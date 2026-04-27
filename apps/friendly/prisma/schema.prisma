@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  picks Pick[]
+
+  @@map("users")
+}
+
+model Pick {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  options   String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results PickResult[]
+
+  @@index([userId])
+  @@map("picks")
+}
+
+model PickResult {
+  id       String   @id @default(cuid())
+  pickId   String
+  chosen   String
+  pickedAt DateTime @default(now())
+
+  pick Pick @relation(fields: [pickId], references: [id], onDelete: Cascade)
+
+  @@index([pickId])
+  @@map("pick_results")
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@repo/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig/base.json": "./typescript/base.json",
+    "./tsconfig/node.json": "./typescript/node.json",
+    "./tsconfig/react.json": "./typescript/react.json",
+    "./tsconfig/react-native.json": "./typescript/react-native.json",
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/node": "./eslint/node.js",
+    "./eslint/react": "./eslint/react.js"
+  }
+}

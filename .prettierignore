@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.turbo
+.next
+.expo
+*.min.js
+pnpm-lock.yaml
