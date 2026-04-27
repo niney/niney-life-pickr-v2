@@ -11,7 +11,7 @@ export class AuthService {
 
     const passwordHash = await hashPassword(input.password);
     const user = await this.prisma.user.create({
-      data: { email: input.email, passwordHash, name: input.name },
+      data: { email: input.email, passwordHash },
     });
 
     return this.toPublic(user);
@@ -36,14 +36,12 @@ export class AuthService {
   private toPublic(u: {
     id: string;
     email: string;
-    name: string;
     createdAt: Date;
     updatedAt: Date;
   }): User {
     return {
       id: u.id,
       email: u.email,
-      name: u.name,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
     };

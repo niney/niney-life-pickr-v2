@@ -1,44 +1,91 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLogin } from '@repo/shared';
+import {
+  Button,
+  Divider,
+  ErrorBanner,
+  Input,
+  Screen,
+  SegmentedControl,
+  Stack,
+  Text,
+  useAuthStore,
+  useLogin,
+  useRegister,
+} from '@repo/shared';
+
+type Mode = 'login' | 'register';
+
+const modeOptions = [
+  { value: 'login' as const, label: '로그인' },
+  { value: 'register' as const, label: '회원가입' },
+];
 
 export const LoginPage = () => {
+  const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const login = useLogin();
+  const register = useRegister();
+  const enterGuest = useAuthStore((s) => s.enterGuest);
   const navigate = useNavigate();
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    login.mutate(
+  const mutation = mode === 'login' ? login : register;
+
+  const submit = () => {
+    mutation.mutate(
       { email, password },
       { onSuccess: () => navigate('/picks') },
     );
   };
 
+  const onGuest = () => {
+    enterGuest();
+    navigate('/picks');
+  };
+
   return (
-    <main className="container">
-      <h1>로그인</h1>
-      <form onSubmit={onSubmit} className="stack">
-        <input
-          type="email"
-          placeholder="email"
+    <Screen>
+      <Stack gap="md" align="center">
+        <Text variant="display" align="center">🎲</Text>
+        <Text variant="h1" align="center">Life Pickr</Text>
+        <Text variant="body" color="textMuted" align="center">
+          고민될 땐, 대신 골라드릴게요
+        </Text>
+      </Stack>
+
+      <Button variant="primary" size="lg" fullWidth onPress={onGuest}>
+        바로 시작하기 →
+      </Button>
+
+      <Divider label="또는" />
+
+      <SegmentedControl value={mode} options={modeOptions} onChange={setMode} />
+
+      <Stack gap="md">
+        <Input
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          onChangeText={setEmail}
+          placeholder="email"
+          type="email"
         />
-        <input
-          type="password"
-          placeholder="password"
+        <Input
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
+          onChangeText={setPassword}
+          placeholder={mode === 'register' ? 'password (8자 이상)' : 'password'}
+          type="password"
+          onSubmit={submit}
         />
-        <button type="submit" disabled={login.isPending}>
-          {login.isPending ? '로그인 중…' : '로그인'}
-        </button>
-        {login.isError && <p className="error">{login.error.message}</p>}
-      </form>
-    </main>
+        {mutation.isError && <ErrorBanner message={mutation.error.message} />}
+        <Button
+          variant="secondary"
+          fullWidth
+          loading={mutation.isPending}
+          onPress={submit}
+        >
+          {mode === 'login' ? '로그인' : '가입하기'}
+        </Button>
+      </Stack>
+    </Screen>
   );
 };

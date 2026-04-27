@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreatePickInput, UpdatePickInput } from '@repo/api-contract';
 import { picksApi } from '../api/picks.api.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 const pickKeys = {
   all: ['picks'] as const,
@@ -8,18 +9,23 @@ const pickKeys = {
   detail: (id: string) => [...pickKeys.all, 'detail', id] as const,
 };
 
-export const usePicks = () =>
-  useQuery({
+export const usePicks = () => {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
     queryKey: pickKeys.lists(),
     queryFn: picksApi.list,
+    enabled: !!token,
   });
+};
 
-export const usePick = (id: string) =>
-  useQuery({
+export const usePick = (id: string) => {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
     queryKey: pickKeys.detail(id),
     queryFn: () => picksApi.getById(id),
-    enabled: !!id,
+    enabled: !!id && !!token,
   });
+};
 
 export const useCreatePick = () => {
   const qc = useQueryClient();

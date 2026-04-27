@@ -1,11 +1,34 @@
 import { useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useRandomPick, usePicks } from '@repo/shared';
+import { Button, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAuthStore, useRandomPick, usePicks } from '@repo/shared';
 
 export default function HomeScreen() {
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const clearSession = useAuthStore((s) => s.clearSession);
+  const router = useRouter();
   const { data: picks, isLoading } = usePicks();
   const random = useRandomPick();
   const [result, setResult] = useState<string | null>(null);
+
+  if (isGuest) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>내 Pick</Text>
+        <Text>게스트는 Pick을 저장할 수 없습니다.</Text>
+        <Text>가입하면 영구 저장됩니다.</Text>
+        <View style={{ marginTop: 24 }}>
+          <Button
+            title="로그인 / 회원가입"
+            onPress={() => {
+              clearSession();
+              router.replace('/(auth)/login');
+            }}
+          />
+        </View>
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (

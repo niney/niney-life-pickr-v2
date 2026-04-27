@@ -3,5 +3,6 @@ import { useAuthStore } from '@repo/shared';
 
 export default function Index() {
   const token = useAuthStore((s) => s.token);
-  return <Redirect href={token ? '/(tabs)/home' : '/(auth)/login'} />;
+  const isGuest = useAuthStore((s) => s.isGuest);
+  return <Redirect href={token || isGuest ? '/(tabs)/home' : '/(auth)/login'} />;
 }

@@ -4,9 +4,10 @@ import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
 import { PicksPage } from './routes/PicksPage';
 
-const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+const RequireSession = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((s) => s.token);
-  if (!token) return <Navigate to="/login" replace />;
+  const isGuest = useAuthStore((s) => s.isGuest);
+  if (!token && !isGuest) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
@@ -17,9 +18,9 @@ export const App = () => (
     <Route
       path="/picks"
       element={
-        <RequireAuth>
+        <RequireSession>
           <PicksPage />
-        </RequireAuth>
+        </RequireSession>
       }
     />
   </Routes>

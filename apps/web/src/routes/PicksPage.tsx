@@ -1,10 +1,25 @@
 import { useState } from 'react';
-import { useRandomPick, usePicks } from '@repo/shared';
+import { Link } from 'react-router-dom';
+import { useAuthStore, useRandomPick, usePicks } from '@repo/shared';
 
 export const PicksPage = () => {
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const clearSession = useAuthStore((s) => s.clearSession);
   const { data: picks, isLoading } = usePicks();
   const random = useRandomPick();
   const [result, setResult] = useState<string | null>(null);
+
+  if (isGuest) {
+    return (
+      <main className="container">
+        <h1>내 Pick 목록</h1>
+        <p>게스트는 Pick을 저장할 수 없습니다. 가입하면 영구 저장됩니다.</p>
+        <Link to="/login" onClick={() => clearSession()}>
+          로그인 / 회원가입
+        </Link>
+      </main>
+    );
+  }
 
   if (isLoading) return <p>Loading…</p>;
 

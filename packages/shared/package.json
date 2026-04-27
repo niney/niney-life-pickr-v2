@@ -10,6 +10,8 @@
     "./api/*": "./src/api/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./stores/*": "./src/stores/*.ts",
+    "./design": "./src/design/index.ts",
+    "./ui": "./src/ui/index.ts",
     "./constants": "./src/constants/index.ts"
   },
   "scripts": {
@@ -25,9 +27,16 @@
     "@repo/config": "workspace:*",
     "@types/react": "^19.0.0",
     "react": "^19.0.0",
+    "react-native": "0.76.5",
     "typescript": "^5.7.2"
   },
   "peerDependencies": {
-    "react": ">=18.0.0"
+    "react": ">=18.0.0",
+    "react-native": ">=0.76.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
   }
 }

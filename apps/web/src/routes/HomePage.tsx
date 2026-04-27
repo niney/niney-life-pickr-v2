@@ -3,6 +3,8 @@ import { APP_NAME, useAuthStore, useLogout } from '@repo/shared';
 
 export const HomePage = () => {
   const user = useAuthStore((s) => s.user);
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const clearSession = useAuthStore((s) => s.clearSession);
   const logout = useLogout();
 
   return (
@@ -12,9 +14,15 @@ export const HomePage = () => {
 
       {user ? (
         <div className="stack">
-          <p>안녕하세요, <strong>{user.name}</strong>님</p>
+          <p><strong>{user.email}</strong>님 환영합니다</p>
           <Link to="/picks">내 Pick 목록</Link>
           <button onClick={() => logout.mutate()}>로그아웃</button>
+        </div>
+      ) : isGuest ? (
+        <div className="stack">
+          <p>게스트로 이용 중입니다. 저장하려면 회원가입하세요.</p>
+          <Link to="/picks">계속하기</Link>
+          <Link to="/login" onClick={() => clearSession()}>로그인 / 회원가입</Link>
         </div>
       ) : (
         <Link to="/login">시작하기</Link>
