@@ -36,12 +36,14 @@ export class AuthService {
   private toPublic(u: {
     id: string;
     email: string;
+    role: 'USER' | 'ADMIN';
     createdAt: Date;
     updatedAt: Date;
   }): User {
     return {
       id: u.id,
       email: u.email,
+      role: u.role,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
     };

@@ -49,3 +49,5 @@ apps/friendly/prisma/generated
 
 # Claude Code local state (worktrees, agent scratch dirs)
 .claude/
+
+*.tsbuildinfo

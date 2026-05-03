@@ -18,4 +18,9 @@ export const Picks = {
   byId: (id: string) => `${API_PREFIX}/picks/${id}`,
 } as const;
 
+export const Admin = {
+  listUsers: `${API_PREFIX}/admin/users`,
+  setUserRole: (id: string) => `${API_PREFIX}/admin/users/${id}/role`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;

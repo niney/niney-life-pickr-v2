@@ -21,7 +21,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req, reply) => {
       const user = await service.register(req.body);
-      const token = app.jwt.sign({ userId: user.id, email: user.email });
+      const token = app.jwt.sign({ userId: user.id, email: user.email, role: user.role });
       return reply.code(201).send({ token, user });
     },
   });
@@ -34,7 +34,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) => {
       const user = await service.login(req.body);
-      const token = app.jwt.sign({ userId: user.id, email: user.email });
+      const token = app.jwt.sign({ userId: user.id, email: user.email, role: user.role });
       return { token, user };
     },
   });

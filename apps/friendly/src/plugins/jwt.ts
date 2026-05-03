@@ -15,4 +15,10 @@ export default fp(async (app) => {
       return reply.unauthorized('Invalid or missing token');
     }
   });
+
+  app.decorate('requireAdmin', async (request, reply) => {
+    if (request.user?.role !== 'ADMIN') {
+      return reply.forbidden('Admin role required');
+    }
+  });
 });

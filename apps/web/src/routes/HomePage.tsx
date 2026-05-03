@@ -16,6 +16,7 @@ export const HomePage = () => {
         <div className="stack">
           <p><strong>{user.email}</strong>님 환영합니다</p>
           <Link to="/picks">내 Pick 목록</Link>
+          {user.role === 'ADMIN' && <Link to="/admin">관리자 페이지</Link>}
           <button onClick={() => logout.mutate()}>로그아웃</button>
         </div>
       ) : isGuest ? (
