@@ -68,6 +68,35 @@ pnpm test
 3. web/mobile은 `@repo/shared`를 통해 동일 타입으로 fetch
 4. 스키마 1개 변경 → FE/BE 모두 컴파일 타임에 불일치 감지
 
+## 운영 작업
+
+### Prisma 스키마 변경 후 (마이그레이션 + 클라이언트 재생성)
+
+`@prisma/client`의 query engine DLL은 실행 중인 프로세스가 락을 잡으므로
+재생성 전 dev 서버를 먼저 끕니다.
+
+```bash
+# 1) 백엔드 dev 서버 종료 (해당 터미널에서 Ctrl+C)
+pnpm --filter friendly db:migrate    # schema.prisma 변경분 반영
+pnpm --filter friendly db:generate   # 타입 + DLL 재생성
+pnpm dev:api                         # 다시 기동
+```
+
+Windows에서 `EPERM ... query_engine-windows.dll.node` 에러가 뜨면
+tsx watch가 살아 있다는 뜻입니다.
+
+### 첫 관리자 만들기
+
+회원가입은 항상 `role=USER`로 시작합니다. CLI로 승격:
+
+```bash
+pnpm --filter friendly promote-admin you@example.com
+```
+
+승격 후 다시 로그인하면 (JWT가 새 role을 반영) 홈에서 `/admin` 링크가
+보이고, 다른 사용자의 role을 토글할 수 있습니다. admin 전용 API는
+`Routes.Admin.*` (api-contract). 모바일 앱에는 admin UI가 없습니다 — 의도된 결정입니다.
+
 ## 배포
 
 - **friendly** — Fly.io / Railway
