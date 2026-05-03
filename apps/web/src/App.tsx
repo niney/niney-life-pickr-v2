@@ -24,25 +24,31 @@ const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-export const App = () => (
-  <Routes>
-    <Route path="/" element={<HomePage />} />
-    <Route path="/login" element={<LoginPage />} />
-    <Route
-      path="/picks"
-      element={
-        <RequireSession>
-          <PicksPage />
-        </RequireSession>
-      }
-    />
-    <Route
-      path="/admin"
-      element={
-        <RequireAdmin>
-          <AdminPage />
-        </RequireAdmin>
-      }
-    />
-  </Routes>
-);
+export const App = () => {
+  // Hydrate user (incl. role) on mount when only token was restored from
+  // localStorage — keeps HomePage's admin-link gate honest after reload.
+  useCurrentUser();
+
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/picks"
+        element={
+          <RequireSession>
+            <PicksPage />
+          </RequireSession>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAdmin>
+            <AdminPage />
+          </RequireAdmin>
+        }
+      />
+    </Routes>
+  );
+};

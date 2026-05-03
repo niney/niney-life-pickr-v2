@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LoginInput, RegisterInput } from '@repo/api-contract';
 import { authApi } from '../api/auth.api.js';
@@ -5,11 +6,18 @@ import { useAuthStore } from '../stores/authStore.js';
 
 export const useCurrentUser = () => {
   const token = useAuthStore((s) => s.token);
-  return useQuery({
+  const setUser = useAuthStore((s) => s.setUser);
+  const query = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: authApi.me,
     enabled: !!token,
   });
+
+  useEffect(() => {
+    if (query.data) setUser(query.data);
+  }, [query.data, setUser]);
+
+  return query;
 };
 
 export const useLogin = () => {

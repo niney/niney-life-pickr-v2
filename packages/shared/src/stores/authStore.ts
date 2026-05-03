@@ -6,6 +6,7 @@ interface AuthState {
   token: string | null;
   isGuest: boolean;
   setSession: (user: User, token: string) => void;
+  setUser: (user: User) => void;
   enterGuest: () => void;
   clearSession: () => void;
 }
@@ -15,6 +16,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   isGuest: false,
   setSession: (user, token) => set({ user, token, isGuest: false }),
+  setUser: (user) => set({ user }),
   enterGuest: () => set({ user: null, token: null, isGuest: true }),
   clearSession: () => set({ user: null, token: null, isGuest: false }),
 }));
