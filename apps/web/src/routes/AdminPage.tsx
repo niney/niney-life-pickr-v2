@@ -1,61 +1,121 @@
 import { Link } from 'react-router-dom';
+import { ArrowLeft, ShieldCheck, ShieldOff, Users } from 'lucide-react';
 import type { Role } from '@repo/api-contract';
 import { useAdminUsers, useSetUserRole } from '@repo/shared';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '~/components/ui/table';
 
 export const AdminPage = () => {
   const users = useAdminUsers();
   const setRole = useSetUserRole();
 
-  if (users.isLoading) return <main className="container"><p>Loading…</p></main>;
-  if (users.isError) {
-    return (
-      <main className="container">
-        <h1>Admin</h1>
-        <p>사용자 목록을 불러오지 못했습니다: {(users.error as Error).message}</p>
-        <Link to="/">홈으로</Link>
-      </main>
-    );
-  }
-
-  const rows = users.data?.users ?? [];
-
   return (
-    <main className="container">
-      <header className="stack" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h1>Admin · 사용자</h1>
-        <Link to="/">홈으로</Link>
-      </header>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <header className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Users className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">관리자</h1>
+              <p className="text-sm text-muted-foreground">사용자와 권한을 관리합니다.</p>
+            </div>
+          </div>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/">
+              <ArrowLeft />
+              홈으로
+            </Link>
+          </Button>
+        </header>
 
-      <table>
-        <thead>
-          <tr>
-            <th align="left">Email</th>
-            <th align="left">Role</th>
-            <th align="left">Joined</th>
-            <th align="left">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((u) => {
-            const nextRole: Role = u.role === 'ADMIN' ? 'USER' : 'ADMIN';
-            return (
-              <tr key={u.id}>
-                <td>{u.email}</td>
-                <td>{u.role}</td>
-                <td>{new Date(u.createdAt).toLocaleDateString()}</td>
-                <td>
-                  <button
-                    disabled={setRole.isPending}
-                    onClick={() => setRole.mutate({ id: u.id, role: nextRole })}
-                  >
-                    Make {nextRole}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </main>
+        <Card>
+          <CardHeader>
+            <CardTitle>사용자</CardTitle>
+            <CardDescription>
+              가입한 모든 사용자 목록입니다. 역할을 토글하면 즉시 적용됩니다.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            {users.isLoading && (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                불러오는 중…
+              </p>
+            )}
+
+            {users.isError && (
+              <p className="py-10 text-center text-sm text-destructive">
+                목록을 불러오지 못했습니다: {(users.error as Error).message}
+              </p>
+            )}
+
+            {users.data && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>가입일</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.data.users.map((u) => {
+                    const isAdmin = u.role === 'ADMIN';
+                    const nextRole: Role = isAdmin ? 'USER' : 'ADMIN';
+                    return (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{u.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={isAdmin ? 'default' : 'secondary'}>
+                            {isAdmin ? (
+                              <ShieldCheck className="mr-1 size-3" />
+                            ) : (
+                              <ShieldOff className="mr-1 size-3" />
+                            )}
+                            {u.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(u.createdAt).toLocaleDateString('ko-KR')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant={isAdmin ? 'outline' : 'default'}
+                            size="sm"
+                            disabled={setRole.isPending}
+                            onClick={() => setRole.mutate({ id: u.id, role: nextRole })}
+                          >
+                            {isAdmin ? 'USER로 강등' : 'ADMIN 승격'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {users.data.users.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                        아직 가입한 사용자가 없습니다.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 };

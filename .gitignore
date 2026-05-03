@@ -51,3 +51,7 @@ apps/friendly/prisma/generated
 .claude/
 
 *.tsbuildinfo
+
+# tsc -b emit artifacts beside .ts source (apps/web build script)
+apps/web/src/**/*.js
+apps/web/vite.config.js

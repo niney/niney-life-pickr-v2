@@ -12,6 +12,7 @@ import {
   useAuthStore,
 } from '@repo/shared';
 import { App } from './App';
+import './styles/tailwind.css';
 import './styles/global.css';
 
 const TOKEN_KEY = 'lp:token';
