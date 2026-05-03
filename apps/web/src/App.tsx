@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
-import { AdminPage } from './routes/AdminPage';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminHomePage } from './routes/admin/AdminHomePage';
+import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
 import { PicksPage } from './routes/PicksPage';
@@ -45,10 +47,13 @@ export const App = () => {
         path="/admin"
         element={
           <RequireAdmin>
-            <AdminPage />
+            <AdminLayout />
           </RequireAdmin>
         }
-      />
+      >
+        <Route index element={<AdminHomePage />} />
+        <Route path="restaurants" element={<AdminRestaurantsPage />} />
+      </Route>
     </Routes>
   );
 };
