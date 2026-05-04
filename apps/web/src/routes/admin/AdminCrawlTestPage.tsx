@@ -1,7 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Beaker, Link as LinkIcon, Loader2, Play, AlertCircle } from 'lucide-react';
 import { useCrawlNaverPlace, ApiError } from '@repo/shared';
-import type { MenuItemType, NaverPlaceDataType } from '@repo/api-contract';
+import type {
+  BlogReviewType,
+  MenuItemType,
+  NaverPlaceDataType,
+  ReviewStatsType,
+  VisitorReviewType,
+} from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -41,6 +47,7 @@ const MenuList = ({ menus }: { menus: MenuItemType[] }) => (
                   alt=""
                   className="size-16 shrink-0 rounded object-cover"
                   loading="lazy"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
                 <div className="size-16 shrink-0 rounded bg-muted" />
@@ -61,6 +68,144 @@ const MenuList = ({ menus }: { menus: MenuItemType[] }) => (
                   </p>
                 )}
               </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </CardContent>
+  </Card>
+);
+
+const ReviewStatsCard = ({ stats }: { stats: ReviewStatsType }) => (
+  <Card>
+    <CardHeader>
+      <CardTitle>리뷰 통계</CardTitle>
+      <CardDescription>네이버 방문자 리뷰 분석</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-3 text-sm">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <div className="text-xs text-muted-foreground">평균 평점</div>
+          <div className="text-lg font-semibold">{stats.averageRating ?? '—'}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">총 리뷰</div>
+          <div className="text-lg font-semibold">{stats.totalCount ?? '—'}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">이미지 리뷰</div>
+          <div className="text-lg font-semibold">{stats.imageReviewCount ?? '—'}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">작성자 수</div>
+          <div className="text-lg font-semibold">{stats.authorCount ?? '—'}</div>
+        </div>
+      </div>
+      {stats.themeKeywords.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-xs text-muted-foreground">테마 키워드</div>
+          <div className="flex flex-wrap gap-1.5">
+            {stats.themeKeywords.map((t) => (
+              <Badge key={t.code} variant="secondary">
+                {t.label} {t.count}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+);
+
+const BlogReviewList = ({ reviews }: { reviews: BlogReviewType[] }) => (
+  <Card>
+    <CardHeader>
+      <CardTitle>블로그 리뷰 ({reviews.length})</CardTitle>
+      <CardDescription>네이버에 노출된 외부 블로그/카페 후기</CardDescription>
+    </CardHeader>
+    <CardContent>
+      {reviews.length === 0 ? (
+        <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+          리뷰 없음
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {reviews.map((r) => (
+            <li key={r.url} className="flex items-start gap-3 py-3">
+              {r.thumbnailUrls[0] ? (
+                <img
+                  src={r.thumbnailUrls[0]}
+                  alt=""
+                  className="size-16 shrink-0 rounded object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="size-16 shrink-0 rounded bg-muted" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline">{r.type}</Badge>
+                  {r.authorName && <span>{r.authorName}</span>}
+                  {r.date && <span>· {r.date}</span>}
+                </div>
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-0.5 line-clamp-1 text-sm font-medium hover:underline"
+                >
+                  {r.title}
+                </a>
+                {r.excerpt && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {r.excerpt}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </CardContent>
+  </Card>
+);
+
+const VisitorReviewList = ({ reviews }: { reviews: VisitorReviewType[] }) => (
+  <Card>
+    <CardHeader>
+      <CardTitle>방문자 리뷰 ({reviews.length})</CardTitle>
+      <CardDescription>/review/visitor 서브페이지에서 추출</CardDescription>
+    </CardHeader>
+    <CardContent>
+      {reviews.length === 0 ? (
+        <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+          방문자 리뷰 추출 실패 또는 없음
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {reviews.map((r, i) => (
+            <li key={i} className="py-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {r.authorName && <span className="font-medium">{r.authorName}</span>}
+                {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
+                {r.visitedAt && <span>· {r.visitedAt}</span>}
+              </div>
+              <p className="mt-1 line-clamp-3 text-sm">{r.body}</p>
+              {r.imageUrls.length > 0 && (
+                <div className="mt-2 flex gap-1.5">
+                  {r.imageUrls.slice(0, 4).map((u) => (
+                    <img
+                      key={u}
+                      src={u}
+                      alt=""
+                      className="size-12 rounded object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -98,6 +243,7 @@ const ParsedDataCard = ({ data }: { data: NaverPlaceDataType }) => (
                   alt=""
                   className="h-16 w-16 rounded object-cover"
                   loading="lazy"
+                  referrerPolicy="no-referrer"
                 />
               ))}
         </div>
@@ -226,6 +372,17 @@ export const AdminCrawlTestPage = () => {
 
           <div className="mt-6">
             <MenuList menus={result.data.menus} />
+          </div>
+
+          {result.data.reviewStats && (
+            <div className="mt-6">
+              <ReviewStatsCard stats={result.data.reviewStats} />
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <BlogReviewList reviews={result.data.blogReviews} />
+            <VisitorReviewList reviews={result.data.visitorReviews} />
           </div>
         </>
       )}

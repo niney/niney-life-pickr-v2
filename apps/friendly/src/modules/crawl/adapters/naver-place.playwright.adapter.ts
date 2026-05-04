@@ -2,7 +2,15 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
-import type { MenuItemType, NaverPlaceDataType } from '@repo/api-contract';
+import type {
+  BlogReviewType,
+  MenuItemType,
+  NaverPlaceDataType,
+  RatingDistributionBucketType,
+  ReviewStatsType,
+  ReviewThemeKeywordType,
+  VisitorReviewType,
+} from '@repo/api-contract';
 
 const DEBUG_CAPTURE = process.env.CRAWL_DEBUG_CAPTURE === '1';
 const DEBUG_DIR = resolve(
@@ -123,6 +131,13 @@ const pickNumber = (obj: Record<string, unknown>, ...keys: string[]): number | n
   return null;
 };
 
+const normalizeImageUrl = (raw: string): string => {
+  // Force https — Naver image CDN supports https, and http causes mixed-content
+  // problems on https admin pages. The thumbnail anchor (e.g. `#900x676`) is
+  // harmless to keep but stripped for cleaner storage.
+  return raw.replace(/^http:\/\//i, 'https://').replace(/#[^/]*$/, '');
+};
+
 const collectImagesFromContainer = (
   state: Record<string, unknown> | null,
   container: unknown,
@@ -133,9 +148,9 @@ const collectImagesFromContainer = (
   if (!resolved) return;
   // Plain URL string (e.g. Menu.images is `string[]`, not object[])
   if (typeof resolved === 'string') {
-    if (/^https?:\/\//.test(resolved) && !seen.has(resolved)) {
-      seen.add(resolved);
-      out.push(resolved);
+    if (/^https?:\/\//.test(resolved)) {
+      const u = normalizeImageUrl(resolved);
+      if (!seen.has(u)) { seen.add(u); out.push(u); }
     }
     return;
   }
@@ -149,10 +164,14 @@ const collectImagesFromContainer = (
     (typeof resolved['origin'] === 'string' && resolved['origin']) ||
     (typeof resolved['url'] === 'string' && resolved['url']) ||
     (typeof resolved['imageUrl'] === 'string' && resolved['imageUrl']) ||
-    (typeof resolved['src'] === 'string' && resolved['src']);
-  if (typeof u === 'string' && /^https?:\/\//.test(u) && !seen.has(u)) {
-    seen.add(u);
-    out.push(u);
+    (typeof resolved['src'] === 'string' && resolved['src']) ||
+    (typeof resolved['thumbnail'] === 'string' && resolved['thumbnail']);
+  if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+    const norm = normalizeImageUrl(u);
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      out.push(norm);
+    }
   }
 
   for (const value of Object.values(resolved)) {
@@ -407,12 +426,284 @@ const extractMenus = (
   return out.slice(0, 100);
 };
 
+const extractReviewStats = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+  placeId: string,
+): ReviewStatsType | null => {
+  if (!state) return null;
+  // Direct normalized entry has the richest data
+  let result = state[`VisitorReviewStatsResult:${placeId}`];
+  if (isRef(result)) result = state[result.__ref] ?? null;
+  if (!isObject(result) && placeDetail) {
+    const v = deref(state, placeDetail['visitorReviewStats']);
+    if (isObject(v)) result = v;
+  }
+  if (!isObject(result)) return null;
+
+  const review = deref(state, result['review']);
+  const analysis = deref(state, result['analysis']);
+
+  const themeKeywords: ReviewThemeKeywordType[] = [];
+  if (isObject(analysis) && Array.isArray(analysis['themes'])) {
+    for (const t of analysis['themes']) {
+      const obj = deref(state, t);
+      if (!isObject(obj)) continue;
+      const code = pickString(obj, 'code');
+      const label = pickString(obj, 'label');
+      const count = pickNumber(obj, 'count');
+      if (code && label && count !== null) {
+        themeKeywords.push({ code, label, count });
+      }
+    }
+  }
+
+  const ratingDistribution: RatingDistributionBucketType[] = [];
+  if (isObject(review) && Array.isArray(review['scores'])) {
+    for (const s of review['scores']) {
+      const obj = deref(state, s);
+      if (!isObject(obj)) continue;
+      const count = pickNumber(obj, 'count');
+      if (count === null) continue;
+      ratingDistribution.push({
+        score: pickNumber(obj, 'score'),
+        count,
+      });
+    }
+  }
+
+  return {
+    averageRating: isObject(review) ? pickNumber(review, 'avgRating') : null,
+    totalCount: isObject(review) ? pickNumber(review, 'totalCount') : null,
+    textReviewCount: pickNumber(result, 'visitorReviewsTextReviewTotal'),
+    imageReviewCount: isObject(review) ? pickNumber(review, 'imageReviewCount') : null,
+    authorCount: isObject(review) ? pickNumber(review, 'authorCount') : null,
+    themeKeywords,
+    ratingDistribution,
+  };
+};
+
+const cleanText = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+const buildBlogReview = (
+  state: Record<string, unknown> | null,
+  raw: unknown,
+): BlogReviewType | null => {
+  const obj = deref(state, raw);
+  if (!isObject(obj)) return null;
+  const url = pickString(obj, 'url');
+  const title = pickString(obj, 'title');
+  if (!url || !title) return null;
+
+  const rawContents = pickString(obj, 'contents', 'description', 'content');
+  const excerpt = rawContents ? cleanText(rawContents).slice(0, 200) : null;
+
+  const thumbnailUrls: string[] = [];
+  const seenThumbs = new Set<string>();
+  const pushThumb = (u: string) => {
+    const norm = normalizeImageUrl(u);
+    if (!seenThumbs.has(norm)) { seenThumbs.add(norm); thumbnailUrls.push(norm); }
+  };
+  const thumbList = obj['thumbnailUrlList'];
+  if (Array.isArray(thumbList)) {
+    for (const u of thumbList) {
+      if (typeof u === 'string' && /^https?:\/\//.test(u)) pushThumb(u);
+    }
+  }
+  const single = pickString(obj, 'thumbnailUrl');
+  if (single) {
+    const norm = normalizeImageUrl(single);
+    if (!seenThumbs.has(norm)) { seenThumbs.add(norm); thumbnailUrls.unshift(norm); }
+  }
+
+  return {
+    type: pickString(obj, 'type', 'typeName') ?? 'unknown',
+    title,
+    excerpt,
+    url,
+    thumbnailUrls: thumbnailUrls.slice(0, 10),
+    date: pickString(obj, 'date', 'createdString', 'createdAt'),
+    authorName: pickString(obj, 'name', 'authorName', 'nickname'),
+  };
+};
+
+const extractBlogReviews = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): BlogReviewType[] => {
+  if (!state) return [];
+  const out: BlogReviewType[] = [];
+  const seenUrls = new Set<string>();
+  const push = (raw: unknown) => {
+    const r = buildBlogReview(state, raw);
+    if (!r || seenUrls.has(r.url)) return;
+    seenUrls.add(r.url);
+    out.push(r);
+  };
+
+  // 1. ROOT_QUERY.placeDetail(...).fsasReviews(...).items[]
+  if (placeDetail) {
+    for (const key of Object.keys(placeDetail)) {
+      if (!key.startsWith('fsasReviews(') && key !== 'fsasReviews') continue;
+      const resolved = deref(state, placeDetail[key]);
+      if (isObject(resolved) && Array.isArray(resolved['items'])) {
+        for (const it of resolved['items']) push(it);
+      }
+    }
+  }
+  // 2. Fallback: direct FsasReview: cache entries
+  if (out.length === 0) {
+    for (const key of Object.keys(state)) {
+      if (key.startsWith('FsasReview:')) push(state[key]);
+    }
+  }
+
+  return out.slice(0, 30);
+};
+
+const collectVisitorReviewImageUrls = (
+  state: Record<string, unknown> | null,
+  obj: Record<string, unknown>,
+): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const key of ['media', 'images', 'photos', 'reviewMedia', 'mediaList']) {
+    if (key in obj) collectImagesFromContainer(state, obj[key], out, seen);
+  }
+  // Direct top-level thumbnail string on the review itself
+  if (out.length === 0 && typeof obj['thumbnail'] === 'string') {
+    collectImagesFromContainer(state, obj['thumbnail'], out, seen);
+  }
+  return out.slice(0, 6);
+};
+
+const buildVisitorReview = (
+  state: Record<string, unknown> | null,
+  raw: unknown,
+): VisitorReviewType | null => {
+  const obj = deref(state, raw);
+  if (!isObject(obj)) return null;
+  const body = pickString(obj, 'body', 'content', 'reviewBody', 'visitorReviewBody');
+  if (!body) return null;
+
+  // author can be on the review or on a nested author/visitor object
+  let authorName: string | null = pickString(obj, 'authorName', 'nickname', 'userName');
+  if (!authorName) {
+    const author = deref(state, obj['author'] ?? obj['visitor']);
+    if (isObject(author)) {
+      authorName = pickString(author, 'nickname', 'name', 'userName');
+    }
+  }
+
+  return {
+    authorName,
+    rating: pickNumber(obj, 'rating', 'score', 'visitorReviewScore'),
+    body: cleanText(body).slice(0, 500),
+    visitedAt: pickString(obj, 'visited', 'visitedAt', 'visitDate', 'createdAt', 'created'),
+    imageUrls: collectVisitorReviewImageUrls(state, obj),
+  };
+};
+
+const extractVisitorReviewsFromState = (
+  state: Record<string, unknown>,
+  placeId: string,
+): VisitorReviewType[] => {
+  const out: VisitorReviewType[] = [];
+  const seenBodies = new Set<string>();
+  const push = (raw: unknown) => {
+    const r = buildVisitorReview(state, raw);
+    if (!r) return;
+    const key = r.body.slice(0, 50);
+    if (seenBodies.has(key)) return;
+    seenBodies.add(key);
+    out.push(r);
+  };
+
+  // 1. Direct normalized entries — typename guess: VisitorReview / Review
+  for (const key of Object.keys(state)) {
+    if (
+      key.startsWith('VisitorReview:') ||
+      key.startsWith('Review:') ||
+      key.startsWith(`VisitorReview:${placeId}`)
+    ) {
+      push(state[key]);
+    }
+  }
+
+  // 2. ROOT_QUERY scan for any field that looks like a visitor reviews list
+  if (out.length === 0) {
+    const root = state['ROOT_QUERY'];
+    if (isObject(root)) {
+      for (const key of Object.keys(root)) {
+        if (!/visitor.*review|reviews?\(/i.test(key)) continue;
+        const resolved = deref(state, root[key]);
+        const items = isObject(resolved)
+          ? (resolved['items'] ?? resolved['reviews'] ?? resolved['list'])
+          : Array.isArray(resolved)
+            ? resolved
+            : null;
+        if (Array.isArray(items)) for (const it of items) push(it);
+      }
+    }
+  }
+
+  return out.slice(0, 30);
+};
+
+const fetchVisitorReviewsViaSubpage = async (
+  ctx: BrowserContext,
+  placeId: string,
+): Promise<VisitorReviewType[]> => {
+  const url = `https://m.place.naver.com/restaurant/${placeId}/review/visitor`;
+  const page = await ctx.newPage();
+  try {
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (SHOULD_BLOCK.has(type)) return route.abort();
+      return route.continue();
+    });
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+      await page
+        .waitForLoadState('networkidle', { timeout: 5_000 })
+        .catch(() => undefined);
+    } catch {
+      return [];
+    }
+    const apolloState = await page
+      .evaluate<unknown>(
+        () =>
+          (globalThis as unknown as { __APOLLO_STATE__?: unknown })
+            .__APOLLO_STATE__ ?? null,
+      )
+      .catch(() => null);
+
+    if (DEBUG_CAPTURE && apolloState) {
+      await mkdir(DEBUG_DIR, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = join(DEBUG_DIR, `visitor-${placeId}-${stamp}.json`);
+      await writeFile(
+        file,
+        JSON.stringify({ placeId, url, apolloState }, null, 2),
+        'utf-8',
+      );
+      console.log(`[crawl-debug] visitor reviews dump → ${file}`);
+    }
+
+    if (!isObject(apolloState)) return [];
+    return extractVisitorReviewsFromState(apolloState, placeId);
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+};
+
 const buildPlaceData = (
   placeId: string,
   canonicalUrl: string,
   node: Record<string, unknown>,
   state: Record<string, unknown> | null,
   placeDetail: Record<string, unknown> | null,
+  visitorReviews: VisitorReviewType[] | null,
 ): NaverPlaceDataType => {
   const coordinates = isObject(node['coordinate']) ? node['coordinate'] : node;
   return {
@@ -429,6 +720,9 @@ const buildPlaceData = (
     rating: pickNumber(node, 'visitorReviewsScore', 'rating', 'reviewScore'),
     reviewCount: pickNumber(node, 'visitorReviewsTotal', 'reviewCount'),
     menus: extractMenus(placeId, state, placeDetail),
+    reviewStats: extractReviewStats(state, placeDetail, placeId),
+    blogReviews: extractBlogReviews(state, placeDetail),
+    visitorReviews: visitorReviews ?? [],
     rawSourceUrl: canonicalUrl,
   };
 };
@@ -575,12 +869,22 @@ export const fetchNaverPlaceWithPlaywright = async (
     }
 
     const placeDetailContainer = findPlaceDetailContainer(apolloStateObj, placeId);
+
+    // Fetch visitor reviews from the dedicated subpage (best-effort — tolerate failure)
+    let visitorReviews: VisitorReviewType[] = [];
+    try {
+      visitorReviews = await fetchVisitorReviewsViaSubpage(ctx, placeId);
+    } catch {
+      visitorReviews = [];
+    }
+
     return buildPlaceData(
       placeId,
       canonicalUrl,
       placeNode,
       apolloStateObj,
       placeDetailContainer,
+      visitorReviews,
     );
   } finally {
     if (ctx) await ctx.close().catch(() => undefined);
