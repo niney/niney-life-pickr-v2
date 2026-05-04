@@ -1,5 +1,14 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import type { NaverPlaceDataType } from '@repo/api-contract';
+
+const DEBUG_CAPTURE = process.env.CRAWL_DEBUG_CAPTURE === '1';
+const DEBUG_DIR = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../__debug__',
+);
 
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -188,6 +197,36 @@ export const fetchNaverPlaceWithPlaywright = async (
       );
     }
 
+    let apolloState: unknown = null;
+    if (DEBUG_CAPTURE) {
+      apolloState = await page
+        .evaluate<unknown>(
+          () =>
+            (globalThis as unknown as { __APOLLO_STATE__?: unknown })
+              .__APOLLO_STATE__ ?? null,
+        )
+        .catch(() => null);
+      await mkdir(DEBUG_DIR, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = join(DEBUG_DIR, `place-${placeId}-${stamp}.json`);
+      await writeFile(
+        file,
+        JSON.stringify(
+          {
+            placeId,
+            canonicalUrl,
+            capturedCount: captured.length,
+            captured: captured.map((c) => ({ url: c.url, body: c.body })),
+            apolloState,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+      console.log(`[crawl-debug] dumped ${captured.length} captures to ${file}`);
+    }
+
     let placeNode: Record<string, unknown> | null = null;
     for (const cap of captured) {
       placeNode = findRestaurantNode(cap.body);
@@ -195,9 +234,15 @@ export const fetchNaverPlaceWithPlaywright = async (
     }
 
     if (!placeNode) {
-      const apolloState = await page
-        .evaluate<unknown>(() => (window as unknown as { __APOLLO_STATE__?: unknown }).__APOLLO_STATE__ ?? null)
-        .catch(() => null);
+      if (!DEBUG_CAPTURE) {
+        apolloState = await page
+          .evaluate<unknown>(
+            () =>
+              (globalThis as unknown as { __APOLLO_STATE__?: unknown })
+                .__APOLLO_STATE__ ?? null,
+          )
+          .catch(() => null);
+      }
       if (apolloState) placeNode = findRestaurantNode(apolloState);
     }
 

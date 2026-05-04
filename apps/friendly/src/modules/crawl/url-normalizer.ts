@@ -27,7 +27,7 @@ const PLACE_PATH_PATTERNS: RegExp[] = [
 const extractPlaceIdFromUrl = (url: URL): string | null => {
   for (const pattern of PLACE_PATH_PATTERNS) {
     const m = url.pathname.match(pattern);
-    if (m) return m[1];
+    if (m && m[1]) return m[1];
   }
   const queryId = url.searchParams.get('id') ?? url.searchParams.get('placeId');
   if (queryId && /^\d+$/.test(queryId)) return queryId;

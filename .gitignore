@@ -47,6 +47,9 @@ expo-env.d.ts
 
 apps/friendly/prisma/generated
 
+# crawl adapter live-capture dumps (B-step debugging)
+apps/friendly/src/modules/crawl/__debug__/
+
 # Claude Code local state (worktrees, agent scratch dirs)
 .claude/
 
