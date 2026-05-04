@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Beaker, Link as LinkIcon, Loader2, Play, AlertCircle } from 'lucide-react';
 import { useCrawlNaverPlace, ApiError } from '@repo/shared';
-import type { NaverPlaceDataType } from '@repo/api-contract';
+import type { MenuItemType, NaverPlaceDataType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -18,6 +18,55 @@ const FieldRow = ({ label, value }: { label: string; value: string | number | nu
     <span className="text-muted-foreground">{label}</span>
     <span className="break-all">{formatField(value)}</span>
   </div>
+);
+
+const MenuList = ({ menus }: { menus: MenuItemType[] }) => (
+  <Card>
+    <CardHeader>
+      <CardTitle>메뉴 ({menus.length})</CardTitle>
+      <CardDescription>네이버 플레이스에서 추출한 메뉴</CardDescription>
+    </CardHeader>
+    <CardContent>
+      {menus.length === 0 ? (
+        <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+          메뉴 정보 없음
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {menus.map((m, i) => (
+            <li key={`${m.name}-${i}`} className="flex items-start gap-3 py-3">
+              {m.imageUrls[0] ? (
+                <img
+                  src={m.imageUrls[0]}
+                  alt=""
+                  className="size-16 shrink-0 rounded object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="size-16 shrink-0 rounded bg-muted" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">{m.name}</span>
+                  {m.recommend && (
+                    <Badge variant="secondary" className="shrink-0">추천</Badge>
+                  )}
+                </div>
+                {m.price && (
+                  <div className="text-sm text-muted-foreground">{m.price}</div>
+                )}
+                {m.description && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {m.description}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </CardContent>
+  </Card>
 );
 
 const ParsedDataCard = ({ data }: { data: NaverPlaceDataType }) => (
@@ -173,6 +222,10 @@ export const AdminCrawlTestPage = () => {
                 </pre>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="mt-6">
+            <MenuList menus={result.data.menus} />
           </div>
         </>
       )}

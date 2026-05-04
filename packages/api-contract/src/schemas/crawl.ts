@@ -5,6 +5,15 @@ export const CrawlNaverPlaceInput = z.object({
 });
 export type CrawlNaverPlaceInputType = z.infer<typeof CrawlNaverPlaceInput>;
 
+export const MenuItem = z.object({
+  name: z.string(),
+  price: z.string().nullable(),
+  description: z.string().nullable(),
+  recommend: z.boolean().nullable(),
+  imageUrls: z.array(z.string().url()),
+});
+export type MenuItemType = z.infer<typeof MenuItem>;
+
 export const NaverPlaceData = z.object({
   placeId: z.string(),
   name: z.string(),
@@ -18,6 +27,7 @@ export const NaverPlaceData = z.object({
   imageUrls: z.array(z.string().url()),
   rating: z.number().nullable(),
   reviewCount: z.number().nullable(),
+  menus: z.array(MenuItem),
   rawSourceUrl: z.string().url(),
 });
 export type NaverPlaceDataType = z.infer<typeof NaverPlaceData>;

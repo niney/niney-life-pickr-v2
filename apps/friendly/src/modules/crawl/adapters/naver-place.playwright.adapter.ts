@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
-import type { NaverPlaceDataType } from '@repo/api-contract';
+import type { MenuItemType, NaverPlaceDataType } from '@repo/api-contract';
 
 const DEBUG_CAPTURE = process.env.CRAWL_DEBUG_CAPTURE === '1';
 const DEBUG_DIR = resolve(
@@ -131,6 +131,14 @@ const collectImagesFromContainer = (
 ): void => {
   const resolved = deref(state, container);
   if (!resolved) return;
+  // Plain URL string (e.g. Menu.images is `string[]`, not object[])
+  if (typeof resolved === 'string') {
+    if (/^https?:\/\//.test(resolved) && !seen.has(resolved)) {
+      seen.add(resolved);
+      out.push(resolved);
+    }
+    return;
+  }
   if (Array.isArray(resolved)) {
     for (const item of resolved) collectImagesFromContainer(state, item, out, seen);
     return;
@@ -148,7 +156,12 @@ const collectImagesFromContainer = (
   }
 
   for (const value of Object.values(resolved)) {
-    if (Array.isArray(value) || isRef(value) || isObject(value)) {
+    if (
+      typeof value === 'string' ||
+      Array.isArray(value) ||
+      isRef(value) ||
+      isObject(value)
+    ) {
       collectImagesFromContainer(state, value, out, seen);
     }
   }
@@ -319,6 +332,81 @@ const extractBusinessHours = (
   return null;
 };
 
+const collectMenuImageUrls = (
+  state: Record<string, unknown> | null,
+  raw: unknown,
+): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  collectImagesFromContainer(state, raw, out, seen);
+  return out.slice(0, 6);
+};
+
+const buildMenuItem = (
+  state: Record<string, unknown> | null,
+  raw: unknown,
+): MenuItemType | null => {
+  const obj = deref(state, raw);
+  if (!isObject(obj)) return null;
+  const name = pickString(obj, 'name', 'menuName');
+  if (!name) return null;
+  const recommend =
+    typeof obj['recommend'] === 'boolean'
+      ? (obj['recommend'] as boolean)
+      : typeof obj['isRecommend'] === 'boolean'
+        ? (obj['isRecommend'] as boolean)
+        : null;
+  return {
+    name,
+    price: pickString(obj, 'price', 'priceText', 'menuPrice'),
+    description: pickString(obj, 'description', 'desc'),
+    recommend,
+    imageUrls: collectMenuImageUrls(state, obj['images'] ?? obj['imageUrls']),
+  };
+};
+
+const extractMenus = (
+  placeId: string,
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): MenuItemType[] => {
+  if (!state) return [];
+  const seenNames = new Set<string>();
+  const out: MenuItemType[] = [];
+
+  const push = (raw: unknown) => {
+    const item = buildMenuItem(state, raw);
+    if (!item) return;
+    const dedupKey = `${item.name}|${item.price ?? ''}`;
+    if (seenNames.has(dedupKey)) return;
+    seenNames.add(dedupKey);
+    out.push(item);
+  };
+
+  // 1. Direct normalized cache entries: `Menu:{placeId}_<i>`
+  for (const key of Object.keys(state)) {
+    if (key.startsWith(`Menu:${placeId}_`) || key.startsWith(`Menu:${placeId}-`)) {
+      push(state[key]);
+    }
+  }
+
+  // 2. ROOT_QUERY.placeDetail({...}).menus({...}) array of refs/objects
+  if (placeDetail) {
+    for (const key of Object.keys(placeDetail)) {
+      if (key !== 'menus' && !key.startsWith('menus(')) continue;
+      const resolved = deref(state, placeDetail[key]);
+      if (Array.isArray(resolved)) {
+        for (const m of resolved) push(m);
+      } else if (isObject(resolved)) {
+        const inner = resolved['menus'] ?? resolved['items'];
+        if (Array.isArray(inner)) for (const m of inner) push(m);
+      }
+    }
+  }
+
+  return out.slice(0, 100);
+};
+
 const buildPlaceData = (
   placeId: string,
   canonicalUrl: string,
@@ -340,6 +428,7 @@ const buildPlaceData = (
     imageUrls: extractImageUrls(node, state, placeDetail),
     rating: pickNumber(node, 'visitorReviewsScore', 'rating', 'reviewScore'),
     reviewCount: pickNumber(node, 'visitorReviewsTotal', 'reviewCount'),
+    menus: extractMenus(placeId, state, placeDetail),
     rawSourceUrl: canonicalUrl,
   };
 };
