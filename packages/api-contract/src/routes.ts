@@ -23,4 +23,8 @@ export const Admin = {
   setUserRole: (id: string) => `${API_PREFIX}/admin/users/${id}/role`,
 } as const;
 
+export const Crawl = {
+  naverPlace: `${API_PREFIX}/admin/crawl/naver-place`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;
