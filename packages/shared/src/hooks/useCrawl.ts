@@ -5,13 +5,14 @@ import type {
   CrawlNaverPlaceResultType,
   CrawlStageType,
   NaverPlaceDataType,
+  VisitorReviewType,
 } from '@repo/api-contract';
-import { buildJobEventsUrl, crawlApi } from '../api/crawl.api.js';
+import { buildJobEventsUrl, crawlApi, type StartCrawlArgs } from '../api/crawl.api.js';
 
 export const useStartCrawl = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (url: string) => crawlApi.start(url),
+    mutationFn: (args: StartCrawlArgs) => crawlApi.start(args),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['crawl', 'jobs'] }),
   });
 };
@@ -39,6 +40,14 @@ export interface CrawlStreamState {
   stage: CrawlStageType | null;
   partial: NaverPlaceDataType | null;
   visitorCount: number;
+  // Total reviews persisted across all visitor_batch events for this job.
+  // Drives the "AI 요약 진행률" UI alongside the dedicated summary-status
+  // poll — this counter increments only when a batch was newly inserted,
+  // not when it was deduped.
+  persistedCount: number;
+  // Newest visitor_batch payload — UI can render the freshly-arrived
+  // reviews above the older ones without re-fetching the whole list.
+  lastBatch: VisitorReviewType[] | null;
   result: CrawlNaverPlaceResultType | null;
   // Transport-level error (network drop after retries). Domain errors land in
   // result with ok:false. Kept separate so UI can distinguish "server said
@@ -52,6 +61,8 @@ const initialState: CrawlStreamState = {
   stage: null,
   partial: null,
   visitorCount: 0,
+  persistedCount: 0,
+  lastBatch: null,
   result: null,
   transportError: null,
   lastSeq: 0,
@@ -89,6 +100,10 @@ const reducer = (state: CrawlStreamState, action: Action): CrawlStreamState => {
           break;
         case 'visitor_progress':
           next.visitorCount = ev.count;
+          break;
+        case 'visitor_batch':
+          next.persistedCount = state.persistedCount + ev.addedCount;
+          next.lastBatch = ev.reviews;
           break;
         case 'done':
           next.result = ev.result;
@@ -166,7 +181,7 @@ export const useCrawlJobStream = (jobId: string | null): CrawlStreamState => {
           // ignore malformed
         }
       };
-      for (const t of ['progress', 'partial', 'visitor_progress', 'done', 'error']) {
+      for (const t of ['progress', 'partial', 'visitor_progress', 'visitor_batch', 'done', 'error']) {
         es.addEventListener(t, onEvent as EventListener);
       }
 

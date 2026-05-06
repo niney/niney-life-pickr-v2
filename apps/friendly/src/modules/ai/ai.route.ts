@@ -20,7 +20,7 @@ import {
 
 const AiRoutes = Routes.Ai;
 import { env } from '../../config/env.js';
-import { OllamaCloudAdapter } from './adapters/ollama-cloud.adapter.js';
+import { adapterCache } from './adapter-cache.js';
 import type { LLMProvider } from './adapters/llm-provider.js';
 import {
   AiConfigService,
@@ -37,32 +37,11 @@ const buildEnvBlock = (): LlmProviderEnv => ({
   defaultModel: env.OLLAMA_DEFAULT_MODEL,
 });
 
-// One adapter per (provider, key, baseUrl, maxConcurrent) tuple. Cached so
-// multiple in-flight requests share the same FIFO concurrency gate. When
-// admin updates the config, the cache key changes and a fresh adapter is
-// created on the next call — old waiters simply finish on the prior gate.
-class AdapterCache {
-  private cached: { key: string; adapter: OllamaCloudAdapter } | null = null;
-
-  get(resolved: ResolvedProviderConfig): LLMProvider {
-    const key = `${resolved.apiKey}|${resolved.baseUrl}|${resolved.maxConcurrent}|${resolved.timeoutMs}`;
-    if (this.cached?.key === key) return this.cached.adapter;
-    const adapter = new OllamaCloudAdapter({
-      apiKey: resolved.apiKey,
-      baseUrl: resolved.baseUrl,
-      timeoutMs: resolved.timeoutMs,
-      maxConcurrent: resolved.maxConcurrent,
-    });
-    this.cached = { key, adapter };
-    return adapter;
-  }
-}
-
 const ProviderParams = z.object({ id: LlmProviderId });
 
 const aiRoutes: FastifyPluginAsync = async (app) => {
   const config = new AiConfigService(app.prisma, buildEnvBlock());
-  const cache = new AdapterCache();
+  const cache = adapterCache;
 
   // Lazy provider — picked per-request so config changes (incl. maxConcurrent)
   // take effect without server restart.

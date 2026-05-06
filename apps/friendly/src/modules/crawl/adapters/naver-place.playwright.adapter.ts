@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,24 @@ export interface AdapterHooks {
   onStage?: (stage: CrawlStageType) => void;
   onPartial?: (data: NaverPlaceDataType) => void;
   onVisitorProgress?: (count: number) => void;
+  // Emitted once per "더보기" page after parsing the wire batch — the caller
+  // can persist + summarize concurrently with the next click. Fire-and-forget:
+  // the adapter does not await the callback. Initial Apollo-rendered reviews
+  // (~20 from server-side render) are NOT delivered here; they're returned in
+  // the final result instead so the caller can persist them once at the end
+  // (the dedup is idempotent).
+  onVisitorBatch?: (batch: VisitorReviewType[]) => void;
+  // Update mode: caller-supplied set of keys for reviews already in the DB.
+  // When a "더보기" wire batch contains 100% known reviews, we stop
+  // paginating — Naver returns visitor reviews newest-first, so once we hit
+  // a page made entirely of seen rows the rest is older than what we have.
+  // Keys missing both id and contentHash are treated as new (conservative).
+  existingReviewKeys?: ExistingReviewKeys;
+}
+
+export interface ExistingReviewKeys {
+  externalIds: ReadonlySet<string>;
+  contentHashes: ReadonlySet<string>;
 }
 
 export class CrawlCancelledError extends Error {
@@ -651,6 +670,12 @@ const reviewId = (raw: unknown): string | null => {
   return typeof id === 'string' ? id : null;
 };
 
+// SHA-1 of authorName + body. Mirrors restaurant.service.contentHashOf —
+// kept as a local copy so the adapter has no dependency on the persistence
+// layer (data flows adapter → service, never the reverse).
+const contentHashOfReview = (review: VisitorReviewType): string =>
+  createHash('sha1').update(`${review.authorName ?? ''} ${review.body}`).digest('hex');
+
 const extractVisitorReviewsFromState = (
   state: Record<string, unknown>,
   placeId: string,
@@ -674,7 +699,7 @@ const extractVisitorReviewsFromState = (
       if (seenBodies.has(k)) return;
       seenBodies.add(k);
     }
-    out.push(r);
+    out.push({ ...r, externalId: id });
   };
 
   // 1. Direct normalized entries — typename guess: VisitorReview / Review
@@ -726,15 +751,16 @@ const parseVisitorReviewsFromCaptured = (
       const r = buildVisitorReview(null, raw);
       if (!r) continue;
       const id = isObject(raw) ? (raw['id'] ?? raw['reviewId']) : null;
-      if (typeof id === 'string') {
-        if (seenIds.has(id)) continue;
-        seenIds.add(id);
+      const externalId = typeof id === 'string' ? id : null;
+      if (externalId) {
+        if (seenIds.has(externalId)) continue;
+        seenIds.add(externalId);
       } else {
         const k = r.body.slice(0, 50);
         if (seenBodies.has(k)) continue;
         seenBodies.add(k);
       }
-      out.push(r);
+      out.push({ ...r, externalId });
     }
   };
 
@@ -902,6 +928,12 @@ const fetchVisitorReviewsViaSubpage = async (
       // Click "더보기" until it disappears or we hit the safety cap. Each
       // click triggers a POST /graphql; we wait for that response before the
       // next click so we never race ahead of pagination.
+      //
+      // `pageBatchSeenIds` is the cumulative dedup set used when slicing
+      // newly-arrived wire responses page-by-page. Distinct from the merge
+      // step's `seenIds` (which combines Apollo + wire) — that one runs
+      // once at the end with its own state.
+      const pageBatchSeenIds = new Set<string>();
       let pages = 0;
       let consecutiveFailures = 0;
       while (pages < VISITOR_MAX_PAGES) {
@@ -978,6 +1010,38 @@ const fetchVisitorReviewsViaSubpage = async (
             probeIds,
           );
           hooks.onVisitorProgress(wireSoFar.length);
+        }
+
+        // Parse only the responses that arrived from this click and emit
+        // them as a discrete batch. The persistence layer can write them to
+        // the DB and kick off AI summarization while the next click is in
+        // flight — the whole point of the partial-save design.
+        if (newResponses > 0 && (hooks?.onVisitorBatch || hooks?.existingReviewKeys)) {
+          const newWireBodies = captured.slice(beforeCaptured).map((c) => c.body);
+          const newBatch = parseVisitorReviewsFromCaptured(
+            newWireBodies,
+            pageBatchSeenIds,
+          );
+          if (newBatch.length > 0) {
+            hooks?.onVisitorBatch?.(newBatch);
+
+            // Update mode: if the batch we just got is 100% reviews we've
+            // already stored, the rest of pagination is older still — bail.
+            const known = hooks?.existingReviewKeys;
+            if (known) {
+              const allKnown = newBatch.every((r) => {
+                if (r.externalId && known.externalIds.has(r.externalId)) return true;
+                return known.contentHashes.has(contentHashOfReview(r));
+              });
+              if (allKnown) {
+                // eslint-disable-next-line no-console
+                console.log(
+                  `[crawl-debug] update mode: page ${pages} entirely known — stop paginating`,
+                );
+                break;
+              }
+            }
+          }
         }
       }
       if (pages >= VISITOR_MAX_PAGES) {

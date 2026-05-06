@@ -9,6 +9,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Play,
+  Sparkles,
   XCircle,
 } from 'lucide-react';
 import {
@@ -16,17 +17,22 @@ import {
   useCancelCrawl,
   useCrawlJobs,
   useCrawlJobStream,
+  useRestaurantByPlaceId,
+  useRestaurantSummaryStatus,
   useStartCrawl,
 } from '@repo/shared';
 import type {
   BlogReviewType,
   CrawlJobType,
+  CrawlModeType,
   CrawlNaverPlaceResultType,
   CrawlStageType,
   MenuItemType,
   NaverPlaceDataType,
+  RestaurantSummaryProgressType,
   ReviewStatsType,
   VisitorReviewType,
+  VisitorReviewWithSummaryType,
 } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -403,6 +409,102 @@ const JobListPanel = ({
   );
 };
 
+const MODE_OPTIONS: { value: CrawlModeType; label: string; hint: string }[] = [
+  { value: 'create', label: '신규', hint: '캐시 활용, 처음 수집' },
+  { value: 'recrawl', label: '재크롤링', hint: '리뷰 전부 재수집/재요약' },
+  { value: 'update', label: '업데이트', hint: '새 리뷰만 추가' },
+];
+
+const SummaryProgressCard = ({
+  status,
+}: {
+  status: RestaurantSummaryProgressType;
+}) => {
+  const inFlight = status.pending + status.running;
+  const total = inFlight + status.done + status.failed;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="size-4" /> AI 요약 진행률
+        </CardTitle>
+        <CardDescription>
+          저장된 리뷰 {status.totalReviews}개 · 요약 {status.done}/{total} 완료
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Badge variant="secondary">대기 {status.pending}</Badge>
+          <Badge variant="secondary">진행 {status.running}</Badge>
+          <Badge variant="secondary">완료 {status.done}</Badge>
+          {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
+        </div>
+        {status.recentDone.length > 0 && (
+          <ul className="mt-3 space-y-2 text-sm">
+            {status.recentDone.map((s) => (
+              <li key={s.reviewId} className="rounded border bg-muted/40 p-2">
+                <div className="line-clamp-3 leading-relaxed">{s.text}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const ReviewSummaryList = ({
+  reviews,
+}: {
+  reviews: VisitorReviewWithSummaryType[];
+}) => (
+  <Card>
+    <CardHeader>
+      <CardTitle>저장된 리뷰 + 요약 ({reviews.length})</CardTitle>
+      <CardDescription>DB에 저장된 리뷰. 요약은 비동기로 채워집니다.</CardDescription>
+    </CardHeader>
+    <CardContent>
+      {reviews.length === 0 ? (
+        <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+          저장된 리뷰가 없습니다
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {reviews.slice(0, 50).map((r) => (
+            <li key={r.id} className="space-y-1.5 py-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {r.authorName && <span className="font-medium">{r.authorName}</span>}
+                {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
+                {r.visitedAt && <span>· {r.visitedAt}</span>}
+              </div>
+              <p className="line-clamp-3 text-sm">{r.body}</p>
+              <div className="rounded border-l-2 border-primary/40 bg-muted/40 p-2 text-xs">
+                {!r.summary && <span className="text-muted-foreground">요약 없음</span>}
+                {r.summary?.status === 'pending' && (
+                  <span className="text-muted-foreground">요약 대기 중…</span>
+                )}
+                {r.summary?.status === 'running' && (
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" /> 요약 중…
+                  </span>
+                )}
+                {r.summary?.status === 'done' && (
+                  <span>{r.summary.text}</span>
+                )}
+                {r.summary?.status === 'failed' && (
+                  <span className="text-destructive">
+                    실패: {r.summary.errorMessage ?? r.summary.errorCode ?? 'unknown'}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </CardContent>
+  </Card>
+);
+
 const renderResultBlock = (result: CrawlNaverPlaceResultType) => {
   if (!result.ok) {
     return (
@@ -442,10 +544,20 @@ export const AdminCrawlTestPage = () => {
   const qc = useQueryClient();
 
   const [url, setUrl] = useState('');
+  const [mode, setMode] = useState<CrawlModeType>('create');
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
   const jobsQuery = useCrawlJobs();
   const stream = useCrawlJobStream(jobId ?? null);
+
+  // Pull the placeId out of the stream as soon as it arrives (partial event)
+  // so we can start polling summary status while the crawl is still going.
+  const placeId =
+    (stream.result?.ok ? stream.result.data.placeId : null) ??
+    stream.partial?.placeId ??
+    null;
+  const restaurantQuery = useRestaurantByPlaceId(placeId);
+  const summaryStatusQuery = useRestaurantSummaryStatus(placeId);
 
   // The jobs list is fetched once on mount and re-fetched only on meaningful
   // transitions: start/cancel mutations (handled inside the mutation hooks),
@@ -455,14 +567,25 @@ export const AdminCrawlTestPage = () => {
   useEffect(() => {
     if (stream.result !== null) {
       qc.invalidateQueries({ queryKey: ['crawl', 'jobs'] });
+      if (placeId) {
+        qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
+      }
     }
-  }, [stream.result, qc]);
+  }, [stream.result, placeId, qc]);
+
+  // Each new visitor_batch means new rows in the DB — refresh the
+  // restaurant detail so the freshly-saved reviews show up below.
+  useEffect(() => {
+    if (stream.persistedCount > 0 && placeId) {
+      qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
+    }
+  }, [stream.persistedCount, placeId, qc]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = url.trim();
     if (!trimmed) return;
-    const result = await startMutation.mutateAsync(trimmed);
+    const result = await startMutation.mutateAsync({ url: trimmed, mode });
     if (result.ok) {
       navigate(`/admin/crawl-test/${result.jobId}`);
     }
@@ -501,23 +624,52 @@ export const AdminCrawlTestPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <div className="relative flex-1">
-              <LinkIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="url"
-                inputMode="url"
-                placeholder="https://naver.me/..."
-                className="pl-9"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                disabled={startMutation.isPending}
-              />
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <div className="relative flex-1">
+                <LinkIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://naver.me/..."
+                  className="pl-9"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  disabled={startMutation.isPending}
+                />
+              </div>
+              <Button type="submit" disabled={!url.trim() || startMutation.isPending}>
+                {startMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
+                크롤링 시작
+              </Button>
             </div>
-            <Button type="submit" disabled={!url.trim() || startMutation.isPending}>
-              {startMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-              크롤링 시작
-            </Button>
+            <div role="radiogroup" aria-label="모드" className="flex flex-wrap gap-2">
+              {MODE_OPTIONS.map((opt) => {
+                const checked = mode === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition ${
+                      checked
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-input hover:bg-muted/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="crawl-mode"
+                      value={opt.value}
+                      checked={checked}
+                      onChange={() => setMode(opt.value)}
+                      className="sr-only"
+                      disabled={startMutation.isPending}
+                    />
+                    <span className="font-medium">{opt.label}</span>
+                    <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                  </label>
+                );
+              })}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -558,13 +710,18 @@ export const AdminCrawlTestPage = () => {
               </div>
 
               {isRunning && (
-                <div className="mb-6 flex items-center gap-3">
+                <div className="mb-6 flex flex-wrap items-center gap-3">
                   <Badge variant="secondary">
                     {stream.status === 'connecting' ? '연결 중…' : '진행 중'}
                   </Badge>
                   {stream.visitorCount > 0 && (
                     <span className="text-sm text-muted-foreground">
                       방문자 리뷰 {stream.visitorCount}개 수집
+                    </span>
+                  )}
+                  {stream.persistedCount > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      · DB 저장 {stream.persistedCount}개
                     </span>
                   )}
                   <Button
@@ -625,6 +782,18 @@ export const AdminCrawlTestPage = () => {
                       isStreaming={isRunning}
                     />
                   </div>
+
+                  {summaryStatusQuery.data && (
+                    <div className="mt-6">
+                      <SummaryProgressCard status={summaryStatusQuery.data} />
+                    </div>
+                  )}
+
+                  {restaurantQuery.data && (
+                    <div className="mt-6">
+                      <ReviewSummaryList reviews={restaurantQuery.data.reviews} />
+                    </div>
+                  )}
                 </>
               )}
 

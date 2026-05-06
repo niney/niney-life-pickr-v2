@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
+export const CrawlMode = z.enum(['create', 'recrawl', 'update']);
+export type CrawlModeType = z.infer<typeof CrawlMode>;
+
 export const CrawlNaverPlaceInput = z.object({
   url: z.string().url(),
+  mode: CrawlMode.default('create'),
 });
 export type CrawlNaverPlaceInputType = z.infer<typeof CrawlNaverPlaceInput>;
 
@@ -55,6 +59,10 @@ export const VisitorReview = z.object({
   body: z.string(),
   visitedAt: z.string().nullable(),
   imageUrls: z.array(z.string().url()),
+  // Naver review id when present in the source (Apollo cache or wire). Used
+  // by the persistence layer for dedup; FE clients can ignore it. Optional
+  // because not every review entry carries one.
+  externalId: z.string().nullable().optional(),
 });
 export type VisitorReviewType = z.infer<typeof VisitorReview>;
 
@@ -149,6 +157,16 @@ export const CrawlEvent = z.discriminatedUnion('type', [
     seq: z.number().int(),
     type: z.literal('visitor_progress'),
     count: z.number().int(),
+    at: z.string(),
+  }),
+  // Emitted after a "더보기" page has been persisted to the DB. `addedCount`
+  // is the post-dedup count actually inserted; the client uses this to drive
+  // the AI summary progress UI without needing an extra round-trip.
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('visitor_batch'),
+    reviews: z.array(VisitorReview),
+    addedCount: z.number().int(),
     at: z.string(),
   }),
   z.object({

@@ -1,16 +1,21 @@
 import {
   Routes,
   type CrawlJobListResultType,
-  type StartCrawlInputType,
+  type CrawlModeType,
   type StartCrawlResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
 
+export interface StartCrawlArgs {
+  url: string;
+  mode?: CrawlModeType;
+}
+
 export const crawlApi = {
-  start: (url: string) =>
+  start: ({ url, mode = 'create' }: StartCrawlArgs) =>
     apiFetch<StartCrawlResultType>(Routes.Crawl.naverPlace, {
       method: 'POST',
-      body: JSON.stringify({ url } satisfies StartCrawlInputType),
+      body: JSON.stringify({ url, mode }),
     }),
 
   list: () => apiFetch<CrawlJobListResultType>(Routes.Crawl.jobs),

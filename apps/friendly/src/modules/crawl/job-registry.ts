@@ -151,6 +151,11 @@ export class JobRegistry {
       job.stage = event.stage;
     } else if (event.type === 'visitor_progress') {
       job.visitorCount = event.count;
+    } else if (event.type === 'visitor_batch') {
+      // visitor_progress already tracks the cumulative *fetched* count from
+      // the wire; visitor_batch is about persisted-and-queued reviews. We
+      // intentionally don't overwrite visitorCount here so the wire-side
+      // counter keeps showing real-time pagination progress.
     } else if (event.type === 'partial') {
       job.stage = 'paginating_visitor';
     } else if (event.type === 'done') {

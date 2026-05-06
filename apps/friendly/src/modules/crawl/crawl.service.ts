@@ -1,16 +1,19 @@
 import type {
   CrawlEventType,
   CrawlErrorCodeType,
+  CrawlModeType,
   CrawlNaverPlaceResultType,
   CrawlStageType,
   NaverPlaceDataType,
   StartCrawlResultType,
+  VisitorReviewType,
 } from '@repo/api-contract';
 import {
   CrawlCancelledError,
   fetchNaverPlaceWithPlaywright,
   PlaceParseError,
   PlaywrightFetchError,
+  type ExistingReviewKeys,
 } from './adapters/naver-place.playwright.adapter.js';
 import {
   jobRegistry,
@@ -22,6 +25,8 @@ import {
   RedirectFailedError,
   UnsupportedUrlError,
 } from './url-normalizer.js';
+import type { RestaurantService } from '../restaurant/restaurant.service.js';
+import type { SummaryService } from '../summary/summary.service.js';
 
 const CACHE_TTL_MS = 30_000;
 const RATE_LIMIT_WINDOW_MS = 1_000;
@@ -46,17 +51,29 @@ export class CrawlService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly lastCallByActor = new Map<string, number>();
   private readonly registry: JobRegistry;
+  private readonly restaurants: RestaurantService;
+  private readonly summaries: SummaryService;
   private nextSeq = 1;
 
-  constructor(registry: JobRegistry = jobRegistry) {
+  constructor(
+    restaurants: RestaurantService,
+    summaries: SummaryService,
+    registry: JobRegistry = jobRegistry,
+  ) {
     this.registry = registry;
+    this.restaurants = restaurants;
+    this.summaries = summaries;
   }
 
   // Kick off a crawl. Returns immediately with the jobId; the actual work
   // runs in the background and reports progress through the registry's
   // event stream. Caching, rate-limiting, in-flight dedupe, and concurrency
   // caps all happen here before any Playwright work starts.
-  async startCrawl(rawUrl: string, actorId: string): Promise<StartCrawlResultType> {
+  async startCrawl(
+    rawUrl: string,
+    actorId: string,
+    mode: CrawlModeType = 'create',
+  ): Promise<StartCrawlResultType> {
     const now = Date.now();
 
     const last = this.lastCallByActor.get(actorId) ?? 0;
@@ -92,25 +109,29 @@ export class CrawlService {
 
     // Cache hit short-circuit — synthesize a one-shot job that emits
     // start → done immediately. Keeps callers on a single code path.
-    const cached = this.cache.get(normalized.placeId);
-    if (cached && cached.expiresAt > now) {
-      const created = this.tryCreateJob(rawUrl, normalized.placeId, actorId);
-      if (created.kind === 'error') return created.payload;
-      this.emit(created.id, {
-        type: 'progress',
-        stage: 'done',
-        message: 'cache hit',
-      });
-      this.emit(created.id, {
-        type: 'done',
-        result: {
-          ok: true,
-          data: cached.data,
-          fetchedAt: cached.fetchedAt,
-          durationMs: 0,
-        },
-      });
-      return { ok: true, jobId: created.id, deduped: false };
+    // Recrawl/update modes always need fresh data (the whole point is to
+    // bypass cached state), so we skip the short-circuit for them.
+    if (mode === 'create') {
+      const cached = this.cache.get(normalized.placeId);
+      if (cached && cached.expiresAt > now) {
+        const created = this.tryCreateJob(rawUrl, normalized.placeId, actorId);
+        if (created.kind === 'error') return created.payload;
+        this.emit(created.id, {
+          type: 'progress',
+          stage: 'done',
+          message: 'cache hit',
+        });
+        this.emit(created.id, {
+          type: 'done',
+          result: {
+            ok: true,
+            data: cached.data,
+            fetchedAt: cached.fetchedAt,
+            durationMs: 0,
+          },
+        });
+        return { ok: true, jobId: created.id, deduped: false };
+      }
     }
 
     const created = this.tryCreateJob(rawUrl, normalized.placeId, actorId);
@@ -124,6 +145,7 @@ export class CrawlService {
       created.signal,
       normalized.placeId,
       normalized.canonicalUrl,
+      mode,
     ).catch(() => undefined);
 
     return { ok: true, jobId: created.id, deduped: false };
@@ -164,18 +186,81 @@ export class CrawlService {
     signal: AbortSignal,
     placeId: string,
     canonicalUrl: string,
+    mode: CrawlModeType,
   ): Promise<void> {
     const startedAt = Date.now();
-    // No initial stage event here — the adapter's first onStage('launching')
-    // is what clients see. Until then the job sits at stage 'queued' (its
-    // creation default) which is exactly accurate.
+
+    // Pre-flight: when the user asked for a recrawl/update, find the
+    // existing restaurant row first. Recrawl wipes its reviews so the new
+    // crawl starts from a clean slate; update collects the existing review
+    // keys so the adapter can stop pagination once it sees only known rows.
+    let restaurantId: string | null = null;
+    let existingKeys: ExistingReviewKeys | undefined;
+    if (mode !== 'create') {
+      const r = await this.restaurants.findByPlaceId(placeId);
+      if (r) {
+        restaurantId = r.id;
+        if (mode === 'recrawl') {
+          await this.restaurants.clearReviewsAndSummaries(r.id);
+        } else {
+          existingKeys = await this.restaurants.getExistingReviewKeys(r.id);
+        }
+      }
+    }
+
+    // The persistence path is fire-and-forget so it doesn't block the next
+    // page click — but we must still serialize *within* a job, since two
+    // concurrent persistReviewBatch calls for the same restaurant would
+    // race on the existing-keys snapshot. A simple in-flight tail keeps the
+    // contract: each batch is persisted before the next one starts, but
+    // the adapter is never blocked.
+    let persistTail: Promise<void> = Promise.resolve();
+
+    const persistBatch = (batch: VisitorReviewType[]): void => {
+      if (batch.length === 0) return;
+      persistTail = persistTail
+        .then(async () => {
+          if (!restaurantId) return;
+          const { newReviewIds } = await this.restaurants.persistReviewBatch(
+            restaurantId,
+            batch.map((r) => ({ ...r, externalId: r.externalId ?? null })),
+          );
+          if (newReviewIds.length > 0) {
+            this.summaries.queueSummariesForReviews(newReviewIds);
+          }
+          this.emit(jobId, {
+            type: 'visitor_batch',
+            reviews: batch,
+            addedCount: newReviewIds.length,
+          });
+        })
+        .catch((err) => {
+          // Don't drop subsequent batches — log and continue. Crawl errors
+          // are handled by the outer try/catch via the adapter; this branch
+          // is purely DB/AI fallout.
+          // eslint-disable-next-line no-console
+          console.error('[crawl] persistBatch failed', err);
+        });
+    };
+
     try {
       const data = await fetchNaverPlaceWithPlaywright(placeId, canonicalUrl, {
         signal,
         onStage: (stage) => this.emit(jobId, { type: 'progress', stage }),
-        onPartial: (partial) => this.emit(jobId, { type: 'partial', data: partial }),
+        onPartial: (partial) => {
+          this.emit(jobId, { type: 'partial', data: partial });
+          // Capture the restaurant row id as soon as we have enough data.
+          // Subsequent visitor batches need this. Persist serially via the
+          // persist tail so we don't race with onVisitorBatch callbacks.
+          persistTail = persistTail.then(async () => {
+            const { id } = await this.restaurants.upsertRestaurantFromCrawl(partial);
+            restaurantId = id;
+          });
+        },
         onVisitorProgress: (count) =>
           this.emit(jobId, { type: 'visitor_progress', count }),
+        onVisitorBatch: (batch) => persistBatch(batch),
+        existingReviewKeys: existingKeys,
       });
 
       const fetchedAt = new Date().toISOString();
@@ -184,6 +269,22 @@ export class CrawlService {
         fetchedAt,
         expiresAt: Date.now() + CACHE_TTL_MS,
       });
+
+      // Final pass — Apollo's initial render (~20 reviews) is included in
+      // `data.visitorReviews` but never went through onVisitorBatch. Run it
+      // through the same persistence path; dedup makes the call idempotent.
+      persistBatch(data.visitorReviews);
+      // Also re-upsert the restaurant with the now-complete snapshot.
+      persistTail = persistTail.then(async () => {
+        const { id } = await this.restaurants.upsertRestaurantFromCrawl(data);
+        restaurantId = id;
+      });
+
+      // Wait for any outstanding persistence to finish before emitting
+      // 'done'. The UI relies on the visitor_batch addedCount sequence to
+      // drive its summary progress UI; emitting 'done' first would race.
+      await persistTail;
+
       this.emit(jobId, {
         type: 'done',
         result: {

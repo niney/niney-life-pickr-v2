@@ -11,6 +11,10 @@ import {
 import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
+import { RestaurantService } from '../restaurant/restaurant.service.js';
+import { SummaryService } from '../summary/summary.service.js';
+import { AiConfigService } from '../ai/ai.config.service.js';
+import { env } from '../../config/env.js';
 
 // SSE wire format. EventSource auto-reconnects with a `last-event-id`
 // header; we also accept `?afterSeq=` for explicit replay (e.g., a fresh
@@ -45,7 +49,16 @@ const parseAfterSeq = (req: FastifyRequest): number => {
 };
 
 const crawlRoutes: FastifyPluginAsync = async (app) => {
-  const service = new CrawlService(jobRegistry);
+  const restaurants = new RestaurantService(app.prisma);
+  const aiConfig = new AiConfigService(app.prisma, {
+    apiKey: env.OLLAMA_CLOUD_API_KEY,
+    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
+    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
+    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
+    defaultModel: env.OLLAMA_DEFAULT_MODEL,
+  });
+  const summaries = new SummaryService(app.prisma, aiConfig);
+  const service = new CrawlService(restaurants, summaries, jobRegistry);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   app.addHook('onClose', async () => {
@@ -64,7 +77,8 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       body: CrawlNaverPlaceInput,
       response: { 200: StartCrawlResult },
     },
-    handler: async (req) => service.startCrawl(req.body.url, req.user.userId),
+    handler: async (req) =>
+      service.startCrawl(req.body.url, req.user.userId, req.body.mode),
   });
 
   // GET — list jobs for the current user (running + recently finished).

@@ -66,3 +66,61 @@ model LlmProviderConfig {
 
   @@map("llm_provider_configs")
 }
+
+model Restaurant {
+  id             String   @id @default(cuid())
+  placeId        String   @unique
+  name           String
+  category       String?
+  address        String?
+  phone          String?
+  rating         Float?
+  reviewCount    Int?
+  rawSourceUrl   String
+  snapshotJson   String
+  firstCrawledAt DateTime @default(now())
+  lastCrawledAt  DateTime @updatedAt
+
+  visitorReviews VisitorReview[]
+
+  @@map("restaurants")
+}
+
+model VisitorReview {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  externalId    String?
+  authorName    String?
+  rating        Int?
+  body          String
+  visitedAt     String?
+  imageUrlsJson String
+  contentHash   String
+  fetchedAt     DateTime @default(now())
+
+  restaurant Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  summary    ReviewSummary?
+
+  @@unique([restaurantId, externalId])
+  @@unique([restaurantId, contentHash])
+  @@index([restaurantId])
+  @@map("visitor_reviews")
+}
+
+model ReviewSummary {
+  id           String    @id @default(cuid())
+  reviewId     String    @unique
+  status       String
+  text         String?
+  model        String?
+  errorCode    String?
+  errorMessage String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  review VisitorReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_summaries")
+}
