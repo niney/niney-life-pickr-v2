@@ -102,6 +102,13 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+    dependenciesMeta:
+      '@repo/api-contract':
+        injected: true
+      '@repo/config':
+        injected: true
+      '@repo/utils':
+        injected: true
 
   apps/mobile:
     dependencies:

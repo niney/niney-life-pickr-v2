@@ -18,6 +18,21 @@ const DEBUG_DIR = resolve(
   '../__debug__',
 );
 
+// Debug toggles for one-off experiments. Off by default.
+const HEADLESS = process.env.CRAWL_HEADLESS !== '0';
+const SLOW_MO = HEADLESS ? 0 : Number(process.env.CRAWL_SLOWMO ?? '250');
+// Visitor reviews pagination — click "더보기" until it disappears or we hit
+// the safety cap. Set to 0 to skip pagination (Apollo cache only — first ~20).
+// 30 pages × ~10 reviews/page = ~300 reviews max, enough for almost any place.
+const VISITOR_MAX_PAGES = Number(process.env.CRAWL_VISITOR_MAX_PAGES ?? '30');
+// Inter-click delay to avoid Naver rate-limiting on rapid pagination.
+const VISITOR_PAGE_DELAY_MS = Number(process.env.CRAWL_VISITOR_PAGE_DELAY_MS ?? '300');
+// In headed mode, pause the visitor subpage before closing so a human can
+// visually verify the "더보기" clicks landed. Headless mode never holds.
+const VISITOR_HOLD_MS = HEADLESS
+  ? 0
+  : Number(process.env.CRAWL_HOLD_MS ?? '5000');
+
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
@@ -25,7 +40,7 @@ let browserPromise: Promise<Browser> | null = null;
 
 const getBrowser = (): Promise<Browser> => {
   if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: true });
+    browserPromise = chromium.launch({ headless: HEADLESS, slowMo: SLOW_MO });
   }
   return browserPromise;
 };
@@ -604,18 +619,38 @@ const buildVisitorReview = (
   };
 };
 
+// Pull a stable id from a review record — Apollo cache keys, raw graphql
+// items, and the buildVisitorReview output all expose this differently. Used
+// for cross-source dedupe (wire vs Apollo state).
+const reviewId = (raw: unknown): string | null => {
+  if (!isObject(raw)) return null;
+  const id = raw['id'] ?? raw['reviewId'];
+  return typeof id === 'string' ? id : null;
+};
+
 const extractVisitorReviewsFromState = (
   state: Record<string, unknown>,
   placeId: string,
+  alreadySeenIds?: Set<string>,
 ): VisitorReviewType[] => {
   const out: VisitorReviewType[] = [];
+  const seenIds = alreadySeenIds ?? new Set<string>();
   const seenBodies = new Set<string>();
   const push = (raw: unknown) => {
     const r = buildVisitorReview(state, raw);
     if (!r) return;
-    const key = r.body.slice(0, 50);
-    if (seenBodies.has(key)) return;
-    seenBodies.add(key);
+    const id = reviewId(raw);
+    if (id) {
+      if (seenIds.has(id)) return;
+      seenIds.add(id);
+    } else {
+      // Body-based fallback — only for items without an id, since short
+      // reviews ("굿", "맛있어요") would otherwise collapse multiple distinct
+      // authors into one entry.
+      const k = r.body.slice(0, 50);
+      if (seenBodies.has(k)) return;
+      seenBodies.add(k);
+    }
     out.push(r);
   };
 
@@ -647,7 +682,69 @@ const extractVisitorReviewsFromState = (
     }
   }
 
-  return out.slice(0, 30);
+  return out.slice(0, 200);
+};
+
+// Visitor reviews come from POST /graphql responses whose `data.visitorReviews`
+// holds the items. Naver's SPA does NOT writeQuery new pages back into Apollo
+// cache after "더보기", so __APOLLO_STATE__ stays at the initial-render set; we
+// harvest wire responses for the paginated batches and merge with Apollo for
+// the initially-rendered ones.
+const parseVisitorReviewsFromCaptured = (
+  captured: unknown[],
+  alreadySeenIds?: Set<string>,
+): VisitorReviewType[] => {
+  const out: VisitorReviewType[] = [];
+  const seenIds = alreadySeenIds ?? new Set<string>();
+  const seenBodies = new Set<string>();
+
+  const visitItems = (items: unknown[]) => {
+    for (const raw of items) {
+      const r = buildVisitorReview(null, raw);
+      if (!r) continue;
+      const id = isObject(raw) ? (raw['id'] ?? raw['reviewId']) : null;
+      if (typeof id === 'string') {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+      } else {
+        const k = r.body.slice(0, 50);
+        if (seenBodies.has(k)) continue;
+        seenBodies.add(k);
+      }
+      out.push(r);
+    }
+  };
+
+  // Response can be a single body or a batch array. Walk visitorReviews
+  // wherever it appears under `data`.
+  const walk = (body: unknown): void => {
+    if (!isObject(body)) return;
+    const data = body['data'];
+    if (!isObject(data)) return;
+    for (const v of Object.values(data)) {
+      if (!isObject(v)) continue;
+      const items = v['items'] ?? v['reviews'] ?? v['list'];
+      if (Array.isArray(items)) {
+        // Heuristic: only keep arrays that look like visitor reviews — items
+        // should have a body/content field. Other queries may also expose
+        // `items` (e.g. menus) so we filter.
+        const looksLikeReview = items.some(
+          (x) =>
+            isObject(x) &&
+            (typeof x['body'] === 'string' ||
+              typeof x['content'] === 'string' ||
+              typeof x['reviewBody'] === 'string'),
+        );
+        if (looksLikeReview) visitItems(items);
+      }
+    }
+  };
+
+  for (const body of captured) {
+    if (Array.isArray(body)) for (const b of body) walk(b);
+    else walk(body);
+  }
+  return out;
 };
 
 const fetchVisitorReviewsViaSubpage = async (
@@ -657,11 +754,44 @@ const fetchVisitorReviewsViaSubpage = async (
   const url = `https://m.place.naver.com/restaurant/${placeId}/review/visitor`;
   const page = await ctx.newPage();
   try {
+    // In headed debug mode, keep CSS/fonts so the page is visually intact for the
+    // human watching; otherwise stay aggressive with abort to keep latency low.
     await page.route('**/*', (route) => {
       const type = route.request().resourceType();
-      if (SHOULD_BLOCK.has(type)) return route.abort();
-      return route.continue();
+      const block = HEADLESS
+        ? SHOULD_BLOCK.has(type)
+        : type === 'media';
+      return block ? route.abort() : route.continue();
     });
+
+    // Intercept any JSON response from Naver place hosts — wider than just
+    // /graphql because visitor reviews may come from other paths/methods.
+    // Each item carries its url so we can post-filter and diagnose.
+    interface CapturedResponse { url: string; method: string; body: unknown }
+    const captured: CapturedResponse[] = [];
+    page.on('response', async (res) => {
+      const u = res.url();
+      // The visitor-reviews "더보기" pager hits api.place.naver.com/graphql.
+      // Other Naver place hosts may also serve JSON we want — keep them.
+      if (
+        !u.includes('api.place.naver.com/graphql') &&
+        !u.includes('pcmap.place.naver.com') &&
+        !u.includes('place.naver.com/api') &&
+        !u.includes('m.place.naver.com/graphql')
+      ) {
+        return;
+      }
+      const ct = res.headers()['content-type'] ?? '';
+      if (!ct.includes('json')) return;
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        return;
+      }
+      if (body) captured.push({ url: u, method: res.request().method(), body });
+    });
+
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 });
       await page
@@ -670,28 +800,187 @@ const fetchVisitorReviewsViaSubpage = async (
     } catch {
       return [];
     }
-    const apolloState = await page
-      .evaluate<unknown>(
-        () =>
-          (globalThis as unknown as { __APOLLO_STATE__?: unknown })
-            .__APOLLO_STATE__ ?? null,
-      )
-      .catch(() => null);
 
-    if (DEBUG_CAPTURE && apolloState) {
+    const snapshotApolloState = (): Promise<unknown> =>
+      page
+        .evaluate<unknown>(
+          () =>
+            (globalThis as unknown as { __APOLLO_STATE__?: unknown })
+              .__APOLLO_STATE__ ?? null,
+        )
+        .catch(() => null);
+
+    const dumpApolloState = async (
+      label: 'after' | 'single',
+      apolloState: unknown,
+    ): Promise<void> => {
+      if (!DEBUG_CAPTURE) return;
       await mkdir(DEBUG_DIR, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const file = join(DEBUG_DIR, `visitor-${placeId}-${stamp}.json`);
-      await writeFile(
-        file,
-        JSON.stringify({ placeId, url, apolloState }, null, 2),
-        'utf-8',
-      );
-      console.log(`[crawl-debug] visitor reviews dump → ${file}`);
+      if (apolloState) {
+        const file = join(DEBUG_DIR, `visitor-${placeId}-${label}-${stamp}.json`);
+        await writeFile(
+          file,
+          JSON.stringify(
+            { placeId, url, label, capturedCount: captured.length, captured, apolloState },
+            null,
+            2,
+          ),
+          'utf-8',
+        );
+        // eslint-disable-next-line no-console
+        console.log(
+          `[crawl-debug] visitor reviews (${label}, captured=${captured.length}) → ${file}`,
+        );
+      }
+      // Bodies-only dump alongside — flatten GraphQL batch arrays and keep
+      // only the operations that carry data.visitorReviews. Matches the user-
+      // provided visitor.json shape (one entry per visitor-reviews response).
+      const isVisitorReviewsResponse = (b: unknown): boolean =>
+        isObject(b) && isObject(b['data']) && 'visitorReviews' in b['data'];
+      const visitorBodies = captured.flatMap((c) => {
+        const b = c.body;
+        return Array.isArray(b)
+          ? b.filter(isVisitorReviewsResponse)
+          : isVisitorReviewsResponse(b)
+            ? [b]
+            : [];
+      });
+      const bodiesFile = join(DEBUG_DIR, `visitor-${placeId}-${label}-bodies-${stamp}.json`);
+      await writeFile(bodiesFile, JSON.stringify(visitorBodies, null, 2), 'utf-8');
+    };
+
+    let apolloState: unknown;
+    // Naver uses both inline "펼쳐서 더보기" (expand a single review body)
+    // and a pager more-button. Try multiple selectors; prefer the LAST match
+    // because the pager sits below all the inline expand buttons.
+    const candidates = [
+      'a[role="button"]:has-text("리뷰 더보기")',
+      'button:has-text("리뷰 더보기")',
+      'a[role="button"]:has-text("더보기")',
+      'button:has-text("더보기")',
+    ];
+
+    const findMoreButton = async () => {
+      for (const sel of candidates) {
+        const matches = page.locator(sel);
+        const count = await matches.count().catch(() => 0);
+        if (count > 0) return { sel, target: matches.last() };
+      }
+      return null;
+    };
+
+    if (VISITOR_MAX_PAGES > 0) {
+      // Click "더보기" until it disappears or we hit the safety cap. Each
+      // click triggers a POST /graphql; we wait for that response before the
+      // next click so we never race ahead of pagination.
+      let pages = 0;
+      let consecutiveFailures = 0;
+      while (pages < VISITOR_MAX_PAGES) {
+        await page
+          .evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+          .catch(() => undefined);
+        await page.waitForTimeout(200);
+
+        const more = await findMoreButton();
+        if (!more) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[crawl-debug] visitor pagination done — no "더보기" after ${pages} click(s)`,
+          );
+          break;
+        }
+
+        // Pre-arm response wait so we don't miss the wire.
+        const beforeCaptured = captured.length;
+        const wireWait = page
+          .waitForResponse(
+            (res) =>
+              res.url().includes('api.place.naver.com/graphql') &&
+              res.request().method() === 'POST',
+            { timeout: 7_000 },
+          )
+          .catch(() => null);
+
+        let clicked = false;
+        try {
+          await more.target.scrollIntoViewIfNeeded({ timeout: 2_000 });
+          await more.target.click({ timeout: 3_000 });
+          clicked = true;
+        } catch {
+          try {
+            await more.target.evaluate((el) => (el as HTMLElement).click());
+            clicked = true;
+          } catch {
+            // unable to click — bail out
+          }
+        }
+
+        if (!clicked) {
+          // eslint-disable-next-line no-console
+          console.log(`[crawl-debug] visitor pagination: click failed at page ${pages + 1}, stopping`);
+          break;
+        }
+
+        await wireWait;
+        await page.waitForTimeout(VISITOR_PAGE_DELAY_MS);
+
+        const newResponses = captured.length - beforeCaptured;
+        pages += 1;
+        if (newResponses === 0) {
+          consecutiveFailures += 1;
+          // eslint-disable-next-line no-console
+          console.log(
+            `[crawl-debug] visitor page ${pages}: no new response (consecutive=${consecutiveFailures})`,
+          );
+          if (consecutiveFailures >= 2) break;
+        } else {
+          consecutiveFailures = 0;
+        }
+      }
+      if (pages >= VISITOR_MAX_PAGES) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[crawl-debug] visitor pagination capped at CRAWL_VISITOR_MAX_PAGES=${VISITOR_MAX_PAGES}`,
+        );
+      }
+
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
     }
 
-    if (!isObject(apolloState)) return [];
-    return extractVisitorReviewsFromState(apolloState, placeId);
+    apolloState = await snapshotApolloState();
+    await dumpApolloState(VISITOR_MAX_PAGES > 0 ? 'after' : 'single', apolloState);
+
+    if (VISITOR_HOLD_MS > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[crawl-debug] holding visitor page for ${VISITOR_HOLD_MS}ms`);
+      await page.waitForTimeout(VISITOR_HOLD_MS);
+    }
+
+    // Merge: Apollo cache holds the initially-rendered page (server-side
+    // hydrated, ~20 reviews), wire responses hold subsequent "더보기" pages.
+    // Apollo first so its ids prime the dedup set, then wire fills in the
+    // pages that didn't writeQuery back.
+    const seenIds = new Set<string>();
+    const fromApollo = isObject(apolloState)
+      ? extractVisitorReviewsFromState(apolloState, placeId, seenIds)
+      : [];
+    const fromWire = parseVisitorReviewsFromCaptured(
+      captured.map((c) => c.body),
+      seenIds,
+    );
+    // eslint-disable-next-line no-console
+    console.log(
+      `[crawl-debug] visitor reviews — apollo=${fromApollo.length}, wire=${fromWire.length}, captured=${captured.length}`,
+    );
+    if (fromApollo.length === 0 && fromWire.length === 0 && captured.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[crawl-debug] captured ${captured.length} responses but none looked like visitor reviews. Sample urls:`,
+        captured.slice(0, 5).map((c) => `${c.method} ${c.url}`),
+      );
+    }
+    return [...fromApollo, ...fromWire].slice(0, 200);
   } finally {
     await page.close().catch(() => undefined);
   }
