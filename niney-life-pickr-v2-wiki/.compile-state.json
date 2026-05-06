@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "last_compiled": "2026-05-07",
+  "mode": "codebase",
+  "topics": [
+    "project-overview",
+    "friendly",
+    "crawl",
+    "web",
+    "mobile",
+    "api-contract",
+    "shared",
+    "utils",
+    "config"
+  ],
+  "concepts": [
+    "zod-ssot-buildless",
+    "sse-token-auth",
+    "platform-ui-split"
+  ],
+  "source_locations": [
+    "README.md",
+    "CLAUDE.md",
+    "TECH_STACK.md",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "turbo.json",
+    "tsconfig.base.json",
+    "apps/friendly/",
+    "apps/web/",
+    "apps/mobile/",
+    "packages/api-contract/",
+    "packages/shared/",
+    "packages/utils/",
+    "packages/config/"
+  ],
+  "total_sources_scanned": 126
+}

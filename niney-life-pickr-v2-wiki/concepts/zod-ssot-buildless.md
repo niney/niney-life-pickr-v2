@@ -1,0 +1,42 @@
+---
+concept: Zod SSOT + 빌드 없는 src export
+last_compiled: 2026-05-07
+topics_connected: [api-contract, friendly, shared, web, mobile, utils]
+status: active
+---
+
+# Zod SSOT + 빌드 없는 src export
+
+## Pattern
+
+이 모노레포는 두 가지 결정이 한 쌍으로 묶여 있다: (1) **API I/O는 Zod 스키마로 한 번만 정의**하고, (2) **공유 패키지는 컴파일하지 않고 `src/*.ts`를 그대로 export**한다. 둘 다 따로 보면 각자 합리적이지만, 함께일 때 진짜 가치가 나온다 — 스키마 1개를 고치면 friendly의 검증, 자동 생성된 OpenAPI 문서, web과 mobile의 fetch 타입까지 모두 컴파일 타임에 즉시 동기화된다. 빌드 단계가 끼어 있으면 캐시 무효화·watch 재기동으로 마찰이 생기지만, src 직접 노출은 tsx (friendly), Vite (web), Metro (mobile)이 자연스럽게 처리한다.
+
+## Instances
+
+- **2026-05-07** in [[../topics/api-contract]]: `package.json`이 `./src/index.ts`를 main/types로 직접 가리킨다. 컴파일 산출물 없음. `Routes.Auth.login` 같은 경로 상수 + zod 스키마가 한 파일에서 노출.
+- **2026-05-07** in [[../topics/friendly]]: `fastify-type-provider-zod`로 동일 zod 스키마를 검증기 + 시리얼라이저 + OpenAPI 변환기로 재사용. `app.ts`가 `setValidatorCompiler` / `setSerializerCompiler`로 와이어링.
+- **2026-05-07** in [[../topics/shared]]: `client.ts`의 fetch 래퍼가 `ErrorResponseSchema.safeParse`로 응답 검증. API 함수 시그니처는 `z.infer<typeof X>`로 도출 — 별도 타입 선언 없음.
+- **2026-05-07** in [[../topics/web]] / [[../topics/mobile]]: 같은 `Routes.*` 상수와 `z.infer` 타입을 import. 하드코딩된 경로 문자열·타입 중복 0.
+- **2026-05-07** in [[../topics/utils]]: 같은 빌드 없는 패턴이 도메인 무관 헬퍼에도 적용. 외부 의존 0인 진짜 leaf.
+- **2026-05-07** in [[../topics/project-overview]]: CLAUDE.md 규칙 "공유 스키마는 `@repo/api-contract`에 추가" + 순환 의존 금지 (shared → api-contract OK, 반대 ❌).
+
+## What This Means
+
+빌드 없는 src export는 단순히 빌드 시간 절약이 아니다 — **Zod SSOT의 약속을 지키는 인프라**다. 만약 api-contract에 tsup 단계를 추가하면 즉각 watch 재기동·d.ts 캐시 무효화 문제가 따라붙고, "스키마 한 곳만 고치면 된다"는 약속이 부분적으로 깨진다. 그래서 두 결정은 사실상 한 묶음이다.
+
+이게 깨질 수 있는 시점:
+- **api-contract가 외부 패키지를 npm에 publish해야 할 때** — 그 시점엔 빌드 단계가 필요해진다. 그 전까지는 workspace 안에서만 사용
+- **공유 패키지에 사이드 이펙트가 생길 때** — 현재 모두 순수 (utils는 외부 의존 0, api-contract는 zod만, shared는 react/zustand/tanstack-query peer로). 사이드 이펙트가 들어오면 트리 셰이킹·SSR 호환성 문제가 시작됨
+- **TypeScript의 `verbatimModuleSyntax`를 끄고 싶어질 때** — 이 옵션이 켜져 있어야 isolatedModules 환경(Vite/Metro/tsx)에서 src 직접 import가 안전. 끄는 순간 미묘한 type-only import 문제 발생
+
+순환 의존 금지 규칙(`shared → api-contract`만 허용)도 이 패턴의 보호 장치다 — api-contract는 leaf로 유지돼야 SSOT 노드가 다중화되지 않는다.
+
+## Sources
+
+- [[../topics/api-contract]]
+- [[../topics/friendly]]
+- [[../topics/shared]]
+- [[../topics/web]]
+- [[../topics/mobile]]
+- [[../topics/utils]]
+- [[../topics/project-overview]]
