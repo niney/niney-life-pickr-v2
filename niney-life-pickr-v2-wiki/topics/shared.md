@@ -1,7 +1,7 @@
 ---
 topic: shared
 last_compiled: 2026-05-07
-sources_count: 24
+sources_count: 27
 status: active
 aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared"]
 ---
@@ -13,7 +13,7 @@ aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared"]
 `@repo/shared`는 web과 mobile에서 동시에 사용되는 프론트엔드 공통 코드를 모아둔 워크스페이스
 패키지다. 책임 영역은 다음과 같다.
 
-- 타입 안전한 fetch 래퍼와 도메인별 API 함수 (auth, picks, admin, crawl)
+- 타입 안전한 fetch 래퍼와 도메인별 API 함수 (auth, picks, admin, crawl, ai)
 - TanStack Query 훅 (서버 상태)
 - Zustand 인증 스토어 (클라이언트 상태)
 - 디자인 토큰·테마·`ThemeProvider`·CSS 변수 변환
@@ -23,7 +23,7 @@ aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared"]
 빌드 산출물 없이 `src/index.ts`를 그대로 노출(`"main": "./src/index.ts"`)하므로
 Turborepo 컨슈머는 별도 빌드 단계 없이 TS 소스를 바로 import한다.
 
-## 2. Architecture [coverage: high — 8 sources]
+## 2. Architecture [coverage: high — 9 sources]
 
 ```
 packages/shared/src/
@@ -33,12 +33,14 @@ packages/shared/src/
 │   ├── auth.api.ts
 │   ├── picks.api.ts
 │   ├── admin.api.ts
-│   └── crawl.api.ts        # SSE 엔드포인트 URL 빌더 포함
+│   ├── crawl.api.ts        # SSE 엔드포인트 URL 빌더 포함
+│   └── ai.api.ts           # LLM provider 관리 + complete/completeBatch
 ├── hooks/
 │   ├── useAuth.ts          # useCurrentUser, useLogin, useRegister, useLogout
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
 │   ├── useAdmin.ts
-│   └── useCrawl.ts         # useCrawlJobStream (EventSource reducer)
+│   ├── useCrawl.ts         # useCrawlJobStream (EventSource reducer)
+│   └── useAi.ts            # provider CRUD + complete/test/models
 ├── stores/
 │   └── authStore.ts        # Zustand: user / token / isGuest
 ├── design/
@@ -71,9 +73,10 @@ packages/shared/src/
   → web은 React 19, mobile은 React 18 + RN 0.76 양쪽을 만족한다.
 - 컨슈머: `apps/web` (Vite + React 19), `apps/mobile` (RN 0.76 + React 18).
 - 외부: `apiFetch`로 friendly API에 HTTP, `useCrawlJobStream`은 friendly의
-  SSE 엔드포인트(`Routes.Crawl.jobEvents`)에 EventSource로 접속.
+  SSE 엔드포인트(`Routes.Crawl.jobEvents`)에 EventSource로 접속, `aiApi`는
+  friendly의 `/api/v1/admin/ai/*` 라우트에 접속.
 
-## 4. API Surface [coverage: high — 12 sources]
+## 4. API Surface [coverage: high — 13 sources]
 
 **API 클라이언트 (`api/`)**
 - `configureApi(cfg)`, `getApiConfig()`, `apiFetch<T>(path, init)`, `ApiError`
@@ -81,12 +84,14 @@ packages/shared/src/
 - `picksApi`: `list`, `getById`, `create`, `update`, `remove`, `random`
 - `adminApi`: `listUsers`, `setRole`
 - `crawlApi`: `start`, `list`, `cancel` + `buildJobEventsUrl(jobId)` (SSE URL — `EventSource`가 헤더를 못 실으니 `?token=`으로 인증 토큰 전달)
+- `aiApi`: `complete`, `completeBatch`, `listProviders`, `updateProvider(id, input)`, `deleteProvider(id)` (→ 204 void), `testProvider(id, model?)`, `listModels(id)`. 모든 path는 모듈 상단 상수 `AI_PREFIX = '/api/v1/admin/ai'`로 하드코드.
 
 **React Query 훅 (`hooks/`)**
 - 인증: `useCurrentUser`, `useLogin`, `useRegister`, `useLogout`
 - 픽: `usePicks`, `usePick`, `useCreatePick`, `useUpdatePick`, `useDeletePick`, `useRandomPick`
 - 어드민: `useAdminUsers`, `useSetUserRole`
 - 크롤: `useStartCrawl`, `useCrawlJobs`, `useCancelCrawl`, `useCrawlJobStream`
+- AI: `useCompleteAi`, `useCompleteBatchAi`, `useProviders`, `useUpdateProvider`, `useDeleteProvider`, `useTestProvider`, `useProviderModels(id, enabled?)`
 
 **Zustand 스토어 (`stores/`)**
 - `useAuthStore`: `user`, `token`, `isGuest` + `setSession`, `setUser`, `enterGuest`, `clearSession`
@@ -105,7 +110,7 @@ packages/shared/src/
 **상수 (`constants/`)**
 - `APP_NAME = 'Life Pickr'`, `QUERY_STALE_TIME = 60_000`, `QUERY_GC_TIME = 300_000`
 
-## 5. Data [coverage: high — 3 sources]
+## 5. Data [coverage: high — 4 sources]
 
 **Auth 상태 모양** (`stores/authStore.ts`)
 ```ts
@@ -121,30 +126,36 @@ interface AuthState {
 baseUrl, getToken, onUnauthorized })`로 게터/콜백을 주입한다.
 - web: `localStorage` 기반
 - mobile: `AsyncStorage` 기반
+
 `apiFetch`는 매 요청마다 `await config.getToken?.()`을 호출해 `Authorization:
 Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백을 발동시켜
 앱이 세션 정리/리다이렉트를 수행하도록 한다.
 
-**클라이언트 캐시**는 TanStack Query가 전적으로 관리한다. `usePicks`는
-`['picks', 'list']`/`['picks', 'detail', id]` 쿼리키 팩토리를 사용하고, 변경 훅은
-`invalidateQueries`로 캐시를 갱신한다. 별도 로컬 캐시는 없다.
+**클라이언트 캐시**는 TanStack Query가 전적으로 관리한다.
+- `usePicks`는 `['picks', 'list']` / `['picks', 'detail', id]` 쿼리키 팩토리.
+- `useProviders`는 `['ai', 'providers']`. `useUpdateProvider` / `useDeleteProvider`가 onSuccess에서 `qc.invalidateQueries({ queryKey: ['ai', 'providers'] })` 호출.
+- `useProviderModels(id, enabled)`는 `['ai', 'providers', id, 'models']` — `staleTime: 60_000`, `retry: false`로 베스트-에포트 fetch (실패해도 에러 토스트 없이 빈 결과). UI 자동완성용 datalist에만 쓰이고 사용자가 직접 모델 id 입력 가능.
+
+별도 로컬 캐시는 없다.
 
 **SSE 스트림 상태** (`useCrawlJobStream`)는 reducer로 관리하며 `seq`로 중복 이벤트를
 드롭하고, `done`/`error` 종단 이벤트에서 클라이언트가 직접 `EventSource.close()`를
 호출해 브라우저 자동 재연결을 막는다.
 
-## 6. Key Decisions [coverage: high — 4 sources]
+## 6. Key Decisions [coverage: high — 6 sources]
 
 - **상태관리는 Zustand** — `CLAUDE.md`/TECH_STACK 가이드라인에 따라 Redux 대신 Zustand 채택. 인증처럼 전역 동기 상태에만 사용하고 서버 상태는 TanStack Query에 위임.
 - **서버 상태는 TanStack Query** — 쿼리 무효화 패턴으로 mutation 후 캐시 갱신.
 - **zod 타입 기반 fetch 래퍼** — `apiFetch`는 `ErrorResponseSchema.safeParse`로 서버 에러 형태를 검증해 일관된 `ApiError`로 변환. 요청/응답 타입은 `@repo/api-contract`에서만 정의.
+- **`apiFetch`는 body가 있을 때만 `Content-Type: application/json` 설정** — fastify는 `Content-Type: application/json` 헤더가 붙은 POST/PUT인데 body가 비어 있으면 `Body cannot be empty when content-type is set to 'application/json'` 에러로 거부한다. 이전 구현은 항상 헤더를 박아서 `aiApi.testProvider(id)`(model 없는 호출 → `JSON.stringify({})` 보냄)나 향후 빈 body 호출이 깨졌다. 변경 후엔 `init.body !== undefined && init.body !== null`인 경우에만 헤더를 합성. 204 No Content 응답은 별도로 처리해 `undefined`를 반환.
+- **AI path는 모듈 상수로 하드코드** — `ai.api.ts`는 `Routes.Ai` 네임스페이스 대신 모듈 상단 `const AI_PREFIX = '/api/v1/admin/ai'`를 쓴다. Vite의 esbuild prebundle이 `export * as Routes`로 묶인 inner 객체를 일부 시나리오에서 비워 떨어뜨리는 이슈 우회. 다른 도메인은 `Routes.*`를 그대로 쓰지만 AI 모듈만 명시적으로 끊어둠.
 - **로직은 공유, UI는 플랫폼 분리** — Tamagui 같은 통합 UI 솔루션을 도입하지 않고 (TECH_STACK 결정), 각 컴포넌트를 `.web.tsx` / `.native.tsx`로 쪼갠다. 공용 props는 `*.types.ts` 한 곳에만 두어 시그니처가 갈라지는 것을 방지.
 - **빌드 없는 소스 노출** — `package.json`이 `src/index.ts`를 그대로 main/types로 가리키므로 모노레포 컨슈머는 워크스페이스 링크만으로 즉시 사용. dist 산출물 없음.
 - **유연한 React peer** — `react >=18` peer로 web의 React 19와 mobile의 React 18을 동시에 만족.
 - **SSE 토큰은 쿼리스트링** — `EventSource`가 커스텀 헤더를 보낼 수 없어 `?token=` 방식으로 우회 (`buildJobEventsUrl`).
 - **중복 이벤트 방어** — SSE 재연결 시 서버가 `Last-Event-ID`로 리플레이하면 reducer가 `seq <= lastSeq`인 이벤트를 무시.
 
-## 7. Gotchas [coverage: high — 4 sources]
+## 7. Gotchas [coverage: high — 6 sources]
 
 - **확장자 해석 의존** — UI 프리미티브가 동작하려면 Vite/Webpack는 `.web.tsx`, Metro는 `.native.tsx`를 우선 해석하도록 설정돼 있어야 한다. 한 파일을 잘못 이름 붙이거나 번들러 resolver 설정이 풀리면 한쪽 플랫폼이 즉시 깨진다.
 - **React 18 하한선 고정** — peer가 `react >=18.0.0`. mobile이 RN 0.76 + React 18을 쓰는 한 절대 React 17 이하로 내릴 수 없다.
@@ -153,8 +164,11 @@ Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백
 - **`configureApi` 호출 누락** — 앱 부팅 시점에 `configureApi({ baseUrl, getToken, onUnauthorized })`를 안 부르면 `baseUrl`이 빈 문자열이라 모든 fetch가 동일 origin으로 새는 형태로 조용히 실패한다.
 - **`Button.tsx` 진입점은 현재 `.web.tsx`를 다시 export** — 공유 진입점이 사실상 web 구현을 가리키므로, 번들러가 확장자 우선순위를 올바르게 잡아야 native에서 정상 분기한다.
 - **`applyCssVars`는 `HTMLElement` 인자 필요** — RN에는 `HTMLElement`가 없다. CSS 변수 헬퍼는 web 전용 코드 경로에서만 호출할 것.
+- **`invalidateQueries` 키 매칭** — AI provider mutation은 `['ai', 'providers']`만 무효화한다. `['ai', 'providers', id, 'models']`는 prefix 매칭으로 함께 무효화되지만, 만약 향후 `useProviders` 키 모양을 바꾸면(예: `['ai', 'providers', { filter }]`) `useUpdateProvider`/`useDeleteProvider`의 invalidate 키도 같이 맞춰야 한다.
+- **EventSource SSE 인증 한계** — `useCrawlJobStream`는 `buildJobEventsUrl(jobId)`가 만든 `?token=<jwt>` URL을 사용한다. 토큰이 URL/access log/Referer 등에 노출될 수 있으므로 SSE 엔드포인트에는 짧은 수명의 토큰이나 별도 일회성 stream-token 발급을 고려해야 한다 (현재는 일반 JWT 그대로 사용).
+- **`testProvider`/`deleteProvider` 빈 body** — `aiApi.testProvider(id)`(인자 없음) 호출은 `JSON.stringify({})`를 보내지 않고 `JSON.stringify(model ? { model } : {})`로 빈 객체를 보낸다. 즉 body는 `'{}'`라 비어있지 않으므로 `Content-Type` 헤더가 합성된다. 반면 향후 인자가 정말 없는 POST를 추가할 거라면 `body`를 아예 omit해야 fastify가 받는다 (이게 `apiFetch` 변경의 핵심 포인트).
 
-## 8. Sources [coverage: high — 24 sources]
+## 8. Sources [coverage: high — 27 sources]
 
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
@@ -164,10 +178,12 @@ Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백
 - [packages/shared/src/api/picks.api.ts](../../packages/shared/src/api/picks.api.ts)
 - [packages/shared/src/api/admin.api.ts](../../packages/shared/src/api/admin.api.ts)
 - [packages/shared/src/api/crawl.api.ts](../../packages/shared/src/api/crawl.api.ts)
+- [packages/shared/src/api/ai.api.ts](../../packages/shared/src/api/ai.api.ts)
 - [packages/shared/src/hooks/useAuth.ts](../../packages/shared/src/hooks/useAuth.ts)
 - [packages/shared/src/hooks/usePicks.ts](../../packages/shared/src/hooks/usePicks.ts)
 - [packages/shared/src/hooks/useAdmin.ts](../../packages/shared/src/hooks/useAdmin.ts)
 - [packages/shared/src/hooks/useCrawl.ts](../../packages/shared/src/hooks/useCrawl.ts)
+- [packages/shared/src/hooks/useAi.ts](../../packages/shared/src/hooks/useAi.ts)
 - [packages/shared/src/stores/authStore.ts](../../packages/shared/src/stores/authStore.ts)
 - [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
@@ -180,3 +196,4 @@ Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백
 - [packages/shared/src/ui/Button/Button.types.ts](../../packages/shared/src/ui/Button/Button.types.ts)
 - [packages/shared/src/ui/Button/index.ts](../../packages/shared/src/ui/Button/index.ts)
 - [packages/shared/src/ui/](../../packages/shared/src/ui/) (Divider, ErrorBanner, Input, Screen, SegmentedControl, Stack, Text — 모두 동일한 `.types.ts` + `.tsx` + `.web.tsx` + `.native.tsx` 패턴)
+- [CLAUDE.md](../../CLAUDE.md)

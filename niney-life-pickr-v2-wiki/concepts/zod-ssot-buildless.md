@@ -1,7 +1,7 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
 last_compiled: 2026-05-07
-topics_connected: [api-contract, friendly, shared, web, mobile, utils]
+topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai]
 status: active
 ---
 
@@ -19,6 +19,7 @@ status: active
 - **2026-05-07** in [[../topics/web]] / [[../topics/mobile]]: 같은 `Routes.*` 상수와 `z.infer` 타입을 import. 하드코딩된 경로 문자열·타입 중복 0.
 - **2026-05-07** in [[../topics/utils]]: 같은 빌드 없는 패턴이 도메인 무관 헬퍼에도 적용. 외부 의존 0인 진짜 leaf.
 - **2026-05-07** in [[../topics/project-overview]]: CLAUDE.md 규칙 "공유 스키마는 `@repo/api-contract`에 추가" + 순환 의존 금지 (shared → api-contract OK, 반대 ❌).
+- **2026-05-07** in [[../topics/ai]]: AI 도메인이 그대로 같은 패턴을 따른다. `schemas/ai.ts`에 `AiCompleteInput`/`LlmProviderConfig`/`UpdateLlmProviderInput`/`TestLlmProviderResult` 등 정의 → friendly의 `ai.route.ts`가 동일 스키마로 `body`/`response` 검증 → shared의 `aiApi`/`useAi*` 훅이 `z.infer`로 타입 도출 → web의 `AdminAiKeysPage`/`AdminAiTestPage`가 같은 타입으로 폼/결과 렌더. 한 곳 수정 → 4개 컨슈머가 컴파일 타임에 동기화되는 약속이 신규 도메인에서도 깨지지 않음.
 
 ## What This Means
 

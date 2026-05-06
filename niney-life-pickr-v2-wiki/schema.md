@@ -21,8 +21,9 @@ last_updated: 2026-05-07
 | Slug | 범위 | 핵심 위치 |
 |---|---|---|
 | `project-overview` | 모노레포 전체 — 디렉터리, 워크플로, 공통 결정 | `README.md`, `CLAUDE.md`, `TECH_STACK.md`, 루트 설정 파일 |
-| `friendly` | Fastify 백엔드 (crawl 제외) | `apps/friendly/` |
+| `friendly` | Fastify 백엔드 (crawl·ai 제외) | `apps/friendly/` |
 | `crawl` | Naver Place 크롤러 모듈 | `apps/friendly/src/modules/crawl/` |
+| `ai` | LLM 통합 (Ollama Cloud) — provider config DB, 어댑터, 병렬 요청, admin UI 연동 | `apps/friendly/src/modules/ai/`, `packages/api-contract/src/schemas/ai.ts`, `apps/web/src/routes/admin/AdminAi*Page.tsx` |
 | `web` | Vite + React 19 SPA | `apps/web/` |
 | `mobile` | Expo 52 + RN 0.76 앱 | `apps/mobile/` |
 | `api-contract` | `@repo/api-contract` Zod 스키마 SSOT | `packages/api-contract/` |
@@ -34,9 +35,10 @@ last_updated: 2026-05-07
 
 | Slug | 연결 토픽 | 패턴 한 줄 |
 |---|---|---|
-| `zod-ssot-buildless` | api-contract, friendly, shared, web, mobile, utils, project-overview | Zod 스키마 SSOT는 빌드 없는 src export와 한 묶음 — 스키마 1개 변경 → 모든 컨슈머 컴파일 타임 동기화 |
+| `zod-ssot-buildless` | api-contract, friendly, shared, web, mobile, utils, project-overview, ai | Zod 스키마 SSOT는 빌드 없는 src export와 한 묶음 — 스키마 1개 변경 → 모든 컨슈머 컴파일 타임 동기화 |
 | `sse-token-auth` | friendly, crawl, shared, web | EventSource 헤더 한계 → SSE만 `?token=` 쿼리 인증 + Pino 로거에서 정규식 리덕션 |
 | `platform-ui-split` | shared, web, mobile, project-overview | 로직은 `@repo/shared`로 공유, UI는 `.web.tsx` / `.native.tsx`로 플랫폼 분기 — Tamagui/RN-Web 거부 |
+| `workspace-package-resolution` | api-contract, friendly, shared, web, project-overview | `@repo/*` 컨슈머 도달 체인 — pnpm `injected` → vite extensionAlias → esbuild prebundle namespace re-export → autoload 우회. 한 단계 깨지면 컨슈머 import 에러로 일관 출몰 |
 
 ## Topic Structure (article sections)
 
@@ -54,3 +56,4 @@ last_updated: 2026-05-07
 ## Evolution Log
 
 - **2026-05-07** — 초기 스키마 생성. 9개 토픽(project-overview, friendly, crawl, web, mobile, api-contract, shared, utils, config) + 3개 컨셉(zod-ssot-buildless, sse-token-auth, platform-ui-split)으로 시작. Codebase 모드, deep_scan=false. 사용자가 토픽/컨셉을 추가·이름 변경하려면 이 표를 직접 편집한 뒤 `/wiki-compile`을 다시 돌리면 된다.
+- **2026-05-07** — `ai` 토픽 추가 (Ollama Cloud 통합 + 어드민 키/테스트 UI 도입과 함께). `workspace-package-resolution` 컨셉 추가 — AI 모듈 작업 중 `Routes.Ai` namespace re-export 우회·`vitest.config` extensionAlias·workspace symlink 깨짐을 정리하면서 cross-cutting 함정으로 식별됨. `zod-ssot-buildless`의 연결 토픽에 `ai` 추가 (같은 SSOT 패턴이 신규 도메인에서도 그대로 적용됨).

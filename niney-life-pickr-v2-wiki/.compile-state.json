@@ -6,6 +6,7 @@
     "project-overview",
     "friendly",
     "crawl",
+    "ai",
     "web",
     "mobile",
     "api-contract",
@@ -16,7 +17,8 @@
   "concepts": [
     "zod-ssot-buildless",
     "sse-token-auth",
-    "platform-ui-split"
+    "platform-ui-split",
+    "workspace-package-resolution"
   ],
   "source_locations": [
     "README.md",
@@ -34,5 +36,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 126
+  "total_sources_scanned": 145
 }

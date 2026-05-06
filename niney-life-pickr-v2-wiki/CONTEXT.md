@@ -10,7 +10,7 @@
    - `[coverage: high]` — 이 섹션 신뢰, 원시 파일 안 봐도 됨
    - `[coverage: medium]` — 좋은 개요지만 코드 디테일은 원시 소스 확인
    - `[coverage: low]` — Sources에 적힌 원시 파일을 직접 읽기
-4. **`concepts/` 확인** — 횡단 패턴(Zod SSOT, SSE 인증, UI 플랫폼 분기). 여러 토픽에 걸친 결정의 "왜"가 여기 있음
+4. **`concepts/` 확인** — 횡단 패턴(Zod SSOT, SSE 인증, UI 플랫폼 분기, workspace 패키지 해결 체인). 여러 토픽에 걸친 결정의 "왜"가 여기 있음
 5. **마지막에 원시 소스** — 코드 레벨 디테일이 필요할 때만
 
 ## When NOT to use the wiki
@@ -25,14 +25,15 @@
 
 ## Stats
 
-Compiled: 2026-05-07 | Topics: 9 | Concepts: 3 | Sources: 126
+Compiled: 2026-05-07 | Topics: 10 | Concepts: 4 | Sources: 145
 
 ## Topic map at a glance
 
 ```
 project-overview  (모노레포 전체)
 ├── friendly     (Fastify 백엔드)
-│   └── crawl    (Naver Place 크롤러 — 별도 토픽)
+│   ├── crawl    (Naver Place 크롤러 — 별도 토픽)
+│   └── ai       (Ollama Cloud 통합 + admin UI — 별도 토픽)
 ├── web          (Vite + React 19)
 ├── mobile       (Expo + RN 0.76)
 └── packages/
