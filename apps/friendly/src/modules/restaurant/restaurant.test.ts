@@ -31,7 +31,13 @@ const adminToken = (app: FastifyInstance) =>
 const userToken = (app: FastifyInstance) =>
   app.jwt.sign({ userId: 'user-test', email: 'u@x.com', role: 'USER' });
 
-const stamp = () => `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+// Per-file prefix — vitest runs test files in parallel against the same
+// dev.db, and afterEach hooks use placeId prefix matching to clean up. If
+// two files share a prefix, one's cleanup will cascade-delete the other's
+// in-flight rows. Keep prefixes file-local.
+const PLACE_PREFIX = 'tr-';
+const stamp = () =>
+  `${PLACE_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const placeData = (overrides: Partial<NaverPlaceDataType> = {}): NaverPlaceDataType => ({
   placeId: stamp(),
@@ -82,7 +88,7 @@ describe('RestaurantService', () => {
     // are removed by id. We use unique placeIds per test so cross-test
     // pollution doesn't matter, but we still clean up to keep dev.db tidy.
     await app.prisma.restaurant.deleteMany({
-      where: { placeId: { startsWith: 't-' } },
+      where: { placeId: { startsWith: PLACE_PREFIX } },
     });
   });
 

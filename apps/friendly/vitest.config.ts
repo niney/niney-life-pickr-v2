@@ -37,7 +37,12 @@ export default defineConfig({
       // Inline workspace packages so the extensionAlias above also applies
       // to imports inside @repo/*. Otherwise their `*.js` re-exports stay
       // unresolved and namespace imports come back undefined.
-      deps: { inline: [/^@repo\//] },
+      // @fastify/autoload uses dynamic import to load plugins/routes at
+      // runtime — without inlining it goes through Node's resolver which
+      // doesn't know about extensionAlias, so `import './foo.js'` fails to
+      // resolve `foo.ts`. Inlining routes those imports through Vite's
+      // pipeline.
+      deps: { inline: [/^@repo\//, '@fastify/autoload'] },
     },
   },
 });

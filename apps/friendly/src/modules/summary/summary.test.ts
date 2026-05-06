@@ -27,7 +27,10 @@ const buildApp = async (): Promise<FastifyInstance> => {
   return app;
 };
 
-const stamp = () => `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+// Per-file prefix — see restaurant.test.ts for why this matters.
+const PLACE_PREFIX = 'ts-';
+const stamp = () =>
+  `${PLACE_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const fakeProvider = (
   fn: (model: string, prompt: string) => Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null }>,
@@ -50,7 +53,7 @@ describe('SummaryService', () => {
 
   afterEach(async () => {
     await app.prisma.restaurant.deleteMany({
-      where: { placeId: { startsWith: 't-' } },
+      where: { placeId: { startsWith: PLACE_PREFIX } },
     });
   });
 
@@ -126,7 +129,7 @@ describe('SummaryService', () => {
   it('records failures per row without aborting siblings', async () => {
     const reviewIds = await seed(['ok', 'will fail', 'ok2']);
     const provider = fakeProvider(async (_model, prompt) => {
-      if (prompt.includes('will fail')) throw new LLMUpstreamError('boom');
+      if (prompt.includes('will fail')) throw new LLMUpstreamError(500, 'boom');
       return { text: `요약 ${prompt}`, model: 'm', promptTokens: 1, completionTokens: 1 };
     });
     const aiConfig = new AiConfigService(app.prisma, {
