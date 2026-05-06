@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Beaker, Home, Shield, UtensilsCrossed, type LucideIcon } from 'lucide-react';
+import { Beaker, Home, KeyRound, Shield, Sparkles, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { cn } from '~/lib/utils';
 
 interface NavItem {
@@ -13,6 +13,8 @@ const NAV: NavItem[] = [
   { to: '/admin', label: '홈', icon: Home, end: true },
   { to: '/admin/restaurants', label: '맛집', icon: UtensilsCrossed },
   { to: '/admin/crawl-test', label: '크롤링 테스트', icon: Beaker },
+  { to: '/admin/ai-keys', label: 'AI 키', icon: KeyRound },
+  { to: '/admin/ai-test', label: 'AI 테스트', icon: Sparkles },
 ];
 
 export const AdminLayout = () => (

@@ -28,7 +28,11 @@ export const getApiConfig = (): ApiClientConfig => config;
 export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   const token = await config.getToken?.();
   const headers = new Headers(init.headers);
-  headers.set('Content-Type', 'application/json');
+  // Only declare JSON when we actually have a body — fastify rejects POST/PUT
+  // requests that say `Content-Type: application/json` but send nothing.
+  if (init.body !== undefined && init.body !== null) {
+    headers.set('Content-Type', 'application/json');
+  }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const res = await fetch(`${config.baseUrl}${path}`, { ...init, headers });

@@ -52,3 +52,17 @@ model PickResult {
   @@index([pickId])
   @@map("pick_results")
 }
+
+model LlmProviderConfig {
+  id            String   @id @default(cuid())
+  provider      String   @unique
+  apiKey        String
+  baseUrl       String?
+  defaultModel  String?
+  enabled       Boolean  @default(true)
+  maxConcurrent Int      @default(15)
+  updatedAt     DateTime @updatedAt
+  updatedById   String?
+
+  @@map("llm_provider_configs")
+}

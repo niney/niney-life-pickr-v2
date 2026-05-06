@@ -30,4 +30,13 @@ export const Crawl = {
   jobEvents: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}/events`,
 } as const;
 
+export const Ai = {
+  complete: `${API_PREFIX}/admin/ai/complete`,
+  completeBatch: `${API_PREFIX}/admin/ai/complete-batch`,
+  providers: `${API_PREFIX}/admin/ai/providers`,
+  provider: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}`,
+  testProvider: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}/test`,
+  providerModels: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}/models`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;
