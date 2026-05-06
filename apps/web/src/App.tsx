@@ -55,6 +55,7 @@ export const App = () => {
         <Route index element={<AdminHomePage />} />
         <Route path="restaurants" element={<AdminRestaurantsPage />} />
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />
+        <Route path="crawl-test/:jobId" element={<AdminCrawlTestPage />} />
       </Route>
     </Routes>
   );

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import type {
   BlogReviewType,
+  CrawlStageType,
   MenuItemType,
   NaverPlaceDataType,
   RatingDistributionBucketType,
@@ -11,6 +12,28 @@ import type {
   ReviewThemeKeywordType,
   VisitorReviewType,
 } from '@repo/api-contract';
+
+// Hooks let the caller observe progress without coupling to a transport
+// (SSE, log, future websocket — same API). Optional everywhere so the
+// adapter can still be called as a pure "fetch + return" function (tests,
+// scripts).
+export interface AdapterHooks {
+  signal?: AbortSignal;
+  onStage?: (stage: CrawlStageType) => void;
+  onPartial?: (data: NaverPlaceDataType) => void;
+  onVisitorProgress?: (count: number) => void;
+}
+
+export class CrawlCancelledError extends Error {
+  constructor() {
+    super('Crawl cancelled');
+    this.name = 'CrawlCancelledError';
+  }
+}
+
+const throwIfAborted = (signal?: AbortSignal): void => {
+  if (signal?.aborted) throw new CrawlCancelledError();
+};
 
 const DEBUG_CAPTURE = process.env.CRAWL_DEBUG_CAPTURE === '1';
 const DEBUG_DIR = resolve(
@@ -750,6 +773,7 @@ const parseVisitorReviewsFromCaptured = (
 const fetchVisitorReviewsViaSubpage = async (
   ctx: BrowserContext,
   placeId: string,
+  hooks?: AdapterHooks,
 ): Promise<VisitorReviewType[]> => {
   const url = `https://m.place.naver.com/restaurant/${placeId}/review/visitor`;
   const page = await ctx.newPage();
@@ -792,6 +816,8 @@ const fetchVisitorReviewsViaSubpage = async (
       if (body) captured.push({ url: u, method: res.request().method(), body });
     });
 
+    hooks?.onStage?.('loading_visitor');
+    throwIfAborted(hooks?.signal);
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 });
       await page
@@ -800,6 +826,7 @@ const fetchVisitorReviewsViaSubpage = async (
     } catch {
       return [];
     }
+    throwIfAborted(hooks?.signal);
 
     const snapshotApolloState = (): Promise<unknown> =>
       page
@@ -871,12 +898,14 @@ const fetchVisitorReviewsViaSubpage = async (
     };
 
     if (VISITOR_MAX_PAGES > 0) {
+      hooks?.onStage?.('paginating_visitor');
       // Click "더보기" until it disappears or we hit the safety cap. Each
       // click triggers a POST /graphql; we wait for that response before the
       // next click so we never race ahead of pagination.
       let pages = 0;
       let consecutiveFailures = 0;
       while (pages < VISITOR_MAX_PAGES) {
+        throwIfAborted(hooks?.signal);
         await page
           .evaluate(() => window.scrollTo(0, document.body.scrollHeight))
           .catch(() => undefined);
@@ -936,6 +965,19 @@ const fetchVisitorReviewsViaSubpage = async (
           if (consecutiveFailures >= 2) break;
         } else {
           consecutiveFailures = 0;
+        }
+
+        // Emit a running count after each successful page. We compute it
+        // optimistically from wire responses we've already captured plus
+        // Apollo's initial set — Apollo cache won't reflect "더보기" pages
+        // (Naver SPA doesn't writeQuery), so wire is what grows.
+        if (hooks?.onVisitorProgress) {
+          const probeIds = new Set<string>();
+          const wireSoFar = parseVisitorReviewsFromCaptured(
+            captured.map((c) => c.body),
+            probeIds,
+          );
+          hooks.onVisitorProgress(wireSoFar.length);
         }
       }
       if (pages >= VISITOR_MAX_PAGES) {
@@ -1061,7 +1103,10 @@ const SHOULD_BLOCK = new Set(['image', 'font', 'media', 'stylesheet']);
 export const fetchNaverPlaceWithPlaywright = async (
   placeId: string,
   canonicalUrl: string,
+  hooks?: AdapterHooks,
 ): Promise<NaverPlaceDataType> => {
+  hooks?.onStage?.('launching');
+  throwIfAborted(hooks?.signal);
   const browser = await getBrowser();
   let ctx: BrowserContext | null = null;
   try {
@@ -1094,6 +1139,8 @@ export const fetchNaverPlaceWithPlaywright = async (
       }
     });
 
+    hooks?.onStage?.('loading_main');
+    throwIfAborted(hooks?.signal);
     try {
       await page.goto(canonicalUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
       await page
@@ -1104,6 +1151,8 @@ export const fetchNaverPlaceWithPlaywright = async (
         e instanceof Error ? `Navigation failed: ${e.message}` : 'Navigation failed',
       );
     }
+    throwIfAborted(hooks?.signal);
+    hooks?.onStage?.('parsing_main');
 
     const apolloState = await page
       .evaluate<unknown>(
@@ -1159,14 +1208,34 @@ export const fetchNaverPlaceWithPlaywright = async (
 
     const placeDetailContainer = findPlaceDetailContainer(apolloStateObj, placeId);
 
-    // Fetch visitor reviews from the dedicated subpage (best-effort — tolerate failure)
+    // Emit a partial snapshot — main page parsed, visitor reviews still
+    // pending. Lets the UI render the place card immediately while visitor
+    // pagination (which can take minutes) streams in.
+    if (hooks?.onPartial) {
+      hooks.onPartial(
+        buildPlaceData(
+          placeId,
+          canonicalUrl,
+          placeNode,
+          apolloStateObj,
+          placeDetailContainer,
+          [],
+        ),
+      );
+    }
+
+    throwIfAborted(hooks?.signal);
+    // Fetch visitor reviews from the dedicated subpage (best-effort — tolerate
+    // failure, but propagate cancellation).
     let visitorReviews: VisitorReviewType[] = [];
     try {
-      visitorReviews = await fetchVisitorReviewsViaSubpage(ctx, placeId);
-    } catch {
+      visitorReviews = await fetchVisitorReviewsViaSubpage(ctx, placeId, hooks);
+    } catch (e) {
+      if (e instanceof CrawlCancelledError) throw e;
       visitorReviews = [];
     }
 
+    hooks?.onStage?.('finalizing');
     return buildPlaceData(
       placeId,
       canonicalUrl,

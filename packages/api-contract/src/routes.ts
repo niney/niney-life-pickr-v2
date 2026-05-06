@@ -25,6 +25,9 @@ export const Admin = {
 
 export const Crawl = {
   naverPlace: `${API_PREFIX}/admin/crawl/naver-place`,
+  jobs: `${API_PREFIX}/admin/crawl/jobs`,
+  job: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}`,
+  jobEvents: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}/events`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;

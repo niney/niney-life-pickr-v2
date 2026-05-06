@@ -87,6 +87,10 @@ export const CrawlErrorCode = z.enum([
   'parse_failed',
   'place_not_found',
   'rate_limited',
+  'max_concurrent',
+  'cancelled',
+  'not_found',
+  'forbidden',
 ]);
 export type CrawlErrorCodeType = z.infer<typeof CrawlErrorCode>;
 
@@ -105,3 +109,101 @@ export const CrawlNaverPlaceResult = z.discriminatedUnion('ok', [
   }),
 ]);
 export type CrawlNaverPlaceResultType = z.infer<typeof CrawlNaverPlaceResult>;
+
+// Job-based streaming model — SSE.
+// Each event carries an incrementing seq used by clients to dedupe across
+// reconnects. Stage names are coarse-grained — fine enough for a UI stepper,
+// not so fine that they leak adapter implementation details.
+export const CrawlStage = z.enum([
+  'queued',
+  'normalizing',
+  'launching',
+  'loading_main',
+  'parsing_main',
+  'loading_visitor',
+  'paginating_visitor',
+  'finalizing',
+  'done',
+]);
+export type CrawlStageType = z.infer<typeof CrawlStage>;
+
+export const CrawlEvent = z.discriminatedUnion('type', [
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('progress'),
+    stage: CrawlStage,
+    message: z.string().optional(),
+    at: z.string(),
+  }),
+  // Main page parsed but visitor reviews still loading — UI can render the
+  // place card immediately while visitor list streams in below.
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('partial'),
+    data: NaverPlaceData,
+    at: z.string(),
+  }),
+  // Emitted on each "더보기" click during visitor pagination so UI can show
+  // a live count without rebuilding the card.
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('visitor_progress'),
+    count: z.number().int(),
+    at: z.string(),
+  }),
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('done'),
+    result: CrawlNaverPlaceResult,
+    at: z.string(),
+  }),
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('error'),
+    error: CrawlErrorCode,
+    message: z.string(),
+    at: z.string(),
+  }),
+]);
+export type CrawlEventType = z.infer<typeof CrawlEvent>;
+
+export const CrawlJobStatus = z.enum(['running', 'done', 'failed', 'cancelled']);
+export type CrawlJobStatusType = z.infer<typeof CrawlJobStatus>;
+
+export const CrawlJob = z.object({
+  id: z.string(),
+  url: z.string(),
+  placeId: z.string().nullable(),
+  status: CrawlJobStatus,
+  stage: CrawlStage,
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  visitorCount: z.number().int(),
+  // Final result attached only when status !== 'running'.
+  result: CrawlNaverPlaceResult.nullable(),
+});
+export type CrawlJobType = z.infer<typeof CrawlJob>;
+
+export const StartCrawlInput = CrawlNaverPlaceInput;
+export type StartCrawlInputType = z.infer<typeof StartCrawlInput>;
+
+export const StartCrawlResult = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    jobId: z.string(),
+    // Server may dedupe and return an existing in-flight jobId.
+    deduped: z.boolean(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    error: CrawlErrorCode,
+    message: z.string(),
+    triedUrl: z.string().optional(),
+  }),
+]);
+export type StartCrawlResultType = z.infer<typeof StartCrawlResult>;
+
+export const CrawlJobListResult = z.object({
+  jobs: z.array(CrawlJob),
+});
+export type CrawlJobListResultType = z.infer<typeof CrawlJobListResult>;

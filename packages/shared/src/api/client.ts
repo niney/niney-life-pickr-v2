@@ -23,6 +23,8 @@ export const configureApi = (cfg: ApiClientConfig): void => {
   config = cfg;
 };
 
+export const getApiConfig = (): ApiClientConfig => config;
+
 export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   const token = await config.getToken?.();
   const headers = new Headers(init.headers);
