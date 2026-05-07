@@ -5,6 +5,7 @@ import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
 import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
 import { AdminHomePage } from './routes/admin/AdminHomePage';
+import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailPage';
 import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
@@ -56,6 +57,7 @@ export const App = () => {
       >
         <Route index element={<AdminHomePage />} />
         <Route path="restaurants" element={<AdminRestaurantsPage />} />
+        <Route path="restaurants/:placeId" element={<AdminRestaurantDetailPage />} />
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />
         <Route path="crawl-test/:jobId" element={<AdminCrawlTestPage />} />
         <Route path="ai-keys" element={<AdminAiKeysPage />} />

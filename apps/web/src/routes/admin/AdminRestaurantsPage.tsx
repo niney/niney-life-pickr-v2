@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -8,7 +9,6 @@ import {
   Loader2,
   Play,
   RefreshCw,
-  Sparkles,
   Trash2,
   UtensilsCrossed,
   XCircle,
@@ -28,13 +28,12 @@ import type {
   CrawlStageType,
   RestaurantDetailType,
   RestaurantListItemType,
-  RestaurantSummaryProgressType,
-  VisitorReviewWithSummaryType,
 } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { ReviewSummarySection, SummaryProgressSection } from '~/components/restaurant/sections';
 
 const NAVER_PLACE_HOSTS = ['naver.com', 'naver.me'];
 
@@ -73,106 +72,6 @@ interface ActiveJob {
 
 const summaryInFlight = (item: RestaurantListItemType): number =>
   item.summaryPending + item.summaryRunning;
-
-// Section header inside the flat ActiveJobPanel — small icon + label,
-// optional trailing meta. Replaces the nested Card/CardHeader pattern so
-// the panel reads as one card with horizontal dividers.
-const SectionHeader = ({
-  icon,
-  label,
-  meta,
-}: {
-  icon?: ReactNode;
-  label: string;
-  meta?: ReactNode;
-}) => (
-  <div className="flex items-center justify-between gap-2 text-sm font-medium">
-    <span className="flex items-center gap-2">
-      {icon}
-      {label}
-    </span>
-    {meta && <span className="text-xs font-normal text-muted-foreground">{meta}</span>}
-  </div>
-);
-
-const SummaryProgressSection = ({
-  status,
-}: {
-  status: RestaurantSummaryProgressType;
-}) => {
-  const inFlight = status.pending + status.running;
-  const total = inFlight + status.done + status.failed;
-  return (
-    <section className="space-y-3">
-      <SectionHeader
-        icon={<Sparkles className="size-4 text-primary" />}
-        label="AI 요약"
-        meta={
-          <>
-            저장된 리뷰 {status.totalReviews}개 · {status.done}/{total} 완료
-          </>
-        }
-      />
-      <div className="flex flex-wrap gap-2 text-xs">
-        <Badge variant="secondary">대기 {status.pending}</Badge>
-        <Badge variant="secondary">진행 {status.running}</Badge>
-        <Badge variant="secondary">완료 {status.done}</Badge>
-        {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
-      </div>
-      {status.recentDone.length > 0 && (
-        <ul className="space-y-1.5 text-sm text-muted-foreground">
-          {status.recentDone.map((s) => (
-            <li key={s.reviewId} className="line-clamp-2 leading-relaxed">
-              · {s.text}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-};
-
-const ReviewSummarySection = ({
-  reviews,
-}: {
-  reviews: VisitorReviewWithSummaryType[];
-}) => {
-  if (reviews.length === 0) return null;
-  return (
-    <section className="space-y-2">
-      <SectionHeader label={`리뷰 (${reviews.length})`} />
-      <ul className="divide-y">
-        {reviews.slice(0, 50).map((r) => (
-          <li key={r.id} className="space-y-1.5 py-3 first:pt-0 last:pb-0">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {r.authorName && <span className="font-medium">{r.authorName}</span>}
-              {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
-              {r.visitedAt && <span>· {r.visitedAt}</span>}
-            </div>
-            <p className="line-clamp-3 text-sm">{r.body}</p>
-            <div className="border-l-2 border-primary/40 pl-2 text-xs">
-              {!r.summary && <span className="text-muted-foreground">요약 없음</span>}
-              {r.summary?.status === 'pending' && (
-                <span className="text-muted-foreground">요약 대기 중…</span>
-              )}
-              {r.summary?.status === 'running' && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" /> 요약 중…
-                </span>
-              )}
-              {r.summary?.status === 'done' && <span>{r.summary.text}</span>}
-              {r.summary?.status === 'failed' && (
-                <span className="text-destructive">
-                  실패: {r.summary.errorMessage ?? r.summary.errorCode ?? 'unknown'}
-                </span>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-};
 
 // Inline progress panel — rendered either at the top (for new-URL jobs,
 // before we know the placeId) or stretched under a list row once placeId
@@ -317,9 +216,37 @@ const RestaurantRow = ({
   onDelete: () => void;
   onCancelDelete: () => void;
 }) => {
+  const navigate = useNavigate();
   const inFlight = summaryInFlight(item);
+  // Whole row navigates to the detail page. Buttons stop propagation so
+  // their own actions don't trigger the row click. While a job is active
+  // for this row the inline panel is mounted underneath, so we suppress
+  // the navigation to avoid yanking the panel away.
+  const handleRowClick = () => {
+    if (busy || deleting || confirmingDelete) return;
+    navigate(`/admin/restaurants/${item.placeId}`);
+  };
+  const stop = (fn: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fn();
+  };
   return (
-    <div className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={handleRowClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleRowClick();
+        }
+      }}
+      className={`flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center ${
+        busy || deleting || confirmingDelete
+          ? 'cursor-default'
+          : 'cursor-pointer hover:bg-muted/40'
+      }`}
+    >
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm font-semibold">{item.name}</span>
@@ -347,7 +274,7 @@ const RestaurantRow = ({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => onAction('update')}
+          onClick={stop(() => onAction('update'))}
           disabled={busy}
         >
           <ChevronRight />
@@ -356,7 +283,7 @@ const RestaurantRow = ({
         <Button
           type="button"
           size="sm"
-          onClick={() => onAction('recrawl')}
+          onClick={stop(() => onAction('recrawl'))}
           disabled={busy}
         >
           <RefreshCw />
@@ -368,7 +295,7 @@ const RestaurantRow = ({
               type="button"
               variant="destructive"
               size="sm"
-              onClick={onDelete}
+              onClick={stop(onDelete)}
               disabled={deleting}
             >
               {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
@@ -378,7 +305,7 @@ const RestaurantRow = ({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onCancelDelete}
+              onClick={stop(onCancelDelete)}
               disabled={deleting}
             >
               취소
@@ -389,7 +316,7 @@ const RestaurantRow = ({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={onDelete}
+            onClick={stop(onDelete)}
             disabled={busy}
             aria-label="삭제"
             title="삭제"

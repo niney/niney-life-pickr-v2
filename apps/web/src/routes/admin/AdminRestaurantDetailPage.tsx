@@ -1,0 +1,614 @@
+import { useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Clock,
+  ExternalLink,
+  Image as ImageIcon,
+  Info,
+  Loader2,
+  RefreshCw,
+  Star,
+  Trash2,
+  UtensilsCrossed,
+} from 'lucide-react';
+import {
+  ApiError,
+  useDeleteRestaurant,
+  useRestaurantByPlaceId,
+  useRestaurantSummaryEvents,
+  useStartCrawl,
+} from '@repo/shared';
+import type {
+  BlogReviewType,
+  CrawlModeType,
+  MenuItemType,
+  RestaurantDetailType,
+  ReviewSummaryStatusType,
+  VisitorReviewWithSummaryType,
+} from '@repo/api-contract';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Card, CardContent } from '~/components/ui/card';
+import {
+  ReviewSummaryItem,
+  SectionHeader,
+  SummaryProgressSection,
+} from '~/components/restaurant/sections';
+
+const PAGE_SIZE = 20;
+
+type RatingFilter = 'all' | 1 | 2 | 3 | 4 | 5;
+type SortMode = 'fetchedAt-desc' | 'rating-desc' | 'rating-asc' | 'visitedAt-desc';
+type SummaryFilter = 'all' | ReviewSummaryStatusType | 'none';
+
+const RATING_OPTIONS: { value: RatingFilter; label: string }[] = [
+  { value: 'all', label: '별점 전체' },
+  { value: 5, label: '★ 5' },
+  { value: 4, label: '★ 4' },
+  { value: 3, label: '★ 3' },
+  { value: 2, label: '★ 2' },
+  { value: 1, label: '★ 1' },
+];
+
+const SUMMARY_OPTIONS: { value: SummaryFilter; label: string }[] = [
+  { value: 'all', label: '요약 전체' },
+  { value: 'done', label: '요약 완료' },
+  { value: 'running', label: '요약 진행' },
+  { value: 'pending', label: '요약 대기' },
+  { value: 'failed', label: '요약 실패' },
+  { value: 'none', label: '요약 없음' },
+];
+
+// Naver image CDN (ldb-phinf.pstatic.net etc.) checks the Referer header
+// and 403s anything that isn't from a *.naver.com origin. With a no-referrer
+// policy on each <img>, the request goes through and the picture loads.
+// Pair with onError to swap in a placeholder for the rare ones still 403'd.
+const IMG_REFERRER_POLICY = 'no-referrer' as const;
+
+const ImgWithFallback = (props: {
+  src: string;
+  alt?: string;
+  className?: string;
+}) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-muted text-muted-foreground ${
+          props.className ?? ''
+        }`}
+        aria-label="이미지를 불러올 수 없습니다"
+      >
+        <ImageIcon className="size-5 opacity-40" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={props.src}
+      alt={props.alt ?? ''}
+      loading="lazy"
+      referrerPolicy={IMG_REFERRER_POLICY}
+      onError={() => setFailed(true)}
+      className={props.className}
+    />
+  );
+};
+
+const SELECT_CLASS =
+  'h-8 rounded-md border border-input bg-background px-2 text-xs ' +
+  'shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1';
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: 'fetchedAt-desc', label: '최근 수집순' },
+  { value: 'visitedAt-desc', label: '방문일 최신순' },
+  { value: 'rating-desc', label: '별점 높은순' },
+  { value: 'rating-asc', label: '별점 낮은순' },
+];
+
+const matchSummaryFilter = (
+  r: VisitorReviewWithSummaryType,
+  filter: SummaryFilter,
+): boolean => {
+  if (filter === 'all') return true;
+  if (filter === 'none') return !r.summary;
+  return r.summary?.status === filter;
+};
+
+const sortReviews = (
+  list: VisitorReviewWithSummaryType[],
+  mode: SortMode,
+): VisitorReviewWithSummaryType[] => {
+  const arr = [...list];
+  switch (mode) {
+    case 'fetchedAt-desc':
+      arr.sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
+      break;
+    case 'visitedAt-desc':
+      arr.sort((a, b) => (b.visitedAt ?? '').localeCompare(a.visitedAt ?? ''));
+      break;
+    case 'rating-desc':
+      arr.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+      break;
+    case 'rating-asc':
+      arr.sort((a, b) => (a.rating ?? 99) - (b.rating ?? 99));
+      break;
+  }
+  return arr;
+};
+
+const InfoSection = ({ detail }: { detail: RestaurantDetailType }) => {
+  const s = detail.snapshot;
+  const items: { label: string; value: string }[] = [];
+  if (detail.address) items.push({ label: '주소', value: detail.address });
+  if (s.roadAddress) items.push({ label: '도로명', value: s.roadAddress });
+  if (detail.phone) items.push({ label: '전화', value: detail.phone });
+  if (s.latitude !== null && s.longitude !== null) {
+    items.push({ label: '좌표', value: `${s.latitude}, ${s.longitude}` });
+  }
+  if (items.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <SectionHeader icon={<Info className="size-4" />} label="정보" />
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        {items.map((it) => (
+          <div key={it.label} className="contents">
+            <dt className="text-muted-foreground">{it.label}</dt>
+            <dd>{it.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+};
+
+const BusinessHoursSection = ({ hours }: { hours: string | null }) => {
+  if (!hours || hours.trim().length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <SectionHeader icon={<Clock className="size-4" />} label="영업시간" />
+      <pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">
+        {hours}
+      </pre>
+    </section>
+  );
+};
+
+const MenuSection = ({ menus }: { menus: MenuItemType[] }) => {
+  if (menus.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <SectionHeader
+        icon={<UtensilsCrossed className="size-4" />}
+        label={`메뉴 (${menus.length})`}
+      />
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {menus.map((m, i) => {
+          const thumb = m.imageUrls[0] ?? null;
+          return (
+            <li
+              key={`${m.name}-${i}`}
+              className="flex items-start gap-3 rounded-md border p-3"
+            >
+              {thumb && (
+                <ImgWithFallback
+                  src={thumb}
+                  alt={m.name}
+                  className="size-16 shrink-0 rounded object-cover"
+                />
+              )}
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">{m.name}</span>
+                  {m.recommend && (
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      추천
+                    </Badge>
+                  )}
+                </div>
+                {m.price && (
+                  <div className="text-sm font-medium tabular-nums text-foreground/80">
+                    {m.price}
+                  </div>
+                )}
+                {m.description && (
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {m.description}
+                  </p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+};
+
+const ImageGallerySection = ({ urls }: { urls: string[] }) => {
+  if (urls.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <SectionHeader
+        icon={<ImageIcon className="size-4" />}
+        label={`사진 (${urls.length})`}
+      />
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {urls.map((u) => (
+          <li key={u}>
+            <a href={u} target="_blank" rel="noreferrer" className="block">
+              <ImgWithFallback
+                src={u}
+                className="aspect-square w-full rounded object-cover transition-opacity hover:opacity-80"
+              />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+const BlogReviewsSection = ({ reviews }: { reviews: BlogReviewType[] }) => {
+  const [expanded, setExpanded] = useState(false);
+  if (reviews.length === 0) return null;
+  const visible = expanded ? reviews : reviews.slice(0, 12);
+  return (
+    <section className="space-y-3">
+      <SectionHeader label={`블로그 리뷰 (${reviews.length})`} />
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {visible.map((b) => {
+          const thumb = b.thumbnailUrls[0] ?? null;
+          return (
+            <li key={b.url} className="rounded-md border transition-colors hover:bg-muted/40">
+              <a
+                href={b.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block space-y-2 p-3"
+              >
+                {thumb && (
+                  <ImgWithFallback
+                    src={thumb}
+                    className="aspect-video w-full rounded object-cover"
+                  />
+                )}
+                <div className="line-clamp-2 text-sm font-medium">{b.title}</div>
+                {b.excerpt && (
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{b.excerpt}</p>
+                )}
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  {b.authorName && <span>{b.authorName}</span>}
+                  {b.date && <span>· {b.date}</span>}
+                  <ExternalLink className="ml-auto size-3" />
+                </div>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+      {reviews.length > 12 && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? '접기' : `${reviews.length - 12}개 더 보기`}
+        </Button>
+      )}
+    </section>
+  );
+};
+
+const VisitorReviewsSection = ({
+  reviews,
+}: {
+  reviews: VisitorReviewWithSummaryType[];
+}) => {
+  const [rating, setRating] = useState<RatingFilter>('all');
+  const [summary, setSummary] = useState<SummaryFilter>('all');
+  const [sort, setSort] = useState<SortMode>('fetchedAt-desc');
+  const [page, setPage] = useState(1);
+
+  const filtered = useMemo(() => {
+    let list = reviews;
+    if (rating !== 'all') list = list.filter((r) => r.rating === rating);
+    if (summary !== 'all') list = list.filter((r) => matchSummaryFilter(r, summary));
+    return sortReviews(list, sort);
+  }, [reviews, rating, summary, sort]);
+
+  const visible = filtered.slice(0, page * PAGE_SIZE);
+  const hasMore = filtered.length > visible.length;
+
+  return (
+    <section className="space-y-3">
+      <SectionHeader
+        label={`방문자 리뷰 (${filtered.length}/${reviews.length})`}
+      />
+      <div className="flex flex-wrap gap-2 text-xs">
+        <select
+          value={String(rating)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setRating(v === 'all' ? 'all' : (Number(v) as RatingFilter));
+            setPage(1);
+          }}
+          className={SELECT_CLASS}
+        >
+          {RATING_OPTIONS.map((o) => (
+            <option key={String(o.value)} value={String(o.value)}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={summary}
+          onChange={(e) => {
+            setSummary(e.target.value as SummaryFilter);
+            setPage(1);
+          }}
+          className={SELECT_CLASS}
+        >
+          {SUMMARY_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortMode)}
+          className={SELECT_CLASS}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {visible.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          조건에 해당하는 리뷰가 없습니다.
+        </p>
+      ) : (
+        <ul className="divide-y">
+          {visible.map((r) => (
+            <ReviewSummaryItem key={r.id} r={r} />
+          ))}
+        </ul>
+      )}
+      {hasMore && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setPage((p) => p + 1)}
+        >
+          {filtered.length - visible.length}개 더 보기
+        </Button>
+      )}
+    </section>
+  );
+};
+
+export const AdminRestaurantDetailPage = () => {
+  const { placeId } = useParams<{ placeId: string }>();
+  const navigate = useNavigate();
+  const detailQuery = useRestaurantByPlaceId(placeId ?? null);
+  // Subscribe to summary events so the detail cache + summary card stay
+  // live during/after a recrawl initiated elsewhere (or a fresh re-summarize
+  // we kick off from this page).
+  const summaryStatusQuery = useRestaurantSummaryEvents(placeId ?? null);
+
+  const startMutation = useStartCrawl();
+  const deleteMutation = useDeleteRestaurant();
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  if (!placeId) return <Navigate to="/admin/restaurants" replace />;
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+          <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
+        </div>
+      </div>
+    );
+  }
+  if (detailQuery.isError || !detailQuery.data) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <Link
+          to="/admin/restaurants"
+          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> 목록
+        </Link>
+        <Card>
+          <CardContent className="flex h-32 items-center justify-center gap-2 text-sm text-destructive">
+            <AlertCircle className="size-4" />
+            맛집을 찾을 수 없습니다.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const detail = detailQuery.data;
+  const s = detail.snapshot;
+
+  const handleAction = async (mode: CrawlModeType) => {
+    setError(null);
+    try {
+      const result = await startMutation.mutateAsync({ url: detail.rawSourceUrl, mode });
+      if (result.ok) {
+        // Hand off to the list page where ActiveJobPanel is wired up.
+        navigate('/admin/restaurants');
+      } else {
+        setError(`${result.error}: ${result.message}`);
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'failed to start');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setError(null);
+    try {
+      await deleteMutation.mutateAsync(detail.placeId);
+      navigate('/admin/restaurants');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'failed to delete');
+      setConfirmDelete(false);
+    }
+  };
+
+  const summaryInFlight =
+    (summaryStatusQuery.data?.pending ?? 0) +
+    (summaryStatusQuery.data?.running ?? 0);
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6 px-6 py-10">
+      <div>
+        <Link
+          to="/admin/restaurants"
+          className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> 목록
+        </Link>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2">
+              <h1 className="truncate text-2xl font-semibold tracking-tight">{detail.name}</h1>
+              {detail.category && (
+                <span className="text-sm text-muted-foreground">{detail.category}</span>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+              {detail.rating !== null && (
+                <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground">
+                  <Star className="size-3.5 fill-current text-amber-500" />
+                  {detail.rating}
+                </span>
+              )}
+              {detail.reviewCount !== null && (
+                <span className="text-sm text-foreground/80">
+                  리뷰 <span className="font-medium">{detail.reviewCount}</span>
+                </span>
+              )}
+              <span className="text-sm text-foreground/80">
+                DB <span className="font-medium">{detail.reviews.length}</span>
+              </span>
+              <span className="ml-2 text-muted-foreground">
+                마지막 크롤 {new Date(detail.lastCrawledAt).toLocaleString('ko-KR')}
+              </span>
+              <a
+                href={detail.rawSourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="size-3" /> 원본
+              </a>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleAction('update')}
+              disabled={startMutation.isPending}
+            >
+              업데이트
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => handleAction('recrawl')}
+              disabled={startMutation.isPending}
+            >
+              <RefreshCw />
+              재크롤링
+            </Button>
+            {confirmDelete ? (
+              <>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                  정말 삭제
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleteMutation.isPending}
+                >
+                  취소
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleDelete}
+                aria-label="삭제"
+                title="삭제"
+              >
+                <Trash2 />
+              </Button>
+            )}
+          </div>
+        </div>
+        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      </div>
+
+      <Card>
+        <CardContent className="divide-y [&>*]:py-4">
+          <InfoSection detail={detail} />
+          <BusinessHoursSection hours={s.businessHours} />
+          <MenuSection menus={s.menus} />
+          <ImageGallerySection urls={s.imageUrls} />
+        </CardContent>
+      </Card>
+
+      {summaryStatusQuery.data && summaryInFlight > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <SummaryProgressSection status={summaryStatusQuery.data} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="py-4">
+          <VisitorReviewsSection reviews={detail.reviews} />
+        </CardContent>
+      </Card>
+
+      {s.blogReviews.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <BlogReviewsSection reviews={s.blogReviews} />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};

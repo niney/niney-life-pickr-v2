@@ -13,4 +13,13 @@ body {
   color: var(--color-text, #18181b);
 }
 
-a { color: var(--color-primary, #f59e0b); }
+/* Anchors inherit by default — components style their own links via
+   Tailwind utilities. We put this in @layer base so any utility class
+   (e.g. `text-muted-foreground` from @layer utilities) trivially wins
+   per the CSS cascade-layer ordering. Without the layer wrap, this
+   becomes an unlayered rule and beats every Tailwind utility. */
+@layer base {
+  a { color: inherit; text-decoration: none; }
+}
+.link-primary { color: var(--color-primary, #f59e0b); }
+.link-primary:hover { text-decoration: underline; }
