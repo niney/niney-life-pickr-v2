@@ -1,5 +1,6 @@
 import {
   Routes,
+  type RestaurantDeleteResultType,
   type RestaurantDetailType,
   type RestaurantListResultType,
   type RestaurantSummaryProgressType,
@@ -14,4 +15,9 @@ export const restaurantApi = {
 
   getSummaryStatus: (placeId: string) =>
     apiFetch<RestaurantSummaryProgressType>(Routes.Restaurant.summaryStatus(placeId)),
+
+  delete: (placeId: string) =>
+    apiFetch<RestaurantDeleteResultType>(Routes.Restaurant.delete(placeId), {
+      method: 'DELETE',
+    }),
 };

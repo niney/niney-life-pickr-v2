@@ -9,6 +9,7 @@ import {
   Play,
   RefreshCw,
   Sparkles,
+  Trash2,
   UtensilsCrossed,
   XCircle,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
   ApiError,
   useCancelCrawl,
   useCrawlJobStream,
+  useDeleteRestaurant,
   useRestaurantByPlaceId,
   useRestaurantList,
   useRestaurantSummaryStatus,
@@ -215,17 +217,15 @@ const ActiveJobPanel = ({
           )}
           크롤링 작업
         </CardTitle>
-        <CardDescription className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge variant="outline">job: {jobId.slice(0, 8)}…</Badge>
-            {stage && <Badge variant="secondary">{STAGE_LABEL[stage]}</Badge>}
-            {stream.visitorCount > 0 && (
-              <span>방문자 리뷰 {stream.visitorCount}개 수집</span>
-            )}
-            {stream.persistedCount > 0 && (
-              <span>· DB 저장 {stream.persistedCount}개</span>
-            )}
-          </div>
+        <CardDescription className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant="outline">job: {jobId.slice(0, 8)}…</Badge>
+          {stage && <Badge variant="secondary">{STAGE_LABEL[stage]}</Badge>}
+          {stream.visitorCount > 0 && (
+            <span>방문자 리뷰 {stream.visitorCount}개 수집</span>
+          )}
+          {stream.persistedCount > 0 && (
+            <span>· DB 저장 {stream.persistedCount}개</span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -256,15 +256,23 @@ const ActiveJobPanel = ({
 const RestaurantRow = ({
   item,
   busy,
+  deleting,
+  confirmingDelete,
   onAction,
+  onDelete,
+  onCancelDelete,
 }: {
   item: RestaurantListItemType;
   busy: boolean;
+  deleting: boolean;
+  confirmingDelete: boolean;
   onAction: (mode: 'recrawl' | 'update') => void;
+  onDelete: () => void;
+  onCancelDelete: () => void;
 }) => {
   const inFlight = summaryInFlight(item);
   return (
-    <li className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm font-semibold">{item.name}</span>
@@ -307,8 +315,43 @@ const RestaurantRow = ({
           <RefreshCw />
           재크롤링
         </Button>
+        {confirmingDelete ? (
+          <>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={onDelete}
+              disabled={deleting}
+            >
+              {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+              정말 삭제
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onCancelDelete}
+              disabled={deleting}
+            >
+              취소
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            disabled={busy}
+            aria-label="삭제"
+            title="삭제"
+          >
+            <Trash2 />
+          </Button>
+        )}
       </div>
-    </li>
+    </div>
   );
 };
 
@@ -317,10 +360,29 @@ export const AdminRestaurantsPage = () => {
   const listQuery = useRestaurantList();
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
+  const deleteMutation = useDeleteRestaurant();
 
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
+  // placeId currently in the "click again to confirm" state. Only one row
+  // can be in confirm mode at a time; clicking another row's trash icon
+  // moves the prompt instead of opening a second one.
+  const [confirmDeletePlaceId, setConfirmDeletePlaceId] = useState<string | null>(null);
+
+  const handleDelete = async (placeId: string) => {
+    if (confirmDeletePlaceId !== placeId) {
+      setConfirmDeletePlaceId(placeId);
+      return;
+    }
+    setError(null);
+    try {
+      await deleteMutation.mutateAsync(placeId);
+      setConfirmDeletePlaceId(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'failed to delete');
+    }
+  };
 
   const handleAdd = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -485,7 +547,14 @@ export const AdminRestaurantsPage = () => {
                     <RestaurantRow
                       item={item}
                       busy={busy || (isActive && startMutation.isPending)}
+                      deleting={
+                        deleteMutation.isPending &&
+                        deleteMutation.variables === item.placeId
+                      }
+                      confirmingDelete={confirmDeletePlaceId === item.placeId}
                       onAction={handleRowAction(item)}
+                      onDelete={() => handleDelete(item.placeId)}
+                      onCancelDelete={() => setConfirmDeletePlaceId(null)}
                     />
                     {isActive && activeJob && (
                       <ActiveJobPanel

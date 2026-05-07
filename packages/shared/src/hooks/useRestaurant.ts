@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client.js';
 import { restaurantApi } from '../api/restaurant.api.js';
 
@@ -55,3 +55,18 @@ export const useRestaurantSummaryStatus = (placeId: string | null) =>
       return data.pending + data.running > 0 ? 3000 : false;
     },
   });
+
+// Hard-delete a restaurant by placeId. On success the list query is
+// invalidated and the cached detail/summary entries for that placeId are
+// removed so the row vanishes immediately.
+export const useDeleteRestaurant = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (placeId: string) => restaurantApi.delete(placeId),
+    onSuccess: (_data, placeId) => {
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.removeQueries({ queryKey: ['restaurant', placeId] });
+      qc.removeQueries({ queryKey: ['restaurant', placeId, 'summary-status'] });
+    },
+  });
+};

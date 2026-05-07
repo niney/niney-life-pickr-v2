@@ -2,12 +2,14 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
+  RestaurantDeleteResult,
   RestaurantDetail,
   RestaurantListResult,
   RestaurantSummaryProgress,
   Routes,
 } from '@repo/api-contract';
 import { RestaurantService } from './restaurant.service.js';
+import { jobRegistry } from '../crawl/job-registry.js';
 
 const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const service = new RestaurantService(app.prisma);
@@ -35,6 +37,27 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const detail = await service.getDetailByPlaceId(req.params.placeId);
       if (!detail) throw app.httpErrors.notFound('Restaurant not crawled yet');
       return detail;
+    },
+  });
+
+  typed.delete(Routes.Restaurant.delete(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantDeleteResult },
+    },
+    handler: async (req) => {
+      // Block deletion while a crawl is targeting this place — cascade
+      // delete + concurrent INSERT would race on the FK.
+      const inFlight = jobRegistry.findInFlightByPlace(req.user.userId, req.params.placeId);
+      if (inFlight) {
+        throw app.httpErrors.conflict('Crawl in progress for this restaurant');
+      }
+      const result = await service.deleteByPlaceId(req.params.placeId);
+      if (!result) throw app.httpErrors.notFound('Restaurant not found');
+      return { ok: true as const, deletedReviewCount: result.deletedReviewCount };
     },
   });
 

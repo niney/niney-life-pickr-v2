@@ -33,6 +33,7 @@ export const Crawl = {
 export const Restaurant = {
   list: `${API_PREFIX}/admin/restaurants`,
   byPlaceId: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
+  delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   summaryStatus: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/summary-status`,
 } as const;

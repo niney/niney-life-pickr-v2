@@ -157,6 +157,29 @@ describe('RestaurantService', () => {
     expect(keys.contentHashes.has(contentHashOf('B', 'bbb'))).toBe(true);
   });
 
+  it('deleteByPlaceId: removes restaurant and cascades reviews/summaries', async () => {
+    const data = placeData();
+    const { id: rid } = await service.upsertRestaurantFromCrawl(data);
+    const { newReviewIds } = await service.persistReviewBatch(rid, [
+      review({ externalId: 'd1', body: 'aa' }),
+      review({ externalId: 'd2', body: 'bb' }),
+    ]);
+    await app.prisma.reviewSummary.create({
+      data: { reviewId: newReviewIds[0]!, status: 'done', text: 'x' },
+    });
+    const result = await service.deleteByPlaceId(data.placeId);
+    expect(result?.deletedReviewCount).toBe(2);
+    const left = await app.prisma.restaurant.count({ where: { id: rid } });
+    expect(left).toBe(0);
+    const reviewsLeft = await app.prisma.visitorReview.count({ where: { restaurantId: rid } });
+    expect(reviewsLeft).toBe(0);
+  });
+
+  it('deleteByPlaceId: returns null for unknown placeId', async () => {
+    const result = await service.deleteByPlaceId(`${PLACE_PREFIX}does-not-exist`);
+    expect(result).toBeNull();
+  });
+
   it('clearReviewsAndSummaries: cascade-removes summaries', async () => {
     const { id: rid } = await service.upsertRestaurantFromCrawl(placeData());
     const { newReviewIds } = await service.persistReviewBatch(rid, [
@@ -210,5 +233,66 @@ describe('Restaurant routes — auth guards', () => {
       headers: { Authorization: `Bearer ${adminToken(app)}` },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('DELETE /restaurants/place/:placeId 401 without token', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/admin/restaurants/place/anything',
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('DELETE /restaurants/place/:placeId 403 with USER role', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/admin/restaurants/place/anything',
+      headers: { Authorization: `Bearer ${userToken(app)}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('DELETE /restaurants/place/:placeId 404 for unknown placeId', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/admin/restaurants/place/${PLACE_PREFIX}never-xyz`,
+      headers: { Authorization: `Bearer ${adminToken(app)}` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('DELETE /restaurants/place/:placeId 200 removes the restaurant', async () => {
+    const data: NaverPlaceDataType = {
+      placeId: `${PLACE_PREFIX}delete-${Date.now().toString(36)}`,
+      name: '삭제 테스트',
+      category: null,
+      address: null,
+      roadAddress: null,
+      phone: null,
+      businessHours: null,
+      latitude: null,
+      longitude: null,
+      imageUrls: [],
+      rating: null,
+      reviewCount: null,
+      menus: [],
+      reviewStats: null,
+      blogReviews: [],
+      visitorReviews: [],
+      rawSourceUrl: 'https://m.place.naver.com/restaurant/del',
+    };
+    const svc = new RestaurantService(app.prisma);
+    await svc.upsertRestaurantFromCrawl(data);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/admin/restaurants/place/${data.placeId}`,
+      headers: { Authorization: `Bearer ${adminToken(app)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { ok: boolean; deletedReviewCount: number };
+    expect(body.ok).toBe(true);
+    expect(body.deletedReviewCount).toBe(0);
+    const gone = await app.prisma.restaurant.findUnique({ where: { placeId: data.placeId } });
+    expect(gone).toBeNull();
   });
 });

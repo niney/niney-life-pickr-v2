@@ -69,6 +69,12 @@ export const RestaurantListResult = z.object({
 });
 export type RestaurantListResultType = z.infer<typeof RestaurantListResult>;
 
+export const RestaurantDeleteResult = z.object({
+  ok: z.literal(true),
+  deletedReviewCount: z.number().int(),
+});
+export type RestaurantDeleteResultType = z.infer<typeof RestaurantDeleteResult>;
+
 export const RestaurantSummaryProgress = z.object({
   totalReviews: z.number().int(),
   pending: z.number().int(),
