@@ -17,6 +17,7 @@ status: active
 - **2026-05-07** in [[../topics/crawl]] (`crawl.route.ts`): `GET /api/v1/crawl/jobs/:id/events` SSE 엔드포인트가 `Authorization` 헤더 또는 `?token=` 쿼리 둘 다 받는다 — `EventSource` 클라이언트를 위해 후자가 필요.
 - **2026-05-07** in [[../topics/shared]] (`useCrawlJobStream` / `crawl.api.ts`): SSE URL을 만들 때 `getToken()`으로 가져온 JWT를 쿼리에 붙인다. `EventSource`로 감싼 후 `seq` 기반 dedupe 리듀서로 진행 이벤트 처리.
 - **2026-05-07** in [[../topics/web]] (`AdminCrawlTestPage`): EventSource 한계 때문에 SSE 호출만 `?token=` 패턴 사용. 일반 fetch는 `Authorization: Bearer` 헤더 그대로.
+- **2026-05-07** in [[../topics/friendly]] (`restaurant.route.ts` 멀티플렉싱 `summaryEvents`): 같은 패턴이 새 다중 placeId SSE 엔드포인트에도 그대로 — `?placeId=A&placeId=B&...&token=<jwt>` 형태로 토큰 + 다중 구독 placeId가 한 쿼리에 실린다. 클라의 `buildSummaryEventsUrl(placeIds: string[])`이 같은 정규식이 redact 가능한 형태로 URL을 만든다.
 
 ## What This Means
 

@@ -18,7 +18,9 @@
     "zod-ssot-buildless",
     "sse-token-auth",
     "platform-ui-split",
-    "workspace-package-resolution"
+    "workspace-package-resolution",
+    "stream-driven-cache-merge",
+    "in-memory-singleton-gates"
   ],
   "source_locations": [
     "README.md",
@@ -36,5 +38,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 145
+  "total_sources_scanned": 178
 }

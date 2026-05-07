@@ -2,6 +2,7 @@
 name: niney-life-pickr-v2
 mode: codebase
 last_updated: 2026-05-07
+
 ---
 
 # Wiki Schema
@@ -39,6 +40,8 @@ last_updated: 2026-05-07
 | `sse-token-auth` | friendly, crawl, shared, web | EventSource 헤더 한계 → SSE만 `?token=` 쿼리 인증 + Pino 로거에서 정규식 리덕션 |
 | `platform-ui-split` | shared, web, mobile, project-overview | 로직은 `@repo/shared`로 공유, UI는 `.web.tsx` / `.native.tsx`로 플랫폼 분기 — Tamagui/RN-Web 거부 |
 | `workspace-package-resolution` | api-contract, friendly, shared, web, project-overview | `@repo/*` 컨슈머 도달 체인 — pnpm `injected` → vite extensionAlias → esbuild prebundle namespace re-export → autoload 우회. 한 단계 깨지면 컨슈머 import 에러로 일관 출몰 |
+| `stream-driven-cache-merge` | crawl, friendly, shared, web | SSE 이벤트가 머지 가능한 완성된 페이로드를 동봉 → `setQueryData`로 직접 패치, follow-up GET 0회 |
+| `in-memory-singleton-gates` | ai, crawl, friendly, shared | 외부 큐/Redis 없이 모듈 싱글턴 + in-memory FIFO로 동시성 제어 — AI cap, 크롤 큐, persistTail, SSE 매니저 모두 같은 모양 |
 
 ## Topic Structure (article sections)
 
@@ -57,3 +60,4 @@ last_updated: 2026-05-07
 
 - **2026-05-07** — 초기 스키마 생성. 9개 토픽(project-overview, friendly, crawl, web, mobile, api-contract, shared, utils, config) + 3개 컨셉(zod-ssot-buildless, sse-token-auth, platform-ui-split)으로 시작. Codebase 모드, deep_scan=false. 사용자가 토픽/컨셉을 추가·이름 변경하려면 이 표를 직접 편집한 뒤 `/wiki-compile`을 다시 돌리면 된다.
 - **2026-05-07** — `ai` 토픽 추가 (Ollama Cloud 통합 + 어드민 키/테스트 UI 도입과 함께). `workspace-package-resolution` 컨셉 추가 — AI 모듈 작업 중 `Routes.Ai` namespace re-export 우회·`vitest.config` extensionAlias·workspace symlink 깨짐을 정리하면서 cross-cutting 함정으로 식별됨. `zod-ssot-buildless`의 연결 토픽에 `ai` 추가 (같은 SSOT 패턴이 신규 도메인에서도 그대로 적용됨).
+- **2026-05-07** — 맛집 도메인 (DB 영속화 + AI 요약 + 다중 크롤 + SSE 멀티플렉싱) 통합으로 `crawl`/`friendly`/`shared`/`web`/`api-contract` 5개 토픽 갱신. 신규 컨셉 2개: `stream-driven-cache-merge` (SSE 페이로드 직접 머지로 detail GET 회피), `in-memory-singleton-gates` (Redis 없이 모듈 싱글턴 + FIFO로 cap·순서·통합 모두 처리). `sse-token-auth`에 멀티플렉싱 `summaryEvents` instance 추가.
