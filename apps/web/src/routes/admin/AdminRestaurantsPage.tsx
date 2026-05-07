@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -74,7 +74,28 @@ interface ActiveJob {
 const summaryInFlight = (item: RestaurantListItemType): number =>
   item.summaryPending + item.summaryRunning;
 
-const SummaryProgressCard = ({
+// Section header inside the flat ActiveJobPanel — small icon + label,
+// optional trailing meta. Replaces the nested Card/CardHeader pattern so
+// the panel reads as one card with horizontal dividers.
+const SectionHeader = ({
+  icon,
+  label,
+  meta,
+}: {
+  icon?: ReactNode;
+  label: string;
+  meta?: ReactNode;
+}) => (
+  <div className="flex items-center justify-between gap-2 text-sm font-medium">
+    <span className="flex items-center gap-2">
+      {icon}
+      {label}
+    </span>
+    {meta && <span className="text-xs font-normal text-muted-foreground">{meta}</span>}
+  </div>
+);
+
+const SummaryProgressSection = ({
   status,
 }: {
   status: RestaurantSummaryProgressType;
@@ -82,79 +103,74 @@ const SummaryProgressCard = ({
   const inFlight = status.pending + status.running;
   const total = inFlight + status.done + status.failed;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="size-4" /> AI 요약 진행률
-        </CardTitle>
-        <CardDescription>
-          저장된 리뷰 {status.totalReviews}개 · 요약 {status.done}/{total} 완료
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2 text-xs">
-          <Badge variant="secondary">대기 {status.pending}</Badge>
-          <Badge variant="secondary">진행 {status.running}</Badge>
-          <Badge variant="secondary">완료 {status.done}</Badge>
-          {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
-        </div>
-        {status.recentDone.length > 0 && (
-          <ul className="mt-3 space-y-2 text-sm">
-            {status.recentDone.map((s) => (
-              <li key={s.reviewId} className="rounded border bg-muted/40 p-2">
-                <div className="line-clamp-3 leading-relaxed">{s.text}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <section className="space-y-3">
+      <SectionHeader
+        icon={<Sparkles className="size-4 text-primary" />}
+        label="AI 요약"
+        meta={
+          <>
+            저장된 리뷰 {status.totalReviews}개 · {status.done}/{total} 완료
+          </>
+        }
+      />
+      <div className="flex flex-wrap gap-2 text-xs">
+        <Badge variant="secondary">대기 {status.pending}</Badge>
+        <Badge variant="secondary">진행 {status.running}</Badge>
+        <Badge variant="secondary">완료 {status.done}</Badge>
+        {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
+      </div>
+      {status.recentDone.length > 0 && (
+        <ul className="space-y-1.5 text-sm text-muted-foreground">
+          {status.recentDone.map((s) => (
+            <li key={s.reviewId} className="line-clamp-2 leading-relaxed">
+              · {s.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 };
 
-const ReviewSummaryList = ({
+const ReviewSummarySection = ({
   reviews,
 }: {
   reviews: VisitorReviewWithSummaryType[];
 }) => {
   if (reviews.length === 0) return null;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>저장된 리뷰 + 요약 ({reviews.length})</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="divide-y">
-          {reviews.slice(0, 50).map((r) => (
-            <li key={r.id} className="space-y-1.5 py-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {r.authorName && <span className="font-medium">{r.authorName}</span>}
-                {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
-                {r.visitedAt && <span>· {r.visitedAt}</span>}
-              </div>
-              <p className="line-clamp-3 text-sm">{r.body}</p>
-              <div className="rounded border-l-2 border-primary/40 bg-muted/40 p-2 text-xs">
-                {!r.summary && <span className="text-muted-foreground">요약 없음</span>}
-                {r.summary?.status === 'pending' && (
-                  <span className="text-muted-foreground">요약 대기 중…</span>
-                )}
-                {r.summary?.status === 'running' && (
-                  <span className="inline-flex items-center gap-1 text-muted-foreground">
-                    <Loader2 className="size-3 animate-spin" /> 요약 중…
-                  </span>
-                )}
-                {r.summary?.status === 'done' && <span>{r.summary.text}</span>}
-                {r.summary?.status === 'failed' && (
-                  <span className="text-destructive">
-                    실패: {r.summary.errorMessage ?? r.summary.errorCode ?? 'unknown'}
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+    <section className="space-y-2">
+      <SectionHeader label={`리뷰 (${reviews.length})`} />
+      <ul className="divide-y">
+        {reviews.slice(0, 50).map((r) => (
+          <li key={r.id} className="space-y-1.5 py-3 first:pt-0 last:pb-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {r.authorName && <span className="font-medium">{r.authorName}</span>}
+              {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
+              {r.visitedAt && <span>· {r.visitedAt}</span>}
+            </div>
+            <p className="line-clamp-3 text-sm">{r.body}</p>
+            <div className="border-l-2 border-primary/40 pl-2 text-xs">
+              {!r.summary && <span className="text-muted-foreground">요약 없음</span>}
+              {r.summary?.status === 'pending' && (
+                <span className="text-muted-foreground">요약 대기 중…</span>
+              )}
+              {r.summary?.status === 'running' && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" /> 요약 중…
+                </span>
+              )}
+              {r.summary?.status === 'done' && <span>{r.summary.text}</span>}
+              {r.summary?.status === 'failed' && (
+                <span className="text-destructive">
+                  실패: {r.summary.errorMessage ?? r.summary.errorCode ?? 'unknown'}
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 };
 
@@ -255,25 +271,29 @@ const ActiveJobPanel = ({
           )}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {isRunning && (
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-            취소
-          </Button>
-        )}
-        {stream.result && !stream.result.ok && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
-            <Badge variant="outline" className="mr-2">
-              {stream.result.error}
-            </Badge>
-            {stream.result.message}
+      <CardContent className="divide-y [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+        {(isRunning || (stream.result && !stream.result.ok)) && (
+          <div className="space-y-3">
+            {isRunning && (
+              <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+                취소
+              </Button>
+            )}
+            {stream.result && !stream.result.ok && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
+                <Badge variant="outline" className="mr-2">
+                  {stream.result.error}
+                </Badge>
+                {stream.result.message}
+              </div>
+            )}
           </div>
         )}
         {summaryStatusQuery.data && (
-          <SummaryProgressCard status={summaryStatusQuery.data} />
+          <SummaryProgressSection status={summaryStatusQuery.data} />
         )}
         {detailQuery.data && (
-          <ReviewSummaryList reviews={detailQuery.data.reviews} />
+          <ReviewSummarySection reviews={detailQuery.data.reviews} />
         )}
       </CardContent>
     </Card>
