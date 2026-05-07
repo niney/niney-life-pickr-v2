@@ -195,6 +195,15 @@ const normalizeImageUrl = (raw: string): string => {
   return raw.replace(/^http:\/\//i, 'https://').replace(/#[^/]*$/, '');
 };
 
+// Defensive: if the recursive image walker ever resolves into a review/blog
+// node (cross-typed Apollo refs), bail out so post URLs and blog photos don't
+// pollute menu/visitor-review image lists.
+const REVIEW_TYPENAME_RE = /(?:Review|^Blog|BlogPost)/i;
+const isReviewTypename = (resolved: Record<string, unknown>): boolean => {
+  const tn = resolved['__typename'];
+  return typeof tn === 'string' && REVIEW_TYPENAME_RE.test(tn);
+};
+
 const collectImagesFromContainer = (
   state: Record<string, unknown> | null,
   container: unknown,
@@ -216,6 +225,10 @@ const collectImagesFromContainer = (
     return;
   }
   if (!isObject(resolved)) return;
+  // Hard stop at review/blog subtrees — `images(...)` containers occasionally
+  // splice in adjacent BlogReview/FsasReview entries whose `url` fields are
+  // post URLs, not image URLs.
+  if (isReviewTypename(resolved)) return;
 
   const u =
     (typeof resolved['origin'] === 'string' && resolved['origin']) ||
@@ -243,25 +256,12 @@ const collectImagesFromContainer = (
   }
 };
 
-const IMAGE_FIELD_PREFIXES = ['images', 'cpImages', 'sasImages', 'menuImages'];
-
-const harvestImagesFromContainer = (
-  state: Record<string, unknown> | null,
-  container: Record<string, unknown>,
-  out: string[],
-  seen: Set<string>,
-): void => {
-  for (const prefix of IMAGE_FIELD_PREFIXES) {
-    for (const key of Object.keys(container)) {
-      if (key !== prefix && !key.startsWith(`${prefix}(`)) continue;
-      const resolved = deref(state, container[key]);
-      if (isObject(resolved) && 'images' in resolved) {
-        collectImagesFromContainer(state, resolved['images'], out, seen);
-      } else {
-        collectImagesFromContainer(state, resolved, out, seen);
-      }
-    }
-  }
+const pushImageUrl = (raw: unknown, out: string[], seen: Set<string>): void => {
+  if (typeof raw !== 'string' || !/^https?:\/\//.test(raw)) return;
+  const norm = normalizeImageUrl(raw);
+  if (seen.has(norm)) return;
+  seen.add(norm);
+  out.push(norm);
 };
 
 const extractImageUrls = (
@@ -272,18 +272,44 @@ const extractImageUrls = (
   const out: string[] = [];
   const seen = new Set<string>();
 
-  // 1. Direct keys on the node (legacy GraphQL responses)
-  for (const k of ['images', 'imageUrls', 'photoList']) {
-    if (k in node) collectImagesFromContainer(state, node[k], out, seen);
+  // Targeted extraction — only the two known canonical paths on placeDetail.
+  // Avoids cpImages / fsasReviews / sasImages where blog and ad photos hide.
+  //   1. placeDetail.images(...).images[].origin   ← official place gallery
+  //   2. placeDetail.panoramaThumbnail(...).url    ← street/exterior panorama
+  if (placeDetail) {
+    for (const key of Object.keys(placeDetail)) {
+      if (key === 'images' || key.startsWith('images(')) {
+        const wrapper = deref(state, placeDetail[key]);
+        const list = isObject(wrapper) ? wrapper['images'] : null;
+        const items = Array.isArray(list) ? list : [];
+        for (const item of items) {
+          const obj = deref(state, item);
+          if (!isObject(obj)) continue;
+          pushImageUrl(obj['origin'], out, seen);
+        }
+      } else if (key === 'panoramaThumbnail' || key.startsWith('panoramaThumbnail(')) {
+        const obj = deref(state, placeDetail[key]);
+        if (isObject(obj)) pushImageUrl(obj['url'], out, seen);
+      }
+    }
   }
-  // 2. Apollo cache: ROOT_QUERY.placeDetail({...}) holds images({...}).images[]
-  if (placeDetail) harvestImagesFromContainer(state, placeDetail, out, seen);
-  // 3. Same prefix on PlaceDetailBase itself (rare but possible)
-  if (out.length === 0) harvestImagesFromContainer(state, node, out, seen);
-  // 4. Last resort — scan ROOT_QUERY direct keys
-  if (out.length === 0 && state) {
-    const root = state['ROOT_QUERY'];
-    if (isObject(root)) harvestImagesFromContainer(state, root, out, seen);
+
+  // Fallback for legacy GraphQL shapes that put a flat list directly on the
+  // place node (no Apollo placeDetail wrapper).
+  if (out.length === 0) {
+    for (const k of ['images', 'imageUrls', 'photoList']) {
+      const raw = node[k];
+      if (Array.isArray(raw)) {
+        for (const item of raw) {
+          if (typeof item === 'string') {
+            pushImageUrl(item, out, seen);
+          } else {
+            const obj = deref(state, item);
+            if (isObject(obj)) pushImageUrl(obj['origin'] ?? obj['url'] ?? obj['imageUrl'], out, seen);
+          }
+        }
+      }
+    }
   }
 
   return out.slice(0, 20);
