@@ -16,16 +16,23 @@ import type {
 // EVENT_BUFFER_MAX as a safety belt against runaway adapters.
 
 const FINISHED_TTL_MS = 5 * 60_000;
-const MAX_CONCURRENT_PER_ACTOR = 3;
+export const MAX_CONCURRENT_PER_ACTOR = 3;
 const EVENT_BUFFER_MAX = 1000;
 
 export type JobSubscriber = (event: CrawlEventType) => void;
+
+// Internal lifecycle. Public `status` stays as the existing 4-value enum
+// (running/done/failed/cancelled) so the API surface doesn't change — both
+// 'queued' and 'active' phases publicly look like 'running', distinguished
+// by the `stage` field.
+type JobPhase = 'queued' | 'active' | 'finished';
 
 interface InternalJob {
   id: string;
   url: string;
   placeId: string | null;
   actorId: string;
+  phase: JobPhase;
   status: CrawlJobStatusType;
   stage: CrawlStageType;
   startedAt: string;
@@ -39,6 +46,10 @@ interface InternalJob {
   finishedAtMs: number | null;
 }
 
+export type CancelOutcome = 'aborted' | 'queued-cancelled' | 'noop';
+
+// Kept exported for backward-compat with callers that imported it; never
+// thrown anymore — the queue absorbs over-cap requests instead.
 export class MaxConcurrentJobsError extends Error {
   constructor(public readonly cap: number) {
     super(`Too many concurrent crawl jobs (cap=${cap})`);
@@ -50,12 +61,14 @@ export class JobRegistry {
   private readonly jobs = new Map<string, InternalJob>();
   private gcTimer: NodeJS.Timeout | null = null;
 
-  // Find an in-flight job for the same actor + placeId. Used to dedupe
-  // double-clicks and concurrent triggers for the same place.
+  // Find an in-flight job for the same actor + placeId — dedup double-clicks
+  // and concurrent triggers. Includes both queued and active phases, so a
+  // user that clicks while the first request is still queued doesn't end up
+  // with two duplicate queue entries.
   findInFlightByPlace(actorId: string, placeId: string): string | null {
     for (const j of this.jobs.values()) {
       if (
-        j.status === 'running' &&
+        j.phase !== 'finished' &&
         j.actorId === actorId &&
         j.placeId === placeId
       ) {
@@ -65,28 +78,37 @@ export class JobRegistry {
     return null;
   }
 
+  // Counts only jobs that are *actually consuming a slot* (Playwright running).
+  // Queued jobs do not count toward the cap — that's the whole point of the
+  // queue.
   countActive(actorId: string): number {
     let n = 0;
     for (const j of this.jobs.values()) {
-      if (j.status === 'running' && j.actorId === actorId) n += 1;
+      if (j.phase === 'active' && j.actorId === actorId) n += 1;
     }
     return n;
   }
 
+  hasSlotForActor(actorId: string): boolean {
+    return this.countActive(actorId) < MAX_CONCURRENT_PER_ACTOR;
+  }
+
+  // Always succeeds. Caller (CrawlService) decides whether to immediately
+  // promote the job to 'active' (via markActive) or leave it queued. The
+  // initial stage is 'queued' so a subscriber that connects right away sees
+  // the waiting state without us having to emit an extra event.
   create(input: {
     url: string;
     placeId: string | null;
     actorId: string;
   }): { id: string; abortSignal: AbortSignal } {
-    if (this.countActive(input.actorId) >= MAX_CONCURRENT_PER_ACTOR) {
-      throw new MaxConcurrentJobsError(MAX_CONCURRENT_PER_ACTOR);
-    }
     const id = randomUUID();
     const job: InternalJob = {
       id,
       url: input.url,
       placeId: input.placeId,
       actorId: input.actorId,
+      phase: 'queued',
       status: 'running',
       stage: 'queued',
       startedAt: new Date().toISOString(),
@@ -101,6 +123,12 @@ export class JobRegistry {
     this.jobs.set(id, job);
     this.ensureGcTimer();
     return { id, abortSignal: job.abort.signal };
+  }
+
+  markActive(jobId: string): void {
+    const job = this.jobs.get(jobId);
+    if (!job) return;
+    if (job.phase === 'queued') job.phase = 'active';
   }
 
   get(id: string): InternalJob | null {
@@ -161,11 +189,13 @@ export class JobRegistry {
     } else if (event.type === 'done') {
       job.stage = 'done';
       job.status = event.result.ok ? 'done' : 'failed';
+      job.phase = 'finished';
       job.finishedAt = event.at;
       job.finishedAtMs = Date.now();
       job.result = event.result;
     } else if (event.type === 'error') {
       job.status = event.error === 'cancelled' ? 'cancelled' : 'failed';
+      job.phase = 'finished';
       job.finishedAt = event.at;
       job.finishedAtMs = Date.now();
       job.result = {
@@ -197,13 +227,20 @@ export class JobRegistry {
     };
   }
 
-  cancel(jobId: string, actorId: string): boolean {
+  // Cancel either an active job (abort the Playwright run) or a queued one
+  // (caller is responsible for emitting the 'cancelled' error event so seq
+  // numbering stays under the service's control). Returns the outcome so
+  // the service can prune its pending queue when a queued job is cancelled.
+  cancel(jobId: string, actorId: string): CancelOutcome {
     const job = this.jobs.get(jobId);
-    if (!job) return false;
-    if (job.actorId !== actorId) return false;
-    if (job.status !== 'running') return false;
-    job.abort.abort();
-    return true;
+    if (!job) return 'noop';
+    if (job.actorId !== actorId) return 'noop';
+    if (job.phase === 'finished') return 'noop';
+    if (job.phase === 'active') {
+      job.abort.abort();
+      return 'aborted';
+    }
+    return 'queued-cancelled';
   }
 
   // Sweep finished jobs after TTL. Runs every minute while jobs exist.
@@ -233,7 +270,7 @@ export class JobRegistry {
   // For graceful shutdown.
   abortAll(): void {
     for (const j of this.jobs.values()) {
-      if (j.status === 'running') j.abort.abort();
+      if (j.phase === 'active') j.abort.abort();
     }
   }
 }

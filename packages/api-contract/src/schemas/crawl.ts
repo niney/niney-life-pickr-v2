@@ -228,6 +228,10 @@ export const StartCrawlResult = z.discriminatedUnion('ok', [
     jobId: z.string(),
     // Server may dedupe and return an existing in-flight jobId.
     deduped: z.boolean(),
+    // True if the actor is at the concurrency cap and this job is waiting in
+    // the FIFO queue. The job will start automatically when a slot frees.
+    // SSE subscribers see stage='queued' until then.
+    queued: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(false),

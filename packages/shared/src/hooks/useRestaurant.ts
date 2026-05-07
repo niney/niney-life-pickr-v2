@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   RestaurantDetailType,
   RestaurantListResultType,
   RestaurantSummaryProgressType,
-  RestaurantSummaryReviewEventType,
 } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
-import { buildSummaryEventsUrl, restaurantApi } from '../api/restaurant.api.js';
+import { restaurantApi } from '../api/restaurant.api.js';
+import { summarySseManager } from './summarySseManager.js';
 
 const isNotFound = (e: unknown): boolean =>
   e instanceof ApiError && e.statusCode === 404;
@@ -47,33 +47,21 @@ export const useRestaurantByPlaceId = (placeId: string | null) =>
 //
 // Returns `data` shaped like the polling hook used to so call sites don't
 // have to change. `data` is null until the first snapshot arrives.
-export const useRestaurantSummaryEvents = (
-  placeId: string | null,
-): { data: RestaurantSummaryProgressType | null } => {
-  const [data, setData] = useState<RestaurantSummaryProgressType | null>(null);
-  const esRef = useRef<EventSource | null>(null);
+// Passive subscription for many placeIds at once — used by the list page so
+// every visible row's badges stay live, not just the ones with an active
+// crawl panel mounted. Side-effect only; the singleton SSE manager keeps
+// this to a single underlying connection regardless of count.
+export const useRestaurantListSummaryEvents = (placeIds: string[]): void => {
   const qc = useQueryClient();
-
+  // Stable string key so the effect doesn't re-run when the array identity
+  // changes but its contents don't (React Query refetch returning a new
+  // items[] with the same placeIds is the common case).
+  const key = placeIds.join(',');
   useEffect(() => {
-    setData(null);
-    if (!placeId) return undefined;
-
-    let cancelled = false;
-    const connect = async () => {
-      const url = await buildSummaryEventsUrl(placeId);
-      if (cancelled) return;
-      const es = new EventSource(url);
-      esRef.current = es;
-
-      es.addEventListener('snapshot', (e: MessageEvent) => {
-        if (typeof e.data !== 'string' || e.data.length === 0) return;
-        try {
-          const parsed = JSON.parse(e.data) as RestaurantSummaryProgressType;
-          setData(parsed);
-          // Patch the list cache so the matching row's "진행/완료" badges
-          // stay in sync as summaries finish. Without this, the list only
-          // refreshes on crawl `done`, leaving stale running counts when
-          // summaries continue past the crawl finish.
+    if (placeIds.length === 0) return undefined;
+    const unsubs = placeIds.map((placeId) =>
+      summarySseManager.subscribe(placeId, {
+        onSnapshot: (snap) => {
           qc.setQueryData<RestaurantListResultType | undefined>(
             ['restaurant', 'list'],
             (prev) => {
@@ -82,33 +70,72 @@ export const useRestaurantSummaryEvents = (
                 item.placeId === placeId
                   ? {
                       ...item,
-                      totalReviews: parsed.totalReviews,
-                      summaryPending: parsed.pending,
-                      summaryRunning: parsed.running,
-                      summaryDone: parsed.done,
-                      summaryFailed: parsed.failed,
+                      totalReviews: snap.totalReviews,
+                      summaryPending: snap.pending,
+                      summaryRunning: snap.running,
+                      summaryDone: snap.done,
+                      summaryFailed: snap.failed,
                     }
                   : item,
               );
               return { ...prev, items };
             },
           );
-        } catch {
-          // ignore malformed
-        }
-      });
+        },
+        onReview: () => {
+          // List view doesn't render per-review text; ignore the per-row
+          // payload here — the snapshot bump that follows already updates
+          // the row's count badges, which is all we render.
+        },
+      }),
+    );
+    return () => {
+      for (const u of unsubs) u();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, qc]);
+};
 
-      // Per-row patch — merge the new summary directly into the detail
-      // cache. Without this we'd have to invalidate the whole detail query
-      // (which carries every review body) every time one summary lands.
-      es.addEventListener('review', (e: MessageEvent) => {
-        if (typeof e.data !== 'string' || e.data.length === 0) return;
-        let ev: RestaurantSummaryReviewEventType;
-        try {
-          ev = JSON.parse(e.data) as RestaurantSummaryReviewEventType;
-        } catch {
-          return;
-        }
+export const useRestaurantSummaryEvents = (
+  placeId: string | null,
+): { data: RestaurantSummaryProgressType | null } => {
+  const [data, setData] = useState<RestaurantSummaryProgressType | null>(null);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    setData(null);
+    if (!placeId) return undefined;
+    return summarySseManager.subscribe(placeId, {
+      onSnapshot: (snap) => {
+        setData(snap);
+        // Patch the list cache so the matching row's "진행/완료" badges stay
+        // in sync as summaries finish. Without this, the list only refreshes
+        // on crawl `done`, leaving stale running counts when summaries
+        // continue past the crawl finish.
+        qc.setQueryData<RestaurantListResultType | undefined>(
+          ['restaurant', 'list'],
+          (prev) => {
+            if (!prev) return prev;
+            const items = prev.items.map((item) =>
+              item.placeId === placeId
+                ? {
+                    ...item,
+                    totalReviews: snap.totalReviews,
+                    summaryPending: snap.pending,
+                    summaryRunning: snap.running,
+                    summaryDone: snap.done,
+                    summaryFailed: snap.failed,
+                  }
+                : item,
+            );
+            return { ...prev, items };
+          },
+        );
+      },
+      onReview: (ev) => {
+        // Per-row patch — merge the new summary directly into the detail
+        // cache. Without this we'd have to invalidate the whole detail query
+        // (which carries every review body) every time one summary lands.
         qc.setQueryData<RestaurantDetailType | null>(
           ['restaurant', placeId],
           (prev) => {
@@ -132,19 +159,8 @@ export const useRestaurantSummaryEvents = (
             return { ...prev, reviews };
           },
         );
-      });
-      // EventSource auto-reconnects on transient drops; only initial 401/404
-      // is fatal and surfaces as a permanent close.
-    };
-    void connect();
-
-    return () => {
-      cancelled = true;
-      if (esRef.current) {
-        esRef.current.close();
-        esRef.current = null;
-      }
-    };
+      },
+    });
   }, [placeId, qc]);
 
   return { data };

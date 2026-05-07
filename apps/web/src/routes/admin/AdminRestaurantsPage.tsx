@@ -17,7 +17,9 @@ import {
   useCancelCrawl,
   useDeleteRestaurant,
   useRestaurantList,
+  useRestaurantListSummaryEvents,
   useStartCrawl,
+  type ActiveCrawlJob,
 } from '@repo/shared';
 import type { RestaurantListItemType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
@@ -180,9 +182,10 @@ export const AdminRestaurantsPage = () => {
 
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const activeJob = useActiveCrawlJobStore((s) => s.active);
-  const setActiveJob = useActiveCrawlJobStore((s) => s.setActive);
-  const resolveActivePlaceId = useActiveCrawlJobStore((s) => s.resolvePlaceId);
+  const jobs = useActiveCrawlJobStore((s) => s.jobs);
+  const addJob = useActiveCrawlJobStore((s) => s.add);
+  const removeJob = useActiveCrawlJobStore((s) => s.remove);
+  const resolveJobPlaceId = useActiveCrawlJobStore((s) => s.resolvePlaceId);
   // placeId currently in the "click again to confirm" state. Only one row
   // can be in confirm mode at a time; clicking another row's trash icon
   // moves the prompt instead of opening a second one.
@@ -217,7 +220,7 @@ export const AdminRestaurantsPage = () => {
     try {
       const result = await startMutation.mutateAsync({ url: trimmed, mode: 'create' });
       if (result.ok) {
-        setActiveJob({
+        addJob({
           jobId: result.jobId,
           placeId: null,
           source: 'new',
@@ -238,7 +241,7 @@ export const AdminRestaurantsPage = () => {
       try {
         const result = await startMutation.mutateAsync({ url: item.rawSourceUrl, mode });
         if (result.ok) {
-          setActiveJob({
+          addJob({
             jobId: result.jobId,
             placeId: item.placeId,
             source: 'list-row',
@@ -252,21 +255,40 @@ export const AdminRestaurantsPage = () => {
       }
     };
 
-  const handlePlaceIdResolved = (placeId: string) => {
-    if (activeJob && activeJob.placeId !== placeId) {
+  const handlePlaceIdResolved = (jobId: string, placeId: string) => {
+    const existing = jobs[jobId];
+    if (existing && existing.placeId !== placeId) {
       // Once we know the placeId, the row in the list is the canonical
       // anchor — refresh the list so the row appears (for new-URL jobs)
       // before the panel slots in beneath it.
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
     }
-    resolveActivePlaceId(placeId);
+    resolveJobPlaceId(jobId, placeId);
   };
 
-  const handleCancel = () => {
-    if (activeJob) cancelMutation.mutate(activeJob.jobId);
-  };
+  const handleFinished =
+    (jobId: string) =>
+    (result: { ok: boolean; error?: string; message?: string }) => {
+      if (!result.ok && result.error) {
+        setError(`${result.error}: ${result.message ?? ''}`);
+      }
+      removeJob(jobId);
+    };
 
   const items = listQuery.data?.items ?? [];
+  // Subscribe to summary events for every visible row so trailing summaries
+  // (the ones still finishing after a crawl `done`) keep the badges fresh
+  // even when no panel is mounted for that row. The singleton SSE manager
+  // multiplexes these into a single connection.
+  useRestaurantListSummaryEvents(items.map((it) => it.placeId));
+  // Index jobs by placeId so each row can render its own anchored panel
+  // without scanning the full set on every render.
+  const jobByPlaceId = new Map<string, ActiveCrawlJob>();
+  const newJobs: ActiveCrawlJob[] = [];
+  for (const j of Object.values(jobs)) {
+    if (j.source === 'new' || j.placeId === null) newJobs.push(j);
+    else jobByPlaceId.set(j.placeId, j);
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
@@ -319,22 +341,20 @@ export const AdminRestaurantsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Active "new" job — shown until we know its placeId, after which it
-          slots underneath the matching list row. */}
-      {activeJob && activeJob.source === 'new' && (
-        <div className="mb-6">
-          <ActiveJobPanel
-            jobId={activeJob.jobId}
-            placeId={activeJob.placeId}
-            onPlaceIdResolved={handlePlaceIdResolved}
-            onCancel={handleCancel}
-            onFinished={(result) => {
-              if (!result.ok) {
-                setError(`${result.error}: ${result.message}`);
-              }
-              setActiveJob(null);
-            }}
-          />
+      {/* Active "new" jobs — shown until each one's placeId resolves, at
+          which point the panel slots underneath the matching list row. */}
+      {newJobs.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {newJobs.map((j) => (
+            <ActiveJobPanel
+              key={j.jobId}
+              jobId={j.jobId}
+              placeId={j.placeId}
+              onPlaceIdResolved={(placeId) => handlePlaceIdResolved(j.jobId, placeId)}
+              onCancel={() => cancelMutation.mutate(j.jobId)}
+              onFinished={handleFinished(j.jobId)}
+            />
+          ))}
         </div>
       )}
 
@@ -361,14 +381,12 @@ export const AdminRestaurantsPage = () => {
           ) : (
             <ul className="space-y-3">
               {items.map((item) => {
-                const isActive =
-                  activeJob?.placeId === item.placeId && activeJob.source === 'list-row';
-                const busy = !!activeJob && !isActive;
+                const rowJob = jobByPlaceId.get(item.placeId) ?? null;
                 return (
                   <li key={item.id} className="space-y-3">
                     <RestaurantRow
                       item={item}
-                      busy={busy || (isActive && startMutation.isPending)}
+                      busy={!!rowJob}
                       deleting={
                         deleteMutation.isPending &&
                         deleteMutation.variables === item.placeId
@@ -378,18 +396,15 @@ export const AdminRestaurantsPage = () => {
                       onDelete={() => handleDelete(item.placeId)}
                       onCancelDelete={() => setConfirmDeletePlaceId(null)}
                     />
-                    {isActive && activeJob && (
+                    {rowJob && (
                       <ActiveJobPanel
-                        jobId={activeJob.jobId}
-                        placeId={activeJob.placeId}
-                        onPlaceIdResolved={handlePlaceIdResolved}
-                        onCancel={handleCancel}
-                        onFinished={(result) => {
-                          if (!result.ok) {
-                            setError(`${result.error}: ${result.message}`);
-                          }
-                          setActiveJob(null);
-                        }}
+                        jobId={rowJob.jobId}
+                        placeId={rowJob.placeId}
+                        onPlaceIdResolved={(placeId) =>
+                          handlePlaceIdResolved(rowJob.jobId, placeId)
+                        }
+                        onCancel={() => cancelMutation.mutate(rowJob.jobId)}
+                        onFinished={handleFinished(rowJob.jobId)}
                       />
                     )}
                   </li>

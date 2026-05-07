@@ -24,13 +24,15 @@ export const restaurantApi = {
 
 // Build the SSE endpoint URL for live summary progress. EventSource can't
 // carry the auth header, so we tack the JWT onto the query string (same
-// pattern as the crawl jobEvents stream).
-export const buildSummaryEventsUrl = async (placeId: string): Promise<string> => {
+// pattern as the crawl jobEvents stream). The endpoint multiplexes any
+// number of placeIds over a single connection.
+export const buildSummaryEventsUrl = async (placeIds: string[]): Promise<string> => {
   const cfg = getApiConfig();
   const token = (await cfg.getToken?.()) ?? '';
   const params = new URLSearchParams();
   if (token) params.set('token', token);
+  for (const pid of placeIds) params.append('placeId', pid);
   const qs = params.toString();
   const sep = qs ? '?' : '';
-  return `${cfg.baseUrl}${Routes.Restaurant.summaryEvents(placeId)}${sep}${qs}`;
+  return `${cfg.baseUrl}${Routes.Restaurant.summaryEvents}${sep}${qs}`;
 };

@@ -36,8 +36,11 @@ export const Restaurant = {
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   summaryStatus: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/summary-status`,
-  summaryEvents: (placeId: string) =>
-    `${API_PREFIX}/admin/restaurants/place/${placeId}/summary-events`,
+  // SSE endpoint that multiplexes summary progress for many placeIds over a
+  // single connection (?placeId=A&placeId=B&…). One connection per browser
+  // tab keeps us under the HTTP/1.1 6-per-origin SSE cap, even with several
+  // crawls in flight.
+  summaryEvents: `${API_PREFIX}/admin/restaurants/summary-events`,
 } as const;
 
 export const Ai = {

@@ -78,9 +78,12 @@ export type RestaurantDeleteResultType = z.infer<typeof RestaurantDeleteResult>;
 // SSE per-review payload pushed by the summary-events stream when a single
 // row's AI summary finishes (success or failure). The client merges this
 // directly into the restaurant detail cache, so a fresh summary appears in
-// the UI without a follow-up GET.
+// the UI without a follow-up GET. The multiplexed endpoint tags every event
+// with placeId so the client can demux when one connection serves many
+// restaurants.
 export const RestaurantSummaryReviewEvent = z.object({
   type: z.literal('review'),
+  placeId: z.string(),
   reviewId: z.string(),
   status: z.enum(['done', 'failed']),
   text: z.string().nullable(),
@@ -106,3 +109,12 @@ export const RestaurantSummaryProgress = z.object({
   ),
 });
 export type RestaurantSummaryProgressType = z.infer<typeof RestaurantSummaryProgress>;
+
+// SSE snapshot payload — same shape as the GET /summary-status response but
+// tagged with placeId for the multiplexed stream.
+export const RestaurantSummarySnapshotEvent = RestaurantSummaryProgress.extend({
+  placeId: z.string(),
+});
+export type RestaurantSummarySnapshotEventType = z.infer<
+  typeof RestaurantSummarySnapshotEvent
+>;

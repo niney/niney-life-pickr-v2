@@ -15,11 +15,7 @@ import {
   PlaywrightFetchError,
   type ExistingReviewKeys,
 } from './adapters/naver-place.playwright.adapter.js';
-import {
-  jobRegistry,
-  MaxConcurrentJobsError,
-  type JobRegistry,
-} from './job-registry.js';
+import { jobRegistry, type JobRegistry } from './job-registry.js';
 import {
   normalizeToPlaceId,
   RedirectFailedError,
@@ -47,12 +43,22 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+// Per-actor FIFO of jobs waiting for a concurrency slot. The closure carries
+// every input runJob needs; once a running job ends we pop the next entry
+// for that actor and invoke it.
+interface PendingStart {
+  jobId: string;
+  actorId: string;
+  start: () => void;
+}
+
 export class CrawlService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly lastCallByActor = new Map<string, number>();
   private readonly registry: JobRegistry;
   private readonly restaurants: RestaurantService;
   private readonly summaries: SummaryService;
+  private readonly pending: PendingStart[] = [];
   private nextSeq = 1;
 
   constructor(
@@ -114,8 +120,15 @@ export class CrawlService {
     if (mode === 'create') {
       const cached = this.cache.get(normalized.placeId);
       if (cached && cached.expiresAt > now) {
-        const created = this.tryCreateJob(rawUrl, normalized.placeId, actorId);
-        if (created.kind === 'error') return created.payload;
+        const created = this.registry.create({
+          url: rawUrl,
+          placeId: normalized.placeId,
+          actorId,
+        });
+        // Cache hits don't consume a Playwright slot but we still flip the
+        // phase so countActive stays consistent and the job appears in lists
+        // as having actually run.
+        this.registry.markActive(created.id);
         this.emit(created.id, {
           type: 'progress',
           stage: 'done',
@@ -134,50 +147,61 @@ export class CrawlService {
       }
     }
 
-    const created = this.tryCreateJob(rawUrl, normalized.placeId, actorId);
-    if (created.kind === 'error') return created.payload;
+    const { id: jobId, abortSignal } = this.registry.create({
+      url: rawUrl,
+      placeId: normalized.placeId,
+      actorId,
+    });
 
-    // Fire-and-forget — runJob handles all errors by emitting events; nothing
-    // here should reject. We tag the promise to silence unhandled-rejection
-    // warnings just in case.
-    void this.runJob(
-      created.id,
-      created.signal,
-      normalized.placeId,
-      normalized.canonicalUrl,
-      mode,
-    ).catch(() => undefined);
+    const start = () => {
+      this.registry.markActive(jobId);
+      // Fire-and-forget — runJob handles all errors by emitting events.
+      // After the job ends we drain the queue so any waiting jobs for this
+      // actor pick up the freed slot.
+      void this.runJob(jobId, abortSignal, normalized.placeId, normalized.canonicalUrl, mode)
+        .catch(() => undefined)
+        .finally(() => this.flushQueue(actorId));
+    };
 
-    return { ok: true, jobId: created.id, deduped: false };
+    if (this.registry.hasSlotForActor(actorId)) {
+      start();
+      return { ok: true, jobId, deduped: false };
+    }
+    // Emit a 'queued' stage event so SSE subscribers immediately see the
+    // waiting badge — without this the stream would be silent until a slot
+    // frees and the adapter starts emitting its own progress events.
+    this.emit(jobId, { type: 'progress', stage: 'queued' });
+    this.pending.push({ jobId, actorId, start });
+    return { ok: true, jobId, deduped: false, queued: true };
   }
 
   cancel(jobId: string, actorId: string): boolean {
-    return this.registry.cancel(jobId, actorId);
+    const outcome = this.registry.cancel(jobId, actorId);
+    if (outcome === 'noop') return false;
+    if (outcome === 'queued-cancelled') {
+      // Drop the deferred start so it never fires. The registry will record
+      // the cancellation event below.
+      const idx = this.pending.findIndex((p) => p.jobId === jobId);
+      if (idx >= 0) this.pending.splice(idx, 1);
+      this.emit(jobId, {
+        type: 'error',
+        error: 'cancelled',
+        message: '대기 중에 취소되었습니다.',
+      });
+    }
+    return true;
   }
 
-  private tryCreateJob(
-    url: string,
-    placeId: string,
-    actorId: string,
-  ):
-    | { kind: 'ok'; id: string; signal: AbortSignal }
-    | { kind: 'error'; payload: StartCrawlResultType } {
-    try {
-      const { id, abortSignal } = this.registry.create({ url, placeId, actorId });
-      return { kind: 'ok', id, signal: abortSignal };
-    } catch (e) {
-      if (e instanceof MaxConcurrentJobsError) {
-        return {
-          kind: 'error',
-          payload: {
-            ok: false,
-            error: 'max_concurrent',
-            message: `동시 실행 제한 (${e.cap}개) 초과`,
-            triedUrl: url,
-          },
-        };
-      }
-      throw e;
+  // Pop the next queued job for this actor and start it, repeating while
+  // there's still slack. Called when a slot frees (job finished) or right
+  // after queueing a new job (in case a slot is still available).
+  private flushQueue(actorId: string): void {
+    while (this.registry.hasSlotForActor(actorId)) {
+      const idx = this.pending.findIndex((p) => p.actorId === actorId);
+      if (idx < 0) return;
+      const next = this.pending.splice(idx, 1)[0];
+      if (!next) return;
+      next.start();
     }
   }
 

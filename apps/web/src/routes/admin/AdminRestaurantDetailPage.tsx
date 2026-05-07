@@ -414,13 +414,18 @@ export const AdminRestaurantDetailPage = () => {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const activeJobGlobal = useActiveCrawlJobStore((s) => s.active);
-  const setActiveJobGlobal = useActiveCrawlJobStore((s) => s.setActive);
-  // Only treat the global job as "ours" when its placeId matches this page —
-  // otherwise an unrelated job (started elsewhere on a different restaurant)
-  // would mount the panel here too.
-  const activeJob =
-    activeJobGlobal && activeJobGlobal.placeId === placeId ? activeJobGlobal : null;
+  // Pull only the job whose placeId matches this page. Multiple jobs can be
+  // running globally (different restaurants), but the detail page only cares
+  // about its own. Returning the matched object directly keeps zustand's
+  // default reference equality stable across unrelated job updates.
+  const activeJob = useActiveCrawlJobStore((s) => {
+    for (const j of Object.values(s.jobs)) {
+      if (j.placeId === placeId) return j;
+    }
+    return null;
+  });
+  const addJob = useActiveCrawlJobStore((s) => s.add);
+  const removeJob = useActiveCrawlJobStore((s) => s.remove);
 
   if (!placeId) return <Navigate to="/admin/restaurants" replace />;
 
@@ -469,7 +474,7 @@ export const AdminRestaurantDetailPage = () => {
             (prev) => (prev ? { ...prev, reviews: [] } : prev),
           );
         }
-        setActiveJobGlobal({
+        addJob({
           jobId: result.jobId,
           placeId: detail.placeId,
           mode,
@@ -557,7 +562,7 @@ export const AdminRestaurantDetailPage = () => {
               variant="outline"
               size="sm"
               onClick={() => handleAction('update')}
-              disabled={startMutation.isPending || !!activeJobGlobal}
+              disabled={startMutation.isPending || !!activeJob}
             >
               업데이트
             </Button>
@@ -565,7 +570,7 @@ export const AdminRestaurantDetailPage = () => {
               type="button"
               size="sm"
               onClick={() => handleAction('recrawl')}
-              disabled={startMutation.isPending || !!activeJobGlobal}
+              disabled={startMutation.isPending || !!activeJob}
             >
               <RefreshCw />
               재크롤링
@@ -620,7 +625,7 @@ export const AdminRestaurantDetailPage = () => {
             if (!result.ok) {
               setError(`${result.error}: ${result.message}`);
             }
-            setActiveJobGlobal(null);
+            removeJob(activeJob.jobId);
           }}
         />
       )}

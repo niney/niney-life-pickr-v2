@@ -77,14 +77,14 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  // SSE — push summary progress snapshots whenever a row's status flips.
-  // EventSource can't carry custom headers, so we accept ?token=<jwt> and
-  // verify it inline (mirrors crawl SSE auth).
-  app.get(Routes.Restaurant.summaryEvents(':placeId'), {
+  // Multiplexed SSE — accepts ?placeId=A&placeId=B&… and pushes summary
+  // events for every requested placeId over a single connection. Keeps the
+  // browser well under its HTTP/1.1 6-per-origin SSE cap when many crawls
+  // are running. Each event payload carries placeId so the client can demux.
+  app.get(Routes.Restaurant.summaryEvents, {
     schema: { tags: ['admin'] },
     handler: async (req, reply) => {
-      const params = req.params as { placeId: string };
-      const query = req.query as { token?: string };
+      const rawQuery = req.query as { token?: string; placeId?: string | string[] };
 
       let userId: string | null = null;
       let role: 'USER' | 'ADMIN' | null = null;
@@ -93,9 +93,9 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
         userId = req.user.userId;
         role = req.user.role;
       } catch {
-        if (typeof query.token === 'string' && query.token.length > 0) {
+        if (typeof rawQuery.token === 'string' && rawQuery.token.length > 0) {
           try {
-            const payload = app.jwt.verify(query.token) as {
+            const payload = app.jwt.verify(rawQuery.token) as {
               userId: string;
               role: 'USER' | 'ADMIN';
             };
@@ -114,16 +114,16 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // Validate the restaurant exists once up-front so a bad placeId
-      // returns 404 instead of opening an empty stream.
-      const initial = await service.getSummaryProgress(params.placeId);
-      if (!initial) {
-        return reply.code(404).send({
-          statusCode: 404,
-          error: 'Not Found',
-          message: 'Restaurant not crawled yet',
-        });
-      }
+      // Normalize placeId param to an array. Fastify's default query parser
+      // gives a string for ?placeId=X and an array for ?placeId=X&placeId=Y.
+      const placeIdsRaw = rawQuery.placeId;
+      const placeIds = Array.isArray(placeIdsRaw)
+        ? placeIdsRaw
+        : typeof placeIdsRaw === 'string' && placeIdsRaw.length > 0
+          ? [placeIdsRaw]
+          : [];
+      // Dedupe while preserving order.
+      const uniquePlaceIds = Array.from(new Set(placeIds));
 
       reply.hijack();
       reply.raw.writeHead(200, {
@@ -149,43 +149,57 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       };
 
       writeComment('connected');
-      writeNamed('snapshot', initial);
 
-      // Coalesce bursts of progress signals: many row flips within a tick
-      // get collapsed into one DB read + one SSE push. Avoids hammering the
-      // DB when a chunk of summaries finishes simultaneously. Per-review
-      // signals bypass coalescing — they carry their own payload and the
-      // client merges them straight into its cache.
-      let pendingProgressPush = false;
-      const pushSnapshotNow = async (): Promise<void> => {
-        pendingProgressPush = false;
+      // Initial snapshot for every requested placeId so subscribers don't
+      // have to wait for the next progress tick to render. Skips ones that
+      // don't exist (the row may have been deleted between client subscribe
+      // and server connect — silently dropped, not 404).
+      for (const pid of uniquePlaceIds) {
         try {
-          const snap = await service.getSummaryProgress(params.placeId);
-          if (snap) writeNamed('snapshot', snap);
+          const snap = await service.getSummaryProgress(pid);
+          if (snap) writeNamed('snapshot', { placeId: pid, ...snap });
         } catch {
-          // ignore — keep the stream open; transient DB errors shouldn't kill it
+          // ignore — bad placeId shouldn't kill the stream
         }
-      };
-      const onSignal = (signal: { type: string }): void => {
-        if (signal.type === 'review') {
-          writeNamed('review', signal);
-          return;
-        }
-        if (pendingProgressPush) return;
-        pendingProgressPush = true;
-        setImmediate(() => {
-          void pushSnapshotNow();
-        });
-      };
+      }
 
-      const unsubscribe = summaryEventsBus.subscribe(params.placeId, onSignal);
+      // One coalescing slot per placeId so a flurry of progress signals on
+      // one restaurant collapses into a single DB read + push. Reviews skip
+      // coalescing — their payload is already complete.
+      const pendingProgressPush = new Set<string>();
+      const pushSnapshotNow = async (placeId: string): Promise<void> => {
+        pendingProgressPush.delete(placeId);
+        try {
+          const snap = await service.getSummaryProgress(placeId);
+          if (snap) writeNamed('snapshot', { placeId, ...snap });
+        } catch {
+          // keep the stream open — transient DB errors shouldn't drop it
+        }
+      };
+      const makeOnSignal =
+        (placeId: string) =>
+        (signal: { type: string } & Record<string, unknown>): void => {
+          if (signal.type === 'review') {
+            writeNamed('review', { placeId, ...signal });
+            return;
+          }
+          if (pendingProgressPush.has(placeId)) return;
+          pendingProgressPush.add(placeId);
+          setImmediate(() => {
+            void pushSnapshotNow(placeId);
+          });
+        };
+
+      const unsubscribers = uniquePlaceIds.map((pid) =>
+        summaryEventsBus.subscribe(pid, makeOnSignal(pid)),
+      );
 
       const heartbeat = setInterval(() => writeComment('hb'), 15_000);
       heartbeat.unref?.();
 
       const cleanup = (): void => {
         clearInterval(heartbeat);
-        unsubscribe();
+        for (const u of unsubscribers) u();
         try {
           reply.raw.end();
         } catch {
