@@ -108,9 +108,9 @@ const ReviewSummaryBlock = ({ r }: { r: VisitorReviewWithSummaryType }) => {
   const echoes =
     r.summary?.status === 'done' && summaryEchoesBody(r.body, r.summary.text);
   return (
-    <div className="flex gap-2 text-xs">
+    <div className="flex items-center gap-2 text-xs">
       <span
-        className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-medium ${
+        className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${
           r.summary?.status === 'failed'
             ? 'bg-destructive/10 text-destructive'
             : echoes

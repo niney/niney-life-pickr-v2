@@ -98,7 +98,7 @@ const RestaurantRow = ({
             <span className="text-xs text-muted-foreground">{item.category}</span>
           )}
         </div>
-        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {item.rating !== null && <Badge variant="secondary">★ {item.rating}</Badge>}
           <Badge variant="outline">리뷰 {item.totalReviews}개</Badge>
           <Badge variant="outline">요약 {item.summaryDone}/{item.totalReviews}</Badge>
