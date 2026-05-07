@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   ArrowLeft,
@@ -15,6 +16,8 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
+  useActiveCrawlJobStore,
+  useCancelCrawl,
   useDeleteRestaurant,
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
@@ -31,6 +34,7 @@ import type {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
+import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import {
   ReviewSummaryItem,
   SectionHeader,
@@ -405,9 +409,18 @@ export const AdminRestaurantDetailPage = () => {
   const summaryStatusQuery = useRestaurantSummaryEvents(placeId ?? null);
 
   const startMutation = useStartCrawl();
+  const cancelMutation = useCancelCrawl();
   const deleteMutation = useDeleteRestaurant();
+  const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const activeJobGlobal = useActiveCrawlJobStore((s) => s.active);
+  const setActiveJobGlobal = useActiveCrawlJobStore((s) => s.setActive);
+  // Only treat the global job as "ours" when its placeId matches this page —
+  // otherwise an unrelated job (started elsewhere on a different restaurant)
+  // would mount the panel here too.
+  const activeJob =
+    activeJobGlobal && activeJobGlobal.placeId === placeId ? activeJobGlobal : null;
 
   if (!placeId) return <Navigate to="/admin/restaurants" replace />;
 
@@ -447,14 +460,31 @@ export const AdminRestaurantDetailPage = () => {
     try {
       const result = await startMutation.mutateAsync({ url: detail.rawSourceUrl, mode });
       if (result.ok) {
-        // Hand off to the list page where ActiveJobPanel is wired up.
-        navigate('/admin/restaurants');
+        // Recrawl cascade-deletes existing reviews server-side, so the cached
+        // detail's review ids will all become stale. Wipe them now so the
+        // streamed batches don't end up interleaved with about-to-vanish rows.
+        if (mode === 'recrawl') {
+          qc.setQueryData<RestaurantDetailType | null>(
+            ['restaurant', detail.placeId],
+            (prev) => (prev ? { ...prev, reviews: [] } : prev),
+          );
+        }
+        setActiveJobGlobal({
+          jobId: result.jobId,
+          placeId: detail.placeId,
+          mode,
+          source: 'list-row',
+        });
       } else {
         setError(`${result.error}: ${result.message}`);
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to start');
     }
+  };
+
+  const handleCancelJob = () => {
+    if (activeJob) cancelMutation.mutate(activeJob.jobId);
   };
 
   const handleDelete = async () => {
@@ -527,7 +557,7 @@ export const AdminRestaurantDetailPage = () => {
               variant="outline"
               size="sm"
               onClick={() => handleAction('update')}
-              disabled={startMutation.isPending}
+              disabled={startMutation.isPending || !!activeJobGlobal}
             >
               업데이트
             </Button>
@@ -535,7 +565,7 @@ export const AdminRestaurantDetailPage = () => {
               type="button"
               size="sm"
               onClick={() => handleAction('recrawl')}
-              disabled={startMutation.isPending}
+              disabled={startMutation.isPending || !!activeJobGlobal}
             >
               <RefreshCw />
               재크롤링
@@ -579,6 +609,22 @@ export const AdminRestaurantDetailPage = () => {
         {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
       </div>
 
+      {activeJob && (
+        <ActiveJobPanel
+          jobId={activeJob.jobId}
+          placeId={detail.placeId}
+          onPlaceIdResolved={() => {}}
+          onCancel={handleCancelJob}
+          showInlineReviewList={false}
+          onFinished={(result) => {
+            if (!result.ok) {
+              setError(`${result.error}: ${result.message}`);
+            }
+            setActiveJobGlobal(null);
+          }}
+        />
+      )}
+
       <Card>
         <CardContent className="divide-y [&>*]:py-4">
           <InfoSection detail={detail} />
@@ -588,7 +634,7 @@ export const AdminRestaurantDetailPage = () => {
         </CardContent>
       </Card>
 
-      {summaryStatusQuery.data && summaryInFlight > 0 && (
+      {!activeJob && summaryStatusQuery.data && summaryInFlight > 0 && (
         <Card>
           <CardContent className="py-4">
             <SummaryProgressSection status={summaryStatusQuery.data} />

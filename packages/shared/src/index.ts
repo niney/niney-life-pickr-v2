@@ -6,6 +6,7 @@ export * from './api/crawl.api.js';
 export * from './api/restaurant.api.js';
 export * from './api/ai.api.js';
 export * from './stores/authStore.js';
+export * from './stores/activeCrawlJobStore.js';
 export * from './hooks/useAuth.js';
 export * from './hooks/usePicks.js';
 export * from './hooks/useAdmin.js';

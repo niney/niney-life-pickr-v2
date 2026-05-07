@@ -1,9 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  AlertCircle,
-  CheckCircle2,
   ChevronRight,
   Link as LinkIcon,
   Loader2,
@@ -15,25 +13,18 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
+  useActiveCrawlJobStore,
   useCancelCrawl,
-  useCrawlJobStream,
   useDeleteRestaurant,
-  useRestaurantByPlaceId,
   useRestaurantList,
-  useRestaurantSummaryEvents,
   useStartCrawl,
 } from '@repo/shared';
-import type {
-  CrawlModeType,
-  CrawlStageType,
-  RestaurantDetailType,
-  RestaurantListItemType,
-} from '@repo/api-contract';
+import type { RestaurantListItemType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
-import { ReviewSummarySection, SummaryProgressSection } from '~/components/restaurant/sections';
+import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 
 const NAVER_PLACE_HOSTS = ['naver.com', 'naver.me'];
 
@@ -47,157 +38,8 @@ const isValidNaverPlaceUrl = (raw: string): boolean => {
   }
 };
 
-const STAGE_LABEL: Record<CrawlStageType, string> = {
-  queued: '대기',
-  normalizing: 'URL 정규화',
-  launching: '브라우저 준비',
-  loading_main: '메인 페이지 로드',
-  parsing_main: '데이터 파싱',
-  loading_visitor: '방문자 페이지 로드',
-  paginating_visitor: '리뷰 페이지네이션',
-  finalizing: '마무리',
-  done: '완료',
-};
-
-interface ActiveJob {
-  jobId: string;
-  // The placeId the job is targeting. Known for recrawl/update right away;
-  // for new URLs we discover it from the SSE 'partial' event.
-  placeId: string | null;
-  // Where to anchor the inline progress UI: a known list item, or the
-  // sticky "new" panel at the top.
-  source: 'list-row' | 'new';
-  mode: CrawlModeType;
-}
-
 const summaryInFlight = (item: RestaurantListItemType): number =>
   item.summaryPending + item.summaryRunning;
-
-// Inline progress panel — rendered either at the top (for new-URL jobs,
-// before we know the placeId) or stretched under a list row once placeId
-// is known. Covers SSE state, summary progress, and the persisted reviews.
-const ActiveJobPanel = ({
-  jobId,
-  placeId,
-  onPlaceIdResolved,
-  onCancel,
-}: {
-  jobId: string;
-  placeId: string | null;
-  onPlaceIdResolved: (placeId: string) => void;
-  onCancel: () => void;
-}) => {
-  const stream = useCrawlJobStream(jobId);
-  const detailQuery = useRestaurantByPlaceId(placeId);
-  const summaryStatusQuery = useRestaurantSummaryEvents(placeId);
-  const qc = useQueryClient();
-
-  // The first 'partial' or 'done' event tells us the placeId. Lift it up so
-  // the parent can attach the panel to the right list row.
-  useEffect(() => {
-    const fromPartial = stream.partial?.placeId;
-    const fromDone = stream.result?.ok ? stream.result.data.placeId : null;
-    const resolved = fromPartial ?? fromDone;
-    if (resolved && resolved !== placeId) {
-      onPlaceIdResolved(resolved);
-    }
-  }, [stream.partial, stream.result, placeId, onPlaceIdResolved]);
-
-  // Merge each freshly-INSERTed batch directly into the detail cache.
-  // Replaces the old "invalidate per visitor_batch" path which re-fetched
-  // the whole detail (every review body) just to show new rows. With this,
-  // the detail GET happens at most once per page visit.
-  useEffect(() => {
-    if (!placeId || !stream.lastPersistedBatch || stream.lastPersistedBatch.length === 0) return;
-    const incoming = stream.lastPersistedBatch;
-    qc.setQueryData<RestaurantDetailType | null>(
-      ['restaurant', placeId],
-      (prev) => {
-        if (!prev) return prev;
-        const seen = new Set(prev.reviews.map((r) => r.id));
-        const merged = [
-          ...incoming
-            .filter((r) => !seen.has(r.id))
-            .map((r) => ({
-              authorName: r.authorName,
-              rating: r.rating,
-              body: r.body,
-              visitedAt: r.visitedAt,
-              imageUrls: r.imageUrls,
-              id: r.id,
-              externalId: r.externalId,
-              fetchedAt: r.fetchedAt,
-              summary: null,
-            })),
-          ...prev.reviews,
-        ];
-        return { ...prev, reviews: merged };
-      },
-    );
-  }, [stream.lastPersistedBatch, placeId, qc]);
-
-  // List counts (totalReviews, summary buckets) update after the job ends.
-  useEffect(() => {
-    if (stream.result !== null) {
-      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
-    }
-  }, [stream.result, qc]);
-
-  const isRunning = stream.status === 'connecting' || stream.status === 'open';
-  const stage = stream.stage;
-
-  return (
-    <Card className="border-primary/40">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          {isRunning ? (
-            <Loader2 className="size-4 animate-spin text-primary" />
-          ) : stream.result?.ok ? (
-            <CheckCircle2 className="size-4 text-primary" />
-          ) : (
-            <AlertCircle className="size-4 text-destructive" />
-          )}
-          크롤링 작업
-        </CardTitle>
-        <CardDescription className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge variant="outline">job: {jobId.slice(0, 8)}…</Badge>
-          {stage && <Badge variant="secondary">{STAGE_LABEL[stage]}</Badge>}
-          {stream.visitorCount > 0 && (
-            <span>방문자 리뷰 {stream.visitorCount}개 수집</span>
-          )}
-          {stream.persistedCount > 0 && (
-            <span>· DB 저장 {stream.persistedCount}개</span>
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="divide-y [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
-        {(isRunning || (stream.result && !stream.result.ok)) && (
-          <div className="space-y-3">
-            {isRunning && (
-              <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-                취소
-              </Button>
-            )}
-            {stream.result && !stream.result.ok && (
-              <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
-                <Badge variant="outline" className="mr-2">
-                  {stream.result.error}
-                </Badge>
-                {stream.result.message}
-              </div>
-            )}
-          </div>
-        )}
-        {summaryStatusQuery.data && (
-          <SummaryProgressSection status={summaryStatusQuery.data} />
-        )}
-        {detailQuery.data && (
-          <ReviewSummarySection reviews={detailQuery.data.reviews} />
-        )}
-      </CardContent>
-    </Card>
-  );
-};
 
 const RestaurantRow = ({
   item,
@@ -338,7 +180,9 @@ export const AdminRestaurantsPage = () => {
 
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
+  const activeJob = useActiveCrawlJobStore((s) => s.active);
+  const setActiveJob = useActiveCrawlJobStore((s) => s.setActive);
+  const resolveActivePlaceId = useActiveCrawlJobStore((s) => s.resolvePlaceId);
   // placeId currently in the "click again to confirm" state. Only one row
   // can be in confirm mode at a time; clicking another row's trash icon
   // moves the prompt instead of opening a second one.
@@ -409,15 +253,13 @@ export const AdminRestaurantsPage = () => {
     };
 
   const handlePlaceIdResolved = (placeId: string) => {
-    setActiveJob((prev) => {
-      if (!prev) return prev;
-      if (prev.placeId === placeId) return prev;
+    if (activeJob && activeJob.placeId !== placeId) {
       // Once we know the placeId, the row in the list is the canonical
       // anchor — refresh the list so the row appears (for new-URL jobs)
       // before the panel slots in beneath it.
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
-      return { ...prev, placeId, source: 'list-row' };
-    });
+    }
+    resolveActivePlaceId(placeId);
   };
 
   const handleCancel = () => {
@@ -486,6 +328,12 @@ export const AdminRestaurantsPage = () => {
             placeId={activeJob.placeId}
             onPlaceIdResolved={handlePlaceIdResolved}
             onCancel={handleCancel}
+            onFinished={(result) => {
+              if (!result.ok) {
+                setError(`${result.error}: ${result.message}`);
+              }
+              setActiveJob(null);
+            }}
           />
         </div>
       )}
@@ -536,6 +384,12 @@ export const AdminRestaurantsPage = () => {
                         placeId={activeJob.placeId}
                         onPlaceIdResolved={handlePlaceIdResolved}
                         onCancel={handleCancel}
+                        onFinished={(result) => {
+                          if (!result.ok) {
+                            setError(`${result.error}: ${result.message}`);
+                          }
+                          setActiveJob(null);
+                        }}
                       />
                     )}
                   </li>

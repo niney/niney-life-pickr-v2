@@ -1,0 +1,184 @@
+import { useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
+import {
+  useCrawlJobStream,
+  useRestaurantByPlaceId,
+  useRestaurantSummaryEvents,
+} from '@repo/shared';
+import type {
+  CrawlNaverPlaceResultType,
+  CrawlStageType,
+  RestaurantDetailType,
+} from '@repo/api-contract';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import { ReviewSummarySection, SummaryProgressSection } from './sections';
+
+const STAGE_LABEL: Record<CrawlStageType, string> = {
+  queued: '대기',
+  normalizing: 'URL 정규화',
+  launching: '브라우저 준비',
+  loading_main: '메인 페이지 로드',
+  parsing_main: '데이터 파싱',
+  loading_visitor: '방문자 페이지 로드',
+  paginating_visitor: '리뷰 페이지네이션',
+  finalizing: '마무리',
+  done: '완료',
+};
+
+interface ActiveJobPanelProps {
+  jobId: string;
+  placeId: string | null;
+  onPlaceIdResolved: (placeId: string) => void;
+  onCancel: () => void;
+  // Detail page already shows reviews in its own filter/sort/paginate list,
+  // so it hides the panel's compact 50-row preview to avoid duplication.
+  showInlineReviewList?: boolean;
+  // Detail page uses this to dismiss the panel (and re-enable header buttons)
+  // once the job is done. List page leaves it mounted.
+  onDismiss?: () => void;
+  // Fires exactly once when the job stream produces a terminal result.
+  // Detail page uses this to clear its activeJob state (re-enabling buttons
+  // and unmounting the panel). List page leaves the panel anchored to the
+  // row so onFinished is not needed there.
+  onFinished?: (result: CrawlNaverPlaceResultType) => void;
+}
+
+export const ActiveJobPanel = ({
+  jobId,
+  placeId,
+  onPlaceIdResolved,
+  onCancel,
+  showInlineReviewList = true,
+  onDismiss,
+  onFinished,
+}: ActiveJobPanelProps) => {
+  const stream = useCrawlJobStream(jobId);
+  const detailQuery = useRestaurantByPlaceId(placeId);
+  const summaryStatusQuery = useRestaurantSummaryEvents(placeId);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const fromPartial = stream.partial?.placeId;
+    const fromDone = stream.result?.ok ? stream.result.data.placeId : null;
+    const resolved = fromPartial ?? fromDone;
+    if (resolved && resolved !== placeId) {
+      onPlaceIdResolved(resolved);
+    }
+  }, [stream.partial, stream.result, placeId, onPlaceIdResolved]);
+
+  useEffect(() => {
+    if (!placeId || !stream.lastPersistedBatch || stream.lastPersistedBatch.length === 0) return;
+    const incoming = stream.lastPersistedBatch;
+    qc.setQueryData<RestaurantDetailType | null>(
+      ['restaurant', placeId],
+      (prev) => {
+        if (!prev) return prev;
+        const seen = new Set(prev.reviews.map((r) => r.id));
+        const merged = [
+          ...incoming
+            .filter((r) => !seen.has(r.id))
+            .map((r) => ({
+              authorName: r.authorName,
+              rating: r.rating,
+              body: r.body,
+              visitedAt: r.visitedAt,
+              imageUrls: r.imageUrls,
+              id: r.id,
+              externalId: r.externalId,
+              fetchedAt: r.fetchedAt,
+              summary: null,
+            })),
+          ...prev.reviews,
+        ];
+        return { ...prev, reviews: merged };
+      },
+    );
+  }, [stream.lastPersistedBatch, placeId, qc]);
+
+  // After the job ends, refresh both the list (counts/summary buckets) and
+  // the active detail (snapshotJson, totalReviews, anything not covered by
+  // the streamed merges). Then fire onFinished exactly once.
+  const finishedFiredRef = useRef(false);
+  useEffect(() => {
+    if (stream.result === null) return;
+    qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    if (placeId) {
+      qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
+    }
+    if (!finishedFiredRef.current) {
+      finishedFiredRef.current = true;
+      onFinished?.(stream.result);
+    }
+  }, [stream.result, placeId, qc, onFinished]);
+
+  const isRunning = stream.status === 'connecting' || stream.status === 'open';
+  const stage = stream.stage;
+  const finished = stream.result !== null;
+
+  return (
+    <Card className="border-primary/40">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          {isRunning ? (
+            <Loader2 className="size-4 animate-spin text-primary" />
+          ) : stream.result?.ok ? (
+            <CheckCircle2 className="size-4 text-primary" />
+          ) : (
+            <AlertCircle className="size-4 text-destructive" />
+          )}
+          크롤링 작업
+          {finished && onDismiss && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={onDismiss}
+              aria-label="닫기"
+            >
+              <X />
+            </Button>
+          )}
+        </CardTitle>
+        <CardDescription className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant="outline">job: {jobId.slice(0, 8)}…</Badge>
+          {stage && <Badge variant="secondary">{STAGE_LABEL[stage]}</Badge>}
+          {stream.visitorCount > 0 && (
+            <span>방문자 리뷰 {stream.visitorCount}개 수집</span>
+          )}
+          {stream.persistedCount > 0 && (
+            <span>· DB 저장 {stream.persistedCount}개</span>
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="divide-y [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+        {(isRunning || (stream.result && !stream.result.ok)) && (
+          <div className="space-y-3">
+            {isRunning && (
+              <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+                취소
+              </Button>
+            )}
+            {stream.result && !stream.result.ok && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
+                <Badge variant="outline" className="mr-2">
+                  {stream.result.error}
+                </Badge>
+                {stream.result.message}
+              </div>
+            )}
+          </div>
+        )}
+        {summaryStatusQuery.data && (
+          <SummaryProgressSection status={summaryStatusQuery.data} />
+        )}
+        {showInlineReviewList && detailQuery.data && (
+          <ReviewSummarySection reviews={detailQuery.data.reviews} />
+        )}
+      </CardContent>
+    </Card>
+  );
+};
