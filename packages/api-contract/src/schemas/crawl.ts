@@ -66,6 +66,17 @@ export const VisitorReview = z.object({
 });
 export type VisitorReviewType = z.infer<typeof VisitorReview>;
 
+// What a `visitor_batch` SSE event carries: the actual rows that landed in
+// the DB, with their server-assigned ids. Defined in this module (not in
+// schemas/restaurant.ts) to avoid a circular import — restaurant.ts already
+// imports from here.
+export const PersistedVisitorReview = VisitorReview.extend({
+  id: z.string(),
+  externalId: z.string().nullable(),
+  fetchedAt: z.string(),
+});
+export type PersistedVisitorReviewType = z.infer<typeof PersistedVisitorReview>;
+
 export const NaverPlaceData = z.object({
   placeId: z.string(),
   name: z.string(),
@@ -167,6 +178,12 @@ export const CrawlEvent = z.discriminatedUnion('type', [
     type: z.literal('visitor_batch'),
     reviews: z.array(VisitorReview),
     addedCount: z.number().int(),
+    // The actually-INSERTed rows for this batch. Carries the DB ids and
+    // fetchedAt so the client can merge directly into the detail cache,
+    // avoiding a follow-up GET /restaurants/place/:placeId per batch.
+    // `summary` is always null here — it'll be filled in by the
+    // /summary-events SSE stream once AI summarization finishes.
+    persistedReviews: z.array(PersistedVisitorReview),
     at: z.string(),
   }),
   z.object({

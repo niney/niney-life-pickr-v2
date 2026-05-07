@@ -75,6 +75,22 @@ export const RestaurantDeleteResult = z.object({
 });
 export type RestaurantDeleteResultType = z.infer<typeof RestaurantDeleteResult>;
 
+// SSE per-review payload pushed by the summary-events stream when a single
+// row's AI summary finishes (success or failure). The client merges this
+// directly into the restaurant detail cache, so a fresh summary appears in
+// the UI without a follow-up GET.
+export const RestaurantSummaryReviewEvent = z.object({
+  type: z.literal('review'),
+  reviewId: z.string(),
+  status: z.enum(['done', 'failed']),
+  text: z.string().nullable(),
+  model: z.string().nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  finishedAt: z.string(),
+});
+export type RestaurantSummaryReviewEventType = z.infer<typeof RestaurantSummaryReviewEvent>;
+
 export const RestaurantSummaryProgress = z.object({
   totalReviews: z.number().int(),
   pending: z.number().int(),

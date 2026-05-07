@@ -18,7 +18,7 @@ import {
   useCrawlJobs,
   useCrawlJobStream,
   useRestaurantByPlaceId,
-  useRestaurantSummaryStatus,
+  useRestaurantSummaryEvents,
   useStartCrawl,
 } from '@repo/shared';
 import type {
@@ -557,7 +557,7 @@ export const AdminCrawlTestPage = () => {
     stream.partial?.placeId ??
     null;
   const restaurantQuery = useRestaurantByPlaceId(placeId);
-  const summaryStatusQuery = useRestaurantSummaryStatus(placeId);
+  const summaryStatusQuery = useRestaurantSummaryEvents(placeId);
 
   // The jobs list is fetched once on mount and re-fetched only on meaningful
   // transitions: start/cancel mutations (handled inside the mutation hooks),

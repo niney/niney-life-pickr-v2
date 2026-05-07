@@ -3,6 +3,7 @@ import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
+import { summaryEventsBus, type SummaryEventsBus } from './summary-events-bus.js';
 
 const SYSTEM_PROMPT =
   '다음은 한 식당에 대한 방문자 리뷰입니다. 1-2문장으로 핵심(분위기/맛/서비스/장단점)을 요약해 주세요. 추측하지 말고 본문에 있는 내용만 사용하세요.';
@@ -20,6 +21,8 @@ export interface SummaryServiceOptions {
   // Test seam — bypass AiConfigService and return a fixed (provider, model).
   // Keeps the unit test independent of DB rows / env setup.
   resolveOverride?: () => Promise<{ provider: LLMProvider; model: string } | null>;
+  // Test seam — inject a custom bus instance (default: module singleton).
+  bus?: SummaryEventsBus;
 }
 
 // Background AI summarization. The crawl pipeline calls
@@ -34,18 +37,22 @@ export class SummaryService {
     private readonly opts: SummaryServiceOptions = {},
   ) {}
 
-  queueSummariesForReviews(reviewIds: string[]): void {
+  queueSummariesForReviews(placeId: string, reviewIds: string[]): void {
     if (reviewIds.length === 0) return;
-    void this.run(reviewIds).catch(() => undefined);
+    void this.run(placeId, reviewIds).catch(() => undefined);
   }
 
   // Exposed for tests so they can await completion deterministically. The
   // crawl path never awaits — it relies on queueSummariesForReviews.
-  async runForTests(reviewIds: string[]): Promise<void> {
-    await this.run(reviewIds);
+  async runForTests(placeId: string, reviewIds: string[]): Promise<void> {
+    await this.run(placeId, reviewIds);
   }
 
-  private async run(reviewIds: string[]): Promise<void> {
+  private get bus(): SummaryEventsBus {
+    return this.opts.bus ?? summaryEventsBus;
+  }
+
+  private async run(placeId: string, reviewIds: string[]): Promise<void> {
     if (reviewIds.length === 0) return;
     const startedAt = new Date();
 
@@ -66,6 +73,7 @@ export class SummaryService {
         },
       });
     }
+    this.bus.publish(placeId);
 
     const resolved = await this.resolveProvider();
     if (!resolved) {
@@ -88,6 +96,7 @@ export class SummaryService {
         where: { reviewId: { in: chunk.map((r) => r.id) } },
         data: { status: 'running' },
       });
+      this.bus.publish(placeId);
 
       const settled = await Promise.allSettled(
         chunk.map((r) =>
@@ -106,16 +115,30 @@ export class SummaryService {
         settled.map(async (s, idx) => {
           const reviewId = chunk[idx]!.id;
           if (s.status === 'fulfilled') {
+            const text = s.value.text.trim();
             await this.prisma.reviewSummary.update({
               where: { reviewId },
               data: {
                 status: 'done',
-                text: s.value.text.trim(),
+                text,
                 model: s.value.model,
                 finishedAt,
                 errorCode: null,
                 errorMessage: null,
               },
+            });
+            // Per-row patch: lets the SSE subscriber push the new summary
+            // text directly into the client's detail cache. Without this,
+            // the only way to learn the text was a follow-up GET.
+            this.bus.publish(placeId, {
+              type: 'review',
+              reviewId,
+              status: 'done',
+              text,
+              model: s.value.model,
+              errorCode: null,
+              errorMessage: null,
+              finishedAt: finishedAt.toISOString(),
             });
           } else {
             const { error, message } = classifyError(s.reason);
@@ -128,9 +151,23 @@ export class SummaryService {
                 finishedAt,
               },
             });
+            this.bus.publish(placeId, {
+              type: 'review',
+              reviewId,
+              status: 'failed',
+              text: null,
+              model: null,
+              errorCode: error,
+              errorMessage: message,
+              finishedAt: finishedAt.toISOString(),
+            });
           }
         }),
       );
+      // Counts bump after the chunk — the SSE handler debounces this so
+      // multiple chunk-completions inside one tick collapse into one
+      // snapshot push.
+      this.bus.publish(placeId);
     }
   }
 

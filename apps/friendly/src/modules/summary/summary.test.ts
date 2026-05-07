@@ -57,7 +57,9 @@ describe('SummaryService', () => {
     });
   });
 
-  const seed = async (reviewBodies: string[]): Promise<string[]> => {
+  const seed = async (
+    reviewBodies: string[],
+  ): Promise<{ placeId: string; reviewIds: string[] }> => {
     const placeId = stamp();
     const { id: rid } = await restaurantService.upsertRestaurantFromCrawl({
       placeId,
@@ -78,7 +80,7 @@ describe('SummaryService', () => {
       visitorReviews: [],
       rawSourceUrl: 'https://x',
     });
-    const { newReviewIds } = await restaurantService.persistReviewBatch(
+    const { newReviews } = await restaurantService.persistReviewBatch(
       rid,
       reviewBodies.map((b, i) => ({
         authorName: `author-${i}`,
@@ -89,11 +91,11 @@ describe('SummaryService', () => {
         externalId: `ext-${i}-${stamp()}`,
       })),
     );
-    return newReviewIds;
+    return { placeId, reviewIds: newReviews.map((r) => r.id) };
   };
 
   it('marks all rows as done with text on success', async () => {
-    const reviewIds = await seed(['리뷰 본문 1', '리뷰 본문 2']);
+    const { placeId, reviewIds } = await seed(['리뷰 본문 1', '리뷰 본문 2']);
     const provider = fakeProvider(async (model, prompt) => ({
       text: `요약(${model}): ${prompt.slice(0, 8)}`,
       model: 'test-model',
@@ -111,7 +113,7 @@ describe('SummaryService', () => {
       resolveOverride: async () => ({ provider, model: 'override-model' }),
     });
 
-    await service.runForTests(reviewIds);
+    await service.runForTests(placeId, reviewIds);
 
     const rows = await app.prisma.reviewSummary.findMany({
       where: { reviewId: { in: reviewIds } },
@@ -127,7 +129,7 @@ describe('SummaryService', () => {
   });
 
   it('records failures per row without aborting siblings', async () => {
-    const reviewIds = await seed(['ok', 'will fail', 'ok2']);
+    const { placeId, reviewIds } = await seed(['ok', 'will fail', 'ok2']);
     const provider = fakeProvider(async (_model, prompt) => {
       if (prompt.includes('will fail')) throw new LLMUpstreamError(500, 'boom');
       return { text: `요약 ${prompt}`, model: 'm', promptTokens: 1, completionTokens: 1 };
@@ -143,7 +145,7 @@ describe('SummaryService', () => {
       resolveOverride: async () => ({ provider, model: 'override-model' }),
     });
 
-    await service.runForTests(reviewIds);
+    await service.runForTests(placeId, reviewIds);
 
     const rows = await app.prisma.reviewSummary.findMany({
       where: { reviewId: { in: reviewIds } },
@@ -158,8 +160,42 @@ describe('SummaryService', () => {
     for (const r of succeeded) expect(r.status).toBe('done');
   });
 
+  it('publishes bus events on status transitions', async () => {
+    const { placeId, reviewIds } = await seed(['리뷰 A', '리뷰 B']);
+    const { SummaryEventsBus } = await import('./summary-events-bus.js');
+    const bus = new SummaryEventsBus();
+    const fired: string[] = [];
+    const unsub = bus.subscribe(placeId, () => fired.push(placeId));
+
+    const provider = fakeProvider(async (_model, prompt) => ({
+      text: `요약 ${prompt}`,
+      model: 'm',
+      promptTokens: 1,
+      completionTokens: 1,
+    }));
+    const aiConfig = new AiConfigService(app.prisma, {
+      apiKey: '',
+      baseUrl: '',
+      timeoutMs: 1000,
+      maxConcurrent: 1,
+      defaultModel: '',
+    });
+    const service = new SummaryService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'm' }),
+      bus,
+    });
+
+    await service.runForTests(placeId, reviewIds);
+    unsub();
+
+    // At minimum we expect publishes for: pending upsert, running flip,
+    // chunk-done. Order matters less than presence and count > 0.
+    expect(fired.length).toBeGreaterThanOrEqual(3);
+    expect(fired.every((p) => p === placeId)).toBe(true);
+  });
+
   it('leaves rows pending when no provider/model is configured', async () => {
-    const reviewIds = await seed(['x']);
+    const { placeId, reviewIds } = await seed(['x']);
     const aiConfig = new AiConfigService(app.prisma, {
       apiKey: '',
       baseUrl: '',
@@ -171,7 +207,7 @@ describe('SummaryService', () => {
       resolveOverride: async () => null,
     });
 
-    await service.runForTests(reviewIds);
+    await service.runForTests(placeId, reviewIds);
 
     const row = await app.prisma.reviewSummary.findUnique({
       where: { reviewId: reviewIds[0]! },

@@ -5,6 +5,7 @@ import type {
   CrawlNaverPlaceResultType,
   CrawlStageType,
   NaverPlaceDataType,
+  PersistedVisitorReviewType,
   VisitorReviewType,
 } from '@repo/api-contract';
 import { buildJobEventsUrl, crawlApi, type StartCrawlArgs } from '../api/crawl.api.js';
@@ -48,6 +49,10 @@ export interface CrawlStreamState {
   // Newest visitor_batch payload — UI can render the freshly-arrived
   // reviews above the older ones without re-fetching the whole list.
   lastBatch: VisitorReviewType[] | null;
+  // The DB rows that this batch actually inserted (post-dedup), with their
+  // server-assigned ids. Callers merge these into the restaurant detail
+  // cache so a follow-up GET isn't needed.
+  lastPersistedBatch: PersistedVisitorReviewType[] | null;
   result: CrawlNaverPlaceResultType | null;
   // Transport-level error (network drop after retries). Domain errors land in
   // result with ok:false. Kept separate so UI can distinguish "server said
@@ -63,6 +68,7 @@ const initialState: CrawlStreamState = {
   visitorCount: 0,
   persistedCount: 0,
   lastBatch: null,
+  lastPersistedBatch: null,
   result: null,
   transportError: null,
   lastSeq: 0,
@@ -104,6 +110,7 @@ const reducer = (state: CrawlStreamState, action: Action): CrawlStreamState => {
         case 'visitor_batch':
           next.persistedCount = state.persistedCount + ev.addedCount;
           next.lastBatch = ev.reviews;
+          next.lastPersistedBatch = ev.persistedReviews;
           break;
         case 'done':
           next.result = ev.result;

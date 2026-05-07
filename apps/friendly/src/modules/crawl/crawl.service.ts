@@ -221,17 +221,30 @@ export class CrawlService {
       persistTail = persistTail
         .then(async () => {
           if (!restaurantId) return;
-          const { newReviewIds } = await this.restaurants.persistReviewBatch(
+          const { newReviews } = await this.restaurants.persistReviewBatch(
             restaurantId,
             batch.map((r) => ({ ...r, externalId: r.externalId ?? null })),
           );
-          if (newReviewIds.length > 0) {
-            this.summaries.queueSummariesForReviews(newReviewIds);
+          if (newReviews.length > 0) {
+            this.summaries.queueSummariesForReviews(
+              placeId,
+              newReviews.map((r) => r.id),
+            );
           }
           this.emit(jobId, {
             type: 'visitor_batch',
             reviews: batch,
-            addedCount: newReviewIds.length,
+            addedCount: newReviews.length,
+            persistedReviews: newReviews.map((r) => ({
+              id: r.id,
+              externalId: r.externalId,
+              authorName: r.authorName,
+              rating: r.rating,
+              body: r.body,
+              visitedAt: r.visitedAt,
+              imageUrls: r.imageUrls,
+              fetchedAt: r.fetchedAt,
+            })),
           });
         })
         .catch((err) => {

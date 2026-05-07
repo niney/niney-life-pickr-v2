@@ -5,7 +5,7 @@ import {
   type RestaurantListResultType,
   type RestaurantSummaryProgressType,
 } from '@repo/api-contract';
-import { apiFetch } from './client.js';
+import { apiFetch, getApiConfig } from './client.js';
 
 export const restaurantApi = {
   list: () => apiFetch<RestaurantListResultType>(Routes.Restaurant.list),
@@ -20,4 +20,17 @@ export const restaurantApi = {
     apiFetch<RestaurantDeleteResultType>(Routes.Restaurant.delete(placeId), {
       method: 'DELETE',
     }),
+};
+
+// Build the SSE endpoint URL for live summary progress. EventSource can't
+// carry the auth header, so we tack the JWT onto the query string (same
+// pattern as the crawl jobEvents stream).
+export const buildSummaryEventsUrl = async (placeId: string): Promise<string> => {
+  const cfg = getApiConfig();
+  const token = (await cfg.getToken?.()) ?? '';
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  const qs = params.toString();
+  const sep = qs ? '?' : '';
+  return `${cfg.baseUrl}${Routes.Restaurant.summaryEvents(placeId)}${sep}${qs}`;
 };

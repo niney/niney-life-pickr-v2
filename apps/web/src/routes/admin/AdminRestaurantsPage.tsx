@@ -20,12 +20,13 @@ import {
   useDeleteRestaurant,
   useRestaurantByPlaceId,
   useRestaurantList,
-  useRestaurantSummaryStatus,
+  useRestaurantSummaryEvents,
   useStartCrawl,
 } from '@repo/shared';
 import type {
   CrawlModeType,
   CrawlStageType,
+  RestaurantDetailType,
   RestaurantListItemType,
   RestaurantSummaryProgressType,
   VisitorReviewWithSummaryType,
@@ -173,7 +174,7 @@ const ActiveJobPanel = ({
 }) => {
   const stream = useCrawlJobStream(jobId);
   const detailQuery = useRestaurantByPlaceId(placeId);
-  const summaryStatusQuery = useRestaurantSummaryStatus(placeId);
+  const summaryStatusQuery = useRestaurantSummaryEvents(placeId);
   const qc = useQueryClient();
 
   // The first 'partial' or 'done' event tells us the placeId. Lift it up so
@@ -187,19 +188,45 @@ const ActiveJobPanel = ({
     }
   }, [stream.partial, stream.result, placeId, onPlaceIdResolved]);
 
-  // Refresh detail / list whenever a new batch lands or the job ends, so
-  // newly-saved rows appear without a manual reload.
+  // Merge each freshly-INSERTed batch directly into the detail cache.
+  // Replaces the old "invalidate per visitor_batch" path which re-fetched
+  // the whole detail (every review body) just to show new rows. With this,
+  // the detail GET happens at most once per page visit.
   useEffect(() => {
-    if (placeId && stream.persistedCount > 0) {
-      qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
-    }
-  }, [stream.persistedCount, placeId, qc]);
+    if (!placeId || !stream.lastPersistedBatch || stream.lastPersistedBatch.length === 0) return;
+    const incoming = stream.lastPersistedBatch;
+    qc.setQueryData<RestaurantDetailType | null>(
+      ['restaurant', placeId],
+      (prev) => {
+        if (!prev) return prev;
+        const seen = new Set(prev.reviews.map((r) => r.id));
+        const merged = [
+          ...incoming
+            .filter((r) => !seen.has(r.id))
+            .map((r) => ({
+              authorName: r.authorName,
+              rating: r.rating,
+              body: r.body,
+              visitedAt: r.visitedAt,
+              imageUrls: r.imageUrls,
+              id: r.id,
+              externalId: r.externalId,
+              fetchedAt: r.fetchedAt,
+              summary: null,
+            })),
+          ...prev.reviews,
+        ];
+        return { ...prev, reviews: merged };
+      },
+    );
+  }, [stream.lastPersistedBatch, placeId, qc]);
+
+  // List counts (totalReviews, summary buckets) update after the job ends.
   useEffect(() => {
     if (stream.result !== null) {
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
-      if (placeId) qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
     }
-  }, [stream.result, placeId, qc]);
+  }, [stream.result, qc]);
 
   const isRunning = stream.status === 'connecting' || stream.status === 'open';
   const stage = stream.stage;

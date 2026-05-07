@@ -36,6 +36,8 @@ export const Restaurant = {
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   summaryStatus: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/summary-status`,
+  summaryEvents: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/summary-events`,
 } as const;
 
 export const Ai = {

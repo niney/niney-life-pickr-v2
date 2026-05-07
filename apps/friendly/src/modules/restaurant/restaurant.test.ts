@@ -121,7 +121,7 @@ describe('RestaurantService', () => {
       review({ externalId: 'ext-1', body: '한 번' }),
       review({ externalId: 'ext-2', body: '두 번' }),
     ]);
-    expect(r1.newReviewIds).toHaveLength(2);
+    expect(r1.newReviews).toHaveLength(2);
 
     // Re-running the same batch must produce zero new ids.
     const r2 = await service.persistReviewBatch(rid, [
@@ -129,7 +129,7 @@ describe('RestaurantService', () => {
       review({ externalId: 'ext-2', body: '두 번' }),
       review({ externalId: 'ext-3', body: '세 번' }),
     ]);
-    expect(r2.newReviewIds).toHaveLength(1);
+    expect(r2.newReviews).toHaveLength(1);
   });
 
   it('persistReviewBatch: dedups by contentHash when externalId is null', async () => {
@@ -137,12 +137,12 @@ describe('RestaurantService', () => {
     const r1 = await service.persistReviewBatch(rid, [
       review({ authorName: '갑', body: '동일한 내용' }),
     ]);
-    expect(r1.newReviewIds).toHaveLength(1);
+    expect(r1.newReviews).toHaveLength(1);
 
     const r2 = await service.persistReviewBatch(rid, [
       review({ authorName: '갑', body: '동일한 내용' }),
     ]);
-    expect(r2.newReviewIds).toHaveLength(0);
+    expect(r2.newReviews).toHaveLength(0);
   });
 
   it('getExistingReviewKeys: returns set of externalIds and contentHashes', async () => {
@@ -160,12 +160,12 @@ describe('RestaurantService', () => {
   it('deleteByPlaceId: removes restaurant and cascades reviews/summaries', async () => {
     const data = placeData();
     const { id: rid } = await service.upsertRestaurantFromCrawl(data);
-    const { newReviewIds } = await service.persistReviewBatch(rid, [
+    const { newReviews } = await service.persistReviewBatch(rid, [
       review({ externalId: 'd1', body: 'aa' }),
       review({ externalId: 'd2', body: 'bb' }),
     ]);
     await app.prisma.reviewSummary.create({
-      data: { reviewId: newReviewIds[0]!, status: 'done', text: 'x' },
+      data: { reviewId: newReviews[0]!.id, status: 'done', text: 'x' },
     });
     const result = await service.deleteByPlaceId(data.placeId);
     expect(result?.deletedReviewCount).toBe(2);
@@ -182,11 +182,11 @@ describe('RestaurantService', () => {
 
   it('clearReviewsAndSummaries: cascade-removes summaries', async () => {
     const { id: rid } = await service.upsertRestaurantFromCrawl(placeData());
-    const { newReviewIds } = await service.persistReviewBatch(rid, [
+    const { newReviews } = await service.persistReviewBatch(rid, [
       review({ externalId: 'q', body: 'q' }),
     ]);
     await app.prisma.reviewSummary.create({
-      data: { reviewId: newReviewIds[0]!, status: 'done', text: 'sum' },
+      data: { reviewId: newReviews[0]!.id, status: 'done', text: 'sum' },
     });
     await service.clearReviewsAndSummaries(rid);
     const left = await app.prisma.visitorReview.count({ where: { restaurantId: rid } });
