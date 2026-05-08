@@ -1,5 +1,6 @@
 import { Star } from 'lucide-react';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
+import { ImgWithFallback } from '~/components/ImgWithFallback';
 import { cn } from '~/lib/utils';
 
 interface Props {
@@ -40,10 +41,8 @@ export const PublicRestaurantCard = ({
     >
       <div className="size-20 shrink-0 overflow-hidden rounded-md bg-muted">
         {item.thumbnailUrl ? (
-          <img
+          <ImgWithFallback
             src={item.thumbnailUrl}
-            alt=""
-            loading="lazy"
             className="size-full object-cover"
           />
         ) : (

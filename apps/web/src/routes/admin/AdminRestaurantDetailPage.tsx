@@ -41,6 +41,7 @@ import { Card, CardContent } from '~/components/ui/card';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import { MenuRankingSection } from '~/components/restaurant/MenuRankingSection';
 import { VWorldMap } from '~/components/restaurant/VWorldMap';
+import { ImgWithFallback } from '~/components/ImgWithFallback';
 import {
   ReviewSummaryItem,
   SectionHeader,
@@ -70,42 +71,6 @@ const SUMMARY_OPTIONS: { value: SummaryFilter; label: string }[] = [
   { value: 'failed', label: '요약 실패' },
   { value: 'none', label: '요약 없음' },
 ];
-
-// Naver image CDN (ldb-phinf.pstatic.net etc.) checks the Referer header
-// and 403s anything that isn't from a *.naver.com origin. With a no-referrer
-// policy on each <img>, the request goes through and the picture loads.
-// Pair with onError to swap in a placeholder for the rare ones still 403'd.
-const IMG_REFERRER_POLICY = 'no-referrer' as const;
-
-const ImgWithFallback = (props: {
-  src: string;
-  alt?: string;
-  className?: string;
-}) => {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <div
-        className={`flex items-center justify-center bg-muted text-muted-foreground ${
-          props.className ?? ''
-        }`}
-        aria-label="이미지를 불러올 수 없습니다"
-      >
-        <ImageIcon className="size-5 opacity-40" />
-      </div>
-    );
-  }
-  return (
-    <img
-      src={props.src}
-      alt={props.alt ?? ''}
-      loading="lazy"
-      referrerPolicy={IMG_REFERRER_POLICY}
-      onError={() => setFailed(true)}
-      className={props.className}
-    />
-  );
-};
 
 const SELECT_CLASS =
   'h-8 rounded-md border border-input bg-background px-2 text-xs ' +

@@ -18,6 +18,7 @@ import type {
 } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { ImgWithFallback } from '~/components/ImgWithFallback';
 import { cn } from '~/lib/utils';
 
 interface Props {
@@ -183,10 +184,8 @@ const PanelContent = ({ detail, insights, insightsLoading }: PanelContentProps) 
                   className="flex gap-2 rounded-md border p-2 hover:bg-muted/40"
                 >
                   {b.thumbnailUrls[0] && (
-                    <img
+                    <ImgWithFallback
                       src={b.thumbnailUrls[0]}
-                      alt=""
-                      loading="lazy"
                       className="size-14 shrink-0 rounded object-cover"
                     />
                   )}
@@ -360,10 +359,8 @@ const MenuGrid = ({
         return (
           <li key={`${m.name}-${idx}`} className="flex gap-2 rounded-md border p-2">
             {m.imageUrls[0] && (
-              <img
+              <ImgWithFallback
                 src={m.imageUrls[0]}
-                alt=""
-                loading="lazy"
                 className="size-14 shrink-0 rounded object-cover"
               />
             )}
@@ -475,14 +472,12 @@ const PhotoCarousel = ({ images, alt }: { images: string[]; alt: string }) => {
     );
   }
   const safe = idx % images.length;
+  const current = images[safe];
   return (
     <div className="relative h-56 bg-muted">
-      <img
-        src={images[safe]}
-        alt={alt}
-        className="size-full object-cover"
-        loading="lazy"
-      />
+      {current && (
+        <ImgWithFallback src={current} alt={alt} className="size-full object-cover" />
+      )}
       {images.length > 1 && (
         <>
           <button
