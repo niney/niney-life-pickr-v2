@@ -112,4 +112,13 @@ export const Ai = {
   providerModels: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}/models`,
 } as const;
 
+// 외부 지도 SDK 키 관리. AI 키와 별개 라우트로 둔다 — provider 식별자 외엔
+// 모델·동시성 등 LLM 고유 옵션이 필요 없어서 같은 모듈로 묶기 어색함.
+// secret 은 평문 키 반환 (admin only) — vworld JS SDK init 에 필요.
+export const SettingsMap = {
+  list: `${API_PREFIX}/admin/settings/map`,
+  provider: (id: string) => `${API_PREFIX}/admin/settings/map/${id}`,
+  secret: (id: string) => `${API_PREFIX}/admin/settings/map/${id}/secret`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;

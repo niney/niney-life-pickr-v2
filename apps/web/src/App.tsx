@@ -7,8 +7,10 @@ import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
 import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
 import { AdminHomePage } from './routes/admin/AdminHomePage';
+import { AdminMapKeysPage } from './routes/admin/AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailPage';
 import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
+import { AdminSettingsPage } from './routes/admin/AdminSettingsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
 import { RestaurantsPage } from './routes/RestaurantsPage';
@@ -51,8 +53,14 @@ export const App = () => {
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />
         <Route path="crawl-test/:jobId" element={<AdminCrawlTestPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
-        <Route path="ai-keys" element={<AdminAiKeysPage />} />
         <Route path="ai-test" element={<AdminAiTestPage />} />
+        {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}
+        <Route path="ai-keys" element={<Navigate to="/admin/settings/ai-keys" replace />} />
+        <Route path="settings" element={<AdminSettingsPage />}>
+          <Route index element={<Navigate to="ai-keys" replace />} />
+          <Route path="ai-keys" element={<AdminAiKeysPage />} />
+          <Route path="map" element={<AdminMapKeysPage />} />
+        </Route>
       </Route>
     </Routes>
   );

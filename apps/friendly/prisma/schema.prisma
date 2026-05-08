@@ -53,6 +53,24 @@ model PickResult {
   @@map("pick_results")
 }
 
+// 외부 지도 서비스 키. 현재는 vworld JS API 키만 사용하지만, 카카오/네이버
+// 지도가 추가될 가능성을 열어두기 위해 LlmProviderConfig 와 같은 형태로
+// provider 컬럼에 식별자(예: 'vworld')를 둔다. apiKey 는 admin 화면이 평문
+// 으로 다시 받아와야 하기 때문에 (vworld JS SDK는 init 시 키를 그대로 URL
+// 에 붙여 호출) AI 키와 달리 reveal 엔드포인트를 따로 둔다.
+model MapProviderConfig {
+  id          String   @id @default(cuid())
+  provider    String   @unique
+  apiKey      String
+  // vworld는 키 발급 시 도메인 화이트리스트가 필수. 운영/로컬이 다르면
+  // 키를 따로 둬야 하므로 여기는 단순 메모용. 콤마 구분 자유 입력.
+  domains     String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("map_provider_configs")
+}
+
 model LlmProviderConfig {
   id            String   @id @default(cuid())
   provider      String   @unique

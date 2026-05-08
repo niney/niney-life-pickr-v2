@@ -8,4 +8,5 @@ export * from './schemas/restaurant.js';
 export * from './schemas/menu-grouping.js';
 export * from './schemas/analytics.js';
 export * from './schemas/ai.js';
+export * from './schemas/settings-map.js';
 export * as Routes from './routes.js';
