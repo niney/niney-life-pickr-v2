@@ -24,6 +24,45 @@ const TEMPERATURE = 0.1;
 const MAX_TOKENS = 4000;
 const NUM_CTX = 8192;
 
+// 통계 read 결과 TTL 캐시 — 반복 페이지 진입 / 잦은 새로고침 시 raw 쿼리
+// 부하 줄이기. 같은 키 동시 요청은 in-flight promise 공유로 dogpile 방어.
+// 단일 인스턴스 + 단일 프로세스 가정 (CLAUDE.md "Redis 사용 금지").
+// 머지/그룹핑 잡이 끝나면 invalidate (runGlobalMerge 안에서 clear).
+class TtlCache<V> {
+  private readonly store = new Map<string, { value: V; expiresAt: number }>();
+  private readonly pending = new Map<string, Promise<V>>();
+  constructor(private readonly ttlMs: number) {}
+
+  async getOrCompute(key: string, compute: () => Promise<V>): Promise<V> {
+    const entry = this.store.get(key);
+    if (entry && entry.expiresAt >= Date.now()) return entry.value;
+    if (entry) this.store.delete(key);
+
+    const inFlight = this.pending.get(key);
+    if (inFlight) return inFlight;
+
+    const promise = compute()
+      .then((value) => {
+        this.store.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+        return value;
+      })
+      .finally(() => {
+        this.pending.delete(key);
+      });
+    this.pending.set(key, promise);
+    return promise;
+  }
+
+  clear(): void {
+    this.store.clear();
+    // pending 은 그대로 — 진행 중 요청은 끝까지 가게 두고, 결과만 캐시 미저장.
+    // (위 .then 에서 set 하지만, clear() 직후라도 stale 한 값이 한 번만 들어가고
+    //  다음 호출은 다시 compute. 일관성보단 단순함.)
+  }
+}
+
+const ANALYTICS_CACHE_TTL_MS = 60_000;
+
 // LLM 출력 path 정규화 — 다양한 구분자(>, /, ›, →, |) 와 공백 변형을 표준
 // " > " 로 통일. 최상위가 화이트리스트에 없으면 "기타" prepend. 빈 입력은 null.
 const TOP_WHITELIST = new Set([
@@ -90,6 +129,14 @@ export interface GlobalMergeResult {
 }
 
 export class AnalyticsService {
+  // 통계 read 캐시 — overview/getGlobalMenus/getCategoryTree 공용. 키:
+  //   - 'overview'
+  //   - `menus:${JSON.stringify(query)}`
+  //   - 'tree'
+  // 머지 잡 done 시 clear, 그 외엔 60s TTL.
+  // unknown 캐스트는 동일 캐시로 세 종류 결과 보관하기 위함 — 키별 형이 다름.
+  private readonly readCache = new TtlCache<unknown>(ANALYTICS_CACHE_TTL_MS);
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
@@ -98,6 +145,11 @@ export class AnalyticsService {
 
   private get log(): FastifyBaseLogger | null {
     return this.opts.logger ?? null;
+  }
+
+  // 외부에서도 invalidate 가능 — menu-grouping 잡이 끝났을 때 호출자가 부를 수 있다.
+  invalidateReadCache(): void {
+    this.readCache.clear();
   }
 
   // 모든 MenuCanonical 그룹을 distinct canonicalName 으로 모아 두-패스 LLM
@@ -359,6 +411,9 @@ export class AnalyticsService {
       }
     });
 
+    // 머지가 끝나면 통계 read 캐시 모두 무효화 — overview/menus/tree 모두 변함.
+    this.readCache.clear();
+
     return {
       inputCount: inputVariants.length,
       finalGroupCount: distinctGlobalKeys.size,
@@ -419,6 +474,12 @@ export class AnalyticsService {
   // ── 통계 조회 ──────────────────────────────────────────────────────
 
   async getOverview(): Promise<AnalyticsOverviewType> {
+    return this.readCache.getOrCompute('overview', () =>
+      this.computeOverview(),
+    ) as Promise<AnalyticsOverviewType>;
+  }
+
+  private async computeOverview(): Promise<AnalyticsOverviewType> {
     const [
       restaurantCount,
       analyzedReviewCount,
@@ -456,6 +517,14 @@ export class AnalyticsService {
   }
 
   async getGlobalMenus(query: GlobalMenuQueryType): Promise<GlobalMenuResultType> {
+    // 키는 query 직렬화 — 정렬/필터 조합마다 별개 캐시.
+    return this.readCache.getOrCompute(
+      `menus:${JSON.stringify(query)}`,
+      () => this.computeGlobalMenus(query),
+    ) as Promise<GlobalMenuResultType>;
+  }
+
+  private async computeGlobalMenus(query: GlobalMenuQueryType): Promise<GlobalMenuResultType> {
     // 매핑된 항목과 (옵션) 매핑 안 된 항목 두 갈래 처리.
     const linked = await this.prisma.globalMenuCanonical.findMany({
       include: {
@@ -700,6 +769,12 @@ export class AnalyticsService {
   // 카테고리별 누적 통계 트리. categoryPath 가 채워진 글로벌 메뉴만 대상.
   // path segment 별로 트리를 만들어 leaf 의 멘션 통계를 부모로 누적 합산.
   async getCategoryTree(): Promise<CategoryTreeNodeType[]> {
+    return this.readCache.getOrCompute('tree', () =>
+      this.computeCategoryTree(),
+    ) as Promise<CategoryTreeNodeType[]>;
+  }
+
+  private async computeCategoryTree(): Promise<CategoryTreeNodeType[]> {
     const linked = await this.prisma.globalMenuCanonical.findMany({
       where: { categoryPath: { not: null } },
       select: { id: true, categoryPath: true, links: { select: { menuCanonical: { select: { restaurantId: true, canonicalNorm: true } } } } },

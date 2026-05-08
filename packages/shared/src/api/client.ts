@@ -11,6 +11,10 @@ export class ApiError extends Error {
     public readonly statusCode: number,
     public readonly error: string,
     message: string,
+    // 응답 body 원본 — 일부 4xx 응답이 단순 에러가 아니라 기존 리소스의
+    // 스냅샷을 들고 오는 경우(409 with current job snapshot 등)에 caller 가
+    // 추출해 쓸 수 있게 보존. 표준 ErrorResponseSchema 가 아닐 수 있어 unknown.
+    public readonly body: unknown = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -42,9 +46,10 @@ export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise
     const body = await res.json().catch(() => null);
     const parsed = ErrorResponseSchema.safeParse(body);
     if (parsed.success) {
-      throw new ApiError(parsed.data.statusCode, parsed.data.error, parsed.data.message);
+      throw new ApiError(parsed.data.statusCode, parsed.data.error, parsed.data.message, body);
     }
-    throw new ApiError(res.status, res.statusText, res.statusText);
+    // body 가 표준 에러 모양이 아니어도 caller 가 활용할 수 있게 그대로 보존.
+    throw new ApiError(res.status, res.statusText, res.statusText, body);
   }
 
   if (res.status === 204) return undefined as T;

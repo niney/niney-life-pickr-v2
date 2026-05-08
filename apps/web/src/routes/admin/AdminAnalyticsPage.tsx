@@ -19,7 +19,11 @@ import {
   useGroupingRestaurantsStatus,
   useStartGlobalMerge,
 } from '@repo/shared';
-import type { CategoryTreeNodeType, GlobalMenuQuerySortType } from '@repo/api-contract';
+import type {
+  CategoryTreeNodeType,
+  GlobalMenuQuerySortType,
+  GlobalMergeJobSnapshotType,
+} from '@repo/api-contract';
 import type { MenuGroupingRestaurantStatusType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -436,15 +440,15 @@ const GlobalMergeSection = () => {
       const snap = await start.mutateAsync({ full });
       setJobId(snap.jobId);
     } catch (e) {
-      // 409 = 이미 진행 중 — 응답 body 에 기존 잡 스냅샷이 들어있다.
+      // 409 = 이미 진행 중. 라우트가 응답 body 로 기존 잡 스냅샷을 그대로
+      // 보내주므로 ApiError.body 에서 jobId 만 추출해 같은 진행 패널을 그대로
+      // 마운트한다 — 사용자는 새로 시작한 것처럼 보인다.
       if (e instanceof ApiError && e.statusCode === 409) {
-        // ApiError 는 statusCode/error/message 만 들고 있어 body 복원이 어려움.
-        // 단순화: overview 새로고침 시 사용자가 다른 화면에서 진행 중인 잡을
-        // 확인하도록 안내. (drawer/dropdown 으로 inflight 잡 노출이 더 친절하지만
-        // 이번 단계는 단순화.)
-        // eslint-disable-next-line no-alert
-        alert('이미 진행 중인 글로벌 머지 잡이 있습니다. 잠시 후 다시 시도하세요.');
-        return;
+        const body = e.body as Partial<GlobalMergeJobSnapshotType> | null;
+        if (body && typeof body.jobId === 'string') {
+          setJobId(body.jobId);
+          return;
+        }
       }
       throw e;
     }
