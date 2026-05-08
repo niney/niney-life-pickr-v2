@@ -5,6 +5,7 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { HomeTab } from './HomeTab';
 import { InfoTab } from './InfoTab';
+import { InsightsTab } from './InsightsTab';
 import { MenuTab } from './MenuTab';
 import { PhotosTab } from './PhotosTab';
 import { ReviewsTab } from './ReviewsTab';
@@ -155,6 +156,14 @@ const ActiveTab = ({
       return <MenuTab detail={detail} insights={insights} />;
     case 'reviews':
       return <ReviewsTab detail={detail} />;
+    case 'insights':
+      return (
+        <InsightsTab
+          detail={detail}
+          insights={insights}
+          insightsLoading={insightsLoading}
+        />
+      );
     case 'photos':
       return <PhotosTab detail={detail} />;
     case 'info':

@@ -67,7 +67,11 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
 
       {insights && insights.analyzedCount > 0 ? (
         <section className="space-y-3 border-t px-4 pt-4">
-          <h3 className="text-sm font-semibold">AI 분석</h3>
+          <SectionHead
+            title="AI 분석"
+            actionLabel="분석 전체 보기"
+            onAction={() => onChangeTab('insights')}
+          />
           <AiSummary insights={insights} />
         </section>
       ) : insightsLoading ? (
