@@ -73,7 +73,7 @@ export const ReviewsTab = ({ detail }: Props) => {
             onChange={(e) => setSort(e.target.value as SortMode)}
             className="h-7 rounded border bg-background px-1.5 text-xs"
           >
-            <option value="recent">최근 수집순</option>
+            <option value="recent">최근 방문순</option>
             <option value="rating">별점 높은순</option>
           </select>
         </label>
@@ -112,7 +112,8 @@ const comparator = (mode: SortMode) => {
     return (a: PublicVisitorReviewType, b: PublicVisitorReviewType) =>
       (b.rating ?? 0) - (a.rating ?? 0);
   }
-  // recent — fetchedAt desc (최근에 수집된 게 위로)
+  // recent — 어댑터가 [최신 방문 → 옛 방문] 순서로 fetch 해 DB 에 저장하므로
+  // fetchedAt asc 가 실제로는 방문일 desc. 어드민 detail 정렬과 동일.
   return (a: PublicVisitorReviewType, b: PublicVisitorReviewType) =>
-    +new Date(b.fetchedAt) - +new Date(a.fetchedAt);
+    +new Date(a.fetchedAt) - +new Date(b.fetchedAt);
 };
