@@ -197,11 +197,18 @@ const normalizeImageUrl = (raw: string): string => {
 
 // Defensive: if the recursive image walker ever resolves into a review/blog
 // node (cross-typed Apollo refs), bail out so post URLs and blog photos don't
-// pollute menu/visitor-review image lists.
-const REVIEW_TYPENAME_RE = /(?:Review|^Blog|BlogPost)/i;
+// pollute menu/visitor-review image lists. Match only the *review entity*
+// typenames — NOT subtypes like VisitorReviewMedia/Author/Stats which
+// legitimately carry image refs we want to harvest.
+const REVIEW_TYPENAMES = new Set([
+  'VisitorReview',
+  'BlogReview',
+  'FsasReview',
+  'BlogPost',
+]);
 const isReviewTypename = (resolved: Record<string, unknown>): boolean => {
   const tn = resolved['__typename'];
-  return typeof tn === 'string' && REVIEW_TYPENAME_RE.test(tn);
+  return typeof tn === 'string' && REVIEW_TYPENAMES.has(tn);
 };
 
 const collectImagesFromContainer = (
