@@ -115,6 +115,11 @@ const Row = ({ item, rank }: { item: MenuRankingItemType; rank: number }) => {
       <View style={styles.rowMeta}>
         <Text style={styles.mentions}>{item.mentionCount}회</Text>
         <Text style={styles.ratio}>{ratio}</Text>
+        {item.global && item.global.restaurantCount > 1 && item.global.positiveRatio !== null && (
+          <Text style={styles.globalRatio}>
+            전체 {Math.round(item.global.positiveRatio * 100)}%
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -163,5 +168,6 @@ const styles = StyleSheet.create({
   rowMeta: { alignItems: 'flex-end', gap: 2 },
   mentions: { fontSize: 12, fontWeight: '600' },
   ratio: { fontSize: 11, color: '#64748b' },
+  globalRatio: { fontSize: 10, color: '#94a3b8' },
   more: { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4 },
 });

@@ -42,6 +42,22 @@ export const MenuRankingItem = z.object({
   topTraits: z.array(z.string()),
   // 대표 리뷰 — 긍정/부정 각 한 건 미리보기 용도.
   sampleReviewIds: z.array(z.string()),
+  // 전역 비교 — 이 메뉴의 식당 그룹이 GlobalMenuCanonical 에 링크돼 있는 경우에만
+  // 채워진다. UI 는 "이 식당 vs 전체 평균" 위젯으로 노출. null = 전역 매핑 없음
+  // (전역 머지 안 돌렸거나 머지 후 새로 추가된 그룹).
+  global: z
+    .object({
+      globalKey: z.string(),
+      displayName: z.string(),
+      // 모든 식당 합산.
+      totalMentions: z.number().int(),
+      positive: z.number().int(),
+      negative: z.number().int(),
+      positiveRatio: z.number().nullable(),
+      // 이 메뉴를 가진 식당 수 (자기 식당 포함).
+      restaurantCount: z.number().int(),
+    })
+    .nullable(),
 });
 export type MenuRankingItemType = z.infer<typeof MenuRankingItem>;
 

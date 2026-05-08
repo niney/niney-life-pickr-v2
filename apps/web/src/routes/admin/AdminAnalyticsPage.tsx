@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -550,7 +551,16 @@ const GLOBAL_SORT_OPTIONS: { value: GlobalMenuQuerySortType; label: string }[] =
 ];
 
 const GlobalMenusSection = () => {
-  const [q, setQ] = useState('');
+  // ?menu=김치찌개 deep-link 가 single source of truth — 별도 useState 두지 않고
+  // searchParams 를 그대로 읽는다. 변경은 onChange 안에서 즉시 setSearchParams.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const q = searchParams.get('menu') ?? '';
+  const setQ = (next: string): void => {
+    const params = new URLSearchParams(searchParams);
+    if (next.trim().length > 0) params.set('menu', next);
+    else params.delete('menu');
+    setSearchParams(params, { replace: true });
+  };
   const [sort, setSort] = useState<GlobalMenuQuerySortType>('mentions');
   const [minMentions, setMinMentions] = useState(5);
   const [includeUnlinked, setIncludeUnlinked] = useState(false);

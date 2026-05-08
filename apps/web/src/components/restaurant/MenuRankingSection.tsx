@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { AlertTriangle, BarChart3, Loader2, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, BarChart3, Loader2, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { useGroupForRestaurant, useMenuRanking } from '@repo/shared';
-import type { MenuRankingSortType } from '@repo/api-contract';
+import type { MenuRankingItemType, MenuRankingSortType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
@@ -170,6 +171,7 @@ export const MenuRankingSection = ({ placeId }: { placeId: string }) => {
                     ))}
                   </div>
                 )}
+                {it.global && <GlobalCompareBadge item={it} />}
               </div>
               <SentimentBar
                 positive={it.positive}
@@ -225,6 +227,50 @@ const SentimentBar = ({
       />
       <div className={cn('bg-zinc-400')} style={{ width: `${pct(neutral)}%` }} />
       <div className={cn('bg-red-500')} style={{ width: `${pct(negative)}%` }} />
+    </div>
+  );
+};
+
+// "이 식당 vs 전체" 비교 배지. 글로벌 매핑이 있을 때만 노출.
+// 자기 식당의 positiveRatio 와 글로벌 평균을 비교 — 자기가 더 높으면 ↑, 낮으면 ↓.
+// 글로벌 키 클릭 시 admin analytics 페이지에 검색어 prefill 로 deep-link.
+const GlobalCompareBadge = ({ item }: { item: MenuRankingItemType }) => {
+  if (!item.global) return null;
+  const g = item.global;
+  const local = item.positiveRatio;
+  const delta =
+    local !== null && g.positiveRatio !== null ? local - g.positiveRatio : null;
+  // 식당 1개면 비교 무의미 — "이 식당만 가진 메뉴" 표시.
+  const onlyHere = g.restaurantCount <= 1;
+
+  return (
+    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span>전체 평균:</span>
+      <span className="tabular-nums">
+        {g.positiveRatio === null ? '-' : `${Math.round(g.positiveRatio * 100)}%`}
+      </span>
+      <span className="text-[10px]">({g.restaurantCount}개 식당)</span>
+      {!onlyHere && delta !== null && Math.abs(delta) >= 0.05 && (
+        <span
+          className={cn(
+            'flex items-center gap-0.5 font-medium',
+            delta > 0
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-red-600 dark:text-red-400',
+          )}
+        >
+          {delta > 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+          {delta > 0 ? '+' : ''}
+          {Math.round(delta * 100)}%p
+        </span>
+      )}
+      <Link
+        to={`/admin/analytics?menu=${encodeURIComponent(g.displayName)}`}
+        className="underline-offset-2 hover:underline"
+        title="전체 메뉴 통계에서 보기"
+      >
+        전체 보기
+      </Link>
     </div>
   );
 };

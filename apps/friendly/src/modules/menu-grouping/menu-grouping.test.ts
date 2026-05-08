@@ -244,6 +244,107 @@ describe('MenuGroupingService', () => {
     expect(ranking.items[0].topTraits).toEqual(['진한', '얼큰한', '담백한']);
   });
 
+  it('attaches global comparison stats when MenuCanonical is linked', async () => {
+    // 식당 A — 김치찌개 멘션 3개 (긍정 2 / 부정 1)
+    const { placeId: placeA, restaurantId: ridA } = await seedRestaurantWithMentions(
+      app,
+      [
+        { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
+        { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
+        { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'negative' },
+      ],
+      { name: '식당 A' },
+    );
+    // 식당 B — 묵은지김치찌개 멘션 2개 (긍정 1 / 부정 1)
+    const { restaurantId: ridB } = await seedRestaurantWithMentions(
+      app,
+      [
+        { name: '묵은지김치찌개', nameNorm: '묵은지김치찌개', sentiment: 'positive' },
+        { name: '묵은지김치찌개', nameNorm: '묵은지김치찌개', sentiment: 'negative' },
+      ],
+      { name: '식당 B' },
+    );
+
+    // MenuCanonical + GlobalMenuCanonical + Link 직접 시드 (LLM 우회).
+    const mcA = await app.prisma.menuCanonical.create({
+      data: {
+        restaurantId: ridA,
+        nameNorm: '김치찌개',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    const mcB = await app.prisma.menuCanonical.create({
+      data: {
+        restaurantId: ridB,
+        nameNorm: '묵은지김치찌개',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    const global = await app.prisma.globalMenuCanonical.create({
+      data: {
+        globalKey: 'gk-test-김치찌개',
+        displayName: '김치찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    await app.prisma.globalMenuCanonicalLink.createMany({
+      data: [
+        {
+          menuCanonicalId: mcA.id,
+          restaurantId: ridA,
+          localCanonicalNorm: '김치찌개',
+          globalCanonicalId: global.id,
+        },
+        {
+          menuCanonicalId: mcB.id,
+          restaurantId: ridB,
+          localCanonicalNorm: '김치찌개',
+          globalCanonicalId: global.id,
+        },
+      ],
+    });
+
+    const service = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => null,
+    });
+    const ranking = await service.getRanking(placeA, { sort: 'mentions', minMentions: 1 });
+    const kim = ranking.items.find((i) => i.canonicalKey === '김치찌개');
+    expect(kim).toBeDefined();
+    // 자기 식당 통계.
+    expect(kim!.mentionCount).toBe(3);
+    expect(kim!.positive).toBe(2);
+    expect(kim!.negative).toBe(1);
+    // 글로벌 비교 — A + B 합산 (긍 3 / 부 2).
+    expect(kim!.global).toBeDefined();
+    expect(kim!.global!.globalKey).toBe('gk-test-김치찌개');
+    expect(kim!.global!.totalMentions).toBe(5);
+    expect(kim!.global!.positive).toBe(3);
+    expect(kim!.global!.negative).toBe(2);
+    expect(kim!.global!.restaurantCount).toBe(2);
+    expect(kim!.global!.positiveRatio).toBeCloseTo(3 / 5);
+
+    // 정리 — globalMenuCanonical 은 별도 테스트 cleanup 에 포함 안 되므로 명시 삭제.
+    await app.prisma.globalMenuCanonical.delete({ where: { id: global.id } });
+  });
+
+  it('leaves global field null when MenuCanonical has no global link', async () => {
+    const { placeId } = await seedRestaurantWithMentions(app, [
+      { name: '돈까스', nameNorm: '돈까스', sentiment: 'positive' },
+    ]);
+    const service = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => null,
+    });
+    const ranking = await service.getRanking(placeId, { sort: 'mentions', minMentions: 1 });
+    expect(ranking.items[0].global).toBeNull();
+  });
+
   it('reports restaurant status with distinct/mapped/unmapped counts', async () => {
     const { placeId } = await seedRestaurantWithMentions(app, [
       { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },

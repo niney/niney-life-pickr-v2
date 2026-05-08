@@ -226,11 +226,102 @@ export class MenuGroupingService {
       }),
       this.prisma.menuCanonical.findMany({
         where: { restaurantId: restaurant.id },
-        select: { nameNorm: true, canonicalName: true, canonicalNorm: true, version: true, createdAt: true },
+        select: {
+          nameNorm: true,
+          canonicalName: true,
+          canonicalNorm: true,
+          version: true,
+          createdAt: true,
+          // 글로벌 비교 위젯 — 이 메뉴가 GlobalMenuCanonical 에 링크돼 있는지.
+          globalLink: {
+            select: {
+              global: { select: { id: true, globalKey: true, displayName: true } },
+            },
+          },
+        },
       }),
     ]);
 
     const canonByNorm = new Map(canonicals.map((c) => [c.nameNorm, c]));
+
+    // 글로벌 비교 통계 — 우리 식당의 메뉴들이 링크된 globalCanonical id 수집 후
+    // 그 globalId 들에 매핑된 모든 식당의 멘션을 합산. 식당당 1쿼리로 바운드 — 보통
+    // 한 globalKey 에 식당 1~10개 사이라 OK. 더 빨라야 하면 raw SQL 로 단일 쿼리화.
+    const targetGlobalIds = canonicals
+      .map((c) => c.globalLink?.global.id)
+      .filter((id): id is string => !!id);
+
+    interface GlobalAgg {
+      id: string;
+      globalKey: string;
+      displayName: string;
+      totalMentions: number;
+      positive: number;
+      negative: number;
+      restaurants: Set<string>;
+    }
+    const globalAggById = new Map<string, GlobalAgg>();
+
+    if (targetGlobalIds.length > 0) {
+      // 같은 글로벌에 링크된 모든 식당 그룹을 끌어온다 — (restaurantId, nameNorm)
+      // 으로 menu_mentions 와 join 하기 위함.
+      const siblings = await this.prisma.menuCanonical.findMany({
+        where: { globalLink: { globalCanonicalId: { in: targetGlobalIds } } },
+        select: {
+          restaurantId: true,
+          nameNorm: true,
+          globalLink: {
+            select: {
+              global: { select: { id: true, globalKey: true, displayName: true } },
+            },
+          },
+        },
+      });
+
+      // restaurantId → [{ nameNorm, globalId }] — 식당별로 한 번에 멘션 끌어옴.
+      const siblingsByRestaurant = new Map<
+        string,
+        { nameNorm: string; global: { id: string; globalKey: string; displayName: string } }[]
+      >();
+      for (const s of siblings) {
+        if (!s.globalLink) continue;
+        const arr = siblingsByRestaurant.get(s.restaurantId) ?? [];
+        arr.push({ nameNorm: s.nameNorm, global: s.globalLink.global });
+        siblingsByRestaurant.set(s.restaurantId, arr);
+      }
+
+      for (const [restId, sibs] of siblingsByRestaurant) {
+        const norms = sibs.map((s) => s.nameNorm);
+        const siblingMentions = await this.prisma.menuMention.findMany({
+          where: { restaurantId: restId, nameNorm: { in: norms } },
+          select: { sentiment: true, nameNorm: true },
+        });
+        // 이 식당의 nameNorm → globalId 매핑.
+        const globalByNorm = new Map(sibs.map((s) => [s.nameNorm, s.global]));
+        for (const mm of siblingMentions) {
+          const g = globalByNorm.get(mm.nameNorm);
+          if (!g) continue;
+          let agg = globalAggById.get(g.id);
+          if (!agg) {
+            agg = {
+              id: g.id,
+              globalKey: g.globalKey,
+              displayName: g.displayName,
+              totalMentions: 0,
+              positive: 0,
+              negative: 0,
+              restaurants: new Set<string>(),
+            };
+            globalAggById.set(g.id, agg);
+          }
+          agg.totalMentions += 1;
+          if (mm.sentiment === 'positive') agg.positive += 1;
+          else if (mm.sentiment === 'negative') agg.negative += 1;
+          // neutral 은 카운트만 totalMentions 에 들어가고 별도 트랙 안 함 — UI 가 안 씀.
+          agg.restaurants.add(restId);
+        }
+      }
+    }
     interface Bucket {
       canonicalName: string;
       canonicalKey: string;
@@ -294,6 +385,17 @@ export class MenuGroupingService {
       }
     }
 
+    // canonicalNorm → globalCanonical 정보 매핑 (이 식당 한정).
+    const globalByLocalNorm = new Map<
+      string,
+      { id: string; globalKey: string; displayName: string }
+    >();
+    for (const c of canonicals) {
+      if (c.globalLink) {
+        globalByLocalNorm.set(c.canonicalNorm, c.globalLink.global);
+      }
+    }
+
     const items: MenuRankingItemType[] = [];
     for (const b of buckets.values()) {
       if (b.mentionCount < query.minMentions) continue;
@@ -312,6 +414,36 @@ export class MenuGroupingService {
         b.sampleReviewByPolarity.negative,
         b.sampleReviewByPolarity.neutral,
       ].filter((x): x is string => !!x);
+
+      const globalRef = b.mapped ? globalByLocalNorm.get(b.canonicalKey) : undefined;
+      let globalField: MenuRankingItemType['global'] = null;
+      if (globalRef) {
+        const agg = globalAggById.get(globalRef.id);
+        if (agg) {
+          const gDenom = agg.positive + agg.negative;
+          globalField = {
+            globalKey: agg.globalKey,
+            displayName: agg.displayName,
+            totalMentions: agg.totalMentions,
+            positive: agg.positive,
+            negative: agg.negative,
+            positiveRatio: gDenom === 0 ? null : agg.positive / gDenom,
+            restaurantCount: agg.restaurants.size,
+          };
+        } else {
+          // 글로벌 링크가 있긴 한데 멘션 집계가 아직 없는 케이스
+          // (멘션 0이지만 매핑만 있는 코너 케이스). 표시용으로 빈 값 채움.
+          globalField = {
+            globalKey: globalRef.globalKey,
+            displayName: globalRef.displayName,
+            totalMentions: 0,
+            positive: 0,
+            negative: 0,
+            positiveRatio: null,
+            restaurantCount: 0,
+          };
+        }
+      }
       items.push({
         canonicalName: b.canonicalName,
         canonicalKey: b.canonicalKey,
@@ -321,6 +453,7 @@ export class MenuGroupingService {
         negative: b.negative,
         neutral: b.neutral,
         positiveRatio,
+        global: globalField,
         variants,
         topTraits,
         sampleReviewIds,
