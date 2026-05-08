@@ -3,6 +3,7 @@ import { useAuthStore, useCurrentUser } from '@repo/shared';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
 import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
+import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
 import { AdminHomePage } from './routes/admin/AdminHomePage';
 import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailPage';
@@ -60,6 +61,7 @@ export const App = () => {
         <Route path="restaurants/:placeId" element={<AdminRestaurantDetailPage />} />
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />
         <Route path="crawl-test/:jobId" element={<AdminCrawlTestPage />} />
+        <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="ai-keys" element={<AdminAiKeysPage />} />
         <Route path="ai-test" element={<AdminAiTestPage />} />
       </Route>

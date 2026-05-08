@@ -103,7 +103,7 @@ describe('SummaryService', () => {
       sentiment: 'positive',
       sentimentScore: 0.8,
       satisfactionScore: 5,
-      menus: [{ name: '김치찌개', sentiment: 'positive' }],
+      menus: [{ name: '김치찌개', sentiment: 'positive', traits: ['얼큰한'] }],
       tips: ['예약 권장'],
       keywords: ['아늑함', '친절'],
     }) +
@@ -143,9 +143,9 @@ describe('SummaryService', () => {
       expect(r.sentiment).toBe('positive');
       expect(r.sentimentScore).toBeCloseTo(0.8);
       expect(r.satisfactionScore).toBe(5);
-      expect(r.analysisVersion).toBe(3);
+      expect(r.analysisVersion).toBe(4);
       expect(JSON.parse(r.menusJson ?? '[]')).toEqual([
-        { name: '김치찌개', sentiment: 'positive' },
+        { name: '김치찌개', sentiment: 'positive', traits: ['얼큰한'] },
       ]);
       expect(JSON.parse(r.tipsJson ?? '[]')).toEqual(['예약 권장']);
       expect(JSON.parse(r.keywordsJson ?? '[]')).toEqual(['아늑함', '친절']);

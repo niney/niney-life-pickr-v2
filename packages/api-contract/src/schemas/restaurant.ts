@@ -17,6 +17,10 @@ export type MenuSentimentType = z.infer<typeof MenuSentiment>;
 export const ReviewAnalysisMenu = z.object({
   name: z.string(),
   sentiment: MenuSentiment.nullable().optional(),
+  // 맛/식감/특징 태그 (예: "독특한 맛", "매콤한", "바삭한"). v4 부터 LLM 출력에
+  // 포함됨. v3 잔존 데이터 호환을 위해 optional + default([]) 로 둔다 — DB 에서
+  // 읽을 때 누락된 행은 빈 배열로 정규화돼서 클라이언트는 항상 배열로 다룰 수 있다.
+  traits: z.array(z.string()).optional().default([]),
 });
 export type ReviewAnalysisMenuType = z.infer<typeof ReviewAnalysisMenu>;
 
@@ -126,6 +130,15 @@ export const RestaurantReanalyzeResult = z.object({
   queued: z.number().int(),
 });
 export type RestaurantReanalyzeResultType = z.infer<typeof RestaurantReanalyzeResult>;
+
+// 정규화 분석 테이블 백필 응답. processed = 새로 행을 채운 summary 수.
+export const RestaurantAnalyticsBackfillResult = z.object({
+  ok: z.literal(true),
+  processed: z.number().int(),
+});
+export type RestaurantAnalyticsBackfillResultType = z.infer<
+  typeof RestaurantAnalyticsBackfillResult
+>;
 
 // 가중 랜덤 픽 입력. candidatePlaceIds 가 비면 등록된 모든 식당 대상.
 // strategy: balanced(만족도+긍정 합), satisfaction(만족도만), positive(긍정만).

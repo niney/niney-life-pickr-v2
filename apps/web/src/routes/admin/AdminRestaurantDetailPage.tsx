@@ -35,6 +35,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
+import { MenuRankingSection } from '~/components/restaurant/MenuRankingSection';
 import {
   ReviewSummaryItem,
   SectionHeader,
@@ -659,6 +660,12 @@ export const AdminRestaurantDetailPage = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="py-4">
+          <MenuRankingSection placeId={detail.placeId} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="py-4">

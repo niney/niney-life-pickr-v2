@@ -55,10 +55,48 @@ export const Restaurant = {
   // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
   insights: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,
+  // 기존 done 행의 menusJson/tipsJson/keywordsJson 을 정규화 분석 테이블
+  // (menu_mentions / review_tags) 로 풀어쓰는 일회성 백필. LLM 재호출 없이
+  // 이미 저장된 분석을 그대로 사용 — 분석 스키마 변경 없이 통계 인덱스만
+  // 새로 깔 때 호출.
+  analyticsBackfill: `${API_PREFIX}/admin/restaurants/analytics/backfill`,
+  // 단일 식당 메뉴 그룹핑 — distinct nameNorm 들을 LLM 으로 canonical 그룹에
+  // 매핑. 동기 응답 (보통 2~5초). 미분류 메뉴가 있는 식당 상세에서 호출.
+  menusGroup: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/menus/group`,
+  // 메뉴 그룹핑 결과 + 긍/부 카운트 순위. canonical 매핑 없는 nameNorm 은
+  // 자기 자신을 그룹키로 fallback 처리하고 unmappedMenus 에도 같이 노출.
+  menusRanking: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/menus/ranking`,
   // 가중 랜덤 픽 — 분석 점수를 가중치로 써서 등록된 식당 중 하나를 고른다.
   // niney의 본 목적("선택 대신 골라주기")에 분석 결과를 직접 활용하는
   // 가장 작은 통합 지점.
   smartPick: `${API_PREFIX}/admin/restaurants/smart-pick`,
+} as const;
+
+// AI 분석 운영(메뉴 분류 batch) 화면용. 식당별 라우트는 Restaurant.menusGroup/
+// menusRanking 으로 단일 처리하고, 여기는 다건 잡 + 상태 조회 전담.
+export const Analytics = {
+  // 식당별 정규화 상태 (메뉴 분류 페이지 메인 테이블).
+  restaurantsStatus: `${API_PREFIX}/admin/analytics/restaurants`,
+  // 다건 그룹핑 잡 시작. body: { placeIds: string[] }.
+  groupingJobs: `${API_PREFIX}/admin/analytics/grouping-jobs`,
+  // 잡 스냅샷 조회 (재접속/새로고침 직후 SSE 보다 먼저 호출).
+  groupingJob: (id: string) => `${API_PREFIX}/admin/analytics/grouping-jobs/${id}`,
+  // 잡 진행 SSE — 식당별 done/failed event push.
+  groupingJobEvents: (id: string) =>
+    `${API_PREFIX}/admin/analytics/grouping-jobs/${id}/events`,
+  // ── 글로벌 (식당 가로지르기) ────────────────────────────────────
+  // 대시보드 카드용 핵심 카운터.
+  overview: `${API_PREFIX}/admin/analytics/overview`,
+  // 글로벌 메뉴 통계 — q/sort/minMentions/limit/includeUnlinked querystring.
+  globalMenus: `${API_PREFIX}/admin/analytics/global-menus`,
+  // 글로벌 머지 잡 시작 (body: {full:boolean}) + 스냅샷 + SSE.
+  globalMergeJobs: `${API_PREFIX}/admin/analytics/global-merge-jobs`,
+  globalMergeJob: (id: string) =>
+    `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}`,
+  globalMergeJobEvents: (id: string) =>
+    `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}/events`,
 } as const;
 
 export const Ai = {

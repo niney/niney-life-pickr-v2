@@ -5,5 +5,7 @@ export * from './schemas/picks.js';
 export * from './schemas/admin.js';
 export * from './schemas/crawl.js';
 export * from './schemas/restaurant.js';
+export * from './schemas/menu-grouping.js';
+export * from './schemas/analytics.js';
 export * from './schemas/ai.js';
 export * as Routes from './routes.js';

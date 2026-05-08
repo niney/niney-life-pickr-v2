@@ -2,6 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
+  MenuGroupRunResult,
+  MenuRankingQuery,
+  MenuRankingResult,
+  RestaurantAnalyticsBackfillResult,
   RestaurantDeleteResult,
   RestaurantDetail,
   RestaurantInsights,
@@ -19,6 +23,7 @@ import {
   type SummarySignal,
 } from '../summary/summary-events-bus.js';
 import { SummaryService } from '../summary/summary.service.js';
+import { MenuGroupingError, MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { env } from '../../config/env.js';
 
@@ -32,6 +37,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
   });
   const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
+  const grouping = new MenuGroupingService(app.prisma, aiConfig, { logger: app.log });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Restaurant.list, {
@@ -107,6 +113,62 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const insights = await service.getInsights(req.params.placeId);
       if (!insights) throw app.httpErrors.notFound('Restaurant not crawled yet');
       return insights;
+    },
+  });
+
+  typed.post(Routes.Restaurant.menusGroup(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: MenuGroupRunResult },
+    },
+    handler: async (req) => {
+      try {
+        return await grouping.groupForRestaurant(req.params.placeId);
+      } catch (e) {
+        if (e instanceof MenuGroupingError) {
+          if (e.code === 'restaurant_not_found') throw app.httpErrors.notFound(e.message);
+          if (e.code === 'no_menus') throw app.httpErrors.conflict(e.message);
+          if (e.code === 'no_provider') throw app.httpErrors.failedDependency(e.message);
+        }
+        throw e;
+      }
+    },
+  });
+
+  typed.get(Routes.Restaurant.menusRanking(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      querystring: MenuRankingQuery,
+      response: { 200: MenuRankingResult },
+    },
+    handler: async (req) => {
+      try {
+        return await grouping.getRanking(req.params.placeId, req.query);
+      } catch (e) {
+        if (e instanceof MenuGroupingError && e.code === 'restaurant_not_found') {
+          throw app.httpErrors.notFound(e.message);
+        }
+        throw e;
+      }
+    },
+  });
+
+  typed.post(Routes.Restaurant.analyticsBackfill, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: RestaurantAnalyticsBackfillResult },
+    },
+    handler: async () => {
+      const processed = await summaries.backfillAnalyticsFromExisting();
+      return { ok: true as const, processed };
     },
   });
 

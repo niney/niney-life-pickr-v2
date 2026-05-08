@@ -82,8 +82,72 @@ model Restaurant {
   lastCrawledAt  DateTime @updatedAt
 
   visitorReviews VisitorReview[]
+  menuCanonicals MenuCanonical[]
 
   @@map("restaurants")
+}
+
+// 식당 내 메뉴 표기 변형을 canonical 그룹으로 매핑하는 테이블.
+// nameNorm = MenuMention.nameNorm 과 동일한 정규화 (소문자+공백/특수문자 제거).
+// 한 식당 안에서 (nameNorm) → (canonicalName) 으로 묶고, canonicalNorm 은
+// 통계 GROUP BY 키. version 은 MENU_GROUPING_VERSION — 프롬프트/모델 변경
+// 시 stale 매핑 식별용.
+model MenuCanonical {
+  id             String   @id @default(cuid())
+  restaurantId   String
+  nameNorm       String
+  canonicalName  String
+  canonicalNorm  String
+  version        Int      @default(1)
+  model          String?
+  createdAt      DateTime @default(now())
+
+  restaurant Restaurant                @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  globalLink GlobalMenuCanonicalLink?
+
+  @@unique([restaurantId, nameNorm])
+  @@index([restaurantId, canonicalNorm])
+  @@map("menu_canonicals")
+}
+
+// 식당 가로지르는 전역 canonical — 모든 식당의 MenuCanonical 그룹들을 다시
+// LLM 으로 묶어 만든 단일 진실. 글로벌 메뉴 통계의 GROUP BY 키.
+// version 변경 시 이전 매핑 stale.
+model GlobalMenuCanonical {
+  id            String   @id @default(cuid())
+  // 표시용 표기 — 전역 대표 이름 (예: "김치찌개").
+  displayName   String
+  // 그룹 키 (displayName 의 normalizeTerm). 통계 쿼리의 GROUP BY 키.
+  globalKey     String   @unique
+  version       Int      @default(1)
+  model         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  links GlobalMenuCanonicalLink[]
+
+  @@map("global_menu_canonicals")
+}
+
+// 식당별 MenuCanonical → 전역 GlobalMenuCanonical 다대일 링크.
+// (restaurantId, localCanonicalNorm) 가 유니크 — 한 식당의 한 그룹은
+// 정확히 한 전역 그룹에만 속한다.
+model GlobalMenuCanonicalLink {
+  id                  String  @id @default(cuid())
+  // MenuCanonical row 의 id 와 1:1 — onDelete: Cascade 로 동기화.
+  menuCanonicalId     String  @unique
+  // 빠른 조회용 비정규화 (restaurantId + localCanonicalNorm). MenuCanonical
+  // 을 매번 조인하지 않아도 글로벌 키로 곧장 통계 가능.
+  restaurantId        String
+  localCanonicalNorm  String
+  globalCanonicalId   String
+
+  menuCanonical MenuCanonical       @relation(fields: [menuCanonicalId], references: [id], onDelete: Cascade)
+  global        GlobalMenuCanonical @relation(fields: [globalCanonicalId], references: [id], onDelete: Cascade)
+
+  @@index([globalCanonicalId])
+  @@index([restaurantId])
+  @@map("global_menu_canonical_links")
 }
 
 model VisitorReview {
@@ -136,7 +200,55 @@ model ReviewSummary {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  review VisitorReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  review        VisitorReview   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  menuMentions  MenuMention[]
+  tags          ReviewTag[]
 
   @@map("review_summaries")
+}
+
+// 분석 done 시 menusJson 을 행 단위로 풀어 쓴 테이블. 글로벌·필터·검색
+// 통계용. summaryId 단위로 한 번에 다시 써(delete + insert) 재분석/백필
+// 결과와 자연스럽게 동기화된다.
+model MenuMention {
+  id           String   @id @default(cuid())
+  summaryId    String
+  restaurantId String
+  // 원문 표기. UI 노출 시 사용.
+  name         String
+  // 그룹키 — 소문자 + 공백 제거. 동의어 사전은 추후 도입.
+  nameNorm     String
+  // positive | negative | neutral. v3 잔존 행에서 null 들어온 경우 'neutral'
+  // 로 정규화해 저장한다(통계 쿼리에서 분기 줄임).
+  sentiment    String
+  // 메뉴 traits 원본 (string[] 직렬화). 빈도 집계가 필요해지면 별도 테이블로
+  // 분리하지만, 지금은 응답 라운드트립용으로만 보존.
+  traitsJson   String   @default("[]")
+
+  summary      ReviewSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@index([nameNorm])
+  @@index([restaurantId, nameNorm])
+  @@index([summaryId])
+  @@map("menu_mentions")
+}
+
+// tip + keyword 를 한 테이블에 통합. kind 로 구분 — 둘 다 free-form 짧은
+// 한국어 태그라 스키마가 같다. 별도 테이블로 쪼개면 조회 쿼리만 두 번 나서
+// 캐시 키도 늘어난다.
+model ReviewTag {
+  id           String   @id @default(cuid())
+  summaryId    String
+  restaurantId String
+  // 'tip' | 'keyword'
+  kind         String
+  term         String
+  termNorm     String
+
+  summary      ReviewSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@index([kind, termNorm])
+  @@index([restaurantId, kind])
+  @@index([summaryId])
+  @@map("review_tags")
 }
