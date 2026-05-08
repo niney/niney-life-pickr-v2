@@ -307,11 +307,10 @@ export class CrawlService {
         expiresAt: Date.now() + CACHE_TTL_MS,
       });
 
-      // Final pass — Apollo's initial render (~20 reviews) is included in
-      // `data.visitorReviews` but never went through onVisitorBatch. Run it
-      // through the same persistence path; dedup makes the call idempotent.
-      persistBatch(data.visitorReviews);
-      // Also re-upsert the restaurant with the now-complete snapshot.
+      // Re-upsert the restaurant with the now-complete snapshot. All reviews
+      // (SSR initial + wire pages) have already been persisted via
+      // onVisitorBatch — the adapter emits the SSR-injected first page from
+      // the document response handler — so no review-level final pass needed.
       persistTail = persistTail.then(async () => {
         const { id } = await this.restaurants.upsertRestaurantFromCrawl(data);
         restaurantId = id;

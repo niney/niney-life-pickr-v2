@@ -761,9 +761,8 @@ const extractVisitorReviewsFromState = (
 
 // Visitor reviews come from POST /graphql responses whose `data.visitorReviews`
 // holds the items. Naver's SPA does NOT writeQuery new pages back into Apollo
-// cache after "더보기", so __APOLLO_STATE__ stays at the initial-render set; we
-// harvest wire responses for the paginated batches and merge with Apollo for
-// the initially-rendered ones.
+// cache after "더보기", so __APOLLO_STATE__ stays at the initial-render set;
+// pagination pages live only in wire responses, which this parser walks.
 const parseVisitorReviewsFromCaptured = (
   captured: unknown[],
   alreadySeenIds?: Set<string>,
@@ -822,22 +821,73 @@ const parseVisitorReviewsFromCaptured = (
   return out;
 };
 
+// Walk a graphql request body and force any `sort` field inside `variables`
+// (or nested `input`) to "recent". Returns whether anything was changed so
+// the caller can skip rewriting requests that don't carry a sort variable.
+const forceRecentSort = (body: unknown): { body: unknown; changed: boolean } => {
+  let changed = false;
+  const visitVariables = (vars: unknown): void => {
+    if (!isObject(vars)) return;
+    if (typeof vars['sort'] === 'string' && vars['sort'] !== 'recent') {
+      vars['sort'] = 'recent';
+      changed = true;
+    }
+    for (const key of Object.keys(vars)) {
+      const v = vars[key];
+      if (isObject(v)) visitVariables(v);
+    }
+  };
+  const visitOp = (op: unknown): void => {
+    if (!isObject(op)) return;
+    visitVariables(op['variables']);
+  };
+  if (Array.isArray(body)) body.forEach(visitOp);
+  else visitOp(body);
+  return { body, changed };
+};
+
 const fetchVisitorReviewsViaSubpage = async (
   ctx: BrowserContext,
   placeId: string,
   hooks?: AdapterHooks,
 ): Promise<VisitorReviewType[]> => {
-  const url = `https://m.place.naver.com/restaurant/${placeId}/review/visitor`;
+  const url = `https://m.place.naver.com/restaurant/${placeId}/review/visitor?reviewSort=recent`;
   const page = await ctx.newPage();
   try {
     // In headed debug mode, keep CSS/fonts so the page is visually intact for the
     // human watching; otherwise stay aggressive with abort to keep latency low.
+    //
+    // We also intercept POSTs to the visitor-reviews graphql endpoint and force
+    // `sort: "recent"` in the operation variables. The URL `?reviewSort=recent`
+    // hint isn't honored by the SPA's pager — it builds its own variables from
+    // UI state (default = recommend). Rewriting the request body is more robust
+    // than clicking a "최신순" tab (selector breakage immune).
     await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
+      const req = route.request();
+      const type = req.resourceType();
       const block = HEADLESS
         ? SHOULD_BLOCK.has(type)
         : type === 'media';
-      return block ? route.abort() : route.continue();
+      if (block) return route.abort();
+
+      const u = req.url();
+      const isGraphql =
+        req.method() === 'POST' &&
+        (u.includes('api.place.naver.com/graphql') ||
+          u.includes('m.place.naver.com/graphql') ||
+          u.includes('pcmap.place.naver.com/graphql'));
+      if (!isGraphql) return route.continue();
+
+      const raw = req.postData();
+      if (!raw) return route.continue();
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        const rewritten = forceRecentSort(parsed);
+        if (!rewritten.changed) return route.continue();
+        return route.continue({ postData: JSON.stringify(rewritten.body) });
+      } catch {
+        return route.continue();
+      }
     });
 
     // Intercept any JSON response from Naver place hosts — wider than just
@@ -868,6 +918,52 @@ const fetchVisitorReviewsViaSubpage = async (
       if (body) captured.push({ url: u, method: res.request().method(), body });
     });
 
+    // SSR-injected initial reviews live as inline `<script>__APOLLO_STATE__=...</script>`
+    // in the document HTML — not in a separate JSON network response — so the
+    // graphql `captured` listener above doesn't see them. Treat the document
+    // response itself as the "first batch": parse the inline state, extract
+    // its visitor reviews, and emit them via onVisitorBatch BEFORE pagination
+    // starts. Result: req1=document → batch 0, req2=graphql → batch 1, ...
+    // matches the "fetch == save" invariant the persistence path expects.
+    const ssrSeenIds = new Set<string>();
+    let resolveSsr: () => void = () => undefined;
+    const ssrReady = new Promise<void>((resolve) => {
+      resolveSsr = resolve;
+    });
+    let ssrSettled = false;
+    const settleSsr = () => {
+      if (ssrSettled) return;
+      ssrSettled = true;
+      resolveSsr();
+    };
+    page.on('response', async (res) => {
+      if (ssrSettled) return;
+      const req = res.request();
+      if (req.resourceType() !== 'document') return;
+      const u = res.url();
+      if (!u.includes(`/restaurant/${placeId}/review/visitor`)) return;
+      try {
+        const html = await res.text();
+        const m = html.match(
+          /window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\})\s*;[\s\S]*?<\/script>/,
+        );
+        if (!m || !m[1]) return;
+        const state = JSON.parse(m[1]);
+        if (!isObject(state)) return;
+        const initial = extractVisitorReviewsFromState(state, placeId, ssrSeenIds);
+        if (initial.length === 0) return;
+        // eslint-disable-next-line no-console
+        console.log(
+          `[crawl-debug] visitor SSR initial batch from document: ${initial.length}`,
+        );
+        hooks?.onVisitorBatch?.(initial);
+      } catch {
+        // best-effort — swallow and let pagination continue
+      } finally {
+        settleSsr();
+      }
+    });
+
     hooks?.onStage?.('loading_visitor');
     throwIfAborted(hooks?.signal);
     try {
@@ -879,6 +975,15 @@ const fetchVisitorReviewsViaSubpage = async (
       return [];
     }
     throwIfAborted(hooks?.signal);
+
+    // Settle the SSR document handler before we start clicking 더보기 — gives
+    // the (async) html parse a chance to land its batch first. Bound the wait
+    // so a missing/changed HTML shape doesn't stall the pager.
+    await Promise.race([
+      ssrReady,
+      new Promise<void>((r) => setTimeout(r, 1500)),
+    ]);
+    settleSsr();
 
     const snapshotApolloState = (): Promise<unknown> =>
       page
@@ -959,7 +1064,10 @@ const fetchVisitorReviewsViaSubpage = async (
       // newly-arrived wire responses page-by-page. Distinct from the merge
       // step's `seenIds` (which combines Apollo + wire) — that one runs
       // once at the end with its own state.
-      const pageBatchSeenIds = new Set<string>();
+      // Seed with SSR-batch ids so wire pages don't re-emit reviews already
+      // pushed as the initial batch (DB would dedup either way, but we save
+      // a roundtrip and keep the SSE event sequence clean).
+      const pageBatchSeenIds = new Set<string>(ssrSeenIds);
       let pages = 0;
       let consecutiveFailures = 0;
       while (pages < VISITOR_MAX_PAGES) {
@@ -1089,10 +1197,13 @@ const fetchVisitorReviewsViaSubpage = async (
       await page.waitForTimeout(VISITOR_HOLD_MS);
     }
 
-    // Merge: Apollo cache holds the initially-rendered page (server-side
-    // hydrated, ~20 reviews), wire responses hold subsequent "더보기" pages.
-    // Apollo first so its ids prime the dedup set, then wire fills in the
-    // pages that didn't writeQuery back.
+    // Build the return value (used by the service for the snapshot/cache/SSE
+    // 'done' payload — NOT for review persistence). All reviews have already
+    // streamed through hooks.onVisitorBatch:
+    //   - SSR initial page: emitted from the document response handler above.
+    //   - Pagination pages: emitted per "더보기" click inside the loop.
+    // We still merge Apollo + wire here so the returned snapshot is complete
+    // even in edge cases (e.g., service crashes between batches).
     const seenIds = new Set<string>();
     const fromApollo = isObject(apolloState)
       ? extractVisitorReviewsFromState(apolloState, placeId, seenIds)
@@ -1112,7 +1223,45 @@ const fetchVisitorReviewsViaSubpage = async (
         captured.slice(0, 5).map((c) => `${c.method} ${c.url}`),
       );
     }
-    return [...fromApollo, ...fromWire].slice(0, 200);
+    const merged = [...fromApollo, ...fromWire].slice(0, 200);
+
+    // Mirror what the service actually persists. The wire-only `*-bodies-*`
+    // dump is misleading on its own because the SSR-hydrated first page lives
+    // in Apollo, not in network responses — surface the merged list so future
+    // diagnostics can verify the user-visible result without re-running merge.
+    if (DEBUG_CAPTURE) {
+      try {
+        await mkdir(DEBUG_DIR, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const file = join(DEBUG_DIR, `visitor-${placeId}-merged-${stamp}.json`);
+        await writeFile(
+          file,
+          JSON.stringify(
+            {
+              placeId,
+              counts: {
+                apollo: fromApollo.length,
+                wire: fromWire.length,
+                merged: merged.length,
+              },
+              merged,
+            },
+            null,
+            2,
+          ),
+          'utf-8',
+        );
+        // eslint-disable-next-line no-console
+        console.log(
+          `[crawl-debug] merged visitor reviews (apollo=${fromApollo.length}, wire=${fromWire.length}, total=${merged.length}) → ${file}`,
+        );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[crawl-debug] merged dump failed', err);
+      }
+    }
+
+    return merged;
   } finally {
     await page.close().catch(() => undefined);
   }
