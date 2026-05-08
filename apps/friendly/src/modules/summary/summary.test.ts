@@ -195,6 +195,44 @@ describe('SummaryService', () => {
     expect(row?.text).toBe('맛있고 친절');
   });
 
+  it('retries failed reviews and succeeds within the retry budget', async () => {
+    const { placeId, reviewIds } = await seed(['리뷰']);
+    let calls = 0;
+    const provider = fakeProvider(async () => {
+      calls += 1;
+      if (calls < 3) {
+        // 처음 두 번은 형태가 깨진 응답 → parseAnalysis 가 null 반환.
+        return { text: '잘못된 응답', model: 'm', promptTokens: 1, completionTokens: 1 };
+      }
+      return {
+        text: analysisJson('성공'),
+        model: 'm',
+        promptTokens: 1,
+        completionTokens: 1,
+      };
+    });
+    const aiConfig = new AiConfigService(app.prisma, {
+      apiKey: '',
+      baseUrl: '',
+      timeoutMs: 1000,
+      maxConcurrent: 1,
+      defaultModel: '',
+    });
+    const service = new SummaryService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'm' }),
+    });
+
+    await service.runForTests(placeId, reviewIds);
+
+    expect(calls).toBe(3);
+    const row = await app.prisma.reviewSummary.findUnique({
+      where: { reviewId: reviewIds[0]! },
+    });
+    expect(row?.status).toBe('done');
+    expect(row?.text).toBe('성공');
+    expect(row?.errorCode).toBeNull();
+  });
+
   it('marks rows as failed with parse_failed when LLM returns invalid JSON', async () => {
     const { placeId, reviewIds } = await seed(['리뷰']);
     const provider = fakeProvider(async () => ({

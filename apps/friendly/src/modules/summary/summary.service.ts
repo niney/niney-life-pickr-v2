@@ -91,6 +91,28 @@ const NUM_CTX = 4096;
 // the adapter's FIFO gate; chunking here is just a defensive boundary so a
 // single fan-out doesn't allocate thousands of pending Promises at once.
 const DEFAULT_CHUNK_SIZE = 10;
+// 한 review 당 시도 횟수 (첫 시도 + 재시도 2회). parse_failed 는 모델이
+// 운에 따라 형태를 못 맞추는 경우가 많아 재시도가 효과적이고,
+// upstream/timeout 도 일시적 네트워크/모델 장애에 자주 회복된다.
+// 어댑터의 동시성-한도 백오프와 별개 — 그쪽은 같은 호출 내부에서 회복.
+const RETRY_LIMIT = 3;
+
+// 한 review 의 한 시도 결과. ok 면 parsed 분석을 들고 나오고, 실패면
+// 다음 시도/최종 실패 처리를 위한 errorCode + message 를 들고 나온다.
+type ReviewAttemptOutcome =
+  | {
+      ok: true;
+      parsed: ReviewAnalysisType;
+      text: string;
+      model: string;
+    }
+  | {
+      ok: false;
+      errorCode: string;
+      message: string;
+      // parse_failed 일 땐 모델 id 가 알려져 있어 보존, upstream/timeout 은 null.
+      model: string | null;
+    };
 
 export interface SummaryServiceOptions {
   cache?: AdapterCache;
@@ -250,85 +272,52 @@ export class SummaryService {
       });
       this.bus.publish(placeId);
 
-      const settled = await Promise.allSettled(
-        chunk.map((r) =>
-          provider.complete({
-            prompt: this.buildPrompt(r),
-            model,
-            systemPrompt: SYSTEM_PROMPT,
-            temperature: TEMPERATURE,
-            maxTokens: MAX_TOKENS,
-            numCtx: NUM_CTX,
-            format: ANALYSIS_JSON_SCHEMA,
-          }),
-        ),
-      );
+      // 한 review에 대해 fetch + parse 까지 한 사이클. 실패 시 최대
+      // RETRY_LIMIT 만큼 재시도. parse_failed/upstream/timeout 모두 대상.
+      // 어댑터의 동시성-한도 백오프와 이 재시도는 겹치지 않는다(어댑터는
+      // 같은 슬롯에서 한 호출 내부 회복, 여기는 호출 자체를 새로 시작).
+      const attemptForReview = async (
+        r: (typeof chunk)[number],
+      ): Promise<ReviewAttemptOutcome> => {
+        let last: ReviewAttemptOutcome | null = null;
+        for (let attempt = 0; attempt < RETRY_LIMIT; attempt += 1) {
+          if (attempt > 0) {
+            const delay = 300 * attempt + Math.floor(Math.random() * 200);
+            await new Promise((res) => setTimeout(res, delay));
+            this.log?.info(
+              { placeId, reviewId: r.id, attempt: attempt + 1, prev: last?.errorCode },
+              '[summary] retry',
+            );
+          }
+          last = await this.attemptOnce(provider, model, r);
+          if (last.ok) return last;
+        }
+        return last!;
+      };
+
+      const attempts = await Promise.all(chunk.map((r) => attemptForReview(r)));
 
       const finishedAt = new Date();
       await Promise.all(
-        settled.map(async (s, idx) => {
+        attempts.map(async (a, idx) => {
           const reviewId = chunk[idx]!.id;
-          if (s.status === 'fulfilled') {
-            const parsed = parseAnalysis(s.value.text);
-            if (!parsed) {
-              // LLM이 JSON 스키마를 못 맞춤. raw text는 errorMessage에
-              // 잘라 넣어 진단 가능하게 하고 status=failed.
-              const message = s.value.text.slice(0, 500);
-              parseFailCount += 1;
-              this.log?.warn(
-                {
-                  placeId,
-                  reviewId,
-                  model: s.value.model,
-                  rawHead: message.slice(0, 120),
-                },
-                '[summary] parse_failed',
-              );
-              await this.prisma.reviewSummary.update({
-                where: { reviewId },
-                data: {
-                  status: 'failed',
-                  errorCode: 'parse_failed',
-                  errorMessage: message,
-                  model: s.value.model,
-                  finishedAt,
-                },
-              });
-              this.bus.publish(placeId, {
-                type: 'review',
-                reviewId,
-                status: 'failed',
-                text: null,
-                model: s.value.model,
-                errorCode: 'parse_failed',
-                errorMessage: message,
-                finishedAt: finishedAt.toISOString(),
-                sentiment: null,
-                sentimentScore: null,
-                satisfactionScore: null,
-                menus: null,
-                tips: null,
-                keywords: null,
-              });
-              return;
-            }
-            const text = parsed.summary.trim();
+          if (a.ok) {
             doneCount += 1;
             await this.prisma.reviewSummary.update({
               where: { reviewId },
               data: {
                 status: 'done',
-                text,
-                model: s.value.model,
+                text: a.text,
+                model: a.model,
                 finishedAt,
                 errorCode: null,
                 errorMessage: null,
-                sentiment: parsed.sentiment,
-                sentimentScore: parsed.sentimentScore,
-                satisfactionScore: parsed.satisfactionScore,
-                menusJson: JSON.stringify(parsed.menus),
-                tipsJson: JSON.stringify(parsed.tips),
-                keywordsJson: JSON.stringify(parsed.keywords),
+                sentiment: a.parsed.sentiment,
+                sentimentScore: a.parsed.sentimentScore,
+                satisfactionScore: a.parsed.satisfactionScore,
+                menusJson: JSON.stringify(a.parsed.menus),
+                tipsJson: JSON.stringify(a.parsed.tips),
+                keywordsJson: JSON.stringify(a.parsed.keywords),
                 analysisVersion: ANALYSIS_VERSION,
               },
             });
@@ -339,51 +328,59 @@ export class SummaryService {
               type: 'review',
               reviewId,
               status: 'done',
-              text,
-              model: s.value.model,
+              text: a.text,
+              model: a.model,
               errorCode: null,
               errorMessage: null,
               finishedAt: finishedAt.toISOString(),
-              sentiment: parsed.sentiment,
-              sentimentScore: parsed.sentimentScore,
-              satisfactionScore: parsed.satisfactionScore,
-              menus: parsed.menus,
-              tips: parsed.tips,
-              keywords: parsed.keywords,
+              sentiment: a.parsed.sentiment,
+              sentimentScore: a.parsed.sentimentScore,
+              satisfactionScore: a.parsed.satisfactionScore,
+              menus: a.parsed.menus,
+              tips: a.parsed.tips,
+              keywords: a.parsed.keywords,
             });
-          } else {
-            const { error, message } = classifyError(s.reason);
-            failCount += 1;
-            this.log?.warn(
-              { placeId, reviewId, errorCode: error, message },
-              '[summary] upstream/timeout failure',
-            );
-            await this.prisma.reviewSummary.update({
-              where: { reviewId },
-              data: {
-                status: 'failed',
-                errorCode: error,
-                errorMessage: message,
-                finishedAt,
-              },
-            });
-            this.bus.publish(placeId, {
-              type: 'review',
-              reviewId,
-              status: 'failed',
-              text: null,
-              model: null,
-              errorCode: error,
-              errorMessage: message,
-              finishedAt: finishedAt.toISOString(),
-              sentiment: null,
-              sentimentScore: null,
-              satisfactionScore: null,
-              menus: null,
-              tips: null,
-              keywords: null,
-            });
+            return;
           }
+          // 모든 시도 실패. parse_failed 와 upstream 을 분기해 카운트.
+          if (a.errorCode === 'parse_failed') parseFailCount += 1;
+          else failCount += 1;
+          this.log?.warn(
+            {
+              placeId,
+              reviewId,
+              errorCode: a.errorCode,
+              message: a.message.slice(0, 120),
+              attempts: RETRY_LIMIT,
+            },
+            '[summary] all retries exhausted',
+          );
+          await this.prisma.reviewSummary.update({
+            where: { reviewId },
+            data: {
+              status: 'failed',
+              errorCode: a.errorCode,
+              errorMessage: a.message,
+              model: a.model,
+              finishedAt,
+            },
+          });
+          this.bus.publish(placeId, {
+            type: 'review',
+            reviewId,
+            status: 'failed',
+            text: null,
+            model: a.model,
+            errorCode: a.errorCode,
+            errorMessage: a.message,
+            finishedAt: finishedAt.toISOString(),
+            sentiment: null,
+            sentimentScore: null,
+            satisfactionScore: null,
+            menus: null,
+            tips: null,
+            keywords: null,
+          });
         }),
       );
       // Counts bump after the chunk — the SSE handler debounces this so
@@ -414,6 +411,45 @@ export class SummaryService {
       },
       '[summary] queue finished',
     );
+  }
+
+  // 한 review 에 대한 단일 시도. provider.complete + parseAnalysis 까지
+  // 한 사이클로 묶어 ReviewAttemptOutcome 으로 정규화한다. 던지지 않는다 —
+  // 호출자(retry 루프)가 ok/실패를 분기하기 위함.
+  private async attemptOnce(
+    provider: LLMProvider,
+    model: string,
+    r: { id: string; body: string; authorName: string | null; rating: number | null },
+  ): Promise<ReviewAttemptOutcome> {
+    try {
+      const res = await provider.complete({
+        prompt: this.buildPrompt(r),
+        model,
+        systemPrompt: SYSTEM_PROMPT,
+        temperature: TEMPERATURE,
+        maxTokens: MAX_TOKENS,
+        numCtx: NUM_CTX,
+        format: ANALYSIS_JSON_SCHEMA,
+      });
+      const parsed = parseAnalysis(res.text);
+      if (parsed) {
+        return {
+          ok: true,
+          parsed,
+          text: parsed.summary.trim(),
+          model: res.model,
+        };
+      }
+      return {
+        ok: false,
+        errorCode: 'parse_failed',
+        message: res.text.slice(0, 500),
+        model: res.model,
+      };
+    } catch (e) {
+      const { error, message } = classifyError(e);
+      return { ok: false, errorCode: error, message, model: null };
+    }
   }
 
   private async resolveProvider(): Promise<
