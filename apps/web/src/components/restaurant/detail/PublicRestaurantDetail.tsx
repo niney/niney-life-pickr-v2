@@ -18,9 +18,9 @@ interface Props {
 // 식당 상세 패널. 헤더 + sticky 탭 바 + 활성 탭 컨텐츠. 데이터 fetch 는 여기서
 // 한 번씩 (detail + insights) — 탭 전환은 컨텐츠만 바뀌고 추가 호출 없음.
 //
-// 탭 상태는 패널 내부 useState. URL 까지는 안 가지지만, placeId 가 바뀌면
-// (다른 식당 클릭) 자동으로 'home' 으로 reset — 어떤 식당이든 첫 인상은 홈 탭.
-export const PublicRestaurantPanel = ({ placeId, onClose }: Props) => {
+// 탭 상태는 내부 useState. URL 까지는 안 가지지만, placeId 가 바뀌면 (다른
+// 식당 클릭) 자동으로 'home' 으로 reset — 어떤 식당이든 첫 인상은 홈 탭.
+export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
   const [tab, setTab] = useState<TabKey>('home');

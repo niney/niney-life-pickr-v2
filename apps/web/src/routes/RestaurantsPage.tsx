@@ -5,7 +5,7 @@ import type { RestaurantPublicListQueryType } from '@repo/api-contract';
 import { useRestaurantsPublic } from '@repo/shared';
 import { PublicRestaurantList } from '~/components/restaurant/PublicRestaurantList';
 import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsMap';
-import { PublicRestaurantPanel } from '~/components/restaurant/panel/PublicRestaurantPanel';
+import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 
@@ -122,7 +122,7 @@ export const RestaurantsPage = () => {
               mobileView === 'list' ? 'block' : 'hidden xl:block',
             )}
           >
-            <PublicRestaurantPanel placeId={placeId} onClose={handleClosePanel} />
+            <PublicRestaurantDetail placeId={placeId} onClose={handleClosePanel} />
           </aside>
         )}
 

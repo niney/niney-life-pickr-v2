@@ -5,7 +5,7 @@ import type {
 } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
-import { AiSummary, MenuGrid, QuickActions, ReviewCard } from './panelShared';
+import { AiSummary, MenuGrid, QuickActions, ReviewCard } from './shared';
 import type { TabKey } from './tabs';
 
 interface Props {

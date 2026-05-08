@@ -4,7 +4,7 @@ import type {
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { cn } from '~/lib/utils';
-import { ReviewCard } from './panelShared';
+import { ReviewCard } from './shared';
 
 type SentimentFilter = 'all' | 'positive' | 'negative';
 type SortMode = 'recent' | 'rating';

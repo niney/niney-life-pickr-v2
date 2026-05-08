@@ -2,7 +2,7 @@ import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
-import { MenuGrid } from './panelShared';
+import { MenuGrid } from './shared';
 
 interface Props {
   detail: RestaurantPublicDetailType;
