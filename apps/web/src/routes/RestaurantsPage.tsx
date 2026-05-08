@@ -80,8 +80,8 @@ export const RestaurantsPage = () => {
 
   return (
     <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden">
-      {/* xl+ 양분할 / 그 미만은 토글 */}
-      <div className="flex h-full w-full">
+      {/* xl+ : 리스트 / (선택시) 상세 / 지도 3-column. xl 미만: 토글. */}
+      <div className="relative flex h-full w-full">
         <aside
           className={cn(
             'relative h-full w-full border-r bg-background xl:w-[400px] xl:shrink-0',
@@ -103,12 +103,28 @@ export const RestaurantsPage = () => {
             onSelectItem={handleSelectItem}
             onHoverItem={setHoveredPlaceId}
           />
-
-          {/* 좌측 패널 위로 슬라이드인하는 상세 패널 */}
-          {placeId && (
-            <PublicRestaurantPanel placeId={placeId} onClose={handleClosePanel} />
-          )}
         </aside>
+
+        {/* 상세 패널 — placeId 있을 때만 mount.
+            xl+ 에서는 list 와 map 사이에 별도 column 으로 추가 (네이버 지도
+            패턴 — list/detail/map). xl 미만에서는 list aside 위에 absolute
+            덮어쓰기로 동작 (좁은 화면에서 list 와 detail 동시 표시 무리).
+            mobileView=map 일 때는 숨김 — 사용자가 명시적으로 지도 모드로
+            갔으니 detail 도 같이 빠지게. */}
+        {placeId && (
+          <aside
+            className={cn(
+              'bg-background',
+              // xl+: 인접 column
+              'xl:relative xl:h-full xl:w-[440px] xl:shrink-0 xl:border-r',
+              // xl-: list aside 영역 위로 덮어쓰기 (mobileView=list 일 때만)
+              'absolute inset-y-0 left-0 right-0 z-30 xl:left-auto xl:right-auto xl:z-auto',
+              mobileView === 'list' ? 'block' : 'hidden xl:block',
+            )}
+          >
+            <PublicRestaurantPanel placeId={placeId} onClose={handleClosePanel} />
+          </aside>
+        )}
 
         <section
           className={cn(

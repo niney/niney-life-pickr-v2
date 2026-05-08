@@ -42,7 +42,7 @@ export const PublicRestaurantPanel = ({ placeId, onClose }: Props) => {
     <div
       role="dialog"
       aria-label="식당 상세"
-      className="absolute inset-0 z-30 flex flex-col bg-background animate-in slide-in-from-left-4 fade-in duration-200"
+      className="flex h-full flex-col bg-background animate-in slide-in-from-left-4 fade-in duration-200"
     >
       <header className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
         <Button
