@@ -5,7 +5,7 @@ import type { RestaurantPublicListQueryType } from '@repo/api-contract';
 import { useRestaurantsPublic } from '@repo/shared';
 import { PublicRestaurantList } from '~/components/restaurant/PublicRestaurantList';
 import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsMap';
-import { PublicRestaurantPanel } from '~/components/restaurant/PublicRestaurantPanel';
+import { PublicRestaurantPanel } from '~/components/restaurant/panel/PublicRestaurantPanel';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 
