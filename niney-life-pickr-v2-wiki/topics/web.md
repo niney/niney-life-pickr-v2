@@ -1,6 +1,6 @@
 ---
 topic: web
-last_compiled: 2026-05-07
+last_compiled: 2026-05-08
 sources_count: 28
 status: active
 aliases: [vite, react, web-app, frontend-web]
@@ -89,27 +89,46 @@ aliases: [vite, react, web-app, frontend-web]
   업데이트/재크롤/삭제 버튼은 `stopPropagation`으로 행 클릭과 분리된다.
   삭제는 trash 아이콘 1차 클릭 → "정말 삭제 / 취소" 인라인 확인(2-step).
   리스트 위쪽엔 placeId가 아직 없는 "new" 잡이 쌓이고, 행마다 자기
-  placeId에 묶인 `ActiveJobPanel`이 안커처럼 매달린다.
+  placeId에 묶인 `ActiveJobPanel`이 안커처럼 매달린다. 헤더 우측의
+  정렬 dropdown은 `recent | satisfaction | positive | negativeRatio` —
+  `avgSatisfactionScore` / `avgSentimentScore` / `negativeCount /
+  summaryDone` 비율 기준으로 클라이언트 정렬하며, 분석이 없는 행
+  (점수 `null`)은 항상 아래로 떨어진다. SSE 구독은 `rawItems` 기준이라
+  정렬 변경만으로 EventSource가 끊기지 않는다.
 - [`AdminRestaurantDetailPage`](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx)
   — `useRestaurantByPlaceId`로 단일 GET, 상단 헤더 + flat divide-y
   레이아웃의 정보/영업시간/메뉴/사진 섹션, AI 요약 진행 카드(잡이 없을
   때만 별도 표시), 방문자 리뷰(별점/요약 필터 + 정렬 + 20개 페이지
-  pagination), 블로그 리뷰(12 + 더보기). 헤더 우측 업데이트/재크롤/삭제는
-  모두 in-page에서 동작 — 재크롤 시 detail 캐시의 `reviews`를 즉시
-  비워서 새 배치가 stale id와 섞이지 않게 한다.
+  pagination), 블로그 리뷰(12 + 더보기). 정렬 기본값은 `fetchedAt-asc`
+  (Naver가 최신 방문→옛 방문 순으로 내려주고 어댑터가 그 순서대로
+  저장하므로 `fetchedAt asc == 최근 수집순`). 방문일 정렬은
+  `visitedSortKey`로 `"YY.M.D"`를 `"YYYY-MM-DD"`로 정규화 후 비교한다
+  (원문 그대로 비교하면 `"25.8" > "25.12"`로 오판됨). 헤더 우측
+  업데이트/재크롤/삭제는 모두 in-page에서 동작 — 재크롤 시 detail
+  캐시의 `reviews`를 즉시 비워서 새 배치가 stale id와 섞이지 않게 한다.
 - [`components/restaurant/`](../../apps/web/src/components/restaurant/)
   — 두 페이지가 공유하는 컴포넌트 디렉토리.
   - [`ActiveJobPanel.tsx`](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)
     — 단일 잡의 SSE 카드. `useCrawlJobStream(jobId)` + `useRestaurantSummaryEvents(placeId)`를
     구독하고 `visitor_batch.persistedReviews`를 detail 캐시에 직접
-    머지. `done` 시 list/detail 둘 다 invalidate, `onFinished`를 정확히
-    한 번 호출. props: `showInlineReviewList`(detail은 false로 자기
-    리스트 중복 방지), `onPlaceIdResolved`, `onCancel`, `onDismiss`,
-    `onFinished`.
+    머지(중복 id 필터링 + `videos` 필드 포함). `done` 시 list/detail
+    둘 다 invalidate, `onFinished`를 정확히 한 번 호출. props:
+    `showInlineReviewList`(detail은 false로 자기 리스트 중복 방지),
+    `onPlaceIdResolved`, `onCancel`, `onDismiss`, `onFinished`.
   - [`sections.tsx`](../../apps/web/src/components/restaurant/sections.tsx)
     — `SectionHeader`, `SummaryProgressSection`, `ReviewSummaryItem`,
     `ReviewSummarySection`. `ReviewSummaryItem`은 본문 ≈ 요약(짧은
-    리뷰에서 AI가 그대로 따라 쓴 케이스)을 감지해 dimmed로 렌더.
+    리뷰에서 AI가 그대로 따라 쓴 케이스)을 감지해 dimmed로 렌더하며,
+    감정 뱃지(`positive/negative/mixed/neutral` → emerald/rose/amber/
+    muted), `만족도 N/5` 칩, 메뉴 칩(메뉴별 sentiment 색상), `💡 팁`
+    리스트를 한 카드 안에 늘어놓는다. 비디오 타일은 `posterUrl`을
+    `reviewThumbnailUrl(_, 200)`로 프록시 통과시켜 16x16 그리드에
+    `▶` 오버레이로 렌더, 클릭 시 인라인 `VideoPlayerModal`이 뜬다.
+  - **`VideoPlayerModal`** (`sections.tsx` 내부) — portal/포커스 트랩
+    없는 가벼운 다이얼로그. ESC 키와 backdrop 클릭 모두 닫기. 마운트
+    시 `document.body.style.overflow = 'hidden'`로 스크롤 락,
+    언마운트에서 원복. `<video controls autoPlay>`로 서명된 akamaized
+    video URL을 그대로 재생(프록시 우회).
   - `ImgWithFallback` 헬퍼 — detail 페이지 내부에 정의. 모든 `<img>`에
     `referrerPolicy="no-referrer"`를 주어 Naver 이미지 CDN(ldb-phinf
     등)의 referer 검사 우회. onError 시 placeholder 박스로 스왑.
@@ -157,12 +176,15 @@ aliases: [vite, react, web-app, frontend-web]
   `useCompleteAi`, `useCompleteBatchAi`), 테마(`ThemeProvider`/
   `lightTheme`/`applyCssVars`), 공통 상수(`APP_NAME`, `QUERY_STALE_TIME`,
   `QUERY_GC_TIME`), 에러 클래스(`ApiError`), 타입(`ActiveCrawlJob`).
+- **`@repo/utils`** — 썸네일 프록시 헬퍼 `reviewThumbnailUrl(originalUrl,
+  size)` 사용. 비디오 `posterUrl`/리뷰 이미지 모두 같은 헬퍼로 프록시
+  경유시킨다(상세는 [media](media.md)).
 - **TanStack Query 캐시 직접 패치** — `ActiveJobPanel`은 SSE
   `visitor_batch.persistedReviews`를 받아 `qc.setQueryData(['restaurant',
   placeId], …)`로 detail 캐시의 `reviews` 배열에 직접 합친다(중복 id
-  필터링). 재크롤 시작 시에는 detail 페이지가 미리 같은 키에 빈
-  `reviews: []`를 써서 stale을 비우고, 잡 종료 시엔 list/detail 둘 다
-  `invalidateQueries` 한다.
+  필터링, `videos` 필드 포함). 재크롤 시작 시에는 detail 페이지가
+  미리 같은 키에 빈 `reviews: []`를 써서 stale을 비우고, 잡 종료 시엔
+  list/detail 둘 다 `invalidateQueries` 한다.
 - **`useActiveCrawlJobStore`(zustand singleton)** — `jobs:
   Record<jobId, ActiveCrawlJob>`. 리스트와 detail이 같은 스토어를 읽기
   때문에 어느 쪽에서 시작한 잡이든 모든 화면에 즉시 보인다.
@@ -184,7 +206,7 @@ aliases: [vite, react, web-app, frontend-web]
   `Save`, `Plus`).
 
 크롤링 SSE/요약 이벤트 hook의 내부는 [shared](shared.md), 서버 측
-스트림 형식은 [crawl](crawl.md) 토픽 참고.
+스트림 형식은 [crawl](crawl.md), 썸네일 프록시는 [media](media.md) 참고.
 
 ## API Surface [coverage: high — 4 sources]
 
@@ -198,9 +220,11 @@ URL:
 - `/picks` — 내 Pick 목록 + 랜덤 추첨 (세션 필수)
 - `/admin` — 어드민 대시보드 (사용자 목록 + 역할 토글)
 - `/admin/restaurants` — 네이버 플레이스 URL 적재 폼 + 등록된 맛집
-  리스트 + 행 단위 업데이트/재크롤/삭제 + 다중 슬롯 active job panel
+  리스트 + 행 단위 업데이트/재크롤/삭제 + 다중 슬롯 active job panel +
+  만족도/긍정/부정비율 정렬 dropdown
 - `/admin/restaurants/:placeId` — 단일 맛집 상세 (정보/영업시간/메뉴/
-  이미지 + 방문자 리뷰 필터·정렬·pagination + 블로그 리뷰 + AI 요약 진행)
+  이미지 + 방문자 리뷰 필터·정렬(`fetchedAt-asc` 기본)·pagination +
+  블로그 리뷰 + AI 요약 진행 + 리뷰별 비디오 인라인 재생)
 - `/admin/crawl-test` — URL 입력 후 크롤링 잡 시작 (구버전, 그대로 유지)
 - `/admin/crawl-test/:jobId` — 특정 잡의 SSE 스트림 실시간 표시
 - `/admin/ai-keys` — provider 카드 리스트
@@ -212,8 +236,9 @@ URL:
 
 - [`ActiveJobPanel`](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)
   — 리스트의 행별 패널과 detail의 진행 카드 양쪽에서 공유.
-- [`SectionHeader`/`SummaryProgressSection`/`ReviewSummaryItem`/`ReviewSummarySection`](../../apps/web/src/components/restaurant/sections.tsx)
-  — flat 섹션 레이아웃의 공통 빌딩 블록.
+- [`SectionHeader`/`SummaryProgressSection`/`ReviewSummaryItem`/`ReviewSummarySection`/`VideoPlayerModal`](../../apps/web/src/components/restaurant/sections.tsx)
+  — flat 섹션 레이아웃의 공통 빌딩 블록. `VideoPlayerModal`은 inline
+  비공개 export(같은 파일 내에서만 사용).
 
 ## Data [coverage: high — 4 sources]
 
@@ -230,8 +255,8 @@ URL:
   - `['restaurant', 'list']` — 리스트 페이지가 사용. 각 행 카운터/요약
     버킷 새로고침 대상.
   - `['restaurant', placeId]` — 상세 + `ActiveJobPanel`이 공유. SSE
-    배치는 이 캐시에 직접 머지(`setQueryData`), 잡 `done`은
-    invalidate.
+    배치는 이 캐시에 직접 머지(`setQueryData`, `videos` 포함), 잡
+    `done`은 invalidate.
   - `['restaurant', placeId, 'summary-status']` 형태의 보조 키는
     `useRestaurantSummaryEvents` 내부에서 관리(상세는 [shared](shared.md)).
 - **토큰 영속화** — `localStorage` 키 `lp:token` (게스트 플래그는
@@ -256,9 +281,14 @@ URL:
 - **Next.js 미채택** — 풀텍스트 SEO나 SSR 요구사항이 없고, 어드민 콘솔
   성격이 강해 단순 SPA로 충분하다고 판단.
 - **Tailwind v4 + shadcn 토큰** — CSS-in-JS를 도입하지 않고 OKLCH
-  변수 + `cn()` 유틸 + class-variance-authority로 정리.
+  변수 + `cn()` 유틸 + class-variance-authority로 정리. Tamagui 같은
+  RN-호환 스타일 시스템은 명시적으로 거부 — 웹/모바일 UI를 한 트리에
+  엮지 않고 platform-ui-split 정책을 따른다(웹=shadcn, 모바일=RN).
 - **`@repo/shared` 경유 API/스토어** — 모바일과 동일한 React Query
   훅을 그대로 호출. 웹 전용 API 함수를 따로 두지 않는다.
+- **stream-driven cache merge** — SSE 배치를 받자마자 detail 쿼리
+  캐시(`['restaurant', placeId]`)에 직접 `setQueryData`로 머지한다.
+  서버를 다시 때리지 않고도 새 리뷰가 즉시 화면에 박힌다.
 - **역할 기반 라우트 가드** — `RequireSession`(token 또는 guest),
   `RequireAdmin`(token + role==='ADMIN')을 컴포넌트로 분리해 라우트
   트리에 직접 끼워 넣는다.
@@ -273,10 +303,24 @@ URL:
 - **재크롤 시작 시 detail 캐시 review 비우기** — 서버가 cascade로 옛
   리뷰를 지우므로, 클라가 미리 `reviews: []`로 set 해 stale id가 새
   배치와 섞이지 않게 한다.
+- **`fetchedAt-asc == 최근 수집순`** — Naver는 최신 방문→옛 방문 순으로
+  내려주고 어댑터가 그 순서대로 즉시 저장하기 때문에, `fetchedAt`
+  오름차순이 곧 "Naver가 최신순으로 내려준 수집 순서"가 된다. 정렬
+  레이블 의미를 코드 주석으로 못 박았다.
+- **방문일 정렬은 정규화 후 비교** — 원문 `"YY.M.D"`는 zero-pad가 안 돼
+  있어 문자열 비교 시 `"25.8" > "25.12"`로 뒤집힌다. `visitedSortKey`가
+  `"YYYY-MM-DD"`로 정규화 후 `localeCompare`.
+- **비디오는 프록시 우회, 썸네일만 프록시** — `<video src>`는 서명된
+  akamaized URL을 그대로 사용(스트리밍 트래픽을 friendly로 끌어오지
+  않음). 반면 `posterUrl`/리뷰 이미지는 referer 검사 때문에
+  `reviewThumbnailUrl`로 프록시 경유.
+- **인라인 모달 (no portal)** — `VideoPlayerModal`은 portal/포커스 트랩
+  없이 `fixed inset-0` + `z-50`으로 띄운다. ESC + backdrop 클릭으로
+  닫고, body scroll lock으로 배경 스크롤만 잠근다.
 - **`visitor_batch.persistedReviews`를 detail 캐시에 직접 머지** —
   리스트만 invalidate하면 detail에서 재요청이 늦게 들어오고 사용자가
   빈 화면을 본다. 배치 자체에 충분한 정보(`id`, `body`, `rating`,
-  `fetchedAt`, `imageUrls` 등)가 들어 있어 그대로 머지 가능.
+  `fetchedAt`, `imageUrls`, `videos` 등)가 들어 있어 그대로 머지 가능.
 - **`ImgWithFallback` + `referrerPolicy="no-referrer"`** — Naver 이미지
   CDN이 referer를 검사해 외부 origin 요청을 403으로 떨어뜨린다. 모든
   `<img>`에 `no-referrer`를 강제하고 onError 시 placeholder로 스왑.
@@ -313,6 +357,9 @@ URL:
   곧 사라질 row와 새 row가 섞인다. detail 페이지가
   `qc.setQueryData([..., placeId], prev => ({ ...prev, reviews: [] }))`로
   먼저 비우는 이유.
+- **방문일 정렬 정규화 누락 시 8월 > 12월** — `visitedAt`은 Naver 원문
+  `"25.8.3.일"` 같은 형태라 `localeCompare` 직빵으로 쓰면 월 1자리 vs
+  2자리에서 뒤집힌다. 항상 `visitedSortKey`를 거쳐야 한다.
 - **다중 슬롯 = 동시 다발 start** — 글로벌 zustand 스토어 덕에 UI는
   잡을 무제한 띄울 수 있고, 서버 큐가 동시성 캡을 넘는 제출을 흡수한다
   (상세는 [crawl](crawl.md)). UI 쪽 가드는 행 단위 `busy` 정도로 충분.
@@ -325,6 +372,16 @@ URL:
 - **SSE 인증** — `EventSource`가 커스텀 헤더를 못 보내기 때문에
   `useCrawlJobStream`은 토큰을 `?token=` 쿼리스트링으로 붙인다.
   서버 라우트도 이 형태를 받도록 맞춰져 있다(상세는 [crawl](crawl.md)).
+- **서명된 video URL 만료** — Naver의 akamaized 비디오 URL은 일정
+  TTL이 박힌 서명을 포함한다. detail 캐시에 머지된 `videos[].videoUrl`
+  은 시간이 지나면 403이 될 수 있어, 화면을 오래 띄워둔 뒤
+  `VideoPlayerModal`을 열면 재생이 실패할 수 있다. 새로고침으로 단순
+  복구 — 별도 refresh 로직은 없다.
+- **`VideoPlayerModal` body scroll lock** — 모달이 마운트되는 동안
+  `document.body.style.overflow = 'hidden'`이 박힌다. 컴포넌트가 정상
+  언마운트되지 않고 트리에서 쳐내지면 락이 남아 페이지가 스크롤
+  안 되는 상태로 멎을 수 있다. 현재 코드는 `useEffect` cleanup으로
+  원복하므로 정상 흐름에선 안전.
 - **logout 시 localStorage 정리** — `useAuthStore.subscribe`가
   스토어 변경을 localStorage로 미러링하므로, 로그아웃은 토큰을
   `null`로 되돌리기만 하면 자동으로 키가 지워진다.
@@ -342,6 +399,11 @@ URL:
   잡 하나만 뽑아 쓸 때, 매번 새 객체를 만들면 zustand 기본 reference
   equality가 깨져 무관한 잡 변경에도 리렌더가 일어난다. 현재 코드는
   `for ... return j`로 매칭 객체를 그대로 반환해 안정성을 유지.
+- **리스트 정렬은 클라이언트 측, SSE 구독은 원본 기준** —
+  `AdminRestaurantsPage`의 정렬 dropdown은 `rawItems`를 다시 정렬해
+  렌더만 바꾼다. `useRestaurantListSummaryEvents`는 정렬되지 않은
+  `rawItems.map(placeId)`를 받아야 정렬 변경 시 EventSource가 끊겼다
+  다시 붙는 일을 막는다.
 - **`window.confirm`은 AdminAiKeysPage에만 남아 있다** — 맛집 쪽은
   이미 인라인 confirm-delete로 마이그레이션됨. AI 키 삭제도 추후 같은
   패턴으로 옮기는 게 적절.

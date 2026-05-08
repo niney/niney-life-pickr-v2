@@ -1,6 +1,6 @@
 ---
 topic: shared
-last_compiled: 2026-05-07
+last_compiled: 2026-05-08
 sources_count: 31
 status: active
 aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared"]
@@ -16,7 +16,7 @@ aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared"]
 - 타입 안전한 fetch 래퍼와 도메인별 API 함수 (auth, picks, admin, crawl, restaurant, ai)
 - TanStack Query 훅 (서버 상태)
 - Zustand 스토어 (인증, 활성 크롤 잡)
-- 프로세스 전역 SSE 매니저 싱글톤 (요약 진행률 멀티플렉싱)
+- 프로세스 전역 SSE 매니저 싱글톤 (요약 진행률 + review 분석 멀티플렉싱)
 - 디자인 토큰·테마·`ThemeProvider`·CSS 변수 변환
 - 플랫폼 분기형 UI 프리미티브 (Button, Input, Stack, Text, Divider, ErrorBanner, Screen, SegmentedControl)
 - 공용 상수 (`APP_NAME`, React Query staleTime/gcTime)
@@ -42,7 +42,7 @@ packages/shared/src/
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
 │   ├── useAdmin.ts
 │   ├── useCrawl.ts         # useCrawlJobStream (EventSource reducer + persistedCount/lastBatch)
-│   ├── useRestaurant.ts    # list/byPlaceId/delete + summary SSE 구독 훅
+│   ├── useRestaurant.ts    # list/byPlaceId/delete + summary SSE 구독 훅 (분석 필드 머지)
 │   ├── summarySseManager.ts# 프로세스 전역 SSE 싱글톤 (멀티플렉싱)
 │   └── useAi.ts            # provider CRUD + complete/test/models
 ├── stores/
@@ -109,6 +109,7 @@ packages/shared/src/
 
 **SSE 매니저 (`hooks/summarySseManager.ts`)**
 - `summarySseManager.subscribe(placeId, { onSnapshot, onReview })` → `unsubscribe()` 함수 반환. 컴포넌트가 직접 부르기보다 위 두 훅을 통해 사용한다.
+- 이벤트 타입: `snapshot` (placeId 단위 카운트 갱신) + `review` (개별 리뷰 분석 결과 — text/model + sentiment/sentimentScore/satisfactionScore/menus/tips/keywords).
 
 **Zustand 스토어 (`stores/`)**
 - `useAuthStore`: `user`, `token`, `isGuest` + `setSession`, `setUser`, `enterGuest`, `clearSession`
@@ -167,7 +168,15 @@ Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백
 - `useProviders`는 `['ai', 'providers']`. `useUpdateProvider` / `useDeleteProvider`가 onSuccess에서 `qc.invalidateQueries({ queryKey: ['ai', 'providers'] })` 호출.
 - `useProviderModels(id, enabled)`는 `['ai', 'providers', id, 'models']` — `staleTime: 60_000`, `retry: false`로 베스트-에포트 fetch (실패해도 에러 토스트 없이 빈 결과). UI 자동완성용 datalist에만 쓰이고 사용자가 직접 모델 id 입력 가능.
 
-**SSE last-snapshot 캐시** (`summarySseManager.lastSnapshot`)는 매니저 내부 `Map<placeId, snapshot>`. 새 구독자가 붙는 즉시 동기적으로 마지막 snapshot을 replay해주므로 UI는 첫 progress tick을 기다리지 않고 곧장 렌더 가능. placeId의 마지막 구독자가 떨어지면 해당 키도 제거된다.
+**ReviewSummary 분석 필드 머지** (since 2026-05-08, [useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts))
+- `useRestaurantSummaryEvents`의 `onReview` 콜백이 detail 캐시(`['restaurant', placeId]`)에 inline 머지하는 review 객체에는 텍스트/모델 외 분석 필드가 포함된다:
+  - `sentiment` — `'positive' | 'negative' | 'neutral'`
+  - `sentimentScore` — number (서버 LLM 출력)
+  - `satisfactionScore` — number
+  - `menus`, `tips`, `keywords` — 문자열 배열
+- 직렬화는 friendly의 SSE `review` 이벤트(`RestaurantSummaryReviewEventType`)와 동일하며, `RestaurantDetailType.reviews[].summary` 모양으로 그대로 들어간다. 따라서 `useRestaurantByPlaceId` 캐시 컨슈머는 review가 도착하는 즉시 분석 필드도 사용 가능.
+
+**SSE last-snapshot 캐시** (`summarySseManager.lastSnapshot`)는 매니저 내부 `Map<placeId, snapshot>`. 새 구독자가 붙는 즉시 동기적으로 마지막 snapshot을 replay해주므로 UI는 첫 progress tick을 기다리지 않고 곧장 렌더 가능. placeId의 마지막 구독자가 떨어지면 해당 키도 제거된다. (※ review 이벤트는 replay되지 않음 — 매니저가 들고 있는 건 snapshot 한정.)
 
 **SSE 스트림 상태** (`useCrawlJobStream`)는 reducer로 관리하며 `seq`로 중복 이벤트를
 드롭하고, `done`/`error` 종단 이벤트에서 클라이언트가 직접 `EventSource.close()`를
@@ -183,6 +192,7 @@ Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백
 - **재연결 coalescing(microtask)** — React StrictMode 더블 인보케이션이나 한 tick 안의 다중 subscribe/unsubscribe가 매번 reconnect를 트리거하지 않도록 `queueMicrotask`로 모아 한 번만 reconnect. `connectGen` 카운터로 stale `buildSummaryEventsUrl()` resolve도 무시.
 - **last-snapshot replay** — 새 구독자가 붙는 즉시 매니저가 보유한 마지막 snapshot을 동기 콜백으로 흘려준다. 이전 폴링 훅과 시그니처 호환을 유지하면서 첫 페인트가 비어 보이지 않도록 함.
 - **List는 `setQueryData` 패치, Detail review는 inline merge** — summary 이벤트마다 리스트 페이지의 매칭 row 카운트만 갱신하고, review 이벤트마다 detail 캐시의 해당 review 한 건만 업데이트한다. 둘 다 invalidate를 쓰지 않아 detail GET(전체 리뷰 본문 페이로드)이 페이지 진입당 최대 1회로 억제됨.
+- **분석 필드도 review 이벤트에 합승** — `sentiment/satisfactionScore/menus/tips/keywords`를 별도 채널/엔드포인트로 빼지 않고 기존 `review` SSE 이벤트에 함께 실어 단일 setQueryData로 머지. 분석이 끝나야만 review가 발행되므로 부분 상태(텍스트만 있고 분석 없음)가 클라이언트에 잠깐 보이는 일이 없다.
 - **Multi-slot crawl store** — `jobs`가 jobId 키 맵이라서 다수 동시 잡을 표현 가능. list 페이지와 detail 페이지가 동일 store를 읽으므로 어느 쪽에서 띄운 잡이든 다른 쪽에서 즉시 보인다.
 - **Passive list-summary subscription** — `useRestaurantListSummaryEvents`는 state를 들지 않고 캐시 패치만 하는 부수효과 전용 훅. 사용자가 진행률 패널을 unmount해도 같은 페이지에 머무는 동안 row 뱃지는 라이브로 유지.
 - **zod 타입 기반 fetch 래퍼** — `apiFetch`는 `ErrorResponseSchema.safeParse`로 서버 에러 형태를 검증해 일관된 `ApiError`로 변환. 요청/응답 타입은 `@repo/api-contract`에서만 정의.
@@ -197,9 +207,10 @@ Bearer <token>` 헤더를 합성한다. 401 응답이면 `onUnauthorized` 콜백
 ## 7. Gotchas [coverage: high — 9 sources]
 
 - **`buildSummaryEventsUrl`은 string[] 시그니처** — 단일 placeId가 아니라 배열을 받는다. 엔드포인트도 `:placeId` path 기반이 아닌 `?placeId=A&placeId=B` 쿼리 기반(`Routes.Restaurant.summaryEvents`). 호출부는 항상 배열로 감싸 넘길 것.
-- **재연결 시 짧은 갭** — 구독 set이 변하면 `summarySseManager`가 기존 EventSource를 닫고 새 union으로 다시 연다. 사이의 짧은 비연결 구간 동안 발생한 이벤트는 손실되지만, 서버가 connect 시 초기 snapshot을 재방출하므로 카운트/상태는 다음 tick에 회복된다.
+- **재연결 시 짧은 갭** — 구독 set이 변하면 `summarySseManager`가 기존 EventSource를 닫고 새 union으로 다시 연다. 사이의 짧은 비연결 구간 동안 발생한 이벤트는 손실되지만, 서버가 connect 시 초기 snapshot을 재방출하므로 카운트/상태는 다음 tick에 회복된다. (단 review 이벤트는 replay되지 않음 — detail 페이지에서 새로 mount하면서 잠깐 끊긴 사이에 review가 푸시됐다면 그 분석은 다음 detail GET 전엔 못 본다.)
 - **EventSource는 헤더를 못 실음** — `summarySseManager`/`useCrawlJobStream` 모두 토큰을 URL `?token=<jwt>`에 담는다. URL/access log/Referer 노출 위험이 있으므로 단명 토큰이나 별도 stream-token 발급을 고려해야 한다 (현재는 일반 JWT 그대로).
 - **Detail 캐시 inline 패치 의존** — `useRestaurantSummaryEvents`는 review 이벤트가 도착할 때마다 detail 캐시를 직접 mutate한다. 만약 detail 페이지가 캐시 대신 새 GET을 강제로 트리거하면 매 review 마다 전체 리뷰 페이로드를 재다운로드하는 사고가 난다. detail GET은 페이지 진입당 1회만 발생하도록 유지.
+- **Review 머지는 `summary` 한 객체 전체를 통째로 교체** — `r.summary`를 spread하지 않고 `summary: { ...신규 필드 }`로 전부 새로 만든다(`startedAt`만 `r.summary?.startedAt ?? null`로 보존). 따라서 서버 SSE가 새 필드를 빠뜨려 보내면 클라이언트에서 그 필드는 undefined로 떨어진다 — `RestaurantSummaryReviewEventType`이 모든 분석 필드를 옵셔널로 둘지, 필수로 둘지가 곧 클라이언트 동작을 결정한다.
 - **List 캐시 형태 변경 주의** — snapshot 핸들러가 `prev.items[i].{summaryPending,summaryRunning,summaryDone,summaryFailed,totalReviews}`를 직접 덮는다. `RestaurantListResultType` 모양을 바꾸면 두 훅(`useRestaurantSummaryEvents`, `useRestaurantListSummaryEvents`)을 같이 맞춰야 한다.
 - **`useRestaurantListSummaryEvents`는 부수효과 전용** — 반환값이 없는 `void` 훅이다. 호출부가 반환값을 데이터로 쓰려고 하면 안 되며, 캐시 패치 외엔 상태가 없다. 진행률 텍스트가 필요한 곳에서는 `useRestaurantSummaryEvents`(상태 보유)를 따로 써야 함.
 - **활성 잡 스토어 cleanup은 호출부 책임** — `useActiveCrawlJobStore`는 자동으로 done/error 잡을 지우지 않는다. 호출부가 SSE 종단 이벤트나 unmount 시점에 `remove(jobId)`를 명시적으로 부를 것.

@@ -1,6 +1,6 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-05-07
+last_compiled: 2026-05-08
 topics_connected: [crawl, friendly, shared, web]
 status: active
 ---
@@ -17,6 +17,8 @@ status: active
 - **2026-05-07** in [[../topics/friendly]] (`restaurant.route.ts` `summaryEvents`): SSE `review` 이벤트가 done/failed 상태 + 요약 텍스트 + 모델명 + 에러 정보까지 한 페이로드에 담아 푸시. 클라가 `reviews[].summary`를 그 자리에서 머지. `snapshot` 이벤트는 progress 카운트 + recentDone 같이 보내 list/detail 캐시 양쪽을 패치할 수 있게 함. placeId 태그도 페이로드에 — 멀티플렉싱 endpoint에서 demux용.
 - **2026-05-07** in [[../topics/shared]] (`useRestaurantSummaryEvents` / `summarySseManager`): `onSnapshot`에서 `qc.setQueryData(['restaurant', 'list'], ...)`로 행의 카운트 패치 + `onReview`에서 `qc.setQueryData(['restaurant', placeId], ...)`로 detail 안 리뷰의 summary 필드 패치. `useCrawlJobStream`도 `lastPersistedBatch`를 reducer state에 노출해 호출자(`ActiveJobPanel`)가 같은 패턴 적용.
 - **2026-05-07** in [[../topics/web]] (`ActiveJobPanel.tsx`): `stream.lastPersistedBatch`를 `seen` Set로 dedupe한 뒤 detail 캐시에 prepend. `done` 시점에서야 list 캐시만 invalidate. 이전엔 visitor_batch 이벤트마다 `invalidateQueries(['restaurant', placeId])`를 쳐서 매 페이지마다 detail GET이 떠 페이지가 멎었음.
+- **2026-05-08** in [[../topics/crawl]] / [[../topics/api-contract]] (`crawl.service.ts`, `schemas/crawl.ts`): 새로 추가된 `VisitorReview.videos: VisitorReviewVideo[]`(포스터 + 서명된 mp4 url)도 같은 머지 채널을 그대로 탄다. `visitor_batch` SSE의 `persistedReviews`에 `videos`가 동봉되어 `setQueryData` 머지 시 클라가 별도 GET 없이 비디오 타일까지 그릴 수 있음. 페이로드 한 칸 늘리고 끝 — 머지 인프라는 손 안 댐.
+- **2026-05-08** in [[../topics/friendly]] / [[../topics/web]] (`summary.service.ts`, `summary-events-bus.ts`, `sections.tsx`): ReviewSummary 구조화 분석(sentiment / sentimentScore / satisfactionScore / menusJson / tipsJson / keywordsJson)도 SSE `review` 이벤트 페이로드에 그대로 실려와 `reviews[].summary.*`로 머지됨. FE 리뷰 카드의 감정 뱃지·만족도·메뉴 칩·팁 리스트가 detail GET 0회로 채워지고 갱신됨. 페이로드만 풍부해지고 머지 코드는 동일.
 
 ## What This Means
 

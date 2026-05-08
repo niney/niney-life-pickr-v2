@@ -1,6 +1,6 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-05-07
+last_compiled: 2026-05-08
 topics_connected: [ai, crawl, friendly, shared]
 status: active
 ---
@@ -18,6 +18,8 @@ status: active
 - **2026-05-07** in [[../topics/crawl]] (`crawl.service.ts` `runJob`): 같은 잡 내부에서도 같은 패턴 — `persistTail: Promise<void>` 체인. 어댑터의 `onVisitorBatch` 콜백이 `persistTail = persistTail.then(...)`로 다음 batch persist를 직렬 큐에 추가만 하고 await하지 않아 다음 페이지 클릭이 막히지 않음. 잡 끝에서 `await persistTail`로 모든 batch가 정착했음을 보장.
 - **2026-05-07** in [[../topics/friendly]] (`summary-events-bus.ts`): 모듈 싱글턴 fan-out 버스. placeId별 listener Set을 가지고 `progress` / `review` 신호를 fan-out. AI 게이트(adapter-cache)와 함께 summary 서비스의 핵심 동시성 인프라.
 - **2026-05-07** in [[../topics/shared]] (`summarySseManager.ts`): 클라이언트 사이드에 같은 패턴 적용. 프로세스 스코프 싱글턴이 EventSource 1개만 유지하면서 N개 컴포넌트의 placeId 구독을 refcount로 회계. microtask coalescing으로 구독 set 변경을 한 번의 reconnect으로 모음. HTTP/1.1 6-per-origin SSE 한계를 우회하는 방식.
+- **2026-05-08** in [[../topics/friendly]] (`summary.service.ts`): placeId별 run() Promise 체인 도입 — 크롤러가 페이지마다 띄우는 fire-and-forget run()들이 동시에 진행되며 각자 chunk를 'running'으로 마킹해 DB 상태가 의미를 잃던 문제를 해결. `persistTail`과 정확히 같은 모양 (모듈 스코프 Map<placeId, Promise<void>>가 다음 run을 앞 run의 .finally 뒤로 큐잉). 다른 placeId는 그대로 병렬 — slot 회계 단위가 placeId임을 명시.
+- **2026-05-08** in [[../topics/ai]] (`adapters/ollama-cloud.adapter.ts`): "too many concurrent requests" / 429 응답을 어댑터 내부에서 지수 백오프(200·400·800ms+jitter) 최대 3회로 자동 재시도. **슬롯을 잡은 채** 재시도하므로 외부 cap 게이트(`adapter-cache.maxConcurrent`)에서 보면 재시도 중이어도 한 슬롯만 점유 — 회복이 cap 회계를 절대 깨지 않음. "slot 보유 중 재시도"가 외부 게이트와 내부 회복을 분리하는 핵심.
 
 ## What This Means
 

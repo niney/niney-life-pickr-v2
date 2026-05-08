@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_compiled": "2026-05-07",
+  "last_compiled": "2026-05-08",
   "mode": "codebase",
   "topics": [
     "project-overview",
@@ -38,5 +38,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 178
+  "total_sources_scanned": 205
 }

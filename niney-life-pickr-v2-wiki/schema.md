@@ -1,7 +1,7 @@
 ---
 name: niney-life-pickr-v2
 mode: codebase
-last_updated: 2026-05-07
+last_updated: 2026-05-08
 
 ---
 
@@ -61,3 +61,4 @@ last_updated: 2026-05-07
 - **2026-05-07** — 초기 스키마 생성. 9개 토픽(project-overview, friendly, crawl, web, mobile, api-contract, shared, utils, config) + 3개 컨셉(zod-ssot-buildless, sse-token-auth, platform-ui-split)으로 시작. Codebase 모드, deep_scan=false. 사용자가 토픽/컨셉을 추가·이름 변경하려면 이 표를 직접 편집한 뒤 `/wiki-compile`을 다시 돌리면 된다.
 - **2026-05-07** — `ai` 토픽 추가 (Ollama Cloud 통합 + 어드민 키/테스트 UI 도입과 함께). `workspace-package-resolution` 컨셉 추가 — AI 모듈 작업 중 `Routes.Ai` namespace re-export 우회·`vitest.config` extensionAlias·workspace symlink 깨짐을 정리하면서 cross-cutting 함정으로 식별됨. `zod-ssot-buildless`의 연결 토픽에 `ai` 추가 (같은 SSOT 패턴이 신규 도메인에서도 그대로 적용됨).
 - **2026-05-07** — 맛집 도메인 (DB 영속화 + AI 요약 + 다중 크롤 + SSE 멀티플렉싱) 통합으로 `crawl`/`friendly`/`shared`/`web`/`api-contract` 5개 토픽 갱신. 신규 컨셉 2개: `stream-driven-cache-merge` (SSE 페이로드 직접 머지로 detail GET 회피), `in-memory-singleton-gates` (Redis 없이 모듈 싱글턴 + FIFO로 cap·순서·통합 모두 처리). `sse-token-auth`에 멀티플렉싱 `summaryEvents` instance 추가.
+- **2026-05-08** — 미디어/요약 강화 (썸네일 프록시·동영상 분리·구조화 분석·재시도/백오프) 통합으로 `crawl`/`friendly`/`ai`/`api-contract`/`web`/`shared`/`utils` 7개 토픽 갱신. 신규 토픽·컨셉 없음 (기존 구조에 자연스럽게 흡수). 컨셉 2개에 신규 인스턴스 추가: `stream-driven-cache-merge`에 `VisitorReview.videos`·요약 분석 필드(SSE 페이로드 확장만으로 머지 인프라는 동일) / `in-memory-singleton-gates`에 placeId별 summary run 직렬화·Ollama 429 슬롯-보유 백오프(외부 게이트와 내부 회복 분리). `friendly`에 신규 media 모듈 (`/api/v1/media/thumbnail` Naver CDN 호스트 allowlist + sharp + 디스크 캐시) 흡수. `summary` 모듈은 활동량이 크지만 아직 friendly 내부 모듈로 유지 — 별도 토픽 분리는 다음 라운드에서 재평가.
