@@ -5,6 +5,7 @@ import type {
   RestaurantSummaryProgressType,
   VisitorReviewWithSummaryType,
 } from '@repo/api-contract';
+import { reviewThumbnailUrl } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 
 // Small icon + label + optional trailing meta. Used as a header inside flat
@@ -98,6 +99,28 @@ export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) =>
         >
           {expanded ? '접기' : '더 보기'}
         </button>
+      )}
+      {r.imageUrls.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {r.imageUrls.map((u) => (
+            <li key={u}>
+              <a
+                href={u}
+                target="_blank"
+                rel="noreferrer"
+                className="block"
+                aria-label="원본 이미지 열기"
+              >
+                <img
+                  src={reviewThumbnailUrl(u, 200)}
+                  alt=""
+                  loading="lazy"
+                  className="size-16 rounded object-cover transition-opacity hover:opacity-80"
+                />
+              </a>
+            </li>
+          ))}
+        </ul>
       )}
       <ReviewSummaryBlock r={r} />
     </li>

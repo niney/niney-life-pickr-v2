@@ -23,6 +23,13 @@ export const Admin = {
   setUserRole: (id: string) => `${API_PREFIX}/admin/users/${id}/role`,
 } as const;
 
+export const Media = {
+  // Proxies a Naver-hosted image through friendly, returning a JPEG thumbnail.
+  // Public (no auth) — review images themselves are public on Naver and we
+  // need plain <img> tags to load them without browser-side auth handling.
+  thumbnail: `${API_PREFIX}/media/thumbnail`,
+} as const;
+
 export const Crawl = {
   naverPlace: `${API_PREFIX}/admin/crawl/naver-place`,
   jobs: `${API_PREFIX}/admin/crawl/jobs`,
