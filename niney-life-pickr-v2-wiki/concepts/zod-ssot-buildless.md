@@ -1,7 +1,7 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
 last_compiled: 2026-05-09
-topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, project-overview]
+topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview]
 status: active
 ---
 
@@ -21,6 +21,7 @@ status: active
 - **2026-05-07** in [[../topics/project-overview]]: CLAUDE.md 규칙 "공유 스키마는 `@repo/api-contract`에 추가" + 순환 의존 금지 (shared → api-contract OK, 반대 ❌).
 - **2026-05-07** in [[../topics/ai]]: AI 도메인이 그대로 같은 패턴을 따른다. `schemas/ai.ts`에 `AiCompleteInput`/`LlmProviderConfig`/`UpdateLlmProviderInput`/`TestLlmProviderResult` 등 정의 → friendly의 `ai.route.ts`가 동일 스키마로 `body`/`response` 검증 → shared의 `aiApi`/`useAi*` 훅이 `z.infer`로 타입 도출 → web의 `AdminAiKeysPage`/`AdminAiTestPage`가 같은 타입으로 폼/결과 렌더. 한 곳 수정 → 4개 컨슈머가 컴파일 타임에 동기화되는 약속이 신규 도메인에서도 깨지지 않음.
 - **2026-05-09** in [[../topics/menu-grouping]] / [[../topics/analytics]]: 두 신규 스키마 모듈 (`packages/api-contract/src/schemas/menu-grouping.ts`, `analytics.ts`) 이 같은 패턴으로 추가. friendly 가 `fastify-type-provider-zod` 로 자동 검증 + OpenAPI 생성, shared 의 `apiFetch` 함수가 동일 zod 타입을 type-only import, web/mobile 컴포넌트가 `Type` suffix `z.infer` 결과를 직접 사용. 신규 진입 두 가지: (1) **재귀 스키마 — 같은 모듈에서 첫 `z.lazy` 사용**. `CategoryTreeNode` 트리 구조에 대해 type alias 를 먼저 선언한 뒤 `z.ZodType<CategoryTreeNodeType>` 로 lazy 정의 — TS 추론이 재귀 깊이를 못 따라가서 명시적 annotation 필요. (2) **잡 SSE event payload 별도 스키마** — `MenuGroupingJobItemEvent`, `GlobalMergeJobChunkEvent`, ... 를 discriminated union 으로 묶지 않고 단순함을 우선해 개별 스키마로 노출.
+- **2026-05-09** in [[../topics/map]] / [[../topics/api-contract]] / [[../topics/friendly]] / [[../topics/shared]] / [[../topics/web]]: vworld 지도 도메인 + 공개 맛집 페어가 같은 SSOT 모델로 흡수. `schemas/settings-map.ts` 에 `MapProviderConfig` / `UpdateMapProviderInput` / `MapProviderSecret` / `MapProviderPublicConfig` 4종이 한 곳에 정의되고, friendly 의 `map.route.ts` 가 검증 + OpenAPI 자동 생성, shared 의 `settingsMapApi` / `useMapProviders` / `useUpdateMapProvider` / `useMapProviderSecret` / `useMapPublicConfig` 가 `z.infer` 로 타입 도출, web 의 `AdminMapKeysPage` / `PublicRestaurantsMap` 이 같은 타입으로 폼 / 응답 처리. 그리고 공개 맛집 페어 — `RestaurantPublicListQuery` / `RestaurantPublicListItem` / `RestaurantPublicListResult` / `PublicReviewAnalysis` / `PublicVisitorReview` / `RestaurantPublicDetail` 6종이 어드민 페어 옆에 `schemas/restaurant.ts` 한 모듈에 추가되어 한 번 변경에 컨슈머 4-5개가 컴파일 타임 동기화. 새 도메인이 늘어도 보일러플레이트가 증가하지 않는다는 약속이 두 라운드 연속 깨지지 않음.
 
 ## What This Means
 
@@ -46,3 +47,4 @@ status: active
 - [[../topics/project-overview]]
 - [[../topics/menu-grouping]]
 - [[../topics/analytics]]
+- [[../topics/map]]

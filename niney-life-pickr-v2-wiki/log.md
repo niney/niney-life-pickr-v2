@@ -1,5 +1,35 @@
 # Wiki Compile Log
 
+## 2026-05-09 (6th compile)
+
+**Topics updated:** friendly, api-contract, shared, web, project-overview
+**New topics:** map
+**New concepts:** public-admin-route-split
+**Concepts updated:**
+- `zod-ssot-buildless` — `topics_connected` 에 `map` 추가. 새 인스턴스 한 줄 추가 — `schemas/settings-map.ts` 4종 + 공개 맛집 페어 6종 (`RestaurantPublicListQuery/Item/Result`, `PublicReviewAnalysis`, `PublicVisitorReview`, `RestaurantPublicDetail`) 이 같은 SSOT 모델로 흡수, 신규 토픽이 늘어도 컨슈머 4-5개가 컴파일 타임 동기화. 두 라운드 연속 깨지지 않음.
+
+**Sources scanned:** ~270 (직전 245 + apps/web public components 6개 + apps/web admin settings 2개 + ImgWithFallback + lib/vworld + 신규 친구 settings 모듈 3개 + api-contract 신규 6 zod + shared 신규 4훅 + Prisma migration 1개 + index.html + tailwind.css)
+**Sources changed:** ~45 (커밋 8e62270 · 129e696 · 966979c · d1ca1df · ffd27cb · f83fe10 · 04af127 · 974de88)
+
+**Highlights:**
+- **공개 사용자 페이지 도입** — 이전엔 어드민 위주 SPA + 루트 랭킹 페이지 정도였지만, 이제 본격 공개 영역 확장: `/restaurants` 풀 뷰포트 (xl+ 3-column 목록/상세/지도, xl- 토글) + 5탭 상세 패널 (홈/메뉴/리뷰/사진/정보) + 다중 마커 지도 + URL state 동기화 (`?q=&category=&sort=&bbox=&placeId=`).
+- **신규 토픽 `map`** — vworld JS SDK 거부, OpenLayers (`ol@^10.7.0`) + WMTS XYZ 타일 직접. 도메인 화이트리스트 부담 회피. `MapProviderConfig` DB-backed 키 (env fallback 없음 — vworld 키는 1:1 운영자 자원). `MapCanvas` (저레벨, 다중 마커 + viewport 이벤트 + flyTo/fitToMarkers imperative API) + `VWorldMap` (어드민 단일 마커 thin wrapper) + `PublicRestaurantsMap` (공개 다중 마커 + "이 지역에서 재검색"). 어드민 `/admin/settings/map` 등록 UI + 공개 페이지가 같은 키 사용 (admin secret 과 보안 등급 동등 — WMTS 키는 클라사이드 자원).
+- **신규 컨셉 `public-admin-route-split`** — 공개/어드민 같은 데이터에 가드만 토글하지 않고 라우트·스키마·훅을 페어로 분리. `Routes.Restaurant.publicList` ↔ `Routes.Restaurant.list`, `RestaurantPublicListItem` ↔ `RestaurantListItem`, `useRestaurantsPublic` ↔ `useRestaurantList`. 어드민 회귀 위험 0, 운영 메타 (`status`/`errorCode`/`model`) 의도적 제거, 캐싱 정책 분리. 5 토픽에 일관 등장 (friendly + api-contract + shared + web + map + project-overview).
+- **friendly settings 모듈 신규** — `MapSettingsService` (LlmProviderConfig 패턴이지만 모델/동시성/env fallback 없음). admin 4 라우트 + 공개 1 라우트 (`/api/v1/settings/map/public`). 9 tests.
+- **friendly restaurant 공개 라우트 3개** — `getPublicList` (snapshotJson 메모리 파싱 → bbox 필터 → 그 이후 ids 만 분석 집계), `getPublicDetail` (done 행만 평탄화한 `PublicReviewAnalysis`, 운영 메타 제거), `getInsights` (가드만 빠짐). 11 새 테스트.
+- **공개 zod 페어 6종** — `RestaurantPublicListQuery/Item/Result`, `PublicReviewAnalysis`, `PublicVisitorReview`, `RestaurantPublicDetail`. bbox 는 string + regex (4개 숫자 콤마 구분 — query string 친화). mixed sentiment 카운트 분포 4범주 → 3범주 (라이트한 UI 표면).
+- **공개 훅 4개** — `useRestaurantsPublic` (placeholderData prev, staleTime 30s), `useRestaurantPublic`, `useRestaurantPublicInsights`, `useMapPublicConfig` (404 OK + retry: false + staleTime Infinity).
+- **5탭 상세 패널** — `apps/web/src/components/restaurant/detail/` 디렉토리. root + HomeTab + MenuTab + ReviewsTab + PhotosTab + InfoTab + Lightbox + shared. 데이터 fetch 1회, 탭 전환은 컨텐츠만. **placeId 변경 시 자동 'home' 탭 reset**. 명명 정리 라운드 — 처음 단일 파일이었다가 `panel/` 분해, 다시 `detail/` 로 명명 정리 ("목록 패널" 좌측 vs "상세 패널" 가운데 구분 명료화).
+- **`ImgWithFallback` 공용화** — 어드민 로컬 → `~/components/`. `referrerPolicy="no-referrer"` (네이버 CDN hotlink 차단 회피) + onError fallback + src 변경 시 failed 자동 reset (캐러셀 edge case).
+- **Pretendard + 텍스트 시프트** — Pretendard Variable 동적 서브셋 jsDelivr CDN, `font-pretendard` 유틸 PublicLayout 한정. Tailwind v4 `@theme inline` 의 `--text-*` 변수를 한 단계 시프트 (12→13/14→15/16→17/18→19/20→22/24→26/30→32) — spacing/icon 그대로, 사이트 전체 본문 가독성 ↑.
+- **어드민 `/admin/settings` 통합** — 옛 `/admin/ai-keys` → `/admin/settings/ai-keys` 자동 redirect (북마크 호환). NavLink 탭 (AI 키 / 지도). 사이드바 "AI 키" → "설정". `AdminMapKeysPage` 신규 — provider 카드 + 연결 테스트 (probeVworldKey).
+- **어드민 식당 상세 vworld 사이드바** — xl+ 우측 sticky 위치 카드 + Maximize2 → Radix Dialog 우측 슬라이드오버 풀 높이 지도 (별도 VWorldMap 두 인스턴스, `setTarget` 라이프사이클 부담 회피).
+- **Prisma 신규 테이블 `MapProviderConfig`** + 마이그레이션 `20260508173216_add_map_provider_configs`.
+
+**Suggested for next round:** 마커 클러스터링 (식당 수 100+ 대비), 거리순 정렬 (사용자 위치 옵션), 공개 list q LIKE 인덱싱 시점 (식당 1k+), 공개 사용자 인증 도입 시 (즐겨찾기/평가) 라우트 페어 정책 재평가.
+
+---
+
 ## 2026-05-09 (5th compile)
 
 **Topics updated:** friendly, ai, api-contract, web, mobile, shared, project-overview

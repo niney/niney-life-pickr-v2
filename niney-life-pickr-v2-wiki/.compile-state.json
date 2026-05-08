@@ -9,6 +9,7 @@
     "ai",
     "menu-grouping",
     "analytics",
+    "map",
     "web",
     "mobile",
     "api-contract",
@@ -18,6 +19,7 @@
   ],
   "concepts": [
     "zod-ssot-buildless",
+    "public-admin-route-split",
     "sse-token-auth",
     "platform-ui-split",
     "workspace-package-resolution",
@@ -42,5 +44,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 245
+  "total_sources_scanned": 270
 }
