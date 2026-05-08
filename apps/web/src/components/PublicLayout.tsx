@@ -6,7 +6,7 @@ import { PublicTopBar } from './PublicTopBar';
 export const PublicLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground font-pretendard">
       <PublicTopBar onMenuClick={() => setSidebarOpen(true)} />
       <PublicSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1">
