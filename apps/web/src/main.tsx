@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import {
   applyCssVars,
   configureApi,
+  darkTheme,
   lightTheme,
   QUERY_GC_TIME,
   QUERY_STALE_TIME,
@@ -12,6 +13,7 @@ import {
   useAuthStore,
 } from '@repo/shared';
 import { App } from './App';
+import { useThemeStore } from './stores/theme';
 import './styles/tailwind.css';
 import './styles/global.css';
 
@@ -39,7 +41,12 @@ configureApi({
   onUnauthorized: () => useAuthStore.getState().clearSession(),
 });
 
-applyCssVars(lightTheme, document.documentElement);
+const applyMode = (mode: 'light' | 'dark') => {
+  document.documentElement.classList.toggle('dark', mode === 'dark');
+  applyCssVars(mode === 'dark' ? darkTheme : lightTheme, document.documentElement);
+};
+applyMode(useThemeStore.getState().mode);
+useThemeStore.subscribe((state) => applyMode(state.mode));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,14 +59,21 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ThemeProvider mode="light">
+const ThemedApp = () => {
+  const mode = useThemeStore((s) => s.mode);
+  return (
+    <ThemeProvider mode={mode}>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <App />
         </BrowserRouter>
       </QueryClientProvider>
     </ThemeProvider>
+  );
+};
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ThemedApp />
   </StrictMode>,
 );

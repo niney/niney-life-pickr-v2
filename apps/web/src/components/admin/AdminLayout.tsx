@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { Beaker, Home, KeyRound, Shield, Sparkles, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { cn } from '~/lib/utils';
+import { AdminTopBar } from './AdminTopBar';
 
 interface NavItem {
   to: string;
@@ -64,8 +65,11 @@ export const AdminLayout = () => (
       </div>
     </aside>
 
-    <main className="flex-1 overflow-x-hidden">
-      <Outlet />
+    <main className="flex flex-1 flex-col overflow-x-hidden">
+      <AdminTopBar />
+      <div className="flex-1">
+        <Outlet />
+      </div>
     </main>
   </div>
 );
