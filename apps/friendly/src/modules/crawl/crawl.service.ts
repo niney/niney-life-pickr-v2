@@ -267,6 +267,7 @@ export class CrawlService {
               body: r.body,
               visitedAt: r.visitedAt,
               imageUrls: r.imageUrls,
+              videos: r.videos ?? [],
               fetchedAt: r.fetchedAt,
             })),
           });

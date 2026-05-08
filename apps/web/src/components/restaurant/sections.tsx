@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { Loader2, Play, Sparkles, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type {
   RestaurantSummaryProgressType,
   VisitorReviewWithSummaryType,
@@ -82,7 +82,9 @@ const summaryEchoesBody = (body: string, summary: string | null): boolean => {
 
 export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) => {
   const [expanded, setExpanded] = useState(false);
+  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
   const isLong = r.body.length > 140;
+  const hasMedia = r.imageUrls.length > 0 || r.videos.length > 0;
   return (
     <li className="space-y-2 py-4 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -100,8 +102,28 @@ export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) =>
           {expanded ? '접기' : '더 보기'}
         </button>
       )}
-      {r.imageUrls.length > 0 && (
+      {hasMedia && (
         <ul className="flex flex-wrap gap-1.5">
+          {r.videos.map((v) => (
+            <li key={v.videoUrl}>
+              <button
+                type="button"
+                onClick={() => setPlayingVideoUrl(v.videoUrl)}
+                className="group relative block size-16 overflow-hidden rounded"
+                aria-label="동영상 재생"
+              >
+                <img
+                  src={reviewThumbnailUrl(v.posterUrl, 200)}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-cover transition-opacity group-hover:opacity-80"
+                />
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30">
+                  <Play className="size-5 fill-white text-white drop-shadow" />
+                </span>
+              </button>
+            </li>
+          ))}
           {r.imageUrls.map((u) => (
             <li key={u}>
               <a
@@ -122,8 +144,57 @@ export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) =>
           ))}
         </ul>
       )}
+      {playingVideoUrl && (
+        <VideoPlayerModal url={playingVideoUrl} onClose={() => setPlayingVideoUrl(null)} />
+      )}
       <ReviewSummaryBlock r={r} />
     </li>
+  );
+};
+
+// Lightweight modal — no portal, no focus trap. The video element is the
+// only interactive child; ESC closes. Backdrop click also closes.
+const VideoPlayerModal = ({ url, onClose }: { url: string; onClose: () => void }) => {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-3xl"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="absolute -top-10 right-0 text-white/80 hover:text-white"
+        >
+          <X className="size-6" />
+        </button>
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video
+          src={url}
+          controls
+          autoPlay
+          className="max-h-[80vh] w-full rounded bg-black"
+        />
+      </div>
+    </div>
   );
 };
 

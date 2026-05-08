@@ -53,12 +53,22 @@ export const BlogReview = z.object({
 });
 export type BlogReviewType = z.infer<typeof BlogReview>;
 
+// Video media on a visitor review. `posterUrl` is a Naver-hosted JPEG
+// (video-phinf.pstatic.net) suitable for the thumbnail proxy. `videoUrl`
+// is a signed Akamai .mp4 — short-lived and CDN-direct, NOT proxied.
+export const VisitorReviewVideo = z.object({
+  posterUrl: z.string().url(),
+  videoUrl: z.string().url(),
+});
+export type VisitorReviewVideoType = z.infer<typeof VisitorReviewVideo>;
+
 export const VisitorReview = z.object({
   authorName: z.string().nullable(),
   rating: z.number().nullable(),
   body: z.string(),
   visitedAt: z.string().nullable(),
   imageUrls: z.array(z.string().url()),
+  videos: z.array(VisitorReviewVideo).default([]),
   // Naver review id when present in the source (Apollo cache or wire). Used
   // by the persistence layer for dedup; FE clients can ignore it. Optional
   // because not every review entry carries one.

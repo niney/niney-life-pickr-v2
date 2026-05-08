@@ -95,6 +95,7 @@ model VisitorReview {
   body          String
   visitedAt     String?
   imageUrlsJson String
+  videosJson    String   @default("[]")
   contentHash   String
   fetchedAt     DateTime @default(now())
 

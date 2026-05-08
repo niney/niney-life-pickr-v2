@@ -17,6 +17,7 @@ const ALLOWED_HOSTS = new Set([
   'review-phinf.pstatic.net',
   'ldb-phinf.pstatic.net',
   'search.pstatic.net',
+  'video-phinf.pstatic.net',
 ]);
 
 const FETCH_TIMEOUT_MS = 5_000;

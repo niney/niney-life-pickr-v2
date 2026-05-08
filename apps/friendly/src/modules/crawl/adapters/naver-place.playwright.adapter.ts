@@ -12,6 +12,7 @@ import type {
   ReviewStatsType,
   ReviewThemeKeywordType,
   VisitorReviewType,
+  VisitorReviewVideoType,
 } from '@repo/api-contract';
 
 // Hooks let the caller observe progress without coupling to a transport
@@ -236,6 +237,11 @@ const collectImagesFromContainer = (
   // splice in adjacent BlogReview/FsasReview entries whose `url` fields are
   // post URLs, not image URLs.
   if (isReviewTypename(resolved)) return;
+  // Skip VisitorReviewMedia entries with type === 'video' — those carry a
+  // poster JPEG under `thumbnail` but they belong in the structured `videos`
+  // list, not in `imageUrls`. The adapter surfaces them via
+  // `collectVisitorReviewVideos` instead.
+  if (resolved['type'] === 'video') return;
 
   const u =
     (typeof resolved['origin'] === 'string' && resolved['origin']) ||
@@ -664,7 +670,53 @@ const collectVisitorReviewImageUrls = (
   if (out.length === 0 && typeof obj['thumbnail'] === 'string') {
     collectImagesFromContainer(state, obj['thumbnail'], out, seen);
   }
-  return out.slice(0, 6);
+  return out;
+};
+
+// Walk the review's media[] looking for VisitorReviewMedia entries with
+// type === 'video'. Each carries a poster JPEG (`thumbnail`, on
+// video-phinf.pstatic.net — proxied via /media/thumbnail) and a signed
+// .mp4 (`trailerUrl`, on akamaized.net — short-lived, played direct from
+// the FE without proxying through us).
+const collectVisitorReviewVideos = (
+  state: Record<string, unknown> | null,
+  obj: Record<string, unknown>,
+): VisitorReviewVideoType[] => {
+  const out: VisitorReviewVideoType[] = [];
+  const seen = new Set<string>();
+  const visit = (raw: unknown): void => {
+    const node = deref(state, raw);
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    if (!isObject(node)) return;
+    if (isReviewTypename(node)) return;
+    if (node['type'] === 'video') {
+      const posterUrl =
+        (typeof node['thumbnail'] === 'string' && node['thumbnail']) || null;
+      const videoUrl =
+        (typeof node['trailerUrl'] === 'string' && node['trailerUrl']) || null;
+      if (
+        posterUrl &&
+        videoUrl &&
+        /^https?:\/\//.test(posterUrl) &&
+        /^https?:\/\//.test(videoUrl) &&
+        !seen.has(videoUrl)
+      ) {
+        seen.add(videoUrl);
+        out.push({ posterUrl, videoUrl });
+      }
+      return;
+    }
+    for (const v of Object.values(node)) {
+      if (Array.isArray(v) || isRef(v) || isObject(v)) visit(v);
+    }
+  };
+  for (const key of ['media', 'reviewMedia', 'mediaList']) {
+    if (key in obj) visit(obj[key]);
+  }
+  return out;
 };
 
 const buildVisitorReview = (
@@ -691,6 +743,7 @@ const buildVisitorReview = (
     body: cleanText(body).slice(0, 500),
     visitedAt: pickString(obj, 'visited', 'visitedAt', 'visitDate', 'createdAt', 'created'),
     imageUrls: collectVisitorReviewImageUrls(state, obj),
+    videos: collectVisitorReviewVideos(state, obj),
   };
 };
 
@@ -770,6 +823,12 @@ const extractVisitorReviewsFromState = (
 // holds the items. Naver's SPA does NOT writeQuery new pages back into Apollo
 // cache after "더보기", so __APOLLO_STATE__ stays at the initial-render set;
 // pagination pages live only in wire responses, which this parser walks.
+// Exported for tests. Same shape used by both pagination wire bodies and
+// the after-bodies fixture in __debug__.
+export const __test_parseVisitorReviewsFromCaptured = (
+  captured: unknown[],
+): VisitorReviewType[] => parseVisitorReviewsFromCaptured(captured);
+
 const parseVisitorReviewsFromCaptured = (
   captured: unknown[],
   alreadySeenIds?: Set<string>,

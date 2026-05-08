@@ -86,6 +86,7 @@ export const ActiveJobPanel = ({
               body: r.body,
               visitedAt: r.visitedAt,
               imageUrls: r.imageUrls,
+              videos: r.videos,
               id: r.id,
               externalId: r.externalId,
               fetchedAt: r.fetchedAt,
