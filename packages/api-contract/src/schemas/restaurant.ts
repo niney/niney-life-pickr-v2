@@ -198,6 +198,46 @@ export const RestaurantInsights = z.object({
 });
 export type RestaurantInsightsType = z.infer<typeof RestaurantInsights>;
 
+// 공개 식당 랭킹 — 비로그인/게스트도 볼 수 있는 루트 페이지용. 정렬은 긍정/부정
+// 비율, 중립 포함/제외 토글로 분모를 바꾼다. 표본 부족 식당이 1·2건 멘션으로
+// 1위를 잡지 못하게 minMentions 컷오프(기본 5).
+export const RestaurantRankingQuery = z.object({
+  sort: z.enum(['positive', 'negative']).default('positive'),
+  // true = 분모에 neutral 제외 → positive/(positive+negative)
+  // false = 분모에 neutral 포함 → positive/(positive+negative+neutral)
+  excludeNeutral: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .default(false)
+    .transform((v) => (typeof v === 'string' ? v === 'true' : v)),
+  minMentions: z.coerce.number().int().min(0).max(1000).default(5),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type RestaurantRankingQueryType = z.infer<typeof RestaurantRankingQuery>;
+
+export const RestaurantRankingItem = z.object({
+  rank: z.number().int(),
+  placeId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  positiveCount: z.number().int(),
+  negativeCount: z.number().int(),
+  neutralCount: z.number().int(),
+  totalMentions: z.number().int(),
+  // 정렬 점수 (0~1). sort=positive → positive 비율, sort=negative → negative 비율.
+  score: z.number(),
+});
+export type RestaurantRankingItemType = z.infer<typeof RestaurantRankingItem>;
+
+export const RestaurantRankingResult = z.object({
+  items: z.array(RestaurantRankingItem),
+  total: z.number().int(),
+  sort: z.enum(['positive', 'negative']),
+  excludeNeutral: z.boolean(),
+  minMentions: z.number().int(),
+});
+export type RestaurantRankingResultType = z.infer<typeof RestaurantRankingResult>;
+
 // SSE per-review payload pushed by the summary-events stream when a single
 // row's AI summary finishes (success or failure). The client merges this
 // directly into the restaurant detail cache, so a fresh summary appears in

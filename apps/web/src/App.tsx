@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
 import { AdminLayout } from './components/admin/AdminLayout';
+import { PublicLayout } from './components/PublicLayout';
 import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
 import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
 import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
@@ -10,14 +11,6 @@ import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailP
 import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
-import { PicksPage } from './routes/PicksPage';
-
-const RequireSession = ({ children }: { children: React.ReactNode }) => {
-  const token = useAuthStore((s) => s.token);
-  const isGuest = useAuthStore((s) => s.isGuest);
-  if (!token && !isGuest) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-};
 
 const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((s) => s.token);
@@ -38,16 +31,10 @@ export const App = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<HomePage />} />
+      </Route>
       <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/picks"
-        element={
-          <RequireSession>
-            <PicksPage />
-          </RequireSession>
-        }
-      />
       <Route
         path="/admin"
         element={

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   RestaurantDetailType,
   RestaurantListResultType,
+  RestaurantRankingQueryType,
   RestaurantSummaryProgressType,
 } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
@@ -19,6 +20,25 @@ export const useRestaurantList = () =>
   useQuery({
     queryKey: ['restaurant', 'list'],
     queryFn: restaurantApi.list,
+  });
+
+// 공개 랭킹 — 비로그인/게스트도 호출. 토글 변경 시 깜빡임 방지를 위해
+// placeholderData 로 이전 결과 유지. 서버 60s TTL 과 정렬을 맞춰 staleTime
+// 30s — 토글이 자주 바뀌어도 분당 두 번 정도만 fetch.
+export const useRestaurantRanking = (query: Partial<RestaurantRankingQueryType> = {}) =>
+  useQuery({
+    queryKey: [
+      'restaurant',
+      'ranking',
+      query.sort ?? 'positive',
+      !!query.excludeNeutral,
+      query.minMentions ?? 5,
+      query.limit ?? 20,
+      query.offset ?? 0,
+    ],
+    queryFn: () => restaurantApi.ranking(query),
+    placeholderData: (prev) => prev,
+    staleTime: 30_000,
   });
 
 // `placeId` may be null when the user hasn't started a crawl yet — keeps

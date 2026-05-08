@@ -35,13 +35,13 @@ export const LoginPage = () => {
   const submit = () => {
     mutation.mutate(
       { email, password },
-      { onSuccess: () => navigate('/picks') },
+      { onSuccess: () => navigate('/') },
     );
   };
 
   const onGuest = () => {
     enterGuest();
-    navigate('/picks');
+    navigate('/');
   };
 
   return (

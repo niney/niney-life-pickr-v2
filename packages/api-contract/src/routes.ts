@@ -38,6 +38,8 @@ export const Crawl = {
 } as const;
 
 export const Restaurant = {
+  // 공개 식당 랭킹 — 비로그인/게스트도 접근. 긍정/부정 비율 정렬, 중립 토글.
+  ranking: `${API_PREFIX}/restaurants/ranking`,
   list: `${API_PREFIX}/admin/restaurants`,
   byPlaceId: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,

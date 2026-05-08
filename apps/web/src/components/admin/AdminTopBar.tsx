@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { ThemeToggle } from './ThemeToggle';
+import { ThemeToggle } from '~/components/ThemeToggle';
 
 interface TitleRule {
   match: (pathname: string) => boolean;

@@ -10,6 +10,8 @@ import {
   RestaurantDetail,
   RestaurantInsights,
   RestaurantListResult,
+  RestaurantRankingQuery,
+  RestaurantRankingResult,
   RestaurantReanalyzeResult,
   RestaurantSmartPickInput,
   RestaurantSmartPickResult,
@@ -39,6 +41,16 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
   const grouping = new MenuGroupingService(app.prisma, aiConfig, { logger: app.log });
   const typed = app.withTypeProvider<ZodTypeProvider>();
+
+  // 공개 식당 랭킹 — 인증 불필요. 루트 페이지에서 게스트도 본다.
+  typed.get(Routes.Restaurant.ranking, {
+    schema: {
+      tags: ['public'],
+      querystring: RestaurantRankingQuery,
+      response: { 200: RestaurantRankingResult },
+    },
+    handler: async (req) => service.getRanking(req.query),
+  });
 
   typed.get(Routes.Restaurant.list, {
     onRequest: [app.authenticate, app.requireAdmin],

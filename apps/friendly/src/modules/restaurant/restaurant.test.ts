@@ -11,7 +11,12 @@ import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import restaurantRoutes from './restaurant.route.js';
-import { contentHashOf, RestaurantService, type RawReview } from './restaurant.service.js';
+import {
+  contentHashOf,
+  invalidateRankingCache,
+  RestaurantService,
+  type RawReview,
+} from './restaurant.service.js';
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -294,5 +299,171 @@ describe('Restaurant routes — auth guards', () => {
     expect(body.deletedReviewCount).toBe(0);
     const gone = await app.prisma.restaurant.findUnique({ where: { placeId: data.placeId } });
     expect(gone).toBeNull();
+  });
+});
+
+describe('GET /restaurants/ranking — public', () => {
+  let app: FastifyInstance;
+
+  const RANK_PREFIX = 'tr-rank-';
+  const rankPlaceId = (s: string) => `${RANK_PREFIX}${s}-${Date.now().toString(36)}`;
+
+  // 한 식당에 (positive, negative, neutral) 카운트만큼 done 요약 행을 만든다.
+  const seedRestaurantWithSentiments = async (
+    name: string,
+    counts: { positive: number; negative: number; neutral: number },
+  ): Promise<string> => {
+    const placeId = rankPlaceId(name);
+    const r = await app.prisma.restaurant.create({
+      data: {
+        placeId,
+        name,
+        category: '한식',
+        rawSourceUrl: 'https://m.place.naver.com/x',
+        snapshotJson: '{}',
+      },
+      select: { id: true },
+    });
+    const all: Array<'positive' | 'negative' | 'neutral'> = [
+      ...Array<'positive'>(counts.positive).fill('positive'),
+      ...Array<'negative'>(counts.negative).fill('negative'),
+      ...Array<'neutral'>(counts.neutral).fill('neutral'),
+    ];
+    let i = 0;
+    for (const sentiment of all) {
+      const review = await app.prisma.visitorReview.create({
+        data: {
+          restaurantId: r.id,
+          authorName: `u${i}`,
+          rating: 5,
+          body: `body-${name}-${i}`,
+          visitedAt: null,
+          imageUrlsJson: '[]',
+          videosJson: '[]',
+          contentHash: `${placeId}-${i}`,
+        },
+        select: { id: true },
+      });
+      await app.prisma.reviewSummary.create({
+        data: { reviewId: review.id, status: 'done', sentiment },
+      });
+      i += 1;
+    }
+    return placeId;
+  };
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(async () => {
+    invalidateRankingCache();
+    await app.prisma.restaurant.deleteMany({
+      where: { placeId: { startsWith: RANK_PREFIX } },
+    });
+  });
+
+  it('returns positive ranking ordered by positive ratio (neutral included by default)', async () => {
+    const a = await seedRestaurantWithSentiments('A', { positive: 8, negative: 1, neutral: 1 });
+    const b = await seedRestaurantWithSentiments('B', { positive: 5, negative: 5, neutral: 0 });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/ranking?sort=positive&minMentions=5',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: Array<{ placeId: string; rank: number; score: number }>;
+      total: number;
+      sort: string;
+      excludeNeutral: boolean;
+    };
+    const ids = body.items.map((i) => i.placeId);
+    expect(ids.indexOf(a)).toBeLessThan(ids.indexOf(b));
+    expect(body.items[ids.indexOf(a)]!.rank).toBe(ids.indexOf(a) + 1);
+    expect(body.excludeNeutral).toBe(false);
+  });
+
+  it('excludeNeutral=true changes the denominator and reranks', async () => {
+    // C: positive 4, neutral 6 → include=0.4, exclude=1.0 (no negative)
+    // D: positive 8, neutral 0, negative 2 → include=0.8, exclude=0.8
+    // include 모드: D > C. exclude 모드: C > D.
+    const c = await seedRestaurantWithSentiments('C', { positive: 4, negative: 0, neutral: 6 });
+    const d = await seedRestaurantWithSentiments('D', { positive: 8, negative: 2, neutral: 0 });
+
+    const incl = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/ranking?sort=positive&excludeNeutral=false&minMentions=5',
+    });
+    const inclItems = (incl.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(inclItems.indexOf(d)).toBeLessThan(inclItems.indexOf(c));
+
+    const excl = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/ranking?sort=positive&excludeNeutral=true&minMentions=5',
+    });
+    const exclItems = (excl.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(exclItems.indexOf(c)).toBeLessThan(exclItems.indexOf(d));
+  });
+
+  it('minMentions filters out small-sample restaurants', async () => {
+    const small = await seedRestaurantWithSentiments('S', {
+      positive: 2,
+      negative: 0,
+      neutral: 0,
+    });
+    const big = await seedRestaurantWithSentiments('B', {
+      positive: 6,
+      negative: 1,
+      neutral: 0,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/ranking?sort=positive&minMentions=5',
+    });
+    const ids = (res.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(ids).toContain(big);
+    expect(ids).not.toContain(small);
+  });
+
+  it('sort=negative ranks high-negative first', async () => {
+    const bad = await seedRestaurantWithSentiments('Bad', {
+      positive: 1,
+      negative: 8,
+      neutral: 1,
+    });
+    const good = await seedRestaurantWithSentiments('Good', {
+      positive: 8,
+      negative: 1,
+      neutral: 1,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/ranking?sort=negative&minMentions=5',
+    });
+    const ids = (res.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(ids.indexOf(bad)).toBeLessThan(ids.indexOf(good));
+  });
+
+  it('does not require auth', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/ranking',
+    });
+    expect(res.statusCode).toBe(200);
   });
 });
