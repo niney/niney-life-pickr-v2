@@ -54,3 +54,16 @@ export const useMapProviderSecret = (id: MapProviderIdType, enabled = true) =>
     staleTime: Infinity,
     gcTime: Infinity,
   });
+
+// 공개 맛집 지도 페이지가 vworld WMTS 호출에 쓸 키. 키 미등록이면 404 — 호출
+// 자가 query.error 의 ApiError.statusCode 로 분기해 placeholder 노출.
+export const useMapPublicConfig = (enabled = true) =>
+  useQuery({
+    queryKey: ['settings', 'map', 'public'],
+    queryFn: settingsMapApi.publicConfig,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    // 404 는 정상 상태(키 미등록) — 자동 retry 안 함.
+    retry: false,
+  });

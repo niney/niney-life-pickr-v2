@@ -40,6 +40,12 @@ export const Crawl = {
 export const Restaurant = {
   // 공개 식당 랭킹 — 비로그인/게스트도 접근. 긍정/부정 비율 정렬, 중립 토글.
   ranking: `${API_PREFIX}/restaurants/ranking`,
+  // 공개 식당 리스트(지도 페이지). 좌표·대표 이미지·AI 통계 포함.
+  publicList: `${API_PREFIX}/restaurants/public`,
+  publicByPlaceId: (placeId: string) =>
+    `${API_PREFIX}/restaurants/public/${placeId}`,
+  publicInsights: (placeId: string) =>
+    `${API_PREFIX}/restaurants/public/${placeId}/insights`,
   list: `${API_PREFIX}/admin/restaurants`,
   byPlaceId: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
@@ -119,6 +125,8 @@ export const SettingsMap = {
   list: `${API_PREFIX}/admin/settings/map`,
   provider: (id: string) => `${API_PREFIX}/admin/settings/map/${id}`,
   secret: (id: string) => `${API_PREFIX}/admin/settings/map/${id}/secret`,
+  // 공개 — 맛집 지도 페이지가 vworld WMTS 호출에 쓸 키. 키 미등록 시 404.
+  publicConfig: `${API_PREFIX}/settings/map/public`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;

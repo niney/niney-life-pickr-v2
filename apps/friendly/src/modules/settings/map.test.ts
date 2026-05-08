@@ -148,3 +148,40 @@ describe('Settings/Map routes', () => {
     expect(list.json().providers[0].hasApiKey).toBe(false);
   });
 });
+
+describe('GET /settings/map/public — public', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    await app.prisma.mapProviderConfig.deleteMany({ where: { provider: 'vworld' } });
+  });
+
+  afterAll(async () => {
+    await app.prisma.mapProviderConfig.deleteMany({ where: { provider: 'vworld' } });
+    await app.close();
+  });
+
+  it('returns 404 when no key is registered', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/settings/map/public',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns plaintext key when registered, no auth required', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/admin/settings/map/vworld',
+      headers: { Authorization: `Bearer ${adminToken(app)}` },
+      payload: { apiKey: 'public-key-9999' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/settings/map/public',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ provider: 'vworld', apiKey: 'public-key-9999' });
+  });
+});

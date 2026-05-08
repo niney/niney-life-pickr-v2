@@ -467,3 +467,264 @@ describe('GET /restaurants/ranking — public', () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe('Public restaurant routes', () => {
+  let app: FastifyInstance;
+
+  const PUB_PREFIX = 'tr-pub-';
+  const seedRestaurant = async (
+    overrides: Partial<{
+      name: string;
+      category: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      address: string | null;
+      roadAddress: string | null;
+      imageUrls: string[];
+      rating: number | null;
+      firstCrawledAt: Date;
+    }> = {},
+  ): Promise<{ id: string; placeId: string }> => {
+    const placeId = `${PUB_PREFIX}${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const snap = {
+      placeId,
+      name: overrides.name ?? '공개 테스트 식당',
+      category: overrides.category ?? '한식',
+      address: overrides.address ?? '서울 강남구',
+      roadAddress: overrides.roadAddress ?? '서울 강남구 테헤란로 1',
+      phone: null,
+      businessHours: null,
+      latitude: overrides.latitude ?? null,
+      longitude: overrides.longitude ?? null,
+      imageUrls: overrides.imageUrls ?? [],
+      rating: overrides.rating ?? null,
+      reviewCount: null,
+      menus: [],
+      reviewStats: null,
+      blogReviews: [],
+      rawSourceUrl: 'https://m.place.naver.com/restaurant/x',
+    };
+    const r = await app.prisma.restaurant.create({
+      data: {
+        placeId,
+        name: snap.name,
+        category: snap.category,
+        address: snap.address,
+        rating: snap.rating,
+        rawSourceUrl: snap.rawSourceUrl,
+        snapshotJson: JSON.stringify(snap),
+        ...(overrides.firstCrawledAt
+          ? { firstCrawledAt: overrides.firstCrawledAt, lastCrawledAt: overrides.firstCrawledAt }
+          : {}),
+      },
+      select: { id: true },
+    });
+    return { id: r.id, placeId };
+  };
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(async () => {
+    await app.prisma.restaurant.deleteMany({
+      where: { placeId: { startsWith: PUB_PREFIX } },
+    });
+  });
+
+  it('GET /restaurants/public — no auth required', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/restaurants/public' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('GET /restaurants/public — returns lat/lng + thumbnail from snapshot', async () => {
+    const { placeId } = await seedRestaurant({
+      name: '좌표있는집',
+      latitude: 37.5,
+      longitude: 127.0,
+      imageUrls: ['https://example.com/a.jpg', 'https://example.com/b.jpg'],
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/public?q=좌표있는집',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: Array<{
+        placeId: string;
+        latitude: number | null;
+        longitude: number | null;
+        thumbnailUrl: string | null;
+        roadAddress: string | null;
+      }>;
+    };
+    const item = body.items.find((i) => i.placeId === placeId);
+    expect(item).toBeDefined();
+    expect(item!.latitude).toBe(37.5);
+    expect(item!.longitude).toBe(127.0);
+    expect(item!.thumbnailUrl).toBe('https://example.com/a.jpg');
+    expect(item!.roadAddress).toBe('서울 강남구 테헤란로 1');
+  });
+
+  it('GET /restaurants/public — bbox filters out points outside', async () => {
+    const inside = await seedRestaurant({
+      name: '안쪽',
+      latitude: 37.5,
+      longitude: 127.0,
+    });
+    const outside = await seedRestaurant({
+      name: '바깥',
+      latitude: 35.0,
+      longitude: 127.0,
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/public?bbox=126.9,37.4,127.1,37.6',
+    });
+    expect(res.statusCode).toBe(200);
+    const ids = (res.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(ids).toContain(inside.placeId);
+    expect(ids).not.toContain(outside.placeId);
+  });
+
+  it('GET /restaurants/public — q matches name OR category', async () => {
+    const a = await seedRestaurant({ name: '맛있는 김치찌개', category: '한식' });
+    const b = await seedRestaurant({ name: '커피하우스', category: '카페' });
+    const byName = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/public?q=김치',
+    });
+    const byCat = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/public?q=카페',
+    });
+    const idsByName = (byName.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    const idsByCat = (byCat.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(idsByName).toContain(a.placeId);
+    expect(idsByName).not.toContain(b.placeId);
+    expect(idsByCat).toContain(b.placeId);
+    expect(idsByCat).not.toContain(a.placeId);
+  });
+
+  it('GET /restaurants/public — sort=recent orders by firstCrawledAt desc', async () => {
+    const older = await seedRestaurant({
+      name: 'older-pub',
+      firstCrawledAt: new Date(2025, 0, 1),
+    });
+    const newer = await seedRestaurant({
+      name: 'newer-pub',
+      firstCrawledAt: new Date(2026, 0, 1),
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/public?q=pub',
+    });
+    const ids = (res.json() as { items: Array<{ placeId: string }> }).items.map(
+      (i) => i.placeId,
+    );
+    expect(ids.indexOf(newer.placeId)).toBeLessThan(ids.indexOf(older.placeId));
+  });
+
+  it('GET /restaurants/public/:placeId — 404 for unknown', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${PUB_PREFIX}nope`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /restaurants/public/:placeId — returns flattened analysis only for done summaries', async () => {
+    const { id, placeId } = await seedRestaurant({
+      name: '리뷰있는집',
+      latitude: 37.5,
+      longitude: 127.0,
+    });
+    const r1 = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: id,
+        authorName: '익명',
+        rating: 5,
+        body: '맛있어요',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${placeId}-1`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: {
+        reviewId: r1.id,
+        status: 'done',
+        text: '맛있는 식당',
+        sentiment: 'positive',
+        sentimentScore: 0.8,
+        satisfactionScore: 5,
+        finishedAt: new Date(),
+      },
+    });
+    // 분석 안 된 리뷰
+    await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: id,
+        authorName: '익명2',
+        rating: null,
+        body: '아직 분석 전',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${placeId}-2`,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      placeId: string;
+      latitude: number | null;
+      reviews: Array<{ body: string; analysis: null | { text: string; sentiment: string } }>;
+    };
+    expect(body.placeId).toBe(placeId);
+    expect(body.latitude).toBe(37.5);
+    expect(body.reviews).toHaveLength(2);
+    const analyzed = body.reviews.find((r) => r.analysis !== null);
+    const unanalyzed = body.reviews.find((r) => r.analysis === null);
+    expect(analyzed?.analysis?.text).toBe('맛있는 식당');
+    expect(analyzed?.analysis?.sentiment).toBe('positive');
+    expect(unanalyzed?.body).toBe('아직 분석 전');
+  });
+
+  it('GET /restaurants/public/:placeId/insights — 404 for unknown', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${PUB_PREFIX}nope/insights`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /restaurants/public/:placeId/insights — returns aggregates without auth', async () => {
+    const { placeId } = await seedRestaurant({ name: '인사이트' });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}/insights`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { analyzedCount: number };
+    expect(body.analyzedCount).toBe(0);
+  });
+});

@@ -1,19 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
-import OlMap from 'ol/Map';
-import OlView from 'ol/View';
-import TileLayer from 'ol/layer/Tile';
-import VectorLayer from 'ol/layer/Vector';
-import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
-import Feature from 'ol/Feature';
-import Point from 'ol/geom/Point';
-import { fromLonLat } from 'ol/proj';
-import { Style, Icon, Text as OlText, Fill, Stroke } from 'ol/style';
-import 'ol/ol.css';
 import { useMapProviderSecret } from '@repo/shared';
-import { buildVworldTileUrl } from '~/lib/vworld';
+import { MapCanvas, type MapMarker } from './MapCanvas';
 
 interface Props {
   lat: number | null;
@@ -24,98 +13,14 @@ interface Props {
   className?: string;
 }
 
-const ZOOM = 17;
-
-// vworld WMTS 타일을 OpenLayers 가 직접 받아 그리는 지도. JS SDK 와 달리
-// 도메인 화이트리스트 검증이 없어 어떤 origin 에서도 동작한다 — 키 유효
-// 여부만 vworld 서버가 본다.
-//
-// 마커는 SVG data-URL Icon 으로 그려서 외부 이미지 의존을 없앴다.
+// 어드민 식당 상세에서 단일 마커 지도를 띄우는 박스. MapCanvas 의 thin wrapper
+// 로, admin secret hook 을 통해 평문 키를 받아 전달한다. 좌표/키 미충족 상태는
+// placeholder 로 분기.
 export const VWorldMap = ({ lat, lng, name, className }: Props) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<OlMap | null>(null);
-
   const hasCoords = lat !== null && lng !== null;
   const secret = useMapProviderSecret('vworld', hasCoords);
   const apiKey = secret.data?.apiKey ?? null;
-
   const [tileError, setTileError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!containerRef.current || !hasCoords || !apiKey) return;
-
-    const tileSource = new XYZ({
-      url: buildVworldTileUrl(apiKey, 'Base'),
-      crossOrigin: 'anonymous',
-    });
-
-    // 타일 로드 실패는 키 거부 / 네트워크 차단의 신호. 한 번이라도 떨어지면
-    // 즉시 표시 — 화면에 빈 회색만 보이는 상황을 줄인다.
-    let errored = false;
-    tileSource.on('tileloaderror', () => {
-      if (errored) return;
-      errored = true;
-      setTileError(
-        '지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.',
-      );
-    });
-
-    const baseLayer = new TileLayer({ source: tileSource });
-
-    const view = new OlView({
-      center: fromLonLat([lng!, lat!]),
-      zoom: ZOOM,
-    });
-
-    const map = new OlMap({
-      target: containerRef.current,
-      layers: [baseLayer],
-      view,
-      // 컨트롤은 OL 기본값 — zoom 버튼만 노출. attribution/rotate 는 작은
-      // 사이드바 카드에서 시각 노이즈가 되어 끔.
-      controls: [],
-    });
-
-    const markerFeature = new Feature({
-      geometry: new Point(fromLonLat([lng!, lat!])),
-    });
-    markerFeature.setStyle(
-      new Style({
-        image: new Icon({
-          anchor: [0.5, 1],
-          src:
-            'data:image/svg+xml;charset=utf-8,' +
-            encodeURIComponent(`
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">
-                <path fill="#ef4444" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>
-                <circle fill="#fff" cx="16" cy="16" r="6"/>
-              </svg>
-            `),
-        }),
-        text: new OlText({
-          text: name,
-          offsetY: -54,
-          font: 'bold 12px sans-serif',
-          fill: new Fill({ color: '#0f172a' }),
-          stroke: new Stroke({ color: '#fff', width: 3 }),
-        }),
-      }),
-    );
-
-    map.addLayer(
-      new VectorLayer({
-        source: new VectorSource({ features: [markerFeature] }),
-      }),
-    );
-
-    mapRef.current = map;
-    setTileError(null);
-
-    return () => {
-      map.setTarget(undefined);
-      mapRef.current = null;
-    };
-  }, [apiKey, lat, lng, name, hasCoords]);
 
   const sizeClass = className ?? 'h-[280px] w-full';
 
@@ -126,7 +31,6 @@ export const VWorldMap = ({ lat, lng, name, className }: Props) => {
       </Placeholder>
     );
   }
-
   if (secret.isLoading) {
     return (
       <Placeholder sizeClass={sizeClass}>
@@ -134,7 +38,6 @@ export const VWorldMap = ({ lat, lng, name, className }: Props) => {
       </Placeholder>
     );
   }
-
   if (!apiKey) {
     return (
       <Placeholder sizeClass={sizeClass}>
@@ -153,10 +56,19 @@ export const VWorldMap = ({ lat, lng, name, className }: Props) => {
     );
   }
 
+  const marker: MapMarker = { id: 'self', lat: lat!, lng: lng!, label: name };
+
   return (
     <div className={`relative ${sizeClass}`}>
-      <div
-        ref={containerRef}
+      <MapCanvas
+        apiKey={apiKey}
+        markers={[marker]}
+        initialCenter={{ lat: lat!, lng: lng!, zoom: 17 }}
+        onTileError={() =>
+          setTileError(
+            '지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.',
+          )
+        }
         className="size-full overflow-hidden rounded-md border bg-muted"
       />
       {tileError && (

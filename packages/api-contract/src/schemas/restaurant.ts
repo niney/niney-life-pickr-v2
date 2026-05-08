@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NaverPlaceData, VisitorReview } from './crawl.js';
+import { BlogReview, MenuItem, NaverPlaceData, VisitorReview } from './crawl.js';
 
 export const ReviewSummaryStatus = z.enum(['pending', 'running', 'done', 'failed']);
 export type ReviewSummaryStatusType = z.infer<typeof ReviewSummaryStatus>;
@@ -237,6 +237,106 @@ export const RestaurantRankingResult = z.object({
   minMentions: z.number().int(),
 });
 export type RestaurantRankingResultType = z.infer<typeof RestaurantRankingResult>;
+
+// 공개 식당 리스트(지도 페이지) — 비로그인도 호출. 좌표 + 핵심 메타 + AI 통계 한
+// 응답에 묶음. RestaurantListItem(어드민) 과 분리한 이유:
+//   - 어드민 행은 크롤 진행/요약 진행률 같은 운영 메타가 핵심이고
+//   - 공개 행은 좌표/대표 사진/도로명/AI 요약 점수가 핵심이라 필드 셋이 다르다.
+export const RestaurantPublicListQuery = z.object({
+  q: z.string().trim().min(1).max(120).optional(),
+  category: z.string().trim().min(1).max(80).optional(),
+  // "minLng,minLat,maxLng,maxLat" — 지도 viewport bbox.
+  bbox: z
+    .string()
+    .regex(
+      /^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$/,
+      'bbox must be "minLng,minLat,maxLng,maxLat"',
+    )
+    .optional(),
+  sort: z.enum(['recent', 'satisfaction', 'positive', 'rating']).default('recent'),
+  limit: z.coerce.number().int().min(1).max(200).default(60),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type RestaurantPublicListQueryType = z.infer<typeof RestaurantPublicListQuery>;
+
+export const RestaurantPublicListItem = z.object({
+  placeId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  address: z.string().nullable(),
+  roadAddress: z.string().nullable(),
+  rating: z.number().nullable(),
+  reviewCount: z.number().int().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  thumbnailUrl: z.string().nullable(),
+  firstCrawledAt: z.string(),
+  // AI 통계 (done 행만). analyzedCount === 0 이면 나머지 점수/카운트는 의미 없음.
+  analyzedCount: z.number().int(),
+  avgSentimentScore: z.number().nullable(),
+  avgSatisfactionScore: z.number().nullable(),
+  positiveCount: z.number().int(),
+  negativeCount: z.number().int(),
+  neutralCount: z.number().int(),
+});
+export type RestaurantPublicListItemType = z.infer<typeof RestaurantPublicListItem>;
+
+export const RestaurantPublicListResult = z.object({
+  items: z.array(RestaurantPublicListItem),
+  total: z.number().int(),
+});
+export type RestaurantPublicListResultType = z.infer<typeof RestaurantPublicListResult>;
+
+// 공개 상세 — 어드민 detail 에서 ReviewSummary 진행/에러 메타데이터를 제거하고
+// 분석 결과만 평탄화한다. 분석 안 된 리뷰는 analysis=null 로 본문만 노출.
+export const PublicReviewAnalysis = z.object({
+  text: z.string(),
+  sentiment: ReviewSentiment,
+  sentimentScore: z.number(),
+  satisfactionScore: z.number().int(),
+  menus: z.array(ReviewAnalysisMenu),
+  tips: z.array(z.string()),
+  keywords: z.array(z.string()),
+  finishedAt: z.string(),
+});
+export type PublicReviewAnalysisType = z.infer<typeof PublicReviewAnalysis>;
+
+export const PublicVisitorReview = z.object({
+  id: z.string(),
+  authorName: z.string().nullable(),
+  rating: z.number().nullable(),
+  body: z.string(),
+  visitedAt: z.string().nullable(),
+  imageUrls: z.array(z.string().url()),
+  videos: z.array(z.object({
+    posterUrl: z.string().url(),
+    videoUrl: z.string().url(),
+  })),
+  fetchedAt: z.string(),
+  analysis: PublicReviewAnalysis.nullable(),
+});
+export type PublicVisitorReviewType = z.infer<typeof PublicVisitorReview>;
+
+export const RestaurantPublicDetail = z.object({
+  placeId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  address: z.string().nullable(),
+  roadAddress: z.string().nullable(),
+  phone: z.string().nullable(),
+  businessHours: z.string().nullable(),
+  rating: z.number().nullable(),
+  reviewCount: z.number().int().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  imageUrls: z.array(z.string().url()),
+  menus: z.array(MenuItem),
+  blogReviews: z.array(BlogReview),
+  rawSourceUrl: z.string(),
+  firstCrawledAt: z.string(),
+  reviews: z.array(PublicVisitorReview),
+});
+export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
 
 // SSE per-review payload pushed by the summary-events stream when a single
 // row's AI summary finishes (success or failure). The client merges this

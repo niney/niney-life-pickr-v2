@@ -2,7 +2,11 @@ import {
   Routes,
   type RestaurantDeleteResultType,
   type RestaurantDetailType,
+  type RestaurantInsightsType,
   type RestaurantListResultType,
+  type RestaurantPublicDetailType,
+  type RestaurantPublicListQueryType,
+  type RestaurantPublicListResultType,
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
   type RestaurantSummaryProgressType,
@@ -26,6 +30,27 @@ export const restaurantApi = {
       `${Routes.Restaurant.ranking}${qs ? `?${qs}` : ''}`,
     );
   },
+
+  // 공개 맛집 지도/리스트 페이지에서 호출. 토큰 있어도 그대로 동작 (공개 라우트).
+  publicList: (query: Partial<RestaurantPublicListQueryType> = {}) => {
+    const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
+    if (query.category) params.set('category', query.category);
+    if (query.bbox) params.set('bbox', query.bbox);
+    if (query.sort) params.set('sort', query.sort);
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    const qs = params.toString();
+    return apiFetch<RestaurantPublicListResultType>(
+      `${Routes.Restaurant.publicList}${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  publicByPlaceId: (placeId: string) =>
+    apiFetch<RestaurantPublicDetailType>(Routes.Restaurant.publicByPlaceId(placeId)),
+
+  publicInsights: (placeId: string) =>
+    apiFetch<RestaurantInsightsType>(Routes.Restaurant.publicInsights(placeId)),
 
   getByPlaceId: (placeId: string) =>
     apiFetch<RestaurantDetailType>(Routes.Restaurant.byPlaceId(placeId)),

@@ -10,6 +10,9 @@ import {
   RestaurantDetail,
   RestaurantInsights,
   RestaurantListResult,
+  RestaurantPublicDetail,
+  RestaurantPublicListQuery,
+  RestaurantPublicListResult,
   RestaurantRankingQuery,
   RestaurantRankingResult,
   RestaurantReanalyzeResult,
@@ -50,6 +53,45 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: RestaurantRankingResult },
     },
     handler: async (req) => service.getRanking(req.query),
+  });
+
+  // 공개 식당 리스트 — 맛집 지도 페이지가 호출. 좌표·대표 사진·AI 통계 한 번에.
+  typed.get(Routes.Restaurant.publicList, {
+    schema: {
+      tags: ['public'],
+      querystring: RestaurantPublicListQuery,
+      response: { 200: RestaurantPublicListResult },
+    },
+    handler: async (req) => service.getPublicList(req.query),
+  });
+
+  // 공개 식당 상세 — 어드민 detail 의 운영 메타 (요약 진행 상태/에러/모델) 제거,
+  // 분석된(done) 행만 평탄화. 분석 안 된 리뷰는 본문만 노출.
+  typed.get(Routes.Restaurant.publicByPlaceId(':placeId'), {
+    schema: {
+      tags: ['public'],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantPublicDetail },
+    },
+    handler: async (req) => {
+      const detail = await service.getPublicDetail(req.params.placeId);
+      if (!detail) throw app.httpErrors.notFound('Restaurant not found');
+      return detail;
+    },
+  });
+
+  // 공개 식당 인사이트 — 어드민 라우트와 동일한 응답 스키마, 가드만 빠짐.
+  typed.get(Routes.Restaurant.publicInsights(':placeId'), {
+    schema: {
+      tags: ['public'],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantInsights },
+    },
+    handler: async (req) => {
+      const insights = await service.getInsights(req.params.placeId);
+      if (!insights) throw app.httpErrors.notFound('Restaurant not found');
+      return insights;
+    },
   });
 
   typed.get(Routes.Restaurant.list, {

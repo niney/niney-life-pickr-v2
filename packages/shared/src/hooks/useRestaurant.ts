@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   RestaurantDetailType,
   RestaurantListResultType,
+  RestaurantPublicListQueryType,
   RestaurantRankingQueryType,
   RestaurantSummaryProgressType,
 } from '@repo/api-contract';
@@ -39,6 +40,53 @@ export const useRestaurantRanking = (query: Partial<RestaurantRankingQueryType> 
     queryFn: () => restaurantApi.ranking(query),
     placeholderData: (prev) => prev,
     staleTime: 30_000,
+  });
+
+// 공개 맛집 지도 페이지가 호출하는 리스트. URL 동기화 패턴이라 query 가 자주
+// 갱신되는데, queryKey 에 모든 필드를 깔아두면 불필요한 리페치가 잦다 — 의미
+// 있는 필드만 키에 넣어 디바운스/탭 전환에 견디게 한다. placeholderData 로 깜
+// 빡임 방지.
+export const useRestaurantsPublic = (
+  query: Partial<RestaurantPublicListQueryType> = {},
+) =>
+  useQuery({
+    queryKey: [
+      'restaurant',
+      'public',
+      'list',
+      query.q ?? '',
+      query.category ?? '',
+      query.bbox ?? '',
+      query.sort ?? 'recent',
+      query.limit ?? 60,
+      query.offset ?? 0,
+    ],
+    queryFn: () => restaurantApi.publicList(query),
+    placeholderData: (prev) => prev,
+    staleTime: 30_000,
+  });
+
+// 공개 식당 상세. placeId 가 null/빈 문자열이면 비활성화 — 패널 닫힘 상태.
+export const useRestaurantPublic = (placeId: string | null) =>
+  useQuery({
+    queryKey: ['restaurant', 'public', 'detail', placeId],
+    queryFn: () => {
+      if (!placeId) throw new Error('placeId required');
+      return restaurantApi.publicByPlaceId(placeId);
+    },
+    enabled: !!placeId,
+    staleTime: 60_000,
+  });
+
+export const useRestaurantPublicInsights = (placeId: string | null) =>
+  useQuery({
+    queryKey: ['restaurant', 'public', 'insights', placeId],
+    queryFn: () => {
+      if (!placeId) throw new Error('placeId required');
+      return restaurantApi.publicInsights(placeId);
+    },
+    enabled: !!placeId,
+    staleTime: 60_000,
   });
 
 // `placeId` may be null when the user hasn't started a crawl yet — keeps

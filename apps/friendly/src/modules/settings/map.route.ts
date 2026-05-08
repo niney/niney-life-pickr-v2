@@ -5,6 +5,7 @@ import {
   MapProviderConfig as MapProviderConfigSchema,
   MapProviderId,
   MapProviderListResult,
+  MapProviderPublicConfig,
   MapProviderSecret,
   Routes,
   UpdateMapProviderInput,
@@ -78,6 +79,23 @@ const settingsMapRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: MapProviderSecret },
     },
     handler: async (req) => service.getSecret(req.params.id as MapProviderIdType),
+  });
+
+  // 공개 — 맛집 지도 페이지가 vworld WMTS 호출에 쓸 키. WMTS 키는 어차피 브라
+  // 우저 Network 탭에 노출되므로 admin secret 과 보안 등급이 동등 — 단지 공개
+  // 페이지가 admin guard 를 통과 못 하니 라우트만 분리. 키 미등록이면 404.
+  typed.get(MapRoutes.publicConfig, {
+    schema: {
+      tags: ['public'],
+      response: { 200: MapProviderPublicConfig },
+    },
+    handler: async () => {
+      const secret = await service.getSecret('vworld');
+      if (!secret.apiKey) {
+        throw app.httpErrors.notFound('지도 키가 등록되지 않았습니다.');
+      }
+      return { provider: 'vworld' as const, apiKey: secret.apiKey };
+    },
   });
 };
 

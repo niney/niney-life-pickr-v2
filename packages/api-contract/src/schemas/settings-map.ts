@@ -37,3 +37,13 @@ export const MapProviderSecret = z.object({
   domains: z.string().nullable(),
 });
 export type MapProviderSecretType = z.infer<typeof MapProviderSecret>;
+
+// 공개 페이지(맛집 지도) 가 호출하는 키 노출 라우트. WMTS 키는 어차피 브라우저
+// Network 탭에 노출되는 클라사이드 자원이라 admin 평문과 보안 등급이 동등.
+// 단지 공개 페이지가 admin guard 를 통과 못 하니 라우트만 분리.
+// 키 미등록 시 서버는 404. provider 는 현재 vworld 단일.
+export const MapProviderPublicConfig = z.object({
+  provider: MapProviderId,
+  apiKey: z.string(),
+});
+export type MapProviderPublicConfigType = z.infer<typeof MapProviderPublicConfig>;
