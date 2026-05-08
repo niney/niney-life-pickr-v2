@@ -42,10 +42,33 @@ export class OllamaCloudAdapter implements LLMProvider {
   async complete(opts: LLMCompleteOptions): Promise<LLMCompleteResult> {
     await this.acquire();
     try {
-      return await this.doComplete(opts);
+      return await this.completeWithRetry(opts);
     } finally {
       this.release();
     }
+  }
+
+  // Ollama Cloud는 로컬 게이트 통과 후에도 자체 한도로 거부할 수 있다
+  // (HTTP 429 또는 본문에 "too many concurrent requests"). 같은 슬롯을
+  // 잡은 채 짧은 백오프 후 재시도한다 — release 하지 않으므로 동시성이
+  // 늘지 않고, 일시적 한도 초과는 자동 회복된다.
+  private async completeWithRetry(opts: LLMCompleteOptions): Promise<LLMCompleteResult> {
+    const maxRetries = 3;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      if (attempt > 0) {
+        const base = Math.min(2000, 200 * 2 ** (attempt - 1));
+        const jitter = Math.random() * 200;
+        await new Promise((r) => setTimeout(r, base + jitter));
+      }
+      try {
+        return await this.doComplete(opts);
+      } catch (e) {
+        if (!isConcurrencyLimit(e)) throw e;
+        lastErr = e;
+      }
+    }
+    throw lastErr ?? new LLMUpstreamError(429, 'too many concurrent requests');
   }
 
   async listModels(): Promise<string[]> {
@@ -185,4 +208,12 @@ const isAbortError = (e: unknown): boolean => {
     return true;
   }
   return false;
+};
+
+// Ollama Cloud의 동시성 제한 시그널. status 429 또는 본문 메시지로 옴.
+// "too many concurrent requests" / "rate limit" 둘 다 매칭.
+const isConcurrencyLimit = (e: unknown): boolean => {
+  if (!(e instanceof LLMUpstreamError)) return false;
+  if (e.status === 429) return true;
+  return /too many concurrent|rate.?limit/i.test(e.message);
 };

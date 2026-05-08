@@ -57,7 +57,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
   });
-  const summaries = new SummaryService(app.prisma, aiConfig);
+  const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
   const service = new CrawlService(restaurants, summaries, jobRegistry);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 

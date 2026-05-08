@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import type { FastifyBaseLogger } from 'fastify';
 import { ReviewAnalysis, type ReviewAnalysisType } from '@repo/api-contract';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
@@ -99,6 +100,9 @@ export interface SummaryServiceOptions {
   resolveOverride?: () => Promise<{ provider: LLMProvider; model: string } | null>;
   // Test seam — inject a custom bus instance (default: module singleton).
   bus?: SummaryEventsBus;
+  // Fastify pino logger. 미주입 시 silent — 테스트는 로그 없이 돌고,
+  // 라우트에서 만들 땐 app.log를 넘겨 콘솔에 진행 상황이 찍히게 한다.
+  logger?: FastifyBaseLogger;
 }
 
 // Background AI summarization. The crawl pipeline calls
@@ -107,6 +111,14 @@ export interface SummaryServiceOptions {
 // fire-and-forget by design. Failures are recorded on the ReviewSummary row
 // (status='failed' + errorMessage) so the UI can surface them; we never throw.
 export class SummaryService {
+  // 같은 placeId 의 batch 들을 직렬로 잇는다. 크롤러가 페이지마다
+  // queueSummariesForReviews 를 호출하면 여러 run() 이 동시에 떠서
+  // 각자 자기 chunk 를 'running' 으로 마킹 → DB 상태 표시가 의미를
+  // 잃는 문제가 있었다 (어댑터 게이트가 실제 fetch 는 막지만 마킹은
+  // 합집합으로 보인다). placeId 단위로 then-chaining 하면 처리량 손실
+  // 없이 마킹/진행이 일관된다 — 다른 place 는 여전히 병렬.
+  private readonly runChainByPlace = new Map<string, Promise<void>>();
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
@@ -115,7 +127,16 @@ export class SummaryService {
 
   queueSummariesForReviews(placeId: string, reviewIds: string[]): void {
     if (reviewIds.length === 0) return;
-    void this.run(placeId, reviewIds).catch(() => undefined);
+    const prev = this.runChainByPlace.get(placeId) ?? Promise.resolve();
+    const next = prev.then(() => this.run(placeId, reviewIds)).catch(() => undefined);
+    this.runChainByPlace.set(placeId, next);
+    void next.finally(() => {
+      // 이 next 가 여전히 chain 의 tail 이면 정리. 그 사이 더 들어왔으면
+      // 그 새 tail 이 끝날 때 정리되도록 둔다.
+      if (this.runChainByPlace.get(placeId) === next) {
+        this.runChainByPlace.delete(placeId);
+      }
+    });
   }
 
   // 백필 — 한 식당의 분석되지 않았거나 구버전(analysisVersion < 현재) 행을
@@ -162,9 +183,15 @@ export class SummaryService {
     return this.opts.bus ?? summaryEventsBus;
   }
 
+  private get log(): FastifyBaseLogger | null {
+    return this.opts.logger ?? null;
+  }
+
   private async run(placeId: string, reviewIds: string[]): Promise<void> {
     if (reviewIds.length === 0) return;
     const startedAt = new Date();
+    const total = reviewIds.length;
+    this.log?.info({ placeId, total, version: ANALYSIS_VERSION }, '[summary] queue start');
 
     // Mark every accepted review as pending up-front. Re-summarizing an
     // existing row is allowed (recrawl path wipes reviews+summaries first
@@ -190,9 +217,14 @@ export class SummaryService {
       // No key / no model / disabled — leave rows pending. Admin can fix
       // config and re-trigger via recrawl. We don't fail loud because the
       // primary path (crawling reviews) succeeded; summaries are auxiliary.
+      this.log?.warn(
+        { placeId, total },
+        '[summary] no provider/model resolved — rows left pending',
+      );
       return;
     }
     const { provider, model } = resolved;
+    this.log?.info({ placeId, total, model }, '[summary] provider resolved');
 
     const reviews = await this.prisma.visitorReview.findMany({
       where: { id: { in: reviewIds } },
@@ -200,8 +232,18 @@ export class SummaryService {
     });
 
     const chunkSize = this.opts.chunkSize ?? DEFAULT_CHUNK_SIZE;
+    let doneCount = 0;
+    let failCount = 0;
+    let parseFailCount = 0;
     for (let i = 0; i < reviews.length; i += chunkSize) {
       const chunk = reviews.slice(i, i + chunkSize);
+      const chunkIdx = Math.floor(i / chunkSize) + 1;
+      const chunkTotal = Math.ceil(reviews.length / chunkSize);
+      const chunkStartedAt = Date.now();
+      this.log?.info(
+        { placeId, chunk: `${chunkIdx}/${chunkTotal}`, size: chunk.length },
+        '[summary] chunk start',
+      );
       await this.prisma.reviewSummary.updateMany({
         where: { reviewId: { in: chunk.map((r) => r.id) } },
         data: { status: 'running' },
@@ -232,6 +274,16 @@ export class SummaryService {
               // LLM이 JSON 스키마를 못 맞춤. raw text는 errorMessage에
               // 잘라 넣어 진단 가능하게 하고 status=failed.
               const message = s.value.text.slice(0, 500);
+              parseFailCount += 1;
+              this.log?.warn(
+                {
+                  placeId,
+                  reviewId,
+                  model: s.value.model,
+                  rawHead: message.slice(0, 120),
+                },
+                '[summary] parse_failed',
+              );
               await this.prisma.reviewSummary.update({
                 where: { reviewId },
                 data: {
@@ -261,6 +313,7 @@ export class SummaryService {
               return;
             }
             const text = parsed.summary.trim();
+            doneCount += 1;
             await this.prisma.reviewSummary.update({
               where: { reviewId },
               data: {
@@ -300,6 +353,11 @@ export class SummaryService {
             });
           } else {
             const { error, message } = classifyError(s.reason);
+            failCount += 1;
+            this.log?.warn(
+              { placeId, reviewId, errorCode: error, message },
+              '[summary] upstream/timeout failure',
+            );
             await this.prisma.reviewSummary.update({
               where: { reviewId },
               data: {
@@ -332,7 +390,30 @@ export class SummaryService {
       // multiple chunk-completions inside one tick collapse into one
       // snapshot push.
       this.bus.publish(placeId);
+      this.log?.info(
+        {
+          placeId,
+          chunk: `${chunkIdx}/${chunkTotal}`,
+          tookMs: Date.now() - chunkStartedAt,
+          progress: `${doneCount + failCount + parseFailCount}/${total}`,
+          done: doneCount,
+          failed: failCount,
+          parseFailed: parseFailCount,
+        },
+        '[summary] chunk done',
+      );
     }
+    this.log?.info(
+      {
+        placeId,
+        total,
+        done: doneCount,
+        failed: failCount,
+        parseFailed: parseFailCount,
+        tookMs: Date.now() - startedAt.getTime(),
+      },
+      '[summary] queue finished',
+    );
   }
 
   private async resolveProvider(): Promise<
