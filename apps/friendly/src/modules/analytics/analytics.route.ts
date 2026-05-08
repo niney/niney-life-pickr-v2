@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   AnalyticsOverview,
+  CategoryTreeResult,
   GlobalMenuQuery,
   GlobalMenuResult,
   GlobalMergeJobInput,
@@ -12,6 +13,7 @@ import {
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { env } from '../../config/env.js';
 import { AnalyticsError, AnalyticsService } from './analytics.service.js';
+import { GLOBAL_MERGE_VERSION } from './global-merge.prompts.js';
 import {
   globalMergeJobRegistry,
   type GlobalMergeJobEvent,
@@ -36,6 +38,19 @@ const analyticsRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: AnalyticsOverview },
     },
     handler: async () => service.getOverview(),
+  });
+
+  typed.get(Routes.Analytics.categoryTree, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: CategoryTreeResult },
+    },
+    handler: async () => ({
+      currentVersion: GLOBAL_MERGE_VERSION,
+      roots: await service.getCategoryTree(),
+    }),
   });
 
   typed.get(Routes.Analytics.globalMenus, {

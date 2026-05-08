@@ -11,6 +11,7 @@ import {
 import {
   ApiError,
   useAnalyticsOverview,
+  useCategoryTree,
   useCreateGroupingJob,
   useGlobalMenus,
   useGlobalMergeJob,
@@ -18,7 +19,7 @@ import {
   useGroupingRestaurantsStatus,
   useStartGlobalMerge,
 } from '@repo/shared';
-import type { GlobalMenuQuerySortType } from '@repo/api-contract';
+import type { CategoryTreeNodeType, GlobalMenuQuerySortType } from '@repo/api-contract';
 import type { MenuGroupingRestaurantStatusType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -166,6 +167,7 @@ export const AdminAnalyticsPage = () => {
       </section>
 
       <GlobalMergeSection />
+      <CategoryTreeSection />
       <GlobalMenusSection />
 
       {jobId && job.data && (
@@ -564,8 +566,18 @@ const GlobalMenusSection = () => {
   const [sort, setSort] = useState<GlobalMenuQuerySortType>('mentions');
   const [minMentions, setMinMentions] = useState(5);
   const [includeUnlinked, setIncludeUnlinked] = useState(false);
+  const category = searchParams.get('category') ?? '';
+  const setCategory = (next: string): void => {
+    const params = new URLSearchParams(searchParams);
+    if (next.trim().length > 0) params.set('category', next);
+    else params.delete('category');
+    setSearchParams(params, { replace: true });
+  };
 
-  const menus = useGlobalMenus({ q, sort, minMentions, limit: 50, includeUnlinked });
+  const menus = useGlobalMenus({ q, category, sort, minMentions, limit: 50, includeUnlinked });
+  const tree = useCategoryTree();
+  // 자동완성용 path 후보 — 트리 노드 path 들 평탄화.
+  const categoryPaths = (tree.data?.roots ?? []).flatMap(flattenPaths);
 
   return (
     <Card>
@@ -584,6 +596,19 @@ const GlobalMenusSection = () => {
             placeholder="메뉴 검색 (예: 김치찌개)"
             className="flex-1 min-w-[200px] rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
+          <input
+            type="text"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="카테고리 (예: 한식 > 찌개)"
+            list="analytics-category-suggestions"
+            className="min-w-[180px] rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <datalist id="analytics-category-suggestions">
+            {categoryPaths.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as GlobalMenuQuerySortType)}
@@ -626,6 +651,7 @@ const GlobalMenusSection = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>메뉴</TableHead>
+                <TableHead>카테고리</TableHead>
                 <TableHead className="text-right">언급</TableHead>
                 <TableHead className="text-right">식당</TableHead>
                 <TableHead className="text-right">긍정</TableHead>
@@ -642,6 +668,20 @@ const GlobalMenusSection = () => {
                       <span className="text-[10px] text-amber-600 dark:text-amber-400">
                         미머지
                       </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {m.categoryPath ? (
+                      <button
+                        type="button"
+                        onClick={() => setCategory(m.categoryPath!)}
+                        className="hover:underline"
+                        title="이 카테고리로 필터"
+                      >
+                        {m.categoryPath}
+                      </button>
+                    ) : (
+                      '-'
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{m.totalMentions}</TableCell>
@@ -670,6 +710,129 @@ const GlobalMenusSection = () => {
         )}
       </CardContent>
     </Card>
+  );
+};
+
+// 트리에서 모든 path 평탄화 — datalist 자동완성 후보로 사용.
+const flattenPaths = (node: CategoryTreeNodeType): string[] => {
+  const out = [node.path];
+  if (node.children) {
+    for (const c of node.children) out.push(...flattenPaths(c));
+  }
+  return out;
+};
+
+// ── 카테고리 트리 섹션 ──────────────────────────────────────────────
+
+const CategoryTreeSection = () => {
+  const tree = useCategoryTree();
+  const [, setSearchParams] = useSearchParams();
+  const setCategory = (path: string): void => {
+    const params = new URLSearchParams();
+    params.set('category', path);
+    setSearchParams(params, { replace: true });
+    // 메뉴 통계 섹션이 같은 URL state 를 보고 있으므로 자동으로 필터링됨.
+  };
+
+  if (tree.isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>카테고리 트리</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> 불러오는 중…
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const roots = tree.data?.roots ?? [];
+  if (roots.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>카테고리 트리</CardTitle>
+          <CardDescription>
+            전역 머지를 한 번 실행해야 카테고리 path 가 채워집니다.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>카테고리 트리</CardTitle>
+        <CardDescription>
+          전역 메뉴를 계층 카테고리로 묶어 본다. 노드 클릭 시 해당 카테고리로 메뉴 통계 필터.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-1 text-sm">
+          {roots.map((n) => (
+            <CategoryTreeRow key={n.path} node={n} depth={0} onPick={setCategory} />
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+};
+
+const CategoryTreeRow = ({
+  node,
+  depth,
+  onPick,
+}: {
+  node: CategoryTreeNodeType;
+  depth: number;
+  onPick: (path: string) => void;
+}) => {
+  const [open, setOpen] = useState(depth < 1);
+  const hasChildren = !!node.children && node.children.length > 0;
+  const ratio =
+    node.positiveRatio === null ? '-' : `${Math.round(node.positiveRatio * 100)}%`;
+  return (
+    <li>
+      <div
+        className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/40"
+        style={{ paddingLeft: `${depth * 16}px` }}
+      >
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="size-4 text-xs text-muted-foreground"
+          >
+            {open ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span className="size-4" />
+        )}
+        <button
+          type="button"
+          onClick={() => onPick(node.path)}
+          className="flex-1 text-left hover:underline"
+          title={node.path}
+        >
+          {node.label}
+        </button>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {node.totalMentions}회
+        </span>
+        <span className="w-12 text-right text-xs tabular-nums">{ratio}</span>
+      </div>
+      {hasChildren && open && (
+        <ul className="space-y-1">
+          {node.children!.map((c) => (
+            <CategoryTreeRow key={c.path} node={c} depth={depth + 1} onPick={onPick} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 };
 

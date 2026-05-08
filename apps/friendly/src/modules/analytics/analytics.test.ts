@@ -11,7 +11,11 @@ import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
-import { AnalyticsError, AnalyticsService } from './analytics.service.js';
+import {
+  AnalyticsError,
+  AnalyticsService,
+  normalizeCategoryPath,
+} from './analytics.service.js';
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -551,5 +555,143 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     expect(overview.globalGroupCount).toBe(0);
     expect(overview.globalLinkedCount).toBe(0);
     expect(overview.lastGlobalMergeAt).toBeNull();
+  });
+
+  it('filters by category prefix', async () => {
+    const r = await seedRestaurant(app, [
+      {
+        name: '김치찌개',
+        nameNorm: '김치찌개',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+        mentions: [{ sentiment: 'positive' }, { sentiment: 'positive' }],
+      },
+    ]);
+    const g1 = await app.prisma.globalMenuCanonical.create({
+      data: {
+        globalKey: 'category-test-1',
+        displayName: '김치찌개',
+        categoryPath: '한식 > 찌개 > 김치찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    await app.prisma.globalMenuCanonicalLink.create({
+      data: {
+        menuCanonicalId: r.menuCanonicalIds.get('김치찌개')!,
+        restaurantId: r.restaurantId,
+        localCanonicalNorm: '김치찌개',
+        globalCanonicalId: g1.id,
+      },
+    });
+
+    const matched = await service.getGlobalMenus({
+      category: '한식 > 찌개',
+      sort: 'mentions',
+      minMentions: 1,
+      limit: 200,
+      includeUnlinked: false,
+    });
+    expect(matched.items.find((i) => i.globalKey === 'category-test-1')).toBeDefined();
+
+    const noMatch = await service.getGlobalMenus({
+      category: '일식',
+      sort: 'mentions',
+      minMentions: 1,
+      limit: 200,
+      includeUnlinked: false,
+    });
+    expect(noMatch.items.find((i) => i.globalKey === 'category-test-1')).toBeUndefined();
+  });
+
+  it('builds a category tree with parent-accumulated stats', async () => {
+    const r = await seedRestaurant(app, [
+      {
+        name: '김치찌개',
+        nameNorm: '김치찌개',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+        mentions: [{ sentiment: 'positive' }, { sentiment: 'positive' }],
+      },
+      {
+        name: '된장찌개',
+        nameNorm: '된장찌개',
+        canonicalName: '된장찌개',
+        canonicalNorm: '된장찌개',
+        mentions: [{ sentiment: 'negative' }],
+      },
+    ]);
+    const g1 = await app.prisma.globalMenuCanonical.create({
+      data: {
+        globalKey: 'tree-test-kim',
+        displayName: '김치찌개',
+        categoryPath: '한식 > 찌개 > 김치찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    const g2 = await app.prisma.globalMenuCanonical.create({
+      data: {
+        globalKey: 'tree-test-doen',
+        displayName: '된장찌개',
+        categoryPath: '한식 > 찌개 > 된장찌개',
+        version: 1,
+        model: 'seed',
+      },
+    });
+    await app.prisma.globalMenuCanonicalLink.createMany({
+      data: [
+        {
+          menuCanonicalId: r.menuCanonicalIds.get('김치찌개')!,
+          restaurantId: r.restaurantId,
+          localCanonicalNorm: '김치찌개',
+          globalCanonicalId: g1.id,
+        },
+        {
+          menuCanonicalId: r.menuCanonicalIds.get('된장찌개')!,
+          restaurantId: r.restaurantId,
+          localCanonicalNorm: '된장찌개',
+          globalCanonicalId: g2.id,
+        },
+      ],
+    });
+
+    const tree = await service.getCategoryTree();
+    const han = tree.find((n) => n.label === '한식');
+    expect(han).toBeDefined();
+    // 한식 노드는 김치찌개(긍2) + 된장찌개(부1) 합산.
+    expect(han!.totalMentions).toBeGreaterThanOrEqual(3);
+    expect(han!.positive).toBeGreaterThanOrEqual(2);
+    expect(han!.negative).toBeGreaterThanOrEqual(1);
+    // 자식: "찌개" 노드.
+    const jjigae = han!.children?.find((c) => c.label === '찌개');
+    expect(jjigae).toBeDefined();
+    // 손자: "김치찌개", "된장찌개".
+    const kim = jjigae!.children?.find((c) => c.label === '김치찌개');
+    const doen = jjigae!.children?.find((c) => c.label === '된장찌개');
+    expect(kim).toBeDefined();
+    expect(doen).toBeDefined();
+    expect(kim!.totalMentions).toBe(2);
+    expect(doen!.totalMentions).toBe(1);
+  });
+});
+
+describe('normalizeCategoryPath', () => {
+  it('passes through canonical " > " path', () => {
+    expect(normalizeCategoryPath('한식 > 찌개 > 김치찌개')).toBe('한식 > 찌개 > 김치찌개');
+  });
+  it('normalizes alternate separators and whitespace', () => {
+    expect(normalizeCategoryPath('한식/찌개/김치찌개')).toBe('한식 > 찌개 > 김치찌개');
+    expect(normalizeCategoryPath('  한식  >  찌개  ')).toBe('한식 > 찌개');
+    expect(normalizeCategoryPath('디저트>케이크')).toBe('디저트 > 케이크');
+  });
+  it('prepends 기타 when top segment is unknown', () => {
+    expect(normalizeCategoryPath('미지의카테고리 > foo')).toBe('기타 > 미지의카테고리 > foo');
+  });
+  it('returns null for empty / non-string', () => {
+    expect(normalizeCategoryPath('')).toBeNull();
+    expect(normalizeCategoryPath('   ')).toBeNull();
+    expect(normalizeCategoryPath(null)).toBeNull();
+    expect(normalizeCategoryPath(123)).toBeNull();
   });
 });

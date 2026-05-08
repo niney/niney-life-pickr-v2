@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type {
   AnalyticsOverviewType,
+  CategoryTreeNodeType,
   GlobalMenuQueryType,
   GlobalMenuResultType,
   GlobalMenuStatType,
@@ -22,6 +23,35 @@ import {
 const TEMPERATURE = 0.1;
 const MAX_TOKENS = 4000;
 const NUM_CTX = 8192;
+
+// LLM 출력 path 정규화 — 다양한 구분자(>, /, ›, →, |) 와 공백 변형을 표준
+// " > " 로 통일. 최상위가 화이트리스트에 없으면 "기타" prepend. 빈 입력은 null.
+const TOP_WHITELIST = new Set([
+  '한식',
+  '중식',
+  '일식',
+  '양식',
+  '분식',
+  '디저트',
+  '음료',
+  '주류',
+  '기타',
+]);
+
+export const normalizeCategoryPath = (raw: unknown): string | null => {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const segments = trimmed
+    .split(/\s*[>/›→|]\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (segments.length === 0) return null;
+  if (!TOP_WHITELIST.has(segments[0]!)) {
+    segments.unshift('기타');
+  }
+  return segments.join(' > ');
+};
 
 export class AnalyticsError extends Error {
   constructor(
@@ -129,9 +159,10 @@ export class AnalyticsService {
       // 컨텍스트 join 없이 단순 chunking. 기존 매핑 유지가 목적이라면 full=true 권장.
     }
 
-    // pass 1: chunk 별 매핑.
+    // pass 1: chunk 별 매핑. v2 부터 응답이 { canonical, categoryPath } 객체.
     const chunks1 = chunk(inputVariants, GLOBAL_MERGE_CHUNK_SIZE);
-    const variantToCanonical = new Map<string, string>(); // variant → pass1 canonical
+    const variantToCanonical = new Map<string, string>();
+    const variantToCategoryPath = new Map<string, string | null>();
     let totalChunks = chunks1.length;
     let doneChunks = 0;
     this.log?.info({ total: inputVariants.length, chunks: chunks1.length }, '[global-merge] pass1 start');
@@ -141,10 +172,12 @@ export class AnalyticsService {
       const map = await this.callOneChunk(provider, model, ch);
       let mapped = 0;
       for (const v of ch) {
-        const c = map[v];
-        const canonical = typeof c === 'string' && c.trim().length > 0 ? c.trim() : v;
+        const entry = map[v];
+        const canonical =
+          entry && entry.canonical.trim().length > 0 ? entry.canonical.trim() : v;
         variantToCanonical.set(v, canonical);
-        if (map[v]) mapped += 1;
+        variantToCategoryPath.set(v, entry?.categoryPath ?? null);
+        if (entry) mapped += 1;
       }
       doneChunks += 1;
       progress.onChunk?.({
@@ -155,26 +188,26 @@ export class AnalyticsService {
       });
     }
 
-    // pass 2: pass1 결과의 distinct canonical 들 사이의 충돌 해소 — 청크 사이
-    // 같은 의미가 다른 표기로 떨어진 케이스를 다시 한 번 묶음. 입력이 작으면
-    // 한 번에 들어가서 pass2 자체가 빠르게 끝남.
+    // pass 2: pass1 결과의 distinct canonical 들 사이의 충돌 해소. pass2 가 새
+    // categoryPath 를 주면 우선 적용, 안 주면 pass1 의 path 보존.
     const pass1Canonicals = [...new Set(variantToCanonical.values())];
     const variantToFinal = new Map<string, string>();
-    if (pass1Canonicals.length > GLOBAL_MERGE_CHUNK_SIZE) {
-      // pass2 도 청크 분할.
-      const chunks2 = chunk(pass1Canonicals, GLOBAL_MERGE_CHUNK_SIZE);
-      totalChunks += chunks2.length;
-      this.log?.info({ pass1: pass1Canonicals.length, chunks: chunks2.length }, '[global-merge] pass2 start');
+    const finalCategoryByCanonical = new Map<string, string | null>(); // pass2 결과
+    const runPass2 = async (chunks2: string[][]): Promise<void> => {
       const pass2Map = new Map<string, string>();
       for (let i = 0; i < chunks2.length; i += 1) {
         const ch = chunks2[i]!;
         const map = await this.callOneChunk(provider, model, ch);
         let mapped = 0;
         for (const v of ch) {
-          const c = map[v];
-          const finalName = typeof c === 'string' && c.trim().length > 0 ? c.trim() : v;
+          const entry = map[v];
+          const finalName =
+            entry && entry.canonical.trim().length > 0 ? entry.canonical.trim() : v;
           pass2Map.set(v, finalName);
-          if (map[v]) mapped += 1;
+          if (entry?.categoryPath) {
+            finalCategoryByCanonical.set(finalName, entry.categoryPath);
+          }
+          if (entry) mapped += 1;
         }
         doneChunks += 1;
         progress.onChunk?.({
@@ -187,28 +220,16 @@ export class AnalyticsService {
       for (const [variant, c1] of variantToCanonical) {
         variantToFinal.set(variant, pass2Map.get(c1) ?? c1);
       }
+    };
+
+    if (pass1Canonicals.length > GLOBAL_MERGE_CHUNK_SIZE) {
+      const chunks2 = chunk(pass1Canonicals, GLOBAL_MERGE_CHUNK_SIZE);
+      totalChunks += chunks2.length;
+      this.log?.info({ pass1: pass1Canonicals.length, chunks: chunks2.length }, '[global-merge] pass2 start');
+      await runPass2(chunks2);
     } else if (pass1Canonicals.length > 0) {
-      // 단일 청크면 그대로 한 번 더.
       totalChunks += 1;
-      const map = await this.callOneChunk(provider, model, pass1Canonicals);
-      const pass2Map = new Map<string, string>();
-      let mapped = 0;
-      for (const v of pass1Canonicals) {
-        const c = map[v];
-        const finalName = typeof c === 'string' && c.trim().length > 0 ? c.trim() : v;
-        pass2Map.set(v, finalName);
-        if (map[v]) mapped += 1;
-      }
-      doneChunks += 1;
-      progress.onChunk?.({
-        pass: 2,
-        chunkIndex: 0,
-        chunkTotal: 1,
-        mappedInChunk: mapped,
-      });
-      for (const [variant, c1] of variantToCanonical) {
-        variantToFinal.set(variant, pass2Map.get(c1) ?? c1);
-      }
+      await runPass2([pass1Canonicals]);
     } else {
       // pass1 결과가 없으면 그대로.
       for (const [variant, c1] of variantToCanonical) {
@@ -216,12 +237,38 @@ export class AnalyticsService {
       }
     }
 
-    // norm 별 → final displayName + globalKey 결정.
-    const finalByNorm = new Map<string, { displayName: string; globalKey: string }>();
+    // norm 별 → final displayName + globalKey + categoryPath 결정.
+    // path 는 pass2 응답이 우선, 없으면 pass1 응답, 둘 다 없으면 null.
+    // 같은 globalKey 에 대해 여러 norm 의 path 가 다를 수 있어 first non-null 채택.
+    const finalByNorm = new Map<
+      string,
+      { displayName: string; globalKey: string; categoryPath: string | null }
+    >();
+    const pathByGlobalKey = new Map<string, string>();
     for (const [norm, name] of nameByNorm) {
       const finalName = variantToFinal.get(name) ?? name;
       const globalKey = normalizeTerm(finalName) || norm;
-      finalByNorm.set(norm, { displayName: finalName, globalKey });
+      // path 결정: pass2 우선 → pass1 fallback.
+      const pass2Path = finalCategoryByCanonical.get(finalName);
+      const pass1Path = variantToCategoryPath.get(name);
+      const path = normalizeCategoryPath(pass2Path) ?? normalizeCategoryPath(pass1Path);
+      // globalKey 단위로 first non-null path 보존 — 충돌 시 처음 본 값 유지.
+      if (path && !pathByGlobalKey.has(globalKey)) {
+        pathByGlobalKey.set(globalKey, path);
+      }
+      finalByNorm.set(norm, {
+        displayName: finalName,
+        globalKey,
+        categoryPath: path,
+      });
+    }
+    // 같은 globalKey 의 다른 norm 이 path null 이었던 경우 보강 — first non-null 이
+    // 들어왔을 수 있다.
+    for (const [norm, info] of finalByNorm) {
+      if (info.categoryPath === null) {
+        const fallback = pathByGlobalKey.get(info.globalKey) ?? null;
+        if (fallback) finalByNorm.set(norm, { ...info, categoryPath: fallback });
+      }
     }
 
     // DB 적용. full=true 면 기존 GlobalMenuCanonical / Link 모두 비우고 새로
@@ -239,13 +286,17 @@ export class AnalyticsService {
       for (const e of existing) keyToId.set(e.globalKey, e.id);
 
       // 변경 요약 — full 이면 모든 row 갱신, 아니면 부족한 것만 추가.
+      // 같은 globalKey 가 여러 norm 에서 나오면 첫 번째 path 가 채택되도록 dedup.
+      const seenKeys = new Set<string>();
       for (const [, info] of finalByNorm) {
+        if (seenKeys.has(info.globalKey)) continue;
+        seenKeys.add(info.globalKey);
         if (keyToId.has(info.globalKey)) {
-          // updatedAt 갱신 + version/displayName 보정.
           await tx.globalMenuCanonical.update({
             where: { id: keyToId.get(info.globalKey)! },
             data: {
               displayName: info.displayName,
+              categoryPath: info.categoryPath,
               version: GLOBAL_MERGE_VERSION,
               model,
               updatedAt: now,
@@ -256,6 +307,7 @@ export class AnalyticsService {
             data: {
               globalKey: info.globalKey,
               displayName: info.displayName,
+              categoryPath: info.categoryPath,
               version: GLOBAL_MERGE_VERSION,
               model,
             },
@@ -317,11 +369,14 @@ export class AnalyticsService {
     };
   }
 
+  // v2 응답 형태: { variant: { canonical, categoryPath } }.
+  // v1 호환을 위해 string 값도 받아 { canonical: <string>, categoryPath: null } 로
+  // 풀어쓴다 — 모델이 가끔 v1 형태로 떨어질 때 fallback.
   private async callOneChunk(
     provider: LLMProvider,
     model: string,
     variants: string[],
-  ): Promise<Record<string, string>> {
+  ): Promise<Record<string, { canonical: string; categoryPath: string | null }>> {
     try {
       const res = await provider.complete({
         prompt: buildGlobalMergePrompt(variants),
@@ -336,9 +391,17 @@ export class AnalyticsService {
       if (!candidate) return {};
       const parsed = JSON.parse(candidate) as unknown;
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const out: Record<string, string> = {};
+        const out: Record<string, { canonical: string; categoryPath: string | null }> = {};
         for (const [k, v] of Object.entries(parsed)) {
-          if (typeof v === 'string') out[k] = v;
+          if (typeof v === 'string') {
+            out[k] = { canonical: v, categoryPath: null };
+          } else if (v && typeof v === 'object') {
+            const obj = v as { canonical?: unknown; categoryPath?: unknown };
+            const canonical = typeof obj.canonical === 'string' ? obj.canonical : null;
+            const categoryPath =
+              typeof obj.categoryPath === 'string' ? obj.categoryPath : null;
+            if (canonical !== null) out[k] = { canonical, categoryPath };
+          }
         }
         return out;
       }
@@ -503,6 +566,7 @@ export class AnalyticsService {
       items.push({
         globalKey: g.globalKey,
         displayName: g.displayName,
+        categoryPath: g.categoryPath,
         totalMentions: total,
         restaurantCount: restaurants.length,
         positive,
@@ -585,6 +649,7 @@ export class AnalyticsService {
         items.push({
           globalKey: key,
           displayName: b.displayName,
+          categoryPath: null,
           totalMentions: b.total,
           restaurantCount: b.restaurants.length,
           positive: b.positive,
@@ -606,6 +671,14 @@ export class AnalyticsService {
           i.globalKey.toLowerCase().includes(q),
       );
     }
+    // 카테고리 prefix 필터 — "한식" → "한식 > %" 모두, "한식 > 찌개" → 그 prefix.
+    if (query.category) {
+      const cat = query.category.trim();
+      filtered = filtered.filter((i) => {
+        if (i.categoryPath === null) return false;
+        return i.categoryPath === cat || i.categoryPath.startsWith(`${cat} > `);
+      });
+    }
 
     filtered.sort((a, b) => sortGlobal(a, b, query.sort));
     filtered = filtered.slice(0, query.limit);
@@ -622,6 +695,119 @@ export class AnalyticsService {
       currentVersion: GLOBAL_MERGE_VERSION,
       items: filtered,
     };
+  }
+
+  // 카테고리별 누적 통계 트리. categoryPath 가 채워진 글로벌 메뉴만 대상.
+  // path segment 별로 트리를 만들어 leaf 의 멘션 통계를 부모로 누적 합산.
+  async getCategoryTree(): Promise<CategoryTreeNodeType[]> {
+    const linked = await this.prisma.globalMenuCanonical.findMany({
+      where: { categoryPath: { not: null } },
+      select: { id: true, categoryPath: true, links: { select: { menuCanonical: { select: { restaurantId: true, canonicalNorm: true } } } } },
+    });
+    if (linked.length === 0) return [];
+
+    // 한 번에 모든 링크 식당의 멘션 통계 — getGlobalMenus 와 같은 raw 쿼리 재사용.
+    const mentionStats = await this.prisma.$queryRaw<
+      Array<{
+        restaurantId: string;
+        canonicalNorm: string;
+        sentiment: string;
+        cnt: number | bigint;
+      }>
+    >`SELECT mc.restaurantId AS restaurantId,
+             mc.canonicalNorm AS canonicalNorm,
+             mm.sentiment AS sentiment,
+             COUNT(*) AS cnt
+        FROM menu_mentions mm
+        JOIN menu_canonicals mc
+          ON mc.restaurantId = mm.restaurantId
+         AND mc.nameNorm = mm.nameNorm
+        GROUP BY mc.restaurantId, mc.canonicalNorm, mm.sentiment`;
+    const statByLocal = new Map<
+      string,
+      { positive: number; negative: number; total: number }
+    >();
+    for (const r of mentionStats) {
+      const key = `${r.restaurantId}::${r.canonicalNorm}`;
+      const cur = statByLocal.get(key) ?? { positive: 0, negative: 0, total: 0 };
+      const cnt = Number(r.cnt);
+      cur.total += cnt;
+      if (r.sentiment === 'positive') cur.positive += cnt;
+      else if (r.sentiment === 'negative') cur.negative += cnt;
+      statByLocal.set(key, cur);
+    }
+
+    // 트리 구성. path 의 모든 prefix 를 노드로 만들고 leaf 통계를 누적.
+    interface MutableNode {
+      path: string;
+      label: string;
+      totalMentions: number;
+      positive: number;
+      negative: number;
+      children: Map<string, MutableNode>;
+    }
+    const roots = new Map<string, MutableNode>();
+
+    for (const g of linked) {
+      const segments = g.categoryPath!.split(' > ');
+      let total = 0;
+      let pos = 0;
+      let neg = 0;
+      for (const link of g.links) {
+        const stat = statByLocal.get(
+          `${link.menuCanonical.restaurantId}::${link.menuCanonical.canonicalNorm}`,
+        );
+        if (!stat) continue;
+        total += stat.total;
+        pos += stat.positive;
+        neg += stat.negative;
+      }
+      if (total === 0) continue;
+
+      // 모든 prefix 경로에 stat 누적.
+      let parentMap = roots;
+      let acc = '';
+      for (const seg of segments) {
+        acc = acc === '' ? seg : `${acc} > ${seg}`;
+        let node = parentMap.get(seg);
+        if (!node) {
+          node = {
+            path: acc,
+            label: seg,
+            totalMentions: 0,
+            positive: 0,
+            negative: 0,
+            children: new Map(),
+          };
+          parentMap.set(seg, node);
+        }
+        node.totalMentions += total;
+        node.positive += pos;
+        node.negative += neg;
+        parentMap = node.children;
+      }
+    }
+
+    // mutable → 직렬화 가능한 형태로 + 자식은 mentions desc 정렬.
+    const toJson = (node: MutableNode): CategoryTreeNodeType => {
+      const denom = node.positive + node.negative;
+      const children = [...node.children.values()]
+        .map(toJson)
+        .sort((a, b) => b.totalMentions - a.totalMentions);
+      return {
+        path: node.path,
+        label: node.label,
+        totalMentions: node.totalMentions,
+        positive: node.positive,
+        negative: node.negative,
+        positiveRatio: denom === 0 ? null : node.positive / denom,
+        children: children.length > 0 ? children : undefined,
+      };
+    };
+
+    return [...roots.values()]
+      .map(toJson)
+      .sort((a, b) => b.totalMentions - a.totalMentions);
   }
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {

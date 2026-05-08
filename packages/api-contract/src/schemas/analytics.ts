@@ -4,6 +4,8 @@ import { z } from 'zod';
 export const GlobalMenuStat = z.object({
   globalKey: z.string(),
   displayName: z.string(),
+  // 계층 카테고리 path (예: "한식 > 찌개 > 김치찌개"). null = 분류 없음.
+  categoryPath: z.string().nullable(),
   // 전체 멘션 수 (모든 식당의 합).
   totalMentions: z.number().int(),
   // 이 메뉴를 가진 식당 수.
@@ -33,6 +35,9 @@ export type GlobalMenuQuerySortType = z.infer<typeof GlobalMenuQuerySort>;
 export const GlobalMenuQuery = z.object({
   // 부분 일치 검색 — displayName / variants 모두 매칭.
   q: z.string().optional(),
+  // 카테고리 path prefix 필터 — "한식" → "한식 > %" 모두 포함, "한식 > 찌개"
+  // → 그 prefix, 정확한 path 도 포함.
+  category: z.string().optional(),
   sort: GlobalMenuQuerySort.default('mentions'),
   // 노이즈 제거 — 기본 5.
   minMentions: z.coerce.number().int().min(1).default(5),
@@ -54,6 +59,35 @@ export const GlobalMenuResult = z.object({
   items: z.array(GlobalMenuStat),
 });
 export type GlobalMenuResultType = z.infer<typeof GlobalMenuResult>;
+
+// 카테고리 트리 노드 (재귀). path 의 모든 prefix 가 노드. 자식은 직속만.
+// leaf 의 통계는 부모로 누적 합산되어 있어 어느 레벨에서도 해당 가지의 합계.
+export type CategoryTreeNodeType = {
+  path: string;
+  label: string;
+  totalMentions: number;
+  positive: number;
+  negative: number;
+  positiveRatio: number | null;
+  children?: CategoryTreeNodeType[];
+};
+export const CategoryTreeNode: z.ZodType<CategoryTreeNodeType> = z.lazy(() =>
+  z.object({
+    path: z.string(),
+    label: z.string(),
+    totalMentions: z.number().int(),
+    positive: z.number().int(),
+    negative: z.number().int(),
+    positiveRatio: z.number().nullable(),
+    children: z.array(CategoryTreeNode).optional(),
+  }),
+);
+
+export const CategoryTreeResult = z.object({
+  currentVersion: z.number().int(),
+  roots: z.array(CategoryTreeNode),
+});
+export type CategoryTreeResultType = z.infer<typeof CategoryTreeResult>;
 
 // overview — admin 대시보드 카드용. 핵심 카운터 만.
 export const AnalyticsOverview = z.object({

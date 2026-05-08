@@ -119,6 +119,10 @@ model GlobalMenuCanonical {
   displayName   String
   // 그룹 키 (displayName 의 normalizeTerm). 통계 쿼리의 GROUP BY 키.
   globalKey     String   @unique
+  // 계층 카테고리 path (예: "한식 > 찌개 > 김치찌개"). null = 분류 없음.
+  // 마지막 segment 는 displayName 과 같거나 약간 더 일반적인 표기. 통계 쿼리는
+  // 항상 globalKey 로 GROUP BY 하고 categoryPath 는 표시·prefix 필터용.
+  categoryPath  String?
   version       Int      @default(1)
   model         String?
   createdAt     DateTime @default(now())
@@ -126,6 +130,7 @@ model GlobalMenuCanonical {
 
   links GlobalMenuCanonicalLink[]
 
+  @@index([categoryPath])
   @@map("global_menu_canonicals")
 }
 

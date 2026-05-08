@@ -24,12 +24,19 @@ export const useGlobalMenus = (query: Partial<GlobalMenuQueryType> = {}) =>
       'analytics',
       'global-menus',
       query.q ?? '',
+      query.category ?? '',
       query.sort ?? 'mentions',
       query.minMentions ?? 5,
       query.limit ?? 50,
       !!query.includeUnlinked,
     ],
     queryFn: () => analyticsApi.globalMenus(query),
+  });
+
+export const useCategoryTree = () =>
+  useQuery({
+    queryKey: ['analytics', 'category-tree'],
+    queryFn: analyticsApi.categoryTree,
   });
 
 export const useStartGlobalMerge = () => {

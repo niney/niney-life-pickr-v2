@@ -1,6 +1,7 @@
 import {
   Routes,
   type AnalyticsOverviewType,
+  type CategoryTreeResultType,
   type GlobalMenuQueryType,
   type GlobalMenuResultType,
   type GlobalMergeJobInputType,
@@ -14,6 +15,7 @@ export const analyticsApi = {
   globalMenus: (query: Partial<GlobalMenuQueryType> = {}) => {
     const params = new URLSearchParams();
     if (query.q) params.set('q', query.q);
+    if (query.category) params.set('category', query.category);
     if (query.sort) params.set('sort', query.sort);
     if (query.minMentions !== undefined) params.set('minMentions', String(query.minMentions));
     if (query.limit !== undefined) params.set('limit', String(query.limit));
@@ -25,6 +27,8 @@ export const analyticsApi = {
       `${Routes.Analytics.globalMenus}${qs ? `?${qs}` : ''}`,
     );
   },
+
+  categoryTree: () => apiFetch<CategoryTreeResultType>(Routes.Analytics.categoryTree),
 
   startGlobalMerge: (input: GlobalMergeJobInputType) =>
     apiFetch<GlobalMergeJobSnapshotType>(Routes.Analytics.globalMergeJobs, {

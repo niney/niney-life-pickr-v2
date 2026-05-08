@@ -97,6 +97,8 @@ export const Analytics = {
     `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}`,
   globalMergeJobEvents: (id: string) =>
     `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}/events`,
+  // 카테고리 트리 — 글로벌 머지 이후 채워진 categoryPath 기반 누적 통계.
+  categoryTree: `${API_PREFIX}/admin/analytics/category-tree`,
 } as const;
 
 export const Ai = {
