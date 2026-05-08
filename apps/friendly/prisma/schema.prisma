@@ -108,17 +108,32 @@ model VisitorReview {
 }
 
 model ReviewSummary {
-  id           String    @id @default(cuid())
-  reviewId     String    @unique
-  status       String
-  text         String?
-  model        String?
-  errorCode    String?
-  errorMessage String?
-  startedAt    DateTime?
-  finishedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  reviewId          String    @unique
+  status            String
+  text              String?
+  model             String?
+  errorCode         String?
+  errorMessage      String?
+  // 구조화된 분석 — LLM이 JSON으로 한 번에 추출.
+  // sentiment: positive | negative | neutral | mixed
+  sentiment         String?
+  // -1.0 ~ 1.0
+  sentimentScore    Float?
+  // 1~5
+  satisfactionScore Int?
+  // [{ name, sentiment }] 직렬화
+  menusJson         String?
+  // string[] 직렬화 (예: "주차 협소", "예약 필수")
+  tipsJson          String?
+  // string[] 직렬화 — 분위기/서비스/가격 등 자유 태그
+  keywordsJson      String?
+  // 프롬프트/모델 변경 시 재분석 트리거용
+  analysisVersion   Int?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   review VisitorReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 

@@ -152,6 +152,12 @@ export const useRestaurantSummaryEvents = (
                       errorMessage: ev.errorMessage,
                       startedAt: r.summary?.startedAt ?? null,
                       finishedAt: ev.finishedAt,
+                      sentiment: ev.sentiment,
+                      sentimentScore: ev.sentimentScore,
+                      satisfactionScore: ev.satisfactionScore,
+                      menus: ev.menus,
+                      tips: ev.tips,
+                      keywords: ev.keywords,
                     },
                   }
                 : r,

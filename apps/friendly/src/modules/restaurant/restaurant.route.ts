@@ -4,16 +4,34 @@ import { z } from 'zod';
 import {
   RestaurantDeleteResult,
   RestaurantDetail,
+  RestaurantInsights,
   RestaurantListResult,
+  RestaurantReanalyzeResult,
+  RestaurantSmartPickInput,
+  RestaurantSmartPickResult,
   RestaurantSummaryProgress,
   Routes,
 } from '@repo/api-contract';
 import { RestaurantService } from './restaurant.service.js';
 import { jobRegistry } from '../crawl/job-registry.js';
-import { summaryEventsBus } from '../summary/summary-events-bus.js';
+import {
+  summaryEventsBus,
+  type SummarySignal,
+} from '../summary/summary-events-bus.js';
+import { SummaryService } from '../summary/summary.service.js';
+import { AiConfigService } from '../ai/ai.config.service.js';
+import { env } from '../../config/env.js';
 
 const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const service = new RestaurantService(app.prisma);
+  const aiConfig = new AiConfigService(app.prisma, {
+    apiKey: env.OLLAMA_CLOUD_API_KEY,
+    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
+    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
+    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
+    defaultModel: env.OLLAMA_DEFAULT_MODEL,
+  });
+  const summaries = new SummaryService(app.prisma, aiConfig);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Restaurant.list, {
@@ -60,6 +78,47 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       if (!result) throw app.httpErrors.notFound('Restaurant not found');
       return { ok: true as const, deletedReviewCount: result.deletedReviewCount };
     },
+  });
+
+  typed.post(Routes.Restaurant.reanalyze(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantReanalyzeResult },
+    },
+    handler: async (req) => {
+      // 큐잉만 하고 즉시 반환 — 진행 상황은 기존 SSE(summary-events)로 본다.
+      const queued = await summaries.backfillForRestaurant(req.params.placeId);
+      return { ok: true as const, queued };
+    },
+  });
+
+  typed.get(Routes.Restaurant.insights(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantInsights },
+    },
+    handler: async (req) => {
+      const insights = await service.getInsights(req.params.placeId);
+      if (!insights) throw app.httpErrors.notFound('Restaurant not crawled yet');
+      return insights;
+    },
+  });
+
+  typed.post(Routes.Restaurant.smartPick, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      body: RestaurantSmartPickInput,
+      response: { 200: RestaurantSmartPickResult },
+    },
+    handler: async (req) => service.smartPick(req.body),
   });
 
   typed.get(Routes.Restaurant.summaryStatus(':placeId'), {
@@ -178,7 +237,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       };
       const makeOnSignal =
         (placeId: string) =>
-        (signal: { type: string } & Record<string, unknown>): void => {
+        (signal: SummarySignal): void => {
           if (signal.type === 'review') {
             writeNamed('review', { placeId, ...signal });
             return;

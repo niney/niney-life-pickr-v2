@@ -127,39 +127,91 @@ export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) =>
   );
 };
 
+// 감정 → 색상. 같은 팔레트를 인사이트 페이지에서도 쓸 수 있도록 단순한
+// tailwind 클래스로 통일.
+const sentimentClass = (s: string | null | undefined): string => {
+  if (s === 'positive') return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+  if (s === 'negative') return 'bg-rose-500/10 text-rose-600 dark:text-rose-400';
+  if (s === 'mixed') return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
+  return 'bg-muted text-muted-foreground';
+};
+
+const sentimentLabel: Record<string, string> = {
+  positive: '긍정',
+  negative: '부정',
+  neutral: '중립',
+  mixed: '혼합',
+};
+
 const ReviewSummaryBlock = ({ r }: { r: VisitorReviewWithSummaryType }) => {
   const echoes =
     r.summary?.status === 'done' && summaryEchoesBody(r.body, r.summary.text);
+  const s = r.summary;
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span
-        className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${
-          r.summary?.status === 'failed'
-            ? 'bg-destructive/10 text-destructive'
-            : echoes
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-primary/10 text-primary'
-        }`}
-      >
-        AI 요약
-      </span>
-      <div className={`flex-1 ${echoes ? 'text-muted-foreground' : ''}`}>
-        {!r.summary && <span className="text-muted-foreground">없음</span>}
-        {r.summary?.status === 'pending' && (
-          <span className="text-muted-foreground">대기 중…</span>
-        )}
-        {r.summary?.status === 'running' && (
-          <span className="inline-flex items-center gap-1 text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" /> 진행 중…
-          </span>
-        )}
-        {r.summary?.status === 'done' && <span>{r.summary.text}</span>}
-        {r.summary?.status === 'failed' && (
-          <span className="text-destructive">
-            실패: {r.summary.errorMessage ?? r.summary.errorCode ?? 'unknown'}
-          </span>
-        )}
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 text-xs">
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${
+            s?.status === 'failed'
+              ? 'bg-destructive/10 text-destructive'
+              : echoes
+                ? 'bg-muted text-muted-foreground'
+                : 'bg-primary/10 text-primary'
+          }`}
+        >
+          AI 요약
+        </span>
+        <div className={`flex-1 ${echoes ? 'text-muted-foreground' : ''}`}>
+          {!s && <span className="text-muted-foreground">없음</span>}
+          {s?.status === 'pending' && (
+            <span className="text-muted-foreground">대기 중…</span>
+          )}
+          {s?.status === 'running' && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" /> 진행 중…
+            </span>
+          )}
+          {s?.status === 'done' && <span>{s.text}</span>}
+          {s?.status === 'failed' && (
+            <span className="text-destructive">
+              실패: {s.errorMessage ?? s.errorCode ?? 'unknown'}
+            </span>
+          )}
+        </div>
       </div>
+      {s?.status === 'done' && (s.sentiment || s.satisfactionScore !== null) && (
+        <div className="flex flex-wrap items-center gap-1.5 pl-[3.5rem] text-xs">
+          {s.sentiment && (
+            <span className={`rounded px-1.5 py-0.5 ${sentimentClass(s.sentiment)}`}>
+              {sentimentLabel[s.sentiment] ?? s.sentiment}
+            </span>
+          )}
+          {s.satisfactionScore !== null && (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">
+              만족도 {s.satisfactionScore}/5
+            </span>
+          )}
+        </div>
+      )}
+      {s?.status === 'done' && s.menus && s.menus.length > 0 && (
+        <ul className="flex flex-wrap gap-1 pl-[3.5rem] text-[11px]">
+          {s.menus.map((m, i) => (
+            <li
+              key={`${m.name}-${i}`}
+              className={`rounded px-1.5 py-0.5 ${sentimentClass(m.sentiment ?? null)}`}
+            >
+              {m.name}
+            </li>
+          ))}
+        </ul>
+      )}
+      {s?.status === 'done' && s.tips && s.tips.length > 0 && (
+        <ul className="space-y-0.5 pl-[3.5rem] text-[11px] text-muted-foreground">
+          {s.tips.map((t, i) => (
+            <li key={`${t}-${i}`}>💡 {t}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };

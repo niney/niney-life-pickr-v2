@@ -84,13 +84,20 @@ export class OllamaCloudAdapter implements LLMProvider {
     const ollamaOptions: Record<string, number> = {};
     if (typeof opts.temperature === 'number') ollamaOptions.temperature = opts.temperature;
     if (typeof opts.maxTokens === 'number') ollamaOptions.num_predict = opts.maxTokens;
+    if (typeof opts.numCtx === 'number') ollamaOptions.num_ctx = opts.numCtx;
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: opts.model,
       stream: false,
       messages,
       ...(Object.keys(ollamaOptions).length > 0 ? { options: ollamaOptions } : {}),
     };
+    // format 은 options 가 아니라 최상위 필드. 'json' 문자열이거나 JSON
+    // Schema 객체. 구조화 출력은 모델 토큰 샘플링 단계에서 스키마를
+    // 강제하므로 parse 실패율을 크게 낮춘다.
+    if (opts.format !== undefined) {
+      body.format = opts.format;
+    }
 
     // Combine two cancellation sources into one AbortController so fetch
     // sees a single signal. We track which source fired so the catch block

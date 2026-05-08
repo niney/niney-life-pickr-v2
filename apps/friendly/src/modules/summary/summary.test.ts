@@ -94,10 +94,25 @@ describe('SummaryService', () => {
     return { placeId, reviewIds: newReviews.map((r) => r.id) };
   };
 
-  it('marks all rows as done with text on success', async () => {
+  // 어댑터가 JSON 객체 형태로 응답한다고 가정한 헬퍼. 코드펜스를 섞어
+  // 보내도 파서가 첫 `{` ~ 마지막 `}`만 잘라내는지를 함께 확인한다.
+  const analysisJson = (summary: string) =>
+    '```json\n' +
+    JSON.stringify({
+      summary,
+      sentiment: 'positive',
+      sentimentScore: 0.8,
+      satisfactionScore: 5,
+      menus: [{ name: '김치찌개', sentiment: 'positive' }],
+      tips: ['예약 권장'],
+      keywords: ['아늑함', '친절'],
+    }) +
+    '\n```';
+
+  it('marks all rows as done with parsed analysis on success', async () => {
     const { placeId, reviewIds } = await seed(['리뷰 본문 1', '리뷰 본문 2']);
-    const provider = fakeProvider(async (model, prompt) => ({
-      text: `요약(${model}): ${prompt.slice(0, 8)}`,
+    const provider = fakeProvider(async (_model, prompt) => ({
+      text: analysisJson(`요약: ${prompt.slice(0, 8)}`),
       model: 'test-model',
       promptTokens: 10,
       completionTokens: 5,
@@ -125,14 +140,101 @@ describe('SummaryService', () => {
       expect(r.model).toBe('test-model');
       expect(r.finishedAt).not.toBeNull();
       expect(r.errorCode).toBeNull();
+      expect(r.sentiment).toBe('positive');
+      expect(r.sentimentScore).toBeCloseTo(0.8);
+      expect(r.satisfactionScore).toBe(5);
+      expect(r.analysisVersion).toBe(3);
+      expect(JSON.parse(r.menusJson ?? '[]')).toEqual([
+        { name: '김치찌개', sentiment: 'positive' },
+      ]);
+      expect(JSON.parse(r.tipsJson ?? '[]')).toEqual(['예약 권장']);
+      expect(JSON.parse(r.keywordsJson ?? '[]')).toEqual(['아늑함', '친절']);
     }
+  });
+
+  it('extracts JSON even when LLM wraps it in <think> reasoning and prose', async () => {
+    const { placeId, reviewIds } = await seed(['리뷰 본문']);
+    const wrapped =
+      '<think>이건 긍정적인 리뷰 같다. {잡설} 점수는 대략...</think>\n' +
+      '다음은 분석 결과입니다:\n' +
+      '```json\n' +
+      JSON.stringify({
+        summary: '맛있고 친절',
+        sentiment: 'positive',
+        sentimentScore: 0.9,
+        satisfactionScore: 5,
+        menus: [{ name: '파스타', sentiment: 'positive' }],
+        tips: [],
+        keywords: ['친절'],
+      }) +
+      '\n```\n이상입니다.';
+    const provider = fakeProvider(async () => ({
+      text: wrapped,
+      model: 'm',
+      promptTokens: 10,
+      completionTokens: 10,
+    }));
+    const aiConfig = new AiConfigService(app.prisma, {
+      apiKey: '',
+      baseUrl: '',
+      timeoutMs: 1000,
+      maxConcurrent: 1,
+      defaultModel: '',
+    });
+    const service = new SummaryService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'm' }),
+    });
+
+    await service.runForTests(placeId, reviewIds);
+
+    const row = await app.prisma.reviewSummary.findUnique({
+      where: { reviewId: reviewIds[0]! },
+    });
+    expect(row?.status).toBe('done');
+    expect(row?.sentiment).toBe('positive');
+    expect(row?.text).toBe('맛있고 친절');
+  });
+
+  it('marks rows as failed with parse_failed when LLM returns invalid JSON', async () => {
+    const { placeId, reviewIds } = await seed(['리뷰']);
+    const provider = fakeProvider(async () => ({
+      text: '죄송하지만 분석할 수 없습니다.',
+      model: 'm',
+      promptTokens: 1,
+      completionTokens: 1,
+    }));
+    const aiConfig = new AiConfigService(app.prisma, {
+      apiKey: '',
+      baseUrl: '',
+      timeoutMs: 1000,
+      maxConcurrent: 1,
+      defaultModel: '',
+    });
+    const service = new SummaryService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'm' }),
+    });
+
+    await service.runForTests(placeId, reviewIds);
+
+    const row = await app.prisma.reviewSummary.findUnique({
+      where: { reviewId: reviewIds[0]! },
+    });
+    expect(row?.status).toBe('failed');
+    expect(row?.errorCode).toBe('parse_failed');
+    expect(row?.text).toBeNull();
+    expect(row?.sentiment).toBeNull();
   });
 
   it('records failures per row without aborting siblings', async () => {
     const { placeId, reviewIds } = await seed(['ok', 'will fail', 'ok2']);
     const provider = fakeProvider(async (_model, prompt) => {
       if (prompt.includes('will fail')) throw new LLMUpstreamError(500, 'boom');
-      return { text: `요약 ${prompt}`, model: 'm', promptTokens: 1, completionTokens: 1 };
+      return {
+        text: analysisJson(`요약 ${prompt.slice(0, 8)}`),
+        model: 'm',
+        promptTokens: 1,
+        completionTokens: 1,
+      };
     });
     const aiConfig = new AiConfigService(app.prisma, {
       apiKey: '',
@@ -168,7 +270,7 @@ describe('SummaryService', () => {
     const unsub = bus.subscribe(placeId, () => fired.push(placeId));
 
     const provider = fakeProvider(async (_model, prompt) => ({
-      text: `요약 ${prompt}`,
+      text: analysisJson(`요약 ${prompt.slice(0, 8)}`),
       model: 'm',
       promptTokens: 1,
       completionTokens: 1,

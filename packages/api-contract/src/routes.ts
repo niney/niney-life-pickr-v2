@@ -48,6 +48,17 @@ export const Restaurant = {
   // tab keeps us under the HTTP/1.1 6-per-origin SSE cap, even with several
   // crawls in flight.
   summaryEvents: `${API_PREFIX}/admin/restaurants/summary-events`,
+  // analysisVersion 이 비었거나 구버전인 done/failed 행을 다시 큐잉.
+  // 재크롤 없이 새 분석 스키마를 기존 리뷰에 채울 때 쓴다.
+  reanalyze: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/reanalyze`,
+  // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
+  insights: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,
+  // 가중 랜덤 픽 — 분석 점수를 가중치로 써서 등록된 식당 중 하나를 고른다.
+  // niney의 본 목적("선택 대신 골라주기")에 분석 결과를 직접 활용하는
+  // 가장 작은 통합 지점.
+  smartPick: `${API_PREFIX}/admin/restaurants/smart-pick`,
 } as const;
 
 export const Ai = {

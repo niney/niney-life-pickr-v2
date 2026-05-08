@@ -11,6 +11,15 @@ export interface LLMCompleteOptions {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  // 입력 컨텍스트 윈도우 토큰 수. Ollama의 num_ctx 기본값이 2048이라
+  // 긴 리뷰가 잘리는 사고가 자주 난다. 분석 작업처럼 입력이 큰 경우
+  // 명시해야 한다. 다른 어댑터는 무시.
+  numCtx?: number;
+  // JSON 출력 강제. 'json' 은 단순 JSON 모드, 객체는 JSON Schema로
+  // 구조화 출력(스키마와 일치하는 토큰만 샘플링) 강제. Ollama는 둘 다
+  // /api/chat 의 최상위 `format` 으로 받는다. 다른 어댑터는 무시하거나
+  // 자체 매핑.
+  format?: 'json' | Record<string, unknown>;
   signal?: AbortSignal;
 }
 

@@ -110,6 +110,16 @@ const RestaurantRow = ({
           {item.summaryFailed > 0 && (
             <Badge variant="destructive">실패 {item.summaryFailed}</Badge>
           )}
+          {item.avgSatisfactionScore !== null && (
+            <Badge variant="outline">😊 {item.avgSatisfactionScore.toFixed(1)}/5</Badge>
+          )}
+          {item.positiveCount + item.negativeCount + item.neutralCount + item.mixedCount > 0 && (
+            <span className="text-[11px]">
+              <span className="text-emerald-600 dark:text-emerald-400">+{item.positiveCount}</span>
+              <span className="mx-1 text-muted-foreground">/</span>
+              <span className="text-rose-600 dark:text-rose-400">-{item.negativeCount}</span>
+            </span>
+          )}
           <span>· 마지막: {new Date(item.lastCrawledAt).toLocaleString('ko-KR')}</span>
         </div>
       </div>
@@ -190,6 +200,9 @@ export const AdminRestaurantsPage = () => {
   // can be in confirm mode at a time; clicking another row's trash icon
   // moves the prompt instead of opening a second one.
   const [confirmDeletePlaceId, setConfirmDeletePlaceId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'recent' | 'satisfaction' | 'positive' | 'negativeRatio'>(
+    'recent',
+  );
 
   const handleDelete = async (placeId: string) => {
     if (confirmDeletePlaceId !== placeId) {
@@ -275,12 +288,52 @@ export const AdminRestaurantsPage = () => {
       removeJob(jobId);
     };
 
-  const items = listQuery.data?.items ?? [];
+  const rawItems = listQuery.data?.items ?? [];
+  // 정렬은 클라이언트에서. 분석 안 된 식당은 항상 가장 뒤로 (점수 null)
+  // — 정렬 기준이 분석 점수일 때 빈 줄이 위로 올라오는 걸 방지한다.
+  const items = (() => {
+    if (sortBy === 'recent') return rawItems;
+    const withNullsLast = (
+      cmp: (a: RestaurantListItemType, b: RestaurantListItemType) => number,
+      keyOf: (it: RestaurantListItemType) => number | null,
+    ) =>
+      [...rawItems].sort((a, b) => {
+        const av = keyOf(a);
+        const bv = keyOf(b);
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        return cmp(a, b);
+      });
+    if (sortBy === 'satisfaction') {
+      return withNullsLast(
+        (a, b) => (b.avgSatisfactionScore ?? 0) - (a.avgSatisfactionScore ?? 0),
+        (it) => it.avgSatisfactionScore,
+      );
+    }
+    if (sortBy === 'positive') {
+      return withNullsLast(
+        (a, b) => (b.avgSentimentScore ?? 0) - (a.avgSentimentScore ?? 0),
+        (it) => it.avgSentimentScore,
+      );
+    }
+    // negativeRatio — 분모가 0이면 null 취급(분석 없음). 비율 낮은 순.
+    return withNullsLast(
+      (a, b) => {
+        const ra = a.negativeCount / Math.max(a.summaryDone, 1);
+        const rb = b.negativeCount / Math.max(b.summaryDone, 1);
+        return ra - rb;
+      },
+      (it) => (it.summaryDone === 0 ? null : it.summaryDone),
+    );
+  })();
   // Subscribe to summary events for every visible row so trailing summaries
   // (the ones still finishing after a crawl `done`) keep the badges fresh
   // even when no panel is mounted for that row. The singleton SSE manager
   // multiplexes these into a single connection.
-  useRestaurantListSummaryEvents(items.map((it) => it.placeId));
+  // SSE 구독은 정렬 결과가 아닌 원 목록 기준 — 정렬만 바뀌어도
+  // EventSource가 끊겼다 다시 붙는 걸 막는다.
+  useRestaurantListSummaryEvents(rawItems.map((it) => it.placeId));
   // Index jobs by placeId so each row can render its own anchored panel
   // without scanning the full set on every render.
   const jobByPlaceId = new Map<string, ActiveCrawlJob>();
@@ -360,10 +413,27 @@ export const AdminRestaurantsPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>등록된 맛집 ({items.length})</CardTitle>
-          <CardDescription>
-            업데이트는 새 리뷰만 추가하고, 재크롤링은 리뷰 전체를 다시 수집·요약합니다.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>등록된 맛집 ({items.length})</CardTitle>
+              <CardDescription>
+                업데이트는 새 리뷰만 추가하고, 재크롤링은 리뷰 전체를 다시 수집·요약합니다.
+              </CardDescription>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              정렬
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="h-8 rounded border bg-background px-2 text-xs"
+              >
+                <option value="recent">최근 크롤링순</option>
+                <option value="satisfaction">만족도 높은 순</option>
+                <option value="positive">긍정 점수 높은 순</option>
+                <option value="negativeRatio">부정 비율 낮은 순</option>
+              </select>
+            </label>
+          </div>
         </CardHeader>
         <CardContent>
           {listQuery.isLoading ? (

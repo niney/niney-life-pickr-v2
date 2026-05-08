@@ -24,6 +24,13 @@ export interface SummaryReviewSignal {
   errorCode: string | null;
   errorMessage: string | null;
   finishedAt: string;
+  // 구조화 분석 — done 일 때만 채워진다. failed 행은 모두 null.
+  sentiment: 'positive' | 'negative' | 'neutral' | 'mixed' | null;
+  sentimentScore: number | null;
+  satisfactionScore: number | null;
+  menus: Array<{ name: string; sentiment?: 'positive' | 'negative' | 'neutral' | null }> | null;
+  tips: string[] | null;
+  keywords: string[] | null;
 }
 
 export type SummarySignal = SummaryProgressSignal | SummaryReviewSignal;
