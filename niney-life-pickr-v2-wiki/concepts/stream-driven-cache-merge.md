@@ -1,7 +1,7 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-05-08
-topics_connected: [crawl, friendly, shared, web]
+last_compiled: 2026-05-09
+topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics]
 status: active
 ---
 
@@ -19,6 +19,8 @@ status: active
 - **2026-05-07** in [[../topics/web]] (`ActiveJobPanel.tsx`): `stream.lastPersistedBatch`를 `seen` Set로 dedupe한 뒤 detail 캐시에 prepend. `done` 시점에서야 list 캐시만 invalidate. 이전엔 visitor_batch 이벤트마다 `invalidateQueries(['restaurant', placeId])`를 쳐서 매 페이지마다 detail GET이 떠 페이지가 멎었음.
 - **2026-05-08** in [[../topics/crawl]] / [[../topics/api-contract]] (`crawl.service.ts`, `schemas/crawl.ts`): 새로 추가된 `VisitorReview.videos: VisitorReviewVideo[]`(포스터 + 서명된 mp4 url)도 같은 머지 채널을 그대로 탄다. `visitor_batch` SSE의 `persistedReviews`에 `videos`가 동봉되어 `setQueryData` 머지 시 클라가 별도 GET 없이 비디오 타일까지 그릴 수 있음. 페이로드 한 칸 늘리고 끝 — 머지 인프라는 손 안 댐.
 - **2026-05-08** in [[../topics/friendly]] / [[../topics/web]] (`summary.service.ts`, `summary-events-bus.ts`, `sections.tsx`): ReviewSummary 구조화 분석(sentiment / sentimentScore / satisfactionScore / menusJson / tipsJson / keywordsJson)도 SSE `review` 이벤트 페이로드에 그대로 실려와 `reviews[].summary.*`로 머지됨. FE 리뷰 카드의 감정 뱃지·만족도·메뉴 칩·팁 리스트가 detail GET 0회로 채워지고 갱신됨. 페이로드만 풍부해지고 머지 코드는 동일.
+- **2026-05-09** in [[../topics/menu-grouping]] / [[../topics/shared]] (`packages/shared/src/hooks/useMenuGrouping.ts` `useGroupingJob(jobId)`): batch 메뉴 그룹핑 잡 React Query 캐시에 SSE 이벤트를 직접 머지. `snapshot` 이벤트는 잡 캐시를 통째로 set, `item` 이벤트는 items 배열에서 placeId 매치해 patch + doneCount/failedCount/skippedCount 재계산, `done` 이벤트는 state/finishedAt patch + ranking + restaurants-status 캐시 invalidate. follow-up GET 0회. 자동 재연결 백오프(1s→2s→4s→max 30s) + closedRef 가드 + jobId effect dep로 라이프사이클을 훅 안에서 직접 관리.
+- **2026-05-09** in [[../topics/analytics]] / [[../topics/shared]] (`packages/shared/src/hooks/useAnalytics.ts` `useGlobalMergeJob(jobId)`): 전역 머지 잡 진행도. `snapshot`은 잡 캐시 통째 set, `chunk` 이벤트는 doneChunks +1 + totalChunks를 max로 갱신, `done`은 잡 종료 + overview/global-menus 캐시 invalidate. 같은 GET snapshot 1회 + SSE 머지 모양을 그대로 따름.
 
 ## What This Means
 
@@ -28,6 +30,8 @@ status: active
 2. **TanStack Query는 이 패턴의 1차 인프라** — `setQueryData` 콜백 형태(`(prev) => merged`)가 dedupe + prepend + 부분 패치 같은 머지 로직을 명료하게 표현. 캐시 키 컨벤션(`['restaurant', 'list']`, `['restaurant', placeId]`)도 패치 위치를 결정.
 3. **머지의 안전망은 server-assigned id** — `persistedReviews`가 server id를 가져야 클라가 이미 가진 row와 dedupe할 수 있다. server id 없이 `externalId`만으로 머지하면 race에서 깨짐. 페이로드 설계가 직접 머지의 가능 여부를 좌우한다.
 4. **invalidate는 마지막 카드** — `done` 같은 종료 이벤트에서만 list cache invalidate를 친다. 전체 새로고침 비용을 가장 마지막에 한 번만 지불하는 룰.
+5. **이젠 6번째·7번째 인스턴스 — 모든 잡 진행 UI가 같은 모양** — 리뷰 크롤(`useCrawlJobStream`), 요약(`useRestaurantSummaryEvents`), 메뉴 그룹핑(`useGroupingJob`), 전역 머지(`useGlobalMergeJob`)까지 전부 같은 골격을 공유한다: **GET snapshot 1회로 초기 상태 시드 → SSE가 부분 업데이트를 push → `useQueryClient().setQueryData`로 머지 → `done`에서만 invalidate**. `setQueryData`가 이 패턴의 핵심 도구로 굳었음.
+6. **흥미로운 변형: 잡 단위 훅은 공유 매니저를 거치지 않는다** — `summarySseManager`처럼 placeId×endpoint 멀티플렉싱이 필요한 경우엔 공유 매니저를 둔다. 반면 `useGroupingJob` / `useGlobalMergeJob`은 jobId가 곧 구독 단위라 훅 안에서 EventSource 라이프사이클을 직접 관리(재연결 백오프, closedRef 가드, jobId effect dep). 같은 패턴이지만 multiplex 필요 여부에 따라 인프라 층이 갈리는 두 갈래 모양으로 정착했다.
 
 이 패턴이 깨질 수 있는 시점:
 - **페이로드가 너무 무거워질 때** — 한 이벤트가 MB 단위가 되면 SSE가 백프레셔를 못 쳐서 서버 메모리 누적. 리뷰 본문 500자 컷 같은 상한이 이 균형의 일부.

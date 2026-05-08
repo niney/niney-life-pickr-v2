@@ -1,7 +1,7 @@
 ---
 name: niney-life-pickr-v2
 mode: codebase
-last_updated: 2026-05-08
+last_updated: 2026-05-09
 
 ---
 
@@ -27,6 +27,8 @@ last_updated: 2026-05-08
 | `ai` | LLM 통합 (Ollama Cloud) — provider config DB, 어댑터, 병렬 요청, admin UI 연동 | `apps/friendly/src/modules/ai/`, `packages/api-contract/src/schemas/ai.ts`, `apps/web/src/routes/admin/AdminAi*Page.tsx` |
 | `web` | Vite + React 19 SPA | `apps/web/` |
 | `mobile` | Expo 52 + RN 0.76 앱 | `apps/mobile/` |
+| `menu-grouping` | 식당 단위 메뉴 표기 변형 → canonical 그룹 LLM 정규화 + 순위/긍부 통계 + batch 잡 SSE | `apps/friendly/src/modules/menu-grouping/` |
+| `analytics` | 식당 가로지르기 글로벌 메뉴 머지 + 카테고리 트리(`categoryPath`) + 통계 API + admin 운영 UI | `apps/friendly/src/modules/analytics/`, `packages/api-contract/src/schemas/analytics.ts`, `apps/web/src/routes/admin/AdminAnalyticsPage.tsx` |
 | `api-contract` | `@repo/api-contract` Zod 스키마 SSOT | `packages/api-contract/` |
 | `shared` | `@repo/shared` FE 공통 (API/hooks/store/UI) | `packages/shared/` |
 | `utils` | `@repo/utils` 순수 헬퍼 | `packages/utils/` |
@@ -41,7 +43,8 @@ last_updated: 2026-05-08
 | `platform-ui-split` | shared, web, mobile, project-overview | 로직은 `@repo/shared`로 공유, UI는 `.web.tsx` / `.native.tsx`로 플랫폼 분기 — Tamagui/RN-Web 거부 |
 | `workspace-package-resolution` | api-contract, friendly, shared, web, project-overview | `@repo/*` 컨슈머 도달 체인 — pnpm `injected` → vite extensionAlias → esbuild prebundle namespace re-export → autoload 우회. 한 단계 깨지면 컨슈머 import 에러로 일관 출몰 |
 | `stream-driven-cache-merge` | crawl, friendly, shared, web | SSE 이벤트가 머지 가능한 완성된 페이로드를 동봉 → `setQueryData`로 직접 패치, follow-up GET 0회 |
-| `in-memory-singleton-gates` | ai, crawl, friendly, shared | 외부 큐/Redis 없이 모듈 싱글턴 + in-memory FIFO로 동시성 제어 — AI cap, 크롤 큐, persistTail, SSE 매니저 모두 같은 모양 |
+| `in-memory-singleton-gates` | ai, crawl, friendly, shared, menu-grouping, analytics | 외부 큐/Redis 없이 모듈 싱글턴 + in-memory FIFO로 동시성 제어 — AI cap, 크롤 큐, persistTail, SSE 매니저, 잡 registry 모두 같은 모양 |
+| `versioned-llm-prompts` | ai, friendly, menu-grouping, analytics | 도메인 별 `*_VERSION` 상수 + DB 컬럼 + UI stale 배지 + 수동 재실행 — 프롬프트/스키마 변경을 데이터와 조약처럼 다룬다 (`ANALYSIS_VERSION=4`, `MENU_GROUPING_VERSION=1`, `GLOBAL_MERGE_VERSION=2`) |
 
 ## Topic Structure (article sections)
 
@@ -62,3 +65,4 @@ last_updated: 2026-05-08
 - **2026-05-07** — `ai` 토픽 추가 (Ollama Cloud 통합 + 어드민 키/테스트 UI 도입과 함께). `workspace-package-resolution` 컨셉 추가 — AI 모듈 작업 중 `Routes.Ai` namespace re-export 우회·`vitest.config` extensionAlias·workspace symlink 깨짐을 정리하면서 cross-cutting 함정으로 식별됨. `zod-ssot-buildless`의 연결 토픽에 `ai` 추가 (같은 SSOT 패턴이 신규 도메인에서도 그대로 적용됨).
 - **2026-05-07** — 맛집 도메인 (DB 영속화 + AI 요약 + 다중 크롤 + SSE 멀티플렉싱) 통합으로 `crawl`/`friendly`/`shared`/`web`/`api-contract` 5개 토픽 갱신. 신규 컨셉 2개: `stream-driven-cache-merge` (SSE 페이로드 직접 머지로 detail GET 회피), `in-memory-singleton-gates` (Redis 없이 모듈 싱글턴 + FIFO로 cap·순서·통합 모두 처리). `sse-token-auth`에 멀티플렉싱 `summaryEvents` instance 추가.
 - **2026-05-08** — 미디어/요약 강화 (썸네일 프록시·동영상 분리·구조화 분석·재시도/백오프) 통합으로 `crawl`/`friendly`/`ai`/`api-contract`/`web`/`shared`/`utils` 7개 토픽 갱신. 신규 토픽·컨셉 없음 (기존 구조에 자연스럽게 흡수). 컨셉 2개에 신규 인스턴스 추가: `stream-driven-cache-merge`에 `VisitorReview.videos`·요약 분석 필드(SSE 페이로드 확장만으로 머지 인프라는 동일) / `in-memory-singleton-gates`에 placeId별 summary run 직렬화·Ollama 429 슬롯-보유 백오프(외부 게이트와 내부 회복 분리). `friendly`에 신규 media 모듈 (`/api/v1/media/thumbnail` Naver CDN 호스트 allowlist + sharp + 디스크 캐시) 흡수. `summary` 모듈은 활동량이 크지만 아직 friendly 내부 모듈로 유지 — 별도 토픽 분리는 다음 라운드에서 재평가.
+- **2026-05-09** — 메뉴 분석 파이프라인 확장 (식당 단위 그룹핑 + 식당 가로지르기 글로벌 머지 + 카테고리 트리). 신규 토픽 2개: `menu-grouping` (식당당 1회 LLM 호출로 메뉴 표기 변형 정규화 + 순위/긍부 통계 + batch 잡 SSE), `analytics` (전역 메뉴 머지 두-패스 + categoryPath 단일 컬럼 + 메모리 트리 빌더 + 검색·필터 API). 갱신 토픽 7개: `friendly`(두 모듈 흡수 + summary v4 traits + getInsights MenuCanonical 기반), `api-contract`(menu-grouping/analytics 스키마 + Routes.Analytics + 첫 z.lazy 재귀 `CategoryTreeNode`), `shared`(잡 단위 SSE 훅 2개 — 공유 매니저 없이 hook 안에서 EventSource 라이프사이클 직접 관리), `web`(AdminAnalyticsPage 4섹션 + `?menu=`/`?category=` URL 동기화 useEffect 회피 + MenuRankingSection 비교 위젯 deep-link), `mobile`(맛집 탭 + 식당 상세 라우트 + MenuRankingCard, ADMIN gated), `ai`(LLM 컨슈머 3부류로 확장, 도메인별 VERSION 차이만), `project-overview`(3단계 분석 파이프라인 + 5개 신규 테이블). 신규 컨셉 1개: `versioned-llm-prompts` (`*_VERSION` 상수 + DB 컬럼 + UI 배지 + 수동 재실행 — 3 도메인이 같은 모양). 기존 컨셉 4개에 신규 인스턴스 추가: `in-memory-singleton-gates`(잡 registry 두 종 — multi-job actor 격리 / single-job inflight 가드), `sse-token-auth`(잡 SSE 두 엔드포인트), `stream-driven-cache-merge`(useGroupingJob/useGlobalMergeJob 의 snapshot+chunk/item 머지), `zod-ssot-buildless`(첫 z.lazy 재귀 + SSE event payload 개별 스키마). `docs/menu-hierarchy.md`(구현 완료 문서로 보존).

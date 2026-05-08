@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-05-08
-topics_connected: [ai, crawl, friendly, shared]
+last_compiled: 2026-05-09
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics]
 status: active
 ---
 
@@ -20,6 +20,8 @@ status: active
 - **2026-05-07** in [[../topics/shared]] (`summarySseManager.ts`): 클라이언트 사이드에 같은 패턴 적용. 프로세스 스코프 싱글턴이 EventSource 1개만 유지하면서 N개 컴포넌트의 placeId 구독을 refcount로 회계. microtask coalescing으로 구독 set 변경을 한 번의 reconnect으로 모음. HTTP/1.1 6-per-origin SSE 한계를 우회하는 방식.
 - **2026-05-08** in [[../topics/friendly]] (`summary.service.ts`): placeId별 run() Promise 체인 도입 — 크롤러가 페이지마다 띄우는 fire-and-forget run()들이 동시에 진행되며 각자 chunk를 'running'으로 마킹해 DB 상태가 의미를 잃던 문제를 해결. `persistTail`과 정확히 같은 모양 (모듈 스코프 Map<placeId, Promise<void>>가 다음 run을 앞 run의 .finally 뒤로 큐잉). 다른 placeId는 그대로 병렬 — slot 회계 단위가 placeId임을 명시.
 - **2026-05-08** in [[../topics/ai]] (`adapters/ollama-cloud.adapter.ts`): "too many concurrent requests" / 429 응답을 어댑터 내부에서 지수 백오프(200·400·800ms+jitter) 최대 3회로 자동 재시도. **슬롯을 잡은 채** 재시도하므로 외부 cap 게이트(`adapter-cache.maxConcurrent`)에서 보면 재시도 중이어도 한 슬롯만 점유 — 회복이 cap 회계를 절대 깨지 않음. "slot 보유 중 재시도"가 외부 게이트와 내부 회복을 분리하는 핵심.
+- **2026-05-09** in [[../topics/menu-grouping]] (`grouping-job-registry.ts`): `groupingJobRegistry` 모듈 싱글턴이 batch 메뉴 그룹핑 잡 상태(item 단위 pending/running/done/failed/skipped)와 subscribers Set, per-job AbortController를 함께 관리. TTL 10분 GC. **actorId 격리** — 자기 actor의 잡만 조회/구독 가능. 외부 큐 없이 in-memory만으로 SSE 구독자 fan-out + 잡 단위 cancel + per-place 직렬 보장을 동시에 제공. 회계 단위가 actor라는 점에서 `JobRegistry`(crawl)와 같은 모양.
+- **2026-05-09** in [[../topics/analytics]] (`global-merge-job-registry.ts`): `globalMergeJobRegistry` 모듈 싱글턴. 위 grouping과 달리 **동시 1개만** 보장 — `inflightJobId()` 가드로 라우트가 진행 중일 때 새 요청을 받으면 409 + 현재 snapshot을 응답. chunk 단위로 진행 + done event publish. TTL 10분 GC. 단일-잡 모델은 grouping과 다른 점이지만 구조(모듈 스코프 + Map/Set + subscriber fan-out + TTL)는 동일.
 
 ## What This Means
 
@@ -29,6 +31,7 @@ status: active
 2. **slot 회계와 순서 보장의 분리** — 게이트는 두 가지만 책임진다. JobRegistry는 phase로 slot 회계, CrawlService.pending이 순서 보장. summary bus는 listener Set으로 회계 + 호출 순서로 순서. 한 객체가 둘 다 하면 책임이 섞이고 단위 테스트가 어려워진다.
 3. **fire-and-forget + finally 깨우기 = 자동 dequeue** — `runJob.finally(() => flushQueue(actorId))` 한 줄로 잡 종료가 다음 잡 시작을 트리거. 명시적 워커 루프가 없어도 동작. 같은 패턴이 `persistTail`에도 — `then(...)` 체인이 자동으로 다음 batch를 깨운다.
 4. **클라이언트 사이드도 같은 패턴이 통한다** — `summarySseManager`는 인프라가 다를 뿐 모양이 똑같음 (refcount + reconnect coalescing). 동시성 자원이 "AI provider slot"이든 "브라우저 connection slot"이든, 같은 in-memory FIFO 싱글턴으로 풀린다.
+5. **이번 라운드(2026-05-09)에 패턴이 6개 인스턴스로 굳어짐** — (1) AI 동시성 cap 게이트(`adapter-cache`), (2) 크롤 job-registry + pending FIFO, (3) summary `persistTail` / per-placeId run 체인, (4) summary SSE 매니저(서버 fan-out + 클라 refcount), (5) 메뉴 그룹핑 batch jobs(`groupingJobRegistry`, multi-job + actor 격리), (6) 글로벌 머지 inflight 가드(`globalMergeJobRegistry`, single-job + 409 snapshot). 모두 같은 모양 — 모듈 스코프 싱글턴 + Map/Set 회계 + TTL GC + (해당되면) actorId 격리. Redis/외부 큐 없이 단일 인스턴스 가정 위에서 충분히 동작하지만, **다중 인스턴스 배포로 가는 순간 가장 먼저 깨지는 가지**가 바로 이 패턴이다 — cross-process에서는 cap도 dedupe도 inflight 가드도 의미가 없어지므로.
 
 이 패턴이 깨질 수 있는 시점:
 - **다중 Fastify 인스턴스로 스케일 아웃** — 모듈 싱글턴은 프로세스 안에서만 의미. 여러 인스턴스가 같은 placeId 잡을 돌리면 dedupe도 cap도 cross-process에서 안 통함. 그 시점이 진짜 외부 큐가 필요한 시점.
@@ -41,3 +44,5 @@ status: active
 - [[../topics/crawl]]
 - [[../topics/friendly]]
 - [[../topics/shared]]
+- [[../topics/menu-grouping]]
+- [[../topics/analytics]]

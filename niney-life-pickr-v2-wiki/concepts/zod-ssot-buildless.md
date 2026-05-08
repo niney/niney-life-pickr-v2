@@ -1,7 +1,7 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
-last_compiled: 2026-05-07
-topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai]
+last_compiled: 2026-05-09
+topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, project-overview]
 status: active
 ---
 
@@ -20,10 +20,13 @@ status: active
 - **2026-05-07** in [[../topics/utils]]: 같은 빌드 없는 패턴이 도메인 무관 헬퍼에도 적용. 외부 의존 0인 진짜 leaf.
 - **2026-05-07** in [[../topics/project-overview]]: CLAUDE.md 규칙 "공유 스키마는 `@repo/api-contract`에 추가" + 순환 의존 금지 (shared → api-contract OK, 반대 ❌).
 - **2026-05-07** in [[../topics/ai]]: AI 도메인이 그대로 같은 패턴을 따른다. `schemas/ai.ts`에 `AiCompleteInput`/`LlmProviderConfig`/`UpdateLlmProviderInput`/`TestLlmProviderResult` 등 정의 → friendly의 `ai.route.ts`가 동일 스키마로 `body`/`response` 검증 → shared의 `aiApi`/`useAi*` 훅이 `z.infer`로 타입 도출 → web의 `AdminAiKeysPage`/`AdminAiTestPage`가 같은 타입으로 폼/결과 렌더. 한 곳 수정 → 4개 컨슈머가 컴파일 타임에 동기화되는 약속이 신규 도메인에서도 깨지지 않음.
+- **2026-05-09** in [[../topics/menu-grouping]] / [[../topics/analytics]]: 두 신규 스키마 모듈 (`packages/api-contract/src/schemas/menu-grouping.ts`, `analytics.ts`) 이 같은 패턴으로 추가. friendly 가 `fastify-type-provider-zod` 로 자동 검증 + OpenAPI 생성, shared 의 `apiFetch` 함수가 동일 zod 타입을 type-only import, web/mobile 컴포넌트가 `Type` suffix `z.infer` 결과를 직접 사용. 신규 진입 두 가지: (1) **재귀 스키마 — 같은 모듈에서 첫 `z.lazy` 사용**. `CategoryTreeNode` 트리 구조에 대해 type alias 를 먼저 선언한 뒤 `z.ZodType<CategoryTreeNodeType>` 로 lazy 정의 — TS 추론이 재귀 깊이를 못 따라가서 명시적 annotation 필요. (2) **잡 SSE event payload 별도 스키마** — `MenuGroupingJobItemEvent`, `GlobalMergeJobChunkEvent`, ... 를 discriminated union 으로 묶지 않고 단순함을 우선해 개별 스키마로 노출.
 
 ## What This Means
 
 빌드 없는 src export는 단순히 빌드 시간 절약이 아니다 — **Zod SSOT의 약속을 지키는 인프라**다. 만약 api-contract에 tsup 단계를 추가하면 즉각 watch 재기동·d.ts 캐시 무효화 문제가 따라붙고, "스키마 한 곳만 고치면 된다"는 약속이 부분적으로 깨진다. 그래서 두 결정은 사실상 한 묶음이다.
+
+**확장이 마찰 없음** — 새 도메인 스키마 추가 = 한 파일 추가 + `src/index.ts` re-export 1줄. 빌드 없는 src export 라 컨슈머(friendly · shared · web · mobile)가 즉시 컴파일 타임에 동기화된다. menu-grouping/analytics 처럼 도메인 수가 늘어나도 보일러플레이트가 증가하지 않는다. 재귀 스키마 (`z.lazy`) 는 이번 라운드에 처음 들어왔지만 같은 SSOT 모델 안에서 자연스럽게 흡수됐다 — type alias + 명시적 `z.ZodType` annotation 한 줄이면 끝이고, 컨슈머 측은 일반 스키마와 구분 없이 `z.infer` 로 타입을 받는다.
 
 이게 깨질 수 있는 시점:
 - **api-contract가 외부 패키지를 npm에 publish해야 할 때** — 그 시점엔 빌드 단계가 필요해진다. 그 전까지는 workspace 안에서만 사용
@@ -41,3 +44,5 @@ status: active
 - [[../topics/mobile]]
 - [[../topics/utils]]
 - [[../topics/project-overview]]
+- [[../topics/menu-grouping]]
+- [[../topics/analytics]]

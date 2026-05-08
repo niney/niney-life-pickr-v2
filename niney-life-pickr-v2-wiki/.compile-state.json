@@ -1,12 +1,14 @@
 {
   "version": 2,
-  "last_compiled": "2026-05-08",
+  "last_compiled": "2026-05-09",
   "mode": "codebase",
   "topics": [
     "project-overview",
     "friendly",
     "crawl",
     "ai",
+    "menu-grouping",
+    "analytics",
     "web",
     "mobile",
     "api-contract",
@@ -20,7 +22,8 @@
     "platform-ui-split",
     "workspace-package-resolution",
     "stream-driven-cache-merge",
-    "in-memory-singleton-gates"
+    "in-memory-singleton-gates",
+    "versioned-llm-prompts"
   ],
   "source_locations": [
     "README.md",
@@ -30,6 +33,7 @@
     "pnpm-workspace.yaml",
     "turbo.json",
     "tsconfig.base.json",
+    "docs/",
     "apps/friendly/",
     "apps/web/",
     "apps/mobile/",
@@ -38,5 +42,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 205
+  "total_sources_scanned": 245
 }
