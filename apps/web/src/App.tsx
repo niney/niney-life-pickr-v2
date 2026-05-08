@@ -11,6 +11,7 @@ import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailP
 import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
+import { RestaurantsPage } from './routes/RestaurantsPage';
 
 const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((s) => s.token);
@@ -33,6 +34,7 @@ export const App = () => {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/restaurants" element={<RestaurantsPage />} />
       </Route>
       <Route path="/login" element={<LoginPage />} />
       <Route
