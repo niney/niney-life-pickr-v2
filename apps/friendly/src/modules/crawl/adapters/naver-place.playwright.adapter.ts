@@ -66,10 +66,10 @@ const HEADLESS = process.env.CRAWL_HEADLESS !== '0';
 const SLOW_MO = HEADLESS ? 0 : Number(process.env.CRAWL_SLOWMO ?? '250');
 // Visitor reviews pagination — click "더보기" until it disappears or we hit
 // the safety cap. Set to 0 to skip pagination (Apollo cache only — first ~20).
-// 30 pages × ~10 reviews/page = ~300 reviews max, enough for almost any place.
-const VISITOR_MAX_PAGES = Number(process.env.CRAWL_VISITOR_MAX_PAGES ?? '30');
+// 100 pages × ~10 reviews/page = ~1000 reviews max, enough for almost any place.
+const VISITOR_MAX_PAGES = Number(process.env.CRAWL_VISITOR_MAX_PAGES ?? '100');
 // Inter-click delay to avoid Naver rate-limiting on rapid pagination.
-const VISITOR_PAGE_DELAY_MS = Number(process.env.CRAWL_VISITOR_PAGE_DELAY_MS ?? '300');
+const VISITOR_PAGE_DELAY_MS = Number(process.env.CRAWL_VISITOR_PAGE_DELAY_MS ?? '3000');
 // In headed mode, pause the visitor subpage before closing so a human can
 // visually verify the "더보기" clicks landed. Headless mode never holds.
 const VISITOR_HOLD_MS = HEADLESS
