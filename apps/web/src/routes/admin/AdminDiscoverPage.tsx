@@ -80,29 +80,32 @@ export const AdminDiscoverPage = () => {
     if (checkedIds.size === 0) return;
     const selected = searchItems.filter((it) => checkedIds.has(it.placeId));
     if (selected.length === 0) return;
-    // 병렬 startCrawl. 서버가 max_concurrent 로 알아서 큐잉(stage='queued') 하므로
-    // 클라이언트는 N 개를 한꺼번에 보내도 안전. mutateAsync 의 결과로 받은 jobId
-    // 를 글로벌 active job store 에 등록 — 다른 페이지(/admin/restaurants)에서도
-    // 같은 잡이 inline 진행 패널로 노출된다.
-    const results = await Promise.allSettled(
-      selected.map((it) =>
-        startMutation.mutateAsync({ url: it.rawSourceUrl, mode: 'create' }),
-      ),
-    );
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      const it = selected[i];
-      if (!r || !it) continue;
-      if (r.status === 'fulfilled' && r.value.ok) {
-        addJob({
-          jobId: r.value.jobId,
-          placeId: it.placeId,
-          source: 'list-row',
+    // 직렬 호출. 병렬(Promise.allSettled)로 보내면 거의 동시에 서버에 도착해
+    // actor 단위 rate_limit 에 둘째부터 모두 걸린다(이슈: "1개만 크롤링됨").
+    // mutateAsync 를 await 로 묶어 응답 사이 자연 stagger 가 발생하게 한다.
+    // 시작 거부된 placeId 는 체크 상태로 남겨 두어 사용자가 재시도 가능.
+    const failedIds = new Set<string>();
+    for (const it of selected) {
+      try {
+        const r = await startMutation.mutateAsync({
+          url: it.rawSourceUrl,
           mode: 'create',
         });
+        if (r.ok) {
+          addJob({
+            jobId: r.jobId,
+            placeId: it.placeId,
+            source: 'list-row',
+            mode: 'create',
+          });
+        } else {
+          failedIds.add(it.placeId);
+        }
+      } catch {
+        failedIds.add(it.placeId);
       }
     }
-    setCheckedIds(new Set());
+    setCheckedIds(failedIds);
   }, [checkedIds, searchItems, startMutation, addJob]);
 
   const handleSubmitQuery = useCallback(
@@ -190,6 +193,29 @@ export const AdminDiscoverPage = () => {
             panelSide={side}
           />
         </section>
+        {/* 등록 맛집 상세 — 별도 column 으로 추가 (공개 맛집 페이지와 동일한
+            list/detail/map 3-column 패턴). DOM 순서 [map, detail, list] 라
+            flex-row 일 땐 시각적 [좌:map, 중:detail, 우:list], flex-row-reverse
+            일 땐 [좌:list, 중:detail, 우:map] — 어느 쪽이든 detail 이 list 옆에
+            붙는다. xl 미만에선 absolute 로 패널 영역 위에 덮어쓰기. */}
+        {detailPlaceId && (
+          <aside
+            key={detailPlaceId}
+            className={cn(
+              'bg-background',
+              'xl:relative xl:h-full xl:w-[440px] xl:shrink-0',
+              side === 'right' ? 'xl:border-l' : 'xl:border-r',
+              'absolute inset-0 z-30 xl:relative xl:inset-auto xl:z-auto',
+              'animate-in slide-in-from-right-4 duration-200',
+            )}
+          >
+            <PublicRestaurantDetail
+              placeId={detailPlaceId}
+              onClose={handleCloseDetail}
+            />
+          </aside>
+        )}
+
         <aside
           className={cn(
             'relative h-full w-full bg-background xl:w-[400px] xl:shrink-0',
@@ -218,21 +244,6 @@ export const AdminDiscoverPage = () => {
             startInFlight={startMutation.isPending}
             activeJobCount={activeJobCount}
           />
-
-          {/* 등록 맛집 상세 슬라이드 — 같은 패널 영역을 absolute 로 덮어쓰며
-              translate-x 로 슬라이드. unmount 시점은 detailPlaceId === null
-              로 떨어지는 즉시 — 닫기 애니메이션은 생략(단순). */}
-          {detailPlaceId && (
-            <div
-              key={detailPlaceId}
-              className="absolute inset-0 z-20 animate-in slide-in-from-right-4 bg-background duration-200"
-            >
-              <PublicRestaurantDetail
-                placeId={detailPlaceId}
-                onClose={handleCloseDetail}
-              />
-            </div>
-          )}
         </aside>
       </div>
     </div>

@@ -27,7 +27,6 @@ import type { RestaurantService } from '../restaurant/restaurant.service.js';
 import type { SummaryService } from '../summary/summary.service.js';
 
 const CACHE_TTL_MS = 30_000;
-const RATE_LIMIT_WINDOW_MS = 1_000;
 
 // Distributive Omit — applies Omit to each branch of a discriminated union
 // independently, so the result stays a union TS can narrow on. A plain
@@ -56,7 +55,6 @@ interface PendingStart {
 
 export class CrawlService {
   private readonly cache = new Map<string, CacheEntry>();
-  private readonly lastCallByActor = new Map<string, number>();
   private readonly registry: JobRegistry;
   private readonly restaurants: RestaurantService;
   private readonly summaries: SummaryService;
@@ -75,25 +73,19 @@ export class CrawlService {
 
   // Kick off a crawl. Returns immediately with the jobId; the actual work
   // runs in the background and reports progress through the registry's
-  // event stream. Caching, rate-limiting, in-flight dedupe, and concurrency
-  // caps all happen here before any Playwright work starts.
+  // event stream. Caching, in-flight dedupe, and concurrency caps all happen
+  // here before any Playwright work starts.
+  //
+  // 의도적으로 actor 단위 rate-limit 은 두지 않는다 — 어드민 발견 페이지의
+  // 정상 사용 패턴이 "다중 선택 후 한 번에 N개 시작"이라 짧은 윈도우조차
+  // 둘째부터 막힌다. 같은 가게 중복 시작은 findInFlightByPlace 가, 시스템
+  // 전체 폭주는 max_concurrent + queue 가 책임진다.
   async startCrawl(
     rawUrl: string,
     actorId: string,
     mode: CrawlModeType = 'create',
   ): Promise<StartCrawlResultType> {
     const now = Date.now();
-
-    const last = this.lastCallByActor.get(actorId) ?? 0;
-    if (now - last < RATE_LIMIT_WINDOW_MS) {
-      return {
-        ok: false,
-        error: 'rate_limited',
-        message: '잠시 후 다시 시도해 주세요.',
-        triedUrl: rawUrl,
-      };
-    }
-    this.lastCallByActor.set(actorId, now);
 
     let normalized: Awaited<ReturnType<typeof normalizeToPlaceId>>;
     try {
