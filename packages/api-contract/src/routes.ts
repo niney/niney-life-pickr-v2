@@ -35,6 +35,9 @@ export const Crawl = {
   jobs: `${API_PREFIX}/admin/crawl/jobs`,
   job: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}`,
   jobEvents: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}/events`,
+  // 네이버 PC 지도에서 키워드(+선택 영역)로 가게를 검색. /admin/discover 에서
+  // 등록할 후보를 고르는 데 사용.
+  search: `${API_PREFIX}/admin/crawl/search`,
 } as const;
 
 export const Restaurant = {

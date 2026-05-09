@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   CrawlJobListResult,
   CrawlNaverPlaceInput,
+  CrawlSearchQuery,
+  CrawlSearchResult,
   Routes,
   StartCrawlResult,
   type CrawlEventType,
@@ -11,6 +13,7 @@ import {
 import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
+import { closeSearchBrowser } from './adapters/naver-search.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -63,7 +66,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
 
   app.addHook('onClose', async () => {
     jobRegistry.abortAll();
-    await closeBrowser();
+    await Promise.all([closeBrowser(), closeSearchBrowser()]);
   });
 
   // POST — start a new crawl job (returns jobId immediately). Errors that
@@ -79,6 +82,19 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) =>
       service.startCrawl(req.body.url, req.user.userId, req.body.mode),
+  });
+
+  // GET — keyword search via Naver PC map (Playwright). /admin/discover 페이지가
+  // 등록 후보를 고를 때 사용. 빈 q 는 zod 가 거른다.
+  typed.get(Routes.Crawl.search, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: CrawlSearchQuery,
+      response: { 200: CrawlSearchResult },
+    },
+    handler: async (req) => service.searchPlaces(req.query.q, req.query.bbox),
   });
 
   // GET — list jobs for the current user (running + recently finished).

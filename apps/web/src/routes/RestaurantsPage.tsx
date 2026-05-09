@@ -8,6 +8,7 @@ import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsM
 import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { usePanelSide } from '~/stores/panelPrefsStore';
 
 type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
 const VALID_SORTS: SortKey[] = ['recent', 'satisfaction', 'positive', 'rating'];
@@ -58,6 +59,8 @@ export const RestaurantsPage = () => {
   // 모바일 토글 — 상세 패널이 열렸을 때는 자동으로 list 뷰가 자연스러움 (지도
   // 위에 패널 띄우는 것보다 list 위에서 상세 보는 게 narrow 화면에서 덜 답답).
   const [mobileView, setMobileView] = useState<MobileView>('map');
+  // 데스크톱 좌/우 패널 토글 — 사용자별 선호 저장. xl 미만에선 의미 없음.
+  const [panelSide, togglePanelSide] = usePanelSide('public.restaurants');
 
   const handleSelectItem = useCallback(
     (id: string) => {
@@ -80,11 +83,20 @@ export const RestaurantsPage = () => {
 
   return (
     <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden">
-      {/* xl+ : 리스트 / (선택시) 상세 / 지도 3-column. xl 미만: 토글. */}
-      <div className="relative flex h-full w-full">
+      {/* xl+ : 리스트 / (선택시) 상세 / 지도 3-column. xl 미만: 토글.
+          panelSide==='right' 일 때 xl+ 에서 flex-row-reverse 로 list+detail 묶음을
+          시각적 우측에 배치. 모바일 토글에는 영향 없음 (xl 미만은 단일 column). */}
+      <div
+        className={cn(
+          'relative flex h-full w-full',
+          panelSide === 'right' && 'xl:flex-row-reverse',
+        )}
+      >
         <aside
           className={cn(
-            'relative h-full w-full border-r bg-background xl:w-[400px] xl:shrink-0',
+            'relative h-full w-full bg-background xl:w-[400px] xl:shrink-0',
+            // 패널이 좌측이면 우측 모서리에 border-r, 우측이면 좌측 모서리.
+            panelSide === 'left' ? 'border-r xl:border-r' : 'xl:border-l',
             mobileView === 'list' ? 'block' : 'hidden xl:block',
           )}
         >
@@ -102,6 +114,8 @@ export const RestaurantsPage = () => {
             onChangeSort={(next) => setParam('sort', next === 'recent' ? null : next)}
             onSelectItem={handleSelectItem}
             onHoverItem={setHoveredPlaceId}
+            panelSide={panelSide}
+            onTogglePanelSide={togglePanelSide}
           />
         </aside>
 
@@ -115,8 +129,9 @@ export const RestaurantsPage = () => {
           <aside
             className={cn(
               'bg-background',
-              // xl+: 인접 column
-              'xl:relative xl:h-full xl:w-[440px] xl:shrink-0 xl:border-r',
+              // xl+: 인접 column. border 는 panelSide 에 따라 list aside 와 같은 쪽.
+              'xl:relative xl:h-full xl:w-[440px] xl:shrink-0',
+              panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
               // xl-: list aside 영역 위로 덮어쓰기 (mobileView=list 일 때만)
               'absolute inset-y-0 left-0 right-0 z-30 xl:left-auto xl:right-auto xl:z-auto',
               mobileView === 'list' ? 'block' : 'hidden xl:block',

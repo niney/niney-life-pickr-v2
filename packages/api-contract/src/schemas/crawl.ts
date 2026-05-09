@@ -256,3 +256,45 @@ export const CrawlJobListResult = z.object({
   jobs: z.array(CrawlJob),
 });
 export type CrawlJobListResultType = z.infer<typeof CrawlJobListResult>;
+
+// ── 키워드 검색 (어드민 /discover 페이지) ────────────────────────────────
+// 네이버 PC 지도 검색 결과를 그대로 노출. id 가 placeId, x/y 가 lng/lat.
+// rawSourceUrl 은 url-normalizer 가 placeId 를 추출할 수 있는 정규 진입 URL.
+
+export const NaverSearchResult = z.object({
+  placeId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  address: z.string().nullable(),
+  roadAddress: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  phone: z.string().nullable(),
+  thumbnailUrl: z.string().url().nullable(),
+  reviewCount: z.number().int().nullable(),
+  rawSourceUrl: z.string().url(),
+});
+export type NaverSearchResultType = z.infer<typeof NaverSearchResult>;
+
+// bbox: "minLng,minLat,maxLng,maxLat" — RestaurantsPage 의 bbox 와 같은 포맷.
+const BboxString = z
+  .string()
+  .regex(
+    /^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$/,
+    'Invalid bbox format (expected "minLng,minLat,maxLng,maxLat")',
+  );
+
+export const CrawlSearchQuery = z.object({
+  q: z.string().min(1).max(100),
+  bbox: BboxString.optional(),
+});
+export type CrawlSearchQueryType = z.infer<typeof CrawlSearchQuery>;
+
+// source 는 어떤 어댑터가 응답을 만들었는지 노출 — 운영 중 폴백 발동 여부를
+// UI 디버그 배지나 로그에서 확인할 수 있게. 현재는 'playwright' 만 (직접
+// fetch 는 ncaptcha 로 차단). 추후 unofficial API 가 가능해지면 enum 확장.
+export const CrawlSearchResult = z.object({
+  items: z.array(NaverSearchResult),
+  source: z.enum(['playwright']),
+});
+export type CrawlSearchResultType = z.infer<typeof CrawlSearchResult>;

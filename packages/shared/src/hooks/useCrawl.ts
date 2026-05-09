@@ -32,6 +32,17 @@ export const useCancelCrawl = () => {
   });
 };
 
+// 네이버 PC 지도 검색 — /admin/discover 페이지 전용. q 가 비면 자동으로 disabled.
+// staleTime 을 길게(30s) 두는 건 같은 키워드로 패널을 껐다 켜도 즉시 동일 결과가
+// 보이게 하기 위해. 호출자(페이지)는 q 를 디바운스해서 넘기는 책임.
+export const useNaverSearch = (q: string, bbox: string | null) =>
+  useQuery({
+    queryKey: ['crawl', 'search', q, bbox],
+    queryFn: () => crawlApi.search({ q, bbox }),
+    enabled: q.trim().length > 0,
+    staleTime: 30_000,
+  });
+
 // ---- Streaming hook ---------------------------------------------------------
 
 export type CrawlStreamStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error';

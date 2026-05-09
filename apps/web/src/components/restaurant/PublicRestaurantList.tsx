@@ -1,10 +1,11 @@
-import { Loader2, Search, XCircle } from 'lucide-react';
+import { Loader2, PanelLeftOpen, PanelRightOpen, Search, XCircle } from 'lucide-react';
 import type {
   RestaurantPublicListItemType,
   RestaurantPublicListQueryType,
 } from '@repo/api-contract';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
+import type { PanelSide } from '~/stores/panelPrefsStore';
 import { PublicRestaurantCard } from './PublicRestaurantCard';
 
 type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
@@ -43,6 +44,9 @@ interface Props {
   onChangeSort(next: SortKey): void;
   onSelectItem(placeId: string): void;
   onHoverItem(placeId: string | null): void;
+  // 좌/우 패널 토글. xl 미만에선 풀블리드라 의미 없으므로 버튼 자체가 숨겨진다.
+  panelSide: PanelSide;
+  onTogglePanelSide(): void;
 }
 
 export const PublicRestaurantList = ({
@@ -59,29 +63,46 @@ export const PublicRestaurantList = ({
   onChangeSort,
   onSelectItem,
   onHoverItem,
+  panelSide,
+  onTogglePanelSide,
 }: Props) => {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b p-3 space-y-2.5">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="식당명, 카테고리, 메뉴로 검색"
-            className="pl-9 pr-9"
-            value={q}
-            onChange={(e) => onChangeQ(e.target.value)}
-          />
-          {q && (
-            <button
-              type="button"
-              onClick={() => onChangeQ('')}
-              aria-label="검색어 지우기"
-              className="absolute right-2.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
-            >
-              <XCircle className="size-4" />
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="식당명, 카테고리, 메뉴로 검색"
+              className="pl-9 pr-9"
+              value={q}
+              onChange={(e) => onChangeQ(e.target.value)}
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => onChangeQ('')}
+                aria-label="검색어 지우기"
+                className="absolute right-2.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+              >
+                <XCircle className="size-4" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onTogglePanelSide}
+            aria-label={`패널을 ${panelSide === 'right' ? '왼쪽' : '오른쪽'}으로`}
+            title={`패널을 ${panelSide === 'right' ? '왼쪽' : '오른쪽'}으로`}
+            className="hidden size-9 shrink-0 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent xl:inline-flex"
+          >
+            {panelSide === 'right' ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelRightOpen className="size-4" />
+            )}
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-1.5">

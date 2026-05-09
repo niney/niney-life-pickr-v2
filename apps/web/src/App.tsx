@@ -6,6 +6,7 @@ import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
 import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
 import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
+import { AdminDiscoverPage } from './routes/admin/AdminDiscoverPage';
 import { AdminHomePage } from './routes/admin/AdminHomePage';
 import { AdminMapKeysPage } from './routes/admin/AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailPage';
@@ -48,6 +49,7 @@ export const App = () => {
         }
       >
         <Route index element={<AdminHomePage />} />
+        <Route path="discover" element={<AdminDiscoverPage />} />
         <Route path="restaurants" element={<AdminRestaurantsPage />} />
         <Route path="restaurants/:placeId" element={<AdminRestaurantDetailPage />} />
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />

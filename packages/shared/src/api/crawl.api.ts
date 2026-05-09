@@ -2,6 +2,7 @@ import {
   Routes,
   type CrawlJobListResultType,
   type CrawlModeType,
+  type CrawlSearchResultType,
   type StartCrawlResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -22,6 +23,14 @@ export const crawlApi = {
 
   cancel: (jobId: string) =>
     apiFetch<void>(Routes.Crawl.job(jobId), { method: 'DELETE' }),
+
+  search: ({ q, bbox }: { q: string; bbox?: string | null }) => {
+    const params = new URLSearchParams({ q });
+    if (bbox) params.set('bbox', bbox);
+    return apiFetch<CrawlSearchResultType>(
+      `${Routes.Crawl.search}?${params.toString()}`,
+    );
+  },
 };
 
 // Build the SSE endpoint URL with the auth token in the query string. The

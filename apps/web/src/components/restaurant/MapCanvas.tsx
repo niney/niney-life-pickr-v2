@@ -17,6 +17,9 @@ export interface MapMarker {
   lat: number;
   lng: number;
   label?: string;
+  // 'muted' 는 회색 핀(예: 어드민 발견 페이지의 '이미 등록된 맛집' 표시).
+  // 미지정 또는 'primary' 는 기존 빨강. selected 강조는 색 톤만 진해진다.
+  variant?: 'primary' | 'muted';
 }
 
 export interface MapViewport {
@@ -164,7 +167,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 
     mapRef.current = map;
 
+    // 컨테이너 크기가 바뀌면 OL 가 자체적으로 재측정하지 않으므로 직접 트리거.
+    // 좌/우 패널 토글이나 윈도우 리사이즈 모두 한 번에 커버.
+    const ro = new ResizeObserver(() => {
+      mapRef.current?.updateSize();
+    });
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       containerRef.current?.removeEventListener('wheel', handleWheel);
       map.setTarget(undefined);
       mapRef.current = null;
@@ -185,7 +196,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
       f.set('markerId', m.id);
       const isSelected = m.id === selectedMarkerId;
-      f.setStyle(makeMarkerStyle(m.label, isSelected));
+      f.setStyle(makeMarkerStyle(m.label, isSelected, m.variant ?? 'primary'));
       src.addFeature(f);
     }
   }, [markers, selectedMarkerId]);
@@ -233,9 +244,21 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   );
 });
 
-// 빨간 핀 SVG 마커. 선택된 마커는 더 크고 톤이 진하다.
-const makeMarkerStyle = (label: string | undefined, selected: boolean): Style => {
-  const fill = selected ? '#dc2626' : '#ef4444';
+// 핀 SVG. variant 로 색상 분기 — primary(빨강)는 기본/검색결과, muted(회색)는
+// '이미 등록된 항목' 같은 보조 표시. 어느 쪽이든 selected 시 톤이 더 진해지고
+// 살짝 커진다.
+const PIN_COLORS: Record<NonNullable<MapMarker['variant']>, { base: string; selected: string }> = {
+  primary: { base: '#ef4444', selected: '#dc2626' },
+  muted: { base: '#94a3b8', selected: '#64748b' },
+};
+
+const makeMarkerStyle = (
+  label: string | undefined,
+  selected: boolean,
+  variant: NonNullable<MapMarker['variant']>,
+): Style => {
+  const palette = PIN_COLORS[variant];
+  const fill = selected ? palette.selected : palette.base;
   const size = selected ? 40 : 32;
   const height = selected ? 60 : 48;
   return new Style({

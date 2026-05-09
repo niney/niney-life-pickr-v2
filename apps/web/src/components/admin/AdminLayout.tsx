@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   BarChart3,
   Beaker,
+  Compass,
   Home,
   Settings,
   Shield,
@@ -21,6 +22,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/admin', label: '홈', icon: Home, end: true },
+  { to: '/admin/discover', label: '맛집 발견', icon: Compass },
   { to: '/admin/restaurants', label: '맛집', icon: UtensilsCrossed },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
   { to: '/admin/crawl-test', label: '크롤링 테스트', icon: Beaker },
