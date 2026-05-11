@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActiveCrawlJobStore,
@@ -47,6 +47,11 @@ export const AdminDiscoverPage = () => {
   );
 
   const [side, toggleSide] = usePanelSide('admin.discover');
+
+  // 지도 viewport 의 최신 bbox — DiscoverMap 의 onViewportSync 로 갱신.
+  // 검색 트리거 시점에 URL bbox 가 비어 있으면 이 ref 값을 자동으로 박아
+  // 첫 검색도 사용자가 보고 있는 영역에서 결과가 떨어지게 한다.
+  const viewportBboxRef = useRef<string | null>(null);
 
   const search = useNaverSearch(q, bbox);
   // 어드민 list 응답에는 좌표가 없어서 공개 list 를 그대로 쓴다 — 데이터는 동일하고
@@ -109,9 +114,29 @@ export const AdminDiscoverPage = () => {
   }, [checkedIds, searchItems, startMutation, addJob]);
 
   const handleSubmitQuery = useCallback(
-    (next: string) => setParam('q', next || null),
-    [setParam],
+    (next: string) => {
+      setSearchParams(
+        (prev) => {
+          const np = new URLSearchParams(prev);
+          if (next === '') np.delete('q');
+          else np.set('q', next);
+          // bbox 가 아직 박혀 있지 않고 검색어가 있으면 현재 viewport 자동 첨부.
+          // 이 한 줄이 첫 검색을 "이 지역 재검색" 과 동일하게 동작하게 한다.
+          // viewportBboxRef 가 null 인 경우(지도 첫 렌더 전)엔 그대로 두어
+          // 백엔드가 default center 로 폴백.
+          if (next !== '' && !np.get('bbox') && viewportBboxRef.current) {
+            np.set('bbox', viewportBboxRef.current);
+          }
+          return np;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
   );
+  const handleViewportSync = useCallback((nextBbox: string) => {
+    viewportBboxRef.current = nextBbox;
+  }, []);
   const handleChangeTab = useCallback(
     (next: DiscoverTab) =>
       setParam('tab', next === 'search' ? null : next),
@@ -190,6 +215,7 @@ export const AdminDiscoverPage = () => {
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}
             onClearArea={handleClearArea}
+            onViewportSync={handleViewportSync}
             panelSide={side}
           />
         </section>

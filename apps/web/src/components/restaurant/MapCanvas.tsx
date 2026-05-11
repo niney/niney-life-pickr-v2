@@ -48,6 +48,11 @@ interface Props {
   // 사용자가 패닝/줌을 끝낸 후 (programmatic move 는 무시) 호출. "이 지역 재검
   // 색" 버튼 노출 트리거에 쓴다.
   onViewportChangeEnd?(viewport: MapViewport): void;
+  // 모든 viewport 변경(첫 렌더, programmatic move, 사용자 인터랙션) 시 호출.
+  // 호출자가 "현재 보이는 영역" 을 항상 알고 있어야 할 때 (예: 검색 시점에
+  // bbox 자동 첨부) 사용. onViewportChangeEnd 와는 의도가 다름 — 그쪽은
+  // 사용자 인터랙션 직후의 명시적 시그널, 이쪽은 단순 동기화 채널.
+  onViewportSync?(viewport: MapViewport): void;
   // 처음 mount 시점에 onTileError 가 한 번 호출되면 키가 거부됐을 가능성 큼.
   onTileError?(): void;
   className?: string;
@@ -74,6 +79,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     initialCenter,
     onMarkerSelect,
     onViewportChangeEnd,
+    onViewportSync,
     onTileError,
     className,
   },
@@ -88,10 +94,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // 콜백 ref — useEffect 가 매번 새 effect 를 생성하지 않도록 ref 로 보관.
   const onMarkerSelectRef = useRef(onMarkerSelect);
   const onViewportChangeEndRef = useRef(onViewportChangeEnd);
+  const onViewportSyncRef = useRef(onViewportSync);
   const onTileErrorRef = useRef(onTileError);
   useEffect(() => {
     onMarkerSelectRef.current = onMarkerSelect;
     onViewportChangeEndRef.current = onViewportChangeEnd;
+    onViewportSyncRef.current = onViewportSync;
     onTileErrorRef.current = onTileError;
   });
 
@@ -137,22 +145,41 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     };
     containerRef.current.addEventListener('wheel', handleWheel);
 
-    map.on('moveend', () => {
-      if (!userInteractedRef.current) return;
+    const computeViewport = (): MapViewport | null => {
       const v = map.getView();
       const c = v.getCenter();
       const z = v.getZoom();
-      if (!c || z === undefined) return;
+      if (!c || z === undefined) return null;
       const [lng, lat] = toLonLat(c);
       const ext = v.calculateExtent(map.getSize() ?? undefined);
       const [minLng, minLat] = toLonLat([ext[0]!, ext[1]!]);
       const [maxLng, maxLat] = toLonLat([ext[2]!, ext[3]!]);
-      onViewportChangeEndRef.current?.({
+      return {
         centerLng: lng!,
         centerLat: lat!,
         zoom: z,
         bbox: { minLng: minLng!, minLat: minLat!, maxLng: maxLng!, maxLat: maxLat! },
-      });
+      };
+    };
+
+    map.on('moveend', () => {
+      const viewport = computeViewport();
+      if (!viewport) return;
+      // sync 는 user/programmatic 무관 — 항상 최신 viewport 를 흘려서 호출자가
+      // 검색 시점에 현재 영역을 알 수 있게 한다.
+      onViewportSyncRef.current?.(viewport);
+      // 기존 onViewportChangeEnd 의미는 보존 — 사용자가 직접 패닝/줌한 후에만
+      // 발사. "이 지역 재검색" 버튼 노출 트리거.
+      if (userInteractedRef.current) {
+        onViewportChangeEndRef.current?.(viewport);
+      }
+    });
+
+    // 첫 렌더 완료 직후 한 번 sync — 사용자가 패닝 안 하고 곧장 검색해도
+    // viewport ref 가 비어 있지 않게.
+    map.once('postrender', () => {
+      const viewport = computeViewport();
+      if (viewport) onViewportSyncRef.current?.(viewport);
     });
 
     map.on('click', (evt) => {

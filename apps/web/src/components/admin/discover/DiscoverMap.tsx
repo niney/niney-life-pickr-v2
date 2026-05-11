@@ -22,6 +22,10 @@ interface Props {
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
+  // 모든 viewport 변경(첫 렌더, 사용자 패닝, programmatic) 시 현재 bbox 통지.
+  // 페이지가 ref 로 보관해두고, 검색 트리거 시점에 URL bbox 가 비어 있으면
+  // 자동으로 박는다 — 첫 검색도 사용자가 보고 있는 영역으로 떨어지게 하기 위함.
+  onViewportSync?(bbox: string): void;
   // 컨트롤(전체 영역 등)을 패널 반대편 모서리에 붙이기 위해 받아둔다.
   panelSide: PanelSide;
 }
@@ -38,6 +42,7 @@ export const DiscoverMap = ({
   onSelectMarker,
   onResearchInArea,
   onClearArea,
+  onViewportSync,
   panelSide,
 }: Props) => {
   const config = useMapPublicConfig();
@@ -79,6 +84,13 @@ export const DiscoverMap = ({
     setPendingViewport(viewport);
   }, []);
 
+  const handleViewportSync = useCallback(
+    (viewport: MapViewport) => {
+      onViewportSync?.(formatBbox(viewport.bbox));
+    },
+    [onViewportSync],
+  );
+
   const pendingBboxStr = pendingViewport ? formatBbox(pendingViewport.bbox) : null;
   const showResearch = pendingBboxStr !== null && pendingBboxStr !== appliedBbox;
 
@@ -119,6 +131,7 @@ export const DiscoverMap = ({
         selectedMarkerId={highlightedId}
         onMarkerSelect={onSelectMarker}
         onViewportChangeEnd={handleViewportChange}
+        onViewportSync={handleViewportSync}
         onTileError={() => setTileError(true)}
       />
 
