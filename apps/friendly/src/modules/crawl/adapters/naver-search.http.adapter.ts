@@ -160,6 +160,19 @@ const inBbox = (
   return pt.lng >= minLng && pt.lng <= maxLng && pt.lat >= minLat && pt.lat <= maxLat;
 };
 
+// center 와의 거리 제곱(EPSG:4326 평면 근사). 비교 전용이라 sqrt 생략, 도시
+// 단위 검색이라 평면 근사로 충분하지만 경도는 위도 가중(cosφ)으로 보정.
+// 좌표가 없는 항목은 Infinity 로 맨 뒤.
+const distanceSqFromCenter = (
+  pt: { lat: number | null; lng: number | null },
+  center: { lat: number; lng: number },
+): number => {
+  if (pt.lat === null || pt.lng === null) return Number.POSITIVE_INFINITY;
+  const dx = (pt.lng - center.lng) * Math.cos((center.lat * Math.PI) / 180);
+  const dy = pt.lat - center.lat;
+  return dx * dx + dy * dy;
+};
+
 const mapItem = (raw: Record<string, unknown>): NaverSearchResult | null => {
   const placeId = strOrNull(raw['id']);
   const name = strOrNull(raw['name']);
@@ -307,6 +320,14 @@ export const searchPlacesViaMapNaver = async (
       inBbox({ lat: it.lat, lng: it.lng }, options.bbox!),
     );
   }
+
+  // 검색 center 기준 가까운 순으로 재정렬. nx-api 의 default 는 거리+관련도
+  // 혼합이라 "내가 보고 있는 영역에서 가장 가까운 가게" 를 기대했을 때 가끔
+  // 직관과 어긋남 — 단순 거리순으로 통일. 좌표 없는 항목은 맨 뒤.
+  items.sort(
+    (a, b) =>
+      distanceSqFromCenter(a, center) - distanceSqFromCenter(b, center),
+  );
 
   return items;
 };
