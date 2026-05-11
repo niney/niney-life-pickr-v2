@@ -272,6 +272,9 @@ export const NaverSearchResult = z.object({
   phone: z.string().nullable(),
   thumbnailUrl: z.string().url().nullable(),
   reviewCount: z.number().int().nullable(),
+  // 검색 좌표(center)로부터의 거리 — nx-api 응답이 미리 포맷한 문자열
+  // ("350m", "1.2km"). 좌표 없거나 응답에 없으면 null.
+  distance: z.string().nullable(),
   rawSourceUrl: z.string().url(),
 });
 export type NaverSearchResultType = z.infer<typeof NaverSearchResult>;
@@ -291,10 +294,11 @@ export const CrawlSearchQuery = z.object({
 export type CrawlSearchQueryType = z.infer<typeof CrawlSearchQuery>;
 
 // source 는 어떤 어댑터가 응답을 만들었는지 노출 — 운영 중 폴백 발동 여부를
-// UI 디버그 배지나 로그에서 확인할 수 있게. 현재는 'playwright' 만 (직접
-// fetch 는 ncaptcha 로 차단). 추후 unofficial API 가 가능해지면 enum 확장.
+// UI 디버그 배지나 로그에서 확인할 수 있게. 'http' 는 nx-api GraphQL 직접
+// 호출(현 default), 'playwright' 는 옛 PC `allSearch` 페이지 캡처 방식 — 캡차
+// 차단으로 사용 안 함이지만 enum 에 남겨 두었다가 나중에 정리.
 export const CrawlSearchResult = z.object({
   items: z.array(NaverSearchResult),
-  source: z.enum(['playwright']),
+  source: z.enum(['http', 'playwright']),
 });
 export type CrawlSearchResultType = z.infer<typeof CrawlSearchResult>;

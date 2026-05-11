@@ -16,7 +16,7 @@ import {
   PlaywrightFetchError,
   type ExistingReviewKeys,
 } from './adapters/naver-place.playwright.adapter.js';
-import { searchPlacesViaMapNaver } from './adapters/naver-search.playwright.adapter.js';
+import { searchPlacesViaMapNaver } from './adapters/naver-search.http.adapter.js';
 import { jobRegistry, type JobRegistry } from './job-registry.js';
 import {
   normalizeToPlaceId,
@@ -169,12 +169,13 @@ export class CrawlService {
     return { ok: true, jobId, deduped: false, queued: true };
   }
 
-  // 키워드 검색 — 어드민 /discover 페이지 전용. Playwright 어댑터 한 번 띄워
-  // 첫 페이지(20개) 결과만 반환. bbox 는 현재 무시 — 추후 페이지 URL 에
-  // searchCoord/boundary 추가하면 영역 한정 검색 가능.
-  async searchPlaces(query: string, _bbox?: string): Promise<CrawlSearchResultType> {
-    const items = await searchPlacesViaMapNaver(query, { limit: 20 });
-    return { items, source: 'playwright' };
+  // 키워드 검색 — 어드민 /discover 페이지 전용. nx-api GraphQL 직접 호출(HTTP).
+  // bbox 가 들어오면 어댑터가 center 좌표로 추출해 영역 한정 검색.
+  // 빈 query 는 어댑터 안에서 DEFAULT_QUERY ("맛집") 로 fallback — 사용자가
+  // 검색바를 비우고 "이 지역 재검색" 만 눌러도 동작.
+  async searchPlaces(query: string, bbox?: string): Promise<CrawlSearchResultType> {
+    const items = await searchPlacesViaMapNaver(query, { bbox, pageSize: 50 });
+    return { items, source: 'http' };
   }
 
   cancel(jobId: string, actorId: string): boolean {

@@ -18,6 +18,24 @@ import type { PanelSide } from '~/stores/panelPrefsStore';
 
 export type DiscoverTab = 'search' | 'registered';
 
+// 빠른 카테고리 입력 도우미. 클릭 시 검색바에 텍스트 채움 + 즉시 검색.
+// nx-api 의 좌표 기반 영역 한정은 검색어가 일반어/카테고리일 때만 동작 —
+// 영역명("강남구") 박으면 좌표 무시되므로, 사용자가 영역명 박지 않도록
+// 카테고리 칩을 노출해 가이드한다.
+const CATEGORY_CHIPS = [
+  '맛집',
+  '카페',
+  '한식',
+  '중식',
+  '일식',
+  '양식',
+  '분식',
+  '술집',
+  '베이커리',
+  '디저트',
+  '치킨',
+];
+
 interface Props {
   side: PanelSide;
   onToggleSide(): void;
@@ -110,7 +128,7 @@ export const DiscoverPanel = ({
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="식당명·지역·메뉴로 검색"
+              placeholder="맛집, 카페, 한식 등 카테고리"
               className="pl-9 pr-9"
               value={qInput}
               onChange={(e) => {
@@ -153,6 +171,31 @@ export const DiscoverPanel = ({
               <PanelRightOpen className="size-4" />
             )}
           </button>
+        </div>
+
+        {/* 카테고리 칩 — 빠른 카테고리 검색 + 영역명 박지 말라는 가이드 */}
+        <div className="flex flex-wrap gap-1">
+          {CATEGORY_CHIPS.map((c) => {
+            const active = qInput.trim() === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  setQInput(c);
+                  fireImmediate(c);
+                }}
+                className={cn(
+                  'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                  active
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground',
+                )}
+              >
+                {c}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex gap-1.5 text-xs">
@@ -348,6 +391,7 @@ const SearchResultList = ({
               </div>
               <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                 {it.category && <span>{it.category}</span>}
+                {it.distance && <span>{it.distance}</span>}
                 {it.roadAddress && <span className="truncate">{it.roadAddress}</span>}
               </div>
             </div>

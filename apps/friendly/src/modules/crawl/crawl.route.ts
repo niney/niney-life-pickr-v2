@@ -13,7 +13,6 @@ import {
 import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
-import { closeSearchBrowser } from './adapters/naver-search.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -66,7 +65,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
 
   app.addHook('onClose', async () => {
     jobRegistry.abortAll();
-    await Promise.all([closeBrowser(), closeSearchBrowser()]);
+    await closeBrowser();
   });
 
   // POST — start a new crawl job (returns jobId immediately). Errors that
