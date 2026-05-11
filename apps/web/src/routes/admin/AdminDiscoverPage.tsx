@@ -185,7 +185,10 @@ export const AdminDiscoverPage = () => {
         id: it.placeId,
         lat: it.lat,
         lng: it.lng,
-        label: it.placeId === placeId ? it.name : undefined,
+        // 검색 결과(빨강)는 항상 이름 노출 — 사용자가 지도에서 후보를 한눈에
+        // 식별할 수 있게. 등록 마커(회색)는 종 자체가 많아질 수 있어 선택된
+        // 것만 표시(아래 루프 유지).
+        label: it.name,
         variant: 'primary',
       });
     }

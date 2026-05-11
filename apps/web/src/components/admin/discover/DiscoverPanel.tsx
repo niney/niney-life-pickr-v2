@@ -326,6 +326,8 @@ const SearchResultList = ({
   checkedIds: Set<string>;
   onToggleChecked(placeId: string, on: boolean): void;
 }) => {
+  // hook 호출은 모든 early return 위에 — react rules-of-hooks.
+  const ulRef = useScrollSelectedIntoView(selectedPlaceId, items);
   if (empty) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-sm text-muted-foreground">
@@ -355,13 +357,14 @@ const SearchResultList = ({
     );
   }
   return (
-    <ul className="divide-y">
+    <ul ref={ulRef} className="divide-y">
       {items.map((it) => {
         const registered = registeredPlaceIds.has(it.placeId);
         const checked = checkedIds.has(it.placeId);
         return (
           <li
             key={it.placeId}
+            data-place-id={it.placeId}
             onMouseEnter={() => onHover(it.placeId)}
             onMouseLeave={() => onHover(null)}
             onClick={() => onSelect(it.placeId)}
@@ -415,6 +418,7 @@ const RegisteredList = ({
   onSelect(placeId: string): void;
   onHover(placeId: string | null): void;
 }) => {
+  const ulRef = useScrollSelectedIntoView(selectedPlaceId, items);
   if (items.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-sm text-muted-foreground">
@@ -423,10 +427,11 @@ const RegisteredList = ({
     );
   }
   return (
-    <ul className="divide-y">
+    <ul ref={ulRef} className="divide-y">
       {items.map((it) => (
         <li
           key={it.placeId}
+          data-place-id={it.placeId}
           onMouseEnter={() => onHover(it.placeId)}
           onMouseLeave={() => onHover(null)}
           onClick={() => onSelect(it.placeId)}
@@ -447,4 +452,23 @@ const RegisteredList = ({
       ))}
     </ul>
   );
+};
+
+// 외부 시스템(DOM 스크롤) 동기화 — 지도 마커 클릭 등으로 selectedPlaceId 가
+// 화면 밖 항목을 가리키면 자동으로 보이게 한다. items 도 deps 에 넣어서 막
+// 도착한 새 데이터에 selectedPlaceId 항목이 들어오는 케이스(검색 후 즉시
+// 강조)도 커버. block:'nearest' 라 이미 보이면 no-op.
+const useScrollSelectedIntoView = <T,>(
+  selectedId: string | null,
+  items: T[],
+) => {
+  const ulRef = useRef<HTMLUListElement | null>(null);
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = ulRef.current?.querySelector<HTMLElement>(
+      `[data-place-id="${CSS.escape(selectedId)}"]`,
+    );
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedId, items]);
+  return ulRef;
 };
