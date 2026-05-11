@@ -21,6 +21,7 @@ status: active
 - **2026-05-09** in [../topics/web](../topics/web.md): RestaurantsPage 의 공개 페이지가 `useRestaurantsPublic` / `useRestaurantPublic` / `useMapPublicConfig` 만 호출 — 어드민 훅에 의존하지 않음. `AdminRestaurantsPage` 와 코드 공유는 0. 결과: 공개 페이지의 디자인/상태 모델이 어드민 운영 화면을 끌어다니지 않고 자유롭게 진화.
 - **2026-05-09** in [../topics/map](../topics/map.md): `Routes.SettingsMap.secret(':id')` (어드민, JSON `MapProviderSecret`) 와 `Routes.SettingsMap.publicConfig` (공개, JSON `MapProviderPublicConfig`) 가 페어로 공존. 같은 vworld WMTS 키를 노출하지만 라우트 prefix (`/admin/settings/map/{id}/secret` vs `/settings/map/public`) 와 응답 스키마 (`apiKey: nullable + domains` vs `apiKey: 평문` 만) 가 다르다. 핸들러는 둘 다 `service.getSecret('vworld')` 한 함수를 호출하고 차이만 라우트 핸들러에서 만든다.
 - **2026-05-09** in [../topics/project-overview](../topics/project-overview.md): "공개 vs 어드민 분리 정책" 이 모노레포 수준의 결정으로 정착 — 백엔드는 `/api/v1/admin/*` prefix 가 가드의 유일한 신호이고, FE 는 `PublicLayout` vs `AdminLayout` 으로 분기. 새 도메인이 사용자 노출이 필요해질 때 동일한 페어 분리를 따른다.
+- **2026-05-09 (follow-up)** in [../topics/web](../topics/web.md): 페어 경계 흐림의 첫 사례 — 어드민 발견 페이지(`/admin/discover`) 가 등록 맛집 데이터를 어드민 hook 이 아니라 **공개 hook (`useRestaurantsPublic`) 을 호출해 가져온다**. 이유는 어드민 `RestaurantListItem` 응답에 좌표(`latitude`/`longitude`) 가 없어서 — 공개 `RestaurantPublicListItem` 만이 좌표를 노출. 어드민 발견 페이지가 지도 마커를 그리려면 좌표가 필요하므로 공개 응답 셋을 그대로 차용하는 게 가장 단순. 또 등록 행 클릭 시 `PublicRestaurantDetail` 컴포넌트도 그대로 재사용 — 어드민 발견 전용 상세 컴포넌트 별도로 만들지 않음. 이는 페어 분리의 합당성을 흔들지 않는다 — 어드민이 공개 표면을 호출할 때는 응답 셋이 어드민에서 부족해서이지, 같은 데이터를 두 표면에 묶으려는 게 아니다.
 
 ## What This Means
 
@@ -40,6 +41,8 @@ status: active
 - **vworld 스타일의 "응답 데이터는 같지만 라우트만 다른" 케이스** — `MapProviderSecret` 와 `MapProviderPublicConfig` 가 그런 경우다. 데이터는 같은 평문 키지만 의도가 다르다 (admin 진단 reveal vs 사용자 페이지 사용). 컴파일러는 이 둘이 사실상 같은 데이터임을 모른다 — 사람이 의도를 분리해 둬야 의미가 있다.
 
 페어 분리는 어드민 회귀 위험을 0 으로 만들고 두 표면이 다른 속도로 진화하게 한다. 이 코드베이스의 "공개 vs 어드민" 경계는 이제 라우트 prefix / 스키마 / 훅 / 페이지 4 단계에서 모두 명시적이다.
+
+**부수 효과 — 공개 표면이 더 풍부할 때 어드민이 차용 가능** (2026-05-09 follow-up). 어드민 발견 페이지가 공개 hook 을 그대로 호출하는 케이스 — 어드민 응답 셋이 좌표를 노출하지 않아 마커 그리려면 공개 응답이 필요. 또 `PublicRestaurantDetail` 컴포넌트도 어드민 페이지에서 재사용. 페어 분리의 한쪽이 다른 쪽에서 차용되는 첫 사례인데, 분리의 합당성을 흔들지 않는다 — 차용의 이유가 "응답 셋이 어드민에서 부족해서" 라는 의도이고, 운영 메타가 우연히 새는 케이스가 아니다. 페어 분리는 어드민이 공개 응답을 호출하는 것을 금지하지 않는다 — 두 표면의 응답 셋을 명확히 하는 데 의의가 있고, 어드민이 부족한 응답을 공개 응답으로 보강하는 건 분리가 잘 되어 있을 때만 가능한 자연스러운 흐름.
 
 ## Sources
 

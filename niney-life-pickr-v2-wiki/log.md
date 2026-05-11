@@ -1,5 +1,31 @@
 # Wiki Compile Log
 
+## 2026-05-09 (7th compile, follow-up)
+
+**Topics updated:** crawl, friendly, api-contract, shared, web, map, project-overview
+**New topics:** none
+**New concepts:** none
+**Concepts updated:**
+- `in-memory-singleton-gates` — actor rate-limit 제거 인스턴스 추가 (학습 케이스 — 윈도우 기반 rate-limit 은 다중 시작 패턴과 충돌. 게이트가 dedup + max_concurrent 두 layer 로 충분하면 윈도우는 빼라). What This Means 6번째 항목 신규.
+- `public-admin-route-split` — 페어 경계 흐림 첫 사례 (어드민 발견 페이지가 공개 hook `useRestaurantsPublic` + `PublicRestaurantDetail` 컴포넌트를 차용 — 어드민 응답 셋이 좌표를 노출 안 해서). What This Means 보강.
+- `zod-ssot-buildless` — 검색 스키마 페어 추가 (`NaverSearchResult`/`CrawlSearchQuery`/`CrawlSearchResult` + `Routes.Crawl.search`). `source: z.enum(['playwright'])` 어댑터 fallback 노출 enum.
+
+**Sources scanned:** ~276 (직전 270 + 6 신규)
+**Sources changed:** ~18 (신규 6 + 변경 12 — commit 56c5615 + ed041fb)
+
+**Highlights:**
+- **신규 어드민 발견 페이지** (`/admin/discover`) — 어드민 사이드바에 "맛집 발견" (Compass 아이콘) 메뉴 추가, 7개 메뉴로 확장. 풀블리드 vworld 지도 + 우측(또는 좌측) 패널. 패널 = [검색결과 / 등록맛집] 두 탭 + 검색바 (디바운스 300ms + Enter 즉시).
+- **Playwright 기반 네이버 PC 지도 검색** — `naver-search.playwright.adapter.ts` 신규. `https://map.naver.com/p/search/{q}` 헤드리스로 띄우고 첫 `/p/api/search/allSearch` 응답 가로채는 방식. **직접 fetch 는 ncaptcha 봇 보호로 차단** — 페이지 자체의 captcha 토큰 + 세션 쿠키를 활용해야만 정상 응답. 검색당 ~1.1초.
+- **검색·등록 통합 마커** — 검색 결과 = 빨강 (`MapMarker.variant: 'primary'`), 등록 = 회색 (`'muted'`). 같은 placeId 가 양쪽에 있으면 등록 우선해 중복 크롤 방지.
+- **다중 선택 일괄 크롤링** — 검색 결과 행 체크박스(등록 항목은 비활성+[등록됨] 배지). [N개 크롤링] sticky 바 → 직렬 await 호출. 시작 거부된 placeId 는 체크 상태로 남겨 재시도 편의.
+- **actor 단위 rate-limit 완전 제거** — `RATE_LIMIT_WINDOW_MS` 상수 + `lastCallByActor: Map` + 검사 블록 모두 삭제. 어드민 발견의 정상 사용이 다중 시작이라 어떤 윈도우(1초 → 50ms 시도) 길이도 둘째부터 차단되어 1개만 통과되던 버그. spam 방어는 in-flight dedup(`findInFlightByPlace`) + `MAX_CONCURRENT_PER_ACTOR=3` + FIFO 큐 두 layer 로 충분. `error: 'rate_limited'` enum 은 backward-compat 으로 잔존하지만 emit 안 됨.
+- **패널 좌/우 토글** — `panelPrefsStore` (Zustand + localStorage `lp:panelPrefs`). PanelKey = `'admin.discover' | 'public.restaurants'` 페이지별 namespace. `usePanelSide(key)` selector hook. xl+ 한정 ⇄ 토글 버튼. 어드민 발견(default `right`) + 공개 맛집(default `left`) 양쪽 적용. 컨테이너 `flex-row-reverse` + aside `border-l` ↔ `border-r` swap.
+- **MapCanvas variant + ResizeObserver** — `MapMarker.variant?: 'primary' | 'muted'` 색 분기 (회색 핀 `#94a3b8`/`#64748b`). ResizeObserver 자동 reflow — 좌/우 패널 토글, 윈도우 리사이즈, 슬라이드오버 등 모든 사이즈 변경 케이스 한 곳에서 처리.
+- **상세는 별도 column** — 처음엔 패널 안 absolute 슬라이드였으나 사용자 요청으로 list/detail/map 3-column 으로 변경. `PublicRestaurantDetail` 그대로 재사용 — 어드민 발견 전용 상세 컴포넌트 별도 X (페어 경계 흐림 첫 사례).
+- **검색 라우트 + 스키마** — GET `/api/v1/admin/crawl/search?q=&bbox=`. `CrawlSearchResult.source` enum (`'playwright'`) — 추후 비공식 fallback 가능성을 enum 으로 한 곳에 기록.
+
+**Suggested for next round:** 검색 결과 페이지네이션 (네이버 첫 페이지 ~20개 한도), bbox 검색 영역 한정 (현재 어댑터 무시 — page.goto URL 에 `searchCoord`/`boundary` 추가하면 가능), 검색 결과 마커 클러스터링, 어드민 발견의 모바일/태블릿 패턴 (현재 xl 미만 패널만 풀블리드), tailwindcss-animate 도입 (`animate-in slide-in-from-right-4` 가 미설치 시 슬라이드 효과 미작동).
+
 ## 2026-05-09 (6th compile)
 
 **Topics updated:** friendly, api-contract, shared, web, project-overview

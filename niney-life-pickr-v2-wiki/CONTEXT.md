@@ -25,7 +25,7 @@
 
 ## Stats
 
-Compiled: 2026-05-09 | Topics: 13 | Concepts: 8 | Sources: 270
+Compiled: 2026-05-09 | Topics: 13 | Concepts: 8 | Sources: 276
 
 ## Topic map at a glance
 
@@ -37,7 +37,7 @@ project-overview  (모노레포 전체 — 공개 vs 어드민 분리 정책)
 │   ├── menu-grouping (식당 단위 메뉴 변형 → canonical 그룹 LLM 정규화 — 별도 토픽)
 │   └── analytics    (식당 가로지르기 글로벌 머지 + categoryPath 트리 + 통계 — 별도 토픽)
 ├── map              (vworld OpenLayers + WMTS 직접, MapProviderConfig DB 키, 어드민·공개 양쪽 사용)
-├── web              (Vite + React 19, 어드민 + 공개 `/restaurants` 풀 뷰포트 + 5탭 상세)
+├── web              (Vite + React 19, 어드민 + 공개 `/restaurants` + 어드민 `/admin/discover` 발견 페이지, 좌/우 패널 토글)
 ├── mobile           (Expo + RN 0.76, 맛집 탭 ADMIN 전용)
 └── packages/
     ├── api-contract  (Zod SSOT, 공개/어드민 페어 스키마)

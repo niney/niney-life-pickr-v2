@@ -2,6 +2,8 @@
 topic: friendly
 last_compiled: 2026-05-09
 status: active
+aliases: [naver-search-adapter, search-route]
+sources_count: 57
 ---
 
 # friendly — Fastify 백엔드
@@ -27,7 +29,7 @@ status: active
 
 CLAUDE.md 규약상 모든 모듈은 `*.route.ts`(HTTP) + `*.service.ts`(비즈니스) + `*.test.ts`(Vitest) 트리오로 구성하고, FE/BE가 공유하는 타입/검증 로직은 모두 `@repo/api-contract`의 zod 스키마로만 정의한다. [apps/friendly/package.json](../../apps/friendly/package.json)의 `name: "friendly"`가 워크스페이스 식별자이며, `pnpm dev:api`/`pnpm --filter friendly <cmd>`로 단독 실행한다.
 
-## Architecture [coverage: high — 10 sources]
+## Architecture [coverage: high — 11 sources]
 
 엔트리 흐름은 `server.ts → buildApp() → autoload(plugins) → autoload(modules/*.route.ts)`로 단방향이다.
 
@@ -71,7 +73,11 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 
 **공개 vs admin 라우트 분리 정책** — 같은 도메인이라도 (1) 응답 스키마가 다르거나 (2) 가드만 빠진 게 아니라 캐싱/SEO 정책이 다른 경우에는 별도 라우트로 분리한다. 핸들러 안에서 `if (req.user) {…} else {…}` 분기보다 라우트 자체가 둘이라 OpenAPI/Swagger 가 두 응답 셋을 분리해 표시하고 어드민 회귀 위험이 0이 된다. restaurant 의 `publicList`/`publicByPlaceId`/`publicInsights`/`ranking`, settings 의 `publicConfig` 가 같은 패턴 — 모두 `tags: ['public']` + 가드 미적용으로 마운트되고 service 메소드가 admin 과 다른 평탄화/정렬을 담당한다.
 
-## Talks To [coverage: high — 11 sources]
+**crawl 모듈 변경 흡수 (2026-05-09 follow-up)** — 자세한 건 [crawl 토픽](./crawl.md). friendly 차원에서 2가지가 바뀌었다:
+- 어드민 발견 페이지(`/admin/discover`) 가 호출하는 신규 검색 라우트 GET `/admin/crawl/search` 추가. `crawl.service.ts` 의 `searchPlaces(query, bbox?)` 메소드와 신규 `naver-search.playwright.adapter.ts` (Playwright Chromium 으로 PC 지도 페이지의 captcha 토큰 + 세션 쿠키를 가로채 `/p/api/search/allSearch` 응답을 캡처) 가 조합. 검색당 ~1.1초. onClose 훅에서 기존 `closeBrowser()` 와 함께 `closeSearchBrowser()` 도 호출 (place 어댑터와 검색 어댑터가 별개 Browser 인스턴스).
+- `crawl.service.ts` 에서 actor 단위 rate-limit 완전 제거 — `RATE_LIMIT_WINDOW_MS` 상수, `lastCallByActor: Map<string, number>` 인스턴스 필드, startCrawl 진입부 검사 블록 모두 삭제. spam 방어는 in-flight dedup + `MAX_CONCURRENT_PER_ACTOR=3` + FIFO 큐 두 layer 로 충분. `error: 'rate_limited'` enum 은 backward-compat 으로 남아있지만 service 가 emit 하지 않음.
+
+## Talks To [coverage: high — 12 sources]
 
 - **`@repo/api-contract`** — `Routes.*` URL 상수와 모든 zod 스키마(인증/픽/식당/요약/분석/미디어/AI/메뉴 그룹핑/애널리틱스/지도 설정)의 단일 출처. 모든 `*.route.ts`가 import.
 - **`@repo/utils`** — `picks.service.ts`의 랜덤 추첨에서 `pickRandom(options)`.
@@ -80,10 +86,12 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 - **sharp ^0.34** — media 모듈의 썸네일 리사이즈/JPEG 인코딩.
 - **Playwright** — crawl 모듈이 사용 ([crawl 토픽](./crawl.md)).
 - **Naver Place 페이지 + Naver CDN** — crawl 이 SSR/AJAX, media 가 `phinf.pstatic.net` 호스트군 썸네일 프록시.
+- **Naver PC 지도 페이지 (`map.naver.com`) — captcha-aware capture (NEW)** — 검색 어댑터가 Playwright Chromium 으로 `https://map.naver.com/p/search/{query}` 를 띄우고 페이지 자체의 ncaptcha 토큰 + 세션 쿠키를 활용해 첫 `/p/api/search/allSearch` 응답을 가로챈다. 직접 fetch 는 봇 보호로 차단됨.
 - **Ollama Cloud** — ai/summary/menu-grouping/analytics 가 LLM 호출.
 - **외부 지도 키(vworld)** — settings 가 평문 보관, `publicConfig` 로 공개 페이지에 그대로 흘려 보냄(WMTS 키는 어차피 브라우저 Network 탭에 노출되므로 admin secret 과 보안 등급이 동등).
 - **소비자** —
   - `apps/web` 어드민 화면이 `@repo/shared`의 API 클라이언트로 모든 admin 라우트 호출.
+  - `apps/web` 어드민 발견 페이지(`AdminDiscoverPage`, `/admin/discover`) 가 신규 GET `/admin/crawl/search` 호출 → 결과 N개 체크 → 한 번에 N개 startCrawl.
   - `apps/web` **공개 화면**(루트 랭킹·맛집 지도·식당 상세)이 `Routes.Restaurant.ranking`/`publicList`/`publicByPlaceId`/`publicInsights` + `Routes.SettingsMap.publicConfig` 호출.
   - `apps/mobile` 도 같은 클라이언트 (CLAUDE.md 핵심 규칙 #2).
 - **모듈 간 토폴로지**:
@@ -114,7 +122,7 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 │   ├── /public/:placeId                          (public)        ← 공개 상세(NEW)
 │   ├── /public/:placeId/insights                 (public)        ← 공개 인사이트(NEW)
 │   └── /admin/restaurants/*                      (admin)         ← 어드민 CRUD/SSE/smart-pick/...
-├── /admin/crawl/*                                (admin)         ← crawl 토픽
+├── /admin/crawl/*                                (admin)         ← crawl 토픽 (search 라우트 NEW)
 ├── /admin/ai/*                                   (admin)         ← ai 토픽
 ├── /admin/analytics/*                            (admin)         ← analytics 토픽
 ├── /admin/settings/map[/...]                     (admin)         ← (NEW)
@@ -278,6 +286,7 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - **분석 정규화 테이블 도입 동기** — `menusJson`/`tipsJson`/`keywordsJson` 파싱은 식당 단위 통계엔 충분하지만, 글로벌 메뉴 순위·키워드 검색·전역 LLM 머지엔 GROUP BY 가능한 행 단위가 필요하다. summary done 시 같은 트랜잭션 안에서 `delete + reinsert` 로 동기화. 기존 데이터는 `Routes.Restaurant.analyticsBackfill` (LLM 미호출, JSON → row 변환만) 로 1회 채운다.
 - **Summary는 fire-and-forget + 공유 FIFO 게이트** — `queueSummariesForReviews`는 즉시 반환, 내부 `run()`은 `void Promise.catch(() => undefined)`. 어댑터 풀은 [adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)를 공유해 `LlmProviderConfig.maxConcurrent`로 동시성 제어 ([ai 토픽](./ai.md)).
 - **Media는 디스크 캐시 + sharp** — lru-cache가 아닌 `data/thumbs/<sha1>.jpg` 파일 캐시. 이유: (1) 썸네일은 잠재적으로 GB 단위라 메모리에 안 맞음, (2) restart에도 살아남음, (3) 단일 인스턴스라 cache invalidation 문제 없음. ALLOWED_HOSTS로 SSRF 차단, 5초 timeout, 10MB 상한, `If-None-Match`로 304 지원.
+- **crawl 의 actor 단위 rate-limit 제거 (2026-05-09)** — 어드민 발견 페이지의 정상 사용 패턴이 "검색 결과 N개 체크 → 한 번에 N개 startCrawl" 이라 어떤 윈도우 길이도 둘째부터 차단됐다. spam 방어는 in-flight dedup + max_concurrent FIFO 큐 두 layer 로 이미 충분 — `RATE_LIMIT_WINDOW_MS`/`lastCallByActor` Map 필드 제거. 자세한 건 [crawl 토픽](./crawl.md).
 - **No Docker / No Redis** — CLAUDE.md 규칙. SQLite + 단일 인스턴스 + `lru-cache` 또는 디스크 캐시.
 - **dev = `tsx watch`, prod = `tsup` 번들** — [tsup.config.ts](../../apps/friendly/tsup.config.ts), `target: node22`, ESM, sourcemap on. `start`는 `node --env-file=.env dist/server.js`.
 - **Vitest는 `extensionAlias` + 수동 .env 로드** — [vitest.config.ts](../../apps/friendly/vitest.config.ts)는 `verbatimModuleSyntax`로 ESM-style `.js` 임포트를 쓰는 코드베이스를 위해 `resolve.extensionAlias: { '.js': ['.ts','.js'] }`, `server.deps.inline: [/^@repo\//]`. `.env`는 config 상단에서 수동 파싱.
@@ -306,8 +315,9 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - **media `data/thumbs/` 디렉터리 누적** — 캐시 만료/제거 로직이 없다. 운영에서 디스크 모니터링 필요. 키는 `sha1(url|w=…|q=…)`이라 같은 원본을 다른 width로 요청하면 별도 파일이 쌓인다.
 - **media는 public(인증 없음)** — Naver 리뷰 이미지는 공개 자원이고 `<img>` 로 불러야 해서 의도된 결정. ALLOWED_HOSTS 화이트리스트가 SSRF 가드의 전부.
 - **`tsx watch`는 `src/`만 감시한다** — workspace 패키지(`@repo/*`) 변경은 자동 reload되지 않으므로 수동 재시작 필요.
+- **crawl 검색 라우트의 ncaptcha 의존** — 검색 어댑터가 PC 지도 페이지를 띄워 captcha 토큰 + 세션 쿠키를 캡처하는 방식이라, 네이버가 captcha UI/응답 형태를 바꾸면 그날부터 GET `/admin/crawl/search` 가 죽는다. friendly 운영 단에선 어드민 발견 페이지가 빈 결과를 받게 됨. 자세한 건 [crawl 토픽](./crawl.md).
 
-## Sources [coverage: high — 50 sources]
+## Sources [coverage: high — 57 sources]
 
 - [apps/friendly/package.json](../../apps/friendly/package.json)
 - [apps/friendly/tsconfig.json](../../apps/friendly/tsconfig.json)
@@ -360,4 +370,6 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - [apps/friendly/src/modules/settings/map.service.ts](../../apps/friendly/src/modules/settings/map.service.ts)
 - [apps/friendly/src/modules/settings/map.test.ts](../../apps/friendly/src/modules/settings/map.test.ts)
 - [apps/friendly/src/modules/ai/adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)
+- [apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts)
+- [apps/friendly/scripts/dev-capture-search.ts](../../apps/friendly/scripts/dev-capture-search.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)

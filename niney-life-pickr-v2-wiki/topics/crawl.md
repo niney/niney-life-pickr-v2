@@ -1,6 +1,6 @@
 ---
 topic: crawl
-last_compiled: 2026-05-08
+last_compiled: 2026-05-09
 status: active
 ---
 
@@ -14,17 +14,18 @@ status: active
 
 호출자:
 - 어드민 웹 UI(`AdminCrawlTestPage`) — 폼에 URL을 넣고 SSE로 진행률을 받음.
-- 개발자용 1회성 진단 스크립트 `apps/friendly/scripts/dev-capture-visitor.ts` — Playwright를 직접 띄워 방문자 리뷰 wire 응답을 `__debug__/`에 떨어뜨림.
+- 어드민 발견 페이지(`AdminDiscoverPage`) — 검색어로 네이버 지도 결과를 받아 체크박스로 N개 선택 후 한 번에 startCrawl. 클라이언트가 직렬 await로 N개 호출.
+- 개발자용 1회성 진단 스크립트 `apps/friendly/scripts/dev-capture-visitor.ts` (방문자 리뷰 wire) / `dev-capture-search.ts` (검색 페이지 JSON 응답) — Playwright를 직접 띄워 응답을 콘솔/`__debug__/`에 떨어뜨림.
 - 외부 도구(curl/스크립트) — 헤더에 `Authorization: Bearer <jwt>` 실어 동일 라우트 사용.
 
 권한은 항상 `app.authenticate + app.requireAdmin`. 일반 사용자는 호출 불가.
 
-## Architecture [coverage: high — 6 sources]
+## Architecture [coverage: high — 7 sources]
 
 요청 흐름은 단방향이며, 어댑터의 콜백을 통해 DB 영속화가 가지처럼 붙는다.
 
-1. **Route** (`crawl.route.ts`) — Fastify 라우트가 인증·검증을 거친 뒤 `CrawlService.startCrawl(url, actorId, mode)`을 호출. SSE는 별도 GET `events` 엔드포인트.
-2. **Service** (`crawl.service.ts`) — rate-limit / in-flight dedupe / 30초 캐시(`mode === 'create'`만) 검사 → `JobRegistry.create()`로 Job 생성 → actor 슬롯 가용 여부에 따라 즉시 `runJob`을 fire-and-forget 또는 `pending: PendingStart[]` FIFO에 enqueue → `jobId`(+`queued?`)만 즉시 반환.
+1. **Route** (`crawl.route.ts`) — Fastify 라우트가 인증·검증을 거친 뒤 `CrawlService.startCrawl(url, actorId, mode)`을 호출. SSE는 별도 GET `events` 엔드포인트. 검색 라우트는 별도로 `CrawlService.searchPlaces(query, bbox)` 동기 호출.
+2. **Service** (`crawl.service.ts`) — in-flight dedupe / 30초 캐시(`mode === 'create'`만) 검사 → `JobRegistry.create()`로 Job 생성 → actor 슬롯 가용 여부에 따라 즉시 `runJob`을 fire-and-forget 또는 `pending: PendingStart[]` FIFO에 enqueue → `jobId`(+`queued?`)만 즉시 반환. (이전에 있던 actor 단위 1초 rate-limit 윈도우는 제거됨 — 어드민 발견의 다중 시작 패턴이 정상 사용이므로 in-flight dedupe + max_concurrent 큐로만 spam 방어.)
 3. **Mode 사전처리** — `runJob` 진입 시 `mode`가 `recrawl`이면 `restaurants.clearReviewsAndSummaries(restaurantId)`로 기존 리뷰/요약을 cascade-delete. `update`이면 `restaurants.getExistingReviewKeys(restaurantId)`로 dedup 키 셋을 만들어 어댑터에 `existingReviewKeys`로 넘김 → 어댑터가 한 페이지가 100% 기존 리뷰면 페이지네이션을 조기 종료.
 4. **URL normalizer** (`url-normalizer.ts`) — `naver.me` 단축 URL은 `fetch(redirect: 'follow')`로 풀고, `/p/entry/place/{id}`, `/restaurant/{id}`, `?id=` 등 여러 패턴에서 `placeId` 추출 후 표준 모바일 URL `https://m.place.naver.com/restaurant/{id}/home`로 정규화.
 5. **Playwright adapter** (`adapters/naver-place.playwright.adapter.ts`, `fetchNaverPlaceWithPlaywright`) — Chromium(모바일 UA·iPhone viewport)으로 표준 URL 진입 → `__APOLLO_STATE__` 스냅샷 → 메타·메뉴·통계·블로그 리뷰 추출 → `onPartial(data)` 콜백 → 방문자 리뷰 서브페이지(`/review/visitor?reviewSort=recent`)에서 SSR 인라인 `__APOLLO_STATE__` 파싱 → 초기 ~24건 즉시 `onVisitorBatch` → "더보기" 자동 클릭하며 wire graphql 응답 캡처 → 페이지 단위로 `onVisitorBatch(batch)` 콜백 → Apollo + wire 병합 후 최종 데이터 반환.
@@ -35,13 +36,17 @@ status: active
 
 **SSE 전송**은 라우트에서 직접 `reply.hijack()` 후 `text/event-stream`을 수동으로 흘려 보낸다. 모든 이벤트가 `seq` 번호를 갖고 registry의 `events[]`에 보관되므로, EventSource가 끊겼다 재접속할 때 `Last-Event-ID` 헤더 또는 `?afterSeq=`로 빠진 구간만 replay 받는다. 종료된 Job에 재접속하면 누락된 이벤트만 흘리고 stream을 닫고, 이미 따라잡았다면 204로 자동 재연결을 끊는다.
 
-## Talks To [coverage: high — 5 sources]
+**검색 흐름** (`searchPlaces`) — 별도 어댑터 `naver-search.playwright.adapter.ts`가 자체 모듈 스코프 Browser 인스턴스(데스크톱 UA, viewport 1280x900)로 `https://map.naver.com/p/search/{encodeURIComponent(query)}` 페이지를 띄우고, `page.on('response')` 로 첫 `/p/api/search/allSearch` JSON 응답을 가로채 결과를 추출. 페이지 자체가 발급한 captcha 토큰/세션 쿠키 안에서만 응답이 정상적으로 돌아오므로, 직접 fetch 는 사용 불가능하다. 페이지·검색 어댑터는 각자 다른 Browser 인스턴스를 갖고 있어 모바일/데스크톱 컨텍스트가 섞이지 않는다. 검색당 ~1.1초로 어드민 1명 사용 빈도 낮아 단일 Browser + 매 호출 새 BrowserContext 모델로 충분. 어드민 발견 페이지가 검색 결과 중 N개를 선택해 한 번에 startCrawl 하는 경우, 클라이언트가 직렬 await 패턴으로 N번 POST 한다(이때 BE rate-limit 이 제거된 덕에 모두 통과).
 
-- **Playwright (Chromium)** — `adapters/naver-place.playwright.adapter.ts`에서 모듈 스코프 `browserPromise` 하나로 launch. `onClose` 훅에서 `closeBrowser()` 호출. 헤드리스 토글(`CRAWL_HEADLESS=0`), slowMo, viewport hold 시간 등 디버그 노브가 환경 변수로 노출.
+## Talks To [coverage: high — 6 sources]
+
+- **Playwright (Chromium) — Place 어댑터** — `adapters/naver-place.playwright.adapter.ts`에서 모듈 스코프 `browserPromise` 하나로 launch (모바일 UA, iPhone viewport). `onClose` 훅에서 `closeBrowser()` 호출. 헤드리스 토글(`CRAWL_HEADLESS=0`), slowMo, viewport hold 시간 등 디버그 노브가 환경 변수로 노출.
+- **Playwright (Chromium) — Search 어댑터** — `adapters/naver-search.playwright.adapter.ts`에서 별개의 모듈 스코프 `browserPromise` 하나로 launch (데스크톱 UA, 1280x900). `onClose` 훅에서 `closeSearchBrowser()` 호출(`closeBrowser()`와 `Promise.all`). 환경 변수 노브 — `CRAWL_SEARCH_HEADLESS=0`, `CRAWL_SEARCH_TIMEOUT_MS`(기본 15000), `CRAWL_SEARCH_WAIT_MS`(기본 8000). 이미지/폰트/CSS/미디어는 `page.route('**/*')`에서 abort.
 - **Naver Place** — `m.place.naver.com/restaurant/{id}/home`(메인), `m.place.naver.com/restaurant/{id}/review/visitor?reviewSort=recent`(방문자 리뷰 서브페이지). `pcmap.place.naver.com`, `place.map.naver.com`, `api.place.naver.com/graphql`, `m.place.naver.com/graphql`의 JSON 응답을 `page.on('response')`로 가로채 캡처.
-- **api-contract 스키마** (`packages/api-contract/src/schemas/crawl.ts`) — `CrawlNaverPlaceInput`(+`mode`), `StartCrawlResult`(+`queued?`), `CrawlEvent`(+`visitor_batch`), `CrawlJob`, `CrawlStage`, `NaverPlaceData`, `VisitorReview.videos[{posterUrl, videoUrl}]`, `PersistedVisitorReview` 등이 모두 zod. `fastify-type-provider-zod`가 검증 + OpenAPI 자동 생성.
+- **Naver Map (검색)** — `https://map.naver.com/p/search/{encodeURIComponent(query)}` 페이지 + 같은 BrowserContext 안에서 발생하는 `/p/api/search/allSearch` JSON 응답. 직접 fetch 는 ncaptcha 봇 보호로 차단(`pageId === 'ncaptcha-all-search-no-result'`).
+- **api-contract 스키마** (`packages/api-contract/src/schemas/crawl.ts`) — `CrawlNaverPlaceInput`(+`mode`), `StartCrawlResult`(+`queued?`), `CrawlEvent`(+`visitor_batch`), `CrawlJob`, `CrawlStage`, `NaverPlaceData`, `VisitorReview.videos[{posterUrl, videoUrl}]`, `PersistedVisitorReview`, `CrawlSearchQuery`, `CrawlSearchResult`(`{ items: NaverSearchResult[], source: 'playwright' }`), `NaverSearchResult` 등이 모두 zod. `fastify-type-provider-zod`가 검증 + OpenAPI 자동 생성.
 - **RestaurantService / SummaryService** — `CrawlService` 생성자가 두 서비스를 주입받아 persist tail에서 `findByPlaceId`, `clearReviewsAndSummaries`, `getExistingReviewKeys`, `upsertRestaurantFromCrawl`, `persistReviewBatch`, `queueSummariesForReviews`를 호출.
-- **어드민 웹** — `Routes.Crawl.naverPlace`로 POST → 받은 `jobId`로 `Routes.Crawl.jobEvents(id)`를 EventSource 구독. `visitor_batch.persistedReviews`(서버 id·`fetchedAt`·`videos[]` 포함)를 그대로 detail 캐시에 머지해 follow-up GET을 생략. EventSource 한계 때문에 `?token=<jwt>` 쿼리 파라미터도 인정.
+- **어드민 웹** — `AdminCrawlTestPage`는 `Routes.Crawl.naverPlace`로 POST → 받은 `jobId`로 `Routes.Crawl.jobEvents(id)`를 EventSource 구독. `AdminDiscoverPage`는 `Routes.Crawl.search`로 GET 후 결과 중 선택분을 직렬 await로 N번 startCrawl. `visitor_batch.persistedReviews`(서버 id·`fetchedAt`·`videos[]` 포함)를 그대로 detail 캐시에 머지해 follow-up GET을 생략. EventSource 한계 때문에 `?token=<jwt>` 쿼리 파라미터도 인정.
 - **JobRegistry singleton** (`jobRegistry`) — `crawl.route.ts`와 `crawl.service.ts`가 동일 인스턴스를 import해 작업 상태를 공유.
 
 ## API Surface [coverage: high — 2 sources]
@@ -50,7 +55,8 @@ status: active
 
 | Method | Path | Auth | Body / Params | 200 응답 |
 | --- | --- | --- | --- | --- |
-| POST | `/api/v1/admin/crawl/naver-place` | `authenticate + requireAdmin` (Bearer) | `{ url: string(URL), mode?: 'create'|'recrawl'|'update' }` (`CrawlNaverPlaceInput`) | `StartCrawlResult` — `{ ok: true, jobId, deduped, queued? }` 또는 `{ ok: false, error, message, triedUrl? }`. `queued: true`이면 슬롯 대기 중. `error`는 `rate_limited` / `unsupported_format` / `redirect_failed` / `fetch_failed` 등. 분류된 실패도 HTTP 200으로 내려 클라이언트 인라인 표시. |
+| POST | `/api/v1/admin/crawl/naver-place` | `authenticate + requireAdmin` (Bearer) | `{ url: string(URL), mode?: 'create'|'recrawl'|'update' }` (`CrawlNaverPlaceInput`) | `StartCrawlResult` — `{ ok: true, jobId, deduped, queued? }` 또는 `{ ok: false, error, message, triedUrl? }`. `queued: true`이면 슬롯 대기 중. `error`는 `unsupported_format` / `redirect_failed` / `fetch_failed` 등 (`rate_limited` enum 값은 남아 있지만 service가 더 이상 emit 하지 않음). 분류된 실패도 HTTP 200으로 내려 클라이언트 인라인 표시. |
+| GET | `/api/v1/admin/crawl/search` | `authenticate + requireAdmin` (Bearer) | `?q=<string>&bbox=<string?>` (`CrawlSearchQuery`, `q` 비어 있으면 zod가 400) | `CrawlSearchResult` — `{ items: NaverSearchResult[], source: 'playwright' }`. `bbox`는 현재 무시(추후 page.goto URL 에 `searchCoord`/`boundary` 추가 시 활성화). 어댑터가 `naver-search.playwright.adapter.ts` 의 `searchPlacesViaMapNaver(q, { limit: 20 })` 호출. `source` 필드로 어떤 어댑터가 응답했는지 노출. 4건의 라우트 테스트(`crawl.test.ts`): 401(no token) / 403(non-admin) / 400(empty q) / 200(ADMIN + valid q, 어댑터 mock). |
 | GET | `/api/v1/admin/crawl/jobs` | `authenticate + requireAdmin` | — | `CrawlJobListResult` — `{ jobs: CrawlJob[] }`. 호출 actor가 만든 진행 중(queued+active) + 최근 종료 작업. |
 | DELETE | `/api/v1/admin/crawl/jobs/:id` | `authenticate + requireAdmin` | `params: { id }` | 204 No Content (idempotent). active면 `AbortController.abort()`(어댑터가 `CrawlCancelledError`로 종료), queued면 `pending`에서 제거 + service가 `error: 'cancelled'` 이벤트 직접 발행. |
 | GET | `/api/v1/admin/crawl/jobs/:id/events` | JWT(헤더) **또는** `?token=<jwt>` 쿼리, `role === 'ADMIN'` + 본인 Job | `?afterSeq=<n>` 또는 `Last-Event-ID` 헤더 | `text/event-stream`. `id: <seq>` / `event: <type>` / `data: <CrawlEvent JSON>` 라인. 이미 종료되고 클라가 따라잡았으면 204. 15초마다 `: hb\n\n` 코멘트 heartbeat. `done`/`error` 이벤트 후 서버가 stream 종료. |
@@ -63,14 +69,19 @@ status: active
 - `done` — `{ result: CrawlNaverPlaceResult }` (terminal)
 - `error` — `{ error, message }` (terminal; 큐에서 취소된 Job은 `error: 'cancelled'`)
 
-`CrawlErrorCode` enum에는 `max_concurrent`가 여전히 포함돼 있지만, 큐 도입 이후로는 service가 절대 emit 하지 않는다. `MaxConcurrentJobsError` 클래스도 backward-compat용으로 export만 유지되고 throw 되지 않는다.
+`CrawlErrorCode` enum에는 `max_concurrent`와 `rate_limited`가 여전히 포함돼 있지만, 둘 다 service가 더 이상 emit 하지 않는다(`max_concurrent`는 큐 도입 이후, `rate_limited`는 actor 윈도우 제거 이후). `MaxConcurrentJobsError` 클래스도 backward-compat용으로 export만 유지되고 throw 되지 않는다.
 
-어댑터 export(테스트/스크립트용):
+Place 어댑터 export(테스트/스크립트용):
 - `fetchNaverPlaceWithPlaywright(placeId, canonicalUrl, hooks)` — 메인 진입점.
 - `closeBrowser()` — 모듈 스코프 Chromium 정리 (Fastify `onClose`에서 호출).
 - `CrawlCancelledError` / `PlaceParseError` / `PlaywrightFetchError` — 분류된 에러 클래스.
 - `__test_parseVisitorReviewsFromCaptured` — 캡처된 wire 응답 배열에서 visitor reviews를 파싱하는 함수의 테스트 export (videos 분리 회귀 검증용).
 - `ExistingReviewKeys` 인터페이스 — `{ externalIds, contentHashes }` 두 read-only 셋.
+
+Search 어댑터 export:
+- `searchPlacesViaMapNaver(query, options)` — 메인 진입점. `options.limit` 으로 결과 자름.
+- `closeSearchBrowser()` — 검색 어댑터 자체 Chromium 정리 (Fastify `onClose`에서 `closeBrowser()`와 함께 호출).
+- `NaverSearchError` — 분류된 에러 클래스.
 
 ## Data [coverage: high — 4 sources]
 
@@ -94,11 +105,12 @@ status: active
 
 **상한**:
 - actor당 동시 active 3개 (`MAX_CONCURRENT_PER_ACTOR`) → 초과분은 `pending` FIFO에 무제한 대기 (예외 발생 X)
-- actor당 호출 간격 1초 (`RATE_LIMIT_WINDOW_MS`) → `error: 'rate_limited'`
+- ~~actor당 호출 간격 1초 (`RATE_LIMIT_WINDOW_MS`)~~ — **제거됨**. 어드민 발견의 다중 시작이 정상 사용 패턴이라 윈도우 자체가 잘못 자리한 것으로 판단. spam 방어는 in-flight dedupe + max_concurrent 큐 두 layer 로 흡수.
 - placeId 캐시 30초 (`CACHE_TTL_MS`) — `mode === 'create'`만 적용. hit 시 즉시 `progress(done)` + `done` 이벤트만 내는 1회성 Job 합성.
 - 종료 Job TTL 5분 (`FINISHED_TTL_MS`)
 - 방문자 리뷰 페이지네이션 30 페이지 (`CRAWL_VISITOR_MAX_PAGES`, env 오버라이드 가능), 클릭 간 300 ms (`CRAWL_VISITOR_PAGE_DELAY_MS`)
 - 이벤트 버퍼 Job당 1000건 (`EVENT_BUFFER_MAX`, 백스톱)
+- 검색 어댑터 페이지 타임아웃 15초 (`CRAWL_SEARCH_TIMEOUT_MS`), 응답 대기 8초 (`CRAWL_SEARCH_WAIT_MS`)
 
 **`NaverPlaceData` 추출 필드**(`packages/api-contract/src/schemas/crawl.ts`):
 - 메타 — `placeId`, `name`, `category`, `address`/`roadAddress`, `phone`, `latitude`/`longitude`, `rating`, `reviewCount`, `rawSourceUrl`
@@ -109,9 +121,19 @@ status: active
 - `blogReviews` — URL 기준 dedupe, 본문은 200자 excerpt, 최대 30건.
 - `visitorReviews` — SSR 초기(~24건) + wire(이후 "더보기" 페이지)를 병합. `id`/`reviewId`로 cross-source dedupe, 본문은 500자 컷. 각 리뷰는 `imageUrls`(다중)와 `videos[{posterUrl, videoUrl}]` 분리 보유 — 수집 개수 상한(slice)은 제거됨.
 
-**디버그 캡처**: `CRAWL_DEBUG_CAPTURE=1`일 때 `apps/friendly/src/modules/crawl/__debug__/`에 메인/방문자 wire 덤프 + 페이지네이션 후 Apollo state 덤프(`visitor-{placeId}-{after|single}-{stamp}.json`). 진단 스크립트 `dev-capture-visitor.ts`도 동일 디렉토리.
+**`NaverSearchResult` 스키마** (검색 어댑터 응답, `allSearch` JSON 추출):
+- `placeId` — `id` 필드. 진입 URL `https://map.naver.com/p/entry/place/{placeId}` 합성용.
+- `name`, `category` — `category[]` 배열의 첫 항목만.
+- `address`, `roadAddress`
+- `phone` — `tel` 또는 `virtualTel` (장식된 안심번호도 허용).
+- `lat` (= `y`), `lng` (= `x`)
+- `thumbnailUrl` — `thumUrl`
+- `reviewCount`
+- `rawSourceUrl` — `https://map.naver.com/p/entry/place/{placeId}`로 합성 (기존 url-normalizer 가 placeId 추출 가능한 정규 진입 URL)
 
-## Key Decisions [coverage: high — 6 sources]
+**디버그 캡처**: `CRAWL_DEBUG_CAPTURE=1`일 때 `apps/friendly/src/modules/crawl/__debug__/`에 메인/방문자 wire 덤프 + 페이지네이션 후 Apollo state 덤프(`visitor-{placeId}-{after|single}-{stamp}.json`). 진단 스크립트 `dev-capture-visitor.ts` (방문자 리뷰) / `dev-capture-search.ts` (검색 페이지의 모든 JSON 응답 캡처해 콘솔 출력 — 비공식 검색 엔드포인트 변경 감지용)도 같은 모듈 패턴.
+
+## Key Decisions [coverage: high — 7 sources]
 
 - **HTTP 직접 호출 대신 Playwright** — 네이버 Place는 React/Apollo SPA. 서버사이드 렌더된 `__APOLLO_STATE__`에 메타·메뉴·리뷰가 정규화된 형태로 있어 DOM scraping보다 cache 객체 직접 추출이 안정적.
 - **Apollo cache가 1차 source of truth** — DOM 셀렉터는 잘 바뀌지만 GraphQL 타입과 필드명은 안정. 캐시 키에 인자가 JSON으로 인코딩된 점을 감안해 prefix-match (`findFieldByPrefix`)으로 처리.
@@ -124,6 +146,8 @@ status: active
 - **Mode 분기는 `runJob` 진입 시 한 번만** — `recrawl`은 cascade-delete 후 깨끗한 상태에서 시작, `update`는 기존 키 셋을 어댑터에 미리 넘겨 페이지네이션 조기 종료. `create`만 30초 캐시 short-circuit 적용(나머지는 의도가 "fresh"이므로 우회).
 - **In-flight dedupe + 30초 캐시** — 더블 클릭/concurrent 트리거 보호. dedupe는 같은 actor + 같은 placeId가 phase!==finished면 그 jobId 그대로 반환(`deduped: true`). 캐시 hit은 `start → done` 합성 1회성 Job.
 - **부분 결과(`partial` 이벤트)** — 메인 페이지 파싱 즉시 한 번 발행. UI가 카드를 먼저 그리고 visitor 리스트는 아래에서 스트리밍.
+- **검색은 Playwright 페이지로 captcha 우회** — `/p/api/search/allSearch` 를 직접 fetch 하면 `searchCoord` 등 파라미터를 채워도 ncaptcha 봇 보호 응답(`pageId === 'ncaptcha-all-search-no-result'`)으로 막힌다. 페이지 자체가 발급한 captcha 토큰/세션 쿠키 안에서만 정상 응답이 돌아오므로, naver-place 어댑터와 같은 패턴(페이지 띄우고 `page.on('response')` 로 가로채기)을 그대로 적용. 어드민 1명·검색당 ~1.1초 사용 빈도라 단일 Browser + 매 호출 새 BrowserContext 모델로 충분.
+- **actor 단위 rate-limit 제거** — 어드민 발견 페이지가 검색 결과 N개를 체크박스로 골라 한 번에 startCrawl 하는 것이 정상 사용 패턴. POST 응답이 수 ms 안에 떨어져 직렬 await 호출에서도 둘째부터 1초 윈도우에 걸려 막혔다(50 ms 로 줄여도 동일). 윈도우 자체가 잘못 자리한 셈으로 판단해 상수·맵·검사 블록을 모두 제거. spam 방어는 in-flight dedupe(`findInFlightByPlace` → 같은 placeId 중복 시작은 같은 jobId 반환)와 actor당 동시 active 3 + FIFO 큐 두 layer 로 흡수. `error: 'rate_limited'` enum 은 backward-compat 으로 남아있으나 emit 되지 않음.
 
 ## Gotchas [coverage: high — 5 sources]
 
@@ -134,6 +158,9 @@ status: active
 - **In-flight dedupe는 phase를 가로지른다** — `findInFlightByPlace`가 queued + active 모두 검사. 따라서 사용자가 첫 요청이 큐에 잠겨 있을 때 다시 클릭해도 새 Job이 안 생기고 같은 jobId를 받는다.
 - **Cancel 두 경로** — active Job 취소는 `AbortController.abort()`로 어댑터가 `CrawlCancelledError`를 던지며 종료(자체적으로 `error` 이벤트 emit). queued Job 취소는 어댑터가 한 번도 안 돈 상태이므로 service가 `pending` 배열에서 제거하고 직접 `error: 'cancelled'`를 emit해 seq 일관성을 유지. `JobRegistry.cancel()`이 반환하는 `CancelOutcome`(`'aborted' | 'queued-cancelled' | 'noop'`)으로 두 경로를 분기.
 - **`max_concurrent` 에러는 더 이상 발생하지 않음** — 스키마/enum에는 남아 있지만 큐가 모든 over-cap 요청을 흡수. 클라이언트는 대신 `StartCrawlResult.queued === true`를 보고 대기 UI를 표시.
+- **`rate_limited` 에러도 더 이상 발생하지 않음** — actor 단위 1초 윈도우 자체가 제거됨. enum 값과 메시지 매핑은 backward-compat 으로 유지되지만 service 코드에서는 emit 경로가 없다(테스트도 없음).
+- **검색은 직접 fetch 차단** — `https://map.naver.com/p/api/search/allSearch` 를 BrowserContext 외부에서 호출하면 `result.metaInfo.pageId === 'ncaptcha-all-search-no-result'` 응답으로 ncaptcha 봇 보호에 막힌다. 같은 페이지가 발급한 captcha 토큰/세션 쿠키가 있어야 정상 응답이 돌아오므로, Playwright 페이지를 띄워 응답을 가로채는 게 유일한 안정 경로.
+- **검색 어댑터는 별도 Browser 인스턴스** — `naver-search.playwright.adapter.ts` 가 자체 모듈 스코프 `browserPromise` 를 갖는다. place 어댑터(모바일 UA, mobile viewport)와 검색 어댑터(데스크톱 UA, 1280x900)가 완전히 분리되어 있고, Fastify `onClose` 훅이 두 어댑터의 `closeBrowser()` / `closeSearchBrowser()` 를 `Promise.all` 로 함께 호출한다.
 - **`visitorCount`는 wire 누적, `addedCount`는 DB 신규** — 두 숫자는 다르다. `update` 모드에서 wire가 200건 들어와도 신규 INSERT는 5건일 수 있음. UI가 진행률을 그릴 때 둘을 헷갈리지 말 것.
 - **이미지 hotlink referer** — 클라이언트 측 `<img referrerpolicy="no-referrer">`로 회피.
 - **Apollo cache 모양은 변한다** — 새 필드 추가 시 정규화 entry(`Type:{id}`)와 `placeDetail(...)` 컨테이너 양쪽을 다 뒤져야 안전. `findFieldByPrefix` 사용.
@@ -142,7 +169,7 @@ status: active
 - **`__debug__/` 캡처는 git에 넣지 말 것** — 수십 MB. `CRAWL_DEBUG_CAPTURE=1`에서만 떨어지며 untracked.
 - **단일 Chromium 인스턴스 공유** — `getBrowser()`가 모듈 스코프 `browserPromise`로 lazy launch. 동시 Job들이 같은 Browser에서 별도 BrowserContext를 만들어 격리. `app.close()` 시 `closeBrowser()`로 종료.
 
-## Sources [coverage: high — 10 sources]
+## Sources [coverage: high — 12 sources]
 
 - [apps/friendly/src/modules/crawl/crawl.route.ts](../../apps/friendly/src/modules/crawl/crawl.route.ts)
 - [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts)
@@ -152,6 +179,8 @@ status: active
 - [apps/friendly/src/modules/crawl/url-normalizer.ts](../../apps/friendly/src/modules/crawl/url-normalizer.ts)
 - [apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts)
 - [apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts)
+- [apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts)
 - [apps/friendly/scripts/dev-capture-visitor.ts](../../apps/friendly/scripts/dev-capture-visitor.ts)
+- [apps/friendly/scripts/dev-capture-search.ts](../../apps/friendly/scripts/dev-capture-search.ts)
 - [packages/api-contract/src/schemas/crawl.ts](../../packages/api-contract/src/schemas/crawl.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)
