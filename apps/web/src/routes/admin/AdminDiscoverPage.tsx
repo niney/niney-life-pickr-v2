@@ -316,10 +316,21 @@ const DiscoverJobTracker = ({
 }) => {
   const stream = useCrawlJobStream(jobId);
   const qc = useQueryClient();
-  const firedRef = useRef(false);
+  const partialFiredRef = useRef(false);
+  const resultFiredRef = useRef(false);
+  // partial.placeId 가 처음 도착하는 시점이 곧 DB row insert 시점 — done 까지
+  // 기다리면(요약 다 끝날 때까지) 분 단위로 새 행이 안 보인다. 한 번만 발사.
   useEffect(() => {
-    if (stream.result === null || firedRef.current) return;
-    firedRef.current = true;
+    if (partialFiredRef.current) return;
+    if (!stream.partial?.placeId) return;
+    partialFiredRef.current = true;
+    qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
+  }, [stream.partial, qc]);
+  // 최종 done 시점에 카운트/요약 버킷 최종 동기화 + 잡 store 정리.
+  useEffect(() => {
+    if (stream.result === null || resultFiredRef.current) return;
+    resultFiredRef.current = true;
     qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
     qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
     onDone();
