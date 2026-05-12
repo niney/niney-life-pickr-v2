@@ -271,6 +271,14 @@ export const RestaurantPublicListItem = z.object({
   longitude: z.number().nullable(),
   thumbnailUrl: z.string().nullable(),
   firstCrawledAt: z.string(),
+  // 크롤된 visitorReview 총 수 + 요약 status 분포. 어드민 발견 페이지가 진행
+  // 배지를 라이브로 갱신하기 위해 필요 — SSE summary 스냅샷의 필드 이름과
+  // 1:1 매칭되어 캐시 패치가 깔끔.
+  totalReviews: z.number().int(),
+  summaryPending: z.number().int(),
+  summaryRunning: z.number().int(),
+  summaryDone: z.number().int(),
+  summaryFailed: z.number().int(),
   // AI 통계 (done 행만). analyzedCount === 0 이면 나머지 점수/카운트는 의미 없음.
   analyzedCount: z.number().int(),
   avgSentimentScore: z.number().nullable(),

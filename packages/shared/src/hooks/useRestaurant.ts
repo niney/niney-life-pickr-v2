@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import type {
   RestaurantDetailType,
   RestaurantListResultType,
   RestaurantPublicListQueryType,
+  RestaurantPublicListResultType,
   RestaurantRankingQueryType,
   RestaurantSummaryProgressType,
 } from '@repo/api-contract';
@@ -13,6 +19,56 @@ import { summarySseManager } from './summarySseManager.js';
 
 const isNotFound = (e: unknown): boolean =>
   e instanceof ApiError && e.statusCode === 404;
+
+// SSE summary snapshot 이 도착했을 때 어드민 list (`['restaurant', 'list']`)
+// 와 공개 list (`['restaurant', 'public', 'list', ...]`) 양쪽 캐시의 해당 행을
+// 동일 필드 셋으로 패치한다. 공개 list 의 queryKey 는 URL 파라미터마다 달라
+// 여러 인스턴스가 동시에 캐시에 살아 있을 수 있어 setQueriesData 로 prefix
+// 매칭한다.
+const patchSummaryInListCaches = (
+  qc: QueryClient,
+  placeId: string,
+  snap: RestaurantSummaryProgressType,
+): void => {
+  qc.setQueryData<RestaurantListResultType | undefined>(
+    ['restaurant', 'list'],
+    (prev) => {
+      if (!prev) return prev;
+      const items = prev.items.map((item) =>
+        item.placeId === placeId
+          ? {
+              ...item,
+              totalReviews: snap.totalReviews,
+              summaryPending: snap.pending,
+              summaryRunning: snap.running,
+              summaryDone: snap.done,
+              summaryFailed: snap.failed,
+            }
+          : item,
+      );
+      return { ...prev, items };
+    },
+  );
+  qc.setQueriesData<RestaurantPublicListResultType | undefined>(
+    { queryKey: ['restaurant', 'public', 'list'] },
+    (prev) => {
+      if (!prev) return prev;
+      const items = prev.items.map((item) =>
+        item.placeId === placeId
+          ? {
+              ...item,
+              totalReviews: snap.totalReviews,
+              summaryPending: snap.pending,
+              summaryRunning: snap.running,
+              summaryDone: snap.done,
+              summaryFailed: snap.failed,
+            }
+          : item,
+      );
+      return { ...prev, items };
+    },
+  );
+};
 
 // Crawled-restaurant list. Query is mostly static — invalidate from the
 // restaurants page after a crawl completes (or after recrawl/update kicks
@@ -46,8 +102,12 @@ export const useRestaurantRanking = (query: Partial<RestaurantRankingQueryType> 
 // 갱신되는데, queryKey 에 모든 필드를 깔아두면 불필요한 리페치가 잦다 — 의미
 // 있는 필드만 키에 넣어 디바운스/탭 전환에 견디게 한다. placeholderData 로 깜
 // 빡임 방지.
+// `alwaysRefetchOnMount` 는 어드민 발견 페이지처럼 재진입마다 최신 데이터를
+// 강제로 받아야 하는 호출처를 위한 옵트인. 기본은 30s staleTime 캐시 그대로 —
+// 공개 맛집 페이지는 토글/스크롤이 잦아 캐시 우선이 맞다.
 export const useRestaurantsPublic = (
   query: Partial<RestaurantPublicListQueryType> = {},
+  options: { alwaysRefetchOnMount?: boolean } = {},
 ) =>
   useQuery({
     queryKey: [
@@ -64,6 +124,7 @@ export const useRestaurantsPublic = (
     queryFn: () => restaurantApi.publicList(query),
     placeholderData: (prev) => prev,
     staleTime: 30_000,
+    refetchOnMount: options.alwaysRefetchOnMount ? 'always' : true,
   });
 
 // 공개 식당 상세. placeId 가 null/빈 문자열이면 비활성화 — 패널 닫힘 상태.
@@ -130,25 +191,7 @@ export const useRestaurantListSummaryEvents = (placeIds: string[]): void => {
     const unsubs = placeIds.map((placeId) =>
       summarySseManager.subscribe(placeId, {
         onSnapshot: (snap) => {
-          qc.setQueryData<RestaurantListResultType | undefined>(
-            ['restaurant', 'list'],
-            (prev) => {
-              if (!prev) return prev;
-              const items = prev.items.map((item) =>
-                item.placeId === placeId
-                  ? {
-                      ...item,
-                      totalReviews: snap.totalReviews,
-                      summaryPending: snap.pending,
-                      summaryRunning: snap.running,
-                      summaryDone: snap.done,
-                      summaryFailed: snap.failed,
-                    }
-                  : item,
-              );
-              return { ...prev, items };
-            },
-          );
+          patchSummaryInListCaches(qc, placeId, snap);
         },
         onReview: () => {
           // List view doesn't render per-review text; ignore the per-row
@@ -180,25 +223,7 @@ export const useRestaurantSummaryEvents = (
         // in sync as summaries finish. Without this, the list only refreshes
         // on crawl `done`, leaving stale running counts when summaries
         // continue past the crawl finish.
-        qc.setQueryData<RestaurantListResultType | undefined>(
-          ['restaurant', 'list'],
-          (prev) => {
-            if (!prev) return prev;
-            const items = prev.items.map((item) =>
-              item.placeId === placeId
-                ? {
-                    ...item,
-                    totalReviews: snap.totalReviews,
-                    summaryPending: snap.pending,
-                    summaryRunning: snap.running,
-                    summaryDone: snap.done,
-                    summaryFailed: snap.failed,
-                  }
-                : item,
-            );
-            return { ...prev, items };
-          },
-        );
+        patchSummaryInListCaches(qc, placeId, snap);
       },
       onReview: (ev) => {
         // Per-row patch — merge the new summary directly into the detail

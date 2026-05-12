@@ -11,6 +11,7 @@ import type {
   NaverSearchResultType,
   RestaurantPublicListItemType,
 } from '@repo/api-contract';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
@@ -428,28 +429,61 @@ const RegisteredList = ({
   }
   return (
     <ul ref={ulRef} className="divide-y">
-      {items.map((it) => (
-        <li
-          key={it.placeId}
-          data-place-id={it.placeId}
-          onMouseEnter={() => onHover(it.placeId)}
-          onMouseLeave={() => onHover(null)}
-          onClick={() => onSelect(it.placeId)}
-          className={cn(
-            'cursor-pointer px-3 py-2.5 text-sm transition-colors',
-            hoveredPlaceId === it.placeId && 'bg-muted/40',
-            selectedPlaceId === it.placeId && 'bg-primary/10',
-          )}
-        >
-          <div className="truncate font-medium">{it.name}</div>
-          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-            {it.category && <span>{it.category}</span>}
-            {it.reviewCount !== null && <span>리뷰 {it.reviewCount}</span>}
-            {it.rating !== null && <span>★ {it.rating}</span>}
-            {it.analyzedCount > 0 && <span>분석 {it.analyzedCount}</span>}
-          </div>
-        </li>
-      ))}
+      {items.map((it) => {
+        const inFlight = it.summaryPending + it.summaryRunning;
+        return (
+          <li
+            key={it.placeId}
+            data-place-id={it.placeId}
+            onMouseEnter={() => onHover(it.placeId)}
+            onMouseLeave={() => onHover(null)}
+            onClick={() => onSelect(it.placeId)}
+            className={cn(
+              'cursor-pointer px-3 py-2.5 text-sm transition-colors',
+              hoveredPlaceId === it.placeId && 'bg-muted/40',
+              selectedPlaceId === it.placeId && 'bg-primary/10',
+            )}
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="truncate font-medium">{it.name}</span>
+              {it.category && (
+                <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
+              )}
+            </div>
+            {/* 어드민 맛집 페이지와 동일한 배지 셋 — SSE 로 진행도 라이브 갱신.
+                좁은 패널 폭에 맞춰 wrap 허용, 텍스트 크기는 admin row 와 동일. */}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              {it.rating !== null && <Badge variant="secondary">★ {it.rating}</Badge>}
+              <Badge variant="outline">리뷰 {it.totalReviews}개</Badge>
+              <Badge variant="outline">
+                요약 {it.summaryDone}/{it.totalReviews}
+              </Badge>
+              {inFlight > 0 && (
+                <Badge variant="secondary" className="inline-flex items-center gap-1">
+                  <Loader2 className="size-3 animate-spin" /> {inFlight}건 진행
+                </Badge>
+              )}
+              {it.summaryFailed > 0 && (
+                <Badge variant="destructive">실패 {it.summaryFailed}</Badge>
+              )}
+              {it.avgSatisfactionScore !== null && (
+                <Badge variant="outline">😊 {it.avgSatisfactionScore.toFixed(1)}/5</Badge>
+              )}
+              {it.positiveCount + it.negativeCount + it.neutralCount > 0 && (
+                <span className="text-[11px]">
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    +{it.positiveCount}
+                  </span>
+                  <span className="mx-1 text-muted-foreground">/</span>
+                  <span className="text-rose-600 dark:text-rose-400">
+                    -{it.negativeCount}
+                  </span>
+                </span>
+              )}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 };

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   useActiveCrawlJobStore,
   useNaverSearch,
+  useRestaurantListSummaryEvents,
   useRestaurantsPublic,
   useStartCrawl,
 } from '@repo/shared';
@@ -58,9 +59,18 @@ export const AdminDiscoverPage = () => {
   // 좌표·도로명·대표 사진·AI 통계가 한 번에 들어와 마커/리스트 모두 충분히 채울
   // 수 있다. 검색 q 와는 독립 — 등록된 맛집 전체를 보여 줘야 사용자가 새 검색
   // 결과와 위치 비교를 할 수 있다.
-  const list = useRestaurantsPublic({ limit: 200 });
+  // 발견은 어드민 작업 페이지 — 재진입마다 최신 데이터를 강제로 받는다.
+  // placeholderData 가 살아 있어 깜빡임은 없고, SSE 가 라이브 갱신을 이어받는다.
+  const list = useRestaurantsPublic(
+    { limit: 200 },
+    { alwaysRefetchOnMount: true },
+  );
   const searchItems = search.data?.items ?? [];
   const registeredItems = list.data?.items ?? [];
+  // 등록된 행마다 summary SSE 구독 — 진행 배지(pending/running/done/failed)
+  // 가 크롤·요약 진행과 함께 라이브 갱신된다. 어드민 맛집 페이지와 동일한
+  // 싱글톤 manager 라 연결은 1개로 멀티플렉싱.
+  useRestaurantListSummaryEvents(registeredItems.map((it) => it.placeId));
 
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   // 다중 선택은 페이지 레벨에서 보관 — 탭 전환·검색어 변경에도 유지.
