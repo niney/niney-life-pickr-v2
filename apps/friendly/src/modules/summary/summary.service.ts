@@ -436,9 +436,13 @@ export class SummaryService {
       const attempts = await Promise.all(chunk.map((r) => attemptForReview(r)));
 
       const finishedAt = new Date();
-      await Promise.all(
-        attempts.map(async (a, idx) => {
-          const reviewId = chunk[idx]!.id;
+      // SQLite 는 동시 쓰기 트랜잭션 불가 — Promise.all 로 트랜잭션을
+      // 여러 개 띄우면 SQLITE_BUSY → "Transaction not found" 로 떨어진다.
+      // DB 쓰기만 순차로 직렬화. (LLM 호출은 위에서 이미 병렬 처리됨)
+      for (let idx = 0; idx < attempts.length; idx += 1) {
+        const a = attempts[idx]!;
+        const reviewId = chunk[idx]!.id;
+        {
           if (a.ok) {
             doneCount += 1;
             const restaurantId = chunk[idx]!.restaurantId;
@@ -524,7 +528,7 @@ export class SummaryService {
               tips: a.parsed.tips,
               keywords: a.parsed.keywords,
             });
-            return;
+            continue;
           }
           // 모든 시도 실패. parse_failed 와 upstream 을 분기해 카운트.
           if (a.errorCode === 'parse_failed') parseFailCount += 1;
@@ -565,8 +569,8 @@ export class SummaryService {
             tips: null,
             keywords: null,
           });
-        }),
-      );
+        }
+      }
       // Counts bump after the chunk — the SSE handler debounces this so
       // multiple chunk-completions inside one tick collapse into one
       // snapshot push.
