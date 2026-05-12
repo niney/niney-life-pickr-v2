@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Loader2, X } from 'lucide-react';
 import { ApiError, useRestaurantPublic, useRestaurantPublicInsights } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -25,10 +25,19 @@ export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
   const [tab, setTab] = useState<TabKey>('home');
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setTab('home');
   }, [placeId]);
+
+  // 탭 변경 시 본문 스크롤을 맨 위로. setTab 호출 경로를 단일 핸들러로
+  // 모아 두면 useEffect 없이 이벤트 시점에 처리할 수 있다 — 외부에서 tab
+  // 을 강제로 바꾸는 경로가 없으므로 이걸로 충분.
+  const handleChangeTab = useCallback((next: TabKey) => {
+    setTab(next);
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, []);
 
   const isNotFound =
     detail.isError &&
@@ -81,7 +90,7 @@ export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setTab(t.key)}
+                onClick={() => handleChangeTab(t.key)}
                 className={cn(
                   'relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors',
                   active
@@ -102,7 +111,7 @@ export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
         </nav>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {detail.isLoading ? (
           <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
@@ -121,7 +130,7 @@ export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
             detail={detail.data}
             insights={insights.data}
             insightsLoading={insights.isLoading}
-            onChangeTab={setTab}
+            onChangeTab={handleChangeTab}
           />
         ) : null}
       </div>
