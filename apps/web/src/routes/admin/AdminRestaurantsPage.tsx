@@ -337,10 +337,15 @@ export const AdminRestaurantsPage = () => {
   useRestaurantListSummaryEvents(rawItems.map((it) => it.placeId));
   // Index jobs by placeId so each row can render its own anchored panel
   // without scanning the full set on every render.
+  // placeId 가 list 에 아직 없는 잡(어드민 발견에서 시작 → row 미생성 상태)
+  // 도 newJobs 로 분류해 상단에 ActiveJobPanel 을 마운트한다. 그래야 SSE 가
+  // 열려 partial 시점에 list invalidation 이 트리거되고, 행이 등장하면 다음
+  // 렌더에서 jobByPlaceId 로 재분류돼 자연스럽게 행 밑으로 이동.
+  const itemPlaceIds = new Set(rawItems.map((it) => it.placeId));
   const jobByPlaceId = new Map<string, ActiveCrawlJob>();
   const newJobs: ActiveCrawlJob[] = [];
   for (const j of Object.values(jobs)) {
-    if (j.source === 'new' || j.placeId === null) newJobs.push(j);
+    if (j.placeId === null || !itemPlaceIds.has(j.placeId)) newJobs.push(j);
     else jobByPlaceId.set(j.placeId, j);
   }
 
