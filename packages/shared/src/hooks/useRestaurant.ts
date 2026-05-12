@@ -274,6 +274,7 @@ export const useDeleteRestaurant = () => {
     mutationFn: (placeId: string) => restaurantApi.delete(placeId),
     onSuccess: (_data, placeId) => {
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
       qc.removeQueries({ queryKey: ['restaurant', placeId] });
     },
   });

@@ -1,7 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActiveCrawlJobStore,
+  useCrawlJobStream,
   useNaverSearch,
   useRestaurantListSummaryEvents,
   useRestaurantsPublic,
@@ -78,9 +80,13 @@ export const AdminDiscoverPage = () => {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const startMutation = useStartCrawl();
   const addJob = useActiveCrawlJobStore((s) => s.add);
-  const activeJobCount = useActiveCrawlJobStore(
-    (s) => Object.keys(s.jobs).length,
-  );
+  const removeJob = useActiveCrawlJobStore((s) => s.remove);
+  // jobs 객체(안정 ref) 자체를 구독하고 keys 는 렌더에서 파생 — selector 가
+  // 매번 새 배열을 반환하면 zustand 의 useSyncExternalStore 가 변경으로 감지해
+  // 무한 렌더 루프에 빠진다.
+  const jobs = useActiveCrawlJobStore((s) => s.jobs);
+  const jobIds = useMemo(() => Object.keys(jobs), [jobs]);
+  const activeJobCount = jobIds.length;
 
   const handleToggleChecked = useCallback((placeId: string, on: boolean) => {
     setCheckedIds((prev) => {
@@ -211,6 +217,13 @@ export const AdminDiscoverPage = () => {
 
   return (
     <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden">
+      {/* 발견 페이지는 ActiveJobPanel 을 시각적으로 마운트하지 않는다
+          (지도+패널 레이아웃이라 패널을 끼울 자리 없음). 그래서 잡 완료 시점에
+          공개/어드민 list 캐시 invalidation + store 정리를 트리거할 곳이
+          따로 필요 — 잡당 하나씩 헤드리스 트래커를 돌린다. UI 없음. */}
+      {jobIds.map((id) => (
+        <DiscoverJobTracker key={id} jobId={id} onDone={() => removeJob(id)} />
+      ))}
       <div
         className={cn(
           'flex h-full w-full',
@@ -287,4 +300,29 @@ export const AdminDiscoverPage = () => {
       </div>
     </div>
   );
+};
+
+// 헤드리스 잡 트래커 — ActiveJobPanel 과 동일한 완료 후 side-effect 만 수행한다.
+// 발견 페이지는 시각적 panel 자리가 없어서 렌더는 null. result 가 도착하면
+// 공개/어드민 list 캐시를 invalidate 해 새 행이 등장하고, store 에서 잡을
+// 제거해 영구 잔류를 막는다. 잡 status 가 'done' 또는 'error' 일 때 useCrawlJobStream
+// 이 자체적으로 EventSource 를 닫으므로 별도 정리는 불필요.
+const DiscoverJobTracker = ({
+  jobId,
+  onDone,
+}: {
+  jobId: string;
+  onDone: () => void;
+}) => {
+  const stream = useCrawlJobStream(jobId);
+  const qc = useQueryClient();
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (stream.result === null || firedRef.current) return;
+    firedRef.current = true;
+    qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
+    onDone();
+  }, [stream.result, qc, onDone]);
+  return null;
 };

@@ -275,6 +275,7 @@ export const AdminRestaurantsPage = () => {
       // anchor — refresh the list so the row appears (for new-URL jobs)
       // before the panel slots in beneath it.
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
     }
     resolveJobPlaceId(jobId, placeId);
   };

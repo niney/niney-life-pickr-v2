@@ -106,6 +106,9 @@ export const ActiveJobPanel = ({
   useEffect(() => {
     if (stream.result === null) return;
     qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    // 공개 list 도 함께 — 어드민 발견 페이지나 공개 맛집 페이지가 동일한
+    // 데이터를 다른 queryKey 로 캐싱한다.
+    qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
     if (placeId) {
       qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
     }
