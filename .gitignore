@@ -26,6 +26,8 @@ Thumbs.db
 
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite-journal
 apps/friendly/data/*
