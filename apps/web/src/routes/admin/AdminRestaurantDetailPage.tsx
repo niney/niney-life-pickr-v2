@@ -499,6 +499,33 @@ export const AdminRestaurantDetailPage = () => {
   return (
     <div className="mx-auto grid max-w-5xl gap-6 px-6 py-10 xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
+      {/* 진행 중 크롤 / 크롤 후에도 도는 AI 요약은 본문 정보(제목·별점·메타)
+          보다 위로 — 들어오자마자 현재 상태가 가장 먼저 보이게.
+          activeJob 이 있으면 ActiveJobPanel 내부에서 요약 진행도 함께 표시,
+          크롤은 끝났는데 요약이 trailing 으로 도는 동안은 SummaryProgress 가
+          이어받는다 (조건이 상호 배타라 둘이 동시에 뜨지 않음). */}
+      {activeJob && (
+        <ActiveJobPanel
+          jobId={activeJob.jobId}
+          placeId={detail.placeId}
+          onPlaceIdResolved={() => {}}
+          onCancel={handleCancelJob}
+          showInlineReviewList={false}
+          onFinished={(result) => {
+            if (!result.ok) {
+              setError(`${result.error}: ${result.message}`);
+            }
+            removeJob(activeJob.jobId);
+          }}
+        />
+      )}
+      {!activeJob && summaryStatusQuery.data && summaryInFlight > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <SummaryProgressSection status={summaryStatusQuery.data} />
+          </CardContent>
+        </Card>
+      )}
       <div>
         <Link
           to="/admin/restaurants"
@@ -600,22 +627,6 @@ export const AdminRestaurantDetailPage = () => {
         {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
       </div>
 
-      {activeJob && (
-        <ActiveJobPanel
-          jobId={activeJob.jobId}
-          placeId={detail.placeId}
-          onPlaceIdResolved={() => {}}
-          onCancel={handleCancelJob}
-          showInlineReviewList={false}
-          onFinished={(result) => {
-            if (!result.ok) {
-              setError(`${result.error}: ${result.message}`);
-            }
-            removeJob(activeJob.jobId);
-          }}
-        />
-      )}
-
       <Card>
         <CardContent className="divide-y [&>*]:py-4">
           <InfoSection detail={detail} />
@@ -624,14 +635,6 @@ export const AdminRestaurantDetailPage = () => {
           <ImageGallerySection urls={s.imageUrls} />
         </CardContent>
       </Card>
-
-      {!activeJob && summaryStatusQuery.data && summaryInFlight > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <SummaryProgressSection status={summaryStatusQuery.data} />
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardContent className="py-4">
