@@ -28,7 +28,7 @@ export const lightColors = {
   dangerBg: 'rgba(239,68,68,0.08)',
 } as const;
 
-export type ColorTokens = typeof lightColors;
+export type ColorTokens = { -readonly [K in keyof typeof lightColors]: string };
 
 export const darkColors: ColorTokens = {
   bg: palette.zinc950,

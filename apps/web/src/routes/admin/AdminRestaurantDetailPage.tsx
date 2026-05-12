@@ -98,7 +98,8 @@ const visitedSortKey = (v: string | null): string => {
   if (!v) return '';
   const m = v.match(/^(\d{2})\.(\d{1,2})\.(\d{1,2})/);
   if (!m) return '';
-  return `20${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  const [, y, mo, d] = m;
+  return `20${y}-${mo!.padStart(2, '0')}-${d!.padStart(2, '0')}`;
 };
 
 const sortReviews = (
