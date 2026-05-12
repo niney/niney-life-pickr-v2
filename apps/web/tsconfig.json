@@ -1,7 +1,6 @@
 {
   "extends": "@repo/config/tsconfig/react.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": { "~/*": ["./src/*"] },
     "types": ["vite/client"]
   },
