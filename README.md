@@ -50,7 +50,9 @@ pnpm --filter friendly db:migrate
 pnpm dev              # 전체
 pnpm dev:api          # http://localhost:3000 (docs: /docs)
 pnpm dev:web          # http://localhost:5173
-pnpm dev:mobile       # Expo Dev Tools
+pnpm dev:mobile       # 앱 (Expo Dev Tools)
+pnpm dev:ios          # 앱 iOS 시뮬레이터 직행
+pnpm dev:android      # 앱 Android 에뮬레이터 직행
 ```
 
 ### 검증
@@ -65,7 +67,7 @@ pnpm test
 
 1. `@repo/api-contract`에서 zod 스키마 정의
 2. friendly는 동일 스키마로 자동 검증 (`fastify-type-provider-zod`)
-3. web/mobile은 `@repo/shared`를 통해 동일 타입으로 fetch
+3. 웹/앱은 `@repo/shared`를 통해 동일 타입으로 fetch
 4. 스키마 1개 변경 → FE/BE 모두 컴파일 타임에 불일치 감지
 
 ## 운영 작업
@@ -95,7 +97,7 @@ pnpm --filter friendly promote-admin you@example.com
 
 승격 후 다시 로그인하면 (JWT가 새 role을 반영) 홈에서 `/admin` 링크가
 보이고, 다른 사용자의 role을 토글할 수 있습니다. admin 전용 API는
-`Routes.Admin.*` (api-contract). 모바일 앱에는 admin UI가 없습니다 — 의도된 결정입니다.
+`Routes.Admin.*` (api-contract). 앱에는 admin UI가 없습니다 — 의도된 결정입니다.
 
 ## 배포
 

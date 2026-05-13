@@ -1,4 +1,4 @@
-# 모바일 글로벌 통계 화면 — 구현 스펙
+# 앱 글로벌 통계 화면 — 구현 스펙
 
 > Status: **계획 단계 (미구현)**
 > Last updated: 2026-05-09
@@ -6,19 +6,19 @@
 
 ## 0. TL;DR
 
-`apps/mobile/app/(tabs)/analytics.tsx` 신규 탭 + 1~2개 보조 라우트로 식당 가로지르기 글로벌 메뉴 통계를 모바일 앱에 노출. ADMIN gated. 데이터는 기존 admin API (`/admin/analytics/*`) 그대로 사용 — 신규 백엔드 변경 0. RN 컴포넌트 3~4개 신규 + 기존 `useGlobalMenus` / `useCategoryTree` / `useAnalyticsOverview` 훅 재사용.
+`apps/mobile/app/(tabs)/analytics.tsx` 신규 탭 + 1~2개 보조 라우트로 식당 가로지르기 글로벌 메뉴 통계를 앱에 노출. ADMIN gated. 데이터는 기존 admin API (`/admin/analytics/*`) 그대로 사용 — 신규 백엔드 변경 0. RN 컴포넌트 3~4개 신규 + 기존 `useGlobalMenus` / `useCategoryTree` / `useAnalyticsOverview` 훅 재사용.
 
 작업량: **중간 (반나절~하루)**.
 
 ## 1. 동기
 
-현재 모바일 앱에는 식당별 메뉴 순위 (`MenuRankingCard`, 식당 상세 안)만 있음. 글로벌 통계 (식당 가로지르기 — "전체 식당 통틀어 김치찌개는 1,243번 언급, 긍정률 72%") 는 web admin 페이지에만 존재. 모바일 ADMIN 사용자가 출퇴근 중 또는 식당에서 빠르게 확인할 수 없다.
+현재 앱에는 식당별 메뉴 순위 (`MenuRankingCard`, 식당 상세 안)만 있음. 글로벌 통계 (식당 가로지르기 — "전체 식당 통틀어 김치찌개는 1,243번 언급, 긍정률 72%") 는 web admin 페이지에만 존재. 앱 ADMIN 사용자가 출퇴근 중 또는 식당에서 빠르게 확인할 수 없다.
 
 ## 2. 설계 원칙
 
-- **읽기 전용** — 글로벌 머지/그룹핑 트리거 같은 운영 액션은 web 에만 (큰 잡, 비용 큼, 모바일에서 실행 위험). 모바일은 통계 조회만.
+- **읽기 전용** — 글로벌 머지/그룹핑 트리거 같은 운영 액션은 web 에만 (큰 잡, 비용 큼, 앱에서 실행 위험). 앱은 통계 조회만.
 - **데이터 소스 동일** — `useAnalyticsOverview`, `useGlobalMenus`, `useCategoryTree`, `useGlobalMergeJob` (옵션). 신규 API 호출 없음.
-- **UI 는 모바일 제스처에 맞게** — 검색 입력 + 정렬 토글 + 무한스크롤 풍의 메뉴 카드 리스트. 카테고리 트리는 접고/펼치는 단순 인덴트 리스트.
+- **UI 는 앱 제스처에 맞게** — 검색 입력 + 정렬 토글 + 무한스크롤 풍의 메뉴 카드 리스트. 카테고리 트리는 접고/펼치는 단순 인덴트 리스트.
 - **ADMIN gated** — `useCurrentUser().role === 'ADMIN'` 체크. 비-ADMIN 은 안내 메시지만.
 
 ## 3. 신규 파일
@@ -104,7 +104,7 @@ apps/mobile/
 └─────────────────────────────────┘
 ```
 
-머지 트리거를 모바일에서 막는 이유: LLM 비용 + 시간이 큰 작업이라 스크린 락/네트워크 끊김 위험. web 에서 명시적으로.
+머지 트리거를 앱에서 막는 이유: LLM 비용 + 시간이 큰 작업이라 스크린 락/네트워크 끊김 위험. web 에서 명시적으로.
 
 ## 5. 컴포넌트 명세
 
@@ -205,7 +205,7 @@ return (
 ## 6. 데이터 흐름
 
 ```
-┌─ 모바일 analytics 탭 ─┐         ┌─ friendly /admin/analytics/* ─┐
+┌─ 앱 analytics 탭 ─┐         ┌─ friendly /admin/analytics/* ─┐
 │                       │  GET    │                                │
 │ useAnalyticsOverview ─┼────────▶│ overview                        │
 │ useCategoryTree ──────┼────────▶│ category-tree                   │
@@ -242,7 +242,7 @@ return (
 | 상태 | 표시 |
 |---|---|
 | 비-ADMIN | "관리자만 조회 가능" |
-| ADMIN + 머지 미실행 | "전역 머지를 실행해야 통계가 채워집니다" 안내 + web admin 으로 가는 link 텍스트 (모바일에서 직접 트리거 X) |
+| ADMIN + 머지 미실행 | "전역 머지를 실행해야 통계가 채워집니다" 안내 + web admin 으로 가는 link 텍스트 (앱에서 직접 트리거 X) |
 | 로딩 | `<ActivityIndicator />` 가운데 |
 | 검색 결과 없음 | "결과가 없습니다. 검색어 또는 필터를 바꿔보세요." |
 | 네트워크 오류 | `useGlobalMenus` 의 isError → "다시 시도" 버튼 + `refetch()` |
@@ -270,10 +270,10 @@ return (
 
 ## 12. 테스트 계획
 
-모바일 단위 테스트 인프라가 없음 (현재). 테스트 옵션:
+앱 단위 테스트 인프라가 없음 (현재). 테스트 옵션:
 - (A) **수동 QA 만** — 가장 단순, 첫 라운드 권장.
 - (B) `@testing-library/react-native` 도입해서 컴포넌트 스냅샷/상호작용 테스트 — 인프라 비용 추가.
-- (C) shared 훅은 이미 friendly + web 에서 검증됨, 모바일 컴포넌트는 표시만 → A 로 시작.
+- (C) shared 훅은 이미 friendly + web 에서 검증됨, 앱 컴포넌트는 표시만 → A 로 시작.
 
 수동 QA 체크리스트:
 - ADMIN 로그인 → 분석 탭 진입 → overview/카테고리 트리/메뉴 리스트 모두 표시
@@ -304,14 +304,14 @@ return (
 - **expo-router typed paths** 는 첫 빌드 전엔 stale 이라 `router.push(\`/restaurant/${placeId}\` as never)` 캐스트가 필요 (기존 `restaurants.tsx` 와 동일 패턴).
 - **`useGlobalMenus` 의 query key** 가 8-튜플이라 파라미터 default 변경 시 신중. 기본값 그대로 유지 권장.
 - **카테고리 path 가 null 인 메뉴** — 글로벌 머지가 v1 결과만 가지고 있고 v2 (categoryPath 추가) 안 돌렸을 때. UI 가 "-" 또는 비어 있게 처리. 안내 메시지로 admin 에 재실행 유도.
-- **`includeUnlinked`** — 모바일은 default false 권장. true 면 "미머지" 라벨이 시각적으로 노이즈.
+- **`includeUnlinked`** — 앱은 default false 권장. true 면 "미머지" 라벨이 시각적으로 노이즈.
 - **무한스크롤** 은 첫 라운드 X — `limit: 50` 한 번 가져와서 끝. 50개 넘으면 "더 정밀한 검색어" 또는 "minMentions 올리기" 로 안내.
 - **검색 입력 한국어 IME** — onChangeText 가 글자 조립 중에도 발화함. debounce 300ms 가 깔끔.
 
 ## 15. 참고
 
 - web 구현: `apps/web/src/routes/admin/AdminAnalyticsPage.tsx` (`GlobalMenusSection`, `CategoryTreeSection`, `GlobalMergeSection`)
-- 기존 모바일 메뉴 카드: `apps/mobile/src/components/MenuRankingCard.tsx`
+- 기존 앱 메뉴 카드: `apps/mobile/src/components/MenuRankingCard.tsx`
 - 토픽: [analytics](../niney-life-pickr-v2-wiki/topics/analytics.md), [mobile](../niney-life-pickr-v2-wiki/topics/mobile.md), [shared](../niney-life-pickr-v2-wiki/topics/shared.md)
 
 ## 16. 추정 작업량
@@ -335,4 +335,4 @@ return (
 - 푸시 알림 — 새 글로벌 머지 끝났을 때 ADMIN 에게
 - iPad / 태블릿 split-view 레이아웃
 - 다크 모드
-- 모바일에서도 글로벌 머지 트리거 (지금은 web 에서만)
+- 앱에서도 글로벌 머지 트리거 (지금은 web 에서만)

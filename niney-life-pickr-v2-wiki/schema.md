@@ -17,6 +17,23 @@ last_updated: 2026-05-14
 - **언어** — 본문은 한국어, 코드/식별자는 영어 그대로.
 - **Coverage 태그** — 모든 섹션 헤딩에 `[coverage: high|medium|low — N sources]` 필수. 5+ sources = high, 2–4 = medium, 0–1 = low. Sources 섹션은 늘 high.
 
+## Terminology — "웹" / "앱" / "모바일"
+
+`apps/web`과 `apps/mobile`이 둘 다 모바일 컨텍스트를 가져서 "모바일"이라는 단어가 모호해진다. 다음 규칙으로 분리한다 (CLAUDE.md와 동일).
+
+| 호칭 | 가리킴 | 코드 |
+|---|---|---|
+| **웹** | Vite + React 19 SPA (공개 + 어드민) | `apps/web` |
+| **앱** | Expo + RN 앱 통합 | `apps/mobile` |
+| **iOS앱** / **Android앱** | 앱의 네이티브 빌드 | `apps/mobile` (분기 파일 없음 — RN 공통) |
+| **Expo Web** | 앱의 RN-Web 출력 (`expo start --web`) | `apps/mobile` |
+| **모바일** | **웹**의 작은 화면 / 반응형 레이아웃 | `apps/web` |
+| **모바일 단말** | 휴대전화 브라우저로 **웹** 접속 | — |
+
+- 토픽 슬러그(`mobile`, `web`)와 디렉터리 식별자는 그대로 유지 — 영문 식별자는 변경 안 함.
+- 한국어 본문에서 "모바일"은 **웹의 반응형**만 가리킨다. `apps/mobile`을 가리킬 땐 항상 "앱".
+- 다음 컴파일부터 이 규칙을 적용. 기존 문서의 모호한 "모바일"은 컴파일러가 점진적으로 다시 쓴다.
+
 ## Topics
 
 | Slug | 범위 | 핵심 위치 |

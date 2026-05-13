@@ -14,7 +14,7 @@
 | **백엔드** | Fastify 5 |
 | **DB** | SQLite + Prisma |
 | **웹** | Vite 6 + React 19 |
-| **모바일** | Expo 52 + React Native 0.76 |
+| **앱** | Expo 52 + React Native 0.76 |
 | **상태/데이터** | Zustand + TanStack Query 5 |
 | **스키마/검증** | Zod 3 (FE/BE 단일 진실의 원천) |
 
@@ -147,7 +147,7 @@ src/
 
 ---
 
-## 6. 모바일 — `apps/mobile`
+## 6. 앱 — `apps/mobile`
 
 | 패키지 | 버전 | 역할 |
 |---|---|---|
@@ -219,7 +219,7 @@ app/
 ### GitHub Actions (권장 워크플로우)
 - `ci.yml` — push 시 typecheck + lint + test (Turborepo 캐싱 활용)
 - `deploy-api.yml` — main 브랜치 머지 시 friendly 배포
-- `eas-update.yml` — mobile OTA 업데이트
+- `eas-update.yml` — 앱 OTA 업데이트
 
 ---
 
@@ -278,7 +278,7 @@ app/
 | Prisma 6 + SQLite + Node 22 | ✅ |
 | Zod 3 + fastify-type-provider-zod 4 | ✅ |
 
-> **주의**: web은 React 19 / mobile은 React 18 — 다르지만 `@repo/shared`는 React 18+ peer로 선언되어 양쪽 호환.
+> **주의**: 웹은 React 19 / 앱은 React 18 — 다르지만 `@repo/shared`는 React 18+ peer로 선언되어 양쪽 호환.
 
 ---
 
@@ -297,8 +297,10 @@ pnpm --filter friendly db:studio
 # 개발
 pnpm dev               # 전체
 pnpm dev:api           # friendly만
-pnpm dev:web           # web만
-pnpm dev:mobile        # Expo
+pnpm dev:web           # 웹만
+pnpm dev:mobile        # 앱 (Expo Dev Tools)
+pnpm dev:ios           # 앱 iOS 시뮬레이터 직행
+pnpm dev:android       # 앱 Android 에뮬레이터 직행
 
 # 빌드/검증
 pnpm build
@@ -306,7 +308,7 @@ pnpm typecheck
 pnpm lint
 pnpm test
 
-# 모바일 빌드
+# 앱 빌드
 pnpm --filter mobile exec eas build --platform ios --profile preview
 pnpm --filter mobile exec eas update
 ```
