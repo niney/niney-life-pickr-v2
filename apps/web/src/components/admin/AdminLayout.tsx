@@ -185,7 +185,14 @@ export const AdminLayout = () => {
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+      {/* overflow-x-hidden 을 두면 main 자체가 scroll container 가 되어 내부
+          position:sticky 가 viewport(=body 스크롤) 가 아니라 main 을 기준으로
+          잡힌다. 모바일은 main 이 실제로 스크롤되지 않고 body 가 스크롤되므로
+          상세 페이지의 sticky 헤더(식당명+탭)가 body 스크롤과 함께 통째로
+          밀려나는 문제 → PublicLayout 과 동일하게 overflow 무지정으로 둔다.
+          가로 오버플로 차단이 필요한 컴포넌트가 나오면 그 자리에서 국소적으로
+          처리(overflow-x-clip 등) — 전역 차단은 sticky 동작을 깨므로 금지. */}
+      <main className="flex min-w-0 flex-1 flex-col">
         <AdminTopBar onMenuClick={() => setMobileOpen(true)} />
         <div className="flex-1">
           <Outlet />
