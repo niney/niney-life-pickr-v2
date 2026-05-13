@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   BarChart3,
   Beaker,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   Home,
   Settings,
@@ -30,58 +33,137 @@ const NAV: NavItem[] = [
   { to: '/admin/settings', label: '설정', icon: Settings },
 ];
 
-export const AdminLayout = () => (
-  <div className="flex min-h-screen bg-background text-foreground">
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r bg-card">
-      <div className="flex items-center gap-2 border-b px-5 py-4">
-        <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Shield className="size-4" />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold leading-tight">관리자</span>
-          <span className="text-xs text-muted-foreground leading-tight">Life Pickr</span>
-        </div>
-      </div>
+const STORAGE_KEY = 'lp:adminSidebarCollapsed';
+// 사이드바 폭은 두 곳(aside, main 의 좌측 패딩 등)에서 참조될 수 있으므로
+// 상수로 추출. 같은 transition timing 을 모든 요소에 공유시켜 동기화한다.
+const TRANSITION = 'transition-all duration-300 ease-in-out';
 
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                )
-              }
-            >
-              <Icon className="size-4" />
-              {item.label}
-            </NavLink>
-          );
-        })}
-      </nav>
+const readInitialCollapsed = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
-      <div className="border-t px-5 py-3">
-        <NavLink
-          to="/"
-          className="text-xs text-muted-foreground hover:text-foreground"
+export const AdminLayout = () => {
+  const [collapsed, setCollapsed] = useState<boolean>(readInitialCollapsed);
+
+  const toggle = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex min-h-screen bg-background text-foreground">
+      <aside
+        className={cn(
+          'sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r bg-card',
+          TRANSITION,
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        {/* 헤더 — 고정 높이로 접힘 전후 동일하게 유지 */}
+        <div
+          className={cn(
+            'flex h-16 shrink-0 items-center border-b px-3',
+            collapsed && 'justify-center',
+          )}
         >
-          ← 일반 화면으로
-        </NavLink>
-      </div>
-    </aside>
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Shield className="size-4" />
+          </div>
+          <div
+            className={cn(
+              'flex flex-col overflow-hidden whitespace-nowrap',
+              TRANSITION,
+              collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[160px] opacity-100',
+            )}
+          >
+            <span className="text-sm font-semibold leading-tight">관리자</span>
+            <span className="text-xs text-muted-foreground leading-tight">Life Pickr</span>
+          </div>
+        </div>
 
-    <main className="flex flex-1 flex-col overflow-x-hidden">
-      <AdminTopBar />
-      <div className="flex-1">
-        <Outlet />
-      </div>
-    </main>
-  </div>
-);
+        <nav className="flex flex-1 flex-col gap-1 px-2 py-4">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                title={collapsed ? item.label : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-10 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                    collapsed && 'justify-center',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  )
+                }
+              >
+                <Icon className="size-4 shrink-0" />
+                <span
+                  className={cn(
+                    'overflow-hidden whitespace-nowrap',
+                    TRANSITION,
+                    collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-3 max-w-[160px] opacity-100',
+                  )}
+                >
+                  {item.label}
+                </span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        {/* 푸터 — 헤더와 동일한 패딩/높이 패턴으로 정렬 */}
+        <div
+          className={cn(
+            'flex h-14 shrink-0 items-center border-t px-3',
+            collapsed ? 'justify-center' : 'justify-between',
+          )}
+        >
+          <NavLink
+            to="/"
+            className={cn(
+              'overflow-hidden whitespace-nowrap text-xs text-muted-foreground hover:text-foreground',
+              TRANSITION,
+              collapsed ? 'max-w-0 opacity-0' : 'max-w-[140px] opacity-100',
+            )}
+          >
+            ← 일반 화면으로
+          </NavLink>
+          <button
+            type="button"
+            onClick={toggle}
+            title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <ChevronLeft
+              className={cn('size-4 transition-transform duration-300', collapsed && 'rotate-180')}
+            />
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex flex-1 flex-col overflow-x-hidden">
+        <AdminTopBar />
+        <div className="flex-1">
+          <Outlet />
+        </div>
+      </main>
+    </div>
+  );
+};
