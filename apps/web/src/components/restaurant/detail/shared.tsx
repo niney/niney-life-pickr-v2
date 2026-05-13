@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type {
   PublicVisitorReviewType,
   RestaurantInsightsType,
@@ -12,6 +13,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import { cn } from '~/lib/utils';
+import { Lightbox } from './Lightbox';
 
 // 패널 탭들에서 공유하는 시각 요소. 데이터 fetch 는 root 에서, 여기는 순수
 // 표시용.
@@ -193,44 +195,74 @@ export const MenuGrid = ({
   );
 };
 
-export const ReviewCard = ({ r }: { r: PublicVisitorReviewType }) => (
-  <div
-    className={cn(
-      'rounded-md border p-2.5',
-      r.analysis?.sentiment === 'positive' &&
-        'border-emerald-200 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-900/10',
-      r.analysis?.sentiment === 'negative' &&
-        'border-rose-200 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-900/10',
-    )}
-  >
-    <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
-      <span>{r.authorName ?? '익명'}</span>
-      <span>{r.visitedAt ?? r.fetchedAt.slice(0, 10)}</span>
+export const ReviewCard = ({ r }: { r: PublicVisitorReviewType }) => {
+  // 이미지 lightbox 인덱스. null 이면 닫힘. 카드별 독립 상태라 다른 리뷰
+  // 카드의 lightbox 와 간섭하지 않는다.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const authorLabel = r.authorName ?? '익명';
+  return (
+    <div
+      className={cn(
+        'rounded-md border p-2.5',
+        r.analysis?.sentiment === 'positive' &&
+          'border-emerald-200 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-900/10',
+        r.analysis?.sentiment === 'negative' &&
+          'border-rose-200 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-900/10',
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+        <span>{authorLabel}</span>
+        <span>{r.visitedAt ?? r.fetchedAt.slice(0, 10)}</span>
+      </div>
+      {r.analysis && <div className="mt-1 text-sm font-medium">{r.analysis.text}</div>}
+      <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{r.body}</div>
+      {r.imageUrls.length > 0 && (
+        // 카드 패딩(p-2.5) 만큼 음수 마진 — 첫·마지막 이미지가 카드 가장자리에
+        // 붙어 "더 콘텐츠가 있다" 신호. snap-x + snap-start 로 한 장씩 깔끔히
+        // 정렬. iOS pull-to-refresh 와 가로 스크롤 충돌 방지: overscroll-x-contain.
+        <div
+          className={cn(
+            '-mx-2.5 mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain px-2.5',
+            'snap-x snap-mandatory',
+            '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          )}
+        >
+          {r.imageUrls.map((u, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setLightboxIndex(i)}
+              aria-label={`${authorLabel} 리뷰 ${i + 1}번 사진 크게 보기`}
+              className="shrink-0 snap-start overflow-hidden rounded bg-muted"
+            >
+              <ImgWithFallback
+                src={u}
+                className="h-56 w-auto object-cover transition-transform active:scale-95 sm:h-64"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+      {r.analysis && r.analysis.keywords.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {r.analysis.keywords.slice(0, 8).map((k) => (
+            <span
+              key={k}
+              className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            >
+              {k}
+            </span>
+          ))}
+        </div>
+      )}
+      {lightboxIndex !== null && r.imageUrls.length > 0 && (
+        <Lightbox
+          images={r.imageUrls}
+          index={lightboxIndex}
+          onChangeIndex={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
-    {r.analysis && <div className="mt-1 text-sm font-medium">{r.analysis.text}</div>}
-    <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{r.body}</div>
-    {r.imageUrls.length > 0 && (
-      <div className="mt-2 flex gap-1.5 overflow-x-auto">
-        {r.imageUrls.slice(0, 6).map((u, i) => (
-          <ImgWithFallback
-            key={i}
-            src={u}
-            className="size-16 shrink-0 rounded object-cover"
-          />
-        ))}
-      </div>
-    )}
-    {r.analysis && r.analysis.keywords.length > 0 && (
-      <div className="mt-1.5 flex flex-wrap gap-1">
-        {r.analysis.keywords.slice(0, 8).map((k) => (
-          <span
-            key={k}
-            className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-          >
-            {k}
-          </span>
-        ))}
-      </div>
-    )}
-  </div>
-);
+  );
+};
