@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Loader2, PanelLeftOpen, PanelRightOpen, Search, XCircle } from 'lucide-react';
 import type {
   RestaurantPublicListItemType,
@@ -66,6 +67,13 @@ export const PublicRestaurantList = ({
   panelSide,
   onTogglePanelSide,
 }: Props) => {
+  // 한글 IME 대응 — input 은 로컬 draft 로 즉시 반영하고, composition 중에는
+  // 상위 state(URL searchParams) 업데이트를 보류한다. controlled input + onChange
+  // 마다 setParam → URL → re-render 가 미완성 한글을 덮어써 "ㅇ으음" 중복 입력이
+  // 발생하는 문제 회피. compositionEnd 시 최종 조합을 한 번에 sync.
+  const composingRef = useRef(false);
+  const [draft, setDraft] = useState(q);
+
   return (
     <div className="flex flex-col">
       {/* 검색/필터 헤더 — sticky.
@@ -79,13 +87,29 @@ export const PublicRestaurantList = ({
               type="search"
               placeholder="식당명, 카테고리, 메뉴로 검색"
               className="pl-9 pr-9"
-              value={q}
-              onChange={(e) => onChangeQ(e.target.value)}
+              value={draft}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDraft(next);
+                if (!composingRef.current) onChangeQ(next);
+              }}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onCompositionEnd={(e) => {
+                composingRef.current = false;
+                const next = e.currentTarget.value;
+                setDraft(next);
+                onChangeQ(next);
+              }}
             />
-            {q && (
+            {draft && (
               <button
                 type="button"
-                onClick={() => onChangeQ('')}
+                onClick={() => {
+                  setDraft('');
+                  onChangeQ('');
+                }}
                 aria-label="검색어 지우기"
                 className="absolute right-2.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
               >
