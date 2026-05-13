@@ -1,107 +1,173 @@
-import { useState } from 'react';
-import { Button, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuthStore, useRandomPick, usePicks } from '@repo/shared';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRestaurantRanking, useTheme } from '@repo/shared';
+import type { RestaurantRankingItemType } from '@repo/api-contract';
+import { RankingHeader } from '~/components/RankingHeader';
+import { RankingRow } from '~/components/RankingRow';
 
+const PAGE_SIZE = 20;
+const MIN_MENTIONS = 5;
+
+type Sort = 'positive' | 'negative';
+
+// 홈 = 맛집 랭킹. 웹의 apps/web/src/routes/HomePage.tsx 를 RN으로 포팅하되, 페이지
+// 이전/다음 버튼 대신 모바일 친화적인 무한 스크롤(onEndReached) + pull-to-refresh.
+// 정렬·중립 토글이 바뀌면 offset 과 누적 items 를 초기화한다.
 export default function HomeScreen() {
-  const isGuest = useAuthStore((s) => s.isGuest);
-  const clearSession = useAuthStore((s) => s.clearSession);
   const router = useRouter();
-  const { data: picks, isLoading } = usePicks();
-  const random = useRandomPick();
-  const [result, setResult] = useState<string | null>(null);
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
-  if (isGuest) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>내 Pick</Text>
-        <Text>게스트는 Pick을 저장할 수 없습니다.</Text>
-        <Text>가입하면 영구 저장됩니다.</Text>
-        <View style={{ marginTop: 24 }}>
-          <Button
-            title="로그인 / 회원가입"
-            onPress={() => {
-              clearSession();
-              router.replace('/(auth)/login');
-            }}
-          />
-        </View>
-      </View>
-    );
-  }
+  const [sort, setSort] = useState<Sort>('positive');
+  const [excludeNeutral, setExcludeNeutral] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [items, setItems] = useState<RestaurantRankingItemType[]>([]);
 
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <Text>Loading…</Text>
-      </View>
-    );
-  }
+  const query = useRestaurantRanking({
+    sort,
+    excludeNeutral,
+    minMentions: MIN_MENTIONS,
+    limit: PAGE_SIZE,
+    offset,
+  });
+
+  // 페이지가 fetch 될 때마다 누적. offset===0 이면 새 토글 조합이므로 덮어쓰기.
+  useEffect(() => {
+    const page = query.data?.items;
+    if (!page) return;
+    setItems((prev) => (offset === 0 ? page : [...prev, ...page]));
+  }, [query.data, offset]);
+
+  const total = query.data?.total ?? 0;
+  const hasMore = items.length < total;
+
+  const resetTo = useCallback((next: Partial<{ sort: Sort; excludeNeutral: boolean }>) => {
+    if (next.sort !== undefined) setSort(next.sort);
+    if (next.excludeNeutral !== undefined) setExcludeNeutral(next.excludeNeutral);
+    setOffset(0);
+    setItems([]);
+  }, []);
+
+  const handleChangeSort = useCallback(
+    (next: Sort) => {
+      if (next === sort) return;
+      resetTo({ sort: next });
+    },
+    [sort, resetTo],
+  );
+
+  const handleChangeNeutral = useCallback(
+    (next: boolean) => {
+      if (next === excludeNeutral) return;
+      resetTo({ excludeNeutral: next });
+    },
+    [excludeNeutral, resetTo],
+  );
+
+  const handleEndReached = useCallback(() => {
+    if (query.isFetching || !hasMore) return;
+    setOffset((o) => o + PAGE_SIZE);
+  }, [query.isFetching, hasMore]);
+
+  const handleRefresh = useCallback(() => {
+    setOffset(0);
+    setItems([]);
+    query.refetch();
+  }, [query]);
+
+  const handleSelect = useCallback(
+    (placeId: string) => {
+      router.push(`/restaurant/${placeId}` as never);
+    },
+    [router],
+  );
+
+  const isInitialLoading = query.isLoading && items.length === 0;
+  const isError = query.isError && items.length === 0;
+
+  const listHeader = useMemo(
+    () => (
+      <RankingHeader
+        sort={sort}
+        excludeNeutral={excludeNeutral}
+        onChangeSort={handleChangeSort}
+        onChangeNeutral={handleChangeNeutral}
+      />
+    ),
+    [sort, excludeNeutral, handleChangeSort, handleChangeNeutral],
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>내 Pick</Text>
+    // 상단 헤더(Tabs)를 숨겼으므로 상태바 영역만큼 직접 padding. 좌우/하단은
+    // 탭바·기본 레이아웃이 처리.
+    <View style={[styles.container, { backgroundColor: theme.colors.bg, paddingTop: insets.top }]}>
       <FlatList
-        data={picks}
-        keyExtractor={(item) => item.id}
+        data={items}
+        keyExtractor={(it) => it.placeId}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={listHeader}
+        ItemSeparatorComponent={() => <View style={styles.sep} />}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.category}>{item.category}</Text>
-            <Text style={styles.options}>{item.options.join(' / ')}</Text>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() =>
-                random.mutate(item.id, {
-                  onSuccess: (r) => setResult(r.chosen),
-                })
-              }
-            >
-              <Text style={styles.buttonText}>랜덤 픽!</Text>
-            </TouchableOpacity>
-          </View>
+          <Pressable
+            onPress={() => handleSelect(item.placeId)}
+            android_ripple={{ color: theme.colors.surfaceAlt }}
+          >
+            <RankingRow item={item} sort={sort} />
+          </Pressable>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>아직 Pick이 없습니다.</Text>}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl refreshing={query.isFetching && offset === 0} onRefresh={handleRefresh} />
+        }
+        ListEmptyComponent={
+          isInitialLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator />
+            </View>
+          ) : isError ? (
+            <View style={styles.center}>
+              <Text style={{ color: theme.colors.danger }}>랭킹을 불러오지 못했습니다.</Text>
+            </View>
+          ) : (
+            <View style={styles.center}>
+              <Text style={{ color: theme.colors.textMuted }}>
+                조건에 맞는 식당이 아직 없습니다.
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          hasMore && query.isFetching && offset > 0 ? (
+            <View style={styles.footer}>
+              <ActivityIndicator />
+            </View>
+          ) : !hasMore && items.length > 0 ? (
+            <Text style={[styles.endText, { color: theme.colors.textMuted }]}>
+              총 {total}개
+            </Text>
+          ) : null
+        }
       />
-      {result && (
-        <View style={styles.result}>
-          <Text>
-            오늘의 선택: <Text style={styles.resultText}>{result}</Text>
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
-  card: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  cardTitle: { fontSize: 18, fontWeight: '600' },
-  category: { color: '#888', fontSize: 12, marginVertical: 4 },
-  options: { marginBottom: 8 },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  buttonText: { color: '#fff', fontWeight: '600' },
-  empty: { textAlign: 'center', color: '#888', marginTop: 40 },
-  result: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: '#dbeafe',
-    borderRadius: 8,
-  },
-  resultText: { fontWeight: '700' },
+  container: { flex: 1 },
+  list: { padding: 16, gap: 0 },
+  sep: { height: 8 },
+  center: { paddingVertical: 48, alignItems: 'center' },
+  footer: { paddingVertical: 16, alignItems: 'center' },
+  endText: { textAlign: 'center', fontSize: 12, paddingVertical: 16 },
 });
