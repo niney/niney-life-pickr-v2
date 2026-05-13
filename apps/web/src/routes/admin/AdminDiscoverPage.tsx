@@ -166,8 +166,17 @@ export const AdminDiscoverPage = () => {
       setParam('tab', next === 'search' ? null : next),
     [setParam],
   );
+  // 모바일은 body 스크롤. 패널을 깊이 스크롤한 상태로 detail 을 열면 같은 offset
+  // 위치에서 detail 이 시작 → 본문 중간이 보인다. detail 진입·닫기 시 강제로
+  // 맨 위로 올린다. xl+ 은 body 가 고정(컨테이너 xl:overflow-hidden) 이라 no-op.
+  const scrollWindowTop = () => {
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
   const handleSelectItem = useCallback(
-    (id: string) => setParam('placeId', id),
+    (id: string) => {
+      setParam('placeId', id);
+      scrollWindowTop();
+    },
     [setParam],
   );
   const handleResearch = useCallback(
@@ -175,7 +184,10 @@ export const AdminDiscoverPage = () => {
     [setParam],
   );
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
-  const handleCloseDetail = useCallback(() => setParam('placeId', null), [setParam]);
+  const handleCloseDetail = useCallback(() => {
+    setParam('placeId', null);
+    scrollWindowTop();
+  }, [setParam]);
 
   // 등록된 placeId 가 선택된 경우에만 상세 슬라이드 노출. 검색 결과의 미등록
   // placeId 는 단지 마커/행 강조에 그친다.
@@ -224,7 +236,7 @@ export const AdminDiscoverPage = () => {
   const reverse = side === 'left';
 
   return (
-    <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden">
+    <div className="relative w-full xl:h-[calc(100vh-3.5rem)] xl:overflow-hidden">
       {/* 발견 페이지는 ActiveJobPanel 을 시각적으로 마운트하지 않는다
           (지도+패널 레이아웃이라 패널을 끼울 자리 없음). 그래서 잡 완료 시점에
           공개/어드민 list 캐시 invalidation + store 정리를 트리거할 곳이
@@ -234,20 +246,22 @@ export const AdminDiscoverPage = () => {
       ))}
       <div
         className={cn(
-          'flex h-full w-full',
-          reverse ? 'xl:flex-row-reverse' : 'xl:flex-row',
+          'relative flex w-full',
+          reverse ? 'xl:h-full xl:flex-row-reverse' : 'xl:h-full xl:flex-row',
         )}
       >
-        {/* 지도. xl+ 에서는 항상 노출(좌/우 패널과 분할). 모바일은 mobileView==='map'
-            일 때만 fixed 풀스크린으로 표시 — 컨테이너가 h-[calc(100vh-3.5rem)] +
-            overflow-hidden 이라 fixed 가 viewport 기준으로 빠져나가 토글 위에
-            깔린다(z-10). top-14 는 AdminTopBar(56px) 아래에서 시작. */}
+        {/* 지도. xl+ 은 sticky 풀뷰포트. 모바일은 mobileView==='map' 일 때만
+            fixed 풀스크린, 상세 열림 시 숨김(상세가 자연 흐름으로 페이지를
+            차지). top-14 는 AdminTopBar(56px) 아래에서 시작. */}
         <section
           className={cn(
-            'relative h-full flex-1 xl:block',
-            mobileView === 'map'
-              ? 'fixed inset-x-0 bottom-0 top-14 z-10 xl:relative xl:inset-auto xl:bottom-auto'
-              : 'hidden xl:block',
+            'relative flex-1',
+            'xl:sticky xl:top-14 xl:block xl:h-[calc(100dvh-3.5rem)]',
+            detailPlaceId
+              ? 'hidden xl:block'
+              : mobileView === 'map'
+                ? 'fixed inset-x-0 bottom-0 top-14 z-10 xl:relative xl:inset-auto xl:bottom-auto'
+                : 'hidden xl:block',
           )}
         >
           <DiscoverMap
@@ -262,19 +276,18 @@ export const AdminDiscoverPage = () => {
             panelSide={side}
           />
         </section>
-        {/* 등록 맛집 상세 — 별도 column 으로 추가 (공개 맛집 페이지와 동일한
-            list/detail/map 3-column 패턴). DOM 순서 [map, detail, list] 라
+        {/* 등록 맛집 상세 — 별도 column. DOM 순서 [map, detail, list] 라
             flex-row 일 땐 시각적 [좌:map, 중:detail, 우:list], flex-row-reverse
             일 땐 [좌:list, 중:detail, 우:map] — 어느 쪽이든 detail 이 list 옆에
-            붙는다. xl 미만에선 absolute 로 패널 영역 위에 덮어쓰기. */}
+            붙는다. 모바일은 자연 흐름으로 body 스크롤 (공개 맛집 mobile 라우트와
+            동일 패턴), panel/map 형제는 hidden 처리해 detail 만 노출. */}
         {detailPlaceId && (
           <aside
             key={detailPlaceId}
             className={cn(
-              'bg-background',
-              'xl:relative xl:h-full xl:w-[440px] xl:shrink-0',
+              'relative w-full bg-background',
+              'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[440px] xl:shrink-0 xl:overflow-hidden',
               side === 'right' ? 'xl:border-l' : 'xl:border-r',
-              'absolute inset-0 z-30 xl:relative xl:inset-auto xl:z-auto',
               'animate-in slide-in-from-right-4 duration-200',
             )}
           >
@@ -287,13 +300,14 @@ export const AdminDiscoverPage = () => {
 
         <aside
           className={cn(
-            'relative h-full w-full bg-background xl:w-[400px] xl:shrink-0',
+            'relative w-full bg-background',
+            // xl+: sticky 컬럼 — AdminTopBar(56px) 아래 고정, aside 자체가 스크롤 컨테이너.
+            'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[400px] xl:shrink-0 xl:overflow-hidden',
             // 패널이 시각적으로 우측이면 좌측 모서리에 border, 좌측이면 우측 모서리.
             side === 'right' ? 'xl:border-l' : 'xl:border-r',
-            // 모바일은 'list' 모드일 때만 노출. 'map' 일 땐 hidden — 지도가
-            // 풀스크린을 차지한다. detail 이 열려 있으면 detail aside 가 위를
-            // 덮으므로 이 값은 시각적으로 영향이 없다.
-            mobileView === 'map' && 'hidden xl:block',
+            // 모바일은 'list' 모드 + 상세 미열림일 때만 노출. 'map' 이거나 상세 열림
+            // 이면 hidden — detail aside 가 페이지를 차지한다.
+            (mobileView === 'map' || detailPlaceId) && 'hidden xl:block',
           )}
         >
           <DiscoverPanel

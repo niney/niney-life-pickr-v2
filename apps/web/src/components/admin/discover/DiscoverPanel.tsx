@@ -123,7 +123,7 @@ export const DiscoverPanel = ({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col xl:h-full">
       <div className="border-b p-3 space-y-2.5">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -223,7 +223,10 @@ export const DiscoverPanel = ({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      {/* 리스트 영역. xl+ 에서는 자체 overflow-y-auto 로 헤더(검색·탭) 가
+          정적 유지되며 리스트만 스크롤. 모바일은 body 스크롤(공개 mobile 라우트와
+          동일 패턴) 이므로 자체 overflow 없이 자연 높이. */}
+      <div className="flex-1 xl:overflow-y-auto">
         {tab === 'search' ? (
           <SearchResultList
             items={searchItems}

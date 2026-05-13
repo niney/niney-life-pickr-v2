@@ -2,6 +2,7 @@ import { ArrowLeft, Menu } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { cn } from '~/lib/utils';
 
 interface TitleRule {
   match: (pathname: string) => boolean;
@@ -30,9 +31,21 @@ interface Props {
 }
 
 export const AdminTopBar = ({ onMenuClick }: Props) => {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // 어드민 발견 모바일에서 상세(?placeId=) 열림 시 자체 sticky 헤더(식당명+탭) 가
+  // 화면 상단을 담당 → 전역 AdminTopBar 56px 회수. xl+ 데스크톱은 3-column
+  // 레이아웃이라 좌측에 패널/지도가 같이 보이므로 글로벌 네비 유지.
+  // 공개 PublicTopBar 의 hideOnMobile 패턴과 동등 ([[mobile-public-restaurant-ux]]).
+  const hideOnMobile =
+    pathname === '/admin/discover' &&
+    !!new URLSearchParams(search).get('placeId');
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:px-6">
+    <header
+      className={cn(
+        'sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:px-6',
+        hideOnMobile && 'hidden xl:flex',
+      )}
+    >
       <div className="flex min-w-0 items-center gap-2">
         {/* md+ 에서는 사이드바가 항상 보이므로 햄버거 불필요. */}
         <button
