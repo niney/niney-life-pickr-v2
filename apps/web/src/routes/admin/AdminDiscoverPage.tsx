@@ -334,12 +334,20 @@ export const AdminDiscoverPage = () => {
         </aside>
       </div>
 
-      {/* 모바일 토글 — xl 미만 + 상세 미열림에서만 노출. fixed 로 컨테이너의
-          overflow-hidden 을 벗어나 viewport 하단에 고정. map 모드의 fixed
-          지도(z-10) 위에 떠야 하므로 z-40. 상세(z-30) 가 열려 있으면 숨김 —
-          상세가 화면 전체를 덮어 토글이 의미 없고 닫기 버튼은 상세 헤더에 있음. */}
+      {/* 모바일 토글 — xl 미만 + 상세 미열림에서만 노출. fixed 로 viewport 하단에
+          고정. map 모드의 fixed 지도(z-10) 위에 떠야 하므로 z-40. 상세(z-30) 가
+          열려 있으면 숨김. 패널 모드에서 선택 항목 > 0 이면 DiscoverPanel 의
+          sticky 크롤바가 화면 하단에 올라오므로 토글을 그 위(bottom-20)로 이동,
+          그 외엔 bottom-4. */}
       {!detailPlaceId && (
-        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 overflow-hidden rounded-full border bg-background/95 shadow-md xl:hidden">
+        <div
+          className={cn(
+            'fixed left-1/2 z-40 flex -translate-x-1/2 overflow-hidden rounded-full border bg-background/95 shadow-md xl:hidden',
+            mobileView === 'list' && checkedIds.size > 0 && tab === 'search'
+              ? 'bottom-20'
+              : 'bottom-4',
+          )}
+        >
           <Button
             type="button"
             variant={mobileView === 'list' ? 'default' : 'ghost'}

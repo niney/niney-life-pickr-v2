@@ -252,9 +252,12 @@ export const DiscoverPanel = ({
         )}
       </div>
 
-      {/* sticky 일괄 크롤링 바 — 검색 탭에서만, 선택 항목이 있을 때 노출 */}
+      {/* 일괄 크롤링 바 — 검색 탭에서 선택 항목이 있을 때만 노출.
+          모바일: sticky bottom-0 으로 body 스크롤 중에도 항상 접근 가능. AdminDiscoverPage
+          가 하단 토글을 selection > 0 인 동안 bottom-20 으로 올려 겹침을 피한다.
+          xl+: 패널이 자체 column 이라 sticky 가 자연스럽게 column 하단에 안착. */}
       {tab === 'search' && checkedIds.size > 0 && (
-        <div className="border-t bg-background p-3">
+        <div className="sticky bottom-0 z-20 border-t bg-background p-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.08)] xl:shadow-none">
           <Button
             type="button"
             className="w-full gap-2"
