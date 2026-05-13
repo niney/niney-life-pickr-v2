@@ -1,16 +1,16 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Beaker,
   ChevronLeft,
-  ChevronRight,
   Compass,
   Home,
   Settings,
   Shield,
   Sparkles,
   UtensilsCrossed,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
@@ -49,8 +49,18 @@ const readInitialCollapsed = (): boolean => {
 
 export const AdminLayout = () => {
   const [collapsed, setCollapsed] = useState<boolean>(readInitialCollapsed);
+  // 모바일(<md) 전용 드로어 open state. md+ 에서는 aside 가 sticky 로
+  // 항상 표시되므로 이 값은 사실상 무시된다. localStorage 와 무관 —
+  // 페이지 이동 시마다 자연스럽게 닫히는 게 표준 UX.
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const { pathname } = useLocation();
+  // 라우트 이동 시 자동 닫기. 햄버거로 열고 메뉴 클릭 → 페이지 이동 후
+  // 드로어가 그대로 열려 있으면 본문을 가린다.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
-  const toggle = () => {
+  const toggleCollapsed = () => {
     setCollapsed((prev) => {
       const next = !prev;
       try {
@@ -62,20 +72,37 @@ export const AdminLayout = () => {
     });
   };
 
+  // 모바일에서는 collapsed 무시 — 드로어로 열리면 항상 전체 폭(w-60).
+  // md+ 에서만 collapsed 가 의미를 가진다.
+  const mdCollapsed = collapsed;
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      {/* 모바일 backdrop — md+ 에서는 절대 표시 안 됨 (sticky aside 라 dim 불필요). */}
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="사이드바 닫기"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden"
+        />
+      )}
       <aside
         className={cn(
-          'sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r bg-card',
+          // 모바일: fixed 드로어. closed 시 -translate-x-full 로 화면 밖.
+          'fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-hidden border-r bg-card',
+          // md+: sticky 사이드바. translate 무효화 + 폭 collapsed 적용.
+          'md:sticky md:top-0 md:z-auto md:translate-x-0',
+          mdCollapsed ? 'md:w-16' : 'md:w-60',
           TRANSITION,
-          collapsed ? 'w-16' : 'w-60',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         )}
       >
         {/* 헤더 — 고정 높이로 접힘 전후 동일하게 유지 */}
         <div
           className={cn(
             'flex h-16 shrink-0 items-center border-b px-3',
-            collapsed && 'justify-center',
+            mdCollapsed && 'md:justify-center',
           )}
         >
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -85,12 +112,23 @@ export const AdminLayout = () => {
             className={cn(
               'flex flex-col overflow-hidden whitespace-nowrap',
               TRANSITION,
-              collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[160px] opacity-100',
+              // 모바일은 항상 펼친 상태이므로 라벨 노출.
+              'ml-2 max-w-[160px] opacity-100',
+              mdCollapsed && 'md:ml-0 md:max-w-0 md:opacity-0',
             )}
           >
             <span className="text-sm font-semibold leading-tight">관리자</span>
             <span className="text-xs text-muted-foreground leading-tight">Life Pickr</span>
           </div>
+          {/* 모바일 전용 닫기 버튼 — 햄버거 토글과 별도로 사이드바 안에서도 닫을 수 있게. */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="사이드바 닫기"
+            className="ml-auto flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground md:hidden"
+          >
+            <X className="size-4" />
+          </button>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-2 py-4">
@@ -101,11 +139,11 @@ export const AdminLayout = () => {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                title={collapsed ? item.label : undefined}
+                title={mdCollapsed ? item.label : undefined}
                 className={({ isActive }) =>
                   cn(
                     'flex h-10 items-center rounded-md px-3 text-sm font-medium transition-colors',
-                    collapsed && 'justify-center',
+                    mdCollapsed && 'md:justify-center',
                     isActive
                       ? 'bg-primary text-primary-foreground shadow-xs'
                       : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
@@ -117,7 +155,8 @@ export const AdminLayout = () => {
                   className={cn(
                     'overflow-hidden whitespace-nowrap',
                     TRANSITION,
-                    collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-3 max-w-[160px] opacity-100',
+                    'ml-3 max-w-[160px] opacity-100',
+                    mdCollapsed && 'md:ml-0 md:max-w-0 md:opacity-0',
                   )}
                 >
                   {item.label}
@@ -131,7 +170,8 @@ export const AdminLayout = () => {
         <div
           className={cn(
             'flex h-14 shrink-0 items-center border-t px-3',
-            collapsed ? 'justify-center' : 'justify-between',
+            'justify-between',
+            mdCollapsed && 'md:justify-center',
           )}
         >
           <NavLink
@@ -139,27 +179,29 @@ export const AdminLayout = () => {
             className={cn(
               'overflow-hidden whitespace-nowrap text-xs text-muted-foreground hover:text-foreground',
               TRANSITION,
-              collapsed ? 'max-w-0 opacity-0' : 'max-w-[140px] opacity-100',
+              'max-w-[140px] opacity-100',
+              mdCollapsed && 'md:max-w-0 md:opacity-0',
             )}
           >
             ← 일반 화면으로
           </NavLink>
+          {/* collapse 토글은 md+ 전용 — 모바일은 드로어 개념이라 collapse 의미 없음. */}
           <button
             type="button"
-            onClick={toggle}
-            title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
-            aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            onClick={toggleCollapsed}
+            title={mdCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            aria-label={mdCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            className="hidden size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground md:flex"
           >
             <ChevronLeft
-              className={cn('size-4 transition-transform duration-300', collapsed && 'rotate-180')}
+              className={cn('size-4 transition-transform duration-300', mdCollapsed && 'rotate-180')}
             />
           </button>
         </div>
       </aside>
 
-      <main className="flex flex-1 flex-col overflow-x-hidden">
-        <AdminTopBar />
+      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        <AdminTopBar onMenuClick={() => setMobileOpen(true)} />
         <div className="flex-1">
           <Outlet />
         </div>

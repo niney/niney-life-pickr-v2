@@ -126,7 +126,7 @@ export const AdminAnalyticsPage = () => {
   const attentionCount = totalRestaurants - cleanCount;
 
   return (
-    <div className="container mx-auto max-w-6xl p-6 space-y-6">
+    <div className="container mx-auto max-w-6xl space-y-6 px-4 py-6 sm:p-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">AI 분석 관리</h1>
@@ -241,7 +241,7 @@ export const AdminAnalyticsPage = () => {
       )}
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+        <CardHeader className="flex-col items-stretch gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>식당별 정규화 상태</CardTitle>
             <CardDescription>
@@ -276,7 +276,7 @@ export const AdminAnalyticsPage = () => {
           ) : items.length === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">등록된 식당이 없습니다.</p>
           ) : (
-            <Table>
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -456,7 +456,7 @@ const GlobalMergeSection = () => {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+      <CardHeader className="flex-col items-stretch gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>전역 메뉴 머지</CardTitle>
           <CardDescription>

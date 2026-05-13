@@ -603,7 +603,7 @@ export const AdminCrawlTestPage = () => {
     result && result.ok ? result.data : stream.partial;
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-8 flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Beaker className="size-5" />

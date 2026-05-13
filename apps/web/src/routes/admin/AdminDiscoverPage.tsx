@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { List, Map as MapIcon } from 'lucide-react';
 import {
   useActiveCrawlJobStore,
   useCrawlJobStream,
@@ -16,8 +17,11 @@ import {
 import { DiscoverMap } from '~/components/admin/discover/DiscoverMap';
 import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
 import type { MapMarker } from '~/components/restaurant/MapCanvas';
+import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { usePanelSide } from '~/stores/panelPrefsStore';
+
+type MobileView = 'list' | 'map';
 
 const isDiscoverTab = (s: string | null): s is DiscoverTab =>
   s === 'search' || s === 'registered';
@@ -50,6 +54,10 @@ export const AdminDiscoverPage = () => {
   );
 
   const [side, toggleSide] = usePanelSide('admin.discover');
+  // 모바일(<xl) 토글 — 패널/지도 중 하나만 표시. 기본값은 'list'(패널) —
+  // 어드민 발견의 주 작업은 검색·등록이라 입력 가능한 패널을 우선 보여 준다.
+  // 상세가 열려 있으면 토글은 숨기고 detail 이 absolute inset-0 으로 위를 덮음.
+  const [mobileView, setMobileView] = useState<MobileView>('list');
 
   // 지도 viewport 의 최신 bbox — DiscoverMap 의 onViewportSync 로 갱신.
   // 검색 트리거 시점에 URL bbox 가 비어 있으면 이 ref 값을 자동으로 박아
@@ -230,9 +238,18 @@ export const AdminDiscoverPage = () => {
           reverse ? 'xl:flex-row-reverse' : 'xl:flex-row',
         )}
       >
-        {/* 지도는 xl+ 에서만 노출. 어드민 발견은 데스크톱 가정 — 좁은 화면에선
-            패널이 풀블리드로 떨어진다. 모바일 지도 모드가 필요해지면 추후 추가. */}
-        <section className="relative hidden h-full flex-1 xl:block">
+        {/* 지도. xl+ 에서는 항상 노출(좌/우 패널과 분할). 모바일은 mobileView==='map'
+            일 때만 fixed 풀스크린으로 표시 — 컨테이너가 h-[calc(100vh-3.5rem)] +
+            overflow-hidden 이라 fixed 가 viewport 기준으로 빠져나가 토글 위에
+            깔린다(z-10). top-14 는 AdminTopBar(56px) 아래에서 시작. */}
+        <section
+          className={cn(
+            'relative h-full flex-1 xl:block',
+            mobileView === 'map'
+              ? 'fixed inset-x-0 bottom-0 top-14 z-10 xl:relative xl:inset-auto xl:bottom-auto'
+              : 'hidden xl:block',
+          )}
+        >
           <DiscoverMap
             markers={markers}
             selectedPlaceId={placeId}
@@ -273,6 +290,10 @@ export const AdminDiscoverPage = () => {
             'relative h-full w-full bg-background xl:w-[400px] xl:shrink-0',
             // 패널이 시각적으로 우측이면 좌측 모서리에 border, 좌측이면 우측 모서리.
             side === 'right' ? 'xl:border-l' : 'xl:border-r',
+            // 모바일은 'list' 모드일 때만 노출. 'map' 일 땐 hidden — 지도가
+            // 풀스크린을 차지한다. detail 이 열려 있으면 detail aside 가 위를
+            // 덮으므로 이 값은 시각적으로 영향이 없다.
+            mobileView === 'map' && 'hidden xl:block',
           )}
         >
           <DiscoverPanel
@@ -298,6 +319,35 @@ export const AdminDiscoverPage = () => {
           />
         </aside>
       </div>
+
+      {/* 모바일 토글 — xl 미만 + 상세 미열림에서만 노출. fixed 로 컨테이너의
+          overflow-hidden 을 벗어나 viewport 하단에 고정. map 모드의 fixed
+          지도(z-10) 위에 떠야 하므로 z-40. 상세(z-30) 가 열려 있으면 숨김 —
+          상세가 화면 전체를 덮어 토글이 의미 없고 닫기 버튼은 상세 헤더에 있음. */}
+      {!detailPlaceId && (
+        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 overflow-hidden rounded-full border bg-background/95 shadow-md xl:hidden">
+          <Button
+            type="button"
+            variant={mobileView === 'list' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setMobileView('list')}
+            className="gap-1.5 rounded-none"
+          >
+            <List className="size-3.5" />
+            패널
+          </Button>
+          <Button
+            type="button"
+            variant={mobileView === 'map' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setMobileView('map')}
+            className="gap-1.5 rounded-none"
+          >
+            <MapIcon className="size-3.5" />
+            지도
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

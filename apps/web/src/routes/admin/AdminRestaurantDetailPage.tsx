@@ -498,7 +498,7 @@ export const AdminRestaurantDetailPage = () => {
     (summaryStatusQuery.data?.running ?? 0);
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 px-6 py-10 xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 sm:py-10 xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
       {/* 진행 중 크롤 / 크롤 후에도 도는 AI 요약은 본문 정보(제목·별점·메타)
           보다 위로 — 들어오자마자 현재 상태가 가장 먼저 보이게.

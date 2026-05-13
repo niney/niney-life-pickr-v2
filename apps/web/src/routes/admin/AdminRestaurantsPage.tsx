@@ -86,7 +86,7 @@ const RestaurantRow = ({
           handleRowClick();
         }
       }}
-      className={`flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center ${
+      className={`flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:p-4 ${
         busy || deleting || confirmingDelete
           ? 'cursor-default'
           : 'cursor-pointer hover:bg-muted/40'
@@ -124,7 +124,7 @@ const RestaurantRow = ({
           <span>· 마지막: {new Date(item.lastCrawledAt).toLocaleString('ko-KR')}</span>
         </div>
       </div>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         <Button
           type="button"
           variant="outline"
@@ -351,7 +351,7 @@ export const AdminRestaurantsPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-8 flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <UtensilsCrossed className="size-5" />
