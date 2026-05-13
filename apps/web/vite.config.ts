@@ -13,6 +13,7 @@ export default defineConfig({
     extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
   },
   server: {
+    host: true,
     port: 5173,
     proxy: {
       '/api': {
