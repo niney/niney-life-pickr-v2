@@ -20,6 +20,19 @@ body {
    becomes an unlayered rule and beats every Tailwind utility. */
 @layer base {
   a { color: inherit; text-decoration: none; }
+
+  /* iOS Safari 자동 줌 방지: focus 된 input 의 font-size 가 16px 미만이면
+     줌인되어 페이지가 어색하게 확대된다. 모바일(<sm)에서는 16px, sm+ 에서는
+     컴포넌트가 정의한 폰트 크기를 유지. 컴포넌트가 text-base 이상이면 자연
+     무효. shadcn Input 컴포넌트도 동일 분기를 갖지만 raw <input>/<textarea>
+     /<select> 인라인 사용처를 한 번에 커버한다. */
+  @media (max-width: 639px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
 }
 .link-primary { color: var(--color-primary, #f59e0b); }
 .link-primary:hover { text-decoration: underline; }
