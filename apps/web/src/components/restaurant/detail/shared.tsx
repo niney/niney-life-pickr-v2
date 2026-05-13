@@ -6,6 +6,7 @@ import type {
 } from '@repo/api-contract';
 import {
   ExternalLink,
+  Lightbulb,
   Navigation,
   Phone,
 } from 'lucide-react';
@@ -195,23 +196,73 @@ export const MenuGrid = ({
   );
 };
 
+type ReviewSentimentKey = 'positive' | 'neutral' | 'negative' | 'mixed';
+
+const SENTIMENT_LABEL: Record<ReviewSentimentKey, string> = {
+  positive: '긍정',
+  neutral: '중립',
+  negative: '부정',
+  mixed: '혼합',
+};
+
+// 만족도 칩 — sentiment 색 도트(원형 마커) + 환산 점수. 카드 좌측 컬러바를
+// 대체하는 시그널 — 도트만으로 sentiment 즉시 식별, 점수로 정도 확인.
+// aria-label 에 텍스트 라벨까지 실어 스크린리더 친화.
+const SatisfactionChip = ({
+  sentiment,
+  score,
+}: {
+  sentiment: ReviewSentimentKey;
+  score: number;
+}) => (
+  <span
+    aria-label={`${SENTIMENT_LABEL[sentiment]} ${score}점`}
+    className={cn(
+      'inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none',
+      sentiment === 'positive' &&
+        'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+      sentiment === 'negative' &&
+        'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+      sentiment === 'mixed' &&
+        'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+      sentiment === 'neutral' && 'bg-muted text-muted-foreground',
+    )}
+  >
+    <span
+      aria-hidden
+      className={cn(
+        'size-2 rounded-full',
+        sentiment === 'positive' && 'bg-emerald-500',
+        sentiment === 'negative' && 'bg-rose-500',
+        sentiment === 'mixed' && 'bg-amber-500',
+        sentiment === 'neutral' && 'bg-muted-foreground/50',
+      )}
+    />
+    <span className="tabular-nums">{score}</span>
+  </span>
+);
+
 export const ReviewCard = ({ r }: { r: PublicVisitorReviewType }) => {
   // 이미지 lightbox 인덱스. null 이면 닫힘. 카드별 독립 상태라 다른 리뷰
   // 카드의 lightbox 와 간섭하지 않는다.
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const authorLabel = r.authorName ?? '익명';
   return (
-    <div
-      className={cn(
-        'rounded-md border p-2.5',
-        r.analysis?.sentiment === 'positive' &&
-          'border-emerald-200 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-900/10',
-        r.analysis?.sentiment === 'negative' &&
-          'border-rose-200 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-900/10',
-      )}
-    >
+    // 카드는 균일한 중립 border. sentiment 시각화는 헤더의 SatisfactionChip
+    // (컬러 도트 + 점수) 한 곳으로 집중 — 묶음 스캔도 칩 색 분포로 가능.
+    <div className="rounded-md border p-2.5">
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
-        <span>{authorLabel}</span>
+        <div className="flex items-center gap-1.5">
+          <span>{authorLabel}</span>
+          {/* 만족도 칩 — 이모지 + LLM 환산 별점(1~5). sentiment 색을 칩 배경에도
+              실어 카드 좌측 컬러바와 짝이 맞게. 모바일 0.1초 스캔용. */}
+          {r.analysis && (
+            <SatisfactionChip
+              sentiment={r.analysis.sentiment}
+              score={r.analysis.satisfactionScore}
+            />
+          )}
+        </div>
         <span>{r.visitedAt ?? r.fetchedAt.slice(0, 10)}</span>
       </div>
       {r.analysis && <div className="mt-1 text-sm font-medium">{r.analysis.text}</div>}
@@ -242,6 +293,49 @@ export const ReviewCard = ({ r }: { r: PublicVisitorReviewType }) => {
             </button>
           ))}
         </div>
+      )}
+      {/* 언급 메뉴 — 각 메뉴별 sentiment 색 좌측 stripe + 메뉴명 + traits.
+          여러 메뉴가 있어도 한 메뉴당 한 줄이라 시각적으로 가장 무거운 시그널
+          (행 자체) 으로 도드라진다. neutral 은 muted, positive/negative 는
+          색 stripe. */}
+      {r.analysis && r.analysis.menus.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {r.analysis.menus.map((m, i) => (
+            <li
+              key={`${m.name}-${i}`}
+              className={cn(
+                'border-l-2 pl-2 text-xs',
+                m.sentiment === 'positive'
+                  ? 'border-emerald-500'
+                  : m.sentiment === 'negative'
+                    ? 'border-rose-500'
+                    : 'border-muted-foreground/30',
+              )}
+            >
+              <span className="font-semibold text-foreground">{m.name}</span>
+              {m.traits.length > 0 && (
+                <span className="ml-1.5 text-muted-foreground">
+                  {m.traits.join(' · ')}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* 팁 — 짧은 노하우/조언. 조용한 quote 톤(muted 박스 + 💡). 메뉴와
+          시각 무게가 겹치지 않도록 의도적으로 차분하게. */}
+      {r.analysis && r.analysis.tips.length > 0 && (
+        <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-2">
+          {r.analysis.tips.map((t, i) => (
+            <li
+              key={i}
+              className="flex items-start gap-1.5 text-xs text-muted-foreground"
+            >
+              <Lightbulb className="mt-0.5 size-3 shrink-0 text-amber-500" />
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
       )}
       {r.analysis && r.analysis.keywords.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
