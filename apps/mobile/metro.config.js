@@ -19,6 +19,16 @@ config.resolver.disableHierarchicalLookup = true;
 config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
 
+// Pin react / react-dom to mobile's own copy. Workspace packages carry React 19
+// for `apps/web`, but mobile is on React 18 for RN 0.76 compat — without this
+// alias two copies can leak into the same bundle and `$$typeof` mismatches
+// cause "Objects are not valid as a React child" at render time.
+config.resolver.extraNodeModules = {
+  ...(config.resolver.extraNodeModules ?? {}),
+  react: path.resolve(projectRoot, 'node_modules/react'),
+  'react-dom': path.resolve(projectRoot, 'node_modules/react-dom'),
+};
+
 config.resolver.blockList = [
   /[\\/]\.claude[\\/].*/,
   /[\\/]\.git[\\/].*/,
