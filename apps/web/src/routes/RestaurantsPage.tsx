@@ -137,8 +137,9 @@ export const RestaurantsPage = () => {
               // 따라 list aside 와 같은 쪽.
               'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[440px] xl:shrink-0 xl:overflow-hidden',
               panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
-              // xl-: 헤더 아래 fixed 풀스크린 오버레이 (mobileView=list 일 때만).
-              'fixed inset-x-0 bottom-0 top-14 z-30 xl:relative xl:inset-auto xl:bottom-auto',
+              // xl-: 풀스크린 모달. 전역 PublicTopBar(z-30)·모바일 토글(z-40)
+              // 위로 덮어 상단 중복 영역과 body 스크롤 누수를 차단한다.
+              'fixed inset-0 z-50 xl:relative xl:inset-auto',
               mobileView === 'list' ? 'block' : 'hidden xl:block',
             )}
           >

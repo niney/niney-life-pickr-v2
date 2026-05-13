@@ -31,6 +31,19 @@ export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
     setTab('home');
   }, [placeId]);
 
+  // 모바일(xl 미만)에서는 풀스크린 모달 — body 스크롤 누수를 막아 상세 영역
+  // 위/아래로 뒤 페이지가 움직이는 "불필요한 상단바 스크롤" 현상을 차단한다.
+  // xl+ 에선 컬럼 레이아웃이라 무관.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1279px)');
+    if (!mq.matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   // 탭 변경 시 본문 스크롤을 맨 위로. setTab 호출 경로를 단일 핸들러로
   // 모아 두면 useEffect 없이 이벤트 시점에 처리할 수 있다 — 외부에서 tab
   // 을 강제로 바꾸는 경로가 없으므로 이걸로 충분.
