@@ -1,5 +1,78 @@
 # Wiki Compile Log
 
+## 2026-05-14 (8th compile)
+
+**Topics updated:** web, project-overview
+**New topics:** none
+**New concepts:** none
+**Concepts updated:** none (모바일 UX 패턴은 `web` 한 토픽에 닫혀 있어 3+ 토픽 연결 임계 미달 — `docs/mobile-public-restaurant-ux.md` 가 SSOT 역할)
+
+**Sources scanned:** ~280
+**Sources changed:** ~30 (24개 commit, 주로 `apps/web/src/` 하위)
+
+**Knowledge file 추가**:
+- `docs/mobile-public-restaurant-ux.md` — 공개 맛집 페이지 모바일 스크롤·sticky 패턴의 SSOT. 핵심 규칙 8조 + 함정 사례 + 파일 매핑. project-overview Key Decisions "모바일 UX 규율" 섹션에 흡수.
+
+**Highlights**:
+
+### 모바일 UX 규율 — 프로젝트 단위 정책으로 격상
+공개 `/restaurants` + 어드민 `/admin/discover` 두 페이지에 동일 패턴 적용. SSOT: `docs/mobile-public-restaurant-ux.md`. 8조:
+
+1. **모바일 = body 스크롤** — `fixed inset-0` 풀스크린 모달 금지. URL bar collapse 가 동작하려면 document/window 자체가 스크롤되어야 한다. 상세 화면은 라우트 분리로 자연 페이지화.
+2. **sticky element wrapping 금지** — wrapping div 가 containing block 트랩. 분기는 sticky element 자체 className 에서.
+3. **sticky 묶음은 `overflow:auto` 컨테이너 밖에** — 안에 두면 자체 containing block 형성, 모바일에서 깨짐.
+4. **`100vh` → `100dvh`** — iOS Safari dynamic viewport.
+5. **탭은 URL 의 일부** — `?tab=menu` 푸시(replace 금지), 뒤로가기 1회 = 직전 탭.
+6. **한글 IME** — `compositionStart/End` + 로컬 draft state. controlled `value={q}` 가 미완성 조합 덮어쓰는 "ㅇ으음" 회피.
+7. **scroll-to-top 환경 자동 분기** — `scrollHeight > clientHeight + 1` 로 `scrollRef.scrollTo` vs `window.scrollTo` 결정.
+8. **iOS Safari focus 자동 줌 차단** — `Input` 컴포넌트 `text-base sm:text-sm` + 전역 `@media (max-width:639px) { input,textarea,select { font-size: 16px; } }`.
+
+### 공개 맛집 페이지 — 라우트 분리 + 모바일 body 스크롤
+- `/restaurants` (layout) + `/restaurants/:placeId` (outlet) nested route. `RestaurantDetailRoute.tsx` 신규.
+- 컨테이너 풀뷰포트 고정 해제 (`h-[calc(100vh-3.5rem)] overflow-hidden` 제거). 각 aside/section 은 `xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)]` 컬럼 패턴.
+- 모바일 상세 진입 시 list/map/토글 hidden → outlet 만 노출 + 자체 sticky 헤더(식당명+탭).
+- 모바일 `PublicTopBar` hidden (`hidden xl:flex` via `useMatch('/restaurants/:placeId')`).
+- 탭 전환 `setSearchParams` push — 뒤로가기 1회 = 직전 탭.
+- 카테고리 칩 모바일 가로 스크롤, 검색 인풋 한글 IME 대응, 재검색 버튼 상단 중앙 (지도 앱 표준).
+
+### 어드민 발견 페이지 — 동일 패턴 미러링
+- 단일 페이지 + `?placeId=` 쿼리. 컨테이너 모바일에서 자연 흐름, xl+ 만 풀뷰포트 고정.
+- `DiscoverPanel` 내부 `h-full` / `overflow-y-auto` → `xl:` 분기.
+- 모바일 패널 모드 = body 스크롤, 지도 모드 = `fixed` 풀스크린, 상세 모드 = 자연 흐름.
+- `AdminTopBar`: `/admin/discover` + 모바일 + `?placeId` 있으면 `hidden xl:flex`.
+- 모바일 토글 + sticky 크롤바 (`sticky bottom-0 z-20`). selection > 0 시 토글이 `bottom-20` 자동 상승해 겹침 회피.
+
+### 관리자 페이지 전반
+- `AdminLayout`: `<md` fixed 드로어 + backdrop, `md+` sticky aside.
+- `AdminTopBar`: `md:hidden` 햄버거, "일반 화면으로" 사이드바에서 TopBar 우측으로 이전.
+- 컨테이너 패딩 통일 `px-4 py-6 sm:px-6 sm:py-10` (6개 페이지).
+- `AdminAnalyticsPage` 8컬럼 테이블 `min-w-[760px]` (가로 스크롤 의도화).
+
+### Card 컴포넌트 글로벌 모바일 패딩
+- `p-6` → `p-4 sm:p-6` (Header/Content/Footer). 콘텐츠 가용 폭 ~12% 회수.
+
+### 리뷰 카드 LLM 분석 풀 노출
+- `analysis.menus` (메뉴별 sentiment + traits) + `analysis.tips` 노출 — 데이터에 있던 정보가 UI 에 안 보이던 거.
+- menus: 메뉴별 한 줄 + 좌측 sentiment-color stripe + traits 점 구분.
+- tips: muted 박스 + 💡 amber 아이콘.
+- keywords: 기존 칩 유지.
+- 이미지 `size-16` → `h-56 sm:h-64` 가로 스냅 캐러셀, slice(0,6) 제거, 클릭 → Lightbox.
+- `Lightbox` 재구성: 네이티브 scroll-snap 캐러셀 — 모바일 손가락 스와이프(브라우저 momentum/snap), 데스크톱 chevron `hidden sm:inline-flex`, 키보드 화살표 유지.
+- `SatisfactionChip`: 헤더 작성자 옆 sentiment 색 도트 + 환산 점수. 카드 자체는 균일 중립 border — 시각화를 칩 한 곳으로 집중.
+
+### iOS Safari focus 자동 줌 차단
+- `Input` 컴포넌트 + global.css `@media (max-width:639px)` 두 레이어. raw textarea/select 인라인 사용처(다수) 글로벌 룰로 한 번에 커버.
+
+**Sources 신규**:
+- `docs/mobile-public-restaurant-ux.md`
+- `apps/web/src/routes/RestaurantDetailRoute.tsx` (NEW)
+- `apps/web/src/components/restaurant/detail/Lightbox.tsx` (rewritten)
+- `apps/web/src/components/ui/card.tsx`, `input.tsx`
+- `apps/web/src/styles/global.css`
+- `apps/web/vite.config.ts`
+
+---
+
 ## 2026-05-09 (7th compile, follow-up)
 
 **Topics updated:** crawl, friendly, api-contract, shared, web, map, project-overview
