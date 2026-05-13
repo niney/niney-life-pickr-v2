@@ -41,14 +41,20 @@ export const PublicRestaurantDetail = ({
     if (tabProp === undefined) setInternalTab('home');
   }, [placeId, tabProp]);
 
-  // 탭 변경 시 본문 스크롤을 맨 위로. setTab 호출 경로를 단일 핸들러로
-  // 모아 두면 useEffect 없이 이벤트 시점에 처리할 수 있다 — 외부에서 tab
-  // 을 강제로 바꾸는 경로가 없으므로 이걸로 충분.
+  // 탭 변경 시 스크롤을 맨 위로.
+  // - admin 패널 / xl+ 컬럼: 본문 div 가 자체 scroll → scrollRef 안에서 top
+  // - 모바일 라우트: 페이지(body) 스크롤 → window 로 top
+  // scrollHeight 로 자체 scroll 여부 판단해 자동 분기.
   const handleChangeTab = useCallback(
     (next: TabKey) => {
       if (onChangeTabProp) onChangeTabProp(next);
       else setInternalTab(next);
-      scrollRef.current?.scrollTo({ top: 0 });
+      const el = scrollRef.current;
+      if (el && el.scrollHeight > el.clientHeight + 1) {
+        el.scrollTo({ top: 0 });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      }
     },
     [onChangeTabProp],
   );
@@ -64,42 +70,44 @@ export const PublicRestaurantDetail = ({
       aria-label="식당 상세"
       className="flex h-full flex-col bg-background animate-in slide-in-from-left-4 fade-in duration-200"
     >
-      <header className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          className="gap-1"
-          aria-label="목록으로"
-        >
-          <ChevronLeft className="size-4" />
-          <span className="hidden sm:inline">목록</span>
-        </Button>
-        <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold">
-          {detail.data?.name ?? '식당 상세'}
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          aria-label="닫기"
-        >
-          <X className="size-4" />
-        </Button>
-      </header>
+      {/* 식당명 헤더 + 탭바 묶음 sticky.
+          본문 div 밖, detail 루트 직계 자식이라 containing block 이 detail
+          루트(overflow:visible) → 모바일은 body 스크롤 기준 자연 sticky.
+          top-0 으로 통일 — PublicLayout 이 모바일 상세에서 PublicTopBar 를
+          숨기므로 화면 최상단에 stick. xl+/admin 은 부모 aside 가 이미
+          헤더 아래 위치라 그 안에서 top-0 이 자연스럽게 그 시작점에 stick. */}
+      <div className="sticky top-0 z-10 bg-background">
+        <header className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="gap-1"
+            aria-label="목록으로"
+          >
+            <ChevronLeft className="size-4" />
+            <span className="hidden sm:inline">목록</span>
+          </Button>
+          <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold">
+            {detail.data?.name ?? '식당 상세'}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="닫기"
+          >
+            <X className="size-4" />
+          </Button>
+        </header>
 
-      {/* nav 는 본문 scroll 컨테이너 안에 둬서 sticky 가 양쪽 환경에서 동작:
-          - xl+ 또는 admin 패널: 부모가 h-full + 본문이 자체 scroll → 본문 기준 top-0
-          - 모바일 라우트(/restaurants/:placeId): 부모가 자연 흐름 → body 기준 sticky.
-            이때 전역 PublicTopBar(56px) 아래에 붙도록 top-14. */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {detail.data && (
           <nav
             role="tablist"
             aria-label="식당 정보 탭"
-            className="sticky top-14 z-10 flex border-b bg-background xl:top-0"
+            className="flex border-b bg-background"
           >
             {TAB_ORDER.map((t) => {
               const active = tab === t.key;
@@ -129,7 +137,9 @@ export const PublicRestaurantDetail = ({
             })}
           </nav>
         )}
+      </div>
 
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {detail.isLoading ? (
           <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…

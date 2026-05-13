@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useMatch } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useAuthStore, useLogout } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -24,8 +24,21 @@ export const PublicTopBar = ({ onMenuClick }: Props) => {
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
 
+  // 맛집 상세 라우트는 자체 헤더(식당명·← 목록·✕) 가 상단을 담당 → 모바일에선
+  // 전역 TopBar 를 hidden 처리해 56px 회수. xl+ 데스크톱은 3-column 표시 중이라
+  // 글로벌 네비 접근 위해 그대로 표시. PublicLayout 에서 wrapping div 로 감싸면
+  // sticky containing block 이 깨져 본문 스크롤 시 함께 사라지므로, 분기는
+  // 반드시 PublicTopBar 의 root header 자체 className 에서 처리한다.
+  const detailMatch = useMatch('/restaurants/:placeId');
+  const hideOnMobile = !!detailMatch;
+
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:px-6">
+    <header
+      className={cn(
+        'sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:px-6',
+        hideOnMobile && 'hidden xl:flex',
+      )}
+    >
       <div className="flex items-center gap-4">
         <button
           type="button"
