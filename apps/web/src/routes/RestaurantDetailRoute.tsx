@@ -7,10 +7,9 @@ const TAB_KEYS = TAB_ORDER.map((t) => t.key) as TabKey[];
 const isTabKey = (s: string | null): s is TabKey =>
   s !== null && (TAB_KEYS as string[]).includes(s);
 
-// /restaurants/:placeId 라우트의 상세 outlet. URL ?tab= 으로 탭을 관리하며,
-// 같은 식당 내 탭 전환은 history 를 채우지 않도록 replace:true 로 처리한다
-// (모바일 뒤로가기 1회 = 리스트로). placeId 변경(다른 식당)은 push 라 식당
-// 간 뒤로가기 가능.
+// /restaurants/:placeId 라우트의 상세 outlet. URL ?tab= 으로 탭을 관리한다.
+// 탭 전환은 push — 뒤로가기로 직전 탭/식당으로 돌아갈 수 있도록 history 에
+// 누적된다. (사용자 요청: 뒤로가기 1회 = 직전 탭)
 export const RestaurantDetailRoute = () => {
   const { placeId = '' } = useParams<{ placeId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,15 +20,12 @@ export const RestaurantDetailRoute = () => {
 
   const handleChangeTab = useCallback(
     (next: TabKey) => {
-      setSearchParams(
-        (prev) => {
-          const params = new URLSearchParams(prev);
-          if (next === 'home') params.delete('tab');
-          else params.set('tab', next);
-          return params;
-        },
-        { replace: true },
-      );
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'home') params.delete('tab');
+        else params.set('tab', next);
+        return params;
+      });
     },
     [setSearchParams],
   );
