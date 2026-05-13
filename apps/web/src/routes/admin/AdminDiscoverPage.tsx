@@ -16,6 +16,7 @@ import {
 } from '~/components/admin/discover/DiscoverPanel';
 import { DiscoverMap } from '~/components/admin/discover/DiscoverMap';
 import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
+import { TAB_ORDER, type TabKey } from '~/components/restaurant/detail/tabs';
 import type { MapMarker } from '~/components/restaurant/MapCanvas';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
@@ -25,6 +26,10 @@ type MobileView = 'list' | 'map';
 
 const isDiscoverTab = (s: string | null): s is DiscoverTab =>
   s === 'search' || s === 'registered';
+
+const DETAIL_TAB_KEYS = TAB_ORDER.map((t) => t.key) as TabKey[];
+const isDetailTab = (s: string | null): s is TabKey =>
+  s !== null && (DETAIL_TAB_KEYS as string[]).includes(s);
 
 // /admin/discover — 풀블리드 지도 + 우/좌 토글 가능한 패널.
 // task 6 단계는 골격 + 검색·등록 리스트 + URL 동기화까지. 마커 합성, 다중 선택,
@@ -37,9 +42,14 @@ export const AdminDiscoverPage = () => {
     ? (searchParams.get('tab') as DiscoverTab)
     : 'search';
   const placeId = searchParams.get('placeId');
+  const detailTabRaw = searchParams.get('dtab');
+  const detailTab: TabKey = isDetailTab(detailTabRaw) ? detailTabRaw : 'home';
 
+  // 기본은 replace — bbox/q/패널 tab 같은 보조 상태가 history 를 더럽히지 않도록.
+  // push=true 는 detail 열기/닫기 + 상세 탭 전환에만 사용 — 공개 라우트
+  // (RestaurantDetailRoute) 와 동일하게 뒤로가기로 직전 탭/리스트로 돌아갈 수 있다.
   const setParam = useCallback(
-    (key: string, value: string | null) => {
+    (key: string, value: string | null, opts?: { push?: boolean }) => {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -47,7 +57,7 @@ export const AdminDiscoverPage = () => {
           else next.set(key, value);
           return next;
         },
-        { replace: true },
+        { replace: !opts?.push },
       );
     },
     [setSearchParams],
@@ -174,10 +184,20 @@ export const AdminDiscoverPage = () => {
   };
   const handleSelectItem = useCallback(
     (id: string) => {
-      setParam('placeId', id);
+      // detail 열기 = history push — 뒤로가기로 닫힘. 새 placeId 로 전환 시
+      // 이전 상세 탭(dtab) 은 함께 비워 'home' 으로 시작하도록 함.
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('placeId', id);
+          next.delete('dtab');
+          return next;
+        },
+        { replace: false },
+      );
       scrollWindowTop();
     },
-    [setParam],
+    [setSearchParams],
   );
   const handleResearch = useCallback(
     (b: string) => setParam('bbox', b),
@@ -185,9 +205,25 @@ export const AdminDiscoverPage = () => {
   );
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
   const handleCloseDetail = useCallback(() => {
-    setParam('placeId', null);
+    // 닫기 = history push — 직전 탭/상세 상태로 뒤로가기가 자연스럽게 동작.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('placeId');
+        next.delete('dtab');
+        return next;
+      },
+      { replace: false },
+    );
     scrollWindowTop();
-  }, [setParam]);
+  }, [setSearchParams]);
+  const handleChangeDetailTab = useCallback(
+    (next: TabKey) => {
+      // 상세 탭 전환 = history push — 공개 라우트와 동일한 뒤로가기 동작.
+      setParam('dtab', next === 'home' ? null : next, { push: true });
+    },
+    [setParam],
+  );
 
   // 등록된 placeId 가 선택된 경우에만 상세 슬라이드 노출. 검색 결과의 미등록
   // placeId 는 단지 마커/행 강조에 그친다.
@@ -294,6 +330,8 @@ export const AdminDiscoverPage = () => {
             <PublicRestaurantDetail
               placeId={detailPlaceId}
               onClose={handleCloseDetail}
+              tab={detailTab}
+              onChangeTab={handleChangeDetailTab}
             />
           </aside>
         )}
