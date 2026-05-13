@@ -125,8 +125,16 @@ export const AdminAnalyticsPage = () => {
   const cleanCount = items.filter((r) => !needsAttention(r)).length;
   const attentionCount = totalRestaurants - cleanCount;
 
+  const mobileBarVisible = attentionCount > 0 || selected.size > 0;
+
   return (
-    <div className="container mx-auto max-w-6xl space-y-6 px-4 py-6 sm:p-6">
+    <div
+      className={cn(
+        'container mx-auto max-w-6xl space-y-6 px-4 py-6 sm:p-6',
+        // 모바일 sticky 액션 바 노출 시 마지막 카드와 겹치지 않게 하단 여백 확보.
+        mobileBarVisible && 'pb-24 xl:pb-6',
+      )}
+    >
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">AI 분석 관리</h1>
@@ -210,18 +218,23 @@ export const AdminAnalyticsPage = () => {
             <div className="max-h-64 overflow-y-auto rounded-md border">
               <ul className="divide-y text-sm">
                 {job.data.items.map((it) => (
-                  <li key={it.placeId} className="flex items-center gap-3 px-3 py-2">
-                    <ItemStateIcon state={it.state} />
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {it.placeId}
-                    </span>
+                  <li
+                    key={it.placeId}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <ItemStateIcon state={it.state} />
+                      <span className="truncate font-mono text-xs text-muted-foreground">
+                        {it.placeId}
+                      </span>
+                    </div>
                     {it.state === 'done' && it.groupCount !== null ? (
                       <span className="text-xs text-muted-foreground">
                         그룹 {it.groupCount} / 매핑 {it.mappedCount}
                       </span>
                     ) : null}
                     {it.errorMessage ? (
-                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                      <span className="break-words text-xs text-amber-600 dark:text-amber-400">
                         {it.errorMessage}
                       </span>
                     ) : null}
@@ -248,7 +261,8 @@ export const AdminAnalyticsPage = () => {
               체크해서 선택 정규화 또는 "처리 필요한 식당 일괄 정규화" 버튼을 사용하세요.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          {/* 모바일에선 page-level sticky 바로 이관 — xl+ 에서만 헤더 인라인. */}
+          <div className="hidden items-center gap-2 xl:flex">
             <Button
               variant="outline"
               size="sm"
@@ -276,6 +290,96 @@ export const AdminAnalyticsPage = () => {
           ) : items.length === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">등록된 식당이 없습니다.</p>
           ) : (
+            <>
+              {/* 모바일 카드 — 정렬 컨트롤은 xl+ 표 컬럼 헤더 클릭으로만 동작.
+                  카드 클릭(=label) 으로 체크박스 토글되도록 label 래핑. */}
+              <ul className="space-y-2 xl:hidden">
+                {sortedItems.map((r) => {
+                  const attention = needsAttention(r);
+                  const stale =
+                    r.storedVersion !== null &&
+                    currentVersion !== null &&
+                    r.storedVersion < currentVersion;
+                  const isChecked = selected.has(r.placeId);
+                  return (
+                    <li key={r.placeId}>
+                      <label
+                        className={cn(
+                          'flex select-none flex-col gap-2 rounded-md border p-3 transition-colors',
+                          'cursor-pointer hover:bg-muted/40',
+                          isChecked && 'bg-muted/30 ring-1 ring-primary/30',
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleOne(r.placeId)}
+                            className="mt-0.5 size-4 shrink-0"
+                            aria-label={`${r.name} 선택`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm font-medium">{r.name}</span>
+                              {!attention ? (
+                                <Badge variant="secondary" className="shrink-0 gap-1">
+                                  <CheckCircle2 className="size-3" /> 정상
+                                </Badge>
+                              ) : stale ? (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 gap-1 border-amber-300 text-amber-700 dark:text-amber-300"
+                                >
+                                  <AlertTriangle className="size-3" /> 재실행
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 gap-1 border-amber-300 text-amber-700 dark:text-amber-300"
+                                >
+                                  <AlertTriangle className="size-3" /> 미분류
+                                </Badge>
+                              )}
+                            </div>
+                            {r.category && (
+                              <div className="truncate text-xs text-muted-foreground">
+                                {r.category}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-xs text-muted-foreground">
+                          <span>
+                            분석{' '}
+                            <span className="tabular-nums text-foreground">
+                              {r.analyzedReviews}
+                            </span>
+                            /{r.totalReviews}
+                          </span>
+                          <span>
+                            메뉴{' '}
+                            <span className="tabular-nums text-foreground">{r.distinctMenus}</span>
+                          </span>
+                          <span>
+                            매핑{' '}
+                            <span className="tabular-nums text-foreground">{r.mappedMenus}</span>
+                          </span>
+                          <span
+                            className={cn(
+                              r.unmappedMenus > 0 && 'text-amber-600 dark:text-amber-400',
+                            )}
+                          >
+                            미분류 <span className="tabular-nums">{r.unmappedMenus}</span>
+                          </span>
+                          <span>· {formatDate(r.lastGroupedAt)}</span>
+                        </div>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              {/* 데스크톱 표 — xl+ */}
+              <div className="hidden xl:block">
             <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
@@ -392,9 +496,51 @@ export const AdminAnalyticsPage = () => {
                 })}
               </TableBody>
             </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
+
+      {/* 모바일 sticky 액션 바 — xl 미만 + 처리필요/선택 둘 중 하나라도 있을 때 노출.
+          AdminDiscoverPage 의 모바일 토글 바와 동일 패턴(z-40, 가운데 fixed). */}
+      {mobileBarVisible && (
+        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-2 py-1.5 shadow-md xl:hidden">
+          {attentionCount > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={startAttention}
+              disabled={create.isPending}
+              className="rounded-full"
+            >
+              {create.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <PlayCircle className="size-4" />
+              )}
+              처리 필요 {attentionCount}
+            </Button>
+          )}
+          {selected.size > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={startJob}
+              disabled={create.isPending}
+              className="rounded-full"
+            >
+              {create.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <PlayCircle className="size-4" />
+              )}
+              선택 {selected.size} 정규화
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -570,6 +716,8 @@ const GlobalMenusSection = () => {
   const [sort, setSort] = useState<GlobalMenuQuerySortType>('mentions');
   const [minMentions, setMinMentions] = useState(5);
   const [includeUnlinked, setIncludeUnlinked] = useState(false);
+  // 모바일 필터 펼침 — 검색 외 컨트롤 4개를 접어두고 [필터 ▾] 로 토글. URL 동기화 X.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const category = searchParams.get('category') ?? '';
   const setCategory = (next: string): void => {
     const params = new URLSearchParams(searchParams);
@@ -592,7 +740,14 @@ const GlobalMenusSection = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <datalist id="analytics-category-suggestions">
+          {categoryPaths.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
+
+        {/* 데스크톱 — 기존 wrap 그대로 (xl+ 만 노출) */}
+        <div className="hidden flex-wrap items-center gap-2 xl:flex">
           <input
             type="search"
             value={q}
@@ -608,11 +763,6 @@ const GlobalMenusSection = () => {
             list="analytics-category-suggestions"
             className="min-w-[180px] rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
-          <datalist id="analytics-category-suggestions">
-            {categoryPaths.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as GlobalMenuQuerySortType)}
@@ -644,6 +794,69 @@ const GlobalMenusSection = () => {
           </label>
         </div>
 
+        {/* 모바일 — 검색 1줄 + [필터 ▾] 토글 + 펼침 영역 */}
+        <div className="space-y-2 xl:hidden">
+          <div className="flex gap-2">
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="메뉴 검색 (예: 김치찌개)"
+              className="min-w-0 flex-1 rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className="shrink-0"
+            >
+              필터 {filtersOpen ? '▴' : '▾'}
+            </Button>
+          </div>
+          {filtersOpen && (
+            <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2">
+              <input
+                type="text"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="카테고리 (예: 한식 > 찌개)"
+                list="analytics-category-suggestions"
+                className="rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as GlobalMenuQuerySortType)}
+                className="rounded border bg-background px-2 py-1.5 text-sm"
+              >
+                {GLOBAL_SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    정렬: {o.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={minMentions}
+                onChange={(e) => setMinMentions(Number(e.target.value))}
+                className="rounded border bg-background px-2 py-1.5 text-sm"
+              >
+                <option value={1}>최소 1회 언급</option>
+                <option value={3}>최소 3회 언급</option>
+                <option value={5}>최소 5회 언급</option>
+                <option value={10}>최소 10회 언급</option>
+              </select>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={includeUnlinked}
+                  onChange={(e) => setIncludeUnlinked(e.target.checked)}
+                />
+                미머지 포함
+              </label>
+            </div>
+          )}
+        </div>
+
         {menus.isLoading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> 불러오는 중…
@@ -651,6 +864,71 @@ const GlobalMenusSection = () => {
         ) : !menus.data || menus.data.items.length === 0 ? (
           <p className="py-6 text-sm text-muted-foreground">결과가 없습니다.</p>
         ) : (
+          <>
+            {/* 모바일 카드 */}
+            <ul className="space-y-2 xl:hidden">
+              {menus.data.items.map((m) => (
+                <li key={m.globalKey} className="rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {m.displayName}
+                    </span>
+                    {m.globalKey.startsWith('unlinked:') && (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 border-amber-300 text-[10px] text-amber-700 dark:text-amber-300"
+                      >
+                        미머지
+                      </Badge>
+                    )}
+                  </div>
+                  {m.categoryPath && (
+                    <button
+                      type="button"
+                      onClick={() => setCategory(m.categoryPath!)}
+                      className="mt-1 block max-w-full truncate text-left text-xs text-muted-foreground hover:underline"
+                      title="이 카테고리로 필터"
+                    >
+                      {m.categoryPath}
+                    </button>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>
+                      언급{' '}
+                      <span className="tabular-nums text-foreground">{m.totalMentions}</span>
+                    </span>
+                    <span>
+                      식당{' '}
+                      <span className="tabular-nums text-foreground">{m.restaurantCount}</span>
+                    </span>
+                    <span className="tabular-nums">
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        +{m.positive}
+                      </span>
+                      <span className="mx-1">/</span>
+                      <span className="text-rose-600 dark:text-rose-400">-{m.negative}</span>
+                    </span>
+                    <span className="tabular-nums">
+                      {m.positiveRatio === null
+                        ? '-'
+                        : `${Math.round(m.positiveRatio * 100)}%`}
+                    </span>
+                  </div>
+                  {m.topRestaurants.length > 0 && (
+                    <div className="mt-2 space-y-0.5 text-xs">
+                      {m.topRestaurants.slice(0, 2).map((r) => (
+                        <div key={r.placeId} className="truncate">
+                          <span>{r.name}</span>{' '}
+                          <span className="text-muted-foreground">{r.mentionCount}회</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {/* 데스크톱 표 */}
+            <div className="hidden xl:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -711,6 +989,8 @@ const GlobalMenusSection = () => {
               ))}
             </TableBody>
           </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
@@ -803,31 +1083,31 @@ const CategoryTreeRow = ({
     <li>
       <div
         className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/40"
-        style={{ paddingLeft: `${depth * 16}px` }}
+        style={{ paddingLeft: `${depth * 12}px` }}
       >
         {hasChildren ? (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="size-4 text-xs text-muted-foreground"
+            className="size-4 shrink-0 text-xs text-muted-foreground"
           >
             {open ? '▾' : '▸'}
           </button>
         ) : (
-          <span className="size-4" />
+          <span className="size-4 shrink-0" />
         )}
         <button
           type="button"
           onClick={() => onPick(node.path)}
-          className="flex-1 text-left hover:underline"
+          className="min-w-0 flex-1 truncate text-left hover:underline"
           title={node.path}
         >
           {node.label}
         </button>
-        <span className="text-xs tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {node.totalMentions}회
         </span>
-        <span className="w-12 text-right text-xs tabular-nums">{ratio}</span>
+        <span className="w-12 shrink-0 text-right text-xs tabular-nums">{ratio}</span>
       </div>
       {hasChildren && open && (
         <ul className="space-y-1">
