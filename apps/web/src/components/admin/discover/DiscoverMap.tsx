@@ -141,8 +141,10 @@ export const DiscoverMap = ({
         </div>
       )}
 
+      {/* "이 지역 재검색" — 모바일은 상단 중앙(하단의 패널/지도 토글과 겹침
+          방지), xl+ 은 기존 위치(하단 중앙) 유지. */}
       {showResearch && pendingBboxStr && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+        <div className="absolute left-1/2 top-3 -translate-x-1/2 xl:bottom-6 xl:top-auto">
           <Button
             type="button"
             size="sm"
