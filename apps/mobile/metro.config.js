@@ -37,7 +37,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     : (name) => context.resolveRequest(context, name, platform);
 
   if (moduleName.endsWith('.js') && (moduleName.startsWith('./') || moduleName.startsWith('../'))) {
-    for (const ext of ['.ts', '.tsx']) {
+    // Try platform-specific extensions first so `.native.tsx` / `.ios.tsx` /
+    // `.android.tsx` variants are picked over the bare `.tsx` (which often
+    // re-exports the `.web` build).
+    const platformExts =
+      platform === 'ios'
+        ? ['.ios.tsx', '.ios.ts', '.native.tsx', '.native.ts']
+        : platform === 'android'
+          ? ['.android.tsx', '.android.ts', '.native.tsx', '.native.ts']
+          : platform === 'web'
+            ? ['.web.tsx', '.web.ts']
+            : [];
+    for (const ext of [...platformExts, '.tsx', '.ts']) {
       try {
         return next(moduleName.replace(/\.js$/, ext));
       } catch {
