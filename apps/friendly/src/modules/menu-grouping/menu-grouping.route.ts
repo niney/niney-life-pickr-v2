@@ -5,6 +5,7 @@ import {
   MenuGroupingJobInput,
   MenuGroupingJobSnapshot,
   MenuGroupingRestaurantStatusList,
+  MenuGroupingRestaurantStatusQuery,
   Routes,
 } from '@repo/api-contract';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -32,12 +33,16 @@ const menuGroupingRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['admin'],
       security: [{ bearerAuth: [] }],
+      querystring: MenuGroupingRestaurantStatusQuery,
       response: { 200: MenuGroupingRestaurantStatusList },
     },
-    handler: async () => ({
-      currentVersion: MENU_GROUPING_VERSION,
-      items: await grouping.getRestaurantsStatus(),
-    }),
+    handler: async (req) => {
+      const result = await grouping.getRestaurantsStatus(req.query);
+      return {
+        currentVersion: MENU_GROUPING_VERSION,
+        ...result,
+      };
+    },
   });
 
   typed.post(Routes.Analytics.groupingJobs, {

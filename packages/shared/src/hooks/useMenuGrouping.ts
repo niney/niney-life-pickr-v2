@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import type {
   MenuGroupingJobItemType,
   MenuGroupingJobSnapshotType,
   MenuGroupingJobStateType,
+  MenuGroupingRestaurantStatusQueryType,
   MenuRankingQueryType,
   MenuRankingResultType,
 } from '@repo/api-contract';
@@ -49,10 +50,23 @@ export const useGroupForRestaurant = () => {
 };
 
 // 관리자 페이지 — 식당 정규화 상태 테이블. 잡 끝날 때마다 invalidate.
-export const useGroupingRestaurantsStatus = () =>
+// keepPreviousData: 페이지·필터 전환 시 표가 깜빡이지 않음 (이전 페이지 그대로
+// 둔 채 새 데이터 가져옴 → 도착 시 교체).
+export const useGroupingRestaurantsStatus = (
+  query: Partial<MenuGroupingRestaurantStatusQueryType> = {},
+) =>
   useQuery({
-    queryKey: ['menu-grouping', 'restaurants-status'],
-    queryFn: menuGroupingApi.getRestaurantsStatus,
+    queryKey: [
+      'menu-grouping',
+      'restaurants-status',
+      query.q ?? '',
+      query.sort ?? 'unmapped',
+      query.attention ?? false,
+      query.page ?? 1,
+      query.pageSize ?? 50,
+    ],
+    queryFn: () => menuGroupingApi.getRestaurantsStatus(query),
+    placeholderData: keepPreviousData,
   });
 
 // batch 잡 시작.

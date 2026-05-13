@@ -2,6 +2,8 @@ import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type {
   MenuGroupRunResultType,
+  MenuGroupingRestaurantStatusListType,
+  MenuGroupingRestaurantStatusQueryType,
   MenuGroupingRestaurantStatusType,
   MenuRankingItemType,
   MenuRankingQueryType,
@@ -494,8 +496,14 @@ export class MenuGroupingService {
     };
   }
 
-  // 관리자 페이지 메인 테이블용 — 식당별 정규화 상태.
-  async getRestaurantsStatus(): Promise<MenuGroupingRestaurantStatusType[]> {
+  // 관리자 페이지 메인 테이블용 — 식당별 정규화 상태. 쿼리(검색·필터·정렬·
+  // 페이지) 적용 후 현재 페이지만 반환. groupBy 집계 자체는 전체에 대해
+  // 한 번 돌리고 메모리에서 필터/정렬/슬라이스 — 식당 수천 단위까지는 부담
+  // 미미하고, "처리 필요" 카운트(attentionCount)도 같은 패스로 한 번에 계산.
+  // 진짜 수만 단위 진입 시 SQL raw 로 옮기는 게 다음 단계.
+  async getRestaurantsStatus(
+    query: MenuGroupingRestaurantStatusQueryType,
+  ): Promise<Omit<MenuGroupingRestaurantStatusListType, 'currentVersion'>> {
     // 식당 + 그 통계 한 방에. SQLite + 단일 인스턴스라 N+1 가 부담이라
     // groupBy 로 묶는다. 단일 식당 수가 수백~수천 단위 범위라 OK.
     const restaurants = await this.prisma.restaurant.findMany({
@@ -508,7 +516,16 @@ export class MenuGroupingService {
       },
     });
 
-    if (restaurants.length === 0) return [];
+    if (restaurants.length === 0) {
+      return {
+        items: [],
+        total: 0,
+        totalRestaurants: 0,
+        attentionCount: 0,
+        page: query.page,
+        pageSize: query.pageSize,
+      };
+    }
 
     const ids = restaurants.map((r) => r.id);
 
@@ -560,7 +577,7 @@ export class MenuGroupingService {
       });
     }
 
-    return restaurants.map((r) => {
+    const rows: MenuGroupingRestaurantStatusType[] = restaurants.map((r) => {
       const distinct = distinctMenuByRest.get(r.id) ?? 0;
       const mapped = mappedByRest.get(r.id) ?? 0;
       const last = lastByRest.get(r.id);
@@ -577,6 +594,47 @@ export class MenuGroupingService {
         storedVersion: last?.version ?? null,
       };
     });
+
+    // attentionCount 는 항상 전체 기준 — 필터/페이지와 무관하게 sticky bar
+    // 표시가 안정적이어야 한다. UI 의 needsAttention 정의와 동일.
+    const needsAttention = (r: MenuGroupingRestaurantStatusType): boolean =>
+      r.unmappedMenus > 0 ||
+      (r.storedVersion !== null && r.storedVersion < MENU_GROUPING_VERSION);
+    const attentionCount = rows.filter(needsAttention).length;
+
+    // 필터.
+    let filtered = rows;
+    const q = query.q?.trim().toLowerCase();
+    if (q) filtered = filtered.filter((r) => r.name.toLowerCase().includes(q));
+    if (query.attention) filtered = filtered.filter(needsAttention);
+
+    // 정렬 — 동률은 항상 name asc 로 안정 정렬.
+    const cmpName = (a: MenuGroupingRestaurantStatusType, b: MenuGroupingRestaurantStatusType) =>
+      a.name.localeCompare(b.name);
+    filtered.sort((a, b) => {
+      switch (query.sort) {
+        case 'analyzed':
+          return b.analyzedReviews - a.analyzedReviews || cmpName(a, b);
+        case 'name':
+          return cmpName(a, b);
+        case 'unmapped':
+        default:
+          return b.unmappedMenus - a.unmappedMenus || cmpName(a, b);
+      }
+    });
+
+    const total = filtered.length;
+    const offset = (query.page - 1) * query.pageSize;
+    const items = filtered.slice(offset, offset + query.pageSize);
+
+    return {
+      items,
+      total,
+      totalRestaurants: rows.length,
+      attentionCount,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
   }
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {

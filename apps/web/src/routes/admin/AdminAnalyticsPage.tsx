@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -6,10 +6,12 @@ import {
   Loader2,
   PlayCircle,
   RefreshCw,
+  Search,
   XCircle,
 } from 'lucide-react';
 import {
   ApiError,
+  menuGroupingApi,
   useAnalyticsOverview,
   useCategoryTree,
   useCreateGroupingJob,
@@ -23,8 +25,9 @@ import type {
   CategoryTreeNodeType,
   GlobalMenuQuerySortType,
   GlobalMergeJobSnapshotType,
+  MenuGroupingRestaurantSortType,
+  MenuGroupingRestaurantStatusType,
 } from '@repo/api-contract';
-import type { MenuGroupingRestaurantStatusType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -34,6 +37,8 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
+import { Pager } from '~/components/ui/pager';
 import {
   Table,
   TableBody,
@@ -44,7 +49,13 @@ import {
 } from '~/components/ui/table';
 import { cn } from '~/lib/utils';
 
-type SortKey = 'unmapped' | 'analyzed' | 'name';
+// 식당 표 정렬 키 — api-contract 의 MenuGroupingRestaurantSortType 과 같음.
+const SORT_KEYS: MenuGroupingRestaurantSortType[] = ['unmapped', 'analyzed', 'name'];
+const isSortKey = (v: string | null): v is MenuGroupingRestaurantSortType =>
+  v !== null && (SORT_KEYS as string[]).includes(v);
+
+const DEFAULT_PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 const formatDate = (iso: string | null): string => {
   if (!iso) return '-';
@@ -53,47 +64,89 @@ const formatDate = (iso: string | null): string => {
 };
 
 export const AdminAnalyticsPage = () => {
-  const status = useGroupingRestaurantsStatus();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL 이 진실의 원천. 컴포넌트 state 는 URL 파싱 결과로만 도출.
+  const qParam = searchParams.get('q') ?? '';
+  const sortParam = searchParams.get('sort');
+  const sort: MenuGroupingRestaurantSortType = isSortKey(sortParam) ? sortParam : 'unmapped';
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
+  const pageSize = (() => {
+    const n = Number(searchParams.get('pageSize') ?? DEFAULT_PAGE_SIZE);
+    return PAGE_SIZE_OPTIONS.includes(n) ? n : DEFAULT_PAGE_SIZE;
+  })();
+
+  // 검색 입력은 디바운스 — 즉시 URL 동기화하면 글자마다 fetch 가 터진다.
+  // 입력값과 URL(q) 의 의도적 분리: 입력값은 즉시 반영, URL 은 300ms 후.
+  const [searchInput, setSearchInput] = useState(qParam);
+  useEffect(() => {
+    if (searchInput === qParam) return;
+    const handle = setTimeout(() => {
+      updateParams({ q: searchInput || null, page: null });
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+  // URL 이 외부에서 바뀐 경우(뒤로/앞으로) 입력 동기화.
+  useEffect(() => {
+    setSearchInput(qParam);
+  }, [qParam]);
+
+  const updateParams = (
+    patch: Record<string, string | number | null>,
+    opts: { replace?: boolean } = {},
+  ): void => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === null || v === '') next.delete(k);
+          else next.set(k, String(v));
+        }
+        return next;
+      },
+      { replace: opts.replace ?? true },
+    );
+  };
+
+  const status = useGroupingRestaurantsStatus({
+    q: qParam || undefined,
+    sort,
+    page,
+    pageSize,
+  });
   const create = useCreateGroupingJob();
   const [jobId, setJobId] = useState<string | null>(null);
   const job = useGroupingJob(jobId);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sortKey, setSortKey] = useState<SortKey>('unmapped');
 
   const items = status.data?.items ?? [];
+  const total = status.data?.total ?? 0;
+  const totalRestaurants = status.data?.totalRestaurants ?? 0;
+  const attentionCount = status.data?.attentionCount ?? 0;
+  const cleanCount = Math.max(0, totalRestaurants - attentionCount);
   const currentVersion = status.data?.currentVersion ?? null;
 
-  const sortedItems = useMemo(() => {
-    const arr = [...items];
-    arr.sort((a, b) => {
-      switch (sortKey) {
-        case 'unmapped':
-          return b.unmappedMenus - a.unmappedMenus || a.name.localeCompare(b.name);
-        case 'analyzed':
-          return b.analyzedReviews - a.analyzedReviews || a.name.localeCompare(b.name);
-        case 'name':
-          return a.name.localeCompare(b.name);
-        default:
-          return 0;
-      }
-    });
-    return arr;
-  }, [items, sortKey]);
-
-  // 정규화 필요한 식당 = 미분류 메뉴가 있거나, 매핑이 옛 버전.
+  // 정규화 필요한 식당 = 미분류 메뉴가 있거나, 매핑이 옛 버전. UI 배지용.
   const needsAttention = (r: MenuGroupingRestaurantStatusType): boolean =>
     r.unmappedMenus > 0 ||
     (r.storedVersion !== null && currentVersion !== null && r.storedVersion < currentVersion);
 
-  const allSelectableIds = sortedItems.map((r) => r.placeId);
-  const allSelected =
-    allSelectableIds.length > 0 && allSelectableIds.every((id) => selected.has(id));
+  // 현재 페이지의 식당들만 — 헤더 체크박스는 페이지 단위 토글.
+  const pageIds = items.map((r) => r.placeId);
+  const allOnPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
 
-  const toggleAll = () => {
+  const togglePage = () => {
     setSelected((prev) => {
-      if (allSelected) return new Set();
-      return new Set(allSelectableIds);
+      const next = new Set(prev);
+      if (allOnPageSelected) {
+        for (const id of pageIds) next.delete(id);
+      } else {
+        for (const id of pageIds) next.add(id);
+      }
+      return next;
     });
   };
 
@@ -106,6 +159,10 @@ export const AdminAnalyticsPage = () => {
     });
   };
 
+  const setSort = (next: MenuGroupingRestaurantSortType) => {
+    updateParams({ sort: next, page: null });
+  };
+
   const startJob = async () => {
     const placeIds = [...selected];
     if (placeIds.length === 0) return;
@@ -114,16 +171,28 @@ export const AdminAnalyticsPage = () => {
     setSelected(new Set()); // 잡 시작했으면 체크박스 초기화
   };
 
+  // 처리 필요 식당을 페이지 가로질러 모두 수집한 뒤 잡 시작. 한 페이지(최대 200)
+  // 안에서 끝나는 경우가 흔하지만 안전하게 페이지를 따라가며 모은다.
   const startAttention = async () => {
-    const placeIds = sortedItems.filter(needsAttention).map((r) => r.placeId);
-    if (placeIds.length === 0) return;
-    const snap = await create.mutateAsync(placeIds);
+    if (attentionCount === 0) return;
+    const allIds: string[] = [];
+    const FETCH_SIZE = 200;
+    let p = 1;
+    while (true) {
+      const res = await menuGroupingApi.getRestaurantsStatus({
+        attention: true,
+        sort: 'unmapped',
+        page: p,
+        pageSize: FETCH_SIZE,
+      });
+      for (const it of res.items) allIds.push(it.placeId);
+      if (p * FETCH_SIZE >= res.total) break;
+      p += 1;
+    }
+    if (allIds.length === 0) return;
+    const snap = await create.mutateAsync(allIds);
     setJobId(snap.jobId);
   };
-
-  const totalRestaurants = items.length;
-  const cleanCount = items.filter((r) => !needsAttention(r)).length;
-  const attentionCount = totalRestaurants - cleanCount;
 
   const mobileBarVisible = attentionCount > 0 || selected.size > 0;
 
@@ -255,31 +324,43 @@ export const AdminAnalyticsPage = () => {
 
       <Card>
         <CardHeader className="flex-col items-stretch gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <CardTitle>식당별 정규화 상태</CardTitle>
             <CardDescription>
               체크해서 선택 정규화 또는 "처리 필요한 식당 일괄 정규화" 버튼을 사용하세요.
             </CardDescription>
           </div>
-          {/* 모바일에선 page-level sticky 바로 이관 — xl+ 에서만 헤더 인라인. */}
-          <div className="hidden items-center gap-2 xl:flex">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startAttention}
-              disabled={attentionCount === 0 || create.isPending}
-            >
-              {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
-              처리 필요 {attentionCount}개 일괄 정규화
-            </Button>
-            <Button
-              size="sm"
-              onClick={startJob}
-              disabled={selected.size === 0 || create.isPending}
-            >
-              {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
-              선택 {selected.size}개 정규화
-            </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-60">
+              <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="식당 이름 검색"
+                className="h-9 pl-8"
+                aria-label="식당 이름 검색"
+              />
+            </div>
+            {/* 모바일에선 page-level sticky 바로 이관 — xl+ 에서만 헤더 인라인. */}
+            <div className="hidden items-center gap-2 xl:flex">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startAttention}
+                disabled={attentionCount === 0 || create.isPending}
+              >
+                {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
+                처리 필요 {attentionCount}개 일괄 정규화
+              </Button>
+              <Button
+                size="sm"
+                onClick={startJob}
+                disabled={selected.size === 0 || create.isPending}
+              >
+                {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
+                선택 {selected.size}개 정규화
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -287,14 +368,27 @@ export const AdminAnalyticsPage = () => {
             <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> 식당 목록 불러오는 중…
             </div>
-          ) : items.length === 0 ? (
+          ) : totalRestaurants === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">등록된 식당이 없습니다.</p>
+          ) : items.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">
+              검색 결과가 없습니다.
+              {qParam && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  className="ml-2 underline hover:no-underline"
+                >
+                  검색어 지우기
+                </button>
+              )}
+            </p>
           ) : (
             <>
               {/* 모바일 카드 — 정렬 컨트롤은 xl+ 표 컬럼 헤더 클릭으로만 동작.
                   카드 클릭(=label) 으로 체크박스 토글되도록 label 래핑. */}
               <ul className="space-y-2 xl:hidden">
-                {sortedItems.map((r) => {
+                {items.map((r) => {
                   const attention = needsAttention(r);
                   const stale =
                     r.storedVersion !== null &&
@@ -386,18 +480,18 @@ export const AdminAnalyticsPage = () => {
                   <TableHead className="w-10">
                     <input
                       type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      aria-label="전체 선택"
+                      checked={allOnPageSelected}
+                      onChange={togglePage}
+                      aria-label="현재 페이지 전체 선택"
                     />
                   </TableHead>
                   <TableHead>
                     <button
                       type="button"
-                      onClick={() => setSortKey('name')}
+                      onClick={() => setSort('name')}
                       className={cn(
                         'text-left',
-                        sortKey === 'name' && 'text-foreground font-semibold',
+                        sort === 'name' && 'text-foreground font-semibold',
                       )}
                     >
                       식당
@@ -406,10 +500,10 @@ export const AdminAnalyticsPage = () => {
                   <TableHead className="text-right">
                     <button
                       type="button"
-                      onClick={() => setSortKey('analyzed')}
+                      onClick={() => setSort('analyzed')}
                       className={cn(
                         'text-right',
-                        sortKey === 'analyzed' && 'text-foreground font-semibold',
+                        sort === 'analyzed' && 'text-foreground font-semibold',
                       )}
                     >
                       분석 리뷰
@@ -420,10 +514,10 @@ export const AdminAnalyticsPage = () => {
                   <TableHead className="text-right">
                     <button
                       type="button"
-                      onClick={() => setSortKey('unmapped')}
+                      onClick={() => setSort('unmapped')}
                       className={cn(
                         'text-right',
-                        sortKey === 'unmapped' && 'text-foreground font-semibold',
+                        sort === 'unmapped' && 'text-foreground font-semibold',
                       )}
                     >
                       미분류
@@ -434,7 +528,7 @@ export const AdminAnalyticsPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedItems.map((r) => {
+                {items.map((r) => {
                   const attention = needsAttention(r);
                   const stale =
                     r.storedVersion !== null &&
@@ -497,6 +591,17 @@ export const AdminAnalyticsPage = () => {
               </TableBody>
             </Table>
               </div>
+              {/* 페이저 — 데스크탑은 풀, 모바일은 컴팩트. total=0 이어도 노출 시
+                  레이아웃 점프 방지. selected 와 무관 — 페이지 전환에도 선택은 보존. */}
+              <Pager
+                className="mt-3"
+                total={total}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={(p) => updateParams({ page: p })}
+                onPageSizeChange={(s) => updateParams({ pageSize: s, page: null })}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+              />
             </>
           )}
         </CardContent>

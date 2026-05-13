@@ -370,13 +370,88 @@ describe('MenuGroupingService', () => {
     const service = new MenuGroupingService(app.prisma, aiConfig, {
       resolveOverride: async () => null,
     });
-    const statuses = await service.getRestaurantsStatus();
-    const row = statuses.find((s) => s.placeId === placeId);
+    const result = await service.getRestaurantsStatus({
+      sort: 'unmapped',
+      page: 1,
+      pageSize: 50,
+    });
+    const row = result.items.find((s) => s.placeId === placeId);
     expect(row).toBeDefined();
     expect(row!.distinctMenus).toBe(2);
     expect(row!.mappedMenus).toBe(1);
     expect(row!.unmappedMenus).toBe(1);
     expect(row!.lastGroupedAt).not.toBeNull();
     expect(row!.storedVersion).toBe(1);
+    // 응답 메타 — 페이저/UI 표시에 사용.
+    expect(result.total).toBeGreaterThanOrEqual(1);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(50);
+    // 이 식당은 unmappedMenus=1 이라 attention 대상.
+    expect(result.attentionCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('paginates, filters by q, and reports stable attentionCount', async () => {
+    // 3개 식당 시드 — 모두 unmapped 있음(=attention 대상). 이름 다르게.
+    const a = await seedRestaurantWithMentions(
+      app,
+      [{ name: 'A메뉴', nameNorm: 'a메뉴', sentiment: 'positive' }],
+      { name: '알파식당' },
+    );
+    const b = await seedRestaurantWithMentions(
+      app,
+      [{ name: 'B메뉴', nameNorm: 'b메뉴', sentiment: 'positive' }],
+      { name: '베타식당' },
+    );
+    const c = await seedRestaurantWithMentions(
+      app,
+      [{ name: 'C메뉴', nameNorm: 'c메뉴', sentiment: 'positive' }],
+      { name: '감마식당' },
+    );
+
+    const service = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => null,
+    });
+
+    // pageSize=2 로 자르면 첫 페이지 2개, 두 번째 페이지 1개.
+    const page1 = await service.getRestaurantsStatus({
+      sort: 'name',
+      page: 1,
+      pageSize: 2,
+    });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBeGreaterThanOrEqual(3);
+    expect(page1.attentionCount).toBeGreaterThanOrEqual(3);
+    const page2 = await service.getRestaurantsStatus({
+      sort: 'name',
+      page: 2,
+      pageSize: 2,
+    });
+    expect(page2.items.length).toBeGreaterThanOrEqual(1);
+    // page 가 바뀌어도 attentionCount 는 동일(전체 기준).
+    expect(page2.attentionCount).toBe(page1.attentionCount);
+
+    // q 필터 — 이름 부분일치.
+    const filtered = await service.getRestaurantsStatus({
+      q: '알파',
+      sort: 'name',
+      page: 1,
+      pageSize: 50,
+    });
+    expect(filtered.items.map((r) => r.placeId)).toEqual([a.placeId]);
+    expect(filtered.total).toBe(1);
+    // q 필터에도 불구하고 attentionCount 는 여전히 전체 기준.
+    expect(filtered.attentionCount).toBe(page1.attentionCount);
+
+    // attention=true 면 attention 대상만(여기선 3개 모두).
+    const att = await service.getRestaurantsStatus({
+      attention: true,
+      sort: 'name',
+      page: 1,
+      pageSize: 50,
+    });
+    expect(att.total).toBe(page1.attentionCount);
+
+    void b;
+    void c;
   });
 });

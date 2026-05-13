@@ -117,9 +117,38 @@ export const MenuGroupingRestaurantStatus = z.object({
 });
 export type MenuGroupingRestaurantStatusType = z.infer<typeof MenuGroupingRestaurantStatus>;
 
+// 식당 정렬 키 — 'unmapped' 는 미분류 메뉴 수, 'analyzed' 는 분석 done 리뷰
+// 수, 'name' 은 가나다순. 동률은 항상 name 으로 안정 정렬.
+export const MenuGroupingRestaurantSort = z.enum(['unmapped', 'analyzed', 'name']);
+export type MenuGroupingRestaurantSortType = z.infer<typeof MenuGroupingRestaurantSort>;
+
+export const MenuGroupingRestaurantStatusQuery = z.object({
+  // 식당 이름 부분일치 — 대소문자 무시. 빈 문자열은 무시.
+  q: z.string().optional(),
+  sort: MenuGroupingRestaurantSort.default('unmapped'),
+  // true 면 "처리 필요"(unmappedMenus>0 또는 storedVersion 옛 버전)만 반환.
+  // attentionCount 자체는 이 필터와 무관하게 항상 전체 기준.
+  attention: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type MenuGroupingRestaurantStatusQueryType = z.infer<
+  typeof MenuGroupingRestaurantStatusQuery
+>;
+
 export const MenuGroupingRestaurantStatusList = z.object({
   currentVersion: z.number().int(),
+  // 현재 페이지 행만.
   items: z.array(MenuGroupingRestaurantStatus),
+  // 필터(q/attention) 적용 후 전체 매칭 수. 페이저 표시용.
+  total: z.number().int(),
+  // 필터 무시, 전체 식당 수. 상단 overview 카드("전체 식당") 표시용.
+  totalRestaurants: z.number().int(),
+  // 필터 무시, 전체 식당 중 "처리 필요" 수. sticky 액션바·overview 카드 표시용 —
+  // 페이지 전환·필터링과 무관하게 안정적이어야 하므로 응답에 동봉.
+  attentionCount: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
 });
 export type MenuGroupingRestaurantStatusListType = z.infer<
   typeof MenuGroupingRestaurantStatusList

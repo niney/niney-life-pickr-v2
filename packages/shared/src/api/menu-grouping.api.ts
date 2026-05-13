@@ -4,6 +4,7 @@ import {
   type MenuGroupingJobInputType,
   type MenuGroupingJobSnapshotType,
   type MenuGroupingRestaurantStatusListType,
+  type MenuGroupingRestaurantStatusQueryType,
   type MenuRankingQueryType,
   type MenuRankingResultType,
 } from '@repo/api-contract';
@@ -30,9 +31,21 @@ export const menuGroupingApi = {
     );
   },
 
-  // 관리자 페이지 메인 테이블 — 식당별 정규화 상태 한 방에.
-  getRestaurantsStatus: () =>
-    apiFetch<MenuGroupingRestaurantStatusListType>(Routes.Analytics.restaurantsStatus),
+  // 관리자 페이지 메인 테이블 — 식당별 정규화 상태. 검색·정렬·페이지 쿼리.
+  getRestaurantsStatus: (
+    query: Partial<MenuGroupingRestaurantStatusQueryType> = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
+    if (query.sort) params.set('sort', query.sort);
+    if (query.attention) params.set('attention', 'true');
+    if (query.page !== undefined) params.set('page', String(query.page));
+    if (query.pageSize !== undefined) params.set('pageSize', String(query.pageSize));
+    const qs = params.toString();
+    return apiFetch<MenuGroupingRestaurantStatusListType>(
+      `${Routes.Analytics.restaurantsStatus}${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   // batch 잡 시작 — 여러 식당을 하나의 잡으로 묶어 SSE 로 진행.
   createGroupingJob: (input: MenuGroupingJobInputType) =>
