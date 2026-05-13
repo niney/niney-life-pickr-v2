@@ -14,6 +14,7 @@ import type {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { ReanalyzeFailedBadge } from '~/components/restaurant/ReanalyzeFailedBadge';
 import { cn } from '~/lib/utils';
 import type { PanelSide } from '~/stores/panelPrefsStore';
 
@@ -450,8 +451,6 @@ const RegisteredList = ({
                 <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
               )}
             </div>
-            {/* 어드민 맛집 페이지와 동일한 배지 셋 — SSE 로 진행도 라이브 갱신.
-                좁은 패널 폭에 맞춰 wrap 허용, 텍스트 크기는 admin row 와 동일. */}
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {it.rating !== null && <Badge variant="secondary">★ {it.rating}</Badge>}
               <Badge variant="outline">리뷰 {it.totalReviews}개</Badge>
@@ -464,7 +463,7 @@ const RegisteredList = ({
                 </Badge>
               )}
               {it.summaryFailed > 0 && (
-                <Badge variant="destructive">실패 {it.summaryFailed}</Badge>
+                <ReanalyzeFailedBadge placeId={it.placeId} count={it.summaryFailed} />
               )}
               {it.avgSatisfactionScore !== null && (
                 <Badge variant="outline">😊 {it.avgSatisfactionScore.toFixed(1)}/5</Badge>

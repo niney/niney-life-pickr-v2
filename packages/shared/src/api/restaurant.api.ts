@@ -9,6 +9,7 @@ import {
   type RestaurantPublicListResultType,
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
+  type RestaurantReanalyzeResultType,
   type RestaurantSummaryProgressType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -61,6 +62,11 @@ export const restaurantApi = {
   delete: (placeId: string) =>
     apiFetch<RestaurantDeleteResultType>(Routes.Restaurant.delete(placeId), {
       method: 'DELETE',
+    }),
+
+  reanalyze: (placeId: string) =>
+    apiFetch<RestaurantReanalyzeResultType>(Routes.Restaurant.reanalyze(placeId), {
+      method: 'POST',
     }),
 };
 

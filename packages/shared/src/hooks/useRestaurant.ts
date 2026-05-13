@@ -265,6 +265,15 @@ export const useRestaurantSummaryEvents = (
   return { data };
 };
 
+// 실패/구버전 요약을 LLM 큐에 다시 밀어 넣는다. 백엔드 reanalyze API 는
+// status='failed' + status='done' AND analysisVersion<현재 만 골라 큐잉하므로
+// 멱등 — 같은 버튼을 여러 번 눌러도 진행 중(pending/running)인 행은 건드리지
+// 않는다. SSE 가 결과를 라이브로 흘려주므로 별도 invalidate 는 불필요.
+export const useReanalyzeRestaurant = () =>
+  useMutation({
+    mutationFn: (placeId: string) => restaurantApi.reanalyze(placeId),
+  });
+
 // Hard-delete a restaurant by placeId. On success the list query is
 // invalidated and the cached detail/summary entries for that placeId are
 // removed so the row vanishes immediately.

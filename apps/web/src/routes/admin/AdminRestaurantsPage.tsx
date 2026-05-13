@@ -27,6 +27,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
+import { ReanalyzeFailedBadge } from '~/components/restaurant/ReanalyzeFailedBadge';
 
 const NAVER_PLACE_HOSTS = ['naver.com', 'naver.me'];
 
@@ -108,7 +109,7 @@ const RestaurantRow = ({
             </Badge>
           )}
           {item.summaryFailed > 0 && (
-            <Badge variant="destructive">실패 {item.summaryFailed}</Badge>
+            <ReanalyzeFailedBadge placeId={item.placeId} count={item.summaryFailed} />
           )}
           {item.avgSatisfactionScore !== null && (
             <Badge variant="outline">😊 {item.avgSatisfactionScore.toFixed(1)}/5</Badge>

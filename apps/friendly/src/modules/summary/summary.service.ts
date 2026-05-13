@@ -191,8 +191,17 @@ export class SummaryService {
 
   queueSummariesForReviews(placeId: string, reviewIds: string[]): void {
     if (reviewIds.length === 0) return;
-    const prev = this.runChainByPlace.get(placeId) ?? Promise.resolve();
-    const next = prev.then(() => this.run(placeId, reviewIds)).catch(() => undefined);
+    const prev = this.runChainByPlace.get(placeId);
+    // chained=true 이면 이전 batch 의 run() 이 아직 안 끝나 뒤에 줄을 선 것.
+    // 크롤 페이지가 빠르게 넘어오면 여러 batch 가 같은 placeId chain 에 쌓이고,
+    // run() 은 placeId 단위로 순차 실행된다 (다른 place 는 병렬).
+    this.log?.info(
+      { placeId, count: reviewIds.length, chained: prev !== undefined },
+      '[summary] queued',
+    );
+    const next = (prev ?? Promise.resolve())
+      .then(() => this.run(placeId, reviewIds))
+      .catch(() => undefined);
     this.runChainByPlace.set(placeId, next);
     void next.finally(() => {
       // 이 next 가 여전히 chain 의 tail 이면 정리. 그 사이 더 들어왔으면
