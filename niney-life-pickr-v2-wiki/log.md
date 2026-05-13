@@ -1,5 +1,44 @@
 # Wiki Compile Log
 
+## 2026-05-14 (9th compile)
+
+**Topics updated:** mobile, project-overview
+**New topics:** none
+**New concepts:** none
+**Concepts updated:** none
+
+**Sources scanned:** ~280
+**Sources changed:** ~5 (4 commits since 8th compile)
+
+**Knowledge file 추가/변경**:
+- `CLAUDE.md` — "용어" 섹션 신설 (웹/앱/모바일 분리 규칙)
+- `niney-life-pickr-v2-wiki/schema.md` — Terminology SSOT
+- `TECH_STACK.md`, `README.md` — prose "모바일/mobile" → "앱/웹"
+- `docs/mobile-analytics-screen.md` → `docs/app-analytics-screen.md` rename + 본문 정리
+- `apps/mobile/metro.config.js` — platform-aware resolver + react/react-dom alias
+- `apps/mobile/app.config.ts` — `web.output: 'static'` → `'single'`
+- 루트 `package.json` — `dev:ios` / `dev:android` 단축 스크립트
+
+**Highlights**:
+
+### 용어 규칙 — 웹 / 앱 / 모바일 의미 분리
+한국어 "모바일" 단어가 `apps/web`의 작은 화면 / `apps/mobile`(Expo 앱) 둘 다를 가리켜 혼동되던 문제. 이번 컴파일부터 다음 규칙 적용:
+- **웹** = `apps/web` / **앱** = `apps/mobile` 통합 (+ **iOS앱** / **Android앱** / **Expo Web** RN-Web 출력)
+- **모바일** = **웹**의 작은 화면(반응형)만
+- 식별자(슬러그·디렉터리·스크립트)는 `mobile`/`web` 그대로
+SSOT: [schema.md Terminology](schema.md#terminology--웹--앱--모바일). 이번 회차에는 mobile/project-overview 두 토픽만 우선 적용. 나머지 토픽(web, shared, friendly 등)의 prose 는 다음 사실 변경이 일어날 때 함께 갱신.
+
+### 앱 Metro — 플랫폼 확장자 우선 탐색 + 단일 React 사본
+shared 패키지가 `Comp.tsx`(=`.web` 셔틀) + `Comp.native.tsx` + `Comp.web.tsx` quad 패턴인데, Metro 커스텀 resolver 가 `./Foo.js` → `.ts`/`.tsx` 만 시도해서 native 빌드에서도 셔틀(=`.web` 구현)이 픽돼 `<h1>` Invariant 같은 에러로 뜨던 버그. iOS/Android 면 `.ios.tsx` → `.native.tsx` → `.tsx` 순, web 이면 `.web.tsx` → `.tsx` 순으로 시도하도록 수정. 이게 곧 [platform-ui-split](concepts/platform-ui-split.md) quad 패턴의 작동 보장. 동시에 앱 의 `extraNodeModules` 로 react/react-dom 을 앱 로컬 사본으로 강제해 워크스페이스에 공존하는 React 18(앱) / React 19(웹·shared) 사본이 같은 번들에 섞이는 사고를 방지.
+
+### Expo Web — SPA 모드 (`output: 'single'`)
+`apps/mobile`의 RN-Web 빌드는 SPA. 정적 사전렌더(`'static'`)는 expo-router 가 Node 의 hoist 된 react-dom@19 로 앱이 번들한 React 18 element 를 렌더하다 `$$typeof` 불일치로 SSR 500 을 낸다. 앱 브라우저 미리보기 용도라 SSR/SEO 불요 → SPA 로 떨어뜨려 브라우저에서만 렌더. 정적 export 가 필요해지면 react/react-dom 을 워크스페이스 전역 단일 버전으로 정렬해야 함.
+
+### 루트 `dev:ios` / `dev:android` 단축
+`pnpm dev:mobile` → `turbo dev --filter=mobile` → `expo start` 인데, turbo 가 stdin 을 자식 프로세스로 패스스루하지 않아 `i`(iOS 시뮬레이터) / `a`(Android 에뮬레이터) 같은 expo CLI 인터랙티브 키가 안 먹는다. `pnpm dev:ios` / `pnpm dev:android` 는 turbo 우회: `pnpm --filter mobile ios` (= `expo start --ios`) 를 직접 실행해 시뮬레이터/에뮬레이터를 자동 기동. 기존 `dev:mobile` 도 그대로 — 웹/QR 같이 키 입력 안 받는 시나리오용.
+
+---
+
 ## 2026-05-14 (8th compile)
 
 **Topics updated:** web, project-overview

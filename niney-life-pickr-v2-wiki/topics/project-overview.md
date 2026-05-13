@@ -3,12 +3,19 @@ topic: project-overview
 last_compiled: 2026-05-14
 sources_count: 11
 status: active
-aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block]
+aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web]
 ---
 
 # project-overview — 모노레포 개요
 
 루트 레벨에서 본 niney-life-pickr-v2 — "선택을 대신 골라주는 서비스" — 의 구조, 워크플로, 공통 규칙을 한 페이지로 정리한다. 공개 영역(사용자 대상 페이지) 과 어드민 영역(운영 도구) 으로 나뉘며, 양쪽 모두 단일 백엔드를 공유한다. 개별 모듈에 대한 자세한 내용은 각 토픽 문서로.
+
+> **용어 (Terminology)** — 이 위키와 코드베이스 전반에서:
+> - **웹** = `apps/web` (Vite + React 19 SPA)
+> - **앱** = `apps/mobile` (Expo + RN 앱) — 통합 호칭. 플랫폼별로 **iOS앱**, **Android앱**, **Expo Web** (RN-Web 출력)
+> - **모바일** = **웹**의 작은 화면(반응형 레이아웃)만 지칭. `apps/mobile`을 가리킬 땐 항상 "앱"
+> - 식별자(슬러그·디렉터리·스크립트) `mobile` / `web` 은 그대로 유지
+> 자세한 규칙: [schema.md Terminology](../schema.md#terminology--웹--앱--모바일), [CLAUDE.md 용어](../../CLAUDE.md#용어).
 
 ## Purpose [coverage: high — 4 sources]
 
@@ -128,10 +135,11 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint)
 
 | 명령 | 동작 |
 |---|---|
-| `pnpm dev` | 전체 dev (web + mobile + friendly 동시) |
+| `pnpm dev` | 전체 dev (웹 + 앱 + friendly 동시) |
 | `pnpm dev:api` | friendly만 (`http://localhost:3000`, docs `/docs`) |
-| `pnpm dev:web` | web만 (`http://localhost:5173`, LAN host 노출) |
-| `pnpm dev:mobile` | Expo Dev Tools |
+| `pnpm dev:web` | 웹만 (`http://localhost:5173`, LAN host 노출) |
+| `pnpm dev:mobile` | 앱 (Expo Dev Tools — turbo가 stdin을 패스스루하지 않아 `i`/`a` 인터랙티브 키는 안 먹음) |
+| `pnpm dev:ios` / `pnpm dev:android` | 앱 iOS/Android 시뮬레이터 직행 (turbo 우회: `pnpm --filter mobile ios`/`android`) |
 | `pnpm build` / `typecheck` / `lint` / `test` | 전체 turbo 태스크 |
 | `pnpm format` | Prettier (semi, singleQuote, trailingComma=all, printWidth=100) |
 | `pnpm clean` | turbo clean + node_modules 제거 |
@@ -199,7 +207,7 @@ packages/api-contract (Zod schema)
                           web        mobile
 ```
 
-영속 데이터: SQLite 파일 (`apps/friendly/data/dev.db`), Prisma 마이그레이션. 클라이언트 토큰: web은 `localStorage` `lp:token`, mobile은 AsyncStorage `lp:token`. 이외 web localStorage: `lp:panelPrefs` — 페이지별 사이드 패널 좌/우 위치 (`panelPrefsStore` Zustand 영속).
+영속 데이터: SQLite 파일 (`apps/friendly/data/dev.db`), Prisma 마이그레이션. 클라이언트 토큰: 웹은 `localStorage` `lp:token`, 앱은 AsyncStorage `lp:token`. 이외 웹 localStorage: `lp:panelPrefs` — 페이지별 사이드 패널 좌/우 위치 (`panelPrefsStore` Zustand 영속).
 
 ### 도메인 테이블 그룹
 
@@ -279,7 +287,7 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 ## Gotchas [coverage: medium — 6 sources]
 
 - **패키지 간 순환 의존 금지** — `shared → api-contract`는 OK, 반대는 금지 (CLAUDE.md)
-- **공유 스키마는 반드시 `@repo/api-contract`에 zod로** — 직접 `apps/friendly`에 정의하면 web/mobile이 못 쓴다
+- **공유 스키마는 반드시 `@repo/api-contract`에 zod로** — 직접 `apps/friendly`에 정의하면 웹/앱이 못 쓴다
 - **vworld 키 미등록 시 placeholder** — 공개 `/restaurants` 페이지는 `useMapPublicConfig` 가 404 면 "지도 키가 등록되지 않았습니다" placeholder 로 fallback. 운영 시작 직후 admin 이 `/admin/settings/map` 에서 키를 등록해야 지도가 켜진다
 - **공개 list 의 `q` 쿼리는 LIKE 기반 (인덱스 없음)** — 식당 수가 1k+ 로 늘면 별도 검색 인덱스(FTS5 등) 재고 필요. 현재 규모에서는 충분
 - **공개 list 의 bbox 필터는 메모리 처리** — Prisma where 가 아닌 enriched 후 `.filter()`. 좌표가 `snapshotJson` 안에 있어 SQL 단계에서 못 자른다
@@ -287,12 +295,13 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 - **지도 키 환경변수 fallback 없음** — `MapSettingsService` 는 첫 등록 시 `apiKey` 가 없으면 거절. AI provider 와 달리 .env 기본값 없음
 - **OpenLayers `ol/ol.css` import 필수** — 마커가 안 보이거나 어택 영역이 망가지면 보통 이 import 빠진 게 원인
 - **Prisma DLL 락 (Windows)** — `db:generate` / `db:migrate` 전에 friendly dev 서버를 끈다
-- **첫 관리자 만들기** — 회원가입은 항상 `role=USER`. 승격은 CLI: `pnpm --filter friendly promote-admin you@example.com`. 모바일엔 어드민 UI 없음 (의도)
+- **첫 관리자 만들기** — 회원가입은 항상 `role=USER`. 승격은 CLI: `pnpm --filter friendly promote-admin you@example.com`. 앱엔 어드민 UI 없음 (의도)
 - **분석 단계 실행 순서 강제** — 리뷰 분석 → 식당별 그룹핑 → 전역 머지. 앞 단계가 stale이면 뒤 단계 결과가 흔들린다 ([analytics](analytics.md))
 - **공개 영역에도 분석 stale 그대로 노출** — 별도 stale 배지 없음. 운영 정책으로 처리 (자동 트리거 안 함)
 - **모바일 sticky 함정 (재강조)** — sticky 가 깨질 때 99%는 (a) wrapping div 로 containing block 묶임 또는 (b) `overflow:auto` 컨테이너 안에 둠 — 둘 다 `docs/mobile-public-restaurant-ux.md` 의 2·3번 규칙 위반. 부모 chain 을 따라가며 sticky/overflow 를 잡는 부모를 찾는다
 - **HANDOFF 문서는 git에 넣지 말 것** — `docs/HANDOFF-*.md`는 untracked 유지
-- **버전 매트릭스** — web은 React 19, mobile은 React 18 — `@repo/shared`가 React 18+ peer로 양쪽 호환
+- **버전 매트릭스** — 웹은 React 19, 앱은 React 18 — `@repo/shared`가 React 18+ peer로 양쪽 호환. 앱의 Metro 는 `extraNodeModules` 로 react/react-dom을 앱 로컬 사본으로 강제 — 워크스페이스에 두 사본이 공존하므로 같은 번들에 새어 들어오면 `$$typeof` 불일치 ([mobile 토픽 Gotchas](mobile.md#gotchas-coverage-high--6-sources))
+- **앱 Expo Web 은 SPA 모드 고정** — `web.output: 'single'`. 정적 사전렌더(`'static'`) 는 워크스페이스 두 React 사본 환경에서 expo-router 의 `renderToString` 이 SSR 500 을 낸다. 앱 브라우저 미리보기 용도라 SSR 불요 ([mobile › Architecture › Expo Web](mobile.md#expo-web-rn-web-출력-coverage-high--1-source))
 
 ## Sources [coverage: high — 11 sources]
 
