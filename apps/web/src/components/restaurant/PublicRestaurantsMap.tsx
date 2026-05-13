@@ -115,13 +115,15 @@ export const PublicRestaurantsMap = ({
       />
 
       {tileError && (
-        <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive shadow-sm">
+        <div className="absolute left-3 top-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive shadow-sm">
           지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.
         </div>
       )}
 
+      {/* "이 지역 재검색" — 상단 중앙. 네이버/카카오/구글맵 모바일 표준 위치이며,
+          하단의 list/map 토글(모바일)과 겹치지 않는다. */}
       {showResearch && pendingBboxStr && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+        <div className="absolute left-1/2 top-3 -translate-x-1/2">
           <Button
             type="button"
             variant="default"

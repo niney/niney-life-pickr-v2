@@ -82,19 +82,23 @@ export const RestaurantsPage = () => {
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
 
   return (
-    <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden">
-      {/* xl+ : 리스트 / (선택시) 상세 / 지도 3-column. xl 미만: 토글.
+    <div className="relative w-full">
+      {/* xl+ : 리스트 / (선택시) 상세 / 지도 3-column — 각 컬럼은 sticky 로 시각적
+          풀뷰포트 고정. xl 미만: list 모드는 페이지 자연 흐름(body 스크롤 → 모바일
+          브라우저 주소창 자동 minify), map/detail 은 fixed 오버레이.
           panelSide==='right' 일 때 xl+ 에서 flex-row-reverse 로 list+detail 묶음을
-          시각적 우측에 배치. 모바일 토글에는 영향 없음 (xl 미만은 단일 column). */}
+          시각적 우측에 배치. */}
       <div
         className={cn(
-          'relative flex h-full w-full',
+          'relative flex w-full',
           panelSide === 'right' && 'xl:flex-row-reverse',
         )}
       >
         <aside
           className={cn(
-            'relative h-full w-full bg-background xl:w-[400px] xl:shrink-0',
+            'relative w-full bg-background',
+            // xl+: sticky 컬럼 — 헤더(56px) 아래 고정, aside 자체가 스크롤 컨테이너.
+            'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[400px] xl:shrink-0 xl:overflow-y-auto',
             // 패널이 좌측이면 우측 모서리에 border-r, 우측이면 좌측 모서리.
             panelSide === 'left' ? 'border-r xl:border-r' : 'xl:border-l',
             mobileView === 'list' ? 'block' : 'hidden xl:block',
@@ -129,11 +133,12 @@ export const RestaurantsPage = () => {
           <aside
             className={cn(
               'bg-background',
-              // xl+: 인접 column. border 는 panelSide 에 따라 list aside 와 같은 쪽.
-              'xl:relative xl:h-full xl:w-[440px] xl:shrink-0',
+              // xl+: sticky 별도 컬럼 (list 와 map 사이). border 는 panelSide 에
+              // 따라 list aside 와 같은 쪽.
+              'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[440px] xl:shrink-0 xl:overflow-hidden',
               panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
-              // xl-: list aside 영역 위로 덮어쓰기 (mobileView=list 일 때만)
-              'absolute inset-y-0 left-0 right-0 z-30 xl:left-auto xl:right-auto xl:z-auto',
+              // xl-: 헤더 아래 fixed 풀스크린 오버레이 (mobileView=list 일 때만).
+              'fixed inset-x-0 bottom-0 top-14 z-30 xl:relative xl:inset-auto xl:bottom-auto',
               mobileView === 'list' ? 'block' : 'hidden xl:block',
             )}
           >
@@ -143,8 +148,13 @@ export const RestaurantsPage = () => {
 
         <section
           className={cn(
-            'relative h-full flex-1',
-            mobileView === 'map' ? 'block' : 'hidden xl:block',
+            'relative flex-1',
+            // xl+: sticky 풀뷰포트 고정.
+            'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)]',
+            // xl-: map 모드일 때 헤더 아래 fixed 풀스크린.
+            mobileView === 'map'
+              ? 'fixed inset-x-0 bottom-0 top-14 z-10 xl:relative xl:inset-auto xl:bottom-auto'
+              : 'hidden xl:block',
           )}
         >
           <PublicRestaurantsMap
@@ -159,8 +169,9 @@ export const RestaurantsPage = () => {
         </section>
       </div>
 
-      {/* 모바일 토글 — xl 미만에서만 노출 */}
-      <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 overflow-hidden rounded-full border bg-background/95 shadow-md xl:hidden">
+      {/* 모바일 토글 — xl 미만에서만 노출. fixed 로 스크롤과 무관하게 항상 표시,
+          map 모드 fixed 지도(z-10) 위에 떠야 하므로 z-40. */}
+      <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 overflow-hidden rounded-full border bg-background/95 shadow-md xl:hidden">
         <Button
           type="button"
           variant={mobileView === 'list' ? 'default' : 'ghost'}
