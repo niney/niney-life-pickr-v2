@@ -166,32 +166,17 @@ export const AdminLayout = () => {
           })}
         </nav>
 
-        {/* 푸터 — 헤더와 동일한 패딩/높이 패턴으로 정렬 */}
-        <div
-          className={cn(
-            'flex h-14 shrink-0 items-center border-t px-3',
-            'justify-between',
-            mdCollapsed && 'md:justify-center',
-          )}
-        >
-          <NavLink
-            to="/"
-            className={cn(
-              'overflow-hidden whitespace-nowrap text-xs text-muted-foreground hover:text-foreground',
-              TRANSITION,
-              'max-w-[140px] opacity-100',
-              mdCollapsed && 'md:max-w-0 md:opacity-0',
-            )}
-          >
-            ← 일반 화면으로
-          </NavLink>
-          {/* collapse 토글은 md+ 전용 — 모바일은 드로어 개념이라 collapse 의미 없음. */}
+        {/* 푸터 — 헤더와 동일한 패딩/높이 패턴으로 정렬. collapse 토글은 md+
+            전용 (모바일은 드로어 개념이라 의미 없음). "일반 화면으로" 진입은
+            AdminTopBar 로 이전 — 어드민 어디서든 보이고, collapse/드로어 폭에
+            영향 안 받는다. */}
+        <div className="hidden h-14 shrink-0 items-center justify-center border-t px-3 md:flex">
           <button
             type="button"
             onClick={toggleCollapsed}
             title={mdCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
             aria-label={mdCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-            className="hidden size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground md:flex"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <ChevronLeft
               className={cn('size-4 transition-transform duration-300', mdCollapsed && 'rotate-180')}
