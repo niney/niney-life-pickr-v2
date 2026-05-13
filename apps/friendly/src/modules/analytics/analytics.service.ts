@@ -593,7 +593,10 @@ export class AnalyticsService {
       let positive = 0;
       let negative = 0;
       let neutral = 0;
-      const restaurants: RestaurantContrib[] = [];
+      // 한 글로벌 메뉴에 동일 식당의 여러 MenuCanonical 이 링크될 수 있으므로
+      // (예: "김치찌개" + "묵은지김치찌개" → 글로벌 "김치찌개") placeId 단위로
+      // 합산. 합산 없이 push 하면 React key 중복 + restaurantCount 부풀어짐.
+      const byPlace = new Map<string, RestaurantContrib>();
       for (const link of g.links) {
         const mc = link.menuCanonical;
         const stat =
@@ -608,15 +611,24 @@ export class AnalyticsService {
         negative += stat.negative;
         neutral += stat.neutral;
         if (stat.total > 0) {
-          restaurants.push({
-            placeId: mc.restaurant.placeId,
-            name: mc.restaurant.name,
-            mentionCount: stat.total,
-            positive: stat.positive,
-            negative: stat.negative,
-          });
+          const placeId = mc.restaurant.placeId;
+          const cur = byPlace.get(placeId);
+          if (cur) {
+            cur.mentionCount += stat.total;
+            cur.positive += stat.positive;
+            cur.negative += stat.negative;
+          } else {
+            byPlace.set(placeId, {
+              placeId,
+              name: mc.restaurant.name,
+              mentionCount: stat.total,
+              positive: stat.positive,
+              negative: stat.negative,
+            });
+          }
         }
       }
+      const restaurants = [...byPlace.values()];
       const topRestaurants = restaurants
         .sort((a, b) => b.mentionCount - a.mentionCount)
         .slice(0, 3)
@@ -657,6 +669,10 @@ export class AnalyticsService {
           restaurant: { select: { placeId: true, name: true } },
         },
       });
+      // linked 분기와 동일하게 placeId 단위 합산이 필요. unlinked 그룹 안에서도
+       // 같은 placeId 가 여러 MenuCanonical 행으로 들어올 수 있음(데이터상 PK 보장
+       // 부재 또는 동일 식당의 canonicalNorm 중복) → key 중복 회피 + 부풀린
+       // restaurantCount 방지.
       const byKey = new Map<
         string,
         {
@@ -665,7 +681,7 @@ export class AnalyticsService {
           positive: number;
           negative: number;
           neutral: number;
-          restaurants: RestaurantContrib[];
+          byPlace: Map<string, RestaurantContrib>;
         }
       >();
       for (const t of unlinkedTargets) {
@@ -682,26 +698,35 @@ export class AnalyticsService {
           positive: 0,
           negative: 0,
           neutral: 0,
-          restaurants: [] as RestaurantContrib[],
+          byPlace: new Map<string, RestaurantContrib>(),
         };
         cur.total += stat.total;
         cur.positive += stat.positive;
         cur.negative += stat.negative;
         cur.neutral += stat.neutral;
         if (stat.total > 0) {
-          cur.restaurants.push({
-            placeId: t.restaurant.placeId,
-            name: t.restaurant.name,
-            mentionCount: stat.total,
-            positive: stat.positive,
-            negative: stat.negative,
-          });
+          const placeId = t.restaurant.placeId;
+          const existing = cur.byPlace.get(placeId);
+          if (existing) {
+            existing.mentionCount += stat.total;
+            existing.positive += stat.positive;
+            existing.negative += stat.negative;
+          } else {
+            cur.byPlace.set(placeId, {
+              placeId,
+              name: t.restaurant.name,
+              mentionCount: stat.total,
+              positive: stat.positive,
+              negative: stat.negative,
+            });
+          }
         }
         byKey.set(key, cur);
       }
       for (const [key, b] of byKey) {
+        const restaurants = [...b.byPlace.values()];
         const denom = b.positive + b.negative;
-        const topRestaurants = b.restaurants
+        const topRestaurants = restaurants
           .sort((a, b2) => b2.mentionCount - a.mentionCount)
           .slice(0, 3)
           .map((r) => {
@@ -720,7 +745,7 @@ export class AnalyticsService {
           displayName: b.displayName,
           categoryPath: null,
           totalMentions: b.total,
-          restaurantCount: b.restaurants.length,
+          restaurantCount: restaurants.length,
           positive: b.positive,
           negative: b.negative,
           neutral: b.neutral,
