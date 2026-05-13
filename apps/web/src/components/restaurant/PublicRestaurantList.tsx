@@ -132,7 +132,9 @@ export const PublicRestaurantList = ({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        {/* 모바일: 가로 한 줄 + 좌우 스와이프 스크롤. md+ 부터는 wrap 으로 줄바꿈.
+            -mx-3/px-3 으로 헤더 padding 영역까지 풀-블리드 스크롤 영역 확보. */}
+        <div className="-mx-3 flex gap-1.5 overflow-x-auto whitespace-nowrap px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
           {CATEGORY_CHIPS.map((c) => {
             const active = category === c;
             return (
@@ -141,7 +143,7 @@ export const PublicRestaurantList = ({
                 type="button"
                 onClick={() => onChangeCategory(active ? null : c)}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  'shrink-0 rounded-full border px-2.5 py-1 text-xs transition-colors',
                   active
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground',
