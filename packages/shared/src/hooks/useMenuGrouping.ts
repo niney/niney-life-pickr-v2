@@ -13,6 +13,7 @@ import {
   buildGroupingJobEventsUrl,
   menuGroupingApi,
 } from '../api/menu-grouping.api.js';
+import { useActiveGroupingJobStore } from '../stores/activeGroupingJobStore.js';
 
 const isNotFound = (e: unknown): boolean =>
   e instanceof ApiError && e.statusCode === 404;
@@ -91,6 +92,7 @@ export const useGroupingJob = (
   jobId: string | null,
 ): { data: MenuGroupingJobSnapshotType | null; isLoading: boolean; error: unknown } => {
   const qc = useQueryClient();
+  const clearActive = useActiveGroupingJobStore((s) => s.clear);
   const queryKey = ['menu-grouping', 'job', jobId];
   const queryRes = useQuery({
     queryKey,
@@ -99,7 +101,12 @@ export const useGroupingJob = (
       try {
         return await menuGroupingApi.getGroupingJob(jobId);
       } catch (e) {
-        if (isNotFound(e)) return null;
+        if (isNotFound(e)) {
+          // 서버 in-memory 레지스트리에서 만료된 잡 — stale jobId 로 SSE 재연결
+          // 무한 시도되지 않게 activeGroupingJob store 정리.
+          clearActive();
+          return null;
+        }
         throw e;
       }
     },

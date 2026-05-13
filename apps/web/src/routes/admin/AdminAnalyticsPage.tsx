@@ -12,6 +12,7 @@ import {
 import {
   ApiError,
   menuGroupingApi,
+  useActiveGroupingJobStore,
   useAnalyticsOverview,
   useCategoryTree,
   useCreateGroupingJob,
@@ -116,8 +117,13 @@ export const AdminAnalyticsPage = () => {
     pageSize,
   });
   const create = useCreateGroupingJob();
-  const [jobId, setJobId] = useState<string | null>(null);
-  const job = useGroupingJob(jobId);
+  // 진행 중인 잡 ID 는 store + localStorage 에 들고 다닌다 — 다른 어드민 페이지로
+  // 이동했다 돌아오거나 새로고침해도 진행 카드가 유지되게. 잡 자체는 서버
+  // in-memory 레지스트리에서 SSE 로 push 받으므로 클라는 jobId 만 알면 충분.
+  const activeJobId = useActiveGroupingJobStore((s) => s.jobId);
+  const setActiveJobId = useActiveGroupingJobStore((s) => s.setJobId);
+  const clearActiveJob = useActiveGroupingJobStore((s) => s.clear);
+  const job = useGroupingJob(activeJobId);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -167,7 +173,7 @@ export const AdminAnalyticsPage = () => {
     const placeIds = [...selected];
     if (placeIds.length === 0) return;
     const snap = await create.mutateAsync(placeIds);
-    setJobId(snap.jobId);
+    setActiveJobId(snap.jobId);
     setSelected(new Set()); // 잡 시작했으면 체크박스 초기화
   };
 
@@ -191,7 +197,7 @@ export const AdminAnalyticsPage = () => {
     }
     if (allIds.length === 0) return;
     const snap = await create.mutateAsync(allIds);
-    setJobId(snap.jobId);
+    setActiveJobId(snap.jobId);
   };
 
   const mobileBarVisible = attentionCount > 0 || selected.size > 0;
@@ -251,7 +257,7 @@ export const AdminAnalyticsPage = () => {
       <CategoryTreeSection />
       <GlobalMenusSection />
 
-      {jobId && job.data && (
+      {activeJobId && job.data && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -313,7 +319,7 @@ export const AdminAnalyticsPage = () => {
             </div>
             {(job.data.state === 'done' || job.data.state === 'failed') && (
               <div className="flex justify-end">
-                <Button variant="ghost" size="sm" onClick={() => setJobId(null)}>
+                <Button variant="ghost" size="sm" onClick={clearActiveJob}>
                   닫기
                 </Button>
               </div>
