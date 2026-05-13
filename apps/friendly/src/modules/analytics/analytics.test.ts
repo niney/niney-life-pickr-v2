@@ -449,7 +449,8 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     const result = await service.getGlobalMenus({
       sort: 'mentions',
       minMentions: 1,
-      limit: 200,
+      pageSize: 200,
+      page: 1,
       includeUnlinked: false,
     });
     const item = result.items.find((i) => i.globalKey === '김치찌개');
@@ -483,7 +484,8 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     const linkedOnly = await service.getGlobalMenus({
       sort: 'mentions',
       minMentions: 1,
-      limit: 200,
+      pageSize: 200,
+      page: 1,
       includeUnlinked: false,
     });
     // 자기 시드의 돈까스는 글로벌 매핑이 없으므로 linked-only 결과에 안 보여야 함.
@@ -495,7 +497,8 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     const withUnlinked = await service.getGlobalMenus({
       sort: 'mentions',
       minMentions: 1,
-      limit: 200,
+      pageSize: 200,
+      page: 1,
       includeUnlinked: true,
     });
     const unlinkedDonkatsu = withUnlinked.items.find(
@@ -527,7 +530,8 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       q: '김치찌개',
       sort: 'mentions',
       minMentions: 2,
-      limit: 200,
+      pageSize: 200,
+      page: 1,
       includeUnlinked: true,
     });
     // 자기 시드 김치찌개가 결과에 있고, 자기 시드 된장찌개는 minMentions=2 로 필터됨.
@@ -589,7 +593,8 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       category: '한식 > 찌개',
       sort: 'mentions',
       minMentions: 1,
-      limit: 200,
+      pageSize: 200,
+      page: 1,
       includeUnlinked: false,
     });
     expect(matched.items.find((i) => i.globalKey === 'category-test-1')).toBeDefined();
@@ -598,7 +603,8 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       category: '일식',
       sort: 'mentions',
       minMentions: 1,
-      limit: 200,
+      pageSize: 200,
+      page: 1,
       includeUnlinked: false,
     });
     expect(noMatch.items.find((i) => i.globalKey === 'category-test-1')).toBeUndefined();

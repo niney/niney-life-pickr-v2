@@ -12,6 +12,7 @@ import {
 import {
   ApiError,
   menuGroupingApi,
+  useActiveGlobalMergeJobStore,
   useActiveGroupingJobStore,
   useAnalyticsOverview,
   useCategoryTree,
@@ -683,8 +684,12 @@ const JobStateBadge = ({ state }: { state: 'pending' | 'running' | 'done' | 'fai
 const GlobalMergeSection = () => {
   const overview = useAnalyticsOverview();
   const start = useStartGlobalMerge();
-  const [jobId, setJobId] = useState<string | null>(null);
-  const job = useGlobalMergeJob(jobId);
+  // 식당 정규화 잡과 동일 패턴 — 별도 store 인 이유는 두 잡이 동시 실행 가능한
+  // 독립 슬롯이기 때문. [[active-grouping-job-store]] 참고.
+  const activeJobId = useActiveGlobalMergeJobStore((s) => s.jobId);
+  const setActiveJobId = useActiveGlobalMergeJobStore((s) => s.setJobId);
+  const clearActiveJob = useActiveGlobalMergeJobStore((s) => s.clear);
+  const job = useGlobalMergeJob(activeJobId);
 
   const o = overview.data;
   const linkedPct =
@@ -695,7 +700,7 @@ const GlobalMergeSection = () => {
   const trigger = async (full: boolean) => {
     try {
       const snap = await start.mutateAsync({ full });
-      setJobId(snap.jobId);
+      setActiveJobId(snap.jobId);
     } catch (e) {
       // 409 = 이미 진행 중. 라우트가 응답 body 로 기존 잡 스냅샷을 그대로
       // 보내주므로 ApiError.body 에서 jobId 만 추출해 같은 진행 패널을 그대로
@@ -703,7 +708,7 @@ const GlobalMergeSection = () => {
       if (e instanceof ApiError && e.statusCode === 409) {
         const body = e.body as Partial<GlobalMergeJobSnapshotType> | null;
         if (body && typeof body.jobId === 'string') {
-          setJobId(body.jobId);
+          setActiveJobId(body.jobId);
           return;
         }
       }
@@ -752,7 +757,7 @@ const GlobalMergeSection = () => {
             아직 한 번도 전역 머지를 실행하지 않았습니다. 식당 가로지르기 통계가 비어 있습니다.
           </p>
         )}
-        {jobId && job.data && (
+        {activeJobId && job.data && (
           <div className="space-y-2 rounded-md border p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">잡 진행</span>
@@ -785,7 +790,7 @@ const GlobalMergeSection = () => {
             </div>
             {(job.data.state === 'done' || job.data.state === 'failed') && (
               <div className="flex justify-end">
-                <Button variant="ghost" size="sm" onClick={() => setJobId(null)}>
+                <Button variant="ghost" size="sm" onClick={clearActiveJob}>
                   닫기
                 </Button>
               </div>
@@ -823,21 +828,31 @@ const GlobalMenusSection = () => {
     if (next.trim().length > 0) params.set('menu', next);
     else params.delete('menu');
     setSearchParams(params, { replace: true });
+    setPage(1);
   };
   const [sort, setSort] = useState<GlobalMenuQuerySortType>('mentions');
   const [minMentions, setMinMentions] = useState(5);
   const [includeUnlinked, setIncludeUnlinked] = useState(false);
   // 모바일 필터 펼침 — 검색 외 컨트롤 4개를 접어두고 [필터 ▾] 로 토글. URL 동기화 X.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // 페이지·페이지당은 로컬 state — URL 의 page/pageSize 는 메인 식당 표 가 점유.
+  // 두 페이저가 같은 키 쓰면 충돌하니 분리. 페이지 떠났다 돌아오면 1로 리셋 OK.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const category = searchParams.get('category') ?? '';
   const setCategory = (next: string): void => {
     const params = new URLSearchParams(searchParams);
     if (next.trim().length > 0) params.set('category', next);
     else params.delete('category');
     setSearchParams(params, { replace: true });
+    setPage(1);
   };
 
-  const menus = useGlobalMenus({ q, category, sort, minMentions, limit: 50, includeUnlinked });
+  // 필터/검색/정렬 변경 시 page 1 로 리셋 — 안 하면 빈 결과로 점프.
+  // useEffect 회피: 변경 핸들러 안에서 page reset 호출.
+  const resetPage = () => setPage(1);
+
+  const menus = useGlobalMenus({ q, category, sort, minMentions, page, pageSize, includeUnlinked });
   const tree = useCategoryTree();
   // 자동완성용 path 후보 — 트리 노드 path 들 평탄화.
   const categoryPaths = (tree.data?.roots ?? []).flatMap(flattenPaths);
@@ -876,7 +891,7 @@ const GlobalMenusSection = () => {
           />
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as GlobalMenuQuerySortType)}
+            onChange={(e) => { setSort(e.target.value as GlobalMenuQuerySortType); resetPage(); }}
             className="rounded border bg-background px-2 py-1 text-sm"
           >
             {GLOBAL_SORT_OPTIONS.map((o) => (
@@ -887,7 +902,7 @@ const GlobalMenusSection = () => {
           </select>
           <select
             value={minMentions}
-            onChange={(e) => setMinMentions(Number(e.target.value))}
+            onChange={(e) => { setMinMentions(Number(e.target.value)); resetPage(); }}
             className="rounded border bg-background px-2 py-1 text-sm"
           >
             <option value={1}>최소 1회</option>
@@ -899,7 +914,7 @@ const GlobalMenusSection = () => {
             <input
               type="checkbox"
               checked={includeUnlinked}
-              onChange={(e) => setIncludeUnlinked(e.target.checked)}
+              onChange={(e) => { setIncludeUnlinked(e.target.checked); resetPage(); }}
             />
             미머지 포함
           </label>
@@ -937,7 +952,7 @@ const GlobalMenusSection = () => {
               />
               <select
                 value={sort}
-                onChange={(e) => setSort(e.target.value as GlobalMenuQuerySortType)}
+                onChange={(e) => { setSort(e.target.value as GlobalMenuQuerySortType); resetPage(); }}
                 className="rounded border bg-background px-2 py-1.5 text-sm"
               >
                 {GLOBAL_SORT_OPTIONS.map((o) => (
@@ -948,7 +963,7 @@ const GlobalMenusSection = () => {
               </select>
               <select
                 value={minMentions}
-                onChange={(e) => setMinMentions(Number(e.target.value))}
+                onChange={(e) => { setMinMentions(Number(e.target.value)); resetPage(); }}
                 className="rounded border bg-background px-2 py-1.5 text-sm"
               >
                 <option value={1}>최소 1회 언급</option>
@@ -960,7 +975,7 @@ const GlobalMenusSection = () => {
                 <input
                   type="checkbox"
                   checked={includeUnlinked}
-                  onChange={(e) => setIncludeUnlinked(e.target.checked)}
+                  onChange={(e) => { setIncludeUnlinked(e.target.checked); resetPage(); }}
                 />
                 미머지 포함
               </label>
@@ -1101,6 +1116,14 @@ const GlobalMenusSection = () => {
             </TableBody>
           </Table>
             </div>
+            <Pager
+              className="mt-3"
+              total={menus.data.total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); resetPage(); }}
+            />
           </>
         )}
       </CardContent>

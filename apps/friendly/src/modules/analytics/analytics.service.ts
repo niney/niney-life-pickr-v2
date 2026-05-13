@@ -775,7 +775,11 @@ export class AnalyticsService {
     }
 
     filtered.sort((a, b) => sortGlobal(a, b, query.sort));
-    filtered = filtered.slice(0, query.limit);
+
+    // 페이지네이션 — 정렬 후 슬라이스. total 은 슬라이스 전 길이(필터 적용 후).
+    const total = filtered.length;
+    const offset = (query.page - 1) * query.pageSize;
+    const pageItems = filtered.slice(offset, offset + query.pageSize);
 
     const linkedTotal = await this.prisma.menuCanonical.count();
     const linkedRatio = linkedTotal === 0 ? null : linked.reduce((sum, g) => sum + g.links.length, 0) / linkedTotal;
@@ -787,7 +791,10 @@ export class AnalyticsService {
       ).size,
       linkedRatio,
       currentVersion: GLOBAL_MERGE_VERSION,
-      items: filtered,
+      items: pageItems,
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
     };
   }
 

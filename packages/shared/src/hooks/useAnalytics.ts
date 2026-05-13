@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import type {
   GlobalMenuQueryType,
   GlobalMergeJobChunkProgressType,
@@ -11,6 +11,7 @@ import {
   analyticsApi,
   buildGlobalMergeJobEventsUrl,
 } from '../api/analytics.api.js';
+import { useActiveGlobalMergeJobStore } from '../stores/activeGlobalMergeJobStore.js';
 
 export const useAnalyticsOverview = () =>
   useQuery({
@@ -27,10 +28,12 @@ export const useGlobalMenus = (query: Partial<GlobalMenuQueryType> = {}) =>
       query.category ?? '',
       query.sort ?? 'mentions',
       query.minMentions ?? 5,
-      query.limit ?? 50,
+      query.page ?? 1,
+      query.pageSize ?? 50,
       !!query.includeUnlinked,
     ],
     queryFn: () => analyticsApi.globalMenus(query),
+    placeholderData: keepPreviousData,
   });
 
 export const useCategoryTree = () =>
@@ -61,6 +64,7 @@ export const useGlobalMergeJob = (
   jobId: string | null,
 ): { data: GlobalMergeJobSnapshotType | null; isLoading: boolean; error: unknown } => {
   const qc = useQueryClient();
+  const clearActive = useActiveGlobalMergeJobStore((s) => s.clear);
   const queryKey = ['analytics', 'global-merge-job', jobId];
   const queryRes = useQuery({
     queryKey,
@@ -69,7 +73,11 @@ export const useGlobalMergeJob = (
       try {
         return await analyticsApi.getGlobalMergeJob(jobId);
       } catch (e) {
-        if (isNotFound(e)) return null;
+        if (isNotFound(e)) {
+          // stale jobId 정리 — 무한 SSE 재연결 시도 방지.
+          clearActive();
+          return null;
+        }
         throw e;
       }
     },

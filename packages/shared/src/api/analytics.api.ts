@@ -18,7 +18,8 @@ export const analyticsApi = {
     if (query.category) params.set('category', query.category);
     if (query.sort) params.set('sort', query.sort);
     if (query.minMentions !== undefined) params.set('minMentions', String(query.minMentions));
-    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.page !== undefined) params.set('page', String(query.page));
+    if (query.pageSize !== undefined) params.set('pageSize', String(query.pageSize));
     if (query.includeUnlinked !== undefined) {
       params.set('includeUnlinked', query.includeUnlinked ? 'true' : 'false');
     }

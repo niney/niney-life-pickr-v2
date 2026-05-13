@@ -41,7 +41,9 @@ export const GlobalMenuQuery = z.object({
   sort: GlobalMenuQuerySort.default('mentions'),
   // 노이즈 제거 — 기본 5.
   minMentions: z.coerce.number().int().min(1).default(5),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  // 페이지네이션. limit 은 deprecated — 신규 코드는 page/pageSize 사용.
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
   // 매핑되지 않은 (unlinked) MenuCanonical 도 결과에 포함. 기본 false.
   // true 면 식당별 그룹 그대로 보임 — "전역 정규화 전 모습" 확인용.
   includeUnlinked: z.coerce.boolean().default(false),
@@ -56,7 +58,12 @@ export const GlobalMenuResult = z.object({
   // 식당별 그룹 (MenuCanonical) 중 글로벌 링크가 있는 것 / 전체.
   linkedRatio: z.number().nullable(),
   currentVersion: z.number().int(),
+  // 현재 페이지 행만.
   items: z.array(GlobalMenuStat),
+  // 필터(q/category/minMentions/includeUnlinked) 적용 후 매칭 전체 수 — 페이저용.
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
 });
 export type GlobalMenuResultType = z.infer<typeof GlobalMenuResult>;
 

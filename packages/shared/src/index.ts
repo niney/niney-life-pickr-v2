@@ -11,6 +11,7 @@ export * from './api/settings-map.api.js';
 export * from './stores/authStore.js';
 export * from './stores/activeCrawlJobStore.js';
 export * from './stores/activeGroupingJobStore.js';
+export * from './stores/activeGlobalMergeJobStore.js';
 export * from './hooks/useAuth.js';
 export * from './hooks/usePicks.js';
 export * from './hooks/useAdmin.js';
