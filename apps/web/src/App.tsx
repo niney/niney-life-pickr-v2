@@ -14,6 +14,7 @@ import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
 import { AdminSettingsPage } from './routes/admin/AdminSettingsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
+import { RestaurantDetailRoute } from './routes/RestaurantDetailRoute';
 import { RestaurantsPage } from './routes/RestaurantsPage';
 
 const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
@@ -37,7 +38,9 @@ export const App = () => {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/restaurants" element={<RestaurantsPage />} />
+        <Route path="/restaurants" element={<RestaurantsPage />}>
+          <Route path=":placeId" element={<RestaurantDetailRoute />} />
+        </Route>
       </Route>
       <Route path="/login" element={<LoginPage />} />
       <Route

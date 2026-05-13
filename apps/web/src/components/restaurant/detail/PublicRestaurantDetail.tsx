@@ -14,43 +14,44 @@ import { TAB_ORDER, type TabKey } from './tabs';
 interface Props {
   placeId: string;
   onClose(): void;
+  // 라우트 기반 사용처(공개 /restaurants/:placeId)에서 URL ?tab= 과 sync 하기
+  // 위한 controlled 모드. 미지정 시 내부 state 로 동작 (admin 사이드 패널 등).
+  tab?: TabKey;
+  onChangeTab?(next: TabKey): void;
 }
 
 // 식당 상세 패널. 헤더 + sticky 탭 바 + 활성 탭 컨텐츠. 데이터 fetch 는 여기서
 // 한 번씩 (detail + insights) — 탭 전환은 컨텐츠만 바뀌고 추가 호출 없음.
 //
-// 탭 상태는 내부 useState. URL 까지는 안 가지지만, placeId 가 바뀌면 (다른
-// 식당 클릭) 자동으로 'home' 으로 reset — 어떤 식당이든 첫 인상은 홈 탭.
-export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
+// 탭은 uncontrolled 기본: placeId 가 바뀌면 자동으로 'home' 으로 reset.
+// controlled 모드(tab/onChangeTab 주입) 일 땐 부모가 URL 동기화·reset 책임.
+export const PublicRestaurantDetail = ({
+  placeId,
+  onClose,
+  tab: tabProp,
+  onChangeTab: onChangeTabProp,
+}: Props) => {
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
-  const [tab, setTab] = useState<TabKey>('home');
+  const [internalTab, setInternalTab] = useState<TabKey>('home');
+  const tab = tabProp ?? internalTab;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setTab('home');
-  }, [placeId]);
-
-  // 모바일(xl 미만)에서는 풀스크린 모달 — body 스크롤 누수를 막아 상세 영역
-  // 위/아래로 뒤 페이지가 움직이는 "불필요한 상단바 스크롤" 현상을 차단한다.
-  // xl+ 에선 컬럼 레이아웃이라 무관.
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1279px)');
-    if (!mq.matches) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+    if (tabProp === undefined) setInternalTab('home');
+  }, [placeId, tabProp]);
 
   // 탭 변경 시 본문 스크롤을 맨 위로. setTab 호출 경로를 단일 핸들러로
   // 모아 두면 useEffect 없이 이벤트 시점에 처리할 수 있다 — 외부에서 tab
   // 을 강제로 바꾸는 경로가 없으므로 이걸로 충분.
-  const handleChangeTab = useCallback((next: TabKey) => {
-    setTab(next);
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, []);
+  const handleChangeTab = useCallback(
+    (next: TabKey) => {
+      if (onChangeTabProp) onChangeTabProp(next);
+      else setInternalTab(next);
+      scrollRef.current?.scrollTo({ top: 0 });
+    },
+    [onChangeTabProp],
+  );
 
   const isNotFound =
     detail.isError &&
@@ -89,42 +90,46 @@ export const PublicRestaurantDetail = ({ placeId, onClose }: Props) => {
         </Button>
       </header>
 
-      {detail.data && (
-        <nav
-          role="tablist"
-          aria-label="식당 정보 탭"
-          className="flex shrink-0 border-b bg-background"
-        >
-          {TAB_ORDER.map((t) => {
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => handleChangeTab(t.key)}
-                className={cn(
-                  'relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors',
-                  active
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {t.label}
-                <span
-                  className={cn(
-                    'absolute inset-x-3 bottom-0 h-0.5 rounded-t bg-primary transition-opacity',
-                    active ? 'opacity-100' : 'opacity-0',
-                  )}
-                />
-              </button>
-            );
-          })}
-        </nav>
-      )}
-
+      {/* nav 는 본문 scroll 컨테이너 안에 둬서 sticky 가 양쪽 환경에서 동작:
+          - xl+ 또는 admin 패널: 부모가 h-full + 본문이 자체 scroll → 본문 기준 top-0
+          - 모바일 라우트(/restaurants/:placeId): 부모가 자연 흐름 → body 기준 sticky.
+            이때 전역 PublicTopBar(56px) 아래에 붙도록 top-14. */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {detail.data && (
+          <nav
+            role="tablist"
+            aria-label="식당 정보 탭"
+            className="sticky top-14 z-10 flex border-b bg-background xl:top-0"
+          >
+            {TAB_ORDER.map((t) => {
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => handleChangeTab(t.key)}
+                  className={cn(
+                    'relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors',
+                    active
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {t.label}
+                  <span
+                    className={cn(
+                      'absolute inset-x-3 bottom-0 h-0.5 rounded-t bg-primary transition-opacity',
+                      active ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                </button>
+              );
+            })}
+          </nav>
+        )}
+
         {detail.isLoading ? (
           <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
