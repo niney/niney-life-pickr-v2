@@ -19,8 +19,12 @@ export const SegmentedControl = <T extends string>({
     alignSelf: fullWidth ? 'stretch' : 'flex-start',
   };
 
+  // fullWidth=true → 각 아이템이 flex:1 로 컨테이너를 균등 분할 (웹의
+  // grid-template-columns: repeat(N, 1fr) 와 동일).
+  // fullWidth=false → flex 안 주고 content(텍스트+패딩) 너비로 줄어들게 둔다
+  // (웹의 width:undefined + 1fr 컬럼이 content 로 수축하는 동작과 매칭).
   const itemStyle = (active: boolean): ViewStyle => ({
-    flex: 1,
+    ...(fullWidth ? { flex: 1 } : null),
     backgroundColor: active ? theme.colors.surface : 'transparent',
     paddingVertical: theme.space.sm,
     paddingHorizontal: theme.space.md,
