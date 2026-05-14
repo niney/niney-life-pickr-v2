@@ -43,6 +43,28 @@ export const useNaverSearch = (q: string, bbox: string | null) =>
     staleTime: 30_000,
   });
 
+// 캐치테이블 키워드 검색 — /admin/catchtable-test 페이지 전용. 첫 호출은 어댑터
+// 워밍업 비용으로 ~14s, 이후는 ~수백 ms. staleTime 60s — 같은 키워드 재검색이
+// 잦을 수 있어 네이버보다 약간 길게.
+export interface UseCatchtableSearchArgs {
+  q: string;
+  offset?: string | null;
+  limit?: number | null;
+  contractedOnly?: boolean | null;
+}
+export const useCatchtableSearch = ({
+  q,
+  offset = null,
+  limit = null,
+  contractedOnly = null,
+}: UseCatchtableSearchArgs) =>
+  useQuery({
+    queryKey: ['crawl', 'catchtable-search', q, offset, limit, contractedOnly],
+    queryFn: () => crawlApi.catchtableSearch({ q, offset, limit, contractedOnly }),
+    enabled: q.trim().length > 0,
+    staleTime: 60_000,
+  });
+
 // ---- Streaming hook ---------------------------------------------------------
 
 export type CrawlStreamStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error';

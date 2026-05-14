@@ -38,6 +38,9 @@ export const Crawl = {
   // 네이버 PC 지도에서 키워드(+선택 영역)로 가게를 검색. /admin/discover 에서
   // 등록할 후보를 고르는 데 사용.
   search: `${API_PREFIX}/admin/crawl/search`,
+  // 캐치테이블 자체 API 를 통한 키워드 검색. /admin/catchtable-test 페이지가
+  // 어떻게 수집되는지 검증할 때 사용.
+  catchtableSearch: `${API_PREFIX}/admin/crawl/catchtable/search`,
 } as const;
 
 export const Restaurant = {

@@ -1,4 +1,6 @@
 import type {
+  CatchtableSearchQueryType,
+  CatchtableSearchResponseType,
   CrawlEventType,
   CrawlErrorCodeType,
   CrawlModeType,
@@ -17,6 +19,7 @@ import {
   type ExistingReviewKeys,
 } from './adapters/naver-place.playwright.adapter.js';
 import { searchPlacesViaMapNaver } from './adapters/naver-search.http.adapter.js';
+import { searchCatchtablePlaces } from './adapters/catchtable-search.playwright.adapter.js';
 import { jobRegistry, type JobRegistry } from './job-registry.js';
 import {
   normalizeToPlaceId,
@@ -176,6 +179,23 @@ export class CrawlService {
   async searchPlaces(query: string, bbox?: string): Promise<CrawlSearchResultType> {
     const items = await searchPlacesViaMapNaver(query, { bbox, pageSize: 50 });
     return { items, source: 'http' };
+  }
+
+  // 캐치테이블 키워드 검색 — 어드민 /catchtable-test 전용. Playwright 페이지를
+  // 띄워 그 안에서 캐치테이블 자체 API 를 호출한다(CF 봇 보호 우회).
+  async searchCatchtable(
+    query: CatchtableSearchQueryType,
+  ): Promise<CatchtableSearchResponseType> {
+    const coord =
+      query.lat !== undefined && query.lon !== undefined
+        ? { lat: query.lat, lon: query.lon }
+        : undefined;
+    return searchCatchtablePlaces(query.q, {
+      coord,
+      offset: query.offset,
+      limit: query.limit,
+      contractedOnly: query.contractedOnly,
+    });
   }
 
   cancel(jobId: string, actorId: string): boolean {

@@ -302,3 +302,59 @@ export const CrawlSearchResult = z.object({
   source: z.enum(['http', 'playwright']),
 });
 export type CrawlSearchResultType = z.infer<typeof CrawlSearchResult>;
+
+// ── 캐치테이블 키워드 검색 (어드민 /catchtable-test 페이지) ────────────────
+// 캐치테이블 자체 검색 API(`POST /api/v6/search/list`) 응답을 정규화.
+// 검색은 캐치테이블 가맹점 한정(contractedOnly default=true). 직접 호출 시 CF
+// 봇 보호에 막히므로 어댑터가 페이지를 띄워 그 안에서 fetch 한다.
+
+export const CatchtableSearchResult = z.object({
+  shopRef: z.string(),
+  shopName: z.string(),
+  foodKind: z.string().nullable(),
+  // 빌딩/위치 라벨 — 정규 주소가 아니라 "현대백화점 무역센터점" 같은 단축 라벨.
+  landName: z.string().nullable(),
+  // 캐치테이블 내부 base64 슬러그. shopRef 만으로도 정규 URL 이 잡힌다.
+  urlPathAlias: z.string().nullable(),
+  // /ct/shop/{shopRef} — 어드민이 새 탭으로 캐치테이블 상세 페이지 열 때 사용.
+  rawSourceUrl: z.string().url(),
+  imageUrl: z.string().url().nullable(),
+  reviewCount: z.number().int(),
+  avgScore: z.number().nullable(),
+  shopPhone: z.string().nullable(),
+  lat: z.number().nullable(),
+  lon: z.number().nullable(),
+  // "OPEN" | "DAY_OFF" 등. UI 매핑은 호출자 책임.
+  operationStatus: z.string().nullable(),
+  // "DINING" | "WAITING" | "PICKUP".
+  mainService: z.string().nullable(),
+  badges: z.array(z.string()),
+});
+export type CatchtableSearchResultType = z.infer<typeof CatchtableSearchResult>;
+
+export const CatchtableSearchQuery = z.object({
+  q: z.string().min(1).max(100),
+  // 백엔드 정렬 좌표 (서울시청 default).
+  lat: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+  // 페이지네이션 토큰. 첫 호출은 미지정, 다음 호출은 직전 응답의 nextOffset.
+  offset: z.string().optional(),
+  // 1~30. 기본 30.
+  limit: z.coerce.number().int().min(1).max(30).optional(),
+  // 가맹점만 (default true).
+  contractedOnly: z.coerce.boolean().optional(),
+});
+export type CatchtableSearchQueryType = z.infer<typeof CatchtableSearchQuery>;
+
+export const CatchtableSearchResponse = z.object({
+  items: z.array(CatchtableSearchResult),
+  totalShopCount: z.number().int(),
+  hasMore: z.boolean(),
+  nextOffset: z.string().nullable(),
+  source: z.literal('playwright'),
+  // true 면 키워드가 백엔드에 매칭 안 되고 추천 DB fallback 으로 떨어진 상태.
+  // UI 는 이 경우 "결과가 적절하지 않을 수 있다" 안내.
+  fallback: z.boolean(),
+  elapsedMs: z.number().int(),
+});
+export type CatchtableSearchResponseType = z.infer<typeof CatchtableSearchResponse>;

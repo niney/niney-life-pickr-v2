@@ -2,6 +2,8 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
+  CatchtableSearchQuery,
+  CatchtableSearchResponse,
   CrawlJobListResult,
   CrawlNaverPlaceInput,
   CrawlSearchQuery,
@@ -13,6 +15,7 @@ import {
 import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
+import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -65,7 +68,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
 
   app.addHook('onClose', async () => {
     jobRegistry.abortAll();
-    await closeBrowser();
+    await Promise.all([closeBrowser(), closeCatchtableSearchBrowser()]);
   });
 
   // POST — start a new crawl job (returns jobId immediately). Errors that
@@ -94,6 +97,20 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: CrawlSearchResult },
     },
     handler: async (req) => service.searchPlaces(req.query.q, req.query.bbox),
+  });
+
+  // GET — 캐치테이블 키워드 검색. 어드민 /catchtable-test 페이지에서 "이런 키워드를
+  // 넣으면 캐치테이블이 어떤 결과를 주는지" 를 직접 확인하는 용도. 동일한 응답을
+  // 향후 등록 파이프라인에 흘릴 수도 있지만, 우선은 검증 페이지로 시작.
+  typed.get(Routes.Crawl.catchtableSearch, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: CatchtableSearchQuery,
+      response: { 200: CatchtableSearchResponse },
+    },
+    handler: async (req) => service.searchCatchtable(req.query),
   });
 
   // GET — list jobs for the current user (running + recently finished).

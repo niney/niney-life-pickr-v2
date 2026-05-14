@@ -1,5 +1,6 @@
 import {
   Routes,
+  type CatchtableSearchResponseType,
   type CrawlJobListResultType,
   type CrawlModeType,
   type CrawlSearchResultType,
@@ -29,6 +30,33 @@ export const crawlApi = {
     if (bbox) params.set('bbox', bbox);
     return apiFetch<CrawlSearchResultType>(
       `${Routes.Crawl.search}?${params.toString()}`,
+    );
+  },
+
+  // 캐치테이블 키워드 검색 — 어드민 검증 페이지 전용. q 외엔 모두 옵션.
+  catchtableSearch: ({
+    q,
+    offset,
+    limit,
+    contractedOnly,
+    lat,
+    lon,
+  }: {
+    q: string;
+    offset?: string | null;
+    limit?: number | null;
+    contractedOnly?: boolean | null;
+    lat?: number | null;
+    lon?: number | null;
+  }) => {
+    const params = new URLSearchParams({ q });
+    if (offset) params.set('offset', offset);
+    if (limit != null) params.set('limit', String(limit));
+    if (contractedOnly != null) params.set('contractedOnly', String(contractedOnly));
+    if (lat != null) params.set('lat', String(lat));
+    if (lon != null) params.set('lon', String(lon));
+    return apiFetch<CatchtableSearchResponseType>(
+      `${Routes.Crawl.catchtableSearch}?${params.toString()}`,
     );
   },
 };

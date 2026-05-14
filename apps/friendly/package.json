@@ -17,6 +17,7 @@
     "db:studio": "prisma studio",
     "promote-admin": "tsx --env-file=.env scripts/promote-admin.ts",
     "dev:capture-visitor": "tsx scripts/dev-capture-visitor.ts",
+    "dev:capture-catchtable": "tsx scripts/dev-capture-catchtable.ts",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
