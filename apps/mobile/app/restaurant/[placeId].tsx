@@ -7,13 +7,13 @@ import {
   View,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useRestaurantByPlaceId } from '@repo/shared';
+import { useRestaurantPublic } from '@repo/shared';
 import { MenuRankingCard } from '~/components/MenuRankingCard';
 
 export default function RestaurantDetailScreen() {
   const { placeId } = useLocalSearchParams<{ placeId: string }>();
   const router = useRouter();
-  const detail = useRestaurantByPlaceId(placeId ?? null);
+  const detail = useRestaurantPublic(placeId ?? null);
 
   return (
     <>

@@ -1,107 +1,183 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  useAuthStore,
-  useCurrentUser,
-  useRestaurantList,
-} from '@repo/shared';
-import type { RestaurantListItemType } from '@repo/api-contract';
+import { useRestaurantsPublic, useTheme } from '@repo/shared';
+import type {
+  RestaurantPublicListItemType,
+  RestaurantPublicListQueryType,
+} from '@repo/api-contract';
+import { PublicRestaurantCard } from '~/components/PublicRestaurantCard';
+import { RestaurantSearchBar } from '~/components/RestaurantSearchBar';
 
-// 맛집 탭 — 등록된 식당 리스트. 현재 list API 가 admin 전용이라
-// 비-ADMIN 사용자에겐 안내만 표시.
+type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
+const PAGE_SIZE = 60;
+
+// 맛집 탭 — 웹 RestaurantsPage 의 공개 리스트 마이그레이션. 모바일 UX에 맞춰:
+//  - 지도/패널 토글/hover 제거 (Phase 2 에서 react-native-maps 도입 예정)
+//  - URL 동기화 대신 로컬 state
+//  - 페이지네이션 대신 무한 스크롤 + pull-to-refresh
 export default function RestaurantsScreen() {
   const router = useRouter();
-  const { data: me } = useCurrentUser();
-  const isGuest = useAuthStore((s) => s.isGuest);
-  const isAdmin = me?.role === 'ADMIN';
-  const list = useRestaurantList();
+  const theme = useTheme();
 
-  if (isGuest || !isAdmin) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.title}>맛집</Text>
-        <Text style={styles.note}>
-          현재 맛집 데이터는 관리자만 조회할 수 있습니다.
-        </Text>
-      </View>
-    );
-  }
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>('recent');
+  const [offset, setOffset] = useState(0);
+  const [items, setItems] = useState<RestaurantPublicListItemType[]>([]);
 
-  if (list.isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  const query = useRestaurantsPublic({
+    q: q || undefined,
+    category: category ?? undefined,
+    sort,
+    limit: PAGE_SIZE,
+    offset,
+  });
 
-  const items = list.data?.items ?? [];
+  useEffect(() => {
+    const page = query.data?.items;
+    if (!page) return;
+    setItems((prev) => (offset === 0 ? page : [...prev, ...page]));
+  }, [query.data, offset]);
+
+  const total = query.data?.total ?? 0;
+  const hasMore = items.length < total;
+
+  const reset = useCallback(() => {
+    setOffset(0);
+    setItems([]);
+  }, []);
+
+  const handleChangeQ = useCallback(
+    (next: string) => {
+      if (next === q) return;
+      setQ(next);
+      reset();
+    },
+    [q, reset],
+  );
+
+  const handleChangeCategory = useCallback(
+    (next: string | null) => {
+      if (next === category) return;
+      setCategory(next);
+      reset();
+    },
+    [category, reset],
+  );
+
+  const handleChangeSort = useCallback(
+    (next: SortKey) => {
+      if (next === sort) return;
+      setSort(next);
+      reset();
+    },
+    [sort, reset],
+  );
+
+  const handleEndReached = useCallback(() => {
+    if (query.isFetching || !hasMore) return;
+    setOffset((o) => o + PAGE_SIZE);
+  }, [query.isFetching, hasMore]);
+
+  const handleRefresh = useCallback(() => {
+    reset();
+    query.refetch();
+  }, [reset, query]);
+
+  const handleSelect = useCallback(
+    (placeId: string) => {
+      router.push(`/restaurant/${placeId}` as never);
+    },
+    [router],
+  );
+
+  const isInitialLoading = query.isLoading && items.length === 0;
+  const isError = query.isError && items.length === 0;
+
+  const header = useMemo(
+    () => (
+      <RestaurantSearchBar
+        q={q}
+        category={category}
+        sort={sort}
+        total={total}
+        onChangeQ={handleChangeQ}
+        onChangeCategory={handleChangeCategory}
+        onChangeSort={handleChangeSort}
+      />
+    ),
+    [q, category, sort, total, handleChangeQ, handleChangeCategory, handleChangeSort],
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>맛집 ({items.length})</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       <FlatList
         data={items}
-        keyExtractor={(r) => r.placeId}
+        keyExtractor={(it) => it.placeId}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={header}
+        ItemSeparatorComponent={() => <View style={styles.sep} />}
         renderItem={({ item }) => (
-          <RestaurantRow
-            item={item}
-            onPress={() =>
-              // expo-router 의 type-safe path 는 .expo/types/router.d.ts 가 갱신돼야
-              // 인식됨. expo start 한 번 돌면 타입이 자동 보강되지만, 지금 typecheck
-              // 만 도는 환경을 위해 캐스트.
-              router.push(`/restaurant/${item.placeId}` as never)
-            }
-          />
+          <Pressable
+            onPress={() => handleSelect(item.placeId)}
+            android_ripple={{ color: theme.colors.surfaceAlt }}
+          >
+            <PublicRestaurantCard item={item} />
+          </Pressable>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>등록된 식당이 없습니다.</Text>}
-        contentContainerStyle={{ gap: 8, paddingBottom: 24 }}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl refreshing={query.isFetching && offset === 0} onRefresh={handleRefresh} />
+        }
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          isInitialLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator />
+            </View>
+          ) : isError ? (
+            <View style={styles.center}>
+              <Text style={{ color: theme.colors.danger }}>결과를 불러오지 못했습니다.</Text>
+            </View>
+          ) : (
+            <View style={styles.center}>
+              <Text style={{ color: theme.colors.textMuted }}>
+                조건에 맞는 식당이 없습니다.
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          hasMore && query.isFetching && offset > 0 ? (
+            <View style={styles.footer}>
+              <ActivityIndicator />
+            </View>
+          ) : !hasMore && items.length > 0 ? (
+            <Text style={[styles.endText, { color: theme.colors.textMuted }]}>
+              총 {total}곳
+            </Text>
+          ) : null
+        }
       />
     </View>
   );
 }
 
-const RestaurantRow = ({
-  item,
-  onPress,
-}: {
-  item: RestaurantListItemType;
-  onPress: () => void;
-}) => (
-  <Pressable onPress={onPress} style={styles.row}>
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text style={styles.name}>{item.name}</Text>
-      {item.category && <Text style={styles.category}>{item.category}</Text>}
-      <Text style={styles.meta}>
-        리뷰 {item.totalReviews} · 분석 {item.summaryDone}
-      </Text>
-    </View>
-  </Pressable>
-);
-
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 12 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, padding: 24 },
-  title: { fontSize: 22, fontWeight: '700' },
-  note: { color: '#64748b', textAlign: 'center' },
-  empty: { color: '#888', textAlign: 'center', marginTop: 40 },
-  row: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  name: { fontSize: 16, fontWeight: '600' },
-  category: { fontSize: 12, color: '#64748b' },
-  meta: { fontSize: 11, color: '#94a3b8' },
+  container: { flex: 1 },
+  list: { padding: 16 },
+  sep: { height: 8 },
+  center: { paddingVertical: 48, alignItems: 'center' },
+  footer: { paddingVertical: 16, alignItems: 'center' },
+  endText: { textAlign: 'center', fontSize: 12, paddingVertical: 16 },
 });
