@@ -10,7 +10,7 @@ import Point from 'ol/geom/Point';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { Style, Icon, Text as OlText, Fill, Stroke } from 'ol/style';
 import 'ol/ol.css';
-import { buildVworldTileUrl } from '~/lib/vworld';
+import { buildVworldTileUrl } from '@repo/utils';
 
 export interface MapMarker {
   id: string;

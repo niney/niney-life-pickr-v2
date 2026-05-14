@@ -18,7 +18,7 @@ import type {
   MapProviderIdType,
   UpdateMapProviderInputType,
 } from '@repo/api-contract';
-import { probeVworldKey } from '~/lib/vworld';
+import { probeVworldKey } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
