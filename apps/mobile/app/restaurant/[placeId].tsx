@@ -13,6 +13,10 @@ export default function RestaurantDetailScreen() {
     <>
       <Stack.Screen
         options={{
+          // 루트 Stack 의 screenOptions.headerShown=false 를 상세에서만 덮어쓴다.
+          // 명시적으로 켜지 않으면 부모가 cascade 로 적용돼 헤더가 안 뜸 → TabBar
+          // 가 노치를 침범. A안(네이티브 헤더 + sticky 탭바) 패턴 복원.
+          headerShown: true,
           title: name ?? '맛집 상세',
           headerBackTitle: '뒤로',
         }}
