@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRestaurantsPublic, useTheme } from '@repo/shared';
 import type {
   RestaurantPublicListItemType,
@@ -32,6 +33,7 @@ type ViewMode = 'list' | 'map';
 export default function RestaurantsScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string | null>(null);
@@ -140,7 +142,19 @@ export default function RestaurantsScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+    // 상단 헤더(Tabs) 숨김. list 모드는 검색바가 노치 밑에서 시작하도록
+    // paddingTop=insets.top; map 모드는 지도 타일이 edge-to-edge 가 자연
+    // (Naver/Kakao 지도 패턴). map 모드의 floating 버튼(재검색/전체 영역) 은
+    // WebMap 안에서 topInset 만큼 띄워 노치를 피한다.
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.colors.bg,
+          paddingTop: view === 'list' ? insets.top : 0,
+        },
+      ]}
+    >
       {view === 'list' ? (
         <FlatList
           data={items}
@@ -199,6 +213,7 @@ export default function RestaurantsScreen() {
           items={items}
           selectedPlaceId={null}
           appliedBbox={bbox}
+          topInset={insets.top}
           onSelectMarker={handleSelect}
           onResearchInArea={handleResearchInArea}
           onClearArea={handleClearArea}

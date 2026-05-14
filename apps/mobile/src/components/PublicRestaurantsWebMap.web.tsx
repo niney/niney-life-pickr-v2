@@ -22,6 +22,7 @@ interface Props {
   items: RestaurantPublicListItemType[];
   selectedPlaceId: string | null;
   appliedBbox: string | null;
+  topInset?: number;
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
@@ -39,6 +40,7 @@ export const PublicRestaurantsWebMap = ({
   items,
   selectedPlaceId,
   appliedBbox,
+  topInset = 0,
   onSelectMarker,
   onResearchInArea,
   onClearArea,
@@ -156,7 +158,9 @@ export const PublicRestaurantsWebMap = ({
       />
 
       {tileError && (
-        <View style={[styles.toast, { borderColor: theme.colors.danger }]}>
+        <View
+          style={[styles.toast, { top: 12 + topInset, borderColor: theme.colors.danger }]}
+        >
           <Text style={{ color: theme.colors.danger, fontSize: 12 }}>
             지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.
           </Text>
@@ -166,7 +170,10 @@ export const PublicRestaurantsWebMap = ({
       {showResearch && pendingBbox && (
         <Pressable
           onPress={handleResearchPress}
-          style={[styles.researchBtn, { backgroundColor: theme.colors.primary }]}
+          style={[
+            styles.researchBtn,
+            { top: 12 + topInset, backgroundColor: theme.colors.primary },
+          ]}
         >
           <Text style={[styles.researchBtnText, { color: theme.colors.primaryText }]}>
             이 지역에서 재검색
@@ -182,7 +189,11 @@ export const PublicRestaurantsWebMap = ({
           }}
           style={[
             styles.clearAreaBtn,
-            { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+            {
+              top: 12 + topInset,
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
           ]}
         >
           <Text style={[styles.clearAreaText, { color: theme.colors.text }]}>전체 영역</Text>
@@ -206,9 +217,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   placeholderText: { fontSize: 13, textAlign: 'center' },
+  // top 은 인라인으로 동적 주입 (12 + topInset).
   toast: {
     position: 'absolute',
-    top: 12,
     left: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -218,7 +229,6 @@ const styles = StyleSheet.create({
   },
   researchBtn: {
     position: 'absolute',
-    top: 12,
     alignSelf: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -227,7 +237,6 @@ const styles = StyleSheet.create({
   researchBtnText: { fontSize: 13, fontWeight: '600' },
   clearAreaBtn: {
     position: 'absolute',
-    top: 12,
     right: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
