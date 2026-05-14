@@ -52,10 +52,15 @@ export default function RestaurantsScreen() {
     offset,
   });
 
+  // 같은 offset 의 query.data 가 다시 들어와도 중복 placeId 가 안 쌓이도록 dedupe.
   useEffect(() => {
     const page = query.data?.items;
     if (!page) return;
-    setItems((prev) => (offset === 0 ? page : [...prev, ...page]));
+    setItems((prev) => {
+      if (offset === 0) return page;
+      const seen = new Set(prev.map((it) => it.placeId));
+      return [...prev, ...page.filter((it) => !seen.has(it.placeId))];
+    });
   }, [query.data, offset]);
 
   const total = query.data?.total ?? 0;

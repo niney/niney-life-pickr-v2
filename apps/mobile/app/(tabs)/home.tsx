@@ -42,10 +42,17 @@ export default function HomeScreen() {
   });
 
   // 페이지가 fetch 될 때마다 누적. offset===0 이면 새 토글 조합이므로 덮어쓰기.
+  // placeId 로 dedupe — 같은 offset 의 query.data 가 reference 만 갈리며 다시
+  // 들어오는 케이스(staleTime 만료 / placeholderData 갱신 / 포커스 refetch)에
+  // 같은 page 가 또 합쳐져 "duplicate key" 가 발생하던 버그 방어.
   useEffect(() => {
     const page = query.data?.items;
     if (!page) return;
-    setItems((prev) => (offset === 0 ? page : [...prev, ...page]));
+    setItems((prev) => {
+      if (offset === 0) return page;
+      const seen = new Set(prev.map((it) => it.placeId));
+      return [...prev, ...page.filter((it) => !seen.has(it.placeId))];
+    });
   }, [query.data, offset]);
 
   const total = query.data?.total ?? 0;
