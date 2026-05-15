@@ -51,6 +51,17 @@ export const Crawl = {
   // 캐치테이블 AI 가 만든 가게 리뷰 종합 (한 줄 + 3-4 문장).
   catchtableShopReviewOverview: (shopRef: string) =>
     `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}/review-overview`,
+  // 다이닝코드 자체 검색 API. /admin/diningcode-test 페이지가 어떤 데이터가
+  // 돌아오는지 검증할 때 사용. HTTP 직접 호출이라 Playwright 비용 없음.
+  diningcodeSearch: `${API_PREFIX}/admin/crawl/diningcode/search`,
+  // 다이닝코드 가게 상세 — POST /API/profile/ 한 방에 메뉴·사진·리뷰 첫 페이지·
+  // 블로그·평점 분포 모두 옴. 검색 카드의 "상세 보기" 가 이 경로 호출.
+  diningcodeShop: (vRid: string) =>
+    `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}`,
+  // 다이닝코드 리뷰 페이지네이션 — 같은 /API/profile/ 에 tab=review&page=N
+  // 으로 호출. 응답이 16섹션 모두 오지만 어댑터가 review 만 추려서 가볍게 반환.
+  diningcodeShopReviews: (vRid: string) =>
+    `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/reviews`,
 } as const;
 
 export const Restaurant = {

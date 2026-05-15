@@ -30,6 +30,7 @@ const NAV: NavItem[] = [
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
   { to: '/admin/crawl-test', label: '네이버 크롤링 테스트', icon: Beaker },
   { to: '/admin/catchtable-test', label: '캐치테이블 크롤링 테스트', icon: Beaker },
+  { to: '/admin/diningcode-test', label: '다이닝코드 크롤링 테스트', icon: Beaker },
   { to: '/admin/ai-test', label: 'AI 테스트', icon: Sparkles },
   { to: '/admin/settings', label: '설정', icon: Settings },
 ];

@@ -11,6 +11,10 @@ import {
   CrawlNaverPlaceInput,
   CrawlSearchQuery,
   CrawlSearchResult,
+  DiningcodeSearchQuery,
+  DiningcodeSearchResponse,
+  DiningcodeShopData,
+  DiningcodeShopReviewsResponse,
   Routes,
   StartCrawlResult,
   type CrawlEventType,
@@ -145,6 +149,54 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: CatchtableShopMenusResponse },
     },
     handler: async (req) => service.fetchCatchtableShopMenus(req.params.shopRef),
+  });
+
+  // GET — 다이닝코드 키워드 검색. 어드민 /diningcode-test 페이지에서 "이 키워드로
+  // 다이닝코드가 무엇을 돌려주는지" 검증하는 단발 동기 라우트. HTTP 직접 호출이라
+  // Playwright 비용 없음.
+  typed.get(Routes.Crawl.diningcodeSearch, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: DiningcodeSearchQuery,
+      response: { 200: DiningcodeSearchResponse },
+    },
+    handler: async (req) => service.searchDiningcode(req.query),
+  });
+
+  // GET — 다이닝코드 가게 상세. 검색 카드의 "상세 보기" 가 호출하는 단발 동기
+  // 라우트. POST /API/profile/ 한 방에 메뉴·사진·리뷰 첫 페이지·블로그·평점 분포
+  // 가 모두 옴 — 별도 lazy 호출 없이 단일 GET 으로 끝.
+  typed.get(Routes.Crawl.diningcodeShop(':vRid'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ vRid: z.string().min(1).max(80) }),
+      response: { 200: DiningcodeShopData },
+    },
+    handler: async (req) => service.fetchDiningcodeShopDetail(req.params.vRid),
+  });
+
+  // GET — 다이닝코드 리뷰 페이지네이션. 상세 페이지의 "더 보기" 클릭 시.
+  // ?page=N 으로 받아 review 섹션만 추려 가벼운 응답.
+  typed.get(Routes.Crawl.diningcodeShopReviews(':vRid'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ vRid: z.string().min(1).max(80) }),
+      querystring: z.object({
+        page: z.coerce.number().int().min(1).max(200).optional(),
+      }),
+      response: { 200: DiningcodeShopReviewsResponse },
+    },
+    handler: async (req) =>
+      service.fetchDiningcodeShopReviewsPage(
+        req.params.vRid,
+        req.query.page ?? 1,
+      ),
   });
 
   // GET — 캐치테이블 AI 리뷰 종합 (한 줄 + 3~4 문장). 등록 검증 화면 핵심 정보.

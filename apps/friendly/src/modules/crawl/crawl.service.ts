@@ -10,6 +10,10 @@ import type {
   CrawlNaverPlaceResultType,
   CrawlSearchResultType,
   CrawlStageType,
+  DiningcodeSearchQueryType,
+  DiningcodeSearchResponseType,
+  DiningcodeShopDataType,
+  DiningcodeShopReviewsResponseType,
   NaverPlaceDataType,
   StartCrawlResultType,
   VisitorReviewType,
@@ -23,6 +27,11 @@ import {
 } from './adapters/naver-place.playwright.adapter.js';
 import { searchPlacesViaMapNaver } from './adapters/naver-search.http.adapter.js';
 import { searchCatchtablePlaces } from './adapters/catchtable-search.playwright.adapter.js';
+import { searchDiningcodePlaces } from './adapters/diningcode-search.http.adapter.js';
+import {
+  fetchDiningcodeShop,
+  fetchDiningcodeShopReviews,
+} from './adapters/diningcode-shop.http.adapter.js';
 import {
   fetchCatchtableShop,
   fetchCatchtableShopMenus,
@@ -204,6 +213,38 @@ export class CrawlService {
       limit: query.limit,
       contractedOnly: query.contractedOnly,
     });
+  }
+
+  // 다이닝코드 키워드 검색 — 어드민 /diningcode-test 전용. CORS 가 열려있고
+  // CF 보호 없음이라 HTTP 직접 호출. lat/lng 한쪽만 있으면 어댑터가 무시.
+  async searchDiningcode(
+    query: DiningcodeSearchQueryType,
+  ): Promise<DiningcodeSearchResponseType> {
+    const hasCoord =
+      typeof query.lat === 'number' && typeof query.lng === 'number';
+    return searchDiningcodePlaces(query.q, {
+      from: query.from,
+      size: query.size,
+      order: query.order,
+      lat: hasCoord ? query.lat : undefined,
+      lng: hasCoord ? query.lng : undefined,
+      distance: hasCoord ? query.distance : undefined,
+    });
+  }
+
+  // 다이닝코드 가게 상세 — 검색 카드 "상세 보기" 진입. /API/profile/ 한 방에
+  // 메뉴·사진·리뷰 첫 페이지·블로그·평점 분포 모두 옴.
+  async fetchDiningcodeShopDetail(vRid: string): Promise<DiningcodeShopDataType> {
+    return fetchDiningcodeShop(vRid);
+  }
+
+  // 다이닝코드 리뷰 페이지네이션 — 상세 페이지에서 "더 보기" 클릭 시. 같은
+  // endpoint 호출이지만 review 섹션만 추려서 반환 (응답 자체는 16섹션 다 옴).
+  async fetchDiningcodeShopReviewsPage(
+    vRid: string,
+    page: number,
+  ): Promise<DiningcodeShopReviewsResponseType> {
+    return fetchDiningcodeShopReviews(vRid, page);
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시

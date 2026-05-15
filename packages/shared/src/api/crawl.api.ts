@@ -7,6 +7,9 @@ import {
   type CrawlJobListResultType,
   type CrawlModeType,
   type CrawlSearchResultType,
+  type DiningcodeSearchResponseType,
+  type DiningcodeShopDataType,
+  type DiningcodeShopReviewsResponseType,
   type StartCrawlResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -76,6 +79,49 @@ export const crawlApi = {
     apiFetch<CatchtableShopReviewOverviewResponseType>(
       Routes.Crawl.catchtableShopReviewOverview(shopRef),
     ),
+
+  // 다이닝코드 키워드 검색 — 어드민 /diningcode-test 페이지 전용. q 외엔 옵션.
+  diningcodeSearch: ({
+    q,
+    from,
+    size,
+    order,
+    lat,
+    lng,
+    distance,
+  }: {
+    q: string;
+    from?: number | null;
+    size?: number | null;
+    order?: 'r_score' | 'score' | 'review' | 'distance' | null;
+    lat?: number | null;
+    lng?: number | null;
+    distance?: number | null;
+  }) => {
+    const params = new URLSearchParams({ q });
+    if (from != null) params.set('from', String(from));
+    if (size != null) params.set('size', String(size));
+    if (order) params.set('order', order);
+    if (lat != null) params.set('lat', String(lat));
+    if (lng != null) params.set('lng', String(lng));
+    if (distance != null) params.set('distance', String(distance));
+    return apiFetch<DiningcodeSearchResponseType>(
+      `${Routes.Crawl.diningcodeSearch}?${params.toString()}`,
+    );
+  },
+
+  // 다이닝코드 가게 상세. vRid 만 받으면 메뉴·사진·리뷰 첫 페이지·블로그·평점
+  // 분포 모두 한 방에. UI 는 별도 lazy fetch 필요 없음.
+  diningcodeShop: (vRid: string) =>
+    apiFetch<DiningcodeShopDataType>(Routes.Crawl.diningcodeShop(vRid)),
+
+  // 다이닝코드 리뷰 페이지네이션. 상세 페이지의 "더 보기" 클릭 시.
+  diningcodeShopReviews: (vRid: string, page: number) => {
+    const params = new URLSearchParams({ page: String(page) });
+    return apiFetch<DiningcodeShopReviewsResponseType>(
+      `${Routes.Crawl.diningcodeShopReviews(vRid)}?${params.toString()}`,
+    );
+  },
 };
 
 // Build the SSE endpoint URL with the auth token in the query string. The

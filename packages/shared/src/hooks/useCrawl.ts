@@ -65,6 +65,59 @@ export const useCatchtableSearch = ({
     staleTime: 60_000,
   });
 
+// 다이닝코드 키워드 검색 — /admin/diningcode-test 페이지 전용. HTTP 직접 호출이라
+// 첫 호출도 ~수백 ms. staleTime 60s — 같은 키워드 재검색 시 즉시 표시.
+export interface UseDiningcodeSearchArgs {
+  q: string;
+  from?: number | null;
+  size?: number | null;
+  order?: 'r_score' | 'score' | 'review' | 'distance' | null;
+  lat?: number | null;
+  lng?: number | null;
+  distance?: number | null;
+}
+export const useDiningcodeSearch = ({
+  q,
+  from = null,
+  size = null,
+  order = null,
+  lat = null,
+  lng = null,
+  distance = null,
+}: UseDiningcodeSearchArgs) =>
+  useQuery({
+    queryKey: ['crawl', 'diningcode-search', q, from, size, order, lat, lng, distance],
+    queryFn: () =>
+      crawlApi.diningcodeSearch({ q, from, size, order, lat, lng, distance }),
+    enabled: q.trim().length > 0,
+    staleTime: 60_000,
+  });
+
+// 다이닝코드 가게 상세 — vRid null/undefined 면 disabled. /API/profile/ 한 방에
+// 메뉴·사진·리뷰·블로그 모두 옴. 5분 staleTime (검증 도구).
+export const useDiningcodeShop = (vRid: string | null) =>
+  useQuery({
+    queryKey: ['crawl', 'diningcode-shop', vRid],
+    queryFn: () => crawlApi.diningcodeShop(vRid!),
+    enabled: Boolean(vRid),
+    staleTime: 5 * 60_000,
+  });
+
+// 다이닝코드 리뷰 페이지네이션. 페이지 단위 lazy fetch — 같은 page 재진입은
+// 캐시 hit. 본 디테일 응답의 reviewsFirstPage 와 별개 query key 라 호출자가
+// page=1 호출하면 (이미 본 페이지일 수 있어도) 추가 wire 호출 발생.
+export const useDiningcodeShopReviews = (
+  vRid: string | null,
+  page: number,
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['crawl', 'diningcode-shop-reviews', vRid, page],
+    queryFn: () => crawlApi.diningcodeShopReviews(vRid!, page),
+    enabled: Boolean(vRid) && enabled,
+    staleTime: 5 * 60_000,
+  });
+
 // 캐치테이블 가게 상세 — shopRef 가 null/undefined 면 disabled. 한 가게당
 // 한 번 가져오면 staleTime 5분 유지 (검증 도구라 자주 invalidate 안 함).
 export const useCatchtableShop = (shopRef: string | null) =>

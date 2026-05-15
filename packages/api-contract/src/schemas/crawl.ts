@@ -529,3 +529,348 @@ export const CatchtableShopData = z.object({
   source: z.literal('playwright'),
 });
 export type CatchtableShopDataType = z.infer<typeof CatchtableShopData>;
+
+// ── 다이닝코드 키워드 검색 (어드민 /diningcode-test 페이지) ──────────────────
+// 다이닝코드 자체 검색 API(`POST /API/isearch/`) 응답을 정규화. CORS 가 열려
+// 있고 CF 보호 없음이라 Playwright 불필요 — 네이버 nx-api 와 동일한 HTTP 어댑터.
+// `query` 만 있어도 동작하고, lat/lng 박으면 "내주변" 모드로 자동 전환.
+
+export const DiningcodeKeywordTag = z.object({
+  // 메뉴/특성 키워드 (예: "백년가게", "테라스"). mark 1 이면 검색어 매칭 강조.
+  term: z.string(),
+  mark: z.number().int(),
+});
+
+export const DiningcodeDisplayReview = z.object({
+  user_nm: z.string().nullable(),
+  review_cont: z.string().nullable(),
+  review_reg_dt: z.string().nullable(),
+});
+
+export const DiningcodeSearchResult = z.object({
+  // 다이닝코드 placeId. profile.php?rid=<vRid> 진입의 그 rid.
+  vRid: z.string(),
+  name: z.string(),
+  branch: z.string().nullable(),
+  category: z.string().nullable(),
+  address: z.string().nullable(),
+  roadAddress: z.string().nullable(),
+  // 행정동 등 다중 영역 (예: ["은행동", "중구"]).
+  areas: z.array(z.string()),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  phone: z.string().nullable(),
+  // 다이닝코드 자체 점수 (0~100, 빅데이터 기반 랭킹).
+  score: z.number().int().nullable(),
+  // 사용자 평균 평점 (1~5).
+  userScore: z.number().nullable(),
+  reviewCount: z.number().int(),
+  thumbnailUrl: z.string().url().nullable(),
+  imageUrls: z.array(z.string().url()),
+  // "영업 중" / "영업 종료" 등 응답 그대로. UI 매핑 책임은 호출자.
+  openStatus: z.string().nullable(),
+  // nx-api 의 distance 와 비슷한 포맷 문자열 — 좌표 검색 시에만 채워짐.
+  distance: z.string().nullable(),
+  keywords: z.array(DiningcodeKeywordTag),
+  displayReview: DiningcodeDisplayReview.nullable(),
+  // /profile.php?rid=<vRid> — 어드민이 새 탭으로 다이닝코드 상세를 여는 용도.
+  rawSourceUrl: z.string().url(),
+});
+export type DiningcodeSearchResultType = z.infer<typeof DiningcodeSearchResult>;
+
+// 다이닝코드는 `data` querystring 으로 from/size 를 JSON 인코딩해 받지만
+// 어댑터가 그 변환을 흡수하고, 호출자는 평탄한 파라미터만 본다.
+export const DiningcodeSearchQuery = z.object({
+  q: z.string().min(1).max(100),
+  // 0-based offset (다이닝코드 API 의 `from`).
+  from: z.coerce.number().int().min(0).max(10000).optional(),
+  // 1~30. 기본 20. (서버에서 더 큰 값도 받지만 검증 도구로 충분).
+  size: z.coerce.number().int().min(1).max(30).optional(),
+  // 정렬 — 미지정 시 다이닝코드 기본 랭킹(r_score). UI 셀렉트의 값을 그대로.
+  order: z.enum(['r_score', 'score', 'review', 'distance']).optional(),
+  // 좌표 박으면 검색 모드가 "내주변" 으로 전환되고, 응답의 region 이
+  // "내주변" 으로 표시된다. lat/lng 둘 다 있어야 의미 있음 — 한쪽만 들어오면
+  // 어댑터가 무시.
+  lat: z.coerce.number().optional(),
+  lng: z.coerce.number().optional(),
+  // 반경(m). 좌표 동반 시에만 의미. 미지정 시 다이닝코드 기본 500.
+  distance: z.coerce.number().int().min(50).max(20000).optional(),
+});
+export type DiningcodeSearchQueryType = z.infer<typeof DiningcodeSearchQuery>;
+
+// 응답에 같이 실리는 다이닝코드 특유의 메타. 어드민 검증 페이지가 별도
+// 패널로 노출해 "이 영역에서 다이닝코드가 어떤 키워드를 인기로 보는지" 등을
+// 한눈에 확인할 수 있게 한다. 모두 nullable — 좌표/지역 시그널이 없을 때 비어옴.
+export const DiningcodeSearchMeta = z.object({
+  // 응답이 인식한 검색 영역 — "강남" / "내주변" 등.
+  region: z.string().nullable(),
+  // 자동 추론된 영역명 (region 과 살짝 다른 키, 응답에 둘 다 있을 때 별도 노출).
+  regionName: z.string().nullable(),
+  // 다이닝코드가 매긴 실제 매칭 수. total 은 10000 캡이 걸려있어 비교 부정확,
+  // 진짜 매칭 카운트는 rcount.
+  rcount: z.number().int().nullable(),
+  // 적용된 정렬 — 서버가 정규화해 돌려준 값. 호출자가 보낸 order 와 다를 수 있음.
+  order: z.string().nullable(),
+  // "ranking_search" 등.
+  searchType: z.string().nullable(),
+  // 응답이 추천하는 대체 검색어 (오타·유사어 보정).
+  altQueries: z.array(z.string()),
+  // "강남" 검색 시 가는 동·역 이름들.
+  relatedRegions: z.array(z.string()),
+  // 이 영역/키워드의 연관 검색어.
+  relatedKeywords: z.array(z.string()),
+  // 이 지역의 인기 메뉴/카테고리 키워드.
+  regionMainKeywords: z.array(z.string()),
+});
+export type DiningcodeSearchMetaType = z.infer<typeof DiningcodeSearchMeta>;
+
+export const DiningcodeSearchResponse = z.object({
+  items: z.array(DiningcodeSearchResult),
+  // total 은 10000 캡 — 정확한 매칭 수는 meta.rcount.
+  total: z.number().int(),
+  // 적용된 from/size 를 그대로 돌려줌 (서버 echo).
+  from: z.number().int(),
+  size: z.number().int(),
+  // hasMore 는 from+size < total 이면서 응답 items 가 비지 않은 경우 true.
+  hasMore: z.boolean(),
+  meta: DiningcodeSearchMeta,
+  source: z.literal('http'),
+  elapsedMs: z.number().int(),
+  // 좌표+반경 동반 시 어댑터가 클라이언트 측 후필터링으로 잘라낸 항목 수.
+  // > 0 이면 다이닝코드 API 가 반경 밖 결과를 끼워보냈다는 신호 — UI 가
+  // "키워드 매칭이 반경 안에 없어 광역 결과를 숨겼습니다" 안내를 띄울 수 있다.
+  filteredOutCount: z.number().int(),
+});
+export type DiningcodeSearchResponseType = z.infer<typeof DiningcodeSearchResponse>;
+
+// ── 다이닝코드 가게 상세 (어드민 /diningcode-test/:vRid) ────────────────────
+// POST /API/profile/ 한 방에 가게 기본·메뉴·사진·리뷰(첫 페이지)·블로그·평점
+// 분포 + 워드클라우드 등이 모두 옴. 같은 endpoint 를 tab=review&page=N 으로
+// 다시 호출해 리뷰 페이지를 따로 받을 수 있어, 페이지 단위 lazy 호출은
+// DiningcodeShopReviewsResponse 로 분리한다.
+
+export const DiningcodeShopImage = z.object({
+  pdId: z.string().nullable(),
+  origin: z.string().url(),
+  thumb: z.string().url(),
+  middle: z.string().url(),
+  // 사용자 사진(photo 섹션)에만 채워짐. restaurant.images.list 는 익명 표시 이미지.
+  uploaderName: z.string().nullable(),
+  uploaderProfileImg: z.string().url().nullable(),
+  // "2일 전" 같은 다이닝코드 자체 포맷. 정규 datetime 아님.
+  date: z.string().nullable(),
+  // "user" / "owner" 등.
+  type: z.string().nullable(),
+});
+
+export const DiningcodeShopReviewImage = z.object({
+  pdId: z.string().nullable(),
+  // "PHOTO" / "VIDEO" 등 응답 그대로.
+  type: z.string(),
+  origin: z.string().url(),
+  thumb: z.string().url(),
+  middle: z.string().url(),
+});
+
+// 리뷰 단건. 다이닝코드는 점수 5개 카테고리 — 종합은 정수(1~5), 세부는 문자열
+// 라벨("좋음"/"보통"/"나쁨"). UI 매핑은 호출자 책임.
+export const DiningcodeShopReview = z.object({
+  rvId: z.string(),
+  vRvid: z.string(),
+  vUid: z.string(),
+  userName: z.string().nullable(),
+  userProfileImg: z.string().url().nullable(),
+  // "NORMAL_TASTER" 등 코드. dc_level.title 은 빈 string 빈번 — text 와 별개.
+  userLevelCode: z.string().nullable(),
+  // "5월 2일" / "13일 전" 등 다이닝코드 포맷.
+  reviewDt: z.string(),
+  totalScore: z.number().int().nullable(),
+  // 세부 점수는 라벨 텍스트("좋음" 등) — 응답 정수 아님.
+  tasteScore: z.string().nullable(),
+  serviceScore: z.string().nullable(),
+  priceScore: z.string().nullable(),
+  cleanScore: z.string().nullable(),
+  content: z.string().nullable(),
+  keywords: z.array(z.string()),
+  images: z.array(DiningcodeShopReviewImage),
+  // 리뷰어가 주문한 메뉴들.
+  orderMenu: z.array(z.string()),
+  // 사장 답글. 없으면 null.
+  replyComment: z.string().nullable(),
+  replyDt: z.string().nullable(),
+  replyPartner: z.string().nullable(),
+  favoritesCount: z.number().int(),
+});
+export type DiningcodeShopReviewType = z.infer<typeof DiningcodeShopReview>;
+
+export const DiningcodeShopReviewsSection = z.object({
+  page: z.number().int(),
+  totalCount: z.number().int(),
+  totalPage: z.number().int(),
+  list: z.array(DiningcodeShopReview),
+});
+export type DiningcodeShopReviewsSectionType = z.infer<typeof DiningcodeShopReviewsSection>;
+
+export const DiningcodeShopMenu = z.object({
+  name: z.string(),
+  price: z.string().nullable(),
+  description: z.string().nullable(),
+  rank: z.number().int(),
+  // 인기 메뉴 플래그 (best 1 → true).
+  best: z.boolean(),
+  selectionCount: z.number().int(),
+  selectionRate: z.number().int(),
+  reviewCount: z.number().int(),
+  commentCount: z.number().int(),
+});
+
+export const DiningcodeShopBlog = z.object({
+  pId: z.string(),
+  title: z.string(),
+  // 다이닝코드가 https 미접두 URL 을 그대로 박아 보내는 경우가 있어 nullable 처리.
+  url: z.string(),
+  // 본문 발췌 (다이닝코드가 잘라서 보내는 길이).
+  contents: z.string().nullable(),
+  nickname: z.string().nullable(),
+  // 빈 string 빈번 — 어댑터가 빈 string 을 null 로 정규화한다.
+  image: z.string().nullable(),
+  // "naver" / "tistory" 등.
+  site: z.string().nullable(),
+  // "11시간 전" 등.
+  date: z.string().nullable(),
+});
+
+export const DiningcodeShopBlogsSection = z.object({
+  page: z.number().int(),
+  totalPage: z.number().int(),
+  list: z.array(DiningcodeShopBlog),
+});
+
+// detail.bhour / bhour_seo 의 한 항목. bhour 는 7일치 (오늘 포함), bhour_seo 는
+// 요약("매일 08:00-22:00" 한 줄).
+export const DiningcodeShopBusinessHour = z.object({
+  duration: z.string(),
+  time: z.string(),
+  today: z.boolean(),
+});
+
+export const DiningcodeShopStatus = z.object({
+  // "영업 중" / "영업 종료" / "휴무" 등.
+  isOpen: z.string().nullable(),
+  color: z.string().nullable(),
+  // "영업시간: 08:00 - 22:00" 등.
+  time: z.string().nullable(),
+});
+
+// 평점 분포 한 카테고리 (taste/service/price/clean) — good/normal/bad 3가지 비율.
+export const DiningcodeShopScoreSlice = z.object({
+  text: z.string().nullable(),
+  percent: z.number().int(),
+});
+
+export const DiningcodeShopScoreBucket = z.object({
+  average: z.number().nullable(),
+  good: DiningcodeShopScoreSlice,
+  normal: DiningcodeShopScoreSlice,
+  bad: DiningcodeShopScoreSlice,
+});
+
+export const DiningcodeShopScore = z.object({
+  average: z.number().nullable(),
+  total: z.number().int(),
+  reviewTotal: z.number().int(),
+  taste: z.number().nullable(),
+  service: z.number().nullable(),
+  price: z.number().nullable(),
+  clean: z.number().nullable(),
+  // 별점 분포 (5/4.5/4/3.5/3/2/1). 다이닝코드가 string 으로 주는 카운트.
+  distribution: z.object({
+    s5: z.number().int(),
+    s4_5: z.number().int(),
+    s4: z.number().int(),
+    s3_5: z.number().int(),
+    s3: z.number().int(),
+    s2: z.number().int(),
+    s1: z.number().int(),
+  }),
+  tasteInfo: DiningcodeShopScoreBucket.nullable(),
+  priceInfo: DiningcodeShopScoreBucket.nullable(),
+  serviceInfo: DiningcodeShopScoreBucket.nullable(),
+  cleanInfo: DiningcodeShopScoreBucket.nullable(),
+  // "이 음식점의 평가결과는 신뢰할 수 있을 만큼 이루어졌습니다." 등 안내.
+  text: z.string().nullable(),
+});
+
+export const DiningcodeShopData = z.object({
+  vRid: z.string(),
+  // rn (가게 본 이름)
+  name: z.string(),
+  // "본점" 등 branch — 없는 가게 다수.
+  branch: z.string().nullable(),
+  // "성심당 본점" — rn + branch 결합 응답 그대로.
+  fullName: z.string(),
+  // "은행동" 등 행정동 1개. (검색 결과의 area[]와 달리 단일 string.)
+  area: z.string().nullable(),
+  categories: z.array(z.string()),
+  // 특징 키워드 ("시끌벅적한", "저렴" 등).
+  descTags: z.array(z.string()),
+  // 다이닝코드 0~100.
+  score: z.number().int().nullable(),
+
+  address: z.string().nullable(),
+  roadAddress: z.string().nullable(),
+  phone: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+
+  thumbnailUrl: z.string().url().nullable(),
+  // restaurant.images.list — 가게 대표 사진들 (anonymous, photo 섹션과 별개).
+  images: z.array(DiningcodeShopImage),
+  // photo.list — 사용자 사진 12장 (date, uploaderName 풍부).
+  photos: z.array(DiningcodeShopImage),
+
+  // detail.tag — "백년가게" 등 인증/특징.
+  tags: z.array(z.string()),
+  // detail.facility — "테라스", "주차" 등.
+  facilities: z.array(z.string()),
+  status: DiningcodeShopStatus.nullable(),
+  // 7일치 영업시간.
+  businessHours: z.array(DiningcodeShopBusinessHour),
+  // bhour_seo — "매일 08:00-22:00" 한 줄 요약(들).
+  businessHoursSummary: z.array(DiningcodeShopBusinessHour),
+
+  menus: z.array(DiningcodeShopMenu),
+  menuTotalCount: z.number().int(),
+  hasPopularMenu: z.boolean(),
+
+  scoreDetail: DiningcodeShopScore.nullable(),
+
+  // 응답 첫 페이지 리뷰. 페이지네이션은 별도 endpoint(/reviews?page=N) 사용.
+  reviewsFirstPage: DiningcodeShopReviewsSection,
+  // 응답 첫 페이지 블로그. blog 도 페이지네이션 가능하지만 1차 스코프에선 첫 페이지만.
+  blogsFirstPage: DiningcodeShopBlogsSection,
+
+  // 워드클라우드 이미지 — tag.word (PC 사이즈 기본). word_w/word_m 은 wide/mobile 변형.
+  wordcloudUrl: z.string().url().nullable(),
+  wordcloudUrlMobile: z.string().url().nullable(),
+
+  // /profile.php?rid=<vRid> — 어드민이 새 탭으로 다이닝코드 원본을 열 때 쓰는 URL.
+  rawSourceUrl: z.string().url(),
+  fetchedAt: z.string(),
+  elapsedMs: z.number().int(),
+  source: z.literal('http'),
+});
+export type DiningcodeShopDataType = z.infer<typeof DiningcodeShopData>;
+
+// 리뷰 페이지네이션 응답 — 가게 메타 없이 리뷰 한 페이지만. 호출이 가볍게
+// 끝나도록 reviewsFirstPage 의 shape 만 그대로 + vRid 식별자.
+export const DiningcodeShopReviewsResponse = z.object({
+  vRid: z.string(),
+  page: z.number().int(),
+  totalCount: z.number().int(),
+  totalPage: z.number().int(),
+  list: z.array(DiningcodeShopReview),
+  source: z.literal('http'),
+  elapsedMs: z.number().int(),
+});
+export type DiningcodeShopReviewsResponseType = z.infer<typeof DiningcodeShopReviewsResponse>;
