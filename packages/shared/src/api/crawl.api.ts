@@ -10,6 +10,7 @@ import {
   type DiningcodeSearchResponseType,
   type DiningcodeShopDataType,
   type DiningcodeShopReviewsResponseType,
+  type SaveDiningcodeShopResultType,
   type StartCrawlResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -122,6 +123,13 @@ export const crawlApi = {
       `${Routes.Crawl.diningcodeShopReviews(vRid)}?${params.toString()}`,
     );
   },
+
+  // 다이닝코드 가게를 DB 에 저장 (+ 모든 리뷰 페이지 끌어와 persist + AI 분석 큐잉).
+  // 응답은 동기. 평균 가게당 수 초. AI 분석은 백그라운드.
+  diningcodeShopSave: (vRid: string) =>
+    apiFetch<SaveDiningcodeShopResultType>(Routes.Crawl.diningcodeShopSave(vRid), {
+      method: 'POST',
+    }),
 };
 
 // Build the SSE endpoint URL with the auth token in the query string. The

@@ -611,7 +611,10 @@ export class AnalyticsService {
         negative += stat.negative;
         neutral += stat.neutral;
         if (stat.total > 0) {
+          // 다이닝코드 행은 placeId 가 null — 1차 스코프상 어드민 analytics 는 네이버
+          // 전용. 스키마 응답은 placeId: z.string() 이라 그대로 두면 직렬화 실패.
           const placeId = mc.restaurant.placeId;
+          if (placeId === null) continue;
           const cur = byPlace.get(placeId);
           if (cur) {
             cur.mentionCount += stat.total;
@@ -705,7 +708,9 @@ export class AnalyticsService {
         cur.negative += stat.negative;
         cur.neutral += stat.neutral;
         if (stat.total > 0) {
+          // 다이닝코드 행은 placeId 가 null — analytics 는 네이버 전용 스코프.
           const placeId = t.restaurant.placeId;
+          if (placeId === null) continue;
           const existing = cur.byPlace.get(placeId);
           if (existing) {
             existing.mentionCount += stat.total;

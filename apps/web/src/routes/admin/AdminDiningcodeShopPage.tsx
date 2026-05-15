@@ -3,10 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
   Code2,
+  Database,
   ExternalLink,
   Loader2,
   MapPin,
@@ -17,6 +19,7 @@ import {
 import {
   useDiningcodeShop,
   useDiningcodeShopReviews,
+  useSaveDiningcodeShop,
 } from '@repo/shared';
 import type {
   DiningcodeShopDataType,
@@ -585,17 +588,55 @@ const RawJson = ({ data }: { data: DiningcodeShopDataType }) => {
 export const AdminDiningcodeShopPage = () => {
   const { vRid } = useParams<{ vRid: string }>();
   const { data, isLoading, isError, error } = useDiningcodeShop(vRid ?? null);
+  const save = useSaveDiningcodeShop();
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
           <Link to="/admin/diningcode-test">
             <ArrowLeft className="size-4" />
             검색으로 돌아가기
           </Link>
         </Button>
+        {data && (
+          <Button
+            size="sm"
+            onClick={() => save.mutate(data.vRid)}
+            disabled={save.isPending}
+          >
+            {save.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Database className="size-4" />
+            )}
+            {save.isPending ? '저장 중…' : 'DB 에 저장 + AI 분석'}
+          </Button>
+        )}
       </div>
+
+      {save.isSuccess && save.data && (
+        <Card className="mb-4 border-emerald-500/50">
+          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 p-4 pt-4 text-sm sm:p-6 sm:pt-6">
+            <CheckCircle2 className="size-4 text-emerald-500" />
+            <span className="font-medium">저장 완료</span>
+            <span className="text-muted-foreground">
+              restaurant {save.data.restaurantId.slice(0, 8)}… ·
+              {' '}리뷰 {save.data.fetchedPages}p / 신규 {save.data.newReviewCount}건 ·
+              {' '}AI 큐 {save.data.queuedForAnalysis}건 ·
+              {' '}{save.data.elapsedMs}ms
+            </span>
+          </CardContent>
+        </Card>
+      )}
+      {save.isError && (
+        <Card className="mb-4 border-destructive/50">
+          <CardContent className="flex items-center gap-2 p-4 pt-4 text-sm text-destructive sm:p-6 sm:pt-6">
+            <AlertCircle className="size-4" />
+            저장 실패: {(save.error as Error).message}
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading && (
         <Card>

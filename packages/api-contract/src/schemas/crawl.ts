@@ -874,3 +874,21 @@ export const DiningcodeShopReviewsResponse = z.object({
   elapsedMs: z.number().int(),
 });
 export type DiningcodeShopReviewsResponseType = z.infer<typeof DiningcodeShopReviewsResponse>;
+
+// 다이닝코드 가게를 DB 에 저장(+AI 분석 큐잉) 결과. POST /API/crawl/diningcode/:vRid/save.
+// 라우트는 모든 페이지의 리뷰를 끌어와 persistReviewBatch 후 SummaryService 큐에 태운다.
+export const SaveDiningcodeShopResult = z.object({
+  vRid: z.string(),
+  // Restaurant.id (cuid).
+  restaurantId: z.string(),
+  // 끌어온 총 리뷰 페이지 수 (첫 페이지 포함).
+  fetchedPages: z.number().int(),
+  // 응답의 total — 다이닝코드가 보고한 리뷰 총수.
+  totalReviewsReported: z.number().int(),
+  // persistReviewBatch 결과 신규 저장된 리뷰 개수 (dedup 후).
+  newReviewCount: z.number().int(),
+  // queueSummariesForReviews 에 태운 reviewId 개수 (= newReviewCount).
+  queuedForAnalysis: z.number().int(),
+  elapsedMs: z.number().int(),
+});
+export type SaveDiningcodeShopResultType = z.infer<typeof SaveDiningcodeShopResult>;

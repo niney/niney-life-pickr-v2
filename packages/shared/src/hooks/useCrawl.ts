@@ -118,6 +118,14 @@ export const useDiningcodeShopReviews = (
     staleTime: 5 * 60_000,
   });
 
+// 다이닝코드 가게 DB 저장 + AI 분석 큐잉 mutation. 어드민 상세 페이지의
+// "DB 에 저장" 버튼이 호출. 응답은 동기 (모든 리뷰 페이지 fetch 후 200) —
+// 평균 가게당 수 초.
+export const useSaveDiningcodeShop = () =>
+  useMutation({
+    mutationFn: (vRid: string) => crawlApi.diningcodeShopSave(vRid),
+  });
+
 // 캐치테이블 가게 상세 — shopRef 가 null/undefined 면 disabled. 한 가게당
 // 한 번 가져오면 staleTime 5분 유지 (검증 도구라 자주 invalidate 안 함).
 export const useCatchtableShop = (shopRef: string | null) =>

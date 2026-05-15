@@ -15,6 +15,7 @@ import type {
   DiningcodeShopDataType,
   DiningcodeShopReviewsResponseType,
   NaverPlaceDataType,
+  SaveDiningcodeShopResultType,
   StartCrawlResultType,
   VisitorReviewType,
 } from '@repo/api-contract';
@@ -43,7 +44,7 @@ import {
   RedirectFailedError,
   UnsupportedUrlError,
 } from './url-normalizer.js';
-import type { RestaurantService } from '../restaurant/restaurant.service.js';
+import { RestaurantService } from '../restaurant/restaurant.service.js';
 import type { SummaryService } from '../summary/summary.service.js';
 
 const CACHE_TTL_MS = 30_000;
@@ -245,6 +246,60 @@ export class CrawlService {
     page: number,
   ): Promise<DiningcodeShopReviewsResponseType> {
     return fetchDiningcodeShopReviews(vRid, page);
+  }
+
+  // 다이닝코드 가게 + 모든 리뷰 페이지를 DB 에 저장하고 AI 분석 큐에 태운다.
+  // 비용 분포: profile 호출 1회 + 리뷰 페이지 (totalPage - 1) 회. 한 가게당 보통
+  // 1~5 페이지. 페이지 간 200ms 간격으로 다이닝코드에 부담 안 주게 직렬화.
+  //
+  // restaurantId 는 (source='diningcode', sourceId=vRid) upsert 결과. 신규 리뷰만
+  // 다시 AI 분석 큐에 들어가서 재호출 시 idempotent.
+  async saveDiningcodeShop(vRid: string): Promise<SaveDiningcodeShopResultType> {
+    const startedAt = Date.now();
+    const detail = await fetchDiningcodeShop(vRid);
+
+    // 첫 페이지는 detail.reviewsFirstPage 에 이미 들어있다. 2페이지부터 끝까지 추가
+    // fetch. totalPage 가 0/1 이면 추가 fetch 없이 첫 페이지만 사용.
+    const allReviews: DiningcodeShopDataType['reviewsFirstPage']['list'] = [
+      ...detail.reviewsFirstPage.list,
+    ];
+    let fetchedPages = 1;
+    const totalPage = detail.reviewsFirstPage.totalPage;
+    for (let page = 2; page <= totalPage; page += 1) {
+      // 다이닝코드 부담 줄이려 페이지 간 200ms 간격. 어드민 작업이라 동기 응답은 받지만
+      // 평균적으로 가게당 수 초 이내 끝난다.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const pageResp = await fetchDiningcodeShopReviews(vRid, page);
+      allReviews.push(...pageResp.list);
+      fetchedPages += 1;
+    }
+
+    const { id: restaurantId } =
+      await this.restaurants.upsertRestaurantFromDiningcode(detail);
+
+    const raw = allReviews.map((rv) =>
+      RestaurantService.mapDiningcodeReviewToRaw(rv),
+    );
+    const { newReviews } = await this.restaurants.persistReviewBatch(restaurantId, raw);
+
+    if (newReviews.length > 0) {
+      // 다이닝코드 체인 키는 'dc:<vRid>' — 네이버 placeId 와 충돌 안 나게. 내부 run()
+      // 은 reviewId 로만 조회하므로 키 형태는 자유.
+      this.summaries.queueSummariesForReviews(
+        `dc:${vRid}`,
+        newReviews.map((r) => r.id),
+      );
+    }
+
+    return {
+      vRid,
+      restaurantId,
+      fetchedPages,
+      totalReviewsReported: detail.reviewsFirstPage.totalCount,
+      newReviewCount: newReviews.length,
+      queuedForAnalysis: newReviews.length,
+      elapsedMs: Date.now() - startedAt,
+    };
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시

@@ -507,6 +507,8 @@ export class MenuGroupingService {
     // 식당 + 그 통계 한 방에. SQLite + 단일 인스턴스라 N+1 가 부담이라
     // groupBy 로 묶는다. 단일 식당 수가 수백~수천 단위 범위라 OK.
     const restaurants = await this.prisma.restaurant.findMany({
+      // 메뉴 그루핑 어드민 화면은 네이버 전용 (placeId 가 응답 키).
+      where: { source: 'naver' },
       select: {
         id: true,
         placeId: true,
@@ -582,7 +584,8 @@ export class MenuGroupingService {
       const mapped = mappedByRest.get(r.id) ?? 0;
       const last = lastByRest.get(r.id);
       return {
-        placeId: r.placeId,
+        // source='naver' 필터로 placeId non-null.
+        placeId: r.placeId!,
         name: r.name,
         category: r.category,
         totalReviews: r._count.visitorReviews,

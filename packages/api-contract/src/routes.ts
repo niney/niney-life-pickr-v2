@@ -62,6 +62,10 @@ export const Crawl = {
   // 으로 호출. 응답이 16섹션 모두 오지만 어댑터가 review 만 추려서 가볍게 반환.
   diningcodeShopReviews: (vRid: string) =>
     `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/reviews`,
+  // 다이닝코드 가게를 DB 에 저장(+모든 리뷰 페이지 끌어와 persist + AI 분석 큐잉).
+  // POST. 어드민 상세 페이지의 "DB 에 저장" 버튼이 호출.
+  diningcodeShopSave: (vRid: string) =>
+    `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/save`,
 } as const;
 
 export const Restaurant = {

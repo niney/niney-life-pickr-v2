@@ -87,7 +87,12 @@ model LlmProviderConfig {
 
 model Restaurant {
   id             String   @id @default(cuid())
-  placeId        String   @unique
+  // 외부 소스 식별자. source='naver'면 placeId 와 같은 값이 sourceId 에도 들어가고,
+  // diningcode/catchtable 은 placeId 가 null. 공개 /restaurants/:placeId 라우트 호환을
+  // 깨지 않으려 placeId 는 nullable 컬럼으로 남겨두되 신규 소스에서는 채우지 않는다.
+  source         String   @default("naver")
+  sourceId       String
+  placeId        String?  @unique
   name           String
   category       String?
   address        String?
@@ -102,6 +107,8 @@ model Restaurant {
   visitorReviews VisitorReview[]
   menuCanonicals MenuCanonical[]
 
+  @@unique([source, sourceId])
+  @@index([source])
   @@map("restaurants")
 }
 

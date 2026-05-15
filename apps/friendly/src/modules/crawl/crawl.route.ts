@@ -15,6 +15,7 @@ import {
   DiningcodeSearchResponse,
   DiningcodeShopData,
   DiningcodeShopReviewsResponse,
+  SaveDiningcodeShopResult,
   Routes,
   StartCrawlResult,
   type CrawlEventType,
@@ -197,6 +198,20 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
         req.params.vRid,
         req.query.page ?? 1,
       ),
+  });
+
+  // POST — 다이닝코드 가게를 DB 에 저장 + 모든 리뷰 페이지 끌어와 persist +
+  // AI 분석 큐잉. 응답은 동기 — 페이지 fetch 가 끝나야 200 떨어진다. 평균 가게당
+  // 수 초. AI 분석은 백그라운드.
+  typed.post(Routes.Crawl.diningcodeShopSave(':vRid'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ vRid: z.string().min(1).max(80) }),
+      response: { 200: SaveDiningcodeShopResult },
+    },
+    handler: async (req) => service.saveDiningcodeShop(req.params.vRid),
   });
 
   // GET — 캐치테이블 AI 리뷰 종합 (한 줄 + 3~4 문장). 등록 검증 화면 핵심 정보.
