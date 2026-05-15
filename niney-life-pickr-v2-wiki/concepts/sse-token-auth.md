@@ -1,6 +1,6 @@
 ---
 concept: SSE의 ?token= 쿼리 인증 + 로거 리덕션
-last_compiled: 2026-05-09
+last_compiled: 2026-05-15
 topics_connected: [friendly, crawl, shared, web, menu-grouping, analytics]
 status: active
 ---
@@ -20,6 +20,7 @@ status: active
 - **2026-05-07** in [[../topics/friendly]] (`restaurant.route.ts` 멀티플렉싱 `summaryEvents`): 같은 패턴이 새 다중 placeId SSE 엔드포인트에도 그대로 — `?placeId=A&placeId=B&...&token=<jwt>` 형태로 토큰 + 다중 구독 placeId가 한 쿼리에 실린다. 클라의 `buildSummaryEventsUrl(placeIds: string[])`이 같은 정규식이 redact 가능한 형태로 URL을 만든다.
 - **2026-05-09** in [[../topics/menu-grouping]] (`menu-grouping.route.ts` `Routes.Analytics.groupingJobEvents(jobId)`): batch 메뉴 그룹핑 잡 진행 SSE. 동일 패턴 — `await req.jwtVerify()` 시도 → 실패 시 `query.token` 으로 fallback → `app.jwt.verify(token)` → userId/role 추출 → `role !== 'ADMIN'` 이면 401. shared 의 `buildGroupingJobEventsUrl(jobId)` 가 URL 빌더. Pino redact 정규식이 `?token=...` 그대로 마스킹.
 - **2026-05-09** in [[../topics/analytics]] (`analytics.route.ts` `Routes.Analytics.globalMergeJobEvents(jobId)`): 전역 머지 잡 진행 SSE. 같은 헤더→쿼리 fallback + ADMIN 게이트 + redact 패턴. shared 의 `buildGlobalMergeJobEventsUrl(jobId)` 빌더. 새 잡 단위 SSE 가 추가될 때마다 같은 토큰 패턴이 자연스럽게 흡수됨.
+- **2026-05-15** in [[../topics/crawl]] (`crawl.route.ts` `Routes.Crawl.diningcodeBulkSaveJobEvents(jobId)`): 다이닝코드 일괄 저장 잡 진행 SSE. 어드민 정식 페이지가 N개 vRid 선택 후 한 번에 저장하는 패턴. 같은 헤더→`?token=` fallback + ADMIN 게이트. shared 의 `buildDiningcodeBulkSaveEventsUrl(jobId)` 빌더 — `useGroupingJob` 의 빌더와 동형. 일곱 번째 SSE 엔드포인트 — 패턴이 어떤 도메인이든 그대로 흡수된다는 것을 다시 확인.
 
 ## What This Means
 

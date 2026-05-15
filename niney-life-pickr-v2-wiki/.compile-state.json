@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "last_compiled": "2026-05-14",
+  "last_compiled": "2026-05-15",
   "mode": "codebase",
   "topics": [
     "project-overview",
     "friendly",
     "crawl",
+    "canonical",
     "ai",
     "menu-grouping",
     "analytics",
@@ -44,5 +45,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 280
+  "total_sources_scanned": 315
 }

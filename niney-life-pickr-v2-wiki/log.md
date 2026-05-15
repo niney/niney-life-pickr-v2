@@ -1,5 +1,38 @@
 # Wiki Compile Log
 
+## 2026-05-15 (10th compile)
+
+**Topics updated:** crawl, friendly, web, shared, api-contract, project-overview
+**New topics:** canonical
+**New concepts:** none
+**Concepts updated:** sse-token-auth, stream-driven-cache-merge, in-memory-singleton-gates
+
+**Sources scanned:** ~315 (knowledge files + canonical module 4 files + matching lib + adapters 4개 + Prisma migrations 4개 + AdminDiningcodePage + AdminCatchtable* + CanonicalMergePanel + MergeProposalQueue + DC bulk-save-registry + canonical.api/useCanonical + activeDiningcodeBulkSaveJobStore + 갱신된 schemas/crawl.ts·canonical.ts·restaurant.ts·routes.ts)
+**Sources changed:** ~49 files (15 modified + 3 new web/shared/friendly modules + 4 Prisma migrations + 4 catchtable/diningcode adapters + 다수)
+
+**Major changes since last compile (2026-05-14):**
+- **신규 토픽 `canonical`** — 출처(Naver/다이닝코드/캐치테이블) 가로지르는 같은 가게 묶기. `apps/friendly/src/modules/canonical/` (CanonicalService + ProposalService + canonical.route + 8 테스트) + `apps/friendly/src/lib/matching.ts` (bigram Jaccard + Haversine, 임계 0.45/0.7 + 500m + bbox prefilter ±0.007°) + `packages/api-contract/src/schemas/canonical.ts` (14 zod) + `packages/shared/src/api/canonical.api.ts` + `useCanonical.ts` (9 훅) + `apps/web/src/components/restaurant/CanonicalMergePanel.tsx` + `MergeProposalQueue.tsx`. **정책: 자동 머지 없음, 전부 검토 큐 + 등록 후크 자동 + 수동 버튼.**
+- **다이닝코드 통합** — 검색 (`diningcode-search.http.adapter.ts` HTTP 직접) + 가게 상세 (`diningcode-shop.http.adapter.ts` POST `/API/profile/` 한 방) + DB 저장 (`saveDiningcodeShop` — vRid 모든 리뷰 페이지 끌어와 persist + summary 큐) + 검증 페이지 (`/admin/diningcode-test`).
+- **다이닝코드 정식 페이지 + SSE 일괄 저장** — `/admin/diningcode` 검색 + 등록 배지 + 체크박스 + sticky 액션바 + SSE 진행 카드. `diningcode-bulk-save-registry.ts` 신규 (per-actor 단일 잡, 60초 TTL GC, snapshot/item/done events). EventSource 백오프 재연결 + localStorage activeStore.
+- **캐치테이블 통합** — 검색 (`catchtable-search.playwright.adapter.ts` 페이지 안 fetch 가로채기 — CF 봇 보호 우회) + 가게 상세 + 메뉴 (lazy) + AI 리뷰 종합. 검증 페이지 (`/admin/catchtable-test`).
+- **AdminRestaurantsPage 대대적 개편** — list 가 canonical 그룹 단위로 (`CanonicalListItem.sources[]`), source 칩 + 분리 액션, MergeProposalQueue 상단 카드, 행 위 suggestion 알림 줄(amber dashed), 병합 후보 수 배지, canonical 단위 삭제 (placeId → canonicalId).
+- **Prisma schema 확장** — `CanonicalRestaurant`, `CanonicalMergeProposal` 신규 + Restaurant `(source, sourceId)` 분리 + `Restaurant.canonicalId` FK (NOT Cascade, 의도) + `suggestionDismissedAt`. 마이그레이션 4개 (20260515063258 / 083303 / 100910 / 104718).
+- **crawl.service 후크** — 가게 등록 직후 `generateProposalsForRestaurant(restaurantId)` 호출 (idempotent, 실패해도 등록 흐름 안 막음).
+- **DC 출처 칩 link** — 어드민 맛집/MergeProposalQueue 에서 `/admin/diningcode-test/:vRid` → `/admin/diningcode/:vRid` 로 교체 (AdminDiningcodeShopPage 컴포넌트가 두 라우트에서 마운트되어 pathname 으로 back-link 분기).
+- **명명 변경** — naver-search 어댑터가 Playwright → HTTP 직접 호출로 이전 (`naver-search.http.adapter.ts`).
+
+**Concept updates:**
+- `sse-token-auth` — DC bulk save events 엔드포인트 추가 (7번째 SSE 엔드포인트, `buildDiningcodeBulkSaveEventsUrl` 가 useGroupingJob 빌더와 동형). topics_connected 변동 없음.
+- `stream-driven-cache-merge` — `useDiningcodeBulkSaveJob` 추가. `useGroupingJob` 의 카피 ("패턴 머지 카피의 첫 사례") — snapshot/item/done event 머지 + 종료 시 `['crawl','diningcode-registered']` 등 cache invalidate.
+- `in-memory-singleton-gates` — `diningcodeBulkSaveRegistry` 추가 (8번째 인스턴스). `groupingJobRegistry` 와 동형이지만 per-actor **단일 잡** 정책 (다이닝코드 부담 의식). topics_connected 에 `canonical` 추가.
+
+**No new concept this round:** canonical 의 "자동 매칭 후보 → 어드민 검토 큐 → 수동 확정" 패턴은 흥미롭지만 아직 한 도메인에만 존재 — 3+ 토픽에서 같은 모양이 반복될 때 컨셉화. 같은 패턴이 LLM 평가나 그룹 머지 큐로 번지면 그 때 추출.
+
+**Notes:**
+- canonical 토픽은 신규지만 cross-cutting 강도가 매우 높음 (friendly, api-contract, shared, web, crawl 5개 토픽이 자기 섹션에서 참조). 별도 토픽으로 분리한 이유는 (a) 충분한 양 — 14 zod + 9 훅 + matching lib + 2 service + 2 web component (b) 활발한 활동 — 한 라운드에 4개 마이그레이션 동반.
+- `topics/crawl.md` 가 11 라우트 + 4 어댑터(Naver + 캐치테이블 + 다이닝코드 + Naver 검색 HTTP) + 2 잡 패턴(SSE 단일 + SSE 일괄)로 가장 큰 토픽으로 굳어짐. 다음 라운드에 캐치테이블이 더 늘면 별도 토픽 분리 후보.
+- 다이닝코드 정식 페이지 + bulk save SSE 가 menu-grouping 패턴을 거의 그대로 카피한 점 — 두 컨셉(`stream-driven-cache-merge` / `in-memory-singleton-gates`) 의 적용 깊이가 커진 신호.
+
 ## 2026-05-14 (9th compile)
 
 **Topics updated:** mobile, project-overview

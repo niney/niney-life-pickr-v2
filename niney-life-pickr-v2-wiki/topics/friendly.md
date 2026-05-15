@@ -1,16 +1,16 @@
 ---
 topic: friendly
-last_compiled: 2026-05-09
+last_compiled: 2026-05-15
 status: active
 aliases: [naver-search-adapter, search-route]
-sources_count: 57
+sources_count: 62
 ---
 
 # friendly — Fastify 백엔드
 
 ## Purpose [coverage: high — 7 sources]
 
-`apps/friendly`는 niney-life-pickr-v2 모노레포의 유일한 백엔드 서비스다. Fastify 5 위에 zod 기반 스키마 검증, JWT 인증, Prisma+SQLite 영속화, OpenAPI/Swagger 문서, Playwright 크롤링 런타임, Naver 이미지 썸네일 프록시(sharp), Ollama Cloud 기반 리뷰 요약 + 구조화 분석 + 메뉴 정규화/통계, vworld 지도 SDK 키 관리까지 얹어 web(`apps/web`)과 mobile(`apps/mobile`)이 동시에 호출하는 단일 API를 제공한다.
+`apps/friendly`는 niney-life-pickr-v2 모노레포의 유일한 백엔드 서비스다. Fastify 5 위에 zod 기반 스키마 검증, JWT 인증, Prisma+SQLite 영속화, OpenAPI/Swagger 문서, Playwright 크롤링 런타임, Naver 이미지 썸네일 프록시(sharp), Ollama Cloud 기반 리뷰 요약 + 구조화 분석 + 메뉴 정규화/통계, vworld 지도 SDK 키 관리, **multi-source 가게 통합(canonical)** 까지 얹어 web(`apps/web`)과 mobile(`apps/mobile`)이 동시에 호출하는 단일 API를 제공한다.
 
 도메인 표면은 모듈 디렉터리로 나뉜다.
 
@@ -21,15 +21,16 @@ sources_count: 57
 - **summary** — 리뷰 단위 AI 요약+구조화 분석 라이프사이클 (HTTP 라우트 없음, 내부 모듈)
 - **menu-grouping** — 식당별 메뉴 표기 변형을 LLM으로 canonical 그룹핑 + 순위. 자세한 건 [menu-grouping 토픽](./menu-grouping.md).
 - **analytics** — 글로벌 메뉴 통계 + 전역 LLM 머지 + 카테고리 트리. 자세한 건 [analytics 토픽](./analytics.md).
+- **canonical** — **(NEW)** cross-source 가게 동일성(canonical) + 자동 매칭 제안 큐. CanonicalService + ProposalService. 자세한 건 [canonical 토픽](./canonical.md).
 - **media** — Naver CDN 이미지 썸네일 프록시 + 디스크 캐시 (`Routes.Media.*`)
-- **settings** — **(NEW)** 외부 지도 SDK 키(vworld) 관리. admin CRUD + 평문 reveal + 공개 키 노출 (`Routes.SettingsMap.*`)
+- **settings** — 외부 지도 SDK 키(vworld) 관리. admin CRUD + 평문 reveal + 공개 키 노출 (`Routes.SettingsMap.*`)
 - **health** — 라이브니스 체크 (`Routes.Health`, `/health`)
 - **crawl** — 별도 위키 토픽 ([crawl 토픽 참조](./crawl.md))
 - **ai** — 별도 위키 토픽 ([ai 토픽 참조](./ai.md))
 
 CLAUDE.md 규약상 모든 모듈은 `*.route.ts`(HTTP) + `*.service.ts`(비즈니스) + `*.test.ts`(Vitest) 트리오로 구성하고, FE/BE가 공유하는 타입/검증 로직은 모두 `@repo/api-contract`의 zod 스키마로만 정의한다. [apps/friendly/package.json](../../apps/friendly/package.json)의 `name: "friendly"`가 워크스페이스 식별자이며, `pnpm dev:api`/`pnpm --filter friendly <cmd>`로 단독 실행한다.
 
-## Architecture [coverage: high — 11 sources]
+## Architecture [coverage: high — 12 sources]
 
 엔트리 흐름은 `server.ts → buildApp() → autoload(plugins) → autoload(modules/*.route.ts)`로 단방향이다.
 
@@ -58,55 +59,57 @@ modules/
 ├── ai/
 ├── analytics/        ← 글로벌 메뉴 통계 + 전역 LLM 머지 (analytics 토픽)
 ├── auth/
+├── canonical/        ← (NEW) cross-source 가게 통합 + 자동 매칭 제안 (canonical 토픽)
 ├── crawl/
 ├── health/
 ├── media/
 ├── menu-grouping/    ← 식당별 메뉴 LLM 그룹핑 + 순위 (menu-grouping 토픽)
 ├── picks/
 ├── restaurant/
-├── settings/         ← (NEW) 지도 SDK 키 관리 (vworld)
+├── settings/         ← 지도 SDK 키 관리 (vworld)
 ├── summary/
 └── user/
 ```
 
-autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이 없는 모듈은 외부에서 모듈 싱글턴(`summaryEventsBus`)과 명시적 import로만 접근한다. analytics/menu-grouping/settings 은 자체 `*.route.ts` 가 있어 자동 등록.
+autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이 없는 모듈은 외부에서 모듈 싱글턴(`summaryEventsBus`)과 명시적 import로만 접근한다. analytics/menu-grouping/settings/canonical 은 자체 `*.route.ts` 가 있어 자동 등록.
 
-**공개 vs admin 라우트 분리 정책** — 같은 도메인이라도 (1) 응답 스키마가 다르거나 (2) 가드만 빠진 게 아니라 캐싱/SEO 정책이 다른 경우에는 별도 라우트로 분리한다. 핸들러 안에서 `if (req.user) {…} else {…}` 분기보다 라우트 자체가 둘이라 OpenAPI/Swagger 가 두 응답 셋을 분리해 표시하고 어드민 회귀 위험이 0이 된다. restaurant 의 `publicList`/`publicByPlaceId`/`publicInsights`/`ranking`, settings 의 `publicConfig` 가 같은 패턴 — 모두 `tags: ['public']` + 가드 미적용으로 마운트되고 service 메소드가 admin 과 다른 평탄화/정렬을 담당한다.
+**가게 동일성 매칭 라이브러리** — [src/lib/matching.ts](../../apps/friendly/src/lib/matching.ts) 는 모듈에 속하지 않는 순수 유틸. 가게명 정규화(`normalizeName` — 소문자/공백/구두점 제거 + 분점 suffix `본점/지점/점` 제거) + bigram Jaccard 이름 유사도(`nameSimilarity`) + Haversine 거리(`distanceMeters`) + 둘을 0.6/0.4 가중한 `scoreMatch` 와 임계(`MATCH_THRESHOLDS`: 좌표 있을 때 score ≥ 0.45 + 거리 ≤ 500m, 좌표 없으면 name ≥ 0.7). `restaurant.list()` 의 1차 suggestion 산출과 canonical 의 ProposalService 가 둘 다 호출.
 
-**crawl 모듈 변경 흡수 (2026-05-09 follow-up)** — 자세한 건 [crawl 토픽](./crawl.md). friendly 차원에서 2가지가 바뀌었다:
-- 어드민 발견 페이지(`/admin/discover`) 가 호출하는 신규 검색 라우트 GET `/admin/crawl/search` 추가. `crawl.service.ts` 의 `searchPlaces(query, bbox?)` 메소드와 신규 `naver-search.playwright.adapter.ts` (Playwright Chromium 으로 PC 지도 페이지의 captcha 토큰 + 세션 쿠키를 가로채 `/p/api/search/allSearch` 응답을 캡처) 가 조합. 검색당 ~1.1초. onClose 훅에서 기존 `closeBrowser()` 와 함께 `closeSearchBrowser()` 도 호출 (place 어댑터와 검색 어댑터가 별개 Browser 인스턴스).
-- `crawl.service.ts` 에서 actor 단위 rate-limit 완전 제거 — `RATE_LIMIT_WINDOW_MS` 상수, `lastCallByActor: Map<string, number>` 인스턴스 필드, startCrawl 진입부 검사 블록 모두 삭제. spam 방어는 in-flight dedup + `MAX_CONCURRENT_PER_ACTOR=3` + FIFO 큐 두 layer 로 충분. `error: 'rate_limited'` enum 은 backward-compat 으로 남아있지만 service 가 emit 하지 않음.
+**공개 vs admin 라우트 분리 정책** — 같은 도메인이라도 (1) 응답 스키마가 다르거나 (2) 가드만 빠진 게 아니라 캐싱/SEO 정책이 다른 경우에는 별도 라우트로 분리한다. 핸들러 안에서 `if (req.user) {…} else {…}` 분기보다 라우트 자체가 둘이라 OpenAPI/Swagger 가 두 응답 셋을 분리해 표시하고 어드민 회귀 위험이 0이 된다. restaurant 의 `publicList`/`publicByPlaceId`/`publicInsights`/`ranking`, settings 의 `publicConfig` 가 같은 패턴.
 
-## Talks To [coverage: high — 12 sources]
+**crawl 모듈 변경 흡수 (2026-05-15)** — 자세한 건 [crawl 토픽](./crawl.md). friendly 차원에선 `CrawlService` 생성자에 `ProposalService` 가 추가 주입돼 (`new CrawlService(restaurants, summaries, jobRegistry, proposals)`) 신규 등록 후크에서 자동 매칭 후보를 적재한다. 캐치테이블/다이닝코드 검색·상세 라우트(2026-05-09 ~ 2026-05-14) 외에 새 라우트는 없음.
 
-- **`@repo/api-contract`** — `Routes.*` URL 상수와 모든 zod 스키마(인증/픽/식당/요약/분석/미디어/AI/메뉴 그룹핑/애널리틱스/지도 설정)의 단일 출처. 모든 `*.route.ts`가 import.
+## Talks To [coverage: high — 13 sources]
+
+- **`@repo/api-contract`** — `Routes.*` URL 상수와 모든 zod 스키마(인증/픽/식당/요약/분석/미디어/AI/메뉴 그룹핑/애널리틱스/지도 설정/canonical)의 단일 출처. 모든 `*.route.ts`가 import.
 - **`@repo/utils`** — `picks.service.ts`의 랜덤 추첨에서 `pickRandom(options)`.
 - **Prisma + SQLite** — [prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)는 `provider = "sqlite"`, `DATABASE_URL`은 기본 `file:./data/dev.db`. CLAUDE.md "Docker 추가하지 말 것" 규칙과 짝.
 - **bcryptjs** — [src/lib/hash.ts](../../apps/friendly/src/lib/hash.ts)의 `hashPassword`/`verifyPassword`가 10 라운드 솔트.
 - **sharp ^0.34** — media 모듈의 썸네일 리사이즈/JPEG 인코딩.
 - **Playwright** — crawl 모듈이 사용 ([crawl 토픽](./crawl.md)).
 - **Naver Place 페이지 + Naver CDN** — crawl 이 SSR/AJAX, media 가 `phinf.pstatic.net` 호스트군 썸네일 프록시.
-- **Naver PC 지도 페이지 (`map.naver.com`) — captcha-aware capture (NEW)** — 검색 어댑터가 Playwright Chromium 으로 `https://map.naver.com/p/search/{query}` 를 띄우고 페이지 자체의 ncaptcha 토큰 + 세션 쿠키를 활용해 첫 `/p/api/search/allSearch` 응답을 가로챈다. 직접 fetch 는 봇 보호로 차단됨.
+- **Naver PC 지도 페이지 (`map.naver.com`)** — 검색 어댑터가 Playwright Chromium 으로 captcha 토큰 + 세션 쿠키 캡처. 직접 fetch 는 봇 보호로 차단됨.
+- **Diningcode / Catchtable** — crawl 의 추가 소스. 자세한 건 [crawl 토픽](./crawl.md).
 - **Ollama Cloud** — ai/summary/menu-grouping/analytics 가 LLM 호출.
-- **외부 지도 키(vworld)** — settings 가 평문 보관, `publicConfig` 로 공개 페이지에 그대로 흘려 보냄(WMTS 키는 어차피 브라우저 Network 탭에 노출되므로 admin secret 과 보안 등급이 동등).
+- **외부 지도 키(vworld)** — settings 가 평문 보관, `publicConfig` 로 공개 페이지에 그대로 흘려 보냄.
 - **소비자** —
-  - `apps/web` 어드민 화면이 `@repo/shared`의 API 클라이언트로 모든 admin 라우트 호출.
-  - `apps/web` 어드민 발견 페이지(`AdminDiscoverPage`, `/admin/discover`) 가 신규 GET `/admin/crawl/search` 호출 → 결과 N개 체크 → 한 번에 N개 startCrawl.
+  - `apps/web` 어드민 화면이 `@repo/shared`의 API 클라이언트로 모든 admin 라우트 호출 (canonical merge 패널 포함).
   - `apps/web` **공개 화면**(루트 랭킹·맛집 지도·식당 상세)이 `Routes.Restaurant.ranking`/`publicList`/`publicByPlaceId`/`publicInsights` + `Routes.SettingsMap.publicConfig` 호출.
   - `apps/mobile` 도 같은 클라이언트 (CLAUDE.md 핵심 규칙 #2).
 - **모듈 간 토폴로지**:
-  - `crawl → restaurant` — 크롤이 `RestaurantService.upsertRestaurantFromCrawl(...)`로 마스터 행 upsert, 페이지 단위 `persistReviewBatch(restaurantId, reviews)`로 idempotent insert.
-  - `crawl → summary` — `persistReviewBatch`가 돌려준 새 리뷰 id 배열을 `SummaryService.queueSummariesForReviews(placeId, ids)`로 fire-and-forget.
-  - `summary → ai` — `summary.service.ts`가 [ai/adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)의 공유 FIFO 게이트로 LLM 어댑터를 받아 호출. `AiConfigService.getResolved('ollama-cloud')`로 키/모델/concurrency를 해소.
-  - `summary → restaurant.route` — `summaryEventsBus`(모듈 싱글턴)가 두 모듈의 결합점. publish는 SummaryService, subscribe는 restaurant SSE 핸들러.
-  - `summary → menu-grouping/analytics` — `summary.service.ts`가 export 한 `extractFirstJsonObject`/`normalizeTerm` 을 두 모듈이 재사용 (LLM JSON 응답 파싱·이름 정규화).
-  - `restaurant.route → summary` — `Routes.Restaurant.reanalyze(:placeId)` 핸들러가 `summaries.backfillForRestaurant(placeId)`로 구버전(`analysisVersion < ANALYSIS_VERSION`)/failed 행을 재큐잉. `Routes.Restaurant.analyticsBackfill` 은 `summaries.backfillAnalyticsFromExisting()` 으로 기존 `menusJson`/`tipsJson`/`keywordsJson` 을 `MenuMention`/`ReviewTag` 로 풀어쓴다 (LLM 재호출 없음).
-  - `restaurant.route → menu-grouping` — `Routes.Restaurant.menusGroup`/`menusRanking` 가 `MenuGroupingService` 를 호출 (식당 단위 그룹핑/순위).
-  - `settings.route → settings.service` — 공개/admin 모두 같은 `MapSettingsService.getSecret('vworld')` 를 사용. 차이는 라우트 가드뿐.
+  - `crawl → restaurant` — 크롤이 `upsertRestaurantFromCrawl(...)` (네이버) / `upsertRestaurantFromDiningcode(...)` (다이닝코드) 로 마스터 행 upsert. 둘 다 신규 행 생성 시 nested `canonical: { create: {...} }` 로 자기 전용 CanonicalRestaurant 1행을 같이 만든다 (1:1 시작).
+  - **`crawl → canonical (ProposalService → CanonicalService)`** — `CrawlService` 가 등록 후크에서 `ProposalService` 를 호출, ProposalService 가 `lib/matching.ts` 로 후보 점수 계산 후 임계(0.45) 이상이면 `CanonicalMergeProposal` 행을 status=`open` 으로 적재. 자동 머지는 안 하고 검토 큐에 적재만. 어드민 수락 시 `CanonicalService.merge(A,B)` 로 두 canonical 중 한쪽이 다른 쪽으로 흡수. ProposalService → CanonicalService 단방향 의존.
+  - `crawl → summary` — `persistReviewBatch`가 돌려준 새 리뷰 id 배열을 `SummaryService.queueSummariesForReviews(busKey, ids)`로 fire-and-forget. busKey 는 네이버=`placeId`, 다이닝코드=`dc:<vRid>`.
+  - `summary → ai` — `summary.service.ts`가 [ai/adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)의 공유 FIFO 게이트로 LLM 어댑터를 받아 호출.
+  - `summary → restaurant.route` — `summaryEventsBus`(모듈 싱글턴)가 두 모듈의 결합점. publish는 SummaryService, subscribe는 restaurant SSE 핸들러. SSE 가 placeId 외에 **canonicalId 도 받아** `getRestaurantsByCanonicalIds` 로 묶인 모든 source 행 (네이버 + 다이닝코드) 의 bus key 를 union 구독.
+  - `summary → menu-grouping/analytics` — `extractFirstJsonObject`/`normalizeTerm` 공유 export.
+  - `restaurant.route → summary` — `reanalyze`/`analyticsBackfill` 라우트가 summary 메소드 호출.
+  - `restaurant.route → menu-grouping` — `menusGroup`/`menusRanking`.
+  - `settings.route → settings.service` — 공개/admin 모두 같은 `MapSettingsService.getSecret('vworld')`.
 
 ## API Surface [coverage: high — 8 sources]
 
-라우트 경로는 모두 `@repo/api-contract`의 [`Routes.*`](../../packages/api-contract/src/routes.ts)에서 가져오므로 이 파일 하나가 클라이언트와 동기화된다.
+라우트 경로는 모두 `@repo/api-contract`의 [`Routes.*`](../../packages/api-contract/src/routes.ts)에서 가져온다.
 
 라우트 트리 (요약, 공개/admin 표기):
 
@@ -118,17 +121,20 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 ├── /media/thumbnail                              (public)
 ├── /restaurants
 │   ├── /ranking                                  (public)        ← AI 분포 정렬
-│   ├── /public                                   (public)        ← 공개 리스트(NEW)
-│   ├── /public/:placeId                          (public)        ← 공개 상세(NEW)
-│   ├── /public/:placeId/insights                 (public)        ← 공개 인사이트(NEW)
+│   ├── /public                                   (public)        ← 공개 리스트
+│   ├── /public/:placeId                          (public)        ← 공개 상세
+│   ├── /public/:placeId/insights                 (public)        ← 공개 인사이트
 │   └── /admin/restaurants/*                      (admin)         ← 어드민 CRUD/SSE/smart-pick/...
-├── /admin/crawl/*                                (admin)         ← crawl 토픽 (search 라우트 NEW)
+├── /admin/crawl/*                                (admin)         ← crawl 토픽
+├── /admin/canonical/*                            (admin)         ← (NEW) canonical 토픽
 ├── /admin/ai/*                                   (admin)         ← ai 토픽
 ├── /admin/analytics/*                            (admin)         ← analytics 토픽
-├── /admin/settings/map[/...]                     (admin)         ← (NEW)
-├── /settings/map/public                          (public)        ← (NEW)
+├── /admin/settings/map[/...]                     (admin)
+├── /settings/map/public                          (public)
 └── /health                                       (public)
 ```
+
+restaurant 의 admin `list` 응답은 multi-source 통합 형태로 진화 — 한 행 = 한 canonical, 그 안에 `sources[]` 배열로 네이버/다이닝코드 행이 들어가고 `candidateCount`/`suggestion` (top1 매칭 후보) 도 포함. 공개 표면(`publicList`/`publicByPlaceId`/`ranking`/`smartPick`)은 여전히 네이버 전용(`source = 'naver'` 필터 + `placeId` 키) — 1차 PR 스코프가 DB 저장 + AI 분석까지였음. canonical 자체 라우트는 [canonical 토픽](./canonical.md) 참고.
 
 ### auth — [auth.route.ts](../../apps/friendly/src/modules/auth/auth.route.ts)
 
@@ -141,7 +147,7 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 
 ### picks — [picks.route.ts](../../apps/friendly/src/modules/picks/picks.route.ts)
 
-`addHook('onRequest', app.authenticate)`로 모듈 전역 인증. CRUD + `POST :id/random` (`PickResultSchema`).
+`addHook('onRequest', app.authenticate)`로 모듈 전역 인증. CRUD + `POST :id/random`.
 
 ### admin — [admin.route.ts](../../apps/friendly/src/modules/admin/admin.route.ts)
 
@@ -149,85 +155,91 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 
 ### restaurant — [restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts)
 
-공개 라우트 4개 + admin 라우트 다수가 같은 모듈 안에 공존. **공개 라우트는 별도 service 메소드(`getPublicList`/`getPublicDetail`/`getRanking`)** 로 응답 스키마를 평탄화/축소한다 — admin 의 `getDetailByPlaceId`/`list` 와 다른 형태.
-
 | Method | Path (`Routes.Restaurant.*`)                  | Auth          | 설명                                                                              |
 | ------ | --------------------------------------------- | ------------- | --------------------------------------------------------------------------------- |
-| GET    | `ranking`                                     | **public**    | 식당 단위 sentiment 분포 정렬(`positive`/`negative` ratio). 60s TTL 풀 캐시 + dogpile-guard. |
-| GET    | `publicList`                                  | **public**    | **NEW**. 좌표·도로명·썸네일·AI 통계가 함께 들어간 공개 리스트. q/category/bbox 필터, sort=`recent`/`satisfaction`/`positive`/`rating` (null 항상 뒤). |
-| GET    | `publicByPlaceId(:placeId)`                   | **public**    | **NEW**. 공개 상세. ReviewSummary 의 운영 메타(status/error/model/startedAt) 제거, `done` 행만 평탄화한 `analysis` (text/sentiment/sentimentScore/satisfactionScore/menus/tips/keywords/finishedAt). |
-| GET    | `publicInsights(:placeId)`                    | **public**    | **NEW**. 어드민 `insights` 와 동일 응답 스키마, 가드만 빠짐. mixed 분포는 그대로 카운트(어드민과 동일).      |
-| GET    | `list`                                        | bearer+admin  | 맛집 목록 + 행마다 요약 카운트(`pending/Running/Done/Failed`) + sentiment/만족도 평균.        |
-| GET    | `byPlaceId(:placeId)`                         | bearer+admin  | 디테일. `reviews[]` (요약/분석 포함, `visitorReviews` 정렬은 `fetchedAt asc`).   |
+| GET    | `ranking`                                     | **public**    | 60s TTL + dogpile-guard. 네이버 전용.                                             |
+| GET    | `publicList`                                  | **public**    | 좌표·도로명·썸네일·AI 통계. q/category/bbox/sort. 네이버 전용. nullsLast.        |
+| GET    | `publicByPlaceId(:placeId)`                   | **public**    | 공개 상세. `analysis` 는 done 행만 평탄화.                                        |
+| GET    | `publicInsights(:placeId)`                    | **public**    | 어드민 `insights` 와 동일 응답 스키마, 가드만 빠짐.                                |
+| GET    | `list`                                        | bearer+admin  | **multi-source 통합 리스트**. 한 행 = 한 canonical + `sources[]` + `candidateCount`/`suggestion`. |
+| GET    | `byPlaceId(:placeId)`                         | bearer+admin  | 디테일 (네이버 단일 행).                                                          |
 | DELETE | `delete(:placeId)`                            | bearer+admin  | 캐스케이드 삭제. in-flight 크롤이 같은 placeId면 **409**.                        |
-| POST   | `reanalyze(:placeId)`                         | bearer+admin  | 구버전/failed 분석 행을 재큐잉 → `{ ok, queued }`.                                |
-| GET    | `insights(:placeId)`                          | bearer+admin  | 식당 단위 인사이트. 메뉴는 `MenuMention` + `MenuCanonical` JOIN 기반.            |
-| POST   | `menusGroup(:placeId)`                        | bearer+admin  | 식당 메뉴 LLM canonical 그룹핑 ([menu-grouping](./menu-grouping.md)).             |
-| GET    | `menusRanking(:placeId)`                      | bearer+admin  | 그룹된 메뉴 순위 + 통계.                                                          |
-| POST   | `analyticsBackfill`                           | bearer+admin  | 기존 done summary 의 menusJson/tipsJson/keywordsJson 을 정규화 테이블로 풀어쓰는 1회 백필. |
-| POST   | `smartPick`                                   | bearer+admin  | 분석 점수 가중 랜덤 픽.                                                           |
+| POST   | `reanalyze(:placeId)`                         | bearer+admin  | 구버전/failed 분석 행 재큐잉.                                                     |
+| GET    | `insights(:placeId)`                          | bearer+admin  | MenuMention + MenuCanonical JOIN.                                                 |
+| POST   | `menusGroup(:placeId)`                        | bearer+admin  | 식당 메뉴 LLM canonical 그룹핑.                                                   |
+| GET    | `menusRanking(:placeId)`                      | bearer+admin  | 그룹된 메뉴 순위.                                                                 |
+| POST   | `analyticsBackfill`                           | bearer+admin  | menus/tips/keywords JSON → 정규화 테이블 1회 백필.                                |
+| POST   | `smartPick`                                   | bearer+admin  | 가중 랜덤 픽. 네이버 전용.                                                        |
 | GET    | `summaryStatus(:placeId)`                     | bearer+admin  | 요약 진행률 스냅샷.                                                               |
-| GET    | `summaryEvents`                               | query token   | Multiplexed SSE. `?placeId=A&placeId=B&…&token=<jwt>`. 페이로드에 `placeId`. |
+| GET    | `summaryEvents`                               | query token   | Multiplexed SSE. `?placeId=…&canonicalId=…&token=<jwt>`. canonicalId 는 묶인 모든 source 의 bus key 를 union 구독. |
 
-> 글로벌 통계 라우트 (`/admin/analytics/*`) 와 카테고리 트리는 [analytics 토픽](./analytics.md) 참고.
+> 글로벌 통계 라우트는 [analytics 토픽](./analytics.md), 가게 통합/제안 라우트는 [canonical 토픽](./canonical.md) 참고.
 
-SSE: 연결 직후 모든 placeId에 `snapshot` 푸시. placeId별 `pendingProgressPush` 슬롯으로 progress 신호 coalesce(`setImmediate` 한 틱당 1회 DB 조회). `review` 신호는 페이로드가 완전하므로 즉시 push (분석 필드 포함). 15초 keep-alive `: hb`.
+### settings — [settings/map.route.ts](../../apps/friendly/src/modules/settings/map.route.ts)
 
-### settings (NEW) — [settings/map.route.ts](../../apps/friendly/src/modules/settings/map.route.ts)
-
-vworld JS SDK 키. 공개 한 개 + admin 네 개. admin 라우트는 모두 `onRequest: [authenticate, requireAdmin]`.
-
-| Method | Path (`Routes.SettingsMap.*`) | Auth         | 설명                                                                |
-| ------ | ----------------------------- | ------------ | ------------------------------------------------------------------- |
-| GET    | `list`                        | bearer+admin | 등록된 provider 목록. 행이 없어도 `{ provider:'vworld', hasApiKey:false, … }` 합성. |
-| PUT    | `provider(:id)`               | bearer+admin | upsert. `apiKey` 미입력 + 첫 등록은 400. `domains` 만 부분 갱신 가능.    |
-| DELETE | `provider(:id)`               | bearer+admin | 행 제거 (`deleteMany`).                                             |
-| GET    | `secret(:id)`                 | bearer+admin | **평문 키 reveal**. vworld JS SDK init URL 에 키를 그대로 박아 호출해야 해서 별도 엔드포인트 노출. AI 어댑터의 `apiKeyMasked` 패턴과 다름. |
-| GET    | `publicConfig`                | **public**   | `{ provider:'vworld', apiKey }` — 키 미등록이면 404. 공개 맛집 지도 페이지가 부팅 시 한 번 호출. |
+vworld JS SDK 키. 공개 한 개 + admin 네 개 (`list`/`provider(:id) PUT|DELETE`/`secret(:id) GET` 평문 reveal/`publicConfig`).
 
 ### media — [media.route.ts](../../apps/friendly/src/modules/media/media.route.ts) — public
 
-| Method | Path                       | Auth   | 설명                                                                                                                              |
-| ------ | -------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `Routes.Media.thumbnail`   | public | `?url=<naver-cdn-url>&w=300&q=78` → JPEG. ALLOWED_HOSTS 화이트리스트, sharp 리사이즈, `data/thumbs/<sha1>.jpg` 디스크 캐시.        |
-
-응답 헤더: `Cache-Control: public, max-age=2592000, immutable`(30일), `ETag: "<key>"`. `If-None-Match` 매칭이면 304. 업스트림 실패는 502. 호스트 화이트리스트(`ALLOWED_HOSTS`)에 `phinf.pstatic.net`, `pup-review-phinf.pstatic.net`, `review-phinf.pstatic.net`, `ldb-phinf.pstatic.net`, `search.pstatic.net`, `video-phinf.pstatic.net`. 업스트림 fetch는 5초 timeout, 10MB 상한.
+`?url=<naver-cdn-url>&w=300&q=78` → JPEG. ALLOWED_HOSTS 화이트리스트, sharp 리사이즈, `data/thumbs/<sha1>.jpg` 디스크 캐시. `Cache-Control: 30일 immutable`, `ETag`, 304. 업스트림 5초 timeout, 10MB 상한.
 
 ### health — [health.route.ts](../../apps/friendly/src/modules/health/health.route.ts)
 
-`Routes.Health` (`{ status, uptime, timestamp }`) + `/health` (스모크 프로브, Swagger hide).
+`Routes.Health` + `/health` (스모크 프로브).
 
-## Data [coverage: high — 11 sources]
+## Data [coverage: high — 13 sources]
 
 [prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) 모델 — 코어:
 
 | 모델 | 테이블 | 핵심 필드 / 인덱스 | 비고 |
 | ---- | ------ | -------------------- | ---- |
-| `User` | `users` | `email @unique`, `role Role @default(USER)` | picks Cascade |
-| `Pick` | `picks` | `userId @index`, `options String`(JSON) | options 는 stringify 된 string[] |
-| `PickResult` | `pick_results` | `pickId @index`, `chosen` | Pick Cascade |
+| `User` | `users` | `email @unique`, `role Role` | picks Cascade |
+| `Pick` | `picks` | `userId @index`, `options` JSON | User Cascade |
+| `PickResult` | `pick_results` | `pickId @index` | Pick Cascade |
 | `Role` | enum | `USER \| ADMIN` | |
-| `LlmProviderConfig` | `llm_provider_configs` | `provider @unique`, `apiKey`, `defaultModel?`, `enabled`, `maxConcurrent` | env fallback 있음. ai 모듈 ([ai 토픽](./ai.md)) |
-| **`MapProviderConfig`** | **`map_provider_configs`** | **`provider @unique`, `apiKey`(평문), `domains?`, `updatedAt`, `updatedById?`** | **NEW**. settings 모듈. env fallback **없음** |
-| `Restaurant` | `restaurants` | `placeId @unique`, `snapshotJson`, `firstCrawledAt`, `lastCrawledAt @updatedAt` | 메뉴/블로그/영업시간/이미지/좌표는 snapshotJson 안 |
-| `VisitorReview` | `visitor_reviews` | `restaurantId @index`, `externalId?`, `contentHash`, `videosJson String @default("[]")` | dedup `@@unique([restaurantId, externalId])` + `@@unique([restaurantId, contentHash])` |
-| `ReviewSummary` | `review_summaries` | `reviewId @unique`(1:1), `status`, `sentiment?`, `sentimentScore? Float`, `satisfactionScore? Int`, `menusJson?`/`tipsJson?`/`keywordsJson?`, `analysisVersion?` | `ANALYSIS_VERSION = 4` |
-| `MenuMention` | `menu_mentions` | `summaryId`/`restaurantId` + `name`/`nameNorm`/`sentiment`/`traitsJson` | summary done 시 menusJson 평탄화 사본 |
+| `LlmProviderConfig` | `llm_provider_configs` | `provider @unique`, `apiKey`, `maxConcurrent` | env fallback |
+| `MapProviderConfig` | `map_provider_configs` | `provider @unique`, `apiKey`(평문), `domains?` | env fallback **없음** |
+| **`CanonicalRestaurant`** | **`canonical_restaurants`** | **`id`, `name`, `primaryCategory?`, `latitude?`, `longitude?`, `searchKey?`, `suggestionDismissedAt?`, `@@index([searchKey])`, `@@index([latitude, longitude])`** | **NEW**. cross-source "같은 가게" 의 단일 진실. 자세한 건 [canonical 토픽](./canonical.md) |
+| **`CanonicalMergeProposal`** | **`canonical_merge_proposals`** | **`canonicalAId`+`canonicalBId` (정규화: A<B), `score`/`nameScore`/`distanceM?`, `status` (open/accepted/rejected/superseded), `@@unique([A,B])`, `@@index([status])`** | **NEW**. 자동 매칭 검토 큐. 둘 FK 모두 **Cascade** (한쪽 canonical 사라지면 제안 자동 삭제) |
+| `Restaurant` | `restaurants` | `id`, **`source` (NEW, default 'naver')**, **`sourceId` (NEW)**, `placeId?` (nullable; 네이버만 채움), **`canonicalId` (NEW, NOT NULL)**, `snapshotJson`, `lastCrawledAt @updatedAt`, **`@@unique([source, sourceId])`**, `@@index([source])`, `@@index([canonicalId])`, `placeId @unique` 유지 | 메뉴/블로그/영업시간/이미지/좌표는 snapshotJson 안. **canonical FK 는 `onDelete: Restrict`(=Cascade 아님)** |
+| `VisitorReview` | `visitor_reviews` | `restaurantId @index`, dedup `@@unique([restaurantId, externalId])` + `@@unique([restaurantId, contentHash])` | Restaurant Cascade |
+| `ReviewSummary` | `review_summaries` | `reviewId @unique`, `status`, `sentiment?`, `sentimentScore?`, `satisfactionScore?`, `menusJson?`/`tipsJson?`/`keywordsJson?`, `analysisVersion?` | `ANALYSIS_VERSION = 4` |
+| `MenuMention` | `menu_mentions` | `summaryId`/`restaurantId` + `name`/`nameNorm`/`sentiment`/`traitsJson` | summary done 시 평탄화 사본 |
 | `ReviewTag` | `review_tags` | `kind` ('tip'/'keyword') + `term`/`termNorm` | tip+keyword 통합 |
-| `MenuCanonical` | `menu_canonicals` | `(restaurantId, nameNorm)` unique | 식당 내 canonical |
+| `MenuCanonical` | `menu_canonicals` | `(restaurantId, nameNorm) @@unique` | 식당 내 canonical |
 | `GlobalMenuCanonical` | `global_menu_canonicals` | `globalKey @unique`, `categoryPath?` | 전역 canonical |
 | `GlobalMenuCanonicalLink` | `global_menu_canonical_links` | `menuCanonicalId @unique` + `globalCanonicalId @index` | 다대일 링크 |
 
-캐스케이드 체인 — `Restaurant 삭제 → VisitorReview → ReviewSummary → MenuMention/ReviewTag` 그리고 `Restaurant → MenuCanonical → GlobalMenuCanonicalLink` 모두 SQLite FK로 자동 처리. `MapProviderConfig` 는 캐스케이드 무관 (`updatedById` 는 nullable + FK 미선언, 사용자 삭제 시 그냥 dangling reference).
+**Restaurant ↔ Canonical 관계 핵심**:
+- 신규 Restaurant 생성 시 항상 nested `canonical: { create: {...} }` 로 자기 전용 CanonicalRestaurant 1행을 동시 생성 (1:1 시작).
+- 어드민이 ProposalService 큐에서 수락하면 `CanonicalService.merge(A,B)` 가 한쪽 canonical 의 `Restaurant.canonicalId` 들을 다른 쪽으로 옮기고 빈 canonical 행을 삭제 → N:1 로 진화.
+- `Restaurant.canonicalId` FK 는 **`onDelete: Restrict`** (Cascade **아님**) — 같은 canonical 에 묶인 다른 source 행이 남아있을 때 한 source 만 지워도 canonical 은 보존돼야 한다. 다이닝코드 단독 가게도 canonical 이 살아남아 다음 등록(예: 같은 가게의 네이버 행)에서 다시 매칭 후보로 떠야 함.
+- `CanonicalMergeProposal.canonicalA/BId` FK 는 반대로 **Cascade** — canonical 이 사라지면 그 canonical 을 가리키던 제안은 자동으로 정리(stale 방지).
+
+**`Restaurant.source` 분기**:
+- `source = 'naver'` — `sourceId` 와 `placeId` 가 같은 값 (백필 마이그레이션에서 `sourceId = placeId` 로 채움). 공개 라우트가 `placeId` 키로 라우팅하므로 항상 NOT NULL.
+- `source = 'diningcode'` — `sourceId` 는 `vRid`, `placeId` 는 `null`. 공개 `/restaurants/:placeId` 에 잡히지 않도록 의도된 nullable.
+- `source = 'catchtable'` — 아직 저장 경로 없음(검증 페이지 단계).
+- cross-source unique 키는 `(source, sourceId)` — 같은 가게의 다른 출처 행은 서로 다른 행으로 존재하되 같은 `canonicalId` 로 묶인다.
+
+캐스케이드 체인:
+- `Restaurant 삭제 → VisitorReview → ReviewSummary → MenuMention/ReviewTag` (Cascade), `Restaurant → MenuCanonical → GlobalMenuCanonicalLink` (Cascade).
+- `Restaurant → CanonicalRestaurant` 는 **Restrict** (반대로 canonical 을 먼저 지우려면 묶인 Restaurant 가 0개여야 함).
+- `CanonicalRestaurant → CanonicalMergeProposal` (Cascade).
+- `MapProviderConfig.updatedById` 는 nullable + FK 미선언 — 사용자 삭제 시 dangling reference.
 
 마이그레이션 (최근순):
-- **`20260508173216_add_map_provider_configs`** — **(NEW)** `MapProviderConfig` 테이블
-- `20260509_add_global_menu_category_path` — `GlobalMenuCanonical.categoryPath` 추가
-- `20260509_add_global_menu_canonicals` — `GlobalMenuCanonical` + `GlobalMenuCanonicalLink`
-- `20260509_add_menu_canonicals` — `MenuCanonical` (식당 내 그룹핑)
+- **`20260515104718_add_canonical_merge_proposals`** — **(NEW)** `CanonicalMergeProposal` 테이블 + status index + (A,B) unique
+- **`20260515100910_add_canonical_suggestion_dismissed`** — **(NEW)** `CanonicalRestaurant.suggestionDismissedAt` 컬럼 추가
+- **`20260515083303_add_canonical_restaurant`** — **(NEW)** `CanonicalRestaurant` 테이블 + Restaurant.canonicalId(NOT NULL) FK + 기존 행마다 자기 전용 Canonical 백필 (id 재활용, 좌표는 snapshotJson 의 `$.latitude`/`$.lat` COALESCE)
+- **`20260515063258_add_restaurant_source_split`** — **(NEW)** Restaurant 에 `source`(default 'naver')/`sourceId`(NOT NULL) 컬럼 + `@@unique([source, sourceId])` + 기존 행 sourceId 를 placeId 로 백필
+- `20260508173216_add_map_provider_configs` — `MapProviderConfig`
+- `20260509_add_global_menu_category_path` — `GlobalMenuCanonical.categoryPath`
+- `20260509_add_global_menu_canonicals` — `GlobalMenuCanonical` + Link
+- `20260509_add_menu_canonicals` — `MenuCanonical`
 - `20260509_add_analytics_tables` — `MenuMention` + `ReviewTag`
-- [20260508122321_add_visitor_review_videos](../../apps/friendly/prisma/migrations/20260508122321_add_visitor_review_videos/migration.sql) — `videosJson` 컬럼
-- [20260508095207_add_review_analysis_fields](../../apps/friendly/prisma/migrations/20260508095207_add_review_analysis_fields/migration.sql) — sentiment/menus/tips/keywords/analysisVersion
+- [20260508122321_add_visitor_review_videos](../../apps/friendly/prisma/migrations/20260508122321_add_visitor_review_videos/migration.sql) — `videosJson`
+- [20260508095207_add_review_analysis_fields](../../apps/friendly/prisma/migrations/20260508095207_add_review_analysis_fields/migration.sql)
 - [20260506205226_add_restaurant_review_summary](../../apps/friendly/prisma/migrations/20260506205226_add_restaurant_review_summary/migration.sql)
 - [20260506191413_add_llm_provider_config](../../apps/friendly/prisma/migrations/20260506191413_add_llm_provider_config/migration.sql)
 
@@ -235,7 +247,7 @@ vworld JS SDK 키. 공개 한 개 + admin 네 개. admin 라우트는 모두 `on
 - `apps/friendly/data/dev.db` — SQLite DB 파일
 - `apps/friendly/data/thumbs/<sha1>.jpg` — media 모듈 썸네일 캐시
 
-JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`request.user`도 동일).
+JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }`.
 
 환경 변수 — [src/config/env.ts](../../apps/friendly/src/config/env.ts)의 `EnvSchema` (zod):
 
@@ -255,69 +267,76 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 | `OLLAMA_CLOUD_MAX_CONCURRENT` | `15`                 |                                                                     |
 | `OLLAMA_DEFAULT_MODEL`        | `''`                 |                                                                     |
 
-**vworld 키는 env 변수 없음** — `MapProviderConfig` DB 행이 유일한 출처. 첫 등록 전엔 `publicConfig` 가 404.
+vworld 키는 env 변수 없음. canonical/source 분리 관련 env 변수도 없음 — DB 스키마와 lib/matching 임계만으로 동작.
 
-## Key Decisions [coverage: high — 18 sources]
+## Key Decisions [coverage: high — 22 sources]
 
-- **Zod = 단일 진실 (SSOT)** — 라우트 스키마(`body`/`params`/`response`)는 모두 `@repo/api-contract`. `fastify-type-provider-zod`의 `validatorCompiler`/`serializerCompiler`가 런타임 검증 + TS 타입 추론 + OpenAPI 자동 생성을 한 번에 처리.
-- **autoload 두 단계** — `plugins/`는 무조건 전부, `modules/`는 `matchFilter: /\.route\.(ts|js)$/`로 route 파일만. `summary` 모듈은 라우트 파일이 없어 autoload 영향권 밖이고 외부에서는 모듈 싱글턴(`summaryEventsBus`) + 명시적 import로만 접근.
-- **모듈 레이아웃** — CLAUDE.md 규칙대로 모듈마다 `*.route.ts` + `*.service.ts` + `*.test.ts` 트리오. 인증 패턴 세 가지: picks는 모듈 전역 `addHook`, admin/restaurant/settings 은 라우트별 `onRequest`, summary-events SSE는 핸들러 안에서 직접 토큰 검증.
-- **공개 라우트는 별도 라우트로 분리, 응답 스키마도 다르게** — restaurant 의 `publicList`/`publicByPlaceId`/`publicInsights`/`ranking`, settings 의 `publicConfig` 모두 admin 라우트와 path 자체가 다르고 service 메소드도 별개(`getPublicList`/`getPublicDetail` vs `list`/`getDetailByPlaceId`). 이유:
-  - **응답이 다르다.** 공개 list 는 좌표·썸네일·도로명이 들어가고 운영 메타(요약 진행 카운트/분석 실패 카운트)가 빠진다. 공개 detail 은 `ReviewSummary` 의 status/errorCode/errorMessage/model/startedAt 같은 운영 메타를 떼고 분석 안 된 행은 `analysis: null` 로 본문만 노출.
-  - **어드민 회귀 위험 0.** 공개 화면이 가벼워지더라도 admin 응답 셋이 그대로라 화면 회귀 가능성 없음.
-  - **캐싱 정책 분리 가능.** `ranking` 은 60s TTL 메모리 캐시 + dogpile guard 가 들어갔지만 admin `list` 는 매 요청 새로 집계 — 공유 캐시면 admin 의 통계가 stale 해진다.
-  - **OpenAPI 표면이 깔끔.** `tags: ['public']` vs `['admin']` 으로 분류돼 Swagger UI 에서 두 응답 셋이 분리 표시.
-- **공개 list 의 메모리 파싱 + bbox 필터 + 좁힌 ids 만 분석 집계** — 좌표/대표 사진/도로명은 `Restaurant.snapshotJson` 안에 묻혀 있어 SQL where 로 거를 수 없다. 모든 행을 가져와 메모리에서 파싱 → bbox 필터 → 통과한 ids 만 `reviewSummary.findMany({ status:'done' })` 로 집계. **bbox 통과 후의 ids 만 집계해서 검색 범위 밖 식당의 분석 통계 호출을 회피**한다 (대규모 도시 단위 통계 호출이 검색바운드별로 따로 잡히게 됨). 식당 수가 수백 단위까지는 메모리 처리로 충분.
-- **공개 detail 의 mixed sentiment 분포는 카운트 안 함** — 어드민 detail/insights 는 `mixed` 도 분포에 포함하지만, 공개 list 의 카운트는 `positive/negative/neutral` 만 표시한다. 라이트한 UI 표면에서 4범주가 시각적으로 무거워 신호/잡음 비가 나쁘다는 판단. (공개 insights 는 어드민과 같은 응답 스키마라 mixed 그대로 노출 — 화면이 의도된 4분포 차트.)
-- **vworld 키는 LlmProviderConfig 와 같은 DB-backed 패턴이지만 env fallback 없음** — vworld JS SDK 키는 운영자가 발급받아 도메인 화이트리스트와 짝지어 직접 등록하는 1:1 자원이라 `.env` 기본값 개념이 어색하다. AI 키는 dev/test 환경에서 임시 키 fallback 이 유용하지만 vworld 는 도메인 페어링이 다르면 어차피 동작하지 않음 → 첫 등록 전엔 공개 라우트가 404, 등록 후엔 평문 그대로 흘려 보냄.
-- **vworld secret 라우트는 평문 reveal** — AI 키 라우트는 `apiKeyMasked` (예: `sk-…abcd`) 만 돌려주고 평문은 한 번 입력 후 분실. vworld 는 SDK init URL 에 키를 그대로 박아 호출하므로 admin 화면이 평문을 다시 받아와야 한다 → `Routes.SettingsMap.secret(:id)` 라우트가 `{ provider, apiKey, domains }` 를 평문으로 반환. admin 가드 통과 시에만.
-- **vworld `publicConfig` 는 admin secret 과 보안 등급이 동등** — WMTS 키는 어차피 브라우저 Network 탭에서 노출된다. admin 만 본다고 해서 더 비밀이 되는 게 아니므로 공개 라우트로 분리만 하고(가드 적용해야 동작 안 함) 평문 그대로 반환.
-- **JWT `?token=` 쿼리 + 로그 redaction** — `EventSource`(SSE)는 커스텀 헤더 불가하므로 토큰을 쿼리스트링에 싣는다. [src/app.ts](../../apps/friendly/src/app.ts)의 `serializers.req`가 `([?&]token=)[^&]+ → $1[REDACTED]`로 마스킹.
-- **Multiplexed Summary SSE** — 한 admin이 여러 식당을 동시 모니터링할 때 placeId마다 `EventSource`를 열면 HTTP/1.1 6 connection 제한에 걸린다. `?placeId=A&placeId=B&…` 한 번에 보내고 서버가 placeId 수만큼 subscribe. 이벤트 페이로드에 `placeId`를 포함해 클라이언트가 demux.
-- **요약 이벤트 두 종류** — [summary-events-bus.ts](../../apps/friendly/src/modules/summary/summary-events-bus.ts)의 `progress`(카운트만 변경)와 `review`(특정 행 done/failed + 분석 필드 동봉). 후자가 있어 클라이언트가 디테일 GET 재요청 없이 캐시 머지 가능.
-- **리뷰 dedup = externalId + contentHash 이중 키** — Naver review id가 있으면 `(restaurantId, externalId)`, 없거나 익명이면 `(restaurantId, sha1(authorName + body))`. SQLite는 `createMany skipDuplicates` 미지원 → in-memory pre-filter + row-by-row create + P2002 silent skip 패턴.
-- **1 review = 1 ReviewSummary** — `reviewId @unique` 1:1. 재요약/재분석은 같은 row를 `upsert`로 덮어쓴다. 재크롤은 `clearReviewsAndSummaries`로 통째로 날린 뒤 새로.
-- **Summary placeId-level 직렬화** — `runChainByPlace: Map<string, Promise<void>>`로 같은 placeId 의 batch 들을 then-chaining. 다른 placeId 는 여전히 병렬. 페이지마다 `queueSummariesForReviews` 가 떠도 자기 chunk 만 'running' 으로 마킹돼 진행 표시가 일관된다. Fastify `app.log`(pino) 주입으로 `[summary] queue start/chunk start/chunk done/queue finished` 라인이 콘솔에 박힌다.
-- **리뷰 단위 자동 재시도 3회** — `attemptOnce` 헬퍼 + `attemptForReview` 재시도 루프. parse_failed/upstream/timeout 모두 대상. 백오프 = `300 * attempt + Math.floor(Math.random() * 200)` ms. 어댑터의 동시성-한도 백오프와 별개.
-- **`ANALYSIS_VERSION = 4` (v4)** — v3→v4 변경점: (1) `menus[].sentiment` 를 LLM JSON schema/zod 양쪽에서 **필수 + non-null** 강제 (positive/negative/neutral 셋 중 하나만). 모델이 모호할 때도 'neutral' 로 빠지도록 — 메뉴 단위 통계의 입력 품질 확보. (2) `menus[].traits` (맛/특징 태그, string[]) 추가 — sentiment 와 직교해 "독특한 맛" 처럼 호불호 표현을 보존. 프롬프트도 few-shot 4개로 재구성하고 traits 단서가 없을 때 빈 배열을 명시. v3 잔존 행은 `backfillForRestaurant` 로 재분석되거나 `analyticsBackfill` 로 정규화 테이블에만 풀어쓸 수 있다.
-- **Ollama structured output + numCtx=4096** — `provider.complete({ format: ANALYSIS_JSON_SCHEMA })` 로 토큰 샘플링 단계에서 출력 모양을 잡는다. `temperature: 0.2`, `maxTokens: 1500`, `numCtx: 4096` (Ollama 기본 2048 은 시스템 프롬프트 600토큰 + 긴 리뷰가 들어가면 입력에서 잘려 분석이 무의미해진다 — 회귀 핸들). 파서는 `<think>...</think>` reasoning 블록 제거 + 균형 괄호 추적으로 첫 완전 JSON 객체 추출.
-- **`extractFirstJsonObject` / `normalizeTerm` 공유 export** — summary.service.ts 가 두 헬퍼를 export 해 menu-grouping/analytics 모듈이 같은 LLM 응답 파싱 + 이름 정규화 (소문자/공백/특수문자 제거) 를 재사용한다. 동의어 사전(예: "세트"="SET")은 별도 작업으로 미룸.
-- **`getInsights` MenuCanonical 기반으로 갈아탔다** — 기존엔 done summary의 `menusJson` 을 행마다 파싱해서 메모리에서 그룹핑했다. 이제는 `MenuMention` + `MenuCanonical` JOIN. 매핑이 있으면 `canonicalNorm` 으로 그룹, 없으면 `nameNorm` fallback (가장 빈번한 원문 표기를 displayName 으로). sentiment 분포·평균 점수·tips/keywords 는 여전히 `ReviewSummary` 행에서 직접 집계 — 분석 필드는 1:1 이라 정규화 테이블 없이 충분.
-- **분석 정규화 테이블 도입 동기** — `menusJson`/`tipsJson`/`keywordsJson` 파싱은 식당 단위 통계엔 충분하지만, 글로벌 메뉴 순위·키워드 검색·전역 LLM 머지엔 GROUP BY 가능한 행 단위가 필요하다. summary done 시 같은 트랜잭션 안에서 `delete + reinsert` 로 동기화. 기존 데이터는 `Routes.Restaurant.analyticsBackfill` (LLM 미호출, JSON → row 변환만) 로 1회 채운다.
-- **Summary는 fire-and-forget + 공유 FIFO 게이트** — `queueSummariesForReviews`는 즉시 반환, 내부 `run()`은 `void Promise.catch(() => undefined)`. 어댑터 풀은 [adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)를 공유해 `LlmProviderConfig.maxConcurrent`로 동시성 제어 ([ai 토픽](./ai.md)).
-- **Media는 디스크 캐시 + sharp** — lru-cache가 아닌 `data/thumbs/<sha1>.jpg` 파일 캐시. 이유: (1) 썸네일은 잠재적으로 GB 단위라 메모리에 안 맞음, (2) restart에도 살아남음, (3) 단일 인스턴스라 cache invalidation 문제 없음. ALLOWED_HOSTS로 SSRF 차단, 5초 timeout, 10MB 상한, `If-None-Match`로 304 지원.
-- **crawl 의 actor 단위 rate-limit 제거 (2026-05-09)** — 어드민 발견 페이지의 정상 사용 패턴이 "검색 결과 N개 체크 → 한 번에 N개 startCrawl" 이라 어떤 윈도우 길이도 둘째부터 차단됐다. spam 방어는 in-flight dedup + max_concurrent FIFO 큐 두 layer 로 이미 충분 — `RATE_LIMIT_WINDOW_MS`/`lastCallByActor` Map 필드 제거. 자세한 건 [crawl 토픽](./crawl.md).
-- **No Docker / No Redis** — CLAUDE.md 규칙. SQLite + 단일 인스턴스 + `lru-cache` 또는 디스크 캐시.
-- **dev = `tsx watch`, prod = `tsup` 번들** — [tsup.config.ts](../../apps/friendly/tsup.config.ts), `target: node22`, ESM, sourcemap on. `start`는 `node --env-file=.env dist/server.js`.
-- **Vitest는 `extensionAlias` + 수동 .env 로드** — [vitest.config.ts](../../apps/friendly/vitest.config.ts)는 `verbatimModuleSyntax`로 ESM-style `.js` 임포트를 쓰는 코드베이스를 위해 `resolve.extensionAlias: { '.js': ['.ts','.js'] }`, `server.deps.inline: [/^@repo\//]`. `.env`는 config 상단에서 수동 파싱.
+- **Zod = 단일 진실 (SSOT)** — 라우트 스키마는 모두 `@repo/api-contract`. `fastify-type-provider-zod`가 런타임 검증 + TS 타입 추론 + OpenAPI 자동 생성.
+- **autoload 두 단계** — `plugins/`는 무조건 전부, `modules/`는 `*.route.ts` 파일만. `summary` 모듈은 라우트 파일이 없어 autoload 영향권 밖.
+- **모듈 레이아웃** — CLAUDE.md 규칙대로 모듈마다 `*.route.ts` + `*.service.ts` + `*.test.ts` 트리오.
+- **공개 라우트는 별도 라우트로 분리, 응답 스키마도 다르게** — restaurant 의 `publicList`/`publicByPlaceId`/`publicInsights`/`ranking`, settings 의 `publicConfig` 모두 admin 라우트와 path 자체가 다르고 service 메소드도 별개. 응답 분리 + 어드민 회귀 위험 0 + 캐싱 정책 분리 + OpenAPI 표면 분류.
+- **공개 list 의 메모리 파싱 + bbox 필터 + 좁힌 ids 만 분석 집계** — 좌표/대표 사진/도로명은 `Restaurant.snapshotJson` 안. SQL where 로 못 거름 → 모든 행 메모리 파싱 → bbox 필터 → 통과한 ids 만 분석 집계.
+- **공개 detail 의 mixed sentiment 분포는 카운트 안 함** — 공개 list 의 카운트는 `positive/negative/neutral` 만. 공개 insights 는 어드민과 같은 스키마라 mixed 포함.
+- **cross-source 가게는 `Restaurant` 다행 + `CanonicalRestaurant` 1행 패턴** — 같은 가게의 네이버/다이닝코드 행을 하나로 합치지 않고 출처별 행을 그대로 둔 채 같은 `canonicalId` 로 묶는다. 출처별 스냅샷(snapshotJson)/리뷰/분석은 독립 → source 별로 다른 시점/다른 필드가 자연스럽게 보존. 통합 표면은 list 의 `sources[]` 배열로 합치고 sentiment 평균은 가중평균.
+- **`(source, sourceId)` 가 cross-source unique 키** — 네이버는 `placeId == sourceId`, 다이닝코드는 `sourceId = vRid` + `placeId = null`. 공개 라우트 호환을 위해 `placeId @unique` (nullable) 도 그대로 유지 — 신규 소스는 채우지 않으니 네이버만 라우팅된다. zero-downtime 마이그레이션의 핵심: 기존 placeId 기반 모든 라우트/URL/캐시 키가 그대로 동작.
+- **`Restaurant.canonicalId` FK 가 Cascade 아님 (Restrict) — 의도된 trap** — 다이닝코드 단독으로 등록된 가게가 있을 때 그 행을 지워도 canonical 은 살아남아야 한다. 다음에 같은 가게의 네이버 행이 등록되면 ProposalService 가 그 canonical 을 다시 매칭 후보로 잡을 수 있어야 하기 때문. 반대로 canonical 을 통째로 지우려면 묶인 Restaurant 행이 모두 0이어야 함(역방향 Restrict). 머지 도중 임시로 비는 canonical 은 같은 트랜잭션 내에서 정리.
+- **자동 매칭은 큐만 적재, 머지는 사람이 확정** — `lib/matching.ts` 의 임계 (좌표 있을 때 score 0.45, 이름 단독은 0.7) 통과 후보는 `CanonicalMergeProposal` 에 status=`open` 으로만 적재. 동명이인/주변 가게 false positive 가 데이터 오염을 일으키므로 자동 머지를 의도적으로 안 함. 임계 자체는 보수적으로 (사람 눈에 띌 후보를 빠뜨리는 것보다 가짜 후보를 잡는 비용이 낮음).
+- **(A,B) 쌍 정규화 (A<B cuid 사전순)** — `CanonicalMergeProposal` 의 `(canonicalAId, canonicalBId)` 가 unique. 같은 쌍이 양방향으로 두 번 큐에 뜨지 않도록 항상 cuid 문자열 사전순 정규화. ProposalService 적재 시 swap.
+- **bigram Jaccard + Haversine 200m 선형 감쇠** — 한국어 짧은 가게명에서 trigram 보다 안정적이고 (음절 단위 변형은 normalizeName 단계 흡수), 한 글자 이름은 정규화 후 완전 일치만 1점. 거리는 200m 이상이면 0점, 그 이상은 maxDistanceM=500m 안에서만 후보 고려. name 0.6 + distance 0.4 가중.
+- **vworld 키는 LlmProviderConfig 와 같은 DB-backed 패턴이지만 env fallback 없음** — vworld 도메인 페어링이 다르면 어차피 동작 안 함.
+- **vworld secret 라우트는 평문 reveal** — SDK init URL 에 키를 그대로 박아야 해서.
+- **vworld `publicConfig` 는 admin secret 과 보안 등급이 동등** — WMTS 키는 어차피 Network 탭 노출.
+- **JWT `?token=` 쿼리 + 로그 redaction** — SSE 는 커스텀 헤더 불가. app.ts 의 `serializers.req` 마스킹.
+- **Multiplexed Summary SSE + canonicalId 구독** — 한 admin 이 여러 식당 모니터링 시 HTTP/1.1 6 connection 제한 회피. canonicalId 로 받으면 묶인 모든 source 행의 bus key (네이버=placeId, 다이닝코드=`dc:<vRid>`) 를 union 으로 구독 — 머지 후에도 한 canonical 의 진행 상황을 통째로 본다.
+- **요약 이벤트 두 종류** — `progress`/`review`.
+- **리뷰 dedup = externalId + contentHash 이중 키** — Naver review id 있으면 externalId, 없으면 SHA-1. 다이닝코드는 `dc:rv:<rvId>` prefix 로 네이버와 충돌 방지.
+- **1 review = 1 ReviewSummary** — `reviewId @unique`.
+- **Summary placeId-level 직렬화 + 어댑터 공유 FIFO 게이트** — `runChainByPlace` Map + adapter-cache 동시성.
+- **리뷰 단위 자동 재시도 3회** — `300 * attempt + jitter` ms 백오프.
+- **`ANALYSIS_VERSION = 4`** — sentiment 필수 non-null + traits string[] 추가.
+- **Ollama structured output + numCtx=4096** — 시스템 프롬프트 + 긴 리뷰가 입력에서 잘리지 않도록.
+- **`extractFirstJsonObject` / `normalizeTerm` 공유 export** — summary → menu-grouping/analytics.
+- **`getInsights` MenuCanonical 기반** — MenuMention + MenuCanonical JOIN.
+- **분석 정규화 테이블 도입 동기** — 글로벌 통계용 GROUP BY 가능 행 단위 필요.
+- **Summary는 fire-and-forget + 공유 FIFO 게이트** — adapter-cache 동시성 제어.
+- **Media는 디스크 캐시 + sharp** — `data/thumbs/<sha1>.jpg` 파일 캐시.
+- **No Docker / No Redis** — CLAUDE.md 규칙.
+- **dev = `tsx watch`, prod = `tsup` 번들** — `target: node22`, ESM.
+- **Vitest는 `extensionAlias` + 수동 .env 로드**.
 
-## Gotchas [coverage: medium — 9 sources]
+## Gotchas [coverage: medium — 11 sources]
 
-- **`snapshotJson` 파손 시 좌표/사진만 null fallback** — 공개 list 의 `getPublicList` 가 모든 행에 대해 `JSON.parse(snapshotJson)` 을 돈다. 손상된 행이 있어도 try/catch 안에서 좌표/도로명/썸네일만 null 로 두고 다른 필드(name/category/address/rating/reviewCount)는 살린다. 결과적으로 손상된 행도 리스트에 노출되지만 지도 마커는 안 찍힘.
-- **bbox NaN/length 방어** — `query.bbox` 는 zod regex 통과한 입력이라 정상 파싱되지만 방어적으로 `parts.length === 4 && parts.every(Number.isFinite)` 체크. 한 토큰이라도 무효면 bbox 무시하고 전체 통과 (필터 미적용 대신 빈 결과를 보여주면 UX 가 나쁨).
-- **공개 list 정렬에서 null 은 항상 뒤** — `pickPublicSort` 의 `nullsLast` 헬퍼. `satisfaction`/`positive`/`rating` 정렬은 분석 안 된 식당이 0점인 양 위로 올라오면 빈 자리처럼 보인다. `recent` 는 `firstCrawledAt` 이 항상 NOT NULL 이라 nullsLast 무관.
-- **공개 detail 의 `analysis` 는 done 한정** — `summary.status === 'done'` + 모든 분석 필드 NOT NULL 일 때만 `PublicReviewAnalysis` 로 평탄화. 한 필드라도 비면 `analysis: null` 로 떨어져 본문만 보인다. 운영 메타(`status`/`errorCode`/`model`/`startedAt`) 는 응답 스키마에서 아예 제거 — 공개 페이지가 "분석 실패" 같은 디버깅 정보를 볼 일 없음.
-- **공개 detail mixed 카운트 누락은 의도** — 공개 list 의 sentiment 카운트(`positiveCount`/`negativeCount`/`neutralCount`)는 mixed 를 빼고 집계. 공개 insights 는 어드민과 같은 응답 스키마라 mixed 가 들어가지만, 공개 detail/list 의 화면 위젯은 3분포 막대만 그린다.
-- **vworld `publicConfig` 키 미등록 시 404 → FE 가드 필요** — admin 이 키를 한 번도 등록하지 않은 상태에서 공개 맛집 지도 페이지가 부팅하면 `Routes.SettingsMap.publicConfig` 가 404 를 돌려준다. 클라이언트는 키 없는 상태(빈 배경 지도) 로 폴백하거나 "관리자에게 문의" 메시지를 띄워야 한다 (자동 마운트 실패하면 vworld JS SDK 가 콘솔 에러).
-- **vworld 도메인 화이트리스트는 단순 메모** — `MapProviderConfig.domains` 는 콤마 구분 자유 입력. 서버는 검증/사용 안 하고 단지 admin 화면이 키 발급 시 등록한 도메인을 기억하기 위한 노트필드. 실제 도메인 페어링은 vworld 측에서 강제.
-- **공개 vs admin getInsights — 응답 스키마는 같지만 가드만 다르다** — `publicInsights(:placeId)` 와 `insights(:placeId)` 는 같은 `RestaurantInsights` 응답을 돌려주고 service 도 `getInsights()` 한 메소드를 공유. 둘 다 mixed 카운트 포함. 둘을 따로 둔 이유는 단지 admin 가드를 빼야 게스트가 호출 가능하기 때문.
-- **Windows에서 Prisma DLL lock (EPERM)** — `prisma generate`/`db:migrate`가 dev 서버의 `query_engine-windows.dll.node` 때문에 실패. dev watch 프로세스를 먼저 죽이고 마이그레이션. 분석 정규화/canonical 테이블 4개 + map_provider_configs 마이그레이션이 연달아 추가된 시기엔 특히 자주 부딪힌다.
-- **`extractFirstJsonObject` cross-module 의존성** — summary.service.ts 가 export 한 헬퍼를 menu-grouping/analytics 가 import 한다. summary 의 파서를 손대면 두 모듈도 함께 회귀 테스트해야 한다 (양쪽 다 LLM JSON 응답을 받는 형태가 같음).
-- **v3 행 + v4 코드 공존** — `analysisVersion` null/3 인 done 행은 `menus[].sentiment` 가 null 일 수 있다. `getInsights`/`MenuMention` 저장 경로가 모두 null 을 'neutral' 로 폴백. 정확한 통계가 필요하면 `Routes.Restaurant.reanalyze` 로 LLM 재호출하거나 `analyticsBackfill` 로 정규화만 채운다.
-- **`JWT_SECRET` 32자 미만 → 부팅 실패** — env zod에서 `process.exit(1)`.
-- **회원가입은 무조건 USER** — 첫 ADMIN은 [scripts/promote-admin.ts](../../apps/friendly/scripts/promote-admin.ts)로.
-- **`?token=` 마스킹은 app.ts에만 있다** — 외부 트레이스/메트릭 경로로 `req.url`이 흘러나가면 마스킹이 안 먹는다.
-- **DELETE restaurant ↔ in-flight crawl = 409** — `jobRegistry.findInFlightByPlace`로 큐 대기/실행 중 잡까지 확인. cascade delete + 동시 INSERT가 FK race를 만든다. 캐스케이드 범위가 이번에 늘었다 (`MenuMention`/`ReviewTag`/`MenuCanonical`/`GlobalMenuCanonicalLink` 까지) — 큰 식당 삭제 시 트랜잭션 시간이 더 늘어날 수 있음.
-- **summary 모듈은 라우트 미노출** — autoload 픽업 대상이 아니므로 HTTP 인터페이스를 추가하려면 새 `*.route.ts`나 기존 모듈(restaurant) 라우트에 얹어야 한다. 현재 reanalyze/insights/smart-pick + analyticsBackfill 은 restaurant 라우트가 호스팅한다.
-- **`createMany skipDuplicates` SQLite 미지원** — 위 dedup 패턴(in-memory pre-filter + P2002 silent skip)으로 우회.
-- **Ollama `num_ctx` 기본 2048 함정** — 시스템 프롬프트(~600토큰) + 긴 리뷰가 입력 단계에서 잘리면 분석 출력이 늘 깨졌다. `numCtx: 4096` + `maxTokens: 1500` 명시로 해결. Ollama에선 `num_ctx = 입력+출력 합`이라 둘 다 명시해야 한다.
-- **autoload는 vite resolve를 우회한다** — `@fastify/autoload`는 동적 `import()`를 직접 호출하므로 vitest의 `extensionAlias`/`deps.inline` 변환이 적용되지 않는다. `buildApp()`을 통째로 부팅하는 통합 테스트는 ESM/.js resolve에서 깨지기 쉬움. 대안은 ai/settings 모듈처럼 minimal Fastify 인스턴스를 만들어 필요한 plugin/route만 명시적으로 register.
-- **media `data/thumbs/` 디렉터리 누적** — 캐시 만료/제거 로직이 없다. 운영에서 디스크 모니터링 필요. 키는 `sha1(url|w=…|q=…)`이라 같은 원본을 다른 width로 요청하면 별도 파일이 쌓인다.
-- **media는 public(인증 없음)** — Naver 리뷰 이미지는 공개 자원이고 `<img>` 로 불러야 해서 의도된 결정. ALLOWED_HOSTS 화이트리스트가 SSRF 가드의 전부.
-- **`tsx watch`는 `src/`만 감시한다** — workspace 패키지(`@repo/*`) 변경은 자동 reload되지 않으므로 수동 재시작 필요.
-- **crawl 검색 라우트의 ncaptcha 의존** — 검색 어댑터가 PC 지도 페이지를 띄워 captcha 토큰 + 세션 쿠키를 캡처하는 방식이라, 네이버가 captcha UI/응답 형태를 바꾸면 그날부터 GET `/admin/crawl/search` 가 죽는다. friendly 운영 단에선 어드민 발견 페이지가 빈 결과를 받게 됨. 자세한 건 [crawl 토픽](./crawl.md).
+- **canonical 1:1 시작 → merge 로 N:1 로 진화** — 마이그레이션 직후엔 모든 Restaurant 가 자기 전용 canonical 을 갖는다 (백필 시 `canonical.id = restaurant.id` 재활용). list 응답의 `sources.length === 1` 이 압도적으로 많고 `suggestion` 이 뜨면 어드민이 수동 머지. canonical 토픽 작업이 끝날 때까지 어드민 화면은 "보통 1:1, 가끔 묶임" 상태.
+- **`canonicalId` FK 가 Cascade 아니라 Restrict** — 단일 source Restaurant 를 DELETE 하면 그 행만 사라지고 canonical 은 살아남는다. 반대로 canonical 을 prisma 로 직접 지우려 하면 묶인 Restaurant 가 0개일 때만 가능 (FK 위반). 머지 코드는 이를 활용해 "옮기고 → 빈 canonical 정리" 2단계로 진행한다.
+- **`CanonicalMergeProposal` 의 (A,B) 쌍은 항상 A<B 정규화** — 직접 INSERT 로 디버깅 시 사전순 위반하면 unique 검사가 양방향 중복을 못 막는다. 항상 ProposalService 를 거쳐 적재해야 함.
+- **`Restaurant.source` 분기 라우팅 — 공개 표면은 네이버 전용** — `publicList`/`publicByPlaceId`/`ranking`/`smartPick` 의 모든 service 메소드에 `where.source = 'naver'` 가 명시. 다이닝코드 행은 어드민 화면에서만 보인다 (admin list 의 sources[] 에 포함). 공개 표면 확장은 후속 PR.
+- **`Restaurant.placeId` 가 nullable** — 코드 안의 `r.placeId!` non-null assertion 들은 모두 `where: { source: 'naver' }` 필터와 짝 (네이버 행은 항상 placeId 보유). 새 코드에서 이 가정을 흘려쓰면 다이닝코드 행에서 런타임 에러.
+- **lib/matching 의 임계 변경 = 큐 폭증 위험** — `MATCH_THRESHOLDS.minScoreWithCoords` 를 0.45 → 0.3 같이 낮추면 ProposalService 가 적재하는 후보가 기하급수로 늘어 어드민 큐가 무용지물. lib/matching 손대면 ProposalService + restaurant.list 의 candidateCount 두 호출 사이트 회귀 테스트.
+- **`snapshotJson` 파손 시 좌표/사진만 null fallback** — 공개 list 가 try/catch 로 흡수, 다른 필드는 살림.
+- **bbox NaN/length 방어** — 방어적으로 length·finite 체크.
+- **공개 list 정렬에서 null 은 항상 뒤** — `nullsLast` 헬퍼.
+- **공개 detail 의 `analysis` 는 done 한정**.
+- **공개 detail mixed 카운트 누락은 의도**.
+- **vworld `publicConfig` 키 미등록 시 404 → FE 가드 필요**.
+- **vworld 도메인 화이트리스트는 단순 메모**.
+- **공개 vs admin getInsights — 응답 스키마는 같지만 가드만 다르다**.
+- **Windows에서 Prisma DLL lock (EPERM)** — 분석/canonical 마이그레이션 4개가 한꺼번에 들어온 시기엔 특히 자주 부딪힘. dev watch 먼저 죽이고 migrate.
+- **`extractFirstJsonObject` cross-module 의존성** — summary 파서 변경 시 menu-grouping/analytics 회귀 테스트.
+- **v3 행 + v4 코드 공존** — null sentiment 는 'neutral' 로 폴백.
+- **`JWT_SECRET` 32자 미만 → 부팅 실패**.
+- **회원가입은 무조건 USER** — 첫 ADMIN은 `scripts/promote-admin.ts`.
+- **`?token=` 마스킹은 app.ts에만 있다** — 외부 트레이스 경로엔 안 먹음.
+- **DELETE restaurant ↔ in-flight crawl = 409**. 캐스케이드 범위에 MenuMention/ReviewTag/MenuCanonical/GlobalMenuCanonicalLink 까지 포함되어 트랜잭션 시간 증가 가능.
+- **summary 모듈은 라우트 미노출** — restaurant 라우트가 호스팅.
+- **`createMany skipDuplicates` SQLite 미지원** — in-memory pre-filter + P2002 silent skip 패턴.
+- **Ollama `num_ctx` 기본 2048 함정** — 4096 + maxTokens 1500 명시.
+- **autoload는 vite resolve를 우회한다** — vitest 통합 부팅 깨지기 쉬움.
+- **media `data/thumbs/` 디렉터리 누적** — 만료 로직 없음.
+- **media는 public(인증 없음)** — ALLOWED_HOSTS 가 SSRF 가드 전부.
+- **`tsx watch`는 `src/`만 감시한다** — `@repo/*` 변경은 수동 재시작.
+- **crawl 검색/다이닝코드/캐치테이블 적응형 의존** — 자세한 건 [crawl 토픽](./crawl.md).
 
-## Sources [coverage: high — 57 sources]
+## Sources [coverage: high — 62 sources]
 
 - [apps/friendly/package.json](../../apps/friendly/package.json)
 - [apps/friendly/tsconfig.json](../../apps/friendly/tsconfig.json)
@@ -325,6 +344,10 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - [apps/friendly/vitest.config.ts](../../apps/friendly/vitest.config.ts)
 - [apps/friendly/.env.example](../../apps/friendly/.env.example)
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)
+- [apps/friendly/prisma/migrations/20260515104718_add_canonical_merge_proposals/migration.sql](../../apps/friendly/prisma/migrations/20260515104718_add_canonical_merge_proposals/migration.sql)
+- [apps/friendly/prisma/migrations/20260515100910_add_canonical_suggestion_dismissed/migration.sql](../../apps/friendly/prisma/migrations/20260515100910_add_canonical_suggestion_dismissed/migration.sql)
+- [apps/friendly/prisma/migrations/20260515083303_add_canonical_restaurant/migration.sql](../../apps/friendly/prisma/migrations/20260515083303_add_canonical_restaurant/migration.sql)
+- [apps/friendly/prisma/migrations/20260515063258_add_restaurant_source_split/migration.sql](../../apps/friendly/prisma/migrations/20260515063258_add_restaurant_source_split/migration.sql)
 - [apps/friendly/prisma/migrations/20260508173216_add_map_provider_configs/migration.sql](../../apps/friendly/prisma/migrations/20260508173216_add_map_provider_configs/migration.sql)
 - [apps/friendly/prisma/migrations/20260508122321_add_visitor_review_videos/migration.sql](../../apps/friendly/prisma/migrations/20260508122321_add_visitor_review_videos/migration.sql)
 - [apps/friendly/prisma/migrations/20260508095207_add_review_analysis_fields/migration.sql](../../apps/friendly/prisma/migrations/20260508095207_add_review_analysis_fields/migration.sql)
@@ -339,6 +362,7 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - [apps/friendly/src/app.ts](../../apps/friendly/src/app.ts)
 - [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts)
 - [apps/friendly/src/lib/hash.ts](../../apps/friendly/src/lib/hash.ts)
+- [apps/friendly/src/lib/matching.ts](../../apps/friendly/src/lib/matching.ts)
 - [apps/friendly/src/types/fastify.d.ts](../../apps/friendly/src/types/fastify.d.ts)
 - [apps/friendly/src/plugins/cors.ts](../../apps/friendly/src/plugins/cors.ts)
 - [apps/friendly/src/plugins/empty-body-parser.ts](../../apps/friendly/src/plugins/empty-body-parser.ts)
@@ -359,6 +383,9 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - [apps/friendly/src/modules/restaurant/restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts)
 - [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)
 - [apps/friendly/src/modules/restaurant/restaurant.test.ts](../../apps/friendly/src/modules/restaurant/restaurant.test.ts)
+- [apps/friendly/src/modules/canonical/](../../apps/friendly/src/modules/canonical/)
+- [apps/friendly/src/modules/crawl/crawl.route.ts](../../apps/friendly/src/modules/crawl/crawl.route.ts)
+- [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts)
 - [apps/friendly/src/modules/summary/summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts)
 - [apps/friendly/src/modules/summary/summary-events-bus.ts](../../apps/friendly/src/modules/summary/summary-events-bus.ts)
 - [apps/friendly/src/modules/summary/summary.test.ts](../../apps/friendly/src/modules/summary/summary.test.ts)
@@ -370,6 +397,4 @@ JWT payload: `{ userId: string; email: string; role: 'USER' | 'ADMIN' }` (`reque
 - [apps/friendly/src/modules/settings/map.service.ts](../../apps/friendly/src/modules/settings/map.service.ts)
 - [apps/friendly/src/modules/settings/map.test.ts](../../apps/friendly/src/modules/settings/map.test.ts)
 - [apps/friendly/src/modules/ai/adapter-cache.ts](../../apps/friendly/src/modules/ai/adapter-cache.ts)
-- [apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts)
-- [apps/friendly/scripts/dev-capture-search.ts](../../apps/friendly/scripts/dev-capture-search.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)

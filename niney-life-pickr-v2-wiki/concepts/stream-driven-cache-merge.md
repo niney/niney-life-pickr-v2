@@ -1,6 +1,6 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-05-09
+last_compiled: 2026-05-15
 topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics]
 status: active
 ---
@@ -21,6 +21,7 @@ status: active
 - **2026-05-08** in [[../topics/friendly]] / [[../topics/web]] (`summary.service.ts`, `summary-events-bus.ts`, `sections.tsx`): ReviewSummary 구조화 분석(sentiment / sentimentScore / satisfactionScore / menusJson / tipsJson / keywordsJson)도 SSE `review` 이벤트 페이로드에 그대로 실려와 `reviews[].summary.*`로 머지됨. FE 리뷰 카드의 감정 뱃지·만족도·메뉴 칩·팁 리스트가 detail GET 0회로 채워지고 갱신됨. 페이로드만 풍부해지고 머지 코드는 동일.
 - **2026-05-09** in [[../topics/menu-grouping]] / [[../topics/shared]] (`packages/shared/src/hooks/useMenuGrouping.ts` `useGroupingJob(jobId)`): batch 메뉴 그룹핑 잡 React Query 캐시에 SSE 이벤트를 직접 머지. `snapshot` 이벤트는 잡 캐시를 통째로 set, `item` 이벤트는 items 배열에서 placeId 매치해 patch + doneCount/failedCount/skippedCount 재계산, `done` 이벤트는 state/finishedAt patch + ranking + restaurants-status 캐시 invalidate. follow-up GET 0회. 자동 재연결 백오프(1s→2s→4s→max 30s) + closedRef 가드 + jobId effect dep로 라이프사이클을 훅 안에서 직접 관리.
 - **2026-05-09** in [[../topics/analytics]] / [[../topics/shared]] (`packages/shared/src/hooks/useAnalytics.ts` `useGlobalMergeJob(jobId)`): 전역 머지 잡 진행도. `snapshot`은 잡 캐시 통째 set, `chunk` 이벤트는 doneChunks +1 + totalChunks를 max로 갱신, `done`은 잡 종료 + overview/global-menus 캐시 invalidate. 같은 GET snapshot 1회 + SSE 머지 모양을 그대로 따름.
+- **2026-05-15** in [[../topics/crawl]] / [[../topics/shared]] (`packages/shared/src/hooks/useCrawl.ts` `useDiningcodeBulkSaveJob(jobId)`): 다이닝코드 일괄 저장 잡 진행. `snapshot`은 잡 캐시 통째 set, `item` 이벤트는 vRid 매치해 items 배열 patch + doneCount/failedCount/skippedCount 재계산, `done`은 state/finishedAt patch + `['crawl','diningcode-registered']`/`['restaurant','list']`/`['canonical','proposals']` 캐시 invalidate. menu-grouping의 `useGroupingJob` 과 거의 한 글자 다른 카피 — 패턴이 머지 카피되는 첫 사례. 어드민이 N개 vRid 일괄 저장 중 새 가게가 등록될 때마다 결과 카드의 '등록됨' 배지가 별도 GET 없이 갱신.
 
 ## What This Means
 

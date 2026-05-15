@@ -1,9 +1,9 @@
 ---
 topic: web
-last_compiled: 2026-05-14
-sources_count: 56
+last_compiled: 2026-05-15
+sources_count: 62
 status: active
-aliases: [vite, react, web-app, frontend-web, admin-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix]
+aliases: [vite, react, web-app, frontend-web, admin-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar]
 ---
 
 # web — Vite + React 웹 앱
@@ -16,42 +16,33 @@ aliases: [vite, react, web-app, frontend-web, admin-discover, panel-side-toggle,
 - **공개 사용자 화면** — 로그인 없이 누구나 접근 가능한 맛집 탐색 영역.
   - `/` HomePage — AI 분석된 리뷰의 긍정/부정 비율로 정렬한 식당 랭킹
     ([HomePage](../../apps/web/src/routes/HomePage.tsx))
-  - `/restaurants` RestaurantsPage — 네이버 지도 패턴의 풀 뷰포트 검색 UI.
-    좌측 결과 리스트 + (선택 시) 가운데 상세 패널 + 우측 OpenLayers 지도
+  - `/restaurants` RestaurantsPage — 네이버 지도 패턴의 풀 뷰포트 검색 UI
     ([RestaurantsPage](../../apps/web/src/routes/RestaurantsPage.tsx))
   - `/login` LoginPage — 이메일 로그인 + 회원가입 + 게스트 진입
-    ([LoginPage](../../apps/web/src/routes/LoginPage.tsx))
-- **어드민 콘솔** — 사용자/역할 관리, 맛집 등록·상세 보기·재크롤링,
-  네이버 플레이스 크롤링 실험, **LLM 키 + 지도 키 통합 설정 페이지**,
-  **AI 분석 관리(메뉴 정규화 + 전역 머지 + 카테고리 트리 + 전역 메뉴 통계)**,
-  **맛집 발견 페이지 (네이버 PC 지도 검색 + 다중 선택 일괄 크롤링)**
-  (`/admin/*`). 역할이 `ADMIN`인 계정만 접근 가능.
+- **어드민 콘솔** — `/admin/*`. 역할이 `ADMIN`인 계정만 접근.
+  사용자/역할 + canonical 단위 맛집 관리(병합·분리·삭제) + 다이닝코드 정식
+  크롤링 + 캐치테이블 / 다이닝코드 / 네이버 크롤링 테스트 + 맛집 발견
+  (네이버 PC 지도 검색) + AI 분석 관리 + LLM/지도 키 설정.
 
 `apps/mobile`(React Native)와 동일한 백엔드(`apps/friendly`)를 바라보며,
 공통 도메인 로직은 `@repo/shared`에서 끌어 쓴다. 공개 페이지는 사용자
-대상 — 디자인은 Pretendard 폰트 + 네이버 지도 톤. 어드민은 운영 도구
-— shadcn 디폴트 + system-ui.
+대상 — 디자인은 Pretendard + 네이버 지도 톤. 어드민은 운영 도구 — shadcn
+디폴트 + system-ui.
 
-## Architecture [coverage: high — 26 sources]
+## Architecture [coverage: high — 30 sources]
 
 ### 빌드 / 런타임
 
 - **Vite 6 + `@vitejs/plugin-react`** — 정적 SPA 번들러
   ([vite.config.ts](../../apps/web/vite.config.ts)).
 - **React 19 + react-dom 19** — `createRoot`/`StrictMode`로 마운트
-  ([main.tsx](../../apps/web/src/main.tsx),
-  [package.json](../../apps/web/package.json)).
-- **TypeScript 5.7**, `@repo/config/tsconfig/react.json` 확장
-  ([tsconfig.json](../../apps/web/tsconfig.json)).
-- 경로 별칭 `~/* → ./src/*` (Vite alias + tsconfig paths 양쪽에 정의).
-- `extensions` 우선순위에 `.web.tsx`/`.web.ts`가 들어 있어, 향후
-  플랫폼 분기 파일을 만들 여지가 있다.
-- 진입 HTML은 한국어 로케일 + `Life Pickr` 타이틀
-  ([index.html](../../apps/web/index.html)). `<head>`에서 jsDelivr CDN
-  으로 **Pretendard variable** dynamic-subset CSS를 미리 로드 +
-  `lp:theme` localStorage 값으로 다크모드 FOUC 방지 인라인 스크립트.
-- **OpenLayers 10.7** (`ol@^10.7.0`) 의존성 추가 — 지도 캔버스 라이브러리.
-  vworld JS SDK 대신 OL을 쓴다.
+  ([main.tsx](../../apps/web/src/main.tsx)).
+- **TypeScript 5.7**, `@repo/config/tsconfig/react.json` 확장.
+- 경로 별칭 `~/* → ./src/*` (Vite alias + tsconfig paths 양쪽).
+- `extensions` 우선순위에 `.web.tsx`/`.web.ts` 포함.
+- 진입 HTML 한국어 로케일 + jsDelivr Pretendard variable dynamic-subset
+  preload + `lp:theme` localStorage FOUC 방지 인라인 스크립트.
+- **OpenLayers 10.7** (`ol@^10.7.0`) — vworld JS SDK 대신 WMTS 직접.
 
 ### 라우팅
 
@@ -68,980 +59,446 @@ aliases: [vite, react, web-app, frontend-web, admin-discover, panel-side-toggle,
 | `/admin/discover` | `AdminDiscoverPage` | ↑ |
 | `/admin/restaurants` | `AdminRestaurantsPage` | ↑ |
 | `/admin/restaurants/:placeId` | `AdminRestaurantDetailPage` | ↑ |
+| `/admin/crawl-test`, `:jobId` | `AdminCrawlTestPage` | ↑ (네이버 검증) |
+| `/admin/catchtable-test` | `AdminCatchtableTestPage` | ↑ |
+| `/admin/catchtable-test/:shopRef` | `AdminCatchtableShopPage` | ↑ |
+| `/admin/diningcode-test` | `AdminDiningcodeTestPage` | ↑ |
+| `/admin/diningcode-test/:vRid` | `AdminDiningcodeShopPage` | ↑ (검증 진입) |
+| `/admin/diningcode` | `AdminDiningcodePage` | ↑ (정식 — 검색/등록) |
+| `/admin/diningcode/:vRid` | `AdminDiningcodeShopPage` | ↑ (정식 진입 — 같은 컴포넌트 재사용) |
 | `/admin/analytics` | `AdminAnalyticsPage` | ↑ |
-| `/admin/crawl-test`, `:jobId` | `AdminCrawlTestPage` | ↑ |
 | `/admin/ai-test` | `AdminAiTestPage` | ↑ |
-| `/admin/ai-keys` | `<Navigate to="/admin/settings/ai-keys" replace>` | ↑ (북마크 호환) |
+| `/admin/ai-keys` | `<Navigate to="/admin/settings/ai-keys" replace>` | ↑ (옛 북마크) |
 | `/admin/settings` | `AdminSettingsPage` (Outlet) | ↑ |
 | `/admin/settings` (index) | `<Navigate to="ai-keys" replace>` | ↑ |
 | `/admin/settings/ai-keys` | `AdminAiKeysPage` | ↑ |
 | `/admin/settings/map` | `AdminMapKeysPage` | ↑ |
 
 `RequireAdmin`은 `useCurrentUser()`로 역할을 검증하고, 캐시된 `user`가
-없을 때만 로딩 화면을 띄우는 식으로 깜빡임을 줄인다.
+없을 때만 로딩 화면을 띄워 깜빡임 최소화.
 
 ### 모바일 UX 규율 (2026-05-13 도입)
 
 `/restaurants`/`/admin/discover` 의 모바일 스크롤·sticky 패턴은 별도
-문서로 정리되어 있다 ([docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md)).
-요지:
-
-- 모바일은 **body 스크롤** (페이지가 풀-뷰포트 fixed 모달이 아니라 자연
-  document flow). iOS Safari / Android Chrome 의 URL bar collapse 가
-  동작하려면 document/window 자체가 스크롤돼야 한다.
-- 상세는 **별도 라우트** `/restaurants/:placeId` 로 분리. 데스크톱
-  xl+ 에서는 3-column (list / detail / map) 동시 표시, 모바일에선
-  detail 활성 시 list/map/토글 모두 hidden + detail 만 페이지 흐름.
-- 모바일에서는 전역 `PublicTopBar` 도 hidden — detail 자체 헤더(식당명
-  + 탭바)가 상단 단독 sticky.
-- **탭은 URL 의 일부** (`?tab=menu|reviews|...`). 탭 전환은 push 라
-  모바일 뒤로가기 = 이전 탭.
-- `RestaurantsPage` 내부 detail 활성 판단은 `useMatch('/restaurants/:placeId')`
-  로 path 직접 매치 — `useParams` 는 부모에선 동작 안 함.
-- 같은 컨셉으로 `AdminDiscoverPage` 도 `?placeId=` + `?tab=` 쿼리 기반
-  (라우트 분리 없이 query 만 — 어드민 셸 안이라 자체 헤더 충돌 X).
-
-자세한 패턴은 [public-admin-route-split](../concepts/public-admin-route-split.md)
-와 위 docs 문서 참고.
+문서 ([docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md))
+참고. 모바일은 body 스크롤 + 상세 별도 라우트 + 탭 URL 의 일부 + 100dvh
++ 한글 IME 보호 + scroll-to-top 환경 자동 분기 + 16px 폰트 강제.
 
 ### 공개 셸 — `PublicLayout`
 
 [`PublicLayout`](../../apps/web/src/components/PublicLayout.tsx)은
-`flex min-h-screen flex-col font-pretendard` 컨테이너 +
-`PublicTopBar` + `PublicSidebar`(모바일 햄버거) + `<Outlet/>`. `font-pretendard`
-는 root 에 박혀 공개 페이지 전체에 Pretendard 가 적용되고, 어드민은
-이 클래스가 없어 system-ui fallback.
-
-- [`PublicTopBar`](../../apps/web/src/components/PublicTopBar.tsx) —
-  sticky h-14 헤더. md 이상에서 inline NavLink (`홈` / `맛집`),
-  md 미만에서 햄버거 버튼. 우측에 `ThemeToggle` + 로그인/유저 정보 +
-  ADMIN 사용자에겐 "관리자" 링크.
-- [`PublicSidebar`](../../apps/web/src/components/PublicSidebar.tsx) —
-  md 미만에서만 작동하는 좌측 슬라이드 패널. ESC + backdrop 클릭 닫기,
-  `pointer-events-none` 으로 닫혔을 때 클릭 통과. NAV 항목 클릭 시
-  자동 닫기.
+`flex min-h-screen flex-col font-pretendard` 컨테이너 + `PublicTopBar` +
+`PublicSidebar`(모바일 햄버거) + `<Outlet/>`. 공개 페이지만 Pretendard,
+어드민은 system-ui fallback.
 
 ### 어드민 셸
 
 [`AdminLayout`](../../apps/web/src/components/admin/AdminLayout.tsx)이
 좌측 사이드바(NavLink) + 상단 `AdminTopBar` + `<Outlet/>` 본문 패턴.
-메뉴 항목은 7개 (홈 다음에 "맛집 발견" 신규 추가):
+메뉴 항목 10개 (정식 다이닝코드 추가):
 
 | Icon (lucide) | Label | Path |
 | --- | --- | --- |
 | `Home` | 홈 | `/admin` (`end: true`) |
 | `Compass` | 맛집 발견 | `/admin/discover` |
 | `UtensilsCrossed` | 맛집 | `/admin/restaurants` |
+| `Utensils` | 다이닝코드 크롤링 | `/admin/diningcode` |
 | `BarChart3` | AI 분석 관리 | `/admin/analytics` |
-| `Beaker` | 크롤링 테스트 | `/admin/crawl-test` |
+| `Beaker` | 네이버 크롤링 테스트 | `/admin/crawl-test` |
+| `Beaker` | 캐치테이블 크롤링 테스트 | `/admin/catchtable-test` |
+| `Beaker` | 다이닝코드 크롤링 테스트 | `/admin/diningcode-test` |
 | `Sparkles` | AI 테스트 | `/admin/ai-test` |
 | `Settings` | 설정 | `/admin/settings` |
 
-활성 NavLink는 `bg-primary text-primary-foreground`로 강조, 그 외엔
-`text-muted-foreground hover:bg-accent`. 사이드바는 **md+ sticky aside,
-모바일 드로어** (햄버거 트리거 + ESC/backdrop 닫기). `AdminTopBar` 는
-모바일에서 햄버거 버튼 표시 + "← 일반 화면으로" 탈출 링크를 **우측**으로
-이전 (사이드바 하단에서 빠짐 — 모바일 드로어 흐름과 충돌 회피).
+사이드바는 **md+ sticky aside, 모바일 드로어** (햄버거 트리거 +
+ESC/backdrop 닫기). 활성 NavLink 는 `bg-primary text-primary-foreground`
+강조.
 
 ### 공개 맛집 페이지 — 3-column 풀 뷰포트
 
-[`RestaurantsPage`](../../apps/web/src/routes/RestaurantsPage.tsx)는
-네이버 지도와 같은 풀 뷰포트 검색 UI. **데스크톱 xl+ 에서만** 풀-뷰포트
-sticky 컬럼, **모바일은 body 스크롤** 자연 흐름.
+[`RestaurantsPage`](../../apps/web/src/routes/RestaurantsPage.tsx) — xl+
+에서만 풀-뷰포트 sticky 컬럼(list / Outlet / map), 모바일은 body 스크롤
+자연 흐름. detail 활성 판단 `useMatch('/restaurants/:placeId')`. 패널
+좌/우 토글 `panelPrefsStore` (xl+ 한정). URL state — `q/category/sort/bbox/placeId`.
 
-- **xl(>=1280) 이상** — 3-column 레이아웃:
-  - 좌측 `aside` (400px, `xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)]`)
-    → `PublicRestaurantList`
-  - 가운데 Outlet 자리 (`xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)]
-    xl:w-[440px]`, **`/restaurants/:placeId` 활성일 때만 mount**) →
-    `RestaurantDetailRoute` → `PublicRestaurantDetail`. list 와 map 사이의
-    별도 column 으로 박힌다.
-  - 우측 `section` (flex-1) → `PublicRestaurantsMap`
-  - `100vh` → `100dvh` — iOS Safari dynamic viewport 잘림 회피.
-- **xl 미만 (모바일)** —
-  - detail **비활성** 시: list aside 가 자연 흐름 (body 스크롤),
-    PublicRestaurantsMap 은 fixed 풀-뷰포트 토글, 하단 중앙 `mobileView:
-    'list'|'map'` pill 토글.
-  - detail **활성** 시 (URL placeId 존재): list/map/토글 **모두 hidden**,
-    `RestaurantDetailRoute` 만 페이지 자연 흐름으로. body 스크롤 → 모바일
-    브라우저 주소창 자동 minify.
-  - detail 활성 판단: `const detailMatch = useMatch('/restaurants/:placeId');
-    const mobileHasDetail = detailMatch != null;` — 부모 라우트라
-    `useParams` 직접 못 씀.
-- **패널 좌/우 토글 적용** — `PublicRestaurantList` 검색 input 옆에
-  ⇄ 버튼(`PanelLeftOpen`/`PanelRightOpen` 아이콘) 추가. xl+ 에서만 노출.
-  컨테이너에 `xl:flex-row-reverse` 조건부 + list aside 와 detail aside
-  양쪽 모두 `xl:border-l` ↔ `xl:border-r` swap. xl 미만의 detail
-  absolute 패턴은 그대로 (mobileView 토글 영향 없음). 페이지별 namespace
-  로 `panelPrefsStore` 관리 — 기본값 `public.restaurants: 'left'`.
-
-URL state — `useSearchParams`가 single source of truth:
-
-| Param | 의미 |
-| --- | --- |
-| `q` | 검색어 (식당명/카테고리/메뉴 contains) |
-| `category` | 카테고리 칩 (한식/일식/중식/카페/디저트/술집/양식/분식 8종 + free text) |
-| `sort` | `recent` (기본, URL에 없음) / `satisfaction` / `positive` / `rating` |
-| `bbox` | "minLng,minLat,maxLng,maxLat" 5자리 소수 — "이 지역 재검색" 후 적용된 영역 |
-| `placeId` | 상세 패널 열림 — 닫힘일 땐 키 자체가 없음 |
-
-`setParam(key, value)` 헬퍼는 `setSearchParams((prev) => {...})` +
-`{replace: true}` — 입력 한 글자마다 history entry 가 쌓이지 않도록.
-`useEffect` 로 useState 와 URL 을 동기화하는 패턴 회피 — onChange 안에서
-즉시 URL 갱신. `hoveredPlaceId` 만 일시적이라 로컬 useState (마커 강조
-즉시 반영, URL 까진 안 가져감).
-
-### 공개 맛집 — 컴포넌트 트리
-
-`apps/web/src/components/restaurant/` 디렉토리 한 묶음.
-
-- **`PublicRestaurantList.tsx`** — 좌측 패널.
-  - 헤더: 검색 input(`Search` 아이콘 + 입력 비우기 `XCircle`) +
-    카테고리 칩 8종 (toggle — 동일 카테고리 재클릭 시 해제) + 결과 카운트
-    + 정렬 select.
-  - 본문: 스크롤 가능한 `<ul>` of `PublicRestaurantCard`. 빈 상태 분기
-    (loading/error/empty).
-- **`PublicRestaurantCard.tsx`** — 한 행의 식당 카드.
-  - 80x80 썸네일(`ImgWithFallback`) + 이름 + 카테고리 + 도로명/지번 주소
-    + 별점 + 리뷰수 + 만족도 + **좌표 없음 뱃지**(amber).
-  - AI 분석된 리뷰가 있으면 가로 막대(emerald/zinc/rose) + 긍정/부정/
-    분석 카운트.
-  - selected 상태(`border-primary/60 bg-primary/5`) + hover 효과.
-- **`PublicRestaurantsMap.tsx`** — 우측 지도 wrapper.
-  - `useMapPublicConfig()` 로 vworld 공개 키 fetch — 키 미등록 시
-    (`ApiError.statusCode === 404`) "관리자가 설정 > 지도에서..."
-    placeholder.
-  - 좌표 있는 식당만 `MapMarker` 로 변환. `selectedPlaceId` 의 마커는
-    label 노출(다른 마커는 라벨 숨김으로 시각 노이즈 줄임).
-  - 호버 우선 강조 (`hoveredPlaceId ?? selectedPlaceId`) → `flyTo`
-    imperative.
-  - 사용자가 패닝/줌으로 `pendingViewport` 가 URL `appliedBbox` 와 다른
-    영역으로 이동하면 하단 중앙 "이 지역에서 재검색" 버튼 노출.
-    `appliedBbox` 가 있으면 우상단 "전체 영역" 해제 버튼.
-  - `tileError` 발생 시 (vworld 키 거부 등) 상단에 destructive 배너.
-- **`MapCanvas.tsx`** — OpenLayers 저레벨 캔버스.
-  - vworld WMTS XYZ source + VectorLayer(마커).
-  - 마커 SVG 핀 (32x48, selected 시 40x60 + 더 진한 빨강). `MapMarker.variant?:
-    'primary' | 'muted'` 필드 — 'primary' 기본 (`#ef4444`/`#dc2626`
-    빨강), 'muted' 회색 (`#94a3b8`/`#64748b`). `makeMarkerStyle(label,
-    selected, variant)` 시그니처.
-  - imperative API: `flyTo(lat, lng, zoom?)`, `fitToMarkers(padding)` —
-    `forwardRef + useImperativeHandle`.
-  - `userInteractedRef` flag — `pointerdrag` / `wheel` 이벤트로 사용자
-    인터랙션 마크. programmatic move(`flyTo`) 직후 발사되는 moveend 는
-    무시 (false 로 리셋).
-  - 콜백은 ref 보관 — `onMarkerSelect`/`onViewportChangeEnd`/`onTileError`
-    가 매번 새 effect 를 만들지 않게.
-  - `apiKey` 변경 시에만 map 재생성 (드물게 일어남). 마커 변경은
-    `vectorSource.clear() + addFeature` 로 패치.
-  - **`ResizeObserver`** — 컨테이너 크기 변화 감지해 `mapRef.current
-    .updateSize()` 자동 트리거. 좌/우 패널 토글, 윈도우 리사이즈, 어드민
-    detail 슬라이드오버 등 모든 사이즈 변경 케이스를 한 곳에서 커버.
-    `apiKey` mount effect 안에서 같이 init/disconnect.
-
-### 공개 맛집 — 5탭 상세 패널
-
-`apps/web/src/components/restaurant/detail/` 디렉토리. 옛
-`panel/PublicRestaurantPanel.tsx` 단일 파일에서 두 차례 리팩터로 분해됨
-(panel 단일 → panel/ 5탭 분해 → detail/ 디렉토리 + `PublicRestaurantDetail`
-export 로 재명명, 좌측 "목록 패널" 과 가운데 "상세 패널" 명료화).
-
-- **`PublicRestaurantDetail.tsx`** — root.
-  - `useRestaurantPublic(placeId)` + `useRestaurantPublicInsights(placeId)`
-    한 번씩 fetch — 탭 전환은 컨텐츠만 바꾸고 추가 호출 없음.
-  - 헤더(목록 버튼 + 식당명 + 닫기 X) + **헤더+탭 묶음 sticky** + 활성 탭
-    컨텐츠 (`overflow-y-auto` 본문 div). 묶음은 **본문 div 밖**에 둔다
-    (안에 두면 자체 sticky containing block 형성 → 모바일에서 본문 div
-    가 실제 scroll 되지 않으면 sticky 가 깨짐).
-  - **탭은 controlled / uncontrolled 양방향** — `tab?: TabKey` +
-    `onChangeTab?: (next) => void` optional props. 라우트 사용처
-    (`RestaurantDetailRoute`) 는 URL `?tab=` 과 sync (controlled),
-    어드민 발견 사이드 패널은 내부 `useState` 유지 (uncontrolled).
-  - **탭 변경 시 scroll-to-top 환경 자동 분기** — `scrollRef.scrollHeight
-    > clientHeight` 면 자체 scroll (`scrollRef.scrollTo`, admin/xl+),
-    아니면 body 스크롤 (`window.scrollTo`, 모바일 라우트).
-  - **placeId 가 바뀌면** `useEffect([placeId])` 로 자동 'home' reset
-    (uncontrolled 모드 한정). controlled 모드는 라우트 자체가 URL
-    `?tab` 을 관리.
-  - 404 분기 (`ApiError.statusCode === 404`) — "요청한 식당을 찾을 수
-    없습니다.".
-- **`RestaurantDetailRoute.tsx`** [신규] — `/restaurants/:placeId` outlet
-  컴포넌트. `useParams` 로 placeId, `useSearchParams` 로 `?tab=` read/
-  write. tab 변경은 **push** (replace 미지정) — 뒤로가기 1회 = 직전 탭.
-  `home` 으로 갈 땐 `tab` 키 삭제로 canonical URL 유지. `onClose` 는
-  `navigate({ pathname: '/restaurants', search: window.location.search })`
-  로 리스트 query 보존.
-- **`tabs.ts`** — `TabKey = 'home' | 'menu' | 'reviews' | 'photos' | 'info'`
-  + `TAB_ORDER` 라벨 매핑. 단일 source.
-- **`HomeTab.tsx`** — 홈 탭.
-  - 헤더 사진 (`h-56 sm:h-64` 고정 높이 **가로 스냅 캐러셀** —
-    `snap-x snap-mandatory overflow-x-auto`, 각 이미지 `snap-center`).
-    클릭 시 Lightbox 진입. 사진 N장 카운터 표시.
-  - 이름/카테고리/별점/리뷰수 + `QuickActions` (네이버 지도 / 길찾기 /
-    전화)
-  - AI 분석 카드 (`insights.analyzedCount > 0` 일 때만, 아니면 "분석 없음"
-    or loading)
-  - 대표 메뉴 4개 + "메뉴 전체 보기 (N)" → menu 탭 (4개 이하면 버튼 숨김)
-  - 대표 리뷰 3개 — **분석된 리뷰 우선**으로 정렬
-    (`Number(!!b.analysis) - Number(!!a.analysis)`) + "리뷰 전체 보기"
-    → reviews 탭
-  - 영업 정보 1줄 (주소만) + "정보 전체 보기" → info 탭
-- **`MenuTab.tsx`** — `snapshot.menus` 전체를 `MenuGrid` 로 노출.
-  insights 의 `topMenus` 매칭으로 멘션 카운트 (긍정/부정/총) 표시.
-- **`ReviewsTab.tsx`** — 전체 방문자 리뷰.
-  - 감정 필터 칩 (전체/긍정/부정 + 카운트 표시 — `analysis.sentiment`
-    기반)
-  - 정렬 select — "최근 방문순" (`fetchedAt asc`) / "별점 높은순"
-  - **`fetchedAt asc` = 방문일 desc** — 어댑터가 SSR 최신 방문 →
-    더보기 옛 방문 순서로 즉시 저장하므로. 어드민 detail 정렬과 동일.
-  - 빈 결과 ("조건에 맞는 리뷰가 없습니다.") 분기.
-- **`PhotosTab.tsx`** — 카테고리별 사진 그리드 + 라이트박스.
-  - 3섹션 (`hero`/`menu`/`reviews`) — 각 섹션은 자기 사진 수와 그리드.
-  - 모든 사진을 평탄화한 `allImages` 시퀀스 + `sectionOffsets` 맵 —
-    클릭 시 `offset + i` 인덱스로 라이트박스 진입. 모달 안에서 다음
-    섹션으로 자연스럽게 넘어갈 수 있다.
-- **`Lightbox.tsx`** [rewritten] — 풀스크린 **scroll-snap 캐러셀**.
-  - `fixed inset-0 z-50 bg-black/90` overlay + 가로 스크롤 컨테이너
-    (`snap-x snap-mandatory overflow-x-auto`) + 각 슬라이드 `min-w-full
-    snap-center`. 모바일은 손가락 좌우 스와이프 → 브라우저 momentum +
-    snap 자동 처리, **JS swipe 핸들러 불필요**.
-  - 외부 `index` ↔ 내부 `scrollLeft` 양방향 sync: index prop 변경 시
-    `scrollTo({ left: i*clientWidth, behavior: 'smooth' })`, 사용자
-    스와이프 → `onScroll` 에서 `Math.round(scrollLeft/clientWidth)` 로
-    현재 페이지 계산 → `onChangeIndex`. 이중 트리거 방지 `ignoreScrollRef`
-    플래그 (200ms 윈도우).
-  - 좌우 ChevronLeft/Right 버튼은 `sm:` 이상에서만 노출 (모바일은
-    스와이프가 주). 닫기 버튼 명시 한 곳 — overlay 클릭 닫기는 swipe
-    중 의도치 않은 닫힘 회피 위해 안 둠.
-  - ESC 닫기 + ←/→ 키보드 네비 + `n / total` 카운터.
-  - `loading={Math.abs(i-safeIdx) <= 1 ? 'eager' : 'lazy'}` — 인접
-    슬라이드 prefetch.
-- **`InfoTab.tsx`** — 영업 정보 + 블로그 리뷰 + 등록일.
-  - 도로명 + 지번 / `businessHours` 원문 (`whitespace-pre-line`) /
-    `tel:` 링크 / "네이버 지도에서 보기".
-  - 블로그 리뷰는 외부 링크 카드 리스트.
-  - 푸터에 `firstCrawledAt` 등록일.
-- **`shared.tsx`** — 탭들 공유 visual primitive.
-  - `QuickActions` — `https://map.naver.com/p/...` deep-link (검색,
-    좌표 있을 시 길찾기) + `tel:` 전화.
-  - `AiSummary` — 평균 만족도 / 평균 감정 점수 / 가로 4-색 막대(긍정/
-    중립/혼합/부정) / topKeywords 뱃지 / topTips 리스트.
-  - `MenuGrid` — 메뉴 카드 리스트, insights 의 `topMenus` 매칭으로
-    멘션 카운트 표시.
-  - `ReviewCard` — 리뷰 한 카드. **LLM 분석 풀 노출** — 카드 보더는
-    균일한 중립 톤, sentiment 시각화는 헤더의 `SatisfactionChip` (도트
-    + 만족도 1–5 점). analysis.text(요약) + 본문 + 사진 가로 스크롤
-    + **menus 좌측 emerald/rose stripe 리스트** + **tips muted 박스**
-    + **keywords 칩**.
-  - `SatisfactionChip` — sentiment 도트 (emerald/rose/zinc) + 만족도
-    점수 1–5. ReviewCard 헤더에 사용 — 보더 톤 대신 카드별 sentiment
-    표시를 한 곳에 응축.
+공개 컴포넌트 트리 (변경 없음): `PublicRestaurantList`, `PublicRestaurantCard`,
+`PublicRestaurantsMap`, `MapCanvas`, 5탭 상세 디렉토리
+(`detail/PublicRestaurantDetail` + `HomeTab`/`MenuTab`/`ReviewsTab`/`PhotosTab`/
+`InfoTab` + `Lightbox` + `shared.tsx`/`tabs.ts`). 자세한 내부 패턴은 이전
+컴파일 본 참고 — 이번 라운드 변경 없음.
 
 ### 어드민 발견 페이지 [coverage: high — 4 sources]
 
 [`AdminDiscoverPage`](../../apps/web/src/routes/admin/AdminDiscoverPage.tsx)
-는 네이버 PC 지도에서 키워드로 검색 → 결과 마커를 지도에 표시 → 다중
-선택 후 일괄 크롤링 흐름을 한 페이지로 묶는다. 이미 등록된 가게는
-회색 마커 + [등록됨] 배지 + 체크박스 비활성으로 중복 크롤 방지.
+— 네이버 PC 지도 검색 → 결과 마커 → 다중 선택 일괄 크롤링. `DiscoverMap`
++ `DiscoverPanel`. 검색(빨강 `'primary'`) + 등록(회색 `'muted'`) 합성
+마커. xl 미만 `mobileView: 'panel'|'map'` pill 토글, 선택 시 토글
+`bottom-20` 상승. `PublicRestaurantDetail` 그대로 재사용. 다중 선택은
+직렬 await + 시작 거부 보존(`setCheckedIds(failedIds)`).
 
-컴포넌트 트리:
+### 어드민 다이닝코드 정식 페이지 [신규 / coverage: high]
 
-- **[`AdminDiscoverPage`](../../apps/web/src/routes/admin/AdminDiscoverPage.tsx)**
-  — 페이지 컨테이너. URL `?q=&bbox=&tab=&placeId=` 단일 source of
-  truth, 선택 state(`Set<placeId>`), 일괄 startCrawl 트리거.
-  - DOM 순서: `[map, detail-aside, list-aside]`. flex 방향 토글로
-    자연 좌/우 swap — `panelSide='right'` (일반 flex-row) → 시각적
-    [좌:map, 중:detail, 우:list], `panelSide='left'` (flex-row-reverse)
-    → 시각적 [좌:list, 중:detail, 우:map]. detail 은 항상 list 옆 (지도
-    쪽 방향) 에 붙는다.
-  - xl 미만에선 detail 이 absolute 로 패널 영역 위에 덮어쓰기 (xl 미만
-    에서 패널이 풀블리드라 자연스럽게 detail 이 그 위로). `animate-in
-    slide-in-from-right-4 duration-200` (tailwindcss-animate, 미설치
-    시 슬라이드 효과만 빠지고 즉시 표시).
-  - **모바일 패널/지도 토글** — xl 미만에서 `mobileView: 'panel'|'map'`
-    하단 중앙 pill 토글. **검색 결과 선택(`checkedIds.size > 0`)이면
-    토글 위치 자동 상승** (`bottom-20`) — sticky 하단 "N개 크롤링 시작"
-    바와 겹치지 않게.
-  - 등록 행 클릭 시 detail 은 [`PublicRestaurantDetail`](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx)
-    그대로 재사용 — 어드민 발견에서도 같은 5탭 컴포넌트.
-- **[`DiscoverMap`](../../apps/web/src/components/admin/discover/DiscoverMap.tsx)**
-  — vworld 풀블리드 지도. 검색(빨강 = `'primary'`) + 등록(회색 =
-  `'muted'`) 합성 마커, 호버/선택 fly-to, 진입 시 등록 마커
-  `fitToMarkers`, "이 지역 재검색" 버튼(URL `bbox` 갱신). 컨트롤
-  (전체영역 등) 위치는 패널 반대편 모서리(`panelSide` 의존).
-  - 같은 placeId 가 검색·등록 양쪽에 있으면 등록(muted) 우선해 중복
-    크롤 방지.
-- **[`DiscoverPanel`](../../apps/web/src/components/admin/discover/DiscoverPanel.tsx)**
-  — 우측(또는 좌측) 패널.
-  - 헤더: 검색 input + 좌/우 토글 ⇄ 버튼 (xl+ 만 노출)
-  - 검색 디바운스 300ms + Enter 즉시 실행 (clearTimeout 으로 cleanup)
-  - URL `q` 가 외부에서 바뀌면 input 동기화 (useEffect — 외부 system
-    동기화 케이스라 OK)
-  - 탭 바 [검색결과 N | 등록 M]
-  - 검색 결과 행 = 체크박스(등록된 항목은 비활성) + 이름/카테고리/
-    도로명. 행 클릭 = `onSelectItem` (URL `placeId` 갱신). 등록된
-    항목엔 [등록됨] 배지.
-  - 등록 맛집 행 = 이름/카테고리/리뷰수/별점/분석수.
-  - 활성 잡 N개 안내 카드 (전역 `useActiveCrawlJobStore` 의 jobs.length)
-    — 헤더 아래.
-  - sticky 하단 바 — `[N개 크롤링 시작]` 버튼 (검색 탭에서 체크된
-    항목 있을 때만 노출).
+[`AdminDiningcodePage`](../../apps/web/src/routes/admin/AdminDiningcodePage.tsx)
+— 운영용 다이닝코드 크롤링 페이지. 테스트 페이지와 검색·상세는 동일하나
+검증 요소(원본 JSON 패널, vRid 노출, source 메타 배지)는 제거하고
+**등록 흐름** 을 더했다.
 
-다중 선택 일괄 크롤링 — **직렬 await + 시작 거부 보존**:
+- **결과 카드 (`ResultCard`)** — 체크박스 + 썸네일 + 이름/카테고리 +
+  Stars + 키워드 칩 + displayReview 인용. 등록된 가게는 [등록됨] 초록
+  배지 + 체크박스 비활성 + "등록된 가게 보기" 라벨. 잡 진행 중 카드엔
+  추가로 `ItemStateBadge` (대기/저장 중/저장 완료/실패/건너뜀).
+  - 카드의 "상세 보기" 링크는 `/admin/diningcode/${vRid}` (정식 경로) —
+    검증용 `/admin/diningcode-test/:vRid` 가 아니다.
+- **선택 액션 바 (sticky)** — 결과가 있을 때만 `sticky top-2` 로 노출:
+  현재 페이지 전체 선택 토글 + "선택 N / 최대 50" 배지 + 선택 해제 +
+  **"선택 N개 저장" 버튼**. 잡 진행 중엔 시작 비활성 (`isJobRunning`).
+- **일괄 저장 잡 카드 (`BulkSaveJobCard`)** —
+  `useDiningcodeBulkSaveJob(activeJobId)` (SSE 진행 추적) + 활성 잡 id
+  는 `useActiveDiningcodeBulkSaveJobStore` 가 보관. 진행률 막대(처리/
+  전체) + 성공/실패/건너뜀 카운트 + 현재 vRid + 취소/닫기.
+  - 잡 종료(done/failed) 후 60초 뒤 `clearActiveJob()` 자동 — 다음 작업
+    전 결과 배지 정리. "닫기" 누르면 즉시 clear.
+  - 동시 잡은 1개로 제한 (BE 가 동시 잡 1개라는 가정 + store 가 하나의
+    jobId 만 보관).
+- **검색 조건** — `q/from/size/order` + 좌표 사용(`useCoord`) 시 lat/lng/
+  distance + `MiniMapPicker` (vworld). 좌표 사용 모드는 다이닝코드 "내주변".
+- **registered 매칭** — 페이지 vRid 들로 `useDiningcodeRegistered` 호출 →
+  맵 lookup. 이미 등록된 vRid 는 선택 불가 + 배지 노출.
+- **검색/페이지/정렬/좌표 변경 시 선택 자동 초기화** — 현재 페이지에 보이지
+  않는 vRid 의 체크 상태는 사용자가 확인할 길이 없으므로 매번 비운다.
+
+### 다이닝코드 상세 컴포넌트 두 라우트 재사용 [신규]
+
+[`AdminDiningcodeShopPage`](../../apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx)
+한 컴포넌트가 두 라우트에 마운트:
+
+- `/admin/diningcode-test/:vRid` (검증)
+- `/admin/diningcode/:vRid` (정식)
+
+`useLocation()` 으로 `pathname` 을 읽어 back-link 분기:
 
 ```ts
-const handleStartSelected = async () => {
-  const selected = searchItems.filter((it) => checkedIds.has(it.placeId));
-  const failedIds = new Set<string>();
-  for (const it of selected) {
-    try {
-      const r = await startMutation.mutateAsync({ url: it.rawSourceUrl, mode: 'create' });
-      if (r.ok) addJob({ jobId: r.jobId, placeId: it.placeId, source: 'list-row', mode: 'create' });
-      else failedIds.add(it.placeId);
-    } catch { failedIds.add(it.placeId); }
-  }
-  setCheckedIds(failedIds);  // 시작 거부된 placeId는 체크 상태 유지 → 사용자 재시도 편의
-};
+const backTo = pathname.startsWith('/admin/diningcode-test')
+  ? '/admin/diningcode-test'
+  : '/admin/diningcode';
 ```
 
-처음에는 `Promise.allSettled` 병렬이었는데, 백엔드 actor 단위
-rate-limit 1초 윈도우에 모두 동시 도착해 1개만 통과되던 버그가 있었다.
-직렬 await 로 바꿔 응답 사이 자연 stagger 를 만들었지만, 응답이
-수 ms 안에 떨어져 50ms 윈도우로 줄여도 여전히 막힘. 결국 BE 의 actor
-rate-limit 자체를 제거 ([crawl](crawl.md) 참조).
+본문(헤더 + 메뉴 + 사진 + 리뷰 페이지네이션 + 블로그 + 평점 분포 + DB 저장
+버튼) 은 동일. `/API/profile/` 한 방으로 메인 데이터 단일 fetch, 리뷰만
+페이지 단위 lazy fetch (`useDiningcodeShopReviews`).
 
-### 패널 좌/우 토글 (panelPrefsStore) [coverage: high — 1 source]
+### 다이닝코드 / 캐치테이블 검증 페이지 [신규]
 
-신규 [`apps/web/src/stores/panelPrefsStore.ts`](../../apps/web/src/stores/panelPrefsStore.ts)
-— Zustand 단일 store. 페이지별 namespace 로 패널 좌/우 위치를 영속화.
+- [`AdminDiningcodeTestPage`](../../apps/web/src/routes/admin/AdminDiningcodeTestPage.tsx)
+  — 다이닝코드 자체 검색 API 응답을 그대로 노출하는 검증 도구. 좌표/정렬/
+  반경까지 노출해 다이닝코드 응답 변동을 확인. SSE 잡 없음 — 동기 검색,
+  결과 카드의 "상세 보기" 가 `/admin/diningcode-test/:vRid` 진입.
+- [`AdminCatchtableTestPage`](../../apps/web/src/routes/admin/AdminCatchtableTestPage.tsx)
+  — 캐치테이블 자체 검색 API 검증. offset 토큰 한 단계 페이지네이션
+  ("더 보기" = 다음 페이지로 갈아탐, 누적 X).
+- [`AdminCatchtableShopPage`](../../apps/web/src/routes/admin/AdminCatchtableShopPage.tsx)
+  — 캐치테이블 가게 상세. `/admin/catchtable-test/:shopRef`. 메뉴 + 리뷰
+  overview + 운영 시간/지하철/예산 + DB 저장 버튼.
 
-- `sides: Record<PanelKey, 'left' | 'right'>`. PanelKey = `'admin.discover'
-  | 'public.restaurants'` (네임스페이스로 페이지별 독립).
-- localStorage `lp:panelPrefs` 영속화. **zustand persist 미들웨어 안
-  쓰고** `setSide` 안에서 직접 `writeStorage` (theme store 와 같은 패턴,
-  persist 미들웨어 추가 의존 회피).
-- 기본값 — `'admin.discover': 'right'` (사용자 요청), `'public.restaurants':
-  'left'` (기존 유지).
-- `usePanelSide(key): readonly [PanelSide, () => void]` selector hook
-  — useState 와 동일 모양.
+### 어드민 맛집 페이지 [refactor / coverage: high — 4 sources]
 
-xl+ 에서만 토글 버튼 노출 (xl 미만 풀블리드라 의미 없음). 컨테이너
-`flex-row-reverse` + aside `xl:border-l ↔ xl:border-r` swap. 두 페이지
-(`AdminDiscoverPage`, `RestaurantsPage`) 모두 같은 hook 으로 적용.
+[`AdminRestaurantsPage`](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx)
+는 이번 라운드에서 **canonical 단위** 그룹핑 리스트로 대대적 개편. 한 행
+= 한 canonical (Naver + 다이닝코드 등 복수 source 가 한 카드).
 
-### 어드민 맛집 화면
+- **MergeProposalQueue 상단 카드** — `useCanonicalProposals` 큐 표시. 펼침
+  토글, count 배지(0건이면 "없음"), "전체 다시 돌리기"(`useRunCanonicalProposals`)
+  버튼이 항상 닿는다. 각 proposal 행은 좌·우 두 canonical 카드(`CanonicalCard`)
+  를 나란히 — `keepSide: 'A'|'B'` 토글 + 수락(`useAcceptCanonicalProposal`) /
+  거절(`useRejectCanonicalProposal`). DC 칩과 Naver 칩 모두 외부 링크
+  (`/admin/diningcode/:vRid`, `/admin/restaurants/:placeId`).
+- **suggestion 인라인 알림** — 각 행 위에 한 줄짜리 amber 배경 dashed
+  카드. `item.suggestion` 이 있을 때만 노출. "같은 가게일 수 있음:
+  {name} · {category} · 점수 N% · Nm" + [병합] 버튼 (해당 행
+  `CanonicalMergePanel` 펼침) + [무시] (`useDismissCanonicalSuggestion`,
+  variables = canonicalId 로 in-flight 추적).
+- **출처 칩 분리 액션** — 행의 source 칩 옆에 `Scissors` 작은 버튼
+  (sources >= 2 일 때만). `useSplitCanonical` 로 그 restaurantId 를 새
+  canonical 로 분리. variables.input.restaurantId 로 해당 행만 disable.
+- **DC 칩 클릭 = 정식 페이지 진입** — 다이닝코드 source 칩은 `Link to=
+  '/admin/diningcode/:sourceId'` (검증 페이지 X). 행 클릭 자체는 Naver
+  placeId 라우트 `/admin/restaurants/:placeId` — Naver source 가 없는
+  canonical (DC 만 있는 가게) 은 행 네비 + 업데이트/재크롤 모두 disabled,
+  DC 칩으로만 들어갈 수 있다.
+- **DC 재수집 버튼** — DC source 가 있는 행에 노출
+  (`useSaveDiningcodeShop`, variables=vRid 로 in-flight 식별). 응답 후
+  list invalidate.
+- **병합 버튼 + `CanonicalMergePanel`** — 한 번에 한 행만 펼침
+  (`mergeOpenCanonicalId`). 후보 수 > 0 이면 outline + count 배지로 강조,
+  0 이면 ghost. 패널은 인라인 (Dialog 안 씀 — 다른 행과 비교 쉽도록).
+  내부는 `useCanonicalCandidates` 리스트 + `useMergeCanonical`
+  (source/target — 현재 보고 있는 행이 target = "정사본" 유지).
+- **canonical 단위 삭제** — `useDeleteCanonical`. 이전엔 placeId 기반,
+  지금은 canonicalId 기반 → DC 만 등록된 행도 삭제 가능 + 매달린 sources
+  모두 FK Cascade. 인라인 confirm-delete (sources >= 2 일 때 "정말
+  삭제 (N개 출처)" 라벨).
+- **SSE 구독 = canonicalId 단위** — `useRestaurantListSummaryEvents(rawItems
+  .map(it => it.canonicalId))`. 한 canonical 의 모든 source(Naver+DC) 가
+  한 connection 으로 풀려 들어와 진행 배지가 출처 무관 라이브 갱신.
+- **활성 잡 매칭** — Naver placeId 가 list 의 어느 행 source 와도 매칭
+  안 되면 상단 `newJobs` 카드, 매칭되면 그 canonical 행 밑에 panel.
+- **DC 안내 줄** — 카드 하단 dashed 박스 — "다이닝코드에서 가게 찾기"
+  → `/admin/diningcode-test` 새 탭 (정식 페이지 메뉴에서 진입하라는
+  안내는 사이드바 NavLink 가 맡으므로 폼 안내는 검증 페이지를 가리킴).
 
-`/admin/restaurants` 흐름은 두 페이지 + 공유 컴포넌트 디렉토리로 구성된다.
+신규 컴포넌트:
 
-- [`AdminRestaurantsPage`](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx)
-  — URL 추가 폼 + 등록 맛집 리스트. 각 행은 클릭 시 detail로 navigate,
-  업데이트/재크롤/삭제 버튼은 `stopPropagation`으로 행 클릭과 분리된다.
-  삭제는 trash 아이콘 1차 클릭 → "정말 삭제 / 취소" 인라인 확인(2-step).
-  리스트 위쪽엔 placeId가 아직 없는 "new" 잡이 쌓이고, 행마다 자기
-  placeId에 묶인 `ActiveJobPanel`이 안커처럼 매달린다. 헤더 우측의
-  정렬 dropdown은 `recent | satisfaction | positive | negativeRatio` —
-  `avgSatisfactionScore` / `avgSentimentScore` / `negativeCount /
-  summaryDone` 비율 기준으로 클라이언트 정렬하며, 분석이 없는 행
-  (점수 `null`)은 항상 아래로 떨어진다. SSE 구독은 `rawItems` 기준이라
-  정렬 변경만으로 EventSource가 끊기지 않는다.
-- [`AdminRestaurantDetailPage`](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx)
-  — `useRestaurantByPlaceId`로 단일 GET, **xl+ 에서는 2-column 그리드**
-  (`xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_360px]`) — 좌측 본문 +
-  우측 sticky 사이드바. 사이드바엔 위치 카드(`VWorldMap` 280px 컴팩트
-  + `MapPin` 헤더 + `Maximize2` 버튼). xl 미만에서는 사이드바 숨김
-  (좌측 InfoSection 좌표 정보로 대체).
-  - `Maximize2` 버튼 클릭 시 우측 슬라이드오버(`@radix-ui/react-dialog`
-    `Dialog.Root`/`Portal`/`Overlay`/`Content`) — `inset-y-0 right-0
-    sm:max-w-[740px]` 풀 높이 지도. 별도 VWorldMap 인스턴스를 렌더
-    (같은 ol Map 을 두 컨테이너에 옮겨 다는 건 `setTarget` 으로 가능
-    하긴 하나 view/layer 상태가 어색해진다 — 두 인스턴스 비용은 무시할
-    만함).
-  - 본문은 상단 헤더 + flat divide-y 레이아웃의 정보/영업시간/메뉴/사진
-    섹션, AI 요약 진행 카드(잡이 없을 때만 별도 표시), **메뉴 순위
-    카드(`MenuRankingSection`)**, 방문자 리뷰(별점/요약 필터 + 정렬 +
-    20개 페이지 pagination), 블로그 리뷰 (12 + 더보기). 정렬 기본값은
-    `fetchedAt-asc`. 헤더 우측 업데이트/재크롤/삭제는 모두 in-page에서
-    동작 — 재크롤 시 detail 캐시의 `reviews`를 즉시 비워서 새 배치가
-    stale id와 섞이지 않게 한다.
-- [`components/restaurant/`](../../apps/web/src/components/restaurant/)
-  — 공유 컴포넌트 디렉토리.
-  - [`ActiveJobPanel.tsx`](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)
-    — 단일 잡의 SSE 카드. `useCrawlJobStream(jobId)` + `useRestaurantSummaryEvents(placeId)`를
-    구독하고 `visitor_batch.persistedReviews`를 detail 캐시에 직접
-    머지(중복 id 필터링 + `videos` 필드 포함). `done` 시 list/detail
-    둘 다 invalidate, `onFinished`를 정확히 한 번 호출.
-  - [`sections.tsx`](../../apps/web/src/components/restaurant/sections.tsx)
-    — `SectionHeader`, `SummaryProgressSection`, `ReviewSummaryItem`,
-    `ReviewSummarySection` + 인라인 `VideoPlayerModal`.
-  - [`MenuRankingSection.tsx`](../../apps/web/src/components/restaurant/MenuRankingSection.tsx)
-    — 식당 상세에 마운트되는 메뉴 순위 카드 (`SentimentBar`,
-    `GlobalCompareBadge` 포함).
-  - [`VWorldMap.tsx`](../../apps/web/src/components/restaurant/VWorldMap.tsx)
-    — 어드민 식당 상세의 단일 마커 지도. `MapCanvas` thin wrapper —
-    `useMapProviderSecret('vworld', hasCoords)` 로 평문 키 받아 전달.
-    좌표/키 미충족은 placeholder 분기 (키 없으면 "/admin/settings/map"
-    링크 노출).
-  - [`MapCanvas.tsx`](../../apps/web/src/components/restaurant/MapCanvas.tsx)
-    — 위 공개 페이지와 공유. 단일/다중 마커 모두 처리.
+- [`components/restaurant/CanonicalMergePanel.tsx`](../../apps/web/src/components/restaurant/CanonicalMergePanel.tsx)
+  — 한 canonical 의 후보 목록 + 병합 트리거. 인라인 (Dialog X).
+- [`components/restaurant/MergeProposalQueue.tsx`](../../apps/web/src/components/restaurant/MergeProposalQueue.tsx)
+  — 검토 대기 큐 카드. proposal 행 A/B 비교 + keepSide 토글 + accept/
+  reject + 전체 다시 돌리기.
 
-### 어드민 설정 통합 페이지 [신규]
+기존: `ActiveJobPanel`, `MenuRankingSection`, `sections.tsx`,
+`VWorldMap`, `MapCanvas`, `ReanalyzeFailedBadge` 그대로.
 
-옛 `/admin/ai-keys` 단독 라우트 대신 `/admin/settings` 부모 + 탭 자식
-구조로 변경. `/admin/ai-keys` 로 들어오는 옛 북마크는 `<Navigate
-to="/admin/settings/ai-keys" replace>` 로 자동 리다이렉트.
+### 어드민 detail / 설정 / 분석 / UI 시스템
 
-- [`AdminSettingsPage`](../../apps/web/src/routes/admin/AdminSettingsPage.tsx)
-  — 헤더(설정 아이콘 + 제목/설명) + NavLink 탭 바 (`AI 키` / `지도`)
-  + `<Outlet/>`. index 라우트는 `ai-keys` 로 리다이렉트.
-- [`AdminAiKeysPage`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx)
-  — provider 카드 리스트. 옛 단독 페이지에 있던 wrapper div/헤더 제거,
-  본체만 남겨 부모 셸이 헤더를 담당.
-- [`AdminMapKeysPage`](../../apps/web/src/routes/admin/AdminMapKeysPage.tsx)
-  [신규] — vworld provider 카드. AI 키 카드와 비슷한 폼 패턴
-  (`apiKey`/`domains` 필드 + "변경 시에만 입력" + 마스킹 표시 + 인라인
-  "연결 테스트" via `probeVworldKey` — 서울 시청 부근 1:1 줌 타일을
-  fetch 해 image/* 응답이 오면 OK).
+이전 라운드와 동일 — `AdminRestaurantDetailPage` xl+ 2-column + `Maximize2`
+슬라이드오버, `AdminSettingsPage` 탭 셸 (`/ai-keys`, `/map`), `AdminAnalyticsPage`
+4카드 + 진행 패널, shadcn 프리미티브, Pretendard 공개 한정, Tailwind v4
+`@theme inline`. 자세한 내용은 [이전 컴파일 변경 없음].
 
-### AI 분석 관리 화면
+## Talks To [coverage: high — 13 sources]
 
-[`AdminAnalyticsPage`](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx)는
-하나의 페이지에 4개의 카드 + 1개 진행 패널을 쌓는다 (옛 라운드 그대로).
+- **`@repo/api-contract`** — 공유 zod 스키마 타입. 이번 라운드 신규:
+  `CanonicalListItemType`, `RestaurantSourceSummaryType`,
+  `CanonicalProposalItemType`, `DiningcodeBulkSaveJobItemType`,
+  `DiningcodeBulkSaveJobSnapshotType`, `DiningcodeRegisteredEntryType`,
+  `DiningcodeSearchResultType`, `DiningcodeShopDataType`,
+  `DiningcodeShopReviewType`, `DiningcodeShopReviewsResponseType`,
+  `CatchtableSearchResultType`, `CatchtableShopDataType`,
+  `CatchtableShopMenusResponseType`, `CatchtableShopReviewOverviewResponseType`.
+- **`@repo/shared`** — 신규 훅:
+  - canonical 관리 — `useDeleteCanonical`, `useSplitCanonical`,
+    `useMergeCanonical`, `useCanonicalCandidates`, `useCanonicalProposals`,
+    `useAcceptCanonicalProposal`, `useRejectCanonicalProposal`,
+    `useRunCanonicalProposals`, `useDismissCanonicalSuggestion`.
+  - 다이닝코드 — `useDiningcodeSearch`, `useDiningcodeShop`,
+    `useDiningcodeShopReviews`, `useSaveDiningcodeShop`,
+    `useDiningcodeRegistered`, `useStartDiningcodeBulkSave`,
+    `useCancelDiningcodeBulkSave`, `useDiningcodeBulkSaveJob`,
+    `useActiveDiningcodeBulkSaveJobStore`.
+  - 캐치테이블 — `useCatchtableSearch`, `useCatchtableShop`,
+    `useCatchtableShopMenus`, `useCatchtableShopReviewOverview`.
+  - 기존 다수 (`useCurrentUser`, `useLogin`, `useLogout`,
+    `useRestaurantList`, `useRestaurantByPlaceId`,
+    `useRestaurantListSummaryEvents`, `useRestaurantSummaryEvents`,
+    `useStartCrawl`, `useCancelCrawl`, `useNaverSearch`,
+    `useActiveCrawlJobStore`, 지도 키 훅, 분석/메뉴 그루핑 훅 등).
+- **`@repo/utils`** — 썸네일 프록시 헬퍼 (어드민 비디오 모달 등).
+- **TanStack Query 캐시 직접 패치** — `ActiveJobPanel` 의 SSE 머지 패턴
+  유지. 다이닝코드 bulk save 는 SSE 구독을 훅 안에서 처리.
+- **Zustand 스토어** — `useAuthStore`, `useActiveCrawlJobStore`,
+  `panelPrefsStore`, **신규 `useActiveDiningcodeBulkSaveJobStore`**
+  (jobId 영속 — 페이지 이동/새로고침 후 이어보기).
+- **URL = state** — 이전 라운드 패턴 유지. AdminDiningcodePage 는 URL
+  state 미사용 (검색 폼만, 일괄 저장 진행은 store).
+- **OpenLayers / vworld WMTS** — 이전과 동일.
+- **백엔드 friendly** — 신규 endpoint group:
+  `/api/v1/admin/crawl/diningcode/*`(search, shops/:vRid, reviews,
+  registered, save, bulk-save/start, bulk-save/cancel/:jobId,
+  bulk-save/:jobId/stream — SSE), `/api/v1/admin/crawl/catchtable/*`,
+  `/api/v1/admin/restaurants/canonical/*` (candidates, merge, split,
+  proposals, accept/reject/run, suggestions/dismiss).
+- **Radix UI** — `@radix-ui/react-dialog` 어드민 detail 슬라이드오버.
+- **lucide-react** — 신규 아이콘: `Utensils`, `Scissors`, `Link2`,
+  `Database`, `Crosshair`, `CheckCircle2` (다이닝코드 정식 페이지 / 출처
+  분리 / 병합 / DC 재수집).
 
-1. **전체 카운터** — 전체 식당 / 정규화 완료 / 처리 필요.
-2. **`GlobalMergeSection`** — 전역 메뉴 머지 진행 + 결과 metric.
-3. **`CategoryTreeSection`** — `useCategoryTree` 재귀 트리 + 라벨 클릭
-   시 `setSearchParams({category: node.path})`.
-4. **`GlobalMenusSection`** — `?menu=`/`?category=` URL state 기반 검색/
-   통계 테이블.
-5. **정규화 진행 패널 + 식당별 정규화 상태 테이블** — 식당 선택 + 잡
-   시작 + SSE 진행.
+크롤링 백엔드 / SSE / 분석은 [shared](shared.md), [crawl](crawl.md),
+[analytics](analytics.md), [menu-grouping](menu-grouping.md) 참조.
 
-서버 측 SSE/잡 형식과 분석 엔드포인트 상세는 [analytics](analytics.md)
-와 [menu-grouping](menu-grouping.md), 훅 시그니처는 [shared](shared.md)
-참조.
+## API Surface [coverage: high — 12 sources]
 
-### UI 시스템
-
-- **Pretendard 폰트 (공개 한정)** — `index.html` 에서 jsDelivr CDN 로드,
-  `tailwind.css` `@theme inline` 의 `--font-pretendard` 변수 +
-  `font-pretendard` 유틸로 적용. `PublicLayout` root 에만 클래스를 박아
-  공개 페이지 전체에 적용, 어드민은 system-ui fallback 유지.
-- **본문 텍스트 사이즈 한 단계 시프트 (전역 영향)** — `tailwind.css`
-  `@theme inline` 에서 Tailwind v4 의 `--text-*` 변수를 1px씩 위로:
-  `--text-xs: 0.8125rem` (13/12), `--text-sm: 0.9375rem` (15/14),
-  `--text-base: 1.0625rem` (17/16), `--text-lg: 1.1875rem` (19/18),
-  `--text-xl: 1.375rem` (22/20), `--text-2xl: 1.625rem` (26/24),
-  `--text-3xl: 2rem` (32/30). spacing/icon 은 그대로 — 레이아웃이
-  비례 비대해지지 않으면서 본문 가독성만 ↑. **어드민까지 영향**
-  (의도적 — 사이트 전체 가독성 일관성).
-- **shadcn/ui 스타일 프리미티브** — `~/components/ui/`에 손으로 들고 온
-  컴포넌트들 (`Button`, `Card`/Header/Content/Title/Description/Footer,
-  `Input`, `Table`, `Badge`).
-- **Tailwind CSS v4** — `@tailwindcss/vite` 플러그인 + `@import
-  "tailwindcss";` 단일 진입점([tailwind.css](../../apps/web/src/styles/tailwind.css)).
-  shadcn 색 토큰 OKLCH + `@theme inline` 매핑. `.dark` 클래스 토글
-  다크 모드.
-- **`cn()` 유틸** — `clsx + tailwind-merge`
-  ([lib/utils.ts](../../apps/web/src/lib/utils.ts)).
-- **`ImgWithFallback`** — 옛 어드민 detail 페이지에 로컬로 있던 헬퍼를
-  공용 [`~/components/ImgWithFallback.tsx`](../../apps/web/src/components/ImgWithFallback.tsx)
-  로 빼냄. `referrerPolicy="no-referrer"` 로 Naver 이미지 CDN
-  hotlink 차단 회피, onError 시 placeholder 박스, **src 변경 시 failed
-  자동 reset** (`useEffect([src])` — 라이트박스/캐러셀에서 한 번 실패한
-  뒤 다음 이미지가 안 보이는 회귀 방지). 사용처: AdminRestaurantDetailPage,
-  PublicRestaurantCard, HomeTab, MenuGrid, ReviewCard, PhotosTab,
-  Lightbox, InfoTab.
-- **shadcn Card 패딩 모바일 축소** — [card.tsx](../../apps/web/src/components/ui/card.tsx):
-  `CardHeader`/`CardContent`/`CardFooter` 가 `p-4 sm:p-6` (16→24px).
-  좁은 폰 화면에서 콘텐츠 가용 폭을 16px×2=32px 회수.
-- **Input 모바일 16px 폰트** — [input.tsx](../../apps/web/src/components/ui/input.tsx):
-  `text-base sm:text-sm` (16px → 14px). iOS Safari 가 focus 된 input
-  font-size <16px 면 자동 줌인하는 동작을 모바일에서만 회피.
-- **글로벌 input/textarea/select 16px (모바일 한정)** —
-  [global.css](../../apps/web/src/styles/global.css) `@layer base` +
-  `@media (max-width: 639px)` 에서 raw `<input>/<textarea>/<select>`
-  의 font-size: 16px. shadcn Input 컴포넌트도 같은 분기를 갖지만
-  인라인 사용처를 한 번에 커버.
-- **레거시 글로벌 CSS** — `global.css` 는 body·앵커 기본 + 위
-  iOS 줌 방지 미디어 쿼리만 다루는 얇은 시트.
-
-## Talks To [coverage: high — 11 sources]
-
-- **`@repo/api-contract`** — 공유 zod 스키마 기반 타입을 직접 import.
-  맛집/AI 키/메뉴 분석 외 신규: `RestaurantPublicListItemType`,
-  `RestaurantPublicListQueryType`, `RestaurantPublicDetailType`,
-  `RestaurantInsightsType`, `RestaurantRankingQueryType`,
-  `PublicVisitorReviewType`, `MapProviderConfigType`, `MapProviderIdType`,
-  `UpdateMapProviderInputType`.
-- **`@repo/shared`** — API 클라이언트 부트스트랩(`configureApi`),
-  Zustand 스토어(`useAuthStore`, `useActiveCrawlJobStore`), React Query
-  훅들. 공개 맛집 신규 훅: `useRestaurantsPublic`, `useRestaurantPublic`,
-  `useRestaurantPublicInsights`, `useRestaurantRanking`. 지도 키 신규
-  훅: `useMapProviders`, `useUpdateMapProvider`, `useDeleteMapProvider`,
-  `useMapProviderSecret`, `useMapPublicConfig`. **어드민 발견 신규 훅**:
-  `useNaverSearch` (`['crawl', 'search', q, bbox]`, staleTime 30s).
-  `useActiveCrawlJobStore.add(...)` 신규 호출자 (어드민 발견 — list-row
-  source). 기존 훅 다수 (`useCurrentUser`, `useLogin`, `useLogout`,
-  `useRestaurantList`, `useRestaurantByPlaceId`, `useRestaurantSummaryEvents`,
-  `useDeleteRestaurant`, `useProviders`, `useUpdateProvider`,
-  `useDeleteProvider`, `useTestProvider`, `useProviderModels`,
-  `useCompleteAi`, `useCompleteBatchAi`, `useMenuRanking`,
-  `useGroupForRestaurant`, `useAnalyticsOverview`, `useCategoryTree`,
-  `useGlobalMenus`, `useGroupingRestaurantsStatus`,
-  `useCreateGroupingJob`, `useGroupingJob`, `useStartGlobalMerge`,
-  `useGlobalMergeJob`).
-- **`@repo/utils`** — 썸네일 프록시 헬퍼 `reviewThumbnailUrl(originalUrl,
-  size)` (어드민 비디오 모달 등). 공개 페이지 이미지 표시는
-  `referrerPolicy="no-referrer"` 만으로 충분해 프록시를 안 거친다.
-- **TanStack Query 캐시 직접 패치** — `ActiveJobPanel`은 SSE
-  `visitor_batch.persistedReviews`를 받아 `qc.setQueryData(['restaurant',
-  placeId], …)`로 detail 캐시의 `reviews` 배열에 직접 합친다(중복 id
-  필터링, `videos` 필드 포함). 잡 종료 시엔 list/detail 둘 다
-  `invalidateQueries`.
-- **`useActiveCrawlJobStore`(zustand singleton)** — `jobs:
-  Record<jobId, ActiveCrawlJob>`. 리스트와 detail이 같은 스토어를 읽기
-  때문에 어느 쪽에서 시작한 잡이든 모든 화면에 즉시 보인다.
-- **URL = state** — `RestaurantsPage`의 `?q=&category=&sort=&bbox=&placeId=`
-  와 `AdminAnalyticsPage`의 `?menu=&category=`는 모두 `useSearchParams`
-  로 직접 read/write. `setSearchParams(_, { replace: true })` 로 즉시
-  갱신. useState/useEffect 미러링 회피 — useEffect 회피 원칙.
-- **OpenLayers** — `ol@^10.7.0`. `ol/Map`, `ol/View`, `ol/layer/Tile`,
-  `ol/layer/Vector`, `ol/source/Vector`, `ol/source/XYZ`, `ol/Feature`,
-  `ol/geom/Point`, `ol/proj` (fromLonLat/toLonLat), `ol/style`
-  (Style/Icon/Text/Fill/Stroke), `ol/ol.css`. vworld JS SDK 대신 OL 이
-  WMTS 타일을 직접 받아 그린다 — vworld 도메인 화이트리스트 부담 없음
-  (WMTS 는 키만 검증).
-- **vworld WMTS 1.0.0** —
-  `https://api.vworld.kr/req/wmts/1.0.0/{KEY}/{LAYER}/{z}/{y}/{x}.png`,
-  Layer 는 `Base` (다른 옵션 — `gray`/`midnight`/`Satellite`/`Hybrid`).
-  연결 테스트는 작은 타일 한 장 fetch 후 content-type 검사.
-- **백엔드 friendly** — `VITE_API_URL`(예: `http://localhost:3000`)을
-  `configureApi({ baseUrl })`에 흘려보낸다
-  ([.env.example](../../apps/web/.env.example),
-  [main.tsx](../../apps/web/src/main.tsx)). 개발 시 Vite 서버의
-  `proxy: { '/api': 'http://localhost:3000' }` 로 CORS 회피. 신규 외부
-  통신 — `/api/v1/admin/crawl/search` (어드민 발견의 네이버 PC 지도
-  검색 프록시).
-- **Radix UI** — `@radix-ui/react-slot`, `@radix-ui/react-dialog`(어드민
-  detail 의 우측 슬라이드오버), `@radix-ui/react-dropdown-menu` (현
-  시점 광범위 사용 X).
-- **lucide-react** — 모든 아이콘. 공개 맛집 신규: `Search`, `XCircle`,
-  `Star`, `MapPin`, `MapIcon`/`Map`, `List`, `Loader2`, `RefreshCcw`,
-  `ChevronLeft`, `ChevronRight`, `X`, `ArrowRight`, `Phone`,
-  `Navigation`, `ExternalLink`, `Image`. 어드민 설정 신규: `Settings`,
-  `KeyRound`, `Map`, `PlugZap`, `Save`, `Trash2`, `Maximize2`. 어드민
-  발견 + 패널 토글 신규: `Compass`, `PanelLeftOpen`, `PanelRightOpen`,
-  `Play`.
-
-- **브라우저 native scroll API** — 모바일은 fixed 모달 + JS scroll lock
-  대신 **document/window body 스크롤**을 사용한다 (iOS Safari /
-  Android Chrome URL bar collapse 트리거). `Lightbox` 도 가로 swipe
-  핸들러를 안 박고 **CSS `scroll-snap-type: x mandatory` + momentum
-  scroll** 에 위임 — JS event listener 없이 브라우저가 페이지 안착.
-- **react-router `useMatch`** — `RestaurantsPage` (부모 라우트)에서
-  자식 `:placeId` 활성 여부 판단. `useParams` 는 부모 라우트에선
-  자식 path param 을 못 읽으므로 `useMatch('/restaurants/:placeId')`
-  로 우회. `PublicTopBar` 의 모바일 hide 분기에도 같은 패턴.
-
-크롤링 SSE/요약 이벤트 hook의 내부는 [shared](shared.md), 서버 측
-스트림 형식은 [crawl](crawl.md), 분석 엔드포인트는 [analytics](analytics.md),
-메뉴 정규화 잡은 [menu-grouping](menu-grouping.md), 썸네일 프록시는
-[media](media.md), 지도 키 관리는 [map](map.md) 참고.
-
-## API Surface [coverage: high — 10 sources]
-
-웹 앱은 HTTP 엔드포인트가 아니라 **브라우저 URL** + 재사용 가능한 React
-컴포넌트를 노출한다.
+웹 앱은 HTTP 엔드포인트가 아닌 **브라우저 URL** + 재사용 컴포넌트 노출.
 
 URL:
 
-- `/` — 공개 홈. AI 분석 리뷰 긍정/부정 비율 랭킹 (멘션 5건 이상,
-  `?sort=positive|negative` + 중립 토글, 20개 페이지)
-- `/restaurants` — **풀 뷰포트 맛집 검색**. xl+ 3-column sticky (목록/
-  Outlet/지도), 모바일 body 스크롤 + list/map 토글. URL params:
-  `q/category/sort/bbox`
-- `/restaurants/:placeId` — 상세 outlet (nested). xl+ 가운데 column,
-  모바일 page 흐름 (전역 TopBar hidden, 자체 sticky 헤더+탭). URL
-  params: `?tab=home|menu|reviews|insights|photos|info`
-- `/login` — 로그인 + 회원가입 + 게스트 진입
-- `/admin` — 어드민 대시보드 (사용자 목록 + 역할 토글)
-- `/admin/discover` — 맛집 발견 (네이버 PC 지도 검색 + 다중 크롤링)
-  — `?q=&bbox=&tab=&placeId=`
-- `/admin/restaurants` — 네이버 플레이스 URL 적재 + 등록 맛집 리스트.
-  행 단위 업데이트/재크롤/삭제 + 다중 슬롯 active job panel + 만족도/
-  긍정/부정비율 정렬
-- `/admin/restaurants/:placeId` — 단일 맛집 상세 (좌측 본문 + xl+ 우측
-  지도 사이드바 + Maximize2 슬라이드오버)
-- `/admin/analytics` — AI 분석 관리 (`?menu=`/`?category=` deep-link)
-- `/admin/crawl-test`, `/:jobId` — URL 입력 후 크롤링 잡 시작 + SSE
-- `/admin/ai-test` — LLM 호출 실험 도구
-- `/admin/settings` — **설정 셸 (탭 — AI 키 / 지도)**. index 는
-  ai-keys 리다이렉트
-- `/admin/settings/ai-keys` — provider 카드 리스트 + 연결 테스트
-- `/admin/settings/map` — vworld 키 관리 + probeVworldKey
-- `/admin/ai-keys` — `<Navigate>` 자동 리다이렉트 (옛 북마크 호환)
+- `/` — 공개 홈
+- `/restaurants` / `/restaurants/:placeId` — 풀 뷰포트 검색 + 상세 outlet
+- `/login` — 로그인 + 회원가입 + 게스트
+- `/admin` — 어드민 대시보드
+- `/admin/discover` — 맛집 발견
+- `/admin/restaurants` — canonical 그룹핑 리스트 (병합/분리/삭제 + 큐
+  카드 + suggestion 알림)
+- `/admin/restaurants/:placeId` — 단일 맛집 상세
+- `/admin/diningcode` — **다이닝코드 정식 크롤링 (검색 + 등록 + 일괄
+  저장 SSE)**
+- `/admin/diningcode/:vRid` — 다이닝코드 가게 상세 (정식 진입)
+- `/admin/diningcode-test`, `/:vRid` — 다이닝코드 검증 도구
+- `/admin/catchtable-test`, `/:shopRef` — 캐치테이블 검증 도구
+- `/admin/crawl-test`, `/:jobId` — 네이버 크롤링 검증
+- `/admin/analytics` — AI 분석 관리
+- `/admin/ai-test` — LLM 호출 실험
+- `/admin/settings`, `/ai-keys`, `/map` — 설정 셸 (탭)
+- `/admin/ai-keys` — `<Navigate>` 자동 리다이렉트
 
-내부 재사용 컴포넌트:
+내부 재사용 컴포넌트 (변경/신규만):
 
-- `PublicLayout` / `PublicTopBar` / `PublicSidebar` — 공개 셸
-- `AdminLayout` / `AdminTopBar` — 어드민 셸
-- `RestaurantsPage` 의 3-column 서브트리:
-  - `PublicRestaurantList` (좌측 목록 패널 — 한글 IME 안전 검색 input)
-  - `RestaurantDetailRoute` [신규] — `/restaurants/:placeId` outlet,
-    `?tab=` URL sync (push)
-  - `PublicRestaurantDetail` (가운데 5탭 상세 — `tab?`/`onChangeTab?`
-    optional props 로 controlled/uncontrolled 양방향. 같은 디렉토리 안에
-    `HomeTab` / `MenuTab` / `ReviewsTab` / `PhotosTab` / `InfoTab` +
-    `Lightbox` [scroll-snap 캐러셀] + `shared.tsx` 의 QuickActions/
-    AiSummary/MenuGrid/ReviewCard/`SatisfactionChip`)
-  - `PublicRestaurantsMap` (우측 지도 wrapper)
-- `MapCanvas` — 공개/어드민 모두 공유하는 OL 저레벨 캔버스
-- `VWorldMap` — 어드민 단일 마커 wrapper
-- `ImgWithFallback` — 공용 이미지 헬퍼
-- 어드민 맛집: `ActiveJobPanel`, `MenuRankingSection`, sections.tsx
-  (SectionHeader/SummaryProgressSection/ReviewSummaryItem/ReviewSummarySection/
-  VideoPlayerModal)
-- `AdminAnalyticsPage` 비공개 컴포넌트: `GlobalMergeSection`,
-  `CategoryTreeSection`, `CategoryTreeRow`, `GlobalMenusSection`, etc.
-- 어드민 발견: `AdminDiscoverPage`, `DiscoverMap`, `DiscoverPanel`
-  (`PublicRestaurantDetail` 5탭 컴포넌트는 어드민 발견에서도 그대로
-  재사용 — 어드민 전용 상세 컴포넌트 별도 X)
+- 어드민 다이닝코드: `AdminDiningcodePage` (`ResultCard`/`Pager`/
+  `BulkSaveJobCard`/`MiniMapPicker` 내부), `AdminDiningcodeShopPage` (두
+  라우트 공유 컴포넌트)
+- 어드민 캐치테이블: `AdminCatchtableTestPage`, `AdminCatchtableShopPage`
+- 어드민 맛집: `CanonicalMergePanel`, `MergeProposalQueue` (신규),
+  `ActiveJobPanel`, `MenuRankingSection`, `sections.tsx`, `VWorldMap`,
+  `MapCanvas`, `ReanalyzeFailedBadge` (유지)
+- 공개/검색: 변경 없음
 
-## Data [coverage: high — 6 sources]
+## Data [coverage: high — 7 sources]
 
-- 로컬 DB 없음. 모든 상태는 다섯 갈래로 갈린다.
-  - **서버 상태** — TanStack Query 캐시. `staleTime`, `gcTime`,
-    `retry: 1`, `refetchOnWindowFocus: false`로 글로벌 설정
-    ([main.tsx](../../apps/web/src/main.tsx)).
-  - **클라이언트 인증 상태** — Zustand `useAuthStore` (`token`, `user`,
-    `isGuest`).
-  - **다중 슬롯 잡 상태** — Zustand `useActiveCrawlJobStore`
+- 로컬 DB 없음. 상태는 다섯 갈래.
+  - **서버 상태** — TanStack Query 캐시.
+  - **클라이언트 인증** — Zustand `useAuthStore`.
+  - **다중 슬롯 잡 (네이버 크롤링)** — Zustand `useActiveCrawlJobStore`
     (`jobs: Record<jobId, ActiveCrawlJob>`).
-  - **URL 쿼리 + path = 단일 source of truth** — 여러 페이지에서 사용:
-    - `RestaurantsPage`: `?q&category&sort&bbox` (placeId 는 **path
-      param** 으로 이전 — `/restaurants/:placeId`)
-    - `RestaurantDetailRoute`: `?tab=home|menu|reviews|insights|photos|info`
-      (탭 전환은 push — 뒤로가기 = 직전 탭)
-    - `AdminAnalyticsPage`: `?menu&category`
-    - `AdminDiscoverPage`: `?q&bbox&tab&placeId` (라우트 분리 없이 query
-      만 — 어드민 셸 안이라 자체 헤더 충돌 X)
-    - 모두 `useSearchParams` 가 직접 read/write, useState +
-      `useEffect 동기화` 회피. `setSearchParams(_, { replace: true })`
-      로 history entry 적층 차단.
-  - **로컬 useState (page-scope)** — `RestaurantsPage` 의 `mobileView`
-    (list/map 토글), `hoveredPlaceId` (즉시 마커 강조), `Lightbox` 의
-    `lightboxIndex`, `PublicRestaurantDetail` 의 활성 탭, `ReviewsTab`
-    의 sentiment 필터/정렬.
-- **TanStack Query 키 컨벤션** —
-  - `['restaurant', 'list']` — 어드민 리스트.
-  - `['restaurant', placeId]` — 어드민 상세 + `ActiveJobPanel`.
-  - `['restaurant', 'public', query]` — 공개 검색 (q/category/sort/bbox/limit).
-  - `['restaurant', 'public', placeId]` — 공개 단일.
-  - `['restaurant', 'public', placeId, 'insights']` — AI 분석.
-  - `['restaurant', 'ranking', query]` — 공개 랭킹.
-  - `['map-public-config']`, `['map-providers']`, `['map-secret', id]` —
-    지도 키.
-  - `['menu-ranking', placeId, sort, minMentions]` 등 분석 키.
-  - `['crawl', 'search', q, bbox]` — 어드민 발견 네이버 PC 지도 검색
-    (staleTime 30s).
+  - **다이닝코드 일괄 저장 잡** [신규] — Zustand
+    `useActiveDiningcodeBulkSaveJobStore` (`jobId: string|null`).
+    localStorage 영속 — 페이지 이동/새로고침 후 이어보기. 동시 잡 1개
+    제한.
+  - **URL = state** — RestaurantsPage, RestaurantDetailRoute,
+    AdminAnalyticsPage, AdminDiscoverPage 가 useSearchParams 직접 사용.
+    AdminDiningcodePage 는 검색 폼 로컬 useState (일괄 저장 상태는 store).
+  - **로컬 useState (page-scope)** — RestaurantsPage `mobileView`,
+    AdminDiningcodePage `selected: Set<vRid>`, AdminRestaurantsPage
+    `mergeOpenCanonicalId` / `confirmDeleteCanonicalId` / `sortBy`,
+    AdminCatchtableTestPage `offsetToken` 등.
+- **TanStack Query 키 신규** —
+  - `['diningcode', 'search', q, ...]`, `['diningcode', 'shop', vRid]`,
+    `['diningcode', 'shop', vRid, 'reviews', page]`,
+    `['diningcode', 'registered', vRids]`,
+    `['diningcode', 'bulk-save', jobId]` (SSE 구독).
+  - `['catchtable', 'search', ...]`, `['catchtable', 'shop', shopRef]`,
+    `['catchtable', 'menus', shopRef]`, `['catchtable', 'reviews',
+    shopRef]`.
+  - `['canonical', 'candidates', canonicalId]`, `['canonical',
+    'proposals']`.
 - **localStorage** —
-  - `lp:token` — JWT 토큰
-  - `lp:guest` — 게스트 플래그
-  - `lp:theme` — `light`/`dark` (FOUC 방지로 `index.html` 인라인 스크립트
-    가 React 마운트 전에 `<html>` 클래스 토글)
-  - `lp:panelPrefs` — 페이지별 패널 좌/우 위치 (`{ "admin.discover":
-    "right", "public.restaurants": "left" }`). `panelPrefsStore` 가
-    `setSide` 안에서 직접 writeStorage (zustand persist 미들웨어 미사용).
-- **API 클라이언트 토큰 주입** — `configureApi({ getToken: () =>
-  useAuthStore.getState().token })`. 401 응답 시
-  `onUnauthorized: clearSession`으로 자동 로그아웃.
-- **AdminAiKeysPage / AdminMapKeysPage 폼 동기화** — 각 카드는 자체
-  `useState<FormState>`를 유지하되, `useEffect([provider])`로 부모가 새로
-  받아온 데이터에 맞춰 폼을 리셋. 저장 성공 후 `apiKey` 필드만 비워서
-  password input이 마스킹 상태로 돌아간다.
+  - `lp:token`, `lp:guest`, `lp:theme`, `lp:panelPrefs` (기존)
+  - `lp:adminSidebarCollapsed` (어드민 사이드바 접힘)
+  - 다이닝코드 활성 잡 id (`useActiveDiningcodeBulkSaveJobStore` 저장 키)
+- **API 클라이언트 토큰 주입** — `configureApi({ getToken })`, 401 →
+  `onUnauthorized: clearSession` (이전과 동일).
 
-## Key Decisions [coverage: high — 24 sources]
+## Key Decisions [coverage: high — 28 sources]
 
-- **모바일 UX 규율 8조 (2026-05-13)** — `/restaurants` 의 모바일
-  스크롤·sticky 패턴을 별도 문서로 명문화
-  ([docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md)).
-  관련 커밋 `9c245ae` `fb7c00f` `4d4439f` `302f37c` `ddbcb10`.
-  1. **모바일 = body 스크롤** — fixed 풀스크린 모달 + JS scroll lock
-     금지. 라우트 분리로 자연 페이지화 → 모바일 브라우저 URL bar
-     collapse 자동 동작.
-  2. **sticky element 를 wrapping 하지 않는다** — wrapping div 가
-     containing block 을 묶어 sticky 가 wrapper(고작 56px) 안에서만
-     동작하다 함께 사라진다. 분기는 sticky element 자체 className 에서.
-  3. **sticky 묶음은 `overflow:auto` 컨테이너 밖에 둔다** — 안에 두면
-     자체 sticky containing block 형성. 모바일에서 그 컨테이너가 실제
-     scroll 되지 않으면 sticky 가 깨진다 (브라우저별 quirk).
-  4. **`100vh` 대신 `100dvh`** — iOS Safari dynamic viewport 와 합치,
-     주소창 펼침/접힘 시 잘림 회피.
-  5. **탭은 URL 의 일부** — `?tab=xxx`. 탭 전환은 **push** (replace
-     금지). 뒤로가기 1회 = 직전 탭. 딥링크/공유 가능.
-  6. **한글 IME 대응** — URL/상위 state 와 sync 되는 controlled input
-     에는 `compositionStart/End` + 로컬 `draft` state 필수. composition
-     중 상위 sync 보류 → URL re-render 가 미완성 조합 ("ㅇ으음") 깨뜨림
-     회피. `compositionEnd` 시 최종 조합을 한 번에 sync.
-  7. **scroll-to-top 환경 자동 분기** — `scrollHeight > clientHeight`
-     로 자체 scroll 여부 판단해 `scrollRef.scrollTo` (admin/xl+) vs
-     `window.scrollTo` (모바일 body 스크롤) 자동 선택.
-  8. **iOS Safari focus 자동 줌 방지** — input/textarea/select font-size
-     `<16px` 면 focus 시 자동 줌인. 모바일 `<sm` 브레이크포인트에서
-     16px 강제 (shadcn `Input` `text-base sm:text-sm` + `global.css`
-     `@media (max-width:639px) input/textarea/select { font-size: 16px }`).
-- **라우트 분리 = `/restaurants` + `/restaurants/:placeId`** — 이전
-  `?placeId=` 쿼리 + fixed 모달 패턴을 폐기하고 부모-자식 nested
-  route 로 변경. `RestaurantsPage` 가 layout (list aside + Outlet + map
-  section), `RestaurantDetailRoute` 가 자식. xl+ 는 3-column 동시
-  표시, 모바일은 detail 활성 시 list/map/토글 hidden + detail 만 page
-  흐름. 전역 `PublicTopBar` 도 모바일 detail 에서 hidden (`useMatch`
-  로 감지). 자체 헤더(식당명) + 탭바 묶음이 sticky 단독.
-- **AdminLayout 모바일 드로어 + AdminTopBar 햄버거** — 사이드바를
-  md+ sticky aside / 모바일 슬라이드 드로어로 분기. 햄버거 트리거
-  + ESC/backdrop 닫기. "← 일반 화면으로" 탈출 링크는 사이드바 하단에서
-  AdminTopBar **우측**으로 이전.
-- **AdminDiscoverPage 모바일 패널/지도 토글 + 선택 시 토글 상승** —
-  xl 미만 `mobileView: 'panel'|'map'` pill 토글. `checkedIds.size > 0`
-  이면 sticky "N개 크롤링 시작" 바와 겹치지 않게 토글 위치 자동
-  `bottom-20` 상승.
-- **ReviewCard LLM 분석 풀 노출** — 카드 보더는 균일한 중립 톤으로
-  통일하고, sentiment 시각화는 헤더의 `SatisfactionChip` (도트 +
-  만족도 1–5 점) 한 곳에 응축. 본문은 analysis.text 요약 + 본문 +
-  사진 가로 스크롤 + **menus 좌측 emerald/rose stripe 리스트** +
-  **tips muted 박스** + **keywords 칩** — LLM 분석 결과를 추론 없이
-  그대로 사용자에게 노출.
-- **이미지 hero/리뷰 = 가로 스냅 캐러셀** — `HomeTab` hero `h-56
-  sm:h-64`, ReviewCard 사진 모두 `snap-x snap-mandatory overflow-x-auto`
-  + `snap-center` 슬라이드. JS swipe 핸들러 없이 브라우저 momentum +
-  snap 위임. 클릭 시 `Lightbox` (역시 scroll-snap) 진입.
-- **shadcn 프리미티브 모바일 친화 패딩** — `Card` 의 헤더/콘텐츠/푸터
-  `p-4 sm:p-6` (16→24px) — 좁은 폰 가용 폭 32px 회수. `Input`
-  `text-base sm:text-sm` (위 iOS 줌 방지). 컴포넌트 1줄 변경으로 전체
-  화면에 일괄 적용.
-- **공개 맛집 = 풀 뷰포트 + 3-column / 토글** — 네이버 지도 패턴을
-  그대로. xl+ 에서는 좌측 결과 / 가운데 상세 / 우측 지도를 동시 노출,
-  xl 미만에서는 [목록/지도] 탭 토글로 좁은 화면 답답함 회피. 상세
-  패널은 placeId 가 있을 때만 mount 되며 좁은 화면에서는 list aside 위에
-  `absolute z-30` 으로 덮어쓰기. 컨테이너 높이는 `h-[calc(100vh-3.5rem)]`
-  (TopBar h-14 빼기) — 페이지 자체는 스크롤 없이, 안쪽 패널이 자기
-  스크롤만.
-- **URL state 동기화 = useSearchParams + replace** —
-  `q/category/sort/bbox/placeId` 5종을 useSearchParams 가 single source
-  of truth. onChange 안에서 즉시 `setSearchParams(_, { replace: true })`,
-  useEffect 미러링 회피. 입력 한 글자마다 history entry 가 쌓이지 않고
-  새로고침/링크 공유 시에도 상태가 그대로 복구. **단 호버는
-  로컬 useState** (`hoveredPlaceId`) — 일시적이라 URL 까지 안 가져가는
-  게 마커 강조 즉시 반영에 유리.
-- **5탭 상세 = 데이터 fetch 1회 + 탭 전환은 컨텐츠만** —
-  `PublicRestaurantDetail` root 에서 `useRestaurantPublic` +
-  `useRestaurantPublicInsights` 한 번씩만 fetch. 탭 전환은 활성 컴포넌트만
-  스왑하므로 추가 호출 없음. 탭 상태는 내부 useState — URL 까지 안 가져
-  가도 사용자 흐름엔 충분. **placeId 변경 시 useEffect 로 자동 'home'
-  reset** — 다른 식당 클릭 시 첫 인상은 항상 홈 탭. 이 한 곳은
-  useEffect 회피 원칙을 깨고 사용.
-- **`panel/` → `detail/` 명명 정리** — 처음엔 단일 파일
-  `panel/PublicRestaurantPanel.tsx`. 1차 리팩터로 5개 탭 파일 분해
-  (panel/ 디렉토리). 2차 리팩터로 `detail/` 로 디렉토리 리네이밍 +
-  `PublicRestaurantDetail` 로 export 변경 — 좌측 "목록 패널"
-  (`PublicRestaurantList`) 과 가운데 "상세 패널" 의 명료한 구분이
-  목적.
-- **사진 라이트박스 = 카테고리 평탄화된 단일 시퀀스** — 사진 탭의 3섹션
-  (대표/메뉴/리뷰) 사진을 모두 평탄화한 `allImages` 배열 + 섹션별
-  offset 매핑. 클릭 시 `offset + i` 인덱스로 라이트박스 진입. 모달
-  안에서 좌우 키보드 / 화살표 클릭만으로 다음 섹션 사진까지 자연스럽게
-  이동 가능 — 각 섹션마다 라이트박스를 따로 띄우는 패턴보다 UX 가 좋다.
-- **`ImgWithFallback` 공용화 + src 변경 시 failed reset** — 옛
-  AdminRestaurantDetailPage 안에 로컬로 정의돼 있던 컴포넌트를
-  `~/components/` 로 이동. `referrerPolicy="no-referrer"` 로 Naver
-  이미지 CDN hotlink 차단 회피, onError 시 placeholder. 추가로
-  `useEffect([src])` 로 **src 변경 시 failed 자동 리셋** — 라이트박스/
-  캐러셀처럼 같은 컴포넌트가 다른 이미지를 연속으로 그리는 케이스에서
-  한 번 실패한 뒤 다음 이미지가 안 보이는 회귀 방지.
-- **Pretendard 공개 한정 + 텍스트 사이즈 시프트 전역** — `PublicLayout`
-  root 에 `font-pretendard` 클래스를 박아 공개 페이지 한정으로
-  Pretendard 적용 (어드민은 system-ui fallback). 다만 `--text-*`
-  Tailwind v4 변수는 `@theme inline` 에서 1px 씩 위로 시프트
-  (12→13/14→15/16→17/...) — **사이트 전체에 영향**. 이는 의도적
-  결정 — 디자인 일관성 우선. spacing/icon 은 그대로라 레이아웃이
-  비례 비대해지지 않는다.
-- **OpenLayers + WMTS = vworld JS SDK 우회** — vworld 의 `vw.ol3.Map`
-  같은 SDK 를 안 쓰고 OL 로 vworld 의 WMTS 1.0.0 타일을 직접 받는다.
-  WMTS 는 키만 검증하고 도메인 화이트리스트 검증을 안 해, 어떤 origin
-  에서도 그대로 동작. SDK 의존성 + 도메인 등록 부담 동시 회피.
-- **`MapCanvas` imperative API + ref 콜백** — `flyTo`/`fitToMarkers` 는
-  `forwardRef + useImperativeHandle` 로 노출. 콜백
-  (`onMarkerSelect`/`onViewportChangeEnd`/`onTileError`) 은 ref 보관
-  으로 effect 의존성에서 제외 — 매번 새 effect 가 생성되는 걸 방지.
-  `apiKey` 가 바뀔 때만 map 재생성, 마커는 `vectorSource.clear() +
-  addFeature` 로 패치.
-- **사용자 인터랙션 vs programmatic move 분리** — `userInteractedRef`
-  flag. 사용자 `pointerdrag`/`wheel` 시 true, `flyTo`/`fitToMarkers`
-  호출 직전 false. moveend 콜백에서 false 면 무시 — programmatic
-  fly-to 직후 false positive `onViewportChangeEnd` 발사로 "이 지역
-  재검색" 버튼이 잘못 뜨는 사고 방지.
-- **`/admin/settings` 통합 + 옛 경로 redirect** — `/admin/ai-keys` 단독
-  페이지를 폐기하고 `/admin/settings` 부모 + 탭 자식으로 옮김. 옛
-  북마크는 `<Navigate to="/admin/settings/ai-keys" replace>` 로 자동
-  처리. 사이드바 라벨도 "AI 키" → "설정" + Settings 아이콘.
-- **어드민 detail 위치 카드 + Maximize2 슬라이드오버** — xl+ 에서
-  본문 우측에 sticky 위치 카드 (`VWorldMap` 280px 고정). 더 크게 보고
-  싶으면 헤더 `Maximize2` 버튼 → Radix Dialog 우측 슬라이드오버 (sm+
-  740px) 로 풀 높이 지도. 같은 ol Map 인스턴스를 두 컨테이너에 옮기는
-  대신 별개 `VWorldMap` 두 인스턴스를 렌더 — `setTarget` 으로 가능
-  하긴 하나 view/layer 상태가 어색해지고, 두 인스턴스 비용은 무시할
-  만함.
-- **연결 테스트는 키 입력 후 즉시 가능** — `AdminMapKeysPage` 의
-  `handleTest` 는 `form.apiKey` (저장 안 한 입력값) 로 `probeVworldKey`
-  호출. 사용자가 저장 전에 키 유효성을 확인할 수 있다. 비어 있으면
-  안내 문구로 fallback. AI 키 페이지의 `useTestProvider` 도 같은
-  패턴 — `form.defaultModel` 의 즉석 입력값으로 호출.
-- **공개 페이지 vworld 키는 평문 노출** — `useMapPublicConfig` 가
-  반환하는 `apiKey` 는 평문. 어드민의 `useMapProviderSecret` 도 같음.
-  vworld WMTS 는 도메인 화이트리스트로 가드되지 않으므로 키가 노출돼도
-  치명적이지 않다 (단 트래픽 한도는 공유). 운영 정책 측면에서는 추후
-  도메인 화이트리스트 + 키 회전 검토 가능.
-- **어드민 발견 = 검색·등록 통합 마커 + 다중 선택 일괄 크롤링** — 검색
-  결과는 빨강 (`'primary'`), 등록은 회색 (`'muted'`). 같은 placeId 가
-  양쪽에 있으면 등록(muted) 우선해 중복 크롤 방지. 다중 선택은 직렬
-  `await` 로 호출, 시작 거부된 placeId 는 체크 상태 유지해 사용자
-  재시도 편의 (`setCheckedIds(failedIds)`). 처음에는 `Promise.allSettled`
-  병렬이었으나 BE rate-limit 에 걸려 직렬로 변경 → 응답이 ms 단위라
-  결국 BE actor rate-limit 자체 제거.
-- **패널 좌/우 토글 = 페이지별 namespace + localStorage 직접 + xl+
-  한정** — `panelPrefsStore` 가 `Record<PanelKey, 'left' | 'right'>`,
-  PanelKey = `'admin.discover' | 'public.restaurants'`. Zustand persist
-  미들웨어 안 쓰고 `setSide` 안에서 직접 `writeStorage` (theme store
-  와 같은 패턴, 의존성 회피). 모바일은 풀블리드라 토글 의미 없음 —
-  xl+ 에서만 ⇄ 버튼 노출. 기본값 `admin.discover: 'right'`,
-  `public.restaurants: 'left'`.
-- **panel side 변경 시 OL reflow = ResizeObserver 자동** — `MapCanvas`
-  안에서 `ResizeObserver` 로 컨테이너 사이즈 변화 감지 → `map.updateSize()`
-  자동 호출. window resize, panel toggle, dialog 슬라이드오버 모두
-  한 곳에서 처리 → `map.updateSize()` 호출처 분산 회피.
-- **등록 행 클릭 → 별도 column 상세 = 공개 맛집 페이지 패턴 재현** —
-  처음엔 패널 안 absolute 슬라이드였으나 사용자 요청으로 list/detail/map
-  3-column 으로 변경. DOM 순서 `[map, detail-aside, list-aside]` +
-  flex 방향 토글로 좌/우 swap. detail 은 항상 list 옆 (지도 쪽 방향)
-  에 붙는다. `PublicRestaurantDetail` 그대로 재사용 — 어드민 발견
-  전용 상세 컴포넌트 별도 X.
-- **기존 결정들 (변경 없음)** — React 19 (모바일은 RN 0.76 호환 React 18,
-  공유 컴포넌트는 두 버전 호환), Next.js 미채택 (SPA 충분), Tailwind v4
-  + shadcn 토큰, `@repo/shared` 경유 API/스토어, stream-driven cache
-  merge, 역할 기반 라우트 가드, 다중 슬롯 잡 글로벌 zustand, 재크롤
-  시 detail 캐시 review 비우기, `fetchedAt-asc == 최근 수집순`, 방문일
-  정규화 후 비교, 비디오는 프록시 우회·썸네일만 프록시, `VideoPlayerModal`
-  no-portal, `visitor_batch.persistedReviews` 직접 머지, 인라인
-  confirm-delete (2-step), Vite dev proxy, opt-in temperature, AdminAiKeysPage
-  "변경 시에만 입력", datalist 자동완성, 클라이언트 항목 상한 10,
-  분석 페이지 = compose-of-hooks, MenuRankingSection trend 임계값 5%p,
-  재귀 컴포넌트 + depth=0 default open.
+이전 라운드 결정(모바일 UX 8조, `/restaurants` 라우트 분리, AdminLayout
+드로어, AdminDiscover 토글, ReviewCard LLM 풀 노출, 캐러셀 = scroll-snap,
+shadcn 모바일 패딩, 풀 뷰포트 3-column, useSearchParams + replace, 5탭 1회
+fetch, panel/→detail/ 명명, 라이트박스 단일 시퀀스, ImgWithFallback 공용화,
+Pretendard 공개 한정 + 텍스트 사이즈 시프트, OL + WMTS, MapCanvas
+imperative, 사용자 vs programmatic move, /admin/settings 통합, AdminDetail
+Maximize2, 연결 테스트 즉시, 공개 vworld 키 평문, 어드민 발견 통합 마커,
+패널 좌/우, panel side OL reflow, 등록 행 클릭 = 별도 column)는 그대로
+유지. 이번 라운드 신규/변경:
 
-## Gotchas [coverage: high — 18 sources]
+- **다이닝코드 = 테스트 페이지 vs 정식 페이지 분리** — 같은 검색 흐름이지만
+  운영 도구(`/admin/diningcode`)와 검증 도구(`/admin/diningcode-test`)를
+  나란히 유지. 검증 페이지엔 원본 JSON 패널 / vRid 노출 / source 메타
+  배지 — 다이닝코드 응답 변동 디버깅용. 정식 페이지는 디자인 정리 + 등록
+  배지 + 체크박스 + sticky 액션바 + SSE 일괄 저장. 두 페이지가 같은
+  검색 hook(`useDiningcodeSearch`)을 쓰므로 분기 비용 ≈ 0.
+- **`AdminDiningcodeShopPage` 한 컴포넌트 → 두 라우트** — 가게 상세 자체는
+  진입 경로와 무관해 동일. `useLocation().pathname.startsWith(
+  '/admin/diningcode-test')` 로 back-link 만 분기. 별도 페이지 두 벌을
+  유지하면 가게 상세에 새 기능 추가할 때 동시 수정 부담 — 단일 컴포넌트로
+  통일이 옳다.
+- **일괄 저장 = 동시 잡 1개 + jobId persist + 60초 TTL** —
+  `useActiveDiningcodeBulkSaveJobStore` 가 단일 `jobId` 보관 +
+  localStorage 영속. 페이지 이동 → 돌아오면 SSE 자동 재구독, 새로고침 후
+  진행 상황 그대로. 잡 종료 후 60초 setTimeout 으로 자동 clear — 결과를
+  볼 시간은 충분히 주되 다음 작업 시 깔끔. "닫기" 누르면 즉시 clear.
+  동시 잡 2개 이상은 store 가 한 jobId 만 들고 있고 BE 도 actor 단일
+  잡 가정이라 시작 거부.
+- **AdminRestaurantsPage 행 = canonical 단위 그룹** — 한 가게가 Naver +
+  DC 두 출처에 있어도 한 행으로 묶여 보인다. `item.sources` 배열 + 출처
+  칩 + 칩 옆 `Scissors` 분리 액션 (sources >= 2 일 때만). 행 클릭은
+  Naver placeId 라우트 — Naver 가 없는 canonical 은 행 네비 + 액션 모두
+  disabled. 삭제 단위도 canonicalId 기반 (옛 placeId 기반 → DC-only 행
+  삭제 불가 회귀).
+- **suggestion 알림 = 인라인 한 줄** — 별도 카드로 빼지 않고 행 위에 amber
+  배경 dashed 한 줄. 행 옆 [병합] 버튼이 같은 `CanonicalMergePanel` 을
+  여는 게이트라 중복 UI 회피. 무시(`dismiss`)는 한 번 누르면 영구.
+- **MergeProposalQueue 상단 카드** — 큐가 비어도 헤더는 노출 — "전체 다시
+  돌리기" 버튼이 항상 닿을 수 있어야 함. 펼침 토글로 시각적 무게 감소
+  (기본 닫힘). proposal 카드는 A/B 좌·우 + `keepSide` 토글 — accept 시
+  어느 쪽을 정사본으로 유지할지 어드민이 결정.
+- **DC 칩 클릭 = 정식 페이지** — 출처 칩의 다이닝코드 링크는 항상
+  `/admin/diningcode/:sourceId` (검증 X). 검증 페이지는 사이드바 NavLink
+  로만 접근 — 운영 흐름에서 사용자를 검증 도구로 흘려보내지 않는다.
+- **DC 재수집 = 별도 mutation + variables=vRid** — Naver 의 startCrawl +
+  SSE 잡 패턴과 다르게 `useSaveDiningcodeShop` 단일 mutation 으로 완결.
+  variables 가 vRid 라 in-flight 행만 식별. AI 분석 큐잉은 BE 가
+  `dc:<vRid>` 채널로 따로 — 현재 list SSE 통합 전이라 라이브 갱신은 list
+  invalidate 로 폴백.
+- **출처 분리 = canonicalId + restaurantId pair** — `useSplitCanonical
+  ({ canonicalId, input: { restaurantId } })`. 같은 mutation 인스턴스로
+  여러 행에 작용 — variables.input.restaurantId 로 in-flight 행만 disable.
+  병합과 짝을 이루는 안전망 (잘못 묶였을 때 되돌릴 수 있어야 한다).
+- **기존 결정들 유지** — React 19, Tailwind v4 + shadcn 토큰,
+  `@repo/shared` 경유, stream-driven cache merge, 역할 기반 가드, 다중 슬롯
+  잡, 재크롤 시 detail 리뷰 비우기, `fetchedAt-asc` 의미, 비디오 프록시
+  정책, 인라인 confirm-delete (2-step), Vite dev proxy, AdminAiKeysPage "변경
+  시에만 입력", panelPrefsStore 페이지 namespace, `MapCanvas` ResizeObserver.
 
-- **sticky containing block trap** — sticky element 를 wrapping div
-  (`<div className="hidden xl:block"><PublicTopBar/></div>`) 로 감싸면
-  wrapping div 가 자기 boundary 로 sticky containing block 을 만들고,
-  본문 스크롤 시 wrapper(56px) 안에서만 stick 하다 같이 사라진다.
-  반드시 sticky element root 자체 className 에 `hidden xl:flex` 적용.
-- **`overflow-y:auto` 안의 sticky** — 본문 div 가 `overflow-y:auto`
-  이면 자체 sticky containing block 형성. xl+/admin 처럼 그 div 가
-  실제 scroll 되면 정상, 모바일처럼 부모 height 없어 body 가 scroll
-  되는 구조면 sticky 가 어색하게 깨진다. sticky 묶음(헤더+탭)은
-  본문 div **밖** (detail 루트 직계 자식)에 둬야 한다.
-- **모바일 body 스크롤은 `h-[calc(100vh-…)] overflow-hidden`
-  컨테이너 안에선 안 됨** — 루트가 fixed 풀-뷰포트면 document 자체가
-  스크롤되지 않아 iOS Safari / Android Chrome URL bar collapse 가
-  트리거되지 않는다. 모바일은 자연 page 흐름 (라우트 분리)으로.
-- **`100vh` iOS Safari 잘림** — 동적 viewport 의 주소창 변동분이
-  반영 안 돼 하단이 잘린다. 모바일 컬럼 풀-뷰포트는 `100dvh` 사용.
-  detail 본문 안에서 사용 금지.
-- **한글 IME 미완성 조합 덮어쓰기** — controlled `value={q}` 에 URL
-  re-render 가 미완성 조합을 덮어 쓰면 "ㅇ으음" 같은 중복 입력이
-  발생한다. `compositionStart/End` ref 플래그 + 로컬 `draft` state
-  필수. composition 중 상위 sync 보류, `compositionEnd` 시 한 번에
-  flush.
-- **Pretendard 외부 CDN 의존** — jsDelivr 가 다운되거나 응답이 느리면
-  공개 페이지의 첫 페인팅이 system-ui 로 되다가 폰트 적용으로 깜빡인다
-  (FOUT). dynamic-subset 이 가벼워 영향은 작지만, self-host 옵션은
-  현재 검토 안 함.
-- **텍스트 사이즈 시프트가 어드민까지 영향** — `--text-*` Tailwind v4
-  변수는 `@theme inline` 에서 전역 변경. 공개/어드민 둘 다 본문이 1px
-  커진 상태로 렌더된다. 어드민의 빡빡한 dropdown / select 폼이 살짝
-  덜 들어맞을 수 있다 (의도적 — 가독성 일관성 우선).
-- **`ImgWithFallback` src 변경 시 failed 리셋 필수** — 라이트박스 /
-  캐러셀처럼 같은 컴포넌트 노드에 다른 src 를 연속으로 흘릴 때, 최초
-  failed 를 리셋 안 하면 다음 사진이 placeholder 로 떨어진다. 현재
-  `useEffect([src])` 로 자동 리셋 — 이 로직을 빼면 회귀 발생. 라이트
-  박스 키보드 좌우로 빠르게 넘기면 한 번 실패한 사진이 다음 사진
-  로딩까지 막던 실제 사고 사례.
-- **5탭 상세에서 placeId 변경 시 옛 데이터 잠시 보임** — `useRestaurantPublic`
-  은 placeId 키로 query 가 새로 fetch 되지만, React Query 가 옛
-  `data` 를 기본 stale 그대로 들고 있다. 새 식당 데이터가 들어오기
-  전까지 헤더에 옛 식당 이름이 잠깐 보일 수 있다 — 의도적 (skeleton
-  대신 staleness 허용으로 깜빡임 줄이기). 신규 키 fetch 후 자동 갱신.
-- **vworld 키 미등록 시 placeholder** — 공개 페이지는
-  `useMapPublicConfig` 가 404 (`ApiError.statusCode === 404`) 면 "관리자
-  설정 > 지도..." 안내. 어드민 단일 마커 (`VWorldMap`) 도 동일 분기
-  + `/admin/settings/map` 링크. 키 등록 후엔 query 가 자동 refetch 되며
-  복구.
-- **OpenLayers `apiKey` 변경만 map 재생성** — `MapCanvas` 의 mount
-  effect 는 `[apiKey]` 만 deps. `markers`/`initialCenter` 가 바뀌어도
-  map 재생성 X — 마커는 `vectorSource.clear() + addFeature` 로 패치.
-  `initialCenter` 는 첫 렌더 후엔 외부에서 바꿀 수 없다 (`flyTo`
-  imperative 사용). 이 패턴을 모르면 마커가 안 바뀐다고 오해할 수 있음.
-- **`MapCanvas` 첫 렌더 후 자동 moveend 무시** — `initialCenter` /
-  `markers[0]` 로 view 가 처음 세팅되면 OL 이 moveend 를 발사하지만,
-  `userInteractedRef` 가 false 라 `onViewportChangeEnd` 는 안 호출된다.
-  사용자가 `pointerdrag` / `wheel` 한 뒤부터만 콜백이 동작 — 의도적이며,
-  처음 렌더만으로 "이 지역에서 재검색" 버튼이 뜨는 사고 방지.
-- **모바일 detail 활성 시 list/map/토글 hidden** — `/restaurants/:placeId`
-  에 들어가면 (path 매치) RestaurantsPage 의 list aside, map section,
-  하단 토글이 모두 hidden 으로 빠진다. detail 자체 헤더(닫기 X)로
-  `navigate('/restaurants', { search: window.location.search })` 가
-  유일한 복귀 경로 (모바일 뒤로가기는 ?tab 만 pop).
-- **Lightbox key handler 글로벌 등록** — `Lightbox` 가 mount 되면
-  `window` 에 `keydown` 리스너를 박는다. 라이트박스 안에서 ESC 가
-  뒤집힌 상위 modal 도 같이 닫히는 케이스가 있을 수 있다 (현재는 없음
-  — 부모 PublicRestaurantDetail 의 ESC 처리는 별도 안 함).
-- **블로그 리뷰 외부 링크는 referrer 통과** — `target="_blank"
-  rel="noreferrer"` 만 박혀 있고 `<img>` 의 `referrerPolicy` 와는
-  분리. blogReviews thumbnail 은 ImgWithFallback 으로 처리되므로 안전.
-- **Radix Dialog Portal 안의 OpenLayers** — 어드민 detail 의 슬라이드
-  오버 안에서 `VWorldMap` 이 다시 마운트되면 OL 이 새 컨테이너 사이즈를
-  detect 못 할 수 있다 (Portal 의 z-index/transform 컨텍스트). 현재
-  코드는 별개 인스턴스라 자체 mount effect 가 다시 동작 — 정상. 같은
-  ol Map 을 `setTarget` 으로 옮기면 잠금/언락 처리가 어색해진다는 게
-  코드 주석에서 명시.
-- **직렬 await 만으론 부족 — BE rate-limit 자체 제거** — 어드민 발견
-  의 다중 선택 일괄 크롤링은 처음 `Promise.allSettled` → 직렬 `await`
-  로 옮겨도 응답이 수 ms 안에 떨어져 50ms 윈도우조차 둘째부터 막혔다.
-  결국 BE actor rate-limit 자체를 제거. 자세한 건 [crawl](crawl.md)
-  의 actor rate-limit 제거 결정 참고.
-- **어드민 발견 검색 디바운스 cleanup 누락 시 unmount 후 setParam** —
-  `DiscoverPanel` 의 검색 디바운스 300ms 는 `useEffect` cleanup 으로
-  unmount 시 timeout clear 필수. 또 URL `q` 외부 변경 시 input 동기화
-  useEffect 한 곳 — useEffect 회피 원칙 예외 (외부 system 동기화 케이스).
-- **검색 결과 등록 항목 클릭 시 placeId 가 등록 list 에 있는지 체크** —
-  `detailPlaceId` 결정 로직에서 등록 list 에 없는 검색 결과 placeId
-  는 detail 슬라이드 안 띄움 (DB 데이터 없음). 검색 마커 클릭 시
-  detail 이 안 뜨는 게 정상.
-- **tailwindcss-animate 미설치 시 슬라이드 효과 없음** — `animate-in
-  slide-in-from-right-4` 가 미작동, detail 즉시 표시. 기능 자체엔
-  영향 없음.
-- **기존 함정들 (유지)** — `global.css` 의 unlayered `a { color }`
-  Tailwind 우선순위 함정, 재크롤 시 detail 캐시 미리 비우기 필수, 방문일
-  정규화 누락 시 8월 > 12월, 다중 슬롯 무제한 start, `.tsx` 옆 `.js`
-  빌드 잔재 무시, SSE `?token=` 쿼리 인증, 서명 video URL TTL,
-  VideoPlayerModal body scroll lock, logout 시 localStorage 자동 정리,
-  HomePage admin 링크 게이트, OKLCH 일부 도구 미지원, Vite deps
-  prebundle 캐시 함정, `useActiveCrawlJobStore` 셀렉터 안정성, 리스트
-  정렬은 클라 측 SSE 구독은 원본 기준, `window.confirm` AdminAiKeys/
-  AdminMapKeys/Restaurants 일부 잔존, 글로벌 머지 409 = 이미 진행 중,
-  `?menu=`/`?category=` replace 모드, MenuRankingSection 의 글로벌
-  매핑 의존, AdminAiKeysPage 의 useEffect 잔존.
+## Gotchas [coverage: high — 21 sources]
 
-## Sources [coverage: high — 56 sources]
+- **AdminDiningcodePage 선택 자동 초기화** — 검색/페이지/정렬/좌표 변경 시
+  `selected: Set<vRid>` 가 비워진다. 현재 페이지에 보이지 않는 vRid 의 체크
+  를 유지해도 어드민이 확인할 수 없어 혼란만 키운다 — 의도적. 일괄 저장
+  도중엔 잡 카드 진행 배지로 결과 확인.
+- **일괄 저장 잡 카드 60초 TTL** — done/failed 후 60초 뒤 자동 clear.
+  사용자가 결과 화면을 너무 오래 띄워 둔 채 작업했다면 다음 작업과 겹쳐
+  지표가 헷갈릴 수 있다. 안전망으로 "닫기" 즉시 clear.
+- **DC-only canonical 은 상세 페이지 접근 불가** — 행 클릭이
+  `/admin/restaurants/:placeId` 로 이동하는데 그 라우트는 Naver placeId
+  필요. DC 만 있는 가게는 "행 클릭" 불활성 + 업데이트/재크롤 disabled —
+  **출처 칩(다이닝코드)** 으로만 진입. 일관 정책상 의도적이지만 신규
+  어드민이 헤맬 수 있는 지점.
+- **DC 칩 클릭이 검증 페이지가 아닌 정식 페이지** — `/admin/diningcode/:vRid`.
+  검증 페이지(`/admin/diningcode-test/:vRid`) 는 다이닝코드 사이드바
+  NavLink + 정식 페이지 결과 카드의 백 버튼 분기에서만 등장. AdminRestaurantsPage
+  의 출처 칩에서 검증 페이지를 기대하면 안 됨.
+- **AdminDiningcodeShopPage pathname 분기 = startsWith** — `/admin/diningcode/:vRid`
+  와 `/admin/diningcode-test/:vRid` 둘 다 매칭. 새 라우트 추가 시 분기
+  로직을 같이 갱신해야 함.
+- **MergeProposalQueue "전체 다시 돌리기" = 큐 비우지 않음** — 큐를 리셋
+  하지 않고 **새 매칭만 추가**한다 (`runMutation.data.created` = 새로
+  적재된 건수). 이미 있는 proposal 은 그대로 — accept/reject 로 제거해야.
+- **canonicalId 단위 삭제 = sources 모두 cascade** — 행 = canonical 통째로
+  삭제. sources >= 2 일 때 "정말 삭제 (N개 출처)" 라벨로 경고하지만,
+  사용자가 한 출처만 빼고 싶다면 `Scissors` 분리 후 삭제해야.
+- **suggestion 무시 = 영구** — `useDismissCanonicalSuggestion` 은 BE 에
+  영구 기록. "잘못 무시했네" 는 BE 데이터를 직접 조작하지 않으면 복구
+  불가 — 어드민 UI 에는 되돌리기 없음.
+- **sticky 액션바 z-index** — AdminDiningcodePage 의 `sticky top-2 z-10`
+  은 일반 본문에 잘 작동하지만, 잡 카드 + 검색 메타 카드와 동시에 있으면
+  스크롤 중 묘하게 겹쳐 보일 수 있다 (의도적 — 백드롭 블러로 가독성 보존).
+- **AdminDiningcodePage MAX_BULK=50** — 한 번에 50개 초과 선택은 BE 가
+  거부하지 않더라도 UI 에서 잘라 보낸다 (`slice(0, MAX_BULK)`). 51번째
+  이후는 다음 작업으로 분리.
+- **이전 라운드 함정들 유지** — sticky containing block trap,
+  `overflow-y:auto` 안 sticky 동작, 모바일 body 스크롤 + `100dvh`,
+  한글 IME 미완성 조합, Pretendard CDN 의존, 텍스트 사이즈 시프트 어드민
+  영향, ImgWithFallback src 변경 reset, 5탭 placeId 변경 옛 데이터 잠시
+  보임, vworld 키 미등록 placeholder, OL apiKey 변경만 재생성, MapCanvas
+  첫 렌더 moveend 무시, 모바일 detail 활성 시 list/map hidden, Lightbox
+  글로벌 keydown, Radix Dialog 안 OL, 직렬 await 만으로 부족 — BE
+  rate-limit 제거, 디바운스 cleanup, 검색 placeId 등록 list 체크,
+  tailwindcss-animate 미설치, `global.css` unlayered anchor, 재크롤 시
+  detail 리뷰 비우기, 방문일 정규화, 다중 슬롯 무제한, `.tsx` 옆 `.js`
+  잔재, SSE `?token` 쿼리 인증, 서명 video URL TTL, VideoPlayerModal
+  body lock, logout localStorage 정리, admin 링크 게이트, OKLCH 일부 도구
+  미지원, Vite deps prebundle 캐시, store 셀렉터 안정성, SSE 구독 원본
+  기준, `window.confirm` 잔존, 글로벌 머지 409, `?menu`/`?category` replace,
+  MenuRankingSection 글로벌 매핑 의존, AdminAiKeysPage useEffect 잔존.
+
+## Sources [coverage: high — 62 sources]
 
 - [apps/web/package.json](../../apps/web/package.json)
 - [apps/web/index.html](../../apps/web/index.html)
@@ -1065,6 +522,11 @@ URL:
 - [apps/web/src/routes/admin/AdminSettingsPage.tsx](../../apps/web/src/routes/admin/AdminSettingsPage.tsx)
 - [apps/web/src/routes/admin/AdminMapKeysPage.tsx](../../apps/web/src/routes/admin/AdminMapKeysPage.tsx)
 - [apps/web/src/routes/admin/AdminDiscoverPage.tsx](../../apps/web/src/routes/admin/AdminDiscoverPage.tsx)
+- [apps/web/src/routes/admin/AdminCatchtableTestPage.tsx](../../apps/web/src/routes/admin/AdminCatchtableTestPage.tsx)
+- [apps/web/src/routes/admin/AdminCatchtableShopPage.tsx](../../apps/web/src/routes/admin/AdminCatchtableShopPage.tsx)
+- [apps/web/src/routes/admin/AdminDiningcodePage.tsx](../../apps/web/src/routes/admin/AdminDiningcodePage.tsx)
+- [apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx](../../apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx)
+- [apps/web/src/routes/admin/AdminDiningcodeTestPage.tsx](../../apps/web/src/routes/admin/AdminDiningcodeTestPage.tsx)
 - [apps/web/src/components/admin/discover/DiscoverMap.tsx](../../apps/web/src/components/admin/discover/DiscoverMap.tsx)
 - [apps/web/src/components/admin/discover/DiscoverPanel.tsx](../../apps/web/src/components/admin/discover/DiscoverPanel.tsx)
 - [apps/web/src/stores/panelPrefsStore.ts](../../apps/web/src/stores/panelPrefsStore.ts)
@@ -1083,6 +545,9 @@ URL:
 - [apps/web/src/components/restaurant/PublicRestaurantList.tsx](../../apps/web/src/components/restaurant/PublicRestaurantList.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantCard.tsx](../../apps/web/src/components/restaurant/PublicRestaurantCard.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantsMap.tsx](../../apps/web/src/components/restaurant/PublicRestaurantsMap.tsx)
+- [apps/web/src/components/restaurant/CanonicalMergePanel.tsx](../../apps/web/src/components/restaurant/CanonicalMergePanel.tsx)
+- [apps/web/src/components/restaurant/MergeProposalQueue.tsx](../../apps/web/src/components/restaurant/MergeProposalQueue.tsx)
+- [apps/web/src/components/restaurant/ReanalyzeFailedBadge.tsx](../../apps/web/src/components/restaurant/ReanalyzeFailedBadge.tsx)
 - [apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx)
 - [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx)
 - [apps/web/src/components/restaurant/detail/MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx)
