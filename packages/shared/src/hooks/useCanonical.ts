@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CanonicalMergeInputType,
+  CanonicalProposalAcceptInputType,
   CanonicalSplitInputType,
 } from '@repo/api-contract';
 import { canonicalApi } from '../api/canonical.api.js';
@@ -36,6 +37,59 @@ export const useDismissCanonicalSuggestion = () => {
     mutationFn: (canonicalId: string) => canonicalApi.dismissSuggestion(canonicalId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    },
+  });
+};
+
+// 자동 매칭 검토 큐. 어드민 페이지가 30초 마다 폴링 — 새 등록 후크가 큐를 채우는
+// 효과를 그리 자주 보지 않아도 되지만, 사용자가 페이지를 켜둔 채로 다른 탭에서
+// 가게를 추가했을 수도 있으니 적당한 간격으로 갱신.
+export const useCanonicalProposals = (enabled = true) =>
+  useQuery({
+    queryKey: ['canonical', 'proposals'],
+    queryFn: () => canonicalApi.listProposals(),
+    enabled,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
+// 전체 다시 돌리기 (수동 트리거). 성공 시 큐 캐시 무효화.
+export const useRunCanonicalProposals = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => canonicalApi.runProposals(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+    },
+  });
+};
+
+// 수락 — 두 canonical 머지. list/candidates/proposals 모두 갱신.
+export const useAcceptCanonicalProposal = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      proposalId,
+      input,
+    }: {
+      proposalId: string;
+      input: CanonicalProposalAcceptInputType;
+    }) => canonicalApi.acceptProposal(proposalId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['canonical', 'candidates'] });
+      qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+    },
+  });
+};
+
+// 거절 — 같은 쌍이 다시 큐에 들어오지 않도록 'rejected' 표시.
+export const useRejectCanonicalProposal = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (proposalId: string) => canonicalApi.rejectProposal(proposalId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
     },
   });
 };

@@ -4,6 +4,11 @@ import {
   type CanonicalDismissSuggestionResultType,
   type CanonicalMergeInputType,
   type CanonicalMergeResultType,
+  type CanonicalProposalAcceptInputType,
+  type CanonicalProposalAcceptResultType,
+  type CanonicalProposalListResultType,
+  type CanonicalProposalRejectResultType,
+  type CanonicalProposalRunResultType,
   type CanonicalSplitInputType,
   type CanonicalSplitResultType,
 } from '@repo/api-contract';
@@ -28,6 +33,29 @@ export const canonicalApi = {
   dismissSuggestion: (canonicalId: string) =>
     apiFetch<CanonicalDismissSuggestionResultType>(
       Routes.Canonical.dismissSuggestion(canonicalId),
+      { method: 'POST' },
+    ),
+
+  listProposals: () =>
+    apiFetch<CanonicalProposalListResultType>(Routes.Canonical.proposals),
+
+  runProposals: () =>
+    apiFetch<CanonicalProposalRunResultType>(Routes.Canonical.proposalsRun, {
+      method: 'POST',
+    }),
+
+  acceptProposal: (
+    proposalId: string,
+    input: CanonicalProposalAcceptInputType,
+  ) =>
+    apiFetch<CanonicalProposalAcceptResultType>(
+      Routes.Canonical.proposalAccept(proposalId),
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
+
+  rejectProposal: (proposalId: string) =>
+    apiFetch<CanonicalProposalRejectResultType>(
+      Routes.Canonical.proposalReject(proposalId),
       { method: 'POST' },
     ),
 };

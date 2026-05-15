@@ -38,6 +38,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { Input } from '~/components/ui/input';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import { CanonicalMergePanel } from '~/components/restaurant/CanonicalMergePanel';
+import { MergeProposalQueue } from '~/components/restaurant/MergeProposalQueue';
 import { ReanalyzeFailedBadge } from '~/components/restaurant/ReanalyzeFailedBadge';
 
 const NAVER_PLACE_HOSTS = ['naver.com', 'naver.me'];
@@ -525,6 +526,10 @@ export const AdminRestaurantsPage = () => {
           </p>
         </div>
       </header>
+
+      <div className="mb-6">
+        <MergeProposalQueue />
+      </div>
 
       <Card className="mb-6">
         <CardHeader>

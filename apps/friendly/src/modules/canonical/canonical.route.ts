@@ -6,14 +6,21 @@ import {
   CanonicalDismissSuggestionResult,
   CanonicalMergeInput,
   CanonicalMergeResult,
+  CanonicalProposalAcceptInput,
+  CanonicalProposalAcceptResult,
+  CanonicalProposalListResult,
+  CanonicalProposalRejectResult,
+  CanonicalProposalRunResult,
   CanonicalSplitInput,
   CanonicalSplitResult,
   Routes,
 } from '@repo/api-contract';
 import { CanonicalError, CanonicalService } from './canonical.service.js';
+import { ProposalService } from './proposal.service.js';
 
 const canonicalRoutes: FastifyPluginAsync = async (app) => {
   const service = new CanonicalService(app.prisma);
+  const proposalService = new ProposalService(app.prisma, service);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   const mapError = (e: unknown): never => {
@@ -69,6 +76,61 @@ const canonicalRoutes: FastifyPluginAsync = async (app) => {
       try {
         await service.dismissSuggestion(req.params.id);
         return { ok: true as const };
+      } catch (e) {
+        return mapError(e);
+      }
+    },
+  });
+
+  typed.get(Routes.Canonical.proposals, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: CanonicalProposalListResult },
+    },
+    handler: async () => proposalService.list(),
+  });
+
+  typed.post(Routes.Canonical.proposalsRun, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: CanonicalProposalRunResult },
+    },
+    handler: async () => proposalService.generateAll(),
+  });
+
+  typed.post(Routes.Canonical.proposalAccept(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      body: CanonicalProposalAcceptInput,
+      response: { 200: CanonicalProposalAcceptResult },
+    },
+    handler: async (req) => {
+      try {
+        return await proposalService.accept(req.params.id, req.body.keepSide);
+      } catch (e) {
+        return mapError(e);
+      }
+    },
+  });
+
+  typed.post(Routes.Canonical.proposalReject(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      response: { 200: CanonicalProposalRejectResult },
+    },
+    handler: async (req) => {
+      try {
+        return await proposalService.reject(req.params.id);
       } catch (e) {
         return mapError(e);
       }
