@@ -249,15 +249,28 @@ const RestaurantRow = ({
             DC 재수집
           </Button>
         )}
+        {/* 후보 수 > 0 이면 outline 으로 강조 + 카운트 표시 — 어드민이 어느 행을
+            먼저 열어볼지 한눈에. 0 이면 ghost 로 시각적 무게 낮춤. */}
         <Button
           type="button"
-          variant={mergeOpen ? 'secondary' : 'ghost'}
+          variant={
+            mergeOpen ? 'secondary' : item.candidateCount > 0 ? 'outline' : 'ghost'
+          }
           size="sm"
           onClick={stop(onToggleMerge)}
-          title="다른 출처의 같은 가게를 이 행에 묶기"
+          title={
+            item.candidateCount > 0
+              ? `같은 가게로 추정되는 후보 ${item.candidateCount}건`
+              : '다른 출처의 같은 가게를 이 행에 묶기'
+          }
         >
           <Link2 />
           {mergeOpen ? '닫기' : '병합'}
+          {!mergeOpen && item.candidateCount > 0 && (
+            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+              {item.candidateCount}
+            </Badge>
+          )}
         </Button>
         {confirmingDelete ? (
           <>

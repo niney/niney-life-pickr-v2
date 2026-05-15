@@ -138,6 +138,11 @@ export const CanonicalListItem = z.object({
   negativeCount: z.number().int(),
   neutralCount: z.number().int(),
   mixedCount: z.number().int(),
+  // 이 canonical 과 같은 가게일 가능성이 있는 다른 canonical 의 수. cross-source
+  // 만 (같은 source 끼리는 후보로 안 잡힘). 어드민이 "병합" 버튼을 누르기 전에
+  // 후보가 있는지 한눈에 알 수 있도록 list 응답에 카운트만 포함 — 실제 후보
+  // 데이터는 클릭 시 GET /admin/canonical/:id/candidates 로 별도 조회.
+  candidateCount: z.number().int(),
 });
 export type CanonicalListItemType = z.infer<typeof CanonicalListItem>;
 
