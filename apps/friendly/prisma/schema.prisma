@@ -85,6 +85,32 @@ model LlmProviderConfig {
   @@map("llm_provider_configs")
 }
 
+// 출처 가로지르는 "같은 가게" 의 정체. Restaurant(N) → CanonicalRestaurant(1).
+// 어드민이 Naver+다이닝코드 두 행을 같은 가게로 인식하면 두 Restaurant 가
+// 같은 canonicalId 를 공유한다. 마이그레이션 직후엔 1:1 (각 Restaurant 가 자기
+// 전용 Canonical 보유) 상태로 시작하고, merge API 호출로 점차 통합된다.
+model CanonicalRestaurant {
+  id              String   @id @default(cuid())
+  // 표시용 가게명. merge 시 primary(보통 Naver) 행 이름 채택.
+  name            String
+  // 대표 카테고리 (primary 행).
+  primaryCategory String?
+  // 후보 매칭용 위경도 — 보통 primary 행과 동일. merge 시 primary 좌표 유지.
+  latitude        Float?
+  longitude       Float?
+  // 빠른 후보 검색용 정규화 키 (normalizeName + 좌표 round). matching 유틸
+  // 에서 채운다. 인덱스로 prefix scan.
+  searchKey       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  restaurants Restaurant[]
+
+  @@index([searchKey])
+  @@index([latitude, longitude])
+  @@map("canonical_restaurants")
+}
+
 model Restaurant {
   id             String   @id @default(cuid())
   // 외부 소스 식별자. source='naver'면 placeId 와 같은 값이 sourceId 에도 들어가고,
@@ -93,6 +119,9 @@ model Restaurant {
   source         String   @default("naver")
   sourceId       String
   placeId        String?  @unique
+  // 같은 가게의 다른 출처 행과 묶는 키. 마이그레이션 직후엔 모든 행이 자기
+  // 전용 Canonical 을 가지고 (1:1), merge API 로 점차 N:1 이 된다. NOT NULL.
+  canonicalId    String
   name           String
   category       String?
   address        String?
@@ -104,11 +133,13 @@ model Restaurant {
   firstCrawledAt DateTime @default(now())
   lastCrawledAt  DateTime @updatedAt
 
+  canonical      CanonicalRestaurant @relation(fields: [canonicalId], references: [id])
   visitorReviews VisitorReview[]
   menuCanonicals MenuCanonical[]
 
   @@unique([source, sourceId])
   @@index([source])
+  @@index([canonicalId])
   @@map("restaurants")
 }
 

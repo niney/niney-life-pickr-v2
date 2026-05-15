@@ -113,6 +113,19 @@ export const Restaurant = {
   smartPick: `${API_PREFIX}/admin/restaurants/smart-pick`,
 } as const;
 
+// 가게 정체(canonical) 통합 — 출처 가로지르는 같은 가게 묶기. 어드민이
+// 후보 보고 수동 확정. 자동 매칭은 의도적으로 안 함.
+export const Canonical = {
+  // 후보 조회 — 좌표/이름 매칭 점수 임계 통과한 다른 canonical 들.
+  candidates: (id: string) =>
+    `${API_PREFIX}/admin/canonical/${id}/candidates`,
+  // 두 canonical 통합. body: { sourceCanonicalId, targetCanonicalId }
+  merge: `${API_PREFIX}/admin/canonical/merge`,
+  // canonical 분리 — 한 Restaurant 만 새 canonical 로 떼어냄.
+  // body: { restaurantId }
+  split: (id: string) => `${API_PREFIX}/admin/canonical/${id}/split`,
+} as const;
+
 // AI 분석 운영(메뉴 분류 batch) 화면용. 식당별 라우트는 Restaurant.menusGroup/
 // menusRanking 으로 단일 처리하고, 여기는 다건 잡 + 상태 조회 전담.
 export const Analytics = {
