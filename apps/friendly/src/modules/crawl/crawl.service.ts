@@ -48,6 +48,8 @@ import {
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import type { SummaryService } from '../summary/summary.service.js';
 import type { ProposalService } from '../canonical/proposal.service.js';
+import type { CanonicalService } from '../canonical/canonical.service.js';
+import { scoreMatch } from '../../lib/matching.js';
 
 const CACHE_TTL_MS = 30_000;
 
@@ -76,12 +78,24 @@ interface PendingStart {
   start: () => void;
 }
 
+// 자동 DC 매칭 임계 (C안 — 자동 머지). 사용자 확정값:
+//   - 이름 유사도 ≥ 0.85 (Jaccard on bigrams)
+//   - 거리 ≤ 50m (좌표 둘 다 있을 때만 의미. 좌표 없으면 자동 매칭 skip)
+//   - top1.score - top2.score ≥ 0.1 (애매한 경우 사람 컨펌으로 떨어뜨림)
+// 정책 변경 시 여기만 손대면 됨.
+const AUTO_DC_NAME_THRESHOLD = 0.85;
+const AUTO_DC_DISTANCE_THRESHOLD_M = 50;
+const AUTO_DC_TIE_GAP = 0.1;
+
 export class CrawlService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly registry: JobRegistry;
   private readonly restaurants: RestaurantService;
   private readonly summaries: SummaryService;
   private readonly proposals: ProposalService | null;
+  // 자동 DC 매칭이 머지 단계에서 canonical merge 를 호출해야 해서 inject.
+  // null 이면 자동 매칭 skip — 테스트 단순화용.
+  private readonly canonical: CanonicalService | null;
   private readonly pending: PendingStart[] = [];
   private nextSeq = 1;
 
@@ -91,11 +105,13 @@ export class CrawlService {
     registry: JobRegistry = jobRegistry,
     // null 이면 후보 큐 생성 skip — 테스트가 단순화 위해 생략할 때 사용.
     proposals: ProposalService | null = null,
+    canonical: CanonicalService | null = null,
   ) {
     this.registry = registry;
     this.restaurants = restaurants;
     this.summaries = summaries;
     this.proposals = proposals;
+    this.canonical = canonical;
   }
 
   // 등록 직후 자동 매칭 후크. 새 가게의 canonicalId 로 cross-source 후보를 큐에
@@ -110,6 +126,86 @@ export class CrawlService {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[crawl] proposal hook failed', e);
+    }
+  }
+
+  // Naver 크롤 종료 직후 자동 DC 매칭. 같은 가게의 다이닝코드 행이 존재하면
+  // DB 에 저장하고 같은 canonical 로 묶는다(=풀 자동 머지, C안).
+  //
+  // 호출 전 단계 검증:
+  //   1) this.canonical 주입 여부
+  //   2) canonical 에 DC source 가 아직 없음 (이미 있으면 duplicate)
+  //   3) canonical 좌표 보유 (50m 컷이 좌표 없이는 무의미)
+  // 임계 통과 못 하면 silent skip — ProposalService 가 별도 채널로 후보 큐 적재.
+  //
+  // 실패해도 Naver 흐름은 막지 않음 (fire-and-forget 호출 + try/catch).
+  private async tryAutoMatchDiningcode(canonicalId: string): Promise<void> {
+    if (!this.canonical) return;
+    try {
+      const core = await this.restaurants.getCanonicalCoreForAutoMatch(canonicalId);
+      if (!core) return;
+      if (core.sources.includes('diningcode')) return;
+      if (core.latitude === null || core.longitude === null) return;
+
+      // 1차 검색 — 좌표 기준 200m 반경. 50m 컷은 후보 점수화 단계에서.
+      // strictDistance=true 가 기본이라 fallback 광역 결과는 자동 제거됨.
+      const search = await searchDiningcodePlaces(core.name, {
+        lat: core.latitude,
+        lng: core.longitude,
+        distance: 200,
+        size: 5,
+        order: 'r_score',
+      });
+      if (search.items.length === 0) return;
+
+      // 이미 등록된 vRid 제외 — 다른 canonical 에 묶여 있을 수 있어
+      // 또 saveDiningcodeShop 호출하면 충돌.
+      const registered = await this.restaurants.findRegisteredDiningcodeByVRids(
+        search.items.map((it) => it.vRid),
+      );
+      const registeredSet = new Set(registered.map((r) => r.vRid));
+      const candidates = search.items.filter(
+        (it) => !registeredSet.has(it.vRid) && it.lat !== null && it.lng !== null,
+      );
+      if (candidates.length === 0) return;
+
+      // 점수 계산 후 내림차순 정렬.
+      const scored = candidates
+        .map((it) => ({
+          item: it,
+          score: scoreMatch(
+            {
+              name: core.name,
+              latitude: core.latitude,
+              longitude: core.longitude,
+            },
+            { name: it.name, latitude: it.lat, longitude: it.lng },
+          ),
+        }))
+        .sort((a, b) => b.score.score - a.score.score);
+
+      const top = scored[0]!;
+      if (top.score.nameScore < AUTO_DC_NAME_THRESHOLD) return;
+      if (
+        top.score.distanceM === null ||
+        top.score.distanceM > AUTO_DC_DISTANCE_THRESHOLD_M
+      ) {
+        return;
+      }
+      // 차순위와 격차 — 동률에 가까운 후보가 있으면 사람 컨펌으로.
+      const second = scored[1];
+      if (second && top.score.score - second.score.score < AUTO_DC_TIE_GAP) return;
+
+      // DC 저장 → 자기 canonical 생성됨 → Naver canonical 로 머지.
+      const result = await this.saveDiningcodeShop(top.item.vRid);
+      const dcCanonicalId = await this.restaurants.getCanonicalIdForRestaurant(
+        result.restaurantId,
+      );
+      if (!dcCanonicalId || dcCanonicalId === canonicalId) return;
+      await this.canonical.merge(dcCanonicalId, canonicalId);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[crawl] auto DC match failed', e);
     }
   }
 
@@ -534,6 +630,14 @@ export class CrawlService {
       // 후보를 검토 큐에 적재. 기존 canonical 이면 idempotent skip.
       if (restaurantId) {
         await this.generateProposalsForRestaurant(restaurantId);
+        // 추가로 다이닝코드 자동 매칭 시도 — 같은 가게 DC 행이 외부에 존재하면
+        // 저장 + 머지까지 자동(C안 정책). 백그라운드 실행 — Naver done 이벤트를
+        // 막지 않게 fire-and-forget. saveDiningcodeShop 자체가 수 초 단위 작업.
+        const canonicalIdForAuto =
+          await this.restaurants.getCanonicalIdForRestaurant(restaurantId);
+        if (canonicalIdForAuto) {
+          void this.tryAutoMatchDiningcode(canonicalIdForAuto);
+        }
       }
 
       this.emit(jobId, {

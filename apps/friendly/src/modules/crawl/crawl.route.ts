@@ -84,7 +84,13 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
   const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
   const canonical = new CanonicalService(app.prisma);
   const proposals = new ProposalService(app.prisma, canonical);
-  const service = new CrawlService(restaurants, summaries, jobRegistry, proposals);
+  const service = new CrawlService(
+    restaurants,
+    summaries,
+    jobRegistry,
+    proposals,
+    canonical,
+  );
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   app.addHook('onClose', async () => {
