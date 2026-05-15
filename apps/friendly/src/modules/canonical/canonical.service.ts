@@ -274,4 +274,18 @@ export class CanonicalService {
       sourceCanonicalDeleted: result.deleted,
     };
   }
+
+  // list 응답 위쪽 알림 줄 (suggestion) 영구 닫기. 풀 후보 패널은 별개 — 어드민이
+  // 직접 "병합" 버튼을 누르면 candidates API 가 다시 후보를 계산한다.
+  async dismissSuggestion(canonicalId: string): Promise<void> {
+    const row = await this.prisma.canonicalRestaurant.findUnique({
+      where: { id: canonicalId },
+      select: { id: true },
+    });
+    if (!row) throw new CanonicalError('canonical not found', 'NOT_FOUND');
+    await this.prisma.canonicalRestaurant.update({
+      where: { id: canonicalId },
+      data: { suggestionDismissedAt: new Date() },
+    });
+  }
 }

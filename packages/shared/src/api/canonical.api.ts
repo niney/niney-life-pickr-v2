@@ -1,6 +1,7 @@
 import {
   Routes,
   type CanonicalCandidatesResultType,
+  type CanonicalDismissSuggestionResultType,
   type CanonicalMergeInputType,
   type CanonicalMergeResultType,
   type CanonicalSplitInputType,
@@ -23,4 +24,10 @@ export const canonicalApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  dismissSuggestion: (canonicalId: string) =>
+    apiFetch<CanonicalDismissSuggestionResultType>(
+      Routes.Canonical.dismissSuggestion(canonicalId),
+      { method: 'POST' },
+    ),
 };

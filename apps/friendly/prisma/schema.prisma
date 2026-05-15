@@ -101,6 +101,11 @@ model CanonicalRestaurant {
   // 빠른 후보 검색용 정규화 키 (normalizeName + 좌표 round). matching 유틸
   // 에서 채운다. 인덱스로 prefix scan.
   searchKey       String?
+  // 어드민이 "이 가게는 다른 출처와 합칠게 없어" 라고 닫은 시각. 한 번 닫으면
+  // list 응답의 suggestion 이 더 이상 노출되지 않는다. null 이면 노출 후보.
+  // 새 등록 시점에 자동 산출되는 1차 제안에 한정 — 사용자가 직접 "병합" 패널을
+  // 열면 별도 후보 API 가 풀 후보를 다시 계산한다.
+  suggestionDismissedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -73,3 +73,25 @@ export const CanonicalSplitResult = z.object({
   sourceCanonicalDeleted: z.boolean(),
 });
 export type CanonicalSplitResultType = z.infer<typeof CanonicalSplitResult>;
+
+// 신규 canonical(sources 1개) 등록 직후 list 응답에 끼어오는 1차 매칭 제안.
+// 어드민이 "병합" 버튼을 직접 누르지 않아도 같은 가게로 보이는 짝이 있는지
+// 행 위 알림 줄로 즉시 노출하기 위한 데이터. 풀 후보 목록은 여전히 GET
+// /admin/canonical/:id/candidates 로 별도 조회.
+export const CanonicalSuggestion = z.object({
+  canonicalId: z.string(),
+  name: z.string(),
+  primaryCategory: z.string().nullable(),
+  score: z.number(),
+  distanceM: z.number().nullable(),
+});
+export type CanonicalSuggestionType = z.infer<typeof CanonicalSuggestion>;
+
+// 사용자가 "이 가게는 합칠 게 없어" 를 명시적으로 닫을 때. 한 번 닫으면
+// suggestionDismissedAt 가 채워져 list 응답의 suggestion 이 더 이상 노출되지 않는다.
+export const CanonicalDismissSuggestionResult = z.object({
+  ok: z.literal(true),
+});
+export type CanonicalDismissSuggestionResultType = z.infer<
+  typeof CanonicalDismissSuggestionResult
+>;

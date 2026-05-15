@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CanonicalSuggestion } from './canonical.js';
 import { BlogReview, MenuItem, NaverPlaceData, VisitorReview } from './crawl.js';
 
 export const ReviewSummaryStatus = z.enum(['pending', 'running', 'done', 'failed']);
@@ -143,6 +144,13 @@ export const CanonicalListItem = z.object({
   // 후보가 있는지 한눈에 알 수 있도록 list 응답에 카운트만 포함 — 실제 후보
   // 데이터는 클릭 시 GET /admin/canonical/:id/candidates 로 별도 조회.
   candidateCount: z.number().int(),
+  // 1차 매칭 제안 (가장 점수 높은 후보 1건). 다음 조건 모두 만족할 때만 채워짐:
+  //   - sources.length === 1 (아직 다른 출처와 묶이지 않은 신규 가게)
+  //   - suggestionDismissedAt === null (어드민이 "무시" 클릭 안 함)
+  //   - candidateCount >= 1
+  // 어드민이 등록 직후 같은 가게 짝을 한눈에 보고 처리할 수 있도록 행 위에
+  // 인라인 알림으로 렌더. 풀 후보 목록은 여전히 "병합" 버튼 → candidates API.
+  suggestion: CanonicalSuggestion.nullable(),
 });
 export type CanonicalListItemType = z.infer<typeof CanonicalListItem>;
 

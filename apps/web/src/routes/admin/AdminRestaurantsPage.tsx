@@ -20,6 +20,7 @@ import {
   useActiveCrawlJobStore,
   useCancelCrawl,
   useDeleteRestaurant,
+  useDismissCanonicalSuggestion,
   useRestaurantList,
   useRestaurantListSummaryEvents,
   useSaveDiningcodeShop,
@@ -324,6 +325,8 @@ export const AdminRestaurantsPage = () => {
   // canonical 분리 — 같은 mutation 으로 여러 행에 작용. variables.input.restaurantId
   // 로 in-flight 행 식별.
   const splitMutation = useSplitCanonical();
+  // suggestion 행 위 알림의 "무시" 클릭. variables 가 canonicalId 라 in-flight 행 식별.
+  const dismissSuggestionMutation = useDismissCanonicalSuggestion();
   // 병합 패널 — 한 번에 한 행만 열림 (canonicalId 키). 다른 행 병합 버튼을 누르면
   // 그 행으로 이동.
   const [mergeOpenCanonicalId, setMergeOpenCanonicalId] = useState<string | null>(null);
@@ -643,8 +646,56 @@ export const AdminRestaurantsPage = () => {
                     ? splitMutation.variables.input.restaurantId
                     : null;
                 const mergeOpen = mergeOpenCanonicalId === item.canonicalId;
+                const suggestion = item.suggestion;
+                const dismissing =
+                  dismissSuggestionMutation.isPending &&
+                  dismissSuggestionMutation.variables === item.canonicalId;
                 return (
                   <li key={item.canonicalId} className="space-y-3">
+                    {suggestion && !mergeOpen && (
+                      <div className="flex flex-col gap-2 rounded-md border border-dashed bg-amber-50 px-3 py-2 text-xs dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
+                          <LinkIcon className="size-3 shrink-0 text-amber-700 dark:text-amber-400" />
+                          <span className="text-muted-foreground">같은 가게일 수 있음:</span>
+                          <span className="truncate font-medium">{suggestion.name}</span>
+                          {suggestion.primaryCategory && (
+                            <span className="text-muted-foreground">
+                              · {suggestion.primaryCategory}
+                            </span>
+                          )}
+                          <span className="text-muted-foreground">
+                            · 점수 {(suggestion.score * 100).toFixed(0)}%
+                          </span>
+                          {suggestion.distanceM !== null && (
+                            <span className="text-muted-foreground">
+                              · {suggestion.distanceM.toFixed(0)}m
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setMergeOpenCanonicalId(item.canonicalId)}
+                          >
+                            <Link2 />
+                            병합
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={dismissing}
+                            onClick={() => dismissSuggestionMutation.mutate(item.canonicalId)}
+                            title="이 알림을 영구히 닫기"
+                          >
+                            {dismissing ? <Loader2 className="animate-spin" /> : <XCircle />}
+                            무시
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     <RestaurantRow
                       item={item}
                       busy={!!rowJob}

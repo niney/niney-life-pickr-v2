@@ -124,6 +124,9 @@ export const Canonical = {
   // canonical 분리 — 한 Restaurant 만 새 canonical 로 떼어냄.
   // body: { restaurantId }
   split: (id: string) => `${API_PREFIX}/admin/canonical/${id}/split`,
+  // list 응답에 1차 매칭 제안이 끼는 걸 영구 닫기. body 없음.
+  dismissSuggestion: (id: string) =>
+    `${API_PREFIX}/admin/canonical/${id}/suggestion/dismiss`,
 } as const;
 
 // AI 분석 운영(메뉴 분류 batch) 화면용. 식당별 라우트는 Restaurant.menusGroup/

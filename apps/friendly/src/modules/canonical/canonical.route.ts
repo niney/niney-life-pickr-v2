@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   CanonicalCandidatesResult,
+  CanonicalDismissSuggestionResult,
   CanonicalMergeInput,
   CanonicalMergeResult,
   CanonicalSplitInput,
@@ -50,6 +51,24 @@ const canonicalRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       try {
         return await service.merge(req.body.sourceCanonicalId, req.body.targetCanonicalId);
+      } catch (e) {
+        return mapError(e);
+      }
+    },
+  });
+
+  typed.post(Routes.Canonical.dismissSuggestion(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      response: { 200: CanonicalDismissSuggestionResult },
+    },
+    handler: async (req) => {
+      try {
+        await service.dismissSuggestion(req.params.id);
+        return { ok: true as const };
       } catch (e) {
         return mapError(e);
       }

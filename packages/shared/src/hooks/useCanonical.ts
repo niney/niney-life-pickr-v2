@@ -28,6 +28,18 @@ export const useMergeCanonical = () => {
   });
 };
 
+// suggestion(행 위 알림) 영구 닫기. dismiss 후 list 응답에서 그 canonical 의
+// suggestion 이 null 로 떨어지므로 list 캐시만 무효화.
+export const useDismissCanonicalSuggestion = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (canonicalId: string) => canonicalApi.dismissSuggestion(canonicalId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    },
+  });
+};
+
 // canonical 분리. 잘못 묶었을 때 한 source 만 떼어내 새 canonical 로.
 export const useSplitCanonical = () => {
   const qc = useQueryClient();
