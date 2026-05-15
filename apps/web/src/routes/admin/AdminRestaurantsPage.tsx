@@ -6,9 +6,11 @@ import {
   Database,
   ExternalLink,
   Link as LinkIcon,
+  Link2,
   Loader2,
   Play,
   RefreshCw,
+  Scissors,
   Trash2,
   UtensilsCrossed,
   XCircle,
@@ -21,6 +23,7 @@ import {
   useRestaurantList,
   useRestaurantListSummaryEvents,
   useSaveDiningcodeShop,
+  useSplitCanonical,
   useStartCrawl,
   type ActiveCrawlJob,
 } from '@repo/shared';
@@ -33,6 +36,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
+import { CanonicalMergePanel } from '~/components/restaurant/CanonicalMergePanel';
 import { ReanalyzeFailedBadge } from '~/components/restaurant/ReanalyzeFailedBadge';
 
 const NAVER_PLACE_HOSTS = ['naver.com', 'naver.me'];
@@ -74,10 +78,14 @@ const RestaurantRow = ({
   deleting,
   confirmingDelete,
   dcSaving,
+  mergeOpen,
+  splittingRestaurantId,
   onAction,
   onDelete,
   onCancelDelete,
   onSaveDiningcode,
+  onToggleMerge,
+  onSplitSource,
 }: {
   item: CanonicalListItemType;
   busy: boolean;
@@ -85,10 +93,15 @@ const RestaurantRow = ({
   confirmingDelete: boolean;
   // 진행 중인 DC 재수집 — 같은 canonical 의 DC source 한 줄에 대해서만 true.
   dcSaving: boolean;
+  mergeOpen: boolean;
+  // split 진행 중인 restaurantId (해당 행만 disable). 없으면 null.
+  splittingRestaurantId: string | null;
   onAction: (mode: 'recrawl' | 'update') => void;
   onDelete: () => void;
   onCancelDelete: () => void;
   onSaveDiningcode: (vRid: string) => void;
+  onToggleMerge: () => void;
+  onSplitSource: (restaurantId: string) => void;
 }) => {
   const navigate = useNavigate();
   const inFlight = summaryInFlight(item);
@@ -129,12 +142,13 @@ const RestaurantRow = ({
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {/* 출처 칩 — DC 칩은 클릭 시 어드민 다이닝코드 상세로 이동 (vRid 라우트).
-              네비게이션 충돌(행 click)을 막기 위해 stopPropagation. */}
+              sources 가 2개 이상이면 칩 옆에 작은 "분리" 액션을 노출 — 잘못 묶인
+              merge 를 되돌리는 용도. */}
           {item.sources.map((s) => {
-            if (s.source === 'diningcode') {
-              return (
+            const splitting = splittingRestaurantId === s.restaurantId;
+            const chip =
+              s.source === 'diningcode' ? (
                 <Link
-                  key={s.restaurantId}
                   to={`/admin/diningcode-test/${s.sourceId}`}
                   onClick={(e) => e.stopPropagation()}
                   className="inline-flex"
@@ -144,15 +158,31 @@ const RestaurantRow = ({
                     <ExternalLink className="ml-1 size-3" />
                   </Badge>
                 </Link>
+              ) : (
+                <Badge variant={s.source === 'naver' ? 'default' : 'secondary'}>
+                  {sourceLabel(s.source)}
+                </Badge>
               );
-            }
             return (
-              <Badge
-                key={s.restaurantId}
-                variant={s.source === 'naver' ? 'default' : 'secondary'}
-              >
-                {sourceLabel(s.source)}
-              </Badge>
+              <span key={s.restaurantId} className="inline-flex items-center gap-1">
+                {chip}
+                {item.sources.length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={stop(() => onSplitSource(s.restaurantId))}
+                    disabled={splitting}
+                    className="inline-flex items-center text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    aria-label={`${sourceLabel(s.source)} 분리`}
+                    title="이 출처를 새 가게로 분리"
+                  >
+                    {splitting ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Scissors className="size-3" />
+                    )}
+                  </button>
+                )}
+              </span>
             );
           })}
           <Badge variant="outline">리뷰 {item.totalReviews}개</Badge>
@@ -219,6 +249,16 @@ const RestaurantRow = ({
             DC 재수집
           </Button>
         )}
+        <Button
+          type="button"
+          variant={mergeOpen ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={stop(onToggleMerge)}
+          title="다른 출처의 같은 가게를 이 행에 묶기"
+        >
+          <Link2 />
+          {mergeOpen ? '닫기' : '병합'}
+        </Button>
         {confirmingDelete ? (
           <>
             <Button
@@ -268,6 +308,12 @@ export const AdminRestaurantsPage = () => {
   // DC 가게 한 건 재수집(+AI 분석 큐잉). useMutation 한 인스턴스가 모든 행의
   // 클릭을 처리 — variables 가 vRid 이므로 어떤 행이 in-flight 인지 식별.
   const saveDcMutation = useSaveDiningcodeShop();
+  // canonical 분리 — 같은 mutation 으로 여러 행에 작용. variables.input.restaurantId
+  // 로 in-flight 행 식별.
+  const splitMutation = useSplitCanonical();
+  // 병합 패널 — 한 번에 한 행만 열림 (canonicalId 키). 다른 행 병합 버튼을 누르면
+  // 그 행으로 이동.
+  const [mergeOpenCanonicalId, setMergeOpenCanonicalId] = useState<string | null>(null);
 
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -323,6 +369,16 @@ export const AdminRestaurantsPage = () => {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to start');
     }
+  };
+
+  const handleSplitSource = (canonicalId: string, restaurantId: string) => {
+    setError(null);
+    splitMutation.mutate(
+      { canonicalId, input: { restaurantId } },
+      {
+        onError: (e) => setError(e instanceof ApiError ? e.message : '분리 실패'),
+      },
+    );
   };
 
   const handleSaveDiningcode = async (vRid: string) => {
@@ -568,6 +624,12 @@ export const AdminRestaurantsPage = () => {
                   saveDcMutation.isPending &&
                   dcSource !== null &&
                   saveDcMutation.variables === dcSource.sourceId;
+                const splittingRestaurantId =
+                  splitMutation.isPending &&
+                  splitMutation.variables?.canonicalId === item.canonicalId
+                    ? splitMutation.variables.input.restaurantId
+                    : null;
+                const mergeOpen = mergeOpenCanonicalId === item.canonicalId;
                 return (
                   <li key={item.canonicalId} className="space-y-3">
                     <RestaurantRow
@@ -582,11 +644,23 @@ export const AdminRestaurantsPage = () => {
                         naverPlaceId !== null && confirmDeletePlaceId === naverPlaceId
                       }
                       dcSaving={dcSaving}
+                      mergeOpen={mergeOpen}
+                      splittingRestaurantId={splittingRestaurantId}
                       onAction={handleRowAction(item)}
                       onDelete={() => naverPlaceId && handleDelete(naverPlaceId)}
                       onCancelDelete={() => setConfirmDeletePlaceId(null)}
                       onSaveDiningcode={handleSaveDiningcode}
+                      onToggleMerge={() =>
+                        setMergeOpenCanonicalId(mergeOpen ? null : item.canonicalId)
+                      }
+                      onSplitSource={(rid) => handleSplitSource(item.canonicalId, rid)}
                     />
+                    {mergeOpen && (
+                      <CanonicalMergePanel
+                        canonicalId={item.canonicalId}
+                        onClose={() => setMergeOpenCanonicalId(null)}
+                      />
+                    )}
                     {rowJob && (
                       <ActiveJobPanel
                         jobId={rowJob.jobId}
