@@ -188,6 +188,8 @@ const mapReview = (
     replyDt: hasReply ? strOrNull(reply!['reply_dt']) : null,
     replyPartner: hasReply ? strOrNull(reply!['reply_partner']) : null,
     favoritesCount: parseIntLoose(info['review_favorites_cnt'] ?? info['review_favorite_cnt']),
+    // 서비스 레이어가 DB join 으로 채움 — 어댑터는 항상 null.
+    summaryText: null,
   };
 };
 

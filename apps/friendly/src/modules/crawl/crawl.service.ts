@@ -352,8 +352,24 @@ export class CrawlService {
 
   // 다이닝코드 가게 상세 — 검색 카드 "상세 보기" 진입. /API/profile/ 한 방에
   // 메뉴·사진·리뷰 첫 페이지·블로그·평점 분포 모두 옴.
+  // 이미 DB 에 저장된 가게면 reviewsFirstPage 의 각 리뷰에 우리 ReviewSummary.text
+  // 를 join 해서 채워준다(외부 응답은 그대로 두고 summaryText 만 덮어씀).
   async fetchDiningcodeShopDetail(vRid: string): Promise<DiningcodeShopDataType> {
-    return fetchDiningcodeShop(vRid);
+    const detail = await fetchDiningcodeShop(vRid);
+    const summaryMap = await this.restaurants.getDiningcodeReviewSummaryMap(
+      vRid,
+      detail.reviewsFirstPage.list.map((r) => r.rvId),
+    );
+    if (summaryMap.size > 0) {
+      detail.reviewsFirstPage = {
+        ...detail.reviewsFirstPage,
+        list: detail.reviewsFirstPage.list.map((r) => ({
+          ...r,
+          summaryText: summaryMap.get(r.rvId) ?? null,
+        })),
+      };
+    }
+    return detail;
   }
 
   // 다이닝코드 리뷰 페이지네이션 — 상세 페이지에서 "더 보기" 클릭 시. 같은
@@ -362,7 +378,19 @@ export class CrawlService {
     vRid: string,
     page: number,
   ): Promise<DiningcodeShopReviewsResponseType> {
-    return fetchDiningcodeShopReviews(vRid, page);
+    const resp = await fetchDiningcodeShopReviews(vRid, page);
+    const summaryMap = await this.restaurants.getDiningcodeReviewSummaryMap(
+      vRid,
+      resp.list.map((r) => r.rvId),
+    );
+    if (summaryMap.size === 0) return resp;
+    return {
+      ...resp,
+      list: resp.list.map((r) => ({
+        ...r,
+        summaryText: summaryMap.get(r.rvId) ?? null,
+      })),
+    };
   }
 
   // 다이닝코드 가게 + 모든 리뷰 페이지를 DB 에 저장하고 AI 분석 큐에 태운다.

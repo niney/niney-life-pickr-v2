@@ -355,6 +355,14 @@ const ReviewCard = ({ rv }: { rv: DiningcodeShopReviewType }) => (
         </span>
       )}
     </div>
+    {rv.summaryText && (
+      <div className="flex items-start gap-2 text-xs">
+        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+          AI 요약
+        </span>
+        <span className="leading-relaxed">{rv.summaryText}</span>
+      </div>
+    )}
     {rv.content && (
       <p className="whitespace-pre-wrap text-sm leading-relaxed">{rv.content}</p>
     )}

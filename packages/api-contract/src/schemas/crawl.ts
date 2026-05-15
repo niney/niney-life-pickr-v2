@@ -700,6 +700,10 @@ export const DiningcodeShopReview = z.object({
   replyDt: z.string().nullable(),
   replyPartner: z.string().nullable(),
   favoritesCount: z.number().int(),
+  // 우리 DB 의 ReviewSummary.text 와 join 결과. DB에 미저장이거나 분석 status!=done
+  // 이면 null. 어댑터는 항상 null 로 채우고, 서비스 레이어가 (source='diningcode',
+  // sourceId=vRid) 인 Restaurant 의 Review.externalId='dc:rv:<rvId>' 매칭으로 주입.
+  summaryText: z.string().nullable(),
 });
 export type DiningcodeShopReviewType = z.infer<typeof DiningcodeShopReview>;
 
