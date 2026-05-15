@@ -316,11 +316,14 @@ describe('GET /restaurants/ranking — public', () => {
     const placeId = rankPlaceId(name);
     const r = await app.prisma.restaurant.create({
       data: {
+        source: 'naver',
+        sourceId: placeId,
         placeId,
         name,
         category: '한식',
         rawSourceUrl: 'https://m.place.naver.com/x',
         snapshotJson: '{}',
+        canonical: { create: { name, primaryCategory: '한식' } },
       },
       select: { id: true },
     });
@@ -508,6 +511,8 @@ describe('Public restaurant routes', () => {
     };
     const r = await app.prisma.restaurant.create({
       data: {
+        source: 'naver',
+        sourceId: placeId,
         placeId,
         name: snap.name,
         category: snap.category,
@@ -515,6 +520,14 @@ describe('Public restaurant routes', () => {
         rating: snap.rating,
         rawSourceUrl: snap.rawSourceUrl,
         snapshotJson: JSON.stringify(snap),
+        canonical: {
+          create: {
+            name: snap.name,
+            primaryCategory: snap.category,
+            latitude: snap.latitude,
+            longitude: snap.longitude,
+          },
+        },
         ...(overrides.firstCrawledAt
           ? { firstCrawledAt: overrides.firstCrawledAt, lastCrawledAt: overrides.firstCrawledAt }
           : {}),

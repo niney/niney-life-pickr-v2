@@ -11,8 +11,10 @@ import type {
   RestaurantPublicListQueryType,
   RestaurantPublicListResultType,
   RestaurantRankingQueryType,
+  RestaurantSourceSummaryType,
   RestaurantSummaryProgressType,
 } from '@repo/api-contract';
+import { recomputeCanonicalAggregates } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
 import { restaurantApi } from '../api/restaurant.api.js';
 import { summarySseManager } from './summarySseManager.js';
@@ -30,22 +32,27 @@ const patchSummaryInListCaches = (
   placeId: string,
   snap: RestaurantSummaryProgressType,
 ): void => {
+  // 어드민 list 는 canonical-그룹핑이라 sources[] 안의 매칭 source 를 갱신하고
+  // 통합 카운트(가중평균)를 재계산. 분석 평균은 source 단위 값이 따로 없어
+  // (SSE snapshot 에 안 옴) 기존 값을 유지 — 그 source 의 done 가중치만 바뀐다.
   qc.setQueryData<RestaurantListResultType | undefined>(
     ['restaurant', 'list'],
     (prev) => {
       if (!prev) return prev;
-      const items = prev.items.map((item) =>
-        item.placeId === placeId
-          ? {
-              ...item,
-              totalReviews: snap.totalReviews,
-              summaryPending: snap.pending,
-              summaryRunning: snap.running,
-              summaryDone: snap.done,
-              summaryFailed: snap.failed,
-            }
-          : item,
-      );
+      const items = prev.items.map((item) => {
+        const idx = item.sources.findIndex((s) => s.placeId === placeId);
+        if (idx === -1) return item;
+        const updatedSource: RestaurantSourceSummaryType = {
+          ...item.sources[idx]!,
+          totalReviews: snap.totalReviews,
+          summaryPending: snap.pending,
+          summaryRunning: snap.running,
+          summaryDone: snap.done,
+          summaryFailed: snap.failed,
+        };
+        const sources = item.sources.map((s, i) => (i === idx ? updatedSource : s));
+        return { ...item, sources, ...recomputeCanonicalAggregates(sources) };
+      });
       return { ...prev, items };
     },
   );

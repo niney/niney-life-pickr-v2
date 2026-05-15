@@ -21,7 +21,10 @@ import {
   useStartCrawl,
   type ActiveCrawlJob,
 } from '@repo/shared';
-import type { RestaurantListItemType } from '@repo/api-contract';
+import type {
+  CanonicalListItemType,
+  RestaurantSourceSummaryType,
+} from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -41,8 +44,21 @@ const isValidNaverPlaceUrl = (raw: string): boolean => {
   }
 };
 
-const summaryInFlight = (item: RestaurantListItemType): number =>
+const summaryInFlight = (item: CanonicalListItemType): number =>
   item.summaryPending + item.summaryRunning;
+
+const findNaverSource = (
+  item: CanonicalListItemType,
+): RestaurantSourceSummaryType | null =>
+  item.sources.find((s) => s.source === 'naver') ?? null;
+
+// 칩 라벨 — source 식별자를 사람용으로. 새 source 추가 시 여기에만 매핑.
+const SOURCE_LABELS: Record<string, string> = {
+  naver: 'Naver',
+  diningcode: '다이닝코드',
+  catchtable: '캐치테이블',
+};
+const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s;
 
 const RestaurantRow = ({
   item,
@@ -53,7 +69,7 @@ const RestaurantRow = ({
   onDelete,
   onCancelDelete,
 }: {
-  item: RestaurantListItemType;
+  item: CanonicalListItemType;
   busy: boolean;
   deleting: boolean;
   confirmingDelete: boolean;
@@ -63,18 +79,18 @@ const RestaurantRow = ({
 }) => {
   const navigate = useNavigate();
   const inFlight = summaryInFlight(item);
-  // Whole row navigates to the detail page. Buttons stop propagation so
-  // their own actions don't trigger the row click. While a job is active
-  // for this row the inline panel is mounted underneath, so we suppress
-  // the navigation to avoid yanking the panel away.
+  const naverSource = findNaverSource(item);
+  // 행 클릭 = 상세 페이지(=Naver placeId 라우트). Naver source 가 없는 canonical
+  // (= DC 만 있는 가게) 은 네비게이션 비활성. 액션 버튼들도 마찬가지로 disabled.
   const handleRowClick = () => {
-    if (busy || deleting || confirmingDelete) return;
-    navigate(`/admin/restaurants/${item.placeId}`);
+    if (busy || deleting || confirmingDelete || !naverSource) return;
+    navigate(`/admin/restaurants/${naverSource.placeId}`);
   };
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();
     fn();
   };
+  const clickable = !busy && !deleting && !confirmingDelete && !!naverSource;
   return (
     <div
       role="link"
@@ -87,20 +103,26 @@ const RestaurantRow = ({
         }
       }}
       className={`flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:p-4 ${
-        busy || deleting || confirmingDelete
-          ? 'cursor-default'
-          : 'cursor-pointer hover:bg-muted/40'
+        clickable ? 'cursor-pointer hover:bg-muted/40' : 'cursor-default'
       }`}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm font-semibold">{item.name}</span>
-          {item.category && (
-            <span className="text-xs text-muted-foreground">{item.category}</span>
+          {item.primaryCategory && (
+            <span className="text-xs text-muted-foreground">{item.primaryCategory}</span>
           )}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {item.rating !== null && <Badge variant="secondary">★ {item.rating}</Badge>}
+          {/* 출처 칩 — canonical 에 묶인 source 가 어떤 게 있는지 한눈에 */}
+          {item.sources.map((s) => (
+            <Badge
+              key={s.restaurantId}
+              variant={s.source === 'naver' ? 'default' : 'secondary'}
+            >
+              {sourceLabel(s.source)}
+            </Badge>
+          ))}
           <Badge variant="outline">리뷰 {item.totalReviews}개</Badge>
           <Badge variant="outline">요약 {item.summaryDone}/{item.totalReviews}</Badge>
           {inFlight > 0 && (
@@ -108,8 +130,13 @@ const RestaurantRow = ({
               <Loader2 className="size-3 animate-spin" /> {inFlight}건 진행
             </Badge>
           )}
-          {item.summaryFailed > 0 && (
-            <ReanalyzeFailedBadge placeId={item.placeId} count={item.summaryFailed} />
+          {/* 재분석 배지는 Naver placeId 가 있을 때만 — backend reanalyze 가
+              그 키로 묶여 있음 (DC 백필은 후속 PR). */}
+          {item.summaryFailed > 0 && naverSource && (
+            <ReanalyzeFailedBadge
+              placeId={naverSource.placeId!}
+              count={item.summaryFailed}
+            />
           )}
           {item.avgSatisfactionScore !== null && (
             <Badge variant="outline">😊 {item.avgSatisfactionScore.toFixed(1)}/5</Badge>
@@ -125,12 +152,14 @@ const RestaurantRow = ({
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
+        {/* 액션은 Naver source 가 있을 때만. DC만 있는 canonical 은 어드민
+            다이닝코드 페이지에서 직접 작업 — PR2b 에서 source 별 액션 분기 추가. */}
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={stop(() => onAction('update'))}
-          disabled={busy}
+          disabled={busy || !naverSource}
         >
           <ChevronRight />
           업데이트
@@ -139,7 +168,7 @@ const RestaurantRow = ({
           type="button"
           size="sm"
           onClick={stop(() => onAction('recrawl'))}
-          disabled={busy}
+          disabled={busy || !naverSource}
         >
           <RefreshCw />
           재크롤링
@@ -172,7 +201,7 @@ const RestaurantRow = ({
             variant="ghost"
             size="sm"
             onClick={stop(onDelete)}
-            disabled={busy}
+            disabled={busy || !naverSource}
             aria-label="삭제"
             title="삭제"
           >
@@ -197,9 +226,7 @@ export const AdminRestaurantsPage = () => {
   const addJob = useActiveCrawlJobStore((s) => s.add);
   const removeJob = useActiveCrawlJobStore((s) => s.remove);
   const resolveJobPlaceId = useActiveCrawlJobStore((s) => s.resolvePlaceId);
-  // placeId currently in the "click again to confirm" state. Only one row
-  // can be in confirm mode at a time; clicking another row's trash icon
-  // moves the prompt instead of opening a second one.
+  // 삭제 확인 상태 — 삭제 액션이 Naver source 한정이라 placeId 로 유지.
   const [confirmDeletePlaceId, setConfirmDeletePlaceId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'recent' | 'satisfaction' | 'positive' | 'negativeRatio'>(
     'recent',
@@ -250,14 +277,16 @@ export const AdminRestaurantsPage = () => {
   };
 
   const handleRowAction =
-    (item: RestaurantListItemType) => async (mode: 'recrawl' | 'update') => {
+    (item: CanonicalListItemType) => async (mode: 'recrawl' | 'update') => {
+      const naver = findNaverSource(item);
+      if (!naver) return; // 버튼이 disabled 라 이론적으로 안 옴.
       setError(null);
       try {
-        const result = await startMutation.mutateAsync({ url: item.rawSourceUrl, mode });
+        const result = await startMutation.mutateAsync({ url: naver.rawSourceUrl, mode });
         if (result.ok) {
           addJob({
             jobId: result.jobId,
-            placeId: item.placeId,
+            placeId: naver.placeId,
             source: 'list-row',
             mode,
           });
@@ -272,9 +301,8 @@ export const AdminRestaurantsPage = () => {
   const handlePlaceIdResolved = (jobId: string, placeId: string) => {
     const existing = jobs[jobId];
     if (existing && existing.placeId !== placeId) {
-      // Once we know the placeId, the row in the list is the canonical
-      // anchor — refresh the list so the row appears (for new-URL jobs)
-      // before the panel slots in beneath it.
+      // placeId 가 알려진 순간 list 의 해당 행이 정식 앵커가 된다 — 신규 URL
+      // 추가 흐름이라면 행이 없을 수 있으니 list 무효화로 새로 페치.
       qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
       qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
     }
@@ -291,13 +319,12 @@ export const AdminRestaurantsPage = () => {
     };
 
   const rawItems = listQuery.data?.items ?? [];
-  // 정렬은 클라이언트에서. 분석 안 된 식당은 항상 가장 뒤로 (점수 null)
-  // — 정렬 기준이 분석 점수일 때 빈 줄이 위로 올라오는 걸 방지한다.
+  // 정렬은 클라이언트에서. 분석 안 된 가게는 항상 가장 뒤로 (점수 null).
   const items = (() => {
     if (sortBy === 'recent') return rawItems;
     const withNullsLast = (
-      cmp: (a: RestaurantListItemType, b: RestaurantListItemType) => number,
-      keyOf: (it: RestaurantListItemType) => number | null,
+      cmp: (a: CanonicalListItemType, b: CanonicalListItemType) => number,
+      keyOf: (it: CanonicalListItemType) => number | null,
     ) =>
       [...rawItems].sort((a, b) => {
         const av = keyOf(a);
@@ -319,7 +346,6 @@ export const AdminRestaurantsPage = () => {
         (it) => it.avgSentimentScore,
       );
     }
-    // negativeRatio — 분모가 0이면 null 취급(분석 없음). 비율 낮은 순.
     return withNullsLast(
       (a, b) => {
         const ra = a.negativeCount / Math.max(a.summaryDone, 1);
@@ -329,25 +355,30 @@ export const AdminRestaurantsPage = () => {
       (it) => (it.summaryDone === 0 ? null : it.summaryDone),
     );
   })();
-  // Subscribe to summary events for every visible row so trailing summaries
-  // (the ones still finishing after a crawl `done`) keep the badges fresh
-  // even when no panel is mounted for that row. The singleton SSE manager
-  // multiplexes these into a single connection.
-  // SSE 구독은 정렬 결과가 아닌 원 목록 기준 — 정렬만 바뀌어도
-  // EventSource가 끊겼다 다시 붙는 걸 막는다.
-  useRestaurantListSummaryEvents(rawItems.map((it) => it.placeId));
-  // Index jobs by placeId so each row can render its own anchored panel
-  // without scanning the full set on every render.
-  // placeId 가 list 에 아직 없는 잡(어드민 발견에서 시작 → row 미생성 상태)
-  // 도 newJobs 로 분류해 상단에 ActiveJobPanel 을 마운트한다. 그래야 SSE 가
-  // 열려 partial 시점에 list invalidation 이 트리거되고, 행이 등장하면 다음
-  // 렌더에서 jobByPlaceId 로 재분류돼 자연스럽게 행 밑으로 이동.
-  const itemPlaceIds = new Set(rawItems.map((it) => it.placeId));
-  const jobByPlaceId = new Map<string, ActiveCrawlJob>();
+  // SSE 구독 — Naver source 의 placeId 들만. DC 라이브 갱신은 PR2c.
+  const allNaverPlaceIds = rawItems
+    .flatMap((it) => it.sources)
+    .filter((s) => s.source === 'naver' && s.placeId !== null)
+    .map((s) => s.placeId!);
+  useRestaurantListSummaryEvents(allNaverPlaceIds);
+  // 활성 잡 — placeId 가 list 의 어느 행의 Naver source 와도 매칭 안 되면
+  // 상단 newJobs 로. 매칭되면 그 행 밑에 panel 마운트.
+  const placeIdToCanonical = new Map<string, CanonicalListItemType>();
+  for (const it of rawItems) {
+    for (const s of it.sources) {
+      if (s.placeId) placeIdToCanonical.set(s.placeId, it);
+    }
+  }
+  const jobByCanonical = new Map<string, ActiveCrawlJob>();
   const newJobs: ActiveCrawlJob[] = [];
   for (const j of Object.values(jobs)) {
-    if (j.placeId === null || !itemPlaceIds.has(j.placeId)) newJobs.push(j);
-    else jobByPlaceId.set(j.placeId, j);
+    if (j.placeId === null) {
+      newJobs.push(j);
+      continue;
+    }
+    const canonical = placeIdToCanonical.get(j.placeId);
+    if (canonical) jobByCanonical.set(canonical.canonicalId, j);
+    else newJobs.push(j);
   }
 
   return (
@@ -401,8 +432,6 @@ export const AdminRestaurantsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Active "new" jobs — shown until each one's placeId resolves, at
-          which point the panel slots underneath the matching list row. */}
       {newJobs.length > 0 && (
         <div className="mb-6 space-y-3">
           {newJobs.map((j) => (
@@ -458,19 +487,24 @@ export const AdminRestaurantsPage = () => {
           ) : (
             <ul className="space-y-3">
               {items.map((item) => {
-                const rowJob = jobByPlaceId.get(item.placeId) ?? null;
+                const naverSource = findNaverSource(item);
+                const rowJob = jobByCanonical.get(item.canonicalId) ?? null;
+                const naverPlaceId = naverSource?.placeId ?? null;
                 return (
-                  <li key={item.id} className="space-y-3">
+                  <li key={item.canonicalId} className="space-y-3">
                     <RestaurantRow
                       item={item}
                       busy={!!rowJob}
                       deleting={
                         deleteMutation.isPending &&
-                        deleteMutation.variables === item.placeId
+                        naverPlaceId !== null &&
+                        deleteMutation.variables === naverPlaceId
                       }
-                      confirmingDelete={confirmDeletePlaceId === item.placeId}
+                      confirmingDelete={
+                        naverPlaceId !== null && confirmDeletePlaceId === naverPlaceId
+                      }
                       onAction={handleRowAction(item)}
-                      onDelete={() => handleDelete(item.placeId)}
+                      onDelete={() => naverPlaceId && handleDelete(naverPlaceId)}
                       onCancelDelete={() => setConfirmDeletePlaceId(null)}
                     />
                     {rowJob && (

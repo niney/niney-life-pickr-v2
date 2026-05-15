@@ -84,12 +84,13 @@ export const RestaurantDetail = z.object({
 });
 export type RestaurantDetailType = z.infer<typeof RestaurantDetail>;
 
-// Compact list-row shape — drives the restaurants admin page. Includes the
-// summary counts inline so the page can render progress badges without an
-// extra round-trip per row.
-export const RestaurantListItem = z.object({
-  id: z.string(),
-  placeId: z.string(),
+// 출처별 행 1줄 — Restaurant 1행 = 1 source. 어드민 list 행이 canonical 로
+// 그룹된 후 sources 배열에 들어간다. placeId 는 source='naver' 일 때만 채워짐.
+export const RestaurantSourceSummary = z.object({
+  restaurantId: z.string(),
+  source: z.string(),
+  sourceId: z.string(),
+  placeId: z.string().nullable(),
   name: z.string(),
   category: z.string().nullable(),
   rating: z.number().nullable(),
@@ -97,13 +98,13 @@ export const RestaurantListItem = z.object({
   rawSourceUrl: z.string(),
   firstCrawledAt: z.string(),
   lastCrawledAt: z.string(),
+  // source 단위 카운트 — SSE snapshot 이 이 source 의 placeId 로 patch.
   totalReviews: z.number().int(),
   summaryPending: z.number().int(),
   summaryRunning: z.number().int(),
   summaryDone: z.number().int(),
   summaryFailed: z.number().int(),
-  // AI 분석 집계 — done 행만 대상. 분석 안 된 행이 많으면 null.
-  // FE는 정렬 기준으로 사용하고 null은 가장 뒤로 보낸다.
+  // 분석 집계 — done 행만 대상.
   avgSentimentScore: z.number().nullable(),
   avgSatisfactionScore: z.number().nullable(),
   positiveCount: z.number().int(),
@@ -111,10 +112,103 @@ export const RestaurantListItem = z.object({
   neutralCount: z.number().int(),
   mixedCount: z.number().int(),
 });
-export type RestaurantListItemType = z.infer<typeof RestaurantListItem>;
+export type RestaurantSourceSummaryType = z.infer<typeof RestaurantSourceSummary>;
+
+// 어드민 list 의 행 = canonical(같은 가게). sources 의 합으로 통합 카운트도
+// 같이 내려준다 — SSE patch 후 클라이언트가 다시 합산할 때 helper 로 재계산.
+export const CanonicalListItem = z.object({
+  canonicalId: z.string(),
+  name: z.string(),
+  primaryCategory: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  // 가장 최근 활동한 source 의 lastCrawledAt — 기본 정렬 키.
+  lastCrawledAt: z.string(),
+  // 길이 ≥ 1 — 출처별 행. 어드민 UI 는 각 source 의 액션을 분기.
+  sources: z.array(RestaurantSourceSummary),
+  // 통합 카운트 (sources 합). 분석 평균은 done 행 수로 가중평균.
+  totalReviews: z.number().int(),
+  summaryPending: z.number().int(),
+  summaryRunning: z.number().int(),
+  summaryDone: z.number().int(),
+  summaryFailed: z.number().int(),
+  avgSentimentScore: z.number().nullable(),
+  avgSatisfactionScore: z.number().nullable(),
+  positiveCount: z.number().int(),
+  negativeCount: z.number().int(),
+  neutralCount: z.number().int(),
+  mixedCount: z.number().int(),
+});
+export type CanonicalListItemType = z.infer<typeof CanonicalListItem>;
+
+// SSE patch 등 클라이언트가 source 갱신 후 통합 카운트를 다시 계산할 때 호출.
+// 서버 list() 가 처음 내려준 값과 동일 로직.
+export const recomputeCanonicalAggregates = (
+  sources: RestaurantSourceSummaryType[],
+): Pick<
+  CanonicalListItemType,
+  | 'totalReviews'
+  | 'summaryPending'
+  | 'summaryRunning'
+  | 'summaryDone'
+  | 'summaryFailed'
+  | 'avgSentimentScore'
+  | 'avgSatisfactionScore'
+  | 'positiveCount'
+  | 'negativeCount'
+  | 'neutralCount'
+  | 'mixedCount'
+> => {
+  let totalReviews = 0;
+  let summaryPending = 0;
+  let summaryRunning = 0;
+  let summaryDone = 0;
+  let summaryFailed = 0;
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let neutralCount = 0;
+  let mixedCount = 0;
+  // 가중평균: source 의 (avg, done 수) 곱을 합산 / 전체 done 수.
+  let sentSum = 0;
+  let sentN = 0;
+  let satSum = 0;
+  let satN = 0;
+  for (const s of sources) {
+    totalReviews += s.totalReviews;
+    summaryPending += s.summaryPending;
+    summaryRunning += s.summaryRunning;
+    summaryDone += s.summaryDone;
+    summaryFailed += s.summaryFailed;
+    positiveCount += s.positiveCount;
+    negativeCount += s.negativeCount;
+    neutralCount += s.neutralCount;
+    mixedCount += s.mixedCount;
+    if (s.avgSentimentScore !== null && s.summaryDone > 0) {
+      sentSum += s.avgSentimentScore * s.summaryDone;
+      sentN += s.summaryDone;
+    }
+    if (s.avgSatisfactionScore !== null && s.summaryDone > 0) {
+      satSum += s.avgSatisfactionScore * s.summaryDone;
+      satN += s.summaryDone;
+    }
+  }
+  return {
+    totalReviews,
+    summaryPending,
+    summaryRunning,
+    summaryDone,
+    summaryFailed,
+    avgSentimentScore: sentN > 0 ? sentSum / sentN : null,
+    avgSatisfactionScore: satN > 0 ? satSum / satN : null,
+    positiveCount,
+    negativeCount,
+    neutralCount,
+    mixedCount,
+  };
+};
 
 export const RestaurantListResult = z.object({
-  items: z.array(RestaurantListItem),
+  items: z.array(CanonicalListItem),
 });
 export type RestaurantListResultType = z.infer<typeof RestaurantListResult>;
 
