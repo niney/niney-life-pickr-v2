@@ -275,8 +275,11 @@ export class CanonicalService {
     };
   }
 
-  // canonical 행 통째로 삭제. 매달린 모든 Restaurant + 그 review/summary 가 FK
-  // Cascade 로 함께 사라진다. 어드민 UI 가 두 단계 확인 후 호출.
+  // canonical 행 통째로 삭제. Restaurant.canonical FK 가 onDelete: Cascade 가
+  // 아니라 부모를 먼저 지울 수 없으니, 트랜잭션 안에서 자식 Restaurant 들을 먼저
+  // 지운 뒤 Canonical 을 지운다. Restaurant→VisitorReview/MenuCanonical 은 자체
+  // Cascade 로 매달린 review/summary 가 함께 삭제되고, CanonicalMergeProposal 의
+  // FK 도 Cascade 라 부모 삭제 시 자동 정리.
   async deleteCanonical(canonicalId: string): Promise<{
     deletedRestaurantCount: number;
     deletedReviewCount: number;
@@ -299,7 +302,12 @@ export class CanonicalService {
       (acc, r) => acc + r._count.visitorReviews,
       0,
     );
-    await this.prisma.canonicalRestaurant.delete({ where: { id: canonicalId } });
+    await this.prisma.$transaction(async (tx) => {
+      if (deletedRestaurantCount > 0) {
+        await tx.restaurant.deleteMany({ where: { canonicalId } });
+      }
+      await tx.canonicalRestaurant.delete({ where: { id: canonicalId } });
+    });
     return { deletedRestaurantCount, deletedReviewCount };
   }
 
