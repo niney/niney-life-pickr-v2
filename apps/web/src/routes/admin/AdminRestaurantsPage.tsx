@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight,
+  Database,
+  ExternalLink,
   Link as LinkIcon,
   Loader2,
   Play,
@@ -18,6 +20,7 @@ import {
   useDeleteRestaurant,
   useRestaurantList,
   useRestaurantListSummaryEvents,
+  useSaveDiningcodeShop,
   useStartCrawl,
   type ActiveCrawlJob,
 } from '@repo/shared';
@@ -52,6 +55,11 @@ const findNaverSource = (
 ): RestaurantSourceSummaryType | null =>
   item.sources.find((s) => s.source === 'naver') ?? null;
 
+const findDiningcodeSource = (
+  item: CanonicalListItemType,
+): RestaurantSourceSummaryType | null =>
+  item.sources.find((s) => s.source === 'diningcode') ?? null;
+
 // 칩 라벨 — source 식별자를 사람용으로. 새 source 추가 시 여기에만 매핑.
 const SOURCE_LABELS: Record<string, string> = {
   naver: 'Naver',
@@ -65,21 +73,27 @@ const RestaurantRow = ({
   busy,
   deleting,
   confirmingDelete,
+  dcSaving,
   onAction,
   onDelete,
   onCancelDelete,
+  onSaveDiningcode,
 }: {
   item: CanonicalListItemType;
   busy: boolean;
   deleting: boolean;
   confirmingDelete: boolean;
+  // 진행 중인 DC 재수집 — 같은 canonical 의 DC source 한 줄에 대해서만 true.
+  dcSaving: boolean;
   onAction: (mode: 'recrawl' | 'update') => void;
   onDelete: () => void;
   onCancelDelete: () => void;
+  onSaveDiningcode: (vRid: string) => void;
 }) => {
   const navigate = useNavigate();
   const inFlight = summaryInFlight(item);
   const naverSource = findNaverSource(item);
+  const dcSource = findDiningcodeSource(item);
   // 행 클릭 = 상세 페이지(=Naver placeId 라우트). Naver source 가 없는 canonical
   // (= DC 만 있는 가게) 은 네비게이션 비활성. 액션 버튼들도 마찬가지로 disabled.
   const handleRowClick = () => {
@@ -114,15 +128,33 @@ const RestaurantRow = ({
           )}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {/* 출처 칩 — canonical 에 묶인 source 가 어떤 게 있는지 한눈에 */}
-          {item.sources.map((s) => (
-            <Badge
-              key={s.restaurantId}
-              variant={s.source === 'naver' ? 'default' : 'secondary'}
-            >
-              {sourceLabel(s.source)}
-            </Badge>
-          ))}
+          {/* 출처 칩 — DC 칩은 클릭 시 어드민 다이닝코드 상세로 이동 (vRid 라우트).
+              네비게이션 충돌(행 click)을 막기 위해 stopPropagation. */}
+          {item.sources.map((s) => {
+            if (s.source === 'diningcode') {
+              return (
+                <Link
+                  key={s.restaurantId}
+                  to={`/admin/diningcode-test/${s.sourceId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex"
+                >
+                  <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                    {sourceLabel(s.source)}
+                    <ExternalLink className="ml-1 size-3" />
+                  </Badge>
+                </Link>
+              );
+            }
+            return (
+              <Badge
+                key={s.restaurantId}
+                variant={s.source === 'naver' ? 'default' : 'secondary'}
+              >
+                {sourceLabel(s.source)}
+              </Badge>
+            );
+          })}
           <Badge variant="outline">리뷰 {item.totalReviews}개</Badge>
           <Badge variant="outline">요약 {item.summaryDone}/{item.totalReviews}</Badge>
           {inFlight > 0 && (
@@ -152,8 +184,7 @@ const RestaurantRow = ({
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
-        {/* 액션은 Naver source 가 있을 때만. DC만 있는 canonical 은 어드민
-            다이닝코드 페이지에서 직접 작업 — PR2b 에서 source 별 액션 분기 추가. */}
+        {/* Naver 액션 — Naver source 가 없으면 disabled */}
         <Button
           type="button"
           variant="outline"
@@ -173,6 +204,21 @@ const RestaurantRow = ({
           <RefreshCw />
           재크롤링
         </Button>
+        {/* DC source 가 있을 때만 노출. saveDiningcodeShop 은 신규 리뷰만 추가
+            +AI 분석 큐잉 — 네이버 "업데이트" 와 동일한 의미라 라벨도 일치. */}
+        {dcSource && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={stop(() => onSaveDiningcode(dcSource.sourceId))}
+            disabled={dcSaving}
+            title="다이닝코드 가게의 새 리뷰를 받아오고 AI 분석을 큐잉합니다"
+          >
+            {dcSaving ? <Loader2 className="animate-spin" /> : <Database />}
+            DC 재수집
+          </Button>
+        )}
         {confirmingDelete ? (
           <>
             <Button
@@ -219,6 +265,9 @@ export const AdminRestaurantsPage = () => {
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
   const deleteMutation = useDeleteRestaurant();
+  // DC 가게 한 건 재수집(+AI 분석 큐잉). useMutation 한 인스턴스가 모든 행의
+  // 클릭을 처리 — variables 가 vRid 이므로 어떤 행이 in-flight 인지 식별.
+  const saveDcMutation = useSaveDiningcodeShop();
 
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -273,6 +322,19 @@ export const AdminRestaurantsPage = () => {
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to start');
+    }
+  };
+
+  const handleSaveDiningcode = async (vRid: string) => {
+    setError(null);
+    try {
+      await saveDcMutation.mutateAsync(vRid);
+      // 응답이 새 리뷰 수 + AI 분석 큐 사이즈를 반환하지만, 행 카운트는 list
+      // 무효화로 새로 페치하면 자동으로 반영. AI 진행은 Naver source 의 SSE
+      // 와 별도 채널(dc:<vRid>) — PR2c 에서 SSE 통합 시 라이브 반영.
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'DC 재수집 실패');
     }
   };
 
@@ -397,13 +459,14 @@ export const AdminRestaurantsPage = () => {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>URL 추가</CardTitle>
+          <CardTitle>가게 추가</CardTitle>
           <CardDescription>
-            네이버 지도에서 가게 페이지를 열고 공유 URL을 붙여넣으세요. 추가하면 즉시 크롤링이
-            시작되고, 진행 상황이 아래에 표시됩니다.
+            네이버 플레이스 URL 을 붙여넣어 즉시 크롤링하거나, 다이닝코드에서 검색해
+            저장합니다. 같은 가게라면 두 출처에 모두 등록한 뒤 어드민에서 한 행으로
+            병합하세요.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <form onSubmit={handleAdd} className="flex flex-col gap-3 sm:flex-row sm:items-start">
             <div className="flex-1">
               <div className="relative">
@@ -429,6 +492,19 @@ export const AdminRestaurantsPage = () => {
               추가 + 크롤링
             </Button>
           </form>
+          {/* 다이닝코드는 URL 이 아니라 검색 기반 — 별도 페이지에서 키워드 입력
+              후 검증·저장. 클릭 시 새 탭으로 띄워 등록 작업을 잃지 않게 한다. */}
+          <div className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+            <span>다이닝코드에서 가게 찾기 — 키워드 검색 후 "DB에 저장"</span>
+            <Link
+              to="/admin/diningcode-test"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-1 text-foreground hover:underline"
+            >
+              다이닝코드 페이지 열기 <ExternalLink className="size-3" />
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
@@ -488,8 +564,13 @@ export const AdminRestaurantsPage = () => {
             <ul className="space-y-3">
               {items.map((item) => {
                 const naverSource = findNaverSource(item);
+                const dcSource = findDiningcodeSource(item);
                 const rowJob = jobByCanonical.get(item.canonicalId) ?? null;
                 const naverPlaceId = naverSource?.placeId ?? null;
+                const dcSaving =
+                  saveDcMutation.isPending &&
+                  dcSource !== null &&
+                  saveDcMutation.variables === dcSource.sourceId;
                 return (
                   <li key={item.canonicalId} className="space-y-3">
                     <RestaurantRow
@@ -503,9 +584,11 @@ export const AdminRestaurantsPage = () => {
                       confirmingDelete={
                         naverPlaceId !== null && confirmDeletePlaceId === naverPlaceId
                       }
+                      dcSaving={dcSaving}
                       onAction={handleRowAction(item)}
                       onDelete={() => naverPlaceId && handleDelete(naverPlaceId)}
                       onCancelDelete={() => setConfirmDeletePlaceId(null)}
+                      onSaveDiningcode={handleSaveDiningcode}
                     />
                     {rowJob && (
                       <ActiveJobPanel
