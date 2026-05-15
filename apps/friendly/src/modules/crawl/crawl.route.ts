@@ -27,6 +27,8 @@ import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playw
 import { closeCatchtableShopBrowser } from './adapters/catchtable-shop.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
+import { CanonicalService } from '../canonical/canonical.service.js';
+import { ProposalService } from '../canonical/proposal.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { env } from '../../config/env.js';
 
@@ -72,7 +74,9 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
   });
   const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
-  const service = new CrawlService(restaurants, summaries, jobRegistry);
+  const canonical = new CanonicalService(app.prisma);
+  const proposals = new ProposalService(app.prisma, canonical);
+  const service = new CrawlService(restaurants, summaries, jobRegistry, proposals);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   app.addHook('onClose', async () => {

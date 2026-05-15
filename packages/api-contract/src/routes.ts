@@ -127,6 +127,14 @@ export const Canonical = {
   // list 응답에 1차 매칭 제안이 끼는 걸 영구 닫기. body 없음.
   dismissSuggestion: (id: string) =>
     `${API_PREFIX}/admin/canonical/${id}/suggestion/dismiss`,
+  // 자동 매칭 큐 — 두 canonical 이 같은 가게일 수 있다는 검토 대기 쌍.
+  proposals: `${API_PREFIX}/admin/canonical/proposals`,
+  // 전수 재계산. 어드민 "전체 다시 돌리기" 버튼.
+  proposalsRun: `${API_PREFIX}/admin/canonical/proposals/run`,
+  proposalAccept: (id: string) =>
+    `${API_PREFIX}/admin/canonical/proposals/${id}/accept`,
+  proposalReject: (id: string) =>
+    `${API_PREFIX}/admin/canonical/proposals/${id}/reject`,
 } as const;
 
 // AI 분석 운영(메뉴 분류 batch) 화면용. 식당별 라우트는 Restaurant.menusGroup/

@@ -95,3 +95,68 @@ export const CanonicalDismissSuggestionResult = z.object({
 export type CanonicalDismissSuggestionResultType = z.infer<
   typeof CanonicalDismissSuggestionResult
 >;
+
+// ── Merge proposal queue ─────────────────────────────────────────────
+// 자동 매칭이 잡은 두 canonical 의 "같은 가게일 수 있다" 쌍. 정책상 자동 머지는
+// 안 하므로 score 가 임계(0.45) 이상이면 모두 큐로 들어와 어드민 검토 대상이 된다.
+
+export const CanonicalProposalStatus = z.enum([
+  'open',
+  'accepted',
+  'rejected',
+  'superseded',
+]);
+export type CanonicalProposalStatusType = z.infer<typeof CanonicalProposalStatus>;
+
+export const CanonicalProposalItem = z.object({
+  id: z.string(),
+  // 쌍은 항상 (작은 id, 큰 id) 로 정규화돼 저장됨.
+  canonicalA: CanonicalSummary,
+  canonicalB: CanonicalSummary,
+  score: z.number(),
+  nameScore: z.number(),
+  distanceM: z.number().nullable(),
+  status: CanonicalProposalStatus,
+  createdAt: z.string(),
+});
+export type CanonicalProposalItemType = z.infer<typeof CanonicalProposalItem>;
+
+export const CanonicalProposalListResult = z.object({
+  items: z.array(CanonicalProposalItem),
+});
+export type CanonicalProposalListResultType = z.infer<
+  typeof CanonicalProposalListResult
+>;
+
+// 전체 다시 돌리기 결과. created = 이번에 새로 큐에 들어간 쌍의 수
+// (이미 open/rejected 인 쌍은 skip).
+export const CanonicalProposalRunResult = z.object({
+  created: z.number().int(),
+});
+export type CanonicalProposalRunResultType = z.infer<
+  typeof CanonicalProposalRunResult
+>;
+
+// 수락 시 어느 쪽을 target(살아남는 가게) 으로 둘지. 기본 'A' (작은 id).
+// UI 에서 어드민이 명시 선택 가능.
+export const CanonicalProposalAcceptInput = z.object({
+  keepSide: z.enum(['A', 'B']).default('A'),
+});
+export type CanonicalProposalAcceptInputType = z.infer<
+  typeof CanonicalProposalAcceptInput
+>;
+
+export const CanonicalProposalAcceptResult = z.object({
+  ok: z.literal(true),
+  merge: CanonicalMergeResult,
+});
+export type CanonicalProposalAcceptResultType = z.infer<
+  typeof CanonicalProposalAcceptResult
+>;
+
+export const CanonicalProposalRejectResult = z.object({
+  ok: z.literal(true),
+});
+export type CanonicalProposalRejectResultType = z.infer<
+  typeof CanonicalProposalRejectResult
+>;

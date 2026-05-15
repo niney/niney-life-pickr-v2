@@ -46,6 +46,7 @@ import {
 } from './url-normalizer.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import type { SummaryService } from '../summary/summary.service.js';
+import type { ProposalService } from '../canonical/proposal.service.js';
 
 const CACHE_TTL_MS = 30_000;
 
@@ -79,6 +80,7 @@ export class CrawlService {
   private readonly registry: JobRegistry;
   private readonly restaurants: RestaurantService;
   private readonly summaries: SummaryService;
+  private readonly proposals: ProposalService | null;
   private readonly pending: PendingStart[] = [];
   private nextSeq = 1;
 
@@ -86,10 +88,28 @@ export class CrawlService {
     restaurants: RestaurantService,
     summaries: SummaryService,
     registry: JobRegistry = jobRegistry,
+    // null 이면 후보 큐 생성 skip — 테스트가 단순화 위해 생략할 때 사용.
+    proposals: ProposalService | null = null,
   ) {
     this.registry = registry;
     this.restaurants = restaurants;
     this.summaries = summaries;
+    this.proposals = proposals;
+  }
+
+  // 등록 직후 자동 매칭 후크. 새 가게의 canonicalId 로 cross-source 후보를 큐에
+  // 적재. 실패해도 등록 흐름은 막지 않음 — 큐는 보조 채널이고 어드민이 수동
+  // "전체 다시 돌리기" 로 보강 가능.
+  private async generateProposalsForRestaurant(restaurantId: string): Promise<void> {
+    if (!this.proposals) return;
+    try {
+      const canonical = await this.restaurants.getCanonicalIdForRestaurant(restaurantId);
+      if (!canonical) return;
+      await this.proposals.generateForCanonical(canonical);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[crawl] proposal hook failed', e);
+    }
   }
 
   // Kick off a crawl. Returns immediately with the jobId; the actual work
@@ -276,6 +296,9 @@ export class CrawlService {
 
     const { id: restaurantId } =
       await this.restaurants.upsertRestaurantFromDiningcode(detail);
+
+    // 등록 직후 자동 매칭 후크 — cross-source 같은 가게 짝을 검토 큐에 적재.
+    await this.generateProposalsForRestaurant(restaurantId);
 
     const raw = allReviews.map((rv) =>
       RestaurantService.mapDiningcodeReviewToRaw(rv),
@@ -467,6 +490,12 @@ export class CrawlService {
       // 'done'. The UI relies on the visitor_batch addedCount sequence to
       // drive its summary progress UI; emitting 'done' first would race.
       await persistTail;
+
+      // 등록(또는 갱신) 직후 자동 매칭 후크. 신규 canonical 이라면 cross-source
+      // 후보를 검토 큐에 적재. 기존 canonical 이면 idempotent skip.
+      if (restaurantId) {
+        await this.generateProposalsForRestaurant(restaurantId);
+      }
 
       this.emit(jobId, {
         type: 'done',

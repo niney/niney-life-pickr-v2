@@ -110,10 +110,44 @@ model CanonicalRestaurant {
   updatedAt       DateTime @updatedAt
 
   restaurants Restaurant[]
+  proposalsA  CanonicalMergeProposal[] @relation("ProposalCanonicalA")
+  proposalsB  CanonicalMergeProposal[] @relation("ProposalCanonicalB")
 
   @@index([searchKey])
   @@index([latitude, longitude])
   @@map("canonical_restaurants")
+}
+
+// 자동 매칭이 두 canonical 을 "같은 가게일 수 있다" 고 잡았을 때 큐에 적재되는
+// 검토 대기 항목. 정책상 자동 머지는 하지 않고 모두 사람이 확인 — score 가
+// 임계(0.45) 이상이면 무조건 여기로 들어온다.
+//
+// 중복 방지를 위해 양방향 쌍을 정규화: 항상 canonicalAId < canonicalBId
+// (cuid 문자열 사전순) 으로 저장. unique 제약으로 동일 쌍이 한 번만 큐에 뜬다.
+//
+// status 흐름:
+//   open       — 어드민 검토 대기. UI 노출 대상.
+//   accepted   — 어드민이 수락 → CanonicalService.merge 실행 → A/B 한쪽 소멸.
+//   rejected   — 어드민이 "같은 가게 아님" 거절. 같은 쌍이 다시 제안되지 않음.
+//   superseded — 다른 머지로 둘 중 한 canonical 이 사라짐(=stale). UI 에서 숨김.
+model CanonicalMergeProposal {
+  id             String   @id @default(cuid())
+  canonicalAId   String
+  canonicalBId   String
+  score          Float
+  nameScore      Float
+  // 둘 다 좌표 있을 때만 채워짐. null 이면 이름 단독 매칭.
+  distanceM      Float?
+  status         String   @default("open")
+  createdAt      DateTime @default(now())
+  resolvedAt     DateTime?
+
+  canonicalA CanonicalRestaurant @relation("ProposalCanonicalA", fields: [canonicalAId], references: [id], onDelete: Cascade)
+  canonicalB CanonicalRestaurant @relation("ProposalCanonicalB", fields: [canonicalBId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalAId, canonicalBId])
+  @@index([status])
+  @@map("canonical_merge_proposals")
 }
 
 model Restaurant {
