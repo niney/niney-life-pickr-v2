@@ -66,6 +66,15 @@ export const Crawl = {
   // POST. 어드민 상세 페이지의 "DB 에 저장" 버튼이 호출.
   diningcodeShopSave: (vRid: string) =>
     `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/save`,
+  // 정식 /admin/diningcode 페이지 — 검색 결과 카드의 '등록됨' 배지용. vRid 다수를
+  // 한 번에 조회. ids=콤마 분리.
+  diningcodeRegistered: `${API_PREFIX}/admin/crawl/diningcode/registered`,
+  // 일괄 저장 잡 — 검색 페이지에서 다중 선택 후 한 번에 저장. 진행률은 SSE.
+  diningcodeBulkSaveJobs: `${API_PREFIX}/admin/crawl/diningcode/bulk-save/jobs`,
+  diningcodeBulkSaveJob: (id: string) =>
+    `${API_PREFIX}/admin/crawl/diningcode/bulk-save/jobs/${id}`,
+  diningcodeBulkSaveJobEvents: (id: string) =>
+    `${API_PREFIX}/admin/crawl/diningcode/bulk-save/jobs/${id}/events`,
 } as const;
 
 export const Restaurant = {

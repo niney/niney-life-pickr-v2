@@ -7,6 +7,9 @@ import {
   type CrawlJobListResultType,
   type CrawlModeType,
   type CrawlSearchResultType,
+  type DiningcodeBulkSaveJobInputType,
+  type DiningcodeBulkSaveJobSnapshotType,
+  type DiningcodeRegisteredResultType,
   type DiningcodeSearchResponseType,
   type DiningcodeShopDataType,
   type DiningcodeShopReviewsResponseType,
@@ -130,6 +133,43 @@ export const crawlApi = {
     apiFetch<SaveDiningcodeShopResultType>(Routes.Crawl.diningcodeShopSave(vRid), {
       method: 'POST',
     }),
+
+  // 정식 /admin/diningcode 페이지 — vRid 다수의 등록 상태 조회. 결과에 없는
+  // vRid 는 미등록.
+  diningcodeRegistered: (vRids: string[]) => {
+    const params = new URLSearchParams({ ids: vRids.join(',') });
+    return apiFetch<DiningcodeRegisteredResultType>(
+      `${Routes.Crawl.diningcodeRegistered}?${params.toString()}`,
+    );
+  },
+
+  // 일괄 저장 잡 시작 — vRids 받아서 백그라운드 직렬 저장. 응답은 초기 스냅샷.
+  diningcodeBulkSaveStart: (input: DiningcodeBulkSaveJobInputType) =>
+    apiFetch<DiningcodeBulkSaveJobSnapshotType>(
+      Routes.Crawl.diningcodeBulkSaveJobs,
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
+
+  diningcodeBulkSaveGet: (jobId: string) =>
+    apiFetch<DiningcodeBulkSaveJobSnapshotType>(
+      Routes.Crawl.diningcodeBulkSaveJob(jobId),
+    ),
+
+  diningcodeBulkSaveCancel: (jobId: string) =>
+    apiFetch<void>(Routes.Crawl.diningcodeBulkSaveJob(jobId), { method: 'DELETE' }),
+};
+
+// 다이닝코드 일괄 저장 SSE URL — token query.
+export const buildDiningcodeBulkSaveEventsUrl = async (
+  jobId: string,
+): Promise<string> => {
+  const cfg = getApiConfig();
+  const token = (await cfg.getToken?.()) ?? '';
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  const qs = params.toString();
+  const sep = qs ? '?' : '';
+  return `${cfg.baseUrl}${Routes.Crawl.diningcodeBulkSaveJobEvents(jobId)}${sep}${qs}`;
 };
 
 // Build the SSE endpoint URL with the auth token in the query string. The

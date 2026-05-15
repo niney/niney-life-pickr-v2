@@ -892,3 +892,99 @@ export const SaveDiningcodeShopResult = z.object({
   elapsedMs: z.number().int(),
 });
 export type SaveDiningcodeShopResultType = z.infer<typeof SaveDiningcodeShopResult>;
+
+// ── 다이닝코드 정식 페이지 (/admin/diningcode) 전용 ─────────────────────────
+// 검색 결과 카드에 '등록됨' 배지를 띄우기 위해 vRid 들이 이미 DB 에 있는지 확인.
+// vRid 다수를 한 번에 조회하는 가벼운 GET — restaurants where (source='diningcode',
+// sourceId IN (ids)). 결과는 vRid → { restaurantId, canonicalId } map.
+
+export const DiningcodeRegisteredQuery = z.object({
+  // 콤마 분리 vRid 목록. URL 길이 안전 범위 — 한 페이지 카드 30개 기준 충분.
+  ids: z.string().min(1).max(4000),
+});
+export type DiningcodeRegisteredQueryType = z.infer<typeof DiningcodeRegisteredQuery>;
+
+export const DiningcodeRegisteredEntry = z.object({
+  vRid: z.string(),
+  restaurantId: z.string(),
+  canonicalId: z.string(),
+});
+export type DiningcodeRegisteredEntryType = z.infer<typeof DiningcodeRegisteredEntry>;
+
+export const DiningcodeRegisteredResult = z.object({
+  // 등록된 행만 포함 — vRid 가 결과에 없으면 미등록.
+  items: z.array(DiningcodeRegisteredEntry),
+});
+export type DiningcodeRegisteredResultType = z.infer<typeof DiningcodeRegisteredResult>;
+
+// ── 다이닝코드 일괄 저장 잡 (SSE) ───────────────────────────────────────────
+// 어드민 페이지에서 결과 카드 다수 선택 후 일괄 저장. 한 vRid 가 끝날 때마다
+// item 이벤트, 전부 끝나면 done. 패턴은 menu-grouping 잡과 거의 동일.
+
+export const DiningcodeBulkSaveJobInput = z.object({
+  // 최대 50개 — 다이닝코드 부담 의식해 보수적으로 잡음. 더 큰 batch 가 필요해지면
+  // 어댑터의 페이지 간 200ms 간격과 함께 재검토.
+  vRids: z.array(z.string().min(1).max(80)).min(1).max(50),
+});
+export type DiningcodeBulkSaveJobInputType = z.infer<typeof DiningcodeBulkSaveJobInput>;
+
+export const DiningcodeBulkSaveJobState = z.enum(['pending', 'running', 'done', 'failed']);
+export type DiningcodeBulkSaveJobStateType = z.infer<typeof DiningcodeBulkSaveJobState>;
+
+export const DiningcodeBulkSaveJobItemState = z.enum([
+  'pending',
+  'running',
+  'done',
+  'failed',
+  'skipped',
+]);
+export type DiningcodeBulkSaveJobItemStateType = z.infer<typeof DiningcodeBulkSaveJobItemState>;
+
+export const DiningcodeBulkSaveJobItem = z.object({
+  vRid: z.string(),
+  state: DiningcodeBulkSaveJobItemState,
+  // 성공 시 채워짐 — UI 에서 "등록된 가게 보기" link.
+  restaurantId: z.string().nullable(),
+  // 끌어온 리뷰 페이지 수 (성공 시).
+  fetchedPages: z.number().int().nullable(),
+  // 신규 저장된 리뷰 수 (dedup 후, 성공 시).
+  newReviewCount: z.number().int().nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+});
+export type DiningcodeBulkSaveJobItemType = z.infer<typeof DiningcodeBulkSaveJobItem>;
+
+export const DiningcodeBulkSaveJobSnapshot = z.object({
+  jobId: z.string(),
+  state: DiningcodeBulkSaveJobState,
+  total: z.number().int(),
+  doneCount: z.number().int(),
+  failedCount: z.number().int(),
+  skippedCount: z.number().int(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  items: z.array(DiningcodeBulkSaveJobItem),
+});
+export type DiningcodeBulkSaveJobSnapshotType = z.infer<typeof DiningcodeBulkSaveJobSnapshot>;
+
+// SSE per-event — snapshot/item/done. menu-grouping 과 동일 shape.
+export const DiningcodeBulkSaveJobItemEvent = z.object({
+  type: z.literal('item'),
+  jobId: z.string(),
+  item: DiningcodeBulkSaveJobItem,
+});
+export type DiningcodeBulkSaveJobItemEventType = z.infer<
+  typeof DiningcodeBulkSaveJobItemEvent
+>;
+
+export const DiningcodeBulkSaveJobDoneEvent = z.object({
+  type: z.literal('done'),
+  jobId: z.string(),
+  state: DiningcodeBulkSaveJobState,
+  finishedAt: z.string(),
+});
+export type DiningcodeBulkSaveJobDoneEventType = z.infer<
+  typeof DiningcodeBulkSaveJobDoneEvent
+>;

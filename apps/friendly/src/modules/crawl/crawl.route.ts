@@ -11,6 +11,10 @@ import {
   CrawlNaverPlaceInput,
   CrawlSearchQuery,
   CrawlSearchResult,
+  DiningcodeBulkSaveJobInput,
+  DiningcodeBulkSaveJobSnapshot,
+  DiningcodeRegisteredQuery,
+  DiningcodeRegisteredResult,
   DiningcodeSearchQuery,
   DiningcodeSearchResponse,
   DiningcodeShopData,
@@ -22,6 +26,10 @@ import {
 } from '@repo/api-contract';
 import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
+import {
+  diningcodeBulkSaveRegistry,
+  type BulkSaveJobEvent,
+} from './diningcode-bulk-save-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
 import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playwright.adapter.js';
 import { closeCatchtableShopBrowser } from './adapters/catchtable-shop.playwright.adapter.js';
@@ -216,6 +224,195 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: SaveDiningcodeShopResult },
     },
     handler: async (req) => service.saveDiningcodeShop(req.params.vRid),
+  });
+
+  // GET — 정식 /admin/diningcode 페이지의 등록 배지 조회. vRid 콤마 분리.
+  // 결과에 없는 vRid 는 미등록.
+  typed.get(Routes.Crawl.diningcodeRegistered, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: DiningcodeRegisteredQuery,
+      response: { 200: DiningcodeRegisteredResult },
+    },
+    handler: async (req) => {
+      const ids = req.query.ids
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      const items = await restaurants.findRegisteredDiningcodeByVRids(ids);
+      return { items };
+    },
+  });
+
+  // POST — 일괄 저장 잡 시작. body.vRids 만 받고 actor 단위로 한 번에 1개 잡만
+  // (단순화 — 동시 여러 잡이 다이닝코드 부담을 키우므로). 잡 자체는 백그라운드.
+  typed.post(Routes.Crawl.diningcodeBulkSaveJobs, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      body: DiningcodeBulkSaveJobInput,
+      response: { 200: DiningcodeBulkSaveJobSnapshot },
+    },
+    handler: async (req) => {
+      const actorId = req.user.userId;
+      // 중복 vRid 제거 — 클라이언트가 잘못 보냈을 때 같은 가게를 두 번 처리하지 않게.
+      const vRids = Array.from(new Set(req.body.vRids));
+      const { id } = diningcodeBulkSaveRegistry.create({ actorId, vRids });
+      void service.runDiningcodeBulkSave(id, vRids).catch((e) => {
+        app.log.error({ err: e, jobId: id }, '[diningcode-bulk-save] runner crashed');
+      });
+      const snapshot = diningcodeBulkSaveRegistry.get(id, actorId);
+      if (!snapshot) throw app.httpErrors.internalServerError('Failed to create job');
+      return snapshot;
+    },
+  });
+
+  // GET — 잡 스냅샷 (재접속/새로고침 직후 SSE 보다 먼저 호출).
+  typed.get(Routes.Crawl.diningcodeBulkSaveJob(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      response: { 200: DiningcodeBulkSaveJobSnapshot },
+    },
+    handler: async (req) => {
+      const snap = diningcodeBulkSaveRegistry.get(req.params.id, req.user.userId);
+      if (!snap) throw app.httpErrors.notFound('Job not found');
+      return snap;
+    },
+  });
+
+  // DELETE — 잡 취소. 진행 중이던 한 vRid 의 fetch 는 끝까지 기다리고(어댑터
+  // abort 미지원), 이후 vRid 들은 skipped 로 마무리.
+  typed.delete(Routes.Crawl.diningcodeBulkSaveJob(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+    },
+    handler: async (req, reply) => {
+      diningcodeBulkSaveRegistry.cancel(req.params.id, req.user.userId);
+      return reply.code(204).send();
+    },
+  });
+
+  // GET SSE — 잡 진행. menu-grouping 패턴과 동일 (snapshot/item/done event).
+  // token query 인증.
+  app.get(Routes.Crawl.diningcodeBulkSaveJobEvents(':id'), {
+    schema: { tags: ['admin'] },
+    handler: async (req, reply) => {
+      const params = req.params as { id: string };
+      const rawQuery = req.query as { token?: string };
+
+      let userId: string | null = null;
+      let role: 'USER' | 'ADMIN' | null = null;
+      try {
+        await req.jwtVerify();
+        userId = req.user.userId;
+        role = req.user.role;
+      } catch {
+        if (typeof rawQuery.token === 'string' && rawQuery.token.length > 0) {
+          try {
+            const payload = app.jwt.verify(rawQuery.token) as {
+              userId: string;
+              role: 'USER' | 'ADMIN';
+            };
+            userId = payload.userId;
+            role = payload.role;
+          } catch {
+            // fall through
+          }
+        }
+      }
+      if (!userId || role !== 'ADMIN') {
+        return reply.code(401).send({
+          statusCode: 401,
+          error: 'Unauthorized',
+          message: 'Invalid or missing token',
+        });
+      }
+
+      const snapshot = diningcodeBulkSaveRegistry.get(params.id, userId);
+      if (!snapshot) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Job not found',
+        });
+      }
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      const writeNamed = (name: string, data: unknown): void => {
+        try {
+          reply.raw.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+        } catch {
+          // socket already gone
+        }
+      };
+      const writeComment = (c: string): void => {
+        try {
+          reply.raw.write(`: ${c}\n\n`);
+        } catch {
+          // ignore
+        }
+      };
+
+      writeComment('connected');
+      writeNamed('snapshot', snapshot);
+
+      if (snapshot.state === 'done' || snapshot.state === 'failed') {
+        writeNamed('done', {
+          jobId: snapshot.jobId,
+          state: snapshot.state,
+          finishedAt: snapshot.finishedAt ?? new Date().toISOString(),
+        });
+        reply.raw.end();
+        return;
+      }
+
+      const onEvent = (event: BulkSaveJobEvent): void => {
+        if (event.type === 'item') {
+          writeNamed('item', { jobId: snapshot.jobId, item: event.item });
+        } else if (event.type === 'done') {
+          writeNamed('done', {
+            jobId: snapshot.jobId,
+            state: event.state,
+            finishedAt: event.finishedAt,
+          });
+        }
+      };
+      const unsubscribe = diningcodeBulkSaveRegistry.subscribe(
+        params.id,
+        userId,
+        onEvent,
+      );
+
+      const heartbeat = setInterval(() => writeComment('hb'), 15_000);
+      heartbeat.unref?.();
+
+      const cleanup = (): void => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        try {
+          reply.raw.end();
+        } catch {
+          // ignore
+        }
+      };
+      req.raw.on('close', cleanup);
+    },
   });
 
   // GET — 캐치테이블 AI 리뷰 종합 (한 줄 + 3~4 문장). 등록 검증 화면 핵심 정보.

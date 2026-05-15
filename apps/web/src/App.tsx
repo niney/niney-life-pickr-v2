@@ -8,6 +8,7 @@ import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
 import { AdminCatchtableShopPage } from './routes/admin/AdminCatchtableShopPage';
 import { AdminCatchtableTestPage } from './routes/admin/AdminCatchtableTestPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
+import { AdminDiningcodePage } from './routes/admin/AdminDiningcodePage';
 import { AdminDiningcodeShopPage } from './routes/admin/AdminDiningcodeShopPage';
 import { AdminDiningcodeTestPage } from './routes/admin/AdminDiningcodeTestPage';
 import { AdminDiscoverPage } from './routes/admin/AdminDiscoverPage';
@@ -65,6 +66,8 @@ export const App = () => {
         <Route path="catchtable-test/:shopRef" element={<AdminCatchtableShopPage />} />
         <Route path="diningcode-test" element={<AdminDiningcodeTestPage />} />
         <Route path="diningcode-test/:vRid" element={<AdminDiningcodeShopPage />} />
+        <Route path="diningcode" element={<AdminDiningcodePage />} />
+        <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="ai-test" element={<AdminAiTestPage />} />
         {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}

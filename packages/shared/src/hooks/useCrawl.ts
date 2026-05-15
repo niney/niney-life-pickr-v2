@@ -4,11 +4,22 @@ import type {
   CrawlEventType,
   CrawlNaverPlaceResultType,
   CrawlStageType,
+  DiningcodeBulkSaveJobInputType,
+  DiningcodeBulkSaveJobItemType,
+  DiningcodeBulkSaveJobSnapshotType,
+  DiningcodeBulkSaveJobStateType,
   NaverPlaceDataType,
   PersistedVisitorReviewType,
   VisitorReviewType,
 } from '@repo/api-contract';
-import { buildJobEventsUrl, crawlApi, type StartCrawlArgs } from '../api/crawl.api.js';
+import { ApiError } from '../api/client.js';
+import {
+  buildDiningcodeBulkSaveEventsUrl,
+  buildJobEventsUrl,
+  crawlApi,
+  type StartCrawlArgs,
+} from '../api/crawl.api.js';
+import { useActiveDiningcodeBulkSaveJobStore } from '../stores/activeDiningcodeBulkSaveJobStore.js';
 
 export const useStartCrawl = () => {
   const qc = useQueryClient();
@@ -263,6 +274,193 @@ const reducer = (state: CrawlStreamState, action: Action): CrawlStreamState => {
     default:
       return state;
   }
+};
+
+// ---- 다이닝코드 정식 페이지: 등록 배지 + 일괄 저장 잡 ─────────────────────
+
+// 검색 결과 vRid 들의 등록 여부 일괄 조회. 30s staleTime — 같은 페이지에서
+// 카드 hover 하다가 다시 검색해도 즉시 표시. vRids 비면 disabled.
+export const useDiningcodeRegistered = (vRids: string[]) => {
+  const key = vRids.join(',');
+  return useQuery({
+    queryKey: ['crawl', 'diningcode-registered', key],
+    queryFn: () => crawlApi.diningcodeRegistered(vRids),
+    enabled: vRids.length > 0,
+    staleTime: 30_000,
+  });
+};
+
+// 일괄 저장 잡 시작 — 성공 시 activeStore 에 jobId 박고, 진행 카드가 자동
+// 마운트되도록 setQueryData 로 초기 스냅샷 캐싱.
+export const useStartDiningcodeBulkSave = () => {
+  const qc = useQueryClient();
+  const setActive = useActiveDiningcodeBulkSaveJobStore((s) => s.setJobId);
+  return useMutation({
+    mutationFn: (input: DiningcodeBulkSaveJobInputType) =>
+      crawlApi.diningcodeBulkSaveStart(input),
+    onSuccess: (snap) => {
+      qc.setQueryData(['crawl', 'diningcode-bulk-save', snap.jobId], snap);
+      setActive(snap.jobId);
+    },
+  });
+};
+
+// 잡 취소 (DELETE). 응답 없음.
+export const useCancelDiningcodeBulkSave = () =>
+  useMutation({
+    mutationFn: (jobId: string) => crawlApi.diningcodeBulkSaveCancel(jobId),
+  });
+
+// 잡 상태 + 라이브 SSE 구독. menu-grouping 의 useGroupingJob 과 동일 구조.
+// 끝나면 EventSource 닫고 재연결 막음 + registered 캐시 무효화.
+export const useDiningcodeBulkSaveJob = (
+  jobId: string | null,
+): {
+  data: DiningcodeBulkSaveJobSnapshotType | null;
+  isLoading: boolean;
+  error: unknown;
+} => {
+  const qc = useQueryClient();
+  const clearActive = useActiveDiningcodeBulkSaveJobStore((s) => s.clear);
+  const queryKey = ['crawl', 'diningcode-bulk-save', jobId];
+
+  const queryRes = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (!jobId) return null;
+      try {
+        return await crawlApi.diningcodeBulkSaveGet(jobId);
+      } catch (e) {
+        if (e instanceof ApiError && e.statusCode === 404) {
+          clearActive();
+          return null;
+        }
+        throw e;
+      }
+    },
+    enabled: !!jobId,
+  });
+
+  const esRef = useRef<EventSource | null>(null);
+  const retryRef = useRef<number>(0);
+  const closedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!jobId) return undefined;
+    closedRef.current = false;
+
+    let cancelled = false;
+    const reconnectTimer: { id: ReturnType<typeof setTimeout> | null } = {
+      id: null,
+    };
+
+    const updateSnapshot = (
+      patcher: (
+        prev: DiningcodeBulkSaveJobSnapshotType | null,
+      ) => DiningcodeBulkSaveJobSnapshotType | null,
+    ): void => {
+      qc.setQueryData<DiningcodeBulkSaveJobSnapshotType | null>(queryKey, (prev) =>
+        patcher(prev ?? null),
+      );
+    };
+
+    const connect = async (): Promise<void> => {
+      if (cancelled || closedRef.current) return;
+      const url = await buildDiningcodeBulkSaveEventsUrl(jobId);
+      if (cancelled) return;
+      const es = new EventSource(url);
+      esRef.current = es;
+
+      es.addEventListener('snapshot', (e) => {
+        try {
+          const snap = JSON.parse(
+            (e as MessageEvent).data,
+          ) as DiningcodeBulkSaveJobSnapshotType;
+          updateSnapshot(() => snap);
+          retryRef.current = 0;
+        } catch {
+          // ignore malformed
+        }
+      });
+
+      es.addEventListener('item', (e) => {
+        try {
+          const payload = JSON.parse((e as MessageEvent).data) as {
+            jobId: string;
+            item: DiningcodeBulkSaveJobItemType;
+          };
+          updateSnapshot((prev) => {
+            if (!prev) return prev;
+            const items = prev.items.map((it) =>
+              it.vRid === payload.item.vRid ? payload.item : it,
+            );
+            const doneCount = items.filter((i) => i.state === 'done').length;
+            const failedCount = items.filter((i) => i.state === 'failed').length;
+            const skippedCount = items.filter((i) => i.state === 'skipped').length;
+            return { ...prev, items, doneCount, failedCount, skippedCount };
+          });
+        } catch {
+          // ignore
+        }
+      });
+
+      es.addEventListener('done', (e) => {
+        try {
+          const payload = JSON.parse((e as MessageEvent).data) as {
+            jobId: string;
+            state: DiningcodeBulkSaveJobStateType;
+            finishedAt: string;
+          };
+          updateSnapshot((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              state: payload.state,
+              finishedAt: payload.finishedAt,
+            };
+          });
+          closedRef.current = true;
+          es.close();
+          // 새로 등록된 가게가 생겼으니 등록 배지/리스트 캐시 무효화.
+          qc.invalidateQueries({ queryKey: ['crawl', 'diningcode-registered'] });
+          qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+          qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+        } catch {
+          // ignore
+        }
+      });
+
+      es.onerror = () => {
+        es.close();
+        if (cancelled || closedRef.current) return;
+        const backoff = Math.min(30_000, 1000 * 2 ** retryRef.current);
+        retryRef.current += 1;
+        reconnectTimer.id = setTimeout(() => {
+          void connect();
+        }, backoff);
+      };
+    };
+
+    void connect();
+
+    return () => {
+      cancelled = true;
+      closedRef.current = true;
+      if (reconnectTimer.id) clearTimeout(reconnectTimer.id);
+      esRef.current?.close();
+      esRef.current = null;
+      retryRef.current = 0;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
+  return {
+    data:
+      (queryRes.data as DiningcodeBulkSaveJobSnapshotType | null | undefined) ??
+      null,
+    isLoading: queryRes.isLoading,
+    error: queryRes.error,
+  };
 };
 
 // Manage an EventSource for the given jobId. Pass null to detach (e.g.,

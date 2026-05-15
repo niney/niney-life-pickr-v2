@@ -39,6 +39,7 @@ import {
   fetchCatchtableShopReviewOverview,
 } from './adapters/catchtable-shop.playwright.adapter.js';
 import { jobRegistry, type JobRegistry } from './job-registry.js';
+import { diningcodeBulkSaveRegistry } from './diningcode-bulk-save-registry.js';
 import {
   normalizeToPlaceId,
   RedirectFailedError,
@@ -323,6 +324,44 @@ export class CrawlService {
       queuedForAnalysis: newReviews.length,
       elapsedMs: Date.now() - startedAt,
     };
+  }
+
+  // 다이닝코드 일괄 저장 — 정식 /admin/diningcode 페이지의 일괄 저장 액션.
+  // vRid 들을 순차로 saveDiningcodeShop 호출 (직렬화 — 동시 호출 시 다이닝코드
+  // 부담 + 우리 DB 의 (source, sourceId) unique upsert 가 같은 vRid 두 번 들어
+  // 와도 안전하지만 SSE 이벤트 순서 직관 유지 목적). 잡 progress 는 registry 가
+  // 직접 publish 하므로 service 는 결과만 전달.
+  async runDiningcodeBulkSave(jobId: string, vRids: string[]): Promise<void> {
+    diningcodeBulkSaveRegistry.markRunning(jobId);
+    const abortSignal = diningcodeBulkSaveRegistry.abortSignal(jobId);
+
+    for (const vRid of vRids) {
+      if (abortSignal?.aborted) {
+        diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
+          skipped: true,
+          reason: '잡이 취소되어 시작 전 건너뜀',
+        });
+        continue;
+      }
+      diningcodeBulkSaveRegistry.markItemStart(jobId, vRid);
+      try {
+        const result = await this.saveDiningcodeShop(vRid);
+        diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
+          ok: true,
+          restaurantId: result.restaurantId,
+          fetchedPages: result.fetchedPages,
+          newReviewCount: result.newReviewCount,
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
+          ok: false,
+          errorCode: 'save_failed',
+          errorMessage: message,
+        });
+      }
+    }
+    diningcodeBulkSaveRegistry.markFinished(jobId);
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시

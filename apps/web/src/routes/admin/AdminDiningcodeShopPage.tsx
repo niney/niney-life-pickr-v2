@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
@@ -589,12 +589,18 @@ export const AdminDiningcodeShopPage = () => {
   const { vRid } = useParams<{ vRid: string }>();
   const { data, isLoading, isError, error } = useDiningcodeShop(vRid ?? null);
   const save = useSaveDiningcodeShop();
+  // 한 컴포넌트가 테스트(/admin/diningcode-test/:vRid)와 정식(/admin/diningcode/:vRid)
+  // 양쪽 라우트에서 마운트됨 — pathname 으로 어느 쪽 검색 화면으로 돌아갈지 결정.
+  const { pathname } = useLocation();
+  const backTo = pathname.startsWith('/admin/diningcode-test')
+    ? '/admin/diningcode-test'
+    : '/admin/diningcode';
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link to="/admin/diningcode-test">
+          <Link to={backTo}>
             <ArrowLeft className="size-4" />
             검색으로 돌아가기
           </Link>
