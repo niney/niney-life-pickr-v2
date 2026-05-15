@@ -446,9 +446,21 @@ export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
 // the UI without a follow-up GET. The multiplexed endpoint tags every event
 // with placeId so the client can demux when one connection serves many
 // restaurants.
-export const RestaurantSummaryReviewEvent = z.object({
+// SSE 이벤트의 공통 source 식별자 — 한 canonical 의 어느 source 한 줄에서
+// 발생했는지. placeId 는 source='naver' 일 때만 채워짐.
+export const RestaurantSummaryEventSource = z.object({
+  canonicalId: z.string(),
+  restaurantId: z.string(),
+  source: z.string(),
+  sourceId: z.string(),
+  placeId: z.string().nullable(),
+});
+export type RestaurantSummaryEventSourceType = z.infer<
+  typeof RestaurantSummaryEventSource
+>;
+
+export const RestaurantSummaryReviewEvent = RestaurantSummaryEventSource.extend({
   type: z.literal('review'),
-  placeId: z.string(),
   reviewId: z.string(),
   status: z.enum(['done', 'failed']),
   text: z.string().nullable(),
@@ -481,11 +493,11 @@ export const RestaurantSummaryProgress = z.object({
 });
 export type RestaurantSummaryProgressType = z.infer<typeof RestaurantSummaryProgress>;
 
-// SSE snapshot payload — same shape as the GET /summary-status response but
-// tagged with placeId for the multiplexed stream.
-export const RestaurantSummarySnapshotEvent = RestaurantSummaryProgress.extend({
-  placeId: z.string(),
-});
+// SSE snapshot payload — GET /summary-status 응답 + source 식별자. canonicalId
+// 로 list 행을 찾고, restaurantId 로 그 행의 source 한 줄을 찾아 갱신한다.
+export const RestaurantSummarySnapshotEvent = RestaurantSummaryProgress.merge(
+  RestaurantSummaryEventSource,
+);
 export type RestaurantSummarySnapshotEventType = z.infer<
   typeof RestaurantSummarySnapshotEvent
 >;

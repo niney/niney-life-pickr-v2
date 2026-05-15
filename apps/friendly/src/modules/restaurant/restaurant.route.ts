@@ -259,7 +259,11 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   app.get(Routes.Restaurant.summaryEvents, {
     schema: { tags: ['admin'] },
     handler: async (req, reply) => {
-      const rawQuery = req.query as { token?: string; placeId?: string | string[] };
+      const rawQuery = req.query as {
+        token?: string;
+        placeId?: string | string[];
+        canonicalId?: string | string[];
+      };
 
       let userId: string | null = null;
       let role: 'USER' | 'ADMIN' | null = null;
@@ -289,16 +293,69 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // Normalize placeId param to an array. Fastify's default query parser
-      // gives a string for ?placeId=X and an array for ?placeId=X&placeId=Y.
-      const placeIdsRaw = rawQuery.placeId;
-      const placeIds = Array.isArray(placeIdsRaw)
-        ? placeIdsRaw
-        : typeof placeIdsRaw === 'string' && placeIdsRaw.length > 0
-          ? [placeIdsRaw]
-          : [];
-      // Dedupe while preserving order.
-      const uniquePlaceIds = Array.from(new Set(placeIds));
+      // ?placeId=X 와 ?canonicalId=Y 둘 다 받아 union 으로 구독. placeId 는
+      // Naver source 단일 행, canonicalId 는 그 가게에 묶인 모든 source 행.
+      const toArr = (raw: string | string[] | undefined): string[] =>
+        Array.isArray(raw)
+          ? raw
+          : typeof raw === 'string' && raw.length > 0
+            ? [raw]
+            : [];
+      const placeIdsParam = toArr(rawQuery.placeId);
+      const canonicalIdsParam = Array.from(new Set(toArr(rawQuery.canonicalId)));
+
+      // canonicalId 들 → 묶인 Restaurant 모두 풀어서 (placeId 풀과 병합).
+      // 같은 Restaurant 가 placeId/canonicalId 양쪽으로 들어와도 restaurantId
+      // 키로 dedup.
+      const canonicalRows = canonicalIdsParam.length
+        ? await service.getRestaurantsByCanonicalIds(canonicalIdsParam)
+        : [];
+
+      const byRestaurantId = new Map<
+        string,
+        {
+          canonicalId: string;
+          restaurantId: string;
+          source: string;
+          sourceId: string;
+          placeId: string | null;
+          // 같은 행이 publish 받을 bus key. Naver=placeId, DC=dc:<vRid>.
+          busKey: string;
+        }
+      >();
+      for (const r of canonicalRows) {
+        const busKey = r.source === 'naver' ? r.placeId ?? '' : `dc:${r.sourceId}`;
+        if (!busKey) continue;
+        byRestaurantId.set(r.restaurantId, { ...r, busKey });
+      }
+      // placeId 파라미터로 들어온 행은 별도 조회 — 이미 canonical 로 풀려 들어와
+      // 있으면 skip.
+      if (placeIdsParam.length > 0) {
+        const placeRows = await app.prisma.restaurant.findMany({
+          where: { placeId: { in: placeIdsParam } },
+          select: {
+            id: true,
+            canonicalId: true,
+            source: true,
+            sourceId: true,
+            placeId: true,
+          },
+        });
+        for (const r of placeRows) {
+          if (byRestaurantId.has(r.id)) continue;
+          if (!r.placeId) continue;
+          byRestaurantId.set(r.id, {
+            canonicalId: r.canonicalId,
+            restaurantId: r.id,
+            source: r.source,
+            sourceId: r.sourceId,
+            placeId: r.placeId,
+            busKey: r.placeId,
+          });
+        }
+      }
+
+      const subscriptions = [...byRestaurantId.values()];
 
       reply.hijack();
       reply.raw.writeHead(200, {
@@ -325,48 +382,72 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
 
       writeComment('connected');
 
-      // Initial snapshot for every requested placeId so subscribers don't
-      // have to wait for the next progress tick to render. Skips ones that
-      // don't exist (the row may have been deleted between client subscribe
-      // and server connect — silently dropped, not 404).
-      for (const pid of uniquePlaceIds) {
+      // 초기 snapshot — 구독자가 첫 진행 tick 까지 안 기다리고 바로 렌더 가능.
+      for (const sub of subscriptions) {
         try {
-          const snap = await service.getSummaryProgress(pid);
-          if (snap) writeNamed('snapshot', { placeId: pid, ...snap });
+          const snap = await service.getSummaryProgressByRestaurantId(sub.restaurantId);
+          if (snap) {
+            writeNamed('snapshot', {
+              canonicalId: sub.canonicalId,
+              restaurantId: sub.restaurantId,
+              source: sub.source,
+              sourceId: sub.sourceId,
+              placeId: sub.placeId,
+              ...snap,
+            });
+          }
         } catch {
-          // ignore — bad placeId shouldn't kill the stream
+          // ignore — 단일 행 에러가 스트림 전체를 죽이면 안 됨
         }
       }
 
-      // One coalescing slot per placeId so a flurry of progress signals on
-      // one restaurant collapses into a single DB read + push. Reviews skip
-      // coalescing — their payload is already complete.
+      // restaurantId 단위 coalescing — 같은 가게에 progress signal 이 폭주해도
+      // DB 한 번만 읽어 한 번만 push. review 이벤트는 페이로드가 이미 완전해서
+      // coalescing 안 함.
       const pendingProgressPush = new Set<string>();
-      const pushSnapshotNow = async (placeId: string): Promise<void> => {
-        pendingProgressPush.delete(placeId);
+      const pushSnapshotNow = async (
+        sub: (typeof subscriptions)[number],
+      ): Promise<void> => {
+        pendingProgressPush.delete(sub.restaurantId);
         try {
-          const snap = await service.getSummaryProgress(placeId);
-          if (snap) writeNamed('snapshot', { placeId, ...snap });
+          const snap = await service.getSummaryProgressByRestaurantId(sub.restaurantId);
+          if (snap) {
+            writeNamed('snapshot', {
+              canonicalId: sub.canonicalId,
+              restaurantId: sub.restaurantId,
+              source: sub.source,
+              sourceId: sub.sourceId,
+              placeId: sub.placeId,
+              ...snap,
+            });
+          }
         } catch {
-          // keep the stream open — transient DB errors shouldn't drop it
+          // 일시적 DB 에러는 스트림 유지
         }
       };
       const makeOnSignal =
-        (placeId: string) =>
+        (sub: (typeof subscriptions)[number]) =>
         (signal: SummarySignal): void => {
           if (signal.type === 'review') {
-            writeNamed('review', { placeId, ...signal });
+            writeNamed('review', {
+              canonicalId: sub.canonicalId,
+              restaurantId: sub.restaurantId,
+              source: sub.source,
+              sourceId: sub.sourceId,
+              placeId: sub.placeId,
+              ...signal,
+            });
             return;
           }
-          if (pendingProgressPush.has(placeId)) return;
-          pendingProgressPush.add(placeId);
+          if (pendingProgressPush.has(sub.restaurantId)) return;
+          pendingProgressPush.add(sub.restaurantId);
           setImmediate(() => {
-            void pushSnapshotNow(placeId);
+            void pushSnapshotNow(sub);
           });
         };
 
-      const unsubscribers = uniquePlaceIds.map((pid) =>
-        summaryEventsBus.subscribe(pid, makeOnSignal(pid)),
+      const unsubscribers = subscriptions.map((sub) =>
+        summaryEventsBus.subscribe(sub.busKey, makeOnSignal(sub)),
       );
 
       const heartbeat = setInterval(() => writeComment('hb'), 15_000);

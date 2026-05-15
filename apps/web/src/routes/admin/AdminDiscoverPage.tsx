@@ -6,7 +6,7 @@ import {
   useActiveCrawlJobStore,
   useCrawlJobStream,
   useNaverSearch,
-  useRestaurantListSummaryEvents,
+  useRestaurantListSummaryEventsByPlaceIds,
   useRestaurantsPublic,
   useStartCrawl,
 } from '@repo/shared';
@@ -90,7 +90,7 @@ export const AdminDiscoverPage = () => {
   // 등록된 행마다 summary SSE 구독 — 진행 배지(pending/running/done/failed)
   // 가 크롤·요약 진행과 함께 라이브 갱신된다. 어드민 맛집 페이지와 동일한
   // 싱글톤 manager 라 연결은 1개로 멀티플렉싱.
-  useRestaurantListSummaryEvents(registeredItems.map((it) => it.placeId));
+  useRestaurantListSummaryEventsByPlaceIds(registeredItems.map((it) => it.placeId));
 
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   // 다중 선택은 페이지 레벨에서 보관 — 탭 전환·검색어 변경에도 유지.

@@ -417,12 +417,9 @@ export const AdminRestaurantsPage = () => {
       (it) => (it.summaryDone === 0 ? null : it.summaryDone),
     );
   })();
-  // SSE 구독 — Naver source 의 placeId 들만. DC 라이브 갱신은 PR2c.
-  const allNaverPlaceIds = rawItems
-    .flatMap((it) => it.sources)
-    .filter((s) => s.source === 'naver' && s.placeId !== null)
-    .map((s) => s.placeId!);
-  useRestaurantListSummaryEvents(allNaverPlaceIds);
+  // SSE 구독 — canonicalId 단위. 한 canonical 의 모든 source(Naver+DC) 가 한
+  // connection 으로 풀려 들어와 진행 배지가 출처 무관 라이브 갱신.
+  useRestaurantListSummaryEvents(rawItems.map((it) => it.canonicalId));
   // 활성 잡 — placeId 가 list 의 어느 행의 Naver source 와도 매칭 안 되면
   // 상단 newJobs 로. 매칭되면 그 행 밑에 panel 마운트.
   const placeIdToCanonical = new Map<string, CanonicalListItemType>();

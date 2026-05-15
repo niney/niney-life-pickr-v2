@@ -13,6 +13,7 @@ import type {
   RestaurantRankingQueryType,
   RestaurantSourceSummaryType,
   RestaurantSummaryProgressType,
+  RestaurantSummarySnapshotEventType,
 } from '@repo/api-contract';
 import { recomputeCanonicalAggregates } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
@@ -27,20 +28,20 @@ const isNotFound = (e: unknown): boolean =>
 // 동일 필드 셋으로 패치한다. 공개 list 의 queryKey 는 URL 파라미터마다 달라
 // 여러 인스턴스가 동시에 캐시에 살아 있을 수 있어 setQueriesData 로 prefix
 // 매칭한다.
+// SSE snapshot 이 도착했을 때 어드민 list / 공개 list 캐시를 patch.
+//   - 어드민 list: canonicalId 로 행 찾고, restaurantId 로 그 행의 source 갱신.
+//   - 공개 list: placeId 가 있을 때만(=Naver) 매칭해서 갱신.
 const patchSummaryInListCaches = (
   qc: QueryClient,
-  placeId: string,
-  snap: RestaurantSummaryProgressType,
+  snap: RestaurantSummarySnapshotEventType,
 ): void => {
-  // 어드민 list 는 canonical-그룹핑이라 sources[] 안의 매칭 source 를 갱신하고
-  // 통합 카운트(가중평균)를 재계산. 분석 평균은 source 단위 값이 따로 없어
-  // (SSE snapshot 에 안 옴) 기존 값을 유지 — 그 source 의 done 가중치만 바뀐다.
   qc.setQueryData<RestaurantListResultType | undefined>(
     ['restaurant', 'list'],
     (prev) => {
       if (!prev) return prev;
       const items = prev.items.map((item) => {
-        const idx = item.sources.findIndex((s) => s.placeId === placeId);
+        if (item.canonicalId !== snap.canonicalId) return item;
+        const idx = item.sources.findIndex((s) => s.restaurantId === snap.restaurantId);
         if (idx === -1) return item;
         const updatedSource: RestaurantSourceSummaryType = {
           ...item.sources[idx]!,
@@ -56,6 +57,9 @@ const patchSummaryInListCaches = (
       return { ...prev, items };
     },
   );
+  // 공개 list 는 placeId 가 key — DC 행은 공개 list 에 안 노출되므로 skip.
+  if (snap.placeId === null) return;
+  const placeId = snap.placeId;
   qc.setQueriesData<RestaurantPublicListResultType | undefined>(
     { queryKey: ['restaurant', 'public', 'list'] },
     (prev) => {
@@ -187,25 +191,25 @@ export const useRestaurantByPlaceId = (placeId: string | null) =>
 // every visible row's badges stay live, not just the ones with an active
 // crawl panel mounted. Side-effect only; the singleton SSE manager keeps
 // this to a single underlying connection regardless of count.
-export const useRestaurantListSummaryEvents = (placeIds: string[]): void => {
+// 어드민 발견(공개 list 기반) 화면용 — 공개 list 는 Naver 전용이라 placeId 만
+// 있다. canonical-기반 hook 과 별개 (kind: 'place' 로 구독).
+export const useRestaurantListSummaryEventsByPlaceIds = (placeIds: string[]): void => {
   const qc = useQueryClient();
-  // Stable string key so the effect doesn't re-run when the array identity
-  // changes but its contents don't (React Query refetch returning a new
-  // items[] with the same placeIds is the common case).
   const key = placeIds.join(',');
   useEffect(() => {
     if (placeIds.length === 0) return undefined;
     const unsubs = placeIds.map((placeId) =>
-      summarySseManager.subscribe(placeId, {
-        onSnapshot: (snap) => {
-          patchSummaryInListCaches(qc, placeId, snap);
+      summarySseManager.subscribe(
+        { kind: 'place', placeId },
+        {
+          onSnapshot: (snap) => {
+            patchSummaryInListCaches(qc, snap);
+          },
+          onReview: () => {
+            // 리스트는 review 본문 무관 — snapshot bump 가 카운트 갱신 처리.
+          },
         },
-        onReview: () => {
-          // List view doesn't render per-review text; ignore the per-row
-          // payload here — the snapshot bump that follows already updates
-          // the row's count badges, which is all we render.
-        },
-      }),
+      ),
     );
     return () => {
       for (const u of unsubs) u();
@@ -214,6 +218,39 @@ export const useRestaurantListSummaryEvents = (placeIds: string[]): void => {
   }, [key, qc]);
 };
 
+// 리스트 화면용 — 표시 중인 canonical 들의 SSE 구독. DC source 도 같이 풀려
+// 들어와 라이브 진행 배지가 모든 출처에서 갱신.
+export const useRestaurantListSummaryEvents = (canonicalIds: string[]): void => {
+  const qc = useQueryClient();
+  // 안정 키 — items[] 가 같은 canonicalId 들로 refetch 될 때 effect 가 다시
+  // 돌지 않게.
+  const key = canonicalIds.join(',');
+  useEffect(() => {
+    if (canonicalIds.length === 0) return undefined;
+    const unsubs = canonicalIds.map((canonicalId) =>
+      summarySseManager.subscribe(
+        { kind: 'canonical', canonicalId },
+        {
+          onSnapshot: (snap) => {
+            patchSummaryInListCaches(qc, snap);
+          },
+          onReview: () => {
+            // 리스트는 per-review 본문을 렌더하지 않음 — 다음 snapshot bump 가
+            // 카운트 배지 갱신을 처리.
+          },
+        },
+      ),
+    );
+    return () => {
+      for (const u of unsubs) u();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, qc]);
+};
+
+// 디테일 페이지 — placeId 단일 구독 (Naver 전용 라우트). 서버는 같은 SSE 로
+// 처리하므로 DC 행은 이 hook 으로는 안 오지만 onReview 이벤트가 canonical
+// 기반이라 같은 canonical 의 DC review 가 와도 placeId 가 다르면 patch 안 함.
 export const useRestaurantSummaryEvents = (
   placeId: string | null,
 ): { data: RestaurantSummaryProgressType | null } => {
@@ -223,16 +260,18 @@ export const useRestaurantSummaryEvents = (
   useEffect(() => {
     setData(null);
     if (!placeId) return undefined;
-    return summarySseManager.subscribe(placeId, {
+    return summarySseManager.subscribe(
+      { kind: 'place', placeId },
+      {
       onSnapshot: (snap) => {
         setData(snap);
-        // Patch the list cache so the matching row's "진행/완료" badges stay
-        // in sync as summaries finish. Without this, the list only refreshes
-        // on crawl `done`, leaving stale running counts when summaries
-        // continue past the crawl finish.
-        patchSummaryInListCaches(qc, placeId, snap);
+        // 리스트 캐시도 같이 갱신 — 디테일에서 진행이 발생하면 리스트 행 배지도
+        // 함께 stale 해소.
+        patchSummaryInListCaches(qc, snap);
       },
       onReview: (ev) => {
+        // 자신의 placeId 가 아닌 review (=같은 canonical 의 다른 source) 는 무시.
+        if (ev.placeId !== placeId) return;
         // Per-row patch — merge the new summary directly into the detail
         // cache. Without this we'd have to invalidate the whole detail query
         // (which carries every review body) every time one summary lands.

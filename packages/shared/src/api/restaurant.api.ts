@@ -73,13 +73,18 @@ export const restaurantApi = {
 // Build the SSE endpoint URL for live summary progress. EventSource can't
 // carry the auth header, so we tack the JWT onto the query string (same
 // pattern as the crawl jobEvents stream). The endpoint multiplexes any
-// number of placeIds over a single connection.
-export const buildSummaryEventsUrl = async (placeIds: string[]): Promise<string> => {
+// number of placeIds + canonicalIds over a single connection.
+// canonicalId 는 한 가게의 모든 source(Naver+DC) 를 한 번에 구독 — 리스트 화면용.
+// placeId 는 단일 Naver 행 — 디테일 페이지용 (기존 흐름 유지).
+export const buildSummaryEventsUrl = async (
+  keys: { placeIds?: string[]; canonicalIds?: string[] },
+): Promise<string> => {
   const cfg = getApiConfig();
   const token = (await cfg.getToken?.()) ?? '';
   const params = new URLSearchParams();
   if (token) params.set('token', token);
-  for (const pid of placeIds) params.append('placeId', pid);
+  for (const pid of keys.placeIds ?? []) params.append('placeId', pid);
+  for (const cid of keys.canonicalIds ?? []) params.append('canonicalId', cid);
   const qs = params.toString();
   const sep = qs ? '?' : '';
   return `${cfg.baseUrl}${Routes.Restaurant.summaryEvents}${sep}${qs}`;
