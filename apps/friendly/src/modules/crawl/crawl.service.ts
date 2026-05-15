@@ -1,6 +1,9 @@
 import type {
   CatchtableSearchQueryType,
   CatchtableSearchResponseType,
+  CatchtableShopDataType,
+  CatchtableShopMenusResponseType,
+  CatchtableShopReviewOverviewResponseType,
   CrawlEventType,
   CrawlErrorCodeType,
   CrawlModeType,
@@ -20,6 +23,11 @@ import {
 } from './adapters/naver-place.playwright.adapter.js';
 import { searchPlacesViaMapNaver } from './adapters/naver-search.http.adapter.js';
 import { searchCatchtablePlaces } from './adapters/catchtable-search.playwright.adapter.js';
+import {
+  fetchCatchtableShop,
+  fetchCatchtableShopMenus,
+  fetchCatchtableShopReviewOverview,
+} from './adapters/catchtable-shop.playwright.adapter.js';
 import { jobRegistry, type JobRegistry } from './job-registry.js';
 import {
   normalizeToPlaceId,
@@ -196,6 +204,25 @@ export class CrawlService {
       limit: query.limit,
       contractedOnly: query.contractedOnly,
     });
+  }
+
+  // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시
+  // 호출. 메뉴/리뷰는 lazy 라 어댑터가 best-effort 로 채운다.
+  async fetchCatchtableShopDetail(shopRef: string): Promise<CatchtableShopDataType> {
+    return fetchCatchtableShop(shopRef);
+  }
+
+  // 가게 메뉴 — 상세 페이지에서 "메뉴 불러오기" 클릭 시 호출. 별도 페이지 진입
+  // (/menuAllList) + display/v2/.../tabs/menu 응답 가로채기.
+  async fetchCatchtableShopMenus(shopRef: string): Promise<CatchtableShopMenusResponseType> {
+    return fetchCatchtableShopMenus(shopRef);
+  }
+
+  // AI 리뷰 종합 — 캐치테이블이 자체 생성한 가게 한 줄 + 3-4 문장.
+  async fetchCatchtableShopReviewOverview(
+    shopRef: string,
+  ): Promise<CatchtableShopReviewOverviewResponseType> {
+    return fetchCatchtableShopReviewOverview(shopRef);
   }
 
   cancel(jobId: string, actorId: string): boolean {

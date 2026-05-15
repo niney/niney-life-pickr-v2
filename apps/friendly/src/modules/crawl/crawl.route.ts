@@ -4,6 +4,9 @@ import { z } from 'zod';
 import {
   CatchtableSearchQuery,
   CatchtableSearchResponse,
+  CatchtableShopData,
+  CatchtableShopMenusResponse,
+  CatchtableShopReviewOverviewResponse,
   CrawlJobListResult,
   CrawlNaverPlaceInput,
   CrawlSearchQuery,
@@ -16,6 +19,7 @@ import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
 import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playwright.adapter.js';
+import { closeCatchtableShopBrowser } from './adapters/catchtable-shop.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
@@ -68,7 +72,11 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
 
   app.addHook('onClose', async () => {
     jobRegistry.abortAll();
-    await Promise.all([closeBrowser(), closeCatchtableSearchBrowser()]);
+    await Promise.all([
+      closeBrowser(),
+      closeCatchtableSearchBrowser(),
+      closeCatchtableShopBrowser(),
+    ]);
   });
 
   // POST — start a new crawl job (returns jobId immediately). Errors that
@@ -111,6 +119,44 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: CatchtableSearchResponse },
     },
     handler: async (req) => service.searchCatchtable(req.query),
+  });
+
+  // GET — 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드의 "상세 보기"
+  // 가 호출하는 단발 동기 라우트. 운영 등록 파이프라인에 연결할 때는 SSE 잡으로
+  // 승격될 수 있지만 현 단계는 검증 도구이므로 단순 GET.
+  typed.get(Routes.Crawl.catchtableShop(':shopRef'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ shopRef: z.string().min(1).max(80) }),
+      response: { 200: CatchtableShopData },
+    },
+    handler: async (req) => service.fetchCatchtableShopDetail(req.params.shopRef),
+  });
+
+  // GET — 가게 메뉴 (lazy). 상세 페이지에서 사용자가 "메뉴 불러오기" 클릭 시.
+  typed.get(Routes.Crawl.catchtableShopMenus(':shopRef'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ shopRef: z.string().min(1).max(80) }),
+      response: { 200: CatchtableShopMenusResponse },
+    },
+    handler: async (req) => service.fetchCatchtableShopMenus(req.params.shopRef),
+  });
+
+  // GET — 캐치테이블 AI 리뷰 종합 (한 줄 + 3~4 문장). 등록 검증 화면 핵심 정보.
+  typed.get(Routes.Crawl.catchtableShopReviewOverview(':shopRef'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ shopRef: z.string().min(1).max(80) }),
+      response: { 200: CatchtableShopReviewOverviewResponse },
+    },
+    handler: async (req) => service.fetchCatchtableShopReviewOverview(req.params.shopRef),
   });
 
   // GET — list jobs for the current user (running + recently finished).

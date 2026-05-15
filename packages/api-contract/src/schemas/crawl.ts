@@ -358,3 +358,174 @@ export const CatchtableSearchResponse = z.object({
   elapsedMs: z.number().int(),
 });
 export type CatchtableSearchResponseType = z.infer<typeof CatchtableSearchResponse>;
+
+// ── 캐치테이블 가게 상세 (가벼운 미리보기) ──────────────────────────────────
+// /ct/shop/{shopRef} 페이지 진입 시 자동 발사되는 응답을 가로채 정규화한다.
+// 메뉴·리뷰는 lazy 영역이라 가게/contractState 에 따라 비어 있을 수 있어 nullable.
+
+export const CatchtableShopImage = z.object({
+  thumbUrl: z.string().url(),
+  imgUrl: z.string().url(),
+  imgWidth: z.number().int().nullable(),
+  imgHeight: z.number().int().nullable(),
+});
+
+export const CatchtableShopSubway = z.object({
+  lines: z.array(z.string()),
+  station: z.string(),
+  distance: z.string(),
+});
+
+export const CatchtableShopReview = z.object({
+  averageScore: z.number().nullable(),
+  totalCount: z.number().int(),
+  blogReviewCount: z.number().int(),
+  foodScore: z.number().nullable(),
+  ambienceScore: z.number().nullable(),
+  serviceScore: z.number().nullable(),
+});
+
+export const CatchtableShopScheduleDay = z.object({
+  date: z.string().nullable(),
+  dayOfWeek: z.string().nullable(),
+  isClosed: z.boolean(),
+  startTime: z.string().nullable(),
+  endTime: z.string().nullable(),
+  breakStartTime: z.string().nullable(),
+  breakEndTime: z.string().nullable(),
+  lastOrderTime: z.string().nullable(),
+});
+
+export const CatchtableShopSchedule = z.object({
+  today: CatchtableShopScheduleDay.nullable(),
+  weekly: z.array(
+    z.object({
+      dayOfWeek: z.string(),
+      isClosed: z.boolean(),
+      startTime: z.string().nullable(),
+      endTime: z.string().nullable(),
+    }),
+  ),
+});
+
+export const CatchtableShopPriceRange = z.object({
+  lunchMin: z.number().nullable(),
+  lunchMax: z.number().nullable(),
+  dinnerMin: z.number().nullable(),
+  dinnerMax: z.number().nullable(),
+  lunchText: z.string().nullable(),
+  dinnerText: z.string().nullable(),
+});
+
+export const CatchtableShopMenu = z.object({
+  name: z.string(),
+  price: z.string().nullable(),
+  description: z.string().nullable(),
+  imageUrl: z.string().url().nullable(),
+});
+
+export const CatchtableShopReviewSample = z.object({
+  authorName: z.string().nullable(),
+  score: z.number().nullable(),
+  body: z.string(),
+  visitedAt: z.string().nullable(),
+});
+
+export const CatchtableShopRelatedKeyword = z.object({
+  label: z.string(),
+  type: z.string(),
+});
+
+export const CatchtableShopMenuBoard = z.object({
+  thumbUrl: z.string().url(),
+  imageUrl: z.string().url(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  type: z.string().nullable(),
+  regDate: z.string().nullable(),
+});
+
+export const CatchtableShopMenuItem = z.object({
+  foodMenuSeq: z.number().int().nullable(),
+  name: z.string(),
+  minPrice: z.string().nullable(),
+  maxPrice: z.string().nullable(),
+  description: z.string().nullable(),
+  isRecommended: z.boolean(),
+  isNew: z.boolean(),
+  isRepresentative: z.boolean(),
+  imageUrl: z.string().url().nullable(),
+});
+
+export const CatchtableShopMenuDetailInfo = z.object({
+  isKidsMenu: z.boolean().nullable(),
+  kidsMenuGuide: z.string().nullable(),
+  isAllergyMenuSubstitute: z.boolean().nullable(),
+  allergyMenuSubstituteGuide: z.string().nullable(),
+  isVeganMenuSubstitute: z.boolean().nullable(),
+  veganMenuSubstituteGuide: z.string().nullable(),
+  isAlcoholOrderRequired: z.boolean(),
+  corkChargeGuide: z.string().nullable(),
+  lastMenuUpdateDateTime: z.string().nullable(),
+});
+
+export const CatchtableShopMenusResponse = z.object({
+  shopRef: z.string(),
+  menuBoards: z.array(CatchtableShopMenuBoard),
+  menus: z.array(CatchtableShopMenuItem),
+  menuDetailInfo: CatchtableShopMenuDetailInfo.nullable(),
+  fetchedAt: z.string(),
+  elapsedMs: z.number().int(),
+  source: z.literal('playwright'),
+});
+export type CatchtableShopMenusResponseType = z.infer<typeof CatchtableShopMenusResponse>;
+
+// 캐치테이블 AI 가 만든 가게 한 줄 요약 + 3~4 문장 특징. 등록 검증 시 가게가
+// 어떤 곳인지 한눈에 보는 용도로 매우 유용.
+export const CatchtableShopReviewOverviewResponse = z.object({
+  shopRef: z.string(),
+  title: z.string().nullable(),
+  sentences: z.array(z.string()),
+  latestUpdateDate: z.string().nullable(),
+  fetchedAt: z.string(),
+  elapsedMs: z.number().int(),
+  source: z.literal('playwright'),
+});
+export type CatchtableShopReviewOverviewResponseType = z.infer<typeof CatchtableShopReviewOverviewResponse>;
+
+export const CatchtableShopData = z.object({
+  shopRef: z.string(),
+  alias: z.string().nullable(),
+  shopName: z.string(),
+  shopNameEn: z.string().nullable(),
+  category: z.string().nullable(),
+  landName: z.string().nullable(),
+  serviceDesc: z.string().nullable(),
+  address: z.string().nullable(),
+  addressDetail: z.string().nullable(),
+  lat: z.number().nullable(),
+  lon: z.number().nullable(),
+  subways: z.array(CatchtableShopSubway),
+  phone: z.string().nullable(),
+  images: z.array(CatchtableShopImage),
+  priceRange: CatchtableShopPriceRange,
+  review: CatchtableShopReview,
+  schedule: CatchtableShopSchedule.nullable(),
+  disableDays: z.array(z.string()),
+  awardItems: z.array(z.string()),
+  relatedKeywords: z.array(CatchtableShopRelatedKeyword),
+  bookmarkCount: z.number().int().nullable(),
+  mainService: z.string().nullable(),
+  contractState: z.string().nullable(),
+  exposeCatchtable: z.boolean(),
+  useOnline: z.boolean(),
+  useCatchtable: z.boolean(),
+  // lazy. 비가맹점이거나 영역 트리거 실패면 null.
+  menus: z.array(CatchtableShopMenu).nullable(),
+  reviewSamples: z.array(CatchtableShopReviewSample).nullable(),
+  rawSourceUrl: z.string().url(),
+  fetchedAt: z.string(),
+  elapsedMs: z.number().int(),
+  source: z.literal('playwright'),
+});
+export type CatchtableShopDataType = z.infer<typeof CatchtableShopData>;

@@ -5,6 +5,7 @@ import { PublicLayout } from './components/PublicLayout';
 import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
 import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
 import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
+import { AdminCatchtableShopPage } from './routes/admin/AdminCatchtableShopPage';
 import { AdminCatchtableTestPage } from './routes/admin/AdminCatchtableTestPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
 import { AdminDiscoverPage } from './routes/admin/AdminDiscoverPage';
@@ -59,6 +60,7 @@ export const App = () => {
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />
         <Route path="crawl-test/:jobId" element={<AdminCrawlTestPage />} />
         <Route path="catchtable-test" element={<AdminCatchtableTestPage />} />
+        <Route path="catchtable-test/:shopRef" element={<AdminCatchtableShopPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="ai-test" element={<AdminAiTestPage />} />
         {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}

@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   Beaker,
   ChevronRight,
   Code2,
   ExternalLink,
+  Eye,
   Loader2,
   Search,
   Star,
@@ -62,7 +64,6 @@ const ResultCard = ({ item }: { item: CatchtableSearchResultType }) => (
     <div className="flex gap-4 p-4 sm:gap-5 sm:p-5">
       <div className="size-24 shrink-0 overflow-hidden rounded-md bg-muted sm:size-28">
         {item.imageUrl ? (
-          // 캐치테이블 ugc CDN — 핫링크 금지 referer 미적용. 안전하게 no-referrer.
           <img
             src={item.imageUrl}
             alt=""
@@ -116,14 +117,28 @@ const ResultCard = ({ item }: { item: CatchtableSearchResultType }) => (
             ))}
           </div>
         )}
-        <div className="mt-auto pt-1 text-[11px] text-muted-foreground/80">
-          <span className="font-mono">{item.shopRef}</span>
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+          <span className="truncate font-mono text-[11px] text-muted-foreground/80">
+            {item.shopRef}
+          </span>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1 px-2 text-xs"
+          >
+            <Link to={`/admin/catchtable-test/${item.shopRef}`}>
+              <Eye className="size-3.5" />
+              상세 보기
+            </Link>
+          </Button>
         </div>
       </div>
     </div>
   </Card>
 );
 
+// ── 모달 컴포넌트 제거됨 — 상세는 /admin/catchtable-test/:shopRef 라우트로 분리 ──
 const Pager = ({
   hasMore,
   hasPrev,

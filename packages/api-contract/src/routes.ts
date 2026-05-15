@@ -41,6 +41,16 @@ export const Crawl = {
   // 캐치테이블 자체 API 를 통한 키워드 검색. /admin/catchtable-test 페이지가
   // 어떻게 수집되는지 검증할 때 사용.
   catchtableSearch: `${API_PREFIX}/admin/crawl/catchtable/search`,
+  // 캐치테이블 가게 상세 (가벼운 미리보기) — 검색 결과 카드에서 "상세 보기"
+  // 클릭 시 같은 페이지의 모달에서 펼침.
+  catchtableShop: (shopRef: string) =>
+    `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}`,
+  // 캐치테이블 가게 메뉴 — lazy 페치 (상세 페이지에서 "메뉴 불러오기" 클릭 시).
+  catchtableShopMenus: (shopRef: string) =>
+    `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}/menus`,
+  // 캐치테이블 AI 가 만든 가게 리뷰 종합 (한 줄 + 3-4 문장).
+  catchtableShopReviewOverview: (shopRef: string) =>
+    `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}/review-overview`,
 } as const;
 
 export const Restaurant = {

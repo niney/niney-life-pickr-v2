@@ -65,6 +65,35 @@ export const useCatchtableSearch = ({
     staleTime: 60_000,
   });
 
+// 캐치테이블 가게 상세 — shopRef 가 null/undefined 면 disabled. 한 가게당
+// 한 번 가져오면 staleTime 5분 유지 (검증 도구라 자주 invalidate 안 함).
+export const useCatchtableShop = (shopRef: string | null) =>
+  useQuery({
+    queryKey: ['crawl', 'catchtable-shop', shopRef],
+    queryFn: () => crawlApi.catchtableShop(shopRef!),
+    enabled: Boolean(shopRef),
+    staleTime: 5 * 60_000,
+  });
+
+// 가게 메뉴 — lazy fetch. UI 버튼 클릭 시점에 enabled true 가 되도록 설계.
+// 한 번 가져오면 10분 신선 유지 (메뉴는 자주 안 바뀜).
+export const useCatchtableShopMenus = (shopRef: string | null, enabled: boolean) =>
+  useQuery({
+    queryKey: ['crawl', 'catchtable-shop-menus', shopRef],
+    queryFn: () => crawlApi.catchtableShopMenus(shopRef!),
+    enabled: Boolean(shopRef) && enabled,
+    staleTime: 10 * 60_000,
+  });
+
+// AI 리뷰 종합 — 상세 페이지 진입 시 자동 fetch (간단한 정보라 비용 적음).
+export const useCatchtableShopReviewOverview = (shopRef: string | null) =>
+  useQuery({
+    queryKey: ['crawl', 'catchtable-shop-review-overview', shopRef],
+    queryFn: () => crawlApi.catchtableShopReviewOverview(shopRef!),
+    enabled: Boolean(shopRef),
+    staleTime: 10 * 60_000,
+  });
+
 // ---- Streaming hook ---------------------------------------------------------
 
 export type CrawlStreamStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error';

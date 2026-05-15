@@ -1,6 +1,9 @@
 import {
   Routes,
   type CatchtableSearchResponseType,
+  type CatchtableShopDataType,
+  type CatchtableShopMenusResponseType,
+  type CatchtableShopReviewOverviewResponseType,
   type CrawlJobListResultType,
   type CrawlModeType,
   type CrawlSearchResultType,
@@ -59,6 +62,20 @@ export const crawlApi = {
       `${Routes.Crawl.catchtableSearch}?${params.toString()}`,
     );
   },
+
+  // 캐치테이블 가게 상세 (가벼운 미리보기). shopRef 만 받음.
+  catchtableShop: (shopRef: string) =>
+    apiFetch<CatchtableShopDataType>(Routes.Crawl.catchtableShop(shopRef)),
+
+  catchtableShopMenus: (shopRef: string) =>
+    apiFetch<CatchtableShopMenusResponseType>(
+      Routes.Crawl.catchtableShopMenus(shopRef),
+    ),
+
+  catchtableShopReviewOverview: (shopRef: string) =>
+    apiFetch<CatchtableShopReviewOverviewResponseType>(
+      Routes.Crawl.catchtableShopReviewOverview(shopRef),
+    ),
 };
 
 // Build the SSE endpoint URL with the auth token in the query string. The
