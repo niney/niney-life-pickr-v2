@@ -60,7 +60,7 @@ const CanonicalCard = ({
           return (
             <Link
               key={s.restaurantId}
-              to={`/admin/diningcode-test/${s.sourceId}`}
+              to={`/admin/diningcode/${s.sourceId}`}
               className="inline-flex"
               target="_blank"
               rel="noreferrer"

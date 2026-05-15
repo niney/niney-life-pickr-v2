@@ -151,7 +151,7 @@ const RestaurantRow = ({
             const chip =
               s.source === 'diningcode' ? (
                 <Link
-                  to={`/admin/diningcode-test/${s.sourceId}`}
+                  to={`/admin/diningcode/${s.sourceId}`}
                   onClick={(e) => e.stopPropagation()}
                   className="inline-flex"
                 >
