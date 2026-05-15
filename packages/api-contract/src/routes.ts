@@ -135,6 +135,9 @@ export const Canonical = {
     `${API_PREFIX}/admin/canonical/proposals/${id}/accept`,
   proposalReject: (id: string) =>
     `${API_PREFIX}/admin/canonical/proposals/${id}/reject`,
+  // canonical 행 통째로 삭제 — DC만 등록된 행도 지울 수 있게 placeId 기반 라우트와
+  // 별개로 신설. FK Cascade 로 Restaurant/review/summary/proposal 모두 따라간다.
+  delete: (id: string) => `${API_PREFIX}/admin/canonical/${id}`,
 } as const;
 
 // AI 분석 운영(메뉴 분류 batch) 화면용. 식당별 라우트는 Restaurant.menusGroup/

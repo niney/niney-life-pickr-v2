@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   CanonicalCandidatesResult,
+  CanonicalDeleteResult,
   CanonicalDismissSuggestionResult,
   CanonicalMergeInput,
   CanonicalMergeResult,
@@ -131,6 +132,24 @@ const canonicalRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       try {
         return await proposalService.reject(req.params.id);
+      } catch (e) {
+        return mapError(e);
+      }
+    },
+  });
+
+  typed.delete(Routes.Canonical.delete(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      response: { 200: CanonicalDeleteResult },
+    },
+    handler: async (req) => {
+      try {
+        const result = await service.deleteCanonical(req.params.id);
+        return { ok: true as const, ...result };
       } catch (e) {
         return mapError(e);
       }

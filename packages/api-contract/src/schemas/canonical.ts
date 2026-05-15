@@ -160,3 +160,12 @@ export const CanonicalProposalRejectResult = z.object({
 export type CanonicalProposalRejectResultType = z.infer<
   typeof CanonicalProposalRejectResult
 >;
+
+// canonical 행 통째로 삭제 결과. FK Cascade 로 Restaurant 들 + 그 review/summary
+// 까지 동시 삭제. 어드민이 확인 후 호출.
+export const CanonicalDeleteResult = z.object({
+  ok: z.literal(true),
+  deletedRestaurantCount: z.number().int(),
+  deletedReviewCount: z.number().int(),
+});
+export type CanonicalDeleteResultType = z.infer<typeof CanonicalDeleteResult>;

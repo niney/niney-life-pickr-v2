@@ -94,6 +94,20 @@ export const useRejectCanonicalProposal = () => {
   });
 };
 
+// canonical 행 통째로 삭제. 매달린 모든 Restaurant + review/summary cascade.
+// list/proposals/candidates 캐시 모두 무효화.
+export const useDeleteCanonical = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (canonicalId: string) => canonicalApi.delete(canonicalId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['canonical', 'candidates'] });
+      qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+    },
+  });
+};
+
 // canonical 분리. 잘못 묶었을 때 한 source 만 떼어내 새 canonical 로.
 export const useSplitCanonical = () => {
   const qc = useQueryClient();

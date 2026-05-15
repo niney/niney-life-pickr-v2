@@ -275,6 +275,34 @@ export class CanonicalService {
     };
   }
 
+  // canonical 행 통째로 삭제. 매달린 모든 Restaurant + 그 review/summary 가 FK
+  // Cascade 로 함께 사라진다. 어드민 UI 가 두 단계 확인 후 호출.
+  async deleteCanonical(canonicalId: string): Promise<{
+    deletedRestaurantCount: number;
+    deletedReviewCount: number;
+  }> {
+    const row = await this.prisma.canonicalRestaurant.findUnique({
+      where: { id: canonicalId },
+      select: {
+        id: true,
+        restaurants: {
+          select: {
+            id: true,
+            _count: { select: { visitorReviews: true } },
+          },
+        },
+      },
+    });
+    if (!row) throw new CanonicalError('canonical not found', 'NOT_FOUND');
+    const deletedRestaurantCount = row.restaurants.length;
+    const deletedReviewCount = row.restaurants.reduce(
+      (acc, r) => acc + r._count.visitorReviews,
+      0,
+    );
+    await this.prisma.canonicalRestaurant.delete({ where: { id: canonicalId } });
+    return { deletedRestaurantCount, deletedReviewCount };
+  }
+
   // list 응답 위쪽 알림 줄 (suggestion) 영구 닫기. 풀 후보 패널은 별개 — 어드민이
   // 직접 "병합" 버튼을 누르면 candidates API 가 다시 후보를 계산한다.
   async dismissSuggestion(canonicalId: string): Promise<void> {

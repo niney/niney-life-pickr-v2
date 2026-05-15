@@ -19,7 +19,7 @@ import {
   ApiError,
   useActiveCrawlJobStore,
   useCancelCrawl,
-  useDeleteRestaurant,
+  useDeleteCanonical,
   useDismissCanonicalSuggestion,
   useRestaurantList,
   useRestaurantListSummaryEvents,
@@ -282,9 +282,16 @@ const RestaurantRow = ({
               size="sm"
               onClick={stop(onDelete)}
               disabled={deleting}
+              title={
+                item.sources.length > 1
+                  ? `${item.sources.length}개 출처 모두 삭제됩니다`
+                  : undefined
+              }
             >
               {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-              정말 삭제
+              {item.sources.length > 1
+                ? `정말 삭제 (${item.sources.length}개 출처)`
+                : '정말 삭제'}
             </Button>
             <Button
               type="button"
@@ -302,9 +309,9 @@ const RestaurantRow = ({
             variant="ghost"
             size="sm"
             onClick={stop(onDelete)}
-            disabled={busy || !naverSource}
+            disabled={busy}
             aria-label="삭제"
-            title="삭제"
+            title="삭제 — 매달린 모든 출처/리뷰가 함께 삭제됩니다"
           >
             <Trash2 />
           </Button>
@@ -319,7 +326,9 @@ export const AdminRestaurantsPage = () => {
   const listQuery = useRestaurantList();
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
-  const deleteMutation = useDeleteRestaurant();
+  // 행 = canonical 통째로 삭제 — DC만 등록된 행도 지울 수 있게 canonicalId 기반.
+  // FK Cascade 로 매달린 Restaurant·review·summary·proposal 모두 같이 사라짐.
+  const deleteMutation = useDeleteCanonical();
   // DC 가게 한 건 재수집(+AI 분석 큐잉). useMutation 한 인스턴스가 모든 행의
   // 클릭을 처리 — variables 가 vRid 이므로 어떤 행이 in-flight 인지 식별.
   const saveDcMutation = useSaveDiningcodeShop();
@@ -338,21 +347,22 @@ export const AdminRestaurantsPage = () => {
   const addJob = useActiveCrawlJobStore((s) => s.add);
   const removeJob = useActiveCrawlJobStore((s) => s.remove);
   const resolveJobPlaceId = useActiveCrawlJobStore((s) => s.resolvePlaceId);
-  // 삭제 확인 상태 — 삭제 액션이 Naver source 한정이라 placeId 로 유지.
-  const [confirmDeletePlaceId, setConfirmDeletePlaceId] = useState<string | null>(null);
+  // 삭제 확인 상태 — canonical 단위 삭제로 통일. sources 가 여러 개여도 한 번에 처리.
+  const [confirmDeleteCanonicalId, setConfirmDeleteCanonicalId] =
+    useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'recent' | 'satisfaction' | 'positive' | 'negativeRatio'>(
     'recent',
   );
 
-  const handleDelete = async (placeId: string) => {
-    if (confirmDeletePlaceId !== placeId) {
-      setConfirmDeletePlaceId(placeId);
+  const handleDelete = async (canonicalId: string) => {
+    if (confirmDeleteCanonicalId !== canonicalId) {
+      setConfirmDeleteCanonicalId(canonicalId);
       return;
     }
     setError(null);
     try {
-      await deleteMutation.mutateAsync(placeId);
-      setConfirmDeletePlaceId(null);
+      await deleteMutation.mutateAsync(canonicalId);
+      setConfirmDeleteCanonicalId(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to delete');
     }
@@ -637,10 +647,8 @@ export const AdminRestaurantsPage = () => {
           ) : (
             <ul className="space-y-3">
               {items.map((item) => {
-                const naverSource = findNaverSource(item);
                 const dcSource = findDiningcodeSource(item);
                 const rowJob = jobByCanonical.get(item.canonicalId) ?? null;
-                const naverPlaceId = naverSource?.placeId ?? null;
                 const dcSaving =
                   saveDcMutation.isPending &&
                   dcSource !== null &&
@@ -706,18 +714,15 @@ export const AdminRestaurantsPage = () => {
                       busy={!!rowJob}
                       deleting={
                         deleteMutation.isPending &&
-                        naverPlaceId !== null &&
-                        deleteMutation.variables === naverPlaceId
+                        deleteMutation.variables === item.canonicalId
                       }
-                      confirmingDelete={
-                        naverPlaceId !== null && confirmDeletePlaceId === naverPlaceId
-                      }
+                      confirmingDelete={confirmDeleteCanonicalId === item.canonicalId}
                       dcSaving={dcSaving}
                       mergeOpen={mergeOpen}
                       splittingRestaurantId={splittingRestaurantId}
                       onAction={handleRowAction(item)}
-                      onDelete={() => naverPlaceId && handleDelete(naverPlaceId)}
-                      onCancelDelete={() => setConfirmDeletePlaceId(null)}
+                      onDelete={() => handleDelete(item.canonicalId)}
+                      onCancelDelete={() => setConfirmDeleteCanonicalId(null)}
                       onSaveDiningcode={handleSaveDiningcode}
                       onToggleMerge={() =>
                         setMergeOpenCanonicalId(mergeOpen ? null : item.canonicalId)

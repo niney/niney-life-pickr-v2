@@ -1,6 +1,7 @@
 import {
   Routes,
   type CanonicalCandidatesResultType,
+  type CanonicalDeleteResultType,
   type CanonicalDismissSuggestionResultType,
   type CanonicalMergeInputType,
   type CanonicalMergeResultType,
@@ -58,4 +59,9 @@ export const canonicalApi = {
       Routes.Canonical.proposalReject(proposalId),
       { method: 'POST' },
     ),
+
+  delete: (canonicalId: string) =>
+    apiFetch<CanonicalDeleteResultType>(Routes.Canonical.delete(canonicalId), {
+      method: 'DELETE',
+    }),
 };
