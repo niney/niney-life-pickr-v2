@@ -650,6 +650,232 @@ describe('Public restaurant routes', () => {
     expect(ids.indexOf(newer.placeId)).toBeLessThan(ids.indexOf(older.placeId));
   });
 
+  it('GET /restaurants/public — list row sums DC sibling reviews + summary counts', async () => {
+    // Naver 단독 1행 + Naver+DC 묶인 1행. 둘 다 q 한 단어로 잡히게 이름 짓고
+    // 응답에서 placeId 매핑해 카운트 비교.
+    const naverOnly = await seedRestaurant({
+      name: 'merge-pub-solo',
+      firstCrawledAt: new Date(2026, 0, 1),
+    });
+    // Naver 단독 행에 분석된 리뷰 1건 (done/positive) — bucket 검증용.
+    const soloRv = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: naverOnly.id,
+        authorName: 'solo',
+        rating: 5,
+        body: 'solo',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${naverOnly.placeId}-solo-1`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: {
+        reviewId: soloRv.id,
+        status: 'done',
+        text: 'ok',
+        sentiment: 'positive',
+        sentimentScore: 0.5,
+        satisfactionScore: 4,
+        finishedAt: new Date(),
+      },
+    });
+
+    // Naver + DC 묶인 canonical.
+    const merged = await seedRestaurant({
+      name: 'merge-pub-pair',
+      firstCrawledAt: new Date(2026, 0, 1),
+    });
+    // Naver 쪽 리뷰 2건 (1 done positive, 1 pending).
+    const n1 = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: merged.id,
+        authorName: 'n1',
+        rating: 5,
+        body: 'n1',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${merged.placeId}-n1`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: {
+        reviewId: n1.id,
+        status: 'done',
+        text: 'ok',
+        sentiment: 'positive',
+        sentimentScore: 0.6,
+        satisfactionScore: 5,
+        finishedAt: new Date(),
+      },
+    });
+    const n2 = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: merged.id,
+        authorName: 'n2',
+        rating: null,
+        body: 'n2',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${merged.placeId}-n2`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: { reviewId: n2.id, status: 'pending' },
+    });
+
+    // 같은 canonical 에 묶인 DC 형제 + 리뷰 3건 (2 done — 1 positive, 1 negative; 1 running).
+    const mergedRow = await app.prisma.restaurant.findUnique({
+      where: { id: merged.id },
+      select: { canonicalId: true },
+    });
+    const dcVRid = `${PUB_PREFIX}dc-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+    const dcRestaurant = await app.prisma.restaurant.create({
+      data: {
+        source: 'diningcode',
+        sourceId: dcVRid,
+        placeId: null,
+        name: 'merge-pub-pair-dc',
+        category: '한식',
+        address: null,
+        phone: null,
+        rating: 4.6,
+        reviewCount: 3,
+        rawSourceUrl: `https://www.diningcode.com/profile.php?rid=${dcVRid}`,
+        snapshotJson: '{}',
+        canonicalId: mergedRow!.canonicalId,
+      },
+      select: { id: true },
+    });
+    const d1 = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: dcRestaurant.id,
+        externalId: 'dc:rv:1',
+        authorName: 'd1',
+        rating: 5,
+        body: 'd1',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${merged.placeId}-d1`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: {
+        reviewId: d1.id,
+        status: 'done',
+        text: 'ok',
+        sentiment: 'positive',
+        sentimentScore: 0.7,
+        satisfactionScore: 5,
+        finishedAt: new Date(),
+      },
+    });
+    const d2 = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: dcRestaurant.id,
+        externalId: 'dc:rv:2',
+        authorName: 'd2',
+        rating: 2,
+        body: 'd2',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${merged.placeId}-d2`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: {
+        reviewId: d2.id,
+        status: 'done',
+        text: 'bad',
+        sentiment: 'negative',
+        sentimentScore: -0.6,
+        satisfactionScore: 2,
+        finishedAt: new Date(),
+      },
+    });
+    const d3 = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: dcRestaurant.id,
+        externalId: 'dc:rv:3',
+        authorName: 'd3',
+        rating: null,
+        body: 'd3',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${merged.placeId}-d3`,
+      },
+      select: { id: true },
+    });
+    await app.prisma.reviewSummary.create({
+      data: { reviewId: d3.id, status: 'running' },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/restaurants/public?q=merge-pub',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: Array<{
+        placeId: string;
+        totalReviews: number;
+        summaryPending: number;
+        summaryRunning: number;
+        summaryDone: number;
+        summaryFailed: number;
+        analyzedCount: number;
+        positiveCount: number;
+        negativeCount: number;
+        neutralCount: number;
+        avgSentimentScore: number | null;
+        avgSatisfactionScore: number | null;
+      }>;
+    };
+    const solo = body.items.find((i) => i.placeId === naverOnly.placeId);
+    const pair = body.items.find((i) => i.placeId === merged.placeId);
+    expect(solo).toBeDefined();
+    expect(pair).toBeDefined();
+
+    // Naver 단독 행은 영향 없음 — Naver 리뷰 1건, done 1건만 카운트.
+    expect(solo!.totalReviews).toBe(1);
+    expect(solo!.summaryDone).toBe(1);
+    expect(solo!.positiveCount).toBe(1);
+
+    // 머지된 행은 Naver(2) + DC(3) = 5건 합산.
+    expect(pair!.totalReviews).toBe(5);
+    // Naver done 1 + DC done 2 = 3.
+    expect(pair!.summaryDone).toBe(3);
+    expect(pair!.summaryPending).toBe(1);
+    expect(pair!.summaryRunning).toBe(1);
+    expect(pair!.analyzedCount).toBe(3);
+    // 긍정 = Naver done positive 1 + DC done positive 1 = 2.
+    expect(pair!.positiveCount).toBe(2);
+    // 부정 = DC done negative 1.
+    expect(pair!.negativeCount).toBe(1);
+    // avg = (0.6 + 0.7 + (-0.6)) / 3 = 0.2333…
+    expect(pair!.avgSentimentScore).toBeCloseTo(0.7 / 3, 5);
+    // avg sat = (5 + 5 + 2) / 3 = 4.0
+    expect(pair!.avgSatisfactionScore).toBeCloseTo(12 / 3, 5);
+
+    // afterEach 가 PUB_PREFIX 만 청소하므로 DC sibling 은 명시 정리.
+    await app.prisma.restaurant.deleteMany({
+      where: { source: 'diningcode', sourceId: dcVRid },
+    });
+  });
+
   it('GET /restaurants/public/:placeId — 404 for unknown', async () => {
     const res = await app.inject({
       method: 'GET',
