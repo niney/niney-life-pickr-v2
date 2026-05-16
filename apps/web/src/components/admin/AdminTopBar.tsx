@@ -13,6 +13,7 @@ interface TitleRule {
 // 더 구체적인 prefix 가 먼저 매칭되도록 순서 유지 — '/admin' 은 가장 마지막.
 const TITLE_RULES: TitleRule[] = [
   { match: (p) => p.startsWith('/admin/restaurants'), label: '맛집' },
+  { match: (p) => p.startsWith('/admin/auto-discover'), label: '맛집 자동 발견' },
   { match: (p) => p.startsWith('/admin/discover'), label: '맛집 발견' },
   { match: (p) => p.startsWith('/admin/analytics'), label: 'AI 분석 관리' },
   { match: (p) => p.startsWith('/admin/crawl-test'), label: '크롤링 테스트' },

@@ -11,6 +11,7 @@ import {
   Sparkles,
   Utensils,
   UtensilsCrossed,
+  Wand2,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/admin', label: '홈', icon: Home, end: true },
   { to: '/admin/discover', label: '맛집 발견', icon: Compass },
+  { to: '/admin/auto-discover', label: '맛집 자동 발견', icon: Wand2 },
   { to: '/admin/restaurants', label: '맛집', icon: UtensilsCrossed },
   { to: '/admin/diningcode', label: '다이닝코드 크롤링', icon: Utensils },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },

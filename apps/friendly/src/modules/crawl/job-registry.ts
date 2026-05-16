@@ -16,7 +16,7 @@ import type {
 // EVENT_BUFFER_MAX as a safety belt against runaway adapters.
 
 const FINISHED_TTL_MS = 5 * 60_000;
-export const MAX_CONCURRENT_PER_ACTOR = 3;
+export const MAX_CONCURRENT_PER_ACTOR = 5;
 const EVENT_BUFFER_MAX = 1000;
 
 export type JobSubscriber = (event: CrawlEventType) => void;

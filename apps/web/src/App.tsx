@@ -5,6 +5,7 @@ import { PublicLayout } from './components/PublicLayout';
 import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
 import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
 import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
+import { AdminAutoDiscoverPage } from './routes/admin/AdminAutoDiscoverPage';
 import { AdminCatchtableShopPage } from './routes/admin/AdminCatchtableShopPage';
 import { AdminCatchtableTestPage } from './routes/admin/AdminCatchtableTestPage';
 import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
@@ -58,6 +59,7 @@ export const App = () => {
       >
         <Route index element={<AdminHomePage />} />
         <Route path="discover" element={<AdminDiscoverPage />} />
+        <Route path="auto-discover" element={<AdminAutoDiscoverPage />} />
         <Route path="restaurants" element={<AdminRestaurantsPage />} />
         <Route path="restaurants/:placeId" element={<AdminRestaurantDetailPage />} />
         <Route path="crawl-test" element={<AdminCrawlTestPage />} />

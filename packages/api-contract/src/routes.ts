@@ -176,6 +176,16 @@ export const Analytics = {
   categoryTree: `${API_PREFIX}/admin/analytics/category-tree`,
 } as const;
 
+// 맛집 자동 발견 — 키워드 한 줄 + 카테고리 칩 + targetCount 받아 AI 키워드 8 개
+// 생성 → 다중 검색 → dedupe → 그룹 5 개씩 직렬 크롤(=Naver Place 등록) 까지.
+// 잡 상태는 SSE 로 push.
+export const AutoDiscover = {
+  jobs: `${API_PREFIX}/admin/auto-discover/jobs`,
+  job: (id: string) => `${API_PREFIX}/admin/auto-discover/jobs/${id}`,
+  jobEvents: (id: string) =>
+    `${API_PREFIX}/admin/auto-discover/jobs/${id}/events`,
+} as const;
+
 export const Ai = {
   complete: `${API_PREFIX}/admin/ai/complete`,
   completeBatch: `${API_PREFIX}/admin/ai/complete-batch`,
