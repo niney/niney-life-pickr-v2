@@ -677,6 +677,35 @@ export class SummaryService {
   }
 }
 
+// 부팅 직후 호출. ReviewSummary 의 status='pending'|'running' 행은 직전
+// 인스턴스가 큐잉/실행 중 비정상 종료되며 남긴 stale — 단일 Fastify
+// 인스턴스 가정(CLAUDE.md) 하에서 부팅 시점엔 실행 중인 요약 작업이 없다.
+// 그대로 두면 어드민 목록의 summaryPending/summaryRunning 합산이 영원히
+// "진행중" 으로 남는다. failed + errorCode='server_restart' 로 마킹하면
+// 기존 재요약 경로(backfillForRestaurant → failed 행을 다시 pending 으로
+// upsert) 와 자연스럽게 호환된다.
+export const cleanupStaleReviewSummaries = async (
+  prisma: PrismaClient,
+  log?: FastifyBaseLogger | null,
+): Promise<number> => {
+  const res = await prisma.reviewSummary.updateMany({
+    where: { status: { in: ['pending', 'running'] } },
+    data: {
+      status: 'failed',
+      errorCode: 'server_restart',
+      errorMessage: 'Server restarted while summary was in progress',
+      finishedAt: new Date(),
+    },
+  });
+  if (res.count > 0) {
+    log?.warn(
+      { count: res.count },
+      '[summary] cleaned up stale pending/running rows on boot',
+    );
+  }
+  return res.count;
+};
+
 // LLM 출력에서 분석 JSON을 추출. 이 함수가 처리해야 하는 이상 케이스:
 //   1. 코드펜스: ```json { ... } ```
 //   2. reasoning 모델의 <think>...</think> 블록 (gpt-oss, deepseek-r1 등)

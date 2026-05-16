@@ -13,7 +13,7 @@ import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import { LLMUpstreamError } from '../ai/adapters/llm-provider.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
-import { SummaryService } from './summary.service.js';
+import { SummaryService, cleanupStaleReviewSummaries } from './summary.service.js';
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -354,5 +354,59 @@ describe('SummaryService', () => {
     });
     expect(row?.status).toBe('pending');
     expect(row?.text).toBeNull();
+  });
+
+  describe('cleanupStaleReviewSummaries', () => {
+    it('marks pending/running rows as failed with server_restart errorCode, leaves done/failed untouched', async () => {
+      const { reviewIds } = await seed(['a', 'b', 'c', 'd']);
+      const [rPending, rRunning, rDone, rFailed] = reviewIds as [string, string, string, string];
+
+      await app.prisma.reviewSummary.create({
+        data: { reviewId: rPending, status: 'pending', startedAt: new Date() },
+      });
+      await app.prisma.reviewSummary.create({
+        data: { reviewId: rRunning, status: 'running', startedAt: new Date() },
+      });
+      await app.prisma.reviewSummary.create({
+        data: {
+          reviewId: rDone,
+          status: 'done',
+          text: 'done text',
+          finishedAt: new Date(),
+        },
+      });
+      await app.prisma.reviewSummary.create({
+        data: {
+          reviewId: rFailed,
+          status: 'failed',
+          errorCode: 'parse_failed',
+          errorMessage: 'prev failure',
+          finishedAt: new Date(),
+        },
+      });
+
+      const count = await cleanupStaleReviewSummaries(app.prisma);
+      expect(count).toBe(2);
+
+      const after = await app.prisma.reviewSummary.findMany({
+        where: { reviewId: { in: reviewIds } },
+      });
+      const byId = new Map(after.map((r) => [r.reviewId, r]));
+
+      expect(byId.get(rPending)?.status).toBe('failed');
+      expect(byId.get(rPending)?.errorCode).toBe('server_restart');
+      expect(byId.get(rPending)?.finishedAt).not.toBeNull();
+      expect(byId.get(rRunning)?.status).toBe('failed');
+      expect(byId.get(rRunning)?.errorCode).toBe('server_restart');
+      expect(byId.get(rDone)?.status).toBe('done');
+      expect(byId.get(rDone)?.text).toBe('done text');
+      expect(byId.get(rFailed)?.status).toBe('failed');
+      expect(byId.get(rFailed)?.errorCode).toBe('parse_failed');
+    });
+
+    it('returns 0 when nothing is stale', async () => {
+      const count = await cleanupStaleReviewSummaries(app.prisma);
+      expect(count).toBe(0);
+    });
   });
 });

@@ -1,9 +1,11 @@
 import { buildApp } from './app.js';
 import { env } from './config/env.js';
+import { cleanupStaleReviewSummaries } from './modules/summary/summary.service.js';
 
 const start = async (): Promise<void> => {
   try {
     const app = await buildApp();
+    await cleanupStaleReviewSummaries(app.prisma, app.log);
     await app.listen({ port: env.PORT, host: env.HOST });
 
     const shutdown = async (signal: string): Promise<void> => {
