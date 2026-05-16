@@ -42,6 +42,17 @@ interface Subscribers {
   reviews: Set<ReviewHandler>;
 }
 
+// Heartbeat/idle-timeout 파라미터.
+// 서버는 5s 마다 'heartbeat' named event 를 보낸다. 어떤 event 든 받으면
+// lastEventAt 을 갱신. watchdog 이 3s 마다 비교해 15s 이상 침묵이면 죽음으로
+// 간주하고 강제 close + backoff 재연결. backoff 는 1.5s 부터 시작해 두 배씩
+// 늘리되 60s 로 cap, 무한 재시도 — 어드민이 페이지를 떠나면 unsubscribe 가
+// 알아서 timer 를 정리한다.
+const IDLE_TIMEOUT_MS = 15_000;
+const WATCHDOG_INTERVAL_MS = 3_000;
+const BACKOFF_MIN_MS = 1_500;
+const BACKOFF_MAX_MS = 60_000;
+
 class SummarySseManager {
   private es: EventSource | null = null;
   private connectedKeyIds: string[] = [];
@@ -52,6 +63,12 @@ class SummarySseManager {
   private subs = new Map<string, Subscribers>();
   private reconnectScheduled = false;
   private connectGen = 0;
+  // Idle 감지 + 재연결 상태. lastEventAt 은 onopen 또는 어떤 event 도착 시
+  // 갱신. errorReconnect 는 onerror 또는 idle timeout 양쪽에서 진입.
+  private lastEventAt = 0;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  private errorReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private errorReconnectAttempts = 0;
 
   subscribe(
     key: SubscriptionKey,
@@ -115,9 +132,60 @@ class SummarySseManager {
       this.es?.close();
       this.es = null;
       this.connectedKeyIds = [];
+      this.stopWatchdog();
+      this.clearErrorReconnect();
       return;
     }
     this.connect(desired);
+  }
+
+  private touch(): void {
+    this.lastEventAt = Date.now();
+  }
+
+  private startWatchdog(): void {
+    this.stopWatchdog();
+    this.watchdogTimer = setInterval(() => {
+      if (Date.now() - this.lastEventAt < IDLE_TIMEOUT_MS) return;
+      this.handleConnectionLost();
+    }, WATCHDOG_INTERVAL_MS);
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
+  private handleConnectionLost(): void {
+    // 죽음 단정. 현재 EventSource 강제 close → backoff 재연결 예약.
+    this.stopWatchdog();
+    this.es?.close();
+    this.es = null;
+    this.connectedKeyIds = [];
+    this.scheduleErrorReconnect();
+  }
+
+  private scheduleErrorReconnect(): void {
+    if (this.errorReconnectTimer) return;
+    if (this.subs.size === 0) return;
+    const attempt = this.errorReconnectAttempts;
+    this.errorReconnectAttempts += 1;
+    const delay = Math.min(BACKOFF_MAX_MS, BACKOFF_MIN_MS * 2 ** attempt);
+    this.errorReconnectTimer = setTimeout(() => {
+      this.errorReconnectTimer = null;
+      if (this.subs.size === 0) return;
+      this.connect([...this.subs.keys()].sort());
+    }, delay);
+  }
+
+  private clearErrorReconnect(): void {
+    if (this.errorReconnectTimer) {
+      clearTimeout(this.errorReconnectTimer);
+      this.errorReconnectTimer = null;
+    }
+    this.errorReconnectAttempts = 0;
   }
 
   private connect(keyIds: string[]): void {
@@ -125,6 +193,13 @@ class SummarySseManager {
     this.es?.close();
     this.es = null;
     this.connectedKeyIds = keyIds;
+    // 새 connect 시작 — 진행 중이던 watchdog/error reconnect 정리. 그쪽이
+    // 또 connect 를 호출해 중복 EventSource 가 떠다닐 위험 차단.
+    this.stopWatchdog();
+    if (this.errorReconnectTimer) {
+      clearTimeout(this.errorReconnectTimer);
+      this.errorReconnectTimer = null;
+    }
 
     const placeIds: string[] = [];
     const canonicalIds: string[] = [];
@@ -138,6 +213,27 @@ class SummarySseManager {
       const es = new EventSource(url);
       this.es = es;
 
+      es.onopen = () => {
+        // 정상 연결 — backoff attempts 리셋, lastEventAt 초기화, watchdog 시작.
+        this.errorReconnectAttempts = 0;
+        this.touch();
+        this.startWatchdog();
+      };
+
+      es.onerror = () => {
+        // 브라우저 자동 재연결은 readyState 를 CONNECTING 으로 두기만 하고
+        // 침묵하는 경우가 있어 신뢰 못 한다. 명시 close 후 backoff 재연결로
+        // 우리가 직접 관리. (idle watchdog 도 같은 handleConnectionLost 로 수렴)
+        if (gen !== this.connectGen) return;
+        this.handleConnectionLost();
+      };
+
+      es.addEventListener('heartbeat', () => {
+        // backend 가 5초마다 보내는 명시적 keepalive. payload 는 무시 — 도착
+        // 했다는 사실 자체가 신호.
+        this.touch();
+      });
+
       es.addEventListener('snapshot', (e: MessageEvent) => {
         if (typeof e.data !== 'string' || e.data.length === 0) return;
         let parsed: RestaurantSummarySnapshotEventType;
@@ -146,6 +242,7 @@ class SummarySseManager {
         } catch {
           return;
         }
+        this.touch();
         // prev 는 같은 키 직전 snapshot — dispatch 전에 캡처해 핸들러에 함께
         // 넘긴다 (delta 계산용). 그런 다음에야 캐시를 새 값으로 교체.
         const prevByCanon = this.lastSnapshotByCanonical.get(parsed.canonicalId) ?? null;
@@ -172,6 +269,7 @@ class SummarySseManager {
         } catch {
           return;
         }
+        this.touch();
         const canonEntry = this.subs.get(`canonical:${parsed.canonicalId}`);
         if (canonEntry) for (const h of canonEntry.reviews) h(parsed);
         if (parsed.placeId) {

@@ -450,7 +450,15 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
         summaryEventsBus.subscribe(sub.busKey, makeOnSignal(sub)),
       );
 
-      const heartbeat = setInterval(() => writeComment('hb'), 15_000);
+      // 명시적 named heartbeat — SSE comment(`: hb`)는 클라이언트 EventSource
+      // 콜백으로 노출되지 않아 idle 감지에 못 쓴다. 5초 주기는 reverse proxy
+      // idle 정리(보통 30~60s)보다 충분히 짧고, 클라이언트의 15s idle timeout
+      // 과 3:1 비율로 한두 번 누락은 흡수하면서 3회 연속 누락이면 죽음으로
+      // 판단 가능한 지점.
+      const heartbeat = setInterval(
+        () => writeNamed('heartbeat', { at: new Date().toISOString() }),
+        5_000,
+      );
       heartbeat.unref?.();
 
       const cleanup = (): void => {
