@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Loader2,
+  MapPin,
   PanelLeftOpen,
   PanelRightOpen,
   Play,
@@ -373,12 +374,9 @@ const SearchResultList = ({
           <li
             key={it.placeId}
             data-place-id={it.placeId}
-            onMouseEnter={() => onHover(it.placeId)}
-            onMouseLeave={() => onHover(null)}
             onClick={() => onSelect(it.placeId)}
             className={cn(
-              'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors',
-              hoveredPlaceId === it.placeId && 'bg-muted/40',
+              'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
               selectedPlaceId === it.placeId && 'bg-primary/10',
             )}
           >
@@ -392,13 +390,19 @@ const SearchResultList = ({
               className="mt-1 size-4 shrink-0 cursor-pointer disabled:cursor-not-allowed"
             />
             <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-center gap-2">
                 <span className="truncate font-medium">{it.name}</span>
                 {registered && (
                   <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
                     등록됨
                   </span>
                 )}
+                <ShowOnMapButton
+                  className="ml-auto"
+                  active={hoveredPlaceId === it.placeId}
+                  label={it.name}
+                  onClick={() => onHover(it.placeId)}
+                />
               </div>
               <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                 {it.category && <span>{it.category}</span>}
@@ -442,49 +446,54 @@ const RegisteredList = ({
           <li
             key={it.placeId}
             data-place-id={it.placeId}
-            onMouseEnter={() => onHover(it.placeId)}
-            onMouseLeave={() => onHover(null)}
             onClick={() => onSelect(it.placeId)}
             className={cn(
-              'cursor-pointer px-3 py-2.5 text-sm transition-colors',
-              hoveredPlaceId === it.placeId && 'bg-muted/40',
+              'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
               selectedPlaceId === it.placeId && 'bg-primary/10',
             )}
           >
-            <div className="flex items-baseline gap-2">
-              <span className="truncate font-medium">{it.name}</span>
-              {it.category && (
-                <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
-              )}
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {it.rating !== null && <Badge variant="secondary">★ {it.rating}</Badge>}
-              <Badge variant="outline">리뷰 {it.totalReviews}개</Badge>
-              <Badge variant="outline">
-                요약 {it.summaryDone}/{it.totalReviews}
-              </Badge>
-              {inFlight > 0 && (
-                <Badge variant="secondary" className="inline-flex items-center gap-1">
-                  <Loader2 className="size-3 animate-spin" /> {inFlight}건 진행
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium">{it.name}</span>
+                {it.category && (
+                  <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
+                )}
+                <ShowOnMapButton
+                  className="ml-auto"
+                  active={hoveredPlaceId === it.placeId}
+                  label={it.name}
+                  onClick={() => onHover(it.placeId)}
+                />
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {it.rating !== null && <Badge variant="secondary">★ {it.rating}</Badge>}
+                <Badge variant="outline">리뷰 {it.totalReviews}개</Badge>
+                <Badge variant="outline">
+                  요약 {it.summaryDone}/{it.totalReviews}
                 </Badge>
-              )}
-              {it.summaryFailed > 0 && (
-                <ReanalyzeFailedBadge placeId={it.placeId} count={it.summaryFailed} />
-              )}
-              {it.avgSatisfactionScore !== null && (
-                <Badge variant="outline">😊 {it.avgSatisfactionScore.toFixed(1)}/5</Badge>
-              )}
-              {it.positiveCount + it.negativeCount + it.neutralCount > 0 && (
-                <span className="text-[11px]">
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    +{it.positiveCount}
+                {inFlight > 0 && (
+                  <Badge variant="secondary" className="inline-flex items-center gap-1">
+                    <Loader2 className="size-3 animate-spin" /> {inFlight}건 진행
+                  </Badge>
+                )}
+                {it.summaryFailed > 0 && (
+                  <ReanalyzeFailedBadge placeId={it.placeId} count={it.summaryFailed} />
+                )}
+                {it.avgSatisfactionScore !== null && (
+                  <Badge variant="outline">😊 {it.avgSatisfactionScore.toFixed(1)}/5</Badge>
+                )}
+                {it.positiveCount + it.negativeCount + it.neutralCount > 0 && (
+                  <span className="text-[11px]">
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      +{it.positiveCount}
+                    </span>
+                    <span className="mx-1 text-muted-foreground">/</span>
+                    <span className="text-rose-600 dark:text-rose-400">
+                      -{it.negativeCount}
+                    </span>
                   </span>
-                  <span className="mx-1 text-muted-foreground">/</span>
-                  <span className="text-rose-600 dark:text-rose-400">
-                    -{it.negativeCount}
-                  </span>
-                </span>
-              )}
+                )}
+              </div>
             </div>
           </li>
         );
@@ -492,6 +501,39 @@ const RegisteredList = ({
     </ul>
   );
 };
+
+// 행 지도 버튼. 식당명 라인 우측에 배치 — 클릭 시 onHover 로 hoveredPlaceId
+// 를 갱신해 DiscoverMap 의 highlightedId effect 가 flyTo 를 발사한다. 행 본문
+// 클릭(상세 열기)과 분리하기 위해 stopPropagation. active 일 때는 텍스트색을
+// primary 로 띄워 어느 행이 마지막으로 지도와 동기화됐는지 표시.
+const ShowOnMapButton = ({
+  active,
+  label,
+  onClick,
+  className,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  className?: string;
+}) => (
+  <button
+    type="button"
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
+    aria-label={`${label} 지도에서 보기`}
+    title="지도에서 보기"
+    className={cn(
+      'inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+      active && 'text-primary',
+      className,
+    )}
+  >
+    <MapPin className="size-4" />
+  </button>
+);
 
 // 외부 시스템(DOM 스크롤) 동기화 — 지도 마커 클릭 등으로 selectedPlaceId 가
 // 화면 밖 항목을 가리키면 자동으로 보이게 한다. items 도 deps 에 넣어서 막
