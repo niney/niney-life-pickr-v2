@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type {
+  PublicDiningcodeScoreDetailType,
   PublicVisitorReviewType,
   RestaurantInsightsType,
   RestaurantPublicDetailType,
@@ -242,7 +243,82 @@ const SatisfactionChip = ({
   </span>
 );
 
-export const ReviewCard = ({ r }: { r: PublicVisitorReviewType }) => {
+// 다이닝코드 scoreDetail 의 5점 만점 카테고리별 분포 바.
+// 홈 탭의 별점 영역과 정보 탭 모두에서 사용 — 컴팩트 표시.
+// 모든 값이 null/0 이면 컴포넌트 자체가 null 반환.
+export const ScoreDistributionBars = ({
+  detail,
+  showHeader = true,
+}: {
+  detail: PublicDiningcodeScoreDetailType;
+  showHeader?: boolean;
+}) => {
+  const items: Array<{ label: string; value: number | null }> = [
+    { label: '맛', value: detail.taste },
+    { label: '서비스', value: detail.service },
+    { label: '가격', value: detail.price },
+    { label: '청결', value: detail.clean },
+  ];
+  const visible = items.filter((it) => it.value !== null && it.value > 0);
+  if (visible.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {showHeader && (
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="font-semibold text-foreground">다이닝코드 점수 분포</span>
+          {detail.reviewTotal > 0 && (
+            <span className="text-muted-foreground tabular-nums">
+              리뷰 {detail.reviewTotal.toLocaleString()}
+            </span>
+          )}
+        </div>
+      )}
+      <ul className="space-y-1">
+        {visible.map((it) => (
+          <li key={it.label} className="flex items-center gap-2 text-xs">
+            <span className="w-12 text-muted-foreground">{it.label}</span>
+            <div className="relative h-2 flex-1 overflow-hidden rounded bg-muted">
+              <div
+                className="absolute inset-y-0 left-0 bg-primary/70"
+                style={{
+                  width: `${Math.min(100, ((it.value ?? 0) / 5) * 100)}%`,
+                }}
+              />
+            </div>
+            <span className="w-8 text-right font-medium tabular-nums">
+              {(it.value ?? 0).toFixed(1)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+// 출처 배지 — 두 출처가 섞인 리스트에서 한 줄로 출처 식별. 카드 또는 행의
+// 헤더에 작게 배치. 단일 출처만 있을 때 호출자가 표시 여부를 결정.
+export const SourceBadge = ({ source }: { source: 'naver' | 'diningcode' }) => (
+  <span
+    className={cn(
+      'inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[10px] font-medium leading-4',
+      source === 'naver'
+        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+        : 'border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
+    )}
+  >
+    {source === 'naver' ? '네이버' : '다이닝코드'}
+  </span>
+);
+
+export const ReviewCard = ({
+  r,
+  showSource = false,
+}: {
+  r: PublicVisitorReviewType;
+  // 머지 응답이 두 출처를 모두 가질 때만 true — 한 출처만 있는 경우엔 배지가
+  // 시각적 노이즈가 되므로 호출자가 숨긴다.
+  showSource?: boolean;
+}) => {
   // 이미지 lightbox 인덱스. null 이면 닫힘. 카드별 독립 상태라 다른 리뷰
   // 카드의 lightbox 와 간섭하지 않는다.
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -253,6 +329,7 @@ export const ReviewCard = ({ r }: { r: PublicVisitorReviewType }) => {
     <div className="rounded-md border p-2.5">
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
+          {showSource && <SourceBadge source={r.source} />}
           <span>{authorLabel}</span>
           {/* 만족도 칩 — 이모지 + LLM 환산 별점(1~5). sentiment 색을 칩 배경에도
               실어 카드 좌측 컬러바와 짝이 맞게. 모바일 0.1초 스캔용. */}

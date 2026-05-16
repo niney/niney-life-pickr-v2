@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { CanonicalSuggestion } from './canonical.js';
-import { BlogReview, MenuItem, NaverPlaceData, VisitorReview } from './crawl.js';
+import {
+  BlogReview,
+  DiningcodeShopBusinessHour,
+  MenuItem,
+  NaverPlaceData,
+  VisitorReview,
+} from './crawl.js';
 
 export const ReviewSummaryStatus = z.enum(['pending', 'running', 'done', 'failed']);
 export type ReviewSummaryStatusType = z.infer<typeof ReviewSummaryStatus>;
@@ -418,6 +424,11 @@ export type PublicReviewAnalysisType = z.infer<typeof PublicReviewAnalysis>;
 
 export const PublicVisitorReview = z.object({
   id: z.string(),
+  // 두 출처의 리뷰가 같은 배열에 섞여 들어가므로 카드/필터가 출처를 구분.
+  // DC 리뷰의 점수 라벨/키워드/주문메뉴/사장답변 같은 추가 메타는 현재 DB에
+  // 저장하지 않으므로 본 응답에는 포함하지 않는다(필요해지면 VisitorReview
+  // 행에 extras 컬럼을 추가하는 별도 마이그레이션이 선행 필요).
+  source: z.enum(['naver', 'diningcode']),
   authorName: z.string().nullable(),
   rating: z.number().nullable(),
   body: z.string(),
@@ -432,6 +443,81 @@ export const PublicVisitorReview = z.object({
 });
 export type PublicVisitorReviewType = z.infer<typeof PublicVisitorReview>;
 
+// 출처별 표시용 메타 — 헤더에서 별점/리뷰수를 출처별로 분리해 보여 줄 때 사용.
+// `siteReviewCount` 는 사이트가 보고한 카운트(네이버 reviewCount / DC reviewTotal).
+// 우리가 실제 수집한 리뷰 수는 별도 `storedReviewCount` 필드에서 노출.
+export const PublicSourceNaver = z.object({
+  placeId: z.string(),
+  rating: z.number().nullable(),
+  siteReviewCount: z.number().int().nullable(),
+  rawSourceUrl: z.string(),
+});
+export type PublicSourceNaverType = z.infer<typeof PublicSourceNaver>;
+
+export const PublicSourceDiningcode = z.object({
+  vRid: z.string(),
+  rating: z.number().nullable(),
+  siteReviewCount: z.number().int().nullable(),
+  rawSourceUrl: z.string(),
+});
+export type PublicSourceDiningcodeType = z.infer<typeof PublicSourceDiningcode>;
+
+export const PublicSources = z.object({
+  naver: PublicSourceNaver.nullable(),
+  diningcode: PublicSourceDiningcode.nullable(),
+});
+export type PublicSourcesType = z.infer<typeof PublicSources>;
+
+// 실제 DB에 적재된 리뷰 수 — 사이트 카운트와 별개로 "우리가 분석에 쓸 수
+// 있는 리뷰 풀" 크기. 출처 필터 칩의 카운트로 사용.
+export const PublicStoredReviewCount = z.object({
+  naver: z.number().int(),
+  diningcode: z.number().int(),
+  total: z.number().int(),
+});
+export type PublicStoredReviewCountType = z.infer<typeof PublicStoredReviewCount>;
+
+// 다이닝코드만 가진 보조 정보. canonical 에 DC 행이 없으면 통째로 null.
+// scoreDetail 은 DC scoreDetail 의 핵심 수치만 추려 노출 (bucket 별 비율은 제외).
+export const PublicDiningcodeScoreDetail = z.object({
+  average: z.number().nullable(),
+  total: z.number().int(),
+  reviewTotal: z.number().int(),
+  taste: z.number().nullable(),
+  service: z.number().nullable(),
+  price: z.number().nullable(),
+  clean: z.number().nullable(),
+  distribution: z.object({
+    s5: z.number().int(),
+    s4_5: z.number().int(),
+    s4: z.number().int(),
+    s3_5: z.number().int(),
+    s3: z.number().int(),
+    s2: z.number().int(),
+    s1: z.number().int(),
+  }),
+  text: z.string().nullable(),
+});
+export type PublicDiningcodeScoreDetailType = z.infer<
+  typeof PublicDiningcodeScoreDetail
+>;
+
+export const PublicDiningcodeAddon = z.object({
+  scoreDetail: PublicDiningcodeScoreDetail.nullable(),
+  descTags: z.array(z.string()),
+  facilities: z.array(z.string()),
+  tags: z.array(z.string()),
+  wordcloudUrl: z.string().url().nullable(),
+  // DC 의 "매일 08:00-22:00" 한 줄 요약 (여러 줄 가능).
+  businessHoursSummary: z.array(DiningcodeShopBusinessHour),
+  // 요일별 7일치.
+  businessHoursWeekly: z.array(DiningcodeShopBusinessHour),
+});
+export type PublicDiningcodeAddonType = z.infer<typeof PublicDiningcodeAddon>;
+
+// 공개 식당 상세. 기존 스칼라 필드 (name/category/address/rating 등) 는
+// 두 출처가 머지된 결과 — Naver 우선 + Naver 가 비면 DC fallback. 출처별
+// 분리값은 `sources` 에 따로 노출되어 UI 가 헤더 등에서 표시할 수 있다.
 export const RestaurantPublicDetail = z.object({
   placeId: z.string(),
   name: z.string(),
@@ -439,17 +525,27 @@ export const RestaurantPublicDetail = z.object({
   address: z.string().nullable(),
   roadAddress: z.string().nullable(),
   phone: z.string().nullable(),
+  // DC summary 가 있으면 그것을 우선 직렬화한 string, 없으면 Naver text.
   businessHours: z.string().nullable(),
   rating: z.number().nullable(),
   reviewCount: z.number().int().nullable(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
+  // Naver imageUrls + DC photos/images origin URL 합집합 (URL dedup).
   imageUrls: z.array(z.string().url()),
+  // Naver 가 비어있을 때만 DC menus 를 매핑해 채움.
   menus: z.array(MenuItem),
+  // Naver blogReviews + DC blogsFirstPage 합쳐 dedup.
   blogReviews: z.array(BlogReview),
   rawSourceUrl: z.string(),
   firstCrawledAt: z.string(),
   reviews: z.array(PublicVisitorReview),
+  // 출처별 별점/리뷰수 — 헤더 분리 표시용. 둘 다 있는 경우 둘 다 채움.
+  sources: PublicSources,
+  // DB 저장 리뷰 카운트 — 출처 필터 칩 카운트로 사용.
+  storedReviewCount: PublicStoredReviewCount,
+  // DC 보조 정보 — canonical 에 DC 행이 없으면 null.
+  diningcode: PublicDiningcodeAddon.nullable(),
 });
 export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
 

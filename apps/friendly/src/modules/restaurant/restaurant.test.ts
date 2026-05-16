@@ -722,6 +722,240 @@ describe('Public restaurant routes', () => {
     expect(unanalyzed?.body).toBe('아직 분석 전');
   });
 
+  it('GET /restaurants/public/:placeId — merges DC sibling fields & reviews', async () => {
+    // Naver 행 한 줄. 우리 머지 기준에서 phone/address 가 비어 있으면 DC fallback
+    // 으로 채워져야 하므로 의도적으로 일부 필드를 빈 상태로 시작.
+    const placeId = `${PUB_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const naverSnap = {
+      placeId,
+      name: '머지가게',
+      category: '한식',
+      address: null as string | null,
+      roadAddress: null as string | null,
+      phone: null as string | null,
+      businessHours: null as string | null,
+      latitude: 37.5,
+      longitude: 127.0,
+      imageUrls: ['https://n.example/a.jpg'],
+      rating: 4.2,
+      reviewCount: 60,
+      menus: [],
+      reviewStats: null,
+      blogReviews: [],
+      rawSourceUrl: 'https://m.place.naver.com/restaurant/x',
+    };
+    const naverRow = await app.prisma.restaurant.create({
+      data: {
+        source: 'naver',
+        sourceId: placeId,
+        placeId,
+        name: '머지가게',
+        category: '한식',
+        address: null,
+        phone: null,
+        rating: 4.2,
+        reviewCount: 60,
+        rawSourceUrl: naverSnap.rawSourceUrl,
+        snapshotJson: JSON.stringify(naverSnap),
+        canonical: {
+          create: { name: '머지가게', primaryCategory: '한식', latitude: 37.5, longitude: 127.0 },
+        },
+      },
+      select: { id: true, canonicalId: true },
+    });
+
+    // 같은 canonical 에 묶인 DC 행. 다이닝코드 snapshot 형태(메뉴/스코어/태그 등).
+    const dcVRid = `${PUB_PREFIX}dc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const dcSnap = {
+      vRid: dcVRid,
+      name: 'DC머지',
+      branch: null,
+      fullName: 'DC머지',
+      area: '강남',
+      categories: ['한식'],
+      descTags: ['분위기좋은', '데이트'],
+      score: 88,
+      address: '서울 강남구 DC주소',
+      roadAddress: '서울 강남구 DC도로명',
+      phone: '02-1234',
+      lat: 37.51,
+      lng: 127.01,
+      thumbnailUrl: null,
+      images: [],
+      photos: [
+        { pdId: 'p1', origin: 'https://dc.example/p1.jpg', thumb: 'x', middle: 'y', uploaderName: null, uploaderProfileImg: null, date: null, type: null },
+      ],
+      tags: ['백년가게'],
+      facilities: ['주차'],
+      status: null,
+      businessHours: [{ duration: '월요일', time: '09:00-22:00', today: false }],
+      businessHoursSummary: [{ duration: '매일', time: '08:00-23:00', today: true }],
+      menus: [
+        { name: 'DC추천메뉴', price: '20000', description: null, rank: 1, best: true, selectionCount: 5, selectionRate: 80, reviewCount: 10, commentCount: 2 },
+      ],
+      menuTotalCount: 1,
+      hasPopularMenu: true,
+      scoreDetail: {
+        average: 4.6,
+        total: 100,
+        reviewTotal: 42,
+        taste: 4.7,
+        service: 4.4,
+        price: 4.2,
+        clean: 4.5,
+        distribution: { s5: 30, s4_5: 5, s4: 4, s3_5: 1, s3: 1, s2: 0, s1: 1 },
+        tasteInfo: null,
+        priceInfo: null,
+        serviceInfo: null,
+        cleanInfo: null,
+        text: '평가 신뢰',
+      },
+      blogsFirstPage: { page: 1, totalPage: 0, list: [] },
+      wordcloudUrl: 'https://dc.example/wc.png',
+      wordcloudUrlMobile: null,
+      rawSourceUrl: `https://www.diningcode.com/profile.php?rid=${dcVRid}`,
+      fetchedAt: '2026-01-01T00:00:00.000Z',
+      elapsedMs: 100,
+      source: 'http',
+    };
+    const dcRow = await app.prisma.restaurant.create({
+      data: {
+        source: 'diningcode',
+        sourceId: dcVRid,
+        placeId: null,
+        name: 'DC머지',
+        category: '한식',
+        address: '서울 강남구 DC주소',
+        phone: '02-1234',
+        rating: 4.6,
+        reviewCount: 42,
+        rawSourceUrl: dcSnap.rawSourceUrl,
+        snapshotJson: JSON.stringify(dcSnap),
+        canonicalId: naverRow.canonicalId,
+      },
+      select: { id: true },
+    });
+
+    // 양쪽에 1건씩 visitorReview. Naver 가 더 최근(fetchedAt) — 정렬 검증.
+    await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: naverRow.id,
+        externalId: 'naver-rv-1',
+        authorName: 'Nuser',
+        rating: 5,
+        body: '네이버 리뷰 본문',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${placeId}-n1`,
+        fetchedAt: new Date('2026-02-01T00:00:00.000Z'),
+      },
+    });
+    await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: dcRow.id,
+        externalId: 'dc:rv:1',
+        authorName: 'Duser',
+        rating: 4,
+        body: '다이닝코드 리뷰 본문',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${placeId}-d1`,
+        fetchedAt: new Date('2026-01-15T00:00:00.000Z'),
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      placeId: string;
+      address: string | null;
+      phone: string | null;
+      businessHours: string | null;
+      menus: Array<{ name: string }>;
+      imageUrls: string[];
+      reviews: Array<{ source: 'naver' | 'diningcode'; body: string; fetchedAt: string }>;
+      sources: {
+        naver: { placeId: string; rating: number | null; siteReviewCount: number | null } | null;
+        diningcode: { vRid: string; rating: number | null; siteReviewCount: number | null } | null;
+      };
+      storedReviewCount: { naver: number; diningcode: number; total: number };
+      diningcode: {
+        scoreDetail: { average: number | null; taste: number | null } | null;
+        descTags: string[];
+        facilities: string[];
+        wordcloudUrl: string | null;
+        businessHoursSummary: Array<{ duration: string; time: string }>;
+      } | null;
+    };
+
+    // Naver 가 비었던 필드는 DC 값으로 채워짐.
+    expect(body.address).toBe('서울 강남구 DC주소');
+    expect(body.phone).toBe('02-1234');
+    expect(body.businessHours).toBe('매일 08:00-23:00');
+
+    // Naver 가 비어있었으므로 DC 메뉴로 채워짐.
+    expect(body.menus).toHaveLength(1);
+    expect(body.menus[0]?.name).toBe('DC추천메뉴');
+
+    // Naver imageUrls + DC photos.origin 합집합.
+    expect(body.imageUrls).toEqual([
+      'https://n.example/a.jpg',
+      'https://dc.example/p1.jpg',
+    ]);
+
+    // 리뷰는 두 출처가 합쳐서 fetchedAt desc — Naver(2/1) 가 DC(1/15) 보다 위.
+    expect(body.reviews).toHaveLength(2);
+    expect(body.reviews[0]?.source).toBe('naver');
+    expect(body.reviews[1]?.source).toBe('diningcode');
+
+    // 출처별 별점/리뷰수 노출.
+    expect(body.sources.naver).toMatchObject({ placeId, rating: 4.2, siteReviewCount: 60 });
+    expect(body.sources.diningcode).toMatchObject({ vRid: dcVRid, rating: 4.6, siteReviewCount: 42 });
+
+    // DB 저장 리뷰 카운트.
+    expect(body.storedReviewCount).toEqual({ naver: 1, diningcode: 1, total: 2 });
+
+    // DC 보조 정보 통째로 노출.
+    expect(body.diningcode?.scoreDetail?.average).toBe(4.6);
+    expect(body.diningcode?.scoreDetail?.taste).toBe(4.7);
+    expect(body.diningcode?.descTags).toEqual(['분위기좋은', '데이트']);
+    expect(body.diningcode?.facilities).toEqual(['주차']);
+    expect(body.diningcode?.wordcloudUrl).toBe('https://dc.example/wc.png');
+    expect(body.diningcode?.businessHoursSummary).toHaveLength(1);
+
+    // afterEach 가 PUB_PREFIX 만 청소하므로 DC sibling 은 명시 정리.
+    await app.prisma.restaurant.deleteMany({
+      where: { source: 'diningcode', sourceId: dcVRid },
+    });
+  });
+
+  it('GET /restaurants/public/:placeId — Naver-only canonical returns null DC addon', async () => {
+    const { placeId } = await seedRestaurant({
+      name: '단독네이버',
+      latitude: 37.5,
+      longitude: 127.0,
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      diningcode: unknown | null;
+      sources: { naver: { placeId: string } | null; diningcode: unknown | null };
+      storedReviewCount: { naver: number; diningcode: number; total: number };
+    };
+    expect(body.diningcode).toBeNull();
+    expect(body.sources.diningcode).toBeNull();
+    expect(body.sources.naver?.placeId).toBe(placeId);
+    expect(body.storedReviewCount).toEqual({ naver: 0, diningcode: 0, total: 0 });
+  });
+
   it('GET /restaurants/public/:placeId/insights — 404 for unknown', async () => {
     const res = await app.inject({
       method: 'GET',
