@@ -25,21 +25,26 @@ const isNotFound = (e: unknown): boolean =>
 
 // SSE summary snapshot 이 도착했을 때 어드민 list (`['restaurant', 'list']`)
 // 와 공개 list (`['restaurant', 'public', 'list', ...]`) 양쪽 캐시의 해당 행을
-// 동일 필드 셋으로 패치한다. 공개 list 의 queryKey 는 URL 파라미터마다 달라
-// 여러 인스턴스가 동시에 캐시에 살아 있을 수 있어 setQueriesData 로 prefix
-// 매칭한다.
-// SSE snapshot 이 도착했을 때 어드민 list / 공개 list 캐시를 patch.
-//   - 어드민 list: canonicalId 로 행 찾고, restaurantId 로 그 행의 source 갱신.
-//   - 공개 list: placeId 가 있을 때만(=Naver) 매칭해서 갱신.
+// 갱신한다. 공개 list 의 queryKey 는 URL 파라미터마다 달라 여러 인스턴스가
+// 동시에 살아 있을 수 있어 setQueriesData 로 prefix 매칭.
+//
+// 두 list 의 갱신 전략이 다르다:
+//   - 어드민 list: 행마다 sources[] 분리 카운트가 있으므로 한 source 만 새 값
+//     으로 교체하고 recomputeCanonicalAggregates 로 합산 재계산. prev 불필요.
+//   - 공개 list: 행은 placeId 키 1개에 두 출처의 합산 카운트만 들고 있다 (서버
+//     머지 결과). 한 source 의 새 값으로 통째 덮어쓰면 다른 source 의 카운트가
+//     0 으로 빠지므로, prev snapshot 과 비교해 변경된 source 의 delta 만 합산
+//     행에 가감한다. 첫 catch-up snapshot 은 prev=null → delta=0 → 덮어쓰지 않음.
 const patchSummaryInListCaches = (
   qc: QueryClient,
   snap: RestaurantSummarySnapshotEventType,
+  prev: RestaurantSummarySnapshotEventType | null,
 ): void => {
   qc.setQueryData<RestaurantListResultType | undefined>(
     ['restaurant', 'list'],
-    (prev) => {
-      if (!prev) return prev;
-      const items = prev.items.map((item) => {
+    (prevCache) => {
+      if (!prevCache) return prevCache;
+      const items = prevCache.items.map((item) => {
         if (item.canonicalId !== snap.canonicalId) return item;
         const idx = item.sources.findIndex((s) => s.restaurantId === snap.restaurantId);
         if (idx === -1) return item;
@@ -54,29 +59,51 @@ const patchSummaryInListCaches = (
         const sources = item.sources.map((s, i) => (i === idx ? updatedSource : s));
         return { ...item, sources, ...recomputeCanonicalAggregates(sources) };
       });
-      return { ...prev, items };
+      return { ...prevCache, items };
     },
   );
-  // 공개 list 는 placeId 가 key — DC 행은 공개 list 에 안 노출되므로 skip.
-  if (snap.placeId === null) return;
-  const placeId = snap.placeId;
+  // 공개 list 는 placeId 가 key — DC source 이벤트(placeId=null)는 공개 list
+  // 행에 직접 매칭 안 됨. 단 그런 이벤트도 합산 카운트의 변경분(예: DC 쪽 done
+  // +1)을 같은 canonical 의 Naver placeId 행에 반영해야 라이브가 정확.
+  const targetPlaceId =
+    snap.placeId ?? prev?.placeId ?? null;
+  // prev/snap 모두 placeId 가 없으면 어느 행에 적용할지 알 수 없음 — skip.
+  // (DC source 의 첫 catch-up 이 이 케이스. 다음 이벤트부터는 prev 가 채워져
+  // 정상 delta 적용.)
+  const dTotal = snap.totalReviews - (prev?.totalReviews ?? snap.totalReviews);
+  const dPending = snap.pending - (prev?.pending ?? snap.pending);
+  const dRunning = snap.running - (prev?.running ?? snap.running);
+  const dDone = snap.done - (prev?.done ?? snap.done);
+  const dFailed = snap.failed - (prev?.failed ?? snap.failed);
+  const allZero =
+    dTotal === 0 && dPending === 0 && dRunning === 0 && dDone === 0 && dFailed === 0;
+  if (allZero) return;
+  // delta 적용은 같은 canonical 의 어떤 placeId 행에 해야 한다. 공개 list 는
+  // Naver placeId 만 노출하므로 그 placeId 를 알아야 함. snap.placeId 가 있으면
+  // 그것을, 없으면 prev.placeId (DC 이벤트는 placeId=null 이지만 prev 는 같은
+  // canonical 의 같은 source 라 둘 다 null 일 수밖에 없음). 그래서 DC 이벤트로
+  // 공개 list 를 갱신하려면 canonicalId → placeId 역매핑이 필요하지만 — 본
+  // hook 시점에는 알 수 없으므로 우선 patch 안 함 (재진입/staleTime 만료 시
+  // 정상 fetch 로 합산값 갱신). Naver 이벤트만 안전하게 라이브 갱신한다.
+  if (targetPlaceId === null) return;
+  const placeId = targetPlaceId;
   qc.setQueriesData<RestaurantPublicListResultType | undefined>(
     { queryKey: ['restaurant', 'public', 'list'] },
-    (prev) => {
-      if (!prev) return prev;
-      const items = prev.items.map((item) =>
+    (prevCache) => {
+      if (!prevCache) return prevCache;
+      const items = prevCache.items.map((item) =>
         item.placeId === placeId
           ? {
               ...item,
-              totalReviews: snap.totalReviews,
-              summaryPending: snap.pending,
-              summaryRunning: snap.running,
-              summaryDone: snap.done,
-              summaryFailed: snap.failed,
+              totalReviews: Math.max(0, item.totalReviews + dTotal),
+              summaryPending: Math.max(0, item.summaryPending + dPending),
+              summaryRunning: Math.max(0, item.summaryRunning + dRunning),
+              summaryDone: Math.max(0, item.summaryDone + dDone),
+              summaryFailed: Math.max(0, item.summaryFailed + dFailed),
             }
           : item,
       );
-      return { ...prev, items };
+      return { ...prevCache, items };
     },
   );
 };
@@ -202,8 +229,8 @@ export const useRestaurantListSummaryEventsByPlaceIds = (placeIds: string[]): vo
       summarySseManager.subscribe(
         { kind: 'place', placeId },
         {
-          onSnapshot: (snap) => {
-            patchSummaryInListCaches(qc, snap);
+          onSnapshot: (snap, prev) => {
+            patchSummaryInListCaches(qc, snap, prev);
           },
           onReview: () => {
             // 리스트는 review 본문 무관 — snapshot bump 가 카운트 갱신 처리.
@@ -231,8 +258,8 @@ export const useRestaurantListSummaryEvents = (canonicalIds: string[]): void => 
       summarySseManager.subscribe(
         { kind: 'canonical', canonicalId },
         {
-          onSnapshot: (snap) => {
-            patchSummaryInListCaches(qc, snap);
+          onSnapshot: (snap, prev) => {
+            patchSummaryInListCaches(qc, snap, prev);
           },
           onReview: () => {
             // 리스트는 per-review 본문을 렌더하지 않음 — 다음 snapshot bump 가
@@ -263,11 +290,11 @@ export const useRestaurantSummaryEvents = (
     return summarySseManager.subscribe(
       { kind: 'place', placeId },
       {
-      onSnapshot: (snap) => {
+      onSnapshot: (snap, prev) => {
         setData(snap);
         // 리스트 캐시도 같이 갱신 — 디테일에서 진행이 발생하면 리스트 행 배지도
         // 함께 stale 해소.
-        patchSummaryInListCaches(qc, snap);
+        patchSummaryInListCaches(qc, snap, prev);
       },
       onReview: (ev) => {
         // 자신의 placeId 가 아닌 review (=같은 canonical 의 다른 source) 는 무시.

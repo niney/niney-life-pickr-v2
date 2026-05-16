@@ -27,7 +27,14 @@ export type SubscriptionKey =
 const keyId = (k: SubscriptionKey): string =>
   k.kind === 'place' ? `place:${k.placeId}` : `canonical:${k.canonicalId}`;
 
-type SnapshotHandler = (snap: RestaurantSummarySnapshotEventType) => void;
+// `prev` 는 같은 키(place 또는 canonical) 직전 snapshot. 첫 catch-up 시 null.
+// 공개 list 처럼 행 1개가 두 source 의 합산 카운트를 들고 있는 캐시는, 한
+// source 의 새 카운트로 통째 덮어쓰면 다른 source 의 카운트가 0 으로 빠진다.
+// prev 와 비교해 delta 만 합산 행에 반영하기 위해 같이 전달한다.
+type SnapshotHandler = (
+  snap: RestaurantSummarySnapshotEventType,
+  prev: RestaurantSummarySnapshotEventType | null,
+) => void;
 type ReviewHandler = (ev: RestaurantSummaryReviewEventType) => void;
 
 interface Subscribers {
@@ -61,12 +68,14 @@ class SummarySseManager {
     entry.snapshots.add(handlers.onSnapshot);
     entry.reviews.add(handlers.onReview);
 
-    // Replay 마지막 snapshot — 키 종류에 맞는 캐시에서 꺼낸다.
+    // Replay 마지막 snapshot — 키 종류에 맞는 캐시에서 꺼낸다. 새 구독자에게
+    // 는 첫 dispatch 라 prev=null. delta-aware patch 는 첫 replay 가 합산 행을
+    // 덮어쓰지 않게 자연스럽게 처리한다.
     const last =
       key.kind === 'place'
         ? this.lastSnapshotByPlace.get(key.placeId)
         : this.lastSnapshotByCanonical.get(key.canonicalId);
-    if (last) handlers.onSnapshot(last);
+    if (last) handlers.onSnapshot(last, null);
 
     if (needsReconnect) this.scheduleReconnect();
 
@@ -137,15 +146,21 @@ class SummarySseManager {
         } catch {
           return;
         }
+        // prev 는 같은 키 직전 snapshot — dispatch 전에 캡처해 핸들러에 함께
+        // 넘긴다 (delta 계산용). 그런 다음에야 캐시를 새 값으로 교체.
+        const prevByCanon = this.lastSnapshotByCanonical.get(parsed.canonicalId) ?? null;
+        const prevByPlace = parsed.placeId
+          ? this.lastSnapshotByPlace.get(parsed.placeId) ?? null
+          : null;
         // canonicalId 캐시 무조건 갱신. placeId 가 있으면(=Naver) place 캐시도.
         this.lastSnapshotByCanonical.set(parsed.canonicalId, parsed);
         if (parsed.placeId) this.lastSnapshotByPlace.set(parsed.placeId, parsed);
         // 양쪽 키 구독자 모두에게 dispatch.
         const canonEntry = this.subs.get(`canonical:${parsed.canonicalId}`);
-        if (canonEntry) for (const h of canonEntry.snapshots) h(parsed);
+        if (canonEntry) for (const h of canonEntry.snapshots) h(parsed, prevByCanon);
         if (parsed.placeId) {
           const placeEntry = this.subs.get(`place:${parsed.placeId}`);
-          if (placeEntry) for (const h of placeEntry.snapshots) h(parsed);
+          if (placeEntry) for (const h of placeEntry.snapshots) h(parsed, prevByPlace);
         }
       });
 
