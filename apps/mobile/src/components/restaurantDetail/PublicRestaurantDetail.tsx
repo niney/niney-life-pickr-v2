@@ -129,16 +129,20 @@ export const PublicRestaurantDetail = ({
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="뒤로"
-            style={styles.backBtn}
           >
-            <Text style={[styles.backIcon, { color: theme.colors.text }]}>‹</Text>
+            {/* ‹ 와 식당명을 하나의 Text 안에 nested 로 두면 RN 이 같은
+                baseline 으로 inline 정렬 — flex row 박스 가운데정렬에 의존하지
+                않아 'cap 위치'/lineHeight 차이로 어긋나지 않는다.
+                numberOfLines + ellipsizeMode 로 식당명이 길어도 wrap 안 됨. */}
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={[styles.headerText, { color: theme.colors.text }]}
+            >
+              <Text style={styles.headerBackIcon}>‹{'  '}</Text>
+              {detail.data.name}
+            </Text>
           </Pressable>
-          <Text
-            numberOfLines={1}
-            style={[styles.headerTitle, { color: theme.colors.text }]}
-          >
-            {detail.data.name}
-          </Text>
         </View>
       )}
 
@@ -200,20 +204,13 @@ const styles = StyleSheet.create({
   },
   note: { fontSize: 13, textAlign: 'center' },
   sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     height: 48,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  backIcon: { fontSize: 32, lineHeight: 32, fontWeight: '300', marginTop: -4 },
-  headerTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
+  headerText: { fontSize: 16, fontWeight: '600' },
+  headerBackIcon: { fontSize: 24, fontWeight: '400' },
   heroWrap: { height: 224, width: '100%', position: 'relative' },
   heroImg: { width: '100%', height: '100%' },
   heroEmpty: { height: 128, alignItems: 'center', justifyContent: 'center' },
