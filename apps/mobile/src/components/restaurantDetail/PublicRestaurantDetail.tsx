@@ -37,9 +37,8 @@ interface Props {
 }
 
 // 식당 상세 컨테이너. 데이터 fetch(상세 + 인사이트) 는 여기 한 번 — 탭 전환은
-// 콘텐츠만 바꾼다. Scroller 의 stickyHeaderIndices 로 onBack 헤더(있을 때) 와
-// TabBar 가 둘 다 sticky — 시트 full 시 검색바를 시트가 덮으면서 이 헤더가
-// 그 자리를 차지. 탭 전환 시 스크롤 top 으로 reset.
+// 콘텐츠만 바꾼다. 시트 모드 헤더는 스크롤러 밖에 고정하고, TabBar 만
+// Scroller 의 stickyHeaderIndices 로 붙인다. 탭 전환 시 스크롤 top 으로 reset.
 export const PublicRestaurantDetail = ({
   placeId,
   onResolveName,
@@ -101,51 +100,18 @@ export const PublicRestaurantDetail = ({
     );
   }
 
-  // 시트 모드: [헤더(sticky), hero, TabBar(sticky), ...탭콘텐츠] → [0, 2]
-  // deep-link 모드: [hero, TabBar(sticky), ...탭콘텐츠] → [1]
-  const stickyIndices = onBack ? [0, 2] : [1];
+  // [hero, TabBar(sticky), ...탭콘텐츠] → [1]
+  const stickyIndices = [1];
   const hero = detail.data.imageUrls[0] ?? null;
   const imageCount = detail.data.imageUrls.length;
 
-  return (
+  const scroller = (
     <Scroller
       ref={scrollRef}
-      style={{ backgroundColor: theme.colors.bg }}
+      style={[styles.scroller, { backgroundColor: theme.colors.bg }]}
       contentContainerStyle={styles.scrollContent}
       stickyHeaderIndices={stickyIndices}
     >
-      {onBack && (
-        <View
-          style={[
-            styles.sheetHeader,
-            {
-              backgroundColor: theme.colors.surface,
-              borderBottomColor: theme.colors.border,
-            },
-          ]}
-        >
-          <Pressable
-            onPress={onBack}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="뒤로"
-          >
-            {/* ‹ 와 식당명을 하나의 Text 안에 nested 로 두면 RN 이 같은
-                baseline 으로 inline 정렬 — flex row 박스 가운데정렬에 의존하지
-                않아 'cap 위치'/lineHeight 차이로 어긋나지 않는다.
-                numberOfLines + ellipsizeMode 로 식당명이 길어도 wrap 안 됨. */}
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              style={[styles.headerText, { color: theme.colors.text }]}
-            >
-              <Text style={styles.headerBackIcon}>‹{'  '}</Text>
-              {detail.data.name}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
       {hero ? (
         <Pressable
           onPress={() => handleChangeTab('photos')}
@@ -191,9 +157,47 @@ export const PublicRestaurantDetail = ({
       {tab === 'info' && <InfoTab detail={detail.data} />}
     </Scroller>
   );
+
+  if (!onBack) return scroller;
+
+  return (
+    <>
+      <View
+        style={[
+          styles.sheetHeader,
+          {
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={onBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="뒤로"
+        >
+          {/* ‹ 와 식당명을 하나의 Text 안에 nested 로 두면 RN 이 같은
+              baseline 으로 inline 정렬 — flex row 박스 가운데정렬에 의존하지
+              않아 'cap 위치'/lineHeight 차이로 어긋나지 않는다.
+              numberOfLines + ellipsizeMode 로 식당명이 길어도 wrap 안 됨. */}
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={[styles.headerText, { color: theme.colors.text }]}
+          >
+            <Text style={styles.headerBackIcon}>‹{'  '}</Text>
+            {detail.data.name}
+          </Text>
+        </Pressable>
+      </View>
+      {scroller}
+    </>
+  );
 };
 
 const styles = StyleSheet.create({
+  scroller: { flex: 1 },
   scrollContent: { paddingBottom: 24 },
   center: {
     flex: 1,
