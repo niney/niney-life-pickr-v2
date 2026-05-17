@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useMatch, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
 import { TAB_ORDER, type TabKey } from '~/components/restaurant/detail/tabs';
 
@@ -30,12 +30,15 @@ export const RestaurantDetailRoute = () => {
     [setSearchParams],
   );
 
+  // v2 라우트(/restaurants-v2/:placeId) 에서도 동일하게 쓰이므로 닫기 경로를
+  // useMatch 로 분기 — 그 외 로직(탭 동기화 등)은 동일.
+  const v2Match = useMatch('/restaurants-v2/:placeId');
+  const basePath = v2Match ? '/restaurants-v2' : '/restaurants';
+
   const handleClose = useCallback(() => {
-    // 리스트 영역으로. 기존 검색/필터 query 를 보존하려면 list 라우트의
-    // searchParams 를 유지해야 하는데, 현재 placeId 자체는 path 라 query 는
-    // 이미 list 쪽 그대로다. 단순 navigate('/restaurants') 로 path 만 잘라낸다.
-    navigate({ pathname: '/restaurants', search: window.location.search });
-  }, [navigate]);
+    // 리스트 영역으로. 검색/필터 query 는 그대로 보존.
+    navigate({ pathname: basePath, search: window.location.search });
+  }, [navigate, basePath]);
 
   if (!placeId) return null;
   return (

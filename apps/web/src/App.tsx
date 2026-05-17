@@ -22,6 +22,7 @@ import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
 import { RestaurantDetailRoute } from './routes/RestaurantDetailRoute';
 import { RestaurantsPage } from './routes/RestaurantsPage';
+import { RestaurantsV2Page } from './routes/RestaurantsV2Page';
 
 const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((s) => s.token);
@@ -45,6 +46,10 @@ export const App = () => {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/restaurants" element={<RestaurantsPage />}>
+          <Route path=":placeId" element={<RestaurantDetailRoute />} />
+        </Route>
+        {/* 모바일 시트 패턴 v2 — 데스크톱은 기존 3-column 동일, 모바일은 BottomSheet. */}
+        <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
           <Route path=":placeId" element={<RestaurantDetailRoute />} />
         </Route>
       </Route>

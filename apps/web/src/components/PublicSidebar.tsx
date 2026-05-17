@@ -12,7 +12,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: '홈', icon: Home, end: true },
-  { to: '/restaurants', label: '맛집', icon: UtensilsCrossed },
+  { to: '/restaurants-v2', label: '맛집', icon: UtensilsCrossed },
 ];
 
 interface Props {
