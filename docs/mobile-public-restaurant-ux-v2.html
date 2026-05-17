@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>맛집 페이지 모바일 v2 — 바텀시트 패턴</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-soft: #131a31;
+    --panel: #1a2240;
+    --panel-soft: #232c54;
+    --border: #2a356a;
+    --fg: #e6ebff;
+    --fg-soft: #b8c0e6;
+    --muted: #7b86b8;
+    --accent: #7dd3fc;
+    --accent-2: #fbbf24;
+    --accent-3: #c084fc;
+    --success: #34d399;
+    --danger: #f87171;
+    --code-bg: #0f152e;
+    --code-fg: #d1d9ff;
+    --shadow: 0 6px 24px rgba(0,0,0,.35);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,.55);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 20% -10%, #1a2547 0%, transparent 60%),
+      radial-gradient(900px 600px at 100% 100%, #1f1a47 0%, transparent 60%),
+      var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    max-width: 1380px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  /* ToC */
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 28px 18px;
+    border-right: 1px solid var(--border);
+    background: rgba(11,16,32,.6);
+    backdrop-filter: blur(8px);
+    font-size: 13px;
+  }
+  nav.toc .brand {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  nav.toc .brand-sub {
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: section; }
+  nav.toc ol li { counter-increment: section; margin: 4px 0; }
+  nav.toc ol li a {
+    color: var(--fg-soft);
+    text-decoration: none;
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+    font-size: 12.5px;
+  }
+  nav.toc ol li a::before { content: counter(section, decimal-leading-zero) "  "; color: var(--muted); font-family: ui-monospace, monospace; font-size: 10.5px; }
+  nav.toc ol li a:hover { background: var(--panel); color: var(--accent); border-left-color: var(--accent); }
+
+  main {
+    padding: 40px 48px 80px;
+    min-width: 0;
+  }
+  header.hero { margin-bottom: 32px; }
+  header.hero .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+  .chip.success { background: rgba(52,211,153,.15); color: var(--success); border: 1px solid rgba(52,211,153,.35); }
+  .chip.date    { background: rgba(125,211,252,.12); color: var(--accent); border: 1px solid rgba(125,211,252,.30); }
+  .chip.commit  { background: var(--code-bg); color: var(--code-fg); border: 1px solid var(--border); font-family: ui-monospace, monospace; font-size: 10.5px; padding: 3px 7px; }
+  header.hero h1 {
+    margin: 0 0 6px;
+    font-size: 34px;
+    letter-spacing: -.02em;
+    background: linear-gradient(120deg, var(--accent) 0%, var(--accent-3) 50%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  header.hero p.lede { color: var(--fg-soft); margin: 0; font-size: 16px; }
+
+  section { margin: 56px 0; }
+  section h2 {
+    font-size: 22px;
+    margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  section h2 .num {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 14px;
+    font-family: ui-monospace, monospace;
+  }
+  section h2 .icon { font-size: 20px; }
+  section h3 {
+    font-size: 17px;
+    margin: 28px 0 12px;
+    color: var(--accent);
+  }
+
+  p { color: var(--fg-soft); }
+  p strong { color: var(--fg); }
+  a { color: var(--accent); }
+
+  /* card */
+  .card {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    margin: 18px 0;
+    box-shadow: var(--shadow);
+  }
+  .card.tldr {
+    background: linear-gradient(135deg, rgba(125,211,252,.10), rgba(192,132,252,.06), rgba(251,191,36,.04));
+    border-color: rgba(125,211,252,.30);
+  }
+  .card-title { font-weight: 700; color: var(--accent); margin-bottom: 10px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+
+  /* keypoint list */
+  ul.keypoints { list-style: none; padding: 0; margin: 0; }
+  ul.keypoints li {
+    position: relative;
+    padding: 12px 12px 12px 36px;
+    margin: 8px 0;
+    background: var(--panel-soft);
+    border-radius: 10px;
+    border-left: 3px solid var(--accent);
+  }
+  ul.keypoints li::before {
+    content: "▸"; position: absolute; left: 14px; top: 10px; color: var(--accent); font-size: 14px;
+  }
+  ul.keypoints li strong { color: var(--accent-2); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--bg-soft); border-radius: 8px; overflow: hidden; font-size: 13.5px; }
+  thead th { background: var(--panel-soft); color: var(--accent); text-align: left; padding: 10px 14px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--fg-soft); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(125,211,252,.04); }
+  tbody td code { font-size: 12px; }
+  td.ok  { color: var(--success); font-weight: 600; }
+  td.bad { color: var(--danger); }
+  td.warn { color: var(--accent-2); }
+
+  /* code */
+  code { background: var(--code-bg); color: var(--code-fg); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; border: 1px solid var(--border); }
+  pre { background: var(--code-bg); color: var(--code-fg); padding: 16px 18px; border-radius: 10px; overflow-x: auto; border: 1px solid var(--border); font-size: 12.5px; line-height: 1.55; }
+  pre code { background: transparent; border: none; padding: 0; font-size: inherit; }
+  /* basic syntax highlight via spans */
+  .kw   { color: #ff7b9d; }
+  .str  { color: #98e88a; }
+  .num  { color: #fbbf24; }
+  .cmt  { color: #6b7298; font-style: italic; }
+  .fn   { color: #7dd3fc; }
+  .typ  { color: #c084fc; }
+
+  /* matrix */
+  .matrix {
+    display: grid;
+    grid-template-columns: 200px 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 14px 0;
+  }
+  .matrix > div { background: var(--bg-soft); padding: 14px; font-size: 13.5px; }
+  .matrix > div.h { background: var(--panel-soft); color: var(--accent); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .matrix .yes { color: var(--success); font-weight: 600; }
+  .matrix .no  { color: var(--danger); }
+  .matrix .meh { color: var(--muted); font-style: italic; }
+  .matrix .star { color: var(--accent-2); font-weight: 700; }
+
+  /* callout */
+  .callout {
+    background: linear-gradient(135deg, rgba(125,211,252,.10), rgba(125,211,252,.02));
+    border: 1px solid rgba(125,211,252,.40);
+    border-left-width: 4px;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    color: var(--fg-soft);
+  }
+  .callout.warn { background: linear-gradient(135deg, rgba(251,191,36,.10), rgba(251,191,36,.02)); border-color: rgba(251,191,36,.40); }
+  .callout.danger { background: linear-gradient(135deg, rgba(248,113,113,.10), rgba(248,113,113,.02)); border-color: rgba(248,113,113,.40); }
+  .callout .label { font-weight: 700; color: var(--accent); margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .callout.warn .label { color: var(--accent-2); }
+  .callout.danger .label { color: var(--danger); }
+
+  /* ============ PHONE MOCKUP ============ */
+  .phones {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+    margin: 24px 0;
+  }
+  .phone-wrap {
+    text-align: center;
+  }
+  .phone-wrap .caption {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .phone-wrap .caption b { color: var(--accent-2); font-size: 14px; display: block; margin-bottom: 2px; letter-spacing: 0; text-transform: none; }
+  .phone {
+    width: 200px;
+    height: 410px;
+    margin: 0 auto;
+    background: #0a0d1f;
+    border-radius: 28px;
+    border: 6px solid #1a1f3a;
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,.04);
+    position: relative;
+    overflow: hidden;
+  }
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 4px; left: 50%; transform: translateX(-50%);
+    width: 60px; height: 14px;
+    background: #0a0d1f; border-radius: 0 0 10px 10px;
+    z-index: 30;
+  }
+  .phone-screen { position: absolute; inset: 0; }
+  .ph-topbar {
+    position: absolute; left: 0; right: 0; top: 0; height: 22px;
+    background: rgba(125,211,252,.18);
+    border-bottom: 1px solid rgba(125,211,252,.40);
+    display: flex; align-items: center; gap: 4px; padding: 0 8px;
+    font-size: 9px; color: var(--accent); font-weight: 600;
+    z-index: 20;
+  }
+  .ph-topbar::after { content: "🎲 Life Pickr"; }
+  .ph-subbar {
+    position: absolute; left: 0; right: 0; top: 22px; height: 38px;
+    background: rgba(251,191,36,.12);
+    border-bottom: 1px solid rgba(251,191,36,.30);
+    padding: 4px 6px;
+    z-index: 20;
+  }
+  .ph-subbar .search { background: rgba(255,255,255,.08); border-radius: 4px; height: 14px; margin-bottom: 4px; }
+  .ph-subbar .chips { display: flex; gap: 3px; }
+  .ph-subbar .chip-mini { width: 12px; height: 8px; background: rgba(255,255,255,.10); border-radius: 999px; }
+  .ph-map {
+    position: absolute; left: 0; right: 0; bottom: 0; top: 22px;
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    z-index: 1;
+  }
+  .ph-map .marker { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 1px white; }
+  .ph-map .marker:nth-child(1) { top: 30%; left: 20%; }
+  .ph-map .marker:nth-child(2) { top: 40%; left: 60%; }
+  .ph-map .marker:nth-child(3) { top: 55%; left: 35%; }
+  .ph-map .marker:nth-child(4) { top: 65%; left: 75%; }
+  .ph-sheet {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: #0f1428;
+    border-top: 1px solid rgba(248,113,113,.40);
+    border-radius: 14px 14px 0 0;
+    padding-top: 8px;
+    z-index: 15;
+    transition: height .25s ease-out;
+  }
+  .ph-sheet .handle { width: 28px; height: 3px; background: rgba(255,255,255,.30); border-radius: 999px; margin: 0 auto 6px; }
+  .ph-sheet .body { padding: 0 8px; }
+  .ph-sheet .item { height: 22px; background: rgba(255,255,255,.05); border-radius: 4px; margin-bottom: 4px; border-left: 2px solid var(--accent); }
+  /* snap heights — total phone inner = 398px (410 - 12 border). topbar+subbar = 22+38 = 60. available = 338. */
+  .phone[data-snap="peek"]  .ph-sheet { height: 70px; }
+  .phone[data-snap="half"]  .ph-sheet { height: 200px; }
+  .phone[data-snap="full"]  .ph-sheet { height: 338px; }
+  .phone[data-snap="full"]  .ph-sheet { border-top: 0; border-radius: 0; }
+  /* phone-only without subbar */
+  .phone[data-view="detail"] .ph-subbar { display: none; }
+  .phone[data-view="detail"] .ph-map { top: 22px; }
+  .phone[data-view="detail"] .ph-sheet .item { border-left-color: var(--accent-2); }
+
+  /* ============ INTERACTIVE DEMO ============ */
+  .demo-wrap {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin: 20px 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 32px;
+    align-items: center;
+    box-shadow: var(--shadow);
+  }
+  .demo-wrap .controls { display: flex; flex-direction: column; gap: 14px; }
+  .demo-wrap .controls h4 { margin: 0 0 4px; color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
+  .demo-wrap .ctrl-group { display: flex; gap: 6px; }
+  .demo-wrap .radio { display: none; }
+  .demo-wrap .radio + label {
+    padding: 8px 14px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg-soft);
+    transition: all .15s;
+  }
+  .demo-wrap .radio:checked + label {
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #0b1020;
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(125,211,252,.30);
+  }
+  .demo-wrap .radio + label:hover { border-color: var(--accent); color: var(--accent); }
+  /* interactive snap demo binding */
+  #demo-snap-peek:checked ~ .demo-phone { --snap-h: 70px; }
+  #demo-snap-half:checked ~ .demo-phone { --snap-h: 200px; }
+  #demo-snap-full:checked ~ .demo-phone { --snap-h: 338px; }
+  #demo-view-list:checked ~ .demo-phone { --sub-display: block; --map-top: 60px; }
+  #demo-view-detail:checked ~ .demo-phone { --sub-display: none; --map-top: 22px; }
+  .demo-phone { /* phone clone with css-var driven */
+    width: 200px; height: 410px;
+    background: #0a0d1f; border-radius: 28px; border: 6px solid #1a1f3a;
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,.04);
+    position: relative; overflow: hidden;
+  }
+  .demo-phone::before {
+    content: ""; position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    width: 60px; height: 14px; background: #0a0d1f; border-radius: 0 0 10px 10px; z-index: 30;
+  }
+  .demo-phone .ph-topbar { position: absolute; left:0; right:0; top:0; height:22px; background: rgba(125,211,252,.18); border-bottom: 1px solid rgba(125,211,252,.40); display: flex; align-items: center; padding: 0 8px; font-size: 9px; color: var(--accent); font-weight: 600; z-index: 20; }
+  .demo-phone .ph-topbar::after { content: "🎲 Life Pickr"; }
+  .demo-phone .ph-subbar { position: absolute; left:0; right:0; top:22px; height:38px; background: rgba(251,191,36,.12); border-bottom: 1px solid rgba(251,191,36,.30); padding: 4px 6px; z-index: 20; display: var(--sub-display, block); }
+  .demo-phone .ph-subbar .search { background: rgba(255,255,255,.08); border-radius: 4px; height: 14px; margin-bottom: 4px; }
+  .demo-phone .ph-subbar .chips { display: flex; gap: 3px; }
+  .demo-phone .ph-subbar .chip-mini { width: 12px; height: 8px; background: rgba(255,255,255,.10); border-radius: 999px; }
+  .demo-phone .ph-map { position: absolute; left:0; right:0; bottom:0; top: var(--map-top, 60px); background: linear-gradient(135deg, #1e293b, #0f172a); z-index: 1; transition: top .25s; }
+  .demo-phone .ph-map .marker { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 1px white; }
+  .demo-phone .ph-map .marker:nth-child(1){top:30%;left:20%}
+  .demo-phone .ph-map .marker:nth-child(2){top:40%;left:60%}
+  .demo-phone .ph-map .marker:nth-child(3){top:55%;left:35%}
+  .demo-phone .ph-map .marker:nth-child(4){top:65%;left:75%}
+  .demo-phone .ph-sheet {
+    position: absolute; left:0; right:0; bottom:0;
+    background: #0f1428;
+    border-top: 1px solid rgba(248,113,113,.40);
+    border-radius: 14px 14px 0 0;
+    padding-top: 8px;
+    z-index: 15;
+    height: var(--snap-h, 70px);
+    transition: height .25s ease-out;
+  }
+  .demo-phone .ph-sheet .handle { width: 28px; height: 3px; background: rgba(255,255,255,.30); border-radius: 999px; margin: 0 auto 6px; }
+  .demo-phone .ph-sheet .body { padding: 0 8px; }
+  .demo-phone .ph-sheet .item { height: 22px; background: rgba(255,255,255,.05); border-radius: 4px; margin-bottom: 4px; border-left: 2px solid var(--accent); }
+  .demo-readout {
+    margin-top: 12px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--code-fg);
+    display: none;
+  }
+  #demo-snap-peek:checked ~ .demo-readout .readout-snap::after { content: "peek"; color: var(--accent); }
+  #demo-snap-half:checked ~ .demo-readout .readout-snap::after { content: "half"; color: var(--accent); }
+  #demo-snap-full:checked ~ .demo-readout .readout-snap::after { content: "full"; color: var(--accent-2); font-weight: 700; }
+  #demo-snap-full:checked ~ .demo-readout .readout-mode::after { content: "scroll"; color: var(--accent-2); font-weight: 700; }
+  #demo-snap-peek:checked ~ .demo-readout .readout-mode::after,
+  #demo-snap-half:checked ~ .demo-readout .readout-mode::after { content: "fixed"; color: var(--accent); }
+  #demo-snap-full:checked ~ .demo-readout .readout-addr::after { content: "✓ minify 동작"; color: var(--success); font-weight: 700; }
+  #demo-snap-peek:checked ~ .demo-readout .readout-addr::after,
+  #demo-snap-half:checked ~ .demo-readout .readout-addr::after { content: "그대로"; color: var(--muted); }
+  #demo-view-list:checked ~ .demo-readout .readout-view::after { content: "list"; color: var(--accent); }
+  #demo-view-detail:checked ~ .demo-readout .readout-view::after { content: "detail (subBar 회수)"; color: var(--accent-2); font-weight: 700; }
+  .demo-readout { display: block; }
+
+  /* ============ STATE DIAGRAM (SVG) ============ */
+  .state-diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    margin: 16px 0;
+  }
+  .state-diagram svg { max-width: 100%; height: auto; }
+
+  /* ============ TIMELINE ============ */
+  .timeline {
+    position: relative;
+    padding-left: 28px;
+    margin: 20px 0;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 8px; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-3), var(--accent-2));
+  }
+  .tl-item {
+    position: relative;
+    padding: 14px 18px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+  .tl-item::before {
+    content: "";
+    position: absolute;
+    left: -25px; top: 18px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .tl-item.t-chore::before { background: var(--muted); }
+  .tl-item.t-refactor::before { background: var(--accent-3); }
+  .tl-item.t-feat::before { background: var(--success); }
+  .tl-item.t-fix::before { background: var(--danger); }
+  .tl-item .tl-hash { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); padding: 2px 6px; background: var(--code-bg); border-radius: 4px; border: 1px solid var(--border); }
+  .tl-item .tl-type { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; margin-right: 8px; }
+  .tl-item .tl-type.chore    { background: rgba(123,134,184,.20); color: var(--muted); }
+  .tl-item .tl-type.refactor { background: rgba(192,132,252,.20); color: var(--accent-3); }
+  .tl-item .tl-type.feat     { background: rgba(52,211,153,.20); color: var(--success); }
+  .tl-item .tl-type.fix      { background: rgba(248,113,113,.20); color: var(--danger); }
+  .tl-item .tl-title { font-weight: 600; color: var(--fg); margin: 6px 0; font-size: 15px; }
+  .tl-item .tl-desc { color: var(--fg-soft); font-size: 13.5px; margin: 0; }
+
+  /* ============ BEFORE/AFTER ============ */
+  .ba-grid {
+    display: grid;
+    grid-template-columns: 1fr 60px 1fr;
+    gap: 0;
+    align-items: center;
+    margin: 20px 0;
+  }
+  .ba-col {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .ba-col.v1 { border-color: rgba(123,134,184,.50); }
+  .ba-col.v2 { border-color: rgba(52,211,153,.50); background: linear-gradient(180deg, rgba(52,211,153,.04), var(--bg-soft)); }
+  .ba-col .ba-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+  .ba-col.v1 .ba-label { color: var(--muted); }
+  .ba-col.v2 .ba-label { color: var(--success); }
+  .ba-col .ba-title { font-size: 18px; font-weight: 700; color: var(--fg); margin-bottom: 14px; }
+  .ba-col ul { text-align: left; list-style: none; padding: 0; margin: 0; font-size: 13px; }
+  .ba-col ul li { padding: 6px 0; color: var(--fg-soft); border-bottom: 1px dashed var(--border); }
+  .ba-col ul li:last-child { border-bottom: none; }
+  .ba-col ul li::before { margin-right: 6px; }
+  .ba-col.v1 ul li::before { content: "○"; color: var(--muted); }
+  .ba-col.v2 ul li::before { content: "✓"; color: var(--success); font-weight: 700; }
+  .ba-arrow {
+    font-size: 32px;
+    color: var(--accent);
+    text-align: center;
+    background: linear-gradient(90deg, var(--accent), var(--accent-3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ============ FLOW SEQUENCE ============ */
+  .seq { display: flex; gap: 12px; overflow-x: auto; padding: 12px 0; margin: 16px 0; }
+  .seq-step {
+    flex: 0 0 auto;
+    width: 160px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--fg-soft);
+    position: relative;
+  }
+  .seq-step .n {
+    display: inline-flex;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    font-size: 11px;
+    align-items: center; justify-content: center;
+    margin-bottom: 6px;
+  }
+  .seq-step .t { font-weight: 700; color: var(--fg); margin-bottom: 4px; font-size: 13px; }
+  .seq-step:not(:last-child)::after {
+    content: "→";
+    position: absolute;
+    right: -18px; top: 50%; transform: translateY(-50%);
+    color: var(--accent);
+    font-size: 18px;
+    z-index: 2;
+  }
+
+  /* ============ FLOW (numbered list verticle) ============ */
+  .flow { display: grid; grid-template-columns: 30px 1fr; gap: 16px; margin: 16px 0; }
+  .flow-step { display: contents; }
+  .flow-step .marker { width: 24px; height: 24px; border-radius: 50%; background: var(--panel); color: var(--accent); border: 2px solid var(--accent); text-align: center; line-height: 20px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+  .flow-step .body { background: var(--bg-soft); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); font-size: 13.5px; }
+  .flow-step .body em { color: var(--accent-2); font-style: normal; font-weight: 600; }
+
+  /* responsive */
+  @media (max-width: 1120px) {
+    .phones { grid-template-columns: repeat(2, 1fr); }
+    .ba-grid { grid-template-columns: 1fr; gap: 12px; }
+    .ba-arrow { transform: rotate(90deg); padding: 4px 0; }
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 28px 20px 60px; }
+    header.hero h1 { font-size: 26px; }
+    .matrix { grid-template-columns: 1fr; }
+    .phones { grid-template-columns: 1fr; }
+    .demo-wrap { grid-template-columns: 1fr; justify-items: center; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <div class="brand">맛집 모바일 v2</div>
+  <div class="brand-sub">바텀시트 패턴 (2026-05-18)</div>
+  <ol>
+    <li><a href="#tldr">TL;DR</a></li>
+    <li><a href="#snapshots">시트 스냅 미리보기</a></li>
+    <li><a href="#demo">인터랙티브 데모</a></li>
+    <li><a href="#background">배경 (v1 vs v2)</a></li>
+    <li><a href="#decisions">핵심 결정</a></li>
+    <li><a href="#statemachine">상태 다이어그램</a></li>
+    <li><a href="#architecture">아키텍처</a></li>
+    <li><a href="#desktop">데스크톱 분기</a></li>
+    <li><a href="#files">코드 위치</a></li>
+    <li><a href="#sheet">BottomSheet 세부</a></li>
+    <li><a href="#detail">detail 진입/복귀</a></li>
+    <li><a href="#timeline">커밋 타임라인</a></li>
+    <li><a href="#failures">실패한 시도</a></li>
+    <li><a href="#verify">검증 시나리오</a></li>
+    <li><a href="#tradeoff">트레이드오프</a></li>
+    <li><a href="#followup">후속 작업</a></li>
+    <li><a href="#decisions-log">결정 로그</a></li>
+  </ol>
+</nav>
+
+<main>
+  <header class="hero">
+    <div class="meta">
+      <span class="chip success">✓ 적용 완료</span>
+      <span class="chip date">2026-05-18</span>
+      <span class="chip commit">6adf917</span>
+      <span class="chip commit">6899e30</span>
+      <span class="chip commit">5cfd186</span>
+      <span class="chip commit">36ba145</span>
+      <span class="chip commit">8a09b34</span>
+    </div>
+    <h1>공개 맛집 페이지 — 모바일 바텀시트 패턴 (v2)</h1>
+    <p class="lede"><code>/restaurants-v2</code> — 네이버 지도식 3-snap 바텀시트로 모바일 UX 재구성. 데스크톱(xl+) 은 기존 3-column 그대로.</p>
+  </header>
+
+  <!-- 1. TL;DR -->
+  <section id="tldr">
+    <h2><span class="icon">🎯</span><span class="num">01</span> TL;DR</h2>
+    <div class="card tldr">
+      <div class="card-title">★ 핵심 5가지</div>
+      <ul class="keypoints">
+        <li><strong>3-snap 시트 (peek / half / full)</strong> — <code>@use-gesture/react</code> 드래그, 220ms transform animation</li>
+        <li><strong>Dual-mode 시트 (fixed ↔ scroll)</strong> — full 정착 시 <code>position:static</code> swap → body 스크롤 활성 → 모바일 주소창 자동 minify</li>
+        <li><strong>단일 sticky 통합 헤더</strong> — <code>PublicTopBar</code> 의 root <code>&lt;header&gt;</code> 안에 검색·카테고리 행을 <code>subBar</code> slot 으로 주입</li>
+        <li><strong>ResizeObserver 헤더 실측</strong> — 시트 <code>topOffset</code> 을 상수가 아닌 실측 px → subBar 변동/숨김에 자동 동기화</li>
+        <li><strong>viewKey per-view 스크롤 메모리</strong> — list↔detail 전환 시 list scroll 자동 저장/복원</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 2. SNAP SNAPSHOTS -->
+  <section id="snapshots">
+    <h2><span class="icon">📱</span><span class="num">02</span> 시트 스냅 미리보기</h2>
+    <p>3 스냅 + 데일 진입 시 subBar 회수 — 한눈에 비교.</p>
+    <div class="phones">
+      <div class="phone-wrap">
+        <div class="phone" data-snap="peek" data-view="list">
+          <div class="phone-screen">
+            <div class="ph-topbar"></div>
+            <div class="ph-subbar">
+              <div class="search"></div>
+              <div class="chips"><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span></div>
+            </div>
+            <div class="ph-map">
+              <span class="marker"></span><span class="marker"></span><span class="marker"></span><span class="marker"></span>
+            </div>
+            <div class="ph-sheet">
+              <div class="handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>peek</b>맵 위주 · 시트 최소</div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone" data-snap="half" data-view="list">
+          <div class="phone-screen">
+            <div class="ph-topbar"></div>
+            <div class="ph-subbar">
+              <div class="search"></div>
+              <div class="chips"><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span></div>
+            </div>
+            <div class="ph-map">
+              <span class="marker"></span><span class="marker"></span><span class="marker"></span><span class="marker"></span>
+            </div>
+            <div class="ph-sheet">
+              <div class="handle"></div>
+              <div class="body">
+                <div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>half</b>맵 + 목록 동시</div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone" data-snap="full" data-view="list">
+          <div class="phone-screen">
+            <div class="ph-topbar"></div>
+            <div class="ph-subbar">
+              <div class="search"></div>
+              <div class="chips"><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span></div>
+            </div>
+            <div class="ph-map">
+              <span class="marker"></span><span class="marker"></span><span class="marker"></span><span class="marker"></span>
+            </div>
+            <div class="ph-sheet">
+              <div class="handle"></div>
+              <div class="body">
+                <div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>full</b>시트가 맵 전체 덮음 · body 스크롤 = 주소창 minify</div>
+      </div>
+    </div>
+
+    <h3>+ detail 진입 시 (subBar 회수)</h3>
+    <div class="phones" style="grid-template-columns: repeat(2, 1fr); max-width: 460px;">
+      <div class="phone-wrap">
+        <div class="phone" data-snap="half" data-view="list">
+          <div class="phone-screen">
+            <div class="ph-topbar"></div>
+            <div class="ph-subbar">
+              <div class="search"></div>
+              <div class="chips"><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span></div>
+            </div>
+            <div class="ph-map">
+              <span class="marker"></span><span class="marker"></span><span class="marker"></span><span class="marker"></span>
+            </div>
+            <div class="ph-sheet">
+              <div class="handle"></div>
+              <div class="body"><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>list — half</b>topBar + subBar 노출</div>
+      </div>
+      <div class="phone-wrap">
+        <div class="phone" data-snap="half" data-view="detail">
+          <div class="phone-screen">
+            <div class="ph-topbar"></div>
+            <div class="ph-subbar">
+              <div class="search"></div>
+              <div class="chips"><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span></div>
+            </div>
+            <div class="ph-map">
+              <span class="marker"></span><span class="marker"></span><span class="marker"></span><span class="marker"></span>
+            </div>
+            <div class="ph-sheet">
+              <div class="handle"></div>
+              <div class="body"><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>detail — half</b>subBar 숨김 → 시트 영역 확장</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. INTERACTIVE DEMO -->
+  <section id="demo">
+    <h2><span class="icon">🎮</span><span class="num">03</span> 인터랙티브 데모</h2>
+    <p>버튼을 눌러 snap/view 를 바꿔보세요. 시트 높이와 readout 이 동시 변화 — 실제 컴포넌트의 동작 모델을 시각화.</p>
+    <div class="demo-wrap">
+      <input type="radio" name="demo-snap" id="demo-snap-peek" class="radio" />
+      <input type="radio" name="demo-snap" id="demo-snap-half" class="radio" checked />
+      <input type="radio" name="demo-snap" id="demo-snap-full" class="radio" />
+      <input type="radio" name="demo-view" id="demo-view-list" class="radio" checked />
+      <input type="radio" name="demo-view" id="demo-view-detail" class="radio" />
+      <div class="demo-phone">
+        <div class="ph-topbar"></div>
+        <div class="ph-subbar">
+          <div class="search"></div>
+          <div class="chips"><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span><span class="chip-mini"></span></div>
+        </div>
+        <div class="ph-map">
+          <span class="marker"></span><span class="marker"></span><span class="marker"></span><span class="marker"></span>
+        </div>
+        <div class="ph-sheet">
+          <div class="handle"></div>
+          <div class="body">
+            <div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <div>
+          <h4>snap</h4>
+          <div class="ctrl-group">
+            <label for="demo-snap-peek">peek</label>
+            <label for="demo-snap-half">half</label>
+            <label for="demo-snap-full">full</label>
+          </div>
+        </div>
+        <div>
+          <h4>view</h4>
+          <div class="ctrl-group">
+            <label for="demo-view-list">list</label>
+            <label for="demo-view-detail">detail</label>
+          </div>
+        </div>
+        <div class="demo-readout">
+          <div>snap     : <span class="readout-snap"></span></div>
+          <div>mode     : <span class="readout-mode"></span></div>
+          <div>view     : <span class="readout-view"></span></div>
+          <div>주소창   : <span class="readout-addr"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="callout">
+      <div class="label">⌨ 라벨</div>
+      <span style="color: var(--accent)">파란색</span> TopBar · <span style="color: var(--accent-2)">노란색</span> SearchRow (subBar) · <span style="color: var(--success)">초록색</span> 맵 · <span style="color: var(--danger)">빨간색</span> 시트
+    </div>
+  </section>
+
+  <!-- 4. BACKGROUND - BEFORE/AFTER -->
+  <section id="background">
+    <h2><span class="icon">⏮</span><span class="num">04</span> 배경 — v1 vs v2 비교</h2>
+    <div class="ba-grid">
+      <div class="ba-col v1">
+        <div class="ba-label">BEFORE</div>
+        <div class="ba-title">v1 <code>/restaurants</code></div>
+        <ul>
+          <li>하단 fixed pill <code>[목록 | 지도]</code> 토글</li>
+          <li>list ↔ map 전환 = 컨텍스트 단절</li>
+          <li>list 와 map 을 동시에 못 봄</li>
+          <li>상세 진입 시 전역 TopBar hidden</li>
+          <li>모달성 풀스크린</li>
+        </ul>
+      </div>
+      <div class="ba-arrow">⟶</div>
+      <div class="ba-col v2">
+        <div class="ba-label">AFTER</div>
+        <div class="ba-title">v2 <code>/restaurants-v2</code></div>
+        <ul>
+          <li>3-snap 바텀시트 (peek/half/full)</li>
+          <li>맵 + 목록 부분 노출 (조정 가능)</li>
+          <li>TopBar 항상 노출 (글로벌 네비 유지)</li>
+          <li>주소창 자동 minify 동작</li>
+          <li>list ↔ detail scroll 위치 자동 보존</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. DECISIONS -->
+  <section id="decisions">
+    <h2><span class="icon">🧭</span><span class="num">05</span> 핵심 결정</h2>
+
+    <h3>5-1. 모바일 주소창 minify 메커니즘 (제약 사실)</h3>
+    <div class="callout warn">
+      <div class="label">⚠ 브라우저 제약</div>
+      <strong>주소창은 body(window) 스크롤이 아래로 움직일 때만 줄어든다.</strong>
+      JS 강제 불가 (<code>window.scrollTo(0,1)</code> 트릭은 iOS 8+ 부터 무효).
+      transform 드래그 / 내부 div overflow 스크롤은 효과 X.
+    </div>
+    <p>⇒ 주소창을 줄이려면 <strong>그 순간엔 body 가 실제로 스크롤되는 구조</strong>여야 한다. 이게 dual-mode 의 존재 이유.</p>
+
+    <h3>5-2. Dual-mode 시트</h3>
+    <div class="matrix">
+      <div class="h">snap</div>
+      <div class="h">mode='fixed'</div>
+      <div class="h">mode='scroll'</div>
+      <div>peek / half</div>
+      <div class="yes">✅ transform 드래그</div>
+      <div class="meh">(사용 안 함)</div>
+      <div>full (드래그 중)</div>
+      <div class="yes">✅ (마지막 프레임)</div>
+      <div class="no">✗</div>
+      <div>full (정착 후)</div>
+      <div class="meh">(transition 직후)</div>
+      <div class="star">★ body 스크롤 → 주소창 minify</div>
+    </div>
+
+    <h3>5-3. 한 몸 sticky 통합 (v2 의 결정적 fix)</h3>
+    <div class="callout danger">
+      <div class="label">✕ 초기 버그</div>
+      snap=full collapse 시 브라우저가 주소창 재표시 → dvh jump → 분리되어 있던 두 sticky(TopBar / SearchRow) 의 paint 가 한 프레임 어긋나 <strong>겹침 또는 TopBar 사라짐</strong>.
+    </div>
+    <div class="callout">
+      <div class="label">✓ 해결</div>
+      <code>PublicTopBar</code> 에 <code>subBar</code> slot prop 추가 → root <code>&lt;header&gt;</code> 안에 두 번째 row 로 렌더. <strong>단일 sticky element</strong> 가 되어 dvh 변동이 한 단위로 일어남.
+    </div>
+
+    <h3>5-4. viewKey 스크롤 메모리</h3>
+    <div class="seq">
+      <div class="seq-step"><span class="n">1</span><div class="t">viewKey 변화</div><div>예: 'list' → 'detail'</div></div>
+      <div class="seq-step"><span class="n">2</span><div class="t">이전 키 저장</div><div>scrollByViewKeyRef[prev] = scrollY</div></div>
+      <div class="seq-step"><span class="n">3</span><div class="t">새 키 로드</div><div>scrollPosRef = map[new] ?? 0</div></div>
+      <div class="seq-step"><span class="n">4</span><div class="t">mode 별 적용</div><div>inner.scrollTop or window.scrollY</div></div>
+    </div>
+  </section>
+
+  <!-- 6. STATE MACHINE SVG -->
+  <section id="statemachine">
+    <h2><span class="icon">⚙</span><span class="num">06</span> 상태 다이어그램</h2>
+    <p>snap 과 mode 의 상태 전이. 색상: <span style="color: var(--accent)">파랑=fixed</span>, <span style="color: var(--accent-2)">노랑=scroll</span>.</p>
+    <div class="state-diagram">
+      <svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#7dd3fc" />
+          </marker>
+          <marker id="arrow-y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+          </marker>
+          <linearGradient id="g-fixed" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#1a2547" />
+            <stop offset="100%" stop-color="#131a31" />
+          </linearGradient>
+          <linearGradient id="g-scroll" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#3a2e0e" />
+            <stop offset="100%" stop-color="#2a210a" />
+          </linearGradient>
+        </defs>
+
+        <!-- nodes -->
+        <g>
+          <rect x="40" y="40" width="160" height="70" rx="14" fill="url(#g-fixed)" stroke="#7dd3fc" stroke-width="1.5"/>
+          <text x="120" y="68" text-anchor="middle" fill="#e6ebff" font-size="14" font-weight="700">snap=peek</text>
+          <text x="120" y="92" text-anchor="middle" fill="#7dd3fc" font-size="12" font-family="ui-monospace,monospace">mode=fixed</text>
+        </g>
+        <g>
+          <rect x="240" y="40" width="160" height="70" rx="14" fill="url(#g-fixed)" stroke="#7dd3fc" stroke-width="1.5"/>
+          <text x="320" y="68" text-anchor="middle" fill="#e6ebff" font-size="14" font-weight="700">snap=half</text>
+          <text x="320" y="92" text-anchor="middle" fill="#7dd3fc" font-size="12" font-family="ui-monospace,monospace">mode=fixed</text>
+        </g>
+        <g>
+          <rect x="440" y="40" width="160" height="70" rx="14" fill="url(#g-fixed)" stroke="#7dd3fc" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="520" y="68" text-anchor="middle" fill="#e6ebff" font-size="14" font-weight="700">snap=full</text>
+          <text x="520" y="92" text-anchor="middle" fill="#7dd3fc" font-size="12" font-family="ui-monospace,monospace">mode=fixed (220ms)</text>
+        </g>
+        <g>
+          <rect x="440" y="200" width="160" height="80" rx="14" fill="url(#g-scroll)" stroke="#fbbf24" stroke-width="2"/>
+          <text x="520" y="232" text-anchor="middle" fill="#e6ebff" font-size="14" font-weight="700">snap=full</text>
+          <text x="520" y="254" text-anchor="middle" fill="#fbbf24" font-size="12" font-family="ui-monospace,monospace">mode=scroll</text>
+          <text x="520" y="272" text-anchor="middle" fill="#fbbf24" font-size="10">★ body 스크롤 = 주소창 minify</text>
+        </g>
+
+        <!-- arrows -->
+        <path d="M 200 75 L 240 75" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrow)" />
+        <path d="M 400 75 L 440 75" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrow)" />
+        <path d="M 240 90 L 200 90" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrow)" />
+        <path d="M 440 90 L 400 90" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrow)" />
+
+        <text x="220" y="65" text-anchor="middle" fill="#b8c0e6" font-size="10">drag up</text>
+        <text x="220" y="105" text-anchor="middle" fill="#b8c0e6" font-size="10">drag down</text>
+        <text x="420" y="65" text-anchor="middle" fill="#b8c0e6" font-size="10">drag up</text>
+        <text x="420" y="105" text-anchor="middle" fill="#b8c0e6" font-size="10">drag down</text>
+
+        <!-- vertical mode swap -->
+        <path d="M 540 110 L 540 200" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arrow-y)" />
+        <path d="M 500 200 L 500 110" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrow)" />
+        <text x="610" y="160" text-anchor="end" fill="#fbbf24" font-size="11">220ms settle</text>
+        <text x="610" y="175" text-anchor="end" fill="#fbbf24" font-size="11">→ scroll</text>
+        <text x="430" y="160" text-anchor="end" fill="#7dd3fc" font-size="11">drag 시작</text>
+        <text x="430" y="175" text-anchor="end" fill="#7dd3fc" font-size="11">→ fixed</text>
+
+        <!-- legend -->
+        <g transform="translate(40, 220)">
+          <rect x="0" y="0" width="14" height="14" fill="url(#g-fixed)" stroke="#7dd3fc" stroke-width="1.5" rx="3"/>
+          <text x="22" y="11" fill="#b8c0e6" font-size="12">fixed: position:fixed + transform drag</text>
+          <rect x="0" y="22" width="14" height="14" fill="url(#g-scroll)" stroke="#fbbf24" stroke-width="2" rx="3"/>
+          <text x="22" y="33" fill="#b8c0e6" font-size="12">scroll: position:static, body 스크롤 가능</text>
+          <text x="0" y="60" fill="#b8c0e6" font-size="11">★ peek/half/full 의 시각 높이는 같은 fixed transform 으로 조절</text>
+          <text x="0" y="76" fill="#b8c0e6" font-size="11">  단 full 정착 시점에 scroll 모드로 swap</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 7. ARCHITECTURE -->
+  <section id="architecture">
+    <h2><span class="icon">🏗</span><span class="num">07</span> 아키텍처 (모바일 xl-)</h2>
+    <div class="state-diagram">
+      <svg viewBox="0 0 520 360" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g-tb" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#1a2547" /><stop offset="100%" stop-color="#0f152e" />
+          </linearGradient>
+          <linearGradient id="g-sub" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#3a2e0e" /><stop offset="100%" stop-color="#1a1408" />
+          </linearGradient>
+          <linearGradient id="g-mp" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#0a2618" /><stop offset="100%" stop-color="#051a10" />
+          </linearGradient>
+          <linearGradient id="g-sh" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#3a0e14" /><stop offset="100%" stop-color="#1a050a" />
+          </linearGradient>
+        </defs>
+
+        <!-- y axis labels -->
+        <text x="10" y="36" fill="#7b86b8" font-size="11" font-family="ui-monospace,monospace">y=0</text>
+        <text x="10" y="100" fill="#7b86b8" font-size="11" font-family="ui-monospace,monospace">y=56</text>
+        <text x="10" y="180" fill="#7b86b8" font-size="11" font-family="ui-monospace,monospace">y=headerH</text>
+        <text x="10" y="350" fill="#7b86b8" font-size="11" font-family="ui-monospace,monospace">y=100dvh</text>
+
+        <!-- TopBar -->
+        <rect x="80" y="20" width="420" height="50" rx="8" fill="url(#g-tb)" stroke="#7dd3fc" stroke-width="2"/>
+        <text x="98" y="42" fill="#7dd3fc" font-size="13" font-weight="700">PublicTopBar (sticky top-0)</text>
+        <text x="98" y="60" fill="#b8c0e6" font-size="11">row 1: 햄버거 + 로고 + NAV (h-14)</text>
+
+        <!-- SubBar -->
+        <rect x="80" y="78" width="420" height="80" rx="8" fill="url(#g-sub)" stroke="#fbbf24" stroke-width="2"/>
+        <text x="98" y="100" fill="#fbbf24" font-size="13" font-weight="700">subBar slot (PublicTopBar 내부)</text>
+        <text x="98" y="118" fill="#b8c0e6" font-size="11">list: PublicRestaurantListHeader (검색 + 카테고리 + 정렬)</text>
+        <text x="98" y="135" fill="#b8c0e6" font-size="11">detail: null (영역 회수)</text>
+        <text x="488" y="152" text-anchor="end" fill="#fbbf24" font-size="10" font-style="italic">ResizeObserver → headerHeight</text>
+
+        <!-- Map -->
+        <rect x="80" y="170" width="420" height="170" rx="8" fill="url(#g-mp)" stroke="#34d399" stroke-width="2"/>
+        <text x="98" y="195" fill="#34d399" font-size="13" font-weight="700">PublicRestaurantsMap</text>
+        <text x="98" y="213" fill="#b8c0e6" font-size="11">fixed inset-x-0 bottom-0, top:${headerHeight}, z-0</text>
+
+        <!-- Sheet (overlay) -->
+        <rect x="220" y="220" width="270" height="118" rx="10" fill="url(#g-sh)" stroke="#f87171" stroke-width="2"/>
+        <text x="232" y="240" fill="#f87171" font-size="13" font-weight="700">BottomSheet (z-20)</text>
+        <text x="232" y="256" fill="#b8c0e6" font-size="11">topOffset = headerHeight</text>
+        <text x="232" y="272" fill="#b8c0e6" font-size="11">drag handle (sticky, 48px hit-area)</text>
+        <text x="232" y="288" fill="#b8c0e6" font-size="11">content: list body or detail Outlet</text>
+        <text x="232" y="310" fill="#f87171" font-size="11" font-style="italic">peek / half / full</text>
+
+        <!-- markers -->
+        <circle cx="120" cy="240" r="3" fill="#f87171" stroke="white" stroke-width="0.5"/>
+        <circle cx="160" cy="270" r="3" fill="#f87171" stroke="white" stroke-width="0.5"/>
+        <circle cx="190" cy="220" r="3" fill="#f87171" stroke="white" stroke-width="0.5"/>
+      </svg>
+    </div>
+    <p><code>headerHeight</code> 는 <code>PublicTopBar</code> 의 <code>headerRef</code> 에 ResizeObserver 부착해 실측. subBar 가 등장/사라지거나 컨텐츠가 바뀌면 즉시 동기화.</p>
+  </section>
+
+  <!-- 8. 데스크톱 -->
+  <section id="desktop">
+    <h2><span class="icon">🖥</span><span class="num">08</span> 데스크톱 (xl+) 분기</h2>
+    <p>같은 페이지 컴포넌트 안에서 CSS 분기:</p>
+    <ul class="keypoints">
+      <li><code>&lt;div className="hidden xl:flex"&gt;</code> — 데스크톱 3-column (기존 RestaurantsPage 동일): 좌 <code>PublicRestaurantList</code> + 중 <code>&lt;Outlet/&gt;</code> + 우 <code>PublicRestaurantsMap</code></li>
+      <li><code>&lt;div className="xl:hidden"&gt;</code> — 모바일 시트 패턴</li>
+      <li>subBar 컨테이너에 <code>xl:hidden</code> → 데스크톱은 display:none → headerHeight 자동으로 56 (TopBar 만)</li>
+      <li>BottomSheet 는 xl- 영역 안에서만 mount → 데스크톱은 시트 무관</li>
+    </ul>
+  </section>
+
+  <!-- 9. 파일 -->
+  <section id="files">
+    <h2><span class="icon">📂</span><span class="num">09</span> 코드 위치</h2>
+    <table>
+      <thead><tr><th>파일</th><th>역할</th></tr></thead>
+      <tbody>
+        <tr><td><code>apps/web/src/components/PublicTopBar.tsx</code></td><td>subBar slot + ResizeObserver → onHeightChange</td></tr>
+        <tr><td><code>apps/web/src/components/PublicLayout.tsx</code></td><td>subBar/headerHeight state, outlet context, <code>usePublicLayout()</code></td></tr>
+        <tr><td><code>apps/web/src/components/restaurant/PublicRestaurantList.tsx</code></td><td>Header / Body / 통합 3 컴포넌트 export</td></tr>
+        <tr><td><code>apps/web/src/components/restaurant-v2/BottomSheet.tsx</code></td><td>dual-mode 시트 핵심</td></tr>
+        <tr><td><code>apps/web/src/routes/RestaurantsV2Page.tsx</code></td><td>xl+ 3-column + xl- 시트, subBar 등록</td></tr>
+        <tr><td><code>apps/web/src/routes/RestaurantDetailRoute.tsx</code></td><td>useMatch 로 v2 경로 감지 후 닫기 분기</td></tr>
+        <tr><td><code>apps/web/src/App.tsx</code></td><td>/restaurants-v2 + nested :placeId</td></tr>
+        <tr><td><code>apps/web/vite.config.ts</code></td><td>React duplicate 방지 root react alias</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 10. BottomSheet 세부 -->
+  <section id="sheet">
+    <h2><span class="icon">🎛</span><span class="num">10</span> BottomSheet 동작 세부</h2>
+
+    <h3>props</h3>
+<pre><code><span class="kw">interface</span> <span class="typ">Props</span> {
+  children: <span class="typ">React.ReactNode</span>;
+  snap?: <span class="typ">Snap</span>;                 <span class="cmt">// 'peek' | 'half' | 'full' — 외부 제어</span>
+  onSnapChange?(next: <span class="typ">Snap</span>): <span class="kw">void</span>;
+  peekHeight?: <span class="typ">number</span>;         <span class="cmt">// peek 일 때 최소 시각 높이 (px)</span>
+  halfRatio?: <span class="typ">number</span>;          <span class="cmt">// half 비율 (vh - topOffset 대비)</span>
+  topOffset?: <span class="typ">number</span>;          <span class="cmt">// 시트가 침범 못하는 상단 영역 (px)</span>
+  viewKey?: <span class="typ">string</span>;            <span class="cmt">// 컨텐츠 식별자 — per-view scroll 메모리</span>
+}</code></pre>
+
+    <h3>두 useLayoutEffect</h3>
+    <div class="card">
+      <div class="card-title">① mode + viewKey 변화 effect</div>
+      <ol>
+        <li>viewKey 가 바뀌었으면: outgoing scroll 저장, 새 키 scroll 로드</li>
+        <li><code>mode === 'fixed'</code>: html overflow 잠금, <code>inner.scrollTop = scrollPosRef</code></li>
+        <li><code>mode === 'scroll'</code>: html overflow 해제, <code>window.scrollTo(0, scrollPosRef)</code></li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="card-title">② snap → mode reconciliation effect</div>
+      <ul>
+        <li>드래그 중이면 skip</li>
+        <li><code>snap=full + mode=fixed</code> → setTimeout 220ms 후 <code>setMode('scroll')</code></li>
+        <li><code>snap≠full + mode=scroll</code> → 즉시 <code>setMode('fixed')</code></li>
+      </ul>
+    </div>
+
+    <h3>드래그 처리 (useDrag)</h3>
+    <ul class="keypoints">
+      <li>핸들에만 바인딩 (<code>{...bind()}</code> on handle div)</li>
+      <li><code>filterTaps: true</code>, <code>axis: 'y'</code></li>
+      <li><code>first</code> 이고 <code>mode === 'scroll'</code> 이면 <code>beginDragFromScroll()</code>: scrollY 저장 후 <code>setMode('fixed')</code></li>
+      <li><strong>scrollY 가드 없음</strong> — 핸들은 sticky 라 항상 받음</li>
+      <li><code>last</code> 이면 <code>pickSnap</code> 으로 가장 가까운 스냅 (velocity 가속)</li>
+    </ul>
+  </section>
+
+  <!-- 11. detail 진입 -->
+  <section id="detail">
+    <h2><span class="icon">🎬</span><span class="num">11</span> detail 진입/복귀 처리</h2>
+
+<pre><code><span class="cmt">// RestaurantsV2Page</span>
+<span class="kw">const</span> snapBeforeDetailRef = <span class="fn">useRef</span>&lt;<span class="typ">Snap</span>&gt;(<span class="str">'peek'</span>);
+
+<span class="kw">const</span> handleSelectItem = <span class="fn">useCallback</span>((id: <span class="typ">string</span>) =&gt; {
+  snapBeforeDetailRef.current = snap;           <span class="cmt">// 진입 전 snap 보존</span>
+  <span class="fn">navigate</span>({ pathname: <span class="str">`/restaurants-v2/${id}`</span>, search: ... });
+  <span class="fn">setSnap</span>(<span class="str">'half'</span>);                              <span class="cmt">// 상세가 잘 보이도록</span>
+}, [navigate, snap]);
+
+<span class="cmt">// 닫기 → placeId 가 null 이 되는 걸 감지해 snap 복원.</span>
+<span class="kw">const</span> prevPlaceIdRef = <span class="fn">useRef</span>(placeId);
+<span class="fn">useEffect</span>(() =&gt; {
+  <span class="kw">if</span> (prevPlaceIdRef.current !== <span class="kw">null</span> &amp;&amp; placeId === <span class="kw">null</span>) {
+    <span class="fn">setSnap</span>(snapBeforeDetailRef.current);
+  }
+  prevPlaceIdRef.current = placeId;
+}, [placeId]);</code></pre>
+
+    <h3>viewKey 자동 메모리와 결합한 흐름</h3>
+    <table>
+      <thead>
+        <tr><th>단계</th><th>snap</th><th>mode</th><th>view</th><th>body scrollY</th><th>inner scrollTop</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>초기</td><td>peek</td><td>fixed</td><td>list</td><td>0</td><td>0</td></tr>
+        <tr><td>핸들 → full</td><td>full</td><td>scroll</td><td>list</td><td>0</td><td>—</td></tr>
+        <tr><td>body 스크롤 600</td><td>full</td><td>scroll</td><td>list</td><td class="warn">600</td><td>—</td></tr>
+        <tr><td>카드 클릭</td><td>half</td><td>fixed</td><td><strong>detail</strong></td><td>0</td><td class="ok">0 (top)</td></tr>
+        <tr><td>닫기 (X)</td><td><strong>full</strong></td><td>scroll</td><td><strong>list</strong></td><td class="ok">600 (복원)</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 12. TIMELINE -->
+  <section id="timeline">
+    <h2><span class="icon">⏱</span><span class="num">12</span> 커밋 타임라인</h2>
+    <div class="timeline">
+      <div class="tl-item t-chore">
+        <span class="tl-hash">6adf917</span>
+        <span class="tl-type chore">chore</span>
+        <div class="tl-title">React 19.1.0 정렬 + @use-gesture/react 추가</div>
+        <p class="tl-desc">workspace 의 react/react-dom 버전을 모두 19.1.0 으로 통일. duplicate React 로 인한 "Invalid hook call" 에러 해결. vite alias 로 안전망 추가.</p>
+      </div>
+      <div class="tl-item t-refactor">
+        <span class="tl-hash">6899e30</span>
+        <span class="tl-type refactor">refactor</span>
+        <div class="tl-title">PublicRestaurantList 헤더·본체 분리</div>
+        <p class="tl-desc">검색·카테고리·정렬을 PublicRestaurantListHeader, 카드 ul 을 PublicRestaurantListBody 로 export. v2 가 헤더만 따로 가져다 쓰기 위한 사전 정리. 데스크톱 인터페이스 무변경.</p>
+      </div>
+      <div class="tl-item t-feat">
+        <span class="tl-hash">5cfd186</span>
+        <span class="tl-type feat">feat</span>
+        <div class="tl-title">/restaurants-v2 모바일 시트 패턴 + 메뉴 링크 전환</div>
+        <p class="tl-desc">BottomSheet (dual-mode, 3-snap, viewKey) 신설. RestaurantsV2Page 가 xl+ 는 3-column, xl- 는 시트 + sticky SearchRow. PublicTopBar / Sidebar 의 "맛집" 링크를 v2 로 전환.</p>
+      </div>
+      <div class="tl-item t-fix">
+        <span class="tl-hash">36ba145</span>
+        <span class="tl-type fix">fix</span>
+        <div class="tl-title">v2 모바일 헤더·검색바를 한몸 sticky 로 통합</div>
+        <p class="tl-desc">dvh 변동 시 두 sticky 가 paint 어긋나며 겹치던 버그 해결. PublicTopBar 에 subBar slot prop 추가 → 단일 sticky element. ResizeObserver 로 시트 topOffset 실측.</p>
+      </div>
+      <div class="tl-item t-feat">
+        <span class="tl-hash">8a09b34</span>
+        <span class="tl-type feat">feat</span>
+        <div class="tl-title">v2 모바일 상세 진입 시 검색·카테고리 subBar 숨김</div>
+        <p class="tl-desc">viewMode==='detail' 일 때 subBar=null → headerHeight 자동 56 → 시트가 상세 컨텐츠를 더 넓게 노출. 닫으면 자동 복원.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13. FAILURES -->
+  <section id="failures">
+    <h2><span class="icon">🔧</span><span class="num">13</span> 실패한 시도와 회복</h2>
+    <table>
+      <thead><tr><th>#</th><th>시도</th><th>결과</th><th>해결</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><code>@use-gesture/react</code> 의 <code>pointer:{ touch:true }</code></td>
+          <td class="bad">Chrome 데스크톱 mouse 드래그 무시</td>
+          <td class="ok">옵션 제거</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>scroll 모드 핸들 드래그 시 <code>scrollY &gt; 0</code> 이면 cancel</td>
+          <td class="bad">사용자: scrollY&gt;0 일 때 핸들 무반응</td>
+          <td class="ok">가드 제거. scroll 진입 시 scrollY 저장 후 fixed swap</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>TopBar + SearchRow 별도 sticky</td>
+          <td class="bad">사용자: 주소창 변동 시 paint 어긋남</td>
+          <td class="ok">subBar slot 통합</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><code>SEARCH_ROW_HEIGHT=140</code> 상수</td>
+          <td class="warn">컨텐츠 변동 시 시트 위치 어긋남</td>
+          <td class="ok">ResizeObserver 실측</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><code>scrollPosRef</code> 를 매번 0 reset</td>
+          <td class="bad">사용자: detail 닫고 돌아오면 list 가 top 으로</td>
+          <td class="ok">viewKey per-view 메모리</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>(별도) root react@19.1.0 + react-dom@19.2.6 mismatch</td>
+          <td class="bad">"Invalid hook call" / useMemo=null</td>
+          <td class="ok">모든 workspace react=19.1.0 통일 + vite alias</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 14. 검증 -->
+  <section id="verify">
+    <h2><span class="icon">✅</span><span class="num">14</span> 검증 시나리오 (실기기)</h2>
+    <div class="card">
+      <ol>
+        <li><strong>peek → drag up → half → drag up → full</strong>: 시트 부드럽게 확장, full 정착 후 220ms 내 mode swap</li>
+        <li><strong>full + body 스크롤</strong>: 주소창 자동 minify</li>
+        <li><strong>full + 스크롤된 상태 + 핸들 collapse</strong>: scroll→fixed swap, body scrollY 0 reset, inner.scrollTop 에 이전 값 미러</li>
+        <li><strong>카드 클릭</strong>: snap=half, viewMode='detail', subBar 사라짐, detail content top 부터</li>
+        <li><strong>detail body 스크롤 후 닫기</strong>: list 복귀 시 진입 전 snap 복원 + scroll 위치 복원</li>
+        <li><strong>주소창 minify 변동</strong>: visualViewport resize 가 vh state 갱신 → 시트 위치 즉시 따라감</li>
+        <li><strong>데스크톱 폭 (xl+)</strong>: 시트/subBar 안 보임, 기존 3-column 동작</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 15. 트레이드오프 -->
+  <section id="tradeoff">
+    <h2><span class="icon">⚖</span><span class="num">15</span> 알려진 트레이드오프</h2>
+    <ul class="keypoints">
+      <li><strong>fixed 모드 inner 직접 스크롤은 메모리에 안 반영</strong> — peek/half 에서 inner 컨테이너를 직접 스크롤한 경우, 다음 mode 전환 시 scrollPosRef 가 덮어씀</li>
+      <li><strong>subBar 등장/사라짐 transition 없음</strong> — detail 진입 시 헤더 영역 즉시 변동. 어색하면 height transition 추가</li>
+      <li><strong>scrollPosRef 가 'list'/'detail' 두 키만</strong> — 식당별 분리 메모리 안 함</li>
+      <li><strong>PublicTopBar root 가 flex → block</strong> — 두 번째 row 가 세로 stack 가능하도록. xl+ 에서 시각적 영향 없음</li>
+      <li><strong>React 19.1.0 다운그레이드</strong> — workspace 일관성 위해. 19.2 신규 API 사용처 현재 없음</li>
+    </ul>
+  </section>
+
+  <!-- 16. 후속 -->
+  <section id="followup">
+    <h2><span class="icon">🚀</span><span class="num">16</span> 후속 작업 후보</h2>
+    <table>
+      <thead><tr><th>항목</th><th>설명</th></tr></thead>
+      <tbody>
+        <tr><td>본문 pull-down 인터셉트</td><td>현재 scroll 모드 collapse 는 드래그 핸들로만. 본문 영역 scrollY=0 pull-down 은 iOS overscroll refresh 동작</td></tr>
+        <tr><td>헤더 transition</td><td>subBar 등장/사라짐 height transition</td></tr>
+        <tr><td>시트 snap 가속 튜닝</td><td>빠른 플릭의 다음 스냅 예측 weight (현재 200ms)</td></tr>
+        <tr><td>deep link 도착 시 초기 snap</td><td>외부 링크로 detail 직접 도착 시 모바일 snap 기본값</td></tr>
+        <tr><td>번들 코드 스플릿</td><td>1.1MB (gzip 305KB) — <code>ol</code> 가 큰 비중</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 17. 결정 로그 -->
+  <section id="decisions-log">
+    <h2><span class="icon">📜</span><span class="num">17</span> 사용자 관점 결정 로그</h2>
+    <table>
+      <thead><tr><th>질문</th><th>결정</th></tr></thead>
+      <tbody>
+        <tr><td>데스크톱(xl+) 레이아웃</td><td class="ok">기존 3-column 그대로</td></tr>
+        <tr><td>PublicTopBar 공통화</td><td class="ok">기존 PublicTopBar 그대로 재사용</td></tr>
+        <tr><td>데이터 소스</td><td class="ok">실 API (useRestaurantsPublic 등)</td></tr>
+        <tr><td>카드 클릭 시 snap</td><td class="ok">half 로 자동 조정</td></tr>
+        <tr><td>한 몸 sticky 방식</td><td class="ok">PublicTopBar 에 slot prop 추가</td></tr>
+        <tr><td>시트 topOffset 계산</td><td class="ok">ResizeObserver 로 실측</td></tr>
+        <tr><td>5173 에러 해결</td><td class="ok">사용자가 직접 dev 서버 재시작</td></tr>
+        <tr><td>PoC 범위</td><td class="ok">전체 (상세까지)</td></tr>
+        <tr><td>스냅 단계</td><td class="ok">3단계 (peek / half / full)</td></tr>
+        <tr><td>드래그 라이브러리</td><td class="ok">@use-gesture/react</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+</div>
+</body>
+</html>
