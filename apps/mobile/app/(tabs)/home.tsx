@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRestaurantRanking, useTheme } from '@repo/shared';
 import type { RestaurantRankingItemType } from '@repo/api-contract';
+import { NotchFade } from '~/components/NotchFade';
 import { RankingHeader } from '~/components/RankingHeader';
 import { RankingRow } from '~/components/RankingRow';
 
@@ -115,13 +116,16 @@ export default function HomeScreen() {
   );
 
   return (
-    // 상단 헤더(Tabs)를 숨겼으므로 상태바 영역만큼 직접 padding. 좌우/하단은
-    // 탭바·기본 레이아웃이 처리.
-    <View style={[styles.container, { backgroundColor: theme.colors.bg, paddingTop: insets.top }]}>
+    // edge-to-edge 스크롤 — 컨테이너에는 paddingTop 을 두지 않고, FlatList 의
+    // contentContainerStyle 에만 insets.top 을 더한다. 그러면 스크롤 트랙은
+    // 화면 맨 위부터지만 컨텐츠 시작 지점은 노치 아래라, 위로 스와이프하면
+    // 컨텐츠가 노치 영역으로 빨려 들어가며 상단 BlurView 뒤로 흐려진다.
+    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       <FlatList
         data={items}
         keyExtractor={(it) => it.placeId}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingTop: insets.top + 16 }]}
+        scrollIndicatorInsets={{ top: insets.top }}
         ListHeaderComponent={listHeader}
         ItemSeparatorComponent={() => <View style={styles.sep} />}
         renderItem={({ item }) => (
@@ -135,7 +139,11 @@ export default function HomeScreen() {
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
         refreshControl={
-          <RefreshControl refreshing={query.isFetching && offset === 0} onRefresh={handleRefresh} />
+          <RefreshControl
+            progressViewOffset={insets.top}
+            refreshing={query.isFetching && offset === 0}
+            onRefresh={handleRefresh}
+          />
         }
         ListEmptyComponent={
           isInitialLoading ? (
@@ -166,13 +174,15 @@ export default function HomeScreen() {
           ) : null
         }
       />
+
+      <NotchFade />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 16, gap: 0 },
+  list: { paddingHorizontal: 16, paddingBottom: 16, gap: 0 },
   sep: { height: 8 },
   center: { paddingVertical: 48, alignItems: 'center' },
   footer: { paddingVertical: 16, alignItems: 'center' },

@@ -15,6 +15,7 @@ import type {
   RestaurantPublicListItemType,
   RestaurantPublicListQueryType,
 } from '@repo/api-contract';
+import { NotchFade } from '~/components/NotchFade';
 import { PublicRestaurantCard } from '~/components/PublicRestaurantCard';
 import { PublicRestaurantsWebMap } from '~/components/PublicRestaurantsWebMap';
 import { RestaurantSearchBar } from '~/components/RestaurantSearchBar';
@@ -147,24 +148,19 @@ export default function RestaurantsScreen() {
   );
 
   return (
-    // 상단 헤더(Tabs) 숨김. list 모드는 검색바가 노치 밑에서 시작하도록
-    // paddingTop=insets.top; map 모드는 지도 타일이 edge-to-edge 가 자연
-    // (Naver/Kakao 지도 패턴). map 모드의 floating 버튼(재검색/전체 영역) 은
+    // 상단 헤더(Tabs) 숨김. list/map 모두 edge-to-edge — list 는 FlatList
+    // contentContainer 의 paddingTop 으로 컨텐츠만 노치 아래로 밀고, 노치
+    // 영역엔 페이드 오버레이를 얹어 컨텐츠가 그 뒤로 흘러갈 때 자연스럽게
+    // 사라지게 한다. map 은 지도 타일이 노치까지 차는 게 자연(Naver/Kakao
+    // 패턴) 이라 오버레이 생략. map 모드의 floating 버튼(재검색/전체 영역) 은
     // WebMap 안에서 topInset 만큼 띄워 노치를 피한다.
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.colors.bg,
-          paddingTop: view === 'list' ? insets.top : 0,
-        },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       {view === 'list' ? (
         <FlatList
           data={items}
           keyExtractor={(it) => it.placeId}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingTop: insets.top + 16 }]}
+          scrollIndicatorInsets={{ top: insets.top }}
           ListHeaderComponent={header}
           ItemSeparatorComponent={() => <View style={styles.sep} />}
           renderItem={({ item }) => (
@@ -179,6 +175,7 @@ export default function RestaurantsScreen() {
           onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl
+              progressViewOffset={insets.top}
               refreshing={query.isFetching && offset === 0}
               onRefresh={handleRefresh}
             />
@@ -224,6 +221,8 @@ export default function RestaurantsScreen() {
           onClearArea={handleClearArea}
         />
       )}
+
+      {view === 'list' && <NotchFade />}
 
       <View style={styles.fabWrap} pointerEvents="box-none">
         <View
@@ -273,7 +272,7 @@ const ToggleBtn = ({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 16 },
+  list: { paddingHorizontal: 16, paddingBottom: 16 },
   sep: { height: 8 },
   center: { paddingVertical: 48, alignItems: 'center' },
   footer: { paddingVertical: 16, alignItems: 'center' },
