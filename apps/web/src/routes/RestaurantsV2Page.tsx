@@ -107,8 +107,11 @@ export const RestaurantsV2Page = () => {
   // 모바일 전용 subBar 컨텐츠 — 검색 input + 카테고리 칩 + 총/정렬.
   // xl+ 데스크톱에서는 컨테이너 div 가 display:none (xl:hidden) 이라 차지하는
   // 높이 0 → ResizeObserver 가 측정한 headerHeight 는 자동으로 56(TopBar 만).
-  const subBarContent = useMemo(
-    () => (
+  // detail 진입 시엔 null 반환 → headerHeight 가 56 으로 줄어 시트가 상세 컨텐츠를
+  // 더 넓게 노출 (검색·카테고리는 list 화면에서만 의미 있음).
+  const subBarContent = useMemo(() => {
+    if (viewMode === 'detail') return null;
+    return (
       <div className="xl:hidden">
         <PublicRestaurantListHeader
           q={q}
@@ -120,9 +123,8 @@ export const RestaurantsV2Page = () => {
           onChangeSort={(next) => setParam('sort', next === 'recent' ? null : next)}
         />
       </div>
-    ),
-    [q, total, category, sort, setParam],
-  );
+    );
+  }, [viewMode, q, total, category, sort, setParam]);
 
   // subBar 등록/해제. useLayoutEffect 로 paint 전 PublicLayout state 갱신 →
   // 첫 paint 부터 통합 헤더 모습으로 렌더.
