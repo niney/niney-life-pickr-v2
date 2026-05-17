@@ -1,9 +1,9 @@
 ---
 topic: project-overview
-last_compiled: 2026-05-15
-sources_count: 12
+last_compiled: 2026-05-17
+sources_count: 18
 status: active
-aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source]
+aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source, auto-dc-merge, sse-heartbeat, stale-summary-cleanup]
 ---
 
 # project-overview — 모노레포 개요
@@ -23,7 +23,7 @@ aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discov
 선택이 고민될 때 대신 골라주는 서비스다. 핵심 도메인은 두 축으로 갈린다:
 
 - **선택 도우미(Pick)** — 사용자가 선택지(`options`)를 등록해 두면, API가 무작위 결과를 골라 `PickResult`로 기록한다. 식당이 등록되어 있으면 분석 점수(만족도/긍정 비율)를 가중치로 쓰는 `smart-pick` 가 활성된다.
-- **맛집 분석** — 어드민이 다양한 출처에서 식당을 크롤링하고 리뷰를 LLM으로 분석해 메뉴 통계 트리까지 빌드한다 ([crawl](crawl.md), [ai](ai.md), [menu-grouping](menu-grouping.md), [analytics](analytics.md)). 출처는 3종 — **네이버 플레이스 / 다이닝코드 / 캐치테이블**. 어드민의 진입 경로는 세 갈래 — 단건 placeId 입력 (`/admin/restaurants`), 키워드 검색→다중 선택 일괄 등록 (`/admin/discover`), 다이닝코드 일괄 저장 (`/admin/diningcode`). 결과물은 공개 페이지에서 비로그인 사용자가 그대로 본다.
+- **맛집 분석** — 어드민이 다양한 출처에서 식당을 크롤링하고 리뷰를 LLM으로 분석해 메뉴 통계 트리까지 빌드한다 ([crawl](crawl.md), [ai](ai.md), [menu-grouping](menu-grouping.md), [analytics](analytics.md)). 출처는 3종 — **네이버 플레이스 / 다이닝코드 / 캐치테이블**. 어드민의 진입 경로는 네 갈래 — 단건 placeId 입력 (`/admin/restaurants`), 키워드 검색→다중 선택 일괄 등록 (`/admin/discover`), 다이닝코드 일괄 저장 (`/admin/diningcode`), **AI 자동 발견** (`/admin/auto-discover` — 영역명 한 줄 + 카테고리 + 목표 수 만으로 키워드 8개 자동 생성 → 다중 검색·dedupe → 그룹 5병렬 직렬 크롤·등록. 자세한 건 [auto-discover](auto-discover.md)). 결과물은 공개 페이지에서 비로그인 사용자가 그대로 본다.
 
 세 개의 클라이언트가 동일 백엔드를 공유한다:
 - **friendly** — Fastify + Prisma + SQLite 백엔드 ([friendly](friendly.md))
@@ -68,7 +68,8 @@ Catchtable  ──┘     ^                                    ^
 
 - `Restaurant` 는 `(source, sourceId)` 로 unique — 네이버는 `source='naver'` 이고 `sourceId=placeId`, 다이닝코드/캐치테이블은 자체 id 사용 + `placeId=null`
 - 같은 가게의 다른 출처 행들은 `canonicalId` 를 공유 — 마이그레이션 직후엔 모든 Restaurant 가 자기 전용 Canonical 을 가지고(1:1), merge 수락 시 점진적으로 N:1 로 압축됨
-- **자동 머지 안 함** — 매칭 알고리즘이 임계점(score ≥ 0.45) 넘는 후보를 잡으면 `CanonicalMergeProposal` 큐에 적재하고 어드민이 수락/거절. 머지 큐 자동 적재는 두 트리거 — (a) 새 출처 등록 후크 자동, (b) 어드민이 수동 "병합 후보 찾기" 버튼
+- **자동 DC 머지 후크 (C안 정착, 신규)** — Naver 크롤 done 직후 `tryAutoMatchDiningcode` 가 좌표 기반 DC 후보(200m 반경)를 점수화해 임계 통과(nameScore ≥ AUTO_DC_NAME_THRESHOLD, distance ≤ AUTO_DC_DISTANCE_THRESHOLD_M, 차순위와 점수 격차 ≥ AUTO_DC_TIE_GAP) 시 **자동으로 DC 저장 + canonical 머지**까지 수행. 이전 "수동 확정만" 정책에서 한 단계 진화 — 잘못된 머지의 복구 비용이 큰 케이스만 사람 컨펌으로 남기는 절충
+- **검토 큐는 임계 못 넘는 케이스 fallback** — score ≥ 0.45 이되 자동 임계까지는 못 닿는 후보는 `CanonicalMergeProposal` 큐로. 머지 큐 자동 적재 트리거 — (a) 새 출처 등록 후크 자동, (b) 어드민 수동 "병합 후보 찾기" 버튼
 
 자세한 모델·매칭 로직: [friendly](friendly.md), [canonical](canonical.md).
 
@@ -79,7 +80,8 @@ Catchtable  ──┘     ^                                    ^
 | `auth` | 회원가입 / 로그인 / JWT | — |
 | `user` | 프로필 / 관리자 role 토글 | — |
 | `picks` | 선택지 등록 + 무작위 픽 | — |
-| `crawl` | 네이버 플레이스 / 다이닝코드 / 캐치테이블 크롤 (Playwright + 어댑터별 분기) | [crawl](crawl.md) |
+| `crawl` | 네이버 플레이스 / 다이닝코드 / 캐치테이블 크롤 (Playwright + 어댑터별 분기, Naver done 후 자동 DC 매칭+머지 후크 포함) | [crawl](crawl.md) |
+| **`auto-discover`** | AI 키워드 8개 → 다중 검색 → 그룹 5병렬 자동 발견 잡 (신규) | [auto-discover](auto-discover.md) |
 | `ai` | LLM 라우팅 (요약/분석/그룹핑/머지) | [ai](ai.md) |
 | `summary` | 리뷰 단위 분석 v4 (메뉴 멘션 + 태그) | [ai](ai.md) |
 | `restaurant` | 어드민 식당 CRUD + 공개 list/detail/insights/ranking | — |
@@ -100,7 +102,7 @@ Catchtable  ──┘     ^                                    ^
 |---|---|---|---|
 | 공개 | `PublicLayout` (TopBar + 모바일 사이드바) | `/`, `/restaurants`, `/restaurants/:placeId` | 없음 |
 | 인증 진입 | (단독) | `/login` | 없음 |
-| 어드민 | `AdminLayout` (좌측 사이드바 — 홈 / 맛집 발견 / **다이닝코드** / 맛집 / AI 분석 관리 / 크롤링 테스트 / 다이닝코드 테스트 / 캐치테이블 테스트 / AI 테스트 / 설정) | `/admin/*` | `RequireAdmin` (token + role=ADMIN) |
+| 어드민 | `AdminLayout` (좌측 사이드바 — 홈 / 맛집 발견 / **맛집 자동 발견** / 맛집 / 다이닝코드 / AI 분석 관리 / 네이버·다이닝코드·캐치테이블 크롤링 테스트 / AI 테스트 / 설정) | `/admin/*` | `RequireAdmin` (token + role=ADMIN) |
 
 공개 영역은 Pretendard 변수 폰트 + 텍스트 사이즈 시프트가 적용되고(`font-pretendard` + `--text-*` CSS 변수), 어드민은 시스템 폰트 fallback 그대로 둔다 — 운영자 시야 부담을 줄이기 위해 한정적으로만 적용.
 
@@ -125,6 +127,28 @@ naver-search.playwright.adapter (Playwright 페이지로 응답 가로채기 —
 ```
 
 URL state 는 `?q=&bbox=&tab=&placeId=` — useSearchParams 직접 read/write. 검색당 ~1.1초.
+
+발견 리스트 카드는 노출 행마다 같은 canonical 의 **다이닝코드 형제 행을 합산해** 표시한다 — `totalReviews / summaryPending·Running·Done·Failed / analyzedCount / positive·negative·neutralCount` 두 출처 합산, 평균 점수는 가중평균. 응답 행 키는 Naver placeId 그대로라 라우팅/캐시/UI 스키마 변경 없음. SSE snapshot 이 합산 카운트를 덮어쓰지 않도록 후속 패치도 포함. 또한 행 호버 자동 지도 이동은 **"지도" 버튼 클릭 트리거로 변경** — 모바일 터치에서 호버가 의도와 다르게 발화하던 문제 해결.
+
+상세 패널은 **Naver + 다이닝코드 융합 detail** 을 보여준다 — 백엔드 `restaurant.merge.ts` (신규, 순수 함수 모음) 가 canonical 그룹의 Naver 행 + DC 형제들을 단일 detail 로 머지해 응답하면, FE 는 `PublicRestaurantDetail` 컴포넌트 그대로 렌더. 필드별 머지 규칙: rating/reviewCount/phone/address 는 Naver 우선·없으면 DC, businessHours 는 DC summary 우선, menus 는 Naver 비어 있을 때만 DC, photos/reviews 는 두 출처 합치고 dedup, descTags/facilities/scoreDetail/wordcloud 는 DC 전용이라 항상 노출. canonical 정책 진화의 다음 단계 ([canonical](canonical.md)).
+
+### 어드민 자동 발견 페이지 (`/admin/auto-discover` — AI 키워드 → 다중 검색 → 그룹 5병렬, 신규)
+
+영역명 한 줄("강남역") + 카테고리 칩 + 목표 수만 입력하면 한 번의 잡으로 끝나는 페이지. 흐름:
+
+```
+입력: { area, categories[], targetCount } → POST /admin/auto-discover/jobs (즉시 jobId 반환)
+   ▼ (백그라운드 SSE 스트림)
+Phase 1: generating_keywords — AI(ollama-cloud, JSON schema 강제) 가 정확히 8개 생성 (부족 시 fallback 보충)
+   ▼
+Phase 2: searching — 키워드 8개 Promise.all 병렬 네이버 지도 검색 + placeId dedupe + 이미 등록은 skipped
+   ▼
+Phase 3: crawling — 남은 후보를 5개 단위 그룹으로, 그룹 직렬 + 그룹 내 5병렬 Naver Place 크롤·등록
+   ▼ (newlyRegistered >= targetCount 면 조기 종료)
+markFinished('done'|'cancelled'|'failed')
+```
+
+actor 당 잡은 1 개 제한 (다이닝코드 bulk-save 와 의도적으로 다른 결정 — 무거운 파이프라인 한 줄). 자세한 건 [auto-discover](auto-discover.md).
 
 ### 다이닝코드 어드민 페이지 (`/admin/diningcode` — 정식)
 
@@ -185,12 +209,13 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint)
 │   └── public/:placeId/insights ... 공개 인사이트
 ├── health
 └── admin/
-    ├── crawl/* .................... 크롤 잡 + SSE (출처 3종 분기)
+    ├── crawl/* .................... 크롤 잡 + SSE (출처 3종 분기, Naver done 후 자동 DC 매칭 후크)
+    ├── auto-discover/* ............ AI 키워드 → 다중 검색 → 그룹 5병렬 자동 발견 잡 (신규)
     ├── ai/* ....................... LLM 호출 + provider 키
     ├── analytics/* ................ 그룹핑 잡 + 글로벌 머지 + 카테고리 트리
-    ├── canonical/* ................ 머지 제안 큐 / 수락·거절 (신규)
+    ├── canonical/* ................ 머지 제안 큐 / 수락·거절
     ├── settings/map ............... 지도 SDK 키 (admin)
-    └── restaurants/* .............. 어드민 식당 CRUD + 인사이트 + smart-pick + summary SSE
+    └── restaurants/* .............. 어드민 식당 CRUD + 인사이트 + smart-pick + summary SSE (heartbeat 15s + idle timeout)
 ```
 
 ### 웹 라우트 트리 (요약)
@@ -204,6 +229,7 @@ PublicLayout
 AdminLayout (RequireAdmin 가드)
   /admin                     AdminHomePage
   /admin/discover            AdminDiscoverPage (네이버 검색·다중 등록)
+  /admin/auto-discover       AdminAutoDiscoverPage (AI 키워드 → 다중 검색 → 그룹 5병렬, 신규)
   /admin/diningcode          AdminDiningcodeShopPage (다이닝코드 정식, SSE 일괄 저장)
   /admin/diningcode-test     AdminDiningcodeTestPage (검증용 — 유지)
   /admin/catchtable-test     AdminCatchtableTestPage (검증용)
@@ -279,12 +305,19 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 |---|---|
 | **용어 규약 — 웹 / 앱 / 모바일 분리 (신규)** | "모바일"의 모호함 제거. 웹은 `apps/web`, 앱은 `apps/mobile`, "모바일"은 웹의 반응형만. 코드 식별자(`mobile`/`web` 슬러그)는 그대로 — 디렉터리 슬러그 기준. CLAUDE.md 의 "용어" 섹션이 단일 출처 |
 | **출처 3종 + canonical 1:N 묶음 (신규)** | 크롤 출처 확장 (Naver + 다이닝코드 + 캐치테이블). `Restaurant.(source, sourceId)` unique 로 출처별 행 분리, `CanonicalRestaurant` 가 같은 가게 묶음. `placeId @unique nullable` 로 공개 URL 호환 유지 |
-| **자동 머지 없음 — 모든 머지는 어드민 검토 (신규)** | 매칭 알고리즘이 score ≥ 0.45 후보를 `CanonicalMergeProposal` 큐에 적재만, 자동 수락 안 함. 두 트리거 — (a) 새 출처 등록 후크 자동 적재, (b) 어드민 수동 "병합 후보 찾기" 버튼. 잘못된 머지의 복구 비용이 검토 비용보다 크다 |
+| **C안 — 자동 DC 머지 정착 (갱신)** | Naver 크롤 done 직후 `tryAutoMatchDiningcode` 가 좌표 200m 반경 DC 후보를 점수화해 nameScore/distance/tie-gap 임계 통과 시 **DC 저장 + canonical 머지를 자동 수행**. 이전 "수동 확정만" 정책에서 한 단계 진화 — 명백히 같은 가게의 케이스는 운영자 손을 거치지 않게. 임계 못 넘는 케이스는 silent skip 후 `CanonicalMergeProposal` 큐가 fallback. 잘못된 머지의 복구 비용이 큰 케이스만 사람 컨펌 |
+| **AI 자동 발견 — 영역명 한 줄로 N건 신규 등록 (신규)** | `/admin/auto-discover` — area + 카테고리 + targetCount 만 받아 AI 가 키워드 8개 생성 → 다중 검색 + dedupe → 그룹 5병렬 직렬 크롤. actor 당 잡은 1개 제한 (무거운 파이프라인 한 줄). 기존 `/admin/discover` 의 수동 흐름은 그대로, 별도 메뉴로 추가 |
+| **MAX_CONCURRENT_PER_ACTOR 3 → 5 (갱신)** | auto-discover 의 그룹 크기 5와 정렬. 어드민 발견 페이지의 다중 선택 일괄 등록도 5병렬을 받게 됨. 기존 in-flight dedup + FIFO 큐 두 layer 그대로 |
+| **부팅 시 stale 요약 행 정리 (신규)** | `cleanupStaleReviewSummaries` 가 서버 부팅 직후 `ReviewSummary.status in ('pending','running')` 행을 `failed + errorCode='server_restart'` 로 마킹. 단일 인스턴스 가정 하에서 부팅 시점엔 실행 중인 요약 작업이 없으므로 stale. 기존 재요약 경로(backfillForRestaurant) 와 자연 호환 — 다음 큐가 그대로 잡음 |
+| **SSE liveness 패턴 — heartbeat 15s + idle timeout (신규)** | summary/crawl/auto-discover/analytics SSE 모두 15s heartbeat 코멘트 + idle timeout 으로 서버 다운 자동 감지. 어드민 진행률이 영원히 "진행중" 으로 묶이는 사고 방지 |
 | **AdminDiningcodePage 정식 / 테스트 페이지 둘 다 유지 (신규)** | 정식 페이지(`/admin/diningcode`)는 운영자 일괄 등록 동선 + SSE 진행률 (menu-grouping 패턴 차용). 테스트 페이지(`/admin/diningcode-test`)는 어댑터 회귀·검증용으로 별도 유지 |
 | **공개 영역 도입 — 사용자 대상 페이지 vs 어드민 운영 도구 분리** | 분석 결과(랭킹/메뉴 통계)는 본래 사용자가 보라고 만든 자산. SPA 안에서 `PublicLayout` / `AdminLayout` 두 묶음으로 나누고, 공개는 비로그인 가능 |
 | **공개 API 별도 라우트 (`/api/v1/restaurants/public/*`)** | admin 라우트와 service 메서드는 공유하되 라우트만 분리 — admin 회귀 위험 0. 공개 응답에서 운영 메타(요약 진행 상태/모델/에러)만 제거된 평탄화 스키마 사용 |
-| **어드민 발견 = 검색·등록 통합 마커 + 다중 선택 일괄 크롤링** | 단건 placeId 입력 외 키워드 진입이 필요. 네이버 PC 지도 직접 fetch 는 ncaptcha 차단 → Playwright 페이지로 응답 가로채기. 검색 빨강 / 등록 회색 마커 통합, 다중 선택은 직렬 await + 시작 거부 placeId 체크 보존. 상세는 공개 `PublicRestaurantDetail` 재사용 |
-| **actor 단위 rate-limit 제거** | `crawl.service.ts` 의 `RATE_LIMIT_WINDOW_MS` + `lastCallByActor: Map` 삭제. spam 방어는 in-flight dedup + `MAX_CONCURRENT_PER_ACTOR=3` FIFO 큐 두 layer 로 충분 |
+| **어드민 발견 = 검색·등록 통합 마커 + 다중 선택 일괄 크롤링** | 단건 placeId 입력 외 키워드 진입이 필요. 네이버 PC 지도 직접 fetch 는 ncaptcha 차단 → Playwright 페이지로 응답 가로채기. 검색 빨강 / 등록 회색 마커 통합, 다중 선택은 직렬 await + 시작 거부 placeId 체크 보존. 상세는 공개 `PublicRestaurantDetail` 재사용 (Naver+DC 융합) |
+| **발견 리스트 카드 = canonical 단위 합산 (신규)** | 노출 행마다 같은 canonical 의 DC 형제를 합산해 totalReviews/summary*/positive·negative·neutralCount 두 출처 합. 평균 점수는 가중평균. 응답 행 키는 Naver placeId 그대로 — UI/캐시 변경 없음. SSE snapshot 이 합산 카운트를 덮어쓰지 않도록 별도 패치 |
+| **발견 리스트 행 호버 자동 이동 → "지도" 버튼 클릭 (신규)** | 데스크탑 호버 트리거는 모바일 터치에서 의도와 다르게 발화. 식당명 라인 우측에 명시적 "지도" 버튼을 두고 그쪽 클릭만 hoveredPlaceId 갱신 — 모바일/터치 호환 |
+| **공개 상세 = Naver + 다이닝코드 융합 (신규)** | 어드민 발견 상세 패널도 같은 컴포넌트(`PublicRestaurantDetail`) 재사용. 백엔드 `restaurant.merge.ts` (순수 함수 모음) 가 canonical 그룹의 Naver 행 + DC 형제들을 단일 detail 로 머지 — 필드별 하드코딩 규칙(rating/phone/address Naver 우선, businessHours DC 우선, photos/reviews 합치고 dedup, descTags/wordcloud DC 전용) |
+| **actor 단위 rate-limit 제거** | `crawl.service.ts` 의 `RATE_LIMIT_WINDOW_MS` + `lastCallByActor: Map` 삭제. spam 방어는 in-flight dedup + `MAX_CONCURRENT_PER_ACTOR=5` FIFO 큐 두 layer 로 충분 (3 → 5 갱신, auto-discover 그룹 크기와 정렬) |
 | **패널 좌/우 토글 = 페이지별 namespace + xl+ 한정** | `panelPrefsStore` Zustand + localStorage `lp:panelPrefs`. xl(>=1280) 미만은 풀블리드라 토글 비노출 |
 | **vworld JS SDK 거부, OpenLayers + WMTS 직접 호출** | vworld JS SDK 의 도메인 화이트리스트 부담 회피. WMTS 타일 엔드포인트는 키만 검증. `ol@^10.7.0` 한 의존만 추가 |
 | **공개 키 노출 = admin secret 과 보안 등급 동등** | WMTS 키는 어차피 클라사이드 자원(브라우저 Network 탭 노출). 가드 토글이 보안에 무의미하므로 라우트 분리만으로 처리 |
@@ -322,7 +355,8 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 ## Gotchas [coverage: medium — 7 sources]
 
 - **"모바일" 단어의 의미 (재강조)** — 한국어 본문에서 "모바일" 단독은 **웹의 반응형**만 가리킨다. `apps/mobile` 의 Expo 앱을 지칭하고 싶을 땐 항상 "앱". 코드 식별자/스크립트의 `mobile` 슬러그는 디렉터리 이름이라 그대로
-- **출처별 행이 분리됨 — `(source, sourceId)` unique** — 같은 가게라도 출처가 다르면 Restaurant 행이 따로 생긴다. 같은 가게로 묶이려면 머지 큐를 거쳐 어드민이 수락해야 함. 자동 머지 없음 — 출처 추가 직후엔 `canonical` 어드민 페이지에 검토 대기가 쌓인다고 가정해야 함
+- **출처별 행이 분리됨 — `(source, sourceId)` unique** — 같은 가게라도 출처가 다르면 Restaurant 행이 따로 생긴다. Naver 크롤 done 후크가 임계 통과 시 자동 DC 매칭+머지를 시도하므로 명백한 동일 가게는 자동 묶임. 임계 못 넘으면 silent skip → `CanonicalMergeProposal` 큐에 검토 대기로 남음
+- **자동 DC 머지 임계 — silent skip 케이스** — `tryAutoMatchDiningcode` 는 nameScore / 50m / 차순위 격차 세 임계 중 하나라도 못 넘으면 그냥 return. 별도 알림 없음. 누락된 머지는 `ProposalService` 검토 큐(`/admin/canonical`) 가 fallback 으로 잡음 — 거기 안 보이면 search 가 200m 반경 안에서 DC 후보 자체를 못 찾은 경우
 - **`placeId` 는 nullable (네이버 외 출처는 null)** — 공개 라우트 `/restaurants/:placeId` 는 네이버 행에만 해당. 다이닝코드/캐치테이블 행은 URL 직링크 미지원 (현 시점) — 공개 노출은 canonical 묶음을 거치게 될 가능성 있음
 - **패키지 간 순환 의존 금지** — `shared → api-contract`는 OK, 반대는 금지
 - **공유 스키마는 반드시 `@repo/api-contract`에 zod로** — 직접 `apps/friendly`에 정의하면 웹/앱이 못 쓴다
@@ -336,11 +370,13 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 - **분석 단계 실행 순서 강제** — 리뷰 분석 → 식당별 그룹핑 → 전역 머지. 앞 단계가 stale이면 뒤 단계 결과가 흔들린다
 - **공개 영역에도 분석 stale 그대로 노출** — 별도 stale 배지 없음. 운영 정책으로 처리
 - **모바일 sticky 함정 (재강조)** — sticky 가 깨질 때 99%는 (a) wrapping div 로 containing block 묶임 또는 (b) `overflow:auto` 컨테이너 안에 둠
+- **부팅 직후 stale 요약 행은 자동으로 failed 처리** — 어드민 진행률에서 "요약 진행중" 으로 보이는 행이 서버 재시작 후엔 `errorCode='server_restart'` 의 failed 상태로 바뀐다. 기존 backfillForRestaurant 경로가 이 행을 다음 큐에서 pending 으로 되돌려 다시 잡음
+- **자동 발견 잡은 actor 당 1 개 제한** — `auto-discover` 는 무거운 파이프라인(AI+검색+크롤 한 줄)이라 동시 1개. 다이닝코드 bulk-save 의 다중 동시와 의도적으로 다름. 두 번째 잡을 같은 actor 가 시작하려면 첫 번째 종료/취소가 필요
 - **HANDOFF 문서는 git에 넣지 말 것** — `docs/HANDOFF-*.md`는 untracked 유지
 - **버전 매트릭스** — 웹은 React 19, 앱은 React 18 — `@repo/shared`가 React 18+ peer로 양쪽 호환
 - **앱 Expo Web 은 SPA 모드 고정** — `web.output: 'single'`. 정적 사전렌더(`'static'`)는 워크스페이스 두 React 사본 환경에서 SSR 500
 
-## Sources [coverage: high — 12 sources]
+## Sources [coverage: high — 18 sources]
 
 - [README.md](../../README.md)
 - [CLAUDE.md](../../CLAUDE.md) — "용어" 섹션 포함
@@ -349,15 +385,27 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 - [pnpm-workspace.yaml](../../pnpm-workspace.yaml)
 - [turbo.json](../../turbo.json)
 - [tsconfig.base.json](../../tsconfig.base.json)
-- [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — `CanonicalRestaurant`, `CanonicalMergeProposal`, `Restaurant.(source, sourceId)` 신규
+- [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — `CanonicalRestaurant`, `CanonicalMergeProposal`, `Restaurant.(source, sourceId)`
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)
 - [packages/api-contract/src/schemas/crawl.ts](../../packages/api-contract/src/schemas/crawl.ts) — 출처 3종 스키마
-- [apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx](../../apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx) — 정식 페이지 (신규)
+- [apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx](../../apps/web/src/routes/admin/AdminDiningcodeShopPage.tsx)
 - [apps/web/src/routes/admin/AdminDiscoverPage.tsx](../../apps/web/src/routes/admin/AdminDiscoverPage.tsx)
+- [apps/web/src/routes/admin/AdminAutoDiscoverPage.tsx](../../apps/web/src/routes/admin/AdminAutoDiscoverPage.tsx) — 자동 발견 페이지 (신규)
+- [apps/web/src/components/admin/AdminLayout.tsx](../../apps/web/src/components/admin/AdminLayout.tsx) — 사이드바 NAV (자동 발견 추가)
+- [apps/web/src/components/admin/discover/DiscoverPanel.tsx](../../apps/web/src/components/admin/discover/DiscoverPanel.tsx) — 행 "지도" 버튼 (호버 → 클릭 트리거 갱신)
 - [apps/web/src/stores/panelPrefsStore.ts](../../apps/web/src/stores/panelPrefsStore.ts)
+- [apps/friendly/src/modules/auto-discover/auto-discover.service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts) — 신규
+- [apps/friendly/src/modules/auto-discover/auto-discover.route.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.route.ts) — 신규 (SSE heartbeat 15s)
+- [apps/friendly/src/modules/auto-discover/auto-discover-registry.ts](../../apps/friendly/src/modules/auto-discover/auto-discover-registry.ts) — 신규
+- [apps/friendly/src/modules/auto-discover/auto-discover.prompts.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.prompts.ts) — 키워드 8개 생성 프롬프트
+- [apps/friendly/src/modules/restaurant/restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) — Naver+DC 융합 순수 함수 모음 (신규)
+- [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) — `tryAutoMatchDiningcode` 자동 매칭+머지 후크
+- [apps/friendly/src/modules/crawl/job-registry.ts](../../apps/friendly/src/modules/crawl/job-registry.ts) — `MAX_CONCURRENT_PER_ACTOR = 5` (3 → 5 갱신)
+- [apps/friendly/src/modules/summary/summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts) — `cleanupStaleReviewSummaries` 부팅 cleanup (신규)
+- [apps/friendly/src/server.ts](../../apps/friendly/src/server.ts) — 부팅 시 cleanup 호출
 - [apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-search.playwright.adapter.ts)
 - [docs/menu-hierarchy.md](../../docs/menu-hierarchy.md)
 - [docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md)
 - [apps/web/src/App.tsx](../../apps/web/src/App.tsx)
 - [apps/web/vite.config.ts](../../apps/web/vite.config.ts) — `server.host: true` LAN/모바일 단말 dev 접근
-- 토픽 — [friendly](friendly.md), [web](web.md), [api-contract](api-contract.md), [analytics](analytics.md), [menu-grouping](menu-grouping.md), [media](media.md), [ai](ai.md), [map](map.md), [crawl](crawl.md), [canonical](canonical.md)
+- 토픽 — [auto-discover](auto-discover.md), [friendly](friendly.md), [web](web.md), [api-contract](api-contract.md), [analytics](analytics.md), [menu-grouping](menu-grouping.md), [media](media.md), [ai](ai.md), [map](map.md), [crawl](crawl.md), [canonical](canonical.md)

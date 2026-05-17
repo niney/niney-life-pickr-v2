@@ -1,7 +1,7 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-05-15
-topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics]
+last_compiled: 2026-05-17
+topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics, auto-discover]
 status: active
 ---
 
@@ -21,6 +21,8 @@ status: active
 - **2026-05-08** in [[../topics/friendly]] / [[../topics/web]] (`summary.service.ts`, `summary-events-bus.ts`, `sections.tsx`): ReviewSummary 구조화 분석(sentiment / sentimentScore / satisfactionScore / menusJson / tipsJson / keywordsJson)도 SSE `review` 이벤트 페이로드에 그대로 실려와 `reviews[].summary.*`로 머지됨. FE 리뷰 카드의 감정 뱃지·만족도·메뉴 칩·팁 리스트가 detail GET 0회로 채워지고 갱신됨. 페이로드만 풍부해지고 머지 코드는 동일.
 - **2026-05-09** in [[../topics/menu-grouping]] / [[../topics/shared]] (`packages/shared/src/hooks/useMenuGrouping.ts` `useGroupingJob(jobId)`): batch 메뉴 그룹핑 잡 React Query 캐시에 SSE 이벤트를 직접 머지. `snapshot` 이벤트는 잡 캐시를 통째로 set, `item` 이벤트는 items 배열에서 placeId 매치해 patch + doneCount/failedCount/skippedCount 재계산, `done` 이벤트는 state/finishedAt patch + ranking + restaurants-status 캐시 invalidate. follow-up GET 0회. 자동 재연결 백오프(1s→2s→4s→max 30s) + closedRef 가드 + jobId effect dep로 라이프사이클을 훅 안에서 직접 관리.
 - **2026-05-09** in [[../topics/analytics]] / [[../topics/shared]] (`packages/shared/src/hooks/useAnalytics.ts` `useGlobalMergeJob(jobId)`): 전역 머지 잡 진행도. `snapshot`은 잡 캐시 통째 set, `chunk` 이벤트는 doneChunks +1 + totalChunks를 max로 갱신, `done`은 잡 종료 + overview/global-menus 캐시 invalidate. 같은 GET snapshot 1회 + SSE 머지 모양을 그대로 따름.
+- **2026-05-17** in [[../topics/auto-discover]] / [[../topics/shared]] (`packages/shared/src/hooks/useAutoDiscover.ts` `useAutoDiscoverJob(jobId)`): 자동 발견 잡 진행. `snapshot` 통째 set, `keyword` 이벤트로 8칸 키워드 패치, `candidate` 이벤트로 후보 patch + **클라가 자체적으로 `newlyRegistered` 재계산** (서버 phase 이벤트 도착 전에도 진행률 즉시 반영), `phase` 이벤트로 단계+카운트 동기화, `done`은 `['restaurant','list']`/`['restaurant','public','list']`/`['canonical','proposals']` invalidate. bulk-save·grouping 의 머지 패턴을 그대로 카피했지만 **클라 자체 카운트 계산** 추가 — 이벤트 도착 순서가 어긋나도 진행률은 candidate done 기준으로 정직. 같은 머지 인프라가 도메인별 강조점 한 칸씩 늘리며 흡수되는 사례.
+- **2026-05-17** in [[../topics/shared]] / [[../topics/friendly]] (`summarySseManager.ts` + `useRestaurant.ts` 스냅샷 보호): 머지의 **반대 방향 함정 패치** — SSE `snapshot` 이벤트가 들어왔을 때 list 캐시의 합산 카운트(DC 형제 합)를 덮어쓰지 않도록 머지 정책을 `(snap, prev) => merged` 형태로 변경. snapshot 이 가진 데이터 일부가 client-augmented (백엔드 합산이 아닌 FE 머지 결과) 였다는 것이 드러난 케이스 — 머지 핸들러는 항상 `prev`를 인자로 받아 client-augmented 필드는 보존하도록 시그니처가 진화. 페이로드 완전성 vs client-augmentation 의 경계.
 - **2026-05-15** in [[../topics/crawl]] / [[../topics/shared]] (`packages/shared/src/hooks/useCrawl.ts` `useDiningcodeBulkSaveJob(jobId)`): 다이닝코드 일괄 저장 잡 진행. `snapshot`은 잡 캐시 통째 set, `item` 이벤트는 vRid 매치해 items 배열 patch + doneCount/failedCount/skippedCount 재계산, `done`은 state/finishedAt patch + `['crawl','diningcode-registered']`/`['restaurant','list']`/`['canonical','proposals']` 캐시 invalidate. menu-grouping의 `useGroupingJob` 과 거의 한 글자 다른 카피 — 패턴이 머지 카피되는 첫 사례. 어드민이 N개 vRid 일괄 저장 중 새 가게가 등록될 때마다 결과 카드의 '등록됨' 배지가 별도 GET 없이 갱신.
 
 ## What This Means
@@ -45,3 +47,6 @@ status: active
 - [[../topics/friendly]]
 - [[../topics/shared]]
 - [[../topics/web]]
+- [[../topics/menu-grouping]]
+- [[../topics/analytics]]
+- [[../topics/auto-discover]]

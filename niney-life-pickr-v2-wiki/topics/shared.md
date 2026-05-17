@@ -1,9 +1,9 @@
 ---
 topic: shared
-last_compiled: 2026-05-15
-sources_count: 40
+last_compiled: 2026-05-17
+sources_count: 43
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob]
+aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat]
 ---
 
 # shared — FE 공통 패키지
@@ -30,7 +30,7 @@ aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", us
 빌드 산출물 없이 `src/index.ts`를 그대로 노출(`"main": "./src/index.ts"`)하므로
 Turborepo 컨슈머는 별도 빌드 단계 없이 TS 소스를 바로 import한다.
 
-## 2. Architecture [coverage: high — 18 sources]
+## 2. Architecture [coverage: high — 21 sources]
 
 ```
 packages/shared/src/
@@ -42,8 +42,9 @@ packages/shared/src/
 │   ├── admin.api.ts
 │   ├── crawl.api.ts        # start/list/cancel/search + catchtable*/diningcode* + DC bulk-save 잡 + buildJobEventsUrl + buildDiningcodeBulkSaveEventsUrl
 │   ├── restaurant.api.ts   # 어드민 list/ranking/getByPlaceId/delete/reanalyze + 공개 publicList/publicByPlaceId/publicInsights + buildSummaryEventsUrl({placeIds, canonicalIds})
-│   ├── canonical.api.ts    # candidates/merge/split/dismissSuggestion/proposals(list/run/accept/reject)/delete (신규)
+│   ├── canonical.api.ts    # candidates/merge/split/dismissSuggestion/proposals(list/run/accept/reject)/delete
 │   ├── menu-grouping.api.ts# 식당 단위 그룹핑 + 잡 시작/스냅샷 + buildGroupingJobEventsUrl
+│   ├── autoDiscover.api.ts # 자동 발견 잡 start/get/cancel + buildAutoDiscoverEventsUrl (신규)
 │   ├── analytics.api.ts    # overview / global-menus / category-tree + 전역 머지 잡 + buildGlobalMergeJobEventsUrl
 │   ├── settings-map.api.ts # 어드민 list/update/remove/getSecret + 공개 publicConfig (Routes.SettingsMap 단일 소스)
 │   └── ai.api.ts           # LLM provider 관리 + complete/completeBatch
@@ -52,10 +53,11 @@ packages/shared/src/
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
 │   ├── useAdmin.ts
 │   ├── useCrawl.ts         # useStartCrawl/useCrawlJobs/useCancelCrawl/useNaverSearch + useCrawlJobStream + useCatchtable*/useDiningcode* + DC bulk-save 잡 훅
-│   ├── useRestaurant.ts    # 어드민 list/ranking/byPlaceId/delete/reanalyze + 공개 useRestaurantsPublic/useRestaurantPublic/useRestaurantPublicInsights + canonical 기반 list summary SSE 구독
-│   ├── useCanonical.ts     # candidates/merge/split/dismiss + proposals(list/run/accept/reject) + delete (신규)
-│   ├── summarySseManager.ts# 프로세스 전역 SSE 싱글톤 (place + canonical 두 키 멀티플렉싱)
+│   ├── useRestaurant.ts    # 어드민 list/ranking/byPlaceId/delete/reanalyze + 공개 useRestaurantsPublic/useRestaurantPublic/useRestaurantPublicInsights + canonical 기반 list summary SSE 구독 (delta-aware 합산 보호)
+│   ├── useCanonical.ts     # candidates/merge/split/dismiss + proposals(list/run/accept/reject) + delete
+│   ├── summarySseManager.ts# 프로세스 전역 SSE 싱글톤 (place + canonical 두 키 멀티플렉싱) + heartbeat watchdog + idle timeout (서버 다운 자동 감지) + snapshot delta-aware dispatch
 │   ├── useMenuGrouping.ts  # ranking/group/status/createJob + useGroupingJob (자체 EventSource + 백오프)
+│   ├── useAutoDiscover.ts  # useStartAutoDiscover / useAutoDiscoverJob / useCancelAutoDiscover (snapshot/keyword/candidate/phase/done SSE 머지, 신규)
 │   ├── useAnalytics.ts     # overview/globalMenus/categoryTree + useStartGlobalMerge + useGlobalMergeJob (chunk 진행)
 │   ├── useSettingsMap.ts   # 어드민 providers/secret + 공개 useMapPublicConfig
 │   └── useAi.ts            # provider CRUD + complete/test/models
@@ -64,7 +66,8 @@ packages/shared/src/
 │   ├── activeCrawlJobStore.ts             # Zustand: jobs by jobId (멀티 슬롯)
 │   ├── activeGroupingJobStore.ts          # Zustand + persist: jobId (단일 슬롯, localStorage)
 │   ├── activeGlobalMergeJobStore.ts       # Zustand + persist: jobId (단일 슬롯, localStorage)
-│   └── activeDiningcodeBulkSaveJobStore.ts# Zustand + persist: jobId (단일 슬롯, localStorage, 신규)
+│   ├── activeDiningcodeBulkSaveJobStore.ts# Zustand + persist: jobId (단일 슬롯, localStorage)
+│   └── activeAutoDiscoverJobStore.ts      # Zustand + persist: jobId (단일 슬롯, localStorage, 신규)
 ├── design/ … (불변)
 ├── ui/ … (불변)
 └── constants/ …
@@ -108,6 +111,30 @@ ReviewOverview`, `diningcodeSearch/Shop/ShopReviews/ShopSave`, `diningcodeRegist
    16s → 30s cap) 으로 재연결. `closedRef` true 면 모든 reconnect 차단.
 4. cleanup 에서 `cancelled = true` + `closedRef = true` + 백오프 타이머 clear + ES close.
 
+**자동 발견 도메인 (신규)** ([autoDiscover.api.ts](../../packages/shared/src/api/autoDiscover.api.ts) +
+[useAutoDiscover.ts](../../packages/shared/src/hooks/useAutoDiscover.ts) +
+[activeAutoDiscoverJobStore.ts](../../packages/shared/src/stores/activeAutoDiscoverJobStore.ts)) —
+키워드/그룹 단위로 새 가게를 자동으로 찾아 등록하는 잡. DC bulk-save 와 동형 (start/get/cancel +
+SSE URL 빌더 + persist 단일 슬롯 store). 훅 셋: `useStartAutoDiscover` (mutation, onSuccess 시
+응답 snapshot 을 `['auto-discover', 'job', jobId]` 에 `setQueryData` + `activeStore.setJobId`),
+`useCancelAutoDiscover`, `useAutoDiscoverJob(jobId)`. SSE 이벤트는 5종:
+- `'snapshot'` — 전체 교체 + `retryRef = 0` 리셋.
+- `'keyword'` — `keywords[]` 안의 동일 keyword 행 교체 또는 append.
+- `'candidate'` — `candidates[]` 안의 동일 placeId 행 교체 또는 append. **이때 클라이언트가 자체로
+  `candidates.filter((c) => c.state === 'done').length` 로 `newlyRegistered` 도 재계산** — phase
+  이벤트가 늦게 와도 UI 가 즉시 갱신되도록.
+- `'phase'` — `phase` + 서버 권위 `newlyRegistered` 로 교체.
+- `'done'` — `state`/`phase: 'done'`/`finishedAt` 머지 후 `closedRef = true; es.close()` +
+  세 캐시 (`['restaurant', 'list']`, `['restaurant', 'public', 'list']`, `['canonical', 'proposals']`) invalidate.
+
+백오프 동일 (`1s → 2s → 4s → 8s → 16s → 30s cap`). GET snapshot 404 → `ApiError.statusCode === 404`
+→ `activeStore.clear()` 호출 후 `null` 반환. cleanup 순서 동일 (`cancelled = true; closedRef =
+true; clearTimeout; es.close(); retryRef = 0`). store key 는 `lp:activeAutoDiscoverJob`.
+
+후보가 키워드/그룹 단위로 묶이는 점이 DC bulk-save 와 다른 특징 — `keywords[]` 자체가 첫 페이즈
+이벤트로 나열되고, 각 keyword 가 처리되는 동안 그 keyword 의 검색 결과인 `candidates[]` 가
+일정 페이스로 흘러 들어온다. UI 는 keyword 그룹별로 candidate 진행을 그룹 헤더로 묶어 표시.
+
 **SSE 매니저 확장** — `summarySseManager` 가 이전엔 placeId 단일 키였는데 이번에 `SubscriptionKey`
 를 union `{ kind: 'place'; placeId } | { kind: 'canonical'; canonicalId }` 로 확장. 서버는
 두 종류 키를 한 connection 에서 받아 각 이벤트마다 canonicalId / placeId 양쪽 태그를 흘려보내고,
@@ -116,6 +143,25 @@ ReviewOverview`, `diningcodeSearch/Shop/ShopReviews/ShopSave`, `diningcodeRegist
 구독하면 라이브 진행 배지가 갱신된다 (리스트 화면 — `useRestaurantListSummaryEvents` 가
 canonicalId[] 받음). 디테일 페이지(`useRestaurantSummaryEvents(placeId)`) 는 Naver 전용 라우트라
 place 키로 구독.
+
+**SSE 매니저 heartbeat + idle timeout (서버 다운 자동 감지)** — 매니저가 두 단계로 죽음을 감지.
+서버는 5초마다 `'heartbeat'` 명명 이벤트를 보내고, 매니저는 모든 이벤트(`onopen`, `'heartbeat'`,
+`'snapshot'`, `'review'`) 도착 시 `lastEventAt = Date.now()` 로 갱신. 별도의 watchdog setInterval
+(3초 주기) 이 `Date.now() - lastEventAt > IDLE_TIMEOUT_MS(15s)` 이면 강제로 `handleConnectionLost`
+호출 → 현재 ES 명시 close → `BACKOFF_MIN_MS(1.5s)` 부터 두 배씩 늘려 `BACKOFF_MAX_MS(60s)` cap
+으로 재연결. `onerror` 도 같은 `handleConnectionLost` 로 수렴 (브라우저 자동 재연결이 readyState
+만 CONNECTING 으로 두고 침묵하는 경우를 신뢰 못 함). 정상 `onopen` 마다 `errorReconnectAttempts =
+0` 으로 리셋. 매니저 unsubscribe 가 모든 구독을 비우면 watchdog/error reconnect 타이머 모두 정리.
+
+**SSE snapshot delta-aware dispatch (합산 카운트 보호)** — 이전엔 snapshot 핸들러가 `(snap)` 만
+받았지만 이번에 `(snap, prev)` 시그니처로 변경. `prev` 는 같은 키 직전 snapshot (첫 catch-up 은
+`null`). 매니저가 dispatch 직전에 `lastSnapshotByCanonical.get(canonicalId)` / `lastSnapshotByPlace.
+get(placeId)` 로 prev 를 캡처해 핸들러에 전달한 뒤에야 캐시를 새 값으로 교체. 그러면 같은 canonical
+의 두 source(Naver + DC) 가 합산 카운트 1행을 공유하는 공개 list 캐시에서, 한 source 의 새
+snapshot 으로 행 전체를 덮어쓰지 않고 `(snap - prev)` delta 만 합산 행에 가감 가능
+([useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) 의 `patchSummaryInListCaches`
+가 그 로직 담당). 어드민 list 는 행마다 sources[] 분리 카운트가 있어 prev 불필요 — 해당 source 만
+교체하고 `recomputeCanonicalAggregates` 로 합산 재계산.
 
 `apiFetch`의 자동 토큰 첨부는 모드를 구분하지 않는다 — 토큰이 있으면 모든 요청에
 `Authorization: Bearer <token>`이 붙고, 없으면 헤더 없이 나간다. 공개 라우트는 토큰이
@@ -147,12 +193,13 @@ place 키로 구독.
   - `apiFetch`로 [friendly](friendly.md) API에 HTTP.
   - `useCrawlJobStream` → `Routes.Crawl.jobEvents` EventSource.
   - `useDiningcodeBulkSaveJob` → `Routes.Crawl.diningcodeBulkSaveJobEvents(jobId)` EventSource (token query 인증).
-  - `summarySseManager` → `Routes.Restaurant.summaryEvents` 단일 EventSource. placeId / canonicalId 두 키 종류 멀티플렉싱.
+  - `useAutoDiscoverJob` → `Routes.AutoDiscover.jobEvents(jobId)` EventSource (token query 인증).
+  - `summarySseManager` → `Routes.Restaurant.summaryEvents` 단일 EventSource. placeId / canonicalId 두 키 종류 멀티플렉싱. `'heartbeat'` 명명 이벤트 5초 주기.
   - `useGroupingJob` → `Routes.Analytics.groupingJobEvents(jobId)`, `useGlobalMergeJob` → `Routes.Analytics.globalMergeJobEvents(jobId)`.
   - `canonicalApi` → friendly의 `Routes.Canonical.*` (candidates/merge/split/dismissSuggestion/proposals/proposalsRun/proposalAccept/proposalReject/delete).
 - UI 측 사용처는 [web](web.md) 참조.
 
-## 4. API Surface [coverage: high — 25 sources]
+## 4. API Surface [coverage: high — 27 sources]
 
 **API 클라이언트 (`api/`)**
 - `configureApi(cfg)`, `getApiConfig()`, `apiFetch<T>(path, init)`, `ApiError`
@@ -168,8 +215,9 @@ place 키로 구독.
   - 어드민: `list`, `ranking(query?)`, `getByPlaceId(placeId)`, `getSummaryStatus(placeId)`, `delete(placeId)`, `reanalyze(placeId)`
   - 공개: `publicList(query?)`, `publicByPlaceId(placeId)`, `publicInsights(placeId)`
   - SSE URL: **`buildSummaryEventsUrl({ placeIds?, canonicalIds? })`** — 시그니처가 객체로 변경됨. 두 키 종류 동시에 `?placeId=...&canonicalId=...` 로 직렬화.
-- **`canonicalApi` (신규)**: `candidates(canonicalId)`, `merge(input)`, `split(canonicalId, input)`, `dismissSuggestion(canonicalId)`, `listProposals()`, `runProposals()`, `acceptProposal(proposalId, input)`, `rejectProposal(proposalId)`, `delete(canonicalId)`. 모두 `Routes.Canonical.*` 사용.
+- `canonicalApi`: `candidates(canonicalId)`, `merge(input)`, `split(canonicalId, input)`, `dismissSuggestion(canonicalId)`, `listProposals()`, `runProposals()`, `acceptProposal(proposalId, input)`, `rejectProposal(proposalId)`, `delete(canonicalId)`. 모두 `Routes.Canonical.*` 사용.
 - `menuGroupingApi`: `groupForRestaurant(placeId)`, `getRanking(placeId, query?)`, `getRestaurantsStatus()`, `createGroupingJob({ placeIds })`, `getGroupingJob(jobId)` + `buildGroupingJobEventsUrl(jobId)`
+- **`autoDiscoverApi` (신규)**: `start(input)`, `get(jobId)`, `cancel(jobId)` + `buildAutoDiscoverEventsUrl(jobId)` (SSE URL, `?token=`). 모두 `Routes.AutoDiscover.*` 사용.
 - `analyticsApi`: `overview()`, `globalMenus(query?)`, `categoryTree()`, `startGlobalMerge({ full })`, `getGlobalMergeJob(jobId)` + `buildGlobalMergeJobEventsUrl(jobId)`
 - `settingsMapApi`: 어드민 `list/update/remove/getSecret` + 공개 `publicConfig`
 - `aiApi`: `complete`, `completeBatch`, `listProviders`, `updateProvider`, `deleteProvider`, `testProvider`, `listModels`
@@ -184,33 +232,38 @@ place 키로 구독.
 - **DC 일괄 저장 잡**: `useStartDiningcodeBulkSave()` (onSuccess 시 store.setJobId + setQueryData), `useCancelDiningcodeBulkSave()`, **`useDiningcodeBulkSaveJob(jobId)`** (query + SSE + 백오프)
 - 맛집 어드민: `useRestaurantList`, `useRestaurantRanking(query?)`, `useRestaurantByPlaceId(placeId)`, `useDeleteRestaurant`, `useReanalyzeRestaurant`, `useRestaurantSummaryEvents(placeId)`, `useRestaurantListSummaryEvents(canonicalIds[])`, `useRestaurantListSummaryEventsByPlaceIds(placeIds[])` (공개 발견 페이지용)
 - 맛집 공개: `useRestaurantsPublic(query, { alwaysRefetchOnMount? })`, `useRestaurantPublic(placeId)`, `useRestaurantPublicInsights(placeId)`
-- **캐노니컬 (신규)**: `useCanonicalCandidates(canonicalId | null)`(staleTime 30s, null=disabled), `useMergeCanonical()`, `useSplitCanonical()`, `useDismissCanonicalSuggestion()`, `useCanonicalProposals(enabled?)`(staleTime 15s + **refetchInterval 30_000 자동 폴링**), `useRunCanonicalProposals()`, `useAcceptCanonicalProposal()`, `useRejectCanonicalProposal()`, `useDeleteCanonical()`
+- **캐노니컬**: `useCanonicalCandidates(canonicalId | null)`(staleTime 30s, null=disabled), `useMergeCanonical()`, `useSplitCanonical()`, `useDismissCanonicalSuggestion()`, `useCanonicalProposals(enabled?)`(staleTime 15s + **refetchInterval 30_000 자동 폴링**), `useRunCanonicalProposals()`, `useAcceptCanonicalProposal()`, `useRejectCanonicalProposal()`, `useDeleteCanonical()`
 - 메뉴 그룹핑: `useMenuRanking`, `useGroupForRestaurant`, `useGroupingRestaurantsStatus`, `useCreateGroupingJob`, `useGroupingJob`
+- **자동 발견 (신규)**: `useStartAutoDiscover()` (onSuccess 시 store.setJobId + setQueryData), `useCancelAutoDiscover()`, **`useAutoDiscoverJob(jobId)`** (query + SSE + 백오프, snapshot/keyword/candidate/phase/done 머지)
 - 분석: `useAnalyticsOverview`, `useGlobalMenus`, `useCategoryTree`, `useStartGlobalMerge`, `useGlobalMergeJob`
 - 지도: `useMapProviders`, `useUpdateMapProvider`, `useDeleteMapProvider`, `useMapProviderSecret`, `useMapPublicConfig`
 - AI: `useCompleteAi`, `useCompleteBatchAi`, `useProviders`, `useUpdateProvider`, `useDeleteProvider`, `useTestProvider`, `useProviderModels`
 
 **SSE 매니저 (`hooks/summarySseManager.ts`)**
 - `summarySseManager.subscribe(key: SubscriptionKey, handlers)` — `key` 가 `{ kind: 'place'; placeId }` 또는 `{ kind: 'canonical'; canonicalId }` union.
-- 이벤트: `snapshot` (canonicalId + 옵션 placeId 태그) / `review`. 들어온 이벤트는 양쪽 키 구독자 set 에 dispatch.
-- `lastSnapshotByCanonical` / `lastSnapshotByPlace` 두 Map 으로 키 종류별 replay 캐시.
+- 핸들러 시그니처: `onSnapshot(snap, prev)` (prev = 같은 키 직전 snapshot, 첫 catch-up 은 null — delta 계산용), `onReview(ev)`.
+- 이벤트: `'snapshot'` (canonicalId + 옵션 placeId 태그) / `'review'` / `'heartbeat'` (5s 주기, payload 무시 — 도착 자체가 신호).
+- 들어온 이벤트는 양쪽 키 구독자 set 에 dispatch. `lastSnapshotByCanonical` / `lastSnapshotByPlace` 두 Map 으로 키 종류별 replay 캐시.
+- Idle watchdog 3s 주기, 15s 무이벤트면 강제 close + backoff 1.5s→60s cap 재연결. `onerror` 도 같은 경로로 수렴.
 
 **잡 단위 SSE 훅** (매니저 미사용)
 - `useGroupingJob(jobId)` — snapshot/item/done, 백오프 1s→30s, done 시 `restaurants-status` + `ranking` invalidate.
 - `useGlobalMergeJob(jobId)` — snapshot/chunk(`doneChunks += 1`, `totalChunks = max(prev, doneChunks)`)/done, done 시 `analytics.overview` + `global-menus` invalidate.
-- **`useDiningcodeBulkSaveJob(jobId)` (신규)** — snapshot(전체 교체) / item(vRid 매칭 + 카운트 재계산) / done(state·finishedAt + 세 캐시 invalidate). 백오프 동일 (`1s → 2s → 4s → 8s → 16s → 30s cap`). GET snapshot 404 → `ApiError.statusCode === 404` → `activeStore.clear()` 호출 후 `null` 반환.
-- 세 훅 모두 `closedRef`/`retryRef`/cleanup 패턴 동일. `jobId` null 이면 effect 비활성.
+- `useDiningcodeBulkSaveJob(jobId)` — snapshot(전체 교체) / item(vRid 매칭 + 카운트 재계산) / done(state·finishedAt + 세 캐시 invalidate). 백오프 동일 (`1s → 2s → 4s → 8s → 16s → 30s cap`). GET snapshot 404 → `ApiError.statusCode === 404` → `activeStore.clear()` 호출 후 `null` 반환.
+- **`useAutoDiscoverJob(jobId)` (신규)** — snapshot(전체 교체) / keyword(keyword 매칭 + append) / candidate(placeId 매칭 + append + **클라이언트 자체 `newlyRegistered` 재계산**) / phase(phase + 서버 newlyRegistered 교체) / done(state·phase·finishedAt + 세 캐시 `['restaurant', 'list']` / `['restaurant', 'public', 'list']` / `['canonical', 'proposals']` invalidate). 백오프/cleanup/404 패턴 DC bulk-save 와 동일.
+- 네 훅 모두 `closedRef`/`retryRef`/cleanup 패턴 동일. `jobId` null 이면 effect 비활성.
 
 **Zustand 스토어 (`stores/`)**
 - `useAuthStore`: `user`, `token`, `isGuest` + `setSession`, `setUser`, `enterGuest`, `clearSession`
 - `useActiveCrawlJobStore`: `jobs: Record<jobId, ActiveCrawlJob>` (멀티 슬롯, persist 없음)
 - `useActiveGroupingJobStore`: `jobId | null` + `setJobId`, `clear` — `lp:activeGroupingJob` 로 localStorage persist
 - `useActiveGlobalMergeJobStore`: `jobId | null` + `setJobId`, `clear` — `lp:activeGlobalMergeJob` localStorage persist
-- **`useActiveDiningcodeBulkSaveJobStore` (신규)**: `jobId | null` + `setJobId`, `clear` — `lp:activeDiningcodeBulkSaveJob` localStorage persist
+- `useActiveDiningcodeBulkSaveJobStore`: `jobId | null` + `setJobId`, `clear` — `lp:activeDiningcodeBulkSaveJob` localStorage persist
+- **`useActiveAutoDiscoverJobStore` (신규)**: `jobId | null` + `setJobId`, `clear` — `lp:activeAutoDiscoverJob` localStorage persist
 
 **UI / 디자인 / 상수** — 변경 없음 (기존 8 컴포넌트, `palette/lightColors/darkColors/space/radius/typography/duration`, `APP_NAME` / `QUERY_STALE_TIME` / `QUERY_GC_TIME`).
 
-## 5. Data [coverage: high — 11 sources]
+## 5. Data [coverage: high — 12 sources]
 
 **Auth 상태 모양** (`stores/authStore.ts`)
 ```ts
@@ -223,7 +276,7 @@ interface AuthState {
 
 **Active crawl job 상태** — 기존 동일. 멀티 슬롯 `jobs: Record<jobId, ActiveCrawlJob>`.
 
-**Active DC bulk-save job 상태 (신규)** (`stores/activeDiningcodeBulkSaveJobStore.ts`)
+**Active DC bulk-save job 상태** (`stores/activeDiningcodeBulkSaveJobStore.ts`)
 ```ts
 interface ActiveDiningcodeBulkSaveJobState {
   jobId: string | null;
@@ -236,6 +289,10 @@ interface ActiveDiningcodeBulkSaveJobState {
 - `activeGroupingJobStore` / `activeGlobalMergeJobStore` 와 동일 패턴 (단일 슬롯). 어드민이
   다른 페이지로 이동했다가 돌아와도 진행 카드가 살아 있도록.
 - 자동 정리는 훅 책임 — `useDiningcodeBulkSaveJob` 의 GET snapshot 404 → `clear()`.
+
+**Active auto-discover job 상태 (신규)** (`stores/activeAutoDiscoverJobStore.ts`) — DC bulk-save
+와 동일 모양 (`jobId | null` + `setJobId` + `clear`), key 만 `lp:activeAutoDiscoverJob`. 자동 정리
+는 `useAutoDiscoverJob` 의 GET snapshot 404 분기가 책임.
 
 **토큰 저장**은 `@repo/shared` 책임 아님. 각 앱이 `configureApi({ baseUrl, getToken, onUnauthorized })`로 게터/콜백 주입.
 
@@ -252,7 +309,8 @@ interface ActiveDiningcodeBulkSaveJobState {
   - `useDiningcodeShop` → `['crawl', 'diningcode-shop', vRid]` (5분)
   - `useDiningcodeShopReviews` → `['crawl', 'diningcode-shop-reviews', vRid, page]` (5분)
   - `useDiningcodeRegistered` → `['crawl', 'diningcode-registered', vRids.join(',')]` (30s)
-- **DC 일괄 저장 잡** (신규): `['crawl', 'diningcode-bulk-save', jobId]`. `useStartDiningcodeBulkSave` 의 onSuccess 가 응답 snapshot 을 같은 키에 `setQueryData` + store.setJobId 동시. `useDiningcodeBulkSaveJob` 은 GET 으로 한 번 더 채우고 이후 SSE 가 라이브로 머지. done 시 세 캐시 (`['crawl', 'diningcode-registered']`, `['restaurant', 'list']`, `['canonical', 'proposals']`) prefix 무효화.
+- **DC 일괄 저장 잡**: `['crawl', 'diningcode-bulk-save', jobId]`. `useStartDiningcodeBulkSave` 의 onSuccess 가 응답 snapshot 을 같은 키에 `setQueryData` + store.setJobId 동시. `useDiningcodeBulkSaveJob` 은 GET 으로 한 번 더 채우고 이후 SSE 가 라이브로 머지. done 시 세 캐시 (`['crawl', 'diningcode-registered']`, `['restaurant', 'list']`, `['canonical', 'proposals']`) prefix 무효화.
+- **자동 발견 잡 (신규)**: `['auto-discover', 'job', jobId]`. `useStartAutoDiscover` 의 onSuccess 가 응답 snapshot 을 같은 키에 `setQueryData` + store.setJobId 동시. `useAutoDiscoverJob` 은 GET 으로 한 번 더 채우고 이후 SSE 5종(snapshot/keyword/candidate/phase/done) 이 라이브 머지. done 시 세 캐시 (`['restaurant', 'list']`, `['restaurant', 'public', 'list']`, `['canonical', 'proposals']`) prefix 무효화.
 - 어드민 맛집: `['restaurant', 'list']`, `['restaurant', placeId]`. **공개 맛집** 키 모양 변경 없음 (`['restaurant', 'public', 'list', q, category, bbox, sort, limit, offset]` / `['restaurant', 'public', 'detail', placeId]` / `['restaurant', 'public', 'insights', placeId]`).
 - **공개 list summary 패치 추가** — `useRestaurantListSummaryEvents` 가 어드민 list 행에 `restaurantApi`의 `recomputeCanonicalAggregates(sources)` 로 canonical 집계까지 재계산해서 행 교체. 공개 list 캐시는 placeId 가 있을 때만 (=Naver source) `setQueriesData` prefix 매치로 동시 패치.
 - **캐노니컬 (신규)**:
@@ -275,7 +333,7 @@ interface ActiveDiningcodeBulkSaveJobState {
 **SSE 스트림 상태** (`useCrawlJobStream`) — 기존 동일 (reducer + seq dedup + done/error 시 직접
 close).
 
-## 6. Key Decisions [coverage: high — 18 sources]
+## 6. Key Decisions [coverage: high — 20 sources]
 
 - **상태관리는 Zustand**, **서버 상태는 TanStack Query**.
 - **공개 훅 placeholderData / staleTime 30s / queryKey 좁히기** — 기존 결정 유지.
@@ -290,13 +348,32 @@ close).
   양쪽 태그로 구독자 set 양쪽에 dispatch — 결과적으로 같은 canonical 의 DC review 가 도착해도
   리스트 행은 갱신되지만 Naver 디테일 캐시는 placeId 비교로 안전하게 스킵한다.
 - **잡 단위 SSE 는 매니저를 쓰지 않는다** — `useGroupingJob` / `useGlobalMergeJob` /
-  **`useDiningcodeBulkSaveJob` (신규)**. 잡 하나당 한 페이지에서 하나만 띄우는 일회성 흐름이라
-  멀티플렉싱 불필요. 모두 같은 패턴(`closedRef`/`retryRef` + cleanup) 으로 정렬 — 한 훅을 읽으면
-  나머지 두 훅의 동작도 즉시 이해 가능.
-- **`useDiningcodeBulkSaveJob` 은 useGroupingJob 패턴을 그대로 답습** — query(snapshot) +
-  EventSource(`'snapshot'` / `'item'` / `'done'` addEventListener) + 1s→30s 백오프 재연결.
-  코드를 통째로 닮게 둔 이유는 (a) 백오프/cleanup 같은 미묘한 곳을 한 곳에서만 검증해도
-  되도록, (b) 새로운 잡 타입이 생길 때 carbon-copy 로 시작할 수 있도록.
+  `useDiningcodeBulkSaveJob` / **`useAutoDiscoverJob` (신규)**. 잡 하나당 한 페이지에서 하나만
+  띄우는 일회성 흐름이라 멀티플렉싱 불필요. 모두 같은 패턴(`closedRef`/`retryRef` + cleanup) 으로
+  정렬 — 한 훅을 읽으면 나머지 세 훅의 동작도 즉시 이해 가능.
+- **`useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` 은 useGroupingJob 패턴을 그대로 답습** —
+  query(snapshot) + EventSource(이벤트별 addEventListener) + 1s→30s 백오프 재연결. 코드를 통째로
+  닮게 둔 이유는 (a) 백오프/cleanup 같은 미묘한 곳을 한 곳에서만 검증해도 되도록, (b) 새로운 잡
+  타입이 생길 때 carbon-copy 로 시작할 수 있도록.
+- **자동 발견 잡 candidate 이벤트에서 클라가 `newlyRegistered` 자체 계산** — phase 이벤트가
+  서버 권위 값을 결국 보내주지만, candidate 이벤트가 먼저 도착했을 때 UI 가 즉시 갱신되도록
+  `useAutoDiscoverJob` 이 `candidates.filter((c) => c.state === 'done').length` 로 자체 계산해
+  patch 한다. phase 이벤트가 뒤이어 오면 그 값으로 덮어쓰기 — 결국 서버 값이 권위. 짧은 윈도우
+  에서 phase 값이 0/이전 값일 때를 가리는 트레이드오프 (속도 우선).
+- **Summary SSE heartbeat + idle timeout (서버 다운 자동 감지)** — 서버 5초 주기 `'heartbeat'`
+  명명 이벤트 + 클라이언트 3초 주기 watchdog 이 15초 무이벤트면 강제 close + backoff 재연결
+  (1.5s→60s cap). 브라우저 EventSource 자동 재연결이 readyState 만 CONNECTING 으로 두고 침묵
+  하는 케이스를 메우기 위함 — 서버가 죽었을 때 어드민이 모르고 stale 데이터를 보는 일을 차단.
+  이 패턴은 잡 단위 SSE 훅(`useGroupingJob` / `useGlobalMergeJob` / `useDiningcodeBulkSaveJob` /
+  `useAutoDiscoverJob`) 으로 점진 확산 가능성 — 현재는 매니저에만 있고 잡 훅들은 단순 `onerror`
+  + backoff 만.
+- **Summary SSE snapshot 핸들러 시그니처 (snap, prev) — 합산 카운트 보호** — 이전엔 snapshot
+  핸들러가 snap 만 받아 캐시를 통째로 갈아끼웠는데, 같은 canonical 의 두 source(Naver + DC) 가
+  합산 카운트 한 행을 공유하는 공개 list 캐시에서 한 source 의 새 snapshot 으로 행 전체를 덮어
+  쓰면 다른 source 카운트가 0 으로 빠지는 버그가 있었다. 매니저가 dispatch 직전 prev snapshot
+  을 캡처해 핸들러에 전달 → `patchSummaryInListCaches` 가 `(snap - prev)` delta 만 합산 행에
+  가감. 첫 catch-up 은 prev=null → delta 0 → 합산 행 안 덮어씀. 어드민 list 는 행마다 sources[]
+  분리 카운트라 prev 불필요 (해당 source 만 교체 후 `recomputeCanonicalAggregates`).
 - **잡 GET snapshot 404 → activeStore.clear** — `useDiningcodeBulkSaveJob` / `useGroupingJob` 둘
   다 GET 실패가 `ApiError.statusCode === 404` 면 `clearActive()` 호출. 서버가 잡 레지스트리에서
   만료시킨 stale jobId 가 store 에 남아 무한 SSE 재연결 loop 도는 걸 차단. 다른 에러는 그대로
@@ -332,11 +409,11 @@ close).
   Content-Type 안 붙임, AI path 하드코드, 로직/UI 플랫폼 분리, 빌드 없는 소스 노출, 유연한
   React peer, SSE 토큰은 쿼리스트링, 중복 이벤트 방어** — 모두 기존 결정 유지.
 
-## 7. Gotchas [coverage: high — 16 sources]
+## 7. Gotchas [coverage: high — 18 sources]
 
 - **EventSource 헤더 못 보냄 → token query 필수** — `buildJobEventsUrl`, `buildSummaryEventsUrl`,
-  `buildGroupingJobEventsUrl`, `buildGlobalMergeJobEventsUrl`, **`buildDiningcodeBulkSaveEventsUrl`
-  (신규)** 모두 `?token=<jwt>` 우회. URL/access log/Referer 노출 위험은 동일.
+  `buildGroupingJobEventsUrl`, `buildGlobalMergeJobEventsUrl`, `buildDiningcodeBulkSaveEventsUrl`,
+  **`buildAutoDiscoverEventsUrl` (신규)** 모두 `?token=<jwt>` 우회. URL/access log/Referer 노출 위험 동일.
 - **DC bulk-save 잡 GET 404 → activeStore.clear** — `useDiningcodeBulkSaveJob` 내부 GET 이
   `ApiError.statusCode === 404` 일 때만 `clearActive()` 호출하고 `null` 반환. 만약 다른 statusCode
   를 함부로 404 와 같은 처리로 합치면 일시적 5xx 에 stale jobId 가 store 에서 날아가 잡 진행을
@@ -367,6 +444,22 @@ close).
   (`['restaurant', 'public', 'list', ...]`) 는 같은 prefix 라 함께 invalidate 되지만, 의도된
   동작인지(혹은 어드민 list 만 무효화하고 싶었던 건지) 호출 시 확인 필요. 현 코드는 prefix
   매치라 둘 다 invalidate.
+- **`useAutoDiscoverJob` candidate 자체 계산이 phase 와 어긋날 수 있음** — candidate 이벤트마다
+  클라이언트가 `candidates.filter((c) => c.state === 'done').length` 로 `newlyRegistered` 를 갱신
+  하는데, 뒤이어 들어오는 phase 이벤트의 서버 권위 값과 짧은 윈도우 동안 다를 수 있다. UI 가
+  깜빡이거나 phase 늦게 도착 시 카운트가 잠시 줄어 보일 가능성 — 서버 값이 결국 권위이므로
+  사용자에게는 phase 도착 시점에 정합. 화면 디자인 시 단조 증가 가정 금지.
+- **자동 발견 잡 done 시 store.clear 는 hook 이 안 한다** — DC bulk-save 와 동일. `useAutoDiscoverJob`
+  의 done 핸들러는 캐시 invalidate 만 하고 `activeAutoDiscoverJobStore.clear()` 는 페이지
+  컴포넌트 책임. hook 이 자동 clear 하면 done 직후 카드가 사라져 결과를 못 봄.
+- **Summary 매니저 heartbeat 의존 — 서버 5초 주기 보장 필수** — 매니저가 15초 무이벤트면
+  강제 close + 재연결한다. 서버가 heartbeat 를 끊거나 주기를 늘리면 정상 연결도 idle timeout
+  으로 오인되어 끊임없이 재연결하는 루프에 빠질 수 있음. 서버 측 SSE 핸들러 수정 시 5초 heartbeat
+  보장 + 클라이언트 IDLE_TIMEOUT_MS(15s) 와 마진 확인.
+- **Summary 매니저 snapshot 핸들러 (snap, prev) 시그니처** — prev 는 같은 키 직전 snapshot, 첫
+  catch-up 시 null. 외부 컨슈머가 매니저 directly subscribe 한다면 `(snap, prev)` 두 인자 모두
+  수신 필요. 공개 list 처럼 합산 카운트 보호가 필요한 캐시는 prev 와 delta 비교 필수 —
+  prev=null 이면 delta 0 처리해 합산 행 안 덮어쓰기.
 - **DC bulk-save 잡은 직렬 실행** — 일괄 vRid 가 백엔드에서 한 건씩 순차 처리되므로 100개 잡이
   면 5~10분 단위로 걸린다. SSE 연결이 그 시간 내내 살아 있어야 함. 네트워크 끊김에 대해 1s →
   30s cap 백오프로 견디지만, 30초 cap 에 도달한 채 오래 끊겨 있으면 done 이벤트를 놓치는 갭이
@@ -377,7 +470,7 @@ close).
   가드**, **`buildSummaryEventsUrl` 사용 시 키 객체 형태**, **`useNaverSearch` 빈 q 자동
   disabled**, **잡 SSE 훅 effect jobId 단일 dep**, **`useGlobalMergeJob` chunk payload.progress
   미사용**, **잡 done 이후 추가 이벤트는 무시**, **`useMenuRanking` / `useGroupingJob` /
-  `useDiningcodeBulkSaveJob` 의 404 → null 패턴**, **`useGroupingRestaurantsStatus` 자동 refetch
+  `useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` 의 404 → null 패턴**, **`useGroupingRestaurantsStatus` 자동 refetch
   없음**, **8-튜플/9-튜플 기본값 변경 시 cold cache**, **재연결 짧은 갭 — summary 매니저
   한정**, **Detail 캐시 inline 패치 의존**, **Review 머지는 summary 통째 교체**, **List 캐시
   형태 변경 주의**, **`useRestaurantListSummaryEvents*` 부수효과 전용**, **활성 잡 스토어
@@ -386,7 +479,7 @@ close).
   HTMLElement 필요**, **`invalidateQueries` prefix 매칭 주의**, **`testProvider`/`deleteProvider`
   빈 body** — 모두 기존 항목 유지.
 
-## 8. Sources [coverage: high — 40 sources]
+## 8. Sources [coverage: high — 43 sources]
 
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
@@ -399,6 +492,7 @@ close).
 - [packages/shared/src/api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts)
 - [packages/shared/src/api/canonical.api.ts](../../packages/shared/src/api/canonical.api.ts)
 - [packages/shared/src/api/menu-grouping.api.ts](../../packages/shared/src/api/menu-grouping.api.ts)
+- [packages/shared/src/api/autoDiscover.api.ts](../../packages/shared/src/api/autoDiscover.api.ts)
 - [packages/shared/src/api/analytics.api.ts](../../packages/shared/src/api/analytics.api.ts)
 - [packages/shared/src/api/ai.api.ts](../../packages/shared/src/api/ai.api.ts)
 - [packages/shared/src/api/settings-map.api.ts](../../packages/shared/src/api/settings-map.api.ts)
@@ -410,6 +504,7 @@ close).
 - [packages/shared/src/hooks/useCanonical.ts](../../packages/shared/src/hooks/useCanonical.ts)
 - [packages/shared/src/hooks/summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts)
 - [packages/shared/src/hooks/useMenuGrouping.ts](../../packages/shared/src/hooks/useMenuGrouping.ts)
+- [packages/shared/src/hooks/useAutoDiscover.ts](../../packages/shared/src/hooks/useAutoDiscover.ts)
 - [packages/shared/src/hooks/useAnalytics.ts](../../packages/shared/src/hooks/useAnalytics.ts)
 - [packages/shared/src/hooks/useAi.ts](../../packages/shared/src/hooks/useAi.ts)
 - [packages/shared/src/hooks/useSettingsMap.ts](../../packages/shared/src/hooks/useSettingsMap.ts)
@@ -418,6 +513,7 @@ close).
 - [packages/shared/src/stores/activeGroupingJobStore.ts](../../packages/shared/src/stores/activeGroupingJobStore.ts)
 - [packages/shared/src/stores/activeGlobalMergeJobStore.ts](../../packages/shared/src/stores/activeGlobalMergeJobStore.ts)
 - [packages/shared/src/stores/activeDiningcodeBulkSaveJobStore.ts](../../packages/shared/src/stores/activeDiningcodeBulkSaveJobStore.ts)
+- [packages/shared/src/stores/activeAutoDiscoverJobStore.ts](../../packages/shared/src/stores/activeAutoDiscoverJobStore.ts)
 - [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
 - [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts)

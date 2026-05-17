@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-05-15
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical]
+last_compiled: 2026-05-17
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover]
 status: active
 ---
 
@@ -23,6 +23,8 @@ status: active
 - **2026-05-09** in [[../topics/menu-grouping]] (`grouping-job-registry.ts`): `groupingJobRegistry` 모듈 싱글턴이 batch 메뉴 그룹핑 잡 상태(item 단위 pending/running/done/failed/skipped)와 subscribers Set, per-job AbortController를 함께 관리. TTL 10분 GC. **actorId 격리** — 자기 actor의 잡만 조회/구독 가능. 외부 큐 없이 in-memory만으로 SSE 구독자 fan-out + 잡 단위 cancel + per-place 직렬 보장을 동시에 제공. 회계 단위가 actor라는 점에서 `JobRegistry`(crawl)와 같은 모양.
 - **2026-05-09** in [[../topics/analytics]] (`global-merge-job-registry.ts`): `globalMergeJobRegistry` 모듈 싱글턴. 위 grouping과 달리 **동시 1개만** 보장 — `inflightJobId()` 가드로 라우트가 진행 중일 때 새 요청을 받으면 409 + 현재 snapshot을 응답. chunk 단위로 진행 + done event publish. TTL 10분 GC. 단일-잡 모델은 grouping과 다른 점이지만 구조(모듈 스코프 + Map/Set + subscriber fan-out + TTL)는 동일.
 - **2026-05-15** in [[../topics/crawl]] (`diningcode-bulk-save-registry.ts`): 다이닝코드 일괄 저장 잡 레지스트리. `groupingJobRegistry` 와 동형 — 모듈 싱글턴 + Map/Set 회계 + per-job AbortController + subscriber fan-out + TTL 10분 GC + actorId 격리. 차이점은 (a) per-actor **단일 잡** 정책 (한 어드민이 동시 일괄 저장 1개 — 다이닝코드 부담 의식) (b) item state 가 `pending|running|done|failed|skipped` 로 menu-grouping과 같은 다섯 단계. 8번째 인스턴스 — 새 도메인이 추가될 때마다 이 패턴이 "디폴트 디자인" 으로 채택되고 있음을 확인.
+- **2026-05-17** in [[../topics/auto-discover]] (`auto-discover-registry.ts` + `auto-discover.service.ts`): 9 번째 인스턴스. 모듈 싱글턴 `autoDiscoverRegistry` + per-job AbortController + subscriber fan-out + TTL 10 분 GC — `groupingJobRegistry`/`diningcodeBulkSaveRegistry` 와 동형. 차이점은 **상태가 두 갈래** (keywords Map + candidates Map) 라 `upsertKeyword`/`upsertCandidate` 두 publish 채널을 가짐 + `phase` enum (queued/generating_keywords/searching/crawling/done) 이 잡 state 와 분리됨. per-actor **단일 잡** 정책 (`findInFlightByActor` → 두 번째 POST 는 409) — AI+검색+크롤 동시 부담 의식. **`MAX_CONCURRENT_PER_ACTOR` 3 → 5** (`crawl/job-registry.ts`) 도 같은 라운드 — 자동 발견 그룹 크기 5 와 액터 슬롯을 일치시켜 한 그룹이 통째로 동시 진입 가능하게. 게이트 cap 자체가 컨슈머 디자인(그룹 크기)에 맞춰 조정된 첫 사례.
+- **2026-05-17** in [[../topics/friendly]] (`summary.service.ts:cleanupStaleReviewSummaries` + `server.ts` boot hook): 게이트의 **재시작 회복** 패치 — in-memory 게이트가 process exit 으로 사라지면 DB rows 가 'pending'/'running' 으로 남아 다음 큐가 못 잡는다. 부팅 직후 stale 행을 `status='failed' errorCode='server_restart'` 로 마킹 → 기존 재요약 경로가 다시 살려냄. "다중 인스턴스 = 외부 큐 필요" 라는 한계를 미루는 한 가지 패치 — 단일 인스턴스 가정은 유지하되 재시작 후 자동 청소로 운영 부담을 줄임. 같은 모양이 다른 잡 도메인 (menu-grouping, diningcode-bulk-save, auto-discover) 으로 번질 후보.
 - **2026-05-09** in [[../topics/crawl]] (`crawl.service.ts` actor rate-limit 제거): 게이트가 **추가**된 게 아니라 **잘못된 게이트가 제거**된 케이스 — 학습 인스턴스. 기존 `RATE_LIMIT_WINDOW_MS=1_000` (이후 50ms 로 시도) + `lastCallByActor: Map` 윈도우 기반 rate-limit 이 어드민 발견 페이지의 다중 시작(N개 체크 → 한 번에 N개 startCrawl) 패턴과 충돌. 응답이 수 ms 안에 떨어지는 환경에서 어떤 윈도우 길이여도 직렬 await 호출조차 둘째부터 차단되어 1개만 진행되던 버그. spam 방어는 이미 두 layer (`findInFlightByPlace` in-flight dedup + `MAX_CONCURRENT_PER_ACTOR=3` + FIFO 큐) 가 있었음 — 윈도우 기반 rate-limit 은 redundant + actively harmful. 모듈 싱글턴 게이트가 충분히 spam 방어하면 보조 윈도우는 제거가 옳다.
 
 ## What This Means
@@ -49,3 +51,5 @@ status: active
 - [[../topics/shared]]
 - [[../topics/menu-grouping]]
 - [[../topics/analytics]]
+- [[../topics/canonical]]
+- [[../topics/auto-discover]]

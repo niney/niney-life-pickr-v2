@@ -1,5 +1,25 @@
 # Wiki Compile Log
 
+## 2026-05-17 (11th compile)
+
+**Topics updated:** friendly, crawl, canonical, web, api-contract, shared, project-overview
+**New topics:** auto-discover
+**New concepts:** none
+**Concepts updated:** zod-ssot-buildless, sse-token-auth, stream-driven-cache-merge, in-memory-singleton-gates, versioned-llm-prompts
+
+**Sources scanned:** ~329 (knowledge files + 신규 auto-discover 모듈 5 파일 + restaurant.merge.ts/.test.ts + auto-discover schema + autoDiscover.api/useAutoDiscover/activeAutoDiscoverJobStore + AdminAutoDiscoverPage + AutoDiscoverForm/JobCard + 갱신된 schemas/restaurant.ts/crawl.ts + crawl.service.ts tryAutoMatchDiningcode + job-registry.ts MAX_CONCURRENT 3→5 + summary.service.ts cleanupStaleReviewSummaries + server.ts boot hook + restaurant.route.ts summary SSE heartbeat + summarySseManager idle timeout + useRestaurant snapshot 보호 + DiscoverPanel/HomeTab/InfoTab/ReviewsTab/shared 융합 렌더)
+**Sources changed:** ~40 (commit 58a93b8 이후 9개 커밋)
+
+**Reason**: 어드민 맛집 자동 발견 도입 (AI 키워드 8개 → 다중 검색 → 그룹 5병렬 크롤) + canonical 자동 DC 매칭+머지 후크(C안) + 어드민 발견 상세 패널 Naver+DC 융합 + 서버 안정성 패치 (부팅 시 stale 요약 정리 + summary SSE heartbeat/idle timeout) + MAX_CONCURRENT_PER_ACTOR 3→5 (자동 발견 그룹 크기와 일치).
+
+**Notable patterns**:
+- 신규 토픽 1개 — auto-discover 가 한 모듈 + 한 페이지 + 한 schema + 한 hook 트리오로 자체 정체성을 가짐. 5 개 기존 컨셉의 인스턴스가 됨 (`in-memory-singleton-gates` 9번째, `sse-token-auth` 8번째, `stream-driven-cache-merge` 머지 패턴 + 클라 자체 카운트 변형, `zod-ssot-buildless` JobState/Phase 두 enum 분리 + 첫 `cancelled` enum 값, `versioned-llm-prompts` 얇은 인스턴스).
+- canonical 자동 머지 정책 진화 — "수동 확정만" → "C안 자동 머지 + 검토 큐 fallback". 임계 상수 3개(이름≥0.85, 거리≤50m, top1-top2≥0.1) 가 보수적이라 false-positive 방지.
+- 게이트 cap 자체가 컨슈머 디자인(자동 발견 group-of-5)에 맞춰 조정된 첫 사례 — `MAX_CONCURRENT_PER_ACTOR` 3→5.
+- 서버 부팅 시 stale 요약 cleanup 가 `in-memory-singleton-gates` 의 재시작 회복 패치로 등록 — "다중 인스턴스 = 외부 큐 필요" 한계를 미루는 한 가지 패치.
+- summary SSE heartbeat + idle timeout 가 `sse-token-auth` 의 liveness layer 로 추가됨. 같은 패턴이 다른 잡 SSE 훅으로 번지면 별도 컨셉 후보.
+- 신규 컨셉 0개 — Phase 1/2/3 직렬 그룹 + AI fallback 과 SSE liveness 둘 다 한 도메인에 닫혀 있어 (3+ 토픽 임계 미달) 컨셉화 보류.
+
 ## 2026-05-15 (10th compile)
 
 **Topics updated:** crawl, friendly, web, shared, api-contract, project-overview
