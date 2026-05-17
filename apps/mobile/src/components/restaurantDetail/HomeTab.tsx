@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type {
   PublicVisitorReviewType,
@@ -24,9 +24,10 @@ const HOME_MENU_PREVIEW = 4;
 const HOME_REVIEW_PREVIEW = 3;
 
 // 홈 탭 — 모든 정보의 요약. 각 섹션에 "전체 보기" 액션으로 해당 탭 점프.
+// hero 이미지와 식당명은 컨테이너(PublicRestaurantDetail) 가 처리 — 여기선
+// 메타(카테고리/별점/리뷰수) + QuickActions 부터 시작.
 export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Props) => {
   const theme = useTheme();
-  const hero = detail.imageUrls[0] ?? null;
   const previewMenus = detail.menus.slice(0, HOME_MENU_PREVIEW);
   const previewReviews: PublicVisitorReviewType[] = [...detail.reviews]
     .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
@@ -34,48 +35,21 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
 
   return (
     <View>
-      {hero ? (
-        <Pressable
-          onPress={() => onChangeTab('photos')}
-          accessibilityLabel="사진 전체 보기"
-        >
-          <View style={styles.heroWrap}>
-            <Image source={{ uri: hero }} style={styles.heroImg} />
-            {detail.imageUrls.length > 1 && (
-              <View style={styles.heroBadge}>
-                <Text style={styles.heroBadgeText}>
-                  사진 {detail.imageUrls.length}장
-                </Text>
-              </View>
-            )}
-          </View>
-        </Pressable>
-      ) : (
-        <View style={[styles.heroEmpty, { backgroundColor: theme.colors.surfaceAlt }]}>
-          <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
-            사진이 없습니다.
-          </Text>
-        </View>
-      )}
-
       <View style={styles.section}>
-        <View style={{ gap: 4 }}>
-          <Text style={[styles.name, { color: theme.colors.text }]}>{detail.name}</Text>
-          <View style={styles.metaRow}>
-            {detail.category && (
-              <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
-                {detail.category}
-              </Text>
-            )}
-            {detail.rating !== null && (
-              <Text style={[styles.meta, { color: STAR }]}>★ {detail.rating}</Text>
-            )}
-            {detail.reviewCount !== null && (
-              <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
-                리뷰 {detail.reviewCount}
-              </Text>
-            )}
-          </View>
+        <View style={styles.metaRow}>
+          {detail.category && (
+            <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
+              {detail.category}
+            </Text>
+          )}
+          {detail.rating !== null && (
+            <Text style={[styles.meta, { color: STAR }]}>★ {detail.rating}</Text>
+          )}
+          {detail.reviewCount !== null && (
+            <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
+              리뷰 {detail.reviewCount}
+            </Text>
+          )}
         </View>
         <QuickActions detail={detail} />
       </View>
@@ -175,23 +149,9 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
 };
 
 const styles = StyleSheet.create({
-  heroWrap: { height: 224, width: '100%', position: 'relative' },
-  heroImg: { width: '100%', height: '100%' },
-  heroEmpty: { height: 128, alignItems: 'center', justifyContent: 'center' },
-  heroBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  heroBadgeText: { color: '#fff', fontSize: 11, fontVariant: ['tabular-nums'] },
   section: { paddingHorizontal: 16, paddingVertical: 16, gap: 12 },
   sectionBordered: { borderTopWidth: 1 },
   lastSection: { paddingBottom: 24 },
-  name: { fontSize: 18, fontWeight: '700' },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   meta: { fontSize: 12 },
   note: { fontSize: 12 },

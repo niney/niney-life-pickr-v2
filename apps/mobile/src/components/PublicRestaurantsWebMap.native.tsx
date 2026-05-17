@@ -23,9 +23,9 @@ interface Props {
   items: RestaurantPublicListItemType[];
   selectedPlaceId: string | null;
   appliedBbox: string | null;
-  // 지도가 edge-to-edge 일 때 floating 버튼이 노치/상태바와 겹치지 않도록
-  // 위에서부터 띄울 추가 여백. 컨테이너가 status bar 영역까지 차지하면
-  // useSafeAreaInsets().top 을 넘겨준다. 헤더 아래라면 0.
+  // 지도 위 floating 버튼('이 지역 재검색' / '전체 영역' / 타일 에러 토스트)
+  // 들이 시작할 y 픽셀. 부모는 보통 insets.top + 헤더 카드 높이 를 넘겨,
+  // 카드 바로 아래에서 버튼들이 12px 간격으로 깔리게 한다.
   topInset?: number;
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;

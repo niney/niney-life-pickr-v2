@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   ApiError,
   useRestaurantPublic,
@@ -19,12 +27,25 @@ interface Props {
   placeId: string;
   // 컨테이너가 stack 헤더에 식당명을 채울 수 있게, 부모로 노출. 미지정 시 동작 X.
   onResolveName?(name: string | null): void;
+  // 시트 안에서 BottomSheetScrollView 주입용. 호환 ref 타입이 라이브러리마다
+  // 달라 ComponentType<any> 로 받는다 — 사용처는 RN ScrollView 인터페이스만 씀.
+  Scroller?: ComponentType<any>;
+  // 시트 모드에서 사용. 지정하면 콘텐츠 최상단에 '← + 식당명' sticky 헤더가
+  // 추가로 렌더된다. 미지정(deep-link 라우트) 이면 헤더 없이 stack 의 네이티브
+  // 헤더가 처리한다.
+  onBack?(): void;
 }
 
 // 식당 상세 컨테이너. 데이터 fetch(상세 + 인사이트) 는 여기 한 번 — 탭 전환은
-// 콘텐츠만 바꾼다. ScrollView 의 stickyHeaderIndices 로 TabBar 가 헤더 바로
-// 아래에서 sticky. 탭 전환 시 스크롤 top 으로 reset.
-export const PublicRestaurantDetail = ({ placeId, onResolveName }: Props) => {
+// 콘텐츠만 바꾼다. Scroller 의 stickyHeaderIndices 로 onBack 헤더(있을 때) 와
+// TabBar 가 둘 다 sticky — 시트 full 시 검색바를 시트가 덮으면서 이 헤더가
+// 그 자리를 차지. 탭 전환 시 스크롤 top 으로 reset.
+export const PublicRestaurantDetail = ({
+  placeId,
+  onResolveName,
+  Scroller = ScrollView,
+  onBack,
+}: Props) => {
   const theme = useTheme();
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
@@ -80,13 +101,69 @@ export const PublicRestaurantDetail = ({ placeId, onResolveName }: Props) => {
     );
   }
 
+  // 시트 모드: [헤더(sticky), hero, TabBar(sticky), ...탭콘텐츠] → [0, 2]
+  // deep-link 모드: [hero, TabBar(sticky), ...탭콘텐츠] → [1]
+  const stickyIndices = onBack ? [0, 2] : [1];
+  const hero = detail.data.imageUrls[0] ?? null;
+  const imageCount = detail.data.imageUrls.length;
+
   return (
-    <ScrollView
+    <Scroller
       ref={scrollRef}
       style={{ backgroundColor: theme.colors.bg }}
       contentContainerStyle={styles.scrollContent}
-      stickyHeaderIndices={[0]}
+      stickyHeaderIndices={stickyIndices}
     >
+      {onBack && (
+        <View
+          style={[
+            styles.sheetHeader,
+            {
+              backgroundColor: theme.colors.surface,
+              borderBottomColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={onBack}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="뒤로"
+            style={styles.backBtn}
+          >
+            <Text style={[styles.backIcon, { color: theme.colors.text }]}>‹</Text>
+          </Pressable>
+          <Text
+            numberOfLines={1}
+            style={[styles.headerTitle, { color: theme.colors.text }]}
+          >
+            {detail.data.name}
+          </Text>
+        </View>
+      )}
+
+      {hero ? (
+        <Pressable
+          onPress={() => handleChangeTab('photos')}
+          accessibilityLabel="사진 전체 보기"
+        >
+          <View style={styles.heroWrap}>
+            <Image source={{ uri: hero }} style={styles.heroImg} />
+            {imageCount > 1 && (
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>사진 {imageCount}장</Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+      ) : (
+        <View style={[styles.heroEmpty, { backgroundColor: theme.colors.surfaceAlt }]}>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
+            사진이 없습니다.
+          </Text>
+        </View>
+      )}
+
       <TabBar active={tab} onChange={handleChangeTab} />
 
       {tab === 'home' && (
@@ -108,7 +185,7 @@ export const PublicRestaurantDetail = ({ placeId, onResolveName }: Props) => {
       {tab === 'reviews' && <ReviewsTab detail={detail.data} />}
       {tab === 'photos' && <PhotosTab detail={detail.data} />}
       {tab === 'info' && <InfoTab detail={detail.data} />}
-    </ScrollView>
+    </Scroller>
   );
 };
 
@@ -122,4 +199,32 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   note: { fontSize: 13, textAlign: 'center' },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIcon: { fontSize: 32, lineHeight: 32, fontWeight: '300', marginTop: -4 },
+  headerTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
+  heroWrap: { height: 224, width: '100%', position: 'relative' },
+  heroImg: { width: '100%', height: '100%' },
+  heroEmpty: { height: 128, alignItems: 'center', justifyContent: 'center' },
+  heroBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  heroBadgeText: { color: '#fff', fontSize: 11, fontVariant: ['tabular-nums'] },
 });
