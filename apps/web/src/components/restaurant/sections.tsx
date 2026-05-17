@@ -33,17 +33,32 @@ export const SummaryProgressSection = ({
 }: {
   status: RestaurantSummaryProgressType;
 }) => {
+  const [expanded, setExpanded] = useState(false);
   const inFlight = status.pending + status.running;
   const total = inFlight + status.done + status.failed;
+  const recent = status.recentDone;
+  const hasMore = recent.length > 1;
+  const visibleRecent = expanded ? recent : recent.slice(0, 1);
   return (
     <section className="space-y-3">
       <SectionHeader
         icon={<Sparkles className="size-4 text-primary" />}
         label="AI 요약"
         meta={
-          <>
-            저장된 리뷰 {status.totalReviews}개 · {status.done}/{total} 완료
-          </>
+          <span className="flex items-center gap-2">
+            <span>
+              저장된 리뷰 {status.totalReviews}개 · {status.done}/{total} 완료
+            </span>
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="text-primary hover:underline"
+              >
+                {expanded ? '접기' : `전체 보기 (${recent.length})`}
+              </button>
+            )}
+          </span>
         }
       />
       <div className="flex flex-wrap gap-2 text-xs">
@@ -52,9 +67,9 @@ export const SummaryProgressSection = ({
         <Badge variant="secondary">완료 {status.done}</Badge>
         {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
       </div>
-      {status.recentDone.length > 0 && (
+      {visibleRecent.length > 0 && (
         <ul className="space-y-1.5 text-sm text-muted-foreground">
-          {status.recentDone.map((s) => (
+          {visibleRecent.map((s) => (
             <li key={s.reviewId} className="line-clamp-2 leading-relaxed">
               · {s.text}
             </li>
@@ -290,17 +305,40 @@ const ReviewSummaryBlock = ({ r }: { r: VisitorReviewWithSummaryType }) => {
 // Compact reviews list used in the inline ActiveJobPanel — caps at 50 rows
 // since the panel is meant for a quick "did the crawl land?" peek. The
 // dedicated detail page uses its own list with filter/sort/paginate.
+// Default-collapsed to 1 row so streaming reviews don't blow up the panel
+// height; toggle in the header expands to the full 50-row preview.
 export const ReviewSummarySection = ({
   reviews,
 }: {
   reviews: VisitorReviewWithSummaryType[];
 }) => {
+  const [expanded, setExpanded] = useState(false);
   if (reviews.length === 0) return null;
+  const cap = 50;
+  const previewCount = 1;
+  const capped = reviews.slice(0, cap);
+  const visible = expanded ? capped : capped.slice(0, previewCount);
+  const hasMore = reviews.length > previewCount;
   return (
     <section className="space-y-2">
-      <SectionHeader label={`리뷰 (${reviews.length})`} />
+      <SectionHeader
+        label={`리뷰 (${reviews.length})`}
+        meta={
+          hasMore && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-primary hover:underline"
+            >
+              {expanded
+                ? '접기'
+                : `전체 보기 (${Math.min(reviews.length, cap)})`}
+            </button>
+          )
+        }
+      />
       <ul className="divide-y">
-        {reviews.slice(0, 50).map((r) => (
+        {visible.map((r) => (
           <ReviewSummaryItem key={r.id} r={r} />
         ))}
       </ul>
