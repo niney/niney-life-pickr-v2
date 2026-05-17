@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { ReviewAnalysis, type ReviewAnalysisType } from '@repo/api-contract';
-import type { LLMProvider } from '../ai/adapters/llm-provider.js';
+import { LLMUpstreamError, type LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
@@ -154,7 +154,22 @@ type ReviewAttemptOutcome =
       message: string;
       // parse_failed 일 땐 모델 id 가 알려져 있어 보존, upstream/timeout 은 null.
       model: string | null;
+      // LLMUpstreamError 일 때만 채움 — 429/500/503 구분용. 그 외 null.
+      httpStatus: number | null;
     };
+
+// 한 시도의 디버깅용 스냅샷. 최종 실패 시 시도별 이력 전체를 로그에 실어
+// 보내기 위해 각 시도 outcome 을 이 모양으로 누적한다.
+type AttemptTrace = {
+  attempt: number;             // 1-indexed
+  ok: boolean;
+  errorCode: string | null;
+  message: string | null;      // ok=false 일 때만, cap 없이 원본
+  httpStatus: number | null;
+  model: string | null;
+  tookMs: number;              // 이 시도 소요
+  delayMs: number;             // 이 시도 직전 백오프 대기
+};
 
 export interface SummaryServiceOptions {
   cache?: AdapterCache;
@@ -425,24 +440,51 @@ export class SummaryService {
       // 같은 슬롯에서 한 호출 내부 회복, 여기는 호출 자체를 새로 시작).
       const attemptForReview = async (
         r: (typeof chunk)[number],
-      ): Promise<ReviewAttemptOutcome> => {
+      ): Promise<{ outcome: ReviewAttemptOutcome; traces: AttemptTrace[] }> => {
+        const traces: AttemptTrace[] = [];
         let last: ReviewAttemptOutcome | null = null;
         for (let attempt = 0; attempt < RETRY_LIMIT; attempt += 1) {
+          let delayMs = 0;
           if (attempt > 0) {
-            const delay = 300 * attempt + Math.floor(Math.random() * 200);
-            await new Promise((res) => setTimeout(res, delay));
+            delayMs = 300 * attempt + Math.floor(Math.random() * 200);
+            await new Promise((res) => setTimeout(res, delayMs));
+            const prevErr = last && !last.ok ? last : null;
             this.log?.info(
-              { placeId, reviewId: r.id, attempt: attempt + 1, prev: last?.errorCode },
+              {
+                placeId,
+                reviewId: r.id,
+                attempt: attempt + 1,
+                prev: prevErr?.errorCode,
+                prevHttpStatus: prevErr?.httpStatus ?? null,
+                prevMessage: prevErr?.message.slice(0, 80) ?? null,
+                delayMs,
+              },
               '[summary] retry',
             );
           }
+          const startedAt = Date.now();
           last = await this.attemptOnce(provider, model, r);
-          if (last.ok) return last;
+          const tookMs = Date.now() - startedAt;
+          traces.push({
+            attempt: attempt + 1,
+            ok: last.ok,
+            errorCode: last.ok ? null : last.errorCode,
+            message: last.ok ? null : last.message,
+            httpStatus: last.ok ? null : last.httpStatus,
+            model: last.ok ? last.model : last.model,
+            tookMs,
+            delayMs,
+          });
+          if (last.ok) return { outcome: last, traces };
         }
-        return last!;
+        return { outcome: last!, traces };
       };
 
-      const attempts = await Promise.all(chunk.map((r) => attemptForReview(r)));
+      const attemptResults = await Promise.all(
+        chunk.map((r) => attemptForReview(r)),
+      );
+      const attempts = attemptResults.map((x) => x.outcome);
+      const tracesByIdx = attemptResults.map((x) => x.traces);
 
       const finishedAt = new Date();
       // SQLite 는 동시 쓰기 트랜잭션 불가 — Promise.all 로 트랜잭션을
@@ -542,13 +584,23 @@ export class SummaryService {
           // 모든 시도 실패. parse_failed 와 upstream 을 분기해 카운트.
           if (a.errorCode === 'parse_failed') parseFailCount += 1;
           else failCount += 1;
+          const reviewRow = chunk[idx]!;
+          const traces = tracesByIdx[idx]!;
           this.log?.warn(
             {
               placeId,
               reviewId,
-              errorCode: a.errorCode,
-              message: a.message.slice(0, 120),
-              attempts: RETRY_LIMIT,
+              bodyLen: reviewRow.body.length,
+              rating: reviewRow.rating,
+              authorName: reviewRow.authorName,
+              provider: 'ollama-cloud',
+              model,
+              attempts: traces,           // 시도별 전체 이력 (errorCode, httpStatus, tookMs, delayMs, model, message 전체)
+              attemptCount: traces.length,
+              finalErrorCode: a.errorCode,
+              finalHttpStatus: a.httpStatus,
+              // cap 없이 원본 — parse_failed 일 때 raw text 500자, upstream 일 때 응답 body 그대로.
+              finalMessage: a.message,
             },
             '[summary] all retries exhausted',
           );
@@ -642,10 +694,12 @@ export class SummaryService {
         errorCode: 'parse_failed',
         message: res.text.slice(0, 500),
         model: res.model,
+        httpStatus: null,
       };
     } catch (e) {
       const { error, message } = classifyError(e);
-      return { ok: false, errorCode: error, message, model: null };
+      const httpStatus = e instanceof LLMUpstreamError ? e.status : null;
+      return { ok: false, errorCode: error, message, model: null, httpStatus };
     }
   }
 
