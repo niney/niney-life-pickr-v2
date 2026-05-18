@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { RestaurantPublicListQueryType } from '@repo/api-contract';
-import { useRestaurantsPublic } from '@repo/shared';
+import { useRestaurantsPublic, useUserLocation } from '@repo/shared';
+import { computeBboxAround } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import {
   PublicRestaurantList,
@@ -17,6 +18,14 @@ type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
 const VALID_SORTS: SortKey[] = ['recent', 'satisfaction', 'positive', 'rating'];
 const isSortKey = (s: string | null): s is SortKey =>
   s !== null && (VALID_SORTS as string[]).includes(s);
+
+// 사용자 위치 기반 첫 진입 시 검색 반경. ±1.5km → 3km × 3km 박스 — 도심
+// 권역이면 limit 80 안에 충분히 채워지고, 지방이면 결과 0 가능 (그땐 사용자
+// 가 "전체 영역" 으로 풀거나 패닝하여 재검색).
+const INITIAL_NEARBY_KM = 1.5;
+const formatBbox = (b: { minLng: number; minLat: number; maxLng: number; maxLat: number }) =>
+  // PublicRestaurantsMap.tsx 의 formatBbox 와 동일 — 소수점 5자리.
+  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 
 // /restaurants 의 모바일 UX 를 네이버 지도식 바텀시트 패턴으로 교체한 v2.
 // xl+ 데스크톱은 기존 RestaurantsPage 와 동일한 3-column (단일 페이지 안에서
@@ -104,6 +113,42 @@ export const RestaurantsV2Page = () => {
   const handleResearch = useCallback((b: string) => setParam('bbox', b), [setParam]);
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
 
+  // 첫 진입 시 사용자 위치 → 주변 bbox 자동 적용. one-shot — 한 번 적용된 후
+  // 사용자가 "전체 영역" 으로 해제하거나 직접 패닝해 재검색하면 다시 끼어들지
+  // 않는다.
+  const userLoc = useUserLocation();
+  const appliedGeoBboxRef = useRef(false);
+  useEffect(() => {
+    if (appliedGeoBboxRef.current) return;
+    if (userLoc.status !== 'granted' || !userLoc.coords) return;
+    appliedGeoBboxRef.current = true;
+    // 공유 링크 등으로 URL 에 이미 bbox 가 있으면 사용자 의도 우선 — 덮어쓰지
+    // 않는다. one-shot 플래그는 위에서 이미 true 로 마크.
+    if (bbox) return;
+    const box = computeBboxAround(userLoc.coords, INITIAL_NEARBY_KM);
+    setParam('bbox', formatBbox(box));
+  }, [userLoc.status, userLoc.coords, bbox, setParam]);
+
+  // "내 위치" 버튼 클릭은 사용자의 명시 의도 — 기존 URL bbox 가 있어도 덮어
+  // 쓴다. manualRequestRef 로 "다음 granted 도착 시 강제 적용" 표시.
+  const manualRequestRef = useRef(false);
+  useEffect(() => {
+    if (!manualRequestRef.current) return;
+    if (userLoc.status !== 'granted' || !userLoc.coords) return;
+    manualRequestRef.current = false;
+    const box = computeBboxAround(userLoc.coords, INITIAL_NEARBY_KM);
+    setParam('bbox', formatBbox(box));
+  }, [userLoc.status, userLoc.coords, setParam]);
+
+  const handleRequestLocation = useCallback(() => {
+    manualRequestRef.current = true;
+    userLoc.refetch();
+  }, [userLoc]);
+
+  // 지도 view 동기화용 중심 좌표. PublicRestaurantsMap 이 참조 변경마다 flyTo —
+  // 첫 자동 도착과 수동 refetch 양쪽 다 처리. 권한 거부면 null → 서울시청 폴백.
+  const focusCoord = userLoc.status === 'granted' ? userLoc.coords : null;
+
   // 모바일 전용 subBar 컨텐츠 — 검색 input + 카테고리 칩 + 총/정렬.
   // xl+ 데스크톱에서는 컨테이너 div 가 display:none (xl:hidden) 이라 차지하는
   // 높이 0 → ResizeObserver 가 측정한 headerHeight 는 자동으로 56(TopBar 만).
@@ -188,6 +233,9 @@ export const RestaurantsV2Page = () => {
             selectedPlaceId={placeId}
             hoveredPlaceId={hoveredPlaceId}
             appliedBbox={bbox}
+            focusCoord={focusCoord}
+            locationStatus={userLoc.status}
+            onRequestLocation={handleRequestLocation}
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}
             onClearArea={handleClearArea}
@@ -210,6 +258,9 @@ export const RestaurantsV2Page = () => {
             selectedPlaceId={placeId}
             hoveredPlaceId={hoveredPlaceId}
             appliedBbox={bbox}
+            focusCoord={focusCoord}
+            locationStatus={userLoc.status}
+            onRequestLocation={handleRequestLocation}
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}
             onClearArea={handleClearArea}

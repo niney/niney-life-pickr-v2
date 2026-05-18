@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MapPin, RefreshCcw } from 'lucide-react';
-import { ApiError, useMapPublicConfig } from '@repo/shared';
+import { Loader2, LocateFixed, MapPin, RefreshCcw } from 'lucide-react';
+import { ApiError, useMapPublicConfig, type UserLocationStatus } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from './MapCanvas';
@@ -12,6 +12,13 @@ interface Props {
   // URL 의 bbox(이미 검색에 반영된 영역) — 사용자가 지도를 패닝해서 이 값과
   // 다른 영역으로 가면 "이 지역 재검색" 노출.
   appliedBbox: string | null;
+  // 외부에서 주입하는 중심 좌표(예: 사용자 geolocation). 참조가 새로워질
+  // 때마다 flyTo — 첫 진입의 자동 도착과 "내 위치" 버튼의 수동 재요청 양쪽
+  // 다 처리. 사용자가 패닝한 후엔 호출자가 새 좌표를 안 주는 한 그대로 둔다.
+  focusCoord?: { lat: number; lng: number } | null;
+  // "내 위치" 버튼 표시/상태/콜백. null/undefined 면 버튼 자체 숨김.
+  locationStatus?: UserLocationStatus;
+  onRequestLocation?: () => void;
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
@@ -22,6 +29,9 @@ export const PublicRestaurantsMap = ({
   selectedPlaceId,
   hoveredPlaceId,
   appliedBbox,
+  focusCoord,
+  locationStatus,
+  onRequestLocation,
   onSelectMarker,
   onResearchInArea,
   onClearArea,
@@ -64,6 +74,15 @@ export const PublicRestaurantsMap = ({
     if (!target || target.latitude === null || target.longitude === null) return;
     handleRef.current?.flyTo(target.latitude, target.longitude);
   }, [highlightedId, items]);
+
+  // focusCoord 참조가 바뀌면 fly — 첫 도착도, "내 위치" 재요청도 같은 경로.
+  // 같은 좌표라도 호출자가 새 object 를 넘기면 다시 fly (idempotent — 이미
+  // 같은 중심이면 시각적 변화 없음). apiKey 가 늦게 와서 mount 이 늦어진
+  // 경우를 위해 apiKey 도 deps 에 포함.
+  useEffect(() => {
+    if (!focusCoord || !apiKey) return;
+    handleRef.current?.flyTo(focusCoord.lat, focusCoord.lng);
+  }, [focusCoord, apiKey]);
 
   // viewport 변경 콜백 — URL bbox 와 비교, 다르면 재검색 후보로 보관.
   const handleViewportChange = useCallback(
@@ -139,8 +158,10 @@ export const PublicRestaurantsMap = ({
         </div>
       )}
 
-      {appliedBbox && (
-        <div className="absolute right-3 top-3">
+      {/* 우측 상단 컨트롤 — 가로 배치. "전체 영역"(bbox 있을 때) 왼쪽, "내 위치"
+          오른쪽. 위치 버튼이 모서리에 고정되어 "전체 영역" 토글 시 안 흔들린다. */}
+      <div className="absolute right-3 top-3 flex items-center gap-2">
+        {appliedBbox && (
           <Button
             type="button"
             variant="outline"
@@ -153,9 +174,52 @@ export const PublicRestaurantsMap = ({
           >
             전체 영역
           </Button>
-        </div>
-      )}
+        )}
+        {onRequestLocation && locationStatus && (
+          <MyLocationButton
+            status={locationStatus}
+            onClick={onRequestLocation}
+          />
+        )}
+      </div>
     </div>
+  );
+};
+
+// 별도 컴포넌트로 뽑는 건 disabled/스피너/툴팁 분기를 본체 JSX 에서 떼어
+// 가독성 유지. 권한 거부/비지원 시 클릭 무반응 + title 로 안내.
+const MyLocationButton = ({
+  status,
+  onClick,
+}: {
+  status: UserLocationStatus;
+  onClick: () => void;
+}) => {
+  const isPending = status === 'pending';
+  const isBlocked = status === 'denied' || status === 'unavailable';
+  const title =
+    status === 'denied'
+      ? '브라우저 위치 권한이 차단되어 있어요. 사이트 설정에서 허용해 주세요.'
+      : status === 'unavailable'
+        ? '이 환경에서는 위치를 사용할 수 없어요.'
+        : '내 위치';
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      onClick={onClick}
+      disabled={isBlocked || isPending}
+      title={title}
+      aria-label={title}
+      className="size-8 bg-background/95 shadow-sm"
+    >
+      {isPending ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : (
+        <LocateFixed className="size-4" />
+      )}
+    </Button>
   );
 };
 

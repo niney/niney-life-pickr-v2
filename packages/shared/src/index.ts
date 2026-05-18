@@ -27,6 +27,7 @@ export * from './hooks/useAutoDiscover.js';
 export * from './hooks/useAnalytics.js';
 export * from './hooks/useAi.js';
 export * from './hooks/useSettingsMap.js';
+export * from './hooks/useUserLocation.js';
 export * from './constants/index.js';
 export * from './design/index.js';
 export * from './ui/index.js';
