@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type {
@@ -28,10 +29,19 @@ const HOME_REVIEW_PREVIEW = 3;
 // 메타(카테고리/별점/리뷰수) + QuickActions 부터 시작.
 export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Props) => {
   const theme = useTheme();
-  const previewMenus = detail.menus.slice(0, HOME_MENU_PREVIEW);
-  const previewReviews: PublicVisitorReviewType[] = [...detail.reviews]
-    .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
-    .slice(0, HOME_REVIEW_PREVIEW);
+  const previewMenus = useMemo(
+    () => detail.menus.slice(0, HOME_MENU_PREVIEW),
+    [detail.menus],
+  );
+  // detail.reviews 가 N=수십~수백이라 매 렌더마다 spread+sort 하지 않도록 캐시.
+  // 분석 있는 리뷰가 우선 (.analysis 가 truthy 인 것이 먼저).
+  const previewReviews: PublicVisitorReviewType[] = useMemo(
+    () =>
+      [...detail.reviews]
+        .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
+        .slice(0, HOME_REVIEW_PREVIEW),
+    [detail.reviews],
+  );
 
   return (
     <View>

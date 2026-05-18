@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
@@ -13,7 +13,9 @@ interface Props {
 
 // 리뷰 카드 — 만족도 칩 + 본문 + 가로 스크롤 이미지(탭 → Lightbox) + 분석 세부
 // (메뉴 stripe / 팁 / 키워드).
-export const ReviewCard = ({ review: r }: Props) => {
+// React.memo: ReviewsTab 의 filter/sort 칩 변경 시 visible 배열만 새로 만들어지고
+// 각 review entry reference 는 그대로라 props 동일 → re-render 차단.
+const ReviewCardImpl = ({ review: r }: Props) => {
   const theme = useTheme();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const authorLabel = r.authorName ?? '익명';
@@ -131,6 +133,8 @@ export const ReviewCard = ({ review: r }: Props) => {
     </View>
   );
 };
+
+export const ReviewCard = memo(ReviewCardImpl);
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 6 },
