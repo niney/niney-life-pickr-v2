@@ -107,14 +107,15 @@ const ANALYSIS_JSON_SCHEMA = {
 } as const;
 
 const TEMPERATURE = 0.2;
-// Ollama 에선 num_ctx = 입력+출력 합이므로, num_ctx(4096) 안에서 시스템
-// 프롬프트(~600) + 리뷰 입력 자리를 충분히 남기려면 출력은 1500 정도가
-// 적정. 실측 분석 출력은 보통 300~700 토큰이라 1500도 보수적으로 큰 편.
-const MAX_TOKENS = 1500;
-// Ollama num_ctx 기본 2048 — 시스템 프롬프트 + 긴 리뷰가 들어가면
-// 입력 단계에서 잘려 분석 자체가 무의미해진다. 4096이면 시스템 프롬프트
-// (~600토큰) + 긴 리뷰(~1500토큰) + 출력 여유까지 담긴다.
-const NUM_CTX = 4096;
+// Ollama 에선 num_ctx = 입력+출력 합. 실측에서 menus 가 많은 한식 리뷰
+// (단호박죽/이동갈비정식/냉면/꿀떡/수정과 등 5+ 종)는 traits 까지 포함하면
+// 출력이 1500 을 넘어 JSON 이 닫는 괄호 없이 잘리는 parse_failed 가 났다.
+// 2500 이면 메뉴 10 개 + traits/tips/keywords 까지 안전.
+const MAX_TOKENS = 2500;
+// 시스템 프롬프트(~600) + 긴 한식 리뷰(~2000) + 출력 2500 = ~5100. 8192 면
+// 충분한 여유. KV cache 메모리는 늘지만 Ollama Cloud 측 부담이라 클라이언트
+// 영향 없음. 토큰 청구는 실제 사용량 기준이라 num_ctx 만 키워서 늘진 않는다.
+const NUM_CTX = 8192;
 // Mirrors the public batch endpoint's cap. Real concurrency is governed by
 // the adapter's FIFO gate; chunking here is just a defensive boundary so a
 // single fan-out doesn't allocate thousands of pending Promises at once.
@@ -212,6 +213,13 @@ export class SummaryService {
   // jobId 는 크롤 잡 컨텍스트에서 호출됐을 때 함께 흘려보낸 식별자. 같은
   // placeId 라도 잡이 바뀌면 새 jobId 로 묶여 로그 패널이 잡 단위 흐름을
   // 표시할 수 있다. backfillForRestaurant 같이 잡 컨텍스트 없는 경로는 null.
+  //
+  // 호출 즉시 (chain 밖에서) reviewIds 전부를 status='queued' 로 upsert 하여
+  // DB 흔적을 남긴다 — chain 메모리 큐가 서버 재시작에 휘발되더라도 어디
+  // 까지 적재됐는지 영구 보존된다. createMany 는 fire-and-forget — 호출자
+  // (크롤러) 가 await 하지 않아도 직후 SQLite writer 가 처리하므로 짧은
+  // 윈도우 안에 박힌다. 이 윈도우 동안 발생하는 재시작은 막을 수 없지만,
+  // 기존엔 49 batches × 60s = 49 분이었던 휘발 윈도우가 ms 단위로 줄어든다.
   queueSummariesForReviews(
     placeId: string,
     reviewIds: string[],
@@ -240,6 +248,29 @@ export class SummaryService {
         channel: 'summary',
       });
     }
+    // 적재 흔적 영속화 (chain 밖, 즉시). SQLite 는 writer 가 직렬화되므로
+    // createMany 일괄. UNIQUE(reviewId) 충돌 시 createMany 전체가 거부되니
+    // 충돌 발생하면 행 단위 upsert 로 fallback — 재크롤 등으로 같은 reviewId
+    // 가 다시 들어오는 경우만 해당.
+    void this.prisma.reviewSummary
+      .createMany({
+        data: reviewIds.map((id) => ({ reviewId: id, status: 'queued' })),
+      })
+      .catch(async () => {
+        for (const id of reviewIds) {
+          try {
+            await this.prisma.reviewSummary.upsert({
+              where: { reviewId: id },
+              create: { reviewId: id, status: 'queued' },
+              update: {}, // 이미 행 있으면 손대지 않음
+            });
+          } catch {
+            // 한 행 실패는 무시 — 다른 행이라도 박히게.
+          }
+        }
+      })
+      .then(() => this.bus.publish(placeId));
+
     const next = (prev ?? Promise.resolve())
       .then(() => this.run(placeId, reviewIds, jobId))
       .catch(() => undefined);
@@ -866,19 +897,20 @@ export class SummaryService {
   }
 }
 
-// 부팅 직후 호출. ReviewSummary 의 status='pending'|'running' 행은 직전
-// 인스턴스가 큐잉/실행 중 비정상 종료되며 남긴 stale — 단일 Fastify
+// 부팅 직후 호출. ReviewSummary 의 status='queued'|'pending'|'running' 행은
+// 직전 인스턴스가 적재/실행 중 비정상 종료되며 남긴 stale — 단일 Fastify
 // 인스턴스 가정(CLAUDE.md) 하에서 부팅 시점엔 실행 중인 요약 작업이 없다.
-// 그대로 두면 어드민 목록의 summaryPending/summaryRunning 합산이 영원히
-// "진행중" 으로 남는다. failed + errorCode='server_restart' 로 마킹하면
-// 기존 재요약 경로(backfillForRestaurant → failed 행을 다시 pending 으로
-// upsert) 와 자연스럽게 호환된다.
+// 그대로 두면 어드민 목록의 진행도 합산이 영원히 "진행중" 으로 남는다.
+// failed + errorCode='server_restart' 로 마킹하면 기존 재요약 경로
+// (backfillForRestaurant → failed 행을 다시 'queued' 로 upsert) 와 자연스럽
+// 게 호환되고, rescheduleStaleSummaries 가 같은 placeId 의 행들을 묶어
+// 자동 재큐잉할 수 있다.
 export const cleanupStaleReviewSummaries = async (
   prisma: PrismaClient,
   log?: FastifyBaseLogger | null,
 ): Promise<number> => {
   const res = await prisma.reviewSummary.updateMany({
-    where: { status: { in: ['pending', 'running'] } },
+    where: { status: { in: ['queued', 'pending', 'running'] } },
     data: {
       status: 'failed',
       errorCode: 'server_restart',
@@ -889,10 +921,74 @@ export const cleanupStaleReviewSummaries = async (
   if (res.count > 0) {
     log?.warn(
       { count: res.count },
-      '[summary] cleaned up stale pending/running rows on boot',
+      '[summary] cleaned up stale queued/pending/running rows on boot',
     );
   }
   return res.count;
+};
+
+// 부팅 시 cleanupStaleReviewSummaries 직후 호출. 방금 server_restart 로
+// 마킹된 행들 + 이전 인스턴스에서 server_restart 로 남아있던 행들을 placeId
+// 단위로 묶어 자동 재큐잉한다. 어드민이 수동으로 reanalyze 안 눌러도 직전
+// 재시작 이전에 진행 중이던 요약을 알아서 재개.
+//
+// `failed AND errorCode='server_restart'` 행만 대상으로 한정 — parse_failed/
+// upstream 같은 LLM 에러는 어드민이 의도적으로 분류·재시도해야 할 수 있어
+// 자동 재큐잉에서 빼둔다.
+//
+// placeId 가 null 인 Restaurant (예: source='diningcode') 행은 'dc:<vRid>'
+// 채널키로 큐잉 — saveDiningcodeShop 의 패턴과 동일. summary 큐 chain key 는
+// 자유 문자열이라 placeId 와 충돌 안 함.
+//
+// jobId 는 null — 부팅 시점엔 잡 컨텍스트가 없으므로 crawl_job_logs 로 흐르
+// 지 않고 pino 로그에만 남는다.
+export const rescheduleStaleSummaries = async (
+  prisma: PrismaClient,
+  summaries: { queueSummariesForReviews: (key: string, ids: string[], jobId?: string | null) => Promise<void> | void },
+  log?: FastifyBaseLogger | null,
+): Promise<{ keys: number; reviews: number }> => {
+  const rows = await prisma.reviewSummary.findMany({
+    where: {
+      status: 'failed',
+      errorCode: 'server_restart',
+    },
+    select: {
+      reviewId: true,
+      review: {
+        select: {
+          restaurant: {
+            select: { placeId: true, source: true, sourceId: true },
+          },
+        },
+      },
+    },
+  });
+  if (rows.length === 0) return { keys: 0, reviews: 0 };
+
+  // 큐 채널 키별로 reviewId 묶기. Naver 는 placeId, DC 는 'dc:<vRid>'.
+  const groups = new Map<string, string[]>();
+  for (const r of rows) {
+    const rest = r.review.restaurant;
+    const key =
+      rest.source === 'naver' && rest.placeId
+        ? rest.placeId
+        : `${rest.source.slice(0, 2)}:${rest.sourceId}`;
+    let list = groups.get(key);
+    if (!list) {
+      list = [];
+      groups.set(key, list);
+    }
+    list.push(r.reviewId);
+  }
+
+  for (const [key, ids] of groups) {
+    await summaries.queueSummariesForReviews(key, ids, null);
+  }
+  log?.warn(
+    { keys: groups.size, reviews: rows.length },
+    '[summary] rescheduled stale (server_restart) rows on boot',
+  );
+  return { keys: groups.size, reviews: rows.length };
 };
 
 // LLM 출력에서 분석 JSON을 추출. 이 함수가 처리해야 하는 이상 케이스:

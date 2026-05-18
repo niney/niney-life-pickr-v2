@@ -34,8 +34,12 @@ export const SummaryProgressSection = ({
   status: RestaurantSummaryProgressType;
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const inFlight = status.pending + status.running;
-  const total = inFlight + status.done + status.failed;
+  const inFlight = status.queued + status.pending + status.running;
+  const accountedFor = inFlight + status.done + status.failed;
+  const total = accountedFor;
+  // totalReviews 와 accountedFor 가 다르면 ReviewSummary 행이 없는 리뷰 존재.
+  // 구버전 데이터(여기 변경 전 적재 누락분)에서만 일어나야 정상.
+  const orphan = Math.max(0, status.totalReviews - accountedFor);
   const recent = status.recentDone;
   const hasMore = recent.length > 1;
   const visibleRecent = expanded ? recent : recent.slice(0, 1);
@@ -62,10 +66,24 @@ export const SummaryProgressSection = ({
         }
       />
       <div className="flex flex-wrap gap-2 text-xs">
+        {status.queued > 0 && (
+          <Badge variant="outline">큐 {status.queued}</Badge>
+        )}
         <Badge variant="secondary">대기 {status.pending}</Badge>
         <Badge variant="secondary">진행 {status.running}</Badge>
         <Badge variant="secondary">완료 {status.done}</Badge>
         {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
+        {orphan > 0 && (
+          // ReviewSummary 행이 없는 리뷰 — 구버전 chain 휘발 잔여물. backfill
+          // 또는 재크롤 필요. queued 상태 도입 이후엔 신규로는 발생하지 않음.
+          <Badge
+            variant="outline"
+            className="border-amber-500 text-amber-700 dark:text-amber-300"
+            title="ReviewSummary 행이 없는 리뷰 — 구버전 chain 휘발 잔여. backfill 또는 재크롤 필요."
+          >
+            누락 {orphan}
+          </Badge>
+        )}
       </div>
       {visibleRecent.length > 0 && (
         <ul className="space-y-1.5 text-sm text-muted-foreground">

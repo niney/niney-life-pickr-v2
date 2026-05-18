@@ -9,7 +9,15 @@ import {
   VisitorReview,
 } from './crawl.js';
 
-export const ReviewSummaryStatus = z.enum(['pending', 'running', 'done', 'failed']);
+// 단계 의미:
+//   queued  — queueSummariesForReviews 진입 시점에 즉시 박힘. chain 대기 중.
+//             chain 휘발(서버 재시작) 시 흔적이 사라지지 않도록 한 안전망.
+//   pending — run() 진입 후 청크에 할당되기 직전. 이 상태가 도달하면 batch 가
+//             chain 에서 꺼내져 처리가 시작된 것이다.
+//   running — 청크에 포함되어 실제 LLM 호출 중.
+//   done / failed — 최종.
+// 구버전 데이터에 'pending' 행이 남아 있을 수 있어 enum 에 보존한다.
+export const ReviewSummaryStatus = z.enum(['queued', 'pending', 'running', 'done', 'failed']);
 export type ReviewSummaryStatusType = z.infer<typeof ReviewSummaryStatus>;
 
 export const ReviewSentiment = z.enum(['positive', 'negative', 'neutral', 'mixed']);
@@ -589,6 +597,9 @@ export type RestaurantSummaryReviewEventType = z.infer<typeof RestaurantSummaryR
 
 export const RestaurantSummaryProgress = z.object({
   totalReviews: z.number().int(),
+  // 큐에 들어갔지만 아직 run() 진입 전. chain 대기. ReviewSummaryStatus 의
+  // 'queued' 단계와 일대일.
+  queued: z.number().int(),
   pending: z.number().int(),
   running: z.number().int(),
   done: z.number().int(),
