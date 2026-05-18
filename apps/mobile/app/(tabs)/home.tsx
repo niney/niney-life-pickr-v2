@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,7 @@ import { RankingRow } from '~/components/RankingRow';
 
 const PAGE_SIZE = 20;
 const MIN_MENTIONS = 5;
+const MIN_REFRESH_VISIBLE_MS = 500;
 
 type Sort = 'positive' | 'negative';
 
@@ -33,6 +34,8 @@ export default function HomeScreen() {
   const [excludeNeutral, setExcludeNeutral] = useState(false);
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<RestaurantRankingItemType[]>([]);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const refreshStartedAtRef = useRef(0);
 
   const query = useRestaurantRanking({
     sort,
@@ -55,6 +58,23 @@ export default function HomeScreen() {
       return [...prev, ...page.filter((it) => !seen.has(it.placeId))];
     });
   }, [query.data, offset]);
+
+  useEffect(() => {
+    if (!isPullRefreshing || offset !== 0) return undefined;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void query.refetch().finally(() => {
+      const elapsed = Date.now() - refreshStartedAtRef.current;
+      const delay = Math.max(0, MIN_REFRESH_VISIBLE_MS - elapsed);
+      timer = setTimeout(() => {
+        if (!cancelled) setIsPullRefreshing(false);
+      }, delay);
+    });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [isPullRefreshing, offset, query.refetch]);
 
   const total = query.data?.total ?? 0;
   const hasMore = items.length < total;
@@ -88,10 +108,10 @@ export default function HomeScreen() {
   }, [query.isFetching, hasMore]);
 
   const handleRefresh = useCallback(() => {
+    refreshStartedAtRef.current = Date.now();
+    setIsPullRefreshing(true);
     setOffset(0);
-    setItems([]);
-    query.refetch();
-  }, [query]);
+  }, []);
 
   const handleSelect = useCallback(
     (placeId: string) => {
@@ -140,9 +160,12 @@ export default function HomeScreen() {
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
-            progressViewOffset={insets.top}
-            refreshing={query.isFetching && offset === 0}
+            progressViewOffset={insets.top + 48}
+            refreshing={isPullRefreshing}
             onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+            progressBackgroundColor={theme.colors.surface}
           />
         }
         ListEmptyComponent={
@@ -176,6 +199,19 @@ export default function HomeScreen() {
       />
 
       <NotchFade />
+      {isPullRefreshing ? (
+        <View pointerEvents="none" style={[styles.refreshOverlay, { top: insets.top + 8 }]}>
+          <View
+            style={[
+              styles.refreshBadge,
+              { backgroundColor: theme.colors.surface + 'E6', borderColor: theme.colors.border },
+            ]}
+          >
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+            <Text style={[styles.refreshText, { color: theme.colors.text }]}>새로고침 중</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -187,4 +223,26 @@ const styles = StyleSheet.create({
   center: { paddingVertical: 48, alignItems: 'center' },
   footer: { paddingVertical: 16, alignItems: 'center' },
   endText: { textAlign: 'center', fontSize: 12, paddingVertical: 16 },
+  refreshOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 30,
+  },
+  refreshBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  refreshText: { fontSize: 12, fontWeight: '600' },
 });
