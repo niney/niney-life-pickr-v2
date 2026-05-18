@@ -89,6 +89,10 @@ export const Restaurant = {
     `${API_PREFIX}/restaurants/public/${placeId}`,
   publicInsights: (placeId: string) =>
     `${API_PREFIX}/restaurants/public/${placeId}/insights`,
+  // 페이지네이션 방문자 리뷰. detail 응답엔 reviewsFirstPage (10개) 만 동봉되고
+  // 나머지는 여기서 offset/limit + sentiment/sort 로 가져온다.
+  publicReviews: (placeId: string) =>
+    `${API_PREFIX}/restaurants/public/${placeId}/reviews`,
   list: `${API_PREFIX}/admin/restaurants`,
   byPlaceId: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,

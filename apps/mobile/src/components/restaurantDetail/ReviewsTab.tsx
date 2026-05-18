@@ -1,46 +1,59 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@repo/shared';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRestaurantPublicReviews, useTheme } from '@repo/shared';
 import type {
   PublicVisitorReviewType,
   RestaurantPublicDetailType,
+  RestaurantPublicReviewSentimentType,
+  RestaurantPublicReviewSortType,
 } from '@repo/api-contract';
 import { ReviewCard } from './shared/ReviewCard';
 
-type SentimentFilter = 'all' | 'positive' | 'negative';
-type SortMode = 'recent' | 'rating';
-
-const FILTERS: ReadonlyArray<{ value: SentimentFilter; label: string }> = [
+const FILTERS: ReadonlyArray<{
+  value: RestaurantPublicReviewSentimentType;
+  label: string;
+}> = [
   { value: 'all', label: '전체' },
   { value: 'positive', label: '긍정' },
   { value: 'negative', label: '부정' },
 ];
 
-const SORTS: ReadonlyArray<{ value: SortMode; label: string }> = [
+const SORTS: ReadonlyArray<{ value: RestaurantPublicReviewSortType; label: string }> = [
   { value: 'recent', label: '최근 방문순' },
   { value: 'rating', label: '별점 높은순' },
 ];
 
 interface Props {
+  // detail 전체가 아니라 placeId 와 첫 페이지 seed + 필터 카운트만 받음.
+  placeId: string;
   detail: RestaurantPublicDetailType;
 }
 
-export const ReviewsTab = ({ detail }: Props) => {
+export const ReviewsTab = ({ placeId, detail }: Props) => {
   const theme = useTheme();
-  const [filter, setFilter] = useState<SentimentFilter>('all');
-  const [sort, setSort] = useState<SortMode>('recent');
+  const [filter, setFilter] = useState<RestaurantPublicReviewSentimentType>('all');
+  const [sort, setSort] = useState<RestaurantPublicReviewSortType>('recent');
 
-  const counts = useMemo(() => countBySentiment(detail.reviews), [detail.reviews]);
+  const seed = useMemo(
+    () => ({
+      items: detail.reviewsFirstPage,
+      total: detail.reviewCounts.all,
+    }),
+    [detail.reviewsFirstPage, detail.reviewCounts.all],
+  );
 
-  const visible = useMemo(() => {
-    let list = detail.reviews;
-    if (filter !== 'all') {
-      list = list.filter((r) => r.analysis?.sentiment === filter);
-    }
-    return [...list].sort(comparator(sort));
-  }, [detail.reviews, filter, sort]);
+  const reviewsQuery = useRestaurantPublicReviews(placeId, { sentiment: filter, sort }, seed);
+  const flat: PublicVisitorReviewType[] = useMemo(
+    () =>
+      reviewsQuery.data ? reviewsQuery.data.pages.flatMap((p) => p.items) : [],
+    [reviewsQuery.data],
+  );
 
-  if (detail.reviews.length === 0) {
+  // chip 카운트는 detail.reviewCounts (전체 풀 기준). 'all' chip 은 항상 전체
+  // 카운트 — 현재 sentiment 필터 적용 후 total 과 별개.
+  const counts = detail.reviewCounts;
+
+  if (counts.all === 0) {
     return (
       <View style={styles.empty}>
         <Text style={{ color: theme.colors.textMuted }}>
@@ -49,6 +62,9 @@ export const ReviewsTab = ({ detail }: Props) => {
       </View>
     );
   }
+
+  const hasMore = reviewsQuery.hasNextPage ?? false;
+  const isLoadingMore = reviewsQuery.isFetchingNextPage;
 
   return (
     <View style={styles.wrap}>
@@ -84,7 +100,11 @@ export const ReviewsTab = ({ detail }: Props) => {
         </ScrollView>
       </View>
 
-      {visible.length === 0 ? (
+      {reviewsQuery.isLoading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator />
+        </View>
+      ) : flat.length === 0 ? (
         <View
           style={[
             styles.emptyCard,
@@ -97,9 +117,31 @@ export const ReviewsTab = ({ detail }: Props) => {
         </View>
       ) : (
         <View style={{ gap: 8 }}>
-          {visible.map((r) => (
+          {flat.map((r) => (
             <ReviewCard key={r.id} review={r} />
           ))}
+          {hasMore && (
+            <Pressable
+              onPress={() => reviewsQuery.fetchNextPage()}
+              disabled={isLoadingMore}
+              style={[
+                styles.loadMoreBtn,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                  opacity: isLoadingMore ? 0.6 : 1,
+                },
+              ]}
+            >
+              {isLoadingMore ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Text style={[styles.loadMoreText, { color: theme.colors.text }]}>
+                  더 보기
+                </Text>
+              )}
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -141,34 +183,17 @@ const Chip = ({
   );
 };
 
-const countBySentiment = (
-  reviews: PublicVisitorReviewType[],
-): Record<SentimentFilter, number> => {
-  const out: Record<SentimentFilter, number> = {
-    all: reviews.length,
-    positive: 0,
-    negative: 0,
-  };
-  for (const r of reviews) {
-    if (r.analysis?.sentiment === 'positive') out.positive += 1;
-    else if (r.analysis?.sentiment === 'negative') out.negative += 1;
-  }
-  return out;
-};
-
-const comparator = (mode: SortMode) => {
-  if (mode === 'rating') {
-    return (a: PublicVisitorReviewType, b: PublicVisitorReviewType) =>
-      (b.rating ?? 0) - (a.rating ?? 0);
-  }
-  return (a: PublicVisitorReviewType, b: PublicVisitorReviewType) =>
-    +new Date(a.fetchedAt) - +new Date(b.fetchedAt);
-};
-
 const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
   empty: { paddingVertical: 48, alignItems: 'center' },
-  emptyCard: { padding: 24, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center' },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  loading: { paddingVertical: 24, alignItems: 'center' },
   controls: { gap: 8 },
   chipsRow: { gap: 6 },
   chip: {
@@ -185,4 +210,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipTextSmall: { fontSize: 11, fontWeight: '500' },
+  loadMoreBtn: {
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  loadMoreText: { fontSize: 13, fontWeight: '500' },
 });

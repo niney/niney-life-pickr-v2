@@ -26,12 +26,14 @@ export const PhotosTab = ({ detail }: Props) => {
     if (menuImages.length > 0) {
       out.push({ key: 'menu', title: '메뉴 사진', images: menuImages });
     }
-    const reviewImages = detail.reviews.flatMap((r) => r.imageUrls);
+    // 첫 페이지 reviews 의 이미지만. 전체 reviews 이미지 모음이 필요하면
+    // useRestaurantPublicReviews 로 추가 페이지를 lazy fetch 해야 한다.
+    const reviewImages = detail.reviewsFirstPage.flatMap((r) => r.imageUrls);
     if (reviewImages.length > 0) {
       out.push({ key: 'reviews', title: '방문자 리뷰 사진', images: reviewImages });
     }
     return out;
-  }, [detail.imageUrls, detail.menus, detail.reviews]);
+  }, [detail.imageUrls, detail.menus, detail.reviewsFirstPage]);
 
   // 모든 섹션 사진을 하나의 시퀀스로 평탄화. 라이트박스의 인덱스는 평탄화된
   // 배열 위 인덱스.

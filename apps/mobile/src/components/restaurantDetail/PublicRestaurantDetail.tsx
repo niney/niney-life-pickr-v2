@@ -196,7 +196,7 @@ export const PublicRestaurantDetail = ({
         />
       )}
       {tab === 'menu' && <MenuTab detail={detail.data} insights={insights.data} />}
-      {tab === 'reviews' && <ReviewsTab detail={detail.data} />}
+      {tab === 'reviews' && <ReviewsTab placeId={placeId} detail={detail.data} />}
       {tab === 'photos' && <PhotosTab detail={detail.data} />}
       {tab === 'info' && <InfoTab detail={detail.data} />}
     </Scroller>

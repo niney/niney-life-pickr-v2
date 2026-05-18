@@ -15,6 +15,8 @@ import {
   RestaurantPublicDetail,
   RestaurantPublicListQuery,
   RestaurantPublicListResult,
+  RestaurantPublicReviewsQuery,
+  RestaurantPublicReviewsResult,
   RestaurantRankingQuery,
   RestaurantRankingResult,
   RestaurantReanalyzeResult,
@@ -94,6 +96,22 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const detail = await service.getPublicDetail(req.params.placeId);
       if (!detail) throw app.httpErrors.notFound('Restaurant not found');
       return detail;
+    },
+  });
+
+  // 공개 식당 방문자 리뷰 페이지네이션. detail 응답엔 reviewsFirstPage(10) 만
+  // 동봉되고 나머지는 여기서 가져옴. offset/limit + sentiment/sort 쿼리.
+  typed.get(Routes.Restaurant.publicReviews(':placeId'), {
+    schema: {
+      tags: ['public'],
+      params: z.object({ placeId: z.string() }),
+      querystring: RestaurantPublicReviewsQuery,
+      response: { 200: RestaurantPublicReviewsResult },
+    },
+    handler: async (req) => {
+      const result = await service.getPublicReviews(req.params.placeId, req.query);
+      if (!result) throw app.httpErrors.notFound('Restaurant not found');
+      return result;
     },
   });
 

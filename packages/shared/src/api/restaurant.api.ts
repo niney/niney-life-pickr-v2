@@ -9,6 +9,8 @@ import {
   type RestaurantPublicDetailType,
   type RestaurantPublicListQueryType,
   type RestaurantPublicListResultType,
+  type RestaurantPublicReviewsQueryType,
+  type RestaurantPublicReviewsResultType,
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
   type RestaurantReanalyzeResultType,
@@ -51,6 +53,20 @@ export const restaurantApi = {
 
   publicByPlaceId: (placeId: string) =>
     apiFetch<RestaurantPublicDetailType>(Routes.Restaurant.publicByPlaceId(placeId)),
+
+  // 방문자 리뷰 페이지네이션. 첫 페이지는 detail.reviewsFirstPage 로 동봉돼
+  // 오므로 useInfiniteQuery 의 첫 페이지 seed 로 쓰고, 이 함수는 2 페이지부터.
+  publicReviews: (placeId: string, query: Partial<RestaurantPublicReviewsQueryType> = {}) => {
+    const params = new URLSearchParams();
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.sentiment) params.set('sentiment', query.sentiment);
+    if (query.sort) params.set('sort', query.sort);
+    const qs = params.toString();
+    return apiFetch<RestaurantPublicReviewsResultType>(
+      `${Routes.Restaurant.publicReviews(placeId)}${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   publicInsights: (placeId: string) =>
     apiFetch<RestaurantInsightsType>(Routes.Restaurant.publicInsights(placeId)),

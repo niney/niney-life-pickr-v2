@@ -33,12 +33,13 @@ export const PhotosTab = ({ detail }: Props) => {
     if (menuImages.length > 0) {
       out.push({ key: 'menu', title: '메뉴 사진', images: menuImages });
     }
-    const reviewImages = detail.reviews.flatMap((r) => r.imageUrls);
+    // 첫 페이지 reviews 의 이미지만. 전체 reviews 가 필요하면 별도 endpoint 필요.
+    const reviewImages = detail.reviewsFirstPage.flatMap((r) => r.imageUrls);
     if (reviewImages.length > 0) {
       out.push({ key: 'reviews', title: '방문자 리뷰 사진', images: reviewImages });
     }
     return out;
-  }, [detail.imageUrls, detail.menus, detail.reviews]);
+  }, [detail.imageUrls, detail.menus, detail.reviewsFirstPage]);
 
   const allImages = useMemo(
     () => sections.flatMap((s) => s.images),

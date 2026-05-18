@@ -28,7 +28,9 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
   const hero = detail.imageUrls[0] ?? null;
   const previewMenus = detail.menus.slice(0, HOME_MENU_PREVIEW);
   // 분석된 리뷰 우선 — 사용자에게 가장 정보량 큰 미리보기.
-  const previewReviews = [...detail.reviews]
+  // detail.reviewsFirstPage 는 fetchedAt desc 정렬된 첫 페이지 (10개) — 그 안에서
+  // 분석된 리뷰를 위로 한 번 더 stable sort.
+  const previewReviews = [...detail.reviewsFirstPage]
     .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
     .slice(0, HOME_REVIEW_PREVIEW);
   // 두 출처 모두 리뷰가 있는 경우에만 카드에 출처 배지를 노출 — 한 출처만
@@ -123,9 +125,9 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
         <section className="space-y-2 border-t px-4 pt-4">
           <SectionHead
             title="대표 리뷰"
-            actionLabel={`리뷰 전체 보기 (${detail.reviews.length})`}
+            actionLabel={`리뷰 전체 보기 (${detail.reviewCounts.all})`}
             onAction={() => onChangeTab('reviews')}
-            disabled={detail.reviews.length <= HOME_REVIEW_PREVIEW}
+            disabled={detail.reviewCounts.all <= HOME_REVIEW_PREVIEW}
           />
           <ul className="space-y-2">
             {previewReviews.map((r) => (

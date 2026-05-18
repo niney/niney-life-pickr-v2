@@ -33,14 +33,15 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
     () => detail.menus.slice(0, HOME_MENU_PREVIEW),
     [detail.menus],
   );
-  // detail.reviews 가 N=수십~수백이라 매 렌더마다 spread+sort 하지 않도록 캐시.
-  // 분석 있는 리뷰가 우선 (.analysis 가 truthy 인 것이 먼저).
+  // reviewsFirstPage 가 이미 fetchedAt desc 로 정렬돼 있음. 분석된 리뷰를
+  // 우선 노출하기 위해 한 번 더 stable sort + slice — 첫 페이지(10) 범위라
+  // 비용은 무시할 수준.
   const previewReviews: PublicVisitorReviewType[] = useMemo(
     () =>
-      [...detail.reviews]
+      [...detail.reviewsFirstPage]
         .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
         .slice(0, HOME_REVIEW_PREVIEW),
-    [detail.reviews],
+    [detail.reviewsFirstPage],
   );
 
   return (
@@ -117,9 +118,9 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
         >
           <SectionHead
             title="대표 리뷰"
-            actionLabel={`리뷰 전체 보기 (${detail.reviews.length})`}
+            actionLabel={`리뷰 전체 보기 (${detail.reviewCounts.all})`}
             onAction={() => onChangeTab('reviews')}
-            disabled={detail.reviews.length <= HOME_REVIEW_PREVIEW}
+            disabled={detail.reviewCounts.all <= HOME_REVIEW_PREVIEW}
           />
           <View style={{ gap: 8 }}>
             {previewReviews.map((r) => (

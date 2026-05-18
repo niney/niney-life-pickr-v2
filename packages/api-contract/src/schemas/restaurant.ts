@@ -548,7 +548,17 @@ export const RestaurantPublicDetail = z.object({
   blogReviews: z.array(BlogReview),
   rawSourceUrl: z.string(),
   firstCrawledAt: z.string(),
-  reviews: z.array(PublicVisitorReview),
+  // 방문자 리뷰는 페이지네이션. 첫 페이지만 detail 에 동봉해서 ReviewsTab 첫
+  // 진입을 추가 fetch 없이 즉시 그릴 수 있게 한다. 추가 페이지는 별도
+  // 엔드포인트(Routes.Restaurant.publicReviews)로 가져옴.
+  // 정렬: fetchedAt desc, 필터: all. ReviewsTab 의 기본 UI 상태와 일치.
+  reviewsFirstPage: z.array(PublicVisitorReview),
+  // sentiment chip 의 카운트. 별도 fetch 안 하고 detail 에서 한 번에.
+  reviewCounts: z.object({
+    all: z.number().int(),
+    positive: z.number().int(),
+    negative: z.number().int(),
+  }),
   // 출처별 별점/리뷰수 — 헤더 분리 표시용. 둘 다 있는 경우 둘 다 채움.
   sources: PublicSources,
   // DB 저장 리뷰 카운트 — 출처 필터 칩 카운트로 사용.
@@ -557,6 +567,35 @@ export const RestaurantPublicDetail = z.object({
   diningcode: PublicDiningcodeAddon.nullable(),
 });
 export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
+
+// `/restaurants/public/:placeId/reviews` 쿼리. ReviewsTab 의 chip + 정렬을 그대로
+// 백엔드 페이지네이션으로 위임. UI 의 SentimentFilter / SortMode 와 같은 값.
+export const RestaurantPublicReviewSentiment = z.enum(['all', 'positive', 'negative']);
+export type RestaurantPublicReviewSentimentType = z.infer<
+  typeof RestaurantPublicReviewSentiment
+>;
+
+export const RestaurantPublicReviewSort = z.enum(['recent', 'rating']);
+export type RestaurantPublicReviewSortType = z.infer<typeof RestaurantPublicReviewSort>;
+
+export const RestaurantPublicReviewsQuery = z.object({
+  offset: z.coerce.number().int().nonnegative().default(0),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  sentiment: RestaurantPublicReviewSentiment.default('all'),
+  sort: RestaurantPublicReviewSort.default('recent'),
+});
+export type RestaurantPublicReviewsQueryType = z.infer<
+  typeof RestaurantPublicReviewsQuery
+>;
+
+export const RestaurantPublicReviewsResult = z.object({
+  items: z.array(PublicVisitorReview),
+  // 현재 필터(sentiment) 적용 후 총 카운트. hasMore 판단용.
+  total: z.number().int(),
+});
+export type RestaurantPublicReviewsResultType = z.infer<
+  typeof RestaurantPublicReviewsResult
+>;
 
 // SSE per-review payload pushed by the summary-events stream when a single
 // row's AI summary finishes (success or failure). The client merges this

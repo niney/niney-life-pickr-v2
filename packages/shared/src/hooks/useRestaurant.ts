@@ -8,10 +8,14 @@ import {
 } from '@tanstack/react-query';
 import type {
   CrawlLogLevelType,
+  PublicVisitorReviewType,
   RestaurantDetailType,
   RestaurantListResultType,
   RestaurantPublicListQueryType,
   RestaurantPublicListResultType,
+  RestaurantPublicReviewsResultType,
+  RestaurantPublicReviewSentimentType,
+  RestaurantPublicReviewSortType,
   RestaurantRankingQueryType,
   RestaurantSourceSummaryType,
   RestaurantSummaryLogEventType,
@@ -179,6 +183,63 @@ export const useRestaurantPublic = (placeId: string | null) =>
     enabled: !!placeId,
     staleTime: 60_000,
   });
+
+// 공개 식당 방문자 리뷰 페이지네이션. detail 응답엔 reviewsFirstPage(10) 만
+// 동봉되므로 ReviewsTab 진입 후 추가 페이지를 lazy 로 가져온다. 첫 페이지는
+// detail.reviewsFirstPage 를 initialData 로 seed — sentiment='all', sort='recent'
+// 일 때만 (detail 동봉 페이로드의 필터 상태와 일치). 다른 chip 으로 시작하면
+// seed 무효, 첫 페이지부터 fetch.
+const REVIEWS_PAGE_SIZE = 10;
+
+export const useRestaurantPublicReviews = (
+  placeId: string | null,
+  filters: {
+    sentiment: RestaurantPublicReviewSentimentType;
+    sort: RestaurantPublicReviewSortType;
+  },
+  seed?: { items: PublicVisitorReviewType[]; total: number },
+) => {
+  const canSeed =
+    !!seed && filters.sentiment === 'all' && filters.sort === 'recent';
+  return useInfiniteQuery<
+    RestaurantPublicReviewsResultType,
+    Error,
+    { pages: RestaurantPublicReviewsResultType[]; pageParams: number[] },
+    readonly unknown[],
+    number
+  >({
+    queryKey: [
+      'restaurant',
+      'public',
+      'reviews',
+      placeId,
+      filters.sentiment,
+      filters.sort,
+    ] as const,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
+      if (!placeId) throw new Error('placeId required');
+      return restaurantApi.publicReviews(placeId, {
+        offset: pageParam,
+        limit: REVIEWS_PAGE_SIZE,
+        sentiment: filters.sentiment,
+        sort: filters.sort,
+      });
+    },
+    getNextPageParam: (lastPage, _all, lastPageParam) => {
+      const nextOffset = (lastPageParam ?? 0) + lastPage.items.length;
+      return nextOffset < lastPage.total ? nextOffset : undefined;
+    },
+    enabled: !!placeId,
+    staleTime: 60_000,
+    initialData: canSeed
+      ? {
+          pages: [{ items: seed!.items, total: seed!.total }],
+          pageParams: [0],
+        }
+      : undefined,
+  });
+};
 
 export const useRestaurantPublicInsights = (placeId: string | null) =>
   useQuery({

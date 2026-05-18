@@ -1,56 +1,55 @@
 import { useMemo, useState } from 'react';
+import { useRestaurantPublicReviews } from '@repo/shared';
 import type {
   PublicVisitorReviewType,
   RestaurantPublicDetailType,
+  RestaurantPublicReviewSentimentType,
+  RestaurantPublicReviewSortType,
 } from '@repo/api-contract';
 import { cn } from '~/lib/utils';
 import { ReviewCard } from './shared';
 
-type SentimentFilter = 'all' | 'positive' | 'negative';
-type SortMode = 'recent' | 'rating';
-type SourceFilter = 'all' | 'naver' | 'diningcode';
-
-const FILTERS: Array<{ value: SentimentFilter; label: string }> = [
+const FILTERS: Array<{ value: RestaurantPublicReviewSentimentType; label: string }> = [
   { value: 'all', label: '전체' },
   { value: 'positive', label: '긍정' },
   { value: 'negative', label: '부정' },
 ];
 
-const SOURCE_FILTERS: Array<{ value: SourceFilter; label: string }> = [
-  { value: 'all', label: '전체' },
-  { value: 'naver', label: '네이버' },
-  { value: 'diningcode', label: '다이닝코드' },
-];
-
 interface Props {
+  placeId: string;
   detail: RestaurantPublicDetailType;
 }
 
-export const ReviewsTab = ({ detail }: Props) => {
-  const [sentimentFilter, setSentimentFilter] = useState<SentimentFilter>('all');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  const [sort, setSort] = useState<SortMode>('recent');
+export const ReviewsTab = ({ placeId, detail }: Props) => {
+  const [sentiment, setSentiment] =
+    useState<RestaurantPublicReviewSentimentType>('all');
+  const [sort, setSort] = useState<RestaurantPublicReviewSortType>('recent');
 
-  const visible = useMemo(() => {
-    let list = detail.reviews;
-    if (sentimentFilter !== 'all') {
-      list = list.filter((r) => r.analysis?.sentiment === sentimentFilter);
-    }
-    if (sourceFilter !== 'all') {
-      list = list.filter((r) => r.source === sourceFilter);
-    }
-    return [...list].sort(comparator(sort));
-  }, [detail.reviews, sentimentFilter, sourceFilter, sort]);
-
-  const sentimentCounts = useMemo(
-    () => countBySentiment(detail.reviews),
-    [detail.reviews],
+  const seed = useMemo(
+    () => ({
+      items: detail.reviewsFirstPage,
+      total: detail.reviewCounts.all,
+    }),
+    [detail.reviewsFirstPage, detail.reviewCounts.all],
   );
-  const sourceCounts = useMemo(() => countBySource(detail.reviews), [detail.reviews]);
-  // 두 출처가 모두 리뷰를 가질 때만 출처 칩 라인 + 카드 출처 배지 노출.
-  const bothSources = sourceCounts.naver > 0 && sourceCounts.diningcode > 0;
 
-  if (detail.reviews.length === 0) {
+  const reviewsQuery = useRestaurantPublicReviews(
+    placeId,
+    { sentiment, sort },
+    seed,
+  );
+
+  const flat: PublicVisitorReviewType[] = useMemo(
+    () =>
+      reviewsQuery.data ? reviewsQuery.data.pages.flatMap((p) => p.items) : [],
+    [reviewsQuery.data],
+  );
+
+  // 두 출처가 모두 리뷰를 가질 때만 카드에 출처 배지를 노출.
+  const bothSources =
+    detail.storedReviewCount.naver > 0 && detail.storedReviewCount.diningcode > 0;
+
+  if (detail.reviewCounts.all === 0) {
     return (
       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
         아직 수집된 리뷰가 없습니다.
@@ -58,45 +57,21 @@ export const ReviewsTab = ({ detail }: Props) => {
     );
   }
 
+  const hasMore = reviewsQuery.hasNextPage ?? false;
+  const isLoadingMore = reviewsQuery.isFetchingNextPage;
+
   return (
     <div className="space-y-3 p-4">
-      {bothSources && (
-        <div className="flex gap-1">
-          {SOURCE_FILTERS.map((f) => {
-            const active = sourceFilter === f.value;
-            const c = sourceCounts[f.value];
-            // 'all' 은 항상 노출. 출처별 칩은 카운트가 0 이면 숨김(병합 직후 한
-            // 쪽 출처에 아직 리뷰가 없는 케이스).
-            if (f.value !== 'all' && c === 0) return null;
-            return (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setSourceFilter(f.value)}
-                className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
-                  active
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground',
-                )}
-              >
-                {f.label} <span className="tabular-nums opacity-80">{c}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       <div className="flex items-center justify-between gap-2">
         <div className="flex gap-1">
           {FILTERS.map((f) => {
-            const active = sentimentFilter === f.value;
-            const c = sentimentCounts[f.value];
+            const active = sentiment === f.value;
+            const c = detail.reviewCounts[f.value];
             return (
               <button
                 key={f.value}
                 type="button"
-                onClick={() => setSentimentFilter(f.value)}
+                onClick={() => setSentiment(f.value)}
                 className={cn(
                   'rounded-full border px-2.5 py-1 text-xs transition-colors',
                   active
@@ -114,7 +89,9 @@ export const ReviewsTab = ({ detail }: Props) => {
           정렬
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as SortMode)}
+            onChange={(e) =>
+              setSort(e.target.value as RestaurantPublicReviewSortType)
+            }
             className="h-7 rounded border bg-background px-1.5 text-xs"
           >
             <option value="recent">최근 수집순</option>
@@ -123,52 +100,35 @@ export const ReviewsTab = ({ detail }: Props) => {
         </label>
       </div>
 
-      {visible.length === 0 ? (
+      {reviewsQuery.isLoading ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          불러오는 중…
+        </div>
+      ) : flat.length === 0 ? (
         <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
           조건에 맞는 리뷰가 없습니다.
         </div>
       ) : (
-        <ul className="space-y-2">
-          {visible.map((r) => (
-            <li key={r.id}>
-              <ReviewCard r={r} showSource={bothSources} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-2">
+            {flat.map((r) => (
+              <li key={r.id}>
+                <ReviewCard r={r} showSource={bothSources} />
+              </li>
+            ))}
+          </ul>
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => reviewsQuery.fetchNextPage()}
+              disabled={isLoadingMore}
+              className="w-full rounded-md border bg-background py-2 text-sm font-medium hover:bg-accent disabled:opacity-60"
+            >
+              {isLoadingMore ? '불러오는 중…' : '더 보기'}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
-};
-
-const countBySentiment = (
-  reviews: PublicVisitorReviewType[],
-): Record<SentimentFilter, number> => {
-  const out: Record<SentimentFilter, number> = { all: reviews.length, positive: 0, negative: 0 };
-  for (const r of reviews) {
-    if (r.analysis?.sentiment === 'positive') out.positive += 1;
-    else if (r.analysis?.sentiment === 'negative') out.negative += 1;
-  }
-  return out;
-};
-
-const countBySource = (
-  reviews: PublicVisitorReviewType[],
-): Record<SourceFilter, number> => {
-  const out: Record<SourceFilter, number> = { all: reviews.length, naver: 0, diningcode: 0 };
-  for (const r of reviews) {
-    if (r.source === 'naver') out.naver += 1;
-    else if (r.source === 'diningcode') out.diningcode += 1;
-  }
-  return out;
-};
-
-const comparator = (mode: SortMode) => {
-  if (mode === 'rating') {
-    return (a: PublicVisitorReviewType, b: PublicVisitorReviewType) =>
-      (b.rating ?? 0) - (a.rating ?? 0);
-  }
-  // recent — 서버가 두 출처 합쳐서 fetchedAt desc 로 내려보내므로 동일 방향
-  // (최근 수집순)을 유지. 어드민 detail 의 fetchedAt asc 와는 의미가 반대.
-  return (a: PublicVisitorReviewType, b: PublicVisitorReviewType) =>
-    +new Date(b.fetchedAt) - +new Date(a.fetchedAt);
 };

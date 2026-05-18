@@ -936,13 +936,19 @@ describe('Public restaurant routes', () => {
     const body = res.json() as {
       placeId: string;
       latitude: number | null;
-      reviews: Array<{ body: string; analysis: null | { text: string; sentiment: string } }>;
+      reviewsFirstPage: Array<{
+        body: string;
+        analysis: null | { text: string; sentiment: string };
+      }>;
+      reviewCounts: { all: number; positive: number; negative: number };
     };
     expect(body.placeId).toBe(placeId);
     expect(body.latitude).toBe(37.5);
-    expect(body.reviews).toHaveLength(2);
-    const analyzed = body.reviews.find((r) => r.analysis !== null);
-    const unanalyzed = body.reviews.find((r) => r.analysis === null);
+    // 2개라 첫 페이지(10) 한 번에 다 들어감.
+    expect(body.reviewsFirstPage).toHaveLength(2);
+    expect(body.reviewCounts).toEqual({ all: 2, positive: 1, negative: 0 });
+    const analyzed = body.reviewsFirstPage.find((r) => r.analysis !== null);
+    const unanalyzed = body.reviewsFirstPage.find((r) => r.analysis === null);
     expect(analyzed?.analysis?.text).toBe('맛있는 식당');
     expect(analyzed?.analysis?.sentiment).toBe('positive');
     expect(unanalyzed?.body).toBe('아직 분석 전');
@@ -1104,7 +1110,12 @@ describe('Public restaurant routes', () => {
       businessHours: string | null;
       menus: Array<{ name: string }>;
       imageUrls: string[];
-      reviews: Array<{ source: 'naver' | 'diningcode'; body: string; fetchedAt: string }>;
+      reviewsFirstPage: Array<{
+        source: 'naver' | 'diningcode';
+        body: string;
+        fetchedAt: string;
+      }>;
+      reviewCounts: { all: number; positive: number; negative: number };
       sources: {
         naver: { placeId: string; rating: number | null; siteReviewCount: number | null } | null;
         diningcode: { vRid: string; rating: number | null; siteReviewCount: number | null } | null;
@@ -1135,9 +1146,11 @@ describe('Public restaurant routes', () => {
     ]);
 
     // 리뷰는 두 출처가 합쳐서 fetchedAt desc — Naver(2/1) 가 DC(1/15) 보다 위.
-    expect(body.reviews).toHaveLength(2);
-    expect(body.reviews[0]?.source).toBe('naver');
-    expect(body.reviews[1]?.source).toBe('diningcode');
+    // 2개라 첫 페이지(10) 한 번에.
+    expect(body.reviewsFirstPage).toHaveLength(2);
+    expect(body.reviewsFirstPage[0]?.source).toBe('naver');
+    expect(body.reviewsFirstPage[1]?.source).toBe('diningcode');
+    expect(body.reviewCounts.all).toBe(2);
 
     // 출처별 별점/리뷰수 노출.
     expect(body.sources.naver).toMatchObject({ placeId, rating: 4.2, siteReviewCount: 60 });

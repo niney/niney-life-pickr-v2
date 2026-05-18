@@ -155,6 +155,7 @@ export const PublicRestaurantDetail = ({
         ) : detail.data ? (
           <ActiveTab
             tab={tab}
+            placeId={placeId}
             detail={detail.data}
             insights={insights.data}
             insightsLoading={insights.isLoading}
@@ -168,12 +169,14 @@ export const PublicRestaurantDetail = ({
 
 const ActiveTab = ({
   tab,
+  placeId,
   detail,
   insights,
   insightsLoading,
   onChangeTab,
 }: {
   tab: TabKey;
+  placeId: string;
   detail: NonNullable<ReturnType<typeof useRestaurantPublic>['data']>;
   insights: ReturnType<typeof useRestaurantPublicInsights>['data'];
   insightsLoading: boolean;
@@ -192,7 +195,7 @@ const ActiveTab = ({
     case 'menu':
       return <MenuTab detail={detail} insights={insights} />;
     case 'reviews':
-      return <ReviewsTab detail={detail} />;
+      return <ReviewsTab placeId={placeId} detail={detail} />;
     case 'insights':
       return (
         <InsightsTab
