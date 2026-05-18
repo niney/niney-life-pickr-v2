@@ -28,6 +28,7 @@ const config: ExpoConfig = {
     'expo-font',
     'react-native-bottom-tabs',
     './plugins/with-swift-concurrency-fix',
+    './plugins/with-android-minify',
   ],
   experiments: {
     typedRoutes: true,
