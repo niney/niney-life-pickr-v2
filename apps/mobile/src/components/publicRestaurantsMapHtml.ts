@@ -5,9 +5,12 @@ import { buildVworldTileUrl } from '@repo/utils';
 //   - native WebView: window.ReactNativeWebView.postMessage(string)
 //   - iframe in web : window.parent.postMessage(string, '*')
 // 부모 → 인스턴스 데이터 푸시:
-//   - native: WebView.injectJavaScript("window.__setData(...)")
+//   - native: WebView.injectJavaScript("window.__setMarkers(...) / __setSelected(...)")
 //   - web   : iframe.contentWindow.postMessage({ type:'setData', ... })
-//     → HTML 안에서 message 리스너가 받아 __setData 호출.
+//     → HTML 안에서 message 리스너가 받아 라우팅.
+// 채널을 marker / selected 로 나눈 이유: 기존 __setData 가 selection 한 번
+// 바꿀 때마다 vectorSource.clear() + N 개 feature 재생성이 일어나 비쌌다.
+// 분리하면 selection 변경은 prev/next 두 setStyle 만으로 끝난다.
 export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
   const tileUrl = buildVworldTileUrl(apiKey, 'Base');
   return `<!doctype html>
@@ -120,20 +123,27 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
   }
 
   var firstFit = false;
-  window.__setData = function(payload) {
-    var data = (typeof payload === 'string') ? JSON.parse(payload) : payload;
-    var markers = data.markers || [];
-    var selectedId = data.selectedId || null;
+  var currentSelectedId = null;
+
+  window.__setMarkers = function(payload) {
+    var markers = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    if (!markers) markers = [];
     vectorSource.clear();
     for (var i = 0; i < markers.length; i++) {
       var m = markers[i];
       var feat = new ol.Feature({
         geometry: new ol.geom.Point(ol.proj.fromLonLat([m.lng, m.lat])),
       });
+      feat.setId(m.id);            // getFeatureById 로 selection 갱신 시 O(1) lookup
       feat.set('markerId', m.id);
-      var isSelected = m.id === selectedId;
-      feat.setStyle(makePinStyle(isSelected ? m.name : null, isSelected));
+      feat.set('label', m.name);   // selection 복원 시 라벨 재사용
+      feat.setStyle(makePinStyle(null, false));
       vectorSource.addFeature(feat);
+    }
+    // markers 가 바뀌어도 현재 selection 은 유지 — 새 set 에 동일 id 가 있으면 다시 강조.
+    if (currentSelectedId !== null) {
+      var sel = vectorSource.getFeatureById(currentSelectedId);
+      if (sel) sel.setStyle(makePinStyle(sel.get('label'), true));
     }
     if (!firstFit && markers.length > 0) {
       firstFit = true;
@@ -141,13 +151,38 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
     }
   };
 
-  // iframe in web: 부모로부터 setData 메시지 받아 처리. native WebView 는
+  window.__setSelected = function(payload) {
+    var id = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    var nextId = (id === undefined || id === null || id === '') ? null : id;
+    if (nextId === currentSelectedId) return;
+    if (currentSelectedId !== null) {
+      var prev = vectorSource.getFeatureById(currentSelectedId);
+      if (prev) prev.setStyle(makePinStyle(null, false));
+    }
+    currentSelectedId = nextId;
+    if (nextId !== null) {
+      var next = vectorSource.getFeatureById(nextId);
+      if (next) next.setStyle(makePinStyle(next.get('label'), true));
+    }
+  };
+
+  // 기존 호출자(예: iframe-in-web 의 postMessage type:setData) 호환 유지.
+  window.__setData = function(payload) {
+    var data = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    window.__setMarkers(data.markers || []);
+    window.__setSelected(data.selectedId !== undefined ? data.selectedId : null);
+  };
+
+  // iframe in web: 부모로부터 메시지 받아 처리. native WebView 는
   // injectJavaScript 로 직접 호출되므로 이 리스너가 트리거되지 않는다.
   window.addEventListener('message', function(e) {
     var msg;
     try { msg = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; }
     catch (err) { return; }
-    if (msg && msg.type === 'setData') window.__setData(msg);
+    if (!msg) return;
+    if (msg.type === 'setData') window.__setData(msg);
+    else if (msg.type === 'setMarkers') window.__setMarkers(msg.markers || []);
+    else if (msg.type === 'setSelected') window.__setSelected(msg.id);
   });
 
   post({ type: 'ready' });

@@ -78,13 +78,20 @@ export const PublicRestaurantsWebMap = ({
     [apiKey],
   );
 
-  // ready 신호가 오기 전에 markers/selection 이 바뀌면 마지막 값만 push 하면 됨.
-  // ready 이후엔 매번 setData 로 동기화.
+  // markers 와 selection 채널을 분리. selection 변경 시 vectorSource.clear() +
+  // N 개 feature 재생성을 피하기 위함 — Web 측 __setSelected 는 prev/next 두
+  // setStyle 만 수행.
   useEffect(() => {
     if (!ready || !webRef.current) return;
-    const payload = JSON.stringify({ markers, selectedId: selectedPlaceId });
-    webRef.current.injectJavaScript(`window.__setData(${payload}); true;`);
-  }, [ready, markers, selectedPlaceId]);
+    const payload = JSON.stringify(markers);
+    webRef.current.injectJavaScript(`window.__setMarkers(${payload}); true;`);
+  }, [ready, markers]);
+
+  useEffect(() => {
+    if (!ready || !webRef.current) return;
+    const payload = JSON.stringify(selectedPlaceId);
+    webRef.current.injectJavaScript(`window.__setSelected(${payload}); true;`);
+  }, [ready, selectedPlaceId]);
 
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
