@@ -77,6 +77,8 @@ const SELECT_CLASS =
   'h-8 rounded-md border border-input bg-background px-2 text-xs ' +
   'shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1';
 
+const DETAIL_SECTION_CONTENT_CLASS = 'p-4 pt-6 sm:p-6 sm:pt-7';
+
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'fetchedAt-asc', label: '최근 수집순' },
   { value: 'visitedAt-desc', label: '방문일 최신순' },
@@ -639,27 +641,27 @@ export const AdminRestaurantDetailPage = () => {
       </Card>
 
       <Card>
-        <CardContent className="py-4">
+        <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
           <MenuRankingSection placeId={detail.placeId} />
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="py-4">
+        <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
           <VisitorReviewsSection reviews={detail.reviews} />
         </CardContent>
       </Card>
 
       {s.blogReviews.length > 0 && (
         <Card>
-          <CardContent className="py-4">
+          <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
             <BlogReviewsSection reviews={s.blogReviews} />
           </CardContent>
         </Card>
       )}
 
       <Card>
-        <CardContent className="py-4">
+        <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
           <RestaurantCrawlLogsSection placeId={detail.placeId} />
         </CardContent>
       </Card>

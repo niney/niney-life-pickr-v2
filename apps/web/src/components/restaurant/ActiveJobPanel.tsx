@@ -134,7 +134,7 @@ export const ActiveJobPanel = ({
 
   return (
     <Card className="border-primary/40">
-      <CardHeader>
+      <CardHeader className="pt-6 sm:pt-7">
         <CardTitle className="flex items-center gap-2 text-base">
           {isRunning ? (
             <Loader2 className="size-4 animate-spin text-primary" />
