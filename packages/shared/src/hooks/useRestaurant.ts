@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
 import type {
+  CrawlLogLevelType,
   RestaurantDetailType,
   RestaurantListResultType,
   RestaurantPublicListQueryType,
   RestaurantPublicListResultType,
   RestaurantRankingQueryType,
   RestaurantSourceSummaryType,
+  RestaurantSummaryLogEventType,
   RestaurantSummaryProgressType,
   RestaurantSummarySnapshotEventType,
 } from '@repo/api-contract';
@@ -278,11 +281,22 @@ export const useRestaurantListSummaryEvents = (canonicalIds: string[]): void => 
 // 디테일 페이지 — placeId 단일 구독 (Naver 전용 라우트). 서버는 같은 SSE 로
 // 처리하므로 DC 행은 이 hook 으로는 안 오지만 onReview 이벤트가 canonical
 // 기반이라 같은 canonical 의 DC review 가 와도 placeId 가 다르면 patch 안 함.
+//
+// onLog 콜백을 넘기면 잡 단계별 로그도 같은 connection 으로 수신. 어드민 패널
+// 의 "로그" 탭이 요약 단계 로그를 누적하기 위한 통로. 미지정 시 log 이벤트는
+// drop 된다.
 export const useRestaurantSummaryEvents = (
   placeId: string | null,
+  opts?: { onLog?: (ev: RestaurantSummaryLogEventType) => void },
 ): { data: RestaurantSummaryProgressType | null } => {
   const [data, setData] = useState<RestaurantSummaryProgressType | null>(null);
   const qc = useQueryClient();
+  // onLog 콜백은 상위에서 매 렌더마다 새로 생성될 수 있어 ref 로 안정화. 그래야
+  // useEffect 의존성에서 빼고도 최신 콜백을 호출 가능.
+  const onLogRef = useRef(opts?.onLog);
+  useEffect(() => {
+    onLogRef.current = opts?.onLog;
+  }, [opts?.onLog]);
 
   useEffect(() => {
     setData(null);
@@ -332,6 +346,10 @@ export const useRestaurantSummaryEvents = (
           },
         );
       },
+      onLog: (ev) => {
+        if (ev.placeId !== placeId) return;
+        onLogRef.current?.(ev);
+      },
     });
   }, [placeId, qc]);
 
@@ -345,6 +363,39 @@ export const useRestaurantSummaryEvents = (
 export const useReanalyzeRestaurant = () =>
   useMutation({
     mutationFn: (placeId: string) => restaurantApi.reanalyze(placeId),
+  });
+
+// placeId 단위 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언 전용. 한 가게의
+// 누적 잡 로그를 cursor pagination 으로. 아코디언이 닫혀 있으면 enabled=false
+// 로 fetch 안 함.
+export interface UseRestaurantCrawlLogsArgs {
+  placeId: string | null;
+  level?: CrawlLogLevelType | null;
+  stage?: string | null;
+  pageSize?: number;
+  enabled?: boolean;
+}
+
+export const useRestaurantCrawlLogs = ({
+  placeId,
+  level = null,
+  stage = null,
+  pageSize = 100,
+  enabled = true,
+}: UseRestaurantCrawlLogsArgs) =>
+  useInfiniteQuery({
+    queryKey: ['restaurant', 'crawl-logs', placeId, level, stage, pageSize],
+    enabled: enabled && !!placeId,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      restaurantApi.crawlLogs({
+        placeId: placeId as string,
+        cursor: pageParam ?? null,
+        limit: pageSize,
+        level: level ?? null,
+        stage: stage ?? null,
+      }),
+    getNextPageParam: (last) => last.nextCursor,
   });
 
 // Hard-delete a restaurant by placeId. On success the list query is

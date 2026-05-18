@@ -39,6 +39,7 @@ import {
   fetchCatchtableShopReviewOverview,
 } from './adapters/catchtable-shop.playwright.adapter.js';
 import { jobRegistry, type JobRegistry } from './job-registry.js';
+import type { JobLogService } from './job-log.service.js';
 import { diningcodeBulkSaveRegistry } from './diningcode-bulk-save-registry.js';
 import {
   normalizeToPlaceId,
@@ -96,6 +97,8 @@ export class CrawlService {
   // 자동 DC 매칭이 머지 단계에서 canonical merge 를 호출해야 해서 inject.
   // null 이면 자동 매칭 skip — 테스트 단순화용.
   private readonly canonical: CanonicalService | null;
+  // 잡 단계별 로그 — null 이면 silent (테스트 단순화). 운영 라우트는 항상 주입.
+  private readonly jobLog: JobLogService | null;
   private readonly pending: PendingStart[] = [];
   private nextSeq = 1;
 
@@ -106,12 +109,14 @@ export class CrawlService {
     // null 이면 후보 큐 생성 skip — 테스트가 단순화 위해 생략할 때 사용.
     proposals: ProposalService | null = null,
     canonical: CanonicalService | null = null,
+    jobLog: JobLogService | null = null,
   ) {
     this.registry = registry;
     this.restaurants = restaurants;
     this.summaries = summaries;
     this.proposals = proposals;
     this.canonical = canonical;
+    this.jobLog = jobLog;
   }
 
   // 등록 직후 자동 매칭 후크. 새 가게의 canonicalId 로 cross-source 후보를 큐에
@@ -285,6 +290,16 @@ export class CrawlService {
       actorId,
     });
 
+    void this.jobLog?.log({
+      jobId,
+      placeId: normalized.placeId,
+      stage: 'queued',
+      level: 'info',
+      message: '크롤 잡 생성',
+      meta: { url: rawUrl, mode, actorId },
+      channel: 'crawl',
+    });
+
     const start = () => {
       this.registry.markActive(jobId);
       // Fire-and-forget — runJob handles all errors by emitting events.
@@ -303,6 +318,14 @@ export class CrawlService {
     // waiting badge — without this the stream would be silent until a slot
     // frees and the adapter starts emitting its own progress events.
     this.emit(jobId, { type: 'progress', stage: 'queued' });
+    void this.jobLog?.log({
+      jobId,
+      placeId: normalized.placeId,
+      stage: 'queued',
+      level: 'info',
+      message: '동시성 한도 — 대기열 등록',
+      channel: 'crawl',
+    });
     this.pending.push({ jobId, actorId, start });
     return { ok: true, jobId, deduped: false, queued: true };
   }
@@ -510,6 +533,14 @@ export class CrawlService {
   cancel(jobId: string, actorId: string): boolean {
     const outcome = this.registry.cancel(jobId, actorId);
     if (outcome === 'noop') return false;
+    void this.jobLog?.log({
+      jobId,
+      stage: 'finalizing',
+      level: 'warn',
+      message: '잡 취소 요청',
+      meta: { actorId, outcome },
+      channel: 'crawl',
+    });
     if (outcome === 'queued-cancelled') {
       // Drop the deferred start so it never fires. The registry will record
       // the cancellation event below.
@@ -546,6 +577,16 @@ export class CrawlService {
   ): Promise<void> {
     const startedAt = Date.now();
 
+    void this.jobLog?.log({
+      jobId,
+      placeId,
+      stage: 'launching',
+      level: 'info',
+      message: '잡 실행 시작',
+      meta: { mode, canonicalUrl },
+      channel: 'crawl',
+    });
+
     // Pre-flight: when the user asked for a recrawl/update, find the
     // existing restaurant row first. Recrawl wipes its reviews so the new
     // crawl starts from a clean slate; update collects the existing review
@@ -558,6 +599,15 @@ export class CrawlService {
         restaurantId = r.id;
         if (mode === 'recrawl') {
           await this.restaurants.clearReviewsAndSummaries(r.id);
+          void this.jobLog?.log({
+            jobId,
+            placeId,
+            stage: 'launching',
+            level: 'info',
+            message: '재크롤 — 기존 리뷰/요약 삭제',
+            meta: { restaurantId: r.id },
+            channel: 'crawl',
+          });
         } else {
           existingKeys = await this.restaurants.getExistingReviewKeys(r.id);
         }
@@ -585,8 +635,22 @@ export class CrawlService {
             this.summaries.queueSummariesForReviews(
               placeId,
               newReviews.map((r) => r.id),
+              jobId,
             );
           }
+          void this.jobLog?.log({
+            jobId,
+            placeId,
+            stage: 'paginating_visitor',
+            level: 'info',
+            message: '리뷰 배치 영속',
+            meta: {
+              batchSize: batch.length,
+              newCount: newReviews.length,
+              dedupedCount: batch.length - newReviews.length,
+            },
+            channel: 'crawl',
+          });
           this.emit(jobId, {
             type: 'visitor_batch',
             reviews: batch,
@@ -608,8 +672,18 @@ export class CrawlService {
           // Don't drop subsequent batches — log and continue. Crawl errors
           // are handled by the outer try/catch via the adapter; this branch
           // is purely DB/AI fallout.
-          // eslint-disable-next-line no-console
-          console.error('[crawl] persistBatch failed', err);
+          void this.jobLog?.log({
+            jobId,
+            placeId,
+            stage: 'paginating_visitor',
+            level: 'error',
+            message: '리뷰 배치 저장 실패',
+            meta: {
+              batchSize: batch.length,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            channel: 'crawl',
+          });
         });
     };
 
@@ -668,6 +742,20 @@ export class CrawlService {
         }
       }
 
+      void this.jobLog?.log({
+        jobId,
+        placeId,
+        stage: 'done',
+        level: 'info',
+        message: '크롤 완료',
+        meta: {
+          durationMs: Date.now() - startedAt,
+          reviewCount: data.visitorReviews.length,
+          restaurantId,
+        },
+        channel: 'crawl',
+      });
+
       this.emit(jobId, {
         type: 'done',
         result: {
@@ -679,6 +767,18 @@ export class CrawlService {
       });
     } catch (e) {
       const { error, message } = this.classifyAdapterError(e);
+      void this.jobLog?.log({
+        jobId,
+        placeId,
+        stage: 'finalizing',
+        level: 'error',
+        message: `크롤 실패: ${message}`,
+        meta: {
+          errorCode: error,
+          durationMs: Date.now() - startedAt,
+        },
+        channel: 'crawl',
+      });
       this.emit(jobId, { type: 'error', error, message });
     }
   }

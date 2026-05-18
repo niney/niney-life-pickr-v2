@@ -40,6 +40,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import { MenuRankingSection } from '~/components/restaurant/MenuRankingSection';
+import { RestaurantCrawlLogsSection } from '~/components/restaurant/RestaurantCrawlLogsSection';
 import { VWorldMap } from '~/components/restaurant/VWorldMap';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import {
@@ -656,6 +657,12 @@ export const AdminRestaurantDetailPage = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="py-4">
+          <RestaurantCrawlLogsSection placeId={detail.placeId} />
+        </CardContent>
+      </Card>
       </div>
 
       {/*

@@ -156,12 +156,30 @@ export const CrawlStage = z.enum([
 ]);
 export type CrawlStageType = z.infer<typeof CrawlStage>;
 
+// 크롤+요약 로그의 레벨. info 는 정상 단계 진입/완료, warn 은 재시도·복구
+// 가능 이상, error 는 잡 또는 항목 실패. UI 필터·배지 색의 입력.
+export const CrawlLogLevel = z.enum(['info', 'warn', 'error']);
+export type CrawlLogLevelType = z.infer<typeof CrawlLogLevel>;
+
 export const CrawlEvent = z.discriminatedUnion('type', [
   z.object({
     seq: z.number().int(),
     type: z.literal('progress'),
     stage: CrawlStage,
     message: z.string().optional(),
+    at: z.string(),
+  }),
+  // 단계별 로그. progress 보다 더 세밀한 디버그/관찰용 — 모델·지연·attempt
+  // 같은 메타가 함께 흐른다. stage 는 CrawlStage union 이 아닌 string —
+  // 요약 파이프라인의 단계(summary_queue/summary_attempt 등)까지 같은
+  // 채널로 흘려 보내기 위함. UI 는 'log' 타입을 별도 탭에서 누적 표시.
+  z.object({
+    seq: z.number().int(),
+    type: z.literal('log'),
+    level: CrawlLogLevel,
+    stage: z.string(),
+    message: z.string(),
+    meta: z.record(z.unknown()).optional(),
     at: z.string(),
   }),
   // Main page parsed but visitor reviews still loading — UI can render the
@@ -992,3 +1010,39 @@ export const DiningcodeBulkSaveJobDoneEvent = z.object({
 export type DiningcodeBulkSaveJobDoneEventType = z.infer<
   typeof DiningcodeBulkSaveJobDoneEvent
 >;
+
+// ── 크롤+요약 잡 로그 조회 ─────────────────────────────────────────────────
+// SSE 의 실시간 'log' 이벤트와 동일한 데이터를 DB 에 영속화해, 잡 종료 후에도
+// 어드민 패널에서 로그 탭을 다시 열 수 있게 한다. 페이지네이션은 createdAt
+// 기준 cursor — 같은 ms 충돌 회피를 위해 id 도 cursor 토큰에 포함된다.
+
+export const CrawlJobLogEntry = z.object({
+  id: z.string(),
+  jobId: z.string(),
+  placeId: z.string().nullable(),
+  stage: z.string(),
+  level: CrawlLogLevel,
+  message: z.string(),
+  // 모델·지연ms·토큰·attempt 등 디버깅 메타. parse_failed 의 경우 rawSnippet
+  // (응답 앞 ~200 자) 도 여기에. JSON 직렬화 가능한 값만 들어옴.
+  meta: z.record(z.unknown()).nullable(),
+  createdAt: z.string(),
+});
+export type CrawlJobLogEntryType = z.infer<typeof CrawlJobLogEntry>;
+
+export const CrawlJobLogsQuery = z.object({
+  // 다음 페이지 토큰. 응답 nextCursor 를 그대로 전달. 미지정이면 최신부터.
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  level: CrawlLogLevel.optional(),
+  // 단계 필터 — exact match. 'summary' 처럼 접두 매칭이 필요해지면 후속.
+  stage: z.string().optional(),
+});
+export type CrawlJobLogsQueryType = z.infer<typeof CrawlJobLogsQuery>;
+
+export const CrawlJobLogsResult = z.object({
+  // 최신 → 과거 순. UI 는 표시 시 다시 뒤집어 시간 오름차순으로 보여줄 수 있음.
+  items: z.array(CrawlJobLogEntry),
+  nextCursor: z.string().nullable(),
+});
+export type CrawlJobLogsResultType = z.infer<typeof CrawlJobLogsResult>;

@@ -1,4 +1,5 @@
 import type {
+  RestaurantSummaryLogEventType,
   RestaurantSummaryProgressType,
   RestaurantSummaryReviewEventType,
   RestaurantSummarySnapshotEventType,
@@ -36,10 +37,15 @@ type SnapshotHandler = (
   prev: RestaurantSummarySnapshotEventType | null,
 ) => void;
 type ReviewHandler = (ev: RestaurantSummaryReviewEventType) => void;
+// 잡 단계별 로그 — placeId 단위 SSE 로 흘려보내는 로그 이벤트. 어드민 패널의
+// 로그 탭이 누적해 표시. 핸들러 미지정 구독자(예: 리스트 행)는 이 이벤트를
+// 무시해도 무방하므로 옵셔널.
+type LogHandler = (ev: RestaurantSummaryLogEventType) => void;
 
 interface Subscribers {
   snapshots: Set<SnapshotHandler>;
   reviews: Set<ReviewHandler>;
+  logs: Set<LogHandler>;
 }
 
 // Heartbeat/idle-timeout 파라미터.
@@ -72,18 +78,24 @@ class SummarySseManager {
 
   subscribe(
     key: SubscriptionKey,
-    handlers: { onSnapshot: SnapshotHandler; onReview: ReviewHandler },
+    handlers: {
+      onSnapshot: SnapshotHandler;
+      onReview: ReviewHandler;
+      // 잡 단계별 로그 — 어드민 패널 로그 탭만 구독. 미지정 시 log 이벤트는 drop.
+      onLog?: LogHandler;
+    },
   ): () => void {
     const id = keyId(key);
     let entry = this.subs.get(id);
     let needsReconnect = false;
     if (!entry) {
-      entry = { snapshots: new Set(), reviews: new Set() };
+      entry = { snapshots: new Set(), reviews: new Set(), logs: new Set() };
       this.subs.set(id, entry);
       needsReconnect = true;
     }
     entry.snapshots.add(handlers.onSnapshot);
     entry.reviews.add(handlers.onReview);
+    if (handlers.onLog) entry.logs.add(handlers.onLog);
 
     // Replay 마지막 snapshot — 키 종류에 맞는 캐시에서 꺼낸다. 새 구독자에게
     // 는 첫 dispatch 라 prev=null. delta-aware patch 는 첫 replay 가 합산 행을
@@ -101,7 +113,8 @@ class SummarySseManager {
       if (!e) return;
       e.snapshots.delete(handlers.onSnapshot);
       e.reviews.delete(handlers.onReview);
-      if (e.snapshots.size === 0 && e.reviews.size === 0) {
+      if (handlers.onLog) e.logs.delete(handlers.onLog);
+      if (e.snapshots.size === 0 && e.reviews.size === 0 && e.logs.size === 0) {
         this.subs.delete(id);
         if (key.kind === 'place') this.lastSnapshotByPlace.delete(key.placeId);
         else this.lastSnapshotByCanonical.delete(key.canonicalId);
@@ -275,6 +288,23 @@ class SummarySseManager {
         if (parsed.placeId) {
           const placeEntry = this.subs.get(`place:${parsed.placeId}`);
           if (placeEntry) for (const h of placeEntry.reviews) h(parsed);
+        }
+      });
+
+      es.addEventListener('log', (e: MessageEvent) => {
+        if (typeof e.data !== 'string' || e.data.length === 0) return;
+        let parsed: RestaurantSummaryLogEventType;
+        try {
+          parsed = JSON.parse(e.data) as RestaurantSummaryLogEventType;
+        } catch {
+          return;
+        }
+        this.touch();
+        const canonEntry = this.subs.get(`canonical:${parsed.canonicalId}`);
+        if (canonEntry) for (const h of canonEntry.logs) h(parsed);
+        if (parsed.placeId) {
+          const placeEntry = this.subs.get(`place:${parsed.placeId}`);
+          if (placeEntry) for (const h of placeEntry.logs) h(parsed);
         }
       });
     });

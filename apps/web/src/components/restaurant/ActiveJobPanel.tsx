@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
 import {
@@ -10,11 +10,13 @@ import type {
   CrawlNaverPlaceResultType,
   CrawlStageType,
   RestaurantDetailType,
+  RestaurantSummaryLogEventType,
 } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { ReviewSummarySection, SummaryProgressSection } from './sections';
+import { JobLogTab } from './JobLogTab';
 
 const STAGE_LABEL: Record<CrawlStageType, string> = {
   queued: '대기',
@@ -57,7 +59,15 @@ export const ActiveJobPanel = ({
 }: ActiveJobPanelProps) => {
   const stream = useCrawlJobStream(jobId);
   const detailQuery = useRestaurantByPlaceId(placeId);
-  const summaryStatusQuery = useRestaurantSummaryEvents(placeId);
+  // 활성 탭 — 진행도/로그. 로그 탭에선 크롤 SSE 의 'log' 이벤트와 요약 SSE 의
+  // 'log' 이벤트를 한 곳에 누적 표시.
+  const [activeTab, setActiveTab] = useState<'progress' | 'logs'>('progress');
+  // 요약 SSE 로 들어오는 로그를 누적. 크롤 SSE 의 logs (stream.logs) 와 합쳐 표시.
+  const [summaryLogs, setSummaryLogs] = useState<RestaurantSummaryLogEventType[]>([]);
+  const handleSummaryLog = useCallback((ev: RestaurantSummaryLogEventType) => {
+    setSummaryLogs((prev) => [...prev, ev]);
+  }, []);
+  const summaryStatusQuery = useRestaurantSummaryEvents(placeId, { onLog: handleSummaryLog });
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -159,28 +169,63 @@ export const ActiveJobPanel = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="divide-y [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
-        {(isRunning || (stream.result && !stream.result.ok)) && (
-          <div className="space-y-3">
-            {isRunning && (
-              <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-                취소
-              </Button>
+        {/* 탭 — 진행도(기본) / 로그. 로그 탭에서 잡 단계·에러를 사후 확인. */}
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={activeTab === 'progress' ? 'secondary' : 'ghost'}
+            onClick={() => setActiveTab('progress')}
+          >
+            진행도
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={activeTab === 'logs' ? 'secondary' : 'ghost'}
+            onClick={() => setActiveTab('logs')}
+          >
+            로그
+            {stream.logs.length + summaryLogs.length > 0 && (
+              <Badge variant="outline" className="ml-1">
+                {stream.logs.length + summaryLogs.length}
+              </Badge>
             )}
-            {stream.result && !stream.result.ok && (
-              <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
-                <Badge variant="outline" className="mr-2">
-                  {stream.result.error}
-                </Badge>
-                {stream.result.message}
+          </Button>
+        </div>
+        {activeTab === 'progress' ? (
+          <>
+            {(isRunning || (stream.result && !stream.result.ok)) && (
+              <div className="space-y-3">
+                {isRunning && (
+                  <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+                    취소
+                  </Button>
+                )}
+                {stream.result && !stream.result.ok && (
+                  <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
+                    <Badge variant="outline" className="mr-2">
+                      {stream.result.error}
+                    </Badge>
+                    {stream.result.message}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-        {summaryStatusQuery.data && (
-          <SummaryProgressSection status={summaryStatusQuery.data} />
-        )}
-        {showInlineReviewList && detailQuery.data && (
-          <ReviewSummarySection reviews={detailQuery.data.reviews} />
+            {summaryStatusQuery.data && (
+              <SummaryProgressSection status={summaryStatusQuery.data} />
+            )}
+            {showInlineReviewList && detailQuery.data && (
+              <ReviewSummarySection reviews={detailQuery.data.reviews} />
+            )}
+          </>
+        ) : (
+          <JobLogTab
+            jobId={jobId}
+            streamLogs={stream.logs}
+            summaryLogs={summaryLogs}
+            isJobFinished={finished}
+          />
         )}
       </CardContent>
     </Card>

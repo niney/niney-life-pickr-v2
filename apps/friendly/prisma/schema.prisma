@@ -333,6 +333,28 @@ model MenuMention {
   @@map("menu_mentions")
 }
 
+// 크롤+요약 잡의 단계별 로그. 어드민 UI 가 진행 상황·끊김 지점을 사후에도
+// 추적할 수 있게 영속화. SSE 의 실시간 이벤트와 동일한 데이터를 DB 에도
+// 저장해, 잡 종료 후 패널 재진입 시에도 같은 로그를 볼 수 있다.
+//
+// stage 는 CrawlStage 가 아니라 자유 문자열. 요약 파이프라인의 단계
+// ('summary_queue', 'summary_attempt' 등) 까지 같은 테이블에 누적한다.
+// meta 는 모델·지연ms·토큰·attempt 등 디버깅용 부가 정보의 JSON 직렬화.
+model CrawlJobLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  placeId   String?
+  stage     String
+  level     String
+  message   String
+  meta      String?
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+  @@index([placeId, createdAt])
+  @@map("crawl_job_logs")
+}
+
 // tip + keyword 를 한 테이블에 통합. kind 로 구분 — 둘 다 free-form 짧은
 // 한국어 태그라 스키마가 같다. 별도 테이블로 쪼개면 조회 쿼리만 두 번 나서
 // 캐시 키도 늘어난다.

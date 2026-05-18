@@ -33,7 +33,23 @@ export interface SummaryReviewSignal {
   keywords: string[] | null;
 }
 
-export type SummarySignal = SummaryProgressSignal | SummaryReviewSignal;
+// 단계별 로그 신호 — 크롤+요약 잡의 진행/경고/에러를 placeId 단위 SSE 로
+// 흘려보낸다. JobLogService 가 DB 영속화와 동시에 이 시그널을 publish 하므로,
+// /summary-events 구독자는 별도 GET 없이 실시간 로그를 받아 누적할 수 있다.
+export interface SummaryLogSignal {
+  type: 'log';
+  jobId: string | null;
+  stage: string;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  meta: Record<string, unknown> | null;
+  at: string;
+}
+
+export type SummarySignal =
+  | SummaryProgressSignal
+  | SummaryReviewSignal
+  | SummaryLogSignal;
 
 export type SummaryEventListener = (signal: SummarySignal) => void;
 

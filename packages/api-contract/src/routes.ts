@@ -35,6 +35,9 @@ export const Crawl = {
   jobs: `${API_PREFIX}/admin/crawl/jobs`,
   job: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}`,
   jobEvents: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}/events`,
+  // 잡 단위 영속 로그 — SSE 의 실시간 'log' 이벤트와 동일한 데이터를 DB 에
+  // 누적해 잡 종료 후에도 조회 가능. cursor pagination.
+  jobLogs: (id: string) => `${API_PREFIX}/admin/crawl/jobs/${id}/logs`,
   // 네이버 PC 지도에서 키워드(+선택 영역)로 가게를 검색. /admin/discover 에서
   // 등록할 후보를 고르는 데 사용.
   search: `${API_PREFIX}/admin/crawl/search`,
@@ -120,6 +123,10 @@ export const Restaurant = {
   // niney의 본 목적("선택 대신 골라주기")에 분석 결과를 직접 활용하는
   // 가장 작은 통합 지점.
   smartPick: `${API_PREFIX}/admin/restaurants/smart-pick`,
+  // placeId 단위 누적 크롤 로그. 같은 가게의 여러 잡(과거 재크롤 포함)이 한
+  // 흐름으로 보임. 상세 페이지 "크롤 로그" 아코디언이 호출.
+  crawlLogs: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/crawl-logs`,
 } as const;
 
 // 가게 정체(canonical) 통합 — 출처 가로지르는 같은 가게 묶기. 어드민이

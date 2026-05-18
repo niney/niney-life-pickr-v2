@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CanonicalSuggestion } from './canonical.js';
 import {
   BlogReview,
+  CrawlLogLevel,
   DiningcodeShopBusinessHour,
   MenuItem,
   NaverPlaceData,
@@ -610,3 +611,19 @@ export const RestaurantSummarySnapshotEvent = RestaurantSummaryProgress.merge(
 export type RestaurantSummarySnapshotEventType = z.infer<
   typeof RestaurantSummarySnapshotEvent
 >;
+
+// 요약 SSE 스트림(/summary-events)으로 흘려보내는 단계별 로그 이벤트. 크롤
+// SSE 의 'log' 이벤트와 같은 페이로드 + source 식별자. UI 는 SummaryEvent 와
+// CrawlEvent 의 'log' 변종을 하나의 로그 탭에 합쳐 누적 표시할 수 있다.
+// jobId 는 큐잉 시점에 크롤 잡 ID 가 전달된 경우에만 채워짐 (수동 요약 재실행
+// 같이 잡 컨텍스트 없는 경로에서는 null).
+export const RestaurantSummaryLogEvent = RestaurantSummaryEventSource.extend({
+  type: z.literal('log'),
+  jobId: z.string().nullable(),
+  level: CrawlLogLevel,
+  stage: z.string(),
+  message: z.string(),
+  meta: z.record(z.unknown()).nullable(),
+  at: z.string(),
+});
+export type RestaurantSummaryLogEventType = z.infer<typeof RestaurantSummaryLogEvent>;

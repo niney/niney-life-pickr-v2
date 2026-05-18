@@ -1,5 +1,7 @@
 import {
   Routes,
+  type CrawlJobLogsResultType,
+  type CrawlLogLevelType,
   type RestaurantDeleteResultType,
   type RestaurantDetailType,
   type RestaurantInsightsType,
@@ -68,6 +70,33 @@ export const restaurantApi = {
     apiFetch<RestaurantReanalyzeResultType>(Routes.Restaurant.reanalyze(placeId), {
       method: 'POST',
     }),
+
+  // placeId 단위 누적 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언이 호출.
+  // 한 가게의 모든 잡(과거 재크롤 포함) 가로지름. cursor pagination.
+  crawlLogs: ({
+    placeId,
+    cursor,
+    limit,
+    level,
+    stage,
+  }: {
+    placeId: string;
+    cursor?: string | null;
+    limit?: number | null;
+    level?: CrawlLogLevelType | null;
+    stage?: string | null;
+  }) => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    if (limit != null) params.set('limit', String(limit));
+    if (level) params.set('level', level);
+    if (stage) params.set('stage', stage);
+    const qs = params.toString();
+    const sep = qs ? '?' : '';
+    return apiFetch<CrawlJobLogsResultType>(
+      `${Routes.Restaurant.crawlLogs(placeId)}${sep}${qs}`,
+    );
+  },
 };
 
 // Build the SSE endpoint URL for live summary progress. EventSource can't

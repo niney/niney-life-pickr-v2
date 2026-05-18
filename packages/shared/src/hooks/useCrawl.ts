@@ -1,7 +1,14 @@
 import { useEffect, useReducer, useRef } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type {
   CrawlEventType,
+  CrawlJobLogEntryType,
+  CrawlLogLevelType,
   CrawlNaverPlaceResultType,
   CrawlStageType,
   DiningcodeBulkSaveJobInputType,
@@ -193,6 +200,23 @@ export interface CrawlStreamState {
   // parse_failed" from "network is down".
   transportError: string | null;
   lastSeq: number;
+  // 'log' 이벤트 누적 — 잡 시작부터 종료까지 전 단계의 디버그/관찰용 메시지.
+  // UI 의 "로그" 탭이 이 배열을 시간 오름차순으로 표시. 잡 종료 후엔 DB 조회
+  // (useCrawlJobLogs) 와 합쳐 더 과거 페이지를 더 불러올 수 있다.
+  logs: StreamLogEntry[];
+}
+
+// SSE 가 흘려보내는 단계별 로그 한 행. 잡 영속 로그(CrawlJobLogEntryType) 와
+// 같은 모양이지만 id 가 없다 — 실시간 스트림에는 DB id 가 없어서. UI 는
+// (seq + at) 또는 (jobId + seq) 로 키를 잡아 렌더.
+export interface StreamLogEntry {
+  seq: number;
+  jobId: string;
+  level: CrawlLogLevelType;
+  stage: string;
+  message: string;
+  meta: Record<string, unknown> | null;
+  at: string;
 }
 
 const initialState: CrawlStreamState = {
@@ -206,13 +230,14 @@ const initialState: CrawlStreamState = {
   result: null,
   transportError: null,
   lastSeq: 0,
+  logs: [],
 };
 
 type Action =
   | { type: 'reset' }
   | { type: 'connecting' }
   | { type: 'open' }
-  | { type: 'event'; event: CrawlEventType }
+  | { type: 'event'; event: CrawlEventType; jobId: string }
   | { type: 'transport_error'; message: string }
   | { type: 'closed' };
 
@@ -245,6 +270,21 @@ const reducer = (state: CrawlStreamState, action: Action): CrawlStreamState => {
           next.persistedCount = state.persistedCount + ev.addedCount;
           next.lastBatch = ev.reviews;
           next.lastPersistedBatch = ev.persistedReviews;
+          break;
+        case 'log':
+          // 누적. 잡 종료 후에도 보관되어 패널 재오픈 시 그대로 보임.
+          next.logs = [
+            ...state.logs,
+            {
+              seq: ev.seq,
+              jobId: action.jobId,
+              level: ev.level,
+              stage: ev.stage,
+              message: ev.message,
+              meta: ev.meta ?? null,
+              at: ev.at,
+            },
+          ];
           break;
         case 'done':
           next.result = ev.result;
@@ -501,7 +541,7 @@ export const useCrawlJobStream = (jobId: string | null): CrawlStreamState => {
         if (typeof e.data !== 'string' || e.data.length === 0) return;
         try {
           const parsed = JSON.parse(e.data) as CrawlEventType;
-          dispatch({ type: 'event', event: parsed });
+          dispatch({ type: 'event', event: parsed, jobId });
           if (parsed.type === 'done' || parsed.type === 'error') {
             es.close();
           }
@@ -509,7 +549,7 @@ export const useCrawlJobStream = (jobId: string | null): CrawlStreamState => {
           // ignore malformed
         }
       };
-      for (const t of ['progress', 'partial', 'visitor_progress', 'visitor_batch', 'done', 'error']) {
+      for (const t of ['progress', 'partial', 'visitor_progress', 'visitor_batch', 'log', 'done', 'error']) {
         es.addEventListener(t, onEvent as EventListener);
       }
 
@@ -536,4 +576,54 @@ export const useCrawlJobStream = (jobId: string | null): CrawlStreamState => {
   }, [jobId]);
 
   return state;
+};
+
+// 잡 단위 영속 로그 조회 — DB 에 누적된 로그를 cursor pagination 으로. SSE 의
+// 실시간 누적분(state.logs) 위에 과거 페이지를 더 얹거나, 잡 종료 후 패널을
+// 다시 열 때 fallback. 응답은 최신순(createdAt DESC). UI 는 표시 시 다시
+// 뒤집어 시간 오름차순으로 보여줄 수 있음.
+//
+// jobId 가 null/빈 문자열이면 disabled — 패널이 닫혔거나 아직 잡이 없는 상태.
+export interface UseCrawlJobLogsArgs {
+  jobId: string | null;
+  level?: CrawlLogLevelType | null;
+  stage?: string | null;
+  // 한 페이지 크기. 서버 max 500.
+  pageSize?: number;
+  // false 면 fetch 안 함 — 실시간 SSE 누적분만으로 충분할 때 (실행 중인 잡).
+  enabled?: boolean;
+}
+
+export const useCrawlJobLogs = ({
+  jobId,
+  level = null,
+  stage = null,
+  pageSize = 100,
+  enabled = true,
+}: UseCrawlJobLogsArgs) =>
+  useInfiniteQuery({
+    queryKey: ['crawl', 'job-logs', jobId, level, stage, pageSize],
+    enabled: enabled && !!jobId,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      crawlApi.jobLogs({
+        jobId: jobId as string,
+        cursor: pageParam ?? null,
+        limit: pageSize,
+        level: level ?? null,
+        stage: stage ?? null,
+      }),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+
+// 무한 페이지 결과를 평탄한 entry 배열로. UI 표시용 헬퍼.
+export const flattenJobLogPages = (
+  data:
+    | {
+        pages: Array<{ items: CrawlJobLogEntryType[] }>;
+      }
+    | undefined,
+): CrawlJobLogEntryType[] => {
+  if (!data) return [];
+  return data.pages.flatMap((p) => p.items);
 };

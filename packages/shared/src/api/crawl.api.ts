@@ -5,6 +5,8 @@ import {
   type CatchtableShopMenusResponseType,
   type CatchtableShopReviewOverviewResponseType,
   type CrawlJobListResultType,
+  type CrawlJobLogsResultType,
+  type CrawlLogLevelType,
   type CrawlModeType,
   type CrawlSearchResultType,
   type DiningcodeBulkSaveJobInputType,
@@ -34,6 +36,34 @@ export const crawlApi = {
 
   cancel: (jobId: string) =>
     apiFetch<void>(Routes.Crawl.job(jobId), { method: 'DELETE' }),
+
+  // 잡 영속 로그 조회 — SSE 의 실시간 'log' 이벤트와 같은 데이터를 DB 에서.
+  // 잡 종료 후 패널 재진입 시 fallback, 또는 실시간 누적분 위로 과거 페이지를
+  // 더 불러올 때.
+  jobLogs: ({
+    jobId,
+    cursor,
+    limit,
+    level,
+    stage,
+  }: {
+    jobId: string;
+    cursor?: string | null;
+    limit?: number | null;
+    level?: CrawlLogLevelType | null;
+    stage?: string | null;
+  }) => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    if (limit != null) params.set('limit', String(limit));
+    if (level) params.set('level', level);
+    if (stage) params.set('stage', stage);
+    const qs = params.toString();
+    const sep = qs ? '?' : '';
+    return apiFetch<CrawlJobLogsResultType>(
+      `${Routes.Crawl.jobLogs(jobId)}${sep}${qs}`,
+    );
+  },
 
   search: ({ q, bbox }: { q: string; bbox?: string | null }) => {
     const params = new URLSearchParams({ q });

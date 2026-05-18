@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
+  CrawlJobLogsQuery,
+  CrawlJobLogsResult,
   MenuGroupRunResult,
   MenuRankingQuery,
   MenuRankingResult,
@@ -20,6 +22,8 @@ import {
   RestaurantSmartPickResult,
   RestaurantSummaryProgress,
   Routes,
+  type CrawlJobLogEntryType,
+  type CrawlLogLevelType,
 } from '@repo/api-contract';
 import { RestaurantService } from './restaurant.service.js';
 import { jobRegistry } from '../crawl/job-registry.js';
@@ -31,6 +35,19 @@ import { SummaryService } from '../summary/summary.service.js';
 import { MenuGroupingError, MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { env } from '../../config/env.js';
+
+// CrawlJobLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
+// null 로 떨궈서 나머지 로그가 보이도록.
+const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return typeof v === 'object' && v !== null && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const service = new RestaurantService(app.prisma);
@@ -237,6 +254,72 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => service.smartPick(req.body),
   });
 
+  // placeId 단위 누적 크롤 로그. 한 가게의 모든 잡(과거 재크롤 포함)이 한
+  // 흐름으로 보임. 응답은 최신순(createdAt DESC) — UI 가 표시 시 뒤집을지
+  // 결정. 잡 자체는 in-memory 라 서버 재시작 후 잡 메타는 사라져도 로그는
+  // 이 placeId 컬럼으로 계속 추적 가능.
+  typed.get(Routes.Restaurant.crawlLogs(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      querystring: CrawlJobLogsQuery,
+      response: { 200: CrawlJobLogsResult },
+    },
+    handler: async (req) => {
+      const limit = req.query.limit ?? 100;
+      const level = req.query.level as CrawlLogLevelType | undefined;
+      const stage = req.query.stage;
+      const cursor = req.query.cursor;
+
+      // (createdAt DESC, id DESC) — 동률 회피용 id 부보조 정렬. cursor 는
+      // 마지막 entry 의 id 로 직전 페이지의 (createdAt,id) 보다 작은 것만.
+      const cursorRow = cursor
+        ? await app.prisma.crawlJobLog.findUnique({
+            where: { id: cursor },
+            select: { createdAt: true, id: true },
+          })
+        : null;
+
+      const rows = await app.prisma.crawlJobLog.findMany({
+        where: {
+          placeId: req.params.placeId,
+          ...(level ? { level } : {}),
+          ...(stage ? { stage } : {}),
+          ...(cursorRow
+            ? {
+                OR: [
+                  { createdAt: { lt: cursorRow.createdAt } },
+                  {
+                    createdAt: cursorRow.createdAt,
+                    id: { lt: cursorRow.id },
+                  },
+                ],
+              }
+            : {}),
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+      });
+
+      const hasMore = rows.length > limit;
+      const sliced = hasMore ? rows.slice(0, limit) : rows;
+      const items: CrawlJobLogEntryType[] = sliced.map((r) => ({
+        id: r.id,
+        jobId: r.jobId,
+        placeId: r.placeId,
+        stage: r.stage,
+        level: r.level as CrawlLogLevelType,
+        message: r.message,
+        meta: r.meta ? safeParseJsonObject(r.meta) : null,
+        createdAt: r.createdAt.toISOString(),
+      }));
+      const nextCursor = hasMore ? sliced[sliced.length - 1]!.id : null;
+      return { items, nextCursor };
+    },
+  });
+
   typed.get(Routes.Restaurant.summaryStatus(':placeId'), {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
@@ -436,6 +519,26 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
               sourceId: sub.sourceId,
               placeId: sub.placeId,
               ...signal,
+            });
+            return;
+          }
+          if (signal.type === 'log') {
+            // 잡 단계별 로그 — placeId 단위로 흘려보낸 로그를 같은 SSE 채널로
+            // 그대로 전달. 어드민 패널이 잡 종료 후에도 요약 단계 로그를 받을
+            // 수 있게 (크롤 SSE 는 done 이벤트로 닫힘).
+            writeNamed('log', {
+              canonicalId: sub.canonicalId,
+              restaurantId: sub.restaurantId,
+              source: sub.source,
+              sourceId: sub.sourceId,
+              placeId: sub.placeId,
+              type: 'log' as const,
+              jobId: signal.jobId,
+              level: signal.level,
+              stage: signal.stage,
+              message: signal.message,
+              meta: signal.meta,
+              at: signal.at,
             });
             return;
           }
