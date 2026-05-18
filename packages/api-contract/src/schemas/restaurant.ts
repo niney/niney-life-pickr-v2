@@ -273,6 +273,17 @@ export type RestaurantCancelSummaryResultType = z.infer<
   typeof RestaurantCancelSummaryResult
 >;
 
+// 요약 재개 응답. resumed = 'cancelled' → 'queued' 로 다시 큐잉된 행 수.
+// 명시적으로 중지(cancelled)했던 행만 재투입한다. failed/parse_failed 같은
+// LLM 에러는 별개 — 그쪽은 reanalyze 로 재시도.
+export const RestaurantResumeSummaryResult = z.object({
+  ok: z.literal(true),
+  resumed: z.number().int(),
+});
+export type RestaurantResumeSummaryResultType = z.infer<
+  typeof RestaurantResumeSummaryResult
+>;
+
 // 정규화 분석 테이블 백필 응답. processed = 새로 행을 채운 summary 수.
 export const RestaurantAnalyticsBackfillResult = z.object({
   ok: z.literal(true),

@@ -112,6 +112,11 @@ export const Restaurant = {
   // 자동 재큐잉에서도 cancelled 는 제외.
   cancelSummary: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/cancel-summary`,
+  // 중지된(cancelled) 행만 골라 다시 큐잉. failed/parse_failed 등 LLM 에러
+  // 카테고리는 손대지 않는다 — 그쪽은 reanalyze 가 담당. cancelledPlaces 표식
+  // 도 함께 해제하므로 새 batch 가 들어와도 정상 흐름으로 들어간다.
+  resumeSummary: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/resume-summary`,
   // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
   insights: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,

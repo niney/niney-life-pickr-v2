@@ -377,6 +377,65 @@ export class SummaryService {
     return res.count;
   }
 
+  // 어드민이 "요약 재개" 누름. cancelSummaryForPlace 로 'cancelled' 가 된
+  // 행들만 골라 다시 큐잉한다. 동작:
+  //   1) cancelledPlaces 에서 placeId 풀어줘 새 batch 가 정상 흐름으로.
+  //   2) 'cancelled' 행을 'queued' 로 즉시 flip — UI 가 재개를 바로 반영.
+  //      (queueSummariesForReviews 의 createMany 는 UNIQUE 충돌로 fallback
+  //       upsert 의 update:{} 를 타서 상태를 안 바꾼다. 미리 우리가 풀어둠.)
+  //   3) queueSummariesForReviews 로 chain 등록 — run() 진입 시 'pending' 으
+  //      로 자연 전환.
+  // backfillForRestaurant 와 분리한 이유: reanalyze 는 failed/done(구버전)
+  // 까지 한꺼번에 다시 돌리는 광범위 액션이고, resume 은 사용자의 명시 중지
+  // 만 되돌리는 좁은 의도라 UI 도 별도 버튼이 더 명확하다.
+  // 반환: 재큐잉된 reviewId 수.
+  async resumeSummaryForPlace(placeId: string): Promise<number> {
+    this.cancelledPlaces.delete(placeId);
+
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { id: true },
+    });
+    if (!restaurant) {
+      this.log?.warn({ placeId }, '[summary] resume: restaurant not found');
+      return 0;
+    }
+
+    const targets = await this.prisma.reviewSummary.findMany({
+      where: {
+        review: { restaurantId: restaurant.id },
+        status: 'cancelled',
+      },
+      select: { reviewId: true },
+    });
+    if (targets.length === 0) {
+      this.log?.info({ placeId }, '[summary] resume: no cancelled rows');
+      return 0;
+    }
+    const reviewIds = targets.map((t) => t.reviewId);
+
+    await this.prisma.reviewSummary.updateMany({
+      where: {
+        reviewId: { in: reviewIds },
+        status: 'cancelled',
+      },
+      data: {
+        status: 'queued',
+        errorCode: null,
+        errorMessage: null,
+        finishedAt: null,
+      },
+    });
+    this.bus.publish(placeId);
+
+    this.queueSummariesForReviews(placeId, reviewIds);
+    this.log?.warn(
+      { placeId, resumed: reviewIds.length },
+      '[summary] resumed by admin',
+    );
+    return reviewIds.length;
+  }
+
   // 백필 — 한 식당의 분석되지 않았거나 구버전(analysisVersion < 현재) 행을
   // 모두 다시 큐잉. 재크롤은 리뷰를 통째로 날리므로 부담이 크다. 이 경로는
   // 리뷰 텍스트는 그대로 두고 분석만 다시 채운다.

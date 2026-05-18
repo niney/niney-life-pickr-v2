@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Loader2, Play, Sparkles, StopCircle, X } from 'lucide-react';
+import { Loader2, Play, PlayCircle, Sparkles, StopCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type {
   RestaurantSummaryProgressType,
@@ -33,12 +33,17 @@ export const SummaryProgressSection = ({
   status,
   onCancel,
   cancelPending = false,
+  onResume,
+  resumePending = false,
 }: {
   status: RestaurantSummaryProgressType;
   // 지정 시 진행 중일 때만 "중지" 버튼이 노출된다. inFlight=0 이면 숨김.
   onCancel?: () => void;
   // mutation pending 상태 — 버튼 비활성화 + 스피너.
   cancelPending?: boolean;
+  // 지정 시 cancelled>0 일 때 "재개" 버튼이 노출된다. 중지된 행만 다시 큐잉.
+  onResume?: () => void;
+  resumePending?: boolean;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const inFlight = status.queued + status.pending + status.running;
@@ -112,6 +117,26 @@ export const SummaryProgressSection = ({
               <StopCircle className="size-3" />
             )}
             요약 중지
+          </Button>
+        )}
+        {/* 진행 중이 아니고 직전에 중지한 행이 남아 있을 때만 노출. 진행 중일
+            땐 "중지" 버튼이 자리잡으므로 두 버튼이 동시에 보이지 않는다. */}
+        {onResume && inFlight === 0 && status.cancelled > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-7 gap-1 px-2 text-xs"
+            onClick={onResume}
+            disabled={resumePending}
+            title="직전에 중지된 행만 다시 큐잉합니다. 실패한 행은 별도 '재분석' 으로 처리하세요."
+          >
+            {resumePending ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <PlayCircle className="size-3" />
+            )}
+            요약 재개
           </Button>
         )}
       </div>

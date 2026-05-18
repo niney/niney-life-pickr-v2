@@ -26,6 +26,7 @@ import {
   useDeleteRestaurant,
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
+  useResumeSummary,
   useStartCrawl,
 } from '@repo/shared';
 import type {
@@ -400,6 +401,7 @@ export const AdminRestaurantDetailPage = () => {
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
   const cancelSummaryMutation = useCancelSummary();
+  const resumeSummaryMutation = useResumeSummary();
   const deleteMutation = useDeleteRestaurant();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -525,23 +527,33 @@ export const AdminRestaurantDetailPage = () => {
           }}
         />
       )}
-      {!activeJob && summaryStatusQuery.data && summaryInFlight > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <SummaryProgressSection
-              status={summaryStatusQuery.data}
-              onCancel={() => {
-                if (!detail.placeId) return;
-                if (!window.confirm('이 가게의 진행 중인 요약 작업을 중지하시겠습니까? 현재 청크는 끝까지 처리됩니다.')) {
-                  return;
-                }
-                cancelSummaryMutation.mutate(detail.placeId);
-              }}
-              cancelPending={cancelSummaryMutation.isPending}
-            />
-          </CardContent>
-        </Card>
-      )}
+      {!activeJob &&
+        summaryStatusQuery.data &&
+        (summaryInFlight > 0 || summaryStatusQuery.data.cancelled > 0) && (
+          <Card>
+            <CardContent className="py-4">
+              <SummaryProgressSection
+                status={summaryStatusQuery.data}
+                onCancel={() => {
+                  if (!detail.placeId) return;
+                  if (!window.confirm('이 가게의 진행 중인 요약 작업을 중지하시겠습니까? 현재 청크는 끝까지 처리됩니다.')) {
+                    return;
+                  }
+                  cancelSummaryMutation.mutate(detail.placeId);
+                }}
+                cancelPending={cancelSummaryMutation.isPending}
+                onResume={() => {
+                  if (!detail.placeId) return;
+                  if (!window.confirm('직전에 중지된 행만 다시 요약 큐에 올립니다. 진행하시겠습니까?')) {
+                    return;
+                  }
+                  resumeSummaryMutation.mutate(detail.placeId);
+                }}
+                resumePending={resumeSummaryMutation.isPending}
+              />
+            </CardContent>
+          </Card>
+        )}
       <div>
         <Link
           to="/admin/restaurants"

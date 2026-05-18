@@ -433,6 +433,13 @@ export const useCancelSummary = () =>
     mutationFn: (placeId: string) => restaurantApi.cancelSummary(placeId),
   });
 
+// 직전에 중지된(cancelled) 행만 다시 큐잉. UI 가 SSE 로 새 'queued' 카운트
+// 와 곧 이어지는 진행 전환을 받아 갱신하므로 별도 invalidate 불필요.
+export const useResumeSummary = () =>
+  useMutation({
+    mutationFn: (placeId: string) => restaurantApi.resumeSummary(placeId),
+  });
+
 // placeId 단위 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언 전용. 한 가게의
 // 누적 잡 로그를 cursor pagination 으로. 아코디언이 닫혀 있으면 enabled=false
 // 로 fetch 안 함.

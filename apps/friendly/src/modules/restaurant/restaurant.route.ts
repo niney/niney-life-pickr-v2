@@ -21,6 +21,7 @@ import {
   RestaurantRankingQuery,
   RestaurantRankingResult,
   RestaurantReanalyzeResult,
+  RestaurantResumeSummaryResult,
   RestaurantSmartPickInput,
   RestaurantSmartPickResult,
   RestaurantSummaryProgress,
@@ -197,6 +198,23 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       const cancelled = await summaries.cancelSummaryForPlace(req.params.placeId);
       return { ok: true as const, cancelled };
+    },
+  });
+
+  // 어드민이 "요약 재개" 누름. 직전 중지로 'cancelled' 상태가 된 행만 골라
+  // 'queued' 로 되돌리고 chain 에 다시 등록한다. failed 행은 손대지 않으므로
+  // reanalyze 와 의도가 명확히 나뉜다.
+  typed.post(Routes.Restaurant.resumeSummary(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantResumeSummaryResult },
+    },
+    handler: async (req) => {
+      const resumed = await summaries.resumeSummaryForPlace(req.params.placeId);
+      return { ok: true as const, resumed };
     },
   });
 

@@ -16,6 +16,7 @@ import {
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
   type RestaurantReanalyzeResultType,
+  type RestaurantResumeSummaryResultType,
   type RestaurantSummaryProgressType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -126,6 +127,14 @@ export const restaurantApi = {
   cancelSummary: (placeId: string) =>
     apiFetch<RestaurantCancelSummaryResultType>(
       Routes.Restaurant.cancelSummary(placeId),
+      { method: 'POST' },
+    ),
+
+  // 중지(cancelled)된 행만 골라 다시 큐잉. failed 행은 손대지 않으므로
+  // reanalyze 와 명확히 분리된 의도 — "내가 멈췄던 것만 이어서".
+  resumeSummary: (placeId: string) =>
+    apiFetch<RestaurantResumeSummaryResultType>(
+      Routes.Restaurant.resumeSummary(placeId),
       { method: 'POST' },
     ),
 
