@@ -22,6 +22,7 @@ import {
   ApiError,
   useActiveCrawlJobStore,
   useCancelCrawl,
+  useCancelSummary,
   useDeleteRestaurant,
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
@@ -398,6 +399,7 @@ export const AdminRestaurantDetailPage = () => {
 
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
+  const cancelSummaryMutation = useCancelSummary();
   const deleteMutation = useDeleteRestaurant();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -526,7 +528,17 @@ export const AdminRestaurantDetailPage = () => {
       {!activeJob && summaryStatusQuery.data && summaryInFlight > 0 && (
         <Card>
           <CardContent className="py-4">
-            <SummaryProgressSection status={summaryStatusQuery.data} />
+            <SummaryProgressSection
+              status={summaryStatusQuery.data}
+              onCancel={() => {
+                if (!detail.placeId) return;
+                if (!window.confirm('이 가게의 진행 중인 요약 작업을 중지하시겠습니까? 현재 청크는 끝까지 처리됩니다.')) {
+                  return;
+                }
+                cancelSummaryMutation.mutate(detail.placeId);
+              }}
+              cancelPending={cancelSummaryMutation.isPending}
+            />
           </CardContent>
         </Card>
       )}

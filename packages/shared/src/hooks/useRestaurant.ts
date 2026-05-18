@@ -426,6 +426,13 @@ export const useReanalyzeRestaurant = () =>
     mutationFn: (placeId: string) => restaurantApi.reanalyze(placeId),
   });
 
+// 이 가게의 진행 중인 요약 작업 중지. queued/pending 행이 'cancelled' 로
+// 마킹되고 chain 이 끊긴다. 진행 중인 청크는 끝까지 흘러간다.
+export const useCancelSummary = () =>
+  useMutation({
+    mutationFn: (placeId: string) => restaurantApi.cancelSummary(placeId),
+  });
+
 // placeId 단위 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언 전용. 한 가게의
 // 누적 잡 로그를 cursor pagination 으로. 아코디언이 닫혀 있으면 enabled=false
 // 로 fetch 안 함.

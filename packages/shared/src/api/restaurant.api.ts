@@ -3,6 +3,7 @@ import {
   type CrawlJobLogsResultType,
   type CrawlLogLevelType,
   type PublicVisitorReviewType,
+  type RestaurantCancelSummaryResultType,
   type RestaurantDeleteResultType,
   type RestaurantDetailType,
   type RestaurantInsightsType,
@@ -119,6 +120,14 @@ export const restaurantApi = {
     apiFetch<RestaurantReanalyzeResultType>(Routes.Restaurant.reanalyze(placeId), {
       method: 'POST',
     }),
+
+  // 이 가게의 진행 중인 요약 작업 중지. queued/pending 행을 'cancelled' 로
+  // 마킹 + chain 클리어. 진행 중 청크는 끝까지 흘러간다.
+  cancelSummary: (placeId: string) =>
+    apiFetch<RestaurantCancelSummaryResultType>(
+      Routes.Restaurant.cancelSummary(placeId),
+      { method: 'POST' },
+    ),
 
   // placeId 단위 누적 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언이 호출.
   // 한 가게의 모든 잡(과거 재크롤 포함) 가로지름. cursor pagination.

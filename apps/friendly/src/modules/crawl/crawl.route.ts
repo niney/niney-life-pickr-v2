@@ -29,7 +29,6 @@ import {
   type CrawlLogLevelType,
 } from '@repo/api-contract';
 import { CrawlService } from './crawl.service.js';
-import { JobLogService } from './job-log.service.js';
 import { jobRegistry } from './job-registry.js';
 import {
   diningcodeBulkSaveRegistry,
@@ -39,11 +38,8 @@ import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
 import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playwright.adapter.js';
 import { closeCatchtableShopBrowser } from './adapters/catchtable-shop.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
-import { SummaryService } from '../summary/summary.service.js';
 import { CanonicalService } from '../canonical/canonical.service.js';
 import { ProposalService } from '../canonical/proposal.service.js';
-import { AiConfigService } from '../ai/ai.config.service.js';
-import { env } from '../../config/env.js';
 
 // SSE wire format. EventSource auto-reconnects with a `last-event-id`
 // header; we also accept `?afterSeq=` for explicit replay (e.g., a fresh
@@ -92,18 +88,10 @@ const parseAfterSeq = (req: FastifyRequest): number => {
 
 const crawlRoutes: FastifyPluginAsync = async (app) => {
   const restaurants = new RestaurantService(app.prisma);
-  const aiConfig = new AiConfigService(app.prisma, {
-    apiKey: env.OLLAMA_CLOUD_API_KEY,
-    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModel: env.OLLAMA_DEFAULT_MODEL,
-  });
-  const jobLog = new JobLogService(app.prisma, jobRegistry, undefined, app.log);
-  const summaries = new SummaryService(app.prisma, aiConfig, {
-    logger: app.log,
-    jobLog,
-  });
+  // summaries / jobLog 는 plugins/summaries.ts 가 만든 app 전역 singleton.
+  // 두 라우트(crawl/restaurant) 가 같은 chain map · cancelledPlaces 를 공유.
+  const summaries = app.summaries;
+  const jobLog = app.jobLog;
   const canonical = new CanonicalService(app.prisma);
   const proposals = new ProposalService(app.prisma, canonical);
   const service = new CrawlService(

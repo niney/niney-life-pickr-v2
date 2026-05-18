@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Loader2, Play, Sparkles, X } from 'lucide-react';
+import { Loader2, Play, Sparkles, StopCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type {
   RestaurantSummaryProgressType,
@@ -7,6 +7,7 @@ import type {
 } from '@repo/api-contract';
 import { reviewThumbnailUrl } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
 
 // Small icon + label + optional trailing meta. Used as a header inside flat
 // section layouts (CardContent + divide-y), replacing nested Card/CardHeader.
@@ -30,12 +31,18 @@ export const SectionHeader = ({
 
 export const SummaryProgressSection = ({
   status,
+  onCancel,
+  cancelPending = false,
 }: {
   status: RestaurantSummaryProgressType;
+  // 지정 시 진행 중일 때만 "중지" 버튼이 노출된다. inFlight=0 이면 숨김.
+  onCancel?: () => void;
+  // mutation pending 상태 — 버튼 비활성화 + 스피너.
+  cancelPending?: boolean;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const inFlight = status.queued + status.pending + status.running;
-  const accountedFor = inFlight + status.done + status.failed;
+  const accountedFor = inFlight + status.done + status.failed + status.cancelled;
   const total = accountedFor;
   // totalReviews 와 accountedFor 가 다르면 ReviewSummary 행이 없는 리뷰 존재.
   // 구버전 데이터(여기 변경 전 적재 누락분)에서만 일어나야 정상.
@@ -65,7 +72,7 @@ export const SummaryProgressSection = ({
           </span>
         }
       />
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         {status.queued > 0 && (
           <Badge variant="outline">큐 {status.queued}</Badge>
         )}
@@ -73,6 +80,11 @@ export const SummaryProgressSection = ({
         <Badge variant="secondary">진행 {status.running}</Badge>
         <Badge variant="secondary">완료 {status.done}</Badge>
         {status.failed > 0 && <Badge variant="destructive">실패 {status.failed}</Badge>}
+        {status.cancelled > 0 && (
+          <Badge variant="outline" className="text-muted-foreground">
+            중지 {status.cancelled}
+          </Badge>
+        )}
         {orphan > 0 && (
           // ReviewSummary 행이 없는 리뷰 — 구버전 chain 휘발 잔여물. backfill
           // 또는 재크롤 필요. queued 상태 도입 이후엔 신규로는 발생하지 않음.
@@ -83,6 +95,24 @@ export const SummaryProgressSection = ({
           >
             누락 {orphan}
           </Badge>
+        )}
+        {onCancel && inFlight > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-7 gap-1 px-2 text-xs"
+            onClick={onCancel}
+            disabled={cancelPending}
+            title="이 가게의 진행 중인 요약 작업을 중지합니다. 현재 청크는 끝까지 처리됩니다."
+          >
+            {cancelPending ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <StopCircle className="size-3" />
+            )}
+            요약 중지
+          </Button>
         )}
       </div>
       {visibleRecent.length > 0 && (

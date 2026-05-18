@@ -10,14 +10,24 @@ import {
 } from './crawl.js';
 
 // 단계 의미:
-//   queued  — queueSummariesForReviews 진입 시점에 즉시 박힘. chain 대기 중.
-//             chain 휘발(서버 재시작) 시 흔적이 사라지지 않도록 한 안전망.
-//   pending — run() 진입 후 청크에 할당되기 직전. 이 상태가 도달하면 batch 가
-//             chain 에서 꺼내져 처리가 시작된 것이다.
-//   running — 청크에 포함되어 실제 LLM 호출 중.
-//   done / failed — 최종.
+//   queued    — queueSummariesForReviews 진입 시점에 즉시 박힘. chain 대기.
+//               chain 휘발(서버 재시작) 시 흔적이 사라지지 않도록 한 안전망.
+//   pending   — run() 진입 후 청크에 할당되기 직전. 이 상태가 도달하면 batch
+//               가 chain 에서 꺼내져 처리가 시작된 것이다.
+//   running   — 청크에 포함되어 실제 LLM 호출 중.
+//   done      — 파싱 + 저장 성공 (최종).
+//   failed    — 재시도 모두 실패 또는 서버 재시작으로 cleanup 됨 (최종).
+//   cancelled — 어드민이 명시적으로 "요약 중지" 누름 (최종). 부팅 자동 재큐잉
+//               에서 제외되어 재개되지 않는다. 재시도하려면 명시적 reanalyze.
 // 구버전 데이터에 'pending' 행이 남아 있을 수 있어 enum 에 보존한다.
-export const ReviewSummaryStatus = z.enum(['queued', 'pending', 'running', 'done', 'failed']);
+export const ReviewSummaryStatus = z.enum([
+  'queued',
+  'pending',
+  'running',
+  'done',
+  'failed',
+  'cancelled',
+]);
 export type ReviewSummaryStatusType = z.infer<typeof ReviewSummaryStatus>;
 
 export const ReviewSentiment = z.enum(['positive', 'negative', 'neutral', 'mixed']);
@@ -252,6 +262,16 @@ export const RestaurantReanalyzeResult = z.object({
   queued: z.number().int(),
 });
 export type RestaurantReanalyzeResultType = z.infer<typeof RestaurantReanalyzeResult>;
+
+// 요약 중지 응답. cancelled = 'cancelled' 로 마킹된 행 수 (queued + pending).
+// running 행은 이번 호출에서 손대지 않고 현재 청크가 끝나면 자연 종료된다.
+export const RestaurantCancelSummaryResult = z.object({
+  ok: z.literal(true),
+  cancelled: z.number().int(),
+});
+export type RestaurantCancelSummaryResultType = z.infer<
+  typeof RestaurantCancelSummaryResult
+>;
 
 // 정규화 분석 테이블 백필 응답. processed = 새로 행을 채운 summary 수.
 export const RestaurantAnalyticsBackfillResult = z.object({
@@ -643,6 +663,8 @@ export const RestaurantSummaryProgress = z.object({
   running: z.number().int(),
   done: z.number().int(),
   failed: z.number().int(),
+  // 어드민이 명시적으로 요약 중지를 누른 결과. inFlight 합산에서 빠진다.
+  cancelled: z.number().int(),
   recentDone: z.array(
     z.object({
       reviewId: z.string(),

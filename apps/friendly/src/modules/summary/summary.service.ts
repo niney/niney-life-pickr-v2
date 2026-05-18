@@ -203,6 +203,10 @@ export class SummaryService {
   // 합집합으로 보인다). placeId 단위로 then-chaining 하면 처리량 손실
   // 없이 마킹/진행이 일관된다 — 다른 place 는 여전히 병렬.
   private readonly runChainByPlace = new Map<string, Promise<void>>();
+  // 어드민이 cancelSummaryForPlace 호출 시 placeId 가 등록된다. run() 의
+  // 청크 루프가 매 청크 진입 직전에 이 set 을 확인해 자기 자신을 종료한다.
+  // 새 queueSummariesForReviews 호출(=다시 시작) 시 자연 해제된다.
+  private readonly cancelledPlaces = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -226,6 +230,55 @@ export class SummaryService {
     jobId: string | null = null,
   ): void {
     if (reviewIds.length === 0) return;
+
+    // 어드민이 이 placeId 의 요약 중지를 누른 상태면 새로 들어오는 batch 도
+    // 즉시 'cancelled' 로 박고 chain 에는 등록하지 않는다. 크롤이 진행 중이라
+    // persistBatch 가 페이지마다 호출하더라도 cancel 효과가 유지됨. 해제는
+    // backfillForRestaurant (reanalyze 라우트) 가 명시적으로 한다.
+    if (this.cancelledPlaces.has(placeId)) {
+      this.log?.warn(
+        { placeId, count: reviewIds.length, jobId },
+        '[summary] queue arrived while cancelled — marking as cancelled',
+      );
+      void this.prisma.reviewSummary
+        .createMany({
+          data: reviewIds.map((id) => ({
+            reviewId: id,
+            status: 'cancelled',
+            errorCode: 'cancelled_by_user',
+            errorMessage: 'Admin cancelled the summary job',
+            finishedAt: new Date(),
+          })),
+        })
+        .catch(async () => {
+          for (const id of reviewIds) {
+            try {
+              await this.prisma.reviewSummary.upsert({
+                where: { reviewId: id },
+                create: {
+                  reviewId: id,
+                  status: 'cancelled',
+                  errorCode: 'cancelled_by_user',
+                  errorMessage: 'Admin cancelled the summary job',
+                  finishedAt: new Date(),
+                },
+                update: {
+                  // 이미 done/failed 면 그대로 두기. queued/pending 만 cancelled 로.
+                  status: 'cancelled',
+                  errorCode: 'cancelled_by_user',
+                  errorMessage: 'Admin cancelled the summary job',
+                  finishedAt: new Date(),
+                },
+              });
+            } catch {
+              // 한 행 실패는 무시.
+            }
+          }
+        })
+        .then(() => this.bus.publish(placeId));
+      return;
+    }
+
     const prev = this.runChainByPlace.get(placeId);
     // chained=true 이면 이전 batch 의 run() 이 아직 안 끝나 뒤에 줄을 선 것.
     // 크롤 페이지가 빠르게 넘어오면 여러 batch 가 같은 placeId chain 에 쌓이고,
@@ -284,9 +337,50 @@ export class SummaryService {
     });
   }
 
+  // 어드민이 "이 가게 요약 중지" 누르면 호출. 동작:
+  //   1) cancelledPlaces 에 placeId 등록 — 다음 청크 진입 직전에 run() 가 자기
+  //      자신을 종료한다. 진행 중 청크는 끝까지 흘러간 뒤 자연 종료.
+  //   2) chain map 에서 placeId 키 제거 — 새 enqueue 가 fresh chain 으로.
+  //   3) DB 의 'queued'/'pending' 행을 'cancelled' 로 마킹. 'running' 은 손대지
+  //      않음 — 청크가 끝나면서 done/failed 로 자연 마감된다.
+  // 반환: 'cancelled' 로 마킹된 행 수.
+  async cancelSummaryForPlace(placeId: string): Promise<number> {
+    this.cancelledPlaces.add(placeId);
+    this.runChainByPlace.delete(placeId);
+
+    // restaurant 찾아 그 식당의 queued/pending 행만 한정해 cancelled 마킹.
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { id: true },
+    });
+    if (!restaurant) {
+      this.log?.warn({ placeId }, '[summary] cancel: restaurant not found');
+      return 0;
+    }
+    const res = await this.prisma.reviewSummary.updateMany({
+      where: {
+        review: { restaurantId: restaurant.id },
+        status: { in: ['queued', 'pending'] },
+      },
+      data: {
+        status: 'cancelled',
+        errorCode: 'cancelled_by_user',
+        errorMessage: 'Admin cancelled the summary job',
+        finishedAt: new Date(),
+      },
+    });
+    this.log?.warn(
+      { placeId, cancelled: res.count },
+      '[summary] cancelled by admin',
+    );
+    this.bus.publish(placeId);
+    return res.count;
+  }
+
   // 백필 — 한 식당의 분석되지 않았거나 구버전(analysisVersion < 현재) 행을
   // 모두 다시 큐잉. 재크롤은 리뷰를 통째로 날리므로 부담이 크다. 이 경로는
   // 리뷰 텍스트는 그대로 두고 분석만 다시 채운다.
+  // 어드민의 명시적 "다시 시도" 액션이므로 직전 cancel 표식도 함께 해제한다.
   // 반환: 큐잉된 reviewId 수.
   async backfillForRestaurant(placeId: string): Promise<number> {
     const restaurant = await this.prisma.restaurant.findUnique({
@@ -295,13 +389,20 @@ export class SummaryService {
     });
     if (!restaurant) return 0;
 
-    // failed/parse_failed 도 포함 — 새 프롬프트/모델로 다시 시도할 가치가 있음.
-    // 이미 진행 중(pending/running)인 행은 건드리지 않는다.
+    // 어드민이 reanalyze 를 누른 시점 = "이제 다시 진행해" — cancel 표식 해제.
+    // 해제 전에 cancelled 행을 queueSummariesForReviews 로 다시 태우려면 순서
+    // 가 중요: 먼저 풀어줘야 그 다음 호출이 정상 흐름으로 들어간다.
+    this.cancelledPlaces.delete(placeId);
+
+    // failed/cancelled/구버전 done 모두 대상 — 새 프롬프트/모델 또는 사용자
+    // 의도 변경으로 다시 시도할 가치가 있음. 이미 진행 중(queued/pending/
+    // running)인 행은 건드리지 않는다.
     const targets = await this.prisma.reviewSummary.findMany({
       where: {
         review: { restaurantId: restaurant.id },
         OR: [
           { status: 'failed' },
+          { status: 'cancelled' },
           {
             status: 'done',
             OR: [
@@ -519,6 +620,19 @@ export class SummaryService {
     let failCount = 0;
     let parseFailCount = 0;
     for (let i = 0; i < reviews.length; i += chunkSize) {
+      // 어드민이 cancelSummaryForPlace 를 호출했으면 매 청크 진입 직전에 끝낸다.
+      // 진행 중이던 직전 청크의 LLM 호출은 이미 완료된 상태 — 그 비용은 살린다.
+      if (this.cancelledPlaces.has(placeId)) {
+        this.log?.info(
+          { placeId, processed: doneCount + failCount + parseFailCount, total },
+          '[summary] cancelled by admin, exiting chunk loop',
+        );
+        this.logToJob(jobId, placeId, 'summary_run', 'warn', '요약 중지 — 어드민 요청', {
+          processed: doneCount + failCount + parseFailCount,
+          total,
+        });
+        return;
+      }
       const chunk = reviews.slice(i, i + chunkSize);
       const chunkIdx = Math.floor(i / chunkSize) + 1;
       const chunkTotal = Math.ceil(reviews.length / chunkSize);

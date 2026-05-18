@@ -8,6 +8,7 @@ import {
   MenuRankingQuery,
   MenuRankingResult,
   RestaurantAnalyticsBackfillResult,
+  RestaurantCancelSummaryResult,
   RestaurantDeleteResult,
   RestaurantDetail,
   RestaurantInsights,
@@ -33,10 +34,7 @@ import {
   summaryEventsBus,
   type SummarySignal,
 } from '../summary/summary-events-bus.js';
-import { SummaryService } from '../summary/summary.service.js';
 import { MenuGroupingError, MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
-import { AiConfigService } from '../ai/ai.config.service.js';
-import { env } from '../../config/env.js';
 
 // CrawlJobLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
 // null 로 떨궈서 나머지 로그가 보이도록.
@@ -53,14 +51,9 @@ const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
 
 const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const service = new RestaurantService(app.prisma);
-  const aiConfig = new AiConfigService(app.prisma, {
-    apiKey: env.OLLAMA_CLOUD_API_KEY,
-    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModel: env.OLLAMA_DEFAULT_MODEL,
-  });
-  const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
+  // summaries / aiConfig 는 plugins/summaries.ts 의 app 전역 singleton.
+  const summaries = app.summaries;
+  const aiConfig = app.aiConfig;
   const grouping = new MenuGroupingService(app.prisma, aiConfig, { logger: app.log });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -187,6 +180,23 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       // 큐잉만 하고 즉시 반환 — 진행 상황은 기존 SSE(summary-events)로 본다.
       const queued = await summaries.backfillForRestaurant(req.params.placeId);
       return { ok: true as const, queued };
+    },
+  });
+
+  // 어드민이 "이 가게 요약 중지" 누름. queued/pending 행을 'cancelled' 로
+  // 마킹 + cancelledPlaces 등록 → chain 의 다음 청크가 진입 직전에 자기 자
+  // 신을 종료한다. 진행 중인 청크는 끝까지 흘러가 done/failed 로 자연 마감.
+  typed.post(Routes.Restaurant.cancelSummary(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantCancelSummaryResult },
+    },
+    handler: async (req) => {
+      const cancelled = await summaries.cancelSummaryForPlace(req.params.placeId);
+      return { ok: true as const, cancelled };
     },
   });
 

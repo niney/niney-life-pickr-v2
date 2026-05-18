@@ -107,6 +107,11 @@ export const Restaurant = {
   // 재크롤 없이 새 분석 스키마를 기존 리뷰에 채울 때 쓴다.
   reanalyze: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/reanalyze`,
+  // 이 가게의 진행 중인 요약 작업을 중지. queued/pending 행을 'cancelled' 로
+  // 마킹 + chain 클리어. 진행 중 청크는 끝까지 흘러간 뒤 자연 종료. 부팅
+  // 자동 재큐잉에서도 cancelled 는 제외.
+  cancelSummary: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/cancel-summary`,
   // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
   insights: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,
