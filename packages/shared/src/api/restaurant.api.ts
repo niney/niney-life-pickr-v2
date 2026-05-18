@@ -2,6 +2,7 @@ import {
   Routes,
   type CrawlJobLogsResultType,
   type CrawlLogLevelType,
+  type PublicVisitorReviewType,
   type RestaurantDeleteResultType,
   type RestaurantDetailType,
   type RestaurantInsightsType,
@@ -17,6 +18,34 @@ import {
   type RestaurantSummaryProgressType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
+
+// prod 백엔드 배포 전 임시 호환. 옛 응답은 `reviews: PublicVisitorReview[]` 한
+// 필드에 전체 reviews 를 담아 보낸다. 새 클라이언트는 `reviewsFirstPage` +
+// `reviewCounts` 를 기대하므로, 옛 응답을 새 모양으로 평탄화한다.
+// prod 배포 완료 후 이 어댑터는 제거. publicReviews 새 endpoint 가 옛 서버에는
+// 없어 chip/sort 변경 시 추가 fetch 는 404 — ReviewsTab 의 첫 페이지(seed) 만
+// 보장된다.
+const adaptPublicDetailResponse = (
+  raw: RestaurantPublicDetailType & { reviews?: PublicVisitorReviewType[] },
+): RestaurantPublicDetailType => {
+  if (raw.reviewsFirstPage && raw.reviewCounts) return raw;
+  const reviews = raw.reviews ?? [];
+  let positive = 0;
+  let negative = 0;
+  for (const r of reviews) {
+    if (r.analysis?.sentiment === 'positive') positive += 1;
+    else if (r.analysis?.sentiment === 'negative') negative += 1;
+  }
+  return {
+    ...raw,
+    reviewsFirstPage: raw.reviewsFirstPage ?? reviews,
+    reviewCounts: raw.reviewCounts ?? {
+      all: reviews.length,
+      positive,
+      negative,
+    },
+  };
+};
 
 export const restaurantApi = {
   list: () => apiFetch<RestaurantListResultType>(Routes.Restaurant.list),
@@ -51,8 +80,12 @@ export const restaurantApi = {
     );
   },
 
-  publicByPlaceId: (placeId: string) =>
-    apiFetch<RestaurantPublicDetailType>(Routes.Restaurant.publicByPlaceId(placeId)),
+  publicByPlaceId: async (placeId: string): Promise<RestaurantPublicDetailType> => {
+    const raw = await apiFetch<
+      RestaurantPublicDetailType & { reviews?: PublicVisitorReviewType[] }
+    >(Routes.Restaurant.publicByPlaceId(placeId));
+    return adaptPublicDetailResponse(raw);
+  },
 
   // 방문자 리뷰 페이지네이션. 첫 페이지는 detail.reviewsFirstPage 로 동봉돼
   // 오므로 useInfiniteQuery 의 첫 페이지 seed 로 쓰고, 이 함수는 2 페이지부터.
