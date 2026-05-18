@@ -27,9 +27,8 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
   },
-  extra: {
-    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
-  },
+  // EXPO_PUBLIC_API_URL 은 src/lib/api-setup.ts 가 process.env 로 직접 읽음.
+  // (Metro 가 빌드 시 인라인 — extra 경유보다 dev client 캐시에 덜 민감)
 };
 
 export default config;

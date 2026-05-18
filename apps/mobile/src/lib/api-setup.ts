@@ -7,8 +7,10 @@ const TOKEN_KEY = 'lp:token';
 const GUEST_KEY = 'lp:guest';
 
 // API URL 우선순위 (LAN IP 자동 추종):
-//  1. 명시 환경변수 EXPO_PUBLIC_API_URL (`extra.apiUrl`) — 프로덕션/스테이징
-//     원격 서버 또는 개발 중 강제 override 용.
+//  1. 명시 환경변수 EXPO_PUBLIC_API_URL — 프로덕션/스테이징 원격 서버 또는
+//     개발 중 강제 override 용. Metro 가 .env.local 등에서 읽어 JS 번들에
+//     인라인하므로 process.env 로 그대로 읽힌다 (Constants.expoConfig.extra
+//     경로보다 캐시/타이밍에 덜 민감).
 //  2. Metro dev 서버 호스트 — friendly 가 0.0.0.0 으로 listen 중이라 같은 IP
 //     의 다른 포트(3000) 에 접근 가능.
 //     - managed (Expo Go) : Constants.expoConfig.hostUri
@@ -46,8 +48,11 @@ const extractHostFromDevServer = (): string | null => {
 };
 
 const resolveApiUrl = (): string => {
-  const explicit = Constants.expoConfig?.extra?.apiUrl as string | undefined;
-  if (explicit && explicit !== 'http://localhost:3000') return explicit;
+  // process.env.EXPO_PUBLIC_API_URL — Metro 가 빌드 시 인라인. 비어있으면 undefined.
+  // (Constants.expoConfig?.extra 는 manifest 갱신 타이밍 / 캐시에 영향을 받아
+  //  dev client 에서 stale 가능 → process.env 를 1차 소스로 사용.)
+  const explicit = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (explicit) return explicit;
 
   // managed 경로 (Expo Go / @expo/cli dev server)
   const expoHost =
@@ -63,7 +68,7 @@ const resolveApiUrl = (): string => {
     return `http://${devHost}:${FRIENDLY_PORT}`;
   }
 
-  return explicit ?? `http://localhost:${FRIENDLY_PORT}`;
+  return `http://localhost:${FRIENDLY_PORT}`;
 };
 
 const apiUrl = resolveApiUrl();
