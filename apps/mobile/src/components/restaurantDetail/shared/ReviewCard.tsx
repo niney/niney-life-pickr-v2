@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { PublicVisitorReviewType } from '@repo/api-contract';
 import { SENTIMENT_COLORS } from '../colors';
@@ -60,7 +61,7 @@ export const ReviewCard = ({ review: r }: Props) => {
               onPress={() => setLightboxIndex(i)}
               accessibilityLabel={`${authorLabel} 리뷰 ${i + 1}번 사진 크게 보기`}
             >
-              <Image source={{ uri: u }} style={styles.image} />
+              <Image source={u} style={styles.image} recyclingKey={u} contentFit="cover" />
             </Pressable>
           ))}
         </ScrollView>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicDetailType } from '@repo/api-contract';
 import { Lightbox } from './Lightbox';
@@ -87,7 +88,7 @@ export const PhotosTab = ({ detail }: Props) => {
                   accessibilityLabel={`${s.title} ${i + 1}번 사진 크게 보기`}
                   style={{ width: tileSize, height: tileSize }}
                 >
-                  <Image source={{ uri: u }} style={styles.tile} />
+                  <Image source={u} style={styles.tile} recyclingKey={u} contentFit="cover" />
                 </Pressable>
               ))}
             </View>

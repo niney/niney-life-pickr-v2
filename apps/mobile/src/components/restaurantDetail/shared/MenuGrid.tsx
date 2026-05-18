@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type {
   RestaurantInsightsType,
@@ -32,7 +33,12 @@ export const MenuGrid = ({ menus, insights }: Props) => {
             ]}
           >
             {m.imageUrls[0] ? (
-              <Image source={{ uri: m.imageUrls[0] }} style={styles.thumb} />
+              <Image
+                source={m.imageUrls[0]}
+                style={styles.thumb}
+                recyclingKey={m.imageUrls[0]}
+                contentFit="cover"
+              />
             ) : null}
             <View style={styles.body}>
               <View style={styles.titleRow}>

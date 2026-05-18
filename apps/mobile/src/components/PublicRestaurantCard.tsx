@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 
@@ -34,7 +35,12 @@ export const PublicRestaurantCard = ({ item, selected = false }: Props) => {
     >
       <View style={[styles.thumb, { backgroundColor: theme.colors.surfaceAlt }]}>
         {item.thumbnailUrl ? (
-          <Image source={{ uri: item.thumbnailUrl }} style={styles.thumbImg} />
+          <Image
+            source={item.thumbnailUrl}
+            style={styles.thumbImg}
+            recyclingKey={item.thumbnailUrl}
+            contentFit="cover"
+          />
         ) : (
           <Text style={[styles.thumbPlaceholder, { color: theme.colors.textMuted }]}>
             no img

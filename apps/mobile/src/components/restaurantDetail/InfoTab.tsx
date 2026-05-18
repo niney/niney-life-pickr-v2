@@ -1,4 +1,5 @@
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicDetailType } from '@repo/api-contract';
 
@@ -70,7 +71,12 @@ export const InfoTab = ({ detail }: Props) => {
                 ]}
               >
                 {b.thumbnailUrls[0] && (
-                  <Image source={{ uri: b.thumbnailUrls[0] }} style={styles.blogThumb} />
+                  <Image
+                    source={b.thumbnailUrls[0]}
+                    style={styles.blogThumb}
+                    recyclingKey={b.thumbnailUrls[0]}
+                    contentFit="cover"
+                  />
                 )}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text

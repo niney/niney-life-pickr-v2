@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  Image,
   Modal,
   Pressable,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   type NativeSyntheticEvent,
   type ViewToken,
 } from 'react-native';
+import { Image } from 'expo-image';
 
 interface Props {
   images: string[];
@@ -88,9 +88,11 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
           renderItem={({ item }) => (
             <View style={{ width, alignItems: 'center', justifyContent: 'center' }}>
               <Image
-                source={{ uri: item }}
+                source={item}
                 style={{ width, height: '100%' }}
-                resizeMode="contain"
+                contentFit="contain"
+                recyclingKey={item}
+                transition={150}
               />
             </View>
           )}

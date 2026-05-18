@@ -1,7 +1,6 @@
 import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   type LayoutChangeEvent,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import {
   ApiError,
   useRestaurantPublic,
@@ -154,7 +154,12 @@ export const PublicRestaurantDetail = ({
           accessibilityLabel="사진 전체 보기"
         >
           <View style={styles.heroWrap}>
-            <Image source={{ uri: hero }} style={styles.heroImg} />
+            <Image
+              source={hero}
+              style={styles.heroImg}
+              contentFit="cover"
+              transition={150}
+            />
             {imageCount > 1 && (
               <View style={styles.heroBadge}>
                 <Text style={styles.heroBadgeText}>사진 {imageCount}장</Text>

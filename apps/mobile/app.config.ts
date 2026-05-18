@@ -26,6 +26,7 @@ const config: ExpoConfig = {
   plugins: ['expo-router', 'expo-font', 'react-native-bottom-tabs'],
   experiments: {
     typedRoutes: true,
+    reactCompiler: true,
   },
   // EXPO_PUBLIC_API_URL 은 src/lib/api-setup.ts 가 process.env 로 직접 읽음.
   // (Metro 가 빌드 시 인라인 — extra 경유보다 dev client 캐시에 덜 민감)
