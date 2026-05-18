@@ -23,7 +23,12 @@ const config: ExpoConfig = {
     bundler: 'metro',
     output: 'single',
   },
-  plugins: ['expo-router', 'expo-font', 'react-native-bottom-tabs'],
+  plugins: [
+    'expo-router',
+    'expo-font',
+    'react-native-bottom-tabs',
+    './plugins/with-swift-concurrency-fix',
+  ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
