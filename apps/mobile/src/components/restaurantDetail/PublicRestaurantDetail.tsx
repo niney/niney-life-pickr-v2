@@ -2,6 +2,7 @@ import { type ComponentType, useCallback, useEffect, useRef, useState } from 're
 import {
   ActivityIndicator,
   Image,
+  type LayoutChangeEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -49,7 +50,22 @@ export const PublicRestaurantDetail = ({
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
   const [tab, setTab] = useState<TabKey>('home');
+  const [heroH, setHeroH] = useState(0);
   const scrollRef = useRef<ScrollView | null>(null);
+  // onScroll 콜백 안에서 현재 scrollY 추적 — 탭 전환 시 'hero 가려진' 상태
+  // 였는지 판정해서 그 위치를 유지 (붙은 상태 유지) 하기 위함.
+  const scrollYRef = useRef(0);
+
+  const handleHeroLayout = useCallback((e: LayoutChangeEvent) => {
+    setHeroH(e.nativeEvent.layout.height);
+  }, []);
+
+  const handleScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      scrollYRef.current = e.nativeEvent.contentOffset.y;
+    },
+    [],
+  );
 
   // placeId 가 바뀌면 처음 탭(home) 으로 리셋. 같은 화면 안에서 일어날 일은
   // 거의 없지만 안전망.
@@ -61,10 +77,19 @@ export const PublicRestaurantDetail = ({
     if (onResolveName) onResolveName(detail.data?.name ?? null);
   }, [detail.data?.name, onResolveName]);
 
-  const handleChangeTab = useCallback((next: TabKey) => {
-    setTab(next);
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, []);
+  const handleChangeTab = useCallback(
+    (next: TabKey) => {
+      setTab(next);
+      // hero 가 가려진 상태(scrollY >= heroH)였으면 새 탭에서도 그 위치 유지
+      // — TabBar 가 헤더 바닥에 sticky 인 상태로 시작. 그렇지 않으면 top.
+      // 새 콘텐츠 마운트 후 scrollTo 가 적용되도록 다음 프레임에 호출.
+      const targetY = scrollYRef.current >= heroH && heroH > 0 ? heroH : 0;
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: targetY, animated: false });
+      });
+    },
+    [heroH],
+  );
 
   const isNotFound =
     detail.isError &&
@@ -105,16 +130,27 @@ export const PublicRestaurantDetail = ({
   const hero = detail.data.imageUrls[0] ?? null;
   const imageCount = detail.data.imageUrls.length;
 
+  // hero 영역 사이에선 scroll snap — 사용자가 위로 살짝만 밀어도 hero 끝
+  // (= TabBar 가 헤더 바닥에 닿는 위치) 으로 자동 점프. 그 이후 콘텐츠 영역은
+  // 자유 스크롤. decelerationRate='fast' 로 snap 이 빠르게 안착.
+  const snapOffsets = heroH > 0 ? [0, heroH] : undefined;
+
   const scroller = (
     <Scroller
       ref={scrollRef}
       style={[styles.scroller, { backgroundColor: theme.colors.bg }]}
       contentContainerStyle={styles.scrollContent}
       stickyHeaderIndices={stickyIndices}
+      snapToOffsets={snapOffsets}
+      snapToEnd={false}
+      decelerationRate="fast"
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
     >
       {hero ? (
         <Pressable
           onPress={() => handleChangeTab('photos')}
+          onLayout={handleHeroLayout}
           accessibilityLabel="사진 전체 보기"
         >
           <View style={styles.heroWrap}>
@@ -127,7 +163,10 @@ export const PublicRestaurantDetail = ({
           </View>
         </Pressable>
       ) : (
-        <View style={[styles.heroEmpty, { backgroundColor: theme.colors.surfaceAlt }]}>
+        <View
+          onLayout={handleHeroLayout}
+          style={[styles.heroEmpty, { backgroundColor: theme.colors.surfaceAlt }]}
+        >
           <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
             사진이 없습니다.
           </Text>
