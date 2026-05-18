@@ -40,11 +40,11 @@ const LEVEL_BADGE: Record<CrawlLogLevelType, string> = {
   error: 'bg-destructive/20 text-destructive',
 };
 
-// 실시간 스트림 한 행을 표시용 변환. 잡 종료 후엔 DB 페이지로 덮어쓰여 중복
-// 제거되도록 source/at/message 기준으로 dedup 키를 별도 계산하지 않는다 — 잡
-// 단위 로그는 양이 많아도 수백 행 수준이라 단순화.
+// 키는 (jobId, seq) — 백엔드가 같은 로그를 crawl SSE 와 summary SSE 양쪽에
+// fan-out 할 때 같은 seq 를 박는다. 클라이언트는 두 출처가 같은 key 를 만들
+// 어 Map dedup 으로 한 행만 남긴다.
 const fromStream = (e: StreamLogEntry): DisplayLog => ({
-  key: `crawl:${e.seq}`,
+  key: `${e.jobId}:${e.seq}`,
   source: 'crawl-sse',
   level: e.level,
   stage: e.stage,
@@ -54,9 +54,9 @@ const fromStream = (e: StreamLogEntry): DisplayLog => ({
 });
 
 const fromSummaryStream = (e: RestaurantSummaryLogEventType): DisplayLog => ({
-  // 요약 SSE 는 seq 가 없어 at + stage 로 안정 키. 같은 at(ms) 충돌은 거의
-  // 없지만 stage 까지 더해 추가 안전.
-  key: `summary:${e.at}:${e.stage}:${e.message.slice(0, 16)}`,
+  // crawl-sse 가 같은 (jobId, seq) 로 먼저 들어왔으면 Map 에서 같은 key 로
+  // 충돌해 자연 dedup. summary 단계(잡 SSE 가 안 받는 단계) 만 단독으로 남음.
+  key: `${e.jobId ?? 'no-job'}:${e.seq}`,
   source: 'summary-sse',
   level: e.level,
   stage: e.stage,
@@ -95,16 +95,20 @@ export const JobLogTab = ({
   const dbItems = useMemo(() => flattenJobLogPages(dbQuery.data), [dbQuery.data]);
 
   const merged = useMemo(() => {
-    // DB + 실시간 둘 다 모아 시간 오름차순. 같은 행이 DB 와 실시간 둘 다에
-    // 있을 수 있지만 (잡 진행 중 DB 가 먼저 응답하면) key 가 다르므로 중복으로
-    // 표시될 수 있다 — 잡 종료 후만 fallback 호출이라 실제로는 거의 안 겹침.
-    const all: DisplayLog[] = [
-      ...streamLogs.map(fromStream),
-      ...summaryLogs.map(fromSummaryStream),
-      ...dbItems.map(fromDb),
-    ];
-    // 같은 at 일 때 source 'db' 가 stable 키를 들고 있으니 우선. 단순 정렬만.
-    return all
+    // DB + 실시간 두 SSE 출처를 Map<key, DisplayLog> 로 dedup. 우선순위:
+    // crawl-sse(원본) > summary-sse(fan-out) > db. 같은 key 가 중복 도착해도
+    // 첫 출처를 유지 — fan-out 으로 들어온 동일 로그는 무시된다.
+    const map = new Map<string, DisplayLog>();
+    for (const e of streamLogs.map(fromStream)) {
+      if (!map.has(e.key)) map.set(e.key, e);
+    }
+    for (const e of summaryLogs.map(fromSummaryStream)) {
+      if (!map.has(e.key)) map.set(e.key, e);
+    }
+    for (const e of dbItems.map(fromDb)) {
+      if (!map.has(e.key)) map.set(e.key, e);
+    }
+    return [...map.values()]
       .filter((e) => levelFilter === 'all' || e.level === levelFilter)
       .sort((a, b) => a.at.localeCompare(b.at));
   }, [streamLogs, summaryLogs, dbItems, levelFilter]);

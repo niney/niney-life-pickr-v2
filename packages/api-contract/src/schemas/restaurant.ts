@@ -617,6 +617,8 @@ export type RestaurantSummarySnapshotEventType = z.infer<
 // CrawlEvent 의 'log' 변종을 하나의 로그 탭에 합쳐 누적 표시할 수 있다.
 // jobId 는 큐잉 시점에 크롤 잡 ID 가 전달된 경우에만 채워짐 (수동 요약 재실행
 // 같이 잡 컨텍스트 없는 경로에서는 null).
+// seq 는 같은 잡 안에서 모노톤. 크롤 SSE 와 요약 SSE 양쪽으로 fan-out 된
+// 같은 로그를 (jobId, seq) 로 dedup 하기 위함.
 export const RestaurantSummaryLogEvent = RestaurantSummaryEventSource.extend({
   type: z.literal('log'),
   jobId: z.string().nullable(),
@@ -624,6 +626,7 @@ export const RestaurantSummaryLogEvent = RestaurantSummaryEventSource.extend({
   stage: z.string(),
   message: z.string(),
   meta: z.record(z.unknown()).nullable(),
+  seq: z.number().int(),
   at: z.string(),
 });
 export type RestaurantSummaryLogEventType = z.infer<typeof RestaurantSummaryLogEvent>;

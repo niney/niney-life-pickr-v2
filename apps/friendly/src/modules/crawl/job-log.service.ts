@@ -76,7 +76,13 @@ export class JobLogService {
 
     // 2) SSE — 잡 종료 후에는 jobRegistry 에 addEvent 가 효과 없을 수 있어
     //    실패해도 무시. 채널 'none' 은 SSE 안 함.
+    //
+    // 'crawl' 채널이면 jobRegistry 로 보낸다. 추가로 placeId 가 있으면
+    // summaryEventsBus 에도 같은 페이로드로 fan-out — 상세 페이지가 placeId
+    // 단위 SSE 한 채널로 크롤+요약 단계 로그 모두 실시간 수신하기 위함. 같은
+    // seq 를 양쪽에 박아 클라이언트가 (jobId, seq) 로 중복 dedup 가능.
     if (input.channel === 'crawl') {
+      const seq = this.nextSeq();
       try {
         const event: CrawlEventType = {
           type: 'log',
@@ -84,12 +90,28 @@ export class JobLogService {
           stage: input.stage,
           message: input.message,
           ...(input.meta ? { meta: input.meta } : {}),
-          seq: this.nextSeq(),
+          seq,
           at: atIso,
         };
         this.registry.addEvent(input.jobId, event);
       } catch {
         // job 이 이미 사라졌거나 등록 안 됨 — 영속 채널은 계속 진행.
+      }
+      if (placeId) {
+        try {
+          this.bus.publish(placeId, {
+            type: 'log',
+            jobId: input.jobId,
+            stage: input.stage,
+            level: input.level,
+            message: input.message,
+            meta: input.meta ?? null,
+            seq,
+            at: atIso,
+          });
+        } catch {
+          // bus 가 던지지 않게 막혀있지만 방어적으로.
+        }
       }
     } else if (input.channel === 'summary' && placeId) {
       try {
@@ -100,6 +122,7 @@ export class JobLogService {
           level: input.level,
           message: input.message,
           meta: input.meta ?? null,
+          seq: this.nextSeq(),
           at: atIso,
         });
       } catch {

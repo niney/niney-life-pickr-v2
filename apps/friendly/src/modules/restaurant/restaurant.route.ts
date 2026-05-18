@@ -538,6 +538,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
               stage: signal.stage,
               message: signal.message,
               meta: signal.meta,
+              seq: signal.seq,
               at: signal.at,
             });
             return;
