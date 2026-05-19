@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { RestaurantPublicListQueryType } from '@repo/api-contract';
 import { useRestaurantsPublic, useUserLocation } from '@repo/shared';
-import { computeBboxAround } from '@repo/utils';
+import { computeBboxAround, isInKorea } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import {
   PublicRestaurantList,
@@ -23,6 +23,9 @@ const isSortKey = (s: string | null): s is SortKey =>
 // 권역이면 limit 80 안에 충분히 채워지고, 지방이면 결과 0 가능 (그땐 사용자
 // 가 "전체 영역" 으로 풀거나 패닝하여 재검색).
 const INITIAL_NEARBY_KM = 1.5;
+// 권한 거부/한국 밖일 때 폴백 — 서울시청. vworld 가 한국 영토만 커버해서
+// 한국 밖 좌표는 타일 전부 404, 그래서 모바일과 동일 폴백 정책.
+const SEOUL: { lat: number; lng: number } = { lat: 37.5665, lng: 126.978 };
 const formatBbox = (b: { minLng: number; minLat: number; maxLng: number; maxLat: number }) =>
   // PublicRestaurantsMap.tsx 의 formatBbox 와 동일 — 소수점 5자리.
   [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
@@ -113,19 +116,27 @@ export const RestaurantsV2Page = () => {
   const handleResearch = useCallback((b: string) => setParam('bbox', b), [setParam]);
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
 
-  // 첫 진입 시 사용자 위치 → 주변 bbox 자동 적용. one-shot — 한 번 적용된 후
-  // 사용자가 "전체 영역" 으로 해제하거나 직접 패닝해 재검색하면 다시 끼어들지
-  // 않는다.
+  // 첫 진입 시 자동 bbox 적용. one-shot — 한 번 적용된 후 사용자가 "전체 영역"
+  // 으로 해제하거나 직접 패닝해 재검색하면 다시 끼어들지 않는다. granted +
+  // 한국이면 사용자 좌표, 그 외(denied/unavailable/한국 밖)면 서울 ±1.5km —
+  // "현재 보고 있는 위치에서만" 일관 멘탈 모델 (앱과 동일).
   const userLoc = useUserLocation();
   const appliedGeoBboxRef = useRef(false);
   useEffect(() => {
     if (appliedGeoBboxRef.current) return;
-    if (userLoc.status !== 'granted' || !userLoc.coords) return;
+    // pending/idle 동안은 대기 — 권한 결정 후 한 번에.
+    if (userLoc.status === 'idle' || userLoc.status === 'pending') return;
     appliedGeoBboxRef.current = true;
     // 공유 링크 등으로 URL 에 이미 bbox 가 있으면 사용자 의도 우선 — 덮어쓰지
     // 않는다. one-shot 플래그는 위에서 이미 true 로 마크.
     if (bbox) return;
-    const box = computeBboxAround(userLoc.coords, INITIAL_NEARBY_KM);
+    const center =
+      userLoc.status === 'granted' &&
+      userLoc.coords &&
+      isInKorea(userLoc.coords)
+        ? userLoc.coords
+        : SEOUL;
+    const box = computeBboxAround(center, INITIAL_NEARBY_KM);
     setParam('bbox', formatBbox(box));
   }, [userLoc.status, userLoc.coords, bbox, setParam]);
 

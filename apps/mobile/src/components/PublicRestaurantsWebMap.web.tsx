@@ -300,10 +300,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   clearAreaBtn: {
+    height: 32,
     paddingHorizontal: 10,
-    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearAreaText: { fontSize: 12, fontWeight: '500' },
   locationBtn: {

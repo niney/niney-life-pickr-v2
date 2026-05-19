@@ -21,7 +21,7 @@ import BottomSheet, {
   type BottomSheetBackgroundProps,
 } from '@gorhom/bottom-sheet';
 import { useRestaurantsPublic, useTheme } from '@repo/shared';
-import { isInKorea } from '@repo/utils';
+import { computeBboxAround, isInKorea } from '@repo/utils';
 import type {
   RestaurantPublicListItemType,
   RestaurantPublicListQueryType,
@@ -36,6 +36,20 @@ type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
 const PAGE_SIZE = 60;
 // 권한 거부/한국 밖일 때 폴백 — 서울시청.
 const SEOUL: { lat: number; lng: number } = { lat: 37.5665, lng: 126.978 };
+
+// 첫 진입 시 자동 적용할 bbox 의 반경. 사용자 위치(granted) 든 서울(denied)
+// 든 동일하게 ±1.5km — "현재 보고 있는 위치에서만" 일관 멘탈 모델. 웹의
+// RestaurantsV2Page 와 동일 값으로 통일.
+const INITIAL_NEARBY_KM = 1.5;
+
+const formatBbox = (b: {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+}): string =>
+  // PublicRestaurantsWebMap 의 formatBbox 와 동일 — 소수점 5자리.
+  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 // gorhom 의 % snap 은 (screenH - topInset) 기준 — '100%' 는 topInset 바로
 // 아래까지 차서 헤더 sticky 와 시트가 맞붙는다.
 const SNAP_POINTS = ['20%', '50%', '100%'];
@@ -68,7 +82,9 @@ export default function RestaurantsScreen() {
     if (triggeredRef.current) return;
     triggeredRef.current = true;
     userLoc.refetch();
-  }, [userLoc]);
+    // refetch 만 deps — userLoc 객체 자체는 매 렌더 새 인스턴스라 deps 두면
+    // effect 가 자주 재실행 시도. refetch 는 useCallback([]) 으로 stable.
+  }, [userLoc.refetch]);
 
   // resolved: 권한 결과가 확정된 상태. idle/pending 동안엔 WebView 안 띄움.
   const resolved =
@@ -91,22 +107,47 @@ export default function RestaurantsScreen() {
   // refetch 결과(granted든 denied든)로 새 객체가 들어오면 발사.
   const [focusCoord, setFocusCoord] = useState<{ lat: number; lng: number } | null>(null);
   const manualRequestRef = useRef(false);
+
+  // 첫 진입 자동 bbox — 권한 결정(granted/denied/unavailable) 후 1회. granted +
+  // 한국이면 사용자 좌표, 그 외엔 서울 좌표 ±1.5km. "현재 보고 있는 위치에서만"
+  // 일관 멘탈 모델. bbox 가 이미 들어 있으면(딥링크 등 — 현재 모바일은 없지만
+  // 보존성 차원에서) 덮어쓰지 않는다.
+  const appliedGeoBboxRef = useRef(false);
+  useEffect(() => {
+    if (appliedGeoBboxRef.current) return;
+    if (userLoc.status === 'idle' || userLoc.status === 'pending') return;
+    appliedGeoBboxRef.current = true;
+    if (bbox) return;
+    const center =
+      userLoc.status === 'granted' &&
+      userLoc.coords &&
+      isInKorea(userLoc.coords)
+        ? userLoc.coords
+        : SEOUL;
+    setBbox(formatBbox(computeBboxAround(center, INITIAL_NEARBY_KM)));
+    // bbox 변경에 따른 페이지 reset. reset() 콜백은 아직 선언 전이라 직접 호출.
+    // items 는 자동 교체(useEffect offset===0 분기)에 맡김.
+    setOffset(0);
+  }, [userLoc.status, userLoc.coords, bbox]);
+
   useEffect(() => {
     if (!manualRequestRef.current) return;
     // pending/idle 동안은 대기 — 결과 도착 시 한 번에 결정.
     if (userLoc.status === 'pending' || userLoc.status === 'idle') return;
     manualRequestRef.current = false;
-    // granted + 한국 좌표면 그쪽으로, 그 외(denied/unavailable/한국 밖)면 서울
-    // 로 fly — 이전 granted 좌표가 화면에 떠 있던 채로 권한 잃으면 시각적으로
-    // 권한 박탈을 반영해줘야 한다 (안 그러면 사용자가 "내 위치 됐다"고 오해).
-    // 새 객체로 발사해야 flyTo effect 가 ref 변경 감지함.
     if (
       userLoc.status === 'granted' &&
       userLoc.coords &&
       isInKorea(userLoc.coords)
     ) {
+      // 사용자 위치로 fly + 그 주변 ±1.5km 로 bbox 강제 적용 (사용자 명시 의도).
       setFocusCoord({ lat: userLoc.coords.lat, lng: userLoc.coords.lng });
+      setBbox(formatBbox(computeBboxAround(userLoc.coords, INITIAL_NEARBY_KM)));
+      setOffset(0);
     } else {
+      // 권한 거부/한국 밖이면 시각적으로 서울 폴백만 — 사용자가 보고 있던 검색
+      // 결과(bbox) 는 그대로 둔다. 사용자가 의도적으로 누른 한 번의 액션으로
+      // 기존 검색을 갈아엎는 건 너무 침습적.
       setFocusCoord({ ...SEOUL });
     }
   }, [userLoc.status, userLoc.coords]);
@@ -117,7 +158,7 @@ export default function RestaurantsScreen() {
   const handleRequestLocation = useCallback(() => {
     manualRequestRef.current = true;
     return userLoc.refetch();
-  }, [userLoc]);
+  }, [userLoc.refetch]);
 
   // detail 표시 여부는 placeId 존재로 판단. 별도 view 상태 불필요.
   const [placeId, setPlaceId] = useState<string | null>(null);
@@ -166,9 +207,11 @@ export default function RestaurantsScreen() {
   const total = query.data?.total ?? 0;
   const hasMore = items.length < total;
 
+  // offset 만 0 으로. items 는 비우지 않고 query 결과 도착 시 offset===0 분기
+  // 에서 자동 교체 (위 useEffect). 빈 화면 1프레임 깜빡임이 없어지고, 새 결과
+  // 가 들어올 때까지 이전 결과가 잠시 stale 로 보임 (네이버지도/카카오맵 패턴).
   const reset = useCallback(() => {
     setOffset(0);
-    setItems([]);
   }, []);
 
   const handleChangeQ = useCallback(
@@ -203,10 +246,20 @@ export default function RestaurantsScreen() {
     setOffset((o) => o + PAGE_SIZE);
   }, [query.isFetching, hasMore]);
 
-  const handleRefresh = useCallback(() => {
+  // RefreshControl 의 refreshing 을 query.isFetching 직접 의존에서 떼어내고
+  // pull-to-refresh 액션에만 한정. 직접 의존하면 setBbox 등 다른 경로로
+  // isFetching 이 빠르게 토글될 때 RefreshControl re-render 가 BottomSheetFlatList
+  // 의 reanimated 스크롤 worklet 과 race → 네이티브 스택 폭주.
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setPullRefreshing(true);
     reset();
-    query.refetch();
-  }, [reset, query]);
+    try {
+      await query.refetch();
+    } finally {
+      setPullRefreshing(false);
+    }
+  }, [reset, query.refetch]);
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -348,7 +401,7 @@ export default function RestaurantsScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
-              refreshing={query.isFetching && offset === 0}
+              refreshing={pullRefreshing}
               onRefresh={handleRefresh}
             />
           }
