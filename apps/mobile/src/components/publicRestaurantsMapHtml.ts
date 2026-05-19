@@ -63,7 +63,9 @@ export const buildPublicRestaurantsMapHtml = (
 
   var baseLayer = new ol.layer.Tile({ source: tileSource });
   var vectorSource = new ol.source.Vector();
-  var vectorLayer = new ol.layer.Vector({ source: vectorSource });
+  // declutter:true — 모든 마커의 라벨이 노출되더라도 겹치는 텍스트는 OL 이
+  // 자동으로 숨김. 도심 밀집 지역에서 글자 충돌을 막아준다.
+  var vectorLayer = new ol.layer.Vector({ source: vectorSource, declutter: true });
 
   var map = new ol.Map({
     target: 'map',
@@ -103,27 +105,47 @@ export const buildPublicRestaurantsMapHtml = (
     }
   });
 
-  function makePinStyle(label, selected) {
-    var fill = selected ? '#dc2626' : '#ef4444';
-    var size = selected ? 40 : 32;
-    var height = selected ? 60 : 48;
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + height + '" viewBox="0 0 32 48">'
-      + '<path fill="' + fill + '" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>'
-      + '<circle fill="#fff" cx="16" cy="16" r="6"/></svg>';
-    var styleObj = {
-      image: new ol.style.Icon({
-        anchor: [0.5, 1],
-        src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
-      }),
-    };
-    if (label) {
-      styleObj.text = new ol.style.Text({
-        text: label,
-        offsetY: -(height + 6),
-        font: (selected ? 'bold ' : '') + '12px sans-serif',
-        fill: new ol.style.Fill({ color: '#0f172a' }),
-        stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
-      });
+  // 비선택은 작은 원형 dot (14×14), 선택된 마커만 핀 모양 (32×48) 으로 강조.
+  // 도심 밀집 지역에서 dot 들이 깔끔하게 깔리고 선택은 한눈에 띈다.
+  function makeMarkerStyle(label, selected) {
+    var styleObj;
+    if (selected) {
+      var pinSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">'
+        + '<path fill="#dc2626" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>'
+        + '<circle fill="#fff" cx="16" cy="16" r="6"/></svg>';
+      styleObj = {
+        image: new ol.style.Icon({
+          anchor: [0.5, 1],  // 핀 꼭지점이 좌표
+          src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pinSvg),
+        }),
+      };
+      if (label) {
+        styleObj.text = new ol.style.Text({
+          text: label,
+          offsetY: -54,  // 핀 위에 라벨
+          font: 'bold 12px sans-serif',
+          fill: new ol.style.Fill({ color: '#0f172a' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+        });
+      }
+    } else {
+      var dotSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">'
+        + '<circle fill="#ef4444" stroke="#fff" stroke-width="2" cx="9" cy="9" r="7"/></svg>';
+      styleObj = {
+        image: new ol.style.Icon({
+          anchor: [0.5, 0.5],  // 원 중심이 좌표
+          src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(dotSvg),
+        }),
+      };
+      if (label) {
+        styleObj.text = new ol.style.Text({
+          text: label,
+          offsetY: 16,  // dot 중심에서 아래
+          font: '11px sans-serif',
+          fill: new ol.style.Fill({ color: '#0f172a' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+        });
+      }
     }
     return new ol.style.Style(styleObj);
   }
@@ -142,13 +164,13 @@ export const buildPublicRestaurantsMapHtml = (
       feat.setId(m.id);            // getFeatureById 로 selection 갱신 시 O(1) lookup
       feat.set('markerId', m.id);
       feat.set('label', m.name);   // selection 복원 시 라벨 재사용
-      feat.setStyle(makePinStyle(null, false));
+      feat.setStyle(makeMarkerStyle(m.name, false));
       vectorSource.addFeature(feat);
     }
     // markers 가 바뀌어도 현재 selection 은 유지 — 새 set 에 동일 id 가 있으면 다시 강조.
     if (currentSelectedId !== null) {
       var sel = vectorSource.getFeatureById(currentSelectedId);
-      if (sel) sel.setStyle(makePinStyle(sel.get('label'), true));
+      if (sel) sel.setStyle(makeMarkerStyle(sel.get('label'), true));
     }
     // 자동 fit 없음 — 첫 진입의 중심은 부모가 initialCenter 로 결정. 마커가
     // 늦게 들어와서 화면이 갑자기 옮겨가는 일을 막는다.
@@ -160,12 +182,12 @@ export const buildPublicRestaurantsMapHtml = (
     if (nextId === currentSelectedId) return;
     if (currentSelectedId !== null) {
       var prev = vectorSource.getFeatureById(currentSelectedId);
-      if (prev) prev.setStyle(makePinStyle(null, false));
+      if (prev) prev.setStyle(makeMarkerStyle(prev.get('label'), false));
     }
     currentSelectedId = nextId;
     if (nextId !== null) {
       var next = vectorSource.getFeatureById(nextId);
-      if (next) next.setStyle(makePinStyle(next.get('label'), true));
+      if (next) next.setStyle(makeMarkerStyle(next.get('label'), true));
     }
   };
 

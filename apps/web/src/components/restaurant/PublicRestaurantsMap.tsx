@@ -49,6 +49,9 @@ export const PublicRestaurantsMap = ({
   const [tileError, setTileError] = useState(false);
 
   // 좌표 있는 식당만 마커로. id 는 placeId 그대로 사용 (선택 동기화에 그대로 매핑).
+  // 모든 마커에 라벨 전달. 겹치는 텍스트는 VectorLayer declutter:true 가 자동
+  // 숨김 처리 (도심 밀집 지역에서도 가독성 유지). selectedPlaceId 가 deps 에
+  // 없어 selection 변경 시 markers 재계산 안 됨 → MapCanvas 의 feature 안정성 ↑.
   const markers: MapMarker[] = useMemo(
     () =>
       items
@@ -57,10 +60,9 @@ export const PublicRestaurantsMap = ({
           id: it.placeId,
           lat: it.latitude!,
           lng: it.longitude!,
-          // label 은 선택된 마커에만 — 모든 마커에 라벨 띄우면 시각 노이즈.
-          label: it.placeId === selectedPlaceId ? it.name : undefined,
+          label: it.name,
         })),
-    [items, selectedPlaceId],
+    [items],
   );
 
   // 호버 우선 강조. selectedPlaceId 가 있을 때 hoveredPlaceId 가 다르면 hover 우선.

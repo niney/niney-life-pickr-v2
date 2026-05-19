@@ -131,7 +131,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 
     const map = new OlMap({
       target: containerRef.current,
-      layers: [baseLayer, new VectorLayer({ source: vectorSource })],
+      // declutter:true — 모든 마커의 라벨이 노출되더라도 겹치는 텍스트는 OL
+      // 이 자동으로 숨김. 도심 밀집 지역에서 글자 충돌 회피.
+      layers: [baseLayer, new VectorLayer({ source: vectorSource, declutter: true })],
       view,
       controls: [],
     });
@@ -279,6 +281,8 @@ const PIN_COLORS: Record<NonNullable<MapMarker['variant']>, { base: string; sele
   muted: { base: '#94a3b8', selected: '#64748b' },
 };
 
+// 비선택은 작은 원형 dot (14×14), 선택만 핀 (32×48) 으로 강조 — 도심 밀집 지역
+// 에서 dot 깔끔 + 선택 한눈에. 앱(publicRestaurantsMapHtml) 과 동일 디자인.
 const makeMarkerStyle = (
   label: string | undefined,
   selected: boolean,
@@ -286,26 +290,48 @@ const makeMarkerStyle = (
 ): Style => {
   const palette = PIN_COLORS[variant];
   const fill = selected ? palette.selected : palette.base;
-  const size = selected ? 40 : 32;
-  const height = selected ? 60 : 48;
+  if (selected) {
+    return new Style({
+      image: new Icon({
+        anchor: [0.5, 1],  // 핀 꼭지점이 좌표
+        scale: 1,
+        src:
+          'data:image/svg+xml;charset=utf-8,' +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">
+              <path fill="${fill}" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>
+              <circle fill="#fff" cx="16" cy="16" r="6"/>
+            </svg>
+          `),
+      }),
+      text: label
+        ? new OlText({
+            text: label,
+            offsetY: -54,
+            font: 'bold 12px sans-serif',
+            fill: new Fill({ color: '#0f172a' }),
+            stroke: new Stroke({ color: '#fff', width: 3 }),
+          })
+        : undefined,
+    });
+  }
   return new Style({
     image: new Icon({
-      anchor: [0.5, 1],
+      anchor: [0.5, 0.5],  // 원 중심이 좌표
       scale: 1,
       src:
         'data:image/svg+xml;charset=utf-8,' +
         encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 32 48">
-            <path fill="${fill}" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>
-            <circle fill="#fff" cx="16" cy="16" r="6"/>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
+            <circle fill="${fill}" stroke="#fff" stroke-width="2" cx="9" cy="9" r="7"/>
           </svg>
         `),
     }),
     text: label
       ? new OlText({
           text: label,
-          offsetY: -(height + 6),
-          font: `${selected ? 'bold ' : ''}12px sans-serif`,
+          offsetY: 16,  // dot 중심에서 아래
+          font: '11px sans-serif',
           fill: new Fill({ color: '#0f172a' }),
           stroke: new Stroke({ color: '#fff', width: 3 }),
         })
