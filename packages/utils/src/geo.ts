@@ -28,3 +28,19 @@ export const computeBboxAround = (center: LatLng, radiusKm: number): Bbox => {
     maxLat: center.lat + latDelta,
   };
 };
+
+// vworld 타일은 한국 영토만 커버 — 시뮬레이터/실 사용자 좌표가 한국 밖이면
+// 타일 전부 404 가 떨어진다. bbox 는 본토·제주·울릉 포함 넉넉히 잡음.
+// (북쪽 38.7 은 휴전선 이남 — 북한은 어차피 데이터 없음.)
+const KOREA_BBOX: Bbox = {
+  minLng: 124.5,
+  minLat: 33.0,
+  maxLng: 131.9,
+  maxLat: 38.7,
+};
+
+export const isInKorea = (coords: LatLng): boolean =>
+  coords.lat >= KOREA_BBOX.minLat &&
+  coords.lat <= KOREA_BBOX.maxLat &&
+  coords.lng >= KOREA_BBOX.minLng &&
+  coords.lng <= KOREA_BBOX.maxLng;

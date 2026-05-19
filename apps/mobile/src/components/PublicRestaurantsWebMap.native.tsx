@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { ApiError, useMapPublicConfig, useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import { buildPublicRestaurantsMapHtml } from './publicRestaurantsMapHtml';
+import type {
+  UserLocationResult,
+  UserLocationStatus,
+} from '~/hooks/useUserLocationNative';
 
 interface Marker {
   id: string;
@@ -27,6 +39,19 @@ interface Props {
   // 들이 시작할 y 픽셀. 부모는 보통 insets.top + 헤더 카드 높이 를 넘겨,
   // 카드 바로 아래에서 버튼들이 12px 간격으로 깔리게 한다.
   topInset?: number;
+  // 부모가 권한 결정 후 확정한 시작 좌표. HTML 에 박혀 들어가 WebView 가
+  // mount 되면서 처음부터 이 위치로 그려진다. 부모가 권한 결과를 받기 전
+  // 이 컴포넌트를 mount 하지 않는 게 원칙 — 그래야 WebView 자체가
+  // unmount/remount 안 되어 worklets 충돌이 없음.
+  initialCenter: { lat: number; lng: number };
+  // 외부에서 주입하는 중심 좌표(예: 사용자 geolocation 재요청 결과). 참조가
+  // 새로워질 때마다 flyTo. null/undefined 면 무시.
+  focusCoord?: { lat: number; lng: number } | null;
+  // "내 위치" 버튼 표시/상태/콜백. undefined 면 버튼 자체 숨김.
+  // onRequestLocation 은 결과를 Promise 로 반환 — denied/unavailable 상태에서
+  // 클릭 시 silent refetch 결과로 분기하려면 await 가능해야 한다.
+  locationStatus?: UserLocationStatus;
+  onRequestLocation?: () => Promise<UserLocationResult>;
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
@@ -44,6 +69,10 @@ export const PublicRestaurantsWebMap = ({
   selectedPlaceId,
   appliedBbox,
   topInset = 0,
+  initialCenter,
+  focusCoord,
+  locationStatus,
+  onRequestLocation,
   onSelectMarker,
   onResearchInArea,
   onClearArea,
@@ -73,10 +102,20 @@ export const PublicRestaurantsWebMap = ({
     [items],
   );
 
-  const html = useMemo(
-    () => (apiKey ? buildPublicRestaurantsMapHtml(apiKey) : ''),
-    [apiKey],
-  );
+  // HTML 은 apiKey + initialCenter 가 확정된 시점에 한 번 만들어진다. 이후
+  // initialCenter 가 바뀌어도 (드물게) HTML 은 새로 만들지 않음 — WebView
+  // 재마운트는 worklets 충돌 위험. 추가 이동은 __flyTo 로.
+  const initialHtmlRef = useRef<{ key: string; html: string } | null>(null);
+  const html = useMemo(() => {
+    if (!apiKey) return '';
+    if (initialHtmlRef.current && initialHtmlRef.current.key === apiKey) {
+      return initialHtmlRef.current.html;
+    }
+    const built = buildPublicRestaurantsMapHtml(apiKey, initialCenter);
+    initialHtmlRef.current = { key: apiKey, html: built };
+    return built;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey]);
 
   // markers 와 selection 채널을 분리. selection 변경 시 vectorSource.clear() +
   // N 개 feature 재생성을 피하기 위함 — Web 측 __setSelected 는 prev/next 두
@@ -92,6 +131,14 @@ export const PublicRestaurantsWebMap = ({
     const payload = JSON.stringify(selectedPlaceId);
     webRef.current.injectJavaScript(`window.__setSelected(${payload}); true;`);
   }, [ready, selectedPlaceId]);
+
+  // focusCoord 참조가 바뀌면 fly. "내 위치" 재요청 시 부모가 새 객체로 넘겨
+  // 같은 좌표여도 다시 fly (idempotent — 이미 같은 중심이면 시각 변화 없음).
+  useEffect(() => {
+    if (!ready || !webRef.current || !focusCoord) return;
+    const payload = JSON.stringify({ lat: focusCoord.lat, lng: focusCoord.lng });
+    webRef.current.injectJavaScript(`window.__flyTo(${payload}); true;`);
+  }, [ready, focusCoord]);
 
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
@@ -115,6 +162,33 @@ export const PublicRestaurantsWebMap = ({
     },
     [onSelectMarker],
   );
+
+  // hook 순서 보존을 위해 early return 이전에 선언.
+  // 사용자가 설정에서 권한 풀고 돌아온 경우 locationStatus 는 아직 stale
+  // ('denied'). 무조건 refetch 를 먼저 호출해 시스템에 다시 묻고, 그 결과로
+  // 분기 — granted 면 자동으로 focusCoord 갱신 (부모 effect), 여전히 막혀
+  // 있으면 Alert + Linking.openSettings() 로 안내.
+  const handleLocationPress = useCallback(async () => {
+    if (!onRequestLocation) return;
+    const result = await onRequestLocation();
+    if (result.status === 'granted') return;
+    if (result.status === 'pending' || result.status === 'idle') return;
+    const message =
+      result.status === 'denied'
+        ? '위치 권한이 꺼져 있어요. 설정에서 허용한 뒤 다시 시도해 주세요.'
+        : '이 환경에서는 위치를 사용할 수 없어요. 설정을 확인해 주세요.';
+    Alert.alert('위치 권한 필요', message, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '설정 열기',
+        onPress: () => {
+          // openSettings 는 Promise 를 반환하지만 실패해도 사용자에게 다시
+          // alert 띄울 만큼은 아님 — 그냥 무시.
+          Linking.openSettings().catch(() => {});
+        },
+      },
+    ]);
+  }, [onRequestLocation]);
 
   if (config.isLoading) {
     return (
@@ -147,6 +221,10 @@ export const PublicRestaurantsWebMap = ({
   }
 
   const showResearch = pendingBbox !== null && pendingBbox !== appliedBbox;
+  const showLocation = !!onRequestLocation && !!locationStatus;
+  // pending 만 disabled (응답 대기). denied/unavailable 은 클릭 가능 — 시스템
+  // 설정으로 안내. 한 번 거부한 사용자가 마음 바꿀 길을 열어둔다.
+  const locationDisabled = locationStatus === 'pending';
 
   return (
     <View style={styles.container}>
@@ -191,24 +269,48 @@ export const PublicRestaurantsWebMap = ({
         </Pressable>
       )}
 
-      {appliedBbox && (
-        <Pressable
-          onPress={() => {
-            onClearArea();
-            setPendingBbox(null);
-          }}
-          style={[
-            styles.clearAreaBtn,
-            {
-              top: 12 + topInset,
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.clearAreaText, { color: theme.colors.text }]}>전체 영역</Text>
-        </Pressable>
-      )}
+      {/* 우측 상단 컨트롤 — 가로 배치. "전체 영역"(왼쪽) + "내 위치"(오른쪽). */}
+      <View style={[styles.topRightRow, { top: 12 + topInset }]}>
+        {appliedBbox && (
+          <Pressable
+            onPress={() => {
+              onClearArea();
+              setPendingBbox(null);
+            }}
+            style={[
+              styles.clearAreaBtn,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.clearAreaText, { color: theme.colors.text }]}>전체 영역</Text>
+          </Pressable>
+        )}
+        {showLocation && (
+          <Pressable
+            onPress={handleLocationPress}
+            disabled={locationDisabled}
+            style={[
+              styles.locationBtn,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                // denied/unavailable 은 클릭 가능하므로 흐리게 표시하지 않음.
+                // 시각적으로 "막혔다"가 아니라 "다른 동작" 임을 암시.
+                opacity: 1,
+              },
+            ]}
+          >
+            {locationStatus === 'pending' ? (
+              <ActivityIndicator size="small" color={theme.colors.text} />
+            ) : (
+              <Text style={styles.locationIcon}>📍</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 };
@@ -251,14 +353,28 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   researchBtnText: { fontSize: 13, fontWeight: '600' },
-  clearAreaBtn: {
+  topRightRow: {
     position: 'absolute',
     right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearAreaBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
   },
   clearAreaText: { fontSize: 12, fontWeight: '500' },
+  locationBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // iOS/Android 둘 다 기본 system emoji 폰트로 렌더. svg 의존성 없음.
+  locationIcon: { fontSize: 16, lineHeight: 18 },
 });
-

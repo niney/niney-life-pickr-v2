@@ -27,6 +27,15 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-font',
     'react-native-bottom-tabs',
+    // CNG 가 Info.plist 의 NSLocationWhenInUseUsageDescription / Android
+    // ACCESS_*_LOCATION 권한을 자동 주입. ios/ 는 gitignored 라 prebuild 가
+    // 다시 돌 때마다 키를 박아 줘야 expo-location 이 crash 안 함.
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission: '주변 식당을 보여주기 위해 위치를 사용합니다.',
+      },
+    ],
     './plugins/with-swift-concurrency-fix',
     './plugins/with-android-minify',
   ],

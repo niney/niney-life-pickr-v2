@@ -3,6 +3,10 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { ApiError, useMapPublicConfig, useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import { buildPublicRestaurantsMapHtml } from './publicRestaurantsMapHtml';
+import type {
+  UserLocationResult,
+  UserLocationStatus,
+} from '~/hooks/useUserLocationNative';
 
 interface Marker {
   id: string;
@@ -23,6 +27,10 @@ interface Props {
   selectedPlaceId: string | null;
   appliedBbox: string | null;
   topInset?: number;
+  initialCenter: { lat: number; lng: number };
+  focusCoord?: { lat: number; lng: number } | null;
+  locationStatus?: UserLocationStatus;
+  onRequestLocation?: () => Promise<UserLocationResult>;
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
@@ -41,6 +49,10 @@ export const PublicRestaurantsWebMap = ({
   selectedPlaceId,
   appliedBbox,
   topInset = 0,
+  initialCenter,
+  focusCoord,
+  locationStatus,
+  onRequestLocation,
   onSelectMarker,
   onResearchInArea,
   onClearArea,
@@ -69,10 +81,20 @@ export const PublicRestaurantsWebMap = ({
     [items],
   );
 
-  const html = useMemo(
-    () => (apiKey ? buildPublicRestaurantsMapHtml(apiKey) : ''),
-    [apiKey],
-  );
+  // HTML 은 apiKey 가 처음 들어온 시점의 initialCenter 로 한 번만 빌드. 이후
+  // 부모가 새 center 를 줘도 iframe 자체는 재마운트하지 않음 (가능하면 web 도
+  // 동일 안정성 패턴 유지). 추가 이동은 flyTo 메시지로.
+  const initialHtmlRef = useRef<{ key: string; html: string } | null>(null);
+  const html = useMemo(() => {
+    if (!apiKey) return '';
+    if (initialHtmlRef.current && initialHtmlRef.current.key === apiKey) {
+      return initialHtmlRef.current.html;
+    }
+    const built = buildPublicRestaurantsMapHtml(apiKey, initialCenter);
+    initialHtmlRef.current = { key: apiKey, html: built };
+    return built;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey]);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -102,6 +124,16 @@ export const PublicRestaurantsWebMap = ({
       '*',
     );
   }, [ready, markers, selectedPlaceId]);
+
+  useEffect(() => {
+    if (!ready || !focusCoord) return;
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(
+      JSON.stringify({ type: 'flyTo', lat: focusCoord.lat, lng: focusCoord.lng }),
+      '*',
+    );
+  }, [ready, focusCoord]);
 
   // hook 순서 보존을 위해 early return 이전에 선언.
   const handleResearchPress = useCallback(() => {
@@ -141,6 +173,11 @@ export const PublicRestaurantsWebMap = ({
   }
 
   const showResearch = pendingBbox !== null && pendingBbox !== appliedBbox;
+  const showLocation = !!onRequestLocation && !!locationStatus;
+  const locationDisabled =
+    locationStatus === 'pending' ||
+    locationStatus === 'denied' ||
+    locationStatus === 'unavailable';
 
   return (
     <View style={styles.container}>
@@ -181,24 +218,45 @@ export const PublicRestaurantsWebMap = ({
         </Pressable>
       )}
 
-      {appliedBbox && (
-        <Pressable
-          onPress={() => {
-            onClearArea();
-            setPendingBbox(null);
-          }}
-          style={[
-            styles.clearAreaBtn,
-            {
-              top: 12 + topInset,
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.clearAreaText, { color: theme.colors.text }]}>전체 영역</Text>
-        </Pressable>
-      )}
+      <View style={[styles.topRightRow, { top: 12 + topInset }]}>
+        {appliedBbox && (
+          <Pressable
+            onPress={() => {
+              onClearArea();
+              setPendingBbox(null);
+            }}
+            style={[
+              styles.clearAreaBtn,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.clearAreaText, { color: theme.colors.text }]}>전체 영역</Text>
+          </Pressable>
+        )}
+        {showLocation && (
+          <Pressable
+            onPress={onRequestLocation}
+            disabled={locationDisabled}
+            style={[
+              styles.locationBtn,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                opacity: locationDisabled && locationStatus !== 'pending' ? 0.5 : 1,
+              },
+            ]}
+          >
+            {locationStatus === 'pending' ? (
+              <ActivityIndicator size="small" color={theme.colors.text} />
+            ) : (
+              <Text style={styles.locationIcon}>📍</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 };
@@ -217,7 +275,6 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   placeholderText: { fontSize: 13, textAlign: 'center' },
-  // top 은 인라인으로 동적 주입 (12 + topInset).
   toast: {
     position: 'absolute',
     left: 12,
@@ -235,13 +292,27 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   researchBtnText: { fontSize: 13, fontWeight: '600' },
-  clearAreaBtn: {
+  topRightRow: {
     position: 'absolute',
     right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearAreaBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
   },
   clearAreaText: { fontSize: 12, fontWeight: '500' },
+  locationBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationIcon: { fontSize: 16, lineHeight: 18 },
 });

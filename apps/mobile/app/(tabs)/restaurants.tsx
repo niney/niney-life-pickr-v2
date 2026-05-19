@@ -21,6 +21,7 @@ import BottomSheet, {
   type BottomSheetBackgroundProps,
 } from '@gorhom/bottom-sheet';
 import { useRestaurantsPublic, useTheme } from '@repo/shared';
+import { isInKorea } from '@repo/utils';
 import type {
   RestaurantPublicListItemType,
   RestaurantPublicListQueryType,
@@ -29,9 +30,12 @@ import { PublicRestaurantCard } from '~/components/PublicRestaurantCard';
 import { PublicRestaurantsWebMap } from '~/components/PublicRestaurantsWebMap';
 import { RestaurantsFloatingHeader } from '~/components/RestaurantsFloatingHeader';
 import { PublicRestaurantDetail } from '~/components/restaurantDetail/PublicRestaurantDetail';
+import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
 const PAGE_SIZE = 60;
+// 권한 거부/한국 밖일 때 폴백 — 서울시청.
+const SEOUL: { lat: number; lng: number } = { lat: 37.5665, lng: 126.978 };
 // gorhom 의 % snap 은 (screenH - topInset) 기준 — '100%' 는 topInset 바로
 // 아래까지 차서 헤더 sticky 와 시트가 맞붙는다.
 const SNAP_POINTS = ['20%', '50%', '100%'];
@@ -53,6 +57,67 @@ export default function RestaurantsScreen() {
   const [bbox, setBbox] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<RestaurantPublicListItemType[]>([]);
+
+  // 권한 체크는 vworld 초기화(WebView mount) 전에 끝낸다. resolved 가 되기
+  // 전에는 단순 View+Text 로딩 화면 — WebView 가 mount 안 됨 → 마운트 후
+  // unmount/remount swap 이 reanimated worklet 와 충돌하던 이전 버그 회피.
+  // 페이지 진입 시 한 번 트리거. refetch 는 "내 위치" 버튼에서.
+  const userLoc = useUserLocationNative();
+  const triggeredRef = useRef(false);
+  useEffect(() => {
+    if (triggeredRef.current) return;
+    triggeredRef.current = true;
+    userLoc.refetch();
+  }, [userLoc]);
+
+  // resolved: 권한 결과가 확정된 상태. idle/pending 동안엔 WebView 안 띄움.
+  const resolved =
+    userLoc.status === 'granted' ||
+    userLoc.status === 'denied' ||
+    userLoc.status === 'unavailable';
+
+  // 시작 좌표: granted + 한국 안 → 사용자 좌표 / 그 외 → 서울.
+  // vworld 가 한국 영토만 커버해서 한국 밖 좌표는 타일 전부 404.
+  const usableUserCoords =
+    userLoc.status === 'granted' &&
+    userLoc.coords &&
+    isInKorea(userLoc.coords)
+      ? userLoc.coords
+      : null;
+  const initialCenter = usableUserCoords ?? SEOUL;
+
+  // focusCoord — 사용자가 "내 위치" 재요청해서 결과가 들어오면 flyTo. 첫 진입
+  // 의 initialCenter 는 HTML 에 박혀 처리되므로 여기선 null 로 두고, 이후
+  // refetch 결과(granted든 denied든)로 새 객체가 들어오면 발사.
+  const [focusCoord, setFocusCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const manualRequestRef = useRef(false);
+  useEffect(() => {
+    if (!manualRequestRef.current) return;
+    // pending/idle 동안은 대기 — 결과 도착 시 한 번에 결정.
+    if (userLoc.status === 'pending' || userLoc.status === 'idle') return;
+    manualRequestRef.current = false;
+    // granted + 한국 좌표면 그쪽으로, 그 외(denied/unavailable/한국 밖)면 서울
+    // 로 fly — 이전 granted 좌표가 화면에 떠 있던 채로 권한 잃으면 시각적으로
+    // 권한 박탈을 반영해줘야 한다 (안 그러면 사용자가 "내 위치 됐다"고 오해).
+    // 새 객체로 발사해야 flyTo effect 가 ref 변경 감지함.
+    if (
+      userLoc.status === 'granted' &&
+      userLoc.coords &&
+      isInKorea(userLoc.coords)
+    ) {
+      setFocusCoord({ lat: userLoc.coords.lat, lng: userLoc.coords.lng });
+    } else {
+      setFocusCoord({ ...SEOUL });
+    }
+  }, [userLoc.status, userLoc.coords]);
+
+  // Promise<UserLocationResult> 를 그대로 패스 — 호출자(PublicRestaurantsWebMap)
+  // 가 await 해서 분기 (denied 상태에서 시스템 설정 다녀온 사용자가 클릭한
+  // 경우 silent refetch 로 풀리거나, 여전히 막혀 있으면 Alert).
+  const handleRequestLocation = useCallback(() => {
+    manualRequestRef.current = true;
+    return userLoc.refetch();
+  }, [userLoc]);
 
   // detail 표시 여부는 placeId 존재로 판단. 별도 view 상태 불필요.
   const [placeId, setPlaceId] = useState<string | null>(null);
@@ -211,6 +276,24 @@ export default function RestaurantsScreen() {
     [],
   );
 
+  // 권한 미해결 단계 — 단순 View+Text 로딩만. reanimated/svg 없는 순정
+  // 컴포넌트라 worklets 충돌 없음. resolved 이후엔 같은 트리에 WebView mount.
+  if (!resolved) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.bootCenter,
+          { backgroundColor: theme.colors.bg },
+        ]}
+      >
+        <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>
+          위치 확인 중…
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       <PublicRestaurantsWebMap
@@ -218,6 +301,10 @@ export default function RestaurantsScreen() {
         selectedPlaceId={placeId}
         appliedBbox={bbox}
         topInset={mapTopInset}
+        initialCenter={initialCenter}
+        focusCoord={focusCoord}
+        locationStatus={userLoc.status}
+        onRequestLocation={handleRequestLocation}
         onSelectMarker={handleSelect}
         onResearchInArea={handleResearchInArea}
         onClearArea={handleClearArea}
@@ -377,6 +464,7 @@ const SheetBackground = ({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  bootCenter: { alignItems: 'center', justifyContent: 'center' },
   // detail 시트가 list 시트 위로 적층되도록 z 분리.
   listSheetContainer: { zIndex: 20 },
   detailSheetContainer: { zIndex: 30 },

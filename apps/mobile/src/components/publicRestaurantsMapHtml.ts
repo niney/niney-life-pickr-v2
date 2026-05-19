@@ -1,17 +1,29 @@
 import { buildVworldTileUrl } from '@repo/utils';
 
+export interface MapInitialCenter {
+  lat: number;
+  lng: number;
+}
+
 // 지도 WebView/iframe 에 주입할 HTML. native 는 react-native-webview, web 은
 // <iframe srcDoc> 으로 같은 HTML 을 띄운다. post 함수는 두 컨텍스트 모두 지원:
 //   - native WebView: window.ReactNativeWebView.postMessage(string)
 //   - iframe in web : window.parent.postMessage(string, '*')
 // 부모 → 인스턴스 데이터 푸시:
-//   - native: WebView.injectJavaScript("window.__setMarkers(...) / __setSelected(...)")
+//   - native: WebView.injectJavaScript("window.__setMarkers(...) / __setSelected(...) / __flyTo(...)")
 //   - web   : iframe.contentWindow.postMessage({ type:'setData', ... })
 //     → HTML 안에서 message 리스너가 받아 라우팅.
 // 채널을 marker / selected 로 나눈 이유: 기존 __setData 가 selection 한 번
 // 바꿀 때마다 vectorSource.clear() + N 개 feature 재생성이 일어나 비쌌다.
 // 분리하면 selection 변경은 prev/next 두 setStyle 만으로 끝난다.
-export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
+//
+// initialCenter: 부모가 권한 결정 후 확정한 시작 좌표 (granted → 사용자 위치,
+// denied → 서울시청). 마커가 들어와도 자동 fit 하지 않으므로 첫 화면이 흔들리지
+// 않는다. "내 위치" 같은 이동은 __flyTo 메시지로 명시 호출.
+export const buildPublicRestaurantsMapHtml = (
+  apiKey: string,
+  initialCenter: MapInitialCenter = { lat: 37.5665, lng: 126.978 },
+): string => {
   const tileUrl = buildVworldTileUrl(apiKey, 'Base');
   return `<!doctype html>
 <html>
@@ -57,8 +69,8 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
     target: 'map',
     layers: [baseLayer, vectorLayer],
     view: new ol.View({
-      center: ol.proj.fromLonLat([126.978, 37.5665]),
-      zoom: 13,
+      center: ol.proj.fromLonLat([${initialCenter.lng}, ${initialCenter.lat}]),
+      zoom: 15,
     }),
     controls: [],
   });
@@ -116,13 +128,6 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
     return new ol.style.Style(styleObj);
   }
 
-  function fitToMarkers() {
-    var ext = vectorSource.getExtent();
-    if (!ext || !isFinite(ext[0])) return;
-    map.getView().fit(ext, { padding: [60,60,60,60], duration: 300, maxZoom: 17 });
-  }
-
-  var firstFit = false;
   var currentSelectedId = null;
 
   window.__setMarkers = function(payload) {
@@ -145,10 +150,8 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
       var sel = vectorSource.getFeatureById(currentSelectedId);
       if (sel) sel.setStyle(makePinStyle(sel.get('label'), true));
     }
-    if (!firstFit && markers.length > 0) {
-      firstFit = true;
-      setTimeout(fitToMarkers, 50);
-    }
+    // 자동 fit 없음 — 첫 진입의 중심은 부모가 initialCenter 로 결정. 마커가
+    // 늦게 들어와서 화면이 갑자기 옮겨가는 일을 막는다.
   };
 
   window.__setSelected = function(payload) {
@@ -164,6 +167,19 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
       var next = vectorSource.getFeatureById(nextId);
       if (next) next.setStyle(makePinStyle(next.get('label'), true));
     }
+  };
+
+  // "내 위치" 버튼 등에서 호출 — 부드럽게 중심 이동. 사용자가 패닝하지 않은
+  // 상태로 도착하므로 userInteracted 플래그는 건드리지 않음.
+  window.__flyTo = function(payload) {
+    var p = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    if (!p || typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+    var view = map.getView();
+    view.animate({
+      center: ol.proj.fromLonLat([p.lng, p.lat]),
+      zoom: typeof p.zoom === 'number' ? p.zoom : view.getZoom(),
+      duration: 400,
+    });
   };
 
   // 기존 호출자(예: iframe-in-web 의 postMessage type:setData) 호환 유지.
@@ -183,6 +199,7 @@ export const buildPublicRestaurantsMapHtml = (apiKey: string): string => {
     if (msg.type === 'setData') window.__setData(msg);
     else if (msg.type === 'setMarkers') window.__setMarkers(msg.markers || []);
     else if (msg.type === 'setSelected') window.__setSelected(msg.id);
+    else if (msg.type === 'flyTo') window.__flyTo(msg);
   });
 
   post({ type: 'ready' });
