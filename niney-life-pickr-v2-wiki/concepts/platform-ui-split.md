@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-05-07
-topics_connected: [shared, web, mobile, project-overview]
+last_compiled: 2026-05-19
+topics_connected: [shared, web, mobile, project-overview, utils, map]
 status: active
 ---
 
@@ -18,6 +18,8 @@ status: active
 - **2026-05-07** in [[../topics/mobile]]: shared UI 프리미티브 + expo-router로 RN-native 네비게이션 트리. 어드민 UI는 의도적으로 빠져 있음.
 - **2026-05-07** in [[../topics/project-overview]]: TECH_STACK.md "의도적으로 제외" 표에서 Tamagui/RN-Web 거부 명시 — "UI 통합 복잡도 > 이득". CLAUDE.md도 "플랫폼별 UI는 각각 `apps/web`, `apps/mobile`에" 규칙 명시.
 - **2026-05-14** in [[../topics/mobile]]: quad 패턴이 작동하려면 Metro resolver 가 플랫폼별 확장자를 우선 탐색해야 한다는 사실 표면화. 커스텀 `resolveRequest` 가 `./Foo.js` → `.ts`/`.tsx` 만 시도하던 시점에 native 빌드에서 `Comp.tsx`(=`.web` 셔틀)가 픽돼 `<h1>` Invariant 가 떴다. iOS → `.ios.tsx` → `.native.tsx` → `.tsx`, web → `.web.tsx` → `.tsx` 순서로 시도하도록 수정. 셔틀(`Comp.tsx`)이 `.web.tsx` 를 그대로 재export 하는 현재 구현에선 이 우선순위가 곧 quad 패턴의 작동 보장.
+- **2026-05-19** in [[../topics/shared]] / [[../topics/mobile]] / [[../topics/utils]] (`useUserLocation` 웹/네이티브 페어 + `@repo/utils/geo`): 같은 패턴이 **훅 레벨**로 확장. [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) 는 브라우저 `navigator.geolocation` + `Permissions API` 기반, [apps/mobile/src/hooks/useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts) 는 `expo-location` 기반. 인터페이스(`UserLocationState`: `{ status, coords, refetch }`) 가 같아 호출자(`PublicRestaurantsMap`/`PublicRestaurantsWebMap`) 가 import 만 다르고 코드는 동일. 공통 로직(좌표 → bbox 변환, 한국 영토 체크) 은 `@repo/utils/geo` 의 `computeBboxAround`/`isInKorea` 로 떼어내 양쪽 훅 호출자가 같이 소비. 인프라(navigator vs expo-location) 가 달라 한 줄 셔틀로 못 합쳐도, 인터페이스 동형 + 공통 산술 추출로 "분기 비용" 을 흡수.
+- **2026-05-19** in [[../topics/mobile]] / [[../topics/map]] (`PublicRestaurantsWebMap.native.tsx` + `publicRestaurantsMapHtml.ts` + `.web.tsx` quad 변형): 패턴의 **극단 인스턴스** — RN 이 OpenLayers 를 네이티브로 카리지 못해서, 네이티브는 WebView 안에 HTML(vworld WMTS + OpenLayers + 마커 클릭 → `window.ReactNativeWebView.postMessage` 브릿지) 을 통째로 주입. Expo Web 은 `.web.tsx` 가 web 컴포넌트(`PublicRestaurantsMap`) 를 그대로 재사용. 한 컴포넌트가 (1) 모바일 네이티브에서 WebView, (2) Expo Web 에서 web 컴포넌트, (3) Vite 웹에서 같은 web 컴포넌트 — 세 빌드에서 다른 인프라로 같은 표현을 낸다. UI 분기 경계가 컴포넌트 안의 한 글자가 아니라 **번들 자체** 일 수 있음을 보여준다.
 
 ## What This Means
 
@@ -38,3 +40,5 @@ status: active
 - [[../topics/web]]
 - [[../topics/mobile]]
 - [[../topics/project-overview]]
+- [[../topics/utils]]
+- [[../topics/map]]

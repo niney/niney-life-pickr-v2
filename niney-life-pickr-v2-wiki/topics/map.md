@@ -1,13 +1,15 @@
 ---
 topic: map
 type: codebase
-last_compiled: 2026-05-09
-source_count: 18
+last_compiled: 2026-05-19
+source_count: 21
 status: active
-aliases: [muted-marker, gray-pin, map-resize-observer, discover-map, registered-vs-search-marker]
+aliases: [muted-marker, gray-pin, map-resize-observer, discover-map, registered-vs-search-marker, webview-vworld, fly-to-zoom, marker-fly, selected-marker-pin, label-always-visible, location-fly-bbox, public-restaurants-webview-map]
 ---
 
 # map
+
+**2026-05-19 변경 흡수**: (1) **WebView 기반 모바일 지도** — RN 가 OpenLayers 를 네이티브로 카리지 못해 [PublicRestaurantsWebMap.native.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx) 가 WebView 안에 [publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 의 인라인 HTML(vworld WMTS + OpenLayers + 마커 클릭 → `window.ReactNativeWebView.postMessage` 브릿지) 주입. Expo Web 은 [.web.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) 로 web 컴포넌트 직접 재사용. (2) **위치 기반 첫 진입** — `MapCanvas`/`VWorldMap`/`PublicRestaurantsMap` 가 첫 진입 시 `useUserLocation` (브라우저) / `useUserLocationNative` (앱) + `computeBboxAround` 로 자동 fly. "내 위치" 버튼 추가. 한국 밖이면 `isInKorea` 폴백. (3) **마커 fly + zoom + 스타일 분기** — 리스트 선택 시 지도 자동 fly + zoom in, 비선택은 dot 만 / 선택은 핀 + 라벨 항상 표시. 모바일은 Reanimated 워클릿 폭주를 막기 위해 selection 채널과 marker 채널을 분리.
 
 ## Purpose [coverage: high -- 7 sources]
 

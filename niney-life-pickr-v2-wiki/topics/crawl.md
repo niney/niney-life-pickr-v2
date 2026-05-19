@@ -1,12 +1,15 @@
 ---
 topic: crawl
-last_compiled: 2026-05-17
+last_compiled: 2026-05-19
 status: active
+aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup]
 ---
 
 # crawl — 다중 출처 크롤러 (Naver Place + 캐치테이블 + 다이닝코드)
 
 `apps/friendly/src/modules/crawl/`에 위치한 어드민 전용 크롤러. Naver Place / 캐치테이블 / 다이닝코드 세 출처를 모두 다루며, 각 출처마다 어댑터 비용 분포가 다르다 (Naver = Playwright 풀세션, 캐치테이블 = Playwright 안에서 fetch 가로채기, 다이닝코드 = HTTP 직접). 잡 패턴도 4가지 — 단일 Naver 크롤(SSE), Naver/캐치테이블/다이닝코드 키워드 검색(동기), 다이닝코드 가게 저장(단일 동기), 다이닝코드 일괄 저장(SSE).
+
+**2026-05-19 변경 흡수 — 잡 단계별 영속 로그 시스템 도입**: 신규 [job-log.service.ts](../../apps/friendly/src/modules/crawl/job-log.service.ts) 가 모든 크롤+요약 단계의 로그를 (1) pino, (2) `prisma.crawlJobLog` DB, (3) `jobRegistry` SSE + 조건부 `summaryEventsBus` fan-out 까지 한 호출에 흘려보낸다. 모노톤 `seq` 카운터로 같은 로그가 두 SSE 양쪽에 가도 `(jobId, seq)` 로 클라이언트 dedup. `CrawlEvent` zod union 에 신규 `'log'` variant 추가 (`CrawlLogLevel: info|warn|error`, `stage`, `message`, `meta?`, `seq`, `at`). `crawl.service.ts` 가 페이지 로드/리뷰 적재/오류 등 모든 단계를 `channel: 'crawl'` 로 흘리고, `summary.service.ts` 는 LLM 단계(`summary_queue`/`summary_run`/`summary_chunk`/`summary_retry`/`summary_failed`) 를 `channel: 'summary'` 로 흘려보내 같은 잡의 크롤+요약 로그가 한 패널에서 보인다. 잡 종료 후에도 DB 의 `CrawlJobLog` 가 살아남아 패널 재진입 시 전체 로그 복원, 같은 placeId 의 재크롤 누적 로그는 상세 페이지 "크롤 로그" 아코디언이 cursor pagination 으로 가져온다. 자세한 건 [friendly 토픽](./friendly.md) 의 CrawlJobLog 시스템 / Data 섹션 참조.
 
 ## Purpose [coverage: high — 5 sources]
 

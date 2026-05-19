@@ -1,12 +1,14 @@
 ---
 topic: utils
-last_compiled: 2026-05-08
-sources_count: 6
+last_compiled: 2026-05-19
+sources_count: 7
 status: active
-aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnail-url]
+aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnail-url, geo, bbox, compute-bbox-around, is-in-korea, lat-lng]
 ---
 
 # utils — 순수 유틸 패키지
+
+**2026-05-19 변경 흡수 — geo 모듈 신규**: [geo.ts](../../packages/utils/src/geo.ts) 가 위경도 다루는 순수 유틸 한 파일로 추가. (1) `computeBboxAround(center: LatLng, radiusKm: number): Bbox` — 사용자 위치 주변 정사각형 bbox. 1° latitude ≈ 111.32 km 평균 + cos(lat) longitude 보정. 짧은 거리(≤수 km) 정사각 근사로 Haversine 등 측지 거리 불필요. (2) `isInKorea(coords): boolean` — vworld 타일 가드 (본토·제주·울릉 포함 124.5~131.9 lng, 33.0~38.7 lat). 시뮬레이터/실 사용자가 한국 밖이면 vworld 타일이 전부 404 떨어지므로 폴백 트리거. `LatLng`/`Bbox` 인터페이스 export — 웹(`useUserLocation`) 과 앱(`useUserLocationNative`) 양쪽이 같은 모양으로 소비.
 
 ## Purpose [coverage: high — 2 sources]
 

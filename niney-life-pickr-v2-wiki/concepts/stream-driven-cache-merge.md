@@ -1,6 +1,6 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-05-17
+last_compiled: 2026-05-19
 topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics, auto-discover]
 status: active
 ---
@@ -24,6 +24,7 @@ status: active
 - **2026-05-17** in [[../topics/auto-discover]] / [[../topics/shared]] (`packages/shared/src/hooks/useAutoDiscover.ts` `useAutoDiscoverJob(jobId)`): 자동 발견 잡 진행. `snapshot` 통째 set, `keyword` 이벤트로 8칸 키워드 패치, `candidate` 이벤트로 후보 patch + **클라가 자체적으로 `newlyRegistered` 재계산** (서버 phase 이벤트 도착 전에도 진행률 즉시 반영), `phase` 이벤트로 단계+카운트 동기화, `done`은 `['restaurant','list']`/`['restaurant','public','list']`/`['canonical','proposals']` invalidate. bulk-save·grouping 의 머지 패턴을 그대로 카피했지만 **클라 자체 카운트 계산** 추가 — 이벤트 도착 순서가 어긋나도 진행률은 candidate done 기준으로 정직. 같은 머지 인프라가 도메인별 강조점 한 칸씩 늘리며 흡수되는 사례.
 - **2026-05-17** in [[../topics/shared]] / [[../topics/friendly]] (`summarySseManager.ts` + `useRestaurant.ts` 스냅샷 보호): 머지의 **반대 방향 함정 패치** — SSE `snapshot` 이벤트가 들어왔을 때 list 캐시의 합산 카운트(DC 형제 합)를 덮어쓰지 않도록 머지 정책을 `(snap, prev) => merged` 형태로 변경. snapshot 이 가진 데이터 일부가 client-augmented (백엔드 합산이 아닌 FE 머지 결과) 였다는 것이 드러난 케이스 — 머지 핸들러는 항상 `prev`를 인자로 받아 client-augmented 필드는 보존하도록 시그니처가 진화. 페이로드 완전성 vs client-augmentation 의 경계.
 - **2026-05-15** in [[../topics/crawl]] / [[../topics/shared]] (`packages/shared/src/hooks/useCrawl.ts` `useDiningcodeBulkSaveJob(jobId)`): 다이닝코드 일괄 저장 잡 진행. `snapshot`은 잡 캐시 통째 set, `item` 이벤트는 vRid 매치해 items 배열 patch + doneCount/failedCount/skippedCount 재계산, `done`은 state/finishedAt patch + `['crawl','diningcode-registered']`/`['restaurant','list']`/`['canonical','proposals']` 캐시 invalidate. menu-grouping의 `useGroupingJob` 과 거의 한 글자 다른 카피 — 패턴이 머지 카피되는 첫 사례. 어드민이 N개 vRid 일괄 저장 중 새 가게가 등록될 때마다 결과 카드의 '등록됨' 배지가 별도 GET 없이 갱신.
+- **2026-05-19** in [[../topics/crawl]] / [[../topics/friendly]] / [[../topics/api-contract]] / [[../topics/shared]] / [[../topics/web]] (CrawlJobLog 시스템 — `JobLogService` + `(jobId, seq)` Map dedup): 머지 패턴의 **로그 채널 적용** + **2-fan-out 1-dedup** 변형. 한 호출(`JobLogService.log`)이 (a) pino, (b) `prisma.crawlJobLog` DB 영속화, (c) `jobRegistry` SSE 채널, (d) (placeId 있으면) `summaryEventsBus` 양쪽으로 fan-out — 같은 모노톤 `seq` 가 박혀 클라가 `(jobId, seq)` Map 으로 단일 dedup. `useCrawl.logs[]` reducer 가 SSE 'log' 이벤트 받아 누적, `summarySseManager.subscribe({ onLog })` 콜백이 같은 채널 사용, `JobLogTab` 이 두 SSE 소스(crawl + summary) + DB 폴백(`useCrawlJobLogs` / `useRestaurantCrawlLogs` infiniteQuery) 세 소스를 같은 Map 으로 통합. 기존 머지 패턴이 "한 채널 → 한 캐시" 였다면, 이번엔 "한 origin 이벤트가 두 SSE 로 vector + 한 DB 로 영속 → 클라가 셋 다 같은 Map 으로 통합". `done` 이벤트 없는 영구 누적 케이스라 invalidate 카드도 없음 — `nextCursor` 페이지네이션이 그 역할 대체. 페이로드 설계가 머지를 가능케 하는 사례의 가장 강한 인스턴스: 서버가 한 ID 공간 (jobId, seq) 을 미리 발급해 멀티 채널 dedup 을 위탁 가능하게 만듦.
 
 ## What This Means
 

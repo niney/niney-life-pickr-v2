@@ -1,12 +1,20 @@
 ---
 topic: mobile
-last_compiled: 2026-05-14
-sources_count: 19
+last_compiled: 2026-05-19
+sources_count: 36
 status: active
-aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web]
+aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet]
 ---
 
 # mobile — Expo + React Native 앱
+
+**2026-05-14 ~ 2026-05-19 대규모 리빌드** — apps/mobile 가 사실상 새 앱으로 재구성. 다섯 큰 줄기:
+
+1. **네이티브 탭바 + dev client 워크플로 전환** — `expo-router` v4 의 네이티브 `(tabs)` 그룹 도입 ([app/(tabs)/_layout.tsx](../../apps/mobile/app/(tabs)/_layout.tsx)). Expo Go 가 아니라 dev client 가 기본 — `dev:mobile` 이 cocoapods/gradle 자동 동기화 + `expo run:ios/android`. `EXPO_PUBLIC_API_URL` 을 `process.env` 에서 직접 읽기 (이전엔 Constants 경유 — bare 환경에서 비어버림).
+2. **맛집 탭 통합 UX (네이버 지도 스타일)** — [app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx) 가 풀스크린 WebView 지도 + 바텀시트 + 상세 in-sheet 단일 트리. 시트 안에 list/detail 두 시트가 적층 (`list/detail 2-sheet stack` — list 스크롤 위치 복구 패턴). 신규 컴포넌트 12+ 종: [PublicRestaurantsWebMap.native.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx) + [.web.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) — 네이티브는 WebView 안에 [publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 의 인라인 HTML(vworld + OpenLayers) 주입, Expo Web 은 web 컴포넌트 그대로. [RestaurantsFloatingHeader](../../apps/mobile/src/components/RestaurantsFloatingHeader.tsx) + [PublicRestaurantCard](../../apps/mobile/src/components/PublicRestaurantCard.tsx) + [NotchFade](../../apps/mobile/src/components/NotchFade.tsx) (상단 노치 페이드). 상세는 [restaurantDetail/](../../apps/mobile/src/components/restaurantDetail/) 디렉터리에 `HomeTab`/`InfoTab`/`PhotosTab`/`ReviewsTab` + `Lightbox` + `shared/MenuGrid`/`ReviewCard`. Hero scroll snap + 탭 전환 시 snap 위치 유지 — 헤더는 스크롤러 밖으로 분리.
+3. **위치 기반 첫 진입** — [useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts) 가 `expo-location` 으로 권한 요청 + `enableHighAccuracy:false` 좌표 → `@repo/utils` 의 `computeBboxAround(coords, 1.5km)` 로 자동 fly. "내 위치" 버튼 + 한국 밖이면 `isInKorea` 폴백. 웹 페어 [useUserLocation](../../packages/shared/src/hooks/useUserLocation.ts) 와 디자인 동형(브라우저 navigator vs expo-location).
+4. **마커 fly + zoom + Reanimated 워클릿 폭주 fix** — 리스트 선택 시 지도 자동 fly + zoom in, 비선택 dot + 선택 핀 + 라벨 항상 표시 ([fc02964](https://github.com/niney/niney-life-pickr-v2/commit/fc02964)). bbox 자동 계산이 매 렌더 워클릿 폭주를 일으켜 selection 채널을 marker 채널과 분리.
+5. **빌드/플랫폼 최적화** — [plugins/with-android-minify.js](../../apps/mobile/plugins/with-android-minify.js) — Android release R8 minify + 리소스 shrink 강제. [plugins/with-swift-concurrency-fix.js](../../apps/mobile/plugins/with-swift-concurrency-fix.js) — Xcode 26 + RN 0.76 호환 Swift 5 강제 config plugin. Metro 콜드 스타트·이미지 렌더링 최적화 3종. 홈 새로고침 표시 안정화. 로그인/프로필 화면 디자인 — 홈/맛집과 동일한 safe-area 패턴.
 
 > 용어: 이 토픽은 **앱**(`apps/mobile`, Expo + RN)을 다룬다. "모바일"이라는 단어는 **웹**(`apps/web`)의 작은 화면 레이아웃을 가리키는 별도 개념이므로 본문에서는 항상 "앱"으로 표기 ([schema.md Terminology](../schema.md#terminology--웹--앱--모바일)).
 

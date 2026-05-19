@@ -1,12 +1,14 @@
 ---
 topic: project-overview
-last_compiled: 2026-05-17
-sources_count: 18
+last_compiled: 2026-05-19
+sources_count: 19
 status: active
-aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source, auto-dc-merge, sse-heartbeat, stale-summary-cleanup]
+aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source, auto-dc-merge, sse-heartbeat, stale-summary-cleanup, crawl-job-log, summary-queued-cancelled, summary-resume, app-level-singleton-plugin, mobile-native-tabs, dev-client, webview-vworld, location-first-entry, public-reviews-pagination]
 ---
 
 # project-overview — 모노레포 개요
+
+**2026-05-19 변경 흡수** — 다섯 큰 줄기로 흡수: (1) **잡 단계별 영속 로그 시스템** — `CrawlJobLog` 테이블 + `JobLogService` 가 모든 크롤+요약 단계를 pino + DB + 두 SSE(jobRegistry / summaryEventsBus) 로 동시 fan-out, `(jobId, seq)` 로 dedup. 어드민이 잡 진행 중 [진행도]/[로그] 탭 + 상세 페이지 "크롤 로그" 아코디언으로 실시간/과거 로그 통합 조회. (2) **요약 라이프사이클 6 상태** — `ReviewSummaryStatus` enum 이 queued/pending/running/done/failed/cancelled 6종. `queued` 가 큐잉 즉시 박혀 chain 휘발 윈도우를 ms 로 줄임 (이전 사고: placeId=36668856 가 446 리뷰 중 56 만 done, 381 missing). `cancelled` 는 어드민 "요약 중지" 결과 — 별도 "요약 재개" 라우트가 cancelled→queued flip. 부팅 시 `cleanupStaleReviewSummaries` + `rescheduleStaleSummaries` 가 stale 행 정리 + 자동 재큐잉 (server_restart errorCode). (3) **`plugins/summaries.ts` 전역 singleton 패턴** — SummaryService/JobLogService/AiConfigService 셋을 `fastify-plugin` 으로 app.decorate, 라우트별 인스턴스 분리 시 발생하던 cancel/chain race 해소. (4) **공개 맛집 위치 기반 첫 진입 + WebView 지도** — `useUserLocation` (웹) / `useUserLocationNative` (앱) + `@repo/utils/geo` 의 `computeBboxAround`/`isInKorea`. 모바일은 RN 안의 WebView 안 vworld HTML 주입 패턴 — RN 가 OpenLayers 네이티브 비호환 회피. (5) **모바일 v2 리빌드 + 공개 웹 v2** — 모바일은 네이티브 탭바 + dev client 워크플로 + 맛집 탭 통합(지도+바텀시트+상세 in-sheet) + R8 minify + Swift concurrency plugin. 웹은 `/restaurants-v2` 라우트 + restaurant-v2/BottomSheet + detail/ 디렉터리 — 모바일과 같은 컴포넌트 트리 공유. 공개 리뷰는 첫 페이지만 detail 동봉 + 추가 페이지 별도 endpoint 로 분리.
 
 루트 레벨에서 본 niney-life-pickr-v2 — "선택을 대신 골라주는 서비스" — 의 구조, 워크플로, 공통 규칙을 한 페이지로 정리한다. 공개 영역(사용자 대상 페이지) 과 어드민 영역(운영 도구) 으로 나뉘며, 양쪽 모두 단일 백엔드를 공유한다. 개별 모듈에 대한 자세한 내용은 각 토픽 문서로.
 

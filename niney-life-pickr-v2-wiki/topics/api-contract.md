@@ -1,12 +1,14 @@
 ---
 topic: api-contract
-last_compiled: 2026-05-17
+last_compiled: 2026-05-19
 sources_count: 17
 status: active
-aliases: [zod, schemas, ssot, contracts, "@repo/api-contract", canonical, canonical-merge, canonical-split, canonical-proposal, canonical-suggestion, catchtable, catchtable-search, catchtable-shop, diningcode, diningcode-search, diningcode-shop, diningcode-bulk-save, naver-search-result, crawl-search-query, crawl-search-result, search-bbox, auto-discover, auto-discover-job, auto-discover-phase, auto-discover-snapshot, fused-detail, public-sources, public-diningcode-addon]
+aliases: [zod, schemas, ssot, contracts, "@repo/api-contract", canonical, canonical-merge, canonical-split, canonical-proposal, canonical-suggestion, catchtable, catchtable-search, catchtable-shop, diningcode, diningcode-search, diningcode-shop, diningcode-bulk-save, naver-search-result, crawl-search-query, crawl-search-result, search-bbox, auto-discover, auto-discover-job, auto-discover-phase, auto-discover-snapshot, fused-detail, public-sources, public-diningcode-addon, crawl-log, crawl-log-level, crawl-job-log-entry, review-summary-queued, review-summary-cancelled, restaurant-cancel-summary, restaurant-resume-summary, summary-log-event, public-reviews-pagination, public-review-sentiment, public-review-sort]
 ---
 
 # api-contract — Zod 공유 스키마 (SSOT)
+
+**2026-05-19 변경 흡수**: (1) `crawl.ts` — `CrawlLogLevel` enum (`info|warn|error`) + `CrawlEvent` discriminated union 에 신규 `'log'` variant + `CrawlJobLogEntry`/`CrawlJobLogsQuery`/`CrawlJobLogsResult` 영속 로그 페이지네이션 스키마 추가. (2) `restaurant.ts` — `ReviewSummaryStatus` enum 이 4종→**6종** (queued/pending/running/done/failed/cancelled, 신규 enum 값 `queued`/`cancelled`), `RestaurantSummaryProgress` 에 `queued`/`cancelled` 카운트 필드 추가, 신규 `RestaurantCancelSummaryResult` + `RestaurantResumeSummaryResult` 응답 페어, `RestaurantSummaryLogEvent` (SSE log 이벤트) 추가, 공개 리뷰 페이지네이션 분리(`RestaurantPublicReviewsQuery`/`Result` + `RestaurantPublicReviewSentiment`/`Sort` enum). `RestaurantPublicDetail` 의 `reviews: PublicVisitorReview[]` → `reviewsFirstPage` + `reviewCounts: { all, positive, negative }` 로 변경 — 첫 페이지만 detail 동봉, 추가 페이지는 별도 endpoint. `PublicVisitorReview` 분리 (어드민의 운영 메타 제거된 공개 응답 모델). (3) `routes.ts` — `Routes.Crawl.jobLogs(:id)`, `Routes.Restaurant.crawlLogs(:placeId)`/`cancelSummary(:placeId)`/`resumeSummary(:placeId)`/`publicReviews(:placeId)` 추가.
 
 `@repo/api-contract` 은 모노레포 전체의 API I/O 단일 진실 공급원(Single Source of Truth)이다.
 서버(friendly)와 클라이언트(web/mobile, `@repo/shared` 경유) 양쪽이 동일한 Zod 스키마와

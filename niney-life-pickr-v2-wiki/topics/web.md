@@ -1,12 +1,14 @@
 ---
 topic: web
-last_compiled: 2026-05-17
-sources_count: 65
+last_compiled: 2026-05-19
+sources_count: 68
 status: active
-aliases: [vite, react, web-app, frontend-web, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button]
+aliases: [vite, react, web-app, frontend-web, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination]
 ---
 
 # web — Vite + React 웹 앱
+
+**2026-05-19 변경 흡수** — 세 가지 큰 줄기: (A) **요약 운영 UI**: `SummaryProgressSection` (`sections.tsx`) 에 "요약 중지"(`StopCircle`) / "요약 재개"(`PlayCircle`) 버튼 + 큐/대기/진행/완료/실패/중지/누락(amber) 7배지, 누락 = `totalReviews - accountedFor` (chain 휘발 잔여 표식). `ActiveJobPanel` 이 [진행도]/[로그] 탭 분리 + 신규 [JobLogTab.tsx](../../apps/web/src/components/restaurant/JobLogTab.tsx) — 크롤 SSE + 요약 SSE + DB 폴백 세 소스를 `(jobId, seq)` Map 으로 dedup 후 통합 렌더. 신규 [RestaurantCrawlLogsSection.tsx](../../apps/web/src/components/restaurant/RestaurantCrawlLogsSection.tsx) 아코디언 — 상세 페이지에서 placeId 단위 누적 로그를 lazy fetch + LIVE Radio 배지 + `useRestaurantSummaryEvents(open ? placeId : null, { onLog })` 로 실시간 추가. `AdminRestaurantDetailPage` 가 카드 가시성 조건 확장 (`summaryInFlight > 0 || cancelled > 0`) + `useCancelSummary`/`useResumeSummary` mutation 두 confirm dialog 연결. (B) **공개 맛집 v2 + 위치 기반 진입**: 신규 [RestaurantsV2Page.tsx](../../apps/web/src/routes/RestaurantsV2Page.tsx) + [restaurant-v2/BottomSheet.tsx](../../apps/web/src/components/restaurant-v2/BottomSheet.tsx) — 풀스크린 지도 + 바텀시트(드래그 스냅 3단계) + 시트 안 상세 in-place 전환 패턴. `PublicRestaurantsMap` 가 첫 진입 시 `useUserLocation` + `computeBboxAround(coords, 1.5km)` 로 자동 fly + "내 위치" 버튼 추가, 한국 밖이면 `isInKorea` 가드. 신규 [RestaurantDetailRoute.tsx](../../apps/web/src/routes/RestaurantDetailRoute.tsx) — placeId 라우트 분리. detail/ 디렉터리 통합 (`HomeTab`/`PhotosTab`/`ReviewsTab`/`PublicRestaurantDetail`) — 모바일 v2 와 같은 컴포넌트 트리 공유. `PublicRestaurantList` 헤더/본체 분리 리팩터. (C) **공개 리뷰 페이지네이션 분리**: 첫 페이지만 detail 동봉(`reviewsFirstPage`), `useRestaurantPublicReviews(placeId, { sentiment, sort })` 가 2 페이지부터 lazy. `ReviewsTab` 가 chip(전체/긍정/부정) + 정렬(최신/평점) URL state 동기화. **공개 사이드바/탑바 추가** ([PublicLayout/PublicSidebar/PublicTopBar.tsx](../../apps/web/src/components/PublicLayout.tsx)).
 
 ## Purpose [coverage: high — 6 sources]
 

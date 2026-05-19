@@ -1,12 +1,14 @@
 ---
 topic: shared
-last_compiled: 2026-05-17
-sources_count: 43
+last_compiled: 2026-05-19
+sources_count: 45
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat]
+aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-05-19 변경 흡수**: (1) `useUserLocation` 신규 훅 — 브라우저 geolocation 권한 query → getCurrentPosition (`enableHighAccuracy:false`, 5s timeout, 60s maximumAge), `idle|pending|granted|denied|unavailable` 5상태 + `refetch()`. ref 기반 attempt 카운터로 in-flight 무효화. 공개 맛집 지도 첫 진입에서 사용 — `@repo/utils` 의 `computeBboxAround` 와 짝. (2) `useRestaurant` — `useCancelSummary` / `useResumeSummary` 신규 mutation, `useRestaurantCrawlLogs(placeId)` infiniteQuery (cursor pagination), `useRestaurantSummaryEvents(placeId, { onLog })` 시그니처 확장 — onLog 콜백을 ref 안정화로 받아 SSE log 이벤트 누적 가능. (3) `summarySseManager` — `LogHandler` 타입 + `Subscribers.logs: Set<LogHandler>` 추가, `subscribe({ onLog?: ... })` 옵션 추가, 'log' named event 를 구독자에 라우팅. (4) `useCrawl` — `CrawlStreamState.logs: StreamLogEntry[]` 누적 필드 + `useCrawlJobLogs(jobId)` 신규 + reducer 가 (jobId, seq) Map dedup 으로 SSE 'log' 이벤트 누적. (5) `useRestaurantPublicReviews` 신규 infiniteQuery — detail 의 `reviewsFirstPage` 를 seed (sentiment='all', sort='recent' 일 때만) + 2 페이지부터 fetch. (6) `restaurantApi` — `cancelSummary`/`resumeSummary`/`crawlLogs`/`publicReviews` API 함수, `publicByPlaceId` 가 옛 백엔드 응답 어댑팅 (`reviews` 단일 배열 → `reviewsFirstPage` + `reviewCounts` 평탄화). `crawlApi.jobLogs(jobId)` 추가.
 
 ## 1. Purpose [coverage: high — 5 sources]
 

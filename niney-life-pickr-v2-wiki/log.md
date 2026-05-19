@@ -1,5 +1,36 @@
 # Wiki Compile Log
 
+## 2026-05-19 (12th compile)
+
+**Topics updated:** friendly, crawl, web, mobile, shared, api-contract, utils, map, project-overview
+**New topics:** none
+**New concepts:** none
+**Concepts updated:** in-memory-singleton-gates, stream-driven-cache-merge, platform-ui-split
+
+**Sources scanned:** ~335 (기존 + 신규 6: `apps/friendly/src/plugins/summaries.ts`, `apps/friendly/src/modules/crawl/job-log.service.ts`, `apps/friendly/prisma/migrations/20260518014530_add_crawl_job_log/migration.sql`, `packages/shared/src/hooks/useUserLocation.ts`, `packages/utils/src/geo.ts`, `apps/mobile/src/hooks/useUserLocationNative.ts`)
+**Sources changed:** ~90 (commit c2e84f5 이후 41개 커밋 — `git log --since="2026-05-17"`)
+
+**Reason**: 2026-05-17 이후 다섯 큰 줄기의 변경:
+1. **잡 단계별 영속 로그 시스템 도입** — CrawlJobLog 테이블 + `JobLogService` 가 pino + DB + 두 SSE(`jobRegistry` + `summaryEventsBus`) 로 동시 fan-out, `(jobId, seq)` 모노톤 카운터로 클라 dedup. 어드민 잡 패널 [진행도]/[로그] 탭 분리 + 상세 페이지 "크롤 로그" 아코디언 + LIVE Radio 배지.
+2. **요약 라이프사이클 6 상태 확장** — `ReviewSummaryStatus` 가 4종 → 6종 (queued/pending/running/done/failed/cancelled). `queued` 가 큐잉 즉시 박혀 chain 휘발 윈도우를 49 분 → ms 로 줄임 (placeId=36668856 사고: 446 리뷰 중 56 done + 381 missing 사고에서 학습). `cancelled` 는 어드민 "요약 중지" 결과. 부팅 시 cleanup + reschedule hook 으로 자동 청소+재큐잉.
+3. **SummaryService app 전역 singleton (`plugins/summaries.ts`)** — 라우트별 인스턴스 분리 시 `runChainByPlace`/`cancelledPlaces` 가 라우트 단위로 갈라져 cancel 이 한쪽 chain 만 끊는 버그 해소. `fastify-plugin` + `app.decorate('summaries' | 'jobLog' | 'aiConfig', ...)`.
+4. **공개 맛집 위치 기반 첫 진입** — `useUserLocation` (웹) + `useUserLocationNative` (앱) + `@repo/utils/geo` (`computeBboxAround`/`isInKorea`). 페어 + 공통 산술 패턴.
+5. **모바일 v2 대규모 리빌드** — 네이티브 (tabs) 그룹 + dev client 워크플로 + 맛집 탭 통합 UX (풀스크린 WebView 지도 + 바텀시트 + 상세 in-sheet + list/detail 2-sheet 적층) + WebView 안 vworld HTML 주입 (RN-OpenLayers 비호환 회피) + restaurantDetail/ 디렉터리 풀세트 + 마커 fly+zoom + Reanimated 워클릿 fix + R8 minify + Swift concurrency plugin.
+
+**Notable patterns**:
+- **plugins/summaries.ts 패턴** — 모듈 import 가 인스턴스 보장의 충분조건 아닐 때(import 한 모듈을 두 코드가 새로 인스턴스화하면 분리) `app.decorate` 가 다음 단계. `in-memory-singleton-gates` 의 진화 인스턴스.
+- **`cancelledPlaces` Set "사용자 의도 표식"** — 게이트가 "지금 진행 가능한가?" 외에 "이 키는 의도적으로 차단됐는가?" 까지 표식. cancel/resume 토글이 in-memory Set + DB 상태 두 곳으로.
+- **`queued` 상태 + 부팅 자동 재큐잉** — 외부 큐 도입 미루는 한 가지 패치. in-memory 휘발성을 DB "다음 부팅이 줍기 위한 신호" 로 보강.
+- **2-fan-out 1-dedup** — `JobLogService.log` 한 호출이 두 SSE + 한 DB 로 vector, 같은 모노톤 `seq` 가 박혀 클라가 통합 dedup. 머지 패턴의 가장 강한 인스턴스: 서버가 ID 공간 (jobId, seq) 을 미리 발급해 멀티 채널 dedup 위탁.
+- **인프라가 다른 cross-platform 훅 페어** — `useUserLocation`(navigator.geolocation) ↔ `useUserLocationNative`(expo-location). 인터페이스 동형(`{ status, coords, refetch }`) + 공통 산술 추출(`@repo/utils/geo`) → 셔틀 한 줄로 못 합쳐도 분기 비용 흡수.
+- **번들 단위 UI 분기 (WebView 패턴)** — `PublicRestaurantsWebMap.native.tsx` 가 WebView 안에 HTML 통째 주입, `.web.tsx` 는 web 컴포넌트 재사용. 한 컴포넌트가 세 빌드에서 다른 인프라로 같은 표현. UI 분기 경계가 컴포넌트 안의 한 글자가 아니라 **번들 자체** 일 수 있음.
+
+**시사점**:
+- 4 round 연속으로 `in-memory-singleton-gates` 가 새 인스턴스 흡수 — 이제 11+ 인스턴스. 모듈 싱글턴 → 앱 plugin singleton 으로 한 단계 더 굳어짐. 다중 인스턴스 배포 시점이 점점 가까워지는데 그때 가장 먼저 깨질 가지.
+- `stream-driven-cache-merge` 도 4 round 연속 인스턴스 추가 — 로그 채널까지 흡수. 거의 모든 SSE 흐름이 같은 패턴으로 정착.
+- 모바일이 처음 큰 갱신(이전 last_compiled 2026-05-14). 네이티브 탭바 + dev client + WebView 지도 + 맛집 탭 통합 UX 까지 한 라운드에 묶임. 다음은 앱 상세 페이지의 ReviewsTab 페이지네이션 + 분석 카드 채움이 후속 후보.
+- `queued` 상태 도입 동기가 명확한 사고(placeId=36668856) — 같은 결정이 다른 영속 큐 도메인(menu-grouping batch, diningcode-bulk-save, auto-discover) 으로 번질 후보. 현재 그쪽은 in-memory only.
+
 ## 2026-05-17 (11th compile)
 
 **Topics updated:** friendly, crawl, canonical, web, api-contract, shared, project-overview
