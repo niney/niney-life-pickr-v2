@@ -132,6 +132,18 @@ export const PublicRestaurantsWebMap = ({
     webRef.current.injectJavaScript(`window.__setSelected(${payload}); true;`);
   }, [ready, selectedPlaceId]);
 
+  // 리스트 카드 선택 → 그 식당 좌표로 자동 fly + zoom in. markers 는 deps 에
+  // 안 넣음 — selection 자체 변경 시점에만 fly 하고, markers 가 그 사이
+  // 바뀌어도 (보통 list 클릭 직후엔 안 바뀜) 재발사 안 함.
+  useEffect(() => {
+    if (!ready || !webRef.current || !selectedPlaceId) return;
+    const m = markers.find((x) => x.id === selectedPlaceId);
+    if (!m) return;
+    const payload = JSON.stringify({ lat: m.lat, lng: m.lng, zoom: 17 });
+    webRef.current.injectJavaScript(`window.__flyTo(${payload}); true;`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, selectedPlaceId]);
+
   // focusCoord 참조가 바뀌면 fly. "내 위치" 재요청 시 부모가 새 객체로 넘겨
   // 같은 좌표여도 다시 fly (idempotent — 이미 같은 중심이면 시각 변화 없음).
   useEffect(() => {

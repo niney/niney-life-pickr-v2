@@ -125,6 +125,21 @@ export const PublicRestaurantsWebMap = ({
     );
   }, [ready, markers, selectedPlaceId]);
 
+  // 리스트 카드 선택 → 그 식당 좌표로 자동 fly + zoom in. markers 는 deps 에
+  // 안 넣음 — selection 자체 변경 시점에만 fly.
+  useEffect(() => {
+    if (!ready || !selectedPlaceId) return;
+    const m = markers.find((x) => x.id === selectedPlaceId);
+    if (!m) return;
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(
+      JSON.stringify({ type: 'flyTo', lat: m.lat, lng: m.lng, zoom: 17 }),
+      '*',
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, selectedPlaceId]);
+
   useEffect(() => {
     if (!ready || !focusCoord) return;
     const win = iframeRef.current?.contentWindow;
