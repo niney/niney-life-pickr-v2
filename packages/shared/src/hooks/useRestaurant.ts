@@ -10,6 +10,7 @@ import type {
   CrawlLogLevelType,
   PublicVisitorReviewType,
   RestaurantDetailType,
+  RestaurantListQueryType,
   RestaurantListResultType,
   RestaurantPublicListQueryType,
   RestaurantPublicListResultType,
@@ -47,8 +48,10 @@ const patchSummaryInListCaches = (
   snap: RestaurantSummarySnapshotEventType,
   prev: RestaurantSummarySnapshotEventType | null,
 ): void => {
-  qc.setQueryData<RestaurantListResultType | undefined>(
-    ['restaurant', 'list'],
+  // 어드민 list 가 페이징되면서 queryKey 가 ['restaurant','list', page, pageSize,
+  // sort] 처럼 가변이라 prefix 매칭(setQueriesData)으로 모든 페이지 캐시를 갱신.
+  qc.setQueriesData<RestaurantListResultType | undefined>(
+    { queryKey: ['restaurant', 'list'] },
     (prevCache) => {
       if (!prevCache) return prevCache;
       const items = prevCache.items.map((item) => {
@@ -118,10 +121,23 @@ const patchSummaryInListCaches = (
 // Crawled-restaurant list. Query is mostly static — invalidate from the
 // restaurants page after a crawl completes (or after recrawl/update kicks
 // off, since the row stays present but counts change).
-export const useRestaurantList = () =>
+//
+// 페이징 — queryKey 에 limit/offset/sort 가 들어가서 페이지/정렬 변경마다 다른
+// 캐시 인스턴스. placeholderData 로 페이지 전환 시 깜빡임 방지. SSE patch 는
+// 모든 인스턴스를 prefix 매칭으로 갱신 (patchSummaryInListCaches 참고).
+export const useRestaurantList = (
+  query: Partial<RestaurantListQueryType> = {},
+) =>
   useQuery({
-    queryKey: ['restaurant', 'list'],
-    queryFn: restaurantApi.list,
+    queryKey: [
+      'restaurant',
+      'list',
+      query.limit ?? 25,
+      query.offset ?? 0,
+      query.sort ?? 'recent',
+    ],
+    queryFn: () => restaurantApi.list(query),
+    placeholderData: (prev) => prev,
   });
 
 // 공개 랭킹 — 비로그인/게스트도 호출. 토글 변경 시 깜빡임 방지를 위해

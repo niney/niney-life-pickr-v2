@@ -12,6 +12,7 @@ import {
   RestaurantDeleteResult,
   RestaurantDetail,
   RestaurantInsights,
+  RestaurantListQuery,
   RestaurantListResult,
   RestaurantPublicDetail,
   RestaurantPublicListQuery,
@@ -128,9 +129,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['admin'],
       security: [{ bearerAuth: [] }],
+      querystring: RestaurantListQuery,
       response: { 200: RestaurantListResult },
     },
-    handler: async () => ({ items: await service.list() }),
+    handler: async (req) => service.list(req.query),
   });
 
   typed.get(Routes.Restaurant.byPlaceId(':placeId'), {

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight,
@@ -36,6 +36,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { Pager } from '~/components/ui/pager';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import { CanonicalMergePanel } from '~/components/restaurant/CanonicalMergePanel';
 import { MergeProposalQueue } from '~/components/restaurant/MergeProposalQueue';
@@ -321,9 +322,45 @@ const RestaurantRow = ({
   );
 };
 
+type SortKey = 'recent' | 'satisfaction' | 'positive' | 'negativeRatio';
+const SORT_KEYS: SortKey[] = ['recent', 'satisfaction', 'positive', 'negativeRatio'];
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const DEFAULT_PAGE_SIZE = 25;
+
 export const AdminRestaurantsPage = () => {
   const qc = useQueryClient();
-  const listQuery = useRestaurantList();
+
+  // URL 동기화 — 새로고침/뒤로가기/링크 공유 시 페이지·정렬 보존.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sortParam = searchParams.get('sort');
+  const sortBy: SortKey = (SORT_KEYS as string[]).includes(sortParam ?? '')
+    ? (sortParam as SortKey)
+    : 'recent';
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
+  const pageSize = (() => {
+    const n = Number(searchParams.get('pageSize') ?? DEFAULT_PAGE_SIZE);
+    return PAGE_SIZE_OPTIONS.includes(n) ? n : DEFAULT_PAGE_SIZE;
+  })();
+
+  const updateParams = (patch: Record<string, string | number | null>): void => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === null || v === '') next.delete(k);
+          else next.set(k, String(v));
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const listQuery = useRestaurantList({
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    sort: sortBy,
+  });
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
   // 행 = canonical 통째로 삭제 — DC만 등록된 행도 지울 수 있게 canonicalId 기반.
@@ -350,9 +387,6 @@ export const AdminRestaurantsPage = () => {
   // 삭제 확인 상태 — canonical 단위 삭제로 통일. sources 가 여러 개여도 한 번에 처리.
   const [confirmDeleteCanonicalId, setConfirmDeleteCanonicalId] =
     useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'recent' | 'satisfaction' | 'positive' | 'negativeRatio'>(
-    'recent',
-  );
 
   const handleDelete = async (canonicalId: string) => {
     if (confirmDeleteCanonicalId !== canonicalId) {
@@ -390,6 +424,8 @@ export const AdminRestaurantsPage = () => {
           mode: 'create',
         });
         setUrl('');
+        // 신규 가게는 lastCrawledAt 가장 최근 — recent 정렬 1페이지에서 보이도록.
+        updateParams({ sort: null, page: null });
       } else {
         setError(`${result.error}: ${result.message}`);
       }
@@ -463,50 +499,17 @@ export const AdminRestaurantsPage = () => {
       removeJob(jobId);
     };
 
-  const rawItems = listQuery.data?.items ?? [];
-  // 정렬은 클라이언트에서. 분석 안 된 가게는 항상 가장 뒤로 (점수 null).
-  const items = (() => {
-    if (sortBy === 'recent') return rawItems;
-    const withNullsLast = (
-      cmp: (a: CanonicalListItemType, b: CanonicalListItemType) => number,
-      keyOf: (it: CanonicalListItemType) => number | null,
-    ) =>
-      [...rawItems].sort((a, b) => {
-        const av = keyOf(a);
-        const bv = keyOf(b);
-        if (av === null && bv === null) return 0;
-        if (av === null) return 1;
-        if (bv === null) return -1;
-        return cmp(a, b);
-      });
-    if (sortBy === 'satisfaction') {
-      return withNullsLast(
-        (a, b) => (b.avgSatisfactionScore ?? 0) - (a.avgSatisfactionScore ?? 0),
-        (it) => it.avgSatisfactionScore,
-      );
-    }
-    if (sortBy === 'positive') {
-      return withNullsLast(
-        (a, b) => (b.avgSentimentScore ?? 0) - (a.avgSentimentScore ?? 0),
-        (it) => it.avgSentimentScore,
-      );
-    }
-    return withNullsLast(
-      (a, b) => {
-        const ra = a.negativeCount / Math.max(a.summaryDone, 1);
-        const rb = b.negativeCount / Math.max(b.summaryDone, 1);
-        return ra - rb;
-      },
-      (it) => (it.summaryDone === 0 ? null : it.summaryDone),
-    );
-  })();
-  // SSE 구독 — canonicalId 단위. 한 canonical 의 모든 source(Naver+DC) 가 한
-  // connection 으로 풀려 들어와 진행 배지가 출처 무관 라이브 갱신.
-  useRestaurantListSummaryEvents(rawItems.map((it) => it.canonicalId));
+  // 정렬은 서버 처리. 응답이 이미 정렬·페이지 분리된 상태로 옴.
+  const items = listQuery.data?.items ?? [];
+  const total = listQuery.data?.total ?? 0;
+  // SSE 구독 — 현재 페이지의 canonicalId 만. 한 canonical 의 모든 source
+  // (Naver+DC) 가 한 connection 으로 풀려 들어와 진행 배지가 출처 무관 라이브 갱신.
+  useRestaurantListSummaryEvents(items.map((it) => it.canonicalId));
   // 활성 잡 — placeId 가 list 의 어느 행의 Naver source 와도 매칭 안 되면
-  // 상단 newJobs 로. 매칭되면 그 행 밑에 panel 마운트.
+  // 상단 newJobs 로. 매칭되면 그 행 밑에 panel 마운트. 페이징 후로는 현재
+  // 페이지 행만 검사 — 다른 페이지의 잡은 상단으로 떠 사라지지 않음.
   const placeIdToCanonical = new Map<string, CanonicalListItemType>();
-  for (const it of rawItems) {
+  for (const it of items) {
     for (const s of it.sources) {
       if (s.placeId) placeIdToCanonical.set(s.placeId, it);
     }
@@ -611,7 +614,7 @@ export const AdminRestaurantsPage = () => {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>등록된 맛집 ({items.length})</CardTitle>
+              <CardTitle>등록된 맛집 ({total})</CardTitle>
               <CardDescription>
                 업데이트는 새 리뷰만 추가하고, 재크롤링은 리뷰 전체를 다시 수집·요약합니다.
               </CardDescription>
@@ -620,7 +623,14 @@ export const AdminRestaurantsPage = () => {
               정렬
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                onChange={(e) =>
+                  // 정렬 변경은 페이지를 1로 리셋 — 다른 페이지에 있던 채로
+                  // 정렬을 바꾸면 결과가 어색하게 어긋남.
+                  updateParams({
+                    sort: e.target.value === 'recent' ? null : e.target.value,
+                    page: null,
+                  })
+                }
                 className="h-8 rounded border bg-background px-2 text-xs"
               >
                 <option value="recent">최근 크롤링순</option>
@@ -750,6 +760,24 @@ export const AdminRestaurantsPage = () => {
                 );
               })}
             </ul>
+          )}
+          {/* 페이저 — 로딩/에러 중에는 숨김. xl 이상은 풀, 그 미만(모바일 반응형)은
+              컴팩트(prev/next + n/total) 자동. */}
+          {!listQuery.isLoading && !listQuery.isError && (
+            <Pager
+              className="mt-3"
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={(p) => updateParams({ page: p === 1 ? null : p })}
+              onPageSizeChange={(s) =>
+                updateParams({
+                  pageSize: s === DEFAULT_PAGE_SIZE ? null : s,
+                  page: null,
+                })
+              }
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+            />
           )}
         </CardContent>
       </Card>

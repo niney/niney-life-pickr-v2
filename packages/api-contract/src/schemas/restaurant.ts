@@ -245,8 +245,25 @@ export const recomputeCanonicalAggregates = (
   };
 };
 
+// 어드민 list 페이징/정렬 쿼리. 정렬 키는 클라 기존 옵션과 동일 —
+// recent(=lastCrawledAt desc) / satisfaction / positive / negativeRatio.
+// 정렬을 서버로 옮긴 이유: 클라가 페이지 단위로만 정렬하면 페이지 경계에서
+// 순서가 뒤섞여 사용자가 혼란을 겪는다.
+export const RestaurantListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+  sort: z
+    .enum(['recent', 'satisfaction', 'positive', 'negativeRatio'])
+    .default('recent'),
+});
+export type RestaurantListQueryType = z.infer<typeof RestaurantListQuery>;
+
 export const RestaurantListResult = z.object({
   items: z.array(CanonicalListItem),
+  // 필터 적용 후 전체 canonical 수 — 페이저가 totalPages 계산에 사용.
+  total: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
 });
 export type RestaurantListResultType = z.infer<typeof RestaurantListResult>;
 

@@ -7,6 +7,7 @@ import {
   type RestaurantDeleteResultType,
   type RestaurantDetailType,
   type RestaurantInsightsType,
+  type RestaurantListQueryType,
   type RestaurantListResultType,
   type RestaurantPublicDetailType,
   type RestaurantPublicListQueryType,
@@ -50,7 +51,16 @@ const adaptPublicDetailResponse = (
 };
 
 export const restaurantApi = {
-  list: () => apiFetch<RestaurantListResultType>(Routes.Restaurant.list),
+  list: (query: Partial<RestaurantListQueryType> = {}) => {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    if (query.sort) params.set('sort', query.sort);
+    const qs = params.toString();
+    return apiFetch<RestaurantListResultType>(
+      `${Routes.Restaurant.list}${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   ranking: (query: Partial<RestaurantRankingQueryType> = {}) => {
     const params = new URLSearchParams();
