@@ -56,7 +56,8 @@ export const RestaurantsV2Page = () => {
 
   const viewMode: 'list' | 'detail' = placeId === null ? 'list' : 'detail';
 
-  const [snap, setSnap] = useState<Snap>('peek');
+  const [listSnap, setListSnap] = useState<Snap>('peek');
+  const [detailSnap, setDetailSnap] = useState<Snap>('half');
   const snapBeforeDetailRef = useRef<Snap>('peek');
 
   const [panelSide, togglePanelSide] = usePanelSide('public.restaurants');
@@ -93,14 +94,18 @@ export const RestaurantsV2Page = () => {
 
   const handleSelectItem = useCallback(
     (id: string) => {
-      snapBeforeDetailRef.current = snap;
       navigate({
         pathname: `/restaurants-v2/${id}`,
         search: window.location.search,
       });
-      setSnap('half');
+      // prev 캡처로 진입 직전 snap 저장 — listSnap 을 deps 에 넣지 않아도 됨.
+      setListSnap((prev) => {
+        snapBeforeDetailRef.current = prev;
+        return 'peek';
+      });
+      setDetailSnap('half');
     },
-    [navigate, snap],
+    [navigate],
   );
 
   // 닫기는 RestaurantDetailRoute 의 onClose 가 navigate('/restaurants-v2') 로
@@ -108,7 +113,7 @@ export const RestaurantsV2Page = () => {
   const prevPlaceIdRef = useRef(placeId);
   useEffect(() => {
     if (prevPlaceIdRef.current !== null && placeId === null) {
-      setSnap(snapBeforeDetailRef.current);
+      setListSnap(snapBeforeDetailRef.current);
     }
     prevPlaceIdRef.current = placeId;
   }, [placeId]);
@@ -278,28 +283,41 @@ export const RestaurantsV2Page = () => {
           />
         </div>
 
+        {/* 1. 목록 BottomSheet (상시 마운트) */}
         <BottomSheet
-          snap={snap}
-          onSnapChange={setSnap}
+          snap={listSnap}
+          onSnapChange={setListSnap}
           topOffset={headerHeight}
           peekHeight={120}
-          viewKey={viewMode}
+          disableScrollLock={placeId !== null}
+          hidden={placeId !== null}
+          zIndex={20}
         >
-          {viewMode === 'list' ? (
-            <div className="px-3 pb-24 pt-2">
-              <PublicRestaurantListBody
-                items={items}
-                isLoading={list.isLoading}
-                isError={list.isError}
-                selectedPlaceId={placeId}
-                onSelectItem={handleSelectItem}
-                onHoverItem={setHoveredPlaceId}
-              />
-            </div>
-          ) : (
-            <Outlet />
-          )}
+          <div className="px-3 pb-24 pt-2">
+            <PublicRestaurantListBody
+              items={items}
+              isLoading={list.isLoading}
+              isError={list.isError}
+              selectedPlaceId={placeId}
+              onSelectItem={handleSelectItem}
+              onHoverItem={setHoveredPlaceId}
+            />
+          </div>
         </BottomSheet>
+
+        {/* 2. 상세 BottomSheet (placeId 존재 시 적층 마운트) */}
+        {placeId && (
+          <BottomSheet
+            key={placeId}
+            snap={detailSnap}
+            onSnapChange={setDetailSnap}
+            topOffset={headerHeight}
+            peekHeight={120}
+            zIndex={30}
+          >
+            <Outlet />
+          </BottomSheet>
+        )}
       </div>
     </div>
   );
