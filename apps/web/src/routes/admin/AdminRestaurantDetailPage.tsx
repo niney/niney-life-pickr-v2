@@ -29,6 +29,7 @@ import {
   useResumeSummary,
   useStartCrawl,
 } from '@repo/shared';
+import { formatWonPrice } from '@repo/utils';
 import type {
   BlogReviewType,
   CrawlModeType,
@@ -204,7 +205,7 @@ const MenuSection = ({ menus }: { menus: MenuItemType[] }) => {
                 </div>
                 {m.price && (
                   <div className="text-sm font-medium tabular-nums text-foreground/80">
-                    {m.price}
+                    {formatWonPrice(m.price)}
                   </div>
                 )}
                 {m.description && (

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
+import { formatWonPrice } from '@repo/utils';
 import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
@@ -60,7 +61,7 @@ export const MenuGrid = ({ menus, insights }: Props) => {
               </View>
               {m.price && (
                 <Text style={[styles.price, { color: theme.colors.textMuted }]}>
-                  {m.price}
+                  {formatWonPrice(m.price)}
                 </Text>
               )}
               {m.description && (

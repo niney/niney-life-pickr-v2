@@ -21,6 +21,7 @@ import {
   useRestaurantSummaryEvents,
   useStartCrawl,
 } from '@repo/shared';
+import { formatWonPrice } from '@repo/utils';
 import type {
   BlogReviewType,
   CrawlJobType,
@@ -106,7 +107,11 @@ const MenuList = ({ menus }: { menus: MenuItemType[] }) => (
                   <span className="truncate text-sm font-medium">{m.name}</span>
                   {m.recommend && <Badge variant="secondary" className="shrink-0">추천</Badge>}
                 </div>
-                {m.price && <div className="text-sm text-muted-foreground">{m.price}</div>}
+                {m.price && (
+                  <div className="text-sm text-muted-foreground">
+                    {formatWonPrice(m.price)}
+                  </div>
+                )}
                 {m.description && (
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>
                 )}

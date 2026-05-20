@@ -20,6 +20,7 @@ import {
   useCatchtableShopMenus,
   useCatchtableShopReviewOverview,
 } from '@repo/shared';
+import { formatWonPrice } from '@repo/utils';
 import type {
   CatchtableShopDataType,
   CatchtableShopMenusResponseType,
@@ -62,13 +63,6 @@ const StatBox = ({ label, value, sub }: { label: string; value: string; sub?: st
 // ── AI 리뷰 종합 ────────────────────────────────────────────────────────────
 // 캐치테이블이 자체 LLM 으로 만든 가게 한 줄 + 3-4 문장. 페이지 진입 시 자동
 // 페치. 가벼운 호출 (~200-500ms) 이라 메인 데이터와 병렬로 가져옴.
-
-const formatPrice = (s: string | null): string | null => {
-  if (!s) return null;
-  const n = Number(s);
-  if (!Number.isFinite(n) || n === 0) return s;
-  return `${n.toLocaleString()}원`;
-};
 
 const ReviewOverviewCard = ({
   data,
@@ -234,8 +228,8 @@ const MenuContent = ({ data }: { data: CatchtableShopMenusResponseType }) => {
       {data.menus.length > 0 && (
         <ul className="divide-y rounded-md border">
           {data.menus.map((m, i) => {
-            const minPrice = formatPrice(m.minPrice);
-            const maxPrice = formatPrice(m.maxPrice);
+            const minPrice = formatWonPrice(m.minPrice);
+            const maxPrice = formatWonPrice(m.maxPrice);
             const priceText =
               minPrice && maxPrice && minPrice !== maxPrice
                 ? `${minPrice} ~ ${maxPrice}`

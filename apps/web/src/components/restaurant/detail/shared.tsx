@@ -5,6 +5,7 @@ import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
+import { formatWonPrice } from '@repo/utils';
 import {
   ExternalLink,
   Lightbulb,
@@ -173,7 +174,9 @@ export const MenuGrid = ({
                   )}
                 </div>
                 {m.price && (
-                  <div className="text-xs tabular-nums text-muted-foreground">{m.price}</div>
+                  <div className="text-xs tabular-nums text-muted-foreground">
+                    {formatWonPrice(m.price)}
+                  </div>
                 )}
                 {m.description && (
                   <div className="line-clamp-2 text-xs text-muted-foreground">

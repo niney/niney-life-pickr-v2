@@ -21,6 +21,7 @@ import {
   useDiningcodeShopReviews,
   useSaveDiningcodeShop,
 } from '@repo/shared';
+import { formatWonPrice } from '@repo/utils';
 import type {
   DiningcodeShopDataType,
   DiningcodeShopReviewType,
@@ -242,7 +243,9 @@ const Menus = ({ data }: { data: DiningcodeShopDataType }) => {
                   )}
                 </div>
                 {m.price && (
-                  <span className="shrink-0 text-sm font-medium">{m.price}</span>
+                  <span className="shrink-0 text-sm font-medium">
+                    {formatWonPrice(m.price)}
+                  </span>
                 )}
               </div>
               {(m.reviewCount > 0 || m.selectionCount > 0) && (
