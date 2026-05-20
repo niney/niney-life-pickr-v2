@@ -151,49 +151,51 @@ export const MenuGrid = ({
     for (const m of insights.topMenus) mentionByName.set(m.name, m);
   }
   return (
-    <ul className="grid gap-2 sm:grid-cols-2">
-      {menus.map((m, idx) => {
-        const stats = mentionByName.get(m.name);
-        return (
-          <li key={`${m.name}-${idx}`} className="flex gap-2 rounded-md border p-2">
-            {m.imageUrls[0] && (
-              <ImgWithFallback
-                src={m.imageUrls[0]}
-                className="size-14 shrink-0 rounded object-cover"
-              />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-sm font-medium">{m.name}</span>
-                {m.recommend && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    추천
-                  </Badge>
+    <div className="@container">
+      <ul className="grid grid-cols-1 gap-2 @md:grid-cols-2">
+        {menus.map((m, idx) => {
+          const stats = mentionByName.get(m.name);
+          return (
+            <li key={`${m.name}-${idx}`} className="flex gap-2 rounded-md border p-2">
+              {m.imageUrls[0] && (
+                <ImgWithFallback
+                  src={m.imageUrls[0]}
+                  className="size-14 shrink-0 rounded object-cover"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium">{m.name}</span>
+                  {m.recommend && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      추천
+                    </Badge>
+                  )}
+                </div>
+                {m.price && (
+                  <div className="text-xs tabular-nums text-muted-foreground">{m.price}</div>
+                )}
+                {m.description && (
+                  <div className="line-clamp-2 text-xs text-muted-foreground">
+                    {m.description}
+                  </div>
+                )}
+                {stats && (
+                  <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      +{stats.positive}
+                    </span>
+                    <span className="mx-1">/</span>
+                    <span className="text-rose-600 dark:text-rose-400">-{stats.negative}</span>
+                    <span className="ml-1">· {stats.count}회 언급</span>
+                  </div>
                 )}
               </div>
-              {m.price && (
-                <div className="text-xs tabular-nums text-muted-foreground">{m.price}</div>
-              )}
-              {m.description && (
-                <div className="line-clamp-2 text-xs text-muted-foreground">
-                  {m.description}
-                </div>
-              )}
-              {stats && (
-                <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    +{stats.positive}
-                  </span>
-                  <span className="mx-1">/</span>
-                  <span className="text-rose-600 dark:text-rose-400">-{stats.negative}</span>
-                  <span className="ml-1">· {stats.count}회 언급</span>
-                </div>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 };
 
