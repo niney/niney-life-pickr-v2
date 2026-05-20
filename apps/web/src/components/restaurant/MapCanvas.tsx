@@ -10,7 +10,11 @@ import Point from 'ol/geom/Point';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { Style, Icon, Text as OlText, Fill, Stroke } from 'ol/style';
 import 'ol/ol.css';
-import { buildVworldTileUrl } from '@repo/utils';
+import {
+  buildRestaurantMarkerDataUrl,
+  buildVworldTileUrl,
+  type RestaurantCategoryKey,
+} from '@repo/utils';
 
 export interface MapMarker {
   id: string;
@@ -20,6 +24,9 @@ export interface MapMarker {
   // 'muted' 는 회색 핀(예: 어드민 발견 페이지의 '이미 등록된 맛집' 표시).
   // 미지정 또는 'primary' 는 기존 빨강. selected 강조는 색 톤만 진해진다.
   variant?: 'primary' | 'muted';
+  // primary 변형에서 사용 — 한식/일식 등 카테고리에 맞는 라인 아이콘을 마커
+  // 안에 그린다. null/미지정이면 일반 식기 아이콘. muted 에서는 무시.
+  categoryKey?: RestaurantCategoryKey | null;
 }
 
 export interface MapViewport {
@@ -225,7 +232,14 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
       f.set('markerId', m.id);
       const isSelected = m.id === selectedMarkerId;
-      f.setStyle(makeMarkerStyle(m.label, isSelected, m.variant ?? 'primary'));
+      f.setStyle(
+        makeMarkerStyle(
+          m.label,
+          isSelected,
+          m.variant ?? 'primary',
+          m.categoryKey ?? null,
+        ),
+      );
       src.addFeature(f);
     }
   }, [markers, selectedMarkerId]);
@@ -273,65 +287,25 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   );
 });
 
-// 핀 SVG. variant 로 색상 분기 — primary(빨강)는 기본/검색결과, muted(회색)는
-// '이미 등록된 항목' 같은 보조 표시. 어느 쪽이든 selected 시 톤이 더 진해지고
-// 살짝 커진다.
-const PIN_COLORS: Record<NonNullable<MapMarker['variant']>, { base: string; selected: string }> = {
-  primary: { base: '#ef4444', selected: '#dc2626' },
-  muted: { base: '#94a3b8', selected: '#64748b' },
-};
-
-// 비선택은 작은 원형 dot (14×14), 선택만 핀 (32×48) 으로 강조 — 도심 밀집 지역
-// 에서 dot 깔끔 + 선택 한눈에. 앱(publicRestaurantsMapHtml) 과 동일 디자인.
+// primary(빨강) / muted(회색) 둘 다 같은 빌더를 쓴다 — variant 는 배경색 톤만
+// 결정하고, 카테고리는 안쪽 라인 아이콘으로 일관되게 표시. 앱(publicRestaurantsMapHtml)
+// 과 동일 디자인.
 const makeMarkerStyle = (
   label: string | undefined,
   selected: boolean,
   variant: NonNullable<MapMarker['variant']>,
+  categoryKey: RestaurantCategoryKey | null,
 ): Style => {
-  const palette = PIN_COLORS[variant];
-  const fill = selected ? palette.selected : palette.base;
-  if (selected) {
-    return new Style({
-      image: new Icon({
-        anchor: [0.5, 1],  // 핀 꼭지점이 좌표
-        scale: 1,
-        src:
-          'data:image/svg+xml;charset=utf-8,' +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">
-              <path fill="${fill}" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>
-              <circle fill="#fff" cx="16" cy="16" r="6"/>
-            </svg>
-          `),
-      }),
-      text: label
-        ? new OlText({
-            text: label,
-            offsetY: -54,
-            font: 'bold 12px sans-serif',
-            fill: new Fill({ color: '#0f172a' }),
-            stroke: new Stroke({ color: '#fff', width: 3 }),
-          })
-        : undefined,
-    });
-  }
   return new Style({
     image: new Icon({
-      anchor: [0.5, 0.5],  // 원 중심이 좌표
-      scale: 1,
-      src:
-        'data:image/svg+xml;charset=utf-8,' +
-        encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
-            <circle fill="${fill}" stroke="#fff" stroke-width="2" cx="9" cy="9" r="7"/>
-          </svg>
-        `),
+      anchor: selected ? [0.5, 1] : [0.5, 0.5],
+      src: buildRestaurantMarkerDataUrl(categoryKey, selected, variant),
     }),
     text: label
       ? new OlText({
           text: label,
-          offsetY: 16,  // dot 중심에서 아래
-          font: '11px sans-serif',
+          offsetY: selected ? -54 : 20,
+          font: selected ? 'bold 12px sans-serif' : '11px sans-serif',
           fill: new Fill({ color: '#0f172a' }),
           stroke: new Stroke({ color: '#fff', width: 3 }),
         })

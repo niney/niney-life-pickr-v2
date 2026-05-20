@@ -14,6 +14,7 @@ import {
   DiscoverPanel,
   type DiscoverTab,
 } from '~/components/admin/discover/DiscoverPanel';
+import { resolveRestaurantCategoryKey } from '@repo/utils';
 import { DiscoverMap } from '~/components/admin/discover/DiscoverMap';
 import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
 import { TAB_ORDER, type TabKey } from '~/components/restaurant/detail/tabs';
@@ -247,6 +248,7 @@ export const AdminDiscoverPage = () => {
         lng: it.longitude,
         label: it.placeId === placeId ? it.name : undefined,
         variant: 'muted',
+        categoryKey: resolveRestaurantCategoryKey(it.category),
       });
     }
     for (const it of searchItems) {
@@ -262,6 +264,7 @@ export const AdminDiscoverPage = () => {
         // 것만 표시(아래 루프 유지).
         label: it.name,
         variant: 'primary',
+        categoryKey: resolveRestaurantCategoryKey(it.category),
       });
     }
     return out;

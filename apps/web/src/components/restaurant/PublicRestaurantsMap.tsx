@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, LocateFixed, MapPin, RefreshCcw } from 'lucide-react';
 import { ApiError, useMapPublicConfig, type UserLocationStatus } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
+import { resolveRestaurantCategoryKey } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from './MapCanvas';
 
@@ -61,6 +62,7 @@ export const PublicRestaurantsMap = ({
           lat: it.latitude!,
           lng: it.longitude!,
           label: it.name,
+          categoryKey: resolveRestaurantCategoryKey(it.category),
         })),
     [items],
   );

@@ -11,6 +11,10 @@ import {
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { ApiError, useMapPublicConfig, useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
+import {
+  resolveRestaurantCategoryKey,
+  type RestaurantCategoryKey,
+} from '@repo/utils';
 import { buildPublicRestaurantsMapHtml } from './publicRestaurantsMapHtml';
 import type {
   UserLocationResult,
@@ -22,6 +26,7 @@ interface Marker {
   lat: number;
   lng: number;
   name: string;
+  categoryKey: RestaurantCategoryKey | null;
 }
 
 interface Bbox {
@@ -88,7 +93,8 @@ export const PublicRestaurantsWebMap = ({
   const [ready, setReady] = useState(false);
   const [tileError, setTileError] = useState(false);
 
-  // 좌표 있는 식당만. 선택된 항목에만 이름 라벨 노출 (시각 노이즈 방지).
+  // 좌표 있는 식당만. categoryKey 는 자유 텍스트 카테고리를 8칩 키로 정규화 —
+  // HTML 측은 키 lookup 으로 마커 아이콘 결정. 매칭 실패는 null → generic 아이콘.
   const markers: Marker[] = useMemo(
     () =>
       items
@@ -98,6 +104,7 @@ export const PublicRestaurantsWebMap = ({
           lat: it.latitude!,
           lng: it.longitude!,
           name: it.name,
+          categoryKey: resolveRestaurantCategoryKey(it.category),
         })),
     [items],
   );

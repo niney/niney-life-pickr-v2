@@ -1,9 +1,32 @@
-import { buildVworldTileUrl } from '@repo/utils';
+import {
+  RESTAURANT_CATEGORY_KEYS,
+  buildRestaurantMarkerDataUrl,
+  buildVworldTileUrl,
+  type RestaurantCategoryKey,
+} from '@repo/utils';
 
 export interface MapInitialCenter {
   lat: number;
   lng: number;
 }
+
+// 빌드 시점에 카테고리별 마커 SVG data URL 18개(8 카테고리 + generic, 각 선택/비선택)
+// 를 한 번 만들어 HTML 의 JS 변수로 inject. 런타임에는 lookup 한 번이면 끝.
+const buildIconCache = (): Record<string, { off: string; on: string }> => {
+  const cache: Record<string, { off: string; on: string }> = {
+    _: {
+      off: buildRestaurantMarkerDataUrl(null, false),
+      on: buildRestaurantMarkerDataUrl(null, true),
+    },
+  };
+  for (const k of RESTAURANT_CATEGORY_KEYS) {
+    cache[k] = {
+      off: buildRestaurantMarkerDataUrl(k as RestaurantCategoryKey, false),
+      on: buildRestaurantMarkerDataUrl(k as RestaurantCategoryKey, true),
+    };
+  }
+  return cache;
+};
 
 // 지도 WebView/iframe 에 주입할 HTML. native 는 react-native-webview, web 은
 // <iframe srcDoc> 으로 같은 HTML 을 띄운다. post 함수는 두 컨텍스트 모두 지원:
@@ -25,6 +48,7 @@ export const buildPublicRestaurantsMapHtml = (
   initialCenter: MapInitialCenter = { lat: 37.5665, lng: 126.978 },
 ): string => {
   const tileUrl = buildVworldTileUrl(apiKey, 'Base');
+  const iconCache = buildIconCache();
   return `<!doctype html>
 <html>
 <head>
@@ -105,47 +129,28 @@ export const buildPublicRestaurantsMapHtml = (
     }
   });
 
-  // 비선택은 작은 원형 dot (14×14), 선택된 마커만 핀 모양 (32×48) 으로 강조.
-  // 도심 밀집 지역에서 dot 들이 깔끔하게 깔리고 선택은 한눈에 띈다.
-  function makeMarkerStyle(label, selected) {
-    var styleObj;
-    if (selected) {
-      var pinSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">'
-        + '<path fill="#dc2626" stroke="#fff" stroke-width="2" d="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>'
-        + '<circle fill="#fff" cx="16" cy="16" r="6"/></svg>';
-      styleObj = {
-        image: new ol.style.Icon({
-          anchor: [0.5, 1],  // 핀 꼭지점이 좌표
-          src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pinSvg),
-        }),
-      };
-      if (label) {
-        styleObj.text = new ol.style.Text({
-          text: label,
-          offsetY: -54,  // 핀 위에 라벨
-          font: 'bold 12px sans-serif',
-          fill: new ol.style.Fill({ color: '#0f172a' }),
-          stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
-        });
-      }
-    } else {
-      var dotSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">'
-        + '<circle fill="#ef4444" stroke="#fff" stroke-width="2" cx="9" cy="9" r="7"/></svg>';
-      styleObj = {
-        image: new ol.style.Icon({
-          anchor: [0.5, 0.5],  // 원 중심이 좌표
-          src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(dotSvg),
-        }),
-      };
-      if (label) {
-        styleObj.text = new ol.style.Text({
-          text: label,
-          offsetY: 16,  // dot 중심에서 아래
-          font: '11px sans-serif',
-          fill: new ol.style.Fill({ color: '#0f172a' }),
-          stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
-        });
-      }
+  // 카테고리별 마커 data URL 캐시. 빌드 시점에 미리 18개를 만들어 inject.
+  var ICONS = ${JSON.stringify(iconCache)};
+
+  // 비선택: 원형 26×26 + 카테고리 라인 아이콘. 선택: 핀 32×48 + 같은 아이콘.
+  // 카테고리 매칭 실패 또는 null 이면 '_' (generic 식기) 사용.
+  function makeMarkerStyle(catKey, label, selected) {
+    var entry = ICONS[catKey] || ICONS['_'];
+    var src = selected ? entry.on : entry.off;
+    var styleObj = {
+      image: new ol.style.Icon({
+        anchor: selected ? [0.5, 1] : [0.5, 0.5],  // 선택 핀은 꼭지점, 비선택 원은 중심
+        src: src,
+      }),
+    };
+    if (label) {
+      styleObj.text = new ol.style.Text({
+        text: label,
+        offsetY: selected ? -54 : 20,  // 핀 위 vs 원 아래
+        font: (selected ? 'bold 12px' : '11px') + ' sans-serif',
+        fill: new ol.style.Fill({ color: '#0f172a' }),
+        stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+      });
     }
     return new ol.style.Style(styleObj);
   }
@@ -164,13 +169,14 @@ export const buildPublicRestaurantsMapHtml = (
       feat.setId(m.id);            // getFeatureById 로 selection 갱신 시 O(1) lookup
       feat.set('markerId', m.id);
       feat.set('label', m.name);   // selection 복원 시 라벨 재사용
-      feat.setStyle(makeMarkerStyle(m.name, false));
+      feat.set('catKey', m.categoryKey || '_');
+      feat.setStyle(makeMarkerStyle(feat.get('catKey'), m.name, false));
       vectorSource.addFeature(feat);
     }
     // markers 가 바뀌어도 현재 selection 은 유지 — 새 set 에 동일 id 가 있으면 다시 강조.
     if (currentSelectedId !== null) {
       var sel = vectorSource.getFeatureById(currentSelectedId);
-      if (sel) sel.setStyle(makeMarkerStyle(sel.get('label'), true));
+      if (sel) sel.setStyle(makeMarkerStyle(sel.get('catKey'), sel.get('label'), true));
     }
     // 자동 fit 없음 — 첫 진입의 중심은 부모가 initialCenter 로 결정. 마커가
     // 늦게 들어와서 화면이 갑자기 옮겨가는 일을 막는다.
@@ -182,12 +188,12 @@ export const buildPublicRestaurantsMapHtml = (
     if (nextId === currentSelectedId) return;
     if (currentSelectedId !== null) {
       var prev = vectorSource.getFeatureById(currentSelectedId);
-      if (prev) prev.setStyle(makeMarkerStyle(prev.get('label'), false));
+      if (prev) prev.setStyle(makeMarkerStyle(prev.get('catKey'), prev.get('label'), false));
     }
     currentSelectedId = nextId;
     if (nextId !== null) {
       var next = vectorSource.getFeatureById(nextId);
-      if (next) next.setStyle(makeMarkerStyle(next.get('label'), true));
+      if (next) next.setStyle(makeMarkerStyle(next.get('catKey'), next.get('label'), true));
     }
   };
 

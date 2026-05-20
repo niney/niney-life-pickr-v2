@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError, useMapPublicConfig, useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
+import {
+  resolveRestaurantCategoryKey,
+  type RestaurantCategoryKey,
+} from '@repo/utils';
 import { buildPublicRestaurantsMapHtml } from './publicRestaurantsMapHtml';
 import type {
   UserLocationResult,
@@ -13,6 +17,7 @@ interface Marker {
   lat: number;
   lng: number;
   name: string;
+  categoryKey: RestaurantCategoryKey | null;
 }
 
 interface Bbox {
@@ -77,6 +82,7 @@ export const PublicRestaurantsWebMap = ({
           lat: it.latitude!,
           lng: it.longitude!,
           name: it.name,
+          categoryKey: resolveRestaurantCategoryKey(it.category),
         })),
     [items],
   );
