@@ -24,22 +24,33 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
   // 잡아 옮길 때 onScroll 이 발사돼 같은 인덱스를 다시 set 하면 안정적이지만
   // 무의미한 렌더 + scroll-end 흔들림이 생긴다.
   const ignoreScrollRef = useRef(false);
+  // 첫 effect 실행 여부. 첫 mount 는 instant jump, 이후는 smooth.
+  const firstRunRef = useRef(true);
 
   // index → scrollLeft 동기화. 첫 마운트와 키보드/버튼 변경 둘 다 커버.
-  // behavior: 'auto' — 첫 mount 시 jump, 이후엔 smooth. requestAnimationFrame
-  // 으로 한 프레임 미뤄 layout 이 확정된 뒤 위치 보정.
+  //
+  // 첫 mount 는 'instant' — smooth 로 2+ 페이지를 건너뛰면 모바일에서 smooth
+  // scroll 이 가드(setTimeout) 보다 늦게 끝나, 도중의 onScroll 이 가드를
+  // 빠져나와 인덱스를 잘못 보정하던 버그가 있었다 (사용자가 3번째 이미지를
+  // 눌렀는데 2번째가 떴던 원인). 첫 진입은 도착 위치가 곧 보일 화면이므로
+  // 애니메이션 불필요.
+  //
+  // 이후 키보드/버튼은 'smooth' — 한 페이지씩 짧은 거리라 자연스럽다.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const target = safeIdx * el.clientWidth;
     if (Math.abs(el.scrollLeft - target) < 1) return;
+    const isFirst = firstRunRef.current;
+    firstRunRef.current = false;
     ignoreScrollRef.current = true;
-    el.scrollTo({ left: target, behavior: 'smooth' });
-    // smooth scroll 종료 직후 onScroll 들이 정리되도록 짧은 지연. snap 이
-    // 안정화될 때까지 200ms 면 충분 (실측 평균 ~120ms).
+    el.scrollTo({ left: target, behavior: isFirst ? 'instant' : 'smooth' });
+    // instant 는 onScroll 한 번이면 충분, smooth 는 모바일에서 종종 300ms+
+    // 걸리므로 600ms 가드로 안전 마진 확보.
+    const guardMs = isFirst ? 80 : 600;
     const t = window.setTimeout(() => {
       ignoreScrollRef.current = false;
-    }, 200);
+    }, guardMs);
     return () => window.clearTimeout(t);
   }, [safeIdx]);
 
@@ -70,7 +81,10 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
     <div
       role="dialog"
       aria-label="사진 보기"
-      className="fixed inset-0 z-50 bg-black/90 animate-in fade-in duration-150"
+      // height 를 dvh 로 — vh 는 layout viewport 기준이라 모바일 주소창 영역이
+      // 차이만큼 dialog 가 시야 밖으로 넘어가 이미지/인디케이터가 잘렸다.
+      // dvh 는 주소창 토글 시 즉시 따라간다.
+      className="fixed inset-x-0 top-0 z-50 h-[100dvh] bg-black/90 animate-in fade-in duration-150"
     >
       {/* 닫기 버튼 — overlay 클릭 닫기는 scroll-snap 컨테이너 위에 두면 swipe
           중 의도치 않게 닫힐 수 있어 명시 버튼 한 곳으로 한정. */}
@@ -118,12 +132,19 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
         {images.map((u, i) => (
           <div
             key={`${i}-${u}`}
-            className="flex h-full min-w-full shrink-0 snap-center items-center justify-center p-4"
+            // w-full (not min-w-full) — min-w-full 은 flex item 이 콘텐츠에 맞춰
+            // 더 커질 수 있어, 세로 긴/정방형 이미지가 max-h 기준으로 부풀면
+            // slide 가 scroller 보다 넓어지고 max-w-full 이 무력화돼 가로로
+            // 화면을 넘쳐 잘렸다. w-full + shrink-0 으로 정확히 scroller 폭에
+            // 고정해 max-w-full 이 실효력을 갖도록.
+            className="flex h-full w-full shrink-0 snap-center items-center justify-center p-4"
           >
             <ImgWithFallback
               src={u}
               loading={Math.abs(i - safeIdx) <= 1 ? 'eager' : 'lazy'}
-              className="max-h-[88vh] max-w-full rounded object-contain"
+              // max-h 는 dvh — dialog 와 동일 기준이라 모바일 주소창 상태가
+              // 바뀌어도 잘리지 않는다.
+              className="max-h-[88dvh] max-w-full rounded object-contain"
             />
           </div>
         ))}
