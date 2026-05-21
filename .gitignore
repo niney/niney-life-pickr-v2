@@ -55,6 +55,9 @@ apps/friendly/src/modules/crawl/__debug__/
 # Claude Code local state (worktrees, agent scratch dirs)
 .claude/
 
+# 임시폴더
+.tmp/
+
 *.tsbuildinfo
 
 # tsc -b emit artifacts beside .ts source (apps/web build script)
