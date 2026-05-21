@@ -67,6 +67,14 @@ interface Props {
 
 const DEFAULT_ZOOM = 15;
 
+// 이 줌 이상부터 라벨(식당명) + 풀사이즈 핀. 미만에서는 라벨 없는 축소 핀.
+// OL declutter 가 feature 단위라 라벨까지 같이 그리면 줌 아웃 시 핀이 통째로
+// 가려진다 — 라벨 영역을 떼서 충돌 박스를 작게 만드는 게 핵심.
+const LABEL_VISIBLE_ZOOM = 14;
+// LABEL_VISIBLE_ZOOM 미만에서 아이콘 축소 배율. 26×26 → ~14px. 작아질수록
+// 도심 밀집 지역에서도 핀 충돌 거의 없음.
+const SMALL_ICON_SCALE = 0.55;
+
 // vworld WMTS 타일을 OpenLayers 가 직접 받아 그리는 저레벨 캔버스. 단일/다중
 // 마커 모두 처리 — 마커 배열만 넘겨주면 된다. 좌표 없는 상태 / 키 없는 상태
 // 등 렌더 분기는 호출자 책임 (placeholder 포함).
@@ -138,9 +146,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 
     const map = new OlMap({
       target: containerRef.current,
-      // declutter:true — 모든 마커의 라벨이 노출되더라도 겹치는 텍스트는 OL
-      // 이 자동으로 숨김. 도심 밀집 지역에서 글자 충돌 회피.
-      layers: [baseLayer, new VectorLayer({ source: vectorSource, declutter: true })],
+      // declutter 끔 — OL 의 layer declutter 는 Feature 단위라 라벨이 겹치면
+      // 핀까지 같이 가려진다. 라벨 가시성은 style function 안에서 줌 임계값
+      // (LABEL_VISIBLE_ZOOM)으로 직접 제어하고, 충돌 박스를 작게 만들어 핀이
+      // 사라지지 않도록 한다.
+      layers: [baseLayer, new VectorLayer({ source: vectorSource })],
       view,
       controls: [],
     });
@@ -224,6 +234,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   }, [apiKey]);
 
   // 마커 갱신 — 좌표/선택 상태가 바뀌면 vectorSource 만 새로 칠한다 (map 재생성 X).
+  // 스타일은 style function 으로 둬서 줌 변화 시 OL 이 자동 재평가 (라벨 on/off).
   useEffect(() => {
     const src = vectorSourceRef.current;
     if (!src) return;
@@ -232,14 +243,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
       f.set('markerId', m.id);
       const isSelected = m.id === selectedMarkerId;
-      f.setStyle(
-        makeMarkerStyle(
-          m.label,
-          isSelected,
-          m.variant ?? 'primary',
-          m.categoryKey ?? null,
-        ),
-      );
+      const variant = m.variant ?? 'primary';
+      const categoryKey = m.categoryKey ?? null;
+      f.setStyle((_feature, resolution) => {
+        const zoom =
+          mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
+        return makeMarkerStyle(m.label, isSelected, variant, categoryKey, zoom);
+      });
       src.addFeature(f);
     }
   }, [markers, selectedMarkerId]);
@@ -290,25 +300,34 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 // primary(빨강) / muted(회색) 둘 다 같은 빌더를 쓴다 — variant 는 배경색 톤만
 // 결정하고, 카테고리는 안쪽 라인 아이콘으로 일관되게 표시. 앱(publicRestaurantsMapHtml)
 // 과 동일 디자인.
+//
+// zoom 기준 분기:
+//   - selected : 항상 풀사이즈 핀 + 라벨 (선택 마커는 줌과 무관하게 식별 가능)
+//   - zoom >= LABEL_VISIBLE_ZOOM : 풀사이즈 핀 + 라벨
+//   - zoom <  LABEL_VISIBLE_ZOOM : SMALL_ICON_SCALE 배율 축소 핀, 라벨 없음
 const makeMarkerStyle = (
   label: string | undefined,
   selected: boolean,
   variant: NonNullable<MapMarker['variant']>,
   categoryKey: RestaurantCategoryKey | null,
+  zoom: number,
 ): Style => {
+  const compact = !selected && zoom < LABEL_VISIBLE_ZOOM;
   return new Style({
     image: new Icon({
       anchor: selected ? [0.5, 1] : [0.5, 0.5],
       src: buildRestaurantMarkerDataUrl(categoryKey, selected, variant),
+      scale: compact ? SMALL_ICON_SCALE : 1,
     }),
-    text: label
-      ? new OlText({
-          text: label,
-          offsetY: selected ? -54 : 20,
-          font: selected ? 'bold 12px sans-serif' : '11px sans-serif',
-          fill: new Fill({ color: '#0f172a' }),
-          stroke: new Stroke({ color: '#fff', width: 3 }),
-        })
-      : undefined,
+    text:
+      label && !compact
+        ? new OlText({
+            text: label,
+            offsetY: selected ? -54 : 20,
+            font: selected ? 'bold 12px sans-serif' : '11px sans-serif',
+            fill: new Fill({ color: '#0f172a' }),
+            stroke: new Stroke({ color: '#fff', width: 3 }),
+          })
+        : undefined,
   });
 };
