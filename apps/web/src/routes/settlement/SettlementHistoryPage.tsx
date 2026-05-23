@@ -56,15 +56,15 @@ export const SettlementHistoryPage = () => {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                <ul className="divide-y">
-                  {list.data.items.map((s) => (
-                    <li key={s.id}>
-                      <Link
-                        to={`/restaurants/${s.restaurantPlaceId}/settle/${s.id}`}
-                        className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent"
-                      >
+            <ul className="space-y-2">
+              {list.data.items.map((s) => (
+                <li key={s.id}>
+                  <Link
+                    to={`/restaurants/${s.restaurantPlaceId}/settle/${s.id}`}
+                    className="block"
+                  >
+                    <Card className="transition-colors hover:border-primary/40 hover:bg-accent">
+                      <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium">
                             {s.restaurantName}
@@ -86,12 +86,12 @@ export const SettlementHistoryPage = () => {
                             </div>
                           )}
                         </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+                      </div>
+                    </Card>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
 
           <div className="mt-4">
