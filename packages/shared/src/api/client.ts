@@ -34,7 +34,9 @@ export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise
   const headers = new Headers(init.headers);
   // Only declare JSON when we actually have a body — fastify rejects POST/PUT
   // requests that say `Content-Type: application/json` but send nothing.
-  if (init.body !== undefined && init.body !== null) {
+  // FormData 는 boundary 가 포함된 Content-Type 을 브라우저가 알아서
+  // 채우게 두어야 하므로 여기서 덮어쓰지 않는다.
+  if (init.body !== undefined && init.body !== null && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);

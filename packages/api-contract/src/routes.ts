@@ -232,4 +232,14 @@ export const SettingsMap = {
   publicConfig: `${API_PREFIX}/settings/map/public`,
 } as const;
 
+// 정산하기의 영수증 업로드/추출 엔드포인트. 인증된 사용자(USER+) 만 사용
+// 가능 — 정산 자체가 로그인 사용자 기능. 추출은 vision LLM 호출이라 비용이
+// 들지만 MVP 에서는 제한 없음.
+export const SettlementExtraction = {
+  upload: `${API_PREFIX}/settlement-extraction/upload`,
+  extract: `${API_PREFIX}/settlement-extraction/extract`,
+  preview: (token: string) =>
+    `${API_PREFIX}/settlement-extraction/preview/${token}`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;

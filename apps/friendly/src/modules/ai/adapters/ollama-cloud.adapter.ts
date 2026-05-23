@@ -100,9 +100,20 @@ export class OllamaCloudAdapter implements LLMProvider {
   private async doComplete(opts: LLMCompleteOptions): Promise<LLMCompleteResult> {
     if (opts.signal?.aborted) throw new LLMCancelledError();
 
-    const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+    // Ollama 의 vision 메시지는 content 외에 images 배열을 함께 받는다.
+    // base64 문자열 (data: 접두 없이) 만 허용 — 변환 책임은 호출자.
+    interface OllamaMessage {
+      role: 'system' | 'user';
+      content: string;
+      images?: string[];
+    }
+    const messages: OllamaMessage[] = [];
     if (opts.systemPrompt) messages.push({ role: 'system', content: opts.systemPrompt });
-    messages.push({ role: 'user', content: opts.prompt });
+    const userMessage: OllamaMessage = { role: 'user', content: opts.prompt };
+    if (opts.images && opts.images.length > 0) {
+      userMessage.images = opts.images;
+    }
+    messages.push(userMessage);
 
     const ollamaOptions: Record<string, number> = {};
     if (typeof opts.temperature === 'number') ollamaOptions.temperature = opts.temperature;

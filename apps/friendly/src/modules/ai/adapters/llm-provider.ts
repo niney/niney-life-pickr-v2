@@ -9,6 +9,12 @@ export interface LLMCompleteOptions {
   // Resolved model id (e.g. 'gpt-oss:20b'), not the alias. Alias→id mapping
   // happens in AiService before calling the adapter.
   model: string;
+  // Base64-encoded image payloads attached to the user prompt. Vision
+  // models read these alongside the text. Ollama 의 /api/chat 은
+  // messages[i].images 로 받는다 — 'data:...' 접두는 제거하고 순수 base64
+  // 만 전달. 어댑터가 vision 미지원 모델에 대해 이 필드를 무시할지 에러로
+  // 다룰지는 어댑터 구현에 맡긴다.
+  images?: string[];
   temperature?: number;
   maxTokens?: number;
   // 입력 컨텍스트 윈도우 토큰 수. Ollama의 num_ctx 기본값이 2048이라
