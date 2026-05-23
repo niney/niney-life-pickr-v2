@@ -244,10 +244,16 @@ export const SettlementExtraction = {
 
 // 정산 세션 — 로그인 사용자 본인만 사용한다. list/get/delete 모두 소유자
 // 검증을 라우트 핸들러에서 한다.
+//
+// share/shared 는 한 쌍: share 는 owner 가 토큰을 만들고/회수하는 인증 경로,
+// shared 는 누구나 토큰만 알면 read-only 로 결과를 보는 공개 경로. 공개
+// 응답에서는 receiptPreviewUrl/userId 가 빠진다.
 export const Settlement = {
   list: `${API_PREFIX}/settlements`,
   create: `${API_PREFIX}/settlements`,
   one: (id: string) => `${API_PREFIX}/settlements/${id}`,
+  share: (id: string) => `${API_PREFIX}/settlements/${id}/share`,
+  shared: (token: string) => `${API_PREFIX}/share/settlements/${token}`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;

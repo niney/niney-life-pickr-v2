@@ -48,6 +48,10 @@ model SettlementSession {
   // 분배 계산 결과의 사실상 합. 항목 amount 의 단순 합과 같지만 client 가
   // 매번 계산하지 않아도 되도록 저장.
   itemsSubtotal     Int
+  // 공유 링크 토큰 — null 이면 비공개. POST /settlements/:id/share 로 owner 가
+  // 멱등 생성, DELETE 로 회수. 토큰 자체는 추측 불가능한 32바이트 base64url.
+  // unique 인덱스로 GET /share/settlements/:token 조회 O(1).
+  shareToken        String?  @unique
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

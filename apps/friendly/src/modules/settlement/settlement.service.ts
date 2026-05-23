@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
@@ -7,8 +8,10 @@ import {
   type ListSettlementsQueryType,
   type ListSettlementsResultType,
   type ReceiptItemCategoryType,
+  type SettlementShareType,
   type SettlementSessionType,
   type SettlementSourceType,
+  type SharedSettlementSessionType,
   calculateShares,
 } from '@repo/api-contract';
 
@@ -207,6 +210,60 @@ export class SettlementService {
     if (!row) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
     if (row.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
     await this.prisma.settlementSession.delete({ where: { id } });
+  }
+
+  // 공유 토큰 생성 — 이미 있으면 동일 토큰을 그대로 돌려준다(멱등). 회수 후
+  // 재생성하면 새 토큰이 발급되므로 이전 링크는 자연 무효화.
+  async createShare(userId: string, id: string): Promise<SettlementShareType> {
+    const row = await this.prisma.settlementSession.findUnique({
+      where: { id },
+      select: { id: true, userId: true, shareToken: true },
+    });
+    if (!row) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
+    if (row.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
+
+    let token = row.shareToken;
+    if (!token) {
+      // base64url 32바이트 = 43자. URL safe, padding 없음.
+      token = randomBytes(32).toString('base64url');
+      await this.prisma.settlementSession.update({
+        where: { id },
+        data: { shareToken: token },
+      });
+    }
+    return { token, shareUrl: Routes.Settlement.shared(token) };
+  }
+
+  async revokeShare(userId: string, id: string): Promise<void> {
+    const row = await this.prisma.settlementSession.findUnique({
+      where: { id },
+      select: { id: true, userId: true, shareToken: true },
+    });
+    if (!row) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
+    if (row.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
+    if (!row.shareToken) return; // 이미 비공개. 멱등 처리.
+    await this.prisma.settlementSession.update({
+      where: { id },
+      data: { shareToken: null },
+    });
+  }
+
+  // 공유 토큰으로 read-only 세션 조회. 토큰을 안다 = 접근 허용이므로 인증
+  // 검사는 하지 않는다. 응답에서 userId/receiptPreviewUrl 은 제거.
+  async getBySharedToken(token: string): Promise<SharedSettlementSessionType | null> {
+    const row = await this.prisma.settlementSession.findUnique({
+      where: { shareToken: token },
+      include: {
+        items: { orderBy: { orderIndex: 'asc' } },
+        participants: { orderBy: { orderIndex: 'asc' } },
+      },
+    });
+    if (!row) return null;
+    const session = this.rowToSession(row);
+    // userId, receiptPreviewUrl 둘 다 제거. 영수증 사진은 토큰 받은 사람에게도
+    // 공개하지 않는다(개인정보 우려).
+    const { userId: _userId, receiptPreviewUrl: _preview, ...shared } = session;
+    return shared;
   }
 
   private rowToSession(row: {

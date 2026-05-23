@@ -35,3 +35,24 @@ export const useDeleteSettlement = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
+
+// 공유 토큰 생성. mutation 성공 시 onShared(token) 결과를 그대로 UI 가 표시.
+// 서버가 멱등이라 같은 세션 여러 번 호출해도 같은 토큰이 돌아온다.
+export const useCreateSettlementShare = () =>
+  useMutation({
+    mutationFn: (id: string) => settlementApi.createShare(id),
+  });
+
+export const useRevokeSettlementShare = () =>
+  useMutation({
+    mutationFn: (id: string) => settlementApi.revokeShare(id),
+  });
+
+// 공개 read-only 조회. 비로그인 사용자도 token 만 알면 호출 가능. 별도 KEY 로
+// 격리해 소유자가 같은 세션을 보고 있어도 캐시 충돌 없음.
+export const useSharedSettlement = (token: string | null) =>
+  useQuery({
+    queryKey: ['settlement', 'shared', token],
+    queryFn: () => settlementApi.getShared(token ?? ''),
+    enabled: !!token,
+  });

@@ -7,6 +7,8 @@ import {
   ListSettlementsResult,
   Routes,
   SettlementSession,
+  SettlementShare,
+  SharedSettlementSession,
 } from '@repo/api-contract';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
@@ -14,6 +16,8 @@ import { SettlementError, SettlementService } from './settlement.service.js';
 const S = Routes.Settlement;
 
 const IdParams = z.object({ id: z.string().min(1) });
+// base64url 43자 + 안전여유 — 길이 검사로 명백히 잘못된 입력은 zod 단계에서 컷.
+const TokenParams = z.object({ token: z.string().min(20).max(64) });
 
 const throwAsHttp = (app: FastifyInstance, e: SettlementError): never => {
   switch (e.code) {
@@ -104,6 +108,60 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
         if (e instanceof SettlementError) return throwAsHttp(app, e);
         throw e;
       }
+    },
+  });
+
+  // 공유 토큰 생성 — 멱등. 같은 세션을 두 번 호출해도 동일 토큰 반환.
+  typed.post(S.share(':id'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['settlement'],
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+      response: { 200: SettlementShare },
+    },
+    handler: async (req) => {
+      try {
+        return await service.createShare(req.user.userId, req.params.id);
+      } catch (e) {
+        if (e instanceof SettlementError) return throwAsHttp(app, e);
+        throw e;
+      }
+    },
+  });
+
+  // 공유 토큰 회수 — 이미 비공개여도 204. 호출 후 같은 세션을 다시 share 하면
+  // 새 토큰이 발급되므로 이전 링크는 영구 무효.
+  typed.delete(S.share(':id'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['settlement'],
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+    },
+    handler: async (req, reply) => {
+      try {
+        await service.revokeShare(req.user.userId, req.params.id);
+        return reply.code(204).send();
+      } catch (e) {
+        if (e instanceof SettlementError) return throwAsHttp(app, e);
+        throw e;
+      }
+    },
+  });
+
+  // 공유 토큰 read-only 조회 — 인증 불필요. 토큰을 안다 = 접근 허용. 응답에서
+  // userId/receiptPreviewUrl 은 제거되어 영수증 원본 사진은 못 본다.
+  typed.get(S.shared(':token'), {
+    schema: {
+      tags: ['settlement'],
+      params: TokenParams,
+      response: { 200: SharedSettlementSession },
+    },
+    handler: async (req) => {
+      const out = await service.getBySharedToken(req.params.token);
+      if (!out) throw app.httpErrors.notFound('공유된 정산을 찾을 수 없습니다.');
+      return out;
     },
   });
 };

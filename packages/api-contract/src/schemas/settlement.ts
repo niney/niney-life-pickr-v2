@@ -107,3 +107,19 @@ export const ListSettlementsResult = z.object({
   total: z.number().int().nonnegative(),
 });
 export type ListSettlementsResultType = z.infer<typeof ListSettlementsResult>;
+
+// 공유 토큰 생성/회수 응답. 토큰이 없으면 (회수 직후) token=null.
+// shareUrl 은 절대 URL 이 아닌 API 경로 — 클라이언트가 origin 을 붙여 사용.
+export const SettlementShare = z.object({
+  token: z.string().nullable(),
+  shareUrl: z.string().nullable(),
+});
+export type SettlementShareType = z.infer<typeof SettlementShare>;
+
+// 공개 공유 응답. 기존 SettlementSession 에서 소유자 식별(userId)과 영수증
+// 미리보기(receiptPreviewUrl) 를 제거 — 토큰 받은 사람도 원본 사진은 보지 못한다.
+export const SharedSettlementSession = SettlementSession.omit({
+  userId: true,
+  receiptPreviewUrl: true,
+});
+export type SharedSettlementSessionType = z.infer<typeof SharedSettlementSession>;
