@@ -33,6 +33,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // 단일 dev.db 를 공유하기 때문에 파일 병렬 실행은 안전하지 않다 — 한 테스트가
+    // restaurant.deleteMany 로 cascade 삭제 중일 때 다른 파일의 read 가
+    // 중간 상태를 잡아 "Field review is required ... got null" 같은 오류가
+    // 단속적으로 발생한다. 격리된 DB 인스턴스를 따로 안 쓰는 한 직렬화가
+    // 가장 단순하고 안정적인 보호선.
+    fileParallelism: false,
     server: {
       // Inline workspace packages so the extensionAlias above also applies
       // to imports inside @repo/*. Otherwise their `*.js` re-exports stay

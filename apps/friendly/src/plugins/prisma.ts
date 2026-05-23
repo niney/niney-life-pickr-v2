@@ -17,6 +17,10 @@ export default fp(
     await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL');
     await prisma.$queryRawUnsafe('PRAGMA synchronous = NORMAL');
     await prisma.$queryRawUnsafe('PRAGMA busy_timeout = 30000');
+    // FK 강제. SQLite 기본은 OFF 라 ON DELETE CASCADE 가 동작하지 않아 부모
+    // 행을 deleteMany 로 지워도 자식이 orphan 으로 남는다. 테스트 시 보이던
+    // "Field review is required ... got null" 이슈가 여기서 비롯.
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON');
 
     app.decorate('prisma', prisma);
 

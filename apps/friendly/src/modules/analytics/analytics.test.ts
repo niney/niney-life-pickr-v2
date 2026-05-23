@@ -81,13 +81,17 @@ const seedRestaurant = async (
   meta: { name?: string; category?: string | null } = {},
 ): Promise<SeededRestaurant> => {
   const placeId = stamp();
+  const name = meta.name ?? '테스트 식당';
   const rest = await app.prisma.restaurant.create({
     data: {
+      source: 'naver',
+      sourceId: placeId,
       placeId,
-      name: meta.name ?? '테스트 식당',
+      name,
       category: meta.category ?? null,
       rawSourceUrl: 'https://x',
       snapshotJson: '{}',
+      canonical: { create: { name, primaryCategory: meta.category ?? null } },
     },
   });
 
