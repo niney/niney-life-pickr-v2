@@ -242,4 +242,12 @@ export const SettlementExtraction = {
     `${API_PREFIX}/settlement-extraction/preview/${token}`,
 } as const;
 
+// 정산 세션 — 로그인 사용자 본인만 사용한다. list/get/delete 모두 소유자
+// 검증을 라우트 핸들러에서 한다.
+export const Settlement = {
+  list: `${API_PREFIX}/settlements`,
+  create: `${API_PREFIX}/settlements`,
+  one: (id: string) => `${API_PREFIX}/settlements/${id}`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;

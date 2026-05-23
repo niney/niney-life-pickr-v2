@@ -15,7 +15,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  picks Pick[]
+  picks       Pick[]
+  settlements SettlementSession[]
 
   @@map("users")
 }
@@ -23,6 +24,84 @@ model User {
 enum Role {
   USER
   ADMIN
+}
+
+// 정산하기 — 한 식당에서의 한 번의 정산 세션. 로그인 사용자 본인만 보고
+// 편집할 수 있으며 (개인 전용 결정), 영수증으로 만든 세션은 receiptImageToken
+// 에 data/receipts/<token>.jpg 가리키는 UUID 가 들어간다. totalAmount 는
+// 영수증 표기 / 사용자가 직접 입력한 합계 — 분배 계산에는 items 의 amount
+// 합을 사용하지만 화면 표시·검증을 위해 따로 저장한다.
+model SettlementSession {
+  id                String   @id @default(cuid())
+  userId            String
+  restaurantPlaceId String
+  // 식당 이름 스냅샷 — restaurant 이름이 나중에 바뀌어도 이력에서 보이게.
+  restaurantName    String
+  // 'MANUAL' (직접 입력) | 'RECEIPT' (영수증 추출 후 보정).
+  source            String
+  // null 이면 사용자가 총액을 입력하지 않은 것. 분배 계산엔 사용하지 않는다.
+  totalAmount       Int?
+  // 항목 합과 totalAmount 가 불일치할 때 추출 단계에서 만든 경고 문구.
+  warning           String?
+  // 영수증 이미지 토큰 — data/receipts/<token>.jpg. MANUAL 세션은 null.
+  receiptImageToken String?
+  // 분배 계산 결과의 사실상 합. 항목 amount 의 단순 합과 같지만 client 가
+  // 매번 계산하지 않아도 되도록 저장.
+  itemsSubtotal     Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items        SettlementItem[]
+  participants SettlementParticipant[]
+
+  @@index([userId, createdAt])
+  @@index([restaurantPlaceId])
+  @@map("settlement_sessions")
+}
+
+model SettlementItem {
+  id              String  @id @default(cuid())
+  sessionId       String
+  // 사용자가 화면에서 본 그대로의 메뉴명.
+  name            String
+  unitPrice       Int?
+  // 직접 입력 모드에서 빠뜨릴 수 있어 nullable.
+  quantity        Int?
+  // 라인 합계. 분배 계산은 이 값으로 한다.
+  amount          Int
+  // 'ALCOHOL' | 'NON_ALCOHOL' | 'SIDE' | 'UNCATEGORIZED'.
+  category        String
+  // 레스토랑 등록 메뉴 이름과 매칭됐을 때 정규화된 표기.
+  matchedMenuName String?
+  orderIndex      Int
+
+  session SettlementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("settlement_items")
+}
+
+model SettlementParticipant {
+  id                String  @id @default(cuid())
+  sessionId         String
+  // 이름·닉네임 둘 중 하나만 채워져도 valid — application layer 가 검증.
+  name              String?
+  nickname          String?
+  // 카테고리별 분담 제외 플래그. excludeAlcohol=true 면 ALCOHOL 풀에서
+  // 빠지고, 그 풀은 나머지 참여자끼리 나눠 부담.
+  excludeAlcohol    Boolean @default(false)
+  excludeNonAlcohol Boolean @default(false)
+  excludeSide       Boolean @default(false)
+  // 계산된 분담액 스냅샷. items/excludes 가 바뀌면 server 가 다시 계산해
+  // 모든 참여자 행을 update.
+  shareAmount       Int
+  orderIndex        Int
+
+  session SettlementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("settlement_participants")
 }
 
 model Pick {
