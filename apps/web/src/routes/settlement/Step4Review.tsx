@@ -82,6 +82,9 @@ export const Step4Review = ({ placeId, onBack }: Props) => {
           excludeAlcohol: p.excludeAlcohol,
           excludeNonAlcohol: p.excludeNonAlcohol,
           excludeSide: p.excludeSide,
+          // 자동완성에서 골랐을 때 hint 로 같이 전송. 서버는 어차피 정규화 키로
+          // 다시 매칭하지만 의도 명시 + 추후 서버 확장 여지.
+          ...(p.contactId ? { contactId: p.contactId } : {}),
         })),
       });
       // 저장 성공 — draft 정리하고 결과 페이지로.

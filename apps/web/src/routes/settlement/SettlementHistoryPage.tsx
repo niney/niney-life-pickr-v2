@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, Receipt } from 'lucide-react';
 import { ApiError, useListSettlements } from '@repo/shared';
+import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { Pager } from '~/components/ui/pager';
 
@@ -25,12 +26,15 @@ export const SettlementHistoryPage = () => {
         <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Receipt className="size-4" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-semibold">내 정산 이력</h1>
           <p className="text-sm text-muted-foreground">
             저장한 정산을 최근순으로 보여줍니다.
           </p>
         </div>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/me/contacts">내 단골 →</Link>
+        </Button>
       </header>
 
       {list.isLoading && (
