@@ -6,6 +6,7 @@ import { Button } from '~/components/ui/button';
 import { Step1Participants } from './Step1Participants';
 import { Step2Source } from './Step2Source';
 import { Step3Edit } from './Step3Edit';
+import { Step4Review } from './Step4Review';
 
 export type StepKey = 'participants' | 'source' | 'edit' | 'review';
 
@@ -84,9 +85,7 @@ export const SettlementNewPage = () => {
             />
           )}
           {step === 'review' && (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              결과·저장 단계는 다음 PR 에서 구현됩니다.
-            </div>
+            <Step4Review placeId={placeId} onBack={() => setStep('edit')} />
           )}
         </div>
       )}

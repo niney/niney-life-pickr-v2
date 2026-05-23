@@ -9,8 +9,8 @@ import {
   type ReceiptItemCategoryType,
   type SettlementSessionType,
   type SettlementSourceType,
+  calculateShares,
 } from '@repo/api-contract';
-import { calculateShares } from './settlement.calculator.js';
 
 // receiptImageToken 검증용 정규식 — settlement-extraction 의 IMAGE_TOKEN_PATTERN
 // 과 동일. 모듈을 직접 import 하지 않고 패턴만 다시 둔다 (모듈 결합도 축소).

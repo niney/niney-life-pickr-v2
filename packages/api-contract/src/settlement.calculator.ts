@@ -1,8 +1,8 @@
+import type { ReceiptItemCategoryType } from './schemas/settlement-extraction.js';
 import type {
-  ReceiptItemCategoryType,
   SettlementItemInputType,
   SettlementParticipantInputType,
-} from '@repo/api-contract';
+} from './schemas/settlement.js';
 
 // 분배 계산기 — 순수 함수. items 의 amount 합을 카테고리별 풀로 분리한 뒤
 // 참여자의 excludeXxx 플래그에 따라 풀별 인원수를 줄여 분담액을 산출한다.

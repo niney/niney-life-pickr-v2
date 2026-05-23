@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateShares } from './settlement.calculator.js';
+import { calculateShares } from '@repo/api-contract';
 
 const noExclude = (n: number) =>
   Array.from({ length: n }, () => ({
