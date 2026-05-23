@@ -9,12 +9,14 @@ import {
   LlmModelListResult,
   LlmProviderId,
   LlmProviderListResult,
+  LlmProviderPurpose,
   LlmProviderConfig as LlmProviderConfigSchema,
   Routes,
   TestLlmProviderInput,
   TestLlmProviderResult,
   UpdateLlmProviderInput,
   type LlmProviderIdType,
+  type LlmProviderPurposeType,
   type TestLlmProviderResultType,
 } from '@repo/api-contract';
 
@@ -37,16 +39,17 @@ const buildEnvBlock = (): LlmProviderEnv => ({
   defaultModel: env.OLLAMA_DEFAULT_MODEL,
 });
 
-const ProviderParams = z.object({ id: LlmProviderId });
+const ProviderParams = z.object({ id: LlmProviderId, purpose: LlmProviderPurpose });
 
 const aiRoutes: FastifyPluginAsync = async (app) => {
   const config = new AiConfigService(app.prisma, buildEnvBlock());
   const cache = adapterCache;
 
   // Lazy provider — picked per-request so config changes (incl. maxConcurrent)
-  // take effect without server restart.
+  // take effect without server restart. /complete 류 admin 엔드포인트는 chat
+  // purpose 만 사용한다.
   const buildService = async (): Promise<{ service: AiService; resolved: ResolvedProviderConfig | null }> => {
-    const resolved = await config.getResolved('ollama-cloud');
+    const resolved = await config.getResolved('ollama-cloud', 'chat');
     if (!resolved) {
       // Sentinel provider: no key, every call should error early in AiService
       // before reaching here. We pass a stub that throws so accidental calls
@@ -101,7 +104,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     handler: async () => ({ providers: await config.list() }),
   });
 
-  typed.delete(AiRoutes.provider(':id'), {
+  typed.delete(AiRoutes.provider(':id', ':purpose'), {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
       tags: ['admin'],
@@ -109,12 +112,15 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       params: ProviderParams,
     },
     handler: async (req, reply) => {
-      await config.remove(req.params.id as LlmProviderIdType);
+      await config.remove(
+        req.params.id as LlmProviderIdType,
+        req.params.purpose as LlmProviderPurposeType,
+      );
       return reply.code(204).send();
     },
   });
 
-  typed.put(AiRoutes.provider(':id'), {
+  typed.put(AiRoutes.provider(':id', ':purpose'), {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
       tags: ['admin'],
@@ -124,10 +130,15 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: LlmProviderConfigSchema },
     },
     handler: async (req) =>
-      config.update(req.params.id as LlmProviderIdType, req.body, req.user.userId),
+      config.update(
+        req.params.id as LlmProviderIdType,
+        req.params.purpose as LlmProviderPurposeType,
+        req.body,
+        req.user.userId,
+      ),
   });
 
-  typed.get(AiRoutes.providerModels(':id'), {
+  typed.get(AiRoutes.providerModels(':id', ':purpose'), {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
       tags: ['admin'],
@@ -135,11 +146,14 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       params: ProviderParams,
       response: { 200: LlmModelListResult },
     },
-    handler: async () => {
+    handler: async (req) => {
       // Best-effort — empty list is a valid response (no key, provider
       // doesn't support listing, network blip). Clients fall back to free
       // text entry rather than treating this as an error.
-      const resolved = await config.getResolved('ollama-cloud');
+      const resolved = await config.getResolved(
+        req.params.id as LlmProviderIdType,
+        req.params.purpose as LlmProviderPurposeType,
+      );
       if (!resolved) return { models: [] };
       const provider = cache.get(resolved);
       if (typeof provider.listModels !== 'function') return { models: [] };
@@ -152,7 +166,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  typed.post(AiRoutes.testProvider(':id'), {
+  typed.post(AiRoutes.testProvider(':id', ':purpose'), {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
       tags: ['admin'],
@@ -162,7 +176,10 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: TestLlmProviderResult },
     },
     handler: async (req): Promise<TestLlmProviderResultType> => {
-      const resolved = await config.getResolved('ollama-cloud');
+      const resolved = await config.getResolved(
+        req.params.id as LlmProviderIdType,
+        req.params.purpose as LlmProviderPurposeType,
+      );
       if (!resolved) {
         return { ok: false, error: 'no_api_key', message: 'API 키가 설정되지 않았습니다.' };
       }

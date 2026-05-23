@@ -7,6 +7,7 @@ import type {
   LlmProviderConfigType,
   LlmProviderIdType,
   LlmProviderListResultType,
+  LlmProviderPurposeType,
   TestLlmProviderResultType,
   UpdateLlmProviderInputType,
 } from '@repo/api-contract';
@@ -16,6 +17,11 @@ import { apiFetch } from './client.js';
 // some bundlers (vite's esbuild prebundle) drop the inner object from the
 // `export * as Routes` re-export, so we hardcode the paths here.
 const AI_PREFIX = '/api/v1/admin/ai';
+
+export interface ProviderKey {
+  id: LlmProviderIdType;
+  purpose: LlmProviderPurposeType;
+}
 
 export const aiApi = {
   complete: (input: AiCompleteInputType) =>
@@ -32,23 +38,28 @@ export const aiApi = {
 
   listProviders: () => apiFetch<LlmProviderListResultType>(`${AI_PREFIX}/providers`),
 
-  updateProvider: (id: LlmProviderIdType, input: UpdateLlmProviderInputType) =>
-    apiFetch<LlmProviderConfigType>(`${AI_PREFIX}/providers/${id}`, {
+  updateProvider: ({ id, purpose }: ProviderKey, input: UpdateLlmProviderInputType) =>
+    apiFetch<LlmProviderConfigType>(`${AI_PREFIX}/providers/${id}/${purpose}`, {
       method: 'PUT',
       body: JSON.stringify(input),
     }),
 
-  deleteProvider: (id: LlmProviderIdType) =>
-    apiFetch<void>(`${AI_PREFIX}/providers/${id}`, {
+  deleteProvider: ({ id, purpose }: ProviderKey) =>
+    apiFetch<void>(`${AI_PREFIX}/providers/${id}/${purpose}`, {
       method: 'DELETE',
     }),
 
-  testProvider: (id: LlmProviderIdType, model?: string) =>
-    apiFetch<TestLlmProviderResultType>(`${AI_PREFIX}/providers/${id}/test`, {
-      method: 'POST',
-      body: JSON.stringify(model ? { model } : {}),
-    }),
+  testProvider: ({ id, purpose }: ProviderKey, model?: string) =>
+    apiFetch<TestLlmProviderResultType>(
+      `${AI_PREFIX}/providers/${id}/${purpose}/test`,
+      {
+        method: 'POST',
+        body: JSON.stringify(model ? { model } : {}),
+      },
+    ),
 
-  listModels: (id: LlmProviderIdType) =>
-    apiFetch<LlmModelListResultType>(`${AI_PREFIX}/providers/${id}/models`),
+  listModels: ({ id, purpose }: ProviderKey) =>
+    apiFetch<LlmModelListResultType>(
+      `${AI_PREFIX}/providers/${id}/${purpose}/models`,
+    ),
 };

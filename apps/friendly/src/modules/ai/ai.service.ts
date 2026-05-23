@@ -34,7 +34,7 @@ export class AiService {
     if (this.isRateLimited(actorId)) {
       return rateLimitedResult();
     }
-    const resolved = await this.config.getResolved('ollama-cloud');
+    const resolved = await this.config.getResolved('ollama-cloud', 'chat');
     if (!resolved) return noApiKeyResult();
 
     return this.runOne(input, resolved);
@@ -55,7 +55,7 @@ export class AiService {
       };
     }
 
-    const resolved = await this.config.getResolved('ollama-cloud');
+    const resolved = await this.config.getResolved('ollama-cloud', 'chat');
     if (!resolved) {
       return {
         results: input.items.map((it) => ({

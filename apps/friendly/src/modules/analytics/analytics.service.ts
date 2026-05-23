@@ -924,7 +924,7 @@ export class AnalyticsService {
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {
     if (this.opts.resolveOverride) return this.opts.resolveOverride();
-    const resolved = await this.aiConfig.getResolved('ollama-cloud');
+    const resolved = await this.aiConfig.getResolved('ollama-cloud', 'chat');
     if (!resolved) return null;
     const model = resolved.defaultModel?.trim();
     if (!model) return null;

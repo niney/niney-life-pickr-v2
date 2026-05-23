@@ -10,7 +10,7 @@ export class AdapterCache {
   private cached: { key: string; adapter: OllamaCloudAdapter } | null = null;
 
   get(resolved: ResolvedProviderConfig): LLMProvider {
-    const key = `${resolved.apiKey}|${resolved.baseUrl}|${resolved.maxConcurrent}|${resolved.timeoutMs}`;
+    const key = `${resolved.provider}|${resolved.purpose}|${resolved.apiKey}|${resolved.baseUrl}|${resolved.maxConcurrent}|${resolved.timeoutMs}`;
     if (this.cached?.key === key) return this.cached.adapter;
     const adapter = new OllamaCloudAdapter({
       apiKey: resolved.apiKey,

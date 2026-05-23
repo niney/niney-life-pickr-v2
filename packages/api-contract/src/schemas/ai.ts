@@ -86,8 +86,15 @@ export type AiCompleteBatchResultType = z.infer<typeof AiCompleteBatchResult>;
 export const LlmProviderId = z.enum(['ollama-cloud']);
 export type LlmProviderIdType = z.infer<typeof LlmProviderId>;
 
+// 같은 provider 를 용도별로 따로 설정한다 — 텍스트(chat)와 비전(image)은
+// 보통 모델이 달라 한 row 에 묶기 어렵다. env fallback 은 chat 에만 적용,
+// image 는 DB row 가 있을 때만 활성화된다.
+export const LlmProviderPurpose = z.enum(['chat', 'image']);
+export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
+
 export const LlmProviderConfig = z.object({
   provider: LlmProviderId,
+  purpose: LlmProviderPurpose,
   hasApiKey: z.boolean(),
   apiKeyMasked: z.string().nullable(),
   baseUrl: z.string().nullable(),

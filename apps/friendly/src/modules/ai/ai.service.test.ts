@@ -12,6 +12,7 @@ import type { ResolvedProviderConfig } from './ai.config.service.js';
 
 const RESOLVED: ResolvedProviderConfig = {
   provider: 'ollama-cloud',
+  purpose: 'chat',
   apiKey: 'k',
   baseUrl: 'https://x',
   timeoutMs: 1_000,

@@ -71,9 +71,13 @@ model MapProviderConfig {
   @@map("map_provider_configs")
 }
 
+// purpose 컬럼은 같은 provider 를 용도별로 따로 등록할 수 있게 한다 — 텍스트
+// 추론(chat)과 비전(image)이 보통 다른 모델이라 한 row 로 묶기 어렵다.
+// 마이그레이션 시점에 기존 행은 모두 purpose='chat' 으로 채워진다.
 model LlmProviderConfig {
   id            String   @id @default(cuid())
-  provider      String   @unique
+  provider      String
+  purpose       String   @default("chat")
   apiKey        String
   baseUrl       String?
   defaultModel  String?
@@ -82,6 +86,7 @@ model LlmProviderConfig {
   updatedAt     DateTime @updatedAt
   updatedById   String?
 
+  @@unique([provider, purpose])
   @@map("llm_provider_configs")
 }
 

@@ -207,13 +207,18 @@ export const AutoDiscover = {
     `${API_PREFIX}/admin/auto-discover/jobs/${id}/events`,
 } as const;
 
+// provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며
+// 같은 provider 에 'image' 등 다른 용도를 따로 등록할 수 있다.
 export const Ai = {
   complete: `${API_PREFIX}/admin/ai/complete`,
   completeBatch: `${API_PREFIX}/admin/ai/complete-batch`,
   providers: `${API_PREFIX}/admin/ai/providers`,
-  provider: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}`,
-  testProvider: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}/test`,
-  providerModels: (id: string) => `${API_PREFIX}/admin/ai/providers/${id}/models`,
+  provider: (id: string, purpose: string) =>
+    `${API_PREFIX}/admin/ai/providers/${id}/${purpose}`,
+  testProvider: (id: string, purpose: string) =>
+    `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/test`,
+  providerModels: (id: string, purpose: string) =>
+    `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/models`,
 } as const;
 
 // 외부 지도 SDK 키 관리. AI 키와 별개 라우트로 둔다 — provider 식별자 외엔

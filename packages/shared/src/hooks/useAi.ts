@@ -2,10 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AiCompleteBatchInputType,
   AiCompleteInputType,
-  LlmProviderIdType,
   UpdateLlmProviderInputType,
 } from '@repo/api-contract';
-import { aiApi } from '../api/ai.api.js';
+import { aiApi, type ProviderKey } from '../api/ai.api.js';
 
 export const useCompleteAi = () =>
   useMutation({
@@ -26,8 +25,8 @@ export const useProviders = () =>
 export const useUpdateProvider = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: LlmProviderIdType; input: UpdateLlmProviderInputType }) =>
-      aiApi.updateProvider(id, input),
+    mutationFn: ({ key, input }: { key: ProviderKey; input: UpdateLlmProviderInputType }) =>
+      aiApi.updateProvider(key, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai', 'providers'] }),
   });
 };
@@ -35,24 +34,24 @@ export const useUpdateProvider = () => {
 export const useDeleteProvider = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: LlmProviderIdType) => aiApi.deleteProvider(id),
+    mutationFn: (key: ProviderKey) => aiApi.deleteProvider(key),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai', 'providers'] }),
   });
 };
 
 export const useTestProvider = () =>
   useMutation({
-    mutationFn: ({ id, model }: { id: LlmProviderIdType; model?: string }) =>
-      aiApi.testProvider(id, model),
+    mutationFn: ({ key, model }: { key: ProviderKey; model?: string }) =>
+      aiApi.testProvider(key, model),
   });
 
 // Best-effort fetch — silent on failure (returns empty array). UI uses this
 // to populate a datalist for autocomplete; users can always type a model
 // id by hand if the list isn't available.
-export const useProviderModels = (id: LlmProviderIdType, enabled = true) =>
+export const useProviderModels = (key: ProviderKey, enabled = true) =>
   useQuery({
-    queryKey: ['ai', 'providers', id, 'models'],
-    queryFn: () => aiApi.listModels(id),
+    queryKey: ['ai', 'providers', key.id, key.purpose, 'models'],
+    queryFn: () => aiApi.listModels(key),
     enabled,
     retry: false,
     staleTime: 60_000,

@@ -57,8 +57,9 @@ export const AdminAiTestPage = () => {
   const [temperature, setTemperature] = useState(0.7);
   const effectiveTemperature = useTemperature ? temperature : undefined;
 
-  // Best-effort fetch — empty list when key missing or call fails.
-  const modelsQuery = useProviderModels('ollama-cloud');
+  // Best-effort fetch — empty list when key missing or call fails. AI 테스트
+  // 페이지는 chat 용도만 다룬다.
+  const modelsQuery = useProviderModels({ id: 'ollama-cloud', purpose: 'chat' });
   const allModelOptions = useMemo(
     () => modelsQuery.data?.models ?? [],
     [modelsQuery.data],

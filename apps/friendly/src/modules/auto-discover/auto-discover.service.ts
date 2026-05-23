@@ -514,7 +514,7 @@ export class AutoDiscoverService {
     if (this.deps.resolveProviderOverride) {
       return this.deps.resolveProviderOverride();
     }
-    const resolved = await this.deps.aiConfig.getResolved('ollama-cloud');
+    const resolved = await this.deps.aiConfig.getResolved('ollama-cloud', 'chat');
     if (!resolved) return null;
     const model = resolved.defaultModel?.trim();
     if (!model) return null;

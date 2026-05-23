@@ -151,7 +151,7 @@ describe('AI routes — providers CRUD', () => {
   it('PUT /providers/ollama-cloud creates a row and returns masked key', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/api/v1/admin/ai/providers/ollama-cloud',
+      url: '/api/v1/admin/ai/providers/ollama-cloud/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
       payload: { apiKey: 'sk-test-1234567890abcd', maxConcurrent: 8 },
     });
@@ -171,13 +171,13 @@ describe('AI routes — providers CRUD', () => {
   it('PUT preserves apiKey when omitted, updates other fields', async () => {
     await app.inject({
       method: 'PUT',
-      url: '/api/v1/admin/ai/providers/ollama-cloud',
+      url: '/api/v1/admin/ai/providers/ollama-cloud/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
       payload: { apiKey: 'sk-original-9999' },
     });
     const res = await app.inject({
       method: 'PUT',
-      url: '/api/v1/admin/ai/providers/ollama-cloud',
+      url: '/api/v1/admin/ai/providers/ollama-cloud/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
       payload: { maxConcurrent: 20 },
     });
@@ -190,13 +190,13 @@ describe('AI routes — providers CRUD', () => {
   it('DELETE removes the row and falls list back to env-backed default', async () => {
     await app.inject({
       method: 'PUT',
-      url: '/api/v1/admin/ai/providers/ollama-cloud',
+      url: '/api/v1/admin/ai/providers/ollama-cloud/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
       payload: { apiKey: 'sk-soon-to-be-deleted' },
     });
     const del = await app.inject({
       method: 'DELETE',
-      url: '/api/v1/admin/ai/providers/ollama-cloud',
+      url: '/api/v1/admin/ai/providers/ollama-cloud/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
     });
     expect(del.statusCode).toBe(204);
@@ -216,7 +216,7 @@ describe('AI routes — providers CRUD', () => {
   it('DELETE is idempotent (204 even when no row exists)', async () => {
     const res = await app.inject({
       method: 'DELETE',
-      url: '/api/v1/admin/ai/providers/ollama-cloud',
+      url: '/api/v1/admin/ai/providers/ollama-cloud/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
     });
     expect(res.statusCode).toBe(204);
@@ -225,7 +225,7 @@ describe('AI routes — providers CRUD', () => {
   it('PUT rejects unknown provider id with 400', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/api/v1/admin/ai/providers/unknown-vendor',
+      url: '/api/v1/admin/ai/providers/unknown-vendor/chat',
       headers: { Authorization: `Bearer ${adminToken(app)}` },
       payload: { apiKey: 'whatever' },
     });
