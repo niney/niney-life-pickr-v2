@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, Users } from 'lucide-react';
+import { Plus, Trash2, UserRoundPlus } from 'lucide-react';
 import type { SettlementContactType } from '@repo/api-contract';
 import { useSettlementDraftStore } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -16,39 +16,18 @@ interface Props {
 export const Step1Participants = ({ onNext }: Props) => {
   const participants = useSettlementDraftStore((s) => s.participants);
   const addParticipant = useSettlementDraftStore((s) => s.addParticipant);
+  const addParticipantsAndCompact = useSettlementDraftStore(
+    (s) => s.addParticipantsAndCompact,
+  );
   const updateParticipant = useSettlementDraftStore((s) => s.updateParticipant);
   const removeParticipant = useSettlementDraftStore((s) => s.removeParticipant);
 
   const [submitAttempt, setSubmitAttempt] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // 어느 행의 이름 input 이 focus 인지 — 자동완성 드롭다운을 그 행에만 보여
   // 주기 위해 1개만 추적. blur 가 풀리면 null. 직접 단골을 고른 직후엔
   // 드롭다운을 다시 띄우지 않도록 null 로 리셋.
   const [focusedClientId, setFocusedClientId] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  // 이미 추가된 단골 contactId 집합 — 모달이 같은 사람을 중복 추가하지 않도록
-  // disabled 처리하는 데 사용.
-  const alreadyAddedContactIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const p of participants) {
-      if (p.contactId) s.add(p.contactId);
-    }
-    return s;
-  }, [participants]);
-
-  // 모달에서 다중 선택된 단골들을 한 번에 참여자로 추가.
-  const handleAddFromContacts = (contacts: SettlementContactType[]) => {
-    for (const c of contacts) {
-      addParticipant({
-        name: c.name ?? '',
-        nickname: c.nickname ?? '',
-        excludeAlcohol: c.lastExcludeAlcohol,
-        excludeNonAlcohol: c.lastExcludeNonAlcohol,
-        excludeSide: c.lastExcludeSide,
-        contactId: c.id,
-      });
-    }
-  };
 
   // 단골을 자동완성에서 고르면 그 row 의 모든 입력값을 단골 값으로 채운다.
   // contactId 는 서버 hint 용으로 같이 보존(서버는 결국 normalizedKey 로 다시
@@ -63,6 +42,41 @@ export const Step1Participants = ({ onNext }: Props) => {
       contactId: c.id,
     });
     setFocusedClientId(null);
+  };
+
+  // 모달에서 다중 선택 추가. 이미 추가된 단골 식별용으로 contactId 와
+  // normalizedKey 두 세트 — 자동완성 안 거치고 같은 이름을 직접 타이핑한
+  // 행도 중복 후보에서 제외된다.
+  const existingContactIds = useMemo(
+    () =>
+      new Set(
+        participants
+          .map((p) => p.contactId)
+          .filter((id): id is string => !!id),
+      ),
+    [participants],
+  );
+  const existingKeys = useMemo(
+    () =>
+      new Set(
+        participants.map((p) =>
+          normalizeContactKey(p.name ?? null, p.nickname ?? null),
+        ),
+      ),
+    [participants],
+  );
+
+  const handleBulkAdd = (picked: SettlementContactType[]) => {
+    addParticipantsAndCompact(
+      picked.map((c) => ({
+        name: c.name ?? '',
+        nickname: c.nickname ?? '',
+        excludeAlcohol: c.lastExcludeAlcohol,
+        excludeNonAlcohol: c.lastExcludeNonAlcohol,
+        excludeSide: c.lastExcludeSide,
+        contactId: c.id,
+      })),
+    );
   };
 
   const errors = useMemo(() => {
@@ -81,40 +95,18 @@ export const Step1Participants = ({ onNext }: Props) => {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">참여자</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            누구끼리 나눌까요? 이름 또는 닉네임 중 하나만 채워도 됩니다. 술/안주 등 특이사항은
-            체크박스로 표시하면 해당 카테고리는 그 사람을 제외하고 나눠 부담합니다.
-          </p>
-        </div>
-        {/* 모바일 단말에서 자동완성 드롭다운 한 줄씩 고르는 것보다, 모달에서
-            체크박스로 한꺼번에 여러 명을 고르는 게 훨씬 빠르다. */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={() => setPickerOpen(true)}
-        >
-          <Users className="size-4" />
-          <span className="hidden sm:inline">단골에서 추가</span>
-          <span className="sm:hidden">단골</span>
-        </Button>
+      <div>
+        <h2 className="text-lg font-semibold">참여자</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          누구끼리 나눌까요? 이름 또는 닉네임 중 하나만 채워도 됩니다. 술/안주 등 특이사항은
+          체크박스로 표시하면 해당 카테고리는 그 사람을 제외하고 나눠 부담합니다.
+        </p>
       </div>
-
-      <ContactPickerDialog
-        open={pickerOpen}
-        alreadyAddedContactIds={alreadyAddedContactIds}
-        onClose={() => setPickerOpen(false)}
-        onAdd={handleAddFromContacts}
-      />
 
       <div className="space-y-3">
         {participants.length === 0 && (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            아직 참여자가 없습니다. 아래 버튼이나 '단골에서 추가' 로 시작하세요.
+            아직 참여자가 없습니다. 아래 버튼으로 추가하세요.
           </div>
         )}
         {participants.map((p, idx) => {
@@ -218,24 +210,41 @@ export const Step1Participants = ({ onNext }: Props) => {
           );
         })}
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() =>
-            addParticipant({
-              name: '',
-              nickname: '',
-              excludeAlcohol: false,
-              excludeNonAlcohol: false,
-              excludeSide: false,
-            })
-          }
-        >
-          <Plus className="size-4" />
-          참여자 추가
-        </Button>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              addParticipant({
+                name: '',
+                nickname: '',
+                excludeAlcohol: false,
+                excludeNonAlcohol: false,
+                excludeSide: false,
+              })
+            }
+          >
+            <Plus className="size-4" />
+            참여자 추가
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setPickerOpen(true)}
+          >
+            <UserRoundPlus className="size-4" />
+            단골에서 추가
+          </Button>
+        </div>
       </div>
+
+      <ContactPickerDialog
+        open={pickerOpen}
+        existingContactIds={existingContactIds}
+        existingKeys={existingKeys}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={handleBulkAdd}
+      />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button
@@ -251,6 +260,18 @@ export const Step1Participants = ({ onNext }: Props) => {
       </div>
     </section>
   );
+};
+
+// 서버 settlement.service.normalizeContactKey 와 동일 정의 — 사용자가
+// 자동완성 안 거치고 같은 이름을 직접 타이핑한 경우도 단골 모달에서
+// 중복으로 인식하기 위해 사용.
+const normalizeContactKey = (
+  name: string | null,
+  nickname: string | null,
+): string => {
+  const n = (name ?? '').trim().toLowerCase();
+  const k = (nickname ?? '').trim().toLowerCase();
+  return `${n}|${k}`;
 };
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (

@@ -57,6 +57,9 @@ interface SettlementDraftStore extends SettlementDraft {
 
   setParticipants(participants: DraftParticipant[]): void;
   addParticipant(p: Omit<DraftParticipant, 'clientId'>): void;
+  // 단골 다중 선택 모달이 호출 — 이름·닉네임 둘 다 빈 기존 행을 정리한 뒤
+  // 새 항목들을 뒤에 append. clientId 는 store 가 부여.
+  addParticipantsAndCompact(items: Omit<DraftParticipant, 'clientId'>[]): void;
   updateParticipant(clientId: string, patch: Partial<Omit<DraftParticipant, 'clientId'>>): void;
   removeParticipant(clientId: string): void;
 
@@ -109,6 +112,17 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
         set((s) => ({
           participants: [...s.participants, { ...p, clientId: newClientId() }],
         }));
+      },
+      addParticipantsAndCompact(items) {
+        set((s) => {
+          const filtered = s.participants.filter((p) => {
+            const nm = (p.name ?? '').trim();
+            const nick = (p.nickname ?? '').trim();
+            return nm.length > 0 || nick.length > 0;
+          });
+          const fresh = items.map((p) => ({ ...p, clientId: newClientId() }));
+          return { participants: [...filtered, ...fresh] };
+        });
       },
       updateParticipant(clientId, patch) {
         set((s) => ({

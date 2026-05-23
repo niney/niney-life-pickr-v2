@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Search, Users, X } from 'lucide-react';
+import { Check, Loader2, Search, UserRoundPlus, X } from 'lucide-react';
 import type { SettlementContactType } from '@repo/api-contract';
 import { ApiError, useSettlementContacts } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -7,37 +7,42 @@ import { Input } from '~/components/ui/input';
 
 interface Props {
   open: boolean;
-  // 이미 정산에 추가된 contactId 집합. 모달은 이 항목들을 "추가됨" 으로 표시
-  // 하고 체크박스를 disabled 처리한다 — 같은 사람을 중복으로 또 넣지 못하게.
-  alreadyAddedContactIds: ReadonlySet<string>;
+  // 이미 현재 참여자 목록에 있는 단골을 비활성 처리하기 위한 식별자.
+  // - contactIds: 자동완성으로 골랐던(또는 단골에서 부른) 행
+  // - keys: 사용자가 직접 타이핑해 normalizedKey 만 일치하는 행
+  // 둘 중 어느 쪽이든 매칭되면 "이미 추가됨" 으로 본다.
+  existingContactIds: Set<string>;
+  existingKeys: Set<string>;
   onClose(): void;
-  onAdd(contacts: SettlementContactType[]): void;
+  onConfirm(picked: SettlementContactType[]): void;
 }
 
-// "단골에서 추가" 모달. SettlementShareDialog/ContactEditDialog 와 동일한
-// fixed overlay 패턴 — 모바일은 화면 하단 슬라이드 시트(items-end), sm 이상은
-// 중앙 다이얼로그. 자동완성 드롭다운보다 훨씬 큰 영역을 써서 한 번에 여러
-// 명을 골라 일괄 추가하는 흐름을 빠르게 한다.
+// 정산 입력 1단계의 "단골에서 추가" 모달. 다중 선택 → 한 번에 append.
+// 모바일에서는 화면 하단 슬라이드 시트, sm 이상은 중앙 다이얼로그
+// (SettlementShareDialog / ContactEditDialog 와 동일 패턴).
+//
+// 정렬은 서버 기본(lastUsedAt desc) — 자동완성과 일관성. take 는 100 으로
+// 잡아 보통 사용자의 모든 단골을 한 화면에 노출.
 export const ContactPickerDialog = ({
   open,
-  alreadyAddedContactIds,
+  existingContactIds,
+  existingKeys,
   onClose,
-  onAdd,
+  onConfirm,
 }: Props) => {
   const [q, setQ] = useState('');
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-
-  // 100 개까지 — 자동완성보다 넉넉. 검색이 있으면 서버에서 필터링.
   const list = useSettlementContacts({
     q: q.trim() || undefined,
     take: 100,
   });
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // 열릴 때마다 초기화. 닫혀 있는 동안엔 호출 안 한다 — open 가드는 아래.
+  // 모달이 열릴 때마다 검색·선택 초기화. 외부 시스템(다이얼로그 lifecycle)
+  // 동기화라 useEffect 가 적절.
   useEffect(() => {
     if (!open) return;
     setQ('');
-    setPicked(new Set());
+    setSelected(new Set());
   }, [open]);
 
   // ESC 닫기.
@@ -50,47 +55,53 @@ export const ContactPickerDialog = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  // 새로 고를 수 있는 후보(=아직 추가되지 않은 단골) 개수 — 푸터 카운트의
-  // 분모로도 표시.
-  const items = useMemo(() => list.data?.items ?? [], [list.data]);
-  const selectableCount = useMemo(
-    () => items.filter((c) => !alreadyAddedContactIds.has(c.id)).length,
-    [items, alreadyAddedContactIds],
+  // 빈 단골 상태(0건) 인지, 검색결과 0건인지 메시지를 구분하기 위해 q 비어있을
+  // 때의 total 도 같이 관찰. 굳이 별도 query 까지는 안 만들고 단순 메시지로.
+  const items = list.data?.items ?? [];
+
+  const isAlreadyAdded = useMemo(
+    () => (c: SettlementContactType) => {
+      if (existingContactIds.has(c.id)) return true;
+      const key = normalizeContactKey(c.name, c.nickname);
+      return existingKeys.has(key);
+    },
+    [existingContactIds, existingKeys],
   );
 
   if (!open) return null;
 
   const toggle = (id: string) => {
-    setPicked((prev) => {
-      const next = new Set(prev);
+    setSelected((cur) => {
+      const next = new Set(cur);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   };
 
-  const handleAdd = () => {
-    if (picked.size === 0) return;
-    const chosen = items.filter((c) => picked.has(c.id));
-    onAdd(chosen);
+  const handleConfirm = () => {
+    const picked = items.filter((c) => selected.has(c.id));
+    onConfirm(picked);
     onClose();
   };
+
+  const selectedCount = selected.size;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="단골에서 추가"
+      aria-label="단골에서 참여자 추가"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-md flex-col gap-3 rounded-t-lg bg-background p-4 shadow-lg sm:max-h-[80vh] sm:rounded-lg"
+        className="flex max-h-[85vh] w-full max-w-md flex-col gap-3 rounded-t-lg bg-background p-4 shadow-lg sm:rounded-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-base font-semibold">
-            <Users className="size-4" />
+            <UserRoundPlus className="size-4" />
             단골에서 추가
           </div>
           <button
@@ -107,36 +118,42 @@ export const ContactPickerDialog = ({
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="이름·닉네임 검색"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            placeholder="이름·닉네임 검색"
             className="pl-9"
             autoFocus
           />
         </div>
 
         <div className="-mx-1 flex-1 overflow-auto">
-          {list.isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
+          {list.isLoading && (
+            <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+              <Loader2 className="mr-1.5 size-3 animate-spin" />
               불러오는 중…
             </div>
-          ) : list.isError ? (
-            <p className="px-1 py-4 text-sm text-destructive">
+          )}
+
+          {list.isError && (
+            <p className="px-2 py-2 text-sm text-destructive">
               단골을 불러오지 못했습니다.{' '}
               {list.error instanceof ApiError ? list.error.message : ''}
             </p>
-          ) : items.length === 0 ? (
-            <p className="px-1 py-8 text-center text-sm text-muted-foreground">
+          )}
+
+          {list.data && items.length === 0 && (
+            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
               {q.trim()
-                ? `"${q.trim()}" 에 일치하는 단골이 없습니다`
+                ? `'${q.trim()}' 에 일치하는 단골이 없습니다`
                 : '아직 단골이 없습니다 — 정산을 저장하면 자동으로 적립됩니다'}
-            </p>
-          ) : (
-            <ul className="space-y-1 px-1">
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <ul className="space-y-1">
               {items.map((c) => {
-                const already = alreadyAddedContactIds.has(c.id);
-                const checked = picked.has(c.id);
+                const already = isAlreadyAdded(c);
+                const checked = selected.has(c.id);
                 return (
                   <li key={c.id}>
                     <button
@@ -144,21 +161,23 @@ export const ContactPickerDialog = ({
                       role="checkbox"
                       aria-checked={checked}
                       disabled={already}
-                      onClick={() => toggle(c.id)}
-                      className={`flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                        already
-                          ? 'cursor-not-allowed opacity-60'
+                      onClick={() => !already && toggle(c.id)}
+                      className={
+                        'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors ' +
+                        (already
+                          ? 'cursor-not-allowed opacity-50'
                           : checked
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:bg-accent'
-                      }`}
+                            ? 'bg-primary/10'
+                            : 'hover:bg-accent')
+                      }
                     >
                       <span
-                        className={`inline-flex size-5 shrink-0 items-center justify-center rounded border ${
-                          checked
+                        className={
+                          'flex size-5 shrink-0 items-center justify-center rounded border ' +
+                          (checked
                             ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-muted-foreground/30 bg-background'
-                        }`}
+                            : 'border-input')
+                        }
                       >
                         {checked && <Check className="size-3.5" />}
                       </span>
@@ -166,17 +185,18 @@ export const ContactPickerDialog = ({
                         <div className="truncate text-sm font-medium">
                           {displayName(c)}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                        <div className="mt-0.5 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
                           {c.lastExcludeAlcohol && <Tag>주류 X</Tag>}
                           {c.lastExcludeNonAlcohol && <Tag>비주류 X</Tag>}
                           {c.lastExcludeSide && <Tag>안주 X</Tag>}
-                          {!c.lastExcludeAlcohol &&
-                            !c.lastExcludeNonAlcohol &&
-                            !c.lastExcludeSide && <Tag>기본</Tag>}
-                          {c.useCount > 1 && <Tag>{c.useCount}회</Tag>}
-                          {already && <Tag>추가됨</Tag>}
+                          <Tag>{c.useCount}회</Tag>
                         </div>
                       </div>
+                      {already && (
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          이미 추가됨
+                        </span>
+                      )}
                     </button>
                   </li>
                 );
@@ -186,13 +206,9 @@ export const ContactPickerDialog = ({
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t pt-3">
-          <div className="text-xs text-muted-foreground">
-            {selectableCount > 0 && (
-              <>
-                {picked.size}/{selectableCount} 선택됨
-              </>
-            )}
-          </div>
+          <span className="text-xs text-muted-foreground">
+            {selectedCount > 0 ? `${selectedCount}명 선택됨` : '선택 없음'}
+          </span>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               취소
@@ -200,10 +216,10 @@ export const ContactPickerDialog = ({
             <Button
               type="button"
               size="sm"
-              onClick={handleAdd}
-              disabled={picked.size === 0}
+              onClick={handleConfirm}
+              disabled={selectedCount === 0}
             >
-              {picked.size > 0 ? `${picked.size}명 추가` : '추가'}
+              추가
             </Button>
           </div>
         </div>
@@ -221,4 +237,15 @@ const displayName = (c: SettlementContactType): string => {
   const nick = (c.nickname ?? '').trim();
   if (nm && nick) return `${nm} (${nick})`;
   return nm || nick || '(이름 없음)';
+};
+
+// 서버 normalizeContactKey 와 동일 정의 — 사용자가 자동완성 안 거치고 직접
+// 타이핑한 행이 서버 단골과 매칭될 수 있어, 중복 추가 회피 판정에 사용.
+const normalizeContactKey = (
+  name: string | null,
+  nickname: string | null,
+): string => {
+  const n = (name ?? '').trim().toLowerCase();
+  const k = (nickname ?? '').trim().toLowerCase();
+  return `${n}|${k}`;
 };
