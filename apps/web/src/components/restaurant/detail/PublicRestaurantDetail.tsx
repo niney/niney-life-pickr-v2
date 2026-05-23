@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, Loader2, X } from 'lucide-react';
-import { ApiError, useRestaurantPublic, useRestaurantPublicInsights } from '@repo/shared';
+import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, Loader2, Receipt, X } from 'lucide-react';
+import { ApiError, useAuthStore, useRestaurantPublic, useRestaurantPublicInsights } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { HomeTab } from './HomeTab';
@@ -33,6 +34,8 @@ export const PublicRestaurantDetail = ({
 }: Props) => {
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
+  const navigate = useNavigate();
+  const isLoggedIn = useAuthStore((s) => !!s.token);
   const [internalTab, setInternalTab] = useState<TabKey>('home');
   const tab = tabProp ?? internalTab;
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +95,27 @@ export const PublicRestaurantDetail = ({
           <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold">
             {detail.data?.name ?? '식당 상세'}
           </div>
+          {detail.data && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => {
+                // 비로그인은 로그인 페이지로 — 이후 redirect 는 추후 PR.
+                if (!isLoggedIn) {
+                  navigate('/login');
+                  return;
+                }
+                navigate(`/restaurants/${placeId}/settle/new`);
+              }}
+              aria-label="정산하기"
+              title="이 식당에서 정산하기"
+            >
+              <Receipt className="size-4" />
+              <span className="hidden sm:inline">정산</span>
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"

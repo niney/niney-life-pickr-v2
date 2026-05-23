@@ -23,6 +23,15 @@ import { LoginPage } from './routes/LoginPage';
 import { RestaurantDetailRoute } from './routes/RestaurantDetailRoute';
 import { RestaurantsPage } from './routes/RestaurantsPage';
 import { RestaurantsV2Page } from './routes/RestaurantsV2Page';
+import { SettlementNewPage } from './routes/settlement/SettlementNewPage';
+
+// 인증된 사용자만 — 비로그인은 /login 으로 리다이렉트. role 검사는 안 함.
+// (정산하기는 USER 도 사용 가능)
+const RequireUser = ({ children }: { children: React.ReactNode }) => {
+  const token = useAuthStore((s) => s.token);
+  if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
 
 const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((s) => s.token);
@@ -53,6 +62,14 @@ export const App = () => {
           <Route path=":placeId" element={<RestaurantDetailRoute />} />
         </Route>
       </Route>
+      <Route
+        path="/restaurants/:placeId/settle/new"
+        element={
+          <RequireUser>
+            <SettlementNewPage />
+          </RequireUser>
+        }
+      />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/admin"
