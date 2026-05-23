@@ -26,6 +26,7 @@ import { RestaurantsV2Page } from './routes/RestaurantsV2Page';
 import { SettlementHistoryPage } from './routes/settlement/SettlementHistoryPage';
 import { SettlementNewPage } from './routes/settlement/SettlementNewPage';
 import { SettlementResultPage } from './routes/settlement/SettlementResultPage';
+import { SharedSettlementPage } from './routes/settlement/SharedSettlementPage';
 
 // 인증된 사용자만 — 비로그인은 /login 으로 리다이렉트. role 검사는 안 함.
 // (정산하기는 USER 도 사용 가능)
@@ -88,6 +89,9 @@ export const App = () => {
           </RequireUser>
         }
       />
+      {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
+          않아 받는 사람이 단순히 결과만 보게 한다. */}
+      <Route path="/share/settlements/:token" element={<SharedSettlementPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/admin"

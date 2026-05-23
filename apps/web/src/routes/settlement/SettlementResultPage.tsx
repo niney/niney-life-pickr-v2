@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, Coins, History, Loader2, Trash2 } from 'lucide-react';
-import type { ReceiptItemCategoryType, SettlementSessionType } from '@repo/api-contract';
+import { AlertTriangle, ChevronLeft, History, Loader2, Share2, Trash2 } from 'lucide-react';
 import {
   ApiError,
   settlementExtractionApi,
@@ -10,23 +9,8 @@ import {
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '주류',
-  NON_ALCOHOL: '비주류',
-  SIDE: '안주',
-  UNCATEGORIZED: '미분류',
-};
-
-const participantName = (
-  p: { name: string | null; nickname: string | null },
-  idx: number,
-) => {
-  const nm = (p.name ?? '').trim();
-  const nick = (p.nickname ?? '').trim();
-  if (nm && nick) return `${nm} (${nick})`;
-  return nm || nick || `참여자 ${idx + 1}`;
-};
+import { ItemsCard, ParticipantsCard, SessionSummaryCard } from './SettlementCards';
+import { SettlementShareDialog } from './SettlementShareDialog';
 
 // 저장된 정산 세션 단건 보기. /restaurants/:placeId/settle/:id.
 // 본인 소유가 아니면 server 가 403, 없으면 404.
@@ -35,6 +19,7 @@ export const SettlementResultPage = () => {
   const navigate = useNavigate();
   const session = useSettlement(id);
   const remove = useDeleteSettlement();
+  const [shareOpen, setShareOpen] = useState(false);
 
   const handleBack = () => navigate(`/restaurants/${placeId}`);
 
@@ -87,6 +72,16 @@ export const SettlementResultPage = () => {
         </Button>
         <Button
           type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShareOpen(true)}
+          aria-label="공유"
+        >
+          <Share2 className="size-4" />
+          <span className="hidden sm:inline">공유</span>
+        </Button>
+        <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={handleDelete}
@@ -96,6 +91,12 @@ export const SettlementResultPage = () => {
           {remove.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
         </Button>
       </header>
+
+      <SettlementShareDialog
+        open={shareOpen}
+        sessionId={s.id}
+        onClose={() => setShareOpen(false)}
+      />
 
       <div className="flex-1 space-y-4 px-4 py-6">
         <SessionSummaryCard session={s} />
@@ -115,105 +116,6 @@ export const SettlementResultPage = () => {
     </main>
   );
 };
-
-const SessionSummaryCard = ({ session }: { session: SettlementSessionType }) => (
-  <Card>
-    <CardHeader className="pb-2">
-      <CardTitle className="flex items-center gap-2 text-base">
-        <Coins className="size-4" />
-        합계
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
-      <dl className="grid grid-cols-2 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">항목 합계</dt>
-        <dd className="text-right font-medium">
-          {session.itemsSubtotal.toLocaleString('ko-KR')}원
-        </dd>
-        {session.totalAmount != null && (
-          <>
-            <dt className="text-muted-foreground">영수증 총액</dt>
-            <dd className="text-right">{session.totalAmount.toLocaleString('ko-KR')}원</dd>
-          </>
-        )}
-        <dt className="text-muted-foreground">출처</dt>
-        <dd className="text-right">{session.source === 'RECEIPT' ? '영수증' : '직접 입력'}</dd>
-        <dt className="text-muted-foreground">생성</dt>
-        <dd className="text-right">
-          {new Date(session.createdAt).toLocaleString('ko-KR')}
-        </dd>
-      </dl>
-    </CardContent>
-  </Card>
-);
-
-const ParticipantsCard = ({ session }: { session: SettlementSessionType }) => (
-  <Card>
-    <CardHeader className="pb-2">
-      <CardTitle className="text-base">참여자별 분담</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <ul className="divide-y">
-        {session.participants.map((p, idx) => {
-          const tags: string[] = [];
-          if (p.excludeAlcohol) tags.push('주류 X');
-          if (p.excludeNonAlcohol) tags.push('비주류 X');
-          if (p.excludeSide) tags.push('안주 X');
-          return (
-            <li
-              key={p.id}
-              className="flex items-center justify-between gap-2 py-2.5"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">
-                  {participantName(p, idx)}
-                </div>
-                {tags.length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-1 text-xs text-muted-foreground">
-                    {tags.map((t) => (
-                      <span key={t} className="rounded bg-muted px-1.5 py-0.5">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="shrink-0 text-base font-semibold">
-                {p.shareAmount.toLocaleString('ko-KR')}원
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </CardContent>
-  </Card>
-);
-
-const ItemsCard = ({ session }: { session: SettlementSessionType }) => (
-  <Card>
-    <CardHeader className="pb-2">
-      <CardTitle className="text-base">항목 ({session.items.length})</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <ul className="divide-y">
-        {session.items.map((it) => (
-          <li key={it.id} className="flex items-center justify-between gap-2 py-2">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{it.name}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                {CATEGORY_LABEL[it.category]}
-                {it.unitPrice != null && it.quantity != null && (
-                  <> · {it.unitPrice.toLocaleString('ko-KR')}원 × {it.quantity}</>
-                )}
-              </div>
-            </div>
-            <div className="shrink-0 text-sm">{it.amount.toLocaleString('ko-KR')}원</div>
-          </li>
-        ))}
-      </ul>
-    </CardContent>
-  </Card>
-);
 
 const ReceiptCard = ({ previewUrl }: { previewUrl: string }) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
