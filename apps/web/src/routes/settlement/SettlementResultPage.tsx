@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, Coins, Loader2, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AlertTriangle, ChevronLeft, Coins, History, Loader2, Trash2 } from 'lucide-react';
 import type { ReceiptItemCategoryType, SettlementSessionType } from '@repo/api-contract';
 import {
   ApiError,
@@ -79,6 +79,12 @@ export const SettlementResultPage = () => {
           <ChevronLeft className="size-4" />
         </Button>
         <div className="flex-1 truncate text-sm font-semibold">정산 결과 · {s.restaurantName}</div>
+        <Button asChild variant="ghost" size="sm" aria-label="내 정산 이력">
+          <Link to="/me/settlements">
+            <History className="size-4" />
+            <span className="hidden sm:inline">이력</span>
+          </Link>
+        </Button>
         <Button
           type="button"
           variant="outline"

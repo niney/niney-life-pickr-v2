@@ -99,6 +99,9 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
           {user ? (
             <>
               <span className="hidden text-sm text-muted-foreground sm:inline">{user.email}</span>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/me/settlements">내 정산</Link>
+              </Button>
               {user.role === 'ADMIN' && (
                 <Button asChild variant="outline" size="sm">
                   <Link to="/admin">관리자</Link>

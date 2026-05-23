@@ -23,6 +23,7 @@ import { LoginPage } from './routes/LoginPage';
 import { RestaurantDetailRoute } from './routes/RestaurantDetailRoute';
 import { RestaurantsPage } from './routes/RestaurantsPage';
 import { RestaurantsV2Page } from './routes/RestaurantsV2Page';
+import { SettlementHistoryPage } from './routes/settlement/SettlementHistoryPage';
 import { SettlementNewPage } from './routes/settlement/SettlementNewPage';
 import { SettlementResultPage } from './routes/settlement/SettlementResultPage';
 
@@ -62,6 +63,14 @@ export const App = () => {
         <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
           <Route path=":placeId" element={<RestaurantDetailRoute />} />
         </Route>
+        <Route
+          path="/me/settlements"
+          element={
+            <RequireUser>
+              <SettlementHistoryPage />
+            </RequireUser>
+          }
+        />
       </Route>
       <Route
         path="/restaurants/:placeId/settle/new"
