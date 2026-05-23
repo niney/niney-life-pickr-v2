@@ -20,9 +20,12 @@ interface Props {
 // 정렬되도록 한다. 외부 닫기 처리는 부모(Step1) 가 맡는다.
 export const ContactSuggestions = ({ query, open, onPick }: Props) => {
   const debounced = useDebounced(query.trim(), 250);
+  // 드롭다운은 max-h 로 잘리고 스크롤되므로 넉넉히 가져온다 — 사용자가
+  // "분명히 있는 단골이 자동완성에 안 뜬다" 고 느끼는 사고를 막는 게 6 개
+  // 깔끔함보다 우선. 더 많이 필요해지면 /me/contacts 페이지(100)로 안내.
   const list = useSettlementContacts({
     q: debounced || undefined,
-    take: 6,
+    take: 20,
   });
 
   if (!open) return null;
