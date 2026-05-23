@@ -16,6 +16,7 @@
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "promote-admin": "tsx --env-file=.env scripts/promote-admin.ts",
+    "backfill:contacts": "tsx --env-file=.env scripts/backfill-contacts.ts",
     "dev:capture-visitor": "tsx scripts/dev-capture-visitor.ts",
     "dev:capture-catchtable": "tsx scripts/dev-capture-catchtable.ts",
     "clean": "rimraf dist .turbo"

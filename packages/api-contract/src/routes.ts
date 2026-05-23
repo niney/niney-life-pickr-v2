@@ -248,6 +248,13 @@ export const SettlementExtraction = {
 // share/shared 는 한 쌍: share 는 owner 가 토큰을 만들고/회수하는 인증 경로,
 // shared 는 누구나 토큰만 알면 read-only 로 결과를 보는 공개 경로. 공개
 // 응답에서는 receiptPreviewUrl/userId 가 빠진다.
+// 사용자별 단골 참여자 — 본인 데이터만 조회/수정/삭제. 검색은 querystring q.
+// 정산 입력 화면 자동완성과 /me/contacts 관리 페이지가 호출.
+export const SettlementContact = {
+  list: `${API_PREFIX}/me/contacts`,
+  one: (id: string) => `${API_PREFIX}/me/contacts/${id}`,
+} as const;
+
 export const Settlement = {
   list: `${API_PREFIX}/settlements`,
   create: `${API_PREFIX}/settlements`,

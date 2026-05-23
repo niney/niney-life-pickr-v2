@@ -13,5 +13,6 @@ export * from './schemas/ai.js';
 export * from './schemas/settings-map.js';
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';
+export * from './schemas/settlement-contact.js';
 export * from './settlement.calculator.js';
 export * as Routes from './routes.js';

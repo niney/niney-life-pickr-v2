@@ -32,17 +32,25 @@ export const SettlementParticipant = z.object({
   excludeSide: z.boolean(),
   shareAmount: z.number().int().nonnegative(),
   orderIndex: z.number().int().nonnegative(),
+  // 같은 사용자의 단골과의 매핑. 자동 적립으로 항상 채워지지만, 그 단골이
+  // 삭제되면 서버가 SetNull 로 끊고 null 로 응답.
+  contactId: z.string().nullable(),
 });
 export type SettlementParticipantType = z.infer<typeof SettlementParticipant>;
 
 // 신규 참여자 입력 — id/shareAmount/orderIndex 는 server 가 부여/계산.
 // name 또는 nickname 중 하나는 비어있지 않아야 한다 (application layer 검증).
+//
+// contactId 는 클라이언트가 자동완성에서 단골을 골랐을 때 힌트로 같이 보낸다.
+// 서버는 이 힌트를 신뢰하지 않고, 항상 (userId, normalizedKey) 로 upsert 하므로
+// 힌트가 없거나 stale 해도 정상 동작한다 — 같은 키면 같은 row 로 합쳐진다.
 export const SettlementParticipantInput = z.object({
   name: z.string().trim().max(40).nullable(),
   nickname: z.string().trim().max(40).nullable(),
   excludeAlcohol: z.boolean().default(false),
   excludeNonAlcohol: z.boolean().default(false),
   excludeSide: z.boolean().default(false),
+  contactId: z.string().optional(),
 });
 export type SettlementParticipantInputType = z.infer<typeof SettlementParticipantInput>;
 

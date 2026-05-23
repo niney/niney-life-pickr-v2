@@ -19,6 +19,19 @@ import {
 // 과 동일. 모듈을 직접 import 하지 않고 패턴만 다시 둔다 (모듈 결합도 축소).
 const IMAGE_TOKEN_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
+// 단골(SettlementContact) 매칭 키. 같은 사용자 안에서만 유일성 의미가 있다.
+// trim+lowercase 한 name 과 nickname 을 "|" 로 결합. 두 값 모두 빈 문자열인
+// 케이스는 service 의 참여자 검증에서 거부되므로 "|" 단독 키는 만들어지지 않는다.
+// backfill 스크립트도 동일한 정의를 사용해야 해서 export.
+export const normalizeContactKey = (
+  name: string | null,
+  nickname: string | null,
+): string => {
+  const n = (name ?? '').trim().toLowerCase();
+  const k = (nickname ?? '').trim().toLowerCase();
+  return `${n}|${k}`;
+};
+
 export class SettlementError extends Error {
   constructor(
     public readonly code:
@@ -95,7 +108,9 @@ export class SettlementService {
       })),
     });
 
-    // SettlementSession + 자식 행을 한 transaction 으로 생성.
+    // SettlementSession + 자식 행을 한 transaction 으로 생성. 참여자는 단골
+    // upsert 와 함께 contactId 를 채워야 해서 createMany 가 아니라 루프.
+    const now = new Date();
     const created = await this.prisma.$transaction(async (tx) => {
       const session = await tx.settlementSession.create({
         data: {
@@ -123,18 +138,55 @@ export class SettlementService {
         })),
       });
 
-      await tx.settlementParticipant.createMany({
-        data: input.participants.map((p, idx) => ({
-          sessionId: session.id,
-          name: p.name?.trim() || null,
-          nickname: p.nickname?.trim() || null,
-          excludeAlcohol: p.excludeAlcohol,
-          excludeNonAlcohol: p.excludeNonAlcohol,
-          excludeSide: p.excludeSide,
-          shareAmount: calc.shareAmounts[idx] ?? 0,
-          orderIndex: idx,
-        })),
-      });
+      for (let idx = 0; idx < input.participants.length; idx++) {
+        const p = input.participants[idx]!;
+        const name = p.name?.trim() || null;
+        const nickname = p.nickname?.trim() || null;
+        const normalizedKey = normalizeContactKey(name, nickname);
+
+        // (userId, normalizedKey) 로 upsert — 같은 이름 직접 타이핑이든
+        // 자동완성 선택이든 같은 row 로 합쳐진다. 클라이언트가 보낸
+        // contactId 힌트는 신뢰하지 않는다(서버 정책 단일화).
+        const contact = await tx.settlementContact.upsert({
+          where: { userId_normalizedKey: { userId, normalizedKey } },
+          create: {
+            userId,
+            name,
+            nickname,
+            normalizedKey,
+            lastExcludeAlcohol: p.excludeAlcohol,
+            lastExcludeNonAlcohol: p.excludeNonAlcohol,
+            lastExcludeSide: p.excludeSide,
+            useCount: 1,
+            lastUsedAt: now,
+          },
+          // 표시 이름은 마지막 입력으로 덮어쓴다 — /me/contacts 에서 수정해도
+          // 다음 정산에서 다시 사용자가 입력한 표기로 돌아간다. 의도된 동작.
+          update: {
+            name,
+            nickname,
+            lastExcludeAlcohol: p.excludeAlcohol,
+            lastExcludeNonAlcohol: p.excludeNonAlcohol,
+            lastExcludeSide: p.excludeSide,
+            useCount: { increment: 1 },
+            lastUsedAt: now,
+          },
+        });
+
+        await tx.settlementParticipant.create({
+          data: {
+            sessionId: session.id,
+            name,
+            nickname,
+            excludeAlcohol: p.excludeAlcohol,
+            excludeNonAlcohol: p.excludeNonAlcohol,
+            excludeSide: p.excludeSide,
+            shareAmount: calc.shareAmounts[idx] ?? 0,
+            orderIndex: idx,
+            contactId: contact.id,
+          },
+        });
+      }
 
       return session.id;
     });
@@ -297,6 +349,7 @@ export class SettlementService {
       excludeSide: boolean;
       shareAmount: number;
       orderIndex: number;
+      contactId: string | null;
     }>;
   }): SettlementSessionType {
     return {
@@ -330,6 +383,7 @@ export class SettlementService {
         excludeSide: p.excludeSide,
         shareAmount: p.shareAmount,
         orderIndex: p.orderIndex,
+        contactId: p.contactId,
       })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
