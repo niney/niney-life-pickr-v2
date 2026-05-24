@@ -1,8 +1,14 @@
+/// <reference lib="dom" />
+// page.evaluate(() => window.scrollTo(...)) 같은 in-browser 콜백이 있어
+// DOM 타입이 필요. playwright 단독 import 시엔 그 패키지가 DOM 타입을
+// ambient 로 끌어오지만, playwright-extra 래퍼는 그렇지 않아 명시 reference.
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Browser, type BrowserContext } from 'playwright';
+import { chromium } from 'playwright-extra';
+import type { Browser, BrowserContext } from 'playwright';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import type {
   BlogReviewType,
   CrawlStageType,
@@ -68,8 +74,24 @@ const SLOW_MO = HEADLESS ? 0 : Number(process.env.CRAWL_SLOWMO ?? '250');
 // the safety cap. Set to 0 to skip pagination (Apollo cache only — first ~20).
 // 100 pages × ~10 reviews/page = ~1000 reviews max, enough for almost any place.
 const VISITOR_MAX_PAGES = Number(process.env.CRAWL_VISITOR_MAX_PAGES ?? '100');
-// Inter-click delay to avoid Naver rate-limiting on rapid pagination.
-const VISITOR_PAGE_DELAY_MS = Number(process.env.CRAWL_VISITOR_PAGE_DELAY_MS ?? '3000');
+// Inter-click delay to avoid Naver rate-limiting on rapid pagination. Bumped
+// from the original 3s default to 5s after a real rate-limit incident — even
+// with stealth in place, predictable cadence is itself a fingerprint, so we
+// pair this with JITTER below.
+const VISITOR_PAGE_DELAY_MS = Number(process.env.CRAWL_VISITOR_PAGE_DELAY_MS ?? '5000');
+// Random extra delay added on top of VISITOR_PAGE_DELAY_MS each click —
+// `delay = base + random(0..jitter)`. 0 = disabled (fixed cadence).
+// 권장: 2000~5000ms (효과: 5-10초 사이로 들쭉날쭉). 인간 패턴에 가까움.
+const VISITOR_PAGE_DELAY_JITTER_MS = Number(
+  process.env.CRAWL_VISITOR_PAGE_DELAY_JITTER_MS ?? '3000',
+);
+const computeVisitorPageDelay = (): number => {
+  const jitter =
+    VISITOR_PAGE_DELAY_JITTER_MS > 0
+      ? Math.floor(Math.random() * VISITOR_PAGE_DELAY_JITTER_MS)
+      : 0;
+  return VISITOR_PAGE_DELAY_MS + jitter;
+};
 // In headed mode, pause the visitor subpage before closing so a human can
 // visually verify the "더보기" clicks landed. Headless mode never holds.
 const VISITOR_HOLD_MS = HEADLESS
@@ -79,11 +101,16 @@ const VISITOR_HOLD_MS = HEADLESS
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
+// Stealth 적용 — navigator.webdriver, plugins, permissions, chrome.runtime 등
+// 자동화 시그널을 일반 Chrome 처럼 위장. 네이버 anti-bot 우회에 결정적.
+// catchtable 어댑터는 자체 `playwright` import 라 영향 받지 않음.
+chromium.use(StealthPlugin());
+
 let browserPromise: Promise<Browser> | null = null;
 
 const getBrowser = (): Promise<Browser> => {
   if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: HEADLESS, slowMo: SLOW_MO });
+    browserPromise = chromium.launch({ headless: HEADLESS, slowMo: SLOW_MO }) as Promise<Browser>;
   }
   return browserPromise;
 };
@@ -1184,7 +1211,7 @@ const fetchVisitorReviewsViaSubpage = async (
         }
 
         await wireWait;
-        await page.waitForTimeout(VISITOR_PAGE_DELAY_MS);
+        await page.waitForTimeout(computeVisitorPageDelay());
 
         const newResponses = captured.length - beforeCaptured;
         pages += 1;

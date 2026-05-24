@@ -10,7 +10,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+chromium.use(StealthPlugin());
 
 const PLACE_ID = '1968839024';
 const URL = `https://m.place.naver.com/restaurant/${PLACE_ID}/review/visitor?reviewSort=recent`;
