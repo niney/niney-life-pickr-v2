@@ -153,12 +153,15 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       },
 
       setReceipt({ imageToken, previewUrl, items, totalAmount, warning }) {
+        // 영수증 교체 시 totalAmount/warning 은 이전 값을 끌고 오면 안 된다 —
+        // 예: A 가 불일치(warning 세팅) → B 가 일치(warning=null) 인데 ?? 폴백을
+        // 쓰면 A 의 warning 이 살아남아 B 에도 잘못 표시됨.
         set((s) => ({
           source: 'RECEIPT',
           receiptImageToken: imageToken,
           receiptPreviewUrl: previewUrl,
-          totalAmount: totalAmount ?? s.totalAmount ?? null,
-          warning: warning ?? s.warning ?? null,
+          totalAmount: totalAmount ?? null,
+          warning: warning ?? null,
           items:
             items != null
               ? items.map((it) => ({ ...it, clientId: it.clientId || newClientId() }))
