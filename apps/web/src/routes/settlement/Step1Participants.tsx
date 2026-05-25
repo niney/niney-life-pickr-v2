@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, UserRoundPlus } from 'lucide-react';
+import { Plus, Trash2, UserRoundPlus, X } from 'lucide-react';
 import type { SettlementContactType } from '@repo/api-contract';
 import { useSettlementDraftStore } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -11,8 +11,15 @@ interface Props {
   onNext: () => void;
 }
 
-// 첫 단계 — 정산에 참여할 사람(이름 또는 닉네임 + 카테고리 제외 플래그) 입력.
-// 인원 1명 이상 + 각 행 이름/닉네임 중 하나 채워져 있을 때만 다음 단계로.
+// 첫 단계 — 정산에 참여할 사람 입력. 한 행 = 한 명.
+//
+// 입력 UX: 기본은 단일 필드("이름")만 보임. 같은 이름의 다른 사람을 구분해야
+// 하거나 단골에서 별칭이 같이 채워진 경우엔 "+ 별칭" 으로 두 번째 input 을
+// 펼친다. 이렇게 하면 95% 단순 케이스는 한 칸으로 끝, 충돌·중복 케이스만
+// 두 칸으로 명시한다.
+//
+// 자동완성은 이름 input 에서만 띄우지만 server 검색은 name + nickname 둘 다
+// 매칭 — 사용자가 별칭("길동이")만 기억해 입력해도 기존 단골이 잡힌다.
 export const Step1Participants = ({ onNext }: Props) => {
   const participants = useSettlementDraftStore((s) => s.participants);
   const addParticipant = useSettlementDraftStore((s) => s.addParticipant);
@@ -28,6 +35,18 @@ export const Step1Participants = ({ onNext }: Props) => {
   // 주기 위해 1개만 추적. blur 가 풀리면 null. 직접 단골을 고른 직후엔
   // 드롭다운을 다시 띄우지 않도록 null 로 리셋.
   const [focusedClientId, setFocusedClientId] = useState<string | null>(null);
+  // 별칭 칸을 사용자가 명시적으로 펼친 행. nickname 이 채워진 행은 자동으로
+  // 두 칸 모드라 이 Set 와 무관하게 노출.
+  const [aliasOpened, setAliasOpened] = useState<Set<string>>(new Set());
+
+  const toggleAlias = (clientId: string, open: boolean) => {
+    setAliasOpened((cur) => {
+      const next = new Set(cur);
+      if (open) next.add(clientId);
+      else next.delete(clientId);
+      return next;
+    });
+  };
 
   // 단골을 자동완성에서 고르면 그 row 의 모든 입력값을 단골 값으로 채운다.
   // contactId 는 서버 hint 용으로 같이 보존(서버는 결국 normalizedKey 로 다시
@@ -85,7 +104,9 @@ export const Step1Participants = ({ onNext }: Props) => {
       const nm = (p.name ?? '').trim();
       const nick = (p.nickname ?? '').trim();
       if (nm.length === 0 && nick.length === 0) {
-        map.set(p.clientId, '이름 또는 닉네임 중 하나는 입력해 주세요.');
+        // 단일 필드 모드를 가정한 자연스러운 메시지. 별칭만 채워도 통과는
+        // 한다 (기존 검증 유지).
+        map.set(p.clientId, '이름을 입력해 주세요.');
       }
     });
     return map;
@@ -98,8 +119,9 @@ export const Step1Participants = ({ onNext }: Props) => {
       <div>
         <h2 className="text-lg font-semibold">참여자</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          누구끼리 나눌까요? 이름 또는 닉네임 중 하나만 채워도 됩니다. 술/안주 등 특이사항은
-          체크박스로 표시하면 해당 카테고리는 그 사람을 제외하고 나눠 부담합니다.
+          누구끼리 나눌까요? 한 사람당 한 줄로 추가하세요. 같은 이름이 두 명이면 "+ 별칭" 으로
+          구분할 수 있고, 술/안주 등 특이사항은 체크박스로 표시하면 해당 카테고리는 그 사람을
+          제외하고 나눠 부담합니다.
         </p>
       </div>
 
@@ -111,6 +133,10 @@ export const Step1Participants = ({ onNext }: Props) => {
         )}
         {participants.map((p, idx) => {
           const err = errors.get(p.clientId);
+          // nickname 이 비어있지 않으면 항상 두 칸 모드. 사용자가 명시적으로
+          // 펼친 행도 마찬가지. 둘 다 아니면 단일 필드만.
+          const hasNickname = (p.nickname ?? '').trim().length > 0;
+          const showAlias = hasNickname || aliasOpened.has(p.clientId);
           return (
             <div
               key={p.clientId}
@@ -130,17 +156,24 @@ export const Step1Participants = ({ onNext }: Props) => {
                   <Trash2 className="size-4" />
                 </Button>
               </div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+
+              {/* 단일 필드 모드 (기본) — 별칭 칸이 펼쳐진 상태면 두 칸 grid. */}
+              <div
+                className={
+                  showAlias
+                    ? 'mt-2 grid gap-2 sm:grid-cols-2'
+                    : 'mt-2 flex items-start gap-2'
+                }
+              >
                 <Field label="이름">
                   {/* 자동완성 드롭다운을 input 바로 아래에 absolute 배치하기 위해
-                      relative wrapper. 닉네임 input 은 검색어로는 작동하지만
-                      드롭다운 자체는 이름 input 쪽에서만 띄운다 — 화면 1줄에
-                      두 개를 띄우면 어수선해서. */}
+                      relative wrapper. 단골 검색은 nickname 도 매칭하므로 사용자가
+                      별칭만 알고 있어도 기존 단골이 잡힌다. */}
                   <div className="relative">
                     <Input
                       type="text"
                       value={p.name ?? ''}
-                      placeholder="홍길동"
+                      placeholder={showAlias ? '홍길동' : '홍길동 또는 길동이'}
                       onFocus={() => setFocusedClientId(p.clientId)}
                       // blur 가 mousedown 보다 늦게 발동하도록 microtask 늦춤 —
                       // ContactSuggestions 의 onMouseDown 이 먼저 잡혀 클릭이
@@ -170,19 +203,51 @@ export const Step1Participants = ({ onNext }: Props) => {
                     />
                   </div>
                 </Field>
-                <Field label="닉네임">
-                  <Input
-                    type="text"
-                    value={p.nickname ?? ''}
-                    placeholder="길동이"
-                    onChange={(e) =>
-                      updateParticipant(p.clientId, {
-                        nickname: e.target.value,
-                        contactId: undefined,
-                      })
-                    }
-                  />
-                </Field>
+
+                {showAlias ? (
+                  <Field label="별칭">
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="text"
+                        value={p.nickname ?? ''}
+                        placeholder="길동이"
+                        onChange={(e) =>
+                          updateParticipant(p.clientId, {
+                            nickname: e.target.value,
+                            contactId: undefined,
+                          })
+                        }
+                      />
+                      {/* nickname 이 비어 있을 때만 접을 수 있게 — 값이 있는데
+                          접으면 입력값이 안 보이는 게 헷갈리므로. */}
+                      {!hasNickname && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-9 shrink-0"
+                          aria-label="별칭 칸 닫기"
+                          onClick={() => toggleAlias(p.clientId, false)}
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </Field>
+                ) : (
+                  // 단일 필드 모드의 "+ 별칭" 토글. 같은 이름이 둘 있어 구분이
+                  // 필요할 때만 사용자가 명시적으로 펼친다.
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-5 h-9 shrink-0 gap-1 text-xs text-muted-foreground"
+                    onClick={() => toggleAlias(p.clientId, true)}
+                  >
+                    <Plus className="size-3" />
+                    별칭
+                  </Button>
+                )}
               </div>
 
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
@@ -275,7 +340,7 @@ const normalizeContactKey = (
 };
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+  <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
     <span>{label}</span>
     {children}
   </label>
