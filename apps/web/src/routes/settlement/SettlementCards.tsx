@@ -1,8 +1,9 @@
-import { Coins } from 'lucide-react';
+import { Coins, Pencil } from 'lucide-react';
 import type {
   ReceiptItemCategoryType,
   SharedSettlementSessionType,
 } from '@repo/api-contract';
+import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
@@ -56,6 +57,14 @@ export const SessionSummaryCard = ({
         <dd className="text-right">
           {new Date(session.createdAt).toLocaleString('ko-KR')}
         </dd>
+        {session.editedAt && (
+          <>
+            <dt className="text-muted-foreground">수정됨</dt>
+            <dd className="text-right">
+              {new Date(session.editedAt).toLocaleString('ko-KR')}
+            </dd>
+          </>
+        )}
       </dl>
     </CardContent>
   </Card>
@@ -63,12 +72,30 @@ export const SessionSummaryCard = ({
 
 export const ParticipantsCard = ({
   session,
+  onEdit,
 }: {
   session: SharedSettlementSessionType;
+  // 소유자가 보고 있을 때만 수정 콜백을 넘긴다. SharedSettlementPage 는
+  // 비전달 → 버튼 자체가 안 그려진다.
+  onEdit?: () => void;
 }) => (
   <Card>
     <CardHeader className="pb-2">
-      <CardTitle className="text-base">참여자별 분담</CardTitle>
+      <CardTitle className="flex items-center justify-between text-base">
+        <span>참여자별 분담</span>
+        {onEdit && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground hover:text-foreground"
+            onClick={onEdit}
+          >
+            <Pencil className="size-3" />
+            수정
+          </Button>
+        )}
+      </CardTitle>
     </CardHeader>
     <CardContent>
       <ul className="divide-y">

@@ -53,6 +53,10 @@ model SettlementSession {
   // 멱등 생성, DELETE 로 회수. 토큰 자체는 추측 불가능한 32바이트 base64url.
   // unique 인덱스로 GET /share/settlements/:token 조회 O(1).
   shareToken        String?  @unique
+  // participants 가 저장 후 수정된 마지막 시각 — 한 번도 수정 안 했으면 null.
+  // updatedAt 과 분리한 이유: updatedAt 은 shareToken 발급/회수에도 갱신되어
+  // '수정됨' 배지 기준으로 부적합.
+  editedAt          DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

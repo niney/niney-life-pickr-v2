@@ -9,6 +9,7 @@ import {
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { ParticipantEditDialog } from './ParticipantEditDialog';
 import { ItemsCard, ParticipantsCard, SessionSummaryCard } from './SettlementCards';
 import { SettlementShareDialog } from './SettlementShareDialog';
 
@@ -20,6 +21,7 @@ export const SettlementResultPage = () => {
   const session = useSettlement(id);
   const remove = useDeleteSettlement();
   const [shareOpen, setShareOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const handleBack = () => navigate(`/restaurants/${placeId}`);
 
@@ -109,10 +111,17 @@ export const SettlementResultPage = () => {
 
         {s.receiptPreviewUrl && <ReceiptCard previewUrl={s.receiptPreviewUrl} />}
 
-        <ParticipantsCard session={s} />
+        <ParticipantsCard session={s} onEdit={() => setEditOpen(true)} />
 
         <ItemsCard session={s} />
       </div>
+
+      <ParticipantEditDialog
+        open={editOpen}
+        sessionId={s.id}
+        initial={s.participants}
+        onClose={() => setEditOpen(false)}
+      />
     </main>
   );
 };

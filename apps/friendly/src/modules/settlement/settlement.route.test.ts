@@ -213,6 +213,65 @@ describe('settlement share routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('PATCH participants: 옵션 변경으로 shareAmount 재계산 + editedAt 세팅', async () => {
+    const sessionId = await seedSession(app, ownerId);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/settlements/${sessionId}/participants`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+      payload: {
+        participants: [
+          // A 는 비주류(김치찌개) 제외 → 분담 0 원
+          {
+            name: 'A',
+            nickname: null,
+            excludeAlcohol: false,
+            excludeNonAlcohol: true,
+            excludeSide: false,
+          },
+          {
+            name: 'B',
+            nickname: null,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.editedAt).toBeTruthy();
+    expect(body.participants).toHaveLength(2);
+    // A 는 비주류 제외 → 김치찌개(30000원) 풀에서 빠짐 → 0원
+    // B 혼자 비주류 풀 부담 → 30000원
+    const byName = new Map(body.participants.map((p: { name: string; shareAmount: number }) => [p.name, p.shareAmount]));
+    expect(byName.get('A')).toBe(0);
+    expect(byName.get('B')).toBe(30000);
+  });
+
+  it('PATCH participants: 비소유자는 403', async () => {
+    const sessionId = await seedSession(app, ownerId);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/settlements/${sessionId}/participants`,
+      headers: { Authorization: `Bearer ${tokenFor(app, otherId)}` },
+      payload: {
+        participants: [
+          {
+            name: 'X',
+            nickname: null,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('재발급 후 이전 토큰은 무효', async () => {
     const sessionId = await seedSession(app, ownerId);
     const first = await app.inject({

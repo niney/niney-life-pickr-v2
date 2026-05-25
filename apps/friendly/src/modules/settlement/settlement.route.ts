@@ -9,6 +9,7 @@ import {
   SettlementSession,
   SettlementShare,
   SharedSettlementSession,
+  UpdateSettlementParticipantsInput,
 } from '@repo/api-contract';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
@@ -86,6 +87,27 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
         const out = await service.getById(req.user.userId, req.params.id);
         if (!out) throw app.httpErrors.notFound('세션을 찾을 수 없습니다.');
         return out;
+      } catch (e) {
+        if (e instanceof SettlementError) return throwAsHttp(app, e);
+        throw e;
+      }
+    },
+  });
+
+  // 저장된 정산의 참여자/옵션만 수정 — items 는 불변. 서버가 items 와 결합해
+  // shareAmount 재계산, editedAt 갱신. 응답은 갱신된 세션 전체.
+  typed.patch(S.updateParticipants(':id'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['settlement'],
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+      body: UpdateSettlementParticipantsInput,
+      response: { 200: SettlementSession },
+    },
+    handler: async (req) => {
+      try {
+        return await service.updateParticipants(req.user.userId, req.params.id, req.body);
       } catch (e) {
         if (e instanceof SettlementError) return throwAsHttp(app, e);
         throw e;

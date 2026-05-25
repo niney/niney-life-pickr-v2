@@ -259,6 +259,7 @@ export const Settlement = {
   list: `${API_PREFIX}/settlements`,
   create: `${API_PREFIX}/settlements`,
   one: (id: string) => `${API_PREFIX}/settlements/${id}`,
+  updateParticipants: (id: string) => `${API_PREFIX}/settlements/${id}/participants`,
   share: (id: string) => `${API_PREFIX}/settlements/${id}/share`,
   shared: (token: string) => `${API_PREFIX}/share/settlements/${token}`,
 } as const;

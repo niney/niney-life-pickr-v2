@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateSettlementInputType,
   ListSettlementsQueryType,
+  SettlementSessionType,
+  UpdateSettlementParticipantsInputType,
 } from '@repo/api-contract';
 import { settlementApi } from '../api/settlement.api.js';
 
@@ -27,6 +29,21 @@ export const useSettlement = (id: string | null) =>
     queryFn: () => settlementApi.get(id ?? ''),
     enabled: !!id,
   });
+
+// 저장된 정산의 참여자/옵션 수정. 응답으로 받은 갱신된 세션을 detail 캐시에
+// 즉시 반영 — 결과 페이지가 다시 fetch 하지 않아도 새 shareAmount 가 보인다.
+// 목록은 invalidate 만 (참여자 수 표시가 바뀔 수 있어).
+export const useUpdateSettlementParticipants = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateSettlementParticipantsInputType }) =>
+      settlementApi.updateParticipants(id, input),
+    onSuccess: (updated: SettlementSessionType) => {
+      qc.setQueryData<SettlementSessionType>([...KEY, 'one', updated.id], updated);
+      qc.invalidateQueries({ queryKey: [...KEY, 'list'] });
+    },
+  });
+};
 
 export const useDeleteSettlement = () => {
   const qc = useQueryClient();

@@ -70,6 +70,9 @@ export const SettlementSession = z.object({
   participants: z.array(SettlementParticipant),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // 저장 후 participants 가 수정된 마지막 시각. 한 번도 수정되지 않았으면 null.
+  // 공유 페이지에서 '수정됨' 배지로 노출.
+  editedAt: z.string().nullable(),
 });
 export type SettlementSessionType = z.infer<typeof SettlementSession>;
 
@@ -85,6 +88,15 @@ export const CreateSettlementInput = z.object({
   participants: z.array(SettlementParticipantInput).min(1).max(20),
 });
 export type CreateSettlementInputType = z.infer<typeof CreateSettlementInput>;
+
+// 저장 후 참여자/옵션 수정. items 는 불변이므로 participants 만 받는다.
+// 서버가 items 와 결합해 shareAmount 를 재계산.
+export const UpdateSettlementParticipantsInput = z.object({
+  participants: z.array(SettlementParticipantInput).min(1).max(20),
+});
+export type UpdateSettlementParticipantsInputType = z.infer<
+  typeof UpdateSettlementParticipantsInput
+>;
 
 export const ListSettlementsQuery = z.object({
   // 특정 식당의 이력만 보고 싶을 때. 미지정이면 전체.

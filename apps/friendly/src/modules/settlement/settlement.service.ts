@@ -12,6 +12,7 @@ import {
   type SettlementSessionType,
   type SettlementSourceType,
   type SharedSettlementSessionType,
+  type UpdateSettlementParticipantsInputType,
   calculateShares,
 } from '@repo/api-contract';
 
@@ -254,6 +255,104 @@ export class SettlementService {
     return this.rowToSession(row);
   }
 
+  // 저장 후 참여자/옵션 수정. items 는 불변 — 서버가 보존된 items 를 다시
+  // 사용해 calculateShares 로 재계산. participants 는 전부 교체(삭제 후 재삽입)
+  // 방식 — orderIndex 정합성을 단순히 보장. 단골(contact) 은 normalizedKey
+  // 기준 upsert + useCount/lastUsedAt 갱신은 create 와 동일.
+  async updateParticipants(
+    userId: string,
+    id: string,
+    input: UpdateSettlementParticipantsInputType,
+  ): Promise<SettlementSessionType> {
+    for (const p of input.participants) {
+      const hasName = (p.name ?? '').trim().length > 0;
+      const hasNickname = (p.nickname ?? '').trim().length > 0;
+      if (!hasName && !hasNickname) {
+        throw new SettlementError(
+          'invalid_participant',
+          '참여자는 이름 또는 닉네임 중 하나가 필요합니다.',
+        );
+      }
+    }
+
+    const existing = await this.prisma.settlementSession.findUnique({
+      where: { id },
+      include: { items: { select: { amount: true, category: true } } },
+    });
+    if (!existing) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
+    if (existing.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
+
+    const calc = calculateShares({
+      items: existing.items.map((it) => ({
+        amount: it.amount,
+        category: it.category as ReceiptItemCategoryType,
+      })),
+      participants: input.participants.map((p) => ({
+        excludeAlcohol: p.excludeAlcohol,
+        excludeNonAlcohol: p.excludeNonAlcohol,
+        excludeSide: p.excludeSide,
+      })),
+    });
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.settlementParticipant.deleteMany({ where: { sessionId: id } });
+      for (let idx = 0; idx < input.participants.length; idx++) {
+        const p = input.participants[idx]!;
+        const name = p.name?.trim() || null;
+        const nickname = p.nickname?.trim() || null;
+        const normalizedKey = normalizeContactKey(name, nickname);
+
+        const contact = await tx.settlementContact.upsert({
+          where: { userId_normalizedKey: { userId, normalizedKey } },
+          create: {
+            userId,
+            name,
+            nickname,
+            normalizedKey,
+            lastExcludeAlcohol: p.excludeAlcohol,
+            lastExcludeNonAlcohol: p.excludeNonAlcohol,
+            lastExcludeSide: p.excludeSide,
+            useCount: 1,
+            lastUsedAt: now,
+          },
+          update: {
+            name,
+            nickname,
+            lastExcludeAlcohol: p.excludeAlcohol,
+            lastExcludeNonAlcohol: p.excludeNonAlcohol,
+            lastExcludeSide: p.excludeSide,
+            useCount: { increment: 1 },
+            lastUsedAt: now,
+          },
+        });
+
+        await tx.settlementParticipant.create({
+          data: {
+            sessionId: id,
+            name,
+            nickname,
+            excludeAlcohol: p.excludeAlcohol,
+            excludeNonAlcohol: p.excludeNonAlcohol,
+            excludeSide: p.excludeSide,
+            shareAmount: calc.shareAmounts[idx] ?? 0,
+            orderIndex: idx,
+            contactId: contact.id,
+          },
+        });
+      }
+
+      await tx.settlementSession.update({
+        where: { id },
+        data: { editedAt: now },
+      });
+    });
+
+    const detail = await this.getById(userId, id);
+    if (!detail) throw new SettlementError('not_found', '수정 직후 세션을 다시 찾지 못했습니다.');
+    return detail;
+  }
+
   async deleteById(userId: string, id: string): Promise<void> {
     const row = await this.prisma.settlementSession.findUnique({
       where: { id },
@@ -330,6 +429,7 @@ export class SettlementService {
     itemsSubtotal: number;
     createdAt: Date;
     updatedAt: Date;
+    editedAt: Date | null;
     items: Array<{
       id: string;
       name: string;
@@ -387,6 +487,7 @@ export class SettlementService {
       })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     };
   }
 }

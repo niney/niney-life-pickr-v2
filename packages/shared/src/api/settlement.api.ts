@@ -5,6 +5,7 @@ import type {
   SettlementSessionType,
   SettlementShareType,
   SharedSettlementSessionType,
+  UpdateSettlementParticipantsInputType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
@@ -34,6 +35,16 @@ export const settlementApi = {
 
   remove: (id: string): Promise<void> =>
     apiFetch<void>(`${PREFIX}/${id}`, { method: 'DELETE' }),
+
+  // 저장 후 참여자/옵션 수정 — items 는 불변. 서버가 재계산해서 갱신된 세션 반환.
+  updateParticipants: (
+    id: string,
+    input: UpdateSettlementParticipantsInputType,
+  ): Promise<SettlementSessionType> =>
+    apiFetch<SettlementSessionType>(`${PREFIX}/${id}/participants`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
 
   // 공유 토큰 생성 — 같은 세션 두 번 호출해도 동일 토큰(서버 멱등).
   createShare: (id: string): Promise<SettlementShareType> =>
