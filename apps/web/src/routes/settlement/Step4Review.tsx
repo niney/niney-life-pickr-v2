@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Save, Loader2, Coins } from 'lucide-react';
+import { AlertTriangle, Coins, Loader2, Save } from 'lucide-react';
 import {
-  calculateShares,
+  calculateMultiRoundShares,
+  effectiveExcludes,
   type ReceiptItemCategoryType,
 } from '@repo/api-contract';
 import {
   ApiError,
   useCreateSettlement,
   useSettlementDraftStore,
+  useUpdateSettlement,
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 
 interface Props {
-  placeId: string;
   onBack: () => void;
+  // 편집 모드면 PUT, create 모드면 POST. id 가 있으면 편집.
+  editingId?: string;
 }
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
@@ -25,105 +28,172 @@ const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
   UNCATEGORIZED: '미분류',
 };
 
-const participantName = (p: { name: string | null; nickname: string | null }, idx: number) => {
+const participantName = (
+  p: { name: string | null; nickname: string | null },
+  idx: number,
+) => {
   const nm = (p.name ?? '').trim();
   const nick = (p.nickname ?? '').trim();
   if (nm && nick) return `${nm} (${nick})`;
   return nm || nick || `참여자 ${idx + 1}`;
 };
 
-// 마지막 단계 — 분배 계산 결과 미리보기 + 저장. 클라이언트에서도 동일한
-// calculateShares 를 호출해 서버 라운드트립 없이 보여준다. 저장은 server 가
-// 다시 한 번 계산해 권위 있는 값으로 만든다 (클라이언트 변조 방지).
-export const Step4Review = ({ placeId, onBack }: Props) => {
+// 마지막 단계 — 차수 × 참여자 참석 그리드 + 차수별 분담 + 인당 합계 + 저장.
+// 서버도 같은 계산을 다시 하지만 화면에 즉시 보이도록 client 에서도 호출.
+export const Step4Review = ({ onBack, editingId }: Props) => {
   const draft = useSettlementDraftStore();
+  const setAttendance = useSettlementDraftStore((s) => s.setAttendance);
   const create = useCreateSettlement();
+  const update = useUpdateSettlement();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState<string | null>(null);
 
-  const calc = useMemo(
-    () =>
-      calculateShares({
-        items: draft.items.map((it) => ({ amount: it.amount, category: it.category })),
-        participants: draft.participants.map((p) => ({
-          excludeAlcohol: p.excludeAlcohol,
-          excludeNonAlcohol: p.excludeNonAlcohol,
-          excludeSide: p.excludeSide,
-        })),
-      }),
-    [draft.items, draft.participants],
-  );
+  // 차수별 effective 계산 — round override 적용된 exclude 플래그.
+  const calc = useMemo(() => {
+    return calculateMultiRoundShares({
+      participantCount: draft.participants.length,
+      rounds: draft.rounds.map((r) => ({
+        items: r.items.map((it) => ({ amount: it.amount, category: it.category })),
+        attendees: r.attendances
+          .filter((a) => a.attended)
+          .map((a) => {
+            const master =
+              draft.participants.find((p) => p.clientId === a.participantClientId)!;
+            const eff = effectiveExcludes(master, a);
+            return {
+              participantIndex: draft.participants.findIndex(
+                (p) => p.clientId === a.participantClientId,
+              ),
+              ...eff,
+            };
+          }),
+      })),
+    });
+  }, [draft.participants, draft.rounds]);
 
   const handleSave = async () => {
     setError(null);
-    if (!draft.source) {
-      setError('입력 방식이 결정되지 않았습니다.');
-      return;
+    // 모든 차수에 source 가 설정돼 있어야 한다 (Step2 게이팅에서 막혔지만 한번 더).
+    for (const r of draft.rounds) {
+      if (!r.source) {
+        setError('입력 방식이 결정되지 않은 차수가 있습니다.');
+        return;
+      }
+      if (!r.attendances.some((a) => a.attended)) {
+        setError(`${r.placeName || '차수'} 에 참석자가 한 명도 없습니다.`);
+        return;
+      }
     }
     try {
-      const saved = await create.mutateAsync({
-        restaurantPlaceId: placeId,
-        source: draft.source,
-        totalAmount: draft.totalAmount,
-        warning: draft.warning,
-        receiptImageToken: draft.receiptImageToken,
-        items: draft.items.map((it) => ({
-          name: it.name,
-          unitPrice: it.unitPrice,
-          quantity: it.quantity,
-          amount: it.amount,
-          category: it.category,
-          matchedMenuName: it.matchedMenuName,
+      const payload = {
+        rounds: draft.rounds.map((r) => ({
+          restaurantPlaceId: r.placeId,
+          source: r.source!,
+          totalAmount: r.totalAmount,
+          warning: r.warning,
+          receiptImageToken: r.receiptImageToken,
+          items: r.items.map((it) => ({
+            name: it.name,
+            unitPrice: it.unitPrice,
+            quantity: it.quantity,
+            amount: it.amount,
+            category: it.category,
+            matchedMenuName: it.matchedMenuName,
+          })),
+          attendees: r.attendances.map((a) => ({
+            participantClientId: a.participantClientId,
+            attended: a.attended,
+            excludeAlcoholOverride: a.excludeAlcoholOverride,
+            excludeNonAlcoholOverride: a.excludeNonAlcoholOverride,
+            excludeSideOverride: a.excludeSideOverride,
+          })),
         })),
         participants: draft.participants.map((p) => ({
+          clientId: p.clientId,
           name: p.name?.trim() || null,
           nickname: p.nickname?.trim() || null,
           excludeAlcohol: p.excludeAlcohol,
           excludeNonAlcohol: p.excludeNonAlcohol,
           excludeSide: p.excludeSide,
-          // 자동완성에서 골랐을 때 hint 로 같이 전송. 서버는 어차피 정규화 키로
-          // 다시 매칭하지만 의도 명시 + 추후 서버 확장 여지.
           ...(p.contactId ? { contactId: p.contactId } : {}),
         })),
-      });
-      // 저장 성공 — draft 정리하고 결과 페이지로.
+      };
+      const saved = editingId
+        ? await update.mutateAsync({ id: editingId, input: payload })
+        : await create.mutateAsync(payload);
+      // 저장 성공 — draft 정리 (편집 모드도 마찬가지) 후 결과 페이지로.
       draft.reset();
-      navigate(`/restaurants/${placeId}/settle/${saved.id}`);
+      navigate(`/restaurants/${saved.restaurantPlaceId}/settle/${saved.id}`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '저장 실패');
     }
   };
 
-  const subtotalMismatch =
-    draft.source === 'RECEIPT' &&
-    draft.totalAmount != null &&
-    Math.abs(calc.itemsSubtotal - draft.totalAmount) >= 1;
+  const multi = draft.rounds.length > 1;
+  const pending = create.isPending || update.isPending;
 
   return (
     <section className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">분배 결과</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          참여자별 분담액입니다. 저장하면 이력으로 남아 나중에 다시 볼 수 있어요.
+          {multi
+            ? '차수별 분담을 확인하고, 차수별 참석 체크가 맞는지 확인하세요. 저장하면 이력으로 남습니다.'
+            : '참여자별 분담액입니다. 저장하면 이력으로 남아 나중에 다시 볼 수 있어요.'}
         </p>
       </div>
 
-      {(draft.warning || subtotalMismatch) && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <div className="space-y-1">
-            {draft.warning && <p>{draft.warning}</p>}
-            {subtotalMismatch && (
-              <p>
-                항목 합계 {calc.itemsSubtotal.toLocaleString('ko-KR')}원 — 영수증 총액{' '}
-                {draft.totalAmount?.toLocaleString('ko-KR')}원과 일치하지 않습니다.
-              </p>
-            )}
-          </div>
-        </div>
+      {/* 차수 × 참여자 참석 그리드 — 차수가 2개 이상일 때만 노출. 1개면 모두
+          참석이 default 이므로 굳이 보이지 않아도 된다. */}
+      {multi && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">차수별 참석</CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="px-2 py-1.5 text-left font-medium">참여자</th>
+                  {draft.rounds.map((r, idx) => (
+                    <th key={r.clientId} className="px-2 py-1.5 text-center font-medium">
+                      {idx + 1}차
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {draft.participants.map((p, pIdx) => (
+                  <tr key={p.clientId} className="border-b last:border-0">
+                    <td className="truncate px-2 py-1.5">{participantName(p, pIdx)}</td>
+                    {draft.rounds.map((r) => {
+                      const a = r.attendances.find(
+                        (x) => x.participantClientId === p.clientId,
+                      );
+                      const attended = a?.attended ?? false;
+                      return (
+                        <td key={r.clientId} className="px-2 py-1.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={attended}
+                            onChange={(e) =>
+                              setAttendance(r.clientId, p.clientId, e.target.checked)
+                            }
+                            className="size-4 cursor-pointer"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       )}
 
+      {/* 참여자별 grand total 카드. 멀티 차수면 차수별 부분합도 같이. */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -138,30 +208,43 @@ export const Step4Review = ({ placeId, onBack }: Props) => {
               if (p.excludeAlcohol) tags.push('주류 X');
               if (p.excludeNonAlcohol) tags.push('비주류 X');
               if (p.excludeSide) tags.push('안주 X');
+              const total = calc.perParticipant[idx] ?? 0;
               return (
                 <li
                   key={p.clientId}
-                  className="flex items-center justify-between gap-2 py-2.5"
+                  className="flex items-start justify-between gap-2 py-2.5"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">
                       {participantName(p, idx)}
                     </div>
                     {tags.length > 0 && (
                       <div className="mt-0.5 flex flex-wrap gap-1 text-xs text-muted-foreground">
                         {tags.map((t) => (
-                          <span
-                            key={t}
-                            className="rounded bg-muted px-1.5 py-0.5"
-                          >
+                          <span key={t} className="rounded bg-muted px-1.5 py-0.5">
                             {t}
                           </span>
                         ))}
                       </div>
                     )}
+                    {multi && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {calc.perRound
+                          .map((rc, rIdx) => {
+                            const attended =
+                              draft.rounds[rIdx]?.attendances.find(
+                                (a) => a.participantClientId === p.clientId,
+                              )?.attended ?? false;
+                            return attended
+                              ? `${rIdx + 1}차 ${(rc.shareAmounts[idx] ?? 0).toLocaleString('ko-KR')}원`
+                              : `${rIdx + 1}차 불참`;
+                          })
+                          .join(' · ')}
+                      </div>
+                    )}
                   </div>
                   <div className="shrink-0 text-base font-semibold">
-                    {(calc.shareAmounts[idx] ?? 0).toLocaleString('ko-KR')}원
+                    {total.toLocaleString('ko-KR')}원
                   </div>
                 </li>
               );
@@ -171,61 +254,78 @@ export const Step4Review = ({ placeId, onBack }: Props) => {
           <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm">
             <span className="text-muted-foreground">총 합계</span>
             <span className="font-semibold">
-              {calc.itemsSubtotal.toLocaleString('ko-KR')}원
+              {calc.grandTotal.toLocaleString('ko-KR')}원
             </span>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            <button
-              type="button"
-              className="w-full text-left text-base font-semibold"
-              onClick={() => setBreakdownOpen((v) => !v)}
-            >
-              카테고리별 풀 상세 {breakdownOpen ? '▴' : '▾'}
-            </button>
-          </CardTitle>
-        </CardHeader>
-        {breakdownOpen && (
-          <CardContent>
-            <ul className="space-y-2 text-sm">
-              {(
-                ['ALCOHOL', 'NON_ALCOHOL', 'SIDE', 'UNCATEGORIZED'] as ReceiptItemCategoryType[]
-              ).map((c) => {
-                const b = calc.poolBreakdown[c];
-                if (b.poolAmount === 0) return null;
-                return (
-                  <li
-                    key={c}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <span>{CATEGORY_LABEL[c]}</span>
-                    <span className="text-muted-foreground">
-                      {b.poolAmount.toLocaleString('ko-KR')}원 · {b.participantCount}명 · 1인 {b.perParticipant.toLocaleString('ko-KR')}원
-                    </span>
-                  </li>
-                );
-              })}
-              {Object.values(calc.poolBreakdown).every((b) => b.poolAmount === 0) && (
-                <li className="text-muted-foreground">항목이 없습니다.</li>
-              )}
-            </ul>
-          </CardContent>
-        )}
-      </Card>
+      {/* 차수별 카테고리 풀 디버깅 — 차수가 여러 개면 차수마다 접힌 카드. */}
+      {draft.rounds.map((r, rIdx) => {
+        const rc = calc.perRound[rIdx];
+        if (!rc) return null;
+        const isOpen = breakdownOpen === r.clientId;
+        return (
+          <Card key={r.clientId}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-left text-base font-semibold"
+                  onClick={() => setBreakdownOpen(isOpen ? null : r.clientId)}
+                >
+                  <span>
+                    {multi ? `${rIdx + 1}차 · ` : ''}
+                    {r.placeName} · 카테고리별 풀
+                  </span>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {rc.itemsSubtotal.toLocaleString('ko-KR')}원 {isOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+              </CardTitle>
+            </CardHeader>
+            {isOpen && (
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  {(
+                    ['ALCOHOL', 'NON_ALCOHOL', 'SIDE', 'UNCATEGORIZED'] as ReceiptItemCategoryType[]
+                  ).map((c) => {
+                    const b = rc.poolBreakdown[c];
+                    if (b.poolAmount === 0) return null;
+                    return (
+                      <li key={c} className="flex items-center justify-between gap-2">
+                        <span>{CATEGORY_LABEL[c]}</span>
+                        <span className="text-muted-foreground">
+                          {b.poolAmount.toLocaleString('ko-KR')}원 · {b.participantCount}명 · 1인{' '}
+                          {b.perParticipant.toLocaleString('ko-KR')}원
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {Object.values(rc.poolBreakdown).every((b) => b.poolAmount === 0) && (
+                    <li className="text-muted-foreground">항목이 없습니다.</li>
+                  )}
+                </ul>
+              </CardContent>
+            )}
+          </Card>
+        );
+      })}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <p>{error}</p>
+        </div>
+      )}
 
       <div className="flex justify-between gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onBack} disabled={create.isPending}>
+        <Button type="button" variant="ghost" onClick={onBack} disabled={pending}>
           이전
         </Button>
-        <Button type="button" onClick={handleSave} disabled={create.isPending}>
-          {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          저장
+        <Button type="button" onClick={handleSave} disabled={pending}>
+          {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          {editingId ? '수정 저장' : '저장'}
         </Button>
       </div>
     </section>

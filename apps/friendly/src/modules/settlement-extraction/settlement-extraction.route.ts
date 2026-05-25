@@ -94,16 +94,23 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: ExtractReceiptResult },
     },
     handler: async (req) => {
-      const { imageToken, placeId } = req.body;
+      const { imageToken, placeId, roundIndex, roundTotal } = req.body;
       const detail = await restaurantService.getPublicDetail(placeId);
       if (!detail) {
         throw app.httpErrors.notFound('식당을 찾을 수 없습니다.');
       }
+      // roundIndex 와 roundTotal 은 둘 다 있을 때만 의미가 있다 — 한쪽만 들어
+      // 오면 무시. 범위 검증은 zod 에서 끝났지만 1<=index<=total 도 확인.
+      const roundHint =
+        roundIndex && roundTotal && roundIndex <= roundTotal
+          ? { index: roundIndex, total: roundTotal }
+          : undefined;
       try {
         return await service.extract({
           imageToken,
           restaurantName: detail.name,
           menuNames: detail.menus.map((m) => m.name),
+          roundHint,
         });
       } catch (e) {
         if (e instanceof SettlementExtractionError) {

@@ -1,43 +1,171 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Loader2 } from 'lucide-react';
-import type { SettlementSourceType } from '@repo/api-contract';
-import { useRestaurantPublic, useSettlementDraftStore } from '@repo/shared';
+import {
+  useRestaurantPublic,
+  useSettlement,
+  useSettlementDraftStore,
+  type DraftRound,
+} from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { Step1Participants } from './Step1Participants';
-import { Step2Source } from './Step2Source';
+import { Step2Rounds } from './Step2Rounds';
 import { Step3Edit } from './Step3Edit';
 import { Step4Review } from './Step4Review';
 
-export type StepKey = 'participants' | 'source' | 'edit' | 'review';
+export type StepKey = 'participants' | 'rounds' | 'edit' | 'review';
 
-// 정산하기 다단계 페이지. step 은 page-local state — 새로고침 시 1단계로
-// 돌아가지만 draftStore 가 입력값을 보존한다. 더 큰 단계 동기화가 필요해지면
-// ?step= 쿼리로 옮기는 것이 안전.
+// 정산 입력 페이지 — create 와 edit 두 모드 지원.
+//
+// 진입 경로:
+// - /restaurants/:placeId/settle/new   → create, 1차 식당 prefill
+// - /me/settlements/new                → create, 식당 비어 있음 (Step2 에서 검색)
+// - /restaurants/:placeId/settle/:id/edit → edit, 저장된 세션을 draft 로 복원
+//
+// step 은 page-local state — 새로고침 시 1단계로 돌아가지만 draftStore 가
+// 입력값을 보존한다.
 export const SettlementNewPage = () => {
-  const { placeId = '' } = useParams<{ placeId: string }>();
+  const { placeId, id } = useParams<{ placeId?: string; id?: string }>();
+  const isEdit = Boolean(id);
   const navigate = useNavigate();
-  const detail = useRestaurantPublic(placeId);
   const draft = useSettlementDraftStore();
+  const reset = useSettlementDraftStore((s) => s.reset);
+  const startFor = useSettlementDraftStore((s) => s.startFor);
+  const startFromScratch = useSettlementDraftStore((s) => s.startFromScratch);
+
+  // 1차 식당이 url 로 들어왔으면 그 식당 detail 을 fetch — placeName 을
+  // store 에 prefill 하려면 필요. 독립 진입(/me/settlements/new) 이면 fetch 안 함.
+  const firstPlaceDetail = useRestaurantPublic(placeId ?? null);
+
+  // 편집 모드: 저장된 세션 fetch 해 draft 로 hydrate.
+  const session = useSettlement(isEdit ? (id ?? null) : null);
 
   const [step, setStep] = useState<StepKey>('participants');
 
-  // 식당이 바뀌면 새 draft 로 reset. 같은 식당이면 진행 중인 입력 보존.
+  // create 진입 시 store 초기화 정책.
   useEffect(() => {
-    if (!placeId) return;
-    draft.startFor(placeId);
+    if (isEdit) return; // edit hydrate effect 에서 처리
+    if (placeId) {
+      // 식당 detail 이 와야 placeName 까지 prefill. 일단 placeId 만으로 startFor
+      // 호출하면 같은 식당 draft 는 보존 — placeName 은 detail 도착 시 갱신.
+      const name = firstPlaceDetail.data?.name ?? '';
+      startFor(placeId, name);
+    } else {
+      startFromScratch();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeId]);
+  }, [placeId, firstPlaceDetail.data?.name, isEdit]);
+
+  // edit 모드: 세션이 도착하면 draft 로 hydrate (1번만).
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    if (!isEdit) return;
+    if (hydrated) return;
+    if (!session.data) return;
+    const s = session.data;
+    // 새로 draft 만들고 마스터 + rounds 채우기.
+    reset();
+    // store API 가 setRounds/setParticipants 같은 bulk setter 가 없어서
+    // 직접 state 를 만들어 zustand setState 로 한 번에. 이 시점엔 모든 round
+    // 의 attendances 가 마스터 참여자와 1:1 매칭되어 있어야 동기화 OK.
+    const participantsDraft = s.participants.map((p) => ({
+      clientId: `p-${p.id}`,
+      name: p.name,
+      nickname: p.nickname,
+      excludeAlcohol: p.excludeAlcohol,
+      excludeNonAlcohol: p.excludeNonAlcohol,
+      excludeSide: p.excludeSide,
+      contactId: p.contactId ?? undefined,
+    }));
+    // id → clientId 매핑 (round.attendees 가 db id 로 참조 중).
+    const dbIdToClientId = new Map(
+      s.participants.map((p) => [p.id, `p-${p.id}`]),
+    );
+    const roundsDraft: DraftRound[] = s.rounds.map((r) => ({
+      clientId: `r-${r.id}`,
+      placeId: r.restaurantPlaceId,
+      placeName: r.restaurantName,
+      source: r.source,
+      items: r.items.map((it) => ({
+        clientId: `i-${it.id}`,
+        name: it.name,
+        unitPrice: it.unitPrice,
+        quantity: it.quantity,
+        amount: it.amount,
+        category: it.category,
+        matchedMenuName: it.matchedMenuName,
+      })),
+      // 편집 모드에선 영수증 토큰은 가져올 수 없음 (서버 응답에 없음). 사용자가
+      // 영수증을 다시 올리지 않는 한 receiptImageToken 은 null 로 — 그래도
+      // source='RECEIPT' 는 그대로 유지하고 items 가 보존되므로 분배 계산은 동일.
+      receiptImageToken: null,
+      receiptPreviewUrl: r.receiptPreviewUrl,
+      totalAmount: r.totalAmount,
+      warning: r.warning,
+      attendances: r.attendees.map((a) => ({
+        participantClientId: dbIdToClientId.get(a.participantId) ?? '',
+        attended: a.attended,
+        excludeAlcoholOverride: a.excludeAlcoholOverride,
+        excludeNonAlcoholOverride: a.excludeNonAlcoholOverride,
+        excludeSideOverride: a.excludeSideOverride,
+      })),
+    }));
+    useSettlementDraftStore.setState({
+      participants: participantsDraft,
+      rounds: roundsDraft,
+    });
+    setHydrated(true);
+    // 편집 진입은 보통 곧장 항목 편집/검토로 — 참여자부터 보는 것도 가능.
+  }, [isEdit, session.data, hydrated, reset]);
 
   const handleBack = useCallback(() => {
-    if (step === 'source') setStep('participants');
-    else if (step === 'edit') setStep('source');
+    if (step === 'rounds') setStep('participants');
+    else if (step === 'edit') setStep('rounds');
     else if (step === 'review') setStep('edit');
-    else navigate(`/restaurants/${placeId}`);
-  }, [step, navigate, placeId]);
+    else {
+      // step==='participants' 의 뒤로가기. edit 모드는 결과 페이지로, create 는
+      // 식당 상세로 (또는 history).
+      if (isEdit && id && placeId) {
+        navigate(`/restaurants/${placeId}/settle/${id}`);
+      } else if (placeId) {
+        navigate(`/restaurants/${placeId}`);
+      } else {
+        navigate('/me/settlements');
+      }
+    }
+  }, [step, navigate, placeId, id, isEdit]);
 
-  if (!placeId) return null;
+  // 헤더 식당 라벨.
+  const headerRestaurant = useMemo(() => {
+    if (isEdit && session.data) return session.data.restaurantName;
+    if (placeId && firstPlaceDetail.data) return firstPlaceDetail.data.name;
+    if (draft.rounds[0]?.placeName) return draft.rounds[0].placeName;
+    return placeId
+      ? firstPlaceDetail.isLoading
+        ? '불러오는 중…'
+        : ''
+      : '';
+  }, [isEdit, session.data, placeId, firstPlaceDetail.data, firstPlaceDetail.isLoading, draft.rounds]);
+
+  // edit 모드 hydrate 대기 — 데이터 없으면 로딩.
+  if (isEdit && !hydrated) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <Loader2 className="mr-2 size-4 animate-spin" />
+        <span className="text-sm text-muted-foreground">불러오는 중…</span>
+      </main>
+    );
+  }
+
+  // create 인데 placeId 가 url 에 있지만 식당이 못 와도 (404) 진행 불가.
+  if (!isEdit && placeId && !firstPlaceDetail.isLoading && !firstPlaceDetail.data) {
+    return (
+      <main className="p-8 text-center text-sm text-destructive">
+        식당 정보를 불러오지 못했습니다.
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
@@ -53,105 +181,85 @@ export const SettlementNewPage = () => {
             <ChevronLeft className="size-4" />
           </Button>
           <div className="flex-1 truncate text-sm font-semibold">
-            정산하기 · {detail.data?.name ?? (detail.isLoading ? '불러오는 중…' : '')}
+            {isEdit ? '정산 수정' : '정산하기'}
+            {headerRestaurant ? ` · ${headerRestaurant}` : ''}
+            {draft.rounds.length > 1 && ` 외 ${draft.rounds.length - 1}곳`}
           </div>
         </div>
         <Stepper
           step={step}
-          source={draft.source}
           participantsCount={draft.participants.length}
-          itemsCount={draft.items.length}
+          rounds={draft.rounds}
           onJump={setStep}
         />
       </header>
 
-      {detail.isLoading && !detail.data ? (
-        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-          <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
-        </div>
-      ) : !detail.data ? (
-        <div className="p-8 text-center text-sm text-destructive">
-          식당 정보를 불러오지 못했습니다.
-        </div>
-      ) : (
-        <div className="flex-1 px-4 py-6">
-          {step === 'participants' && (
-            <Step1Participants
-              // 이미 한 번 입력 흐름을 마치고 참여자 편집을 위해 돌아온 경우엔
-              // Step2(입력 방식 선택) 를 다시 거치지 않고 항목 편집으로 직행.
-              // 그래야 영수증 사진을 다시 올리지 않아도 된다.
-              onNext={() => setStep(draft.source ? 'edit' : 'source')}
-            />
-          )}
-          {step === 'source' && (
-            <Step2Source
-              placeId={placeId}
-              onBack={() => setStep('participants')}
-              onProceedToEdit={() => setStep('edit')}
-            />
-          )}
-          {step === 'edit' && (
-            <Step3Edit
-              menus={detail.data.menus}
-              onBack={() => setStep('source')}
-              onNext={() => setStep('review')}
-            />
-          )}
-          {step === 'review' && (
-            <Step4Review
-              placeId={placeId}
-              onBack={() => setStep('edit')}
-            />
-          )}
-        </div>
-      )}
+      <div className="flex-1 px-4 py-6">
+        {step === 'participants' && (
+          <Step1Participants
+            // 참여자만 입력하고 나면 round 가 있으면 항목 편집으로 직행 — Step2
+            // (차수 구성) 는 새 차수 추가나 영수증 교체가 필요할 때 다시 들어감.
+            onNext={() => setStep(draft.rounds.length > 0 ? 'edit' : 'rounds')}
+          />
+        )}
+        {step === 'rounds' && (
+          <Step2Rounds onBack={() => setStep('participants')} onNext={() => setStep('edit')} />
+        )}
+        {step === 'edit' && (
+          <Step3Edit onBack={() => setStep('rounds')} onNext={() => setStep('review')} />
+        )}
+        {step === 'review' && (
+          <Step4Review onBack={() => setStep('edit')} editingId={isEdit ? id : undefined} />
+        )}
+      </div>
     </main>
   );
 };
 
 const STEPS: { key: StepKey; label: string; short: string }[] = [
   { key: 'participants', label: '인원', short: '1' },
-  { key: 'source', label: '방식', short: '2' },
+  { key: 'rounds', label: '차수', short: '2' },
   { key: 'edit', label: '편집', short: '3' },
   { key: 'review', label: '결과', short: '4' },
 ];
 
-// 게이팅 — 각 단계의 선행 조건이 충족되면 점프 가능. "완료된 단계만 자유롭게"
-// 정책: Step N+1 은 Step N 의 산출물이 draft 에 있을 때 활성화.
+// 게이팅 — 각 단계의 선행 조건이 충족되면 점프 가능.
+// - participants: 항상.
+// - rounds: 참여자 ≥ 1.
+// - edit: 차수 ≥ 1 이고 모든 차수에 source 결정됨.
+// - review: 모든 차수에 items ≥ 1.
 const canJumpTo = (
   target: StepKey,
-  source: SettlementSourceType | null,
   participantsCount: number,
-  itemsCount: number,
+  rounds: DraftRound[],
 ): boolean => {
   switch (target) {
     case 'participants':
       return true;
-    case 'source':
+    case 'rounds':
       return participantsCount > 0;
     case 'edit':
-      return source != null;
+      return rounds.length > 0 && rounds.every((r) => r.source !== null);
     case 'review':
-      return itemsCount > 0;
+      return rounds.length > 0 && rounds.every((r) => r.items.length > 0);
   }
 };
 
 interface StepperProps {
   step: StepKey;
-  source: SettlementSourceType | null;
   participantsCount: number;
-  itemsCount: number;
+  rounds: DraftRound[];
   onJump: (key: StepKey) => void;
 }
 
-const Stepper = ({ step, source, participantsCount, itemsCount, onJump }: StepperProps) => (
+const Stepper = ({ step, participantsCount, rounds, onJump }: StepperProps) => (
   <nav
     aria-label="정산 단계"
     className="flex items-center gap-1 border-t bg-muted/30 px-2 py-1.5"
   >
     {STEPS.map((s) => {
       const isActive = s.key === step;
-      const enabled = canJumpTo(s.key, source, participantsCount, itemsCount);
+      const enabled = canJumpTo(s.key, participantsCount, rounds);
       return (
         <button
           key={s.key}

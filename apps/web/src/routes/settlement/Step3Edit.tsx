@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import type { MenuItemType, ReceiptItemCategoryType } from '@repo/api-contract';
-import { settlementExtractionApi, useSettlementDraftStore, type DraftItem } from '@repo/shared';
+import type { ReceiptItemCategoryType } from '@repo/api-contract';
+import {
+  settlementExtractionApi,
+  useRestaurantPublic,
+  useSettlementDraftStore,
+  type DraftItem,
+  type DraftRound,
+} from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { cn } from '~/lib/utils';
 import { MenuPickerDialog } from './MenuPickerDialog';
 
 interface Props {
-  menus: MenuItemType[];
   onBack: () => void;
   onNext: () => void;
 }
@@ -27,129 +33,78 @@ const CATEGORIES: ReceiptItemCategoryType[] = [
   'UNCATEGORIZED',
 ];
 
-// 영수증 분기에서 추출된 prefill 또는 직접 입력으로 시작된 빈 리스트를
-// 편집하는 단계. 항목 합계 + (영수증 분기) 총액 vs 합계 경고 + 다음 단계.
-export const Step3Edit = ({ menus, onBack, onNext }: Props) => {
-  const items = useSettlementDraftStore((s) => s.items);
-  const updateItem = useSettlementDraftStore((s) => s.updateItem);
-  const removeItem = useSettlementDraftStore((s) => s.removeItem);
-  const addItem = useSettlementDraftStore((s) => s.addItem);
-  const source = useSettlementDraftStore((s) => s.source);
-  const totalAmount = useSettlementDraftStore((s) => s.totalAmount);
-  const warning = useSettlementDraftStore((s) => s.warning);
-  const receiptPreviewUrl = useSettlementDraftStore((s) => s.receiptPreviewUrl);
-
-  const [pickerOpen, setPickerOpen] = useState(false);
+// 항목 편집 단계 — 차수가 여러 개면 상단 탭으로 전환. 차수별로 기존 단일
+// 차수 편집기와 같은 UI 를 보여준다.
+export const Step3Edit = ({ onBack, onNext }: Props) => {
+  const rounds = useSettlementDraftStore((s) => s.rounds);
+  const [activeIdx, setActiveIdx] = useState(0);
   const [submitAttempt, setSubmitAttempt] = useState(false);
 
-  const subtotal = useMemo(
-    () => items.reduce((sum, it) => sum + (it.amount || 0), 0),
-    [items],
-  );
+  // 차수 추가/삭제로 인덱스가 흘러내릴 수 있으니 안전 클램프.
+  const safeIdx = Math.min(activeIdx, Math.max(0, rounds.length - 1));
+  const active = rounds[safeIdx];
 
-  const subtotalMismatch =
-    source === 'RECEIPT' && totalAmount != null && Math.abs(subtotal - totalAmount) >= 1;
-
-  const handleAddBlank = () => {
-    addItem({
-      name: '',
-      unitPrice: null,
-      quantity: 1,
-      amount: 0,
-      category: 'UNCATEGORIZED',
-      matchedMenuName: null,
-    });
-  };
-
-  const handlePickMenu = (menu: MenuItemType) => {
-    const price = parsePrice(menu.price);
-    addItem({
-      name: menu.name,
-      unitPrice: price,
-      quantity: 1,
-      amount: price ?? 0,
-      category: 'UNCATEGORIZED',
-      matchedMenuName: menu.name,
-    });
-  };
-
+  // 모든 차수가 다음으로 갈 수 있을 때만 진행. 한 차수라도 항목 0개 또는
+  // 누락 항목이 있으면 막는다.
   const canProceed =
-    items.length > 0 && items.every((it) => it.name.trim().length > 0 && it.amount > 0);
+    rounds.length > 0 &&
+    rounds.every(
+      (r) =>
+        r.items.length > 0 &&
+        r.items.every((it) => it.name.trim().length > 0 && it.amount > 0),
+    );
 
   return (
     <section className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">항목 편집</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {source === 'RECEIPT'
-            ? '영수증에서 추출한 항목입니다. 빠뜨리거나 잘못된 항목은 직접 수정하세요.'
-            : '메뉴를 추가하고 가격을 입력하세요.'}
+          차수마다 항목과 가격을 확인·수정하세요. 영수증 분기는 자동으로 채워졌고, 직접 입력은
+          ‘+ 메뉴에서’ 또는 ‘+ 직접 입력’ 으로 추가합니다.
         </p>
       </div>
 
-      {source === 'RECEIPT' && receiptPreviewUrl && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">영수증 미리보기</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ReceiptPreviewImage url={receiptPreviewUrl} />
-          </CardContent>
-        </Card>
+      {rounds.length > 1 && (
+        <nav
+          aria-label="차수 탭"
+          className="flex gap-1 overflow-x-auto rounded-md border bg-muted/30 p-1"
+        >
+          {rounds.map((r, idx) => {
+            const isActive = idx === safeIdx;
+            const invalid =
+              r.items.length === 0 ||
+              r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0);
+            return (
+              <button
+                key={r.clientId}
+                type="button"
+                onClick={() => setActiveIdx(idx)}
+                className={cn(
+                  'flex-1 whitespace-nowrap rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-foreground hover:bg-accent',
+                )}
+              >
+                {idx + 1}차
+                {submitAttempt && invalid && (
+                  <span className="ml-1 text-destructive">!</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
       )}
 
-      {(warning || subtotalMismatch) && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <div className="space-y-1">
-            {warning && <p>{warning}</p>}
-            {subtotalMismatch && (
-              <p>
-                항목 합계 {subtotal.toLocaleString('ko-KR')}원 — 영수증 총액{' '}
-                {totalAmount?.toLocaleString('ko-KR')}원과 일치하지 않습니다.
-              </p>
-            )}
-          </div>
-        </div>
+      {active && (
+        <RoundEditor
+          key={active.clientId}
+          round={active}
+          showInvalid={submitAttempt}
+        />
       )}
 
-      <div className="space-y-2">
-        {items.length === 0 && (
-          <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            항목이 없습니다. 아래 버튼으로 추가하세요.
-          </div>
-        )}
-        {items.map((it, idx) => (
-          <ItemRow
-            key={it.clientId}
-            item={it}
-            index={idx}
-            onUpdate={(patch) => updateItem(it.clientId, patch)}
-            onRemove={() => removeItem(it.clientId)}
-            invalid={submitAttempt && (it.name.trim().length === 0 || it.amount <= 0)}
-          />
-        ))}
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Button type="button" variant="outline" onClick={() => setPickerOpen(true)}>
-          <Plus className="size-4" />
-          메뉴에서 추가
-        </Button>
-        <Button type="button" variant="outline" onClick={handleAddBlank}>
-          <Plus className="size-4" />
-          직접 입력으로 추가
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-        <span className="text-sm">합계</span>
-        <span className="text-base font-semibold">
-          {subtotal.toLocaleString('ko-KR')}원
-        </span>
-      </div>
-
-      <div className="flex justify-between pt-2">
+      <div className="flex justify-between gap-2 pt-2">
         <Button type="button" variant="ghost" onClick={onBack}>
           이전
         </Button>
@@ -164,17 +119,133 @@ export const Step3Edit = ({ menus, onBack, onNext }: Props) => {
           다음
         </Button>
       </div>
+    </section>
+  );
+};
+
+// 한 차수의 편집기. 영수증 미리보기 + 경고 배너 + 항목 리스트 + 합계.
+const RoundEditor = ({
+  round,
+  showInvalid,
+}: {
+  round: DraftRound;
+  showInvalid: boolean;
+}) => {
+  const addRoundItem = useSettlementDraftStore((s) => s.addRoundItem);
+  const updateRoundItem = useSettlementDraftStore((s) => s.updateRoundItem);
+  const removeRoundItem = useSettlementDraftStore((s) => s.removeRoundItem);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // 메뉴 모달을 위한 식당 detail. 차수의 placeId 기준이라 1차/2차가 다른
+  // 식당이면 각각 자기 메뉴를 가져온다.
+  const detail = useRestaurantPublic(round.placeId);
+  const menus = detail.data?.menus ?? [];
+
+  const subtotal = useMemo(
+    () => round.items.reduce((sum, it) => sum + (it.amount || 0), 0),
+    [round.items],
+  );
+
+  const subtotalMismatch =
+    round.source === 'RECEIPT' &&
+    round.totalAmount != null &&
+    Math.abs(subtotal - round.totalAmount) >= 1;
+
+  return (
+    <div className="space-y-3">
+      {round.source === 'RECEIPT' && round.receiptPreviewUrl && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">{round.placeName} · 영수증 미리보기</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ReceiptPreviewImage url={round.receiptPreviewUrl} />
+          </CardContent>
+        </Card>
+      )}
+
+      {(round.warning || subtotalMismatch) && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div className="space-y-1">
+            {round.warning && <p>{round.warning}</p>}
+            {subtotalMismatch && (
+              <p>
+                항목 합계 {subtotal.toLocaleString('ko-KR')}원 — 영수증 총액{' '}
+                {round.totalAmount?.toLocaleString('ko-KR')}원과 일치하지 않습니다.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {round.items.length === 0 && (
+          <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+            항목이 없습니다. 아래 버튼으로 추가하세요.
+          </div>
+        )}
+        {round.items.map((it, idx) => (
+          <ItemRow
+            key={it.clientId}
+            item={it}
+            index={idx}
+            onUpdate={(patch) => updateRoundItem(round.clientId, it.clientId, patch)}
+            onRemove={() => removeRoundItem(round.clientId, it.clientId)}
+            invalid={showInvalid && (it.name.trim().length === 0 || it.amount <= 0)}
+          />
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button type="button" variant="outline" onClick={() => setPickerOpen(true)}>
+          <Plus className="size-4" />
+          메뉴에서 추가
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            addRoundItem(round.clientId, {
+              name: '',
+              unitPrice: null,
+              quantity: 1,
+              amount: 0,
+              category: 'UNCATEGORIZED',
+              matchedMenuName: null,
+            })
+          }
+        >
+          <Plus className="size-4" />
+          직접 입력으로 추가
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+        <span className="text-sm">차수 합계</span>
+        <span className="text-base font-semibold">
+          {subtotal.toLocaleString('ko-KR')}원
+        </span>
+      </div>
 
       <MenuPickerDialog
         open={pickerOpen}
         menus={menus}
         onClose={() => setPickerOpen(false)}
         onPick={(menu) => {
-          handlePickMenu(menu);
+          const price = parsePrice(menu.price);
+          addRoundItem(round.clientId, {
+            name: menu.name,
+            unitPrice: price,
+            quantity: 1,
+            amount: price ?? 0,
+            category: 'UNCATEGORIZED',
+            matchedMenuName: menu.name,
+          });
           setPickerOpen(false);
         }}
       />
-    </section>
+    </div>
   );
 };
 

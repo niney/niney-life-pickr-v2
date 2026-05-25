@@ -9,9 +9,8 @@ import {
   SettlementSession,
   SettlementShare,
   SharedSettlementSession,
-  UpdateSettlementParticipantsInput,
+  UpdateSettlementInput,
 } from '@repo/api-contract';
-import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
 
 const S = Routes.Settlement;
@@ -23,10 +22,12 @@ const TokenParams = z.object({ token: z.string().min(20).max(64) });
 const throwAsHttp = (app: FastifyInstance, e: SettlementError): never => {
   switch (e.code) {
     case 'not_found':
+    case 'restaurant_not_found':
       throw app.httpErrors.notFound(e.message);
     case 'forbidden':
       throw app.httpErrors.forbidden(e.message);
     case 'invalid_participant':
+    case 'invalid_round':
     case 'invalid_receipt_token':
     default:
       throw app.httpErrors.badRequest(e.message);
@@ -35,7 +36,6 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementError): never => {
 
 const settlementRoutes: FastifyPluginAsync = async (app) => {
   const service = new SettlementService(app.prisma);
-  const restaurantService = new RestaurantService(app.prisma);
 
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -48,14 +48,8 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: SettlementSession },
     },
     handler: async (req) => {
-      // restaurantName 스냅샷은 현재 시점의 식당 이름을 사용 — 이후 변경되어도
-      // 이력에서 정확한 그 시점의 이름이 남는다.
-      const detail = await restaurantService.getPublicDetail(req.body.restaurantPlaceId);
-      if (!detail) {
-        throw app.httpErrors.notFound('식당을 찾을 수 없습니다.');
-      }
       try {
-        return await service.create(req.user.userId, req.body, detail.name);
+        return await service.create(req.user.userId, req.body);
       } catch (e) {
         if (e instanceof SettlementError) return throwAsHttp(app, e);
         throw e;
@@ -94,20 +88,21 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  // 저장된 정산의 참여자/옵션만 수정 — items 는 불변. 서버가 items 와 결합해
-  // shareAmount 재계산, editedAt 갱신. 응답은 갱신된 세션 전체.
-  typed.patch(S.updateParticipants(':id'), {
+  // 저장된 정산 전체 replace. 차수 추가/삭제, 참여자 명단·참석·items 까지 한
+  // 번에 교체. 부분 수정 엔드포인트는 없다 — 클라이언트가 전체 draft 를
+  // 보내고 서버가 트랜잭션 wipe + rebuild.
+  typed.put(S.update(':id'), {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
       security: [{ bearerAuth: [] }],
       params: IdParams,
-      body: UpdateSettlementParticipantsInput,
+      body: UpdateSettlementInput,
       response: { 200: SettlementSession },
     },
     handler: async (req) => {
       try {
-        return await service.updateParticipants(req.user.userId, req.params.id, req.body);
+        return await service.update(req.user.userId, req.params.id, req.body);
       } catch (e) {
         if (e instanceof SettlementError) return throwAsHttp(app, e);
         throw e;
@@ -173,7 +168,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // 공유 토큰 read-only 조회 — 인증 불필요. 토큰을 안다 = 접근 허용. 응답에서
-  // userId/receiptPreviewUrl 은 제거되어 영수증 원본 사진은 못 본다.
+  // userId/round.receiptPreviewUrl 은 제거되어 영수증 원본 사진은 못 본다.
   typed.get(S.shared(':token'), {
     schema: {
       tags: ['settlement'],

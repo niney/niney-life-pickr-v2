@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Receipt } from 'lucide-react';
+import { Loader2, Plus, Receipt } from 'lucide-react';
 import { ApiError, useListSettlements } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
@@ -32,6 +32,11 @@ export const SettlementHistoryPage = () => {
             저장한 정산을 최근순으로 보여줍니다.
           </p>
         </div>
+        <Button asChild variant="default" size="sm">
+          <Link to="/me/settlements/new">
+            <Plus className="size-4" />새 정산
+          </Link>
+        </Button>
         <Button asChild variant="ghost" size="sm">
           <Link to="/me/contacts">내 단골 →</Link>
         </Button>
@@ -56,7 +61,12 @@ export const SettlementHistoryPage = () => {
             <Card>
               <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
                 <p>아직 저장된 정산이 없습니다.</p>
-                <p>식당 상세에서 ‘정산’ 버튼으로 시작해 보세요.</p>
+                <p>식당 상세에서 ‘정산’ 버튼으로 시작하거나 아래 버튼으로 새로 만드세요.</p>
+                <Button asChild size="sm" className="mt-2">
+                  <Link to="/me/settlements/new">
+                    <Plus className="size-4" />새 정산
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -72,23 +82,24 @@ export const SettlementHistoryPage = () => {
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium">
                             {s.restaurantName}
+                            {s.roundCount > 1 && (
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                외 {s.roundCount - 1}곳 ({s.roundCount}차)
+                              </span>
+                            )}
                           </div>
                           <div className="mt-0.5 truncate text-xs text-muted-foreground">
                             {new Date(s.createdAt).toLocaleString('ko-KR')}
                             {' · '}항목 {s.itemCount}개 · 참여 {s.participantCount}명
                             {' · '}
                             {s.source === 'RECEIPT' ? '영수증' : '직접 입력'}
+                            {s.roundCount > 1 ? ' 외' : ''}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
                           <div className="text-sm font-semibold">
-                            {s.itemsSubtotal.toLocaleString('ko-KR')}원
+                            {s.grandTotal.toLocaleString('ko-KR')}원
                           </div>
-                          {s.totalAmount != null && s.totalAmount !== s.itemsSubtotal && (
-                            <div className="text-xs text-muted-foreground">
-                              총 {s.totalAmount.toLocaleString('ko-KR')}원
-                            </div>
-                          )}
                         </div>
                       </div>
                     </Card>

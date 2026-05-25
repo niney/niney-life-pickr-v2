@@ -259,7 +259,9 @@ export const Settlement = {
   list: `${API_PREFIX}/settlements`,
   create: `${API_PREFIX}/settlements`,
   one: (id: string) => `${API_PREFIX}/settlements/${id}`,
-  updateParticipants: (id: string) => `${API_PREFIX}/settlements/${id}/participants`,
+  // PUT 으로 본문(참여자/차수/항목) 전체 replace. 차수 추가/삭제·참여자
+  // 명단·참석 변경까지 한 번에. 이전 /participants 부분 엔드포인트 폐기.
+  update: (id: string) => `${API_PREFIX}/settlements/${id}`,
   share: (id: string) => `${API_PREFIX}/settlements/${id}/share`,
   shared: (token: string) => `${API_PREFIX}/share/settlements/${token}`,
 } as const;

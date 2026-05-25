@@ -126,3 +126,96 @@ const distributeWith = (amount: number, participates: boolean[]): number[] => {
   });
   return out;
 };
+
+// ── 차수(N차) 계산 ─────────────────────────────────────────────────────
+// 차수별로 (items × 참석자 부분집합) 을 독립 풀로 계산하고, 마스터 인덱스
+// 단위로 합산해 인당 grand total 을 만든다. 차수별 분담도 같이 노출해
+// UI 에서 "1차 12,000 + 2차 8,000 = 20,000" 같이 보일 수 있게 한다.
+
+export interface RoundAttendeeCalcInput {
+  // 마스터 participants 배열에서의 index. 비참석자는 입력에 포함시키지 않는다.
+  participantIndex: number;
+  excludeAlcohol: boolean;
+  excludeNonAlcohol: boolean;
+  excludeSide: boolean;
+}
+
+export interface RoundCalcInput {
+  items: Pick<SettlementItemInputType, 'amount' | 'category'>[];
+  attendees: RoundAttendeeCalcInput[];
+}
+
+export interface MultiRoundCalcInput {
+  participantCount: number;
+  rounds: RoundCalcInput[];
+}
+
+export interface PerRoundCalcOutput {
+  // 길이 = participantCount. 비참석자 인덱스는 0.
+  shareAmounts: number[];
+  itemsSubtotal: number;
+  poolBreakdown: CalculateOutput['poolBreakdown'];
+}
+
+export interface MultiRoundCalcOutput {
+  // 마스터 인덱스 단위 grand total.
+  perParticipant: number[];
+  perRound: PerRoundCalcOutput[];
+  grandTotal: number;
+}
+
+// 마스터 default 와 round override 를 합쳐 effective exclude 플래그를 만든다.
+// override 값이 null 이면 마스터 그대로, 아니면 round 값으로 덮어씌운다.
+export const effectiveExcludes = (
+  master: {
+    excludeAlcohol: boolean;
+    excludeNonAlcohol: boolean;
+    excludeSide: boolean;
+  },
+  override: {
+    excludeAlcoholOverride: boolean | null;
+    excludeNonAlcoholOverride: boolean | null;
+    excludeSideOverride: boolean | null;
+  },
+): { excludeAlcohol: boolean; excludeNonAlcohol: boolean; excludeSide: boolean } => ({
+  excludeAlcohol: override.excludeAlcoholOverride ?? master.excludeAlcohol,
+  excludeNonAlcohol: override.excludeNonAlcoholOverride ?? master.excludeNonAlcohol,
+  excludeSide: override.excludeSideOverride ?? master.excludeSide,
+});
+
+export const calculateMultiRoundShares = (
+  input: MultiRoundCalcInput,
+): MultiRoundCalcOutput => {
+  const perParticipant = new Array<number>(input.participantCount).fill(0);
+  const perRound: PerRoundCalcOutput[] = [];
+  let grandTotal = 0;
+
+  for (const round of input.rounds) {
+    // 비참석자는 입력에 빠져 있으므로, 참석자만으로 calculateShares 호출.
+    const inner = calculateShares({
+      items: round.items,
+      participants: round.attendees.map((a) => ({
+        excludeAlcohol: a.excludeAlcohol,
+        excludeNonAlcohol: a.excludeNonAlcohol,
+        excludeSide: a.excludeSide,
+      })),
+    });
+
+    // 참석자 인덱스 → 마스터 인덱스로 되돌려 share 배열을 부풀린다.
+    const shareAmounts = new Array<number>(input.participantCount).fill(0);
+    round.attendees.forEach((a, i) => {
+      const amt = inner.shareAmounts[i] ?? 0;
+      shareAmounts[a.participantIndex] = amt;
+      perParticipant[a.participantIndex] =
+        (perParticipant[a.participantIndex] ?? 0) + amt;
+    });
+    grandTotal += inner.itemsSubtotal;
+    perRound.push({
+      shareAmounts,
+      itemsSubtotal: inner.itemsSubtotal,
+      poolBreakdown: inner.poolBreakdown,
+    });
+  }
+
+  return { perParticipant, perRound, grandTotal };
+};

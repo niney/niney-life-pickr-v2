@@ -90,11 +90,29 @@ export const App = () => {
           </RequireUser>
         }
       />
+      {/* 식당 없이 독립 진입 — Step2 의 차수 카드에서 1차 식당 검색 강제. */}
+      <Route
+        path="/me/settlements/new"
+        element={
+          <RequireUser>
+            <SettlementNewPage />
+          </RequireUser>
+        }
+      />
       <Route
         path="/restaurants/:placeId/settle/:id"
         element={
           <RequireUser>
             <SettlementResultPage />
+          </RequireUser>
+        }
+      />
+      {/* 저장된 정산 편집 — 같은 SettlementNewPage 가 id 받으면 edit 모드. */}
+      <Route
+        path="/restaurants/:placeId/settle/:id/edit"
+        element={
+          <RequireUser>
+            <SettlementNewPage />
           </RequireUser>
         }
       />

@@ -4,17 +4,20 @@ import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import {
   Routes,
+  calculateMultiRoundShares,
+  effectiveExcludes,
   type CreateSettlementInputType,
   type ListSettlementsQueryType,
   type ListSettlementsResultType,
   type ReceiptItemCategoryType,
-  type SettlementShareType,
+  type SettlementRoundInputType,
+  type SettlementRoundType,
   type SettlementSessionType,
   type SettlementSourceType,
   type SharedSettlementSessionType,
-  type UpdateSettlementParticipantsInputType,
-  calculateShares,
+  type UpdateSettlementInputType,
 } from '@repo/api-contract';
+import { RestaurantService } from '../restaurant/restaurant.service.js';
 
 // receiptImageToken 검증용 정규식 — settlement-extraction 의 IMAGE_TOKEN_PATTERN
 // 과 동일. 모듈을 직접 import 하지 않고 패턴만 다시 둔다 (모듈 결합도 축소).
@@ -39,7 +42,9 @@ export class SettlementError extends Error {
       | 'not_found'
       | 'forbidden'
       | 'invalid_participant'
-      | 'invalid_receipt_token',
+      | 'invalid_round'
+      | 'invalid_receipt_token'
+      | 'restaurant_not_found',
     message: string,
   ) {
     super(message);
@@ -53,8 +58,65 @@ export interface SettlementServiceOptions {
   receiptStorageDir?: string;
 }
 
+interface RowSession {
+  id: string;
+  userId: string;
+  restaurantPlaceId: string;
+  restaurantName: string;
+  grandTotal: number;
+  createdAt: Date;
+  updatedAt: Date;
+  editedAt: Date | null;
+  rounds: Array<RowRound>;
+  participants: Array<RowParticipant>;
+}
+
+interface RowRound {
+  id: string;
+  orderIndex: number;
+  restaurantPlaceId: string;
+  restaurantName: string;
+  source: string;
+  totalAmount: number | null;
+  warning: string | null;
+  receiptImageToken: string | null;
+  itemsSubtotal: number;
+  items: Array<{
+    id: string;
+    name: string;
+    unitPrice: number | null;
+    quantity: number | null;
+    amount: number;
+    category: string;
+    matchedMenuName: string | null;
+    orderIndex: number;
+  }>;
+  attendees: Array<{
+    id: string;
+    participantId: string;
+    attended: boolean;
+    excludeAlcoholOverride: boolean | null;
+    excludeNonAlcoholOverride: boolean | null;
+    excludeSideOverride: boolean | null;
+    shareAmount: number;
+  }>;
+}
+
+interface RowParticipant {
+  id: string;
+  name: string | null;
+  nickname: string | null;
+  excludeAlcohol: boolean;
+  excludeNonAlcohol: boolean;
+  excludeSide: boolean;
+  shareAmount: number;
+  orderIndex: number;
+  contactId: string | null;
+}
+
 export class SettlementService {
   private readonly receiptStorageDir: string;
+  private readonly restaurants: RestaurantService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -62,84 +124,51 @@ export class SettlementService {
   ) {
     this.receiptStorageDir =
       opts.receiptStorageDir ?? join(process.cwd(), 'data', 'receipts');
+    this.restaurants = new RestaurantService(prisma);
   }
 
-  // 세션 생성 — 분배 계산은 서버가 계산하고 결과를 그대로 저장한다.
-  // 영수증 토큰이 들어오면 디스크 존재 확인 후 보존.
+  // 세션 생성 — 모든 round 의 분배를 서버가 계산해 결과를 저장. 영수증 토큰이
+  // 들어오면 디스크 존재 확인 후 보존.
   async create(
     userId: string,
     input: CreateSettlementInputType,
-    restaurantName: string,
   ): Promise<SettlementSessionType> {
-    // 참여자 검증 — name 또는 nickname 중 하나는 trim 후 비어있지 않아야 한다.
-    for (const p of input.participants) {
-      const hasName = (p.name ?? '').trim().length > 0;
-      const hasNickname = (p.nickname ?? '').trim().length > 0;
-      if (!hasName && !hasNickname) {
-        throw new SettlementError(
-          'invalid_participant',
-          '참여자는 이름 또는 닉네임 중 하나가 필요합니다.',
-        );
-      }
+    await this.validateInput(input);
+
+    // 1차 식당 이름을 session 본체 snapshot 으로 박는다. round 마다도 별도로
+    // 자기 식당 이름을 resolve 한다.
+    const firstRound = input.rounds[0]!;
+    const sessionRestaurantName = await this.resolveRestaurantName(
+      firstRound.restaurantPlaceId,
+    );
+    const roundRestaurantNames: string[] = [];
+    for (const r of input.rounds) {
+      roundRestaurantNames.push(await this.resolveRestaurantName(r.restaurantPlaceId));
     }
 
-    let receiptImageToken: string | null = null;
-    if (input.receiptImageToken) {
-      if (!IMAGE_TOKEN_PATTERN.test(input.receiptImageToken)) {
-        throw new SettlementError('invalid_receipt_token', '영수증 토큰이 올바르지 않습니다.');
-      }
-      const path = join(this.receiptStorageDir, `${input.receiptImageToken}.jpg`);
-      try {
-        await stat(path);
-        receiptImageToken = input.receiptImageToken;
-      } catch {
-        throw new SettlementError(
-          'invalid_receipt_token',
-          '영수증 이미지를 찾을 수 없습니다.',
-        );
-      }
+    // 영수증 토큰 모두 검증.
+    const validatedTokens: Array<string | null> = [];
+    for (const r of input.rounds) {
+      validatedTokens.push(await this.validateReceiptToken(r.receiptImageToken));
     }
 
-    const calc = calculateShares({
-      items: input.items.map((it) => ({ amount: it.amount, category: it.category })),
-      participants: input.participants.map((p) => ({
-        excludeAlcohol: p.excludeAlcohol,
-        excludeNonAlcohol: p.excludeNonAlcohol,
-        excludeSide: p.excludeSide,
-      })),
-    });
+    const calc = this.computeShares(input);
 
-    // SettlementSession + 자식 행을 한 transaction 으로 생성. 참여자는 단골
-    // upsert 와 함께 contactId 를 채워야 해서 createMany 가 아니라 루프.
     const now = new Date();
-    const created = await this.prisma.$transaction(async (tx) => {
+    const createdId = await this.prisma.$transaction(async (tx) => {
       const session = await tx.settlementSession.create({
         data: {
           userId,
-          restaurantPlaceId: input.restaurantPlaceId,
-          restaurantName,
-          source: input.source,
-          totalAmount: input.totalAmount,
-          warning: input.warning,
-          receiptImageToken,
-          itemsSubtotal: calc.itemsSubtotal,
+          restaurantPlaceId: firstRound.restaurantPlaceId,
+          restaurantName: sessionRestaurantName,
+          grandTotal: calc.grandTotal,
         },
       });
 
-      await tx.settlementItem.createMany({
-        data: input.items.map((it, idx) => ({
-          sessionId: session.id,
-          name: it.name,
-          unitPrice: it.unitPrice,
-          quantity: it.quantity,
-          amount: it.amount,
-          category: it.category,
-          matchedMenuName: it.matchedMenuName,
-          orderIndex: idx,
-        })),
-      });
-
-      for (let idx = 0; idx < input.participants.length; idx++) {
+      // 마스터 participants 먼저 — round attendees 가 db id 로 참조 필요.
+      // clientId → db id 매핑을 만들어 둔다.
+      const clientIdToDbId = new Map<string, string>();
+      for (let idx = 0; idx < input.participants.length; idx += 1) {
         const p = input.participants[idx]!;
         const name = p.name?.trim() || null;
         const nickname = p.nickname?.trim() || null;
@@ -161,8 +190,6 @@ export class SettlementService {
             useCount: 1,
             lastUsedAt: now,
           },
-          // 표시 이름은 마지막 입력으로 덮어쓴다 — /me/contacts 에서 수정해도
-          // 다음 정산에서 다시 사용자가 입력한 표기로 돌아간다. 의도된 동작.
           update: {
             name,
             nickname,
@@ -174,7 +201,7 @@ export class SettlementService {
           },
         });
 
-        await tx.settlementParticipant.create({
+        const created = await tx.settlementParticipant.create({
           data: {
             sessionId: session.id,
             name,
@@ -182,19 +209,76 @@ export class SettlementService {
             excludeAlcohol: p.excludeAlcohol,
             excludeNonAlcohol: p.excludeNonAlcohol,
             excludeSide: p.excludeSide,
-            shareAmount: calc.shareAmounts[idx] ?? 0,
+            shareAmount: calc.perParticipant[idx] ?? 0,
             orderIndex: idx,
             contactId: contact.id,
           },
         });
+        clientIdToDbId.set(p.clientId, created.id);
+      }
+
+      // round + items + attendees.
+      for (let rIdx = 0; rIdx < input.rounds.length; rIdx += 1) {
+        const r = input.rounds[rIdx]!;
+        const round = await tx.settlementRound.create({
+          data: {
+            sessionId: session.id,
+            orderIndex: rIdx,
+            restaurantPlaceId: r.restaurantPlaceId,
+            restaurantName: roundRestaurantNames[rIdx]!,
+            source: r.source,
+            totalAmount: r.totalAmount,
+            warning: r.warning,
+            receiptImageToken: validatedTokens[rIdx]!,
+            itemsSubtotal: calc.perRound[rIdx]!.itemsSubtotal,
+          },
+        });
+
+        await tx.settlementItem.createMany({
+          data: r.items.map((it, idx) => ({
+            roundId: round.id,
+            name: it.name,
+            unitPrice: it.unitPrice,
+            quantity: it.quantity,
+            amount: it.amount,
+            category: it.category,
+            matchedMenuName: it.matchedMenuName,
+            orderIndex: idx,
+          })),
+        });
+
+        // attendees: 모든 마스터 participant 에 대해 row 생성. 입력에 빠진
+        // 참여자는 attended=false 로 채운다 — 차수별 참석은 round 의 attendees
+        // 입력에 명시된 사람들만 attended=true.
+        const attendeeMap = new Map(
+          r.attendees.map((a) => [a.participantClientId, a]),
+        );
+        for (const p of input.participants) {
+          const dbId = clientIdToDbId.get(p.clientId)!;
+          const a = attendeeMap.get(p.clientId);
+          const attended = a?.attended ?? false;
+          const shareIdx = input.participants.findIndex(
+            (pp) => pp.clientId === p.clientId,
+          );
+          await tx.settlementRoundParticipant.create({
+            data: {
+              roundId: round.id,
+              participantId: dbId,
+              attended,
+              excludeAlcoholOverride: a?.excludeAlcoholOverride ?? null,
+              excludeNonAlcoholOverride: a?.excludeNonAlcoholOverride ?? null,
+              excludeSideOverride: a?.excludeSideOverride ?? null,
+              shareAmount: attended ? (calc.perRound[rIdx]!.shareAmounts[shareIdx] ?? 0) : 0,
+            },
+          });
+        }
       }
 
       return session.id;
     });
 
-    const detail = await this.getById(userId, created);
+    const detail = await this.getById(userId, createdId);
     if (!detail) {
-      // 방금 만든 행이 사라지는 일은 없지만 타입 안전.
       throw new SettlementError('not_found', '생성 직후 세션을 다시 찾지 못했습니다.');
     }
     return detail;
@@ -215,7 +299,14 @@ export class SettlementService {
         skip: query.offset,
         take: query.limit,
         include: {
-          _count: { select: { items: true, participants: true } },
+          _count: { select: { participants: true, rounds: true } },
+          rounds: {
+            orderBy: { orderIndex: 'asc' },
+            select: {
+              source: true,
+              _count: { select: { items: true } },
+            },
+          },
         },
       }),
     ]);
@@ -226,10 +317,11 @@ export class SettlementService {
         id: r.id,
         restaurantPlaceId: r.restaurantPlaceId,
         restaurantName: r.restaurantName,
-        source: r.source as SettlementSourceType,
-        totalAmount: r.totalAmount,
-        itemsSubtotal: r.itemsSubtotal,
-        itemCount: r._count.items,
+        // 1차 source 가 summary 대표값.
+        source: (r.rounds[0]?.source ?? 'MANUAL') as SettlementSourceType,
+        grandTotal: r.grandTotal,
+        roundCount: r._count.rounds,
+        itemCount: r.rounds.reduce((sum, x) => sum + x._count.items, 0),
         participantCount: r._count.participants,
         createdAt: r.createdAt.toISOString(),
       })),
@@ -237,13 +329,7 @@ export class SettlementService {
   }
 
   async getById(userId: string, id: string): Promise<SettlementSessionType | null> {
-    const row = await this.prisma.settlementSession.findUnique({
-      where: { id },
-      include: {
-        items: { orderBy: { orderIndex: 'asc' } },
-        participants: { orderBy: { orderIndex: 'asc' } },
-      },
-    });
+    const row = await this.findFullRow(id);
     if (!row) return null;
     if (row.userId !== userId) {
       // 외부에서 본인 외의 세션 id 를 추측해 호출해도 not_found 와 구분되는
@@ -251,53 +337,72 @@ export class SettlementService {
       // forbidden 도 404 와 같이 다루게 할 수도 있지만, 디버그 가독성 위해 분리.
       throw new SettlementError('forbidden', '권한이 없습니다.');
     }
-
     return this.rowToSession(row);
   }
 
-  // 저장 후 참여자/옵션 수정. items 는 불변 — 서버가 보존된 items 를 다시
-  // 사용해 calculateShares 로 재계산. participants 는 전부 교체(삭제 후 재삽입)
-  // 방식 — orderIndex 정합성을 단순히 보장. 단골(contact) 은 normalizedKey
-  // 기준 upsert + useCount/lastUsedAt 갱신은 create 와 동일.
-  async updateParticipants(
+  // 저장된 정산 전체 replace — 참여자 명단·차수 구성·각 차수의 items/attendees
+  // 모두 교체. 부분 수정이 아니라 전체 입력 받고 트랜잭션으로 wipe + rebuild.
+  async update(
     userId: string,
     id: string,
-    input: UpdateSettlementParticipantsInputType,
+    input: UpdateSettlementInputType,
   ): Promise<SettlementSessionType> {
-    for (const p of input.participants) {
-      const hasName = (p.name ?? '').trim().length > 0;
-      const hasNickname = (p.nickname ?? '').trim().length > 0;
-      if (!hasName && !hasNickname) {
-        throw new SettlementError(
-          'invalid_participant',
-          '참여자는 이름 또는 닉네임 중 하나가 필요합니다.',
-        );
-      }
-    }
-
     const existing = await this.prisma.settlementSession.findUnique({
       where: { id },
-      include: { items: { select: { amount: true, category: true } } },
+      select: {
+        id: true,
+        userId: true,
+        restaurantPlaceId: true,
+        restaurantName: true,
+        rounds: { select: { restaurantPlaceId: true, restaurantName: true } },
+      },
     });
     if (!existing) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
     if (existing.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
 
-    const calc = calculateShares({
-      items: existing.items.map((it) => ({
-        amount: it.amount,
-        category: it.category as ReceiptItemCategoryType,
-      })),
-      participants: input.participants.map((p) => ({
-        excludeAlcohol: p.excludeAlcohol,
-        excludeNonAlcohol: p.excludeNonAlcohol,
-        excludeSide: p.excludeSide,
-      })),
-    });
+    await this.validateInput(input);
 
+    // 업데이트에서는 기존에 이미 가지고 있던 placeId 의 이름은 재사용 — 새
+    // 추가된 placeId 만 RestaurantService 에서 fresh 조회. 식당이 나중에
+    // 삭제되어도 기존 차수는 편집할 수 있어야 하고, 테스트에서 매번 식당을
+    // 시드하지 않아도 update 가 통과한다.
+    const knownNames = new Map<string, string>();
+    knownNames.set(existing.restaurantPlaceId, existing.restaurantName);
+    for (const r of existing.rounds) {
+      knownNames.set(r.restaurantPlaceId, r.restaurantName);
+    }
+    const resolveCached = async (placeId: string): Promise<string> => {
+      const cached = knownNames.get(placeId);
+      if (cached) return cached;
+      const fresh = await this.resolveRestaurantName(placeId);
+      knownNames.set(placeId, fresh);
+      return fresh;
+    };
+
+    const firstRound = input.rounds[0]!;
+    const sessionRestaurantName = await resolveCached(firstRound.restaurantPlaceId);
+    const roundRestaurantNames: string[] = [];
+    for (const r of input.rounds) {
+      roundRestaurantNames.push(await resolveCached(r.restaurantPlaceId));
+    }
+    const validatedTokens: Array<string | null> = [];
+    for (const r of input.rounds) {
+      validatedTokens.push(await this.validateReceiptToken(r.receiptImageToken));
+    }
+
+    const calc = this.computeShares(input);
     const now = new Date();
+
     await this.prisma.$transaction(async (tx) => {
+      // 자식 모두 wipe — cascade 이지만 명시적으로 한다. participant 까지 같이
+      // 삭제하면 SettlementContact.useCount 가 다시 늘어나는 부작용은 있지만,
+      // 이는 create 와 동일한 정책(매 수정 = 사용).
+      await tx.settlementRound.deleteMany({ where: { sessionId: id } });
       await tx.settlementParticipant.deleteMany({ where: { sessionId: id } });
-      for (let idx = 0; idx < input.participants.length; idx++) {
+
+      // 마스터 participants 다시 만들기.
+      const clientIdToDbId = new Map<string, string>();
+      for (let idx = 0; idx < input.participants.length; idx += 1) {
         const p = input.participants[idx]!;
         const name = p.name?.trim() || null;
         const nickname = p.nickname?.trim() || null;
@@ -327,7 +432,7 @@ export class SettlementService {
           },
         });
 
-        await tx.settlementParticipant.create({
+        const created = await tx.settlementParticipant.create({
           data: {
             sessionId: id,
             name,
@@ -335,16 +440,75 @@ export class SettlementService {
             excludeAlcohol: p.excludeAlcohol,
             excludeNonAlcohol: p.excludeNonAlcohol,
             excludeSide: p.excludeSide,
-            shareAmount: calc.shareAmounts[idx] ?? 0,
+            shareAmount: calc.perParticipant[idx] ?? 0,
             orderIndex: idx,
             contactId: contact.id,
           },
         });
+        clientIdToDbId.set(p.clientId, created.id);
+      }
+
+      for (let rIdx = 0; rIdx < input.rounds.length; rIdx += 1) {
+        const r = input.rounds[rIdx]!;
+        const round = await tx.settlementRound.create({
+          data: {
+            sessionId: id,
+            orderIndex: rIdx,
+            restaurantPlaceId: r.restaurantPlaceId,
+            restaurantName: roundRestaurantNames[rIdx]!,
+            source: r.source,
+            totalAmount: r.totalAmount,
+            warning: r.warning,
+            receiptImageToken: validatedTokens[rIdx]!,
+            itemsSubtotal: calc.perRound[rIdx]!.itemsSubtotal,
+          },
+        });
+
+        await tx.settlementItem.createMany({
+          data: r.items.map((it, idx) => ({
+            roundId: round.id,
+            name: it.name,
+            unitPrice: it.unitPrice,
+            quantity: it.quantity,
+            amount: it.amount,
+            category: it.category,
+            matchedMenuName: it.matchedMenuName,
+            orderIndex: idx,
+          })),
+        });
+
+        const attendeeMap = new Map(
+          r.attendees.map((a) => [a.participantClientId, a]),
+        );
+        for (const p of input.participants) {
+          const dbId = clientIdToDbId.get(p.clientId)!;
+          const a = attendeeMap.get(p.clientId);
+          const attended = a?.attended ?? false;
+          const shareIdx = input.participants.findIndex(
+            (pp) => pp.clientId === p.clientId,
+          );
+          await tx.settlementRoundParticipant.create({
+            data: {
+              roundId: round.id,
+              participantId: dbId,
+              attended,
+              excludeAlcoholOverride: a?.excludeAlcoholOverride ?? null,
+              excludeNonAlcoholOverride: a?.excludeNonAlcoholOverride ?? null,
+              excludeSideOverride: a?.excludeSideOverride ?? null,
+              shareAmount: attended ? (calc.perRound[rIdx]!.shareAmounts[shareIdx] ?? 0) : 0,
+            },
+          });
+        }
       }
 
       await tx.settlementSession.update({
         where: { id },
-        data: { editedAt: now },
+        data: {
+          restaurantPlaceId: firstRound.restaurantPlaceId,
+          restaurantName: sessionRestaurantName,
+          grandTotal: calc.grandTotal,
+          editedAt: now,
+        },
       });
     });
 
@@ -365,7 +529,10 @@ export class SettlementService {
 
   // 공유 토큰 생성 — 이미 있으면 동일 토큰을 그대로 돌려준다(멱등). 회수 후
   // 재생성하면 새 토큰이 발급되므로 이전 링크는 자연 무효화.
-  async createShare(userId: string, id: string): Promise<SettlementShareType> {
+  async createShare(userId: string, id: string): Promise<{
+    token: string | null;
+    shareUrl: string | null;
+  }> {
     const row = await this.prisma.settlementSession.findUnique({
       where: { id },
       select: { id: true, userId: true, shareToken: true },
@@ -400,61 +567,189 @@ export class SettlementService {
   }
 
   // 공유 토큰으로 read-only 세션 조회. 토큰을 안다 = 접근 허용이므로 인증
-  // 검사는 하지 않는다. 응답에서 userId/receiptPreviewUrl 은 제거.
+  // 검사는 하지 않는다. 응답에서 userId/round.receiptPreviewUrl 은 제거.
   async getBySharedToken(token: string): Promise<SharedSettlementSessionType | null> {
+    const row = await this.findFullRowByToken(token);
+    if (!row) return null;
+    const session = this.rowToSession(row);
+    const { userId: _userId, rounds, ...rest } = session;
+    return {
+      ...rest,
+      rounds: rounds.map(({ receiptPreviewUrl: _r, ...rr }) => rr),
+    };
+  }
+
+  // ── 내부 헬퍼 ───────────────────────────────────────────────────────
+
+  private async validateInput(input: CreateSettlementInputType): Promise<void> {
+    // 참여자 검증.
+    for (const p of input.participants) {
+      const hasName = (p.name ?? '').trim().length > 0;
+      const hasNickname = (p.nickname ?? '').trim().length > 0;
+      if (!hasName && !hasNickname) {
+        throw new SettlementError(
+          'invalid_participant',
+          '참여자는 이름 또는 닉네임 중 하나가 필요합니다.',
+        );
+      }
+    }
+    // clientId 중복 금지.
+    const clientIds = new Set<string>();
+    for (const p of input.participants) {
+      if (clientIds.has(p.clientId)) {
+        throw new SettlementError(
+          'invalid_participant',
+          '참여자 clientId 가 중복됩니다.',
+        );
+      }
+      clientIds.add(p.clientId);
+    }
+    // round 별 attendees 가 참조하는 clientId 가 마스터에 있어야 한다.
+    for (const r of input.rounds) {
+      const attendedSet = new Set<string>();
+      for (const a of r.attendees) {
+        if (!clientIds.has(a.participantClientId)) {
+          throw new SettlementError(
+            'invalid_round',
+            '참석자 참조가 마스터 참여자에 없습니다.',
+          );
+        }
+        if (attendedSet.has(a.participantClientId)) {
+          throw new SettlementError(
+            'invalid_round',
+            '같은 참여자가 한 차수에 여러 번 들어 있습니다.',
+          );
+        }
+        attendedSet.add(a.participantClientId);
+      }
+      // 최소 1명은 attended:true 여야 분배가 의미 있다.
+      if (!r.attendees.some((a) => a.attended)) {
+        throw new SettlementError(
+          'invalid_round',
+          '차수에 참석한 사람이 한 명도 없습니다.',
+        );
+      }
+    }
+  }
+
+  private async resolveRestaurantName(placeId: string): Promise<string> {
+    const detail = await this.restaurants.getPublicDetail(placeId);
+    if (!detail) {
+      throw new SettlementError('restaurant_not_found', '식당을 찾을 수 없습니다.');
+    }
+    return detail.name;
+  }
+
+  private async validateReceiptToken(token: string | null): Promise<string | null> {
+    if (!token) return null;
+    if (!IMAGE_TOKEN_PATTERN.test(token)) {
+      throw new SettlementError('invalid_receipt_token', '영수증 토큰이 올바르지 않습니다.');
+    }
+    const path = join(this.receiptStorageDir, `${token}.jpg`);
+    try {
+      await stat(path);
+    } catch {
+      throw new SettlementError(
+        'invalid_receipt_token',
+        '영수증 이미지를 찾을 수 없습니다.',
+      );
+    }
+    return token;
+  }
+
+  // create/update 둘 다에서 share 계산을 같은 방식으로.
+  private computeShares(input: CreateSettlementInputType) {
+    return calculateMultiRoundShares({
+      participantCount: input.participants.length,
+      rounds: input.rounds.map((r) => this.buildRoundCalcInput(r, input)),
+    });
+  }
+
+  private buildRoundCalcInput(
+    round: SettlementRoundInputType,
+    input: CreateSettlementInputType,
+  ) {
+    const masterByClientId = new Map(input.participants.map((p) => [p.clientId, p]));
+    return {
+      items: round.items.map((it) => ({ amount: it.amount, category: it.category })),
+      attendees: round.attendees
+        .filter((a) => a.attended)
+        .map((a) => {
+          const master = masterByClientId.get(a.participantClientId)!;
+          const eff = effectiveExcludes(master, a);
+          return {
+            participantIndex: input.participants.findIndex(
+              (p) => p.clientId === a.participantClientId,
+            ),
+            ...eff,
+          };
+        }),
+    };
+  }
+
+  private async findFullRow(id: string): Promise<RowSession | null> {
     const row = await this.prisma.settlementSession.findUnique({
-      where: { shareToken: token },
+      where: { id },
       include: {
-        items: { orderBy: { orderIndex: 'asc' } },
+        rounds: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            items: { orderBy: { orderIndex: 'asc' } },
+            attendees: true,
+          },
+        },
         participants: { orderBy: { orderIndex: 'asc' } },
       },
     });
-    if (!row) return null;
-    const session = this.rowToSession(row);
-    // userId, receiptPreviewUrl 둘 다 제거. 영수증 사진은 토큰 받은 사람에게도
-    // 공개하지 않는다(개인정보 우려).
-    const { userId: _userId, receiptPreviewUrl: _preview, ...shared } = session;
-    return shared;
+    return row;
   }
 
-  private rowToSession(row: {
-    id: string;
-    userId: string;
-    restaurantPlaceId: string;
-    restaurantName: string;
-    source: string;
-    totalAmount: number | null;
-    warning: string | null;
-    receiptImageToken: string | null;
-    itemsSubtotal: number;
-    createdAt: Date;
-    updatedAt: Date;
-    editedAt: Date | null;
-    items: Array<{
-      id: string;
-      name: string;
-      unitPrice: number | null;
-      quantity: number | null;
-      amount: number;
-      category: string;
-      matchedMenuName: string | null;
-      orderIndex: number;
-    }>;
-    participants: Array<{
-      id: string;
-      name: string | null;
-      nickname: string | null;
-      excludeAlcohol: boolean;
-      excludeNonAlcohol: boolean;
-      excludeSide: boolean;
-      shareAmount: number;
-      orderIndex: number;
-      contactId: string | null;
-    }>;
-  }): SettlementSessionType {
+  private async findFullRowByToken(token: string): Promise<RowSession | null> {
+    const row = await this.prisma.settlementSession.findUnique({
+      where: { shareToken: token },
+      include: {
+        rounds: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            items: { orderBy: { orderIndex: 'asc' } },
+            attendees: true,
+          },
+        },
+        participants: { orderBy: { orderIndex: 'asc' } },
+      },
+    });
+    return row;
+  }
+
+  private rowToSession(row: RowSession): SettlementSessionType {
     return {
       id: row.id,
       userId: row.userId,
+      restaurantPlaceId: row.restaurantPlaceId,
+      restaurantName: row.restaurantName,
+      grandTotal: row.grandTotal,
+      rounds: row.rounds.map((r) => this.rowToRound(r)),
+      participants: row.participants.map((p) => ({
+        id: p.id,
+        name: p.name,
+        nickname: p.nickname,
+        excludeAlcohol: p.excludeAlcohol,
+        excludeNonAlcohol: p.excludeNonAlcohol,
+        excludeSide: p.excludeSide,
+        shareAmount: p.shareAmount,
+        orderIndex: p.orderIndex,
+        contactId: p.contactId,
+      })),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      editedAt: row.editedAt ? row.editedAt.toISOString() : null,
+    };
+  }
+
+  private rowToRound(row: RowRound): SettlementRoundType {
+    return {
+      id: row.id,
+      orderIndex: row.orderIndex,
       restaurantPlaceId: row.restaurantPlaceId,
       restaurantName: row.restaurantName,
       source: row.source as SettlementSourceType,
@@ -474,20 +769,14 @@ export class SettlementService {
         matchedMenuName: it.matchedMenuName,
         orderIndex: it.orderIndex,
       })),
-      participants: row.participants.map((p) => ({
-        id: p.id,
-        name: p.name,
-        nickname: p.nickname,
-        excludeAlcohol: p.excludeAlcohol,
-        excludeNonAlcohol: p.excludeNonAlcohol,
-        excludeSide: p.excludeSide,
-        shareAmount: p.shareAmount,
-        orderIndex: p.orderIndex,
-        contactId: p.contactId,
+      attendees: row.attendees.map((a) => ({
+        participantId: a.participantId,
+        attended: a.attended,
+        excludeAlcoholOverride: a.excludeAlcoholOverride,
+        excludeNonAlcoholOverride: a.excludeNonAlcoholOverride,
+        excludeSideOverride: a.excludeSideOverride,
+        shareAmount: a.shareAmount,
       })),
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-      editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     };
   }
 }

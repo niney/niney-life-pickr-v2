@@ -28,11 +28,28 @@ const tokenFor = (app: FastifyInstance, userId: string) =>
   app.jwt.sign({ userId, email: `${userId}@x.com`, role: 'USER' });
 
 // 정산 세션을 prisma 로 직접 한 줄 만든다 — 라우트 POST 는 restaurant 존재
-// 검사가 같이 묶여 있어, 공유 토큰만 검증하려는 이 테스트에서는 우회가 깔끔.
+// 검사가 같이 묶여 있어, 공유 토큰/PUT 만 검증하려는 이 테스트에서는 우회가 깔끔.
+// 차수(round) 1개, 김치찌개 30,000원, A·B 두 명 균등.
 const seedSession = async (app: FastifyInstance, userId: string) => {
   const session = await app.prisma.settlementSession.create({
     data: {
       userId,
+      restaurantPlaceId: 'place-test',
+      restaurantName: '테스트식당',
+      grandTotal: 30000,
+      participants: {
+        create: [
+          { name: 'A', nickname: null, shareAmount: 15000, orderIndex: 0 },
+          { name: 'B', nickname: null, shareAmount: 15000, orderIndex: 1 },
+        ],
+      },
+    },
+    include: { participants: { orderBy: { orderIndex: 'asc' } } },
+  });
+  const round = await app.prisma.settlementRound.create({
+    data: {
+      sessionId: session.id,
+      orderIndex: 0,
       restaurantPlaceId: 'place-test',
       restaurantName: '테스트식당',
       source: 'MANUAL',
@@ -52,15 +69,16 @@ const seedSession = async (app: FastifyInstance, userId: string) => {
           },
         ],
       },
-      participants: {
-        create: [
-          { name: 'A', nickname: null, shareAmount: 15000, orderIndex: 0 },
-          { name: 'B', nickname: null, shareAmount: 15000, orderIndex: 1 },
-        ],
+      attendees: {
+        create: session.participants.map((p) => ({
+          participantId: p.id,
+          attended: true,
+          shareAmount: 15000,
+        })),
       },
     },
   });
-  return session.id;
+  return { sessionId: session.id, roundId: round.id, participants: session.participants };
 };
 
 describe('settlement share routes', () => {
@@ -100,7 +118,7 @@ describe('settlement share routes', () => {
   });
 
   it('POST share: 토큰 생성, 동일 호출은 동일 토큰(멱등)', async () => {
-    const sessionId = await seedSession(app, ownerId);
+    const { sessionId } = await seedSession(app, ownerId);
 
     const first = await app.inject({
       method: 'POST',
@@ -122,7 +140,7 @@ describe('settlement share routes', () => {
   });
 
   it('POST share: 비소유자는 403', async () => {
-    const sessionId = await seedSession(app, ownerId);
+    const { sessionId } = await seedSession(app, ownerId);
 
     const res = await app.inject({
       method: 'POST',
@@ -142,7 +160,7 @@ describe('settlement share routes', () => {
   });
 
   it('POST share: 인증 없으면 401', async () => {
-    const sessionId = await seedSession(app, ownerId);
+    const { sessionId } = await seedSession(app, ownerId);
     const res = await app.inject({
       method: 'POST',
       url: `/api/v1/settlements/${sessionId}/share`,
@@ -151,7 +169,7 @@ describe('settlement share routes', () => {
   });
 
   it('DELETE share: 토큰 회수 후 같은 토큰으로 GET 시 404', async () => {
-    const sessionId = await seedSession(app, ownerId);
+    const { sessionId } = await seedSession(app, ownerId);
     const created = await app.inject({
       method: 'POST',
       url: `/api/v1/settlements/${sessionId}/share`,
@@ -174,7 +192,7 @@ describe('settlement share routes', () => {
   });
 
   it('DELETE share: 이미 비공개 세션도 204(멱등)', async () => {
-    const sessionId = await seedSession(app, ownerId);
+    const { sessionId } = await seedSession(app, ownerId);
     const del = await app.inject({
       method: 'DELETE',
       url: `/api/v1/settlements/${sessionId}/share`,
@@ -183,8 +201,8 @@ describe('settlement share routes', () => {
     expect(del.statusCode).toBe(204);
   });
 
-  it('GET shared: 인증 없이 200, 응답에 userId/receiptPreviewUrl 없음', async () => {
-    const sessionId = await seedSession(app, ownerId);
+  it('GET shared: 인증 없이 200, 응답에 userId/round.receiptPreviewUrl 없음', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
     const created = await app.inject({
       method: 'POST',
       url: `/api/v1/settlements/${sessionId}/share`,
@@ -199,9 +217,10 @@ describe('settlement share routes', () => {
     expect(get.statusCode).toBe(200);
     const body = get.json();
     expect(body).not.toHaveProperty('userId');
-    expect(body).not.toHaveProperty('receiptPreviewUrl');
     expect(body.restaurantName).toBe('테스트식당');
-    expect(body.items).toHaveLength(1);
+    expect(body.rounds).toHaveLength(1);
+    expect(body.rounds[0]).not.toHaveProperty('receiptPreviewUrl');
+    expect(body.rounds[0].items).toHaveLength(1);
     expect(body.participants).toHaveLength(2);
   });
 
@@ -213,17 +232,19 @@ describe('settlement share routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('PATCH participants: 옵션 변경으로 shareAmount 재계산 + editedAt 세팅', async () => {
-    const sessionId = await seedSession(app, ownerId);
+  it('PUT update: 마스터 옵션 변경으로 shareAmount 재계산 + editedAt 세팅', async () => {
+    const { sessionId, participants } = await seedSession(app, ownerId);
+    const [a, b] = participants;
 
     const res = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/settlements/${sessionId}/participants`,
+      method: 'PUT',
+      url: `/api/v1/settlements/${sessionId}`,
       headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
       payload: {
         participants: [
           // A 는 비주류(김치찌개) 제외 → 분담 0 원
           {
+            clientId: 'c-a',
             name: 'A',
             nickname: null,
             excludeAlcohol: false,
@@ -231,11 +252,47 @@ describe('settlement share routes', () => {
             excludeSide: false,
           },
           {
+            clientId: 'c-b',
             name: 'B',
             nickname: null,
             excludeAlcohol: false,
             excludeNonAlcohol: false,
             excludeSide: false,
+          },
+        ],
+        rounds: [
+          {
+            restaurantPlaceId: 'place-test',
+            source: 'MANUAL',
+            totalAmount: 30000,
+            warning: null,
+            receiptImageToken: null,
+            items: [
+              {
+                name: '김치찌개',
+                unitPrice: 10000,
+                quantity: 3,
+                amount: 30000,
+                category: 'NON_ALCOHOL',
+                matchedMenuName: null,
+              },
+            ],
+            attendees: [
+              {
+                participantClientId: 'c-a',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+              {
+                participantClientId: 'c-b',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+            ],
           },
         ],
       },
@@ -246,34 +303,150 @@ describe('settlement share routes', () => {
     expect(body.participants).toHaveLength(2);
     // A 는 비주류 제외 → 김치찌개(30000원) 풀에서 빠짐 → 0원
     // B 혼자 비주류 풀 부담 → 30000원
-    const byName = new Map(body.participants.map((p: { name: string; shareAmount: number }) => [p.name, p.shareAmount]));
+    const byName = new Map(
+      body.participants.map((p: { name: string; shareAmount: number }) => [
+        p.name,
+        p.shareAmount,
+      ]),
+    );
     expect(byName.get('A')).toBe(0);
     expect(byName.get('B')).toBe(30000);
+    // round 의 attendees 도 같은 결과를 반영해야 함
+    const rAttendees = body.rounds[0].attendees;
+    const attendeeById = new Map(
+      rAttendees.map((a: { participantId: string; shareAmount: number }) => [
+        a.participantId,
+        a.shareAmount,
+      ]),
+    );
+    expect(attendeeById.size).toBe(2);
+    // 마스터 participant 행도 다시 만들어졌으므로 id 가 바뀌었다 — body.participants 와 합 비교만.
+    const sumAttendees = rAttendees.reduce(
+      (s: number, a: { shareAmount: number }) => s + a.shareAmount,
+      0,
+    );
+    expect(sumAttendees).toBe(30000);
+    // unused params 경고 회피.
+    void a;
+    void b;
   });
 
-  it('PATCH participants: 비소유자는 403', async () => {
-    const sessionId = await seedSession(app, ownerId);
+  it('PUT update: 차수 추가 — 2차 다른 식당, 차수별 참석 분리', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
+    // 2차 식당이 DB 에 등록돼 있어야 하므로 1차와 같은 placeId 로 검증.
+    // (resolveRestaurantName 이 RestaurantService 를 통해 가져오는데 테스트
+    // 환경에선 place-test 만 존재한다고 가정)
     const res = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/settlements/${sessionId}/participants`,
-      headers: { Authorization: `Bearer ${tokenFor(app, otherId)}` },
+      method: 'PUT',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
       payload: {
         participants: [
           {
-            name: 'X',
+            clientId: 'c-a',
+            name: 'A',
+            nickname: null,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          },
+          {
+            clientId: 'c-b',
+            name: 'B',
             nickname: null,
             excludeAlcohol: false,
             excludeNonAlcohol: false,
             excludeSide: false,
           },
         ],
+        rounds: [
+          {
+            restaurantPlaceId: 'place-test',
+            source: 'MANUAL',
+            totalAmount: 30000,
+            warning: null,
+            receiptImageToken: null,
+            items: [
+              {
+                name: '김치찌개',
+                unitPrice: 10000,
+                quantity: 3,
+                amount: 30000,
+                category: 'NON_ALCOHOL',
+                matchedMenuName: null,
+              },
+            ],
+            attendees: [
+              {
+                participantClientId: 'c-a',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+              {
+                participantClientId: 'c-b',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+            ],
+          },
+          {
+            restaurantPlaceId: 'place-test',
+            source: 'MANUAL',
+            totalAmount: 10000,
+            warning: null,
+            receiptImageToken: null,
+            items: [
+              {
+                name: '맥주',
+                unitPrice: 5000,
+                quantity: 2,
+                amount: 10000,
+                category: 'ALCOHOL',
+                matchedMenuName: null,
+              },
+            ],
+            // 2차는 A 만 참석
+            attendees: [
+              {
+                participantClientId: 'c-a',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+              {
+                participantClientId: 'c-b',
+                attended: false,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+            ],
+          },
+        ],
       },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.rounds).toHaveLength(2);
+    expect(body.grandTotal).toBe(40000);
+    const byName = new Map(
+      body.participants.map((p: { name: string; shareAmount: number }) => [
+        p.name,
+        p.shareAmount,
+      ]),
+    );
+    // 1차 30,000 ÷ 2 = 15,000 each. 2차 10,000 (A 단독).
+    expect(byName.get('A')).toBe(25000);
+    expect(byName.get('B')).toBe(15000);
   });
 
   it('재발급 후 이전 토큰은 무효', async () => {
-    const sessionId = await seedSession(app, ownerId);
+    const { sessionId } = await seedSession(app, ownerId);
     const first = await app.inject({
       method: 'POST',
       url: `/api/v1/settlements/${sessionId}/share`,

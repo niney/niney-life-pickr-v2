@@ -5,7 +5,7 @@ import type {
   SettlementSessionType,
   SettlementShareType,
   SharedSettlementSessionType,
-  UpdateSettlementParticipantsInputType,
+  UpdateSettlementInputType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
@@ -36,13 +36,14 @@ export const settlementApi = {
   remove: (id: string): Promise<void> =>
     apiFetch<void>(`${PREFIX}/${id}`, { method: 'DELETE' }),
 
-  // 저장 후 참여자/옵션 수정 — items 는 불변. 서버가 재계산해서 갱신된 세션 반환.
-  updateParticipants: (
+  // 저장된 정산 전체 replace — 참여자 명단·차수 구성·각 차수의 items/attendees
+  // 모두 교체. 서버가 트랜잭션 wipe + rebuild + 재계산 + editedAt 갱신.
+  update: (
     id: string,
-    input: UpdateSettlementParticipantsInputType,
+    input: UpdateSettlementInputType,
   ): Promise<SettlementSessionType> =>
-    apiFetch<SettlementSessionType>(`${PREFIX}/${id}/participants`, {
-      method: 'PATCH',
+    apiFetch<SettlementSessionType>(`${PREFIX}/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(input),
     }),
 

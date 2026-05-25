@@ -151,6 +151,9 @@ export class SettlementExtractionService {
     imageToken: string;
     restaurantName: string;
     menuNames: string[];
+    // 차수(N차 회식) 컨텍스트 — 사용자가 '2차 영수증' 임을 명시할 때만 전달.
+    // 1-based, total<=1 이면 LLM 프롬프트에서 차수 라인을 출력하지 않는다.
+    roundHint?: { index: number; total: number };
   }): Promise<ExtractReceiptResultType> {
     const buffer = await this.readImage(input.imageToken);
 
@@ -167,6 +170,7 @@ export class SettlementExtractionService {
     const userPrompt = buildExtractionUserPrompt({
       restaurantName: input.restaurantName,
       menuNames: input.menuNames,
+      roundHint: input.roundHint,
     });
 
     const startedAt = Date.now();

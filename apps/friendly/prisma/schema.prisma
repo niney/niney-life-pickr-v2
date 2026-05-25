@@ -27,41 +27,35 @@ enum Role {
   ADMIN
 }
 
-// 정산하기 — 한 식당에서의 한 번의 정산 세션. 로그인 사용자 본인만 보고
-// 편집할 수 있으며 (개인 전용 결정), 영수증으로 만든 세션은 receiptImageToken
-// 에 data/receipts/<token>.jpg 가리키는 UUID 가 들어간다. totalAmount 는
-// 영수증 표기 / 사용자가 직접 입력한 합계 — 분배 계산에는 items 의 amount
-// 합을 사용하지만 화면 표시·검증을 위해 따로 저장한다.
+// 정산하기 — 한 번의 정산 세션. 차수(SettlementRound) 1개 이상으로 구성되며
+// 각 차수는 서로 다른 식당일 수 있다. session 본체에 남는 restaurantPlaceId/
+// restaurantName 은 '1차 식당' 스냅샷 — 목록 검색·이력 호환을 위해 중복 보유
+// 한다 (rounds[0] 와 항상 동기화).
+//
+// 로그인 사용자 본인만 보고 편집할 수 있다 (개인 전용). 영수증 토큰·source·
+// totalAmount 같은 차수 단위 정보는 모두 SettlementRound 로 이동했다.
 model SettlementSession {
   id                String   @id @default(cuid())
   userId            String
+  // 1차 식당의 placeId 스냅샷. rounds[0].restaurantPlaceId 와 동기화.
   restaurantPlaceId String
-  // 식당 이름 스냅샷 — restaurant 이름이 나중에 바뀌어도 이력에서 보이게.
+  // 1차 식당 이름 스냅샷.
   restaurantName    String
-  // 'MANUAL' (직접 입력) | 'RECEIPT' (영수증 추출 후 보정).
-  source            String
-  // null 이면 사용자가 총액을 입력하지 않은 것. 분배 계산엔 사용하지 않는다.
-  totalAmount       Int?
-  // 항목 합과 totalAmount 가 불일치할 때 추출 단계에서 만든 경고 문구.
-  warning           String?
-  // 영수증 이미지 토큰 — data/receipts/<token>.jpg. MANUAL 세션은 null.
-  receiptImageToken String?
-  // 분배 계산 결과의 사실상 합. 항목 amount 의 단순 합과 같지만 client 가
-  // 매번 계산하지 않아도 되도록 저장.
-  itemsSubtotal     Int
+  // 모든 차수 itemsSubtotal 의 합. 클라이언트가 매번 계산하지 않아도 되도록 저장.
+  grandTotal        Int
   // 공유 링크 토큰 — null 이면 비공개. POST /settlements/:id/share 로 owner 가
   // 멱등 생성, DELETE 로 회수. 토큰 자체는 추측 불가능한 32바이트 base64url.
   // unique 인덱스로 GET /share/settlements/:token 조회 O(1).
   shareToken        String?  @unique
-  // participants 가 저장 후 수정된 마지막 시각 — 한 번도 수정 안 했으면 null.
-  // updatedAt 과 분리한 이유: updatedAt 은 shareToken 발급/회수에도 갱신되어
-  // '수정됨' 배지 기준으로 부적합.
+  // 본문(참여자/차수/항목)이 저장 후 마지막으로 수정된 시각. 한 번도 수정 안
+  // 했으면 null. updatedAt 과 분리한 이유: updatedAt 은 shareToken 발급/회수
+  // 에도 갱신되어 '수정됨' 배지 기준으로 부적합.
   editedAt          DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items        SettlementItem[]
+  rounds       SettlementRound[]
   participants SettlementParticipant[]
 
   @@index([userId, createdAt])
@@ -69,9 +63,36 @@ model SettlementSession {
   @@map("settlement_sessions")
 }
 
+// 한 정산 안의 한 차수. 같은 식당의 영수증 여러 장이든 다른 식당으로 이동한
+// 2차이든 동일하게 round 1행. 식당 정보·영수증·source·totalAmount 가 모두
+// round 단위.
+model SettlementRound {
+  id                String   @id @default(cuid())
+  sessionId         String
+  orderIndex        Int
+  // 차수마다 다른 식당일 수 있으므로 round 단위 식당 snapshot.
+  restaurantPlaceId String
+  restaurantName    String
+  // 'MANUAL' | 'RECEIPT' — 차수마다 다를 수 있다 (1차 영수증, 2차 직접 입력 등).
+  source            String
+  totalAmount       Int?
+  warning           String?
+  // 영수증 이미지 토큰 — data/receipts/<token>.jpg. MANUAL 차수는 null.
+  receiptImageToken String?
+  // 이 차수 items.amount 합. session.grandTotal 의 부품.
+  itemsSubtotal     Int
+
+  session    SettlementSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  items      SettlementItem[]
+  attendees  SettlementRoundParticipant[]
+
+  @@index([sessionId])
+  @@map("settlement_rounds")
+}
+
 model SettlementItem {
   id              String  @id @default(cuid())
-  sessionId       String
+  roundId         String
   // 사용자가 화면에서 본 그대로의 메뉴명.
   name            String
   unitPrice       Int?
@@ -85,37 +106,63 @@ model SettlementItem {
   matchedMenuName String?
   orderIndex      Int
 
-  session SettlementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  round SettlementRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId])
+  @@index([roundId])
   @@map("settlement_items")
 }
 
+// 마스터 참여자 — session 직속. exclude* 는 'default' 의미, 차수 단위 override
+// 는 SettlementRoundParticipant 에서. shareAmount 는 모든 차수 분담의 grand
+// total (per person).
 model SettlementParticipant {
   id                String  @id @default(cuid())
   sessionId         String
   // 이름·닉네임 둘 중 하나만 채워져도 valid — application layer 가 검증.
   name              String?
   nickname          String?
-  // 카테고리별 분담 제외 플래그. excludeAlcohol=true 면 ALCOHOL 풀에서
-  // 빠지고, 그 풀은 나머지 참여자끼리 나눠 부담.
+  // 마스터 default. 차수 단위 override 가 없을 때 사용된다.
   excludeAlcohol    Boolean @default(false)
   excludeNonAlcohol Boolean @default(false)
   excludeSide       Boolean @default(false)
-  // 계산된 분담액 스냅샷. items/excludes 가 바뀌면 server 가 다시 계산해
-  // 모든 참여자 행을 update.
+  // 모든 차수의 분담 합 (grand total). items/excludes/attendees 가 바뀌면
+  // 서버가 다시 계산해 update.
   shareAmount       Int
   orderIndex        Int
   // 같은 사용자의 단골(SettlementContact) 과 연결. 자동 적립 시 매번 채워지고,
   // 단골이 삭제되면 SetNull 로 끊고 정산 본체는 그대로 둔다(이력 보존).
   contactId         String?
 
-  session SettlementSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  contact SettlementContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  session     SettlementSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contact     SettlementContact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  roundEntries SettlementRoundParticipant[]
 
   @@index([sessionId])
   @@index([contactId])
   @@map("settlement_participants")
+}
+
+// 차수 × 참여자 join. attended=false 면 분담 = 0. excludeXxxOverride 가
+// non-null 이면 마스터 default 를 무시하고 이 차수에서만 다른 값으로 친다.
+// (예: 마스터에선 '술 X' 인데 이 차수에선 마심 → excludeAlcoholOverride=false)
+model SettlementRoundParticipant {
+  id                        String  @id @default(cuid())
+  roundId                   String
+  participantId             String
+  attended                  Boolean @default(true)
+  excludeAlcoholOverride    Boolean?
+  excludeNonAlcoholOverride Boolean?
+  excludeSideOverride       Boolean?
+  // 이 차수에서의 분담액. 비참석이면 0.
+  shareAmount               Int
+
+  round       SettlementRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  participant SettlementParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, participantId])
+  @@index([roundId])
+  @@index([participantId])
+  @@map("settlement_round_participants")
 }
 
 // 사용자별 "단골 참여자" 메모. 새 정산을 만들 때마다 모든 participant 가

@@ -1,6 +1,7 @@
 // 영수증 추출 프롬프트 + JSON schema. 프롬프트/스키마가 바뀌면 EXTRACTION_VERSION
 // 을 올려 추후 재추출/통계에서 식별할 수 있게 한다.
-export const EXTRACTION_VERSION = 1;
+// v2: 차수(N차 회식) 힌트를 user prompt 에 동적으로 주입할 수 있게 확장.
+export const EXTRACTION_VERSION = 2;
 
 export const EXTRACTION_SYSTEM_PROMPT = `너는 한국 음식점 영수증에서 메뉴와 가격을 추출하는 비전 모델이다.
 
@@ -63,11 +64,24 @@ export const EXTRACTION_JSON_SCHEMA = {
 } as const;
 
 // 사용자 프롬프트 — 식당 메뉴 힌트를 매번 동적으로 주입한다.
+// roundHint 가 있으면 "N차 중 K차" 컨텍스트를 추가 — 1차 식당에서 시작해
+// 2차로 자리를 옮긴 회식 같은 케이스에서 LLM 이 같은 카테고리 분류를 자연스레
+// 유지하도록 돕는다 (예: 2차가 호프집이면 주류·안주가 메인일 가능성 가산).
 export const buildExtractionUserPrompt = (input: {
   restaurantName: string;
   menuNames: string[];
+  roundHint?: {
+    // 1-based — UI 와 일치 (사용자가 '2차 영수증' 이라고 인지하는 그 숫자).
+    index: number;
+    total: number;
+  };
 }): string => {
   const lines: string[] = [];
+  if (input.roundHint && input.roundHint.total > 1) {
+    lines.push(
+      `차수: ${input.roundHint.total}차 회식 중 ${input.roundHint.index}차 영수증`,
+    );
+  }
   lines.push(`식당명: ${input.restaurantName}`);
   if (input.menuNames.length > 0) {
     lines.push('등록 메뉴:');

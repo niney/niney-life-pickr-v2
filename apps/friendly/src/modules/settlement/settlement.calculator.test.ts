@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { calculateShares } from '@repo/api-contract';
+import {
+  calculateMultiRoundShares,
+  calculateShares,
+  effectiveExcludes,
+} from '@repo/api-contract';
 
 const noExclude = (n: number) =>
   Array.from({ length: n }, () => ({
@@ -111,5 +115,189 @@ describe('calculateShares', () => {
     expect(r.poolBreakdown.ALCOHOL.poolAmount).toBe(0);
     expect(r.poolBreakdown.ALCOHOL.perParticipant).toBe(0);
     expect(r.shareAmounts).toEqual([3000, 3000, 3000]);
+  });
+});
+
+describe('effectiveExcludes', () => {
+  it('uses master defaults when overrides are null', () => {
+    const r = effectiveExcludes(
+      { excludeAlcohol: true, excludeNonAlcohol: false, excludeSide: false },
+      {
+        excludeAlcoholOverride: null,
+        excludeNonAlcoholOverride: null,
+        excludeSideOverride: null,
+      },
+    );
+    expect(r).toEqual({
+      excludeAlcohol: true,
+      excludeNonAlcohol: false,
+      excludeSide: false,
+    });
+  });
+
+  it('lets round overrides flip the master value either way', () => {
+    const r = effectiveExcludes(
+      { excludeAlcohol: true, excludeNonAlcohol: false, excludeSide: false },
+      {
+        // master 가 true 인데도 이 차수만 마심 — false 로 덮어쓰기.
+        excludeAlcoholOverride: false,
+        excludeNonAlcoholOverride: null,
+        // master 가 false 인데 이 차수는 안 먹음 — true 로 덮어쓰기.
+        excludeSideOverride: true,
+      },
+    );
+    expect(r).toEqual({
+      excludeAlcohol: false,
+      excludeNonAlcohol: false,
+      excludeSide: true,
+    });
+  });
+});
+
+describe('calculateMultiRoundShares', () => {
+  it('splits each round independently and sums grand total per master', () => {
+    // A,B,C 3명. 1차 전원 — UNCAT 30,000. 2차 A,B 만 — UNCAT 10,000.
+    const r = calculateMultiRoundShares({
+      participantCount: 3,
+      rounds: [
+        {
+          items: [{ amount: 30000, category: 'UNCATEGORIZED' }],
+          attendees: [
+            {
+              participantIndex: 0,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+            {
+              participantIndex: 1,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+            {
+              participantIndex: 2,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+        {
+          items: [{ amount: 10000, category: 'UNCATEGORIZED' }],
+          attendees: [
+            {
+              participantIndex: 0,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+            {
+              participantIndex: 1,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+      ],
+    });
+    // 1차: 10000/10000/10000. 2차: 5000/5000/0.
+    expect(r.perRound[0]?.shareAmounts).toEqual([10000, 10000, 10000]);
+    expect(r.perRound[1]?.shareAmounts).toEqual([5000, 5000, 0]);
+    expect(r.perParticipant).toEqual([15000, 15000, 10000]);
+    expect(r.grandTotal).toBe(40000);
+  });
+
+  it('honors per-round exclude overrides (master 술X 가 2차엔 마심)', () => {
+    // A 는 master 에서 술 X. 1차 ALCOHOL 만 → A 빠지고 B 부담.
+    // 2차 ALCOHOL 만 + A 의 excludeAlcoholOverride=false → A,B 같이 부담.
+    const r = calculateMultiRoundShares({
+      participantCount: 2,
+      rounds: [
+        {
+          items: [{ amount: 10000, category: 'ALCOHOL' }],
+          attendees: [
+            {
+              participantIndex: 0,
+              excludeAlcohol: true,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+            {
+              participantIndex: 1,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+        {
+          items: [{ amount: 8000, category: 'ALCOHOL' }],
+          attendees: [
+            {
+              participantIndex: 0,
+              // override 가 적용된 effective 값을 입력으로 넘긴다고 가정.
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+            {
+              participantIndex: 1,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+      ],
+    });
+    // 1차: A=0, B=10000. 2차: A=4000, B=4000.
+    expect(r.perRound[0]?.shareAmounts).toEqual([0, 10000]);
+    expect(r.perRound[1]?.shareAmounts).toEqual([4000, 4000]);
+    expect(r.perParticipant).toEqual([4000, 14000]);
+    expect(r.grandTotal).toBe(18000);
+  });
+
+  it('returns zero shares for absentees in each round', () => {
+    // 1차 A만, 2차 B만.
+    const r = calculateMultiRoundShares({
+      participantCount: 2,
+      rounds: [
+        {
+          items: [{ amount: 5000, category: 'UNCATEGORIZED' }],
+          attendees: [
+            {
+              participantIndex: 0,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+        {
+          items: [{ amount: 7000, category: 'UNCATEGORIZED' }],
+          attendees: [
+            {
+              participantIndex: 1,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(r.perRound[0]?.shareAmounts).toEqual([5000, 0]);
+    expect(r.perRound[1]?.shareAmounts).toEqual([0, 7000]);
+    expect(r.perParticipant).toEqual([5000, 7000]);
+    expect(r.grandTotal).toBe(12000);
+  });
+
+  it('produces empty output for zero rounds', () => {
+    const r = calculateMultiRoundShares({ participantCount: 3, rounds: [] });
+    expect(r.perParticipant).toEqual([0, 0, 0]);
+    expect(r.perRound).toEqual([]);
+    expect(r.grandTotal).toBe(0);
   });
 });

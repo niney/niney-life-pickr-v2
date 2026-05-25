@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, History, Loader2, Share2, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, History, Loader2, Pencil, Share2, Trash2 } from 'lucide-react';
 import {
   ApiError,
   settlementExtractionApi,
@@ -9,8 +9,7 @@ import {
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { ParticipantEditDialog } from './ParticipantEditDialog';
-import { ItemsCard, ParticipantsCard, SessionSummaryCard } from './SettlementCards';
+import { ParticipantsCard, RoundItemsCard, SessionSummaryCard } from './SettlementCards';
 import { SettlementShareDialog } from './SettlementShareDialog';
 
 // 저장된 정산 세션 단건 보기. /restaurants/:placeId/settle/:id.
@@ -21,7 +20,8 @@ export const SettlementResultPage = () => {
   const session = useSettlement(id);
   const remove = useDeleteSettlement();
   const [shareOpen, setShareOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
+
+  const handleEdit = () => navigate(`/restaurants/${placeId}/settle/${id}/edit`);
 
   const handleBack = () => navigate(`/restaurants/${placeId}`);
 
@@ -58,6 +58,11 @@ export const SettlementResultPage = () => {
   }
 
   const s = session.data;
+  // 1차 식당 이름이 헤더 라벨. 차수가 여러 개면 '외 N개' 부기.
+  const headerLabel =
+    s.rounds.length > 1
+      ? `${s.restaurantName} 외 ${s.rounds.length - 1}곳`
+      : s.restaurantName;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
@@ -65,12 +70,22 @@ export const SettlementResultPage = () => {
         <Button type="button" variant="ghost" size="sm" onClick={handleBack} aria-label="뒤로">
           <ChevronLeft className="size-4" />
         </Button>
-        <div className="flex-1 truncate text-sm font-semibold">정산 결과 · {s.restaurantName}</div>
+        <div className="flex-1 truncate text-sm font-semibold">정산 결과 · {headerLabel}</div>
         <Button asChild variant="ghost" size="sm" aria-label="내 정산 이력">
           <Link to="/me/settlements">
             <History className="size-4" />
             <span className="hidden sm:inline">이력</span>
           </Link>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleEdit}
+          aria-label="수정"
+        >
+          <Pencil className="size-4" />
+          <span className="hidden sm:inline">수정</span>
         </Button>
         <Button
           type="button"
@@ -102,26 +117,26 @@ export const SettlementResultPage = () => {
 
       <div className="flex-1 space-y-4 px-4 py-6">
         <SessionSummaryCard session={s} />
-        {s.warning && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <p>{s.warning}</p>
+
+        <ParticipantsCard session={s} onEdit={handleEdit} />
+
+        {/* 차수별 영수증 + 항목 카드. 차수 1개여도 동일 컴포넌트로 표시. */}
+        {s.rounds.map((r) => (
+          <div key={r.id} className="space-y-3">
+            {r.warning && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p>
+                  {s.rounds.length > 1 ? `${r.orderIndex + 1}차 · ` : ''}
+                  {r.warning}
+                </p>
+              </div>
+            )}
+            {r.receiptPreviewUrl && <ReceiptCard previewUrl={r.receiptPreviewUrl} />}
+            <RoundItemsCard round={r} total={s.rounds.length} />
           </div>
-        )}
-
-        {s.receiptPreviewUrl && <ReceiptCard previewUrl={s.receiptPreviewUrl} />}
-
-        <ParticipantsCard session={s} onEdit={() => setEditOpen(true)} />
-
-        <ItemsCard session={s} />
+        ))}
       </div>
-
-      <ParticipantEditDialog
-        open={editOpen}
-        sessionId={s.id}
-        initial={s.participants}
-        onClose={() => setEditOpen(false)}
-      />
     </main>
   );
 };

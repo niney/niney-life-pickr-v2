@@ -44,6 +44,11 @@ export const ExtractReceiptInput = z.object({
   // 어떤 식당의 영수증인지 — LLM 프롬프트에 해당 식당 메뉴를 힌트로
   // 주입하기 위해 필수.
   placeId: z.string().min(1),
+  // 차수(N차 회식) 컨텍스트 힌트. 사용자가 '2차 영수증' 임을 명시할 때 1-based
+  // 로 (roundIndex=2, roundTotal=N). 미지정/roundTotal<=1 이면 프롬프트에
+  // 차수 라인을 넣지 않는다. roundIndex 는 1..roundTotal 범위.
+  roundIndex: z.coerce.number().int().min(1).max(20).optional(),
+  roundTotal: z.coerce.number().int().min(1).max(20).optional(),
 });
 export type ExtractReceiptInputType = z.infer<typeof ExtractReceiptInput>;
 
