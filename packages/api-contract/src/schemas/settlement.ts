@@ -73,9 +73,10 @@ export const SettlementRoundInput = z.object({
   warning: z.string().nullable(),
   // 영수증 분기에서 업로드한 이미지 토큰. MANUAL 은 null.
   receiptImageToken: z.string().nullable(),
-  items: z.array(SettlementItemInput).min(1).max(100),
+  items: z.array(SettlementItemInput).min(1).max(200),
   // round 마다 최소 1명은 참석해야 분배가 의미 있음. 비참석은 attended:false 로.
-  attendees: z.array(SettlementRoundAttendeeInput).min(1).max(20),
+  // 100 은 큰 동호회·회사 회식까지 안전하게 커버. DB/계산기 모두 선형 비용.
+  attendees: z.array(SettlementRoundAttendeeInput).min(1).max(100),
 });
 export type SettlementRoundInputType = z.infer<typeof SettlementRoundInput>;
 
@@ -128,7 +129,7 @@ export type SettlementSessionType = z.infer<typeof SettlementSession>;
 
 export const CreateSettlementInput = z.object({
   rounds: z.array(SettlementRoundInput).min(1).max(10),
-  participants: z.array(SettlementParticipantInput).min(1).max(20),
+  participants: z.array(SettlementParticipantInput).min(1).max(100),
 });
 export type CreateSettlementInputType = z.infer<typeof CreateSettlementInput>;
 
