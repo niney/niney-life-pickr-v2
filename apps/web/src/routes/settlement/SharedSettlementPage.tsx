@@ -49,7 +49,7 @@ export const SharedSettlementPage = () => {
       : s.restaurantName;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background lg:max-w-7xl">
       <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background px-4 py-3">
         <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Receipt className="size-4" />
@@ -60,24 +60,30 @@ export const SharedSettlementPage = () => {
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 px-4 py-6">
-        <SessionSummaryCard session={s} />
-        <ParticipantsCard session={s} />
-        <SettlementBreakdownTable session={s} />
-        {s.rounds.map((r) => (
-          <div key={r.id} className="space-y-3">
-            {r.warning && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <p>
-                  {s.rounds.length > 1 ? `${r.orderIndex + 1}차 · ` : ''}
-                  {r.warning}
-                </p>
-              </div>
-            )}
-            <RoundItemsCard round={r} total={s.rounds.length} />
-          </div>
-        ))}
+      {/* 데스크탑(lg+): 좌(요약·참여자·차수별) + 우(정산표 sticky) 2컬럼. */}
+      <div className="flex-1 px-4 py-6 lg:grid lg:grid-cols-[minmax(0,440px)_1fr] lg:items-start lg:gap-6">
+        <div className="space-y-4">
+          <SessionSummaryCard session={s} />
+          <ParticipantsCard session={s} />
+          {s.rounds.map((r) => (
+            <div key={r.id} className="space-y-3">
+              {r.warning && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <p>
+                    {s.rounds.length > 1 ? `${r.orderIndex + 1}차 · ` : ''}
+                    {r.warning}
+                  </p>
+                </div>
+              )}
+              <RoundItemsCard round={r} total={s.rounds.length} />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 lg:mt-0 lg:sticky lg:top-[60px]">
+          <SettlementBreakdownTable session={s} />
+        </div>
       </div>
 
       <footer className="mt-auto border-t bg-muted/30 px-4 py-3 text-center text-xs text-muted-foreground">

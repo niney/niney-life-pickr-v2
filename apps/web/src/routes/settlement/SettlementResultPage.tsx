@@ -66,7 +66,7 @@ export const SettlementResultPage = () => {
       : s.restaurantName;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background lg:max-w-7xl">
       <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background px-3 py-2.5">
         <Button type="button" variant="ghost" size="sm" onClick={handleBack} aria-label="뒤로">
           <ChevronLeft className="size-4" />
@@ -116,31 +116,37 @@ export const SettlementResultPage = () => {
         onClose={() => setShareOpen(false)}
       />
 
-      <div className="flex-1 space-y-4 px-4 py-6">
-        <SessionSummaryCard session={s} />
+      {/* 데스크탑(lg+): 좌(요약·참여자·차수별) + 우(정산표 sticky) 2컬럼.
+          모바일/태블릿: 1컬럼 stack 그대로 — 정산표는 가로 스크롤로 처리. */}
+      <div className="flex-1 px-4 py-6 lg:grid lg:grid-cols-[minmax(0,440px)_1fr] lg:items-start lg:gap-6">
+        <div className="space-y-4">
+          <SessionSummaryCard session={s} />
 
-        <ParticipantsCard session={s} onEdit={handleEdit} />
+          <ParticipantsCard session={s} onEdit={handleEdit} />
 
-        {/* 정산표 — 참여자 × (차수 × 카테고리) 매트릭스. 캡처해 공유하기 좋게
-            sticky 이름/총계, 합계 행, 가로 스크롤. */}
-        <SettlementBreakdownTable session={s} />
+          {/* 차수별 영수증 + 항목 카드. 차수 1개여도 동일 컴포넌트로 표시. */}
+          {s.rounds.map((r) => (
+            <div key={r.id} className="space-y-3">
+              {r.warning && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <p>
+                    {s.rounds.length > 1 ? `${r.orderIndex + 1}차 · ` : ''}
+                    {r.warning}
+                  </p>
+                </div>
+              )}
+              {r.receiptPreviewUrl && <ReceiptCard previewUrl={r.receiptPreviewUrl} />}
+              <RoundItemsCard round={r} total={s.rounds.length} />
+            </div>
+          ))}
+        </div>
 
-        {/* 차수별 영수증 + 항목 카드. 차수 1개여도 동일 컴포넌트로 표시. */}
-        {s.rounds.map((r) => (
-          <div key={r.id} className="space-y-3">
-            {r.warning && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <p>
-                  {s.rounds.length > 1 ? `${r.orderIndex + 1}차 · ` : ''}
-                  {r.warning}
-                </p>
-              </div>
-            )}
-            {r.receiptPreviewUrl && <ReceiptCard previewUrl={r.receiptPreviewUrl} />}
-            <RoundItemsCard round={r} total={s.rounds.length} />
-          </div>
-        ))}
+        {/* 정산표 — 참여자 × (차수 × 카테고리) 매트릭스. 데스크탑에선
+            우측에 sticky 로 따라다녀 좌측 스크롤 중에도 항상 보임. */}
+        <div className="mt-4 lg:mt-0 lg:sticky lg:top-[60px]">
+          <SettlementBreakdownTable session={s} />
+        </div>
       </div>
     </main>
   );
