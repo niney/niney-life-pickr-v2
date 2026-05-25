@@ -61,23 +61,51 @@ export const SettlementRound = z.object({
   // 원본 사진은 별도 인증 라우트로만 — 공유 응답에선 빠진다.
   receiptPreviewUrl: z.string().nullable(),
   itemsSubtotal: z.number().int().nonnegative(),
+  // 차수 할인 — 영수증의 쿠폰/멤버십 등. 1차에 1건만 (여러 건은 합산해서
+  // 한 줄로 넣는다). discountAmount=null 이면 할인 없음, 양수면
+  // discountCategory 가 가리키는 카테고리 풀에서 차감 (계산기에서 자연
+  // 반영). UI 상 정산표는 풀 컬럼 합이 줄어들고, 항목 카드는 '할인 -X' 줄.
+  discountAmount: z.number().int().positive().nullable(),
+  discountCategory: ReceiptItemCategory.nullable(),
   items: z.array(SettlementItem),
   attendees: z.array(SettlementRoundAttendee),
 });
 export type SettlementRoundType = z.infer<typeof SettlementRound>;
 
-export const SettlementRoundInput = z.object({
-  restaurantPlaceId: z.string().min(1),
-  source: SettlementSource,
-  totalAmount: z.number().int().nonnegative().nullable(),
-  warning: z.string().nullable(),
-  // 영수증 분기에서 업로드한 이미지 토큰. MANUAL 은 null.
-  receiptImageToken: z.string().nullable(),
-  items: z.array(SettlementItemInput).min(1).max(200),
-  // round 마다 최소 1명은 참석해야 분배가 의미 있음. 비참석은 attended:false 로.
-  // 100 은 큰 동호회·회사 회식까지 안전하게 커버. DB/계산기 모두 선형 비용.
-  attendees: z.array(SettlementRoundAttendeeInput).min(1).max(100),
-});
+export const SettlementRoundInput = z
+  .object({
+    restaurantPlaceId: z.string().min(1),
+    source: SettlementSource,
+    totalAmount: z.number().int().nonnegative().nullable(),
+    warning: z.string().nullable(),
+    // 영수증 분기에서 업로드한 이미지 토큰. MANUAL 은 null.
+    receiptImageToken: z.string().nullable(),
+    // 할인 — null/null 또는 (양수, 카테고리) 페어. 풀 음수 차단은 아래 refine.
+    // 키 자체가 빠진 페이로드(기존 클라이언트)는 둘 다 null 로 본다.
+    discountAmount: z.number().int().positive().nullable().optional().default(null),
+    discountCategory: ReceiptItemCategory.nullable().optional().default(null),
+    items: z.array(SettlementItemInput).min(1).max(200),
+    // round 마다 최소 1명은 참석해야 분배가 의미 있음. 비참석은 attended:false 로.
+    // 100 은 큰 동호회·회사 회식까지 안전하게 커버. DB/계산기 모두 선형 비용.
+    attendees: z.array(SettlementRoundAttendeeInput).min(1).max(100),
+  })
+  .refine((r) => (r.discountAmount == null) === (r.discountCategory == null), {
+    message: '할인 금액과 카테고리는 함께 설정해야 합니다.',
+    path: ['discountAmount'],
+  })
+  .refine(
+    (r) => {
+      if (r.discountAmount == null || r.discountCategory == null) return true;
+      const pool = r.items
+        .filter((it) => it.category === r.discountCategory)
+        .reduce((s, it) => s + it.amount, 0);
+      return pool >= r.discountAmount;
+    },
+    {
+      message: '할인 금액이 해당 카테고리 풀을 초과합니다.',
+      path: ['discountAmount'],
+    },
+  );
 export type SettlementRoundInputType = z.infer<typeof SettlementRoundInput>;
 
 // 마스터 참여자. excludeXxx 는 default — round 가 override 하지 않은 차수에서

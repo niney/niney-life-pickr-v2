@@ -209,6 +209,19 @@ export const RoundItemsCard = ({
             <div className="shrink-0 text-sm">{it.amount.toLocaleString('ko-KR')}원</div>
           </li>
         ))}
+        {round.discountAmount != null && round.discountCategory != null && (
+          <li className="flex items-center justify-between gap-2 py-2 text-emerald-700 dark:text-emerald-400">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">할인</div>
+              <div className="mt-0.5 text-xs opacity-80">
+                {CATEGORY_LABEL[round.discountCategory]} 풀에서 차감
+              </div>
+            </div>
+            <div className="shrink-0 text-sm font-semibold">
+              −{round.discountAmount.toLocaleString('ko-KR')}원
+            </div>
+          </li>
+        )}
       </ul>
     </CardContent>
   </Card>

@@ -87,6 +87,10 @@ export interface DraftRound {
   totalAmount: number | null;
   warning: string | null;
   attendances: DraftAttendance[];
+  // 차수 할인 — null 페어면 할인 없음, (양수, 카테고리) 페어면 해당 카테고리
+  // 풀에서 차감. UI 가 setRoundDiscount 로 한 번에 설정/해제.
+  discountAmount: number | null;
+  discountCategory: ReceiptItemCategoryType | null;
 }
 
 export interface SettlementDraft {
@@ -118,6 +122,8 @@ const newRound = (placeId: string, placeName: string, participants: DraftPartici
   totalAmount: null,
   warning: null,
   attendances: participants.map((p) => emptyAttendance(p.clientId)),
+  discountAmount: null,
+  discountCategory: null,
 });
 
 interface SettlementDraftStore extends SettlementDraft {
@@ -186,6 +192,13 @@ interface SettlementDraftStore extends SettlementDraft {
   // source/영수증 등은 건드리지 않는다 — '2차도 같은 인원·같은 옵션' 케이스를
   // 한 번에 적용하는 용도.
   copyRoundAttendancesFrom(targetRoundClientId: string, sourceRoundClientId: string): void;
+
+  // 차수 할인 설정 — null 이면 할인 제거. 양 필드 둘 다 세팅하거나 둘 다 null.
+  // (스토어는 검증하지 않음 — 풀 음수 검증은 zod refine 이 담당.)
+  setRoundDiscount(
+    roundClientId: string,
+    discount: { amount: number; category: ReceiptItemCategoryType } | null,
+  ): void;
 }
 
 // crypto.randomUUID 가 없는 환경(아주 오래된 브라우저) 폴백.
@@ -402,6 +415,19 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
           ),
         }));
       },
+      setRoundDiscount(roundClientId, discount) {
+        set((s) => ({
+          rounds: s.rounds.map((r) =>
+            r.clientId === roundClientId
+              ? {
+                  ...r,
+                  discountAmount: discount?.amount ?? null,
+                  discountCategory: discount?.category ?? null,
+                }
+              : r,
+          ),
+        }));
+      },
       copyRoundAttendancesFrom(targetRoundClientId, sourceRoundClientId) {
         set((s) => {
           const source = s.rounds.find((r) => r.clientId === sourceRoundClientId);
@@ -439,9 +465,21 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       name: 'settlement-draft-v1',
       // v1 → v2: 평면 draft (한 식당 1 round 모델) → rounds 배열. 옛 입력은
       // 1차 round 1개로 변환, 모든 마스터 참여자는 attended=true.
-      version: 2,
+      // v2 → v3: round 에 discountAmount/discountCategory 필드 추가 (null).
+      version: 3,
       migrate: (persisted, fromVersion) => {
-        if (fromVersion >= 2) return persisted as SettlementDraft;
+        // v2 → v3: rounds 의 각 round 에 discount 필드 채워준다 (없으면 null).
+        if (fromVersion >= 2) {
+          const draft = persisted as SettlementDraft;
+          return {
+            ...draft,
+            rounds: draft.rounds.map((r) => ({
+              ...r,
+              discountAmount: r.discountAmount ?? null,
+              discountCategory: r.discountCategory ?? null,
+            })),
+          };
+        }
         const old = persisted as Partial<{
           placeId: string | null;
           source: SettlementSourceType | null;
@@ -470,6 +508,8 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
           totalAmount: old.totalAmount ?? null,
           warning: old.warning ?? null,
           attendances: participants.map((p) => emptyAttendance(p.clientId)),
+          discountAmount: null,
+          discountCategory: null,
         };
         return { participants, rounds: [round] };
       },

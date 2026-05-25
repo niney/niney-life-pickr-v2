@@ -15,6 +15,7 @@ import {
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { RoundExceptionsEditor } from './RoundExceptionsEditor';
+import { RoundDiscountEditor } from './RoundDiscountEditor';
 import { CopyCheck } from 'lucide-react';
 
 interface Props {
@@ -51,7 +52,9 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [breakdownOpen, setBreakdownOpen] = useState<string | null>(null);
 
-  // 차수별 effective 계산 — round override 적용된 exclude 플래그.
+  // 차수별 effective 계산 — round override 적용된 exclude 플래그 + 차수 할인.
+  // 풀 초과 등 invalid 상태에서도 미리보기는 그려야 하므로 검증은 calculator
+  // 내부 max(0) 클램프에 맡긴다 (저장은 zod refine 으로 한 번 더 차단).
   const calc = useMemo(() => {
     return calculateMultiRoundShares({
       participantCount: draft.participants.length,
@@ -70,6 +73,10 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
               ...eff,
             };
           }),
+        discount:
+          r.discountAmount != null && r.discountCategory != null && r.discountAmount > 0
+            ? { amount: r.discountAmount, category: r.discountCategory }
+            : null,
       })),
     });
   }, [draft.participants, draft.rounds]);
@@ -77,14 +84,29 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
   const handleSave = async () => {
     setError(null);
     // 모든 차수에 source 가 설정돼 있어야 한다 (Step2 게이팅에서 막혔지만 한번 더).
-    for (const r of draft.rounds) {
+    for (let idx = 0; idx < draft.rounds.length; idx += 1) {
+      const r = draft.rounds[idx]!;
+      const label = `${idx + 1}차${r.placeName ? ` (${r.placeName})` : ''}`;
       if (!r.source) {
         setError('입력 방식이 결정되지 않은 차수가 있습니다.');
         return;
       }
       if (!r.attendances.some((a) => a.attended)) {
-        setError(`${r.placeName || '차수'} 에 참석자가 한 명도 없습니다.`);
+        setError(`${label} 에 참석자가 한 명도 없습니다.`);
         return;
+      }
+      if (r.discountAmount != null && r.discountCategory != null) {
+        if (r.discountAmount <= 0) {
+          setError(`${label} 의 할인 금액을 입력하거나 삭제하세요.`);
+          return;
+        }
+        const pool = r.items
+          .filter((it) => it.category === r.discountCategory)
+          .reduce((s, it) => s + it.amount, 0);
+        if (r.discountAmount > pool) {
+          setError(`${label} 의 할인이 해당 카테고리 풀(${pool.toLocaleString('ko-KR')}원)을 초과합니다.`);
+          return;
+        }
       }
     }
     try {
@@ -95,6 +117,8 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
           totalAmount: r.totalAmount,
           warning: r.warning,
           receiptImageToken: r.receiptImageToken,
+          discountAmount: r.discountAmount,
+          discountCategory: r.discountCategory,
           items: r.items.map((it) => ({
             name: it.name,
             unitPrice: it.unitPrice,
@@ -293,6 +317,9 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
             <CardContent className="space-y-3">
               {/* 옵션 C 핵심 — 평소엔 비어 있고, 필요할 때 명시적 칩 추가. */}
               <RoundExceptionsEditor round={r} participants={draft.participants} />
+
+              {/* 차수 할인 입력. Step3 와 같은 컴포넌트로 일관된 UX. */}
+              <RoundDiscountEditor round={r} />
 
               {/* 카테고리 풀 breakdown 은 접힘. 디버깅·확인용이라 default 닫힘. */}
               <div className="border-t pt-2">

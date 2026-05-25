@@ -79,8 +79,12 @@ model SettlementRound {
   warning           String?
   // 영수증 이미지 토큰 — data/receipts/<token>.jpg. MANUAL 차수는 null.
   receiptImageToken String?
-  // 이 차수 items.amount 합. session.grandTotal 의 부품.
+  // 이 차수 items.amount 합 - discountAmount. session.grandTotal 의 부품.
   itemsSubtotal     Int
+  // 차수 할인 — 영수증 쿠폰/멤버십 등. null 이면 할인 없음. 양수면 한
+  // 카테고리(discountCategory) 풀에서만 차감. 풀 음수 차단은 zod refine.
+  discountAmount    Int?
+  discountCategory  String?
 
   session    SettlementSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   items      SettlementItem[]

@@ -13,6 +13,7 @@ import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MenuPickerDialog } from './MenuPickerDialog';
+import { RoundDiscountEditor } from './RoundDiscountEditor';
 
 interface Props {
   onBack: () => void;
@@ -44,15 +45,23 @@ export const Step3Edit = ({ onBack, onNext }: Props) => {
   const safeIdx = Math.min(activeIdx, Math.max(0, rounds.length - 1));
   const active = rounds[safeIdx];
 
-  // 모든 차수가 다음으로 갈 수 있을 때만 진행. 한 차수라도 항목 0개 또는
-  // 누락 항목이 있으면 막는다.
+  // 모든 차수가 다음으로 갈 수 있을 때만 진행. 한 차수라도 항목 0개·누락
+  // 항목·할인 풀 초과·할인 0원 활성 상태가 있으면 막는다.
   const canProceed =
     rounds.length > 0 &&
-    rounds.every(
-      (r) =>
-        r.items.length > 0 &&
-        r.items.every((it) => it.name.trim().length > 0 && it.amount > 0),
-    );
+    rounds.every((r) => {
+      if (r.items.length === 0) return false;
+      if (r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0))
+        return false;
+      if (r.discountAmount != null && r.discountCategory != null) {
+        if (r.discountAmount <= 0) return false;
+        const pool = r.items
+          .filter((it) => it.category === r.discountCategory)
+          .reduce((s, it) => s + it.amount, 0);
+        if (r.discountAmount > pool) return false;
+      }
+      return true;
+    });
 
   return (
     <section className="space-y-4">
@@ -71,9 +80,18 @@ export const Step3Edit = ({ onBack, onNext }: Props) => {
         >
           {rounds.map((r, idx) => {
             const isActive = idx === safeIdx;
+            const discountInvalid =
+              r.discountAmount != null && r.discountCategory != null
+                ? r.discountAmount <= 0 ||
+                  r.discountAmount >
+                    r.items
+                      .filter((it) => it.category === r.discountCategory)
+                      .reduce((s, it) => s + it.amount, 0)
+                : false;
             const invalid =
               r.items.length === 0 ||
-              r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0);
+              r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0) ||
+              discountInvalid;
             return (
               <button
                 key={r.clientId}
@@ -272,10 +290,19 @@ const RoundEditor = ({
         </Button>
       </div>
 
+      <div className="rounded-md border bg-muted/30 px-3 py-2">
+        <RoundDiscountEditor round={round} />
+      </div>
+
       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
         <span className="text-sm">차수 합계</span>
         <span className="text-base font-semibold">
-          {subtotal.toLocaleString('ko-KR')}원
+          {(subtotal - (round.discountAmount ?? 0)).toLocaleString('ko-KR')}원
+          {round.discountAmount ? (
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              ({subtotal.toLocaleString('ko-KR')} − {round.discountAmount.toLocaleString('ko-KR')})
+            </span>
+          ) : null}
         </span>
       </div>
 

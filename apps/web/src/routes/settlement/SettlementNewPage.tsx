@@ -110,6 +110,8 @@ export const SettlementNewPage = () => {
         excludeNonAlcoholOverride: a.excludeNonAlcoholOverride,
         excludeSideOverride: a.excludeSideOverride,
       })),
+      discountAmount: r.discountAmount,
+      discountCategory: r.discountCategory,
     }));
     useSettlementDraftStore.setState({
       participants: participantsDraft,

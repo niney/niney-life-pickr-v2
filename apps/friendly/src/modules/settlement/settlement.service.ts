@@ -81,6 +81,8 @@ interface RowRound {
   warning: string | null;
   receiptImageToken: string | null;
   itemsSubtotal: number;
+  discountAmount: number | null;
+  discountCategory: string | null;
   items: Array<{
     id: string;
     name: string;
@@ -231,6 +233,8 @@ export class SettlementService {
             warning: r.warning,
             receiptImageToken: validatedTokens[rIdx]!,
             itemsSubtotal: calc.perRound[rIdx]!.itemsSubtotal,
+            discountAmount: r.discountAmount,
+            discountCategory: r.discountCategory,
           },
         });
 
@@ -461,6 +465,8 @@ export class SettlementService {
             warning: r.warning,
             receiptImageToken: validatedTokens[rIdx]!,
             itemsSubtotal: calc.perRound[rIdx]!.itemsSubtotal,
+            discountAmount: r.discountAmount,
+            discountCategory: r.discountCategory,
           },
         });
 
@@ -684,6 +690,10 @@ export class SettlementService {
             ...eff,
           };
         }),
+      discount:
+        round.discountAmount != null && round.discountCategory != null
+          ? { amount: round.discountAmount, category: round.discountCategory }
+          : null,
     };
   }
 
@@ -759,6 +769,10 @@ export class SettlementService {
         ? Routes.SettlementExtraction.preview(row.receiptImageToken)
         : null,
       itemsSubtotal: row.itemsSubtotal,
+      discountAmount: row.discountAmount,
+      discountCategory: row.discountCategory
+        ? (row.discountCategory as ReceiptItemCategoryType)
+        : null,
       items: row.items.map((it) => ({
         id: it.id,
         name: it.name,

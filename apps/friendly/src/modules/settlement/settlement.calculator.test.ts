@@ -334,6 +334,69 @@ describe('calculateMultiRoundShares', () => {
     expect(r.grandTotal).toBe(0);
   });
 
+  it('per-round discount subtracts from the targeted category pool', () => {
+    // 2명 모두 참석. SIDE 풀 12000, 할인 -3000 → 차감 후 9000 을 2명이 균등 분담.
+    // ALCOHOL 풀 4000 은 할인 영향 없음.
+    const r = calculateMultiRoundShares({
+      participantCount: 2,
+      rounds: [
+        {
+          items: [
+            { amount: 12000, category: 'SIDE' },
+            { amount: 4000, category: 'ALCOHOL' },
+          ],
+          attendees: [
+            { participantIndex: 0, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+            { participantIndex: 1, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+          ],
+          discount: { amount: 3000, category: 'SIDE' },
+        },
+      ],
+    });
+    const round = r.perRound[0]!;
+    // 풀 9000 / 2 = 4500, ALCOHOL 4000 / 2 = 2000 → 인당 6500.
+    expect(round.shareAmounts).toEqual([6500, 6500]);
+    expect(round.poolBreakdown.SIDE.poolAmount).toBe(9000);
+    expect(round.poolBreakdown.ALCOHOL.poolAmount).toBe(4000);
+    expect(round.itemsSubtotal).toBe(13000); // 16000 - 3000
+    expect(r.grandTotal).toBe(13000);
+    // 매트릭스 invariant — 행 합 = shareAmounts.
+    for (let i = 0; i < 2; i += 1) {
+      const rowSum =
+        (round.perCategoryShares.ALCOHOL[i] ?? 0) +
+        (round.perCategoryShares.NON_ALCOHOL[i] ?? 0) +
+        (round.perCategoryShares.SIDE[i] ?? 0) +
+        (round.perCategoryShares.UNCATEGORIZED[i] ?? 0);
+      expect(rowSum).toBe(round.shareAmounts[i]);
+    }
+  });
+
+  it('discount equal to the pool zeroes that category share', () => {
+    // SIDE 풀 8000 에 8000 할인 → SIDE 컬럼 모두 0. ALCOHOL 2000 만 분담.
+    const r = calculateMultiRoundShares({
+      participantCount: 2,
+      rounds: [
+        {
+          items: [
+            { amount: 8000, category: 'SIDE' },
+            { amount: 2000, category: 'ALCOHOL' },
+          ],
+          attendees: [
+            { participantIndex: 0, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+            { participantIndex: 1, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+          ],
+          discount: { amount: 8000, category: 'SIDE' },
+        },
+      ],
+    });
+    const round = r.perRound[0]!;
+    expect(round.poolBreakdown.SIDE.poolAmount).toBe(0);
+    expect(round.perCategoryShares.SIDE).toEqual([0, 0]);
+    // ALCOHOL 1000 씩.
+    expect(round.shareAmounts).toEqual([1000, 1000]);
+    expect(round.itemsSubtotal).toBe(2000);
+  });
+
   it('round perCategoryShares is master-indexed and zero for absentees', () => {
     // 2명. 1차에 A만 참석, B 불참. 1차 ALCOHOL 5000.
     const r = calculateMultiRoundShares({

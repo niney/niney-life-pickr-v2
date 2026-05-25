@@ -240,6 +240,10 @@ const useMatrix = (session: SharedSettlementSessionType): SettlementMatrix =>
             const eff = effectiveExcludes(master, a);
             return { participantIndex: idx, ...eff };
           }),
+        discount:
+          r.discountAmount != null && r.discountCategory != null
+            ? { amount: r.discountAmount, category: r.discountCategory }
+            : null,
       })),
     });
 

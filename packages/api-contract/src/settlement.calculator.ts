@@ -58,8 +58,19 @@ export interface CalculateOutput {
   perCategoryShares: Record<ReceiptItemCategoryType, number[]>;
 }
 
-export const calculateShares = (input: CalculateInput): CalculateOutput => {
-  const itemsSubtotal = input.items.reduce((sum, it) => sum + it.amount, 0);
+export const calculateShares = (
+  input: CalculateInput & {
+    // 옵션 — 한 카테고리 풀에서만 차감되는 단일 할인. 풀 음수 방어로 max(0, …)
+    // 클램프 (입력 검증은 스키마 refine 으로 막혀 있다).
+    discount?: { amount: number; category: ReceiptItemCategoryType } | null;
+  },
+): CalculateOutput => {
+  const discount = input.discount ?? null;
+  const discountedSubtotal = input.items.reduce(
+    (sum, it) => sum + it.amount,
+    0,
+  ) - (discount?.amount ?? 0);
+  const itemsSubtotal = Math.max(0, discountedSubtotal);
   const participantCount = input.participants.length;
 
   const shareAmounts = new Array<number>(participantCount).fill(0);
@@ -67,9 +78,13 @@ export const calculateShares = (input: CalculateInput): CalculateOutput => {
   const perCategoryShares = {} as CalculateOutput['perCategoryShares'];
 
   for (const category of CATEGORIES) {
-    const poolAmount = input.items
+    const rawPool = input.items
       .filter((it) => it.category === category)
       .reduce((sum, it) => sum + it.amount, 0);
+    const poolAmount =
+      discount && discount.category === category
+        ? Math.max(0, rawPool - discount.amount)
+        : rawPool;
 
     // 어떤 참여자가 이 풀에 참여하는가. UNCATEGORIZED 는 전원 참여.
     const excludeKey = EXCLUDE_KEY[category];
@@ -158,6 +173,8 @@ export interface RoundAttendeeCalcInput {
 export interface RoundCalcInput {
   items: Pick<SettlementItemInputType, 'amount' | 'category'>[];
   attendees: RoundAttendeeCalcInput[];
+  // 한 풀에서만 차감되는 단일 할인. 없으면 null/undefined.
+  discount?: { amount: number; category: ReceiptItemCategoryType } | null;
 }
 
 export interface MultiRoundCalcInput {
@@ -217,6 +234,7 @@ export const calculateMultiRoundShares = (
         excludeNonAlcohol: a.excludeNonAlcohol,
         excludeSide: a.excludeSide,
       })),
+      discount: round.discount ?? null,
     });
 
     // 참석자 인덱스 → 마스터 인덱스로 되돌려 share 배열을 부풀린다.
