@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Tailwind v4 의 dark variant 는 default 가 prefers-color-scheme media query 라
+ * 사용자가 시스템 라이트 모드일 땐 앱의 .dark 토글로 켠 다크 테마에서 dark:
+ * utility 가 작동하지 않는다. 이 codebase 는 html.dark 클래스 토글 방식이므로
+ * dark variant 를 명시적으로 .dark 셀렉터에 묶는다 — 이 한 줄이 빠지면
+ * shadcn 의 CSS variable (background/foreground 등) 만 토글되고 모든
+ * dark:bg-*, dark:text-* 등 Tailwind utility 가 시스템 다크 사용자한테만
+ * 작동하는 일관성 깨진 상태가 된다. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* shadcn/ui CSS variables (Tailwind v4 / OKLCH, Stone warm tone for borders).
  * Light mode is default. Toggle dark mode by adding .dark to <html>.
  * These variables are consumed by shadcn components via @theme below. */
