@@ -4,6 +4,7 @@ import type { SettlementContactType } from '@repo/api-contract';
 import { useSettlementDraftStore } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { useSettlementPrefsStore } from '~/stores/settlementPrefsStore';
 import { ContactPickerDialog } from './ContactPickerDialog';
 import { ContactSuggestions } from './ContactSuggestions';
 
@@ -28,6 +29,14 @@ export const Step1Participants = ({ onNext }: Props) => {
   );
   const updateParticipant = useSettlementDraftStore((s) => s.updateParticipant);
   const removeParticipant = useSettlementDraftStore((s) => s.removeParticipant);
+
+  // 단골 픽 없이 직접 추가하는 새 행의 기본 exclude 값. 사용자가 매번 같은
+  // 옵션을 반복 체크하는 부담을 줄이려는 목적. 단골에서 추가하면 단골값이
+  // 우선이라 이 기본값은 무시된다.
+  const newExcludes = useSettlementPrefsStore((s) => s.newParticipantExcludes);
+  const setNewExclude = useSettlementPrefsStore(
+    (s) => s.setNewParticipantExclude,
+  );
 
   const [submitAttempt, setSubmitAttempt] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -144,9 +153,7 @@ export const Step1Participants = ({ onNext }: Props) => {
       const newId = addParticipant({
         name: '',
         nickname: '',
-        excludeAlcohol: false,
-        excludeNonAlcohol: false,
-        excludeSide: false,
+        ...newExcludes,
       });
       setPendingFocusId(newId);
     } else {
@@ -180,6 +187,28 @@ export const Step1Participants = ({ onNext }: Props) => {
           구분할 수 있고, 술/안주 등 특이사항은 체크박스로 표시하면 해당 카테고리는 그 사람을
           제외하고 나눠 부담합니다.
         </p>
+      </div>
+
+      {/* 새로 추가하는 행의 기본 exclude — 단골에서 픽한 행은 단골값이 우선
+          이라 영향 없음. 자주 쓰는 옵션을 한 번 체크해 두면 매번 반복 안 해도
+          된다. localStorage 라 다음 정산까지 유지. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <span className="font-medium">새 행 기본:</span>
+        <DefaultExcludeToggle
+          label="주류 안 함"
+          checked={newExcludes.excludeAlcohol}
+          onChange={(v) => setNewExclude('excludeAlcohol', v)}
+        />
+        <DefaultExcludeToggle
+          label="비주류 안 함"
+          checked={newExcludes.excludeNonAlcohol}
+          onChange={(v) => setNewExclude('excludeNonAlcohol', v)}
+        />
+        <DefaultExcludeToggle
+          label="안주 안 먹음"
+          checked={newExcludes.excludeSide}
+          onChange={(v) => setNewExclude('excludeSide', v)}
+        />
       </div>
 
       <div className="space-y-3">
@@ -348,9 +377,7 @@ export const Step1Participants = ({ onNext }: Props) => {
               addParticipant({
                 name: '',
                 nickname: '',
-                excludeAlcohol: false,
-                excludeNonAlcohol: false,
-                excludeSide: false,
+                ...newExcludes,
               })
             }
           >
@@ -428,5 +455,26 @@ const ExcludeToggle = ({
       onChange={(e) => onChange(e.target.checked)}
     />
     <span>{label}</span>
+  </label>
+);
+
+// 새 행 기본값 row 의 칩 — 메인 ExcludeToggle 보다 작고 회색조.
+const DefaultExcludeToggle = ({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange(v: boolean): void;
+}) => (
+  <label className="flex cursor-pointer items-center gap-1">
+    <input
+      type="checkbox"
+      className="size-3.5"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+    <span className={checked ? 'text-foreground' : ''}>{label}</span>
   </label>
 );
