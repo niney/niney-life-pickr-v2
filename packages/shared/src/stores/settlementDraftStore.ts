@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import type {
   ReceiptItemCategoryType,
   SettlementParticipantInputType,
@@ -7,8 +7,38 @@ import type {
 } from '@repo/api-contract';
 
 // 정산하기 다단계 흐름의 draft 상태. 새로고침 시에도 진행 중인 입력을
-// 잃지 않게 sessionStorage 에 persist. 식당 별 1개만 보관 — 다른 식당으로
-// 가면 reset.
+// 잃지 않게 persist. 식당 별 1개만 보관 — 다른 식당으로 가면 reset.
+//
+// storage 어댑터는 플랫폼별로 다르다 — 웹은 sessionStorage(브라우저 닫으면
+// 사라짐), 앱은 AsyncStorage(앱 재실행에도 유지). 모듈 로드 시점엔 어느
+// 플랫폼인지 모르므로 lazy resolver 로 처리하고, 앱은 entry 에서
+// setSettlementDraftStorage 로 어댑터를 주입한다. 미주입 + window 도 없으면
+// no-op 폴백 → persist 가 메모리만 쓰는 효과(SSR/테스트 안전).
+
+let injectedStorage: StateStorage | null = null;
+
+/**
+ * RN/외부 환경에서 persist 용 storage 를 주입한다. 모듈 import 후 한 번만
+ * 호출하면 된다. 미호출 + 브라우저 환경이면 window.sessionStorage 가 자동
+ * 사용된다.
+ */
+export const setSettlementDraftStorage = (storage: StateStorage): void => {
+  injectedStorage = storage;
+};
+
+const NO_OP_STORAGE: StateStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+};
+
+const resolveStorage = (): StateStorage => {
+  if (injectedStorage) return injectedStorage;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    return window.sessionStorage;
+  }
+  return NO_OP_STORAGE;
+};
 
 export interface DraftItem {
   // client-only id — 추가/삭제/순서 변경에 사용. 저장 시 서버가 새 id 부여.
@@ -171,17 +201,10 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
     }),
     {
       name: 'settlement-draft-v1',
-      // 새로고침은 살리되 브라우저 닫으면 사라지게 sessionStorage.
-      storage: createJSONStorage(() => {
-        if (typeof window !== 'undefined') return window.sessionStorage;
-        // SSR/test 에서 sessionStorage 가 없을 때를 위한 no-op. createJSONStorage
-        // 가 받는 StateStorage 는 Storage 보다 좁아 길이/clear 등이 없어도 된다.
-        return {
-          getItem: () => null,
-          setItem: () => undefined,
-          removeItem: () => undefined,
-        };
-      }),
+      // resolver 는 호출 시점에 평가 — 앱이 entry 에서 setStorage 를 호출한 뒤
+      // 첫 read/write 가 일어나도록 zustand 가 보장. 웹은 sessionStorage 가
+      // 자동 선택돼 기존 동작 유지.
+      storage: createJSONStorage(() => resolveStorage()),
     },
   ),
 );
