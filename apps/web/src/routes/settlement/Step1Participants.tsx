@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2, UserRoundPlus, X } from 'lucide-react';
 import type { SettlementContactType } from '@repo/api-contract';
 import { useSettlementDraftStore } from '@repo/shared';
@@ -38,6 +38,21 @@ export const Step1Participants = ({ onNext }: Props) => {
   // 별칭 칸을 사용자가 명시적으로 펼친 행. nickname 이 채워진 행은 자동으로
   // 두 칸 모드라 이 Set 와 무관하게 노출.
   const [aliasOpened, setAliasOpened] = useState<Set<string>>(new Set());
+
+  // 행마다 이름 input ref 보관 — Enter 로 새 행을 추가한 직후 그 행의 input
+  // 으로 focus 를 옮기는 데 사용. participants 가 동적이라 Map 으로 관리.
+  const nameRefs = useRef(new Map<string, HTMLInputElement | null>());
+  // 다음 render 후 focus 할 행. effect 가 ref 로 focus 호출 후 null 로 리셋.
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    const el = nameRefs.current.get(pendingFocusId);
+    if (el) {
+      el.focus();
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, participants]);
 
   const toggleAlias = (clientId: string, open: boolean) => {
     setAliasOpened((cur) => {
@@ -96,6 +111,48 @@ export const Step1Participants = ({ onNext }: Props) => {
         contactId: c.id,
       })),
     );
+  };
+
+  // Enter: 마지막 행이면 새 참여자 추가 + 그 행으로 focus 이동, 중간 행이면
+  // 다음 기존 행으로 focus 만 이동 (Tab 보조). 안전 규칙:
+  // - 한글 IME 조립 중인 Enter (compositionend ↔ keydown race) 는 무시
+  // - 빈 행에선 새 행 추가 안 함 (preventDefault 만 — 폼 submit 사고 방지)
+  //
+  // 자동완성 드롭다운은 클릭으로만 픽 (키보드 네비 미지원). Enter 가 드롭다운
+  // 픽 의미가 아니므로 dropdown 열림 상태에서도 그대로 새 행 동작. 서버가
+  // normalizedKey 로 contact 매칭하므로 contactId 힌트 없이 새 행으로 가도
+  // 같은 단골과 자동 매칭된다.
+  const handleRowEnter = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    rowClientId: string,
+    _isAliasInput: boolean,
+  ) => {
+    if (e.key !== 'Enter') return;
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    const idx = participants.findIndex((p) => p.clientId === rowClientId);
+    const p = participants[idx];
+    if (!p) return;
+    const nm = (p.name ?? '').trim();
+    const nick = (p.nickname ?? '').trim();
+    if (nm.length === 0 && nick.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    const isLast = idx === participants.length - 1;
+    if (isLast) {
+      const newId = addParticipant({
+        name: '',
+        nickname: '',
+        excludeAlcohol: false,
+        excludeNonAlcohol: false,
+        excludeSide: false,
+      });
+      setPendingFocusId(newId);
+    } else {
+      const nextId = participants[idx + 1]?.clientId;
+      if (nextId) setPendingFocusId(nextId);
+    }
   };
 
   const errors = useMemo(() => {
@@ -174,6 +231,12 @@ export const Step1Participants = ({ onNext }: Props) => {
                       type="text"
                       value={p.name ?? ''}
                       placeholder={showAlias ? '홍길동' : '홍길동 또는 길동이'}
+                      ref={(el) => {
+                        // 행이 사라지면 Map 에서 제거. 같은 clientId 의 input 이
+                        // 다시 마운트되면 새 ref 로 덮어쓴다.
+                        if (el) nameRefs.current.set(p.clientId, el);
+                        else nameRefs.current.delete(p.clientId);
+                      }}
                       onFocus={() => setFocusedClientId(p.clientId)}
                       // blur 가 mousedown 보다 늦게 발동하도록 microtask 늦춤 —
                       // ContactSuggestions 의 onMouseDown 이 먼저 잡혀 클릭이
@@ -185,6 +248,7 @@ export const Step1Participants = ({ onNext }: Props) => {
                           );
                         }, 0);
                       }}
+                      onKeyDown={(e) => handleRowEnter(e, p.clientId, false)}
                       onChange={(e) =>
                         // 사용자가 이름을 직접 바꾸면 자동완성 매핑은 끊긴다.
                         // contactId 는 server hint 이고, normalizedKey 가 달라
@@ -211,6 +275,7 @@ export const Step1Participants = ({ onNext }: Props) => {
                         type="text"
                         value={p.nickname ?? ''}
                         placeholder="길동이"
+                        onKeyDown={(e) => handleRowEnter(e, p.clientId, true)}
                         onChange={(e) =>
                           updateParticipant(p.clientId, {
                             nickname: e.target.value,

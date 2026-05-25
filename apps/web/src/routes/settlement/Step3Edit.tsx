@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import type { ReceiptItemCategoryType } from '@repo/api-contract';
 import {
@@ -136,6 +136,52 @@ const RoundEditor = ({
   const removeRoundItem = useSettlementDraftStore((s) => s.removeRoundItem);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // 메뉴명 input ref Map — Enter 로 새 항목 추가 후 그 행에 focus 옮길 때 사용.
+  const nameRefs = useRef(new Map<string, HTMLInputElement | null>());
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    const el = nameRefs.current.get(pendingFocusId);
+    if (el) {
+      el.focus();
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, round.items]);
+
+  // Enter: 마지막 항목이면 새 빈 항목 추가 + 그 행 메뉴명 focus, 중간이면
+  // 다음 항목 메뉴명으로 focus 이동. 빈 이름이면 무시 (preventDefault 만).
+  // 한글 IME 조립 중 Enter 도 무시.
+  const handleItemNameEnter = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    itemClientId: string,
+  ) => {
+    if (e.key !== 'Enter') return;
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    const idx = round.items.findIndex((it) => it.clientId === itemClientId);
+    const it = round.items[idx];
+    if (!it) return;
+    if (it.name.trim().length === 0) {
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    const isLast = idx === round.items.length - 1;
+    if (isLast) {
+      const newId = addRoundItem(round.clientId, {
+        name: '',
+        unitPrice: null,
+        quantity: 1,
+        amount: 0,
+        category: 'UNCATEGORIZED',
+        matchedMenuName: null,
+      });
+      if (newId) setPendingFocusId(newId);
+    } else {
+      const nextId = round.items[idx + 1]?.clientId;
+      if (nextId) setPendingFocusId(nextId);
+    }
+  };
+
   // 메뉴 모달을 위한 식당 detail. 차수의 placeId 기준이라 1차/2차가 다른
   // 식당이면 각각 자기 메뉴를 가져온다.
   const detail = useRestaurantPublic(round.placeId);
@@ -193,6 +239,11 @@ const RoundEditor = ({
             onUpdate={(patch) => updateRoundItem(round.clientId, it.clientId, patch)}
             onRemove={() => removeRoundItem(round.clientId, it.clientId)}
             invalid={showInvalid && (it.name.trim().length === 0 || it.amount <= 0)}
+            nameRef={(el) => {
+              if (el) nameRefs.current.set(it.clientId, el);
+              else nameRefs.current.delete(it.clientId);
+            }}
+            onNameKeyDown={(e) => handleItemNameEnter(e, it.clientId)}
           />
         ))}
       </div>
@@ -255,9 +306,19 @@ interface ItemRowProps {
   onUpdate(patch: Partial<DraftItem>): void;
   onRemove(): void;
   invalid: boolean;
+  nameRef: (el: HTMLInputElement | null) => void;
+  onNameKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
-const ItemRow = ({ item, index, onUpdate, onRemove, invalid }: ItemRowProps) => {
+const ItemRow = ({
+  item,
+  index,
+  onUpdate,
+  onRemove,
+  invalid,
+  nameRef,
+  onNameKeyDown,
+}: ItemRowProps) => {
   return (
     <div
       className={
@@ -283,6 +344,8 @@ const ItemRow = ({ item, index, onUpdate, onRemove, invalid }: ItemRowProps) => 
             type="text"
             value={item.name}
             placeholder="예: 카스 500ml"
+            ref={nameRef}
+            onKeyDown={onNameKeyDown}
             onChange={(e) => onUpdate({ name: e.target.value })}
           />
         </Field>

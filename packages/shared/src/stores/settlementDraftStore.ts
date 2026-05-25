@@ -132,7 +132,9 @@ interface SettlementDraftStore extends SettlementDraft {
 
   // ── 마스터 참여자 ──────────────────────────────────────────────────
   setParticipants(participants: DraftParticipant[]): void;
-  addParticipant(p: Omit<DraftParticipant, 'clientId'>): void;
+  // 새 참여자 추가. 반환값은 새 행의 clientId — UI 가 곧장 그 행에 focus
+  // 하고 싶을 때 (예: Enter 로 새 행 추가) 활용.
+  addParticipant(p: Omit<DraftParticipant, 'clientId'>): string;
   // 단골 다중 선택 모달이 호출 — 이름·닉네임 둘 다 빈 기존 행을 정리한 뒤
   // 새 항목들을 뒤에 append. clientId 는 store 가 부여.
   addParticipantsAndCompact(items: Omit<DraftParticipant, 'clientId'>[]): void;
@@ -149,7 +151,9 @@ interface SettlementDraftStore extends SettlementDraft {
 
   // 차수 내 items 편집.
   setRoundItems(roundClientId: string, items: DraftItem[]): void;
-  addRoundItem(roundClientId: string, it: Omit<DraftItem, 'clientId'>): void;
+  // 새 항목 추가. 반환값은 새 항목의 clientId — UI 가 곧장 focus 하고 싶을 때
+  // (예: Enter 로 메뉴 행 추가) 활용. round 가 없으면 빈 문자열.
+  addRoundItem(roundClientId: string, it: Omit<DraftItem, 'clientId'>): string;
   updateRoundItem(
     roundClientId: string,
     itemClientId: string,
@@ -247,10 +251,12 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
         set((s) => ({ participants, rounds: syncAttendances(s.rounds, participants) }));
       },
       addParticipant(p) {
+        const clientId = newClientId();
         set((s) => {
-          const next = [...s.participants, { ...p, clientId: newClientId() }];
+          const next = [...s.participants, { ...p, clientId }];
           return { participants: next, rounds: syncAttendances(s.rounds, next) };
         });
+        return clientId;
       },
       addParticipantsAndCompact(items) {
         set((s) => {
@@ -303,13 +309,16 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
         }));
       },
       addRoundItem(roundClientId, it) {
+        const clientId = newClientId();
+        let added = false;
         set((s) => ({
-          rounds: s.rounds.map((r) =>
-            r.clientId === roundClientId
-              ? { ...r, items: [...r.items, { ...it, clientId: newClientId() }] }
-              : r,
-          ),
+          rounds: s.rounds.map((r) => {
+            if (r.clientId !== roundClientId) return r;
+            added = true;
+            return { ...r, items: [...r.items, { ...it, clientId }] };
+          }),
         }));
+        return added ? clientId : '';
       },
       updateRoundItem(roundClientId, itemClientId, patch) {
         set((s) => ({
