@@ -219,6 +219,10 @@ export const Ai = {
     `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/test`,
   providerModels: (id: string, purpose: string) =>
     `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/models`,
+  // 저장 없이 입력 폼의 키를 그대로 써서 모델 목록만 받아옴 — 신규 등록 시
+  // 키 검증 + 모델 선택을 한 번에 끝내려고 둔 미리보기 엔드포인트.
+  providerModelsPreview: (id: string, purpose: string) =>
+    `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/models/preview`,
 } as const;
 
 // 외부 지도 SDK 키 관리. AI 키와 별개 라우트로 둔다 — provider 식별자 외엔

@@ -137,6 +137,29 @@ export const LlmModelListResult = z.object({
 });
 export type LlmModelListResultType = z.infer<typeof LlmModelListResult>;
 
+// 키 입력 칸에서 저장 없이 바로 모델 목록을 받아오기 위한 미리보기.
+// 저장된 row 가 없거나 신규 입력한 키를 검증할 때 사용한다.
+export const PreviewLlmModelsInput = z.object({
+  apiKey: z.string().min(1).max(500),
+  baseUrl: z.string().url().optional(),
+});
+export type PreviewLlmModelsInputType = z.infer<typeof PreviewLlmModelsInput>;
+
+// 모델 목록 + 에러 분기. listModels 와 달리 미리보기에서는 잘못된 키를
+// 알려줘야 하므로 ok=false 분기를 명시한다.
+export const PreviewLlmModelsResult = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    models: z.array(z.string()),
+  }),
+  z.object({
+    ok: z.literal(false),
+    error: AiErrorCode,
+    message: z.string(),
+  }),
+]);
+export type PreviewLlmModelsResultType = z.infer<typeof PreviewLlmModelsResult>;
+
 export const TestLlmProviderResult = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(true),

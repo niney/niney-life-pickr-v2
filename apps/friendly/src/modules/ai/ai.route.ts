@@ -11,12 +11,15 @@ import {
   LlmProviderListResult,
   LlmProviderPurpose,
   LlmProviderConfig as LlmProviderConfigSchema,
+  PreviewLlmModelsInput,
+  PreviewLlmModelsResult,
   Routes,
   TestLlmProviderInput,
   TestLlmProviderResult,
   UpdateLlmProviderInput,
   type LlmProviderIdType,
   type LlmProviderPurposeType,
+  type PreviewLlmModelsResultType,
   type TestLlmProviderResultType,
 } from '@repo/api-contract';
 
@@ -24,6 +27,7 @@ const AiRoutes = Routes.Ai;
 import { env } from '../../config/env.js';
 import { adapterCache } from './adapter-cache.js';
 import type { LLMProvider } from './adapters/llm-provider.js';
+import { OllamaCloudAdapter } from './adapters/ollama-cloud.adapter.js';
 import {
   AiConfigService,
   type LlmProviderEnv,
@@ -162,6 +166,39 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
         return { models };
       } catch {
         return { models: [] };
+      }
+    },
+  });
+
+  typed.post(AiRoutes.providerModelsPreview(':id', ':purpose'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: ProviderParams,
+      body: PreviewLlmModelsInput,
+      response: { 200: PreviewLlmModelsResult },
+    },
+    handler: async (req): Promise<PreviewLlmModelsResultType> => {
+      // 저장 없이 입력 폼의 키로 직접 어댑터를 만들어 listModels 만 호출한다.
+      // adapterCache 는 거치지 않는다 — 미저장 키를 캐시 키로 박으면 다른
+      // 요청에서 의도치 않게 이 키를 쓰게 된다.
+      const env = buildEnvBlock();
+      const adapter = new OllamaCloudAdapter({
+        apiKey: req.body.apiKey,
+        baseUrl: req.body.baseUrl || env.baseUrl,
+        timeoutMs: env.timeoutMs,
+        maxConcurrent: env.maxConcurrent,
+      });
+      if (typeof adapter.listModels !== 'function') {
+        return { ok: false, error: 'provider_unavailable', message: '이 provider 는 모델 목록을 지원하지 않습니다.' };
+      }
+      try {
+        const models = await adapter.listModels();
+        return { ok: true, models };
+      } catch (e) {
+        const { error, message } = classifyError(e);
+        return { ok: false, error, message };
       }
     },
   });

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AiCompleteBatchInputType,
   AiCompleteInputType,
+  PreviewLlmModelsInputType,
   UpdateLlmProviderInputType,
 } from '@repo/api-contract';
 import { aiApi, type ProviderKey } from '../api/ai.api.js';
@@ -55,4 +56,12 @@ export const useProviderModels = (key: ProviderKey, enabled = true) =>
     enabled,
     retry: false,
     staleTime: 60_000,
+  });
+
+// 저장 전에 입력 폼의 API 키로 직접 모델 목록을 받아온다. 잘못된 키일 경우
+// ok=false 분기로 에러 메시지를 받아 UI 에 그대로 표시한다.
+export const usePreviewModels = () =>
+  useMutation({
+    mutationFn: ({ key, input }: { key: ProviderKey; input: PreviewLlmModelsInputType }) =>
+      aiApi.previewModels(key, input),
   });

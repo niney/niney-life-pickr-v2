@@ -5,12 +5,14 @@ import {
   PlugZap,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   XCircle,
 } from 'lucide-react';
 import {
   ApiError,
   useDeleteProvider,
+  usePreviewModels,
   useProviderModels,
   useProviders,
   useTestProvider,
@@ -183,16 +185,28 @@ const ProviderCard = ({
   const [saveOk, setSaveOk] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<TestLlmProviderResultType | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  // 폼에 입력한 키로 받아온 모델 — 저장된 키의 modelOptions 보다 우선해서
+  // 보여준다 (사용자가 방금 입력한 키를 검증한 결과이므로).
+  const [previewedModels, setPreviewedModels] = useState<string[] | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const purpose = provider.purpose as LlmProviderPurposeType;
   const providerId = provider.provider as LlmProviderIdType;
   const models = useProviderModels({ id: providerId, purpose }, provider.hasApiKey);
+  const previewModels = usePreviewModels();
   const modelOptions = models.data?.models ?? [];
   const datalistId = `models-${providerId}-${purpose}`;
+  const displayedModels = previewedModels ?? modelOptions;
+  const isPreviewing = previewModels.isPending;
+  const canPreview = form.apiKey.trim().length > 0;
 
   // Reset form when the underlying provider changes (e.g., after save reload).
   useEffect(() => {
     setForm(toFormState(provider));
+    // 저장 후엔 폼 키가 비워지므로 미리보기 상태도 같이 비운다 — 저장된
+    // 키 기반의 modelOptions 로 자연스럽게 넘어감.
+    setPreviewedModels(null);
+    setPreviewError(null);
   }, [provider]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -227,20 +241,51 @@ const ProviderCard = ({
     }
   };
 
+  const handlePreviewModels = async () => {
+    if (!canPreview) return;
+    setPreviewError(null);
+    setPreviewedModels(null);
+    try {
+      const r = await previewModels.mutateAsync({
+        key: { id: providerId, purpose },
+        input: {
+          apiKey: form.apiKey.trim(),
+          baseUrl: form.baseUrl.trim() || undefined,
+        },
+      });
+      if (r.ok) {
+        setPreviewedModels(r.models);
+      } else {
+        setPreviewError(r.message);
+      }
+    } catch (e) {
+      setPreviewError(e instanceof ApiError ? e.message : '모델 목록을 불러오지 못했습니다.');
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              {provider.provider}
-              <Badge variant="outline">{PURPOSE_LABEL[purpose]}</Badge>
-              <Badge variant={provider.hasApiKey ? 'default' : 'secondary'}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg">
+              <span className="break-all">{provider.provider}</span>
+              <Badge variant="outline" className="whitespace-nowrap">
+                {PURPOSE_LABEL[purpose]}
+              </Badge>
+              <Badge
+                variant={provider.hasApiKey ? 'default' : 'secondary'}
+                className="whitespace-nowrap"
+              >
                 {provider.hasApiKey ? '키 설정됨' : '키 없음'}
               </Badge>
-              {!provider.enabled && <Badge variant="secondary">비활성</Badge>}
+              {!provider.enabled && (
+                <Badge variant="secondary" className="whitespace-nowrap">
+                  비활성
+                </Badge>
+              )}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="mt-1 break-words">
               {PURPOSE_DESCRIPTION[purpose]}
               {' · '}
               {provider.apiKeyMasked ?? '설정된 키가 없습니다.'}
@@ -250,14 +295,23 @@ const ProviderCard = ({
                 : '환경변수 기본값'}
             </CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={handleTest} disabled={isTesting}>
+          <div className="flex flex-wrap gap-2 sm:shrink-0 sm:flex-nowrap">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+              onClick={handleTest}
+              disabled={isTesting}
+            >
               {isTesting ? <Loader2 className="animate-spin" /> : <PlugZap />}
               연결 테스트
             </Button>
             <Button
               type="button"
               variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
               onClick={async () => {
                 if (
                   !window.confirm(
@@ -289,13 +343,32 @@ const ProviderCard = ({
       <CardContent>
         <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
           <Field label="API 키 (입력 시에만 변경)">
-            <Input
-              type="password"
-              autoComplete="new-password"
-              placeholder="sk-..."
-              value={form.apiKey}
-              onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-            />
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                autoComplete="new-password"
+                placeholder="sk-..."
+                value={form.apiKey}
+                onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handlePreviewModels}
+                disabled={!canPreview || isPreviewing}
+                title={
+                  canPreview
+                    ? '입력한 키로 모델 목록을 미리 확인합니다 (저장 안 함)'
+                    : 'API 키를 먼저 입력하세요'
+                }
+                className="shrink-0"
+              >
+                {isPreviewing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                <span className="hidden sm:inline">모델 불러오기</span>
+              </Button>
+            </div>
           </Field>
           <Field label="Base URL">
             <Input
@@ -307,8 +380,8 @@ const ProviderCard = ({
           </Field>
           <Field
             label={`기본 모델 (선택)${
-              modelOptions.length > 0 ? ` · ${modelOptions.length}개 사용 가능` : ''
-            }`}
+              displayedModels.length > 0 ? ` · ${displayedModels.length}개` : ''
+            }${previewedModels !== null ? ' · 미리본' : ''}`}
           >
             <Input
               type="text"
@@ -318,11 +391,44 @@ const ProviderCard = ({
               onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
             />
             <datalist id={datalistId}>
-              {modelOptions.map((m) => (
+              {displayedModels.map((m) => (
                 <option key={m} value={m} />
               ))}
             </datalist>
           </Field>
+          {previewError && (
+            <div className="sm:col-span-2 -mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+              <XCircle className="inline size-3.5 align-text-bottom" /> {previewError}
+            </div>
+          )}
+          {displayedModels.length > 0 && (
+            <div className="sm:col-span-2 -mt-2">
+              <div className="mb-1.5 text-[11px] text-muted-foreground">
+                {previewedModels !== null
+                  ? '입력한 키로 미리본 모델 — 클릭하면 기본 모델로 설정됩니다'
+                  : '저장된 키로 받아온 모델 — 클릭하면 기본 모델로 설정됩니다'}
+              </div>
+              <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-md border bg-muted/30 p-2">
+                {displayedModels.map((m) => {
+                  const selected = form.defaultModel === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setForm({ ...form, defaultModel: m })}
+                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-accent ${
+                        selected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <Field label="동시 요청 한도">
             <Input
               type="number"

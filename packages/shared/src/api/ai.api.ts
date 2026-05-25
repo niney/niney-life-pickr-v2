@@ -8,6 +8,8 @@ import type {
   LlmProviderIdType,
   LlmProviderListResultType,
   LlmProviderPurposeType,
+  PreviewLlmModelsInputType,
+  PreviewLlmModelsResultType,
   TestLlmProviderResultType,
   UpdateLlmProviderInputType,
 } from '@repo/api-contract';
@@ -61,5 +63,17 @@ export const aiApi = {
   listModels: ({ id, purpose }: ProviderKey) =>
     apiFetch<LlmModelListResultType>(
       `${AI_PREFIX}/providers/${id}/${purpose}/models`,
+    ),
+
+  previewModels: (
+    { id, purpose }: ProviderKey,
+    input: PreviewLlmModelsInputType,
+  ) =>
+    apiFetch<PreviewLlmModelsResultType>(
+      `${AI_PREFIX}/providers/${id}/${purpose}/models/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
     ),
 };
