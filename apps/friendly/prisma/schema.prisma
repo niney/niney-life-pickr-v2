@@ -85,6 +85,10 @@ model SettlementRound {
   // 카테고리(discountCategory) 풀에서만 차감. 풀 음수 차단은 zod refine.
   discountAmount    Int?
   discountCategory  String?
+  // 분담 다듬기 — 카테고리별 잔여 처리 규칙을 JSON 으로 직렬화. 모양:
+  // { [Category]: { leftoverParticipantId, roundUnit: number|null } }.
+  // null/미설정이면 default(잔여를 첫 참여자가 흡수).
+  categoryAdjustments String?
 
   session    SettlementSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   items      SettlementItem[]

@@ -83,6 +83,7 @@ interface RowRound {
   itemsSubtotal: number;
   discountAmount: number | null;
   discountCategory: string | null;
+  categoryAdjustments: string | null;
   items: Array<{
     id: string;
     name: string;
@@ -235,6 +236,10 @@ export class SettlementService {
             itemsSubtotal: calc.perRound[rIdx]!.itemsSubtotal,
             discountAmount: r.discountAmount,
             discountCategory: r.discountCategory,
+            categoryAdjustments: serializeCategoryAdjustments(
+              r.categoryAdjustments ?? null,
+              clientIdToDbId,
+            ),
           },
         });
 
@@ -467,6 +472,10 @@ export class SettlementService {
             itemsSubtotal: calc.perRound[rIdx]!.itemsSubtotal,
             discountAmount: r.discountAmount,
             discountCategory: r.discountCategory,
+            categoryAdjustments: serializeCategoryAdjustments(
+              r.categoryAdjustments ?? null,
+              clientIdToDbId,
+            ),
           },
         });
 
@@ -676,6 +685,29 @@ export class SettlementService {
     input: CreateSettlementInputType,
   ) {
     const masterByClientId = new Map(input.participants.map((p) => [p.clientId, p]));
+    const clientIdToIndex = new Map(
+      input.participants.map((p, i) => [p.clientId, i]),
+    );
+    // 입력 categoryAdjustments 의 leftoverParticipantClientId 를 마스터 인덱스로
+    // 변환해 calculator 가 바로 쓸 수 있게.
+    const adj = round.categoryAdjustments ?? null;
+    const categoryAdjustments = adj
+      ? Object.fromEntries(
+          (Object.entries(adj) as [
+            ReceiptItemCategoryType,
+            { leftoverParticipantClientId: string; roundUnit: number | null } | null | undefined,
+          ][])
+            .filter(([, v]) => v != null)
+            .map(([cat, v]) => [
+              cat,
+              {
+                leftoverParticipantIndex:
+                  clientIdToIndex.get(v!.leftoverParticipantClientId) ?? 0,
+                roundUnit: v!.roundUnit,
+              },
+            ]),
+        )
+      : null;
     return {
       items: round.items.map((it) => ({ amount: it.amount, category: it.category })),
       attendees: round.attendees
@@ -694,6 +726,7 @@ export class SettlementService {
         round.discountAmount != null && round.discountCategory != null
           ? { amount: round.discountAmount, category: round.discountCategory }
           : null,
+      categoryAdjustments,
     };
   }
 
@@ -773,6 +806,7 @@ export class SettlementService {
       discountCategory: row.discountCategory
         ? (row.discountCategory as ReceiptItemCategoryType)
         : null,
+      categoryAdjustments: parseCategoryAdjustments(row.categoryAdjustments),
       items: row.items.map((it) => ({
         id: it.id,
         name: it.name,
@@ -794,3 +828,32 @@ export class SettlementService {
     };
   }
 }
+
+// categoryAdjustments — 입력 clientId 를 db id 로 치환해 JSON 저장. 매칭 안
+// 되는 leftoverParticipantClientId 의 카테고리는 그냥 빼버린다(= default 동작).
+const serializeCategoryAdjustments = (
+  adj: SettlementRoundInputType['categoryAdjustments'] | null,
+  clientIdToDbId: Map<string, string>,
+): string | null => {
+  if (!adj) return null;
+  const out: Record<string, { leftoverParticipantId: string; roundUnit: number | null }> = {};
+  for (const [cat, v] of Object.entries(adj)) {
+    if (!v) continue;
+    const dbId = clientIdToDbId.get(v.leftoverParticipantClientId);
+    if (!dbId) continue;
+    out[cat] = { leftoverParticipantId: dbId, roundUnit: v.roundUnit };
+  }
+  return Object.keys(out).length === 0 ? null : JSON.stringify(out);
+};
+
+const parseCategoryAdjustments = (
+  raw: string | null,
+): SettlementRoundType['categoryAdjustments'] => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as SettlementRoundType['categoryAdjustments'];
+    return parsed;
+  } catch {
+    return null;
+  }
+};

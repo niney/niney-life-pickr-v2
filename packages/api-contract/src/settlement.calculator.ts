@@ -58,30 +58,41 @@ export interface CalculateOutput {
   perCategoryShares: Record<ReceiptItemCategoryType, number[]>;
 }
 
+// 카테고리별 잔여 처리 보정. participantIndex 는 calculateShares 의
+// participants 배열 인덱스. roundUnit 이 있으면 풀을 그 단위로 round 후
+// 균등 분배 — 단, round 한 풀이 인원수로 떨어져야 한다. 안 떨어지면 안전망
+// 으로 무시하고 잔여 가산 모드로 fallback (UI 가 활성 조건 검사 + 서비스
+// 검증으로 실제로 도달하지 않게 한다).
+export type CategoryAdjustmentsInput = Partial<
+  Record<
+    ReceiptItemCategoryType,
+    { leftoverParticipantIndex: number; roundUnit: number | null }
+  >
+>;
+
 export const calculateShares = (
   input: CalculateInput & {
     // 옵션 — 한 카테고리 풀에서만 차감되는 단일 할인. 풀 음수 방어로 max(0, …)
     // 클램프 (입력 검증은 스키마 refine 으로 막혀 있다).
     discount?: { amount: number; category: ReceiptItemCategoryType } | null;
+    categoryAdjustments?: CategoryAdjustmentsInput | null;
   },
 ): CalculateOutput => {
   const discount = input.discount ?? null;
-  const discountedSubtotal = input.items.reduce(
-    (sum, it) => sum + it.amount,
-    0,
-  ) - (discount?.amount ?? 0);
-  const itemsSubtotal = Math.max(0, discountedSubtotal);
+  const adjustments = input.categoryAdjustments ?? null;
   const participantCount = input.participants.length;
 
   const shareAmounts = new Array<number>(participantCount).fill(0);
   const poolBreakdown = {} as CalculateOutput['poolBreakdown'];
   const perCategoryShares = {} as CalculateOutput['perCategoryShares'];
 
+  let itemsSubtotal = 0;
+
   for (const category of CATEGORIES) {
     const rawPool = input.items
       .filter((it) => it.category === category)
       .reduce((sum, it) => sum + it.amount, 0);
-    const poolAmount =
+    const afterDiscount =
       discount && discount.category === category
         ? Math.max(0, rawPool - discount.amount)
         : rawPool;
@@ -94,26 +105,37 @@ export const calculateShares = (
         : input.participants.map((p) => !p[excludeKey]);
 
     let activeCount = participates.filter(Boolean).length;
-    let effectivePool = poolAmount;
+    // 사용자 보정(roundUnit) — round 후 인원수로 나눠떨어질 때만 적용.
+    const adj = adjustments?.[category] ?? null;
+    let effectivePool = afterDiscount;
+    if (adj && adj.roundUnit != null && activeCount > 0) {
+      const rounded = Math.round(afterDiscount / adj.roundUnit) * adj.roundUnit;
+      if (rounded % activeCount === 0) effectivePool = rounded;
+      // 안 떨어지면 roundUnit 무시 → 그대로 effectivePool=afterDiscount 로 잔여 가산.
+    }
     // 이 카테고리에서 각 참여자가 진 분담만 따로 누적 (UI 매트릭스용).
     const categoryShares = new Array<number>(participantCount).fill(0);
 
     // 풀에서 모두 빠졌다면(=주류가 있는데 전원 안 마심) 그 금액을 미분류 풀
     // 처럼 모두에게 균등 분담. 빈 풀은 그대로 0.
-    if (activeCount === 0 && poolAmount > 0) {
-      effectivePool = 0; // 이 카테고리 풀 자체는 비워두고
-      // 다른 풀에 영향 주지 않게 별도 처리: 균등 분담을 직접 적용
-      const fallback = distribute(poolAmount, participantCount);
+    if (activeCount === 0 && effectivePool > 0) {
+      const fallback = distribute(effectivePool, participantCount);
       for (let i = 0; i < participantCount; i += 1) {
         const v = fallback[i] ?? 0;
         shareAmounts[i] = (shareAmounts[i] ?? 0) + v;
         categoryShares[i] = (categoryShares[i] ?? 0) + v;
       }
       activeCount = participantCount;
-    }
-
-    if (effectivePool > 0 && activeCount > 0) {
-      const distributed = distributeWith(effectivePool, participates);
+      // 풀 표시는 0 (이 카테고리는 비움) — 매트릭스 컬럼 합 invariant 는
+      // categoryShares 가 채우니까 사용자에겐 잔여 카테고리 컬럼에 음식값이
+      // 박혀 보일 수 있다(기존 동작과 동일).
+      effectivePool = 0;
+    } else if (effectivePool > 0 && activeCount > 0) {
+      const distributed = distributeWith(
+        effectivePool,
+        participates,
+        adj?.leftoverParticipantIndex,
+      );
       for (let i = 0; i < participantCount; i += 1) {
         const v = distributed[i] ?? 0;
         shareAmounts[i] = (shareAmounts[i] ?? 0) + v;
@@ -122,34 +144,52 @@ export const calculateShares = (
     }
 
     poolBreakdown[category] = {
-      poolAmount,
+      poolAmount: effectivePool,
       participantCount: activeCount,
       perParticipant:
         activeCount > 0 && effectivePool > 0 ? Math.floor(effectivePool / activeCount) : 0,
     };
     perCategoryShares[category] = categoryShares;
+    itemsSubtotal += effectivePool;
   }
 
   return { shareAmounts, itemsSubtotal, poolBreakdown, perCategoryShares };
 };
 
-// amount 를 n 명에게 균등 분배. 나머지는 첫 참여자에게 더한다.
-const distribute = (amount: number, n: number): number[] => {
+// amount 를 n 명에게 균등 분배. 나머지는 leftoverAt 위치에 더한다 (기본 0).
+const distribute = (amount: number, n: number, leftoverAt = 0): number[] => {
   if (n <= 0) return [];
   const per = Math.floor(amount / n);
   const remainder = amount - per * n;
   const out = new Array<number>(n).fill(per);
-  if (remainder > 0) out[0] = (out[0] ?? 0) + remainder;
+  if (remainder > 0) {
+    const idx = leftoverAt >= 0 && leftoverAt < n ? leftoverAt : 0;
+    out[idx] = (out[idx] ?? 0) + remainder;
+  }
   return out;
 };
 
-// participates[i]=true 인 사람에게만 분배. false 는 0.
-const distributeWith = (amount: number, participates: boolean[]): number[] => {
+// participates[i]=true 인 사람에게만 분배. false 는 0. leftoverParticipantIdx
+// 는 participates 배열의 인덱스 — 그 사람이 활성자이면 그 위치에 잔여,
+// 아니면 첫 활성자에 잔여.
+const distributeWith = (
+  amount: number,
+  participates: boolean[],
+  leftoverParticipantIdx?: number,
+): number[] => {
   const activeIdx: number[] = [];
   participates.forEach((p, i) => {
     if (p) activeIdx.push(i);
   });
-  const distributed = distribute(amount, activeIdx.length);
+  const leftoverAt =
+    leftoverParticipantIdx != null
+      ? activeIdx.indexOf(leftoverParticipantIdx)
+      : 0;
+  const distributed = distribute(
+    amount,
+    activeIdx.length,
+    leftoverAt >= 0 ? leftoverAt : 0,
+  );
   const out = new Array<number>(participates.length).fill(0);
   activeIdx.forEach((i, k) => {
     out[i] = distributed[k] ?? 0;
@@ -175,6 +215,9 @@ export interface RoundCalcInput {
   attendees: RoundAttendeeCalcInput[];
   // 한 풀에서만 차감되는 단일 할인. 없으면 null/undefined.
   discount?: { amount: number; category: ReceiptItemCategoryType } | null;
+  // 카테고리별 잔여 보정. participantIndex 는 '마스터' 인덱스 단위 —
+  // calculateMultiRoundShares 가 참석자 인덱스로 변환해 calculateShares 에 전달.
+  categoryAdjustments?: CategoryAdjustmentsInput | null;
 }
 
 export interface MultiRoundCalcInput {
@@ -226,6 +269,30 @@ export const calculateMultiRoundShares = (
   let grandTotal = 0;
 
   for (const round of input.rounds) {
+    // 마스터 인덱스 → 참석자 배열 인덱스 매핑. categoryAdjustments 를
+    // 참석자 인덱스 단위로 변환하기 위해 사용.
+    const masterToAttendee = new Map<number, number>();
+    round.attendees.forEach((a, i) => masterToAttendee.set(a.participantIndex, i));
+    const innerAdj: CategoryAdjustmentsInput | null = round.categoryAdjustments
+      ? Object.fromEntries(
+          (Object.entries(round.categoryAdjustments) as [
+            ReceiptItemCategoryType,
+            { leftoverParticipantIndex: number; roundUnit: number | null } | undefined,
+          ][])
+            .filter(([, v]) => v != null)
+            .map(([cat, v]) => [
+              cat,
+              {
+                // 마스터 인덱스의 참여자가 이 차수에 참석 안 했으면 -1 →
+                // calculateShares 가 첫 활성자로 fallback.
+                leftoverParticipantIndex:
+                  masterToAttendee.get(v!.leftoverParticipantIndex) ?? -1,
+                roundUnit: v!.roundUnit,
+              },
+            ]),
+        )
+      : null;
+
     // 비참석자는 입력에 빠져 있으므로, 참석자만으로 calculateShares 호출.
     const inner = calculateShares({
       items: round.items,
@@ -235,6 +302,7 @@ export const calculateMultiRoundShares = (
         excludeSide: a.excludeSide,
       })),
       discount: round.discount ?? null,
+      categoryAdjustments: innerAdj,
     });
 
     // 참석자 인덱스 → 마스터 인덱스로 되돌려 share 배열을 부풀린다.

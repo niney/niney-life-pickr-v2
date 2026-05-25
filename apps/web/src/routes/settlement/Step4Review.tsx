@@ -16,6 +16,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { RoundExceptionsEditor } from './RoundExceptionsEditor';
 import { RoundDiscountEditor } from './RoundDiscountEditor';
+import { RoundCategoryAdjuster } from './RoundCategoryAdjuster';
 import { CopyCheck } from 'lucide-react';
 
 interface Props {
@@ -77,6 +78,22 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
           r.discountAmount != null && r.discountCategory != null && r.discountAmount > 0
             ? { amount: r.discountAmount, category: r.discountCategory }
             : null,
+        // 보정의 leftoverParticipantClientId → 마스터 인덱스로 변환.
+        categoryAdjustments: r.categoryAdjustments
+          ? Object.fromEntries(
+              Object.entries(r.categoryAdjustments)
+                .filter(([, v]) => v != null)
+                .map(([cat, v]) => [
+                  cat,
+                  {
+                    leftoverParticipantIndex: draft.participants.findIndex(
+                      (p) => p.clientId === v!.leftoverParticipantClientId,
+                    ),
+                    roundUnit: v!.roundUnit,
+                  },
+                ]),
+            )
+          : null,
       })),
     });
   }, [draft.participants, draft.rounds]);
@@ -119,6 +136,7 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
           receiptImageToken: r.receiptImageToken,
           discountAmount: r.discountAmount,
           discountCategory: r.discountCategory,
+          categoryAdjustments: r.categoryAdjustments,
           items: r.items.map((it) => ({
             name: it.name,
             unitPrice: it.unitPrice,
@@ -320,6 +338,9 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
 
               {/* 차수 할인 입력. Step3 와 같은 컴포넌트로 일관된 UX. */}
               <RoundDiscountEditor round={r} />
+
+              {/* 분담 다듬기 — 잔여 있는 카테고리만 자동 노출. */}
+              <RoundCategoryAdjuster round={r} participants={draft.participants} />
 
               {/* 카테고리 풀 breakdown 은 접힘. 디버깅·확인용이라 default 닫힘. */}
               <div className="border-t pt-2">

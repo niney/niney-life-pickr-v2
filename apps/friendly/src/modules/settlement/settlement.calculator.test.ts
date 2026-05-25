@@ -371,6 +371,76 @@ describe('calculateMultiRoundShares', () => {
     }
   });
 
+  it('categoryAdjustments leftover sends remainder to the chosen participant', () => {
+    // 3명, SIDE 풀 10001 → floor 3333 인당, 잔여 2원. leftover = index 2.
+    const r = calculateMultiRoundShares({
+      participantCount: 3,
+      rounds: [
+        {
+          items: [{ amount: 10001, category: 'SIDE' }],
+          attendees: [
+            { participantIndex: 0, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+            { participantIndex: 1, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+            { participantIndex: 2, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+          ],
+          categoryAdjustments: {
+            SIDE: { leftoverParticipantIndex: 2, roundUnit: null },
+          },
+        },
+      ],
+    });
+    expect(r.perRound[0]?.shareAmounts).toEqual([3333, 3333, 3335]);
+  });
+
+  it('categoryAdjustments roundUnit applies when rounded pool divides cleanly', () => {
+    // 4명, SIDE 풀 1003 → 100원 round = 1000, 1000 % 4 === 0 → 인당 250. itemsSubtotal=1000.
+    const r = calculateMultiRoundShares({
+      participantCount: 4,
+      rounds: [
+        {
+          items: [{ amount: 1003, category: 'SIDE' }],
+          attendees: [0, 1, 2, 3].map((i) => ({
+            participantIndex: i,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          })),
+          categoryAdjustments: {
+            SIDE: { leftoverParticipantIndex: 0, roundUnit: 100 },
+          },
+        },
+      ],
+    });
+    expect(r.perRound[0]?.shareAmounts).toEqual([250, 250, 250, 250]);
+    expect(r.perRound[0]?.itemsSubtotal).toBe(1000);
+    expect(r.perRound[0]?.poolBreakdown.SIDE.poolAmount).toBe(1000);
+    expect(r.grandTotal).toBe(1000);
+  });
+
+  it('categoryAdjustments roundUnit falls back when not divisible', () => {
+    // 3명, SIDE 풀 1003 → 100 round = 1000, 1000 % 3 !== 0 → fallback (그대로 1003 분배).
+    const r = calculateMultiRoundShares({
+      participantCount: 3,
+      rounds: [
+        {
+          items: [{ amount: 1003, category: 'SIDE' }],
+          attendees: [0, 1, 2].map((i) => ({
+            participantIndex: i,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          })),
+          categoryAdjustments: {
+            SIDE: { leftoverParticipantIndex: 1, roundUnit: 100 },
+          },
+        },
+      ],
+    });
+    // 1003 / 3 = floor 334, 잔여 1 → leftover(=index 1) 에 1 추가.
+    expect(r.perRound[0]?.shareAmounts).toEqual([334, 335, 334]);
+    expect(r.perRound[0]?.itemsSubtotal).toBe(1003);
+  });
+
   it('discount equal to the pool zeroes that category share', () => {
     // SIDE 풀 8000 에 8000 할인 → SIDE 컬럼 모두 0. ALCOHOL 2000 만 분담.
     const r = calculateMultiRoundShares({

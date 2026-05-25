@@ -244,6 +244,20 @@ const useMatrix = (session: SharedSettlementSessionType): SettlementMatrix =>
           r.discountAmount != null && r.discountCategory != null
             ? { amount: r.discountAmount, category: r.discountCategory }
             : null,
+        // 응답 categoryAdjustments 의 leftoverParticipantId(db) → 마스터 인덱스.
+        categoryAdjustments: r.categoryAdjustments
+          ? Object.fromEntries(
+              Object.entries(r.categoryAdjustments)
+                .filter(([, v]) => v != null)
+                .map(([cat, v]) => [
+                  cat,
+                  {
+                    leftoverParticipantIndex: pIdxById.get(v!.leftoverParticipantId) ?? 0,
+                    roundUnit: v!.roundUnit,
+                  },
+                ]),
+            )
+          : null,
       })),
     });
 

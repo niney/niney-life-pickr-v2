@@ -49,6 +49,54 @@ export const SettlementRoundAttendeeInput = z.object({
 });
 export type SettlementRoundAttendeeInputType = z.infer<typeof SettlementRoundAttendeeInput>;
 
+// 카테고리별 잔여 처리 보정 — '분담 다듬기'. 풀이 인원수로 정확히 나눠
+// 떨어지지 않을 때 사용자가 정한 규칙. 응답 형은 leftoverParticipantId (db),
+// 입력 형은 leftoverParticipantClientId.
+//
+// roundUnit:
+// - null  : 풀 그대로, 잔여 1~(n-1)원을 leftoverParticipant 가 흡수.
+// - 100/1000: 풀을 그 단위로 round 후 균등 분배. 단 round 한 풀이 인원수로
+//   나누어 떨어져야 한다 — 안 떨어지면 calculator 가 안전망으로 roundUnit 을
+//   무시 + 잔여 가산. (UI 가 활성 조건 검사 + 서비스 검증.)
+export const SettlementCategoryAdjustment = z.object({
+  leftoverParticipantId: z.string(),
+  roundUnit: z.number().int().positive().nullable(),
+});
+export type SettlementCategoryAdjustmentType = z.infer<typeof SettlementCategoryAdjustment>;
+
+export const SettlementCategoryAdjustments = z
+  .object({
+    ALCOHOL: SettlementCategoryAdjustment.nullable().optional(),
+    NON_ALCOHOL: SettlementCategoryAdjustment.nullable().optional(),
+    SIDE: SettlementCategoryAdjustment.nullable().optional(),
+    UNCATEGORIZED: SettlementCategoryAdjustment.nullable().optional(),
+  })
+  .nullable();
+export type SettlementCategoryAdjustmentsType = z.infer<typeof SettlementCategoryAdjustments>;
+
+// 입력 시엔 마스터 db id 가 아직 없어 clientId 로 참조.
+export const SettlementCategoryAdjustmentInput = z.object({
+  leftoverParticipantClientId: z.string().min(1),
+  roundUnit: z.number().int().positive().nullable(),
+});
+export type SettlementCategoryAdjustmentInputType = z.infer<
+  typeof SettlementCategoryAdjustmentInput
+>;
+
+export const SettlementCategoryAdjustmentsInput = z
+  .object({
+    ALCOHOL: SettlementCategoryAdjustmentInput.nullable().optional(),
+    NON_ALCOHOL: SettlementCategoryAdjustmentInput.nullable().optional(),
+    SIDE: SettlementCategoryAdjustmentInput.nullable().optional(),
+    UNCATEGORIZED: SettlementCategoryAdjustmentInput.nullable().optional(),
+  })
+  .nullable()
+  .optional()
+  .default(null);
+export type SettlementCategoryAdjustmentsInputType = z.infer<
+  typeof SettlementCategoryAdjustmentsInput
+>;
+
 export const SettlementRound = z.object({
   id: z.string(),
   orderIndex: z.number().int().nonnegative(),
@@ -67,6 +115,8 @@ export const SettlementRound = z.object({
   // 반영). UI 상 정산표는 풀 컬럼 합이 줄어들고, 항목 카드는 '할인 -X' 줄.
   discountAmount: z.number().int().positive().nullable(),
   discountCategory: ReceiptItemCategory.nullable(),
+  // 분담 다듬기 — null 이면 default (잔여를 첫 참여자가 흡수).
+  categoryAdjustments: SettlementCategoryAdjustments,
   items: z.array(SettlementItem),
   attendees: z.array(SettlementRoundAttendee),
 });
@@ -84,6 +134,8 @@ export const SettlementRoundInput = z
     // 키 자체가 빠진 페이로드(기존 클라이언트)는 둘 다 null 로 본다.
     discountAmount: z.number().int().positive().nullable().optional().default(null),
     discountCategory: ReceiptItemCategory.nullable().optional().default(null),
+    // 분담 다듬기 — 카테고리별 잔여 처리 규칙. 키 자체가 빠지면 null.
+    categoryAdjustments: SettlementCategoryAdjustmentsInput,
     items: z.array(SettlementItemInput).min(1).max(200),
     // round 마다 최소 1명은 참석해야 분배가 의미 있음. 비참석은 attended:false 로.
     // 100 은 큰 동호회·회사 회식까지 안전하게 커버. DB/계산기 모두 선형 비용.

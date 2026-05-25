@@ -76,6 +76,17 @@ export interface DraftAttendance {
   excludeSideOverride: boolean | null;
 }
 
+// 카테고리별 잔여 처리 규칙. 마스터 참여자 clientId 로 leftover 지정 — 그
+// 사람이 빠지면 calculator 가 default(첫 활성자) 로 fallback.
+export interface DraftCategoryAdjustment {
+  leftoverParticipantClientId: string;
+  roundUnit: number | null;
+}
+
+export type DraftCategoryAdjustments = Partial<
+  Record<ReceiptItemCategoryType, DraftCategoryAdjustment | null>
+>;
+
 export interface DraftRound {
   clientId: string;
   placeId: string;
@@ -91,6 +102,8 @@ export interface DraftRound {
   // 풀에서 차감. UI 가 setRoundDiscount 로 한 번에 설정/해제.
   discountAmount: number | null;
   discountCategory: ReceiptItemCategoryType | null;
+  // 분담 다듬기 — 카테고리별 잔여 처리 규칙. 키 없거나 null 이면 default.
+  categoryAdjustments: DraftCategoryAdjustments | null;
 }
 
 export interface SettlementDraft {
@@ -124,6 +137,7 @@ const newRound = (placeId: string, placeName: string, participants: DraftPartici
   attendances: participants.map((p) => emptyAttendance(p.clientId)),
   discountAmount: null,
   discountCategory: null,
+  categoryAdjustments: null,
 });
 
 interface SettlementDraftStore extends SettlementDraft {
@@ -198,6 +212,13 @@ interface SettlementDraftStore extends SettlementDraft {
   setRoundDiscount(
     roundClientId: string,
     discount: { amount: number; category: ReceiptItemCategoryType } | null,
+  ): void;
+
+  // 카테고리별 잔여 보정 설정 — null 이면 그 카테고리 보정 제거.
+  setCategoryAdjustment(
+    roundClientId: string,
+    category: ReceiptItemCategoryType,
+    adjustment: DraftCategoryAdjustment | null,
   ): void;
 }
 
@@ -428,6 +449,19 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
           ),
         }));
       },
+      setCategoryAdjustment(roundClientId, category, adjustment) {
+        set((s) => ({
+          rounds: s.rounds.map((r) => {
+            if (r.clientId !== roundClientId) return r;
+            const next = { ...(r.categoryAdjustments ?? {}) };
+            if (adjustment === null) delete next[category];
+            else next[category] = adjustment;
+            // 비어 있으면 null 로 압축 — '아무 보정 없음' 상태 유지.
+            const isEmpty = Object.keys(next).length === 0;
+            return { ...r, categoryAdjustments: isEmpty ? null : next };
+          }),
+        }));
+      },
       copyRoundAttendancesFrom(targetRoundClientId, sourceRoundClientId) {
         set((s) => {
           const source = s.rounds.find((r) => r.clientId === sourceRoundClientId);
@@ -466,9 +500,10 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       // v1 → v2: 평면 draft (한 식당 1 round 모델) → rounds 배열. 옛 입력은
       // 1차 round 1개로 변환, 모든 마스터 참여자는 attended=true.
       // v2 → v3: round 에 discountAmount/discountCategory 필드 추가 (null).
-      version: 3,
+      // v3 → v4: round 에 categoryAdjustments 필드 추가 (null).
+      version: 4,
       migrate: (persisted, fromVersion) => {
-        // v2 → v3: rounds 의 각 round 에 discount 필드 채워준다 (없으면 null).
+        // v2+ → 최신: rounds 의 각 round 에 빠진 필드 채워준다.
         if (fromVersion >= 2) {
           const draft = persisted as SettlementDraft;
           return {
@@ -477,6 +512,7 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
               ...r,
               discountAmount: r.discountAmount ?? null,
               discountCategory: r.discountCategory ?? null,
+              categoryAdjustments: r.categoryAdjustments ?? null,
             })),
           };
         }
@@ -510,6 +546,7 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
           attendances: participants.map((p) => emptyAttendance(p.clientId)),
           discountAmount: null,
           discountCategory: null,
+          categoryAdjustments: null,
         };
         return { participants, rounds: [round] };
       },

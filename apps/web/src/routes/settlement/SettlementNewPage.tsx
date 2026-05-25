@@ -112,6 +112,21 @@ export const SettlementNewPage = () => {
       })),
       discountAmount: r.discountAmount,
       discountCategory: r.discountCategory,
+      // 응답 categoryAdjustments 는 leftoverParticipantId(db) → leftoverParticipantClientId 로 변환.
+      categoryAdjustments: r.categoryAdjustments
+        ? Object.fromEntries(
+            Object.entries(r.categoryAdjustments)
+              .filter(([, v]) => v != null)
+              .map(([cat, v]) => [
+                cat,
+                {
+                  leftoverParticipantClientId:
+                    dbIdToClientId.get(v!.leftoverParticipantId) ?? '',
+                  roundUnit: v!.roundUnit,
+                },
+              ]),
+          )
+        : null,
     }));
     useSettlementDraftStore.setState({
       participants: participantsDraft,
