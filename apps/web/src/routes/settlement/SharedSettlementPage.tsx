@@ -50,7 +50,7 @@ export const SharedSettlementPage = () => {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background px-4 py-3">
+      <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background px-4 py-3">
         <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Receipt className="size-4" />
         </div>

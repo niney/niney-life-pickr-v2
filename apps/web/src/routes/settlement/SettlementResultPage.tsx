@@ -67,7 +67,7 @@ export const SettlementResultPage = () => {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background px-3 py-2.5">
+      <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background px-3 py-2.5">
         <Button type="button" variant="ghost" size="sm" onClick={handleBack} aria-label="뒤로">
           <ChevronLeft className="size-4" />
         </Button>
