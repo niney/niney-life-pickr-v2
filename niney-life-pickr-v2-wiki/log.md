@@ -1,5 +1,34 @@
 # Wiki Compile Log
 
+## 2026-05-25 (13th compile)
+
+**Topics updated:** friendly, api-contract, shared, web, project-overview, ai, crawl, map, mobile, utils
+**New topics:** settlement
+**New concepts:** none
+**Concepts updated:** zod-ssot-buildless, versioned-llm-prompts, public-admin-route-split
+
+**Sources scanned:** ~410 (기존 + 신규 50+: settlement 백엔드 3 모듈 11파일, scripts/backfill-contacts.ts, plugins/multipart.ts, api-contract settlement schema 3 + settlement.calculator.ts, shared api 3 + hook 3 + store 1, web 정산 라우트 15+ 파일, dev 스크립트 3, restaurantCategory.ts, mobile production-build.md + .env.production + app.config.ts, 5 Prisma 마이그레이션)
+**Sources changed:** ~110 (commit 1ed486d 이후 30개 커밋 — `git log --since="2026-05-19"`)
+
+**Reason**: 2026-05-19 이후 큰 줄기 변경 — **정산(settlement) 도메인 통째 신규 + AI provider purpose 분리 (chat/image — 영수증 vision 모델) + 공유 토큰 비인증 read 패턴 (settlement 첫 사례) + naver 크롤러 stealth/jitter (429 우회) + 앱 운영 빌드 가이드**.
+
+핵심 변경 6 줄기:
+1. **정산 도메인 신규** — 영수증 사진 → vision LLM 추출 (image purpose) → 4단계 stepper(인원/방식/편집/결과) → 분배 계산 → 저장. 백엔드 3 모듈 (settlement-extraction, settlement, contact). Prisma 4개 마이그레이션 (settlement_models, share_token, contacts, edited_at). API 5종 (POST/GET/PATCH/DELETE /settlements/:id + /share endpoints + /me/contacts + /upload + /extract). 단골(SettlementContact) 자동 적립 — (userId, normalizedKey) upsert.
+2. **공유 토큰 + 'edited' 배지** — token-based public read (`/api/v1/share/settlements/:token` 비인증, `SharedSettlementSession` 응답에서 userId + receiptPreviewUrl omit). 저장 후 무제한 수정 + `editedAt` 컬럼 + 공유 페이지에서 '수정됨' 배지. items 불변 — participants/옵션만 PATCH, 서버가 calculator 재실행.
+3. **AI provider purpose 분리** — `LlmProviderConfig.purpose` enum (chat/image). adapter-cache 키 6-tuple 확장. image purpose env fallback 없음. settlement-extraction 이 vision 첫 컨슈머. AdminAiTestPage chat 한정.
+4. **DB 경로 통일** — `apps/friendly/data/dev.db` (기존 분산 경로 정리). vitest 직렬 실행 + PRAGMA FK ON.
+5. **UI 정밀 수정 다수** — `CardContent` 기본 `pt-0` 제거 (CardHeader 와만 짝지을 때 의미 있던 패턴), 라이트박스 모바일 잘림/3 번째 클릭 오인덱스, map declutter 해제 + 줌 임계값 라벨 토글, 메뉴 가격 콤마 포맷 통일 (`formatWonPrice`), 카테고리별 라인 아이콘 8종 + variant 통합.
+6. **앱 운영 빌드** — `apps/mobile/docs/production-build.md` (Release/EAS/실기기 절차) + `.env.production` 자동 로드 + SDK 52→54 / RN 0.76→0.81 업그레이드 + react-compiler.
+
+**Outputs**:
+- 1 신규 토픽 article (`topics/settlement.md` — 49 sources)
+- 10 갱신 토픽 article (friendly 81 / web 81 / shared 50 / project-overview 24 / api-contract 21 / ai 19 / map 22 / mobile 22 / crawl 17 / utils 8)
+- 3 갱신 concept article (zod-ssot-buildless / versioned-llm-prompts / public-admin-route-split)
+- 신규 컨셉 0개 — 정산의 sessionStorage persist + 'edited' 배지 + 4 단계 stepper 가 단일 도메인에 닫혀 있어 (3+ 토픽 임계 미달) 보류
+- schema.md / INDEX.md / log.md / .compile-state.json / CONTEXT.md 갱신
+
+---
+
 ## 2026-05-19 (12th compile)
 
 **Topics updated:** friendly, crawl, web, mobile, shared, api-contract, utils, map, project-overview

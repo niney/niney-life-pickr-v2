@@ -25,23 +25,26 @@
 
 ## Stats
 
-Compiled: 2026-05-14 | Topics: 13 | Concepts: 8 | Sources: 280
+Compiled: 2026-05-25 | Topics: 16 | Concepts: 8 | Sources: ~410
 
 ## Topic map at a glance
 
 ```
-project-overview  (모노레포 전체 — 공개 vs 어드민 분리 정책)
+project-overview  (모노레포 전체 — 공개/어드민/소유자 권한 페어 분리, 정산 도메인 추가)
 ├── friendly         (Fastify 백엔드)
-│   ├── crawl        (Naver Place 크롤러 — 별도 토픽)
-│   ├── ai           (Ollama Cloud 통합 + admin UI — 별도 토픽)
+│   ├── crawl        (Naver/캐치테이블/다이닝코드 크롤러 — 별도 토픽, stealth 적용)
+│   ├── ai           (Ollama Cloud + chat/image purpose 분리 — 별도 토픽)
 │   ├── menu-grouping (식당 단위 메뉴 변형 → canonical 그룹 LLM 정규화 — 별도 토픽)
-│   └── analytics    (식당 가로지르기 글로벌 머지 + categoryPath 트리 + 통계 — 별도 토픽)
-├── map              (vworld OpenLayers + WMTS 직접, MapProviderConfig DB 키, 어드민·공개 양쪽 사용)
-├── web              (Vite + React 19, 어드민 + 공개 `/restaurants` + 어드민 `/admin/discover` 발견 페이지, 좌/우 패널 토글)
-├── mobile           (Expo + RN 0.76, 맛집 탭 ADMIN 전용)
+│   ├── analytics    (식당 가로지르기 글로벌 머지 + categoryPath — 별도 토픽)
+│   ├── canonical    (출처 가로지르는 같은 가게 묶기 — 별도 토픽)
+│   ├── auto-discover (어드민 자동 발견 — AI 키워드 8개 + 그룹 직렬 크롤 — 별도 토픽)
+│   └── settlement   (정산: 영수증 vision + 4단계 stepper + 분배 + 공유 토큰 + 단골 — 별도 토픽)
+├── map              (vworld OpenLayers + WMTS, 카테고리 라인 아이콘 8종, 모바일 WebView)
+├── web              (Vite + React 19, 공개 + 어드민 + 정산 라우트 5종)
+├── mobile           (Expo SDK 54 + RN 0.81 + React 19, 맛집 탭, .env.production)
 └── packages/
-    ├── api-contract  (Zod SSOT, 공개/어드민 페어 스키마)
-    ├── shared        (FE 공통, 공개 훅 `useRestaurantsPublic` 등)
-    ├── utils         (순수 유틸)
+    ├── api-contract  (Zod SSOT, 권한 페어 스키마, settlement.calculator FE/BE 공유 헬퍼)
+    ├── shared        (FE 공통, settlementDraftStore sessionStorage persist)
+    ├── utils         (순수 유틸, restaurantCategory + formatWonPrice)
     └── config        (tsconfig + ESLint)
 ```

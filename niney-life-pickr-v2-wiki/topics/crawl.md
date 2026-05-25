@@ -1,13 +1,15 @@
 ---
 topic: crawl
-last_compiled: 2026-05-19
+last_compiled: 2026-05-25
 status: active
-aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup]
+aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, stealth, jitter, 429, playwright-extra, anti-bot]
 ---
 
 # crawl — 다중 출처 크롤러 (Naver Place + 캐치테이블 + 다이닝코드)
 
 `apps/friendly/src/modules/crawl/`에 위치한 어드민 전용 크롤러. Naver Place / 캐치테이블 / 다이닝코드 세 출처를 모두 다루며, 각 출처마다 어댑터 비용 분포가 다르다 (Naver = Playwright 풀세션, 캐치테이블 = Playwright 안에서 fetch 가로채기, 다이닝코드 = HTTP 직접). 잡 패턴도 4가지 — 단일 Naver 크롤(SSE), Naver/캐치테이블/다이닝코드 키워드 검색(동기), 다이닝코드 가게 저장(단일 동기), 다이닝코드 일괄 저장(SSE).
+
+**2026-05-25 변경 흡수 — Naver Playwright 어댑터 stealth + 더보기 jitter (429 우회) + visitor 캡처 dev 스크립트 3종**: [naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts) 가 기존 `playwright` 대신 `playwright-extra` + `puppeteer-extra-plugin-stealth` 로 launch — `chromium.use(StealthPlugin())` 한 줄로 `navigator.webdriver`, plugins, permissions, `chrome.runtime` 등 자동화 시그널을 일반 Chrome 처럼 위장해 네이버 anti-bot 우회. "더보기" 클릭 사이 지연도 고정 3s 에서 base 5s + random(0..3s) 랜덤 jitter (`CRAWL_VISITOR_PAGE_DELAY_MS` + `CRAWL_VISITOR_PAGE_DELAY_JITTER_MS`) 로 변경 — 실제 429 차단 사고 후 패턴 인식 회피 목적. catchtable 어댑터들은 자체 `playwright` import 그대로라 영향 받지 않음. 디버깅용 dev 스크립트 3종 신규: [dev-capture-visitor.ts](../../apps/friendly/scripts/dev-capture-visitor.ts) (헤디드 + 더보기 1회 클릭, 모든 JSON wire 응답 → `__debug__/after.json` + 파서 E2E 검증), [dev-fetch-visitor-html.ts](../../apps/friendly/scripts/dev-fetch-visitor-html.ts) (Playwright 없이 `fetch()` 한 번 + 차단 페이지 감지 + Apollo state 추출), [dev-open-visitor-page.ts](../../apps/friendly/scripts/dev-open-visitor-page.ts) (홈 진입 → 리뷰 탭 클릭 자연 흐름, `DEV_OPEN_STEALTH=0` 으로 stealth 끄고 비교).
 
 **2026-05-19 변경 흡수 — 잡 단계별 영속 로그 시스템 도입**: 신규 [job-log.service.ts](../../apps/friendly/src/modules/crawl/job-log.service.ts) 가 모든 크롤+요약 단계의 로그를 (1) pino, (2) `prisma.crawlJobLog` DB, (3) `jobRegistry` SSE + 조건부 `summaryEventsBus` fan-out 까지 한 호출에 흘려보낸다. 모노톤 `seq` 카운터로 같은 로그가 두 SSE 양쪽에 가도 `(jobId, seq)` 로 클라이언트 dedup. `CrawlEvent` zod union 에 신규 `'log'` variant 추가 (`CrawlLogLevel: info|warn|error`, `stage`, `message`, `meta?`, `seq`, `at`). `crawl.service.ts` 가 페이지 로드/리뷰 적재/오류 등 모든 단계를 `channel: 'crawl'` 로 흘리고, `summary.service.ts` 는 LLM 단계(`summary_queue`/`summary_run`/`summary_chunk`/`summary_retry`/`summary_failed`) 를 `channel: 'summary'` 로 흘려보내 같은 잡의 크롤+요약 로그가 한 패널에서 보인다. 잡 종료 후에도 DB 의 `CrawlJobLog` 가 살아남아 패널 재진입 시 전체 로그 복원, 같은 placeId 의 재크롤 누적 로그는 상세 페이지 "크롤 로그" 아코디언이 cursor pagination 으로 가져온다. 자세한 건 [friendly 토픽](./friendly.md) 의 CrawlJobLog 시스템 / Data 섹션 참조.
 
@@ -22,13 +24,30 @@ aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup]
 
 권한은 항상 `app.authenticate + app.requireAdmin`.
 
-## Architecture [coverage: high — 10 sources]
+## Architecture [coverage: high — 13 sources]
+
+### Naver 어댑터 stealth 적용 (2026-05-25)
+
+`naver-place.playwright.adapter.ts` 가 `playwright` 의 `chromium` 대신 `playwright-extra` 의 `chromium` 을 import 하고 모듈 로드 시 `chromium.use(StealthPlugin())` 을 한 번 호출 — `puppeteer-extra-plugin-stealth` 가 puppeteer/playwright 양쪽 호환 패턴이라 `playwright-extra` 의 `chromium.use()` 가 그대로 받아 적용. `navigator.webdriver` 제거, `navigator.plugins`/`languages` 위장, `chrome.runtime` 주입, permissions API patch 등 자동화 탐지 시그널을 통째로 가린다. 어댑터 파일 최상단에 `/// <reference lib="dom" />` 추가 — `playwright-extra` 래퍼는 `playwright` 단독 import 와 달리 DOM 타입을 ambient 로 끌어오지 않아서 `page.evaluate(() => window.scrollTo(...))` 같은 in-browser 콜백 컴파일에 필요. `Browser`/`BrowserContext` 타입은 여전히 `playwright` 에서 type-only import (`playwright-extra` 의 `chromium.launch()` 반환을 `as Promise<Browser>` 캐스팅). catchtable 어댑터 2종은 자체 `playwright` 직접 import 라 stealth 영향 없음 — 다른 anti-bot 모델 (CF) 대상이라 stealth 가 도움 안 됨.
+
+### 더보기 jitter (랜덤 지연)
+
+`computeVisitorPageDelay()` 가 매 클릭마다 `VISITOR_PAGE_DELAY_MS` (기본 5000) + `Math.floor(Math.random() * VISITOR_PAGE_DELAY_JITTER_MS)` (기본 3000) 를 계산. 결과적으로 5~8초 사이 랜덤 — 고정 3s 대비 패턴 인식 회피. 이전 글의 "3s 정적 지연" 흐름은 더 이상 없음. env 로 둘 다 조정 가능 (`CRAWL_VISITOR_PAGE_DELAY_MS` / `CRAWL_VISITOR_PAGE_DELAY_JITTER_MS`). jitter=0 이면 비활성 (고정 cadence).
+
+### Dev 디버깅 스크립트 (visitor 캡처 3종)
+
+`apps/friendly/scripts/` 하위 세 진단 스크립트. 어댑터 본체와 같은 stealth + 모바일 UA 설정으로 재현성 보장:
+- `dev-capture-visitor.ts` — 헤디드 Playwright + stealth + 더보기 1회 클릭, 모든 JSON wire 응답을 `__debug__/after.json` (visitor reviews 응답만 필터) + `__debug__/after-meta.json` (url/method/status 메타) 로 덤프. 내부에 어댑터의 `parseVisitorReviewsFromCaptured` 와 동일한 파서 미러 — `dev:api` 없이 어댑터 파이프라인 E2E 검증.
+- `dev-fetch-visitor-html.ts` — Playwright 없이 `fetch()` 한 번으로 m.place 페이지 HTML 받고 `__debug__/visitor-<placeId>-raw-<stamp>.html` / `-apollo-<stamp>.json` / `-summary-<stamp>.json` 셋트 생성. `detectBlockPage()` 가 "과도한 요청"/"비정상적인 접근"/"CAPTCHA" 키워드 매칭으로 차단 페이지 식별. cheerio 셀렉터 설계 입력 자료용.
+- `dev-open-visitor-page.ts` — 자연스러운 navigation 시뮬레이션 (홈 → dwell 2.5s → "리뷰" 탭 클릭 → 비주얼 확인 대기). `DEV_OPEN_STEALTH=0` 환경변수로 stealth 끄고 비교 가능 — anti-bot 우회 효과 사람이 직접 확인용.
+
+세 스크립트 모두 동일 `__debug__/` 디렉터리(`apps/friendly/src/modules/crawl/__debug__/`)에 출력 — 어댑터 본체의 `CRAWL_DEBUG_CAPTURE=1` 덤프와 같은 위치.
 
 ### 어댑터 비용 분포
 
 | 출처 | 어댑터 | 비용 모델 | 비고 |
 |---|---|---|---|
-| Naver Place | `naver-place.playwright.adapter.ts` | Playwright Chromium (모바일 UA, iPhone viewport) + Apollo cache + GraphQL wire 가로채기 | SSR Apollo SPA → Playwright 필수 |
+| Naver Place | `naver-place.playwright.adapter.ts` | `playwright-extra` Chromium + stealth (모바일 UA, iPhone viewport) + Apollo cache + GraphQL wire 가로채기 + 더보기 jitter | SSR Apollo SPA → Playwright 필수, 429 우회 위해 stealth + jitter |
 | Naver Search | `naver-search.http.adapter.ts` | HTTP nx-api GraphQL 직접 호출 | (이전 Playwright 어댑터에서 HTTP 로 이행 — `source: 'http'`) |
 | 캐치테이블 Search | `catchtable-search.playwright.adapter.ts` | Playwright 페이지 1개를 warm 유지 + `page.evaluate(fetch(...))` | CF 봇 보호 — 직접 fetch 차단, 페이지 안에서 호출 |
 | 캐치테이블 Shop | `catchtable-shop.playwright.adapter.ts` | `/ct/shop/{ref}` 진입 후 `page.on('response')` 로 자동 호출 가로채기 + 메뉴/리뷰 영역까지 스크롤 | 별도 Browser/Context 인스턴스 |
@@ -174,8 +193,10 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - 캐치테이블 검색 limit 1~30, 첫 호출 timeout 30s (`CATCHTABLE_WARM_TIMEOUT_MS`), networkidle 12s.
 - 캐치테이블 상세 lazy settle 2.5s (`CATCHTABLE_SHOP_LAZY_MS`).
 
-## Key Decisions [coverage: high — 12 sources]
+## Key Decisions [coverage: high — 14 sources]
 
+- **Naver 어댑터 stealth (`playwright-extra` + `puppeteer-extra-plugin-stealth`)** — 실제 429 차단 사고 후 도입. `chromium.use(StealthPlugin())` 한 줄로 자동화 시그널(`navigator.webdriver`/plugins/permissions/chrome.runtime) 위장 → 네이버 anti-bot 탐지 회피. puppeteer-extra 의 plugin 인데 playwright-extra 가 동일 인터페이스로 받아 그대로 적용됨 — 검증된 maintained 패턴이라 자체 stealth 스니펫 직접 구현보다 안전. `playwright` 단독 import 와 달리 DOM ambient 타입이 안 따라와 `/// <reference lib="dom" />` 명시 필요한 게 잔재 비용.
+- **더보기 jitter (랜덤 지연)** — `base + random(0..jitter)` 패턴. 5초 고정 cadence 자체가 fingerprint 가 되어 stealth 만으로 부족 — 인간 패턴에 더 가까운 5~8초 들쭉날쭉. 권장 jitter 범위 2~5초. 0 으로 끄면 고정 cadence 로 되돌아감 (테스트/재현용).
 - **출처별 비용 모델 다름** — Naver = Playwright 풀세션 (Apollo SSR), 캐치테이블 = Playwright 페이지 안 fetch 가로채기 (CF 봇 보호), 다이닝코드 = HTTP 직접 (CORS 열림 + CF 없음). 같은 "크롤" 추상화 위에 어댑터 인터페이스만 통일하고 비용은 어댑터에 가둠.
 - **`MAX_CONCURRENT_PER_ACTOR` 3 → 5** — `auto-discover` 잡이 group-of-5 동시 실행으로 `startCrawl` 을 호출하면서 어드민 한 명이 5병렬을 정상 패턴으로 가지게 됨. 어드민 발견 페이지의 다중 선택 시작도 함께 받아 큐잉 없이 다 활성으로 들어감. (Playwright 풀세션 부담은 어댑터 풀이 책임.)
 - **C안 — Naver 종료 후 자동 다이닝코드 매칭+머지** — Naver done 직전 `tryAutoMatchDiningcode` 가 (이름≥0.85 + 거리≤50m + top1-top2≥0.1) 임계 통과 시 `saveDiningcodeShop` + `canonical.merge` 까지 자동. 임계 못 넘으면 silent skip — `ProposalService` 가 후보 큐로 fallback. fire-and-forget 으로 Naver `done` 이벤트는 절대 안 막음.
@@ -192,8 +213,11 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - **search·shop·place 어댑터 Browser 인스턴스 모두 별개** — 모바일 UA / 데스크톱 UA / 데스크톱 UA, viewport 도 다름. Fastify `onClose` 가 셋 다 `Promise.all` 로 정리.
 - **DC bulk save TTL 10분** — Naver 잡(5분)보다 길게 잡음. 잡이 끝난 뒤 어드민이 페이지 새로고침이나 다른 탭에서 결과를 확인할 시간 확보. 단 60초 같은 단명 윈도우가 아니라 명시 10분 — `FINISHED_TTL_MS = 10 * 60_000`.
 
-## Gotchas [coverage: high — 9 sources]
+## Gotchas [coverage: high — 11 sources]
 
+- **stealth 는 maintenance 비용 있음** — 네이버 anti-bot 탐지 로직이 바뀌면 `puppeteer-extra-plugin-stealth` 의 위장이 깨질 수 있음. 이전 우회 패턴들 (`navigator.webdriver=false` 만 박는 류) 처럼 한 번 적용하고 끝이 아니라, plugin 업데이트 / 새 위장 추가 필요할 수 있음. 차단 재발 시 1) stealth plugin 최신 버전 확인, 2) `dev-open-visitor-page.ts` 로 `DEV_OPEN_STEALTH=0` 비교, 3) UA / viewport / locale 도 같이 의심. catchtable 어댑터는 stealth 안 쓰니 그쪽 차단은 별도 (CF 측 이슈).
+- **jitter 범위 너무 작으면 의미 없음** — `CRAWL_VISITOR_PAGE_DELAY_JITTER_MS=500` 정도면 4.5~5.5초 사이라 사실상 고정 cadence. 권장은 base 의 50~100% (base=5000 이면 jitter=2000~5000) — 코드 주석에도 "권장: 2000~5000ms" 명시. jitter=0 은 명시적 off (테스트용).
+- **dev 스크립트는 어댑터 stealth 와 동기화 유지 필요** — `dev-capture-visitor.ts` / `dev-open-visitor-page.ts` 가 어댑터 본체와 똑같이 `chromium.use(StealthPlugin())` 호출. 어댑터에서 stealth 끄거나 다른 plugin 으로 바꾸면 dev 스크립트도 같이 갱신해야 재현성 유지. UA/viewport 도 같은 상수 (모바일 iPhone) 로 박혀 있어 어댑터 본체와 drift 가능 — 변경 시 양쪽 확인.
 - **`MAX_CONCURRENT_PER_ACTOR` 가 3 아닌 5** — 이전 문서/어댑터 부담 추정이 "actor 당 max 3" 가정으로 작성됐다면 갱신 필요. 자동 발견 group-of-5 와 맞춤. Playwright 풀세션이 동시에 5개까지 떠 있을 수 있다는 뜻.
 - **C안 자동 머지는 임계 못 넘으면 silent** — Naver done 후 `tryAutoMatchDiningcode` 가 좌표 없음 / DC source 이미 있음 / 이름·거리·tie-gap 임계 미달 중 하나라도 걸리면 그냥 return. 로그도 안 남김 (실패시 `console.error` 만). 후보는 ProposalService 가 후보 큐로 받아주는 게 fallback — UI 에서 "왜 자동 매칭이 안 됐지" 물으면 임계 + 좌표 보유 여부 확인.
 
@@ -213,7 +237,7 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - **다이닝코드 GET 으로 호출 시 size=4 고정** — 페이지네이션 안 됨. 반드시 POST + form body 로 호출.
 - **다이닝코드 `result_code` 체크 필수** — HTTP 200 인데 result_code "001" 등으로 에러 케이스 들어옴. 어댑터가 `'100'` 이 아니면 `DiningcodeShopError` / `DiningcodeSearchError` throw.
 
-## Sources [coverage: high — 14 sources]
+## Sources [coverage: high — 17 sources]
 
 - [apps/friendly/src/modules/crawl/crawl.route.ts](../../apps/friendly/src/modules/crawl/crawl.route.ts)
 - [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts)
@@ -227,5 +251,8 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - [apps/friendly/src/modules/crawl/adapters/diningcode-search.http.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/diningcode-search.http.adapter.ts)
 - [apps/friendly/src/modules/crawl/adapters/diningcode-shop.http.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/diningcode-shop.http.adapter.ts)
 - [apps/friendly/src/modules/crawl/crawl.test.ts](../../apps/friendly/src/modules/crawl/crawl.test.ts)
+- [apps/friendly/scripts/dev-capture-visitor.ts](../../apps/friendly/scripts/dev-capture-visitor.ts)
+- [apps/friendly/scripts/dev-fetch-visitor-html.ts](../../apps/friendly/scripts/dev-fetch-visitor-html.ts)
+- [apps/friendly/scripts/dev-open-visitor-page.ts](../../apps/friendly/scripts/dev-open-visitor-page.ts)
 - [packages/api-contract/src/schemas/crawl.ts](../../packages/api-contract/src/schemas/crawl.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)
