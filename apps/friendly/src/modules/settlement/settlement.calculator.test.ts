@@ -116,6 +116,39 @@ describe('calculateShares', () => {
     expect(r.poolBreakdown.ALCOHOL.perParticipant).toBe(0);
     expect(r.shareAmounts).toEqual([3000, 3000, 3000]);
   });
+
+  it('perCategoryShares sums per row to shareAmounts and per col to poolAmount', () => {
+    // 정산표 매트릭스 행/열 검산 — UI 가 이 불변식에 의존.
+    const r = calculateShares({
+      items: [
+        { amount: 30000, category: 'ALCOHOL' },
+        { amount: 12000, category: 'NON_ALCOHOL' },
+        { amount: 48000, category: 'SIDE' },
+        { amount: 6000, category: 'UNCATEGORIZED' },
+      ],
+      participants: [
+        { excludeAlcohol: true, excludeNonAlcohol: false, excludeSide: false },
+        { excludeAlcohol: false, excludeNonAlcohol: true, excludeSide: false },
+        { excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: true },
+        { excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
+      ],
+    });
+    // 행 합 = shareAmounts[i]
+    for (let i = 0; i < 4; i += 1) {
+      const rowSum =
+        (r.perCategoryShares.ALCOHOL[i] ?? 0) +
+        (r.perCategoryShares.NON_ALCOHOL[i] ?? 0) +
+        (r.perCategoryShares.SIDE[i] ?? 0) +
+        (r.perCategoryShares.UNCATEGORIZED[i] ?? 0);
+      expect(rowSum).toBe(r.shareAmounts[i]);
+    }
+    // 열 합 = 풀 amount
+    const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+    expect(sum(r.perCategoryShares.ALCOHOL)).toBe(30000);
+    expect(sum(r.perCategoryShares.NON_ALCOHOL)).toBe(12000);
+    expect(sum(r.perCategoryShares.SIDE)).toBe(48000);
+    expect(sum(r.perCategoryShares.UNCATEGORIZED)).toBe(6000);
+  });
 });
 
 describe('effectiveExcludes', () => {
@@ -299,5 +332,28 @@ describe('calculateMultiRoundShares', () => {
     expect(r.perParticipant).toEqual([0, 0, 0]);
     expect(r.perRound).toEqual([]);
     expect(r.grandTotal).toBe(0);
+  });
+
+  it('round perCategoryShares is master-indexed and zero for absentees', () => {
+    // 2명. 1차에 A만 참석, B 불참. 1차 ALCOHOL 5000.
+    const r = calculateMultiRoundShares({
+      participantCount: 2,
+      rounds: [
+        {
+          items: [{ amount: 5000, category: 'ALCOHOL' }],
+          attendees: [
+            {
+              participantIndex: 0,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(r.perRound[0]?.perCategoryShares.ALCOHOL).toEqual([5000, 0]);
+    // 사용 안 한 카테고리도 0 배열로 깔린다 (UI 매트릭스가 안전하게 인덱싱).
+    expect(r.perRound[0]?.perCategoryShares.SIDE).toEqual([0, 0]);
   });
 });

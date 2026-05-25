@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, Receipt } from 'lucide-react';
 import { ApiError, useSharedSettlement } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { ParticipantsCard, RoundItemsCard, SessionSummaryCard } from './SettlementCards';
+import { SettlementBreakdownTable } from './SettlementBreakdownTable';
 
 // 공유 토큰으로 read-only 결과 보기. /share/settlements/:token.
 // 비로그인 사용자도 접근 가능 — 서버가 토큰 검증만 한다. 응답에서 영수증
@@ -62,6 +63,7 @@ export const SharedSettlementPage = () => {
       <div className="flex-1 space-y-4 px-4 py-6">
         <SessionSummaryCard session={s} />
         <ParticipantsCard session={s} />
+        <SettlementBreakdownTable session={s} />
         {s.rounds.map((r) => (
           <div key={r.id} className="space-y-3">
             {r.warning && (

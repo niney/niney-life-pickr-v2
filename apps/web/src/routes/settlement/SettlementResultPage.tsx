@@ -10,6 +10,7 @@ import {
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ParticipantsCard, RoundItemsCard, SessionSummaryCard } from './SettlementCards';
+import { SettlementBreakdownTable } from './SettlementBreakdownTable';
 import { SettlementShareDialog } from './SettlementShareDialog';
 
 // 저장된 정산 세션 단건 보기. /restaurants/:placeId/settle/:id.
@@ -119,6 +120,10 @@ export const SettlementResultPage = () => {
         <SessionSummaryCard session={s} />
 
         <ParticipantsCard session={s} onEdit={handleEdit} />
+
+        {/* 정산표 — 참여자 × (차수 × 카테고리) 매트릭스. 캡처해 공유하기 좋게
+            sticky 이름/총계, 합계 행, 가로 스크롤. */}
+        <SettlementBreakdownTable session={s} />
 
         {/* 차수별 영수증 + 항목 카드. 차수 1개여도 동일 컴포넌트로 표시. */}
         {s.rounds.map((r) => (

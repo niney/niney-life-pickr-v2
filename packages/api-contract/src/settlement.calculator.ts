@@ -49,6 +49,13 @@ export interface CalculateOutput {
       perParticipant: number;
     }
   >;
+  // 카테고리 × 참여자 분담 매트릭스 — '정산표' (이름 × 카테고리) UI 가 사용.
+  // 합산하면 shareAmounts[i] 와 같다. fallback(전원 제외) 케이스에도 의미상의
+  // 분담을 그대로 카테고리 키에 기록한다 (예: ALCOHOL 풀이 전원 제외라
+  // UNCATEGORIZED 처럼 균등 분담된 경우, perCategoryShares.ALCOHOL[i] 에 그
+  // 값이 들어간다 — '주류' 컬럼에 음식값이 박혀 이상해 보일 수 있지만 합산은
+  // 정확. UI 측에선 poolBreakdown 으로 '실제 풀' 인지 fallback 인지 구분 가능).
+  perCategoryShares: Record<ReceiptItemCategoryType, number[]>;
 }
 
 export const calculateShares = (input: CalculateInput): CalculateOutput => {
@@ -57,6 +64,7 @@ export const calculateShares = (input: CalculateInput): CalculateOutput => {
 
   const shareAmounts = new Array<number>(participantCount).fill(0);
   const poolBreakdown = {} as CalculateOutput['poolBreakdown'];
+  const perCategoryShares = {} as CalculateOutput['perCategoryShares'];
 
   for (const category of CATEGORIES) {
     const poolAmount = input.items
@@ -72,6 +80,8 @@ export const calculateShares = (input: CalculateInput): CalculateOutput => {
 
     let activeCount = participates.filter(Boolean).length;
     let effectivePool = poolAmount;
+    // 이 카테고리에서 각 참여자가 진 분담만 따로 누적 (UI 매트릭스용).
+    const categoryShares = new Array<number>(participantCount).fill(0);
 
     // 풀에서 모두 빠졌다면(=주류가 있는데 전원 안 마심) 그 금액을 미분류 풀
     // 처럼 모두에게 균등 분담. 빈 풀은 그대로 0.
@@ -80,7 +90,9 @@ export const calculateShares = (input: CalculateInput): CalculateOutput => {
       // 다른 풀에 영향 주지 않게 별도 처리: 균등 분담을 직접 적용
       const fallback = distribute(poolAmount, participantCount);
       for (let i = 0; i < participantCount; i += 1) {
-        shareAmounts[i] = (shareAmounts[i] ?? 0) + (fallback[i] ?? 0);
+        const v = fallback[i] ?? 0;
+        shareAmounts[i] = (shareAmounts[i] ?? 0) + v;
+        categoryShares[i] = (categoryShares[i] ?? 0) + v;
       }
       activeCount = participantCount;
     }
@@ -88,7 +100,9 @@ export const calculateShares = (input: CalculateInput): CalculateOutput => {
     if (effectivePool > 0 && activeCount > 0) {
       const distributed = distributeWith(effectivePool, participates);
       for (let i = 0; i < participantCount; i += 1) {
-        shareAmounts[i] = (shareAmounts[i] ?? 0) + (distributed[i] ?? 0);
+        const v = distributed[i] ?? 0;
+        shareAmounts[i] = (shareAmounts[i] ?? 0) + v;
+        categoryShares[i] = (categoryShares[i] ?? 0) + v;
       }
     }
 
@@ -98,9 +112,10 @@ export const calculateShares = (input: CalculateInput): CalculateOutput => {
       perParticipant:
         activeCount > 0 && effectivePool > 0 ? Math.floor(effectivePool / activeCount) : 0,
     };
+    perCategoryShares[category] = categoryShares;
   }
 
-  return { shareAmounts, itemsSubtotal, poolBreakdown };
+  return { shareAmounts, itemsSubtotal, poolBreakdown, perCategoryShares };
 };
 
 // amount 를 n 명에게 균등 분배. 나머지는 첫 참여자에게 더한다.
@@ -155,6 +170,9 @@ export interface PerRoundCalcOutput {
   shareAmounts: number[];
   itemsSubtotal: number;
   poolBreakdown: CalculateOutput['poolBreakdown'];
+  // 마스터 인덱스 단위 카테고리별 분담 — 정산표 매트릭스 UI 가 사용.
+  // 비참석자/제외자는 0. 차수에 카테고리 자체가 없으면 그 카테고리 배열 전체가 0.
+  perCategoryShares: CalculateOutput['perCategoryShares'];
 }
 
 export interface MultiRoundCalcOutput {
@@ -203,17 +221,26 @@ export const calculateMultiRoundShares = (
 
     // 참석자 인덱스 → 마스터 인덱스로 되돌려 share 배열을 부풀린다.
     const shareAmounts = new Array<number>(input.participantCount).fill(0);
+    const perCategoryShares = {} as CalculateOutput['perCategoryShares'];
+    for (const category of CATEGORIES) {
+      perCategoryShares[category] = new Array<number>(input.participantCount).fill(0);
+    }
     round.attendees.forEach((a, i) => {
       const amt = inner.shareAmounts[i] ?? 0;
       shareAmounts[a.participantIndex] = amt;
       perParticipant[a.participantIndex] =
         (perParticipant[a.participantIndex] ?? 0) + amt;
+      for (const category of CATEGORIES) {
+        perCategoryShares[category]![a.participantIndex] =
+          inner.perCategoryShares[category]?.[i] ?? 0;
+      }
     });
     grandTotal += inner.itemsSubtotal;
     perRound.push({
       shareAmounts,
       itemsSubtotal: inner.itemsSubtotal,
       poolBreakdown: inner.poolBreakdown,
+      perCategoryShares,
     });
   }
 
