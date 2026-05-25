@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Loader2 } from 'lucide-react';
+import type { SettlementSourceType } from '@repo/api-contract';
 import { useRestaurantPublic, useSettlementDraftStore } from '@repo/shared';
 import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
 import { Step1Participants } from './Step1Participants';
 import { Step2Source } from './Step2Source';
 import { Step3Edit } from './Step3Edit';
@@ -39,20 +41,28 @@ export const SettlementNewPage = () => {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-background">
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background px-3 py-2.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleBack}
-          aria-label="뒤로"
-        >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <div className="flex-1 truncate text-sm font-semibold">
-          정산하기 · {detail.data?.name ?? (detail.isLoading ? '불러오는 중…' : '')}
+      <header className="sticky top-0 z-10 border-b bg-background">
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleBack}
+            aria-label="뒤로"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <div className="flex-1 truncate text-sm font-semibold">
+            정산하기 · {detail.data?.name ?? (detail.isLoading ? '불러오는 중…' : '')}
+          </div>
         </div>
-        <StepIndicator step={step} />
+        <Stepper
+          step={step}
+          source={draft.source}
+          participantsCount={draft.participants.length}
+          itemsCount={draft.items.length}
+          onJump={setStep}
+        />
       </header>
 
       {detail.isLoading && !detail.data ? (
@@ -67,7 +77,10 @@ export const SettlementNewPage = () => {
         <div className="flex-1 px-4 py-6">
           {step === 'participants' && (
             <Step1Participants
-              onNext={() => setStep('source')}
+              // 이미 한 번 입력 흐름을 마치고 참여자 편집을 위해 돌아온 경우엔
+              // Step2(입력 방식 선택) 를 다시 거치지 않고 항목 편집으로 직행.
+              // 그래야 영수증 사진을 다시 올리지 않아도 된다.
+              onNext={() => setStep(draft.source ? 'edit' : 'source')}
             />
           )}
           {step === 'source' && (
@@ -85,7 +98,10 @@ export const SettlementNewPage = () => {
             />
           )}
           {step === 'review' && (
-            <Step4Review placeId={placeId} onBack={() => setStep('edit')} />
+            <Step4Review
+              placeId={placeId}
+              onBack={() => setStep('edit')}
+            />
           )}
         </div>
       )}
@@ -93,18 +109,69 @@ export const SettlementNewPage = () => {
   );
 };
 
-const STEPS: { key: StepKey; label: string }[] = [
-  { key: 'participants', label: '1. 인원' },
-  { key: 'source', label: '2. 입력 방식' },
-  { key: 'edit', label: '3. 항목 편집' },
-  { key: 'review', label: '4. 결과' },
+const STEPS: { key: StepKey; label: string; short: string }[] = [
+  { key: 'participants', label: '인원', short: '1' },
+  { key: 'source', label: '방식', short: '2' },
+  { key: 'edit', label: '편집', short: '3' },
+  { key: 'review', label: '결과', short: '4' },
 ];
 
-const StepIndicator = ({ step }: { step: StepKey }) => {
-  const idx = STEPS.findIndex((s) => s.key === step);
-  return (
-    <div className="hidden text-xs text-muted-foreground sm:block">
-      {STEPS[idx]?.label} / 4
-    </div>
-  );
+// 게이팅 — 각 단계의 선행 조건이 충족되면 점프 가능. "완료된 단계만 자유롭게"
+// 정책: Step N+1 은 Step N 의 산출물이 draft 에 있을 때 활성화.
+const canJumpTo = (
+  target: StepKey,
+  source: SettlementSourceType | null,
+  participantsCount: number,
+  itemsCount: number,
+): boolean => {
+  switch (target) {
+    case 'participants':
+      return true;
+    case 'source':
+      return participantsCount > 0;
+    case 'edit':
+      return source != null;
+    case 'review':
+      return itemsCount > 0;
+  }
 };
+
+interface StepperProps {
+  step: StepKey;
+  source: SettlementSourceType | null;
+  participantsCount: number;
+  itemsCount: number;
+  onJump: (key: StepKey) => void;
+}
+
+const Stepper = ({ step, source, participantsCount, itemsCount, onJump }: StepperProps) => (
+  <nav
+    aria-label="정산 단계"
+    className="flex items-center gap-1 border-t bg-muted/30 px-2 py-1.5"
+  >
+    {STEPS.map((s) => {
+      const isActive = s.key === step;
+      const enabled = canJumpTo(s.key, source, participantsCount, itemsCount);
+      return (
+        <button
+          key={s.key}
+          type="button"
+          disabled={!enabled || isActive}
+          aria-current={isActive ? 'step' : undefined}
+          onClick={() => onJump(s.key)}
+          className={cn(
+            'flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+            isActive
+              ? 'bg-primary text-primary-foreground'
+              : enabled
+                ? 'text-foreground hover:bg-accent'
+                : 'cursor-not-allowed text-muted-foreground opacity-50',
+          )}
+        >
+          <span className="tabular-nums">{s.short}</span>
+          <span>{s.label}</span>
+        </button>
+      );
+    })}
+  </nav>
+);
