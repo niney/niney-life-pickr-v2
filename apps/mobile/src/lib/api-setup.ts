@@ -1,7 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules } from 'react-native';
 import Constants from 'expo-constants';
-import { configureApi, useAuthStore } from '@repo/shared';
+import { configureApi, setSettlementDraftStorage, useAuthStore } from '@repo/shared';
+
+// 정산하기 draft persist 어댑터 — 웹은 sessionStorage 가 자동, 앱은 모듈
+// 로드 시점에 AsyncStorage 를 주입해야 zustand persist 가 첫 read/write 부터
+// AsyncStorage 를 쓴다. zustand 의 createJSONStorage 는 async getItem 도
+// 받으므로 AsyncStorage 그대로 호환.
+setSettlementDraftStorage(AsyncStorage);
 
 const TOKEN_KEY = 'lp:token';
 const GUEST_KEY = 'lp:guest';

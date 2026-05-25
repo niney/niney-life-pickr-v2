@@ -36,6 +36,15 @@ const config: ExpoConfig = {
         locationWhenInUsePermission: '주변 식당을 보여주기 위해 위치를 사용합니다.',
       },
     ],
+    // 영수증 사진 입력 — 카메라(촬영) + 라이브러리(앨범) 둘 다 사용. ios/ 가
+    // gitignored 라 prebuild 마다 plist 키가 다시 들어가야 한다.
+    [
+      'expo-image-picker',
+      {
+        photosPermission: '영수증 사진을 첨부하기 위해 사진 라이브러리 접근이 필요합니다.',
+        cameraPermission: '영수증을 바로 촬영하기 위해 카메라 접근이 필요합니다.',
+      },
+    ],
     './plugins/with-swift-concurrency-fix',
     './plugins/with-android-minify',
   ],
