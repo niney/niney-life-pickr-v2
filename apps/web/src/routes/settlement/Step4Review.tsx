@@ -14,6 +14,8 @@ import {
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { RoundExceptionsEditor } from './RoundExceptionsEditor';
+import { CopyCheck } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -260,7 +262,8 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
         </CardContent>
       </Card>
 
-      {/* 차수별 카테고리 풀 디버깅 — 차수가 여러 개면 차수마다 접힌 카드. */}
+      {/* 차수별 카드 — 차수 특이사항(차수별 exclude override) + 카테고리 풀 breakdown.
+          차수가 여러 개면 2차+에 "1차와 동일" 빠른 복사 버튼. */}
       {draft.rounds.map((r, rIdx) => {
         const rc = calc.perRound[rIdx];
         if (!rc) return null;
@@ -268,46 +271,62 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
         return (
           <Card key={r.clientId}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between text-left text-base font-semibold"
-                  onClick={() => setBreakdownOpen(isOpen ? null : r.clientId)}
-                >
-                  <span>
-                    {multi ? `${rIdx + 1}차 · ` : ''}
-                    {r.placeName} · 카테고리별 풀
-                  </span>
+              <CardTitle className="flex items-center justify-between gap-2 text-base">
+                <span className="truncate">
+                  {multi ? `${rIdx + 1}차 · ` : ''}
+                  {r.placeName}
+                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* 2차+ 라운드에만 노출. 1차의 참석/특이사항 그대로 복사. */}
+                  {rIdx > 0 && (
+                    <CopyFromFirstButton
+                      targetRoundClientId={r.clientId}
+                      sourceRoundClientId={draft.rounds[0]!.clientId}
+                    />
+                  )}
                   <span className="text-sm font-normal text-muted-foreground">
-                    {rc.itemsSubtotal.toLocaleString('ko-KR')}원 {isOpen ? '▴' : '▾'}
+                    {rc.itemsSubtotal.toLocaleString('ko-KR')}원
                   </span>
-                </button>
+                </div>
               </CardTitle>
             </CardHeader>
-            {isOpen && (
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  {(
-                    ['ALCOHOL', 'NON_ALCOHOL', 'SIDE', 'UNCATEGORIZED'] as ReceiptItemCategoryType[]
-                  ).map((c) => {
-                    const b = rc.poolBreakdown[c];
-                    if (b.poolAmount === 0) return null;
-                    return (
-                      <li key={c} className="flex items-center justify-between gap-2">
-                        <span>{CATEGORY_LABEL[c]}</span>
-                        <span className="text-muted-foreground">
-                          {b.poolAmount.toLocaleString('ko-KR')}원 · {b.participantCount}명 · 1인{' '}
-                          {b.perParticipant.toLocaleString('ko-KR')}원
-                        </span>
-                      </li>
-                    );
-                  })}
-                  {Object.values(rc.poolBreakdown).every((b) => b.poolAmount === 0) && (
-                    <li className="text-muted-foreground">항목이 없습니다.</li>
-                  )}
-                </ul>
-              </CardContent>
-            )}
+            <CardContent className="space-y-3">
+              {/* 옵션 C 핵심 — 평소엔 비어 있고, 필요할 때 명시적 칩 추가. */}
+              <RoundExceptionsEditor round={r} participants={draft.participants} />
+
+              {/* 카테고리 풀 breakdown 은 접힘. 디버깅·확인용이라 default 닫힘. */}
+              <div className="border-t pt-2">
+                <button
+                  type="button"
+                  className="w-full text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                  onClick={() => setBreakdownOpen(isOpen ? null : r.clientId)}
+                >
+                  카테고리별 풀 {isOpen ? '▴' : '▾'}
+                </button>
+                {isOpen && (
+                  <ul className="mt-2 space-y-1.5 text-sm">
+                    {(
+                      ['ALCOHOL', 'NON_ALCOHOL', 'SIDE', 'UNCATEGORIZED'] as ReceiptItemCategoryType[]
+                    ).map((c) => {
+                      const b = rc.poolBreakdown[c];
+                      if (b.poolAmount === 0) return null;
+                      return (
+                        <li key={c} className="flex items-center justify-between gap-2">
+                          <span>{CATEGORY_LABEL[c]}</span>
+                          <span className="text-muted-foreground">
+                            {b.poolAmount.toLocaleString('ko-KR')}원 · {b.participantCount}명 · 1인{' '}
+                            {b.perParticipant.toLocaleString('ko-KR')}원
+                          </span>
+                        </li>
+                      );
+                    })}
+                    {Object.values(rc.poolBreakdown).every((b) => b.poolAmount === 0) && (
+                      <li className="text-muted-foreground">항목이 없습니다.</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            </CardContent>
           </Card>
         );
       })}
@@ -329,5 +348,38 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
         </Button>
       </div>
     </section>
+  );
+};
+
+// "1차와 동일" — 2차+ 라운드에서 참석/특이사항을 1차에서 한 번에 복사.
+// items/source/영수증은 건드리지 않음 (그 차수의 메뉴 입력은 그대로).
+// 클릭 직후 1초간 ✓ 피드백.
+const CopyFromFirstButton = ({
+  targetRoundClientId,
+  sourceRoundClientId,
+}: {
+  targetRoundClientId: string;
+  sourceRoundClientId: string;
+}) => {
+  const copyRoundAttendancesFrom = useSettlementDraftStore(
+    (s) => s.copyRoundAttendancesFrom,
+  );
+  const [justCopied, setJustCopied] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1 text-xs"
+      onClick={() => {
+        copyRoundAttendancesFrom(targetRoundClientId, sourceRoundClientId);
+        setJustCopied(true);
+        window.setTimeout(() => setJustCopied(false), 1200);
+      }}
+      title="1차의 참석/특이사항을 그대로 복사"
+    >
+      <CopyCheck className="size-3" />
+      {justCopied ? '복사됨' : '1차와 동일'}
+    </Button>
   );
 };

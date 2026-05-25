@@ -178,6 +178,10 @@ interface SettlementDraftStore extends SettlementDraft {
     key: ExcludeKey,
     override: boolean | null,
   ): void;
+  // 다른 차수의 attendances (참석 + 차수별 override) 를 그대로 복사. items/
+  // source/영수증 등은 건드리지 않는다 — '2차도 같은 인원·같은 옵션' 케이스를
+  // 한 번에 적용하는 용도.
+  copyRoundAttendancesFrom(targetRoundClientId: string, sourceRoundClientId: string): void;
 }
 
 // crypto.randomUUID 가 없는 환경(아주 오래된 브라우저) 폴백.
@@ -388,6 +392,38 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
               : r,
           ),
         }));
+      },
+      copyRoundAttendancesFrom(targetRoundClientId, sourceRoundClientId) {
+        set((s) => {
+          const source = s.rounds.find((r) => r.clientId === sourceRoundClientId);
+          if (!source) return s;
+          // participantClientId 별로 source 의 attendance 값 lookup. target 의
+          // attendances 배열 자체는 마스터 sync 결과를 따르므로 길이는 유지하고
+          // 각 항목의 attended/override 값만 source 에서 가져온다.
+          const sourceByPid = new Map(
+            source.attendances.map((a) => [a.participantClientId, a]),
+          );
+          return {
+            rounds: s.rounds.map((r) =>
+              r.clientId === targetRoundClientId
+                ? {
+                    ...r,
+                    attendances: r.attendances.map((a) => {
+                      const src = sourceByPid.get(a.participantClientId);
+                      if (!src) return a;
+                      return {
+                        ...a,
+                        attended: src.attended,
+                        excludeAlcoholOverride: src.excludeAlcoholOverride,
+                        excludeNonAlcoholOverride: src.excludeNonAlcoholOverride,
+                        excludeSideOverride: src.excludeSideOverride,
+                      };
+                    }),
+                  }
+                : r,
+            ),
+          };
+        });
       },
     }),
     {
