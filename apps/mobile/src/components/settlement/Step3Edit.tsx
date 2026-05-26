@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -209,6 +209,43 @@ const RoundEditor = ({ round, showInvalid, theme }: RoundEditorProps) => {
   const menus = detail.data?.menus ?? [];
   const [menuPickerOpen, setMenuPickerOpen] = useState(false);
 
+  // 항목 메뉴명 input ref Map — Enter 로 새 항목 추가 후 그 행 focus 이동.
+  // 행이 unmount 되면 Map 에서 자동 정리.
+  const nameRefs = useRef(new Map<string, TextInput | null>());
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    const ref = nameRefs.current.get(pendingFocusId);
+    if (ref) {
+      ref.focus();
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, round.items]);
+
+  // Enter / "다음" 키: 마지막 항목이면 새 빈 항목 추가 + 그 행 메뉴명 focus.
+  // 중간 항목이면 다음 항목 focus. 빈 이름이면 무시.
+  const handleItemSubmit = (itemClientId: string) => {
+    const idx = round.items.findIndex((it) => it.clientId === itemClientId);
+    const it = round.items[idx];
+    if (!it) return;
+    if (it.name.trim().length === 0) return;
+    const isLast = idx === round.items.length - 1;
+    if (isLast) {
+      const newId = addRoundItem(round.clientId, {
+        name: '',
+        unitPrice: null,
+        quantity: 1,
+        amount: 0,
+        category: 'UNCATEGORIZED',
+        matchedMenuName: null,
+      });
+      if (newId) setPendingFocusId(newId);
+    } else {
+      const nextId = round.items[idx + 1]?.clientId;
+      if (nextId) setPendingFocusId(nextId);
+    }
+  };
+
   const subtotal = useMemo(
     () => round.items.reduce((sum, it) => sum + (it.amount || 0), 0),
     [round.items],
@@ -264,10 +301,16 @@ const RoundEditor = ({ round, showInvalid, theme }: RoundEditorProps) => {
           key={it.clientId}
           item={it}
           index={idx}
+          isLast={idx === round.items.length - 1}
           onUpdate={(patch) =>
             updateRoundItem(round.clientId, it.clientId, patch)
           }
           onRemove={() => removeRoundItem(round.clientId, it.clientId)}
+          onSubmit={() => handleItemSubmit(it.clientId)}
+          nameRef={(el) => {
+            if (el) nameRefs.current.set(it.clientId, el);
+            else nameRefs.current.delete(it.clientId);
+          }}
           invalid={showInvalid && (it.name.trim().length === 0 || it.amount <= 0)}
           theme={theme}
         />
@@ -377,13 +420,26 @@ const RoundEditor = ({ round, showInvalid, theme }: RoundEditorProps) => {
 interface ItemRowProps {
   item: DraftItem;
   index: number;
+  isLast: boolean;
   onUpdate: (patch: Partial<DraftItem>) => void;
   onRemove: () => void;
+  onSubmit: () => void;
+  nameRef: (el: TextInput | null) => void;
   invalid: boolean;
   theme: Theme;
 }
 
-const ItemRow = ({ item, index, onUpdate, onRemove, invalid, theme }: ItemRowProps) => {
+const ItemRow = ({
+  item,
+  index,
+  isLast,
+  onUpdate,
+  onRemove,
+  onSubmit,
+  nameRef,
+  invalid,
+  theme,
+}: ItemRowProps) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View
@@ -420,10 +476,13 @@ const ItemRow = ({ item, index, onUpdate, onRemove, invalid, theme }: ItemRowPro
           메뉴명
         </Text>
         <TextInput
+          ref={nameRef}
           value={item.name}
           placeholder="예: 카스 500ml"
           placeholderTextColor={theme.colors.textMuted}
           onChangeText={(v) => onUpdate({ name: v })}
+          returnKeyType={isLast ? 'done' : 'next'}
+          onSubmitEditing={onSubmit}
           style={styles.input}
         />
       </View>

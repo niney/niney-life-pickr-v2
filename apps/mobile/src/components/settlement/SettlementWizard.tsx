@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import {
   useRestaurantPublic,
   useSettlement,
@@ -38,7 +38,6 @@ interface Props {
 export const SettlementWizard = ({ placeId = null, editingId = null }: Props) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const router = useRouter();
   const isEdit = Boolean(editingId);
 
   const draft = useSettlementDraftStore();
@@ -162,13 +161,6 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
     draft.rounds,
   ]);
 
-  const handleHeaderBack = useCallback(() => {
-    // 스텝 안에서의 뒤로가기는 각 Step 컴포넌트의 onBack 으로 처리.
-    // 헤더 back 은 wizard 자체 종료 — 식당 진입은 식당 상세로, 일반 진입은
-    // 뒤로 navigate. expo-router 의 router.back() 이 스택 한 칸 뒤로.
-    router.back();
-  }, [router]);
-
   // 편집 hydrate 중에는 로딩 표시 — 아직 store 가 빈 상태로 step1 이 비어
   // 보이는 깜빡임 방지.
   if (isEdit && !hydrated) {
@@ -261,9 +253,6 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
           )}
         </View>
       </View>
-      {/* handleHeaderBack 는 추후 헤더 좌측 버튼에서 호출. 현재는 Stack 의 기본
-          back 동작이 그 역할 — 향후 커스텀 헤더에서 hook 으로 활용한다. */}
-      {false && <Pressable onPress={handleHeaderBack} />}
     </>
   );
 };

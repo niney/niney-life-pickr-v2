@@ -1,30 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   ApiError,
-  settlementExtractionApi,
-  useDeleteSettlement,
-  useSettlement,
+  useSharedSettlement,
   useTheme,
   type Theme,
 } from '@repo/shared';
 import type {
   ReceiptItemCategoryType,
-  SettlementRoundType,
-  SettlementSessionType,
+  SharedSettlementSessionType,
 } from '@repo/api-contract';
-import { SettlementBreakdownTable } from '../../../../../src/components/settlement/SettlementBreakdownTable';
-import { SettlementShareSheet } from '../../../../../src/components/settlement/SettlementShareSheet';
+import { SettlementBreakdownTable } from '../../../src/components/settlement/SettlementBreakdownTable';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
   ALCOHOL: '주류',
@@ -43,48 +36,20 @@ const participantName = (
   return nm || nick || `참여자 ${idx + 1}`;
 };
 
-export default function SettlementResultScreen() {
+// 공유 토큰 read-only 결과 보기. 비로그인 사용자도 접근 가능 — 서버가 토큰
+// 검증만 한다. 응답에서 영수증 미리보기와 소유자 id 는 제거되어 있다.
+// 외부 링크(웹) 를 앱이 받았을 때 같은 도메인의 deep link 로 라우팅되면
+// 이 화면이 떠야 한다 (deep link 설정은 별도).
+export default function SharedSettlementScreen() {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const router = useRouter();
-  const { placeId = '', id = '' } = useLocalSearchParams<{
-    placeId: string;
-    id: string;
-  }>();
-  const session = useSettlement(id);
-  const remove = useDeleteSettlement();
-  const [shareOpen, setShareOpen] = useState(false);
-
-  const handleDelete = () => {
-    Alert.alert(
-      '정산 삭제',
-      '이 정산 이력을 삭제할까요? 되돌릴 수 없습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await remove.mutateAsync(id);
-              router.replace(`/restaurant/${placeId}`);
-            } catch (e) {
-              Alert.alert(
-                '삭제 실패',
-                e instanceof ApiError ? e.message : '알 수 없는 오류',
-              );
-            }
-          },
-        },
-      ],
-      { cancelable: true },
-    );
-  };
+  const { token = '' } = useLocalSearchParams<{ token: string }>();
+  const session = useSharedSettlement(token);
 
   if (session.isLoading) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: '정산 결과' }} />
+        <Stack.Screen options={{ headerShown: true, title: '공유된 정산' }} />
         <View style={[styles.center, { backgroundColor: theme.colors.bg }]}>
           <ActivityIndicator color={theme.colors.text} />
         </View>
@@ -93,15 +58,21 @@ export default function SettlementResultScreen() {
   }
 
   if (session.isError || !session.data) {
+    const status =
+      session.error instanceof ApiError ? session.error.statusCode : null;
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: '정산 결과' }} />
+        <Stack.Screen options={{ headerShown: true, title: '공유된 정산' }} />
         <View style={[styles.center, { backgroundColor: theme.colors.bg }]}>
-          <Text style={[styles.errorText, { color: theme.colors.danger }]}>
-            정산을 불러오지 못했습니다.
-            {session.error instanceof ApiError
-              ? `\n${session.error.message}`
-              : ''}
+          <Text style={[styles.errorTitle, { color: theme.colors.text }]}>
+            공유된 정산을 찾을 수 없습니다
+          </Text>
+          <Text style={[styles.errorBody, { color: theme.colors.textMuted }]}>
+            {status === 404
+              ? '링크가 만료되었거나 잘못된 주소입니다.'
+              : session.error instanceof ApiError
+                ? session.error.message
+                : '잠시 후 다시 시도해 주세요.'}
           </Text>
         </View>
       </>
@@ -119,27 +90,24 @@ export default function SettlementResultScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: `정산 결과 · ${headerLabel}`,
-          headerRight: () => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="내 정산 이력"
-              onPress={() => router.push('/settlement/history')}
-              style={({ pressed }) => ({
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                opacity: pressed ? 0.5 : 1,
-              })}
-            >
-              <Text style={{ color: theme.colors.text, fontSize: 13 }}>
-                🧾 이력
-              </Text>
-            </Pressable>
-          ),
+          title: `🎲 ${headerLabel}`,
         }}
       />
       <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View
+            style={[
+              styles.banner,
+              {
+                backgroundColor: theme.colors.surfaceAlt,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.bannerText, { color: theme.colors.textMuted }]}>
+              공유 링크로 보는 read-only 결과입니다.
+            </Text>
+          </View>
           <SummaryCard session={s} theme={theme} />
           <ParticipantsCard session={s} theme={theme} />
           {s.rounds.map((r) => (
@@ -152,80 +120,6 @@ export default function SettlementResultScreen() {
           ))}
           <SettlementBreakdownTable session={s} />
         </ScrollView>
-
-        <SettlementShareSheet
-          open={shareOpen}
-          sessionId={id}
-          onClose={() => setShareOpen(false)}
-        />
-
-        <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() =>
-              router.push(`/restaurant/${placeId}/settle/${id}/edit`)
-            }
-            style={({ pressed }) => [
-              styles.editButton,
-              {
-                backgroundColor: pressed
-                  ? theme.colors.primaryHover
-                  : theme.colors.primary,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.editButtonText,
-                { color: theme.colors.primaryText },
-              ]}
-            >
-              ✎ 수정
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setShareOpen(true)}
-            style={({ pressed }) => [
-              styles.outlineButton,
-              {
-                borderColor: theme.colors.border,
-                backgroundColor: pressed
-                  ? theme.colors.surfaceAlt
-                  : 'transparent',
-              },
-            ]}
-          >
-            <Text style={[styles.outlineButtonText, { color: theme.colors.text }]}>
-              🔗 공유
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={remove.isPending}
-            onPress={handleDelete}
-            style={({ pressed }) => [
-              styles.dangerButton,
-              {
-                borderColor: theme.colors.danger,
-                backgroundColor: pressed
-                  ? theme.colors.dangerBg
-                  : 'transparent',
-                opacity: remove.isPending ? 0.5 : 1,
-              },
-            ]}
-          >
-            {remove.isPending ? (
-              <ActivityIndicator size="small" color={theme.colors.danger} />
-            ) : (
-              <Text
-                style={[styles.dangerButtonText, { color: theme.colors.danger }]}
-              >
-                🗑 삭제
-              </Text>
-            )}
-          </Pressable>
-        </View>
       </View>
     </>
   );
@@ -235,7 +129,7 @@ const SummaryCard = ({
   session,
   theme,
 }: {
-  session: SettlementSessionType;
+  session: SharedSettlementSessionType;
   theme: Theme;
 }) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -249,15 +143,11 @@ const SummaryCard = ({
       <Text style={[styles.bigAmount, { color: theme.colors.text }]}>
         {session.grandTotal.toLocaleString('ko-KR')}원
       </Text>
-      <View style={styles.summaryMeta}>
-        <Text style={[styles.summaryText, { color: theme.colors.textMuted }]}>
-          참여 {session.participants.length}명 · {session.rounds.length}차
-        </Text>
-        <Text style={[styles.summaryText, { color: theme.colors.textMuted }]}>
-          작성 {createdLabel}
-          {session.editedAt ? ' · 수정됨' : ''}
-        </Text>
-      </View>
+      <Text style={[styles.summaryText, { color: theme.colors.textMuted }]}>
+        참여 {session.participants.length}명 · {session.rounds.length}차 · 작성{' '}
+        {createdLabel}
+        {session.editedAt ? ' · 수정됨' : ''}
+      </Text>
     </View>
   );
 };
@@ -266,7 +156,7 @@ const ParticipantsCard = ({
   session,
   theme,
 }: {
-  session: SettlementSessionType;
+  session: SharedSettlementSessionType;
   theme: Theme;
 }) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -280,12 +170,13 @@ const ParticipantsCard = ({
         if (p.excludeAlcohol) tags.push('주류 X');
         if (p.excludeNonAlcohol) tags.push('비주류 X');
         if (p.excludeSide) tags.push('안주 X');
-        // 차수별 부분합 — round.attendees 의 shareAmount 사용. 비참석은 attended=false.
         const perRoundText =
           session.rounds.length > 1
             ? session.rounds
                 .map((r, rIdx) => {
-                  const att = r.attendees.find((a) => a.participantId === p.id);
+                  const att = r.attendees.find(
+                    (a) => a.participantId === p.id,
+                  );
                   if (!att?.attended) return `${rIdx + 1}차 불참`;
                   return `${rIdx + 1}차 ${att.shareAmount.toLocaleString('ko-KR')}`;
                 })
@@ -327,18 +218,13 @@ const ParticipantsCard = ({
               )}
               {perRoundText && (
                 <Text
-                  style={[
-                    styles.perRoundText,
-                    { color: theme.colors.textMuted },
-                  ]}
+                  style={[styles.perRoundText, { color: theme.colors.textMuted }]}
                 >
                   {perRoundText}
                 </Text>
               )}
             </View>
-            <Text
-              style={[styles.participantTotal, { color: theme.colors.text }]}
-            >
+            <Text style={[styles.participantTotal, { color: theme.colors.text }]}>
               {p.shareAmount.toLocaleString('ko-KR')}원
             </Text>
           </View>
@@ -353,7 +239,7 @@ const RoundCard = ({
   showRoundNumber,
   theme,
 }: {
-  round: SettlementRoundType;
+  round: SharedSettlementSessionType['rounds'][number];
   showRoundNumber: boolean;
   theme: Theme;
 }) => {
@@ -389,18 +275,11 @@ const RoundCard = ({
         </View>
       )}
 
-      {round.receiptPreviewUrl && (
-        <ReceiptImage url={round.receiptPreviewUrl} theme={theme} />
-      )}
-
       <View style={{ gap: 6 }}>
         {round.items.map((it) => (
           <View
             key={it.id}
-            style={[
-              styles.itemRow,
-              { borderTopColor: theme.colors.border },
-            ]}
+            style={[styles.itemRow, { borderTopColor: theme.colors.border }]}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
@@ -409,9 +288,7 @@ const RoundCard = ({
               >
                 {it.name}
               </Text>
-              <Text
-                style={[styles.itemMeta, { color: theme.colors.textMuted }]}
-              >
+              <Text style={[styles.itemMeta, { color: theme.colors.textMuted }]}>
                 {CATEGORY_LABEL[it.category]}
                 {it.unitPrice != null && it.quantity != null
                   ? ` · ${it.unitPrice.toLocaleString('ko-KR')}원 × ${it.quantity}`
@@ -425,18 +302,11 @@ const RoundCard = ({
         ))}
         {round.discountAmount != null && round.discountCategory != null && (
           <View
-            style={[
-              styles.itemRow,
-              { borderTopColor: theme.colors.border },
-            ]}
+            style={[styles.itemRow, { borderTopColor: theme.colors.border }]}
           >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={[styles.itemName, { color: theme.colors.textMuted }]}
-              >
-                할인 ({CATEGORY_LABEL[round.discountCategory]})
-              </Text>
-            </View>
+            <Text style={[styles.itemName, { color: theme.colors.textMuted }]}>
+              할인 ({CATEGORY_LABEL[round.discountCategory]})
+            </Text>
             <Text style={[styles.itemAmount, { color: theme.colors.danger }]}>
               −{round.discountAmount.toLocaleString('ko-KR')}원
             </Text>
@@ -444,62 +314,6 @@ const RoundCard = ({
         )}
       </View>
     </View>
-  );
-};
-
-// 영수증 이미지 — JWT preview 라 fetch + base64 변환 후 표시.
-const ReceiptImage = ({ url, theme }: { url: string; theme: Theme }) => {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const token = url.split('/').pop() ?? '';
-    (async () => {
-      try {
-        const blob = await settlementExtractionApi.previewBlob(token);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (cancelled) return;
-          if (typeof reader.result === 'string') setDataUrl(reader.result);
-          else setError('미리보기 변환 실패');
-        };
-        reader.onerror = () => {
-          if (!cancelled) setError('미리보기 변환 실패');
-        };
-        reader.readAsDataURL(blob);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '미리보기 실패');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  if (error) {
-    return (
-      <Text style={{ fontSize: 12, color: theme.colors.danger }}>{error}</Text>
-    );
-  }
-  if (!dataUrl) {
-    return (
-      <Text style={{ fontSize: 12, color: theme.colors.textMuted }}>
-        영수증 불러오는 중…
-      </Text>
-    );
-  }
-  return (
-    <Image
-      source={{ uri: dataUrl }}
-      style={{
-        width: '100%',
-        height: 200,
-        borderRadius: 8,
-        backgroundColor: theme.colors.surfaceAlt,
-      }}
-      resizeMode="contain"
-    />
   );
 };
 
@@ -512,8 +326,16 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
       padding: 24,
+      gap: 8,
     },
-    errorText: { fontSize: 14, textAlign: 'center' },
+    errorTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
+    errorBody: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+    banner: {
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    bannerText: { fontSize: 12, textAlign: 'center' },
     card: {
       padding: 12,
       borderRadius: 12,
@@ -531,7 +353,6 @@ const createStyles = (theme: Theme) =>
     cardTitle: { fontSize: 14, fontWeight: '600', flex: 1 },
     cardSub: { fontSize: 13 },
     bigAmount: { fontSize: 28, fontWeight: '800' },
-    summaryMeta: { gap: 2 },
     summaryText: { fontSize: 12 },
     warnBanner: {
       padding: 10,
@@ -568,34 +389,4 @@ const createStyles = (theme: Theme) =>
     itemName: { fontSize: 13, fontWeight: '500' },
     itemMeta: { fontSize: 11, marginTop: 2 },
     itemAmount: { fontSize: 13, fontWeight: '600' },
-    footer: {
-      flexDirection: 'row',
-      gap: 8,
-      padding: 12,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      backgroundColor: theme.colors.bg,
-    },
-    editButton: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 10,
-      alignItems: 'center',
-    },
-    editButtonText: { fontSize: 14, fontWeight: '600' },
-    outlineButton: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      alignItems: 'center',
-    },
-    outlineButtonText: { fontSize: 14, fontWeight: '600' },
-    dangerButton: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      alignItems: 'center',
-    },
-    dangerButtonText: { fontSize: 14, fontWeight: '600' },
   });

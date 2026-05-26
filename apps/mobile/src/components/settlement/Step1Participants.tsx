@@ -13,6 +13,7 @@ import {
   useTheme,
   type Theme,
 } from '@repo/shared';
+import { useSettlementPrefsStore } from '../../lib/settlementPrefsStore';
 import { ContactSuggestions } from './ContactSuggestions';
 import {
   ContactPickerSheet,
@@ -35,6 +36,15 @@ export const Step1Participants = ({ onNext }: Props) => {
   );
   const updateParticipant = useSettlementDraftStore((s) => s.updateParticipant);
   const removeParticipant = useSettlementDraftStore((s) => s.removeParticipant);
+
+  // 새 행 기본 exclude — 자주 쓰는 옵션을 한 번 켜두면 다음 정산까지 유지.
+  // AsyncStorage 기반 settlementPrefsStore (mobile).
+  const newExcludes = useSettlementPrefsStore(
+    (s) => s.newParticipantExcludes,
+  );
+  const setNewExclude = useSettlementPrefsStore(
+    (s) => s.setNewParticipantExclude,
+  );
 
   const [submitAttempt, setSubmitAttempt] = useState(false);
   const [aliasOpened, setAliasOpened] = useState<Set<string>>(new Set());
@@ -126,9 +136,7 @@ export const Step1Participants = ({ onNext }: Props) => {
       const newId = addParticipant({
         name: '',
         nickname: '',
-        excludeAlcohol: false,
-        excludeNonAlcohol: false,
-        excludeSide: false,
+        ...newExcludes,
       });
       setPendingFocusId(newId);
     } else {
@@ -164,6 +172,51 @@ export const Step1Participants = ({ onNext }: Props) => {
             "+ 별칭" 으로 구분할 수 있고, 술/안주 등 특이사항은 칩으로 표시하면 해당
             카테고리는 그 사람을 제외하고 나눠 부담합니다.
           </Text>
+        </View>
+
+        {/* 새 행 기본 exclude — 자주 쓰는 옵션을 한 번 체크하면 다음 정산까지
+            유지. 단골에서 추가한 행은 단골값이 우선이라 영향 없음. */}
+        <View
+          style={[
+            styles.prefsBox,
+            {
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surfaceAlt,
+            },
+          ]}
+        >
+          <Text style={[styles.prefsLabel, { color: theme.colors.textMuted }]}>
+            새 행 기본
+          </Text>
+          <View style={styles.prefsChips}>
+            <PrefChip
+              label="주류 안 함"
+              checked={newExcludes.excludeAlcohol}
+              onPress={() =>
+                setNewExclude('excludeAlcohol', !newExcludes.excludeAlcohol)
+              }
+              theme={theme}
+            />
+            <PrefChip
+              label="비주류 안 함"
+              checked={newExcludes.excludeNonAlcohol}
+              onPress={() =>
+                setNewExclude(
+                  'excludeNonAlcohol',
+                  !newExcludes.excludeNonAlcohol,
+                )
+              }
+              theme={theme}
+            />
+            <PrefChip
+              label="안주 안 먹음"
+              checked={newExcludes.excludeSide}
+              onPress={() =>
+                setNewExclude('excludeSide', !newExcludes.excludeSide)
+              }
+              theme={theme}
+            />
+          </View>
         </View>
 
         {participants.length === 0 && (
@@ -351,9 +404,7 @@ export const Step1Participants = ({ onNext }: Props) => {
               const newId = addParticipant({
                 name: '',
                 nickname: '',
-                excludeAlcohol: false,
-                excludeNonAlcohol: false,
-                excludeSide: false,
+                ...newExcludes,
               });
               setPendingFocusId(newId);
             }}
@@ -439,6 +490,49 @@ export const Step1Participants = ({ onNext }: Props) => {
   );
 };
 
+// "새 행 기본" 패널의 미니 칩 — 본 행의 ExcludeChip 보다 작고 회색조.
+const PrefChip = ({
+  label,
+  checked,
+  onPress,
+  theme,
+}: {
+  label: string;
+  checked: boolean;
+  onPress: () => void;
+  theme: Theme;
+}) => (
+  <Pressable
+    accessibilityRole="checkbox"
+    accessibilityState={{ checked }}
+    onPress={onPress}
+    style={({ pressed }) => [
+      {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: checked ? theme.colors.primary : theme.colors.border,
+        backgroundColor: checked
+          ? theme.colors.primary
+          : pressed
+            ? theme.colors.surface
+            : 'transparent',
+      },
+    ]}
+  >
+    <Text
+      style={{
+        fontSize: 11,
+        fontWeight: '500',
+        color: checked ? theme.colors.primaryText : theme.colors.text,
+      }}
+    >
+      {label}
+    </Text>
+  </Pressable>
+);
+
 // 토글 칩 — 체크되면 채워진 배경, 아니면 외곽선만. RN 에 기본 체크박스가
 // 없어서 chip 형태가 모바일 관용. 한 줄 안에서 wrap 되도록 row + flexWrap.
 const ExcludeChip = ({
@@ -489,6 +583,18 @@ const createStyles = (theme: Theme) =>
     scrollContent: { padding: 16, gap: 12, paddingBottom: 24 },
     h2: { fontSize: 18, fontWeight: '700', color: theme.colors.text },
     body: { fontSize: 13, lineHeight: 20, color: theme.colors.textMuted },
+    prefsBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      flexWrap: 'wrap',
+    },
+    prefsLabel: { fontSize: 11, fontWeight: '600' },
+    prefsChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1 },
     emptyBox: {
       padding: 24,
       borderRadius: 8,
