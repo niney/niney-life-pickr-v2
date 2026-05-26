@@ -230,9 +230,9 @@ export const SettlementNewPage = () => {
       <div className="flex-1 px-4 py-6">
         {step === 'participants' && (
           <Step1Participants
-            // 참여자만 입력하고 나면 round 가 있으면 항목 편집으로 직행 — Step2
-            // (차수 구성) 는 새 차수 추가나 영수증 교체가 필요할 때 다시 들어감.
-            onNext={() => setStep(draft.rounds.length > 0 ? 'edit' : 'rounds')}
+            // 참여자 → 항상 차수(rounds) 단계로. round 가 이미 prefill 돼 있어도
+            // 사용자가 차수 구성을 한 번 확인하고 넘어가게 한다.
+            onNext={() => setStep('rounds')}
           />
         )}
         {step === 'rounds' && (
