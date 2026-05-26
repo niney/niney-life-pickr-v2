@@ -59,12 +59,24 @@ export default function ProfileScreen() {
       ];
     }
     return [
+      {
+        key: 'settlements',
+        icon: '🧾',
+        label: '내 정산 이력',
+        onPress: () => router.push('/settlement/history'),
+      },
+      {
+        key: 'contacts',
+        icon: '👥',
+        label: '내 단골',
+        onPress: () => router.push('/settlement/contacts'),
+      },
       { key: 'picks', icon: '⭐', label: '내 즐겨찾기', hint: '아직 비어 있어요' },
       { key: 'recent', icon: '🕓', label: '최근 본 식당' },
       { key: 'noti', icon: '🔔', label: '알림 설정' },
       { key: 'help', icon: '💬', label: '도움말 / 문의' },
     ];
-  }, [loggedIn]);
+  }, [loggedIn, router]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>

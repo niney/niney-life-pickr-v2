@@ -23,6 +23,7 @@ import type {
   SettlementRoundType,
   SettlementSessionType,
 } from '@repo/api-contract';
+import { SettlementShareSheet } from '../../../../../src/components/settlement/SettlementShareSheet';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
   ALCOHOL: '주류',
@@ -51,6 +52,7 @@ export default function SettlementResultScreen() {
   }>();
   const session = useSettlement(id);
   const remove = useDeleteSettlement();
+  const [shareOpen, setShareOpen] = useState(false);
 
   const handleDelete = () => {
     Alert.alert(
@@ -133,6 +135,12 @@ export default function SettlementResultScreen() {
           ))}
         </ScrollView>
 
+        <SettlementShareSheet
+          open={shareOpen}
+          sessionId={id}
+          onClose={() => setShareOpen(false)}
+        />
+
         <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
           <Pressable
             accessibilityRole="button"
@@ -155,6 +163,23 @@ export default function SettlementResultScreen() {
               ]}
             >
               ✎ 수정
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShareOpen(true)}
+            style={({ pressed }) => [
+              styles.outlineButton,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: pressed
+                  ? theme.colors.surfaceAlt
+                  : 'transparent',
+              },
+            ]}
+          >
+            <Text style={[styles.outlineButtonText, { color: theme.colors.text }]}>
+              🔗 공유
             </Text>
           </Pressable>
           <Pressable
@@ -539,6 +564,14 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
     },
     editButtonText: { fontSize: 14, fontWeight: '600' },
+    outlineButton: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      alignItems: 'center',
+    },
+    outlineButtonText: { fontSize: 14, fontWeight: '600' },
     dangerButton: {
       paddingVertical: 12,
       paddingHorizontal: 16,
