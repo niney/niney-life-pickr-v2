@@ -1,5 +1,11 @@
 import type { ExpoConfig } from 'expo/config';
 
+// Universal Links / App Links 가 가로챌 호스트. dev/staging 에서 다른 도메인을
+// 쓸 땐 EXPO_PUBLIC_WEB_HOST 로 override. associatedDomains 와 intentFilters 가
+// 이 호스트의 /share/settlements/* 를 가로채 앱이 직접 연다 — 미설치 단말은
+// 동일 URL 로 웹 SPA(SharedSettlementPage) 가 fallback.
+const WEB_HOST = (process.env.EXPO_PUBLIC_WEB_HOST || 'nlpp.easypcb.co.kr').trim();
+
 const config: ExpoConfig = {
   name: 'Life Pickr',
   slug: 'life-pickr',
@@ -9,15 +15,40 @@ const config: ExpoConfig = {
   // 이미지 추가 시 복원: icon './assets/icon.png',
   // splash { image: './assets/splash.png', resizeMode: 'contain', backgroundColor: '#ffffff' },
   // android.adaptiveIcon { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#ffffff' }
+  //
+  // scheme — 커스텀 URL scheme(lifepickr://...). app-to-app deep link, 푸시,
+  // OAuth 콜백 등에서 사용. Universal Links 와 별개로 보조용.
   scheme: 'lifepickr',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.niney.lifepickr',
+    // applinks:<host> 형식. 호스트의 /.well-known/apple-app-site-association
+    // 이 응답하면 iOS 가 자동 검증해서 해당 호스트의 매칭 URL 을 앱으로 라우팅.
+    // 별도 prefix 지정은 AASA 의 components 에서.
+    associatedDomains: [`applinks:${WEB_HOST}`],
   },
   android: {
     package: 'com.niney.lifepickr',
+    // App Links — autoVerify:true 면 설치 시 /.well-known/assetlinks.json 을
+    // 자동 검증. fingerprint 매칭되면 디스앰비규에이터 없이 바로 앱이 열린다.
+    // 검증 실패 시엔 사용자에게 "어떤 앱으로 열까요?" 선택지가 뜸 — 좋지 않으니
+    // assetlinks.json 의 sha256 가 항상 prod 빌드의 fingerprint 와 일치해야.
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        data: [
+          {
+            scheme: 'https',
+            host: WEB_HOST,
+            pathPrefix: '/share/settlements',
+          },
+        ],
+        category: ['BROWSABLE', 'DEFAULT'],
+      },
+    ],
   },
   web: {
     bundler: 'metro',
