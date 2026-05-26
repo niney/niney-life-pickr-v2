@@ -7,29 +7,87 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type { SettlementContactType } from '@repo/api-contract';
 import {
   useSettlementDraftStore,
   useTheme,
   type Theme,
 } from '@repo/shared';
+import { ContactSuggestions } from './ContactSuggestions';
+import {
+  ContactPickerSheet,
+  normalizeContactKey,
+} from './ContactPickerSheet';
 
 interface Props {
   onNext: () => void;
 }
 
-// Step1 — 정산 참여자 입력. 한 행 = 한 명.
-// 단골 자동완성/픽커는 #73 에서 추가, 새 행 기본 exclude prefs 는 추후 도입.
+// Step1 — 정산 참여자 입력. 한 행 = 한 명. 새 행 기본 exclude prefs 는 추후 도입.
 export const Step1Participants = ({ onNext }: Props) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const participants = useSettlementDraftStore((s) => s.participants);
   const addParticipant = useSettlementDraftStore((s) => s.addParticipant);
+  const addParticipantsAndCompact = useSettlementDraftStore(
+    (s) => s.addParticipantsAndCompact,
+  );
   const updateParticipant = useSettlementDraftStore((s) => s.updateParticipant);
   const removeParticipant = useSettlementDraftStore((s) => s.removeParticipant);
 
   const [submitAttempt, setSubmitAttempt] = useState(false);
   const [aliasOpened, setAliasOpened] = useState<Set<string>>(new Set());
+  // 현재 자동완성 드롭다운이 노출될 행. focus 된 행만 한 번에 1개.
+  const [focusedClientId, setFocusedClientId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // 모달에서 다중 선택 추가 시 이미 존재하는 단골 식별. contactId 또는
+  // normalizedKey 둘 중 어느 쪽이라도 매칭되면 "이미 추가됨".
+  const existingContactIds = useMemo(
+    () =>
+      new Set(
+        participants
+          .map((p) => p.contactId)
+          .filter((id): id is string => !!id),
+      ),
+    [participants],
+  );
+  const existingKeys = useMemo(
+    () =>
+      new Set(
+        participants.map((p) =>
+          normalizeContactKey(p.name ?? null, p.nickname ?? null),
+        ),
+      ),
+    [participants],
+  );
+
+  // 자동완성에서 단골을 픽하면 그 row 의 값을 일괄 채움.
+  const pickContact = (clientId: string, c: SettlementContactType) => {
+    updateParticipant(clientId, {
+      name: c.name ?? '',
+      nickname: c.nickname ?? '',
+      excludeAlcohol: c.lastExcludeAlcohol,
+      excludeNonAlcohol: c.lastExcludeNonAlcohol,
+      excludeSide: c.lastExcludeSide,
+      contactId: c.id,
+    });
+    setFocusedClientId(null);
+  };
+
+  const handleBulkAdd = (picked: SettlementContactType[]) => {
+    addParticipantsAndCompact(
+      picked.map((c) => ({
+        name: c.name ?? '',
+        nickname: c.nickname ?? '',
+        excludeAlcohol: c.lastExcludeAlcohol,
+        excludeNonAlcohol: c.lastExcludeNonAlcohol,
+        excludeSide: c.lastExcludeSide,
+        contactId: c.id,
+      })),
+    );
+  };
 
   // 행 추가 직후 그 행으로 focus 이동하기 위한 ref Map. 행이 unmount 되면
   // 자동 정리.
@@ -160,11 +218,33 @@ export const Step1Participants = ({ onNext }: Props) => {
                     returnKeyType={
                       idx === participants.length - 1 ? 'done' : 'next'
                     }
+                    onFocus={() => setFocusedClientId(p.clientId)}
+                    // blur 시 자동완성 닫지만 픽 onPress 가 먼저 잡히게 즉시 닫지
+                    // 않는다 — keyboardShouldPersistTaps="handled" 와 함께
+                    // 동작해 픽 onPress 가 정상 처리된 후 자연스럽게 blur.
+                    onBlur={() =>
+                      setTimeout(
+                        () =>
+                          setFocusedClientId((cur) =>
+                            cur === p.clientId ? null : cur,
+                          ),
+                        50,
+                      )
+                    }
                     onSubmitEditing={() => handleSubmitName(p.clientId)}
                     onChangeText={(v) =>
-                      // 자동완성 기능 추가(#73) 시 contactId hint clear 도 함께.
-                      updateParticipant(p.clientId, { name: v })
+                      // 직접 타이핑 시 contactId hint 클리어 — normalizedKey 가
+                      // 달라지면 어차피 다른 단골/신규로 처리되니 의도를 명시.
+                      updateParticipant(p.clientId, {
+                        name: v,
+                        contactId: undefined,
+                      })
                     }
+                  />
+                  <ContactSuggestions
+                    query={p.name ?? ''}
+                    open={focusedClientId === p.clientId}
+                    onPick={(c) => pickContact(p.clientId, c)}
                   />
                 </View>
                 {!showAlias && (
@@ -197,7 +277,10 @@ export const Step1Participants = ({ onNext }: Props) => {
                       placeholderTextColor={theme.colors.textMuted}
                       style={[styles.input, { flex: 1 }]}
                       onChangeText={(v) =>
-                        updateParticipant(p.clientId, { nickname: v })
+                        updateParticipant(p.clientId, {
+                          nickname: v,
+                          contactId: undefined,
+                        })
                       }
                     />
                     {!hasNickname && (
@@ -261,33 +344,61 @@ export const Step1Participants = ({ onNext }: Props) => {
           );
         })}
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            const newId = addParticipant({
-              name: '',
-              nickname: '',
-              excludeAlcohol: false,
-              excludeNonAlcohol: false,
-              excludeSide: false,
-            });
-            setPendingFocusId(newId);
-          }}
-          style={({ pressed }) => [
-            styles.addButton,
-            {
-              borderColor: theme.colors.border,
-              backgroundColor: pressed
-                ? theme.colors.surfaceAlt
-                : 'transparent',
-            },
-          ]}
-        >
-          <Text style={[styles.addButtonText, { color: theme.colors.text }]}>
-            + 참여자 추가
-          </Text>
-        </Pressable>
+        <View style={styles.addRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              const newId = addParticipant({
+                name: '',
+                nickname: '',
+                excludeAlcohol: false,
+                excludeNonAlcohol: false,
+                excludeSide: false,
+              });
+              setPendingFocusId(newId);
+            }}
+            style={({ pressed }) => [
+              styles.addButton,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: pressed
+                  ? theme.colors.surfaceAlt
+                  : 'transparent',
+              },
+            ]}
+          >
+            <Text style={[styles.addButtonText, { color: theme.colors.text }]}>
+              + 참여자 추가
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setPickerOpen(true)}
+            style={({ pressed }) => [
+              styles.addButton,
+              {
+                borderColor: theme.colors.border,
+                borderStyle: 'solid',
+                backgroundColor: pressed
+                  ? theme.colors.surfaceAlt
+                  : theme.colors.surfaceAlt,
+              },
+            ]}
+          >
+            <Text style={[styles.addButtonText, { color: theme.colors.text }]}>
+              👥 단골에서 추가
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
+
+      <ContactPickerSheet
+        open={pickerOpen}
+        existingContactIds={existingContactIds}
+        existingKeys={existingKeys}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={handleBulkAdd}
+      />
 
       <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
         <Pressable
@@ -431,14 +542,16 @@ const createStyles = (theme: Theme) =>
     aliasAddText: { fontSize: 12, fontWeight: '500' },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
     errorText: { fontSize: 11, marginTop: 4 },
+    addRow: { flexDirection: 'row', gap: 8 },
     addButton: {
+      flex: 1,
       paddingVertical: 12,
       borderRadius: 10,
       borderWidth: StyleSheet.hairlineWidth,
       alignItems: 'center',
       borderStyle: 'dashed',
     },
-    addButtonText: { fontSize: 14, fontWeight: '600' },
+    addButtonText: { fontSize: 13, fontWeight: '600' },
     footer: {
       padding: 12,
       borderTopWidth: StyleSheet.hairlineWidth,

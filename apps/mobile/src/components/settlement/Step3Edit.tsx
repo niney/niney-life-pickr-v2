@@ -11,12 +11,15 @@ import {
 import type { ReceiptItemCategoryType } from '@repo/api-contract';
 import {
   settlementExtractionApi,
+  useRestaurantPublic,
   useSettlementDraftStore,
   useTheme,
   type DraftItem,
   type DraftRound,
   type Theme,
 } from '@repo/shared';
+import { MenuPickerSheet, parseMenuPrice } from './MenuPickerSheet';
+import { RoundDiscountEditor } from './RoundDiscountEditor';
 
 interface Props {
   onBack: () => void;
@@ -47,17 +50,23 @@ export const Step3Edit = ({ onBack, onNext }: Props) => {
   const safeIdx = Math.min(activeIdx, Math.max(0, rounds.length - 1));
   const active = rounds[safeIdx];
 
-  // 진행 가능 — 모든 차수의 항목이 1개 이상, 이름·금액이 유효해야.
-  // 할인 검증은 #75 도입 후 추가.
+  // 진행 가능 — 모든 차수의 항목이 1개 이상, 이름·금액이 유효해야. 할인이
+  // 활성화돼 있으면 (1) 양수 (2) 카테고리 풀 ≥ 할인금액.
   const canProceed =
     rounds.length > 0 &&
-    rounds.every(
-      (r) =>
-        r.items.length > 0 &&
-        r.items.every(
-          (it) => it.name.trim().length > 0 && it.amount > 0,
-        ),
-    );
+    rounds.every((r) => {
+      if (r.items.length === 0) return false;
+      if (r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0))
+        return false;
+      if (r.discountAmount != null && r.discountCategory != null) {
+        if (r.discountAmount <= 0) return false;
+        const pool = r.items
+          .filter((it) => it.category === r.discountCategory)
+          .reduce((s, it) => s + it.amount, 0);
+        if (r.discountAmount > pool) return false;
+      }
+      return true;
+    });
 
   return (
     <View style={styles.container}>
@@ -193,6 +202,13 @@ const RoundEditor = ({ round, showInvalid, theme }: RoundEditorProps) => {
   const updateRoundItem = useSettlementDraftStore((s) => s.updateRoundItem);
   const removeRoundItem = useSettlementDraftStore((s) => s.removeRoundItem);
 
+  // 메뉴 픽 시트 — 차수의 식당 메뉴를 가져와 보여준다. 차수마다 placeId 가
+  // 달라도 활성 차수 detail 만 매번 fetch — react-query 캐시가 같은 식당 진입
+  // 시 reuse 한다.
+  const detail = useRestaurantPublic(round.placeId);
+  const menus = detail.data?.menus ?? [];
+  const [menuPickerOpen, setMenuPickerOpen] = useState(false);
+
   const subtotal = useMemo(
     () => round.items.reduce((sum, it) => sum + (it.amount || 0), 0),
     [round.items],
@@ -257,32 +273,81 @@ const RoundEditor = ({ round, showInvalid, theme }: RoundEditorProps) => {
         />
       ))}
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() =>
+      <View style={styles.addRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            addRoundItem(round.clientId, {
+              name: '',
+              unitPrice: null,
+              quantity: 1,
+              amount: 0,
+              category: 'UNCATEGORIZED',
+              matchedMenuName: null,
+            })
+          }
+          style={({ pressed }) => [
+            styles.addButton,
+            {
+              borderColor: theme.colors.border,
+              backgroundColor: pressed
+                ? theme.colors.surfaceAlt
+                : 'transparent',
+            },
+          ]}
+        >
+          <Text style={[styles.addButtonText, { color: theme.colors.text }]}>
+            + 항목 추가
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setMenuPickerOpen(true)}
+          style={({ pressed }) => [
+            styles.addButton,
+            {
+              borderColor: theme.colors.border,
+              borderStyle: 'solid',
+              backgroundColor: pressed
+                ? theme.colors.surfaceAlt
+                : theme.colors.surfaceAlt,
+            },
+          ]}
+        >
+          <Text style={[styles.addButtonText, { color: theme.colors.text }]}>
+            🍽 메뉴에서
+          </Text>
+        </Pressable>
+      </View>
+
+      <MenuPickerSheet
+        open={menuPickerOpen}
+        menus={menus}
+        onClose={() => setMenuPickerOpen(false)}
+        onPick={(menu) => {
+          const price = parseMenuPrice(menu.price);
           addRoundItem(round.clientId, {
-            name: '',
-            unitPrice: null,
+            name: menu.name,
+            unitPrice: price,
             quantity: 1,
-            amount: 0,
+            amount: price ?? 0,
             category: 'UNCATEGORIZED',
-            matchedMenuName: null,
-          })
-        }
-        style={({ pressed }) => [
-          styles.addButton,
+            matchedMenuName: menu.name,
+          });
+        }}
+      />
+
+      <View
+        style={[
+          styles.discountWrap,
           {
+            backgroundColor: theme.colors.surfaceAlt,
             borderColor: theme.colors.border,
-            backgroundColor: pressed
-              ? theme.colors.surfaceAlt
-              : 'transparent',
           },
         ]}
       >
-        <Text style={[styles.addButtonText, { color: theme.colors.text }]}>
-          + 항목 추가
-        </Text>
-      </Pressable>
+        <RoundDiscountEditor round={round} />
+      </View>
 
       <View
         style={[
@@ -297,7 +362,12 @@ const RoundEditor = ({ round, showInvalid, theme }: RoundEditorProps) => {
           차수 합계
         </Text>
         <Text style={[styles.subtotalValue, { color: theme.colors.text }]}>
-          {subtotal.toLocaleString('ko-KR')}원
+          {(subtotal - (round.discountAmount ?? 0)).toLocaleString('ko-KR')}원
+          {round.discountAmount ? (
+            <Text style={{ fontSize: 11, fontWeight: '400', color: theme.colors.textMuted }}>
+              {` (${subtotal.toLocaleString('ko-KR')} − ${round.discountAmount.toLocaleString('ko-KR')})`}
+            </Text>
+          ) : null}
         </Text>
       </View>
     </View>
@@ -609,14 +679,21 @@ const createStyles = (theme: Theme) =>
     },
     priceGrid: { flexDirection: 'row', gap: 8 },
     matchedText: { fontSize: 11 },
+    addRow: { flexDirection: 'row', gap: 8 },
     addButton: {
+      flex: 1,
       paddingVertical: 12,
       borderRadius: 10,
       borderWidth: StyleSheet.hairlineWidth,
       borderStyle: 'dashed',
       alignItems: 'center',
     },
-    addButtonText: { fontSize: 14, fontWeight: '600' },
+    addButtonText: { fontSize: 13, fontWeight: '600' },
+    discountWrap: {
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
     subtotalRow: {
       flexDirection: 'row',
       alignItems: 'center',
