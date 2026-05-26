@@ -1,5 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import { Camera, FileEdit, Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
+import {
+  Camera,
+  FileEdit,
+  Loader2,
+  MapPin,
+  Plus,
+  SplitSquareHorizontal,
+  Trash2,
+} from 'lucide-react';
 import {
   ApiError,
   useExtractReceipt,
@@ -10,6 +18,7 @@ import {
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { MultiReceiptSplitDialog } from './MultiReceiptSplitDialog';
 import { RestaurantSearchDialog } from './RestaurantSearchDialog';
 
 interface Props {
@@ -36,6 +45,7 @@ export const Step2Rounds = ({ onBack, onNext }: Props) => {
   const [pickingRoundClientId, setPickingRoundClientId] = useState<string | null>(null);
   // 차수가 아직 없을 때 '+ 추가' 가 모달을 띄울 수 있도록 다른 상태도 분기.
   const [pickingForNewRound, setPickingForNewRound] = useState(false);
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
 
   const handlePickRestaurant = (target: { placeId: string; name: string }) => {
     if (pickingForNewRound) {
@@ -58,6 +68,15 @@ export const Step2Rounds = ({ onBack, onNext }: Props) => {
   );
 
   const canProceed = rounds.length > 0 && rounds.every((r) => r.source !== null);
+
+  // 분할 영수증 진입 조건 — 매핑 대상이 되려면 차수가 2개 이상이고 모든 차수에
+  // 식당이 잡혀 있어야 한다. 식당 미선택 차수가 섞이면 placeId 가 없어 추출
+  // 요청 자체가 실패.
+  const splitCandidateRounds = useMemo(
+    () => rounds.filter((r) => r.placeId.length > 0),
+    [rounds],
+  );
+  const canOpenSplit = splitCandidateRounds.length >= 2;
 
   return (
     <section className="space-y-4">
@@ -115,6 +134,40 @@ export const Step2Rounds = ({ onBack, onNext }: Props) => {
           차수 추가
         </Button>
       )}
+
+      {rounds.length >= 1 && (
+        <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm">
+          <div className="flex items-start gap-2">
+            <SplitSquareHorizontal className="mt-0.5 size-4 text-muted-foreground" />
+            <div className="flex-1 space-y-2">
+              <div>
+                <p className="font-medium">한 사진에 영수증이 여러 장?</p>
+                <p className="text-xs text-muted-foreground">
+                  사진 한 장을 좌→우로 N등분해 각 차수에 자동 배분합니다.
+                  {!canOpenSplit && ' (차수 2개 이상 + 모두 식당 선택 필요)'}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canOpenSplit}
+                onClick={() => setSplitDialogOpen(true)}
+              >
+                분할 영수증 업로드
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <MultiReceiptSplitDialog
+        open={splitDialogOpen}
+        rounds={splitCandidateRounds}
+        totalRounds={rounds.length}
+        onClose={() => setSplitDialogOpen(false)}
+        onApplyOne={(roundClientId, args) => setRoundReceipt(roundClientId, args)}
+      />
 
       <RestaurantSearchDialog
         open={pickingRoundClientId !== null || pickingForNewRound}

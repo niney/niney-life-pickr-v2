@@ -145,6 +145,44 @@ export class SettlementExtractionService {
     return readFile(path);
   }
 
+  // 한 이미지 안에 영수증이 가로로 N장 나란히 있을 때 사용자가 입력한 분할
+  // 정보로 해당 영역만 잘라낸다. 가로 N등분이라 X 축만 다룬다.
+  // count=1 이거나 split 미지정이면 원본 그대로 반환.
+  private async cropForSplit(
+    buffer: Buffer,
+    split: { count: number; index: number } | undefined,
+  ): Promise<Buffer> {
+    if (!split || split.count <= 1) return buffer;
+    const image = sharp(buffer, { failOn: 'none' });
+    const meta = await image.metadata();
+    const totalWidth = meta.width;
+    const height = meta.height;
+    if (!totalWidth || !height) {
+      // metadata 가 비어 있으면 잘라낼 수 없다 — 그냥 원본을 LLM 에 넘긴다.
+      this.log?.warn(
+        { width: totalWidth, height },
+        '[settlement-extraction] split skipped — missing metadata',
+      );
+      return buffer;
+    }
+    // floor 로 영역 폭을 잡고 마지막 슬롯은 남은 픽셀까지 흡수해 누락 없게.
+    const sliceWidth = Math.floor(totalWidth / split.count);
+    const left = sliceWidth * (split.index - 1);
+    const width =
+      split.index === split.count ? totalWidth - left : sliceWidth;
+    if (width <= 0) {
+      this.log?.warn(
+        { left, width, totalWidth, split },
+        '[settlement-extraction] split produced empty region — using full image',
+      );
+      return buffer;
+    }
+    return sharp(buffer, { failOn: 'none' })
+      .extract({ left, top: 0, width, height })
+      .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+      .toBuffer();
+  }
+
   // 영수증 추출 메인. menuHints 는 호출자(라우트) 가 RestaurantService 에서
   // 가져와 주입 — 모듈 간 결합을 줄이려 여기서는 받기만 한다.
   async extract(input: {
@@ -154,8 +192,11 @@ export class SettlementExtractionService {
     // 차수(N차 회식) 컨텍스트 — 사용자가 '2차 영수증' 임을 명시할 때만 전달.
     // 1-based, total<=1 이면 LLM 프롬프트에서 차수 라인을 출력하지 않는다.
     roundHint?: { index: number; total: number };
+    // 한 사진에 영수증이 가로로 여러 장 있을 때 분할 영역. 1-based.
+    split?: { count: number; index: number };
   }): Promise<ExtractReceiptResultType> {
-    const buffer = await this.readImage(input.imageToken);
+    const original = await this.readImage(input.imageToken);
+    const buffer = await this.cropForSplit(original, input.split);
 
     const resolved = await this.resolveProvider();
     if (!resolved) {
@@ -250,6 +291,7 @@ export class SettlementExtractionService {
         model,
         durationMs: Date.now() - startedAt,
         version: EXTRACTION_VERSION,
+        split: input.split,
       },
       '[settlement-extraction] done',
     );

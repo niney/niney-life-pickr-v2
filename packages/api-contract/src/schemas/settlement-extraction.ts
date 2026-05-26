@@ -39,6 +39,18 @@ export const UploadReceiptResult = z.object({
 });
 export type UploadReceiptResultType = z.infer<typeof UploadReceiptResult>;
 
+// 한 사진에 영수증이 여러 장 들어있는 경우를 위한 가로 N등분 옵션.
+// count=N, index=1..N (1-based, 왼쪽이 1). count=1 이면 분할 안 함.
+// 사용자가 UI 에서 "이 사진에 영수증 N장, 왼쪽부터 차수 매핑" 을 입력하면
+// 클라이언트가 같은 imageToken 으로 N번 extract 를 호출 (index 만 다르게).
+export const ExtractReceiptSplit = z.object({
+  count: z.coerce.number().int().min(2).max(5),
+  index: z.coerce.number().int().min(1).max(5),
+}).refine((v) => v.index <= v.count, {
+  message: 'index 는 count 이하여야 합니다.',
+});
+export type ExtractReceiptSplitType = z.infer<typeof ExtractReceiptSplit>;
+
 export const ExtractReceiptInput = z.object({
   imageToken: z.string().min(1),
   // 어떤 식당의 영수증인지 — LLM 프롬프트에 해당 식당 메뉴를 힌트로
@@ -49,6 +61,7 @@ export const ExtractReceiptInput = z.object({
   // 차수 라인을 넣지 않는다. roundIndex 는 1..roundTotal 범위.
   roundIndex: z.coerce.number().int().min(1).max(20).optional(),
   roundTotal: z.coerce.number().int().min(1).max(20).optional(),
+  split: ExtractReceiptSplit.optional(),
 });
 export type ExtractReceiptInputType = z.infer<typeof ExtractReceiptInput>;
 

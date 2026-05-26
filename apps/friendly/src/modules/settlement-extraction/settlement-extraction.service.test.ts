@@ -24,6 +24,24 @@ const makeTestJpeg = async (): Promise<Buffer> =>
     .jpeg()
     .toBuffer();
 
+// split 테스트용 — 가로로 긴 더미 이미지(여러 영수증 나란히 있는 흉내).
+// 300x100 이면 count=3 시 가로 100 짜리 슬롯 3개로 깔끔하게 나뉘어
+// 테스트 단언이 명확하다.
+const makeWideTestJpeg = async (
+  width: number,
+  height: number,
+): Promise<Buffer> =>
+  sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: { r: 255, g: 255, b: 255 },
+    },
+  })
+    .jpeg()
+    .toBuffer();
+
 // vision LLM 응답을 흉내내는 fake provider. 호출 인자는 calls 에 저장.
 class FakeVisionProvider implements LLMProvider {
   calls: Array<{ prompt: string; systemPrompt?: string; images?: string[]; model: string }> = [];
@@ -225,6 +243,50 @@ describe('SettlementExtractionService.extract', () => {
     await expect(
       service.extract({ imageToken, restaurantName: 'x', menuNames: [] }),
     ).rejects.toMatchObject({ code: 'llm_failed' });
+  });
+
+  it('crops the left N-th slice when split is provided (count=3, index=1/2/3)', async () => {
+    const built = buildService(provider);
+    // 300x100 wide image — count=3 면 각 슬롯 100x100.
+    const stored = await built.service.storeImage(await makeWideTestJpeg(300, 100));
+    provider.next = async () =>
+      JSON.stringify({ items: [], totalAmount: null });
+
+    await built.service.extract({
+      imageToken: stored.imageToken,
+      restaurantName: 'x',
+      menuNames: [],
+      split: { count: 3, index: 1 },
+    });
+    await built.service.extract({
+      imageToken: stored.imageToken,
+      restaurantName: 'x',
+      menuNames: [],
+      split: { count: 3, index: 3 },
+    });
+    expect(provider.calls).toHaveLength(2);
+    const widths = await Promise.all(
+      provider.calls.map(async (c) => {
+        const buf = Buffer.from(c.images![0]!, 'base64');
+        return (await sharp(buf).metadata()).width;
+      }),
+    );
+    expect(widths).toEqual([100, 100]);
+  });
+
+  it('passes the full image when split is omitted', async () => {
+    const built = buildService(provider);
+    const stored = await built.service.storeImage(await makeWideTestJpeg(300, 100));
+    provider.next = async () =>
+      JSON.stringify({ items: [], totalAmount: null });
+    await built.service.extract({
+      imageToken: stored.imageToken,
+      restaurantName: 'x',
+      menuNames: [],
+    });
+    const buf = Buffer.from(provider.calls[0]!.images![0]!, 'base64');
+    const meta = await sharp(buf).metadata();
+    expect(meta.width).toBe(300);
   });
 
   it('throws no_provider when resolveOverride returns null', async () => {

@@ -94,7 +94,7 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: ExtractReceiptResult },
     },
     handler: async (req) => {
-      const { imageToken, placeId, roundIndex, roundTotal } = req.body;
+      const { imageToken, placeId, roundIndex, roundTotal, split } = req.body;
       const detail = await restaurantService.getPublicDetail(placeId);
       if (!detail) {
         throw app.httpErrors.notFound('식당을 찾을 수 없습니다.');
@@ -111,6 +111,7 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
           restaurantName: detail.name,
           menuNames: detail.menus.map((m) => m.name),
           roundHint,
+          split,
         });
       } catch (e) {
         if (e instanceof SettlementExtractionError) {
