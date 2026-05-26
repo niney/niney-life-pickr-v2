@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Plus, Receipt, Trash2 } from 'lucide-react';
+import { FileEdit, Loader2, Plus, Receipt, Trash2 } from 'lucide-react';
+import type { SettlementDraftType } from '@repo/api-contract';
 import {
   ApiError,
   useDeleteSettlement,
+  useDeleteSettlementDraft,
+  useListSettlementDrafts,
   useListSettlements,
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -30,6 +33,10 @@ export const SettlementHistoryPage = () => {
   );
   const list = useListSettlements(query);
   const deleteMut = useDeleteSettlement();
+  // 자동 저장 중인 임시저장 목록 — 1페이지 위쪽에만 노출하고, 페이지 이동
+  // 영향 없이 그대로 보인다 (양이 적어서).
+  const drafts = useListSettlementDrafts(true);
+  const deleteDraft = useDeleteSettlementDraft();
 
   // 다중 선택 — 페이지 이동/사이즈 변경 시 자동 초기화.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -170,6 +177,20 @@ export const SettlementHistoryPage = () => {
         </p>
       )}
 
+      {/* 자동 저장된 임시저장 — 있을 때만 표시. 다기기 동기화의 진입점. */}
+      {drafts.data && drafts.data.items.length > 0 && (
+        <DraftsSection
+          drafts={drafts.data.items}
+          deletingId={deleteDraft.isPending ? deleteDraft.variables ?? null : null}
+          onDelete={(d) =>
+            deleteDraft.mutate(d.id, {
+              onError: (e) =>
+                setError(e instanceof ApiError ? e.message : '임시저장 삭제 실패'),
+            })
+          }
+        />
+      )}
+
       {list.data && (
         <>
           {items.length === 0 ? (
@@ -307,3 +328,68 @@ export const SettlementHistoryPage = () => {
     </main>
   );
 };
+
+// 자동 저장된 임시저장 목록. 클릭하면 해당 슬롯의 정산 입력 페이지로 이동 —
+// useSettlementDraftHydrate 가 자동으로 store 를 복원해 사용자는 마지막 입력
+// 상태에서 이어갈 수 있다.
+const DraftsSection = ({
+  drafts,
+  deletingId,
+  onDelete,
+}: {
+  drafts: SettlementDraftType[];
+  deletingId: string | null;
+  onDelete: (d: SettlementDraftType) => void;
+}) => (
+  <section className="mb-4">
+    <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+      <FileEdit className="size-4" /> 이어 입력 {drafts.length}건
+    </h2>
+    <ul className="space-y-2">
+      {drafts.map((d) => {
+        const label = d.placeNameHint ?? '식당 미지정';
+        const to = d.placeId
+          ? `/restaurants/${d.placeId}/settle/new`
+          : '/me/settlements/new';
+        const isDeleting = deletingId === d.id;
+        return (
+          <li key={d.id}>
+            <Card
+              className={cn(
+                'relative border-dashed transition-colors hover:border-primary/40',
+                isDeleting && 'opacity-50 pointer-events-none',
+              )}
+            >
+              <div className="flex items-center gap-3 p-3 sm:p-4">
+                <Link to={to} className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{label}</div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {new Date(d.updatedAt).toLocaleString('ko-KR')} · 자동 저장됨
+                  </div>
+                </Link>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="임시저장 삭제"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDelete(d);
+                  }}
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+);

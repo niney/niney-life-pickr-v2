@@ -210,6 +210,10 @@ export type SettlementSessionType = z.infer<typeof SettlementSession>;
 export const CreateSettlementInput = z.object({
   rounds: z.array(SettlementRoundInput).min(1).max(10),
   participants: z.array(SettlementParticipantInput).min(1).max(100),
+  // 임시저장(SettlementDraft) id — 자동저장으로 만들어진 draft 에서 출발한
+  // 저장이면 서버가 트랜잭션 안에서 그 draft 를 함께 삭제한다. 본인 소유가
+  // 아니거나 없는 id 면 조용히 무시(저장 자체는 성공).
+  fromDraftId: z.string().min(1).optional(),
 });
 export type CreateSettlementInputType = z.infer<typeof CreateSettlementInput>;
 

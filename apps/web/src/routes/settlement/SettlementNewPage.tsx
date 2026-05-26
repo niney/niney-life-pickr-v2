@@ -4,6 +4,8 @@ import { ChevronLeft, Loader2 } from 'lucide-react';
 import {
   useRestaurantPublic,
   useSettlement,
+  useSettlementDraftAutoSync,
+  useSettlementDraftHydrate,
   useSettlementDraftStore,
   type DraftRound,
 } from '@repo/shared';
@@ -56,6 +58,19 @@ export const SettlementNewPage = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeId, firstPlaceDetail.data?.name, isEdit]);
+
+  // create 모드: 서버 draft 가 있으면 store 로 hydrate. edit 모드는 별도
+  // 로직(아래) — 저장된 세션이 source of truth.
+  const draftHydrate = useSettlementDraftHydrate(
+    !isEdit ? (placeId ?? null) : null,
+  );
+  const autoSync = useSettlementDraftAutoSync({
+    placeId: placeId ?? null,
+    placeNameHint: firstPlaceDetail.data?.name ?? draft.rounds[0]?.placeName ?? null,
+    hydrated: !isEdit && draftHydrate.hydrated,
+    initialDraftId: draftHydrate.matched?.id ?? null,
+    enabled: !isEdit,
+  });
 
   // edit 모드: 세션이 도착하면 draft 로 hydrate (1번만).
   const [hydrated, setHydrated] = useState(false);
@@ -202,6 +217,7 @@ export const SettlementNewPage = () => {
             {headerRestaurant ? ` · ${headerRestaurant}` : ''}
             {draft.rounds.length > 1 && ` 외 ${draft.rounds.length - 1}곳`}
           </div>
+          {!isEdit && <AutoSyncBadge status={autoSync.status} savedAt={autoSync.savedAt} />}
         </div>
         <Stepper
           step={step}
@@ -226,10 +242,46 @@ export const SettlementNewPage = () => {
           <Step3Edit onBack={() => setStep('rounds')} onNext={() => setStep('review')} />
         )}
         {step === 'review' && (
-          <Step4Review onBack={() => setStep('edit')} editingId={isEdit ? id : undefined} />
+          <Step4Review
+            onBack={() => setStep('edit')}
+            editingId={isEdit ? id : undefined}
+            fromDraftId={autoSync.draftId}
+          />
         )}
       </div>
     </main>
+  );
+};
+
+// 헤더에 붙는 작은 자동저장 상태 표시. saved 만 시간 같이 — saving/error/idle/
+// disabled 는 라벨만. 비로그인(disabled)은 숨김.
+const AutoSyncBadge = ({
+  status,
+  savedAt,
+}: {
+  status: 'idle' | 'saving' | 'saved' | 'error' | 'disabled';
+  savedAt: Date | null;
+}) => {
+  if (status === 'disabled' || (status === 'idle' && !savedAt)) return null;
+  const label = (() => {
+    if (status === 'saving') return '저장 중…';
+    if (status === 'error') return '저장 실패';
+    if (savedAt) {
+      const hh = String(savedAt.getHours()).padStart(2, '0');
+      const mm = String(savedAt.getMinutes()).padStart(2, '0');
+      return `임시저장됨 · ${hh}:${mm}`;
+    }
+    return '';
+  })();
+  return (
+    <span
+      className={cn(
+        'shrink-0 text-xs tabular-nums',
+        status === 'error' ? 'text-destructive' : 'text-muted-foreground',
+      )}
+    >
+      {label}
+    </span>
   );
 };
 

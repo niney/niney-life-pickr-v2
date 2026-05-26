@@ -18,6 +18,7 @@ model User {
   picks       Pick[]
   settlements SettlementSession[]
   contacts    SettlementContact[]
+  drafts      SettlementDraft[]
 
   @@map("users")
 }
@@ -207,6 +208,34 @@ model SettlementContact {
   @@unique([userId, normalizedKey])
   @@index([userId, lastUsedAt])
   @@map("settlement_contacts")
+}
+
+// 정산 입력 화면의 서버 임시저장. 자동저장(debounce)으로 다기기 동기화 목적.
+// 사용자가 완성된 정산을 저장(SettlementSession 생성)하면 매칭 draft 는
+// 자동 삭제된다.
+//
+// placeIdKey: '1차 식당으로 진입' 슬롯과 '/me/settlements/new' 슬롯을
+// 분리하기 위한 unique 키. 후자는 빈 문자열 '' 로 둔다 (SQLite 의 NULL
+// unique 가 다중 NULL 을 허용하기 때문에 sentinel 사용).
+//
+// payload: settlementDraftStore 상태(JSON 직렬화) 그대로. 서버는 스키마
+// 검증을 하지 않고 보관만 한다 — 클라이언트 버전 진화에 유연하게.
+model SettlementDraft {
+  id            String   @id @default(cuid())
+  userId        String
+  placeIdKey    String   @default("")
+  payload       String
+  // 1차 식당 이름 캐시 — 이력 페이지 "이어 입력" 행 라벨용. 매번 payload 를
+  // 파싱하지 않고도 표시 가능.
+  placeNameHint String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, placeIdKey])
+  @@index([userId, updatedAt])
+  @@map("settlement_drafts")
 }
 
 model Pick {

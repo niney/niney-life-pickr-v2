@@ -23,6 +23,9 @@ interface Props {
   onBack: () => void;
   // 편집 모드면 PUT, create 모드면 POST. id 가 있으면 편집.
   editingId?: string;
+  // 자동저장된 서버 draft id — 저장 성공 시 서버가 같은 트랜잭션에서 함께
+  // 삭제한다. create 모드에서만 의미 있음.
+  fromDraftId?: string | null;
 }
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
@@ -44,7 +47,7 @@ const participantName = (
 
 // 마지막 단계 — 차수 × 참여자 참석 그리드 + 차수별 분담 + 인당 합계 + 저장.
 // 서버도 같은 계산을 다시 하지만 화면에 즉시 보이도록 client 에서도 호출.
-export const Step4Review = ({ onBack, editingId }: Props) => {
+export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
   const draft = useSettlementDraftStore();
   const setAttendance = useSettlementDraftStore((s) => s.setAttendance);
   const create = useCreateSettlement();
@@ -162,6 +165,8 @@ export const Step4Review = ({ onBack, editingId }: Props) => {
           excludeSide: p.excludeSide,
           ...(p.contactId ? { contactId: p.contactId } : {}),
         })),
+        // create 모드에서만 — 서버가 매칭 draft 를 트랜잭션 내 삭제.
+        ...(editingId ? {} : fromDraftId ? { fromDraftId } : {}),
       };
       const saved = editingId
         ? await update.mutateAsync({ id: editingId, input: payload })

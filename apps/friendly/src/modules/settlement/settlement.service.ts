@@ -18,6 +18,7 @@ import {
   type UpdateSettlementInputType,
 } from '@repo/api-contract';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
+import { SettlementDraftService } from './settlement-draft.service.js';
 
 // receiptImageToken 검증용 정규식 — settlement-extraction 의 IMAGE_TOKEN_PATTERN
 // 과 동일. 모듈을 직접 import 하지 않고 패턴만 다시 둔다 (모듈 결합도 축소).
@@ -281,6 +282,16 @@ export class SettlementService {
             },
           });
         }
+      }
+
+      // 자동 저장 draft 정리 — 클라이언트가 fromDraftId 를 넘기면 같은
+      // 트랜잭션에서 함께 삭제한다. 본인 소유가 아니면 조용히 무시.
+      if (input.fromDraftId) {
+        await SettlementDraftService.deleteByIdInTxIfOwner(
+          tx,
+          userId,
+          input.fromDraftId,
+        );
       }
 
       return session.id;

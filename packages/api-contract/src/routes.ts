@@ -270,4 +270,14 @@ export const Settlement = {
   shared: (token: string) => `${API_PREFIX}/share/settlements/${token}`,
 } as const;
 
+// 정산 입력 화면의 서버 임시저장. 자동저장으로 다기기 동기화. upsert 는
+// (userId, placeId) 키를 서버가 본문에서 추출해 사용 — id 를 클라이언트가
+// 모르는 상태에서 PUT 가능. 완성된 정산 저장 성공 시 매칭 draft 가 자동
+// 삭제되므로 일반 사용자 흐름에서 DELETE 를 직접 호출할 일은 거의 없다.
+export const SettlementDraft = {
+  list: `${API_PREFIX}/settlement-drafts`,
+  upsert: `${API_PREFIX}/settlement-drafts`,
+  one: (id: string) => `${API_PREFIX}/settlement-drafts/${id}`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;
