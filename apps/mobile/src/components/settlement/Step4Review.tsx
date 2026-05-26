@@ -20,6 +20,9 @@ import {
   useUpdateSettlement,
   type Theme,
 } from '@repo/shared';
+import { RoundCategoryAdjuster } from './RoundCategoryAdjuster';
+import { RoundDiscountEditor } from './RoundDiscountEditor';
+import { RoundExceptionsEditor } from './RoundExceptionsEditor';
 
 interface Props {
   onBack: () => void;
@@ -355,7 +358,8 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
           </View>
         </View>
 
-        {/* 차수별 카드 — 식당/소계만. 디테일 에디터는 #76 에서 추가. */}
+        {/* 차수별 디테일 카드 — 식당/소계 + 특이사항/할인/분담 다듬기 에디터.
+            2차+ 에는 "1차와 동일" 복사 버튼. */}
         {draft.rounds.map((r, rIdx) => {
           const rc = calc.perRound[rIdx];
           if (!rc) return null;
@@ -369,12 +373,39 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                   {multi ? `${rIdx + 1}차 · ` : ''}
                   {r.placeName}
                 </Text>
-                <Text
-                  style={[styles.cardSub, { color: theme.colors.textMuted }]}
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
                 >
-                  {rc.itemsSubtotal.toLocaleString('ko-KR')}원
-                </Text>
+                  {rIdx > 0 && (
+                    <CopyFromFirstButton
+                      targetRoundClientId={r.clientId}
+                      sourceRoundClientId={draft.rounds[0]!.clientId}
+                      theme={theme}
+                    />
+                  )}
+                  <Text
+                    style={[styles.cardSub, { color: theme.colors.textMuted }]}
+                  >
+                    {rc.itemsSubtotal.toLocaleString('ko-KR')}원
+                  </Text>
+                </View>
               </View>
+
+              <RoundExceptionsEditor round={r} participants={draft.participants} />
+
+              <View
+                style={[
+                  styles.subBlock,
+                  {
+                    backgroundColor: theme.colors.surfaceAlt,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <RoundDiscountEditor round={r} />
+              </View>
+
+              <RoundCategoryAdjuster round={r} participants={draft.participants} />
             </View>
           );
         })}
@@ -448,6 +479,48 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
   );
 };
 
+// "1차와 동일" — 2차+ 라운드에서 참석/특이사항을 1차에서 한 번에 복사.
+// 클릭 직후 1초간 "복사됨" 피드백.
+const CopyFromFirstButton = ({
+  targetRoundClientId,
+  sourceRoundClientId,
+  theme,
+}: {
+  targetRoundClientId: string;
+  sourceRoundClientId: string;
+  theme: Theme;
+}) => {
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const copyRoundAttendancesFrom = useSettlementDraftStore(
+    (s) => s.copyRoundAttendancesFrom,
+  );
+  const [justCopied, setJustCopied] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="1차의 참석/특이사항을 복사"
+      onPress={() => {
+        copyRoundAttendancesFrom(targetRoundClientId, sourceRoundClientId);
+        setJustCopied(true);
+        setTimeout(() => setJustCopied(false), 1200);
+      }}
+      style={({ pressed }) => [
+        styles.copyBtn,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: pressed
+            ? theme.colors.surfaceAlt
+            : 'transparent',
+        },
+      ]}
+    >
+      <Text style={[styles.copyBtnText, { color: theme.colors.text }]}>
+        {justCopied ? '✓ 복사됨' : '1차와 동일'}
+      </Text>
+    </Pressable>
+  );
+};
+
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
@@ -514,6 +587,18 @@ const createStyles = (theme: Theme) =>
     },
     grandTotalLabel: { fontSize: 13 },
     grandTotalValue: { fontSize: 15, fontWeight: '700' },
+    subBlock: {
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    copyBtn: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    copyBtnText: { fontSize: 11, fontWeight: '500' },
     errorBox: {
       padding: 10,
       borderRadius: 8,

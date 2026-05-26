@@ -136,6 +136,29 @@ export default function SettlementResultScreen() {
         <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
           <Pressable
             accessibilityRole="button"
+            onPress={() =>
+              router.push(`/restaurant/${placeId}/settle/${id}/edit`)
+            }
+            style={({ pressed }) => [
+              styles.editButton,
+              {
+                backgroundColor: pressed
+                  ? theme.colors.primaryHover
+                  : theme.colors.primary,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.editButtonText,
+                { color: theme.colors.primaryText },
+              ]}
+            >
+              ✎ 수정
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             disabled={remove.isPending}
             onPress={handleDelete}
             style={({ pressed }) => [
@@ -155,7 +178,7 @@ export default function SettlementResultScreen() {
               <Text
                 style={[styles.dangerButtonText, { color: theme.colors.danger }]}
               >
-                🗑 정산 삭제
+                🗑 삭제
               </Text>
             )}
           </Pressable>
@@ -503,12 +526,22 @@ const createStyles = (theme: Theme) =>
     itemMeta: { fontSize: 11, marginTop: 2 },
     itemAmount: { fontSize: 13, fontWeight: '600' },
     footer: {
+      flexDirection: 'row',
+      gap: 8,
       padding: 12,
       borderTopWidth: StyleSheet.hairlineWidth,
       backgroundColor: theme.colors.bg,
     },
+    editButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    editButtonText: { fontSize: 14, fontWeight: '600' },
     dangerButton: {
       paddingVertical: 12,
+      paddingHorizontal: 16,
       borderRadius: 10,
       borderWidth: StyleSheet.hairlineWidth,
       alignItems: 'center',

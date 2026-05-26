@@ -9,6 +9,7 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import {
   useRestaurantPublic,
+  useSettlement,
   useSettlementDraftAutoSync,
   useSettlementDraftHydrate,
   useSettlementDraftStore,
@@ -43,15 +44,18 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
   const draft = useSettlementDraftStore();
   const startFor = useSettlementDraftStore((s) => s.startFor);
   const startFromScratch = useSettlementDraftStore((s) => s.startFromScratch);
+  const resetDraft = useSettlementDraftStore((s) => s.reset);
 
   const firstPlaceDetail = useRestaurantPublic(placeId);
+  // 편집 모드: 저장된 세션을 fetch 해서 draft 로 hydrate.
+  const session = useSettlement(isEdit ? (editingId ?? null) : null);
 
   const [step, setStep] = useState<StepKey>('participants');
 
   // create 진입 시 store 초기화. 같은 1차 식당이면 startFor 가 보존,
   // 식당 비어 있으면 startFromScratch 가 기존 draft 보존.
   useEffect(() => {
-    if (isEdit) return; // 편집 hydrate 는 #78
+    if (isEdit) return; // 편집은 아래 hydrate effect 에서 처리
     if (placeId) {
       const name = firstPlaceDetail.data?.name ?? '';
       startFor(placeId, name);
@@ -60,6 +64,76 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeId, firstPlaceDetail.data?.name, isEdit]);
+
+  // 편집 hydrate — 세션이 도착하면 draft 를 그 값으로 한 번 덮어쓴다.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    if (!isEdit) return;
+    if (hydrated) return;
+    if (!session.data) return;
+    const s = session.data;
+    resetDraft();
+    const participantsDraft = s.participants.map((p) => ({
+      clientId: `p-${p.id}`,
+      name: p.name,
+      nickname: p.nickname,
+      excludeAlcohol: p.excludeAlcohol,
+      excludeNonAlcohol: p.excludeNonAlcohol,
+      excludeSide: p.excludeSide,
+      contactId: p.contactId ?? undefined,
+    }));
+    const dbIdToClientId = new Map(
+      s.participants.map((p) => [p.id, `p-${p.id}`]),
+    );
+    const roundsDraft: DraftRound[] = s.rounds.map((r) => ({
+      clientId: `r-${r.id}`,
+      placeId: r.restaurantPlaceId,
+      placeName: r.restaurantName,
+      source: r.source,
+      items: r.items.map((it) => ({
+        clientId: `i-${it.id}`,
+        name: it.name,
+        unitPrice: it.unitPrice,
+        quantity: it.quantity,
+        amount: it.amount,
+        category: it.category,
+        matchedMenuName: it.matchedMenuName,
+      })),
+      // 편집 모드에선 영수증 토큰은 서버 응답에 없음. 다시 올리지 않는 한 null.
+      receiptImageToken: null,
+      receiptPreviewUrl: r.receiptPreviewUrl,
+      totalAmount: r.totalAmount,
+      warning: r.warning,
+      attendances: r.attendees.map((a) => ({
+        participantClientId: dbIdToClientId.get(a.participantId) ?? '',
+        attended: a.attended,
+        excludeAlcoholOverride: a.excludeAlcoholOverride,
+        excludeNonAlcoholOverride: a.excludeNonAlcoholOverride,
+        excludeSideOverride: a.excludeSideOverride,
+      })),
+      discountAmount: r.discountAmount,
+      discountCategory: r.discountCategory,
+      categoryAdjustments: r.categoryAdjustments
+        ? Object.fromEntries(
+            Object.entries(r.categoryAdjustments)
+              .filter(([, v]) => v != null)
+              .map(([cat, v]) => [
+                cat,
+                {
+                  leftoverParticipantClientId:
+                    dbIdToClientId.get(v!.leftoverParticipantId) ?? '',
+                  roundUnit: v!.roundUnit,
+                },
+              ]),
+          )
+        : null,
+    }));
+    useSettlementDraftStore.setState({
+      participants: participantsDraft,
+      rounds: roundsDraft,
+    });
+    setHydrated(true);
+  }, [isEdit, session.data, hydrated, resetDraft]);
 
   // 서버 draft 자동 sync (로그인 시).
   const draftHydrate = useSettlementDraftHydrate(!isEdit ? placeId : null);
@@ -74,11 +148,19 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
 
   // 헤더 라벨용 식당명.
   const headerRestaurant = useMemo(() => {
+    if (isEdit && session.data) return session.data.restaurantName;
     if (placeId && firstPlaceDetail.data) return firstPlaceDetail.data.name;
     if (draft.rounds[0]?.placeName) return draft.rounds[0].placeName;
     if (placeId && firstPlaceDetail.isLoading) return '불러오는 중…';
     return '';
-  }, [placeId, firstPlaceDetail.data, firstPlaceDetail.isLoading, draft.rounds]);
+  }, [
+    isEdit,
+    session.data,
+    placeId,
+    firstPlaceDetail.data,
+    firstPlaceDetail.isLoading,
+    draft.rounds,
+  ]);
 
   const handleHeaderBack = useCallback(() => {
     // 스텝 안에서의 뒤로가기는 각 Step 컴포넌트의 onBack 으로 처리.
@@ -86,6 +168,21 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
     // 뒤로 navigate. expo-router 의 router.back() 이 스택 한 칸 뒤로.
     router.back();
   }, [router]);
+
+  // 편집 hydrate 중에는 로딩 표시 — 아직 store 가 빈 상태로 step1 이 비어
+  // 보이는 깜빡임 방지.
+  if (isEdit && !hydrated) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: true, title: '정산 수정' }} />
+        <View
+          style={[styles.center, { backgroundColor: theme.colors.bg }]}
+        >
+          <ActivityIndicator color={theme.colors.text} />
+        </View>
+      </>
+    );
+  }
 
   // place 진입인데 식당 404 면 더 진행 불가.
   if (!isEdit && placeId && !firstPlaceDetail.isLoading && !firstPlaceDetail.data) {

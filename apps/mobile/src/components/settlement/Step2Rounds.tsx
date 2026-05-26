@@ -19,6 +19,7 @@ import {
   type DraftRound,
   type Theme,
 } from '@repo/shared';
+import { MultiReceiptSplitSheet } from './MultiReceiptSplitSheet';
 import { RestaurantPickerSheet } from './RestaurantPickerSheet';
 
 interface Props {
@@ -42,6 +43,14 @@ export const Step2Rounds = ({ onBack, onNext }: Props) => {
   // 식당 선택 모달의 대상 — 기존 차수의 변경 / 신규 차수 추가 두 모드.
   const [pickingRoundClientId, setPickingRoundClientId] = useState<string | null>(null);
   const [pickingForNewRound, setPickingForNewRound] = useState(false);
+  const [splitSheetOpen, setSplitSheetOpen] = useState(false);
+
+  // 분할 영수증 진입 — 차수 2개 이상 + 모두 식당 선택돼야.
+  const splitCandidateRounds = useMemo(
+    () => rounds.filter((r) => r.placeId.length > 0),
+    [rounds],
+  );
+  const canOpenSplit = splitCandidateRounds.length >= 2;
 
   const alreadyPicked = useMemo(
     () => new Set(rounds.map((r) => r.placeId).filter((x) => x.length > 0)),
@@ -145,7 +154,61 @@ export const Step2Rounds = ({ onBack, onNext }: Props) => {
             </Text>
           </Pressable>
         )}
+
+        {rounds.length >= 1 && (
+          <View
+            style={[
+              styles.splitHintBox,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surfaceAlt,
+              },
+            ]}
+          >
+            <Text style={[styles.splitHintTitle, { color: theme.colors.text }]}>
+              한 사진에 영수증이 여러 장?
+            </Text>
+            <Text
+              style={[styles.splitHintBody, { color: theme.colors.textMuted }]}
+            >
+              사진 한 장을 좌→우로 N등분해 각 차수에 자동 배분합니다.
+              {!canOpenSplit && ' (차수 2개 이상 + 모두 식당 선택 필요)'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!canOpenSplit}
+              onPress={() => setSplitSheetOpen(true)}
+              style={({ pressed }) => [
+                styles.outlineSmall,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: pressed
+                    ? theme.colors.surface
+                    : 'transparent',
+                  opacity: canOpenSplit ? 1 : 0.5,
+                  alignSelf: 'flex-start',
+                },
+              ]}
+            >
+              <Text
+                style={[styles.outlineSmallText, { color: theme.colors.text }]}
+              >
+                분할 영수증 업로드
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
+
+      <MultiReceiptSplitSheet
+        open={splitSheetOpen}
+        rounds={splitCandidateRounds}
+        totalRounds={rounds.length}
+        onClose={() => setSplitSheetOpen(false)}
+        onApplyOne={(roundClientId, args) =>
+          setRoundReceipt(roundClientId, args)
+        }
+      />
 
       <RestaurantPickerSheet
         open={pickingRoundClientId !== null || pickingForNewRound}
@@ -594,6 +657,15 @@ const createStyles = (theme: Theme) =>
       borderStyle: 'dashed',
       alignItems: 'center',
     },
+    splitHintBox: {
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderStyle: 'dashed',
+      gap: 6,
+    },
+    splitHintTitle: { fontSize: 13, fontWeight: '600' },
+    splitHintBody: { fontSize: 11, lineHeight: 16 },
     addButtonText: { fontSize: 14, fontWeight: '600' },
     footer: {
       flexDirection: 'row',
