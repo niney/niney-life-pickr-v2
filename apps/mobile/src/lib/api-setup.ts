@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { configureApi, setSettlementDraftStorage, useAuthStore } from '@repo/shared';
 import { useSettlementPrefsStore } from './settlementPrefsStore';
@@ -60,6 +60,13 @@ const resolveApiUrl = (): string => {
   //  dev client 에서 stale 가능 → process.env 를 1차 소스로 사용.)
   const explicit = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (explicit) return explicit;
+
+  // Web — 브라우저가 접속한 hostname 을 그대로 friendly host 로 쓴다. Mac 에서
+  // `http://localhost:8081` 로 보면 localhost, 폰/태블릿이 LAN IP 로 접속하면
+  // 자동으로 같은 LAN IP:3000 으로 잡혀 별도 설정 없이 동작.
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    return `http://${window.location.hostname}:${FRIENDLY_PORT}`;
+  }
 
   // managed 경로 (Expo Go / @expo/cli dev server)
   const expoHost =
