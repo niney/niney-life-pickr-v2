@@ -36,7 +36,15 @@ export default function RootLayout() {
             {/* 앱은 라이트 테마 고정 — 상태바 아이콘도 항상 어둡게.
                 테마를 다크와 분기시키게 되면 style="auto" 로 바꿀 것. */}
             <StatusBar style="dark" />
-            <Stack screenOptions={{ headerShown: false }}>
+            {/* headerBackButtonDisplayMode='minimal' — iOS 백 버튼에서 이전
+                화면 title 을 라벨로 표시하는 기본 동작을 끄고 chevron(<)만 노출.
+                (tabs) 같은 디렉터리명이 백 라벨로 새는 사고 회피 + 최신 Apple HIG. */}
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                headerBackButtonDisplayMode: 'minimal',
+              }}
+            >
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(auth)" />
             </Stack>
