@@ -7,12 +7,23 @@ import { apiFetch, getApiConfig } from './client.js';
 
 const PREFIX = '/api/v1/settlement-extraction';
 
+// 업로드 파일 입력 — 플랫폼별로 형태가 다르다.
+// - 웹: <input> 에서 받은 File/Blob 을 그대로 FormData 에 넣는다.
+// - RN(네이티브): Blob 을 FormData 에 넣으면 본문이 직렬화되지 않아 서버에
+//   빈 파일이 도착한다("Input Buffer is empty"). RN FormData 가 지원하는
+//   { uri, name, type } 객체를 넣어야 파일 스트림이 전송된다.
+export type ReceiptUploadFile =
+  | Blob
+  | { uri: string; name: string; type: string };
+
 export const settlementExtractionApi = {
   // 영수증 이미지 업로드. file 필드 이름은 서버의 req.file() 과 약속되어
   // 있다 — 다른 이름을 쓰면 첫 번째 파일이 잡히지 않을 수 있어 'file' 고정.
-  upload: async (file: Blob): Promise<UploadReceiptResultType> => {
+  upload: async (file: ReceiptUploadFile): Promise<UploadReceiptResultType> => {
     const form = new FormData();
-    form.append('file', file);
+    // RN 의 { uri, name, type } 객체도 그대로 받기 위해 캐스팅 — 런타임은
+    // 웹 Blob/RN 객체 양쪽 다 처리한다.
+    form.append('file', file as Blob);
     return apiFetch<UploadReceiptResultType>(`${PREFIX}/upload`, {
       method: 'POST',
       body: form,

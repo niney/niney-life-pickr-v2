@@ -328,7 +328,7 @@ const RoundCard = ({
               quality: 0.8,
             });
             if (res.canceled) return;
-            await runUploadExtract(res.assets[0]!.uri);
+            await runUploadExtract(res.assets[0]!);
           },
         },
         {
@@ -343,7 +343,7 @@ const RoundCard = ({
                 ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
             });
             if (res.canceled) return;
-            await runUploadExtract(res.assets[0]!.uri);
+            await runUploadExtract(res.assets[0]!);
           },
         },
         { text: '취소', style: 'cancel' },
@@ -352,13 +352,16 @@ const RoundCard = ({
     );
   };
 
-  // 로컬 URI → blob → 업로드 → 추출 → 콜백. RN 의 fetch(localFileUri) 는
-  // 파일 시스템 URI 에서 blob 을 만들어줘 그대로 FormData 에 append 가능.
-  const runUploadExtract = async (uri: string) => {
+  // 업로드 → 추출 → 콜백. RN 은 fetch(uri).blob() 을 FormData 에 넣으면 본문이
+  // 비어 서버에 빈 파일이 도착한다 — { uri, name, type } 객체를 그대로 넘긴다.
+  const runUploadExtract = async (asset: ImagePicker.ImagePickerAsset) => {
     setError(null);
     try {
-      const blob = (await fetch(uri).then((r) => r.blob())) as unknown as Blob;
-      const uploaded = await upload.mutateAsync(blob);
+      const uploaded = await upload.mutateAsync({
+        uri: asset.uri,
+        name: asset.fileName ?? 'receipt.jpg',
+        type: asset.mimeType ?? 'image/jpeg',
+      });
       const extracted = await extract.mutateAsync({
         imageToken: uploaded.imageToken,
         placeId: round.placeId,

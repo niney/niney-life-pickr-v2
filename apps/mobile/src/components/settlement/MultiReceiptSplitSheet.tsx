@@ -127,7 +127,7 @@ export const MultiReceiptSplitSheet = ({
               quality: 0.8,
             });
             if (res.canceled) return;
-            await runUpload(res.assets[0]!.uri);
+            await runUpload(res.assets[0]!);
           },
         },
         {
@@ -142,7 +142,7 @@ export const MultiReceiptSplitSheet = ({
                 ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
             });
             if (res.canceled) return;
-            await runUpload(res.assets[0]!.uri);
+            await runUpload(res.assets[0]!);
           },
         },
         { text: '취소', style: 'cancel' },
@@ -151,10 +151,15 @@ export const MultiReceiptSplitSheet = ({
     );
   };
 
-  const runUpload = async (uri: string) => {
+  // RN 은 fetch(uri).blob() 을 FormData 에 넣으면 본문이 비어 서버에 빈 파일이
+  // 도착한다 — { uri, name, type } 객체를 그대로 넘긴다.
+  const runUpload = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
-      const blob = (await fetch(uri).then((r) => r.blob())) as unknown as Blob;
-      const res = await upload.mutateAsync(blob);
+      const res = await upload.mutateAsync({
+        uri: asset.uri,
+        name: asset.fileName ?? 'receipt.jpg',
+        type: asset.mimeType ?? 'image/jpeg',
+      });
       setUploaded({ imageToken: res.imageToken, previewUrl: res.previewUrl });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '업로드 실패');
