@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ApiError,
@@ -138,7 +139,10 @@ export default function SettlementResultScreen() {
           ),
         }}
       />
-      <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+      <SafeAreaView
+        edges={['bottom']}
+        style={[styles.container, { backgroundColor: theme.colors.bg }]}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <SummaryCard session={s} theme={theme} />
           <ParticipantsCard session={s} theme={theme} />
@@ -226,7 +230,7 @@ export default function SettlementResultScreen() {
             )}
           </Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     </>
   );
 }
