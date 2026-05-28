@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -95,28 +95,14 @@ export default function ContactsScreen() {
           </Text>
         )}
 
-        <FlatList
-          data={list.data?.items ?? []}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={styles.scrollContent}
-          ListEmptyComponent={
-            list.isSuccess ? (
-              <View style={styles.empty}>
-                <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                  {q.trim()
-                    ? `'${q.trim()}' 에 일치하는 단골이 없습니다.`
-                    : '아직 단골이 없습니다. 정산을 저장하면 자동 적립됩니다.'}
-                </Text>
-              </View>
-            ) : null
-          }
-          renderItem={({ item: c }) => {
-            const isDeleting =
-              remove.isPending && remove.variables === c.id;
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {(list.data?.items ?? []).map((c) => {
+            const isDeleting = remove.isPending && remove.variables === c.id;
             const lastUsed = new Date(c.lastUsedAt);
             const usedLabel = `${lastUsed.getFullYear()}-${String(lastUsed.getMonth() + 1).padStart(2, '0')}-${String(lastUsed.getDate()).padStart(2, '0')}`;
             return (
               <View
+                key={c.id}
                 style={[
                   styles.card,
                   {
@@ -187,8 +173,18 @@ export default function ContactsScreen() {
                 </View>
               </View>
             );
-          }}
-        />
+          })}
+
+          {list.isSuccess && (list.data?.items.length ?? 0) === 0 && (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                {q.trim()
+                  ? `'${q.trim()}' 에 일치하는 단골이 없습니다.`
+                  : '아직 단골이 없습니다. 정산을 저장하면 자동 적립됩니다.'}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
 
         <ContactEditSheet
           contact={editing}
