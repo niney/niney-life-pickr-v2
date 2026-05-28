@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import {
   useRestaurantPublic,
@@ -202,7 +203,10 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
               : '정산하기',
         }}
       />
-      <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+      <SafeAreaView
+        edges={['bottom']}
+        style={[styles.container, { backgroundColor: theme.colors.bg }]}
+      >
         <View
           style={[
             styles.stepperWrap,
@@ -252,7 +256,7 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
             />
           )}
         </View>
-      </View>
+      </SafeAreaView>
     </>
   );
 };
