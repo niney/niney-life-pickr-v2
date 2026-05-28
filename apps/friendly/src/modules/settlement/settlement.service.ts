@@ -601,7 +601,9 @@ export class SettlementService {
     const { userId: _userId, rounds, ...rest } = session;
     return {
       ...rest,
-      rounds: rounds.map(({ receiptPreviewUrl: _r, ...rr }) => rr),
+      rounds: rounds.map(
+        ({ receiptPreviewUrl: _r, receiptImageToken: _t, ...rr }) => rr,
+      ),
     };
   }
 
@@ -812,6 +814,7 @@ export class SettlementService {
       receiptPreviewUrl: row.receiptImageToken
         ? Routes.SettlementExtraction.preview(row.receiptImageToken)
         : null,
+      receiptImageToken: row.receiptImageToken,
       itemsSubtotal: row.itemsSubtotal,
       discountAmount: row.discountAmount,
       discountCategory: row.discountCategory

@@ -111,10 +111,10 @@ export const SettlementNewPage = () => {
         category: it.category,
         matchedMenuName: it.matchedMenuName,
       })),
-      // 편집 모드에선 영수증 토큰은 가져올 수 없음 (서버 응답에 없음). 사용자가
-      // 영수증을 다시 올리지 않는 한 receiptImageToken 은 null 로 — 그래도
-      // source='RECEIPT' 는 그대로 유지하고 items 가 보존되므로 분배 계산은 동일.
-      receiptImageToken: null,
+      // 서버가 소유자 응답에 receiptImageToken 을 돌려주므로 그대로 복원 —
+      // 재저장(full replace)에도 영수증이 보존된다. (응답에 토큰이 없던 옛
+      // 데이터는 null 이라 그 경우만 사용자가 다시 올려야 함.)
+      receiptImageToken: r.receiptImageToken ?? null,
       receiptPreviewUrl: r.receiptPreviewUrl,
       totalAmount: r.totalAmount,
       warning: r.warning,

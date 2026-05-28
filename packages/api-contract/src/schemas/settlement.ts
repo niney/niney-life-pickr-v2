@@ -108,6 +108,9 @@ export const SettlementRound = z.object({
   warning: z.string().nullable(),
   // 원본 사진은 별도 인증 라우트로만 — 공유 응답에선 빠진다.
   receiptPreviewUrl: z.string().nullable(),
+  // 업로드한 이미지 토큰. 편집 재진입 시 토큰을 그대로 돌려줘 재저장에도
+  // 영수증이 보존되게 한다 (소유자 응답에만 — 공유 응답에선 omit).
+  receiptImageToken: z.string().nullable(),
   itemsSubtotal: z.number().int().nonnegative(),
   // 차수 할인 — 영수증의 쿠폰/멤버십 등. 1차에 1건만 (여러 건은 합산해서
   // 한 줄로 넣는다). discountAmount=null 이면 할인 없음, 양수면
@@ -258,9 +261,12 @@ export const SettlementShare = z.object({
 });
 export type SettlementShareType = z.infer<typeof SettlementShare>;
 
-// 공유 응답: userId 와 round 별 receiptPreviewUrl 제거 — 토큰 받은 사람도
-// 원본 사진은 보지 못한다.
-const SharedSettlementRound = SettlementRound.omit({ receiptPreviewUrl: true });
+// 공유 응답: userId 와 round 별 receiptPreviewUrl/receiptImageToken 제거 —
+// 토큰 받은 사람도 원본 사진은 보지 못한다.
+const SharedSettlementRound = SettlementRound.omit({
+  receiptPreviewUrl: true,
+  receiptImageToken: true,
+});
 export const SharedSettlementSession = SettlementSession
   .omit({ userId: true, rounds: true })
   .extend({ rounds: z.array(SharedSettlementRound) });

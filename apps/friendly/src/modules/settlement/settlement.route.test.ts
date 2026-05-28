@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
@@ -220,6 +222,7 @@ describe('settlement share routes', () => {
     expect(body.restaurantName).toBe('테스트식당');
     expect(body.rounds).toHaveLength(1);
     expect(body.rounds[0]).not.toHaveProperty('receiptPreviewUrl');
+    expect(body.rounds[0]).not.toHaveProperty('receiptImageToken');
     expect(body.rounds[0].items).toHaveLength(1);
     expect(body.participants).toHaveLength(2);
   });
@@ -479,5 +482,187 @@ describe('settlement share routes', () => {
       url: `/api/v1/share/settlements/${newToken}`,
     });
     expect(getNew.statusCode).toBe(200);
+  });
+});
+
+// 영수증 토큰 왕복(round-trip) — 소유자 응답엔 receiptImageToken 이 그대로
+// 돌아와야 편집 재저장에도 영수증이 보존된다. 라우트는 update 시 토큰의
+// 디스크 파일 존재를 검증하므로 실제 receipts 디렉터리에 더미 파일을 둔다.
+describe('settlement receipt token round-trip', () => {
+  let app: FastifyInstance;
+  const ownerId = 'receipt-rt-owner';
+  // IMAGE_TOKEN_PATTERN(UUID hex) 에 맞는 고정 토큰.
+  const token = '11111111-1111-1111-1111-111111111111';
+  // SettlementService 기본 storageDir = process.cwd()/data/receipts.
+  const receiptPath = join(process.cwd(), 'data', 'receipts', `${token}.jpg`);
+
+  const seedReceiptSession = async (): Promise<string> => {
+    const session = await app.prisma.settlementSession.create({
+      data: {
+        userId: ownerId,
+        restaurantPlaceId: 'place-test',
+        restaurantName: '테스트식당',
+        grandTotal: 30000,
+        participants: {
+          create: [
+            { name: 'A', nickname: null, shareAmount: 15000, orderIndex: 0 },
+            { name: 'B', nickname: null, shareAmount: 15000, orderIndex: 1 },
+          ],
+        },
+      },
+      include: { participants: { orderBy: { orderIndex: 'asc' } } },
+    });
+    await app.prisma.settlementRound.create({
+      data: {
+        sessionId: session.id,
+        orderIndex: 0,
+        restaurantPlaceId: 'place-test',
+        restaurantName: '테스트식당',
+        source: 'RECEIPT',
+        totalAmount: 30000,
+        warning: null,
+        receiptImageToken: token,
+        itemsSubtotal: 30000,
+        items: {
+          create: [
+            {
+              name: '김치찌개',
+              unitPrice: 10000,
+              quantity: 3,
+              amount: 30000,
+              category: 'NON_ALCOHOL',
+              orderIndex: 0,
+            },
+          ],
+        },
+        attendees: {
+          create: session.participants.map((p) => ({
+            participantId: p.id,
+            attended: true,
+            shareAmount: 15000,
+          })),
+        },
+      },
+    });
+    return session.id;
+  };
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    await app.prisma.user.upsert({
+      where: { email: `${ownerId}@x.com` },
+      update: {},
+      create: { id: ownerId, email: `${ownerId}@x.com`, passwordHash: 'x' },
+    });
+    await mkdir(join(process.cwd(), 'data', 'receipts'), { recursive: true });
+    await writeFile(receiptPath, Buffer.from('fake-jpeg'));
+  });
+
+  beforeEach(async () => {
+    await app.prisma.settlementSession.deleteMany({ where: { userId: ownerId } });
+  });
+
+  afterAll(async () => {
+    await app.prisma.settlementSession.deleteMany({ where: { userId: ownerId } });
+    await app.prisma.user.deleteMany({ where: { id: ownerId } });
+    await rm(receiptPath, { force: true });
+    await app.close();
+  });
+
+  it('GET 소유자: receiptImageToken + receiptPreviewUrl 둘 다 응답', async () => {
+    const sessionId = await seedReceiptSession();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const round = res.json().rounds[0];
+    expect(round.receiptImageToken).toBe(token);
+    expect(round.receiptPreviewUrl).toContain(token);
+  });
+
+  it('PUT 편집: 응답의 토큰을 그대로 보내면 재저장에도 영수증 보존', async () => {
+    const sessionId = await seedReceiptSession();
+    // 편집 진입 = GET 응답을 받아 그대로 다시 보내는 왕복.
+    const get = await app.inject({
+      method: 'GET',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+    });
+    const r0 = get.json().rounds[0];
+
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+      payload: {
+        participants: [
+          {
+            clientId: 'c-a',
+            name: 'A',
+            nickname: null,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          },
+          {
+            clientId: 'c-b',
+            name: 'B',
+            nickname: null,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          },
+        ],
+        rounds: [
+          {
+            restaurantPlaceId: r0.restaurantPlaceId,
+            source: r0.source,
+            totalAmount: r0.totalAmount,
+            warning: r0.warning,
+            // 핵심: 응답에서 받은 토큰을 그대로 전달 (옛 버그는 여기서 null 유실).
+            receiptImageToken: r0.receiptImageToken,
+            items: r0.items.map(
+              (it: {
+                name: string;
+                unitPrice: number | null;
+                quantity: number | null;
+                amount: number;
+                category: string;
+                matchedMenuName: string | null;
+              }) => ({
+                name: it.name,
+                unitPrice: it.unitPrice,
+                quantity: it.quantity,
+                amount: it.amount,
+                category: it.category,
+                matchedMenuName: it.matchedMenuName,
+              }),
+            ),
+            attendees: [
+              {
+                participantClientId: 'c-a',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+              {
+                participantClientId: 'c-b',
+                attended: true,
+                excludeAlcoholOverride: null,
+                excludeNonAlcoholOverride: null,
+                excludeSideOverride: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(put.statusCode).toBe(200);
+    const round = put.json().rounds[0];
+    expect(round.receiptImageToken).toBe(token);
+    expect(round.receiptPreviewUrl).toContain(token);
   });
 });
