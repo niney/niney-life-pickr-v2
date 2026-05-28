@@ -257,7 +257,7 @@ export const MultiReceiptSplitSheet = ({
                 disabled={upload.isPending}
                 onPress={pickImage}
                 style={({ pressed }) => [
-                  styles.primaryButton,
+                  styles.pickButton,
                   {
                     backgroundColor: pressed
                       ? theme.colors.primaryHover
@@ -622,6 +622,14 @@ const createStyles = (theme: Theme) =>
     ghostButtonText: { fontSize: 14, fontWeight: '500' },
     primaryButton: {
       flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    // 업로드 박스 안 '사진 선택' — footer 버튼과 달리 flex 로 늘리지 않고
+    // 내용 크기로 가운데 둔다. 좌우 패딩이 없으면 글자가 버튼에 끼어 보인다.
+    pickButton: {
+      paddingHorizontal: 24,
       paddingVertical: 12,
       borderRadius: 10,
       alignItems: 'center',
