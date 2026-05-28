@@ -337,6 +337,10 @@ const RoundCard = ({
             const res = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ['images'],
               quality: 0.8,
+              // iOS 앨범 원본은 HEIC(HEVC) 라 서버 sharp 가 디코드 못 한다.
+              // Compatible 모드로 픽 시점에 JPEG 로 트랜스코딩시켜 업로드.
+              preferredAssetRepresentationMode:
+                ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
             });
             if (res.canceled) return;
             await runUploadExtract(res.assets[0]!.uri);

@@ -1,6 +1,7 @@
-import { mkdtempSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import {
@@ -114,6 +115,21 @@ describe('SettlementExtractionService.storeImage', () => {
     await expect(service.storeImage(Buffer.from('not-an-image'))).rejects.toMatchObject({
       code: 'invalid_image',
     });
+  });
+
+  // 아이폰 앨범 원본 HEIC(HEVC) — sharp prebuilt 는 HEVC 디코더가 없어 픽셀
+  // 디코드에 실패한다. heic-convert 폴백이 JPEG 로 변환해 저장돼야 한다.
+  it('converts HEIC (HEVC) via fallback and stores a JPEG', async () => {
+    const { service, storageDir } = buildService(new FakeVisionProvider());
+    const here = dirname(fileURLToPath(import.meta.url));
+    const heic = readFileSync(join(here, '__fixtures__', 'sample.heic'));
+    const out = await service.storeImage(heic);
+    expect(out.imageToken).toMatch(/^[a-f0-9-]{36}$/);
+    const files = readdirSync(storageDir);
+    expect(files).toEqual([`${out.imageToken}.jpg`]);
+    // 저장된 파일이 실제 디코드 가능한 JPEG 인지 확인.
+    const stored = await service.readImage(out.imageToken);
+    expect((await sharp(stored).metadata()).format).toBe('jpeg');
   });
 });
 

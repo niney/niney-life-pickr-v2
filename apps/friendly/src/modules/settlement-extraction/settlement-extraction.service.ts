@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
 import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 import {
   ReceiptItem,
   type ExtractReceiptResultType,
@@ -93,29 +94,53 @@ export class SettlementExtractionService {
     return this.opts.logger ?? null;
   }
 
+  // sharp 로 JPEG 정규화 + 다운스케일. 디코드 실패 시 throw (호출자가 처리).
+  private async normalizeToJpeg(buffer: Buffer): Promise<Buffer> {
+    return sharp(buffer, { failOn: 'none' })
+      .rotate() // EXIF 방향 정규화
+      .resize({
+        width: MAX_DIMENSION,
+        height: MAX_DIMENSION,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+      .toBuffer();
+  }
+
   // 업로드된 buffer 를 JPEG 로 정규화 + 다운스케일 후 디스크에 저장한다.
   // path traversal 방지를 위해 token 은 server 가 발급 (클라이언트 입력 X).
   async storeImage(buffer: Buffer): Promise<UploadReceiptResultType> {
-    // 이미지 디코딩 자체가 실패하면 invalid_image — 첨부가 PDF 같은 다른 포맷
-    // 일 때 여기서 걸린다.
     let processed: Buffer;
     try {
-      processed = await sharp(buffer, { failOn: 'none' })
-        .rotate() // EXIF 방향 정규화
-        .resize({
-          width: MAX_DIMENSION,
-          height: MAX_DIMENSION,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
-        .toBuffer();
+      processed = await this.normalizeToJpeg(buffer);
     } catch (e) {
-      this.log?.warn(
-        { error: e instanceof Error ? e.message : String(e) },
-        '[settlement-extraction] image decode failed',
-      );
-      throw new SettlementExtractionError('invalid_image', '이미지를 읽을 수 없습니다.');
+      // sharp 가 못 읽는 경우 — 아이폰 앨범 원본 HEIC(HEVC) 가 대표적. sharp
+      // prebuilt 에는 HEVC 디코더(libde265)가 없어 디코드 불가. HEIF 컨테이너로
+      // 보이면 heic-convert(libheif JS)로 JPEG 변환 후 재시도. (AVIF 는 sharp 가
+      // 위에서 이미 처리하므로 여기 안 온다. PDF 등은 ftyp 가 아니라 바로 거부.)
+      if (looksLikeHeif(buffer)) {
+        try {
+          const jpegArrayBuf = await heicConvert({
+            buffer,
+            format: 'JPEG',
+            quality: 0.92,
+          });
+          processed = await this.normalizeToJpeg(Buffer.from(jpegArrayBuf));
+        } catch (heicErr) {
+          this.log?.warn(
+            { error: heicErr instanceof Error ? heicErr.message : String(heicErr) },
+            '[settlement-extraction] HEIC convert failed',
+          );
+          throw new SettlementExtractionError('invalid_image', '이미지를 읽을 수 없습니다.');
+        }
+      } else {
+        this.log?.warn(
+          { error: e instanceof Error ? e.message : String(e) },
+          '[settlement-extraction] image decode failed',
+        );
+        throw new SettlementExtractionError('invalid_image', '이미지를 읽을 수 없습니다.');
+      }
     }
 
     await mkdir(this.storageDir, { recursive: true });
@@ -315,6 +340,12 @@ export class SettlementExtractionService {
     return { provider, model };
   }
 }
+
+// ISOBMFF(HEIF/HEIC/AVIF) 컨테이너인지 — 박스 4..8 바이트가 'ftyp' 인지로
+// 판별. heic-convert 를 임의 바이트(PDF 등)에 돌리지 않기 위한 싼 게이트.
+// 정확한 brand 구분은 하지 않는다 (sharp 가 못 읽고 ftyp 면 변환 시도가 안전).
+const looksLikeHeif = (buf: Buffer): boolean =>
+  buf.length >= 12 && buf.toString('ascii', 4, 8) === 'ftyp';
 
 // 토큰 검증 — 라우트에서 사용. SHA1 등은 쓰지 않고 단순 정규식.
 export const isValidImageToken = (token: string): boolean =>

@@ -136,6 +136,10 @@ export const MultiReceiptSplitSheet = ({
             const res = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ['images'],
               quality: 0.8,
+              // iOS 앨범 원본 HEIC(HEVC) → 서버 sharp 디코드 불가. Compatible
+              // 모드로 픽 시점에 JPEG 로 트랜스코딩.
+              preferredAssetRepresentationMode:
+                ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
             });
             if (res.canceled) return;
             await runUpload(res.assets[0]!.uri);
