@@ -130,7 +130,12 @@ describe('settlement share routes', () => {
     expect(first.statusCode).toBe(200);
     const body1 = first.json();
     expect(body1.token).toBeTruthy();
+    // 7바이트 base64url = 10자 짧은 토큰.
+    expect(body1.token).toHaveLength(10);
     expect(body1.shareUrl).toBe(`/api/v1/share/settlements/${body1.token}`);
+    // ttl 미지정 → 기본 7일 만료가 응답에 실린다.
+    expect(body1.expiresAt).toBeTruthy();
+    expect(new Date(body1.expiresAt).getTime()).toBeGreaterThan(Date.now());
 
     const second = await app.inject({
       method: 'POST',
@@ -138,7 +143,32 @@ describe('settlement share routes', () => {
       headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
     });
     expect(second.statusCode).toBe(200);
+    // 토큰은 멱등(동일), 만료는 갱신.
     expect(second.json().token).toBe(body1.token);
+  });
+
+  it('POST share: ttl 프리셋이 만료에 반영(1d < 30d)', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
+    const auth = { Authorization: `Bearer ${tokenFor(app, ownerId)}` };
+
+    const day = await app.inject({
+      method: 'POST',
+      url: `/api/v1/settlements/${sessionId}/share`,
+      headers: auth,
+      payload: { ttl: '1d' },
+    });
+    const month = await app.inject({
+      method: 'POST',
+      url: `/api/v1/settlements/${sessionId}/share`,
+      headers: auth,
+      payload: { ttl: '30d' },
+    });
+    expect(day.statusCode).toBe(200);
+    expect(month.statusCode).toBe(200);
+    const dayExp = new Date(day.json().expiresAt).getTime();
+    const monthExp = new Date(month.json().expiresAt).getTime();
+    // 30일 만료가 1일 만료보다 한참 뒤. (재호출이 같은 토큰의 만료를 갱신)
+    expect(monthExp - dayExp).toBeGreaterThan(20 * 24 * 60 * 60 * 1000);
   });
 
   it('POST share: 비소유자는 403', async () => {
@@ -233,6 +263,28 @@ describe('settlement share routes', () => {
       url: '/api/v1/share/settlements/' + 'x'.repeat(43),
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('GET shared: 만료된 링크는 410', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/settlements/${sessionId}/share`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+    });
+    const token = created.json().token as string;
+
+    // 만료를 과거로 강제.
+    await app.prisma.settlementSession.update({
+      where: { id: sessionId },
+      data: { shareExpiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const get = await app.inject({
+      method: 'GET',
+      url: `/api/v1/share/settlements/${token}`,
+    });
+    expect(get.statusCode).toBe(410);
   });
 
   it('PUT update: 마스터 옵션 변경으로 shareAmount 재계산 + editedAt 세팅', async () => {

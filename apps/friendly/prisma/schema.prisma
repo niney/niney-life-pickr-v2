@@ -45,9 +45,13 @@ model SettlementSession {
   // 모든 차수 itemsSubtotal 의 합. 클라이언트가 매번 계산하지 않아도 되도록 저장.
   grandTotal        Int
   // 공유 링크 토큰 — null 이면 비공개. POST /settlements/:id/share 로 owner 가
-  // 멱등 생성, DELETE 로 회수. 토큰 자체는 추측 불가능한 32바이트 base64url.
+  // 생성/만료갱신, DELETE 로 회수. 토큰 자체는 추측 불가능한 7바이트 base64url(10자).
+  // 만료(shareExpiresAt)가 항상 걸려 노출 창이 닫히므로 짧아도 안전.
   // unique 인덱스로 GET /share/settlements/:token 조회 O(1).
   shareToken        String?  @unique
+  // 공유 링크 만료 시각 — 지나면 GET 공개 조회가 410. owner 가 다시 share 하면
+  // ttl 기준으로 갱신(연장)된다. null = 만료 없음(구버전 토큰 호환).
+  shareExpiresAt    DateTime?
   // 본문(참여자/차수/항목)이 저장 후 마지막으로 수정된 시각. 한 번도 수정 안
   // 했으면 null. updatedAt 과 분리한 이유: updatedAt 은 shareToken 발급/회수
   // 에도 갱신되어 '수정됨' 배지 기준으로 부적합.

@@ -14,6 +14,7 @@ import {
   type SettlementRoundType,
   type SettlementSessionType,
   type SettlementSourceType,
+  type ShareTtlType,
   type SharedSettlementSessionType,
   type UpdateSettlementInputType,
 } from '@repo/api-contract';
@@ -45,13 +46,21 @@ export class SettlementError extends Error {
       | 'invalid_participant'
       | 'invalid_round'
       | 'invalid_receipt_token'
-      | 'restaurant_not_found',
+      | 'restaurant_not_found'
+      | 'expired',
     message: string,
   ) {
     super(message);
     this.name = 'SettlementError';
   }
 }
+
+// 공유 ttl 프리셋 → 밀리초. 무제한은 없다 — 모든 링크가 최대 30일 내 만료된다.
+const SHARE_TTL_MS: Record<ShareTtlType, number> = {
+  '1d': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
 
 export interface SettlementServiceOptions {
   // 영수증 이미지가 실제로 디스크에 있는지 확인할 디렉터리. 테스트는 임시
@@ -68,6 +77,8 @@ interface RowSession {
   createdAt: Date;
   updatedAt: Date;
   editedAt: Date | null;
+  // 만료 검사용 — findFullRowByToken 의 include 결과에 함께 실려 온다.
+  shareExpiresAt: Date | null;
   rounds: Array<RowRound>;
   participants: Array<RowParticipant>;
 }
@@ -553,11 +564,13 @@ export class SettlementService {
     await this.prisma.settlementSession.delete({ where: { id } });
   }
 
-  // 공유 토큰 생성 — 이미 있으면 동일 토큰을 그대로 돌려준다(멱등). 회수 후
-  // 재생성하면 새 토큰이 발급되므로 이전 링크는 자연 무효화.
-  async createShare(userId: string, id: string): Promise<{
+  // 공유 토큰 생성/갱신 — 토큰은 한 번 발급되면 유지(멱등)하되, 호출할 때마다
+  // ttl 기준으로 만료를 갱신(연장)한다. owner 가 다이얼로그를 다시 열어 기간을
+  // 고르면 같은 링크의 수명만 늘어난다. 회수(revoke) 후 재생성하면 새 토큰.
+  async createShare(userId: string, id: string, ttl: ShareTtlType): Promise<{
     token: string | null;
     shareUrl: string | null;
+    expiresAt: string | null;
   }> {
     const row = await this.prisma.settlementSession.findUnique({
       where: { id },
@@ -566,16 +579,32 @@ export class SettlementService {
     if (!row) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
     if (row.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
 
-    let token = row.shareToken;
-    if (!token) {
-      // base64url 32바이트 = 43자. URL safe, padding 없음.
-      token = randomBytes(32).toString('base64url');
-      await this.prisma.settlementSession.update({
-        where: { id },
-        data: { shareToken: token },
+    const token = row.shareToken ?? (await this.generateUniqueShareToken());
+    const expiresAt = new Date(Date.now() + SHARE_TTL_MS[ttl]);
+    await this.prisma.settlementSession.update({
+      where: { id },
+      data: { shareToken: token, shareExpiresAt: expiresAt },
+    });
+    return {
+      token,
+      shareUrl: Routes.Settlement.shared(token),
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  // 추측 불가능한 7바이트(56bit) base64url 토큰 = 10자. 만료가 항상 걸려 노출
+  // 창이 닫히므로 짧아도 안전. unique 제약 충돌 시 재생성 — 56bit 공간에서
+  // 현실적으로 한 번이면 끝나지만 방어적으로 몇 번 더 시도.
+  private async generateUniqueShareToken(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const candidate = randomBytes(7).toString('base64url');
+      const clash = await this.prisma.settlementSession.findUnique({
+        where: { shareToken: candidate },
+        select: { id: true },
       });
+      if (!clash) return candidate;
     }
-    return { token, shareUrl: Routes.Settlement.shared(token) };
+    throw new SettlementError('not_found', '공유 토큰 생성에 실패했습니다. 다시 시도해 주세요.');
   }
 
   async revokeShare(userId: string, id: string): Promise<void> {
@@ -588,15 +617,19 @@ export class SettlementService {
     if (!row.shareToken) return; // 이미 비공개. 멱등 처리.
     await this.prisma.settlementSession.update({
       where: { id },
-      data: { shareToken: null },
+      data: { shareToken: null, shareExpiresAt: null },
     });
   }
 
   // 공유 토큰으로 read-only 세션 조회. 토큰을 안다 = 접근 허용이므로 인증
-  // 검사는 하지 않는다. 응답에서 userId/round.receiptPreviewUrl 은 제거.
-  async getBySharedToken(token: string): Promise<SharedSettlementSessionType | null> {
+  // 검사는 하지 않는다. 만료된 링크는 'expired'(410). 응답에서
+  // userId/round.receiptPreviewUrl 은 제거.
+  async getBySharedToken(token: string): Promise<SharedSettlementSessionType> {
     const row = await this.findFullRowByToken(token);
-    if (!row) return null;
+    if (!row) throw new SettlementError('not_found', '공유된 정산을 찾을 수 없습니다.');
+    if (row.shareExpiresAt && row.shareExpiresAt.getTime() < Date.now()) {
+      throw new SettlementError('expired', '공유 링크가 만료되었습니다.');
+    }
     const session = this.rowToSession(row);
     const { userId: _userId, rounds, ...rest } = session;
     return {

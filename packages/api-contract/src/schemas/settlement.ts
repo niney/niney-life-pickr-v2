@@ -255,9 +255,27 @@ export const ListSettlementsResult = z.object({
 });
 export type ListSettlementsResultType = z.infer<typeof ListSettlementsResult>;
 
+// 공유 링크 유효 기간 프리셋. 무제한은 없다 — 모든 링크가 최대 30일 내 만료되어
+// 짧은 토큰(10자)으로도 brute-force 노출 창이 닫힌다.
+export const ShareTtl = z.enum(['1d', '7d', '30d']);
+export type ShareTtlType = z.infer<typeof ShareTtl>;
+
+// POST /settlements/:id/share 본문. 본문 전체가 옵셔널 — 본문 없이 POST 하면
+// Fastify 가 body 를 null 로 넘기므로(=undefined 아님) preprocess 로 {} 로
+// 메꾼 뒤 ttl 기본 7일을 적용한다. (다이얼로그 자동 호출이 본문 없이 POST 함.)
+export const CreateSettlementShareInput = z.preprocess(
+  (v) => (v == null ? {} : v),
+  z.object({
+    ttl: ShareTtl.default('7d'),
+  }),
+);
+export type CreateSettlementShareInputType = z.infer<typeof CreateSettlementShareInput>;
+
 export const SettlementShare = z.object({
   token: z.string().nullable(),
   shareUrl: z.string().nullable(),
+  // 만료 시각 ISO 문자열. 토큰이 없으면(=공유 불가) null.
+  expiresAt: z.string().nullable(),
 });
 export type SettlementShareType = z.infer<typeof SettlementShare>;
 

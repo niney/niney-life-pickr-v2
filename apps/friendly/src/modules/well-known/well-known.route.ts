@@ -14,7 +14,8 @@ const wellKnownRoutes: FastifyPluginAsync = async (app) => {
   // iOS Universal Links — /.well-known/apple-app-site-association
   // - 응답: JSON. 확장자 없는 path 라 (1) 라우트 우선매칭, (2) Content-Type
   //   application/json 명시.
-  // - components 의 "/" 는 path 매칭. 토큰 자리는 "*" wildcard.
+  // - components 의 "/" 는 path 매칭. 짧은 공유 경로 /s/<token> 을 가로챈다.
+  //   ('/s/*' 라 /settlements 등 다른 /s 로 시작하는 경로는 매칭 안 됨.)
   // - 한 앱이 여러 환경(dev/staging/prod bundle) 일 땐 details 를 여러 개 둘 수도.
   app.get('/.well-known/apple-app-site-association', async (_req, reply) => {
     const teamId = env.APP_TEAM_ID.trim();
@@ -30,7 +31,7 @@ const wellKnownRoutes: FastifyPluginAsync = async (app) => {
         details: [
           {
             appIDs: [`${teamId}.${bundle}`],
-            components: [{ '/': '/share/settlements/*' }],
+            components: [{ '/': '/s/*' }],
           },
         ],
       },

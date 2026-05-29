@@ -5,6 +5,7 @@ import {
   useCreateSettlementShare,
   useRevokeSettlementShare,
 } from '@repo/shared';
+import type { ShareTtlType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 
@@ -13,6 +14,21 @@ interface Props {
   sessionId: string;
   onClose(): void;
 }
+
+// 유효 기간 프리셋. 무제한 없음 — 모든 링크가 최대 30일 내 만료된다.
+const TTL_OPTIONS: { value: ShareTtlType; label: string }[] = [
+  { value: '1d', label: '1일' },
+  { value: '7d', label: '7일' },
+  { value: '30d', label: '30일' },
+];
+
+// 만료 ISO → "YYYY.MM.DD HH:mm". 받는 사람이 아니라 owner 에게만 보이는 안내.
+const formatExpiry = (iso: string | null): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 // 결과 페이지의 "공유" 버튼이 여는 다이얼로그. open 되면 서버에 POST /share
 // 를 한 번 호출 — 서버가 멱등이라 이미 토큰이 있으면 같은 토큰을 돌려준다.
@@ -24,21 +40,24 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   const create = useCreateSettlementShare();
   const revoke = useRevokeSettlementShare();
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [ttl, setTtl] = useState<ShareTtlType>('7d');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // 다이얼로그가 열리면 자동으로 토큰 생성/조회. 멱등이라 같은 세션을 여러 번
-  // 열어도 동일 토큰. 닫혀 있는 동안에는 호출하지 않는다.
+  // 다이얼로그가 열리거나 기간을 바꾸면 토큰 생성/갱신. 토큰은 멱등(같은 세션
+  // → 같은 링크)이고 ttl 만 만료를 갱신한다. 닫혀 있는 동안에는 호출하지 않는다.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setError(null);
     setCopied(false);
     create
-      .mutateAsync(sessionId)
+      .mutateAsync({ id: sessionId, ttl })
       .then((res) => {
         if (cancelled) return;
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
+        setExpiresAt(res.expiresAt);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -47,9 +66,9 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
     return () => {
       cancelled = true;
     };
-    // sessionId 가 바뀌면 다시 — 일반 사용에선 한 페이지가 한 세션을 다룬다.
+    // sessionId/ttl 이 바뀌면 다시 — 일반 사용에선 한 페이지가 한 세션을 다룬다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sessionId]);
+  }, [open, sessionId, ttl]);
 
   // ESC 닫기.
   useEffect(() => {
@@ -128,8 +147,29 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
 
         <p className="text-xs text-muted-foreground">
           링크 받은 사람은 로그인 없이 결과를 볼 수 있습니다. 영수증 사진은 공유되지 않으며,
-          공유를 해제하면 이전 링크는 영구히 동작하지 않습니다.
+          설정한 기간이 지나거나 공유를 해제하면 링크는 더 이상 동작하지 않습니다.
         </p>
+
+        {/* 유효 기간 선택 — 바꾸면 같은 링크의 만료만 갱신된다. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">유효 기간</span>
+          <div className="flex gap-1.5" role="group" aria-label="유효 기간">
+            {TTL_OPTIONS.map((opt) => (
+              <Button
+                key={opt.value}
+                type="button"
+                size="sm"
+                variant={ttl === opt.value ? 'default' : 'outline'}
+                className="flex-1"
+                aria-pressed={ttl === opt.value}
+                disabled={create.isPending}
+                onClick={() => setTtl(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         {error && (
           <p className="text-sm text-destructive">{error}</p>
@@ -163,6 +203,12 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
                 <span className="hidden sm:inline">{copied ? '복사됨' : '복사'}</span>
               </Button>
             </div>
+
+            {expiresAt && (
+              <p className="text-xs text-muted-foreground">
+                {formatExpiry(expiresAt)}까지 유효
+              </p>
+            )}
 
             <div className="flex items-center justify-between gap-2">
               {canShare ? (
@@ -201,9 +247,9 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
 const absoluteUrl = (path: string): string => {
   if (/^https?:/i.test(path)) return path;
   if (typeof window === 'undefined') return path;
-  // 공유 페이지는 SPA 라우트(/share/settlements/:token) 로 매핑된다. 서버가
-  // 돌려주는 API 경로(/api/v1/share/settlements/:token) 에서 토큰만 떼어
-  // SPA 경로로 다시 조립.
+  // 공유 페이지는 SPA 라우트(/s/:token) 로 매핑된다. 서버가 돌려주는 API
+  // 경로(/api/v1/share/settlements/:token) 에서 토큰만 떼어 짧은 SPA 경로로
+  // 다시 조립한다.
   const token = path.split('/').pop() ?? '';
-  return `${window.location.origin}/share/settlements/${token}`;
+  return `${window.location.origin}/s/${token}`;
 };

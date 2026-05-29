@@ -4,6 +4,7 @@ import type {
   ListSettlementsResultType,
   SettlementSessionType,
   SettlementShareType,
+  ShareTtlType,
   SharedSettlementSessionType,
   UpdateSettlementInputType,
 } from '@repo/api-contract';
@@ -47,9 +48,13 @@ export const settlementApi = {
       body: JSON.stringify(input),
     }),
 
-  // 공유 토큰 생성 — 같은 세션 두 번 호출해도 동일 토큰(서버 멱등).
-  createShare: (id: string): Promise<SettlementShareType> =>
-    apiFetch<SettlementShareType>(`${PREFIX}/${id}/share`, { method: 'POST' }),
+  // 공유 토큰 생성 — 같은 세션 두 번 호출해도 동일 토큰(서버 멱등)이되, ttl
+  // 기준으로 만료가 갱신된다. 기본 7일.
+  createShare: (id: string, ttl: ShareTtlType = '7d'): Promise<SettlementShareType> =>
+    apiFetch<SettlementShareType>(`${PREFIX}/${id}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ ttl }),
+    }),
 
   // 공유 토큰 회수. 이전 링크는 영구 무효 — 다시 share 하면 새 토큰 발급.
   revokeShare: (id: string): Promise<void> =>

@@ -27,13 +27,17 @@ export const SharedSettlementPage = () => {
         <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
           <AlertTriangle className="size-5" />
         </div>
-        <h1 className="text-base font-semibold">공유된 정산을 찾을 수 없습니다</h1>
+        <h1 className="text-base font-semibold">
+          {status === 410 ? '만료된 공유 링크입니다' : '공유된 정산을 찾을 수 없습니다'}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {status === 404
-            ? '링크가 만료되었거나 잘못된 주소입니다.'
-            : session.error instanceof ApiError
-              ? session.error.message
-              : '잠시 후 다시 시도해 주세요.'}
+          {status === 410
+            ? '공유 링크의 유효 기간이 지났습니다. 작성자에게 새 링크를 요청하세요.'
+            : status === 404
+              ? '잘못된 주소이거나 공유가 해제된 링크입니다.'
+              : session.error instanceof ApiError
+                ? session.error.message
+                : '잠시 후 다시 시도해 주세요.'}
         </p>
         <Button asChild variant="ghost" size="sm" className="mt-4">
           <Link to="/">🎲 Life Pickr 홈으로</Link>

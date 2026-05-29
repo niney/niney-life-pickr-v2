@@ -3,6 +3,7 @@ import type {
   CreateSettlementInputType,
   ListSettlementsQueryType,
   SettlementSessionType,
+  ShareTtlType,
   UpdateSettlementInputType,
 } from '@repo/api-contract';
 import { settlementApi } from '../api/settlement.api.js';
@@ -53,11 +54,12 @@ export const useDeleteSettlement = () => {
   });
 };
 
-// 공유 토큰 생성. mutation 성공 시 onShared(token) 결과를 그대로 UI 가 표시.
-// 서버가 멱등이라 같은 세션 여러 번 호출해도 같은 토큰이 돌아온다.
+// 공유 토큰 생성/갱신. 토큰은 멱등(같은 세션 → 같은 토큰)이되 ttl 로 만료가
+// 갱신된다. ttl 미지정이면 서버 기본(7일). 반환값 expiresAt 을 UI 가 표시.
 export const useCreateSettlementShare = () =>
   useMutation({
-    mutationFn: (id: string) => settlementApi.createShare(id),
+    mutationFn: ({ id, ttl }: { id: string; ttl?: ShareTtlType }) =>
+      settlementApi.createShare(id, ttl),
   });
 
 export const useRevokeSettlementShare = () =>

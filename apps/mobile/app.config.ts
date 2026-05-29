@@ -2,7 +2,7 @@ import type { ExpoConfig } from 'expo/config';
 
 // Universal Links / App Links 가 가로챌 호스트. dev/staging 에서 다른 도메인을
 // 쓸 땐 EXPO_PUBLIC_WEB_HOST 로 override. associatedDomains 와 intentFilters 가
-// 이 호스트의 /share/settlements/* 를 가로채 앱이 직접 연다 — 미설치 단말은
+// 이 호스트의 /s/* (짧은 공유 경로) 를 가로채 앱이 직접 연다 — 미설치 단말은
 // 동일 URL 로 웹 SPA(SharedSettlementPage) 가 fallback.
 const WEB_HOST = (process.env.EXPO_PUBLIC_WEB_HOST || 'nlpp.easypcb.co.kr').trim();
 
@@ -43,7 +43,9 @@ const config: ExpoConfig = {
           {
             scheme: 'https',
             host: WEB_HOST,
-            pathPrefix: '/share/settlements',
+            // 짧은 공유 경로. 트레일링 슬래시까지 줘서 /settlements 등 다른 /s
+            // 로 시작하는 경로는 가로채지 않게 한다 (/s/<token> 만 매칭).
+            pathPrefix: '/s/',
           },
         ],
         category: ['BROWSABLE', 'DEFAULT'],

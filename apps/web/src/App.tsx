@@ -117,8 +117,8 @@ export const App = () => {
         }
       />
       {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
-          않아 받는 사람이 단순히 결과만 보게 한다. */}
-      <Route path="/share/settlements/:token" element={<SharedSettlementPage />} />
+          않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}
+      <Route path="/s/:token" element={<SharedSettlementPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/admin"

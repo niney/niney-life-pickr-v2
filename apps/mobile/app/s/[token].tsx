@@ -17,7 +17,7 @@ import type {
   ReceiptItemCategoryType,
   SharedSettlementSessionType,
 } from '@repo/api-contract';
-import { SettlementBreakdownTable } from '../../../src/components/settlement/SettlementBreakdownTable';
+import { SettlementBreakdownTable } from '../../src/components/settlement/SettlementBreakdownTable';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
   ALCOHOL: '주류',
@@ -65,14 +65,18 @@ export default function SharedSettlementScreen() {
         <Stack.Screen options={{ headerShown: true, title: '공유된 정산' }} />
         <View style={[styles.center, { backgroundColor: theme.colors.bg }]}>
           <Text style={[styles.errorTitle, { color: theme.colors.text }]}>
-            공유된 정산을 찾을 수 없습니다
+            {status === 410
+              ? '만료된 공유 링크입니다'
+              : '공유된 정산을 찾을 수 없습니다'}
           </Text>
           <Text style={[styles.errorBody, { color: theme.colors.textMuted }]}>
-            {status === 404
-              ? '링크가 만료되었거나 잘못된 주소입니다.'
-              : session.error instanceof ApiError
-                ? session.error.message
-                : '잠시 후 다시 시도해 주세요.'}
+            {status === 410
+              ? '공유 링크의 유효 기간이 지났습니다. 작성자에게 새 링크를 요청하세요.'
+              : status === 404
+                ? '잘못된 주소이거나 공유가 해제된 링크입니다.'
+                : session.error instanceof ApiError
+                  ? session.error.message
+                  : '잠시 후 다시 시도해 주세요.'}
           </Text>
         </View>
       </>
