@@ -1,199 +1,319 @@
 ---
 topic: mobile
-last_compiled: 2026-05-25
-sources_count: 22
+last_compiled: 2026-05-28
+sources_count: 46
 status: active
-aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env]
+aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token]
 ---
 
 # mobile — Expo + React Native 앱
 
-**2026-05-25 변경 흡수 — 운영 빌드 가이드 + .env.production 자동 로드 + MenuGrid 반응형 컬럼 + map 카테고리 아이콘 흡수.** 운영용 API URL(`https://nlpp.easypcb.co.kr`)을 production 모드에서 자동으로 박기 위해 [.env.production](../../apps/mobile/.env.production) 을 Git 에 포함했고, Release/EAS/실기기 빌드 절차를 별도 문서 [docs/production-build.md](../../apps/mobile/docs/production-build.md) 로 분리. WebMap 컴포넌트군은 [map.md](map.md) 가 다루는 카테고리 아이콘 8종 + variant 통합을 흡수했다.
+**2026-05-28 변경 흡수 — 정산 도메인 모바일 통째 구현 + Universal Links / App Links + Expo Web 안정화 + iOS 백 버튼 라벨 fix.** 이전 컴파일까지 "정산은 모바일 미구현 — 웹만" 이었던 항목이 이번 라운드에 **풀 구현**으로 뒤집혔다. 식당 상세 → 정산하기 CTA → 4단계 위저드 → 결과 → 공유 토큰까지 RN 네이티브 + bottom-sheet 패턴으로 모두 들어왔다. 공유 링크(`https://nlpp.easypcb.co.kr/share/settlements/<token>`) 는 iOS Universal Links + Android App Links 로 설치 단말이면 앱이 직접 가로채고, 미설치 단말은 동일 URL 의 웹 SPA 가 폴백한다. Expo Web 쪽은 (1) native-only `react-native-bottom-tabs` 가 web 번들에 들어가 깨지던 회귀를 `tabs-layout.tsx` / `tabs-layout.web.tsx` 셔틀로 분리, (2) zustand 의 `import.meta.env` 가 `<script defer>` 컨텍스트에서 SyntaxError 내는 회귀를 babel 플러그인으로 치환, (3) 폰에서 LAN IP 로 Expo Web 에 붙으면 friendly API URL 도 같은 LAN IP 로 자동 추종(friendly CORS RFC1918 자동 허용과 짝)으로 모두 잡혔다. iOS Stack 의 자동 back title 이 `(tabs)` 같은 디렉터리명을 라벨로 노출하던 회귀는 루트 Stack 의 `headerBackButtonDisplayMode: 'minimal'` 로 글로벌 차단.
+
+**2026-05-25 변경 — 운영 빌드 가이드 + .env.production 자동 로드 + MenuGrid 반응형 컬럼 + map 카테고리 아이콘 흡수.** 운영용 API URL(`https://nlpp.easypcb.co.kr`)을 production 모드에서 자동으로 박기 위해 [.env.production](../../apps/mobile/.env.production) 을 Git 에 포함했고, Release/EAS/실기기 빌드 절차를 별도 문서 [docs/production-build.md](../../apps/mobile/docs/production-build.md) 로 분리. WebMap 컴포넌트군은 [map.md](map.md) 가 다루는 카테고리 아이콘 8종 + variant 통합을 흡수했다.
 
 **2026-05-14 ~ 2026-05-19 대규모 리빌드** — apps/mobile 가 사실상 새 앱으로 재구성. 다섯 큰 줄기:
 
 1. **네이티브 탭바 + dev client 워크플로 전환** — `expo-router` 의 네이티브 `(tabs)` 그룹 도입 ([app/(tabs)/_layout.tsx](../../apps/mobile/app/(tabs)/_layout.tsx)). Expo Go 가 아니라 dev client 가 기본 — `dev:mobile` 이 cocoapods/gradle 자동 동기화 + `expo run:ios/android`. `EXPO_PUBLIC_API_URL` 을 `process.env` 에서 직접 읽기 (이전엔 Constants 경유 — bare 환경에서 비어버림).
 2. **맛집 탭 통합 UX (네이버 지도 스타일)** — [app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx) 가 풀스크린 WebView 지도 + 바텀시트 + 상세 in-sheet 단일 트리. 시트 안에 list/detail 두 시트가 적층 (`list/detail 2-sheet stack` — list 스크롤 위치 복구 패턴). 신규 컴포넌트 12+ 종: [PublicRestaurantsWebMap.native.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx) + [.web.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) — 네이티브는 WebView 안에 [publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 의 인라인 HTML(vworld + OpenLayers) 주입, Expo Web 은 web 컴포넌트 그대로. 마커는 카테고리별 라인 아이콘 8종 + primary/muted variant ([map.md](map.md) 참조). [RestaurantsFloatingHeader](../../apps/mobile/src/components/RestaurantsFloatingHeader.tsx) + [PublicRestaurantCard](../../apps/mobile/src/components/PublicRestaurantCard.tsx) + [NotchFade](../../apps/mobile/src/components/NotchFade.tsx) (상단 노치 페이드). 상세는 [restaurantDetail/](../../apps/mobile/src/components/restaurantDetail/) 디렉터리에 `HomeTab`/`InfoTab`/`PhotosTab`/`ReviewsTab` + `Lightbox` + `shared/MenuGrid`/`ReviewCard`. Hero scroll snap + 탭 전환 시 snap 위치 유지 — 헤더는 스크롤러 밖으로 분리.
-3. **위치 기반 첫 진입** — [useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts) 가 `expo-location` 으로 권한 요청 + `enableHighAccuracy:false` 좌표 → `@repo/utils` 의 `computeBboxAround(coords, 1.5km)` 로 자동 fly. "내 위치" 버튼 + 한국 밖이면 `isInKorea` 폴백. 웹 페어 [useUserLocation](../../packages/shared/src/hooks/useUserLocation.ts) 와 디자인 동형(브라우저 navigator vs expo-location).
-4. **마커 fly + zoom + Reanimated 워클릿 폭주 fix** — 리스트 선택 시 지도 자동 fly + zoom in, 비선택 dot + 선택 핀 + 라벨 항상 표시 ([fc02964](https://github.com/niney/niney-life-pickr-v2/commit/fc02964)). bbox 자동 계산이 매 렌더 워클릿 폭주를 일으켜 selection 채널을 marker 채널과 분리.
-5. **빌드/플랫폼 최적화** — [plugins/with-android-minify.js](../../apps/mobile/plugins/with-android-minify.js) — Android release R8 minify + 리소스 shrink 강제. [plugins/with-swift-concurrency-fix.js](../../apps/mobile/plugins/with-swift-concurrency-fix.js) — Xcode 26 + RN 0.81 호환 Swift 5 강제 config plugin. Metro 콜드 스타트·이미지 렌더링 최적화 3종. 홈 새로고침 표시 안정화. 로그인/프로필 화면 디자인 — 홈/맛집과 동일한 safe-area 패턴.
+3. **위치 기반 첫 진입** — [useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts) 가 `expo-location` 으로 권한 요청 + `enableHighAccuracy:false` 좌표 → `@repo/utils` 의 `computeBboxAround(coords, 1.5km)` 로 자동 fly. "내 위치" 버튼 + 한국 밖이면 `isInKorea` 폴백.
+4. **마커 fly + zoom + Reanimated 워클릿 폭주 fix** — 리스트 선택 시 지도 자동 fly + zoom in, 비선택 dot + 선택 핀 + 라벨 항상 표시. bbox 자동 계산이 매 렌더 워클릿 폭주를 일으켜 selection 채널을 marker 채널과 분리.
+5. **빌드/플랫폼 최적화** — [plugins/with-android-minify.js](../../apps/mobile/plugins/with-android-minify.js) — Android release R8 minify + 리소스 shrink. [plugins/with-swift-concurrency-fix.js](../../apps/mobile/plugins/with-swift-concurrency-fix.js) — Xcode 26 + RN 0.81 호환 Swift 5 강제 config plugin. Metro 콜드 스타트·이미지 렌더링 최적화 3종.
 
 > 용어: 이 토픽은 **앱**(`apps/mobile`, Expo + RN)을 다룬다. "모바일"이라는 단어는 **웹**(`apps/web`)의 작은 화면 레이아웃을 가리키는 별도 개념이므로 본문에서는 항상 "앱"으로 표기 ([schema.md Terminology](../schema.md#terminology--웹--앱--모바일)).
 
-## Purpose [coverage: high — 5 sources]
+## Purpose [coverage: high — 6 sources]
 
 `apps/mobile/`는 일반 사용자용 Life Pickr 앱이다. "고민될 땐, 대신 골라드릴게요" — 사용자가 등록한 Pick 목록 중 하나를 랜덤으로 뽑아주는 앱 인터페이스가 핵심이다 ([login.tsx](../../apps/mobile/app/(auth)/login.tsx), [home.tsx](../../apps/mobile/app/(tabs)/home.tsx)).
 
-App config의 표시명은 `Life Pickr`, slug `life-pickr`, 번들 ID `com.niney.lifepickr` (iOS/Android 공통) ([app.config.ts](../../apps/mobile/app.config.ts)). 게스트 모드와 이메일 가입/로그인 두 진입로를 제공하며, 게스트는 Pick 저장이 불가하다고 명시적으로 안내한다 ([home.tsx](../../apps/mobile/app/(tabs)/home.tsx), [profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx)).
+App config의 표시명은 `Life Pickr`, slug `life-pickr`, 번들 ID `com.niney.lifepickr` (iOS/Android 공통), URL scheme `lifepickr` ([app.config.ts](../../apps/mobile/app.config.ts)). 게스트 모드와 이메일 가입/로그인 두 진입로를 제공하며, 게스트는 Pick 저장이 불가하다고 명시적으로 안내한다.
 
-추가로 **공개 "맛집" 탭** ([restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx)) 이 풀스크린 WebView 지도 + 바텀시트로 위치 기반 식당 검색을 제공하고, ADMIN 한정으로 식당 상세 메뉴 순위(SentimentBar + 글로벌 비교 + 미분류 메뉴 분류 트리거) 화면도 노출 ([restaurant/[placeId].tsx](../../apps/mobile/app/restaurant/[placeId].tsx), [MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)). 매장/메뉴/리뷰 크롤·관리 같은 본격 어드민은 여전히 웹 전용이다. 정산 도메인은 모바일에 아직 없음 — 웹만 (참고: [settlement.md](settlement.md)).
+추가로 **공개 "맛집" 탭** ([restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx)) 이 풀스크린 WebView 지도 + 바텀시트로 위치 기반 식당 검색을 제공하고, ADMIN 한정으로 식당 상세 메뉴 순위(SentimentBar + 글로벌 비교 + 미분류 메뉴 분류 트리거) 화면도 노출 ([restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx), [MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)). 매장/메뉴/리뷰 크롤·관리 같은 본격 어드민은 여전히 웹 전용이다.
 
-## Architecture [coverage: high — 8 sources]
+**정산 도메인은 이제 앱에서도 풀 구현.** [SettlementWizard](../../apps/mobile/src/components/settlement/SettlementWizard.tsx) 4단계 + 결과 + 수정 + 공유 토큰 view + 단골 관리 + 이력까지. 웹과 동일한 [`@repo/shared`](shared.md) 훅(`useSettlement`, `useListSettlements`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUploadReceipt`, `useExtractReceipt`) 위에서 RN 프리미티브 + `@gorhom/bottom-sheet` UI 만 다르게 그린다. 공유 페이지는 deep link 로 native 앱이 가로채고, 미설치 단말은 web SPA fallback. 자세한 흐름은 [settlement.md](settlement.md).
+
+## Architecture [coverage: high — 12 sources]
 
 스택은 다음과 같다 ([package.json](../../apps/mobile/package.json), [app.config.ts](../../apps/mobile/app.config.ts)):
 
-- **Expo SDK 54** (`expo: ~54.0.34`)
+- **Expo SDK 54** (`expo: ~54.0.34`) — 이번 라운드 업그레이드 없음.
 - **React Native 0.81.5** + **New Architecture 활성화** (`newArchEnabled: true`)
 - **expo-router 6.0.23** — 파일 기반 라우팅 (`main: "expo-router/entry"`)
-- **React 19.1.0** (RN 0.81 부터 React 19 ceiling 해제)
+- **React 19.1.0**
 - **TanStack Query 5.62**, **Zustand 5**, **react-native-reanimated 4.1.7**, **react-native-gesture-handler 2.28**
-- **react-native-bottom-tabs 1.2** — 네이티브 탭바
-- **expo-image / expo-location / expo-glass-effect / expo-linear-gradient / @gorhom/bottom-sheet 5.2** 등
+- **react-native-bottom-tabs 1.2** + **@bottom-tabs/react-navigation 1.2** — 네이티브 탭바 (web 은 `@react-navigation/bottom-tabs` 로 대체, 아래 Expo Web 절 참조)
+- **@gorhom/bottom-sheet 5.2** — 정산 위저드·picker 시트류의 베이스
+- **expo-image / expo-location / expo-image-picker / expo-glass-effect / expo-linear-gradient / expo-linking / expo-splash-screen** 등
 - **react-compiler 1.0** 활성화 (`experiments.reactCompiler: true` + `babel-plugin-react-compiler`)
 
 ### 환경변수 / API URL 해상도 [coverage: high — 3 sources]
 
 API URL 은 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 의 `resolveApiUrl()` 이 다음 우선순위로 결정:
 
-1. **`process.env.EXPO_PUBLIC_API_URL`** — Metro 가 빌드 시 인라인. Expo 가 모드별로 자동 로드하는 dotenv 파일에서 채워진다. dev 는 `.env`/`.env.local`/`.env.development`, production (release 빌드 / `expo export` / EAS production) 은 **`.env.production`** ([.env.production](../../apps/mobile/.env.production) — `EXPO_PUBLIC_API_URL=https://nlpp.easypcb.co.kr`).
-2. **Metro dev 서버 호스트** — `getDevServer().url` 의 호스트(디바이스면 Mac LAN IP) 에 `:3000` 붙임. dev client / bare 진입로.
-3. **localhost:3000** — 마지막 폴백 (시뮬레이터/Expo Web).
+1. **`process.env.EXPO_PUBLIC_API_URL`** — Metro 가 빌드 시 인라인. Expo 가 모드별로 자동 로드하는 dotenv 파일에서 채워진다. dev 는 `.env`/`.env.local`/`.env.development`, production 은 **`.env.production`** ([.env.production](../../apps/mobile/.env.production) — `EXPO_PUBLIC_API_URL=https://nlpp.easypcb.co.kr`).
+2. **Web 한정 — `window.location.hostname`** — Expo Web 이 폰/태블릿에서 LAN IP(`http://192.168.x.y:8081`) 로 접속됐으면 friendly 도 같은 IP:3000 으로 자동 추론. 별도 설정 없이 같은 LAN 안에서 동작 ([friendly](friendly.md) 의 CORS RFC1918 자동 허용과 짝).
+3. **Metro dev 서버 호스트** — `getDevServer().url` 의 호스트(디바이스면 Mac LAN IP) 에 `:3000` 붙임. dev client / bare 진입로.
+4. **localhost:3000** — 마지막 폴백 (시뮬레이터/Expo Web localhost).
 
 `app.config.ts` 는 더 이상 `extra.apiUrl` 로 굳히지 않는다 — `process.env` 직접 읽는 경로가 dev client 캐시 / manifest stale 에 덜 민감하기 때문 ([app.config.ts](../../apps/mobile/app.config.ts) 주석).
 
-운영 빌드 절차는 별도 문서 [docs/production-build.md](../../apps/mobile/docs/production-build.md) 가 다룬다 — 로컬 Release (시뮬레이터/실기기), EAS Build (preview/production), `eas env` 등록, `expo export` 번들 추출, 트러블슈팅까지.
+### 앱 부트스트랩 — storage adapter 주입 [coverage: high — 2 sources]
+
+[api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 가 **모듈 import 시점**(`bootstrapApi()` 호출 전)에 다음을 실행한다:
+
+```ts
+setSettlementDraftStorage(AsyncStorage);
+```
+
+[`@repo/shared`](shared.md) 의 settlement draft 스토어(zustand persist) 가 첫 read/write 부터 AsyncStorage 를 쓰도록 강제. 웹은 sessionStorage 가 자동이지만 앱은 명시 주입 필요. 주입이 빠지면 persist 가 silently no-op — store 는 동작하지만 앱 재실행 시 draft 가 날아간다.
+
+이후 `bootstrapApi()` 가 await 되면서 (1) AsyncStorage 에서 토큰/게스트 hydrate, (2) `useAuthStore.subscribe` 로 양방향 동기화, (3) `configureApi({ baseUrl, getToken, onUnauthorized })`, (4) `useSettlementPrefsStore.getState().hydrate()` 까지 끝낸다.
 
 ### 라우팅 트리 (expo-router 파일 기반)
 
+이번 라운드에 정산 도메인 라우트가 들어오면서 트리가 크게 자랐다 — `restaurant/[placeId]` 가 단일 파일에서 **디렉터리로 승격**(`restaurant/[placeId]/index.tsx`) 되어 `settle/` 하위 라우트를 품을 수 있게 됐다.
+
 ```
 app/
-├── _layout.tsx              ← 루트: GestureHandler + ThemeProvider + QueryClient + bootstrap
-├── index.tsx                ← 토큰/게스트 상태 보고 (auth) 또는 (tabs)로 Redirect
+├── _layout.tsx                          ← 루트: GestureHandler + BottomSheetModalProvider + ThemeProvider + QueryClient + bootstrap
+│                                          + screenOptions.headerBackButtonDisplayMode='minimal' (iOS 백 라벨 차단)
+├── index.tsx                            ← 토큰/게스트 보고 redirect
 ├── (auth)/
-│   ├── _layout.tsx          ← Stack, header 숨김
-│   └── login.tsx            ← 로그인/회원가입 SegmentedControl + 게스트 진입
+│   ├── _layout.tsx
+│   └── login.tsx
 ├── (tabs)/
-│   ├── _layout.tsx          ← Tabs (홈 / 맛집 / 프로필)
-│   ├── home.tsx             ← Pick 리스트 + 랜덤 픽
-│   ├── restaurants.tsx      ← 공개 맛집 — 지도 + 바텀시트(list/detail 2-sheet)
-│   └── profile.tsx          ← 사용자 정보 + 로그아웃
-└── restaurant/
-    └── [placeId].tsx        ← (admin) 식당 상세 + MenuRankingCard
+│   ├── _layout.tsx                      ← shim: ~/components/tabs-layout 재export (web 은 .web.tsx 자동 선택)
+│   ├── home.tsx
+│   ├── restaurants.tsx
+│   └── profile.tsx                      ← [수정] 로그인 시 '정산 이력' / '내 단골' 메뉴 추가
+├── restaurant/
+│   └── [placeId]/                       ← [디렉터리 승격] 식당 상세 + 정산 하위 트리
+│       ├── index.tsx                    ← 식당 상세 (탭형 — Home/Info/Menu/Photos/Reviews)
+│       └── settle/
+│           ├── new.tsx                  ← 4단계 위저드 (placeId prefill)
+│           └── [id]/
+│               ├── index.tsx            ← 결과 view
+│               └── edit.tsx             ← 편집 모드
+├── settlement/                          ← [신규] 식당 미지정 + 이력/단골 진입
+│   ├── new.tsx                          ← placeless 위저드
+│   ├── history.tsx                      ← useListSettlements
+│   └── contacts.tsx                     ← useSettlementContacts
+└── share/                               ← [신규] 공유 토큰 진입 (deep link 가 가로채는 경로)
+    └── settlements/
+        └── [token].tsx                  ← useSharedSettlement(token) — read-only view
 ```
 
-루트 레이아웃은 비동기 `bootstrapApi()`가 끝날 때까지 `null`을 반환하여 splash를 유지하고, 준비되면 `GestureHandlerRootView` → `ThemeProvider mode="light"` → `QueryClientProvider` → `Stack` 구조로 마운트한다 ([_layout.tsx](../../apps/mobile/app/_layout.tsx)). QueryClient는 [`@repo/shared`](shared.md)의 `QUERY_STALE_TIME`/`QUERY_GC_TIME` 상수와 `retry: 1`을 사용한다.
+루트 레이아웃 ([_layout.tsx](../../apps/mobile/app/_layout.tsx)) 은 비동기 `bootstrapApi()` 가 끝날 때까지 `null` 반환 — splash 유지. 준비되면 `GestureHandlerRootView` → `ThemeProvider mode="light"` → `QueryClientProvider` → **`BottomSheetModalProvider`** (정산 picker 시트들의 portal 호스트) → `Stack` 구조. Stack 은 `screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal' }}` — 후자가 이번 라운드에 추가된 iOS 백 라벨 회귀 방지(아래 Gotchas).
 
-`app.config.ts`에서 `experiments.typedRoutes: true` + `experiments.reactCompiler: true` 활성. plugins 는 `expo-router`, `expo-font`, `react-native-bottom-tabs`, `expo-location` (`locationWhenInUsePermission` 메시지 인라인), 그리고 로컬 config plugin 2종 (`./plugins/with-swift-concurrency-fix`, `./plugins/with-android-minify`).
+`app.config.ts` 에서 `experiments.typedRoutes: true` + `experiments.reactCompiler: true` 활성. plugins 는 `expo-router`, `expo-font`, `react-native-bottom-tabs`, `expo-location`, **`expo-image-picker`**(영수증 사진 — 카메라+라이브러리 권한 inline), 그리고 로컬 config plugin 2종 (`./plugins/with-swift-concurrency-fix`, `./plugins/with-android-minify`).
+
+### Universal Links / App Links 설정 [coverage: high — 2 sources]
+
+`app.config.ts` 가 공유 정산 링크(`https://<WEB_HOST>/share/settlements/<token>`) 를 가로채는 capability 를 빌드 시 박는다 ([app.config.ts](../../apps/mobile/app.config.ts)):
+
+- `WEB_HOST = process.env.EXPO_PUBLIC_WEB_HOST || 'nlpp.easypcb.co.kr'` — env 로 dev/staging 도메인 override 가능.
+- **iOS** — `ios.associatedDomains: ['applinks:${WEB_HOST}']`. 호스트의 `/.well-known/apple-app-site-association` (friendly 가 응답) 가 iOS 검증을 통과하면 매칭 URL 이 자동으로 앱으로 라우팅.
+- **Android** — `android.intentFilters: [{ action: 'VIEW', autoVerify: true, data: [{ scheme: 'https', host: WEB_HOST, pathPrefix: '/share/settlements' }], category: ['BROWSABLE', 'DEFAULT'] }]`. 설치 시 OS 가 `/.well-known/assetlinks.json` 자동 검증. fingerprint 매칭 시 디스앰비규에이터 없이 바로 앱 진입.
+- **scheme** — `scheme: 'lifepickr'` (커스텀 URL scheme) 은 보조용으로 유지 — OAuth 콜백 등.
+
+서버측 `.well-known` 응답은 [friendly](friendly.md) 가 책임지고, prebuild + 재빌드 + env(`APP_TEAM_ID`, `APP_BUNDLE_ID`, `ANDROID_APP_PACKAGE`, `ANDROID_SHA256_FINGERPRINTS`) 채우기 절차는 [DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md) 가 단계별로 정리 (Team ID 추출 / SHA-256 추출 / `pm get-app-links` / `adb shell am start` 검증 / 트러블슈팅 매트릭스).
+
+흐름: **사용자가 카톡으로 받은 공유 링크 탭 → 앱 설치됨 → OS 의도가 앱으로 → expo-router 가 `share/settlements/[token]` 매칭 → `useSharedSettlement(token)`** . 미설치 / 검증 실패 단말은 동일 URL 의 웹 SharedSettlementPage 가 폴백 — 같은 read-only view 라 UX 안 깨짐.
 
 ### 맛집 / 식당 상세 화면 [coverage: high — 4 sources]
 
-- **`(tabs)/restaurants.tsx`** — 풀스크린 WebView 지도 + `@gorhom/bottom-sheet` 2개 적층(list / detail). list 시트는 항상 mount, detail 시트는 `placeId` 가 truthy 일 때만 conditional mount. snap=`['20%', '50%', '100%']`, `topInset` 으로 검색 floating 카드 아래에서 시작. Android 하드웨어 백 가로채서 list 복귀. 첫 진입 시 [useUserLocationNative](../../apps/mobile/src/hooks/useUserLocationNative.ts) 로 권한 해결 후 사용자 좌표(한국 안) 또는 서울 폴백 ±1.5km bbox 자동 적용.
-- **`restaurant/[placeId].tsx`** — admin 한정 메뉴 순위 상세. `useLocalSearchParams<{ placeId: string }>()`로 받은 placeId를 `useRestaurantByPlaceId(placeId)`에 넘겨 헤더(이름/카테고리/주소/리뷰 수)를 그리고, 그 아래 `<MenuRankingCard placeId={placeId} />`를 마운트한다. 화면 헤더는 `<Stack.Screen options={{ title: '맛집 상세', headerBackTitle: '뒤로' }} />`로 라우트별로 박는다.
-- **`src/components/restaurantDetail/`** — 공개 맛집 상세 in-sheet 트리. `HomeTab`/`InfoTab`/`PhotosTab`/`ReviewsTab` + `Lightbox` + `shared/MenuGrid`/`ReviewCard`. [MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx) 는 행 단위 카드 (썸네일 + 이름 + 추천 배지 + 가격(`formatWonPrice`) + 설명 + insights 멘션 통계 `+pos/-neg · N회 언급`) — `flexDirection: 'row'` 단일 컬럼 리스트 (반응형 컬럼 조정 흡수).
-- **`src/components/MenuRankingCard.tsx`** — `useMenuRanking(placeId, { sort, minMentions: 2 })` 결과를 받아 정렬 칩 3종(`mentions`/`positive`/`positiveRatio` → 언급순/긍정순/긍정률)을 토글하고, 상위 5개를 `Row`로 렌더한다. 각 행은 RN flex 비율 기반 `SentimentBar`(긍정 초록 / 중립 회색 / 부정 빨강), 멘션 수, 긍정률 텍스트, 그리고 `item.global.restaurantCount > 1`일 때만 "전체 N%" 글로벌 비교 라벨을 보여준다. 6번째부터는 `+N개 더`로 접고, `unmappedMenus.length > 0`이면 노란 경고 박스 + "분류하기" 버튼이 떠 `useGroupForRestaurant().mutate(placeId)`를 트리거해 [menu-grouping](menu-grouping.md) 파이프라인으로 보낸다(분류 진행 중 disabled).
+- **`(tabs)/restaurants.tsx`** — 풀스크린 WebView 지도 + `@gorhom/bottom-sheet` 2개 적층(list / detail). list 시트는 항상 mount, detail 시트는 `placeId` 가 truthy 일 때만 conditional mount.
+- **`restaurant/[placeId]/index.tsx`** — 식당 상세. `useLocalSearchParams<{ placeId: string }>()` + `PublicRestaurantDetail` 컨테이너. `Stack.Screen` 으로 `headerBackTitle: '뒤로'` 명시 — 부모 Stack 의 `headerShown:false` 를 여기서만 켠다.
+- **`src/components/restaurantDetail/`** — 공개 맛집 상세 in-sheet 트리. `HomeTab`/`InfoTab`/`PhotosTab`/`ReviewsTab` + `Lightbox` + `shared/MenuGrid`/`ReviewCard`. [MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) **수정** — 메뉴 리스트 상단에 "🧮 이 메뉴로 정산하기" Pressable CTA. 비로그인이면 `/(auth)/login` 으로, 로그인이면 `/restaurant/[placeId]/settle/new` 로 push (typedRoutes 가 nested dynamic 인식 못 할 때 위해 `as never` 캐스트).
+- **`src/components/MenuRankingCard.tsx`** — (admin 한정) `useMenuRanking(placeId)` 결과로 메뉴 순위 SentimentBar.
 
-분류·랭킹 로직은 앱에 없다 — 전부 [`@repo/shared`](shared.md)의 훅이 들고 있고, mutation 성공 시 invalidate도 shared 쪽이 책임진다. 앱은 sort 상태를 `useState`로 들고, 데이터 가공은 `items.slice(0, 5)`/flex 비율 계산 정도만 한다.
+### 정산 — Mobile 구현 [coverage: high — 16 sources]
+
+[`apps/mobile/src/components/settlement/`](../../apps/mobile/src/components/settlement) — 위저드/시트/에디터 일습. 비즈니스 로직은 [`@repo/shared`](shared.md) 훅이 들고, 이 디렉터리는 RN 프리미티브 + bottom-sheet UI 만 다룬다.
+
+- [SettlementWizard.tsx](../../apps/mobile/src/components/settlement/SettlementWizard.tsx) — 4단계 네비게이터. `placeId` prop 으로 식당 prefill, draft 는 `useSettlementDraft` 가 AsyncStorage persist.
+- [Step1Participants.tsx](../../apps/mobile/src/components/settlement/Step1Participants.tsx) / [Step2Rounds.tsx](../../apps/mobile/src/components/settlement/Step2Rounds.tsx) / [Step3Edit.tsx](../../apps/mobile/src/components/settlement/Step3Edit.tsx) / [Step4Review.tsx](../../apps/mobile/src/components/settlement/Step4Review.tsx) — 웹 단계별 의미와 1:1 대응, RN 프리미티브 + 시트 호출.
+- [ContactPickerSheet.tsx](../../apps/mobile/src/components/settlement/ContactPickerSheet.tsx) / [ContactSuggestions.tsx](../../apps/mobile/src/components/settlement/ContactSuggestions.tsx) — 단골(`useSettlementContacts`) 선택 시트. 웹 다이얼로그를 bottom-sheet 로 옮긴 변형.
+- [MenuPickerSheet.tsx](../../apps/mobile/src/components/settlement/MenuPickerSheet.tsx) — 식당 메뉴 picker (영수증 항목 명 → 메뉴 매칭/추가).
+- [RestaurantPickerSheet.tsx](../../apps/mobile/src/components/settlement/RestaurantPickerSheet.tsx) — 식당 검색 시트 (식당 미지정 진입 / 차수 추가용).
+- [MultiReceiptSplitSheet.tsx](../../apps/mobile/src/components/settlement/MultiReceiptSplitSheet.tsx) — 영수증 한 장에 여러 차수가 섞여 있을 때 split.
+- [RoundDiscountEditor.tsx](../../apps/mobile/src/components/settlement/RoundDiscountEditor.tsx) / [RoundCategoryAdjuster.tsx](../../apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx) / [RoundExceptionsEditor.tsx](../../apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx) — 차수 단위 할인/카테고리/예외 편집.
+- [SettlementBreakdownTable.tsx](../../apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx) — 참여자 × (차수 × 카테고리) 매트릭스 RN 렌더.
+- [SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx) — 공유 토큰 발급 + 네이티브 share intent.
+
+부속 store:
+
+- [src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts) — `newParticipantExcludes` (주류/비주류/안주 제외 체크박스의 기본값) 를 AsyncStorage 로 persist. 웹 `settlementPrefsStore` 의 RN 짝. `bootstrapApi()` 에서 `hydrate()` 호출.
+
+### Expo Web (RN-Web 출력) [coverage: high — 3 sources]
+
+`app.config.ts` 의 `web: { bundler: 'metro', output: 'single' }` — SPA 모드. 이번 라운드 두 회귀를 잡았다.
+
+**1. native-only 라이브러리가 web 번들에 들어가 깨지던 회귀.** `app/(tabs)/_layout.tsx` 가 `@bottom-tabs/react-navigation` (`react-native-bottom-tabs` 의 RN-Navigation 어댑터) 을 직접 import 하면 그 안의 `codegenNativeComponent` 가 web 번들에 들어가 SyntaxError. 해결:
+
+```
+app/(tabs)/_layout.tsx                    ← 두 줄짜리 셔틀 — ~/components/tabs-layout 재export
+src/components/tabs-layout.tsx            ← native: @bottom-tabs/react-navigation 사용
+src/components/tabs-layout.web.tsx        ← web: @react-navigation/bottom-tabs (JS 구현) + inline SVG 아이콘
+```
+
+Metro 의 플랫폼 확장자 우선 탐색이 `.web.tsx` 를 자동 선택. 같은 규칙으로 `PublicRestaurantsWebMap.{native,web}.tsx` 도 동작.
+
+**2. Lucide 단색 라인 아이콘 inline SVG.** web 탭바 아이콘을 npm Lucide 의존 없이 [tabs-layout.web.tsx](../../apps/mobile/src/components/tabs-layout.web.tsx) 안에 SVG path 를 직접 5종 (홈/맛집/프로필/정산/단골 — 현재 활성은 3개) 내장. stroke=currentColor 라 React Navigation 의 active/inactive 색이 자동 적용. 컬러 이모지에 grayscale 안 먹는 OS bitmap glyph 회피.
+
+**3. `zustand` 의 `import.meta.env` 회귀 — babel 플러그인으로 치환.** [babel.config.js](../../apps/mobile/babel.config.js) 에 inline 정의한 `replace-import-meta` 플러그인이 모든 플랫폼에서 `import.meta` 를 `{ env: { MODE: 'production' } }` 객체로 치환. zustand devtools 가 `import.meta.env?.MODE !== 'production'` 으로 dev 분기를 켜는데, web 번들이 `<script defer>` (not `type="module"`) 로 로드되는 컨텍스트에서 `import.meta` 자체가 SyntaxError 라 치환 없으면 web 부팅 자체가 실패. 치환값이 zustand devtools 를 prod 경로로 평가시키는 부수효과는 native 에서도 무해 (devtools 비활성).
+
+`pnpm dev:mobile` 후 `w` 키 또는 `pnpm --filter mobile web` 으로 띄운다. 폰에서 LAN IP 로 접속하면 friendly 도 같은 IP 로 자동 추종 (위 환경변수 절 참조).
 
 ### Metro 모노레포 설정 [coverage: high — 1 source]
 
-`metro.config.js`는 pnpm + workspace 환경에서 동작하기 위한 비표준 설정이 다수다 ([metro.config.js](../../apps/mobile/metro.config.js)):
+`metro.config.js` 는 pnpm + workspace 환경에서 동작하기 위한 비표준 설정이 다수다 ([metro.config.js](../../apps/mobile/metro.config.js)):
 
-- `watchFolders = [workspaceRoot]` — 모노레포 루트까지 감시
-- `nodeModulesPaths` — 앱 로컬 + 워크스페이스 루트 + `node_modules/.pnpm/node_modules` (pnpm이 hoist한 transitive deps 위치)
+- `watchFolders = [workspaceRoot]`
+- `nodeModulesPaths` — 앱 로컬 + 워크스페이스 루트 + `node_modules/.pnpm/node_modules`
 - `disableHierarchicalLookup = true` + `unstable_enableSymlinks = true` + `unstable_enablePackageExports = true`
-- `blockList`로 `.claude/`, `.git/`, `.turbo/`, `.expo/` 제외
-- **커스텀 `resolveRequest` — 두 가지 작업을 한다:**
-  1. `@repo/*` 패키지가 `"type": "module"` + TS NodeNext 규약에 따라 `.js` 접미사로 import한 상대 경로를 실제 `.ts`/`.tsx`로 매핑
-  2. **플랫폼별 확장자 우선 탐색** — `./Foo.js` → iOS면 `.ios.tsx` → `.native.tsx` → `.tsx`, web이면 `.web.tsx` → `.tsx` 순. shared의 `Comp.tsx`(`.web` 재export 셔틀)가 native에서 잘못 픽되던 버그 회피. 이 우선순위가 곧 [platform-ui-split](../concepts/platform-ui-split.md) quad 패턴의 작동 보장
+- `blockList` 로 `.claude/`, `.git/`, `.turbo/`, `.expo/` 제외
+- **커스텀 `resolveRequest`** — (1) `@repo/*` 의 `.js` 접미사 import 를 `.ts/.tsx` 로 매핑, (2) 플랫폼별 확장자 우선 탐색 (`.ios.tsx` → `.native.tsx` → `.tsx`, web 은 `.web.tsx` → `.tsx`)
 
-Babel은 `babel-preset-expo` + `react-native-reanimated/plugin` + `babel-plugin-react-compiler` 사용 ([babel.config.js](../../apps/mobile/babel.config.js)).
+Babel 은 `babel-preset-expo` + inline `replace-import-meta` 플러그인 + `react-native-reanimated/plugin` ([babel.config.js](../../apps/mobile/babel.config.js)). `babel-plugin-react-compiler` 는 preset-expo 의 experimental react-compiler 옵션 경로로.
 
-### Expo Web (RN-Web 출력) [coverage: high — 1 source]
+## Talks To [coverage: high — 4 sources]
 
-`app.config.ts`의 `web: { bundler: 'metro', output: 'single' }` — RN-Web 출력은 **SPA 모드**다. 정적 모드(`'static'`) 는 React 19 통일 이전 SSR 호환 이슈로 인해 비활성. SPA 는 브라우저에서만 렌더하므로 충돌 없음. 모바일 개발 중 브라우저 미리보기 용도라 SSR/SEO는 불요.
+- **[`@repo/api-contract`](api-contract.md)** — zod 스키마/타입. 이번 라운드 정산 도메인 추가분: `SharedSettlementSessionType`, `ReceiptItemCategoryType`, `SettlementSessionType`, `SettlementParticipantType`, `SettlementRoundType` 등.
+- **[`@repo/shared`](shared.md)** — API 클라이언트 (`configureApi`), 인증·맛집 훅 (`useLogin`, `useRegister`, `useLogout`, `useCurrentUser`, `usePicks`, `useRandomPick`, `useRestaurantList`, `useRestaurantsPublic`, `useRestaurantByPlaceId`, `useMenuRanking`, `useGroupForRestaurant`), Zustand 스토어 (`useAuthStore`), UI (`Screen`, `Stack`, `Text`, `Button`, `Input`, `SegmentedControl`, `Divider`, `ErrorBanner`), `ThemeProvider`/`useTheme`. **정산 훅 (신규 의존)**: `useSettlement`, `useListSettlements`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUploadReceipt`, `useExtractReceipt`, `setSettlementDraftStorage` (스토리지 어댑터 주입 API), `ApiError`.
+- **[`@repo/utils`](utils.md)** — `computeBboxAround`, `isInKorea`, `formatWonPrice` 등.
+- **[friendly](friendly.md) 백엔드** — `EXPO_PUBLIC_API_URL` 로 baseUrl 주입. dev 는 LAN/localhost/web-hostname 자동 추종, production 은 `.env.production` 의 `https://nlpp.easypcb.co.kr`. `.well-known/{apple-app-site-association,assetlinks.json}` 응답도 friendly 가 책임.
 
-`pnpm dev:mobile` 실행 후 `w` 키 또는 `pnpm --filter mobile web`으로 띄운다.
-
-## Talks To [coverage: high — 3 sources]
-
-- **[`@repo/api-contract`](api-contract.md)** — zod 스키마/타입 (`RestaurantListItemType`, `RestaurantPublicListItemType`, `RestaurantPublicDetailType`, `RestaurantInsightsType`, `MenuRankingItemType`, `MenuRankingSortType` 등)
-- **[`@repo/shared`](shared.md)** — API 클라이언트 (`configureApi`), React Query 훅 (`useLogin`, `useRegister`, `useLogout`, `useCurrentUser`, `usePicks`, `useRandomPick`, `useRestaurantList`, `useRestaurantsPublic`, `useRestaurantByPlaceId`, `useMenuRanking`, `useGroupForRestaurant`), Zustand 스토어 (`useAuthStore`), UI 컴포넌트 (`Screen`, `Stack`, `Text`, `Button`, `Input`, `SegmentedControl`, `Divider`, `ErrorBanner`), `ThemeProvider`/`useTheme`, `QUERY_STALE_TIME`/`QUERY_GC_TIME` 상수
-- **[`@repo/utils`](utils.md)** — 순수 유틸 (`computeBboxAround`, `isInKorea`, `formatWonPrice` 등)
-- **[friendly](friendly.md) 백엔드** — `EXPO_PUBLIC_API_URL` 환경변수로 baseUrl 주입. dev 는 LAN/localhost 자동 추종, production 은 `.env.production` 의 `https://nlpp.easypcb.co.kr` 자동 로드 ([api-setup.ts](../../apps/mobile/src/lib/api-setup.ts), [.env.example](../../apps/mobile/.env.example), [.env.production](../../apps/mobile/.env.production))
-
-## API Surface [coverage: high — 8 sources]
+## API Surface [coverage: high — 12 sources]
 
 expo-router 파일 트리가 곧 라우트다.
 
 | Route | File | 설명 |
 |-------|------|------|
-| `/` | [`app/index.tsx`](../../apps/mobile/app/index.tsx) | `useAuthStore`의 `token`/`isGuest` 보고 `/(tabs)/home` 또는 `/(auth)/login`로 Redirect |
-| `/(auth)/login` | [`app/(auth)/login.tsx`](../../apps/mobile/app/(auth)/login.tsx) | 로그인/회원가입 SegmentedControl, 게스트 "바로 시작하기" 버튼 |
-| `/(tabs)/home` | [`app/(tabs)/home.tsx`](../../apps/mobile/app/(tabs)/home.tsx) | `usePicks()` 리스트, 카드별 "랜덤 픽!" → `useRandomPick()` mutation, 게스트는 안내 화면 |
-| `/(tabs)/restaurants` | [`app/(tabs)/restaurants.tsx`](../../apps/mobile/app/(tabs)/restaurants.tsx) | 공개 맛집 — 풀스크린 WebView 지도 + bottom-sheet 2개 적층 (list/detail), 위치 권한 + 자동 bbox |
-| `/(tabs)/profile` | [`app/(tabs)/profile.tsx`](../../apps/mobile/app/(tabs)/profile.tsx) | `useCurrentUser()` 이메일 표시, `useLogout()` 버튼 |
-| `/restaurant/[placeId]` | [`app/restaurant/[placeId].tsx`](../../apps/mobile/app/restaurant/[placeId].tsx) | (admin) `useRestaurantByPlaceId()` 헤더 + `<MenuRankingCard>`. `Stack.Screen` 헤더로 "뒤로" 제공 |
+| `/` | [`app/index.tsx`](../../apps/mobile/app/index.tsx) | `useAuthStore` 보고 `/(tabs)/home` 또는 `/(auth)/login` 으로 Redirect |
+| `/(auth)/login` | [`app/(auth)/login.tsx`](../../apps/mobile/app/(auth)/login.tsx) | 로그인/회원가입 + 게스트 진입 |
+| `/(tabs)/home` | [`app/(tabs)/home.tsx`](../../apps/mobile/app/(tabs)/home.tsx) | Pick 리스트 + 랜덤 픽 |
+| `/(tabs)/restaurants` | [`app/(tabs)/restaurants.tsx`](../../apps/mobile/app/(tabs)/restaurants.tsx) | 공개 맛집 — 풀스크린 WebView 지도 + 2-시트 적층 |
+| `/(tabs)/profile` | [`app/(tabs)/profile.tsx`](../../apps/mobile/app/(tabs)/profile.tsx) | 사용자 정보 + 로그아웃. **로그인 시 '내 정산 이력' / '내 단골' 행** → `/settlement/history`, `/settlement/contacts` |
+| `/restaurant/[placeId]` | [`app/restaurant/[placeId]/index.tsx`](../../apps/mobile/app/restaurant/[placeId]/index.tsx) | 식당 상세 (탭형 — 메뉴 탭 상단 정산 CTA) |
+| `/restaurant/[placeId]/settle/new` | [`new.tsx`](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx) | 정산 신규 위저드 (placeId prefill) |
+| `/restaurant/[placeId]/settle/[id]` | [`[id]/index.tsx`](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx) | 정산 결과 view |
+| `/restaurant/[placeId]/settle/[id]/edit` | [`[id]/edit.tsx`](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx) | 정산 편집 모드 |
+| `/settlement/new` | [`app/settlement/new.tsx`](../../apps/mobile/app/settlement/new.tsx) | 식당 미지정 위저드 — Step2 에서 식당 검색 |
+| `/settlement/history` | [`app/settlement/history.tsx`](../../apps/mobile/app/settlement/history.tsx) | `useListSettlements()` 이력 |
+| `/settlement/contacts` | [`app/settlement/contacts.tsx`](../../apps/mobile/app/settlement/contacts.tsx) | `useSettlementContacts()` 단골 관리 |
+| `/share/settlements/[token]` | [`app/share/settlements/[token].tsx`](../../apps/mobile/app/share/settlements/[token].tsx) | **deep link 가로채기 대상** — `useSharedSettlement(token)` read-only view (비로그인 OK) |
 
-`(auth)`/`(tabs)`는 expo-router의 group(URL에 영향 없는 폴더). 루트 Stack에서 `headerShown: false`로 헤더를 숨기고, `(tabs)` 내부는 `Tabs` 컴포넌트가 한국어 타이틀(`홈`, `맛집`, `프로필`)을 렌더한다. `restaurant/[placeId]`는 group 바깥의 일반 stack 라우트라 자체 `Stack.Screen`으로 헤더(`title: '맛집 상세'`, `headerBackTitle: '뒤로'`)를 켠다.
+`(auth)`/`(tabs)` 는 expo-router group(URL 영향 없음). 루트 Stack 은 `headerShown:false` + `headerBackButtonDisplayMode:'minimal'` 글로벌 적용 — 자식이 명시적으로 `<Stack.Screen options={{ headerShown: true, ... }} />` 로 덮어쓸 때만 헤더 노출 (식당 상세 / 공유 결과 등).
 
-## Data [coverage: high — 2 sources]
+## Data [coverage: high — 4 sources]
 
-- **인증 토큰**: `@react-native-async-storage/async-storage`에 `lp:token` 키로 저장. 게스트 플래그는 `lp:guest='1'` ([api-setup.ts](../../apps/mobile/src/lib/api-setup.ts))
-- **로컬 DB 없음** — SQLite/WatermelonDB 등 미사용
-- **서버 상태**: TanStack Query (`@tanstack/react-query 5.62`) — staleTime/gcTime은 [`@repo/shared`](shared.md) 상수, retry 1회. 메뉴 순위/식당 리스트/식당 상세도 동일한 query client를 공유
+- **인증 토큰**: AsyncStorage `lp:token`. 게스트는 `lp:guest='1'`.
+- **정산 draft (zustand persist)**: `setSettlementDraftStorage(AsyncStorage)` 로 [`@repo/shared`](shared.md) 의 draft store 가 AsyncStorage 에 persist. 키는 shared 쪽 정의.
+- **정산 prefs**: [settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts) — AsyncStorage `lp:settlementPrefs`. `newParticipantExcludes` 만.
+- **서버 상태**: TanStack Query 단일 client, staleTime/gcTime 은 [`@repo/shared`](shared.md) 상수, retry 1. 정산 도메인까지 같은 client 공유.
 
 부트스트랩 흐름 ([api-setup.ts](../../apps/mobile/src/lib/api-setup.ts)):
-1. AsyncStorage에서 토큰/게스트 플래그 읽어 `useAuthStore` 초기 상태 hydrate
-2. `useAuthStore.subscribe`로 토큰 변경 시 AsyncStorage write/remove 자동 동기화
-3. `configureApi({ baseUrl, getToken: () => cachedToken, onUnauthorized: () => clearSession() })` 호출 — 401 응답 시 자동 로그아웃
+1. **모듈 import 시점** — `setSettlementDraftStorage(AsyncStorage)` (동기 — 첫 store 접근 전 보장).
+2. `bootstrapApi()` await:
+   - `useSettlementPrefsStore.getState().hydrate()` 트리거 (fire-and-forget).
+   - AsyncStorage 에서 토큰/게스트 hydrate.
+   - `useAuthStore.subscribe` 로 양방향 sync.
+   - `configureApi({ baseUrl, getToken, onUnauthorized })`.
 
-## Key Decisions [coverage: high — 7 sources]
+## Key Decisions [coverage: high — 14 sources]
 
-- **`.env.production` 을 Git 에 포함** — 운영 API URL(`https://nlpp.easypcb.co.kr`) 을 production 모드(`run:* --release` / `expo export` / EAS production) 에서 **자동 로드** 받기 위함. Expo 의 dotenv 규약상 `.env.production` 만 production 모드에서 자동 픽되고, 임의 파일명(예: `.env.prod`) 은 `dotenv-cli` 강제 주입 필요해 휴먼 에러 위험. 시크릿은 들어가지 않으므로 (`EXPO_PUBLIC_*` 만 인라인 — 어차피 번들에 박힘) 평문 커밋 OK.
-- **운영 빌드 가이드 별도 문서** ([docs/production-build.md](../../apps/mobile/docs/production-build.md)) — Release/EAS/실기기 절차가 길고 절차마다 환경(Xcode Team, USB 디버깅, EAS env 등록) 이 달라 README 에 묻으면 묻히기 쉬워 분리. 선택 가이드 표로 "운영 변수로 빠르게 확인 → 2번", "외부 배포 → EAS" 등 의사결정 트리 제공.
-- **Expo (bare RN 아님)** — EAS Build/Update 사용 위해 ([eas.json](../../apps/mobile/eas.json)에 development/preview/production 3개 채널 정의, `appVersionSource: 'remote'`, production은 `autoIncrement: true`)
-- **expo-router 6 파일 기반** — `react-navigation`을 직접 imperative하게 쓰지 않고 파일 트리로 표현. `experiments.typedRoutes`로 타입 안전성 확보
-- **Expo SDK 54 / React 19 / RN 0.81** — 이전 SDK 52 / RN 0.76 / React 18 라인에서 SDK 54 로 업그레이드. 웹과 React 버전 통일(둘 다 19.1) 되면서 워크스페이스 React 두 사본 공존 문제도 해소.
-- **Expo Web은 SPA 모드** — `web.output: 'single'`. 모바일 개발 중 브라우저 미리보기 용도. SSR/SEO 불요.
-- **New Architecture 활성화** — `newArchEnabled: true` (Fabric/TurboModules)
-- **React Compiler 활성화** — `experiments.reactCompiler: true` + `babel-plugin-react-compiler` — auto-memoization. 수동 `useMemo`/`useCallback` 의존성 줄임.
-- **공개 맛집 vs admin 식당 상세 분리** — `(tabs)/restaurants` 는 공개 (모두 사용 가능, 지도+바텀시트 UX), `/restaurant/[placeId]` 의 메뉴 순위 카드는 admin API 의존 (인증된 ADMIN 만 의미 있는 데이터). 본격 어드민(매장 등록·리뷰 크롤·요약 트리거 등 쓰기 액션)은 웹 전용 — 단 `MenuRankingCard`의 "분류하기" 버튼만은 예외로 mutation 직접 호출.
-- **메뉴 순위 비즈니스 로직은 [`@repo/shared`](shared.md)에, UI 비율 계산만 앱에** — 정렬/필터(`minMentions: 2`)/그룹핑/[menu-grouping](menu-grouping.md) invalidate는 shared 훅이, RN flex 비율과 sort 상태 `useState`만 앱에.
-- **공통 로직은 `@repo/shared`, UI는 플랫폼별** — 훅·스토어는 공유하지만, `home.tsx`/`profile.tsx`/`restaurants.tsx`/`MenuRankingCard.tsx` 등은 `react-native`의 `View`/`Text`/`FlatList`/`Pressable`/`StyleSheet`를 직접 사용. `login.tsx`만 `@repo/shared`의 RN 호환 컴포넌트 사용.
-- **앱은 light only** — `ThemeProvider mode="light"` 고정. 웹/admin 은 다크 모드 토글이 있지만 앱은 미적용.
-- **정산은 모바일 미구현** — 웹만. ([settlement.md](settlement.md) 참조)
-- **게스트 우선 진입** — 로그인 화면 최상단의 "바로 시작하기 →" 버튼이 가장 큰 primary CTA.
+- **정산은 mobile/web 양쪽 풀 구현** — 같은 [`@repo/shared`](shared.md) 훅 위에서 UI 만 다르게. 공유 페이지는 deep link 로 native 앱이 가로채고, 미설치 단말은 web SPA 로 동일 read-only view fallback. (이전 컴파일까지의 "정산은 모바일 미구현 — 웹만" 항목은 본 라운드에 완전히 해소.)
+- **Universal Links + App Links 패턴** — iOS `associatedDomains`, Android `intentFilters: autoVerify: true`. 호스트는 `EXPO_PUBLIC_WEB_HOST` env 로 dev/staging 분기 (기본 `nlpp.easypcb.co.kr`). 호스트 변경 시 prebuild + 새 빌드 필요 — 네이티브 config 라 hot reload 불가. 서버측 `.well-known` 응답은 [friendly](friendly.md) 가 동적으로 (env 의 TEAM_ID/BUNDLE_ID/SHA256 으로). 절차 전체는 [DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md).
+- **`tabs-layout.tsx` / `tabs-layout.web.tsx` 셔틀 분리** — `react-native-bottom-tabs` 같은 native-only 라이브러리는 web 번들에 들어가지 못한다. expo-router layout 파일 자체는 두 줄 셔틀로 두고, 실제 구현을 `~/components/tabs-layout` 으로 옮겨 Metro 의 platform extension 우선 탐색이 native vs web 을 자동 선택. 새 native-only 의존이 들어올 때마다 같은 패턴 (`.web.tsx` 같이 두기) 으로 가야 함.
+- **Lucide inline SVG (web 탭 아이콘)** — Lucide npm 의존 없이 path 만 inline. stroke=currentColor 로 React Navigation 색 자동 적용. 컬러 이모지에 grayscale 안 먹는 OS 회피.
+- **LAN IP 자동 추종 (Expo Web 한정)** — `window.location.hostname` 으로 friendly URL 도 같은 IP:3000 추론. friendly 의 CORS RFC1918 자동 허용과 짝이라 별도 설정 없이 같은 LAN 의 폰에서 Expo Web 으로 같은 LAN IP 로 붙으면 즉시 동작.
+- **`setSettlementDraftStorage(AsyncStorage)` 는 모듈 import 시점에 동기 호출** — `bootstrapApi()` 의 `await` 안에 두면 첫 store 접근이 먼저 일어날 수 있어 persist 가 silently no-op. import 부수효과로 강제.
+- **iOS 자동 백 라벨 글로벌 차단** — 루트 Stack 의 `screenOptions.headerBackButtonDisplayMode: 'minimal'` 로 모든 자식 라우트의 iOS 백 버튼이 chevron(<) 만. `(tabs)` 같은 group 디렉터리명이 라벨로 새는 회귀 + 최신 Apple HIG.
+- **`.env.production` 을 Git 에 포함** — 운영 API URL 을 production 모드에서 자동 로드. `EXPO_PUBLIC_*` 만 인라인 — 어차피 번들에 박힘 — 평문 OK.
+- **운영 빌드 가이드 별도 문서** ([docs/production-build.md](../../apps/mobile/docs/production-build.md)) — Release/EAS/실기기 절차.
+- **Expo (bare RN 아님)** — EAS Build/Update 사용 위해 ([eas.json](../../apps/mobile/eas.json) 3 채널).
+- **expo-router 6 파일 기반 + `experiments.typedRoutes`** — 라우트 트리 = 파일 트리. 식당 상세를 디렉터리로 승격해 settle 하위를 품도록 한 것도 같은 원리.
+- **Expo SDK 54 / RN 0.81 / React 19 유지** — 이번 라운드 SDK 업그레이드 없음.
+- **New Architecture + React Compiler** — `newArchEnabled: true`, `experiments.reactCompiler: true`.
+- **공통 로직은 `@repo/shared`, UI 는 플랫폼별** — 정산 도메인도 같은 원칙. Wizard step 시그너처/검증/계산은 shared 가, RN 시트/Pressable 만 mobile 이.
+- **앱은 light only** — `ThemeProvider mode="light"`.
+- **게스트 우선 진입** — 로그인 화면 최상단 "바로 시작하기 →".
 
-## Gotchas [coverage: high — 8 sources]
+## Gotchas [coverage: high — 14 sources]
 
-- **`.env.production` 은 평문 — 시크릿 금지** — `EXPO_PUBLIC_*` 접두사 변수만 인라인 되며 어차피 빌드된 번들에서 추출 가능. API URL/도메인 정도만 OK. JWT/DB 패스워드 등 진짜 시크릿은 EAS env (`eas env:create --environment production --name ... --value ...`) 로만 — 단 그것도 `EXPO_PUBLIC_*` 접두사면 마찬가지로 번들 박힘. 진짜 시크릿은 클라이언트가 아니라 서버 측 환경변수로.
-- **EAS 빌드 시 환경별 분기** — `.env.production` 은 **로컬** 빌드에서만 자동 픽. EAS 클라우드 빌드는 EAS 서버에서 도는 빌드 컨테이너가 로컬 파일을 못 읽으므로 `eas env:create --environment production` 로 별도 등록 필요 ([docs/production-build.md](../../apps/mobile/docs/production-build.md) §4). `eas env:list --environment production` 으로 확인. preview/development 환경도 별도 등록 필요.
-- **`EXPO_PUBLIC_API_URL` 변경 후엔 재빌드 필수** — Metro 가 빌드 시 인라인하므로 런타임 핫스왑 불가. dev 서버는 재시작, Release/EAS 는 재빌드. 캐시 의심되면 `pnpm --filter mobile clean` 후 재시도.
-- **iOS Release 실기기 — 최초 1회 Xcode Team 설정 + 폰에서 "신뢰"** — `apps/mobile/ios/mobile.xcworkspace` 열어서 Target > Signing & Capabilities > Team 선택 (무료 Apple ID 도 가능, 7일 만료). 설치 후 폰 설정 → 일반 → VPN 및 기기 관리에서 프로파일 신뢰. ios 디렉터리는 gitignored 라 CNG/prebuild 가 다시 돌면 재설정 필요 ([docs/production-build.md](../../apps/mobile/docs/production-build.md) §3).
-- **Android Release 설치 — 기존 dev 빌드와 서명 충돌** — `INSTALL_FAILED_UPDATE_INCOMPATIBLE` 가 뜨면 `adb uninstall com.niney.lifepickr` 후 재설치 ([docs/production-build.md](../../apps/mobile/docs/production-build.md) 트러블슈팅).
-- **typedRoutes는 첫 빌드 전엔 stale** — `experiments.typedRoutes: true`라도 `.expo/types/router.d.ts`가 갱신돼야 새 라우트(`/restaurant/[placeId]`)를 인식. typecheck-only 환경에서는 `router.push(\`/restaurant/${item.placeId}\` as never)`처럼 캐스트해 두고, `expo start` 한 번 돌면 자동 갱신된다 ([restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx))
-- **식당 상세(`/restaurant/[placeId]`)는 admin 전용** — `useRestaurantList`가 admin API에 매여 있어, 비-ADMIN/게스트는 분기로 빈 안내만. `(tabs)/restaurants` 자체는 공개 (모두 접근 가능). 라우트 가드는 화면 안에서만 처리.
-- **`MenuRankingCard`는 분류 mutation 진행 중 버튼 disabled만 처리** — pending 시 `groupMutation.isPending` → "분류 중…" 텍스트 + opacity 0.6. 실패 시 별도 토스트/에러 UI 없음.
-- **flex 비율 sentiment bar — total이 0이면 모두 0** — `pos`/`neu` 모두 0이 되어 마지막 세그먼트(`100 - pos - neu = 100`)가 통째로 빨강이 된다. `totalMentions === 0`일 땐 카드 자체가 "분석된 메뉴 멘션이 아직 없습니다"로 빠지지만, 개별 행 단위 total 0인 상태가 도달 가능한지는 ranking 훅의 minMentions 보장에 의존
-- **글로벌 비교 라벨은 `restaurantCount > 1`일 때만** — 같은 메뉴가 여러 가게에서 잡혀야 의미가 있어, 단일 가게에서만 등장한 메뉴는 "전체 N%" 라벨이 아예 안 뜬다 ([MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx))
-- **Metro 모노레포 설정 필수** — `watchFolders`, `disableHierarchicalLookup`, `unstable_enableSymlinks`, `unstable_enablePackageExports`, `nodeModulesPaths`에 `.pnpm/node_modules` 포함, `.js` → `.ts/.tsx` 매핑 커스텀 resolver, 플랫폼 우선 확장자 탐색이 모두 한 묶음. 하나만 빠져도 pnpm 심볼릭 링크 / `@repo/*` workspace dep / 플랫폼 분기 중 무엇 하나가 깨진다 ([metro.config.js](../../apps/mobile/metro.config.js))
-- **shared `Comp.tsx` 셔틀은 native에서 잘못 픽되기 쉽다** — `Button.tsx`처럼 `.web.tsx`만 재export하는 셔틀이 있을 때, Metro resolver가 플랫폼별 확장자(`.ios.tsx`/`.native.tsx`/`.web.tsx`)를 먼저 시도하지 않으면 native에서도 셔틀(=`.web` 구현)이 선택돼 RN 런타임에서 `h1` Invariant 같은 에러로 표면화. 새 UI 프리미티브 추가 시 quad 4-file 패턴(`.types.ts` + `.tsx` + `.web.tsx` + `.native.tsx`)을 반드시 지킬 것
-- **루트 layout이 `bootstrapApi` 끝날 때까지 `null` 반환** — splash 뒤에 흰 화면이 잠깐 보이지 않게 하려면 `expo-splash-screen`의 hide 타이밍을 이 ready 시점과 맞춰야 함 (현재 코드에는 명시적 SplashScreen.hideAsync 호출 없음 — Expo 기본 동작에 의존)
-- **Pick 목록은 `usePicks()` Query, 결과는 로컬 `useState`** — 랜덤 픽 결과(`result`)는 query 캐시가 아니라 컴포넌트 state라 화면 이동 시 사라짐 ([home.tsx](../../apps/mobile/app/(tabs)/home.tsx))
-- **`noUncheckedIndexedAccess: true`** — tsconfig에서 켜져 있어 배열/객체 인덱스 접근이 `T | undefined`로 좁혀진다 ([tsconfig.json](../../apps/mobile/tsconfig.json))
+- **iOS Stack 의 auto back title 이 group/디렉터리명을 노출** — 라우트 트리가 깊어지면서 `(tabs)`, `[placeId]`, `settle` 같은 디렉터리명이 그대로 iOS 백 라벨로 새던 회귀. 루트 Stack 에 `headerBackButtonDisplayMode: 'minimal'` 글로벌 적용으로 차단. 새로 헤더 켜는 라우트 추가 시에도 명시적 라벨이 필요하면 `<Stack.Screen options={{ headerBackTitle: '뒤로' }} />` 로 박을 것.
+- **`zustand` 의 `import.meta.env` 가 web 번들에서 SyntaxError** — Metro/babel-preset-expo 는 `import.meta` 를 변환하지 않고, web 출력은 `<script defer>` (not `type="module"`) 라 그대로면 부팅 실패. [babel.config.js](../../apps/mobile/babel.config.js) 의 inline `replace-import-meta` 플러그인이 모든 플랫폼에서 `{ env: { MODE: 'production' } }` 객체로 치환. zustand 외 다른 라이브러리가 `import.meta` 를 의도하면 같은 치환에 영향받음 — 의도된 동작 (devtools 등 prod 분기로 평가) 인지 확인 필요.
+- **DEEP_LINK_SETUP 절차를 안 밟으면 deep link 가 그냥 브라우저로 fallback** — `app.config.ts` 의 capability 만으로는 부족. (1) friendly 서버 env 채우기 (`APP_TEAM_ID`, `APP_BUNDLE_ID`, `ANDROID_APP_PACKAGE`, `ANDROID_SHA256_FINGERPRINTS`), (2) `npx expo prebuild --clean`, (3) native build, (4) `pm get-app-links` / `am start` 로 검증. 어느 단계 빠지면 verification state 가 `unverified` 라 "어떤 앱으로 열까요?" 다이얼로그 또는 브라우저 직행. [DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md) 의 트러블슈팅 매트릭스 참조.
+- **`setSettlementDraftStorage` 주입 순서** — 모듈 import 시점(동기, 부수효과) 에 실행돼야 함. `bootstrapApi()` 같은 async 함수 안에 두면 wizard 컴포넌트가 먼저 마운트되면서 첫 read/write 가 일어나, 어댑터 주입 전에는 zustand persist 가 in-memory 만 쓰고 silently 끝남 — 앱 재실행 시 draft 가 사라지는 형태로 표면화. 현재 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 가 모듈 최상위에서 호출 — 옮길 때 주의.
+- **`react-native-bottom-tabs` 는 native-only** — `@bottom-tabs/react-navigation` 까지 한 묶음이라 어떤 코드 경로로든 web 번들에 들어가면 `codegenNativeComponent` 가 web 에서 unknown 으로 깨진다. 새 native-only 라이브러리 의존이 들어올 때마다 `.web.tsx` 셔틀로 둘러야 함 — `tabs-layout` / `PublicRestaurantsWebMap` 패턴 따라가기.
+- **식당 상세 디렉터리 승격 — import 경로 변경** — `app/restaurant/[placeId].tsx` 는 이제 없다. `app/restaurant/[placeId]/index.tsx` + `settle/` 하위. 외부에서 import 하는 코드가 있다면 경로 수정 필요 (현재는 expo-router 가 라우트 단위로만 다루므로 코드 import 는 없는 편).
+- **typedRoutes 는 첫 빌드 전엔 stale** — 새 라우트(`/restaurant/[placeId]/settle/new`, `/settlement/new`, `/share/settlements/[token]` 등) 들이 `.expo/types/router.d.ts` 에 들어오기 전엔 typecheck 가 깨질 수 있다. MenuTab CTA 의 `router.push(... as never)` 캐스트가 그 때문.
+- **`EXPO_PUBLIC_WEB_HOST` 변경 시 prebuild + 새 빌드 필수** — associatedDomains/intentFilters 는 네이티브 config 라 hot reload 불가. JS only 변경이 아님.
+- **`EXPO_PUBLIC_API_URL` 변경 후엔 재빌드 필수** — Metro 가 빌드 시 인라인. dev 서버 재시작, Release/EAS 는 재빌드.
+- **`.env.production` 은 평문 — 시크릿 금지** — `EXPO_PUBLIC_*` 만 인라인되고 어차피 번들에서 추출 가능. JWT/DB 패스워드 등은 서버 측 env 로.
+- **EAS 클라우드 빌드는 로컬 `.env.production` 못 읽음** — `eas env:create --environment production` 로 별도 등록 ([docs/production-build.md](../../apps/mobile/docs/production-build.md) §4).
+- **iOS Release 실기기 — 최초 1회 Xcode Team 설정 + 폰 "신뢰"** — `ios/` 는 gitignored 라 prebuild 가 다시 돌면 재설정 필요.
+- **Android Release — 기존 dev 빌드와 서명 충돌** — `INSTALL_FAILED_UPDATE_INCOMPATIBLE` → `adb uninstall com.niney.lifepickr` 후 재설치.
+- **Metro 모노레포 설정은 한 묶음** — `watchFolders`, `disableHierarchicalLookup`, `unstable_enableSymlinks`, `unstable_enablePackageExports`, `.pnpm/node_modules` 포함, `.js → .ts/.tsx` 매핑, 플랫폼 확장자 우선 — 하나만 빠져도 깨진다.
+- **shared `Comp.tsx` 셔틀의 native 오픽** — `Button.tsx` 처럼 `.web.tsx` 를 재export 하는 셔틀이 있을 때 quad (`.types.ts` + `.tsx` + `.web.tsx` + `.native.tsx`) 패턴을 지키지 않으면 native 에서도 셔틀(=web 구현) 이 선택돼 `h1` Invariant.
+- **루트 layout 이 `bootstrapApi` 끝까지 `null` 반환** — `expo-splash-screen` 의 hide 타이밍이 ready 시점과 어긋나면 잠깐 흰 화면. 현재 명시적 `SplashScreen.hideAsync` 없음.
+- **`noUncheckedIndexedAccess: true`** — 배열/객체 인덱스가 `T | undefined`.
 
-## Sources [coverage: high — 22 sources]
+## Sources [coverage: high — 46 sources]
 
+설정·빌드:
 - [apps/mobile/package.json](../../apps/mobile/package.json)
-- [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts)
+- [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts) — *modified: associatedDomains, intentFilters, expo-image-picker plugin, EXPO_PUBLIC_WEB_HOST*
 - [apps/mobile/metro.config.js](../../apps/mobile/metro.config.js)
-- [apps/mobile/babel.config.js](../../apps/mobile/babel.config.js)
+- [apps/mobile/babel.config.js](../../apps/mobile/babel.config.js) — *modified: replace-import-meta inline plugin*
 - [apps/mobile/eas.json](../../apps/mobile/eas.json)
 - [apps/mobile/tsconfig.json](../../apps/mobile/tsconfig.json)
 - [apps/mobile/.env.example](../../apps/mobile/.env.example)
 - [apps/mobile/.env.production](../../apps/mobile/.env.production)
 - [apps/mobile/docs/production-build.md](../../apps/mobile/docs/production-build.md)
-- [apps/mobile/app/_layout.tsx](../../apps/mobile/app/_layout.tsx)
+- [apps/mobile/DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md) — *NEW*
+
+라우트 (app/):
+- [apps/mobile/app/_layout.tsx](../../apps/mobile/app/_layout.tsx) — *modified: BottomSheetModalProvider + headerBackButtonDisplayMode minimal*
 - [apps/mobile/app/index.tsx](../../apps/mobile/app/index.tsx)
 - [apps/mobile/app/(auth)/_layout.tsx](../../apps/mobile/app/(auth)/_layout.tsx)
 - [apps/mobile/app/(auth)/login.tsx](../../apps/mobile/app/(auth)/login.tsx)
-- [apps/mobile/app/(tabs)/_layout.tsx](../../apps/mobile/app/(tabs)/_layout.tsx)
+- [apps/mobile/app/(tabs)/_layout.tsx](../../apps/mobile/app/(tabs)/_layout.tsx) — *modified: shim 으로 변환*
 - [apps/mobile/app/(tabs)/home.tsx](../../apps/mobile/app/(tabs)/home.tsx)
 - [apps/mobile/app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx)
-- [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx)
-- [apps/mobile/app/restaurant/[placeId].tsx](../../apps/mobile/app/restaurant/[placeId].tsx)
-- [apps/mobile/src/components/MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)
+- [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) — *modified: 정산 이력 / 내 단골 메뉴*
+- [apps/mobile/app/restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx) — *RENAMED (was restaurant/[placeId].tsx)*
+- [apps/mobile/app/restaurant/[placeId]/settle/new.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx) — *NEW*
+- [apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx) — *NEW*
+- [apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx) — *NEW*
+- [apps/mobile/app/settlement/new.tsx](../../apps/mobile/app/settlement/new.tsx) — *NEW*
+- [apps/mobile/app/settlement/history.tsx](../../apps/mobile/app/settlement/history.tsx) — *NEW*
+- [apps/mobile/app/settlement/contacts.tsx](../../apps/mobile/app/settlement/contacts.tsx) — *NEW*
+- [apps/mobile/app/share/settlements/[token].tsx](../../apps/mobile/app/share/settlements/[token].tsx) — *NEW (deep link target)*
+
+컴포넌트·라이브러리:
+- [apps/mobile/src/components/tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx) — *NEW*
+- [apps/mobile/src/components/tabs-layout.web.tsx](../../apps/mobile/src/components/tabs-layout.web.tsx) — *NEW (Lucide inline SVG)*
+- [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — *modified: 정산하기 CTA*
 - [apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx)
+- [apps/mobile/src/components/MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)
+- [apps/mobile/src/components/settlement/SettlementWizard.tsx](../../apps/mobile/src/components/settlement/SettlementWizard.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/Step1Participants.tsx](../../apps/mobile/src/components/settlement/Step1Participants.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/Step2Rounds.tsx](../../apps/mobile/src/components/settlement/Step2Rounds.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/Step3Edit.tsx](../../apps/mobile/src/components/settlement/Step3Edit.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/Step4Review.tsx](../../apps/mobile/src/components/settlement/Step4Review.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/ContactPickerSheet.tsx](../../apps/mobile/src/components/settlement/ContactPickerSheet.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/ContactSuggestions.tsx](../../apps/mobile/src/components/settlement/ContactSuggestions.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/MenuPickerSheet.tsx](../../apps/mobile/src/components/settlement/MenuPickerSheet.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/RestaurantPickerSheet.tsx](../../apps/mobile/src/components/settlement/RestaurantPickerSheet.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/MultiReceiptSplitSheet.tsx](../../apps/mobile/src/components/settlement/MultiReceiptSplitSheet.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/RoundDiscountEditor.tsx](../../apps/mobile/src/components/settlement/RoundDiscountEditor.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx](../../apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx](../../apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx](../../apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx) — *NEW*
+- [apps/mobile/src/components/settlement/SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx) — *NEW*
 - [apps/mobile/src/hooks/useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts)
-- [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts)
-- [packages/shared/src/hooks (useRestaurantList, useRestaurantsPublic, useRestaurantByPlaceId, useMenuRanking, useGroupForRestaurant)](../../packages/shared/src/hooks)
+- [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) — *modified: setSettlementDraftStorage + LAN IP web 추론*
+- [apps/mobile/src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts) — *NEW*
+- [packages/shared/src/hooks](../../packages/shared/src/hooks) — settlement 훅 7종 + 기존 맛집·인증 훅

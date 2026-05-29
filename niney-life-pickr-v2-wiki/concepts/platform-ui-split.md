@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-05-19
-topics_connected: [shared, web, mobile, project-overview, utils, map]
+last_compiled: 2026-05-28
+topics_connected: [shared, web, mobile, project-overview, utils, map, settlement]
 status: active
 ---
 
@@ -20,6 +20,7 @@ status: active
 - **2026-05-14** in [[../topics/mobile]]: quad 패턴이 작동하려면 Metro resolver 가 플랫폼별 확장자를 우선 탐색해야 한다는 사실 표면화. 커스텀 `resolveRequest` 가 `./Foo.js` → `.ts`/`.tsx` 만 시도하던 시점에 native 빌드에서 `Comp.tsx`(=`.web` 셔틀)가 픽돼 `<h1>` Invariant 가 떴다. iOS → `.ios.tsx` → `.native.tsx` → `.tsx`, web → `.web.tsx` → `.tsx` 순서로 시도하도록 수정. 셔틀(`Comp.tsx`)이 `.web.tsx` 를 그대로 재export 하는 현재 구현에선 이 우선순위가 곧 quad 패턴의 작동 보장.
 - **2026-05-19** in [[../topics/shared]] / [[../topics/mobile]] / [[../topics/utils]] (`useUserLocation` 웹/네이티브 페어 + `@repo/utils/geo`): 같은 패턴이 **훅 레벨**로 확장. [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) 는 브라우저 `navigator.geolocation` + `Permissions API` 기반, [apps/mobile/src/hooks/useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts) 는 `expo-location` 기반. 인터페이스(`UserLocationState`: `{ status, coords, refetch }`) 가 같아 호출자(`PublicRestaurantsMap`/`PublicRestaurantsWebMap`) 가 import 만 다르고 코드는 동일. 공통 로직(좌표 → bbox 변환, 한국 영토 체크) 은 `@repo/utils/geo` 의 `computeBboxAround`/`isInKorea` 로 떼어내 양쪽 훅 호출자가 같이 소비. 인프라(navigator vs expo-location) 가 달라 한 줄 셔틀로 못 합쳐도, 인터페이스 동형 + 공통 산술 추출로 "분기 비용" 을 흡수.
 - **2026-05-19** in [[../topics/mobile]] / [[../topics/map]] (`PublicRestaurantsWebMap.native.tsx` + `publicRestaurantsMapHtml.ts` + `.web.tsx` quad 변형): 패턴의 **극단 인스턴스** — RN 이 OpenLayers 를 네이티브로 카리지 못해서, 네이티브는 WebView 안에 HTML(vworld WMTS + OpenLayers + 마커 클릭 → `window.ReactNativeWebView.postMessage` 브릿지) 을 통째로 주입. Expo Web 은 `.web.tsx` 가 web 컴포넌트(`PublicRestaurantsMap`) 를 그대로 재사용. 한 컴포넌트가 (1) 모바일 네이티브에서 WebView, (2) Expo Web 에서 web 컴포넌트, (3) Vite 웹에서 같은 web 컴포넌트 — 세 빌드에서 다른 인프라로 같은 표현을 낸다. UI 분기 경계가 컴포넌트 안의 한 글자가 아니라 **번들 자체** 일 수 있음을 보여준다.
+- **2026-05-28** in [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] / [[../topics/settlement]] (정산 Step1/2/3/4 + Round\* 편집 컴포넌트 + tabs-layout web/native + storage adapter 주입): 패턴이 **도메인 단위 듀얼 구현**으로 확장 — 정산 플로우의 같은 단계가 web `Step*.tsx` 는 다이얼로그/모달로, mobile `Step*.tsx` 는 바텀시트로 따로 작성. 같은 store 훅(`@repo/shared/stores`) 을 소비해 데이터 모델은 1개, UI 프리미티브만 두 갈래. `RoundDiscountEditor` / `RoundCategoryAdjuster` / `RoundExceptionsEditor` / `MultiReceiptSplit*` / `SettlementBreakdownTable` 도 같은 듀얼 구현 — 한 데이터 셰이프, 두 표현. 또 `tabs-layout.tsx` (native, `react-native-bottom-tabs` 직접) vs `tabs-layout.web.tsx` (custom React tabs) — 라이브러리가 네이티브 전용이라 web 빌드는 같은 컴포넌트 이름 surface 로 다시 작성. 그리고 **새 sub-pattern: storage adapter 주입** — `settlementDraftStore` (zustand) 가 자체 persist 미들웨어를 들고 있지 않고, 진입점에서 storage 를 주입 (`setSettlementDraftStorage(adapter)`). web 은 자동으로 sessionStorage, mobile 은 AsyncStorage 어댑터를 등록. 같은 store 코드 한 벌, 두 persistence layer — **파일 확장자 분기(`.web.tsx`/`.native.tsx`)에 더해 "런타임 의존성 주입" 이 분기 도구로 추가됐다는 점에서 quad 패턴의 자매 패턴**. zustand 가 빌드 시 분기되기 어려운 시나리오(import.meta · AsyncStorage 가 web 빌드에 들어가면 깨짐) 를 주입으로 우회 — quad 가 "번들러가 알아서 픽" 이라면 storage adapter 주입은 "엔트리 파일이 명시적으로 등록" 모델.
 
 ## What This Means
 
@@ -28,6 +29,7 @@ status: active
 1. **공유의 비용은 UI에서 가장 비싸다** — 비즈니스 로직(어떤 픽 모델, 어떤 유효성 검증)은 모든 플랫폼이 동일해야 하고, 그래서 `@repo/api-contract`/`@repo/shared`로 강제 공유된다. UI는 반대로 — 키보드 입력 처리, 햅틱, safe-area, 폰트 렌더링이 플랫폼마다 다르고, 추상화 레이어로 흡수하려 들면 양쪽 다 어색해진다. 그래서 "공유해야 할 것"과 "분기해야 할 것"의 경계를 의식적으로 그어 둠.
 2. **번들러 친화적 추상화** — 빌드 시점에 확장자(`.web.tsx` vs `.native.tsx`) 해석으로 플랫폼이 결정되므로, 런타임 분기 코드(`if (Platform.OS === 'web')`) 없이도 트리셰이킹이 깨끗하다. 결과: web 번들에 RN 코드가 안 들어가고, native 번들에 DOM 코드가 안 들어간다.
 3. **다른 화면은 다른 도구로** — 어드민 콘솔은 web-only이라서 shared의 cross-platform 추상화가 오히려 짐이 된다 → 로컬 shadcn 컴포넌트로. mobile은 expo-router의 file-based 라우팅을 그대로 활용. "공유 가능한 추상화"를 모든 곳에 강요하지 않음.
+4. **분기 도구가 둘이 됐다 — 파일 확장자 + 런타임 주입** (2026-05-28). 기존엔 quad(`.web.tsx`/`.native.tsx`/`.tsx` 셔틀) 가 유일한 분기 메커니즘이었는데, settlement 라운드에 zustand store 의 storage adapter 주입(`setSettlementDraftStorage`) 이 추가됐다. 코드 1벌 + persistence 2 종을 entry 파일이 명시적으로 결정. 빌드 분기로는 풀리지 않는 의존성(웹의 sessionStorage 와 RN 의 AsyncStorage 는 API 비호환) 을 주입으로 흡수. 분기 점이 컴파일 타임 한 곳에서 컴파일 타임 + 런타임 두 곳으로 늘었지만, **"API/스토어 인터페이스는 1개, 구현은 N 개"** 라는 핵심 약속은 유지.
 
 이 패턴이 깨질 수 있는 위험:
 - 번들러가 확장자 우선순위를 다르게 해석할 때 — shared 의 `Comp.tsx` 가 `.web.tsx` 를 직접 재export 하는 셔틀 패턴이라, Metro 가 `./Foo.js` 를 `.tsx` 만 매핑하면 native 빌드에서도 셔틀(=`.web`)이 픽된다. `apps/mobile/metro.config.js` 의 커스텀 resolver 가 플랫폼별 확장자(`.ios.tsx`/`.native.tsx`/`.web.tsx`)를 우선 시도해야 한다 (2026-05-14 fix 참조). 누가 무심코 `Button.tsx` 에 web 구현을 넣으면 Metro 가 그걸 native 에서도 쓰게 됨 → 항상 quad 패턴 유지 필요
@@ -42,3 +44,4 @@ status: active
 - [[../topics/project-overview]]
 - [[../topics/utils]]
 - [[../topics/map]]
+- [[../topics/settlement]]

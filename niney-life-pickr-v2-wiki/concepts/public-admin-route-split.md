@@ -1,6 +1,6 @@
 ---
 concept: 공개/어드민 라우트 페어 분리
-last_compiled: 2026-05-25
+last_compiled: 2026-05-28
 topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement]
 status: active
 ---
@@ -23,6 +23,7 @@ status: active
 - **2026-05-09** in [../topics/project-overview](../topics/project-overview.md): "공개 vs 어드민 분리 정책" 이 모노레포 수준의 결정으로 정착 — 백엔드는 `/api/v1/admin/*` prefix 가 가드의 유일한 신호이고, FE 는 `PublicLayout` vs `AdminLayout` 으로 분기. 새 도메인이 사용자 노출이 필요해질 때 동일한 페어 분리를 따른다.
 - **2026-05-09 (follow-up)** in [../topics/web](../topics/web.md): 페어 경계 흐림의 첫 사례 — 어드민 발견 페이지(`/admin/discover`) 가 등록 맛집 데이터를 어드민 hook 이 아니라 **공개 hook (`useRestaurantsPublic`) 을 호출해 가져온다**. 이유는 어드민 `RestaurantListItem` 응답에 좌표(`latitude`/`longitude`) 가 없어서 — 공개 `RestaurantPublicListItem` 만이 좌표를 노출. 어드민 발견 페이지가 지도 마커를 그리려면 좌표가 필요하므로 공개 응답 셋을 그대로 차용하는 게 가장 단순. 또 등록 행 클릭 시 `PublicRestaurantDetail` 컴포넌트도 그대로 재사용 — 어드민 발견 전용 상세 컴포넌트 별도로 만들지 않음. 이는 페어 분리의 합당성을 흔들지 않는다 — 어드민이 공개 표면을 호출할 때는 응답 셋이 어드민에서 부족해서이지, 같은 데이터를 두 표면에 묶으려는 게 아니다.
 - **2026-05-25** in [../topics/settlement](../topics/settlement.md) / [../topics/api-contract](../topics/api-contract.md) / [../topics/friendly](../topics/friendly.md) / [../topics/shared](../topics/shared.md) / [../topics/web](../topics/web.md): **새 결 — 권한 분리 축이 "role" 이 아니라 "토큰 소유"** 인 공유 토큰 페어. 같은 `SettlementSession` 데이터에 (a) 소유자만 `GET /api/v1/settlements/:id` (Bearer 인증, owner=userId 일치 검사), (b) 토큰 가진 사람만 `GET /api/v1/share/settlements/:token` (비인증, read-only). 응답 스키마도 분리 — `SettlementSession` 옆에 `SharedSettlementSession` 페어, 후자는 `.omit({ userId: true, receiptPreviewUrl: true })` 로 소유자 식별 + 영수증 원본 미리보기 제거 (토큰 받은 사람도 영수증 사진은 못 봄 — 개인정보 우려). 라우트 상수도 페어 — `Routes.Settlement.one(:id)` vs `Routes.Settlement.shared(:token)`, URL prefix 도 `/api/v1/settlements/` vs `/api/v1/share/settlements/`. shared 의 훅도 페어 — `useSettlement(id)` vs `useSharedSettlement(token)`, **queryKey 도 다른 namespace 라 캐시 격리** (`['settlement','one',id]` vs `['settlement','shared',token]`). web 도 페이지 분리 — `SettlementResultPage` (소유자) vs `SharedSettlementPage` (토큰), 라우트도 `/restaurants/:placeId/settle/:id` vs `/share/settlements/:token`, 후자는 `RequireUser` 가드 없이 직접 라우트. **결의 차이**: 기존 인스턴스들은 "역할(어드민/공개)" 축으로 분리됐는데, 여기는 "토큰 소유 vs 소유자" 축. 둘 다 같은 패턴 — 가드만 토글하지 않고 라우트·스키마·훅·페이지 전부 페어. 페어 분리 원칙이 "어드민/공개" 라는 특정 차원이 아니라 **"권한 차원이 다르면 페어로 분리한다"** 라는 일반화로 확장됐음을 보여주는 사례.
+- **2026-05-28** in [../topics/settlement](../topics/settlement.md) / [../topics/friendly](../topics/friendly.md) / [../topics/api-contract](../topics/api-contract.md): 권한 축에 새 결 — **드래프트는 소유자 전용, 공개 짝 없음**. `SettlementDraft` 라우트군(`GET/PUT/DELETE /api/v1/settlements/drafts/...`) 이 owner-only 인증으로만 노출되고 share-token 짝이 의도적으로 부재. 드래프트는 "사용자 편집 진행 중인 사적 입력 상태" 라서 다른 사람과 공유될 의미 자체가 없음 — share 짝을 두지 않는 게 도메인 의미와 정합. 권한 축이 "owner / token / 없음" 세 가지로 표현 가능해졌고, 도메인마다 적용 짝의 부분집합만 선택. 동시에 **owner 축 안에서 라우트 표면이 축소** — 기존 `PATCH /api/v1/settlements/:id/participants` (참석자 부분 업데이트) 가 `PUT /api/v1/settlements/:id` (세션 전체 교체) 로 통합. 다라운드 모델로 진화하면서 부분 PATCH 가지가 폭발할 위험을 owner 표면 단일 PUT 으로 흡수. **새 차원 추가가 아니라 같은 축(owner vs token) 위의 부분집합 + 표면 축소** 두 움직임이 한 라운드에 같이 일어남.
 
 ## What This Means
 

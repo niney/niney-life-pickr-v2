@@ -1,177 +1,263 @@
 ---
 topic: settlement
-last_compiled: 2026-05-25
-sources_count: 49
+last_compiled: 2026-05-28
+sources_count: 95
 status: active
-aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증 추출, 단골, contact, share token, edited badge]
+aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증 추출, 단골, contact, share token, edited badge, rounds, N차, settlement-draft, draft-autosave, multi-receipt, MultiReceiptSplitDialog, RoundDiscountEditor, RoundCategoryAdjuster, SettlementBreakdownTable, RoundExceptionsEditor, leftover-routing, roundUnit-100-1000, calculateMultiRoundShares, fromDraftId, EXTRACTION_VERSION, ExtractReceiptSplit, roundIndex, roundTotal, universal-links, app-links, deep-link, settlement-mobile, RestaurantSearchDialog, confirm-dialog, attendees-100, items-200]
 ---
 
 # settlement — 정산하기 도메인
 
 식당에서 일행이 영수증을 나눠 부담할 때 "주류 안 마신 사람은 술값 빼고" 같은 카테고리별 제외 규칙으로 자동 분배해 주는 도메인. 영수증 사진을 vision LLM 으로 OCR/분류하거나 직접 입력으로 만들고, 결과를 저장/공유/수정하며 정산에 자주 나오는 사람은 "단골" 로 자동 적립된다.
 
-**2026-05-25 신규 토픽 — 정산하기 도메인 통째로 추가됐다.** 백엔드 3 모듈(`settlement`, `settlement-extraction`, `contact`) + DB 4 테이블(session/item/participant/contact) + 웹 라우트 4종(`/restaurants/:placeId/settle/new`, `/restaurants/:placeId/settle/:id`, `/me/settlements`, `/me/contacts`) + 공유 라우트(`/share/settlements/:token`) 가 한꺼번에 들어왔다. 핵심 결정:
+**2026-05-28 14차 컴파일 — 정산 도메인의 출생 이후 가장 큰 단일 재작성.** 차수(N차) 정산 + 서버 임시저장(draft auto-save) + 한 사진 N등분(multi-receipt split) + 모바일 정산 풀 구현 + Universal/App Links 딥링크 + UX 다듬기가 한꺼번에 들어왔다. 이전 1식당-1라운드 모델은 사라졌고, items 불변·`PATCH /:id/participants` 같은 옛 정책도 폐기됐다. 핵심 변경:
 
-- **분배는 서버가 권위** — `calculateShares` 순수 함수가 카테고리별 풀 + 제외 플래그를 받아 분담액을 산출하고, 클라이언트는 같은 함수를 미리보기에 쓰되 저장 시 서버가 다시 계산한다.
-- **영수증 토큰은 server 가 발급** — `randomUUID` 36자 형식 정규식으로 path traversal 차단. 파일은 `data/receipts/<token>.jpg`.
-- **단골은 (userId, normalizedKey) upsert + 자동 적립** — 클라이언트의 `contactId` 힌트는 신뢰하지 않고 매번 정규화 키로 다시 매칭. 자동완성·"단골에서 추가" 모달이 같은 row 를 공유.
-- **공유 토큰 + 편집 + 수정됨 배지** — 멱등 share token, items 불변 정책(participants 만 PATCH), `editedAt` 분리 컬럼으로 "수정됨" 배지 노출.
+- **N차 정산** — 한 세션은 1~10 round, 각 round 는 자기 식당·source·items·attendees(부분집합)·할인·분담 보정을 가진다. 분배는 round 별로 계산해서 마스터 인덱스에 합산.
+- **차수 할인 + 분담 다듬기** — round 단위 단일 카테고리 할인(쿠폰/멤버십)과 카테고리별 잔여 처리 규칙(leftover 받는 사람 + 100/1000원 단위 반올림).
+- **정산표(breakdown matrix)** — 참여자 × (차수 × 카테고리) 매트릭스. 결과/공유 페이지의 핵심 시각화.
+- **분할 영수증** — 한 사진에 영수증 N장 가로 배치 → 같은 imageToken 으로 index 만 다르게 N번 extract 호출. 서버가 sharp 로 X 축만 잘라 vision LLM 에 넘긴다.
+- **서버 임시저장(SettlementDraft)** — `(userId, placeId)` unique upsert. debounce 5s(또는 3s) 자동 저장으로 다기기 동기화, 정산 완성 시 `fromDraftId` 로 트랜잭션 자동 삭제.
+- **모바일 정산 풀 구현** — 4단계 wizard·결과·이력·단골·공유까지 expo-router 라우트로 모두 이식. Universal Links/App Links 로 공유 링크가 앱을 직접 연다.
+- **PUT /:id 전체 replace** — items 불변·participants 만 PATCH 정책 폐기. UpdateSettlementInput = CreateSettlementInput.
+- **참여자 100명·아이템 200개로 한도 확장** + RFC1918 사설 LAN origin 자동 CORS 허용(Expo Web 모바일 단말).
 
-## Purpose [coverage: high — 8 sources]
+## Purpose [coverage: high — 9 sources]
 
-`settlement` 은 로그인 사용자가 한 식당에서 일행 분담액을 계산·저장·공유·수정할 수 있게 한다. 두 갈래 입력 — 영수증 사진(vision LLM 추출) 또는 직접 입력 — 이 같은 4단계 stepper 로 합류한다. 저장된 정산은 본인만 보지만, 공유 토큰을 발급하면 비로그인 사용자도 read-only 로 결과를 본다.
+`settlement` 은 로그인 사용자가 일행의 분담액을 계산·저장·공유·수정할 수 있게 한다. 한 세션은 1~10 차수로 구성되며 각 차수는 영수증 사진(vision LLM 추출) 또는 직접 입력으로 만들 수 있다. 차수마다 다른 식당·다른 참석자 부분집합·다른 할인을 가질 수 있다. 저장된 정산은 본인만 보지만, 공유 토큰을 발급하면 비로그인 사용자도 read-only 로 결과를 본다.
 
 자동 적립되는 **단골(SettlementContact)** 은 같은 사람을 매번 다시 입력하지 않게 한다 — 정산 저장 시마다 (userId, normalizedKey) 기준 upsert 되어, 자동완성 드롭다운과 다중 선택 모달의 데이터원이 된다.
 
-의존자: `apps/web` 의 정산 라우트 4종 + 공유 라우트가 직접 호출. `restaurant` 모듈을 `RestaurantService.getPublicDetail` 로 호출해 식당명 스냅샷·메뉴 힌트를 가져온다. `ai` 모듈의 vision LLM provider (purpose=`image`) 가 영수증 추출에 쓰인다.
+서버 임시저장 **(SettlementDraft)** 은 자동 저장으로 다기기 동기화 — 폰에서 입력 시작한 정산을 데스크톱에서 이어 입력. `(userId, placeId)` 키로 식당당 하나, 식당 미지정 슬롯(`/me/settlements/new`)은 sentinel `placeIdKey=''`.
 
-## Architecture [coverage: high — 12 sources]
+의존자: `apps/web` 의 정산 라우트 + `apps/mobile` 의 expo-router 라우트가 직접 호출. `restaurant` 모듈을 `RestaurantService.getPublicDetail` 로 호출해 식당명 스냅샷·메뉴 힌트를 가져온다. `ai` 모듈의 vision LLM provider (purpose=`image`) 가 영수증 추출에 쓰인다. 공유 링크는 `well-known` 모듈이 발급하는 AASA/assetlinks.json 으로 검증돼 iOS/Android 앱이 직접 가로챈다.
 
-**Backend 모듈 3개 (`apps/friendly/src/modules/`)**:
+## Architecture [coverage: high — 17 sources]
+
+**Backend 모듈 4개 (`apps/friendly/src/modules/`)**:
 
 - [`settlement-extraction/`](../../apps/friendly/src/modules/settlement-extraction/) — 영수증 이미지 업로드/저장 + vision LLM 호출 + 추출 결과 정규화
-  - [settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts) — `upload` / `extract` / `preview/:token` 3 엔드포인트
-  - [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts) — `storeImage` (sharp 로 JPEG 정규화 + 1600px 다운스케일), `readImage` (토큰 검증 + 디스크 읽기), `extract` (vision LLM 호출 + 응답 파싱 + warning 산출)
-  - [settlement-extraction.prompts.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.prompts.ts) — `EXTRACTION_SYSTEM_PROMPT` + `EXTRACTION_JSON_SCHEMA` (Ollama structured output) + `EXTRACTION_VERSION`
-- [`settlement/`](../../apps/friendly/src/modules/settlement/) — 정산 세션 CRUD + 공유 토큰 + 참여자 PATCH
-  - [settlement.route.ts](../../apps/friendly/src/modules/settlement/settlement.route.ts) — `create`/`list`/`one`/`updateParticipants`/`delete` + `share` POST/DELETE + `shared` GET (비인증)
-  - [settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts) — `create` (transaction + contact upsert), `updateParticipants` (items 불변, participants 전부 교체 + `editedAt` 갱신), `createShare/revokeShare` (멱등), `getBySharedToken` (userId/receiptPreviewUrl 제거)
-  - `normalizeContactKey(name, nickname)` — `lower(trim(name))+"|"+lower(trim(nickname))`. **여기가 단일 진실** — backfill 스크립트와 클라이언트(`Step1Participants`, `ContactPickerDialog`) 모두 같은 정의를 복사해 쓴다.
-- [`contact/`](../../apps/friendly/src/modules/contact/) — 사용자별 단골 list/update/delete (생성은 settlement 모듈이 upsert 로 자동 처리)
-  - [contact.service.ts](../../apps/friendly/src/modules/contact/contact.service.ts) — `update` 시 normalizedKey 충돌 검사 409
+  - [settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts) — `upload` / `extract` / `preview/:token` 3 엔드포인트. extract 가 `roundIndex/roundTotal/split` 까지 받는다.
+  - [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts) — `storeImage` (sharp 로 JPEG 정규화 + 1600px 다운스케일), `readImage`, `cropForSplit` (한 사진을 X 축 N등분), `extract` (vision LLM 호출 + 응답 파싱 + warning 산출)
+  - [settlement-extraction.prompts.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.prompts.ts) — `EXTRACTION_SYSTEM_PROMPT` + `EXTRACTION_JSON_SCHEMA` + `EXTRACTION_VERSION`. `buildExtractionUserPrompt` 가 roundHint 를 받아 "2차 영수증" 컨텍스트를 라인으로 추가.
+- [`settlement/`](../../apps/friendly/src/modules/settlement/) — 정산 세션 CRUD + 공유 토큰 + 전체 replace
+  - [settlement.route.ts](../../apps/friendly/src/modules/settlement/settlement.route.ts) — `create`/`list`/`one`/`update`(PUT)/`delete` + `share` POST/DELETE + `shared` GET(비인증). 이전 PATCH `/:id/participants` 는 폐기.
+  - [settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts) — `create`/`update` 가 transaction 안에서 마스터 participants + N round + N round × M attendees + items + categoryAdjustments 직렬화까지 전체 wipe/rebuild. `create` 는 `fromDraftId` 가 있으면 같은 트랜잭션에서 draft 도 삭제.
+  - `normalizeContactKey(name, nickname)` — `lower(trim(name))+"|"+lower(trim(nickname))`. **single source of truth** — backfill 스크립트와 클라이언트(`Step1Participants`, `ContactPickerDialog`) 도 같은 정의.
+- [`settlement/settlement-draft.{route,service}.ts`](../../apps/friendly/src/modules/settlement/) — 서버 임시저장
+  - [settlement-draft.route.ts](../../apps/friendly/src/modules/settlement/settlement-draft.route.ts) — `GET /settlement-drafts` (list), `PUT /settlement-drafts` (upsert by body), `DELETE /settlement-drafts/:id`.
+  - [settlement-draft.service.ts](../../apps/friendly/src/modules/settlement/settlement-draft.service.ts) — `(userId, placeIdKey)` upsert. payload 는 JSON 문자열로 통과만 (서버 검증 없음, 클라 진화 유연성). `static deleteByIdInTxIfOwner` 가 settlement.create 트랜잭션 안에서 호출됨.
+- [`contact/`](../../apps/friendly/src/modules/contact/) — 사용자별 단골 list/update/delete (생성은 settlement 모듈 upsert)
+- [`well-known/well-known.route.ts`](../../apps/friendly/src/modules/well-known/well-known.route.ts) — `/.well-known/apple-app-site-association` + `/.well-known/assetlinks.json` 동적 응답 (env 미설정 시 404).
 
 기타:
-- [plugins/multipart.ts](../../apps/friendly/src/plugins/multipart.ts) — 5MB / 1 file limit (multipart 플러그인이 자동 413)
-- [scripts/backfill-contacts.ts](../../apps/friendly/scripts/backfill-contacts.ts) — 기존 participant 들을 단골로 일괄 적립 (멱등, `createdAt asc + orderIndex asc` 정렬로 최신값이 `lastExclude*` 가 되게)
+- [plugins/multipart.ts](../../apps/friendly/src/plugins/multipart.ts) — 5MB / 1 file limit
+- [plugins/cors.ts](../../apps/friendly/src/plugins/cors.ts) — dev 에서 RFC1918 사설 IP origin 자동 허용 (Expo Web 모바일 단말 대응)
+- [scripts/backfill-contacts.ts](../../apps/friendly/scripts/backfill-contacts.ts)
 
 **API Contract (`packages/api-contract/src/`)**:
-- [schemas/settlement.ts](../../packages/api-contract/src/schemas/settlement.ts) — `SettlementSession`, `SettlementItem(Input)`, `SettlementParticipant(Input)`, `CreateSettlementInput`, `UpdateSettlementParticipantsInput`, `SettlementShare`, `SharedSettlementSession` (`omit userId/receiptPreviewUrl`)
-- [schemas/settlement-extraction.ts](../../packages/api-contract/src/schemas/settlement-extraction.ts) — `ReceiptItem`, `ReceiptItemCategory` (4-state enum), `UploadReceiptResult`, `Extract*`
-- [schemas/settlement-contact.ts](../../packages/api-contract/src/schemas/settlement-contact.ts) — `SettlementContact`, `UpdateContactInput`, `ListContactsQuery`
-- [settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts) — `calculateShares` 순수 함수 (FE/BE 공유)
-- [routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Settlement` / `Routes.SettlementExtraction` / `Routes.SettlementContact`
+- [schemas/settlement.ts](../../packages/api-contract/src/schemas/settlement.ts) — 마스터 `SettlementParticipant`, `SettlementRound`(차수), `SettlementRoundAttendee`(차수 attendance), `SettlementCategoryAdjustment(s)` (분담 다듬기), `CreateSettlementInput` (rounds + participants + optional fromDraftId), `UpdateSettlementInput = CreateSettlementInput`. round.items.max(200), participants/attendees.max(100), rounds.max(10).
+- [schemas/settlement-extraction.ts](../../packages/api-contract/src/schemas/settlement-extraction.ts) — `ReceiptItemCategory` 4-state, `ExtractReceiptSplit` (count 2..5, index 1..count), `ExtractReceiptInput` 에 `roundIndex/roundTotal/split` 옵션 필드.
+- [schemas/settlement-draft.ts](../../packages/api-contract/src/schemas/settlement-draft.ts) — `SettlementDraft`, `UpsertSettlementDraftInput` (payload `z.unknown()` + 200KB JSON 크기 refine), `ListSettlementDraftsResult`.
+- [schemas/settlement-contact.ts](../../packages/api-contract/src/schemas/settlement-contact.ts)
+- [settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts) — `calculateShares` (할인 + categoryAdjustments 옵션 추가) + 신규 `calculateMultiRoundShares` (라운드별 호출 + 마스터 인덱스 합산) + `effectiveExcludes` (master + round override merge).
+- [routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Settlement.update(id)` PUT 추가, `Routes.SettlementDraft` namespace 추가.
+- [index.ts](../../packages/api-contract/src/index.ts) — 모든 신규 스키마 re-export.
 
 **FE Shared (`packages/shared/src/`)**:
-- API 래퍼 — [settlement.api.ts](../../packages/shared/src/api/settlement.api.ts), [settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts), [settlement-contact.api.ts](../../packages/shared/src/api/settlement-contact.api.ts)
-- React Query 훅 — [useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts), [useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts), [useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts)
-- Zustand 스토어 — [settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) (sessionStorage persist, placeId 변경 시 reset)
+- API 래퍼 — [settlement.api.ts](../../packages/shared/src/api/settlement.api.ts), [settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts), [settlement-contact.api.ts](../../packages/shared/src/api/settlement-contact.api.ts), [settlement-draft.api.ts](../../packages/shared/src/api/settlement-draft.api.ts) (NEW)
+- React Query 훅 — [useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts), [useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts), [useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts), [useSettlementDraft.ts](../../packages/shared/src/hooks/useSettlementDraft.ts) (NEW) — `useListSettlementDrafts`, `useUpsertSettlementDraft`, `useDeleteSettlementDraft`, `useSettlementDraftHydrate` (진입 시 한 번 hydrate), `useSettlementDraftAutoSync` (debounce 자동 저장).
+- Zustand 스토어 — [settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — N차 모델로 전면 재구성. `version: 4`, v1→v4 migration 포함. `setSettlementDraftStorage(storage)` 로 RN AsyncStorage 어댑터 주입 가능 (미주입 시 브라우저 sessionStorage 자동 선택). 차수 추가/삭제, attendance 동기화, 영수증 주입, 할인/카테고리 보정 액션 모두 포함.
 
-**Web Routes (`apps/web/src/routes/settlement/`)** — [App.tsx](../../apps/web/src/App.tsx) 60-103 에 등록:
-- `/restaurants/:placeId/settle/new` → [SettlementNewPage.tsx](../../apps/web/src/routes/settlement/SettlementNewPage.tsx) — 4단계 stepper 컨테이너
-  - [Step1Participants.tsx](../../apps/web/src/routes/settlement/Step1Participants.tsx) — 참여자 + 자동완성 + "단골에서 추가" 모달
-  - [Step2Source.tsx](../../apps/web/src/routes/settlement/Step2Source.tsx) — MANUAL/RECEIPT 분기 (업로드 + 추출 한 번에)
-  - [Step3Edit.tsx](../../apps/web/src/routes/settlement/Step3Edit.tsx) — 항목 편집 + 영수증 미리보기 + warning 배너
-  - [Step4Review.tsx](../../apps/web/src/routes/settlement/Step4Review.tsx) — 분담 미리보기 (클라이언트 `calculateShares`) + 저장
-- `/restaurants/:placeId/settle/:id` → [SettlementResultPage.tsx](../../apps/web/src/routes/settlement/SettlementResultPage.tsx) — 결과 보기 + 공유/삭제/수정
-- `/me/settlements` → [SettlementHistoryPage.tsx](../../apps/web/src/routes/settlement/SettlementHistoryPage.tsx) — 사용자별 이력 페이지네이션
-- `/me/contacts` → [ContactsPage.tsx](../../apps/web/src/routes/settlement/ContactsPage.tsx) — 단골 관리
-- `/share/settlements/:token` → [SharedSettlementPage.tsx](../../apps/web/src/routes/settlement/SharedSettlementPage.tsx) — 비인증 read-only
+**Web Routes (`apps/web/src/routes/settlement/`)** — App.tsx 에 등록:
+- `/restaurants/:placeId/settle/new` → [SettlementNewPage.tsx](../../apps/web/src/routes/settlement/SettlementNewPage.tsx) — 4단계 stepper. Step2Source 폐기, Step2Rounds 로 직행.
+  - [Step1Participants.tsx](../../apps/web/src/routes/settlement/Step1Participants.tsx) — 참여자 단일 필드 + alias 토글 + Enter 추가 + 기본 제외 토글(localStorage). 자동완성 + 단골 모달.
+  - [Step2Rounds.tsx](../../apps/web/src/routes/settlement/Step2Rounds.tsx) — 차수 N개 입력. 각 round 의 식당 선택, MANUAL/RECEIPT 분기, 영수증 업로드, 다중 영수증 분할 다이얼로그, 참석자 선택, 할인, 카테고리 보정.
+  - [Step3Edit.tsx](../../apps/web/src/routes/settlement/Step3Edit.tsx) — 차수별 항목 편집 + 영수증 미리보기 + warning.
+  - [Step4Review.tsx](../../apps/web/src/routes/settlement/Step4Review.tsx) — 분담 미리보기(클라이언트 `calculateMultiRoundShares`) + 정산표 + 저장.
+- `/restaurants/:placeId/settle/:id` → [SettlementResultPage.tsx](../../apps/web/src/routes/settlement/SettlementResultPage.tsx) — 결과 보기 + 공유/삭제/수정. 차수별 카드 + 영수증 썸네일 + 정산표. 헤더 z-30.
+- `/me/settlements` → [SettlementHistoryPage.tsx](../../apps/web/src/routes/settlement/SettlementHistoryPage.tsx) — 행별 삭제 + 다중 선택 일괄 삭제 + "이어 입력"(draft) 행.
+- `/me/contacts` → [ContactsPage.tsx](../../apps/web/src/routes/settlement/ContactsPage.tsx)
+- `/share/settlements/:token` → [SharedSettlementPage.tsx](../../apps/web/src/routes/settlement/SharedSettlementPage.tsx) — 비인증 read-only. 차수별 카드 + 정산표. z-30.
 
-**다이얼로그/카드** — [SettlementShareDialog.tsx](../../apps/web/src/routes/settlement/SettlementShareDialog.tsx), [ParticipantEditDialog.tsx](../../apps/web/src/routes/settlement/ParticipantEditDialog.tsx), [ContactPickerDialog.tsx](../../apps/web/src/routes/settlement/ContactPickerDialog.tsx), [ContactSuggestions.tsx](../../apps/web/src/routes/settlement/ContactSuggestions.tsx), [ContactEditDialog.tsx](../../apps/web/src/routes/settlement/ContactEditDialog.tsx), [MenuPickerDialog.tsx](../../apps/web/src/routes/settlement/MenuPickerDialog.tsx), [SettlementCards.tsx](../../apps/web/src/routes/settlement/SettlementCards.tsx) (Result/Shared 페이지 공유 카드).
+**다이얼로그/카드 (web)** — [SettlementShareDialog.tsx](../../apps/web/src/routes/settlement/SettlementShareDialog.tsx), [ContactPickerDialog.tsx](../../apps/web/src/routes/settlement/ContactPickerDialog.tsx), [ContactSuggestions.tsx](../../apps/web/src/routes/settlement/ContactSuggestions.tsx), [ContactEditDialog.tsx](../../apps/web/src/routes/settlement/ContactEditDialog.tsx), [MenuPickerDialog.tsx](../../apps/web/src/routes/settlement/MenuPickerDialog.tsx), [RestaurantSearchDialog.tsx](../../apps/web/src/routes/settlement/RestaurantSearchDialog.tsx) (NEW — 2차 식당 검색), [MultiReceiptSplitDialog.tsx](../../apps/web/src/routes/settlement/MultiReceiptSplitDialog.tsx) (NEW), [RoundDiscountEditor.tsx](../../apps/web/src/routes/settlement/RoundDiscountEditor.tsx) (NEW), [RoundCategoryAdjuster.tsx](../../apps/web/src/routes/settlement/RoundCategoryAdjuster.tsx) (NEW), [RoundExceptionsEditor.tsx](../../apps/web/src/routes/settlement/RoundExceptionsEditor.tsx) (NEW), [SettlementBreakdownTable.tsx](../../apps/web/src/routes/settlement/SettlementBreakdownTable.tsx) (NEW), [SettlementCards.tsx](../../apps/web/src/routes/settlement/SettlementCards.tsx), 공용 [confirm-dialog.tsx](../../apps/web/src/components/ui/confirm-dialog.tsx) (NEW). [settlementPrefsStore.ts](../../apps/web/src/stores/settlementPrefsStore.ts) (NEW, localStorage) — Step1 기본 제외 토글 등 사용자 선호.
 
-## Talks To [coverage: medium — 4 sources]
+**Mobile (`apps/mobile/`)** — expo-router 라우트로 정산 도메인 전체 이식:
+- `/restaurant/[placeId]/settle/new` → [restaurant/[placeId]/settle/new.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx) — 4단계 wizard 진입
+- `/restaurant/[placeId]/settle/[id]/index` → […/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx)
+- `/restaurant/[placeId]/settle/[id]/edit` → […/[id]/edit.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx)
+- `/settlement/new` → [settlement/new.tsx](../../apps/mobile/app/settlement/new.tsx) (placeless)
+- `/settlement/history` → [settlement/history.tsx](../../apps/mobile/app/settlement/history.tsx)
+- `/settlement/contacts` → [settlement/contacts.tsx](../../apps/mobile/app/settlement/contacts.tsx)
+- `/share/settlements/[token]` → [share/settlements/[token].tsx](../../apps/mobile/app/share/settlements/[token].tsx) — 딥링크가 직접 연다.
+- 컴포넌트는 [apps/mobile/src/components/settlement/](../../apps/mobile/src/components/settlement/) 디렉터리: [SettlementWizard.tsx](../../apps/mobile/src/components/settlement/SettlementWizard.tsx), Step1~4, ContactPickerSheet, ContactSuggestions, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, SettlementShareSheet.
+- [apps/mobile/src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts) — RN 전용 선호 (AsyncStorage).
+- [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts) — `ios.associatedDomains: ["applinks:${WEB_HOST}"]` + `android.intentFilters` autoVerify:true / pathPrefix `/share/settlements`. 보조용 커스텀 scheme `lifepickr://` 유지.
+- [apps/mobile/DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md) — Universal/App Links 설정 가이드 (env, fingerprint 등록).
 
-- **`ai` 모듈 (vision LLM)** — `settlement-extraction.service.ts` 가 `AiConfigService.getResolved('ollama-cloud', 'image')` 로 vision provider 를 해결하고, `adapterCache` 에 등록된 `LLMProvider.complete` 를 호출. `format=EXTRACTION_JSON_SCHEMA` (Ollama structured output) 로 토큰 샘플링 단계부터 JSON 모양을 강제. 타임아웃은 어댑터의 chat 기준과 별도로 `VISION_TIMEOUT_MS=60_000`.
-- **`restaurant` 모듈** — `RestaurantService.getPublicDetail(placeId)` 를 두 곳에서 호출: (1) `settlement-extraction.route.ts` 가 식당명 + 등록 메뉴 이름을 LLM 프롬프트 힌트로 주입, (2) `settlement.route.ts` 가 `create` 시 식당명 스냅샷을 `restaurantName` 컬럼에 박는다 — 이후 식당 이름이 바뀌어도 이력의 이름은 정산 당시 그대로.
+## Talks To [coverage: medium — 5 sources]
+
+- **`ai` 모듈 (vision LLM)** — `settlement-extraction.service.ts` 가 `AiConfigService.getResolved('ollama-cloud', 'image')` 로 vision provider 를 해결하고, `adapterCache` 에 등록된 `LLMProvider.complete` 를 호출. `format=EXTRACTION_JSON_SCHEMA` 로 토큰 샘플링 단계부터 JSON 모양 강제. `VISION_TIMEOUT_MS=60_000` 별도 타임아웃, `AbortController` 시그널.
+- **`restaurant` 모듈** — `RestaurantService.getPublicDetail(placeId)` 를 (1) `settlement-extraction.route.ts` 가 식당명 + 메뉴 이름을 LLM 프롬프트 힌트로 주입, (2) `settlement.service.ts` 가 모든 round 의 식당명 snapshot 으로 `restaurantName` 컬럼에 박는다. update 에선 기존에 가지고 있던 placeId 의 이름은 재사용하고 새로 추가된 placeId 만 fresh 조회 — 식당이 나중에 삭제돼도 차수 편집은 통과.
 - **`summary` 모듈** — `extractFirstJsonObject` 유틸을 LLM 응답에서 첫 JSON 블록만 잘라낼 때 재사용.
-- **인증** — Settlement/Extraction/Contact 라우트는 모두 `app.authenticate` (JWT) onRequest 훅. 예외: **`Routes.Settlement.shared(:token)` 만 비인증** — 토큰을 안다 = 접근 허용. 응답에서 `userId` / `receiptPreviewUrl` 가 빠진다 (영수증 사진은 토큰 받은 사람에게도 비공개).
+- **`well-known` 모듈** — 정산 도메인의 외부 통신은 아니지만, 공유 링크 딥링크를 가능하게 만드는 동반 모듈. iOS/Android 가 시스템 단에서 `/.well-known/{apple-app-site-association,assetlinks.json}` 을 fetch 해 앱이 `/share/settlements/*` 를 가로채는 권한을 검증.
+- **인증** — 모든 라우트 `app.authenticate` JWT onRequest. 예외: **`Routes.Settlement.shared(:token)` 만 비인증** — 토큰을 안다 = 접근 허용. 응답에서 `userId` 와 round 별 `receiptPreviewUrl` 가 빠진다. `well-known` 두 엔드포인트도 비인증(시스템이 호출).
 
-## API Surface [coverage: high — 6 sources]
+## API Surface [coverage: high — 8 sources]
 
 | Method | Path | Auth | Body / Params | 응답 (200) |
 |---|---|---|---|---|
-| POST | `/api/v1/settlement-extraction/upload` | JWT | `multipart/form-data` — file 필드 1개, ≤5MB | `UploadReceiptResult` `{ imageToken, previewUrl, byteSize }` |
-| POST | `/api/v1/settlement-extraction/extract` | JWT | `ExtractReceiptInput` `{ imageToken, placeId }` | `ExtractReceiptResult` `{ items[], totalAmount, itemsSubtotal, warning, model }` |
-| GET | `/api/v1/settlement-extraction/preview/:token` | JWT | UUID v4 정규식 검증 | `image/jpeg` binary, `Cache-Control: private, max-age=3600` |
-| POST | `/api/v1/settlements` | JWT | `CreateSettlementInput` | `SettlementSession` (items/participants 포함) |
-| GET | `/api/v1/settlements?placeId=&offset=&limit=` | JWT | `ListSettlementsQuery` | `ListSettlementsResult` `{ items: Summary[], total }` |
+| POST | `/api/v1/settlement-extraction/upload` | JWT | `multipart/form-data` — file 1개, ≤5MB | `UploadReceiptResult` `{ imageToken, previewUrl, byteSize }` |
+| POST | `/api/v1/settlement-extraction/extract` | JWT | `ExtractReceiptInput` `{ imageToken, placeId, roundIndex?, roundTotal?, split? }` | `ExtractReceiptResult` `{ items[], totalAmount, itemsSubtotal, warning, model }` |
+| GET | `/api/v1/settlement-extraction/preview/:token` | JWT | UUID v4 정규식 | `image/jpeg`, `Cache-Control: private, max-age=3600` |
+| POST | `/api/v1/settlements` | JWT | `CreateSettlementInput` `{ rounds[1..10], participants[1..100], fromDraftId? }` | `SettlementSession` (rounds+items+attendees+participants) |
+| GET | `/api/v1/settlements?placeId=&offset=&limit=` | JWT | `ListSettlementsQuery` | `ListSettlementsResult` (summary 에 `roundCount/itemCount` 포함, `grandTotal` 대표) |
 | GET | `/api/v1/settlements/:id` | JWT | — | `SettlementSession` (소유자만, 비소유자 403) |
-| PATCH | `/api/v1/settlements/:id/participants` | JWT | `UpdateSettlementParticipantsInput` (participants only) | `SettlementSession` (서버가 재계산, `editedAt` 갱신) |
+| **PUT** | `/api/v1/settlements/:id` | JWT | `UpdateSettlementInput = CreateSettlementInput` (전체 replace) | `SettlementSession` (서버 재계산 + `editedAt` 갱신) |
 | DELETE | `/api/v1/settlements/:id` | JWT | — | 204 |
 | POST | `/api/v1/settlements/:id/share` | JWT | — | `SettlementShare` `{ token, shareUrl }` (멱등) |
-| DELETE | `/api/v1/settlements/:id/share` | JWT | — | 204 (이미 비공개여도 204) |
-| GET | `/api/v1/share/settlements/:token` | **none** | base64url 20-64자 길이 검사 | `SharedSettlementSession` (userId/receiptPreviewUrl 제거) |
-| GET | `/api/v1/me/contacts?q=&take=` | JWT | `ListContactsQuery` | `ListContactsResult` (lastUsedAt desc) |
-| PATCH | `/api/v1/me/contacts/:id` | JWT | `UpdateContactInput` `{ name, nickname }` | `SettlementContact` (normalizedKey 충돌 시 409) |
-| DELETE | `/api/v1/me/contacts/:id` | JWT | — | 204 (과거 정산의 `participant.contactId` 는 SetNull) |
+| DELETE | `/api/v1/settlements/:id/share` | JWT | — | 204 |
+| GET | `/api/v1/share/settlements/:token` | **none** | base64url 20~64자 | `SharedSettlementSession` (userId/receiptPreviewUrl 제거) |
+| **GET** | `/api/v1/settlement-drafts` | JWT | — | `ListSettlementDraftsResult` `{ items[] }` |
+| **PUT** | `/api/v1/settlement-drafts` | JWT | `UpsertSettlementDraftInput` `{ placeId, placeNameHint?, payload }` | `SettlementDraft` |
+| **DELETE** | `/api/v1/settlement-drafts/:id` | JWT | — | 204 |
+| GET | `/api/v1/me/contacts?q=&take=` | JWT | `ListContactsQuery` | `ListContactsResult` |
+| PATCH | `/api/v1/me/contacts/:id` | JWT | `UpdateContactInput` | `SettlementContact` (충돌 409) |
+| DELETE | `/api/v1/me/contacts/:id` | JWT | — | 204 (`participant.contactId` SetNull) |
+| **GET** | `/.well-known/apple-app-site-association` | none | — | JSON (env 미설정 시 404) |
+| **GET** | `/.well-known/assetlinks.json` | none | — | JSON array (env 미설정 시 404) |
+
+폐기: `PATCH /api/v1/settlements/:id/participants` — `PUT /:id` 가 대체. items 불변 정책도 동시에 폐기 (items/round 까지 모두 한 번에 교체).
 
 에러 매핑 (`throwAsHttp`):
 - `settlement-extraction`: `invalid_image`/`invalid_token` → 400, `image_not_found`/`restaurant_not_found` → 404, `no_provider` → 503, `llm_failed` → 502
-- `settlement`: `not_found` → 404, `forbidden` → 403, `invalid_participant`/`invalid_receipt_token` → 400
+- `settlement`: `not_found`/`restaurant_not_found` → 404, `forbidden` → 403, `invalid_participant`/`invalid_round`/`invalid_receipt_token` → 400
+- `settlement-draft`: `not_found` → 404, `forbidden` → 403, 그 외 → 400
 - `contact`: `not_found`/`forbidden`/`conflict` → 404/403/409, `invalid_input` → 400
 
-## Data [coverage: high — 8 sources]
+## Data [coverage: high — 13 sources]
 
-**Prisma 모델 4개** (전부 [schema.prisma](../../apps/friendly/prisma/schema.prisma) 35-155):
+**Prisma 모델 6개** (전부 [schema.prisma](../../apps/friendly/prisma/schema.prisma)):
 
-- **`SettlementSession`** (`settlement_sessions`) — `userId`, `restaurantPlaceId`, `restaurantName`(스냅샷), `source`(MANUAL|RECEIPT), `totalAmount?`(영수증 표기), `warning?`, `receiptImageToken?`, `itemsSubtotal`, `shareToken? @unique`, `editedAt?`, `createdAt`, `updatedAt`. 인덱스: `(userId, createdAt)`, `(restaurantPlaceId)`. user `onDelete: Cascade`.
-- **`SettlementItem`** (`settlement_items`) — `name`, `unitPrice?`, `quantity?`, `amount`, `category`, `matchedMenuName?`, `orderIndex`. session `onDelete: Cascade`.
-- **`SettlementParticipant`** (`settlement_participants`) — `name?`, `nickname?`, `excludeAlcohol/NonAlcohol/Side`, `shareAmount`(스냅샷), `orderIndex`, `contactId?`. contact `onDelete: SetNull` — 단골 삭제해도 정산 본체 보존.
-- **`SettlementContact`** (`settlement_contacts`) — `userId`, `name?`, `nickname?`, `normalizedKey`, `lastExcludeAlcohol/NonAlcohol/Side`, `useCount`, `lastUsedAt`. 유니크 `(userId, normalizedKey)` — 같은 사용자 안에서 정확 일치 매칭의 키. 인덱스 `(userId, lastUsedAt)`. user `onDelete: Cascade`.
+- **`SettlementSession`** (`settlement_sessions`) — `userId`, `restaurantPlaceId`/`restaurantName` (1차 식당 스냅샷, `rounds[0]` 과 항상 동기화), `grandTotal` (모든 round.itemsSubtotal 합), `shareToken? @unique`, `editedAt?`, `createdAt`, `updatedAt`. **차수 단위 필드(source/totalAmount/warning/receiptImageToken/itemsSubtotal) 는 round 로 이동**. user `onDelete: Cascade`.
+- **`SettlementRound`** (`settlement_rounds`, NEW) — `sessionId`, `orderIndex`, `restaurantPlaceId`/`restaurantName` (차수 식당 스냅샷), `source`('MANUAL'|'RECEIPT'), `totalAmount?`, `warning?`, `receiptImageToken?`, `itemsSubtotal` (= items.amount 합 - discountAmount), `discountAmount?`, `discountCategory?`, `categoryAdjustments?` (JSON 문자열). session `onDelete: Cascade`. 인덱스 `(sessionId)`.
+- **`SettlementItem`** (`settlement_items`) — **`sessionId` → `roundId` 로 이동**. `name`, `unitPrice?`, `quantity?`, `amount`, `category`, `matchedMenuName?`, `orderIndex`. round `onDelete: Cascade`.
+- **`SettlementParticipant`** (`settlement_participants`) — 마스터 명단. `sessionId`, `name?`, `nickname?`, `excludeAlcohol/NonAlcohol/Side` (default — round override 가 없을 때 사용), `shareAmount` (모든 round 합 — grand total per person), `orderIndex`, `contactId?`. contact `onDelete: SetNull`.
+- **`SettlementRoundParticipant`** (`settlement_round_participants`, NEW) — round × 마스터 참여자 join. `roundId`, `participantId`, `attended` (default true), `excludeAlcoholOverride?`/`NonAlcohol`/`Side` (null = 마스터 default 사용), `shareAmount` (이 차수에서의 분담, 비참석이면 0). 유니크 `(roundId, participantId)`. 양쪽 모두 Cascade.
+- **`SettlementContact`** (`settlement_contacts`) — 변동 없음. 유니크 `(userId, normalizedKey)`.
+- **`SettlementDraft`** (`settlement_drafts`, NEW) — 서버 임시저장. `userId`, `placeIdKey` (NULL 대신 `''` sentinel — SQLite multi-NULL unique 회피), `payload` (JSON 문자열), `placeNameHint?`, `createdAt`, `updatedAt`. 유니크 `(userId, placeIdKey)`, 인덱스 `(userId, updatedAt)`. user `onDelete: Cascade`.
 
-**영수증 파일** — `apps/friendly/data/receipts/<token>.jpg`. 토큰은 `randomUUID()` (server 발급). `sharp` 가 EXIF rotate + ≤1600px + JPEG quality 80 + mozjpeg 으로 재인코딩 후 저장. 저장 직전 디코딩 실패 시 `invalid_image` (PDF 등 비이미지가 여기서 걸림).
+**영수증 파일** — `apps/friendly/data/receipts/<token>.jpg`. 토큰 `randomUUID()`. sharp 가 EXIF rotate + ≤1600px + JPEG 80 + mozjpeg. 분할 입력일 땐 `cropForSplit` 가 X 축 N등분 후 vision LLM 호출.
 
-**`normalizedKey` 정책** — `lower(trim(name))+"|"+lower(trim(nickname))`. 빈 문자열 케이스(`"|"`)는 application layer 가 거부하므로 row 가 안 생긴다. **이 정의는 4 곳에서 동일**:
-1. server [settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts) `normalizeContactKey` (export, single source of truth)
-2. backfill 스크립트가 import
-3. [Step1Participants.tsx](../../apps/web/src/routes/settlement/Step1Participants.tsx) — "단골에서 추가" 모달에서 사용자가 직접 타이핑한 행도 중복 후보에서 제외
-4. [ContactPickerDialog.tsx](../../apps/web/src/routes/settlement/ContactPickerDialog.tsx) — `existingKeys` 판정
+**`normalizedKey` 정책** — `lower(trim(name))+"|"+lower(trim(nickname))`. server export `normalizeContactKey` 가 single source of truth — backfill 스크립트, `Step1Participants`, `ContactPickerDialog` 4 곳에 같은 정의 복사.
 
-**`shareToken`** — 32바이트 `randomBytes` → `base64url` 43자. unique 인덱스로 `GET /share/settlements/:token` 이 O(1). 회수 = `null` 로 업데이트, 재발급 = `randomBytes` 새로 호출 (이전 토큰 영구 무효).
+**`shareToken`** — 32바이트 `randomBytes` → `base64url` 43자. unique 인덱스. 회수 = `null` 업데이트, 재발급 = 새 randomBytes (이전 토큰 영구 무효).
 
-**`editedAt`** — participants PATCH 시에만 갱신되는 별도 컬럼. `updatedAt` 은 share token 발급/회수에서도 자동 bump 되어 "수정됨" 배지 기준으로 부적합 → 분리.
+**`editedAt`** — participants/rounds/items 의 통합 update(PUT) 시에만 갱신. `updatedAt` 은 share token 발급/회수에서도 자동 bump 되어 부적합.
 
-**Zustand persist 스토어** ([settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts)) — `sessionStorage` 에 `settlement-draft-v1` 키로 저장. 새로고침 살리고 탭 닫으면 사라진다. `startFor(placeId)` 가 같은 placeId 면 draft 보존, 다른 placeId 면 `emptyDraft()` 로 초기화. 한 식당당 한 draft 만 유지 (브라우저 탭마다 다른 placeId 정산 동시 진행은 미지원).
+**`categoryAdjustments` 직렬화** — settlement.service 의 `serializeCategoryAdjustments` 가 입력 clientId 를 db id 로 치환해 `{ [Category]: { leftoverParticipantId, roundUnit } }` JSON 문자열로. 매칭 안 되는 clientId 의 카테고리는 default 로 떨어트림 (조용히 drop).
 
-**Migrations 4개** (시간순):
-1. [`20260523012752_add_settlement_models`](../../apps/friendly/prisma/migrations/20260523012752_add_settlement_models/migration.sql) — session/item/participant 3 테이블 신설
-2. [`20260523030833_add_settlement_share_token`](../../apps/friendly/prisma/migrations/20260523030833_add_settlement_share_token/migration.sql) — `shareToken` 컬럼 + 유니크 인덱스
-3. [`20260524000000_add_settlement_contacts`](../../apps/friendly/prisma/migrations/20260524000000_add_settlement_contacts/migration.sql) — `settlement_contacts` 신설 + participants 에 `contactId` FK SetNull (SQLite redefine table 패턴)
-4. [`20260524112443_add_settlement_edited_at`](../../apps/friendly/prisma/migrations/20260524112443_add_settlement_edited_at/migration.sql) — `editedAt DATETIME` 추가
+**Zustand persist 스토어** ([settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts)) — `settlement-draft-v1` 키. **storage 어댑터 주입**: 모듈 로드 시점엔 플랫폼 미상이라 lazy resolver 사용. 앱은 entry 에서 `setSettlementDraftStorage(AsyncStorage)` 주입, 웹은 `window.sessionStorage` 자동 선택, SSR/테스트는 no-op. **version: 4** 까지의 migration:
+- v1 → v2 : 평면 draft(한 식당 1 round) → rounds 배열 (1차 round 1개로 변환). placeId 없으면 비움.
+- v2 → v3 : `discountAmount/discountCategory` 추가 (null).
+- v3 → v4 : `categoryAdjustments` 추가 (null).
 
-## Key Decisions [coverage: high — 12 sources]
+**서버 임시저장 vs 클라이언트 persist** — store 의 sessionStorage(웹) 또는 AsyncStorage(앱) 가 즉시 반영용, `SettlementDraft` 테이블이 다기기 동기화용. `useSettlementDraftHydrate(placeId)` 가 진입 시 한 번 list 조회해 store 에 overwrite. `useSettlementDraftAutoSync` 가 store subscribe 후 debounce 자동 upsert.
 
-시간순 진화 (MVP → 공유 → 단골 → 편집+배지):
+**Migrations 8개** (시간순):
+1. [`20260523012752_add_settlement_models`](../../apps/friendly/prisma/migrations/20260523012752_add_settlement_models/migration.sql)
+2. [`20260523030833_add_settlement_share_token`](../../apps/friendly/prisma/migrations/20260523030833_add_settlement_share_token/migration.sql)
+3. [`20260524000000_add_settlement_contacts`](../../apps/friendly/prisma/migrations/20260524000000_add_settlement_contacts/migration.sql)
+4. [`20260524112443_add_settlement_edited_at`](../../apps/friendly/prisma/migrations/20260524112443_add_settlement_edited_at/migration.sql)
+5. [`20260525100000_add_settlement_rounds`](../../apps/friendly/prisma/migrations/20260525100000_add_settlement_rounds/migration.sql) — `SettlementRound` + `SettlementRoundParticipant` 신설, `items.sessionId → roundId` 이동, session 컬럼 정리(grandTotal 추가). backfill 규약: round.id = session.id, 모든 참여자 attended=true.
+6. [`20260525110000_add_settlement_round_discount`](../../apps/friendly/prisma/migrations/20260525110000_add_settlement_round_discount/migration.sql) — round 에 `discountAmount/discountCategory` 추가.
+7. [`20260525220309_add_settlement_round_category_adjustments`](../../apps/friendly/prisma/migrations/20260525220309_add_settlement_round_category_adjustments/migration.sql) — round 에 `categoryAdjustments` 추가.
+8. [`20260525235559_add_settlement_drafts`](../../apps/friendly/prisma/migrations/20260525235559_add_settlement_drafts/migration.sql) — `SettlementDraft` 신설 + 유니크/인덱스.
 
-**MVP 진입 (2026-05-23 첫 마이그)**
-- **분배 알고리즘 = 카테고리별 풀 + 제외 플래그** ([settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts)) — ALCOHOL/NON_ALCOHOL/SIDE 각각의 풀 금액을 "그 카테고리를 제외하지 않은 인원" 으로 나눈다. UNCATEGORIZED 는 전원 균등. 1원 단위 나머지는 항상 첫 참여자에게. **edge case**: 한 카테고리를 전원이 제외했는데 그 풀에 금액이 있으면 미분류처럼 전원 균등 분담 — 사용자 입력 모순이지만 안전 폴백 (calculator.test.ts L66 "falls back to even split").
-- **영수증 vision 추출** — purpose=`image` 인 ollama-cloud provider 만 사용. `EXTRACTION_JSON_SCHEMA` 의 structured output 으로 토큰 샘플링 단계에서 JSON 강제. 카테고리 4-state(ALCOHOL/NON_ALCOHOL/SIDE/UNCATEGORIZED). 식당 등록 메뉴를 힌트로 주입하고 `matchedMenuName` 으로 매칭. **추출 결과는 사용자 수정 필수** — Step3 에서 항목/카테고리를 손볼 수 있고, warning 배너가 항목 합 vs `totalAmount` 불일치를 표시.
-- **클라+서버 양쪽에서 계산** — `calculateShares` 가 zod 와 함께 api-contract 에 있어 Step4Review 가 미리보기에 그대로 호출. 저장 시 서버가 다시 계산하는 게 권위 있는 값. 클라가 변조한 값을 서버가 받아주지 않는다.
-- **영수증 토큰 server 발급 + 정규식 검증** — `randomUUID()` 36자 hex+hyphen 만 통과. `../etc/passwd` 같은 path traversal 은 정규식 단계에서 차단.
+## Key Decisions [coverage: high — 18 sources]
 
-**공유 도입 (2026-05-23 두번째 마이그)**
-- **shareToken 멱등** ([settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts) `createShare`) — 같은 세션 두 번 호출해도 동일 토큰. 회수 시 `null` 로 비우고, 재발급 시 `randomBytes(32)` 새로 — 이전 링크 영구 무효.
-- **shared 응답에서 userId/receiptPreviewUrl 제거** — 토큰 받은 사람도 영수증 원본 사진은 못 본다 (개인정보). 라우트도 비인증 read-only.
+시간순 진화 (MVP → 공유 → 단골 → 편집+배지 → **N차/할인/분담다듬기/임시저장/모바일/딥링크/UX**):
 
-**단골 자동 적립 (2026-05-24 세번째 마이그)**
-- **(userId, normalizedKey) upsert + 자동 적립** — 정산 저장/수정 시 모든 participant 가 트랜잭션 안에서 contact 로 upsert. `useCount` 증가, `lastExclude*` 갱신, `lastUsedAt` 갱신.
-- **클라이언트의 `contactId` 힌트는 신뢰하지 않음** — 자동완성에서 단골을 골랐을 때 hint 로 같이 보내지만, 서버는 결국 `normalizedKey` 로 다시 매칭. 사용자가 직접 같은 이름을 타이핑한 행도 같은 contact 로 합쳐진다. 정책 단일화.
-- **삭제 시 SetNull** — 단골을 지워도 과거 정산의 `participant.contactId` 만 null 로 떨어지고 정산 본체는 보존 (이력 보존 정책).
-- **backfill 스크립트 멱등** — 기존 participants 를 `createdAt asc + orderIndex asc` 로 정렬해 순회. 마지막 update 가 `lastExclude*` 의 최신값이 되도록.
+**MVP 진입 (2026-05-23)** — 카테고리별 풀 + 제외 플래그 분배 알고리즘, 영수증 vision 추출, 서버 권위 + 클라 미리보기, 토큰 server 발급 + 정규식 검증, 멱등 shareToken, shared 응답에서 userId/receiptPreviewUrl 제거.
 
-**편집 + "수정됨" 배지 (2026-05-24 네번째 마이그)**
-- **편집 정책 = 무제한 + items 불변** — 저장 후 `PATCH /:id/participants` 로 participants/제외 옵션만 수정. items 는 그대로, 서버가 `calculateShares` 로 `shareAmount` 재계산. participants 는 deleteMany → 재삽입으로 orderIndex 정합성을 단순 보장.
-- **`editedAt` 분리 컬럼** — `updatedAt` 은 share token 발급/회수에도 갱신되어 "수정됨" 배지 기준에 부적합. 별도 nullable `editedAt` 컬럼을 두고 PATCH 시에만 채운다. UI 는 `editedAt != null` 일 때만 SessionSummaryCard 에 "수정됨" dt/dd 노출.
-- **Stepper UX — 완료된 단계만 자유 점프** ([SettlementNewPage.tsx](../../apps/web/src/routes/settlement/SettlementNewPage.tsx) `canJumpTo`) — Step N+1 은 Step N 산출물이 draft 에 있을 때만 활성화. **Step1 → Step3 직행** 특례: 같은 세션 안에서 참여자만 고치고 돌아왔을 때 `draft.source` 가 이미 있으면 Step2(입력 방식 선택)를 건너뛰고 바로 Step3 로 (영수증 사진 재업로드 회피).
+**단골 자동 적립 (2026-05-24)** — `(userId, normalizedKey)` upsert + 클라 contactId 힌트 미신뢰, 삭제 SetNull, backfill 멱등.
 
-**기타 회피·결정**
-- **`?? null` 폴백 제거** ([settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) `setReceipt`) — 영수증 교체 시 `totalAmount`/`warning` 을 명시적 `?? null` 로 클리어. 폴백을 안 쓰면 이전 영수증의 warning 이 새 영수증에 잘못 남는다 (커밋 `14196ea` 의 회귀 수정).
-- **sessionStorage persist** — localStorage 가 아니라 sessionStorage 인 이유: "정산 입력 중에 새로고침은 살리고, 탭 닫으면 깔끔히 사라지길" 의도. 다른 사용자가 그 탭을 열어도 이전 draft 가 안 보인다.
+**편집 + "수정됨" 배지 (2026-05-24)** — `editedAt` 분리, items 불변 + participants 만 PATCH (이번 컴파일에 폐기됨).
 
-## Gotchas [coverage: high — 7 sources]
+**차수(N차) 정산 도입 (2026-05-25, 14차 컴파일 핵심)**
+- **세션 vs 차수 분리** — session 본체는 사용자/식당-1차-스냅샷/grandTotal/shareToken/editedAt 만, 차수 단위 정보(source/totalAmount/warning/영수증/items/attendees)는 모두 `SettlementRound` 로. backfill 은 session 1개 = round 1개로 자동 변환, round.id = session.id 규약으로 items 의 roundId 재매핑이 단순.
+- **마스터 vs 차수 attendance 이중 구조** — 마스터 `SettlementParticipant.excludeXxx` 는 default, `SettlementRoundParticipant.excludeXxxOverride` 가 null 이면 default 사용, true/false 면 round 단위 override. `effectiveExcludes(master, override)` 헬퍼가 merge — 계산기와 service 둘 다 사용.
+- **clientId ↔ db id 매핑** — 입력 시점엔 마스터 cuid 가 아직 없어 클라이언트가 `participantClientId` 부여, round.attendees 는 그 키로 마스터 참조. 서버가 트랜잭션 안에서 cuid 부여 후 매핑 폐기. categoryAdjustments 의 `leftoverParticipantClientId` 도 같은 매핑으로 db id 치환.
+- **계산기 분기** — `calculateMultiRoundShares` 가 round 별로 참석자 부분집합만으로 `calculateShares` 호출, 마스터 인덱스 단위로 share 부풀려 합산. `perRound[].shareAmounts` 와 `perCategoryShares` 둘 다 마스터 인덱스 단위로 반환. PerRound 결과는 결과 페이지의 "차수별 카드" 와 정산표 매트릭스가 모두 사용.
+- **참여자 100명 / items 200개 한도** — 회사 회식·동호회 규모까지 안전 커버. 계산기는 선형 비용이라 100 × 200 = 20k 곱셈도 ms 이하.
 
-- **영수증 이미지 디스크 존재 검증 필수** ([settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts) L91-100) — `CreateSettlementInput.receiptImageToken` 이 들어오면 정규식 검증 + `stat()` 으로 파일 존재 확인. 클라이언트가 토큰만 위조해 보내도 `invalid_receipt_token` 400. `extraction.service.IMAGE_TOKEN_PATTERN` 과 동일 정규식이 두 모듈에 복사돼 있다 (모듈 간 결합도 축소 의도) — 패턴 바꾸면 두 곳 다 손대야 한다.
-- **`normalizedKey` 정의가 4 곳에 복사돼 있다** — server export 가 single source of truth 지만, 클라이언트 두 파일(`Step1Participants`, `ContactPickerDialog`) 은 동기화를 위해 정의를 다시 적었다. **server 정의를 바꾸면 4 곳 다** — 또는 backfill 후 NormalizedKey 가 어긋나면 같은 사람이 두 row 로 갈라진다.
-- **shareToken 무효화 후 재발급 시 새 토큰** — 회수 직후 다시 `POST /share` 호출하면 `randomBytes(32)` 가 다시 도는데 동일 토큰이 아니다 (`settlement.route.test.ts` "재발급 후 이전 토큰은 무효" 시나리오로 검증). UX 측에서 "공유 해제하면 이전 링크는 영구 무효" 라고 명시 (SettlementShareDialog 의 confirm 메시지).
-- **`editedAt` 과 `updatedAt` 분리** — Prisma 의 `@updatedAt` 은 모든 컬럼 변경에 자동 bump. share token 발급/회수도 update 라 `updatedAt` 이 바뀐다. "수정됨" 배지가 share token 켰을 때 잘못 켜지는 버그를 피하려고 별도 `editedAt` 을 둔다 — 코드/마이그레이션 두 군데에 주석으로 명시돼 있다.
-- **`?? null` 폴백 제거 사례** — `setReceipt` 에서 `totalAmount: totalAmount ?? null` 로 명시 클리어. 처음엔 `?? s.totalAmount` 같은 폴백을 썼다가 영수증 교체 시 이전 값이 잔존하는 회귀가 났다 — 커밋 `14196ea` 와 함께 store 주석에 "예: A 가 불일치(warning 세팅) → B 가 일치(warning=null) 인데 ?? 폴백을 쓰면 A 의 warning 이 살아남아 B 에도 잘못 표시됨" 으로 박혀 있다.
-- **Vision LLM 타임아웃 별도** — `VISION_TIMEOUT_MS=60_000` 으로 어댑터 default 와 분리. chat 모델보다 vision 호출이 느려서 — `provider.complete({ signal: ac.signal })` 에 `AbortController` 를 명시적으로 묶는다.
-- **Preview 라우트 JWT 필요 → `<img src>` 직접 호출 불가** — 같은 origin 이라도 Authorization 헤더가 필요해 `Step3Edit`/`SettlementResultPage` 의 `ReceiptPreviewImage` 가 `fetch` → `Blob` → `URL.createObjectURL` 패턴을 쓴다. unmount 시 `revokeObjectURL` 까지 묶어야 메모리 누수 없음 — 두 컴포넌트에 같은 패턴이 복사돼 있다.
-- **Step1 자동완성 onMouseDown 트릭** — input blur 가 mousedown 보다 먼저 발동하면 드롭다운이 사라져 onClick 이 도달 못 한다. `ContactSuggestions` 가 `onMouseDown.preventDefault() + onPick` 으로 우회. blur 도 `setTimeout(0)` 으로 microtask 늦춤 (Step1Participants L148-153).
-- **`backfill-contacts.ts` 정렬** — `session.createdAt asc + orderIndex asc` 가 의도. 마지막 순회가 `lastExclude*` 의 최신값으로 update 되도록. 반대로 desc 로 돌리면 가장 오래된 정산의 옵션이 default 가 되어 자동완성 제안이 어긋난다.
-- **`SharedSettlementSession` 은 SettlementSession 의 omit** — 구조적 subtyping 으로 `SettlementCards` 가 두 type 을 같이 받지만, TS 가 `userId`/`receiptPreviewUrl` 을 카드 안에서 우연히 참조하지 않게 해야 한다. 현재 카드들은 의도적으로 그 필드를 안 본다.
+**차수 할인 (round discount)**
+- **단일 카테고리 단일 라인** — `discountAmount` (양수) + `discountCategory` (enum) 페어. 양쪽 다 null 이거나 둘 다 set. zod refine 두 개 — (1) 페어 일관성, (2) `pool >= discountAmount` (해당 카테고리 풀이 음수가 되지 않도록).
+- **calculator 자연 반영** — `Math.max(0, rawPool - discount.amount)` 클램프(스키마가 막아도 안전망). UI 상 정산표는 풀 컬럼이 줄어들고, 항목 카드는 '할인 -X' 줄.
 
-## Sources [coverage: high — 49 sources]
+**분담 다듬기 (refinement)**
+- **leftover 받는 사람** — 카테고리별 `leftoverParticipantId`. 풀이 인원수로 나눠 떨어지지 않을 때 잔여 1~(n-1)원을 누가 흡수할지. 지정 안 하면 첫 활성자.
+- **roundUnit (100/1000원 단위 반올림)** — null|100|1000. 양수면 풀을 그 단위로 round 한 뒤 균등 분배. 단 round 한 풀이 인원수로 나눠 떨어져야 함 — 안 떨어지면 calculator 가 안전망으로 무시 + 잔여 가산 모드로 fallback. UI 가 활성 조건 검사 + 서비스 검증.
+- **마스터→참석자 인덱스 변환** — categoryAdjustments 입력은 마스터 clientId 단위인데 calculator 는 참석자 배열 인덱스만 안다. `calculateMultiRoundShares` 가 `masterToAttendee` Map 으로 변환 — 마스터 참여자가 그 차수에 참석하지 않으면 -1 로 두고 calculateShares 가 첫 활성자로 fallback.
+
+**분할 영수증 (multi-receipt split) — 한 사진 좌→우 N등분**
+- **`ExtractReceiptSplit`** — `count: 2..5`, `index: 1..count` (1-based, 왼쪽=1), `index <= count` refine.
+- **같은 imageToken N번 사용** — 클라이언트가 N번 extract 호출, index 만 다르게. 서버 `cropForSplit` 가 `floor(totalWidth / count) * (index-1)` 부터 자르고 마지막 슬롯은 남은 픽셀 모두 흡수해 누락 없게. 메타데이터 비면 잘라내지 않고 원본 그대로.
+- **roundIndex/roundTotal 프롬프트 힌트** — 두 값 모두 있고 `index<=total` 이면 user prompt 에 "2차 영수증" 컨텍스트 라인 추가. LLM 이 영수증 본문에 그 컨텍스트를 반영하지는 못해도 무관 — 사용자 의도 명시용.
+
+**서버 임시저장 (SettlementDraft) — 다기기 동기화**
+- **payload 자유형** — z.unknown() + 200KB JSON 크기 refine 만. 서버는 형태 검증 안 함 (클라 store 진화 유연성). 응답에서 다시 JSON parse 해서 unknown 으로 노출.
+- **`(userId, placeId)` upsert** — PUT 요청 body 의 placeId 로 server 가 매칭. id 를 클라가 모르고도 호출 가능. `placeId=null` (식당 미지정) 슬롯은 DB 의 `placeIdKey=''` sentinel — SQLite 의 NULL unique 가 다중 NULL 을 허용하기 때문.
+- **debounce 자동 저장** — `useSettlementDraftAutoSync` 가 store subscribe 후 default 3s (호출자 5s 도 가능) debounce 로 upsert. 마운트 시점에 baseline snapshot 을 잡아 실제 편집이 있을 때만 저장 (마운트 직후 spurious save 방지).
+- **정산 저장 시 draft 자동 삭제** — `CreateSettlementInput.fromDraftId` 가 들어오면 `SettlementService.create` 트랜잭션 안에서 `SettlementDraftService.deleteByIdInTxIfOwner` 호출. 본인 소유 아니거나 없는 id 면 조용히 무시(저장 자체는 성공).
+- **이력 페이지 "이어 입력" 행** — `placeNameHint` 캐시로 매번 payload parse 없이 식당 이름 라벨 표시.
+
+**통합 update (전체 replace)**
+- **PUT /:id 가 PATCH /:id/participants 대체** — items/rounds/attendees/participants 모두 한 번에 교체. items 불변 정책 폐기 — N차 모델에서 차수 추가/삭제·attendance 변경 등이 빈번해 부분 엔드포인트로 다루기 복잡.
+- **트랜잭션 wipe + rebuild** — 자식 모두 deleteMany 후 다시 create. SettlementContact `useCount` 가 다시 증가하는 부작용은 create 와 동일 정책(매 수정 = 사용).
+- **update 의 식당명 캐시** — 기존 round 의 placeId 는 이름 재사용, 새로 추가된 placeId 만 fresh 조회. 식당이 나중에 삭제돼도 기존 차수 편집은 통과(테스트도 시드 없이 update 가능).
+
+**모바일 정산 풀 구현**
+- **expo-router 라우트 미러링** — 웹의 5개 정산 라우트를 같은 의미로 모바일에도. `[placeId]` 가 디렉터리로 승격되어 `restaurant/[placeId]/index.tsx` + `restaurant/[placeId]/settle/...` 가 한 번에 가능.
+- **bottom-sheet 변종** — 웹 다이얼로그(ContactPickerDialog, MenuPickerDialog, RestaurantSearchDialog, MultiReceiptSplitDialog, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor) 의 모바일 대응은 `…Sheet.tsx` 로 별도 카피. RN 의 키보드 + 스크롤 + safe area 처리가 달라 dialog 패턴 그대로 못 옮긴다.
+- **storage 어댑터 주입** — `setSettlementDraftStorage(AsyncStorage)` 를 mobile entry 에서 호출. 호출 안 하면 sessionStorage 가 없는 RN 환경에서 no-op 폴백으로 메모리만 유지.
+
+**Universal Links / App Links (deep link)**
+- **공유 토큰 URL = 앱 진입점** — `https://${WEB_HOST}/share/settlements/<token>` 한 URL 로 iOS Universal Links + Android App Links + 웹 SPA fallback 셋 다 처리. 앱 설치되어 있으면 시스템이 검증 후 가로채 expo-router 가 `[token].tsx` 로 라우팅, 미설치면 같은 URL 이 웹 `SharedSettlementPage` 로.
+- **AASA/assetlinks 동적 응답** — 정적 파일 대신 fastify 라우트로. env 미설정 시 404 (잘못된 빈 JSON 로 검증 실패하는 사고 회피), `Cache-Control: public, max-age=300` (env 바꾸면 빨리 반영).
+- **Android autoVerify:true + sha256 fingerprints** — `ANDROID_SHA256_FINGERPRINTS` 콤마 분리 env 로 dev/release 둘 다 지원. 실패 시 사용자에게 "어떤 앱?" 디스앰비규에이터가 떠 좋지 않으니 prod fingerprint 정확히 박아야 한다.
+- **scheme `lifepickr://` 보조 유지** — push 콜백·OAuth 등에서 사용 가능. 메인은 https Universal Links.
+
+**UX 다듬기**
+- **Step2Source 폐기, Step2Rounds 직행** — N차 모델에선 입력 방식 분기가 round 단위라 별도 step 불필요. 한 step 안에서 차수 카드를 늘리며 source 도 같이 정함.
+- **Step1 단일 필드 + alias 토글** — name + nickname 두 칸 → 단일 입력 + "별명도 따로" 토글. Enter 로 새 행 추가 + focus 이동. 새 행 기본 제외 토글은 localStorage(`settlementPrefsStore`) 에 저장.
+- **공용 confirm-dialog** — `apps/web/src/components/ui/confirm-dialog.tsx` 가 inline `confirm()` 호출들을 대체.
+- **결과/공유 페이지 z-30** — 데스크톱 2-col 레이아웃의 sticky 정산표 헤더와 상단 헤더가 겹치는 문제. z-10 → z-30.
+- **이력 페이지 — 행별 trash + 다중 선택 일괄 삭제 + 이어 입력 행** — draft 들이 history list 위에 노출.
+- **Tailwind v4 dark variant fix** — `.dark` 클래스 토글이 children 에 안 적용되는 v4 동작 변경 — `@custom-variant dark` 정의로 우회.
+
+**기타 환경**
+- **RFC1918 사설 IP CORS 자동 허용 (dev)** — `cors.ts` 의 `PRIVATE_LAN_ORIGIN` 정규식이 localhost/127.0.0.1/10.x/192.168.x/172.16-31.x 매칭. Expo Web 을 폰에서 LAN IP 로 볼 때 friendly API 도 같은 LAN IP 로 호출되므로 .env 에 매번 IP 안 박아도 통과.
+- **AI keys 모델 미리보기** — `GET /admin/ai/providers/:id/:purpose/models/preview` 가 폼에 입력한 키(아직 저장 안 됨)로 model list 를 받아옴. 신규 등록 시 키 검증 + 모델 선택을 한 번에.
+
+## Gotchas [coverage: high — 10 sources]
+
+- **차수 attendee 의 마스터→인덱스 변환** — 입력 시 `participantClientId` 기준, 저장 시 db id, 계산기는 참석자 배열 인덱스. 두 번의 변환 — clientIdToDbId(serialize)와 masterToAttendee(calculator) 모두 같이 동작해야 함. categoryAdjustments 의 `leftoverParticipantClientId` 가 그 차수에 참석 안 한 마스터를 가리키면 calculator 가 -1 → 첫 활성자 fallback. zod 가 아니라 service/calculator 가 정합성을 떠받친다.
+- **`roundUnit` 안전망** — UI 가 활성 조건(`rounded % activeCount === 0`)을 검사하고 서버 zod 도 refine 으로 막지만, calculator 는 그래도 안전망으로 무시(잔여 가산 모드) 한다. 안 떨어지는 값이 들어와도 calculator 가 crash 하지 않음.
+- **할인 페어 일관성** — `discountAmount` 와 `discountCategory` 는 양쪽 null 또는 양쪽 set. 한쪽만 들어오면 zod refine 이 거부. 풀 음수도 refine 가 거부 — calculator 의 `Math.max(0, …)` 클램프는 안전망.
+- **영수증 토큰 디스크 검증 + IMAGE_TOKEN_PATTERN 두 곳 복사** — `settlement.service.IMAGE_TOKEN_PATTERN` 과 `settlement-extraction.service.IMAGE_TOKEN_PATTERN` 가 동일 정규식을 따로 둔다(모듈 결합도 축소). 패턴 변경 시 두 곳 모두 손대야 한다.
+- **`normalizedKey` 정의 4곳 복사** — server `normalizeContactKey` 가 single source of truth지만 클라이언트 두 파일과 backfill 스크립트가 정의 복사. 바꾸려면 4 곳 동시에.
+- **shareToken 재발급 시 새 토큰 (이전 영구 무효)** — 회수→재생성 직후 같은 호출이라도 새 randomBytes. `settlement.route.test.ts` 의 "재발급 후 이전 토큰은 무효" 시나리오로 검증. UX 측에서 confirm 메시지로 사용자에게 명시.
+- **`editedAt` 과 `updatedAt` 분리** — `@updatedAt` 은 share token 발급/회수에도 자동 bump 되어 "수정됨" 배지에 부적합. `editedAt` 은 PUT update 시에만 채움. 코드/마이그레이션 두 곳에 주석.
+- **draft payload 자유형 → 형 검증 책임은 클라** — 서버는 z.unknown() + 200KB 크기만 본다. 클라가 깨진 payload 를 보내면 hydrate 단계에서 `Array.isArray(p.participants)` 등 type guard 로 방어. 안 그러면 store 가 깨진 데이터로 mount 됨.
+- **`?? null` 폴백 제거 사례** — store `setRoundReceipt` 에서 `totalAmount/warning` 을 명시 `?? null` 로 클리어. 이전 영수증의 warning 이 새 영수증에 잘못 잔존하는 회귀 회피.
+- **storage 어댑터 주입 미흡 = no-op 폴백** — RN entry 에서 `setSettlementDraftStorage(AsyncStorage)` 호출 누락하면 모듈은 NO_OP_STORAGE 로 동작 → persist 가 메모리만, 앱 재실행 시 draft 손실. SSR/테스트엔 의도된 동작이지만 RN prod 에선 사고.
+- **Vision LLM 타임아웃 별도** — `VISION_TIMEOUT_MS=60_000`. chat 모델보다 vision 호출이 느려서 — `AbortController` 시그널을 `provider.complete({ signal })` 에 명시 묶음.
+- **Preview 라우트 JWT 필요 → `<img src>` 직접 호출 불가** — 같은 origin 이라도 Authorization 헤더가 필요해 `Step3Edit` 등이 `fetch` → `Blob` → `URL.createObjectURL` 패턴. unmount 시 `revokeObjectURL`.
+- **`SharedSettlementSession` 은 SettlementSession 의 omit + receiptPreviewUrl 빠진 round 배열** — `SettlementCards` 가 두 type 을 구조적 subtyping 으로 같이 받으므로 카드 안에서 의도적으로 `userId`/`receiptPreviewUrl` 을 안 본다.
+- **`split.count` 가 1 이면 cropForSplit 가 no-op** — 클라가 잘못 count=1 로 보내도 안전. metadata 비면 잘라내지 않음(원본 LLM 전달).
+- **AASA/assetlinks 미설정 시 404, 잘못된 JSON 보다 안전** — env 빠진 채 200 빈 JSON 응답하면 iOS/Android 검증이 통과해 버려 앱이 잘못된 권한을 얻을 수 있음 → 의도적으로 404. dev/staging 에서 의도하지 않게 매칭되는 사고 방지.
+
+## Sources [coverage: high — 95 sources]
 
 **Backend — settlement-extraction 모듈**
 - [apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts)
@@ -184,52 +270,108 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - [apps/friendly/src/modules/settlement/settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts)
 - [apps/friendly/src/modules/settlement/settlement.calculator.test.ts](../../apps/friendly/src/modules/settlement/settlement.calculator.test.ts)
 - [apps/friendly/src/modules/settlement/settlement.route.test.ts](../../apps/friendly/src/modules/settlement/settlement.route.test.ts)
+- [apps/friendly/src/modules/settlement/settlement-draft.route.ts](../../apps/friendly/src/modules/settlement/settlement-draft.route.ts)
+- [apps/friendly/src/modules/settlement/settlement-draft.service.ts](../../apps/friendly/src/modules/settlement/settlement-draft.service.ts)
+- [apps/friendly/src/modules/settlement/settlement-draft.route.test.ts](../../apps/friendly/src/modules/settlement/settlement-draft.route.test.ts)
 
 **Backend — contact 모듈**
 - [apps/friendly/src/modules/contact/contact.route.ts](../../apps/friendly/src/modules/contact/contact.route.ts)
 - [apps/friendly/src/modules/contact/contact.service.ts](../../apps/friendly/src/modules/contact/contact.service.ts)
 - [apps/friendly/src/modules/contact/contact.route.test.ts](../../apps/friendly/src/modules/contact/contact.route.test.ts)
 
-**Backend — infra/scripts**
+**Backend — well-known 모듈**
+- [apps/friendly/src/modules/well-known/well-known.route.ts](../../apps/friendly/src/modules/well-known/well-known.route.ts)
+
+**Backend — infra/scripts/plugins**
 - [apps/friendly/scripts/backfill-contacts.ts](../../apps/friendly/scripts/backfill-contacts.ts)
 - [apps/friendly/src/plugins/multipart.ts](../../apps/friendly/src/plugins/multipart.ts)
+- [apps/friendly/src/plugins/cors.ts](../../apps/friendly/src/plugins/cors.ts)
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)
 - [apps/friendly/prisma/migrations/20260523012752_add_settlement_models/migration.sql](../../apps/friendly/prisma/migrations/20260523012752_add_settlement_models/migration.sql)
 - [apps/friendly/prisma/migrations/20260523030833_add_settlement_share_token/migration.sql](../../apps/friendly/prisma/migrations/20260523030833_add_settlement_share_token/migration.sql)
 - [apps/friendly/prisma/migrations/20260524000000_add_settlement_contacts/migration.sql](../../apps/friendly/prisma/migrations/20260524000000_add_settlement_contacts/migration.sql)
 - [apps/friendly/prisma/migrations/20260524112443_add_settlement_edited_at/migration.sql](../../apps/friendly/prisma/migrations/20260524112443_add_settlement_edited_at/migration.sql)
+- [apps/friendly/prisma/migrations/20260525100000_add_settlement_rounds/migration.sql](../../apps/friendly/prisma/migrations/20260525100000_add_settlement_rounds/migration.sql)
+- [apps/friendly/prisma/migrations/20260525110000_add_settlement_round_discount/migration.sql](../../apps/friendly/prisma/migrations/20260525110000_add_settlement_round_discount/migration.sql)
+- [apps/friendly/prisma/migrations/20260525220309_add_settlement_round_category_adjustments/migration.sql](../../apps/friendly/prisma/migrations/20260525220309_add_settlement_round_category_adjustments/migration.sql)
+- [apps/friendly/prisma/migrations/20260525235559_add_settlement_drafts/migration.sql](../../apps/friendly/prisma/migrations/20260525235559_add_settlement_drafts/migration.sql)
 
 **API Contract**
 - [packages/api-contract/src/schemas/settlement.ts](../../packages/api-contract/src/schemas/settlement.ts)
 - [packages/api-contract/src/schemas/settlement-extraction.ts](../../packages/api-contract/src/schemas/settlement-extraction.ts)
 - [packages/api-contract/src/schemas/settlement-contact.ts](../../packages/api-contract/src/schemas/settlement-contact.ts)
+- [packages/api-contract/src/schemas/settlement-draft.ts](../../packages/api-contract/src/schemas/settlement-draft.ts)
 - [packages/api-contract/src/settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)
+- [packages/api-contract/src/index.ts](../../packages/api-contract/src/index.ts)
 
 **FE shared**
 - [packages/shared/src/api/settlement.api.ts](../../packages/shared/src/api/settlement.api.ts)
 - [packages/shared/src/api/settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts)
 - [packages/shared/src/api/settlement-contact.api.ts](../../packages/shared/src/api/settlement-contact.api.ts)
+- [packages/shared/src/api/settlement-draft.api.ts](../../packages/shared/src/api/settlement-draft.api.ts)
 - [packages/shared/src/hooks/useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts)
 - [packages/shared/src/hooks/useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts)
 - [packages/shared/src/hooks/useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts)
+- [packages/shared/src/hooks/useSettlementDraft.ts](../../packages/shared/src/hooks/useSettlementDraft.ts)
 - [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts)
+- [packages/shared/src/index.ts](../../packages/shared/src/index.ts)
 
 **Web — 정산 라우트 디렉터리 (`apps/web/src/routes/settlement/`)**
 - [SettlementNewPage.tsx](../../apps/web/src/routes/settlement/SettlementNewPage.tsx)
 - [Step1Participants.tsx](../../apps/web/src/routes/settlement/Step1Participants.tsx)
-- [Step2Source.tsx](../../apps/web/src/routes/settlement/Step2Source.tsx)
+- [Step2Rounds.tsx](../../apps/web/src/routes/settlement/Step2Rounds.tsx)
 - [Step3Edit.tsx](../../apps/web/src/routes/settlement/Step3Edit.tsx)
 - [Step4Review.tsx](../../apps/web/src/routes/settlement/Step4Review.tsx)
 - [SettlementResultPage.tsx](../../apps/web/src/routes/settlement/SettlementResultPage.tsx)
 - [SettlementHistoryPage.tsx](../../apps/web/src/routes/settlement/SettlementHistoryPage.tsx)
 - [SharedSettlementPage.tsx](../../apps/web/src/routes/settlement/SharedSettlementPage.tsx)
 - [SettlementShareDialog.tsx](../../apps/web/src/routes/settlement/SettlementShareDialog.tsx)
-- [ParticipantEditDialog.tsx](../../apps/web/src/routes/settlement/ParticipantEditDialog.tsx)
 - [ContactsPage.tsx](../../apps/web/src/routes/settlement/ContactsPage.tsx)
 - [ContactPickerDialog.tsx](../../apps/web/src/routes/settlement/ContactPickerDialog.tsx)
 - [ContactSuggestions.tsx](../../apps/web/src/routes/settlement/ContactSuggestions.tsx)
 - [ContactEditDialog.tsx](../../apps/web/src/routes/settlement/ContactEditDialog.tsx)
 - [MenuPickerDialog.tsx](../../apps/web/src/routes/settlement/MenuPickerDialog.tsx)
+- [MultiReceiptSplitDialog.tsx](../../apps/web/src/routes/settlement/MultiReceiptSplitDialog.tsx)
+- [RestaurantSearchDialog.tsx](../../apps/web/src/routes/settlement/RestaurantSearchDialog.tsx)
+- [RoundCategoryAdjuster.tsx](../../apps/web/src/routes/settlement/RoundCategoryAdjuster.tsx)
+- [RoundDiscountEditor.tsx](../../apps/web/src/routes/settlement/RoundDiscountEditor.tsx)
+- [RoundExceptionsEditor.tsx](../../apps/web/src/routes/settlement/RoundExceptionsEditor.tsx)
+- [SettlementBreakdownTable.tsx](../../apps/web/src/routes/settlement/SettlementBreakdownTable.tsx)
 - [SettlementCards.tsx](../../apps/web/src/routes/settlement/SettlementCards.tsx)
+- [apps/web/src/stores/settlementPrefsStore.ts](../../apps/web/src/stores/settlementPrefsStore.ts)
+- [apps/web/src/components/ui/confirm-dialog.tsx](../../apps/web/src/components/ui/confirm-dialog.tsx)
+- [apps/web/src/styles/tailwind.css](../../apps/web/src/styles/tailwind.css)
 - [apps/web/src/App.tsx](../../apps/web/src/App.tsx)
+
+(폐기되어 더 이상 존재하지 않는 파일 — 기록용)
+- `apps/web/src/routes/settlement/Step2Source.tsx` — Step2Rounds 로 대체
+- `apps/web/src/routes/settlement/ParticipantEditDialog.tsx` — Step1 인라인 + RestaurantSearchDialog 흐름으로 대체
+
+**Mobile — 정산 라우트 + 컴포넌트**
+- [apps/mobile/app/restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx)
+- [apps/mobile/app/restaurant/[placeId]/settle/new.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx)
+- [apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx)
+- [apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx)
+- [apps/mobile/app/settlement/new.tsx](../../apps/mobile/app/settlement/new.tsx)
+- [apps/mobile/app/settlement/history.tsx](../../apps/mobile/app/settlement/history.tsx)
+- [apps/mobile/app/settlement/contacts.tsx](../../apps/mobile/app/settlement/contacts.tsx)
+- [apps/mobile/app/share/settlements/[token].tsx](../../apps/mobile/app/share/settlements/[token].tsx)
+- [apps/mobile/src/components/settlement/SettlementWizard.tsx](../../apps/mobile/src/components/settlement/SettlementWizard.tsx)
+- [apps/mobile/src/components/settlement/Step1Participants.tsx](../../apps/mobile/src/components/settlement/Step1Participants.tsx)
+- [apps/mobile/src/components/settlement/Step2Rounds.tsx](../../apps/mobile/src/components/settlement/Step2Rounds.tsx)
+- [apps/mobile/src/components/settlement/Step3Edit.tsx](../../apps/mobile/src/components/settlement/Step3Edit.tsx)
+- [apps/mobile/src/components/settlement/Step4Review.tsx](../../apps/mobile/src/components/settlement/Step4Review.tsx)
+- [apps/mobile/src/components/settlement/ContactPickerSheet.tsx](../../apps/mobile/src/components/settlement/ContactPickerSheet.tsx)
+- [apps/mobile/src/components/settlement/ContactSuggestions.tsx](../../apps/mobile/src/components/settlement/ContactSuggestions.tsx)
+- [apps/mobile/src/components/settlement/MenuPickerSheet.tsx](../../apps/mobile/src/components/settlement/MenuPickerSheet.tsx)
+- [apps/mobile/src/components/settlement/MultiReceiptSplitSheet.tsx](../../apps/mobile/src/components/settlement/MultiReceiptSplitSheet.tsx)
+- [apps/mobile/src/components/settlement/RestaurantPickerSheet.tsx](../../apps/mobile/src/components/settlement/RestaurantPickerSheet.tsx)
+- [apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx](../../apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx)
+- [apps/mobile/src/components/settlement/RoundDiscountEditor.tsx](../../apps/mobile/src/components/settlement/RoundDiscountEditor.tsx)
+- [apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx](../../apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx)
+- [apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx](../../apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx)
+- [apps/mobile/src/components/settlement/SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx)
+- [apps/mobile/src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts)
+- [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts)
+- [apps/mobile/DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md)

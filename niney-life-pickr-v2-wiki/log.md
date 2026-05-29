@@ -1,5 +1,41 @@
 # Wiki Compile Log
 
+## 2026-05-28 (14th compile)
+
+**Topics updated:** settlement, friendly, api-contract, shared, web, mobile, ai, project-overview
+**New topics:** none
+**Concepts updated:** zod-ssot-buildless, public-admin-route-split, platform-ui-split, versioned-llm-prompts, workspace-package-resolution
+**New concepts:** none
+
+**Sources scanned:** ~503 (기존 ~410 + 신규 ~93 파일 — 백엔드 14, api-contract 1 신규 + 3 수정, shared 2 신규 + 6 수정, web 9 신규(2 삭제 포함 차감) + 다수 수정, mobile 24 신규 + 다수 수정)
+**Sources changed:** ~110 — 32 커밋 (commit `1ed486d` 이후 — `git log --since="2026-05-25"`)
+
+**Reason**: 2026-05-25 이후 정산 도메인이 한 라운드에 통째 재설계됐다 — 가장 큰 단일 라운드 리팩토링 (이전 라운드는 도메인 신설, 이번 라운드는 도메인 재설계). 핵심 줄기 8개:
+
+1. **정산 N차(차수) 모델** — 한 세션이 1..10 차수, 차수마다 식당·source·items·attendees·할인·분담다듬기를 독립적으로 가짐. 마스터 참여자는 세션 단위, 참석/exclude override 는 차수 단위. `calculateMultiRoundShares` 가 차수별 `calculateShares` 를 attendee subset 으로 돌리고 마스터 인덱스로 합산. attendees 한 차수 최대 100, items 한 차수 최대 200.
+2. **차수 할인 + 분담 다듬기** — 차수당 하나의 카테고리 풀에서만 차감되는 할인 (`discountAmount` + `discountCategory`, zod refine 으로 풀 음수 차단). 카테고리별 분담 다듬기 — `leftoverParticipantClientId` (잔여 받는 사람) + `roundUnit` (null|100|1000 원 반올림). roundUnit 이 활성자 수로 안 떨어지면 calculator 가 안전망으로 그냥 잔여 가산 fallback.
+3. **영수증 분할 추출 (multi-receipt split)** — 한 사진에 N장 영수증이 들어있을 때 `ExtractReceiptSplit { count: 2..5, index: 1..count }` 로 같은 imageToken 을 N번 호출. service 가 sharp 로 좌→우 N등분 후 vision LLM 호출. roundIndex/roundTotal 도 prompt 힌트로 주입.
+4. **서버 임시저장 (server draft auto-save)** — 새 `SettlementDraft` 테이블 `(userId, placeIdKey)` unique (placeIdKey='' sentinel for null placeId 우회). 클라이언트 store 가 변경될 때마다 5s debounce 로 PUT 업서트 — id 를 클라이언트가 모르고도 호출 가능. 저장 성공 시 `CreateSettlementInput.fromDraftId` 가 트랜잭션 안에서 매칭 draft 를 함께 삭제. 본인 소유가 아니거나 없는 id 면 조용히 무시 (저장 자체는 성공).
+5. **모바일 정산 풀 구현** — 이전 라운드의 "정산은 모바일 미구현 — 웹만" 정책 종료. `app/restaurant/[placeId]/settle/{new,[id]/{index,edit}}` + `app/settlement/{new,history,contacts}` + `app/share/settlements/[token]` 라우트, `src/components/settlement/` 15 컴포넌트 (SettlementWizard, Step1~4, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, SettlementShareSheet, ContactSuggestions). `settlementPrefsStore.ts` (AsyncStorage) + `setSettlementDraftStorage(AsyncStorage)` 어댑터 주입.
+6. **Universal Links (iOS) / App Links (Android)** — friendly 신규 `well-known` 모듈이 `/.well-known/apple-app-site-association` + `/.well-known/assetlinks.json` 을 env-driven 동적 응답 (`APP_TEAM_ID`/`APP_BUNDLE_ID`/`ANDROID_APP_PACKAGE`/`ANDROID_SHA256_FINGERPRINTS`). 미설정 시 의도적 404 (잘못된 빈 JSON 으로 검증 우연 통과 사고 회피). mobile `app.config.ts` `associatedDomains: [applinks:${WEB_HOST}]` + `intentFilters: [{ autoVerify:true, pathPrefix:'/share/settlements' }]`. 미설치 단말은 web SPA fallback (`SharedSettlementPage`). `apps/mobile/DEEP_LINK_SETUP.md` 운영 가이드.
+7. **Expo Web 안정화** — `react-native-bottom-tabs` 가 web 번들 깨뜨려 `tabs-layout.tsx`/`.web.tsx` shim 페어 분리. 하단 탭 Lucide 단색 라인 아이콘을 npm 의존 없이 inline SVG. zustand ESM build (`zustand/esm/middleware.mjs`) 의 `import.meta.env` 가 `<script defer>` 컨텍스트에서 SyntaxError → babel `replaceImportMeta` 플러그인이 `MetaProperty` visitor 로 `{env:{MODE:'production'}}` 로 재작성. dev CORS RFC1918 자동 허용 (friendly `cors.ts`) + `window.location.hostname` LAN IP 추론 (mobile `api-setup.ts`) 으로 폰에서 Expo Web 띄울 때 같은 LAN IP 의 friendly API 자동 호출.
+8. **AI 키 모델 미리보기 + 통합 update PUT + Tailwind v4 dark fix** — `GET /admin/ai/providers/:id/:purpose/models/preview` 가 저장 안 한 form key 로 provider /models 호출 후 응답 (adapter-cache 우회). `usePreviewModels` 훅 + AdminAiKeysPage 가 저장 전 키 검증 + 모델 picker. `PATCH /:id/participants` 폐기 → `PUT /:id` 전체 replace (`UpdateSettlementInput = CreateSettlementInput`) — items 가변 정책으로 전환 (이전의 "items 불변" 폐기). Tailwind v4 `@custom-variant dark` 명시 바인딩 fix.
+
+**Notable patterns**:
+- **Storage adapter 주입** — `settlementDraftStore` 가 sessionStorage(web) / AsyncStorage(mobile) / NO_OP(SSR/test) 를 lazy resolver + injection 으로 처리. 모듈 import 시점엔 어느 플랫폼인지 모르므로 entry 에서 `setSettlementDraftStorage` 호출 — `platform-ui-split` concept 의 새 sub-pattern.
+- **SQLite multi-NULL unique 우회 sentinel** — `SettlementDraft.placeIdKey` 가 빈문자 sentinel for null placeId. SQLite 가 NULL unique 에서 다중 NULL 을 허용하기 때문에 unique 가 효과 없는 회피.
+- **트랜잭션 안의 silent-ignore cleanup hook** — `SettlementDraftService.deleteByIdInTxIfOwner` 가 본인 소유 아니거나 없는 id 일 때 조용히 무시. 저장 자체는 항상 성공해야 하므로 cleanup 실패가 트랜잭션 fail 로 이어지면 안 됨.
+- **Calculator 안전망 fallback** — `roundUnit` 이 활성자 수로 안 떨어지면 calculator 가 그냥 잔여 가산 모드로 fallback. UI 가 활성 조건 검사 + 서비스 검증으로 실제로 도달 안 하게 하지만, 마지막 안전망.
+- **`?? null` 명시 클리어 패턴** — `setRoundReceipt` 가 영수증 교체 시 totalAmount/warning 을 `??` 폴백 없이 명시 `?? null` 로 클리어. 폴백을 쓰면 이전 영수증의 warning 이 새 영수증에 잘못 잔존하는 회귀 (커밋 `14196ea` 의 원인).
+
+**Outputs**:
+- 0 신규 토픽 / 0 신규 컨셉 article — 흥미로운 패턴 셋이 모두 단일 도메인에 닫혀 있어 (3+ 토픽 임계 미달) 보류. storage adapter 주입은 `platform-ui-split` sub-pattern 으로 흡수.
+- 8 갱신 토픽 article (settlement 95 / web 93 / friendly 88 / shared 52 / mobile 46 / project-overview 31 / ai 25 / api-contract 23)
+- 5 갱신 concept article (zod-ssot-buildless / public-admin-route-split / platform-ui-split / versioned-llm-prompts / workspace-package-resolution)
+- schema.md / INDEX.md / log.md / .compile-state.json 갱신
+
+---
+
 ## 2026-05-25 (13th compile)
 
 **Topics updated:** friendly, api-contract, shared, web, project-overview, ai, crawl, map, mobile, utils
