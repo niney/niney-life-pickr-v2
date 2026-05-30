@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -97,69 +97,74 @@ export default function SettlementHistoryScreen() {
           </Text>
         )}
 
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/settlement/new')}
-            style={({ pressed }) => [
-              styles.newButton,
-              {
-                backgroundColor: pressed
-                  ? theme.colors.primaryHover
-                  : theme.colors.primary,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.newButtonText,
-                { color: theme.colors.primaryText },
-              ]}
-            >
-              + 새 정산
-            </Text>
-          </Pressable>
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.scrollContent}
+          ListHeaderComponent={
+            <View style={{ gap: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/settlement/new')}
+                style={({ pressed }) => [
+                  styles.newButton,
+                  {
+                    backgroundColor: pressed
+                      ? theme.colors.primaryHover
+                      : theme.colors.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.newButtonText,
+                    { color: theme.colors.primaryText },
+                  ]}
+                >
+                  + 새 정산
+                </Text>
+              </Pressable>
 
-          {draftItems.length > 0 && (
-            <View style={{ gap: 6 }}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>
-                이어 입력 {draftItems.length}건
-              </Text>
-              {draftItems.map((d) => (
-                <DraftRow
-                  key={d.id}
-                  draft={d}
-                  isDeleting={
-                    deleteDraft.isPending && deleteDraft.variables === d.id
-                  }
-                  onPress={() => {
-                    if (d.placeId) {
-                      router.push(`/restaurant/${d.placeId}/settle/new`);
-                    } else {
-                      router.push('/settlement/new');
-                    }
-                  }}
-                  onDelete={() => confirmDeleteDraft(d)}
-                  theme={theme}
-                />
-              ))}
+              {draftItems.length > 0 && (
+                <View style={{ gap: 6 }}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>
+                    이어 입력 {draftItems.length}건
+                  </Text>
+                  {draftItems.map((d) => (
+                    <DraftRow
+                      key={d.id}
+                      draft={d}
+                      isDeleting={
+                        deleteDraft.isPending && deleteDraft.variables === d.id
+                      }
+                      onPress={() => {
+                        if (d.placeId) {
+                          router.push(`/restaurant/${d.placeId}/settle/new`);
+                        } else {
+                          router.push('/settlement/new');
+                        }
+                      }}
+                      onDelete={() => confirmDeleteDraft(d)}
+                      theme={theme}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {items.length > 0 && (
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: theme.colors.textMuted, marginTop: 12 },
+                  ]}
+                >
+                  저장된 정산 {list.data?.total ?? items.length}건
+                </Text>
+              )}
             </View>
-          )}
-
-          {items.length > 0 && (
-            <Text
-              style={[
-                styles.sectionTitle,
-                { color: theme.colors.textMuted, marginTop: 12 },
-              ]}
-            >
-              저장된 정산 {list.data?.total ?? items.length}건
-            </Text>
-          )}
-
-          {items.map((item) => (
+          }
+          renderItem={({ item }) => (
             <SessionRow
-              key={item.id}
               session={item}
               isDeleting={
                 deleteMut.isPending && deleteMut.variables === item.id
@@ -175,16 +180,17 @@ export default function SettlementHistoryScreen() {
               }}
               theme={theme}
             />
-          ))}
-
-          {list.isSuccess && items.length === 0 && draftItems.length === 0 && (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                아직 저장된 정산이 없습니다.
-              </Text>
-            </View>
           )}
-        </ScrollView>
+          ListEmptyComponent={
+            list.isSuccess && draftItems.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                  아직 저장된 정산이 없습니다.
+                </Text>
+              </View>
+            ) : null
+          }
+        />
       </View>
     </>
   );

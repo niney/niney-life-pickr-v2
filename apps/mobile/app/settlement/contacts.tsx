@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -95,96 +95,33 @@ export default function ContactsScreen() {
           </Text>
         )}
 
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {(list.data?.items ?? []).map((c) => {
-            const isDeleting = remove.isPending && remove.variables === c.id;
-            const lastUsed = new Date(c.lastUsedAt);
-            const usedLabel = `${lastUsed.getFullYear()}-${String(lastUsed.getMonth() + 1).padStart(2, '0')}-${String(lastUsed.getDate()).padStart(2, '0')}`;
-            return (
-              <View
-                key={c.id}
-                style={[
-                  styles.card,
-                  {
-                    borderColor: theme.colors.border,
-                    backgroundColor: theme.colors.surface,
-                    opacity: isDeleting ? 0.5 : 1,
-                  },
-                ]}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    style={[styles.cardName, { color: theme.colors.text }]}
-                    numberOfLines={1}
-                  >
-                    {displayName(c)}
-                  </Text>
-                  <View style={styles.tagRow}>
-                    {c.lastExcludeAlcohol && <Tag theme={theme}>주류 X</Tag>}
-                    {c.lastExcludeNonAlcohol && <Tag theme={theme}>비주류 X</Tag>}
-                    {c.lastExcludeSide && <Tag theme={theme}>안주 X</Tag>}
-                    <Tag theme={theme}>{c.useCount}회</Tag>
-                    <Tag theme={theme}>최근 {usedLabel}</Tag>
-                  </View>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 4 }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="수정"
-                    onPress={() => setEditing(c)}
-                    style={({ pressed }) => [
-                      styles.iconButton,
-                      {
-                        backgroundColor: pressed
-                          ? theme.colors.surfaceAlt
-                          : 'transparent',
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: theme.colors.text, fontSize: 16 }}>✎</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="삭제"
-                    disabled={isDeleting}
-                    onPress={() => confirmDelete(c)}
-                    style={({ pressed }) => [
-                      styles.iconButton,
-                      {
-                        backgroundColor: pressed
-                          ? theme.colors.dangerBg
-                          : 'transparent',
-                      },
-                    ]}
-                  >
-                    {isDeleting ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={theme.colors.textMuted}
-                      />
-                    ) : (
-                      <Text
-                        style={{ color: theme.colors.textMuted, fontSize: 16 }}
-                      >
-                        🗑
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
-
-          {list.isSuccess && (list.data?.items.length ?? 0) === 0 && (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                {q.trim()
-                  ? `'${q.trim()}' 에 일치하는 단골이 없습니다.`
-                  : '아직 단골이 없습니다. 정산을 저장하면 자동 적립됩니다.'}
-              </Text>
-            </View>
+        <FlatList
+          data={list.data?.items ?? []}
+          keyExtractor={(c) => c.id}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          renderItem={({ item: c }) => (
+            <ContactRow
+              contact={c}
+              isDeleting={remove.isPending && remove.variables === c.id}
+              onEdit={() => setEditing(c)}
+              onDelete={() => confirmDelete(c)}
+              theme={theme}
+            />
           )}
-        </ScrollView>
+          ListEmptyComponent={
+            list.isSuccess ? (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                  {q.trim()
+                    ? `'${q.trim()}' 에 일치하는 단골이 없습니다.`
+                    : '아직 단골이 없습니다. 정산을 저장하면 자동 적립됩니다.'}
+                </Text>
+              </View>
+            ) : null
+          }
+        />
 
         <ContactEditSheet
           contact={editing}
@@ -195,6 +132,91 @@ export default function ContactsScreen() {
     </>
   );
 }
+
+// 단골 1행 — 별도 컴포넌트로 추출해 FlatList 가 보이는 행만 렌더하고
+// React Compiler 가 행 단위로 메모이즈하게 한다.
+const ContactRow = ({
+  contact: c,
+  isDeleting,
+  onEdit,
+  onDelete,
+  theme,
+}: {
+  contact: SettlementContactType;
+  isDeleting: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  theme: Theme;
+}) => {
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const lastUsed = new Date(c.lastUsedAt);
+  const usedLabel = `${lastUsed.getFullYear()}-${String(lastUsed.getMonth() + 1).padStart(2, '0')}-${String(lastUsed.getDate()).padStart(2, '0')}`;
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
+          opacity: isDeleting ? 0.5 : 1,
+        },
+      ]}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={[styles.cardName, { color: theme.colors.text }]}
+          numberOfLines={1}
+        >
+          {displayName(c)}
+        </Text>
+        <View style={styles.tagRow}>
+          {c.lastExcludeAlcohol && <Tag theme={theme}>주류 X</Tag>}
+          {c.lastExcludeNonAlcohol && <Tag theme={theme}>비주류 X</Tag>}
+          {c.lastExcludeSide && <Tag theme={theme}>안주 X</Tag>}
+          <Tag theme={theme}>{c.useCount}회</Tag>
+          <Tag theme={theme}>최근 {usedLabel}</Tag>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 4 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="수정"
+          onPress={onEdit}
+          style={({ pressed }) => [
+            styles.iconButton,
+            {
+              backgroundColor: pressed
+                ? theme.colors.surfaceAlt
+                : 'transparent',
+            },
+          ]}
+        >
+          <Text style={{ color: theme.colors.text, fontSize: 16 }}>✎</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="삭제"
+          disabled={isDeleting}
+          onPress={onDelete}
+          style={({ pressed }) => [
+            styles.iconButton,
+            {
+              backgroundColor: pressed
+                ? theme.colors.dangerBg
+                : 'transparent',
+            },
+          ]}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color={theme.colors.textMuted} />
+          ) : (
+            <Text style={{ color: theme.colors.textMuted, fontSize: 16 }}>🗑</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+};
 
 interface EditSheetProps {
   contact: SettlementContactType | null;
