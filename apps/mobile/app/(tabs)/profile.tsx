@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, useCurrentUser, useLogout, useTheme } from '@repo/shared';
 import { NotchFade } from '~/components/NotchFade';
+import { useTabBarHeight } from '~/hooks/useTabBarHeight';
 
 type Row = {
   key: string;
@@ -15,9 +16,9 @@ type Row = {
 };
 
 // 프로필 탭 — 게스트/로그인 두 상태를 한 화면으로 처리. 홈/맛집과 같은
-// edge-to-edge + useSafeAreaInsets + NotchFade 패턴을 따라간다. 탭바
-// (네이티브 BottomTabs) 의 bottom inset 은 시스템이 알아서 잡아주므로 여기서는
-// 상단 노치만 신경 쓰면 된다.
+// edge-to-edge + useSafeAreaInsets + NotchFade 패턴을 따라간다. 상단은 노치,
+// 하단은 탭바(네이티브 BottomTabs — scene 을 풀블리드로 깔아 인셋을 자동으로
+// 안 잡아줌) 높이만큼 useTabBarHeight 로 직접 비켜준다.
 export default function ProfileScreen() {
   const { data: user } = useCurrentUser();
   const isGuest = useAuthStore((s) => s.isGuest);
@@ -26,6 +27,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // 콘텐츠 끝이 하단 탭바 뒤로 안 가리게 그만큼 하단 패딩을 더한다.
+  const tabBarH = useTabBarHeight();
 
   const goLogin = () => {
     clearSession();
@@ -83,7 +86,7 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 24, paddingBottom: 32 },
+          { paddingTop: insets.top + 24, paddingBottom: tabBarH + 32 },
         ]}
         scrollIndicatorInsets={{ top: insets.top }}
         showsVerticalScrollIndicator={false}

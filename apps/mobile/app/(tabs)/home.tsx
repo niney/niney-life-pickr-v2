@@ -15,6 +15,7 @@ import type { RestaurantRankingItemType } from '@repo/api-contract';
 import { NotchFade } from '~/components/NotchFade';
 import { RankingHeader } from '~/components/RankingHeader';
 import { RankingRow } from '~/components/RankingRow';
+import { useTabBarHeight } from '~/hooks/useTabBarHeight';
 
 const PAGE_SIZE = 20;
 const MIN_MENTIONS = 5;
@@ -29,6 +30,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // 랭킹 마지막 줄이 하단 탭바 뒤로 안 가리게 그만큼 하단 패딩을 더한다.
+  const tabBarH = useTabBarHeight();
 
   const [sort, setSort] = useState<Sort>('positive');
   const [excludeNeutral, setExcludeNeutral] = useState(false);
@@ -144,8 +147,11 @@ export default function HomeScreen() {
       <FlatList
         data={items}
         keyExtractor={(it) => it.placeId}
-        contentContainerStyle={[styles.list, { paddingTop: insets.top + 16 }]}
-        scrollIndicatorInsets={{ top: insets.top }}
+        contentContainerStyle={[
+          styles.list,
+          { paddingTop: insets.top + 16, paddingBottom: tabBarH + 16 },
+        ]}
+        scrollIndicatorInsets={{ top: insets.top, bottom: tabBarH }}
         ListHeaderComponent={listHeader}
         ItemSeparatorComponent={() => <View style={styles.sep} />}
         renderItem={({ item }) => (
@@ -218,7 +224,8 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingHorizontal: 16, paddingBottom: 16, gap: 0 },
+  // paddingBottom 은 런타임에 tabBarH + 16 으로 주입 (위 contentContainerStyle).
+  list: { paddingHorizontal: 16 },
   sep: { height: 8 },
   center: { paddingVertical: 48, alignItems: 'center' },
   footer: { paddingVertical: 16, alignItems: 'center' },

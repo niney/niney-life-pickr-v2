@@ -16,6 +16,7 @@ import {
   useRestaurantPublicInsights,
   useTheme,
 } from '@repo/shared';
+import { useTabBarHeight } from '~/hooks/useTabBarHeight';
 import { HomeTab } from './HomeTab';
 import { InfoTab } from './InfoTab';
 import { InsightsTab } from './InsightsTab';
@@ -49,6 +50,9 @@ export const PublicRestaurantDetail = ({
 }: Props) => {
   const theme = useTheme();
   const { height: screenH } = useWindowDimensions();
+  // 스크롤 끝이 하단 탭바(시트 모드) / 홈 인디케이터(딥링크 route) 뒤로 안
+  // 가리게 그만큼 하단 패딩을 더한다.
+  const tabBarH = useTabBarHeight();
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
   const [tab, setTab] = useState<TabKey>('home');
@@ -132,7 +136,8 @@ export const PublicRestaurantDetail = ({
     <Scroller
       ref={scrollRef}
       style={[styles.scroller, { backgroundColor: theme.colors.bg }]}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={{ paddingBottom: tabBarH + 24 }}
+      scrollIndicatorInsets={{ bottom: tabBarH }}
       stickyHeaderIndices={stickyIndices}
       snapToOffsets={snapOffsets}
       snapToEnd={false}
@@ -235,7 +240,6 @@ export const PublicRestaurantDetail = ({
 
 const styles = StyleSheet.create({
   scroller: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
   center: {
     flex: 1,
     alignItems: 'center',

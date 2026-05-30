@@ -30,6 +30,7 @@ import { PublicRestaurantCard } from '~/components/PublicRestaurantCard';
 import { PublicRestaurantsWebMap } from '~/components/PublicRestaurantsWebMap';
 import { RestaurantsFloatingHeader } from '~/components/RestaurantsFloatingHeader';
 import { PublicRestaurantDetail } from '~/components/restaurantDetail/PublicRestaurantDetail';
+import { useTabBarHeight } from '~/hooks/useTabBarHeight';
 import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
@@ -64,6 +65,8 @@ const FALLBACK_SEARCH_H = 144;
 export default function RestaurantsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // 리스트 마지막 카드가 하단 탭바 뒤로 안 가리게 그만큼 하단 패딩을 더한다.
+  const tabBarH = useTabBarHeight();
 
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string | null>(null);
@@ -386,7 +389,8 @@ export default function RestaurantsScreen() {
         <BottomSheetFlatList
           data={items}
           keyExtractor={(it) => it.placeId}
-          contentContainerStyle={styles.listPad}
+          contentContainerStyle={[styles.listPad, { paddingBottom: tabBarH + 24 }]}
+          scrollIndicatorInsets={{ bottom: tabBarH }}
           ItemSeparatorComponent={() => <View style={styles.sep} />}
           renderItem={({ item }) => (
             <Pressable
@@ -521,7 +525,8 @@ const styles = StyleSheet.create({
   // detail 시트가 list 시트 위로 적층되도록 z 분리.
   listSheetContainer: { zIndex: 20 },
   detailSheetContainer: { zIndex: 30 },
-  listPad: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 },
+  // paddingBottom 은 런타임에 tabBarH + 24 로 주입 (위 contentContainerStyle).
+  listPad: { paddingHorizontal: 16, paddingTop: 4 },
   sep: { height: 8 },
   center: { paddingVertical: 48, alignItems: 'center' },
   footer: { paddingVertical: 16, alignItems: 'center' },
