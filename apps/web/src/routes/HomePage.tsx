@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useRestaurantRanking } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
@@ -174,44 +175,51 @@ const RankingRow = ({ item, sort }: RankingRowProps) => {
   const neuPct = 100 - posPct - negPct;
 
   return (
-    <Card>
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className="w-8 shrink-0 text-center text-lg font-bold tabular-nums text-muted-foreground">
-          {item.rank}
-        </div>
+    <Link
+      to={`/restaurants-v2/${item.placeId}`}
+      // 클릭 = 신버전 맛집 레이아웃의 상세로 진입. placeId 가 그대로 라우팅 키.
+      // Link 라 Cmd/Ctrl+클릭 새 탭·키보드 포커스가 그대로 동작한다.
+      className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <Card className="transition-colors hover:border-primary/40 hover:bg-accent/40">
+        <CardContent className="flex items-center gap-4 p-4">
+          <div className="w-8 shrink-0 text-center text-lg font-bold tabular-nums text-muted-foreground">
+            {item.rank}
+          </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <div className="min-w-0">
-              <div className="truncate text-base font-semibold">{item.name}</div>
-              {item.category && (
-                <div className="truncate text-xs text-muted-foreground">{item.category}</div>
-              )}
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold">{item.name}</div>
+                {item.category && (
+                  <div className="truncate text-xs text-muted-foreground">{item.category}</div>
+                )}
+              </div>
+              <div
+                className={cn(
+                  'shrink-0 text-lg font-bold tabular-nums',
+                  sort === 'positive' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+                )}
+              >
+                {Math.round(item.score * 100)}%
+              </div>
             </div>
-            <div
-              className={cn(
-                'shrink-0 text-lg font-bold tabular-nums',
-                sort === 'positive' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
-              )}
-            >
-              {Math.round(item.score * 100)}%
+
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="bg-emerald-500" style={{ width: `${posPct}%` }} />
+              <div className="bg-zinc-400" style={{ width: `${neuPct}%` }} />
+              <div className="bg-rose-500" style={{ width: `${negPct}%` }} />
+            </div>
+
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
+              <span className="text-emerald-600 dark:text-emerald-400">긍정 {item.positiveCount}</span>
+              <span>중립 {item.neutralCount}</span>
+              <span className="text-rose-600 dark:text-rose-400">부정 {item.negativeCount}</span>
+              <span>· 총 {item.totalMentions}</span>
             </div>
           </div>
-
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="bg-emerald-500" style={{ width: `${posPct}%` }} />
-            <div className="bg-zinc-400" style={{ width: `${neuPct}%` }} />
-            <div className="bg-rose-500" style={{ width: `${negPct}%` }} />
-          </div>
-
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
-            <span className="text-emerald-600 dark:text-emerald-400">긍정 {item.positiveCount}</span>
-            <span>중립 {item.neutralCount}</span>
-            <span className="text-rose-600 dark:text-rose-400">부정 {item.negativeCount}</span>
-            <span>· 총 {item.totalMentions}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 };
