@@ -17,7 +17,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import BottomSheet, {
   BottomSheetFlatList,
-  BottomSheetScrollView,
   type BottomSheetBackgroundProps,
 } from '@gorhom/bottom-sheet';
 import { useRestaurantsPublic, useTheme } from '@repo/shared';
@@ -472,7 +471,7 @@ export default function RestaurantsScreen() {
         >
           <PublicRestaurantDetail
             placeId={placeId}
-            Scroller={BottomSheetScrollView}
+            List={BottomSheetFlatList}
             onBack={handleBack}
           />
         </BottomSheet>
