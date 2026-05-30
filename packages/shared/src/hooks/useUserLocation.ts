@@ -49,6 +49,15 @@ export const useUserLocation = (): UserLocationState => {
       return;
     }
 
+    // 비-secure context(localhost 아닌 평문 HTTP — 예: http://192.168.x.x)에서는
+    // 브라우저가 geolocation 을 아예 차단한다. 권한 prompt 조차 안 뜨고
+    // getCurrentPosition 은 즉시 code 1 로 실패 → 'denied' 로 오분류될 수 있다.
+    // 권한과 무관한 환경 제약이므로 'unavailable' 로 단정 (사이트 설정으로 못 풂).
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setState({ status: 'unavailable', coords: null });
+      return;
+    }
+
     if (navigator.permissions?.query) {
       try {
         const result = await navigator.permissions.query({
@@ -94,6 +103,34 @@ export const useUserLocation = (): UserLocationState => {
     return () => {
       // unmount — 진행 중 콜백 무효화.
       attemptRef.current++;
+    };
+  }, [run]);
+
+  // 권한 상태가 외부(브라우저 사이트 설정)에서 바뀌면 자동 반영. 한 번 'denied'
+  // 가 되면 사이트가 다시 prompt 를 띄울 방법은 없고(브라우저 보안 정책), 사용자
+  // 가 설정에서 직접 풀어야 한다. 그 변화를 Permissions API 의 'change' 이벤트로
+  // 감지해서, 새로고침 없이 버튼이 살아나고 granted 면 좌표까지 자동 취득.
+  // Permissions API 미지원 환경은 스킵 (수동 refetch 만 가능).
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
+      return;
+    }
+    let permStatus: PermissionStatus | null = null;
+    let cancelled = false;
+    const onChange = () => run();
+    navigator.permissions
+      .query({ name: 'geolocation' as PermissionName })
+      .then((status) => {
+        if (cancelled) return;
+        permStatus = status;
+        permStatus.addEventListener('change', onChange);
+      })
+      .catch(() => {
+        // 일부 환경에서 query 가 throw — 무시.
+      });
+    return () => {
+      cancelled = true;
+      permStatus?.removeEventListener('change', onChange);
     };
   }, [run]);
 
