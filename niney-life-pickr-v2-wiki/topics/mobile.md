@@ -1,12 +1,14 @@
 ---
 topic: mobile
-last_compiled: 2026-05-28
-sources_count: 46
+last_compiled: 2026-05-31
+sources_count: 48
 status: active
-aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token]
+aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token, useTabBarHeight, tab-bar-inset, bottom-tab-bleed, awesome-gallery, react-native-awesome-gallery, lightbox-gallery, pinch-zoom, double-tap-zoom, swipe-to-close, virtualized-reviews, review-infinite-scroll, ReviewsControls, single-flatlist-detail, row-discriminated-union, hero-hide-on-tab, scrollToOffset-hero]
 ---
 
 # mobile — Expo + React Native 앱
+
+**2026-05-31 변경 흡수 — 맛집 상세를 단일 FlatList 스크롤 루트로 재구성(가상화 리뷰 무한 스크롤) + 리뷰 라이트박스 라이브러리 교체(핀치/더블탭/쓸어내려 닫기) + 하단 네이티브 탭바 인셋(`useTabBarHeight`).** 식당 상세([PublicRestaurantDetail](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx))의 스크롤 루트가 `ScrollView` → **단일 `FlatList`** 로 바뀌었다. 행을 `Row` discriminated union(`hero`/`tabbar`(sticky)/`tab`/`review-controls`/`review`/`review-loading`/`review-empty`/`review-footer`)으로 펼쳐, 리뷰 탭일 때만 카드가 행 단위로 나뉘어 **가상화 + `onEndReached` 무한 스크롤**(`useRestaurantPublicReviews` `fetchNextPage`)이 걸린다. 이전 `ReviewsTab.tsx`(자체 "더보기" 버튼)는 삭제되고, 필터/정렬 칩만 떼어낸 [ReviewsControls.tsx](../../apps/mobile/src/components/restaurantDetail/ReviewsControls.tsx) 가 신규. 시트 주입 prop 도 `Scroller`(BottomSheetScrollView) → **`List`**(BottomSheetFlatList) 로 교체. 탭을 누르면 hero 를 가린 위치(`heroH`)로 `scrollToOffset({ animated: true })` — hero 를 숨기고 콘텐츠를 최대 노출(`contentContainerStyle.minHeight = heroH + screenH` 로 짧은 탭에서도 스크롤 가능 보장). 리뷰 라이트박스([Lightbox.tsx](../../apps/mobile/src/components/restaurantDetail/Lightbox.tsx))는 직접 만든 FlatList 캐러셀을 버리고 **[react-native-awesome-gallery](../../apps/mobile/package.json)**(신규 의존성 `^0.4.3`)로 교체 — 페이징·핀치/더블탭 줌·줌 패닝·아래로 쓸어내려 닫기·탭 닫기를 한 번에 처리(줌↔페이징↔닫기 제스처 충돌 조율을 라이브러리에 위임), RN Modal 이 앱 루트와 분리된 네이티브 계층이라 내부 제스처가 동작하도록 `GestureHandlerRootView` 로 감쌌다. 하단 네이티브 탭바(`react-native-bottom-tabs`)가 scene 을 풀블리드로 깔고 인셋을 자동으로 안 잡아줘 마지막 콘텐츠가 탭바 뒤로 가리던 문제를, 신규 [useTabBarHeight.ts](../../apps/mobile/src/hooks/useTabBarHeight.ts)(native) / [.web.ts](../../apps/mobile/src/hooks/useTabBarHeight.web.ts)(web) 페어가 탭바 높이(홈 인디케이터 inset 포함)를 읽어 home/profile/restaurants/상세의 `contentContainerStyle.paddingBottom` 에 더해 해결([platform-ui-split](../concepts/platform-ui-split.md) 의 훅 레벨 인스턴스).
 
 **2026-05-28 변경 흡수 — 정산 도메인 모바일 통째 구현 + Universal Links / App Links + Expo Web 안정화 + iOS 백 버튼 라벨 fix.** 이전 컴파일까지 "정산은 모바일 미구현 — 웹만" 이었던 항목이 이번 라운드에 **풀 구현**으로 뒤집혔다. 식당 상세 → 정산하기 CTA → 4단계 위저드 → 결과 → 공유 토큰까지 RN 네이티브 + bottom-sheet 패턴으로 모두 들어왔다. 공유 링크(`https://nlpp.easypcb.co.kr/share/settlements/<token>`) 는 iOS Universal Links + Android App Links 로 설치 단말이면 앱이 직접 가로채고, 미설치 단말은 동일 URL 의 웹 SPA 가 폴백한다. Expo Web 쪽은 (1) native-only `react-native-bottom-tabs` 가 web 번들에 들어가 깨지던 회귀를 `tabs-layout.tsx` / `tabs-layout.web.tsx` 셔틀로 분리, (2) zustand 의 `import.meta.env` 가 `<script defer>` 컨텍스트에서 SyntaxError 내는 회귀를 babel 플러그인으로 치환, (3) 폰에서 LAN IP 로 Expo Web 에 붙으면 friendly API URL 도 같은 LAN IP 로 자동 추종(friendly CORS RFC1918 자동 허용과 짝)으로 모두 잡혔다. iOS Stack 의 자동 back title 이 `(tabs)` 같은 디렉터리명을 라벨로 노출하던 회귀는 루트 Stack 의 `headerBackButtonDisplayMode: 'minimal'` 로 글로벌 차단.
 
@@ -43,6 +45,7 @@ App config의 표시명은 `Life Pickr`, slug `life-pickr`, 번들 ID `com.niney
 - **TanStack Query 5.62**, **Zustand 5**, **react-native-reanimated 4.1.7**, **react-native-gesture-handler 2.28**
 - **react-native-bottom-tabs 1.2** + **@bottom-tabs/react-navigation 1.2** — 네이티브 탭바 (web 은 `@react-navigation/bottom-tabs` 로 대체, 아래 Expo Web 절 참조)
 - **@gorhom/bottom-sheet 5.2** — 정산 위저드·picker 시트류의 베이스
+- **react-native-awesome-gallery 0.4** — **(신규 2026-05-31)** 리뷰 사진 라이트박스. 핀치/더블탭 줌 + 줌 패닝 + 페이징 + 쓸어내려 닫기를 한 컴포넌트가 처리 (gesture-handler + reanimated 위에 빌드). 직접 만든 FlatList 캐러셀 대체.
 - **expo-image / expo-location / expo-image-picker / expo-glass-effect / expo-linear-gradient / expo-linking / expo-splash-screen** 등
 - **react-compiler 1.0** 활성화 (`experiments.reactCompiler: true` + `babel-plugin-react-compiler`)
 
@@ -122,10 +125,18 @@ app/
 
 ### 맛집 / 식당 상세 화면 [coverage: high — 4 sources]
 
-- **`(tabs)/restaurants.tsx`** — 풀스크린 WebView 지도 + `@gorhom/bottom-sheet` 2개 적층(list / detail). list 시트는 항상 mount, detail 시트는 `placeId` 가 truthy 일 때만 conditional mount.
+- **`(tabs)/restaurants.tsx`** — 풀스크린 WebView 지도 + `@gorhom/bottom-sheet` 2개 적층(list / detail). list 시트는 항상 mount, detail 시트는 `placeId` 가 truthy 일 때만 conditional mount. list 시트의 `BottomSheetFlatList` 와 detail 의 `PublicRestaurantDetail` 모두 `useTabBarHeight()` 만큼 하단 패딩.
 - **`restaurant/[placeId]/index.tsx`** — 식당 상세. `useLocalSearchParams<{ placeId: string }>()` + `PublicRestaurantDetail` 컨테이너. `Stack.Screen` 으로 `headerBackTitle: '뒤로'` 명시 — 부모 Stack 의 `headerShown:false` 를 여기서만 켠다.
-- **`src/components/restaurantDetail/`** — 공개 맛집 상세 in-sheet 트리. `HomeTab`/`InfoTab`/`PhotosTab`/`ReviewsTab` + `Lightbox` + `shared/MenuGrid`/`ReviewCard`. [MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) **수정** — 메뉴 리스트 상단에 "🧮 이 메뉴로 정산하기" Pressable CTA. 비로그인이면 `/(auth)/login` 으로, 로그인이면 `/restaurant/[placeId]/settle/new` 로 push (typedRoutes 가 nested dynamic 인식 못 할 때 위해 `as never` 캐스트).
+- **`src/components/restaurantDetail/PublicRestaurantDetail.tsx`** **[재구성 2026-05-31]** — 공개 맛집 상세 컨테이너. 스크롤 루트가 단일 `FlatList` (시트 모드는 `List=BottomSheetFlatList` 주입, deep-link route 는 기본 `FlatList`). 데이터 fetch(상세 + 인사이트 + **리뷰 페이지네이션**)는 여기 한 번. 행을 `Row` discriminated union 으로 펼쳐 `[hero, TabBar(sticky idx 1), ...콘텐츠]` 구성 — 비-리뷰 탭은 콘텐츠 통째로 한 행, **리뷰 탭만** controls + 카드 N행 + footer 로 펼쳐 가상화. `useRestaurantPublicReviews(detail ? placeId : null, { sentiment, sort }, reviewSeed)` 가 `detail.reviewsFirstPage` 를 seed 로 첫 페이지 즉시 + `onEndReached` → `fetchNextPage`. 탭 변경은 `scrollToOffset({ offset: heroH, animated: true })` 로 hero 숨김.
+- **`restaurantDetail/ReviewsControls.tsx`** **[신규]** — 리뷰 sentiment 필터(전체/긍정/부정, `detail.reviewCounts` 카운트) + 정렬(최근 방문순/별점 높은순) 칩. FlatList 의 `review-controls` 행으로 렌더. 폐기된 `ReviewsTab.tsx` 에서 칩 UI 만 분리.
+- **`restaurantDetail/Lightbox.tsx`** **[재작성 2026-05-31]** — `react-native-awesome-gallery` 기반 풀스크린 뷰어. 페이징·핀치/더블탭 줌(`doubleTapScale=2.5`/`maxScale=6`)·줌 패닝·`onSwipeToClose`·`onTap` 닫기. `GestureHandlerRootView` 로 Modal 래핑(제스처 동작 필수). `renderItem` 의 `setImageDimensions` 로 원본 픽셀 크기를 알려야 contain 배치·줌 경계 계산이 됨.
+- **`restaurantDetail/shared/ReviewCard.tsx`** — 리뷰 카드(만족도 칩 + 본문 + 가로 스크롤 이미지 → Lightbox + 분석 세부). `React.memo` — 필터/정렬 칩 변경이나 무한 스크롤 페이지 추가로 리스트가 새로 만들어져도 entry reference 동일이면 re-render 차단.
+- **`src/components/restaurantDetail/`** 나머지 — `HomeTab`/`InfoTab`/`PhotosTab` + `shared/MenuGrid`. [MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — 메뉴 리스트 상단에 "🧮 이 메뉴로 정산하기" Pressable CTA. 비로그인이면 `/(auth)/login` 으로, 로그인이면 `/restaurant/[placeId]/settle/new` 로 push (typedRoutes 가 nested dynamic 인식 못 할 때 위해 `as never` 캐스트).
 - **`src/components/MenuRankingCard.tsx`** — (admin 한정) `useMenuRanking(placeId)` 결과로 메뉴 순위 SentimentBar.
+
+### `useTabBarHeight` — 하단 탭바 인셋 [신규 2026-05-31]
+
+`react-native-bottom-tabs` 는 translucent 여부와 무관하게 scene 을 풀블리드로 깔고 인셋을 직접 넣어야 한다 — 그래서 스크롤 마지막 콘텐츠가 탭바(+홈 인디케이터) 뒤로 가렸다. [useTabBarHeight.ts](../../apps/mobile/src/hooks/useTabBarHeight.ts)(native, `react-native-bottom-tabs` 의 `BottomTabBarHeightContext` 를 직접 읽음 — `useBottomTabBarHeight()` 는 탭 밖 deep-link route 에서 throw) / [.web.ts](../../apps/mobile/src/hooks/useTabBarHeight.web.ts)(web, `@react-navigation/bottom-tabs` 의 동명 context — web 탭바는 JS 구현이라) 페어가 탭바 높이를 반환. 폴백은 `?? ` 가 아니라 `||` — 탭 밖(`undefined`) / 측정 전 첫 프레임(Provider 초기값 `0`) 둘 다 `useSafeAreaInsets().bottom` 을 바닥값으로 잡아 첫 프레임부터 콘텐츠가 안 가린다(탭바 높이는 항상 bottom inset 을 포함하므로 `||` 가 under-pad 를 만들지 않음). 호출처: `(tabs)/home`·`(tabs)/profile`·`(tabs)/restaurants`·`PublicRestaurantDetail` 의 `contentContainerStyle.paddingBottom` + `scrollIndicatorInsets.bottom`.
 
 ### 정산 — Mobile 구현 [coverage: high — 16 sources]
 
@@ -259,11 +270,15 @@ expo-router 파일 트리가 곧 라우트다.
 - **shared `Comp.tsx` 셔틀의 native 오픽** — `Button.tsx` 처럼 `.web.tsx` 를 재export 하는 셔틀이 있을 때 quad (`.types.ts` + `.tsx` + `.web.tsx` + `.native.tsx`) 패턴을 지키지 않으면 native 에서도 셔틀(=web 구현) 이 선택돼 `h1` Invariant.
 - **루트 layout 이 `bootstrapApi` 끝까지 `null` 반환** — `expo-splash-screen` 의 hide 타이밍이 ready 시점과 어긋나면 잠깐 흰 화면. 현재 명시적 `SplashScreen.hideAsync` 없음.
 - **`noUncheckedIndexedAccess: true`** — 배열/객체 인덱스가 `T | undefined`.
+- **`react-native-awesome-gallery` 는 RN Modal 안에서 `GestureHandlerRootView` 필수** — Modal 은 앱 루트와 분리된 네이티브 계층이라 루트의 GestureHandlerRootView 가 미치지 않는다. 라이트박스가 Modal 안에서 핀치/스와이프가 먹지 않으면 십중팔구 이 래핑 누락. 또 `renderItem` 에서 `setImageDimensions({ width, height })` (이미지 `onLoad`)를 호출 안 하면 갤러리가 contain 배치·줌 경계를 못 계산해 이미지가 안 보이거나 줌이 깨진다.
+- **상세 FlatList 의 `contentContainerStyle.minHeight = heroH + screenH`** — 짧은 탭(Info 등)으로 바뀌어도 hero 를 가린 위치까지 스크롤 가능 + 스크롤이 위로 클램프되지 않아 hero 숨김 상태 유지. 이 값을 빼면 짧은 탭에서 `scrollToOffset(heroH)` 가 바닥에 막혀 탭 전환 시 hero 가 다시 노출된다. `heroH` 는 hero `onLayout` 으로 측정 — 측정 전(0) 엔 snap/scroll 이 no-op 이라 첫 프레임 의존 금지.
+- **`useTabBarHeight` 폴백은 `||` (not `??`)** — 탭 밖 deep-link route 면 context 가 `undefined`, 탭 안이라도 측정 전 첫 프레임엔 Provider 초기값 `0` 이 내려온다. 둘 다 홈 인디케이터 inset 을 바닥값으로 잡아야 첫 프레임부터 안 가리므로 `tabBarHeight || insets.bottom`. `??` 로 바꾸면 `0` 을 유효값으로 받아 첫 프레임에 패딩이 0 이 된다. 탭바 높이는 항상 bottom inset 을 포함하므로 `||` 가 under-pad 를 만들지 않는다.
+- **`useBottomTabBarHeight()` 직접 호출 금지** — 탭 네비게이터 밖(`restaurant/[placeId]` 같은 deep-link route)에서 throw 한다. `useTabBarHeight` 는 그래서 `BottomTabBarHeightContext` 를 `useContext` 로 직접 읽는다.
 
-## Sources [coverage: high — 46 sources]
+## Sources [coverage: high — 48 sources]
 
 설정·빌드:
-- [apps/mobile/package.json](../../apps/mobile/package.json)
+- [apps/mobile/package.json](../../apps/mobile/package.json) — *modified: react-native-awesome-gallery ^0.4.3 추가*
 - [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts) — *modified: associatedDomains, intentFilters, expo-image-picker plugin, EXPO_PUBLIC_WEB_HOST*
 - [apps/mobile/metro.config.js](../../apps/mobile/metro.config.js)
 - [apps/mobile/babel.config.js](../../apps/mobile/babel.config.js) — *modified: replace-import-meta inline plugin*
@@ -280,9 +295,9 @@ expo-router 파일 트리가 곧 라우트다.
 - [apps/mobile/app/(auth)/_layout.tsx](../../apps/mobile/app/(auth)/_layout.tsx)
 - [apps/mobile/app/(auth)/login.tsx](../../apps/mobile/app/(auth)/login.tsx)
 - [apps/mobile/app/(tabs)/_layout.tsx](../../apps/mobile/app/(tabs)/_layout.tsx) — *modified: shim 으로 변환*
-- [apps/mobile/app/(tabs)/home.tsx](../../apps/mobile/app/(tabs)/home.tsx)
-- [apps/mobile/app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx)
-- [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) — *modified: 정산 이력 / 내 단골 메뉴*
+- [apps/mobile/app/(tabs)/home.tsx](../../apps/mobile/app/(tabs)/home.tsx) — *modified: useTabBarHeight 하단 패딩*
+- [apps/mobile/app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx) — *modified: useTabBarHeight + List=BottomSheetFlatList 주입*
+- [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) — *modified: 정산 이력 / 내 단골 메뉴 + useTabBarHeight*
 - [apps/mobile/app/restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx) — *RENAMED (was restaurant/[placeId].tsx)*
 - [apps/mobile/app/restaurant/[placeId]/settle/new.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx) — *NEW*
 - [apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx) — *NEW*
@@ -295,8 +310,14 @@ expo-router 파일 트리가 곧 라우트다.
 컴포넌트·라이브러리:
 - [apps/mobile/src/components/tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx) — *NEW*
 - [apps/mobile/src/components/tabs-layout.web.tsx](../../apps/mobile/src/components/tabs-layout.web.tsx) — *NEW (Lucide inline SVG)*
+- [apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx) — *modified: 단일 FlatList 스크롤 루트 + Row union + 가상화 리뷰 무한 스크롤 + List prop + scrollToOffset hero 숨김*
+- [apps/mobile/src/components/restaurantDetail/ReviewsControls.tsx](../../apps/mobile/src/components/restaurantDetail/ReviewsControls.tsx) — *NEW (필터/정렬 칩 — ReviewsTab 에서 분리)*
+- [apps/mobile/src/components/restaurantDetail/Lightbox.tsx](../../apps/mobile/src/components/restaurantDetail/Lightbox.tsx) — *modified: react-native-awesome-gallery 재작성 (핀치/더블탭/쓸어내려 닫기)*
+- [apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) — *modified: memo 주석 (무한 스크롤)*
 - [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — *modified: 정산하기 CTA*
 - [apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx)
+- [apps/mobile/src/hooks/useTabBarHeight.ts](../../apps/mobile/src/hooks/useTabBarHeight.ts) — *NEW (native — react-native-bottom-tabs context)*
+- [apps/mobile/src/hooks/useTabBarHeight.web.ts](../../apps/mobile/src/hooks/useTabBarHeight.web.ts) — *NEW (web — @react-navigation/bottom-tabs context)*
 - [apps/mobile/src/components/MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)
 - [apps/mobile/src/components/settlement/SettlementWizard.tsx](../../apps/mobile/src/components/settlement/SettlementWizard.tsx) — *NEW*
 - [apps/mobile/src/components/settlement/Step1Participants.tsx](../../apps/mobile/src/components/settlement/Step1Participants.tsx) — *NEW*

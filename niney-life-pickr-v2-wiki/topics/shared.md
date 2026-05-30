@@ -1,12 +1,14 @@
 ---
 topic: shared
-last_compiled: 2026-05-28
+last_compiled: 2026-05-31
 sources_count: 52
 status: active
 aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-05-31 변경 흡수 — `useUserLocation` 권한/환경 판정 강화**: ([useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts)) (1) **비-secure context 단정** — 평문 HTTP(`http://192.168.x.x` 등, localhost 제외)에서는 브라우저가 geolocation 을 권한 prompt 조차 없이 즉시 `code 1` 로 막아 `denied` 로 오분류될 수 있다. `window.isSecureContext === false` 면 시도 전에 `unavailable` 로 단정(사이트 설정으로 못 푸는 환경 제약 — `denied` 와 구분). (2) **Permissions API `'change'` 구독** — 한 번 `denied` 가 되면 사이트가 다시 prompt 를 띄울 방법이 없고 사용자가 브라우저 설정에서 직접 풀어야 하는데, 그 변화를 `navigator.permissions.query({name:'geolocation'})` 의 `change` 이벤트로 감지해 새로고침 없이 자동 `refetch` — granted 면 좌표까지 자동 취득(미지원 환경은 스킵, 수동 refetch 만). 컨슈머([web](web.md) 의 `PublicRestaurantsMap` "내 위치" 버튼)는 이 덕에 "설정 풀면 버튼이 저절로 살아남" UX 를 공짜로 얻는다. 상태 enum(`idle|pending|granted|denied|unavailable`) + `refetch()` 시그니처는 불변.
 
 **2026-05-28 변경 흡수 — 정산 N차(rounds) + 서버 임시저장 자동 동기화 + 스토리지 어댑터 주입**:
 (1) `settlementDraftStore` 가 평면 draft → `rounds[]` 배열 모델로 리팩토링(차수 N개 + 마스터 참여자 1 명단), persist 버전 v1 → v4 마이그레이션
@@ -761,7 +763,7 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/hooks/useAnalytics.ts](../../packages/shared/src/hooks/useAnalytics.ts)
 - [packages/shared/src/hooks/useAi.ts](../../packages/shared/src/hooks/useAi.ts)
 - [packages/shared/src/hooks/useSettingsMap.ts](../../packages/shared/src/hooks/useSettingsMap.ts)
-- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts)
+- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *modified: insecure-context 단정 + Permissions 'change' 구독*
 - [packages/shared/src/hooks/useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts)
 - [packages/shared/src/hooks/useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts)
 - [packages/shared/src/hooks/useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts)

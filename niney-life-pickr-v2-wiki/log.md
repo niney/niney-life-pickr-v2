@@ -1,5 +1,24 @@
 # Wiki Compile Log
 
+## 2026-05-31 (15th compile)
+
+**Topics updated:** mobile, web, shared, friendly, map, project-overview
+**New topics:** none
+**Concepts updated:** platform-ui-split (useTabBarHeight.ts/.web.ts 훅 페어 인스턴스)
+**New concepts:** none
+
+**Sources scanned:** ~505 (기존 503 + 신규 3 − 삭제 1 + 다수 수정)
+**Sources changed:** 18 파일 — 10 커밋 (위키 커밋 `c4d77d7` 이후 — `git diff c4d77d7 HEAD`)
+
+**Reason**: 14차(정산 통째 재설계) 컴파일 이후의 UX·안정성 정비 라운드. 신규 도메인/모듈/테이블/스키마 없음 — 모두 기존 토픽 흡수. 핵심 줄기 4개:
+
+1. **앱 맛집 상세 재구성 (mobile)** — `PublicRestaurantDetail` 의 스크롤 루트가 `ScrollView` → 단일 `FlatList`. 행을 `Row` discriminated union(`hero`/`tabbar`(sticky)/`tab`/`review-controls`/`review`/`review-loading`/`review-empty`/`review-footer`)으로 펼쳐 리뷰 탭만 카드 행 단위 가상화 + `onEndReached`→`fetchNextPage` 무한 스크롤. `ReviewsTab.tsx`(자체 더보기 버튼) 삭제 → 필터/정렬 칩만 `ReviewsControls.tsx` 로 분리. 시트 주입 prop `Scroller`(ScrollView)→`List`(FlatList). 탭 누르면 `scrollToOffset({offset: heroH, animated:true})` 로 hero 숨김 + `contentContainerStyle.minHeight = heroH+screenH`.
+2. **앱 리뷰 라이트박스 라이브러리 교체 (mobile)** — 직접 만든 FlatList 캐러셀 → `react-native-awesome-gallery@^0.4.3`(신규 의존성). 페이징·핀치/더블탭 줌·줌 패닝·아래로 쓸어내려 닫기·탭 닫기를 한 번에. RN Modal 이 별도 네이티브 계층이라 `GestureHandlerRootView` 로 래핑 + `setImageDimensions`(onLoad) 필수.
+3. **앱 하단 탭바 인셋 (mobile)** — `react-native-bottom-tabs` 가 scene 풀블리드라 마지막 콘텐츠가 탭바 뒤로 가리던 문제. `useTabBarHeight.ts`(native, `BottomTabBarHeightContext` 직접 — `useBottomTabBarHeight()` 는 탭 밖 throw) / `.web.ts`(web, `@react-navigation/bottom-tabs` context) 페어 신규. 폴백 `||`(not `??`) — 측정 전 0 / 탭 밖 undefined 둘 다 `insets.bottom` 바닥값. home/profile/restaurants/상세 paddingBottom 주입. → `platform-ui-split` 의 가장 얇은 훅 인스턴스(import 한 줄만 다름).
+4. **웹·shared·friendly 정비** — web: 홈 랭킹 행 `<Link to="/restaurants-v2/:placeId">`, 상세 라이트박스 `createPortal(document.body)`(3-컬럼 sticky stacking context 에 `z-50` 갇혀 지도 컬럼에 잘리던 회귀 fix) + pointerdown 좌표 10px 비교로 backdrop 클릭 vs 스와이프 구분, "내 위치" 버튼 denied/insecure 분기(비활성 대신 callout + refetch). shared: `useUserLocation` — `window.isSecureContext === false`(평문 HTTP) 면 `unavailable` 단정(denied 오분류 회피) + Permissions API `'change'` 구독으로 사이트 설정 변경 자동 반영. friendly: dev CORS 화이트리스트 폐기 → 모든 origin 반사(`cb(null,true)`), 비-LAN 만 origin당 1회 warn — 이전 `cb(Error)` 거부가 로그인 preflight 깨던 회귀 해소(prod 는 env list 그대로); 공개 리뷰 `sort=recent` 가 오래된순으로 나오던 `assemblePublicReviews` 정렬 `desc`→`asc` fix; `contentHashOf` NUL(0x00) 구분자 → 유니코드 이스케이프(해시값 불변).
+
+**Notes:** 신규 컨셉 0개 — 라이트박스 portal stacking-context 탈출 / geolocation permission-change 구독은 단일 토픽에 닫혀 3+ 토픽 임계 미달. `useTabBarHeight` 페어는 `platform-ui-split` 의 새 인스턴스로 흡수(기존 `useUserLocation`·`tabs-layout` 셔틀의 훅/컴포넌트 연장선). `map` 은 `MyLocationButton` 이 그 소스 파일(`PublicRestaurantsMap.tsx`)에 있어 light note 만 — 렌더 코어 무관. api-contract 변경 0 — `useRestaurantPublicReviews`/리뷰 페이지네이션 스키마는 12차에서 이미 존재. 부수: project-overview 의 stale "Expo SDK 52 / RN 0.76" → "SDK 54 / RN 0.81" 교정.
+
 ## 2026-05-28 (14th compile)
 
 **Topics updated:** settlement, friendly, api-contract, shared, web, mobile, ai, project-overview

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_compiled": "2026-05-28",
+  "last_compiled": "2026-05-31",
   "mode": "codebase",
   "topics": [
     "project-overview",
@@ -65,6 +65,11 @@
     "apps/mobile/app/settlement/",
     "apps/mobile/app/share/settlements/[token].tsx",
     "apps/mobile/src/components/settlement/",
+    "apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx",
+    "apps/mobile/src/components/restaurantDetail/ReviewsControls.tsx",
+    "apps/mobile/src/components/restaurantDetail/Lightbox.tsx",
+    "apps/mobile/src/hooks/useTabBarHeight.ts",
+    "apps/mobile/src/hooks/useTabBarHeight.web.ts",
     "apps/mobile/src/components/tabs-layout.tsx",
     "apps/mobile/src/components/tabs-layout.web.tsx",
     "apps/mobile/src/lib/settlementPrefsStore.ts",
@@ -76,5 +81,5 @@
     "packages/utils/",
     "packages/config/"
   ],
-  "total_sources_scanned": 503
+  "total_sources_scanned": 505
 }

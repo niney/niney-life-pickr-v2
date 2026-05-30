@@ -1,12 +1,14 @@
 ---
 topic: web
-last_compiled: 2026-05-28
+last_compiled: 2026-05-31
 sources_count: 93
 status: active
-aliases: [vite, react, web-app, frontend-web, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle]
+aliases: [vite, react, web-app, frontend-web, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http]
 ---
 
 # web — Vite + React 웹 앱
+
+**2026-05-31 변경 흡수 — 홈 랭킹 행 클릭 → 상세 진입 + 상세 리뷰 라이트박스 잘림(portal) / 바깥 클릭 닫기 + "내 위치" 버튼 권한·HTTP 막다른 길 해소.** (1) `HomePage` 의 `RankingRow` 가 `<Link to="/restaurants-v2/:placeId">` 로 감싸져 랭킹 한 줄을 누르면 신버전 맛집 레이아웃 상세로 진입 (Link 라 Cmd/Ctrl+클릭 새 탭·키보드 포커스 유지, hover 배경 강조). (2) 공개 맛집 상세 리뷰 라이트박스([detail/Lightbox.tsx](../../apps/web/src/components/restaurant/detail/Lightbox.tsx))가 `createPortal(…, document.body)` 로 빠졌다 — 데스크톱 상세는 `[리스트|상세|지도]` 3-컬럼이고 각 컬럼이 `position: sticky` 라 저마다 stacking context 를 만들어, `z-50` 이 상세 컬럼 안에서만 유효해 DOM 뒤의 지도 컬럼이 이미지 오른쪽을 덮어 잘렸다. body 로 빼면 컬럼 context 밖이라 전체 화면을 정상으로 덮는다. 더해 어두운 backdrop 클릭으로도 닫기 — `pointerdown` 좌표를 기록해 `click` 시 이동거리 10px 초과면 스와이프/드래그로 보고 닫지 않아(캐러셀 스와이프 끝의 click 으로 의도치 않게 닫히는 것 방지), 이미지·버튼 클릭도 제외. (3) `PublicRestaurantsMap` 의 "내 위치" 버튼([PublicRestaurantsMap.tsx](../../apps/web/src/components/restaurant/PublicRestaurantsMap.tsx))이 `denied`(권한 차단)와 `unavailable` 중 평문 HTTP(`insecure`)를 구분 — 둘 다 비활성 대신 클릭 시 해제 방법 callout 을 띄우고, denied 는 refetch 도 같이 걸어 사용자가 이미 설정을 풀어뒀으면 즉시 재시도(설정을 푸는 즉시 `useUserLocation` 의 permission `change` 구독이 자동 반영해 클릭조차 안 해도 버튼이 살아남). 손쓸 수 없는 진짜 미지원 `unavailable` 만 비활성 유지. 권한/HTTP 판정 로직 자체는 [shared.md](shared.md) 의 `useUserLocation`.
 
 **2026-05-28 변경 흡수** — 정산 라우트가 **N차(차수) 모델**로 통째 리라이트:
 `Step2Source.tsx`/`ParticipantEditDialog.tsx` 삭제 + `Step2Rounds.tsx` 신규 + 차수별
@@ -492,6 +494,30 @@ SettlementShareDialog 자동 POST 멱등)는 그대로 유지. 이번 라운드 
   1페이지 상단에 "이어 입력" 행으로 노출. 저장 완료(`useCreateSettlement`) 시
   `fromDraftId` 를 같이 보내 서버가 같은 트랜잭션에서 draft 도 정리한다.
 
+- **(2026-05-31) 홈 랭킹 행 = `<Link>`, `<button>`/`onClick` 아님** — `RankingRow` 를
+  `<Link to="/restaurants-v2/:placeId">` 로 감쌌다. `onClick` + `navigate` 대신 Link 라
+  Cmd/Ctrl+클릭 새 탭·미들 클릭·키보드 포커스·우클릭 "새 탭에서 열기" 가 공짜로 동작.
+  `placeId` 가 그대로 라우팅 키. 목적지는 `/restaurants` 가 아니라 신버전 `/restaurants-v2`
+  레이아웃 — 홈에서 바로 시트형 상세로 들어간다.
+- **(2026-05-31) 상세 라이트박스 = `createPortal(document.body)`** — 데스크톱 공개 상세는
+  `[리스트|상세|지도]` 3-컬럼, 각 컬럼이 `position: sticky` 라 **저마다 stacking context** 를
+  만든다. 라이트박스를 상세 컬럼 안에서 렌더하면 `z-50` 이 그 컬럼 context 안에서만 유효해,
+  DOM 상 뒤에 오는 지도 컬럼(같은 `z:auto`)이 이미지 오른쪽을 덮어 잘렸다. `createPortal` 로
+  `document.body` 에 빼면 컬럼 context 밖이라 전체 화면을 정상으로 덮는다. (기존 Gotchas 의
+  "sticky containing block trap" 이 라이트박스에서 실제 회귀한 사례 + 그 해법.)
+- **(2026-05-31) 라이트박스 backdrop 클릭 닫기 = pointerdown 좌표 비교** — X 버튼 외 보조
+  닫기로 어두운 영역 클릭을 추가하되, 캐러셀 스와이프 끝에 발생하는 `click` 으로 의도치 않게
+  닫히는 걸 막아야 한다. `pointerdown` 시 좌표를 기록하고 `click` 에서 이동거리가 10px 초과면
+  스와이프/드래그로 보고 무시 (`Math.hypot`). 이미지(`IMG`)·버튼 클릭도 제외.
+- **(2026-05-31) "내 위치" 버튼 = denied/insecure 는 비활성 대신 안내 callout** — 이전엔
+  `denied`·`unavailable` 을 묶어 버튼을 disabled(클릭·title·재시도 전부 막힘) 했다. 지금은
+  (a) `denied`(권한 차단) — 사용자가 브라우저 사이트 설정에서 직접 풀 수 있으므로 비활성하지
+  않고 클릭 시 해제 방법 callout + `onClick`(refetch) 동시 — 이미 풀어뒀으면 즉시 재시도,
+  (b) `insecure`(평문 HTTP — `window.isSecureContext === false`, 주로 dev/LAN 접속) — 앱에서
+  못 푸니 callout 만(재시도 무의미), (c) 그 외 `unavailable`(timeout 등) — 비활성 대신 재시도
+  여지, (d) `pending` 만 비활성. callout 은 바깥 클릭(`document mousedown` — 외부 시스템
+  동기화라 useEffect 적합)으로 닫는다. 판정 로직은 [shared](shared.md) 의 `useUserLocation`.
+
 ### 기존 결정 유지
 
 React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cache merge,
@@ -562,6 +588,19 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - **`AdminAiKeysPage` 모델 미리보기 = 저장 전 키 사용** — `usePreviewModels` 가
   사용자가 입력한 키를 그대로 백엔드로 보내 라이브 fetch. 잘못된 키면 에러 응답이
   와 노출. 키가 비어 있으면 버튼 disabled — 빈 키로 호출하지 않도록.
+- **(2026-05-31) 라이트박스를 상세 컬럼 안에 두면 다시 잘린다** — `detail/Lightbox.tsx`
+  는 `createPortal(document.body)` 가 필수. sticky 3-컬럼 레이아웃에서 컬럼별 stacking
+  context 때문에 `z-50` 이 컬럼 안에 갇혀 지도 컬럼이 위를 덮는다. portal 을 떼거나 상세
+  컬럼 내부 래퍼로 되돌리면 회귀. (Radix Dialog 등은 자체 portal 이 있어 무관하지만 이
+  라이트박스는 순수 div 라 명시 portal 필요.)
+- **(2026-05-31) 라이트박스 backdrop `onClick` 은 스와이프와 구분해야** — `pointerDownRef`
+  좌표 비교(10px) 를 빼면 캐러셀을 스와이프하다 손을 뗀 위치에서 발생하는 click 으로
+  라이트박스가 닫힌다. 이미지/버튼 타깃 제외도 같이 유지.
+- **(2026-05-31) "내 위치" — `unavailable` 을 통째로 비활성하면 안 됨** — `unavailable` 은
+  비-secure context(평문 HTTP)·미지원뿐 아니라 timeout/일시 실패도 포함한다. 통째 disabled
+  하면 title 툴팁도 안 뜨고 재시도도 막힌다. 평문 HTTP 만 `window.isSecureContext === false`
+  로 따로 분기해 안내, 나머지는 재시도 여지를 남긴다. denied 도 비활성하면 사용자가 설정을
+  푼 뒤 다시 시도할 길이 막히므로 callout + refetch.
 - **이전 라운드 함정들 유지** — sticky containing block trap, `overflow-y:auto`
   안 sticky 동작, 모바일 body 스크롤 + `100dvh`, 한글 IME 미완성 조합, Pretendard
   CDN 의존, ImgWithFallback src 변경 reset, OL apiKey 변경만 재생성, Lightbox
@@ -580,7 +619,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/.env.example](../../apps/web/.env.example)
 - [apps/web/src/main.tsx](../../apps/web/src/main.tsx)
 - [apps/web/src/App.tsx](../../apps/web/src/App.tsx)
-- [apps/web/src/routes/HomePage.tsx](../../apps/web/src/routes/HomePage.tsx)
+- [apps/web/src/routes/HomePage.tsx](../../apps/web/src/routes/HomePage.tsx) — *modified: 랭킹 행 → Link /restaurants-v2/:placeId*
 - [apps/web/src/routes/LoginPage.tsx](../../apps/web/src/routes/LoginPage.tsx)
 - [apps/web/src/routes/RestaurantsPage.tsx](../../apps/web/src/routes/RestaurantsPage.tsx)
 - [apps/web/src/routes/RestaurantDetailRoute.tsx](../../apps/web/src/routes/RestaurantDetailRoute.tsx)
@@ -622,7 +661,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/src/components/restaurant/VWorldMap.tsx](../../apps/web/src/components/restaurant/VWorldMap.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantList.tsx](../../apps/web/src/components/restaurant/PublicRestaurantList.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantCard.tsx](../../apps/web/src/components/restaurant/PublicRestaurantCard.tsx)
-- [apps/web/src/components/restaurant/PublicRestaurantsMap.tsx](../../apps/web/src/components/restaurant/PublicRestaurantsMap.tsx)
+- [apps/web/src/components/restaurant/PublicRestaurantsMap.tsx](../../apps/web/src/components/restaurant/PublicRestaurantsMap.tsx) — *modified: MyLocationButton denied/insecure 안내 callout + 바깥 클릭 닫기*
 - [apps/web/src/components/restaurant/CanonicalMergePanel.tsx](../../apps/web/src/components/restaurant/CanonicalMergePanel.tsx)
 - [apps/web/src/components/restaurant/MergeProposalQueue.tsx](../../apps/web/src/components/restaurant/MergeProposalQueue.tsx)
 - [apps/web/src/components/restaurant/ReanalyzeFailedBadge.tsx](../../apps/web/src/components/restaurant/ReanalyzeFailedBadge.tsx)
@@ -631,7 +670,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/src/components/restaurant/detail/MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx)
 - [apps/web/src/components/restaurant/detail/ReviewsTab.tsx](../../apps/web/src/components/restaurant/detail/ReviewsTab.tsx)
 - [apps/web/src/components/restaurant/detail/PhotosTab.tsx](../../apps/web/src/components/restaurant/detail/PhotosTab.tsx)
-- [apps/web/src/components/restaurant/detail/Lightbox.tsx](../../apps/web/src/components/restaurant/detail/Lightbox.tsx)
+- [apps/web/src/components/restaurant/detail/Lightbox.tsx](../../apps/web/src/components/restaurant/detail/Lightbox.tsx) — *modified: createPortal(body) 잘림 fix + backdrop 클릭 닫기*
 - [apps/web/src/components/restaurant/detail/InfoTab.tsx](../../apps/web/src/components/restaurant/detail/InfoTab.tsx)
 - [apps/web/src/components/restaurant/detail/shared.tsx](../../apps/web/src/components/restaurant/detail/shared.tsx)
 - [apps/web/src/components/restaurant/detail/tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts)
