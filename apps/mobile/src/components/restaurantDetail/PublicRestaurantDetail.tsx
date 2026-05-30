@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -47,25 +48,16 @@ export const PublicRestaurantDetail = ({
   onBack,
 }: Props) => {
   const theme = useTheme();
+  const { height: screenH } = useWindowDimensions();
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
   const [tab, setTab] = useState<TabKey>('home');
   const [heroH, setHeroH] = useState(0);
   const scrollRef = useRef<ScrollView | null>(null);
-  // onScroll 콜백 안에서 현재 scrollY 추적 — 탭 전환 시 'hero 가려진' 상태
-  // 였는지 판정해서 그 위치를 유지 (붙은 상태 유지) 하기 위함.
-  const scrollYRef = useRef(0);
 
   const handleHeroLayout = useCallback((e: LayoutChangeEvent) => {
     setHeroH(e.nativeEvent.layout.height);
   }, []);
-
-  const handleScroll = useCallback(
-    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
-      scrollYRef.current = e.nativeEvent.contentOffset.y;
-    },
-    [],
-  );
 
   // placeId 가 바뀌면 처음 탭(home) 으로 리셋. 같은 화면 안에서 일어날 일은
   // 거의 없지만 안전망.
@@ -80,12 +72,13 @@ export const PublicRestaurantDetail = ({
   const handleChangeTab = useCallback(
     (next: TabKey) => {
       setTab(next);
-      // hero 가 가려진 상태(scrollY >= heroH)였으면 새 탭에서도 그 위치 유지
-      // — TabBar 가 헤더 바닥에 sticky 인 상태로 시작. 그렇지 않으면 top.
-      // 새 콘텐츠 마운트 후 scrollTo 가 적용되도록 다음 프레임에 호출.
-      const targetY = scrollYRef.current >= heroH && heroH > 0 ? heroH : 0;
+      // 탭을 누르면 hero 를 가린 위치(heroH)로 부드럽게 스크롤 → 콘텐츠를 최대로
+      // 노출. hero 가 보이던 상태(top)면 스르륵 올라가고, 이미 가린 상태면 이동
+      // 거리가 0 이라 모션 없이 그대로. 위로 스크롤하면 hero 는 다시 보인다.
+      // 아래 콘텐츠 래퍼의 minHeight 가 짧은 탭에서도 heroH 까지 스크롤 가능 +
+      // 위로 클램프되지 않게 보장. 새 콘텐츠 마운트 뒤 적용되도록 다음 프레임에.
       requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ y: targetY, animated: false });
+        scrollRef.current?.scrollTo({ y: heroH, animated: true });
       });
     },
     [heroH],
@@ -144,8 +137,6 @@ export const PublicRestaurantDetail = ({
       snapToOffsets={snapOffsets}
       snapToEnd={false}
       decelerationRate="fast"
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
     >
       {hero ? (
         <Pressable
@@ -180,25 +171,30 @@ export const PublicRestaurantDetail = ({
 
       <TabBar active={tab} onChange={handleChangeTab} />
 
-      {tab === 'home' && (
-        <HomeTab
-          detail={detail.data}
-          insights={insights.data}
-          insightsLoading={insights.isLoading}
-          onChangeTab={handleChangeTab}
-        />
-      )}
-      {tab === 'insights' && (
-        <InsightsTab
-          detail={detail.data}
-          insights={insights.data}
-          insightsLoading={insights.isLoading}
-        />
-      )}
-      {tab === 'menu' && <MenuTab detail={detail.data} insights={insights.data} />}
-      {tab === 'reviews' && <ReviewsTab placeId={placeId} detail={detail.data} />}
-      {tab === 'photos' && <PhotosTab detail={detail.data} />}
-      {tab === 'info' && <InfoTab detail={detail.data} />}
+      {/* 콘텐츠 영역을 항상 화면 높이 이상으로 보장 → 짧은 탭으로 바뀌어도
+          heroH 까지 스크롤 가능하고, 스크롤이 위로 클램프되지 않아 hero 를 가린
+          상태가 유지된다. 위로 스크롤하면 hero 는 다시 보인다. */}
+      <View style={{ minHeight: screenH }}>
+        {tab === 'home' && (
+          <HomeTab
+            detail={detail.data}
+            insights={insights.data}
+            insightsLoading={insights.isLoading}
+            onChangeTab={handleChangeTab}
+          />
+        )}
+        {tab === 'insights' && (
+          <InsightsTab
+            detail={detail.data}
+            insights={insights.data}
+            insightsLoading={insights.isLoading}
+          />
+        )}
+        {tab === 'menu' && <MenuTab detail={detail.data} insights={insights.data} />}
+        {tab === 'reviews' && <ReviewsTab placeId={placeId} detail={detail.data} />}
+        {tab === 'photos' && <PhotosTab detail={detail.data} />}
+        {tab === 'info' && <InfoTab detail={detail.data} />}
+      </View>
     </Scroller>
   );
 
