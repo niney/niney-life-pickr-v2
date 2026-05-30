@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 
@@ -26,6 +27,9 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
   const ignoreScrollRef = useRef(false);
   // 첫 effect 실행 여부. 첫 mount 는 instant jump, 이후는 smooth.
   const firstRunRef = useRef(true);
+  // 빈 영역 '클릭'으로 닫기 위해 pointerdown 좌표를 기록 — click 시점에 이동
+  // 거리를 비교해 스와이프/드래그와 진짜 클릭을 구분한다.
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
 
   // index → scrollLeft 동기화. 첫 마운트와 키보드/버튼 변경 둘 다 커버.
   //
@@ -75,12 +79,35 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
     if (next !== safeIdx) onChangeIndex(next);
   };
 
+  // 이미지 바깥 어두운 영역을 '클릭'하면 닫는다 (X 버튼 외 보조 닫기).
+  // (1) 이미지·컨트롤 버튼 클릭은 제외하고, (2) 이동 거리 10px 초과는
+  // 스와이프/드래그로 보고 제외해, 캐러셀 스와이프 끝에 발생하는 click 으로
+  // 의도치 않게 닫히는 걸 막는다.
+  const handleBackdropPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    pointerDownRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'IMG' || target.closest('button')) return;
+    const down = pointerDownRef.current;
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) return;
+    onClose();
+  };
+
   if (images.length === 0) return null;
 
-  return (
+  // document.body 로 portal — 데스크톱 상세는 [리스트|상세|지도] 3-컬럼이고
+  // 각 컬럼이 `position: sticky` 라 저마다 stacking context 를 만든다. 라이트박스를
+  // 상세 컬럼 안에서 그대로 렌더하면 `z-50` 이 상세 컬럼의 context 안에서만
+  // 유효해, DOM 상 뒤에 오는 지도 컬럼(같은 z:auto)이 그 위에 덮여 이미지
+  // 오른쪽이 지도에 가려 잘렸다. body 로 빼면 컬럼들의 context 밖이라 전체
+  // 화면을 정상적으로 덮는다.
+  return createPortal(
     <div
       role="dialog"
       aria-label="사진 보기"
+      onPointerDown={handleBackdropPointerDown}
+      onClick={handleBackdropClick}
       // height 를 dvh 로 — vh 는 layout viewport 기준이라 모바일 주소창 영역이
       // 차이만큼 dialog 가 시야 밖으로 넘어가 이미지/인디케이터가 잘렸다.
       // dvh 는 주소창 토글 시 즉시 따라간다.
@@ -155,6 +182,7 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
           {safeIdx + 1} / {images.length}
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 };
