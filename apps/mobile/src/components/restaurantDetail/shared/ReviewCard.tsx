@@ -6,6 +6,7 @@ import type { PublicVisitorReviewType } from '@repo/api-contract';
 import { SENTIMENT_COLORS } from '../colors';
 import { Lightbox } from '../Lightbox';
 import { SatisfactionChip } from './SatisfactionChip';
+import { thumbUrl } from '~/lib/thumbUrl';
 
 interface Props {
   review: PublicVisitorReviewType;
@@ -63,7 +64,14 @@ const ReviewCardImpl = ({ review: r }: Props) => {
               onPress={() => setLightboxIndex(i)}
               accessibilityLabel={`${authorLabel} 리뷰 ${i + 1}번 사진 크게 보기`}
             >
-              <Image source={u} style={styles.image} recyclingKey={u} contentFit="cover" />
+              <Image
+                source={thumbUrl(u, 480)}
+                style={styles.image}
+                recyclingKey={u}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
             </Pressable>
           ))}
         </ScrollView>

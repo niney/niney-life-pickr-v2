@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicDetailType } from '@repo/api-contract';
 import { Lightbox } from './Lightbox';
+import { thumbUrl } from '~/lib/thumbUrl';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -89,7 +90,14 @@ export const PhotosTab = ({ detail }: Props) => {
                   accessibilityLabel={`${s.title} ${i + 1}번 사진 크게 보기`}
                   style={{ width: tileSize, height: tileSize }}
                 >
-                  <Image source={u} style={styles.tile} recyclingKey={u} contentFit="cover" />
+                  <Image
+                    source={thumbUrl(u, 400)}
+                    style={styles.tile}
+                    recyclingKey={u}
+                    contentFit="cover"
+                    transition={200}
+                    cachePolicy="memory-disk"
+                  />
                 </Pressable>
               ))}
             </View>

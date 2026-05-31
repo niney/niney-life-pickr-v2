@@ -124,6 +124,11 @@ export const PublicRestaurantsWebMap = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
+  // source 객체를 memoize — 부모 리렌더(setPendingBbox 등)마다 새 { html }
+  // 참조가 WebView 로 내려가 source 재평가/리렌더가 도는 걸 막는다. html
+  // 문자열은 apiKey 고정이라 사실상 1회만 생성.
+  const source = useMemo(() => ({ html }), [html]);
+
   // markers 와 selection 채널을 분리. selection 변경 시 vectorSource.clear() +
   // N 개 feature 재생성을 피하기 위함 — Web 측 __setSelected 는 prev/next 두
   // setStyle 만 수행.
@@ -250,7 +255,7 @@ export const PublicRestaurantsWebMap = ({
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={source}
         onMessage={onMessage}
         javaScriptEnabled
         domStorageEnabled

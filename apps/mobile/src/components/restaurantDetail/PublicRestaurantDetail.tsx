@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { thumbUrl } from '~/lib/thumbUrl';
 import {
   ApiError,
   useRestaurantPublic,
@@ -254,10 +255,11 @@ export const PublicRestaurantDetail = ({
             >
               <View style={styles.heroWrap}>
                 <Image
-                  source={hero}
+                  source={thumbUrl(hero, 900)}
                   style={styles.heroImg}
                   contentFit="cover"
                   transition={150}
+                  cachePolicy="memory-disk"
                 />
                 {imageCount > 1 && (
                   <View style={styles.heroBadge}>

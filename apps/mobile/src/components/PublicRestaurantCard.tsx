@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
+import { thumbUrl } from '~/lib/thumbUrl';
 
 // 긍/중/부 의미 색상. RankingRow 와 동일하게 직접 지정.
 const POSITIVE = '#10b981';
@@ -36,10 +37,12 @@ export const PublicRestaurantCard = ({ item, selected = false }: Props) => {
       <View style={[styles.thumb, { backgroundColor: theme.colors.surfaceAlt }]}>
         {item.thumbnailUrl ? (
           <Image
-            source={item.thumbnailUrl}
+            source={thumbUrl(item.thumbnailUrl, 240)}
             style={styles.thumbImg}
             recyclingKey={item.thumbnailUrl}
             contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
           />
         ) : (
           <Text style={[styles.thumbPlaceholder, { color: theme.colors.textMuted }]}>

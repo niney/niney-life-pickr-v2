@@ -2,6 +2,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicDetailType } from '@repo/api-contract';
+import { thumbUrl } from '~/lib/thumbUrl';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -72,10 +73,12 @@ export const InfoTab = ({ detail }: Props) => {
               >
                 {b.thumbnailUrls[0] && (
                   <Image
-                    source={b.thumbnailUrls[0]}
+                    source={thumbUrl(b.thumbnailUrls[0], 240)}
                     style={styles.blogThumb}
                     recyclingKey={b.thumbnailUrls[0]}
                     contentFit="cover"
+                    transition={200}
+                    cachePolicy="memory-disk"
                   />
                 )}
                 <View style={{ flex: 1, minWidth: 0 }}>
