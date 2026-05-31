@@ -194,8 +194,10 @@ const BusinessHours = ({ data }: { data: DiningcodeShopDataType }) => {
 };
 
 const Menus = ({ data }: { data: DiningcodeShopDataType }) => {
-  if (data.menus.length === 0) return null;
+  // Hooks must run unconditionally — early return은 useState 아래로 (menus 0↔양수
+  // 전이 시 hook 개수가 달라져 크래시하는 Rules of Hooks 위반 방지).
   const [showAll, setShowAll] = useState(false);
+  if (data.menus.length === 0) return null;
   const shown = showAll ? data.menus : data.menus.slice(0, 8);
   return (
     <Card>
