@@ -168,14 +168,23 @@ export const useSettlementDraftHydrate = (
   const [hydrated, setHydrated] = useState(false);
   const [matched, setMatched] = useState<SettlementDraftType | null>(null);
 
+  // 한 placeId(식당 컨텍스트)에 대해 단 한 번만 hydrate. 자동 저장이 list 를
+  // invalidate→refetch 하면 list.data 가 새 참조로 와 effect 가 다시 돌지만,
+  // 같은 컨텍스트라면 store 를 다시 덮어쓰지 않는다 — 저장 in-flight 중 사용자
+  // 입력을 옛 서버 스냅샷이 밀어내는 좁은 레이스 + 저장마다 store 전역 리렌더
+  // 방지. placeId 가 바뀌면(다른 식당 진입) 다시 hydrate 허용.
+  const hydratedForRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    if (hydratedForRef.current === placeId) return;
     if (!isAuthed) {
+      hydratedForRef.current = placeId;
       setHydrated(true);
       return;
     }
     if (list.isLoading) return;
     if (list.isError) {
       // 서버 실패 → sessionStorage 만 사용하는 모드로 진행.
+      hydratedForRef.current = placeId;
       setHydrated(true);
       return;
     }
@@ -197,6 +206,7 @@ export const useSettlementDraftHydrate = (
           : {}),
       }));
     }
+    hydratedForRef.current = placeId;
     setMatched(found);
     setHydrated(true);
   }, [isAuthed, list.isLoading, list.isError, list.data, placeId]);
