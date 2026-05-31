@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
 import { PublicLayout } from './components/PublicLayout';
 import { HomePage } from './routes/HomePage';
@@ -44,9 +45,11 @@ const SharedSettlementPage = lazy(() =>
 // 어드민 전체를 단일 lazy 청크로 — 진입 전엔 0바이트, 진입 시 한 번에 로드.
 const AdminRoutes = lazy(() => import('./routes/admin/AdminRoutes'));
 
+// lazy 청크 로딩 폴백 — 중앙 스피너. 페이지 자체 로딩 상태(예: SharedSettlementPage)와
+// 같은 모양으로 맞춰, 청크 로드 → 데이터 로드 전환 시 화면이 튀지 않게 한다.
 const PageFallback = () => (
-  <main className="container">
-    <p>Loading…</p>
+  <main className="flex min-h-screen items-center justify-center">
+    <Loader2 className="size-5 animate-spin text-muted-foreground" />
   </main>
 );
 
