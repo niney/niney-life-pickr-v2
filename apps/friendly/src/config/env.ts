@@ -36,6 +36,13 @@ const EnvSchema = z.object({
   APP_BUNDLE_ID: z.string().default('com.niney.lifepickr'),
   ANDROID_APP_PACKAGE: z.string().default('com.niney.lifepickr'),
   ANDROID_SHA256_FINGERPRINTS: z.string().default(''),
+
+  // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
+  // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치
+  // (apps/web/dist/index.html) 를 빌드 산출물 기준 상대경로로 탐색.
+  WEB_INDEX_PATH: z.string().optional(),
+  // OG 기본 이미지. 같은 도메인 정적 파일의 path (또는 절대 URL).
+  OG_IMAGE_PATH: z.string().default('/og-default.png'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

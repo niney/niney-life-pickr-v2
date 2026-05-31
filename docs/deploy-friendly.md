@@ -103,6 +103,43 @@ location /api/ {
 }
 ```
 
+### 정산 공유 링크 OG 미리보기 (SSR-lite)
+
+웹은 순수 SPA 라 카카오톡·텔레그램 크롤러(JS 미실행)가 공유 링크를 긁으면 OG
+태그가 비어 미리보기가 안 뜬다. 공유 경로만 Fastify 로 보내 `index.html` 의
+`<head>` 에 OG 메타(식당명·총액·인원수)를 주입해 내려준다. 정적 `location /`
+fallback 보다 구체적 prefix 라 자동으로 우선 매칭된다.
+
+```nginx
+# 정식 공유 경로 + 별칭(/s/). 끝 슬래시 X — Fastify 가 경로 그대로 받는다.
+location /share/settlements/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;   # Cloudflare 실제 방문자 IP
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;            # Flexible SSL: 공개는 항상 https
+}
+location /s/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
+```
+
+- friendly 가 빌드된 웹 `index.html` 을 읽어 주입한다. 기본 경로는 산출물 기준
+  자동 탐색(`apps/web/dist/index.html`). 위치가 다르면 `.env` 에 `WEB_INDEX_PATH`.
+- OG 기본 이미지는 `apps/web/public/og-default.png` → 빌드 시 `dist/og-default.png`
+  → `https://ninelife.kr/og-default.png`. 현재는 앱 아이콘 임시본 — 정식 배너
+  (1200×630 권장)로 교체 권장. 경로 변경은 `OG_IMAGE_PATH`.
+- **카카오 캐시**: 한 번 긁으면 며칠 캐시. 수정 후 갱신은 카카오 OG 캐시 초기화
+  도구(`developers.kakao.com/tool/clear/og`). 텔레그램은 `@WebpageBot`.
+- `index.html` 은 프로세스 메모리에 1회 캐시되므로 재배포 후 `pm2 reload friendly`
+  필수(reload 시 캐시도 비워짐).
+
 ## 재배포 (매번)
 
 ```bash

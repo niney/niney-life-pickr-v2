@@ -8,6 +8,7 @@ import {
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { env, isDev } from './config/env.js';
+import { registerSharePreview } from './modules/settlement/share-preview.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -51,6 +52,10 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     matchFilter: /\.route\.(ts|js)$/,
     dirNameRoutePrefix: false,
   });
+
+  // 정산 공유 링크 OG 미리보기 — `/api/v1` prefix 밖의 루트 경로
+  // (/share/settlements/:token, /s/:token) 를 직접 등록한다.
+  await registerSharePreview(app);
 
   return app;
 }
