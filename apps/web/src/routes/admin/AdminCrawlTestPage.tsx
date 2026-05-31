@@ -30,6 +30,7 @@ import type {
   CrawlStageType,
   MenuItemType,
   NaverPlaceDataType,
+  RestaurantDetailType,
   RestaurantSummaryProgressType,
   ReviewStatsType,
   VisitorReviewType,
@@ -578,13 +579,25 @@ export const AdminCrawlTestPage = () => {
     }
   }, [stream.result, placeId, qc]);
 
-  // Each new visitor_batch means new rows in the DB — refresh the
-  // restaurant detail so the freshly-saved reviews show up below.
+  // Each new visitor_batch carries the rows that actually landed in the DB
+  // (post-dedup) with their server ids — merge them straight into the detail
+  // cache instead of invalidating (which would re-GET the whole review list
+  // every batch). New rows prepend with summary:null; ids already present are
+  // skipped. Mirrors the per-review SSE merge in useRestaurantSummaryEvents.
+  // The final stream.result invalidate (effect above) still reconciles totals.
   useEffect(() => {
-    if (stream.persistedCount > 0 && placeId) {
-      qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
-    }
-  }, [stream.persistedCount, placeId, qc]);
+    const batch = stream.lastPersistedBatch;
+    if (!batch || batch.length === 0 || !placeId) return;
+    qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (prev) => {
+      if (!prev) return prev;
+      const existing = new Set(prev.reviews.map((r) => r.id));
+      const fresh: VisitorReviewWithSummaryType[] = batch
+        .filter((r) => !existing.has(r.id))
+        .map((r) => ({ ...r, summary: null }));
+      if (fresh.length === 0) return prev;
+      return { ...prev, reviews: [...fresh, ...prev.reviews] };
+    });
+  }, [stream.lastPersistedBatch, placeId, qc]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
