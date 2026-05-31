@@ -11,5 +11,11 @@
     "./eslint/base": "./eslint/base.js",
     "./eslint/node": "./eslint/node.js",
     "./eslint/react": "./eslint/react.js"
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "typescript-eslint": "^8.60.0"
   }
 }

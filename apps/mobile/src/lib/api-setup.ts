@@ -37,7 +37,6 @@ const extractHostFromDevServer = (): string | null => {
   // deep import 경고가 뜨지만 SDK 54 / RN 0.81 기준 공식 대안 없음.
   let url: string | undefined;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const getDevServer = require('react-native/Libraries/Core/Devtools/getDevServer').default;
     url = getDevServer()?.url;
   } catch {

@@ -48,6 +48,7 @@ interface Props {
   // 시트 안에서 BottomSheetFlatList 주입용. 호환 ref 타입이 라이브러리마다
   // 달라 ComponentType<any> 로 받는다 — 사용처는 RN FlatList 인터페이스만 씀.
   // 미지정(deep-link 라우트) 이면 RN FlatList.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 라이브러리별 ref 타입이 달라 의도적 any
   List?: ComponentType<any>;
   // 시트 모드에서 사용. 지정하면 콘텐츠 최상단에 '← + 식당명' sticky 헤더가
   // 추가로 렌더된다. 미지정(deep-link 라우트) 이면 헤더 없이 stack 의 네이티브
