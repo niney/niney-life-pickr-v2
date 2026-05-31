@@ -76,13 +76,13 @@ pm2 startup     # 출력된 sudo 명령 실행 → 부팅 자동 기동
 
 ## Nginx + HTTPS
 
-같은 도메인에서 웹/API 모두 서비스 (`nlpp.easypcb.co.kr` 예시).
+같은 도메인에서 웹/API 모두 서비스 (`ninelife.kr` 예시).
 설정 파일: `/etc/nginx/sites-available/niney_life_pickr_v2_projects` → `sites-enabled` 에 심볼릭 링크.
 
 ```bash
 chmod o+x /home/samplepcb /home/samplepcb/niney-life-pickr-v2
 chmod -R o+rX /home/samplepcb/niney-life-pickr-v2/apps/web/dist
-sudo certbot --nginx -d nlpp.easypcb.co.kr
+sudo certbot --nginx -d ninelife.kr
 ```
 
 `location /api/` 의 `proxy_pass` 끝 슬래시 **없이** 작성 — 백엔드 라우트가 `/api/` prefix 포함이라 prefix 보존해야 함.

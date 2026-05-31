@@ -19,7 +19,7 @@ Expo는 모드별로 자동 로드되는 파일명이 정해져 있다.
 
 ```
 apps/mobile/.env.production
-EXPO_PUBLIC_API_URL=https://nlpp.easypcb.co.kr
+EXPO_PUBLIC_API_URL=https://ninelife.kr
 ```
 
 `EXPO_PUBLIC_*` 접두사 값만 클라이언트 번들에 인라인 박힘. 빌드 시점에 굳기 때문에 런타임 변경 불가.
@@ -102,7 +102,7 @@ eas build --profile production --platform all
 ```bash
 eas env:create --environment production \
   --name EXPO_PUBLIC_API_URL \
-  --value https://nlpp.easypcb.co.kr
+  --value https://ninelife.kr
 ```
 
 `eas env:list --environment production` 으로 확인.

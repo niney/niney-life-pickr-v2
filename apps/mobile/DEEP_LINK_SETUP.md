@@ -1,6 +1,6 @@
 # Deep Link 설정 가이드
 
-정산 공유 링크(`https://nlpp.easypcb.co.kr/share/settlements/<token>`) 가 외부
+정산 공유 링크(`https://ninelife.kr/share/settlements/<token>`) 가 외부
 브라우저·메시지 앱에서 클릭될 때 앱이 직접 열도록 설정.
 
 코드 변경은 다음 세 곳에서 끝났다 — 운영에서 동작시키려면 **값 채워 넣기 +
@@ -31,7 +31,7 @@ APP_BUNDLE_ID=com.niney.lifepickr
 서버 재시작 후 확인:
 
 ```bash
-curl -i https://nlpp.easypcb.co.kr/.well-known/apple-app-site-association
+curl -i https://ninelife.kr/.well-known/apple-app-site-association
 # 200 + JSON 이어야 함. 404 면 env 비어 있음.
 ```
 
@@ -101,7 +101,7 @@ ANDROID_SHA256_FINGERPRINTS=AA:BB:CC:DD:...:FF,11:22:33:...:99
 서버 재시작 후 확인:
 
 ```bash
-curl -i https://nlpp.easypcb.co.kr/.well-known/assetlinks.json
+curl -i https://ninelife.kr/.well-known/assetlinks.json
 ```
 
 ### 2-3. 재빌드 + 자동 검증 트리거
@@ -130,7 +130,7 @@ adb shell pm verify-app-links --re-verify com.niney.lifepickr
 
 ```bash
 adb shell am start -W -a android.intent.action.VIEW \
-  -d "https://nlpp.easypcb.co.kr/share/settlements/test-token"
+  -d "https://ninelife.kr/share/settlements/test-token"
 ```
 
 앱이 직접 열려야 OK. "어떤 앱으로 열까요?" 다이얼로그가 뜨면 검증 실패.
@@ -151,7 +151,7 @@ DNS 만 잡혀 있으면 OK.
 ## 4. 동작 흐름 요약
 
 ```
-사용자가 카톡으로 받은 https://nlpp.easypcb.co.kr/share/settlements/xxx 를 탭
+사용자가 카톡으로 받은 https://ninelife.kr/share/settlements/xxx 를 탭
   │
   ├─ 앱 설치 안 됨 → 모바일 Safari/Chrome 이 SharedSettlementPage 웹 SPA 로 진입
   │

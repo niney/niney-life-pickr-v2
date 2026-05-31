@@ -4,7 +4,7 @@ import type { ExpoConfig } from 'expo/config';
 // 쓸 땐 EXPO_PUBLIC_WEB_HOST 로 override. associatedDomains 와 intentFilters 가
 // 이 호스트의 /s/* (짧은 공유 경로) 를 가로채 앱이 직접 연다 — 미설치 단말은
 // 동일 URL 로 웹 SPA(SharedSettlementPage) 가 fallback.
-const WEB_HOST = (process.env.EXPO_PUBLIC_WEB_HOST || 'nlpp.easypcb.co.kr').trim();
+const WEB_HOST = (process.env.EXPO_PUBLIC_WEB_HOST || 'ninelife.kr').trim();
 
 const config: ExpoConfig = {
   name: 'Life Pickr',
