@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { RestaurantPublicListQueryType } from '@repo/api-contract';
 import { useRestaurantsPublic, useUserLocation } from '@repo/shared';
@@ -239,7 +247,9 @@ export const RestaurantsV2Page = () => {
               panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
             )}
           >
-            <Outlet />
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+              <Outlet />
+            </Suspense>
           </aside>
         )}
 
@@ -315,7 +325,9 @@ export const RestaurantsV2Page = () => {
             peekHeight={120}
             zIndex={30}
           >
-            <Outlet />
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+              <Outlet />
+            </Suspense>
           </BottomSheet>
         )}
       </div>

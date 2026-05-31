@@ -1,33 +1,54 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
-import { AdminLayout } from './components/admin/AdminLayout';
 import { PublicLayout } from './components/PublicLayout';
-import { AdminAiKeysPage } from './routes/admin/AdminAiKeysPage';
-import { AdminAiTestPage } from './routes/admin/AdminAiTestPage';
-import { AdminAnalyticsPage } from './routes/admin/AdminAnalyticsPage';
-import { AdminAutoDiscoverPage } from './routes/admin/AdminAutoDiscoverPage';
-import { AdminCatchtableShopPage } from './routes/admin/AdminCatchtableShopPage';
-import { AdminCatchtableTestPage } from './routes/admin/AdminCatchtableTestPage';
-import { AdminCrawlTestPage } from './routes/admin/AdminCrawlTestPage';
-import { AdminDiningcodePage } from './routes/admin/AdminDiningcodePage';
-import { AdminDiningcodeShopPage } from './routes/admin/AdminDiningcodeShopPage';
-import { AdminDiningcodeTestPage } from './routes/admin/AdminDiningcodeTestPage';
-import { AdminDiscoverPage } from './routes/admin/AdminDiscoverPage';
-import { AdminHomePage } from './routes/admin/AdminHomePage';
-import { AdminMapKeysPage } from './routes/admin/AdminMapKeysPage';
-import { AdminRestaurantDetailPage } from './routes/admin/AdminRestaurantDetailPage';
-import { AdminRestaurantsPage } from './routes/admin/AdminRestaurantsPage';
-import { AdminSettingsPage } from './routes/admin/AdminSettingsPage';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
-import { RestaurantDetailRoute } from './routes/RestaurantDetailRoute';
-import { RestaurantsPage } from './routes/RestaurantsPage';
-import { RestaurantsV2Page } from './routes/RestaurantsV2Page';
-import { ContactsPage } from './routes/settlement/ContactsPage';
-import { SettlementHistoryPage } from './routes/settlement/SettlementHistoryPage';
-import { SettlementNewPage } from './routes/settlement/SettlementNewPage';
-import { SettlementResultPage } from './routes/settlement/SettlementResultPage';
-import { SharedSettlementPage } from './routes/settlement/SharedSettlementPage';
+
+// 코드 스플리팅 — 공개 진입(/, /login)과 레이아웃 셸만 메인 번들에 두고, 무거운
+// 라우트는 React.lazy 로 분할한다. 어드민 서브트리 16개 페이지와 OpenLayers(ol)
+// 지도를 끌어오는 식당/정산 페이지가 메인 청크에서 빠져, 익명 사용자가 받는 첫
+// 청크가 대폭 작아진다. RestaurantDetailRoute 의 상세 탭 묶음(PublicRestaurantDetail
+// → 8개 탭 + Lightbox)도 lazy — 부모(식당 목록 페이지)의 Outlet 을 자체 Suspense 로
+// 감싸 목록을 깜빡이지 않고 상세 패널만 로딩 표시한다.
+const RestaurantDetailRoute = lazy(() =>
+  import('./routes/RestaurantDetailRoute').then((m) => ({ default: m.RestaurantDetailRoute })),
+);
+const RestaurantsPage = lazy(() =>
+  import('./routes/RestaurantsPage').then((m) => ({ default: m.RestaurantsPage })),
+);
+const RestaurantsV2Page = lazy(() =>
+  import('./routes/RestaurantsV2Page').then((m) => ({ default: m.RestaurantsV2Page })),
+);
+const SettlementHistoryPage = lazy(() =>
+  import('./routes/settlement/SettlementHistoryPage').then((m) => ({
+    default: m.SettlementHistoryPage,
+  })),
+);
+const ContactsPage = lazy(() =>
+  import('./routes/settlement/ContactsPage').then((m) => ({ default: m.ContactsPage })),
+);
+const SettlementNewPage = lazy(() =>
+  import('./routes/settlement/SettlementNewPage').then((m) => ({ default: m.SettlementNewPage })),
+);
+const SettlementResultPage = lazy(() =>
+  import('./routes/settlement/SettlementResultPage').then((m) => ({
+    default: m.SettlementResultPage,
+  })),
+);
+const SharedSettlementPage = lazy(() =>
+  import('./routes/settlement/SharedSettlementPage').then((m) => ({
+    default: m.SharedSettlementPage,
+  })),
+);
+// 어드민 전체를 단일 lazy 청크로 — 진입 전엔 0바이트, 진입 시 한 번에 로드.
+const AdminRoutes = lazy(() => import('./routes/admin/AdminRoutes'));
+
+const PageFallback = () => (
+  <main className="container">
+    <p>Loading…</p>
+  </main>
+);
 
 // 인증된 사용자만 — 비로그인은 /login 으로 리다이렉트. role 검사는 안 함.
 // (정산하기는 USER 도 사용 가능)
@@ -55,102 +76,81 @@ export const App = () => {
   useCurrentUser();
 
   return (
-    <Routes>
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/restaurants" element={<RestaurantsPage />}>
-          <Route path=":placeId" element={<RestaurantDetailRoute />} />
-        </Route>
-        {/* 모바일 시트 패턴 v2 — 데스크톱은 기존 3-column 동일, 모바일은 BottomSheet. */}
-        <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
-          <Route path=":placeId" element={<RestaurantDetailRoute />} />
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/restaurants" element={<RestaurantsPage />}>
+            <Route path=":placeId" element={<RestaurantDetailRoute />} />
+          </Route>
+          {/* 모바일 시트 패턴 v2 — 데스크톱은 기존 3-column 동일, 모바일은 BottomSheet. */}
+          <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
+            <Route path=":placeId" element={<RestaurantDetailRoute />} />
+          </Route>
+          <Route
+            path="/me/settlements"
+            element={
+              <RequireUser>
+                <SettlementHistoryPage />
+              </RequireUser>
+            }
+          />
+          <Route
+            path="/me/contacts"
+            element={
+              <RequireUser>
+                <ContactsPage />
+              </RequireUser>
+            }
+          />
         </Route>
         <Route
-          path="/me/settlements"
+          path="/restaurants/:placeId/settle/new"
           element={
             <RequireUser>
-              <SettlementHistoryPage />
+              <SettlementNewPage />
+            </RequireUser>
+          }
+        />
+        {/* 식당 없이 독립 진입 — Step2 의 차수 카드에서 1차 식당 검색 강제. */}
+        <Route
+          path="/me/settlements/new"
+          element={
+            <RequireUser>
+              <SettlementNewPage />
             </RequireUser>
           }
         />
         <Route
-          path="/me/contacts"
+          path="/restaurants/:placeId/settle/:id"
           element={
             <RequireUser>
-              <ContactsPage />
+              <SettlementResultPage />
             </RequireUser>
           }
         />
-      </Route>
-      <Route
-        path="/restaurants/:placeId/settle/new"
-        element={
-          <RequireUser>
-            <SettlementNewPage />
-          </RequireUser>
-        }
-      />
-      {/* 식당 없이 독립 진입 — Step2 의 차수 카드에서 1차 식당 검색 강제. */}
-      <Route
-        path="/me/settlements/new"
-        element={
-          <RequireUser>
-            <SettlementNewPage />
-          </RequireUser>
-        }
-      />
-      <Route
-        path="/restaurants/:placeId/settle/:id"
-        element={
-          <RequireUser>
-            <SettlementResultPage />
-          </RequireUser>
-        }
-      />
-      {/* 저장된 정산 편집 — 같은 SettlementNewPage 가 id 받으면 edit 모드. */}
-      <Route
-        path="/restaurants/:placeId/settle/:id/edit"
-        element={
-          <RequireUser>
-            <SettlementNewPage />
-          </RequireUser>
-        }
-      />
-      {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
-          않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}
-      <Route path="/s/:token" element={<SharedSettlementPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/admin"
-        element={
-          <RequireAdmin>
-            <AdminLayout />
-          </RequireAdmin>
-        }
-      >
-        <Route index element={<AdminHomePage />} />
-        <Route path="discover" element={<AdminDiscoverPage />} />
-        <Route path="auto-discover" element={<AdminAutoDiscoverPage />} />
-        <Route path="restaurants" element={<AdminRestaurantsPage />} />
-        <Route path="restaurants/:placeId" element={<AdminRestaurantDetailPage />} />
-        <Route path="crawl-test" element={<AdminCrawlTestPage />} />
-        <Route path="crawl-test/:jobId" element={<AdminCrawlTestPage />} />
-        <Route path="catchtable-test" element={<AdminCatchtableTestPage />} />
-        <Route path="catchtable-test/:shopRef" element={<AdminCatchtableShopPage />} />
-        <Route path="diningcode-test" element={<AdminDiningcodeTestPage />} />
-        <Route path="diningcode-test/:vRid" element={<AdminDiningcodeShopPage />} />
-        <Route path="diningcode" element={<AdminDiningcodePage />} />
-        <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
-        <Route path="analytics" element={<AdminAnalyticsPage />} />
-        <Route path="ai-test" element={<AdminAiTestPage />} />
-        {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}
-        <Route path="ai-keys" element={<Navigate to="/admin/settings/ai-keys" replace />} />
-        <Route path="settings" element={<AdminSettingsPage />}>
-          <Route index element={<Navigate to="ai-keys" replace />} />
-          <Route path="ai-keys" element={<AdminAiKeysPage />} />
-          <Route path="map" element={<AdminMapKeysPage />} />
-        </Route>
-      </Route>
-    </Routes>
+        {/* 저장된 정산 편집 — 같은 SettlementNewPage 가 id 받으면 edit 모드. */}
+        <Route
+          path="/restaurants/:placeId/settle/:id/edit"
+          element={
+            <RequireUser>
+              <SettlementNewPage />
+            </RequireUser>
+          }
+        />
+        {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
+            않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}
+        <Route path="/s/:token" element={<SharedSettlementPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/admin/*"
+          element={
+            <RequireAdmin>
+              <AdminRoutes />
+            </RequireAdmin>
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 };

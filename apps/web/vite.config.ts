@@ -20,6 +20,28 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', '@tanstack/react-query', 'zustand'],
     extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Vite 8 의 번들러는 Rolldown — 객체형 manualChunks 대신 codeSplitting.groups
+        // 사용. 첫 로드 바이트 절감은 라우트 lazy 가 담당하고, 여기선 vendor 청크를
+        // 고정해 앱 코드만 바뀌어도 벤더 캐시가 유지되게 한다(automatic 분할은 그대로
+        // 유지되며 아래 group 은 그 위에 vendor 만 추가로 묶는다). ol 은 식당/어드민
+        // 청크가 공유하므로 단일 vendor 청크로 모은다.
+        codeSplitting: {
+          groups: [
+            { name: 'ol', test: /[\\/]node_modules[\\/]ol[\\/]/ },
+            {
+              name: 'react-vendor',
+              test: /[\\/]node_modules[\\/](react-router-dom|react-router|react-dom|react|scheduler)[\\/]/,
+            },
+            { name: 'query', test: /[\\/]node_modules[\\/]@tanstack[\\/]/ },
+            { name: 'radix', test: /[\\/]node_modules[\\/]@radix-ui[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5173,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { Outlet, useOutletContext } from 'react-router-dom';
 import { PublicSidebar } from './PublicSidebar';
 import { PublicTopBar } from './PublicTopBar';
@@ -44,7 +44,10 @@ export const PublicLayout = () => {
       />
       <PublicSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1">
-        <Outlet context={layoutCtx} />
+        {/* lazy 라우트 로드 중에도 TopBar/Sidebar 셸은 유지 — 본문만 fallback. */}
+        <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+          <Outlet context={layoutCtx} />
+        </Suspense>
       </main>
     </div>
   );

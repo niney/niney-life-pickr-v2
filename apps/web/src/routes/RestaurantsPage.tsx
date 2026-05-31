@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { Suspense, useCallback, useState } from 'react';
 import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import { List, MapIcon } from 'lucide-react';
 import type { RestaurantPublicListQueryType } from '@repo/api-contract';
@@ -144,7 +144,10 @@ export const RestaurantsPage = () => {
               panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
             )}
           >
-            <Outlet />
+            {/* 상세 탭 묶음은 lazy — 목록은 그대로 두고 이 패널만 로딩 표시. */}
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+              <Outlet />
+            </Suspense>
           </aside>
         )}
 
