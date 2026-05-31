@@ -124,6 +124,7 @@ export default function ContactsScreen() {
         />
 
         <ContactEditSheet
+          key={editing?.id ?? 'closed'}
           contact={editing}
           onClose={() => setEditing(null)}
           theme={theme}
@@ -229,16 +230,12 @@ interface EditSheetProps {
 const ContactEditSheet = ({ contact, onClose, theme }: EditSheetProps) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const update = useUpdateSettlementContact();
-  const [name, setName] = useState('');
-  const [nickname, setNickname] = useState('');
+  // 초기값을 contact 에서 직접 잡는다. contact 가 바뀌면 부모가 key 로 이 시트를
+  // 리마운트하므로(아래 <ContactEditSheet key=...>), useEffect/useMemo 로 prop→state
+  // 를 동기화할 필요가 없다.
+  const [name, setName] = useState(contact?.name ?? '');
+  const [nickname, setNickname] = useState(contact?.nickname ?? '');
   const [error, setError] = useState<string | null>(null);
-
-  useMemo(() => {
-    if (!contact) return;
-    setName(contact.name ?? '');
-    setNickname(contact.nickname ?? '');
-    setError(null);
-  }, [contact]);
 
   const handleSave = async () => {
     setError(null);
