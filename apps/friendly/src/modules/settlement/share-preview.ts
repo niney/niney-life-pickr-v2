@@ -20,25 +20,45 @@ import { SettlementError, SettlementService } from './settlement.service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// 빌드 산출물 기준: dist/modules/settlement/share-preview.js → apps/web/dist/index.html.
-// dev(tsx, src/...) 와 prod(dist/...) 모두 friendly 루트로부터 같은 깊이라 동일하게 동작.
-const DEFAULT_INDEX_PATH = resolve(__dirname, '../../../../web/dist/index.html');
-
-function indexPath(): string {
-  return env.WEB_INDEX_PATH ? resolve(env.WEB_INDEX_PATH) : DEFAULT_INDEX_PATH;
+// 빌드된 웹 index.html 위치는 환경마다 다르다:
+//  - dev: tsx 가 src 를 그대로 실행 → __dirname = apps/friendly/src/modules/settlement
+//  - prod: tsup 이 번들 → share-preview 는 독립 파일이 아니라 app.js/chunk 에 합쳐져
+//    __dirname = apps/friendly/dist (모듈 경로가 사라진다)
+// 그래서 고정 상대경로 하나로는 둘 다 못 맞춘다. __dirname 과 cwd 에서 위로 올라가며
+// `apps/web/dist/index.html` 과 `web/dist/index.html` 두 형태를 모두 후보로 만들어
+// 처음 읽히는 것을 쓴다. WEB_INDEX_PATH 가 있으면 그것만 쓴다.
+function candidateIndexPaths(): string[] {
+  if (env.WEB_INDEX_PATH) return [resolve(env.WEB_INDEX_PATH)];
+  const seen = new Set<string>();
+  for (const base of [__dirname, process.cwd()]) {
+    let cur = base;
+    for (let i = 0; i < 7; i += 1) {
+      seen.add(resolve(cur, 'apps/web/dist/index.html'));
+      seen.add(resolve(cur, 'web/dist/index.html'));
+      const up = dirname(cur);
+      if (up === cur) break; // 루트 도달
+      cur = up;
+    }
+  }
+  return [...seen];
 }
 
 // index.html 은 배포마다 해시 자산명이 바뀌므로 프로세스 수명 동안만 캐시한다.
 // pm2 reload 로 재기동되면 자연히 비워진다. 읽기 실패는 캐시하지 않는다.
+// 실패 시 시도한 경로 전부를 반환해 호출부가 로그로 남긴다.
 let cachedIndex: string | null = null;
-async function loadIndex(): Promise<string | null> {
-  if (cachedIndex) return cachedIndex;
-  try {
-    cachedIndex = await readFile(indexPath(), 'utf8');
-    return cachedIndex;
-  } catch {
-    return null;
+async function loadIndex(): Promise<{ html: string } | { tried: string[] }> {
+  if (cachedIndex) return { html: cachedIndex };
+  const tried = candidateIndexPaths();
+  for (const p of tried) {
+    try {
+      cachedIndex = await readFile(p, 'utf8');
+      return { html: cachedIndex };
+    } catch {
+      // 다음 후보로
+    }
   }
+  return { tried };
 }
 
 const ESC: Record<string, string> = {
@@ -102,12 +122,17 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
     req: FastifyRequest<{ Params: { token: string } }>,
     reply: FastifyReply,
   ) => {
-    const html = await loadIndex();
-    if (!html) {
-      // index.html 을 못 읽음(dev 환경이라 dist 미빌드, 경로 오설정 등).
-      app.log.warn(`share-preview: index.html 읽기 실패 — ${indexPath()}`);
+    const loaded = await loadIndex();
+    if (!('html' in loaded)) {
+      // index.html 을 어느 후보 경로에서도 못 읽음(dist 미빌드/경로 오설정).
+      // 시도한 경로를 전부 남겨 운영에서 바로 진단할 수 있게 한다.
+      app.log.error(
+        { triedPaths: loaded.tried, cwd: process.cwd() },
+        'share-preview: index.html 을 찾지 못함 — WEB_INDEX_PATH 로 명시 지정 권장',
+      );
       return reply.code(500).type('text/plain; charset=utf-8').send('preview unavailable');
     }
+    const html = loaded.html;
 
     const { token } = req.params;
     const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https';
