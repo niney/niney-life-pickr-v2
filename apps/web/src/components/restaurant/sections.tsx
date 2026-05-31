@@ -274,7 +274,6 @@ const VideoPlayerModal = ({ url, onClose }: { url: string; onClose: () => void }
         >
           <X className="size-6" />
         </button>
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           src={url}
           controls
