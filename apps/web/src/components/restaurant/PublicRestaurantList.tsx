@@ -216,12 +216,13 @@ export const PublicRestaurantListBody = ({
     <ul className="flex flex-col gap-2" data-testid="public-restaurant-list">
       {items.map((item) => (
         <li key={item.placeId}>
+          {/* 인라인 클로저 없이 안정 콜백을 그대로 전달 — 카드 memo 가 동작하도록.
+              placeId 바인딩은 카드 내부에서 item.placeId 로 처리. */}
           <PublicRestaurantCard
             item={item}
             selected={item.placeId === selectedPlaceId}
-            onClick={() => onSelectItem(item.placeId)}
-            onMouseEnter={() => onHoverItem(item.placeId)}
-            onMouseLeave={() => onHoverItem(null)}
+            onSelect={onSelectItem}
+            onHover={onHoverItem}
           />
         </li>
       ))}

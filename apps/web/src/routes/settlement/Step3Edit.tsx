@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import type { ReceiptItemCategoryType } from '@repo/api-contract';
 import {
@@ -150,11 +150,11 @@ const RoundEditor = ({
   showInvalid: boolean;
 }) => {
   const addRoundItem = useSettlementDraftStore((s) => s.addRoundItem);
-  const updateRoundItem = useSettlementDraftStore((s) => s.updateRoundItem);
-  const removeRoundItem = useSettlementDraftStore((s) => s.removeRoundItem);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // 메뉴명 input ref Map — Enter 로 새 항목 추가 후 그 행에 focus 옮길 때 사용.
+  // ref/focus 관리는 부모(RoundEditor)가 소유 — 행 간 focus 이동 때문에 ItemRow
+  // 내부로 내리면 안 된다.
   const nameRefs = useRef(new Map<string, HTMLInputElement | null>());
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   useEffect(() => {
@@ -166,39 +166,58 @@ const RoundEditor = ({
     }
   }, [pendingFocusId, round.items]);
 
+  // 최신 round 를 ref 로 들고 있어 아래 키다운 핸들러를 deps [] 로 안정화한다.
+  // (round.items 를 deps 에 넣으면 키 입력마다 새 함수 → ItemRow memo 가 깨짐.)
+  // 키다운은 사용자 인터랙션이라 항상 커밋 후 발생 → 렌더 중 쓰기 대신 effect 로
+  // 동기화해도 핸들러는 최신 round 를 읽는다.
+  const roundRef = useRef(round);
+  useEffect(() => {
+    roundRef.current = round;
+  });
+
+  // ItemRow 가 clientId 와 함께 호출 — 안정 콜백이라 memo 유지.
+  const registerNameRef = useCallback(
+    (clientId: string, el: HTMLInputElement | null) => {
+      if (el) nameRefs.current.set(clientId, el);
+      else nameRefs.current.delete(clientId);
+    },
+    [],
+  );
+
   // Enter: 마지막 항목이면 새 빈 항목 추가 + 그 행 메뉴명 focus, 중간이면
   // 다음 항목 메뉴명으로 focus 이동. 빈 이름이면 무시 (preventDefault 만).
-  // 한글 IME 조립 중 Enter 도 무시.
-  const handleItemNameEnter = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    itemClientId: string,
-  ) => {
-    if (e.key !== 'Enter') return;
-    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-    const idx = round.items.findIndex((it) => it.clientId === itemClientId);
-    const it = round.items[idx];
-    if (!it) return;
-    if (it.name.trim().length === 0) {
+  // 한글 IME 조립 중 Enter 도 무시. roundRef 로 최신 items 를 읽어 deps 안정.
+  const handleItemNameEnter = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>, itemClientId: string) => {
+      if (e.key !== 'Enter') return;
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+      const r = roundRef.current;
+      const idx = r.items.findIndex((it) => it.clientId === itemClientId);
+      const it = r.items[idx];
+      if (!it) return;
+      if (it.name.trim().length === 0) {
+        e.preventDefault();
+        return;
+      }
       e.preventDefault();
-      return;
-    }
-    e.preventDefault();
-    const isLast = idx === round.items.length - 1;
-    if (isLast) {
-      const newId = addRoundItem(round.clientId, {
-        name: '',
-        unitPrice: null,
-        quantity: 1,
-        amount: 0,
-        category: 'UNCATEGORIZED',
-        matchedMenuName: null,
-      });
-      if (newId) setPendingFocusId(newId);
-    } else {
-      const nextId = round.items[idx + 1]?.clientId;
-      if (nextId) setPendingFocusId(nextId);
-    }
-  };
+      const isLast = idx === r.items.length - 1;
+      if (isLast) {
+        const newId = addRoundItem(r.clientId, {
+          name: '',
+          unitPrice: null,
+          quantity: 1,
+          amount: 0,
+          category: 'UNCATEGORIZED',
+          matchedMenuName: null,
+        });
+        if (newId) setPendingFocusId(newId);
+      } else {
+        const nextId = r.items[idx + 1]?.clientId;
+        if (nextId) setPendingFocusId(nextId);
+      }
+    },
+    [addRoundItem],
+  );
 
   // 메뉴 모달을 위한 식당 detail. 차수의 placeId 기준이라 1차/2차가 다른
   // 식당이면 각각 자기 메뉴를 가져온다.
@@ -254,14 +273,10 @@ const RoundEditor = ({
             key={it.clientId}
             item={it}
             index={idx}
-            onUpdate={(patch) => updateRoundItem(round.clientId, it.clientId, patch)}
-            onRemove={() => removeRoundItem(round.clientId, it.clientId)}
+            roundClientId={round.clientId}
             invalid={showInvalid && (it.name.trim().length === 0 || it.amount <= 0)}
-            nameRef={(el) => {
-              if (el) nameRefs.current.set(it.clientId, el);
-              else nameRefs.current.delete(it.clientId);
-            }}
-            onNameKeyDown={(e) => handleItemNameEnter(e, it.clientId)}
+            registerNameRef={registerNameRef}
+            onNameKeyDown={handleItemNameEnter}
           />
         ))}
       </div>
@@ -330,22 +345,26 @@ const RoundEditor = ({
 interface ItemRowProps {
   item: DraftItem;
   index: number;
-  onUpdate(patch: Partial<DraftItem>): void;
-  onRemove(): void;
+  roundClientId: string;
   invalid: boolean;
-  nameRef: (el: HTMLInputElement | null) => void;
-  onNameKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  registerNameRef: (clientId: string, el: HTMLInputElement | null) => void;
+  onNameKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, itemClientId: string) => void;
 }
 
-const ItemRow = ({
+// memo — 같은 차수의 다른 항목 입력 시에도 변경된 행만 리렌더된다. 이를 위해
+// onUpdate/onRemove 콜백 prop 을 받지 않고 store action 을 직접 호출(액션은 안정
+// 참조). updateRoundItem 은 미변경 항목의 객체 identity 를 보존하므로 item prop
+// 도 안정 → 영수증 항목이 수십 개여도 키 입력당 한 행만 갱신.
+const ItemRow = memo(function ItemRow({
   item,
   index,
-  onUpdate,
-  onRemove,
+  roundClientId,
   invalid,
-  nameRef,
+  registerNameRef,
   onNameKeyDown,
-}: ItemRowProps) => {
+}: ItemRowProps) {
+  const updateRoundItem = useSettlementDraftStore((s) => s.updateRoundItem);
+  const removeRoundItem = useSettlementDraftStore((s) => s.removeRoundItem);
   return (
     <div
       className={
@@ -360,7 +379,7 @@ const ItemRow = ({
           variant="ghost"
           size="icon"
           aria-label="삭제"
-          onClick={onRemove}
+          onClick={() => removeRoundItem(roundClientId, item.clientId)}
         >
           <Trash2 className="size-4" />
         </Button>
@@ -371,16 +390,18 @@ const ItemRow = ({
             type="text"
             value={item.name}
             placeholder="예: 카스 500ml"
-            ref={nameRef}
-            onKeyDown={onNameKeyDown}
-            onChange={(e) => onUpdate({ name: e.target.value })}
+            ref={(el) => registerNameRef(item.clientId, el)}
+            onKeyDown={(e) => onNameKeyDown(e, item.clientId)}
+            onChange={(e) => updateRoundItem(roundClientId, item.clientId, { name: e.target.value })}
           />
         </Field>
         <Field label="카테고리">
           <select
             value={item.category}
             onChange={(e) =>
-              onUpdate({ category: e.target.value as ReceiptItemCategoryType })
+              updateRoundItem(roundClientId, item.clientId, {
+                category: e.target.value as ReceiptItemCategoryType,
+              })
             }
             className="h-9 rounded-md border bg-background px-2 text-sm"
           >
@@ -400,7 +421,9 @@ const ItemRow = ({
             onChange={(e) => {
               const v = e.target.value;
               const n = v === '' ? null : Number(v);
-              onUpdate({ unitPrice: Number.isFinite(n) ? n : null });
+              updateRoundItem(roundClientId, item.clientId, {
+                unitPrice: Number.isFinite(n) ? n : null,
+              });
             }}
           />
         </Field>
@@ -413,7 +436,9 @@ const ItemRow = ({
             onChange={(e) => {
               const v = e.target.value;
               const n = v === '' ? null : Number(v);
-              onUpdate({ quantity: Number.isFinite(n) && n != null && n > 0 ? n : null });
+              updateRoundItem(roundClientId, item.clientId, {
+                quantity: Number.isFinite(n) && n != null && n > 0 ? n : null,
+              });
             }}
           />
         </Field>
@@ -422,7 +447,11 @@ const ItemRow = ({
             type="number"
             inputMode="numeric"
             value={item.amount}
-            onChange={(e) => onUpdate({ amount: Math.max(0, Number(e.target.value) || 0) })}
+            onChange={(e) =>
+              updateRoundItem(roundClientId, item.clientId, {
+                amount: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
           />
         </Field>
         {item.matchedMenuName && (
@@ -433,7 +462,7 @@ const ItemRow = ({
       </div>
     </div>
   );
-};
+});
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">

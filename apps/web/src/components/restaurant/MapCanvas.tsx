@@ -103,6 +103,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<OlMap | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
+  // 선택 마커 id 를 ref 로 보관 — 각 feature 의 style function 이 평가 시점에 이
+  // 값을 읽어 강조를 결정한다. selectedMarkerId 가 바뀌어도 feature 를 재생성하지
+  // 않고, 영향받는 이전/현재 2개 feature 만 changed() 로 다시 칠한다.
+  const selectedIdRef = useRef(selectedMarkerId);
+  const prevSelectedIdRef = useRef(selectedMarkerId);
+  const featureByIdRef = useRef(new Map<string, Feature>());
   // 사용자 인터랙션이 시작된 적 있는지. 처음 렌더 직후 발생하는 자동 moveend
   // 이벤트(setCenter/animate 호출) 는 무시하기 위함.
   const userInteractedRef = useRef(false);
@@ -233,26 +239,43 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  // 마커 갱신 — 좌표/선택 상태가 바뀌면 vectorSource 만 새로 칠한다 (map 재생성 X).
-  // 스타일은 style function 으로 둬서 줌 변화 시 OL 이 자동 재평가 (라벨 on/off).
+  // 마커 갱신 — markers 가 바뀔 때만 vectorSource 를 새로 칠한다 (map 재생성 X).
+  // 선택 상태는 deps 에 넣지 않는다: style function 이 selectedIdRef 에서 읽으므로
+  // 선택만 바뀔 때 전체 feature 재생성 + 아이콘 재디코드(N개)를 막는다. 스타일은
+  // function 으로 둬 줌 변화 시 OL 이 자동 재평가(라벨 on/off).
   useEffect(() => {
     const src = vectorSourceRef.current;
     if (!src) return;
     src.clear();
+    const byId = new Map<string, Feature>();
     for (const m of markers) {
       const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
       f.set('markerId', m.id);
-      const isSelected = m.id === selectedMarkerId;
       const variant = m.variant ?? 'primary';
       const categoryKey = m.categoryKey ?? null;
       f.setStyle((_feature, resolution) => {
         const zoom =
           mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
+        const isSelected = selectedIdRef.current === m.id;
         return makeMarkerStyle(m.label, isSelected, variant, categoryKey, zoom);
       });
       src.addFeature(f);
+      byId.set(m.id, f);
     }
-  }, [markers, selectedMarkerId]);
+    featureByIdRef.current = byId;
+  }, [markers]);
+
+  // 선택 변경 — vectorSource 는 건드리지 않고 이전/현재 마커 feature 2개만
+  // changed() 로 다시 칠한다 (style function 이 selectedIdRef 를 다시 읽음). N→2.
+  useEffect(() => {
+    selectedIdRef.current = selectedMarkerId;
+    const prev = prevSelectedIdRef.current;
+    if (prev === selectedMarkerId) return;
+    prevSelectedIdRef.current = selectedMarkerId;
+    const byId = featureByIdRef.current;
+    if (prev) byId.get(prev)?.changed();
+    if (selectedMarkerId) byId.get(selectedMarkerId)?.changed();
+  }, [selectedMarkerId]);
 
   // 외부 imperative API
   useImperativeHandle(

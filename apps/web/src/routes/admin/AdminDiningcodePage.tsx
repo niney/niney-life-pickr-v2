@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -83,7 +83,8 @@ interface ResultCardProps {
   item: DiningcodeSearchResultType;
   registered: DiningcodeRegisteredEntryType | null;
   selected: boolean;
-  onToggle: () => void;
+  // vRid 인자형 — 부모가 안정 콜백(useCallback)을 그대로 넘겨 아래 memo 가 동작.
+  onToggle: (vRid: string) => void;
   jobItem: DiningcodeBulkSaveJobItemType | null;
 }
 
@@ -137,13 +138,16 @@ const ItemStateBadge = ({
   );
 };
 
-const ResultCard = ({
+// memo — 체크박스 토글 시 부모(페이지)가 통째로 리렌더되지만, 토글된 카드만
+// selected 가 바뀌므로 나머지 카드(≤30)는 bail-out. 잡 진행 중 SSE 틱에도 잡에
+// 속한 카드(jobItem 변경)만 리렌더되고 미포함 카드(jobItem=null)는 그대로다.
+const ResultCard = memo(function ResultCard({
   item,
   registered,
   selected,
   onToggle,
   jobItem,
-}: ResultCardProps) => {
+}: ResultCardProps) {
   const isRegistered = !!registered;
   // 등록 가게도 다이닝코드 상세 페이지로 link — 상세 페이지가 source-of-truth
   // (다이닝코드 자체 응답) 라 등록 후 어떤 데이터가 들어갔는지 확인 가능.
@@ -159,7 +163,7 @@ const ResultCard = ({
             type="checkbox"
             checked={selected}
             disabled={checkboxDisabled}
-            onChange={onToggle}
+            onChange={() => onToggle(item.vRid)}
             aria-label={isRegistered ? '이미 등록됨' : '저장 대상으로 선택'}
             className="size-4 shrink-0"
           />
@@ -293,7 +297,7 @@ const ResultCard = ({
       </div>
     </Card>
   );
-};
+});
 
 const Pager = ({
   hasMore,
@@ -438,14 +442,15 @@ export const AdminDiningcodePage = () => {
     setQuery(trimmed);
   };
 
-  const toggleOne = (vRid: string) => {
+  // 함수형 업데이터라 deps [] 로 안정 — ResultCard memo 가 유지된다.
+  const toggleOne = useCallback((vRid: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(vRid)) next.delete(vRid);
       else next.add(vRid);
       return next;
     });
-  };
+  }, []);
 
   // 현재 페이지에서 선택 가능한(=미등록 + 잡에서 처리 안 됨) vRid 들.
   const selectableVRids = useMemo(
@@ -862,7 +867,7 @@ export const AdminDiningcodePage = () => {
               item={it}
               registered={registeredMap.get(it.vRid) ?? null}
               selected={selected.has(it.vRid)}
-              onToggle={() => toggleOne(it.vRid)}
+              onToggle={toggleOne}
               jobItem={jobItemByVRid.get(it.vRid) ?? null}
             />
           ))}
