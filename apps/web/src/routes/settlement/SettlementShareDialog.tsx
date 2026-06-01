@@ -45,6 +45,7 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
+  const [imageCopied, setImageCopied] = useState(false);
 
   // 다이얼로그가 열리거나 기간을 바꾸면 토큰 생성/갱신. 토큰은 멱등(같은 세션
   // → 같은 링크)이고 ttl 만 만료를 갱신한다. 닫혀 있는 동안에는 호출하지 않는다.
@@ -97,6 +98,12 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   // Web Share API — 모바일 단말에서 네이티브 공유 시트(카톡/메시지/메일 등)
   // 호출. 데스크톱 일부 브라우저에서도 동작. 미지원이면 버튼 숨김.
   const canShare = typeof navigator !== 'undefined' && 'share' in navigator;
+  // 파일(이미지) 공유 가능 여부 — 주로 모바일 단말. 데스크톱은 보통 false →
+  // '공유' 버튼 숨기고 '이미지 복사'(클립보드)만 노출.
+  const canShareFiles =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] });
   const handleShare = async () => {
     if (!shareUrl) return;
     try {
@@ -106,40 +113,80 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
     }
   };
 
-  // 정산표를 '이미지'로 — 서버가 만든 정산 요약 카드 PNG 를 받아, 파일 공유가
-  // 되는 환경(주로 모바일 단말)에선 네이티브 공유 시트(카톡 등)로, 안 되면
-  // 다운로드로 폴백. (서버 라우트: /s/<token>/image.png)
-  const handleImage = async () => {
+  // 이미지는 SPA 라우트(/s/...)가 아니라 백엔드 카드 라우트에서만 나온다. 동일
+  // 출처 상대경로로 받아 dev(Vite proxy)·prod(nginx) 모두에서 Fastify 에 도달.
+  // 토큰은 shareUrl(.../s/<token>) 의 마지막 세그먼트.
+  const imageUrl = (): string => {
+    const token = (shareUrl ?? '').split('/').pop() ?? '';
+    return `/share/settlements/${encodeURIComponent(token)}/image.png`;
+  };
+
+  const downloadImage = async () => {
+    const res = await fetch(imageUrl());
+    if (!res.ok) throw new Error(`image ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '정산표.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // 정산표 이미지를 '클립보드'에 PNG 로 복사 — 그림판·카카오톡 데스크톱 등에
+  // 바로 붙여넣기(Ctrl/⌘+V). Safari 는 사용자 제스처가 만료되면 거부하므로,
+  // fetch 를 await 하지 않고 ClipboardItem 값에 Promise<Blob> 를 그대로 넘겨
+  // 클립보드 쓰기 '안'에서 받아오게 한다. 미지원/실패 시 다운로드로 폴백.
+  const handleCopyImage = async () => {
     if (!shareUrl || imageBusy) return;
     setImageBusy(true);
     setError(null);
     try {
-      // 이미지는 SPA 라우트(/s/...)가 아니라 백엔드 카드 라우트에서만 나온다.
-      // 동일 출처 상대경로로 받아 dev(Vite proxy)·prod(nginx) 모두에서 Fastify 에
-      // 도달하게 한다. 토큰은 shareUrl(.../s/<token>) 의 마지막 세그먼트.
-      const token = shareUrl.split('/').pop() ?? '';
-      const res = await fetch(`/share/settlements/${encodeURIComponent(token)}/image.png`);
+      if (
+        navigator.clipboard &&
+        'write' in navigator.clipboard &&
+        typeof ClipboardItem !== 'undefined'
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'image/png': fetch(imageUrl()).then((r) => {
+              if (!r.ok) throw new Error(`image ${r.status}`);
+              return r.blob();
+            }),
+          }),
+        ]);
+        setImageCopied(true);
+        window.setTimeout(() => setImageCopied(false), 1500);
+        return;
+      }
+      await downloadImage();
+    } catch {
+      // 클립보드 이미지 쓰기 실패(권한/미지원) → 다운로드 폴백, 그것도 실패 시 에러.
+      try {
+        await downloadImage();
+      } catch {
+        setError('이미지 복사 실패 — 잠시 후 다시 시도하세요.');
+      }
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  // 파일 공유가 되는 환경(주로 모바일 단말): 네이티브 공유 시트(카톡 등)로 첨부.
+  const handleShareImageFile = async () => {
+    if (!shareUrl || imageBusy) return;
+    setImageBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(imageUrl());
       if (!res.ok) throw new Error(`image ${res.status}`);
       const blob = await res.blob();
       const file = new File([blob], '정산표.png', { type: 'image/png' });
-      const nav = navigator as Navigator & {
-        canShare?: (data?: ShareData) => boolean;
-      };
-      if (nav.canShare?.({ files: [file] }) && 'share' in nav) {
-        await nav.share({ files: [file], title: '정산표' });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = '정산표.png';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
+      await navigator.share({ files: [file], title: '정산표' });
     } catch (e) {
-      // 사용자가 공유 시트를 취소하면 AbortError — 조용히 무시.
-      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (e instanceof DOMException && e.name === 'AbortError') return; // 사용자 취소
       setError('이미지 공유 실패 — 잠시 후 다시 시도하세요.');
     } finally {
       setImageBusy(false);
@@ -251,21 +298,41 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
               </p>
             )}
 
-            {/* 1순위: 정산표 이미지로 공유/저장 — 카카오톡 등에 바로 첨부. */}
-            <Button
-              type="button"
-              variant="default"
-              className="w-full"
-              onClick={handleImage}
-              disabled={imageBusy}
-            >
-              {imageBusy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <ImageDown className="size-4" />
+            {/* 1순위: 정산표 이미지를 클립보드에 복사(그림판·카톡 데스크톱에
+                붙여넣기). 파일 공유 지원 단말이면 '공유' 시트 버튼을 함께 노출. */}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="default"
+                className="flex-1"
+                onClick={handleCopyImage}
+                disabled={imageBusy}
+              >
+                {imageBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : imageCopied ? (
+                  <Check className="size-4" />
+                ) : (
+                  <ImageDown className="size-4" />
+                )}
+                {imageCopied ? '이미지 복사됨' : '정산표 이미지 복사'}
+              </Button>
+              {canShareFiles && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleShareImageFile}
+                  disabled={imageBusy}
+                  aria-label="정산표 이미지 공유"
+                >
+                  <Share2 className="size-4" />
+                  공유
+                </Button>
               )}
-              정산표 이미지로 공유
-            </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              복사 후 카카오톡·메모·그림판 등에 붙여넣기(Ctrl/⌘+V) 하세요.
+            </p>
 
             <div className="flex items-center justify-between gap-2">
               {canShare ? (
