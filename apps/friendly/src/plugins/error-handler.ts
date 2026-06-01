@@ -1,9 +1,10 @@
 import fp from 'fastify-plugin';
+import type { FastifyError } from 'fastify';
 import { ZodError } from 'zod';
 import { isDev } from '../config/env.js';
 
 export default fp(async (app) => {
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error: FastifyError, _request, reply) => {
     if (error instanceof ZodError) {
       return reply.status(400).send({
         statusCode: 400,
