@@ -332,25 +332,24 @@ export class SettlementService {
         const attendeeMap = new Map(
           r.attendees.map((a) => [a.participantClientId, a]),
         );
-        for (const p of input.participants) {
-          const dbId = clientIdToDbId.get(p.clientId)!;
-          const a = attendeeMap.get(p.clientId);
-          const attended = a?.attended ?? false;
-          const shareIdx = input.participants.findIndex(
-            (pp) => pp.clientId === p.clientId,
-          );
-          await tx.settlementRoundParticipant.create({
-            data: {
+        // R×P 개 attendee 를 1회 createMany 로 묶어 트랜잭션 write 왕복을 줄인다.
+        // clientId 는 validateInput 이 유일성을 보장하므로 루프 인덱스(pIdx)가 곧
+        // shareAmounts 인덱스(=과거 findIndex 결과)와 동일.
+        await tx.settlementRoundParticipant.createMany({
+          data: input.participants.map((p, pIdx) => {
+            const a = attendeeMap.get(p.clientId);
+            const attended = a?.attended ?? false;
+            return {
               roundId: round.id,
-              participantId: dbId,
+              participantId: clientIdToDbId.get(p.clientId)!,
               attended,
               excludeAlcoholOverride: a?.excludeAlcoholOverride ?? null,
               excludeNonAlcoholOverride: a?.excludeNonAlcoholOverride ?? null,
               excludeSideOverride: a?.excludeSideOverride ?? null,
-              shareAmount: attended ? (calc.perRound[rIdx]!.shareAmounts[shareIdx] ?? 0) : 0,
-            },
-          });
-        }
+              shareAmount: attended ? (calc.perRound[rIdx]!.shareAmounts[pIdx] ?? 0) : 0,
+            };
+          }),
+        });
       }
 
       // 자동 저장 draft 정리 — 클라이언트가 fromDraftId 를 넘기면 같은
@@ -575,25 +574,24 @@ export class SettlementService {
         const attendeeMap = new Map(
           r.attendees.map((a) => [a.participantClientId, a]),
         );
-        for (const p of input.participants) {
-          const dbId = clientIdToDbId.get(p.clientId)!;
-          const a = attendeeMap.get(p.clientId);
-          const attended = a?.attended ?? false;
-          const shareIdx = input.participants.findIndex(
-            (pp) => pp.clientId === p.clientId,
-          );
-          await tx.settlementRoundParticipant.create({
-            data: {
+        // R×P 개 attendee 를 1회 createMany 로 묶어 트랜잭션 write 왕복을 줄인다.
+        // clientId 는 validateInput 이 유일성을 보장하므로 루프 인덱스(pIdx)가 곧
+        // shareAmounts 인덱스(=과거 findIndex 결과)와 동일.
+        await tx.settlementRoundParticipant.createMany({
+          data: input.participants.map((p, pIdx) => {
+            const a = attendeeMap.get(p.clientId);
+            const attended = a?.attended ?? false;
+            return {
               roundId: round.id,
-              participantId: dbId,
+              participantId: clientIdToDbId.get(p.clientId)!,
               attended,
               excludeAlcoholOverride: a?.excludeAlcoholOverride ?? null,
               excludeNonAlcoholOverride: a?.excludeNonAlcoholOverride ?? null,
               excludeSideOverride: a?.excludeSideOverride ?? null,
-              shareAmount: attended ? (calc.perRound[rIdx]!.shareAmounts[shareIdx] ?? 0) : 0,
-            },
-          });
-        }
+              shareAmount: attended ? (calc.perRound[rIdx]!.shareAmounts[pIdx] ?? 0) : 0,
+            };
+          }),
+        });
       }
 
       await tx.settlementSession.update({
