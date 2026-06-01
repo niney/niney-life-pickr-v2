@@ -122,7 +122,6 @@ export const ContactPickerDialog = ({
             onChange={(e) => setQ(e.target.value)}
             placeholder="이름·닉네임 검색"
             className="pl-9"
-            autoFocus
           />
         </div>
 

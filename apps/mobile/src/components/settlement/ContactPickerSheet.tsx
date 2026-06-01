@@ -111,7 +111,6 @@ export const ContactPickerSheet = ({
             placeholderTextColor={theme.colors.textMuted}
             onChangeText={setQ}
             style={styles.search}
-            autoFocus
           />
         </View>
 
