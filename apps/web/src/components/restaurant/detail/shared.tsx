@@ -53,7 +53,15 @@ export const QuickActions = ({ detail }: { detail: RestaurantPublicDetailType })
   );
 };
 
-export const AiSummary = ({ insights }: { insights: RestaurantInsightsType }) => {
+export const AiSummary = ({
+  insights,
+  onSelectTip,
+}: {
+  insights: RestaurantInsightsType;
+  // 주어지면 방문 팁을 클릭 가능한 버튼으로 렌더해 리뷰 필터로 연결한다.
+  // (홈 탭에서만 주입 — 인사이트 탭은 정적 목록 유지.)
+  onSelectTip?: (term: string) => void;
+}) => {
   const dist = insights.sentimentDistribution;
   const total = dist.positive + dist.negative + dist.neutral + dist.mixed;
   const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
@@ -113,11 +121,28 @@ export const AiSummary = ({ insights }: { insights: RestaurantInsightsType }) =>
       {insights.topTips.length > 0 && (
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">방문 팁</div>
-          <ul className="space-y-0.5 text-xs">
-            {insights.topTips.slice(0, 8).map((t) => (
-              <li key={t.term}>· {t.term}</li>
-            ))}
-          </ul>
+          {onSelectTip ? (
+            <ul className="space-y-0.5 text-xs">
+              {insights.topTips.slice(0, 8).map((t) => (
+                <li key={t.term}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTip(t.term)}
+                    className="inline text-left underline-offset-2 hover:text-foreground hover:underline"
+                    title={`"${t.term}" 팁이 달린 리뷰 보기`}
+                  >
+                    · {t.term}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-0.5 text-xs">
+              {insights.topTips.slice(0, 8).map((t) => (
+                <li key={t.term}>· {t.term}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>

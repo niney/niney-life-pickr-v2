@@ -1,14 +1,17 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type { RestaurantInsightsType } from '@repo/api-contract';
 import { SENTIMENT_COLORS } from '../colors';
 
 interface Props {
   insights: RestaurantInsightsType;
+  // 주어지면 방문 팁을 탭 가능하게 렌더해 리뷰 필터로 연결한다.
+  // (홈 탭에서만 주입 — 인사이트 탭은 정적 목록 유지.)
+  onSelectTip?: (term: string) => void;
 }
 
 // 통계 카드(만족도/감정점수) + sentiment 분포 막대 + 키워드 칩 + 팁 목록.
-export const AiSummary = ({ insights }: Props) => {
+export const AiSummary = ({ insights, onSelectTip }: Props) => {
   const theme = useTheme();
   const dist = insights.sentimentDistribution;
   const total = dist.positive + dist.negative + dist.neutral + dist.mixed;
@@ -99,11 +102,32 @@ export const AiSummary = ({ insights }: Props) => {
       {insights.topTips.length > 0 && (
         <View style={{ gap: 2 }}>
           <Text style={[styles.label, { color: theme.colors.textMuted }]}>방문 팁</Text>
-          {insights.topTips.slice(0, 8).map((t) => (
-            <Text key={t.term} style={[styles.tip, { color: theme.colors.text }]}>
-              · {t.term}
-            </Text>
-          ))}
+          {insights.topTips.slice(0, 8).map((t) =>
+            onSelectTip ? (
+              <Pressable
+                key={t.term}
+                onPress={() => onSelectTip(t.term)}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={`"${t.term}" 팁이 달린 리뷰 보기`}
+              >
+                {({ pressed }) => (
+                  <Text
+                    style={[
+                      styles.tip,
+                      { color: pressed ? theme.colors.textMuted : theme.colors.primary },
+                    ]}
+                  >
+                    · {t.term}
+                  </Text>
+                )}
+              </Pressable>
+            ) : (
+              <Text key={t.term} style={[styles.tip, { color: theme.colors.text }]}>
+                · {t.term}
+              </Text>
+            ),
+          )}
         </View>
       )}
     </View>

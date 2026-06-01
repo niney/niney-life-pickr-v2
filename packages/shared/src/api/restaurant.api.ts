@@ -107,6 +107,7 @@ export const restaurantApi = {
     if (query.limit !== undefined) params.set('limit', String(query.limit));
     if (query.sentiment) params.set('sentiment', query.sentiment);
     if (query.sort) params.set('sort', query.sort);
+    if (query.tip) params.set('tip', query.tip);
     const qs = params.toString();
     return apiFetch<RestaurantPublicReviewsResultType>(
       `${Routes.Restaurant.publicReviews(placeId)}${qs ? `?${qs}` : ''}`,

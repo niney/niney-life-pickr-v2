@@ -19,6 +19,7 @@ interface Props {
   insights: RestaurantInsightsType | undefined;
   insightsLoading: boolean;
   onChangeTab(next: TabKey): void;
+  onSelectTip(term: string): void;
 }
 
 const HOME_MENU_PREVIEW = 4;
@@ -27,7 +28,13 @@ const HOME_REVIEW_PREVIEW = 3;
 // 홈 탭 — 모든 정보의 요약. 각 섹션에 "전체 보기" 액션으로 해당 탭 점프.
 // hero 이미지와 식당명은 컨테이너(PublicRestaurantDetail) 가 처리 — 여기선
 // 메타(카테고리/별점/리뷰수) + QuickActions 부터 시작.
-export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Props) => {
+export const HomeTab = ({
+  detail,
+  insights,
+  insightsLoading,
+  onChangeTab,
+  onSelectTip,
+}: Props) => {
   const theme = useTheme();
   const previewMenus = useMemo(
     () => detail.menus.slice(0, HOME_MENU_PREVIEW),
@@ -78,7 +85,7 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
           onAction={() => onChangeTab('insights')}
         />
         {insights && insights.analyzedCount > 0 ? (
-          <AiSummary insights={insights} />
+          <AiSummary insights={insights} onSelectTip={onSelectTip} />
         ) : insightsLoading ? (
           <Text style={[styles.note, { color: theme.colors.textMuted }]}>
             분석 정보 불러오는 중…

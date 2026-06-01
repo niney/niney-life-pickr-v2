@@ -954,6 +954,68 @@ describe('Public restaurant routes', () => {
     expect(unanalyzed?.body).toBe('아직 분석 전');
   });
 
+  it('GET /restaurants/public/:placeId/reviews — tip filter matches by normalized term', async () => {
+    const { id, placeId } = await seedRestaurant({ name: '팁필터집' });
+    // 팁이 다른 두 리뷰 + 분석 안 된 리뷰 하나.
+    const seedReviewWithTips = async (n: number, tips: string[] | null) => {
+      const v = await app.prisma.visitorReview.create({
+        data: {
+          restaurantId: id,
+          authorName: `익명${n}`,
+          rating: 4,
+          body: `리뷰 ${n}`,
+          visitedAt: null,
+          imageUrlsJson: '[]',
+          videosJson: '[]',
+          contentHash: `${placeId}-${n}`,
+        },
+        select: { id: true },
+      });
+      if (tips) {
+        await app.prisma.reviewSummary.create({
+          data: {
+            reviewId: v.id,
+            status: 'done',
+            text: `요약 ${n}`,
+            sentiment: 'positive',
+            sentimentScore: 0.5,
+            satisfactionScore: 4,
+            tipsJson: JSON.stringify(tips),
+            finishedAt: new Date(),
+          },
+        });
+      }
+    };
+    await seedReviewWithTips(1, ['주차 협소']);
+    await seedReviewWithTips(2, ['예약 필수']);
+    await seedReviewWithTips(3, null); // 분석 없음 → 팁 필터에서 제외
+
+    const get = async (tip: string) => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/restaurants/public/${placeId}/reviews`,
+        query: { tip },
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json() as { items: Array<{ body: string }>; total: number };
+    };
+
+    // 정확한 원문 일치.
+    const exact = await get('주차 협소');
+    expect(exact.total).toBe(1);
+    expect(exact.items[0]?.body).toBe('리뷰 1');
+
+    // 공백/대소문자 차이는 termNorm 정규화로 흡수 — 같은 결과.
+    const normalized = await get('주차협소');
+    expect(normalized.total).toBe(1);
+    expect(normalized.items[0]?.body).toBe('리뷰 1');
+
+    // 일치하는 팁이 없으면 빈 결과.
+    const none = await get('없는팁');
+    expect(none.total).toBe(0);
+    expect(none.items).toHaveLength(0);
+  });
+
   it('GET /restaurants/public/:placeId — merges DC sibling fields & reviews', async () => {
     // Naver 행 한 줄. 우리 머지 기준에서 phone/address 가 비어 있으면 DC fallback
     // 으로 채워져야 하므로 의도적으로 일부 필드를 빈 상태로 시작.

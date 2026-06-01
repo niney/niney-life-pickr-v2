@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
+import { normalizeTerm } from '../summary/summary.service.js';
 import {
   composeDiningcodeAddon,
   computeSources,
@@ -1169,6 +1170,15 @@ export class RestaurantService {
     let filtered = reviews;
     if (query.sentiment !== 'all') {
       filtered = filtered.filter((r) => r.analysis?.sentiment === query.sentiment);
+    }
+
+    // 방문 팁 필터 — topTips 집계와 동일한 termNorm 정확 일치. 클릭한 팁이
+    // 분석에 달린 리뷰만 남긴다(분석 없는 리뷰는 자동 제외).
+    if (query.tip) {
+      const want = normalizeTerm(query.tip);
+      filtered = filtered.filter(
+        (r) => r.analysis?.tips.some((t) => normalizeTerm(t) === want) ?? false,
+      );
     }
 
     if (query.sort === 'rating') {

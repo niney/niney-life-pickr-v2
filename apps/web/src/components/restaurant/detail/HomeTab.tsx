@@ -19,12 +19,19 @@ interface Props {
   insights: RestaurantInsightsType | undefined;
   insightsLoading: boolean;
   onChangeTab(tab: TabKey): void;
+  onSelectTip(term: string): void;
 }
 
 const HOME_MENU_PREVIEW = 4;
 const HOME_REVIEW_PREVIEW = 3;
 
-export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Props) => {
+export const HomeTab = ({
+  detail,
+  insights,
+  insightsLoading,
+  onChangeTab,
+  onSelectTip,
+}: Props) => {
   const hero = detail.imageUrls[0] ?? null;
   const previewMenus = detail.menus.slice(0, HOME_MENU_PREVIEW);
   // 분석된 리뷰 우선 — 사용자에게 가장 정보량 큰 미리보기.
@@ -97,7 +104,7 @@ export const HomeTab = ({ detail, insights, insightsLoading, onChangeTab }: Prop
             actionLabel="분석 전체 보기"
             onAction={() => onChangeTab('insights')}
           />
-          <AiSummary insights={insights} />
+          <AiSummary insights={insights} onSelectTip={onSelectTip} />
         </section>
       ) : insightsLoading ? (
         <section className="border-t px-4 pt-4 text-xs text-muted-foreground">

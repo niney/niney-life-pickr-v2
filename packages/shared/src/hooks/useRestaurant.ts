@@ -212,11 +212,17 @@ export const useRestaurantPublicReviews = (
   filters: {
     sentiment: RestaurantPublicReviewSentimentType;
     sort: RestaurantPublicReviewSortType;
+    // 방문 팁 필터. 지정 시 그 팁이 달린 리뷰만. seed(첫 페이지 동봉본)는
+    // 필터 없는 기본 상태에만 유효하므로 tip 이 있으면 seed 무효.
+    tip?: string;
   },
   seed?: { items: PublicVisitorReviewType[]; total: number },
 ) => {
   const canSeed =
-    !!seed && filters.sentiment === 'all' && filters.sort === 'recent';
+    !!seed &&
+    filters.sentiment === 'all' &&
+    filters.sort === 'recent' &&
+    !filters.tip;
   return useInfiniteQuery<
     RestaurantPublicReviewsResultType,
     Error,
@@ -231,6 +237,7 @@ export const useRestaurantPublicReviews = (
       placeId,
       filters.sentiment,
       filters.sort,
+      filters.tip ?? null,
     ] as const,
     initialPageParam: 0,
     queryFn: ({ pageParam }) => {
@@ -240,6 +247,7 @@ export const useRestaurantPublicReviews = (
         limit: REVIEWS_PAGE_SIZE,
         sentiment: filters.sentiment,
         sort: filters.sort,
+        tip: filters.tip,
       });
     },
     getNextPageParam: (lastPage, _all, lastPageParam) => {

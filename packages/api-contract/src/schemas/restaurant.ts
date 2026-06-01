@@ -631,6 +631,9 @@ export const RestaurantPublicReviewsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   sentiment: RestaurantPublicReviewSentiment.default('all'),
   sort: RestaurantPublicReviewSort.default('recent'),
+  // 방문 팁 필터. 인사이트의 topTips(정규화 빈도 집계)에서 한 항목을 클릭하면
+  // 그 팁이 달린 리뷰만 보여준다. 서버는 termNorm 정확 일치로 거른다.
+  tip: z.string().trim().min(1).optional(),
 });
 export type RestaurantPublicReviewsQueryType = z.infer<
   typeof RestaurantPublicReviewsQuery

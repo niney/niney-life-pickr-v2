@@ -38,11 +38,21 @@ export const PublicRestaurantDetail = ({
   const isLoggedIn = useAuthStore((s) => !!s.token);
   const [internalTab, setInternalTab] = useState<TabKey>('home');
   const tab = tabProp ?? internalTab;
+  // 홈 탭 "방문 팁" 클릭 → 리뷰 탭으로 넘기며 적용하는 팁 필터. 리뷰 탭이
+  // 자체 sentiment/sort state 를 가지므로 탭 간 공유가 필요한 tip 만 여기서 보관.
+  const [tipFilter, setTipFilter] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (tabProp === undefined) setInternalTab('home');
   }, [placeId, tabProp]);
+
+  // 팁 필터는 식당이 바뀔 때만 리셋. tabProp(URL ?tab=) 변경에 묶으면
+  // controlled 모드에서 "팁 클릭 → reviews 로 전환" 시 tabProp 이 바뀌며
+  // 방금 설정한 필터를 곧장 지워버린다. placeId 에만 의존시킨다.
+  useEffect(() => {
+    setTipFilter(null);
+  }, [placeId]);
 
   // 탭 변경 시 스크롤을 맨 위로.
   // - admin 패널 / xl+ 컬럼: 본문 div 가 자체 scroll → scrollRef 안에서 top
@@ -184,6 +194,12 @@ export const PublicRestaurantDetail = ({
             insights={insights.data}
             insightsLoading={insights.isLoading}
             onChangeTab={handleChangeTab}
+            tipFilter={tipFilter}
+            onSelectTip={(term) => {
+              setTipFilter(term);
+              handleChangeTab('reviews');
+            }}
+            onClearTip={() => setTipFilter(null)}
           />
         ) : null}
       </div>
@@ -198,6 +214,9 @@ const ActiveTab = ({
   insights,
   insightsLoading,
   onChangeTab,
+  tipFilter,
+  onSelectTip,
+  onClearTip,
 }: {
   tab: TabKey;
   placeId: string;
@@ -205,6 +224,9 @@ const ActiveTab = ({
   insights: ReturnType<typeof useRestaurantPublicInsights>['data'];
   insightsLoading: boolean;
   onChangeTab(next: TabKey): void;
+  tipFilter: string | null;
+  onSelectTip(term: string): void;
+  onClearTip(): void;
 }) => {
   switch (tab) {
     case 'home':
@@ -214,12 +236,20 @@ const ActiveTab = ({
           insights={insights}
           insightsLoading={insightsLoading}
           onChangeTab={onChangeTab}
+          onSelectTip={onSelectTip}
         />
       );
     case 'menu':
       return <MenuTab detail={detail} insights={insights} />;
     case 'reviews':
-      return <ReviewsTab placeId={placeId} detail={detail} />;
+      return (
+        <ReviewsTab
+          placeId={placeId}
+          detail={detail}
+          tip={tipFilter}
+          onClearTip={onClearTip}
+        />
+      );
     case 'insights':
       return (
         <InsightsTab
