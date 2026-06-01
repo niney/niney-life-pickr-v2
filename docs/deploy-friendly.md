@@ -107,12 +107,20 @@ location /api/ {
 
 웹은 순수 SPA 라 카카오톡·텔레그램 크롤러(JS 미실행)가 공유 링크를 긁으면 OG
 태그가 비어 미리보기가 안 뜬다. 공유 경로만 Fastify 로 보내 `index.html` 의
-`<head>` 에 OG 메타(식당명·총액·인원수)를 주입해 내려준다. 정적 `location /`
-fallback 보다 구체적 prefix 라 자동으로 우선 매칭된다.
+`<head>` 에 OG 메타(식당명·총액·인원수)를 주입해 내려준다.
+
+**반드시 `^~` 를 붙인다.** 정산 카드 이미지 라우트는 `/share/settlements/<token>/
+image.png` 처럼 `.png` 로 끝나는데, nginx 는 **정규식 location 이 일반 prefix 보다
+우선**한다. 정적 캐싱용 `location ~* \.(png|...)$` 가 있으면 이 이미지 요청을
+가로채 `root`(web/dist)에서 파일을 찾다 없으니 404 가 된다(개발은 Vite proxy 라
+정상 → "dev OK / prod 404" 의 전형 원인). `^~` 는 "이 prefix 가 최장 매칭이면
+정규식 검사를 건너뛴다"는 의미라, prefix 가 `.png` 정규식을 이긴다.
 
 ```nginx
 # 정식 공유 경로 + 별칭(/s/). 끝 슬래시 X — Fastify 가 경로 그대로 받는다.
-location /share/settlements/ {
+# ^~ 필수: /share/settlements/<token>/image.png 가 .png 정규식 location 에
+# 가로채이지 않도록 prefix 우선권을 준다.
+location ^~ /share/settlements/ {
     proxy_pass http://127.0.0.1:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -120,7 +128,7 @@ location /share/settlements/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;            # Flexible SSL: 공개는 항상 https
 }
-location /s/ {
+location ^~ /s/ {
     proxy_pass http://127.0.0.1:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -129,6 +137,12 @@ location /s/ {
     proxy_set_header X-Forwarded-Proto https;
 }
 ```
+
+- **Cloudflare 캐시**: `.png` 라 Cloudflare 가 엣지 캐시한다 — 잘못된 404 가 한 번
+  캐시되면 nginx 를 고쳐도 한동안(관측상 max-age 14400s ≈ 4h) 404 가 보인다. nginx
+  수정 후 Cloudflare 에서 해당 URL 을 **Purge** 해야 즉시 반영된다. 성공 응답은
+  origin `cache-control: public, max-age=300` 을 따라 5분 엣지 캐시(편집 시 최대
+  5분 지연 — OG 는 어차피 카카오가 더 길게 캐시).
 
 - friendly 가 빌드된 웹 `index.html` 을 읽어 주입한다. 기본 경로는 산출물 기준
   자동 탐색(`apps/web/dist/index.html`). 위치가 다르면 `.env` 에 `WEB_INDEX_PATH`.
