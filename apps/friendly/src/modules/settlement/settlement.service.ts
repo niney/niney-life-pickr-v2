@@ -177,21 +177,31 @@ export class SettlementService {
     await this.validateInput(input);
 
     // 1차 식당 이름을 session 본체 snapshot 으로 박는다. round 마다도 별도로
-    // 자기 식당 이름을 resolve 한다.
+    // 자기 식당 이름을 resolve 한다. placeId 단위로 메모이즈 + 병렬화 — firstRound
+    // 는 rounds[0] 와 같은 placeId 라 캐시 히트로 중복 조회를 없애고, 같은 식당이
+    // 여러 차수에 있어도 1회만 조회한다. 모두 트랜잭션 진입 전이라 write-lock 무관.
+    const nameCache = new Map<string, Promise<string>>();
+    const resolveName = (placeId: string): Promise<string> => {
+      let p = nameCache.get(placeId);
+      if (!p) {
+        p = this.resolveRestaurantName(placeId);
+        nameCache.set(placeId, p);
+      }
+      return p;
+    };
+
     const firstRound = input.rounds[0]!;
-    const sessionRestaurantName = await this.resolveRestaurantName(
-      firstRound.restaurantPlaceId,
-    );
-    const roundRestaurantNames: string[] = [];
-    for (const r of input.rounds) {
-      roundRestaurantNames.push(await this.resolveRestaurantName(r.restaurantPlaceId));
-    }
+    // 이름 해석을 토큰 검증보다 먼저 — 기존 에러 우선순위(restaurant_not_found
+    // 404 가 invalid_receipt_token 400 보다 먼저 throw)를 보존한다.
+    const [sessionRestaurantName, roundRestaurantNames] = await Promise.all([
+      resolveName(firstRound.restaurantPlaceId),
+      Promise.all(input.rounds.map((r) => resolveName(r.restaurantPlaceId))),
+    ]);
 
     // 영수증 토큰 모두 검증.
-    const validatedTokens: Array<string | null> = [];
-    for (const r of input.rounds) {
-      validatedTokens.push(await this.validateReceiptToken(r.receiptImageToken));
-    }
+    const validatedTokens = await Promise.all(
+      input.rounds.map((r) => this.validateReceiptToken(r.receiptImageToken)),
+    );
 
     const calc = this.computeShares(input);
 
@@ -833,11 +843,18 @@ export class SettlementService {
   }
 
   private async resolveRestaurantName(placeId: string): Promise<string> {
-    const detail = await this.restaurants.getPublicDetail(placeId);
-    if (!detail) {
+    // 이름 한 컬럼만 필요하므로 getPublicDetail(양쪽 출처 전체 리뷰 코퍼스 +
+    // summary join + snapshotJson 파싱 + merge)을 거치지 않고 스칼라 직조회한다.
+    // placeId 는 naver 행에만 채워지고(@unique), getPublicDetail 의 mergeName 도
+    // naver 존재 시 naver.name 을 그대로 반환하므로 결과 값은 동일하다.
+    const row = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { name: true },
+    });
+    if (!row) {
       throw new SettlementError('restaurant_not_found', '식당을 찾을 수 없습니다.');
     }
-    return detail.name;
+    return row.name;
   }
 
   private async validateReceiptToken(token: string | null): Promise<string | null> {
