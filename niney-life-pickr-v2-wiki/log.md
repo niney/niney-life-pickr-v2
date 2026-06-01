@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-06-01 (16th compile)
+
+**Topics updated:** settlement, friendly, web, mobile, shared, api-contract, config, map, project-overview
+**New topics:** none
+**Concepts updated:** stream-driven-cache-merge (AdminCrawlTestPage 배치 setQueryData 머지 — SSE 잡 밖 어드민 인터랙션 확장), platform-ui-split (thumbUrl 플랫폼 무관 프록시 + "내 위치" 회복 web/native 동형), in-memory-singleton-gates (sharePreviewCache read 캐시 변형 — token+origin 5분 TTL + owner invalidate, settlement 연결 추가), versioned-llm-prompts (EXTRACTION v2→v3 envelope-only bump)
+**New concepts:** none (보류 후보 2개: 정산 공유 OG SSR-lite — 단일 도메인 / monorepo-shared-eslint-base — build·lint 인프라)
+
+**Sources scanned:** ~525 (기존 505 + 신규 ~20)
+**Sources changed:** 85 파일 — 33 커밋 (위키 커밋 `f2880bb` 이후 — `git diff f2880bb HEAD`)
+**Notes:** 정산 공유 대확장 + 전방위 perf + ESLint 인프라 라운드를 incremental 흡수. 9개 토픽 영향(crawl·canonical·auto-discover·ai·menu-grouping·analytics·utils 무변경). 핵심: (1) 정산 공유 OG SSR-lite — `share-preview.ts` 가 빌드된 index.html `<head>` 에 OG 메타 + 동적 og:image 만 주입(autoload 우회 공개 비인증 라우트, 본문은 SPA 그대로), `settlement-card.ts` 가 정산표를 satori+resvg 로 PNG 서버 렌더(FE 와 동일 `calculateMultiRoundShares` 재현), OG 이미지 3-mode 선택(restaurant/table/갤러리 특정1장+토큰시드 랜덤). (2) 백엔드 정산 perf — resolveRestaurantName 경량 select(전체 리뷰 코퍼스 로드 제거), create 병렬+attendee createMany, getSharePreviewMeta 경량+5분 캐시(sharePreviewCache), draft hydrate placeId당 1회. (3) 웹/앱 perf — 라우트 코드 스플리팅, React.memo 핫패스, 배치 setQueryData 머지, 앱 썸네일 프록시(~98%)·FlatList 가상화·PNG 압축. (4) ESLint 인프라 전면 연결 — config/eslint/base 를 4 워크스페이스가 확장, turbo lint 4/4 green. 신규 컨셉 0 — OG SSR-lite·eslint-base 둘 다 임계 미달로 보류. settlement article 95→103, friendly 88→92, web 93→95, mobile 48→53, config 8→13, project-overview 31→35 sources.
+
 ## 2026-05-31 (15th compile)
 
 **Topics updated:** mobile, web, shared, friendly, map, project-overview

@@ -1,6 +1,6 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-05-31
+last_compiled: 2026-06-01
 topics_connected: [shared, web, mobile, project-overview, utils, map, settlement]
 status: active
 ---
@@ -23,6 +23,8 @@ status: active
 - **2026-05-28** in [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] / [[../topics/settlement]] (정산 Step1/2/3/4 + Round\* 편집 컴포넌트 + tabs-layout web/native + storage adapter 주입): 패턴이 **도메인 단위 듀얼 구현**으로 확장 — 정산 플로우의 같은 단계가 web `Step*.tsx` 는 다이얼로그/모달로, mobile `Step*.tsx` 는 바텀시트로 따로 작성. 같은 store 훅(`@repo/shared/stores`) 을 소비해 데이터 모델은 1개, UI 프리미티브만 두 갈래. `RoundDiscountEditor` / `RoundCategoryAdjuster` / `RoundExceptionsEditor` / `MultiReceiptSplit*` / `SettlementBreakdownTable` 도 같은 듀얼 구현 — 한 데이터 셰이프, 두 표현. 또 `tabs-layout.tsx` (native, `react-native-bottom-tabs` 직접) vs `tabs-layout.web.tsx` (custom React tabs) — 라이브러리가 네이티브 전용이라 web 빌드는 같은 컴포넌트 이름 surface 로 다시 작성. 그리고 **새 sub-pattern: storage adapter 주입** — `settlementDraftStore` (zustand) 가 자체 persist 미들웨어를 들고 있지 않고, 진입점에서 storage 를 주입 (`setSettlementDraftStorage(adapter)`). web 은 자동으로 sessionStorage, mobile 은 AsyncStorage 어댑터를 등록. 같은 store 코드 한 벌, 두 persistence layer — **파일 확장자 분기(`.web.tsx`/`.native.tsx`)에 더해 "런타임 의존성 주입" 이 분기 도구로 추가됐다는 점에서 quad 패턴의 자매 패턴**. zustand 가 빌드 시 분기되기 어려운 시나리오(import.meta · AsyncStorage 가 web 빌드에 들어가면 깨짐) 를 주입으로 우회 — quad 가 "번들러가 알아서 픽" 이라면 storage adapter 주입은 "엔트리 파일이 명시적으로 등록" 모델.
 
 - **2026-05-31** in [[../topics/mobile]] (`useTabBarHeight.ts` / `.web.ts` 페어): 훅 레벨 분기의 **가장 깨끗한 인스턴스**. 두 파일이 시그니처(`(): number`)·본문(`tabBarHeight || insets.bottom`)까지 동일하고 오직 import 한 줄만 다르다 — native 는 `react-native-bottom-tabs` 의 `BottomTabBarHeightContext`, web 은 `@react-navigation/bottom-tabs` 의 동명 context (web 탭바는 JS 구현 `tabs-layout.web.tsx` 라 그쪽 context). `useUserLocation`(인프라가 navigator vs expo-location 로 본문까지 다름)보다 한 단계 더 얇은 분기 — 같은 개념(탭바 높이)을 두 라이브러리가 각자 제공할 때, 본문이 같아도 native-only import 가 web 번들에 새지 않게 `.web.ts` 형제로 떼어내는 것이 핵심. `react-native-bottom-tabs` 가 web 번들을 깨뜨리는 `tabs-layout.tsx`/`.web.tsx` 셔틀과 같은 회피(2026-05-28 인스턴스)가 훅으로 번진 셈.
+
+- **2026-06-01** in [[../topics/mobile]] / [[../topics/web]] / [[../topics/map]] (네이버 썸네일 프록시 + "내 위치" 회복 동형): 두 개의 얇은 분기 인스턴스. (1) [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) 가 네이버 CDN(`*.pstatic.net`) 이미지를 friendly `/media/thumbnail` 프록시로 감싸 ~98% 다운로드 절감 — 웹의 동명 변환 로직과 같은 결의 **플랫폼 무관 URL 변환 유틸**(인프라가 아니라 문자열 변환이라 분기 자체가 가장 얇음, 공통화 후보). (2) 앱 `PublicRestaurantsWebMap.native` 의 "내 위치" 버튼이 denied/unavailable 에서 비활성 대신 silent refetch + Alert/openSettings 회복 경로 — 웹 `MyLocationButton`(denied/insecure 구분 callout)과 **동형 UX**. 같은 사용자 약속을 두 플랫폼이 각자 인프라로 충족하는, 인터페이스 동형 분기의 연속.
 
 ## What This Means
 
