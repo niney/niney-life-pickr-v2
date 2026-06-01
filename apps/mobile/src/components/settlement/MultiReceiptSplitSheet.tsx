@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ApiError,
-  settlementExtractionApi,
   useExtractReceipt,
   useTheme,
   useUploadReceipt,
@@ -22,6 +21,8 @@ import {
   type DraftRound,
   type Theme,
 } from '@repo/shared';
+import { Lightbox } from '~/components/Lightbox';
+import { useReceiptPreviewUrl } from '~/hooks/useReceiptPreviewUrl';
 
 interface ApplyArgs {
   imageToken: string;
@@ -490,35 +491,11 @@ export const MultiReceiptSplitSheet = ({
   );
 };
 
-// 영수증 미리보기 — JWT 라우트 fetch → data URL.
+// 영수증 미리보기 — 탭하면 Lightbox 로 풀스크린 확대. blob fetch/변환은
+// useReceiptPreviewUrl 훅에 위임한다.
 const ReceiptBlobImage = ({ url, theme }: { url: string; theme: Theme }) => {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const token = url.split('/').pop() ?? '';
-    (async () => {
-      try {
-        const blob = await settlementExtractionApi.previewBlob(token);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (cancelled) return;
-          if (typeof reader.result === 'string') setDataUrl(reader.result);
-          else setError('미리보기 변환 실패');
-        };
-        reader.onerror = () => {
-          if (!cancelled) setError('미리보기 변환 실패');
-        };
-        reader.readAsDataURL(blob);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '미리보기 실패');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
+  const { dataUrl, error } = useReceiptPreviewUrl(url);
+  const [zoomed, setZoomed] = useState(false);
 
   if (error) {
     return (
@@ -535,11 +512,23 @@ const ReceiptBlobImage = ({ url, theme }: { url: string; theme: Theme }) => {
     );
   }
   return (
-    <Image
-      source={{ uri: dataUrl }}
-      style={{ width: '100%', height: 200, backgroundColor: theme.colors.surfaceAlt }}
-      resizeMode="contain"
-    />
+    <>
+      <Pressable onPress={() => setZoomed(true)}>
+        <Image
+          source={{ uri: dataUrl }}
+          style={{ width: '100%', height: 200, backgroundColor: theme.colors.surfaceAlt }}
+          resizeMode="contain"
+        />
+      </Pressable>
+      {zoomed && (
+        <Lightbox
+          images={[dataUrl]}
+          index={0}
+          onChangeIndex={() => {}}
+          onClose={() => setZoomed(false)}
+        />
+      )}
+    </>
   );
 };
 

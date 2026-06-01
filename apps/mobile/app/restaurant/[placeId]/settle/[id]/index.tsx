@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ApiError,
-  settlementExtractionApi,
   useDeleteSettlement,
   useSettlement,
   useTheme,
@@ -26,6 +25,8 @@ import type {
 } from '@repo/api-contract';
 import { SettlementBreakdownTable } from '../../../../../src/components/settlement/SettlementBreakdownTable';
 import { SettlementShareSheet } from '../../../../../src/components/settlement/SettlementShareSheet';
+import { Lightbox } from '~/components/Lightbox';
+import { useReceiptPreviewUrl } from '~/hooks/useReceiptPreviewUrl';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
   ALCOHOL: '주류',
@@ -451,35 +452,11 @@ const RoundCard = ({
   );
 };
 
-// 영수증 이미지 — JWT preview 라 fetch + base64 변환 후 표시.
+// 영수증 이미지 — 탭하면 Lightbox 로 풀스크린 확대. blob fetch/변환은
+// useReceiptPreviewUrl 훅에 위임한다.
 const ReceiptImage = ({ url, theme }: { url: string; theme: Theme }) => {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const token = url.split('/').pop() ?? '';
-    (async () => {
-      try {
-        const blob = await settlementExtractionApi.previewBlob(token);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (cancelled) return;
-          if (typeof reader.result === 'string') setDataUrl(reader.result);
-          else setError('미리보기 변환 실패');
-        };
-        reader.onerror = () => {
-          if (!cancelled) setError('미리보기 변환 실패');
-        };
-        reader.readAsDataURL(blob);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '미리보기 실패');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
+  const { dataUrl, error } = useReceiptPreviewUrl(url);
+  const [zoomed, setZoomed] = useState(false);
 
   if (error) {
     return (
@@ -494,16 +471,28 @@ const ReceiptImage = ({ url, theme }: { url: string; theme: Theme }) => {
     );
   }
   return (
-    <Image
-      source={{ uri: dataUrl }}
-      style={{
-        width: '100%',
-        height: 200,
-        borderRadius: 8,
-        backgroundColor: theme.colors.surfaceAlt,
-      }}
-      resizeMode="contain"
-    />
+    <>
+      <Pressable onPress={() => setZoomed(true)}>
+        <Image
+          source={{ uri: dataUrl }}
+          style={{
+            width: '100%',
+            height: 200,
+            borderRadius: 8,
+            backgroundColor: theme.colors.surfaceAlt,
+          }}
+          resizeMode="contain"
+        />
+      </Pressable>
+      {zoomed && (
+        <Lightbox
+          images={[dataUrl]}
+          index={0}
+          onChangeIndex={() => {}}
+          onClose={() => setZoomed(false)}
+        />
+      )}
+    </>
   );
 };
 

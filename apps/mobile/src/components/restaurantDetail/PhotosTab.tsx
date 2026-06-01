@@ -3,7 +3,7 @@ import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { RestaurantPublicDetailType } from '@repo/api-contract';
-import { Lightbox } from './Lightbox';
+import { Lightbox } from '~/components/Lightbox';
 import { thumbUrl } from '~/lib/thumbUrl';
 
 interface Props {

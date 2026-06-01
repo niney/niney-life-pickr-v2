@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { PublicVisitorReviewType } from '@repo/api-contract';
 import { SENTIMENT_COLORS } from '../colors';
-import { Lightbox } from '../Lightbox';
+import { Lightbox } from '~/components/Lightbox';
 import { SatisfactionChip } from './SatisfactionChip';
 import { thumbUrl } from '~/lib/thumbUrl';
 
