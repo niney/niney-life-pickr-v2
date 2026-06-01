@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, ImageDown, Link2, Loader2, Share2, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  ImageDown,
+  Link2,
+  Loader2,
+  MessageSquare,
+  Share2,
+  Trash2,
+  X,
+} from 'lucide-react';
 import {
   ApiError,
   useCreateSettlementShare,
@@ -46,6 +56,7 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   const [copied, setCopied] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
+  const [kakaoCopied, setKakaoCopied] = useState(false);
 
   // 다이얼로그가 열리거나 기간을 바꾸면 토큰 생성/갱신. 토큰은 멱등(같은 세션
   // → 같은 링크)이고 ttl 만 만료를 갱신한다. 닫혀 있는 동안에는 호출하지 않는다.
@@ -135,37 +146,43 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
     URL.revokeObjectURL(url);
   };
 
-  // 정산표 이미지를 '클립보드'에 PNG 로 복사 — 그림판·카카오톡 데스크톱 등에
-  // 바로 붙여넣기(Ctrl/⌘+V). Safari 는 사용자 제스처가 만료되면 거부하므로,
-  // fetch 를 await 하지 않고 ClipboardItem 값에 Promise<Blob> 를 그대로 넘겨
-  // 클립보드 쓰기 '안'에서 받아오게 한다. 미지원/실패 시 다운로드로 폴백.
-  const handleCopyImage = async () => {
+  // 정산표 이미지를 클립보드에 PNG 로 복사. 성공 시 'copied', 클립보드 쓰기를
+  // 못 해서 다운로드로 폴백했으면 'downloaded'. Safari 는 사용자 제스처가 만료되면
+  // 거부하므로 fetch 를 await 하지 않고 ClipboardItem 값에 Promise<Blob> 를 그대로
+  // 넘겨 클립보드 쓰기 '안'에서 받아오게 한다.
+  const copyImageToClipboard = async (): Promise<'copied' | 'downloaded'> => {
+    if (
+      navigator.clipboard &&
+      'write' in navigator.clipboard &&
+      typeof ClipboardItem !== 'undefined'
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': fetch(imageUrl()).then((r) => {
+            if (!r.ok) throw new Error(`image ${r.status}`);
+            return r.blob();
+          }),
+        }),
+      ]);
+      return 'copied';
+    }
+    await downloadImage();
+    return 'downloaded';
+  };
+
+  // "복사" 와 "카카오톡 복사" 는 동작이 같다(이미지를 클립보드로) — 다만 카카오톡
+  // 버튼은 색/문구로 "카톡에 붙여넣기" 를 강조한다. 카카오 SDK 미연동이라 톡을
+  // 직접 열지는 않고 붙여넣기 안내만 한다.
+  const runCopyImage = async (mark: () => void) => {
     if (!shareUrl || imageBusy) return;
     setImageBusy(true);
     setError(null);
     try {
-      if (
-        navigator.clipboard &&
-        'write' in navigator.clipboard &&
-        typeof ClipboardItem !== 'undefined'
-      ) {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'image/png': fetch(imageUrl()).then((r) => {
-              if (!r.ok) throw new Error(`image ${r.status}`);
-              return r.blob();
-            }),
-          }),
-        ]);
-        setImageCopied(true);
-        window.setTimeout(() => setImageCopied(false), 1500);
-        return;
-      }
-      await downloadImage();
+      const r = await copyImageToClipboard();
+      if (r === 'copied') mark();
     } catch {
-      // 클립보드 이미지 쓰기 실패(권한/미지원) → 다운로드 폴백, 그것도 실패 시 에러.
       try {
-        await downloadImage();
+        await downloadImage(); // 클립보드 실패 → 다운로드 폴백
       } catch {
         setError('이미지 복사 실패 — 잠시 후 다시 시도하세요.');
       }
@@ -173,6 +190,18 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
       setImageBusy(false);
     }
   };
+
+  const handleCopyImage = () =>
+    runCopyImage(() => {
+      setImageCopied(true);
+      window.setTimeout(() => setImageCopied(false), 1500);
+    });
+
+  const handleCopyForKakao = () =>
+    runCopyImage(() => {
+      setKakaoCopied(true);
+      window.setTimeout(() => setKakaoCopied(false), 2500);
+    });
 
   // 파일 공유가 되는 환경(주로 모바일 단말): 네이티브 공유 시트(카톡 등)로 첨부.
   const handleShareImageFile = async () => {
@@ -298,8 +327,8 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
               </p>
             )}
 
-            {/* 1순위: 정산표 이미지를 클립보드에 복사(그림판·카톡 데스크톱에
-                붙여넣기). 파일 공유 지원 단말이면 '공유' 시트 버튼을 함께 노출. */}
+            {/* 정산표 이미지 — '복사' 와 '카카오톡 복사' 둘 다 클립보드에 PNG 를
+                넣는다. 카카오톡 버튼은 카톡 색/문구로 붙여넣기를 강조(SDK 미연동). */}
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -315,23 +344,40 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
                 ) : (
                   <ImageDown className="size-4" />
                 )}
-                {imageCopied ? '이미지 복사됨' : '정산표 이미지 복사'}
+                {imageCopied ? '복사됨' : '이미지 복사'}
               </Button>
-              {canShareFiles && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleShareImageFile}
-                  disabled={imageBusy}
-                  aria-label="정산표 이미지 공유"
-                >
-                  <Share2 className="size-4" />
-                  공유
-                </Button>
-              )}
+              <Button
+                type="button"
+                onClick={handleCopyForKakao}
+                disabled={imageBusy}
+                className="flex-1 bg-[#FEE500] text-[#391B1B] hover:bg-[#FADA0A]"
+              >
+                {imageBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : kakaoCopied ? (
+                  <Check className="size-4" />
+                ) : (
+                  <MessageSquare className="size-4" />
+                )}
+                {kakaoCopied ? '복사됨' : '카카오톡 복사'}
+              </Button>
             </div>
+            {canShareFiles && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleShareImageFile}
+                disabled={imageBusy}
+              >
+                <Share2 className="size-4" />
+                공유 시트로 보내기…
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
-              복사 후 카카오톡·메모·그림판 등에 붙여넣기(Ctrl/⌘+V) 하세요.
+              {kakaoCopied
+                ? '이미지가 복사됐어요 — 카카오톡 대화창에 붙여넣기(Ctrl/⌘+V) 하세요.'
+                : '복사 후 카카오톡·메모·그림판 등에 붙여넣기(Ctrl/⌘+V) 하세요.'}
             </p>
 
             <div className="flex items-center justify-between gap-2">
