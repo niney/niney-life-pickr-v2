@@ -43,6 +43,28 @@ const seedFromToken = (token: string): number => {
   return h;
 };
 
+// 공유 OG 미리보기 메타 캐시 — 카카오/슬랙 OG 크롤러가 같은 링크를 짧은 시간에
+// 여러 번 펼치므로 (token, origin) 단위로 결과를 짧게 캐시한다. owner 가 share 를
+// 갱신/회수하면 해당 token 엔트리를 무효화. 단일 인스턴스 전제(CLAUDE.md)라
+// in-memory Map 으로 충분 — Redis 불필요. 성공(non-null) 결과만 캐시한다.
+interface SharePreviewMeta {
+  restaurantName: string;
+  grandTotal: number;
+  participantCount: number;
+  ogImageUrl: string | null;
+}
+const SHARE_PREVIEW_CACHE_TTL_MS = 5 * 60_000;
+const sharePreviewCache = new Map<string, { value: SharePreviewMeta; expiresAt: number }>();
+const sharePreviewCacheKey = (token: string, origin: string): string =>
+  `${token} ${origin}`;
+// owner 의 share 갱신/회수 시 해당 토큰의 모든 origin 변형 엔트리를 제거.
+const invalidateSharePreview = (token: string): void => {
+  const prefix = `${token} `;
+  for (const key of sharePreviewCache.keys()) {
+    if (key.startsWith(prefix)) sharePreviewCache.delete(key);
+  }
+};
+
 // receiptImageToken 검증용 정규식 — settlement-extraction 의 IMAGE_TOKEN_PATTERN
 // 과 동일. 모듈을 직접 import 하지 않고 패턴만 다시 둔다 (모듈 결합도 축소).
 const IMAGE_TOKEN_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -664,6 +686,8 @@ export class SettlementService {
         shareOgImageUrl: chosenUrl,
       },
     });
+    // OG 선택/만료가 바뀌었을 수 있으니 미리보기 캐시 무효화.
+    invalidateSharePreview(token);
     return {
       token,
       shareUrl: Routes.Settlement.shared(token),
@@ -681,9 +705,11 @@ export class SettlementService {
     const out: string[] = [];
     const seen = new Set<string>();
     for (const pid of [...new Set(placeIds)]) {
-      const detail = await this.restaurants.getPublicDetail(pid).catch(() => null);
-      if (!detail) continue;
-      for (const u of detail.imageUrls) {
+      // 사진 URL 만 필요하므로 getPublicDetail(전체 리뷰 코퍼스 로드) 대신 snapshot
+      // 기반 경량 조회. imageUrls 산출은 동일(mergePhotos). 깨진 snapshotJson 같은
+      // 예외는 해당 식당만 건너뛴다(기존 getPublicDetail.catch 동작 보존).
+      const urls = await this.restaurants.getPhotoUrls(pid).catch(() => []);
+      for (const u of urls) {
         if (seen.has(u) || !isThumbnailProxyable(u)) continue;
         seen.add(u);
         out.push(u);
@@ -693,27 +719,47 @@ export class SettlementService {
     return out;
   }
 
-  // 공유 OG 미리보기에 필요한 메타를 '한 번의 row 조회'로 모은다. share-preview
-  // 가 매 조회마다 getBySharedToken + 이미지해석으로 풀 로우를 두 번 읽지 않도록
-  // 합친 것. 만료/없는 토큰이면 null → 호출부가 기본 OG 로 폴백.
+  // 공유 OG 미리보기에 필요한 메타만 경량 select 로 모은다. OG 크롤러가 같은
+  // 링크를 반복 펼치므로 (token, origin) 단위 짧은 캐시로 흡수한다. 풀 로우
+  // (rounds→items/attendees, participants) 대신 메타 컬럼 + _count + rounds[].placeId
+  // 만 읽는다. 만료/없는 토큰이면 null → 호출부가 기본 OG 로 폴백.
   async getSharePreviewMeta(
     token: string,
     origin: string,
-  ): Promise<{
-    restaurantName: string;
-    grandTotal: number;
-    participantCount: number;
-    ogImageUrl: string | null;
-  } | null> {
-    const row = await this.findFullRowByToken(token);
+  ): Promise<SharePreviewMeta | null> {
+    const now = Date.now();
+    const cacheKey = sharePreviewCacheKey(token, origin);
+    const cached = sharePreviewCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.value;
+
+    const row = await this.prisma.settlementSession.findUnique({
+      where: { shareToken: token },
+      select: {
+        restaurantName: true,
+        grandTotal: true,
+        shareExpiresAt: true,
+        shareOgImage: true,
+        shareOgImageUrl: true,
+        _count: { select: { participants: true } },
+        rounds: { select: { restaurantPlaceId: true } },
+      },
+    });
     if (!row) return null;
-    if (row.shareExpiresAt && row.shareExpiresAt.getTime() < Date.now()) return null;
-    return {
+    if (row.shareExpiresAt && row.shareExpiresAt.getTime() < now) return null;
+
+    const meta: SharePreviewMeta = {
       restaurantName: row.restaurantName,
       grandTotal: row.grandTotal,
-      participantCount: row.participants.length,
+      participantCount: row._count.participants,
       ogImageUrl: await this.pickRestaurantOgImageUrl(row, token, origin),
     };
+    // 메모리 상한 — 과도하면 통째 비움(rateHits 패턴과 동일).
+    if (sharePreviewCache.size > 5_000) sharePreviewCache.clear();
+    sharePreviewCache.set(cacheKey, {
+      value: meta,
+      expiresAt: now + SHARE_PREVIEW_CACHE_TTL_MS,
+    });
+    return meta;
   }
 
   // mode='restaurant'(기본) 이면 그 정산 식당들의 사진(네이버 호스트만, thumbnail
@@ -722,7 +768,11 @@ export class SettlementService {
   // 랜덤. 'table' 이거나 사진이 없으면 null → 정산표 PNG 로 폴백. 시드라 같은
   // 링크는 항상 같은 사진(카카오 OG 캐시와 일관, 매 크롤마다 바뀌지 않음).
   private async pickRestaurantOgImageUrl(
-    row: RowSession,
+    row: {
+      shareOgImage: string | null;
+      shareOgImageUrl: string | null;
+      rounds: Array<{ restaurantPlaceId: string }>;
+    },
     token: string,
     origin: string,
   ): Promise<string | null> {
@@ -768,6 +818,7 @@ export class SettlementService {
       where: { id },
       data: { shareToken: null, shareExpiresAt: null },
     });
+    invalidateSharePreview(row.shareToken);
   }
 
   // 공유 토큰으로 read-only 세션 조회. 토큰을 안다 = 접근 허용이므로 인증

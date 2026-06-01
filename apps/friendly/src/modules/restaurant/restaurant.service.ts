@@ -1185,6 +1185,33 @@ export class RestaurantService {
     };
   }
 
+  // 공유 OG/갤러리용 식당 사진 URL 만 모은다. getPublicDetail 과 달리
+  // visitorReviews/summary(식당당 수십~수백 행)를 로드하지 않고 snapshotJson 만
+  // 읽어 mergePhotos 로 imageUrls 를 산출한다 — 같은 snapshot + 같은 merge 함수라
+  // 결과 배열은 getPublicDetail().imageUrls 와 동일. 식당이 없으면 빈 배열.
+  async getPhotoUrls(placeId: string): Promise<string[]> {
+    const naverRow = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { snapshotJson: true, canonicalId: true },
+    });
+    if (!naverRow) return [];
+
+    const dcRow = await this.prisma.restaurant.findFirst({
+      where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
+      select: { snapshotJson: true },
+    });
+
+    const naverSnap = JSON.parse(naverRow.snapshotJson) as Omit<
+      NaverPlaceDataType,
+      'visitorReviews'
+    >;
+    const dcSnap = dcRow
+      ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
+      : null;
+
+    return mergePhotos(naverSnap, dcSnap);
+  }
+
   // 양쪽 source 의 reviews 를 합쳐 fetchedAt asc 로 정렬해 돌려준다.
   // 크롤러가 네이버 최신순(sort=recent)으로 받아 최신글부터 순서대로 저장하므로
   // fetchedAt asc = 작성일 최신순. (한계: 이후 update 모드로 새로 수집된 리뷰는
