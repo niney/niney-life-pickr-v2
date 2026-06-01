@@ -59,4 +59,20 @@ describe('share-preview (OG)', () => {
     });
     expect(res.body).toContain('property="og:url" content="https://example.test/s/nonexistent-token"');
   });
+
+  it('정산 카드 이미지 라우트 — 없는 토큰은 404 (PNG 렌더 안 함)', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/share/settlements/nonexistent-token/image.png',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('별칭 카드 이미지 라우트(/s/:token/image.png) 도 없는 토큰은 404', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/s/nonexistent-token/image.png',
+    });
+    expect(res.statusCode).toBe(404);
+  });
 });

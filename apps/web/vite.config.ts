@@ -50,6 +50,12 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // 정산 카드 이미지(+OG 미리보기)는 Fastify 루트 경로에서 나온다. dev 에서도
+      // 백엔드에 닿도록 프록시. prod 는 nginx 가 동일 prefix 를 Fastify 로 보낸다.
+      '/share/settlements': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
 });

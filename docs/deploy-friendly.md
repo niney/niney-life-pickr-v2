@@ -132,7 +132,20 @@ location /s/ {
 
 - friendly 가 빌드된 웹 `index.html` 을 읽어 주입한다. 기본 경로는 산출물 기준
   자동 탐색(`apps/web/dist/index.html`). 위치가 다르면 `.env` 에 `WEB_INDEX_PATH`.
-- OG 기본 이미지는 `apps/web/public/og-default.png` → 빌드 시 `dist/og-default.png`
+- **정산표 이미지(동적 og:image)**: 살아있는 공유 링크의 `og:image` 는
+  `/share/settlements/<token>/image.png`(별칭 `/s/<token>/image.png`) 로 — friendly
+  가 satori+resvg 로 정산표 매트릭스(행=참여자, 열=차수·카테고리·소계·총계) PNG 를
+  즉석 렌더한다. 화면의 SettlementBreakdownTable 과 동일한 표다. 링크만 붙여도
+  카카오톡 미리보기에 정산표가 뜨고, 웹/앱 공유 시트의 "정산표 이미지로 공유"
+  버튼도 같은 라우트를 쓴다. 만료/없는 토큰이면 404 → 크롤러는 아래 기본
+  이미지로 폴백. nginx 의 `location /share/settlements/`·`/s/` prefix 가 그대로
+  커버하므로 추가 설정 불필요.
+  - 한글 렌더용 폰트 `apps/friendly/assets/fonts/IBMPlexSansKR-{Regular,Bold}.ttf`
+    가 레포에 포함(커밋됨) — git pull 만으로 배포된다. 별도 설치 불필요.
+  - 카드에는 참가자 이름이 들어간다. 공유 페이지를 열면 어차피 같은 명단이
+    보이고 링크는 ≤30일 만료라 노출 범위는 동일. 더 보수적으로 가려면
+    share-preview 의 og.image 를 `OG_IMAGE_PATH` 기본 이미지로 되돌리면 된다.
+- OG 기본 이미지(폴백)는 `apps/web/public/og-default.png` → 빌드 시 `dist/og-default.png`
   → `https://ninelife.kr/og-default.png`. 현재는 앱 아이콘 임시본 — 정식 배너
   (1200×630 권장)로 교체 권장. 경로 변경은 `OG_IMAGE_PATH`.
 - **카카오 캐시**: 한 번 긁으면 며칠 캐시. 수정 후 갱신은 카카오 OG 캐시 초기화

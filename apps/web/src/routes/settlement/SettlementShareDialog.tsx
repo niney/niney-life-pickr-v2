@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Link2, Loader2, Share2, Trash2, X } from 'lucide-react';
+import { Check, Copy, ImageDown, Link2, Loader2, Share2, Trash2, X } from 'lucide-react';
 import {
   ApiError,
   useCreateSettlementShare,
@@ -44,6 +44,7 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   const [ttl, setTtl] = useState<ShareTtlType>('7d');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
 
   // 다이얼로그가 열리거나 기간을 바꾸면 토큰 생성/갱신. 토큰은 멱등(같은 세션
   // → 같은 링크)이고 ttl 만 만료를 갱신한다. 닫혀 있는 동안에는 호출하지 않는다.
@@ -102,6 +103,46 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
       await navigator.share({ title: '정산 결과', url: shareUrl });
     } catch {
       // 사용자가 취소하면 그대로 무시. 다른 에러는 isolated 라 별도 토스트 없이.
+    }
+  };
+
+  // 정산표를 '이미지'로 — 서버가 만든 정산 요약 카드 PNG 를 받아, 파일 공유가
+  // 되는 환경(주로 모바일 단말)에선 네이티브 공유 시트(카톡 등)로, 안 되면
+  // 다운로드로 폴백. (서버 라우트: /s/<token>/image.png)
+  const handleImage = async () => {
+    if (!shareUrl || imageBusy) return;
+    setImageBusy(true);
+    setError(null);
+    try {
+      // 이미지는 SPA 라우트(/s/...)가 아니라 백엔드 카드 라우트에서만 나온다.
+      // 동일 출처 상대경로로 받아 dev(Vite proxy)·prod(nginx) 모두에서 Fastify 에
+      // 도달하게 한다. 토큰은 shareUrl(.../s/<token>) 의 마지막 세그먼트.
+      const token = shareUrl.split('/').pop() ?? '';
+      const res = await fetch(`/share/settlements/${encodeURIComponent(token)}/image.png`);
+      if (!res.ok) throw new Error(`image ${res.status}`);
+      const blob = await res.blob();
+      const file = new File([blob], '정산표.png', { type: 'image/png' });
+      const nav = navigator as Navigator & {
+        canShare?: (data?: ShareData) => boolean;
+      };
+      if (nav.canShare?.({ files: [file] }) && 'share' in nav) {
+        await nav.share({ files: [file], title: '정산표' });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '정산표.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      // 사용자가 공유 시트를 취소하면 AbortError — 조용히 무시.
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      setError('이미지 공유 실패 — 잠시 후 다시 시도하세요.');
+    } finally {
+      setImageBusy(false);
     }
   };
 
@@ -210,11 +251,27 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
               </p>
             )}
 
+            {/* 1순위: 정산표 이미지로 공유/저장 — 카카오톡 등에 바로 첨부. */}
+            <Button
+              type="button"
+              variant="default"
+              className="w-full"
+              onClick={handleImage}
+              disabled={imageBusy}
+            >
+              {imageBusy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ImageDown className="size-4" />
+              )}
+              정산표 이미지로 공유
+            </Button>
+
             <div className="flex items-center justify-between gap-2">
               {canShare ? (
-                <Button type="button" variant="default" size="sm" onClick={handleShare}>
+                <Button type="button" variant="outline" size="sm" onClick={handleShare}>
                   <Share2 className="size-4" />
-                  공유…
+                  링크 공유…
                 </Button>
               ) : (
                 <span />

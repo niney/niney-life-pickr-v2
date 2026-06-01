@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { env } from '../../config/env.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
+import { renderSettlementCardPng } from './settlement-card.js';
 
 // 정산 공유 링크의 SNS 미리보기(Open Graph) 처리.
 //
@@ -139,18 +140,25 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
     const host = req.headers.host ?? 'ninelife.kr';
     const origin = `${proto}://${host}`;
     const pageUrl = `${origin}${req.url.split('?')[0]}`;
-    const image = env.OG_IMAGE_PATH.startsWith('http')
+    const fallbackImage = env.OG_IMAGE_PATH.startsWith('http')
       ? env.OG_IMAGE_PATH
       : `${origin}${env.OG_IMAGE_PATH}`;
 
     let og: OgMeta;
     try {
       const s = await service.getBySharedToken(token);
+      // 정산이 살아있으면 og:image 를 '정산표' 동적 이미지로 — 링크만 붙여도
+      // 카카오톡/텔레그램 미리보기에 정산표 매트릭스가 바로 뜬다.
+      //
+      // 프라이버시: 카드에는 참가자 이름이 들어간다. 공유 페이지를 열면 어차피
+      // 같은 명단이 그대로 보이고, 모든 공유 링크는 최대 30일 내 만료(만료 후
+      // 이미지 라우트는 404 → 크롤러가 기본 이미지로 폴백)되므로 동일한 노출
+      // 범위로 본다. 더 보수적으로 가려면 OG_IMAGE_PATH 기본 이미지로 되돌리면 됨.
       og = {
         title: `${s.restaurantName} 정산`,
         description: `총 ${formatWon(s.grandTotal)}원 · ${s.participants.length}명`,
         url: pageUrl,
-        image,
+        image: `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,
       };
     } catch (e) {
       if (!(e instanceof SettlementError)) throw e;
@@ -159,7 +167,7 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
         title: 'Life Pickr 정산',
         description: '정산 내역을 확인해보세요',
         url: pageUrl,
-        image,
+        image: fallbackImage,
       };
     }
 
@@ -170,6 +178,37 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
       .send(injectOg(html, og));
   };
 
+  // 정산 요약 카드 PNG — 메신저에 '이미지로 보내기' 버튼 + og:image 가 소비.
+  // 토큰 기반 공개 라우트(공유 페이지와 동일한 노출 범위). 만료/없음 → 404.
+  const imageHandler = async (
+    req: FastifyRequest<{ Params: { token: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const { token } = req.params;
+    let session;
+    try {
+      session = await service.getBySharedToken(token);
+    } catch (e) {
+      if (!(e instanceof SettlementError)) throw e;
+      return reply.code(404).type('text/plain; charset=utf-8').send('not found');
+    }
+    try {
+      const png = await renderSettlementCardPng(session);
+      return reply
+        .code(200)
+        .type('image/png')
+        // 편집은 드물고 크롤러 신선도엔 5분이면 충분. editedAt 기반 ETag 까지는
+        // 가지 않는다(메신저는 자체적으로 OG 이미지를 더 길게 캐시).
+        .header('cache-control', 'public, max-age=300')
+        .send(png);
+    } catch (err) {
+      app.log.error({ err, token }, 'settlement card 렌더 실패');
+      return reply.code(500).type('text/plain; charset=utf-8').send('render error');
+    }
+  };
+
   app.get('/share/settlements/:token', handler);
   app.get('/s/:token', handler);
+  app.get('/share/settlements/:token/image.png', imageHandler);
+  app.get('/s/:token/image.png', imageHandler);
 }

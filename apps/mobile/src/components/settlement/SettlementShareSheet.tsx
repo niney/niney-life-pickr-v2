@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   ApiError,
   getApiConfig,
@@ -59,6 +61,7 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [ttl, setTtl] = useState<ShareTtlType>('7d');
   const [error, setError] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
 
   // open 또는 기간 변경 시 토큰 생성/갱신. 토큰은 멱등이라 URL 은 그대로 두고
   // 만료만 갱신 — 기간 바꿔도 깜빡임 없이 expiresAt 만 바뀐다.
@@ -89,6 +92,35 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
       await Share.share({ message: shareUrl, url: shareUrl });
     } catch {
       // 사용자 취소 등은 무시.
+    }
+  };
+
+  // 정산표를 '이미지'로 공유 — 서버가 만든 정산 요약 카드 PNG 를 캐시에 내려받아
+  // 시스템 공유 시트(카카오톡 등)에 파일로 첨부한다. 링크와 달리 받는 사람이
+  // 클릭/로그인 없이 바로 본다. (서버 라우트: /s/<token>/image.png)
+  const handleShareImage = async () => {
+    if (!shareUrl || imageBusy) return;
+    setImageBusy(true);
+    setError(null);
+    try {
+      const imageUrl = `${shareUrl}/image.png`;
+      const dest = `${FileSystem.cacheDirectory}settlement-${sessionId}.png`;
+      const { uri, status } = await FileSystem.downloadAsync(imageUrl, dest);
+      if (status !== 200) throw new Error(`download ${status}`);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          UTI: 'public.png',
+          dialogTitle: '정산표 이미지 공유',
+        });
+      } else {
+        // 공유 모듈을 못 쓰는 환경 — 파일 URL 로 폴백.
+        await Share.share({ url: uri });
+      }
+    } catch {
+      setError('이미지 공유 실패 — 잠시 후 다시 시도하세요.');
+    } finally {
+      setImageBusy(false);
     }
   };
 
@@ -221,7 +253,7 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
               <Text
                 style={[styles.urlNote, { color: theme.colors.textMuted }]}
               >
-                길게 눌러 복사하거나 아래 "공유…" 로 시스템 시트를 여세요.
+                정산표를 이미지로 보내거나, 길게 눌러 링크를 복사하세요.
               </Text>
 
               {expiresAt && (
@@ -230,26 +262,48 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
                 </Text>
               )}
 
+              {/* 1순위: 정산표 이미지 공유 — 카카오톡 등에 바로 첨부. */}
+              <Pressable
+                accessibilityRole="button"
+                disabled={imageBusy}
+                onPress={handleShareImage}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  {
+                    backgroundColor: pressed
+                      ? theme.colors.primaryHover
+                      : theme.colors.primary,
+                    opacity: imageBusy ? 0.7 : 1,
+                  },
+                ]}
+              >
+                {imageBusy ? (
+                  <ActivityIndicator size="small" color={theme.colors.primaryText} />
+                ) : (
+                  <Text
+                    style={[styles.primaryBtnText, { color: theme.colors.primaryText }]}
+                  >
+                    🧾 정산표 이미지로 공유
+                  </Text>
+                )}
+              </Pressable>
+
               <View style={styles.actionsRow}>
                 <Pressable
                   accessibilityRole="button"
                   onPress={handleShare}
                   style={({ pressed }) => [
-                    styles.primaryBtn,
+                    styles.secondaryBtn,
                     {
+                      borderColor: theme.colors.border,
                       backgroundColor: pressed
-                        ? theme.colors.primaryHover
-                        : theme.colors.primary,
+                        ? theme.colors.surfaceAlt
+                        : 'transparent',
                     },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.primaryBtnText,
-                      { color: theme.colors.primaryText },
-                    ]}
-                  >
-                    공유…
+                  <Text style={[styles.secondaryBtnText, { color: theme.colors.text }]}>
+                    🔗 링크 공유…
                   </Text>
                 </Pressable>
                 <Pressable
@@ -347,13 +401,22 @@ const useStyles = (theme: Theme) => {
     ttlBtnText: { fontSize: 13, fontWeight: '600' },
     actionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
     primaryBtn: {
-      flex: 1,
-      paddingVertical: 10,
+      paddingVertical: 12,
       borderRadius: 8,
       alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: theme.colors.primary,
     },
     primaryBtnText: { fontSize: 14, fontWeight: '600' },
+    secondaryBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    secondaryBtnText: { fontSize: 14, fontWeight: '600' },
     dangerBtn: {
       paddingHorizontal: 14,
       paddingVertical: 10,
