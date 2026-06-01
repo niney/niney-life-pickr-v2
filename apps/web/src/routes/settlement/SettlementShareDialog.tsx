@@ -15,7 +15,7 @@ import {
   useCreateSettlementShare,
   useRevokeSettlementShare,
 } from '@repo/shared';
-import type { ShareTtlType } from '@repo/api-contract';
+import type { ShareOgImageType, ShareTtlType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 
@@ -57,9 +57,12 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   const [imageBusy, setImageBusy] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
   const [kakaoCopied, setKakaoCopied] = useState(false);
+  // 링크 미리보기(OG) 이미지 선택. 서버가 저장한 값으로 동기화한다.
+  const [ogImage, setOgImage] = useState<ShareOgImageType>('restaurant');
 
   // 다이얼로그가 열리거나 기간을 바꾸면 토큰 생성/갱신. 토큰은 멱등(같은 세션
   // → 같은 링크)이고 ttl 만 만료를 갱신한다. 닫혀 있는 동안에는 호출하지 않는다.
+  // ogImage 는 보내지 않는다 — 서버가 기존 선택을 유지하고 그 값을 돌려준다.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -71,6 +74,7 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
         if (cancelled) return;
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
         setExpiresAt(res.expiresAt);
+        setOgImage(res.ogImage);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -82,6 +86,23 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
     // sessionId/ttl 이 바뀌면 다시 — 일반 사용에선 한 페이지가 한 세션을 다룬다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionId, ttl]);
+
+  // 미리보기 이미지 토글 — 선택을 서버에 저장(같은 토큰 유지) 후 서버가 돌려준
+  // 값으로 상태를 확정한다.
+  const handleSelectOgImage = (mode: ShareOgImageType) => {
+    if (mode === ogImage || create.isPending) return;
+    setOgImage(mode); // 낙관적
+    create
+      .mutateAsync({ id: sessionId, ttl, ogImage: mode })
+      .then((res) => {
+        if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
+        setExpiresAt(res.expiresAt);
+        setOgImage(res.ogImage);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof ApiError ? e.message : '미리보기 이미지 변경 실패');
+      });
+  };
 
   // ESC 닫기.
   useEffect(() => {
@@ -326,6 +347,35 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
                 {formatExpiry(expiresAt)}까지 유효
               </p>
             )}
+
+            {/* 링크 미리보기(카톡 등에 링크 붙였을 때 뜨는 그림) 선택.
+                기본 식당 사진(랜덤) — 식당 사진이 없으면 자동으로 정산표가 뜬다. */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                링크 미리보기 이미지
+              </span>
+              <div className="flex gap-1.5" role="group" aria-label="미리보기 이미지">
+                {(
+                  [
+                    ['restaurant', '식당 사진'],
+                    ['table', '정산표'],
+                  ] as const
+                ).map(([val, label]) => (
+                  <Button
+                    key={val}
+                    type="button"
+                    size="sm"
+                    variant={ogImage === val ? 'default' : 'outline'}
+                    className="flex-1"
+                    aria-pressed={ogImage === val}
+                    disabled={create.isPending}
+                    onClick={() => handleSelectOgImage(val)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
 
             {/* 정산표 이미지 — '복사' 와 '카카오톡 복사' 둘 다 클립보드에 PNG 를
                 넣는다. 카카오톡 버튼은 카톡 색/문구로 붙여넣기를 강조(SDK 미연동). */}

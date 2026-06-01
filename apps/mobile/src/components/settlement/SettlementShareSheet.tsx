@@ -21,7 +21,7 @@ import {
   useTheme,
   type Theme,
 } from '@repo/shared';
-import type { ShareTtlType } from '@repo/api-contract';
+import type { ShareOgImageType, ShareTtlType } from '@repo/api-contract';
 
 interface Props {
   open: boolean;
@@ -34,6 +34,12 @@ const TTL_OPTIONS: { value: ShareTtlType; label: string }[] = [
   { value: '1d', label: '1일' },
   { value: '7d', label: '7일' },
   { value: '30d', label: '30일' },
+];
+
+// 링크 미리보기(OG) 이미지 — 기본 식당 사진(랜덤), 없으면 정산표로 폴백.
+const OGIMAGE_OPTIONS: { value: ShareOgImageType; label: string }[] = [
+  { value: 'restaurant', label: '식당 사진' },
+  { value: 'table', label: '정산표' },
 ];
 
 // 만료 ISO → "YYYY.MM.DD HH:mm". owner 안내용.
@@ -62,9 +68,12 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
   const [ttl, setTtl] = useState<ShareTtlType>('7d');
   const [error, setError] = useState<string | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
+  // 링크 미리보기(OG) 이미지 선택 — 서버가 저장한 값으로 동기화.
+  const [ogImage, setOgImage] = useState<ShareOgImageType>('restaurant');
 
   // open 또는 기간 변경 시 토큰 생성/갱신. 토큰은 멱등이라 URL 은 그대로 두고
-  // 만료만 갱신 — 기간 바꿔도 깜빡임 없이 expiresAt 만 바뀐다.
+  // 만료만 갱신 — 기간 바꿔도 깜빡임 없이 expiresAt 만 바뀐다. ogImage 는 보내지
+  // 않는다 — 서버가 기존 선택을 유지하고 그 값을 돌려준다.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -75,6 +84,7 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
         if (cancelled) return;
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
         setExpiresAt(res.expiresAt);
+        setOgImage(res.ogImage);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -85,6 +95,22 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionId, ttl]);
+
+  // 미리보기 이미지 토글 — 선택을 서버에 저장 후 서버가 돌려준 값으로 확정.
+  const handleSelectOgImage = (mode: ShareOgImageType) => {
+    if (mode === ogImage || create.isPending) return;
+    setOgImage(mode); // 낙관적
+    create
+      .mutateAsync({ id: sessionId, ttl, ogImage: mode })
+      .then((res) => {
+        if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
+        setExpiresAt(res.expiresAt);
+        setOgImage(res.ogImage);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof ApiError ? e.message : '미리보기 이미지 변경 실패');
+      });
+  };
 
   const handleShare = async () => {
     if (!shareUrl) return;
@@ -199,6 +225,45 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
                     accessibilityState={{ selected: active }}
                     disabled={create.isPending}
                     onPress={() => setTtl(opt.value)}
+                    style={[
+                      styles.ttlBtn,
+                      {
+                        borderColor: active ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: active ? theme.colors.primary : 'transparent',
+                        opacity: create.isPending ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.ttlBtnText,
+                        { color: active ? theme.colors.primaryText : theme.colors.text },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* 링크 미리보기 이미지 — 카톡 등에 링크 붙였을 때 뜨는 그림. 기본 식당
+              사진(랜덤), 식당 사진이 없으면 자동으로 정산표가 뜬다. */}
+          <View style={styles.ttlGroup}>
+            <Text style={[styles.ttlLabel, { color: theme.colors.textMuted }]}>
+              링크 미리보기 이미지
+            </Text>
+            <View style={styles.ttlRow}>
+              {OGIMAGE_OPTIONS.map((opt) => {
+                const active = ogImage === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    disabled={create.isPending}
+                    onPress={() => handleSelectOgImage(opt.value)}
                     style={[
                       styles.ttlBtn,
                       {
