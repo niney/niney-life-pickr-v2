@@ -62,7 +62,16 @@ export interface SettlementExtractionServiceOptions {
   logger?: FastifyBaseLogger;
   // 저장 디렉터리. 기본은 process.cwd()/data/receipts.
   storageDir?: string;
+  // 추출 디버그 덤프 디렉터리. 기본은 process.cwd()/data/extraction-debug.
+  // EXTRACTION_DEBUG 환경변수가 켜졌을 때만 쓰인다.
+  debugDir?: string;
 }
+
+// 측정용 디버그 덤프 스위치. 정확도를 정량화하려면 raw LLM 응답을 모아야 하는데
+// 프로덕션 로그를 더럽히지 않도록 env 로만 켠다. 호출 시점에 읽어 테스트/스크립트
+// 에서 토글 가능. `pnpm --filter friendly eval:extraction` 으로 집계.
+const extractionDebugEnabled = (): boolean =>
+  process.env.EXTRACTION_DEBUG === '1' || process.env.EXTRACTION_DEBUG === 'true';
 
 // LLM 응답을 파싱하기 위한 내부 스키마. ReceiptItem 과 같지만 server 가
 // 검증/보정한다 (clamp, fallback).
@@ -92,6 +101,46 @@ export class SettlementExtractionService {
 
   private get log(): FastifyBaseLogger | null {
     return this.opts.logger ?? null;
+  }
+
+  // 측정용 best-effort 덤프 — EXTRACTION_DEBUG 켜졌을 때만, 절대 throw 하지
+  // 않는다(추출 흐름을 막으면 안 됨). 성공/파싱실패/LLM실패 세 단계 모두에서
+  // 호출해 실패율까지 모을 수 있게 한다. token 으로 data/receipts/<token>.jpg
+  // 원본과 짝지어 눈으로 대조 가능.
+  private async dumpDebug(record: {
+    phase: 'success' | 'parse_error' | 'llm_error';
+    token: string;
+    model: string | null;
+    restaurantName: string;
+    menuNamesCount: number;
+    roundHint?: { index: number; total: number };
+    split?: { count: number; index: number };
+    userPrompt?: string;
+    rawText?: string;
+    jsonText?: string;
+    parseError?: string;
+    llmError?: string;
+    result?: ExtractReceiptResultType;
+    durationMs: number;
+  }): Promise<void> {
+    if (!extractionDebugEnabled()) return;
+    try {
+      const dir = this.opts.debugDir ?? join(process.cwd(), 'data', 'extraction-debug');
+      await mkdir(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = join(dir, `${stamp}__${record.phase}__${record.token}.json`);
+      await writeFile(
+        file,
+        JSON.stringify({ version: EXTRACTION_VERSION, ...record }, null, 2),
+        'utf8',
+      );
+      this.log?.info({ file }, '[settlement-extraction] debug dump written');
+    } catch (e) {
+      this.log?.warn(
+        { error: e instanceof Error ? e.message : String(e) },
+        '[settlement-extraction] debug dump failed',
+      );
+    }
   }
 
   // sharp 로 JPEG 정규화 + 다운스케일. 디코드 실패 시 throw (호출자가 처리).
@@ -266,6 +315,18 @@ export class SettlementExtractionService {
         { error, message: message.slice(0, 200), model, version: EXTRACTION_VERSION },
         '[settlement-extraction] LLM failed',
       );
+      await this.dumpDebug({
+        phase: 'llm_error',
+        token: input.imageToken,
+        model,
+        restaurantName: input.restaurantName,
+        menuNamesCount: input.menuNames.length,
+        roundHint: input.roundHint,
+        split: input.split,
+        userPrompt,
+        llmError: `${error}: ${message}`,
+        durationMs: Date.now() - startedAt,
+      });
       throw new SettlementExtractionError('llm_failed', `${error}: ${message}`);
     }
 
@@ -276,10 +337,25 @@ export class SettlementExtractionService {
       const candidate: unknown = JSON.parse(jsonText);
       parsed = LlmExtraction.parse(candidate);
     } catch (e) {
+      const parseError = e instanceof Error ? e.message : String(e);
       this.log?.warn(
-        { error: e instanceof Error ? e.message : String(e), preview: rawText.slice(0, 200) },
+        { error: parseError, preview: rawText.slice(0, 200) },
         '[settlement-extraction] LLM response parse failed',
       );
+      await this.dumpDebug({
+        phase: 'parse_error',
+        token: input.imageToken,
+        model,
+        restaurantName: input.restaurantName,
+        menuNamesCount: input.menuNames.length,
+        roundHint: input.roundHint,
+        split: input.split,
+        userPrompt,
+        rawText,
+        jsonText,
+        parseError,
+        durationMs: Date.now() - startedAt,
+      });
       throw new SettlementExtractionError('llm_failed', 'LLM 응답을 해석하지 못했습니다.');
     }
 
@@ -321,13 +397,30 @@ export class SettlementExtractionService {
       '[settlement-extraction] done',
     );
 
-    return {
+    const result: ExtractReceiptResultType = {
       items,
       totalAmount,
       itemsSubtotal,
       warning,
       model,
     };
+
+    await this.dumpDebug({
+      phase: 'success',
+      token: input.imageToken,
+      model,
+      restaurantName: input.restaurantName,
+      menuNamesCount: input.menuNames.length,
+      roundHint: input.roundHint,
+      split: input.split,
+      userPrompt,
+      rawText,
+      jsonText,
+      result,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return result;
   }
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {

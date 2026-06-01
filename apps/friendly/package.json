@@ -17,11 +17,14 @@
     "db:studio": "prisma studio",
     "promote-admin": "tsx --env-file=.env scripts/promote-admin.ts",
     "backfill:contacts": "tsx --env-file=.env scripts/backfill-contacts.ts",
+    "eval:extraction": "tsx scripts/eval-extraction.ts",
+    "probe:extraction": "tsx --env-file=.env scripts/probe-extraction.ts",
     "dev:capture-visitor": "tsx scripts/dev-capture-visitor.ts",
     "dev:fetch-visitor-html": "tsx scripts/dev-fetch-visitor-html.ts",
     "dev:open-visitor-page": "tsx scripts/dev-open-visitor-page.ts",
     "dev:capture-catchtable": "tsx scripts/dev-capture-catchtable.ts",
-    "clean": "rimraf dist .turbo"
+    "clean": "rimraf dist .turbo",
+    "probe:vision": "tsx --env-file=.env scripts/probe-vision.ts"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",
