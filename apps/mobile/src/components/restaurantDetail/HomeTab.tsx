@@ -20,6 +20,7 @@ interface Props {
   insightsLoading: boolean;
   onChangeTab(next: TabKey): void;
   onSelectTip(term: string): void;
+  onSelectMenu(name: string): void;
 }
 
 const HOME_MENU_PREVIEW = 4;
@@ -34,6 +35,7 @@ export const HomeTab = ({
   insightsLoading,
   onChangeTab,
   onSelectTip,
+  onSelectMenu,
 }: Props) => {
   const theme = useTheme();
   const previewMenus = useMemo(
@@ -111,7 +113,7 @@ export const HomeTab = ({
             onAction={() => onChangeTab('menu')}
             disabled={detail.menus.length <= HOME_MENU_PREVIEW}
           />
-          <MenuGrid menus={previewMenus} insights={insights} />
+          <MenuGrid menus={previewMenus} insights={insights} onSelectMenu={onSelectMenu} />
         </View>
       )}
 

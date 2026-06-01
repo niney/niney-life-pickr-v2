@@ -215,6 +215,9 @@ export const useRestaurantPublicReviews = (
     // 방문 팁 필터. 지정 시 그 팁이 달린 리뷰만. seed(첫 페이지 동봉본)는
     // 필터 없는 기본 상태에만 유효하므로 tip 이 있으면 seed 무효.
     tip?: string;
+    // 메뉴 필터. 지정 시 그 메뉴를 언급한 리뷰만 (서버 canonical 그룹핑).
+    // tip 과 마찬가지로 seed 무효 — 단, 호출처에서 tip/menu 는 동시 1개만 설정.
+    menu?: string;
   },
   seed?: { items: PublicVisitorReviewType[]; total: number },
 ) => {
@@ -222,7 +225,8 @@ export const useRestaurantPublicReviews = (
     !!seed &&
     filters.sentiment === 'all' &&
     filters.sort === 'recent' &&
-    !filters.tip;
+    !filters.tip &&
+    !filters.menu;
   return useInfiniteQuery<
     RestaurantPublicReviewsResultType,
     Error,
@@ -238,6 +242,7 @@ export const useRestaurantPublicReviews = (
       filters.sentiment,
       filters.sort,
       filters.tip ?? null,
+      filters.menu ?? null,
     ] as const,
     initialPageParam: 0,
     queryFn: ({ pageParam }) => {
@@ -248,6 +253,7 @@ export const useRestaurantPublicReviews = (
         sentiment: filters.sentiment,
         sort: filters.sort,
         tip: filters.tip,
+        menu: filters.menu,
       });
     },
     getNextPageParam: (lastPage, _all, lastPageParam) => {

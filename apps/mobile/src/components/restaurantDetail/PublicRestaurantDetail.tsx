@@ -63,7 +63,9 @@ type Row =
   | { type: 'hero'; key: string }
   | { type: 'tabbar'; key: string; activeTab: TabKey }
   | { type: 'tab'; key: string; tab: TabKey }
-  | { type: 'review-tip'; key: string; tip: string; total: number }
+  // 방문 팁/메뉴 클릭으로 넘어온 활성 필터 칩. tip/menu 는 동시 1개만 활성이라
+  // label('방문 팁'|'메뉴') 로 구분해 한 행으로 표현.
+  | { type: 'review-filter'; key: string; label: string; value: string; total: number }
   | {
       type: 'review-controls';
       key: string;
@@ -96,8 +98,10 @@ export const PublicRestaurantDetail = ({
   const [tab, setTab] = useState<TabKey>('home');
   const [filter, setFilter] = useState<RestaurantPublicReviewSentimentType>('all');
   const [sort, setSort] = useState<RestaurantPublicReviewSortType>('recent');
-  // 홈 탭 "방문 팁" 탭 → 리뷰 탭으로 넘기며 적용하는 팁 필터. null 이면 미적용.
+  // 홈/메뉴 탭에서 클릭 → 리뷰 탭으로 넘기며 적용하는 필터. tip/menu 는 동시
+  // 1개만 활성 — 한쪽을 고르면 다른 쪽은 해제한다. null 이면 미적용.
   const [tipFilter, setTipFilter] = useState<string | null>(null);
+  const [menuFilter, setMenuFilter] = useState<string | null>(null);
   const [heroH, setHeroH] = useState(0);
   const scrollRef = useRef<FlatList<Row> | null>(null);
 
@@ -115,10 +119,16 @@ export const PublicRestaurantDetail = ({
   );
   const reviewsQuery = useRestaurantPublicReviews(
     detail.data ? placeId : null,
-    { sentiment: filter, sort, tip: tipFilter ?? undefined },
+    {
+      sentiment: filter,
+      sort,
+      tip: tipFilter ?? undefined,
+      menu: menuFilter ?? undefined,
+    },
     reviewSeed,
   );
-  const tipTotal = reviewsQuery.data?.pages[0]?.total ?? 0;
+  // tip/menu 동시 1개만 — 현재 필터 적용 결과 수.
+  const filterTotal = reviewsQuery.data?.pages[0]?.total ?? 0;
   const reviews: PublicVisitorReviewType[] = useMemo(
     () =>
       reviewsQuery.data ? reviewsQuery.data.pages.flatMap((p) => p.items) : [],
@@ -136,6 +146,7 @@ export const PublicRestaurantDetail = ({
     setFilter('all');
     setSort('recent');
     setTipFilter(null);
+    setMenuFilter(null);
   }, [placeId]);
 
   useEffect(() => {
@@ -156,14 +167,31 @@ export const PublicRestaurantDetail = ({
     [heroH],
   );
 
-  // 방문 팁 클릭 → 리뷰 탭으로 이동하며 그 팁으로 필터.
+  // 방문 팁 클릭 → 리뷰 탭으로 이동하며 그 팁으로 필터(메뉴 필터는 해제).
   const handleSelectTip = useCallback(
     (term: string) => {
+      setMenuFilter(null);
       setTipFilter(term);
       handleChangeTab('reviews');
     },
     [handleChangeTab],
   );
+
+  // 메뉴 클릭 → 리뷰 탭으로 이동하며 그 메뉴로 필터(팁 필터는 해제).
+  const handleSelectMenu = useCallback(
+    (name: string) => {
+      setTipFilter(null);
+      setMenuFilter(name);
+      handleChangeTab('reviews');
+    },
+    [handleChangeTab],
+  );
+
+  // 활성 필터 칩 해제 — tip/menu 둘 다 비운다(동시 1개라 안전).
+  const handleClearFilter = useCallback(() => {
+    setTipFilter(null);
+    setMenuFilter(null);
+  }, []);
 
   const handleEndReached = useCallback(() => {
     if (tab !== 'reviews') return;
@@ -192,6 +220,7 @@ export const PublicRestaurantDetail = ({
               insightsLoading={insights.isLoading}
               onChangeTab={handleChangeTab}
               onSelectTip={handleSelectTip}
+              onSelectMenu={handleSelectMenu}
             />
           );
         case 'insights':
@@ -203,7 +232,9 @@ export const PublicRestaurantDetail = ({
             />
           );
         case 'menu':
-          return <MenuTab detail={d} insights={insights.data} />;
+          return (
+            <MenuTab detail={d} insights={insights.data} onSelectMenu={handleSelectMenu} />
+          );
         case 'photos':
           return <PhotosTab detail={d} />;
         case 'info':
@@ -212,7 +243,14 @@ export const PublicRestaurantDetail = ({
           return null;
       }
     },
-    [detail.data, insights.data, insights.isLoading, handleChangeTab, handleSelectTip],
+    [
+      detail.data,
+      insights.data,
+      insights.isLoading,
+      handleChangeTab,
+      handleSelectTip,
+      handleSelectMenu,
+    ],
   );
 
   const hero = detail.data?.imageUrls[0] ?? null;
@@ -228,12 +266,13 @@ export const PublicRestaurantDetail = ({
       if (counts.all === 0) {
         rows.push({ type: 'review-empty', key: 'review-empty', card: false });
       } else {
-        if (tipFilter) {
+        if (tipFilter || menuFilter) {
           rows.push({
-            type: 'review-tip',
-            key: 'review-tip',
-            tip: tipFilter,
-            total: tipTotal,
+            type: 'review-filter',
+            key: 'review-filter',
+            label: tipFilter ? '방문 팁' : '메뉴',
+            value: (tipFilter ?? menuFilter)!,
+            total: filterTotal,
           });
         }
         rows.push({ type: 'review-controls', key: 'review-controls', filter, sort });
@@ -261,7 +300,8 @@ export const PublicRestaurantDetail = ({
     filter,
     sort,
     tipFilter,
-    tipTotal,
+    menuFilter,
+    filterTotal,
     reviews,
     reviewsQuery.isLoading,
     reviewsQuery.isFetchingNextPage,
@@ -307,7 +347,7 @@ export const PublicRestaurantDetail = ({
           return <TabBar active={item.activeTab} onChange={handleChangeTab} />;
         case 'tab':
           return renderTabContent(item.tab);
-        case 'review-tip':
+        case 'review-filter':
           return (
             <View style={styles.reviewTipWrap}>
               <View
@@ -323,18 +363,18 @@ export const PublicRestaurantDetail = ({
                   style={[styles.reviewTipText, { color: theme.colors.text }]}
                   numberOfLines={1}
                 >
-                  <Text style={{ color: theme.colors.textMuted }}>방문 팁 · </Text>
-                  {item.tip}
+                  <Text style={{ color: theme.colors.textMuted }}>{item.label} · </Text>
+                  {item.value}
                   <Text style={{ color: theme.colors.textMuted }}>
                     {' '}
                     ({item.total})
                   </Text>
                 </Text>
                 <Pressable
-                  onPress={() => setTipFilter(null)}
+                  onPress={handleClearFilter}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel="방문 팁 필터 해제"
+                  accessibilityLabel={`${item.label} 필터 해제`}
                   style={styles.reviewTipClear}
                 >
                   <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>✕ 해제</Text>
@@ -402,7 +442,16 @@ export const PublicRestaurantDetail = ({
           return null;
       }
     },
-    [hero, imageCount, handleHeroLayout, handleChangeTab, renderTabContent, detail.data, theme],
+    [
+      hero,
+      imageCount,
+      handleHeroLayout,
+      handleChangeTab,
+      handleClearFilter,
+      renderTabContent,
+      detail.data,
+      theme,
+    ],
   );
 
   const keyExtractor = useCallback((item: Row) => item.key, []);

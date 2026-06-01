@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import { formatWonPrice } from '@repo/utils';
@@ -11,10 +11,13 @@ import { SENTIMENT_COLORS } from '../colors';
 interface Props {
   menus: RestaurantPublicDetailType['menus'];
   insights: RestaurantInsightsType | undefined;
+  // 주어지면 멘션 통계가 있는 메뉴를 탭 가능하게 렌더해 리뷰 필터로 연결.
+  // 멘션 없는(stats 없는) 메뉴는 결과가 비므로 정적 카드로 둔다.
+  onSelectMenu?: (name: string) => void;
 }
 
 // 메뉴 리스트 — 이름·가격·설명·이미지 + (있으면) insights 의 긍/부 멘션 통계.
-export const MenuGrid = ({ menus, insights }: Props) => {
+export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
   const theme = useTheme();
   const mentionByName = new Map<string, { positive: number; negative: number; count: number }>();
   if (insights) {
@@ -25,14 +28,9 @@ export const MenuGrid = ({ menus, insights }: Props) => {
     <View style={{ gap: 8 }}>
       {menus.map((m, idx) => {
         const stats = mentionByName.get(m.name);
-        return (
-          <View
-            key={`${m.name}-${idx}`}
-            style={[
-              styles.row,
-              { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-            ]}
-          >
+        const clickable = !!onSelectMenu && !!stats;
+        const body = (
+          <>
             {m.imageUrls[0] ? (
               <Image
                 source={m.imageUrls[0]}
@@ -87,6 +85,33 @@ export const MenuGrid = ({ menus, insights }: Props) => {
                 </View>
               )}
             </View>
+          </>
+        );
+        return clickable ? (
+          <Pressable
+            key={`${m.name}-${idx}`}
+            onPress={() => onSelectMenu!(m.name)}
+            accessibilityRole="button"
+            accessibilityLabel={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
+            style={({ pressed }) => [
+              styles.row,
+              {
+                borderColor: pressed ? theme.colors.primary : theme.colors.border,
+                backgroundColor: pressed ? theme.colors.surfaceAlt : theme.colors.surface,
+              },
+            ]}
+          >
+            {body}
+          </Pressable>
+        ) : (
+          <View
+            key={`${m.name}-${idx}`}
+            style={[
+              styles.row,
+              { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+            ]}
+          >
+            {body}
           </View>
         );
       })}

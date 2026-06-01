@@ -1016,6 +1016,88 @@ describe('Public restaurant routes', () => {
     expect(none.items).toHaveLength(0);
   });
 
+  it('GET /restaurants/public/:placeId/reviews — menu filter matches by canonical group', async () => {
+    const { id, placeId } = await seedRestaurant({ name: '메뉴필터집' });
+    // 메뉴 멘션이 다른 리뷰들 + 분석 안 된 리뷰. menusJson 은 analysis.menus 로
+    // 평탄화돼 필터 대상이 된다.
+    const seedReviewWithMenus = async (
+      n: number,
+      menus: Array<{ name: string }> | null,
+    ) => {
+      const v = await app.prisma.visitorReview.create({
+        data: {
+          restaurantId: id,
+          authorName: `익명${n}`,
+          rating: 4,
+          body: `리뷰 ${n}`,
+          visitedAt: null,
+          imageUrlsJson: '[]',
+          videosJson: '[]',
+          contentHash: `${placeId}-${n}`,
+        },
+        select: { id: true },
+      });
+      if (menus) {
+        await app.prisma.reviewSummary.create({
+          data: {
+            reviewId: v.id,
+            status: 'done',
+            text: `요약 ${n}`,
+            sentiment: 'positive',
+            sentimentScore: 0.5,
+            satisfactionScore: 4,
+            menusJson: JSON.stringify(
+              menus.map((m) => ({ name: m.name, sentiment: 'positive', traits: [] })),
+            ),
+            finishedAt: new Date(),
+          },
+        });
+      }
+    };
+    await seedReviewWithMenus(1, [{ name: '김치찌개' }]); // canonical 표시명 그대로
+    await seedReviewWithMenus(2, [{ name: '김찌' }]); // 약어 → canonical 매핑으로 같은 그룹
+    await seedReviewWithMenus(3, [{ name: '된장찌개' }]); // 다른 메뉴
+    await seedReviewWithMenus(4, null); // 분석 없음 → 제외
+    // '김찌' → '김치찌개' canonical 매핑. topMenus 집계와 동일 그룹핑.
+    await app.prisma.menuCanonical.create({
+      data: {
+        restaurantId: id,
+        nameNorm: '김찌',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+      },
+    });
+
+    const get = async (menu: string) => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/restaurants/public/${placeId}/reviews`,
+        query: { menu },
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json() as { items: Array<{ body: string }>; total: number };
+    };
+
+    // canonical 그룹 — 직접 표기(리뷰1) + 약어(리뷰2) 모두 묶인다.
+    const group = await get('김치찌개');
+    expect(group.total).toBe(2);
+    expect(group.items.map((r) => r.body).sort()).toEqual(['리뷰 1', '리뷰 2']);
+
+    // 공백 차이는 정규화로 흡수 — 같은 그룹.
+    const spaced = await get('김치 찌개');
+    expect(spaced.total).toBe(2);
+
+    // 다른 메뉴는 자기 리뷰만.
+    const other = await get('된장찌개');
+    expect(other.total).toBe(1);
+    expect(other.items[0]?.body).toBe('리뷰 3');
+
+    // 일치 메뉴 없으면 빈 결과.
+    const none = await get('없는메뉴');
+    expect(none.total).toBe(0);
+    expect(none.items).toHaveLength(0);
+  });
+
   it('GET /restaurants/public/:placeId — merges DC sibling fields & reviews', async () => {
     // Naver 행 한 줄. 우리 머지 기준에서 phone/address 가 비어 있으면 DC fallback
     // 으로 채워져야 하므로 의도적으로 일부 필드를 빈 상태로 시작.

@@ -7,9 +7,10 @@ import { MenuGrid } from './shared';
 interface Props {
   detail: RestaurantPublicDetailType;
   insights: RestaurantInsightsType | undefined;
+  onSelectMenu(name: string): void;
 }
 
-export const MenuTab = ({ detail, insights }: Props) => {
+export const MenuTab = ({ detail, insights, onSelectMenu }: Props) => {
   if (detail.menus.length === 0) {
     return (
       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -20,7 +21,7 @@ export const MenuTab = ({ detail, insights }: Props) => {
   return (
     <div className="space-y-3 p-4">
       <div className="text-xs text-muted-foreground">총 {detail.menus.length}개</div>
-      <MenuGrid menus={detail.menus} insights={insights} />
+      <MenuGrid menus={detail.menus} insights={insights} onSelectMenu={onSelectMenu} />
     </div>
   );
 };

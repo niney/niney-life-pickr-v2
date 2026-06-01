@@ -20,6 +20,7 @@ interface Props {
   insightsLoading: boolean;
   onChangeTab(tab: TabKey): void;
   onSelectTip(term: string): void;
+  onSelectMenu(name: string): void;
 }
 
 const HOME_MENU_PREVIEW = 4;
@@ -31,6 +32,7 @@ export const HomeTab = ({
   insightsLoading,
   onChangeTab,
   onSelectTip,
+  onSelectMenu,
 }: Props) => {
   const hero = detail.imageUrls[0] ?? null;
   const previewMenus = detail.menus.slice(0, HOME_MENU_PREVIEW);
@@ -124,7 +126,7 @@ export const HomeTab = ({
             onAction={() => onChangeTab('menu')}
             disabled={detail.menus.length <= HOME_MENU_PREVIEW}
           />
-          <MenuGrid menus={previewMenus} insights={insights} />
+          <MenuGrid menus={previewMenus} insights={insights} onSelectMenu={onSelectMenu} />
         </section>
       )}
 

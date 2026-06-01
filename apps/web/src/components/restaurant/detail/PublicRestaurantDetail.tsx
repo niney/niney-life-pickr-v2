@@ -38,20 +38,23 @@ export const PublicRestaurantDetail = ({
   const isLoggedIn = useAuthStore((s) => !!s.token);
   const [internalTab, setInternalTab] = useState<TabKey>('home');
   const tab = tabProp ?? internalTab;
-  // 홈 탭 "방문 팁" 클릭 → 리뷰 탭으로 넘기며 적용하는 팁 필터. 리뷰 탭이
-  // 자체 sentiment/sort state 를 가지므로 탭 간 공유가 필요한 tip 만 여기서 보관.
+  // 홈/메뉴 탭에서 클릭 → 리뷰 탭으로 넘기며 적용하는 필터. 리뷰 탭이 자체
+  // sentiment/sort state 를 가지므로 탭 간 공유가 필요한 tip/menu 만 여기서
+  // 보관. tip/menu 는 동시 1개만 활성 — 한쪽을 고르면 다른 쪽은 해제한다.
   const [tipFilter, setTipFilter] = useState<string | null>(null);
+  const [menuFilter, setMenuFilter] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (tabProp === undefined) setInternalTab('home');
   }, [placeId, tabProp]);
 
-  // 팁 필터는 식당이 바뀔 때만 리셋. tabProp(URL ?tab=) 변경에 묶으면
-  // controlled 모드에서 "팁 클릭 → reviews 로 전환" 시 tabProp 이 바뀌며
+  // 팁/메뉴 필터는 식당이 바뀔 때만 리셋. tabProp(URL ?tab=) 변경에 묶으면
+  // controlled 모드에서 "팁/메뉴 클릭 → reviews 로 전환" 시 tabProp 이 바뀌며
   // 방금 설정한 필터를 곧장 지워버린다. placeId 에만 의존시킨다.
   useEffect(() => {
     setTipFilter(null);
+    setMenuFilter(null);
   }, [placeId]);
 
   // 탭 변경 시 스크롤을 맨 위로.
@@ -196,10 +199,18 @@ export const PublicRestaurantDetail = ({
             onChangeTab={handleChangeTab}
             tipFilter={tipFilter}
             onSelectTip={(term) => {
+              setMenuFilter(null);
               setTipFilter(term);
               handleChangeTab('reviews');
             }}
             onClearTip={() => setTipFilter(null)}
+            menuFilter={menuFilter}
+            onSelectMenu={(name) => {
+              setTipFilter(null);
+              setMenuFilter(name);
+              handleChangeTab('reviews');
+            }}
+            onClearMenu={() => setMenuFilter(null)}
           />
         ) : null}
       </div>
@@ -217,6 +228,9 @@ const ActiveTab = ({
   tipFilter,
   onSelectTip,
   onClearTip,
+  menuFilter,
+  onSelectMenu,
+  onClearMenu,
 }: {
   tab: TabKey;
   placeId: string;
@@ -227,6 +241,9 @@ const ActiveTab = ({
   tipFilter: string | null;
   onSelectTip(term: string): void;
   onClearTip(): void;
+  menuFilter: string | null;
+  onSelectMenu(name: string): void;
+  onClearMenu(): void;
 }) => {
   switch (tab) {
     case 'home':
@@ -237,10 +254,11 @@ const ActiveTab = ({
           insightsLoading={insightsLoading}
           onChangeTab={onChangeTab}
           onSelectTip={onSelectTip}
+          onSelectMenu={onSelectMenu}
         />
       );
     case 'menu':
-      return <MenuTab detail={detail} insights={insights} />;
+      return <MenuTab detail={detail} insights={insights} onSelectMenu={onSelectMenu} />;
     case 'reviews':
       return (
         <ReviewsTab
@@ -248,6 +266,8 @@ const ActiveTab = ({
           detail={detail}
           tip={tipFilter}
           onClearTip={onClearTip}
+          menu={menuFilter}
+          onClearMenu={onClearMenu}
         />
       );
     case 'insights':

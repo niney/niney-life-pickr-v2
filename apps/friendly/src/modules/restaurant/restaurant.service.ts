@@ -1181,6 +1181,28 @@ export class RestaurantService {
       );
     }
 
+    // 메뉴 필터 — topMenus(getInsights) 와 동일한 MenuCanonical 그룹핑으로 매칭.
+    // 클릭한 표시명(canonical 표시명) 을 그룹키(canonicalNorm)로 환산하고, 각
+    // 리뷰의 menu 멘션도 같은 방식으로 환산해 비교 → 카드의 'N회 언급' 카운트와
+    // 결과 수가 일치한다(약어/표기 변형까지 같은 그룹으로 묶임). canonical 매핑이
+    // 없는 메뉴는 nameNorm 정확 일치로 fallback — 이 또한 집계와 동일한 키.
+    if (query.menu) {
+      const canonicals = await this.prisma.menuCanonical.findMany({
+        where: { restaurantId: assembled.naverRow.id },
+        select: { nameNorm: true, canonicalName: true, canonicalNorm: true },
+      });
+      const canonByNorm = new Map(canonicals.map((c) => [c.nameNorm, c.canonicalNorm]));
+      const canonicalNameToNorm = new Map(
+        canonicals.map((c) => [c.canonicalName, c.canonicalNorm]),
+      );
+      const groupKey = (name: string) =>
+        canonByNorm.get(normalizeTerm(name)) ?? normalizeTerm(name);
+      const want = canonicalNameToNorm.get(query.menu) ?? normalizeTerm(query.menu);
+      filtered = filtered.filter(
+        (r) => r.analysis?.menus.some((m) => groupKey(m.name) === want) ?? false,
+      );
+    }
+
     if (query.sort === 'rating') {
       // 별점 desc. 별점 null 은 0 으로 떨어져 뒤로 밀린다. 같은 별점에서는
       // 기본 정렬(fetchedAt asc = 최신순)이 안정성(stable sort) 으로 유지 —

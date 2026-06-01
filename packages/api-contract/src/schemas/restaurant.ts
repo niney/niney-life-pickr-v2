@@ -634,6 +634,10 @@ export const RestaurantPublicReviewsQuery = z.object({
   // 방문 팁 필터. 인사이트의 topTips(정규화 빈도 집계)에서 한 항목을 클릭하면
   // 그 팁이 달린 리뷰만 보여준다. 서버는 termNorm 정확 일치로 거른다.
   tip: z.string().trim().min(1).optional(),
+  // 메뉴 필터. 메뉴 카드(topMenus 의 canonical 표시명)를 클릭하면 그 메뉴를
+  // 언급한 리뷰만. 서버는 topMenus 와 동일한 MenuCanonical 그룹핑으로 매칭해
+  // 카드의 'N회 언급' 카운트와 결과 수가 일치한다(약어/표기 변형 포함).
+  menu: z.string().trim().min(1).optional(),
 });
 export type RestaurantPublicReviewsQueryType = z.infer<
   typeof RestaurantPublicReviewsQuery

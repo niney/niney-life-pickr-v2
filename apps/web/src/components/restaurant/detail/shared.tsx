@@ -168,9 +168,13 @@ const Stat = ({
 export const MenuGrid = ({
   menus,
   insights,
+  // 주어지면 멘션 통계가 있는 메뉴를 클릭 가능하게 렌더해 리뷰 필터로 연결.
+  // 멘션 없는(stats 없는) 메뉴는 클릭해도 결과가 비므로 정적 카드로 둔다.
+  onSelectMenu,
 }: {
   menus: RestaurantPublicDetailType['menus'];
   insights: RestaurantInsightsType | undefined;
+  onSelectMenu?(name: string): void;
 }) => {
   const mentionByName = new Map<string, { positive: number; negative: number; count: number }>();
   if (insights) {
@@ -181,8 +185,9 @@ export const MenuGrid = ({
       <ul className="grid grid-cols-1 gap-2 @md:grid-cols-2">
         {menus.map((m, idx) => {
           const stats = mentionByName.get(m.name);
-          return (
-            <li key={`${m.name}-${idx}`} className="flex gap-2 rounded-md border p-2">
+          const clickable = !!onSelectMenu && !!stats;
+          const inner = (
+            <>
               {m.imageUrls[0] && (
                 <ImgWithFallback
                   src={m.imageUrls[0]}
@@ -219,6 +224,22 @@ export const MenuGrid = ({
                   </div>
                 )}
               </div>
+            </>
+          );
+          return (
+            <li key={`${m.name}-${idx}`}>
+              {clickable ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectMenu!(m.name)}
+                  className="flex w-full gap-2 rounded-md border p-2 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                  aria-label={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
+                >
+                  {inner}
+                </button>
+              ) : (
+                <div className="flex gap-2 rounded-md border p-2">{inner}</div>
+              )}
             </li>
           );
         })}

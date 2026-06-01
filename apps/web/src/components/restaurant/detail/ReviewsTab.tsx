@@ -22,9 +22,19 @@ interface Props {
   // 홈 탭 방문 팁 클릭으로 넘어온 필터. null 이면 미적용.
   tip?: string | null;
   onClearTip?(): void;
+  // 메뉴 클릭으로 넘어온 필터. null 이면 미적용. tip 과 동시 1개만 활성.
+  menu?: string | null;
+  onClearMenu?(): void;
 }
 
-export const ReviewsTab = ({ placeId, detail, tip, onClearTip }: Props) => {
+export const ReviewsTab = ({
+  placeId,
+  detail,
+  tip,
+  onClearTip,
+  menu,
+  onClearMenu,
+}: Props) => {
   const [sentiment, setSentiment] =
     useState<RestaurantPublicReviewSentimentType>('all');
   const [sort, setSort] = useState<RestaurantPublicReviewSortType>('recent');
@@ -39,11 +49,17 @@ export const ReviewsTab = ({ placeId, detail, tip, onClearTip }: Props) => {
 
   const reviewsQuery = useRestaurantPublicReviews(
     placeId,
-    { sentiment, sort, tip: tip ?? undefined },
+    { sentiment, sort, tip: tip ?? undefined, menu: menu ?? undefined },
     seed,
   );
 
-  const tipTotal = reviewsQuery.data?.pages[0]?.total ?? 0;
+  // tip/menu 는 동시 1개만 — 활성 칩 하나로 표현. total 은 현재 필터 적용 결과 수.
+  const activeChip = tip
+    ? { label: '방문 팁', value: tip, onClear: onClearTip }
+    : menu
+      ? { label: '메뉴', value: menu, onClear: onClearMenu }
+      : null;
+  const filterTotal = reviewsQuery.data?.pages[0]?.total ?? 0;
 
   const flat: PublicVisitorReviewType[] = useMemo(
     () =>
@@ -68,21 +84,21 @@ export const ReviewsTab = ({ placeId, detail, tip, onClearTip }: Props) => {
 
   return (
     <div className="space-y-3 p-4">
-      {tip && (
+      {activeChip && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
           <span className="min-w-0 truncate">
-            <span className="text-muted-foreground">방문 팁 · </span>
-            <span className="font-medium">{tip}</span>
+            <span className="text-muted-foreground">{activeChip.label} · </span>
+            <span className="font-medium">{activeChip.value}</span>
             <span className="ml-1 tabular-nums text-muted-foreground">
-              ({tipTotal})
+              ({filterTotal})
             </span>
           </span>
-          {onClearTip && (
+          {activeChip.onClear && (
             <button
               type="button"
-              onClick={onClearTip}
+              onClick={activeChip.onClear}
               className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="방문 팁 필터 해제"
+              aria-label={`${activeChip.label} 필터 해제`}
             >
               <X className="size-3" />
               해제

@@ -10,9 +10,10 @@ import { MenuGrid } from './shared/MenuGrid';
 interface Props {
   detail: RestaurantPublicDetailType;
   insights: RestaurantInsightsType | undefined;
+  onSelectMenu(name: string): void;
 }
 
-export const MenuTab = ({ detail, insights }: Props) => {
+export const MenuTab = ({ detail, insights, onSelectMenu }: Props) => {
   const theme = useTheme();
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
@@ -54,7 +55,7 @@ export const MenuTab = ({ detail, insights }: Props) => {
           <Text style={{ color: theme.colors.textMuted }}>등록된 메뉴가 없습니다.</Text>
         </View>
       ) : (
-        <MenuGrid menus={detail.menus} insights={insights} />
+        <MenuGrid menus={detail.menus} insights={insights} onSelectMenu={onSelectMenu} />
       )}
     </View>
   );
