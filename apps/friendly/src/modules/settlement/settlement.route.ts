@@ -168,6 +168,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
           req.user.userId,
           req.params.id,
           req.body.ttl,
+          req.body.ogImage,
         );
       } catch (e) {
         if (e instanceof SettlementError) return throwAsHttp(app, e);

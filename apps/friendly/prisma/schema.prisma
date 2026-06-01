@@ -52,6 +52,10 @@ model SettlementSession {
   // 공유 링크 만료 시각 — 지나면 GET 공개 조회가 410. owner 가 다시 share 하면
   // ttl 기준으로 갱신(연장)된다. null = 만료 없음(구버전 토큰 호환).
   shareExpiresAt    DateTime?
+  // 공유 미리보기(OG) 이미지 선택: 'restaurant'(식당 사진 랜덤) | 'table'(정산표).
+  // null = 미설정 → 기본 'restaurant'(식당 사진, 없으면 정산표로 폴백). 공유 시
+  // owner 가 다이얼로그 토글로 정한다. share-preview 가 og:image 로 반영.
+  shareOgImage      String?
   // 본문(참여자/차수/항목)이 저장 후 마지막으로 수정된 시각. 한 번도 수정 안
   // 했으면 null. updatedAt 과 분리한 이유: updatedAt 은 shareToken 발급/회수
   // 에도 갱신되어 '수정됨' 배지 기준으로 부적합.

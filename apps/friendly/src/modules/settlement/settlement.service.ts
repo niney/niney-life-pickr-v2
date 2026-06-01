@@ -14,12 +14,34 @@ import {
   type SettlementRoundType,
   type SettlementSessionType,
   type SettlementSourceType,
+  type ShareOgImageType,
   type ShareTtlType,
   type SharedSettlementSessionType,
   type UpdateSettlementInputType,
 } from '@repo/api-contract';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
+import { ALLOWED_HOSTS } from '../media/media.route.js';
 import { SettlementDraftService } from './settlement-draft.service.js';
+
+// thumbnail 프록시로 띄울 수 있는 이미지인가(허용 호스트인가). 공유 OG 이미지를
+// 식당 사진으로 쓸 때, 프록시가 거부할 호스트는 애초에 후보에서 뺀다.
+const isThumbnailProxyable = (url: string): boolean => {
+  try {
+    return ALLOWED_HOSTS.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+};
+
+// 토큰 문자열 → 결정적 정수 시드. 같은 공유 링크는 항상 같은 식당 사진을 고르게
+// 해 카카오 OG 캐시와 일관되게 한다(매 크롤마다 바뀌지 않음).
+const seedFromToken = (token: string): number => {
+  let h = 0;
+  for (let i = 0; i < token.length; i += 1) {
+    h = (h * 31 + token.charCodeAt(i)) >>> 0;
+  }
+  return h;
+};
 
 // receiptImageToken 검증용 정규식 — settlement-extraction 의 IMAGE_TOKEN_PATTERN
 // 과 동일. 모듈을 직접 import 하지 않고 패턴만 다시 둔다 (모듈 결합도 축소).
@@ -79,6 +101,8 @@ interface RowSession {
   editedAt: Date | null;
   // 만료 검사용 — findFullRowByToken 의 include 결과에 함께 실려 온다.
   shareExpiresAt: Date | null;
+  // 공유 미리보기 이미지 선택('restaurant'|'table'|null). include 로 함께 온다.
+  shareOgImage: string | null;
   rounds: Array<RowRound>;
   participants: Array<RowParticipant>;
 }
@@ -567,29 +591,90 @@ export class SettlementService {
   // 공유 토큰 생성/갱신 — 토큰은 한 번 발급되면 유지(멱등)하되, 호출할 때마다
   // ttl 기준으로 만료를 갱신(연장)한다. owner 가 다이얼로그를 다시 열어 기간을
   // 고르면 같은 링크의 수명만 늘어난다. 회수(revoke) 후 재생성하면 새 토큰.
-  async createShare(userId: string, id: string, ttl: ShareTtlType): Promise<{
+  async createShare(
+    userId: string,
+    id: string,
+    ttl: ShareTtlType,
+    ogImage?: ShareOgImageType,
+  ): Promise<{
     token: string | null;
     shareUrl: string | null;
     expiresAt: string | null;
+    ogImage: ShareOgImageType;
   }> {
     const row = await this.prisma.settlementSession.findUnique({
       where: { id },
-      select: { id: true, userId: true, shareToken: true },
+      select: { id: true, userId: true, shareToken: true, shareOgImage: true },
     });
     if (!row) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
     if (row.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
 
     const token = row.shareToken ?? (await this.generateUniqueShareToken());
     const expiresAt = new Date(Date.now() + SHARE_TTL_MS[ttl]);
+    // ogImage 생략 시 기존 선택 유지(첫 공유면 기본 restaurant) — 다이얼로그가
+    // 열릴 때마다 본문 없이 POST 해도 사용자가 고른 'table' 이 덮이지 않게 한다.
+    const mode: ShareOgImageType =
+      ogImage ?? (row.shareOgImage as ShareOgImageType | null) ?? 'restaurant';
     await this.prisma.settlementSession.update({
       where: { id },
-      data: { shareToken: token, shareExpiresAt: expiresAt },
+      data: { shareToken: token, shareExpiresAt: expiresAt, shareOgImage: mode },
     });
     return {
       token,
       shareUrl: Routes.Settlement.shared(token),
       expiresAt: expiresAt.toISOString(),
+      ogImage: mode,
     };
+  }
+
+  // 공유 OG 미리보기에 필요한 메타를 '한 번의 row 조회'로 모은다. share-preview
+  // 가 매 조회마다 getBySharedToken + 이미지해석으로 풀 로우를 두 번 읽지 않도록
+  // 합친 것. 만료/없는 토큰이면 null → 호출부가 기본 OG 로 폴백.
+  async getSharePreviewMeta(
+    token: string,
+    origin: string,
+  ): Promise<{
+    restaurantName: string;
+    grandTotal: number;
+    participantCount: number;
+    ogImageUrl: string | null;
+  } | null> {
+    const row = await this.findFullRowByToken(token);
+    if (!row) return null;
+    if (row.shareExpiresAt && row.shareExpiresAt.getTime() < Date.now()) return null;
+    return {
+      restaurantName: row.restaurantName,
+      grandTotal: row.grandTotal,
+      participantCount: row.participants.length,
+      ogImageUrl: await this.pickRestaurantOgImageUrl(row, token, origin),
+    };
+  }
+
+  // mode='restaurant'(기본) 이면 그 정산 식당들의 사진(네이버 호스트만, thumbnail
+  // 프록시 가능) 중 '토큰 시드'로 하나 골라 프록시 URL 을 돌려준다. 'table' 이거나
+  // 사진이 없으면 null → 정산표 PNG 로 폴백. 토큰 시드라 같은 링크는 항상 같은
+  // 사진(카카오 OG 캐시와 일관, 매 크롤마다 바뀌지 않음).
+  private async pickRestaurantOgImageUrl(
+    row: RowSession,
+    token: string,
+    origin: string,
+  ): Promise<string | null> {
+    const mode = (row.shareOgImage as ShareOgImageType | null) ?? 'restaurant';
+    if (mode === 'table') return null;
+
+    const placeIds = [...new Set(row.rounds.map((r) => r.restaurantPlaceId))];
+    const images: string[] = [];
+    for (const pid of placeIds) {
+      const detail = await this.restaurants.getPublicDetail(pid).catch(() => null);
+      if (!detail) continue;
+      for (const u of detail.imageUrls) {
+        if (isThumbnailProxyable(u)) images.push(u);
+      }
+    }
+    if (images.length === 0) return null;
+
+    const pick = images[seedFromToken(token) % images.length]!;
+    return `${origin}${Routes.Media.thumbnail}?url=${encodeURIComponent(pick)}&w=1200&q=80`;
   }
 
   // 추측 불가능한 7바이트(56bit) base64url 토큰 = 10자. 만료가 항상 걸려 노출

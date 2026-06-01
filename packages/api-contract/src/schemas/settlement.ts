@@ -260,13 +260,23 @@ export type ListSettlementsResultType = z.infer<typeof ListSettlementsResult>;
 export const ShareTtl = z.enum(['1d', '7d', '30d']);
 export type ShareTtlType = z.infer<typeof ShareTtl>;
 
+// 공유 링크 미리보기(OG) 이미지 소스.
+// - restaurant: 그 정산 식당들의 사진 중 랜덤 1장(네이버 호스트만). 없으면 정산표로 폴백.
+// - table: 정산표 매트릭스 PNG.
+// 기본은 restaurant — 참가자 이름이 미리보기/크롤러 캐시에 안 박혀 프라이버시상 유리.
+export const ShareOgImage = z.enum(['restaurant', 'table']);
+export type ShareOgImageType = z.infer<typeof ShareOgImage>;
+
 // POST /settlements/:id/share 본문. 본문 전체가 옵셔널 — 본문 없이 POST 하면
 // Fastify 가 body 를 null 로 넘기므로(=undefined 아님) preprocess 로 {} 로
 // 메꾼 뒤 ttl 기본 7일을 적용한다. (다이얼로그 자동 호출이 본문 없이 POST 함.)
+// ogImage 는 옵셔널 — 생략하면 서버가 기존 선택을 유지(첫 공유면 restaurant).
+// 토글을 바꿀 때만 명시해서 보낸다(다이얼로그 자동 호출이 덮어쓰지 않도록).
 export const CreateSettlementShareInput = z.preprocess(
   (v) => (v == null ? {} : v),
   z.object({
     ttl: ShareTtl.default('7d'),
+    ogImage: ShareOgImage.optional(),
   }),
 );
 export type CreateSettlementShareInputType = z.infer<typeof CreateSettlementShareInput>;
@@ -276,6 +286,8 @@ export const SettlementShare = z.object({
   shareUrl: z.string().nullable(),
   // 만료 시각 ISO 문자열. 토큰이 없으면(=공유 불가) null.
   expiresAt: z.string().nullable(),
+  // 현재 저장된 미리보기 이미지 선택 — 다이얼로그가 토글 상태를 복원하는 데 쓴다.
+  ogImage: ShareOgImage,
 });
 export type SettlementShareType = z.infer<typeof SettlementShare>;
 

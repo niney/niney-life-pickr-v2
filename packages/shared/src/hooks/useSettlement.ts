@@ -3,6 +3,7 @@ import type {
   CreateSettlementInputType,
   ListSettlementsQueryType,
   SettlementSessionType,
+  ShareOgImageType,
   ShareTtlType,
   UpdateSettlementInputType,
 } from '@repo/api-contract';
@@ -58,8 +59,15 @@ export const useDeleteSettlement = () => {
 // 갱신된다. ttl 미지정이면 서버 기본(7일). 반환값 expiresAt 을 UI 가 표시.
 export const useCreateSettlementShare = () =>
   useMutation({
-    mutationFn: ({ id, ttl }: { id: string; ttl?: ShareTtlType }) =>
-      settlementApi.createShare(id, ttl),
+    mutationFn: ({
+      id,
+      ttl,
+      ogImage,
+    }: {
+      id: string;
+      ttl?: ShareTtlType;
+      ogImage?: ShareOgImageType;
+    }) => settlementApi.createShare(id, ttl, ogImage),
   });
 
 export const useRevokeSettlementShare = () =>

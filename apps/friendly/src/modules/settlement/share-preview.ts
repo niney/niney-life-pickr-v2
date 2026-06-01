@@ -144,24 +144,25 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
       ? env.OG_IMAGE_PATH
       : `${origin}${env.OG_IMAGE_PATH}`;
 
+    // 한 번의 row 조회로 메타 + og:image 를 모은다(만료/없으면 null).
+    const meta = await service.getSharePreviewMeta(token, origin);
     let og: OgMeta;
-    try {
-      const s = await service.getBySharedToken(token);
-      // 정산이 살아있으면 og:image 를 '정산표' 동적 이미지로 — 링크만 붙여도
-      // 카카오톡/텔레그램 미리보기에 정산표 매트릭스가 바로 뜬다.
+    if (meta) {
+      // og:image 는 owner 가 공유 시 고른 미리보기로 — 기본은 '식당 사진(랜덤)',
+      // 'table' 이거나 식당 사진이 없으면 정산표 매트릭스 PNG 로 폴백.
       //
-      // 프라이버시: 카드에는 참가자 이름이 들어간다. 공유 페이지를 열면 어차피
-      // 같은 명단이 그대로 보이고, 모든 공유 링크는 최대 30일 내 만료(만료 후
-      // 이미지 라우트는 404 → 크롤러가 기본 이미지로 폴백)되므로 동일한 노출
-      // 범위로 본다. 더 보수적으로 가려면 OG_IMAGE_PATH 기본 이미지로 되돌리면 됨.
+      // 식당 사진 기본의 이점: 참가자 이름이 미리보기/크롤러 캐시에 안 박힌다.
+      // (정산표 미리보기는 이름이 노출 — 공유 페이지를 열면 어차피 보이지만,
+      //  크롤러 캐시 박제를 피하려면 식당 사진이 낫다.)
       og = {
-        title: `${s.restaurantName} 정산`,
-        description: `총 ${formatWon(s.grandTotal)}원 · ${s.participants.length}명`,
+        title: `${meta.restaurantName} 정산`,
+        description: `총 ${formatWon(meta.grandTotal)}원 · ${meta.participantCount}명`,
         url: pageUrl,
-        image: `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,
+        image:
+          meta.ogImageUrl ??
+          `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,
       };
-    } catch (e) {
-      if (!(e instanceof SettlementError)) throw e;
+    } else {
       // 만료/없는 토큰 — 일반 OG 로 폴백. SPA 가 자체 에러 화면을 띄운다.
       og = {
         title: 'Life Pickr 정산',

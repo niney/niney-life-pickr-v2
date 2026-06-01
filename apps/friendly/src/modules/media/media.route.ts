@@ -11,7 +11,9 @@ import { Routes } from '@repo/api-contract';
 // Naver review/place CDN hosts we proxy. Anything outside this list is
 // rejected — the proxy is purely a thumbnail accelerator for Naver-hosted
 // review images, not a generic open image proxy.
-const ALLOWED_HOSTS = new Set([
+// thumbnail 프록시가 허용하는 호스트. 다른 모듈(공유 OG 이미지 선택 등)이
+// "이 URL 을 프록시로 띄울 수 있나" 판단할 때 재사용한다.
+export const ALLOWED_HOSTS = new Set([
   'phinf.pstatic.net',
   'pup-review-phinf.pstatic.net',
   'review-phinf.pstatic.net',
