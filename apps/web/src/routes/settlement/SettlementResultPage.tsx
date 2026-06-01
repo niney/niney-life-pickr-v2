@@ -1,17 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ChevronLeft, History, Loader2, Pencil, Share2, Trash2 } from 'lucide-react';
 import {
   ApiError,
-  settlementExtractionApi,
   useDeleteSettlement,
   useSettlement,
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Lightbox } from '~/components/Lightbox';
 import { ParticipantsCard, RoundItemsCard, SessionSummaryCard } from './SettlementCards';
 import { SettlementBreakdownTable } from './SettlementBreakdownTable';
 import { SettlementShareDialog } from './SettlementShareDialog';
+import { useReceiptPreviewUrl } from './useReceiptPreviewUrl';
 
 // 저장된 정산 세션 단건 보기. /restaurants/:placeId/settle/:id.
 // 본인 소유가 아니면 server 가 403, 없으면 404.
@@ -152,29 +153,11 @@ export const SettlementResultPage = () => {
   );
 };
 
+// 영수증 카드 — 클릭하면 Lightbox 로 풀스크린 확대. blob fetch/revoke 는
+// useReceiptPreviewUrl 훅에 위임한다.
 const ReceiptCard = ({ previewUrl }: { previewUrl: string }) => {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let createdUrl: string | null = null;
-    const token = previewUrl.split('/').pop() ?? '';
-    (async () => {
-      try {
-        const blob = await settlementExtractionApi.previewBlob(token);
-        if (cancelled) return;
-        createdUrl = URL.createObjectURL(blob);
-        setObjectUrl(createdUrl);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '미리보기 실패');
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
-    };
-  }, [previewUrl]);
+  const { objectUrl, error } = useReceiptPreviewUrl(previewUrl);
+  const [zoomed, setZoomed] = useState(false);
 
   return (
     <Card>
@@ -187,11 +170,22 @@ const ReceiptCard = ({ previewUrl }: { previewUrl: string }) => {
         ) : !objectUrl ? (
           <p className="text-sm text-muted-foreground">불러오는 중…</p>
         ) : (
-          <img
-            src={objectUrl}
-            alt="영수증"
-            className="max-h-80 w-full rounded-md border object-contain"
-          />
+          <>
+            <img
+              src={objectUrl}
+              alt="영수증"
+              onClick={() => setZoomed(true)}
+              className="max-h-80 w-full cursor-zoom-in rounded-md border object-contain"
+            />
+            {zoomed && (
+              <Lightbox
+                images={[objectUrl]}
+                index={0}
+                onChangeIndex={() => {}}
+                onClose={() => setZoomed(false)}
+              />
+            )}
+          </>
         )}
       </CardContent>
     </Card>

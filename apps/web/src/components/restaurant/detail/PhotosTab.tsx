@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { RestaurantPublicDetailType } from '@repo/api-contract';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
-import { Lightbox } from './Lightbox';
+import { Lightbox } from '~/components/Lightbox';
 
 interface Props {
   detail: RestaurantPublicDetailType;

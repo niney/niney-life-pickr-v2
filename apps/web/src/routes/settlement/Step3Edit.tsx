@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import type { ReceiptItemCategoryType } from '@repo/api-contract';
 import {
-  settlementExtractionApi,
   useRestaurantPublic,
   useSettlementDraftStore,
   type DraftItem,
@@ -11,9 +10,11 @@ import {
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Lightbox } from '~/components/Lightbox';
 import { cn } from '~/lib/utils';
 import { MenuPickerDialog } from './MenuPickerDialog';
 import { RoundDiscountEditor } from './RoundDiscountEditor';
+import { useReceiptPreviewUrl } from './useReceiptPreviewUrl';
 
 interface Props {
   onBack: () => void;
@@ -471,42 +472,32 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </label>
 );
 
-// 영수증 미리보기 — preview 라우트는 JWT 필요라 <img src> 직접 호출이 안 된다.
-// fetch 로 blob 받아 objectURL 로 변환해 표시. 외부 시스템(브라우저 URL 캐시)
-// 동기화라 useEffect 가 맞다 — unmount 시 revoke 까지 한 묶음.
+// 영수증 미리보기 — 클릭하면 Lightbox 로 풀스크린 확대. blob fetch/revoke 는
+// useReceiptPreviewUrl 훅에 위임한다.
 const ReceiptPreviewImage = ({ url }: { url: string }) => {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let createdUrl: string | null = null;
-    const token = url.split('/').pop() ?? '';
-    (async () => {
-      try {
-        const blob = await settlementExtractionApi.previewBlob(token);
-        if (cancelled) return;
-        createdUrl = URL.createObjectURL(blob);
-        setObjectUrl(createdUrl);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '미리보기 실패');
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
-    };
-  }, [url]);
+  const { objectUrl, error } = useReceiptPreviewUrl(url);
+  const [zoomed, setZoomed] = useState(false);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!objectUrl)
     return <p className="text-sm text-muted-foreground">미리보기 불러오는 중…</p>;
   return (
-    <img
-      src={objectUrl}
-      alt="영수증"
-      className="max-h-64 w-full rounded-md border object-contain"
-    />
+    <>
+      <img
+        src={objectUrl}
+        alt="영수증"
+        onClick={() => setZoomed(true)}
+        className="max-h-64 w-full cursor-zoom-in rounded-md border object-contain"
+      />
+      {zoomed && (
+        <Lightbox
+          images={[objectUrl]}
+          index={0}
+          onChangeIndex={() => {}}
+          onClose={() => setZoomed(false)}
+        />
+      )}
+    </>
   );
 };
 

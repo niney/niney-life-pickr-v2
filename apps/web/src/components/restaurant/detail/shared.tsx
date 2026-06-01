@@ -16,7 +16,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import { cn } from '~/lib/utils';
-import { Lightbox } from './Lightbox';
+import { Lightbox } from '~/components/Lightbox';
 
 // 패널 탭들에서 공유하는 시각 요소. 데이터 fetch 는 root 에서, 여기는 순수
 // 표시용.
