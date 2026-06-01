@@ -15,7 +15,7 @@ import {
   useCreateSettlementShare,
   useRevokeSettlementShare,
 } from '@repo/shared';
-import type { ShareOgImageType, ShareTtlType } from '@repo/api-contract';
+import { Routes, type ShareOgImageType, type ShareTtlType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 
@@ -59,6 +59,9 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
   const [kakaoCopied, setKakaoCopied] = useState(false);
   // 링크 미리보기(OG) 이미지 선택. 서버가 저장한 값으로 동기화한다.
   const [ogImage, setOgImage] = useState<ShareOgImageType>('restaurant');
+  // 갤러리에서 고른 식당 사진 원본 URL(null=랜덤) + 고를 수 있는 후보 목록.
+  const [ogImageUrl, setOgImageUrl] = useState<string | null>(null);
+  const [ogCandidates, setOgCandidates] = useState<string[]>([]);
 
   // 다이얼로그가 열리거나 기간을 바꾸면 토큰 생성/갱신. 토큰은 멱등(같은 세션
   // → 같은 링크)이고 ttl 만 만료를 갱신한다. 닫혀 있는 동안에는 호출하지 않는다.
@@ -75,6 +78,8 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
         setExpiresAt(res.expiresAt);
         setOgImage(res.ogImage);
+        setOgImageUrl(res.ogImageUrl);
+        setOgCandidates(res.ogImageCandidates);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -87,22 +92,32 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionId, ttl]);
 
-  // 미리보기 이미지 토글 — 선택을 서버에 저장(같은 토큰 유지) 후 서버가 돌려준
-  // 값으로 상태를 확정한다.
-  const handleSelectOgImage = (mode: ShareOgImageType) => {
-    if (mode === ogImage || create.isPending) return;
+  // 미리보기 이미지 선택 — 모드 토글(식당 사진/정산표) 과 갤러리에서 특정 사진
+  // 고정을 한 함수로 처리한다. url 인자:
+  //   undefined → 기존 선택 유지(모드만 바꿈) / null → 랜덤으로 해제 / URL → 고정.
+  // 선택을 서버에 저장(같은 토큰 유지) 후 서버가 돌려준 값으로 상태를 확정.
+  const handleSelectOgImage = (mode: ShareOgImageType, url?: string | null) => {
+    if (create.isPending) return;
+    if (mode === ogImage && (url === undefined || url === ogImageUrl)) return;
     setOgImage(mode); // 낙관적
+    if (url !== undefined) setOgImageUrl(url);
     create
-      .mutateAsync({ id: sessionId, ttl, ogImage: mode })
+      .mutateAsync({ id: sessionId, ttl, ogImage: mode, ogImageUrl: url })
       .then((res) => {
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
         setExpiresAt(res.expiresAt);
         setOgImage(res.ogImage);
+        setOgImageUrl(res.ogImageUrl);
+        setOgCandidates(res.ogImageCandidates);
       })
       .catch((e: unknown) => {
         setError(e instanceof ApiError ? e.message : '미리보기 이미지 변경 실패');
       });
   };
+
+  // 후보 식당 사진을 thumbnail 프록시로 감싼 작은 미리보기 URL(동일 출처).
+  const thumbSrc = (url: string, w: number): string =>
+    `${Routes.Media.thumbnail}?url=${encodeURIComponent(url)}&w=${w}&q=70`;
 
   // ESC 닫기.
   useEffect(() => {
@@ -265,7 +280,7 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-md flex-col gap-4 rounded-t-lg bg-background p-5 shadow-lg sm:rounded-lg"
+        className="flex max-h-[90dvh] w-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain rounded-t-lg bg-background p-5 shadow-lg sm:rounded-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -349,7 +364,8 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
             )}
 
             {/* 링크 미리보기(카톡 등에 링크 붙였을 때 뜨는 그림) 선택.
-                기본 식당 사진(랜덤) — 식당 사진이 없으면 자동으로 정산표가 뜬다. */}
+                식당 사진을 고르면 그 사진이, 정산표를 고르면 정산표 PNG 가 뜬다.
+                식당 사진이 없으면 갤러리는 숨고 식당 사진은 정산표로 폴백한다. */}
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">
                 링크 미리보기 이미지
@@ -375,6 +391,66 @@ export const SettlementShareDialog = ({ open, sessionId, onClose }: Props) => {
                   </Button>
                 ))}
               </div>
+
+              {/* 식당 사진 모드일 때만 후보 갤러리. 탭한 사진으로 고정 — 자동
+                  랜덤이 관련 없는 사진을 고르는 걸 피할 수 있다. '랜덤' 칸은
+                  선택을 해제(토큰 시드로 매번 같은 1장 자동 선택)한다. */}
+              {ogImage === 'restaurant' && ogCandidates.length > 0 && (
+                <>
+                  {/* 사진이 많아도 팝업이 길어지지 않게 갤러리에 높이 상한(약 2줄)
+                      + 내부 스크롤. 핵심 버튼(이미지/카톡 복사)이 항상 사진 바로
+                      아래 보이게 한다. */}
+                  <div
+                    className="mt-1 grid max-h-[200px] grid-cols-4 gap-1.5 overflow-y-auto overscroll-contain pr-1"
+                    role="group"
+                    aria-label="식당 사진 선택"
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={ogImageUrl === null}
+                      disabled={create.isPending}
+                      onClick={() => handleSelectOgImage('restaurant', null)}
+                      className={`flex aspect-square items-center justify-center rounded-md border text-[11px] font-medium ${
+                        ogImageUrl === null
+                          ? 'border-primary ring-2 ring-primary text-primary'
+                          : 'border-border text-muted-foreground hover:bg-accent'
+                      }`}
+                    >
+                      랜덤
+                    </button>
+                    {ogCandidates.map((url) => {
+                      const selected = ogImageUrl === url;
+                      return (
+                        <button
+                          key={url}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={create.isPending}
+                          onClick={() => handleSelectOgImage('restaurant', url)}
+                          className={`relative aspect-square overflow-hidden rounded-md border ${
+                            selected ? 'border-primary ring-2 ring-primary' : 'border-border'
+                          }`}
+                        >
+                          <img
+                            src={thumbSrc(url, 160)}
+                            alt=""
+                            loading="lazy"
+                            className="size-full object-cover"
+                          />
+                          {selected && (
+                            <span className="absolute right-0.5 top-0.5 inline-flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <Check className="size-3" />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    사진을 골라 미리보기를 고정하세요. ‘랜덤’은 자동으로 한 장을 고릅니다.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* 정산표 이미지 — '복사' 와 '카카오톡 복사' 둘 다 클립보드에 PNG 를

@@ -63,11 +63,13 @@ export const useCreateSettlementShare = () =>
       id,
       ttl,
       ogImage,
+      ogImageUrl,
     }: {
       id: string;
       ttl?: ShareTtlType;
       ogImage?: ShareOgImageType;
-    }) => settlementApi.createShare(id, ttl, ogImage),
+      ogImageUrl?: string | null;
+    }) => settlementApi.createShare(id, ttl, ogImage, ogImageUrl),
   });
 
 export const useRevokeSettlementShare = () =>

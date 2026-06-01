@@ -53,15 +53,27 @@ export const settlementApi = {
   // 기준으로 만료가 갱신된다. 기본 7일.
   // ogImage 생략 시 서버가 기존 선택 유지(첫 공유면 'restaurant'). 토글을 바꿀
   // 때만 명시 — 다이얼로그가 열릴 때마다 호출해도 선택이 덮이지 않게 한다.
+  // ogImageUrl 트라이스테이트(식당 사진 갤러리에서 특정 1장 고정):
+  //   생략 → 유지 / null → 해제(랜덤) / URL → 고정. undefined 일 때만 키를 빼서
+  //   "유지" 와 "해제(null)" 를 서버가 구분할 수 있게 한다.
   createShare: (
     id: string,
     ttl: ShareTtlType = '7d',
     ogImage?: ShareOgImageType,
-  ): Promise<SettlementShareType> =>
-    apiFetch<SettlementShareType>(`${PREFIX}/${id}/share`, {
+    ogImageUrl?: string | null,
+  ): Promise<SettlementShareType> => {
+    const body: {
+      ttl: ShareTtlType;
+      ogImage?: ShareOgImageType;
+      ogImageUrl?: string | null;
+    } = { ttl };
+    if (ogImage !== undefined) body.ogImage = ogImage;
+    if (ogImageUrl !== undefined) body.ogImageUrl = ogImageUrl;
+    return apiFetch<SettlementShareType>(`${PREFIX}/${id}/share`, {
       method: 'POST',
-      body: JSON.stringify(ogImage ? { ttl, ogImage } : { ttl }),
-    }),
+      body: JSON.stringify(body),
+    });
+  },
 
   // 공유 토큰 회수. 이전 링크는 영구 무효 — 다시 share 하면 새 토큰 발급.
   revokeShare: (id: string): Promise<void> =>

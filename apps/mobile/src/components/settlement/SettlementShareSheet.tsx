@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -21,7 +23,7 @@ import {
   useTheme,
   type Theme,
 } from '@repo/shared';
-import type { ShareOgImageType, ShareTtlType } from '@repo/api-contract';
+import { Routes, type ShareOgImageType, type ShareTtlType } from '@repo/api-contract';
 
 interface Props {
   open: boolean;
@@ -70,6 +72,9 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
   const [imageBusy, setImageBusy] = useState(false);
   // 링크 미리보기(OG) 이미지 선택 — 서버가 저장한 값으로 동기화.
   const [ogImage, setOgImage] = useState<ShareOgImageType>('restaurant');
+  // 갤러리에서 고른 식당 사진 원본 URL(null=랜덤) + 고를 수 있는 후보 목록.
+  const [ogImageUrl, setOgImageUrl] = useState<string | null>(null);
+  const [ogCandidates, setOgCandidates] = useState<string[]>([]);
 
   // open 또는 기간 변경 시 토큰 생성/갱신. 토큰은 멱등이라 URL 은 그대로 두고
   // 만료만 갱신 — 기간 바꿔도 깜빡임 없이 expiresAt 만 바뀐다. ogImage 는 보내지
@@ -85,6 +90,8 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
         setExpiresAt(res.expiresAt);
         setOgImage(res.ogImage);
+        setOgImageUrl(res.ogImageUrl);
+        setOgCandidates(res.ogImageCandidates);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -96,20 +103,37 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionId, ttl]);
 
-  // 미리보기 이미지 토글 — 선택을 서버에 저장 후 서버가 돌려준 값으로 확정.
-  const handleSelectOgImage = (mode: ShareOgImageType) => {
-    if (mode === ogImage || create.isPending) return;
+  // 미리보기 이미지 선택 — 모드 토글(식당 사진/정산표) 과 갤러리에서 특정 사진
+  // 고정을 한 함수로 처리. url: undefined=유지 / null=랜덤으로 해제 / URL=고정.
+  const handleSelectOgImage = (mode: ShareOgImageType, url?: string | null) => {
+    if (create.isPending) return;
+    if (mode === ogImage && (url === undefined || url === ogImageUrl)) return;
     setOgImage(mode); // 낙관적
+    if (url !== undefined) setOgImageUrl(url);
     create
-      .mutateAsync({ id: sessionId, ttl, ogImage: mode })
+      .mutateAsync({ id: sessionId, ttl, ogImage: mode, ogImageUrl: url })
       .then((res) => {
         if (res.shareUrl) setShareUrl(absoluteUrl(res.shareUrl));
         setExpiresAt(res.expiresAt);
         setOgImage(res.ogImage);
+        setOgImageUrl(res.ogImageUrl);
+        setOgCandidates(res.ogImageCandidates);
       })
       .catch((e: unknown) => {
         setError(e instanceof ApiError ? e.message : '미리보기 이미지 변경 실패');
       });
+  };
+
+  // 후보 식당 사진을 thumbnail 프록시로 감싼 절대 URL. RN <Image> 는 상대경로를
+  // 못 쓰므로 API base(origin)에 프록시 경로를 붙인다.
+  const thumbSrc = (url: string, w: number): string => {
+    let base = '';
+    try {
+      base = getApiConfig().baseUrl.replace(/\/$/, '');
+    } catch {
+      base = '';
+    }
+    return `${base}${Routes.Media.thumbnail}?url=${encodeURIComponent(url)}&w=${w}&q=70`;
   };
 
   const handleShare = async () => {
@@ -203,7 +227,12 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
           </Pressable>
         </View>
 
-        <View style={styles.body}>
+        <ScrollView
+          style={styles.bodyScroll}
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={[styles.hint, { color: theme.colors.textMuted }]}>
             링크 받은 사람은 로그인 없이 결과를 볼 수 있습니다. 영수증 사진은
             공유되지 않으며, 설정한 기간이 지나거나 해제하면 링크는 더 이상
@@ -285,6 +314,86 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
                 );
               })}
             </View>
+
+            {/* 식당 사진 모드일 때 후보 갤러리 — 탭한 사진으로 미리보기 고정.
+                '랜덤' 칸은 선택을 해제(토큰 시드로 자동 한 장). 사진이 없으면 숨김. */}
+            {ogImage === 'restaurant' && ogCandidates.length > 0 && (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.galleryRow}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: ogImageUrl === null }}
+                    disabled={create.isPending}
+                    onPress={() => handleSelectOgImage('restaurant', null)}
+                    style={[
+                      styles.galleryTile,
+                      styles.galleryRandom,
+                      {
+                        borderColor:
+                          ogImageUrl === null ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: theme.colors.surface,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '600',
+                        color:
+                          ogImageUrl === null ? theme.colors.primary : theme.colors.textMuted,
+                      }}
+                    >
+                      랜덤
+                    </Text>
+                  </Pressable>
+                  {ogCandidates.map((url) => {
+                    const selected = ogImageUrl === url;
+                    return (
+                      <Pressable
+                        key={url}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        disabled={create.isPending}
+                        onPress={() => handleSelectOgImage('restaurant', url)}
+                        style={[
+                          styles.galleryTile,
+                          {
+                            borderColor: selected
+                              ? theme.colors.primary
+                              : theme.colors.border,
+                          },
+                        ]}
+                      >
+                        <Image
+                          source={{ uri: thumbSrc(url, 160) }}
+                          style={styles.galleryImage}
+                          resizeMode="cover"
+                        />
+                        {selected && (
+                          <View
+                            style={[
+                              styles.galleryCheck,
+                              { backgroundColor: theme.colors.primary },
+                            ]}
+                          >
+                            <Text style={{ color: theme.colors.primaryText, fontSize: 11 }}>
+                              ✓
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <Text style={[styles.urlNote, { color: theme.colors.textMuted }]}>
+                  사진을 골라 미리보기를 고정하세요. ‘랜덤’은 자동으로 한 장을 고릅니다.
+                </Text>
+              </>
+            )}
           </View>
 
           {error && (
@@ -397,7 +506,7 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
               </View>
             </>
           )}
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -440,6 +549,7 @@ const useStyles = (theme: Theme) => {
       justifyContent: 'center',
       borderRadius: 8,
     },
+    bodyScroll: { flex: 1 },
     body: { padding: 16, gap: 12 },
     hint: { fontSize: 12, lineHeight: 18 },
     errorText: { fontSize: 13 },
@@ -464,6 +574,26 @@ const useStyles = (theme: Theme) => {
       justifyContent: 'center',
     },
     ttlBtnText: { fontSize: 13, fontWeight: '600' },
+    galleryRow: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+    galleryTile: {
+      width: 64,
+      height: 64,
+      borderRadius: 8,
+      borderWidth: 2,
+      overflow: 'hidden',
+    },
+    galleryRandom: { alignItems: 'center', justifyContent: 'center' },
+    galleryImage: { width: '100%', height: '100%' },
+    galleryCheck: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     actionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
     primaryBtn: {
       paddingVertical: 12,
