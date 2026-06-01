@@ -261,7 +261,8 @@ export const ShareTtl = z.enum(['1d', '7d', '30d']);
 export type ShareTtlType = z.infer<typeof ShareTtl>;
 
 // 공유 링크 미리보기(OG) 이미지 소스.
-// - restaurant: 그 정산 식당들의 사진 중 랜덤 1장(네이버 호스트만). 없으면 정산표로 폴백.
+// - restaurant: 그 정산 식당들의 사진(네이버 호스트만). owner 가 갤러리에서 특정
+//   1장을 고르면 그 사진, 안 고르면 토큰 시드로 결정적 랜덤. 사진이 없으면 정산표.
 // - table: 정산표 매트릭스 PNG.
 // 기본은 restaurant — 참가자 이름이 미리보기/크롤러 캐시에 안 박혀 프라이버시상 유리.
 export const ShareOgImage = z.enum(['restaurant', 'table']);
@@ -272,11 +273,15 @@ export type ShareOgImageType = z.infer<typeof ShareOgImage>;
 // 메꾼 뒤 ttl 기본 7일을 적용한다. (다이얼로그 자동 호출이 본문 없이 POST 함.)
 // ogImage 는 옵셔널 — 생략하면 서버가 기존 선택을 유지(첫 공유면 restaurant).
 // 토글을 바꿀 때만 명시해서 보낸다(다이얼로그 자동 호출이 덮어쓰지 않도록).
+// ogImageUrl 트라이스테이트(식당 사진 갤러리에서 특정 1장 고정):
+//   생략 → 기존 선택 유지 / null → 선택 해제(랜덤으로 복귀) / URL 문자열 → 그 사진
+//   고정(후보 목록에 있는 URL 만 저장, 아니면 서버가 무시하고 null 처리).
 export const CreateSettlementShareInput = z.preprocess(
   (v) => (v == null ? {} : v),
   z.object({
     ttl: ShareTtl.default('7d'),
     ogImage: ShareOgImage.optional(),
+    ogImageUrl: z.string().url().nullable().optional(),
   }),
 );
 export type CreateSettlementShareInputType = z.infer<typeof CreateSettlementShareInput>;
@@ -288,6 +293,12 @@ export const SettlementShare = z.object({
   expiresAt: z.string().nullable(),
   // 현재 저장된 미리보기 이미지 선택 — 다이얼로그가 토글 상태를 복원하는 데 쓴다.
   ogImage: ShareOgImage,
+  // 'restaurant' 모드에서 owner 가 갤러리에서 고른 식당 사진 원본 URL. 미선택이면
+  // null(=랜덤). 다이얼로그가 갤러리에서 어느 사진이 선택됐는지 표시하는 데 쓴다.
+  ogImageUrl: z.string().nullable(),
+  // 고를 수 있는 식당 사진 후보(원본 URL, 네이버 호스트). 다이얼로그가 썸네일
+  // 갤러리로 렌더. 식당 사진이 없으면 빈 배열 → 갤러리 숨김(자동 정산표 폴백).
+  ogImageCandidates: z.array(z.string()),
 });
 export type SettlementShareType = z.infer<typeof SettlementShare>;
 

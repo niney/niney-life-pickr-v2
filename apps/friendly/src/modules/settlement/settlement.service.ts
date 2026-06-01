@@ -103,6 +103,8 @@ interface RowSession {
   shareExpiresAt: Date | null;
   // 공유 미리보기 이미지 선택('restaurant'|'table'|null). include 로 함께 온다.
   shareOgImage: string | null;
+  // owner 가 갤러리에서 고른 식당 사진 원본 URL(null=랜덤). include 로 함께 온다.
+  shareOgImageUrl: string | null;
   rounds: Array<RowRound>;
   participants: Array<RowParticipant>;
 }
@@ -596,15 +598,26 @@ export class SettlementService {
     id: string,
     ttl: ShareTtlType,
     ogImage?: ShareOgImageType,
+    // 트라이스테이트: undefined=기존 유지 / null=선택 해제(랜덤) / URL=그 사진 고정.
+    ogImageUrl?: string | null,
   ): Promise<{
     token: string | null;
     shareUrl: string | null;
     expiresAt: string | null;
     ogImage: ShareOgImageType;
+    ogImageUrl: string | null;
+    ogImageCandidates: string[];
   }> {
     const row = await this.prisma.settlementSession.findUnique({
       where: { id },
-      select: { id: true, userId: true, shareToken: true, shareOgImage: true },
+      select: {
+        id: true,
+        userId: true,
+        shareToken: true,
+        shareOgImage: true,
+        shareOgImageUrl: true,
+        rounds: { select: { restaurantPlaceId: true } },
+      },
     });
     if (!row) throw new SettlementError('not_found', '세션을 찾을 수 없습니다.');
     if (row.userId !== userId) throw new SettlementError('forbidden', '권한이 없습니다.');
@@ -615,16 +628,59 @@ export class SettlementService {
     // 열릴 때마다 본문 없이 POST 해도 사용자가 고른 'table' 이 덮이지 않게 한다.
     const mode: ShareOgImageType =
       ogImage ?? (row.shareOgImage as ShareOgImageType | null) ?? 'restaurant';
+
+    // 고를 수 있는 식당 사진 후보 — 다이얼로그 갤러리 + ogImageUrl 검증에 쓴다.
+    const candidates = await this.collectCandidateImageUrls(
+      row.rounds.map((r) => r.restaurantPlaceId),
+    );
+
+    // 특정 사진 고정값 결정. 생략이면 기존값 유지하되, 후보에서 사라졌으면 정리.
+    let chosenUrl: string | null;
+    if (ogImageUrl === undefined) {
+      chosenUrl = row.shareOgImageUrl ?? null;
+    } else if (ogImageUrl === null) {
+      chosenUrl = null;
+    } else {
+      chosenUrl = candidates.includes(ogImageUrl) ? ogImageUrl : null;
+    }
+    if (chosenUrl && !candidates.includes(chosenUrl)) chosenUrl = null;
+
     await this.prisma.settlementSession.update({
       where: { id },
-      data: { shareToken: token, shareExpiresAt: expiresAt, shareOgImage: mode },
+      data: {
+        shareToken: token,
+        shareExpiresAt: expiresAt,
+        shareOgImage: mode,
+        shareOgImageUrl: chosenUrl,
+      },
     });
     return {
       token,
       shareUrl: Routes.Settlement.shared(token),
       expiresAt: expiresAt.toISOString(),
       ogImage: mode,
+      ogImageUrl: chosenUrl,
+      ogImageCandidates: candidates,
     };
+  }
+
+  // 정산에 묶인 식당들의 사진(네이버 호스트만, thumbnail 프록시 가능)을 모은다.
+  // 원본 URL 그대로 반환 — 갤러리 렌더는 호출부가 thumbnail 프록시로 감싼다.
+  // 갤러리/시드 안정성을 위해 dedup + 상한(12장)을 둔다.
+  private async collectCandidateImageUrls(placeIds: string[]): Promise<string[]> {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const pid of [...new Set(placeIds)]) {
+      const detail = await this.restaurants.getPublicDetail(pid).catch(() => null);
+      if (!detail) continue;
+      for (const u of detail.imageUrls) {
+        if (seen.has(u) || !isThumbnailProxyable(u)) continue;
+        seen.add(u);
+        out.push(u);
+        if (out.length >= 12) return out;
+      }
+    }
+    return out;
   }
 
   // 공유 OG 미리보기에 필요한 메타를 '한 번의 row 조회'로 모은다. share-preview
@@ -651,9 +707,10 @@ export class SettlementService {
   }
 
   // mode='restaurant'(기본) 이면 그 정산 식당들의 사진(네이버 호스트만, thumbnail
-  // 프록시 가능) 중 '토큰 시드'로 하나 골라 프록시 URL 을 돌려준다. 'table' 이거나
-  // 사진이 없으면 null → 정산표 PNG 로 폴백. 토큰 시드라 같은 링크는 항상 같은
-  // 사진(카카오 OG 캐시와 일관, 매 크롤마다 바뀌지 않음).
+  // 프록시 가능)에서 하나 골라 프록시 URL 을 돌려준다. owner 가 갤러리에서 고른
+  // 사진(shareOgImageUrl)이 후보에 살아 있으면 그것, 아니면 '토큰 시드'로 결정적
+  // 랜덤. 'table' 이거나 사진이 없으면 null → 정산표 PNG 로 폴백. 시드라 같은
+  // 링크는 항상 같은 사진(카카오 OG 캐시와 일관, 매 크롤마다 바뀌지 않음).
   private async pickRestaurantOgImageUrl(
     row: RowSession,
     token: string,
@@ -662,18 +719,15 @@ export class SettlementService {
     const mode = (row.shareOgImage as ShareOgImageType | null) ?? 'restaurant';
     if (mode === 'table') return null;
 
-    const placeIds = [...new Set(row.rounds.map((r) => r.restaurantPlaceId))];
-    const images: string[] = [];
-    for (const pid of placeIds) {
-      const detail = await this.restaurants.getPublicDetail(pid).catch(() => null);
-      if (!detail) continue;
-      for (const u of detail.imageUrls) {
-        if (isThumbnailProxyable(u)) images.push(u);
-      }
-    }
+    const images = await this.collectCandidateImageUrls(
+      row.rounds.map((r) => r.restaurantPlaceId),
+    );
     if (images.length === 0) return null;
 
-    const pick = images[seedFromToken(token) % images.length]!;
+    const pick =
+      row.shareOgImageUrl && images.includes(row.shareOgImageUrl)
+        ? row.shareOgImageUrl
+        : images[seedFromToken(token) % images.length]!;
     return `${origin}${Routes.Media.thumbnail}?url=${encodeURIComponent(pick)}&w=1200&q=80`;
   }
 
