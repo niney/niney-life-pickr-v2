@@ -156,13 +156,16 @@ const RestaurantRow = ({
                   onClick={(e) => e.stopPropagation()}
                   className="inline-flex"
                 >
-                  <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                  <Badge
+                    variant="violet"
+                    className="cursor-pointer hover:bg-[var(--tonal-violet-bg-hover)]"
+                  >
                     {sourceLabel(s.source)}
                     <ExternalLink className="ml-1 size-3" />
                   </Badge>
                 </Link>
               ) : (
-                <Badge variant={s.source === 'naver' ? 'default' : 'secondary'}>
+                <Badge variant={s.source === 'naver' ? 'green' : 'secondary'}>
                   {sourceLabel(s.source)}
                 </Badge>
               );
@@ -220,7 +223,7 @@ const RestaurantRow = ({
         {/* Naver 액션 — Naver source 가 없으면 disabled */}
         <Button
           type="button"
-          variant="outline"
+          variant="blue"
           size="sm"
           onClick={stop(() => onAction('update'))}
           disabled={busy || !naverSource}
@@ -230,6 +233,7 @@ const RestaurantRow = ({
         </Button>
         <Button
           type="button"
+          variant="amber"
           size="sm"
           onClick={stop(() => onAction('recrawl'))}
           disabled={busy || !naverSource}
@@ -242,7 +246,7 @@ const RestaurantRow = ({
         {dcSource && (
           <Button
             type="button"
-            variant="outline"
+            variant="violet"
             size="sm"
             onClick={stop(() => onSaveDiningcode(dcSource.sourceId))}
             disabled={dcSaving}
@@ -256,9 +260,7 @@ const RestaurantRow = ({
             먼저 열어볼지 한눈에. 0 이면 ghost 로 시각적 무게 낮춤. */}
         <Button
           type="button"
-          variant={
-            mergeOpen ? 'secondary' : item.candidateCount > 0 ? 'outline' : 'ghost'
-          }
+          variant={mergeOpen ? 'secondary' : 'teal'}
           size="sm"
           onClick={stop(onToggleMerge)}
           title={
@@ -279,7 +281,7 @@ const RestaurantRow = ({
           <>
             <Button
               type="button"
-              variant="destructive"
+              variant="red"
               size="sm"
               onClick={stop(onDelete)}
               disabled={deleting}
@@ -307,7 +309,7 @@ const RestaurantRow = ({
         ) : (
           <Button
             type="button"
-            variant="ghost"
+            variant="red"
             size="sm"
             onClick={stop(onDelete)}
             disabled={busy}

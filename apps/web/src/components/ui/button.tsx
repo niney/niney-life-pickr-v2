@@ -16,6 +16,16 @@ const buttonVariants = cva(
         secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        // Soft tonal — 무테두리 + 옅은 틴트 배경 + 같은 hue 텍스트. 토큰은 tailwind.css.
+        blue: 'bg-[var(--tonal-blue-bg)] text-[var(--tonal-blue-fg)] hover:bg-[var(--tonal-blue-bg-hover)]',
+        amber:
+          'bg-[var(--tonal-amber-bg)] text-[var(--tonal-amber-fg)] hover:bg-[var(--tonal-amber-bg-hover)]',
+        violet:
+          'bg-[var(--tonal-violet-bg)] text-[var(--tonal-violet-fg)] hover:bg-[var(--tonal-violet-bg-hover)]',
+        green:
+          'bg-[var(--tonal-green-bg)] text-[var(--tonal-green-fg)] hover:bg-[var(--tonal-green-bg-hover)]',
+        red: 'bg-[var(--tonal-red-bg)] text-[var(--tonal-red-fg)] hover:bg-[var(--tonal-red-bg-hover)]',
+        teal: 'bg-[var(--tonal-teal-bg)] text-[var(--tonal-teal-fg)] hover:bg-[var(--tonal-teal-bg-hover)]',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
