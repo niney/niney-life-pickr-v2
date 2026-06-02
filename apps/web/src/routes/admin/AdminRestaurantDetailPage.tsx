@@ -601,7 +601,7 @@ export const AdminRestaurantDetailPage = () => {
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="blue"
               size="sm"
               onClick={() => handleAction('update')}
               disabled={startMutation.isPending || !!activeJob}
@@ -610,6 +610,7 @@ export const AdminRestaurantDetailPage = () => {
             </Button>
             <Button
               type="button"
+              variant="amber"
               size="sm"
               onClick={() => handleAction('recrawl')}
               disabled={startMutation.isPending || !!activeJob}
@@ -621,7 +622,7 @@ export const AdminRestaurantDetailPage = () => {
               <>
                 <Button
                   type="button"
-                  variant="destructive"
+                  variant="red"
                   size="sm"
                   onClick={handleDelete}
                   disabled={deleteMutation.isPending}
@@ -642,7 +643,7 @@ export const AdminRestaurantDetailPage = () => {
             ) : (
               <Button
                 type="button"
-                variant="ghost"
+                variant="red"
                 size="sm"
                 onClick={handleDelete}
                 aria-label="삭제"

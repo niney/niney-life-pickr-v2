@@ -65,7 +65,10 @@ const CanonicalCard = ({
               target="_blank"
               rel="noreferrer"
             >
-              <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+              <Badge
+                variant="violet"
+                className="cursor-pointer hover:bg-[var(--tonal-violet-bg-hover)]"
+              >
                 {sourceLabel(s.source)}
                 <ExternalLink className="ml-1 size-3" />
               </Badge>
@@ -81,7 +84,10 @@ const CanonicalCard = ({
               target="_blank"
               rel="noreferrer"
             >
-              <Badge variant="default" className="cursor-pointer">
+              <Badge
+                variant="green"
+                className="cursor-pointer hover:bg-[var(--tonal-green-bg-hover)]"
+              >
                 {sourceLabel(s.source)}
                 <ExternalLink className="ml-1 size-3" />
               </Badge>

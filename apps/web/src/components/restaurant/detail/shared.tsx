@@ -351,10 +351,10 @@ export const ScoreDistributionBars = ({
 export const SourceBadge = ({ source }: { source: 'naver' | 'diningcode' }) => (
   <span
     className={cn(
-      'inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[10px] font-medium leading-4',
+      'inline-flex shrink-0 items-center rounded-full px-1.5 py-0 text-[10px] font-medium leading-4',
       source === 'naver'
-        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-        : 'border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
+        ? 'bg-[var(--tonal-green-bg)] text-[var(--tonal-green-fg)]'
+        : 'bg-[var(--tonal-violet-bg)] text-[var(--tonal-violet-fg)]',
     )}
   >
     {source === 'naver' ? '네이버' : '다이닝코드'}

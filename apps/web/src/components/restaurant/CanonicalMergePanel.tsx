@@ -87,7 +87,13 @@ export const CanonicalMergePanel = ({
                     {c.canonical.sources.map((s) => (
                       <Badge
                         key={s.restaurantId}
-                        variant={s.source === 'naver' ? 'default' : 'secondary'}
+                        variant={
+                          s.source === 'naver'
+                            ? 'green'
+                            : s.source === 'diningcode'
+                              ? 'violet'
+                              : 'secondary'
+                        }
                       >
                         {sourceLabel(s.source)}
                       </Badge>
@@ -98,6 +104,7 @@ export const CanonicalMergePanel = ({
                 </div>
                 <Button
                   type="button"
+                  variant="teal"
                   size="sm"
                   onClick={() => handleMerge(c.canonical.id)}
                   disabled={isMerging || mergeMutation.isPending}

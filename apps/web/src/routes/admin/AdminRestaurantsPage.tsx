@@ -701,7 +701,7 @@ export const AdminRestaurantsPage = () => {
                           <Button
                             type="button"
                             size="sm"
-                            variant="outline"
+                            variant="teal"
                             onClick={() => setMergeOpenCanonicalId(item.canonicalId)}
                           >
                             <Link2 />
