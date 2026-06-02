@@ -219,7 +219,7 @@ export const AdminAnalyticsPage = () => {
           </p>
         </div>
         <Button
-          variant="outline"
+          variant="amber"
           size="sm"
           onClick={() => status.refetch()}
           disabled={status.isFetching}
@@ -351,7 +351,7 @@ export const AdminAnalyticsPage = () => {
             {/* 모바일에선 page-level sticky 바로 이관 — xl+ 에서만 헤더 인라인. */}
             <div className="hidden items-center gap-2 xl:flex">
               <Button
-                variant="outline"
+                variant="blue"
                 size="sm"
                 onClick={startAttention}
                 disabled={attentionCount === 0 || create.isPending}
@@ -360,6 +360,7 @@ export const AdminAnalyticsPage = () => {
                 처리 필요 {attentionCount}개 일괄 정규화
               </Button>
               <Button
+                variant="blue"
                 size="sm"
                 onClick={startJob}
                 disabled={selected.size === 0 || create.isPending}
@@ -621,7 +622,7 @@ export const AdminAnalyticsPage = () => {
           {attentionCount > 0 && (
             <Button
               type="button"
-              variant="outline"
+              variant="blue"
               size="sm"
               onClick={startAttention}
               disabled={create.isPending}
@@ -638,6 +639,7 @@ export const AdminAnalyticsPage = () => {
           {selected.size > 0 && (
             <Button
               type="button"
+              variant="blue"
               size="sm"
               onClick={startJob}
               disabled={create.isPending}
@@ -727,7 +729,7 @@ const GlobalMergeSection = () => {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="teal"
             size="sm"
             onClick={() => trigger(false)}
             disabled={start.isPending || (job.data?.state === 'running')}
@@ -736,6 +738,7 @@ const GlobalMergeSection = () => {
             증분 머지
           </Button>
           <Button
+            variant="amber"
             size="sm"
             onClick={() => trigger(true)}
             disabled={start.isPending || (job.data?.state === 'running')}
