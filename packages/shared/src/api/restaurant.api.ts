@@ -4,6 +4,7 @@ import {
   type CrawlLogLevelType,
   type PublicVisitorReviewType,
   type RestaurantCancelSummaryResultType,
+  type RestaurantCategoryTreeResultType,
   type RestaurantDeleteResultType,
   type RestaurantDetailType,
   type RestaurantInsightsType,
@@ -117,6 +118,11 @@ export const restaurantApi = {
 
   publicInsights: (placeId: string) =>
     apiFetch<RestaurantInsightsType>(Routes.Restaurant.publicInsights(placeId)),
+
+  publicCategoryTree: (placeId: string) =>
+    apiFetch<RestaurantCategoryTreeResultType>(
+      Routes.Restaurant.publicCategoryTree(placeId),
+    ),
 
   getByPlaceId: (placeId: string) =>
     apiFetch<RestaurantDetailType>(Routes.Restaurant.byPlaceId(placeId)),

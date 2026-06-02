@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
 import { normalizeTerm } from '../summary/summary.service.js';
+import { buildCategoryTree, type CategoryTreeLeaf } from '../analytics/category-tree.js';
 import {
   composeDiningcodeAddon,
   computeSources,
@@ -19,6 +20,7 @@ import {
   mergeReviewCount,
 } from './restaurant.merge.js';
 import type {
+  CategoryTreeNodeType,
   DiningcodeShopDataType,
   DiningcodeShopReviewType,
   NaverPlaceDataType,
@@ -1610,6 +1612,82 @@ export class RestaurantService {
       topTips: sortedTips,
       topKeywords: sortedKeywords,
     };
+  }
+
+  // 이 식당의 언급 메뉴를 카테고리 트리로. categoryPath 는 전역 머지(LLM)가
+  // GlobalMenuCanonical 에 붙인 값 — 이 식당의 MenuCanonical 이 링크된 전역
+  // 그룹의 path 를 쓰고, 멘션 통계는 이 식당 것만 누적한다. 아직 전역 머지가
+  // 안 닿은 식당이면 roots 는 빈 배열(분석 탭에서 섹션 자체를 숨김).
+  async getCategoryTree(placeId: string): Promise<CategoryTreeNodeType[] | null> {
+    const r = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { id: true },
+    });
+    if (!r) return null;
+
+    // 이 식당이 링크된, categoryPath 가 있는 전역 그룹 + 이 식당 쪽 링크만.
+    const linked = await this.prisma.globalMenuCanonical.findMany({
+      where: {
+        categoryPath: { not: null },
+        links: { some: { restaurantId: r.id } },
+      },
+      select: {
+        categoryPath: true,
+        links: {
+          where: { restaurantId: r.id },
+          select: { localCanonicalNorm: true },
+        },
+      },
+    });
+    if (linked.length === 0) return [];
+
+    // 이 식당의 정규화 메뉴별 멘션 통계 (감정별 COUNT). getInsights 와 동일한
+    // menu_mentions ↔ menu_canonicals 조인을 식당으로 좁힌 것.
+    const mentionStats = await this.prisma.$queryRaw<
+      Array<{ canonicalNorm: string; sentiment: string; cnt: number | bigint }>
+    >`SELECT mc.canonicalNorm AS canonicalNorm,
+             mm.sentiment AS sentiment,
+             COUNT(*) AS cnt
+        FROM menu_mentions mm
+        JOIN menu_canonicals mc
+          ON mc.restaurantId = mm.restaurantId
+         AND mc.nameNorm = mm.nameNorm
+       WHERE mm.restaurantId = ${r.id}
+       GROUP BY mc.canonicalNorm, mm.sentiment`;
+    const statByNorm = new Map<
+      string,
+      { positive: number; negative: number; total: number }
+    >();
+    for (const s of mentionStats) {
+      const cur = statByNorm.get(s.canonicalNorm) ?? {
+        positive: 0,
+        negative: 0,
+        total: 0,
+      };
+      const cnt = Number(s.cnt);
+      cur.total += cnt;
+      if (s.sentiment === 'positive') cur.positive += cnt;
+      else if (s.sentiment === 'negative') cur.negative += cnt;
+      statByNorm.set(s.canonicalNorm, cur);
+    }
+
+    const leaves: CategoryTreeLeaf[] = [];
+    for (const g of linked) {
+      let total = 0;
+      let positive = 0;
+      let negative = 0;
+      for (const link of g.links) {
+        const stat = statByNorm.get(link.localCanonicalNorm);
+        if (!stat) continue;
+        total += stat.total;
+        positive += stat.positive;
+        negative += stat.negative;
+      }
+      if (total === 0) continue;
+      leaves.push({ categoryPath: g.categoryPath!, total, positive, negative });
+    }
+
+    return buildCategoryTree(leaves);
   }
 
   async getDetailByPlaceId(placeId: string): Promise<RestaurantDetailType | null> {

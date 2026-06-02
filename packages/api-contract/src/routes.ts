@@ -89,6 +89,9 @@ export const Restaurant = {
     `${API_PREFIX}/restaurants/public/${placeId}`,
   publicInsights: (placeId: string) =>
     `${API_PREFIX}/restaurants/public/${placeId}/insights`,
+  // 이 식당의 언급 메뉴를 카테고리 계층 트리로. 멘션 횟수 + 긍/부 누적.
+  publicCategoryTree: (placeId: string) =>
+    `${API_PREFIX}/restaurants/public/${placeId}/category-tree`,
   // 페이지네이션 방문자 리뷰. detail 응답엔 reviewsFirstPage (10개) 만 동봉되고
   // 나머지는 여기서 offset/limit + sentiment/sort 로 가져온다.
   publicReviews: (placeId: string) =>

@@ -282,6 +282,18 @@ export const useRestaurantPublicInsights = (placeId: string | null) =>
     staleTime: 60_000,
   });
 
+// 분석 탭의 메뉴 카테고리 트리. 전역 머지가 닿은 식당만 roots 가 채워진다.
+export const useRestaurantPublicCategoryTree = (placeId: string | null) =>
+  useQuery({
+    queryKey: ['restaurant', 'public', 'category-tree', placeId],
+    queryFn: () => {
+      if (!placeId) throw new Error('placeId required');
+      return restaurantApi.publicCategoryTree(placeId);
+    },
+    enabled: !!placeId,
+    staleTime: 60_000,
+  });
+
 // `placeId` may be null when the user hasn't started a crawl yet — keeps
 // callers from having to gate the hook conditionally. Returns 404s as
 // `data: undefined` (the restaurant simply isn't crawled yet) rather than

@@ -1357,4 +1357,98 @@ describe('Public restaurant routes', () => {
     const body = res.json() as { analyzedCount: number };
     expect(body.analyzedCount).toBe(0);
   });
+
+  it('GET /restaurants/public/:placeId/category-tree — 404 for unknown', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${PUB_PREFIX}nope/category-tree`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /restaurants/public/:placeId/category-tree — hierarchy with mention counts + sentiment', async () => {
+    const { id, placeId } = await seedRestaurant({ name: '카테고리트리집' });
+    // 멘션을 매달 ReviewSummary 하나.
+    const review = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: id,
+        authorName: 'u',
+        rating: 5,
+        body: 'b',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${placeId}-ct`,
+      },
+      select: { id: true },
+    });
+    const summary = await app.prisma.reviewSummary.create({
+      data: { reviewId: review.id, status: 'done', sentiment: 'positive' },
+      select: { id: true },
+    });
+    // 배추김치 ×3 (긍2/부1), 파김치 ×2 (긍2).
+    const mention = (name: string, sentiment: string) =>
+      app.prisma.menuMention.create({
+        data: { summaryId: summary.id, restaurantId: id, name, nameNorm: name, sentiment },
+      });
+    await mention('배추김치', 'positive');
+    await mention('배추김치', 'positive');
+    await mention('배추김치', 'negative');
+    await mention('파김치', 'positive');
+    await mention('파김치', 'positive');
+    // canonical (nameNorm == canonicalNorm) + 전역 링크. categoryPath = "김치 > …".
+    const mcBae = await app.prisma.menuCanonical.create({
+      data: { restaurantId: id, nameNorm: '배추김치', canonicalName: '배추김치', canonicalNorm: '배추김치' },
+      select: { id: true },
+    });
+    const mcPa = await app.prisma.menuCanonical.create({
+      data: { restaurantId: id, nameNorm: '파김치', canonicalName: '파김치', canonicalNorm: '파김치' },
+      select: { id: true },
+    });
+    const gKey = `tr-pub-ct-${Date.now().toString(36)}`;
+    const gBae = await app.prisma.globalMenuCanonical.create({
+      data: { globalKey: `${gKey}-bae`, displayName: '배추김치', categoryPath: '김치 > 배추김치', model: 'seed' },
+      select: { id: true },
+    });
+    const gPa = await app.prisma.globalMenuCanonical.create({
+      data: { globalKey: `${gKey}-pa`, displayName: '파김치', categoryPath: '김치 > 파김치', model: 'seed' },
+      select: { id: true },
+    });
+    await app.prisma.globalMenuCanonicalLink.createMany({
+      data: [
+        { menuCanonicalId: mcBae.id, restaurantId: id, localCanonicalNorm: '배추김치', globalCanonicalId: gBae.id },
+        { menuCanonicalId: mcPa.id, restaurantId: id, localCanonicalNorm: '파김치', globalCanonicalId: gPa.id },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}/category-tree`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      roots: Array<{
+        label: string;
+        totalMentions: number;
+        positive: number;
+        negative: number;
+        children?: Array<{ label: string; totalMentions: number }>;
+      }>;
+    };
+    const kim = body.roots.find((n) => n.label === '김치');
+    expect(kim).toBeDefined();
+    // 부모 = 자식 누적: 멘션 5, 긍 4, 부 1.
+    expect(kim!.totalMentions).toBe(5);
+    expect(kim!.positive).toBe(4);
+    expect(kim!.negative).toBe(1);
+    // 자식은 멘션 많은 순 — 배추김치(3) 먼저, 파김치(2).
+    expect(kim!.children?.map((c) => c.label)).toEqual(['배추김치', '파김치']);
+    expect(kim!.children?.[0]?.totalMentions).toBe(3);
+    expect(kim!.children?.[1]?.totalMentions).toBe(2);
+
+    // 전역 canonical 은 restaurant 삭제(afterEach)로 안 지워지므로 직접 정리.
+    await app.prisma.globalMenuCanonical.deleteMany({
+      where: { globalKey: { startsWith: gKey } },
+    });
+  });
 });

@@ -1,11 +1,12 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@repo/shared';
+import { useRestaurantPublicCategoryTree, useTheme } from '@repo/shared';
 import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { SENTIMENT_COLORS } from './colors';
 import { AiSummary } from './shared/AiSummary';
+import { CategoryTree } from './shared/CategoryTree';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -24,6 +25,9 @@ export const InsightsTab = ({
   onSelectMenu,
 }: Props) => {
   const theme = useTheme();
+  // 카테고리 트리는 별도 endpoint — 훅 규칙상 early return 위에서 호출. 전역
+  // 머지가 닿은 식당만 roots 가 채워지므로 비면 섹션을 숨긴다.
+  const categoryTree = useRestaurantPublicCategoryTree(detail.placeId);
 
   if (insightsLoading) {
     return (
@@ -66,6 +70,20 @@ export const InsightsTab = ({
         </View>
         <AiSummary insights={insights} onSelectTip={onSelectTip} />
       </View>
+
+      {categoryTree.data && categoryTree.data.roots.length > 0 && (
+        <View style={[styles.section, { borderTopColor: theme.colors.border }]}>
+          <View style={styles.h3Row}>
+            <Text style={[styles.h3, { color: theme.colors.text }]}>메뉴 카테고리</Text>
+            <Text style={[styles.h3Sub, { color: theme.colors.textMuted }]}>
+              (언급 횟수 · 긍정/부정)
+            </Text>
+          </View>
+          <View style={{ marginTop: 12 }}>
+            <CategoryTree roots={categoryTree.data.roots} />
+          </View>
+        </View>
+      )}
 
       {ranked.length > 0 && (
         <View style={[styles.section, { borderTopColor: theme.colors.border }]}>

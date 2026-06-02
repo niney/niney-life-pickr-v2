@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CategoryTreeNode } from './analytics.js';
 import { CanonicalSuggestion } from './canonical.js';
 import {
   BlogReview,
@@ -367,6 +368,15 @@ export const RestaurantInsights = z.object({
   topKeywords: z.array(RestaurantInsightTermStat),
 });
 export type RestaurantInsightsType = z.infer<typeof RestaurantInsights>;
+
+// 이 식당의 언급 메뉴를 카테고리 계층 트리로. 어드민 전역 트리(analytics)와
+// 같은 노드 구조를 쓰되 이 식당의 멘션만 누적. coverage 가 없으면 roots 는 빈 배열.
+export const RestaurantCategoryTreeResult = z.object({
+  roots: z.array(CategoryTreeNode),
+});
+export type RestaurantCategoryTreeResultType = z.infer<
+  typeof RestaurantCategoryTreeResult
+>;
 
 // 공개 식당 랭킹 — 비로그인/게스트도 볼 수 있는 루트 페이지용. 정렬은 긍정/부정
 // 비율, 중립 포함/제외 토글로 분모를 바꾼다. 표본 부족 식당이 1·2건 멘션으로

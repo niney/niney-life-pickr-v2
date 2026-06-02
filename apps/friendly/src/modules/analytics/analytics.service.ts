@@ -12,6 +12,7 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import { extractFirstJsonObject, normalizeTerm } from '../summary/summary.service.js';
+import { buildCategoryTree, type CategoryTreeLeaf } from './category-tree.js';
 import {
   GLOBAL_MERGE_CHUNK_SIZE,
   GLOBAL_MERGE_JSON_SCHEMA,
@@ -849,77 +850,26 @@ export class AnalyticsService {
       statByLocal.set(key, cur);
     }
 
-    // 트리 구성. path 의 모든 prefix 를 노드로 만들고 leaf 통계를 누적.
-    interface MutableNode {
-      path: string;
-      label: string;
-      totalMentions: number;
-      positive: number;
-      negative: number;
-      children: Map<string, MutableNode>;
-    }
-    const roots = new Map<string, MutableNode>();
-
+    // categoryPath 별 멘션 통계를 잎으로 모아 트리 빌더에 넘긴다.
+    const leaves: CategoryTreeLeaf[] = [];
     for (const g of linked) {
-      const segments = g.categoryPath!.split(' > ');
       let total = 0;
-      let pos = 0;
-      let neg = 0;
+      let positive = 0;
+      let negative = 0;
       for (const link of g.links) {
         const stat = statByLocal.get(
           `${link.menuCanonical.restaurantId}::${link.menuCanonical.canonicalNorm}`,
         );
         if (!stat) continue;
         total += stat.total;
-        pos += stat.positive;
-        neg += stat.negative;
+        positive += stat.positive;
+        negative += stat.negative;
       }
       if (total === 0) continue;
-
-      // 모든 prefix 경로에 stat 누적.
-      let parentMap = roots;
-      let acc = '';
-      for (const seg of segments) {
-        acc = acc === '' ? seg : `${acc} > ${seg}`;
-        let node = parentMap.get(seg);
-        if (!node) {
-          node = {
-            path: acc,
-            label: seg,
-            totalMentions: 0,
-            positive: 0,
-            negative: 0,
-            children: new Map(),
-          };
-          parentMap.set(seg, node);
-        }
-        node.totalMentions += total;
-        node.positive += pos;
-        node.negative += neg;
-        parentMap = node.children;
-      }
+      leaves.push({ categoryPath: g.categoryPath!, total, positive, negative });
     }
 
-    // mutable → 직렬화 가능한 형태로 + 자식은 mentions desc 정렬.
-    const toJson = (node: MutableNode): CategoryTreeNodeType => {
-      const denom = node.positive + node.negative;
-      const children = [...node.children.values()]
-        .map(toJson)
-        .sort((a, b) => b.totalMentions - a.totalMentions);
-      return {
-        path: node.path,
-        label: node.label,
-        totalMentions: node.totalMentions,
-        positive: node.positive,
-        negative: node.negative,
-        positiveRatio: denom === 0 ? null : node.positive / denom,
-        children: children.length > 0 ? children : undefined,
-      };
-    };
-
-    return [...roots.values()]
-      .map(toJson)
-      .sort((a, b) => b.totalMentions - a.totalMentions);
+    return buildCategoryTree(leaves);
   }
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {

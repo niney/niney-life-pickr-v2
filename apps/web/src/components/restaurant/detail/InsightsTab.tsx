@@ -1,9 +1,11 @@
-import { ChefHat, Loader2, MessageSquare } from 'lucide-react';
+import { ChefHat, FolderTree, Loader2, MessageSquare } from 'lucide-react';
+import { useRestaurantPublicCategoryTree } from '@repo/shared';
 import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { AiSummary } from './shared';
+import { CategoryTree } from './CategoryTree';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -24,6 +26,10 @@ export const InsightsTab = ({
   onSelectTip,
   onSelectMenu,
 }: Props) => {
+  // 카테고리 트리는 insights 와 별도 endpoint — 훅 규칙상 early return 위에서 호출.
+  // 전역 머지가 닿은 식당만 roots 가 채워지므로 비면 섹션을 숨긴다.
+  const categoryTree = useRestaurantPublicCategoryTree(detail.placeId);
+
   if (insightsLoading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
@@ -59,6 +65,19 @@ export const InsightsTab = ({
         </h3>
         <AiSummary insights={insights} onSelectTip={onSelectTip} />
       </section>
+
+      {categoryTree.data && categoryTree.data.roots.length > 0 && (
+        <section className="space-y-3 border-t pt-4">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+            <FolderTree className="size-4" />
+            메뉴 카테고리
+            <span className="text-xs font-normal text-muted-foreground">
+              (언급 횟수 · 긍정/부정)
+            </span>
+          </h3>
+          <CategoryTree roots={categoryTree.data.roots} />
+        </section>
+      )}
 
       {ranked.length > 0 && (
         <section className="space-y-3 border-t pt-4">

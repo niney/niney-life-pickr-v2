@@ -9,6 +9,7 @@ import {
   MenuRankingResult,
   RestaurantAnalyticsBackfillResult,
   RestaurantCancelSummaryResult,
+  RestaurantCategoryTreeResult,
   RestaurantDeleteResult,
   RestaurantDetail,
   RestaurantInsights,
@@ -121,6 +122,20 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const insights = await service.getInsights(req.params.placeId);
       if (!insights) throw app.httpErrors.notFound('Restaurant not found');
       return insights;
+    },
+  });
+
+  // 공개 식당 메뉴 카테고리 트리 — 분석 탭에서 언급 메뉴를 계층으로 본다.
+  typed.get(Routes.Restaurant.publicCategoryTree(':placeId'), {
+    schema: {
+      tags: ['public'],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantCategoryTreeResult },
+    },
+    handler: async (req) => {
+      const roots = await service.getCategoryTree(req.params.placeId);
+      if (roots === null) throw app.httpErrors.notFound('Restaurant not found');
+      return { roots };
     },
   });
 
