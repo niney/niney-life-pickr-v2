@@ -180,70 +180,96 @@ export const MenuGrid = ({
   if (insights) {
     for (const m of insights.topMenus) mentionByName.set(m.name, m);
   }
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(
+    null,
+  );
   return (
     <div className="@container">
       <ul className="grid grid-cols-1 gap-2 @md:grid-cols-2">
         {menus.map((m, idx) => {
           const stats = mentionByName.get(m.name);
           const clickable = !!onSelectMenu && !!stats;
-          const inner = (
+          const text = (
             <>
-              {m.imageUrls[0] && (
-                <ImgWithFallback
-                  src={m.imageUrls[0]}
-                  className="size-14 shrink-0 rounded object-cover"
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium">{m.name}</span>
-                  {m.recommend && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      추천
-                    </Badge>
-                  )}
-                </div>
-                {m.price && (
-                  <div className="text-xs tabular-nums text-muted-foreground">
-                    {formatWonPrice(m.price)}
-                  </div>
-                )}
-                {m.description && (
-                  <div className="line-clamp-2 text-xs text-muted-foreground">
-                    {m.description}
-                  </div>
-                )}
-                {stats && (
-                  <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                    <span className="text-emerald-600 dark:text-emerald-400">
-                      +{stats.positive}
-                    </span>
-                    <span className="mx-1">/</span>
-                    <span className="text-rose-600 dark:text-rose-400">-{stats.negative}</span>
-                    <span className="ml-1">· {stats.count}회 언급</span>
-                  </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-sm font-medium">{m.name}</span>
+                {m.recommend && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    추천
+                  </Badge>
                 )}
               </div>
+              {m.price && (
+                <div className="text-xs tabular-nums text-muted-foreground">
+                  {formatWonPrice(m.price)}
+                </div>
+              )}
+              {m.description && (
+                <div className="line-clamp-2 text-xs text-muted-foreground">
+                  {m.description}
+                </div>
+              )}
+              {stats && (
+                <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    +{stats.positive}
+                  </span>
+                  <span className="mx-1">/</span>
+                  <span className="text-rose-600 dark:text-rose-400">-{stats.negative}</span>
+                  <span className="ml-1">· {stats.count}회 언급</span>
+                </div>
+              )}
             </>
           );
+          // 카드 전체가 아니라 영역을 둘로 나눈다: 썸네일=사진 확대(라이트박스),
+          // 텍스트 영역=리뷰 필터. 한 카드에서 두 동작이 겹치지 않게.
           return (
-            <li key={`${m.name}-${idx}`}>
+            <li
+              key={`${m.name}-${idx}`}
+              className="flex gap-2 rounded-md border p-2"
+            >
+              {m.imageUrls[0] && (
+                <button
+                  type="button"
+                  onClick={() => setLightbox({ images: m.imageUrls, index: 0 })}
+                  className="relative size-14 shrink-0 overflow-hidden rounded"
+                  aria-label={`"${m.name}" 메뉴 사진 크게 보기`}
+                >
+                  <ImgWithFallback
+                    src={m.imageUrls[0]}
+                    className="size-14 rounded object-cover transition-opacity hover:opacity-90"
+                  />
+                  {m.imageUrls.length > 1 && (
+                    <span className="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-1 text-[9px] font-medium tabular-nums text-white">
+                      {m.imageUrls.length}
+                    </span>
+                  )}
+                </button>
+              )}
               {clickable ? (
                 <button
                   type="button"
                   onClick={() => onSelectMenu!(m.name)}
-                  className="flex w-full gap-2 rounded-md border p-2 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                  className="min-w-0 flex-1 rounded text-left transition-colors hover:bg-primary/5"
                   aria-label={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
                 >
-                  {inner}
+                  {text}
                 </button>
               ) : (
-                <div className="flex gap-2 rounded-md border p-2">{inner}</div>
+                <div className="min-w-0 flex-1">{text}</div>
               )}
             </li>
           );
         })}
       </ul>
+      {lightbox && (
+        <Lightbox
+          images={lightbox.images}
+          index={lightbox.index}
+          onChangeIndex={(i) => setLightbox((p) => (p ? { ...p, index: i } : p))}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 };
