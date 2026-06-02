@@ -276,6 +276,7 @@ const ActiveTab = ({
           detail={detail}
           insights={insights}
           insightsLoading={insightsLoading}
+          onSelectTip={onSelectTip}
         />
       );
     case 'photos':

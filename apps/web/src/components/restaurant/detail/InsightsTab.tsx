@@ -9,13 +9,14 @@ interface Props {
   detail: RestaurantPublicDetailType;
   insights: RestaurantInsightsType | undefined;
   insightsLoading: boolean;
+  onSelectTip(term: string): void;
 }
 
 // 분석/통계 탭 — 홈 탭의 AI 분석 카드의 풀 버전 + 메뉴 순위 (멘션 많은 순,
 // 긍/부 분포 막대). 향후 카테고리 비교·트렌드·키워드 시각화 등이 추가될
 // 자리. 데이터는 root 의 useRestaurantPublicInsights 한 번 fetch — 탭
 // 전환만으론 추가 호출 없음.
-export const InsightsTab = ({ detail, insights, insightsLoading }: Props) => {
+export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: Props) => {
   if (insightsLoading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
@@ -49,7 +50,7 @@ export const InsightsTab = ({ detail, insights, insightsLoading }: Props) => {
             ({insights.analyzedCount}개 리뷰 분석)
           </span>
         </h3>
-        <AiSummary insights={insights} />
+        <AiSummary insights={insights} onSelectTip={onSelectTip} />
       </section>
 
       {ranked.length > 0 && (

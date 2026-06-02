@@ -11,10 +11,11 @@ interface Props {
   detail: RestaurantPublicDetailType;
   insights: RestaurantInsightsType | undefined;
   insightsLoading: boolean;
+  onSelectTip(term: string): void;
 }
 
 // 분석 + 메뉴 순위. 데이터는 컨테이너에서 한 번 fetch 했고 여기는 표시 전담.
-export const InsightsTab = ({ detail, insights, insightsLoading }: Props) => {
+export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: Props) => {
   const theme = useTheme();
 
   if (insightsLoading) {
@@ -56,7 +57,7 @@ export const InsightsTab = ({ detail, insights, insightsLoading }: Props) => {
             ({insights.analyzedCount}개 리뷰 분석)
           </Text>
         </View>
-        <AiSummary insights={insights} />
+        <AiSummary insights={insights} onSelectTip={onSelectTip} />
       </View>
 
       {ranked.length > 0 && (
