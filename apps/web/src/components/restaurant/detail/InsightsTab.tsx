@@ -10,13 +10,20 @@ interface Props {
   insights: RestaurantInsightsType | undefined;
   insightsLoading: boolean;
   onSelectTip(term: string): void;
+  onSelectMenu(name: string): void;
 }
 
 // 분석/통계 탭 — 홈 탭의 AI 분석 카드의 풀 버전 + 메뉴 순위 (멘션 많은 순,
 // 긍/부 분포 막대). 향후 카테고리 비교·트렌드·키워드 시각화 등이 추가될
 // 자리. 데이터는 root 의 useRestaurantPublicInsights 한 번 fetch — 탭
 // 전환만으론 추가 호출 없음.
-export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: Props) => {
+export const InsightsTab = ({
+  detail,
+  insights,
+  insightsLoading,
+  onSelectTip,
+  onSelectMenu,
+}: Props) => {
   if (insightsLoading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
@@ -69,10 +76,13 @@ export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: 
               const negPct = total > 0 ? (m.negative / total) * 100 : 0;
               const neuPct = Math.max(0, 100 - posPct - negPct);
               return (
-                <li
-                  key={m.name}
-                  className="flex items-start gap-3 rounded-md border p-3"
-                >
+                <li key={m.name}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectMenu(m.name)}
+                    className="flex w-full items-start gap-3 rounded-md border p-3 text-left transition-colors hover:bg-muted"
+                    title={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
+                  >
                   <div className="w-6 shrink-0 pt-0.5 text-center text-base font-bold tabular-nums text-muted-foreground">
                     {i + 1}
                   </div>
@@ -108,6 +118,7 @@ export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: 
                       </>
                     )}
                   </div>
+                  </button>
                 </li>
               );
             })}

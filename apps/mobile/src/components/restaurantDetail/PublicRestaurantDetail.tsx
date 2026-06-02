@@ -230,6 +230,7 @@ export const PublicRestaurantDetail = ({
               insights={insights.data}
               insightsLoading={insights.isLoading}
               onSelectTip={handleSelectTip}
+              onSelectMenu={handleSelectMenu}
             />
           );
         case 'menu':

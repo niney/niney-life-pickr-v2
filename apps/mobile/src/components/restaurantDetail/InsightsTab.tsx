@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type {
   RestaurantInsightsType,
@@ -12,10 +12,17 @@ interface Props {
   insights: RestaurantInsightsType | undefined;
   insightsLoading: boolean;
   onSelectTip(term: string): void;
+  onSelectMenu(name: string): void;
 }
 
 // 분석 + 메뉴 순위. 데이터는 컨테이너에서 한 번 fetch 했고 여기는 표시 전담.
-export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: Props) => {
+export const InsightsTab = ({
+  detail,
+  insights,
+  insightsLoading,
+  onSelectTip,
+  onSelectMenu,
+}: Props) => {
   const theme = useTheme();
 
   if (insightsLoading) {
@@ -75,13 +82,18 @@ export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: 
               const negPct = total > 0 ? (m.negative / total) * 100 : 0;
               const neuPct = Math.max(0, 100 - posPct - negPct);
               return (
-                <View
+                <Pressable
                   key={m.name}
-                  style={[
+                  onPress={() => onSelectMenu(m.name)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
+                  style={({ pressed }) => [
                     styles.menuItem,
                     {
                       borderColor: theme.colors.border,
-                      backgroundColor: theme.colors.surface,
+                      backgroundColor: pressed
+                        ? theme.colors.surfaceAlt
+                        : theme.colors.surface,
                     },
                   ]}
                 >
@@ -144,7 +156,7 @@ export const InsightsTab = ({ detail, insights, insightsLoading, onSelectTip }: 
                       </>
                     )}
                   </View>
-                </View>
+                </Pressable>
               );
             })}
           </View>
