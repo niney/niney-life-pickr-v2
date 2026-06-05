@@ -299,6 +299,67 @@ describe('AnalyticsService.runGlobalMerge', () => {
     expect(globals.map((g) => g.globalKey).sort()).toEqual(['돈까스', '치즈돈까스']);
   });
 
+  it('persists categoryPath from { mappings: [...] } array response', async () => {
+    await seedRestaurant(app, [
+      {
+        name: '김치찌개',
+        nameNorm: '김치찌개',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+        mentions: [{ sentiment: 'positive' }],
+      },
+    ]);
+    // 신규 응답 형식 — Ollama structured-output(additionalProperties) 깨짐을
+    // 피하려고 { mappings: [{ variant, canonical, categoryPath }] } 배열로 받는다.
+    const { provider } = fakeProvider(() => ({
+      mappings: [
+        { variant: '김치찌개', canonical: '김치찌개', categoryPath: '한식 > 찌개 > 김치찌개' },
+      ],
+    }));
+    const service = new AnalyticsService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'm' }),
+    });
+
+    await service.runGlobalMerge({ full: true });
+    const g = await app.prisma.globalMenuCanonical.findFirst({
+      where: { globalKey: '김치찌개' },
+    });
+    expect(g?.categoryPath).toBe('한식 > 찌개 > 김치찌개');
+  });
+
+  it('preserves existing categoryPath when a later run omits it', async () => {
+    await seedRestaurant(app, [
+      {
+        name: '된장찌개',
+        nameNorm: '된장찌개',
+        canonicalName: '된장찌개',
+        canonicalNorm: '된장찌개',
+        mentions: [{ sentiment: 'positive' }],
+      },
+    ]);
+    const withPath = fakeProvider(() => ({
+      mappings: [
+        { variant: '된장찌개', canonical: '된장찌개', categoryPath: '한식 > 찌개 > 된장찌개' },
+      ],
+    }));
+    const svc1 = new AnalyticsService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider: withPath.provider, model: 'm' }),
+    });
+    await svc1.runGlobalMerge({ full: true });
+
+    // 약한/빈 런 — categoryPath 없이 식별 매핑만. 기존 path 를 덮어쓰면 안 된다.
+    const noPath = fakeProvider(() => ({ 된장찌개: '된장찌개' }));
+    const svc2 = new AnalyticsService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider: noPath.provider, model: 'm' }),
+    });
+    await svc2.runGlobalMerge({ full: true });
+
+    const g = await app.prisma.globalMenuCanonical.findFirst({
+      where: { globalKey: '된장찌개' },
+    });
+    expect(g?.categoryPath).toBe('한식 > 찌개 > 된장찌개');
+  });
+
   it('throws no_provider when LLM is not configured', async () => {
     await seedRestaurant(app, [
       {

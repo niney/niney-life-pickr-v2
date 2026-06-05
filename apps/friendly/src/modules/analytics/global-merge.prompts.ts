@@ -34,54 +34,71 @@ export const GLOBAL_MERGE_SYSTEM_PROMPT = `너는 한국 음식점의 식당 가
 - 같은 그룹의 모든 변형은 같은 categoryPath 를 가져야 한다.
 
 [출력 규칙 - 절대 위반하지 말 것]
-- 응답 전체는 단 하나의 JSON 객체.
+- 응답 전체는 단 하나의 JSON 객체: { "mappings": [ ... ] }.
 - 앞뒤 설명/인사말/코드펜스/사고 과정 출력 금지.
 - 첫 글자 '{', 마지막 글자 '}'.
-- 입력 모든 표기에 매핑이 있어야 한다.
-- 출력 키는 입력 표기 그대로 (대소문자/공백 유지).
-- 각 값은 반드시 { "canonical": "...", "categoryPath": "..." } 객체.
+- mappings 는 입력 모든 표기에 대해 한 항목씩 — 빠짐 없이.
+- 각 항목은 { "variant": "...", "canonical": "...", "categoryPath": "..." } 객체.
+- variant 는 입력 표기 그대로 (대소문자/공백 유지).
 
 [예시]
 입력: ["김치찌개","김치 찌개","묵은지김치찌개","된장찌개","차돌박이된장찌개","돈까스","수제돈까스","치즈돈까스"]
 출력: {
-  "김치찌개":          { "canonical": "김치찌개",          "categoryPath": "한식 > 찌개 > 김치찌개" },
-  "김치 찌개":         { "canonical": "김치찌개",          "categoryPath": "한식 > 찌개 > 김치찌개" },
-  "묵은지김치찌개":    { "canonical": "김치찌개",          "categoryPath": "한식 > 찌개 > 김치찌개" },
-  "된장찌개":          { "canonical": "된장찌개",          "categoryPath": "한식 > 찌개 > 된장찌개" },
-  "차돌박이된장찌개":  { "canonical": "차돌박이된장찌개",  "categoryPath": "한식 > 찌개 > 된장찌개" },
-  "돈까스":            { "canonical": "돈까스",            "categoryPath": "일식 > 튀김 > 돈까스" },
-  "수제돈까스":        { "canonical": "돈까스",            "categoryPath": "일식 > 튀김 > 돈까스" },
-  "치즈돈까스":        { "canonical": "치즈돈까스",        "categoryPath": "일식 > 튀김 > 돈까스" }
+  "mappings": [
+    { "variant": "김치찌개",          "canonical": "김치찌개",          "categoryPath": "한식 > 찌개 > 김치찌개" },
+    { "variant": "김치 찌개",         "canonical": "김치찌개",          "categoryPath": "한식 > 찌개 > 김치찌개" },
+    { "variant": "묵은지김치찌개",    "canonical": "김치찌개",          "categoryPath": "한식 > 찌개 > 김치찌개" },
+    { "variant": "된장찌개",          "canonical": "된장찌개",          "categoryPath": "한식 > 찌개 > 된장찌개" },
+    { "variant": "차돌박이된장찌개",  "canonical": "차돌박이된장찌개",  "categoryPath": "한식 > 찌개 > 된장찌개" },
+    { "variant": "돈까스",            "canonical": "돈까스",            "categoryPath": "일식 > 튀김 > 돈까스" },
+    { "variant": "수제돈까스",        "canonical": "돈까스",            "categoryPath": "일식 > 튀김 > 돈까스" },
+    { "variant": "치즈돈까스",        "canonical": "치즈돈까스",        "categoryPath": "일식 > 튀김 > 돈까스" }
+  ]
 }
 
 입력: ["연어초밥","연어 초밥","광어초밥","참치초밥","참치초밥(특)","회덮밥","공깃밥"]
 출력: {
-  "연어초밥":     { "canonical": "연어초밥",   "categoryPath": "일식 > 초밥 > 연어초밥" },
-  "연어 초밥":    { "canonical": "연어초밥",   "categoryPath": "일식 > 초밥 > 연어초밥" },
-  "광어초밥":     { "canonical": "광어초밥",   "categoryPath": "일식 > 초밥 > 광어초밥" },
-  "참치초밥":     { "canonical": "참치초밥",   "categoryPath": "일식 > 초밥 > 참치초밥" },
-  "참치초밥(특)": { "canonical": "참치초밥",   "categoryPath": "일식 > 초밥 > 참치초밥" },
-  "회덮밥":       { "canonical": "회덮밥",     "categoryPath": "일식 > 회덮밥" },
-  "공깃밥":       { "canonical": "공깃밥",     "categoryPath": "한식 > 공깃밥" }
+  "mappings": [
+    { "variant": "연어초밥",     "canonical": "연어초밥",   "categoryPath": "일식 > 초밥 > 연어초밥" },
+    { "variant": "연어 초밥",    "canonical": "연어초밥",   "categoryPath": "일식 > 초밥 > 연어초밥" },
+    { "variant": "광어초밥",     "canonical": "광어초밥",   "categoryPath": "일식 > 초밥 > 광어초밥" },
+    { "variant": "참치초밥",     "canonical": "참치초밥",   "categoryPath": "일식 > 초밥 > 참치초밥" },
+    { "variant": "참치초밥(특)", "canonical": "참치초밥",   "categoryPath": "일식 > 초밥 > 참치초밥" },
+    { "variant": "회덮밥",       "canonical": "회덮밥",     "categoryPath": "일식 > 회덮밥" },
+    { "variant": "공깃밥",       "canonical": "공깃밥",     "categoryPath": "한식 > 공깃밥" }
+  ]
 }`;
 
-// JSON schema — additionalProperties 의 값을 객체 모양으로 강제.
+// JSON schema — mappings 배열로 강제. 이전엔 additionalProperties 맵을 썼는데
+// Ollama(llama.cpp) 가 additionalProperties 값 스키마를 grammar 로 변환 못 해
+// 응답이 통째로 비어 버렸다(→ 식별 매핑·categoryPath 전멸). 배열+items 는
+// 안정적으로 강제된다. (probe:merge 로 검증)
 export const GLOBAL_MERGE_JSON_SCHEMA = {
   type: 'object',
-  additionalProperties: {
-    type: 'object',
-    properties: {
-      canonical: { type: 'string' },
-      categoryPath: { type: 'string' },
+  properties: {
+    mappings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          variant: { type: 'string' },
+          canonical: { type: 'string' },
+          categoryPath: { type: 'string' },
+        },
+        required: ['variant', 'canonical', 'categoryPath'],
+      },
     },
-    required: ['canonical', 'categoryPath'],
   },
+  required: ['mappings'],
 } as const;
 
-// 한 청크에 들어가는 입력 메뉴 수의 상한. menu-grouping 보다 살짝 적게 — 식당
-// 가로지르기는 컨텍스트가 더 풍부해야 정확하다(같은 표기가 여러 의미일 수
-// 있어 모델이 더 신중해야 함). v2 는 출력 토큰이 늘어나니 조금 더 줄임.
-export const GLOBAL_MERGE_CHUNK_SIZE = 50;
+// 한 청크에 들어가는 입력 메뉴 수의 상한. reasoning 모델(deepseek 등)은
+// 청크가 크면 thinking 토큰이 폭증해 60s 타임아웃·출력 truncation 으로
+// 응답이 통째로 비고, 그 청크의 메뉴가 식별 매핑으로 떨어져 grouping·
+// categoryPath 가 조용히 망가진다(probe:merge 로 확인 — 10개는 ~2900토큰에
+// 안정적으로 완료, 20개는 빈 응답/타임아웃). 작게 잡고 pass2 에서 다시
+// 통합한다. (정확도보다 "완주" 가 우선 — 빈 응답은 결과가 0 이므로)
+export const GLOBAL_MERGE_CHUNK_SIZE = 10;
 
 export const buildGlobalMergePrompt = (variants: string[]): string =>
   `메뉴 표기들: ${JSON.stringify(variants)}`;

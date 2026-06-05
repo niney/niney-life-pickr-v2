@@ -15,7 +15,6 @@ import { extractFirstJsonObject, normalizeTerm } from '../summary/summary.servic
 import { buildCategoryTree, type CategoryTreeLeaf } from './category-tree.js';
 import {
   GLOBAL_MERGE_CHUNK_SIZE,
-  GLOBAL_MERGE_JSON_SCHEMA,
   GLOBAL_MERGE_SYSTEM_PROMPT,
   GLOBAL_MERGE_VERSION,
   buildGlobalMergePrompt,
@@ -332,11 +331,15 @@ export class AnalyticsService {
     await this.prisma.$transaction(async (tx) => {
       // GlobalMenuCanonical upsert by globalKey.
       const keyToId = new Map<string, string>();
-      // 기존 row 들의 id 매핑 미리 가져오기.
+      // 기존 row 들의 id + categoryPath 미리 가져오기. path 는 비파괴 보존용.
       const existing = await tx.globalMenuCanonical.findMany({
-        select: { id: true, globalKey: true },
+        select: { id: true, globalKey: true, categoryPath: true },
       });
-      for (const e of existing) keyToId.set(e.globalKey, e.id);
+      const existingPathByKey = new Map<string, string | null>();
+      for (const e of existing) {
+        keyToId.set(e.globalKey, e.id);
+        existingPathByKey.set(e.globalKey, e.categoryPath);
+      }
 
       // 변경 요약 — full 이면 모든 row 갱신, 아니면 부족한 것만 추가.
       // 같은 globalKey 가 여러 norm 에서 나오면 첫 번째 path 가 채택되도록 dedup.
@@ -345,11 +348,15 @@ export class AnalyticsService {
         if (seenKeys.has(info.globalKey)) continue;
         seenKeys.add(info.globalKey);
         if (keyToId.has(info.globalKey)) {
+          // 이번 런이 path 를 못 주면(빈 응답/모델 누락) 기존 path 보존 —
+          // 약한 런이 좋은 categoryPath 를 null 로 덮어쓰는 사고 방지.
+          const nextPath =
+            info.categoryPath ?? existingPathByKey.get(info.globalKey) ?? null;
           await tx.globalMenuCanonical.update({
             where: { id: keyToId.get(info.globalKey)! },
             data: {
               displayName: info.displayName,
-              categoryPath: info.categoryPath,
+              categoryPath: nextPath,
               version: GLOBAL_MERGE_VERSION,
               model,
               updatedAt: now,
@@ -428,11 +435,62 @@ export class AnalyticsService {
   // v2 응답 형태: { variant: { canonical, categoryPath } }.
   // v1 호환을 위해 string 값도 받아 { canonical: <string>, categoryPath: null } 로
   // 풀어쓴다 — 모델이 가끔 v1 형태로 떨어질 때 fallback.
+  private parseMergeResponse(
+    text: string,
+  ): Record<string, { canonical: string; categoryPath: string | null }> {
+    const candidate = extractFirstJsonObject(text);
+    if (!candidate) return {};
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      return {};
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const out: Record<string, { canonical: string; categoryPath: string | null }> = {};
+    const add = (variant: unknown, canonical: unknown, categoryPath: unknown): void => {
+      if (typeof variant !== 'string' || variant.length === 0) return;
+      if (typeof canonical !== 'string' || canonical.length === 0) return;
+      out[variant] = {
+        canonical,
+        categoryPath: typeof categoryPath === 'string' ? categoryPath : null,
+      };
+    };
+
+    const mappings = (parsed as { mappings?: unknown }).mappings;
+    if (Array.isArray(mappings)) {
+      // 신규 형식: { mappings: [{ variant, canonical, categoryPath }] }.
+      for (const m of mappings) {
+        if (m && typeof m === 'object') {
+          const o = m as { variant?: unknown; canonical?: unknown; categoryPath?: unknown };
+          add(o.variant, o.canonical, o.categoryPath);
+        }
+      }
+    } else {
+      // 구형 호환: { variant: { canonical, categoryPath } } / { variant: "canonical" }.
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === 'string') add(k, v, null);
+        else if (v && typeof v === 'object') {
+          const o = v as { canonical?: unknown; categoryPath?: unknown };
+          add(k, o.canonical, o.categoryPath);
+        }
+      }
+    }
+    return out;
+  }
+
   private async callOneChunk(
     provider: LLMProvider,
     model: string,
     variants: string[],
   ): Promise<Record<string, { canonical: string; categoryPath: string | null }>> {
+    // structured-output `format`(grammar)을 쓰지 않는다. 이 provider/모델 조합
+    // (ollama-cloud)에서 format 을 주면 응답이 통째로 비거나 categoryPath 가
+    // 빠진 채로 와서, 그 청크의 메뉴가 식별 매핑으로 떨어진다(grouping·
+    // categoryPath 동시 소실). probe:merge 로 확인 — format 없이 프롬프트만
+    // 주면 { mappings: [...] } 가 path 까지 안정적으로 온다. 파서가 JSON 을
+    // 견고하게 추출하므로 grammar 강제 없이도 파싱 실패율이 낮다.
     try {
       const res = await provider.complete({
         prompt: buildGlobalMergePrompt(variants),
@@ -441,27 +499,8 @@ export class AnalyticsService {
         temperature: TEMPERATURE,
         maxTokens: MAX_TOKENS,
         numCtx: NUM_CTX,
-        format: GLOBAL_MERGE_JSON_SCHEMA,
       });
-      const candidate = extractFirstJsonObject(res.text);
-      if (!candidate) return {};
-      const parsed = JSON.parse(candidate) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const out: Record<string, { canonical: string; categoryPath: string | null }> = {};
-        for (const [k, v] of Object.entries(parsed)) {
-          if (typeof v === 'string') {
-            out[k] = { canonical: v, categoryPath: null };
-          } else if (v && typeof v === 'object') {
-            const obj = v as { canonical?: unknown; categoryPath?: unknown };
-            const canonical = typeof obj.canonical === 'string' ? obj.canonical : null;
-            const categoryPath =
-              typeof obj.categoryPath === 'string' ? obj.categoryPath : null;
-            if (canonical !== null) out[k] = { canonical, categoryPath };
-          }
-        }
-        return out;
-      }
-      return {};
+      return this.parseMergeResponse(res.text);
     } catch (e) {
       const { error, message } = classifyError(e);
       this.log?.warn(

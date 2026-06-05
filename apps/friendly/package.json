@@ -19,6 +19,8 @@
     "backfill:contacts": "tsx --env-file=.env scripts/backfill-contacts.ts",
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "probe:extraction": "tsx --env-file=.env scripts/probe-extraction.ts",
+    "probe:merge": "tsx --env-file=.env scripts/probe-merge.ts",
+    "run-merge": "tsx --env-file=.env scripts/run-global-merge.ts",
     "dev:capture-visitor": "tsx scripts/dev-capture-visitor.ts",
     "dev:fetch-visitor-html": "tsx scripts/dev-fetch-visitor-html.ts",
     "dev:open-visitor-page": "tsx scripts/dev-open-visitor-page.ts",
