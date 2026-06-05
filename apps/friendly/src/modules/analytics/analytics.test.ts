@@ -313,7 +313,7 @@ describe('AnalyticsService.runGlobalMerge', () => {
     // 피하려고 { mappings: [{ variant, canonical, categoryPath }] } 배열로 받는다.
     const { provider } = fakeProvider(() => ({
       mappings: [
-        { variant: '김치찌개', canonical: '김치찌개', categoryPath: '한식 > 찌개 > 김치찌개' },
+        { variant: '김치찌개', canonical: '김치찌개', categoryPath: '찌개·전골 > 김치찌개' },
       ],
     }));
     const service = new AnalyticsService(app.prisma, aiConfig, {
@@ -324,7 +324,7 @@ describe('AnalyticsService.runGlobalMerge', () => {
     const g = await app.prisma.globalMenuCanonical.findFirst({
       where: { globalKey: '김치찌개' },
     });
-    expect(g?.categoryPath).toBe('한식 > 찌개 > 김치찌개');
+    expect(g?.categoryPath).toBe('찌개·전골 > 김치찌개');
   });
 
   it('preserves existing categoryPath when a later run omits it', async () => {
@@ -339,7 +339,7 @@ describe('AnalyticsService.runGlobalMerge', () => {
     ]);
     const withPath = fakeProvider(() => ({
       mappings: [
-        { variant: '된장찌개', canonical: '된장찌개', categoryPath: '한식 > 찌개 > 된장찌개' },
+        { variant: '된장찌개', canonical: '된장찌개', categoryPath: '찌개·전골 > 된장찌개' },
       ],
     }));
     const svc1 = new AnalyticsService(app.prisma, aiConfig, {
@@ -357,7 +357,7 @@ describe('AnalyticsService.runGlobalMerge', () => {
     const g = await app.prisma.globalMenuCanonical.findFirst({
       where: { globalKey: '된장찌개' },
     });
-    expect(g?.categoryPath).toBe('한식 > 찌개 > 된장찌개');
+    expect(g?.categoryPath).toBe('찌개·전골 > 된장찌개');
   });
 
   it('throws no_provider when LLM is not configured', async () => {
@@ -640,7 +640,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       data: {
         globalKey: 'category-test-1',
         displayName: '김치찌개',
-        categoryPath: '한식 > 찌개 > 김치찌개',
+        categoryPath: '찌개·전골 > 김치찌개',
         version: 1,
         model: 'seed',
       },
@@ -655,7 +655,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     });
 
     const matched = await service.getGlobalMenus({
-      category: '한식 > 찌개',
+      category: '찌개·전골',
       sort: 'mentions',
       minMentions: 1,
       pageSize: 200,
@@ -665,7 +665,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     expect(matched.items.find((i) => i.globalKey === 'category-test-1')).toBeDefined();
 
     const noMatch = await service.getGlobalMenus({
-      category: '일식',
+      category: '회·초밥',
       sort: 'mentions',
       minMentions: 1,
       pageSize: 200,
@@ -696,7 +696,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       data: {
         globalKey: 'tree-test-kim',
         displayName: '김치찌개',
-        categoryPath: '한식 > 찌개 > 김치찌개',
+        categoryPath: '찌개·전골 > 김치찌개',
         version: 1,
         model: 'seed',
       },
@@ -705,7 +705,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       data: {
         globalKey: 'tree-test-doen',
         displayName: '된장찌개',
-        categoryPath: '한식 > 찌개 > 된장찌개',
+        categoryPath: '찌개·전골 > 된장찌개',
         version: 1,
         model: 'seed',
       },
@@ -728,18 +728,15 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
     });
 
     const tree = await service.getCategoryTree();
-    const han = tree.find((n) => n.label === '한식');
-    expect(han).toBeDefined();
-    // 한식 노드는 김치찌개(긍2) + 된장찌개(부1) 합산.
-    expect(han!.totalMentions).toBeGreaterThanOrEqual(3);
-    expect(han!.positive).toBeGreaterThanOrEqual(2);
-    expect(han!.negative).toBeGreaterThanOrEqual(1);
-    // 자식: "찌개" 노드.
-    const jjigae = han!.children?.find((c) => c.label === '찌개');
-    expect(jjigae).toBeDefined();
-    // 손자: "김치찌개", "된장찌개".
-    const kim = jjigae!.children?.find((c) => c.label === '김치찌개');
-    const doen = jjigae!.children?.find((c) => c.label === '된장찌개');
+    const top = tree.find((n) => n.label === '찌개·전골');
+    expect(top).toBeDefined();
+    // "찌개·전골" 노드는 김치찌개(긍2) + 된장찌개(부1) 합산.
+    expect(top!.totalMentions).toBeGreaterThanOrEqual(3);
+    expect(top!.positive).toBeGreaterThanOrEqual(2);
+    expect(top!.negative).toBeGreaterThanOrEqual(1);
+    // 자식: "김치찌개", "된장찌개" 노드.
+    const kim = top!.children?.find((c) => c.label === '김치찌개');
+    const doen = top!.children?.find((c) => c.label === '된장찌개');
     expect(kim).toBeDefined();
     expect(doen).toBeDefined();
     expect(kim!.totalMentions).toBe(2);
@@ -749,15 +746,17 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
 
 describe('normalizeCategoryPath', () => {
   it('passes through canonical " > " path', () => {
-    expect(normalizeCategoryPath('한식 > 찌개 > 김치찌개')).toBe('한식 > 찌개 > 김치찌개');
+    expect(normalizeCategoryPath('면 > 냉면 > 물냉면')).toBe('면 > 냉면 > 물냉면');
   });
   it('normalizes alternate separators and whitespace', () => {
-    expect(normalizeCategoryPath('한식/찌개/김치찌개')).toBe('한식 > 찌개 > 김치찌개');
-    expect(normalizeCategoryPath('  한식  >  찌개  ')).toBe('한식 > 찌개');
+    expect(normalizeCategoryPath('면/냉면/물냉면')).toBe('면 > 냉면 > 물냉면');
+    expect(normalizeCategoryPath('  고기  >  삼겹살  ')).toBe('고기 > 삼겹살');
     expect(normalizeCategoryPath('디저트>케이크')).toBe('디저트 > 케이크');
   });
   it('prepends 기타 when top segment is unknown', () => {
     expect(normalizeCategoryPath('미지의카테고리 > foo')).toBe('기타 > 미지의카테고리 > foo');
+    // 음식 종류(한식/일식)는 v3 부터 최상위가 아니다 — 화이트리스트 밖이라 기타 prepend.
+    expect(normalizeCategoryPath('한식 > 김치찌개')).toBe('기타 > 한식 > 김치찌개');
   });
   it('returns null for empty / non-string', () => {
     expect(normalizeCategoryPath('')).toBeNull();

@@ -1157,7 +1157,7 @@ const GlobalMenusSection = () => {
             type="text"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="카테고리 (예: 한식 > 찌개)"
+            placeholder="카테고리 (예: 고기 > 삼겹살)"
             list="analytics-category-suggestions"
             className="min-w-[180px] rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
@@ -1218,7 +1218,7 @@ const GlobalMenusSection = () => {
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="카테고리 (예: 한식 > 찌개)"
+                placeholder="카테고리 (예: 고기 > 삼겹살)"
                 list="analytics-category-suggestions"
                 className="rounded border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               />
