@@ -74,10 +74,20 @@ const config: ExpoConfig = {
     // 담당하므로, 네이티브 스플래시에는 로고를 두지 않고 단색 배경만 깐다. 그래야
     // 네이티브 정적 핀과 인앱 애니 핀이 충돌(깜빡임)하지 않는다. 배경색은 인앱
     // 그라데이션 중심색(#3916ae)과 동일 → 단색에서 애니메이션으로 매끄럽게 연결.
+    //
+    // Android: expo-splash-screen 의 prebuild-config 는 styles.xml 에 항상
+    // windowSplashScreenAnimatedIcon=@drawable/splashscreen_logo 를 박지만,
+    // image 가 없으면 그 drawable 을 만들지 않아 리소스 링크가 깨진다
+    // (`resource drawable/splashscreen_logo not found`). 완전 투명 PNG 를
+    // android.image 로 주면 drawable 은 생성되되 로고는 보이지 않아 "단색만"
+    // 의도를 유지한 채 빌드가 통과한다.
     [
       'expo-splash-screen',
       {
         backgroundColor: '#3916ae',
+        android: {
+          image: './assets/splash-transparent.png',
+        },
       },
     ],
     // CNG 가 Info.plist 의 NSLocationWhenInUseUsageDescription / Android
