@@ -7,10 +7,16 @@ import { Button } from '~/components/ui/button';
 import { MyLocationButton } from './MyLocationButton';
 import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from './MapCanvas';
 
+// 카드 더블클릭 "확대" 시 목표 줌. DEFAULT_ZOOM(15)보다 두 단계 가까운 거리감 —
+// fitToMarkers 의 maxZoom 과 같은 17 로 통일.
+const ZOOM_IN_LEVEL = 17;
+
 interface Props {
   items: RestaurantPublicListItemType[];
   selectedPlaceId: string | null;
-  hoveredPlaceId: string | null;
+  // 더블클릭으로 "확대 포커스" 요청된 식당. 참조가 바뀔 때마다(매 더블클릭 새
+  // 객체) 해당 식당으로 flyToZoomIn — 단순 선택(클릭) 패닝과 구분된다.
+  zoomFocus: { placeId: string } | null;
   // URL 의 bbox(이미 검색에 반영된 영역) — 사용자가 지도를 패닝해서 이 값과
   // 다른 영역으로 가면 "이 지역 재검색" 노출.
   appliedBbox: string | null;
@@ -29,7 +35,7 @@ interface Props {
 export const PublicRestaurantsMap = ({
   items,
   selectedPlaceId,
-  hoveredPlaceId,
+  zoomFocus,
   appliedBbox,
   focusCoord,
   locationStatus,
@@ -68,17 +74,24 @@ export const PublicRestaurantsMap = ({
     [items],
   );
 
-  // 호버 우선 강조. selectedPlaceId 가 있을 때 hoveredPlaceId 가 다르면 hover 우선.
-  const highlightedId = hoveredPlaceId ?? selectedPlaceId;
-
-  // 선택/호버된 마커가 화면 밖이면 부드럽게 가운데로 이동. 이건 사용자 인터랙션
-  // 이 아니라 시스템 동작 — onViewportChangeEnd 안 발사.
+  // 선택된 마커가 화면 밖이면 부드럽게 가운데로 이동. 식당 선택(카드/마커 클릭)
+  // 으로만 트리거 — 단순 호버로는 패닝하지 않는다. 이건 사용자 인터랙션이 아니라
+  // 시스템 동작 — onViewportChangeEnd 안 발사.
   useEffect(() => {
-    if (!highlightedId) return;
-    const target = items.find((it) => it.placeId === highlightedId);
+    if (!selectedPlaceId) return;
+    const target = items.find((it) => it.placeId === selectedPlaceId);
     if (!target || target.latitude === null || target.longitude === null) return;
     handleRef.current?.flyTo(target.latitude, target.longitude);
-  }, [highlightedId, items]);
+  }, [selectedPlaceId, items]);
+
+  // 더블클릭 = 해당 식당으로 확대. zoomFocus 참조가 바뀔 때마다 flyToZoomIn —
+  // 클릭 패닝(줌 유지)과 달리 ZOOM_IN_LEVEL 까지 당긴다(이미 더 확대면 유지).
+  useEffect(() => {
+    if (!zoomFocus) return;
+    const target = items.find((it) => it.placeId === zoomFocus.placeId);
+    if (!target || target.latitude === null || target.longitude === null) return;
+    handleRef.current?.flyToZoomIn(target.latitude, target.longitude, ZOOM_IN_LEVEL);
+  }, [zoomFocus, items]);
 
   // focusCoord 참조가 바뀌면 fly — 첫 도착도, "내 위치" 재요청도 같은 경로.
   // 같은 좌표라도 호출자가 새 object 를 넘기면 다시 fly (idempotent — 이미

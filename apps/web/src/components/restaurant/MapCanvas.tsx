@@ -52,6 +52,9 @@ export interface MapCanvasHandle {
   // 외부에서 특정 좌표로 부드럽게 이동. 다중 마커 페이지에서 카드 클릭 시
   // 해당 마커로 fly-to 할 때 사용.
   flyTo(lat: number, lng: number, zoom?: number): void;
+  // flyTo 와 같지만 최소 minZoom 까지 확대 — 이미 더 확대돼 있으면 줌은 유지하고
+  // 중심만 옮긴다. 카드 더블클릭 "확대" 에 사용 (줌아웃은 하지 않음).
+  flyToZoomIn(lat: number, lng: number, minZoom: number): void;
   // bbox 에 모든 마커가 들어오게 fit. ol fit duration 짧게.
   fitToMarkers(padding?: number): void;
 }
@@ -361,6 +364,18 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         v.animate({
           center: fromLonLat([lng, lat]),
           zoom: zoom ?? v.getZoom() ?? DEFAULT_ZOOM,
+          duration: 350,
+        });
+      },
+      flyToZoomIn(lat, lng, minZoom) {
+        const map = mapRef.current;
+        if (!map) return;
+        const v = map.getView();
+        userInteractedRef.current = false;
+        v.animate({
+          center: fromLonLat([lng, lat]),
+          // 줌아웃 방지 — 현재 줌이 minZoom 보다 크면 그대로 둔다.
+          zoom: Math.max(minZoom, v.getZoom() ?? minZoom),
           duration: 350,
         });
       },

@@ -61,8 +61,10 @@ export const RestaurantsPage = () => {
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
 
-  // 호버는 일시적 — URL 까지 안 가고 로컬 상태로만 (마커 강조 즉시 반영).
-  const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
+  // 더블클릭 = 해당 식당으로 지도 확대. 매번 새 객체라 같은 식당 재더블클릭도
+  // PublicRestaurantsMap 의 effect 를 재실행시킨다.
+  const [zoomFocus, setZoomFocus] = useState<{ placeId: string } | null>(null);
+  const handleZoomItem = useCallback((id: string) => setZoomFocus({ placeId: id }), []);
 
   // 모바일 토글 — xl 미만 list/map 전환. placeId 있을 땐 outlet 이 화면을
   // 차지하므로 토글 자체가 숨김.
@@ -126,7 +128,7 @@ export const RestaurantsPage = () => {
             onChangeCategory={(next) => setParam('category', next)}
             onChangeSort={(next) => setParam('sort', next === 'recent' ? null : next)}
             onSelectItem={handleSelectItem}
-            onHoverItem={setHoveredPlaceId}
+            onZoomItem={handleZoomItem}
             panelSide={panelSide}
             onTogglePanelSide={togglePanelSide}
           />
@@ -167,7 +169,7 @@ export const RestaurantsPage = () => {
           <PublicRestaurantsMap
             items={items}
             selectedPlaceId={placeId}
-            hoveredPlaceId={hoveredPlaceId}
+            zoomFocus={zoomFocus}
             appliedBbox={bbox}
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}

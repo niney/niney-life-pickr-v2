@@ -10,20 +10,21 @@ interface Props {
   // placeId 인자형 — 부모가 안정 콜백(useCallback/dispatcher)을 인라인 클로저
   // 없이 그대로 넘길 수 있어 아래 memo 가 실제로 동작한다.
   onSelect(placeId: string): void;
-  onHover(placeId: string | null): void;
+  // 더블클릭 — 선택(클릭)에 더해 지도를 해당 식당으로 확대.
+  onZoom(placeId: string): void;
 }
 
 // 좌측 리스트의 한 행. 네이버 지도 결과 카드 톤 — 썸네일 + 이름 + 카테고리/주소
 // + 별점 + AI 통계. 통계는 분석된 리뷰가 있을 때만 노출.
 //
-// memo — 카드 호버 시 부모(목록 페이지)는 hoveredPlaceId 변경으로 리렌더되지만,
-// 그건 지도 마커 강조용일 뿐 카드 prop(item·selected·안정 콜백)은 그대로다.
-// memo 로 bail-out 시켜 호버 한 번에 80개 카드가 통째로 리렌더되던 것을 막는다.
+// memo — 식당 선택이 바뀌면 부모(목록 페이지)가 리렌더되지만, 실제로 바뀌는 카드
+// prop 은 선택/해제된 두 카드의 selected 뿐이다. memo 로 나머지를 bail-out 시켜
+// 선택 한 번에 80개 카드가 통째로 리렌더되던 것을 막는다 (안정 콜백 전제).
 export const PublicRestaurantCard = memo(function PublicRestaurantCard({
   item,
   selected,
   onSelect,
-  onHover,
+  onZoom,
 }: Props) {
   const hasAi = item.analyzedCount > 0;
   const totalSentimented = item.positiveCount + item.negativeCount + item.neutralCount;
@@ -35,10 +36,9 @@ export const PublicRestaurantCard = memo(function PublicRestaurantCard({
     <button
       type="button"
       onClick={() => onSelect(item.placeId)}
-      onMouseEnter={() => onHover(item.placeId)}
-      onMouseLeave={() => onHover(null)}
+      onDoubleClick={() => onZoom(item.placeId)}
       className={cn(
-        'group flex w-full gap-3 rounded-lg border p-3 text-left transition-colors',
+        'group flex w-full select-none gap-3 rounded-lg border p-3 text-left transition-colors',
         selected
           ? 'border-primary/60 bg-primary/5'
           : 'border-border hover:border-foreground/30 hover:bg-muted/40',

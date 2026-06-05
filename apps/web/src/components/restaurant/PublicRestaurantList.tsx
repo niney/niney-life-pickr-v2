@@ -180,7 +180,7 @@ export interface PublicRestaurantListBodyProps {
   isError: boolean;
   selectedPlaceId: string | null;
   onSelectItem(placeId: string): void;
-  onHoverItem(placeId: string | null): void;
+  onZoomItem(placeId: string): void;
 }
 
 export const PublicRestaurantListBody = ({
@@ -189,7 +189,7 @@ export const PublicRestaurantListBody = ({
   isError,
   selectedPlaceId,
   onSelectItem,
-  onHoverItem,
+  onZoomItem,
 }: PublicRestaurantListBodyProps) => {
   if (isLoading && items.length === 0) {
     return (
@@ -222,7 +222,7 @@ export const PublicRestaurantListBody = ({
             item={item}
             selected={item.placeId === selectedPlaceId}
             onSelect={onSelectItem}
-            onHover={onHoverItem}
+            onZoom={onZoomItem}
           />
         </li>
       ))}
@@ -248,7 +248,7 @@ interface Props {
   onChangeCategory(next: string | null): void;
   onChangeSort(next: SortKey): void;
   onSelectItem(placeId: string): void;
-  onHoverItem(placeId: string | null): void;
+  onZoomItem(placeId: string): void;
   panelSide: PanelSide;
   onTogglePanelSide(): void;
 }
@@ -266,7 +266,7 @@ export const PublicRestaurantList = ({
   onChangeCategory,
   onChangeSort,
   onSelectItem,
-  onHoverItem,
+  onZoomItem,
   panelSide,
   onTogglePanelSide,
 }: Props) => {
@@ -296,7 +296,7 @@ export const PublicRestaurantList = ({
           isError={isError}
           selectedPlaceId={selectedPlaceId}
           onSelectItem={onSelectItem}
-          onHoverItem={onHoverItem}
+          onZoomItem={onZoomItem}
         />
       </div>
     </div>

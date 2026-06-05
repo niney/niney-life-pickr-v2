@@ -98,7 +98,10 @@ export const RestaurantsV2Page = () => {
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
 
-  const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
+  // 더블클릭 = 해당 식당으로 지도 확대. 매번 새 객체를 만들어 같은 식당을 다시
+  // 더블클릭해도 PublicRestaurantsMap 의 effect 가 재실행된다.
+  const [zoomFocus, setZoomFocus] = useState<{ placeId: string } | null>(null);
+  const handleZoomItem = useCallback((id: string) => setZoomFocus({ placeId: id }), []);
 
   const handleSelectItem = useCallback(
     (id: string) => {
@@ -233,7 +236,7 @@ export const RestaurantsV2Page = () => {
             onChangeCategory={(next) => setParam('category', next)}
             onChangeSort={(next) => setParam('sort', next === 'recent' ? null : next)}
             onSelectItem={handleSelectItem}
-            onHoverItem={setHoveredPlaceId}
+            onZoomItem={handleZoomItem}
             panelSide={panelSide}
             onTogglePanelSide={togglePanelSide}
           />
@@ -257,7 +260,7 @@ export const RestaurantsV2Page = () => {
           <PublicRestaurantsMap
             items={items}
             selectedPlaceId={placeId}
-            hoveredPlaceId={hoveredPlaceId}
+            zoomFocus={zoomFocus}
             appliedBbox={bbox}
             focusCoord={focusCoord}
             locationStatus={userLoc.status}
@@ -282,7 +285,7 @@ export const RestaurantsV2Page = () => {
           <PublicRestaurantsMap
             items={items}
             selectedPlaceId={placeId}
-            hoveredPlaceId={hoveredPlaceId}
+            zoomFocus={zoomFocus}
             appliedBbox={bbox}
             focusCoord={focusCoord}
             locationStatus={userLoc.status}
@@ -310,7 +313,7 @@ export const RestaurantsV2Page = () => {
               isError={list.isError}
               selectedPlaceId={placeId}
               onSelectItem={handleSelectItem}
-              onHoverItem={setHoveredPlaceId}
+              onZoomItem={handleZoomItem}
             />
           </div>
         </BottomSheet>
