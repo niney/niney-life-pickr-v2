@@ -131,9 +131,18 @@ export const HomeTab = ({
             onAction={() => onChangeTab('reviews')}
             disabled={detail.reviewCounts.all <= HOME_REVIEW_PREVIEW}
           />
-          <View style={{ gap: 8 }}>
-            {previewReviews.map((r) => (
-              <ReviewCard key={r.id} review={r} />
+          <View>
+            {previewReviews.map((r, idx) => (
+              <View
+                key={r.id}
+                style={
+                  idx < previewReviews.length - 1
+                    ? { borderBottomWidth: 1, borderBottomColor: theme.colors.border }
+                    : undefined
+                }
+              >
+                <ReviewCard review={r} />
+              </View>
             ))}
           </View>
         </View>

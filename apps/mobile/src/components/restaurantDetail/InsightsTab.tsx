@@ -93,7 +93,7 @@ export const InsightsTab = ({
               (멘션 많은 순)
             </Text>
           </View>
-          <View style={{ gap: 8, marginTop: 12 }}>
+          <View style={{ marginTop: 12 }}>
             {ranked.map((m, i) => {
               const total = m.positive + m.negative + m.neutral;
               const posPct = total > 0 ? (m.positive / total) * 100 : 0;
@@ -107,12 +107,11 @@ export const InsightsTab = ({
                   accessibilityLabel={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
                   style={({ pressed }) => [
                     styles.menuItem,
-                    {
-                      borderColor: theme.colors.border,
-                      backgroundColor: pressed
-                        ? theme.colors.surfaceAlt
-                        : theme.colors.surface,
+                    i < ranked.length - 1 && {
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.border,
                     },
+                    pressed && { backgroundColor: theme.colors.surfaceAlt },
                   ]}
                 >
                   <Text style={[styles.rank, { color: theme.colors.textMuted }]}>
@@ -205,9 +204,7 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     gap: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 12,
   },
   rank: { width: 24, fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'], textAlign: 'center' },
   menuName: { fontSize: 14, fontWeight: '500' },

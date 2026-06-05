@@ -15,7 +15,7 @@ export const palette = {
 } as const;
 
 export const lightColors = {
-  bg: palette.zinc50,
+  bg: palette.white,
   surface: palette.white,
   surfaceAlt: palette.zinc100,
   text: palette.zinc900,

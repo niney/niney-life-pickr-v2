@@ -22,12 +22,7 @@ const ReviewCardImpl = ({ review: r }: Props) => {
   const authorLabel = r.authorName ?? '익명';
 
   return (
-    <View
-      style={[
-        styles.card,
-        { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-      ]}
-    >
+    <View style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Text style={[styles.author, { color: theme.colors.textMuted }]}>
@@ -56,6 +51,7 @@ const ReviewCardImpl = ({ review: r }: Props) => {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.imageScroller}
           contentContainerStyle={styles.imageRow}
         >
           {r.imageUrls.map((u, i) => (
@@ -145,15 +141,19 @@ const ReviewCardImpl = ({ review: r }: Props) => {
 export const ReviewCard = memo(ReviewCardImpl);
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 6 },
+  card: { paddingVertical: 12, gap: 6 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   author: { fontSize: 12 },
   date: { fontSize: 11 },
   summary: { fontSize: 14, fontWeight: '500' },
   body: { fontSize: 12, lineHeight: 18 },
-  imageRow: { gap: 6, paddingVertical: 4 },
-  image: { width: 160, height: 200, borderRadius: 6, backgroundColor: '#f4f4f5' },
+  // 사진만 카드 좌우 패딩(16)을 뚫고 화면 끝까지 — 부모(reviewItem/섹션)의
+  // paddingHorizontal:16 을 marginHorizontal:-16 으로 상쇄하고, 첫/끝 사진은
+  // contentContainerStyle 의 paddingHorizontal:16 으로 콘텐츠와 정렬.
+  imageScroller: { marginHorizontal: -16 },
+  imageRow: { gap: 4, paddingVertical: 4, paddingHorizontal: 16 },
+  image: { width: 180, height: 225, borderRadius: 6, backgroundColor: '#f4f4f5' },
   menuList: { gap: 4, marginTop: 4 },
   menuRow: { borderLeftWidth: 2, paddingLeft: 8, paddingVertical: 2 },
   menuName: { fontSize: 12, fontWeight: '600' },

@@ -30,7 +30,7 @@ export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
   }
 
   return (
-    <View style={{ gap: 8 }}>
+    <View>
       {menus.map((m, idx) => {
         const stats = mentionByName.get(m.name);
         const clickable = !!onSelectMenu && !!stats;
@@ -89,7 +89,10 @@ export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
             key={`${m.name}-${idx}`}
             style={[
               styles.row,
-              { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+              idx < menus.length - 1 && {
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.border,
+              },
             ]}
           >
             {hasImage ? (
@@ -143,9 +146,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 8,
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 12,
   },
   thumbWrap: { width: 56, height: 56 },
   thumb: { width: 56, height: 56, borderRadius: 6, backgroundColor: '#f4f4f5' },

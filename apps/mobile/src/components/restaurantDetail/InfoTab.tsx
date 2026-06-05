@@ -58,16 +58,16 @@ export const InfoTab = ({ detail }: Props) => {
           <Text style={[styles.h3, { color: theme.colors.text }]}>
             블로그 리뷰 ({detail.blogReviews.length})
           </Text>
-          <View style={{ gap: 8, marginTop: 8 }}>
+          <View style={{ marginTop: 8 }}>
             {detail.blogReviews.map((b, idx) => (
               <Pressable
                 key={idx}
                 onPress={() => open(b.url)}
                 style={[
                   styles.blogRow,
-                  {
-                    borderColor: theme.colors.border,
-                    backgroundColor: theme.colors.surface,
+                  idx < detail.blogReviews.length - 1 && {
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.border,
                   },
                 ]}
               >
@@ -130,9 +130,7 @@ const styles = StyleSheet.create({
   blogRow: {
     flexDirection: 'row',
     gap: 8,
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 10,
   },
   blogThumb: { width: 56, height: 56, borderRadius: 6, backgroundColor: '#f4f4f5' },
   blogTitle: { fontSize: 13 },

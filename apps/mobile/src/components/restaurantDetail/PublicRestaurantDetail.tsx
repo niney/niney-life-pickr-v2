@@ -400,6 +400,7 @@ export const PublicRestaurantDetail = ({
           return (
             <View style={styles.reviewItem}>
               <ReviewCard review={item.review} />
+              <View style={{ height: 1, backgroundColor: theme.colors.border }} />
             </View>
           );
         case 'review-loading':
@@ -611,7 +612,7 @@ const styles = StyleSheet.create({
   reviewTipText: { flexShrink: 1, fontSize: 13, fontWeight: '600' },
   reviewTipClear: { flexShrink: 0, paddingVertical: 2, paddingHorizontal: 4 },
   reviewControls: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
-  reviewItem: { paddingHorizontal: 16, paddingBottom: 8 },
+  reviewItem: { paddingHorizontal: 16 },
   reviewLoading: { paddingVertical: 24, alignItems: 'center' },
   reviewEmpty: { paddingVertical: 48, alignItems: 'center' },
   reviewEmptyCardWrap: { paddingHorizontal: 16, paddingTop: 16 },
