@@ -95,6 +95,12 @@ export const AdminDiscoverPage = () => {
   useRestaurantListSummaryEventsByPlaceIds(registeredItems.map((it) => it.placeId));
 
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
+  // 더블클릭 "확대 포커스". 매 더블클릭마다 새 객체를 넣어 DiscoverMap 의
+  // effect 가 같은 식당이라도 다시 flyToZoomIn 하게 한다.
+  const [zoomFocus, setZoomFocus] = useState<{ placeId: string } | null>(null);
+  const handleZoomItem = useCallback((id: string) => {
+    setZoomFocus({ placeId: id });
+  }, []);
   // 다중 선택은 페이지 레벨에서 보관 — 탭 전환·검색어 변경에도 유지.
   // 선택된 placeId 가 더 이상 검색 결과에 없으면 자동으로 무시 (필터링).
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -316,6 +322,7 @@ export const AdminDiscoverPage = () => {
             markers={markers}
             selectedPlaceId={placeId}
             hoveredPlaceId={hoveredPlaceId}
+            zoomFocus={zoomFocus}
             appliedBbox={bbox}
             focusCoord={focusCoord}
             locationStatus={userLoc.status}
@@ -378,6 +385,7 @@ export const AdminDiscoverPage = () => {
             hoveredPlaceId={hoveredPlaceId}
             onSelectItem={handleSelectItem}
             onHoverItem={setHoveredPlaceId}
+            onZoomItem={handleZoomItem}
             checkedIds={checkedIds}
             onToggleChecked={handleToggleChecked}
             onStartSelected={handleStartSelected}

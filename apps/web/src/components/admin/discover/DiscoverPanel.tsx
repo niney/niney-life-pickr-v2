@@ -58,6 +58,8 @@ interface Props {
   hoveredPlaceId: string | null;
   onSelectItem(placeId: string): void;
   onHoverItem(placeId: string | null): void;
+  // 행 더블클릭 — 지도를 해당 식당으로 확대.
+  onZoomItem(placeId: string): void;
 
   // 다중 선택 (검색 탭 한정). 등록 탭은 체크박스 비표시.
   checkedIds: Set<string>;
@@ -88,6 +90,7 @@ export const DiscoverPanel = ({
   hoveredPlaceId,
   onSelectItem,
   onHoverItem,
+  onZoomItem,
   checkedIds,
   onToggleChecked,
   onStartSelected,
@@ -239,6 +242,7 @@ export const DiscoverPanel = ({
             hoveredPlaceId={hoveredPlaceId}
             onSelect={onSelectItem}
             onHover={onHoverItem}
+            onZoom={onZoomItem}
             checkedIds={checkedIds}
             onToggleChecked={onToggleChecked}
           />
@@ -249,6 +253,7 @@ export const DiscoverPanel = ({
             hoveredPlaceId={hoveredPlaceId}
             onSelect={onSelectItem}
             onHover={onHoverItem}
+            onZoom={onZoomItem}
           />
         )}
       </div>
@@ -320,6 +325,7 @@ const SearchResultList = ({
   hoveredPlaceId,
   onSelect,
   onHover,
+  onZoom,
   checkedIds,
   onToggleChecked,
 }: {
@@ -332,6 +338,7 @@ const SearchResultList = ({
   hoveredPlaceId: string | null;
   onSelect(placeId: string): void;
   onHover(placeId: string | null): void;
+  onZoom(placeId: string): void;
   checkedIds: Set<string>;
   onToggleChecked(placeId: string, on: boolean): void;
 }) => {
@@ -375,6 +382,7 @@ const SearchResultList = ({
             key={it.placeId}
             data-place-id={it.placeId}
             onClick={() => onSelect(it.placeId)}
+            onDoubleClick={() => onZoom(it.placeId)}
             className={cn(
               'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
               selectedPlaceId === it.placeId && 'bg-primary/10',
@@ -423,12 +431,14 @@ const RegisteredList = ({
   hoveredPlaceId,
   onSelect,
   onHover,
+  onZoom,
 }: {
   items: RestaurantPublicListItemType[];
   selectedPlaceId: string | null;
   hoveredPlaceId: string | null;
   onSelect(placeId: string): void;
   onHover(placeId: string | null): void;
+  onZoom(placeId: string): void;
 }) => {
   const ulRef = useScrollSelectedIntoView(selectedPlaceId, items);
   if (items.length === 0) {
@@ -447,6 +457,7 @@ const RegisteredList = ({
             key={it.placeId}
             data-place-id={it.placeId}
             onClick={() => onSelect(it.placeId)}
+            onDoubleClick={() => onZoom(it.placeId)}
             className={cn(
               'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
               selectedPlaceId === it.placeId && 'bg-primary/10',
