@@ -88,7 +88,7 @@ export const InsightsTab = ({
               (멘션 많은 순)
             </span>
           </h3>
-          <ol className="space-y-2">
+          <ol className="divide-y divide-border">
             {ranked.map((m, i) => {
               const total = m.positive + m.negative + m.neutral;
               const posPct = total > 0 ? (m.positive / total) * 100 : 0;
@@ -99,7 +99,7 @@ export const InsightsTab = ({
                   <button
                     type="button"
                     onClick={() => onSelectMenu(m.name)}
-                    className="flex w-full items-start gap-3 rounded-md border p-3 text-left transition-colors hover:bg-muted"
+                    className="flex w-full items-start gap-3 py-3 text-left transition-colors hover:bg-muted"
                     title={`"${m.name}" 메뉴가 언급된 리뷰 보기`}
                   >
                   <div className="w-6 shrink-0 pt-0.5 text-center text-base font-bold tabular-nums text-muted-foreground">

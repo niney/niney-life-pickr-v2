@@ -138,7 +138,7 @@ export const HomeTab = ({
             onAction={() => onChangeTab('reviews')}
             disabled={detail.reviewCounts.all <= HOME_REVIEW_PREVIEW}
           />
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border">
             {previewReviews.map((r) => (
               <li key={r.id}>
                 <ReviewCard r={r} showSource={showSourceBadges} />

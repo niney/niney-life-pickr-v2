@@ -132,14 +132,14 @@ export const InfoTab = ({ detail }: Props) => {
       {detail.blogReviews.length > 0 && (
         <section className="space-y-2 border-t pt-4">
           <h3 className="text-sm font-semibold">블로그 리뷰 ({detail.blogReviews.length})</h3>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border">
             {detail.blogReviews.map((b, idx) => (
               <li key={idx}>
                 <a
                   href={b.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex gap-2 rounded-md border p-2 hover:bg-muted/40"
+                  className="flex gap-2 py-2.5 hover:bg-muted/40"
                 >
                   {b.thumbnailUrls[0] && (
                     <ImgWithFallback

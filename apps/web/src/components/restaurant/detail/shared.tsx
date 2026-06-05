@@ -184,8 +184,8 @@ export const MenuGrid = ({
     null,
   );
   return (
-    <div className="@container">
-      <ul className="grid grid-cols-1 gap-2 @md:grid-cols-2">
+    <div>
+      <ul className="divide-y divide-border">
         {menus.map((m, idx) => {
           const stats = mentionByName.get(m.name);
           const clickable = !!onSelectMenu && !!stats;
@@ -226,7 +226,7 @@ export const MenuGrid = ({
           return (
             <li
               key={`${m.name}-${idx}`}
-              className="flex gap-2 rounded-md border p-2"
+              className="flex gap-2 py-2.5"
             >
               {m.imageUrls[0] && (
                 <button
@@ -401,9 +401,9 @@ export const ReviewCard = ({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const authorLabel = r.authorName ?? '익명';
   return (
-    // 카드는 균일한 중립 border. sentiment 시각화는 헤더의 SatisfactionChip
-    // (컬러 도트 + 점수) 한 곳으로 집중 — 묶음 스캔도 칩 색 분포로 가능.
-    <div className="rounded-md border p-2.5">
+    // 테두리 없는 평면 행 — 항목 사이는 부모 ul 의 divide-y 로 구분. sentiment
+    // 시각화는 헤더의 SatisfactionChip (컬러 도트 + 점수) 한 곳으로 집중.
+    <div className="py-3">
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
           {showSource && <SourceBadge source={r.source} />}
@@ -422,12 +422,12 @@ export const ReviewCard = ({
       {r.analysis && <div className="mt-1 text-sm font-medium">{r.analysis.text}</div>}
       <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{r.body}</div>
       {r.imageUrls.length > 0 && (
-        // 카드 패딩(p-2.5) 만큼 음수 마진 — 첫·마지막 이미지가 카드 가장자리에
-        // 붙어 "더 콘텐츠가 있다" 신호. snap-x + snap-start 로 한 장씩 깔끔히
-        // 정렬. iOS pull-to-refresh 와 가로 스크롤 충돌 방지: overscroll-x-contain.
+        // 사진만 부모 패딩(px-4=16)을 음수 마진으로 뚫어 화면 좌우 끝까지(full-bleed).
+        // 첫·마지막은 px-4 로 콘텐츠와 정렬. snap-x + snap-start 로 한 장씩 정렬.
+        // iOS pull-to-refresh 와 가로 스크롤 충돌 방지: overscroll-x-contain.
         <div
           className={cn(
-            '-mx-2.5 mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain px-2.5',
+            '-mx-4 mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain px-4',
             'snap-x snap-mandatory',
             '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           )}
