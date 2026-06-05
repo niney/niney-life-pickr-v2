@@ -10,6 +10,8 @@
     "dev:mobile:local": "pnpm --filter mobile dev:local",
     "dev:mobile:prod": "pnpm --filter mobile dev:prod",
     "dev:ios": "pnpm --filter mobile ios",
+    "dev:ios:device": "pnpm --filter mobile ios:device",
+    "dev:ios:release": "pnpm --filter mobile ios:release",
     "dev:ios:local": "pnpm --filter mobile ios:local",
     "dev:ios:prod": "pnpm --filter mobile ios:prod",
     "dev:android": "pnpm --filter mobile android",

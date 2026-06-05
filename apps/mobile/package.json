@@ -11,6 +11,8 @@
     "android:local": "expo start --dev-client --android",
     "android:prod": "EXPO_PUBLIC_API_URL=https://ninelife.kr expo start --dev-client --android",
     "ios": "expo run:ios",
+    "ios:device": "expo run:ios --device",
+    "ios:release": "expo run:ios --configuration Release --device",
     "ios:local": "expo start --dev-client --ios",
     "ios:prod": "EXPO_PUBLIC_API_URL=https://ninelife.kr expo start --dev-client --ios",
     "web": "expo start --web",
