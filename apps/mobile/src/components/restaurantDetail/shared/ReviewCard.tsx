@@ -1,5 +1,10 @@
 import { memo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+// 가로 사진 스크롤러. 기본 RN ScrollView 는 gorhom BottomSheet 안(맛집 탭 경로)
+// 에서 안드로이드 제스처 오케스트레이터에 등록되지 않아 가로 스와이프가 먹힌다.
+// gesture-handler 의 ScrollView 로 바꿔 시트 pan/세로 리스트와 협상되게 한다.
+// (시트 밖 라우트 경로에서도 동일 동작 — 드롭인.)
+import { ScrollView } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import { useTheme } from '@repo/shared';
 import type { PublicVisitorReviewType } from '@repo/api-contract';

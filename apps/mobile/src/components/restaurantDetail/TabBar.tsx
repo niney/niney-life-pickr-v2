@@ -1,4 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+// gorhom BottomSheet(맛집 탭) 안에서 가로 스크롤이 안드로이드 제스처 오케스트
+// 레이터에 잡히도록 gesture-handler 의 ScrollView 사용. (ReviewCard 와 동일 이유)
+import { ScrollView } from 'react-native-gesture-handler';
 import { useTheme } from '@repo/shared';
 import { TAB_ORDER, type TabKey } from './tabs';
 
