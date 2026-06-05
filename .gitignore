@@ -40,6 +40,13 @@ coverage
 web-build/
 expo-env.d.ts
 
+# 루트에서 expo prebuild/run 을 실수로 돌리면 생기는 네이티브 산출물.
+# 정상 앱은 apps/mobile (apps/mobile/.gitignore 가 거기 ios/android 를 관리).
+# 루트 직속(leading slash)만 무시 — apps/* 하위는 영향 없음.
+/ios
+/android
+/app.json
+
 *.orig.*
 *.jks
 *.p8
