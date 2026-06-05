@@ -1,4 +1,11 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import OlMap from 'ol/Map';
 import OlView from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -14,7 +21,10 @@ import {
   buildRestaurantMarkerDataUrl,
   buildVworldTileUrl,
   type RestaurantCategoryKey,
+  type VworldLayer,
 } from '@repo/utils';
+import { useThemeStore, type ThemeMode } from '~/stores/theme';
+import { MapLayerControl } from './MapLayerControl';
 
 export interface MapMarker {
   id: string;
@@ -62,10 +72,20 @@ interface Props {
   onViewportSync?(viewport: MapViewport): void;
   // 처음 mount 시점에 onTileError 가 한 번 호출되면 키가 거부됐을 가능성 큼.
   onTileError?(): void;
+  // 좌하단 레이어 전환 컨트롤(일반/다크/위성) 표시. 기본 true.
+  layerControl?: boolean;
   className?: string;
 }
 
 const DEFAULT_ZOOM = 15;
+
+// 앱 테마 → 지도 기본 레이어. 라이트=일반(Base), 다크=야간(midnight).
+const layerForTheme = (mode: ThemeMode): VworldLayer =>
+  mode === 'dark' ? 'midnight' : 'Base';
+
+// 어두운 배경 레이어 — 마커 라벨 색을 반전(흰 글자 + 어두운 외곽선)해야 한다.
+const isDarkBaseLayer = (layer: VworldLayer): boolean =>
+  layer === 'midnight' || layer === 'Satellite';
 
 // 이 줌 이상부터 라벨(식당명) + 풀사이즈 핀. 미만에서는 라벨 없는 축소 핀.
 // OL declutter 가 feature 단위라 라벨까지 같이 그리면 줌 아웃 시 핀이 통째로
@@ -96,6 +116,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onViewportChangeEnd,
     onViewportSync,
     onTileError,
+    layerControl = true,
     className,
   },
   ref,
@@ -103,6 +124,31 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<OlMap | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
+  // 현재 베이스 타일 소스 — 레이어 변경 시 map 을 재생성하지 않고 URL 만 교체한다
+  // (줌/센터/마커 유지).
+  const tileSourceRef = useRef<XYZ | null>(null);
+
+  // 레이어(일반/다크/위성). 초기값은 앱 테마를 따른다. 사용자가 토글로 한 번
+  // 직접 고르면(userPickedLayerRef) 이후 테마 변경에 끌려가지 않는다.
+  const themeMode = useThemeStore((s) => s.mode);
+  const [layer, setLayer] = useState<VworldLayer>(() => layerForTheme(themeMode));
+  const userPickedLayerRef = useRef(false);
+  // map 생성 effect 가 최신 layer 값을 stale closure 없이 읽도록 ref 동기화.
+  const layerRef = useRef(layer);
+  layerRef.current = layer;
+  // 라벨 style function 이 평가 시점에 읽는 다크 배경 여부.
+  const isDarkBaseRef = useRef(isDarkBaseLayer(layer));
+
+  // 테마가 바뀌면(사용자가 레이어를 직접 고르지 않은 한) 지도도 따라간다.
+  useEffect(() => {
+    if (userPickedLayerRef.current) return;
+    setLayer(layerForTheme(themeMode));
+  }, [themeMode]);
+
+  const handlePickLayer = useCallback((next: VworldLayer) => {
+    userPickedLayerRef.current = true;
+    setLayer(next);
+  }, []);
   // 선택 마커 id 를 ref 로 보관 — 각 feature 의 style function 이 평가 시점에 이
   // 값을 읽어 강조를 결정한다. selectedMarkerId 가 바뀌어도 feature 를 재생성하지
   // 않고, 영향받는 이전/현재 2개 feature 만 changed() 로 다시 칠한다.
@@ -129,9 +175,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     if (!containerRef.current || !apiKey) return;
 
     const tileSource = new XYZ({
-      url: buildVworldTileUrl(apiKey, 'Base'),
+      url: buildVworldTileUrl(apiKey, layerRef.current),
       crossOrigin: 'anonymous',
     });
+    tileSourceRef.current = tileSource;
     let errored = false;
     tileSource.on('tileloaderror', () => {
       if (errored) return;
@@ -232,12 +279,28 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       map.setTarget(undefined);
       mapRef.current = null;
       vectorSourceRef.current = null;
+      tileSourceRef.current = null;
       userInteractedRef.current = false;
     };
     // initialCenter / markers 는 의도적으로 deps 에서 빼고 별도 effect 에서 갱신.
     // 처음 mount 직후 외 reflow 가 필요한 입력은 apiKey 뿐.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
+
+  // 레이어 변경 — map 재생성 없이 타일 URL 만 교체하고, 바뀐 배경에 맞춰 라벨을
+  // 다시 칠한다. 첫 렌더는 map-create effect 가 이미 올바른 레이어로 만들었으므로
+  // 건너뛴다(같은 URL 로 setUrl 하면 OL 이 타일을 통째로 리프레시해 깜빡임).
+  const layerInitRef = useRef(true);
+  useEffect(() => {
+    isDarkBaseRef.current = isDarkBaseLayer(layer);
+    if (layerInitRef.current) {
+      layerInitRef.current = false;
+      return;
+    }
+    tileSourceRef.current?.setUrl(buildVworldTileUrl(apiKey, layer));
+    // 라벨 색을 새 배경에 맞게 — feature 재생성 없이 style function 재평가만.
+    vectorSourceRef.current?.changed();
+  }, [layer, apiKey]);
 
   // 마커 갱신 — markers 가 바뀔 때만 vectorSource 를 새로 칠한다 (map 재생성 X).
   // 선택 상태는 deps 에 넣지 않는다: style function 이 selectedIdRef 에서 읽으므로
@@ -257,7 +320,14 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         const zoom =
           mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
         const isSelected = selectedIdRef.current === m.id;
-        return makeMarkerStyle(m.label, isSelected, variant, categoryKey, zoom);
+        return makeMarkerStyle(
+          m.label,
+          isSelected,
+          variant,
+          categoryKey,
+          zoom,
+          isDarkBaseRef.current,
+        );
       });
       src.addFeature(f);
       byId.set(m.id, f);
@@ -312,11 +382,14 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   );
 
   return (
-    <div
-      ref={containerRef}
-      className={className ?? 'h-full w-full'}
-      style={{ position: 'relative' }}
-    />
+    <div className={className ?? 'h-full w-full'} style={{ position: 'relative' }}>
+      {/* OL 타깃은 내부 div — 레이어 컨트롤을 React 형제로 깔끔히 오버레이하기
+          위해 OL 이 관리하는 DOM 과 분리한다. */}
+      <div ref={containerRef} className="absolute inset-0" />
+      {layerControl && apiKey && (
+        <MapLayerControl value={layer} onChange={handlePickLayer} />
+      )}
+    </div>
   );
 });
 
@@ -334,8 +407,13 @@ const makeMarkerStyle = (
   variant: NonNullable<MapMarker['variant']>,
   categoryKey: RestaurantCategoryKey | null,
   zoom: number,
+  darkBg: boolean,
 ): Style => {
   const compact = !selected && zoom < LABEL_VISIBLE_ZOOM;
+  // 어두운 베이스맵(야간/위성) 위에서는 글자/외곽선을 반전 — 흰 글자 + 어두운
+  // 외곽선이라야 가독성이 산다. 밝은 맵에서는 기존 어두운 글자 + 흰 외곽선.
+  const labelFill = darkBg ? '#f8fafc' : '#0f172a';
+  const labelStroke = darkBg ? '#0f172a' : '#fff';
   return new Style({
     image: new Icon({
       anchor: selected ? [0.5, 1] : [0.5, 0.5],
@@ -348,8 +426,8 @@ const makeMarkerStyle = (
             text: label,
             offsetY: selected ? -54 : 20,
             font: selected ? 'bold 12px sans-serif' : '11px sans-serif',
-            fill: new Fill({ color: '#0f172a' }),
-            stroke: new Stroke({ color: '#fff', width: 3 }),
+            fill: new Fill({ color: labelFill }),
+            stroke: new Stroke({ color: labelStroke, width: 3 }),
           })
         : undefined,
   });
