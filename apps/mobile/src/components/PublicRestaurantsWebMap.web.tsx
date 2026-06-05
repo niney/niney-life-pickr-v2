@@ -96,7 +96,9 @@ export const PublicRestaurantsWebMap = ({
     if (initialHtmlRef.current && initialHtmlRef.current.key === apiKey) {
       return initialHtmlRef.current.html;
     }
-    const built = buildPublicRestaurantsMapHtml(apiKey, initialCenter);
+    // 초기 빌드에만 현재 모드를 박는다. 이후 모드 변경은 iframe 재생성 대신
+    // postMessage(type:setMode)로 처리 — theme.mode 는 의도적으로 deps 제외.
+    const built = buildPublicRestaurantsMapHtml(apiKey, initialCenter, theme.mode);
     initialHtmlRef.current = { key: apiKey, html: built };
     return built;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,6 +132,15 @@ export const PublicRestaurantsWebMap = ({
       '*',
     );
   }, [ready, markers, selectedPlaceId]);
+
+  // 테마 변경 → 지도 베이스맵(일반↔야간) 런타임 전환. 초기 모드는 HTML 에 이미
+  // 박혀 있어 첫 호출은 same-mode no-op(__setMode 가드).
+  useEffect(() => {
+    if (!ready) return;
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(JSON.stringify({ type: 'setMode', mode: theme.mode }), '*');
+  }, [ready, theme.mode]);
 
   // 리스트 카드 선택 → 그 식당 좌표로 자동 fly + zoom in. markers 는 deps 에
   // 안 넣음 — selection 자체 변경 시점에만 fly.
@@ -217,7 +228,10 @@ export const PublicRestaurantsWebMap = ({
 
       {tileError && (
         <View
-          style={[styles.toast, { top: 12 + topInset, borderColor: theme.colors.danger }]}
+          style={[
+            styles.toast,
+            { top: 12 + topInset, borderColor: theme.colors.danger, backgroundColor: theme.colors.surface },
+          ]}
         >
           <Text style={{ color: theme.colors.danger, fontSize: 12 }}>
             지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.
@@ -303,7 +317,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   researchBtn: {
     position: 'absolute',

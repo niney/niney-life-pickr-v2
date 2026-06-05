@@ -118,7 +118,10 @@ export const PublicRestaurantsWebMap = ({
     if (initialHtmlRef.current && initialHtmlRef.current.key === apiKey) {
       return initialHtmlRef.current.html;
     }
-    const built = buildPublicRestaurantsMapHtml(apiKey, initialCenter);
+    // 초기 빌드에만 현재 모드를 박는다. 이후 모드 변경은 HTML 재생성(=WebView
+    // 재마운트) 대신 __setMode 주입으로 처리(아래 effect) — worklets 충돌·지도
+    // 상태 유실 방지. 그래서 theme.mode 는 의도적으로 deps 에서 제외.
+    const built = buildPublicRestaurantsMapHtml(apiKey, initialCenter, theme.mode);
     initialHtmlRef.current = { key: apiKey, html: built };
     return built;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,6 +146,15 @@ export const PublicRestaurantsWebMap = ({
     const payload = JSON.stringify(selectedPlaceId);
     webRef.current.injectJavaScript(`window.__setSelected(${payload}); true;`);
   }, [ready, selectedPlaceId]);
+
+  // 테마 변경 → 지도 베이스맵(일반↔야간) 런타임 전환. HTML 은 초기 모드로 이미
+  // 빌드돼 있어, ready 직후 첫 호출은 같은 모드라 __setMode 가 no-op 한다(깜빡임
+  // 없음). 사용자가 모드를 바꿀 때만 실제 타일/라벨이 교체된다.
+  useEffect(() => {
+    if (!ready || !webRef.current) return;
+    const payload = JSON.stringify(theme.mode);
+    webRef.current.injectJavaScript(`window.__setMode(${payload}); true;`);
+  }, [ready, theme.mode]);
 
   // 리스트 카드 선택 → 그 식당 좌표로 자동 fly + zoom in. markers 는 deps 에
   // 안 넣음 — selection 자체 변경 시점에만 fly 하고, markers 가 그 사이

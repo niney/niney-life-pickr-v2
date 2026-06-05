@@ -46,8 +46,14 @@ const buildIconCache = (): Record<string, { off: string; on: string }> => {
 export const buildPublicRestaurantsMapHtml = (
   apiKey: string,
   initialCenter: MapInitialCenter = { lat: 37.5665, lng: 126.978 },
+  // 앱 테마 → 지도 베이스맵. 라이트=일반(Base), 다크=야간(midnight). VWorld 가
+  // 제공하는 실제 다크 타일이라 CSS invert 같은 트릭이 필요 없다(웹 MapCanvas
+  // 와 동일 전략). 런타임 전환은 __setMode 로 — WebView 재마운트 없이.
+  mode: 'light' | 'dark' = 'light',
 ): string => {
-  const tileUrl = buildVworldTileUrl(apiKey, 'Base');
+  const dark = mode === 'dark';
+  const baseTileUrl = buildVworldTileUrl(apiKey, 'Base');
+  const darkTileUrl = buildVworldTileUrl(apiKey, 'midnight');
   const iconCache = buildIconCache();
   return `<!doctype html>
 <html>
@@ -57,7 +63,7 @@ export const buildPublicRestaurantsMapHtml = (
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.3.1/ol.css" />
 <style>
   html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
-  body { background: #f4f4f5; -webkit-tap-highlight-color: transparent; }
+  body { background: ${dark ? '#09090b' : '#f4f4f5'}; -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
 <body>
@@ -74,8 +80,14 @@ export const buildPublicRestaurantsMapHtml = (
     }
   };
 
+  var BASE_TILE_URL = ${JSON.stringify(baseTileUrl)};
+  var DARK_TILE_URL = ${JSON.stringify(darkTileUrl)};
+  // 어두운 베이스맵(야간)에서는 마커 라벨을 흰 글자 + 어두운 외곽선으로 반전한다.
+  // __setMode 가 런타임에 이 값을 바꾸면 이후 makeMarkerStyle 호출이 따라간다.
+  var darkBg = ${dark};
+
   var tileSource = new ol.source.XYZ({
-    url: ${JSON.stringify(tileUrl)},
+    url: darkBg ? DARK_TILE_URL : BASE_TILE_URL,
     crossOrigin: 'anonymous',
   });
   var errored = false;
@@ -148,8 +160,8 @@ export const buildPublicRestaurantsMapHtml = (
         text: label,
         offsetY: selected ? -54 : 20,  // 핀 위 vs 원 아래
         font: (selected ? 'bold 12px' : '11px') + ' sans-serif',
-        fill: new ol.style.Fill({ color: '#0f172a' }),
-        stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+        fill: new ol.style.Fill({ color: darkBg ? '#f8fafc' : '#0f172a' }),
+        stroke: new ol.style.Stroke({ color: darkBg ? '#0f172a' : '#fff', width: 3 }),
       });
     }
     return new ol.style.Style(styleObj);
@@ -217,6 +229,23 @@ export const buildPublicRestaurantsMapHtml = (
     window.__setSelected(data.selectedId !== undefined ? data.selectedId : null);
   };
 
+  // 앱 테마 변경 시 호출 — map 재생성 없이 타일 레이어(일반↔야간)와 라벨 색만
+  // 교체한다(줌/센터/선택 유지). mode 는 'light' | 'dark' 단순 문자열이라 JSON
+  // 파싱하지 않는다. 같은 모드면 no-op — 중복 setUrl 로 인한 타일 깜빡임 방지.
+  window.__setMode = function(mode) {
+    var nextDark = (mode === 'dark');
+    if (nextDark === darkBg) return;
+    darkBg = nextDark;
+    tileSource.setUrl(darkBg ? DARK_TILE_URL : BASE_TILE_URL);
+    document.body.style.background = darkBg ? '#09090b' : '#f4f4f5';
+    // 모든 마커 라벨 색을 새 배경에 맞게 다시 칠한다 (선택 상태 보존).
+    var feats = vectorSource.getFeatures();
+    for (var i = 0; i < feats.length; i++) {
+      var f = feats[i];
+      f.setStyle(makeMarkerStyle(f.get('catKey'), f.get('label'), f.getId() === currentSelectedId));
+    }
+  };
+
   // iframe in web: 부모로부터 메시지 받아 처리. native WebView 는
   // injectJavaScript 로 직접 호출되므로 이 리스너가 트리거되지 않는다.
   window.addEventListener('message', function(e) {
@@ -227,6 +256,7 @@ export const buildPublicRestaurantsMapHtml = (
     if (msg.type === 'setData') window.__setData(msg);
     else if (msg.type === 'setMarkers') window.__setMarkers(msg.markers || []);
     else if (msg.type === 'setSelected') window.__setSelected(msg.id);
+    else if (msg.type === 'setMode') window.__setMode(msg.mode);
     else if (msg.type === 'flyTo') window.__flyTo(msg);
   });
 
