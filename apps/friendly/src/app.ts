@@ -14,6 +14,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export async function buildApp(opts: FastifyServerOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
+    // graceful shutdown 시 idle keep-alive 연결을 즉시 닫아 app.close() 가
+    // 매달리지 않게 한다(처리 중인 요청은 그대로 완료 대기). SIGTERM 핸들러의
+    // 스케줄러 정리 후 close 가 지연되는 것을 막는다.
+    forceCloseConnections: 'idle',
     logger: {
       level: env.LOG_LEVEL,
       // Redact `?token=...` (used by EventSource for SSE auth — EventSource

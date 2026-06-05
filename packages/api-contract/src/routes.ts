@@ -200,6 +200,22 @@ export const Analytics = {
   categoryTree: `${API_PREFIX}/admin/analytics/category-tree`,
 } as const;
 
+// 주기 자동 실행 — 관리자가 cron 으로 "정규화 → 글로벌 머지" 파이프라인을
+// 예약. 인프로세스 스케줄러(croner)가 단일 인스턴스 안에서 돌고, 설정은
+// SQLite 에 영속화되어 재시작 후 부팅 시 복원된다.
+export const Schedule = {
+  // 설정 조회/변경 — GET(현재 설정+다음 실행 시각), PUT(enabled/cronExpr/timezone).
+  config: `${API_PREFIX}/admin/schedule`,
+  // 지금 실행 — cron tick 을 기다리지 않고 즉시 파이프라인을 돌린다(manual).
+  run: `${API_PREFIX}/admin/schedule/run`,
+  // 실행 이력 — 최근 run 목록 + 진행 중 run id.
+  runs: `${API_PREFIX}/admin/schedule/runs`,
+  // 진행 SSE — manual/cron run 의 단계별 진행을 push.
+  runEvents: `${API_PREFIX}/admin/schedule/run-events`,
+  // cron 식 검증 + 다음 실행 시각 미리보기 (저장 전 입력 검증용).
+  preview: `${API_PREFIX}/admin/schedule/preview`,
+} as const;
+
 // 맛집 자동 발견 — 키워드 한 줄 + 카테고리 칩 + targetCount 받아 AI 키워드 8 개
 // 생성 → 다중 검색 → dedupe → 그룹 5 개씩 직렬 크롤(=Naver Place 등록) 까지.
 // 잡 상태는 SSE 로 push.

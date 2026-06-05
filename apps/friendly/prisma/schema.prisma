@@ -605,3 +605,50 @@ model ReviewTag {
   @@index([summaryId])
   @@map("review_tags")
 }
+
+// 주기 자동 실행 설정 — 관리자가 cron 으로 "정규화 → 글로벌 머지" 파이프라인을
+// 예약. jobType 당 한 행(현재는 'normalize-merge' 단일). 부팅 시 이 행을 읽어
+// 인프로세스 스케줄러(croner)에 등록하고, 어드민이 바꾸면 런타임 재등록한다.
+// 단일 인스턴스라 분산 락은 불필요 — CLAUDE.md 의 no-Redis 전제와 일관.
+model ScheduleConfig {
+  id         String    @id @default(cuid())
+  // 작업 종류 — 행 식별 키. 현재는 'normalize-merge' 하나.
+  jobType    String    @unique
+  enabled    Boolean   @default(false)
+  // cron 식 (5필드). 예: '0 3 * * *' = 매일 03:00. 검증은 croner 가 한다.
+  cronExpr   String
+  // IANA 타임존. 기본 Asia/Seoul.
+  timezone   String    @default("Asia/Seoul")
+  // 마지막 실행 시각/결과 — 빠른 표시용 비정규화. 상세 이력은 ScheduleRun.
+  // nextRunAt 은 저장하지 않는다 — croner 로 매번 계산(저장하면 stale).
+  lastRunAt  DateTime?
+  lastStatus String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("schedule_configs")
+}
+
+// 주기 작업 한 번의 실행 기록 — 이력 조회/감사용. status='running' 으로 시작해
+// done/failed/interrupted 로 마감한다. skipped 는 이전 실행이 아직 안 끝나
+// 이번 tick 을 건너뛴(overlap 방지) 경우를 한 행으로 남긴다.
+model ScheduleRun {
+  id             String    @id @default(cuid())
+  jobType        String
+  // 'cron' | 'manual'
+  trigger        String
+  // 'running' | 'done' | 'failed' | 'skipped' | 'interrupted'
+  status         String
+  // collecting 단계 후 확정된 처리 대상 식당 수. 미정 시 null.
+  totalTargets   Int?
+  // 정규화(grouping) 완료 식당 수.
+  processedCount Int       @default(0)
+  // 크롤 진행 중이라 이번 실행에서 제외한 식당 수.
+  skippedCount   Int       @default(0)
+  error          String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@index([jobType, startedAt])
+  @@map("schedule_runs")
+}

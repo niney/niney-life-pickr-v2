@@ -3,8 +3,10 @@ import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Loader2,
   PlayCircle,
+  Power,
   RefreshCw,
   Search,
   XCircle,
@@ -21,7 +23,13 @@ import {
   useGlobalMergeJob,
   useGroupingJob,
   useGroupingRestaurantsStatus,
+  useRunScheduleNow,
+  useScheduleConfig,
+  useSchedulePreview,
+  useScheduleRunEvents,
+  useScheduleRuns,
   useStartGlobalMerge,
+  useUpdateScheduleConfig,
 } from '@repo/shared';
 import type {
   CategoryTreeNodeType,
@@ -29,6 +37,7 @@ import type {
   GlobalMergeJobSnapshotType,
   MenuGroupingRestaurantSortType,
   MenuGroupingRestaurantStatusType,
+  ScheduleRunStatusType,
 } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -254,6 +263,7 @@ export const AdminAnalyticsPage = () => {
         </Card>
       </section>
 
+      <ScheduleSection />
       <GlobalMergeSection />
       <CategoryTreeSection />
       <GlobalMenusSection />
@@ -682,6 +692,265 @@ const JobStateBadge = ({ state }: { state: 'pending' | 'running' | 'done' | 'fai
 };
 
 // ── 전역 머지 섹션 ──────────────────────────────────────────────────
+
+// 친화적 프리셋 — cron 식을 직접 모르는 관리자도 한 번에 고를 수 있게.
+// 라벨→cron 매핑은 우리가 정의(라이브러리 미제공). '커스텀'은 직접 입력.
+const SCHEDULE_PRESETS: { label: string; cron: string }[] = [
+  { label: '매일 새벽 3시', cron: '0 3 * * *' },
+  { label: '매일 정오', cron: '0 12 * * *' },
+  { label: '6시간마다', cron: '0 */6 * * *' },
+  { label: '매시간', cron: '0 * * * *' },
+];
+
+const ScheduleStatusChip = ({ status }: { status: ScheduleRunStatusType }) => {
+  const map: Record<ScheduleRunStatusType, { label: string; cls: string }> = {
+    done: { label: '완료', cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
+    failed: { label: '실패', cls: 'bg-red-500/15 text-red-600 dark:text-red-400' },
+    running: { label: '진행 중', cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
+    skipped: { label: '건너뜀', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+    interrupted: { label: '중단', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+  };
+  const m = map[status];
+  return (
+    <span className={cn('inline-block rounded px-2 py-0.5 text-xs font-medium', m.cls)}>
+      {m.label}
+    </span>
+  );
+};
+
+// 자동 실행 스케줄 — 관리자가 주기를 설정하면 "미분류 식당 정규화 → 전역 머지"를
+// 그 주기마다 자동 실행. 설정은 서버 DB 에 영속되어 재시작에도 유지된다.
+const ScheduleSection = () => {
+  const config = useScheduleConfig();
+  const update = useUpdateScheduleConfig();
+  const runNow = useRunScheduleNow();
+  const runs = useScheduleRuns();
+
+  const [draftCron, setDraftCron] = useState('');
+  const [timezone, setTimezone] = useState('Asia/Seoul');
+  const [customMode, setCustomMode] = useState(false);
+
+  useEffect(() => {
+    if (config.data) {
+      setDraftCron(config.data.cronExpr);
+      setTimezone(config.data.timezone);
+      setCustomMode(!SCHEDULE_PRESETS.some((p) => p.cron === config.data!.cronExpr));
+    }
+    // config 값이 바뀔 때만 draft 동기화.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.data?.cronExpr, config.data?.timezone]);
+
+  const preview = useSchedulePreview(draftCron, timezone, true);
+  const inflightRunId = runs.data?.inflightRunId ?? null;
+  const { progress } = useScheduleRunEvents(!!inflightRunId);
+
+  const enabled = config.data?.enabled ?? false;
+  const dirty = !!config.data && draftCron !== config.data.cronExpr;
+  const isPreset = SCHEDULE_PRESETS.some((p) => p.cron === draftCron);
+  const showCustomInput = customMode || !isPreset;
+  const cronValid = preview.data?.valid ?? true;
+  const isRunning = !!inflightRunId || progress !== null;
+
+  const selectPreset = (cron: string): void => {
+    setDraftCron(cron);
+    setCustomMode(false);
+  };
+  const toggleEnabled = (): void => {
+    if (!config.data) return;
+    update.mutate({
+      enabled: !enabled,
+      cronExpr: config.data.cronExpr,
+      timezone: config.data.timezone,
+    });
+  };
+  const save = (): void => {
+    if (!cronValid) return;
+    update.mutate({ enabled, cronExpr: draftCron, timezone });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-col items-stretch gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="size-4" />
+            자동 실행 스케줄
+          </CardTitle>
+          <CardDescription>
+            설정한 주기마다 “미분류 식당 메뉴 정규화 → 전역 머지”를 자동 실행합니다. 크롤
+            진행 중인 식당은 건너뜁니다.
+          </CardDescription>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={enabled ? 'green' : 'outline'}
+            size="sm"
+            onClick={toggleEnabled}
+            disabled={update.isPending || !config.data}
+          >
+            <Power className="size-4" />
+            {enabled ? '활성' : '비활성'}
+          </Button>
+          <Button
+            variant="teal"
+            size="sm"
+            onClick={() => runNow.mutate()}
+            disabled={runNow.isPending || isRunning}
+          >
+            {runNow.isPending || isRunning ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <PlayCircle className="size-4" />
+            )}
+            지금 실행
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">실행 주기</div>
+          <div className="flex flex-wrap gap-2">
+            {SCHEDULE_PRESETS.map((p) => (
+              <Button
+                key={p.cron}
+                variant={!showCustomInput && draftCron === p.cron ? 'blue' : 'outline'}
+                size="sm"
+                onClick={() => selectPreset(p.cron)}
+              >
+                {p.label}
+              </Button>
+            ))}
+            <Button
+              variant={showCustomInput ? 'blue' : 'outline'}
+              size="sm"
+              onClick={() => setCustomMode(true)}
+            >
+              커스텀
+            </Button>
+          </div>
+          {showCustomInput && (
+            <Input
+              value={draftCron}
+              onChange={(e) => setDraftCron(e.target.value)}
+              placeholder="예: 0 3 * * *  (분 시 일 월 요일)"
+              className="font-mono"
+            />
+          )}
+        </div>
+
+        <div className="rounded-md border p-3 text-sm">
+          {!cronValid ? (
+            <p className="text-red-600 dark:text-red-400">
+              잘못된 cron 식입니다{preview.data?.error ? `: ${preview.data.error}` : ''}
+            </p>
+          ) : preview.data && preview.data.nextRuns.length > 0 ? (
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">다음 실행 예정 (적용 후)</div>
+              <ul className="space-y-0.5">
+                {preview.data.nextRuns.slice(0, 3).map((r) => (
+                  <li key={r} className="font-mono text-xs text-muted-foreground">
+                    {formatDate(r)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">미리보기를 불러오는 중…</p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {config.data?.lastRunAt ? (
+              <>
+                <span>마지막 실행 {formatDate(config.data.lastRunAt)}</span>
+                {config.data.lastStatus && (
+                  <ScheduleStatusChip status={config.data.lastStatus} />
+                )}
+              </>
+            ) : (
+              <span>아직 실행된 적 없음</span>
+            )}
+          </div>
+          <Button
+            variant="amber"
+            size="sm"
+            onClick={save}
+            disabled={!dirty || !cronValid || update.isPending}
+          >
+            저장
+          </Button>
+        </div>
+
+        {progress && (
+          <div className="space-y-2 rounded-md border p-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">
+                {progress.phase === 'collecting' && '대상 수집 중'}
+                {progress.phase === 'grouping' && '메뉴 정규화 중'}
+                {progress.phase === 'merging' && '전역 머지 중'}
+                {progress.phase === 'done' && '마무리'}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {progress.processed} / {progress.total}
+                {progress.skipped > 0 ? ` · 건너뜀 ${progress.skipped}` : ''}
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{
+                  width: `${progress.total === 0 ? 0 : Math.round((progress.processed / progress.total) * 100)}%`,
+                }}
+              />
+            </div>
+            {progress.currentName && (
+              <div className="truncate text-xs text-muted-foreground">
+                {progress.currentName}
+              </div>
+            )}
+          </div>
+        )}
+
+        {runs.data && runs.data.items.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground">최근 실행 이력</div>
+            <div className="overflow-hidden rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>시각</TableHead>
+                    <TableHead>트리거</TableHead>
+                    <TableHead>상태</TableHead>
+                    <TableHead className="text-right">처리 / 건너뜀</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {runs.data.items.slice(0, 8).map((r) => (
+                    <TableRow key={r.runId}>
+                      <TableCell className="font-mono text-xs">
+                        {formatDate(r.startedAt)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.trigger === 'cron' ? '자동' : '수동'}
+                      </TableCell>
+                      <TableCell>
+                        <ScheduleStatusChip status={r.status} />
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {r.processedCount} / {r.skippedCount}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const GlobalMergeSection = () => {
   const overview = useAnalyticsOverview();

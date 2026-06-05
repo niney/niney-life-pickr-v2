@@ -78,6 +78,17 @@ export class JobRegistry {
     return null;
   }
 
+  // Actor-agnostic check: is *anyone* currently crawling this place? The
+  // periodic scheduler is a system job (no single actor), so it must skip a
+  // restaurant whose crawl is in flight regardless of who triggered it —
+  // re-grouping mid-crawl would race against reviews still being persisted.
+  isPlaceCrawling(placeId: string): boolean {
+    for (const j of this.jobs.values()) {
+      if (j.phase !== 'finished' && j.placeId === placeId) return true;
+    }
+    return false;
+  }
+
   // Counts only jobs that are *actually consuming a slot* (Playwright running).
   // Queued jobs do not count toward the cap — that's the whole point of the
   // queue.
