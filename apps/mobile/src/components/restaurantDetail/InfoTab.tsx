@@ -74,7 +74,7 @@ export const InfoTab = ({ detail }: Props) => {
                 {b.thumbnailUrls[0] && (
                   <Image
                     source={thumbUrl(b.thumbnailUrls[0], 240)}
-                    style={styles.blogThumb}
+                    style={[styles.blogThumb, { backgroundColor: theme.colors.surfaceAlt }]}
                     recyclingKey={b.thumbnailUrls[0]}
                     contentFit="cover"
                     transition={200}
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
   },
-  blogThumb: { width: 56, height: 56, borderRadius: 6, backgroundColor: '#f4f4f5' },
+  blogThumb: { width: 56, height: 56, borderRadius: 6 },
   blogTitle: { fontSize: 13 },
   blogExcerpt: { fontSize: 11, marginTop: 2 },
   blogMeta: { fontSize: 10, marginTop: 2 },

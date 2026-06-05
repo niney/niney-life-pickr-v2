@@ -3,6 +3,7 @@ import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { configureApi, setSettlementDraftStorage, useAuthStore } from '@repo/shared';
 import { useSettlementPrefsStore } from './settlementPrefsStore';
+import { useThemeStore } from './themeStore';
 
 // 정산하기 draft persist 어댑터 — 웹은 sessionStorage 가 자동, 앱은 모듈
 // 로드 시점에 AsyncStorage 를 주입해야 zustand persist 가 첫 read/write 부터
@@ -94,6 +95,10 @@ if (__DEV__) {
 let cachedToken: string | null = null;
 
 export const bootstrapApi = async (): Promise<void> => {
+  // 화면 모드는 await 로 먼저 당겨온다 — 스플래시가 떠 있는 동안 확정해야
+  // Stack 첫 마운트가 올바른 테마로 그려진다(잘못된 테마 플래시 방지).
+  await useThemeStore.getState().hydrate();
+
   // 정산 prefs 도 같이 hydrate — Step1 의 '새 행 기본' 패널 초기값이 무릇.
   void useSettlementPrefsStore.getState().hydrate();
 

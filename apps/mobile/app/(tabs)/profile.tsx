@@ -2,9 +2,22 @@ import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useCurrentUser, useLogout, useTheme } from '@repo/shared';
+import {
+  SegmentedControl,
+  useAuthStore,
+  useCurrentUser,
+  useLogout,
+  useTheme,
+} from '@repo/shared';
 import { NotchFade } from '~/components/NotchFade';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
+import { useThemeStore, type ThemeMode } from '~/lib/themeStore';
+
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemeMode; label: string }> = [
+  { value: 'light', label: '라이트' },
+  { value: 'dark', label: '다크' },
+  { value: 'system', label: '시스템' },
+];
 
 type Row = {
   key: string;
@@ -26,6 +39,8 @@ export default function ProfileScreen() {
   const logout = useLogout();
   const router = useRouter();
   const theme = useTheme();
+  const themeMode = useThemeStore((s) => s.mode);
+  const setThemeMode = useThemeStore((s) => s.setMode);
   const insets = useSafeAreaInsets();
   // 콘텐츠 끝이 하단 탭바 뒤로 안 가리게 그만큼 하단 패딩을 더한다.
   const tabBarH = useTabBarHeight();
@@ -186,6 +201,18 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>
+            화면 모드
+          </Text>
+          <SegmentedControl
+            value={themeMode}
+            options={THEME_OPTIONS}
+            onChange={setThemeMode}
+            fullWidth
+          />
+        </View>
+
         {loggedIn && (
           <Pressable
             onPress={onLogout}
@@ -240,6 +267,8 @@ const styles = StyleSheet.create({
   },
   ctaText: { fontSize: 15, fontWeight: '600' },
   card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  section: { gap: 8 },
+  sectionLabel: { fontSize: 12, fontWeight: '600', paddingHorizontal: 4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

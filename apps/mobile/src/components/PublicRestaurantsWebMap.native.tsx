@@ -268,7 +268,10 @@ export const PublicRestaurantsWebMap = ({
 
       {tileError && (
         <View
-          style={[styles.toast, { top: 12 + topInset, borderColor: theme.colors.danger }]}
+          style={[
+            styles.toast,
+            { top: 12 + topInset, borderColor: theme.colors.danger, backgroundColor: theme.colors.surface },
+          ]}
         >
           <Text style={{ color: theme.colors.danger, fontSize: 12 }}>
             지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.
@@ -362,7 +365,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   researchBtn: {
     position: 'absolute',

@@ -92,7 +92,7 @@ export const PhotosTab = ({ detail }: Props) => {
                 >
                   <Image
                     source={thumbUrl(u, 400)}
-                    style={styles.tile}
+                    style={[styles.tile, { backgroundColor: theme.colors.surfaceAlt }]}
                     recyclingKey={u}
                     contentFit="cover"
                     transition={200}
@@ -124,5 +124,5 @@ const styles = StyleSheet.create({
   h3: { fontSize: 14, fontWeight: '600' },
   count: { fontSize: 11, fontVariant: ['tabular-nums'] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GUTTER },
-  tile: { width: '100%', height: '100%', borderRadius: 4, backgroundColor: '#f4f4f5' },
+  tile: { width: '100%', height: '100%', borderRadius: 4 },
 });

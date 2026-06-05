@@ -4,6 +4,7 @@ export const palette = {
   zinc50: '#fafafa',
   zinc100: '#f4f4f5',
   zinc200: '#e4e4e7',
+  zinc400: '#a1a1aa',
   zinc500: '#71717a',
   zinc700: '#3f3f46',
   zinc800: '#27272a',
@@ -35,8 +36,14 @@ export const darkColors: ColorTokens = {
   surface: palette.zinc900,
   surfaceAlt: palette.zinc800,
   text: palette.zinc50,
-  textMuted: palette.zinc500,
-  border: 'rgba(255,255,255,0.1)',
+  // 다크 보조 텍스트는 zinc400(#a1a1aa) — zinc500은 surface 위 3.08:1로 본문
+  // AA(4.5:1) 미달이라 zinc400(surfaceAlt 위 5.81:1)으로 올린다. 라이트는
+  // 흰 배경이라 zinc500 그대로 둠(lightColors). placeholderTextColor 14곳도
+  // 이 토큰을 쓰므로 함께 가독성이 회복된다.
+  textMuted: palette.zinc400,
+  // rgba 흰 0.1은 surface 위 1.33:1로 거의 안 보임 → 0.14로 살짝 높여 카드
+  // 외곽선·구분선이 보이게 한다.
+  border: 'rgba(255,255,255,0.14)',
   primary: palette.amber500,
   primaryHover: palette.amber600,
   primaryText: palette.zinc950,

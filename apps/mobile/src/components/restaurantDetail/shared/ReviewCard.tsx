@@ -62,7 +62,7 @@ const ReviewCardImpl = ({ review: r }: Props) => {
             >
               <Image
                 source={thumbUrl(u, 480)}
-                style={styles.image}
+                style={[styles.image, { backgroundColor: theme.colors.surfaceAlt }]}
                 recyclingKey={u}
                 contentFit="cover"
                 transition={200}
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   // contentContainerStyle 의 paddingHorizontal:16 으로 콘텐츠와 정렬.
   imageScroller: { marginHorizontal: -16 },
   imageRow: { gap: 4, paddingVertical: 4, paddingHorizontal: 16 },
-  image: { width: 180, height: 225, borderRadius: 6, backgroundColor: '#f4f4f5' },
+  image: { width: 180, height: 225, borderRadius: 6 },
   menuList: { gap: 4, marginTop: 4 },
   menuRow: { borderLeftWidth: 2, paddingLeft: 8, paddingVertical: 2 },
   menuName: { fontSize: 12, fontWeight: '600' },

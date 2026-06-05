@@ -104,7 +104,7 @@ export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
               >
                 <Image
                   source={m.imageUrls[0]}
-                  style={styles.thumb}
+                  style={[styles.thumb, { backgroundColor: theme.colors.surfaceAlt }]}
                   recyclingKey={m.imageUrls[0]}
                   contentFit="cover"
                 />
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   thumbWrap: { width: 56, height: 56 },
-  thumb: { width: 56, height: 56, borderRadius: 6, backgroundColor: '#f4f4f5' },
+  thumb: { width: 56, height: 56, borderRadius: 6 },
   countBadge: {
     position: 'absolute',
     right: 2,

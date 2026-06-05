@@ -1,5 +1,6 @@
 import { createNativeBottomTabNavigator } from '@bottom-tabs/react-navigation';
 import { withLayoutContext } from 'expo-router';
+import { useTheme } from '@repo/shared';
 import type { ParamListBase, TabNavigationState } from '@react-navigation/native';
 import type {
   NativeBottomTabNavigationEventMap,
@@ -28,8 +29,16 @@ const Tabs = withLayoutContext<
 >(Navigator);
 
 export default function TabsLayout() {
+  const theme = useTheme();
   return (
-    <Tabs>
+    // 활성/비활성 틴트만 명시 — barTintColor(solid 배경 강제)는 의도적으로 두지
+    // 않는다. 그래야 iOS 26 의 liquid glass + scroll-edge 효과가 유지되고, 바
+    // 배경색은 시스템이 OS 다크/라이트에 맞춰 자동 적용한다('system' 모드 기준).
+    // (라이트/다크 강제 시 바 배경은 OS 를 따르는 한계 — 실기기 검증 항목)
+    <Tabs
+      tabBarActiveTintColor={theme.colors.primary}
+      tabBarInactiveTintColor={theme.colors.textMuted}
+    >
       <Tabs.Screen
         name="home"
         options={{

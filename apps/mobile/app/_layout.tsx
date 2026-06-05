@@ -5,9 +5,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { QUERY_GC_TIME, QUERY_STALE_TIME, ThemeProvider } from '@repo/shared';
+import { QUERY_GC_TIME, QUERY_STALE_TIME, ThemeProvider, themes, useTheme } from '@repo/shared';
 import { bootstrapApi } from '../src/lib/api-setup';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
+import { useResolvedThemeMode } from '../src/hooks/useResolvedThemeMode';
 
 // 네이티브 스플래시를 수동으로 끌 때까지 유지 — JS 가 떠서 인앱 풀배경
 // 스플래시(AnimatedSplash)가 화면을 덮은 뒤에야 hideAsync() 로 넘긴다.
@@ -27,10 +28,38 @@ const queryClient = new QueryClient({
   },
 });
 
+// ThemeProvider 안쪽에서 useTheme 로 네이티브 Stack 헤더/scene 배경을 테마화한다.
+// (헤더가 있는 화면들은 headerStyle/headerTintColor 를 따로 안 줘서 여기 한 번에
+//  cascade 시킨다 — 각 화면은 headerShown/title 만 override.)
+function RootNavigator() {
+  const theme = useTheme();
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        // headerBackButtonDisplayMode='minimal' — iOS 백 버튼에서 이전 화면
+        // title 라벨을 끄고 chevron(<)만 노출.
+        headerBackButtonDisplayMode: 'minimal',
+        headerStyle: { backgroundColor: theme.colors.bg },
+        headerTintColor: theme.colors.text,
+        headerTitleStyle: { color: theme.colors.text },
+        headerShadowVisible: false,
+        // scene 배경 — 화면 전환 시 흰 깜빡임 방지.
+        contentStyle: { backgroundColor: theme.colors.bg },
+      }}
+    >
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(auth)" />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [minElapsed, setMinElapsed] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  // 사용자 선택 + OS 스킴을 합친 실제 모드. 'system' 이면 OS 변경에 실시간 반응.
+  const mode = useResolvedThemeMode();
 
   useEffect(() => {
     void bootstrapApi().then(() => setReady(true));
@@ -48,29 +77,22 @@ export default function RootLayout() {
   const splashDone = ready && minElapsed;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayout}>
-      <ThemeProvider mode="light">
+    // 루트 배경도 모드 따라감 — Stack 마운트 전/전환 틈의 흰 깜빡임 방지.
+    // (GestureHandlerRootView 는 ThemeProvider 밖이라 useTheme 대신 토큰 직접 참조)
+    <GestureHandlerRootView
+      style={{ flex: 1, backgroundColor: themes[mode].colors.bg }}
+      onLayout={onLayout}
+    >
+      <ThemeProvider mode={mode}>
         <QueryClientProvider client={queryClient}>
           {/* BottomSheetModal portal 호스트 — 정산 입력 화면처럼 ScrollView 안에서
               호출되는 시트가 부모 tree 와 격리되도록 root 에 한 번만 둔다. */}
           <BottomSheetModalProvider>
-            {/* 앱은 라이트 테마 고정 — 상태바 아이콘도 항상 어둡게.
-                테마를 다크와 분기시키게 되면 style="auto" 로 바꿀 것. */}
-            <StatusBar style="dark" />
-            {/* headerBackButtonDisplayMode='minimal' — iOS 백 버튼에서 이전
-                화면 title 을 라벨로 표시하는 기본 동작을 끄고 chevron(<)만 노출.
-                (tabs) 같은 디렉터리명이 백 라벨로 새는 사고 회피 + 최신 Apple HIG. */}
-            {ready && (
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  headerBackButtonDisplayMode: 'minimal',
-                }}
-              >
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="(auth)" />
-              </Stack>
-            )}
+            {/* 상태바 아이콘 색 — 다크 배경엔 밝은 아이콘, 라이트 배경엔 어두운
+                아이콘. 'system' 강제-반대 케이스도 정확히 맞추려고 resolved mode
+                로 직접 분기(style="auto" 는 OS 만 보므로 강제 모드와 어긋남). */}
+            <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+            {ready && <RootNavigator />}
           </BottomSheetModalProvider>
         </QueryClientProvider>
       </ThemeProvider>
