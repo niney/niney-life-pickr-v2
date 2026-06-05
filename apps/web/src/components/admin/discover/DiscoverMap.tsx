@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, MapPin, RefreshCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ApiError, useMapPublicConfig } from '@repo/shared';
+import { ApiError, useMapPublicConfig, type UserLocationStatus } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { MyLocationButton } from '~/components/restaurant/MyLocationButton';
 import {
   MapCanvas,
   type MapCanvasHandle,
@@ -19,6 +20,13 @@ interface Props {
   // URL 의 bbox(이미 검색에 반영된 영역). 사용자가 패닝하여 다른 영역으로 가면
   // "이 지역 재검색" 버튼이 노출된다.
   appliedBbox: string | null;
+  // 외부에서 주입하는 중심 좌표(사용자 geolocation). 참조가 새로워질 때마다
+  // flyTo — "내 위치" 버튼의 수동 재요청을 처리한다. 어드민은 첫 진입 자동
+  // 도착이 없고(등록 마커 fit 우선), 버튼 클릭으로만 좌표가 들어온다.
+  focusCoord?: { lat: number; lng: number } | null;
+  // "내 위치" 버튼 표시/상태/콜백. null/undefined 면 버튼 자체 숨김.
+  locationStatus?: UserLocationStatus;
+  onRequestLocation?: () => void;
   onSelectMarker(placeId: string): void;
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
@@ -34,11 +42,19 @@ const formatBbox = (b: MapViewport['bbox']): string =>
   // 5자리 → vworld bbox 1m 정도 해상도면 충분.
   [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 
+// "내 위치" 도착 줌 — 동네/도로 수준. 등록 마커 전체 fit(시 단위로 축소)이나
+// 직전 패닝 줌과 무관하게, 클릭하면 항상 이 레벨로 확대해 주변 가게가 한눈에
+// 들어오게 한다(MapCanvas DEFAULT_ZOOM=15 보다 한 단계 더 가깝게).
+const MY_LOCATION_ZOOM = 16;
+
 export const DiscoverMap = ({
   markers,
   selectedPlaceId,
   hoveredPlaceId,
   appliedBbox,
+  focusCoord,
+  locationStatus,
+  onRequestLocation,
   onSelectMarker,
   onResearchInArea,
   onClearArea,
@@ -79,6 +95,17 @@ export const DiscoverMap = ({
     handleRef.current?.fitToMarkers(80);
     didInitialFitRef.current = true;
   }, [markers]);
+
+  // focusCoord 참조가 바뀌면 fly — "내 위치" 버튼 클릭 경로. 같은 좌표라도
+  // 호출자가 새 object 를 넘기면 다시 fly(idempotent). apiKey 가 늦게 와서
+  // 마운트가 늦어진 경우를 위해 apiKey 도 deps 에 포함. 검색 bbox 는 건드리지
+  // 않고 지도만 이동 — 이후 사용자가 검색하면 onViewportSync 가 잡은 현재
+  // 영역으로 자동으로 떨어진다(PublicRestaurantsMap 과 다른 어드민 워크플로).
+  // 이동만 하지 않고 동네 수준(MY_LOCATION_ZOOM)으로 함께 확대한다.
+  useEffect(() => {
+    if (!focusCoord || !apiKey) return;
+    handleRef.current?.flyTo(focusCoord.lat, focusCoord.lng, MY_LOCATION_ZOOM);
+  }, [focusCoord, apiKey]);
 
   const handleViewportChange = useCallback((viewport: MapViewport) => {
     setPendingViewport(viewport);
@@ -159,20 +186,36 @@ export const DiscoverMap = ({
         </div>
       )}
 
-      {appliedBbox && (
-        <div className={cn('absolute top-3', controlSideClass)}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              onClearArea();
-              setPendingViewport(null);
-            }}
-            className="gap-1 bg-background/95 shadow-sm"
-          >
-            전체 영역
-          </Button>
+      {/* 컨트롤 그룹 — 패널 반대편 모서리. "내 위치" 는 모서리에 고정해
+          "전체 영역" 토글 시 흔들리지 않게 한다(모서리가 좌측이면 내 위치를
+          먼저, 우측이면 나중에 배치). */}
+      {(appliedBbox || (onRequestLocation && locationStatus)) && (
+        <div
+          className={cn(
+            'absolute top-3 flex items-center gap-2',
+            controlSideClass,
+          )}
+        >
+          {onRequestLocation && locationStatus && panelSide === 'right' && (
+            <MyLocationButton status={locationStatus} onClick={onRequestLocation} />
+          )}
+          {appliedBbox && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                onClearArea();
+                setPendingViewport(null);
+              }}
+              className="gap-1 bg-background/95 shadow-sm"
+            >
+              전체 영역
+            </Button>
+          )}
+          {onRequestLocation && locationStatus && panelSide !== 'right' && (
+            <MyLocationButton status={locationStatus} onClick={onRequestLocation} />
+          )}
         </div>
       )}
     </div>

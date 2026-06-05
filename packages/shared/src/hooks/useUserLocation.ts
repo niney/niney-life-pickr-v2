@@ -21,6 +21,15 @@ export interface UserLocationState {
   refetch: () => void;
 }
 
+export interface UseUserLocationOptions {
+  // 마운트 시 자동 1회 요청 여부. 기본 true — 공개 맛집(주변 자동 검색)처럼
+  // 진입과 동시에 위치가 필요한 화면용. false 면 명시적 refetch("내 위치" 버튼)
+  // 전까지 'idle' 유지 — 어드민 발견처럼 페이지 진입만으로 권한 prompt 를
+  // 띄우고 싶지 않은 화면용. 외부 설정 변경에 반응하는 permission 'change'
+  // 구독은 auto 와 무관하게 유지(거부 callout → 설정 해제 시 자동 복구).
+  auto?: boolean;
+}
+
 // 브라우저 geolocation 한 번 시도. 컴포넌트 마운트 시 자동 1회 + refetch 호출
 // 시 추가. 권한 prompt 가 이미 'denied' 상태면 호출 자체를 스킵 (재요청해도
 // 어차피 즉시 거부 + 사용자 짜증).
@@ -28,7 +37,10 @@ export interface UserLocationState {
 // enableHighAccuracy: false — GPS 안 깨움, IP/WiFi 기반 정도면 동/구 단위
 // 정확도로 충분 (주변 1.5km 검색 용도). 모바일 배터리/대기시간 절약.
 // timeout: 5s — 응답이 늦으면 UX 마비되니 일찍 포기하고 폴백.
-export const useUserLocation = (): UserLocationState => {
+export const useUserLocation = (
+  options: UseUserLocationOptions = {},
+): UserLocationState => {
+  const { auto = true } = options;
   const [state, setState] = useState<{
     status: UserLocationStatus;
     coords: { lat: number; lng: number } | null;
@@ -99,12 +111,13 @@ export const useUserLocation = (): UserLocationState => {
   }, []);
 
   useEffect(() => {
-    run();
+    // auto=false 면 마운트 자동 요청을 건너뛴다('idle' 유지) — refetch 로만 시작.
+    if (auto) run();
     return () => {
       // unmount — 진행 중 콜백 무효화.
       attemptRef.current++;
     };
-  }, [run]);
+  }, [run, auto]);
 
   // 권한 상태가 외부(브라우저 사이트 설정)에서 바뀌면 자동 반영. 한 번 'denied'
   // 가 되면 사이트가 다시 prompt 를 띄울 방법은 없고(브라우저 보안 정책), 사용자

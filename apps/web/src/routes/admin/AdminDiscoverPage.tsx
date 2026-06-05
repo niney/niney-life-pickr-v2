@@ -9,6 +9,7 @@ import {
   useRestaurantListSummaryEventsByPlaceIds,
   useRestaurantsPublic,
   useStartCrawl,
+  useUserLocation,
 } from '@repo/shared';
 import {
   DiscoverPanel,
@@ -172,6 +173,14 @@ export const AdminDiscoverPage = () => {
   const handleViewportSync = useCallback((nextBbox: string) => {
     viewportBboxRef.current = nextBbox;
   }, []);
+
+  // "내 위치" — 어드민은 진입 자동 요청 없이(auto:false) 버튼 클릭으로만 권한
+  // prompt. 클릭 시 지도를 사용자 위치로 이동만 하고 검색 bbox 는 건드리지
+  // 않는다(이후 검색 시 onViewportSync 가 잡은 현재 영역으로 자동 첨부됨).
+  const userLoc = useUserLocation({ auto: false });
+  const handleRequestLocation = useCallback(() => userLoc.refetch(), [userLoc]);
+  // granted 일 때만 좌표 주입 — 참조가 새로워질 때마다 DiscoverMap 이 flyTo.
+  const focusCoord = userLoc.status === 'granted' ? userLoc.coords : null;
   const handleChangeTab = useCallback(
     (next: DiscoverTab) =>
       setParam('tab', next === 'search' ? null : next),
@@ -308,6 +317,9 @@ export const AdminDiscoverPage = () => {
             selectedPlaceId={placeId}
             hoveredPlaceId={hoveredPlaceId}
             appliedBbox={bbox}
+            focusCoord={focusCoord}
+            locationStatus={userLoc.status}
+            onRequestLocation={handleRequestLocation}
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}
             onClearArea={handleClearArea}
