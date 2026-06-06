@@ -47,6 +47,8 @@ export const ReviewsTab = ({
   // 어드민이면 각 리뷰 카드에 "재요약" 버튼을 노출 — 모델을 골라 그 리뷰만
   // 1회성으로 다시 요약한다. (관리자 전용 — 일반/게스트에겐 안 보임)
   const isAdmin = useAuthStore((s) => s.user?.role === 'ADMIN');
+  // 완료 토스트/캐시 갱신은 App 의 전역 watcher 가 처리(탭/페이지 이동에도
+  // 동작). 여기선 트리거와 버튼 잠금(pending)만.
   const { resummarize, pending } = useResummarizeReview(isAdmin ? placeId : null);
   // 모델 선택 팝업을 띄울 대상 reviewId. null 이면 닫힘.
   const [pickerReviewId, setPickerReviewId] = useState<string | null>(null);
@@ -198,7 +200,14 @@ export const ReviewsTab = ({
           open={pickerReviewId !== null}
           onClose={() => setPickerReviewId(null)}
           onSelect={(model) => {
-            if (pickerReviewId) resummarize(pickerReviewId, model);
+            if (!pickerReviewId) return;
+            // 재분류 전 sentiment 를 같이 넘김 → 완료 토스트의 "부정→긍정" 델타용.
+            const target = flat.find((r) => r.id === pickerReviewId);
+            resummarize(
+              pickerReviewId,
+              model,
+              target?.analysis?.sentiment ?? null,
+            );
           }}
         />
       )}

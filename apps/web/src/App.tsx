@@ -1,7 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { Toaster } from 'sonner';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
+import { useThemeStore } from './stores/theme';
+import { ResummarizeToaster } from './components/ResummarizeToaster';
 import { PublicLayout } from './components/PublicLayout';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
@@ -77,10 +80,25 @@ export const App = () => {
   // Hydrate user (incl. role) on mount when only token was restored from
   // localStorage — keeps HomePage's admin-link gate honest after reload.
   useCurrentUser();
+  // 앱 테마(.dark 클래스 토글과 동일 소스)를 토스트에도 전달 — sonner 가
+  // 다크/라이트 배경·텍스트를 맞춘다.
+  const themeMode = useThemeStore((s) => s.mode);
 
   return (
-    <Suspense fallback={<PageFallback />}>
-      <Routes>
+    <>
+      {/* 전역 토스트 — 단건 재요약 결과 등 일시적 피드백. richColors 로
+          성공/에러 색 구분, 화면 하단 중앙. theme 로 다크/라이트 동기화. */}
+      <Toaster
+        position="bottom-center"
+        richColors
+        closeButton
+        theme={themeMode}
+      />
+      {/* 진행 중 단건 재요약을 전역에서 지켜보다 완료 시 토스트 — 탭/페이지를
+          떠나도 동작하도록 App 레벨에 상주. */}
+      <ResummarizeToaster />
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/restaurants" element={<RestaurantsPage />}>
@@ -154,6 +172,7 @@ export const App = () => {
           }
         />
       </Routes>
-    </Suspense>
+      </Suspense>
+    </>
   );
 };
