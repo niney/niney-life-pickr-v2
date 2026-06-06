@@ -1,12 +1,14 @@
 ---
 topic: project-overview
-last_compiled: 2026-06-01
-sources_count: 35
+last_compiled: 2026-06-06
+sources_count: 41
 status: active
-aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, settlement, 정산, settlement-domain, share-token, public-share-read, ai-purpose, vision-llm, receipt-extraction, contacts-page, settlement-stepper, edited-badge, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source, auto-dc-merge, sse-heartbeat, stale-summary-cleanup, crawl-job-log, summary-queued-cancelled, summary-resume, app-level-singleton-plugin, mobile-native-tabs, dev-client, webview-vworld, location-first-entry, public-reviews-pagination, naver-stealth, db-path-unified, mobile-production-build, settlement-rounds, settlement-draft-auto-save, universal-links-iOS, app-links-android, well-known-AASA, well-known-assetlinks, RFC1918-dev-cors, dev-cors-reflect-all, cors-preflight-fix, expo-web-lan-ip, multi-receipt-split, roundUnit-100-1000, refinement-leftover, ai-models-preview, settlement-PUT-full-replace, items-mutable-after-save, tailwind-v4-dark-fix, deep-link-fallback, share-settlements-deep, settlement-mobile-implementation, attendees-100, items-200, EXTRACTION_VERSION, headerBackTitle-fix, sticky-breakdown-z-30, tab-bar-inset, useTabBarHeight, awesome-gallery, lightbox-portal, home-ranking-link, public-reviews-sort-fix, share-og-ssr, og-image-png, settlement-card-png, share-preview, eslint-infra, turbo-lint, deploy-sh, ninelife-kr, nginx-caret-tilde, cloudflare-purge, vite-codesplitting, route-lazy, react-memo-hotpath, ibmplexsanskr]
+aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, settlement, 정산, settlement-domain, share-token, public-share-read, ai-purpose, vision-llm, receipt-extraction, contacts-page, settlement-stepper, edited-badge, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source, auto-dc-merge, sse-heartbeat, stale-summary-cleanup, crawl-job-log, summary-queued-cancelled, summary-resume, app-level-singleton-plugin, mobile-native-tabs, dev-client, webview-vworld, location-first-entry, public-reviews-pagination, naver-stealth, db-path-unified, mobile-production-build, settlement-rounds, settlement-draft-auto-save, universal-links-iOS, app-links-android, well-known-AASA, well-known-assetlinks, RFC1918-dev-cors, dev-cors-reflect-all, cors-preflight-fix, expo-web-lan-ip, multi-receipt-split, roundUnit-100-1000, refinement-leftover, ai-models-preview, settlement-PUT-full-replace, items-mutable-after-save, tailwind-v4-dark-fix, deep-link-fallback, share-settlements-deep, settlement-mobile-implementation, attendees-100, items-200, EXTRACTION_VERSION, headerBackTitle-fix, sticky-breakdown-z-30, tab-bar-inset, useTabBarHeight, awesome-gallery, lightbox-portal, home-ranking-link, public-reviews-sort-fix, share-og-ssr, og-image-png, settlement-card-png, share-preview, eslint-infra, turbo-lint, deploy-sh, ninelife-kr, nginx-caret-tilde, cloudflare-purge, vite-codesplitting, route-lazy, react-memo-hotpath, ibmplexsanskr, schedule, schedule-config, schedule-run, croner, normalize-merge-cron, in-process-scheduler, taxonomy-v3, ingredient-menu-group, GLOBAL_MERGE_VERSION-3, dark-mode, theme-mode, lp-themeMode, vworld-midnight, satellite-layer, android-custom-tabbar, splash-logo-fix, expo-prebuild-cleanup, soft-tonal, menu-thumbnail-lightbox, card-click-map, double-click-zoom, category-tree-shared, categoryPath-recovery, ollama-grammar-array]
 ---
 
 # project-overview — 모노레포 개요
+
+**2026-06-06 변경 흡수 — schedule 도메인 신규(croner in-process 주기 자동 실행) + 카테고리 택소노미 v3(재료·메뉴군 축) + 다크 모드(웹/앱) + 앱 안드로이드 정비.** 신규 토픽 [schedule](schedule.md) 1개 추가, 나머지는 기존 토픽으로 흡수. (1) **schedule 도메인** — "미분류 식당 메뉴 정규화 → 전역 머지(증분)" 파이프라인을 어드민이 설정한 cron 주기마다 자동 실행한다. `croner` **in-process** 스케줄러(단일 Fastify + no-Redis 전제와 일관 — 외부 잡 큐 없음). `plugins/schedule.ts` 가 `ScheduleService` 를 app 전역 singleton 으로 decorate 하고, cron 타이머 + 동시 1개 inflight(overlap 방지)는 `scheduleRegistry`(모듈 singleton)가 관리. 설정은 SQLite `schedule_configs` 에 영속돼 부팅 시 복원 + cron 등록, 부팅 직후 직전 인스턴스에서 `running` 으로 남은 run 을 `interrupted` 로 정리(`schedule.bootstrap()`). 크롤 진행 중 식당은 제외(`crawl.isPlaceCrawling`), SIGTERM 시 inflight abort + graceful close. 어드민 UI 는 별도 페이지 없이 `AdminAnalyticsPage` 에 "자동 실행 스케줄" 섹션(프리셋·cron 미리보기·실행 이력)으로 통합. 신규 테이블 `schedule_configs`/`schedule_runs`, `croner` 의존 추가. 자세한 건 [schedule](schedule.md). (2) **카테고리 택소노미 v3** — 전역 메뉴 머지 최상위 축을 음식 종류(한식/일식/양식) → **재료·메뉴군**(고기/면/김치/반찬/찌개·전골/회·초밥/튀김…)으로 전환. `GLOBAL_MERGE_VERSION` 2→3 → 기존 행 stale, 새 택소노미 채우려면 **full 재머지**(어드민 '전체 재실행' 또는 `run-merge --full`) 필요. 복합어는 가운뎃점(`/`는 path 구분자라 금지). LLM 출력 스키마를 맵→**배열**로(Ollama grammar fix) + 청크 50→10. 카테고리 트리 `buildCategoryTree` 가 공용(전역 어드민 + 식당별 공개 분석 탭 동일). 자세한 건 [analytics](analytics.md). (3) **다크 모드** — 웹/앱 둘 다 system/light/dark 3-way. **저장소는 플랫폼 분리** — 웹 localStorage / 앱 AsyncStorage `'lp:themeMode'`(수동 hydrate + `useResolvedThemeMode` 가 `useColorScheme` 결합), `@repo/shared` 의 design 토큰만 공유(다크 textMuted zinc400/border 0.14 AA). vworld 지도 다크(midnight 타일)/위성 레이어 토글이 좌하단 컨트롤로 캡슐화 + 앱 다크 진입 시 기본 midnight 자동 전환(직접 고르면 이후 비추종), `tileSource.setUrl()` 로 map 재생성 없이 전환. (4) **앱 안드로이드** — 표준 스타일 커스텀 하단 탭바, `splashscreen_logo` 누락 빌드 fix, 바텀시트 내 가로 스와이프 fix, iOS/Android 실기기·릴리즈 실행 스크립트, 루트 `expo run:ios` 오염(ios/·app.json) 정리 + 루트 `.gitignore` 에 `/ios /android /app.json` 추가로 재발 차단. (5) **UI 정비** — soft tonal 버튼/배지 variant 도입(어드민/상세/병합 일괄), 분석 탭 메뉴/팁 클릭→해당 리뷰 필터, 메뉴 썸네일 탭→라이트박스 확대, 목록 카드 클릭=지도 이동/더블클릭=확대(공개+어드민 통일), 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹/앱 통일). (6) 전역 머지 categoryPath 유실 복구 fix. 자세한 건 [analytics](analytics.md)·[web](web.md)·[mobile](mobile.md)·[map](map.md).
 
 **2026-06-01 변경 흡수 — 전방위 perf 라운드 + ESLint 인프라 전면 연결 + 운영 도메인 교체(ninelife.kr) + 정산 공유 OG SSR-lite 대확장.** 신규 토픽·컨셉 없음 — 모두 기존 토픽으로 흡수. (1) **ESLint 인프라 전면 연결** — `packages/config/eslint/base.js`(js.recommended + typescript-eslint recommended + `consistent-type-imports`/`no-console`/`no-undef:off`)를 web/friendly/api-contract/mobile **4개 워크스페이스가 모두 확장**한다. api-contract 는 `base` 직결, friendly 는 `@repo/config/eslint/node`, web/mobile 은 `@repo/config/eslint/react`(react-hooks v7 recommended — **React Compiler 진단 룰** 포함) 경유. turbo `lint` 4/4 green. 앱·웹은 기존 위반 때문에 Compiler 룰을 일단 `warn` 으로 도입(set-state-in-effect/render·immutability·rules-of-hooks 등). (2) **운영 도메인 교체** — `nlpp.easypcb.co.kr` → **`ninelife.kr`** (`docs/deploy-friendly.md`·`apps/friendly/.env.example`·`deploy.sh`). `deploy.sh` 신규 — 케이스 번호(1~5)로 골라 배포하는 운영 스크립트(API만 / API+DB / 웹만 / 풀 / .env만 + 파괴적 마이그레이션 시 서버 중단 여부 prompt). 운영 토폴로지는 Cloudflare → nginx → Fastify(pm2 fork 단일 인스턴스). (3) **정산 공유 OG SSR-lite** — 공개 비인증 HTML 라우트(`share-preview.ts`)가 빌드된 `index.html` `<head>` 에 OG 메타(식당명·총액·인원수)를 서버 주입하고, `og:image` 는 `/share/settlements/<token>/image.png` 로 정산표 PNG(`settlement-card.ts`, satori+resvg + 레포 동봉 `IBMPlexSansKR` 폰트)를 즉석 렌더 — SNS 언펌(카카오/슬랙/텔레그램, JS 미실행 크롤러) 대응. nginx 는 이 경로에 **`^~` 필수**(`.png` 정규식 location 에 가로채이지 않도록 prefix 우선권) + Cloudflare 엣지 캐시라 수정 후 **Purge** 필요. (4) **전방위 perf 라운드** — 웹 라우트 코드 스플리팅(lazy) + `vite.config.ts` Rolldown `codeSplitting.groups`(ol/react-vendor/query/radix vendor 청크 고정), interaction 핫패스 `React.memo`, 크롤 배치 `setQueryData` 머지(상세 GET 제거), 앱 정적에셋 PNG 압축 + 썸네일 프록시(~98%) + FlatList 가상화, 정산 draft hydrate placeId당 1회, friendly 식당 이름 경량 조회·OG 미리보기 경량 select+5분 캐시·attendee `createMany`. (5) **stale 교정** — README 의 "Expo 52 / RN 0.76" → **Expo SDK 54 / RN 0.81**(TECH_STACK.md 는 작성 시점 명세라 보존, 본 문서는 실제 버전 반영). 자세한 건 [friendly](friendly.md)·[settlement](settlement.md)·[web](web.md)·[config](config.md)·[mobile](mobile.md).
 
@@ -39,7 +41,7 @@ aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, settlement, 
 
 공개 영역은 비로그인 호출 가능 — 데이터 자체는 어드민이 본 것과 차이가 없고 (운영 메타만 제거), 사용자 정책상 그대로 노출한다. 공유 정산 토큰 경로(`/share/settlements/:token`) 도 비인증으로 열려 있으나 추측 불가능한 32바이트 base64url 토큰 보호. 같은 URL 을 앱이 설치된 단말에선 Universal/App Links 가 가로채 앱이 직접 열고, 미설치 단말은 웹 SPA 가 fallback. 그리고 같은 경로를 JS 미실행 크롤러(카카오/슬랙)가 긁으면 friendly 가 OG 메타 + 정산표 PNG 를 SSR-lite 로 내려준다.
 
-## Architecture [coverage: high — 12 sources]
+## Architecture [coverage: high — 14 sources]
 
 pnpm workspaces + Turborepo 기반 모노레포.
 
@@ -52,11 +54,16 @@ niney-life-pickr-v2/
 │   │   │   ├── dev.db           SQLite (DATABASE_URL=file:../data/dev.db; 운영은 prod.db)
 │   │   │   ├── receipts/        영수증 이미지 디스크 저장 (멀티 분할 시에도 한 token 재사용)
 │   │   │   └── thumbs/          네이버 CDN 썸네일 캐시
-│   │   ├── eslint.config.mjs    @repo/config/eslint/node 확장 (신규)
+│   │   ├── eslint.config.mjs    @repo/config/eslint/node 확장
 │   │   └── src/
 │   │       ├── plugins/cors.ts                        dev 전면 origin 반사 허용 (비-LAN 만 warn)
+│   │       ├── plugins/schedule.ts                    ScheduleService app 전역 singleton decorate (신규)
 │   │       ├── config/env.ts                          APP_TEAM_ID / APP_BUNDLE_ID / ANDROID_* / WEB_INDEX_PATH / OG_IMAGE_PATH
 │   │       └── modules/
+│   │           ├── schedule/                cron 주기 정규화→글로벌 머지 (croner in-process, 신규)
+│   │           │   ├── schedule-registry.ts          cron 타이머 + inflight(동시 1개) 모듈 singleton
+│   │           │   ├── schedule.service.ts           bootstrap(stale running→interrupted) + run
+│   │           │   └── schedule.route.ts             설정 CRUD / 수동 실행 / 이력
 │   │           ├── settlement-extraction/  영수증 업로드 + vision LLM 추출 + 멀티 영수증 분할(N슬라이스)
 │   │           ├── settlement/             N차 세션 CRUD + 분배 계산 + 공유 토큰 + draft 자동저장
 │   │           │   ├── settlement.service.ts
@@ -143,12 +150,13 @@ Catchtable  ──┘
 | `settlement` | N차 세션 CRUD + 분배 계산(`calculateMultiRoundShares`) + 공유 토큰 + draft 자동저장 + **공유 OG SSR-lite**(`share-preview.ts`) + **정산표 PNG**(`settlement-card.ts`). `PUT /:id` 풀 리플레이스 | [settlement](settlement.md) |
 | `contact` | 단골 참여자 자동 적립 + `/me/contacts` | [settlement](settlement.md) |
 | `well-known` | `/.well-known/apple-app-site-association` + `/.well-known/assetlinks.json` 동적 응답 (env 기반, 미설정 시 404) | — |
+| `schedule` | cron 주기 자동 실행 (정규화→글로벌 머지 증분). croner in-process, plugin 전역 singleton + registry(cron 타이머 + 동시 1개 inflight), 부팅 stale 정리 + cron 등록 | [schedule](schedule.md) |
 | `summary` | 리뷰 단위 분석 v4 (메뉴 멘션 + 태그) | [ai](ai.md) |
 | `restaurant` | 어드민 식당 CRUD + 공개 list/detail/insights/ranking (식당명 경량 조회 추가) | — |
 | `canonical` | 출처 가로지르는 같은 가게 묶기 + 머지 제안 큐 | [canonical](canonical.md) |
 | `media` | 리뷰 사진/동영상 + 썸네일 프록시 | [media](media.md) |
 | `menu-grouping` | 식당별 메뉴 정규화 (synonym → canonical) | [menu-grouping](menu-grouping.md) |
-| `analytics` | 전역 메뉴 머지 + 카테고리 path + 통계 트리 | [analytics](analytics.md) |
+| `analytics` | 전역 메뉴 머지 + 카테고리 path + 통계 트리. 택소노미 v3(재료·메뉴군 축, `GLOBAL_MERGE_VERSION` 3), LLM 출력 배열 스키마(Ollama grammar) + 청크 10, `buildCategoryTree` 공용 | [analytics](analytics.md) |
 | `settings` | 외부 SDK 키 — 현재 `map.route.ts`만 (vworld) | — |
 | `admin` / `health` | 어드민 메타 / 헬스체크 | — |
 
@@ -186,6 +194,26 @@ og:image PNG (settlement-card.ts):
 ```
 
 nginx 운영 주의: 이 경로엔 **`location ^~ /share/settlements/`·`^~ /s/` 필수**. `.png` 로 끝나는 og:image 요청이 정적 캐싱용 `location ~* \.(png|...)$` 정규식 location 에 가로채여 web/dist 에서 파일 못 찾고 404 나는 걸 막는다("dev OK / prod 404" 전형). `^~` = prefix 최장 매칭이면 정규식 검사 skip. 또 Cloudflare 가 `.png` 를 엣지 캐시하므로 잘못된 404 가 한 번 캐시되면 nginx 고쳐도 **Purge** 전까진 404 보임. 성공 응답은 origin `cache-control: public, max-age=300` 따라 5분 엣지 캐시. `index.html` 은 프로세스 메모리 1회 캐시 → 재배포 후 `pm2 reload friendly` 필수.
+
+### 주기 자동 실행(schedule) 흐름 (신규)
+
+```
+어드민 AdminAnalyticsPage "자동 실행 스케줄" 섹션
+   ▼ cron 식 + timezone(기본 Asia/Seoul) + enabled → PUT 설정 (schedule_configs upsert, jobType='normalize-merge')
+   ▼
+plugins/schedule.ts — ScheduleService 를 app 전역 singleton 으로 decorate
+   ▼ (자체 AiConfigService 생성 — autoload 알파벳순 'schedule' < 'summaries' 라 app.aiConfig 재사용 불가)
+scheduleRegistry (모듈 singleton) — croner Cron 타이머 + inflight AbortController(동시 1개)
+   ▼ 부팅: server.ts → app.schedule.bootstrap()
+   ▼   직전 인스턴스에서 running 으로 남은 schedule_runs → interrupted 로 정리 + enabled 설정 cron 등록
+   ▼ cron tick:
+   ▼   이전 실행 미완료면 이번 tick skip(schedule_runs status='skipped' 행 남김 — overlap 방지)
+   ▼   대상 수집 → 크롤 진행 중 식당 제외(crawl.isPlaceCrawling) → 정규화(grouping) → 글로벌 머지(증분)
+   ▼   schedule_runs: running → done/failed, schedule_configs.lastRunAt/lastStatus 비정규화 갱신
+   ▼ SIGTERM: scheduleRegistry.stopAllCrons() + abortInflight() + forceCloseConnections (graceful)
+```
+
+nextRunAt 은 저장 안 함 — croner 로 매번 계산(저장하면 stale). 단일 Fastify + no-Redis 전제와 일관 — 외부 잡 큐 없이 in-process. 자세한 건 [schedule](schedule.md).
 
 ### 정산 도메인 흐름 (N차 모델)
 
@@ -229,6 +257,8 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint — esl
 - 웹 → friendly (`VITE_API_URL`, dev에선 Vite proxy `/api` → `:3000` + `/share/settlements` → `:3000`(OG/정산표 PNG); `server.host: true` 로 LAN/모바일 단말에서도 dev 서버 접근)
 - 앱 → friendly (`EXPO_PUBLIC_API_URL`, 빌드 시점 주입. Expo Web 은 `window.location.host` 가 LAN IP 면 friendly base URL 도 같은 LAN IP 로 자동 매칭. 운영 빌드는 `.env.production` 자동 로드)
 - friendly → SQLite 파일 (`apps/friendly/data/dev.db`, 운영 `prod.db`)
+- friendly 내부 — `croner` in-process cron 타이머가 주기마다 menu-grouping → analytics(글로벌 머지) 서비스 호출 (외부 잡 큐 없음 — no-Redis 전제 일관)
+- 앱/웹 → `useColorScheme`(OS) — 테마 모드 system 일 때 결합. 저장은 플랫폼별 localStorage / AsyncStorage `'lp:themeMode'`, design 토큰만 shared
 - friendly → 디스크 (`apps/friendly/data/receipts/<token>.jpg` — 영수증 이미지. 멀티 분할은 같은 token 재사용 + sharp crop)
 - friendly → 디스크 (`apps/friendly/assets/fonts/IBMPlexSansKR-*.ttf` — 정산표 PNG 한글 렌더 + `apps/web/dist/index.html` 읽어 OG 메타 주입)
 - friendly → 네이버 / DC / 캐치테이블 (Playwright + 어댑터, naver stealth + jitter)
@@ -309,7 +339,8 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint — esl
     ├── crawl/* .................... 크롤 잡 + SSE + 배치 setQueryData 머지
     ├── auto-discover/* ............ AI 키워드 → 다중 검색 → 그룹 5병렬
     ├── ai/* ....................... LLM 호출 + provider 키 (purpose=chat/image) + models/preview
-    ├── analytics/* ................ 그룹핑 잡 + 글로벌 머지 + 카테고리 트리
+    ├── analytics/* ................ 그룹핑 잡 + 글로벌 머지(택소노미 v3) + 카테고리 트리
+    ├── schedule/* ................. 주기 자동 실행 설정 CRUD / 수동 실행 / 이력 (정규화→머지)
     ├── canonical/* ................ 머지 제안 큐 / 수락·거절
     ├── settings/map ............... 지도 SDK 키 (admin)
     └── restaurants/* .............. 어드민 식당 CRUD + 인사이트 + smart-pick + summary SSE
@@ -382,12 +413,14 @@ packages/api-contract (Zod schema)
 | 웹 sessionStorage | `lp:settlement-draft` | wizard 진행 중 draft (브라우저 탭 scope) |
 | 앱 AsyncStorage | `lp:settlementPrefs` | 같은 exclude default |
 | 앱 AsyncStorage | `lp:settlement-draft` | wizard 진행 중 draft (앱 재시작 영속) |
+| 웹 localStorage | (테마) | 화면 모드 system/light/dark (웹 자체 스토어) |
+| 앱 AsyncStorage | `lp:themeMode` | 화면 모드 system/light/dark (수동 hydrate, design 토큰만 shared 공유) |
 | 서버 DB | `SettlementDraft` | 다기기 canonical draft (5s debounce upsert, hydrate placeId당 1회) |
 | friendly 프로세스 메모리 | (OG index 캐시) | 빌드된 `index.html` 1회 캐시 + OG 미리보기 경량 select 5분 캐시 — pm2 reload 로 비워짐 |
 
 `settlementDraftStore` (zustand) 는 storage 어댑터를 **외부 주입** — 부팅 직후 `setSettlementDraftStorage(...)` 가 호출되어야 store 의 첫 read/write 가 안전. 웹은 entry 에서 sessionStorage 어댑터, 앱은 `apps/mobile/src/lib/api-setup.ts` 에서 AsyncStorage 어댑터 주입.
 
-### 도메인 테이블 그룹 (전 23개)
+### 도메인 테이블 그룹 (전 25개)
 
 | 그룹 | 테이블 (자세한 모델은 friendly/canonical/analytics/settlement 토픽) |
 |---|---|
@@ -400,6 +433,7 @@ packages/api-contract (Zod schema)
 | 전역 머지 + 통계 (2) | `GlobalMenuCanonical`, `GlobalMenuCanonicalLink` |
 | 정산 (6) | `SettlementSession`, `SettlementParticipant`, `SettlementItem`(→Round), `SettlementRound`, `SettlementRoundAttendee`, `SettlementContact` |
 | 정산 보조 (2) | `SettlementCategoryAdjustment` (round × category — leftoverParticipantId + roundUnit nullable), `SettlementDraft` ((userId, placeIdKey) unique — '' sentinel for null placeId) |
+| 스케줄 (2) | `ScheduleConfig` (`jobType @unique`, cronExpr/timezone/enabled + lastRunAt/lastStatus 비정규화 — nextRunAt 미저장), `ScheduleRun` (`@@index([jobType, startedAt])`, status running/done/failed/skipped/interrupted, trigger cron|manual) |
 
 `SettlementSession.shareToken @unique` 가 공유 OG/정산표 PNG 라우트의 진입 키 — 토큰으로 세션을 찾아 satori 매트릭스를 렌더한다.
 
@@ -411,14 +445,19 @@ packages/api-contract (Zod schema)
 크롤 → 1) 리뷰 단위 분석 (summary v4) → 2) 식당별 메뉴 그룹핑 → 3) 전역 머지 + 카테고리 path → 통계 트리
 ```
 
-각 단계는 `*_VERSION` 상수(`ANALYSIS_VERSION`, `MENU_GROUPING_VERSION`, `GLOBAL_MERGE_VERSION`, `EXTRACTION_VERSION`)를 들고 있어 자동 stale 식별 가능.
+각 단계는 `*_VERSION` 상수(`ANALYSIS_VERSION`, `MENU_GROUPING_VERSION`, `GLOBAL_MERGE_VERSION`, `EXTRACTION_VERSION`)를 들고 있어 자동 stale 식별 가능. 이번 라운드 `GLOBAL_MERGE_VERSION` 2→**3**(택소노미 재료·메뉴군 전환) — 기존 머지 행 일괄 stale, full 재머지 필요. schedule 도메인의 cron 자동 실행이 바로 이 정규화→글로벌 머지 파이프라인을 주기로 돌린다.
 
-## Key Decisions [coverage: high — 17 sources]
+## Key Decisions [coverage: high — 18 sources]
 
-CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
+CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정. (reverse-chronological — 최신 먼저)
 
 | 결정 | 이유 |
 |---|---|
+| **schedule 도메인 신규 — croner in-process 주기 자동 실행 (17차 2026-06)** | "정규화→글로벌 머지(증분)" 를 어드민 cron 주기로 자동화. `croner` **in-process**(단일 Fastify + no-Redis 전제와 일관 — 외부 잡 큐 안 둠). `plugins/schedule.ts` 가 `ScheduleService` 전역 singleton + `scheduleRegistry`(cron 타이머 + 동시 1개 inflight, overlap 시 skip). 부팅 시 stale `running`→`interrupted` 정리 + 설정 cron 등록, SIGTERM 시 abort + graceful close. 어드민 UI 는 `AdminAnalyticsPage` 에 섹션 통합. 신규 테이블 `schedule_configs`/`schedule_runs`, croner 의존 추가. nextRunAt 은 croner 로 매번 계산(미저장) |
+| **카테고리 택소노미 v3 — 재료·메뉴군 축 전환 (17차 2026-06)** | 전역 머지 최상위를 음식 종류(한식/일식/양식)→재료·메뉴군(고기/면/김치/반찬/찌개·전골/회·초밥/튀김…)으로. `GLOBAL_MERGE_VERSION` 2→3 → 기존 행 stale, full 재머지 필요. 복합어는 가운뎃점(`/`는 path 구분자라 금지). LLM 출력 맵→**배열** 스키마(Ollama grammar fix) + 청크 50→10. `buildCategoryTree` 공용(전역 어드민 + 식당별 공개 분석 탭) |
+| **다크 모드 — 저장소 플랫폼 분리 / design 토큰 공유 (17차 2026-06)** | 웹/앱 둘 다 system/light/dark 3-way. 웹 localStorage / 앱 AsyncStorage `'lp:themeMode'`(수동 hydrate + `useResolvedThemeMode`=useColorScheme 결합) — shared 가 RN/web storage 직접 import 안 하도록 저장소는 플랫폼별, `@repo/shared` design 토큰만 공유. vworld 다크(midnight)/위성 레이어 토글 + 앱 테마 연동(`tileSource.setUrl()` 로 map 재생성 없이 전환) |
+| **앱 안드로이드 커스텀 탭바 + 빌드 스크립트 (17차 2026-06)** | 표준 스타일 커스텀 하단 탭바, `splashscreen_logo` 누락 빌드 fix, 바텀시트 가로 스와이프 fix. iOS/Android 실기기·릴리즈 실행 스크립트. 루트 `expo run:ios` 오염(ios/·app.json) 정리 + 루트 `.gitignore` 에 `/ios /android /app.json` 추가로 재발 차단(정상 네이티브 빌드는 `apps/mobile`) |
+| **soft tonal variant + 카드 클릭/더블클릭 지도 통일 (17차 2026-06)** | 버튼/배지 soft tonal 색 variant 도입(어드민/상세/병합 일괄). 분석 탭 메뉴/팁 클릭→해당 리뷰 필터, 메뉴 썸네일 탭→라이트박스. 목록 카드 클릭=지도 이동/더블클릭=확대(공개+어드민 통일), 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹/앱 통일) |
 | **ESLint 인프라 — base ← node/react 확장 체인 (신규)** | 4 워크스페이스가 `@repo/config/eslint/*` 를 확장해 turbo lint 4/4 green. base 는 TS 규칙(`consistent-type-imports` error, `no-undef` off — tsc 가 미정의 식별자 처리). web/mobile 은 react-hooks v7 = React Compiler 진단 룰로 메모이즈 가능 여부까지 정적 검사. 기존 위반은 일단 `warn`(가시성·회귀 방지), 정리되는 대로 error 승격 |
 | **운영 도메인 `ninelife.kr` + `deploy.sh` 케이스 선택 (신규)** | 옛 `nlpp.easypcb.co.kr` 폐기. `deploy.sh [1-5]` 가 변경 범위(API/DB/웹)에 맞춰 최소 작업만 — 추가형 마이그레이션은 무중단 `pm2 reload`, 파괴적이면 stop→migrate→start 선택. 운영 토폴로지 Cloudflare→nginx→Fastify(pm2 fork 단일 인스턴스, SQLite 락 회피) |
 | **정산 공유 OG SSR-lite — index.html `<head>` 주입 + 정산표 PNG (신규)** | 웹은 순수 SPA 라 JS 미실행 크롤러(카카오/슬랙)가 공유 링크를 긁으면 OG 가 빈다. 공유 경로만 friendly 로 보내 `<head>` 에 OG 메타(식당명·총액·인원수 — **참가자 이름은 미노출**) 주입. `og:image` 는 `/share/settlements/<token>/image.png` 로 satori+resvg 정산표 매트릭스 즉석 렌더. 폰트는 레포 커밋(`IBMPlexSansKR`)이라 별도 설치 불필요. 풀 SSR 아님(meta 만 서버, 본문은 SPA) |
@@ -456,6 +495,11 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 
 ## Gotchas [coverage: medium — 13 sources]
 
+- **schedule overlap 방지 — 이전 실행 미완료면 tick skip (신규)** — `scheduleRegistry` 가 동시 1개 inflight 만 허용. cron tick 시 이전 실행이 안 끝났으면 `schedule_runs status='skipped'` 행만 남기고 건너뛴다. 부팅 시 직전 인스턴스의 `running` 행은 `interrupted` 로 정리(`schedule.bootstrap()`) — 다음 tick 에 자연 재개
+- **schedule plugin 은 자체 AiConfigService 생성 (신규)** — autoload 알파벳순 `'schedule'` < `'summaries'` 라 `app.aiConfig` 가 아직 없다. plugin 로드 순서 의존을 피하려 schedule 이 자체 AiConfig 를 만든다 — `app.aiConfig` 재사용 불가
+- **택소노미 v3 = `GLOBAL_MERGE_VERSION` 3, full 재머지 필요 (신규)** — 최상위 축 교체로 기존 머지 행 전부 stale. 어드민 '전체 재실행' / `run-merge --full` 안 돌리면 옛 음식종류 트리 그대로. 카테고리 path 복합어는 가운뎃점 — `/`는 segment 구분자
+- **다크 모드 저장소는 플랫폼별 — `'lp:themeMode'` 키 (신규)** — 웹 localStorage / 앱 AsyncStorage. shared 는 design 토큰만 공유(RN/web storage 직접 import 금지). 앱 cron-free 수동 hydrate + `useResolvedThemeMode` 가 system 일 때 `useColorScheme` 결합
+- **루트에서 `expo run:ios`/`prebuild` 금지 — 오염 (신규)** — 루트에서 실행하면 잘못된 ios/·android/·app.json 산출. 정상 네이티브 빌드는 `apps/mobile`(LifePickr). 루트 `.gitignore` 가 `/ios /android /app.json` 로 재발 차단
 - **OG og:image `.png` prod 404 — nginx `^~` 우선권 (신규)** — `/share/settlements/<token>/image.png` 가 정적 캐싱용 `location ~* \.png$` 정규식에 가로채여 web/dist 에서 못 찾고 404("dev OK / prod 404" 전형). `location ^~ /share/settlements/`·`^~ /s/` 로 prefix 우선권 부여 필수
 - **Cloudflare 가 잘못된 404 를 엣지 캐시 — Purge 필요 (신규)** — og:image 가 `.png` 라 Cloudflare 엣지 캐시. 한 번 404 캐시되면 nginx 고쳐도 max-age(관측상 ≈4h) 동안 404. 수정 후 Cloudflare 에서 URL Purge 필수. 카카오/텔레그램도 자체 OG 캐시(며칠) — 갱신은 카카오 OG 캐시 초기화 도구 / 텔레그램 `@WebpageBot`
 - **OG index.html 은 프로세스 1회 캐시 — 재배포 후 `pm2 reload friendly` 필수 (신규)** — friendly 가 빌드된 web `index.html` 을 메모리 1회 캐시. 재배포로 자산 해시명이 바뀌어도 reload 안 하면 옛 index 그대로 → OG/SPA 부팅 깨짐
@@ -492,7 +536,7 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 - **앱 Expo Web 은 SPA 모드 고정** — `web.output: 'single'`
 - **SQLite 락 + Prisma migrate dev** — friendly dev 떠 있으면 `database is locked` 더 자주. 운영은 `migrate deploy` + pm2 fork 단일 인스턴스(cluster 금지)
 
-## Sources [coverage: high — 35 sources]
+## Sources [coverage: high — 41 sources]
 
 - [README.md](../../README.md)
 - [CLAUDE.md](../../CLAUDE.md) — "용어" 섹션 포함
@@ -518,6 +562,19 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 - [apps/friendly/prisma/migrations/20260525220309_add_settlement_round_category_adjustments/](../../apps/friendly/prisma/migrations/) — 분담 다듬기
 - [apps/friendly/prisma/migrations/20260525235559_add_settlement_drafts/](../../apps/friendly/prisma/migrations/) — 서버 draft
 - [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — APP_TEAM_ID / WEB_INDEX_PATH / OG_IMAGE_PATH 등
+- [apps/friendly/package.json](../../apps/friendly/package.json) — croner ^10 / satori ^0.26 / @resvg/resvg-js (croner 신규)
+- [apps/friendly/src/plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) — ScheduleService 전역 singleton decorate + 자체 AiConfig (신규)
+- [apps/friendly/src/modules/schedule/schedule-registry.ts](../../apps/friendly/src/modules/schedule/schedule-registry.ts) — croner cron 타이머 + inflight 동시 1개 모듈 singleton (신규)
+- [apps/friendly/src/modules/schedule/schedule.service.ts](../../apps/friendly/src/modules/schedule/schedule.service.ts) — bootstrap(stale→interrupted) + 정규화→머지 run (신규)
+- [apps/friendly/src/modules/schedule/schedule.route.ts](../../apps/friendly/src/modules/schedule/schedule.route.ts) — 설정 CRUD / 수동 실행 / 이력 (신규)
+- [apps/friendly/src/server.ts](../../apps/friendly/src/server.ts) — schedule.bootstrap + SIGTERM stopAllCrons/abortInflight/forceCloseConnections (수정)
+- [packages/api-contract/src/schemas/schedule.ts](../../packages/api-contract/src/schemas/schedule.ts) — schedule 스키마/라우트 (신규)
+- [packages/shared/src/hooks/useSchedule.ts](../../packages/shared/src/hooks/useSchedule.ts) — schedule API/훅 (신규)
+- [apps/friendly/src/modules/analytics/global-merge.prompts.ts](../../apps/friendly/src/modules/analytics/global-merge.prompts.ts) — 택소노미 v3 카테고리 path 규칙 + few-shot, GLOBAL_MERGE_VERSION 3 (수정)
+- [apps/mobile/src/lib/themeStore.ts](../../apps/mobile/src/lib/themeStore.ts) — 앱 테마 3-way AsyncStorage 'lp:themeMode' (신규)
+- [apps/mobile/src/hooks/useResolvedThemeMode.ts](../../apps/mobile/src/hooks/useResolvedThemeMode.ts) — useColorScheme 결합 (신규)
+- [apps/web/src/components/restaurant/MapLayerControl.tsx](../../apps/web/src/components/restaurant/MapLayerControl.tsx) — vworld 일반/다크/위성 레이어 토글 (신규)
+- [.gitignore](../../.gitignore) — 루트 /ios /android /app.json expo 오염 차단 (수정)
 - [apps/friendly/src/plugins/cors.ts](../../apps/friendly/src/plugins/cors.ts) — dev 전면 origin 반사 허용 (수정)
 - [apps/friendly/src/modules/well-known/well-known.route.ts](../../apps/friendly/src/modules/well-known/well-known.route.ts) — AASA + assetlinks.json 동적 응답
 - [apps/friendly/src/modules/settlement/](../../apps/friendly/src/modules/settlement/) — N차 세션 + draft + 풀 리플레이스 PUT + OG/카드 렌더
@@ -533,4 +590,4 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정.
 - [apps/mobile/docs/production-build.md](../../apps/mobile/docs/production-build.md) — 앱 운영 빌드 가이드
 - [docs/menu-hierarchy.md](../../docs/menu-hierarchy.md)
 - [docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md)
-- 토픽 — [settlement](settlement.md), [auto-discover](auto-discover.md), [friendly](friendly.md), [web](web.md), [api-contract](api-contract.md), [analytics](analytics.md), [menu-grouping](menu-grouping.md), [media](media.md), [ai](ai.md), [map](map.md), [crawl](crawl.md), [canonical](canonical.md), [shared](shared.md), [mobile](mobile.md), [config](config.md), [utils](utils.md)
+- 토픽 — [schedule](schedule.md), [settlement](settlement.md), [auto-discover](auto-discover.md), [friendly](friendly.md), [web](web.md), [api-contract](api-contract.md), [analytics](analytics.md), [menu-grouping](menu-grouping.md), [media](media.md), [ai](ai.md), [map](map.md), [crawl](crawl.md), [canonical](canonical.md), [shared](shared.md), [mobile](mobile.md), [config](config.md), [utils](utils.md)

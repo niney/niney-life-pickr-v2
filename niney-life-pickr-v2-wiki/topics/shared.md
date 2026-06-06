@@ -1,12 +1,18 @@
 ---
 topic: shared
-last_compiled: 2026-06-01
-sources_count: 52
+last_compiled: 2026-06-06
+sources_count: 54
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once]
+aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-06-06 변경 흡수 (17차, 13c10a5→HEAD) — 주기 자동 실행 어드민 FE 플러밍 + 다크 모드 토큰 + 공개 카테고리 트리 + useUserLocation auto 옵션**:
+(1) **신규 `api/schedule.api.ts` + `hooks/useSchedule.ts`** — 주기 자동 실행([schedule](schedule.md)) 어드민 FE 플러밍. `scheduleApi` = `getConfig`/`updateConfig`(PUT)/`runNow`(POST, 진행 중이면 서버가 skipped run 반환)/`listRuns`/`preview`(cron 다음 실행시각 검증) + `buildScheduleRunEventsUrl()`(token query SSE URL). 훅: `useScheduleConfig`/`useScheduleRuns`(useQuery), `useUpdateScheduleConfig`(성공 시 `['schedule','config']` 에 `setQueryData` 직접 박기), `useRunScheduleNow`(runs+config invalidate), `useSchedulePreview(cronExpr, timezone, enabled)`(저장 전 cron 미리보기, queryKey 에 입력 포함, caller 가 디바운스), **`useScheduleRunEvents(enabled)`** — 진행 중 run 의 live SSE 진행 구독. global-merge 잡 훅과 같은 패턴(자체 EventSource + 1s→30s cap 백오프 + closedRef/cancelled), `'snapshot'`(running 이면 progress 로 정규화)/`'progress'`/`'done'` 3 이벤트, done 시 `['schedule','runs']`+`['schedule','config']`+`['analytics']` invalidate(머지 결과를 통계에 반영). [stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md) 의 새 인스턴스(진행 머지). index.ts 가 둘 다 re-export.
+(2) **`design/tokens.ts` — 다크 모드 토큰 가독성 개선** — `palette.zinc400(#a1a1aa)` 추가, `darkColors.textMuted` 를 `zinc500`→`zinc400`(surface 위 본문 AA 4.5:1 미달 → surfaceAlt 위 5.81:1 로 상향, placeholderTextColor 14곳도 회복), `darkColors.border` 를 `rgba(255,255,255,0.1)`→`0.14`(카드 외곽선/구분선 가시성). `lightColors.bg` 는 `zinc50`→`white`(라이트는 흰 배경이라 textMuted=zinc500 유지). 웹/앱이 design 토큰만 공유하고 **테마 저장소는 플랫폼별 분리**(웹 localStorage / 앱 AsyncStorage) — [platform-ui-split](../concepts/platform-ui-split.md) 의 새 인스턴스(토큰 공유 + 영속화 분리).
+(3) **`restaurant.api.ts` + `useRestaurant.ts` — 공개 카테고리 트리 + 리뷰 tip/menu 필터** — `restaurantApi.publicCategoryTree(placeId)` 신규(`Routes.Restaurant.publicCategoryTree`) + **`useRestaurantPublicCategoryTree(placeId)`** 훅(`['restaurant','public','category-tree',placeId]`, staleTime 60s, 전역 머지가 닿은 식당만 roots 채워짐). `useRestaurantPublicReviews` 의 filters 에 `tip?`/`menu?` 추가 — queryKey 에 `tip ?? null`/`menu ?? null` 포함, 둘 중 하나라도 있으면 detail seed 무효화(`canSeed` 가 `!filters.tip && !filters.menu` 추가), `publicReviews` 쿼리스트링에 tip/menu 전달. tip/menu 는 호출처에서 동시 1개만 설정.
+(4) **`useUserLocation.ts` — `{ auto?: boolean }` 옵션 추가** — `auto=true`(기본) 마운트 시 자동 1회 요청(공개 맛집 주변 검색용), `auto=false` 면 명시적 `refetch`("내 위치" 버튼) 전까지 `'idle'` 유지(어드민 발견처럼 진입만으로 권한 prompt 안 띄움). permission `'change'` 구독은 auto 와 무관하게 유지(거부→설정 해제 시 자동 복구). 상태 enum/refetch 시그니처 불변.
 
 **2026-06-01 변경 흡수 — 정산 공유 OG 이미지 갤러리/선택 + draft hydrate placeId당 1회 (correctness)**:
 (1) **`useSettlementDraftHydrate` 가 placeId(식당 컨텍스트)당 단 한 번만 hydrate** ([useSettlementDraft.ts](../../packages/shared/src/hooks/useSettlementDraft.ts)) —
@@ -97,6 +103,7 @@ packages/shared/src/
 │   ├── menu-grouping.api.ts# 식당 단위 그룹핑 + 잡 시작/스냅샷 + buildGroupingJobEventsUrl
 │   ├── autoDiscover.api.ts # 자동 발견 잡 start/get/cancel + buildAutoDiscoverEventsUrl
 │   ├── analytics.api.ts    # overview / global-menus / category-tree + 전역 머지 잡 + buildGlobalMergeJobEventsUrl
+│   ├── schedule.api.ts      # (신규) 주기 자동 실행: getConfig/updateConfig/runNow/listRuns/preview + buildScheduleRunEventsUrl(token query SSE)
 │   ├── settings-map.api.ts # 어드민 list/update/remove/getSecret + 공개 publicConfig (Routes.SettingsMap 단일 소스)
 │   ├── ai.api.ts           # LLM provider×purpose 관리 + complete/completeBatch (ProviderKey = {id, purpose}) + previewModels (저장 전 키 미리보기)
 │   ├── settlement.api.ts             # 정산 세션 CRUD + share 토큰 + update(전체 replace) + getShared(token)
@@ -108,15 +115,16 @@ packages/shared/src/
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
 │   ├── useAdmin.ts
 │   ├── useCrawl.ts         # useStartCrawl/useCrawlJobs/useCancelCrawl/useNaverSearch + useCrawlJobStream + useCatchtable*/useDiningcode* + DC bulk-save 잡 훅
-│   ├── useRestaurant.ts    # 어드민 list(query={limit,offset,sort})/ranking/byPlaceId/delete/reanalyze + 공개 useRestaurantsPublic/useRestaurantPublic/useRestaurantPublicInsights + canonical 기반 list summary SSE 구독 (delta-aware 합산 보호)
+│   ├── useRestaurant.ts    # 어드민 list(query={limit,offset,sort})/ranking/byPlaceId/delete/reanalyze + 공개 useRestaurantsPublic/useRestaurantPublic/useRestaurantPublicInsights/useRestaurantPublicCategoryTree + useRestaurantPublicReviews(tip/menu 필터) + canonical 기반 list summary SSE 구독 (delta-aware 합산 보호)
 │   ├── useCanonical.ts     # candidates/merge/split/dismiss + proposals(list/run/accept/reject) + delete
 │   ├── summarySseManager.ts# 프로세스 전역 SSE 싱글톤 (place + canonical 두 키 멀티플렉싱) + heartbeat watchdog + idle timeout (서버 다운 자동 감지) + snapshot delta-aware dispatch
 │   ├── useMenuGrouping.ts  # ranking/group/status/createJob + useGroupingJob (자체 EventSource + 백오프)
 │   ├── useAutoDiscover.ts  # useStartAutoDiscover / useAutoDiscoverJob / useCancelAutoDiscover (snapshot/keyword/candidate/phase/done SSE 머지)
 │   ├── useAnalytics.ts     # overview/globalMenus/categoryTree + useStartGlobalMerge + useGlobalMergeJob (chunk 진행)
+│   ├── useSchedule.ts       # (신규) useScheduleConfig/useScheduleRuns/useUpdateScheduleConfig/useRunScheduleNow/useSchedulePreview + useScheduleRunEvents (자체 EventSource, snapshot/progress/done, done 시 schedule+analytics invalidate)
 │   ├── useSettingsMap.ts   # 어드민 providers/secret + 공개 useMapPublicConfig
 │   ├── useAi.ts            # ProviderKey({id,purpose}) 기반 provider CRUD + complete/test/models + usePreviewModels(=useProviderModelsPreview, 저장 전 키로 모델 fetch)
-│   ├── useUserLocation.ts  # geolocation 권한+위치 query (5s timeout, 60s maxAge)
+│   ├── useUserLocation.ts  # geolocation 권한+위치 query (5s timeout, 60s maxAge) + { auto?: boolean } 옵션 (false 면 마운트 자동요청 스킵)
 │   ├── useSettlement.ts           # useListSettlements / useSettlement / useCreateSettlement(fromDraftId 옵션) / useDeleteSettlement / useUpdateSettlement(전체 replace, setQueryData) / useCreateSettlementShare / useRevokeSettlementShare / useSharedSettlement
 │   ├── useSettlementExtraction.ts # useUploadReceipt / useExtractReceipt (둘 다 useMutation)
 │   ├── useSettlementContact.ts    # useSettlementContacts(검색어 키별) / useUpdateSettlementContact / useDeleteSettlementContact (삭제 시 settlement 캐시도 무효화)
@@ -290,6 +298,25 @@ candidate 이벤트마다 클라이언트가 자체로 `candidates.filter((c) =>
 로 `newlyRegistered` 도 재계산 (phase 이벤트가 늦게 와도 UI 가 즉시 갱신되도록). 백오프
 동일 (`1s → 2s → 4s → 8s → 16s → 30s cap`). 404 → `activeStore.clear()`.
 
+**주기 자동 실행 도메인** ([schedule.api.ts](../../packages/shared/src/api/schedule.api.ts) +
+[useSchedule.ts](../../packages/shared/src/hooks/useSchedule.ts)) — 어드민이 cron 식으로 전역
+머지 등을 주기 자동 실행하도록 설정/실행/이력/live 진행을 다루는 FE 플러밍. 도메인 자체 동작은
+[schedule](schedule.md) 가 다루고 여기는 HTTP 함수 + React Query 훅만 정리. 함수: `getConfig`/
+`updateConfig`(PUT)/`runNow`(POST — 진행 중이면 서버가 `skipped` run 을 돌려줌)/`listRuns`/
+`preview({ cronExpr, timezone })`(저장 전 cron 검증 + 다음 실행시각) + `buildScheduleRunEventsUrl()`
+(token query SSE URL). 훅: `useScheduleConfig`/`useScheduleRuns`(useQuery), `useUpdateScheduleConfig`
+(성공 시 `['schedule','config']` 에 `setQueryData` 직접 박기 — 별도 refetch 없이 즉시 반영),
+`useRunScheduleNow`(성공 시 runs+config invalidate), `useSchedulePreview(cronExpr, timezone, enabled)`
+(queryKey 에 cronExpr/timezone 포함, `enabled && cronExpr.trim().length > 0`, 입력 디바운스는
+caller 책임). **`useScheduleRunEvents(enabled)`** 는 잡 단위 SSE 훅(global-merge 동형) — 매니저를
+거치지 않고 훅 안에서 직접 `EventSource` 라이프사이클을 들고 `1s → 30s cap` 백오프 + `closedRef`/
+`cancelled`/`reconnectId` 정리. 3 이벤트: `'snapshot'`(`status === 'running'` 이면 snapshot 을
+`ScheduleProgressEventType` 모양으로 정규화해 첫 진행 표시), `'progress'`(그대로 setState), `'done'`
+(es.close + `['schedule','runs']`+`['schedule','config']`+`['analytics']` invalidate — 머지 결과가
+overview/통계에 반영되도록). `enabled=false` 면 `progress` 를 null 로 리셋하고 연결 안 함. 반환은
+`{ progress }` 단일 필드. [stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md) 의
+새 인스턴스로, snapshot/progress 가 캐시가 아닌 로컬 state 로 흐르고 done 에서만 캐시를 무효화한다.
+
 **SSE 매니저 확장** — `summarySseManager` 가 이전엔 placeId 단일 키였는데 이번에 `SubscriptionKey`
 를 union `{ kind: 'place'; placeId } | { kind: 'canonical'; canonicalId }` 로 확장. 서버는
 두 종류 키를 한 connection 에서 받아 각 이벤트마다 canonicalId / placeId 양쪽 태그를 흘려보내고,
@@ -342,14 +369,15 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - `useAutoDiscoverJob` → `Routes.AutoDiscover.jobEvents(jobId)` EventSource (token query 인증).
   - `summarySseManager` → `Routes.Restaurant.summaryEvents` 단일 EventSource. placeId / canonicalId 두 키 종류 멀티플렉싱.
   - `useGroupingJob` → `Routes.Analytics.groupingJobEvents(jobId)`, `useGlobalMergeJob` → `Routes.Analytics.globalMergeJobEvents(jobId)`.
+  - **`useScheduleRunEvents` → `Routes.Schedule.runEvents` EventSource** (token query 인증). `scheduleApi` → `Routes.Schedule.{config,run,runs,preview}`.
   - `canonicalApi` → friendly의 `Routes.Canonical.*`.
   - **`settlementApi` → `/api/v1/settlements/*` + `/api/v1/share/settlements/:token` (공개)**.
   - **`settlementExtractionApi` → `/api/v1/settlement-extraction/upload|extract|preview/:token`** (preview 만 직접 fetch + Authorization 헤더).
   - **`settlementContactApi` → `/api/v1/me/contacts/*`** (인증 필수).
   - **`settlementDraftApi` → `/api/v1/settlement-drafts/*`** (인증 필수, upsert PUT, 서버가 userId+placeId 로 매칭).
-- UI 측 사용처는 [web](web.md), 정산 도메인 자체는 [settlement](settlement.md).
+- UI 측 사용처는 [web](web.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행 도메인은 [schedule](schedule.md).
 
-## 4. API Surface [coverage: high — 33 sources]
+## 4. API Surface [coverage: high — 35 sources]
 
 **API 클라이언트 (`api/`)**
 - `configureApi(cfg)`, `getApiConfig()`, `apiFetch<T>(path, init)`, `ApiError`. `FormData` body 면 Content-Type 자동 스킵.
@@ -363,12 +391,13 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - DC 일괄 저장 잡: `diningcodeBulkSaveStart(input)`, `diningcodeBulkSaveGet(jobId)`, `diningcodeBulkSaveCancel(jobId)` + `buildDiningcodeBulkSaveEventsUrl(jobId)`
 - `restaurantApi`:
   - 어드민: **`list(query: Partial<RestaurantListQueryType>)` (limit/offset/sort, 시그니처 변경)**, `ranking(query?)`, `getByPlaceId(placeId)`, `getSummaryStatus(placeId)`, `delete(placeId)`, `reanalyze(placeId)`, `cancelSummary(placeId)`, `resumeSummary(placeId)`, `crawlLogs({ placeId, cursor? })`
-  - 공개: `publicList(query?)`, `publicByPlaceId(placeId)`, `publicInsights(placeId)`, `publicReviews({ placeId, sentiment, sort, cursor? })`
+  - 공개: `publicList(query?)`, `publicByPlaceId(placeId)`, `publicInsights(placeId)`, **`publicCategoryTree(placeId)` (신규 — `RestaurantCategoryTreeResultType`, 전역 머지 닿은 식당만 roots 채워짐)**, `publicReviews({ placeId, sentiment, sort, cursor?, **tip?, menu?** })` (tip/menu 필터 추가)
   - SSE URL: `buildSummaryEventsUrl({ placeIds?, canonicalIds? })`
 - `canonicalApi`: `candidates(canonicalId)`, `merge(input)`, `split(canonicalId, input)`, `dismissSuggestion(canonicalId)`, `listProposals()`, `runProposals()`, `acceptProposal(proposalId, input)`, `rejectProposal(proposalId)`, `delete(canonicalId)`.
 - `menuGroupingApi`: `groupForRestaurant(placeId)`, `getRanking(placeId, query?)`, `getRestaurantsStatus()`, `createGroupingJob({ placeIds })`, `getGroupingJob(jobId)` + `buildGroupingJobEventsUrl(jobId)`
 - `autoDiscoverApi`: `start(input)`, `get(jobId)`, `cancel(jobId)` + `buildAutoDiscoverEventsUrl(jobId)`
 - `analyticsApi`: `overview()`, `globalMenus(query?)`, `categoryTree()`, `startGlobalMerge({ full })`, `getGlobalMergeJob(jobId)` + `buildGlobalMergeJobEventsUrl(jobId)`
+- **`scheduleApi` (신규)**: `getConfig()`, `updateConfig(input: ScheduleConfigInputType)` (PUT), `runNow()` (POST — 진행 중이면 `skipped` run 반환), `listRuns(): ScheduleRunListType`, `preview(input: SchedulePreviewInputType): SchedulePreviewResultType` + `buildScheduleRunEventsUrl(): Promise<string>` (token query SSE URL).
 - `settingsMapApi`: 어드민 `list/update/remove/getSecret` + 공개 `publicConfig`
 - `aiApi`: **`ProviderKey = { id: LlmProviderIdType; purpose: LlmProviderPurposeType }`** 기반. `complete`, `completeBatch`, `listProviders`, `updateProvider(key, input)`, `deleteProvider(key)`, `testProvider(key, model?)`, `listModels(key)`, **`previewModels(key, input: PreviewLlmModelsInputType)` (신규 — 저장 전에 폼의 API 키로 모델 fetch, `ok=false` 분기로 에러 노출)** — URL 모양 `/providers/:id/:purpose[/models|/models/preview|/test]`.
 - `settlementApi`: `create(input: CreateSettlementInputType)` (**input 에 `fromDraftId?: string` 옵션 필드** — 임시저장 draft 에서 출발한 저장 시 서버 트랜잭션이 그 draft 도 함께 삭제, mismatch 면 silent ignore), `list(query?)`, `get(id)`, `remove(id)`, **`update(id, input: UpdateSettlementInputType)` (전체 replace — 참여자/차수/items/attendees 모두 교체)**, **`createShare(id, ttl='7d', ogImage?, ogImageUrl?)`** (멱등 — 같은 세션 여러 번 호출 시 동일 토큰, ttl 로 만료 갱신; **`ogImage?: ShareOgImageType('restaurant'|'table')`** 미리보기 소스 토글 — 생략 시 서버가 기존 선택 유지; **`ogImageUrl?: string|null`** 트라이스테이트 — 생략→유지 / null→해제(랜덤) / URL→갤러리 사진 고정, `undefined` 일 때만 body 에서 키 제외; 응답 `SettlementShareType` 에 `ogImage`/`ogImageUrl`/**`ogImageCandidates: string[]`** 포함), `revokeShare(id)`, `getShared(token)` (공개 read-only, 비로그인 가능).
@@ -385,12 +414,13 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - 크롤 다이닝코드: `useDiningcodeSearch`, `useDiningcodeShop`, `useDiningcodeShopReviews`, `useSaveDiningcodeShop`, `useDiningcodeRegistered`
 - DC 일괄 저장 잡: `useStartDiningcodeBulkSave`, `useCancelDiningcodeBulkSave`, `useDiningcodeBulkSaveJob`
 - 맛집 어드민: **`useRestaurantList(query?: { limit?, offset?, sort? })` (queryKey `['restaurant', 'list', limit, offset, sort]` + `placeholderData: (prev) => prev`)**, `useRestaurantRanking`, `useRestaurantByPlaceId`, `useDeleteRestaurant`, `useReanalyzeRestaurant`, `useCancelSummary`, `useResumeSummary`, `useRestaurantCrawlLogs(placeId)` (infiniteQuery), `useRestaurantSummaryEvents(placeId, { onLog? })`, `useRestaurantListSummaryEvents(canonicalIds[])`, `useRestaurantListSummaryEventsByPlaceIds(placeIds[])`
-- 맛집 공개: `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, `useRestaurantPublicReviews` (infiniteQuery, detail seed)
+- 맛집 공개: `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, **`useRestaurantPublicCategoryTree(placeId)` (신규 — `['restaurant','public','category-tree',placeId]`, staleTime 60s)**, `useRestaurantPublicReviews(filters, seed?)` (infiniteQuery, detail seed — **filters 에 `tip?`/`menu?` 추가, queryKey 에 `tip ?? null`/`menu ?? null` 포함, tip/menu 있으면 seed 무효**)
 - 캐노니컬: `useCanonicalCandidates`, `useMergeCanonical`, `useSplitCanonical`, `useDismissCanonicalSuggestion`, `useCanonicalProposals` (refetchInterval 30s), `useRunCanonicalProposals`, `useAcceptCanonicalProposal`, `useRejectCanonicalProposal`, `useDeleteCanonical`
 - 메뉴 그룹핑: `useMenuRanking`, `useGroupForRestaurant`, `useGroupingRestaurantsStatus`, `useCreateGroupingJob`, `useGroupingJob`
 - 자동 발견: `useStartAutoDiscover`, `useCancelAutoDiscover`, `useAutoDiscoverJob`
 - 분석: `useAnalyticsOverview`, `useGlobalMenus`, `useCategoryTree`, `useStartGlobalMerge`, `useGlobalMergeJob`
-- 지도: `useMapProviders`, `useUpdateMapProvider`, `useDeleteMapProvider`, `useMapProviderSecret`, `useMapPublicConfig`, `useUserLocation`
+- **주기 자동 실행 (신규)**: `useScheduleConfig()` (`['schedule','config']`), `useScheduleRuns()` (`['schedule','runs']`), `useUpdateScheduleConfig()` (성공 시 config 에 `setQueryData` 직접 박기), `useRunScheduleNow()` (성공 시 runs+config invalidate), `useSchedulePreview(cronExpr, timezone, enabled)` (`['schedule','preview',cronExpr,timezone]`, `enabled && cronExpr.trim().length>0`), **`useScheduleRunEvents(enabled): { progress }`** (자체 EventSource — snapshot/progress/done, done 시 schedule+analytics invalidate, 1s→30s 백오프)
+- 지도: `useMapProviders`, `useUpdateMapProvider`, `useDeleteMapProvider`, `useMapProviderSecret`, `useMapPublicConfig`, **`useUserLocation(options? = { auto?: boolean })`** (auto=false 면 마운트 자동요청 스킵, refetch 로만 시작)
 - AI: `useCompleteAi`, `useCompleteBatchAi`, `useProviders`, `useUpdateProvider({ key, input })`, `useDeleteProvider(key)`, `useTestProvider({ key, model? })`, `useProviderModels(key, enabled?)`, **`usePreviewModels()` (a.k.a. `useProviderModelsPreview`) — mutation, `({ key, input }) => aiApi.previewModels(...)`, AdminAiKeysPage 저장 전 모델 미리보기**
 - 정산 세션:
   - `useListSettlements(query? = { offset: 0, limit: 20 })` — queryKey `['settlement', 'list', placeId ?? null, offset, limit]`. `placeId` 필터 지원해 특정 1차 식당의 이력만 추출 가능.
@@ -417,7 +447,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 
 **SSE 매니저 (`hooks/summarySseManager.ts`)** — 변경 없음. `subscribe(key, { onSnapshot(snap, prev), onReview, onLog? })`, place/canonical 키 union, heartbeat 5s, idle 15s, backoff 1.5s→60s.
 
-**잡 단위 SSE 훅** — 변경 없음. `useGroupingJob` / `useGlobalMergeJob` / `useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` 네 훅 모두 `closedRef`/`retryRef`/cleanup 패턴 동일. 백오프 `1s → 30s cap`.
+**잡 단위 SSE 훅** — **`useScheduleRunEvents` 추가로 다섯 훅.** `useGroupingJob` / `useGlobalMergeJob` / `useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` / **`useScheduleRunEvents`** 모두 매니저를 거치지 않고 훅 안에서 직접 `EventSource` 라이프사이클(closed/cancelled + 백오프 + cleanup)을 든다. 백오프 `1s → 30s cap` 공통. `useScheduleRunEvents` 는 jobId 가 없고 `enabled` 플래그로만 연결 토글(서버가 "현재 진행 중 run" 하나를 스트림) — 진행값은 캐시가 아닌 로컬 `{ progress }` state, done 에서만 schedule+analytics 캐시 invalidate.
 
 **Zustand 스토어 (`stores/`)**
 - `useAuthStore`: `user`, `token`, `isGuest` + `setSession`, `setUser`, `enterGuest`, `clearSession`
@@ -433,7 +463,11 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - persist key `settlement-draft-v1`, version `4` (v1→v2→v3→v4 마이그레이션 체인). storage 는 **`setSettlementDraftStorage(adapter)` 주입형** — 미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` (SSR/test 안전).
   - 노출 타입: `SettlementDraft` / `DraftParticipant` / `DraftItem` / `DraftRound` / `DraftAttendance` / `DraftCategoryAdjustment` / `DraftCategoryAdjustments` / `ExcludeKey`.
 
-**UI / 디자인 / 상수** — 변경 없음 (기존 8 컴포넌트, `palette/lightColors/darkColors/space/radius/typography/duration`, `APP_NAME` / `QUERY_STALE_TIME` / `QUERY_GC_TIME`).
+**UI / 디자인 / 상수** — UI 8 컴포넌트·상수 불변. **`design/tokens.ts` 다크 모드 토큰 가독성 개선** —
+`palette.zinc400(#a1a1aa)` 추가, `darkColors.textMuted` `zinc500→zinc400`(AA 4.5:1 회복), `darkColors.border`
+`rgba(255,255,255,0.1)→0.14`, `lightColors.bg` `zinc50→white`. 토큰만 `@repo/shared` 가 공유하고 테마
+선택의 영속화는 플랫폼별(웹 localStorage / 앱 AsyncStorage) — Key Decisions 참고. (`palette/lightColors/
+darkColors/space/radius/typography/duration`, `APP_NAME` / `QUERY_STALE_TIME` / `QUERY_GC_TIME` 노출 모양 불변.)
 
 ## 5. Data [coverage: high — 16 sources]
 
@@ -525,6 +559,14 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - 어드민 맛집 detail: `['restaurant', placeId]`. 공개 맛집 키 변경 없음.
 - 캐노니컬: 기존과 동일.
 - 메뉴 그룹핑 / 분석 / 지도 / AI: 기존과 동일.
+- 공개 맛집 카테고리 트리: `['restaurant', 'public', 'category-tree', placeId]` (staleTime 60s).
+- 공개 리뷰: `['restaurant', 'public-reviews', placeId, sentiment, sort, tip ?? null, menu ?? null]` (tip/menu 추가로 튜플 확장 — 필터 조합마다 별 캐시 인스턴스, tip/menu 있으면 seed 안 씀).
+- **주기 자동 실행 (신규)**:
+  - `useScheduleConfig` → `['schedule', 'config']`, `useScheduleRuns` → `['schedule', 'runs']`.
+  - `useSchedulePreview` → `['schedule', 'preview', cronExpr, timezone]` (입력별 별 캐시).
+  - `useUpdateScheduleConfig` onSuccess 가 `['schedule','config']` 에 `setQueryData(cfg)` 직접 박기(refetch 없이 반영).
+  - `useRunScheduleNow` onSuccess → `['schedule','runs']` + `['schedule','config']` invalidate.
+  - `useScheduleRunEvents` 의 `progress` 는 React Query 캐시가 아닌 훅 로컬 state. done 시 `['schedule','runs']` + `['schedule','config']` + `['analytics']` 무효화.
 - **정산 (신규)**:
   - `useListSettlements` → `['settlement', 'list', placeId ?? null, offset, limit]`
   - `useSettlement` → `['settlement', 'one', id]`
@@ -547,8 +589,32 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 
 **SSE 스트림 상태** (`useCrawlJobStream`) — 기존 동일.
 
-## 6. Key Decisions [coverage: high — 27 sources]
+## 6. Key Decisions [coverage: high — 29 sources]
 
+- **17차(2026-06): `useScheduleRunEvents` SSE 진행 훅 추가, design 토큰 soft tonal+다크 —
+  테마 저장소는 플랫폼별 분리, `@repo/shared` 는 토큰만 공유.** 주기 자동 실행 진행은 잡 단위 SSE
+  훅 패턴(매니저 미사용 + 1s→30s 백오프)을 그대로 답습하되 jobId 없이 `enabled` 플래그만으로
+  연결 토글하고 진행값을 캐시가 아닌 로컬 state 로 흘린다([stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md)
+  의 새 인스턴스 — done 에서만 캐시 무효화). 다크 모드는 `darkColors`/`lightColors` 토큰만
+  `@repo/shared` 가 공유하고, "어떤 테마를 골랐나" 의 영속화는 플랫폼별(웹 localStorage / 앱
+  AsyncStorage)로 갈린다 — [platform-ui-split](../concepts/platform-ui-split.md) 의 새 인스턴스
+  (`settlementDraftStore` storage adapter 주입과 같은 철학: 라이브러리는 플랫폼 무관 토큰/로직만,
+  영속화 매체는 플랫폼 entry 가 결정).
+- **다크 모드 토큰은 대비비(contrast ratio) 기준으로 결정** — `textMuted` 를 `zinc500`(다크 surface
+  위 3.08:1, 본문 AA 4.5:1 미달)에서 `zinc400`(surfaceAlt 위 5.81:1)으로, `border` 를 흰 0.1(1.33:1,
+  거의 안 보임)에서 0.14 로 상향. 라이트는 흰 배경이라 `zinc500` 그대로(`lightColors.textMuted`
+  불변). 한 토큰이 placeholderTextColor 14곳에 함께 쓰여 일괄 회복.
+- **`useScheduleRunEvents` snapshot 정규화** — 서버 첫 `'snapshot'` 이벤트(running 일 때)를 즉시
+  `ScheduleProgressEventType` 모양으로 변환해 progress state 에 박는다. catch-up 시점에도 진행
+  바가 빈 채로 안 보이고 곧장 현재 진행을 표시(global-merge 의 snapshot 미리 박기와 동형).
+- **`useUserLocation({ auto })` — 진입형 vs 버튼형 화면 분기** — `auto=true`(기본) 는 진입과 동시에
+  위치가 필요한 공개 맛집 주변 검색용, `auto=false` 는 "내 위치" 버튼을 눌러야만 권한 prompt 가
+  뜨길 원하는 어드민 발견 같은 화면용(진입만으로 권한 팝업을 띄우면 거슬림). permission `'change'`
+  구독은 auto 와 무관 — 거부 후 사용자가 설정에서 풀면 어느 모드든 자동 복구.
+- **공개 리뷰 tip/menu 필터는 seed 무효화** — detail 동봉 첫 페이지 seed 는 필터 없는 기본 상태
+  (`sentiment='all'`, `sort='recent'`)에서만 유효한데, tip/menu 필터가 걸리면 서버가 부분집합만
+  돌려주므로 seed 를 쓰면 안 됨. `canSeed` 에 `!filters.tip && !filters.menu` 를 추가해 필터 활성
+  시 seed 를 끄고 1페이지부터 fetch. tip/menu 는 호출처에서 동시 1개만 설정(서버 계약).
 - **상태관리는 Zustand**, **서버 상태는 TanStack Query**.
 - **공개 훅 placeholderData / staleTime 30s / queryKey 좁히기** — 기존 결정 유지.
 - **`useNaverSearch` 디바운스는 호출자 책임**.
@@ -673,11 +739,14 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   Content-Type 안 붙임, AI path 하드코드, 로직/UI 플랫폼 분리, 빌드 없는 소스 노출, 유연한
   React peer, SSE 토큰은 쿼리스트링, 중복 이벤트 방어** — 모두 기존 결정 유지.
 
-## 7. Gotchas [coverage: high — 24 sources]
+## 7. Gotchas [coverage: high — 26 sources]
 
 - **EventSource 헤더 못 보냄 → token query 필수** — `buildJobEventsUrl`, `buildSummaryEventsUrl`,
   `buildGroupingJobEventsUrl`, `buildGlobalMergeJobEventsUrl`, `buildDiningcodeBulkSaveEventsUrl`,
-  `buildAutoDiscoverEventsUrl` 모두 `?token=<jwt>`. URL/access log/Referer 노출 위험 동일.
+  `buildAutoDiscoverEventsUrl`, **`buildScheduleRunEventsUrl`** 모두 `?token=<jwt>`. URL/access log/Referer 노출 위험 동일. (`buildScheduleRunEventsUrl` 만 `async` — `getToken?.()` 가 Promise 일 수 있어 await; 따라서 `useScheduleRunEvents` 의 `connect` 도 async 이고 그 사이 cleanup 이 돌면 `cancelled` 가드로 ES 생성 자체를 막는다.)
+- **`useScheduleRunEvents` 는 jobId 가 아니라 `enabled` 단일 dep** — 서버가 "현재 진행 중 run" 하나를 스트림하므로 클라가 runId 를 모르고도 연결. `enabled` 가 false→true 로 바뀔 때만 재연결하고, false 면 `progress`=null 리셋. caller 가 `enabled` 를 "지금 실행" 클릭/진행 중 run 존재 여부로 토글해야 함 — 안 끄면 done 후에도 빈 연결을 재시도(`onerror` 백오프) 할 수 있으니 done 직후 caller 가 enabled 를 내리거나 done 이벤트의 closed 가드에 의존.
+- **`useScheduleRunEvents` 의 done → `['analytics']` 통째 invalidate** — 주기 머지 결과를 overview/통계에 반영하려는 의도지만 analytics prefix 전체를 무효화하므로 그 화면이 떠 있으면 일괄 refetch. 머지 외 다른 schedule 작업이 추가되면 invalidate 범위 재검토 필요.
+- **공개 리뷰 queryKey 튜플 확장(tip/menu) — cold cache** — `['restaurant','public-reviews',placeId,sentiment,sort]` 가 `tip ?? null`/`menu ?? null` 두 칸 추가로 길어졌다. 기존 캐시 키와 안 맞아 배포 직후 한 번 cold(전부 refetch). 또한 tip 과 menu 를 동시에 설정하면 서버 동작이 정의돼 있지 않으니(계약상 동시 1개만) 호출처에서 상호배타 보장 필요.
 - **잡 GET 404 → activeStore.clear (4 훅 공통)** — `ApiError.statusCode === 404` 만 분기.
 - **잡 done 후 store.clear 는 hook 이 안 한다** — 페이지 컴포넌트 책임.
 - **`buildSummaryEventsUrl` 시그니처 변경** — `{ placeIds?, canonicalIds? }`.
@@ -772,21 +841,22 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   HTMLElement 필요**, **`invalidateQueries` prefix 매칭 주의**, **`testProvider`/`deleteProvider`
   빈 body** — 모두 기존 항목 유지.
 
-## 8. Sources [coverage: high — 52 sources]
+## 8. Sources [coverage: high — 54 sources]
 
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
-- [packages/shared/src/index.ts](../../packages/shared/src/index.ts)
+- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: schedule.api + useSchedule re-export 추가*
 - [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts)
 - [packages/shared/src/api/auth.api.ts](../../packages/shared/src/api/auth.api.ts)
 - [packages/shared/src/api/picks.api.ts](../../packages/shared/src/api/picks.api.ts)
 - [packages/shared/src/api/admin.api.ts](../../packages/shared/src/api/admin.api.ts)
 - [packages/shared/src/api/crawl.api.ts](../../packages/shared/src/api/crawl.api.ts)
-- [packages/shared/src/api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts)
+- [packages/shared/src/api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts) — *modified: publicCategoryTree + publicReviews tip/menu 필터*
 - [packages/shared/src/api/canonical.api.ts](../../packages/shared/src/api/canonical.api.ts)
 - [packages/shared/src/api/menu-grouping.api.ts](../../packages/shared/src/api/menu-grouping.api.ts)
 - [packages/shared/src/api/autoDiscover.api.ts](../../packages/shared/src/api/autoDiscover.api.ts)
 - [packages/shared/src/api/analytics.api.ts](../../packages/shared/src/api/analytics.api.ts)
+- [packages/shared/src/api/schedule.api.ts](../../packages/shared/src/api/schedule.api.ts) (NEW)
 - [packages/shared/src/api/ai.api.ts](../../packages/shared/src/api/ai.api.ts)
 - [packages/shared/src/api/settings-map.api.ts](../../packages/shared/src/api/settings-map.api.ts)
 - [packages/shared/src/api/settlement.api.ts](../../packages/shared/src/api/settlement.api.ts) — *modified: createShare ogImage/ogImageUrl 트라이스테이트 + SettlementShare ogImageCandidates*
@@ -797,15 +867,16 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/hooks/usePicks.ts](../../packages/shared/src/hooks/usePicks.ts)
 - [packages/shared/src/hooks/useAdmin.ts](../../packages/shared/src/hooks/useAdmin.ts)
 - [packages/shared/src/hooks/useCrawl.ts](../../packages/shared/src/hooks/useCrawl.ts)
-- [packages/shared/src/hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts)
+- [packages/shared/src/hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) — *modified: useRestaurantPublicCategoryTree 추가 + useRestaurantPublicReviews tip/menu 필터(seed 무효)*
 - [packages/shared/src/hooks/useCanonical.ts](../../packages/shared/src/hooks/useCanonical.ts)
 - [packages/shared/src/hooks/summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts)
 - [packages/shared/src/hooks/useMenuGrouping.ts](../../packages/shared/src/hooks/useMenuGrouping.ts)
 - [packages/shared/src/hooks/useAutoDiscover.ts](../../packages/shared/src/hooks/useAutoDiscover.ts)
 - [packages/shared/src/hooks/useAnalytics.ts](../../packages/shared/src/hooks/useAnalytics.ts)
+- [packages/shared/src/hooks/useSchedule.ts](../../packages/shared/src/hooks/useSchedule.ts) (NEW)
 - [packages/shared/src/hooks/useAi.ts](../../packages/shared/src/hooks/useAi.ts)
 - [packages/shared/src/hooks/useSettingsMap.ts](../../packages/shared/src/hooks/useSettingsMap.ts)
-- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *modified: insecure-context 단정 + Permissions 'change' 구독*
+- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *modified: { auto?: boolean } 옵션 (auto=false 면 마운트 자동요청 스킵) — 기존 insecure-context 단정 + Permissions 'change' 구독 유지*
 - [packages/shared/src/hooks/useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts) — *modified: useCreateSettlementShare { id, ttl, ogImage, ogImageUrl } 인자 확장*
 - [packages/shared/src/hooks/useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts)
 - [packages/shared/src/hooks/useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts)
@@ -819,7 +890,7 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts)
 - [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
-- [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts)
+- [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts) — *modified: zinc400 추가 + 다크 textMuted/border 대비비 상향 + lightColors.bg=white*
 - [packages/shared/src/design/theme.ts](../../packages/shared/src/design/theme.ts)
 - [packages/shared/src/design/cssVars.ts](../../packages/shared/src/design/cssVars.ts)
 - [packages/shared/src/design/ThemeProvider.tsx](../../packages/shared/src/design/ThemeProvider.tsx)

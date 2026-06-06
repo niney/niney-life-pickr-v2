@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-06-06 (17th compile)
+
+**Topics updated:** analytics, friendly, api-contract, shared, web, mobile, map, project-overview
+**New topics:** schedule (cron(croner) 기반 "정규화 → 글로벌 머지" 인프로세스 주기 자동 실행 — plugin 전역 singleton + 모듈 registry(cron 타이머 + 동시 1개 inflight + overlap skip + SSE 진행) + schedule_configs/schedule_runs 테이블, 어드민 UI 는 AdminAnalyticsPage 통합)
+**Concepts updated:** in-memory-singleton-gates (scheduleRegistry — cron 타이머 + 단일 inflight, global-merge-job-registry 와 같은 단일-잡 모델; schedule 연결 추가), sse-token-auth (Routes.Schedule.runEvents — ?token=+ADMIN+15s heartbeat; schedule 추가), stream-driven-cache-merge (useScheduleRunEvents snapshot/progress/done; schedule 추가), zod-ssot-buildless (schedule.ts 12 export 한 라운드 흡수; schedule 추가), versioned-llm-prompts (GLOBAL_MERGE_VERSION 2→3 진짜 bump — full 재머지 요구, 4요소 풀세트), platform-ui-split (다크 모드 — 테마 저장소 플랫폼 분리 + design 토큰 공유, 지도 다크 동형 다른 인프라)
+**New concepts:** none (다크 모드는 platform-ui-split sub-pattern 으로, 스케줄러는 기존 5개 컨셉 인스턴스로 흡수)
+
+**Sources scanned:** ~544 (기존 525 + 신규 ~19)
+**Sources changed:** 85 파일 — 27 커밋 (16차 위키 커밋 `13c10a5` 이후 — `git diff 13c10a5 HEAD`, +4340/-599)
+**Notes:** 도메인 신설 + 전 토픽 가로지르는 다크 모드/UI 정비가 겹친 큰 라운드. 핵심: (1) **schedule 신규** — croner in-process(단일 Fastify, no-Redis), `plugins/schedule.ts` 가 ScheduleService 를 `app.schedule` 로 decorate(autoload 알파벳순 'schedule'<'summaries' 라 app.aiConfig 못 써 자체 AiConfig 생성), `scheduleRegistry` 가 cron 타이머 Map + 동시 1개 inflight ActiveRun(beginRun overlap 가드→skipped 행), 부팅 시 stale running→interrupted 정리 + cron 등록, jobType 단일 'normalize-merge' 기본 03:00 KST, MAX_TARGETS_PER_RUN=200 멱등(초과분 다음 주기), 크롤 중 식당 skip, SSE ?token= + 15s heartbeat. (2) **택소노미 v3** — 전역 머지 최상위 축 음식종류(한식/일식/양식)→재료·메뉴군(고기/해산물/밥/면/국·탕/찌개·전골/김치/반찬/튀김/회·초밥/분식/디저트/음료/주류/기타), GLOBAL_MERGE_VERSION 2→3, analytics.service TOP_WHITELIST↔프롬프트 동기화, **적용엔 full=true 재머지 필요**(증분만으론 기존 path 안 바뀜). LLM 출력 스키마 additionalProperties 맵→{mappings:[{variant,canonical,categoryPath}]} 배열(Ollama/llama.cpp grammar 가 additionalProperties 값 스키마 변환 못 해 빈 응답→식별매핑·categoryPath 전멸하던 버그 fix), GLOBAL_MERGE_CHUNK_SIZE 50→10(reasoning 모델 thinking 폭증→타임아웃/truncation→빈응답, "완주" 우선; probe:merge 검증). buildCategoryTree 공용(전역 어드민 + 식당별 공개 `GET /restaurants/public/:placeId/category-tree` 동일 규칙), categoryPath 유실 복구(existingPathByKey). (3) **다크 모드** — 웹 localStorage 스토어 + tailwind `@custom-variant dark`, 앱 themeStore(AsyncStorage 'lp:themeMode' + 수동 hydrate 스플래시 중 확정으로 테마 플래시 방지)+useResolvedThemeMode(useColorScheme), @repo/shared design 토큰만 공유(저장소 물리 분리). vworld 지도 다크(midnight)/위성 레이어 토글 — 웹 OL tileSource.setUrl(MapLayerControl) vs 앱 WebView window.__setMode 주입. (4) **앱 안드로이드** — 커스텀 하단 탭바(표준 스타일), splash_logo 누락 빌드 fix, ios/android 실기기·릴리즈 스크립트, 루트 expo prebuild 오염 gitignore. (5) **UI 정비** — soft tonal 버튼/배지 variant, 분석 메뉴·팁 클릭 리뷰 필터, 메뉴 썸네일 라이트박스, 목록 카드 클릭=지도 이동/더블클릭=확대, 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹/앱 통일). article sources: analytics 11→13, friendly 92→99, api-contract 24→25, shared 52→54, web 95→98, mobile 53→56, map 22→24, project-overview 35→41, schedule 신규 ~14.
+
 ## 2026-06-01 (16th compile)
 
 **Topics updated:** settlement, friendly, web, mobile, shared, api-contract, config, map, project-overview

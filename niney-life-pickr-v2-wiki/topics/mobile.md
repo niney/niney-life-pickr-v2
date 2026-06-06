@@ -1,12 +1,14 @@
 ---
 topic: mobile
-last_compiled: 2026-06-01
-sources_count: 53
+last_compiled: 2026-06-06
+sources_count: 56
 status: active
-aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token, useTabBarHeight, tab-bar-inset, bottom-tab-bleed, awesome-gallery, react-native-awesome-gallery, lightbox-gallery, pinch-zoom, double-tap-zoom, swipe-to-close, virtualized-reviews, review-infinite-scroll, ReviewsControls, single-flatlist-detail, row-discriminated-union, hero-hide-on-tab, scrollToOffset-hero, thumbUrl, thumbnail-proxy, pstatic-proxy, eslint-react-compiler, react-compiler-lint, flatlist-virtualization, contacts-flatlist, history-flatlist, lightbox-shared, png-asset-compression, short-share-path, enable-applinks-flag]
+aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token, useTabBarHeight, tab-bar-inset, bottom-tab-bleed, awesome-gallery, react-native-awesome-gallery, lightbox-gallery, pinch-zoom, double-tap-zoom, swipe-to-close, virtualized-reviews, review-infinite-scroll, ReviewsControls, single-flatlist-detail, row-discriminated-union, hero-hide-on-tab, scrollToOffset-hero, thumbUrl, thumbnail-proxy, pstatic-proxy, eslint-react-compiler, react-compiler-lint, flatlist-virtualization, contacts-flatlist, history-flatlist, lightbox-shared, png-asset-compression, short-share-path, enable-applinks-flag, dark-mode, theme-mode, themeStore, useResolvedThemeMode, useColorScheme, manual-hydrate, theme-flash, vworld-midnight, midnight-tile, setMode-injection, android-custom-tabbar, AndroidTabBar, splash-transparent, splashscreen_logo, gesture-handler-scrollview, bottomsheet-horizontal-swipe, CategoryTree, useRestaurantPublicCategoryTree, review-tip-filter, review-menu-filter, card-borderless, full-bleed-photos, menu-thumbnail-lightbox, root-prebuild-pollution, device-release-scripts]
 ---
 
 # mobile — Expo + React Native 앱
+
+**2026-06-06 변경 흡수 — 앱 다크 모드 + vworld 야간 타일 + 안드로이드 커스텀 표준 탭바 + 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹 통일) + 카테고리 트리·필터 연결.** (1) **앱 다크 모드** (system/light/dark) — 신규 [themeStore.ts](../../apps/mobile/src/lib/themeStore.ts)(zustand + AsyncStorage `lp:themeMode`) + [useResolvedThemeMode.ts](../../apps/mobile/src/hooks/useResolvedThemeMode.ts)(`'system'` 이면 `useColorScheme` 결합). 영속화는 `settlementPrefsStore` 와 같은 **수동 hydrate** 패턴 — zustand persist 의 async rehydrate 타이밍 대신 [bootstrapApi](../../apps/mobile/src/lib/api-setup.ts) 에서 `await` 로 당겨와 스플래시가 떠 있는 동안 모드를 확정(잘못된 테마 플래시 방지). 저장소는 웹과 물리 분리(앱 AsyncStorage / 웹 localStorage), [@repo/shared](shared.md) design 토큰만 공유. [_layout.tsx](../../apps/mobile/app/_layout.tsx) 가 resolved mode 를 `ThemeProvider`/`StatusBar`/Stack 헤더에 cascade, [(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) 의 "화면 모드" `SegmentedControl` 로 선택. (2) **vworld 야간(midnight) 타일** — [PublicRestaurantsWebMap.native](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx)/[.web](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) + [publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 가 WebView 안 vworld 베이스맵을 다크 모드에서 `midnight` 타일로 — HTML 재생성/WebView 재마운트 없이 `window.__setMode` 런타임 주입(native injectJavaScript / web postMessage)으로 타일·라벨 색만 교체(줌/센터/선택 유지, 같은 모드면 no-op). (3) **안드로이드 커스텀 하단 탭바(표준 스타일)** — [tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx) 가 Android 에서만 `tabBar` 렌더 prop 으로 JS `AndroidTabBar`(아이콘 위/라벨 아래 세로 배치, 활성은 primary 색 전환만 — 네이티브 Material 의 보라 인디케이터·elevation 회피)를 그린다. iOS 는 네이티브 `UITabBarController` 유지. splash_logo 누락 안드로이드 빌드 실패 fix(투명 [splash-transparent.png](../../apps/mobile/assets/splash-transparent.png) + [app.config.ts](../../apps/mobile/app.config.ts) `expo-splash-screen.android.image`) + 맛집 탭 바텀시트 내 가로 스와이프 동작 수정([TabBar](../../apps/mobile/src/components/restaurantDetail/TabBar.tsx)·[ReviewCard](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) 의 가로 스크롤러를 `react-native-gesture-handler` 의 `ScrollView` 로 교체). (4) **상세 탭 카드 테두리 제거 + 리뷰 사진 풀폭 스와이프**(웹과 통일) — `restaurantDetail/` 다수가 카드 `borderWidth`/`backgroundColor` 를 떼고 hairline divider 로 구분, 리뷰 가로 사진 스크롤러는 `marginHorizontal:-16` 로 좌우 패딩을 뚫어 화면 끝까지. (5) **카테고리 트리 + 필터 연결** — 신규 [CategoryTree.tsx](../../apps/mobile/src/components/restaurantDetail/shared/CategoryTree.tsx)(분석 탭, 새 [`useRestaurantPublicCategoryTree`](shared.md) 훅) + AiSummary 방문 팁·InsightsTab/MenuGrid 인기 메뉴 클릭 → 리뷰 탭으로 점프하며 `tip`/`menu` 필터 적용(해제 칩 행) + MenuGrid 메뉴 썸네일 라이트박스. (6) **빌드 스크립트** — `ios:device`/`ios:release`/`android:device`/`android:release` 실기기·릴리즈 스크립트([package.json](../../apps/mobile/package.json)) + 루트 [.gitignore](../../apps/mobile/../../.gitignore) 에 `/ios`·`/android`·`/app.json`(루트에서 실수로 돈 `expo prebuild` 산출물 무시).
 
 **2026-06-01 변경 흡수 — perf + 빌드 인프라 라운드.** (1) **네이버 이미지 썸네일 프록시** — 신규 [thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) 가 네이버 phinf 원본(최대 ~1.5MB)을 friendly `/media/thumbnail` 프록시(sharp 리사이즈 + 디스크 캐시) 경유로 바꿔 다운로드를 ~98% 줄인다(80×80 원본 1,538,044B → w=240 24,987B). 웹은 이미 `reviewThumbnailUrl` 로 같은 프록시를 썼는데 앱만 원본을 그대로 받고 있던 격차를 메움. [PublicRestaurantCard](../../apps/mobile/src/components/PublicRestaurantCard.tsx)·[InfoTab](../../apps/mobile/src/components/restaurantDetail/InfoTab.tsx)·[PhotosTab](../../apps/mobile/src/components/restaurantDetail/PhotosTab.tsx)·[PublicRestaurantDetail hero](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx)·[ReviewCard](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) 적용. (2) **목록 FlatList 가상화** — 단골([contacts.tsx](../../apps/mobile/app/settlement/contacts.tsx))·정산 이력([history.tsx](../../apps/mobile/app/settlement/history.tsx)) 의 `ScrollView` 를 `FlatList` 로 바꿔 보이는 행만 렌더(`ContactRow`/`SessionRow`/`DraftRow` 추출). (3) **ESLint + React Compiler 진단 룰** — 신규 [eslint.config.mjs](../../apps/mobile/eslint.config.mjs) 가 `@repo/config/eslint/react` 를 확장하고 React Compiler bailout 룰(`set-state-in-effect`/`set-state-in-render`/`refs`/`immutability`)을 `warn` 으로 도입(기존 코드 강제 변경 없이 회귀 가시화). (4) **Lightbox 공용화** — 라이트박스가 `restaurantDetail/Lightbox.tsx` 에서 [components/Lightbox.tsx](../../apps/mobile/src/components/Lightbox.tsx) 로 승격(PhotosTab·ReviewCard 가 `~/components/Lightbox` import). (5) **단골 수정 시트 폼 초기화 → key 리마운트** — `<ContactEditSheet key={editing?.id ?? 'closed'}>` 로 contact 가 바뀌면 시트를 통째 리마운트해 prop→state 동기화 useEffect 를 제거. (6) **정적 에셋 PNG 무손실 압축**(~946KB 절감 — `assets/icon.png`/`adaptive-icon.png`/`splash.png`/`splash-logo.png`). (7) **운영** — `app.config.ts` 의 deep-link path 가 `/share/settlements` → **`/s/`**(짧은 공유 경로) 로 바뀌고, iOS `associatedDomains` 가 `EXPO_PUBLIC_ENABLE_APPLINKS === '1'` 깃발 뒤로(무료 Apple 팀은 Associated Domains capability 미지원).
 
@@ -45,7 +47,7 @@ App config의 표시명은 `Life Pickr`, slug `life-pickr`, 번들 ID `com.niney
 - **expo-router 6.0.23** — 파일 기반 라우팅 (`main: "expo-router/entry"`)
 - **React 19.1.0**
 - **TanStack Query 5.62**, **Zustand 5**, **react-native-reanimated 4.1.7**, **react-native-gesture-handler 2.28**
-- **react-native-bottom-tabs 1.2** + **@bottom-tabs/react-navigation 1.2** — 네이티브 탭바 (web 은 `@react-navigation/bottom-tabs` 로 대체, 아래 Expo Web 절 참조)
+- **react-native-bottom-tabs 1.2** + **@bottom-tabs/react-navigation 1.2** — 탭 네비게이터. iOS 는 네이티브 `UITabBarController` 바, **Android 는 `tabBar` 렌더 prop 으로 커스텀 JS `AndroidTabBar`**(아래 탭바 절), web 은 `@react-navigation/bottom-tabs` 로 대체 (아래 Expo Web 절)
 - **@gorhom/bottom-sheet 5.2** — 정산 위저드·picker 시트류의 베이스
 - **react-native-awesome-gallery 0.4** — 리뷰/사진 라이트박스. 핀치/더블탭 줌 + 줌 패닝 + 페이징 + 쓸어내려 닫기를 한 컴포넌트가 처리 (gesture-handler + reanimated 위에 빌드). 직접 만든 FlatList 캐러셀 대체.
 - **expo-image / expo-location / expo-image-picker / expo-glass-effect / expo-linear-gradient / expo-linking / expo-splash-screen** 등
@@ -62,6 +64,26 @@ API URL 은 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 의 `resolveA
 4. **localhost:3000** — 마지막 폴백 (시뮬레이터/Expo Web localhost).
 
 `app.config.ts` 는 더 이상 `extra.apiUrl` 로 굳히지 않는다 — `process.env` 직접 읽는 경로가 dev client 캐시 / manifest stale 에 덜 민감하기 때문 ([app.config.ts](../../apps/mobile/app.config.ts) 주석).
+
+### 다크 모드 — themeStore + useResolvedThemeMode [coverage: high — 5 sources]
+
+앱 화면 모드는 `'light' | 'dark' | 'system'` 3택 ([themeStore.ts](../../apps/mobile/src/lib/themeStore.ts), zustand). `system` 이면 OS 색상 스킴을 따른다.
+
+- **저장소** — AsyncStorage `lp:themeMode`. 웹은 자체 localStorage 스토어(`apps/web/src/stores/theme.ts`)라 **물리적으로 분리** — 충돌 없음. 공유하는 건 `@repo/shared` 의 design 토큰(`themes`)뿐 ([platform-ui-split](../concepts/platform-ui-split.md) 의 "저장소는 플랫폼별, 토큰은 공유" 인스턴스).
+- **수동 hydrate** — `settlementPrefsStore` 와 같은 패턴: zustand persist 의 async rehydrate 에 맡기지 않고 `themeStore.hydrate()` 를 [bootstrapApi](../../apps/mobile/src/lib/api-setup.ts) 가 **`await`** 로 먼저 당겨온다(prefs hydrate 는 fire-and-forget 이지만 theme 만 await — Stack 첫 마운트 전에 모드를 확정해야 잘못된 테마 플래시가 안 난다). `setMode` 는 in-memory 갱신 후 `void AsyncStorage.setItem` (write 는 fire-and-forget).
+- **OS 반응형 해석은 앱 레벨** — [useResolvedThemeMode.ts](../../apps/mobile/src/hooks/useResolvedThemeMode.ts) 가 `themeStore.mode` + `useColorScheme()`(react-native) 을 합쳐 실제 `'light' | 'dark'` 를 돌려준다. `useColorScheme` 을 `ThemeProvider`(@repo/shared — web/native 공용 단일 파일) 에 넣으면 웹(Vite) 번들이 깨지므로, OS 해석은 이 앱 레벨 훅이 하고 `_layout` 이 결과를 `ThemeProvider mode` prop 으로 주입.
+- **적용 지점** ([_layout.tsx](../../apps/mobile/app/_layout.tsx)) — resolved mode 가 (1) `GestureHandlerRootView` 배경(`themes[mode].colors.bg` 직접 참조 — GHRV 는 ThemeProvider 밖), (2) `ThemeProvider mode`, (3) `StatusBar style`(`mode === 'dark' ? 'light' : 'dark'` — `style="auto"` 는 OS 만 보므로 강제-반대 케이스가 어긋나 직접 분기), (4) Stack `screenOptions` 의 `headerStyle`/`headerTintColor`/`contentStyle` 에 cascade.
+- **선택 UI** — [(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) 의 "화면 모드" `SegmentedControl`(라이트/다크/시스템).
+
+> 이전 라운드까지 앱은 `ThemeProvider mode="light"` 고정이었다 — 이 라운드에 다크 모드가 들어오며 그 가정이 깨졌다.
+
+### vworld 지도 다크(midnight) 타일 [coverage: high — 3 sources]
+
+WebView 안 vworld 베이스맵도 테마를 따른다 — 라이트=일반(Base), 다크=야간(`midnight`). vworld 가 제공하는 **실제 다크 타일**이라 CSS invert 트릭 불필요(웹 MapCanvas 와 동일 전략, [map.md](map.md) 참조).
+
+- [publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 의 `buildPublicRestaurantsMapHtml(apiKey, center, mode)` 가 **초기 모드만** HTML 에 박는다(Base/midnight 두 타일 URL + `darkBg` 플래그 + body 배경 + 마커 라벨 색 분기 — 야간이면 흰 글자/어두운 외곽선).
+- **런타임 전환은 `window.__setMode(mode)`** — HTML 재생성/WebView 재마운트 없이 `tileSource.setUrl` + body 배경 + 모든 마커 라벨 색 재설정(줌/센터/선택 보존). 같은 모드면 early-return no-op(중복 `setUrl` 타일 깜빡임 방지).
+- 호출 경로: native 는 [.native.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx) 가 `theme.mode` 변경 effect 에서 `injectJavaScript('window.__setMode(...)')`, web 은 [.web.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) 가 `postMessage({type:'setMode'})` → HTML 의 `message` 리스너 → `__setMode`. `theme.mode` 는 HTML 빌드 `useMemo` deps 에서 **의도적 제외**(초기만 박고 이후는 주입) — worklet 충돌·지도 상태 유실 방지([platform-ui-split](../concepts/platform-ui-split.md) 의 `.native`/`.web` 페어 인스턴스).
 
 ### 썸네일 프록시 — `thumbUrl()` [coverage: high — 5 sources]
 
@@ -84,7 +106,7 @@ setSettlementDraftStorage(AsyncStorage);
 
 [`@repo/shared`](shared.md) 의 settlement draft 스토어(zustand persist) 가 첫 read/write 부터 AsyncStorage 를 쓰도록 강제. 웹은 sessionStorage 가 자동이지만 앱은 명시 주입 필요. 주입이 빠지면 persist 가 silently no-op — store 는 동작하지만 앱 재실행 시 draft 가 날아간다.
 
-이후 `bootstrapApi()` 가 await 되면서 (1) `useSettlementPrefsStore.getState().hydrate()` (fire-and-forget), (2) AsyncStorage 에서 토큰/게스트 hydrate, (3) `useAuthStore.subscribe` 로 양방향 동기화, (4) `configureApi({ baseUrl, getToken, onUnauthorized })` 까지 끝낸다.
+이후 `bootstrapApi()` 가 await 되면서 (0) **`useThemeStore.getState().hydrate()` 를 `await`** (스플래시 중 모드 확정 — 테마 플래시 방지), (1) `useSettlementPrefsStore.getState().hydrate()` (fire-and-forget), (2) AsyncStorage 에서 토큰/게스트 hydrate, (3) `useAuthStore.subscribe` 로 양방향 동기화, (4) `configureApi({ baseUrl, getToken, onUnauthorized })` 까지 끝낸다. theme 만 `await`, prefs 는 fire-and-forget 인 차이에 유의.
 
 ### 라우팅 트리 (expo-router 파일 기반)
 
@@ -120,7 +142,7 @@ app/
         └── [token].tsx                  ← useSharedSettlement(token) — read-only view
 ```
 
-루트 레이아웃 ([_layout.tsx](../../apps/mobile/app/_layout.tsx)) 은 비동기 `bootstrapApi()` 가 끝날 때까지 `null` 반환 — splash 유지. 준비되면 `GestureHandlerRootView` → `ThemeProvider mode="light"` → `QueryClientProvider` → **`BottomSheetModalProvider`** (정산 picker 시트들의 portal 호스트) → `Stack` 구조. Stack 은 `screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal' }}` — 후자가 iOS 백 라벨 회귀 방지(아래 Gotchas).
+루트 레이아웃 ([_layout.tsx](../../apps/mobile/app/_layout.tsx)) 은 `bootstrapApi()` 가 끝날(`ready`) 때까지 `RootNavigator` 를 안 그리고 풀배경 `AnimatedSplash` 오버레이를 유지(`SplashScreen.preventAutoHideAsync` + GHRV `onLayout` 에서 `hideAsync`, 최소 노출 `MIN_SPLASH_MS=2200`). 구조: `GestureHandlerRootView`(배경 `themes[mode].colors.bg`) → **`ThemeProvider mode={useResolvedThemeMode()}`** (이전 `mode="light"` 고정 → resolved mode) → `QueryClientProvider` → **`BottomSheetModalProvider`** (정산 picker 시트들의 portal 호스트) → `Stack`. Stack(`RootNavigator`) 은 `useTheme` 로 헤더/scene 을 테마화하고 `screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal', headerStyle/headerTintColor/contentStyle }}` — `headerBackButtonDisplayMode` 가 iOS 백 라벨 회귀 방지(아래 Gotchas), `contentStyle.backgroundColor` 가 전환 중 흰 깜빡임 방지.
 
 `app.config.ts` 에서 `experiments.typedRoutes: true` + `experiments.reactCompiler: true` 활성. plugins 는 `expo-router`, `expo-font`, `react-native-bottom-tabs`, `expo-splash-screen`(단색 `#3916ae`), `expo-location`, **`expo-image-picker`**(영수증 사진 — 카메라+라이브러리 권한 inline), 그리고 로컬 config plugin 2종 (`./plugins/with-swift-concurrency-fix`, `./plugins/with-android-minify`).
 
@@ -141,16 +163,29 @@ app/
 
 - **`(tabs)/restaurants.tsx`** — 풀스크린 WebView 지도 + `@gorhom/bottom-sheet` 2개 적층(list / detail). list 시트는 항상 mount, detail 시트는 `placeId` 가 truthy 일 때만 conditional mount. list 시트의 `BottomSheetFlatList` 와 detail 의 `PublicRestaurantDetail` 모두 `useTabBarHeight()` 만큼 하단 패딩.
 - **`restaurant/[placeId]/index.tsx`** — 식당 상세. `useLocalSearchParams<{ placeId: string }>()` + `PublicRestaurantDetail` 컨테이너. `Stack.Screen` 으로 `headerBackTitle: '뒤로'` 명시 — 부모 Stack 의 `headerShown:false` 를 여기서만 켠다.
-- **`src/components/restaurantDetail/PublicRestaurantDetail.tsx`** — 공개 맛집 상세 컨테이너. 스크롤 루트가 단일 `FlatList` (시트 모드는 `List=BottomSheetFlatList` 주입, deep-link route 는 기본 `FlatList`). 데이터 fetch(상세 + 인사이트 + **리뷰 페이지네이션**)는 여기 한 번. 행을 `Row` discriminated union 으로 펼쳐 `[hero, TabBar(sticky idx 1), ...콘텐츠]` 구성 — 비-리뷰 탭은 콘텐츠 통째로 한 행, **리뷰 탭만** controls + 카드 N행 + footer 로 펼쳐 가상화. `useRestaurantPublicReviews(detail ? placeId : null, { sentiment, sort }, reviewSeed)` 가 `detail.reviewsFirstPage` 를 seed 로 첫 페이지 즉시 + `onEndReached` → `fetchNextPage`. 탭 변경은 `scrollToOffset({ offset: heroH, animated: true })` 로 hero 숨김. hero 이미지는 `thumbUrl(hero, 900)`.
+- **`src/components/restaurantDetail/PublicRestaurantDetail.tsx`** — 공개 맛집 상세 컨테이너. 스크롤 루트가 단일 `FlatList` (시트 모드는 `List=BottomSheetFlatList` 주입, deep-link route 는 기본 `FlatList`). 데이터 fetch(상세 + 인사이트 + **리뷰 페이지네이션**)는 여기 한 번. 행을 `Row` discriminated union 으로 펼쳐 `[hero, TabBar(sticky idx 1), ...콘텐츠]` 구성 — 비-리뷰 탭은 콘텐츠 통째로 한 행, **리뷰 탭만** (`review-filter` 칩?) + controls + 카드 N행 + footer 로 펼쳐 가상화. `useRestaurantPublicReviews(detail ? placeId : null, { sentiment, sort, tip, menu }, reviewSeed)` 가 `detail.reviewsFirstPage` 를 seed 로 첫 페이지 즉시 + `onEndReached` → `fetchNextPage`. 탭 변경은 `scrollToOffset({ offset: heroH, animated: true })` 로 hero 숨김. hero 이미지는 `thumbUrl(hero, 900)`. **[17차] 방문 팁/메뉴 클릭 → 리뷰 필터** — `tipFilter`/`menuFilter` state(동시 1개만 활성, 한쪽 고르면 다른 쪽 해제)를 리뷰 쿼리 `tip`/`menu` 파라미터로 넘기고, 활성 시 `review-filter` 행에 "방문 팁 · 〈term〉 (N)" / "메뉴 · 〈name〉 (N)" 칩 + "✕ 해제" 를 렌더. `handleSelectTip`/`handleSelectMenu` 가 `reviews` 탭으로 점프시킨다. 리뷰 카드 행 끝엔 `theme.colors.border` 1px divider(카드 테두리 대신).
 - **`restaurantDetail/ReviewsControls.tsx`** — 리뷰 sentiment 필터(전체/긍정/부정, `detail.reviewCounts` 카운트) + 정렬(최근 방문순/별점 높은순) 칩. FlatList 의 `review-controls` 행으로 렌더. 폐기된 `ReviewsTab.tsx` 에서 칩 UI 만 분리.
+- **`restaurantDetail/shared/CategoryTree.tsx`** **[17차 신규]** — 분석(InsightsTab) 탭의 메뉴 카테고리 트리(RN). 웹 `CategoryTree` 와 같은 데이터·규칙: 재귀 펼침(루트=depth 0 펼침), 행마다 "N회"(`totalMentions`) + `+positive`/`-negative`. 데이터는 신규 [`useRestaurantPublicCategoryTree(placeId)`](shared.md) 훅(별도 endpoint — 전역 머지가 닿은 식당만 `roots` 가 차므로 비면 섹션 숨김). 훅 규칙상 InsightsTab 의 early return 위에서 호출.
+- **상세 탭 카드 테두리 제거(웹 통일)** **[17차]** — `ReviewCard`/`MenuGrid`/`InsightsTab` 메뉴 행 등이 카드 `borderWidth`/`surface 배경`/`borderRadius` 를 떼고, 행 사이는 hairline divider(`borderBottomColor`) 로만 구분. 더 평평하고 웹과 통일된 룩.
+- **리뷰 사진 풀폭 스와이프** **[17차]** — [ReviewCard](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) 의 가로 사진 스크롤러가 `marginHorizontal:-16` 으로 부모 패딩(16)을 상쇄해 화면 끝까지 풀블리드, 첫/끝 사진은 `contentContainerStyle.paddingHorizontal:16` 으로 콘텐츠와 정렬. 스크롤러 자체는 `react-native-gesture-handler` 의 `ScrollView`(아래 Gotchas — 시트 안 가로 스와이프).
 - **`src/components/Lightbox.tsx`** **[승격 2026-06-01]** — `react-native-awesome-gallery` 기반 풀스크린 뷰어. 이전 `restaurantDetail/Lightbox.tsx` 에서 `src/components/Lightbox.tsx` 로 승격 — PhotosTab·ReviewCard 가 `~/components/Lightbox` 로 공용 import. 페이징·핀치/더블탭 줌(`doubleTapScale=2.5`/`maxScale=6`)·줌 패닝·`onSwipeToClose`·`onTap` 닫기. `GestureHandlerRootView` 로 Modal 래핑(제스처 동작 필수). `renderItem` 의 `setImageDimensions` 로 원본 픽셀 크기를 알려야 contain 배치·줌 경계 계산이 됨. 이미지는 원본 URL(thumbUrl 미적용).
 - **`restaurantDetail/shared/ReviewCard.tsx`** — 리뷰 카드(만족도 칩 + 본문 + 가로 스크롤 이미지 → Lightbox + 분석 세부). `memo(ReviewCardImpl)` — 필터/정렬 칩 변경이나 무한 스크롤 페이지 추가로 리스트가 새로 만들어져도 entry reference 동일이면 re-render 차단. 이미지 `thumbUrl(u, 480)`.
-- **`src/components/restaurantDetail/`** 나머지 — `HomeTab`/`InfoTab`/`PhotosTab`/`InsightsTab` + `shared/MenuGrid`. [MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — 메뉴 리스트 상단에 "🧮 이 메뉴로 정산하기" Pressable CTA. 비로그인이면 `/(auth)/login` 으로, 로그인이면 `/restaurant/[placeId]/settle/new` 로 push (typedRoutes 가 nested dynamic 인식 못 할 때 위해 `as never` 캐스트).
+- **`src/components/restaurantDetail/`** 나머지 — `HomeTab`/`InfoTab`/`PhotosTab`/`InsightsTab` + `shared/MenuGrid`/`shared/AiSummary`. [MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — 메뉴 리스트 상단에 "🧮 이 메뉴로 정산하기" Pressable CTA. **[17차]** [AiSummary](../../apps/mobile/src/components/restaurantDetail/shared/AiSummary.tsx) 는 `onSelectTip` 이 주어지면(HomeTab 만 주입, InsightsTab 은 정적) 방문 팁을 primary 색 `Pressable` 로 렌더해 리뷰 필터 연결. [MenuGrid](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx) 는 (1) `onSelectMenu` + 멘션 통계(`stats`) 있는 메뉴를 탭 가능하게(없으면 정적), (2) 메뉴 썸네일 탭 → 자체 `Lightbox` 라이트박스. 비로그인이면 `/(auth)/login` 으로, 로그인이면 `/restaurant/[placeId]/settle/new` 로 push (typedRoutes 가 nested dynamic 인식 못 할 때 위해 `as never` 캐스트).
 - **`src/components/MenuRankingCard.tsx`** — (admin 한정) `useMenuRanking(placeId)` 결과로 메뉴 순위 SentimentBar.
 
 ### `useTabBarHeight` — 하단 탭바 인셋 [coverage: medium — 2 sources]
 
 `react-native-bottom-tabs` 는 translucent 여부와 무관하게 scene 을 풀블리드로 깔고 인셋을 직접 넣어야 한다 — 그래서 스크롤 마지막 콘텐츠가 탭바(+홈 인디케이터) 뒤로 가렸다. [useTabBarHeight.ts](../../apps/mobile/src/hooks/useTabBarHeight.ts)(native, `react-native-bottom-tabs` 의 `BottomTabBarHeightContext` 를 직접 읽음 — `useBottomTabBarHeight()` 는 탭 밖 deep-link route 에서 throw) / [.web.ts](../../apps/mobile/src/hooks/useTabBarHeight.web.ts)(web, `@react-navigation/bottom-tabs` 의 동명 context — web 탭바는 JS 구현이라) 페어가 탭바 높이를 반환. 폴백은 `??` 가 아니라 `||` — 탭 밖(`undefined`) / 측정 전 첫 프레임(Provider 초기값 `0`) 둘 다 `useSafeAreaInsets().bottom` 을 바닥값으로 잡아 첫 프레임부터 콘텐츠가 안 가린다(탭바 높이는 항상 bottom inset 을 포함하므로 `||` 가 under-pad 를 만들지 않음). 호출처: `(tabs)/home`·`(tabs)/profile`·`(tabs)/restaurants`·`PublicRestaurantDetail` 의 `contentContainerStyle.paddingBottom` + `scrollIndicatorInsets.bottom`.
+
+### 하단 탭바 — iOS 네이티브 / Android 커스텀 JS [coverage: low — 1 source]
+
+[tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx)(native) 가 플랫폼별로 다른 바를 그린다 — 같은 `createNativeBottomTabNavigator` 위에서:
+
+- **iOS** — `tabBar` 미지정(`undefined`) → `react-native-bottom-tabs` 의 네이티브 `UITabBarController`(SF Symbols + iOS 26 liquid glass) 그대로. `tabBarIcon` 은 `{ sfSymbol }` 형태.
+- **Android** — 네이티브 Material `BottomNavigationView` 의 활성 인디케이터(아이콘만 감싸는 보라 pill + elevation 보라끼)를 피하려고 `tabBar={(props) => <AndroidTabBar {...props}/>}` 렌더 prop 으로 **커스텀 JS 바**. 가장 흔한 표준 하단 탭 스타일 — `MaterialIcons` 아이콘 위 / 라벨 아래 세로 배치, 활성은 `theme.colors.primary` 색 전환만(배경 pill 없음). `surface` 배경 + hairline top border + `useSafeAreaInsets().bottom` 패딩. 커스텀 `tabBar` 지정 시 라이브러리가 네이티브 바를 숨기고 씬을 flex 로 채운 뒤 이 바를 하단 배치(높이 자동 측정 → `useTabBarHeight` 가 그대로 따라감).
+- `tabBarActiveTintColor`/`InactiveTintColor` 는 iOS 네이티브 바용(커스텀 Android 바는 무시). 라우트 3개: `home`(홈)/`restaurants`(맛집)/`profile`(프로필).
+
+`.web.tsx` 형제([tabs-layout.web.tsx](../../apps/mobile/src/components/tabs-layout.web.tsx))는 여전히 `@react-navigation/bottom-tabs` + inline SVG — 셔틀 분리는 그대로([platform-ui-split](../concepts/platform-ui-split.md)).
 
 ### 정산 — Mobile 구현 [coverage: high — 16 sources]
 
@@ -217,7 +252,7 @@ Babel 은 `babel-preset-expo` + inline `replace-import-meta` 플러그인 + `rea
 ## Talks To [coverage: high — 5 sources]
 
 - **[`@repo/api-contract`](api-contract.md)** — zod 스키마/타입. 정산 도메인: `SharedSettlementSessionType`, `ReceiptItemCategoryType`, `SettlementSessionType`, `SettlementParticipantType`, `SettlementRoundType`, `SettlementContactType`, `SettlementDraftType`, `SettlementSessionSummaryType`. 맛집: `RestaurantPublicListItemType`, `RestaurantPublicDetailType`, `PublicVisitorReviewType`, `RestaurantPublicReviewSentimentType`, `RestaurantPublicReviewSortType`.
-- **[`@repo/shared`](shared.md)** — API 클라이언트 (`configureApi`, `getApiConfig`), 인증·맛집 훅 (`useLogin`, `useRegister`, `useLogout`, `useCurrentUser`, `usePicks`, `useRandomPick`, `useRestaurantList`, `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, `useRestaurantPublicReviews`, `useMenuRanking`, `useMapPublicConfig`), Zustand 스토어 (`useAuthStore`), UI (`Screen`, `Stack`, `Text`, `Button`, `Input`, `SegmentedControl`, `Divider`, `ErrorBanner`), `ThemeProvider`/`useTheme`/`Theme`. **정산 훅**: `useSettlement`, `useListSettlements`, `useListSettlementDrafts`, `useDeleteSettlement`, `useDeleteSettlementDraft`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUpdateSettlementContact`, `useDeleteSettlementContact`, `useUploadReceipt`, `useExtractReceipt`, `setSettlementDraftStorage` (스토리지 어댑터 주입), `ApiError`.
+- **[`@repo/shared`](shared.md)** — API 클라이언트 (`configureApi`, `getApiConfig`), 인증·맛집 훅 (`useLogin`, `useRegister`, `useLogout`, `useCurrentUser`, `usePicks`, `useRandomPick`, `useRestaurantList`, `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, `useRestaurantPublicReviews`(이번에 `tip`/`menu` 필터 파라미터 추가), **`useRestaurantPublicCategoryTree`**(17차 신규 — 분석 탭 메뉴 카테고리 트리), `useMenuRanking`, `useMapPublicConfig`), Zustand 스토어 (`useAuthStore`), UI (`Screen`, `Stack`, `Text`, `Button`, `Input`, `SegmentedControl`, `Divider`, `ErrorBanner`), `ThemeProvider`/`useTheme`/`Theme`/**`themes`**(앱 GHRV 배경에 직접 참조). **정산 훅**: `useSettlement`, `useListSettlements`, `useListSettlementDrafts`, `useDeleteSettlement`, `useDeleteSettlementDraft`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUpdateSettlementContact`, `useDeleteSettlementContact`, `useUploadReceipt`, `useExtractReceipt`, `setSettlementDraftStorage` (스토리지 어댑터 주입), `ApiError`.
 - **[`@repo/utils`](utils.md)** — `computeBboxAround`, `isInKorea`, `formatWonPrice`, **`reviewThumbnailUrl`** (thumbUrl 이 base 와 조합), `resolveRestaurantCategoryKey`, `RestaurantCategoryKey`.
 - **[friendly](friendly.md) 백엔드** — `EXPO_PUBLIC_API_URL` 로 baseUrl 주입. dev 는 LAN/localhost/web-hostname 자동 추종, production 은 `.env.production` 의 `https://ninelife.kr`. `/media/thumbnail` 썸네일 프록시 + `.well-known/{apple-app-site-association,assetlinks.json}` 응답도 friendly 가 책임.
 
@@ -266,8 +301,10 @@ expo-router 파일 트리가 곧 라우트다.
    - `useAuthStore.subscribe` 로 양방향 sync.
    - `configureApi({ baseUrl, getToken, onUnauthorized })`.
 
-## Key Decisions [coverage: high — 16 sources]
+## Key Decisions [coverage: high — 18 sources]
 
+- **17차(2026-06): 앱 다크 모드(themeStore AsyncStorage + 수동 hydrate 스플래시 중 확정으로 테마 플래시 방지 + useResolvedThemeMode/useColorScheme), vworld midnight 타일, 안드로이드 커스텀 표준 탭바, 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹 통일).** 다크 테마 저장소는 앱(AsyncStorage)/웹(localStorage) 으로 물리 분리하되 `@repo/shared` design 토큰만 공유 — [platform-ui-split](../concepts/platform-ui-split.md) 의 또 한 인스턴스. OS 색상 스킴 해석(`useColorScheme`)은 web 번들을 안 깨도록 `ThemeProvider` 가 아닌 앱 레벨 `useResolvedThemeMode` 가 맡고 `_layout` 이 mode prop 주입. 지도 다크 타일은 HTML 재마운트 없이 `__setMode` 런타임 주입(native injectJavaScript / web postMessage, `theme.mode` 는 빌드 deps 제외). Android 탭바는 네이티브 Material 의 보라끼를 피해 `tabBar` 렌더 prop 으로 커스텀 JS 바, iOS 는 네이티브 유지.
+- **수동 hydrate 패턴 (theme/prefs)** — zustand persist 의 async rehydrate 는 첫 렌더 뒤에 비동기로 들어와 플래시(테마)나 stale 기본값(prefs)을 만든다. `themeStore.hydrate()` 를 `bootstrapApi` 가 **`await`** 로 스플래시 중에 끝내고(테마), `settlementPrefsStore` 는 fire-and-forget. 둘 다 zustand persist 미사용 — `AsyncStorage` 직접 read/write.
 - **네이버 썸네일은 friendly 프록시 경유 (앱도 웹과 동일)** — 앱만 원본(최대 ~1.5MB)을 받던 격차를 `thumbUrl()` 로 메움. `*.pstatic.net` 만 프록시(allowlist), 그 외/base 미설정은 원본 폴백 — 깨진 이미지 대신 graceful degrade. 웹/앱이 `@repo/utils` 의 `reviewThumbnailUrl` 을 공유해 쿼리 포맷·프록시가 단일 SSOT.
 - **목록은 FlatList 가상화** — 단골/정산 이력의 `ScrollView` 를 `FlatList` 로. 행을 별도 컴포넌트(`ContactRow`/`SessionRow`/`DraftRow`)로 추출해 (1) 보이는 행만 렌더, (2) React Compiler 가 행 단위로 메모이즈. 헤더(새 정산 버튼/draft 섹션)는 `ListHeaderComponent` 로.
 - **상세는 단일 FlatList 스크롤 루트** — `Row` discriminated union 으로 리뷰만 가상화 + 무한 스크롤. 비-리뷰 탭은 한 행. `stickyHeaderIndices=[1]` 로 TabBar 고정, `minHeight = heroH + screenH` 로 짧은 탭에서도 hero 숨김 유지.
@@ -286,10 +323,17 @@ expo-router 파일 트리가 곧 라우트다.
 - **Expo (bare RN 아님)** — EAS Build/Update 사용 위해 ([eas.json](../../apps/mobile/eas.json) 3 채널). 운영 빌드 절차 별도 문서 ([docs/production-build.md](../../apps/mobile/docs/production-build.md)).
 - **Expo SDK 54 / RN 0.81 / React 19 + New Architecture + React Compiler 유지** — 이번 라운드 SDK 업그레이드 없음.
 - **공통 로직은 `@repo/shared`, UI 는 플랫폼별** — 정산 도메인도 같은 원칙. Wizard step 시그너처/검증/계산은 shared 가, RN 시트/Pressable 만 mobile 이.
-- **앱은 light only** — `ThemeProvider mode="light"`. **게스트 우선 진입** — 로그인 화면 최상단 "바로 시작하기 →".
+- **앱 다크 모드 (17차부터 — 더 이상 light only)** — `ThemeProvider mode={useResolvedThemeMode()}` (이전 `"light"` 고정). system/light/dark 3택, profile 탭에서 선택. **게스트 우선 진입** — 로그인 화면 최상단 "바로 시작하기 →".
+- **안드로이드 splash 는 단색 + 투명 로고** — `expo-splash-screen` 의 prebuild-config 는 `styles.xml` 에 항상 `windowSplashScreenAnimatedIcon=@drawable/splashscreen_logo` 를 박지만 image 가 없으면 그 drawable 을 안 만들어 링크가 깨진다. 투명 PNG(`assets/splash-transparent.png`)를 `android.image` 로 줘 drawable 은 생성되되 로고는 안 보이게 — "단색만"(인앱 `AnimatedSplash` 가 로고/핀 담당) 의도 유지하며 빌드 통과.
 
-## Gotchas [coverage: high — 16 sources]
+## Gotchas [coverage: high — 18 sources]
 
+- **테마는 수동 hydrate — persist async rehydrate 면 플래시** — `themeStore` 가 zustand persist 의 자동 rehydrate 를 쓰면 첫 렌더가 기본 `'system'` 으로 그려진 뒤 비동기로 저장값(예: dark)이 들어와 라이트→다크 플래시가 난다. 그래서 `bootstrapApi` 가 `await themeStore.hydrate()` 로 스플래시 떠 있는 동안 모드를 확정하고, 그 전엔 `_layout` 이 `RootNavigator` 를 안 그린다. theme 만 `await`(prefs 는 fire-and-forget) 이라 부트가 theme read 만큼만 늦어진다.
+- **안드로이드 splash 빌드 실패 `resource drawable/splashscreen_logo not found`** — `expo-splash-screen` android image 누락 시. fix 는 투명 PNG 를 `android.image` 로 주는 것(위 Key Decisions). 라이트 단색 의도라 로고를 안 넣었던 게 회귀로 표면화.
+- **루트에서 `expo prebuild`/`run` 돌리면 모노레포 루트 오염** — 앱은 `apps/mobile` 에 있으므로 루트에서 prebuild 를 돌리면 루트 직속 `/ios`·`/android`·`/app.json` 이 잘못 생긴다. 루트 [.gitignore](../../apps/mobile/../../.gitignore) 가 **leading slash** 로 그 셋만 무시(`apps/*` 하위는 영향 없음 — 거긴 `apps/mobile/.gitignore` 가 관리). 실수로 생기면 지우고 항상 `apps/mobile` 에서 prebuild.
+- **gorhom BottomSheet 안 가로 스와이프는 RN `ScrollView` 로 안 먹음** — 맛집 탭 식당 상세가 시트 안에서 렌더될 때, 기본 `react-native`의 `ScrollView`(상세 `TabBar` 가로 칩, `ReviewCard` 가로 사진)는 안드로이드 제스처 오케스트레이터에 등록 안 돼 시트 pan/세로 리스트와 협상이 안 되고 가로 스와이프가 죽는다. `react-native-gesture-handler` 의 `ScrollView` 로 교체해야 동작(시트 밖 라우트에서도 드롭인 OK).
+- **지도 `theme.mode` 는 HTML 빌드 deps 에서 제외 — `__setMode` 로 런타임 전환** — `buildPublicRestaurantsMapHtml(...mode)` 를 `theme.mode` 변경마다 재호출하면 HTML 이 새로 빌드돼 WebView/iframe 이 재마운트되며 worklet 충돌·지도 상태(줌/센터/선택) 유실. 초기 모드만 박고 이후는 `window.__setMode`(native injectJavaScript / web postMessage) 로 타일·라벨만 교체. 같은 모드면 `__setMode` 가 early-return no-op(중복 `setUrl` 타일 깜빡임 방지).
+- **`StatusBar style="auto"` 는 강제 모드와 어긋남** — `auto` 는 OS 색상 스킴만 보므로, 사용자가 `system` 이 아닌 강제 light/dark 를 고르면 상태바 아이콘 색이 어긋난다. `_layout` 이 resolved `mode === 'dark' ? 'light' : 'dark'` 로 직접 분기.
 - **`thumbUrl` 의 base 미설정 / 비-네이버 호스트는 원본 통과** — `getApiConfig().baseUrl` 이 아직 안 잡혔거나(부트 전) `*.pstatic.net` 이 아니면 원본 URL 을 그대로 반환한다. 의도된 폴백이지만, DC/자체 호스팅 이미지는 절대 프록시되지 않으므로 그쪽 다운로드는 안 줄어든다. 또 프록시 서버가 네이버 호스트만 allowlist(그 외 400) 하므로 호스트 매칭을 thumbUrl 이 먼저 걸러야 400 회피.
 - **라이트박스는 thumbUrl 미적용 (원본 URL)** — 확대 보기라 의도적. PhotosTab/ReviewCard 가 `Lightbox images={...}` 로 넘기는 건 원본 배열이다. 썸네일 URL 을 넘기면 확대 시 흐릿해진다.
 - **단골 수정 시트 — key 안 주면 stale 폼** — `<ContactEditSheet key={editing?.id ?? 'closed'}>` 의 key 가 빠지면 다른 단골을 연속으로 열 때 이전 입력값이 남는다(컴포넌트 재사용 + state 유지). prop→state 동기화 useEffect 를 안 쓰는 대가로 key 리마운트가 필수.
@@ -314,11 +358,13 @@ expo-router 파일 트리가 곧 라우트다.
 - **`useBottomTabBarHeight()` 직접 호출 금지** — 탭 네비게이터 밖(`restaurant/[placeId]` 같은 deep-link route)에서 throw. `useTabBarHeight` 는 그래서 `BottomTabBarHeightContext` 를 `useContext` 로 직접 읽는다.
 - **`noUncheckedIndexedAccess: true`** — 배열/객체 인덱스가 `T | undefined`.
 
-## Sources [coverage: high — 53 sources]
+## Sources [coverage: high — 56 sources]
 
 설정·빌드:
-- [apps/mobile/package.json](../../apps/mobile/package.json) — *modified: react-native-awesome-gallery ^0.4.3, eslint 10 추가*
-- [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts) — *modified: deep-link pathPrefix /s/, associatedDomains EXPO_PUBLIC_ENABLE_APPLINKS 깃발 게이팅, expo-image-picker/expo-splash-screen plugin*
+- [apps/mobile/package.json](../../apps/mobile/package.json) — *modified(17차): ios:device/ios:release/android:device/android:release 실기기·릴리즈 스크립트*
+- [.gitignore](../../apps/mobile/../../.gitignore) (루트) — *modified(17차): /ios·/android·/app.json (루트 expo prebuild 오염 무시)*
+- [apps/mobile/app.config.ts](../../apps/mobile/app.config.ts) — *modified(17차): expo-splash-screen android.image=splash-transparent.png (splashscreen_logo 누락 fix)*
+- [apps/mobile/assets/splash-transparent.png](../../apps/mobile/assets/splash-transparent.png) — *NEW(17차): 투명 안드로이드 splash 로고 placeholder*
 - [apps/mobile/eslint.config.mjs](../../apps/mobile/eslint.config.mjs) — *NEW (@repo/config/eslint/react + React Compiler 진단 warn)*
 - [apps/mobile/metro.config.js](../../apps/mobile/metro.config.js)
 - [apps/mobile/babel.config.js](../../apps/mobile/babel.config.js) — *replace-import-meta inline plugin*
@@ -333,14 +379,14 @@ expo-router 파일 트리가 곧 라우트다.
 - *(에셋 PNG 무손실 압축 — assets/icon.png / adaptive-icon.png / splash.png / splash-logo.png)*
 
 라우트 (app/):
-- [apps/mobile/app/_layout.tsx](../../apps/mobile/app/_layout.tsx) — *BottomSheetModalProvider + headerBackButtonDisplayMode minimal*
+- [apps/mobile/app/_layout.tsx](../../apps/mobile/app/_layout.tsx) — *modified(17차): ThemeProvider mode=useResolvedThemeMode + StatusBar/Stack 헤더 테마 cascade + AnimatedSplash*
 - [apps/mobile/app/index.tsx](../../apps/mobile/app/index.tsx)
 - [apps/mobile/app/(auth)/_layout.tsx](../../apps/mobile/app/(auth)/_layout.tsx)
 - [apps/mobile/app/(auth)/login.tsx](../../apps/mobile/app/(auth)/login.tsx)
 - [apps/mobile/app/(tabs)/_layout.tsx](../../apps/mobile/app/(tabs)/_layout.tsx) — *shim*
 - [apps/mobile/app/(tabs)/home.tsx](../../apps/mobile/app/(tabs)/home.tsx) — *useTabBarHeight 하단 패딩*
 - [apps/mobile/app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx) — *useTabBarHeight + List=BottomSheetFlatList 주입*
-- [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) — *정산 이력 / 내 단골 메뉴 + useTabBarHeight*
+- [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) — *modified(17차): "화면 모드" SegmentedControl(라이트/다크/시스템) + 정산 이력/내 단골 메뉴 + useTabBarHeight*
 - [apps/mobile/app/restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx)
 - [apps/mobile/app/restaurant/[placeId]/settle/new.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx)
 - [apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx)
@@ -351,25 +397,32 @@ expo-router 파일 트리가 곧 라우트다.
 - [apps/mobile/app/share/settlements/[token].tsx](../../apps/mobile/app/share/settlements/[token].tsx) — *deep link target*
 
 컴포넌트·라이브러리:
-- [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) — *NEW (네이버 phinf → friendly 썸네일 프록시, ~98% 절감)*
-- [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) — *setSettlementDraftStorage + LAN IP web 추론*
+- [apps/mobile/src/lib/themeStore.ts](../../apps/mobile/src/lib/themeStore.ts) — *NEW(17차): 화면 모드 zustand + AsyncStorage lp:themeMode + 수동 hydrate*
+- [apps/mobile/src/hooks/useResolvedThemeMode.ts](../../apps/mobile/src/hooks/useResolvedThemeMode.ts) — *NEW(17차): themeStore + useColorScheme 결합 → 'light'|'dark'*
+- [apps/mobile/src/components/restaurantDetail/shared/CategoryTree.tsx](../../apps/mobile/src/components/restaurantDetail/shared/CategoryTree.tsx) — *NEW(17차): 분석 탭 메뉴 카테고리 트리(useRestaurantPublicCategoryTree)*
+- [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) — *네이버 phinf → friendly 썸네일 프록시, ~98% 절감*
+- [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) — *modified(17차): await themeStore.hydrate() (스플래시 중 테마 확정) + setSettlementDraftStorage + LAN IP web 추론*
 - [apps/mobile/src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts)
-- [apps/mobile/src/components/tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx)
+- [apps/mobile/src/components/tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx) — *modified(17차): Android 커스텀 AndroidTabBar(표준 세로 배치 + primary 색 전환), iOS 네이티브 유지*
 - [apps/mobile/src/components/tabs-layout.web.tsx](../../apps/mobile/src/components/tabs-layout.web.tsx) — *Lucide inline SVG*
 - [apps/mobile/src/components/Lightbox.tsx](../../apps/mobile/src/components/Lightbox.tsx) — *PROMOTED (was restaurantDetail/Lightbox.tsx) — react-native-awesome-gallery 공용 라이트박스*
 - [apps/mobile/src/components/PublicRestaurantCard.tsx](../../apps/mobile/src/components/PublicRestaurantCard.tsx) — *modified: thumbUrl(w=240)*
-- [apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx) — *modified: 내 위치 권한/HTTP UX*
-- [apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx)
-- [apps/mobile/src/components/publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts)
+- [apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx) — *modified(17차): theme.mode → __setMode injectJavaScript(야간 타일)*
+- [apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) — *modified(17차): theme.mode → postMessage(setMode)*
+- [apps/mobile/src/components/publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) — *modified(17차): mode 인자 + Base/midnight 타일 + window.__setMode 런타임 전환 + 라벨 색 반전*
 - [apps/mobile/src/components/RestaurantsFloatingHeader.tsx](../../apps/mobile/src/components/RestaurantsFloatingHeader.tsx)
 - [apps/mobile/src/components/NotchFade.tsx](../../apps/mobile/src/components/NotchFade.tsx)
-- [apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx) — *modified: 단일 FlatList + Row union + 가상화 리뷰 무한 스크롤 + hero thumbUrl(w=900)*
+- [apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx) — *modified(17차): tip/menu 리뷰 필터 state + review-filter 칩 행 + 리뷰 카드 divider(카드 테두리 제거)*
+- [apps/mobile/src/components/restaurantDetail/InsightsTab.tsx](../../apps/mobile/src/components/restaurantDetail/InsightsTab.tsx) — *modified(17차): CategoryTree 섹션 + 메뉴 행 Pressable(onSelectMenu) + 카드 테두리 제거*
+- [apps/mobile/src/components/restaurantDetail/HomeTab.tsx](../../apps/mobile/src/components/restaurantDetail/HomeTab.tsx) — *modified(17차): onSelectTip/onSelectMenu 전달 + 리뷰 divider*
+- [apps/mobile/src/components/restaurantDetail/shared/AiSummary.tsx](../../apps/mobile/src/components/restaurantDetail/shared/AiSummary.tsx) — *modified(17차): onSelectTip 시 방문 팁 Pressable(리뷰 필터 연결)*
+- [apps/mobile/src/components/restaurantDetail/TabBar.tsx](../../apps/mobile/src/components/restaurantDetail/TabBar.tsx) — *modified(17차): gesture-handler ScrollView(시트 내 가로 스와이프)*
 - [apps/mobile/src/components/restaurantDetail/ReviewsControls.tsx](../../apps/mobile/src/components/restaurantDetail/ReviewsControls.tsx)
 - [apps/mobile/src/components/restaurantDetail/InfoTab.tsx](../../apps/mobile/src/components/restaurantDetail/InfoTab.tsx) — *modified: thumbUrl(w=240) 블로그 썸네일*
-- [apps/mobile/src/components/restaurantDetail/PhotosTab.tsx](../../apps/mobile/src/components/restaurantDetail/PhotosTab.tsx) — *modified: thumbUrl(w=400) + ~/components/Lightbox import*
-- [apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) — *modified: thumbUrl(w=480) + ~/components/Lightbox import*
-- [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — *정산하기 CTA*
-- [apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx)
+- [apps/mobile/src/components/restaurantDetail/PhotosTab.tsx](../../apps/mobile/src/components/restaurantDetail/PhotosTab.tsx) — *modified(17차): 카드 테두리 제거*
+- [apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) — *modified(17차): 카드 테두리 제거 + 사진 풀폭(marginHorizontal:-16) + gesture-handler ScrollView*
+- [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) — *modified(17차): onSelectMenu 전달 + 정산하기 CTA*
+- [apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx](../../apps/mobile/src/components/restaurantDetail/shared/MenuGrid.tsx) — *modified(17차): onSelectMenu 탭 가능 메뉴 + 썸네일 Lightbox*
 - [apps/mobile/src/hooks/useTabBarHeight.ts](../../apps/mobile/src/hooks/useTabBarHeight.ts) — *native — react-native-bottom-tabs context*
 - [apps/mobile/src/hooks/useTabBarHeight.web.ts](../../apps/mobile/src/hooks/useTabBarHeight.web.ts) — *web — @react-navigation/bottom-tabs context*
 - [apps/mobile/src/hooks/useUserLocationNative.ts](../../apps/mobile/src/hooks/useUserLocationNative.ts)

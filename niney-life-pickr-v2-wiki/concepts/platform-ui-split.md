@@ -1,6 +1,6 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-06-01
+last_compiled: 2026-06-06
 topics_connected: [shared, web, mobile, project-overview, utils, map, settlement]
 status: active
 ---
@@ -25,6 +25,8 @@ status: active
 - **2026-05-31** in [[../topics/mobile]] (`useTabBarHeight.ts` / `.web.ts` 페어): 훅 레벨 분기의 **가장 깨끗한 인스턴스**. 두 파일이 시그니처(`(): number`)·본문(`tabBarHeight || insets.bottom`)까지 동일하고 오직 import 한 줄만 다르다 — native 는 `react-native-bottom-tabs` 의 `BottomTabBarHeightContext`, web 은 `@react-navigation/bottom-tabs` 의 동명 context (web 탭바는 JS 구현 `tabs-layout.web.tsx` 라 그쪽 context). `useUserLocation`(인프라가 navigator vs expo-location 로 본문까지 다름)보다 한 단계 더 얇은 분기 — 같은 개념(탭바 높이)을 두 라이브러리가 각자 제공할 때, 본문이 같아도 native-only import 가 web 번들에 새지 않게 `.web.ts` 형제로 떼어내는 것이 핵심. `react-native-bottom-tabs` 가 web 번들을 깨뜨리는 `tabs-layout.tsx`/`.web.tsx` 셔틀과 같은 회피(2026-05-28 인스턴스)가 훅으로 번진 셈.
 
 - **2026-06-01** in [[../topics/mobile]] / [[../topics/web]] / [[../topics/map]] (네이버 썸네일 프록시 + "내 위치" 회복 동형): 두 개의 얇은 분기 인스턴스. (1) [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) 가 네이버 CDN(`*.pstatic.net`) 이미지를 friendly `/media/thumbnail` 프록시로 감싸 ~98% 다운로드 절감 — 웹의 동명 변환 로직과 같은 결의 **플랫폼 무관 URL 변환 유틸**(인프라가 아니라 문자열 변환이라 분기 자체가 가장 얇음, 공통화 후보). (2) 앱 `PublicRestaurantsWebMap.native` 의 "내 위치" 버튼이 denied/unavailable 에서 비활성 대신 silent refetch + Alert/openSettings 회복 경로 — 웹 `MyLocationButton`(denied/insecure 구분 callout)과 **동형 UX**. 같은 사용자 약속을 두 플랫폼이 각자 인프라로 충족하는, 인터페이스 동형 분기의 연속.
+
+- **2026-06**(17차) in [[../topics/mobile]] / [[../topics/web]] / [[../topics/shared]] / [[../topics/map]] (다크 모드 — 테마 저장소 플랫폼 분리 + 지도 다크 전략 동형): 패턴의 **저장소 물리 분리 + 공통 토큰 공유** 인스턴스로, settlement storage-adapter 주입(2026-05-28)과 같은 결의 "런타임/저장소 분리, 공통 토큰 공유". 테마 모드(`'light'|'dark'|'system'`) 영속화를 플랫폼별로 **물리적으로 다른 저장소**에 둔다 — 앱은 AsyncStorage `'lp:themeMode'`([apps/mobile/src/lib/themeStore.ts](../../apps/mobile/src/lib/themeStore.ts), zustand + `useResolvedThemeMode` 가 `system` 일 때 `useColorScheme` 와 결합), 웹은 자체 localStorage 스토어(`apps/web/src/stores/theme.ts`). 두 저장소가 충돌하지 않고 공유되는 것은 오직 `@repo/shared` 의 design 토큰([packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts)) — "값(토큰)은 1벌, 저장/적용 인프라는 N벌". 앱 themeStore 는 zustand persist 의 async rehydrate 타이밍 대신 bootstrap 에서 `await hydrate()` 로 한 번 당겨와 스플래시 동안 모드 확정(잘못된 테마 플래시 방지) — settlementPrefsStore 와 같은 수동 hydrate 패턴. **지도 다크는 같은 표현 다른 인프라**의 또 다른 사례: 웹은 OpenLayers `tileSource.setUrl(buildVworldTileUrl(...))`([apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx), 같은 URL 이면 skip 해 깜빡임 방지) 로 타일 소스를 바꾸고, 앱은 WebView 안 HTML 에 `window.__setMode(mode)` 를 `injectJavaScript` 로 주입([apps/mobile/src/components/publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 의 `tileSource.setUrl(darkBg ? DARK_TILE_URL : BASE_TILE_URL)`, 같은 모드면 no-op) — 둘 다 "OpenLayers 타일 URL 을 다크/라이트로 스왑" 이라는 **같은 표현**이지만 한쪽은 직접 OL 호출, 한쪽은 WebView 브릿지 주입. 2026-05-19 의 PublicRestaurantsWebMap quad(WebView vs web 컴포넌트)가 다크 모드 런타임 전환까지 확장된 셈 — WebView 재마운트 없이 `__setMode` 한 번으로 테마 토글.
 
 ## What This Means
 

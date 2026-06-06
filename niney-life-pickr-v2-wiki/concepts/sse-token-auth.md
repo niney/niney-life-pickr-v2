@@ -1,7 +1,7 @@
 ---
 concept: SSE의 ?token= 쿼리 인증 + 로거 리덕션
-last_compiled: 2026-05-17
-topics_connected: [friendly, crawl, shared, web, menu-grouping, analytics, auto-discover]
+last_compiled: 2026-06-06
+topics_connected: [friendly, crawl, shared, web, menu-grouping, analytics, auto-discover, schedule]
 status: active
 ---
 
@@ -22,6 +22,8 @@ status: active
 - **2026-05-09** in [[../topics/analytics]] (`analytics.route.ts` `Routes.Analytics.globalMergeJobEvents(jobId)`): 전역 머지 잡 진행 SSE. 같은 헤더→쿼리 fallback + ADMIN 게이트 + redact 패턴. shared 의 `buildGlobalMergeJobEventsUrl(jobId)` 빌더. 새 잡 단위 SSE 가 추가될 때마다 같은 토큰 패턴이 자연스럽게 흡수됨.
 - **2026-05-15** in [[../topics/crawl]] (`crawl.route.ts` `Routes.Crawl.diningcodeBulkSaveJobEvents(jobId)`): 다이닝코드 일괄 저장 잡 진행 SSE. 어드민 정식 페이지가 N개 vRid 선택 후 한 번에 저장하는 패턴. 같은 헤더→`?token=` fallback + ADMIN 게이트. shared 의 `buildDiningcodeBulkSaveEventsUrl(jobId)` 빌더 — `useGroupingJob` 의 빌더와 동형. 일곱 번째 SSE 엔드포인트 — 패턴이 어떤 도메인이든 그대로 흡수된다는 것을 다시 확인.
 - **2026-05-17** in [[../topics/auto-discover]] (`auto-discover.route.ts` `Routes.AutoDiscover.jobEvents(jobId)`): 자동 발견 잡 진행 SSE. 같은 헤더→`?token=` fallback + ADMIN 게이트 + Pino redact. shared 의 `buildAutoDiscoverEventsUrl(jobId)` 빌더 — bulk-save·grouping 의 빌더와 동형. 8 번째 SSE 엔드포인트. 차이점은 **이벤트 종류가 5개** (snapshot/keyword/candidate/phase/done) 라 기존 SSE 들의 1-2개보다 많지만 인증·redact 패턴은 동일.
+- **2026-06**(17차) in [[../topics/schedule]] (`schedule.route.ts` `Routes.Schedule.runEvents`): 주기 스케줄러 진행 SSE — **9 번째 SSE 엔드포인트**. 같은 헤더→`?token=` fallback 패턴: `await req.jwtVerify()` 시도 → 실패 시 `query.token` 으로 `app.jwt.verify(token)` → role 추출 → `role !== 'ADMIN'` 이면 401. shared 의 `buildScheduleRunEventsUrl()` 빌더(`useSchedule.ts`) — jobId 없이 시스템 전역 단일 run 이라 빌더가 인자 0개(기존 빌더들이 `(jobId)` 받던 것과 다른 점). 같은 라운드의 **liveness 보강 흡수**: 15s 주기 `: hb` heartbeat comment + `heartbeat.unref?.()` — 2026-05-17 restaurant heartbeat 가 예고한 "다른 SSE 잡 훅으로 번질 후보" 가 실현됨. 추가로 **즉시 종료 패턴**: 초기 `snapshot` 이벤트 후 `runningRunId()` 가 null 이면(진행 중 run 없음) 더 흘릴 게 없어 `reply.raw.end()` — 단일-잡 게이트라 "지금 inflight 아니면 닫기" 가 자연스러움. Pino redact 정규식이 `?token=...` 그대로 마스킹.
+
 - **2026-05-17** in [[../topics/friendly]] (`restaurant.route.ts` summary-events heartbeat + idle timeout): 같은 SSE 인프라에 **liveness 보강** 추가 — 서버 측 5 초 주기 heartbeat (named event `heartbeat`) + 클라이언트 측 idle timeout 감지로 서버 다운 시 자동 reconnect 트리거. 토큰 인증·redact 와 별개 layer 지만 같은 multiplexed `summaryEvents` 엔드포인트에 박힘. 향후 다른 SSE 잡 훅 (auto-discover, bulk-save, grouping) 으로 번질 후보.
 
 ## What This Means
@@ -47,3 +49,4 @@ status: active
 - [[../topics/menu-grouping]]
 - [[../topics/analytics]]
 - [[../topics/auto-discover]]
+- [[../topics/schedule]]

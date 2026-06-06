@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-06-01
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement]
+last_compiled: 2026-06-06
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule]
 status: active
 ---
 
@@ -29,6 +29,8 @@ status: active
 - **2026-05-19** in [[../topics/friendly]] (`plugins/summaries.ts` app-level singleton): 게이트의 **모듈 싱글턴 → app 플러그인 싱글턴 승격** 패치. 이전엔 `crawl.route.ts` 와 `restaurant.route.ts` 가 각자 `new SummaryService(...)` 를 만들어 `runChainByPlace`/`cancelledPlaces` 가 **라우트별로 분리** — `cancelSummaryForPlace` 가 한쪽 chain 만 끊어 다른 라우트가 큐잉한 batch 는 계속 진행되는 버그. `fastify-plugin` 으로 SummaryService + JobLogService + AiConfigService 셋을 묶고 `app.decorate('summaries' | 'jobLog' | 'aiConfig', ...)` + `dependencies: ['prisma']` 로 prisma 뒤 강제. server.ts boot hook 도 `app.summaries` 로 같은 인스턴스에 enqueue. 패턴: 모듈 import 가 인스턴스 보장의 충분조건이 아닐 때(import 한 모듈을 두 코드가 새로 인스턴스화하면 분리) **app.decorate 가 다음 단계**.
 - **2026-05-19** in [[../topics/friendly]] (`summary.service.ts:cancelledPlaces` + `queueSummariesForReviews` 진입 가드): 게이트의 **사용자 의도 표식** 추가 — `cancelledPlaces: Set<string>` 모듈 싱글턴 (이젠 app singleton). `cancelSummaryForPlace(placeId)` 가 set 에 등록 + chain 삭제 + DB queued/pending → cancelled. 이후 들어오는 `queueSummariesForReviews(placeId, ...)` 는 set 확인 후 새 batch 를 즉시 cancelled 로 마킹(크롤이 진행 중이라 persistBatch 가 페이지마다 호출하더라도 cancel 효과 유지). `resumeSummaryForPlace` 만 set 에서 명시적 delete + cancelled → queued flip. 게이트가 "지금 진행 가능한 슬롯이 있는가?" 외에 "이 키는 의도적으로 차단됐는가?" 까지 표식. cancel/resume 토글이 외부 큐 없이 in-memory Set 한 줄 + DB 상태 두 곳으로 표현됨.
 - **2026-05-19** in [[../topics/friendly]] (`summary.service.ts:cleanupStaleReviewSummaries` + `rescheduleStaleSummaries` boot hook): 위 2026-05-17 인스턴스의 **확장** — cleanup 의 where 절이 `queued|pending|running` 셋 다 포함(2026-05-19 에 queued 도 합류) + reschedule 함수가 `failed AND errorCode='server_restart'` 행을 placeId/busKey 별로 묶어 자동 재큐잉 — 어드민 수동 개입 불필요. `queued` 상태 도입은 chain 휘발 윈도우를 49 분 → ms 로 줄임 (placeId=36668856 사고: 446 리뷰 중 56 done + 381 missing). 게이트의 in-memory 영속성 부족을 DB 쪽에서 "다음 부팅이 줍기 위한 신호" 로 보강 — 외부 큐 도입 없이 가장 큰 한계(휘발) 만 패치.
+
+- **2026-06**(17차) in [[../topics/schedule]] / [[../topics/friendly]] (`schedule-registry.ts` `scheduleRegistry`): **단일-잡 모델의 두 번째 인스턴스** — `globalMergeJobRegistry` 와 같은 "동시 1개 inflight" 게이트. 모듈 싱글턴이 두 가지를 함께 관리: (1) `crons: Map<jobType, Cron>` cron 타이머(croner, `unref:true` 로 타이머 혼자 프로세스 안 붙잡음), (2) `active: ActiveRun | null` 진행 중 run 단일 슬롯. `beginRun(jobType, trigger)` 이 overlap 가드 — 이미 running 이면 `null` 반환 → 호출자가 'skipped' run 행을 기록(cron tick 이 이전 실행과 겹치면 그냥 건너뜀). 정규화→글로벌 머지 파이프라인이 **시스템 전체 작업**이라 중첩 의미가 없어 actorId 격리도 multi-job 도 없이 단일 슬롯이 정답. `finishRun` 은 active 를 비우지 않고 유지해 직후 SSE/조회가 마지막 스냅샷을 봄(다음 `beginRun` 이 교체, 단일 슬롯이라 TTL GC 불필요). graceful shutdown 은 `stopAllCrons`(타이머 정지) + `abortInflight`(진행 중 AbortController 취소) 두 채널. `plugins/schedule.ts` 가 `ScheduleService` 를 `app.decorate('schedule', ...)` + `dependencies:['prisma']` 로 **app 전역 singleton** 으로 묶음(2026-05-19 `summaries.ts` 와 같은 plugin-singleton 승격 — 라우트 수동 실행과 부팅 cron tick 이 같은 인스턴스 공유) + `onClose` 훅에서 stopAllCrons/abortInflight. cron 타이머라는 **새 자원 종류**(동시성 슬롯도 read 캐시도 아닌 "주기 타이머")가 같은 모듈-싱글턴 모양에 흡수됨.
 
 - **2026-06-01** in [[../topics/settlement]] / [[../topics/friendly]] (`settlement.service.ts` `sharePreviewCache` + `invalidateSharePreview`): 게이트 패턴의 **read 캐시 변형** — 정산 공유 OG 미리보기가 카카오/슬랙 크롤러의 반복 펼침을 흡수하려 모듈 스코프 Map(키 = `token + " " + origin`) + 5분 TTL 캐시를 둔다. owner 가 share 를 갱신/회수하면 `invalidateSharePreview(token)` 가 해당 토큰의 모든 origin 변형 엔트리를 제거 — "TTL 자연 만료 + 쓰기 이벤트 명시적 무효화" 두 채널. 같은 모듈의 `rateHits`(공유 토큰 IP rate limiter)와 같은 모양의 in-memory 게이트(Redis 없이 단일 인스턴스 전제). 동시성 슬롯이 아니라 **read 결과**를 회계한다는 점만 다른 형제 패턴 — 게이트 모양이 "동시성 제어" 를 넘어 "공개 핫패스 캐시" 로도 재사용됨.
 
@@ -59,3 +61,4 @@ status: active
 - [[../topics/canonical]]
 - [[../topics/auto-discover]]
 - [[../topics/settlement]]
+- [[../topics/schedule]]
