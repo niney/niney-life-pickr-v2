@@ -24,6 +24,8 @@ import {
   RestaurantRankingResult,
   RestaurantReanalyzeResult,
   RestaurantResumeSummaryResult,
+  ReviewResummarizeInput,
+  ReviewResummarizeResult,
   RestaurantSmartPickInput,
   RestaurantSmartPickResult,
   RestaurantSummaryProgress,
@@ -232,6 +234,27 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       const resumed = await summaries.resumeSummaryForPlace(req.params.placeId);
       return { ok: true as const, resumed };
+    },
+  });
+
+  // 단건 리뷰를 어드민이 고른 모델로 다시 요약. 모델은 1회성 — 전역
+  // defaultModel 은 안 바뀐다. 큐잉만 하고 즉시 반환하며 진행/결과는 기존
+  // summary-events SSE 로 흘러온다. placeId 를 돌려줘 클라가 SSE 구독 키로 쓴다.
+  typed.post(Routes.Restaurant.reviewResummarize(':reviewId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ reviewId: z.string() }),
+      body: ReviewResummarizeInput,
+      response: { 200: ReviewResummarizeResult },
+    },
+    handler: async (req) => {
+      const { placeId } = await summaries.resummarizeReview(
+        req.params.reviewId,
+        req.body.model,
+      );
+      return { ok: true as const, placeId };
     },
   });
 

@@ -482,6 +482,78 @@ export const useResumeSummary = () =>
     mutationFn: (placeId: string) => restaurantApi.resumeSummary(placeId),
   });
 
+// 공개 상세 페이지(어드민)에서 단건 리뷰를 고른 모델로 다시 요약. 모델은
+// 1회성 — 전역 defaultModel 은 안 바뀐다. queue+SSE 재사용:
+//   1) POST 로 단건 큐잉 (onMutate 로 pending 셋에 reviewId 추가 → 카드 스피너)
+//   2) pending 이 있는 동안 place SSE 구독. 매칭 reviewId 의 done/failed
+//      'review' 이벤트가 오면 pending 에서 빼고 공개 캐시(detail/reviews/
+//      insights)를 invalidate → 카드가 새 분석으로 갱신된다.
+// 어드민 1회성 액션이라 정밀 캐시 수술 대신 단순 refetch 로 충분하다.
+export const useResummarizeReview = (placeId: string | null) => {
+  const qc = useQueryClient();
+  const [pending, setPending] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+
+  const mutation = useMutation({
+    mutationFn: ({ reviewId, model }: { reviewId: string; model: string }) =>
+      restaurantApi.resummarizeReview(reviewId, model),
+    onMutate: ({ reviewId }) => {
+      setPending((prev) => {
+        const next = new Set(prev);
+        next.add(reviewId);
+        return next;
+      });
+    },
+    onError: (_e, { reviewId }) => {
+      setPending((prev) => {
+        if (!prev.has(reviewId)) return prev;
+        const next = new Set(prev);
+        next.delete(reviewId);
+        return next;
+      });
+    },
+  });
+
+  const hasPending = pending.size > 0;
+  useEffect(() => {
+    if (!placeId || !hasPending) return undefined;
+    return summarySseManager.subscribe(
+      { kind: 'place', placeId },
+      {
+        onSnapshot: () => {
+          // 카운트 스냅샷은 단건 재요약 카드 UI 와 무관 — 무시.
+        },
+        onReview: (ev) => {
+          if (ev.placeId !== placeId) return;
+          setPending((prev) => {
+            if (!prev.has(ev.reviewId)) return prev;
+            const next = new Set(prev);
+            next.delete(ev.reviewId);
+            return next;
+          });
+          // 새 분석을 공개 캐시에 반영. 공개 캐시는 어드민과 모양이 달라
+          // (r.analysis) 기존 onReview 패치가 닿지 않으므로 직접 refetch.
+          void qc.invalidateQueries({ queryKey: ['restaurant', 'public', placeId] });
+          void qc.invalidateQueries({
+            queryKey: ['restaurant', 'public', 'reviews', placeId],
+          });
+          void qc.invalidateQueries({
+            queryKey: ['restaurant', 'public', 'insights', placeId],
+          });
+        },
+      },
+    );
+  }, [placeId, hasPending, qc]);
+
+  return {
+    resummarize: (reviewId: string, model: string) =>
+      mutation.mutate({ reviewId, model }),
+    // 재요약 진행 중인 reviewId 들 — 카드가 스피너/비활성 표시에 사용.
+    pending,
+  };
+};
+
 // placeId 단위 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언 전용. 한 가게의
 // 누적 잡 로그를 cursor pagination 으로. 아코디언이 닫혀 있으면 enabled=false
 // 로 fetch 안 함.

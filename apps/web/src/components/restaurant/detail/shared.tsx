@@ -9,8 +9,10 @@ import { formatWonPrice } from '@repo/utils';
 import {
   ExternalLink,
   Lightbulb,
+  Loader2,
   Navigation,
   Phone,
+  Sparkles,
 } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -390,11 +392,20 @@ export const SourceBadge = ({ source }: { source: 'naver' | 'diningcode' }) => (
 export const ReviewCard = ({
   r,
   showSource = false,
+  canResummarize = false,
+  isResummarizing = false,
+  onResummarize,
 }: {
   r: PublicVisitorReviewType;
   // 머지 응답이 두 출처를 모두 가질 때만 true — 한 출처만 있는 경우엔 배지가
   // 시각적 노이즈가 되므로 호출자가 숨긴다.
   showSource?: boolean;
+  // 어드민 전용 — true 면 AI 요약 자리에 "재요약" 버튼을 노출한다.
+  canResummarize?: boolean;
+  // 이 리뷰가 재요약 큐에 올라가 결과를 기다리는 중.
+  isResummarizing?: boolean;
+  // 재요약 버튼 클릭 — 호출자가 모델 선택 팝업을 연다.
+  onResummarize?(): void;
 }) => {
   // 이미지 lightbox 인덱스. null 이면 닫힘. 카드별 독립 상태라 다른 리뷰
   // 카드의 lightbox 와 간섭하지 않는다.
@@ -419,7 +430,33 @@ export const ReviewCard = ({
         </div>
         <span>{r.visitedAt ?? r.fetchedAt.slice(0, 10)}</span>
       </div>
-      {r.analysis && <div className="mt-1 text-sm font-medium">{r.analysis.text}</div>}
+      {/* AI 요약(추천) 자리 — 어드민에겐 같은 줄에 "재요약" 버튼을 붙여
+          다른 모델로 이 리뷰만 1회성 재요약하게 한다. */}
+      {(r.analysis || canResummarize) && (
+        <div className="mt-1 flex items-start justify-between gap-2">
+          {r.analysis ? (
+            <div className="text-sm font-medium">{r.analysis.text}</div>
+          ) : (
+            <div className="text-xs italic text-muted-foreground">AI 요약 없음</div>
+          )}
+          {canResummarize && (
+            <button
+              type="button"
+              onClick={onResummarize}
+              disabled={isResummarizing}
+              title="다른 모델로 이 리뷰만 다시 요약"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent disabled:opacity-60"
+            >
+              {isResummarizing ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Sparkles className="size-3" />
+              )}
+              {isResummarizing ? '재요약 중' : '재요약'}
+            </button>
+          )}
+        </div>
+      )}
       <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{r.body}</div>
       {r.imageUrls.length > 0 && (
         // 사진만 부모 패딩(px-4=16)을 음수 마진으로 뚫어 화면 좌우 끝까지(full-bleed).

@@ -18,6 +18,7 @@ import {
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
   type RestaurantReanalyzeResultType,
+  type ReviewResummarizeResultType,
   type RestaurantResumeSummaryResultType,
   type RestaurantSummaryProgressType,
 } from '@repo/api-contract';
@@ -154,6 +155,14 @@ export const restaurantApi = {
     apiFetch<RestaurantResumeSummaryResultType>(
       Routes.Restaurant.resumeSummary(placeId),
       { method: 'POST' },
+    ),
+
+  // 단건 리뷰를 고른 모델로 다시 요약. 모델은 1회성 — 전역 defaultModel 은
+  // 안 바뀐다. 진행/결과는 summary-events SSE 로 흘러온다.
+  resummarizeReview: (reviewId: string, model: string) =>
+    apiFetch<ReviewResummarizeResultType>(
+      Routes.Restaurant.reviewResummarize(reviewId),
+      { method: 'POST', body: JSON.stringify({ model }) },
     ),
 
   // placeId 단위 누적 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언이 호출.

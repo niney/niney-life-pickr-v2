@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { useRestaurantPublicReviews } from '@repo/shared';
+import {
+  useAuthStore,
+  useResummarizeReview,
+  useRestaurantPublicReviews,
+} from '@repo/shared';
 import type {
   PublicVisitorReviewType,
   RestaurantPublicDetailType,
@@ -9,6 +13,7 @@ import type {
 } from '@repo/api-contract';
 import { cn } from '~/lib/utils';
 import { ReviewCard } from './shared';
+import { ModelPickerPopup } from './ModelPickerPopup';
 
 const FILTERS: Array<{ value: RestaurantPublicReviewSentimentType; label: string }> = [
   { value: 'all', label: '전체' },
@@ -38,6 +43,13 @@ export const ReviewsTab = ({
   const [sentiment, setSentiment] =
     useState<RestaurantPublicReviewSentimentType>('all');
   const [sort, setSort] = useState<RestaurantPublicReviewSortType>('recent');
+
+  // 어드민이면 각 리뷰 카드에 "재요약" 버튼을 노출 — 모델을 골라 그 리뷰만
+  // 1회성으로 다시 요약한다. (관리자 전용 — 일반/게스트에겐 안 보임)
+  const isAdmin = useAuthStore((s) => s.user?.role === 'ADMIN');
+  const { resummarize, pending } = useResummarizeReview(isAdmin ? placeId : null);
+  // 모델 선택 팝업을 띄울 대상 reviewId. null 이면 닫힘.
+  const [pickerReviewId, setPickerReviewId] = useState<string | null>(null);
 
   const seed = useMemo(
     () => ({
@@ -158,7 +170,13 @@ export const ReviewsTab = ({
           <ul className="divide-y divide-border">
             {flat.map((r) => (
               <li key={r.id}>
-                <ReviewCard r={r} showSource={bothSources} />
+                <ReviewCard
+                  r={r}
+                  showSource={bothSources}
+                  canResummarize={isAdmin}
+                  isResummarizing={pending.has(r.id)}
+                  onResummarize={() => setPickerReviewId(r.id)}
+                />
               </li>
             ))}
           </ul>
@@ -173,6 +191,16 @@ export const ReviewsTab = ({
             </button>
           )}
         </>
+      )}
+
+      {isAdmin && (
+        <ModelPickerPopup
+          open={pickerReviewId !== null}
+          onClose={() => setPickerReviewId(null)}
+          onSelect={(model) => {
+            if (pickerReviewId) resummarize(pickerReviewId, model);
+          }}
+        />
       )}
     </div>
   );

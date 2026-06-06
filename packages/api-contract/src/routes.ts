@@ -120,6 +120,10 @@ export const Restaurant = {
   // 도 함께 해제하므로 새 batch 가 들어와도 정상 흐름으로 들어간다.
   resumeSummary: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/resume-summary`,
+  // 단건 리뷰를 어드민이 고른 모델로 다시 요약. 모델은 1회성 — 전역
+  // defaultModel 은 안 바뀐다. 진행/결과는 summary-events SSE 로 흘러온다.
+  reviewResummarize: (reviewId: string) =>
+    `${API_PREFIX}/admin/restaurants/review/${reviewId}/resummarize`,
   // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
   insights: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,

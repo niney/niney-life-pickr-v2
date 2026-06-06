@@ -224,10 +224,14 @@ export class SummaryService {
   // (크롤러) 가 await 하지 않아도 직후 SQLite writer 가 처리하므로 짧은
   // 윈도우 안에 박힌다. 이 윈도우 동안 발생하는 재시작은 막을 수 없지만,
   // 기존엔 49 batches × 60s = 49 분이었던 휘발 윈도우가 ms 단위로 줄어든다.
+  // modelOverride: 주어지면 이 batch 의 run() 이 DB defaultModel 대신 이 모델로
+  // 요약한다. 단건 재요약(어드민이 모델을 골라 1회성으로 다시 요약)에서만 쓰며,
+  // 전역 설정은 건드리지 않는다. null 이면 기존대로 defaultModel 사용.
   queueSummariesForReviews(
     placeId: string,
     reviewIds: string[],
     jobId: string | null = null,
+    modelOverride: string | null = null,
   ): void {
     if (reviewIds.length === 0) return;
 
@@ -325,7 +329,7 @@ export class SummaryService {
       .then(() => this.bus.publish(placeId));
 
     const next = (prev ?? Promise.resolve())
-      .then(() => this.run(placeId, reviewIds, jobId))
+      .then(() => this.run(placeId, reviewIds, jobId, modelOverride))
       .catch(() => undefined);
     this.runChainByPlace.set(placeId, next);
     void next.finally(() => {
@@ -478,6 +482,38 @@ export class SummaryService {
     return reviewIds.length;
   }
 
+  // 단건 리뷰 재요약 — 어드민이 모델을 골라 그 리뷰 하나만 다시 요약한다.
+  // reanalyze(식당 전체) 와 달리 범위가 1건이고, 고른 모델을 1회성으로 적용
+  // (전역 defaultModel 은 안 바뀐다). 진행/결과는 기존 summary-events SSE 로
+  // 흘러간다 — bus 채널 키를 reanalyze 와 동일 규칙으로 맞춰 같은 connection
+  // 이 그대로 받는다.
+  // 반환: SSE 구독 키로 쓸 placeId (Naver). placeId 없는 행(DC 등)은 null.
+  async resummarizeReview(
+    reviewId: string,
+    model: string,
+  ): Promise<{ placeId: string | null }> {
+    const review = await this.prisma.visitorReview.findUnique({
+      where: { id: reviewId },
+      select: {
+        id: true,
+        restaurant: { select: { placeId: true, source: true, sourceId: true } },
+      },
+    });
+    if (!review) return { placeId: null };
+    const rest = review.restaurant;
+    // bus/SSE 채널 키 — summary-events 핸들러와 동일 규칙 (Naver=placeId,
+    // DC=dc:<sourceId>). 그래야 디테일 페이지의 기존 SSE 구독이 그대로 받는다.
+    const channelKey =
+      rest.source === 'naver' && rest.placeId
+        ? rest.placeId
+        : `dc:${rest.sourceId}`;
+    // 어드민의 명시적 액션이므로 직전 중지 표식이 있으면 해제 후 큐잉
+    // (backfillForRestaurant 와 동일 — 안 풀면 queue 가 cancelled 로 박힌다).
+    this.cancelledPlaces.delete(channelKey);
+    this.queueSummariesForReviews(channelKey, [review.id], null, model);
+    return { placeId: rest.source === 'naver' ? rest.placeId : null };
+  }
+
   // 기존 done 행의 menusJson/tipsJson/keywordsJson 을 정규화 테이블로 풀어쓰는
   // backfill. LLM 재호출 없이 이미 저장된 분석 결과만으로 채운다 — v3 데이터
   // (traits 없음) 에서도 메뉴 빈도·감정 통계가 즉시 동작하도록.
@@ -613,6 +649,7 @@ export class SummaryService {
     placeId: string,
     reviewIds: string[],
     jobId: string | null,
+    modelOverride: string | null = null,
   ): Promise<void> {
     if (reviewIds.length === 0) return;
     const startedAt = new Date();
@@ -642,7 +679,7 @@ export class SummaryService {
     }
     this.bus.publish(placeId);
 
-    const resolved = await this.resolveProvider();
+    const resolved = await this.resolveProvider(modelOverride);
     if (!resolved) {
       // No key / no model / disabled — leave rows pending. Admin can fix
       // config and re-trigger via recrawl. We don't fail loud because the
@@ -1042,14 +1079,17 @@ export class SummaryService {
     }
   }
 
-  private async resolveProvider(): Promise<
-    { provider: LLMProvider; model: string } | null
-  > {
+  // modelOverride 가 주어지면 (단건 재요약) 그 모델을 쓴다. 키/baseUrl 은 여전히
+  // DB/env 의 ollama-cloud chat 설정에서 가져오고 모델 id 만 갈아끼운다 — 전역
+  // defaultModel 은 건드리지 않는다.
+  private async resolveProvider(
+    modelOverride?: string | null,
+  ): Promise<{ provider: LLMProvider; model: string } | null> {
     if (this.opts.resolveOverride) return this.opts.resolveOverride();
 
     const resolved = await this.aiConfig.getResolved('ollama-cloud', 'chat');
     if (!resolved) return null;
-    const model = resolved.defaultModel?.trim();
+    const model = modelOverride?.trim() || resolved.defaultModel?.trim();
     if (!model) return null;
     const provider = (this.opts.cache ?? adapterCache).get(resolved);
     return { provider, model };

@@ -281,6 +281,21 @@ export const RestaurantReanalyzeResult = z.object({
 });
 export type RestaurantReanalyzeResultType = z.infer<typeof RestaurantReanalyzeResult>;
 
+// 단건 리뷰 재요약 입력. 어드민이 모델을 골라 그 리뷰 하나만 다시 요약한다.
+// 모델은 이번 1회성 — 전역 defaultModel 은 바꾸지 않는다.
+export const ReviewResummarizeInput = z.object({
+  model: z.string().min(1).max(100),
+});
+export type ReviewResummarizeInputType = z.infer<typeof ReviewResummarizeInput>;
+
+// 단건 재요약 응답. 큐잉만 하고 즉시 반환 — 진행/결과는 기존 summary-events
+// SSE 로 흘러온다. placeId 는 SSE 구독 키 (Naver 가 아니면 null).
+export const ReviewResummarizeResult = z.object({
+  ok: z.literal(true),
+  placeId: z.string().nullable(),
+});
+export type ReviewResummarizeResultType = z.infer<typeof ReviewResummarizeResult>;
+
 // 요약 중지 응답. cancelled = 'cancelled' 로 마킹된 행 수 (queued + pending).
 // running 행은 이번 호출에서 손대지 않고 현재 청크가 끝나면 자연 종료된다.
 export const RestaurantCancelSummaryResult = z.object({
