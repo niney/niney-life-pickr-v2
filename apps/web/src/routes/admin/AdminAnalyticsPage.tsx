@@ -1481,7 +1481,8 @@ const CategoryTreeRow = ({
   depth: number;
   onPick: (path: string) => void;
 }) => {
-  const [open, setOpen] = useState(depth < 1);
+  // 최상위만 보이도록 전부 접힌 채로 시작 — 트리가 너무 길어지는 것 방지.
+  const [open, setOpen] = useState(false);
   const hasChildren = !!node.children && node.children.length > 0;
   const ratio =
     node.positiveRatio === null ? '-' : `${Math.round(node.positiveRatio * 100)}%`;
