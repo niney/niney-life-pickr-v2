@@ -10,7 +10,8 @@ const isTabKey = (s: string | null): s is TabKey =>
 // /restaurants/:placeId 라우트의 상세 outlet. URL ?tab= 으로 탭을 관리한다.
 // 탭 전환은 push — 뒤로가기로 직전 탭/식당으로 돌아갈 수 있도록 history 에
 // 누적된다. (사용자 요청: 뒤로가기 1회 = 직전 탭)
-// /r/:placeId 는 공유/SEO 대표 URL — 리스트 없이 상세만 단독으로 보여준다.
+// /r/:placeId 는 공유/SEO 대표 URL — RestaurantsV2Page 가 리스트를 숨기고
+// 지도 + 상세 레이아웃을 제공한다.
 export const RestaurantDetailRoute = () => {
   const { placeId = '' } = useParams<{ placeId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,7 +45,7 @@ export const RestaurantDetailRoute = () => {
   }, [navigate, basePath, shareMatch]);
 
   if (!placeId) return null;
-  const detail = (
+  return (
     <PublicRestaurantDetail
       key={placeId}
       placeId={placeId}
@@ -52,11 +53,5 @@ export const RestaurantDetailRoute = () => {
       tab={tab}
       onChangeTab={handleChangeTab}
     />
-  );
-  if (!shareMatch) return detail;
-  return (
-    <div className="mx-auto h-[100dvh] max-w-3xl bg-background xl:h-[calc(100dvh-3.5rem)] xl:border-x">
-      {detail}
-    </div>
   );
 };

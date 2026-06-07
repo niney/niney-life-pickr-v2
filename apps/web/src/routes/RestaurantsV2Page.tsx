@@ -8,8 +8,11 @@ import {
   useState,
 } from 'react';
 import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
-import type { RestaurantPublicListQueryType } from '@repo/api-contract';
-import { useRestaurantsPublic, useUserLocation } from '@repo/shared';
+import type {
+  RestaurantPublicListItemType,
+  RestaurantPublicListQueryType,
+} from '@repo/api-contract';
+import { useRestaurantPublic, useRestaurantsPublic, useUserLocation } from '@repo/shared';
 import { computeBboxAround, isInKorea } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import {
@@ -50,6 +53,8 @@ const formatBbox = (b: { minLng: number; minLat: number; maxLng: number; maxLat:
 //   - 카드 클릭 → 진입 전 snap 저장, 시트 half 로, viewKey='detail' → list
 //     스크롤 자동 저장, detail 은 top 부터
 //   - 닫기 → 진입 전 snap 복원, viewKey='list' → list 스크롤 복원
+// /r/:placeId 공유/SEO 라우트도 이 화면을 부모로 사용한다. 이때는 리스트만
+// 숨기고 지도 + 상세를 유지한다.
 export const RestaurantsV2Page = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') ?? '';
@@ -59,7 +64,9 @@ export const RestaurantsV2Page = () => {
   const bbox = searchParams.get('bbox');
 
   const detailMatch = useMatch('/restaurants-v2/:placeId');
-  const placeId = detailMatch?.params.placeId ?? null;
+  const shareMatch = useMatch('/r/:placeId');
+  const isShareRoute = !!shareMatch;
+  const placeId = detailMatch?.params.placeId ?? shareMatch?.params.placeId ?? null;
   const navigate = useNavigate();
 
   const viewMode: 'list' | 'detail' = placeId === null ? 'list' : 'detail';
@@ -69,6 +76,7 @@ export const RestaurantsV2Page = () => {
   const snapBeforeDetailRef = useRef<Snap>('peek');
 
   const [panelSide, togglePanelSide] = usePanelSide('public.restaurants');
+  const effectivePanelSide = isShareRoute ? 'left' : panelSide;
 
   // PublicLayout 으로부터 subBar slot 과 통합 헤더 실측 높이 받음.
   const { setSubBar, headerHeight } = usePublicLayout();
@@ -97,6 +105,40 @@ export const RestaurantsV2Page = () => {
   });
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
+  const shareDetail = useRestaurantPublic(isShareRoute ? placeId : null);
+  const shareMapItem = useMemo<RestaurantPublicListItemType | null>(() => {
+    const detail = shareDetail.data;
+    if (!isShareRoute || !detail) return null;
+    return {
+      placeId: detail.placeId,
+      name: detail.name,
+      category: detail.category,
+      address: detail.address,
+      roadAddress: detail.roadAddress,
+      rating: detail.rating,
+      reviewCount: detail.reviewCount,
+      latitude: detail.latitude,
+      longitude: detail.longitude,
+      thumbnailUrl: detail.imageUrls[0] ?? null,
+      firstCrawledAt: detail.firstCrawledAt,
+      totalReviews: detail.storedReviewCount.total,
+      summaryPending: 0,
+      summaryRunning: 0,
+      summaryDone: 0,
+      summaryFailed: 0,
+      analyzedCount: 0,
+      avgSentimentScore: null,
+      avgSatisfactionScore: null,
+      positiveCount: 0,
+      negativeCount: 0,
+      neutralCount: 0,
+    };
+  }, [isShareRoute, shareDetail.data]);
+  const mapItems = useMemo(() => {
+    if (!shareMapItem) return items;
+    if (items.some((it) => it.placeId === shareMapItem.placeId)) return items;
+    return [shareMapItem, ...items];
+  }, [items, shareMapItem]);
 
   // 더블클릭 = 해당 식당으로 지도 확대. 매번 새 객체를 만들어 같은 식당을 다시
   // 더블클릭해도 PublicRestaurantsMap 의 effect 가 재실행된다.
@@ -106,8 +148,8 @@ export const RestaurantsV2Page = () => {
   const handleSelectItem = useCallback(
     (id: string) => {
       navigate({
-        pathname: `/restaurants-v2/${id}`,
-        search: window.location.search,
+        pathname: isShareRoute ? `/r/${id}` : `/restaurants-v2/${id}`,
+        search: isShareRoute ? '' : window.location.search,
       });
       // prev 캡처로 진입 직전 snap 저장 — listSnap 을 deps 에 넣지 않아도 됨.
       setListSnap((prev) => {
@@ -116,7 +158,7 @@ export const RestaurantsV2Page = () => {
       });
       setDetailSnap('half');
     },
-    [navigate],
+    [navigate, isShareRoute],
   );
 
   // 닫기는 RestaurantDetailRoute 의 onClose 가 navigate('/restaurants-v2') 로
@@ -139,6 +181,7 @@ export const RestaurantsV2Page = () => {
   const userLoc = useUserLocation();
   const appliedGeoBboxRef = useRef(false);
   useEffect(() => {
+    if (isShareRoute) return;
     if (appliedGeoBboxRef.current) return;
     // pending/idle 동안은 대기 — 권한 결정 후 한 번에.
     if (userLoc.status === 'idle' || userLoc.status === 'pending') return;
@@ -147,25 +190,24 @@ export const RestaurantsV2Page = () => {
     // 않는다. one-shot 플래그는 위에서 이미 true 로 마크.
     if (bbox) return;
     const center =
-      userLoc.status === 'granted' &&
-      userLoc.coords &&
-      isInKorea(userLoc.coords)
+      userLoc.status === 'granted' && userLoc.coords && isInKorea(userLoc.coords)
         ? userLoc.coords
         : SEOUL;
     const box = computeBboxAround(center, INITIAL_NEARBY_KM);
     setParam('bbox', formatBbox(box));
-  }, [userLoc.status, userLoc.coords, bbox, setParam]);
+  }, [isShareRoute, userLoc.status, userLoc.coords, bbox, setParam]);
 
   // "내 위치" 버튼 클릭은 사용자의 명시 의도 — 기존 URL bbox 가 있어도 덮어
   // 쓴다. manualRequestRef 로 "다음 granted 도착 시 강제 적용" 표시.
   const manualRequestRef = useRef(false);
   useEffect(() => {
+    if (isShareRoute) return;
     if (!manualRequestRef.current) return;
     if (userLoc.status !== 'granted' || !userLoc.coords) return;
     manualRequestRef.current = false;
     const box = computeBboxAround(userLoc.coords, INITIAL_NEARBY_KM);
     setParam('bbox', formatBbox(box));
-  }, [userLoc.status, userLoc.coords, setParam]);
+  }, [isShareRoute, userLoc.status, userLoc.coords, setParam]);
 
   const handleRequestLocation = useCallback(() => {
     manualRequestRef.current = true;
@@ -174,7 +216,7 @@ export const RestaurantsV2Page = () => {
 
   // 지도 view 동기화용 중심 좌표. PublicRestaurantsMap 이 참조 변경마다 flyTo —
   // 첫 자동 도착과 수동 refetch 양쪽 다 처리. 권한 거부면 null → 서울시청 폴백.
-  const focusCoord = userLoc.status === 'granted' ? userLoc.coords : null;
+  const focusCoord = !isShareRoute && userLoc.status === 'granted' ? userLoc.coords : null;
 
   // 모바일 전용 subBar 컨텐츠 — 검색 input + 카테고리 칩 + 총/정렬.
   // xl+ 데스크톱에서는 컨테이너 div 가 display:none (xl:hidden) 이라 차지하는
@@ -213,41 +255,43 @@ export const RestaurantsV2Page = () => {
       <div
         className={cn(
           'relative hidden w-full xl:flex',
-          panelSide === 'right' && 'xl:flex-row-reverse',
+          effectivePanelSide === 'right' && 'xl:flex-row-reverse',
         )}
       >
-        <aside
-          className={cn(
-            'relative w-full bg-background',
-            'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[400px] xl:shrink-0 xl:overflow-y-auto',
-            panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
-          )}
-        >
-          <PublicRestaurantList
-            items={items}
-            total={total}
-            isLoading={list.isLoading}
-            isError={list.isError}
-            q={q}
-            category={category}
-            sort={sort}
-            selectedPlaceId={placeId}
-            onChangeQ={(next) => setParam('q', next)}
-            onChangeCategory={(next) => setParam('category', next)}
-            onChangeSort={(next) => setParam('sort', next === 'recent' ? null : next)}
-            onSelectItem={handleSelectItem}
-            onZoomItem={handleZoomItem}
-            panelSide={panelSide}
-            onTogglePanelSide={togglePanelSide}
-          />
-        </aside>
+        {!isShareRoute && (
+          <aside
+            className={cn(
+              'relative w-full bg-background',
+              'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[400px] xl:shrink-0 xl:overflow-y-auto',
+              panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
+            )}
+          >
+            <PublicRestaurantList
+              items={items}
+              total={total}
+              isLoading={list.isLoading}
+              isError={list.isError}
+              q={q}
+              category={category}
+              sort={sort}
+              selectedPlaceId={placeId}
+              onChangeQ={(next) => setParam('q', next)}
+              onChangeCategory={(next) => setParam('category', next)}
+              onChangeSort={(next) => setParam('sort', next === 'recent' ? null : next)}
+              onSelectItem={handleSelectItem}
+              onZoomItem={handleZoomItem}
+              panelSide={panelSide}
+              onTogglePanelSide={togglePanelSide}
+            />
+          </aside>
+        )}
 
         {placeId && (
           <aside
             className={cn(
               'w-full bg-background',
               'xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)] xl:w-[440px] xl:shrink-0 xl:overflow-hidden',
-              panelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
+              effectivePanelSide === 'left' ? 'xl:border-r' : 'xl:border-l',
             )}
           >
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
@@ -258,13 +302,13 @@ export const RestaurantsV2Page = () => {
 
         <section className="relative flex-1 xl:sticky xl:top-14 xl:h-[calc(100dvh-3.5rem)]">
           <PublicRestaurantsMap
-            items={items}
+            items={mapItems}
             selectedPlaceId={placeId}
             zoomFocus={zoomFocus}
             appliedBbox={bbox}
             focusCoord={focusCoord}
-            locationStatus={userLoc.status}
-            onRequestLocation={handleRequestLocation}
+            locationStatus={isShareRoute ? undefined : userLoc.status}
+            onRequestLocation={isShareRoute ? undefined : handleRequestLocation}
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}
             onClearArea={handleClearArea}
@@ -278,18 +322,15 @@ export const RestaurantsV2Page = () => {
           ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="xl:hidden">
         {/* 맵 배경. headerHeight 아래부터 viewport 하단까지. dvh 변동 시 즉시 따라감. */}
-        <div
-          className="fixed inset-x-0 bottom-0 z-0"
-          style={{ top: `${headerHeight}px` }}
-        >
+        <div className="fixed inset-x-0 bottom-0 z-0" style={{ top: `${headerHeight}px` }}>
           <PublicRestaurantsMap
-            items={items}
+            items={mapItems}
             selectedPlaceId={placeId}
             zoomFocus={zoomFocus}
             appliedBbox={bbox}
             focusCoord={focusCoord}
-            locationStatus={userLoc.status}
-            onRequestLocation={handleRequestLocation}
+            locationStatus={isShareRoute ? undefined : userLoc.status}
+            onRequestLocation={isShareRoute ? undefined : handleRequestLocation}
             onSelectMarker={handleSelectItem}
             onResearchInArea={handleResearch}
             onClearArea={handleClearArea}

@@ -108,8 +108,10 @@ export const App = () => {
             <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
               <Route path=":placeId" element={<RestaurantDetailRoute />} />
             </Route>
-            {/* 공유/SEO 대표 URL — 리스트/지도 없이 상세부터 바로 보여준다. */}
-            <Route path="/r/:placeId" element={<RestaurantDetailRoute />} />
+            {/* 공유/SEO 대표 URL — 맛집 지도 화면에서 리스트만 빼고 상세부터 보여준다. */}
+            <Route path="/r" element={<RestaurantsV2Page />}>
+              <Route path=":placeId" element={<RestaurantDetailRoute />} />
+            </Route>
             <Route
               path="/me/settlements"
               element={
