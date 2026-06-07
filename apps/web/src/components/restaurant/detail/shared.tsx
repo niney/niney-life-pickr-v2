@@ -12,8 +12,10 @@ import {
   Loader2,
   Navigation,
   Phone,
+  Share2,
   Sparkles,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
@@ -29,6 +31,26 @@ export const QuickActions = ({ detail }: { detail: RestaurantPublicDetailType })
     detail.latitude !== null && detail.longitude !== null
       ? `https://map.naver.com/p/directions/-/${detail.longitude},${detail.latitude},${encodeURIComponent(detail.name)}/-/transit?c=15`
       : naverLink;
+  const shareUrl = `${window.location.origin}/r/${encodeURIComponent(detail.placeId)}`;
+
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: detail.name, url: shareUrl });
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('공유 링크를 복사했어요');
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('공유 링크를 복사했어요');
+      } catch {
+        toast.error('공유 링크를 복사하지 못했어요');
+      }
+    }
+  };
   return (
     <div className="flex flex-wrap gap-2">
       <a href={dirLink} target="_blank" rel="noreferrer">
@@ -51,6 +73,18 @@ export const QuickActions = ({ detail }: { detail: RestaurantPublicDetailType })
           </Button>
         </a>
       )}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="gap-1"
+        onClick={handleShare}
+        title="공유"
+        aria-label="공유"
+      >
+        <Share2 className="size-3.5" />
+        공유
+      </Button>
     </div>
   );
 };
@@ -80,11 +114,7 @@ export const AiSummary = ({
         />
         <Stat
           label="평균 감정 점수"
-          value={
-            insights.avgSentimentScore !== null
-              ? insights.avgSentimentScore.toFixed(2)
-              : '—'
-          }
+          value={insights.avgSentimentScore !== null ? insights.avgSentimentScore.toFixed(2) : '—'}
           hint="-1(부정) ~ +1(긍정)"
         />
       </div>
@@ -151,15 +181,7 @@ export const AiSummary = ({
   );
 };
 
-const Stat = ({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) => (
+const Stat = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
   <div className="rounded-md border bg-muted/30 p-2.5">
     <div className="text-[11px] text-muted-foreground">{label}</div>
     <div className="text-lg font-semibold tabular-nums">{value}</div>
@@ -182,9 +204,7 @@ export const MenuGrid = ({
   if (insights) {
     for (const m of insights.topMenus) mentionByName.set(m.name, m);
   }
-  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(
-    null,
-  );
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   return (
     <div>
       <ul className="divide-y divide-border">
@@ -207,15 +227,11 @@ export const MenuGrid = ({
                 </div>
               )}
               {m.description && (
-                <div className="line-clamp-2 text-xs text-muted-foreground">
-                  {m.description}
-                </div>
+                <div className="line-clamp-2 text-xs text-muted-foreground">{m.description}</div>
               )}
               {stats && (
                 <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    +{stats.positive}
-                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400">+{stats.positive}</span>
                   <span className="mx-1">/</span>
                   <span className="text-rose-600 dark:text-rose-400">-{stats.negative}</span>
                   <span className="ml-1">· {stats.count}회 언급</span>
@@ -226,10 +242,7 @@ export const MenuGrid = ({
           // 카드 전체가 아니라 영역을 둘로 나눈다: 썸네일=사진 확대(라이트박스),
           // 텍스트 영역=리뷰 필터. 한 카드에서 두 동작이 겹치지 않게.
           return (
-            <li
-              key={`${m.name}-${idx}`}
-              className="flex gap-2 py-2.5"
-            >
+            <li key={`${m.name}-${idx}`} className="flex gap-2 py-2.5">
               {m.imageUrls[0] && (
                 <button
                   type="button"
@@ -505,9 +518,7 @@ export const ReviewCard = ({
             >
               <span className="font-semibold text-foreground">{m.name}</span>
               {m.traits.length > 0 && (
-                <span className="ml-1.5 text-muted-foreground">
-                  {m.traits.join(' · ')}
-                </span>
+                <span className="ml-1.5 text-muted-foreground">{m.traits.join(' · ')}</span>
               )}
             </li>
           ))}
@@ -518,10 +529,7 @@ export const ReviewCard = ({
       {r.analysis && r.analysis.tips.length > 0 && (
         <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-2">
           {r.analysis.tips.map((t, i) => (
-            <li
-              key={i}
-              className="flex items-start gap-1.5 text-xs text-muted-foreground"
-            >
+            <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
               <Lightbulb className="mt-0.5 size-3 shrink-0 text-amber-500" />
               <span>{t}</span>
             </li>

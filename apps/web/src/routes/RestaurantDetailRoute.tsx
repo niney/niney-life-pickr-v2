@@ -10,6 +10,7 @@ const isTabKey = (s: string | null): s is TabKey =>
 // /restaurants/:placeId 라우트의 상세 outlet. URL ?tab= 으로 탭을 관리한다.
 // 탭 전환은 push — 뒤로가기로 직전 탭/식당으로 돌아갈 수 있도록 history 에
 // 누적된다. (사용자 요청: 뒤로가기 1회 = 직전 탭)
+// /r/:placeId 는 공유/SEO 대표 URL — 리스트 없이 상세만 단독으로 보여준다.
 export const RestaurantDetailRoute = () => {
   const { placeId = '' } = useParams<{ placeId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,18 +31,20 @@ export const RestaurantDetailRoute = () => {
     [setSearchParams],
   );
 
-  // v2 라우트(/restaurants-v2/:placeId) 에서도 동일하게 쓰이므로 닫기 경로를
-  // useMatch 로 분기 — 그 외 로직(탭 동기화 등)은 동일.
+  // v2 라우트(/restaurants-v2/:placeId) 와 공유 라우트(/r/:placeId) 에서도
+  // 동일하게 쓰이므로 닫기 경로를 useMatch 로 분기한다.
   const v2Match = useMatch('/restaurants-v2/:placeId');
-  const basePath = v2Match ? '/restaurants-v2' : '/restaurants';
+  const shareMatch = useMatch('/r/:placeId');
+  const basePath = v2Match || shareMatch ? '/restaurants-v2' : '/restaurants';
 
   const handleClose = useCallback(() => {
-    // 리스트 영역으로. 검색/필터 query 는 그대로 보존.
-    navigate({ pathname: basePath, search: window.location.search });
-  }, [navigate, basePath]);
+    // 리스트 영역으로. 목록에서 들어온 상세는 검색/필터 query 를 보존하고,
+    // 공유 대표 URL 은 tab 같은 상세 전용 query 를 목록으로 넘기지 않는다.
+    navigate({ pathname: basePath, search: shareMatch ? '' : window.location.search });
+  }, [navigate, basePath, shareMatch]);
 
   if (!placeId) return null;
-  return (
+  const detail = (
     <PublicRestaurantDetail
       key={placeId}
       placeId={placeId}
@@ -49,5 +52,11 @@ export const RestaurantDetailRoute = () => {
       tab={tab}
       onChangeTab={handleChangeTab}
     />
+  );
+  if (!shareMatch) return detail;
+  return (
+    <div className="mx-auto h-[100dvh] max-w-3xl bg-background xl:h-[calc(100dvh-3.5rem)] xl:border-x">
+      {detail}
+    </div>
   );
 };

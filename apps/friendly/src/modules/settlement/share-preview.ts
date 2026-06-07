@@ -116,6 +116,13 @@ function injectOg(html: string, og: OgMeta): string {
   return withTitle.replace('</head>', `    ${buildMetaTags(og)}\n  </head>`);
 }
 
+function getPublicOrigin(req: FastifyRequest): string {
+  if (env.PUBLIC_ORIGIN) return env.PUBLIC_ORIGIN.replace(/\/+$/, '');
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https';
+  const host = req.headers.host ?? 'ninelife.kr';
+  return `${proto}://${host}`;
+}
+
 export async function registerSharePreview(app: FastifyInstance): Promise<void> {
   const service = new SettlementService(app.prisma);
 
@@ -136,9 +143,7 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
     const html = loaded.html;
 
     const { token } = req.params;
-    const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https';
-    const host = req.headers.host ?? 'ninelife.kr';
-    const origin = `${proto}://${host}`;
+    const origin = getPublicOrigin(req);
     const pageUrl = `${origin}${req.url.split('?')[0]}`;
     const fallbackImage = env.OG_IMAGE_PATH.startsWith('http')
       ? env.OG_IMAGE_PATH
@@ -159,8 +164,7 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
         description: `총 ${formatWon(meta.grandTotal)}원 · ${meta.participantCount}명`,
         url: pageUrl,
         image:
-          meta.ogImageUrl ??
-          `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,
+          meta.ogImageUrl ?? `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,
       };
     } else {
       // 만료/없는 토큰 — 일반 OG 로 폴백. SPA 가 자체 에러 화면을 띄운다.
@@ -195,13 +199,15 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
     }
     try {
       const png = await renderSettlementCardPng(session);
-      return reply
-        .code(200)
-        .type('image/png')
-        // 편집은 드물고 크롤러 신선도엔 5분이면 충분. editedAt 기반 ETag 까지는
-        // 가지 않는다(메신저는 자체적으로 OG 이미지를 더 길게 캐시).
-        .header('cache-control', 'public, max-age=300')
-        .send(png);
+      return (
+        reply
+          .code(200)
+          .type('image/png')
+          // 편집은 드물고 크롤러 신선도엔 5분이면 충분. editedAt 기반 ETag 까지는
+          // 가지 않는다(메신저는 자체적으로 OG 이미지를 더 길게 캐시).
+          .header('cache-control', 'public, max-age=300')
+          .send(png)
+      );
     } catch (err) {
       app.log.error({ err, token }, 'settlement card 렌더 실패');
       return reply.code(500).type('text/plain; charset=utf-8').send('render error');

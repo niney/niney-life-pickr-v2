@@ -41,6 +41,9 @@ const EnvSchema = z.object({
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치
   // (apps/web/dist/index.html) 를 빌드 산출물 기준 상대경로로 탐색.
   WEB_INDEX_PATH: z.string().optional(),
+  // 공개 URL/canonical 생성 기준 origin. Cloudflare/Flexible SSL/nginx Host 변형에
+  // 흔들리지 않게 SEO 표면은 기본 운영 도메인으로 고정한다.
+  PUBLIC_ORIGIN: z.string().url().default('https://ninelife.kr'),
   // OG 기본 이미지. 같은 도메인 정적 파일의 path (또는 절대 URL).
   OG_IMAGE_PATH: z.string().default('/og-default.png'),
 });

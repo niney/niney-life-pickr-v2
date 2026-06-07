@@ -68,7 +68,6 @@ const computeReviewCounts = (
   return { all: reviews.length, positive, negative };
 };
 
-
 // SHA-1 of authorName + body. Used as the dedup key when the network response
 // doesn't carry a stable review id. Body is already truncated to 500 chars by
 // the adapter so this is bounded.
@@ -80,6 +79,23 @@ export const contentHashOf = (authorName: string | null, body: string): string =
 export interface ExistingReviewKeys {
   externalIds: Set<string>;
   contentHashes: Set<string>;
+}
+
+export interface RestaurantPublicSeoMeta {
+  placeId: string;
+  name: string;
+  category: string | null;
+  address: string | null;
+  roadAddress: string | null;
+  phone: string | null;
+  businessHours: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  imageUrls: string[];
+  menus: RestaurantPublicDetailType['menus'];
+  rawSourceUrl: string;
 }
 
 // The VisitorReview shape carries an optional externalId (Naver review id)
@@ -120,9 +136,7 @@ export class RestaurantService {
   // visitorReviews — those live in their own table. The intent is: any
   // structural data we don't query on (menus, blogReviews, businessHours,
   // imageUrls, reviewStats, coords) round-trips through this blob unchanged.
-  async upsertRestaurantFromCrawl(
-    data: NaverPlaceDataType,
-  ): Promise<{ id: string }> {
+  async upsertRestaurantFromCrawl(data: NaverPlaceDataType): Promise<{ id: string }> {
     const { visitorReviews: _ignored, ...rest } = data;
     const snapshotJson = JSON.stringify(rest);
     // 신규 행은 자기 전용 Canonical 1행을 같이 만든다 (1:1 시작). 어드민이
@@ -170,9 +184,7 @@ export class RestaurantService {
   // 행이 그쪽에 잡히지 않도록 비워둔다. rating 은 다이닝코드 score(0~100) 를 5점 환산
   // 으로 정규화해 저장하되, 환산 의미를 잃지 않게 정보 손실은 snapshotJson 의 원본
   // score/scoreDetail 로 보존한다.
-  async upsertRestaurantFromDiningcode(
-    data: DiningcodeShopDataType,
-  ): Promise<{ id: string }> {
+  async upsertRestaurantFromDiningcode(data: DiningcodeShopDataType): Promise<{ id: string }> {
     const { reviewsFirstPage: _ignored, ...rest } = data;
     const snapshotJson = JSON.stringify(rest);
     const rating = data.score === null ? null : data.score / 20;
@@ -315,10 +327,7 @@ export class RestaurantService {
   // 호출. (source='diningcode', sourceId=vRid) 인 Restaurant 가 있어야 매칭 — 미저장
   // 가게면 빈 Map. Review.externalId='dc:rv:<rvId>' 규약은 mapDiningcodeReviewToRaw
   // 와 일치해야 한다. status='done' 이고 text 가 있는 행만 포함.
-  async getDiningcodeReviewSummaryMap(
-    vRid: string,
-    rvIds: string[],
-  ): Promise<Map<string, string>> {
+  async getDiningcodeReviewSummaryMap(vRid: string, rvIds: string[]): Promise<Map<string, string>> {
     const map = new Map<string, string>();
     if (rvIds.length === 0) return map;
     const restaurant = await this.prisma.restaurant.findUnique({
@@ -434,9 +443,7 @@ export class RestaurantService {
   // Hard-delete a restaurant and all its reviews/summaries (cascade). Returns
   // the count of reviews removed for UI feedback, or null if the placeId
   // doesn't exist (caller maps to 404).
-  async deleteByPlaceId(
-    placeId: string,
-  ): Promise<{ deletedReviewCount: number } | null> {
+  async deleteByPlaceId(placeId: string): Promise<{ deletedReviewCount: number } | null> {
     const r = await this.prisma.restaurant.findUnique({
       where: { placeId },
       select: { id: true, _count: { select: { visitorReviews: true } } },
@@ -561,7 +568,7 @@ export class RestaurantService {
     // desc 정렬이라 sources 도 자동으로 최근순.
     const byCanonical = new Map<
       string,
-      { canonical: typeof rows[number]['canonical']; sources: RestaurantSourceSummaryType[] }
+      { canonical: (typeof rows)[number]['canonical']; sources: RestaurantSourceSummaryType[] }
     >();
     for (const r of rows) {
       const b = byRestaurant.get(r.id)!;
@@ -730,10 +737,7 @@ export class RestaurantService {
       }
       // suggestion 노출 조건 — 신규 단일 source + 무시 안 됨 + top1 후보 존재.
       let suggestion: CanonicalListItemType['suggestion'] = null;
-      if (
-        sources.length === 1 &&
-        canonical.suggestionDismissedAt === null
-      ) {
+      if (sources.length === 1 && canonical.suggestionDismissedAt === null) {
         const top = topCandidates.get(canonical.id);
         if (top) {
           const other = shapeById.get(top.otherId);
@@ -775,9 +779,8 @@ export class RestaurantService {
     // recent 는 ISO 문자열 비교로 desc(=최근이 위).
     const cmpRecent = (a: CanonicalListItemType, b: CanonicalListItemType): number =>
       a.lastCrawledAt < b.lastCrawledAt ? 1 : a.lastCrawledAt > b.lastCrawledAt ? -1 : 0;
-    const byKeyDesc = (
-      keyOf: (it: CanonicalListItemType) => number | null,
-    ) =>
+    const byKeyDesc =
+      (keyOf: (it: CanonicalListItemType) => number | null) =>
       (a: CanonicalListItemType, b: CanonicalListItemType): number => {
         const av = keyOf(a);
         const bv = keyOf(b);
@@ -787,9 +790,8 @@ export class RestaurantService {
         if (av === bv) return cmpRecent(a, b);
         return bv - av;
       };
-    const byKeyAsc = (
-      keyOf: (it: CanonicalListItemType) => number | null,
-    ) =>
+    const byKeyAsc =
+      (keyOf: (it: CanonicalListItemType) => number | null) =>
       (a: CanonicalListItemType, b: CanonicalListItemType): number => {
         const av = keyOf(a);
         const bv = keyOf(b);
@@ -809,9 +811,7 @@ export class RestaurantService {
       case 'negativeRatio':
         // summaryDone===0 → 분모 없음 → null → nulls-last. 그 외엔 negative 비율 asc.
         items.sort(
-          byKeyAsc((it) =>
-            it.summaryDone === 0 ? null : it.negativeCount / it.summaryDone,
-          ),
+          byKeyAsc((it) => (it.summaryDone === 0 ? null : it.negativeCount / it.summaryDone)),
         );
         break;
       case 'recent':
@@ -838,10 +838,7 @@ export class RestaurantService {
     const ands: Record<string, unknown>[] = [{ source: 'naver' }];
     if (query.q && query.q.length > 0) {
       ands.push({
-        OR: [
-          { name: { contains: query.q } },
-          { category: { contains: query.q } },
-        ],
+        OR: [{ name: { contains: query.q } }, { category: { contains: query.q } }],
       });
     }
     if (query.category && query.category.length > 0) {
@@ -892,10 +889,7 @@ export class RestaurantService {
         if (typeof snap.latitude === 'number') latitude = snap.latitude;
         if (typeof snap.longitude === 'number') longitude = snap.longitude;
         if (typeof snap.roadAddress === 'string') roadAddress = snap.roadAddress;
-        if (
-          Array.isArray(snap.imageUrls) &&
-          typeof snap.imageUrls[0] === 'string'
-        ) {
+        if (Array.isArray(snap.imageUrls) && typeof snap.imageUrls[0] === 'string') {
           thumbnailUrl = snap.imageUrls[0];
         }
       } catch {
@@ -926,12 +920,7 @@ export class RestaurantService {
       // bbox 가 무효(NaN) 이면 무시하고 전체 통과 — Zod regex 통과한 입력이라
       // 정상 파싱되지만 방어적으로 length·finite 체크.
       if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
-        const [minLng, minLat, maxLng, maxLat] = parts as [
-          number,
-          number,
-          number,
-          number,
-        ];
+        const [minLng, minLat, maxLng, maxLat] = parts as [number, number, number, number];
         filtered = enriched.filter(
           (r) =>
             r.latitude !== null &&
@@ -967,10 +956,7 @@ export class RestaurantService {
         : [];
     // 같은 canonical 에 DC 행이 둘 이상이면 통상 의미상 첫 매칭만 사용 —
     // 실제로는 (source, sourceId) unique + 자동 매칭이 1:1 이라 한 줄.
-    const dcByCanonical = new Map<
-      string,
-      { id: string; visitorReviewCount: number }
-    >();
+    const dcByCanonical = new Map<string, { id: string; visitorReviewCount: number }>();
     for (const dc of dcSiblings) {
       if (!dcByCanonical.has(dc.canonicalId)) {
         dcByCanonical.set(dc.canonicalId, {
@@ -1055,7 +1041,7 @@ export class RestaurantService {
     const items: RestaurantPublicListItemType[] = filtered.map((r) => {
       const naverBucket = byId.get(r.id)!;
       const dc = dcByCanonical.get(r.canonicalId) ?? null;
-      const dcBucket = dc ? byId.get(dc.id) ?? null : null;
+      const dcBucket = dc ? (byId.get(dc.id) ?? null) : null;
       const sentSum = naverBucket.sentSum + (dcBucket?.sentSum ?? 0);
       const sentN = naverBucket.sentN + (dcBucket?.sentN ?? 0);
       const satSum = naverBucket.satSum + (dcBucket?.satSum ?? 0);
@@ -1108,15 +1094,8 @@ export class RestaurantService {
     const assembled = await this.assemblePublicReviews(placeId);
     if (!assembled) return null;
 
-    const {
-      naverRow,
-      dcRow,
-      naverSnap,
-      dcSnap,
-      reviews,
-      naverReviewCount,
-      dcReviewCount,
-    } = assembled;
+    const { naverRow, dcRow, naverSnap, dcSnap, reviews, naverReviewCount, dcReviewCount } =
+      assembled;
 
     const merged = mergeAddress(naverRow, naverSnap, dcSnap);
     const coords = mergeCoordinates(naverSnap, dcSnap);
@@ -1156,6 +1135,69 @@ export class RestaurantService {
       storedReviewCount: computeStoredReviewCount(naverReviewCount, dcReviewCount),
       diningcode: dcSnap ? composeDiningcodeAddon(dcSnap) : null,
     };
+  }
+
+  async getPublicSeoMeta(placeId: string): Promise<RestaurantPublicSeoMeta | null> {
+    const naverRow = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: {
+        placeId: true,
+        name: true,
+        category: true,
+        address: true,
+        phone: true,
+        rating: true,
+        reviewCount: true,
+        rawSourceUrl: true,
+        snapshotJson: true,
+        canonicalId: true,
+      },
+    });
+    if (!naverRow?.placeId) return null;
+
+    const dcRow = await this.prisma.restaurant.findFirst({
+      where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
+      select: { snapshotJson: true },
+    });
+
+    const naverSnap = JSON.parse(naverRow.snapshotJson) as Omit<
+      NaverPlaceDataType,
+      'visitorReviews'
+    >;
+    const dcSnap = dcRow
+      ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
+      : null;
+    const merged = mergeAddress(naverRow, naverSnap, dcSnap);
+    const coords = mergeCoordinates(naverSnap, dcSnap);
+
+    return {
+      placeId: naverRow.placeId,
+      name: mergeName(naverRow, dcSnap),
+      category: mergeCategory(naverRow, dcSnap),
+      address: merged.address,
+      roadAddress: merged.roadAddress,
+      phone: mergePhone(naverRow, dcSnap),
+      businessHours: mergeBusinessHours(naverSnap, dcSnap),
+      rating: mergeRating(naverRow, dcSnap),
+      reviewCount: mergeReviewCount(naverRow, dcSnap),
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      imageUrls: mergePhotos(naverSnap, dcSnap),
+      menus: mergeMenus(naverSnap, dcSnap),
+      rawSourceUrl: naverRow.rawSourceUrl,
+    };
+  }
+
+  async getPublicSitemapEntries(): Promise<Array<{ placeId: string; lastmod: string }>> {
+    const rows = await this.prisma.restaurant.findMany({
+      where: { placeId: { not: null } },
+      select: { placeId: true, lastCrawledAt: true },
+      orderBy: { lastCrawledAt: 'desc' },
+      take: 50_000,
+    });
+    return rows.flatMap((row) =>
+      row.placeId ? [{ placeId: row.placeId, lastmod: row.lastCrawledAt.toISOString() }] : [],
+    );
   }
 
   // 페이지네이션 방문자 리뷰. detail 과 같은 fetch + merge 경로를 공유.
@@ -1282,9 +1324,7 @@ export class RestaurantService {
       ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
       : null;
 
-    const naverReviews = naverRow.visitorReviews.map((v) =>
-      this.toPublicReview(v, 'naver'),
-    );
+    const naverReviews = naverRow.visitorReviews.map((v) => this.toPublicReview(v, 'naver'));
     const dcReviews = dcRow
       ? dcRow.visitorReviews.map((v) => this.toPublicReview(v, 'diningcode'))
       : [];
@@ -1574,16 +1614,14 @@ export class RestaurantService {
     for (const m of mentions) {
       const canon = canonByNorm.get(m.nameNorm);
       const key = canon ? canon.canonicalNorm : m.nameNorm;
-      const displayName =
-        canon?.canonicalName ?? fallbackBest.get(m.nameNorm)?.name ?? m.name;
-      const cur =
-        menus.get(key) ?? {
-          name: displayName,
-          count: 0,
-          positive: 0,
-          negative: 0,
-          neutral: 0,
-        };
+      const displayName = canon?.canonicalName ?? fallbackBest.get(m.nameNorm)?.name ?? m.name;
+      const cur = menus.get(key) ?? {
+        name: displayName,
+        count: 0,
+        positive: 0,
+        negative: 0,
+        neutral: 0,
+      };
       cur.count += 1;
       if (m.sentiment === 'positive') cur.positive += 1;
       else if (m.sentiment === 'negative') cur.negative += 1;
@@ -1654,10 +1692,7 @@ export class RestaurantService {
          AND mc.nameNorm = mm.nameNorm
        WHERE mm.restaurantId = ${r.id}
        GROUP BY mc.canonicalNorm, mm.sentiment`;
-    const statByNorm = new Map<
-      string,
-      { positive: number; negative: number; total: number }
-    >();
+    const statByNorm = new Map<string, { positive: number; negative: number; total: number }>();
     for (const s of mentionStats) {
       const cur = statByNorm.get(s.canonicalNorm) ?? {
         positive: 0,
@@ -1790,7 +1825,12 @@ export class RestaurantService {
         review: { select: { restaurantId: true } },
       },
     });
-    interface Agg { sentSum: number; sentN: number; satSum: number; satN: number }
+    interface Agg {
+      sentSum: number;
+      sentN: number;
+      satSum: number;
+      satN: number;
+    }
     const byId = new Map<string, Agg>();
     for (const id of ids) byId.set(id, { sentSum: 0, sentN: 0, satSum: 0, satN: 0 });
     for (const s of summaryRows) {
@@ -1910,9 +1950,7 @@ export class RestaurantService {
 
   // SSE 라우트가 canonicalId 들 → Restaurant 행들로 풀어내는 데 사용.
   // bus key 결정에 source/sourceId/placeId 가 모두 필요.
-  async getRestaurantsByCanonicalIds(
-    canonicalIds: string[],
-  ): Promise<
+  async getRestaurantsByCanonicalIds(canonicalIds: string[]): Promise<
     Array<{
       canonicalId: string;
       restaurantId: string;
@@ -1992,8 +2030,7 @@ const safeParseMenus = (raw: string | null): ReviewAnalysisMenuType[] | null => 
         const name = (m as { name?: unknown }).name;
         if (typeof name !== 'string') return null;
         const s = (m as { sentiment?: unknown }).sentiment;
-        const sentiment =
-          s === 'positive' || s === 'negative' || s === 'neutral' ? s : null;
+        const sentiment = s === 'positive' || s === 'negative' || s === 'neutral' ? s : null;
         const rawTraits = (m as { traits?: unknown }).traits;
         const traits = Array.isArray(rawTraits)
           ? rawTraits.filter((t): t is string => typeof t === 'string')
@@ -2012,8 +2049,7 @@ const pickPublicSort = (
   sort: RestaurantPublicListQueryType['sort'],
 ): ((a: RestaurantPublicListItemType, b: RestaurantPublicListItemType) => number) => {
   if (sort === 'recent') {
-    return (a, b) =>
-      +new Date(b.firstCrawledAt) - +new Date(a.firstCrawledAt);
+    return (a, b) => +new Date(b.firstCrawledAt) - +new Date(a.firstCrawledAt);
   }
   const nullsLast =
     (

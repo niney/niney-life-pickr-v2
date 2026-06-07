@@ -71,7 +71,12 @@ const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
   const role = me.data?.role ?? cachedUser?.role;
 
   if (!token) return <Navigate to="/login" replace />;
-  if (me.isLoading && !cachedUser) return <main className="container"><p>Loading…</p></main>;
+  if (me.isLoading && !cachedUser)
+    return (
+      <main className="container">
+        <p>Loading…</p>
+      </main>
+    );
   if (role !== 'ADMIN') return <Navigate to="/" replace />;
   return <>{children}</>;
 };
@@ -88,90 +93,87 @@ export const App = () => {
     <>
       {/* 전역 토스트 — 단건 재요약 결과 등 일시적 피드백. richColors 로
           성공/에러 색 구분, 화면 하단 중앙. theme 로 다크/라이트 동기화. */}
-      <Toaster
-        position="bottom-center"
-        richColors
-        closeButton
-        theme={themeMode}
-      />
+      <Toaster position="bottom-center" richColors closeButton theme={themeMode} />
       {/* 진행 중 단건 재요약을 전역에서 지켜보다 완료 시 토스트 — 탭/페이지를
           떠나도 동작하도록 App 레벨에 상주. */}
       <ResummarizeToaster />
       <Suspense fallback={<PageFallback />}>
         <Routes>
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/restaurants" element={<RestaurantsPage />}>
-            <Route path=":placeId" element={<RestaurantDetailRoute />} />
-          </Route>
-          {/* 모바일 시트 패턴 v2 — 데스크톱은 기존 3-column 동일, 모바일은 BottomSheet. */}
-          <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
-            <Route path=":placeId" element={<RestaurantDetailRoute />} />
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/restaurants" element={<RestaurantsPage />}>
+              <Route path=":placeId" element={<RestaurantDetailRoute />} />
+            </Route>
+            {/* 모바일 시트 패턴 v2 — 데스크톱은 기존 3-column 동일, 모바일은 BottomSheet. */}
+            <Route path="/restaurants-v2" element={<RestaurantsV2Page />}>
+              <Route path=":placeId" element={<RestaurantDetailRoute />} />
+            </Route>
+            {/* 공유/SEO 대표 URL — 리스트/지도 없이 상세부터 바로 보여준다. */}
+            <Route path="/r/:placeId" element={<RestaurantDetailRoute />} />
+            <Route
+              path="/me/settlements"
+              element={
+                <RequireUser>
+                  <SettlementHistoryPage />
+                </RequireUser>
+              }
+            />
+            <Route
+              path="/me/contacts"
+              element={
+                <RequireUser>
+                  <ContactsPage />
+                </RequireUser>
+              }
+            />
           </Route>
           <Route
-            path="/me/settlements"
+            path="/restaurants/:placeId/settle/new"
             element={
               <RequireUser>
-                <SettlementHistoryPage />
+                <SettlementNewPage />
+              </RequireUser>
+            }
+          />
+          {/* 식당 없이 독립 진입 — Step2 의 차수 카드에서 1차 식당 검색 강제. */}
+          <Route
+            path="/me/settlements/new"
+            element={
+              <RequireUser>
+                <SettlementNewPage />
               </RequireUser>
             }
           />
           <Route
-            path="/me/contacts"
+            path="/restaurants/:placeId/settle/:id"
             element={
               <RequireUser>
-                <ContactsPage />
+                <SettlementResultPage />
               </RequireUser>
             }
           />
-        </Route>
-        <Route
-          path="/restaurants/:placeId/settle/new"
-          element={
-            <RequireUser>
-              <SettlementNewPage />
-            </RequireUser>
-          }
-        />
-        {/* 식당 없이 독립 진입 — Step2 의 차수 카드에서 1차 식당 검색 강제. */}
-        <Route
-          path="/me/settlements/new"
-          element={
-            <RequireUser>
-              <SettlementNewPage />
-            </RequireUser>
-          }
-        />
-        <Route
-          path="/restaurants/:placeId/settle/:id"
-          element={
-            <RequireUser>
-              <SettlementResultPage />
-            </RequireUser>
-          }
-        />
-        {/* 저장된 정산 편집 — 같은 SettlementNewPage 가 id 받으면 edit 모드. */}
-        <Route
-          path="/restaurants/:placeId/settle/:id/edit"
-          element={
-            <RequireUser>
-              <SettlementNewPage />
-            </RequireUser>
-          }
-        />
-        {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
+          {/* 저장된 정산 편집 — 같은 SettlementNewPage 가 id 받으면 edit 모드. */}
+          <Route
+            path="/restaurants/:placeId/settle/:id/edit"
+            element={
+              <RequireUser>
+                <SettlementNewPage />
+              </RequireUser>
+            }
+          />
+          {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
             않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}
-        <Route path="/s/:token" element={<SharedSettlementPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/admin/*"
-          element={
-            <RequireAdmin>
-              <AdminRoutes />
-            </RequireAdmin>
-          }
-        />
-      </Routes>
+          <Route path="/s/:token" element={<SharedSettlementPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/admin/*"
+            element={
+              <RequireAdmin>
+                <AdminRoutes />
+              </RequireAdmin>
+            }
+          />
+        </Routes>
       </Suspense>
     </>
   );

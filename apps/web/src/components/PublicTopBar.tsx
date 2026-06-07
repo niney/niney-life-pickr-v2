@@ -36,7 +36,8 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
   // 전역 TopBar 를 hidden 처리해 56px 회수. xl+ 데스크톱은 3-column 표시 중이라
   // 글로벌 네비 접근 위해 그대로 표시. (v2 경로는 시트 패턴이라 매치되지 않음.)
   const detailMatch = useMatch('/restaurants/:placeId');
-  const hideOnMobile = !!detailMatch;
+  const shareDetailMatch = useMatch('/r/:placeId');
+  const hideOnMobile = !!detailMatch || !!shareDetailMatch;
 
   const headerRef = useRef<HTMLElement>(null);
 
@@ -83,9 +84,7 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'text-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
+                    isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                   )
                 }
               >
