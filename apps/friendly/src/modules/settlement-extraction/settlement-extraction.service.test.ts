@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
+import { matchDrinkKind } from '@repo/api-contract';
 import {
   SettlementExtractionError,
   SettlementExtractionService,
@@ -84,6 +85,50 @@ const buildService = (provider: FakeVisionProvider) => {
   );
   return { service, storageDir };
 };
+
+describe('matchDrinkKind (술·음료 종류 사전)', () => {
+  const label = (name: string): string | null => matchDrinkKind([name])?.label ?? null;
+
+  it('matches 국내 소주 제품명 (새로/대선 등 일반 단어형 브랜드 포함)', () => {
+    expect(label('새로')).toBe('소주');
+    expect(label('새로 360ml')).toBe('소주');
+    expect(label('진로이즈백')).toBe('소주');
+    expect(label('참이슬 후레쉬')).toBe('소주');
+    expect(label('대선')).toBe('소주');
+    expect(label('좋은데이')).toBe('소주');
+  });
+
+  it('rejects 일반 단어/다른 메뉴 속 우연 일치 (한글 가드)', () => {
+    expect(label('새로운 메뉴')).toBeNull();
+    expect(label('카스테라')).toBeNull();
+    expect(label('콜라겐 족발')).toBeNull();
+    expect(label('타이거새우')).toBeNull();
+    expect(label('사케동')).toBeNull();
+    expect(label('생선양념구이')).toBeNull();
+    expect(label('칵테일새우')).toBeNull();
+    expect(label('몽블랑')).toBeNull();
+    expect(label('청주해장국')).toBeNull();
+    expect(label('와인숙성 삼겹살')).toBeNull();
+    expect(label('시원한 김치말이국수')).toBeNull();
+    // 케일주스는 맥주('에일') 가 아니라 주스로 잡혀야 한다.
+    expect(label('케일주스')).toBe('주스·에이드');
+  });
+
+  it('keeps 기호/숫자/접두 결합 매칭', () => {
+    expect(label('카스(병)')).toBe('맥주');
+    expect(label('테라 500')).toBe('맥주');
+    expect(label('생맥주')).toBe('맥주');
+    expect(label('레드와인')).toBe('와인');
+    expect(label('제로콜라')).toBe('콜라');
+    expect(label('안동소주')).toBe('소주');
+  });
+
+  it('matches matchedMenuName 힌트로도 (null 후보는 무시)', () => {
+    expect(matchDrinkKind([null, '처음처럼'])?.category).toBe('ALCOHOL');
+    expect(matchDrinkKind(['참이슬', null])?.label).toBe('소주');
+    expect(matchDrinkKind([null, undefined, ''])).toBeNull();
+  });
+});
 
 describe('isValidImageToken', () => {
   it('accepts well-formed uuid v4 strings', () => {
@@ -252,6 +297,73 @@ describe('SettlementExtractionService.extract', () => {
     });
     expect(out.items[0]!.amount).toBe(12000);
     expect(out.itemsSubtotal).toBe(12000);
+  });
+
+  it('corrects 제품명 항목의 잘못된 카테고리 (새로=안주 → 주류)', async () => {
+    provider.next = async () =>
+      JSON.stringify({
+        items: [
+          {
+            name: '새로',
+            unitPrice: 5000,
+            quantity: 2,
+            amount: 10000,
+            category: 'SIDE',
+            matchedMenuName: null,
+          },
+          {
+            name: '새로운 안주',
+            unitPrice: 15000,
+            quantity: 1,
+            amount: 15000,
+            category: 'SIDE',
+            matchedMenuName: null,
+          },
+          {
+            name: '콜라',
+            unitPrice: 2000,
+            quantity: 1,
+            amount: 2000,
+            category: 'ALCOHOL',
+            matchedMenuName: null,
+          },
+        ],
+        totalAmount: 27000,
+      });
+    const out = await service.extract({ imageToken, restaurantName: 'x', menuNames: [] });
+    // 새로 → ALCOHOL 보정, 새로운 안주 → SIDE 유지(가드), 콜라 → NON_ALCOHOL 보정.
+    expect(out.items.map((it) => it.category)).toEqual(['ALCOHOL', 'SIDE', 'NON_ALCOHOL']);
+  });
+
+  it('corrects via matchedMenuName when 영수증 표기가 모호하다', async () => {
+    provider.next = async () =>
+      JSON.stringify({
+        items: [
+          {
+            name: '360 병',
+            unitPrice: 5000,
+            quantity: 1,
+            amount: 5000,
+            category: 'UNCATEGORIZED',
+            matchedMenuName: '참이슬',
+          },
+        ],
+        totalAmount: 5000,
+      });
+    const out = await service.extract({
+      imageToken,
+      restaurantName: 'x',
+      menuNames: ['참이슬'],
+    });
+    expect(out.items[0]!.category).toBe('ALCOHOL');
+  });
+
+  it('includes 제품명 힌트 in the system prompt (v4)', async () => {
+    provider.next = async () => JSON.stringify({ items: [], totalAmount: null });
+    await service.extract({ imageToken, restaurantName: 'x', menuNames: [] });
+    const sys = provider.calls[0]!.systemPrompt ?? '';
+    expect(sys).toContain('참이슬');
+    expect(sys).toContain('새로');
   });
 
   it('throws llm_failed when the response is not valid JSON', async () => {

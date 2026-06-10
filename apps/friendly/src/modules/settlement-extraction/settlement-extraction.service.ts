@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import heicConvert from 'heic-convert';
 import {
   ReceiptItem,
+  matchDrinkKind,
   type ExtractReceiptResultType,
   type ReceiptItemType,
   type UploadReceiptResultType,
@@ -121,6 +122,8 @@ export class SettlementExtractionService {
     parseError?: string;
     llmError?: string;
     result?: ExtractReceiptResultType;
+    // 술 종류 사전이 LLM 카테고리를 덮어쓴 항목 수 — 보정 빈도 측정용.
+    categoryCorrections?: number;
     durationMs: number;
   }): Promise<void> {
     if (!extractionDebugEnabled()) return;
@@ -359,6 +362,7 @@ export class SettlementExtractionService {
       throw new SettlementExtractionError('llm_failed', 'LLM 응답을 해석하지 못했습니다.');
     }
 
+    let categoryCorrections = 0;
     const items: ReceiptItemType[] = parsed.items.map((it) => {
       // amount fallback: server 는 LLM 이 amount=0 으로 줬을 때 unitPrice*qty 로
       // 보정 시도. 그래도 0 이면 0 유지.
@@ -366,12 +370,18 @@ export class SettlementExtractionService {
       if (amount === 0 && it.unitPrice != null && it.quantity != null) {
         amount = it.unitPrice * it.quantity;
       }
+      // 카테고리 사전 보정: '새로/대선' 같은 국내 주류 제품명을 vision 모델이
+      // 안주/미분류로 찍는 오류를 결정적으로 교정. 프롬프트 힌트(v4)의 이중
+      // 안전망 — 어드민에서 모델을 바꿔도 동작이 보장된다.
+      const kind = matchDrinkKind([it.matchedMenuName, it.name]);
+      const category = kind?.category ?? it.category;
+      if (category !== it.category) categoryCorrections++;
       return ReceiptItem.parse({
         name: it.name,
         unitPrice: it.unitPrice,
         quantity: it.quantity,
         amount,
-        category: it.category,
+        category,
         matchedMenuName: it.matchedMenuName,
       });
     });
@@ -389,6 +399,7 @@ export class SettlementExtractionService {
         itemCount: items.length,
         itemsSubtotal,
         totalAmount,
+        categoryCorrections,
         model,
         durationMs: Date.now() - startedAt,
         version: EXTRACTION_VERSION,
@@ -417,6 +428,7 @@ export class SettlementExtractionService {
       rawText,
       jsonText,
       result,
+      categoryCorrections,
       durationMs: Date.now() - startedAt,
     });
 
