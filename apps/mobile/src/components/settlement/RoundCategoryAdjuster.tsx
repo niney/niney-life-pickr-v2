@@ -6,6 +6,7 @@ import {
   type ReceiptItemCategoryType,
 } from '@repo/api-contract';
 import {
+  draftGroupsToCalcInputs,
   useSettlementDraftStore,
   useTheme,
   type DraftParticipant,
@@ -81,6 +82,8 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
               : null,
           // raw 잔여 확인용이라 보정 없이 호출.
           categoryAdjustments: null,
+          // 세부 분배 그룹 반영 — 다듬기 대상은 그룹을 뺀 '나머지(균등) 풀'.
+          groups: draftGroupsToCalcInputs(round, participants),
         },
       ],
     });
@@ -90,14 +93,14 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
   const rows = useMemo(() => {
     return CATEGORY_ORDER.flatMap((cat) => {
       const b = info.poolBreakdown[cat];
-      if (!b || b.poolAmount === 0 || b.participantCount === 0) return [];
-      const remainder = b.poolAmount - b.perParticipant * b.participantCount;
+      if (!b || b.equalPoolAmount === 0 || b.participantCount === 0) return [];
+      const remainder = b.equalPoolAmount - b.perParticipant * b.participantCount;
       const adj = round.categoryAdjustments?.[cat] ?? null;
       if (remainder === 0 && !adj) return [];
       return [
         {
           category: cat,
-          pool: b.poolAmount,
+          pool: b.equalPoolAmount,
           n: b.participantCount,
           remainder,
           perBase: b.perParticipant,

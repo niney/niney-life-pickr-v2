@@ -127,6 +127,29 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
               ]),
           )
         : null,
+      // 세부 분배 그룹 — 앱은 아직 편집 UI 가 없지만, 웹에서 설정한 그룹이
+      // 앱 수정·재저장에 유실되지 않도록 draft 로 복원해 그대로 관통시킨다.
+      groupSplits:
+        r.groupSplits && r.groupSplits.length > 0
+          ? r.groupSplits
+              .map((g, gi) => ({
+                clientId: `g-${r.id}-${gi}`,
+                label: g.label,
+                category: g.category,
+                itemClientIds: g.itemIndexes
+                  .map((idx) => r.items[idx]?.id)
+                  .filter((itemId): itemId is string => Boolean(itemId))
+                  .map((itemId) => `i-${itemId}`),
+                mode: g.mode,
+                members: g.members
+                  .map((m) => ({
+                    participantClientId: dbIdToClientId.get(m.participantId) ?? '',
+                    glasses: m.glasses,
+                  }))
+                  .filter((m) => m.participantClientId),
+              }))
+              .filter((g) => g.itemClientIds.length > 0)
+          : null,
     }));
     useSettlementDraftStore.setState({
       participants: participantsDraft,

@@ -1,7 +1,8 @@
 import { Beer, Coins, CupSoda, Pencil, UtensilsCrossed, type LucideIcon } from 'lucide-react';
-import type {
-  ReceiptItemCategoryType,
-  SharedSettlementSessionType,
+import {
+  effectiveExcludes,
+  type ReceiptItemCategoryType,
+  type SharedSettlementSessionType,
 } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -182,63 +183,124 @@ export const ParticipantsCard = ({
 };
 
 // 차수별 항목 카드. 차수가 1개여도 동일 컴포넌트로 표시되어 일관성 유지.
+// participants 를 주면 세부 분배 그룹(소주 잔수 등)의 근거 라인을 같이 그린다.
 export const RoundItemsCard = ({
   round,
   total,
+  participants,
 }: {
   round: SharedSettlementSessionType['rounds'][number];
   total: number;
-}) => (
-  <Card>
-    <CardHeader className="pb-2">
-      <CardTitle className="flex items-center justify-between text-base">
-        <span>
-          {total > 1 ? `${round.orderIndex + 1}차 · ` : ''}
-          {round.restaurantName}
-        </span>
-        <span className="text-sm font-normal text-muted-foreground">
-          {round.itemsSubtotal.toLocaleString('ko-KR')}원
-        </span>
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-3">
-      <div className="text-xs text-muted-foreground">
-        {round.source === 'RECEIPT' ? '영수증' : '직접 입력'}
-        {round.totalAmount != null && (
-          <> · 영수증 총액 {round.totalAmount.toLocaleString('ko-KR')}원</>
-        )}
-        {' · 항목 '}
-        {round.items.length}개
-      </div>
-      <ul className="divide-y">
-        {round.items.map((it) => (
-          <li key={it.id} className="flex items-center justify-between gap-2 py-2">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{it.name}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                {CATEGORY_LABEL[it.category]}
-                {it.unitPrice != null && it.quantity != null && (
-                  <> · {it.unitPrice.toLocaleString('ko-KR')}원 × {it.quantity}</>
-                )}
+  participants?: SharedSettlementSessionType['participants'];
+}) => {
+  const nameById = new Map(
+    (participants ?? []).map((p, idx) => [p.id, participantName(p, idx)]),
+  );
+  const participantById = new Map((participants ?? []).map((p) => [p.id, p]));
+  // 이 차수에서 그 카테고리를 분담할 자격이 있는(참석 + 제외 아님) 참여자 id —
+  // 균등 그룹의 '빠진 사람'을 역산하는 기준.
+  const candidateIdsFor = (category: ReceiptItemCategoryType): string[] =>
+    round.attendees
+      .filter((a) => {
+        if (!a.attended) return false;
+        const master = participantById.get(a.participantId);
+        if (!master) return false;
+        const eff = effectiveExcludes(master, a);
+        if (category === 'ALCOHOL') return !eff.excludeAlcohol;
+        if (category === 'NON_ALCOHOL') return !eff.excludeNonAlcohol;
+        if (category === 'SIDE') return !eff.excludeSide;
+        return true;
+      })
+      .map((a) => a.participantId);
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between text-base">
+          <span>
+            {total > 1 ? `${round.orderIndex + 1}차 · ` : ''}
+            {round.restaurantName}
+          </span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {round.itemsSubtotal.toLocaleString('ko-KR')}원
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="text-xs text-muted-foreground">
+          {round.source === 'RECEIPT' ? '영수증' : '직접 입력'}
+          {round.totalAmount != null && (
+            <> · 영수증 총액 {round.totalAmount.toLocaleString('ko-KR')}원</>
+          )}
+          {' · 항목 '}
+          {round.items.length}개
+        </div>
+        <ul className="divide-y">
+          {round.items.map((it) => (
+            <li key={it.id} className="flex items-center justify-between gap-2 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{it.name}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  {CATEGORY_LABEL[it.category]}
+                  {it.unitPrice != null && it.quantity != null && (
+                    <> · {it.unitPrice.toLocaleString('ko-KR')}원 × {it.quantity}</>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="shrink-0 text-sm">{it.amount.toLocaleString('ko-KR')}원</div>
-          </li>
-        ))}
-        {round.discountAmount != null && round.discountCategory != null && (
-          <li className="flex items-center justify-between gap-2 py-2 text-emerald-700 dark:text-emerald-400">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">할인</div>
-              <div className="mt-0.5 text-xs opacity-80">
-                {CATEGORY_LABEL[round.discountCategory]} 풀에서 차감
+              <div className="shrink-0 text-sm">{it.amount.toLocaleString('ko-KR')}원</div>
+            </li>
+          ))}
+          {round.discountAmount != null && round.discountCategory != null && (
+            <li className="flex items-center justify-between gap-2 py-2 text-emerald-700 dark:text-emerald-400">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">할인</div>
+                <div className="mt-0.5 text-xs opacity-80">
+                  {CATEGORY_LABEL[round.discountCategory]} 풀에서 차감
+                </div>
               </div>
-            </div>
-            <div className="shrink-0 text-sm font-semibold">
-              −{round.discountAmount.toLocaleString('ko-KR')}원
-            </div>
-          </li>
+              <div className="shrink-0 text-sm font-semibold">
+                −{round.discountAmount.toLocaleString('ko-KR')}원
+              </div>
+            </li>
+          )}
+        </ul>
+        {/* 세부 분배 근거 — 받는 사람이 "왜 내 주류가 더 비싸?" 를 바로 읽도록.
+            균등은 전원 나열 대신 '빠진 사람'을 명시 — 예외만 보여 한눈에 읽힌다. */}
+        {round.groupSplits && round.groupSplits.length > 0 && nameById.size > 0 && (
+          <div className="space-y-0.5 rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+            <div className="font-medium text-foreground">세부 분배</div>
+            {round.groupSplits.map((g, gi) => {
+              if (g.mode === 'GLASSES') {
+                return (
+                  <div key={gi}>
+                    {g.label}:{' '}
+                    {g.members
+                      .map(
+                        (m) =>
+                          `${nameById.get(m.participantId) ?? '?'} ${m.glasses}잔`,
+                      )
+                      .join(' · ')}
+                  </div>
+                );
+              }
+              const memberIds = new Set(g.members.map((m) => m.participantId));
+              const excluded = candidateIdsFor(g.category).filter(
+                (id) => !memberIds.has(id),
+              );
+              return (
+                <div key={gi}>
+                  {g.label}: {g.members.length}명 균등
+                  {excluded.length > 0 && (
+                    <>
+                      {' '}— {excluded.map((id) => nameById.get(id) ?? '?').join('·')}{' '}
+                      제외
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
-      </ul>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};

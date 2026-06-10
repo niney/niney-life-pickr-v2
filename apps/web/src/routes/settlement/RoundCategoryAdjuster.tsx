@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { calculateMultiRoundShares, effectiveExcludes, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
+  draftGroupsToCalcInputs,
   useSettlementDraftStore,
   type DraftParticipant,
   type DraftRound,
-  type DraftCategoryAdjustment,
 } from '@repo/shared';
 import { cn } from '~/lib/utils';
 import { Button } from '~/components/ui/button';
@@ -76,22 +76,36 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
               : null,
           // 보정 없이 raw 분배 결과로 잔여 확인.
           categoryAdjustments: null,
+          // 세부 분배 그룹 반영 — 다듬기 대상은 그룹을 뺀 '나머지(균등) 풀'.
+          groups: draftGroupsToCalcInputs(round, participants),
         },
       ],
     });
     return calc.perRound[0]!;
   }, [round, participants]);
 
-  // 카테고리별 후보 행 생성: 풀>0 인 것만, 그 중 잔여 있거나 사용자가 이미
-  // 보정 적용한 것만 한 줄 노출.
+  // 카테고리별 후보 행 생성: 나머지(균등) 풀>0 인 것만, 그 중 잔여 있거나
+  // 사용자가 이미 보정 적용한 것만 한 줄 노출. 그룹 풀 잔여는 계산기가
+  // 1원씩 자동 분산하므로 다듬을 게 없다.
   const rows = useMemo(() => {
     return CATEGORY_ORDER.flatMap((cat) => {
       const b = info.poolBreakdown[cat];
-      if (!b || b.poolAmount === 0 || b.participantCount === 0) return [];
-      const remainder = b.poolAmount - b.perParticipant * b.participantCount;
+      if (!b || b.equalPoolAmount === 0 || b.participantCount === 0) return [];
+      const remainder = b.equalPoolAmount - b.perParticipant * b.participantCount;
       const adj = round.categoryAdjustments?.[cat] ?? null;
       if (remainder === 0 && !adj) return [];
-      return [{ category: cat, pool: b.poolAmount, n: b.participantCount, remainder, perBase: b.perParticipant, adj }];
+      return [
+        {
+          category: cat,
+          pool: b.equalPoolAmount,
+          // 그룹이 있으면 이 행의 '풀'은 그룹을 뺀 나머지 — 라벨로 구분.
+          grouped: b.equalPoolAmount !== b.poolAmount,
+          n: b.participantCount,
+          remainder,
+          perBase: b.perParticipant,
+          adj,
+        },
+      ];
     });
   }, [info, round.categoryAdjustments]);
 
@@ -152,7 +166,7 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">{CATEGORY_LABEL[row.category]}</span>
               <span>
-                풀 {row.pool.toLocaleString('ko-KR')}원 / {row.n}명 · 인당{' '}
+                {row.grouped ? '나머지 풀' : '풀'} {row.pool.toLocaleString('ko-KR')}원 / {row.n}명 · 인당{' '}
                 {row.perBase.toLocaleString('ko-KR')}원 + 잔여 {row.remainder.toLocaleString('ko-KR')}원
               </span>
             </div>

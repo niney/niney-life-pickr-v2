@@ -97,6 +97,48 @@ export type SettlementCategoryAdjustmentsInputType = z.infer<
   typeof SettlementCategoryAdjustmentsInput
 >;
 
+// ── 세부 분배 그룹 ────────────────────────────────────────────────────
+// 한 차수의 카테고리 풀에서 특정 항목들(예: 소주, 맥주)을 떼어내 그룹
+// 멤버끼리만 나누는 규칙. EQUAL = 그룹 내 균등, GLASSES = 잔수(정수 가중치)
+// 비례. 그룹에 안 묶인 항목은 기존 카테고리 균등 분배('나머지 풀')를 따른다.
+// 스키마·계산기는 카테고리 범용이지만 UI 는 주류/음료에만 노출한다.
+export const SettlementGroupSplitMode = z.enum(['EQUAL', 'GLASSES']);
+export type SettlementGroupSplitModeType = z.infer<typeof SettlementGroupSplitMode>;
+
+// 응답형 멤버 — participantId 는 마스터 참여자의 db id.
+export const SettlementGroupMember = z.object({
+  participantId: z.string(),
+  // 정수 잔수(가중치). EQUAL 모드에선 무시된다. 0잔 = 멤버로 두되 분담 0.
+  glasses: z.number().int().nonnegative().max(999),
+});
+export type SettlementGroupMemberType = z.infer<typeof SettlementGroupMember>;
+
+export const SettlementItemGroup = z.object({
+  label: z.string().min(1).max(40),
+  category: ReceiptItemCategory,
+  // round.items 의 orderIndex(=배열 인덱스) 참조. 한 항목은 최대 1개 그룹.
+  itemIndexes: z.array(z.number().int().nonnegative()).min(1),
+  mode: SettlementGroupSplitMode,
+  members: z.array(SettlementGroupMember).min(1),
+});
+export type SettlementItemGroupType = z.infer<typeof SettlementItemGroup>;
+
+// 입력형 — 마스터 참여자를 clientId 로 참조 (attendees 와 동일한 방식).
+export const SettlementGroupMemberInput = z.object({
+  participantClientId: z.string().min(1),
+  glasses: z.number().int().nonnegative().max(999),
+});
+export type SettlementGroupMemberInputType = z.infer<typeof SettlementGroupMemberInput>;
+
+export const SettlementItemGroupInput = z.object({
+  label: z.string().trim().min(1).max(40),
+  category: ReceiptItemCategory,
+  itemIndexes: z.array(z.number().int().nonnegative()).min(1).max(200),
+  mode: SettlementGroupSplitMode,
+  members: z.array(SettlementGroupMemberInput).min(1).max(100),
+});
+export type SettlementItemGroupInputType = z.infer<typeof SettlementItemGroupInput>;
+
 export const SettlementRound = z.object({
   id: z.string(),
   orderIndex: z.number().int().nonnegative(),
@@ -120,6 +162,8 @@ export const SettlementRound = z.object({
   discountCategory: ReceiptItemCategory.nullable(),
   // 분담 다듬기 — null 이면 default (잔여를 첫 참여자가 흡수).
   categoryAdjustments: SettlementCategoryAdjustments,
+  // 세부 분배 그룹 — null 이면 없음 (카테고리 균등 분배만).
+  groupSplits: z.array(SettlementItemGroup).nullable(),
   items: z.array(SettlementItem),
   attendees: z.array(SettlementRoundAttendee),
 });
@@ -139,6 +183,8 @@ export const SettlementRoundInput = z
     discountCategory: ReceiptItemCategory.nullable().optional().default(null),
     // 분담 다듬기 — 카테고리별 잔여 처리 규칙. 키 자체가 빠지면 null.
     categoryAdjustments: SettlementCategoryAdjustmentsInput,
+    // 세부 분배 그룹. 키 자체가 빠진 페이로드(기존 클라이언트)는 null 로 본다.
+    groupSplits: z.array(SettlementItemGroupInput).max(30).nullable().optional().default(null),
     items: z.array(SettlementItemInput).min(1).max(200),
     // round 마다 최소 1명은 참석해야 분배가 의미 있음. 비참석은 attended:false 로.
     // 100 은 큰 동호회·회사 회식까지 안전하게 커버. DB/계산기 모두 선형 비용.
@@ -159,6 +205,44 @@ export const SettlementRoundInput = z
     {
       message: '할인 금액이 해당 카테고리 풀을 초과합니다.',
       path: ['discountAmount'],
+    },
+  )
+  // 그룹의 항목 참조 검증 — 범위 안 + 그룹 카테고리와 일치 + 그룹 간 중복 없음.
+  .refine(
+    (r) => {
+      if (!r.groupSplits) return true;
+      const used = new Set<number>();
+      for (const g of r.groupSplits) {
+        for (const idx of g.itemIndexes) {
+          if (idx >= r.items.length) return false;
+          if (r.items[idx]!.category !== g.category) return false;
+          if (used.has(idx)) return false;
+          used.add(idx);
+        }
+      }
+      return true;
+    },
+    {
+      message: '세부 분배 그룹의 항목 참조가 올바르지 않습니다.',
+      path: ['groupSplits'],
+    },
+  )
+  // 그룹 안에서 같은 참여자 중복 금지.
+  .refine(
+    (r) => {
+      if (!r.groupSplits) return true;
+      for (const g of r.groupSplits) {
+        const ids = new Set<string>();
+        for (const m of g.members) {
+          if (ids.has(m.participantClientId)) return false;
+          ids.add(m.participantClientId);
+        }
+      }
+      return true;
+    },
+    {
+      message: '세부 분배 그룹에 같은 참여자가 중복됩니다.',
+      path: ['groupSplits'],
     },
   );
 export type SettlementRoundInputType = z.infer<typeof SettlementRoundInput>;

@@ -718,3 +718,171 @@ describe('settlement receipt token round-trip', () => {
     expect(round.receiptPreviewUrl).toContain(token);
   });
 });
+
+describe('settlement group splits round-trip', () => {
+  let app: FastifyInstance;
+  const ownerId = 'group-splits-owner';
+
+  // 공용 PUT 페이로드 — 참이슬(주류, 그룹) + 두루치기(안주). groupSplits 만
+  // 케이스별로 바꿔 끼운다.
+  const putPayload = (groupSplits: unknown) => ({
+    participants: [
+      {
+        clientId: 'c-a',
+        name: 'A',
+        nickname: null,
+        excludeAlcohol: false,
+        excludeNonAlcohol: false,
+        excludeSide: false,
+      },
+      {
+        clientId: 'c-b',
+        name: 'B',
+        nickname: null,
+        excludeAlcohol: false,
+        excludeNonAlcohol: false,
+        excludeSide: false,
+      },
+    ],
+    rounds: [
+      {
+        restaurantPlaceId: 'place-test',
+        source: 'MANUAL',
+        totalAmount: null,
+        warning: null,
+        receiptImageToken: null,
+        groupSplits,
+        items: [
+          {
+            name: '참이슬',
+            unitPrice: 6000,
+            quantity: 4,
+            amount: 24000,
+            category: 'ALCOHOL',
+            matchedMenuName: null,
+          },
+          {
+            name: '두루치기',
+            unitPrice: null,
+            quantity: null,
+            amount: 30000,
+            category: 'SIDE',
+            matchedMenuName: null,
+          },
+        ],
+        attendees: ['c-a', 'c-b'].map((cid) => ({
+          participantClientId: cid,
+          attended: true,
+          excludeAlcoholOverride: null,
+          excludeNonAlcoholOverride: null,
+          excludeSideOverride: null,
+        })),
+      },
+    ],
+  });
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    await app.prisma.user.upsert({
+      where: { email: `${ownerId}@x.com` },
+      update: {},
+      create: { id: ownerId, email: `${ownerId}@x.com`, passwordHash: 'x' },
+    });
+  });
+
+  beforeEach(async () => {
+    await app.prisma.settlementSession.deleteMany({ where: { userId: ownerId } });
+  });
+
+  afterAll(async () => {
+    await app.prisma.settlementSession.deleteMany({ where: { userId: ownerId } });
+    await app.prisma.user.deleteMany({ where: { id: ownerId } });
+    await app.close();
+  });
+
+  it('PUT: 잔수 그룹이 분담액에 반영되고 응답에 participantId 로 돌아온다', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+      payload: putPayload([
+        {
+          label: '소주',
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [
+            { participantClientId: 'c-a', glasses: 3 },
+            { participantClientId: 'c-b', glasses: 1 },
+          ],
+        },
+      ]),
+    });
+    expect(put.statusCode).toBe(200);
+    const body = put.json();
+    // 소주 24,000 → 3:1 = 18,000/6,000. 안주 30,000 → 15,000씩.
+    const byName = new Map(
+      body.participants.map((p: { name: string }) => [p.name, p]),
+    );
+    expect((byName.get('A') as { shareAmount: number }).shareAmount).toBe(33000);
+    expect((byName.get('B') as { shareAmount: number }).shareAmount).toBe(21000);
+    expect(body.grandTotal).toBe(54000);
+    // 응답 groupSplits: 멤버가 db participantId 로 치환되어 돌아온다.
+    const gs = body.rounds[0].groupSplits;
+    expect(gs).toHaveLength(1);
+    expect(gs[0]).toMatchObject({ label: '소주', category: 'ALCOHOL', mode: 'GLASSES' });
+    const aId = (byName.get('A') as { id: string }).id;
+    const bId = (byName.get('B') as { id: string }).id;
+    expect(gs[0].members).toEqual([
+      { participantId: aId, glasses: 3 },
+      { participantId: bId, glasses: 1 },
+    ]);
+    // 차수별 분담(roundEntries)도 비대칭으로 저장된다.
+    const attendees = body.rounds[0].attendees as Array<{
+      participantId: string;
+      shareAmount: number;
+    }>;
+    expect(attendees.find((a) => a.participantId === aId)?.shareAmount).toBe(33000);
+    expect(attendees.find((a) => a.participantId === bId)?.shareAmount).toBe(21000);
+  });
+
+  it('PUT: 그룹 항목 인덱스가 카테고리와 어긋나면 400 (zod refine)', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+      payload: putPayload([
+        {
+          label: '소주',
+          category: 'ALCOHOL',
+          // index 1 은 SIDE(두루치기) — 카테고리 불일치.
+          itemIndexes: [1],
+          mode: 'EQUAL',
+          members: [{ participantClientId: 'c-a', glasses: 1 }],
+        },
+      ]),
+    });
+    expect(put.statusCode).toBe(400);
+  });
+
+  it('PUT: 그룹 멤버가 마스터에 없으면 400 (service 검증)', async () => {
+    const { sessionId } = await seedSession(app, ownerId);
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/settlements/${sessionId}`,
+      headers: { Authorization: `Bearer ${tokenFor(app, ownerId)}` },
+      payload: putPayload([
+        {
+          label: '소주',
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [{ participantClientId: 'c-ghost', glasses: 1 }],
+        },
+      ]),
+    });
+    expect(put.statusCode).toBe(400);
+  });
+});

@@ -142,6 +142,29 @@ export const SettlementNewPage = () => {
               ]),
           )
         : null,
+      // 세부 분배 그룹 — itemIndexes 는 정렬된 items 의 인덱스이므로 위에서
+      // 만든 `i-<id>` clientId 로, 멤버는 participantId → clientId 로 복원.
+      groupSplits:
+        r.groupSplits && r.groupSplits.length > 0
+          ? r.groupSplits
+              .map((g, gi) => ({
+                clientId: `g-${r.id}-${gi}`,
+                label: g.label,
+                category: g.category,
+                itemClientIds: g.itemIndexes
+                  .map((idx) => r.items[idx]?.id)
+                  .filter((itemId): itemId is string => Boolean(itemId))
+                  .map((itemId) => `i-${itemId}`),
+                mode: g.mode,
+                members: g.members
+                  .map((m) => ({
+                    participantClientId: dbIdToClientId.get(m.participantId) ?? '',
+                    glasses: m.glasses,
+                  }))
+                  .filter((m) => m.participantClientId),
+              }))
+              .filter((g) => g.itemClientIds.length > 0)
+          : null,
     }));
     useSettlementDraftStore.setState({
       participants: participantsDraft,

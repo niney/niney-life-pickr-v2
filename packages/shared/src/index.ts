@@ -23,6 +23,7 @@ export * from './stores/activeDiningcodeBulkSaveJobStore.js';
 export * from './stores/activeAutoDiscoverJobStore.js';
 export * from './stores/settlementDraftStore.js';
 export * from './stores/resummarizeStore.js';
+export * from './settlement/groupSuggestion.js';
 export * from './hooks/useAuth.js';
 export * from './hooks/usePicks.js';
 export * from './hooks/useAdmin.js';

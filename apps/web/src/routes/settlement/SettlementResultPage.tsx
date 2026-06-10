@@ -138,7 +138,7 @@ export const SettlementResultPage = () => {
                 </div>
               )}
               {r.receiptPreviewUrl && <ReceiptCard previewUrl={r.receiptPreviewUrl} />}
-              <RoundItemsCard round={r} total={s.rounds.length} />
+              <RoundItemsCard round={r} total={s.rounds.length} participants={s.participants} />
             </div>
           ))}
         </div>

@@ -77,6 +77,9 @@ describe('calculateShares', () => {
     });
     expect(r.shareAmounts).toEqual([3000, 3000, 3000]);
     expect(r.poolBreakdown.ALCOHOL.participantCount).toBe(3);
+    // 전원 제외 fallback 으로 분배된 금액도 itemsSubtotal 에 포함되어야
+    // grandTotal 이 분담 합과 일치한다 (과거엔 빠져서 0 으로 보고됐다).
+    expect(r.itemsSubtotal).toBe(9000);
   });
 
   it('combines multiple categories with different exclusion sets', () => {
@@ -148,6 +151,194 @@ describe('calculateShares', () => {
     expect(sum(r.perCategoryShares.NON_ALCOHOL)).toBe(12000);
     expect(sum(r.perCategoryShares.SIDE)).toBe(48000);
     expect(sum(r.perCategoryShares.UNCATEGORIZED)).toBe(6000);
+  });
+});
+
+describe('calculateShares — 세부 분배 그룹', () => {
+  it('splits a GLASSES group proportionally by glasses', () => {
+    // 소주 24,000 을 3잔:1잔 → 18,000 / 6,000.
+    const r = calculateShares({
+      items: [{ amount: 24000, category: 'ALCOHOL' }],
+      participants: noExclude(2),
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [
+            { participantIndex: 0, glasses: 3 },
+            { participantIndex: 1, glasses: 1 },
+          ],
+        },
+      ],
+    });
+    expect(r.shareAmounts).toEqual([18000, 6000]);
+    expect(r.itemsSubtotal).toBe(24000);
+    expect(r.groupBreakdown[0]).toMatchObject({
+      applied: true,
+      poolAmount: 24000,
+      totalGlasses: 4,
+    });
+    expect(r.groupBreakdown[0]?.shares).toEqual([18000, 6000]);
+    // 그룹이 카테고리 전부를 가져가면 나머지(균등) 풀은 0.
+    expect(r.poolBreakdown.ALCOHOL).toMatchObject({
+      poolAmount: 24000,
+      equalPoolAmount: 0,
+      perParticipant: 0,
+    });
+  });
+
+  it('EQUAL group charges members only; ungrouped items follow category rules', () => {
+    // 참이슬(그룹, A·B 균등) + 기타 주류(나머지 풀, 전원) + 안주(전원).
+    const r = calculateShares({
+      items: [
+        { amount: 12000, category: 'ALCOHOL' }, // 그룹
+        { amount: 9000, category: 'ALCOHOL' }, // 나머지 풀
+        { amount: 30000, category: 'SIDE' },
+      ],
+      participants: noExclude(3),
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'EQUAL',
+          members: [
+            { participantIndex: 0, glasses: 1 },
+            { participantIndex: 1, glasses: 1 },
+          ],
+        },
+      ],
+    });
+    // 그룹 12000÷2 = 6000 (A,B). 나머지 9000÷3 = 3000. 안주 30000÷3 = 10000.
+    expect(r.shareAmounts).toEqual([19000, 19000, 13000]);
+    expect(r.poolBreakdown.ALCOHOL).toMatchObject({
+      poolAmount: 21000,
+      equalPoolAmount: 9000,
+      participantCount: 3,
+      perParticipant: 3000,
+    });
+    // 매트릭스 열 합 invariant — 그룹 분담도 카테고리 컬럼에 포함.
+    const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+    expect(sum(r.perCategoryShares.ALCOHOL)).toBe(21000);
+  });
+
+  it('distributes GLASSES remainder by largest fractional part', () => {
+    // 1000 을 2잔:1잔 → 666.67/333.33 → 잔여 1원은 소수부 큰 쪽(앞)으로.
+    const r = calculateShares({
+      items: [{ amount: 1000, category: 'ALCOHOL' }],
+      participants: noExclude(2),
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [
+            { participantIndex: 0, glasses: 2 },
+            { participantIndex: 1, glasses: 1 },
+          ],
+        },
+      ],
+    });
+    expect(r.shareAmounts).toEqual([667, 333]);
+  });
+
+  it('falls back to EQUAL inside the group when all glasses are zero', () => {
+    const r = calculateShares({
+      items: [{ amount: 9000, category: 'ALCOHOL' }],
+      participants: noExclude(3),
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [
+            { participantIndex: 0, glasses: 0 },
+            { participantIndex: 1, glasses: 0 },
+            { participantIndex: 2, glasses: 0 },
+          ],
+        },
+      ],
+    });
+    expect(r.shareAmounts).toEqual([3000, 3000, 3000]);
+    expect(r.groupBreakdown[0]).toMatchObject({ applied: true, totalGlasses: 0 });
+  });
+
+  it('reverts the group pool to the equal pool when no valid members remain', () => {
+    // 멤버 인덱스가 전부 범위 밖 → 그룹 비활성, 카테고리 균등으로 환원.
+    const r = calculateShares({
+      items: [{ amount: 8000, category: 'ALCOHOL' }],
+      participants: noExclude(2),
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [{ participantIndex: 9, glasses: 2 }],
+        },
+      ],
+    });
+    expect(r.shareAmounts).toEqual([4000, 4000]);
+    expect(r.groupBreakdown[0]).toMatchObject({ applied: false, poolAmount: 0 });
+    expect(r.poolBreakdown.ALCOHOL.equalPoolAmount).toBe(8000);
+  });
+
+  it('allocates a category discount proportionally across group and equal pools', () => {
+    // ALCOHOL 30,000 = 그룹 20,000 + 나머지 10,000. 할인 3,000 → 2,000/1,000 비례.
+    const r = calculateShares({
+      items: [
+        { amount: 20000, category: 'ALCOHOL' },
+        { amount: 10000, category: 'ALCOHOL' },
+      ],
+      participants: noExclude(2),
+      discount: { amount: 3000, category: 'ALCOHOL' },
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'GLASSES',
+          members: [
+            { participantIndex: 0, glasses: 3 },
+            { participantIndex: 1, glasses: 1 },
+          ],
+        },
+      ],
+    });
+    // 그룹 18,000 → 13,500/4,500. 나머지 9,000 → 4,500/4,500.
+    expect(r.shareAmounts).toEqual([18000, 9000]);
+    expect(r.itemsSubtotal).toBe(27000);
+    expect(r.groupBreakdown[0]?.poolAmount).toBe(18000);
+    expect(r.poolBreakdown.ALCOHOL).toMatchObject({
+      poolAmount: 27000,
+      equalPoolAmount: 9000,
+    });
+  });
+
+  it('applies roundUnit adjustment to the equal pool only', () => {
+    // 그룹 7,000(A 단독) + 나머지 1,003. 100원 반올림 → 나머지 1,000 → 500/500.
+    const r = calculateShares({
+      items: [
+        { amount: 7000, category: 'ALCOHOL' },
+        { amount: 1003, category: 'ALCOHOL' },
+      ],
+      participants: noExclude(2),
+      categoryAdjustments: {
+        ALCOHOL: { leftoverParticipantIndex: 0, roundUnit: 100 },
+      },
+      groups: [
+        {
+          category: 'ALCOHOL',
+          itemIndexes: [0],
+          mode: 'EQUAL',
+          members: [{ participantIndex: 0, glasses: 1 }],
+        },
+      ],
+    });
+    expect(r.shareAmounts).toEqual([7500, 500]);
+    expect(r.itemsSubtotal).toBe(8000);
+    expect(r.poolBreakdown.ALCOHOL).toMatchObject({
+      poolAmount: 8000,
+      equalPoolAmount: 1000,
+    });
   });
 });
 
@@ -465,6 +656,68 @@ describe('calculateMultiRoundShares', () => {
     // ALCOHOL 1000 씩.
     expect(round.shareAmounts).toEqual([1000, 1000]);
     expect(round.itemsSubtotal).toBe(2000);
+  });
+
+  it('maps group members from master indexes and back (groupBreakdown)', () => {
+    // 3명 중 1번 불참. 그룹 멤버는 마스터 0(1잔)·2(3잔) — 8,000 을 1:3 으로.
+    const r = calculateMultiRoundShares({
+      participantCount: 3,
+      rounds: [
+        {
+          items: [{ amount: 8000, category: 'ALCOHOL' }],
+          attendees: [0, 2].map((i) => ({
+            participantIndex: i,
+            excludeAlcohol: false,
+            excludeNonAlcohol: false,
+            excludeSide: false,
+          })),
+          groups: [
+            {
+              category: 'ALCOHOL',
+              itemIndexes: [0],
+              mode: 'GLASSES',
+              members: [
+                { participantIndex: 0, glasses: 1 },
+                { participantIndex: 2, glasses: 3 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(r.perRound[0]?.shareAmounts).toEqual([2000, 0, 6000]);
+    expect(r.perRound[0]?.groupBreakdown[0]?.shares).toEqual([2000, 0, 6000]);
+    expect(r.perParticipant).toEqual([2000, 0, 6000]);
+  });
+
+  it('reverts the group when every member is absent from the round', () => {
+    // 그룹 멤버(마스터 0)가 불참 → 그룹 비활성, 참석자(마스터 1)가 균등 부담.
+    const r = calculateMultiRoundShares({
+      participantCount: 2,
+      rounds: [
+        {
+          items: [{ amount: 8000, category: 'ALCOHOL' }],
+          attendees: [
+            {
+              participantIndex: 1,
+              excludeAlcohol: false,
+              excludeNonAlcohol: false,
+              excludeSide: false,
+            },
+          ],
+          groups: [
+            {
+              category: 'ALCOHOL',
+              itemIndexes: [0],
+              mode: 'GLASSES',
+              members: [{ participantIndex: 0, glasses: 2 }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(r.perRound[0]?.shareAmounts).toEqual([0, 8000]);
+    expect(r.perRound[0]?.groupBreakdown[0]?.applied).toBe(false);
   });
 
   it('round perCategoryShares is master-indexed and zero for absentees', () => {

@@ -103,6 +103,10 @@ model SettlementRound {
   // { [Category]: { leftoverParticipantId, roundUnit: number|null } }.
   // null/미설정이면 default(잔여를 첫 참여자가 흡수).
   categoryAdjustments String?
+  // 세부 분배 그룹(소주/맥주 잔수 등)을 JSON 배열로 직렬화. 모양:
+  // [{ label, category, itemIndexes, mode: 'EQUAL'|'GLASSES',
+  //    members: [{ participantId, glasses }] }]. null/미설정이면 없음.
+  groupSplits         String?
 
   session    SettlementSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   items      SettlementItem[]

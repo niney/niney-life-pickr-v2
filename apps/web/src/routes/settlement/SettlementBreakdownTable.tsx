@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import {
   calculateMultiRoundShares,
   effectiveExcludes,
+  toGroupCalcInputs,
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
@@ -258,6 +259,8 @@ const useMatrix = (session: SharedSettlementSessionType): SettlementMatrix =>
                 ]),
             )
           : null,
+        // 세부 분배 그룹 — 빠뜨리면 셀이 저장된 분담(총계 컬럼)과 어긋난다.
+        groups: toGroupCalcInputs(r.groupSplits, pIdxById),
       })),
     });
 

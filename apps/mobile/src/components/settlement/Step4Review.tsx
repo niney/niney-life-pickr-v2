@@ -14,10 +14,14 @@ import {
 } from '@repo/api-contract';
 import {
   ApiError,
+  draftGroupsToCalcInputs,
+  isEligibleGroupMember,
   useCreateSettlement,
   useSettlementDraftStore,
   useTheme,
   useUpdateSettlement,
+  type DraftParticipant,
+  type DraftRound,
   type Theme,
 } from '@repo/shared';
 import { RoundCategoryAdjuster } from './RoundCategoryAdjuster';
@@ -38,6 +42,32 @@ const participantName = (
   const nick = (p.nickname ?? '').trim();
   if (nm && nick) return `${nm} (${nick})`;
   return nm || nick || `참여자 ${idx + 1}`;
+};
+
+// draft 그룹 → 저장 입력 (웹 Step4Review 와 동일 규칙). 앱은 편집 UI 없이
+// 관통만 — 웹에서 설정한 그룹이 앱 재저장에 유실되지 않게 한다.
+const toGroupSplitsPayload = (r: DraftRound, participants: DraftParticipant[]) => {
+  if (!r.groupSplits || r.groupSplits.length === 0) return null;
+  const idxByClientId = new Map(r.items.map((it, i) => [it.clientId, i]));
+  const out = r.groupSplits
+    .map((g) => ({
+      label: g.label.trim() || (g.category === 'NON_ALCOHOL' ? '음료' : '주류'),
+      category: g.category,
+      itemIndexes: g.itemClientIds
+        .map((id) => idxByClientId.get(id) ?? -1)
+        .filter((i) => i >= 0),
+      mode: g.mode,
+      members: g.members
+        .filter((m) =>
+          isEligibleGroupMember(r, participants, m.participantClientId, g.category),
+        )
+        .map((m) => ({
+          participantClientId: m.participantClientId,
+          glasses: m.glasses,
+        })),
+    }))
+    .filter((g) => g.itemIndexes.length > 0 && g.members.length > 0);
+  return out.length > 0 ? out : null;
 };
 
 // Step4 — 분배 결과 확인 + 저장. 차수 예외 칩(#76), 잔여 분배(#76), 할인(#75),
@@ -99,6 +129,8 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                   ]),
               )
             : null,
+          // 세부 분배 그룹 — 웹에서 설정된 값이 앱 미리보기에도 반영되게.
+          groups: draftGroupsToCalcInputs(r, draft.participants),
         })),
       }),
     [draft.participants, draft.rounds],
@@ -147,6 +179,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
           discountAmount: r.discountAmount,
           discountCategory: r.discountCategory,
           categoryAdjustments: r.categoryAdjustments,
+          groupSplits: toGroupSplitsPayload(r, draft.participants),
           items: r.items.map((it) => ({
             name: it.name,
             unitPrice: it.unitPrice,

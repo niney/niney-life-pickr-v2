@@ -144,6 +144,7 @@ interface RowRound {
   discountAmount: number | null;
   discountCategory: string | null;
   categoryAdjustments: string | null;
+  groupSplits: string | null;
   items: Array<{
     id: string;
     name: string;
@@ -310,6 +311,7 @@ export class SettlementService {
               r.categoryAdjustments ?? null,
               clientIdToDbId,
             ),
+            groupSplits: serializeGroupSplits(r.groupSplits ?? null, clientIdToDbId),
           },
         });
 
@@ -555,6 +557,7 @@ export class SettlementService {
               r.categoryAdjustments ?? null,
               clientIdToDbId,
             ),
+            groupSplits: serializeGroupSplits(r.groupSplits ?? null, clientIdToDbId),
           },
         });
 
@@ -888,6 +891,18 @@ export class SettlementService {
           '차수에 참석한 사람이 한 명도 없습니다.',
         );
       }
+      // 세부 분배 그룹의 멤버도 마스터 참여자를 참조해야 한다. (항목 인덱스
+      // 범위·카테고리 일치·그룹 간 중복은 zod refine 이 이미 막았다.)
+      for (const g of r.groupSplits ?? []) {
+        for (const m of g.members) {
+          if (!clientIds.has(m.participantClientId)) {
+            throw new SettlementError(
+              'invalid_round',
+              '세부 분배 그룹의 참여자 참조가 마스터 참여자에 없습니다.',
+            );
+          }
+        }
+      }
     }
   }
 
@@ -978,6 +993,19 @@ export class SettlementService {
           ? { amount: round.discountAmount, category: round.discountCategory }
           : null,
       categoryAdjustments,
+      // 세부 분배 그룹 — 멤버 clientId 를 마스터 인덱스로 변환. 매칭 실패(-1)
+      // 멤버는 calculator 가 방어적으로 무시한다 (validateInput 이 이미 차단).
+      groups: round.groupSplits
+        ? round.groupSplits.map((g) => ({
+            category: g.category,
+            itemIndexes: g.itemIndexes,
+            mode: g.mode,
+            members: g.members.map((m) => ({
+              participantIndex: clientIdToIndex.get(m.participantClientId) ?? -1,
+              glasses: m.glasses,
+            })),
+          }))
+        : null,
     };
   }
 
@@ -1059,6 +1087,7 @@ export class SettlementService {
         ? (row.discountCategory as ReceiptItemCategoryType)
         : null,
       categoryAdjustments: parseCategoryAdjustments(row.categoryAdjustments),
+      groupSplits: parseGroupSplits(row.groupSplits),
       items: row.items.map((it) => ({
         id: it.id,
         name: it.name,
@@ -1105,6 +1134,38 @@ const parseCategoryAdjustments = (
   try {
     const parsed = JSON.parse(raw) as SettlementRoundType['categoryAdjustments'];
     return parsed;
+  } catch {
+    return null;
+  }
+};
+
+// 세부 분배 그룹 — 입력 멤버 clientId 를 db id 로 치환해 JSON 저장. 매칭 안
+// 되는 멤버는 빼고, 멤버가 0명이 된 그룹은 통째로 뺀다(= 균등 분배 의미라
+// 저장 가치 없음). validateInput 통과 후라 실제로는 전원 매칭된다.
+const serializeGroupSplits = (
+  groups: SettlementRoundInputType['groupSplits'] | null,
+  clientIdToDbId: Map<string, string>,
+): string | null => {
+  if (!groups || groups.length === 0) return null;
+  const out = groups
+    .map((g) => ({
+      label: g.label,
+      category: g.category,
+      itemIndexes: g.itemIndexes,
+      mode: g.mode,
+      members: g.members.flatMap((m) => {
+        const dbId = clientIdToDbId.get(m.participantClientId);
+        return dbId ? [{ participantId: dbId, glasses: m.glasses }] : [];
+      }),
+    }))
+    .filter((g) => g.members.length > 0);
+  return out.length === 0 ? null : JSON.stringify(out);
+};
+
+const parseGroupSplits = (raw: string | null): SettlementRoundType['groupSplits'] => {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SettlementRoundType['groupSplits'];
   } catch {
     return null;
   }

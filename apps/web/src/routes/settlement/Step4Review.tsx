@@ -8,15 +8,20 @@ import {
 } from '@repo/api-contract';
 import {
   ApiError,
+  draftGroupsToCalcInputs,
+  isEligibleGroupMember,
   useCreateSettlement,
   useSettlementDraftStore,
   useUpdateSettlement,
+  type DraftParticipant,
+  type DraftRound,
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { RoundExceptionsEditor } from './RoundExceptionsEditor';
 import { RoundDiscountEditor } from './RoundDiscountEditor';
 import { RoundCategoryAdjuster } from './RoundCategoryAdjuster';
+import { RoundGroupSplitEditor } from './RoundGroupSplitEditor';
 import { CopyCheck } from 'lucide-react';
 
 interface Props {
@@ -43,6 +48,33 @@ const participantName = (
   const nick = (p.nickname ?? '').trim();
   if (nm && nick) return `${nm} (${nick})`;
   return nm || nick || `참여자 ${idx + 1}`;
+};
+
+// draft 그룹 → 저장 입력. 항목은 인덱스로 변환하고, 자격 없는 멤버(비참석/
+// 카테고리 제외)는 미리보기 계산과 같은 기준으로 거른다. 참조가 다 끊긴
+// 그룹·멤버 0명 그룹은 떨군다 — 어차피 카테고리 균등과 같은 의미.
+const toGroupSplitsPayload = (r: DraftRound, participants: DraftParticipant[]) => {
+  if (!r.groupSplits || r.groupSplits.length === 0) return null;
+  const idxByClientId = new Map(r.items.map((it, i) => [it.clientId, i]));
+  const out = r.groupSplits
+    .map((g) => ({
+      label: g.label.trim() || (g.category === 'NON_ALCOHOL' ? '음료' : '주류'),
+      category: g.category,
+      itemIndexes: g.itemClientIds
+        .map((id) => idxByClientId.get(id) ?? -1)
+        .filter((i) => i >= 0),
+      mode: g.mode,
+      members: g.members
+        .filter((m) =>
+          isEligibleGroupMember(r, participants, m.participantClientId, g.category),
+        )
+        .map((m) => ({
+          participantClientId: m.participantClientId,
+          glasses: m.glasses,
+        })),
+    }))
+    .filter((g) => g.itemIndexes.length > 0 && g.members.length > 0);
+  return out.length > 0 ? out : null;
 };
 
 // 마지막 단계 — 차수 × 참여자 참석 그리드 + 차수별 분담 + 인당 합계 + 저장.
@@ -97,6 +129,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                 ]),
             )
           : null,
+        groups: draftGroupsToCalcInputs(r, draft.participants),
       })),
     });
   }, [draft.participants, draft.rounds]);
@@ -140,6 +173,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
           discountAmount: r.discountAmount,
           discountCategory: r.discountCategory,
           categoryAdjustments: r.categoryAdjustments,
+          groupSplits: toGroupSplitsPayload(r, draft.participants),
           items: r.items.map((it) => ({
             name: it.name,
             unitPrice: it.unitPrice,
@@ -347,6 +381,9 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
               {/* 분담 다듬기 — 잔여 있는 카테고리만 자동 노출. */}
               <RoundCategoryAdjuster round={r} participants={draft.participants} />
 
+              {/* 세부 분배 — 소주/맥주 그룹 + 잔수. 주류·음료 항목이 있을 때만. */}
+              <RoundGroupSplitEditor round={r} participants={draft.participants} />
+
               {/* 카테고리 풀 breakdown 은 접힘. 디버깅·확인용이라 default 닫힘. */}
               <div className="border-t pt-2">
                 <button
@@ -363,13 +400,55 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                     ).map((c) => {
                       const b = rc.poolBreakdown[c];
                       if (b.poolAmount === 0) return null;
+                      // 이 카테고리에 적용된 세부 분배 그룹 — groupBreakdown 은
+                      // round.groupSplits 와 같은 순서라 zip 으로 라벨을 얻는다.
+                      const groupRows = (r.groupSplits ?? [])
+                        .map((g, gi) => ({ g, bd: rc.groupBreakdown[gi] }))
+                        .filter(
+                          (x): x is { g: NonNullable<typeof x.g>; bd: NonNullable<typeof x.bd> } =>
+                            x.g.category === c && Boolean(x.bd?.applied),
+                        );
                       return (
-                        <li key={c} className="flex items-center justify-between gap-2">
-                          <span>{CATEGORY_LABEL[c]}</span>
-                          <span className="text-muted-foreground">
-                            {b.poolAmount.toLocaleString('ko-KR')}원 · {b.participantCount}명 · 1인{' '}
-                            {b.perParticipant.toLocaleString('ko-KR')}원
-                          </span>
+                        <li key={c} className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{CATEGORY_LABEL[c]}</span>
+                            <span className="text-muted-foreground">
+                              {b.poolAmount.toLocaleString('ko-KR')}원
+                              {groupRows.length === 0 && (
+                                <>
+                                  {' '}· {b.participantCount}명 · 1인{' '}
+                                  {b.perParticipant.toLocaleString('ko-KR')}원
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          {groupRows.length > 0 && (
+                            <ul className="space-y-0.5 pl-3 text-xs text-muted-foreground">
+                              {groupRows.map(({ g, bd }) => (
+                                <li
+                                  key={g.clientId}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span>
+                                    └ {g.label || '그룹'} ·{' '}
+                                    {bd.totalGlasses > 0
+                                      ? `잔수 ${bd.totalGlasses}잔`
+                                      : '균등'}
+                                  </span>
+                                  <span>{bd.poolAmount.toLocaleString('ko-KR')}원</span>
+                                </li>
+                              ))}
+                              {b.equalPoolAmount > 0 && (
+                                <li className="flex items-center justify-between gap-2">
+                                  <span>
+                                    └ 나머지 · {b.participantCount}명 · 1인{' '}
+                                    {b.perParticipant.toLocaleString('ko-KR')}원
+                                  </span>
+                                  <span>{b.equalPoolAmount.toLocaleString('ko-KR')}원</span>
+                                </li>
+                              )}
+                            </ul>
+                          )}
                         </li>
                       );
                     })}

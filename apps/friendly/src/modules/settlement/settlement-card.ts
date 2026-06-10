@@ -6,6 +6,7 @@ import { Resvg } from '@resvg/resvg-js';
 import {
   calculateMultiRoundShares,
   effectiveExcludes,
+  toGroupCalcInputs,
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
@@ -149,6 +150,7 @@ function computeMatrix(
               ]),
           )
         : null,
+      groups: toGroupCalcInputs(r.groupSplits, pIdxById),
     })),
   });
 

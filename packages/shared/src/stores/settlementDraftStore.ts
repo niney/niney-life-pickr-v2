@@ -1,9 +1,12 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
-import type {
-  ReceiptItemCategoryType,
-  SettlementParticipantInputType,
-  SettlementSourceType,
+import {
+  effectiveExcludes,
+  type GroupCalcInput,
+  type ReceiptItemCategoryType,
+  type SettlementGroupSplitModeType,
+  type SettlementParticipantInputType,
+  type SettlementSourceType,
 } from '@repo/api-contract';
 
 // 정산하기 다단계 흐름의 draft 상태. 새로고침 시에도 진행 중인 입력을
@@ -87,6 +90,24 @@ export type DraftCategoryAdjustments = Partial<
   Record<ReceiptItemCategoryType, DraftCategoryAdjustment | null>
 >;
 
+// 세부 분배 그룹 — 카테고리 풀에서 특정 항목들(소주/맥주/콜라…)을 떼어내
+// 멤버끼리만 나누는 규칙. 저장 시 itemClientIds 는 items 인덱스로, 멤버
+// clientId 는 그대로 서버 입력형으로 변환된다.
+export interface DraftGroupMember {
+  participantClientId: string;
+  // 정수 잔수(가중치). EQUAL 모드에선 무시. 0잔 = 멤버로 두되 분담 0.
+  glasses: number;
+}
+
+export interface DraftItemGroup {
+  clientId: string;
+  label: string;
+  category: ReceiptItemCategoryType;
+  itemClientIds: string[];
+  mode: SettlementGroupSplitModeType;
+  members: DraftGroupMember[];
+}
+
 export interface DraftRound {
   clientId: string;
   placeId: string;
@@ -104,12 +125,64 @@ export interface DraftRound {
   discountCategory: ReceiptItemCategoryType | null;
   // 분담 다듬기 — 카테고리별 잔여 처리 규칙. 키 없거나 null 이면 default.
   categoryAdjustments: DraftCategoryAdjustments | null;
+  // 세부 분배 그룹 — null 이면 없음 (카테고리 균등 분배만).
+  groupSplits: DraftItemGroup[] | null;
 }
 
 export interface SettlementDraft {
   participants: DraftParticipant[];
   rounds: DraftRound[];
 }
+
+// 이 차수에서 해당 카테고리 분담 자격이 있는가 — 참석 + 그 카테고리를
+// 제외하지 않음 (차수 특이사항 override 반영). 그룹 멤버 자격의 단일 기준:
+// 에디터 후보 표시·미리보기 계산·저장 페이로드가 모두 이 함수를 쓴다.
+// 제외자가 그날 마신 케이스는 '차수 특이사항: 마심' 으로 풀면 자동으로
+// 후보에 올라온다 (별도 메커니즘 없음).
+export const isEligibleGroupMember = (
+  round: Pick<DraftRound, 'attendances'>,
+  participants: DraftParticipant[],
+  participantClientId: string,
+  category: ReceiptItemCategoryType,
+): boolean => {
+  const p = participants.find((x) => x.clientId === participantClientId);
+  const att = round.attendances.find(
+    (a) => a.participantClientId === participantClientId,
+  );
+  if (!p || !att || !att.attended) return false;
+  const eff = effectiveExcludes(p, att);
+  if (category === 'ALCOHOL') return !eff.excludeAlcohol;
+  if (category === 'NON_ALCOHOL') return !eff.excludeNonAlcohol;
+  if (category === 'SIDE') return !eff.excludeSide;
+  return true;
+};
+
+// draft 의 세부 분배 그룹을 계산기 입력으로 변환 — itemClientIds → 항목
+// 인덱스, 멤버 clientId → 마스터 참여자 인덱스. 끊긴 항목 참조는 빼고,
+// 자격 없는 멤버(비참석/카테고리 제외)는 분담에서 빠지도록 필터한다.
+export const draftGroupsToCalcInputs = (
+  round: Pick<DraftRound, 'items' | 'groupSplits' | 'attendances'>,
+  participants: DraftParticipant[],
+): GroupCalcInput[] | null => {
+  if (!round.groupSplits || round.groupSplits.length === 0) return null;
+  const itemIndexByClientId = new Map(round.items.map((it, i) => [it.clientId, i]));
+  const pIndexByClientId = new Map(participants.map((p, i) => [p.clientId, i]));
+  return round.groupSplits.map((g) => ({
+    category: g.category,
+    itemIndexes: g.itemClientIds
+      .map((id) => itemIndexByClientId.get(id) ?? -1)
+      .filter((i) => i >= 0),
+    mode: g.mode,
+    members: g.members
+      .filter((m) =>
+        isEligibleGroupMember(round, participants, m.participantClientId, g.category),
+      )
+      .map((m) => ({
+        participantIndex: pIndexByClientId.get(m.participantClientId) ?? -1,
+        glasses: m.glasses,
+      })),
+  }));
+};
 
 const emptyDraft = (): SettlementDraft => ({
   participants: [],
@@ -138,6 +211,7 @@ const newRound = (placeId: string, placeName: string, participants: DraftPartici
   discountAmount: null,
   discountCategory: null,
   categoryAdjustments: null,
+  groupSplits: null,
 });
 
 interface SettlementDraftStore extends SettlementDraft {
@@ -220,6 +294,21 @@ interface SettlementDraftStore extends SettlementDraft {
     category: ReceiptItemCategoryType,
     adjustment: DraftCategoryAdjustment | null,
   ): void;
+
+  // ── 세부 분배 그룹 ──────────────────────────────────────────────────
+  // 제안 일괄 적용/전체 해제 — clientId 는 store 가 부여. 빈 배열이면 null.
+  applyGroupSplits(
+    roundClientId: string,
+    groups: Omit<DraftItemGroup, 'clientId'>[],
+  ): void;
+  // 그룹 1개 추가. 반환값은 새 그룹의 clientId (round 없으면 빈 문자열).
+  addGroupSplit(roundClientId: string, group: Omit<DraftItemGroup, 'clientId'>): string;
+  updateGroupSplit(
+    roundClientId: string,
+    groupClientId: string,
+    patch: Partial<Omit<DraftItemGroup, 'clientId'>>,
+  ): void;
+  removeGroupSplit(roundClientId: string, groupClientId: string): void;
 }
 
 // crypto.randomUUID 가 없는 환경(아주 오래된 브라우저) 폴백.
@@ -231,7 +320,9 @@ const newClientId = (): string => {
 };
 
 // 모든 round 의 attendances 에서 사라진 마스터 참여자 항목을 제거하고,
-// 새로 추가된 마스터에게 default attendance 를 채운다.
+// 새로 추가된 마스터에게 default attendance 를 채운다. 세부 분배 그룹의
+// 멤버도 사라진 참여자를 정리한다 (멤버 0명 그룹은 남긴다 — 계산기가 나머지
+// 풀로 환원하고, 사용자가 다시 채울 수 있게).
 const syncAttendances = (rounds: DraftRound[], participants: DraftParticipant[]): DraftRound[] => {
   const validIds = new Set(participants.map((p) => p.clientId));
   return rounds.map((r) => {
@@ -239,9 +330,40 @@ const syncAttendances = (rounds: DraftRound[], participants: DraftParticipant[])
     const next: DraftAttendance[] = participants.map(
       (p) => existing.get(p.clientId) ?? emptyAttendance(p.clientId),
     );
+    const groupSplits = r.groupSplits
+      ? r.groupSplits.map((g) => ({
+          ...g,
+          members: g.members.filter((m) => validIds.has(m.participantClientId)),
+        }))
+      : null;
     // 혹시 모를 stale attendance 도 제거 — 위 map 으로 이미 처리되지만 명시.
-    return { ...r, attendances: next.filter((a) => validIds.has(a.participantClientId)) };
+    return {
+      ...r,
+      attendances: next.filter((a) => validIds.has(a.participantClientId)),
+      groupSplits,
+    };
   });
+};
+
+// 그룹의 항목 참조 정합성 — 사라졌거나 카테고리가 바뀐 항목을 그룹에서
+// 제거하고, 항목이 0개가 된 그룹은 떨군다. items 를 바꾸는 모든 액션 뒤에
+// 호출해 그룹이 항상 실재하는 같은 카테고리 항목만 가리키게 한다.
+const pruneGroupItems = (round: DraftRound): DraftRound => {
+  if (!round.groupSplits || round.groupSplits.length === 0) return round;
+  const itemCategory = new Map(round.items.map((it) => [it.clientId, it.category]));
+  const next = round.groupSplits
+    .map((g) => ({
+      ...g,
+      itemClientIds: g.itemClientIds.filter((id) => itemCategory.get(id) === g.category),
+    }))
+    .filter((g) => g.itemClientIds.length > 0);
+  const unchanged =
+    next.length === round.groupSplits.length &&
+    next.every(
+      (g, i) => g.itemClientIds.length === round.groupSplits![i]!.itemClientIds.length,
+    );
+  if (unchanged) return round;
+  return { ...round, groupSplits: next.length > 0 ? next : null };
 };
 
 export const useSettlementDraftStore = create<SettlementDraftStore>()(
@@ -338,7 +460,7 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       setRoundItems(roundClientId, items) {
         set((s) => ({
           rounds: s.rounds.map((r) =>
-            r.clientId === roundClientId ? { ...r, items } : r,
+            r.clientId === roundClientId ? pruneGroupItems({ ...r, items }) : r,
           ),
         }));
       },
@@ -358,12 +480,13 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
         set((s) => ({
           rounds: s.rounds.map((r) =>
             r.clientId === roundClientId
-              ? {
+              ? // 카테고리가 바뀌면 그 항목은 기존 그룹과 어긋난다 — prune.
+                pruneGroupItems({
                   ...r,
                   items: r.items.map((it) =>
                     it.clientId === itemClientId ? { ...it, ...patch } : it,
                   ),
-                }
+                })
               : r,
           ),
         }));
@@ -372,7 +495,10 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
         set((s) => ({
           rounds: s.rounds.map((r) =>
             r.clientId === roundClientId
-              ? { ...r, items: r.items.filter((it) => it.clientId !== itemClientId) }
+              ? pruneGroupItems({
+                  ...r,
+                  items: r.items.filter((it) => it.clientId !== itemClientId),
+                })
               : r,
           ),
         }));
@@ -385,7 +511,9 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
         set((s) => ({
           rounds: s.rounds.map((r) =>
             r.clientId === roundClientId
-              ? {
+              ? // 항목이 통째로 교체되면 기존 그룹의 항목 참조도 끊긴다 — prune
+                // 으로 빈 그룹을 정리 (items 유지 시엔 그룹도 그대로).
+                pruneGroupItems({
                   ...r,
                   source: 'RECEIPT',
                   receiptImageToken: imageToken,
@@ -399,7 +527,7 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
                           clientId: it.clientId || newClientId(),
                         }))
                       : r.items,
-                }
+                })
               : r,
           ),
         }));
@@ -462,6 +590,59 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
           }),
         }));
       },
+
+      // ── 세부 분배 그룹 ───────────────────────────────────────────
+      applyGroupSplits(roundClientId, groups) {
+        const withIds = groups.map((g) => ({ ...g, clientId: newClientId() }));
+        set((s) => ({
+          rounds: s.rounds.map((r) =>
+            r.clientId === roundClientId
+              ? { ...r, groupSplits: withIds.length > 0 ? withIds : null }
+              : r,
+          ),
+        }));
+      },
+      addGroupSplit(roundClientId, group) {
+        const clientId = newClientId();
+        let added = false;
+        set((s) => ({
+          rounds: s.rounds.map((r) => {
+            if (r.clientId !== roundClientId) return r;
+            added = true;
+            return {
+              ...r,
+              groupSplits: [...(r.groupSplits ?? []), { ...group, clientId }],
+            };
+          }),
+        }));
+        return added ? clientId : '';
+      },
+      updateGroupSplit(roundClientId, groupClientId, patch) {
+        set((s) => ({
+          rounds: s.rounds.map((r) =>
+            r.clientId === roundClientId
+              ? {
+                  ...r,
+                  groupSplits:
+                    r.groupSplits?.map((g) =>
+                      g.clientId === groupClientId ? { ...g, ...patch } : g,
+                    ) ?? null,
+                }
+              : r,
+          ),
+        }));
+      },
+      removeGroupSplit(roundClientId, groupClientId) {
+        set((s) => ({
+          rounds: s.rounds.map((r) => {
+            if (r.clientId !== roundClientId) return r;
+            const next = (r.groupSplits ?? []).filter(
+              (g) => g.clientId !== groupClientId,
+            );
+            return { ...r, groupSplits: next.length > 0 ? next : null };
+          }),
+        }));
+      },
       copyRoundAttendancesFrom(targetRoundClientId, sourceRoundClientId) {
         set((s) => {
           const source = s.rounds.find((r) => r.clientId === sourceRoundClientId);
@@ -501,7 +682,8 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       // 1차 round 1개로 변환, 모든 마스터 참여자는 attended=true.
       // v2 → v3: round 에 discountAmount/discountCategory 필드 추가 (null).
       // v3 → v4: round 에 categoryAdjustments 필드 추가 (null).
-      version: 4,
+      // v4 → v5: round 에 groupSplits 필드 추가 (null).
+      version: 5,
       migrate: (persisted, fromVersion) => {
         // v2+ → 최신: rounds 의 각 round 에 빠진 필드 채워준다.
         if (fromVersion >= 2) {
@@ -513,6 +695,7 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
               discountAmount: r.discountAmount ?? null,
               discountCategory: r.discountCategory ?? null,
               categoryAdjustments: r.categoryAdjustments ?? null,
+              groupSplits: r.groupSplits ?? null,
             })),
           };
         }
@@ -547,6 +730,7 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
           discountAmount: null,
           discountCategory: null,
           categoryAdjustments: null,
+          groupSplits: null,
         };
         return { participants, rounds: [round] };
       },
