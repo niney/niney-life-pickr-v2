@@ -27,6 +27,7 @@ import {
 import { RoundCategoryAdjuster } from './RoundCategoryAdjuster';
 import { RoundDiscountEditor } from './RoundDiscountEditor';
 import { RoundExceptionsEditor } from './RoundExceptionsEditor';
+import { RoundGroupSplitEditor } from './RoundGroupSplitEditor';
 
 interface Props {
   onBack: () => void;
@@ -439,6 +440,21 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
               </View>
 
               <RoundCategoryAdjuster round={r} participants={draft.participants} />
+
+              <View
+                style={[
+                  styles.subBlock,
+                  {
+                    backgroundColor: theme.colors.surfaceAlt,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <RoundGroupSplitEditor
+                  round={r}
+                  participants={draft.participants}
+                />
+              </View>
             </View>
           );
         })}

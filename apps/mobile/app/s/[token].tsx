@@ -17,6 +17,7 @@ import type {
   ReceiptItemCategoryType,
   SharedSettlementSessionType,
 } from '@repo/api-contract';
+import { RoundGroupSplitNote } from '../../src/components/settlement/RoundGroupSplitNote';
 import { SettlementBreakdownTable } from '../../src/components/settlement/SettlementBreakdownTable';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
@@ -118,6 +119,7 @@ export default function SharedSettlementScreen() {
             <RoundCard
               key={r.id}
               round={r}
+              participants={s.participants}
               showRoundNumber={s.rounds.length > 1}
               theme={theme}
             />
@@ -240,10 +242,12 @@ const ParticipantsCard = ({
 
 const RoundCard = ({
   round,
+  participants,
   showRoundNumber,
   theme,
 }: {
   round: SharedSettlementSessionType['rounds'][number];
+  participants: SharedSettlementSessionType['participants'];
   showRoundNumber: boolean;
   theme: Theme;
 }) => {
@@ -317,6 +321,12 @@ const RoundCard = ({
           </View>
         )}
       </View>
+
+      <RoundGroupSplitNote
+        round={round}
+        participants={participants}
+        theme={theme}
+      />
     </View>
   );
 };
