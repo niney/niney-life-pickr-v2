@@ -226,6 +226,9 @@ export const Schedule = {
 export const AutoDiscover = {
   jobs: `${API_PREFIX}/admin/auto-discover/jobs`,
   job: (id: string) => `${API_PREFIX}/admin/auto-discover/jobs/${id}`,
+  // 후보 리스트 확인 후 등록(크롤) 시작 — awaiting_confirmation 해제.
+  jobConfirm: (id: string) =>
+    `${API_PREFIX}/admin/auto-discover/jobs/${id}/confirm`,
   jobEvents: (id: string) =>
     `${API_PREFIX}/admin/auto-discover/jobs/${id}/events`,
 } as const;

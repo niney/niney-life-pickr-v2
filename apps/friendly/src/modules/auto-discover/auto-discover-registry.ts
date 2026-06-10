@@ -52,6 +52,9 @@ interface InternalJob {
   events: AutoDiscoverJobEvent[];
   subscribers: Set<AutoDiscoverJobSubscriber>;
   abort: AbortController;
+  // 후보 리스트 확인 후 등록 시작 — 사용자가 confirm 호출 시 true.
+  confirmed: boolean;
+  confirmWaiters: Set<() => void>;
 }
 
 export class AutoDiscoverRegistry {
@@ -91,6 +94,8 @@ export class AutoDiscoverRegistry {
       events: [],
       subscribers: new Set(),
       abort: new AbortController(),
+      confirmed: false,
+      confirmWaiters: new Set(),
     };
     this.jobs.set(id, job);
     this.ensureGcTimer();
@@ -207,7 +212,42 @@ export class AutoDiscoverRegistry {
       return false;
     }
     job.abort.abort();
+    // 확인 대기 중이었다면 깨운다 — 러너가 abort 를 보고 cancelled 처리.
+    this.releaseConfirmWaiters(job);
     return true;
+  }
+
+  // 사용자의 "등록 시작" 확인. 진행 중 잡이면 confirmed 마킹 + 대기 중인 러너를
+  // 깨운다. idempotent — 이미 확인됐거나 아직 대기 단계 전이어도 true.
+  confirm(id: string, actorId: string): boolean {
+    const job = this.jobs.get(id);
+    if (!job || job.actorId !== actorId) return false;
+    if (
+      job.state === 'done' ||
+      job.state === 'failed' ||
+      job.state === 'cancelled'
+    ) {
+      return false;
+    }
+    job.confirmed = true;
+    this.releaseConfirmWaiters(job);
+    return true;
+  }
+
+  // 러너가 후보 publish 직후 호출 — confirm 또는 abort 까지 대기.
+  waitForConfirmation(jobId: string): Promise<void> {
+    const job = this.jobs.get(jobId);
+    if (!job || job.confirmed || job.abort.signal.aborted) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      job.confirmWaiters.add(resolve);
+    });
+  }
+
+  private releaseConfirmWaiters(job: InternalJob): void {
+    for (const w of job.confirmWaiters) w();
+    job.confirmWaiters.clear();
   }
 
   abortSignal(id: string): AbortSignal | null {

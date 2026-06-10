@@ -30,8 +30,9 @@ const AI_TEMPERATURE = 0.7;
 const AI_MAX_TOKENS = 800;
 const AI_NUM_CTX = 4096;
 
-// 한 그룹에서 동시 진행할 크롤 수. 5 — 잡 레지스트리의 actor 슬롯과 일치.
-const GROUP_SIZE = 5;
+// 한 그룹에서 동시 진행할 크롤 수. 1 — 레스토랑 간 병렬 요청이 네이버 블록을
+// 유발할 수 있어 큐처럼 한 곳씩 순차 처리 (레스토랑 1건 내부 병렬은 유지).
+const GROUP_SIZE = 1;
 
 export interface AutoDiscoverServiceDeps {
   restaurants: RestaurantService;
@@ -213,7 +214,15 @@ export class AutoDiscoverService {
         return;
       }
 
-      // ── Phase 3: 그룹 직렬, 그룹 내 5병렬 크롤 ───────────────────────────
+      // ── Phase 2.5: 등록 리스트 확인 대기 ─────────────────────────────────
+      // 후보 큐가 UI 에 다 깔린 상태에서 멈추고, 사용자의 "등록 시작"(confirm)
+      // 또는 취소(abort) 까지 대기.
+      this.registry.setPhase(jobId, 'awaiting_confirmation');
+      await this.registry.waitForConfirmation(jobId);
+      // abort 였다면 아래 그룹 루프는 시작 전에 빠지고(startedGroups=0), 잔여
+      // 후보 전부 skipped(cancelled) 마킹 후 cancelled 로 종료된다.
+
+      // ── Phase 3: 후보 큐 — 한 곳씩 순차 크롤 (GROUP_SIZE=1) ─────────────
       this.registry.setPhase(jobId, 'crawling');
       const groups: Array<typeof targets> = [];
       for (let i = 0; i < targets.length; i += GROUP_SIZE) {

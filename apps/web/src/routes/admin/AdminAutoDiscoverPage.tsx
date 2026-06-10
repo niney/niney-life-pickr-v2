@@ -3,6 +3,7 @@ import {
   useActiveAutoDiscoverJobStore,
   useAutoDiscoverJob,
   useCancelAutoDiscover,
+  useConfirmAutoDiscover,
   useStartAutoDiscover,
 } from '@repo/shared';
 import { AutoDiscoverForm } from '~/components/admin/auto-discover/AutoDiscoverForm';
@@ -18,6 +19,7 @@ export const AdminAutoDiscoverPage = () => {
   const job = useAutoDiscoverJob(activeJobId);
   const startMutation = useStartAutoDiscover();
   const cancelMutation = useCancelAutoDiscover();
+  const confirmMutation = useConfirmAutoDiscover();
 
   const snapshot = job.data;
   const isJobRunning =
@@ -56,7 +58,11 @@ export const AdminAutoDiscoverPage = () => {
             if (activeJobId) cancelMutation.mutate(activeJobId);
           }}
           onClose={() => clearActiveJob()}
+          onConfirm={() => {
+            if (activeJobId) confirmMutation.mutate(activeJobId);
+          }}
           canCancel={!cancelMutation.isPending}
+          isConfirming={confirmMutation.isPending}
         />
       )}
     </div>

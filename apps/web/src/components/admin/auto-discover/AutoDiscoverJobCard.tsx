@@ -30,13 +30,16 @@ interface Props {
   snapshot: AutoDiscoverJobSnapshotType;
   onCancel: () => void;
   onClose: () => void;
+  onConfirm: () => void;
   canCancel: boolean;
+  isConfirming: boolean;
 }
 
 const PHASE_LABEL: Record<AutoDiscoverPhaseType, string> = {
   queued: '대기 중',
   generating_keywords: 'AI 키워드 생성 중',
   searching: '네이버 검색 중',
+  awaiting_confirmation: '등록 확인 대기',
   crawling: '크롤·등록 중',
   done: '완료',
 };
@@ -45,7 +48,9 @@ export const AutoDiscoverJobCard = ({
   snapshot,
   onCancel,
   onClose,
+  onConfirm,
   canCancel,
+  isConfirming,
 }: Props) => {
   const running =
     snapshot.state === 'pending' || snapshot.state === 'running';
@@ -56,27 +61,16 @@ export const AutoDiscoverJobCard = ({
   const ratio =
     target === 0 ? 0 : Math.min(1, snapshot.newlyRegistered / target);
 
-  // 후보를 그룹 별로 묶기. groupIndex = -1 (already_registered) 는 별도 섹션.
-  const { groups, alreadyRegistered } = useMemo(() => {
-    const byGroup = new Map<number, AutoDiscoverCandidateType[]>();
+  // 처리 큐(groupIndex 순 정렬)와 사전 제외(groupIndex = -1, already_registered) 분리.
+  const { queue, alreadyRegistered } = useMemo(() => {
     const pre: AutoDiscoverCandidateType[] = [];
+    const q: AutoDiscoverCandidateType[] = [];
     for (const c of snapshot.candidates) {
-      if (c.groupIndex < 0) {
-        pre.push(c);
-        continue;
-      }
-      const list = byGroup.get(c.groupIndex) ?? [];
-      list.push(c);
-      byGroup.set(c.groupIndex, list);
+      if (c.groupIndex < 0) pre.push(c);
+      else q.push(c);
     }
-    const sortedKeys = [...byGroup.keys()].sort((a, b) => a - b);
-    return {
-      groups: sortedKeys.map((k) => ({
-        index: k,
-        items: byGroup.get(k)!,
-      })),
-      alreadyRegistered: pre,
-    };
+    q.sort((a, b) => a.groupIndex - b.groupIndex);
+    return { queue: q, alreadyRegistered: pre };
   }, [snapshot.candidates]);
 
   const totalCandidates = snapshot.candidates.length;
@@ -222,34 +216,49 @@ export const AutoDiscoverJobCard = ({
           </section>
         )}
 
-        {/* 그룹별 후보 리스트. */}
-        {groups.length === 0 ? (
+        {/* 처리 큐 — 한 곳씩 순차 크롤·등록. */}
+        {queue.length === 0 ? (
           totalCandidates === 0 && snapshot.phase === 'crawling' ? (
             <p className="text-xs text-muted-foreground">크롤 대상 없음.</p>
           ) : null
         ) : (
-          <section className="space-y-3">
-            {groups.map((g) => {
-              const doneInGroup = g.items.filter(
-                (i) => i.state === 'done',
-              ).length;
-              const totalInGroup = g.items.length;
-              return (
-                <div key={g.index}>
-                  <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    그룹 {g.index + 1}
-                    <span>
-                      ({doneInGroup}/{totalInGroup} 완료)
-                    </span>
-                  </h4>
-                  <ul className="space-y-1">
-                    {g.items.map((c) => (
-                      <CandidateRow key={c.placeId} candidate={c} />
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+          <section>
+            {/* 확인 대기 — 등록 리스트 보고 시작. */}
+            {snapshot.phase === 'awaiting_confirmation' && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+                <p className="text-xs">
+                  후보 <span className="font-semibold">{queue.length}</span>곳을
+                  찾았습니다. 리스트를 확인하고 등록을 시작하세요. 목표{' '}
+                  {target}곳 도달 시 잔여 후보는 건너뜁니다.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onConfirm}
+                  disabled={isConfirming}
+                  className="ml-auto h-7 gap-1.5 px-3 text-xs"
+                >
+                  {isConfirming ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-3.5" />
+                  )}
+                  등록 시작
+                </Button>
+              </div>
+            )}
+            <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              처리 큐
+              <span>
+                ({queue.filter((c) => c.state === 'done').length}/{queue.length}{' '}
+                완료)
+              </span>
+            </h4>
+            <ul className="space-y-1">
+              {queue.map((c, i) => (
+                <CandidateRow key={c.placeId} candidate={c} order={i + 1} />
+              ))}
+            </ul>
           </section>
         )}
       </CardContent>
@@ -288,7 +297,13 @@ const KeywordTile = ({ keyword }: { keyword: AutoDiscoverKeywordType }) => {
   );
 };
 
-const CandidateRow = ({ candidate }: { candidate: AutoDiscoverCandidateType }) => {
+const CandidateRow = ({
+  candidate,
+  order,
+}: {
+  candidate: AutoDiscoverCandidateType;
+  order: number;
+}) => {
   const stateBadge =
     candidate.state === 'pending' ? (
       <Badge variant="outline" className="font-normal text-muted-foreground">
@@ -333,6 +348,9 @@ const CandidateRow = ({ candidate }: { candidate: AutoDiscoverCandidateType }) =
 
   return (
     <li className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-xs">
+      <span className="w-5 shrink-0 text-right tabular-nums text-muted-foreground">
+        {order}
+      </span>
       <span className="truncate font-medium">{candidate.name}</span>
       {candidate.category && (
         <Badge variant="outline" className="font-normal">

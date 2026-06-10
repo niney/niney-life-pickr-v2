@@ -94,6 +94,22 @@ const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
+  // POST — 후보 리스트 확인 후 등록 시작. awaiting_confirmation 에서 대기 중인
+  // 러너를 깨운다. idempotent — 이미 확인됐어도 204.
+  typed.post(Routes.AutoDiscover.jobConfirm(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+    },
+    handler: async (req, reply) => {
+      const ok = autoDiscoverRegistry.confirm(req.params.id, req.user.userId);
+      if (!ok) throw app.httpErrors.notFound('Job not found or finished');
+      return reply.code(204).send();
+    },
+  });
+
   // DELETE — 잡 취소. 진행 중이던 그룹의 Naver 잡들은 abort 신호 받고 즉시 중단,
   // 다음 그룹들은 시작 전 skipped(cancelled). 204 idempotent.
   typed.delete(Routes.AutoDiscover.job(':id'), {

@@ -33,12 +33,14 @@ export type AutoDiscoverJobStateType = z.infer<typeof AutoDiscoverJobState>;
 //   queued: 시작 직전.
 //   generating_keywords: AI 호출 중.
 //   searching: 키워드별 네이버 검색 중.
-//   crawling: 그룹 5 개씩 직렬 크롤 중.
+//   awaiting_confirmation: 후보 리스트 확정 — 사용자의 "등록 시작" 확인 대기.
+//   crawling: 후보 큐를 한 곳씩 순차 크롤 중.
 //   done: 모든 단계 종료.
 export const AutoDiscoverPhase = z.enum([
   'queued',
   'generating_keywords',
   'searching',
+  'awaiting_confirmation',
   'crawling',
   'done',
 ]);

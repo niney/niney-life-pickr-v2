@@ -158,6 +158,16 @@ const buildService = (
   return { service, registry };
 };
 
+// 후보 publish 후 awaiting_confirmation 에서 멈추는 잡을 자동으로 confirm —
+// 확인 단계 자체를 검증하는 테스트 외에는 모두 이 헬퍼로 통과시킨다.
+const autoConfirm = (registry: AutoDiscoverRegistry, id: string): void => {
+  registry.subscribe(id, 'u1', (ev) => {
+    if (ev.type === 'phase' && ev.phase === 'awaiting_confirmation') {
+      registry.confirm(id, 'u1');
+    }
+  });
+};
+
 describe('AutoDiscoverService', () => {
   let crawlRegistry: JobRegistry;
   beforeEach(() => {
@@ -232,6 +242,7 @@ describe('AutoDiscoverService', () => {
       actorId: 'u1',
       input: { q: '강남역', categories: [], targetCount: 5 },
     });
+    autoConfirm(registry, id);
     await service.runAutoDiscover(id, 'u1');
     const snap = registry.get(id, 'u1')!;
     // 모든 키워드가 같은 후보 2 개를 돌려줘도 후보 리스트는 2 개.
@@ -281,6 +292,7 @@ describe('AutoDiscoverService', () => {
       actorId: 'u1',
       input: { q: '강남역', categories: [], targetCount: 5 },
     });
+    autoConfirm(registry, id);
     await service.runAutoDiscover(id, 'u1');
     const snap = registry.get(id, 'u1')!;
     const p1 = snap.candidates.find((c) => c.placeId === 'p1')!;
@@ -325,6 +337,7 @@ describe('AutoDiscoverService', () => {
       actorId: 'u1',
       input: { q: '강남역', categories: [], targetCount: AUTO_DISCOVER_GROUP_SIZE },
     });
+    autoConfirm(registry, id);
     await service.runAutoDiscover(id, 'u1');
     const snap = registry.get(id, 'u1')!;
     const doneCount = snap.candidates.filter((c) => c.state === 'done').length;
@@ -373,6 +386,7 @@ describe('AutoDiscoverService', () => {
       actorId: 'u1',
       input: { q: '강남역', categories: [], targetCount: 100 },
     });
+    autoConfirm(registry, id);
     const runPromise = service.runAutoDiscover(id, 'u1');
     // crawl 의 startCrawl 이 5 번 호출되어 첫 그룹이 await 상태에 진입할 때까지
     // 잠시 양보. crawlRegistry 의 잡 수로 진입 시점 감지.
@@ -405,6 +419,94 @@ describe('AutoDiscoverService', () => {
       (c) => c.state === 'skipped' && c.skipReason === 'cancelled',
     ).length;
     expect(skippedCancelled).toBe(AUTO_DISCOVER_GROUP_SIZE);
+  });
+
+  it('후보 publish 후 awaiting_confirmation 에서 대기 — confirm 해야 크롤 시작', async () => {
+    const restaurants = makeFakeRestaurants();
+    const crawl = makeFakeCrawl(crawlRegistry, restaurants);
+    const search = async () => [
+      {
+        placeId: 'w1',
+        name: '가게',
+        category: null,
+        address: null,
+        roadAddress: null,
+        lat: 37.5,
+        lng: 127,
+        phone: null,
+        thumbnailUrl: null,
+        reviewCount: null,
+        distance: null,
+        rawSourceUrl: 'https://map.naver.com/p/entry/place/w1',
+      },
+    ];
+    const { service, registry } = buildService({
+      crawlRegistry,
+      crawl,
+      restaurants,
+      searchOverride: search,
+    });
+    const { id } = registry.create({
+      actorId: 'u1',
+      input: { q: '강남역', categories: [], targetCount: 5 },
+    });
+    const runPromise = service.runAutoDiscover(id, 'u1');
+    // 확인 대기 단계 진입까지 대기.
+    while (registry.get(id, 'u1')!.phase !== 'awaiting_confirmation') {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    // 아직 크롤 시작 안 함.
+    expect(crawlRegistry.list('u1')).toHaveLength(0);
+    expect(registry.get(id, 'u1')!.candidates[0]!.state).toBe('pending');
+
+    registry.confirm(id, 'u1');
+    await runPromise;
+    const snap = registry.get(id, 'u1')!;
+    expect(snap.state).toBe('done');
+    expect(snap.candidates[0]!.state).toBe('done');
+  });
+
+  it('awaiting_confirmation 중 cancel — 후보 전부 skipped(cancelled) 로 종료', async () => {
+    const restaurants = makeFakeRestaurants();
+    const crawl = makeFakeCrawl(crawlRegistry, restaurants);
+    const search = async () => [
+      {
+        placeId: 'w2',
+        name: '가게',
+        category: null,
+        address: null,
+        roadAddress: null,
+        lat: 37.5,
+        lng: 127,
+        phone: null,
+        thumbnailUrl: null,
+        reviewCount: null,
+        distance: null,
+        rawSourceUrl: 'https://map.naver.com/p/entry/place/w2',
+      },
+    ];
+    const { service, registry } = buildService({
+      crawlRegistry,
+      crawl,
+      restaurants,
+      searchOverride: search,
+    });
+    const { id } = registry.create({
+      actorId: 'u1',
+      input: { q: '강남역', categories: [], targetCount: 5 },
+    });
+    const runPromise = service.runAutoDiscover(id, 'u1');
+    while (registry.get(id, 'u1')!.phase !== 'awaiting_confirmation') {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    registry.cancel(id, 'u1');
+    await runPromise;
+    const snap = registry.get(id, 'u1')!;
+    expect(snap.state).toBe('cancelled');
+    expect(snap.candidates[0]!.state).toBe('skipped');
+    expect(snap.candidates[0]!.skipReason).toBe('cancelled');
+    // 크롤은 시작도 안 했다.
+    expect(crawlRegistry.list('u1')).toHaveLength(0);
   });
 
   it('AutoDiscoverRegistry: per-actor 1잡 — 두 번째 create 직전엔 findInFlightByActor 가 첫 잡을 반환', () => {

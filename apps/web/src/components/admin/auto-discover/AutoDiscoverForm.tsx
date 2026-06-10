@@ -15,6 +15,7 @@ import { cn } from '~/lib/utils';
 
 // 자동 발견 잡 입력 폼. 키워드 한 줄 + 카테고리 칩 다중 선택 + targetCount.
 // 잡 1개만 진행 가능 — 진행 중이면 "시작" 비활성, isJobRunning prop 으로 전달.
+// 시작하면 검색까지만 진행되고, 등록은 후보 리스트 확인 후 "등록 시작"으로 개시.
 
 const CATEGORY_PRESETS = [
   '한식',
@@ -71,7 +72,8 @@ export const AutoDiscoverForm = ({
         </CardTitle>
         <CardDescription className="text-xs">
           영역/지명 한 줄과 카테고리(선택) 를 입력하면 AI 가 검색어 8 개를 만들어
-          네이버 지도를 검색하고, 중복 제거 후 그룹 5 개씩 직렬로 크롤·등록합니다.
+          네이버 지도를 검색하고, 중복 제거한 후보 리스트를 보여줍니다. 리스트
+          확인 후 등록 시작을 누르면 한 곳씩 순차로 크롤·등록합니다.
         </CardDescription>
       </CardHeader>
       <CardContent>

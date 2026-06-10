@@ -19,6 +19,10 @@ export const autoDiscoverApi = {
 
   cancel: (jobId: string) =>
     apiFetch<void>(Routes.AutoDiscover.job(jobId), { method: 'DELETE' }),
+
+  // 후보 리스트 확인 후 등록 시작 — awaiting_confirmation 해제.
+  confirm: (jobId: string) =>
+    apiFetch<void>(Routes.AutoDiscover.jobConfirm(jobId), { method: 'POST' }),
 };
 
 // SSE URL — token query 인증.

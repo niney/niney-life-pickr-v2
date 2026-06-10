@@ -35,6 +35,12 @@ export const useCancelAutoDiscover = () =>
     mutationFn: (jobId: string) => autoDiscoverApi.cancel(jobId),
   });
 
+// 후보 리스트 확인 후 등록 시작 (POST confirm). phase 전환은 SSE 로 들어온다.
+export const useConfirmAutoDiscover = () =>
+  useMutation({
+    mutationFn: (jobId: string) => autoDiscoverApi.confirm(jobId),
+  });
+
 // 잡 상태 + 라이브 SSE 구독. useDiningcodeBulkSaveJob 패턴과 동일 — 종료되면
 // EventSource 닫고 재연결 막음 + 후속 캐시 무효화.
 export const useAutoDiscoverJob = (
