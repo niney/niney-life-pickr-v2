@@ -1212,7 +1212,8 @@ describe('Public restaurant routes', () => {
       select: { id: true },
     });
 
-    // 양쪽에 1건씩 visitorReview. Naver 가 더 최근(fetchedAt) — 정렬 검증.
+    // 양쪽에 1건씩 visitorReview. DC 가 먼저 수집(fetchedAt 1/15 < 2/1) —
+    // asc(저장 순서) 정렬 검증.
     await app.prisma.visitorReview.create({
       data: {
         restaurantId: naverRow.id,
@@ -1289,11 +1290,12 @@ describe('Public restaurant routes', () => {
       'https://dc.example/p1.jpg',
     ]);
 
-    // 리뷰는 두 출처가 합쳐서 fetchedAt desc — Naver(2/1) 가 DC(1/15) 보다 위.
-    // 2개라 첫 페이지(10) 한 번에.
+    // 리뷰는 두 출처가 합쳐서 fetchedAt asc — 크롤러가 최신 작성글부터 순서대로
+    // 저장하므로 asc = 저장 순서 = 작성일 최신순 (bb9cd41 에서 desc → asc 교정).
+    // 먼저 수집된 DC(1/15) 가 Naver(2/1) 보다 위. 2개라 첫 페이지(10) 한 번에.
     expect(body.reviewsFirstPage).toHaveLength(2);
-    expect(body.reviewsFirstPage[0]?.source).toBe('naver');
-    expect(body.reviewsFirstPage[1]?.source).toBe('diningcode');
+    expect(body.reviewsFirstPage[0]?.source).toBe('diningcode');
+    expect(body.reviewsFirstPage[1]?.source).toBe('naver');
     expect(body.reviewCounts.all).toBe(2);
 
     // 출처별 별점/리뷰수 노출.

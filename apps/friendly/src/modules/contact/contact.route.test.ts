@@ -5,6 +5,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { CreateSettlementInputType } from '@repo/api-contract';
 import sensiblePlugin from '../../plugins/sensible.js';
 import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
@@ -27,6 +28,41 @@ const buildTestApp = async (): Promise<FastifyInstance> => {
 
 const tokenFor = (app: FastifyInstance, userId: string) =>
   app.jwt.sign({ userId, email: `${userId}@x.com`, role: 'USER' });
+
+// SettlementService.create 가 resolveRestaurantName 으로 실존 식당(placeId)을
+// 요구하므로 이 테스트 전용 placeId 로 식당을 시드한다.
+const CONTACT_PLACE_ID = 'contact-place-test';
+
+// 현행 CreateSettlementInput(차수 구조) 한 차수짜리 입력. 라우트를 거치지 않는
+// 서비스 직접 호출이라 zod default 가 적용되지 않으므로 모든 키를 명시한다.
+const makeRound = (
+  items: Array<{
+    name: string;
+    unitPrice: number | null;
+    quantity: number | null;
+    amount: number;
+    category: 'ALCOHOL' | 'NON_ALCOHOL' | 'SIDE' | 'UNCATEGORIZED';
+  }>,
+  attendeeClientIds: string[],
+): CreateSettlementInputType['rounds'][number] => ({
+  restaurantPlaceId: CONTACT_PLACE_ID,
+  source: 'MANUAL',
+  totalAmount: items.reduce((sum, it) => sum + it.amount, 0),
+  warning: null,
+  receiptImageToken: null,
+  discountAmount: null,
+  discountCategory: null,
+  categoryAdjustments: null,
+  groupSplits: null,
+  items: items.map((it) => ({ ...it, matchedMenuName: null })),
+  attendees: attendeeClientIds.map((clientId) => ({
+    participantClientId: clientId,
+    attended: true,
+    excludeAlcoholOverride: null,
+    excludeNonAlcoholOverride: null,
+    excludeSideOverride: null,
+  })),
+});
 
 // 단골 row 한 줄을 직접 prisma 로 만든다 — 정산 라우트를 끼고 들어가지
 // 않으므로 식당·계산기 의존 없이 list/patch/delete 만 검증 가능.
@@ -68,6 +104,27 @@ describe('contact routes', () => {
       update: {},
       create: { id: otherId, email: `${otherId}@x.com`, passwordHash: 'x' },
     });
+    // 정산 생성 테스트가 참조하는 식당 — resolveRestaurantName 의 placeId 조회.
+    await app.prisma.restaurant.upsert({
+      where: { placeId: CONTACT_PLACE_ID },
+      update: {},
+      create: {
+        source: 'naver',
+        sourceId: CONTACT_PLACE_ID,
+        placeId: CONTACT_PLACE_ID,
+        name: '테스트식당',
+        rawSourceUrl: 'https://m.place.naver.com/restaurant/contact-test',
+        snapshotJson: '{}',
+        canonical: {
+          create: {
+            name: '테스트식당',
+            primaryCategory: null,
+            latitude: null,
+            longitude: null,
+          },
+        },
+      },
+    });
   });
 
   beforeEach(async () => {
@@ -89,6 +146,16 @@ describe('contact routes', () => {
     await app.prisma.user.deleteMany({
       where: { id: { in: [ownerId, otherId] } },
     });
+    const seeded = await app.prisma.restaurant.findUnique({
+      where: { placeId: CONTACT_PLACE_ID },
+      select: { id: true, canonicalId: true },
+    });
+    if (seeded) {
+      await app.prisma.restaurant.delete({ where: { id: seeded.id } });
+      await app.prisma.canonicalRestaurant.deleteMany({
+        where: { id: seeded.canonicalId },
+      });
+    }
     await app.close();
   });
 
@@ -195,36 +262,32 @@ describe('contact routes', () => {
 
   it('DELETE: 본인 단골 삭제 + 과거 정산 participant.contactId = null', async () => {
     const service = new SettlementService(app.prisma);
-    const created = await service.create(
-      ownerId,
-      {
-        restaurantPlaceId: 'place-test',
-        source: 'MANUAL',
-        totalAmount: 10000,
-        warning: null,
-        receiptImageToken: null,
-        items: [
-          {
-            name: '김치찌개',
-            unitPrice: 10000,
-            quantity: 1,
-            amount: 10000,
-            category: 'NON_ALCOHOL',
-            matchedMenuName: null,
-          },
-        ],
-        participants: [
-          {
-            name: '철수',
-            nickname: null,
-            excludeAlcohol: false,
-            excludeNonAlcohol: false,
-            excludeSide: false,
-          },
-        ],
-      },
-      '테스트식당',
-    );
+    const created = await service.create(ownerId, {
+      participants: [
+        {
+          clientId: 'c-cs',
+          name: '철수',
+          nickname: null,
+          excludeAlcohol: false,
+          excludeNonAlcohol: false,
+          excludeSide: false,
+        },
+      ],
+      rounds: [
+        makeRound(
+          [
+            {
+              name: '김치찌개',
+              unitPrice: 10000,
+              quantity: 1,
+              amount: 10000,
+              category: 'NON_ALCOHOL',
+            },
+          ],
+          ['c-cs'],
+        ),
+      ],
+    });
     const linkedContactId = created.participants[0]!.contactId!;
     expect(linkedContactId).toBeTruthy();
 
@@ -261,77 +324,70 @@ describe('contact routes', () => {
     const service = new SettlementService(app.prisma);
 
     // 1차 정산 — "철수" 가 ALCOHOL 제외로 들어옴.
-    const first = await service.create(
-      ownerId,
-      {
-        restaurantPlaceId: 'place-test',
-        source: 'MANUAL',
-        totalAmount: 10000,
-        warning: null,
-        receiptImageToken: null,
-        items: [
-          {
-            name: '맥주',
-            unitPrice: 5000,
-            quantity: 2,
-            amount: 10000,
-            category: 'ALCOHOL',
-            matchedMenuName: null,
-          },
-        ],
-        participants: [
-          {
-            name: '철수',
-            nickname: null,
-            excludeAlcohol: true,
-            excludeNonAlcohol: false,
-            excludeSide: false,
-          },
-          {
-            name: '영희',
-            nickname: null,
-            excludeAlcohol: false,
-            excludeNonAlcohol: false,
-            excludeSide: false,
-          },
-        ],
-      },
-      '테스트식당',
-    );
+    const first = await service.create(ownerId, {
+      participants: [
+        {
+          clientId: 'c-cs',
+          name: '철수',
+          nickname: null,
+          excludeAlcohol: true,
+          excludeNonAlcohol: false,
+          excludeSide: false,
+        },
+        {
+          clientId: 'c-yh',
+          name: '영희',
+          nickname: null,
+          excludeAlcohol: false,
+          excludeNonAlcohol: false,
+          excludeSide: false,
+        },
+      ],
+      rounds: [
+        makeRound(
+          [
+            {
+              name: '맥주',
+              unitPrice: 5000,
+              quantity: 2,
+              amount: 10000,
+              category: 'ALCOHOL',
+            },
+          ],
+          ['c-cs', 'c-yh'],
+        ),
+      ],
+    });
     const cid1 = first.participants[0]!.contactId!;
 
     // 2차 정산 — 같은 "철수" 가 이번엔 alcohol 제외 안 함. contact 는 매칭되고
     // lastExclude* 가 새 값으로 덮어써져야 한다.
-    const second = await service.create(
-      ownerId,
-      {
-        restaurantPlaceId: 'place-test',
-        source: 'MANUAL',
-        totalAmount: 5000,
-        warning: null,
-        receiptImageToken: null,
-        items: [
-          {
-            name: '콜라',
-            unitPrice: 5000,
-            quantity: 1,
-            amount: 5000,
-            category: 'NON_ALCOHOL',
-            matchedMenuName: null,
-          },
-        ],
-        participants: [
-          {
-            name: '철수',
-            nickname: null,
-            excludeAlcohol: false,
-            excludeNonAlcohol: false,
-            excludeSide: false,
-          },
-        ],
-      },
-      '테스트식당',
-    );
+    const second = await service.create(ownerId, {
+      participants: [
+        {
+          clientId: 'c-cs',
+          name: '철수',
+          nickname: null,
+          excludeAlcohol: false,
+          excludeNonAlcohol: false,
+          excludeSide: false,
+        },
+      ],
+      rounds: [
+        makeRound(
+          [
+            {
+              name: '콜라',
+              unitPrice: 5000,
+              quantity: 1,
+              amount: 5000,
+              category: 'NON_ALCOHOL',
+            },
+          ],
+          ['c-cs'],
+        ),
+      ],
+    });
     const cid2 = second.participants[0]!.contactId!;
 
     expect(cid2).toBe(cid1); // 같은 contact 로 머지

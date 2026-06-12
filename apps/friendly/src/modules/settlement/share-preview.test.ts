@@ -51,13 +51,34 @@ describe('share-preview (OG)', () => {
     expect(res.body).toContain('id="root"');
   });
 
-  it('og:url 은 요청 host + X-Forwarded-Proto 에서 파생된다 (도메인 하드코딩 없음)', async () => {
+  it('og:url 은 PUBLIC_ORIGIN 기준으로 고정 — 요청 Host 변형에 흔들리지 않음', async () => {
+    // 2212fac 부터 SEO 표면은 PUBLIC_ORIGIN(기본 운영 도메인)으로 고정 —
+    // Cloudflare/nginx 의 Host 변형이 og:url 에 새지 않아야 한다.
     const res = await app.inject({
       method: 'GET',
       url: '/s/nonexistent-token',
-      headers: { host: 'example.test', 'x-forwarded-proto': 'https' },
+      headers: { host: 'attacker.example', 'x-forwarded-proto': 'http' },
     });
-    expect(res.body).toContain('property="og:url" content="https://example.test/s/nonexistent-token"');
+    expect(res.body).toContain(
+      `property="og:url" content="${env.PUBLIC_ORIGIN}/s/nonexistent-token"`,
+    );
+  });
+
+  it('PUBLIC_ORIGIN 이 비어 있으면 요청 host + X-Forwarded-Proto 로 폴백', async () => {
+    const saved = env.PUBLIC_ORIGIN;
+    env.PUBLIC_ORIGIN = '';
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/s/nonexistent-token',
+        headers: { host: 'example.test', 'x-forwarded-proto': 'https' },
+      });
+      expect(res.body).toContain(
+        'property="og:url" content="https://example.test/s/nonexistent-token"',
+      );
+    } finally {
+      env.PUBLIC_ORIGIN = saved;
+    }
   });
 
   it('정산 카드 이미지 라우트 — 없는 토큰은 404 (PNG 렌더 안 함)', async () => {
