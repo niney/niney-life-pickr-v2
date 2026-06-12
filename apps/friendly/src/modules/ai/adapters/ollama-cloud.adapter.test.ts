@@ -44,6 +44,7 @@ describe('OllamaCloudAdapter', () => {
         prompt_eval_count: 12,
         eval_count: 7,
         done: true,
+        done_reason: 'stop',
       }),
     );
 
@@ -55,7 +56,36 @@ describe('OllamaCloudAdapter', () => {
       model: 'gpt-oss:20b',
       promptTokens: 12,
       completionTokens: 7,
+      doneReason: 'stop',
     });
+  });
+
+  it('passes think through to the request body and reads done_reason length', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse({
+        model: 'gpt-oss:120b',
+        message: { content: '' },
+        done_reason: 'length',
+      }),
+    );
+
+    const adapter = buildAdapter();
+    const out = await adapter.complete({ prompt: 'x', model: 'gpt-oss:120b', think: 'low' });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body.think).toBe('low');
+    // 출력이 num_predict 에서 잘린 사례 — 진단 신호가 보존돼야 한다.
+    expect(out.doneReason).toBe('length');
+  });
+
+  it('omits think from the body when not set', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ model: 'm', message: { content: 'x' } }));
+    const adapter = buildAdapter();
+    const out = await adapter.complete({ prompt: 'x', model: 'm' });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect('think' in body).toBe(false);
+    expect(out.doneReason).toBeNull();
   });
 
   it('sends Authorization header and Ollama-shaped body', async () => {

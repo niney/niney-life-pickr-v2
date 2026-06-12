@@ -21,6 +21,7 @@ interface OllamaChatResponse {
   prompt_eval_count?: number;
   eval_count?: number;
   done?: boolean;
+  done_reason?: string;
 }
 
 interface OllamaTagsResponse {
@@ -132,6 +133,11 @@ export class OllamaCloudAdapter implements LLMProvider {
     if (opts.format !== undefined) {
       body.format = opts.format;
     }
+    // think 도 최상위 필드 — thinking 미지원 모델에 보내면 Ollama 가
+    // 거부하므로 설정 책임은 호출자에게 있다 (llm-provider.ts 참고).
+    if (opts.think !== undefined) {
+      body.think = opts.think;
+    }
 
     // Combine two cancellation sources into one AbortController so fetch
     // sees a single signal. We track which source fired so the catch block
@@ -188,6 +194,7 @@ export class OllamaCloudAdapter implements LLMProvider {
       model: json.model ?? opts.model,
       promptTokens: typeof json.prompt_eval_count === 'number' ? json.prompt_eval_count : null,
       completionTokens: typeof json.eval_count === 'number' ? json.eval_count : null,
+      doneReason: typeof json.done_reason === 'string' ? json.done_reason : null,
     };
   }
 

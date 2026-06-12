@@ -18,15 +18,22 @@ import { normalizeTerm, extractFirstJsonObject } from '../summary/summary.servic
 import {
   MENU_GROUPING_CHUNK_SIZE,
   MENU_GROUPING_JSON_SCHEMA,
+  MENU_GROUPING_MERGE_CHUNK_SIZE,
   MENU_GROUPING_SYSTEM_PROMPT,
   MENU_GROUPING_VERSION,
   buildGroupingUserPrompt,
 } from './menu-grouping.prompts.js';
+import { packBySimilarity } from './menu-grouping.similarity.js';
 
-const TEMPERATURE = 0.1;
-// 그룹핑 출력은 입력 메뉴 수에 비례 — 80개일 때 평균 ~3000 토큰 예상.
-const MAX_TOKENS = 4000;
+// gpt-oss 권장 온도 ≈ 1.0 — v1 의 0.1 은 reasoning 반복 루프로 토큰 예산을
+// 태우는 보조 원인이었다 (2026-06 parse_failed 운영 장애 분석).
+const TEMPERATURE = 1.0;
+// 출력은 "병합 그룹 인덱스" 수십 토큰뿐 — 나머지는 전부 reasoning 여유분.
+// thinking 모델은 사고 토큰도 num_predict(eval_count)에 합산되는 점에 주의.
+const MAX_TOKENS = 2000;
 const NUM_CTX = 8192;
+// 대표 머지 라운드 상한 — 1라운드가 단일 콜(전 대표 전수 비교)이면 즉시 종료.
+const MAX_MERGE_ROUNDS = 2;
 
 export class MenuGroupingError extends Error {
   constructor(
@@ -42,9 +49,21 @@ export interface MenuGroupingServiceOptions {
   cache?: AdapterCache;
   resolveOverride?: () => Promise<{ provider: LLMProvider; model: string } | null>;
   logger?: FastifyBaseLogger;
+  // 테스트용 호출 크기 오버라이드 — 기본은 prompts 의 상수.
+  chunkSize?: number;
+  mergeChunkSize?: number;
   // 범용 작업 로그 계측 — null/미주입이면 run 기록 없이 기존 흐름 그대로
   // (기존 테스트가 계측 없이도 깨지지 않게).
   operationLog?: OperationLogService | null;
+}
+
+// LLM 호출 한 번의 실패 — diag 는 HTTP 는 성공했는데 parse 가 실패했을 때만
+// 채워진다 (응답 스니펫/토큰 수/done_reason). "사고가 예산을 다 먹었다 vs
+// 형식 이탈" 을 운영 로그에서 한눈에 가르는 신호.
+interface GroupingCallFailure {
+  code: string;
+  message: string;
+  diag?: Record<string, unknown>;
 }
 
 export interface GroupForRestaurantOpts {
@@ -143,7 +162,7 @@ export class MenuGroupingService {
 
   // 실제 그룹핑 본문 — step/finish 는 groupForRestaurant 가 만든 계측 헬퍼.
   // 성공 경로의 finishRun(done/all_chunks_failed)도 여기서 호출한다 —
-  // 전 청크 실패는 비즈니스 결과(identity fallback 저장)는 유지하되
+  // 전 호출 실패는 비즈니스 결과(identity fallback 저장)는 유지하되
   // run 만 실패로 승격해야 해서 throw 로 표현할 수 없기 때문.
   private async doGroupForRestaurant(
     placeId: string,
@@ -182,21 +201,26 @@ export class MenuGroupingService {
     }
 
     // nameNorm 별로 가장 빈도 높은 원문 표기를 input variant 로 사용.
+    // norm 별 총 멘션 수는 canonical 동률(같은 길이) 판정의 빈도 기준.
     const bestNameByNorm = new Map<string, { name: string; count: number }>();
+    const totalByNorm = new Map<string, number>();
     for (const row of grouped) {
-      const cur = bestNameByNorm.get(row.nameNorm);
       const count = row._count._all;
+      totalByNorm.set(row.nameNorm, (totalByNorm.get(row.nameNorm) ?? 0) + count);
+      const cur = bestNameByNorm.get(row.nameNorm);
       if (!cur || count > cur.count) {
         bestNameByNorm.set(row.nameNorm, { name: row.name, count });
       }
     }
 
-    // 변형 = 대표 원문들 (LLM 입력). nameNorm → variant 매핑은 응답을
+    // 변형 = 대표 원문들 (LLM 입력). nameNorm → variant 매핑은 결과를
     // 다시 nameNorm 으로 풀어쓸 때 사용.
     const variantToNorm = new Map<string, string>();
+    const countByVariant = new Map<string, number>();
     const variants: string[] = [];
     for (const [norm, { name }] of bestNameByNorm) {
       variantToNorm.set(name, norm);
+      countByVariant.set(name, totalByNorm.get(norm) ?? 0);
       variants.push(name);
     }
     step('info', 'load', `메뉴 변형 적재 완료 — distinct ${variants.length}개`, {
@@ -213,60 +237,160 @@ export class MenuGroupingService {
     const { provider, model } = resolved;
     step('info', 'resolve_provider', `LLM 결정 — ${model}`, { model });
 
-    // 청크 분할 — 같은 청크 안에서만 묶이는 한계는 수용.
-    // 현실 식당은 메뉴 100 개 미만이라 거의 분할 안 일어남.
-    const chunks = chunk(variants, MENU_GROUPING_CHUNK_SIZE);
+    // ── 파이프라인: 유사도 패킹 분할 → 청크 내 그룹핑(LLM, 병렬) →
+    // 대표 머지(LLM) → union-find 확정. 출력 계약이 "병합 그룹 인덱스"뿐이라
+    // 호출당 출력이 식당 크기와 무관하게 수십 토큰으로 고정되고, 청크가
+    // 갈라놓은 쌍은 대표 머지 라운드가 커버한다 (v1 의 "같은 청크 안에서만
+    // 묶인다" 제약 제거).
+    const chunkSize = this.opts.chunkSize ?? MENU_GROUPING_CHUNK_SIZE;
+    const mergeChunkSize = this.opts.mergeChunkSize ?? MENU_GROUPING_MERGE_CHUNK_SIZE;
+    const chunks = packBySimilarity(variants, chunkSize);
+    step('info', 'plan', `청크 계획 — ${variants.length}개 → ${chunks.length}청크 (유사도 패킹)`, {
+      chunks: chunks.length,
+      sizes: chunks.map((c) => c.length),
+    });
     this.log?.info(
       { placeId, total: variants.length, chunks: chunks.length, model },
       '[menu-grouping] start',
     );
 
-    // canonical 결정 — 같은 청크가 출력하는 canonicalName 을 그대로 신뢰.
-    // 다른 청크 사이의 동일 canonical 충돌은 최소화하기 위해 청크 분할 자체가
-    // 드문 경우만 일어나도록 한도를 크게 잡음(80).
-    // 청크 실패는 identity fallback 으로 삼켜지므로 run meta(failedChunks)와
-    // warn 스텝으로 승격해 가시화한다.
-    const variantToCanonical = new Map<string, string>();
+    // union-find — 변형 이름 키. 1단계와 머지 라운드의 모든 병합이 모이고,
+    // 서로 다른 호출의 판정도 전이적으로 합쳐진다 (a~b, b~c ⇒ a~c).
+    const parent = new Map<string, string>();
+    const find = (x: string): string => {
+      const p = parent.get(x);
+      if (p === undefined || p === x) return x;
+      const r = find(p);
+      parent.set(x, r);
+      return r;
+    };
+    const union = (a: string, b: string): boolean => {
+      const ra = find(a);
+      const rb = find(b);
+      if (ra === rb) return false;
+      parent.set(rb, ra);
+      return true;
+    };
+    const currentGroups = (): string[][] => {
+      const byRoot = new Map<string, string[]>();
+      for (const v of variants) {
+        const r = find(v);
+        const arr = byRoot.get(r) ?? [];
+        arr.push(v);
+        byRoot.set(r, arr);
+      }
+      return [...byRoot.values()];
+    };
+
+    const ctx = { restaurantName: restaurant.name, category: restaurant.category };
+    let llmCalls = 0;
+    let failedCalls = 0;
     const failedChunks: { index: number; code: string }[] = [];
-    let lastChunkFailure: { code: string; message: string } | null = null;
-    for (const [idx, ch] of chunks.entries()) {
-      const { map, failure } = await this.callOneChunk(provider, model, {
-        restaurantName: restaurant.name,
-        category: restaurant.category,
-        variants: ch,
-      });
-      if (failure) {
-        failedChunks.push({ index: idx, code: failure.code });
-        lastChunkFailure = failure;
-        step(
-          'warn',
-          'chunk',
-          `청크 ${idx + 1}/${chunks.length} 실패(${failure.code}) — identity fallback 적용`,
-          {
+    const mergeFailures: { round: number; code: string }[] = [];
+    let lastFailure: GroupingCallFailure | null = null;
+
+    // ── 1단계: 청크 내 그룹핑 — 병렬 (동시성은 어댑터 게이트가 조절).
+    // 실패 청크의 항목들은 identity 확정이 아니라 singleton 으로 머지
+    // 라운드에 진입한다 — 실패가 "포기"에서 "문맥 약화"로 강등된다.
+    const outcomes = await Promise.all(
+      chunks.map((ch, idx) =>
+        this.callChunkWithSplit(provider, model, ctx, ch, (level, message, meta) =>
+          step(level, 'chunk', `청크 ${idx + 1}/${chunks.length} ${message}`, {
             index: idx,
-            size: ch.length,
-            code: failure.code,
-            message: failure.message.slice(0, 300),
-          },
-        );
-      } else {
-        step('info', 'chunk', `청크 ${idx + 1}/${chunks.length} 완료`, {
+            ...meta,
+          }),
+        ),
+      ),
+    );
+    for (const [idx, out] of outcomes.entries()) {
+      llmCalls += out.calls;
+      failedCalls += out.failedCalls;
+      for (const f of out.failures) {
+        failedChunks.push({ index: idx, code: f.code });
+        lastFailure = f;
+      }
+      let merges = 0;
+      for (const g of out.groups) {
+        for (let i = 1; i < g.length; i += 1) {
+          if (union(g[0]!, g[i]!)) merges += 1;
+        }
+      }
+      if (out.calls > 0 && out.failedCalls === 0) {
+        step('info', 'chunk', `청크 ${idx + 1}/${chunks.length} 완료 — 병합 ${merges}건`, {
           index: idx,
-          size: ch.length,
-          mapped: Object.keys(map).length,
+          size: chunks[idx]!.length,
+          merges,
         });
       }
-      // LLM 이 어떤 키를 빠뜨릴 수 있음 — 빠진 항목은 자기 자신을 canonical 로.
-      for (const v of ch) {
-        const c = map[v];
-        const canonical = typeof c === 'string' && c.trim().length > 0 ? c.trim() : v;
-        variantToCanonical.set(v, canonical);
+    }
+
+    // ── 2단계: 대표 머지 — 청크가 갈라놓은 쌍을 그룹 대표끼리 재판정.
+    // 병합은 union 이라 단조적 — 라운드를 더 돌아도 과병합 방향으로
+    // 흐르지 않는다. 대표가 한 콜에 다 들어가면 전수 비교 — one-shot 과
+    // 동등한 커버리지가 그 콜에서 성립한다.
+    let mergeRounds = 0;
+    let mergeMerged = 0;
+    while (mergeRounds < MAX_MERGE_ROUNDS) {
+      const groups = currentGroups();
+      if (groups.length < 2) break;
+      const reps = groups.map((members) => pickCanonicalName(members, countByVariant));
+      const repUnits = packBySimilarity(reps, mergeChunkSize);
+      const callable = repUnits.filter((u) => u.length >= 2);
+      if (callable.length === 0) break;
+      mergeRounds += 1;
+      const roundNo = mergeRounds;
+      step(
+        'info',
+        'merge',
+        `대표 머지 라운드 ${roundNo} — 대표 ${reps.length}개 / ${callable.length}콜`,
+        { round: roundNo, reps: reps.length, calls: callable.length },
+      );
+      const results = await Promise.all(
+        callable.map((unit) => this.callIndexGroups(provider, model, ctx, unit)),
+      );
+      let roundMerges = 0;
+      for (const res of results) {
+        llmCalls += 1;
+        if (!res.ok) {
+          failedCalls += 1;
+          mergeFailures.push({ round: roundNo, code: res.failure.code });
+          lastFailure = res.failure;
+          step('warn', 'merge', `머지 콜 실패(${res.failure.code}) — 기존 그룹 유지`, {
+            round: roundNo,
+            code: res.failure.code,
+            message: res.failure.message.slice(0, 300),
+            ...(res.failure.diag ?? {}),
+          });
+          continue;
+        }
+        for (const g of res.groups) {
+          for (let i = 1; i < g.length; i += 1) {
+            if (union(g[0]!, g[i]!)) roundMerges += 1;
+          }
+        }
       }
+      mergeMerged += roundMerges;
+      step('info', 'merge', `라운드 ${roundNo} 완료 — 병합 ${roundMerges}건`, {
+        round: roundNo,
+        merges: roundMerges,
+      });
+      // 단일 콜이었으면 전수 비교 완료, 병합 0건이면 fixpoint — 종료.
+      if (repUnits.length === 1 || roundMerges === 0) break;
+    }
+
+    // ── 확정: canonical 은 코드가 결정 (최단 표기 → 멘션 빈도 → 사전순).
+    // LLM 은 membership 만 판정했으므로 입력에 없는 이름이 canonical 로
+    // 저장될 수 없다.
+    const canonicalByVariant = new Map<string, string>();
+    for (const members of currentGroups()) {
+      const canonical = pickCanonicalName(members, countByVariant);
+      for (const m of members) canonicalByVariant.set(m, canonical);
     }
 
     // DB 적용 — delete + createMany in transaction.
     const now = new Date();
-    const rows = [...variantToCanonical.entries()].map(([variant, canonical]) => {
+    const rows = variants.map((variant) => {
+      const canonical = canonicalByVariant.get(variant) ?? variant;
       const norm = variantToNorm.get(variant)!;
       return {
         restaurantId: restaurant.id,
@@ -297,23 +421,28 @@ export class MenuGroupingService {
     const runMeta: Record<string, unknown> = {
       inputCount: variants.length,
       chunks: chunks.length,
+      llmCalls,
+      failedCalls,
       groupCount,
       mappedCount: rows.length,
       model,
+      mergeRounds,
+      mergeMerged,
       ...(failedChunks.length > 0 ? { failedChunks } : {}),
+      ...(mergeFailures.length > 0 ? { mergeFailures } : {}),
     };
-    if (failedChunks.length === chunks.length) {
-      // 전 청크 실패 — 저장된 매핑이 전부 identity fallback 이라 사실상
+    if (llmCalls > 0 && failedCalls === llmCalls) {
+      // 전 호출 실패 — 저장된 매핑이 전부 identity fallback 이라 사실상
       // 그룹핑이 안 된 상태. 비즈니스 결과는 유지하되 run 은 실패로 승격.
-      step('error', 'chunk', `전 청크(${chunks.length}개) 실패 — 결과 전부 identity fallback`, {
-        failedChunks: failedChunks.length,
+      step('error', 'chunk', `전 호출(${llmCalls}건) 실패 — 결과 전부 identity fallback`, {
+        failedCalls,
       });
       await finish({
         status: 'failed',
         errorCode: 'all_chunks_failed',
-        errorMessage: lastChunkFailure
-          ? `${lastChunkFailure.code}: ${lastChunkFailure.message}`
-          : 'all chunks failed',
+        errorMessage: lastFailure
+          ? `${lastFailure.code}: ${lastFailure.message}`
+          : 'all LLM calls failed',
         meta: runMeta,
       });
     } else {
@@ -331,51 +460,145 @@ export class MenuGroupingService {
     };
   }
 
-  // 청크 실패도 빈 맵을 반환해 호출자의 identity fallback 을 유지하되,
-  // failure 로 사유를 같이 돌려준다 — 호출자가 스텝 로그/meta.failedChunks 로
-  // 승격하기 위함 (이전엔 pino warn 만 남고 조용히 삼켜졌다).
-  private async callOneChunk(
+  // 1단계 한 청크: 호출 1회 + 실패 시 이분할 재시도 1단계. 어느 조각이
+  // 끝내 실패해도 그 항목들은 singleton 으로 머지 라운드에 진입하므로
+  // (호출자 책임) 여기서는 성공 조각의 병합 그룹만 모아 돌려준다.
+  private async callChunkWithSplit(
     provider: LLMProvider,
     model: string,
-    input: { restaurantName: string; category: string | null; variants: string[] },
+    ctx: { restaurantName: string; category: string | null },
+    names: string[],
+    stepChunk: (
+      level: 'info' | 'warn',
+      message: string,
+      meta?: Record<string, unknown>,
+    ) => void,
   ): Promise<{
-    map: Record<string, string>;
-    failure: { code: string; message: string } | null;
+    groups: string[][];
+    failures: GroupingCallFailure[];
+    calls: number;
+    failedCalls: number;
   }> {
+    // 항목 1개는 비교 대상이 없다 — 호출 없이 singleton 으로 통과.
+    if (names.length < 2) return { groups: [], failures: [], calls: 0, failedCalls: 0 };
+
+    const first = await this.callIndexGroups(provider, model, ctx, names);
+    if (first.ok) return { groups: first.groups, failures: [], calls: 1, failedCalls: 0 };
+
+    stepChunk('warn', `실패(${first.failure.code}) — 이분할 재시도`, {
+      size: names.length,
+      code: first.failure.code,
+      message: first.failure.message.slice(0, 300),
+      ...(first.failure.diag ?? {}),
+    });
+    const out = {
+      groups: [] as string[][],
+      failures: [first.failure],
+      calls: 1,
+      failedCalls: 1,
+    };
+    const mid = Math.ceil(names.length / 2);
+    for (const half of [names.slice(0, mid), names.slice(mid)]) {
+      if (half.length < 2) continue;
+      const res = await this.callIndexGroups(provider, model, ctx, half);
+      out.calls += 1;
+      if (res.ok) {
+        out.groups.push(...res.groups);
+      } else {
+        out.failedCalls += 1;
+        out.failures.push(res.failure);
+        stepChunk(
+          'warn',
+          `절반(${half.length}개) 재시도 실패(${res.failure.code}) — singleton 진입`,
+          {
+            size: half.length,
+            code: res.failure.code,
+            message: res.failure.message.slice(0, 300),
+            ...(res.failure.diag ?? {}),
+          },
+        );
+      }
+    }
+    return out;
+  }
+
+  // 인덱스-그룹 판정 호출 한 번. 출력 {"groups":[[i,j],…]} 를 변형 이름
+  // 그룹으로 풀어 반환. 범위 밖/비정수/중복 인덱스는 버리고 유효 인덱스
+  // 2개 미만 그룹은 무시 — LLM 의 형식 이탈이 병합 오류로 번지지 않게
+  // 방어적으로 좁힌다. 1단계(청크)와 2단계(대표 머지)가 같은 계약을 쓴다.
+  private async callIndexGroups(
+    provider: LLMProvider,
+    model: string,
+    ctx: { restaurantName: string; category: string | null },
+    names: string[],
+  ): Promise<{ ok: true; groups: string[][] } | { ok: false; failure: GroupingCallFailure }> {
     try {
       const res = await provider.complete({
-        prompt: buildGroupingUserPrompt(input),
+        prompt: buildGroupingUserPrompt({
+          restaurantName: ctx.restaurantName,
+          category: ctx.category,
+          variants: names,
+        }),
         model,
         systemPrompt: MENU_GROUPING_SYSTEM_PROMPT,
         temperature: TEMPERATURE,
         maxTokens: MAX_TOKENS,
         numCtx: NUM_CTX,
         format: MENU_GROUPING_JSON_SCHEMA,
+        // gpt-oss 는 thinking 을 끌 수 없고 기본 medium — low 로 줄여 토큰
+        // 예산을 지킨다. 다른 모델은 think 미지원일 수 있어 보내지 않는다.
+        ...(model.includes('gpt-oss') ? { think: 'low' as const } : {}),
       });
+      const diag: Record<string, unknown> = {
+        snippet: res.text.slice(0, 200),
+        completionTokens: res.completionTokens,
+        doneReason: res.doneReason ?? null,
+      };
       const candidate = extractFirstJsonObject(res.text);
       if (!candidate) {
-        // JSON 객체 자체가 없으면 청크 전체가 fallback — 실패로 분류.
+        // '{' 가 없거나(빈 응답 포함) 끝까지 닫히지 않은(잘린) 경우 모두.
         return {
-          map: {},
-          failure: { code: 'parse_failed', message: 'no JSON object found in LLM response' },
+          ok: false,
+          failure: {
+            code: 'parse_failed',
+            message: 'no complete JSON object in LLM response',
+            diag,
+          },
         };
       }
-      const parsed = JSON.parse(candidate) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const out: Record<string, string> = {};
-        for (const [k, v] of Object.entries(parsed)) {
-          if (typeof v === 'string') out[k] = v;
-        }
-        return { map: out, failure: null };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(candidate);
+      } catch {
+        return {
+          ok: false,
+          failure: { code: 'parse_failed', message: 'invalid JSON in LLM response', diag },
+        };
       }
-      return {
-        map: {},
-        failure: { code: 'parse_failed', message: 'LLM response JSON is not an object' },
-      };
+      const rawGroups =
+        parsed && typeof parsed === 'object' ? (parsed as { groups?: unknown }).groups : undefined;
+      if (!Array.isArray(rawGroups)) {
+        return {
+          ok: false,
+          failure: { code: 'parse_failed', message: 'LLM JSON has no groups array', diag },
+        };
+      }
+      const groups: string[][] = [];
+      for (const g of rawGroups) {
+        if (!Array.isArray(g)) continue;
+        const idxs = new Set<number>();
+        for (const x of g) {
+          if (typeof x === 'number' && Number.isInteger(x) && x >= 0 && x < names.length) {
+            idxs.add(x);
+          }
+        }
+        if (idxs.size >= 2) groups.push([...idxs].map((i) => names[i]!));
+      }
+      return { ok: true, groups };
     } catch (e) {
       const { error, message } = classifyError(e);
-      this.log?.warn({ error, message: message.slice(0, 200) }, '[menu-grouping] chunk failed');
-      return { map: {}, failure: { code: error, message } };
+      this.log?.warn({ error, message: message.slice(0, 200) }, '[menu-grouping] LLM call failed');
+      return { ok: false, failure: { code: error, message } };
     }
   }
 
@@ -852,10 +1075,26 @@ const sortRanking = (
   }
 };
 
-const chunk = <T>(arr: T[], n: number): T[][] => {
-  if (n <= 0) return [arr];
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-  return out;
+// 그룹 대표 = 저장될 canonicalName 선정 — 결정적: ① 최단 표기 ② 동률 시
+// 멘션 빈도 최다 ③ 그래도 동률이면 사전순. 머지 라운드가 비교하는 "대표"
+// 와 저장되는 canonical 이 같은 규칙이라, 머지에서 비교된 이름이 곧
+// 최종 표시 이름이다. 테스트에서 직접 검증할 수 있게 export.
+export const pickCanonicalName = (
+  members: string[],
+  countByVariant: Map<string, number>,
+): string => {
+  let best = members[0]!;
+  for (let i = 1; i < members.length; i += 1) {
+    const m = members[i]!;
+    if (m.length < best.length) {
+      best = m;
+      continue;
+    }
+    if (m.length > best.length) continue;
+    const cm = countByVariant.get(m) ?? 0;
+    const cb = countByVariant.get(best) ?? 0;
+    if (cm > cb || (cm === cb && m < best)) best = m;
+  }
+  return best;
 };
 

@@ -26,6 +26,11 @@ export interface LLMCompleteOptions {
   // /api/chat 의 최상위 `format` 으로 받는다. 다른 어댑터는 무시하거나
   // 자체 매핑.
   format?: 'json' | Record<string, unknown>;
+  // 추론(thinking) 제어 — Ollama /api/chat 의 최상위 `think`. gpt-oss 계열은
+  // 'low'|'medium'|'high'(끄기 불가, 기본 medium), 그 외 thinking 모델은
+  // boolean. thinking 미지원 모델에 보내면 Ollama 가 에러를 내므로
+  // 호출자가 모델을 보고 설정 여부를 결정한다.
+  think?: boolean | 'low' | 'medium' | 'high';
   signal?: AbortSignal;
 }
 
@@ -33,7 +38,12 @@ export interface LLMCompleteResult {
   text: string;
   model: string;
   promptTokens: number | null;
+  // 주의: thinking 모델은 사고 토큰도 여기 합산된다 (Ollama eval_count).
   completionTokens: number | null;
+  // Ollama 의 done_reason ('stop' | 'length' | …). 'length' 면 출력이
+  // num_predict 에서 잘린 것 — 빈/불완전 응답 진단의 결정적 신호.
+  // 어댑터가 제공하지 않으면 생략.
+  doneReason?: string | null;
 }
 
 export interface LLMProvider {

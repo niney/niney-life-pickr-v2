@@ -11,7 +11,8 @@ import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
-import { MenuGroupingService } from './menu-grouping.service.js';
+import type { OperationLogService } from '../logs/operation-log.service.js';
+import { MenuGroupingService, pickCanonicalName } from './menu-grouping.service.js';
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -28,6 +29,14 @@ const buildApp = async (): Promise<FastifyInstance> => {
 const PLACE_PREFIX = 'mg-';
 const stamp = (): string =>
   `${PLACE_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+// 프롬프트의 "메뉴 목록" 번호 라인에서 이름들을 복원 — 가짜 LLM 이
+// 인덱스-그룹 출력을 만들 때 사용.
+const namesFromPrompt = (prompt: string): string[] =>
+  prompt
+    .split('\n')
+    .filter((l) => /^\d+\. /.test(l))
+    .map((l) => l.replace(/^\d+\. /, ''));
 
 const fakeProvider = (
   reply: (prompt: string) => string,
@@ -129,30 +138,33 @@ describe('MenuGroupingService', () => {
 
   it('groups variant menus into a canonical name and persists mappings', async () => {
     const { placeId } = await seedRestaurantWithMentions(app, [
+      // '김치찌개' 표기를 2번 넣어 bestNameByNorm 의 대표 표기 선택을
+      // groupBy 순서와 무관하게 고정한다 (count 2 > 1).
+      { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
       { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
       { name: '김치 찌개', nameNorm: '김치찌개', sentiment: 'positive' },
       { name: '묵은지김치찌개', nameNorm: '묵은지김치찌개', sentiment: 'negative' },
       { name: '차돌박이된장찌개', nameNorm: '차돌박이된장찌개', sentiment: 'positive' },
     ]);
 
-    // bestNameByNorm 가 어떤 표기를 variant 로 고를지는 Prisma 의 groupBy
-     // 반환 순서에 달려 있어 양쪽 다 매핑을 넣어둔다 (어느 쪽이 입력으로
-     // 들어와도 같은 canonicalName 결정).
-    const provider = fakeProvider(() =>
-      JSON.stringify({
-        '김치찌개': '김치찌개',
-        '김치 찌개': '김치찌개',
-        '묵은지김치찌개': '김치찌개',
-        '차돌박이된장찌개': '차돌박이된장찌개',
-      }),
-    );
+    // 인덱스-그룹 계약: 김치찌개 계열 표기들의 번호만 한 묶음으로 출력.
+    // (1단계 청크 콜과 대표 머지 콜 모두 같은 로직으로 응답 — 머지 콜에선
+    // 매칭이 1개뿐이라 빈 groups 가 된다.)
+    const provider = fakeProvider((prompt) => {
+      const names = namesFromPrompt(prompt);
+      const idx = names
+        .map((n, i) => [n, i] as const)
+        .filter(([n]) => n.replace(/\s+/g, '').includes('김치찌개'))
+        .map(([, i]) => i);
+      return JSON.stringify({ groups: idx.length >= 2 ? [idx] : [] });
+    });
     const service = new MenuGroupingService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'override-model' }),
     });
 
     const run = await service.groupForRestaurant(placeId);
     expect(run.ok).toBe(true);
-    // distinct nameNorm 3개 입력 → 같은 청크 안에서 모두 매핑.
+    // distinct nameNorm 3개 입력 → 김치찌개+묵은지김치찌개 병합.
     expect(run.inputCount).toBe(3);
     expect(run.mappedCount).toBe(3);
     // 김치찌개 그룹 + 차돌박이된장찌개 그룹.
@@ -165,17 +177,168 @@ describe('MenuGroupingService', () => {
     expect(ranking.items).toHaveLength(2);
 
     // canonicalKey 는 normalizeTerm('김치찌개') = '김치찌개'.
+    // canonical 은 코드가 결정 — 멤버 중 최단 표기인 '김치찌개'.
     const kim = ranking.items.find((i) => i.canonicalKey === '김치찌개')!;
     expect(kim).toBeDefined();
     expect(kim.mapped).toBe(true);
     expect(kim.canonicalName).toBe('김치찌개');
-    // 김치찌개 + 김치 찌개 (positive) + 묵은지김치찌개 (negative) = 3 멘션.
-    expect(kim.mentionCount).toBe(3);
-    expect(kim.positive).toBe(2);
+    // 김치찌개×2 + 김치 찌개 (positive) + 묵은지김치찌개 (negative) = 4 멘션.
+    expect(kim.mentionCount).toBe(4);
+    expect(kim.positive).toBe(3);
     expect(kim.negative).toBe(1);
-    expect(kim.positiveRatio).toBeCloseTo(2 / 3);
+    expect(kim.positiveRatio).toBeCloseTo(3 / 4);
     expect(kim.variants).toContain('김치찌개');
     expect(kim.variants).toContain('묵은지김치찌개');
+  });
+
+  it('merges groups across chunk boundaries via the representative merge round', async () => {
+    // 서로 비유사한 6개 → 유사도 패킹이 전부 singleton 블록 → 3+3 청크.
+    const { placeId, restaurantId } = await seedRestaurantWithMentions(app, [
+      { name: '감자탕', nameNorm: '감자탕', sentiment: 'positive' },
+      { name: '뼈해장국', nameNorm: '뼈해장국', sentiment: 'positive' },
+      { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
+      { name: '된장찌개', nameNorm: '된장찌개', sentiment: 'positive' },
+      { name: '비빔밥', nameNorm: '비빔밥', sentiment: 'positive' },
+      { name: '물냉면', nameNorm: '물냉면', sentiment: 'positive' },
+    ]);
+
+    // 1단계 콜(3개씩)은 병합 없음 → 대표 6개가 한 머지 콜에 모이고,
+    // 거기서 감자탕·뼈해장국을 병합 — 청크 경계를 넘는 병합의 실증.
+    let callCount = 0;
+    const provider: LLMProvider = {
+      complete: async ({ prompt }) => {
+        callCount += 1;
+        const names = namesFromPrompt(prompt);
+        let groups: number[][] = [];
+        if (names.length === 6) {
+          groups = [[names.indexOf('감자탕'), names.indexOf('뼈해장국')]];
+        }
+        return {
+          text: JSON.stringify({ groups }),
+          model: 'fake-model',
+          promptTokens: 10,
+          completionTokens: 10,
+        };
+      },
+    };
+    const service = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'override-model' }),
+      chunkSize: 3,
+    });
+
+    const run = await service.groupForRestaurant(placeId);
+    expect(run.ok).toBe(true);
+    expect(run.inputCount).toBe(6);
+    expect(run.mappedCount).toBe(6);
+    // 감자탕+뼈해장국 병합 → 5그룹.
+    expect(run.groupCount).toBe(5);
+    // 청크 2콜 + 머지 1콜 — 머지가 단일 콜(전수 비교)이면 추가 라운드 없음.
+    expect(callCount).toBe(3);
+
+    // canonical 은 최단 표기 규칙 — 뼈해장국이 감자탕으로 매핑.
+    const row = await app.prisma.menuCanonical.findFirst({
+      where: { restaurantId, nameNorm: '뼈해장국' },
+    });
+    expect(row).toBeDefined();
+    expect(row!.canonicalName).toBe('감자탕');
+    expect(row!.version).toBe(run.version);
+  });
+
+  it('retries a failed chunk by splitting in half and keeps partial results', async () => {
+    // 같은 계열 4개 → 한 블록 → 한 청크. 1차 콜이 깨진 응답이면 이분할
+    // 재시도 — 앞 절반은 병합 성공, 뒤 절반은 병합 없음.
+    const { placeId } = await seedRestaurantWithMentions(app, [
+      { name: '돈까스', nameNorm: '돈까스', sentiment: 'positive' },
+      { name: '돈까스정식', nameNorm: '돈까스정식', sentiment: 'positive' },
+      { name: '돈까스세트', nameNorm: '돈까스세트', sentiment: 'positive' },
+      { name: '돈까스스페셜', nameNorm: '돈까스스페셜', sentiment: 'positive' },
+    ]);
+
+    // 콜 순서는 결정적: 청크(4개) → 앞 절반(2개) → 뒤 절반(2개) → 머지.
+    const replies = [
+      'completely broken response without braces',
+      JSON.stringify({ groups: [[0, 1]] }),
+      JSON.stringify({ groups: [] }),
+      JSON.stringify({ groups: [] }),
+    ];
+    let callCount = 0;
+    const provider: LLMProvider = {
+      complete: async () => {
+        const text = replies[Math.min(callCount, replies.length - 1)]!;
+        callCount += 1;
+        return { text, model: 'fake-model', promptTokens: 10, completionTokens: 10 };
+      },
+    };
+    const service = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'override-model' }),
+    });
+
+    const run = await service.groupForRestaurant(placeId);
+    expect(run.ok).toBe(true);
+    expect(run.inputCount).toBe(4);
+    expect(run.mappedCount).toBe(4);
+    // 앞 절반의 2개만 병합 → 3그룹. 실패가 전체 identity 로 번지지 않는다.
+    expect(run.groupCount).toBe(3);
+    expect(callCount).toBe(4);
+  });
+
+  it('escalates the run to all_chunks_failed when every LLM call fails', async () => {
+    const { placeId } = await seedRestaurantWithMentions(app, [
+      { name: '마라탕', nameNorm: '마라탕', sentiment: 'positive' },
+      { name: '마라샹궈', nameNorm: '마라샹궈', sentiment: 'positive' },
+    ]);
+
+    let callCount = 0;
+    const provider: LLMProvider = {
+      complete: async () => {
+        callCount += 1;
+        return { text: 'garbage', model: 'fake-model', promptTokens: 10, completionTokens: 10 };
+      },
+    };
+    // run 승격을 관찰하기 위한 최소 가짜 oplog — finishRun 입력만 수집.
+    const finishCalls: { status: string; errorCode?: string; meta?: Record<string, unknown> }[] =
+      [];
+    const oplog = {
+      startRun: async () => 'run-1',
+      log: () => {},
+      finishRun: async (
+        _id: string,
+        input: { status: string; errorCode?: string; meta?: Record<string, unknown> },
+      ) => {
+        finishCalls.push(input);
+      },
+    } as unknown as OperationLogService;
+
+    const service = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'override-model' }),
+      operationLog: oplog,
+    });
+
+    const run = await service.groupForRestaurant(placeId);
+    // 비즈니스 결과는 유지 — 전부 identity (2개 → 2그룹).
+    expect(run.ok).toBe(true);
+    expect(run.groupCount).toBe(2);
+    // 청크 1콜(2개라 이분할 불가) + 머지 1콜 = 2콜 모두 실패.
+    expect(callCount).toBe(2);
+    // run 은 실패로 승격 — finish 는 정확히 한 번.
+    expect(finishCalls).toHaveLength(1);
+    expect(finishCalls[0]!.status).toBe('failed');
+    expect(finishCalls[0]!.errorCode).toBe('all_chunks_failed');
+    expect(finishCalls[0]!.meta).toMatchObject({ llmCalls: 2, failedCalls: 2 });
+  });
+
+  it('picks canonical deterministically — shortest, then mention count, then lexicographic', () => {
+    const counts = new Map<string, number>([
+      ['김치찌개', 1],
+      ['된장찌개', 5],
+      ['묵은지김치찌개', 9],
+    ]);
+    // 최단 우선 — 빈도가 더 높아도 긴 표기는 밀린다.
+    expect(pickCanonicalName(['묵은지김치찌개', '김치찌개'], counts)).toBe('김치찌개');
+    // 길이 동률 → 빈도.
+    expect(pickCanonicalName(['김치찌개', '된장찌개'], counts)).toBe('된장찌개');
+    // 길이·빈도 동률 → 사전순.
+    expect(pickCanonicalName(['나물밥', '가지밥'], new Map())).toBe('가지밥');
   });
 
   it('falls back to nameNorm grouping when no canonical mappings exist', async () => {
