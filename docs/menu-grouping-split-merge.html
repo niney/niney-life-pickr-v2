@@ -1,0 +1,1099 @@
+  <!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메뉴 그룹핑 — 분할·머지 아키텍처 제안서</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   MENU GROUPING RFC — blueprint dark
+   ============================================================ */
+:root{
+  --bg0:#0a0e18;
+  --bg1:#0d1322;
+  --panel:#111a2d;
+  --panel2:#0e1525;
+  --ink:#e9edf6;
+  --mut:#9aa4ba;
+  --faint:#5e6980;
+  --line:#22304b;
+  --line2:#31405f;
+  --red:#ff6b5c;
+  --amber:#ffb454;
+  --cyan:#4fd8c4;
+  --violet:#a08dff;
+  --blue:#5fa8ff;
+  --red-t:rgba(255,107,92,.10);
+  --amber-t:rgba(255,180,84,.10);
+  --cyan-t:rgba(79,216,196,.10);
+  --violet-t:rgba(160,141,255,.12);
+  --blue-t:rgba(95,168,255,.10);
+  --sans:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --mono:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,monospace;
+  --maxw:1180px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg0);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.72;
+  word-break:keep-all;
+  overflow-x:hidden;
+}
+/* blueprint grid + glow + noise */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;
+  background:
+    radial-gradient(1100px 520px at 78% -8%, rgba(79,216,196,.07), transparent 60%),
+    radial-gradient(900px 600px at -10% 12%, rgba(95,168,255,.06), transparent 55%),
+    linear-gradient(rgba(125,150,200,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125,150,200,.045) 1px, transparent 1px),
+    linear-gradient(180deg,var(--bg0),var(--bg1) 120vh);
+  background-size:auto,auto,34px 34px,34px 34px,auto;
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+::selection{background:rgba(79,216,196,.28)}
+a{color:var(--cyan);text-decoration:none}
+.mono{font-family:var(--mono)}
+
+/* ---------- top nav ---------- */
+.topnav{
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  background:rgba(10,14,24,.78);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.topnav .in{
+  max-width:var(--maxw);margin:0 auto;padding:0 28px;
+  display:flex;align-items:center;gap:26px;height:52px;
+}
+.brand{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;color:var(--cyan);white-space:nowrap}
+.brand b{color:var(--ink);font-weight:600}
+.navlinks{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.navlinks::-webkit-scrollbar{display:none}
+.navlinks a{
+  font-size:12.5px;color:var(--mut);padding:6px 10px;border-radius:3px;
+  white-space:nowrap;border-bottom:2px solid transparent;transition:color .2s;
+}
+.navlinks a:hover{color:var(--ink)}
+.navlinks a.on{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+section{padding:84px 0 30px;position:relative}
+.plate-no{
+  position:absolute;top:96px;right:0;
+  font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--faint);
+}
+.eyebrow{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.24em;
+  color:var(--cyan);text-transform:uppercase;margin-bottom:14px;
+  display:flex;align-items:center;gap:12px;
+}
+.eyebrow::after{content:"";height:1px;width:64px;background:linear-gradient(90deg,var(--cyan),transparent)}
+h2{font-size:clamp(26px,3.4vw,40px);font-weight:800;letter-spacing:-.025em;line-height:1.25;margin-bottom:14px}
+.lead{color:var(--mut);max-width:760px;font-size:16.5px}
+.lead b,.lead strong{color:var(--ink);font-weight:600}
+.note{font-size:13px;color:var(--faint);margin-top:14px}
+.note b{color:var(--mut)}
+
+/* ---------- chips / badges ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;
+  padding:4px 11px;border:1px solid var(--line2);border-radius:999px;color:var(--mut);
+  background:rgba(255,255,255,.02);white-space:nowrap;
+}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--mut)}
+.chip.red{color:var(--red);border-color:rgba(255,107,92,.4);background:var(--red-t)}
+.chip.red .dot{background:var(--red)}
+.chip.amber{color:var(--amber);border-color:rgba(255,180,84,.4);background:var(--amber-t)}
+.chip.amber .dot{background:var(--amber)}
+.chip.cyan{color:var(--cyan);border-color:rgba(79,216,196,.4);background:var(--cyan-t)}
+.chip.cyan .dot{background:var(--cyan)}
+.chip.violet{color:var(--violet);border-color:rgba(160,141,255,.45);background:var(--violet-t)}
+.chip.violet .dot{background:var(--violet)}
+.badge{
+  display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+  padding:3px 9px;border-radius:3px;text-transform:uppercase;
+}
+.badge.det{background:var(--blue-t);color:var(--blue);border:1px solid rgba(95,168,255,.35)}
+.badge.llm{background:var(--violet-t);color:var(--violet);border:1px solid rgba(160,141,255,.4)}
+.badge.warn{background:var(--amber-t);color:var(--amber);border:1px solid rgba(255,180,84,.35)}
+
+/* ---------- cards / plates ---------- */
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:6px;position:relative;
+}
+.tick::before,.tick::after{content:"";position:absolute;width:11px;height:11px;pointer-events:none}
+.tick::before{top:-1px;left:-1px;border-top:1px solid var(--cyan);border-left:1px solid var(--cyan)}
+.tick::after{bottom:-1px;right:-1px;border-bottom:1px solid var(--cyan);border-right:1px solid var(--cyan)}
+.tick.r::before{border-color:var(--red)}
+.tick.r::after{border-color:var(--red)}
+.tick.a::before{border-color:var(--amber)}
+.tick.a::after{border-color:var(--amber)}
+.tick.v::before{border-color:var(--violet)}
+.tick.v::after{border-color:var(--violet)}
+
+/* ---------- hero ---------- */
+.hero{padding:128px 0 64px;position:relative}
+.hero .deco{
+  position:absolute;right:-40px;top:90px;font-family:var(--mono);
+  font-size:min(330px,30vw);font-weight:600;color:transparent;
+  -webkit-text-stroke:1px rgba(125,150,200,.10);line-height:1;user-select:none;pointer-events:none;
+}
+.hero .meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px;align-items:center}
+.hero .meta .sep{color:var(--faint);font-family:var(--mono);font-size:11px}
+h1{
+  font-size:clamp(40px,6.4vw,76px);font-weight:800;letter-spacing:-.035em;
+  line-height:1.12;margin:6px 0 18px;
+}
+h1 .accent{color:var(--cyan)}
+.thesis{font-size:clamp(16px,1.6vw,19px);color:var(--mut);max-width:780px;margin-bottom:40px}
+.thesis b{color:var(--ink)}
+/* hero mini pipeline */
+.minipipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;row-gap:18px;margin-bottom:34px}
+.minipipe .node{
+  border:1px solid var(--line2);background:rgba(255,255,255,.02);border-radius:5px;
+  padding:10px 16px;text-align:center;min-width:108px;
+}
+.minipipe .node .t{font-family:var(--mono);font-size:15px;font-weight:600}
+.minipipe .node .s{font-size:11px;color:var(--faint);margin-top:2px;letter-spacing:.04em}
+.minipipe .node.c{border-color:rgba(79,216,196,.45);background:var(--cyan-t)}
+.minipipe .node.c .t{color:var(--cyan)}
+.minipipe .node.v{border-color:rgba(160,141,255,.45);background:var(--violet-t)}
+.minipipe .node.v .t{color:var(--violet)}
+.minipipe .arr{display:flex;align-items:center;padding:0 10px;color:var(--faint);font-family:var(--mono)}
+.tldr{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tldr .card{padding:20px 22px}
+.tldr .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;margin-bottom:10px}
+.tldr .k.r{color:var(--red)} .tldr .k.b{color:var(--blue)} .tldr .k.c{color:var(--cyan)}
+.tldr p{font-size:14.5px;color:var(--mut);line-height:1.65}
+.tldr p b{color:var(--ink)}
+
+/* ---------- incident ---------- */
+.term{
+  font-family:var(--mono);font-size:13px;line-height:1.75;
+  background:#070b14;border:1px solid var(--line);border-radius:6px;
+  padding:20px 22px;overflow-x:auto;position:relative;
+}
+.term .bar{display:flex;gap:6px;margin-bottom:14px}
+.term .bar i{width:10px;height:10px;border-radius:50%;background:#243049;display:block}
+.term .bar i:first-child{background:rgba(255,107,92,.55)}
+.term .err{color:var(--red);font-weight:600}
+.term .key{color:var(--blue)} .term .num{color:var(--amber)} .term .str{color:var(--cyan)} .term .dim{color:var(--faint)}
+.insight{
+  margin-top:16px;border-left:3px solid var(--red);background:var(--red-t);
+  border-radius:0 6px 6px 0;padding:14px 18px;font-size:14.5px;color:var(--mut);
+}
+.insight b{color:var(--red)}
+.cols2{display:grid;grid-template-columns:1.05fr .95fr;gap:26px;align-items:start;margin-top:34px}
+
+/* failure chain */
+.chain{counter-reset:st;display:flex;flex-direction:column;gap:0}
+.chain .st{
+  display:flex;gap:16px;padding:13px 4px;border-bottom:1px dashed var(--line);
+  font-size:14.5px;color:var(--mut);align-items:baseline;
+}
+.chain .st:last-child{border-bottom:none}
+.chain .st::before{
+  counter-increment:st;content:"0" counter(st);
+  font-family:var(--mono);font-size:12px;color:var(--faint);
+  border:1px solid var(--line2);border-radius:3px;padding:1px 7px;flex:none;
+}
+.chain .st b{color:var(--ink);font-weight:600}
+.chain .st.bad::before{color:var(--red);border-color:rgba(255,107,92,.4)}
+.chain .st .m{font-family:var(--mono);font-size:12.5px;color:var(--faint)}
+
+/* token budget bar */
+.budget{margin-top:8px}
+.budget .cap{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.budget .cap .t{font-size:14px;font-weight:600}
+.budget .cap .m{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.08em}
+.track{
+  position:relative;height:62px;border:1px solid var(--line2);border-radius:5px;
+  background:rgba(255,255,255,.015);display:flex;overflow:visible;
+}
+.seg{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;min-width:0}
+.seg .l1{font-family:var(--mono);font-size:11.5px;font-weight:600;white-space:nowrap}
+.seg .l2{font-size:10.5px;color:rgba(255,255,255,.55);white-space:nowrap}
+.seg.think{
+  width:70%;
+  background:repeating-linear-gradient(-55deg,rgba(255,180,84,.30) 0 7px,rgba(255,180,84,.12) 7px 14px);
+  border-right:1px solid rgba(255,180,84,.4);color:var(--amber);
+}
+.seg.out{width:30%;background:rgba(79,216,196,.22);color:var(--cyan)}
+.cutline{
+  position:absolute;right:-1px;top:-12px;bottom:-12px;width:0;
+  border-right:2px dashed var(--red);
+}
+.cutline .scissor{
+  position:absolute;top:-22px;right:-11px;font-size:15px;color:var(--red);
+}
+.ghost{
+  position:absolute;left:100%;top:10px;bottom:10px;width:24%;
+  border:1.5px dashed rgba(255,107,92,.5);border-left:none;border-radius:0 5px 5px 0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;color:var(--red);white-space:nowrap;padding:0 8px;
+}
+.ruler{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--faint);width:100%}
+.budget .legend{display:flex;gap:18px;margin-top:14px;font-size:12.5px;color:var(--mut);flex-wrap:wrap}
+.budget .legend i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:7px}
+
+/* ---------- scaling visual ---------- */
+.scale{margin-top:36px;position:relative;padding:26px 26px 18px}
+.scale .row{display:grid;grid-template-columns:120px 1fr 70px;gap:16px;align-items:center;margin-bottom:18px}
+.scale .row .lbl{font-size:14px;color:var(--mut);text-align:right}
+.scale .row .lbl b{color:var(--ink);font-family:var(--mono)}
+.scale .bartrack{position:relative;height:26px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.scale .b-think{position:absolute;left:0;top:0;bottom:0;background:repeating-linear-gradient(-55deg,rgba(255,180,84,.30) 0 6px,rgba(255,180,84,.10) 6px 12px)}
+.scale .b-out{position:absolute;top:0;bottom:0;background:rgba(255,107,92,.30)}
+.scale .verdict{font-family:var(--mono);font-size:12px}
+.scale .verdict.ok{color:var(--cyan)} .scale .verdict.no{color:var(--red)}
+.limitline{position:absolute;top:20px;bottom:74px;left:calc(50% + 25px);border-left:2px dashed var(--red);z-index:2}
+.limitline .t{
+  position:absolute;top:-14px;left:0;transform:translateX(-50%);
+  font-family:var(--mono);font-size:10.5px;color:var(--red);letter-spacing:.08em;white-space:nowrap;
+}
+.scale .axis{display:grid;grid-template-columns:120px 1fr 70px;gap:16px;margin-top:4px}
+.scale .axis .ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.scale .foot{margin-top:16px;font-size:13px;color:var(--faint)}
+.latent{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:26px}
+.latent .card{padding:18px 20px;border-left:3px solid var(--amber)}
+.latent .card .t{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--amber)}
+.latent .card p{font-size:13.5px;color:var(--mut)}
+.latent .card p code{font-family:var(--mono);font-size:12px;color:var(--ink);background:rgba(255,255,255,.05);padding:1px 5px;border-radius:3px}
+
+/* ---------- equivalence ---------- */
+.equiv{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:34px}
+.equiv .card{padding:22px}
+.equiv .num{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--cyan);margin-bottom:12px}
+.equiv h3{font-size:16.5px;margin-bottom:8px;letter-spacing:-.01em}
+.equiv p{font-size:13.5px;color:var(--mut)}
+.equiv p b{color:var(--ink)}
+.equiv svg{display:block;margin:14px 0 4px;width:100%;height:74px}
+.equiv .who{margin-top:12px}
+.gapcall{
+  margin-top:20px;padding:16px 20px;border:1px solid rgba(255,107,92,.35);
+  background:var(--red-t);border-radius:6px;font-size:14.5px;color:var(--mut);
+}
+.gapcall b{color:var(--red)}
+
+/* ---------- pipeline ---------- */
+.pipe{margin-top:40px;display:flex;flex-direction:column}
+.stage{display:grid;grid-template-columns:64px 1fr;gap:24px}
+.stage .rail{display:flex;flex-direction:column;align-items:center}
+.stage .dotno{
+  width:44px;height:44px;border-radius:50%;border:1px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:15px;font-weight:600;flex:none;
+  background:var(--panel);z-index:1;
+}
+.stage.det .dotno{color:var(--blue);border-color:rgba(95,168,255,.5)}
+.stage.llm .dotno{color:var(--violet);border-color:rgba(160,141,255,.55)}
+.stage .rail .vline{width:1px;flex:1;background:linear-gradient(180deg,var(--line2),var(--line));min-height:28px}
+.stage .body{padding-bottom:34px}
+.stage .card{padding:24px 26px}
+.stage .headrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.stage h3{font-size:19px;letter-spacing:-.015em}
+.stage p.desc{font-size:14.5px;color:var(--mut);max-width:720px}
+.stage p.desc b{color:var(--ink)}
+.stage .cost{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.stage .keypoint{
+  margin-top:14px;font-size:13.5px;color:var(--cyan);
+  border-left:2px solid var(--cyan);padding-left:12px;
+}
+.codepill{
+  font-family:var(--mono);font-size:12.5px;background:#070b14;border:1px solid var(--line);
+  border-radius:4px;padding:8px 12px;display:inline-block;margin-top:14px;color:var(--cyan);
+}
+.codepill .d{color:var(--faint)}
+
+/* ---------- worked example ---------- */
+.example{margin-top:18px;padding:28px;overflow:hidden}
+.example .exhead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+.example .exhead .t{font-size:17px;font-weight:700}
+.example .exhead .m{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.1em}
+.example .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-bottom:22px}
+.example .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.exgrid{display:grid;grid-template-columns:1.15fr auto 1fr auto 1fr;gap:0;align-items:start}
+.excol .colcap{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:var(--faint);margin-bottom:12px;text-transform:uppercase}
+.exarr{display:flex;align-items:center;justify-content:center;padding:60px 14px 0;color:var(--faint);font-family:var(--mono);font-size:16px}
+.chunkbox{border:1px solid var(--line2);border-radius:5px;padding:13px 14px;margin-bottom:12px;background:rgba(255,255,255,.015)}
+.chunkbox .cname{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--faint);margin-bottom:9px}
+.mitem{
+  display:inline-flex;align-items:center;gap:6px;margin:3px 3px;
+  font-size:12.5px;padding:4px 9px;border-radius:4px;
+  border:1px solid var(--line);color:var(--mut);background:rgba(255,255,255,.02);
+}
+.mitem .ix{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.mitem.g1{border-color:rgba(79,216,196,.5);background:var(--cyan-t);color:var(--cyan)}
+.mitem.g2{border-color:rgba(95,168,255,.5);background:var(--blue-t);color:var(--blue)}
+.mitem.g3{border-color:rgba(255,180,84,.5);background:var(--amber-t);color:var(--amber)}
+.mitem.gx{border-color:rgba(160,141,255,.6);background:var(--violet-t);color:var(--violet)}
+.exout{font-family:var(--mono);font-size:11.5px;color:var(--cyan);background:#070b14;border:1px solid var(--line);border-radius:4px;padding:7px 10px;margin-top:2px;display:block}
+.exout .d{color:var(--faint)}
+.exout .hl{color:var(--violet);font-weight:600}
+.repbox{border:1px solid var(--line2);border-radius:5px;padding:13px 14px;background:rgba(255,255,255,.015)}
+.repbox .mitem{display:flex;justify-content:flex-start}
+.repline{position:relative}
+.fingroup{
+  display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+  border-radius:5px;padding:7px 12px;margin-bottom:7px;font-size:13px;color:var(--mut);
+  background:rgba(255,255,255,.015);
+}
+.fingroup b{color:var(--ink);font-weight:600}
+.fingroup .cnt{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-left:auto}
+.fingroup.star{border-color:rgba(160,141,255,.6);background:var(--violet-t)}
+.fingroup.star b{color:var(--violet)}
+.fingroup .tagx{font-family:var(--mono);font-size:9.5px;color:var(--violet);border:1px solid rgba(160,141,255,.5);padding:1px 6px;border-radius:999px}
+.exfoot{margin-top:18px;font-size:13px;color:var(--faint)}
+.exfoot b{color:var(--mut)}
+
+/* bonus strip */
+.bonus{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
+.bonus .card{padding:20px 22px;border-top:2px solid var(--cyan)}
+.bonus .t{font-size:14.5px;font-weight:700;margin-bottom:6px}
+.bonus p{font-size:13.5px;color:var(--mut)}
+.bonus p b{color:var(--cyan)}
+
+/* ---------- decisions ---------- */
+.decisions{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:36px}
+.decisions .card{padding:24px 26px}
+.decisions .dno{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--cyan);margin-bottom:10px}
+.decisions h3{font-size:17px;margin-bottom:8px;letter-spacing:-.01em}
+.decisions p{font-size:13.5px;color:var(--mut)}
+.decisions p b{color:var(--ink)}
+.decisions p code{font-family:var(--mono);font-size:12px;color:var(--ink);background:rgba(255,255,255,.05);padding:1px 5px;border-radius:3px}
+.jsoncmp{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+.jsoncmp .row{display:flex;align-items:stretch;gap:10px}
+.jsoncmp .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;width:42px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:3px}
+.jsoncmp .tag.b4{background:var(--red-t);color:var(--red);border:1px solid rgba(255,107,92,.35)}
+.jsoncmp .tag.af{background:var(--cyan-t);color:var(--cyan);border:1px solid rgba(79,216,196,.4)}
+.jsoncmp pre{
+  flex:1;font-family:var(--mono);font-size:11.5px;line-height:1.6;background:#070b14;
+  border:1px solid var(--line);border-radius:4px;padding:9px 12px;overflow-x:auto;color:var(--mut);
+}
+.jsoncmp pre .tok{float:right;color:var(--faint);font-size:10px;margin-left:12px}
+.jsoncmp pre.bad .tok{color:var(--red)} .jsoncmp pre.good{color:var(--cyan)} .jsoncmp pre.good .tok{color:var(--cyan)}
+
+/* ---------- incremental ---------- */
+.flows{display:flex;flex-direction:column;gap:16px;margin-top:36px}
+.flow{padding:22px 26px}
+.flow .fhead{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.flow .fhead .t{font-size:15px;font-weight:700}
+.flowline{display:flex;align-items:center;gap:0;flex-wrap:wrap;row-gap:14px}
+.fnode{
+  border:1px solid var(--line2);border-radius:5px;padding:9px 15px;
+  font-size:13px;color:var(--mut);background:rgba(255,255,255,.02);text-align:center;
+}
+.fnode b{color:var(--ink);display:block;font-size:13.5px}
+.fnode small{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.fnode.bad{border-color:rgba(255,107,92,.45);background:var(--red-t)}
+.fnode.bad b{color:var(--red)}
+.fnode.good{border-color:rgba(79,216,196,.45);background:var(--cyan-t)}
+.fnode.good b{color:var(--cyan)}
+.farr{padding:0 12px;color:var(--faint);font-family:var(--mono)}
+.flow .fnote{margin-top:14px;font-size:12.5px;color:var(--faint)}
+
+/* ---------- versus table ---------- */
+.vs{margin-top:36px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vs table{width:100%;border-collapse:collapse;font-size:13.5px}
+.vs th{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  padding:14px 18px;text-align:left;border-bottom:1px solid var(--line2);background:rgba(255,255,255,.02);
+}
+.vs th:first-child{color:var(--faint);width:21%}
+.vs th.b4{color:var(--red)} .vs th.af{color:var(--cyan)}
+.vs td{padding:13px 18px;border-bottom:1px solid var(--line);color:var(--mut);vertical-align:top}
+.vs tr:last-child td{border-bottom:none}
+.vs td:first-child{color:var(--ink);font-weight:600;font-size:13px}
+.vs td .x{color:var(--red);font-family:var(--mono);margin-right:7px}
+.vs td .o{color:var(--cyan);font-family:var(--mono);margin-right:7px}
+.vs tr:hover td{background:rgba(255,255,255,.015)}
+
+/* ---------- limits ---------- */
+.limits{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:36px}
+.limits .card{padding:22px 24px;border-left:3px solid var(--amber)}
+.limits h3{font-size:15.5px;margin-bottom:8px;color:var(--amber)}
+.limits p{font-size:13.5px;color:var(--mut)}
+.limits p b{color:var(--ink)}
+.limitfoot{
+  margin-top:16px;padding:16px 20px;border:1px solid rgba(79,216,196,.35);
+  background:var(--cyan-t);border-radius:6px;font-size:14px;color:var(--mut);
+}
+.limitfoot b{color:var(--cyan)}
+
+/* ---------- roadmap ---------- */
+.road{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;position:relative}
+.road::before{
+  content:"";position:absolute;top:21px;left:8%;right:8%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--line2) 12%,var(--line2) 88%,transparent);
+}
+.phase{position:relative;padding-top:46px}
+.phase .pdot{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:var(--panel);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;color:var(--cyan);z-index:1;
+}
+.phase .card{padding:22px 24px;height:100%}
+.phase h3{font-size:16px;margin-bottom:4px}
+.phase .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.1em;margin-bottom:14px}
+.phase ul{list-style:none}
+.phase li{
+  font-size:13.5px;color:var(--mut);padding:7px 0 7px 20px;position:relative;
+  border-bottom:1px dashed var(--line);
+}
+.phase li:last-child{border-bottom:none}
+.phase li::before{content:"›";position:absolute;left:4px;color:var(--cyan);font-family:var(--mono)}
+.phase li b{color:var(--ink)}
+.bundle{
+  grid-column:1 / span 2;margin-top:10px;text-align:center;
+  font-family:var(--mono);font-size:11px;color:var(--cyan);letter-spacing:.1em;
+  border:1px dashed rgba(79,216,196,.4);border-top:none;border-radius:0 0 8px 8px;
+  padding:8px 0 10px;
+}
+
+/* ---------- footer ---------- */
+footer{margin-top:90px;border-top:1px solid var(--line);padding:44px 0 70px;font-size:13px;color:var(--faint)}
+footer .cols{display:grid;grid-template-columns:1fr 1fr;gap:30px}
+footer h4{
+  font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--mut);
+  text-transform:uppercase;margin-bottom:14px;
+}
+footer ul{list-style:none}
+footer li{padding:5px 0;border-bottom:1px dashed var(--line)}
+footer li:last-child{border:none}
+footer code{font-family:var(--mono);font-size:11.5px;color:var(--mut)}
+footer .gen{margin-top:36px;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em}
+
+/* ---------- reveal ---------- */
+.reveal{opacity:0;transform:translateY(16px);transition:opacity .7s cubic-bezier(.2,.6,.2,1),transform .7s cubic-bezier(.2,.6,.2,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- responsive ---------- */
+@media (max-width:980px){
+  .tldr,.equiv,.bonus,.road{grid-template-columns:1fr}
+  .road::before{display:none}
+  .phase{padding-top:0}
+  .phase .pdot{position:static;transform:none;margin-bottom:10px}
+  .cols2{grid-template-columns:1fr}
+  .decisions,.limits,.latent{grid-template-columns:1fr}
+  .exgrid{grid-template-columns:1fr}
+  .exarr{padding:10px 0;justify-content:flex-start}
+  .exarr::before{content:"↓"}
+  .exarr span{display:none}
+  footer .cols{grid-template-columns:1fr}
+  .hero .deco{display:none}
+  .bundle{grid-column:auto}
+  .plate-no{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="in">
+    <span class="brand">RFC · <b>MENU-GROUPING</b> · SPLIT/MERGE</span>
+    <div class="navlinks" id="navlinks">
+      <a href="#incident">장애</a>
+      <a href="#problem">문제 구조</a>
+      <a href="#equiv">동등성</a>
+      <a href="#arch">아키텍처</a>
+      <a href="#decisions">설계 결정</a>
+      <a href="#incremental">증분</a>
+      <a href="#cost">비교</a>
+      <a href="#limits">한계</a>
+      <a href="#roadmap">로드맵</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="deco">{&hellip;}</div>
+  <div class="wrap">
+    <div class="meta reveal">
+      <span class="chip"><span class="dot"></span>DESIGN PROPOSAL</span>
+      <span class="chip">2026-06-13</span>
+      <span class="sep">·</span>
+      <span class="chip red"><span class="dot"></span>all_chunks_failed</span>
+      <span class="chip red"><span class="dot"></span>parse_failed</span>
+      <span class="chip amber"><span class="dot"></span>gpt-oss:120b</span>
+      <span class="chip amber"><span class="dot"></span>inputCount 64</span>
+    </div>
+    <h1 class="reveal" style="transition-delay:.06s">한 번에 묶지 않는다<br><span class="accent">분할 → 그룹핑 → 대표 머지</span></h1>
+    <p class="thesis reveal" style="transition-delay:.12s">
+      메뉴 그룹핑의 호출당 토큰 비용을 <b>식당 크기와 무관한 상수</b>로 만들고,
+      대표(canonical) 머지 라운드로 <b>one-shot과 동등한 분할 결과</b>를 얻는 아키텍처 제안.
+    </p>
+    <div class="minipipe reveal" style="transition-delay:.18s">
+      <div class="node"><div class="t">64</div><div class="s">variants</div></div>
+      <div class="arr">→</div>
+      <div class="node c"><div class="t">24·24·16</div><div class="s">유사도 정렬 청크</div></div>
+      <div class="arr">→</div>
+      <div class="node v"><div class="t">LLM ×3</div><div class="s">청크 그룹핑 (병렬)</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="t">~52</div><div class="s">그룹 대표</div></div>
+      <div class="arr">→</div>
+      <div class="node v"><div class="t">LLM ×1</div><div class="s">대표 머지</div></div>
+      <div class="arr">→</div>
+      <div class="node c"><div class="t">∪</div><div class="s">union-find 확정</div></div>
+    </div>
+    <div class="tldr">
+      <div class="card tick r reveal" style="transition-delay:.22s">
+        <div class="k r">01 — 원인</div>
+        <p>gpt-oss:120b의 <b>reasoning 토큰이 maxTokens 4000을 잠식</b>해 최종 JSON이 비거나 잘림. 데이터가 클수록 사고가 길어져 큰 식당부터 터진다.</p>
+      </div>
+      <div class="card tick reveal" style="transition-delay:.3s">
+        <div class="k b">02 — 원칙</div>
+        <p>한도 상향은 선형 패치. 근본 해결은 <b>호출당 토큰을 N과 무관한 상수</b>로 만드는 구조 변경이다.</p>
+      </div>
+      <div class="card tick reveal" style="transition-delay:.38s">
+        <div class="k c">03 — 방법</div>
+        <p>유사도-정렬 분할 → 청크 그룹핑 → <b>대표 머지</b> → union-find. 비교 커버리지를 보존해 one-shot과 동등한 결과.</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= PLATE 01 INCIDENT ================= -->
+<section id="incident">
+  <span class="plate-no">PLATE 01 / 09</span>
+  <div class="eyebrow reveal">Incident — 운영 장애 분석</div>
+  <h2 class="reveal">64개가 들어가자,<br>그룹핑은 0건이 되었다</h2>
+  <p class="lead reveal">자동 스케줄 실행 중 menu-grouping run이 <b>전 청크 실패</b>.
+  저장은 됐지만 64개 전부 자기 자신이 그룹인 identity fallback — 실질 그룹핑 0건.</p>
+
+  <div class="cols2">
+    <div class="reveal">
+      <div class="term">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <span class="err">all_chunks_failed</span> <span class="dim">—</span> parse_failed: no JSON object found in LLM response<br><br>
+        {<br>
+        &nbsp;&nbsp;<span class="key">"inputCount"</span>: <span class="num">64</span>,<br>
+        &nbsp;&nbsp;<span class="key">"chunks"</span>: <span class="num">1</span>,<br>
+        &nbsp;&nbsp;<span class="key">"groupCount"</span>: <span class="num">64</span>,&nbsp;&nbsp;<span class="dim">← inputCount와 동일 = 전부 identity</span><br>
+        &nbsp;&nbsp;<span class="key">"mappedCount"</span>: <span class="num">64</span>,<br>
+        &nbsp;&nbsp;<span class="key">"model"</span>: <span class="str">"gpt-oss:120b"</span>,<br>
+        &nbsp;&nbsp;<span class="key">"failedChunks"</span>: [{ <span class="key">"index"</span>: <span class="num">0</span>, <span class="key">"code"</span>: <span class="str">"parse_failed"</span> }]<br>
+        }
+      </div>
+      <div class="insight">
+        <b>groupCount 64 = inputCount 64.</b> 64개 메뉴가 64개 그룹 — 단 한 쌍도 묶이지 못했다.
+        에러 메시지는 "no JSON object found"지만 파서 구조상 <b>잘린 JSON</b>도 같은 메시지로 뭉뚱그려진다.
+      </div>
+    </div>
+    <div class="reveal" style="transition-delay:.1s">
+      <div class="chain card" style="padding:18px 22px">
+        <div class="st"><span><b>64개 distinct 메뉴</b> → 청크 1개 <span class="m">(한도 80)</span></span></div>
+        <div class="st"><span>gpt-oss:120b 호출 <span class="m">maxTokens 4000 · format JSON · think 미지정(기본 medium)</span></span></div>
+        <div class="st bad"><span><b>reasoning이 토큰 예산 잠식</b> → content가 비거나 JSON이 중간에 잘림</span></div>
+        <div class="st bad"><span><code class="mono" style="font-size:12.5px">extractFirstJsonObject</code> → null → <b>parse_failed</b></span></div>
+        <div class="st bad"><span>64개 전부 identity fallback → <b>all_chunks_failed</b></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card tick a reveal" style="margin-top:30px;padding:26px 28px">
+    <div class="budget">
+      <div class="cap">
+        <span class="t">토큰 예산의 해부 — <span class="mono" style="color:var(--amber)">num_predict 4000</span>은 사고와 본문의 <u>합산</u> 예산</span>
+        <span class="m">단일 생성 스트림 · Harmony 채널 분리는 사후 파싱</span>
+      </div>
+      <div class="track">
+        <div class="seg think"><span class="l1">Harmony reasoning (사고)</span><span class="l2">64개 교차비교 ≈ 2,500–3,000 tok</span></div>
+        <div class="seg out"><span class="l1">JSON 출력</span><span class="l2">잘림</span></div>
+        <div class="cutline"><span class="scissor">✂</span></div>
+        <div class="ghost">못 나온 출력 ≈ +800 tok</div>
+      </div>
+      <div class="ruler"><span>0</span><span>1k</span><span>2k</span><span>3k</span><span>4k = 한도</span></div>
+      <div class="legend">
+        <span><i style="background:repeating-linear-gradient(-55deg,rgba(255,180,84,.5) 0 4px,rgba(255,180,84,.15) 4px 8px)"></i>사고 토큰 — 코드의 추정치("80개 ≈ 3,000")가 누락한 부분</span>
+        <span><i style="background:rgba(79,216,196,.4)"></i>필요한 JSON — 64쌍 전 항목 에코 ≈ 1,500–2,000 tok</span>
+        <span><i style="border:1.5px dashed rgba(255,107,92,.6)"></i>한도 밖 — 비거나 잘린 채 종료</span>
+      </div>
+    </div>
+  </div>
+  <p class="note reveal">보조 요인 — <b>temperature 0.1</b>(gpt-oss 권장 ≈1.0, 저온은 사고 반복 루프 유발) · gpt-oss × format의 알려진 Ollama 이슈(#11867 · #11691 · #14440). 작은 식당이 통과해온 이유: 사고+출력 합이 4000 안에 들어갔기 때문.</p>
+</section>
+
+<!-- ================= PLATE 02 PROBLEM ================= -->
+<section id="problem">
+  <span class="plate-no">PLATE 02 / 09</span>
+  <div class="eyebrow reveal">Problem Structure — 문제의 구조</div>
+  <h2 class="reveal">비용이 데이터 크기에 비례하도록<br>설계된 계약</h2>
+  <p class="lead reveal">출력은 "전 항목 에코"(= O(N)), 사고는 N개 교차비교(= N에 초비례).
+  <b>numCtx / maxTokens 상향은 선형 패치</b> — 메뉴가 100개, 200개가 되면 같은 자리에서 또 터진다.</p>
+
+  <div class="card tick scale reveal">
+    <div class="limitline"><span class="t">maxTokens 4000</span></div>
+    <div class="row">
+      <div class="lbl">메뉴 <b>10</b>개</div>
+      <div class="bartrack"><div class="b-think" style="width:8%"></div><div class="b-out" style="left:8%;width:4%"></div></div>
+      <div class="verdict ok">✓ 통과</div>
+    </div>
+    <div class="row">
+      <div class="lbl">메뉴 <b>64</b>개 <span style="color:var(--red)">← 이번 장애</span></div>
+      <div class="bartrack"><div class="b-think" style="width:35%"></div><div class="b-out" style="left:35%;width:23%"></div></div>
+      <div class="verdict no">✗ 한도 초과</div>
+    </div>
+    <div class="row">
+      <div class="lbl">메뉴 <b>200</b>개</div>
+      <div class="bartrack"><div class="b-think" style="width:62%"></div><div class="b-out" style="left:62%;width:38%;background:linear-gradient(90deg,rgba(255,107,92,.3),rgba(255,107,92,.05))"></div></div>
+      <div class="verdict no">✗✗ 상향해도 초과</div>
+    </div>
+    <div class="axis"><span></span><div class="ticks"><span>0</span><span>2k</span><span>4k</span><span>6k</span><span>8k tok</span></div><span></span></div>
+    <div class="foot">사고(빗금) + 전 항목 에코 출력(적색)의 합산 추정. 막대 길이는 추세 표현 — 한도를 올려도 N이 크면 따라잡힌다.</div>
+  </div>
+
+  <div class="latent">
+    <div class="card reveal">
+      <div class="t">잠복 버그 ① — 에코 오차는 조용히 삼켜진다</div>
+      <p>현행은 <code>map[v]</code> exact-string lookup. 모델이 한국어 키를 한 글자라도 다르게 에코하면 매칭 실패 → <b>경고 없이 identity로 추락</b>. (menu-grouping.service.ts:259-264)</p>
+    </div>
+    <div class="card reveal" style="transition-delay:.08s">
+      <div class="t">잠복 버그 ② — 지어낸 canonical도 그대로 저장</div>
+      <p>"입력에 없는 단어 금지"는 프롬프트 규칙일 뿐 <b>코드 검증이 없다</b>. 모델이 창작한 이름이 canonicalName으로 DB에 들어갈 수 있다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLATE 03 EQUIVALENCE ================= -->
+<section id="equiv">
+  <span class="plate-no">PLATE 03 / 09</span>
+  <div class="eyebrow reveal">Equivalence — 동등성의 조건</div>
+  <h2 class="reveal">"한 번에 한 것과 동일"의<br>정확한 의미</h2>
+  <p class="lead reveal">그룹핑 결과는 결국 <b>분할(partition)</b>이다. one-shot이 묶었을 모든 쌍 (a,b)가
+  아래 세 경로 중 하나로 닿으면 — 결과는 동등하다. 설계 문제는 ①②의 <b>비교 커버리지를 싸게 확보</b>하는 것뿐.</p>
+
+  <div class="equiv">
+    <div class="card tick reveal">
+      <div class="num">COVERAGE ①</div>
+      <h3>같은 호출에서 직접 비교</h3>
+      <svg viewBox="0 0 200 74">
+        <rect x="30" y="12" width="140" height="50" rx="5" fill="none" stroke="#31405f" stroke-dasharray="4 3"/>
+        <line x1="75" y1="37" x2="125" y2="37" stroke="#4fd8c4" stroke-width="1.5"/>
+        <circle cx="70" cy="37" r="6" fill="#4fd8c4"/><circle cx="130" cy="37" r="6" fill="#4fd8c4"/>
+        <text x="100" y="30" fill="#5e6980" font-size="9" text-anchor="middle" font-family="monospace">same chunk</text>
+      </svg>
+      <p>유사도-정렬 패킹이 <b>진짜 병합 후보 대부분을 같은 청크에</b> 모은다. 전체 변형 문맥을 보는 가장 정확한 비교.</p>
+      <div class="who"><span class="badge llm">STAGE 1</span></div>
+    </div>
+    <div class="card tick reveal" style="transition-delay:.08s">
+      <div class="num">COVERAGE ②</div>
+      <h3>대표끼리 비교</h3>
+      <svg viewBox="0 0 200 74">
+        <rect x="8" y="34" width="80" height="32" rx="4" fill="none" stroke="#31405f"/>
+        <rect x="112" y="34" width="80" height="32" rx="4" fill="none" stroke="#31405f"/>
+        <circle cx="32" cy="50" r="4" fill="#5e6980"/><circle cx="48" cy="50" r="4" fill="#5e6980"/>
+        <circle cx="64" cy="50" r="5.5" fill="#a08dff"/>
+        <circle cx="136" cy="50" r="5.5" fill="#a08dff"/><circle cx="156" cy="50" r="4" fill="#5e6980"/>
+        <path d="M64 44 Q100 12 136 44" fill="none" stroke="#a08dff" stroke-width="1.5"/>
+        <text x="100" y="14" fill="#a08dff" font-size="9" text-anchor="middle" font-family="monospace">merge round</text>
+      </svg>
+      <p>청크가 갈라놓은 쌍은 <b>각 그룹의 대표가 머지 라운드에서 만난다</b>. 현행 설계에 없는 단계 — 동등성이 깨지는 유일한 이유였다.</p>
+      <div class="who"><span class="badge llm">STAGE 2</span></div>
+    </div>
+    <div class="card tick reveal" style="transition-delay:.16s">
+      <div class="num">COVERAGE ③</div>
+      <h3>전이성 — 공짜</h3>
+      <svg viewBox="0 0 200 74">
+        <circle cx="40" cy="44" r="6" fill="#5fa8ff"/><circle cx="100" cy="24" r="6" fill="#5fa8ff"/><circle cx="160" cy="44" r="6" fill="#5fa8ff"/>
+        <line x1="46" y1="41" x2="94" y2="27" stroke="#5fa8ff" stroke-width="1.5"/>
+        <line x1="106" y1="27" x2="154" y2="41" stroke="#5fa8ff" stroke-width="1.5"/>
+        <path d="M46 48 Q100 68 154 48" fill="none" stroke="#5fa8ff" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="100" y="66" fill="#5e6980" font-size="9" text-anchor="middle" font-family="monospace">a~b, b~c &#8658; a~c</text>
+      </svg>
+      <p>a~b와 b~c가 서로 다른 호출에서 판정돼도 <b>union-find가 자동으로 a~c를 병합</b>한다. LLM 비용 0.</p>
+      <div class="who"><span class="badge det">STAGE 3</span></div>
+    </div>
+  </div>
+  <div class="gapcall reveal"><b>현행이 동등하지 않은 이유는 단순하다</b> — 임의 순서로 자르고(①의 효율 저하), 머지 단계가 아예 없다(② 부재). "같은 청크 안에서만 묶인다"는 코드 주석의 '수용한 한계'가 바로 이것.</div>
+</section>
+
+<!-- ================= PLATE 04 ARCHITECTURE ================= -->
+<section id="arch">
+  <span class="plate-no">PLATE 04 / 09</span>
+  <div class="eyebrow reveal">Architecture — 추천 파이프라인</div>
+  <h2 class="reveal">4단계 분할·머지 파이프라인</h2>
+  <p class="lead reveal">결정적 단계(<span class="badge det">DETERMINISTIC</span>)가 앞뒤를 잡고,
+  LLM(<span class="badge llm">LLM CALL</span>)은 <b>membership 판정만</b> 한다. 모든 호출의 입출력이 작고 고정적이다.</p>
+
+  <div class="pipe">
+    <!-- stage 0 -->
+    <div class="stage det reveal">
+      <div class="rail"><div class="dotno">0</div><div class="vline"></div></div>
+      <div class="body">
+        <div class="card tick">
+          <div style="padding:24px 26px">
+            <div class="headrow"><h3>유사도 정렬 · 블록 패킹</h3><span class="badge det">Deterministic · 무료</span></div>
+            <p class="desc">자모/음절 bigram 유사도로 <b>비슷한 표기를 같은 청크에</b> 패킹한다 (청크 24~32).
+            핵심: 유사도는 <b>게이트가 아니라 배치 휴리스틱</b> — 잘못 갈라놓아도 머지 단계가 회복하므로 recall 상한이 생기지 않는다.</p>
+            <div class="cost"><span class="chip"><span class="dot"></span>LLM 0회</span><span class="chip"><span class="dot"></span>토큰 0</span><span class="chip cyan"><span class="dot"></span>병합 후보 대부분을 ①커버리지로 격상</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- stage 1 -->
+    <div class="stage llm reveal">
+      <div class="rail"><div class="dotno">1</div><div class="vline"></div></div>
+      <div class="body">
+        <div class="card tick v">
+          <div style="padding:24px 26px">
+            <div class="headrow"><h3>청크 내 그룹핑</h3><span class="badge llm">LLM ×3 병렬</span></div>
+            <p class="desc">번호 매긴 입력에 대해 <b>병합되는 그룹만 인덱스로</b> 출력. singleton(대부분)은 출력 자체가 없다.
+            전체 변형 문맥을 보는 유일한 단계 — 진짜 병합의 대부분이 여기서 끝난다.</p>
+            <span class="codepill">{"groups":[[0,1],[2,3]]} <span class="d">// 출력 ≈ 수십 tok — 잘릴 것이 없다</span></span>
+            <div class="cost"><span class="chip violet"><span class="dot"></span>호출당 입력 ≈ 1.1k tok</span><span class="chip violet"><span class="dot"></span>출력 ≈ 수십 tok</span><span class="chip"><span class="dot"></span>think low</span><span class="chip"><span class="dot"></span>실패 시: 청크 이분할 재시도 1회</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- stage 2 -->
+    <div class="stage llm reveal">
+      <div class="rail"><div class="dotno">2</div><div class="vline"></div></div>
+      <div class="body">
+        <div class="card tick v">
+          <div style="padding:24px 26px">
+            <div class="headrow"><h3>대표 머지</h3><span class="badge llm">LLM ×1</span></div>
+            <p class="desc">각 그룹의 <b>대표 이름만</b>(~52개) 모아 같은 계약으로 한 번 더 판정.
+            모든 대표가 서로 만나는 지점 — <b>one-shot 동등성(커버리지 ②)이 여기서 성립</b>한다.
+            병합 0건이면 fixpoint 종료, 최대 2라운드 캡.</p>
+            <div class="keypoint">현실 스케일(식당당 distinct &lt; 150)에서는 머지가 거의 항상 1콜로 끝난다 — 입력 1k tok 미만, 출력 수십 tok.</div>
+            <div class="cost"><span class="chip violet"><span class="dot"></span>입력 = 대표 G개 이름</span><span class="chip violet"><span class="dot"></span>출력 ≈ 수십 tok</span><span class="chip"><span class="dot"></span>병합은 union — 단조 증가</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- stage 3 -->
+    <div class="stage det reveal">
+      <div class="rail"><div class="dotno">3</div></div>
+      <div class="body" style="padding-bottom:0">
+        <div class="card tick">
+          <div style="padding:24px 26px">
+            <div class="headrow"><h3>UNION-FIND 확정 · canonical 결정</h3><span class="badge det">Deterministic · 무료</span></div>
+            <p class="desc">전 라운드의 병합을 전이 병합(커버리지 ③). 그룹의 표시 이름은 <b>코드가 결정</b> —
+            멤버 중 <b>최단 표기</b>, 동률이면 <b>멘션 빈도 최다</b>(이미 보유한 <code class="mono" style="font-size:12.5px">bestNameByNorm</code> 빈도 사용). 저장은 기존 트랜잭션 그대로.</p>
+            <div class="cost"><span class="chip"><span class="dot"></span>LLM 0회</span><span class="chip cyan"><span class="dot"></span>창작 canonical 구조적 차단</span><span class="chip cyan"><span class="dot"></span>프롬프트의 canonical 규칙 섹션 삭제</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- worked example -->
+  <div class="card tick example reveal">
+    <div class="exhead"><span class="t">미니 시나리오</span><span class="m">12개 메뉴 · 청크 2개로 보는 전체 흐름</span></div>
+    <div class="legend">
+      <span><i style="background:rgba(79,216,196,.5)"></i>같은 그룹 (청크 안)</span>
+      <span><i style="background:rgba(95,168,255,.5)"></i>같은 그룹 (청크 안)</span>
+      <span><i style="background:rgba(255,180,84,.5)"></i>같은 그룹 (청크 안)</span>
+      <span><i style="background:rgba(160,141,255,.6)"></i>★ 청크 경계를 넘어 머지에서 병합</span>
+      <span><i style="background:rgba(255,255,255,.08)"></i>singleton</span>
+    </div>
+    <div class="exgrid">
+      <div class="excol">
+        <div class="colcap">Stage 0–1 · 분할 후 청크 그룹핑</div>
+        <div class="chunkbox">
+          <div class="cname">CHUNK A — 탕·찌개류로 정렬됨</div>
+          <span class="mitem g1"><span class="ix">0</span>설렁탕</span>
+          <span class="mitem g1"><span class="ix">1</span>특설렁탕</span>
+          <span class="mitem g2"><span class="ix">2</span>김치찌개</span>
+          <span class="mitem g2"><span class="ix">3</span>묵은지김치찌개</span>
+          <span class="mitem"><span class="ix">4</span>된장찌개</span>
+          <span class="mitem gx"><span class="ix">5</span>돈까스</span>
+          <span class="exout">{"groups":[[0,1],[2,3]]} <span class="d">// 12 tok</span></span>
+        </div>
+        <div class="chunkbox">
+          <div class="cname">CHUNK B</div>
+          <span class="mitem"><span class="ix">0</span>수육</span>
+          <span class="mitem"><span class="ix">1</span>도가니수육</span>
+          <span class="mitem"><span class="ix">2</span>치즈돈까스</span>
+          <span class="mitem gx"><span class="ix">3</span>수제돈까스</span>
+          <span class="mitem g3"><span class="ix">4</span>공기밥</span>
+          <span class="mitem g3"><span class="ix">5</span>공깃밥</span>
+          <span class="exout">{"groups":[[4,5]]} <span class="d">// 9 tok</span></span>
+        </div>
+      </div>
+      <div class="exarr"><span>→</span></div>
+      <div class="excol">
+        <div class="colcap">Stage 2 · 대표 9개 머지</div>
+        <div class="repbox">
+          <span class="mitem"><span class="ix">0</span>설렁탕</span>
+          <span class="mitem"><span class="ix">1</span>김치찌개</span>
+          <span class="mitem"><span class="ix">2</span>된장찌개</span>
+          <span class="mitem gx"><span class="ix">3</span>돈까스</span>
+          <span class="mitem"><span class="ix">4</span>수육</span>
+          <span class="mitem"><span class="ix">5</span>도가니수육</span>
+          <span class="mitem"><span class="ix">6</span>치즈돈까스</span>
+          <span class="mitem gx"><span class="ix">7</span>수제돈까스</span>
+          <span class="mitem"><span class="ix">8</span>공기밥</span>
+          <span class="exout">{"groups":[<span class="hl">[3,7]</span>]} <span class="d">// 8 tok</span></span>
+        </div>
+        <p style="font-size:12.5px;color:var(--mut);margin-top:12px">청크가 갈라놓았던 <b style="color:var(--violet)">돈까스 · 수제돈까스</b>가 대표 머지에서 만나 병합 — 커버리지 ②의 실증.</p>
+      </div>
+      <div class="exarr"><span>→</span></div>
+      <div class="excol">
+        <div class="colcap">Stage 3 · 확정 — 12개 → 8그룹</div>
+        <div class="fingroup"><b>설렁탕</b><span style="font-size:11px;color:var(--faint)">← 특설렁탕</span><span class="cnt">×2</span></div>
+        <div class="fingroup"><b>김치찌개</b><span style="font-size:11px;color:var(--faint)">← 묵은지김치찌개</span><span class="cnt">×2</span></div>
+        <div class="fingroup star"><b>돈까스</b><span style="font-size:11px;color:var(--faint)">← 수제돈까스</span><span class="tagx">MERGE</span><span class="cnt">×2</span></div>
+        <div class="fingroup"><b>공기밥</b><span style="font-size:11px;color:var(--faint)">← 공깃밥</span><span class="cnt">×2</span></div>
+        <div class="fingroup"><b>된장찌개</b><span class="cnt">×1</span></div>
+        <div class="fingroup"><b>수육</b> · <b>도가니수육</b> · <b>치즈돈까스</b><span class="cnt">각 ×1</span></div>
+        <p style="font-size:12.5px;color:var(--mut);margin-top:12px">치즈돈까스는 끝까지 분리 — <b>재료 차이는 다른 그룹</b> 규칙이 그대로 보존된다. canonical은 전부 최단 표기 규칙으로 코드가 선정.</p>
+      </div>
+    </div>
+    <div class="exfoot"><b>왜 도가니수육·차돌박이된장찌개류는 안 묶이나?</b> — 핵심 재료가 다르면 다른 그룹이라는 기존 프롬프트 철학("애매하면 분리")은 모든 단계에서 동일하게 유지된다.</div>
+  </div>
+
+  <!-- structural bonuses -->
+  <div class="bonus">
+    <div class="card reveal">
+      <div class="t">실패의 의미가 바뀐다</div>
+      <p>현행: 청크 실패 = 전원 identity <b>확정</b> (이번 장애의 64개 전멸).<br>제안: 1단계 실패 청크의 항목은 <b>singleton 자격으로 머지에 진입</b> — 거기서 여전히 묶일 수 있다. 실패가 "포기"에서 "문맥 약화"로 강등된다.</p>
+    </div>
+    <div class="card reveal" style="transition-delay:.08s">
+      <div class="t">청크 경계 한계의 해소</div>
+      <p>현행이 주석으로 "수용"했던 <b>같은 청크 안에서만 병합</b> 제약이 머지 라운드 도입으로 설계 차원에서 사라진다.</p>
+    </div>
+    <div class="card reveal" style="transition-delay:.16s">
+      <div class="t">토큰 상한 영구 고정</div>
+      <p>호출당 입출력이 N과 무관해져 <b>maxTokens / numCtx를 작은 값으로 못 박을 수 있다</b>. 출력이 짧을수록 truncation·형식 이탈 확률 자체가 급감한다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLATE 05 DECISIONS ================= -->
+<section id="decisions">
+  <span class="plate-no">PLATE 05 / 09</span>
+  <div class="eyebrow reveal">Design Decisions — 핵심 설계 결정</div>
+  <h2 class="reveal">네 가지 결정이<br>구조를 지탱한다</h2>
+
+  <div class="decisions">
+    <div class="card tick reveal">
+      <div class="dno">DECISION 01</div>
+      <h3>출력은 "병합 그룹만, 인덱스로"</h3>
+      <p>현행 코드는 이미 빠진 키를 identity 처리한다 — 즉 "전 항목 에코"는 <b>정보량 0인 singleton까지 출력시키는 과잉 계약</b>이다. 진짜 정보는 묶이는 것들뿐.</p>
+      <div class="jsoncmp">
+        <div class="row"><span class="tag b4">현행</span><pre class="bad">{"설렁탕":"설렁탕","특설렁탕":"설렁탕","수육":"수육", &hellip;&times;64<span class="tok">≈ 1,500–2,000 tok ⚠ 잘림</span></pre></div>
+        <div class="row"><span class="tag af">제안</span><pre class="good">{"groups":[[0,1],[2,3]]}<span class="tok">≈ 수십 tok</span></pre></div>
+      </div>
+    </div>
+    <div class="card tick reveal" style="transition-delay:.07s">
+      <div class="dno">DECISION 02</div>
+      <h3>canonical은 코드가 결정한다</h3>
+      <p>LLM의 책임을 <b>membership 판정으로 축소</b>. 표시 이름은 결정적 규칙(최단 표기 → 동률 시 멘션 빈도)으로 선정한다. 효과 세 가지: 프롬프트의 canonical 규칙 섹션 삭제, <b>입력에 없는 이름 창작이 구조적으로 불가능</b>, 출력 추가 축소.</p>
+    </div>
+    <div class="card tick reveal" style="transition-delay:.14s">
+      <div class="dno">DECISION 03</div>
+      <h3>실패는 singleton 통과 — graceful degradation</h3>
+      <p>1단계 청크 실패 → 해당 항목들이 <b>대표 자격으로 머지 단계에 흘러들어</b> 재기회를 얻는다. 머지 실패 → 1단계 결과는 그대로 유효. 어느 단계가 죽어도 <b>"전부 identity 확정"이라는 최악 경로가 사라진다</b>. + parse 실패 시 청크 이분할 재시도 1회.</p>
+    </div>
+    <div class="card tick reveal" style="transition-delay:.21s">
+      <div class="dno">DECISION 04</div>
+      <h3>유사도는 게이트가 아니라 배치 휴리스틱</h3>
+      <p>유사도로 <b>후보를 거르면</b>(블로킹 게이트) "계란말이=달걀말이" 같은 표면 유사도 0의 동의어를 영구히 못 잡는 recall 상한이 생긴다. <b>배치에만 쓰면</b> 그런 쌍도 머지 라운드에서 대표끼리 만나므로 — 상한이 LLM 판단력 수준으로 회복된다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLATE 06 INCREMENTAL ================= -->
+<section id="incremental">
+  <span class="plate-no">PLATE 06 / 09</span>
+  <div class="eyebrow reveal">Incremental — 증분 모드</div>
+  <h2 class="reveal">이번 장애의 실제 맥락:<br>새 메뉴 2개에 전량 재빌드</h2>
+  <p class="lead reveal">스케줄은 <code class="mono" style="font-size:14px">unmappedMenus &gt; 0</code>인 식당을 잡아 <b>매번 전체 삭제 후 재그룹핑</b>한다
+  (deleteMany + createMany). 새 메뉴가 2개만 늘어도 64개 전체의 비용·리스크를 다시 지불하는 구조.</p>
+
+  <div class="flows">
+    <div class="card tick r flow reveal">
+      <div class="fhead"><span class="badge warn">현행</span><span class="t">매 주기 전량 재빌드</span></div>
+      <div class="flowline">
+        <div class="fnode"><b>크롤</b><small>새 메뉴 +2</small></div>
+        <div class="farr">→</div>
+        <div class="fnode"><b>unmapped &gt; 0</b><small>attention 대상</small></div>
+        <div class="farr">→</div>
+        <div class="fnode bad"><b>전량 삭제</b><small>기존 매핑 64건 폐기</small></div>
+        <div class="farr">→</div>
+        <div class="fnode bad"><b>64개 재그룹핑</b><small>전체 비용 + 전체 실패 리스크</small></div>
+      </div>
+      <div class="fnote">이번 장애도 이 경로 — 이미 그룹핑돼 있었을 64개가 재그룹핑되다 전멸했다.</div>
+    </div>
+    <div class="card tick flow reveal" style="transition-delay:.1s">
+      <div class="fhead"><span class="badge det" style="background:var(--cyan-t);color:var(--cyan);border-color:rgba(79,216,196,.4)">제안</span><span class="t">배정(assign) 콜로 단락</span></div>
+      <div class="flowline">
+        <div class="fnode"><b>신규 변형 2개</b><small>미배정분만</small></div>
+        <div class="farr">+</div>
+        <div class="fnode"><b>기존 그룹 대표 ~50</b><small>이름만, 컴팩트</small></div>
+        <div class="farr">→</div>
+        <div class="fnode good"><b>배정 콜 ×1</b><small>기존 그룹 배정 or 신규끼리 묶기 or singleton · 수백 tok</small></div>
+        <div class="farr">→</div>
+        <div class="fnode good"><b>그룹 갱신</b><small>기존 매핑 보존</small></div>
+      </div>
+      <div class="fnote">전량 재빌드는 <b>MENU_GROUPING_VERSION 범프 때만</b>. 머지(Stage 2)와 입출력 계약이 동일해 구현이 거의 공짜로 따라온다.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLATE 07 COST ================= -->
+<section id="cost">
+  <span class="plate-no">PLATE 07 / 09</span>
+  <div class="eyebrow reveal">Comparison — 비용·리스크 비교</div>
+  <h2 class="reveal">64개 기준, 현행 vs 제안</h2>
+
+  <div class="vs card reveal">
+    <table>
+      <thead><tr><th>항목</th><th class="b4">현행 — ONE-SHOT</th><th class="af">제안 — 분할·머지</th></tr></thead>
+      <tbody>
+        <tr><td>LLM 호출</td><td>1회 (거대)</td><td>4회 — 청크 3 병렬 + 머지 1 (지연 비슷)</td></tr>
+        <tr><td>호출당 출력</td><td><span class="x">✗</span>전 항목 에코 ≈ 1,500–2,000 tok</td><td><span class="o">✓</span>병합 그룹만 ≈ 수십 tok</td></tr>
+        <tr><td>truncation 위험</td><td><span class="x">✗</span>사고+출력이 4000 공유 → 높음 (이번 장애)</td><td><span class="o">✓</span>출력 붕괴로 사실상 소멸</td></tr>
+        <tr><td>실패 반경</td><td><span class="x">✗</span>64개 전부 identity 확정</td><td><span class="o">✓</span>청크 1개 문맥 약화 — 머지에서 재기회</td></tr>
+        <tr><td>청크 간 병합</td><td><span class="x">✗</span>불가 (주석으로 수용한 한계)</td><td><span class="o">✓</span>대표 머지가 커버 — one-shot 동등</td></tr>
+        <tr><td>canonical 품질</td><td><span class="x">✗</span>창작 가능 · 에코 오차 silent identity</td><td><span class="o">✓</span>인덱스 + 코드 결정 — 구조적 차단</td></tr>
+        <tr><td>스케줄 증분</td><td><span class="x">✗</span>새 메뉴 2개에도 전량 재빌드</td><td><span class="o">✓</span>배정 콜 1번 · 수백 tok</td></tr>
+        <tr><td>토큰 합계</td><td>입력 ~2.5k + 사고 폭주 + 출력 2k</td><td>4 × (입력 ≤1.1k + 짧은 사고 + 수십 tok) — 비슷하거나 적음</td></tr>
+        <tr><td>한도 설정</td><td>식당 크기 따라 계속 상향 필요</td><td><span class="o">✓</span>작은 값으로 영구 고정</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= PLATE 08 LIMITS ================= -->
+<section id="limits">
+  <span class="plate-no">PLATE 08 / 09</span>
+  <div class="eyebrow reveal">Honest Limits — 동등성의 정직한 한계</div>
+  <h2 class="reveal">어디까지 보장되고,<br>어디서부터 실질인가</h2>
+
+  <div class="limits">
+    <div class="card reveal">
+      <h3>한계 ① — 대표가 의미를 보존한다는 가정</h3>
+      <p>머지는 그룹 <b>대표끼리의</b> 비교다. '변형끼리는 닮았는데 대표끼리는 안 닮은' 쌍은 이론상 놓칠 수 있다. 다만 최단-표기 대표는 이 도메인에서 거의 항상 핵심 이름이라 실제 위험은 낮다.</p>
+    </div>
+    <div class="card reveal" style="transition-delay:.08s">
+      <h3>한계 ② — 대표 수 G가 극단적으로 클 때</h3>
+      <p>G가 머지 1콜 한도를 넘으면 전수 비교가 아닌 <b>정렬 + 추가 라운드의 실질 커버리지</b>로 내려간다. 식당당 distinct &lt; 150인 현실 스케일에서는 거의 발생하지 않는다.</p>
+    </div>
+  </div>
+  <div class="limitfoot reveal">두 한계 모두 <b>현행("청크 밖이면 무조건 못 묶음")보다 엄격히 우월</b>하고, 잘못돼도 방향이 <b>덜 묶는 쪽</b> — 기존 프롬프트 철학 "애매하면 분리"와 같은 방향이라 과병합으로 통계가 망가질 위험은 없다.</div>
+</section>
+
+<!-- ================= PLATE 09 ROADMAP ================= -->
+<section id="roadmap">
+  <span class="plate-no">PLATE 09 / 09</span>
+  <div class="eyebrow reveal">Roadmap — 구현 로드맵</div>
+  <h2 class="reveal">세 단계, 앞 두 개는 한 묶음</h2>
+
+  <div class="road">
+    <div class="phase reveal">
+      <div class="pdot">P1</div>
+      <div class="card tick">
+        <h3>출력 계약 교체</h3>
+        <div class="sub">FOUNDATION — 모든 단계의 공용 부품</div>
+        <ul>
+          <li><b>인덱스 병합 그룹</b> 출력으로 프롬프트·스키마·파서 교체</li>
+          <li><b>canonical 결정론화</b> (최단 → 빈도)</li>
+          <li>어댑터 <b>think 옵션</b> 추가 (gpt-oss는 low)</li>
+          <li>temperature 정상화 (≈1.0)</li>
+          <li>실패 계측: <b>done_reason · 토큰 수 · 응답 스니펫</b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="phase reveal" style="transition-delay:.08s">
+      <div class="pdot">P2</div>
+      <div class="card tick">
+        <h3>분할 · 머지 도입</h3>
+        <div class="sub">CORE — 동등성 확보</div>
+        <ul>
+          <li><b>유사도 정렬 분할</b> (청크 24~32)</li>
+          <li>청크 그룹핑 <b>병렬 실행</b> (동시성 게이트 재사용)</li>
+          <li><b>대표 머지 1라운드</b> + fixpoint/2라운드 캡</li>
+          <li><b>union-find</b> 전이 병합</li>
+          <li>실패 시 singleton 통과 + 이분할 재시도</li>
+        </ul>
+      </div>
+    </div>
+    <div class="phase reveal" style="transition-delay:.16s">
+      <div class="pdot">P3</div>
+      <div class="card tick">
+        <h3>증분 모드</h3>
+        <div class="sub">OPERATIONS — 스케줄 비용 절감</div>
+        <ul>
+          <li>기존 그룹 보유 식당은 <b>배정 콜로 단락</b></li>
+          <li>전량 재빌드는 <b>VERSION 범프 때만</b></li>
+          <li>운영 로그로 병합률·실패율 관측 후 청크 크기 튜닝</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bundle reveal">P1 + P2 한 묶음 권장 — 테스트 경계가 깔끔하다</div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <h4>근거 코드</h4>
+        <ul>
+          <li><code>menu-grouping/menu-grouping.service.ts:26-29</code> — maxTokens 4000 · numCtx 8192 · temp 0.1</li>
+          <li><code>menu-grouping/menu-grouping.service.ts:259-264</code> — 빠진 키 identity fallback (exact-string lookup)</li>
+          <li><code>menu-grouping/menu-grouping.service.ts:282-285</code> — deleteMany + createMany 전량 재빌드</li>
+          <li><code>menu-grouping/menu-grouping.prompts.ts:66</code> — MENU_GROUPING_CHUNK_SIZE 80</li>
+          <li><code>ai/adapters/ollama-cloud.adapter.ts:118-134</code> — think 미전달 · done_reason 미수집</li>
+          <li><code>summary/summary.service.ts:134, 1345</code> — normalizeTerm · extractFirstJsonObject</li>
+        </ul>
+      </div>
+      <div>
+        <h4>관련 이슈 · 참고</h4>
+        <ul>
+          <li><a href="https://github.com/ollama/ollama/issues/11867">ollama#11867</a> — gpt-oss + format이면 응답이 빈다</li>
+          <li><a href="https://github.com/ollama/ollama/issues/11691">ollama#11691</a> — gpt-oss structured output 실패 (open)</li>
+          <li><a href="https://github.com/ollama/ollama/issues/14440">ollama#14440</a> — thinking 시 structured output 미강제</li>
+          <li><a href="https://ollama.com/library/gpt-oss">ollama.com/library/gpt-oss</a> — think low · medium · high</li>
+          <li>장애 run meta — inputCount 64 · chunks 1 · groupCount 64 · gpt-oss:120b</li>
+        </ul>
+      </div>
+    </div>
+    <div class="gen">NINEY-LIFE-PICKR-V2 · MENU GROUPING SPLIT/MERGE RFC · 2026-06-13 · GENERATED WITH CLAUDE CODE</div>
+  </div>
+</footer>
+
+<script>
+// scroll reveal
+const io = new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+// scroll-spy nav
+const links = [...document.querySelectorAll('#navlinks a')];
+const secs = links.map((a) => document.querySelector(a.getAttribute('href')));
+const spy = new IntersectionObserver((es) => {
+  for (const e of es) {
+    if (!e.isIntersecting) continue;
+    const i = secs.indexOf(e.target);
+    links.forEach((l, j) => l.classList.toggle('on', i === j));
+  }
+}, { rootMargin: '-30% 0px -60% 0px' });
+secs.forEach((s) => s && spy.observe(s));
+</script>
+</body>
+</html>
