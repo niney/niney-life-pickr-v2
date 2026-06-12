@@ -19,6 +19,7 @@ import { AdminMapKeysPage } from './AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './AdminRestaurantDetailPage';
 import { AdminRestaurantsPage } from './AdminRestaurantsPage';
 import { AdminSettingsPage } from './AdminSettingsPage';
+import { AdminTablingTestPage } from './AdminTablingTestPage';
 
 // 어드민 서브트리 전체를 한 모듈로 모아 App.tsx 에서 React.lazy 로 1회만 import
 // 하기 위한 컴포넌트. 어드민 16개 페이지 + OpenLayers(지도) 코드가 메인 번들에서
@@ -40,6 +41,7 @@ const AdminRoutes = () => (
       <Route path="catchtable-test/:shopRef" element={<AdminCatchtableShopPage />} />
       <Route path="diningcode-test" element={<AdminDiningcodeTestPage />} />
       <Route path="diningcode-test/:vRid" element={<AdminDiningcodeShopPage />} />
+      <Route path="tabling-test" element={<AdminTablingTestPage />} />
       <Route path="diningcode" element={<AdminDiningcodePage />} />
       <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
       <Route path="analytics" element={<AdminAnalyticsPage />} />

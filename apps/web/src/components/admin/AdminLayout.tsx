@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { to: '/admin/crawl-test', label: '네이버 크롤링 테스트', icon: Beaker },
   { to: '/admin/catchtable-test', label: '캐치테이블 크롤링 테스트', icon: Beaker },
   { to: '/admin/diningcode-test', label: '다이닝코드 크롤링 테스트', icon: Beaker },
+  { to: '/admin/tabling-test', label: '테이블링 크롤링 테스트', icon: Beaker },
   { to: '/admin/ai-test', label: 'AI 테스트', icon: Sparkles },
   { to: '/admin/logs', label: '로그', icon: ScrollText },
   { to: '/admin/settings', label: '설정', icon: Settings },

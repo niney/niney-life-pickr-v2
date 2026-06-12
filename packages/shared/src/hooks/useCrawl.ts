@@ -144,6 +144,67 @@ export const useSaveDiningcodeShop = () =>
     mutationFn: (vRid: string) => crawlApi.diningcodeShopSave(vRid),
   });
 
+// ── 테이블링 — /admin/tabling-test 페이지 ────────────────────────────────
+// 가게 상세(상세+메뉴+리뷰 첫 페이지 합본). idx null/0 이면 disabled. 무인증
+// REST 직접 호출이라 첫 호출도 빠름. 5분 staleTime(검증 도구).
+export const useTablingShop = (idx: number | null) =>
+  useQuery({
+    queryKey: ['crawl', 'tabling-shop', idx],
+    queryFn: () => crawlApi.tablingShop(idx!),
+    enabled: idx != null && idx > 0,
+    staleTime: 5 * 60_000,
+  });
+
+// 가게 DB 저장 + 좌표 기반 자동매칭 mutation. 성공 시 등록 배지/리스트/제안
+// 캐시 무효화 — 새 가게가 cross-source 제안에 잡힐 수 있어서.
+export const useSaveTablingShop = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (idx: number) => crawlApi.tablingShopSave(idx),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crawl', 'tabling-registered'] });
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+    },
+  });
+};
+
+// 미입점 place(JSON-LD) 저장 mutation.
+export const useSaveTablingPlace = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (objectId: string) => crawlApi.tablingPlaceSave(objectId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+    },
+  });
+};
+
+// 사이트맵 기반 발견 — 검색 API 가 없어 전수 발견 백본. enabled 로 lazy 호출.
+export const useTablingDiscover = (
+  tier: 'shop' | 'place',
+  page: number,
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['crawl', 'tabling-discover', tier, page],
+    queryFn: () => crawlApi.tablingDiscover({ tier, page }),
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+
+// 등록됨 배지 — idx 다수 일괄 조회. 비면 disabled.
+export const useTablingRegistered = (idxs: number[]) => {
+  const key = idxs.join(',');
+  return useQuery({
+    queryKey: ['crawl', 'tabling-registered', key],
+    queryFn: () => crawlApi.tablingRegistered(idxs),
+    enabled: idxs.length > 0,
+    staleTime: 30_000,
+  });
+};
+
 // 캐치테이블 가게 상세 — shopRef 가 null/undefined 면 disabled. 한 가게당
 // 한 번 가져오면 staleTime 5분 유지 (검증 도구라 자주 invalidate 안 함).
 export const useCatchtableShop = (shopRef: string | null) =>

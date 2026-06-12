@@ -16,6 +16,12 @@ import {
   type DiningcodeShopDataType,
   type DiningcodeShopReviewsResponseType,
   type SaveDiningcodeShopResultType,
+  type SaveTablingShopResultType,
+  type SaveTablingPlaceResultType,
+  type TablingShopDataType,
+  type TablingShopReviewsResponseType,
+  type TablingRegisteredResultType,
+  type TablingDiscoverResultType,
   type StartCrawlResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -187,6 +193,57 @@ export const crawlApi = {
 
   diningcodeBulkSaveCancel: (jobId: string) =>
     apiFetch<void>(Routes.Crawl.diningcodeBulkSaveJob(jobId), { method: 'DELETE' }),
+
+  // 테이블링 가게 상세 — idx 하나로 상세+메뉴+리뷰 첫 페이지 합본(무인증 REST).
+  tablingShop: (idx: number) =>
+    apiFetch<TablingShopDataType>(Routes.Crawl.tablingShop(String(idx))),
+
+  // 테이블링 리뷰 커서 페이지네이션. cursor 는 직전 응답의 nextCursor.
+  tablingShopReviews: (idx: number, cursor?: string | null) => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    const qs = params.toString();
+    const sep = qs ? '?' : '';
+    return apiFetch<TablingShopReviewsResponseType>(
+      `${Routes.Crawl.tablingShopReviews(String(idx))}${sep}${qs}`,
+    );
+  },
+
+  // 테이블링 가게를 DB 저장 (+리뷰 persist + AI 큐 + 좌표 기반 로컬 canonical
+  // 자동매칭). 응답 동기 — 리뷰 페이지 fetch 끝나야 200.
+  tablingShopSave: (idx: number) =>
+    apiFetch<SaveTablingShopResultType>(Routes.Crawl.tablingShopSave(String(idx)), {
+      method: 'POST',
+    }),
+
+  // 미입점 place(JSON-LD 얕은 티어) 저장.
+  tablingPlaceSave: (objectId: string) =>
+    apiFetch<SaveTablingPlaceResultType>(Routes.Crawl.tablingPlaceSave(objectId), {
+      method: 'POST',
+    }),
+
+  // 등록됨 배지용 — idx 다수 조회.
+  tablingRegistered: (idxs: number[]) => {
+    const params = new URLSearchParams({ ids: idxs.join(',') });
+    return apiFetch<TablingRegisteredResultType>(
+      `${Routes.Crawl.tablingRegistered}?${params.toString()}`,
+    );
+  },
+
+  // 사이트맵 기반 발견 — tier=shop(partner idx) | place(미입점 objectId, page 1~5).
+  tablingDiscover: ({
+    tier,
+    page,
+  }: {
+    tier: 'shop' | 'place';
+    page?: number | null;
+  }) => {
+    const params = new URLSearchParams({ tier });
+    if (page != null) params.set('page', String(page));
+    return apiFetch<TablingDiscoverResultType>(
+      `${Routes.Crawl.tablingDiscover}?${params.toString()}`,
+    );
+  },
 };
 
 // 다이닝코드 일괄 저장 SSE URL — token query.
