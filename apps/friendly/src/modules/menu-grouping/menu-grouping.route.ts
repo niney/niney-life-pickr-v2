@@ -25,7 +25,11 @@ const menuGroupingRoutes: FastifyPluginAsync = async (app) => {
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
   });
-  const grouping = new MenuGroupingService(app.prisma, aiConfig, { logger: app.log });
+  const grouping = new MenuGroupingService(app.prisma, aiConfig, {
+    logger: app.log,
+    // 범용 작업 로그 — 식당별 그룹핑 1회 = OperationRun 1개.
+    operationLog: app.operationLog,
+  });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Analytics.restaurantsStatus, {
@@ -215,7 +219,9 @@ async function runJob(
     }
     groupingJobRegistry.markItemStart(jobId, placeId);
     try {
-      const result = await service.groupForRestaurant(placeId);
+      // 벌크 잡의 레지스트리 jobId 를 OperationRun.jobId 로 — 어드민 로그
+      // 화면에서 같은 잡의 식당별 run 들을 묶어 볼 수 있게.
+      const result = await service.groupForRestaurant(placeId, { jobId, trigger: 'manual' });
       groupingJobRegistry.finishItem(jobId, placeId, {
         ok: true,
         inputCount: result.inputCount,

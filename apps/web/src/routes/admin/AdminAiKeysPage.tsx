@@ -61,17 +61,19 @@ const buildUpdateInput = (form: FormState, original: LlmProviderConfigType): Upd
   return out;
 };
 
-// 어드민이 카드 추가 시 선택 가능한 purpose 목록. 현재 chat / image 두 종류.
-const ADDABLE_PURPOSES: LlmProviderPurposeType[] = ['chat', 'image'];
+// 어드민이 카드 추가 시 선택 가능한 purpose 목록.
+const ADDABLE_PURPOSES: LlmProviderPurposeType[] = ['chat', 'image', 'log-analysis'];
 
 const PURPOSE_LABEL: Record<LlmProviderPurposeType, string> = {
   chat: '텍스트 (chat)',
   image: '이미지 (image)',
+  'log-analysis': '로그 분석 (log-analysis)',
 };
 
 const PURPOSE_DESCRIPTION: Record<LlmProviderPurposeType, string> = {
   chat: '리뷰 요약·메뉴 그룹핑 등 텍스트 추론에 사용됩니다.',
   image: '영수증 추출 등 이미지 입력 모델에 사용됩니다.',
+  'log-analysis': '실패한 작업의 원인 분석·보고서 작성에 사용됩니다. 미설정 시 자동 분석은 건너뜁니다.',
 };
 
 export const AdminAiKeysPage = () => {
@@ -95,8 +97,8 @@ export const AdminAiKeysPage = () => {
   return (
     <div>
       <p className="mb-4 text-sm text-muted-foreground">
-        LLM 제공자별 API 키와 동시성 설정을 관리합니다. 같은 제공자라도 용도(chat / image)별로
-        별도 모델을 둘 수 있습니다.
+        LLM 제공자별 API 키와 동시성 설정을 관리합니다. 같은 제공자라도 용도(chat / image /
+        log-analysis)별로 별도 모델을 둘 수 있습니다.
       </p>
 
       {providers.isLoading && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
@@ -385,7 +387,13 @@ const ProviderCard = ({
           >
             <Input
               type="text"
-              placeholder={purpose === 'image' ? 'llama3.2-vision' : 'gpt-oss:20b'}
+              placeholder={
+                purpose === 'image'
+                  ? 'llama3.2-vision'
+                  : purpose === 'log-analysis'
+                    ? 'gpt-oss:120b'
+                    : 'gpt-oss:20b'
+              }
               list={datalistId}
               value={form.defaultModel}
               onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}

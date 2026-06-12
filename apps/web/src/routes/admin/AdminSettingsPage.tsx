@@ -1,5 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { KeyRound, Map as MapIcon, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
+import {
+  KeyRound,
+  Map as MapIcon,
+  ScrollText,
+  Settings as SettingsIcon,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '~/lib/utils';
 
 interface Tab {
@@ -12,6 +18,7 @@ interface Tab {
 const TABS: Tab[] = [
   { to: '/admin/settings/ai-keys', label: 'AI 키', icon: KeyRound },
   { to: '/admin/settings/map', label: '지도', icon: MapIcon },
+  { to: '/admin/settings/logs', label: '로그', icon: ScrollText },
 ];
 
 export const AdminSettingsPage = () => (

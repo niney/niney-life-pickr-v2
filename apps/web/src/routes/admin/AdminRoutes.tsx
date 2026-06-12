@@ -12,6 +12,9 @@ import { AdminDiningcodeShopPage } from './AdminDiningcodeShopPage';
 import { AdminDiningcodeTestPage } from './AdminDiningcodeTestPage';
 import { AdminDiscoverPage } from './AdminDiscoverPage';
 import { AdminHomePage } from './AdminHomePage';
+import { AdminLogRunDetailPage } from './AdminLogRunDetailPage';
+import { AdminLogSettingsPage } from './AdminLogSettingsPage';
+import { AdminLogsPage } from './AdminLogsPage';
 import { AdminMapKeysPage } from './AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './AdminRestaurantDetailPage';
 import { AdminRestaurantsPage } from './AdminRestaurantsPage';
@@ -40,6 +43,8 @@ const AdminRoutes = () => (
       <Route path="diningcode" element={<AdminDiningcodePage />} />
       <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
       <Route path="analytics" element={<AdminAnalyticsPage />} />
+      <Route path="logs" element={<AdminLogsPage />} />
+      <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />
       <Route path="ai-test" element={<AdminAiTestPage />} />
       {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}
       <Route path="ai-keys" element={<Navigate to="/admin/settings/ai-keys" replace />} />
@@ -47,6 +52,7 @@ const AdminRoutes = () => (
         <Route index element={<Navigate to="ai-keys" replace />} />
         <Route path="ai-keys" element={<AdminAiKeysPage />} />
         <Route path="map" element={<AdminMapKeysPage />} />
+        <Route path="logs" element={<AdminLogSettingsPage />} />
       </Route>
     </Route>
   </Routes>

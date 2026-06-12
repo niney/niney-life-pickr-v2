@@ -12,7 +12,9 @@ import { env } from '../config/env.js';
 //
 // 의존: prisma 플러그인(app.prisma). 자체 aiConfig 를 만들어 summaries 플러그인
 // 로드 순서에 의존하지 않는다 — autoload 알파벳순상 'schedule' < 'summaries' 라
-// schedule 이 먼저 잡히므로 app.aiConfig 재사용은 불가.
+// schedule 이 먼저 잡히므로 app.aiConfig 재사용은 불가. operationLog 는 logs
+// 플러그인이 decorate — cron 경로의 schedule run 과 자식(menu-grouping/
+// global-merge) run 이 parentRunId 로 연계되려면 여기서도 주입해야 한다.
 export default fp(
   async (app) => {
     const aiConfig = new AiConfigService(app.prisma, {
@@ -24,14 +26,17 @@ export default fp(
     });
     const menuGrouping = new MenuGroupingService(app.prisma, aiConfig, {
       logger: app.log,
+      operationLog: app.operationLog,
     });
     const analytics = new AnalyticsService(app.prisma, aiConfig, {
       logger: app.log,
+      operationLog: app.operationLog,
     });
     const schedule = new ScheduleService(app.prisma, {
       menuGrouping,
       analytics,
       logger: app.log,
+      operationLog: app.operationLog,
     });
 
     app.decorate('schedule', schedule);
@@ -43,7 +48,7 @@ export default fp(
       scheduleRegistry.abortInflight();
     });
   },
-  { name: 'schedule', dependencies: ['prisma'] },
+  { name: 'schedule', dependencies: ['prisma', 'logs'] },
 );
 
 declare module 'fastify' {

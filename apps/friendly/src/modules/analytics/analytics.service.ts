@@ -11,6 +11,10 @@ import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
+import type {
+  OperationLogInput,
+  OperationLogService,
+} from '../logs/operation-log.service.js';
 import { extractFirstJsonObject, normalizeTerm } from '../summary/summary.service.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from './category-tree.js';
 import {
@@ -116,6 +120,9 @@ export interface AnalyticsServiceOptions {
   cache?: AdapterCache;
   resolveOverride?: () => Promise<{ provider: LLMProvider; model: string } | null>;
   logger?: FastifyBaseLogger;
+  // 범용 작업 로그(OperationRun/스텝) 계측 — 미주입이면 계측 없이 머지 로직만
+  // 수행한다 (단위 테스트 / 아직 배선 안 된 호출자 호환).
+  operationLog?: OperationLogService | null;
 }
 
 // 머지 잡 진행 콜백. service 가 LLM 호출하면서 호출자(잡 러너)에게 chunk 단위
@@ -165,9 +172,103 @@ export class AnalyticsService {
   // 모든 MenuCanonical 그룹을 distinct canonicalName 으로 모아 두-패스 LLM
   // 머지 후 GlobalMenuCanonical + Link 에 저장. full=false 면 이미 링크된
   // 식당 그룹은 건드리지 않고 새로 추가된 것만 머지 대상에 추가.
+  //
+  // OperationRun 계측은 여기(서비스 내부)서 감싼다 — 호출자가 둘(어드민
+  // 라우트=jobId 보유 / 스케줄러=parentRunId 전달)이라 호출자별 계측은 누락이
+  // 생긴다. jobId/parentRunId 는 run 헤더용 메타일 뿐 머지 로직과 무관.
   async runGlobalMerge(
-    opts: { full: boolean },
+    opts: {
+      full: boolean;
+      parentRunId?: string | null;
+      // 어드민 라우트 경로의 globalMergeJobRegistry 잡 ID — OperationRun.jobId
+      // 로만 쓰인다 (스케줄 경로는 미전달 → null).
+      jobId?: string | null;
+    },
     progress: GlobalMergeProgress = {},
+  ): Promise<GlobalMergeResult> {
+    const oplog = this.opts.operationLog ?? null;
+    if (!oplog) {
+      return this.executeGlobalMerge(opts.full, progress, null);
+    }
+    const runId = await oplog.startRun({
+      feature: 'global-merge',
+      jobId: opts.jobId ?? null,
+      parentRunId: opts.parentRunId ?? null,
+      // jobId 있는 경로 = 어드민 수동 실행. 스케줄 경로의 트리거(cron/manual)는
+      // 부모 run 쪽에 기록되므로 여기서 추측해 오기록하지 않는다.
+      trigger: opts.jobId != null ? 'manual' : null,
+      meta: { full: opts.full },
+    });
+    try {
+      const result = await this.executeGlobalMerge(opts.full, progress, runId);
+      // totalChunks=0 은 full=false 에서 신규(미링크) 입력이 없던 정상 스킵 —
+      // failed 로 기록하면 cron 경로에 무의미한 실패 run 이 쌓인다.
+      const skipped = result.totalChunks === 0;
+      await oplog.finishRun(runId, {
+        status: 'done',
+        meta: {
+          ...(skipped ? { skipped: 'no_new_inputs' } : {}),
+          inputCount: result.inputCount,
+          finalGroupCount: result.finalGroupCount,
+          totalChunks: result.totalChunks,
+          doneChunks: result.doneChunks,
+          model: result.model,
+          version: result.version,
+        },
+      });
+      return result;
+    } catch (e) {
+      if (e instanceof AnalyticsError && e.code === 'no_inputs') {
+        // 머지할 입력이 아직 없는 것은 cron 경로의 정상 상태 — run 은 done 으로
+        // 마감하되 호출자 계약(AnalyticsError throw)은 그대로 유지한다.
+        this.logStep(runId, {
+          stage: 'load',
+          level: 'info',
+          message: '머지할 메뉴 그룹이 없어 종료',
+        });
+        await oplog.finishRun(runId, {
+          status: 'done',
+          meta: { skipped: 'no_inputs' },
+        });
+      } else if (e instanceof AnalyticsError) {
+        // no_provider — 설정 부재. 자동분석 제외 errorCode 라 보고서가 따라붙지 않는다.
+        this.logStep(runId, {
+          stage: 'resolve_provider',
+          level: 'error',
+          message: e.message,
+        });
+        await oplog.finishRun(runId, {
+          status: 'failed',
+          errorCode: e.code,
+          errorMessage: e.message,
+        });
+      } else {
+        const message = e instanceof Error ? e.message : String(e);
+        this.logStep(runId, { stage: 'merge', level: 'error', message });
+        await oplog.finishRun(runId, {
+          status: 'failed',
+          errorCode: 'unknown',
+          errorMessage: message,
+        });
+      }
+      throw e;
+    }
+  }
+
+  // 스텝 로그 헬퍼 — 계측 미주입(runId null)이면 무음. channel 기본 'none'
+  // (global-merge 는 SSE 로그 채널이 없음 — 잡 진행은 registry 가 따로 publish).
+  private logStep(
+    runId: string | null,
+    input: Omit<OperationLogInput, 'runId'>,
+  ): void {
+    if (runId === null) return;
+    this.opts.operationLog?.log({ runId, ...input });
+  }
+
+  private async executeGlobalMerge(
+    full: boolean,
+    progress: GlobalMergeProgress,
+    runId: string | null,
   ): Promise<GlobalMergeResult> {
     const resolved = await this.resolveProvider();
     if (!resolved) {
@@ -202,9 +303,15 @@ export class AnalyticsService {
     const inputVariants = distinctNorms.map((n) => nameByNorm.get(n)!);
 
     // full=false: 이미 모든 식당 그룹이 링크돼 있고 새로 추가된 것이 없으면 noop.
-    if (!opts.full) {
+    if (!full) {
       const unlinked = targets.filter((t) => !t.globalLink);
       if (unlinked.length === 0) {
+        this.logStep(runId, {
+          stage: 'load',
+          level: 'info',
+          message: '신규(미링크) 메뉴 그룹 없음 — 머지 스킵',
+          meta: { full, targetCount: targets.length },
+        });
         return {
           inputCount: 0,
           finalGroupCount: 0,
@@ -221,6 +328,18 @@ export class AnalyticsService {
       // 컨텍스트 join 없이 단순 chunking. 기존 매핑 유지가 목적이라면 full=true 권장.
     }
 
+    // 진행 콜백과 스텝 로그를 같은 지점에서 — onChunk(레지스트리/SSE 변환은
+    // 호출자 책임) 의미는 그대로 두고 영속 스텝 로그만 추가한다.
+    const emitChunk: NonNullable<GlobalMergeProgress['onChunk']> = (info) => {
+      progress.onChunk?.(info);
+      this.logStep(runId, {
+        stage: `pass${info.pass}`,
+        level: 'info',
+        message: `${info.pass}차 청크 ${info.chunkIndex + 1}/${info.chunkTotal} 완료 — 매핑 ${info.mappedInChunk}건`,
+        meta: { ...info },
+      });
+    };
+
     // pass 1: chunk 별 매핑. v2 부터 응답이 { canonical, categoryPath } 객체.
     const chunks1 = chunk(inputVariants, GLOBAL_MERGE_CHUNK_SIZE);
     const variantToCanonical = new Map<string, string>();
@@ -228,10 +347,16 @@ export class AnalyticsService {
     let totalChunks = chunks1.length;
     let doneChunks = 0;
     this.log?.info({ total: inputVariants.length, chunks: chunks1.length }, '[global-merge] pass1 start');
+    this.logStep(runId, {
+      stage: 'pass1',
+      level: 'info',
+      message: `1차 머지 시작 — 입력 ${inputVariants.length}개, 청크 ${chunks1.length}개`,
+      meta: { full, total: inputVariants.length, chunks: chunks1.length },
+    });
 
     for (let i = 0; i < chunks1.length; i += 1) {
       const ch = chunks1[i]!;
-      const map = await this.callOneChunk(provider, model, ch);
+      const map = await this.callOneChunk(provider, model, ch, runId);
       let mapped = 0;
       for (const v of ch) {
         const entry = map[v];
@@ -242,7 +367,7 @@ export class AnalyticsService {
         if (entry) mapped += 1;
       }
       doneChunks += 1;
-      progress.onChunk?.({
+      emitChunk({
         pass: 1,
         chunkIndex: i,
         chunkTotal: chunks1.length,
@@ -256,10 +381,16 @@ export class AnalyticsService {
     const variantToFinal = new Map<string, string>();
     const finalCategoryByCanonical = new Map<string, string | null>(); // pass2 결과
     const runPass2 = async (chunks2: string[][]): Promise<void> => {
+      this.logStep(runId, {
+        stage: 'pass2',
+        level: 'info',
+        message: `2차 머지 시작 — 후보 ${pass1Canonicals.length}개, 청크 ${chunks2.length}개`,
+        meta: { total: pass1Canonicals.length, chunks: chunks2.length },
+      });
       const pass2Map = new Map<string, string>();
       for (let i = 0; i < chunks2.length; i += 1) {
         const ch = chunks2[i]!;
-        const map = await this.callOneChunk(provider, model, ch);
+        const map = await this.callOneChunk(provider, model, ch, runId);
         let mapped = 0;
         for (const v of ch) {
           const entry = map[v];
@@ -272,7 +403,7 @@ export class AnalyticsService {
           if (entry) mapped += 1;
         }
         doneChunks += 1;
-        progress.onChunk?.({
+        emitChunk({
           pass: 2,
           chunkIndex: i,
           chunkTotal: chunks2.length,
@@ -432,6 +563,18 @@ export class AnalyticsService {
     // 머지가 끝나면 통계 read 캐시 모두 무효화 — overview/menus/tree 모두 변함.
     this.readCache.clear();
 
+    this.logStep(runId, {
+      stage: 'save',
+      level: 'info',
+      message: `저장 완료 — 글로벌 그룹 ${distinctGlobalKeys.size}개`,
+      meta: {
+        finalGroupCount: distinctGlobalKeys.size,
+        inputCount: inputVariants.length,
+        totalChunks,
+        doneChunks,
+      },
+    });
+
     return {
       inputCount: inputVariants.length,
       finalGroupCount: distinctGlobalKeys.size,
@@ -494,6 +637,7 @@ export class AnalyticsService {
     provider: LLMProvider,
     model: string,
     variants: string[],
+    runId: string | null = null,
   ): Promise<Record<string, { canonical: string; categoryPath: string | null }>> {
     // structured-output `format`(grammar)을 쓰지 않는다. 이 provider/모델 조합
     // (ollama-cloud)에서 format 을 주면 응답이 통째로 비거나 categoryPath 가
@@ -517,6 +661,15 @@ export class AnalyticsService {
         { error, message: message.slice(0, 200) },
         '[global-merge] chunk failed — falling back to identity',
       );
+      // run 전체는 계속 진행(식별 매핑 폴백)이지만, 어떤 청크가 왜 죽었는지는
+      // 영속 로그에 남겨야 사후 분석이 가능하다 — 실패가 흡수돼 done 으로
+      // 끝나는 run 에서 유일한 단서.
+      this.logStep(runId, {
+        stage: 'merge_chunk',
+        level: 'warn',
+        message: `청크 LLM 호출 실패 — 식별 매핑으로 폴백: ${message.slice(0, 200)}`,
+        meta: { error, size: variants.length },
+      });
       return {};
     }
   }

@@ -288,6 +288,38 @@ describe('AiConfigService', () => {
       });
     });
 
+    it('log-analysis purpose returns null when no DB row (no env fallback)', async () => {
+      const r = await service.getResolved('ollama-cloud', 'log-analysis');
+      expect(r).toBeNull();
+    });
+
+    it('log-analysis purpose resolves when DB row exists', async () => {
+      prisma = buildPrismaStub([
+        {
+          id: 'r1',
+          provider: 'ollama-cloud',
+          purpose: 'log-analysis',
+          apiKey: 'logs-key',
+          baseUrl: null,
+          defaultModel: 'gpt-oss:20b',
+          enabled: true,
+          maxConcurrent: 2,
+          updatedAt: new Date(),
+          updatedById: null,
+        },
+      ]);
+      service = new AiConfigService(prisma as never, ENV);
+      const r = await service.getResolved('ollama-cloud', 'log-analysis');
+      expect(r).toMatchObject({
+        provider: 'ollama-cloud',
+        purpose: 'log-analysis',
+        apiKey: 'logs-key',
+        // env fallback 없음 — defaultModel 은 row 값 그대로.
+        defaultModel: 'gpt-oss:20b',
+        maxConcurrent: 2,
+      });
+    });
+
     it('returns null when no key in DB AND env apiKey is empty (chat)', async () => {
       service = new AiConfigService(prisma as never, { ...ENV, apiKey: '' });
       const r = await service.getResolved('ollama-cloud', 'chat');

@@ -11,6 +11,7 @@ export * from './schemas/auto-discover.js';
 export * from './schemas/analytics.js';
 export * from './schemas/schedule.js';
 export * from './schemas/ai.js';
+export * from './schemas/logs.js';
 export * from './schemas/settings-map.js';
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';

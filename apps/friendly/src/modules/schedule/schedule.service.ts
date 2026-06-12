@@ -14,6 +14,7 @@ import type {
 import { jobRegistry } from '../crawl/job-registry.js';
 import { AnalyticsError, type AnalyticsService } from '../analytics/analytics.service.js';
 import type { MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
+import type { OperationLogService } from '../logs/operation-log.service.js';
 import { scheduleRegistry } from './schedule-registry.js';
 
 // 현재 단일 작업 — "정규화 → 글로벌 머지" 파이프라인. 추후 다른 주기 작업이
@@ -30,6 +31,9 @@ export interface ScheduleServiceDeps {
   menuGrouping: MenuGroupingService;
   analytics: AnalyticsService;
   logger?: FastifyBaseLogger;
+  // 범용 작업 로그 계측 — null/미주입이면 run 기록 없이 기존 흐름 그대로
+  // (기존 단위 테스트가 계측 없이도 깨지지 않게).
+  operationLog?: OperationLogService | null;
 }
 
 export class ScheduleService {
@@ -142,14 +146,40 @@ export class ScheduleService {
       data: { id: runId, jobType: JOB_TYPE, trigger, status: 'running' },
     });
 
+    // 범용 작업 로그 run — ScheduleRun(스케줄 화면용)과 이중 기록.
+    // overlap skip 은 위에서 이미 반환됐으므로 여기 도달 = 실제 실행 1회.
+    // jobId 에 ScheduleRun.id 를 넣어 두 기록을 상호 추적 가능하게 한다.
+    const oplog = this.deps.operationLog ?? null;
+    const opRunId = oplog
+      ? await oplog.startRun({ feature: 'schedule', jobId: runId, trigger })
+      : null;
+    // 스텝 로그 헬퍼 — 계측 미주입이면 no-op. channel 기본 'none'(SSE 없음).
+    const step =
+      oplog && opRunId
+        ? (
+            level: 'debug' | 'info' | 'warn' | 'error',
+            stage: string,
+            message: string,
+            meta?: Record<string, unknown>,
+          ): void => oplog.log({ runId: opRunId, stage, level, message, meta })
+        : null;
+
     let status: ScheduleRunStatusType = 'done';
     let error: string | null = null;
+    // 부모 run 실패 시 errorCode — AnalyticsError 는 코드 보존(no_provider 가
+    // 자동분석 제외목록에 걸리게), 그 외는 unknown.
+    let failedErrorCode = 'unknown';
+    // 개별 식당 실패 수 — run 은 done 으로 유지하되 meta 로 단서를 남긴다.
+    let failedCount = 0;
     try {
       // 1) 대상 식당 수집 — "처리 필요" 식당 중 크롤 진행 중이 아닌 것.
       scheduleRegistry.setPhase('collecting');
       const targets = await this.collectTargets();
       scheduleRegistry.setTotal(targets.length);
       this.log?.info({ runId, targets: targets.length, trigger }, '[schedule] run started');
+      step?.('info', 'collect', `대상 식당 ${targets.length}곳 수집`, {
+        targets: targets.length,
+      });
 
       // 2) 식당별 메뉴 정규화(증분) 순차 — 식당 경계에서 abort 체크.
       scheduleRegistry.setPhase('grouping');
@@ -161,16 +191,33 @@ export class ScheduleService {
         // 수집 이후 크롤이 시작됐을 수 있으니 직전에 한 번 더 확인.
         if (jobRegistry.isPlaceCrawling(t.placeId)) {
           scheduleRegistry.incSkipped();
+          step?.('debug', 'grouping', `크롤 진행 중 — 건너뜀: ${t.name}`, {
+            placeId: t.placeId,
+            skipped: 'crawling',
+          });
           continue;
         }
         scheduleRegistry.markProcessing(t.name);
         try {
-          await this.deps.menuGrouping.groupForRestaurant(t.placeId);
+          // 계측 중이면 parentRunId 로 자식 menu-grouping run 을 연계.
+          // 미계측이면 부모 run 자체가 없으므로 기존 호출 형태 유지.
+          if (opRunId) {
+            await this.deps.menuGrouping.groupForRestaurant(t.placeId, {
+              parentRunId: opRunId,
+            });
+          } else {
+            await this.deps.menuGrouping.groupForRestaurant(t.placeId);
+          }
           scheduleRegistry.incProcessed();
+          step?.('info', 'grouping', `정규화 완료: ${t.name}`, { placeId: t.placeId });
         } catch (e) {
           // 개별 식당 실패가 전체 주기를 죽이지 않게 — 로그만 남기고 계속.
           const msg = e instanceof Error ? e.message : String(e);
+          failedCount += 1;
           this.log?.warn({ placeId: t.placeId, msg }, '[schedule] grouping failed for restaurant');
+          step?.('warn', 'grouping', `정규화 실패: ${t.name} — ${msg}`, {
+            placeId: t.placeId,
+          });
         }
       }
 
@@ -180,11 +227,20 @@ export class ScheduleService {
         scheduleRegistry.markProcessing(null);
         scheduleRegistry.setPhase('merging');
         try {
-          await this.deps.analytics.runGlobalMerge({ full: false });
+          step?.('info', 'merge', '글로벌 머지 시작');
+          if (opRunId) {
+            await this.deps.analytics.runGlobalMerge({ full: false, parentRunId: opRunId });
+          } else {
+            await this.deps.analytics.runGlobalMerge({ full: false });
+          }
+          step?.('info', 'merge', '글로벌 머지 완료');
         } catch (e) {
           // 머지할 입력이 없는 건 정상 — 그 외 에러만 실패로 전파.
           if (e instanceof AnalyticsError && e.code === 'no_inputs') {
             this.log?.info('[schedule] global merge skipped — no inputs');
+            step?.('info', 'merge', '글로벌 머지 건너뜀 — 입력 없음', {
+              skipped: 'no_inputs',
+            });
           } else {
             throw e;
           }
@@ -195,12 +251,46 @@ export class ScheduleService {
     } catch (e) {
       status = 'failed';
       error = e instanceof Error ? e.message : String(e);
+      failedErrorCode = e instanceof AnalyticsError ? e.code : 'unknown';
       this.log?.error({ runId, error }, '[schedule] run failed');
+      step?.('error', 'run', `실행 실패: ${error}`);
     }
 
     // finishRun 전에 카운트 스냅샷 확보(finishRun 이 status 를 바꾸기 전).
     const snap = scheduleRegistry.inflightSnapshot();
     scheduleRegistry.finishRun(status);
+
+    // OperationRun 마감 — 정확히 1회, 모든 log() 이후. ScheduleRun 의
+    // interrupted 는 의도된 중단이므로 'cancelled'+'interrupted'(자동분석 제외)
+    // 로 매핑하고, '정상 스킵'(no_inputs 머지 등)은 위에서 done 으로 흡수됐다.
+    if (oplog && opRunId) {
+      if (status === 'interrupted') {
+        step?.('warn', 'run', '중단 신호로 실행이 중단됨');
+      }
+      const counts: Record<string, unknown> = {
+        totalTargets: snap?.totalTargets ?? null,
+        processedCount: snap?.processedCount ?? 0,
+        skippedCount: snap?.skippedCount ?? 0,
+        ...(failedCount > 0 ? { failedCount } : {}),
+      };
+      if (status === 'done') {
+        await oplog.finishRun(opRunId, { status: 'done', meta: counts });
+      } else if (status === 'interrupted') {
+        await oplog.finishRun(opRunId, {
+          status: 'cancelled',
+          errorCode: 'interrupted',
+          errorMessage: error,
+          meta: counts,
+        });
+      } else {
+        await oplog.finishRun(opRunId, {
+          status: 'failed',
+          errorCode: failedErrorCode,
+          errorMessage: error,
+          meta: counts,
+        });
+      }
+    }
 
     const finishedAt = new Date();
     const updated = await this.prisma.scheduleRun.update({

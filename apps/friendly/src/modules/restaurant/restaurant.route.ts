@@ -41,7 +41,7 @@ import {
 } from '../summary/summary-events-bus.js';
 import { MenuGroupingError, MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
 
-// CrawlJobLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
+// OperationLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
 // null 로 떨궈서 나머지 로그가 보이도록.
 const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
   try {
@@ -59,7 +59,10 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   // summaries / aiConfig 는 plugins/summaries.ts 의 app 전역 singleton.
   const summaries = app.summaries;
   const aiConfig = app.aiConfig;
-  const grouping = new MenuGroupingService(app.prisma, aiConfig, { logger: app.log });
+  const grouping = new MenuGroupingService(app.prisma, aiConfig, {
+    logger: app.log,
+    operationLog: app.operationLog,
+  });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   // 공개 식당 랭킹 — 인증 불필요. 루트 페이지에서 게스트도 본다.
@@ -343,7 +346,11 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   // placeId 단위 누적 크롤 로그. 한 가게의 모든 잡(과거 재크롤 포함)이 한
   // 흐름으로 보임. 응답은 최신순(createdAt DESC) — UI 가 표시 시 뒤집을지
   // 결정. 잡 자체는 in-memory 라 서버 재시작 후 잡 메타는 사라져도 로그는
-  // 이 placeId 컬럼으로 계속 추적 가능.
+  // subjectId(=placeId) 컬럼으로 계속 추적 가능.
+  // 저장소는 operation_logs 로 전환됨 — 레거시 행은 백필로 원본 id 그대로
+  // 복사돼 cursor(행 id) 의미 유지. feature/jobId/level 필터로 레거시 응답
+  // 계약(CrawlJobLogEntry: jobId non-null, level 3종)을 보장하고 menu-grouping
+  // 등 다른 feature 로그의 혼입을 막는다.
   typed.get(Routes.Restaurant.crawlLogs(':placeId'), {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
@@ -362,16 +369,18 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       // (createdAt DESC, id DESC) — 동률 회피용 id 부보조 정렬. cursor 는
       // 마지막 entry 의 id 로 직전 페이지의 (createdAt,id) 보다 작은 것만.
       const cursorRow = cursor
-        ? await app.prisma.crawlJobLog.findUnique({
+        ? await app.prisma.operationLog.findUnique({
             where: { id: cursor },
             select: { createdAt: true, id: true },
           })
         : null;
 
-      const rows = await app.prisma.crawlJobLog.findMany({
+      const rows = await app.prisma.operationLog.findMany({
         where: {
-          placeId: req.params.placeId,
-          ...(level ? { level } : {}),
+          subjectId: req.params.placeId,
+          feature: { in: ['crawl', 'summary'] },
+          jobId: { not: null },
+          ...(level ? { level } : { level: { not: 'debug' } }),
           ...(stage ? { stage } : {}),
           ...(cursorRow
             ? {
@@ -393,8 +402,9 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const sliced = hasMore ? rows.slice(0, limit) : rows;
       const items: CrawlJobLogEntryType[] = sliced.map((r) => ({
         id: r.id,
-        jobId: r.jobId,
-        placeId: r.placeId,
+        // where jobId != null 이므로 항상 non-null — 타입 좁히기용 fallback.
+        jobId: r.jobId ?? '',
+        placeId: r.subjectId,
         stage: r.stage,
         level: r.level as CrawlLogLevelType,
         message: r.message,

@@ -16,6 +16,7 @@ import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
+import type { OperationLogService } from '../logs/operation-log.service.js';
 import { extractFirstJsonObject } from '../summary/summary.service.js';
 import {
   EXTRACTION_JSON_SCHEMA,
@@ -39,6 +40,10 @@ const VISION_TEMPERATURE = 0.1;
 // imageToken 은 cuid 가 아니라 randomUUID 의 hex 변형 — path traversal 을
 // 막기 위해 정해진 패턴(영숫자+하이픈 36자) 만 허용한다.
 const IMAGE_TOKEN_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+
+// 작업 로그(run) errorMessage 캡 — 영수증은 개인 데이터라 분류 코드 수준의
+// 짧은 메시지만 남긴다 (공통 2000자 캡보다 훨씬 보수적).
+const OPLOG_ERROR_MESSAGE_CAP = 300;
 
 export class SettlementExtractionError extends Error {
   constructor(
@@ -66,6 +71,9 @@ export interface SettlementExtractionServiceOptions {
   // 추출 디버그 덤프 디렉터리. 기본은 process.cwd()/data/extraction-debug.
   // EXTRACTION_DEBUG 환경변수가 켜졌을 때만 쓰인다.
   debugDir?: string;
+  // 작업 로그 계측 (extract 1회 = run 1개). 미주입(테스트 등) 시 계측 생략 —
+  // 추출 흐름은 계측 없이도 동일하게 동작해야 한다.
+  operationLog?: OperationLogService | null;
 }
 
 // 측정용 디버그 덤프 스위치. 정확도를 정량화하려면 raw LLM 응답을 모아야 하는데
@@ -271,82 +279,238 @@ export class SettlementExtractionService {
     roundHint?: { index: number; total: number };
     // 한 사진에 영수증이 가로로 여러 장 있을 때 분할 영역. 1-based.
     split?: { count: number; index: number };
+    // 작업 로그 run 의 subjectId 로만 쓰는 식당 식별자 — 영수증 내용이 아닌
+    // 공개 식당 ID 라 기록해도 개인정보가 아니다.
+    placeId?: string | null;
   }): Promise<ExtractReceiptResultType> {
-    const original = await this.readImage(input.imageToken);
-    const buffer = await this.cropForSplit(original, input.split);
+    const oplog = this.opts.operationLog ?? null;
+    const runStartedAt = Date.now();
+    // 개인정보 가드 — run/스텝 meta 는 화이트리스트(model/durationMs/itemCount/
+    // errorCode/splitHint/roundHint)만 허용. rawText·userPrompt·base64·추출
+    // items·imageToken 은 어드민 화면과 실패 분석 LLM 프롬프트로 흘러가므로
+    // 절대 싣지 않는다 (영수증 = 개인 데이터). 사용자 식별자(userId/이메일 등)
+    // 기록 금지 — 영수증과 사람이 연결되면 그 자체로 개인정보가 된다.
+    const runMeta: Record<string, unknown> = {};
+    if (input.roundHint) runMeta.roundHint = input.roundHint;
+    if (input.split) runMeta.splitHint = input.split;
+    const runId = oplog
+      ? await oplog.startRun({
+          feature: 'settlement-extraction',
+          subjectId: input.placeId ?? null,
+          trigger: 'user',
+          meta: Object.keys(runMeta).length > 0 ? runMeta : undefined,
+        })
+      : null;
+    const step = (
+      stage: string,
+      level: 'debug' | 'info' | 'warn' | 'error',
+      message: string,
+      meta?: Record<string, unknown>,
+    ): void => {
+      if (oplog && runId) oplog.log({ runId, stage, level, message, meta });
+    };
 
-    const resolved = await this.resolveProvider();
-    if (!resolved) {
-      throw new SettlementExtractionError(
-        'no_provider',
-        'image 용도의 LLM 이 설정되지 않았습니다. 관리자 페이지에서 추가해주세요.',
-      );
-    }
-    const { provider, model } = resolved;
+    // finishRun 재료 — 실패 지점의 catch 가 채운다. errorMessage 는 분류 코드
+    // 수준(LLM/업스트림 응답 본문 미포함) + 300자 캡.
+    let failure: { errorCode: string; errorMessage: string } | null = null;
+    let usedModel: string | null = null;
+    let itemCount: number | null = null;
+    // 예기치 못한 예외를 발생 스텝에 묶기 위한 현재 스텝 추적.
+    let currentStage = 'read';
 
-    const base64 = buffer.toString('base64');
-    const userPrompt = buildExtractionUserPrompt({
-      restaurantName: input.restaurantName,
-      menuNames: input.menuNames,
-      roundHint: input.roundHint,
-    });
-
-    const startedAt = Date.now();
-    let rawText: string;
     try {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), VISION_TIMEOUT_MS);
-      try {
-        const res = await provider.complete({
-          prompt: userPrompt,
-          systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-          model,
-          images: [base64],
-          temperature: VISION_TEMPERATURE,
-          maxTokens: VISION_MAX_TOKENS,
-          numCtx: VISION_NUM_CTX,
-          format: EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown>,
-          signal: ac.signal,
+      step('read', 'info', '영수증 이미지 읽기');
+      const original = await this.readImage(input.imageToken);
+
+      currentStage = 'crop';
+      const buffer = await this.cropForSplit(original, input.split);
+      if (input.split && input.split.count > 1) {
+        step('crop', 'info', `분할 영역 절단 ${input.split.index}/${input.split.count}`, {
+          splitHint: input.split,
         });
-        rawText = res.text;
-      } finally {
-        clearTimeout(timer);
+      } else {
+        step('crop', 'debug', '분할 없음 — 원본 그대로 사용');
       }
-    } catch (e) {
-      const { error, message } = classifyError(e);
-      this.log?.warn(
-        { error, message: message.slice(0, 200), model, version: EXTRACTION_VERSION },
-        '[settlement-extraction] LLM failed',
-      );
-      await this.dumpDebug({
-        phase: 'llm_error',
-        token: input.imageToken,
-        model,
+
+      currentStage = 'resolveProvider';
+      const resolved = await this.resolveProvider();
+      if (!resolved) {
+        // no_provider 는 설정 부재 — 자동 분석 제외 코드라 보고서가 안 붙는다.
+        failure = {
+          errorCode: 'no_provider',
+          errorMessage: 'image 용도의 LLM 이 설정되지 않았습니다.',
+        };
+        step('resolveProvider', 'error', failure.errorMessage, { errorCode: 'no_provider' });
+        throw new SettlementExtractionError(
+          'no_provider',
+          'image 용도의 LLM 이 설정되지 않았습니다. 관리자 페이지에서 추가해주세요.',
+        );
+      }
+      const { provider, model } = resolved;
+      usedModel = model;
+      step('resolveProvider', 'info', `vision 모델 결정: ${model}`, { model });
+
+      currentStage = 'vision';
+      const base64 = buffer.toString('base64');
+      const userPrompt = buildExtractionUserPrompt({
         restaurantName: input.restaurantName,
-        menuNamesCount: input.menuNames.length,
+        menuNames: input.menuNames,
         roundHint: input.roundHint,
-        split: input.split,
-        userPrompt,
-        llmError: `${error}: ${message}`,
+      });
+
+      const startedAt = Date.now();
+      let rawText: string;
+      try {
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), VISION_TIMEOUT_MS);
+        try {
+          const res = await provider.complete({
+            prompt: userPrompt,
+            systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+            model,
+            images: [base64],
+            temperature: VISION_TEMPERATURE,
+            maxTokens: VISION_MAX_TOKENS,
+            numCtx: VISION_NUM_CTX,
+            format: EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown>,
+            signal: ac.signal,
+          });
+          rawText = res.text;
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch (e) {
+        const { error, message } = classifyError(e);
+        // 작업 로그에는 분류 코드만 — classifyError 의 message 는 업스트림
+        // 응답 본문(=영수증 파생 텍스트 가능)이 섞일 수 있다.
+        failure = { errorCode: error, errorMessage: `vision 호출 실패 (${error})` };
+        step('vision', 'error', failure.errorMessage, {
+          errorCode: error,
+          model,
+          durationMs: Date.now() - startedAt,
+        });
+        this.log?.warn(
+          { error, message: message.slice(0, 200), model, version: EXTRACTION_VERSION },
+          '[settlement-extraction] LLM failed',
+        );
+        await this.dumpDebug({
+          phase: 'llm_error',
+          token: input.imageToken,
+          model,
+          restaurantName: input.restaurantName,
+          menuNamesCount: input.menuNames.length,
+          roundHint: input.roundHint,
+          split: input.split,
+          userPrompt,
+          llmError: `${error}: ${message}`,
+          durationMs: Date.now() - startedAt,
+        });
+        throw new SettlementExtractionError('llm_failed', `${error}: ${message}`);
+      }
+      step('vision', 'info', 'vision 응답 수신', {
+        model,
         durationMs: Date.now() - startedAt,
       });
-      throw new SettlementExtractionError('llm_failed', `${error}: ${message}`);
-    }
 
-    // structured output 이라도 파서 견고성을 위해 첫 JSON 블록만 잘라 시도.
-    const jsonText = extractFirstJsonObject(rawText) ?? rawText.trim();
-    let parsed: z.infer<typeof LlmExtraction>;
-    try {
-      const candidate: unknown = JSON.parse(jsonText);
-      parsed = LlmExtraction.parse(candidate);
-    } catch (e) {
-      const parseError = e instanceof Error ? e.message : String(e);
-      this.log?.warn(
-        { error: parseError, preview: rawText.slice(0, 200) },
-        '[settlement-extraction] LLM response parse failed',
+      currentStage = 'parse';
+      // structured output 이라도 파서 견고성을 위해 첫 JSON 블록만 잘라 시도.
+      const jsonText = extractFirstJsonObject(rawText) ?? rawText.trim();
+      let parsed: z.infer<typeof LlmExtraction>;
+      try {
+        const candidate: unknown = JSON.parse(jsonText);
+        parsed = LlmExtraction.parse(candidate);
+      } catch (e) {
+        const parseError = e instanceof Error ? e.message : String(e);
+        // JSON.parse 의 SyntaxError 메시지는 원문 일부를 인용할 수 있어
+        // 작업 로그에는 고정 문구만 남긴다.
+        failure = { errorCode: 'parse_failed', errorMessage: 'LLM 응답 JSON 파싱 실패' };
+        step('parse', 'error', failure.errorMessage, { errorCode: 'parse_failed' });
+        this.log?.warn(
+          { error: parseError, preview: rawText.slice(0, 200) },
+          '[settlement-extraction] LLM response parse failed',
+        );
+        await this.dumpDebug({
+          phase: 'parse_error',
+          token: input.imageToken,
+          model,
+          restaurantName: input.restaurantName,
+          menuNamesCount: input.menuNames.length,
+          roundHint: input.roundHint,
+          split: input.split,
+          userPrompt,
+          rawText,
+          jsonText,
+          parseError,
+          durationMs: Date.now() - startedAt,
+        });
+        throw new SettlementExtractionError('llm_failed', 'LLM 응답을 해석하지 못했습니다.');
+      }
+      itemCount = parsed.items.length;
+      step('parse', 'info', `항목 ${parsed.items.length}건 파싱`, {
+        itemCount: parsed.items.length,
+      });
+
+      currentStage = 'correct';
+      let categoryCorrections = 0;
+      const items: ReceiptItemType[] = parsed.items.map((it) => {
+        // amount fallback: server 는 LLM 이 amount=0 으로 줬을 때 unitPrice*qty 로
+        // 보정 시도. 그래도 0 이면 0 유지.
+        let amount = it.amount;
+        if (amount === 0 && it.unitPrice != null && it.quantity != null) {
+          amount = it.unitPrice * it.quantity;
+        }
+        // 카테고리 사전 보정: '새로/대선' 같은 국내 주류 제품명을 vision 모델이
+        // 안주/미분류로 찍는 오류를 결정적으로 교정. 프롬프트 힌트(v4)의 이중
+        // 안전망 — 어드민에서 모델을 바꿔도 동작이 보장된다.
+        const kind = matchDrinkKind([it.matchedMenuName, it.name]);
+        const category = kind?.category ?? it.category;
+        if (category !== it.category) categoryCorrections++;
+        return ReceiptItem.parse({
+          name: it.name,
+          unitPrice: it.unitPrice,
+          quantity: it.quantity,
+          amount,
+          category,
+          matchedMenuName: it.matchedMenuName,
+        });
+      });
+      itemCount = items.length;
+      step('correct', 'info', `보정 완료 — 카테고리 보정 ${categoryCorrections}건`, {
+        itemCount: items.length,
+      });
+
+      const itemsSubtotal = items.reduce((sum, it) => sum + it.amount, 0);
+      const totalAmount = parsed.totalAmount;
+      const warning =
+        totalAmount != null && Math.abs(itemsSubtotal - totalAmount) >= 1
+          ? `항목 합계(${itemsSubtotal.toLocaleString('ko-KR')}원) 와 영수증 총액(${totalAmount.toLocaleString('ko-KR')}원) 이 일치하지 않습니다. 확인해 주세요.`
+          : null;
+
+      this.log?.info(
+        {
+          token: input.imageToken,
+          itemCount: items.length,
+          itemsSubtotal,
+          totalAmount,
+          categoryCorrections,
+          model,
+          durationMs: Date.now() - startedAt,
+          version: EXTRACTION_VERSION,
+          split: input.split,
+        },
+        '[settlement-extraction] done',
       );
+
+      const result: ExtractReceiptResultType = {
+        items,
+        totalAmount,
+        itemsSubtotal,
+        warning,
+        model,
+      };
+
       await this.dumpDebug({
-        phase: 'parse_error',
+        phase: 'success',
         token: input.imageToken,
         model,
         restaurantName: input.restaurantName,
@@ -356,83 +520,59 @@ export class SettlementExtractionService {
         userPrompt,
         rawText,
         jsonText,
-        parseError,
-        durationMs: Date.now() - startedAt,
-      });
-      throw new SettlementExtractionError('llm_failed', 'LLM 응답을 해석하지 못했습니다.');
-    }
-
-    let categoryCorrections = 0;
-    const items: ReceiptItemType[] = parsed.items.map((it) => {
-      // amount fallback: server 는 LLM 이 amount=0 으로 줬을 때 unitPrice*qty 로
-      // 보정 시도. 그래도 0 이면 0 유지.
-      let amount = it.amount;
-      if (amount === 0 && it.unitPrice != null && it.quantity != null) {
-        amount = it.unitPrice * it.quantity;
-      }
-      // 카테고리 사전 보정: '새로/대선' 같은 국내 주류 제품명을 vision 모델이
-      // 안주/미분류로 찍는 오류를 결정적으로 교정. 프롬프트 힌트(v4)의 이중
-      // 안전망 — 어드민에서 모델을 바꿔도 동작이 보장된다.
-      const kind = matchDrinkKind([it.matchedMenuName, it.name]);
-      const category = kind?.category ?? it.category;
-      if (category !== it.category) categoryCorrections++;
-      return ReceiptItem.parse({
-        name: it.name,
-        unitPrice: it.unitPrice,
-        quantity: it.quantity,
-        amount,
-        category,
-        matchedMenuName: it.matchedMenuName,
-      });
-    });
-
-    const itemsSubtotal = items.reduce((sum, it) => sum + it.amount, 0);
-    const totalAmount = parsed.totalAmount;
-    const warning =
-      totalAmount != null && Math.abs(itemsSubtotal - totalAmount) >= 1
-        ? `항목 합계(${itemsSubtotal.toLocaleString('ko-KR')}원) 와 영수증 총액(${totalAmount.toLocaleString('ko-KR')}원) 이 일치하지 않습니다. 확인해 주세요.`
-        : null;
-
-    this.log?.info(
-      {
-        token: input.imageToken,
-        itemCount: items.length,
-        itemsSubtotal,
-        totalAmount,
+        result,
         categoryCorrections,
-        model,
         durationMs: Date.now() - startedAt,
-        version: EXTRACTION_VERSION,
-        split: input.split,
-      },
-      '[settlement-extraction] done',
-    );
+      });
 
-    const result: ExtractReceiptResultType = {
-      items,
-      totalAmount,
-      itemsSubtotal,
-      warning,
-      model,
-    };
-
-    await this.dumpDebug({
-      phase: 'success',
-      token: input.imageToken,
-      model,
-      restaurantName: input.restaurantName,
-      menuNamesCount: input.menuNames.length,
-      roundHint: input.roundHint,
-      split: input.split,
-      userPrompt,
-      rawText,
-      jsonText,
-      result,
-      categoryCorrections,
-      durationMs: Date.now() - startedAt,
-    });
-
-    return result;
+      return result;
+    } catch (e) {
+      if (!failure) {
+        // read 실패(invalid_token/image_not_found 등)와 예상 밖 예외 경로.
+        // 화이트리스트 방식 — 우리가 던진 SettlementExtractionError 의 고정
+        // 문구만 작업 로그에 싣는다. 그 외 예외(fs 등)의 message 는 서버
+        // 절대경로 같은 내부 정보가 섞일 수 있어 예외 이름만 남기고, 원문은
+        // 기존 pino 로깅(Fastify 에러 핸들러)으로만 흘린다.
+        const errorMessage = (
+          e instanceof SettlementExtractionError
+            ? e.message
+            : `unexpected (${e instanceof Error ? e.name : typeof e})`
+        ).slice(0, OPLOG_ERROR_MESSAGE_CAP);
+        failure = {
+          errorCode: e instanceof SettlementExtractionError ? e.code : 'unexpected',
+          errorMessage,
+        };
+        step(currentStage, 'error', failure.errorMessage, { errorCode: failure.errorCode });
+      }
+      throw e;
+    } finally {
+      // 동기 HTTP 흐름 — run 마감을 finally 로 보장한다 (finishRun 은 절대
+      // 던지지 않으므로 원래 예외를 가리지 않는다).
+      if (oplog && runId) {
+        const durationMs = Date.now() - runStartedAt;
+        await oplog.finishRun(
+          runId,
+          failure
+            ? {
+                status: 'failed',
+                errorCode: failure.errorCode,
+                errorMessage: failure.errorMessage,
+                meta: {
+                  durationMs,
+                  ...(usedModel ? { model: usedModel } : {}),
+                },
+              }
+            : {
+                status: 'done',
+                meta: {
+                  durationMs,
+                  ...(usedModel ? { model: usedModel } : {}),
+                  ...(itemCount != null ? { itemCount } : {}),
+                },
+              },
+        );
+      }
+    }
   }
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {

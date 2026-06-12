@@ -27,7 +27,12 @@ const analyticsRoutes: FastifyPluginAsync = async (app) => {
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
   });
-  const service = new AnalyticsService(app.prisma, aiConfig, { logger: app.log });
+  // operationLog 주입 — runGlobalMerge 가 service 내부에서 OperationRun 을
+  // 기록한다 (plugins/logs.ts 가 decorate, 플러그인이 라우트보다 먼저 로드됨).
+  const service = new AnalyticsService(app.prisma, aiConfig, {
+    logger: app.log,
+    operationLog: app.operationLog,
+  });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Analytics.overview, {
@@ -229,8 +234,9 @@ async function runGlobalMerge(
   // recordChunk 가 doneChunks 를 늘릴 때 자동 max 처리).
   globalMergeJobRegistry.markRunning(jobId, 0, 0);
   try {
+    // jobId 전달은 OperationRun.jobId 기록용 — 레지스트리/SSE 흐름과 무관.
     const result = await service.runGlobalMerge(
-      { full },
+      { full, jobId },
       {
         onChunk: (info) => {
           globalMergeJobRegistry.recordChunk(jobId, info);

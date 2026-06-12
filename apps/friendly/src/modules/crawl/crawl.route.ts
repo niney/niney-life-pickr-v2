@@ -59,7 +59,7 @@ const writeSseComment = (reply: FastifyReply, comment: string): void => {
   reply.raw.write(`: ${comment}\n\n`);
 };
 
-// CrawlJobLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
+// OperationLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
 // null 로 떨궈서 나머지 로그가 보이도록.
 const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
   try {
@@ -88,10 +88,11 @@ const parseAfterSeq = (req: FastifyRequest): number => {
 
 const crawlRoutes: FastifyPluginAsync = async (app) => {
   const restaurants = new RestaurantService(app.prisma);
-  // summaries / jobLog 는 plugins/summaries.ts 가 만든 app 전역 singleton.
-  // 두 라우트(crawl/restaurant) 가 같은 chain map · cancelledPlaces 를 공유.
+  // summaries 는 plugins/summaries.ts, operationLog 는 plugins/logs.ts 가 만든
+  // app 전역 singleton. 두 라우트(crawl/restaurant) 가 같은 chain map ·
+  // cancelledPlaces 를 공유하고, 로그 SSE seq 는 단일 카운터를 유지한다.
   const summaries = app.summaries;
-  const jobLog = app.jobLog;
+  const operationLog = app.operationLog;
   const canonical = new CanonicalService(app.prisma);
   const proposals = new ProposalService(app.prisma, canonical);
   const service = new CrawlService(
@@ -100,7 +101,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     jobRegistry,
     proposals,
     canonical,
-    jobLog,
+    operationLog,
   );
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -458,6 +459,9 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
   // GET — 잡 단위 영속 로그 조회. SSE 의 실시간 'log' 이벤트와 동일한 데이터를
   // DB 에서 읽어온다. 잡 종료 후 패널 재진입 시 fallback 으로 쓰이고, 실시간
   // 누적분과 합쳐서 표시된다.
+  // 저장소는 operation_logs 로 전환됨 — 레거시 crawl_job_logs 행은 백필로
+  // 원본 id 그대로 복사돼 있어 cursor(행 id) 의미가 유지된다. 응답 계약
+  // (CrawlJobLogEntry: jobId non-null, level 3종)은 feature/level 필터가 보장.
   // cursor 는 마지막 entry 의 id — createdAt 동률 회피용. 응답 items 는
   // 최신순(createdAt DESC). 잡 소유자 검증은 jobRegistry.get 으로.
   typed.get(`${Routes.Crawl.jobs}/:id/logs`, {
@@ -474,7 +478,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       // 잡 메모리 registry 는 finishedAt 후 일정 시간만 보관. 만료된 잡이라도
       // DB 로그는 남아있을 수 있으므로 registry 미스이면 소유자 검증을 건너뛰고
       // 로그만 가져온다 — 같은 actor 가 자기 잡 로그만 조회한다는 보장이 약해지지만
-      // jobId 가 cuid 라 추측 불가. 보강이 필요하면 CrawlJobLog 에도 actorId 컬럼을.
+      // jobId 가 cuid 라 추측 불가. 보강이 필요하면 OperationRun.meta 의 actorId 로.
       if (job && job.actorId !== req.user.userId) {
         throw app.httpErrors.forbidden('Not your job');
       }
@@ -489,16 +493,19 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       // 그러나 같은 ms 안의 충돌은 드물고, 잘못 짚어도 누락이 아니라 중복일 뿐이라
       // 단순화를 위해 createdAt 만으로 페이지네이션, 동률은 id 로 보조 정렬.
       const cursorRow = cursor
-        ? await app.prisma.crawlJobLog.findUnique({
+        ? await app.prisma.operationLog.findUnique({
             where: { id: cursor },
             select: { createdAt: true, id: true },
           })
         : null;
 
-      const rows = await app.prisma.crawlJobLog.findMany({
+      const rows = await app.prisma.operationLog.findMany({
         where: {
           jobId: req.params.id,
-          ...(level ? { level } : {}),
+          // 레거시 응답 계약 보호 — crawl/summary 외 feature 혼입 방지,
+          // debug(레거시에 없던 레벨) 제외로 CrawlLogLevel 3종 유지.
+          feature: { in: ['crawl', 'summary'] },
+          ...(level ? { level } : { level: { not: 'debug' } }),
           ...(stage ? { stage } : {}),
           ...(cursorRow
             ? {
@@ -520,8 +527,9 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       const sliced = hasMore ? rows.slice(0, limit) : rows;
       const items: CrawlJobLogEntryType[] = sliced.map((r) => ({
         id: r.id,
-        jobId: r.jobId,
-        placeId: r.placeId,
+        // where jobId = :id 이므로 항상 non-null — 타입 좁히기용 fallback.
+        jobId: r.jobId ?? req.params.id,
+        placeId: r.subjectId,
         stage: r.stage,
         level: r.level as CrawlLogLevelType,
         message: r.message,

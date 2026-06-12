@@ -29,7 +29,12 @@ const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
   });
-  const summaries = new SummaryService(app.prisma, aiConfig, { logger: app.log });
+  // operationLog 주입 — 누락 시 자동 발견에서 파생되는 크롤/요약 run 계측이
+  // 무음 비활성된다 (두 서비스 모두 null 이면 silent 정책).
+  const summaries = new SummaryService(app.prisma, aiConfig, {
+    logger: app.log,
+    operationLog: app.operationLog,
+  });
   const canonical = new CanonicalService(app.prisma);
   const proposals = new ProposalService(app.prisma, canonical);
   const crawl = new CrawlService(
@@ -38,12 +43,16 @@ const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
     jobRegistry,
     proposals,
     canonical,
+    app.operationLog,
   );
   const service = new AutoDiscoverService({
     restaurants,
     aiConfig,
     crawl,
     logger: app.log,
+    // plugins/logs.ts 가 decorate 한 전역 싱글톤 — seq 카운터 공유를 위해
+    // 새로 만들지 않고 주입한다.
+    operationLog: app.operationLog,
   });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 

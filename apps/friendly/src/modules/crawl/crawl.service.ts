@@ -39,7 +39,10 @@ import {
   fetchCatchtableShopReviewOverview,
 } from './adapters/catchtable-shop.playwright.adapter.js';
 import { jobRegistry, type JobRegistry } from './job-registry.js';
-import type { JobLogService } from './job-log.service.js';
+import type {
+  FinishRunInput,
+  OperationLogService,
+} from '../logs/operation-log.service.js';
 import { diningcodeBulkSaveRegistry } from './diningcode-bulk-save-registry.js';
 import {
   normalizeToPlaceId,
@@ -97,8 +100,12 @@ export class CrawlService {
   // 자동 DC 매칭이 머지 단계에서 canonical merge 를 호출해야 해서 inject.
   // null 이면 자동 매칭 skip — 테스트 단순화용.
   private readonly canonical: CanonicalService | null;
-  // 잡 단계별 로그 — null 이면 silent (테스트 단순화). 운영 라우트는 항상 주입.
-  private readonly jobLog: JobLogService | null;
+  // 범용 작업 로그 — null 이면 run/스텝 기록 없이 silent (테스트 단순화).
+  // 운영 라우트는 항상 app.operationLog 를 주입한다.
+  private readonly operationLog: OperationLogService | null;
+  // jobId → OperationRun id. startCrawl 에서 등록, 종료 경로에서 정리 —
+  // runJob/cancel 이 같은 run 에 스텝과 마감을 연결하기 위한 매핑.
+  private readonly runIdsByJob = new Map<string, string>();
   private readonly pending: PendingStart[] = [];
   private nextSeq = 1;
 
@@ -109,14 +116,63 @@ export class CrawlService {
     // null 이면 후보 큐 생성 skip — 테스트가 단순화 위해 생략할 때 사용.
     proposals: ProposalService | null = null,
     canonical: CanonicalService | null = null,
-    jobLog: JobLogService | null = null,
+    operationLog: OperationLogService | null = null,
   ) {
     this.registry = registry;
     this.restaurants = restaurants;
     this.summaries = summaries;
     this.proposals = proposals;
     this.canonical = canonical;
-    this.jobLog = jobLog;
+    this.operationLog = operationLog;
+  }
+
+  // 크롤 잡 스텝 로그. feature/jobId/subjectId 는 startRun 컨텍스트가 보충
+  // 하므로 stage/level/message 만 넘긴다. runId 미등록(미주입·캐시히트 등)
+  // 이면 no-op — 기존 jobLog null 허용 의미론 유지.
+  private logStep(
+    jobId: string,
+    stage: string,
+    level: 'info' | 'warn' | 'error',
+    message: string,
+    meta?: Record<string, unknown>,
+  ): void {
+    this.logStepWithRun(
+      this.runIdsByJob.get(jobId) ?? null,
+      stage,
+      level,
+      message,
+      meta,
+    );
+  }
+
+  // runId 직접 지정판 — finishJobRun 이 runIdsByJob 매핑을 지운 뒤에 settle
+  // 되는 비동기 작업(persist tail 등)이 매핑 조회 실패로 무음 탈락하지 않고
+  // 원래 run 에 기록을 남길 수 있게 한다.
+  private logStepWithRun(
+    runId: string | null,
+    stage: string,
+    level: 'info' | 'warn' | 'error',
+    message: string,
+    meta?: Record<string, unknown>,
+  ): void {
+    if (!runId || !this.operationLog) return;
+    this.operationLog.log({
+      runId,
+      stage,
+      level,
+      message,
+      ...(meta ? { meta } : {}),
+      channel: 'crawl',
+    });
+  }
+
+  // run 마감 + jobId 매핑 정리. finishRun 은 절대 던지지 않으므로 호출자가
+  // await 하지 않아도 안전하다.
+  private finishJobRun(jobId: string, input: FinishRunInput): Promise<void> {
+    const runId = this.runIdsByJob.get(jobId);
+    this.runIdsByJob.delete(jobId);
+    if (!runId || !this.operationLog) return Promise.resolve();
+    return this.operationLog.finishRun(runId, input);
   }
 
   // 등록 직후 자동 매칭 후크. 새 가게의 canonicalId 로 cross-source 후보를 큐에
@@ -280,6 +336,21 @@ export class CrawlService {
             durationMs: 0,
           },
         });
+        // 캐시 히트 단락 잡도 run 으로 남긴다 — 어드민 로그 화면에서 "왜 잡이
+        // 즉시 끝났는지(cacheHit)" 를 추적 가능하게. 스텝 로그는 없음.
+        if (this.operationLog) {
+          const runId = await this.operationLog.startRun({
+            feature: 'crawl',
+            jobId: created.id,
+            subjectId: normalized.placeId,
+            trigger: 'manual',
+            meta: { url: rawUrl, mode, actorId, cacheHit: true },
+          });
+          await this.operationLog.finishRun(runId, {
+            status: 'done',
+            meta: { durationMs: 0 },
+          });
+        }
         return { ok: true, jobId: created.id, deduped: false };
       }
     }
@@ -290,14 +361,36 @@ export class CrawlService {
       actorId,
     });
 
-    void this.jobLog?.log({
-      jobId,
-      placeId: normalized.placeId,
-      stage: 'queued',
-      level: 'info',
-      message: '크롤 잡 생성',
-      meta: { url: rawUrl, mode, actorId },
-      channel: 'crawl',
+    // run 경계 시작 — registry.create 직후. startRun 은 DB 실패해도 id 를
+    // 반환하므로 이후 스텝/마감은 항상 이 runId 에 연결된다.
+    if (this.operationLog) {
+      const runId = await this.operationLog.startRun({
+        feature: 'crawl',
+        jobId,
+        subjectId: normalized.placeId,
+        trigger: 'manual',
+        meta: { url: rawUrl, mode, actorId },
+      });
+      this.runIdsByJob.set(jobId, runId);
+    }
+
+    // startRun await 동안 cancel() 이 먼저 처리될 수 있다 — 취소로 끝난 잡을
+    // start/pending 에 올리면 죽은 잡이 재가동되므로 여기서 run 만 마감하고
+    // 중단한다 (cancel 시점엔 runId 매핑이 없어 그쪽 finishJobRun 은 no-op).
+    const regJob = this.registry.get(jobId);
+    if (!regJob || regJob.phase === 'finished' || abortSignal.aborted) {
+      await this.finishJobRun(jobId, {
+        status: 'cancelled',
+        errorCode: 'cancelled',
+        errorMessage: '시작 준비 중에 취소되었습니다.',
+      });
+      return { ok: true, jobId, deduped: false };
+    }
+
+    this.logStep(jobId, 'queued', 'info', '크롤 잡 생성', {
+      url: rawUrl,
+      mode,
+      actorId,
     });
 
     const start = () => {
@@ -318,14 +411,7 @@ export class CrawlService {
     // waiting badge — without this the stream would be silent until a slot
     // frees and the adapter starts emitting its own progress events.
     this.emit(jobId, { type: 'progress', stage: 'queued' });
-    void this.jobLog?.log({
-      jobId,
-      placeId: normalized.placeId,
-      stage: 'queued',
-      level: 'info',
-      message: '동시성 한도 — 대기열 등록',
-      channel: 'crawl',
-    });
+    this.logStep(jobId, 'queued', 'info', '동시성 한도 — 대기열 등록');
     this.pending.push({ jobId, actorId, start });
     return { ok: true, jobId, deduped: false, queued: true };
   }
@@ -422,7 +508,13 @@ export class CrawlService {
   //
   // restaurantId 는 (source='diningcode', sourceId=vRid) upsert 결과. 신규 리뷰만
   // 다시 AI 분석 큐에 들어가서 재호출 시 idempotent.
-  async saveDiningcodeShop(vRid: string): Promise<SaveDiningcodeShopResultType> {
+  //
+  // opts — bulk-save 같은 상위 run 컨텍스트에서 호출될 때 파생 요약 run 을
+  // 부모에 연결하기 위한 식별자. 단독 저장 라우트는 생략 — 기존 동작 유지.
+  async saveDiningcodeShop(
+    vRid: string,
+    opts?: { jobId?: string | null; parentRunId?: string | null },
+  ): Promise<SaveDiningcodeShopResultType> {
     const startedAt = Date.now();
     const detail = await fetchDiningcodeShop(vRid);
 
@@ -459,6 +551,9 @@ export class CrawlService {
       this.summaries.queueSummariesForReviews(
         `dc:${vRid}`,
         newReviews.map((r) => r.id),
+        opts?.jobId ?? null,
+        null,
+        opts?.parentRunId ?? null,
       );
     }
 
@@ -482,33 +577,115 @@ export class CrawlService {
     diningcodeBulkSaveRegistry.markRunning(jobId);
     const abortSignal = diningcodeBulkSaveRegistry.abortSignal(jobId);
 
-    for (const vRid of vRids) {
-      if (abortSignal?.aborted) {
-        diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
-          skipped: true,
-          reason: '잡이 취소되어 시작 전 건너뜀',
-        });
-        continue;
+    // 일괄 저장도 run 으로 기록. registry 의 자체 SSE 는 그대로 두고(변경
+    // 금지) OperationLog 에는 항목 단위 스텝만 추가한다. 대상이 여러 가게라
+    // subjectId 는 비워둔다 — 항목별 vRid 는 스텝 meta 로.
+    const runId = this.operationLog
+      ? await this.operationLog.startRun({
+          feature: 'diningcode-bulk-save',
+          jobId,
+          trigger: 'manual',
+          meta: { total: vRids.length },
+        })
+      : null;
+    const step = (
+      stage: string,
+      level: 'debug' | 'info' | 'warn' | 'error',
+      message: string,
+      meta?: Record<string, unknown>,
+    ): void => {
+      if (!runId || !this.operationLog) return;
+      this.operationLog.log({
+        runId,
+        stage,
+        level,
+        message,
+        ...(meta ? { meta } : {}),
+      });
+    };
+
+    let okCount = 0;
+    let failCount = 0;
+    let skipCount = 0;
+    try {
+      for (const vRid of vRids) {
+        if (abortSignal?.aborted) {
+          skipCount += 1;
+          diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
+            skipped: true,
+            reason: '잡이 취소되어 시작 전 건너뜀',
+          });
+          step('item_skipped', 'warn', '취소로 항목 건너뜀', { vRid });
+          continue;
+        }
+        diningcodeBulkSaveRegistry.markItemStart(jobId, vRid);
+        // 시작 스텝은 debug — 항목당 2행씩 쌓이는 잡음을 SSE/기본 조회에서
+        // 빼고 DB 에만 남긴다 (실패 시간 구간 추적용).
+        step('item_start', 'debug', '항목 저장 시작', { vRid });
+        try {
+          // jobId/parentRunId 전달 — 항목별 파생 요약 run 이 이 bulk run 의
+          // 자식으로 연결돼야 어드민 로그 화면에서 출처 추적이 된다.
+          const result = await this.saveDiningcodeShop(vRid, {
+            jobId,
+            parentRunId: runId,
+          });
+          okCount += 1;
+          diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
+            ok: true,
+            restaurantId: result.restaurantId,
+            fetchedPages: result.fetchedPages,
+            newReviewCount: result.newReviewCount,
+          });
+          step('item_done', 'info', '항목 저장 완료', {
+            vRid,
+            restaurantId: result.restaurantId,
+            fetchedPages: result.fetchedPages,
+            newReviewCount: result.newReviewCount,
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          failCount += 1;
+          diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
+            ok: false,
+            errorCode: 'save_failed',
+            errorMessage: message,
+          });
+          step('item_failed', 'error', `항목 저장 실패: ${message}`, { vRid });
+        }
       }
-      diningcodeBulkSaveRegistry.markItemStart(jobId, vRid);
-      try {
-        const result = await this.saveDiningcodeShop(vRid);
-        diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
-          ok: true,
-          restaurantId: result.restaurantId,
-          fetchedPages: result.fetchedPages,
-          newReviewCount: result.newReviewCount,
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        diningcodeBulkSaveRegistry.finishItem(jobId, vRid, {
-          ok: false,
-          errorCode: 'save_failed',
-          errorMessage: message,
-        });
+    } finally {
+      diningcodeBulkSaveRegistry.markFinished(jobId);
+      if (runId && this.operationLog) {
+        const counts = {
+          total: vRids.length,
+          done: okCount,
+          failed: failCount,
+          skipped: skipCount,
+        };
+        // 취소 판정은 registry 상태가 아닌 abortSignal 기준 — registry 는
+        // 전부 skipped 여도 'done' 으로 마감하므로 여기서 구분해야 한다.
+        if (abortSignal?.aborted) {
+          await this.operationLog.finishRun(runId, {
+            status: 'cancelled',
+            errorCode: 'cancelled',
+            errorMessage: '어드민이 일괄 저장을 취소했습니다.',
+            meta: counts,
+          });
+        } else if (vRids.length > 0 && failCount === vRids.length) {
+          await this.operationLog.finishRun(runId, {
+            status: 'failed',
+            errorCode: 'all_items_failed',
+            errorMessage: '모든 항목 저장이 실패했습니다.',
+            meta: counts,
+          });
+        } else {
+          await this.operationLog.finishRun(runId, {
+            status: 'done',
+            meta: counts,
+          });
+        }
       }
     }
-    diningcodeBulkSaveRegistry.markFinished(jobId);
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시
@@ -533,13 +710,9 @@ export class CrawlService {
   cancel(jobId: string, actorId: string): boolean {
     const outcome = this.registry.cancel(jobId, actorId);
     if (outcome === 'noop') return false;
-    void this.jobLog?.log({
-      jobId,
-      stage: 'finalizing',
-      level: 'warn',
-      message: '잡 취소 요청',
-      meta: { actorId, outcome },
-      channel: 'crawl',
+    this.logStep(jobId, 'finalizing', 'warn', '잡 취소 요청', {
+      actorId,
+      outcome,
     });
     if (outcome === 'queued-cancelled') {
       // Drop the deferred start so it never fires. The registry will record
@@ -550,6 +723,13 @@ export class CrawlService {
         type: 'error',
         error: 'cancelled',
         message: '대기 중에 취소되었습니다.',
+      });
+      // 대기열 취소는 runJob 이 영영 돌지 않으므로 여기서 run 을 마감한다.
+      // 실행 중 취소('aborted')는 runJob 의 catch 가 cancelled 로 마감.
+      void this.finishJobRun(jobId, {
+        status: 'cancelled',
+        errorCode: 'cancelled',
+        errorMessage: '대기 중에 취소되었습니다.',
       });
     }
     return true;
@@ -576,43 +756,18 @@ export class CrawlService {
     mode: CrawlModeType,
   ): Promise<void> {
     const startedAt = Date.now();
+    // finishJobRun 이 runIdsByJob 매핑을 지운 뒤에도 persist tail 의 늦은
+    // settle 이 같은 run 에 로그/parentRunId 를 연결해야 하므로 진입 시점에
+    // 스냅샷한다 — 클로저가 매핑 조회 대신 이 값을 직접 쓴다.
+    const runId = this.runIdsByJob.get(jobId) ?? null;
 
-    void this.jobLog?.log({
-      jobId,
-      placeId,
-      stage: 'launching',
-      level: 'info',
-      message: '잡 실행 시작',
-      meta: { mode, canonicalUrl },
-      channel: 'crawl',
+    this.logStep(jobId, 'launching', 'info', '잡 실행 시작', {
+      mode,
+      canonicalUrl,
     });
 
-    // Pre-flight: when the user asked for a recrawl/update, find the
-    // existing restaurant row first. Recrawl wipes its reviews so the new
-    // crawl starts from a clean slate; update collects the existing review
-    // keys so the adapter can stop pagination once it sees only known rows.
     let restaurantId: string | null = null;
     let existingKeys: ExistingReviewKeys | undefined;
-    if (mode !== 'create') {
-      const r = await this.restaurants.findByPlaceId(placeId);
-      if (r) {
-        restaurantId = r.id;
-        if (mode === 'recrawl') {
-          await this.restaurants.clearReviewsAndSummaries(r.id);
-          void this.jobLog?.log({
-            jobId,
-            placeId,
-            stage: 'launching',
-            level: 'info',
-            message: '재크롤 — 기존 리뷰/요약 삭제',
-            meta: { restaurantId: r.id },
-            channel: 'crawl',
-          });
-        } else {
-          existingKeys = await this.restaurants.getExistingReviewKeys(r.id);
-        }
-      }
-    }
 
     // The persistence path is fire-and-forget so it doesn't block the next
     // page click — but we must still serialize *within* a job, since two
@@ -632,24 +787,21 @@ export class CrawlService {
             batch.map((r) => ({ ...r, externalId: r.externalId ?? null })),
           );
           if (newReviews.length > 0) {
+            // 크롤 run 을 부모로 연결 — 요약 run 이 어느 크롤에서 파생됐는지
+            // 어드민 로그 화면에서 추적 가능하게. 매핑 조회 대신 스냅샷 사용
+            // — run 마감 후 settle 돼도 연결이 끊기지 않는다.
             this.summaries.queueSummariesForReviews(
               placeId,
               newReviews.map((r) => r.id),
               jobId,
+              null,
+              runId,
             );
           }
-          void this.jobLog?.log({
-            jobId,
-            placeId,
-            stage: 'paginating_visitor',
-            level: 'info',
-            message: '리뷰 배치 영속',
-            meta: {
-              batchSize: batch.length,
-              newCount: newReviews.length,
-              dedupedCount: batch.length - newReviews.length,
-            },
-            channel: 'crawl',
+          this.logStepWithRun(runId, 'paginating_visitor', 'info', '리뷰 배치 영속', {
+            batchSize: batch.length,
+            newCount: newReviews.length,
+            dedupedCount: batch.length - newReviews.length,
           });
           this.emit(jobId, {
             type: 'visitor_batch',
@@ -672,22 +824,36 @@ export class CrawlService {
           // Don't drop subsequent batches — log and continue. Crawl errors
           // are handled by the outer try/catch via the adapter; this branch
           // is purely DB/AI fallout.
-          void this.jobLog?.log({
-            jobId,
-            placeId,
-            stage: 'paginating_visitor',
-            level: 'error',
-            message: '리뷰 배치 저장 실패',
-            meta: {
-              batchSize: batch.length,
-              error: err instanceof Error ? err.message : String(err),
-            },
-            channel: 'crawl',
+          this.logStepWithRun(runId, 'paginating_visitor', 'error', '리뷰 배치 저장 실패', {
+            batchSize: batch.length,
+            error: err instanceof Error ? err.message : String(err),
           });
         });
     };
 
     try {
+      // Pre-flight: when the user asked for a recrawl/update, find the
+      // existing restaurant row first. Recrawl wipes its reviews so the new
+      // crawl starts from a clean slate; update collects the existing review
+      // keys so the adapter can stop pagination once it sees only known rows.
+      //
+      // try 안에 두는 이유 — 여기서 던지면 catch 의 finishJobRun 을 거치지
+      // 못해 run 이 영구 'running' 으로 남고 runIdsByJob 매핑이 누수된다.
+      if (mode !== 'create') {
+        const r = await this.restaurants.findByPlaceId(placeId);
+        if (r) {
+          restaurantId = r.id;
+          if (mode === 'recrawl') {
+            await this.restaurants.clearReviewsAndSummaries(r.id);
+            this.logStep(jobId, 'launching', 'info', '재크롤 — 기존 리뷰/요약 삭제', {
+              restaurantId: r.id,
+            });
+          } else {
+            existingKeys = await this.restaurants.getExistingReviewKeys(r.id);
+          }
+        }
+      }
+
       const data = await fetchNaverPlaceWithPlaywright(placeId, canonicalUrl, {
         signal,
         onStage: (stage) => this.emit(jobId, { type: 'progress', stage }),
@@ -742,18 +908,18 @@ export class CrawlService {
         }
       }
 
-      void this.jobLog?.log({
-        jobId,
-        placeId,
-        stage: 'done',
-        level: 'info',
-        message: '크롤 완료',
+      this.logStep(jobId, 'done', 'info', '크롤 완료', {
+        durationMs: Date.now() - startedAt,
+        reviewCount: data.visitorReviews.length,
+        restaurantId,
+      });
+      await this.finishJobRun(jobId, {
+        status: 'done',
         meta: {
           durationMs: Date.now() - startedAt,
           reviewCount: data.visitorReviews.length,
           restaurantId,
         },
-        channel: 'crawl',
       });
 
       this.emit(jobId, {
@@ -767,17 +933,20 @@ export class CrawlService {
       });
     } catch (e) {
       const { error, message } = this.classifyAdapterError(e);
-      void this.jobLog?.log({
-        jobId,
-        placeId,
-        stage: 'finalizing',
-        level: 'error',
-        message: `크롤 실패: ${message}`,
-        meta: {
-          errorCode: error,
-          durationMs: Date.now() - startedAt,
-        },
-        channel: 'crawl',
+      // run 마감 전에 잔여 persist 작업을 드레인 — 마감과 동시에 runIdsByJob
+      // 매핑이 사라져, 이후 settle 되는 배치의 스텝 로그가 무음 탈락하는 것
+      // 을 막는다 (실패 자체는 각 링크의 catch 가 이미 삼킨다).
+      await persistTail.catch(() => undefined);
+      this.logStep(jobId, 'finalizing', 'error', `크롤 실패: ${message}`, {
+        errorCode: error,
+        durationMs: Date.now() - startedAt,
+      });
+      // 실행 중 취소(cancelled)는 실패가 아닌 의도된 중단 — 상태를 분리해
+      // 자동 분석이 따라붙지 않게 한다.
+      await this.finishJobRun(jobId, {
+        status: error === 'cancelled' ? 'cancelled' : 'failed',
+        errorCode: error,
+        errorMessage: message,
       });
       this.emit(jobId, { type: 'error', error, message });
     }

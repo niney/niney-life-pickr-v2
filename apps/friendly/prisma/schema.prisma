@@ -590,6 +590,123 @@ model CrawlJobLog {
   @@map("crawl_job_logs")
 }
 
+// 범용 작업 실행(run) 헤더 — 크롤/요약/정규화/정산 추출 등 모든 기능의 실행
+// 1회를 한 행으로 남긴다. CrawlJobLog 가 크롤+요약 전용이었던 것을 일반화한
+// 후속 테이블. jobId/subjectId 는 기능별 의미가 달라(크롤 jobId, placeId,
+// 'dc:<vRid>' 등) 자유 문자열로 둔다. 레거시 백필 행은 id 가 'legacy-<jobId>'.
+model OperationRun {
+  id           String    @id @default(cuid())
+  // 8종: 'crawl'|'summary'|'menu-grouping'|'settlement-extraction'|
+  // 'auto-discover'|'schedule'|'global-merge'|'diningcode-bulk-save'
+  feature      String
+  // 인메모리 레지스트리 잡 ID (crawl jobId, ScheduleRun.id 등). 레지스트리가
+  // 없는 동기 실행(정산 추출 등)은 null.
+  jobId        String?
+  // placeId / restaurantId / 'dc:<vRid>' 등 — 대상 식별자.
+  subjectId    String?
+  // 중첩 run 연계 (schedule→menu-grouping 등). 부모 run 의 id.
+  parentRunId  String?
+  // 'running'|'done'|'failed'|'cancelled'. 재시작 고아는 부팅 sweep 이
+  // 'failed'(errorCode='server_restart') 로 마감한다.
+  status       String    @default("running")
+  // 'manual'|'cron'|'auto'|'user' 등 — 기능별 어휘 상이.
+  trigger      String?
+  errorCode    String?
+  // 2000자 캡 — application layer 에서 절단.
+  errorMessage String?
+  // JSON 직렬화, 4096자 캡. cacheHit/skipped 등 실행 부가 정보.
+  meta         String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+
+  logs   OperationLog[]
+  report OperationReport?
+
+  @@index([feature, startedAt])
+  @@index([status, startedAt])
+  @@index([jobId])
+  @@index([startedAt])
+  @@map("operation_runs")
+}
+
+// run 의 스텝 단위 로그. feature/jobId/subjectId 는 run 에도 있지만 비정규화
+// 해 둔다 — 레거시 크롤 로그 조회(jobId/placeId 기준)가 조인 없이 이 테이블만
+// 으로 동작해야 하기 때문.
+model OperationLog {
+  id        String   @id @default(cuid())
+  runId     String
+  // 비정규화 — run.feature 와 동일.
+  feature   String
+  // 비정규화 — 레거시 크롤 로그 조회 호환용 (CrawlJobLogEntry.jobId non-null).
+  jobId     String?
+  // 비정규화 — placeId 기준 레거시 조회 유지용.
+  subjectId String?
+  stage     String
+  // 'debug'|'info'|'warn'|'error'. debug 는 DB+pino 전용 (SSE 미발송).
+  level     String
+  // 2000자 캡.
+  message   String
+  // JSON 직렬화, 4096자 캡.
+  meta      String?
+  createdAt DateTime @default(now())
+
+  run OperationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([feature, createdAt])
+  @@index([subjectId, createdAt])
+  // 레거시 잡 로그 조회(jobId 기준)가 풀스캔하지 않도록.
+  @@index([jobId, createdAt])
+  @@index([createdAt])
+  @@map("operation_logs")
+}
+
+// 실패 run 1건당 LLM 분석 보고서 1개 (runId unique). done 보고서만 보존
+// 정리에서 제외되는 영구 기록(run 헤더+보고서만 남고 스텝 로그는 소멸) —
+// 본문 없는 미완(pending/running/failed) 보고서는 보존 기간이 지나면 run 과
+// 함께 정리된다.
+model OperationReport {
+  id               String   @id @default(cuid())
+  runId            String   @unique
+  // 'pending'|'running'|'done'|'failed'. failed 는 수동 '다시 분석' 으로 복구.
+  status           String   @default("pending")
+  provider         String?
+  model            String?
+  // 1-2문장 요약.
+  summary          String?
+  rootCause        String?
+  // markdown 본문.
+  details          String?
+  // string[] JSON 직렬화 — 서버가 파싱해 배열로 응답.
+  suggestions      String?
+  // 'low'|'medium'|'high' — LLM JSON schema enum 으로 강제.
+  severity         String?
+  errorCode        String?
+  errorMessage     String?
+  promptTokens     Int?
+  completionTokens Int?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  run OperationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("operation_reports")
+}
+
+// 로그 보존 설정 — 전역 단일 행(key='global'). ScheduleConfig 처럼 키 컬럼
+// unique 로 upsert 하는 소형 설정 테이블.
+model LogConfig {
+  id            String   @id @default(cuid())
+  key           String   @unique @default("global")
+  // 보존 기간(일). cutoff 이전 로그/보고서 없는 run 을 매일 정리.
+  retentionDays Int      @default(30)
+  updatedAt     DateTime @updatedAt
+
+  @@map("log_configs")
+}
+
 // tip + keyword 를 한 테이블에 통합. kind 로 구분 — 둘 다 free-form 짧은
 // 한국어 태그라 스키마가 같다. 별도 테이블로 쪼개면 조회 쿼리만 두 번 나서
 // 캐시 키도 늘어난다.

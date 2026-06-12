@@ -11,6 +11,7 @@ import type {
 } from '@repo/api-contract';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
+import type { OperationLogService } from '../logs/operation-log.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import { normalizeTerm, extractFirstJsonObject } from '../summary/summary.service.js';
@@ -41,6 +42,17 @@ export interface MenuGroupingServiceOptions {
   cache?: AdapterCache;
   resolveOverride?: () => Promise<{ provider: LLMProvider; model: string } | null>;
   logger?: FastifyBaseLogger;
+  // 범용 작업 로그 계측 — null/미주입이면 run 기록 없이 기존 흐름 그대로
+  // (기존 테스트가 계측 없이도 깨지지 않게).
+  operationLog?: OperationLogService | null;
+}
+
+export interface GroupForRestaurantOpts {
+  // 부모 run(schedule 등)이 자식 run 을 연계할 때 전달.
+  parentRunId?: string | null;
+  // 벌크 잡 라우트의 groupingJobRegistry jobId — OperationRun.jobId 로 기록.
+  jobId?: string | null;
+  trigger?: string | null;
 }
 
 export class MenuGroupingService {
@@ -57,7 +69,97 @@ export class MenuGroupingService {
   // 단일 식당의 distinct nameNorm 들을 LLM 으로 canonical 그룹에 매핑.
   // 기존 매핑은 모두 삭제 후 새로 작성 (idempotent). LLM 미설정/오류 시
   // MenuGroupingError 던짐 — 호출자(라우트)가 4xx/5xx 로 변환.
-  async groupForRestaurant(placeId: string): Promise<MenuGroupRunResultType> {
+  // run 경계 = 이 메서드 1회. opts.parentRunId 로 부모 run(schedule 등)과 연계.
+  async groupForRestaurant(
+    placeId: string,
+    opts?: GroupForRestaurantOpts,
+  ): Promise<MenuGroupRunResultType> {
+    const oplog = this.opts.operationLog ?? null;
+    const runId = oplog
+      ? await oplog.startRun({
+          feature: 'menu-grouping',
+          jobId: opts?.jobId ?? null,
+          subjectId: placeId,
+          parentRunId: opts?.parentRunId ?? null,
+          trigger: opts?.trigger ?? null,
+        })
+      : null;
+    const step = (
+      level: 'info' | 'warn' | 'error',
+      stage: string,
+      message: string,
+      meta?: Record<string, unknown>,
+    ): void => {
+      if (oplog && runId) {
+        oplog.log({ runId, stage, level, message, ...(meta !== undefined ? { meta } : {}) });
+      }
+    };
+    // finishRun 은 정확히 한 번 — 성공/실패 매핑 경로가 먼저 마감하면
+    // finally 의 방어 마감은 no-op 이 된다 (run 이 영원히 running 으로
+    // 남는 사고 방지).
+    let finished = false;
+    const finish = async (input: {
+      status: 'done' | 'failed' | 'cancelled';
+      errorCode?: string;
+      errorMessage?: string;
+      meta?: Record<string, unknown>;
+    }): Promise<void> => {
+      if (!oplog || !runId || finished) return;
+      finished = true;
+      await oplog.finishRun(runId, input);
+    };
+
+    try {
+      const result = await this.doGroupForRestaurant(placeId, step, finish);
+      return result;
+    } catch (e) {
+      if (e instanceof MenuGroupingError) {
+        if (e.code === 'no_menus') {
+          // 정상 스킵 — 아직 분석된 멘션이 없을 뿐 실패가 아니다.
+          // failed 로 기록하면 매번 무의미한 자동 분석이 붙는다.
+          step('info', 'load', '그룹핑할 메뉴 멘션이 없어 스킵');
+          await finish({ status: 'done', meta: { skipped: 'no_menus' } });
+        } else {
+          // no_provider 는 자동 분석 제외 코드 — finishRun 이 알아서 거른다.
+          const stage = e.code === 'no_provider' ? 'resolve_provider' : 'load';
+          step('error', stage, e.message, { code: e.code });
+          await finish({ status: 'failed', errorCode: e.code, errorMessage: e.message });
+        }
+      } else {
+        const message = e instanceof Error ? e.message : String(e);
+        step('error', 'run', message);
+        await finish({ status: 'failed', errorCode: 'unknown', errorMessage: message });
+      }
+      throw e;
+    } finally {
+      // 위 경로들이 모두 마감하지만, 누락 시에도 running 고아를 남기지 않는다.
+      await finish({
+        status: 'failed',
+        errorCode: 'unknown',
+        errorMessage: 'run finished without explicit status',
+      });
+    }
+  }
+
+  // 실제 그룹핑 본문 — step/finish 는 groupForRestaurant 가 만든 계측 헬퍼.
+  // 성공 경로의 finishRun(done/all_chunks_failed)도 여기서 호출한다 —
+  // 전 청크 실패는 비즈니스 결과(identity fallback 저장)는 유지하되
+  // run 만 실패로 승격해야 해서 throw 로 표현할 수 없기 때문.
+  private async doGroupForRestaurant(
+    placeId: string,
+    step: (
+      level: 'info' | 'warn' | 'error',
+      stage: string,
+      message: string,
+      meta?: Record<string, unknown>,
+    ) => void,
+    finish: (input: {
+      status: 'done' | 'failed' | 'cancelled';
+      errorCode?: string;
+      errorMessage?: string;
+      meta?: Record<string, unknown>;
+    }) => Promise<void>,
+  ): Promise<MenuGroupRunResultType> {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { placeId },
       select: { id: true, name: true, category: true },
@@ -97,6 +199,9 @@ export class MenuGroupingService {
       variantToNorm.set(name, norm);
       variants.push(name);
     }
+    step('info', 'load', `메뉴 변형 적재 완료 — distinct ${variants.length}개`, {
+      distinctMenus: variants.length,
+    });
 
     const resolved = await this.resolveProvider();
     if (!resolved) {
@@ -106,6 +211,7 @@ export class MenuGroupingService {
       );
     }
     const { provider, model } = resolved;
+    step('info', 'resolve_provider', `LLM 결정 — ${model}`, { model });
 
     // 청크 분할 — 같은 청크 안에서만 묶이는 한계는 수용.
     // 현실 식당은 메뉴 100 개 미만이라 거의 분할 안 일어남.
@@ -118,13 +224,38 @@ export class MenuGroupingService {
     // canonical 결정 — 같은 청크가 출력하는 canonicalName 을 그대로 신뢰.
     // 다른 청크 사이의 동일 canonical 충돌은 최소화하기 위해 청크 분할 자체가
     // 드문 경우만 일어나도록 한도를 크게 잡음(80).
+    // 청크 실패는 identity fallback 으로 삼켜지므로 run meta(failedChunks)와
+    // warn 스텝으로 승격해 가시화한다.
     const variantToCanonical = new Map<string, string>();
-    for (const ch of chunks) {
-      const map = await this.callOneChunk(provider, model, {
+    const failedChunks: { index: number; code: string }[] = [];
+    let lastChunkFailure: { code: string; message: string } | null = null;
+    for (const [idx, ch] of chunks.entries()) {
+      const { map, failure } = await this.callOneChunk(provider, model, {
         restaurantName: restaurant.name,
         category: restaurant.category,
         variants: ch,
       });
+      if (failure) {
+        failedChunks.push({ index: idx, code: failure.code });
+        lastChunkFailure = failure;
+        step(
+          'warn',
+          'chunk',
+          `청크 ${idx + 1}/${chunks.length} 실패(${failure.code}) — identity fallback 적용`,
+          {
+            index: idx,
+            size: ch.length,
+            code: failure.code,
+            message: failure.message.slice(0, 300),
+          },
+        );
+      } else {
+        step('info', 'chunk', `청크 ${idx + 1}/${chunks.length} 완료`, {
+          index: idx,
+          size: ch.length,
+          mapped: Object.keys(map).length,
+        });
+      }
       // LLM 이 어떤 키를 빠뜨릴 수 있음 — 빠진 항목은 자기 자신을 canonical 로.
       for (const v of ch) {
         const c = map[v];
@@ -154,10 +285,41 @@ export class MenuGroupingService {
     });
 
     const groupCount = new Set(rows.map((r) => r.canonicalNorm)).size;
+    step('info', 'save', `매핑 저장 완료 — ${rows.length}건 / ${groupCount}그룹`, {
+      mapped: rows.length,
+      groups: groupCount,
+    });
     this.log?.info(
       { placeId, mapped: rows.length, groups: groupCount, model },
       '[menu-grouping] done',
     );
+
+    const runMeta: Record<string, unknown> = {
+      inputCount: variants.length,
+      chunks: chunks.length,
+      groupCount,
+      mappedCount: rows.length,
+      model,
+      ...(failedChunks.length > 0 ? { failedChunks } : {}),
+    };
+    if (failedChunks.length === chunks.length) {
+      // 전 청크 실패 — 저장된 매핑이 전부 identity fallback 이라 사실상
+      // 그룹핑이 안 된 상태. 비즈니스 결과는 유지하되 run 은 실패로 승격.
+      step('error', 'chunk', `전 청크(${chunks.length}개) 실패 — 결과 전부 identity fallback`, {
+        failedChunks: failedChunks.length,
+      });
+      await finish({
+        status: 'failed',
+        errorCode: 'all_chunks_failed',
+        errorMessage: lastChunkFailure
+          ? `${lastChunkFailure.code}: ${lastChunkFailure.message}`
+          : 'all chunks failed',
+        meta: runMeta,
+      });
+    } else {
+      await finish({ status: 'done', meta: runMeta });
+    }
+
     return {
       ok: true,
       placeId,
@@ -169,11 +331,17 @@ export class MenuGroupingService {
     };
   }
 
+  // 청크 실패도 빈 맵을 반환해 호출자의 identity fallback 을 유지하되,
+  // failure 로 사유를 같이 돌려준다 — 호출자가 스텝 로그/meta.failedChunks 로
+  // 승격하기 위함 (이전엔 pino warn 만 남고 조용히 삼켜졌다).
   private async callOneChunk(
     provider: LLMProvider,
     model: string,
     input: { restaurantName: string; category: string | null; variants: string[] },
-  ): Promise<Record<string, string>> {
+  ): Promise<{
+    map: Record<string, string>;
+    failure: { code: string; message: string } | null;
+  }> {
     try {
       const res = await provider.complete({
         prompt: buildGroupingUserPrompt(input),
@@ -185,21 +353,29 @@ export class MenuGroupingService {
         format: MENU_GROUPING_JSON_SCHEMA,
       });
       const candidate = extractFirstJsonObject(res.text);
-      if (!candidate) return {};
+      if (!candidate) {
+        // JSON 객체 자체가 없으면 청크 전체가 fallback — 실패로 분류.
+        return {
+          map: {},
+          failure: { code: 'parse_failed', message: 'no JSON object found in LLM response' },
+        };
+      }
       const parsed = JSON.parse(candidate) as unknown;
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const out: Record<string, string> = {};
         for (const [k, v] of Object.entries(parsed)) {
           if (typeof v === 'string') out[k] = v;
         }
-        return out;
+        return { map: out, failure: null };
       }
-      return {};
+      return {
+        map: {},
+        failure: { code: 'parse_failed', message: 'LLM response JSON is not an object' },
+      };
     } catch (e) {
       const { error, message } = classifyError(e);
       this.log?.warn({ error, message: message.slice(0, 200) }, '[menu-grouping] chunk failed');
-      // 청크 실패는 빈 맵 반환 — 호출자가 fallback (자기 자신을 canonical 로).
-      return {};
+      return { map: {}, failure: { code: error, message } };
     }
   }
 

@@ -251,6 +251,20 @@ export const Ai = {
     `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/models/preview`,
 } as const;
 
+// 범용 작업 로그 — 모든 기능의 run/스텝 로그 조회 + 실패 run LLM 분석 +
+// 보존 기간 설정. 어드민 전용.
+export const Logs = {
+  runs: `${API_PREFIX}/admin/logs/runs`,
+  run: (id: string) => `${API_PREFIX}/admin/logs/runs/${id}`,
+  // run 의 스텝 로그 — cursor pagination (debug 포함 4종 level 필터).
+  runLogs: (id: string) => `${API_PREFIX}/admin/logs/runs/${id}/logs`,
+  // 실패 run 수동 재분석 — 검증 후 비동기로 분석을 띄우고 즉시 running
+  // 스냅샷을 반환. 완료는 run 상세 폴링으로 확인.
+  analyze: (id: string) => `${API_PREFIX}/admin/logs/runs/${id}/analyze`,
+  // 전역 보존 기간 — GET/PUT 동일 경로.
+  config: `${API_PREFIX}/admin/logs/config`,
+} as const;
+
 // 외부 지도 SDK 키 관리. AI 키와 별개 라우트로 둔다 — provider 식별자 외엔
 // 모델·동시성 등 LLM 고유 옵션이 필요 없어서 같은 모듈로 묶기 어색함.
 // secret 은 평문 키 반환 (admin only) — vworld JS SDK init 에 필요.

@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   Compass,
   Home,
+  ScrollText,
   Settings,
   Shield,
   Sparkles,
@@ -36,6 +37,7 @@ const NAV: NavItem[] = [
   { to: '/admin/catchtable-test', label: '캐치테이블 크롤링 테스트', icon: Beaker },
   { to: '/admin/diningcode-test', label: '다이닝코드 크롤링 테스트', icon: Beaker },
   { to: '/admin/ai-test', label: 'AI 테스트', icon: Sparkles },
+  { to: '/admin/logs', label: '로그', icon: ScrollText },
   { to: '/admin/settings', label: '설정', icon: Settings },
 ];
 

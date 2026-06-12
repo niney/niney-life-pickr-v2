@@ -49,7 +49,12 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementExtractionError): never 
 
 const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
   const aiConfig = new AiConfigService(app.prisma, buildEnvBlock());
-  const service = new SettlementExtractionService(aiConfig, { logger: app.log });
+  // operationLog 주입 — extract 1회 = OperationRun 1개 계측. plugins/logs.ts
+  // 가 라우트 autoload 보다 먼저 등록되므로 여기서 참조해도 안전하다.
+  const service = new SettlementExtractionService(aiConfig, {
+    logger: app.log,
+    operationLog: app.operationLog,
+  });
   const restaurantService = new RestaurantService(app.prisma);
 
   const typed = app.withTypeProvider<ZodTypeProvider>();
@@ -112,6 +117,8 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
           menuNames: detail.menus.map((m) => m.name),
           roundHint,
           split,
+          // 작업 로그 subjectId — 식당 단위로 run 을 묶어 조회하기 위함.
+          placeId,
         });
       } catch (e) {
         if (e instanceof SettlementExtractionError) {

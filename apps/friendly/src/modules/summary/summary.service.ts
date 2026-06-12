@@ -6,7 +6,10 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import { summaryEventsBus, type SummaryEventsBus } from './summary-events-bus.js';
-import type { JobLogService } from '../crawl/job-log.service.js';
+import type {
+  FinishRunInput,
+  OperationLogService,
+} from '../logs/operation-log.service.js';
 
 // 프롬프트/스키마가 바뀌면 이 숫자를 올린다. ReviewSummary.analysisVersion에
 // 저장되어 추후 백필/재분석 대상 식별에 쓰인다.
@@ -184,10 +187,11 @@ export interface SummaryServiceOptions {
   // Fastify pino logger. 미주입 시 silent — 테스트는 로그 없이 돌고,
   // 라우트에서 만들 땐 app.log를 넘겨 콘솔에 진행 상황이 찍히게 한다.
   logger?: FastifyBaseLogger;
-  // 잡 단계별 로그 — DB + SSE 영속화. 미주입 시 pino 로그만 남는다.
-  // 크롤 잡 컨텍스트에서 호출됐을 때 channel: 'summary' 로 placeId 별 SSE 에
-  // 흘려보낸다 — 크롤 SSE 가 done 으로 닫혀도 어드민 UI 가 계속 받을 수 있게.
-  jobLog?: JobLogService;
+  // 범용 작업 로그 — run 경계(OperationRun) + 스텝 영속화(DB) + 'summary'
+  // 채널 SSE. 미주입 시 pino 로그만 남는다 (테스트 단순화). placeId 별 SSE 로
+  // 흘려보내는 이유: 크롤 SSE 가 done 으로 닫혀도 어드민 UI 가 계속 받게.
+  // 단, jobId 없는 run(backfill/resummarize/reschedule)은 'none' — DB+pino 만.
+  operationLog?: OperationLogService;
 }
 
 // Background AI summarization. The crawl pipeline calls
@@ -227,11 +231,14 @@ export class SummaryService {
   // modelOverride: 주어지면 이 batch 의 run() 이 DB defaultModel 대신 이 모델로
   // 요약한다. 단건 재요약(어드민이 모델을 골라 1회성으로 다시 요약)에서만 쓰며,
   // 전역 설정은 건드리지 않는다. null 이면 기존대로 defaultModel 사용.
+  // parentRunId: 호출자(크롤 등)의 OperationRun id — 이 batch 의 요약 run 이
+  // 어느 부모 작업에서 파생됐는지 연결한다.
   queueSummariesForReviews(
     placeId: string,
     reviewIds: string[],
     jobId: string | null = null,
     modelOverride: string | null = null,
+    parentRunId: string | null = null,
   ): void {
     if (reviewIds.length === 0) return;
 
@@ -291,18 +298,41 @@ export class SummaryService {
       { placeId, count: reviewIds.length, chained: prev !== undefined, jobId },
       '[summary] queued',
     );
-    if (jobId) {
-      void this.opts.jobLog?.log({
-        jobId,
-        placeId,
-        stage: 'summary_queue',
-        level: 'info',
-        message: '요약 큐 적재',
-        meta: {
-          reviewCount: reviewIds.length,
-          chained: prev !== undefined,
-        },
-        channel: 'summary',
+    // run 경계 = 이 batch 의 run() 1회. 적재 시점에 run 을 만들어 chain 대기
+    // 시간까지 run 수명에 포함시킨다 — 뒤에 줄을 선 batch 가 "왜 늦게 시작
+    // 했는지" 가 타임라인으로 남는다. jobId null 경로(backfill/resummarize/
+    // reschedule)도 기록한다 — 과거 logToJob 은 스킵했지만 새 체계는 run 화면
+    // 에서 모든 요약 실행을 추적해야 하므로.
+    const opLog = this.opts.operationLog ?? null;
+    // 스텝 SSE 는 jobId 있는 run 만 'summary' 채널로. jobId null 경로의 SSE 는
+    // 웹 dedup 키가 'no-job:<seq>' 로 떨어져 서버 재시작 간 seq 충돌로 로그가
+    // 드롭될 수 있고, 레거시 DB 조회(jobId not null 필터)에선 안 보여 비일관
+    // — SSE 없던 기존 동작을 유지하고 DB+pino 로만 남긴다('none').
+    const stepChannel: 'summary' | 'none' = jobId ? 'summary' : 'none';
+    const runIdPromise = opLog
+      ? opLog.startRun({
+          feature: 'summary',
+          jobId,
+          subjectId: placeId,
+          parentRunId,
+          // 크롤/부모 run 이 흘려보낸 batch 는 'auto', 어드민 단독 액션은 'manual'.
+          trigger: jobId || parentRunId ? 'auto' : 'manual',
+          meta: { total: reviewIds.length },
+        })
+      : null;
+    if (opLog && runIdPromise) {
+      void runIdPromise.then((runId) => {
+        opLog.log({
+          runId,
+          stage: 'summary_queue',
+          level: 'info',
+          message: '요약 큐 적재',
+          meta: {
+            reviewCount: reviewIds.length,
+            chained: prev !== undefined,
+          },
+          channel: stepChannel,
+        });
       });
     }
     // 적재 흔적 영속화 (chain 밖, 즉시). SQLite 는 writer 가 직렬화되므로
@@ -329,7 +359,15 @@ export class SummaryService {
       .then(() => this.bus.publish(placeId));
 
     const next = (prev ?? Promise.resolve())
-      .then(() => this.run(placeId, reviewIds, jobId, modelOverride))
+      .then(async () =>
+        this.run(
+          placeId,
+          reviewIds,
+          modelOverride,
+          runIdPromise ? await runIdPromise : null,
+          stepChannel,
+        ),
+      )
       .catch(() => undefined);
     this.runChainByPlace.set(placeId, next);
     void next.finally(() => {
@@ -611,7 +649,7 @@ export class SummaryService {
   // Exposed for tests so they can await completion deterministically. The
   // crawl path never awaits — it relies on queueSummariesForReviews.
   async runForTests(placeId: string, reviewIds: string[]): Promise<void> {
-    await this.run(placeId, reviewIds, null);
+    await this.run(placeId, reviewIds);
   }
 
   private get bus(): SummaryEventsBus {
@@ -622,43 +660,79 @@ export class SummaryService {
     return this.opts.logger ?? null;
   }
 
-  // jobId 가 있으면 모든 단계 로그를 'summary' 채널 (placeId 별 SSE) 로
-  // 흘려보낸다. null 이면 pino 로그만 남기고 SSE/DB 영속화 skip — 백필 같이
-  // 어드민이 직접 트리거하지 않은 경로용.
-  private logToJob = (
-    jobId: string | null,
-    placeId: string,
+  // run 스텝 로그 — runId 없으면(미주입·테스트) pino 만 남는다. channel=
+  // 'summary' 면 placeId(subjectId) 기준 SSE 로도 흐른다 — 크롤 SSE 가 닫힌
+  // 뒤에도 어드민 UI 가 계속 받아야 해서. jobId 없는 run 은 'none'(DB+pino만)
+  // — queueSummariesForReviews 의 stepChannel 결정을 그대로 받는다. jobId 는
+  // startRun 컨텍스트가 보충.
+  private logStep = (
+    runId: string | null,
     stage: string,
     level: 'info' | 'warn' | 'error',
     message: string,
     meta?: Record<string, unknown>,
+    channel: 'summary' | 'none' = 'summary',
   ): void => {
-    if (!jobId) return;
-    void this.opts.jobLog?.log({
-      jobId,
-      placeId,
+    if (!runId || !this.opts.operationLog) return;
+    this.opts.operationLog.log({
+      runId,
       stage,
       level,
       message,
       ...(meta ? { meta } : {}),
-      channel: 'summary',
+      channel,
     });
   };
 
+  // run 경계 래퍼 — 본문(executeRun)이 어떤 경로로 끝나든 finally 에서
+  // OperationRun 을 정확히 한 번 마감한다. 예기치 못한 예외는 failed 로
+  // 기록하되 기존 전파(chain 의 catch 가 삼킴)는 유지.
   private async run(
     placeId: string,
     reviewIds: string[],
-    jobId: string | null,
     modelOverride: string | null = null,
+    runId: string | null = null,
+    channel: 'summary' | 'none' = 'summary',
   ): Promise<void> {
     if (reviewIds.length === 0) return;
+    let outcome: FinishRunInput = { status: 'done' };
+    try {
+      outcome = await this.executeRun(placeId, reviewIds, runId, modelOverride, channel);
+    } catch (e) {
+      outcome = {
+        status: 'failed',
+        errorCode: 'unexpected',
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+      throw e;
+    } finally {
+      if (runId && this.opts.operationLog) {
+        await this.opts.operationLog.finishRun(runId, outcome);
+      }
+    }
+  }
+
+  // 실제 요약 파이프라인. 종료 사유를 FinishRunInput 으로 반환 — 정상 스킵
+  // (no_provider 보류)과 어드민 취소를 failed/cancelled 로 구분해 run 상태
+  // 매핑이 한 곳(반환값)에 모이게 한다.
+  private async executeRun(
+    placeId: string,
+    reviewIds: string[],
+    runId: string | null,
+    modelOverride: string | null = null,
+    channel: 'summary' | 'none' = 'summary',
+  ): Promise<FinishRunInput> {
     const startedAt = new Date();
     const total = reviewIds.length;
     this.log?.info({ placeId, total, version: ANALYSIS_VERSION }, '[summary] queue start');
-    this.logToJob(jobId, placeId, 'summary_run', 'info', '요약 실행 시작', {
-      total,
-      version: ANALYSIS_VERSION,
-    });
+    this.logStep(
+      runId,
+      'summary_run',
+      'info',
+      '요약 실행 시작',
+      { total, version: ANALYSIS_VERSION },
+      channel,
+    );
 
     // Mark every accepted review as pending up-front. Re-summarizing an
     // existing row is allowed (recrawl path wipes reviews+summaries first
@@ -688,21 +762,25 @@ export class SummaryService {
         { placeId, total },
         '[summary] no provider/model resolved — rows left pending',
       );
-      this.logToJob(
-        jobId,
-        placeId,
+      this.logStep(
+        runId,
         'summary_run',
         'warn',
         'AI provider/model 미설정 — 요약 보류',
         { total },
+        channel,
       );
-      return;
+      // no_provider 는 자동 분석 제외 코드 — 설정 부재는 분석할 거리가 없다.
+      return {
+        status: 'failed',
+        errorCode: 'no_provider',
+        errorMessage: 'AI provider/model 미설정 — 요약 보류',
+        meta: { total },
+      };
     }
     const { provider, model } = resolved;
     this.log?.info({ placeId, total, model }, '[summary] provider resolved');
-    this.logToJob(jobId, placeId, 'summary_run', 'info', 'provider 해석 완료', {
-      model,
-    });
+    this.logStep(runId, 'summary_run', 'info', 'provider 해석 완료', { model }, channel);
 
     const reviews = await this.prisma.visitorReview.findMany({
       where: { id: { in: reviewIds } },
@@ -723,11 +801,21 @@ export class SummaryService {
           { placeId, processed: doneCount + failCount + parseFailCount, total },
           '[summary] cancelled by admin, exiting chunk loop',
         );
-        this.logToJob(jobId, placeId, 'summary_run', 'warn', '요약 중지 — 어드민 요청', {
-          processed: doneCount + failCount + parseFailCount,
-          total,
-        });
-        return;
+        this.logStep(
+          runId,
+          'summary_run',
+          'warn',
+          '요약 중지 — 어드민 요청',
+          { processed: doneCount + failCount + parseFailCount, total },
+          channel,
+        );
+        // 어드민의 의도된 중단 — failed 가 아닌 cancelled 로 (분석 제외).
+        return {
+          status: 'cancelled',
+          errorCode: 'cancelled',
+          errorMessage: '어드민이 요약을 중지했습니다.',
+          meta: { processed: doneCount + failCount + parseFailCount, total },
+        };
       }
       const chunk = reviews.slice(i, i + chunkSize);
       const chunkIdx = Math.floor(i / chunkSize) + 1;
@@ -737,11 +825,14 @@ export class SummaryService {
         { placeId, chunk: `${chunkIdx}/${chunkTotal}`, size: chunk.length },
         '[summary] chunk start',
       );
-      this.logToJob(jobId, placeId, 'summary_chunk', 'info', '청크 시작', {
-        chunkIndex: chunkIdx,
-        chunkTotal,
-        size: chunk.length,
-      });
+      this.logStep(
+        runId,
+        'summary_chunk',
+        'info',
+        '청크 시작',
+        { chunkIndex: chunkIdx, chunkTotal, size: chunk.length },
+        channel,
+      );
       await this.prisma.reviewSummary.updateMany({
         where: { reviewId: { in: chunk.map((r) => r.id) } },
         data: { status: 'running' },
@@ -775,9 +866,8 @@ export class SummaryService {
               },
               '[summary] retry',
             );
-            this.logToJob(
-              jobId,
-              placeId,
+            this.logStep(
+              runId,
               'summary_retry',
               'warn',
               `재시도 ${attempt + 1}/${RETRY_LIMIT}`,
@@ -789,6 +879,7 @@ export class SummaryService {
                 prevMessage: prevErr?.message.slice(0, 200) ?? null,
                 delayMs,
               },
+              channel,
             );
           }
           const startedAt = Date.now();
@@ -933,9 +1024,8 @@ export class SummaryService {
             },
             '[summary] all retries exhausted',
           );
-          this.logToJob(
-            jobId,
-            placeId,
+          this.logStep(
+            runId,
             'summary_failed',
             'error',
             `요약 실패 (${a.errorCode})`,
@@ -956,6 +1046,7 @@ export class SummaryService {
                 delayMs: t.delayMs,
               })),
             },
+            channel,
           );
           await this.prisma.reviewSummary.update({
             where: { reviewId },
@@ -1001,15 +1092,22 @@ export class SummaryService {
         },
         '[summary] chunk done',
       );
-      this.logToJob(jobId, placeId, 'summary_chunk', 'info', '청크 완료', {
-        chunkIndex: chunkIdx,
-        chunkTotal,
-        tookMs: Date.now() - chunkStartedAt,
-        progress: `${doneCount + failCount + parseFailCount}/${total}`,
-        done: doneCount,
-        failed: failCount,
-        parseFailed: parseFailCount,
-      });
+      this.logStep(
+        runId,
+        'summary_chunk',
+        'info',
+        '청크 완료',
+        {
+          chunkIndex: chunkIdx,
+          chunkTotal,
+          tookMs: Date.now() - chunkStartedAt,
+          progress: `${doneCount + failCount + parseFailCount}/${total}`,
+          done: doneCount,
+          failed: failCount,
+          parseFailed: parseFailCount,
+        },
+        channel,
+      );
     }
     this.log?.info(
       {
@@ -1022,9 +1120,8 @@ export class SummaryService {
       },
       '[summary] queue finished',
     );
-    this.logToJob(
-      jobId,
-      placeId,
+    this.logStep(
+      runId,
       'summary_run',
       failCount + parseFailCount > 0 ? 'warn' : 'info',
       '요약 실행 완료',
@@ -1035,7 +1132,20 @@ export class SummaryService {
         parseFailed: parseFailCount,
         tookMs: Date.now() - startedAt.getTime(),
       },
+      channel,
     );
+    // 행 단위 실패는 ReviewSummary 에 남고 어드민이 재시도 가능 — run 자체는
+    // 끝까지 돈 것이므로 done. 실패 수치는 meta 로 보존한다.
+    return {
+      status: 'done',
+      meta: {
+        total,
+        done: doneCount,
+        failed: failCount,
+        parseFailed: parseFailCount,
+        tookMs: Date.now() - startedAt.getTime(),
+      },
+    };
   }
 
   // 한 review 에 대한 단일 시도. provider.complete + parseAnalysis 까지
