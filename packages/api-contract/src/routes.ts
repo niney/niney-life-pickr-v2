@@ -78,6 +78,24 @@ export const Crawl = {
     `${API_PREFIX}/admin/crawl/diningcode/bulk-save/jobs/${id}`,
   diningcodeBulkSaveJobEvents: (id: string) =>
     `${API_PREFIX}/admin/crawl/diningcode/bulk-save/jobs/${id}/events`,
+  // ── 테이블링 (mobile-v2-api.tabling.co.kr 무인증 REST, 웹·앱 공유 백엔드) ──
+  // 가게 상세 — GET /v1/restaurant/:idx + /menu + /review 합본. /admin/tabling-test.
+  tablingShop: (idx: string) =>
+    `${API_PREFIX}/admin/crawl/tabling/shop/${idx}`,
+  // 리뷰 커서 페이지네이션 — ?cursor=<응답 nextCursor>.
+  tablingShopReviews: (idx: string) =>
+    `${API_PREFIX}/admin/crawl/tabling/shop/${idx}/reviews`,
+  // 가게를 DB 저장(+리뷰 persist + AI 큐 + 좌표 기반 로컬 canonical 자동매칭). POST.
+  tablingShopSave: (idx: string) =>
+    `${API_PREFIX}/admin/crawl/tabling/shop/${idx}/save`,
+  // 미입점 place(JSON-LD 얕은 티어) 저장. POST.
+  tablingPlaceSave: (objectId: string) =>
+    `${API_PREFIX}/admin/crawl/tabling/place/${objectId}/save`,
+  // 등록됨 배지용 — idx 다수 한 번에 조회. ids=콤마 분리.
+  tablingRegistered: `${API_PREFIX}/admin/crawl/tabling/registered`,
+  // 사이트맵 기반 발견 — 검색 API 가 없어 사이트맵이 발견 백본.
+  // tier=shop(partner ~4k) | place(미입점 ~225k, page 1~5).
+  tablingDiscover: `${API_PREFIX}/admin/crawl/tabling/discover`,
 } as const;
 
 export const Restaurant = {

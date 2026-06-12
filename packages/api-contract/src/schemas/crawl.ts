@@ -1046,3 +1046,232 @@ export const CrawlJobLogsResult = z.object({
   nextCursor: z.string().nullable(),
 });
 export type CrawlJobLogsResultType = z.infer<typeof CrawlJobLogsResult>;
+
+// ── 테이블링 가게 상세 (어드민 /tabling-test/:idx) ───────────────────────────
+// mobile-v2-api.tabling.co.kr 의 무인증 REST(웹·앱 공유 백엔드)를 정규화. 3 호출
+// 합본: GET /v1/restaurant/:idx (기본) + /v1/restaurant/:idx/menu (메뉴) +
+// /v1/review/restaurant/:idx (리뷰 첫 페이지). CORS 열림 + 토큰 불필요 — 다이닝
+// 코드와 동일한 순수 HTTP 어댑터(Playwright 불필요). 상세 조사는 docs/research/
+// tabling-crawl-feasibility.md 참고.
+
+// 4축 항목 평점. category 는 "TASTE" | "ATMOSPHERE" | "SERVICE" | "CLEAN" 응답 그대로.
+export const TablingRatingItem = z.object({
+  category: z.string(),
+  points: z.number(),
+});
+export type TablingRatingItemType = z.infer<typeof TablingRatingItem>;
+
+export const TablingMenu = z.object({
+  name: z.string(),
+  // 응답 price 는 number(원). 0/누락 케이스 방어로 nullable.
+  price: z.number().nullable(),
+  description: z.string().nullable(),
+  imageUrl: z.string().url().nullable(),
+  isFeatured: z.boolean(),
+  isMain: z.boolean(),
+});
+export type TablingMenuType = z.infer<typeof TablingMenu>;
+
+export const TablingMenuCategory = z.object({
+  categoryName: z.string(),
+  categoryDescription: z.string().nullable(),
+  menus: z.array(TablingMenu),
+});
+export type TablingMenuCategoryType = z.infer<typeof TablingMenuCategory>;
+
+// restaurantTimes 한 요일치 — 요약 표시용 핵심만. dayOfWeek 1=월 … 7=일.
+export const TablingBusinessTime = z.object({
+  startTime: z.string().nullable(),
+  endTime: z.string().nullable(),
+});
+
+export const TablingBusinessDay = z.object({
+  dayOfWeek: z.number().int(),
+  // "BUSINESS" | "DAY_OFF" 등 응답 그대로.
+  dayStatus: z.string().nullable(),
+  openTimeList: z.array(TablingBusinessTime),
+  breakTimeList: z.array(TablingBusinessTime),
+});
+export type TablingBusinessDayType = z.infer<typeof TablingBusinessDay>;
+
+// 리뷰 단건. idx 는 리뷰 고유 식별자(24-hex MongoDB ObjectId 문자열) —
+// VisitorReview.externalId 'tb:rv:<idx>' 규약의 그 값. 방문자(예약/웨이팅
+// 사용자)만 작성 가능해 신뢰도가 높다.
+export const TablingShopReview = z.object({
+  idx: z.string(),
+  // 응답 cursorId — 다음 페이지 요청 시 사용하는 커서.
+  cursorId: z.string().nullable(),
+  nickname: z.string().nullable(),
+  // "2026-06-01" 등 테이블링 포맷.
+  reviewDate: z.string().nullable(),
+  rating: z.number().nullable(),
+  contents: z.string().nullable(),
+  imageUrls: z.array(z.string().url()),
+  // 리뷰어가 주문한 메뉴명.
+  menuOrders: z.array(z.string()),
+  likeCount: z.number().int(),
+  // 사장 답글 텍스트. 없으면 null.
+  reply: z.string().nullable(),
+  isBlinded: z.boolean(),
+  // 우리 DB ReviewSummary.text join 결과 — 어댑터는 항상 null, 서비스가 주입.
+  summaryText: z.string().nullable(),
+});
+export type TablingShopReviewType = z.infer<typeof TablingShopReview>;
+
+export const TablingShopReviewsSection = z.object({
+  totalCount: z.number().int(),
+  imageReviewCount: z.number().int(),
+  list: z.array(TablingShopReview),
+});
+export type TablingShopReviewsSectionType = z.infer<typeof TablingShopReviewsSection>;
+
+// 테이블링 차별 데이터 — 웨이팅/예약/포장/현장주문 가용 플래그.
+export const TablingServiceFlags = z.object({
+  useWaiting: z.boolean(),
+  useRemoteWaiting: z.boolean(),
+  useReservation: z.boolean(),
+  useTakeOut: z.boolean(),
+  useOnSiteOrder: z.boolean(),
+});
+
+export const TablingShopData = z.object({
+  // 가게 고유 idx — sourceId. /restaurant/:idx, 카카오 딥링크 restaurant_idx 와 동일.
+  idx: z.number().int(),
+  name: z.string(),
+  excerpt: z.string().nullable(),
+  description: z.string().nullable(),
+  // "아시아식" 등 단일 카테고리 문자열.
+  category: z.string().nullable(),
+  // address=합본, roadAddress=도로명(address1), jibunAddress=지번(address2).
+  address: z.string().nullable(),
+  roadAddress: z.string().nullable(),
+  jibunAddress: z.string().nullable(),
+  addressDetail: z.string().nullable(),
+  phone: z.string().nullable(),
+  // 응답은 string("37.54...") — 어댑터가 number 로 변환. 머지 좌표키.
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  rating: z.number().nullable(),
+  // 4축 항목 평점(맛/분위기/서비스/청결).
+  ratings: z.array(TablingRatingItem),
+  reviewTotalCount: z.number().int().nullable(),
+  favoriteCount: z.number().int().nullable(),
+  // "영업중" 등.
+  statusLabel: z.string().nullable(),
+  // restaurantImages — 대표 이미지.
+  images: z.array(z.string().url()),
+  menuCategories: z.array(TablingMenuCategory),
+  // restaurantTimes — 요일별 영업시간(최대 7일).
+  businessDays: z.array(TablingBusinessDay),
+  flags: TablingServiceFlags,
+  waitingCount: z.number().int().nullable(),
+  // 응답 첫 페이지 리뷰. 페이지네이션은 TablingShopReviewsResponse(커서) 사용.
+  reviewsFirstPage: TablingShopReviewsSection,
+  // https://www.tabling.co.kr/restaurant/:idx
+  rawSourceUrl: z.string().url(),
+  fetchedAt: z.string(),
+  elapsedMs: z.number().int(),
+  source: z.literal('http'),
+});
+export type TablingShopDataType = z.infer<typeof TablingShopData>;
+
+// 리뷰 페이지네이션 응답 — 가게 메타 없이 한 페이지만(커서 기반).
+export const TablingShopReviewsResponse = z.object({
+  idx: z.number().int(),
+  totalCount: z.number().int(),
+  // 응답 마지막 리뷰의 cursorId. null 이면 더 없음.
+  nextCursor: z.string().nullable(),
+  list: z.array(TablingShopReview),
+  source: z.literal('http'),
+  elapsedMs: z.number().int(),
+});
+export type TablingShopReviewsResponseType = z.infer<typeof TablingShopReviewsResponse>;
+
+// ── 테이블링 place(미입점) — JSON-LD 파싱 (얕은 좌표·메타 티어) ───────────────
+// /place/:objectId 페이지에는 모바일 API 가 없고 서버 렌더 JSON-LD 만 있다.
+// name/좌표/주소/평점/cuisine 으로 머지키는 충족하나 메뉴·리뷰는 없음. 추후
+// 입점 partner(/restaurant/:idx)와 매칭되면 풍부 데이터로 승격.
+export const TablingPlaceData = z.object({
+  // 24-hex MongoDB ObjectId — place 의 sourceId.
+  objectId: z.string(),
+  name: z.string(),
+  address: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  // JSON-LD servesCuisine[] — 카테고리/특성 태그.
+  cuisines: z.array(z.string()),
+  rating: z.number().nullable(),
+  // JSON-LD aggregateRating.reviewCount — API 가 없어 근사치(스테일 가능).
+  reviewCount: z.number().int().nullable(),
+  images: z.array(z.string().url()),
+  description: z.string().nullable(),
+  // https://www.tabling.co.kr/place/:objectId
+  rawSourceUrl: z.string().url(),
+  fetchedAt: z.string(),
+  source: z.literal('jsonld'),
+});
+export type TablingPlaceDataType = z.infer<typeof TablingPlaceData>;
+
+// 테이블링 가게를 DB 에 저장(+AI 분석 큐잉) 결과. POST /crawl/tabling-shop/:idx.
+export const SaveTablingShopResult = z.object({
+  idx: z.number().int(),
+  // Restaurant.id (cuid).
+  restaurantId: z.string(),
+  fetchedPages: z.number().int(),
+  totalReviewsReported: z.number().int(),
+  newReviewCount: z.number().int(),
+  queuedForAnalysis: z.number().int(),
+  // 좌표 기반 로컬 canonical 자동매칭 결과(검색 API 불필요 — 우리 DB 와 매칭).
+  autoMatched: z.boolean(),
+  matchedCanonicalId: z.string().nullable(),
+  elapsedMs: z.number().int(),
+});
+export type SaveTablingShopResultType = z.infer<typeof SaveTablingShopResult>;
+
+// 어드민 검색/목록 카드에 '등록됨' 배지용 — idx 다수 일괄 조회.
+export const TablingRegisteredQuery = z.object({
+  // 콤마 분리 idx 목록.
+  ids: z.string().min(1).max(4000),
+});
+export type TablingRegisteredQueryType = z.infer<typeof TablingRegisteredQuery>;
+
+export const TablingRegisteredEntry = z.object({
+  idx: z.number().int(),
+  restaurantId: z.string(),
+  canonicalId: z.string(),
+});
+export type TablingRegisteredEntryType = z.infer<typeof TablingRegisteredEntry>;
+
+export const TablingRegisteredResult = z.object({
+  items: z.array(TablingRegisteredEntry),
+});
+export type TablingRegisteredResultType = z.infer<typeof TablingRegisteredResult>;
+
+// 미입점 place(JSON-LD 티어) 저장 결과.
+export const SaveTablingPlaceResult = z.object({
+  objectId: z.string(),
+  restaurantId: z.string(),
+  autoMatched: z.boolean(),
+  matchedCanonicalId: z.string().nullable(),
+});
+export type SaveTablingPlaceResultType = z.infer<typeof SaveTablingPlaceResult>;
+
+// ── 테이블링 사이트맵 발견 ─────────────────────────────────────────────────
+// 키워드 검색 JSON API 가 없어 사이트맵이 발견 백본. shop=partner(/restaurant/:idx),
+// place=미입점(/place/:objectId, 5개 사이트맵으로 분할 각 ~45k).
+export const TablingDiscoverQuery = z.object({
+  tier: z.enum(['shop', 'place']).default('shop'),
+  // place tier 페이지(1~5). shop tier 는 무시.
+  page: z.coerce.number().int().min(1).max(5).default(1),
+});
+export type TablingDiscoverQueryType = z.infer<typeof TablingDiscoverQuery>;
+
+export const TablingDiscoverResult = z.object({
+  tier: z.enum(['shop', 'place']),
+  // shop tier: 숫자 idx 문자열[]. place tier: 24-hex objectId[].
+  ids: z.array(z.string()),
+  total: z.number().int(),
+  source: z.literal('sitemap'),
+  elapsedMs: z.number().int(),
+});
+export type TablingDiscoverResultType = z.infer<typeof TablingDiscoverResult>;

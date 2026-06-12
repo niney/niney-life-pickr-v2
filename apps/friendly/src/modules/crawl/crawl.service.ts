@@ -16,6 +16,12 @@ import type {
   DiningcodeShopReviewsResponseType,
   NaverPlaceDataType,
   SaveDiningcodeShopResultType,
+  SaveTablingShopResultType,
+  SaveTablingPlaceResultType,
+  TablingShopDataType,
+  TablingShopReviewsResponseType,
+  TablingDiscoverQueryType,
+  TablingDiscoverResultType,
   StartCrawlResultType,
   VisitorReviewType,
 } from '@repo/api-contract';
@@ -33,6 +39,12 @@ import {
   fetchDiningcodeShop,
   fetchDiningcodeShopReviews,
 } from './adapters/diningcode-shop.http.adapter.js';
+import {
+  fetchTablingShop,
+  fetchTablingShopReviews,
+} from './adapters/tabling-shop.http.adapter.js';
+import { fetchTablingPlace } from './adapters/tabling-place.http.adapter.js';
+import { fetchTablingSitemap } from './adapters/tabling-sitemap.http.adapter.js';
 import {
   fetchCatchtableShop,
   fetchCatchtableShopMenus,
@@ -686,6 +698,196 @@ export class CrawlService {
         }
       }
     }
+  }
+
+  // ── 테이블링 ───────────────────────────────────────────────────────────
+  // 가게 상세 — GET /v1/restaurant/:idx + /menu + /review 합본. 이미 DB 에 저장된
+  // 가게면 reviewsFirstPage 각 리뷰에 우리 ReviewSummary.text 를 join.
+  async fetchTablingShopDetail(idx: number): Promise<TablingShopDataType> {
+    const detail = await fetchTablingShop(idx);
+    const summaryMap = await this.restaurants.getTablingReviewSummaryMap(
+      idx,
+      detail.reviewsFirstPage.list.map((r) => r.idx),
+    );
+    if (summaryMap.size > 0) {
+      detail.reviewsFirstPage = {
+        ...detail.reviewsFirstPage,
+        list: detail.reviewsFirstPage.list.map((r) => ({
+          ...r,
+          summaryText: summaryMap.get(r.idx) ?? null,
+        })),
+      };
+    }
+    return detail;
+  }
+
+  // 리뷰 커서 페이지네이션 — 상세 페이지 "더 보기" 클릭 시.
+  async fetchTablingShopReviewsPage(
+    idx: number,
+    cursorId: string | null,
+  ): Promise<TablingShopReviewsResponseType> {
+    const resp = await fetchTablingShopReviews(idx, cursorId);
+    const summaryMap = await this.restaurants.getTablingReviewSummaryMap(
+      idx,
+      resp.list.map((r) => r.idx),
+    );
+    if (summaryMap.size === 0) return resp;
+    return {
+      ...resp,
+      list: resp.list.map((r) => ({
+        ...r,
+        summaryText: summaryMap.get(r.idx) ?? null,
+      })),
+    };
+  }
+
+  // 테이블링 가게 + 리뷰(커서 전 페이지)를 DB 저장 + AI 분석 큐 + 좌표 기반
+  // 로컬 canonical 자동매칭. 페이지 간 200ms 간격(다이닝코드와 동일 저부하 정책).
+  async saveTablingShop(idx: number): Promise<SaveTablingShopResultType> {
+    const startedAt = Date.now();
+    const detail = await fetchTablingShop(idx);
+
+    // 첫 페이지는 detail.reviewsFirstPage. 커서로 끝까지 추가 fetch.
+    const allReviews: TablingShopDataType['reviewsFirstPage']['list'] = [
+      ...detail.reviewsFirstPage.list,
+    ];
+    let fetchedPages = 1;
+    // 다음 페이지 커서 = 마지막 리뷰의 idx(ObjectId). 테이블링 lastIdx 규약.
+    let cursor =
+      allReviews.length > 0 ? allReviews[allReviews.length - 1]!.idx : null;
+    // 안전 상한 — 폭주 방지(200페이지 × pageSize).
+    while (cursor && fetchedPages < 200) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const pageResp = await fetchTablingShopReviews(idx, cursor);
+      if (pageResp.list.length === 0) break;
+      allReviews.push(...pageResp.list);
+      fetchedPages += 1;
+      cursor = pageResp.nextCursor;
+    }
+
+    const { id: restaurantId } =
+      await this.restaurants.upsertRestaurantFromTabling(detail);
+
+    // 등록 직후 cross-source 제안 후크 — 좌표 박스로 기존 네이버/DC canonical 과
+    // 같은 가게 짝을 검토 큐에 적재.
+    await this.generateProposalsForRestaurant(restaurantId);
+
+    const raw = allReviews.map((rv) => RestaurantService.mapTablingReviewToRaw(rv));
+    const { newReviews } = await this.restaurants.persistReviewBatch(restaurantId, raw);
+
+    if (newReviews.length > 0) {
+      this.summaries.queueSummariesForReviews(
+        `tb:${idx}`,
+        newReviews.map((r) => r.id),
+      );
+    }
+
+    // 좌표 기반 로컬 자동매칭(역방향) — 우리 DB 만 검색하므로 가볍다. 동기 실행해
+    // 결과를 응답에 싣는다(다이닝코드는 외부 저장이라 fire-and-forget).
+    const canonicalId =
+      await this.restaurants.getCanonicalIdForRestaurant(restaurantId);
+    const matched = canonicalId ? await this.tryAutoMatchTabling(canonicalId) : null;
+
+    return {
+      idx,
+      restaurantId,
+      fetchedPages,
+      totalReviewsReported: detail.reviewsFirstPage.totalCount,
+      newReviewCount: newReviews.length,
+      queuedForAnalysis: newReviews.length,
+      autoMatched: matched !== null,
+      matchedCanonicalId: matched,
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+
+  // 미입점 place(JSON-LD 얕은 티어) 저장 + 자동매칭. 메뉴·리뷰 없음.
+  async saveTablingPlace(objectId: string): Promise<SaveTablingPlaceResultType> {
+    const data = await fetchTablingPlace(objectId);
+    const { id: restaurantId } =
+      await this.restaurants.upsertRestaurantFromTablingPlace(data);
+    await this.generateProposalsForRestaurant(restaurantId);
+    const canonicalId =
+      await this.restaurants.getCanonicalIdForRestaurant(restaurantId);
+    const matched = canonicalId ? await this.tryAutoMatchTabling(canonicalId) : null;
+    return {
+      objectId,
+      restaurantId,
+      autoMatched: matched !== null,
+      matchedCanonicalId: matched,
+    };
+  }
+
+  // 테이블링 저장 직후 좌표 기반 로컬 자동매칭(역방향). 테이블링 canonical 을
+  // 기존 네이버/DC canonical 에 자동 머지한다 — 외부 검색 API 불필요, 우리 DB 의
+  // 좌표 박스 안 후보만 스코어링. 임계는 DC 자동매칭과 동일(이름 ≥0.85, 거리
+  // ≤50m, top1-top2 ≥0.1). 미달이면 머지 안 하고 null(제안 큐가 보조 채널).
+  // 반환: 머지된 대상(keep) canonicalId, 없으면 null.
+  private async tryAutoMatchTabling(
+    tablingCanonicalId: string,
+  ): Promise<string | null> {
+    if (!this.canonical) return null;
+    try {
+      const core =
+        await this.restaurants.getCanonicalCoreForAutoMatch(tablingCanonicalId);
+      if (!core) return null;
+      if (core.latitude === null || core.longitude === null) return null;
+
+      const candidates = await this.restaurants.findCanonicalAutoMatchCandidates(
+        tablingCanonicalId,
+        core.latitude,
+        core.longitude,
+      );
+      // 이미 테이블링 source 를 가진 canonical 은 제외(중복 머지 방지).
+      const eligible = candidates.filter((c) => !c.sources.includes('tabling'));
+      if (eligible.length === 0) return null;
+
+      const scored = eligible
+        .map((c) => ({
+          item: c,
+          score: scoreMatch(
+            { name: core.name, latitude: core.latitude, longitude: core.longitude },
+            { name: c.name, latitude: c.latitude, longitude: c.longitude },
+          ),
+        }))
+        .sort((a, b) => b.score.score - a.score.score);
+
+      const top = scored[0]!;
+      if (top.score.nameScore < AUTO_DC_NAME_THRESHOLD) return null;
+      if (
+        top.score.distanceM === null ||
+        top.score.distanceM > AUTO_DC_DISTANCE_THRESHOLD_M
+      ) {
+        return null;
+      }
+      const second = scored[1];
+      if (second && top.score.score - second.score.score < AUTO_DC_TIE_GAP) {
+        return null;
+      }
+
+      // 테이블링 canonical 을 기존 canonical(keep) 로 머지.
+      await this.canonical.merge(tablingCanonicalId, top.item.id);
+      return top.item.id;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[crawl] auto tabling match failed', e);
+      return null;
+    }
+  }
+
+  // 사이트맵 기반 발견 — 검색 API 가 없어 전수 발견 백본. tier=shop(partner idx)
+  // | place(미입점 objectId, page 1~5).
+  async discoverTabling(
+    query: TablingDiscoverQueryType,
+  ): Promise<TablingDiscoverResultType> {
+    const res = await fetchTablingSitemap(query.tier, query.page);
+    return {
+      tier: query.tier,
+      ids: res.ids,
+      total: res.total,
+      source: 'sitemap',
+      elapsedMs: res.elapsedMs,
+    };
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시

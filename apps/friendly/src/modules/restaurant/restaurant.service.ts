@@ -23,6 +23,9 @@ import type {
   CategoryTreeNodeType,
   DiningcodeShopDataType,
   DiningcodeShopReviewType,
+  TablingShopDataType,
+  TablingShopReviewType,
+  TablingPlaceDataType,
   NaverPlaceDataType,
   PublicReviewAnalysisType,
   PublicVisitorReviewType,
@@ -353,6 +356,205 @@ export class RestaurantService {
       map.set(rvId, text);
     }
     return map;
+  }
+
+  // ── 테이블링 (source='tabling') ────────────────────────────────────────
+  // partner 가게(/restaurant/:idx) → Restaurant upsert. 키는 (source='tabling',
+  // sourceId=String(idx)). rating 은 이미 0~5 척도라 환산 없이 저장. placeId 는
+  // null — 공개 /restaurants/:placeId 는 네이버 전용. 좌표는 canonical 에 저장돼
+  // 좌표 기반 머지에 그대로 쓰인다.
+  async upsertRestaurantFromTabling(data: TablingShopDataType): Promise<{ id: string }> {
+    const { reviewsFirstPage: _ignored, ...rest } = data;
+    const snapshotJson = JSON.stringify(rest);
+    const sourceId = String(data.idx);
+    const category = data.category;
+    const address = data.roadAddress ?? data.address;
+    const r = await this.prisma.restaurant.upsert({
+      where: { source_sourceId: { source: 'tabling', sourceId } },
+      create: {
+        source: 'tabling',
+        sourceId,
+        placeId: null,
+        name: data.name,
+        category,
+        address,
+        phone: data.phone,
+        rating: data.rating,
+        reviewCount: data.reviewTotalCount,
+        rawSourceUrl: data.rawSourceUrl,
+        snapshotJson,
+        canonical: {
+          create: {
+            name: data.name,
+            primaryCategory: category,
+            latitude: data.lat,
+            longitude: data.lng,
+          },
+        },
+      },
+      update: {
+        name: data.name,
+        category,
+        address,
+        phone: data.phone,
+        rating: data.rating,
+        reviewCount: data.reviewTotalCount,
+        rawSourceUrl: data.rawSourceUrl,
+        snapshotJson,
+      },
+      select: { id: true },
+    });
+    return r;
+  }
+
+  // 미입점 place(/place/:objectId, JSON-LD) → Restaurant upsert. 얕은 좌표·메타
+  // 티어. partner 와 구분되게 sourceId='place:<objectId>' prefix 로 둔다(같은
+  // source='tabling' 안에서 idx 와 충돌 방지).
+  async upsertRestaurantFromTablingPlace(
+    data: TablingPlaceDataType,
+  ): Promise<{ id: string }> {
+    const snapshotJson = JSON.stringify(data);
+    const sourceId = `place:${data.objectId}`;
+    const category = data.cuisines[0] ?? null;
+    const r = await this.prisma.restaurant.upsert({
+      where: { source_sourceId: { source: 'tabling', sourceId } },
+      create: {
+        source: 'tabling',
+        sourceId,
+        placeId: null,
+        name: data.name,
+        category,
+        address: data.address,
+        phone: null,
+        rating: data.rating,
+        reviewCount: data.reviewCount,
+        rawSourceUrl: data.rawSourceUrl,
+        snapshotJson,
+        canonical: {
+          create: {
+            name: data.name,
+            primaryCategory: category,
+            latitude: data.lat,
+            longitude: data.lng,
+          },
+        },
+      },
+      update: {
+        name: data.name,
+        category,
+        address: data.address,
+        rating: data.rating,
+        reviewCount: data.reviewCount,
+        rawSourceUrl: data.rawSourceUrl,
+        snapshotJson,
+      },
+      select: { id: true },
+    });
+    return r;
+  }
+
+  // 테이블링 리뷰 → RawReview. externalId 는 'tb:rv:<idx>' prefix 로 네이버/DC
+  // review id 와 충돌 안 나게. content 가 비면(사진/별점만) body='' → contentHash
+  // 보다 externalId 가 실질 dedup 키.
+  static mapTablingReviewToRaw(rv: TablingShopReviewType): RawReview {
+    return {
+      externalId: `tb:rv:${rv.idx}`,
+      authorName: rv.nickname,
+      rating: rv.rating,
+      body: rv.contents ?? '',
+      visitedAt: rv.reviewDate,
+      imageUrls: rv.imageUrls,
+      videos: [],
+    };
+  }
+
+  // 정식 /admin/tabling 페이지 등록 배지용 — idx 배열로 (source='tabling',
+  // sourceId IN ids) 행 조회. partner(숫자 idx) 만 — place 행은 'place:' prefix 라
+  // 숫자 변환에서 자연 제외.
+  async findRegisteredTablingByIdxs(
+    idxs: number[],
+  ): Promise<Array<{ idx: number; restaurantId: string; canonicalId: string }>> {
+    if (idxs.length === 0) return [];
+    const rows = await this.prisma.restaurant.findMany({
+      where: { source: 'tabling', sourceId: { in: idxs.map(String) } },
+      select: { id: true, sourceId: true, canonicalId: true },
+    });
+    return rows.map((r) => ({
+      idx: Number(r.sourceId),
+      restaurantId: r.id,
+      canonicalId: r.canonicalId,
+    }));
+  }
+
+  // 테이블링 상세 페이지가 리뷰 카드 옆 AI 요약 한 줄을 붙이려고 호출.
+  // Review.externalId='tb:rv:<idx>' 규약은 mapTablingReviewToRaw 와 일치.
+  async getTablingReviewSummaryMap(
+    idx: number,
+    reviewIdxs: string[],
+  ): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (reviewIdxs.length === 0) return map;
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { source_sourceId: { source: 'tabling', sourceId: String(idx) } },
+      select: { id: true },
+    });
+    if (!restaurant) return map;
+    const externalIds = reviewIdxs.map((id) => `tb:rv:${id}`);
+    const rows = await this.prisma.visitorReview.findMany({
+      where: { restaurantId: restaurant.id, externalId: { in: externalIds } },
+      select: { externalId: true, summary: { select: { status: true, text: true } } },
+    });
+    for (const r of rows) {
+      if (!r.externalId) continue;
+      const text = r.summary?.status === 'done' ? r.summary.text : null;
+      if (!text) continue;
+      const key = r.externalId.startsWith('tb:rv:')
+        ? r.externalId.slice('tb:rv:'.length)
+        : r.externalId;
+      map.set(key, text);
+    }
+    return map;
+  }
+
+  // 테이블링 자동매칭(역방향)용 — 좌표 박스(±0.007°, ProposalService 와 동일 정책)
+  // 안의 다른 canonical 후보. 테이블링은 외부 검색 API 가 없어 우리 DB 의 기존
+  // 네이버/DC canonical 과 매칭한다. 스코어링·임계 판정은 CrawlService 담당.
+  async findCanonicalAutoMatchCandidates(
+    excludeCanonicalId: string,
+    latitude: number,
+    longitude: number,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      latitude: number | null;
+      longitude: number | null;
+      sources: string[];
+    }>
+  > {
+    const DELTA = 0.007;
+    const rows = await this.prisma.canonicalRestaurant.findMany({
+      where: {
+        id: { not: excludeCanonicalId },
+        latitude: { gte: latitude - DELTA, lte: latitude + DELTA },
+        longitude: { gte: longitude - DELTA, lte: longitude + DELTA },
+      },
+      select: {
+        id: true,
+        name: true,
+        latitude: true,
+        longitude: true,
+        restaurants: { select: { source: true } },
+      },
+      take: 100,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      sources: r.restaurants.map((x) => x.source),
+    }));
   }
 
   async getExistingReviewKeys(restaurantId: string): Promise<ExistingReviewKeys> {

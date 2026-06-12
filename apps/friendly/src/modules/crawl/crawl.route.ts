@@ -22,6 +22,14 @@ import {
   DiningcodeShopData,
   DiningcodeShopReviewsResponse,
   SaveDiningcodeShopResult,
+  SaveTablingShopResult,
+  SaveTablingPlaceResult,
+  TablingShopData,
+  TablingShopReviewsResponse,
+  TablingRegisteredQuery,
+  TablingRegisteredResult,
+  TablingDiscoverQuery,
+  TablingDiscoverResult,
   Routes,
   StartCrawlResult,
   type CrawlEventType,
@@ -262,6 +270,91 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       const items = await restaurants.findRegisteredDiningcodeByVRids(ids);
       return { items };
     },
+  });
+
+  // ── 테이블링 (mobile-v2-api.tabling.co.kr 무인증 REST) ────────────────────
+  // GET — 가게 상세. /v1/restaurant/:idx + /menu + /review 합본. 검색 카드의
+  // "상세 보기" 가 호출. 단발 동기.
+  typed.get(Routes.Crawl.tablingShop(':idx'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ idx: z.coerce.number().int().positive() }),
+      response: { 200: TablingShopData },
+    },
+    handler: async (req) => service.fetchTablingShopDetail(req.params.idx),
+  });
+
+  // GET — 리뷰 커서 페이지네이션. ?cursor=<응답 nextCursor>.
+  typed.get(Routes.Crawl.tablingShopReviews(':idx'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ idx: z.coerce.number().int().positive() }),
+      querystring: z.object({ cursor: z.string().optional() }),
+      response: { 200: TablingShopReviewsResponse },
+    },
+    handler: async (req) =>
+      service.fetchTablingShopReviewsPage(req.params.idx, req.query.cursor ?? null),
+  });
+
+  // POST — 가게를 DB 저장(+리뷰 persist + AI 큐 + 좌표 기반 로컬 canonical
+  // 자동매칭). 동기 — 리뷰 페이지 fetch 가 끝나야 200.
+  typed.post(Routes.Crawl.tablingShopSave(':idx'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ idx: z.coerce.number().int().positive() }),
+      response: { 200: SaveTablingShopResult },
+    },
+    handler: async (req) => service.saveTablingShop(req.params.idx),
+  });
+
+  // POST — 미입점 place(JSON-LD 얕은 티어) 저장 + 자동매칭.
+  typed.post(Routes.Crawl.tablingPlaceSave(':objectId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ objectId: z.string().regex(/^[a-f0-9]{24}$/) }),
+      response: { 200: SaveTablingPlaceResult },
+    },
+    handler: async (req) => service.saveTablingPlace(req.params.objectId),
+  });
+
+  // GET — 등록됨 배지용. ids=콤마 분리 숫자 idx. 결과에 없으면 미등록.
+  typed.get(Routes.Crawl.tablingRegistered, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: TablingRegisteredQuery,
+      response: { 200: TablingRegisteredResult },
+    },
+    handler: async (req) => {
+      const idxs = req.query.ids
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0);
+      const items = await restaurants.findRegisteredTablingByIdxs(idxs);
+      return { items };
+    },
+  });
+
+  // GET — 사이트맵 기반 발견. tier=shop(partner idx) | place(미입점 objectId,
+  // page 1~5). 검색 API 가 없어 사이트맵이 전수 발견 백본.
+  typed.get(Routes.Crawl.tablingDiscover, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: TablingDiscoverQuery,
+      response: { 200: TablingDiscoverResult },
+    },
+    handler: async (req) => service.discoverTabling(req.query),
   });
 
   // POST — 일괄 저장 잡 시작. body.vRids 만 받고 actor 단위로 한 번에 1개 잡만
