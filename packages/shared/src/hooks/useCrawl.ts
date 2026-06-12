@@ -17,6 +17,7 @@ import type {
   DiningcodeBulkSaveJobStateType,
   NaverPlaceDataType,
   PersistedVisitorReviewType,
+  TablingSearchSortType,
   VisitorReviewType,
 } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
@@ -145,6 +146,27 @@ export const useSaveDiningcodeShop = () =>
   });
 
 // ── 테이블링 — /admin/tabling-test 페이지 ────────────────────────────────
+// 키워드 검색 — 사이트맵 전수열거와 별개로 키워드로 partner idx 를 바로 찾는다.
+// q 가 비면 disabled. 무인증 REST 직접 호출이라 빠름. staleTime 60s.
+export interface UseTablingSearchArgs {
+  q: string;
+  cursor?: string | null;
+  pageSize?: number | null;
+  sort?: TablingSearchSortType | null;
+}
+export const useTablingSearch = ({
+  q,
+  cursor = null,
+  pageSize = null,
+  sort = null,
+}: UseTablingSearchArgs) =>
+  useQuery({
+    queryKey: ['crawl', 'tabling-search', q, cursor, pageSize, sort],
+    queryFn: () => crawlApi.tablingSearch({ q, cursor, pageSize, sort }),
+    enabled: q.trim().length > 0,
+    staleTime: 60_000,
+  });
+
 // 가게 상세(상세+메뉴+리뷰 첫 페이지 합본). idx null/0 이면 disabled. 무인증
 // REST 직접 호출이라 첫 호출도 빠름. 5분 staleTime(검증 도구).
 export const useTablingShop = (idx: number | null) =>

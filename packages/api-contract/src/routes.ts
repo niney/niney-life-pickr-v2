@@ -79,6 +79,9 @@ export const Crawl = {
   diningcodeBulkSaveJobEvents: (id: string) =>
     `${API_PREFIX}/admin/crawl/diningcode/bulk-save/jobs/${id}/events`,
   // ── 테이블링 (mobile-v2-api.tabling.co.kr 무인증 REST, 웹·앱 공유 백엔드) ──
+  // 키워드 검색 — POST /v1/search/restaurants/map 정규화. 사이트맵 전수열거와
+  // 별개로 키워드로 partner idx 를 바로 찾는다. ?q=&cursor=&pageSize=&sort=.
+  tablingSearch: `${API_PREFIX}/admin/crawl/tabling/search`,
   // 가게 상세 — GET /v1/restaurant/:idx + /menu + /review 합본. /admin/tabling-test.
   tablingShop: (idx: string) =>
     `${API_PREFIX}/admin/crawl/tabling/shop/${idx}`,

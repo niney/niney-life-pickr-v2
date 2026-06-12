@@ -19,10 +19,14 @@ import {
 import {
   useSaveTablingShop,
   useTablingDiscover,
+  useTablingRegistered,
+  useTablingSearch,
   useTablingShop,
 } from '@repo/shared';
 import type {
   SaveTablingShopResultType,
+  TablingSearchResultType,
+  TablingSearchSortType,
   TablingShopDataType,
 } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
@@ -36,9 +40,10 @@ import {
 } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 
-// 테이블링은 검색 API 가 없어(웹 검색은 Server Action 전용) 키워드 검색 대신
-// idx 직접 입력 + 사이트맵 발견으로 가게를 찾는다. 무인증 REST(mobile-v2-api)
-// 라 상세 조회는 빠르다. 근거: docs/research/tabling-crawl-feasibility.md.
+// 가게 발견 3경로: ① 키워드 검색(POST /v1/search/restaurants/map — 웹·앱 검색창이
+// 쓰는 무인증 Elasticsearch), ② idx 직접 입력, ③ 사이트맵 전수 발견. 무인증
+// REST(mobile-v2-api)라 상세 조회는 빠르다. 근거: docs/research/
+// tabling-crawl-feasibility.md.
 
 // 입력에서 idx 추출 — 숫자 또는 tabling.co.kr/restaurant/<idx> URL.
 const parseIdx = (raw: string): number | null => {
@@ -96,6 +101,94 @@ const SaveResultCard = ({ result }: { result: SaveTablingShopResultType }) => (
       </Badge>
     </CardContent>
   </Card>
+);
+
+const SEARCH_SORTS: { value: TablingSearchSortType; label: string }[] = [
+  { value: 'RECOMMEND', label: '추천순' },
+  { value: 'RATING', label: '평점순' },
+];
+
+// 키워드 검색 결과 한 줄. 클릭하면 해당 idx 로 상세 조회가 떨어진다.
+const SearchResultRow = ({
+  item,
+  registered,
+  onLoad,
+}: {
+  item: TablingSearchResultType;
+  registered: boolean;
+  onLoad: (idx: number) => void;
+}) => (
+  <button
+    type="button"
+    onClick={() => onLoad(item.idx)}
+    className="flex w-full items-start gap-3 rounded-md border bg-background p-2.5 text-left transition-colors hover:bg-accent"
+  >
+    {item.thumbnailUrl ? (
+      <img
+        src={item.thumbnailUrl}
+        alt=""
+        className="size-16 shrink-0 rounded-md object-cover"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    ) : (
+      <div className="flex size-16 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <Store className="size-5" />
+      </div>
+    )}
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-1.5">
+        <span className="truncate font-medium">{item.name}</span>
+        {item.isNew && (
+          <Badge className="bg-sky-600 px-1.5 py-0 text-[10px] font-normal hover:bg-sky-600">
+            NEW
+          </Badge>
+        )}
+        {registered && (
+          <Badge
+            variant="outline"
+            className="gap-0.5 border-emerald-400/40 px-1.5 py-0 text-[10px] font-normal text-emerald-700"
+          >
+            <CheckCircle2 className="size-2.5" />
+            등록됨
+          </Badge>
+        )}
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+        {item.category && <span>{item.category}</span>}
+        {item.summaryAddress && (
+          <span className="inline-flex items-center gap-0.5">
+            <MapPin className="size-3" />
+            {item.summaryAddress}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-0.5">
+          <Star className="size-3 fill-amber-400 text-amber-400" />
+          {formatRating(item.rating)}
+          {item.reviewCount != null && item.reviewCount > 0 && (
+            <span className="ml-0.5">({item.reviewCount.toLocaleString()})</span>
+          )}
+        </span>
+      </div>
+      {item.recommendedMenus.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {item.recommendedMenus.slice(0, 3).map((m, i) => (
+            <Badge
+              key={`${m.name}-${i}`}
+              variant="secondary"
+              className="px-1.5 py-0 text-[10px] font-normal"
+            >
+              {m.name}
+              {m.price != null ? ` ${formatPrice(m.price)}` : ''}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+    <span className="shrink-0 self-center font-mono text-[11px] text-muted-foreground/70">
+      idx {item.idx}
+    </span>
+  </button>
 );
 
 const DetailCard = ({
@@ -318,10 +411,25 @@ export const AdminTablingTestPage = () => {
   const [saveResult, setSaveResult] = useState<SaveTablingShopResultType | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [showDiscover, setShowDiscover] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchSort, setSearchSort] = useState<TablingSearchSortType>('RECOMMEND');
 
   const shop = useTablingShop(idx);
   const save = useSaveTablingShop();
   const discover = useTablingDiscover('shop', 1, showDiscover);
+  const search = useTablingSearch({ q: searchQuery, sort: searchSort });
+
+  // 검색 결과 idx 들의 등록 여부 — '등록됨' 배지용.
+  const searchIdxs = useMemo(
+    () => search.data?.items.map((i) => i.idx) ?? [],
+    [search.data],
+  );
+  const registered = useTablingRegistered(searchIdxs);
+  const registeredSet = useMemo(
+    () => new Set(registered.data?.items.map((i) => i.idx) ?? []),
+    [registered.data],
+  );
 
   const parsed = useMemo(() => parseIdx(input), [input]);
 
@@ -330,6 +438,11 @@ export const AdminTablingTestPage = () => {
     if (parsed === null) return;
     setSaveResult(null);
     setIdx(parsed);
+  };
+
+  const handleSearchSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSearchQuery(searchInput.trim());
   };
 
   const loadIdx = (n: number) => {
@@ -353,10 +466,84 @@ export const AdminTablingTestPage = () => {
           <h1 className="text-2xl font-semibold tracking-tight">테이블링 크롤링 테스트</h1>
           <p className="text-sm text-muted-foreground">
             테이블링 무인증 REST(<code>mobile-v2-api.tabling.co.kr</code>) 응답을 그대로
-            보여줍니다. 검색 API 가 없어 idx 직접 입력 또는 사이트맵 발견으로 가게를 찾습니다.
+            보여줍니다. 키워드 검색, idx 직접 입력, 사이트맵 발견으로 가게를 찾습니다.
           </p>
         </div>
       </header>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="size-4" />
+            키워드 검색
+          </CardTitle>
+          <CardDescription>
+            가게명·메뉴·지역 등으로 입점 매장을 검색합니다. 카드를 누르면 해당 가게
+            상세가 아래에 조회됩니다. (<code>POST /v1/search/restaurants/map</code>)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <form onSubmit={handleSearchSubmit} className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="예: 강남 파스타, 우진해장국, 성수 카페"
+                className="pl-9"
+              />
+            </div>
+            <select
+              value={searchSort}
+              onChange={(e) => setSearchSort(e.target.value as TablingSearchSortType)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="정렬"
+            >
+              {SEARCH_SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" disabled={!searchInput.trim() || search.isFetching}>
+              {search.isFetching ? <Loader2 className="animate-spin" /> : <Search />}
+              검색
+            </Button>
+          </form>
+
+          {search.isError && (
+            <p className="text-xs text-destructive">
+              {(search.error as Error | null)?.message ?? '검색 실패'}
+            </p>
+          )}
+
+          {search.data && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {search.data.items.length}건 표시
+                {search.data.total > 0 && ` / 매칭 약 ${search.data.total.toLocaleString()}건`}
+                {search.data.nextCursor && ' · 더 있음'}
+              </p>
+              {search.data.items.length === 0 ? (
+                <div className="rounded-md border border-dashed bg-muted/30 p-4 text-center text-xs text-muted-foreground">
+                  결과 없음 — 다른 키워드를 시도해 보세요.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {search.data.items.map((item) => (
+                    <SearchResultRow
+                      key={item.idx}
+                      item={item}
+                      registered={registeredSet.has(item.idx)}
+                      onLoad={loadIdx}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>

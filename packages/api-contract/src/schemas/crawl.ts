@@ -1257,8 +1257,8 @@ export const SaveTablingPlaceResult = z.object({
 export type SaveTablingPlaceResultType = z.infer<typeof SaveTablingPlaceResult>;
 
 // ── 테이블링 사이트맵 발견 ─────────────────────────────────────────────────
-// 키워드 검색 JSON API 가 없어 사이트맵이 발견 백본. shop=partner(/restaurant/:idx),
-// place=미입점(/place/:objectId, 5개 사이트맵으로 분할 각 ~45k).
+// 전수 열거 백본. 키워드 타깃 발견은 TablingSearch(/v1/search/restaurants/map)가
+// 담당하고, 사이트맵은 전량(shop=partner ~4k, place=미입점 ~225k page 1~5) 훑기용.
 export const TablingDiscoverQuery = z.object({
   tier: z.enum(['shop', 'place']).default('shop'),
   // place tier 페이지(1~5). shop tier 는 무시.
@@ -1275,3 +1275,76 @@ export const TablingDiscoverResult = z.object({
   elapsedMs: z.number().int(),
 });
 export type TablingDiscoverResultType = z.infer<typeof TablingDiscoverResult>;
+
+// ── 테이블링 키워드 검색 (어드민 /tabling-test 페이지) ───────────────────────
+// POST /v1/search/restaurants/map — 웹/앱 검색창이 그대로 호출하는 무인증
+// Elasticsearch 백엔드(앱 4.11.0). 사이트맵 전수열거와 달리 키워드로 partner
+// idx 를 바로 찾는다. 응답 카드에 좌표·평점·추천메뉴까지 실려 별도 상세 호출
+// 없이 등록 후보를 추릴 수 있다. (조사 초기엔 GET 만 시도해 404 → "검색 API
+// 없음" 으로 오판했으나 실제는 POST 라우트.) 근거: docs/research/
+// tabling-crawl-feasibility.md §2.
+//
+// 정렬은 RECOMMEND(기본)·DISTANCE·RATING 만 유효(그 외 ONLY_SORT 에러). 좌표
+// 중심이 없어 결과는 사실상 전국 키워드 매칭 — distance/좌표 모드는 미사용.
+export const TablingSearchSort = z.enum(['RECOMMEND', 'DISTANCE', 'RATING']);
+export type TablingSearchSortType = z.infer<typeof TablingSearchSort>;
+
+export const TablingSearchRecommendedMenu = z.object({
+  name: z.string(),
+  // 응답 price 는 number(원). 누락 방어로 nullable.
+  price: z.number().nullable(),
+  imageUrl: z.string().url().nullable(),
+});
+export type TablingSearchRecommendedMenuType = z.infer<
+  typeof TablingSearchRecommendedMenu
+>;
+
+export const TablingSearchResult = z.object({
+  // restaurantIdx — partner 가게 idx. tablingShop/:idx, 저장의 그 키.
+  idx: z.number().int(),
+  name: z.string(),
+  // classification(+classification2) 결합. 단일 카테고리 문자열.
+  category: z.string().nullable(),
+  // "도곡동" 등 행정동 단축 라벨(정규 주소 아님).
+  summaryAddress: z.string().nullable(),
+  // 응답은 number — 0 이면 평점 없음.
+  rating: z.number().nullable(),
+  reviewCount: z.number().int().nullable(),
+  // 머지 좌표키 — 응답에 number 로 동봉되어 상세 호출 전에도 자동매칭 가능.
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  thumbnailUrl: z.string().url().nullable(),
+  excerpt: z.string().nullable(),
+  isNew: z.boolean(),
+  waitingCount: z.number().int().nullable(),
+  // 웨이팅/예약/포장/현장주문 가용 플래그(상세와 동일 shape).
+  flags: TablingServiceFlags,
+  recommendedMenus: z.array(TablingSearchRecommendedMenu),
+  // "350m"/"-0.00km" 등 응답 그대로 — 좌표 중심 없으면 의미 없음(보통 null).
+  distance: z.string().nullable(),
+  // https://www.tabling.co.kr/restaurant/:idx
+  rawSourceUrl: z.string().url(),
+});
+export type TablingSearchResultType = z.infer<typeof TablingSearchResult>;
+
+export const TablingSearchQuery = z.object({
+  q: z.string().min(1).max(100),
+  // 페이지네이션 커서 — 직전 응답의 nextCursor(테이블링 `last` 토큰을 JSON
+  // 직렬화한 문자열)를 그대로 전달. 첫 페이지는 미지정.
+  cursor: z.string().optional(),
+  // 1~100. 기본 20.
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  sort: TablingSearchSort.optional(),
+});
+export type TablingSearchQueryType = z.infer<typeof TablingSearchQuery>;
+
+export const TablingSearchResponse = z.object({
+  items: z.array(TablingSearchResult),
+  // 테이블링이 보고한 매칭 수(10000 캡 가능 — 정확한 끝 판단은 nextCursor 로).
+  total: z.number().int(),
+  // 다음 페이지 커서(테이블링 `last` 를 JSON 직렬화). 더 없으면 null.
+  nextCursor: z.string().nullable(),
+  source: z.literal('http'),
+  elapsedMs: z.number().int(),
+});
+export type TablingSearchResponseType = z.infer<typeof TablingSearchResponse>;

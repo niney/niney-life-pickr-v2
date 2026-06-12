@@ -20,6 +20,8 @@ import type {
   SaveTablingPlaceResultType,
   TablingShopDataType,
   TablingShopReviewsResponseType,
+  TablingSearchQueryType,
+  TablingSearchResponseType,
   TablingDiscoverQueryType,
   TablingDiscoverResultType,
   StartCrawlResultType,
@@ -45,6 +47,7 @@ import {
 } from './adapters/tabling-shop.http.adapter.js';
 import { fetchTablingPlace } from './adapters/tabling-place.http.adapter.js';
 import { fetchTablingSitemap } from './adapters/tabling-sitemap.http.adapter.js';
+import { fetchTablingSearch } from './adapters/tabling-search.http.adapter.js';
 import {
   fetchCatchtableShop,
   fetchCatchtableShopMenus,
@@ -701,6 +704,19 @@ export class CrawlService {
   }
 
   // ── 테이블링 ───────────────────────────────────────────────────────────
+  // 키워드 검색 — POST /v1/search/restaurants/map 정규화. 사이트맵 전수열거와
+  // 별개로 키워드로 partner idx 를 바로 찾는 경로. 응답 카드에 좌표·평점·추천
+  // 메뉴가 실려 별도 상세 호출 없이 등록 후보 추리기에 충분하다.
+  async searchTabling(
+    query: TablingSearchQueryType,
+  ): Promise<TablingSearchResponseType> {
+    return fetchTablingSearch(query.q, {
+      cursor: query.cursor ?? null,
+      pageSize: query.pageSize,
+      sort: query.sort,
+    });
+  }
+
   // 가게 상세 — GET /v1/restaurant/:idx + /menu + /review 합본. 이미 DB 에 저장된
   // 가게면 reviewsFirstPage 각 리뷰에 우리 ReviewSummary.text 를 join.
   async fetchTablingShopDetail(idx: number): Promise<TablingShopDataType> {

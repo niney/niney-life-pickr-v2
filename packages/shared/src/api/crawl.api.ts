@@ -18,6 +18,8 @@ import {
   type SaveDiningcodeShopResultType,
   type SaveTablingShopResultType,
   type SaveTablingPlaceResultType,
+  type TablingSearchResponseType,
+  type TablingSearchSortType,
   type TablingShopDataType,
   type TablingShopReviewsResponseType,
   type TablingRegisteredResultType,
@@ -193,6 +195,28 @@ export const crawlApi = {
 
   diningcodeBulkSaveCancel: (jobId: string) =>
     apiFetch<void>(Routes.Crawl.diningcodeBulkSaveJob(jobId), { method: 'DELETE' }),
+
+  // 테이블링 키워드 검색 — 사이트맵 전수열거와 별개로 키워드로 partner idx 를
+  // 바로 찾는다. q 외엔 옵션. cursor 는 직전 응답의 nextCursor.
+  tablingSearch: ({
+    q,
+    cursor,
+    pageSize,
+    sort,
+  }: {
+    q: string;
+    cursor?: string | null;
+    pageSize?: number | null;
+    sort?: TablingSearchSortType | null;
+  }) => {
+    const params = new URLSearchParams({ q });
+    if (cursor) params.set('cursor', cursor);
+    if (pageSize != null) params.set('pageSize', String(pageSize));
+    if (sort) params.set('sort', sort);
+    return apiFetch<TablingSearchResponseType>(
+      `${Routes.Crawl.tablingSearch}?${params.toString()}`,
+    );
+  },
 
   // 테이블링 가게 상세 — idx 하나로 상세+메뉴+리뷰 첫 페이지 합본(무인증 REST).
   tablingShop: (idx: number) =>

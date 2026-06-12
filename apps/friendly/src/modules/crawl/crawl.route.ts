@@ -24,6 +24,8 @@ import {
   SaveDiningcodeShopResult,
   SaveTablingShopResult,
   SaveTablingPlaceResult,
+  TablingSearchQuery,
+  TablingSearchResponse,
   TablingShopData,
   TablingShopReviewsResponse,
   TablingRegisteredQuery,
@@ -273,6 +275,20 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── 테이블링 (mobile-v2-api.tabling.co.kr 무인증 REST) ────────────────────
+  // GET — 테이블링 키워드 검색. POST /v1/search/restaurants/map 정규화. 사이트맵
+  // 전수열거와 별개로 키워드로 partner idx 를 바로 찾는다. 검색 카드의 idx 를
+  // 눌러 상세 조회·저장으로 이어진다. ?q=&cursor=&pageSize=&sort=.
+  typed.get(Routes.Crawl.tablingSearch, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: TablingSearchQuery,
+      response: { 200: TablingSearchResponse },
+    },
+    handler: async (req) => service.searchTabling(req.query),
+  });
+
   // GET — 가게 상세. /v1/restaurant/:idx + /menu + /review 합본. 검색 카드의
   // "상세 보기" 가 호출. 단발 동기.
   typed.get(Routes.Crawl.tablingShop(':idx'), {
