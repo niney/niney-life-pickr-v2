@@ -2,8 +2,8 @@
 //
 // endpoint: POST https://mobile-v2-api.tabling.co.kr/v1/search/restaurants/map
 //   Content-Type: application/json
-//   body: {"search":"<keyword>","pageSize":20,"sort":"RECOMMEND","categories":[]
-//          [,"last":[<prev page cursor array>]]}
+//   body: {"search":"<keyword>","pageSize":20,"sort":"RECOMMEND","categories":[],
+//          "distance":700[,"last":[<prev page cursor array>]]}
 //
 // 웹·앱 검색창이 그대로 호출하는 무인증 Elasticsearch 백엔드. CORS 열려 있고
 // 토큰/쿠키 불필요 — 다이닝코드/네이버 nx-api 와 동일한 순수 HTTP 어댑터. 응답
@@ -14,11 +14,15 @@
 //   - search 필수(빈 값은 라우트 zod 가 막음 → 어댑터는 trim 만).
 //   - GET 아닌 POST. (조사 초기엔 GET 만 시도해 404 → "검색 API 없음" 으로
 //     오판했다. 실제는 POST 라우트.)
+//   - distance 필수(좌표 없이). 이 키가 없으면 같은 엔드포인트가 "내주변
+//     추천" 모드로 동작해 키워드를 거의 무시하고 기본 좌표 부근 가게를
+//     돌려준다(예: "숯돈 목동점" → 금돈옥/금은돈 양재·청담). 공식 웹 검색창은
+//     좌표 없이 distance:700 만 실어 보내는데, 이때 ES 가 키워드 관련성 정렬로
+//     전환돼 "숯돈 목동점" 이 1위로 나온다. 값 700 은 공식 웹 클라이언트 기본값.
 //   - 페이지네이션은 응답 `last`(Elasticsearch search_after 토큰 — 길이 3 배열)를
 //     다음 호출 body `last` 로 넘긴다. 경계에서 1건 겹칠 수 있어 호출자는
-//     idx 로 dedup 한다.
+//     idx 로 dedup 한다. distance 와 함께도 정상 동작(라이브 검증).
 //   - 정렬은 RECOMMEND(기본)·DISTANCE·RATING 만 유효(그 외 ONLY_SORT 400).
-//   - 좌표 중심 파라미터가 없어 결과는 사실상 전국 키워드 매칭이다.
 
 import type {
   TablingSearchResultType,
@@ -33,6 +37,9 @@ const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const DEFAULT_PAGE_SIZE = 20;
+// 좌표 없이 키워드 관련성 검색을 켜는 스위치. 공식 웹 검색창의 고정 기본값.
+// (실제 반경 의미보다 "내주변 추천 모드"를 끄는 플래그에 가깝다 — 상단 주석 참고.)
+const SEARCH_DISTANCE = 700;
 const FETCH_TIMEOUT_MS = Number(process.env.CRAWL_TABLING_TIMEOUT_MS ?? '8000');
 
 export interface TablingSearchOptions {
@@ -162,6 +169,7 @@ export const fetchTablingSearch = async (
     pageSize,
     sort: options.sort ?? 'RECOMMEND',
     categories: [],
+    distance: SEARCH_DISTANCE,
   };
   const last = parseCursor(options.cursor);
   if (last) body['last'] = last;

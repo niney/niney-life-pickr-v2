@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Beaker,
+  CalendarClock,
   ChevronLeft,
   Compass,
   Home,
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { to: '/admin/auto-discover', label: '맛집 자동 발견', icon: Wand2 },
   { to: '/admin/restaurants', label: '맛집', icon: UtensilsCrossed },
   { to: '/admin/diningcode', label: '다이닝코드 크롤링', icon: Utensils },
+  { to: '/admin/tabling', label: '테이블링 크롤링', icon: CalendarClock },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
   { to: '/admin/crawl-test', label: '네이버 크롤링 테스트', icon: Beaker },
   { to: '/admin/catchtable-test', label: '캐치테이블 크롤링 테스트', icon: Beaker },

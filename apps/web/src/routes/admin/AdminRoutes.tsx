@@ -19,6 +19,7 @@ import { AdminMapKeysPage } from './AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './AdminRestaurantDetailPage';
 import { AdminRestaurantsPage } from './AdminRestaurantsPage';
 import { AdminSettingsPage } from './AdminSettingsPage';
+import { AdminTablingPage } from './AdminTablingPage';
 import { AdminTablingTestPage } from './AdminTablingTestPage';
 
 // 어드민 서브트리 전체를 한 모듈로 모아 App.tsx 에서 React.lazy 로 1회만 import
@@ -44,6 +45,7 @@ const AdminRoutes = () => (
       <Route path="tabling-test" element={<AdminTablingTestPage />} />
       <Route path="diningcode" element={<AdminDiningcodePage />} />
       <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
+      <Route path="tabling" element={<AdminTablingPage />} />
       <Route path="analytics" element={<AdminAnalyticsPage />} />
       <Route path="logs" element={<AdminLogsPage />} />
       <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />
