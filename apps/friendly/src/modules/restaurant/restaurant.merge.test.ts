@@ -5,6 +5,7 @@ import type {
 } from '@repo/api-contract';
 import {
   composeDiningcodeAddon,
+  composeTablingAddon,
   computeSources,
   computeStoredReviewCount,
   mergeAddress,
@@ -18,9 +19,11 @@ import {
   mergePhotos,
   mergeRating,
   mergeReviewCount,
+  serializeTablingBusinessDays,
   type DiningcodeSnapshot,
   type MergeRestaurantRow,
   type NaverSnapshot,
+  type TablingSnapshot,
 } from './restaurant.merge.js';
 
 const naverSnap = (over: Partial<NaverSnapshot> = {}): NaverSnapshot => ({
@@ -87,6 +90,45 @@ const row = (over: Partial<MergeRestaurantRow> = {}): MergeRestaurantRow => ({
   rating: 4.2,
   reviewCount: 100,
   rawSourceUrl: 'https://map.naver.com/p',
+  ...over,
+});
+
+const tbSnap = (over: Partial<TablingSnapshot> = {}): TablingSnapshot => ({
+  idx: 12345,
+  name: 'TB가게',
+  excerpt: null,
+  description: null,
+  category: '아시아식',
+  address: '서울 테이블링',
+  roadAddress: '서울 테이블링 도로',
+  jibunAddress: null,
+  addressDetail: null,
+  phone: '02-333',
+  lat: 37.52,
+  lng: 127.02,
+  rating: 4.8,
+  ratings: [
+    { category: '맛', points: 4.9 },
+    { category: '분위기', points: 4.7 },
+  ],
+  reviewTotalCount: 77,
+  favoriteCount: 1500,
+  statusLabel: '영업중',
+  images: ['https://tb.example/1.jpg'],
+  menuCategories: [],
+  businessDays: [],
+  flags: {
+    useWaiting: true,
+    useRemoteWaiting: true,
+    useReservation: false,
+    useTakeOut: false,
+    useOnSiteOrder: false,
+  },
+  waitingCount: 3,
+  rawSourceUrl: 'https://www.tabling.co.kr/restaurant/12345',
+  fetchedAt: '2026-01-01T00:00:00.000Z',
+  elapsedMs: 100,
+  source: 'http',
   ...over,
 });
 
@@ -158,7 +200,7 @@ describe('mergeCoordinates', () => {
 });
 
 describe('mergeBusinessHours', () => {
-  it('DC summary wins over Naver text', () => {
+  it('Naver text wins over DC summary (전 필드 Naver 1순위)', () => {
     const got = mergeBusinessHours(
       naverSnap({ businessHours: '09:00-22:00' }),
       dcSnap({
@@ -167,9 +209,29 @@ describe('mergeBusinessHours', () => {
         ],
       }),
     );
-    expect(got).toBe('매일 08:00-23:00');
+    expect(got).toBe('09:00-22:00');
   });
-  it('joins multiple summary lines', () => {
+  it('Naver 비면 테이블링 요일별 직렬화가 DC summary 보다 우선', () => {
+    const got = mergeBusinessHours(
+      naverSnap({ businessHours: null }),
+      dcSnap({
+        businessHoursSummary: [{ duration: '매일', time: '08:00-23:00', today: true }],
+      }),
+      tbSnap({
+        businessDays: [
+          {
+            dayOfWeek: 1,
+            dayStatus: 'BUSINESS',
+            openTimeList: [{ startTime: '11:00:00', endTime: '21:00:00' }],
+            breakTimeList: [{ startTime: '15:00:00', endTime: '17:00:00' }],
+          },
+          { dayOfWeek: 7, dayStatus: 'DAY_OFF', openTimeList: [], breakTimeList: [] },
+        ],
+      }),
+    );
+    expect(got).toBe('월 11:00-21:00 (브레이크 15:00-17:00)\n일 휴무');
+  });
+  it('Naver·테이블링 모두 비면 DC summary 로 폴백, 여러 줄 join', () => {
     const got = mergeBusinessHours(
       null,
       dcSnap({
@@ -178,19 +240,26 @@ describe('mergeBusinessHours', () => {
           { duration: '주말', time: '10-23', today: true },
         ],
       }),
+      tbSnap({ businessDays: [] }),
     );
     expect(got).toBe('평일 09-22\n주말 10-23');
   });
-  it('falls back to Naver text when DC summary empty', () => {
-    const got = mergeBusinessHours(
-      naverSnap({ businessHours: '09-22' }),
-      dcSnap({ businessHoursSummary: [] }),
-    );
-    expect(got).toBe('09-22');
-  });
-  it('returns null when neither has value', () => {
+  it('returns null when none has value', () => {
     expect(
       mergeBusinessHours(naverSnap({ businessHours: null }), dcSnap({ businessHoursSummary: [] })),
+    ).toBeNull();
+  });
+});
+
+describe('serializeTablingBusinessDays', () => {
+  it('returns null for empty input', () => {
+    expect(serializeTablingBusinessDays([])).toBeNull();
+  });
+  it('skips days without open times (except DAY_OFF)', () => {
+    expect(
+      serializeTablingBusinessDays([
+        { dayOfWeek: 2, dayStatus: 'BUSINESS', openTimeList: [], breakTimeList: [] },
+      ]),
     ).toBeNull();
   });
 });
@@ -274,6 +343,14 @@ describe('mergePhotos', () => {
       [],
     );
   });
+  it('테이블링 images 가 합집합 끝에 dedup 으로 합쳐진다', () => {
+    const got = mergePhotos(
+      naverSnap({ imageUrls: ['https://shared.example/x.jpg'] }),
+      null,
+      tbSnap({ images: ['https://tb.example/1.jpg', 'https://shared.example/x.jpg'] }),
+    );
+    expect(got).toEqual(['https://shared.example/x.jpg', 'https://tb.example/1.jpg']);
+  });
 });
 
 describe('mergeMenus', () => {
@@ -317,6 +394,77 @@ describe('mergeMenus', () => {
     expect(got).toEqual([
       { name: 'D메뉴', price: '20000', description: '설명', recommend: true, imageUrls: [] },
     ]);
+  });
+  it('테이블링 메뉴가 DC 보다 우선 (Naver 비었을 때)', () => {
+    const got = mergeMenus(
+      naverSnap({ menus: [] }),
+      dcSnap({
+        menus: [
+          { name: 'D메뉴', price: '20000', description: null, rank: 1, best: true, selectionCount: 0, selectionRate: 0, reviewCount: 0, commentCount: 0 },
+        ],
+      }),
+      tbSnap({
+        menuCategories: [
+          {
+            categoryName: '대표 메뉴',
+            categoryDescription: null,
+            menus: [
+              {
+                name: 'TB메뉴',
+                price: 15000,
+                description: 'TB설명',
+                imageUrl: 'https://tb.example/m.jpg',
+                isFeatured: true,
+                isMain: false,
+              },
+              {
+                name: 'TB사이드',
+                price: 0,
+                description: null,
+                imageUrl: null,
+                isFeatured: false,
+                isMain: false,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(got).toEqual([
+      {
+        name: 'TB메뉴',
+        price: '15000',
+        description: 'TB설명',
+        recommend: true,
+        imageUrls: ['https://tb.example/m.jpg'],
+      },
+      { name: 'TB사이드', price: null, description: null, recommend: null, imageUrls: [] },
+    ]);
+  });
+  it('Naver menus win over 테이블링', () => {
+    const naverMenu = {
+      name: 'N메뉴',
+      price: '10000',
+      description: null,
+      recommend: null,
+      imageUrls: [],
+    };
+    const got = mergeMenus(
+      naverSnap({ menus: [naverMenu] }),
+      null,
+      tbSnap({
+        menuCategories: [
+          {
+            categoryName: '대표',
+            categoryDescription: null,
+            menus: [
+              { name: 'TB메뉴', price: 15000, description: null, imageUrl: null, isFeatured: false, isMain: true },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(got).toEqual([naverMenu]);
   });
 });
 
@@ -375,7 +523,7 @@ describe('mergeBlogReviews', () => {
 });
 
 describe('computeSources', () => {
-  it('returns both when present', () => {
+  it('returns all three when present', () => {
     const got = computeSources(
       row({ rating: 4.2, reviewCount: 100, rawSourceUrl: 'https://n.example' }),
       naverSnap({ placeId: 'pid' }),
@@ -384,6 +532,12 @@ describe('computeSources', () => {
         rating: 4.6,
         siteReviewCount: 42,
         rawSourceUrl: 'https://www.diningcode.com/profile.php?rid=v1',
+      },
+      {
+        idx: 12345,
+        rating: 4.8,
+        siteReviewCount: 77,
+        rawSourceUrl: 'https://www.tabling.co.kr/restaurant/12345',
       },
     );
     expect(got).toEqual({
@@ -399,17 +553,37 @@ describe('computeSources', () => {
         siteReviewCount: 42,
         rawSourceUrl: 'https://www.diningcode.com/profile.php?rid=v1',
       },
+      tabling: {
+        idx: 12345,
+        rating: 4.8,
+        siteReviewCount: 77,
+        rawSourceUrl: 'https://www.tabling.co.kr/restaurant/12345',
+      },
     });
   });
   it('returns null sides when missing', () => {
-    expect(computeSources(null, null, null)).toEqual({ naver: null, diningcode: null });
+    expect(computeSources(null, null, null)).toEqual({
+      naver: null,
+      diningcode: null,
+      tabling: null,
+    });
   });
 });
 
 describe('computeStoredReviewCount', () => {
   it('sums correctly', () => {
-    expect(computeStoredReviewCount(60, 42)).toEqual({ naver: 60, diningcode: 42, total: 102 });
-    expect(computeStoredReviewCount(0, 0)).toEqual({ naver: 0, diningcode: 0, total: 0 });
+    expect(computeStoredReviewCount(60, 42, 8)).toEqual({
+      naver: 60,
+      diningcode: 42,
+      tabling: 8,
+      total: 110,
+    });
+    expect(computeStoredReviewCount(0, 0)).toEqual({
+      naver: 0,
+      diningcode: 0,
+      tabling: 0,
+      total: 0,
+    });
   });
 });
 
@@ -459,5 +633,27 @@ describe('composeDiningcodeAddon', () => {
   });
   it('handles missing scoreDetail', () => {
     expect(composeDiningcodeAddon(dcSnap({ scoreDetail: null })).scoreDetail).toBeNull();
+  });
+});
+
+describe('composeTablingAddon', () => {
+  it('flattens snapshot into addon shape — waitingCount 는 스테일 위험으로 제외', () => {
+    const got = composeTablingAddon(tbSnap({ waitingCount: 5 }));
+    expect(got).toEqual({
+      flags: {
+        useWaiting: true,
+        useRemoteWaiting: true,
+        useReservation: false,
+        useTakeOut: false,
+        useOnSiteOrder: false,
+      },
+      ratings: [
+        { category: '맛', points: 4.9 },
+        { category: '분위기', points: 4.7 },
+      ],
+      favoriteCount: 1500,
+      businessDays: [],
+    });
+    expect('waitingCount' in got).toBe(false);
   });
 });

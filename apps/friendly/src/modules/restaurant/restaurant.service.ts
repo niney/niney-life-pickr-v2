@@ -5,6 +5,7 @@ import { normalizeTerm } from '../summary/summary.service.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from '../analytics/category-tree.js';
 import {
   composeDiningcodeAddon,
+  composeTablingAddon,
   computeSources,
   computeStoredReviewCount,
   mergeAddress,
@@ -18,6 +19,7 @@ import {
   mergePhotos,
   mergeRating,
   mergeReviewCount,
+  type TablingSnapshot,
 } from './restaurant.merge.js';
 import type {
   CategoryTreeNodeType,
@@ -1035,8 +1037,9 @@ export class RestaurantService {
     query: RestaurantPublicListQueryType,
   ): Promise<RestaurantPublicListResultType> {
     // 응답 행은 네이버 placeId 키를 그대로 유지 — 라우팅/캐시/UI 가 placeId 에
-    // 의존. 다만 같은 canonical 에 묶인 다이닝코드 형제가 있으면 그 행의 리뷰
-    // /요약 카운트를 함께 합산해 카드 카운트가 어드민 맛집 list 와 정렬되게 한다.
+    // 의존. 다만 같은 canonical 에 묶인 다이닝코드·테이블링 형제가 있으면 그
+    // 행의 리뷰/요약 카운트를 함께 합산해 카드 카운트가 어드민 맛집 list 와
+    // 정렬되게 한다.
     const ands: Record<string, unknown>[] = [{ source: 'naver' }];
     if (query.q && query.q.length > 0) {
       ands.push({
@@ -1140,9 +1143,9 @@ export class RestaurantService {
     // 채운다 — 어드민 발견 페이지가 SSE 로 행 배지를 갱신할 때 응답 필드
     // 셋이 어드민 list 와 정렬되어 캐시 패치가 단순해진다.
     //
-    // 추가: 같은 canonical 에 묶인 다이닝코드 형제가 있으면 그 행의 visitorReview
-    // 수 / ReviewSummary 분포도 동일 카운트에 합산. 행은 여전히 Naver placeId
-    // 키 1개지만 카드에 보이는 숫자는 두 출처의 통합 카운트가 된다.
+    // 추가: 같은 canonical 에 묶인 다이닝코드·테이블링 형제가 있으면 그 행의
+    // visitorReview 수 / ReviewSummary 분포도 동일 카운트에 합산. 행은 여전히
+    // Naver placeId 키 1개지만 카드에 보이는 숫자는 세 출처의 통합 카운트가 된다.
     const naverIds = filtered.map((r) => r.id);
     const canonicalIds = filtered.map((r) => r.canonicalId);
     const dcSiblings =
@@ -1156,7 +1159,24 @@ export class RestaurantService {
             },
           })
         : [];
-    // 같은 canonical 에 DC 행이 둘 이상이면 통상 의미상 첫 매칭만 사용 —
+    // 테이블링은 partner 행만 — place 행은 리뷰가 없어 합산 의미가 없다
+    // (상세 융합 경로와 동일 기준).
+    const tbSiblings =
+      canonicalIds.length > 0
+        ? await this.prisma.restaurant.findMany({
+            where: {
+              source: 'tabling',
+              canonicalId: { in: canonicalIds },
+              NOT: { sourceId: { startsWith: 'place:' } },
+            },
+            select: {
+              id: true,
+              canonicalId: true,
+              _count: { select: { visitorReviews: true } },
+            },
+          })
+        : [];
+    // 같은 canonical 에 형제 행이 둘 이상이면 통상 의미상 첫 매칭만 사용 —
     // 실제로는 (source, sourceId) unique + 자동 매칭이 1:1 이라 한 줄.
     const dcByCanonical = new Map<string, { id: string; visitorReviewCount: number }>();
     for (const dc of dcSiblings) {
@@ -1167,8 +1187,21 @@ export class RestaurantService {
         });
       }
     }
+    const tbByCanonical = new Map<string, { id: string; visitorReviewCount: number }>();
+    for (const tb of tbSiblings) {
+      if (!tbByCanonical.has(tb.canonicalId)) {
+        tbByCanonical.set(tb.canonicalId, {
+          id: tb.id,
+          visitorReviewCount: tb._count.visitorReviews,
+        });
+      }
+    }
 
-    const ids = [...naverIds, ...dcSiblings.map((dc) => dc.id)];
+    const ids = [
+      ...naverIds,
+      ...dcSiblings.map((dc) => dc.id),
+      ...tbSiblings.map((tb) => tb.id),
+    ];
     const summaryRows =
       ids.length > 0
         ? await this.prisma.reviewSummary.findMany({
@@ -1244,10 +1277,14 @@ export class RestaurantService {
       const naverBucket = byId.get(r.id)!;
       const dc = dcByCanonical.get(r.canonicalId) ?? null;
       const dcBucket = dc ? (byId.get(dc.id) ?? null) : null;
-      const sentSum = naverBucket.sentSum + (dcBucket?.sentSum ?? 0);
-      const sentN = naverBucket.sentN + (dcBucket?.sentN ?? 0);
-      const satSum = naverBucket.satSum + (dcBucket?.satSum ?? 0);
-      const satN = naverBucket.satN + (dcBucket?.satN ?? 0);
+      const tb = tbByCanonical.get(r.canonicalId) ?? null;
+      const tbBucket = tb ? (byId.get(tb.id) ?? null) : null;
+      const sentSum =
+        naverBucket.sentSum + (dcBucket?.sentSum ?? 0) + (tbBucket?.sentSum ?? 0);
+      const sentN = naverBucket.sentN + (dcBucket?.sentN ?? 0) + (tbBucket?.sentN ?? 0);
+      const satSum =
+        naverBucket.satSum + (dcBucket?.satSum ?? 0) + (tbBucket?.satSum ?? 0);
+      const satN = naverBucket.satN + (dcBucket?.satN ?? 0) + (tbBucket?.satN ?? 0);
       return {
         placeId: r.placeId,
         name: r.name,
@@ -1260,17 +1297,22 @@ export class RestaurantService {
         longitude: r.longitude,
         thumbnailUrl: r.thumbnailUrl,
         firstCrawledAt: r.firstCrawledAt.toISOString(),
-        totalReviews: r.totalReviews + (dc?.visitorReviewCount ?? 0),
-        summaryPending: naverBucket.pending + (dcBucket?.pending ?? 0),
-        summaryRunning: naverBucket.running + (dcBucket?.running ?? 0),
-        summaryDone: naverBucket.done + (dcBucket?.done ?? 0),
-        summaryFailed: naverBucket.failed + (dcBucket?.failed ?? 0),
-        analyzedCount: naverBucket.analyzed + (dcBucket?.analyzed ?? 0),
+        totalReviews:
+          r.totalReviews + (dc?.visitorReviewCount ?? 0) + (tb?.visitorReviewCount ?? 0),
+        summaryPending:
+          naverBucket.pending + (dcBucket?.pending ?? 0) + (tbBucket?.pending ?? 0),
+        summaryRunning:
+          naverBucket.running + (dcBucket?.running ?? 0) + (tbBucket?.running ?? 0),
+        summaryDone: naverBucket.done + (dcBucket?.done ?? 0) + (tbBucket?.done ?? 0),
+        summaryFailed:
+          naverBucket.failed + (dcBucket?.failed ?? 0) + (tbBucket?.failed ?? 0),
+        analyzedCount:
+          naverBucket.analyzed + (dcBucket?.analyzed ?? 0) + (tbBucket?.analyzed ?? 0),
         avgSentimentScore: sentN > 0 ? sentSum / sentN : null,
         avgSatisfactionScore: satN > 0 ? satSum / satN : null,
-        positiveCount: naverBucket.pos + (dcBucket?.pos ?? 0),
-        negativeCount: naverBucket.neg + (dcBucket?.neg ?? 0),
-        neutralCount: naverBucket.neu + (dcBucket?.neu ?? 0),
+        positiveCount: naverBucket.pos + (dcBucket?.pos ?? 0) + (tbBucket?.pos ?? 0),
+        negativeCount: naverBucket.neg + (dcBucket?.neg ?? 0) + (tbBucket?.neg ?? 0),
+        neutralCount: naverBucket.neu + (dcBucket?.neu ?? 0) + (tbBucket?.neu ?? 0),
       };
     });
 
@@ -1282,9 +1324,9 @@ export class RestaurantService {
     return { items: slice, total };
   }
 
-  // 공개 상세 — Naver placeId 로 찾은 행 + 같은 canonical 의 다이닝코드
-  // 형제 행을 함께 읽어 융합한 단일 응답을 반환. 머지 규칙은 어드민 합의를
-  // 따라 restaurant.merge.ts 의 순수 함수로 분리해 두었다.
+  // 공개 상세 — Naver placeId 로 찾은 행 + 같은 canonical 의 다이닝코드·
+  // 테이블링 형제 행을 함께 읽어 융합한 단일 응답을 반환. 머지 규칙은 어드민
+  // 합의를 따라 restaurant.merge.ts 의 순수 함수로 분리해 두었다.
   //
   // 분석(ReviewSummary) 진행 상태/에러/모델 같은 운영 메타데이터는 그대로
   // 떼어내고, 분석 완료된 행만 평탄화한 analysis 로 노출. 분석 안 된 리뷰는
@@ -1296,27 +1338,37 @@ export class RestaurantService {
     const assembled = await this.assemblePublicReviews(placeId);
     if (!assembled) return null;
 
-    const { naverRow, dcRow, naverSnap, dcSnap, reviews, naverReviewCount, dcReviewCount } =
-      assembled;
+    const {
+      naverRow,
+      dcRow,
+      tbRow,
+      naverSnap,
+      dcSnap,
+      tbSnap,
+      reviews,
+      naverReviewCount,
+      dcReviewCount,
+      tbReviewCount,
+    } = assembled;
 
-    const merged = mergeAddress(naverRow, naverSnap, dcSnap);
-    const coords = mergeCoordinates(naverSnap, dcSnap);
+    const merged = mergeAddress(naverRow, naverSnap, dcSnap, tbSnap);
+    const coords = mergeCoordinates(naverSnap, dcSnap, tbSnap);
 
     return {
       // placeId 로 findUnique 했으니 일치 행은 반드시 placeId 가 채워져 있다.
       placeId: naverRow.placeId!,
-      name: mergeName(naverRow, dcSnap),
-      category: mergeCategory(naverRow, dcSnap),
+      name: mergeName(naverRow, dcSnap, tbSnap),
+      category: mergeCategory(naverRow, dcSnap, tbSnap),
       address: merged.address,
       roadAddress: merged.roadAddress,
-      phone: mergePhone(naverRow, dcSnap),
-      businessHours: mergeBusinessHours(naverSnap, dcSnap),
-      rating: mergeRating(naverRow, dcSnap),
-      reviewCount: mergeReviewCount(naverRow, dcSnap),
+      phone: mergePhone(naverRow, dcSnap, tbSnap),
+      businessHours: mergeBusinessHours(naverSnap, dcSnap, tbSnap),
+      rating: mergeRating(naverRow, dcSnap, tbSnap),
+      reviewCount: mergeReviewCount(naverRow, dcSnap, tbSnap),
       latitude: coords.latitude,
       longitude: coords.longitude,
-      imageUrls: mergePhotos(naverSnap, dcSnap),
-      menus: mergeMenus(naverSnap, dcSnap),
+      imageUrls: mergePhotos(naverSnap, dcSnap, tbSnap),
+      menus: mergeMenus(naverSnap, dcSnap, tbSnap),
       blogReviews: mergeBlogReviews(naverSnap, dcSnap),
       rawSourceUrl: naverRow.rawSourceUrl,
       firstCrawledAt: naverRow.firstCrawledAt.toISOString(),
@@ -1333,9 +1385,23 @@ export class RestaurantService {
               rawSourceUrl: dcRow.rawSourceUrl,
             }
           : null,
+        tbRow && tbSnap
+          ? {
+              // partner 행만 조회하므로 sourceId 는 항상 숫자 idx 문자열.
+              idx: Number(tbRow.sourceId),
+              rating: tbSnap.rating ?? tbRow.rating,
+              siteReviewCount: tbSnap.reviewTotalCount ?? tbRow.reviewCount,
+              rawSourceUrl: tbRow.rawSourceUrl,
+            }
+          : null,
       ),
-      storedReviewCount: computeStoredReviewCount(naverReviewCount, dcReviewCount),
+      storedReviewCount: computeStoredReviewCount(
+        naverReviewCount,
+        dcReviewCount,
+        tbReviewCount,
+      ),
       diningcode: dcSnap ? composeDiningcodeAddon(dcSnap) : null,
+      tabling: tbSnap ? composeTablingAddon(tbSnap) : null,
     };
   }
 
@@ -1361,6 +1427,14 @@ export class RestaurantService {
       where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
       select: { snapshotJson: true },
     });
+    const tbRow = await this.prisma.restaurant.findFirst({
+      where: {
+        canonicalId: naverRow.canonicalId,
+        source: 'tabling',
+        NOT: { sourceId: { startsWith: 'place:' } },
+      },
+      select: { snapshotJson: true },
+    });
 
     const naverSnap = JSON.parse(naverRow.snapshotJson) as Omit<
       NaverPlaceDataType,
@@ -1369,23 +1443,24 @@ export class RestaurantService {
     const dcSnap = dcRow
       ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
       : null;
-    const merged = mergeAddress(naverRow, naverSnap, dcSnap);
-    const coords = mergeCoordinates(naverSnap, dcSnap);
+    const tbSnap = tbRow ? (JSON.parse(tbRow.snapshotJson) as TablingSnapshot) : null;
+    const merged = mergeAddress(naverRow, naverSnap, dcSnap, tbSnap);
+    const coords = mergeCoordinates(naverSnap, dcSnap, tbSnap);
 
     return {
       placeId: naverRow.placeId,
-      name: mergeName(naverRow, dcSnap),
-      category: mergeCategory(naverRow, dcSnap),
+      name: mergeName(naverRow, dcSnap, tbSnap),
+      category: mergeCategory(naverRow, dcSnap, tbSnap),
       address: merged.address,
       roadAddress: merged.roadAddress,
-      phone: mergePhone(naverRow, dcSnap),
-      businessHours: mergeBusinessHours(naverSnap, dcSnap),
-      rating: mergeRating(naverRow, dcSnap),
-      reviewCount: mergeReviewCount(naverRow, dcSnap),
+      phone: mergePhone(naverRow, dcSnap, tbSnap),
+      businessHours: mergeBusinessHours(naverSnap, dcSnap, tbSnap),
+      rating: mergeRating(naverRow, dcSnap, tbSnap),
+      reviewCount: mergeReviewCount(naverRow, dcSnap, tbSnap),
       latitude: coords.latitude,
       longitude: coords.longitude,
-      imageUrls: mergePhotos(naverSnap, dcSnap),
-      menus: mergeMenus(naverSnap, dcSnap),
+      imageUrls: mergePhotos(naverSnap, dcSnap, tbSnap),
+      menus: mergeMenus(naverSnap, dcSnap, tbSnap),
       rawSourceUrl: naverRow.rawSourceUrl,
     };
   }
@@ -1478,6 +1553,14 @@ export class RestaurantService {
       where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
       select: { snapshotJson: true },
     });
+    const tbRow = await this.prisma.restaurant.findFirst({
+      where: {
+        canonicalId: naverRow.canonicalId,
+        source: 'tabling',
+        NOT: { sourceId: { startsWith: 'place:' } },
+      },
+      select: { snapshotJson: true },
+    });
 
     const naverSnap = JSON.parse(naverRow.snapshotJson) as Omit<
       NaverPlaceDataType,
@@ -1486,11 +1569,12 @@ export class RestaurantService {
     const dcSnap = dcRow
       ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
       : null;
+    const tbSnap = tbRow ? (JSON.parse(tbRow.snapshotJson) as TablingSnapshot) : null;
 
-    return mergePhotos(naverSnap, dcSnap);
+    return mergePhotos(naverSnap, dcSnap, tbSnap);
   }
 
-  // 양쪽 source 의 reviews 를 합쳐 fetchedAt asc 로 정렬해 돌려준다.
+  // 세 source 의 reviews 를 합쳐 fetchedAt asc 로 정렬해 돌려준다.
   // 크롤러가 네이버 최신순(sort=recent)으로 받아 최신글부터 순서대로 저장하므로
   // fetchedAt asc = 작성일 최신순. (한계: 이후 update 모드로 새로 수집된 리뷰는
   // fetchedAt 이 더 커서 끝에 붙는다 — 작성일 정렬이 필요하면 visitedAt 파싱 도입.)
@@ -1518,6 +1602,22 @@ export class RestaurantService {
       },
     });
 
+    // 테이블링은 partner 행(숫자 idx)만 — place 행('place:' prefix)은 얕은
+    // 스냅샷(다른 shape, 리뷰 없음)이라 공개 융합에서 제외.
+    const tbRow = await this.prisma.restaurant.findFirst({
+      where: {
+        canonicalId: naverRow.canonicalId,
+        source: 'tabling',
+        NOT: { sourceId: { startsWith: 'place:' } },
+      },
+      include: {
+        visitorReviews: {
+          orderBy: { fetchedAt: 'asc' },
+          include: { summary: true },
+        },
+      },
+    });
+
     const naverSnap = JSON.parse(naverRow.snapshotJson) as Omit<
       NaverPlaceDataType,
       'visitorReviews'
@@ -1525,23 +1625,32 @@ export class RestaurantService {
     const dcSnap = dcRow
       ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
       : null;
+    const tbSnap = tbRow ? (JSON.parse(tbRow.snapshotJson) as TablingSnapshot) : null;
 
     const naverReviews = naverRow.visitorReviews.map((v) => this.toPublicReview(v, 'naver'));
     const dcReviews = dcRow
       ? dcRow.visitorReviews.map((v) => this.toPublicReview(v, 'diningcode'))
       : [];
-    const reviews: PublicVisitorReviewType[] = [...naverReviews, ...dcReviews].sort(
-      (a, b) => +new Date(a.fetchedAt) - +new Date(b.fetchedAt),
-    );
+    const tbReviews = tbRow
+      ? tbRow.visitorReviews.map((v) => this.toPublicReview(v, 'tabling'))
+      : [];
+    const reviews: PublicVisitorReviewType[] = [
+      ...naverReviews,
+      ...dcReviews,
+      ...tbReviews,
+    ].sort((a, b) => +new Date(a.fetchedAt) - +new Date(b.fetchedAt));
 
     return {
       naverRow,
       dcRow,
+      tbRow,
       naverSnap,
       dcSnap,
+      tbSnap,
       reviews,
       naverReviewCount: naverReviews.length,
       dcReviewCount: dcReviews.length,
+      tbReviewCount: tbReviews.length,
     };
   }
 
@@ -1569,7 +1678,7 @@ export class RestaurantService {
         finishedAt: Date | null;
       } | null;
     },
-    source: 'naver' | 'diningcode',
+    source: 'naver' | 'diningcode' | 'tabling',
   ): PublicVisitorReviewType {
     const s = v.summary;
     let analysis: PublicReviewAnalysisType | null = null;

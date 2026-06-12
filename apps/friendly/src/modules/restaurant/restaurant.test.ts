@@ -1301,7 +1301,12 @@ describe('Public restaurant routes', () => {
     expect(body.sources.diningcode).toMatchObject({ vRid: dcVRid, rating: 4.6, siteReviewCount: 42 });
 
     // DB 저장 리뷰 카운트.
-    expect(body.storedReviewCount).toEqual({ naver: 1, diningcode: 1, total: 2 });
+    expect(body.storedReviewCount).toEqual({
+      naver: 1,
+      diningcode: 1,
+      tabling: 0,
+      total: 2,
+    });
 
     // DC 보조 정보 통째로 노출.
     expect(body.diningcode?.scoreDetail?.average).toBe(4.6);
@@ -1336,7 +1341,258 @@ describe('Public restaurant routes', () => {
     expect(body.diningcode).toBeNull();
     expect(body.sources.diningcode).toBeNull();
     expect(body.sources.naver?.placeId).toBe(placeId);
-    expect(body.storedReviewCount).toEqual({ naver: 0, diningcode: 0, total: 0 });
+    expect(body.storedReviewCount).toEqual({
+      naver: 0,
+      diningcode: 0,
+      tabling: 0,
+      total: 0,
+    });
+  });
+
+  it('GET /restaurants/public/:placeId — merges 테이블링 sibling fields & reviews', async () => {
+    // Naver 행 — 머지 폴백 검증 위해 phone/address/hours/menus 의도적으로 비움.
+    const placeId = `${PUB_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const naverSnap = {
+      placeId,
+      name: '테이블링머지',
+      category: '한식',
+      address: null as string | null,
+      roadAddress: null as string | null,
+      phone: null as string | null,
+      businessHours: null as string | null,
+      latitude: 37.5,
+      longitude: 127.0,
+      imageUrls: ['https://n.example/a.jpg'],
+      rating: 4.2,
+      reviewCount: 60,
+      menus: [],
+      reviewStats: null,
+      blogReviews: [],
+      rawSourceUrl: 'https://m.place.naver.com/restaurant/x',
+    };
+    const naverRow = await app.prisma.restaurant.create({
+      data: {
+        source: 'naver',
+        sourceId: placeId,
+        placeId,
+        name: '테이블링머지',
+        category: '한식',
+        address: null,
+        phone: null,
+        rating: 4.2,
+        reviewCount: 60,
+        rawSourceUrl: naverSnap.rawSourceUrl,
+        snapshotJson: JSON.stringify(naverSnap),
+        canonical: {
+          create: { name: '테이블링머지', primaryCategory: '한식', latitude: 37.5, longitude: 127.0 },
+        },
+      },
+      select: { id: true, canonicalId: true },
+    });
+
+    // 같은 canonical 의 테이블링 partner 행. snapshotJson 은 reviewsFirstPage 가
+    // 제거된 TablingShopData 형태 (upsertRestaurantFromTabling 과 동일).
+    const tbIdx = Math.floor(Math.random() * 1_000_000_000);
+    const tbSnap = {
+      idx: tbIdx,
+      name: 'TB머지',
+      excerpt: null,
+      description: null,
+      category: '아시아식',
+      address: '서울 강남구 TB주소',
+      roadAddress: '서울 강남구 TB도로명',
+      jibunAddress: null,
+      addressDetail: null,
+      phone: '02-7777',
+      lat: 37.51,
+      lng: 127.01,
+      rating: 4.8,
+      ratings: [
+        { category: '맛', points: 4.9 },
+        { category: '청결', points: 4.6 },
+      ],
+      reviewTotalCount: 77,
+      favoriteCount: 1500,
+      statusLabel: '영업중',
+      images: ['https://tb.example/1.jpg'],
+      menuCategories: [
+        {
+          categoryName: '대표 메뉴',
+          categoryDescription: null,
+          menus: [
+            {
+              name: 'TB대표메뉴',
+              price: 15000,
+              description: null,
+              imageUrl: 'https://tb.example/m.jpg',
+              isFeatured: true,
+              isMain: false,
+            },
+          ],
+        },
+      ],
+      businessDays: [
+        {
+          dayOfWeek: 1,
+          dayStatus: 'BUSINESS',
+          openTimeList: [{ startTime: '11:00:00', endTime: '21:00:00' }],
+          breakTimeList: [],
+        },
+      ],
+      flags: {
+        useWaiting: true,
+        useRemoteWaiting: false,
+        useReservation: true,
+        useTakeOut: false,
+        useOnSiteOrder: false,
+      },
+      waitingCount: 3,
+      rawSourceUrl: `https://www.tabling.co.kr/restaurant/${tbIdx}`,
+      fetchedAt: '2026-01-01T00:00:00.000Z',
+      elapsedMs: 100,
+      source: 'http',
+    };
+    const tbRow = await app.prisma.restaurant.create({
+      data: {
+        source: 'tabling',
+        sourceId: String(tbIdx),
+        placeId: null,
+        name: 'TB머지',
+        category: '아시아식',
+        address: '서울 강남구 TB도로명',
+        phone: '02-7777',
+        rating: 4.8,
+        reviewCount: 77,
+        rawSourceUrl: tbSnap.rawSourceUrl,
+        snapshotJson: JSON.stringify(tbSnap),
+        canonicalId: naverRow.canonicalId,
+      },
+      select: { id: true },
+    });
+    await app.prisma.visitorReview.create({
+      data: {
+        restaurantId: tbRow.id,
+        externalId: 'tb:rv:abc',
+        authorName: 'Tuser',
+        rating: 5,
+        body: '테이블링 리뷰 본문',
+        visitedAt: null,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${placeId}-t1`,
+        fetchedAt: new Date('2026-02-01T00:00:00.000Z'),
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      address: string | null;
+      phone: string | null;
+      businessHours: string | null;
+      menus: Array<{ name: string; price: string | null; imageUrls: string[] }>;
+      imageUrls: string[];
+      reviewsFirstPage: Array<{ source: string; body: string }>;
+      sources: {
+        tabling: { idx: number; rating: number | null; siteReviewCount: number | null } | null;
+      };
+      storedReviewCount: { naver: number; diningcode: number; tabling: number; total: number };
+      tabling: {
+        flags: { useWaiting: boolean; useReservation: boolean };
+        ratings: Array<{ category: string; points: number }>;
+        favoriteCount: number | null;
+        businessDays: unknown[];
+      } | null;
+    };
+
+    // Naver 가 비었던 필드는 (DC 없음) 테이블링 값으로 채워짐.
+    expect(body.address).toBe('서울 강남구 TB주소');
+    expect(body.phone).toBe('02-7777');
+    expect(body.businessHours).toBe('월 11:00-21:00');
+
+    // 메뉴 — 테이블링 메뉴가 가격 문자열·이미지와 함께 매핑됨.
+    expect(body.menus).toHaveLength(1);
+    expect(body.menus[0]).toMatchObject({
+      name: 'TB대표메뉴',
+      price: '15000',
+      imageUrls: ['https://tb.example/m.jpg'],
+    });
+
+    // 사진 합집합 Naver → 테이블링.
+    expect(body.imageUrls).toEqual(['https://n.example/a.jpg', 'https://tb.example/1.jpg']);
+
+    // 테이블링 리뷰가 공개 리뷰에 합류 + 출처 태그.
+    expect(body.reviewsFirstPage).toHaveLength(1);
+    expect(body.reviewsFirstPage[0]?.source).toBe('tabling');
+    expect(body.storedReviewCount).toEqual({
+      naver: 0,
+      diningcode: 0,
+      tabling: 1,
+      total: 1,
+    });
+
+    // 출처 메타 + addon (waitingCount 는 의도적으로 미노출).
+    expect(body.sources.tabling).toMatchObject({ idx: tbIdx, rating: 4.8, siteReviewCount: 77 });
+    expect(body.tabling).toMatchObject({
+      flags: { useWaiting: true, useReservation: true },
+      favoriteCount: 1500,
+    });
+    expect(body.tabling?.ratings).toHaveLength(2);
+    expect(body.tabling && 'waitingCount' in body.tabling).toBe(false);
+
+    // afterEach 가 PUB_PREFIX 만 청소하므로 테이블링 sibling 은 명시 정리.
+    await app.prisma.restaurant.deleteMany({
+      where: { source: 'tabling', sourceId: String(tbIdx) },
+    });
+  });
+
+  it('GET /restaurants/public/:placeId — 테이블링 place 티어 행은 공개 융합에서 제외', async () => {
+    const { placeId } = await seedRestaurant({
+      name: '플레이스제외',
+      latitude: 37.5,
+      longitude: 127.0,
+    });
+    const naverRow = await app.prisma.restaurant.findUniqueOrThrow({
+      where: { placeId },
+      select: { canonicalId: true },
+    });
+    // place 티어 — sourceId 'place:' prefix, 얕은 TablingPlaceData snapshot.
+    const objectId = `obj-${Date.now().toString(36)}`;
+    await app.prisma.restaurant.create({
+      data: {
+        source: 'tabling',
+        sourceId: `place:${objectId}`,
+        placeId: null,
+        name: '플레이스가게',
+        category: '한식',
+        address: '서울',
+        phone: null,
+        rating: 4.0,
+        reviewCount: 10,
+        rawSourceUrl: `https://www.tabling.co.kr/place/${objectId}`,
+        snapshotJson: JSON.stringify({ objectId, name: '플레이스가게' }),
+        canonicalId: naverRow.canonicalId,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      tabling: unknown | null;
+      sources: { tabling: unknown | null };
+    };
+    expect(body.tabling).toBeNull();
+    expect(body.sources.tabling).toBeNull();
+
+    await app.prisma.restaurant.deleteMany({
+      where: { source: 'tabling', sourceId: `place:${objectId}` },
+    });
   });
 
   it('GET /restaurants/public/:placeId/insights — 404 for unknown', async () => {

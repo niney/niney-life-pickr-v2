@@ -11,6 +11,8 @@ import {
   QuickActions,
   ReviewCard,
   ScoreDistributionBars,
+  TablingScoreBars,
+  TablingServiceBadges,
 } from './shared';
 import type { TabKey } from './tabs';
 
@@ -42,10 +44,11 @@ export const HomeTab = ({
   const previewReviews = [...detail.reviewsFirstPage]
     .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
     .slice(0, HOME_REVIEW_PREVIEW);
-  // 두 출처 모두 리뷰가 있는 경우에만 카드에 출처 배지를 노출 — 한 출처만
+  // 둘 이상의 출처가 리뷰를 가질 때만 카드에 출처 배지를 노출 — 한 출처만
   // 있는 화면에서는 시각적 노이즈.
+  const src = detail.storedReviewCount;
   const showSourceBadges =
-    detail.storedReviewCount.naver > 0 && detail.storedReviewCount.diningcode > 0;
+    [src.naver, src.diningcode, src.tabling].filter((c) => c > 0).length >= 2;
 
   return (
     <div className="space-y-4">
@@ -77,6 +80,11 @@ export const HomeTab = ({
           </div>
           <SourceRatingLine detail={detail} />
           <ReviewCountLine detail={detail} />
+          {detail.tabling && (
+            <div className="mt-1.5">
+              <TablingServiceBadges flags={detail.tabling.flags} />
+            </div>
+          )}
         </div>
         <QuickActions detail={detail} />
       </section>
@@ -96,6 +104,12 @@ export const HomeTab = ({
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {detail.tabling && detail.tabling.ratings.some((r) => r.points > 0) && (
+        <section className="space-y-2 border-t px-4 pt-4">
+          <TablingScoreBars addon={detail.tabling} />
         </section>
       )}
 
@@ -167,45 +181,49 @@ export const HomeTab = ({
   );
 };
 
-// 별점 라인 — 출처가 둘 다 있으면 "★ 4.4 (네이버 4.2 · 다이닝코드 4.6)" 처럼
-// 통합 평균 + 출처별 분리값을 함께 표시. 한쪽만 있으면 그 값 단독.
+// 별점 라인 — 출처가 둘 이상이면 "★ 4.4 (네이버 4.2 · 다이닝코드 4.6 ·
+// 테이블링 4.8)" 처럼 대표값 + 출처별 분리값을 함께 표시. 하나면 그 값 단독.
 const SourceRatingLine = ({ detail }: { detail: RestaurantPublicDetailType }) => {
-  const n = detail.sources.naver;
-  const d = detail.sources.diningcode;
-  const naverRating = n?.rating ?? null;
-  const dcRating = d?.rating ?? null;
-  if (naverRating === null && dcRating === null) return null;
-  const main = detail.rating ?? naverRating ?? dcRating;
+  const entries = [
+    { label: '네이버', rating: detail.sources.naver?.rating ?? null },
+    { label: '다이닝코드', rating: detail.sources.diningcode?.rating ?? null },
+    { label: '테이블링', rating: detail.sources.tabling?.rating ?? null },
+  ].filter((e): e is { label: string; rating: number } => e.rating !== null);
+  if (entries.length === 0) return null;
+  const main = detail.rating ?? entries[0]!.rating;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
       <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
         <Star className="size-3 fill-current" />
-        <span className="font-medium tabular-nums">
-          {(main ?? 0).toFixed(1)}
-        </span>
+        <span className="font-medium tabular-nums">{main.toFixed(1)}</span>
       </span>
-      {naverRating !== null && dcRating !== null && (
+      {entries.length >= 2 && (
         <span className="text-muted-foreground">
-          네이버 {naverRating.toFixed(1)} · 다이닝코드 {dcRating.toFixed(1)}
+          {entries.map((e) => `${e.label} ${e.rating.toFixed(1)}`).join(' · ')}
         </span>
       )}
     </div>
   );
 };
 
-// 리뷰수 라인 — 사이트가 보고한 카운트를 출처별로 분리해서 표시. 둘 다 있으면
-// "리뷰 102 · 네이버 60 · 다이닝코드 42". 한쪽만 있으면 그 카운트 단독.
+// 리뷰수 라인 — 사이트가 보고한 카운트를 출처별로 분리해서 표시. 둘 이상이면
+// "리뷰 102 · 네이버 60 · 다이닝코드 42". 하나면 그 카운트 단독.
 const ReviewCountLine = ({ detail }: { detail: RestaurantPublicDetailType }) => {
-  const naver = detail.sources.naver?.siteReviewCount ?? null;
-  const dc = detail.sources.diningcode?.siteReviewCount ?? null;
-  if (naver === null && dc === null) return null;
-  const showSplit = naver !== null && dc !== null;
-  const total = (naver ?? 0) + (dc ?? 0);
+  const entries = [
+    { label: '네이버', count: detail.sources.naver?.siteReviewCount ?? null },
+    { label: '다이닝코드', count: detail.sources.diningcode?.siteReviewCount ?? null },
+    { label: '테이블링', count: detail.sources.tabling?.siteReviewCount ?? null },
+  ].filter((e): e is { label: string; count: number } => e.count !== null);
+  if (entries.length === 0) return null;
+  const total = entries.reduce((sum, e) => sum + e.count, 0);
   return (
     <div className="mt-0.5 text-xs text-muted-foreground">
-      <span>리뷰 {(showSplit ? total : (naver ?? dc ?? 0)).toLocaleString()}</span>
-      {showSplit && (
-        <span> · 네이버 {naver.toLocaleString()} · 다이닝코드 {dc.toLocaleString()}</span>
+      <span>리뷰 {total.toLocaleString()}</span>
+      {entries.length >= 2 && (
+        <span>
+          {' · '}
+          {entries.map((e) => `${e.label} ${e.count.toLocaleString()}`).join(' · ')}
+        </span>
       )}
     </div>
   );

@@ -7,6 +7,9 @@ import {
   DiningcodeShopBusinessHour,
   MenuItem,
   NaverPlaceData,
+  TablingBusinessDay,
+  TablingRatingItem,
+  TablingServiceFlags,
   VisitorReview,
 } from './crawl.js';
 
@@ -506,11 +509,13 @@ export type PublicReviewAnalysisType = z.infer<typeof PublicReviewAnalysis>;
 
 export const PublicVisitorReview = z.object({
   id: z.string(),
-  // 두 출처의 리뷰가 같은 배열에 섞여 들어가므로 카드/필터가 출처를 구분.
-  // DC 리뷰의 점수 라벨/키워드/주문메뉴/사장답변 같은 추가 메타는 현재 DB에
-  // 저장하지 않으므로 본 응답에는 포함하지 않는다(필요해지면 VisitorReview
-  // 행에 extras 컬럼을 추가하는 별도 마이그레이션이 선행 필요).
-  source: z.enum(['naver', 'diningcode']),
+  // 세 출처의 리뷰가 같은 배열에 섞여 들어가므로 카드/필터가 출처를 구분.
+  // DC/테이블링 리뷰의 점수 라벨/키워드/주문메뉴/사장답변 같은 추가 메타는
+  // 현재 DB에 저장하지 않으므로 본 응답에는 포함하지 않는다(필요해지면
+  // VisitorReview 행에 extras 컬럼을 추가하는 별도 마이그레이션이 선행 필요).
+  // 테이블링 리뷰는 예약/웨이팅 실사용자만 작성 가능 — UI 가 "방문 인증"
+  // 라벨을 붙일 근거.
+  source: z.enum(['naver', 'diningcode', 'tabling']),
   authorName: z.string().nullable(),
   rating: z.number().nullable(),
   body: z.string(),
@@ -544,9 +549,20 @@ export const PublicSourceDiningcode = z.object({
 });
 export type PublicSourceDiningcodeType = z.infer<typeof PublicSourceDiningcode>;
 
+// 테이블링 partner 가게(idx 티어)만 공개 경로에 노출 — 미입점 place 행
+// (sourceId 'place:' prefix) 은 얕은 스냅샷이라 제외.
+export const PublicSourceTabling = z.object({
+  idx: z.number().int(),
+  rating: z.number().nullable(),
+  siteReviewCount: z.number().int().nullable(),
+  rawSourceUrl: z.string(),
+});
+export type PublicSourceTablingType = z.infer<typeof PublicSourceTabling>;
+
 export const PublicSources = z.object({
   naver: PublicSourceNaver.nullable(),
   diningcode: PublicSourceDiningcode.nullable(),
+  tabling: PublicSourceTabling.nullable(),
 });
 export type PublicSourcesType = z.infer<typeof PublicSources>;
 
@@ -555,6 +571,7 @@ export type PublicSourcesType = z.infer<typeof PublicSources>;
 export const PublicStoredReviewCount = z.object({
   naver: z.number().int(),
   diningcode: z.number().int(),
+  tabling: z.number().int(),
   total: z.number().int(),
 });
 export type PublicStoredReviewCountType = z.infer<typeof PublicStoredReviewCount>;
@@ -597,9 +614,24 @@ export const PublicDiningcodeAddon = z.object({
 });
 export type PublicDiningcodeAddonType = z.infer<typeof PublicDiningcodeAddon>;
 
+// 테이블링만 가진 보조 정보. canonical 에 테이블링 partner 행이 없으면 통째로
+// null. waitingCount(실시간 웨이팅 팀 수) 는 크롤 시점 스냅샷이라 스테일 표시
+// 위험이 커서 의도적으로 제외 — 가용 여부 플래그만 노출.
+export const PublicTablingAddon = z.object({
+  // 웨이팅/원격웨이팅/예약/포장/현장주문 가용 플래그 — 카드/헤더 배지용.
+  flags: TablingServiceFlags,
+  // 4축 항목 평점 (맛/분위기/서비스/청결 — 사이트 표기 그대로).
+  ratings: z.array(TablingRatingItem),
+  favoriteCount: z.number().int().nullable(),
+  // 요일별 영업시간 — InfoTab 의 "주간 영업시간 상세" 펼침용.
+  businessDays: z.array(TablingBusinessDay),
+});
+export type PublicTablingAddonType = z.infer<typeof PublicTablingAddon>;
+
 // 공개 식당 상세. 기존 스칼라 필드 (name/category/address/rating 등) 는
-// 두 출처가 머지된 결과 — Naver 우선 + Naver 가 비면 DC fallback. 출처별
-// 분리값은 `sources` 에 따로 노출되어 UI 가 헤더 등에서 표시할 수 있다.
+// 세 출처가 머지된 결과 — 전 필드 Naver 1순위, 비면 폴백 (영업시간·메뉴는
+// 테이블링 > DC, 그 외 DC > 테이블링). 출처별 분리값은 `sources` 에 따로
+// 노출되어 UI 가 헤더 등에서 표시할 수 있다.
 export const RestaurantPublicDetail = z.object({
   placeId: z.string(),
   name: z.string(),
@@ -607,15 +639,15 @@ export const RestaurantPublicDetail = z.object({
   address: z.string().nullable(),
   roadAddress: z.string().nullable(),
   phone: z.string().nullable(),
-  // DC summary 가 있으면 그것을 우선 직렬화한 string, 없으면 Naver text.
+  // Naver text 우선, 비면 테이블링 요일별 직렬화 string, 그것도 없으면 DC summary.
   businessHours: z.string().nullable(),
   rating: z.number().nullable(),
   reviewCount: z.number().int().nullable(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
-  // Naver imageUrls + DC photos/images origin URL 합집합 (URL dedup).
+  // Naver imageUrls + DC photos/images origin + 테이블링 images 합집합 (URL dedup).
   imageUrls: z.array(z.string().url()),
-  // Naver 가 비어있을 때만 DC menus 를 매핑해 채움.
+  // Naver 가 비어있을 때만 테이블링 menus, 그것도 없으면 DC menus 를 매핑해 채움.
   menus: z.array(MenuItem),
   // Naver blogReviews + DC blogsFirstPage 합쳐 dedup.
   blogReviews: z.array(BlogReview),
@@ -638,6 +670,8 @@ export const RestaurantPublicDetail = z.object({
   storedReviewCount: PublicStoredReviewCount,
   // DC 보조 정보 — canonical 에 DC 행이 없으면 null.
   diningcode: PublicDiningcodeAddon.nullable(),
+  // 테이블링 보조 정보 — canonical 에 테이블링 partner 행이 없으면 null.
+  tabling: PublicTablingAddon.nullable(),
 });
 export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
 

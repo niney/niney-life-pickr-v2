@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type {
   PublicDiningcodeScoreDetailType,
+  PublicTablingAddonType,
   PublicVisitorReviewType,
   RestaurantInsightsType,
   RestaurantPublicDetailType,
@@ -387,20 +388,101 @@ export const ScoreDistributionBars = ({
   );
 };
 
-// 출처 배지 — 두 출처가 섞인 리스트에서 한 줄로 출처 식별. 카드 또는 행의
+// 출처 배지 — 여러 출처가 섞인 리스트에서 한 줄로 출처 식별. 카드 또는 행의
 // 헤더에 작게 배치. 단일 출처만 있을 때 호출자가 표시 여부를 결정.
-export const SourceBadge = ({ source }: { source: 'naver' | 'diningcode' }) => (
+const SOURCE_BADGE_STYLE: Record<'naver' | 'diningcode' | 'tabling', string> = {
+  naver: 'bg-[var(--tonal-green-bg)] text-[var(--tonal-green-fg)]',
+  diningcode: 'bg-[var(--tonal-violet-bg)] text-[var(--tonal-violet-fg)]',
+  tabling: 'bg-[var(--tonal-blue-bg)] text-[var(--tonal-blue-fg)]',
+};
+const SOURCE_BADGE_LABEL: Record<'naver' | 'diningcode' | 'tabling', string> = {
+  naver: '네이버',
+  diningcode: '다이닝코드',
+  tabling: '테이블링',
+};
+export const SourceBadge = ({
+  source,
+}: {
+  source: 'naver' | 'diningcode' | 'tabling';
+}) => (
   <span
     className={cn(
       'inline-flex shrink-0 items-center rounded-full px-1.5 py-0 text-[10px] font-medium leading-4',
-      source === 'naver'
-        ? 'bg-[var(--tonal-green-bg)] text-[var(--tonal-green-fg)]'
-        : 'bg-[var(--tonal-violet-bg)] text-[var(--tonal-violet-fg)]',
+      SOURCE_BADGE_STYLE[source],
     )}
   >
-    {source === 'naver' ? '네이버' : '다이닝코드'}
+    {SOURCE_BADGE_LABEL[source]}
   </span>
 );
+
+// 테이블링 서비스 가용 배지 — 예약/웨이팅 등 켜진 플래그만 나열. 전부
+// 꺼져 있으면 null. 헤더(홈 탭)와 정보 탭에서 공유.
+const TABLING_FLAG_LABELS: Array<{
+  key: keyof PublicTablingAddonType['flags'];
+  label: string;
+}> = [
+  { key: 'useReservation', label: '예약' },
+  { key: 'useWaiting', label: '웨이팅' },
+  { key: 'useRemoteWaiting', label: '원격 웨이팅' },
+  { key: 'useTakeOut', label: '포장' },
+  { key: 'useOnSiteOrder', label: '현장주문' },
+];
+export const TablingServiceBadges = ({
+  flags,
+}: {
+  flags: PublicTablingAddonType['flags'];
+}) => {
+  const active = TABLING_FLAG_LABELS.filter((f) => flags[f.key]);
+  if (active.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {active.map((f) => (
+        <span
+          key={f.key}
+          title={`테이블링에서 ${f.label} 이용 가능`}
+          className="inline-flex shrink-0 items-center rounded-full bg-[var(--tonal-blue-bg)] px-1.5 py-0.5 text-[10px] font-medium leading-4 text-[var(--tonal-blue-fg)]"
+        >
+          {f.label}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+// 테이블링 4축 항목 평점(맛/분위기/서비스/청결) 분포 바 — DC 의
+// ScoreDistributionBars 와 같은 시각 언어. 점수가 전부 0/없으면 null.
+export const TablingScoreBars = ({ addon }: { addon: PublicTablingAddonType }) => {
+  const visible = addon.ratings.filter((r) => r.points > 0);
+  if (visible.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="font-semibold text-foreground">테이블링 점수 분포</span>
+        {addon.favoriteCount !== null && addon.favoriteCount > 0 && (
+          <span className="text-muted-foreground tabular-nums">
+            즐겨찾기 {addon.favoriteCount.toLocaleString()}
+          </span>
+        )}
+      </div>
+      <ul className="space-y-1">
+        {visible.map((r) => (
+          <li key={r.category} className="flex items-center gap-2 text-xs">
+            <span className="w-12 text-muted-foreground">{r.category}</span>
+            <div className="relative h-2 flex-1 overflow-hidden rounded bg-muted">
+              <div
+                className="absolute inset-y-0 left-0 bg-primary/70"
+                style={{ width: `${Math.min(100, (r.points / 5) * 100)}%` }}
+              />
+            </div>
+            <span className="w-8 text-right font-medium tabular-nums">
+              {r.points.toFixed(1)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
 
 export const ReviewCard = ({
   r,
@@ -431,6 +513,16 @@ export const ReviewCard = ({
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
           {showSource && <SourceBadge source={r.source} />}
+          {/* 테이블링 리뷰는 예약/웨이팅 실사용자만 작성 가능 — 신뢰 시그널이라
+              출처 배지와 무관하게 항상 노출. */}
+          {r.source === 'tabling' && (
+            <span
+              title="테이블링 예약/웨이팅 방문자만 작성할 수 있는 리뷰"
+              className="inline-flex shrink-0 items-center rounded-full border border-[var(--tonal-blue-fg)]/30 px-1.5 py-0 text-[10px] font-medium leading-4 text-[var(--tonal-blue-fg)]"
+            >
+              방문 인증
+            </span>
+          )}
           <span>{authorLabel}</span>
           {/* 만족도 칩 — 이모지 + LLM 환산 별점(1~5). sentiment 색을 칩 배경에도
               실어 카드 좌측 컬러바와 짝이 맞게. 모바일 0.1초 스캔용. */}

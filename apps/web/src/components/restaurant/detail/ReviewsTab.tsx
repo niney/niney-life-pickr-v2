@@ -81,9 +81,10 @@ export const ReviewsTab = ({
     [reviewsQuery.data],
   );
 
-  // 두 출처가 모두 리뷰를 가질 때만 카드에 출처 배지를 노출.
+  // 둘 이상의 출처가 리뷰를 가질 때만 카드에 출처 배지를 노출.
+  const src = detail.storedReviewCount;
   const bothSources =
-    detail.storedReviewCount.naver > 0 && detail.storedReviewCount.diningcode > 0;
+    [src.naver, src.diningcode, src.tabling].filter((c) => c > 0).length >= 2;
 
   if (detail.reviewCounts.all === 0) {
     return (

@@ -7,6 +7,7 @@ const SOURCE_LABELS: Record<string, string> = {
   naver: 'Naver',
   diningcode: '다이닝코드',
   catchtable: '캐치테이블',
+  tabling: '테이블링',
 };
 const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s;
 
