@@ -963,3 +963,49 @@ model TelegramConfig {
 
   @@map("telegram_configs")
 }
+
+// 서울시 버스 정류소 — getStationByName 응답을 장기 보존(정류소는 잘 안 바뀜).
+// PK 는 stId(9자리 고유 ID) — 가상정류장은 arsId='0' 이 여럿이라 arsId 는
+// PK/unique 불가. 좌표는 어댑터가 WGS84 로 정규화한 값만 저장.
+model BusStation {
+  stId      String   @id
+  arsId     String
+  name      String
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  searchHits BusStationSearchHit[]
+
+  @@index([arsId])
+  @@map("bus_stations")
+}
+
+// 키워드 검색 캐시 헤더 — fetchedAt 이 TTL(30일) 안이면 서울시 API 재호출 없이
+// hits 로 응답. 빈 결과도 행을 남긴다(네거티브 캐싱 — 무의미 키워드의 반복
+// 업스트림 호출 방지). keyword 는 trim + NFC 정규화 후 저장.
+model BusStationSearch {
+  id        String   @id @default(cuid())
+  keyword   String   @unique
+  fetchedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hits BusStationSearchHit[]
+
+  @@map("bus_station_searches")
+}
+
+// 검색 ↔ 정류소 조인. rank 로 서울시 API 응답 순서를 보존한다.
+model BusStationSearchHit {
+  searchId String
+  stId     String
+  rank     Int
+
+  search  BusStationSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  station BusStation       @relation(fields: [stId], references: [stId], onDelete: Cascade)
+
+  @@id([searchId, stId])
+  @@map("bus_station_search_hits")
+}

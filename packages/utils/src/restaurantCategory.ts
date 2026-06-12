@@ -1,7 +1,8 @@
 // 식당 카테고리 → 아이콘 키 매핑 + 마커 SVG 빌더.
 // 백엔드의 category 필드는 자유 문자열 ("한식 > 백반", "이자카야", "디저트카페" 등)
 // 이라 contains 매칭으로 정규화. 같은 룰을 앱/웹 모두에서 사용해 마커 디자인
-// 일관성 유지.
+// 일관성 유지. 핀/원 골격은 markerFrame.ts 공용 프레임 사용.
+import { buildCircleMarkerSvg, buildPinMarkerSvg } from './markerFrame.js';
 
 export const RESTAURANT_CATEGORY_KEYS = [
   'korean',
@@ -100,27 +101,9 @@ export function buildRestaurantMarkerSvg(
 ): string {
   const inner = key ? ICON_PATHS[key] : GENERIC_ICON_PATH;
   const color = MARKER_COLORS[variant];
-  if (selected) {
-    return (
-      '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">' +
-      `<path fill="${color.selected}" stroke="#fff" stroke-width="2" ` +
-      'd="M16 2C8.268 2 2 8.268 2 16c0 10 14 30 14 30s14-20 14-30c0-7.732-6.268-14-14-14z"/>' +
-      // 아이콘 16×16 영역 (8..24). viewBox 24의 0.667 scale + offset 8.
-      '<g transform="translate(8 8) scale(0.667)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
-      inner +
-      '</g>' +
-      '</svg>'
-    );
-  }
-  return (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">' +
-    `<circle fill="${color.base}" stroke="#fff" stroke-width="2" cx="13" cy="13" r="11.5"/>` +
-    // 아이콘 16×16 영역 (5..21). 24의 0.667 scale + offset 5.
-    '<g transform="translate(5 5) scale(0.667)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
-    inner +
-    '</g>' +
-    '</svg>'
-  );
+  return selected
+    ? buildPinMarkerSvg({ fill: color.selected, innerSvg: inner })
+    : buildCircleMarkerSvg({ fill: color.base, innerSvg: inner });
 }
 
 // data URL 직접 사용 시 — 호출처에서 OL Icon.src 에 그대로 넣을 수 있다.

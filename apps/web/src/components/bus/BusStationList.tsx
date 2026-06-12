@@ -1,0 +1,306 @@
+import { useState } from 'react';
+import { Loader2, RefreshCcw, Search } from 'lucide-react';
+import type { BusStationItemType } from '@repo/api-contract';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { cn } from '~/lib/utils';
+
+// 서울시 원본 수집 시각 → '갱신 N분 전' 표기. 분 단위면 충분 — 서버 캐시
+// TTL 이 30일이라 초 단위 정밀도는 의미 없다.
+const formatRelative = (iso: string): string => {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60_000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BusStationSearchBar — 제출형 검색 인풋 + 메타 행(총수·갱신·강제 새로고침).
+// 일 1,000건(개발계정) 한도 보호를 위해 onChange 검색이 아니라 Enter/버튼
+// 제출만 서버를 때린다. 모바일 레이아웃에서는 지도 위 고정 영역으로 단독 사용.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BusStationSearchBarProps {
+  q: string;
+  total: number;
+  fetchedAt: string | null;
+  refreshing: boolean;
+  // items.length < total — 서버가 100건으로 절단했음을 알린다.
+  truncated: boolean;
+  // 응답 source==='stale' — 서울시 API 실패로 만료 캐시를 표시 중.
+  stale: boolean;
+  onSubmitQ(next: string): void;
+  onForceRefresh(): void;
+}
+
+export const BusStationSearchBar = ({
+  q,
+  total,
+  fetchedAt,
+  refreshing,
+  truncated,
+  stale,
+  onSubmitQ,
+  onForceRefresh,
+}: BusStationSearchBarProps) => {
+  // 제출형이라 draft 는 로컬 — 제출 전까지 URL/q 를 건드리지 않는다.
+  // q 가 외부(다른 인스턴스 제출, 뒤로가기)에서 바뀌면 렌더 중 동기화.
+  const [draft, setDraft] = useState(q);
+  const [prevQ, setPrevQ] = useState(q);
+  if (prevQ !== q) {
+    setPrevQ(q);
+    setDraft(q);
+  }
+
+  const hasQ = q.trim().length >= 2;
+
+  return (
+    <div className="space-y-2 p-3">
+      {/* form 제출형 — Android 가상 키보드 '검색' 키는 keydown 이 아니라
+          submit 이벤트로 들어오므로 form 으로 받아야 동작한다. */}
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmitQ(draft);
+        }}
+      >
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="정류장 이름으로 검색 (2자 이상)"
+            className="pl-9"
+            aria-label="정류장 검색"
+            maxLength={50}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              // 한글 조합 확정용 Enter 는 form 제출로 새지 않게 차단.
+              // keyCode 229 는 isComposing 이 false 로 오는 일부 IME 의
+              // keydown (Step1Participants 와 동일 가드).
+              if (e.nativeEvent.isComposing || e.keyCode === 229) e.preventDefault();
+            }}
+          />
+        </div>
+        <Button type="submit" size="sm">
+          검색
+        </Button>
+      </form>
+
+      {hasQ && fetchedAt && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5 tabular-nums">
+            총 {total}개 · 갱신 {formatRelative(fetchedAt)}
+            {stale && (
+              <Badge variant="amber" title="서울시 API 오류 — 저장된 결과를 표시 중입니다">
+                서울시 API 오류 · 저장된 결과
+              </Badge>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onForceRefresh}
+            disabled={refreshing}
+            aria-label="강제 새로고침"
+            title="서울시 API 에서 다시 가져오기"
+            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+          >
+            <RefreshCcw className={cn('size-3.5', refreshing && 'animate-spin')} />
+          </button>
+        </div>
+      )}
+
+      {truncated && (
+        <p className="text-xs text-muted-foreground">결과가 많아 일부만 표시합니다.</p>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BusStationListBody — 상태 분기 + 정류장 행 ul. 헤더와 분리 export — 모바일
+// 레이아웃이 지도 아래 별도 영역에 본체만 넣고, 차기 바텀시트 승격도 대비.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BusStationListBodyProps {
+  q: string;
+  items: BusStationItemType[];
+  isLoading: boolean;
+  isError: boolean;
+  selectedStId: string | null;
+  // 선택 stId 가 확정 결과에 없음 — 리스트 상단 안내만, URL 정리는 안 함.
+  selectedMissing: boolean;
+  // 강제 새로고침 진행 중 — 재시도 버튼 연타 차단.
+  refreshing: boolean;
+  onSelect(stId: string): void;
+  // 에러 시 재시도. force 재호출(useBusStationsRefresh)을 그대로 물려도 된다 —
+  // 성공하면 같은 검색 키 캐시가 교체돼 에러 상태가 풀린다.
+  onRetry(): void;
+}
+
+export const BusStationListBody = ({
+  q,
+  items,
+  isLoading,
+  isError,
+  selectedStId,
+  selectedMissing,
+  refreshing,
+  onSelect,
+  onRetry,
+}: BusStationListBodyProps) => {
+  const trimmed = q.trim();
+  if (trimmed.length < 2) {
+    return <Hint>정류장 이름을 2자 이상 입력해 검색하세요.</Hint>;
+  }
+  // 인풋 maxLength 로는 못 막는 URL 직접 진입 케이스 — 서버 제약(50자) 안내.
+  if (trimmed.length > 50) {
+    return <Hint>검색어는 50자 이하로 입력하세요.</Hint>;
+  }
+  if (isLoading && items.length === 0) {
+    return (
+      <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-destructive">
+        정류장을 불러오지 못했습니다.
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={refreshing}
+          onClick={onRetry}
+        >
+          재시도
+        </Button>
+      </div>
+    );
+  }
+  if (items.length === 0) {
+    return <Hint>검색 결과가 없습니다.</Hint>;
+  }
+  return (
+    <>
+      {selectedMissing && (
+        <p className="mb-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          선택한 정류장이 현재 결과에 없습니다.
+        </p>
+      )}
+      {/* 재검색 중에는 이전 결과(placeholder)를 디밍해 진행 중임을 표시. */}
+      <ul
+        className={cn(
+          'flex flex-col gap-0.5',
+          isLoading && 'pointer-events-none opacity-50',
+        )}
+        data-testid="bus-station-list"
+      >
+        {items.map((it) => {
+          const selected = it.stId === selectedStId;
+          return (
+            <li key={it.stId}>
+              <button
+                type="button"
+                onClick={() => onSelect(it.stId)}
+                aria-current={selected ? 'true' : undefined}
+                className={cn(
+                  'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+                  selected
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-accent/50',
+                )}
+              >
+                <span className="truncate font-medium">{it.name}</span>
+                {/* arsId '0' = 가상정류장(표지판 번호 없음) — 배지 숨김. */}
+                {it.arsId !== '0' && (
+                  <Badge variant="secondary" className="shrink-0 tabular-nums">
+                    {it.arsId}
+                  </Badge>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+};
+
+const Hint = ({ children }: { children: React.ReactNode }) => (
+  <div className="flex h-32 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm text-muted-foreground">
+    {children}
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BusStationList — 데스크톱 좌측 패널용 컴포지션 (검색바 고정 + 본체 스크롤).
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Props {
+  q: string;
+  items: BusStationItemType[];
+  total: number;
+  fetchedAt: string | null;
+  isLoading: boolean;
+  isError: boolean;
+  selectedStId: string | null;
+  selectedMissing: boolean;
+  refreshing: boolean;
+  stale: boolean;
+  onSubmitQ(next: string): void;
+  onSelect(stId: string): void;
+  onForceRefresh(): void;
+}
+
+export const BusStationList = ({
+  q,
+  items,
+  total,
+  fetchedAt,
+  isLoading,
+  isError,
+  selectedStId,
+  selectedMissing,
+  refreshing,
+  stale,
+  onSubmitQ,
+  onSelect,
+  onForceRefresh,
+}: Props) => (
+  <div className="flex min-h-0 flex-1 flex-col">
+    <div className="border-b">
+      <BusStationSearchBar
+        q={q}
+        total={total}
+        fetchedAt={fetchedAt}
+        refreshing={refreshing}
+        truncated={items.length < total}
+        stale={stale}
+        onSubmitQ={onSubmitQ}
+        onForceRefresh={onForceRefresh}
+      />
+    </div>
+    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <BusStationListBody
+        q={q}
+        items={items}
+        isLoading={isLoading}
+        isError={isError}
+        selectedStId={selectedStId}
+        selectedMissing={selectedMissing}
+        refreshing={refreshing}
+        onSelect={onSelect}
+        onRetry={onForceRefresh}
+      />
+    </div>
+  </div>
+);

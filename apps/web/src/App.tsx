@@ -25,6 +25,9 @@ const RestaurantsPage = lazy(() =>
 const RestaurantsV2Page = lazy(() =>
   import('./routes/RestaurantsV2Page').then((m) => ({ default: m.RestaurantsV2Page })),
 );
+const BusPage = lazy(() =>
+  import('./routes/BusPage').then((m) => ({ default: m.BusPage })),
+);
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -116,6 +119,8 @@ export const App = () => {
             <Route path="/r" element={<RestaurantsV2Page />}>
               <Route path=":placeId" element={<RestaurantDetailRoute />} />
             </Route>
+            {/* 서울시 버스 정류장 검색 + 지도. 비로그인 공개 (맛집과 동일 정책). */}
+            <Route path="/bus" element={<BusPage />} />
             <Route
               path="/me/settlements"
               element={

@@ -37,6 +37,10 @@ export interface MapMarker {
   // primary 변형에서 사용 — 한식/일식 등 카테고리에 맞는 라인 아이콘을 마커
   // 안에 그린다. null/미지정이면 일반 식기 아이콘. muted 에서는 무시.
   categoryKey?: RestaurantCategoryKey | null;
+  // 식당 외 마커(버스 정류장 등)용 아이콘 data URL 직접 지정. 지정 시
+  // variant/categoryKey 빌더 대신 사용. 비선택/선택 이미지는 식당 마커와
+  // 동일 규격(26×26 원 / 32×48 핀)이어야 라벨 offset·축소 스케일이 유효.
+  icon?: { src: string; selectedSrc: string };
 }
 
 export interface MapViewport {
@@ -395,6 +399,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           categoryKey,
           zoom,
           isDarkBaseRef.current,
+          m.icon,
         );
       });
       src.addFeature(f);
@@ -488,6 +493,7 @@ const makeMarkerStyle = (
   categoryKey: RestaurantCategoryKey | null,
   zoom: number,
   darkBg: boolean,
+  icon?: MapMarker['icon'],
 ): Style => {
   const compact = !selected && zoom < LABEL_VISIBLE_ZOOM;
   // 어두운 베이스맵(야간/위성) 위에서는 글자/외곽선을 반전 — 흰 글자 + 어두운
@@ -500,7 +506,11 @@ const makeMarkerStyle = (
     zIndex: selected ? 1000 : 0,
     image: new Icon({
       anchor: selected ? [0.5, 1] : [0.5, 0.5],
-      src: buildRestaurantMarkerDataUrl(categoryKey, selected, variant),
+      src: icon
+        ? selected
+          ? icon.selectedSrc
+          : icon.src
+        : buildRestaurantMarkerDataUrl(categoryKey, selected, variant),
       scale: compact ? SMALL_ICON_SCALE : 1,
     }),
     text:

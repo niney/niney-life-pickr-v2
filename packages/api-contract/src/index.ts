@@ -17,6 +17,7 @@ export * from './schemas/review-clustering.js';
 export * from './schemas/logs.js';
 export * from './schemas/settings-map.js';
 export * from './schemas/telegram-settings.js';
+export * from './schemas/bus.js';
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';
 export * from './schemas/settlement-contact.js';

@@ -389,6 +389,12 @@ export const SettlementDraft = {
   one: (id: string) => `${API_PREFIX}/settlement-drafts/${id}`,
 } as const;
 
+// 서울시 버스 — 정류장 검색은 비로그인 공개 (맛집 공개 지도와 동일 정책).
+// 도착정보/실시간 위치 라우트는 차기 단계에서 이 객체에 추가.
+export const Bus = {
+  stationSearch: `${API_PREFIX}/bus/stations/search`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;
 
 // review-search — 리뷰 문맥검색 / RAG (어드민 우선). 검색 단위는 식당(restaurantId).

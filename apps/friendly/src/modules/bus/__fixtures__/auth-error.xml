@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 합성 fixture: data.go.kr 공통 인증 실패 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
+     인증 실패는 ServiceResult 가 아니라 OpenAPI_ServiceResponse 로 온다. -->
+<OpenAPI_ServiceResponse>
+  <cmmMsgHeader>
+    <errMsg>SERVICE ERROR</errMsg>
+    <returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg>
+    <returnReasonCode>30</returnReasonCode>
+  </cmmMsgHeader>
+</OpenAPI_ServiceResponse>

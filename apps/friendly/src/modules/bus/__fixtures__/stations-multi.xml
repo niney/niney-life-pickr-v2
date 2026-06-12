@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
+     tmX/tmY 에 WGS84 경위도가 들어있는 알려진 사례 + posX/posY 에 GRS80 TM 값 동거. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>0</headerCd>
+    <headerMsg>정상적으로 처리되었습니다.</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody>
+    <itemList>
+      <stId>105000127</stId>
+      <stNm>강남역</stNm>
+      <arsId>02013</arsId>
+      <tmX>127.0276368</tmX>
+      <tmY>37.4979462</tmY>
+      <posX>200228.41</posX>
+      <posY>443382.21</posY>
+      <stationTp>0</stationTp>
+    </itemList>
+    <itemList>
+      <stId>105000128</stId>
+      <stNm>강남역사거리(가상)</stNm>
+      <arsId>0</arsId>
+      <tmX>127.0286521</tmX>
+      <tmY>37.4985301</tmY>
+      <posX>200318.77</posX>
+      <posY>443447.05</posY>
+      <stationTp>0</stationTp>
+    </itemList>
+  </msgBody>
+</ServiceResult>

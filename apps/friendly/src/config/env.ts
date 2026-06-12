@@ -60,6 +60,11 @@ const EnvSchema = z.object({
   ANDROID_APP_PACKAGE: z.string().default('com.niney.lifepickr'),
   ANDROID_SHA256_FINGERPRINTS: z.string().default(''),
 
+  // 서울시 버스 API (ws.bus.go.kr) 인증키 — data.go.kr 발급. 빈 값이면 버스
+  // 기능 비활성(검색 라우트가 503). Encoding/Decoding 키 어느 쪽이든 어댑터가
+  // 처리하며, 확신이 없으면 probe:bus 스크립트가 판별해 알려준다.
+  BUS_API_KEY: z.string().default(''),
+
   // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치
   // (apps/web/dist/index.html) 를 빌드 산출물 기준 상대경로로 탐색.

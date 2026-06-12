@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
+     단건 응답 — fast-xml-parser 가 itemList 를 객체로 떨어뜨리는 함정 검증용. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>0</headerCd>
+    <headerMsg>정상적으로 처리되었습니다.</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody>
+    <itemList>
+      <stId>105000127</stId>
+      <stNm>강남역</stNm>
+      <arsId>02013</arsId>
+      <tmX>127.0276368</tmX>
+      <tmY>37.4979462</tmY>
+    </itemList>
+  </msgBody>
+</ServiceResult>

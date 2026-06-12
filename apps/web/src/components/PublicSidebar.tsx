@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
+import { Bus, Home, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
 import { cn } from '~/lib/utils';
 
 interface NavItem {
@@ -13,6 +13,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: '홈', icon: Home, end: true },
   { to: '/restaurants-v2', label: '맛집', icon: UtensilsCrossed },
+  { to: '/bus', label: '버스', icon: Bus },
 ];
 
 interface Props {

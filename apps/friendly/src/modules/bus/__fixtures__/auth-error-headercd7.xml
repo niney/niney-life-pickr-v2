@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- probe:bus 실관측 기반: 키 인증 실패가 cmmMsgHeader(auth-error.xml)가 아니라
+     ServiceResult headerCd=7 로 오는 형태. headerMsg 의 '인증모듈 에러코드(NN)'
+     에서 NN 을 reasonCode 로 추출한다. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>7</headerCd>
+    <headerMsg>Key인증실패: SERVICE ACCESS DENIED ERROR. [인증모듈 에러코드(20)]</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody/>
+</ServiceResult>
