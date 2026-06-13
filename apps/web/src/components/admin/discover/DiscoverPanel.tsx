@@ -58,7 +58,8 @@ interface Props {
   hoveredPlaceId: string | null;
   onSelectItem(placeId: string): void;
   onHoverItem(placeId: string | null): void;
-  // 행 더블클릭 — 지도를 해당 식당으로 확대.
+  // 지도를 해당 식당으로 이동+확대. 검색 탭은 행 더블클릭,
+  // 등록 탭은 위치 버튼 클릭으로 발사.
   onZoomItem(placeId: string): void;
 
   // 다중 선택 (검색 탭 한정). 등록 탭은 체크박스 비표시.
@@ -457,7 +458,6 @@ const RegisteredList = ({
             key={it.placeId}
             data-place-id={it.placeId}
             onClick={() => onSelect(it.placeId)}
-            onDoubleClick={() => onZoom(it.placeId)}
             className={cn(
               'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
               selectedPlaceId === it.placeId && 'bg-primary/10',
@@ -469,11 +469,15 @@ const RegisteredList = ({
                 {it.category && (
                   <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
                 )}
+                {/* 등록 탭은 위치 버튼이 이동+확대까지 담당 (행 더블클릭 없음) */}
                 <ShowOnMapButton
                   className="ml-auto"
                   active={hoveredPlaceId === it.placeId}
                   label={it.name}
-                  onClick={() => onHover(it.placeId)}
+                  onClick={() => {
+                    onHover(it.placeId);
+                    onZoom(it.placeId);
+                  }}
                 />
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

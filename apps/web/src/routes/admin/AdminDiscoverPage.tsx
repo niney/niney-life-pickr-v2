@@ -200,6 +200,10 @@ export const AdminDiscoverPage = () => {
   };
   const handleSelectItem = useCallback(
     (id: string) => {
+      // 행 클릭 = 지도 "이동만"(패닝, 줌 유지). 직전 위치 버튼이 남긴 hover 를
+      // 비워 highlightedId(=hover ?? selected) 가 이 행을 가리키게 한다 — 안 그러면
+      // 남은 hover 가 우선해 새 행으로 패닝되지 않는다. 확대는 위치 버튼 전용.
+      setHoveredPlaceId(null);
       // detail 열기 = history push — 뒤로가기로 닫힘. 새 placeId 로 전환 시
       // 이전 상세 탭(dtab) 은 함께 비워 'home' 으로 시작하도록 함.
       setSearchParams(
