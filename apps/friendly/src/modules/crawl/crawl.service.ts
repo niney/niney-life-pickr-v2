@@ -59,6 +59,7 @@ import type {
   OperationLogService,
 } from '../logs/operation-log.service.js';
 import { diningcodeBulkSaveRegistry } from './diningcode-bulk-save-registry.js';
+import { tablingBulkSaveRegistry } from './tabling-bulk-save-registry.js';
 import {
   normalizeToPlaceId,
   RedirectFailedError,
@@ -904,6 +905,44 @@ export class CrawlService {
       source: 'sitemap',
       elapsedMs: res.elapsedMs,
     };
+  }
+
+  // 테이블링 일괄 저장 — 발견에서 다수 선택한 idx 를 순차로 saveTablingShop 호출.
+  // 직렬화(동시 호출 시 부담 + SSE 이벤트 순서 직관 유지). saveTablingShop 안에서
+  // 리뷰 페이지 간 200ms 간격. 진행 publish 는 registry 가 담당.
+  async runTablingBulkSave(jobId: string, idxs: number[]): Promise<void> {
+    tablingBulkSaveRegistry.markRunning(jobId);
+    const abortSignal = tablingBulkSaveRegistry.abortSignal(jobId);
+
+    for (const idx of idxs) {
+      if (abortSignal?.aborted) {
+        tablingBulkSaveRegistry.finishItem(jobId, idx, {
+          skipped: true,
+          reason: '잡이 취소되어 시작 전 건너뜀',
+        });
+        continue;
+      }
+      tablingBulkSaveRegistry.markItemStart(jobId, idx);
+      try {
+        const result = await this.saveTablingShop(idx);
+        tablingBulkSaveRegistry.finishItem(jobId, idx, {
+          ok: true,
+          restaurantId: result.restaurantId,
+          fetchedPages: result.fetchedPages,
+          newReviewCount: result.newReviewCount,
+          autoMatched: result.autoMatched,
+          matchedCanonicalId: result.matchedCanonicalId,
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        tablingBulkSaveRegistry.finishItem(jobId, idx, {
+          ok: false,
+          errorCode: 'save_failed',
+          errorMessage: message,
+        });
+      }
+    }
+    tablingBulkSaveRegistry.markFinished(jobId);
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시

@@ -1276,6 +1276,72 @@ export const TablingDiscoverResult = z.object({
 });
 export type TablingDiscoverResultType = z.infer<typeof TablingDiscoverResult>;
 
+// ── 테이블링 일괄 저장 잡 (SSE) ─────────────────────────────────────────────
+// 사이트맵 발견에서 다수 idx 선택 후 일괄 저장. 한 idx 끝날 때마다 item 이벤트,
+// 전부 끝나면 done. 다이닝코드 일괄 저장과 동형(직렬 + 200ms 간격).
+
+export const TablingBulkSaveJobInput = z.object({
+  // 최대 50개 — 저부하 원칙(직렬 + 페이지 간 200ms). 더 필요하면 잡을 나눠 실행.
+  idxs: z.array(z.number().int().positive()).min(1).max(50),
+});
+export type TablingBulkSaveJobInputType = z.infer<typeof TablingBulkSaveJobInput>;
+
+export const TablingBulkSaveJobState = z.enum(['pending', 'running', 'done', 'failed']);
+export type TablingBulkSaveJobStateType = z.infer<typeof TablingBulkSaveJobState>;
+
+export const TablingBulkSaveJobItemState = z.enum([
+  'pending',
+  'running',
+  'done',
+  'failed',
+  'skipped',
+]);
+export type TablingBulkSaveJobItemStateType = z.infer<typeof TablingBulkSaveJobItemState>;
+
+export const TablingBulkSaveJobItem = z.object({
+  idx: z.number().int(),
+  state: TablingBulkSaveJobItemState,
+  restaurantId: z.string().nullable(),
+  fetchedPages: z.number().int().nullable(),
+  newReviewCount: z.number().int().nullable(),
+  // 좌표 기반 로컬 canonical 자동매칭 결과(성공 시).
+  autoMatched: z.boolean().nullable(),
+  matchedCanonicalId: z.string().nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+});
+export type TablingBulkSaveJobItemType = z.infer<typeof TablingBulkSaveJobItem>;
+
+export const TablingBulkSaveJobSnapshot = z.object({
+  jobId: z.string(),
+  state: TablingBulkSaveJobState,
+  total: z.number().int(),
+  doneCount: z.number().int(),
+  failedCount: z.number().int(),
+  skippedCount: z.number().int(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  items: z.array(TablingBulkSaveJobItem),
+});
+export type TablingBulkSaveJobSnapshotType = z.infer<typeof TablingBulkSaveJobSnapshot>;
+
+export const TablingBulkSaveJobItemEvent = z.object({
+  type: z.literal('item'),
+  jobId: z.string(),
+  item: TablingBulkSaveJobItem,
+});
+export type TablingBulkSaveJobItemEventType = z.infer<typeof TablingBulkSaveJobItemEvent>;
+
+export const TablingBulkSaveJobDoneEvent = z.object({
+  type: z.literal('done'),
+  jobId: z.string(),
+  state: TablingBulkSaveJobState,
+  finishedAt: z.string(),
+});
+export type TablingBulkSaveJobDoneEventType = z.infer<typeof TablingBulkSaveJobDoneEvent>;
+
 // ── 테이블링 키워드 검색 (어드민 /tabling-test 페이지) ───────────────────────
 // POST /v1/search/restaurants/map — 웹/앱 검색창이 그대로 호출하는 무인증
 // Elasticsearch 백엔드(앱 4.11.0). 사이트맵 전수열거와 달리 키워드로 partner

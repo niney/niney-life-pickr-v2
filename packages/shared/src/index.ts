@@ -21,6 +21,7 @@ export * from './stores/activeCrawlJobStore.js';
 export * from './stores/activeGroupingJobStore.js';
 export * from './stores/activeGlobalMergeJobStore.js';
 export * from './stores/activeDiningcodeBulkSaveJobStore.js';
+export * from './stores/activeTablingBulkSaveJobStore.js';
 export * from './stores/activeAutoDiscoverJobStore.js';
 export * from './stores/settlementDraftStore.js';
 export * from './stores/resummarizeStore.js';

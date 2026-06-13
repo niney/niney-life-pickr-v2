@@ -99,6 +99,12 @@ export const Crawl = {
   // 사이트맵 기반 발견 — 검색 API 가 없어 사이트맵이 발견 백본.
   // tier=shop(partner ~4k) | place(미입점 ~225k, page 1~5).
   tablingDiscover: `${API_PREFIX}/admin/crawl/tabling/discover`,
+  // 일괄 저장 잡 — 발견에서 다수 선택 후 한 번에 저장. 진행률은 SSE.
+  tablingBulkSaveJobs: `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs`,
+  tablingBulkSaveJob: (id: string) =>
+    `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs/${id}`,
+  tablingBulkSaveJobEvents: (id: string) =>
+    `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs/${id}/events`,
 } as const;
 
 export const Restaurant = {

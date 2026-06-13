@@ -21,6 +21,7 @@
     "probe:extraction": "tsx --env-file=.env scripts/probe-extraction.ts",
     "probe:merge": "tsx --env-file=.env scripts/probe-merge.ts",
     "probe:tabling": "tsx --env-file=.env scripts/probe-tabling.ts",
+    "probe:tabling-bulk": "tsx --env-file=.env scripts/probe-tabling-bulk.ts",
     "run-merge": "tsx --env-file=.env scripts/run-global-merge.ts",
     "dev:capture-visitor": "tsx scripts/dev-capture-visitor.ts",
     "dev:fetch-visitor-html": "tsx scripts/dev-fetch-visitor-html.ts",

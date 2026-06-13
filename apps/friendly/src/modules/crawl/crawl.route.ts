@@ -32,6 +32,8 @@ import {
   TablingRegisteredResult,
   TablingDiscoverQuery,
   TablingDiscoverResult,
+  TablingBulkSaveJobInput,
+  TablingBulkSaveJobSnapshot,
   Routes,
   StartCrawlResult,
   type CrawlEventType,
@@ -44,6 +46,10 @@ import {
   diningcodeBulkSaveRegistry,
   type BulkSaveJobEvent,
 } from './diningcode-bulk-save-registry.js';
+import {
+  tablingBulkSaveRegistry,
+  type TablingBulkSaveJobEvent,
+} from './tabling-bulk-save-registry.js';
 import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
 import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playwright.adapter.js';
 import { closeCatchtableShopBrowser } from './adapters/catchtable-shop.playwright.adapter.js';
@@ -371,6 +377,172 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: TablingDiscoverResult },
     },
     handler: async (req) => service.discoverTabling(req.query),
+  });
+
+  // POST — 테이블링 일괄 저장 잡 시작. body.idxs 받아 백그라운드 직렬 저장.
+  typed.post(Routes.Crawl.tablingBulkSaveJobs, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      body: TablingBulkSaveJobInput,
+      response: { 200: TablingBulkSaveJobSnapshot },
+    },
+    handler: async (req) => {
+      const actorId = req.user.userId;
+      // 중복 idx 제거 — 같은 가게 두 번 처리 방지.
+      const idxs = Array.from(new Set(req.body.idxs));
+      const { id } = tablingBulkSaveRegistry.create({ actorId, idxs });
+      void service.runTablingBulkSave(id, idxs).catch((e) => {
+        app.log.error({ err: e, jobId: id }, '[tabling-bulk-save] runner crashed');
+      });
+      const snapshot = tablingBulkSaveRegistry.get(id, actorId);
+      if (!snapshot) throw app.httpErrors.internalServerError('Failed to create job');
+      return snapshot;
+    },
+  });
+
+  // GET — 테이블링 일괄 저장 잡 스냅샷.
+  typed.get(Routes.Crawl.tablingBulkSaveJob(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+      response: { 200: TablingBulkSaveJobSnapshot },
+    },
+    handler: async (req) => {
+      const snap = tablingBulkSaveRegistry.get(req.params.id, req.user.userId);
+      if (!snap) throw app.httpErrors.notFound('Job not found');
+      return snap;
+    },
+  });
+
+  // DELETE — 테이블링 일괄 저장 잡 취소.
+  typed.delete(Routes.Crawl.tablingBulkSaveJob(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ id: z.string() }),
+    },
+    handler: async (req, reply) => {
+      tablingBulkSaveRegistry.cancel(req.params.id, req.user.userId);
+      return reply.code(204).send();
+    },
+  });
+
+  // GET SSE — 테이블링 일괄 저장 잡 진행. snapshot/item/done event. token query 인증.
+  app.get(Routes.Crawl.tablingBulkSaveJobEvents(':id'), {
+    schema: { tags: ['admin'] },
+    handler: async (req, reply) => {
+      const params = req.params as { id: string };
+      const rawQuery = req.query as { token?: string };
+
+      let userId: string | null = null;
+      let role: 'USER' | 'ADMIN' | null = null;
+      try {
+        await req.jwtVerify();
+        userId = req.user.userId;
+        role = req.user.role;
+      } catch {
+        if (typeof rawQuery.token === 'string' && rawQuery.token.length > 0) {
+          try {
+            const payload = app.jwt.verify(rawQuery.token) as {
+              userId: string;
+              role: 'USER' | 'ADMIN';
+            };
+            userId = payload.userId;
+            role = payload.role;
+          } catch {
+            // fall through
+          }
+        }
+      }
+      if (!userId || role !== 'ADMIN') {
+        return reply.code(401).send({
+          statusCode: 401,
+          error: 'Unauthorized',
+          message: 'Invalid or missing token',
+        });
+      }
+
+      const snapshot = tablingBulkSaveRegistry.get(params.id, userId);
+      if (!snapshot) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Job not found',
+        });
+      }
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      const writeNamed = (name: string, data: unknown): void => {
+        try {
+          reply.raw.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+        } catch {
+          // socket already gone
+        }
+      };
+      const writeComment = (c: string): void => {
+        try {
+          reply.raw.write(`: ${c}\n\n`);
+        } catch {
+          // ignore
+        }
+      };
+
+      writeComment('connected');
+      writeNamed('snapshot', snapshot);
+
+      if (snapshot.state === 'done' || snapshot.state === 'failed') {
+        writeNamed('done', {
+          jobId: snapshot.jobId,
+          state: snapshot.state,
+          finishedAt: snapshot.finishedAt ?? new Date().toISOString(),
+        });
+        reply.raw.end();
+        return;
+      }
+
+      const onEvent = (event: TablingBulkSaveJobEvent): void => {
+        if (event.type === 'item') {
+          writeNamed('item', { jobId: snapshot.jobId, item: event.item });
+        } else if (event.type === 'done') {
+          writeNamed('done', {
+            jobId: snapshot.jobId,
+            state: event.state,
+            finishedAt: event.finishedAt,
+          });
+        }
+      };
+      const unsubscribe = tablingBulkSaveRegistry.subscribe(
+        params.id,
+        userId,
+        onEvent,
+      );
+
+      const heartbeat = setInterval(() => writeComment('hb'), 15_000);
+      heartbeat.unref?.();
+
+      const cleanup = (): void => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        try {
+          reply.raw.end();
+        } catch {
+          // ignore
+        }
+      };
+      req.raw.on('close', cleanup);
+    },
   });
 
   // POST — 일괄 저장 잡 시작. body.vRids 만 받고 actor 단위로 한 번에 1개 잡만

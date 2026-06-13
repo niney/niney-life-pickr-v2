@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -7,18 +7,26 @@ import {
   ExternalLink,
   Link2,
   Loader2,
+  PackagePlus,
   Save,
   Search,
   Star,
+  X,
   XCircle,
 } from 'lucide-react';
 import {
+  useActiveTablingBulkSaveJobStore,
+  useCancelTablingBulkSave,
   useSaveTablingShop,
+  useStartTablingBulkSave,
+  useTablingBulkSaveJob,
   useTablingRegistered,
   useTablingSearch,
 } from '@repo/shared';
 import type {
   SaveTablingShopResultType,
+  TablingBulkSaveJobItemType,
+  TablingBulkSaveJobSnapshotType,
   TablingRegisteredEntryType,
   TablingSearchResultType,
   TablingSearchSortType,
@@ -36,12 +44,12 @@ import { Input } from '~/components/ui/input';
 
 // 테이블링 정식 크롤링 페이지. 테스트 페이지(/admin/tabling-test)와 검색은
 // 동일하지만 운영 흐름에 맞춰 카드별 저장 + 자동매칭 결과 표시를 더했다.
-// 저장은 saveTablingShop 이 리뷰 전체 페이지를 동기 수집하므로 서버 부하를
-// 고려해 한 번에 1건 직렬 — 일괄 저장(SSE 잡)은 다이닝코드와 동일 인프라가
-// 필요해 후속 작업으로 미룬다.
+// 저장은 카드별 단건(직렬 1건) 또는 다중 선택 후 일괄 저장(SSE 잡, 다이닝코드와
+// 동일 인프라). 일괄 저장도 서버 안에서 직렬 + 리뷰 페이지 간 200ms 간격이라
+// 부하는 단건과 동일한 페이스다.
 //
 // 검색은 search_after 커서라 이전/다음 대신 누적 + "더 보기". 누적은 더 보기
-// 클릭 핸들러에서 직전 페이지를 스냅샷으로 쌓는다 (useEffect 불필요).
+// 클릭 핸들러에서 직전 페이지를 스냅샷으로 쌓는다.
 
 const SORT_OPTIONS: Array<{ value: TablingSearchSortType; label: string }> = [
   { value: 'RECOMMEND', label: '추천 (기본)' },
@@ -49,6 +57,9 @@ const SORT_OPTIONS: Array<{ value: TablingSearchSortType; label: string }> = [
 ];
 
 const PAGE_SIZE = 20;
+
+// 한 잡당 최대 idx 수 (스키마 max 와 일치). 더 필요하면 잡을 나눠 실행.
+const MAX_BULK = 50;
 
 const FLAG_LABELS: Array<{
   key: keyof TablingSearchResultType['flags'];
@@ -81,10 +92,52 @@ interface ResultCardProps {
   saveResult: SaveTablingShopResultType | null;
   saveError: string | null;
   saving: boolean;
-  // 다른 카드가 저장 중이면 전체 저장 버튼 잠금 — 직렬 1건 정책.
+  // 다른 카드가 저장 중(단건)이거나 일괄 잡이 돌면 단건 저장 버튼 잠금.
   anySaving: boolean;
+  // 일괄 저장 선택 — selectable 면 체크박스 노출. jobItem 은 진행 중 잡의 이 가게 상태.
+  selectable: boolean;
+  selected: boolean;
+  onToggleSelect: (idx: number) => void;
+  jobItem: TablingBulkSaveJobItemType | null;
   onSave: (idx: number) => void;
 }
+
+const JobItemBadge = ({ item }: { item: TablingBulkSaveJobItemType }) => {
+  if (item.state === 'running') {
+    return (
+      <Badge variant="outline" className="gap-1 font-normal">
+        <Loader2 className="size-3 animate-spin" /> 저장 중…
+      </Badge>
+    );
+  }
+  if (item.state === 'done') {
+    return (
+      <Badge variant="outline" className="gap-1 border-emerald-400/40 text-emerald-700">
+        <CheckCircle2 className="size-3" /> 저장됨 (리뷰 {item.newReviewCount ?? 0})
+        {item.autoMatched && <Link2 className="size-3" />}
+      </Badge>
+    );
+  }
+  if (item.state === 'failed') {
+    return (
+      <Badge variant="outline" className="gap-1 border-destructive/50 text-destructive">
+        <XCircle className="size-3" /> 실패
+      </Badge>
+    );
+  }
+  if (item.state === 'skipped') {
+    return (
+      <Badge variant="secondary" className="font-normal">
+        건너뜀
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary" className="font-normal text-muted-foreground">
+      대기 중
+    </Badge>
+  );
+};
 
 const ResultCard = ({
   item,
@@ -93,13 +146,27 @@ const ResultCard = ({
   saveError,
   saving,
   anySaving,
+  selectable,
+  selected,
+  onToggleSelect,
+  jobItem,
   onSave,
 }: ResultCardProps) => {
-  const isRegistered = !!registered || !!saveResult;
+  const isRegistered = !!registered || !!saveResult || jobItem?.state === 'done';
   const activeFlags = FLAG_LABELS.filter((f) => item.flags[f.key]);
   return (
     <Card className="overflow-hidden transition-shadow hover:shadow-md">
       <div className="flex gap-4 p-4 sm:gap-5 sm:p-5">
+        {selectable && (
+          <label className="flex shrink-0 items-start pt-1" title="일괄 저장 선택">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect(item.idx)}
+              className="size-4 cursor-pointer"
+            />
+          </label>
+        )}
         <div className="size-24 shrink-0 overflow-hidden rounded-md bg-muted sm:size-28">
           {item.thumbnailUrl ? (
             <img
@@ -223,7 +290,7 @@ const ResultCard = ({
           )}
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              {isRegistered && (
+              {isRegistered && !jobItem && (
                 <Badge
                   variant="outline"
                   className="gap-1 border-emerald-400/40 text-emerald-700"
@@ -232,8 +299,9 @@ const ResultCard = ({
                   등록됨
                 </Badge>
               )}
+              {jobItem && jobItem.state !== 'pending' && <JobItemBadge item={jobItem} />}
             </div>
-            {!isRegistered && (
+            {!isRegistered && !jobItem && (
               <Button
                 type="button"
                 size="sm"
@@ -294,8 +362,82 @@ export const AdminTablingPage = () => {
   >(new Map());
   const [saveErrors, setSaveErrors] = useState<Map<number, string>>(new Map());
 
+  // ── 일괄 저장 (SSE 잡) ─────────────────────────────────────────────────
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const activeJobId = useActiveTablingBulkSaveJobStore((s) => s.jobId);
+  const clearActiveJob = useActiveTablingBulkSaveJobStore((s) => s.clear);
+  const job = useTablingBulkSaveJob(activeJobId);
+  const startBulk = useStartTablingBulkSave();
+  const cancelBulk = useCancelTablingBulkSave();
+
+  const jobItemByIdx = useMemo(() => {
+    const m = new Map<number, TablingBulkSaveJobItemType>();
+    for (const it of job.data?.items ?? []) m.set(it.idx, it);
+    return m;
+  }, [job.data]);
+
+  const isJobRunning =
+    job.data?.state === 'pending' || job.data?.state === 'running';
+
+  // 선택 가능한(=미등록 + 잡에서 처리되지 않은) idx 들.
+  const selectableIdxs = useMemo(
+    () =>
+      items
+        .map((it) => it.idx)
+        .filter((idx) => {
+          if (registeredMap.has(idx)) return false;
+          const ji = jobItemByIdx.get(idx);
+          if (ji && ji.state !== 'pending') return false;
+          return true;
+        }),
+    [items, registeredMap, jobItemByIdx],
+  );
+  const selectableSet = useMemo(() => new Set(selectableIdxs), [selectableIdxs]);
+  const allSelectableSelected =
+    selectableIdxs.length > 0 && selectableIdxs.every((idx) => selected.has(idx));
+
+  const toggleOne = useCallback((idx: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelectableSelected) {
+        for (const idx of selectableIdxs) next.delete(idx);
+      } else {
+        for (const idx of selectableIdxs) next.add(idx);
+      }
+      return next;
+    });
+  };
+
+  const handleStartBulk = () => {
+    const idxs = Array.from(selected).slice(0, MAX_BULK);
+    if (idxs.length === 0) return;
+    startBulk.mutate({ idxs }, { onSuccess: () => setSelected(new Set()) });
+  };
+
+  // 새 검색/정렬 시 선택 초기화.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [query, sort]);
+
+  // 잡 종료 후 60초 뒤 자동 정리(결과 확인 시간). "닫기"는 즉시 clear.
+  const jobState = job.data?.state ?? null;
+  useEffect(() => {
+    if (jobState !== 'done' && jobState !== 'failed') return undefined;
+    const t = setTimeout(() => clearActiveJob(), 60_000);
+    return () => clearTimeout(t);
+  }, [jobState, clearActiveJob]);
+
   const handleSave = (idx: number) => {
-    if (savingIdx !== null) return;
+    if (savingIdx !== null || isJobRunning) return;
     setSavingIdx(idx);
     setSaveErrors((prev) => {
       const next = new Map(prev);
@@ -414,6 +556,15 @@ export const AdminTablingPage = () => {
         </Card>
       )}
 
+      {activeJobId && job.data && (
+        <BulkSaveJobCard
+          snapshot={job.data}
+          canCancel={!cancelBulk.isPending}
+          onCancel={() => cancelBulk.mutate(activeJobId)}
+          onClose={clearActiveJob}
+        />
+      )}
+
       {search.data && (
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           <Badge variant="secondary" className="font-normal">
@@ -422,6 +573,46 @@ export const AdminTablingPage = () => {
           <Badge variant="outline" className="font-normal">
             불러옴 {items.length}건
           </Badge>
+        </div>
+      )}
+
+      {items.length > 0 && selectableIdxs.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allSelectableSelected}
+              onChange={toggleAll}
+              disabled={isJobRunning}
+              className="size-4"
+            />
+            <span className="text-muted-foreground">
+              미등록 전체 선택 ({selectableIdxs.length})
+            </span>
+          </label>
+          <span className="text-muted-foreground">
+            선택 {selected.size}
+            {selected.size > MAX_BULK ? ` / 최대 ${MAX_BULK}` : ''}
+          </span>
+          {selected.size > MAX_BULK && (
+            <span className="text-xs text-amber-600">
+              최대 {MAX_BULK}개까지만 저장됩니다
+            </span>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            className="ml-auto gap-1.5"
+            disabled={selected.size === 0 || isJobRunning || startBulk.isPending}
+            onClick={handleStartBulk}
+          >
+            {startBulk.isPending || isJobRunning ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <PackagePlus className="size-4" />
+            )}
+            선택 {Math.min(selected.size, MAX_BULK)}개 일괄 저장
+          </Button>
         </div>
       )}
 
@@ -435,7 +626,11 @@ export const AdminTablingPage = () => {
               saveResult={saveResults.get(it.idx) ?? null}
               saveError={saveErrors.get(it.idx) ?? null}
               saving={savingIdx === it.idx}
-              anySaving={savingIdx !== null}
+              anySaving={savingIdx !== null || isJobRunning}
+              selectable={selectableSet.has(it.idx)}
+              selected={selected.has(it.idx)}
+              onToggleSelect={toggleOne}
+              jobItem={jobItemByIdx.get(it.idx) ?? null}
               onSave={handleSave}
             />
           ))}
@@ -467,5 +662,97 @@ export const AdminTablingPage = () => {
         </Card>
       )}
     </div>
+  );
+};
+
+interface BulkSaveJobCardProps {
+  snapshot: TablingBulkSaveJobSnapshotType;
+  onCancel: () => void;
+  onClose: () => void;
+  canCancel: boolean;
+}
+
+const BulkSaveJobCard = ({
+  snapshot,
+  onCancel,
+  onClose,
+  canCancel,
+}: BulkSaveJobCardProps) => {
+  const running = snapshot.state === 'pending' || snapshot.state === 'running';
+  const currentItem = snapshot.items.find((i) => i.state === 'running') ?? null;
+  const processed =
+    snapshot.doneCount + snapshot.failedCount + snapshot.skippedCount;
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {running ? (
+              <Loader2 className="size-4 animate-spin text-primary" />
+            ) : snapshot.state === 'failed' ? (
+              <XCircle className="size-4 text-destructive" />
+            ) : (
+              <CheckCircle2 className="size-4 text-emerald-600" />
+            )}
+            <CardTitle className="text-base">
+              {running
+                ? `일괄 저장 진행 중 (${processed}/${snapshot.total})`
+                : snapshot.state === 'failed'
+                ? '일괄 저장 실패'
+                : '일괄 저장 완료'}
+            </CardTitle>
+          </div>
+          <div className="flex items-center gap-1">
+            {running && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                disabled={!canCancel}
+                className="h-7 gap-1 px-2 text-xs"
+              >
+                <X className="size-3.5" />
+                취소
+              </Button>
+            )}
+            {!running && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="h-7 gap-1 px-2 text-xs"
+              >
+                닫기
+              </Button>
+            )}
+          </div>
+        </div>
+        <CardDescription className="text-xs">
+          성공 {snapshot.doneCount} · 실패 {snapshot.failedCount}
+          {snapshot.skippedCount > 0 && ` · 건너뜀 ${snapshot.skippedCount}`}
+          {currentItem && (
+            <span className="ml-1 text-muted-foreground">
+              · 현재: <code className="font-mono">idx {currentItem.idx}</code>
+            </span>
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={`absolute inset-y-0 left-0 transition-[width] ${
+              snapshot.state === 'failed' ? 'bg-destructive' : 'bg-primary'
+            }`}
+            style={{
+              width: `${
+                snapshot.total === 0 ? 0 : (processed / snapshot.total) * 100
+              }%`,
+            }}
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 };

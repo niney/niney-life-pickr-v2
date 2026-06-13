@@ -17,17 +17,23 @@ import type {
   DiningcodeBulkSaveJobStateType,
   NaverPlaceDataType,
   PersistedVisitorReviewType,
+  TablingBulkSaveJobInputType,
+  TablingBulkSaveJobItemType,
+  TablingBulkSaveJobSnapshotType,
+  TablingBulkSaveJobStateType,
   TablingSearchSortType,
   VisitorReviewType,
 } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
 import {
   buildDiningcodeBulkSaveEventsUrl,
+  buildTablingBulkSaveEventsUrl,
   buildJobEventsUrl,
   crawlApi,
   type StartCrawlArgs,
 } from '../api/crawl.api.js';
 import { useActiveDiningcodeBulkSaveJobStore } from '../stores/activeDiningcodeBulkSaveJobStore.js';
+import { useActiveTablingBulkSaveJobStore } from '../stores/activeTablingBulkSaveJobStore.js';
 
 export const useStartCrawl = () => {
   const qc = useQueryClient();
@@ -225,6 +231,175 @@ export const useTablingRegistered = (idxs: number[]) => {
     enabled: idxs.length > 0,
     staleTime: 30_000,
   });
+};
+
+// ── 테이블링 일괄 저장 잡 (SSE) — 다이닝코드 패턴과 동형, 키는 idx(number) ──────
+export const useStartTablingBulkSave = () => {
+  const qc = useQueryClient();
+  const setActive = useActiveTablingBulkSaveJobStore((s) => s.setJobId);
+  return useMutation({
+    mutationFn: (input: TablingBulkSaveJobInputType) =>
+      crawlApi.tablingBulkSaveStart(input),
+    onSuccess: (snap) => {
+      qc.setQueryData(['crawl', 'tabling-bulk-save', snap.jobId], snap);
+      setActive(snap.jobId);
+    },
+  });
+};
+
+export const useCancelTablingBulkSave = () =>
+  useMutation({
+    mutationFn: (jobId: string) => crawlApi.tablingBulkSaveCancel(jobId),
+  });
+
+export const useTablingBulkSaveJob = (
+  jobId: string | null,
+): {
+  data: TablingBulkSaveJobSnapshotType | null;
+  isLoading: boolean;
+  error: unknown;
+} => {
+  const qc = useQueryClient();
+  const clearActive = useActiveTablingBulkSaveJobStore((s) => s.clear);
+  const queryKey = ['crawl', 'tabling-bulk-save', jobId];
+
+  const queryRes = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (!jobId) return null;
+      try {
+        return await crawlApi.tablingBulkSaveGet(jobId);
+      } catch (e) {
+        if (e instanceof ApiError && e.statusCode === 404) {
+          clearActive();
+          return null;
+        }
+        throw e;
+      }
+    },
+    enabled: !!jobId,
+  });
+
+  const esRef = useRef<EventSource | null>(null);
+  const retryRef = useRef<number>(0);
+  const closedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!jobId) return undefined;
+    closedRef.current = false;
+
+    let cancelled = false;
+    const reconnectTimer: { id: ReturnType<typeof setTimeout> | null } = {
+      id: null,
+    };
+
+    const updateSnapshot = (
+      patcher: (
+        prev: TablingBulkSaveJobSnapshotType | null,
+      ) => TablingBulkSaveJobSnapshotType | null,
+    ): void => {
+      qc.setQueryData<TablingBulkSaveJobSnapshotType | null>(queryKey, (prev) =>
+        patcher(prev ?? null),
+      );
+    };
+
+    const connect = async (): Promise<void> => {
+      if (cancelled || closedRef.current) return;
+      const url = await buildTablingBulkSaveEventsUrl(jobId);
+      if (cancelled) return;
+      const es = new EventSource(url);
+      esRef.current = es;
+
+      es.addEventListener('snapshot', (e) => {
+        try {
+          const snap = JSON.parse(
+            (e as MessageEvent).data,
+          ) as TablingBulkSaveJobSnapshotType;
+          updateSnapshot(() => snap);
+          retryRef.current = 0;
+        } catch {
+          // ignore malformed
+        }
+      });
+
+      es.addEventListener('item', (e) => {
+        try {
+          const payload = JSON.parse((e as MessageEvent).data) as {
+            jobId: string;
+            item: TablingBulkSaveJobItemType;
+          };
+          updateSnapshot((prev) => {
+            if (!prev) return prev;
+            const items = prev.items.map((it) =>
+              it.idx === payload.item.idx ? payload.item : it,
+            );
+            const doneCount = items.filter((i) => i.state === 'done').length;
+            const failedCount = items.filter((i) => i.state === 'failed').length;
+            const skippedCount = items.filter((i) => i.state === 'skipped').length;
+            return { ...prev, items, doneCount, failedCount, skippedCount };
+          });
+        } catch {
+          // ignore
+        }
+      });
+
+      es.addEventListener('done', (e) => {
+        try {
+          const payload = JSON.parse((e as MessageEvent).data) as {
+            jobId: string;
+            state: TablingBulkSaveJobStateType;
+            finishedAt: string;
+          };
+          updateSnapshot((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              state: payload.state,
+              finishedAt: payload.finishedAt,
+            };
+          });
+          closedRef.current = true;
+          es.close();
+          // 새로 등록된 가게가 생겼으니 등록 배지/리스트/제안 캐시 무효화.
+          qc.invalidateQueries({ queryKey: ['crawl', 'tabling-registered'] });
+          qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+          qc.invalidateQueries({ queryKey: ['canonical', 'proposals'] });
+        } catch {
+          // ignore
+        }
+      });
+
+      es.onerror = () => {
+        es.close();
+        if (cancelled || closedRef.current) return;
+        const backoff = Math.min(30_000, 1000 * 2 ** retryRef.current);
+        retryRef.current += 1;
+        reconnectTimer.id = setTimeout(() => {
+          void connect();
+        }, backoff);
+      };
+    };
+
+    void connect();
+
+    return () => {
+      cancelled = true;
+      closedRef.current = true;
+      if (reconnectTimer.id) clearTimeout(reconnectTimer.id);
+      esRef.current?.close();
+      esRef.current = null;
+      retryRef.current = 0;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
+  return {
+    data:
+      (queryRes.data as TablingBulkSaveJobSnapshotType | null | undefined) ??
+      null,
+    isLoading: queryRes.isLoading,
+    error: queryRes.error,
+  };
 };
 
 // 캐치테이블 가게 상세 — shopRef 가 null/undefined 면 disabled. 한 가게당

@@ -24,6 +24,8 @@ import {
   type TablingShopReviewsResponseType,
   type TablingRegisteredResultType,
   type TablingDiscoverResultType,
+  type TablingBulkSaveJobInputType,
+  type TablingBulkSaveJobSnapshotType,
   type StartCrawlResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -268,6 +270,32 @@ export const crawlApi = {
       `${Routes.Crawl.tablingDiscover}?${params.toString()}`,
     );
   },
+
+  // 테이블링 일괄 저장 잡 시작 — idxs 받아 백그라운드 직렬 저장. 응답은 초기 스냅샷.
+  tablingBulkSaveStart: (input: TablingBulkSaveJobInputType) =>
+    apiFetch<TablingBulkSaveJobSnapshotType>(Routes.Crawl.tablingBulkSaveJobs, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  tablingBulkSaveGet: (jobId: string) =>
+    apiFetch<TablingBulkSaveJobSnapshotType>(Routes.Crawl.tablingBulkSaveJob(jobId)),
+
+  tablingBulkSaveCancel: (jobId: string) =>
+    apiFetch<void>(Routes.Crawl.tablingBulkSaveJob(jobId), { method: 'DELETE' }),
+};
+
+// 테이블링 일괄 저장 SSE URL — token query.
+export const buildTablingBulkSaveEventsUrl = async (
+  jobId: string,
+): Promise<string> => {
+  const cfg = getApiConfig();
+  const token = (await cfg.getToken?.()) ?? '';
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  const qs = params.toString();
+  const sep = qs ? '?' : '';
+  return `${cfg.baseUrl}${Routes.Crawl.tablingBulkSaveJobEvents(jobId)}${sep}${qs}`;
 };
 
 // 다이닝코드 일괄 저장 SSE URL — token query.
