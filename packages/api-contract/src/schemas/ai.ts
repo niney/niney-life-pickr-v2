@@ -93,11 +93,21 @@ export type LlmProviderIdType = z.infer<typeof LlmProviderId>;
 export const LlmProviderPurpose = z.enum(['chat', 'image', 'log-analysis']);
 export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
 
+// 이 용도가 어떤 키로 동작하는지 — UI 배지용.
+//  own       이 row 에 직접 입력된 키.
+//  inherited 자기 키가 없어 계정 대표 키(chat row, 없으면 env)를 상속.
+//  env       chat 용도가 DB row 없이 환경변수 키로 동작.
+//  none      쓸 수 있는 키가 전혀 없음.
+export const LlmKeySource = z.enum(['own', 'inherited', 'env', 'none']);
+export type LlmKeySourceType = z.infer<typeof LlmKeySource>;
+
 export const LlmProviderConfig = z.object({
   provider: LlmProviderId,
   purpose: LlmProviderPurpose,
   hasApiKey: z.boolean(),
   apiKeyMasked: z.string().nullable(),
+  // 키 출처. chat 은 own/env/none, image·log-analysis 는 own/inherited/none.
+  keySource: LlmKeySource,
   baseUrl: z.string().nullable(),
   defaultModel: z.string().nullable(),
   enabled: z.boolean(),

@@ -1,10 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
   CheckCircle2,
+  Image as ImageIcon,
+  KeyRound,
+  List,
   Loader2,
+  MessageSquare,
   PlugZap,
-  Plus,
+  RefreshCw,
   Save,
+  ScrollText,
   Sparkles,
   Trash2,
   XCircle,
@@ -17,63 +22,53 @@ import {
   useProviders,
   useTestProvider,
   useUpdateProvider,
-  type ProviderKey,
 } from '@repo/shared';
 import type {
   LlmProviderConfigType,
-  LlmProviderIdType,
   LlmProviderPurposeType,
   TestLlmProviderResultType,
   UpdateLlmProviderInputType,
 } from '@repo/api-contract';
+import { recommendModelForPurpose } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { ModelPickerPopup } from '~/components/restaurant/detail/ModelPickerPopup';
 
-interface FormState {
-  apiKey: string;
-  baseUrl: string;
-  defaultModel: string;
-  enabled: boolean;
-  maxConcurrent: number;
+// 계정(키)은 chat 용도 row 에 둔다 — image·log-analysis 는 키 없이 이 키를
+// 상속한다. 따라서 위쪽 "AI 계정" 카드가 chat row 의 키/URL/동시성을 편집하고,
+// 아래쪽 "용도별 모델" 섹션이 각 용도의 모델만 고른다.
+const ACCOUNT_PURPOSE: LlmProviderPurposeType = 'chat';
+
+const PURPOSE_ORDER: LlmProviderPurposeType[] = ['chat', 'image', 'log-analysis'];
+
+interface PurposeMeta {
+  icon: typeof MessageSquare;
+  label: string;
+  desc: string;
+  placeholder: string;
 }
 
-const toFormState = (p: LlmProviderConfigType): FormState => ({
-  apiKey: '',
-  baseUrl: p.baseUrl ?? '',
-  defaultModel: p.defaultModel ?? '',
-  enabled: p.enabled,
-  maxConcurrent: p.maxConcurrent,
-});
-
-const buildUpdateInput = (form: FormState, original: LlmProviderConfigType): UpdateLlmProviderInputType => {
-  const out: UpdateLlmProviderInputType = {};
-  if (form.apiKey.length > 0) out.apiKey = form.apiKey;
-  if (form.baseUrl !== (original.baseUrl ?? '')) {
-    out.baseUrl = form.baseUrl.length > 0 ? form.baseUrl : null;
-  }
-  if (form.defaultModel !== (original.defaultModel ?? '')) {
-    out.defaultModel = form.defaultModel.length > 0 ? form.defaultModel : null;
-  }
-  if (form.enabled !== original.enabled) out.enabled = form.enabled;
-  if (form.maxConcurrent !== original.maxConcurrent) out.maxConcurrent = form.maxConcurrent;
-  return out;
-};
-
-// 어드민이 카드 추가 시 선택 가능한 purpose 목록.
-const ADDABLE_PURPOSES: LlmProviderPurposeType[] = ['chat', 'image', 'log-analysis'];
-
-const PURPOSE_LABEL: Record<LlmProviderPurposeType, string> = {
-  chat: '텍스트 (chat)',
-  image: '이미지 (image)',
-  'log-analysis': '로그 분석 (log-analysis)',
-};
-
-const PURPOSE_DESCRIPTION: Record<LlmProviderPurposeType, string> = {
-  chat: '리뷰 요약·메뉴 그룹핑 등 텍스트 추론에 사용됩니다.',
-  image: '영수증 추출 등 이미지 입력 모델에 사용됩니다.',
-  'log-analysis': '실패한 작업의 원인 분석·보고서 작성에 사용됩니다. 미설정 시 자동 분석은 건너뜁니다.',
+const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
+  chat: {
+    icon: MessageSquare,
+    label: '텍스트',
+    desc: '리뷰 요약·메뉴 그룹핑 등 텍스트 추론',
+    placeholder: 'gpt-oss:20b',
+  },
+  image: {
+    icon: ImageIcon,
+    label: '이미지',
+    desc: '영수증 추출 등 이미지(vision) 입력',
+    placeholder: 'llama3.2-vision',
+  },
+  'log-analysis': {
+    icon: ScrollText,
+    label: '로그 분석',
+    desc: '실패한 작업의 원인 분석·보고서',
+    placeholder: 'gpt-oss:120b',
+  },
 };
 
 export const AdminAiKeysPage = () => {
@@ -81,24 +76,55 @@ export const AdminAiKeysPage = () => {
   const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
   const testProvider = useTestProvider();
+  const previewModels = usePreviewModels();
 
-  const existingKeys = new Set(
-    providers.data?.providers.map((p) => `${p.provider}::${p.purpose}`) ?? [],
+  const list = providers.data?.providers ?? [];
+  const account = list.find((p) => p.purpose === ACCOUNT_PURPOSE) ?? null;
+  const purposeRows = PURPOSE_ORDER.map((purpose) => list.find((p) => p.purpose === purpose)).filter(
+    (p): p is LlmProviderConfigType => Boolean(p),
   );
-  const addable: ProviderKey[] = [];
-  for (const id of ['ollama-cloud'] as LlmProviderIdType[]) {
-    for (const purpose of ADDABLE_PURPOSES) {
-      if (!existingKeys.has(`${id}::${purpose}`)) {
-        addable.push({ id, purpose });
+
+  // 저장된 계정 키로 카탈로그를 한 번 받아 모든 용도가 공유한다 (chat 기준 —
+  // 키는 전 용도 공통). "모델 불러오기"로 입력 중인 키를 검증하면 그 결과가
+  // 우선한다.
+  const autoModels = useProviderModels(
+    { id: 'ollama-cloud', purpose: ACCOUNT_PURPOSE },
+    account?.hasApiKey ?? false,
+  );
+  const [previewedCatalog, setPreviewedCatalog] = useState<string[] | null>(null);
+  // 안정 참조 — 모델 선택 팝업의 useMemo 의존성으로 흘러간다.
+  const catalog = useMemo(
+    () => previewedCatalog ?? autoModels.data?.models ?? [],
+    [previewedCatalog, autoModels.data?.models],
+  );
+
+  // 입력 키가 있으면 그 키로 검증(preview), 없으면 저장된 키 카탈로그를 갱신.
+  const loadModels = async (
+    apiKey: string,
+    baseUrl: string,
+  ): Promise<{ ok: true; count: number } | { ok: false; message: string }> => {
+    if (apiKey.trim()) {
+      const r = await previewModels.mutateAsync({
+        key: { id: 'ollama-cloud', purpose: ACCOUNT_PURPOSE },
+        input: { apiKey: apiKey.trim(), baseUrl: baseUrl.trim() || undefined },
+      });
+      if (r.ok) {
+        setPreviewedCatalog(r.models);
+        return { ok: true, count: r.models.length };
       }
+      return { ok: false, message: r.message };
     }
-  }
+    setPreviewedCatalog(null);
+    const res = await autoModels.refetch();
+    return { ok: true, count: res.data?.models.length ?? 0 };
+  };
 
   return (
     <div>
       <p className="mb-4 text-sm text-muted-foreground">
-        LLM 제공자별 API 키와 동시성 설정을 관리합니다. 같은 제공자라도 용도(chat / image /
-        log-analysis)별로 별도 모델을 둘 수 있습니다.
+        키는 <strong>한 번만</strong> 입력하면 됩니다. 위 <strong>AI 계정</strong>에 키를 넣으면
+        텍스트·이미지·로그 분석 용도가 모두 그 키를 공유하고, 아래에서는 용도별 <strong>모델</strong>만
+        고르면 됩니다.
       </p>
 
       {providers.isLoading && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
@@ -108,53 +134,46 @@ export const AdminAiKeysPage = () => {
         </p>
       )}
 
-      <div className="space-y-4">
-        {providers.data?.providers.map((p) => {
-          const key: ProviderKey = {
-            id: p.provider as LlmProviderIdType,
-            purpose: p.purpose as LlmProviderPurposeType,
-          };
-          return (
-            <ProviderCard
-              key={`${p.provider}::${p.purpose}`}
-              provider={p}
-              onSave={(input) => updateProvider.mutateAsync({ key, input })}
-              isSaving={updateProvider.isPending}
-              onTest={(model) => testProvider.mutateAsync({ key, model })}
-              isTesting={testProvider.isPending}
-              onDelete={() => deleteProvider.mutateAsync(key)}
-              isDeleting={deleteProvider.isPending}
-            />
-          );
-        })}
-      </div>
+      {account && (
+        <AccountCard
+          key={`account:${account.updatedAt ?? 'env'}:${account.apiKeyMasked ?? ''}`}
+          account={account}
+          catalogCount={catalog.length}
+          onSave={(input) =>
+            updateProvider.mutateAsync({ key: { id: 'ollama-cloud', purpose: ACCOUNT_PURPOSE }, input })
+          }
+          isSaving={updateProvider.isPending}
+          onTest={(model) =>
+            testProvider.mutateAsync({ key: { id: 'ollama-cloud', purpose: ACCOUNT_PURPOSE }, model })
+          }
+          isTesting={testProvider.isPending}
+          onDelete={() =>
+            deleteProvider.mutateAsync({ id: 'ollama-cloud', purpose: ACCOUNT_PURPOSE })
+          }
+          isDeleting={deleteProvider.isPending}
+          onLoadModels={loadModels}
+          isLoadingModels={previewModels.isPending || autoModels.isFetching}
+        />
+      )}
 
-      {addable.length > 0 && (
-        <div className="mt-6 rounded-lg border border-dashed p-4">
-          <p className="mb-2 text-sm font-medium">다른 용도 추가</p>
+      {purposeRows.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-1 text-sm font-medium">용도별 모델</h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            등록되지 않은 (제공자 × 용도) 조합을 새 카드로 추가합니다. 추가 후 API 키를 입력해
-            활성화하세요.
+            각 용도에 쓸 모델을 고릅니다. 키는 위 계정에서 상속됩니다. 모델을 비워 두면 해당 용도는
+            건너뜁니다.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {addable.map((k) => (
-              <Button
-                key={`add-${k.id}-${k.purpose}`}
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={updateProvider.isPending}
-                onClick={() =>
-                  updateProvider.mutateAsync({
-                    key: k,
-                    // 빈 입력으로 카드만 만든다 — 키는 다음 저장에서.
-                    input: { enabled: true },
-                  })
+          <div className="space-y-3">
+            {purposeRows.map((p) => (
+              <PurposeModelRow
+                key={`${p.purpose}:${p.defaultModel ?? ''}:${p.enabled ? 1 : 0}:${p.updatedAt ?? ''}`}
+                provider={p}
+                catalog={catalog}
+                onSave={(input) =>
+                  updateProvider.mutateAsync({ key: { id: 'ollama-cloud', purpose: p.purpose }, input })
                 }
-              >
-                <Plus className="size-4" />
-                {k.id} · {PURPOSE_LABEL[k.purpose]}
-              </Button>
+                isSaving={updateProvider.isPending}
+              />
             ))}
           </div>
         </div>
@@ -163,69 +182,91 @@ export const AdminAiKeysPage = () => {
   );
 };
 
-interface ProviderCardProps {
-  provider: LlmProviderConfigType;
+// --- AI 계정 카드 ---------------------------------------------------------
+
+interface AccountFormState {
+  apiKey: string;
+  baseUrl: string;
+  maxConcurrent: number;
+}
+
+interface AccountCardProps {
+  account: LlmProviderConfigType;
+  catalogCount: number;
   onSave: (input: UpdateLlmProviderInputType) => Promise<unknown>;
   isSaving: boolean;
   onTest: (model?: string) => Promise<TestLlmProviderResultType>;
   isTesting: boolean;
   onDelete: () => Promise<unknown>;
   isDeleting: boolean;
+  onLoadModels: (
+    apiKey: string,
+    baseUrl: string,
+  ) => Promise<{ ok: true; count: number } | { ok: false; message: string }>;
+  isLoadingModels: boolean;
 }
 
-const ProviderCard = ({
-  provider,
+const AccountCard = ({
+  account,
+  catalogCount,
   onSave,
   isSaving,
   onTest,
   isTesting,
   onDelete,
   isDeleting,
-}: ProviderCardProps) => {
-  const [form, setForm] = useState<FormState>(() => toFormState(provider));
+  onLoadModels,
+  isLoadingModels,
+}: AccountCardProps) => {
+  const [form, setForm] = useState<AccountFormState>({
+    apiKey: '',
+    baseUrl: account.baseUrl ?? '',
+    maxConcurrent: account.maxConcurrent,
+  });
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState<boolean>(false);
+  const [saveOk, setSaveOk] = useState(false);
+  const [loadMsg, setLoadMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testResult, setTestResult] = useState<TestLlmProviderResultType | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
-  // 폼에 입력한 키로 받아온 모델 — 저장된 키의 modelOptions 보다 우선해서
-  // 보여준다 (사용자가 방금 입력한 키를 검증한 결과이므로).
-  const [previewedModels, setPreviewedModels] = useState<string[] | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
-  const purpose = provider.purpose as LlmProviderPurposeType;
-  const providerId = provider.provider as LlmProviderIdType;
-  const models = useProviderModels({ id: providerId, purpose }, provider.hasApiKey);
-  const previewModels = usePreviewModels();
-  const modelOptions = models.data?.models ?? [];
-  const datalistId = `models-${providerId}-${purpose}`;
-  const displayedModels = previewedModels ?? modelOptions;
-  const isPreviewing = previewModels.isPending;
-  const canPreview = form.apiKey.trim().length > 0;
-
-  // Reset form when the underlying provider changes (e.g., after save reload).
-  useEffect(() => {
-    setForm(toFormState(provider));
-    // 저장 후엔 폼 키가 비워지므로 미리보기 상태도 같이 비운다 — 저장된
-    // 키 기반의 modelOptions 로 자연스럽게 넘어감.
-    setPreviewedModels(null);
-    setPreviewError(null);
-  }, [provider]);
+  const buildInput = (): UpdateLlmProviderInputType => {
+    const out: UpdateLlmProviderInputType = {};
+    if (form.apiKey.length > 0) out.apiKey = form.apiKey;
+    if (form.baseUrl !== (account.baseUrl ?? '')) {
+      out.baseUrl = form.baseUrl.length > 0 ? form.baseUrl : null;
+    }
+    if (form.maxConcurrent !== account.maxConcurrent) out.maxConcurrent = form.maxConcurrent;
+    return out;
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaveError(null);
     setSaveOk(false);
-    const input = buildUpdateInput(form, provider);
+    const input = buildInput();
     if (Object.keys(input).length === 0) {
       setSaveError('변경 사항이 없습니다.');
       return;
     }
     try {
       await onSave(input);
-      setForm((prev) => ({ ...prev, apiKey: '' }));
       setSaveOk(true);
-    } catch (e) {
-      setSaveError(e instanceof ApiError ? e.message : '저장 실패');
+      // 저장 성공 시 account.updatedAt 이 바뀌어 key 가 갱신되고 카드가
+      // 재마운트되므로 폼은 자동으로 초기화된다 (apiKey 비워짐).
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : '저장 실패');
+    }
+  };
+
+  const handleLoad = async () => {
+    setLoadMsg(null);
+    try {
+      const r = await onLoadModels(form.apiKey, form.baseUrl);
+      setLoadMsg(
+        r.ok ? { ok: true, text: `모델 ${r.count}개를 불러왔습니다.` } : { ok: false, text: r.message },
+      );
+    } catch (err) {
+      setLoadMsg({ ok: false, text: err instanceof ApiError ? err.message : '불러오기 실패' });
     }
   };
 
@@ -233,37 +274,15 @@ const ProviderCard = ({
     setTestError(null);
     setTestResult(null);
     try {
-      // Use the form's defaultModel — the user's current edit, even if not
-      // saved yet — so they can verify a model id before committing.
-      const model = form.defaultModel.trim() || undefined;
+      const model = account.defaultModel?.trim() || undefined;
       const r = await onTest(model);
       setTestResult(r);
-    } catch (e) {
-      setTestError(e instanceof ApiError ? e.message : '테스트 실패');
+    } catch (err) {
+      setTestError(err instanceof ApiError ? err.message : '테스트 실패');
     }
   };
 
-  const handlePreviewModels = async () => {
-    if (!canPreview) return;
-    setPreviewError(null);
-    setPreviewedModels(null);
-    try {
-      const r = await previewModels.mutateAsync({
-        key: { id: providerId, purpose },
-        input: {
-          apiKey: form.apiKey.trim(),
-          baseUrl: form.baseUrl.trim() || undefined,
-        },
-      });
-      if (r.ok) {
-        setPreviewedModels(r.models);
-      } else {
-        setPreviewError(r.message);
-      }
-    } catch (e) {
-      setPreviewError(e instanceof ApiError ? e.message : '모델 목록을 불러오지 못했습니다.');
-    }
-  };
+  const canLoad = form.apiKey.trim().length > 0 || account.hasApiKey;
 
   return (
     <Card>
@@ -271,29 +290,24 @@ const ProviderCard = ({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg">
-              <span className="break-all">{provider.provider}</span>
+              <KeyRound className="size-5 shrink-0" />
+              <span>AI 계정</span>
               <Badge variant="outline" className="whitespace-nowrap">
-                {PURPOSE_LABEL[purpose]}
+                {account.provider}
               </Badge>
               <Badge
-                variant={provider.hasApiKey ? 'default' : 'secondary'}
+                variant={account.hasApiKey ? 'default' : 'secondary'}
                 className="whitespace-nowrap"
               >
-                {provider.hasApiKey ? '키 설정됨' : '키 없음'}
+                {account.hasApiKey ? '키 설정됨' : '키 없음'}
               </Badge>
-              {!provider.enabled && (
-                <Badge variant="secondary" className="whitespace-nowrap">
-                  비활성
-                </Badge>
-              )}
             </CardTitle>
             <CardDescription className="mt-1 break-words">
-              {PURPOSE_DESCRIPTION[purpose]}
+              이 키를 모든 용도가 공유합니다.{' · '}
+              {account.apiKeyMasked ?? '설정된 키가 없습니다.'}
               {' · '}
-              {provider.apiKeyMasked ?? '설정된 키가 없습니다.'}
-              {' · '}
-              {provider.updatedAt
-                ? `수정 ${new Date(provider.updatedAt).toLocaleString('ko-KR')}`
+              {account.updatedAt
+                ? `수정 ${new Date(account.updatedAt).toLocaleString('ko-KR')}`
                 : '환경변수 기본값'}
             </CardDescription>
           </div>
@@ -304,7 +318,8 @@ const ProviderCard = ({
               size="sm"
               className="flex-1 sm:flex-none"
               onClick={handleTest}
-              disabled={isTesting}
+              disabled={isTesting || !account.hasApiKey}
+              title={account.hasApiKey ? '저장된 키로 연결을 확인합니다' : '키를 먼저 저장하세요'}
             >
               {isTesting ? <Loader2 className="animate-spin" /> : <PlugZap />}
               연결 테스트
@@ -317,22 +332,20 @@ const ProviderCard = ({
               onClick={async () => {
                 if (
                   !window.confirm(
-                    '이 provider의 DB 설정을 삭제합니다. (.env에 키가 있다면 그 값으로 fallback)\n\n계속하시겠습니까?',
+                    '계정 키(DB 설정)를 삭제합니다. (.env에 키가 있다면 그 값으로 fallback)\n\n계속하시겠습니까?',
                   )
                 ) {
                   return;
                 }
                 try {
                   await onDelete();
-                } catch (e) {
-                  setSaveError(e instanceof ApiError ? e.message : '삭제 실패');
+                } catch (err) {
+                  setSaveError(err instanceof ApiError ? err.message : '삭제 실패');
                 }
               }}
-              disabled={isDeleting || !provider.updatedAt}
+              disabled={isDeleting || !account.updatedAt}
               title={
-                provider.updatedAt
-                  ? 'DB의 provider 설정을 삭제합니다'
-                  : '삭제할 DB 설정이 없습니다 (env-backed)'
+                account.updatedAt ? '계정 키 DB 설정을 삭제합니다' : '삭제할 DB 설정이 없습니다 (env-backed)'
               }
             >
               {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
@@ -358,16 +371,22 @@ const ProviderCard = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handlePreviewModels}
-                disabled={!canPreview || isPreviewing}
+                onClick={handleLoad}
+                disabled={!canLoad || isLoadingModels}
                 title={
-                  canPreview
-                    ? '입력한 키로 모델 목록을 미리 확인합니다 (저장 안 함)'
-                    : 'API 키를 먼저 입력하세요'
+                  form.apiKey.trim()
+                    ? '입력한 키로 모델 목록을 확인합니다 (저장 안 함)'
+                    : '저장된 키로 모델 목록을 새로 받아옵니다'
                 }
                 className="shrink-0"
               >
-                {isPreviewing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {isLoadingModels ? (
+                  <Loader2 className="animate-spin" />
+                ) : form.apiKey.trim() ? (
+                  <Sparkles />
+                ) : (
+                  <RefreshCw />
+                )}
                 <span className="hidden sm:inline">모델 불러오기</span>
               </Button>
             </div>
@@ -380,63 +399,6 @@ const ProviderCard = ({
               onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
             />
           </Field>
-          <Field
-            label={`기본 모델 (선택)${
-              displayedModels.length > 0 ? ` · ${displayedModels.length}개` : ''
-            }${previewedModels !== null ? ' · 미리본' : ''}`}
-          >
-            <Input
-              type="text"
-              placeholder={
-                purpose === 'image'
-                  ? 'llama3.2-vision'
-                  : purpose === 'log-analysis'
-                    ? 'gpt-oss:120b'
-                    : 'gpt-oss:20b'
-              }
-              list={datalistId}
-              value={form.defaultModel}
-              onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
-            />
-            <datalist id={datalistId}>
-              {displayedModels.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </Field>
-          {previewError && (
-            <div className="sm:col-span-2 -mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
-              <XCircle className="inline size-3.5 align-text-bottom" /> {previewError}
-            </div>
-          )}
-          {displayedModels.length > 0 && (
-            <div className="sm:col-span-2 -mt-2">
-              <div className="mb-1.5 text-[11px] text-muted-foreground">
-                {previewedModels !== null
-                  ? '입력한 키로 미리본 모델 — 클릭하면 기본 모델로 설정됩니다'
-                  : '저장된 키로 받아온 모델 — 클릭하면 기본 모델로 설정됩니다'}
-              </div>
-              <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-md border bg-muted/30 p-2">
-                {displayedModels.map((m) => {
-                  const selected = form.defaultModel === m;
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setForm({ ...form, defaultModel: m })}
-                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-accent ${
-                        selected
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-background'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           <Field label="동시 요청 한도">
             <Input
               type="number"
@@ -446,19 +408,15 @@ const ProviderCard = ({
               onChange={(e) => setForm({ ...form, maxConcurrent: Number(e.target.value) })}
             />
           </Field>
-          <Field label="활성화">
-            <label className="flex h-9 items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="size-4"
-                checked={form.enabled}
-                onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-              />
-              <span>{form.enabled ? '활성' : '비활성'}</span>
-            </label>
-          </Field>
+          <div className="flex items-end">
+            <p className="text-xs text-muted-foreground">
+              {catalogCount > 0
+                ? `카탈로그 모델 ${catalogCount}개 · 아래 용도에서 선택`
+                : '키 저장 후 “모델 불러오기”로 카탈로그를 받으세요.'}
+            </p>
+          </div>
 
-          <div className="sm:col-span-2 flex items-center gap-3">
+          <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
             <Button type="submit" disabled={isSaving}>
               {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
               저장
@@ -471,6 +429,16 @@ const ProviderCard = ({
             {saveError && (
               <span className="flex items-center gap-1 text-sm text-destructive">
                 <XCircle className="size-4" /> {saveError}
+              </span>
+            )}
+            {loadMsg && (
+              <span
+                className={`flex items-center gap-1 text-sm ${
+                  loadMsg.ok ? 'text-emerald-600' : 'text-destructive'
+                }`}
+              >
+                {loadMsg.ok ? <Sparkles className="size-4" /> : <XCircle className="size-4" />}
+                {loadMsg.text}
               </span>
             )}
           </div>
@@ -487,7 +455,9 @@ const ProviderCard = ({
             {testError && <span>{testError}</span>}
             {testResult?.ok && (
               <div>
-                <div className="font-medium">연결 OK · {testResult.model} · {testResult.durationMs}ms</div>
+                <div className="font-medium">
+                  연결 OK · {testResult.model} · {testResult.durationMs}ms
+                </div>
                 <div className="mt-1 text-xs opacity-80">샘플: {testResult.sample}</div>
               </div>
             )}
@@ -501,6 +471,176 @@ const ProviderCard = ({
       </CardContent>
     </Card>
   );
+};
+
+// --- 용도별 모델 행 -------------------------------------------------------
+
+interface PurposeModelRowProps {
+  provider: LlmProviderConfigType;
+  catalog: string[];
+  onSave: (input: UpdateLlmProviderInputType) => Promise<unknown>;
+  isSaving: boolean;
+}
+
+const PurposeModelRow = ({ provider, catalog, onSave, isSaving }: PurposeModelRowProps) => {
+  const purpose = provider.purpose;
+  const meta = PURPOSE_META[purpose];
+  const Icon = meta.icon;
+  const savedModel = provider.defaultModel ?? '';
+  const recommended = recommendModelForPurpose(purpose, catalog);
+
+  // draft=null 이면 미편집 → 저장값(없으면 추천)을 표시한다. 추천은 카탈로그가
+  // 늦게 와도 렌더 중 다시 계산되므로 useEffect 없이 자동 반영된다.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [enabledDraft, setEnabledDraft] = useState<boolean | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const shownModel = draft ?? (savedModel || recommended || '');
+  const shownEnabled = enabledDraft ?? provider.enabled;
+  // 저장값이 없는데 추천으로 채워진 상태 — 사용자가 저장해야 확정된다.
+  const isRecommendation = draft === null && !savedModel && Boolean(recommended);
+
+  const modelDirty = shownModel !== savedModel;
+  const enabledDirty = shownEnabled !== provider.enabled;
+  const dirty = modelDirty || enabledDirty;
+
+  const datalistId = `models-${purpose}`;
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSaveError(null);
+    setSaveOk(false);
+    const input: UpdateLlmProviderInputType = {};
+    if (modelDirty) input.defaultModel = shownModel.trim() ? shownModel.trim() : null;
+    if (enabledDirty) input.enabled = shownEnabled;
+    if (Object.keys(input).length === 0) return;
+    try {
+      await onSave(input);
+      setSaveOk(true);
+      // 저장 후 provider 가 갱신되며 key 가 바뀌어 행이 재마운트 → draft 리셋.
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : '저장 실패');
+    }
+  };
+
+  return (
+    <Card className={shownEnabled ? '' : 'opacity-70'}>
+      <CardContent className="py-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-2 sm:w-44 sm:shrink-0">
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                {meta.label}
+                <KeySourceBadge keySource={provider.keySource} />
+              </div>
+              <div className="truncate text-xs text-muted-foreground">{meta.desc}</div>
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder={meta.placeholder}
+                list={datalistId}
+                value={shownModel}
+                onChange={(e) => setDraft(e.target.value)}
+                className={`flex-1 ${isRecommendation ? 'border-primary/50' : ''}`}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setPickerOpen(true)}
+                disabled={catalog.length === 0}
+                title={catalog.length > 0 ? '목록에서 모델 선택' : '먼저 모델을 불러오세요'}
+              >
+                <List />
+                <span className="hidden sm:inline">선택</span>
+              </Button>
+            </div>
+            <datalist id={datalistId}>
+              {catalog.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+            {isRecommendation && (
+              <p className="mt-1 text-[11px] text-primary">추천값 — 저장하면 적용됩니다</p>
+            )}
+            {provider.keySource === 'none' && (
+              <p className="mt-1 text-[11px] text-amber-600">
+                위 AI 계정에 키를 먼저 입력해야 이 용도가 동작합니다.
+              </p>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 text-xs sm:shrink-0">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={shownEnabled}
+              onChange={(e) => setEnabledDraft(e.target.checked)}
+            />
+            <span>{shownEnabled ? '활성' : '비활성'}</span>
+          </label>
+
+          <div className="flex items-center gap-2 sm:shrink-0">
+            <Button type="submit" size="sm" disabled={isSaving || !dirty}>
+              {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+              저장
+            </Button>
+            {saveOk && <CheckCircle2 className="size-4 text-emerald-600" />}
+            {saveError && (
+              <span className="text-xs text-destructive">
+                <XCircle className="inline size-3.5 align-text-bottom" /> {saveError}
+              </span>
+            )}
+          </div>
+        </form>
+
+        <ModelPickerPopup
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onSelect={(m) => setDraft(m)}
+          currentModel={shownModel || null}
+          models={catalog}
+          title={`${meta.label} 모델 선택`}
+          description={`${meta.desc}에 쓸 모델을 고릅니다. 계열별로 묶여 있습니다.`}
+          emptyHint={<>위 “AI 계정”에서 키를 저장한 뒤 “모델 불러오기”를 누르세요.</>}
+        />
+      </CardContent>
+    </Card>
+  );
+};
+
+const KeySourceBadge = ({ keySource }: { keySource: LlmProviderConfigType['keySource'] }) => {
+  if (keySource === 'own') {
+    return (
+      <Badge variant="outline" className="text-[10px]">
+        전용 키
+      </Badge>
+    );
+  }
+  if (keySource === 'inherited') {
+    return (
+      <Badge variant="secondary" className="text-[10px]">
+        계정 키
+      </Badge>
+    );
+  }
+  if (keySource === 'none') {
+    return (
+      <Badge variant="secondary" className="text-[10px] text-amber-600">
+        키 없음
+      </Badge>
+    );
+  }
+  // 'env' — chat 계정 자신이 환경변수 키로 동작.
+  return null;
 };
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (

@@ -50,3 +50,47 @@ export const groupModelsByFamily = (models: string[]): ModelFamilyGroup[] => {
     }))
     .sort((a, b) => a.family.localeCompare(b.family));
 };
+
+// 모델 id 가 vision(이미지 입력) 계열인지 — 이름 휴리스틱. 'llama3.2-vision',
+// 'llava', 'qwen3-vl', 'qwen2.5vl:7b', 'minicpm-v' 등을 잡는다. 완벽한 판별이
+// 아니라 image 용도 추천에서 텍스트 모델을 거르는 정도의 게이트.
+export const isVisionModel = (modelId: string): boolean =>
+  /vision|llava|vl(?=[-_:]|\d|$)|minicpm-v/i.test(modelId.trim());
+
+// 모델 id 에서 파라미터 규모(B 단위)를 추출. '120b', ':235b', '7b' 등. 여러
+// 개면 가장 큰 값. 못 찾으면 0 — 정렬 시 맨 뒤로 밀린다.
+const modelSizeB = (modelId: string): number => {
+  const matches = [...modelId.toLowerCase().matchAll(/(\d+(?:\.\d+)?)\s*b\b/g)];
+  if (matches.length === 0) return 0;
+  return Math.max(...matches.map((m) => Number.parseFloat(m[1]!)));
+};
+
+// 용도별로 카탈로그에서 합리적인 기본 모델을 한 개 고른다. UI 가 키 입력 후
+// "추천값"을 폼에 프리필하는 용도 — 강제가 아니라 시작점이다. 적합한 후보가
+// 없으면 null (그땐 프리필하지 않는다).
+//   image        vision 계열 중 가장 작은 모델 (대개 충분 + 저렴). 없으면 null.
+//   log-analysis 텍스트 계열 중 가장 큰 모델 (원인 추론은 추론력 우선).
+//   chat         텍스트 계열 중 중간 규모 (속도·품질 균형).
+export const recommendModelForPurpose = (
+  purpose: 'chat' | 'image' | 'log-analysis',
+  models: string[],
+): string | null => {
+  const list = models.map((m) => m.trim()).filter((m) => m.length > 0);
+  if (list.length === 0) return null;
+
+  if (purpose === 'image') {
+    const vision = list.filter(isVisionModel).sort((a, b) => modelSizeB(a) - modelSizeB(b));
+    return vision[0] ?? null;
+  }
+
+  // 텍스트 용도 — vision 모델은 후보에서 제외 (없으면 전체로 폴백).
+  const textOnly = list.filter((m) => !isVisionModel(m));
+  const pool = textOnly.length > 0 ? textOnly : list;
+  const bySize = [...pool].sort((a, b) => modelSizeB(a) - modelSizeB(b));
+
+  if (purpose === 'log-analysis') {
+    return bySize[bySize.length - 1] ?? null; // 가장 큰 모델
+  }
+  // chat — 규모 오름차순의 중앙값(작은 쪽으로 치우침).
+  return bySize[Math.floor((bySize.length - 1) / 2)] ?? null;
+};
