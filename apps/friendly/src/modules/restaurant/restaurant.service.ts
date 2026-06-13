@@ -559,6 +559,54 @@ export class RestaurantService {
     }));
   }
 
+  // 좌표 박스 안에서 tabling 행을 가진 canonical 들을 tabling sourceId 까지 함께
+  // 돌려준다 — place(미입점, 'place:' prefix) / partner(입점, 숫자) 분류용.
+  // place↔partner 승격 링크가 같은 source('tabling') 끼리 묶을 후보를 고를 때
+  // 쓴다(자동매칭은 다른 source 만, 제안 큐는 새 source 만 봐서 둘 다 건너뛰는
+  // 사각지대). findCanonicalAutoMatchCandidates 와 달리 source 가 아니라 sourceId
+  // 를 노출하는 게 핵심.
+  async findTablingCanonicalsNear(
+    excludeCanonicalId: string,
+    latitude: number,
+    longitude: number,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      latitude: number | null;
+      longitude: number | null;
+      tablingSourceIds: string[];
+    }>
+  > {
+    const DELTA = 0.007;
+    const rows = await this.prisma.canonicalRestaurant.findMany({
+      where: {
+        id: { not: excludeCanonicalId },
+        latitude: { gte: latitude - DELTA, lte: latitude + DELTA },
+        longitude: { gte: longitude - DELTA, lte: longitude + DELTA },
+        restaurants: { some: { source: 'tabling' } },
+      },
+      select: {
+        id: true,
+        name: true,
+        latitude: true,
+        longitude: true,
+        restaurants: {
+          where: { source: 'tabling' },
+          select: { sourceId: true },
+        },
+      },
+      take: 100,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      tablingSourceIds: r.restaurants.map((x) => x.sourceId),
+    }));
+  }
+
   async getExistingReviewKeys(restaurantId: string): Promise<ExistingReviewKeys> {
     const rows = await this.prisma.visitorReview.findMany({
       where: { restaurantId },

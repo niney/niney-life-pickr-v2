@@ -805,6 +805,13 @@ export class CrawlService {
       await this.restaurants.getCanonicalIdForRestaurant(restaurantId);
     const matched = canonicalId ? await this.tryAutoMatchTabling(canonicalId) : null;
 
+    // partner 저장 후 같은 가게의 미입점 place 행이 있으면 partner(풍부) 쪽으로
+    // 승격(머지). auto-match 로 canonical 이 바뀌었을 수 있어 최종 canonical 기준.
+    const finalCanonicalId = matched ?? canonicalId;
+    if (finalCanonicalId) {
+      await this.tryLinkTablingPlacePartner(finalCanonicalId, true);
+    }
+
     return {
       idx,
       restaurantId,
@@ -827,6 +834,15 @@ export class CrawlService {
     const canonicalId =
       await this.restaurants.getCanonicalIdForRestaurant(restaurantId);
     const matched = canonicalId ? await this.tryAutoMatchTabling(canonicalId) : null;
+
+    // place 저장 후 같은 가게의 partner(입점) 행이 이미 있으면 place 를 partner
+    // 쪽으로 흡수(머지). 보통은 partner 저장이 주 트리거지만, partner 가 먼저
+    // 들어온 경우를 위한 대칭 경로. matched(naver/DC) 후 최종 canonical 기준.
+    const finalCanonicalId = matched ?? canonicalId;
+    if (finalCanonicalId) {
+      await this.tryLinkTablingPlacePartner(finalCanonicalId, false);
+    }
+
     return {
       objectId,
       restaurantId,
@@ -888,6 +904,82 @@ export class CrawlService {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[crawl] auto tabling match failed', e);
+      return null;
+    }
+  }
+
+  // place(미입점 JSON-LD)행과 partner(입점, 풍부)행은 둘 다 source='tabling' 이라
+  // tryAutoMatchTabling(다른 source 만 후보) 과 제안 큐(새 source 만 제안) 양쪽이
+  // 모두 건너뛴다 → 같은 가게가 영구히 별도 canonical 로 남는 사각지대. 이 후크가
+  // 좌표+이름으로 둘을 잇고 partner(풍부) 쪽으로 머지("승격"). 임계는 DC 자동매칭과
+  // 동일(이름 ≥0.85, 거리 ≤50m, top1-top2 ≥0.1). 반환: 머지가 일어났으면 남는
+  // (keep=partner) canonicalId, 아니면 null.
+  //
+  // selfIsPartner: 방금 저장한 쪽이 partner(true)면 근처 place-only canonical 을,
+  // place(false)면 근처 partner 보유 canonical 을 찾는다. 어느 방향이든 keep=partner.
+  private async tryLinkTablingPlacePartner(
+    selfCanonicalId: string,
+    selfIsPartner: boolean,
+  ): Promise<string | null> {
+    if (!this.canonical) return null;
+    try {
+      const core =
+        await this.restaurants.getCanonicalCoreForAutoMatch(selfCanonicalId);
+      if (!core) return null;
+      if (core.latitude === null || core.longitude === null) return null;
+
+      const nearby = await this.restaurants.findTablingCanonicalsNear(
+        selfCanonicalId,
+        core.latitude,
+        core.longitude,
+      );
+      const isPlaceOnly = (ids: string[]): boolean =>
+        ids.length > 0 && ids.every((s) => s.startsWith('place:'));
+      const hasPartner = (ids: string[]): boolean =>
+        ids.some((s) => !s.startsWith('place:'));
+
+      // 반대 역할만 후보. self=partner → place-only 후보(아직 partner 없음).
+      // self=place → partner 보유 후보(place 섞여 있어도 partner 만 있으면 인정).
+      const eligible = nearby.filter((c) =>
+        selfIsPartner
+          ? isPlaceOnly(c.tablingSourceIds)
+          : hasPartner(c.tablingSourceIds),
+      );
+      if (eligible.length === 0) return null;
+
+      const scored = eligible
+        .map((c) => ({
+          item: c,
+          score: scoreMatch(
+            { name: core.name, latitude: core.latitude, longitude: core.longitude },
+            { name: c.name, latitude: c.latitude, longitude: c.longitude },
+          ),
+        }))
+        .sort((a, b) => b.score.score - a.score.score);
+
+      const top = scored[0]!;
+      if (top.score.nameScore < AUTO_DC_NAME_THRESHOLD) return null;
+      if (
+        top.score.distanceM === null ||
+        top.score.distanceM > AUTO_DC_DISTANCE_THRESHOLD_M
+      ) {
+        return null;
+      }
+      const second = scored[1];
+      if (second && top.score.score - second.score.score < AUTO_DC_TIE_GAP) {
+        return null;
+      }
+
+      // keep=partner, drop=place. self=partner 면 self 가 keep / 후보(place)가 drop,
+      // self=place 면 self 가 drop / 후보(partner)가 keep. merge(drop, keep).
+      const keep = selfIsPartner ? selfCanonicalId : top.item.id;
+      const drop = selfIsPartner ? top.item.id : selfCanonicalId;
+      if (keep === drop) return null;
+      await this.canonical.merge(drop, keep);
+      return keep;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[crawl] tabling place-partner link failed', e);
       return null;
     }
   }
