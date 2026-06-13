@@ -161,6 +161,89 @@ export const PreviewLlmModelsResult = z.discriminatedUnion('ok', [
 ]);
 export type PreviewLlmModelsResultType = z.infer<typeof PreviewLlmModelsResult>;
 
+// --- LLM 사용량 텔레메트리 (표시 전용) --------------------------------------
+//
+// friendly 의 모든 LLM 호출이 지나는 어댑터 한 곳에서 수집한 인메모리 집계.
+// 강제(예산 차단) 없음 — 어드민이 "지금 얼마나 쓰고 있는지"를 보는 용도.
+// 서버 재시작 시 리셋된다 (startedAt 으로 집계 기준 시점을 표시).
+
+export const LlmGateSnapshot = z.object({
+  limit: z.number().int().nonnegative(),
+  inflight: z.number().int().nonnegative(),
+  queued: z.number().int().nonnegative(),
+  // 대기열 맨 앞이 기다린 시간(ms). 큐가 비어 있으면 null.
+  oldestWaitMs: z.number().int().nonnegative().nullable(),
+});
+export type LlmGateSnapshotType = z.infer<typeof LlmGateSnapshot>;
+
+export const LlmCallStatus = z.enum(['ok', 'error', 'cancelled', 'timeout']);
+export type LlmCallStatusType = z.infer<typeof LlmCallStatus>;
+
+export const LlmTelemetryCall = z.object({
+  id: z.number().int(),
+  purpose: z.string(),
+  model: z.string(),
+  status: LlmCallStatus,
+  errorName: z.string().nullable(),
+  promptTokens: z.number().int().nonnegative().nullable(),
+  completionTokens: z.number().int().nonnegative().nullable(),
+  // 게이트(큐) 대기 시간 — durationMs(업스트림 소요)와 분리해서 보여줘야
+  // "느린 게 모델인지 큐인지"를 구분할 수 있다.
+  queueWaitMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative(),
+  // 429(동시성 한도) 백오프 재시도 횟수.
+  retries: z.number().int().nonnegative(),
+  at: z.string(),
+});
+export type LlmTelemetryCallType = z.infer<typeof LlmTelemetryCall>;
+
+export const LlmTelemetryAgg = z.object({
+  requests: z.number().int().nonnegative(),
+  errors: z.number().int().nonnegative(),
+  promptTokens: z.number().int().nonnegative(),
+  completionTokens: z.number().int().nonnegative(),
+});
+export type LlmTelemetryAggType = z.infer<typeof LlmTelemetryAgg>;
+
+export const LlmTelemetryWindow = LlmTelemetryAgg.extend({
+  avgDurationMs: z.number().int().nonnegative().nullable(),
+  maxDurationMs: z.number().int().nonnegative().nullable(),
+});
+export type LlmTelemetryWindowType = z.infer<typeof LlmTelemetryWindow>;
+
+export const LlmTelemetrySnapshot = z.object({
+  // 집계 시작 시점(프로세스 부팅). 인메모리라 이 시점 이후 누적치다.
+  startedAt: z.string(),
+  totals: LlmTelemetryAgg.extend({
+    ok: z.number().int().nonnegative(),
+    cancelled: z.number().int().nonnegative(),
+    retries: z.number().int().nonnegative(),
+  }),
+  byPurpose: z.array(LlmTelemetryAgg.extend({ purpose: z.string() })),
+  byModel: z.array(LlmTelemetryAgg.extend({ model: z.string() })),
+  windows: z.object({
+    m1: LlmTelemetryWindow,
+    m5: LlmTelemetryWindow,
+    h1: LlmTelemetryWindow,
+  }),
+  // 지금 업스트림에 나가 있는 호출들.
+  active: z.array(
+    z.object({
+      id: z.number().int(),
+      purpose: z.string(),
+      model: z.string(),
+      runningMs: z.number().int().nonnegative(),
+    }),
+  ),
+  recent: z.array(LlmTelemetryCall),
+  gates: z.object({
+    // 계정(API 키) 단위 공유 게이트 — 키는 노출하지 않는다.
+    account: z.array(LlmGateSnapshot),
+    purposes: z.array(z.object({ purpose: z.string(), gate: LlmGateSnapshot })),
+  }),
+});
+export type LlmTelemetrySnapshotType = z.infer<typeof LlmTelemetrySnapshot>;
+
 export const TestLlmProviderResult = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(true),

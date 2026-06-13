@@ -36,6 +36,7 @@ export * from './hooks/useAutoDiscover.js';
 export * from './hooks/useAnalytics.js';
 export * from './hooks/useSchedule.js';
 export * from './hooks/useAi.js';
+export * from './hooks/useLlmTelemetry.js';
 export * from './hooks/useSettingsMap.js';
 export * from './hooks/useSettlementExtraction.js';
 export * from './hooks/useSettlement.js';

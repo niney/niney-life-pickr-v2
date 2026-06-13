@@ -6,6 +6,7 @@ import {
   LLMUpstreamError,
 } from './llm-provider.js';
 import { OllamaCloudAdapter } from './ollama-cloud.adapter.js';
+import { ConcurrencyGate } from '../concurrency-gate.js';
 
 const okResponse = (body: unknown, init: ResponseInit = {}): Response =>
   new Response(JSON.stringify(body), {
@@ -260,5 +261,69 @@ describe('OllamaCloudAdapter', () => {
 
     release[2]!();
     await Promise.all([p1, p2, p3]);
+  });
+
+  it('account gate caps combined inflight across adapters sharing a key', async () => {
+    let inflight = 0;
+    let peak = 0;
+    const release: Array<() => void> = [];
+
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          inflight += 1;
+          if (inflight > peak) peak = inflight;
+          release.push(() => {
+            inflight -= 1;
+            resolve(okResponse({ model: 'm', message: { content: 'r' } }));
+          });
+        }),
+    );
+
+    // chat / image 어댑터가 같은 계정 게이트(cap 2)를 공유하는 상황.
+    // purpose 한도는 각 3 — 계정 게이트가 없다면 합산 peak 가 6까지 간다.
+    const accountGate = new ConcurrencyGate(2);
+    const chat = buildAdapter({ maxConcurrent: 3, accountGate });
+    const image = buildAdapter({ maxConcurrent: 3, accountGate });
+
+    const promises = [
+      ...Array.from({ length: 4 }, (_, i) => chat.complete({ prompt: `c${i}`, model: 'm' })),
+      ...Array.from({ length: 4 }, (_, i) => image.complete({ prompt: `i${i}`, model: 'm' })),
+    ];
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(peak).toBeLessThanOrEqual(2);
+
+    while (release.length > 0) {
+      release.shift()!();
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    await Promise.all(promises);
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it('abort while queued rejects with LLMCancelledError and never reaches fetch', async () => {
+    const release: Array<() => void> = [];
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          release.push(() => resolve(okResponse({ model: 'm', message: { content: 'r' } })));
+        }),
+    );
+
+    const adapter = buildAdapter({ maxConcurrent: 1 });
+    const first = adapter.complete({ prompt: 'a', model: 'm' });
+    await new Promise((r) => setTimeout(r, 5));
+
+    const ac = new AbortController();
+    const queued = adapter.complete({ prompt: 'b', model: 'm', signal: ac.signal });
+    ac.abort();
+    await expect(queued).rejects.toBeInstanceOf(LLMCancelledError);
+
+    // 취소된 호출은 fetch 까지 가지 않는다 — 첫 호출의 1건뿐.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    release[0]!();
+    await first;
   });
 });

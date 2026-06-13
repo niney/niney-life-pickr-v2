@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { AdminAiKeysPage } from './AdminAiKeysPage';
 import { AdminAiTestPage } from './AdminAiTestPage';
+import { AdminAiUsagePage } from './AdminAiUsagePage';
 import { AdminAnalyticsPage } from './AdminAnalyticsPage';
 import { AdminAutoDiscoverPage } from './AdminAutoDiscoverPage';
 import { AdminCatchtableShopPage } from './AdminCatchtableShopPage';
@@ -47,6 +48,7 @@ const AdminRoutes = () => (
       <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
       <Route path="tabling" element={<AdminTablingPage />} />
       <Route path="analytics" element={<AdminAnalyticsPage />} />
+      <Route path="ai-usage" element={<AdminAiUsagePage />} />
       <Route path="logs" element={<AdminLogsPage />} />
       <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />
       <Route path="ai-test" element={<AdminAiTestPage />} />

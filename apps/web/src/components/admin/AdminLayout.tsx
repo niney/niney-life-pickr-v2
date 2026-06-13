@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
+  Activity,
   BarChart3,
   Beaker,
   CalendarClock,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { AdminTopBar } from './AdminTopBar';
+import { LlmUsagePanel } from './LlmUsagePanel';
 
 interface NavItem {
   to: string;
@@ -35,6 +37,7 @@ const NAV: NavItem[] = [
   { to: '/admin/diningcode', label: '다이닝코드 크롤링', icon: Utensils },
   { to: '/admin/tabling', label: '테이블링 크롤링', icon: CalendarClock },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
+  { to: '/admin/ai-usage', label: 'AI 사용량', icon: Activity },
   { to: '/admin/crawl-test', label: '네이버 크롤링 테스트', icon: Beaker },
   { to: '/admin/catchtable-test', label: '캐치테이블 크롤링 테스트', icon: Beaker },
   { to: '/admin/diningcode-test', label: '다이닝코드 크롤링 테스트', icon: Beaker },
@@ -209,6 +212,10 @@ export const AdminLayout = () => {
           <Outlet />
         </div>
       </main>
+
+      {/* LLM 사용량 플로팅 패널 — 어드민 전 페이지 상시 노출, 접힘/코너는
+          패널이 스스로 localStorage 로 영속한다. */}
+      <LlmUsagePanel />
     </div>
   );
 };

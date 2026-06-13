@@ -16,6 +16,7 @@ const TITLE_RULES: TitleRule[] = [
   { match: (p) => p.startsWith('/admin/auto-discover'), label: '맛집 자동 발견' },
   { match: (p) => p.startsWith('/admin/discover'), label: '맛집 발견' },
   { match: (p) => p.startsWith('/admin/analytics'), label: 'AI 분석 관리' },
+  { match: (p) => p.startsWith('/admin/ai-usage'), label: 'AI 사용량' },
   { match: (p) => p.startsWith('/admin/crawl-test'), label: '크롤링 테스트' },
   { match: (p) => p.startsWith('/admin/ai-keys'), label: 'AI 키' },
   { match: (p) => p.startsWith('/admin/ai-test'), label: 'AI 테스트' },

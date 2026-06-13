@@ -270,6 +270,10 @@ export const Ai = {
   // 키 검증 + 모델 선택을 한 번에 끝내려고 둔 미리보기 엔드포인트.
   providerModelsPreview: (id: string, purpose: string) =>
     `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/models/preview`,
+  // LLM 사용량 텔레메트리 — 스냅샷(초기 로드/폴백) + SSE 스트림(실시간).
+  // 표시 전용 인메모리 집계라 서버 재시작 시 리셋된다.
+  telemetry: `${API_PREFIX}/admin/ai/telemetry`,
+  telemetryStream: `${API_PREFIX}/admin/ai/telemetry/stream`,
 } as const;
 
 // 범용 작업 로그 — 모든 기능의 run/스텝 로그 조회 + 실패 run LLM 분석 +

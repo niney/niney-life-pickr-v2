@@ -7,13 +7,50 @@ import {
   type LLMCompleteResult,
   type LLMProvider,
 } from './llm-provider.js';
+import { ConcurrencyGate, type GateSnapshot } from '../concurrency-gate.js';
 
 export interface OllamaCloudAdapterOptions {
   apiKey: string;
   baseUrl: string;
   timeoutMs: number;
   maxConcurrent: number;
+  // 계정(API 키) 단위 공유 게이트 — AdapterCache 가 레지스트리에서 주입.
+  // purpose 게이트(maxConcurrent)를 통과한 뒤 이 게이트를 추가로 통과해야
+  // 하므로, 같은 키를 쓰는 모든 purpose 의 합산 동시성이 계정 cap 을 넘지
+  // 않는다. 미주입 시(테스트, ad-hoc 어댑터) purpose 게이트만 적용.
+  accountGate?: ConcurrencyGate;
+  // 호출 계측 훅 — 게이트 통과 직후(start)와 완료/실패 시(end) 호출된다.
+  // 어댑터는 purpose 를 모르므로 라벨링은 주입자(AdapterCache) 몫.
+  // 큐 대기 중 취소된 호출은 게이트를 통과하지 못해 이벤트가 없다 —
+  // 대기열 상태는 게이트 스냅샷으로 관찰한다.
+  onEvent?: (event: AdapterCallEvent) => void;
 }
+
+export interface AdapterCallStartEvent {
+  type: 'start';
+  callId: number;
+  model: string;
+  queueWaitMs: number;
+}
+
+export interface AdapterCallEndEvent {
+  type: 'end';
+  callId: number;
+  model: string;
+  status: 'ok' | 'error' | 'cancelled' | 'timeout';
+  errorName: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  durationMs: number;
+  // 429(동시성 한도) 백오프 재시도 횟수 — completeWithRetry 내부 루프.
+  retries: number;
+}
+
+export type AdapterCallEvent = AdapterCallStartEvent | AdapterCallEndEvent;
+
+// 프로세스 전역 단조 증가 — start/end 짝 맞추기용. 어댑터가 여러 개라도
+// 충돌하지 않도록 모듈 레벨에 둔다.
+let nextCallId = 1;
 
 interface OllamaChatResponse {
   model?: string;
@@ -29,35 +66,102 @@ interface OllamaTagsResponse {
 }
 
 // Talks to Ollama's native /api/chat. Keeps the bulk of provider logic in
-// one place: request shaping, error classification, and a FIFO concurrency
-// gate that throttles all callers sharing the adapter instance.
+// one place: request shaping, error classification, and a two-tier FIFO
+// concurrency gate: purpose 게이트(이 인스턴스 소유, maxConcurrent) →
+// 계정 게이트(주입, 키 단위 공유). acquire 순서가 모든 호출자에서 동일하므로
+// 교착 없음. 큐 대기 중 abort 되면 게이트가 대기열에서 즉시 이탈시킨다.
 export class OllamaCloudAdapter implements LLMProvider {
   private readonly opts: OllamaCloudAdapterOptions;
-  private inflight = 0;
-  private readonly waiters: Array<() => void> = [];
+  private readonly purposeGate: ConcurrencyGate;
 
   constructor(opts: OllamaCloudAdapterOptions) {
     this.opts = opts;
+    this.purposeGate = new ConcurrencyGate(opts.maxConcurrent);
   }
 
   async complete(opts: LLMCompleteOptions): Promise<LLMCompleteResult> {
-    await this.acquire();
+    const enqueuedAt = Date.now();
+    await this.purposeGate.acquire(opts.signal);
     try {
-      return await this.completeWithRetry(opts);
+      if (this.opts.accountGate) await this.opts.accountGate.acquire(opts.signal);
+      try {
+        return await this.completeInstrumented(opts, Date.now() - enqueuedAt);
+      } finally {
+        this.opts.accountGate?.release();
+      }
     } finally {
-      this.release();
+      this.purposeGate.release();
     }
+  }
+
+  // 게이트 통과 후의 실제 호출 + 계측. 계측 훅이 던져도 호출 흐름을 깨지
+  // 않도록 emit 은 항상 삼킨다.
+  private async completeInstrumented(
+    opts: LLMCompleteOptions,
+    queueWaitMs: number,
+  ): Promise<LLMCompleteResult> {
+    const callId = nextCallId++;
+    this.emit({ type: 'start', callId, model: opts.model, queueWaitMs });
+    const startedAt = Date.now();
+    const stats = { retries: 0 };
+    try {
+      const result = await this.completeWithRetry(opts, stats);
+      this.emit({
+        type: 'end',
+        callId,
+        model: result.model,
+        status: 'ok',
+        errorName: null,
+        promptTokens: result.promptTokens,
+        completionTokens: result.completionTokens,
+        durationMs: Date.now() - startedAt,
+        retries: stats.retries,
+      });
+      return result;
+    } catch (e) {
+      const status =
+        e instanceof LLMCancelledError ? 'cancelled' : e instanceof LLMTimeoutError ? 'timeout' : 'error';
+      this.emit({
+        type: 'end',
+        callId,
+        model: opts.model,
+        status,
+        errorName: e instanceof Error ? e.name : null,
+        promptTokens: null,
+        completionTokens: null,
+        durationMs: Date.now() - startedAt,
+        retries: stats.retries,
+      });
+      throw e;
+    }
+  }
+
+  private emit(event: AdapterCallEvent): void {
+    try {
+      this.opts.onEvent?.(event);
+    } catch {
+      // 계측은 관찰자 — 본 호출에 영향을 주면 안 된다.
+    }
+  }
+
+  // 텔레메트리용 — purpose 게이트의 현재 상태.
+  gateSnapshot(): GateSnapshot {
+    return this.purposeGate.snapshot();
   }
 
   // Ollama Cloud는 로컬 게이트 통과 후에도 자체 한도로 거부할 수 있다
   // (HTTP 429 또는 본문에 "too many concurrent requests"). 같은 슬롯을
   // 잡은 채 짧은 백오프 후 재시도한다 — release 하지 않으므로 동시성이
   // 늘지 않고, 일시적 한도 초과는 자동 회복된다.
-  private async completeWithRetry(opts: LLMCompleteOptions): Promise<LLMCompleteResult> {
+  private async completeWithRetry(
+    opts: LLMCompleteOptions,
+    stats: { retries: number },
+  ): Promise<LLMCompleteResult> {
     const maxRetries = 3;
     let lastErr: unknown;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       if (attempt > 0) {
+        stats.retries = attempt;
         const base = Math.min(2000, 200 * 2 ** (attempt - 1));
         const jitter = Math.random() * 200;
         await new Promise((r) => setTimeout(r, base + jitter));
@@ -198,26 +302,6 @@ export class OllamaCloudAdapter implements LLMProvider {
     };
   }
 
-  // Concurrency gate: at most `maxConcurrent` calls past the gate. Waiters
-  // resolve in FIFO order. Kept tiny on purpose — no external dep.
-  private acquire(): Promise<void> {
-    if (this.inflight < this.opts.maxConcurrent) {
-      this.inflight += 1;
-      return Promise.resolve();
-    }
-    return new Promise<void>((resolve) => {
-      this.waiters.push(() => {
-        this.inflight += 1;
-        resolve();
-      });
-    });
-  }
-
-  private release(): void {
-    this.inflight -= 1;
-    const next = this.waiters.shift();
-    if (next) next();
-  }
 }
 
 const isAbortError = (e: unknown): boolean => {
