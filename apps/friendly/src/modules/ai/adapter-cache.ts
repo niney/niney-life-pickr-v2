@@ -35,7 +35,14 @@ export class AdapterCache {
       maxConcurrent: resolved.maxConcurrent,
       // 캐시 키 회전(설정 변경)과 무관하게 레지스트리의 게이트가 유지되므로
       // 구·신 어댑터가 겹쳐도 계정 합산 동시성은 cap 을 넘지 않는다.
-      accountGate: this.gates.get(resolved.apiKey, resolved.baseUrl),
+      // purpose 의 해석된 한도(DB row ?? env)를 함께 넘겨 계정 cap 을
+      // "웹 설정 값"에 동기화한다 — 패널 분모가 env 가 아닌 설정을 따른다.
+      accountGate: this.gates.get(
+        resolved.apiKey,
+        resolved.baseUrl,
+        resolved.purpose,
+        resolved.maxConcurrent,
+      ),
       // 모든 LLM 호출이 이 한 곳을 지나므로 여기서 purpose 를 라벨링해
       // 텔레메트리로 흘리면 호출부 수정 없이 전 지점이 계측된다.
       onEvent: (e) => llmTelemetry.record(resolved.purpose, e),

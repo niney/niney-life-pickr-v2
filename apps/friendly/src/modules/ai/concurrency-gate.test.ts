@@ -104,9 +104,9 @@ describe('ConcurrencyGate', () => {
 describe('AccountGateRegistry', () => {
   it('returns the same gate for the same apiKey|baseUrl', () => {
     const reg = new AccountGateRegistry(5);
-    const a = reg.get('key-1', 'https://ollama.com');
-    const b = reg.get('key-1', 'https://ollama.com');
-    const c = reg.get('key-2', 'https://ollama.com');
+    const a = reg.get('key-1', 'https://ollama.com', 'chat', 5);
+    const b = reg.get('key-1', 'https://ollama.com', 'image', 5);
+    const c = reg.get('key-2', 'https://ollama.com', 'chat', 5);
     expect(a).toBe(b);
     expect(a).not.toBe(c);
   });
@@ -114,8 +114,8 @@ describe('AccountGateRegistry', () => {
   it('shares one gate across purposes — combined inflight never exceeds the cap', async () => {
     const reg = new AccountGateRegistry(2);
     // chat / image 가 같은 키를 쓰는 상황을 모사.
-    const chatGate = reg.get('k', 'u');
-    const imageGate = reg.get('k', 'u');
+    const chatGate = reg.get('k', 'u', 'chat', 2);
+    const imageGate = reg.get('k', 'u', 'image', 2);
 
     await chatGate.acquire();
     await imageGate.acquire();
@@ -129,5 +129,26 @@ describe('AccountGateRegistry', () => {
     imageGate.release();
     await p;
     expect(granted).toBe(true);
+  });
+
+  it('syncs the account cap to the max of resolved purpose limits (DB-first)', () => {
+    // env(fallback)=15 여도 웹 설정(DB)이 chat=1 이면 계정 cap 도 1 —
+    // 패널 분모가 설정 화면과 일치해야 한다.
+    const reg = new AccountGateRegistry(15);
+    const gate = reg.get('k', 'u', 'chat', 1);
+    expect(gate.snapshot().limit).toBe(1);
+
+    // 다른 purpose 가 더 큰 한도로 resolve 되면 max 로 올라간다.
+    reg.get('k', 'u', 'image', 3);
+    expect(gate.snapshot().limit).toBe(3);
+
+    // 같은 purpose 의 한도 변경(웹 설정 수정)은 즉시 재계산.
+    reg.get('k', 'u', 'image', 2);
+    expect(gate.snapshot().limit).toBe(2);
+
+    // 다른 키는 독립 — 폴백에서 시작해 자기 purpose 한도로 동기화.
+    const other = reg.get('k2', 'u', 'chat', 7);
+    expect(other.snapshot().limit).toBe(7);
+    expect(gate.snapshot().limit).toBe(2);
   });
 });
