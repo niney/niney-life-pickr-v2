@@ -29,7 +29,7 @@ export interface AdapterHooks {
   signal?: AbortSignal;
   onStage?: (stage: CrawlStageType) => void;
   onPartial?: (data: NaverPlaceDataType) => void;
-  onVisitorProgress?: (count: number) => void;
+  onVisitorProgress?: (count: number, page: number) => void;
   // Emitted once per "더보기" page after parsing the wire batch — the caller
   // can persist + summarize concurrently with the next click. Fire-and-forget:
   // the adapter does not await the callback. Initial Apollo-rendered reviews
@@ -1236,7 +1236,7 @@ const fetchVisitorReviewsViaSubpage = async (
             captured.map((c) => c.body),
             probeIds,
           );
-          hooks.onVisitorProgress(wireSoFar.length);
+          hooks.onVisitorProgress(wireSoFar.length, pages);
         }
 
         // Parse only the responses that arrived from this click and emit

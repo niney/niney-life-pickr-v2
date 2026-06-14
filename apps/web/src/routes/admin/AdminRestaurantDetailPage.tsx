@@ -474,6 +474,7 @@ export const AdminRestaurantDetailPage = () => {
           placeId: detail.placeId,
           mode,
           source: 'list-row',
+          name: detail.name,
         });
       } else {
         setError(`${result.error}: ${result.message}`);
@@ -521,6 +522,7 @@ export const AdminRestaurantDetailPage = () => {
           key={activeJob.jobId}
           jobId={activeJob.jobId}
           placeId={detail.placeId}
+          mode={activeJob.mode}
           onPlaceIdResolved={() => {}}
           onCancel={handleCancelJob}
           showInlineReviewList={false}
@@ -534,6 +536,7 @@ export const AdminRestaurantDetailPage = () => {
             markDoneJob(activeJob.jobId);
           }}
           onDismiss={() => removeJob(activeJob.jobId)}
+          autoDismissOnSuccess
         />
       )}
       {!activeJob &&

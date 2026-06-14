@@ -24,6 +24,12 @@ export interface ActiveCrawlJob {
   // explicitly. Only 'running' makes a list row 'busy' (blocks row click /
   // recrawl buttons); a 'done' job leaves the row clickable.
   status: 'running' | 'done';
+  // Display label for the in-progress tray — lets a job stay identifiable even
+  // when its restaurant isn't on the current list page (or doesn't exist yet,
+  // for a fresh create). Discovery / list-row seed it with the known name; a
+  // new URL leaves it undefined and the panel falls back to the name resolved
+  // from the restaurant detail once it's persisted.
+  name?: string;
 }
 
 interface ActiveCrawlJobState {

@@ -445,6 +445,9 @@ export interface CrawlStreamState {
   // poll — this counter increments only when a batch was newly inserted,
   // not when it was deduped.
   persistedCount: number;
+  // 1-based "더보기" 페이지 번호(마지막 visitor_progress 이벤트 기준). 진행
+  // UI 가 "페이지 N" 으로 표시. 0 = 아직 페이지네이션 전.
+  visitorPage: number;
   // Newest visitor_batch payload — UI can render the freshly-arrived
   // reviews above the older ones without re-fetching the whole list.
   lastBatch: VisitorReviewType[] | null;
@@ -483,6 +486,7 @@ const initialState: CrawlStreamState = {
   partial: null,
   visitorCount: 0,
   persistedCount: 0,
+  visitorPage: 0,
   lastBatch: null,
   lastPersistedBatch: null,
   result: null,
@@ -523,6 +527,7 @@ const reducer = (state: CrawlStreamState, action: Action): CrawlStreamState => {
           break;
         case 'visitor_progress':
           next.visitorCount = ev.count;
+          next.visitorPage = ev.page;
           break;
         case 'visitor_batch':
           next.persistedCount = state.persistedCount + ev.addedCount;

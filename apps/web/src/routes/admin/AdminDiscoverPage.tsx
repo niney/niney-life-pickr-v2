@@ -144,6 +144,7 @@ export const AdminDiscoverPage = () => {
             placeId: it.placeId,
             source: 'list-row',
             mode: 'create',
+            name: it.name,
           });
         } else {
           failedIds.add(it.placeId);

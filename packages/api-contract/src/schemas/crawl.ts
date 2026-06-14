@@ -196,6 +196,10 @@ export const CrawlEvent = z.discriminatedUnion('type', [
     seq: z.number().int(),
     type: z.literal('visitor_progress'),
     count: z.number().int(),
+    // 1-based "더보기" 페이지 번호(방금 로드된 페이지). 총 페이지 수는 "더보기"
+    // 모델 특성상 사전에 알 수 없어 보내지 않는다 — 남은 양 표시는 클라이언트가
+    // partial.reviewCount(가게 총 리뷰수)를 분모로 근사.
+    page: z.number().int(),
     at: z.string(),
   }),
   // Emitted after a "더보기" page has been persisted to the DB. `addedCount`

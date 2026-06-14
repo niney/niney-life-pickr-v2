@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Loader2, X } from 'lucide-react';
 import {
   useCrawlJobStream,
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
 } from '@repo/shared';
 import type {
+  CrawlModeType,
   CrawlNaverPlaceResultType,
   CrawlStageType,
   RestaurantDetailType,
@@ -30,9 +31,110 @@ const STAGE_LABEL: Record<CrawlStageType, string> = {
   done: '완료',
 };
 
+// 작업 종류 배지 — 상단 트레이에서 한 가게에 여러 작업이 섞여도 무슨 작업인지
+// 구분되게.
+const MODE_LABEL: Record<CrawlModeType, string> = {
+  create: '신규',
+  recrawl: '재크롤',
+  update: '업데이트',
+};
+
+// 단계 순서 — 진행 바의 위치(%) 계산용. STAGE_LABEL 과 같은 집합.
+const STAGE_ORDER: CrawlStageType[] = [
+  'queued',
+  'normalizing',
+  'launching',
+  'loading_main',
+  'parsing_main',
+  'loading_visitor',
+  'paginating_visitor',
+  'finalizing',
+  'done',
+];
+
+const formatDuration = (ms: number): string => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}초`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem === 0 ? `${m}분` : `${m}분 ${rem}초`;
+};
+
+// 크롤 진행 상세 — 단계 진행 바 + 리뷰 수집 분모(가게 총 리뷰수 근사) + 현재
+// 페이지 + 최근 로그 한 줄. 진행 중인지 한눈에 들어오게.
+const CrawlProgress = ({
+  stage,
+  isRunning,
+  visitorCount,
+  visitorPage,
+  reviewTarget,
+  persistedCount,
+  latestLog,
+}: {
+  stage: CrawlStageType | null;
+  isRunning: boolean;
+  visitorCount: number;
+  visitorPage: number;
+  reviewTarget: number | null;
+  persistedCount: number;
+  latestLog: string | null;
+}) => {
+  const idx = stage ? STAGE_ORDER.indexOf(stage) : -1;
+  const stagePct = idx >= 0 ? Math.round(((idx + 1) / STAGE_ORDER.length) * 100) : 0;
+  const collectPct =
+    reviewTarget && reviewTarget > 0
+      ? Math.min(100, Math.round((visitorCount / reviewTarget) * 100))
+      : null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium">{stage ? STAGE_LABEL[stage] : '준비 중'}</span>
+        <span className="text-muted-foreground">{stagePct}%</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary transition-all"
+          style={{ width: `${stagePct}%` }}
+        />
+      </div>
+      {(visitorCount > 0 || stage === 'paginating_visitor') && (
+        <>
+          <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <span>
+              방문자 리뷰{' '}
+              <span className="font-medium text-foreground">{visitorCount}</span>
+              {reviewTarget ? <> / 약 {reviewTarget}개</> : <>개 수집</>}
+            </span>
+            {visitorPage > 0 && <span>· 페이지 {visitorPage}</span>}
+            {persistedCount > 0 && <span>· DB {persistedCount}</span>}
+          </div>
+          {collectPct !== null && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all"
+                style={{ width: `${collectPct}%` }}
+              />
+            </div>
+          )}
+        </>
+      )}
+      {isRunning && latestLog && (
+        <p className="truncate text-[11px] text-muted-foreground">{latestLog}</p>
+      )}
+    </div>
+  );
+};
+
 interface ActiveJobPanelProps {
   jobId: string;
   placeId: string | null;
+  // Seed label shown in the header until the restaurant detail resolves a
+  // (possibly newer) name. Lets a job in the in-progress tray be identifiable
+  // even before its restaurant is persisted/queried.
+  name?: string;
+  // Crawl kind — rendered as a small badge (신규/재크롤/업데이트) so a tray with
+  // several jobs is unambiguous.
+  mode?: CrawlModeType;
   onPlaceIdResolved: (placeId: string) => void;
   onCancel: () => void;
   // Detail page already shows reviews in its own filter/sort/paginate list,
@@ -46,6 +148,10 @@ interface ActiveJobPanelProps {
   // Only shown when terminal AND placeId is known. Detail page omits it
   // (already on the detail route).
   onViewDetail?: (placeId: string) => void;
+  // 성공 종료 시 짧은 grace 뒤 자동으로 onDismiss 를 호출해 완료 카드를 정리한다
+  // (트레이가 완료 카드로 쌓이지 않게). 실패/결과미상은 자동 정리하지 않고
+  // 사용자가 직접 확인/닫게 둔다.
+  autoDismissOnSuccess?: boolean;
   // Fires exactly once when the job stream reaches ANY terminal state —
   // a domain result (done/error) OR a transport-level close with no result.
   // `result` is null in the latter case. Callers use it to mark the job
@@ -56,11 +162,14 @@ interface ActiveJobPanelProps {
 export const ActiveJobPanel = ({
   jobId,
   placeId,
+  name,
+  mode,
   onPlaceIdResolved,
   onCancel,
   showInlineReviewList = true,
   onDismiss,
   onViewDetail,
+  autoDismissOnSuccess = false,
   onFinished,
 }: ActiveJobPanelProps) => {
   const stream = useCrawlJobStream(jobId);
@@ -75,6 +184,12 @@ export const ActiveJobPanel = ({
   }, []);
   const summaryStatusQuery = useRestaurantSummaryEvents(placeId, { onLog: handleSummaryLog });
   const qc = useQueryClient();
+  // 경과 시간 — 진행 중엔 1초마다 tick, 종료되면 멈춘다. 시작 기준은 첫 연결
+  // 시점(startRef). 성공 종료엔 서버가 잰 durationMs 를 우선 사용.
+  // 경과 시간 — 마운트 시점을 시작으로 잡고(잡 시작 직후 패널이 뜨는 일반 경로
+  // 에선 곧 시작 시각), 진행 중 1초마다 tick. 성공 종료엔 서버 durationMs 우선.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [startedAt] = useState(() => Date.now());
 
   useEffect(() => {
     const fromPartial = stream.partial?.placeId;
@@ -125,6 +240,19 @@ export const ActiveJobPanel = ({
     stream.status === 'closed' ||
     stream.status === 'error';
   const stage = stream.stage;
+  // 헤더 식별 라벨 — 영속된 상세의 이름을 우선, 없으면 시작 시 seed, 둘 다
+  // 없으면(신규 URL 초기) 기본 라벨.
+  const displayName = detailQuery.data?.name ?? name ?? null;
+  // 수집 진행 분모 — 가게가 표기한 총 리뷰수(근사). partial 우선, 없으면 done 결과.
+  const reviewTarget =
+    stream.partial?.reviewCount ??
+    (stream.result?.ok ? stream.result.data.reviewCount : null) ??
+    null;
+  const latestLog =
+    stream.logs.length > 0 ? stream.logs[stream.logs.length - 1]!.message : null;
+  const elapsedMs = stream.result?.ok
+    ? stream.result.durationMs
+    : Math.max(0, nowTick - startedAt);
 
   // Once terminal, refresh the list (counts/summary buckets) and the active
   // detail (snapshotJson, totalReviews, anything not covered by streamed
@@ -145,6 +273,29 @@ export const ActiveJobPanel = ({
     }
   }, [isTerminal, stream.result, placeId, qc, onFinished]);
 
+  // 진행 중에만 1초마다 tick — 종료되면 멈춰 경과 시간이 고정된다.
+  useEffect(() => {
+    if (!isRunning) return undefined;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isRunning]);
+
+  // 성공 종료 자동 정리 — grace 뒤 onDismiss 1회. onDismiss 가 매 렌더 새 함수라
+  // ref 로 최신값을 잡고 deps 에서 제외(재스케줄 방지). 실패/결과미상은 미발동.
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+  const autoDismissedRef = useRef(false);
+  useEffect(() => {
+    if (!autoDismissOnSuccess) return undefined;
+    if (!(isTerminal && stream.result?.ok === true)) return undefined;
+    if (autoDismissedRef.current) return undefined;
+    autoDismissedRef.current = true;
+    const t = setTimeout(() => onDismissRef.current?.(), 4000);
+    return () => clearTimeout(t);
+  }, [autoDismissOnSuccess, isTerminal, stream.result]);
+
   return (
     <Card className="border-primary/40">
       <CardHeader className="pt-6 sm:pt-7">
@@ -157,7 +308,12 @@ export const ActiveJobPanel = ({
             // result.ok 또는 result 없이 종료(transport close) — 둘 다 완료로 표기.
             <CheckCircle2 className="size-4 text-primary" />
           )}
-          크롤링 작업
+          <span className="truncate">{displayName ?? '크롤링 작업'}</span>
+          {mode && (
+            <Badge variant="secondary" className="shrink-0">
+              {MODE_LABEL[mode]}
+            </Badge>
+          )}
           {isTerminal && (onViewDetail || onDismiss) && (
             <div className="ml-auto flex items-center gap-1">
               {onViewDetail && placeId && (
@@ -187,6 +343,12 @@ export const ActiveJobPanel = ({
         <CardDescription className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant="outline">job: {jobId.slice(0, 8)}…</Badge>
           {stage && <Badge variant="secondary">{STAGE_LABEL[stage]}</Badge>}
+          {(isRunning || isTerminal) && (
+            <Badge variant="outline" className="gap-1">
+              <Clock className="size-3" />
+              {formatDuration(elapsedMs)}
+            </Badge>
+          )}
           {stream.visitorCount > 0 && (
             <span>방문자 리뷰 {stream.visitorCount}개 수집</span>
           )}
@@ -222,6 +384,17 @@ export const ActiveJobPanel = ({
         </div>
         {activeTab === 'progress' ? (
           <>
+            {(isRunning || stage) && (
+              <CrawlProgress
+                stage={stage}
+                isRunning={isRunning}
+                visitorCount={stream.visitorCount}
+                visitorPage={stream.visitorPage}
+                reviewTarget={reviewTarget}
+                persistedCount={stream.persistedCount}
+                latestLog={latestLog}
+              />
+            )}
             {(isRunning || (stream.result && !stream.result.ok)) && (
               <div className="space-y-3">
                 {isRunning && (

@@ -476,6 +476,7 @@ export const AdminRestaurantsPage = () => {
             placeId: naver.placeId,
             source: 'list-row',
             mode,
+            name: item.name,
           });
         } else {
           setError(`${result.error}: ${result.message}`);
@@ -506,6 +507,11 @@ export const AdminRestaurantsPage = () => {
         setError(`${result.error}: ${result.message ?? ''}`);
       }
       markDoneJob(jobId);
+      // 신규 등록(create)이 성공하면 목록(최근순/1p)으로 유도 — 새 가게가 등록
+      // 리스트에 바로 같이 보이도록. 재크롤/업데이트는 기존 행이라 불필요.
+      if (result?.ok && jobs[jobId]?.mode === 'create') {
+        updateParams({ sort: null, page: null });
+      }
     };
 
   // 정렬은 서버 처리. 응답이 이미 정렬·페이지 분리된 상태로 옴.
@@ -514,9 +520,10 @@ export const AdminRestaurantsPage = () => {
   // SSE 구독 — 현재 페이지의 canonicalId 만. 한 canonical 의 모든 source
   // (Naver+DC) 가 한 connection 으로 풀려 들어와 진행 배지가 출처 무관 라이브 갱신.
   useRestaurantListSummaryEvents(items.map((it) => it.canonicalId));
-  // 활성 잡 — placeId 가 list 의 어느 행의 Naver source 와도 매칭 안 되면
-  // 상단 newJobs 로. 매칭되면 그 행 밑에 panel 마운트. 페이징 후로는 현재
-  // 페이지 행만 검사 — 다른 페이지의 잡은 상단으로 떠 사라지지 않음.
+  // 활성 잡 — 패널은 이제 E 카드 상단의 "크롤링 작업" 트레이 한 곳에서만 그린다
+  // (발견/다른 페이지에서 시작한 작업도 가게 이름과 함께 항상 여기 모임). 행 밑
+  // 인라인 패널(E2e)은 없앴다. jobByCanonical 은 현재 페이지에 보이는 행을
+  // busy(클릭/액션 잠금) 처리하는 용도로만 남긴다.
   const placeIdToCanonical = new Map<string, CanonicalListItemType>();
   for (const it of items) {
     for (const s of it.sources) {
@@ -524,16 +531,17 @@ export const AdminRestaurantsPage = () => {
     }
   }
   const jobByCanonical = new Map<string, ActiveCrawlJob>();
-  const newJobs: ActiveCrawlJob[] = [];
   for (const j of Object.values(jobs)) {
-    if (j.placeId === null) {
-      newJobs.push(j);
-      continue;
-    }
+    if (j.placeId === null) continue;
     const canonical = placeIdToCanonical.get(j.placeId);
     if (canonical) jobByCanonical.set(canonical.canonicalId, j);
-    else newJobs.push(j);
   }
+  // 트레이 표시 순서 — 진행 중을 먼저, 완료(닫기 대기)를 뒤로.
+  const activeJobs = Object.values(jobs)
+    .slice()
+    .sort((a, b) =>
+      a.status === b.status ? 0 : a.status === 'running' ? -1 : 1,
+    );
 
   return (
     <div className="mx-auto max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
@@ -604,23 +612,6 @@ export const AdminRestaurantsPage = () => {
         </CardContent>
       </Card>
 
-      {newJobs.length > 0 && (
-        <div className="mb-6 space-y-3">
-          {newJobs.map((j) => (
-            <ActiveJobPanel
-              key={j.jobId}
-              jobId={j.jobId}
-              placeId={j.placeId}
-              onPlaceIdResolved={(placeId) => handlePlaceIdResolved(j.jobId, placeId)}
-              onCancel={() => cancelMutation.mutate(j.jobId)}
-              onFinished={handleFinished(j.jobId)}
-              onDismiss={() => removeJob(j.jobId)}
-              onViewDetail={(placeId) => navigate(`/admin/restaurants/${placeId}`)}
-            />
-          ))}
-        </div>
-      )}
-
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -653,6 +644,35 @@ export const AdminRestaurantsPage = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* 크롤링 작업 트레이 — 진행 중/방금 끝난 모든 작업을 가게 이름과 함께
+              목록 맨 위 한 곳에 모은다. 발견·다른 페이지에서 시작했거나 아직
+              목록에 없는 신규 가게도 여기서 식별·추적된다. */}
+          {activeJobs.length > 0 && (
+            <div className="mb-4 space-y-3">
+              <div className="text-xs font-medium text-muted-foreground">
+                크롤링 작업 ({activeJobs.length})
+              </div>
+              {activeJobs.map((j) => (
+                <ActiveJobPanel
+                  key={j.jobId}
+                  jobId={j.jobId}
+                  placeId={j.placeId}
+                  name={j.name}
+                  mode={j.mode}
+                  onPlaceIdResolved={(placeId) =>
+                    handlePlaceIdResolved(j.jobId, placeId)
+                  }
+                  onCancel={() => cancelMutation.mutate(j.jobId)}
+                  onFinished={handleFinished(j.jobId)}
+                  onDismiss={() => removeJob(j.jobId)}
+                  onViewDetail={(placeId) =>
+                    navigate(`/admin/restaurants/${placeId}`)
+                  }
+                  autoDismissOnSuccess
+                />
+              ))}
+            </div>
+          )}
           {listQuery.isLoading ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
@@ -758,24 +778,8 @@ export const AdminRestaurantsPage = () => {
                         onClose={() => setMergeOpenCanonicalId(null)}
                       />
                     )}
-                    {rowJob && (
-                      <ActiveJobPanel
-                        // key=jobId — 같은 행에서 재크롤로 jobId 가 바뀌면 패널을
-                        // 새로 마운트해 내부 상태(완료 발화 ref 등)를 리셋.
-                        key={rowJob.jobId}
-                        jobId={rowJob.jobId}
-                        placeId={rowJob.placeId}
-                        onPlaceIdResolved={(placeId) =>
-                          handlePlaceIdResolved(rowJob.jobId, placeId)
-                        }
-                        onCancel={() => cancelMutation.mutate(rowJob.jobId)}
-                        onFinished={handleFinished(rowJob.jobId)}
-                        onDismiss={() => removeJob(rowJob.jobId)}
-                        onViewDetail={(placeId) =>
-                          navigate(`/admin/restaurants/${placeId}`)
-                        }
-                      />
-                    )}
+                    {/* 진행 중 패널은 더 이상 행 밑에 붙지 않는다 — 카드 상단
+                        "크롤링 작업" 트레이로 통합(가게 이름과 함께 한 곳에). */}
                   </li>
                 );
               })}

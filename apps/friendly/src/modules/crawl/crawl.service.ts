@@ -1216,8 +1216,8 @@ export class CrawlService {
             restaurantId = id;
           });
         },
-        onVisitorProgress: (count) =>
-          this.emit(jobId, { type: 'visitor_progress', count }),
+        onVisitorProgress: (count, page) =>
+          this.emit(jobId, { type: 'visitor_progress', count, page }),
         onVisitorBatch: (batch) => persistBatch(batch),
         existingReviewKeys: existingKeys,
       });
