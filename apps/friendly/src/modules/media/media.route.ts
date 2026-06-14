@@ -7,6 +7,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { Routes } from '@repo/api-contract';
+import { panoramaFilePath } from './panorama-cache.js';
 
 // Naver review/place CDN hosts we proxy. Anything outside this list is
 // rejected — the proxy is purely a thumbnail accelerator for Naver-hosted
@@ -115,6 +116,28 @@ const mediaRoutes: FastifyPluginAsync = async (app) => {
         app.log.warn({ err: e, url, host }, 'thumbnail proxy failed');
         return reply.code(502).send({ error: 'upstream_failed' });
       }
+    },
+  });
+
+  // 크롤 시점에 받아둔 네이버 파노라마 썸네일 사본을 placeId 로 서빙한다.
+  // 원본 apis.naver.com URL 은 TTL 만료(403)로 죽지만, 사본은 영구 자산이라
+  // 다시 외부로 나가지 않는다. 사본이 없으면 404 — 호출측(<img>)이 placeholder.
+  typed.get(Routes.Media.panorama(':placeId'), {
+    schema: {
+      tags: ['media'],
+      params: z.object({ placeId: z.string().regex(/^\d+$/).max(40) }),
+    },
+    handler: async (req, reply) => {
+      const file = panoramaFilePath(req.params.placeId);
+      try {
+        await stat(file);
+      } catch {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+      reply
+        .header('Cache-Control', `public, max-age=${CACHE_MAX_AGE_SEC}, immutable`)
+        .header('Content-Type', 'image/jpeg');
+      return reply.send(createReadStream(file));
     },
   });
 };

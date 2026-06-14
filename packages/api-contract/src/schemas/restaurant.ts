@@ -646,7 +646,9 @@ export const RestaurantPublicDetail = z.object({
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
   // Naver imageUrls + DC photos/images origin + 테이블링 images 합집합 (URL dedup).
-  imageUrls: z.array(z.string().url()),
+  // 절대 URL(외부 CDN) 또는 same-origin 절대경로(/api/v1/media/panorama/… —
+  // 만료되는 네이버 파노라마를 크롤 시점에 받아둔 우리 사본) 둘 다 허용한다.
+  imageUrls: z.array(z.string().url().or(z.string().startsWith('/'))),
   // Naver 가 비어있을 때만 테이블링 menus, 그것도 없으면 DC menus 를 매핑해 채움.
   menus: z.array(MenuItem),
   // Naver blogReviews + DC blogsFirstPage 합쳐 dedup.

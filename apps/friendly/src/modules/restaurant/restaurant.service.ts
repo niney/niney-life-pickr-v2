@@ -21,6 +21,11 @@ import {
   mergeReviewCount,
   type TablingSnapshot,
 } from './restaurant.merge.js';
+import { Routes } from '@repo/api-contract';
+import {
+  cachePanoramaThumbnail,
+  isVolatileNaverPhoto,
+} from '../media/panorama-cache.js';
 import type {
   CategoryTreeNodeType,
   DiningcodeShopDataType,
@@ -141,9 +146,46 @@ export class RestaurantService {
   // visitorReviews — those live in their own table. The intent is: any
   // structural data we don't query on (menus, blogReviews, businessHours,
   // imageUrls, reviewStats, coords) round-trips through this blob unchanged.
+  // 휘발성 파노라마 URL(apis.naver.com/place/panorama)은 TTL 이 지나면 만료(403)
+  // 되므로 크롤 시점(아직 유효할 때) 받아 영구 사본으로 저장하고, snapshot 에는
+  // 우리 사본 URL(/media/panorama/:placeId)을 대신 넣는다. 받기 실패(만료/없음)
+  // 하면 그 URL 은 버린다 — 저장해봐야 곧 죽는 URL 이라 의미가 없다. placeId 당
+  // 파노라마는 1장이므로 첫 휘발성 URL 만 캐시하고 나머지 휘발성은 드롭한다.
+  private async persistVolatilePhotos(
+    placeId: string,
+    urls: string[],
+  ): Promise<string[]> {
+    const out: string[] = [];
+    let panoramaCached = false;
+    for (const u of urls) {
+      if (!isVolatileNaverPhoto(u)) {
+        out.push(u);
+        continue;
+      }
+      if (panoramaCached) continue;
+      const r = await cachePanoramaThumbnail(placeId, u);
+      if (r.ok) {
+        out.push(Routes.Media.panorama(placeId));
+        panoramaCached = true;
+      } else {
+        // 받기 실패 — 휘발성 원본은 버린다(저장해봐야 곧 만료되는 URL). 사유를
+        // 남겨 간헐 실패(만료=not_ok 403, 타임아웃=fetch_error 등)를 추적한다.
+        // 다음 재크롤 때 네이버가 다시 파노라마를 주면 자연히 재시도된다.
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[panorama-cache] miss placeId=${placeId} reason=${r.reason}` +
+            (r.status ? ` status=${r.status}` : '') +
+            (r.contentType ? ` ct=${r.contentType}` : ''),
+        );
+      }
+    }
+    return out;
+  }
+
   async upsertRestaurantFromCrawl(data: NaverPlaceDataType): Promise<{ id: string }> {
+    const imageUrls = await this.persistVolatilePhotos(data.placeId, data.imageUrls);
     const { visitorReviews: _ignored, ...rest } = data;
-    const snapshotJson = JSON.stringify(rest);
+    const snapshotJson = JSON.stringify({ ...rest, imageUrls });
     // 신규 행은 자기 전용 Canonical 1행을 같이 만든다 (1:1 시작). 어드민이
     // 나중에 merge API 로 같은 가게의 다른 source 행을 같은 canonicalId 로 통합.
     const r = await this.prisma.restaurant.upsert({

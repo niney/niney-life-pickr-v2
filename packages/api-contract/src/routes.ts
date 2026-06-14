@@ -28,6 +28,10 @@ export const Media = {
   // Public (no auth) — review images themselves are public on Naver and we
   // need plain <img> tags to load them without browser-side auth handling.
   thumbnail: `${API_PREFIX}/media/thumbnail`,
+  // 네이버 파노라마 썸네일(apis.naver.com/place/panorama)은 HMAC+msgpad 서명이
+  // 박힌 시간제한(TTL) URL이라 저장해두면 곧 만료된다(403 "HMAC 유효 시간 초과").
+  // 크롤 시점(아직 유효할 때) 받아 영구 저장한 사본을 placeId 로 서빙한다.
+  panorama: (placeId: string) => `${API_PREFIX}/media/panorama/${placeId}`,
 } as const;
 
 export const Crawl = {

@@ -28,6 +28,7 @@ import type {
   TablingBusinessDayType,
   TablingShopDataType,
 } from '@repo/api-contract';
+import { isVolatileNaverPhoto } from '../media/panorama-cache.js';
 
 // snapshotJson 은 *Reviews 를 제거한 상태로 저장돼 있으므로 머지 함수가
 // 보는 타입도 그 형태 그대로.
@@ -190,13 +191,19 @@ export const mergePhotos = (
   tbSnap: TablingSnapshot | null = null,
 ): string[] => {
   const seen = new Set<string>();
-  const out: string[] = [];
+  // 안정 CDN 사진과 휘발성(파노라마) URL 을 따로 모아 안정 사진을 앞에 둔다.
+  // 네이버에 갤러리 사진이 없으면 파노라마가 대표(imageUrls[0])가 되는데, 그 URL 은
+  // TTL 만료(403)로 곧 죽으므로 테이블링/다이닝코드 등 안정 사진이 있으면 그쪽을
+  // 대표로 올린다. (신규 크롤분은 service 가 파노라마를 우리 사본 URL 로 치환하지만,
+  // 미백필 스냅샷·여러 출처 우선순위 보정을 위해 머지 단계에서도 한 번 더 정렬한다.)
+  const stable: string[] = [];
+  const volatile: string[] = [];
   const push = (urls: readonly string[]): void => {
     for (const u of urls) {
       if (typeof u !== 'string' || u.length === 0) continue;
       if (seen.has(u)) continue;
       seen.add(u);
-      out.push(u);
+      (isVolatileNaverPhoto(u) ? volatile : stable).push(u);
     }
   };
   if (naverSnap) push(naverSnap.imageUrls);
@@ -205,7 +212,7 @@ export const mergePhotos = (
     push(dcSnap.images.map((p) => p.origin));
   }
   if (tbSnap) push(tbSnap.images);
-  return out;
+  return [...stable, ...volatile];
 };
 
 // Naver 메뉴가 하나라도 있으면 그대로. 비었으면 테이블링(가격+이미지 1차
