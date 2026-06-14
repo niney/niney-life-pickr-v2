@@ -175,7 +175,7 @@ export const DiscoverMap = ({
         onMarkerSelect={onSelectMarker}
         onViewportChangeEnd={handleViewportChange}
         onViewportSync={handleViewportSync}
-        onTileError={() => setTileError(true)}
+        onTileError={(hasError) => setTileError(hasError)}
       />
 
       {tileError && (

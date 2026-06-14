@@ -148,7 +148,7 @@ export const PublicRestaurantsMap = ({
         selectedMarkerId={selectedPlaceId}
         onMarkerSelect={onSelectMarker}
         onViewportChangeEnd={handleViewportChange}
-        onTileError={() => setTileError(true)}
+        onTileError={(hasError) => setTileError(hasError)}
       />
 
       {tileError && (

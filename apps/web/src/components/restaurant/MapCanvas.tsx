@@ -73,8 +73,10 @@ interface Props {
   // bbox 자동 첨부) 사용. onViewportChangeEnd 와는 의도가 다름 — 그쪽은
   // 사용자 인터랙션 직후의 명시적 시그널, 이쪽은 단순 동기화 채널.
   onViewportSync?(viewport: MapViewport): void;
-  // 처음 mount 시점에 onTileError 가 한 번 호출되면 키가 거부됐을 가능성 큼.
-  onTileError?(): void;
+  // 타일 로딩 상태 변화 알림. hasError=true 는 "키 거부 의심"(짧은 시간에
+  // 여러 타일이 연속 실패), false 는 "회복"(이후 타일이 성공적으로 로드됨).
+  // 단발 실패(패닝 중 요청 취소, vworld 순간 throttling 등)는 호출되지 않는다.
+  onTileError?(hasError: boolean): void;
   // 좌하단 레이어 전환 컨트롤(일반/다크/위성) 표시. 기본 true.
   layerControl?: boolean;
   className?: string;
@@ -182,11 +184,27 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       crossOrigin: 'anonymous',
     });
     tileSourceRef.current = tileSource;
-    let errored = false;
+    // 타일 실패는 정상 사용 중에도 흔하다 — 패닝/줌 도중 아직 안 끝난 타일
+    // 요청이 취소되거나(abort→error), vworld 가 순간적으로 일부 타일을 거부.
+    // 따라서 단발 실패로 "키 거부" 를 단정하면 안 된다. 키가 진짜 죽으면 모든
+    // 타일이 실패하므로, "성공 타일 없이 연속 실패가 임계값을 넘을 때" 만
+    // 에러로 보고하고, 타일이 한 장이라도 성공하면 카운터/에러를 리셋한다.
+    const FAIL_THRESHOLD = 6;
+    let consecutiveErrors = 0;
+    let reported = false;
     tileSource.on('tileloaderror', () => {
-      if (errored) return;
-      errored = true;
-      onTileErrorRef.current?.();
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= FAIL_THRESHOLD && !reported) {
+        reported = true;
+        onTileErrorRef.current?.(true);
+      }
+    });
+    tileSource.on('tileloadend', () => {
+      consecutiveErrors = 0;
+      if (reported) {
+        reported = false;
+        onTileErrorRef.current?.(false);
+      }
     });
 
     const baseLayer = new TileLayer({ source: tileSource });

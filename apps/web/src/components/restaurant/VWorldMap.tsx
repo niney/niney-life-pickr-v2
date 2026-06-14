@@ -64,9 +64,11 @@ export const VWorldMap = ({ lat, lng, name, className }: Props) => {
         apiKey={apiKey}
         markers={[marker]}
         initialCenter={{ lat: lat!, lng: lng!, zoom: 17 }}
-        onTileError={() =>
+        onTileError={(hasError) =>
           setTileError(
-            '지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.',
+            hasError
+              ? '지도 타일을 불러오지 못했습니다. 키가 유효한지 확인해 주세요.'
+              : null,
           )
         }
         className="size-full overflow-hidden rounded-md border bg-muted"
