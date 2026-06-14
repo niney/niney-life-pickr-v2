@@ -184,27 +184,74 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       crossOrigin: 'anonymous',
     });
     tileSourceRef.current = tileSource;
-    // 타일 실패는 정상 사용 중에도 흔하다 — 패닝/줌 도중 아직 안 끝난 타일
-    // 요청이 취소되거나(abort→error), vworld 가 순간적으로 일부 타일을 거부.
-    // 따라서 단발 실패로 "키 거부" 를 단정하면 안 된다. 키가 진짜 죽으면 모든
-    // 타일이 실패하므로, "성공 타일 없이 연속 실패가 임계값을 넘을 때" 만
-    // 에러로 보고하고, 타일이 한 장이라도 성공하면 카운터/에러를 리셋한다.
-    const FAIL_THRESHOLD = 6;
+    // 타일 실패(tileloaderror)는 키 거부와 동의어가 아니다 — 실측 결과 대부분은
+    // 클라이언트 측 일시적 실패다: 빠른 패닝/줌으로 대량 타일을 동시에 요청하면
+    // 브라우저가 리소스/커넥션 한계로 이미지 로드를 net::ERR_INSUFFICIENT_RESOURCES
+    // 등으로 실패시킨다(서버는 정상, 같은 타일을 fetch 하면 200). OL 이미지 abort
+    // 도 마찬가지. 따라서 연속 실패만으로 "키 무효" 배너를 띄우면 오탐이 난다.
+    //
+    // 전략: 연속 실패가 임계값을 넘으면 즉시 배너 대신 키를 fetch 로 직접 검사
+    // 한다(낮은 줌의 단일 타일 — 과도 확대로 인한 타일 부재나 이미지 버스트
+    // 실패에 안 휘말림). 검사 결과를 셋으로 나눈다:
+    //   - 401/403 (서버가 키를 명시 거부) → 배너 표시 (진짜 키 무효)
+    //   - 200 + image/* → 배너 억제/해제 + 카운터 리셋 (일시적 실패였음)
+    //   - 그 외(throw·타임아웃·비-이미지·기타 status) → 판정 불가, 상태 유지
+    // throw 를 "무효" 로 보지 않는 게 핵심 — 프로브 fetch 자체가 일시적으로
+    // 실패해도 오탐을 내지 않는다. 타일이 한 장이라도 성공하면 즉시 리셋한다.
+    const FAIL_THRESHOLD = 8;
+    const PROBE_COOLDOWN_MS = 5000;
+    // 키 유효성 확인용 저줌 타일 (서울 부근 z7). buildVworldTileUrl 의 템플릿을
+    // 재사용해 엔드포인트 중복을 피한다.
+    const probeUrl = buildVworldTileUrl(apiKey, 'Base').replace(
+      '{z}/{y}/{x}',
+      '7/44/109',
+    );
     let consecutiveErrors = 0;
     let reported = false;
+    let probing = false;
+    let lastProbeAt = 0;
+
+    const setReported = (next: boolean) => {
+      if (reported === next) return;
+      reported = next;
+      onTileErrorRef.current?.(next);
+    };
+
+    const probeKeyOnBurst = async () => {
+      if (probing) return;
+      probing = true;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+      try {
+        const res = await fetch(probeUrl, { signal: controller.signal });
+        if (res.status === 401 || res.status === 403) {
+          setReported(true); // 키 거부 확정
+        } else if (res.ok && (res.headers.get('content-type') ?? '').startsWith('image/')) {
+          consecutiveErrors = 0;
+          setReported(false); // 키 정상 — 일시적 실패였음, 배너 억제/해제
+        }
+        // 그 외 status → 판정 불가, 상태 유지
+      } catch {
+        // fetch throw / abort(타임아웃) → 판정 불가, 상태 유지
+      } finally {
+        clearTimeout(timer);
+        probing = false;
+      }
+    };
+
     tileSource.on('tileloaderror', () => {
       consecutiveErrors += 1;
-      if (consecutiveErrors >= FAIL_THRESHOLD && !reported) {
-        reported = true;
-        onTileErrorRef.current?.(true);
+      if (consecutiveErrors >= FAIL_THRESHOLD && !probing) {
+        const now = Date.now();
+        if (now - lastProbeAt >= PROBE_COOLDOWN_MS) {
+          lastProbeAt = now;
+          void probeKeyOnBurst();
+        }
       }
     });
     tileSource.on('tileloadend', () => {
       consecutiveErrors = 0;
-      if (reported) {
-        reported = false;
-        onTileErrorRef.current?.(false);
-      }
+      setReported(false);
     });
 
     const baseLayer = new TileLayer({ source: tileSource });
