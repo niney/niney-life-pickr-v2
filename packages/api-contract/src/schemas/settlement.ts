@@ -50,16 +50,19 @@ export const SettlementRoundAttendeeInput = z.object({
 export type SettlementRoundAttendeeInputType = z.infer<typeof SettlementRoundAttendeeInput>;
 
 // 카테고리별 잔여 처리 보정 — '분담 다듬기'. 풀이 인원수로 정확히 나눠
-// 떨어지지 않을 때 사용자가 정한 규칙. 응답 형은 leftoverParticipantId (db),
-// 입력 형은 leftoverParticipantClientId.
+// 떨어지지 않을 때 사용자가 정한 규칙. 응답 형은 leftoverParticipantIds (db),
+// 입력 형은 leftoverParticipantClientIds.
+//
+// leftoverParticipantIds: 잔여를 받을 사람(들). 1명이면 그 사람이 전부
+// 흡수(레거시 '몰아주기'), 여러 명이면 잔여를 그들끼리 균등 분배('나눠 받기').
 //
 // roundUnit:
-// - null  : 풀 그대로, 잔여 1~(n-1)원을 leftoverParticipant 가 흡수.
+// - null  : 풀 그대로, 잔여 1~(n-1)원을 leftover 수령자(들) 가 흡수.
 // - 100/1000: 풀을 그 단위로 round 후 균등 분배. 단 round 한 풀이 인원수로
 //   나누어 떨어져야 한다 — 안 떨어지면 calculator 가 안전망으로 roundUnit 을
 //   무시 + 잔여 가산. (UI 가 활성 조건 검사 + 서비스 검증.)
 export const SettlementCategoryAdjustment = z.object({
-  leftoverParticipantId: z.string(),
+  leftoverParticipantIds: z.array(z.string()).min(1),
   roundUnit: z.number().int().positive().nullable(),
 });
 export type SettlementCategoryAdjustmentType = z.infer<typeof SettlementCategoryAdjustment>;
@@ -76,7 +79,7 @@ export type SettlementCategoryAdjustmentsType = z.infer<typeof SettlementCategor
 
 // 입력 시엔 마스터 db id 가 아직 없어 clientId 로 참조.
 export const SettlementCategoryAdjustmentInput = z.object({
-  leftoverParticipantClientId: z.string().min(1),
+  leftoverParticipantClientIds: z.array(z.string().min(1)).min(1),
   roundUnit: z.number().int().positive().nullable(),
 });
 export type SettlementCategoryAdjustmentInputType = z.infer<

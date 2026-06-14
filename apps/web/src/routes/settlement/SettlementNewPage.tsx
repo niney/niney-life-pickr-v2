@@ -127,7 +127,7 @@ export const SettlementNewPage = () => {
       })),
       discountAmount: r.discountAmount,
       discountCategory: r.discountCategory,
-      // 응답 categoryAdjustments 는 leftoverParticipantId(db) → leftoverParticipantClientId 로 변환.
+      // 응답 categoryAdjustments 는 leftoverParticipantIds(db) → ClientIds 로 변환.
       categoryAdjustments: r.categoryAdjustments
         ? Object.fromEntries(
             Object.entries(r.categoryAdjustments)
@@ -135,8 +135,9 @@ export const SettlementNewPage = () => {
               .map(([cat, v]) => [
                 cat,
                 {
-                  leftoverParticipantClientId:
-                    dbIdToClientId.get(v!.leftoverParticipantId) ?? '',
+                  leftoverParticipantClientIds: v!.leftoverParticipantIds
+                    .map((id) => dbIdToClientId.get(id))
+                    .filter((id): id is string => !!id),
                   roundUnit: v!.roundUnit,
                 },
               ]),

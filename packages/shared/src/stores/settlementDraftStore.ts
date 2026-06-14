@@ -79,10 +79,11 @@ export interface DraftAttendance {
   excludeSideOverride: boolean | null;
 }
 
-// 카테고리별 잔여 처리 규칙. 마스터 참여자 clientId 로 leftover 지정 — 그
-// 사람이 빠지면 calculator 가 default(첫 활성자) 로 fallback.
+// 카테고리별 잔여 처리 규칙. 마스터 참여자 clientId 로 잔여 수령자(들) 지정 —
+// 1명이면 그 사람이 전부 흡수('몰아주기'), 여러 명이면 잔여를 그들끼리 균등
+// 분배('나눠 받기'). 수령자가 차수에서 빠지면 calculator 가 첫 활성자로 fallback.
 export interface DraftCategoryAdjustment {
-  leftoverParticipantClientId: string;
+  leftoverParticipantClientIds: string[];
   roundUnit: number | null;
 }
 
@@ -188,6 +189,31 @@ const emptyDraft = (): SettlementDraft => ({
   participants: [],
   rounds: [],
 });
+
+// v5 → v6 잔여 수령자 단일→배열 승격. 옛 형(leftoverParticipantClientId: string)
+// 을 [id] 로 올린다. 이미 배열이면 그대로.
+const migrateCategoryAdjustments = (
+  adjustments: DraftCategoryAdjustments | null,
+): DraftCategoryAdjustments | null => {
+  if (!adjustments) return null;
+  const out: DraftCategoryAdjustments = {};
+  for (const [cat, v] of Object.entries(adjustments)) {
+    if (!v) continue;
+    const legacy = v as DraftCategoryAdjustment & {
+      leftoverParticipantClientId?: string;
+    };
+    const ids =
+      legacy.leftoverParticipantClientIds ??
+      (legacy.leftoverParticipantClientId
+        ? [legacy.leftoverParticipantClientId]
+        : []);
+    out[cat as keyof DraftCategoryAdjustments] = {
+      leftoverParticipantClientIds: ids,
+      roundUnit: v.roundUnit ?? null,
+    };
+  }
+  return Object.keys(out).length === 0 ? null : out;
+};
 
 const emptyAttendance = (participantClientId: string): DraftAttendance => ({
   participantClientId,
@@ -683,7 +709,9 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       // v2 → v3: round 에 discountAmount/discountCategory 필드 추가 (null).
       // v3 → v4: round 에 categoryAdjustments 필드 추가 (null).
       // v4 → v5: round 에 groupSplits 필드 추가 (null).
-      version: 5,
+      // v5 → v6: categoryAdjustment 의 leftoverParticipantClientId(단일) →
+      //          leftoverParticipantClientIds(배열) 로 승격.
+      version: 6,
       migrate: (persisted, fromVersion) => {
         // v2+ → 최신: rounds 의 각 round 에 빠진 필드 채워준다.
         if (fromVersion >= 2) {
@@ -694,7 +722,9 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
               ...r,
               discountAmount: r.discountAmount ?? null,
               discountCategory: r.discountCategory ?? null,
-              categoryAdjustments: r.categoryAdjustments ?? null,
+              categoryAdjustments: migrateCategoryAdjustments(
+                r.categoryAdjustments ?? null,
+              ),
               groupSplits: r.groupSplits ?? null,
             })),
           };

@@ -131,13 +131,26 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
       <div className="text-xs font-medium text-muted-foreground">분담 다듬기</div>
       {rows.map((row) => {
         const candidates = activeFor(row.category);
-        const currentLeftover =
-          row.adj?.leftoverParticipantClientId ?? candidates[0]?.clientId ?? '';
+        const currentLeftovers =
+          row.adj?.leftoverParticipantClientIds ??
+          (candidates[0] ? [candidates[0].clientId] : []);
         const currentUnit = row.adj?.roundUnit ?? null;
+        // 잔여 R 원이면 최대 R 명까지 나눠 받을 수 있다 (R<2 면 단일=몰아주기).
+        const cap = Math.max(1, row.remainder);
 
-        const setLeftover = (clientId: string) => {
+        const toggleLeftover = (clientId: string) => {
+          let next: string[];
+          if (cap <= 1) {
+            next = [clientId]; // 단일 — 항상 교체(레거시 몰아주기).
+          } else if (currentLeftovers.includes(clientId)) {
+            if (currentLeftovers.length === 1) return; // 최소 1명은 유지.
+            next = currentLeftovers.filter((id) => id !== clientId);
+          } else {
+            if (currentLeftovers.length >= cap) return; // 캡 도달.
+            next = [...currentLeftovers, clientId];
+          }
           setCategoryAdjustment(round.clientId, row.category, {
-            leftoverParticipantClientId: clientId,
+            leftoverParticipantClientIds: next,
             roundUnit: currentUnit,
           });
         };
@@ -150,13 +163,13 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
               return;
             }
             setCategoryAdjustment(round.clientId, row.category, {
-              leftoverParticipantClientId: currentLeftover,
+              leftoverParticipantClientIds: currentLeftovers,
               roundUnit: null,
             });
             return;
           }
           setCategoryAdjustment(round.clientId, row.category, {
-            leftoverParticipantClientId: currentLeftover,
+            leftoverParticipantClientIds: currentLeftovers,
             roundUnit: unit,
           });
         };
@@ -171,17 +184,25 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <select
-                value={currentLeftover}
-                onChange={(e) => setLeftover(e.target.value)}
-                className="h-8 rounded-md border bg-background px-2 text-xs"
-              >
-                {candidates.map((p, i) => (
-                  <option key={p.clientId} value={p.clientId}>
-                    {participantLabel(p, i)} 이 잔여 받기
-                  </option>
-                ))}
-              </select>
+              <span className="text-[11px] text-muted-foreground">
+                잔여 받기
+                {cap >= 2 ? ` (여러 명 고르면 나눠 받음 · 최대 ${cap}명)` : ''}:
+              </span>
+              {candidates.map((p, i) => {
+                const sel = currentLeftovers.includes(p.clientId);
+                return (
+                  <Button
+                    key={p.clientId}
+                    type="button"
+                    size="sm"
+                    variant={sel ? 'default' : 'outline'}
+                    onClick={() => toggleLeftover(p.clientId)}
+                    className="h-8 text-xs"
+                  >
+                    {participantLabel(p, i)}
+                  </Button>
+                );
+              })}
               {ROUND_UNITS.map((unit) => {
                 const rounded = Math.round(row.pool / unit) * unit;
                 const fits = rounded % row.n === 0;

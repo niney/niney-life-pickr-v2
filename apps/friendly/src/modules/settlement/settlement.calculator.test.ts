@@ -322,7 +322,7 @@ describe('calculateShares — 세부 분배 그룹', () => {
       ],
       participants: noExclude(2),
       categoryAdjustments: {
-        ALCOHOL: { leftoverParticipantIndex: 0, roundUnit: 100 },
+        ALCOHOL: { leftoverParticipantIndexes: [0], roundUnit: 100 },
       },
       groups: [
         {
@@ -339,6 +339,30 @@ describe('calculateShares — 세부 분배 그룹', () => {
       poolAmount: 8000,
       equalPoolAmount: 1000,
     });
+  });
+
+  it('splits the 1-won remainder across multiple leftover receivers', () => {
+    // 3,002 / 3명 → 인당 1,000 + 잔여 2. 수령자 [1,2] 가 1원씩 나눠 받는다.
+    const r = calculateShares({
+      items: [{ amount: 3002, category: 'UNCATEGORIZED' }],
+      participants: noExclude(3),
+      categoryAdjustments: {
+        UNCATEGORIZED: { leftoverParticipantIndexes: [1, 2], roundUnit: null },
+      },
+    });
+    expect(r.shareAmounts).toEqual([1000, 1001, 1001]);
+  });
+
+  it('dumps the whole remainder on a single leftover receiver (legacy)', () => {
+    // 3,002 / 3명 → 잔여 2 를 한 명(인덱스 2) 이 전부 흡수 = 몰아주기.
+    const r = calculateShares({
+      items: [{ amount: 3002, category: 'UNCATEGORIZED' }],
+      participants: noExclude(3),
+      categoryAdjustments: {
+        UNCATEGORIZED: { leftoverParticipantIndexes: [2], roundUnit: null },
+      },
+    });
+    expect(r.shareAmounts).toEqual([1000, 1000, 1002]);
   });
 });
 
@@ -575,7 +599,7 @@ describe('calculateMultiRoundShares', () => {
             { participantIndex: 2, excludeAlcohol: false, excludeNonAlcohol: false, excludeSide: false },
           ],
           categoryAdjustments: {
-            SIDE: { leftoverParticipantIndex: 2, roundUnit: null },
+            SIDE: { leftoverParticipantIndexes: [2], roundUnit: null },
           },
         },
       ],
@@ -597,7 +621,7 @@ describe('calculateMultiRoundShares', () => {
             excludeSide: false,
           })),
           categoryAdjustments: {
-            SIDE: { leftoverParticipantIndex: 0, roundUnit: 100 },
+            SIDE: { leftoverParticipantIndexes: [0], roundUnit: 100 },
           },
         },
       ],
@@ -622,7 +646,7 @@ describe('calculateMultiRoundShares', () => {
             excludeSide: false,
           })),
           categoryAdjustments: {
-            SIDE: { leftoverParticipantIndex: 1, roundUnit: 100 },
+            SIDE: { leftoverParticipantIndexes: [1], roundUnit: 100 },
           },
         },
       ],

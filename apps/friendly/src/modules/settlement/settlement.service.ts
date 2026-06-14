@@ -954,21 +954,22 @@ export class SettlementService {
     const clientIdToIndex = new Map(
       input.participants.map((p, i) => [p.clientId, i]),
     );
-    // 입력 categoryAdjustments 의 leftoverParticipantClientId 를 마스터 인덱스로
-    // 변환해 calculator 가 바로 쓸 수 있게.
+    // 입력 categoryAdjustments 의 leftoverParticipantClientIds 를 마스터 인덱스
+    // 배열로 변환해 calculator 가 바로 쓸 수 있게.
     const adj = round.categoryAdjustments ?? null;
     const categoryAdjustments = adj
       ? Object.fromEntries(
           (Object.entries(adj) as [
             ReceiptItemCategoryType,
-            { leftoverParticipantClientId: string; roundUnit: number | null } | null | undefined,
+            { leftoverParticipantClientIds: string[]; roundUnit: number | null } | null | undefined,
           ][])
             .filter(([, v]) => v != null)
             .map(([cat, v]) => [
               cat,
               {
-                leftoverParticipantIndex:
-                  clientIdToIndex.get(v!.leftoverParticipantClientId) ?? 0,
+                leftoverParticipantIndexes: v!.leftoverParticipantClientIds
+                  .map((id) => clientIdToIndex.get(id) ?? -1)
+                  .filter((idx) => idx >= 0),
                 roundUnit: v!.roundUnit,
               },
             ]),
@@ -1110,19 +1111,22 @@ export class SettlementService {
   }
 }
 
-// categoryAdjustments — 입력 clientId 를 db id 로 치환해 JSON 저장. 매칭 안
-// 되는 leftoverParticipantClientId 의 카테고리는 그냥 빼버린다(= default 동작).
+// categoryAdjustments — 입력 clientId(들) 를 db id 로 치환해 JSON 저장. 매칭
+// 안 되는 수령자는 빼고, 수령자가 0명이 된 카테고리는 통째로 뺀다(= default
+// 동작).
 const serializeCategoryAdjustments = (
   adj: SettlementRoundInputType['categoryAdjustments'] | null,
   clientIdToDbId: Map<string, string>,
 ): string | null => {
   if (!adj) return null;
-  const out: Record<string, { leftoverParticipantId: string; roundUnit: number | null }> = {};
+  const out: Record<string, { leftoverParticipantIds: string[]; roundUnit: number | null }> = {};
   for (const [cat, v] of Object.entries(adj)) {
     if (!v) continue;
-    const dbId = clientIdToDbId.get(v.leftoverParticipantClientId);
-    if (!dbId) continue;
-    out[cat] = { leftoverParticipantId: dbId, roundUnit: v.roundUnit };
+    const dbIds = v.leftoverParticipantClientIds
+      .map((id) => clientIdToDbId.get(id))
+      .filter((id): id is string => !!id);
+    if (dbIds.length === 0) continue;
+    out[cat] = { leftoverParticipantIds: dbIds, roundUnit: v.roundUnit };
   }
   return Object.keys(out).length === 0 ? null : JSON.stringify(out);
 };
@@ -1132,8 +1136,27 @@ const parseCategoryAdjustments = (
 ): SettlementRoundType['categoryAdjustments'] => {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as SettlementRoundType['categoryAdjustments'];
-    return parsed;
+    const parsed = JSON.parse(raw) as Record<
+      string,
+      {
+        leftoverParticipantIds?: string[];
+        leftoverParticipantId?: string; // 레거시 단일 형 (v6 이전 저장본)
+        roundUnit: number | null;
+      } | null
+    >;
+    const out = {} as NonNullable<SettlementRoundType['categoryAdjustments']>;
+    for (const [cat, v] of Object.entries(parsed)) {
+      if (!v) continue;
+      const ids =
+        v.leftoverParticipantIds ??
+        (v.leftoverParticipantId ? [v.leftoverParticipantId] : []);
+      if (ids.length === 0) continue;
+      out[cat as keyof typeof out] = {
+        leftoverParticipantIds: ids,
+        roundUnit: v.roundUnit ?? null,
+      };
+    }
+    return Object.keys(out).length === 0 ? null : out;
   } catch {
     return null;
   }

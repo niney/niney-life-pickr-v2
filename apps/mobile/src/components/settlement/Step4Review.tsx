@@ -122,9 +122,13 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                   .map(([cat, v]) => [
                     cat,
                     {
-                      leftoverParticipantIndex: draft.participants.findIndex(
-                        (p) => p.clientId === v!.leftoverParticipantClientId,
-                      ),
+                      leftoverParticipantIndexes: v!.leftoverParticipantClientIds
+                        .map((id) =>
+                          draft.participants.findIndex(
+                            (p) => p.clientId === id,
+                          ),
+                        )
+                        .filter((idx) => idx >= 0),
                       roundUnit: v!.roundUnit,
                     },
                   ]),

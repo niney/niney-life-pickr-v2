@@ -141,13 +141,26 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
       </Text>
       {rows.map((row) => {
         const candidates = activeFor(row.category);
-        const currentLeftover =
-          row.adj?.leftoverParticipantClientId ?? candidates[0]?.clientId ?? '';
+        const currentLeftovers =
+          row.adj?.leftoverParticipantClientIds ??
+          (candidates[0] ? [candidates[0].clientId] : []);
         const currentUnit = row.adj?.roundUnit ?? null;
+        // 잔여 R 원이면 최대 R 명까지 나눠 받을 수 있다 (R<2 면 단일=몰아주기).
+        const cap = Math.max(1, row.remainder);
 
-        const setLeftover = (clientId: string) => {
+        const toggleLeftover = (clientId: string) => {
+          let next: string[];
+          if (cap <= 1) {
+            next = [clientId]; // 단일 — 항상 교체(레거시 몰아주기).
+          } else if (currentLeftovers.includes(clientId)) {
+            if (currentLeftovers.length === 1) return; // 최소 1명은 유지.
+            next = currentLeftovers.filter((id) => id !== clientId);
+          } else {
+            if (currentLeftovers.length >= cap) return; // 캡 도달.
+            next = [...currentLeftovers, clientId];
+          }
           setCategoryAdjustment(round.clientId, row.category, {
-            leftoverParticipantClientId: clientId,
+            leftoverParticipantClientIds: next,
             roundUnit: currentUnit,
           });
         };
@@ -158,13 +171,13 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
               return;
             }
             setCategoryAdjustment(round.clientId, row.category, {
-              leftoverParticipantClientId: currentLeftover,
+              leftoverParticipantClientIds: currentLeftovers,
               roundUnit: null,
             });
             return;
           }
           setCategoryAdjustment(round.clientId, row.category, {
-            leftoverParticipantClientId: currentLeftover,
+            leftoverParticipantClientIds: currentLeftovers,
             roundUnit: unit,
           });
         };
@@ -184,6 +197,9 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
 
             <Text style={[styles.subLabel, { color: theme.colors.textMuted }]}>
               잔여 받기
+              {cap >= 2
+                ? ` · 여러 명 고르면 나눠 받아요 (최대 ${cap}명)`
+                : ''}
             </Text>
             <ScrollView
               horizontal
@@ -191,12 +207,12 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
               contentContainerStyle={{ gap: 6 }}
             >
               {candidates.map((p, i) => {
-                const sel = currentLeftover === p.clientId;
+                const sel = currentLeftovers.includes(p.clientId);
                 return (
                   <Pressable
                     key={p.clientId}
                     accessibilityRole="button"
-                    onPress={() => setLeftover(p.clientId)}
+                    onPress={() => toggleLeftover(p.clientId)}
                     style={({ pressed }) => [
                       styles.chip,
                       {

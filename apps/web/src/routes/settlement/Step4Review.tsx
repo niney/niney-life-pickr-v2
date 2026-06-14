@@ -113,7 +113,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
           r.discountAmount != null && r.discountCategory != null && r.discountAmount > 0
             ? { amount: r.discountAmount, category: r.discountCategory }
             : null,
-        // 보정의 leftoverParticipantClientId → 마스터 인덱스로 변환.
+        // 보정의 leftoverParticipantClientIds → 마스터 인덱스 배열로 변환.
         categoryAdjustments: r.categoryAdjustments
           ? Object.fromEntries(
               Object.entries(r.categoryAdjustments)
@@ -121,9 +121,11 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                 .map(([cat, v]) => [
                   cat,
                   {
-                    leftoverParticipantIndex: draft.participants.findIndex(
-                      (p) => p.clientId === v!.leftoverParticipantClientId,
-                    ),
+                    leftoverParticipantIndexes: v!.leftoverParticipantClientIds
+                      .map((id) =>
+                        draft.participants.findIndex((p) => p.clientId === id),
+                      )
+                      .filter((idx) => idx >= 0),
                     roundUnit: v!.roundUnit,
                   },
                 ]),

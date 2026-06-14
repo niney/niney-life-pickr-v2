@@ -120,8 +120,9 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
               .map(([cat, v]) => [
                 cat,
                 {
-                  leftoverParticipantClientId:
-                    dbIdToClientId.get(v!.leftoverParticipantId) ?? '',
+                  leftoverParticipantClientIds: v!.leftoverParticipantIds
+                    .map((id) => dbIdToClientId.get(id))
+                    .filter((id): id is string => !!id),
                   roundUnit: v!.roundUnit,
                 },
               ]),

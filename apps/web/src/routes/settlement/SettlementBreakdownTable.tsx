@@ -245,7 +245,7 @@ const useMatrix = (session: SharedSettlementSessionType): SettlementMatrix =>
           r.discountAmount != null && r.discountCategory != null
             ? { amount: r.discountAmount, category: r.discountCategory }
             : null,
-        // 응답 categoryAdjustments 의 leftoverParticipantId(db) → 마스터 인덱스.
+        // 응답 categoryAdjustments 의 leftoverParticipantIds(db) → 마스터 인덱스 배열.
         categoryAdjustments: r.categoryAdjustments
           ? Object.fromEntries(
               Object.entries(r.categoryAdjustments)
@@ -253,7 +253,9 @@ const useMatrix = (session: SharedSettlementSessionType): SettlementMatrix =>
                 .map(([cat, v]) => [
                   cat,
                   {
-                    leftoverParticipantIndex: pIdxById.get(v!.leftoverParticipantId) ?? 0,
+                    leftoverParticipantIndexes: v!.leftoverParticipantIds
+                      .map((id) => pIdxById.get(id) ?? -1)
+                      .filter((idx) => idx >= 0),
                     roundUnit: v!.roundUnit,
                   },
                 ]),

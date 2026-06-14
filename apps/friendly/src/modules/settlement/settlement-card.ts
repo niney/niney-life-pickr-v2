@@ -143,8 +143,9 @@ function computeMatrix(
               .map(([cat, v]) => [
                 cat,
                 {
-                  leftoverParticipantIndex:
-                    pIdxById.get(v!.leftoverParticipantId) ?? 0,
+                  leftoverParticipantIndexes: v!.leftoverParticipantIds
+                    .map((id) => pIdxById.get(id) ?? -1)
+                    .filter((idx) => idx >= 0),
                   roundUnit: v!.roundUnit,
                 },
               ]),

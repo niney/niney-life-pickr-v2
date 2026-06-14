@@ -110,7 +110,7 @@ export interface CalculateOutput {
 export type CategoryAdjustmentsInput = Partial<
   Record<
     ReceiptItemCategoryType,
-    { leftoverParticipantIndex: number; roundUnit: number | null }
+    { leftoverParticipantIndexes: number[]; roundUnit: number | null }
   >
 >;
 
@@ -260,7 +260,7 @@ export const calculateShares = (
       const distributed = distributeWith(
         equalPool,
         participates,
-        adj?.leftoverParticipantIndex,
+        adj?.leftoverParticipantIndexes,
       );
       for (let i = 0; i < participantCount; i += 1) {
         const v = distributed[i] ?? 0;
@@ -327,30 +327,40 @@ const distribute = (amount: number, n: number, leftoverAt = 0): number[] => {
   return out;
 };
 
-// participates[i]=true 인 사람에게만 분배. false 는 0. leftoverParticipantIdx
-// 는 participates 배열의 인덱스 — 그 사람이 활성자이면 그 위치에 잔여,
-// 아니면 첫 활성자에 잔여.
+// participates[i]=true 인 사람에게만 분배. false 는 0. leftoverParticipantIdxs
+// 는 participates 배열의 인덱스(들) — 균등 분배 후 남는 1원 단위 잔여를 받을
+// 사람(들). 1명이면 그 사람이 전부 흡수('몰아주기'), 여러 명이면 잔여를 그들
+// 끼리 다시 균등 분배('나눠 받기'). 활성자가 아닌 수령자는 무시하고, 유효
+// 수령자가 0명이면 첫 활성자로 fallback.
 const distributeWith = (
   amount: number,
   participates: boolean[],
-  leftoverParticipantIdx?: number,
+  leftoverParticipantIdxs?: number[],
 ): number[] => {
   const activeIdx: number[] = [];
   participates.forEach((p, i) => {
     if (p) activeIdx.push(i);
   });
-  const leftoverAt =
-    leftoverParticipantIdx != null
-      ? activeIdx.indexOf(leftoverParticipantIdx)
-      : 0;
-  const distributed = distribute(
-    amount,
-    activeIdx.length,
-    leftoverAt >= 0 ? leftoverAt : 0,
-  );
   const out = new Array<number>(participates.length).fill(0);
-  activeIdx.forEach((i, k) => {
-    out[i] = distributed[k] ?? 0;
+  const n = activeIdx.length;
+  if (n === 0 || amount <= 0) return out;
+
+  const per = Math.floor(amount / n);
+  activeIdx.forEach((i) => {
+    out[i] = per;
+  });
+  let remainder = amount - per * n;
+  if (remainder <= 0) return out;
+
+  // 잔여 수령자 — 지정된 활성 수령자(중복 제거, 순서 유지), 없으면 첫 활성자.
+  let receivers = (leftoverParticipantIdxs ?? []).filter((i) => participates[i]);
+  receivers = receivers.filter((i, k) => receivers.indexOf(i) === k);
+  if (receivers.length === 0) receivers = [activeIdx[0]!];
+
+  // 잔여를 수령자끼리 균등 분배 (수령자 1명이면 전부 그 사람에게).
+  const share = distribute(remainder, receivers.length);
+  receivers.forEach((i, k) => {
+    out[i] = (out[i] ?? 0) + (share[k] ?? 0);
   });
   return out;
 };
@@ -459,16 +469,17 @@ export const calculateMultiRoundShares = (
       ? Object.fromEntries(
           (Object.entries(round.categoryAdjustments) as [
             ReceiptItemCategoryType,
-            { leftoverParticipantIndex: number; roundUnit: number | null } | undefined,
+            { leftoverParticipantIndexes: number[]; roundUnit: number | null } | undefined,
           ][])
             .filter(([, v]) => v != null)
             .map(([cat, v]) => [
               cat,
               {
-                // 마스터 인덱스의 참여자가 이 차수에 참석 안 했으면 -1 →
-                // calculateShares 가 첫 활성자로 fallback.
-                leftoverParticipantIndex:
-                  masterToAttendee.get(v!.leftoverParticipantIndex) ?? -1,
+                // 마스터 인덱스 → 참석자 인덱스. 이 차수 비참석 수령자는 빠지고
+                // (남은 수령자 0명이면 calculateShares 가 첫 활성자로 fallback).
+                leftoverParticipantIndexes: v!.leftoverParticipantIndexes
+                  .map((idx) => masterToAttendee.get(idx) ?? -1)
+                  .filter((idx) => idx >= 0),
                 roundUnit: v!.roundUnit,
               },
             ]),

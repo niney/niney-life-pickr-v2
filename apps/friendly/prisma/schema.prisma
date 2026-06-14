@@ -100,8 +100,9 @@ model SettlementRound {
   discountAmount    Int?
   discountCategory  String?
   // 분담 다듬기 — 카테고리별 잔여 처리 규칙을 JSON 으로 직렬화. 모양:
-  // { [Category]: { leftoverParticipantId, roundUnit: number|null } }.
-  // null/미설정이면 default(잔여를 첫 참여자가 흡수).
+  // { [Category]: { leftoverParticipantIds: string[], roundUnit: number|null } }.
+  // 수령자 1명=몰아주기, 여러 명=잔여 균등 분배. null/미설정이면 default(첫
+  // 참여자 흡수). 레거시 단일 leftoverParticipantId 도 읽기 시 호환 처리.
   categoryAdjustments String?
   // 세부 분배 그룹(소주/맥주 잔수 등)을 JSON 배열로 직렬화. 모양:
   // [{ label, category, itemIndexes, mode: 'EQUAL'|'GLASSES',

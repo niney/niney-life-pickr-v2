@@ -52,22 +52,51 @@ export const Step3Edit = ({ onBack, onNext }: Props) => {
   const active = rounds[safeIdx];
 
   // 진행 가능 — 모든 차수의 항목이 1개 이상, 이름·금액이 유효해야. 할인이
-  // 활성화돼 있으면 (1) 양수 (2) 카테고리 풀 ≥ 할인금액.
-  const canProceed =
-    rounds.length > 0 &&
-    rounds.every((r) => {
-      if (r.items.length === 0) return false;
-      if (r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0))
-        return false;
+  // 활성화돼 있으면 (1) 양수 (2) 카테고리 풀 ≥ 할인금액. 막혔으면 *왜* 막혔는지
+  // 첫 번째 위반 차수 index 와 사유 문구를 함께 반환해 사용자에게 노출한다.
+  const block = useMemo<{ idx: number; reason: string } | null>(() => {
+    if (rounds.length === 0) {
+      return { idx: 0, reason: '차수가 없습니다. 이전 단계에서 추가하세요.' };
+    }
+    for (let idx = 0; idx < rounds.length; idx++) {
+      const r = rounds[idx];
+      if (!r) continue;
+      const label = `${idx + 1}차`;
+      if (r.items.length === 0) {
+        return { idx, reason: `${label}: 항목을 1개 이상 추가하세요.` };
+      }
+      if (r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0)) {
+        return { idx, reason: `${label}: 이름이 비었거나 금액이 0인 항목을 확인하세요.` };
+      }
       if (r.discountAmount != null && r.discountCategory != null) {
-        if (r.discountAmount <= 0) return false;
+        if (r.discountAmount <= 0) {
+          return { idx, reason: `${label}: 할인금액은 0보다 커야 합니다.` };
+        }
         const pool = r.items
           .filter((it) => it.category === r.discountCategory)
           .reduce((s, it) => s + it.amount, 0);
-        if (r.discountAmount > pool) return false;
+        if (r.discountAmount > pool) {
+          return {
+            idx,
+            reason: `${label}: 할인금액이 해당 카테고리 항목 합계(${pool.toLocaleString('ko-KR')}원)를 초과합니다.`,
+          };
+        }
       }
-      return true;
-    });
+    }
+    return null;
+  }, [rounds]);
+
+  const canProceed = block === null;
+
+  const handleNext = () => {
+    setSubmitAttempt(true);
+    if (block) {
+      // 첫 번째 문제 차수로 이동해 빨간 항목이 바로 보이게.
+      setActiveIdx(block.idx);
+      return;
+    }
+    onNext();
+  };
 
   return (
     <View style={styles.container}>
@@ -137,55 +166,68 @@ export const Step3Edit = ({ onBack, onNext }: Props) => {
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onBack}
-          style={({ pressed }) => [
-            styles.ghostButton,
-            {
-              backgroundColor: pressed
-                ? theme.colors.surfaceAlt
-                : 'transparent',
-            },
-          ]}
-        >
-          <Text style={[styles.ghostButtonText, { color: theme.colors.text }]}>
-            이전
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={submitAttempt && !canProceed}
-          onPress={() => {
-            setSubmitAttempt(true);
-            if (canProceed) onNext();
-          }}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            {
-              backgroundColor:
-                submitAttempt && !canProceed
-                  ? theme.colors.surfaceAlt
-                  : pressed
-                    ? theme.colors.primaryHover
-                    : theme.colors.primary,
-            },
-          ]}
-        >
-          <Text
+        {submitAttempt && block && (
+          <View
             style={[
-              styles.primaryButtonText,
+              styles.blockBanner,
               {
-                color:
-                  submitAttempt && !canProceed
-                    ? theme.colors.textMuted
-                    : theme.colors.primaryText,
+                backgroundColor: theme.colors.dangerBg,
+                borderColor: theme.colors.danger,
               },
             ]}
           >
-            다음
-          </Text>
-        </Pressable>
+            <Text style={[styles.warnText, { color: theme.colors.text }]}>
+              ⚠ {block.reason}
+            </Text>
+          </View>
+        )}
+        <View style={styles.footerButtons}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onBack}
+            style={({ pressed }) => [
+              styles.ghostButton,
+              {
+                backgroundColor: pressed
+                  ? theme.colors.surfaceAlt
+                  : 'transparent',
+              },
+            ]}
+          >
+            <Text style={[styles.ghostButtonText, { color: theme.colors.text }]}>
+              이전
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleNext}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              {
+                backgroundColor:
+                  submitAttempt && !canProceed
+                    ? theme.colors.surfaceAlt
+                    : pressed
+                      ? theme.colors.primaryHover
+                      : theme.colors.primary,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.primaryButtonText,
+                {
+                  color:
+                    submitAttempt && !canProceed
+                      ? theme.colors.textMuted
+                      : theme.colors.primaryText,
+                },
+              ]}
+            >
+              다음
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -753,11 +795,19 @@ const createStyles = (theme: Theme) =>
     subtotalLabel: { fontSize: 14 },
     subtotalValue: { fontSize: 16, fontWeight: '700' },
     footer: {
-      flexDirection: 'row',
       gap: 8,
       padding: 12,
       borderTopWidth: StyleSheet.hairlineWidth,
       backgroundColor: theme.colors.bg,
+    },
+    footerButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    blockBanner: {
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
     },
     ghostButton: {
       paddingHorizontal: 16,
