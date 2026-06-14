@@ -17,18 +17,47 @@ export interface ActiveCrawlJob {
   // 'list-row'. New-URL jobs start as 'new' and flip to 'list-row' once
   // their placeId resolves.
   source: 'list-row' | 'new';
+  // Lifecycle. Starts 'running'; flips to 'done' the moment the job's stream
+  // reaches any terminal state (done/error or a transport-level close). A
+  // 'done' job intentionally STAYS in the store so its panel can render a
+  // completed card (✅ 결과 + 상세 보기 + 닫기) — the user dismisses it
+  // explicitly. Only 'running' makes a list row 'busy' (blocks row click /
+  // recrawl buttons); a 'done' job leaves the row clickable.
+  status: 'running' | 'done';
 }
 
 interface ActiveCrawlJobState {
   jobs: Record<string, ActiveCrawlJob>;
-  add: (job: ActiveCrawlJob) => void;
+  // status is assigned here ('running') — callers don't pass it.
+  add: (job: Omit<ActiveCrawlJob, 'status'>) => void;
   remove: (jobId: string) => void;
+  // Flip a job to 'done' (kept in the store). Idempotent.
+  markDone: (jobId: string) => void;
   resolvePlaceId: (jobId: string, placeId: string) => void;
 }
 
 export const useActiveCrawlJobStore = create<ActiveCrawlJobState>((set) => ({
   jobs: {},
-  add: (job) => set((s) => ({ jobs: { ...s.jobs, [job.jobId]: job } })),
+  add: (job) =>
+    set((s) => {
+      const next = { ...s.jobs };
+      // Re-crawl/update on a row (or detail) that still shows a finished job's
+      // completed card: drop any existing job for the same place so we don't
+      // accumulate stale 'done' jobs and the fresh running one wins the panel.
+      if (job.placeId) {
+        for (const [id, j] of Object.entries(next)) {
+          if (j.placeId === job.placeId) delete next[id];
+        }
+      }
+      next[job.jobId] = { ...job, status: 'running' };
+      return { jobs: next };
+    }),
+  markDone: (jobId) =>
+    set((s) => {
+      const j = s.jobs[jobId];
+      if (!j || j.status === 'done') return s;
+      return { jobs: { ...s.jobs, [jobId]: { ...j, status: 'done' } } };
+    }),
   remove: (jobId) =>
     set((s) => {
       if (!(jobId in s.jobs)) return s;

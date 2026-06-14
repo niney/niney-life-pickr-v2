@@ -332,6 +332,8 @@ const DEFAULT_PAGE_SIZE = 25;
 
 export const AdminRestaurantsPage = () => {
   const qc = useQueryClient();
+  // 완료 패널의 "상세 보기" 가 사용. 행 클릭도 같은 라우트로 이동한다.
+  const navigate = useNavigate();
 
   // URL 동기화 — 새로고침/뒤로가기/링크 공유 시 페이지·정렬 보존.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -386,6 +388,7 @@ export const AdminRestaurantsPage = () => {
   const jobs = useActiveCrawlJobStore((s) => s.jobs);
   const addJob = useActiveCrawlJobStore((s) => s.add);
   const removeJob = useActiveCrawlJobStore((s) => s.remove);
+  const markDoneJob = useActiveCrawlJobStore((s) => s.markDone);
   const resolveJobPlaceId = useActiveCrawlJobStore((s) => s.resolvePlaceId);
   // 삭제 확인 상태 — canonical 단위 삭제로 통일. sources 가 여러 개여도 한 번에 처리.
   const [confirmDeleteCanonicalId, setConfirmDeleteCanonicalId] =
@@ -493,13 +496,16 @@ export const AdminRestaurantsPage = () => {
     resolveJobPlaceId(jobId, placeId);
   };
 
+  // 종료 시 패널을 자동 제거하지 않고 'done' 으로 표시 — 완료 카드(상세 보기/
+  // 닫기)가 그대로 떠 있고, 행은 busy 가 풀려 클릭 가능해진다. 사용자가 X 로
+  // 닫으면 removeJob. result 가 null 이면(스트림만 닫힘) 표시할 에러도 없음.
   const handleFinished =
     (jobId: string) =>
-    (result: { ok: boolean; error?: string; message?: string }) => {
-      if (!result.ok && result.error) {
+    (result: { ok: boolean; error?: string; message?: string } | null) => {
+      if (result && !result.ok && result.error) {
         setError(`${result.error}: ${result.message ?? ''}`);
       }
-      removeJob(jobId);
+      markDoneJob(jobId);
     };
 
   // 정렬은 서버 처리. 응답이 이미 정렬·페이지 분리된 상태로 옴.
@@ -608,6 +614,8 @@ export const AdminRestaurantsPage = () => {
               onPlaceIdResolved={(placeId) => handlePlaceIdResolved(j.jobId, placeId)}
               onCancel={() => cancelMutation.mutate(j.jobId)}
               onFinished={handleFinished(j.jobId)}
+              onDismiss={() => removeJob(j.jobId)}
+              onViewDetail={(placeId) => navigate(`/admin/restaurants/${placeId}`)}
             />
           ))}
         </div>
@@ -724,7 +732,9 @@ export const AdminRestaurantsPage = () => {
                     )}
                     <RestaurantRow
                       item={item}
-                      busy={!!rowJob}
+                      // 'done' 잡은 행을 막지 않는다 — 완료 후 행/버튼으로 상세
+                      // 진입·재크롤 가능. 진행 중일 때만 busy.
+                      busy={rowJob !== null && rowJob.status === 'running'}
                       deleting={
                         deleteMutation.isPending &&
                         deleteMutation.variables === item.canonicalId
@@ -750,6 +760,9 @@ export const AdminRestaurantsPage = () => {
                     )}
                     {rowJob && (
                       <ActiveJobPanel
+                        // key=jobId — 같은 행에서 재크롤로 jobId 가 바뀌면 패널을
+                        // 새로 마운트해 내부 상태(완료 발화 ref 등)를 리셋.
+                        key={rowJob.jobId}
                         jobId={rowJob.jobId}
                         placeId={rowJob.placeId}
                         onPlaceIdResolved={(placeId) =>
@@ -757,6 +770,10 @@ export const AdminRestaurantsPage = () => {
                         }
                         onCancel={() => cancelMutation.mutate(rowJob.jobId)}
                         onFinished={handleFinished(rowJob.jobId)}
+                        onDismiss={() => removeJob(rowJob.jobId)}
+                        onViewDetail={(placeId) =>
+                          navigate(`/admin/restaurants/${placeId}`)
+                        }
                       />
                     )}
                   </li>

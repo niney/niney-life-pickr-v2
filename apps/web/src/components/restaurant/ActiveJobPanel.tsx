@@ -38,14 +38,19 @@ interface ActiveJobPanelProps {
   // Detail page already shows reviews in its own filter/sort/paginate list,
   // so it hides the panel's compact 50-row preview to avoid duplication.
   showInlineReviewList?: boolean;
-  // Detail page uses this to dismiss the panel (and re-enable header buttons)
-  // once the job is done. List page leaves it mounted.
+  // Dismiss (X) — fired from the completed card. Wired to removeJob so the
+  // user explicitly clears a finished panel. Shown only once the job is
+  // terminal.
   onDismiss?: () => void;
-  // Fires exactly once when the job stream produces a terminal result.
-  // Detail page uses this to clear its activeJob state (re-enabling buttons
-  // and unmounting the panel). List page leaves the panel anchored to the
-  // row so onFinished is not needed there.
-  onFinished?: (result: CrawlNaverPlaceResultType) => void;
+  // "상세 보기" — list page wires this to navigate to the restaurant detail.
+  // Only shown when terminal AND placeId is known. Detail page omits it
+  // (already on the detail route).
+  onViewDetail?: (placeId: string) => void;
+  // Fires exactly once when the job stream reaches ANY terminal state —
+  // a domain result (done/error) OR a transport-level close with no result.
+  // `result` is null in the latter case. Callers use it to mark the job
+  // 'done' in the store (keeping the completed card) and surface errors.
+  onFinished?: (result: CrawlNaverPlaceResultType | null) => void;
 }
 
 export const ActiveJobPanel = ({
@@ -55,6 +60,7 @@ export const ActiveJobPanel = ({
   onCancel,
   showInlineReviewList = true,
   onDismiss,
+  onViewDetail,
   onFinished,
 }: ActiveJobPanelProps) => {
   const stream = useCrawlJobStream(jobId);
@@ -109,12 +115,23 @@ export const ActiveJobPanel = ({
     );
   }, [stream.lastPersistedBatch, placeId, qc]);
 
-  // After the job ends, refresh both the list (counts/summary buckets) and
-  // the active detail (snapshotJson, totalReviews, anything not covered by
-  // the streamed merges). Then fire onFinished exactly once.
+  const isRunning = stream.status === 'connecting' || stream.status === 'open';
+  // Terminal = a domain result arrived (done/error) OR the stream closed at the
+  // transport level without one (server already drained the job, terminal SSE
+  // frame missed, etc.). The latter used to leave the panel stuck: neither
+  // running nor finished, so it never cleaned up and the row stayed busy.
+  const isTerminal =
+    stream.result !== null ||
+    stream.status === 'closed' ||
+    stream.status === 'error';
+  const stage = stream.stage;
+
+  // Once terminal, refresh the list (counts/summary buckets) and the active
+  // detail (snapshotJson, totalReviews, anything not covered by streamed
+  // merges), then fire onFinished exactly once — even when result is null.
   const finishedFiredRef = useRef(false);
   useEffect(() => {
-    if (stream.result === null) return;
+    if (!isTerminal) return;
     qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
     // 공개 list 도 함께 — 어드민 발견 페이지나 공개 맛집 페이지가 동일한
     // 데이터를 다른 queryKey 로 캐싱한다.
@@ -126,11 +143,7 @@ export const ActiveJobPanel = ({
       finishedFiredRef.current = true;
       onFinished?.(stream.result);
     }
-  }, [stream.result, placeId, qc, onFinished]);
-
-  const isRunning = stream.status === 'connecting' || stream.status === 'open';
-  const stage = stream.stage;
-  const finished = stream.result !== null;
+  }, [isTerminal, stream.result, placeId, qc, onFinished]);
 
   return (
     <Card className="border-primary/40">
@@ -138,23 +151,37 @@ export const ActiveJobPanel = ({
         <CardTitle className="flex items-center gap-2 text-base">
           {isRunning ? (
             <Loader2 className="size-4 animate-spin text-primary" />
-          ) : stream.result?.ok ? (
-            <CheckCircle2 className="size-4 text-primary" />
-          ) : (
+          ) : stream.result && !stream.result.ok ? (
             <AlertCircle className="size-4 text-destructive" />
+          ) : (
+            // result.ok 또는 result 없이 종료(transport close) — 둘 다 완료로 표기.
+            <CheckCircle2 className="size-4 text-primary" />
           )}
           크롤링 작업
-          {finished && onDismiss && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="ml-auto"
-              onClick={onDismiss}
-              aria-label="닫기"
-            >
-              <X />
-            </Button>
+          {isTerminal && (onViewDetail || onDismiss) && (
+            <div className="ml-auto flex items-center gap-1">
+              {onViewDetail && placeId && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onViewDetail(placeId)}
+                >
+                  상세 보기
+                </Button>
+              )}
+              {onDismiss && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDismiss}
+                  aria-label="닫기"
+                >
+                  <X />
+                </Button>
+              )}
+            </div>
           )}
         </CardTitle>
         <CardDescription className="flex flex-wrap items-center gap-2 text-xs">
@@ -212,6 +239,13 @@ export const ActiveJobPanel = ({
                 )}
               </div>
             )}
+            {/* 결과 프레임 없이 스트림만 닫힌 종료 — 보통 작업은 끝났고 종료
+                이벤트만 유실된 경우. 패널이 멈춰 보이지 않도록 명시. */}
+            {isTerminal && stream.result === null && (
+              <p className="text-xs text-muted-foreground">
+                작업이 종료되었습니다. 결과는 상세 페이지에서 확인하세요.
+              </p>
+            )}
             {summaryStatusQuery.data && (
               <SummaryProgressSection status={summaryStatusQuery.data} />
             )}
@@ -224,7 +258,7 @@ export const ActiveJobPanel = ({
             jobId={jobId}
             streamLogs={stream.logs}
             summaryLogs={summaryLogs}
-            isJobFinished={finished}
+            isJobFinished={isTerminal}
           />
         )}
       </CardContent>

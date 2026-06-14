@@ -420,6 +420,7 @@ export const AdminRestaurantDetailPage = () => {
   });
   const addJob = useActiveCrawlJobStore((s) => s.add);
   const removeJob = useActiveCrawlJobStore((s) => s.remove);
+  const markDoneJob = useActiveCrawlJobStore((s) => s.markDone);
 
   if (!placeId) return <Navigate to="/admin/restaurants" replace />;
 
@@ -515,17 +516,24 @@ export const AdminRestaurantDetailPage = () => {
           이어받는다 (조건이 상호 배타라 둘이 동시에 뜨지 않음). */}
       {activeJob && (
         <ActiveJobPanel
+          // key=jobId — 재크롤로 jobId 가 바뀌면 패널을 새로 마운트 (내부
+          // 완료 발화 ref / 로그 누적 리셋).
+          key={activeJob.jobId}
           jobId={activeJob.jobId}
           placeId={detail.placeId}
           onPlaceIdResolved={() => {}}
           onCancel={handleCancelJob}
           showInlineReviewList={false}
+          // 종료 시 자동 제거 대신 'done' 표기 — 완료 카드를 유지하고 헤더
+          // 버튼(업데이트/재크롤)을 다시 활성화한다. 상세 페이지라 "상세 보기"
+          // 버튼은 두지 않고, X(onDismiss) 로 닫으면 trailing 요약 카드로 인계.
           onFinished={(result) => {
-            if (!result.ok) {
+            if (result && !result.ok) {
               setError(`${result.error}: ${result.message}`);
             }
-            removeJob(activeJob.jobId);
+            markDoneJob(activeJob.jobId);
           }}
+          onDismiss={() => removeJob(activeJob.jobId)}
         />
       )}
       {!activeJob &&
@@ -604,7 +612,10 @@ export const AdminRestaurantDetailPage = () => {
               variant="blue"
               size="sm"
               onClick={() => handleAction('update')}
-              disabled={startMutation.isPending || !!activeJob}
+              disabled={
+                startMutation.isPending ||
+                (!!activeJob && activeJob.status === 'running')
+              }
             >
               업데이트
             </Button>
@@ -613,7 +624,10 @@ export const AdminRestaurantDetailPage = () => {
               variant="amber"
               size="sm"
               onClick={() => handleAction('recrawl')}
-              disabled={startMutation.isPending || !!activeJob}
+              disabled={
+                startMutation.isPending ||
+                (!!activeJob && activeJob.status === 'running')
+              }
             >
               <RefreshCw />
               재크롤링
