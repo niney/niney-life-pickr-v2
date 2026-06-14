@@ -97,7 +97,13 @@ export const NaverPlaceData = z.object({
   businessHours: z.string().nullable(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
-  imageUrls: z.array(z.string().url()),
+  // 절대 URL(외부 CDN) 또는 same-origin 절대경로 둘 다 허용. 후자는 만료되는
+  // 네이버 파노라마(apis.naver.com/place/panorama)를 크롤 시점에 받아둔 우리
+  // 사본(/api/v1/media/panorama/…)으로, upsertRestaurantFromCrawl 이 저장
+  // 스냅샷에 치환해 넣는다. 이 스냅샷이 어드민 상세(RestaurantDetail.snapshot)
+  // 응답으로 그대로 검증되므로 여기서 절대경로를 막으면 상세가 500 으로 깨진다
+  // (RestaurantPublicDetail.imageUrls 와 동일한 완화).
+  imageUrls: z.array(z.string().url().or(z.string().startsWith('/'))),
   rating: z.number().nullable(),
   reviewCount: z.number().nullable(),
   menus: z.array(MenuItem),
