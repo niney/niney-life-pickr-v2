@@ -838,6 +838,62 @@ export const useCrawlJobStream = (jobId: string | null): CrawlStreamState => {
     };
   }, [jobId]);
 
+  const isTerminal =
+    state.result !== null ||
+    state.status === 'closed' ||
+    state.status === 'error';
+
+  // 종료 재확인 폴백 — 정리(cleanup)가 SSE 'done' 한 프레임 도달에만 의존하지
+  // 않게 한다. 긴 잡의 EventSource 가 끊겨 'done' 을 다시 못 받으면 패널이
+  // 영영 'running' 으로 남는데, 등록부는 잡 상태를 들고 있으므로 목록을 폴링해
+  // 이미 끝난 잡이면 terminal 을 로컬에서 합성한다. 같은 queryKey 라 여러 패널이
+  // 한 번의 폴링으로 dedupe 되고, terminal 이 되면 자동으로 폴링이 멈춘다.
+  const jobsQuery = useQuery({
+    queryKey: ['crawl', 'jobs'],
+    queryFn: crawlApi.list,
+    enabled: !!jobId && !isTerminal,
+    refetchInterval: !!jobId && !isTerminal ? 8000 : false,
+  });
+  useEffect(() => {
+    if (!jobId || isTerminal) return;
+    const jobs = jobsQuery.data?.jobs;
+    if (!jobs) return;
+    const job = jobs.find((j) => j.id === jobId);
+    if (job && job.status !== 'running' && job.result) {
+      dispatch({
+        type: 'event',
+        jobId,
+        event: job.result.ok
+          ? {
+              type: 'done',
+              result: job.result,
+              seq: Number.MAX_SAFE_INTEGER,
+              at: job.finishedAt ?? '',
+            }
+          : {
+              type: 'error',
+              error: job.result.error,
+              message: job.result.message,
+              seq: Number.MAX_SAFE_INTEGER,
+              at: job.finishedAt ?? '',
+            },
+      });
+    } else if (!job && state.lastSeq > 0) {
+      // 진행 중이던(이벤트를 받았던) 잡이 목록에서 사라짐 = 완료 후 GC.
+      // 결과 미상 종료로 정리만 트리거(자동 dismiss 는 성공일 때만 동작).
+      dispatch({ type: 'closed' });
+    }
+  }, [jobsQuery.data, jobId, isTerminal, state.lastSeq]);
+
+  // 종료(실제 'done'/'error' 든 위 폴백 합성이든)되면 EventSource 를 닫아
+  // 백그라운드 무한 재연결을 막는다.
+  useEffect(() => {
+    if (isTerminal && esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+  }, [isTerminal]);
+
   return state;
 };
 

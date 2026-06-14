@@ -51,6 +51,9 @@ const STAGE_ORDER: CrawlStageType[] = [
   'finalizing',
   'done',
 ];
+// 리뷰 수집 단계 — 잡 전체에서 가장 긴 구간. 단계만으로 %를 잡으면 여기서 바가
+// 멈춰 보이므로(78%), 수집 비율을 섞어 전진시킨다.
+const PAGINATING_IDX = STAGE_ORDER.indexOf('paginating_visitor');
 
 const formatDuration = (ms: number): string => {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -80,43 +83,52 @@ const CrawlProgress = ({
   latestLog: string | null;
 }) => {
   const idx = stage ? STAGE_ORDER.indexOf(stage) : -1;
-  const stagePct = idx >= 0 ? Math.round(((idx + 1) / STAGE_ORDER.length) * 100) : 0;
-  const collectPct =
+  // 수집 비율(가게 총 리뷰수 근사 분모). 분모를 모르면 null.
+  const collectRatio =
     reviewTarget && reviewTarget > 0
-      ? Math.min(100, Math.round((visitorCount / reviewTarget) * 100))
+      ? Math.min(1, visitorCount / reviewTarget)
       : null;
+  // 단계 기반 + 수집 비율 혼합. 수집 단계는 가장 길어, 단계만으로 두면 78%에
+  // 고정돼 멈춘 듯 보인다 → 수집 비율로 68~95% 를 전진시킨다.
+  let pct: number;
+  if (idx < 0) pct = 0;
+  else if (stage === 'done') pct = 100;
+  else if (idx < PAGINATING_IDX)
+    pct = Math.round(((idx + 1) / (PAGINATING_IDX + 1)) * 65);
+  else if (stage === 'paginating_visitor')
+    pct = collectRatio === null ? 72 : Math.round(68 + collectRatio * 27);
+  else pct = 97; // finalizing
+  // 페이지네이션이 사실상 끝났는데(수집≈목표) 아직 running 이면 DB 저장/마무리
+  // 구간 — 단계는 그대로라 라벨로 명시해 "멈춤" 오인을 막는다.
+  const finalizing =
+    stage === 'paginating_visitor' && collectRatio !== null && collectRatio >= 0.99;
+  const label = finalizing
+    ? '리뷰 저장·마무리 중'
+    : stage
+      ? STAGE_LABEL[stage]
+      : '준비 중';
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-medium">{stage ? STAGE_LABEL[stage] : '준비 중'}</span>
-        <span className="text-muted-foreground">{stagePct}%</span>
+        <span className="font-medium">{label}</span>
+        <span className="text-muted-foreground">{pct}%</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${stagePct}%` }}
+          style={{ width: `${pct}%` }}
         />
       </div>
       {(visitorCount > 0 || stage === 'paginating_visitor') && (
-        <>
-          <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-            <span>
-              방문자 리뷰{' '}
-              <span className="font-medium text-foreground">{visitorCount}</span>
-              {reviewTarget ? <> / 약 {reviewTarget}개</> : <>개 수집</>}
-            </span>
-            {visitorPage > 0 && <span>· 페이지 {visitorPage}</span>}
-            {persistedCount > 0 && <span>· DB {persistedCount}</span>}
-          </div>
-          {collectPct !== null && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
-                style={{ width: `${collectPct}%` }}
-              />
-            </div>
-          )}
-        </>
+        <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <span>
+            방문자 리뷰{' '}
+            <span className="font-medium text-foreground">{visitorCount}</span>
+            {reviewTarget ? <> / 약 {reviewTarget}개</> : <>개 수집</>}
+          </span>
+          {visitorPage > 0 && <span>· 페이지 {visitorPage}</span>}
+          {persistedCount > 0 && <span>· DB {persistedCount}</span>}
+        </div>
       )}
       {isRunning && latestLog && (
         <p className="truncate text-[11px] text-muted-foreground">{latestLog}</p>
