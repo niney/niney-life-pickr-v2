@@ -495,6 +495,9 @@ const makeMarkerStyle = (
   const labelFill = darkBg ? '#f8fafc' : '#0f172a';
   const labelStroke = darkBg ? '#0f172a' : '#fff';
   return new Style({
+    // 선택 마커는 다른 마커 위로 — feature 들이 겹칠 때 강조 핀이 가려지지 않게
+    // 렌더 순서를 끌어올린다 (OL 은 zIndex 큰 Style 을 나중에=위에 그린다).
+    zIndex: selected ? 1000 : 0,
     image: new Icon({
       anchor: selected ? [0.5, 1] : [0.5, 0.5],
       src: buildRestaurantMarkerDataUrl(categoryKey, selected, variant),
