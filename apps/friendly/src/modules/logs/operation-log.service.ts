@@ -143,6 +143,15 @@ export class OperationLogService {
     this.nextSeq = opts.nextSeqProvider ?? (() => n++);
   }
 
+  // 같은 'crawl' SSE 스트림에 이 서비스의 log 이벤트와 CrawlService.emit 의
+  // progress/visitor_progress/done 이벤트가 섞여 흐른다. 클라이언트가 (jobId,
+  // seq) 로 dedup 하므로 seq 는 반드시 단일 카운터에서 나와야 한다 — 두 소스가
+  // 각자 카운터를 쓰면 한쪽 seq 가 앞서는 순간 다른 쪽 이벤트(특히 done)가
+  // 영영 드롭된다. CrawlService.emit 이 이 메서드로 같은 카운터를 공유한다.
+  allocSeq(): number {
+    return this.nextSeq();
+  }
+
   private get registry(): JobRegistry {
     return this.opts.registry ?? jobRegistry;
   }

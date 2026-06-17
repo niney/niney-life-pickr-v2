@@ -1306,7 +1306,11 @@ export class CrawlService {
   private emit(jobId: string, partial: EmitInput): void {
     const event = {
       ...partial,
-      seq: this.nextSeq++,
+      // operationLog 의 단일 seq 카운터를 공유 — log 이벤트와 같은 'crawl' SSE
+      // 스트림에 섞여도 seq 가 단조 증가하도록. 둘이 각자 카운터를 쓰면
+      // 클라이언트의 (jobId, seq) dedup 이 한쪽(특히 done)을 영영 드롭한다.
+      // operationLog 미주입(테스트)이면 자체 카운터로 폴백.
+      seq: this.operationLog ? this.operationLog.allocSeq() : this.nextSeq++,
       at: new Date().toISOString(),
     } as CrawlEventType;
     this.registry.addEvent(jobId, event);
