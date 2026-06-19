@@ -27,7 +27,11 @@ const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
     baseUrl: env.OLLAMA_CLOUD_BASE_URL,
     timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModel: env.OLLAMA_DEFAULT_MODEL,
+    defaultModels: {
+      chat: env.OLLAMA_DEFAULT_MODEL,
+      image: env.OLLAMA_IMAGE_MODEL,
+      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
+    },
   });
   // operationLog 주입 — 누락 시 자동 발견에서 파생되는 크롤/요약 run 계측이
   // 무음 비활성된다 (두 서비스 모두 null 이면 silent 정책).

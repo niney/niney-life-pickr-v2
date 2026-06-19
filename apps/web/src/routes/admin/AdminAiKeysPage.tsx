@@ -160,7 +160,8 @@ export const AdminAiKeysPage = () => {
         <div className="mt-6">
           <h3 className="mb-1 text-sm font-medium">용도별 모델</h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            각 용도에 쓸 모델을 고릅니다. 키는 위 계정에서 상속됩니다. 모델을 비워 두면 해당 용도는
+            각 용도에 쓸 모델을 고릅니다. 키는 위 계정에서 상속됩니다. 비워 두면{' '}
+            <code>.env</code>의 <code>OLLAMA_*_MODEL</code> 기본값을 쓰고, 그마저 없으면 해당 용도는
             건너뜁니다.
           </p>
           <div className="space-y-3">
@@ -301,6 +302,16 @@ const AccountCard = ({
               >
                 {account.hasApiKey ? '키 설정됨' : '키 없음'}
               </Badge>
+              {account.keySource === 'env' && (
+                <Badge variant="secondary" className="whitespace-nowrap">
+                  .env 사용 중
+                </Badge>
+              )}
+              {account.keySource === 'own' && (
+                <Badge variant="secondary" className="whitespace-nowrap">
+                  DB 저장됨
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription className="mt-1 break-words">
               이 키를 모든 용도가 공유합니다.{' · '}
@@ -570,6 +581,11 @@ const PurposeModelRow = ({ provider, catalog, onSave, isSaving }: PurposeModelRo
             </datalist>
             {isRecommendation && (
               <p className="mt-1 text-[11px] text-primary">추천값 — 저장하면 적용됩니다</p>
+            )}
+            {provider.defaultModelSource === 'env' && !modelDirty && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                <code>.env</code> 기본 모델 — 저장하면 DB 값으로 고정됩니다.
+              </p>
             )}
             {provider.keySource === 'none' && (
               <p className="mt-1 text-[11px] text-amber-600">

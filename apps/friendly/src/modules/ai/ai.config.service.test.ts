@@ -6,7 +6,9 @@ const ENV: LlmProviderEnv = {
   baseUrl: 'https://env.example',
   timeoutMs: 60_000,
   maxConcurrent: 15,
-  defaultModel: 'env-default-model',
+  // 용도별 .env 기본 모델 — chat 만 채워 기존 검증을 보존(image·log-analysis 는
+  // 빈 값이라 row 없으면 모델 ''). env fallback 동작은 아래 별도 describe 에서 검증.
+  defaultModels: { chat: 'env-default-model', image: '', 'log-analysis': '' },
 };
 
 interface Row {
@@ -117,7 +119,9 @@ describe('AiConfigService', () => {
         hasApiKey: true,
         keySource: 'env',
         baseUrl: ENV.baseUrl,
-        defaultModel: null,
+        // DB row 가 없어도 .env 기본 모델이 유효 모델로 노출된다(출처 env).
+        defaultModel: ENV.defaultModels.chat,
+        defaultModelSource: 'env',
         enabled: true,
         maxConcurrent: ENV.maxConcurrent,
       });
@@ -251,7 +255,7 @@ describe('AiConfigService', () => {
         baseUrl: ENV.baseUrl,
         maxConcurrent: 9,
         timeoutMs: ENV.timeoutMs,
-        defaultModel: ENV.defaultModel,
+        defaultModel: ENV.defaultModels.chat,
         enabled: true,
       });
     });
@@ -377,10 +381,56 @@ describe('AiConfigService', () => {
         provider: 'ollama-cloud',
         purpose: 'log-analysis',
         apiKey: 'logs-key',
-        // env fallback 없음 — defaultModel 은 row 값 그대로.
+        // row 값이 .env 기본 모델보다 우선 — 여기선 row 값 그대로.
         defaultModel: 'gpt-oss:20b',
         maxConcurrent: 2,
       });
+    });
+
+    it('image·log-analysis 도 .env 용도별 기본 모델로 보충된다 (DB row 없을 때)', async () => {
+      service = new AiConfigService(prisma as never, {
+        ...ENV,
+        defaultModels: { chat: 'c-model', image: 'env-vision', 'log-analysis': 'env-logger' },
+      });
+      const img = await service.getResolved('ollama-cloud', 'image');
+      const log = await service.getResolved('ollama-cloud', 'log-analysis');
+      expect(img?.defaultModel).toBe('env-vision');
+      expect(log?.defaultModel).toBe('env-logger');
+      // list/toView 도 유효 모델·출처(env)를 노출.
+      const out = await service.list();
+      expect(out.find((p) => p.purpose === 'image')).toMatchObject({
+        defaultModel: 'env-vision',
+        defaultModelSource: 'env',
+      });
+      expect(out.find((p) => p.purpose === 'log-analysis')).toMatchObject({
+        defaultModel: 'env-logger',
+        defaultModelSource: 'env',
+      });
+    });
+
+    it('DB row 의 defaultModel 이 .env 기본 모델을 덮어쓴다 (image)', async () => {
+      prisma = buildPrismaStub([
+        {
+          id: 'r1',
+          provider: 'ollama-cloud',
+          purpose: 'image',
+          apiKey: 'image-key',
+          baseUrl: null,
+          defaultModel: 'own-vision',
+          enabled: true,
+          maxConcurrent: 5,
+          updatedAt: new Date(),
+          updatedById: null,
+        },
+      ]);
+      service = new AiConfigService(prisma as never, {
+        ...ENV,
+        defaultModels: { chat: '', image: 'env-vision', 'log-analysis': '' },
+      });
+      const img = await service.getResolved('ollama-cloud', 'image');
+      expect(img?.defaultModel).toBe('own-vision');
+      const view = (await service.list()).find((p) => p.purpose === 'image');
+      expect(view).toMatchObject({ defaultModel: 'own-vision', defaultModelSource: 'own' });
     });
 
     it('returns null when no key in DB AND env apiKey is empty (chat)', async () => {

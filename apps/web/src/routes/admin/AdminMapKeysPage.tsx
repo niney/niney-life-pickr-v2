@@ -24,6 +24,12 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 
+const SOURCE_LABEL: Record<MapProviderConfigType['source'], string> = {
+  db: 'DB 저장됨',
+  env: '.env 사용 중',
+  none: '미설정',
+};
+
 interface FormState {
   apiKey: string;
   domains: string;
@@ -56,6 +62,8 @@ export const AdminMapKeysPage = () => {
       <p className="mb-4 text-sm text-muted-foreground">
         지도 타일 서비스 키를 등록합니다. vworld WMTS 를 OpenLayers 로 직접
         호출하므로 도메인 화이트리스트 검증 없이 어떤 origin 에서도 동작합니다.
+        DB에 저장된 키가 우선이며, 비워두면 <code>.env</code>의{' '}
+        <code>VWORLD_API_KEY</code> 값으로 동작합니다.
       </p>
 
       {providers.isLoading && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
@@ -174,12 +182,15 @@ const ProviderCard = ({
               <Badge variant={provider.hasApiKey ? 'default' : 'secondary'}>
                 {provider.hasApiKey ? '키 설정됨' : '키 없음'}
               </Badge>
+              <Badge variant="secondary">{SOURCE_LABEL[provider.source]}</Badge>
             </CardTitle>
             <CardDescription>
               {provider.apiKeyMasked ?? '설정된 키가 없습니다.'} ·{' '}
-              {provider.updatedAt
+              {provider.source === 'db' && provider.updatedAt
                 ? `수정 ${new Date(provider.updatedAt).toLocaleString('ko-KR')}`
-                : '등록되지 않음'}
+                : provider.source === 'env'
+                  ? 'DB 미저장(.env)'
+                  : '등록되지 않음'}
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -193,7 +204,7 @@ const ProviderCard = ({
               onClick={async () => {
                 if (
                   !window.confirm(
-                    '이 provider의 키를 삭제합니다. 식당 상세 페이지의 지도가 동작하지 않게 됩니다.\n\n계속하시겠습니까?',
+                    'DB에 저장된 지도 키를 삭제합니다.\n(.env에 VWORLD_API_KEY 값이 있으면 그 값으로 fallback)\n\n계속하시겠습니까?',
                   )
                 ) {
                   return;
@@ -204,11 +215,11 @@ const ProviderCard = ({
                   setSaveError(e instanceof ApiError ? e.message : '삭제 실패');
                 }
               }}
-              disabled={isDeleting || !provider.updatedAt}
-              title={provider.updatedAt ? '키를 삭제합니다' : '삭제할 키가 없습니다'}
+              disabled={isDeleting || provider.source !== 'db'}
+              title={provider.source === 'db' ? 'DB 설정을 삭제합니다' : '삭제할 DB 설정이 없습니다 (.env 사용 중)'}
             >
               {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-              키 삭제
+              DB 설정 삭제
             </Button>
           </div>
         </div>

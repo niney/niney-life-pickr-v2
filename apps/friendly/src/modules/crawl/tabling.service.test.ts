@@ -143,7 +143,7 @@ describe('tabling persistence + matching', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModel: '',
+      defaultModels: { chat: '', image: '', 'log-analysis': '' },
     });
     const summaries = new SummaryService(app.prisma, aiConfig);
     const canonical = new CanonicalService(app.prisma);

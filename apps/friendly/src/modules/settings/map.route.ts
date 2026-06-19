@@ -12,12 +12,16 @@ import {
   type MapProviderIdType,
 } from '@repo/api-contract';
 import { MapSettingsService } from './map.service.js';
+import { env } from '../../config/env.js';
 
 const MapRoutes = Routes.SettingsMap;
 const ProviderParams = z.object({ id: MapProviderId });
 
 const settingsMapRoutes: FastifyPluginAsync = async (app) => {
-  const service = new MapSettingsService(app.prisma);
+  const service = new MapSettingsService(app.prisma, {
+    apiKey: env.VWORLD_API_KEY,
+    domains: env.VWORLD_DOMAINS,
+  });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(MapRoutes.list, {

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type {
   LlmKeySourceType,
+  LlmModelSourceType,
   LlmProviderConfigType,
   LlmProviderIdType,
   LlmProviderPurposeType,
@@ -9,14 +10,16 @@ import type {
 
 // What the service needs from env to fill gaps in DB rows. Kept in this
 // module rather than read from `env` directly so tests can inject a fake.
-// env fallback 은 purpose='chat' 에만 적용한다 — image 같은 다른 용도는
-// 환경변수로 키를 공유하기 어려워 DB row 가 있을 때만 활성화한다.
+// 키·baseUrl 의 env fallback 은 계정 대표(chat)에만 적용한다 — image 등 다른
+// 용도는 키를 env 로 공유하기 어려워 DB row(또는 chat 상속)로만 동작한다.
+// 반면 defaultModels 는 용도별로 따로 두어 세 용도 모두 .env 기본 모델을 가질
+// 수 있다 (모델은 용도마다 달라야 하므로 상속하지 않고 용도별 fallback).
 export interface LlmProviderEnv {
   apiKey: string;
   baseUrl: string;
   timeoutMs: number;
   maxConcurrent: number;
-  defaultModel: string;
+  defaultModels: Record<LlmProviderPurposeType, string>;
 }
 
 // What AiService consumes. `apiKey` is guaranteed non-empty here — getResolved
@@ -118,11 +121,16 @@ export class AiConfigService {
       baseUrl: baseUrl ?? this.env.baseUrl,
       timeoutMs: this.env.timeoutMs,
       maxConcurrent: row?.maxConcurrent ?? this.env.maxConcurrent,
-      // 모델은 상속하지 않는다 — 용도마다 다르므로. chat 만 env defaultModel 보충.
-      defaultModel:
-        row?.defaultModel ?? (purpose === ENV_BACKED_PURPOSE ? this.env.defaultModel : ''),
+      // 모델은 상속하지 않는다 — 용도마다 다르므로. 대신 용도별 .env 기본 모델로
+      // 보충한다(DB row 값이 비어 있을 때만).
+      defaultModel: row?.defaultModel?.trim() || this.envModelFor(purpose),
       enabled,
     };
+  }
+
+  // 용도별 .env 기본 모델. DB row 의 defaultModel 이 비어 있을 때 보충값.
+  private envModelFor(purpose: LlmProviderPurposeType): string {
+    return this.env.defaultModels[purpose]?.trim() ?? '';
   }
 
   // 계정 대표 자격증명(키·baseUrl) — chat row 가 있으면 그 값, 없으면 env.
@@ -227,6 +235,13 @@ export class AiConfigService {
       keySource = accountKey.length > 0 ? 'inherited' : 'none';
     }
 
+    // 유효 기본 모델과 출처 — DB row 값이 있으면 own, 없으면 .env 기본값(env),
+    // 둘 다 없으면 none. 모델은 키와 달리 상속하지 않고 용도별 fallback 만 본다.
+    const ownModel = row?.defaultModel?.trim() || '';
+    const envModel = this.envModelFor(purpose);
+    const effectiveModel = ownModel || envModel;
+    const defaultModelSource: LlmModelSourceType = ownModel ? 'own' : envModel ? 'env' : 'none';
+
     return {
       provider,
       purpose,
@@ -234,7 +249,8 @@ export class AiConfigService {
       apiKeyMasked: maskApiKey(effectiveKey),
       keySource,
       baseUrl: row?.baseUrl ?? (isChat ? this.env.baseUrl : accountBaseUrl),
-      defaultModel: row?.defaultModel ?? null,
+      defaultModel: effectiveModel || null,
+      defaultModelSource,
       enabled: row?.enabled ?? true,
       maxConcurrent: row?.maxConcurrent ?? this.env.maxConcurrent,
       updatedAt: row ? row.updatedAt.toISOString() : null,

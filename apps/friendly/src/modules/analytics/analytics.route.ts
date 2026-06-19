@@ -25,7 +25,11 @@ const analyticsRoutes: FastifyPluginAsync = async (app) => {
     baseUrl: env.OLLAMA_CLOUD_BASE_URL,
     timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModel: env.OLLAMA_DEFAULT_MODEL,
+    defaultModels: {
+      chat: env.OLLAMA_DEFAULT_MODEL,
+      image: env.OLLAMA_IMAGE_MODEL,
+      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
+    },
   });
   // operationLog 주입 — runGlobalMerge 가 service 내부에서 OperationRun 을
   // 기록한다 (plugins/logs.ts 가 decorate, 플러그인이 라우트보다 먼저 로드됨).

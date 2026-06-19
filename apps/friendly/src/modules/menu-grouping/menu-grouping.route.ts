@@ -23,7 +23,11 @@ const menuGroupingRoutes: FastifyPluginAsync = async (app) => {
     baseUrl: env.OLLAMA_CLOUD_BASE_URL,
     timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
     maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModel: env.OLLAMA_DEFAULT_MODEL,
+    defaultModels: {
+      chat: env.OLLAMA_DEFAULT_MODEL,
+      image: env.OLLAMA_IMAGE_MODEL,
+      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
+    },
   });
   const grouping = new MenuGroupingService(app.prisma, aiConfig, {
     logger: app.log,

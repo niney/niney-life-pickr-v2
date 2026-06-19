@@ -160,7 +160,7 @@ describe('AnalyticsService.runGlobalMerge', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModel: '',
+      defaultModels: { chat: '', image: '', 'log-analysis': '' },
     });
   });
 
@@ -537,7 +537,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModel: '',
+      defaultModels: { chat: '', image: '', 'log-analysis': '' },
     });
     // resolveOverride: null — runGlobalMerge 는 이 describe 에서 호출 안 함.
     service = new AnalyticsService(app.prisma, aiConfig, {

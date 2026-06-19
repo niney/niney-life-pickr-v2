@@ -6,12 +6,14 @@ export type MapProviderIdType = z.infer<typeof MapProviderId>;
 
 // 목록·기본 GET 응답. apiKey 는 항상 마스킹돼서 내려간다 (LlmProviderConfig
 // 와 동일 패턴). vworld JS SDK 호출 시 평문 키가 필요하므로 별도 reveal
-// 엔드포인트가 있다.
+// 엔드포인트가 있다. source 로 유효 키 출처(DB 우선 + .env fallback)를 표시 —
+// 텔레그램 설정과 동일 규약. 'none' 은 DB·env 어디에도 키가 없는 상태.
 export const MapProviderConfig = z.object({
   provider: MapProviderId,
   hasApiKey: z.boolean(),
   apiKeyMasked: z.string().nullable(),
   domains: z.string().nullable(),
+  source: z.enum(['db', 'env', 'none']),
   updatedAt: z.string().nullable(),
 });
 export type MapProviderConfigType = z.infer<typeof MapProviderConfig>;

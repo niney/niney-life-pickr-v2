@@ -101,6 +101,13 @@ export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
 export const LlmKeySource = z.enum(['own', 'inherited', 'env', 'none']);
 export type LlmKeySourceType = z.infer<typeof LlmKeySource>;
 
+// 기본 모델 출처 — UI 배지용. 키와 달리 모델은 상속하지 않으므로 3가지뿐.
+//  own  이 row 에 직접 저장된 모델.
+//  env  DB row 에 모델이 없어 .env(OLLAMA_*_MODEL) 기본값으로 동작.
+//  none 저장된 모델도 .env 기본값도 없음.
+export const LlmModelSource = z.enum(['own', 'env', 'none']);
+export type LlmModelSourceType = z.infer<typeof LlmModelSource>;
+
 export const LlmProviderConfig = z.object({
   provider: LlmProviderId,
   purpose: LlmProviderPurpose,
@@ -109,7 +116,9 @@ export const LlmProviderConfig = z.object({
   // 키 출처. chat 은 own/env/none, image·log-analysis 는 own/inherited/none.
   keySource: LlmKeySource,
   baseUrl: z.string().nullable(),
+  // 유효 기본 모델 = DB row 값 있으면 그 값, 없으면 .env 기본값. null=둘 다 없음.
   defaultModel: z.string().nullable(),
+  defaultModelSource: LlmModelSource,
   enabled: z.boolean(),
   maxConcurrent: z.number().int().positive(),
   updatedAt: z.string().nullable(),

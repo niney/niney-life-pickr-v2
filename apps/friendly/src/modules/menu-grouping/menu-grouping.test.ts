@@ -122,7 +122,7 @@ describe('MenuGroupingService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModel: '',
+      defaultModels: { chat: '', image: '', 'log-analysis': '' },
     });
   });
 

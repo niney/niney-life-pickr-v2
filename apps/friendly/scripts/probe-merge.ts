@@ -20,7 +20,11 @@ const buildEnvBlock = (): LlmProviderEnv => ({
   baseUrl: env.OLLAMA_CLOUD_BASE_URL,
   timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
   maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModel: env.OLLAMA_DEFAULT_MODEL,
+  defaultModels: {
+    chat: env.OLLAMA_DEFAULT_MODEL,
+    image: env.OLLAMA_IMAGE_MODEL,
+    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
+  },
 });
 
 // 배열 스키마 변량 — additionalProperties 맵 대신 items 배열로 강제.

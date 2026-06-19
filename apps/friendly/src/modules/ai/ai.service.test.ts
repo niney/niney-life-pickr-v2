@@ -17,7 +17,7 @@ const RESOLVED: ResolvedProviderConfig = {
   baseUrl: 'https://x',
   timeoutMs: 1_000,
   maxConcurrent: 5,
-  defaultModel: '',
+  defaultModels: { chat: '', image: '', 'log-analysis': '' },
   enabled: true,
 };
 
