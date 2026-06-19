@@ -1,13 +1,14 @@
 import type { FastifyBaseLogger } from 'fastify';
 
-// 텔레그램 봇 — long-polling(getUpdates) 단방향 수신 + sendMessage 송신.
+// 텔레그램 봇 — long-polling(getUpdates) 수신 + sendMessage 송신.
 // 단일 Fastify 인스턴스(CLAUDE.md no-Redis) 안에서 폴러 1개만 돈다(webhook 대신
 // long-polling 을 골라 공개 HTTPS URL 노출 불필요). 봇 토큰/chat id 미설정이면
 // 비활성(no-op) — 자동 발굴 회차는 후보를 못 보내 skip 된다.
 //
-// 이 서비스는 기능 중립적이다. 콜백(인라인 버튼 클릭)을 받으면 등록된 핸들러로
-// 넘길 뿐, random-crawl 을 직접 import 하지 않는다(순환 의존 회피). random-crawl
-// 서비스가 onCallback 으로 핸들러를 건다.
+// 이 서비스는 기능 중립적이다. 콜백(인라인 버튼 클릭)과 텍스트 커맨드를 받으면
+// 등록된 핸들러로 넘길 뿐, random-crawl 을 직접 import 하지 않는다(순환 의존
+// 회피). random-crawl 서비스가 onCallback/onMessage 로 핸들러를 건다. 텍스트
+// 메시지는 설정된 chat 에서 온 것만(권한) + 60초 이내(staleness) 통과시킨다.
 
 // 인라인 버튼 클릭 1건 — 핸들러가 받는 정규화 페이로드.
 export interface TelegramCallback {
@@ -19,6 +20,15 @@ export interface TelegramCallback {
 }
 
 export type TelegramCallbackHandler = (cb: TelegramCallback) => Promise<void>;
+
+// 사용자가 봇에 보낸 텍스트 메시지 1건 — 핸들러가 받는 정규화 페이로드.
+// 권한(설정된 chat 인지)·staleness 는 서비스가 이미 걸러서 넘긴다.
+export interface TelegramMessage {
+  chatId: string;
+  text: string;
+}
+
+export type TelegramMessageHandler = (m: TelegramMessage) => Promise<void>;
 
 // 후보 1건을 버튼으로 — text 는 카드 한 줄, callbackData 는 64바이트 이내.
 export interface TelegramButton {
@@ -44,6 +54,8 @@ interface TgUpdate {
   update_id: number;
   message?: {
     message_id: number;
+    date?: number; // unix seconds — 재시작 후 재전송된 옛 메시지 걸러내기용.
+    text?: string;
     chat: { id: number; type?: string; first_name?: string; title?: string };
   };
   callback_query?: {
@@ -72,6 +84,7 @@ export class TelegramService {
   private readonly logger?: FastifyBaseLogger;
 
   private handler: TelegramCallbackHandler | null = null;
+  private msgHandler: TelegramMessageHandler | null = null;
   private polling = false;
   private offset = 0;
   private pollAbort: AbortController | null = null;
@@ -91,6 +104,11 @@ export class TelegramService {
 
   onCallback(handler: TelegramCallbackHandler): void {
     this.handler = handler;
+  }
+
+  // 텍스트 커맨드 핸들러 등록 — random-crawl 이 /discover 를 받기 위해 건다.
+  onMessage(handler: TelegramMessageHandler): void {
+    this.msgHandler = handler;
   }
 
   // ── 송신 ───────────────────────────────────────────────────────────
@@ -114,6 +132,17 @@ export class TelegramService {
     });
     if (!msg) return null;
     return { chatId: String(msg.chat.id), messageId: msg.message_id };
+  }
+
+  // 평문 메시지 송신(버튼 없음) — 커맨드 응답/안내용. 미설정·실패는 no-op.
+  async notify(text: string): Promise<void> {
+    if (!this.isConfigured()) return;
+    await this.call('sendMessage', {
+      chat_id: this.chatId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
   }
 
   // 콜백 응답(버튼 로딩 스피너 종료 + 토스트). 실패해도 흐름엔 영향 없음.
@@ -266,6 +295,16 @@ export class TelegramService {
               messageId: cq.message.message_id,
               data: cq.data,
             });
+            continue;
+          }
+          // 텍스트 커맨드(/discover 등). 권한: 설정된 chat 에서 온 것만.
+          // staleness: 재시작 후 텔레그램이 재전송하는 옛 메시지가 새 회차를
+          // 트리거하지 않도록 60초 넘은 건 무시(콜백은 awaiting 복구용이라 제외).
+          const msg = u.message;
+          if (msg && typeof msg.text === 'string' && msg.text.length > 0) {
+            if (String(msg.chat.id) !== this.chatId) continue;
+            if (msg.date != null && Date.now() / 1000 - msg.date > 60) continue;
+            await this.dispatchMessage({ chatId: String(msg.chat.id), text: msg.text });
           }
         }
       } catch (e) {
@@ -291,12 +330,23 @@ export class TelegramService {
     }
   }
 
+  private async dispatchMessage(m: TelegramMessage): Promise<void> {
+    try {
+      await this.msgHandler?.(m);
+    } catch (e) {
+      this.logger?.error(
+        { err: e instanceof Error ? e.message : String(e) },
+        '[telegram] 메시지 핸들러 오류',
+      );
+    }
+  }
+
   private async getUpdates(
     offset: number,
     timeoutSec: number,
     signal: AbortSignal,
   ): Promise<TgUpdate[]> {
-    const url = `${API_BASE}/bot${this.botToken}/getUpdates?offset=${offset}&timeout=${timeoutSec}&allowed_updates=${encodeURIComponent('["callback_query"]')}`;
+    const url = `${API_BASE}/bot${this.botToken}/getUpdates?offset=${offset}&timeout=${timeoutSec}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`;
     // fetch 자체 타임아웃은 롱폴 timeout 보다 넉넉히.
     const res = await fetch(url, { signal });
     const json = (await res.json()) as TgResponse<TgUpdate[]>;

@@ -42,6 +42,7 @@ const STATUS_LABEL: Record<OperationRunStatusType, string> = {
 const TRIGGER_LABEL: Record<string, string> = {
   manual: '수동',
   cron: '크론',
+  telegram: '텔레그램',
   auto: '자동',
   user: '사용자',
 };

@@ -12,8 +12,8 @@ import { z } from 'zod';
 // cronExpr 형식 검증은 서버 라우트에서 croner 로 한다(api-contract 는 순수
 // 스키마 패키지라 croner 에 의존하지 않는다).
 
-// cron tick / 어드민 "지금 실행".
-export const RandomCrawlTrigger = z.enum(['cron', 'manual']);
+// cron tick / 어드민 "지금 실행" / 텔레그램 커맨드(/discover).
+export const RandomCrawlTrigger = z.enum(['cron', 'manual', 'telegram']);
 export type RandomCrawlTriggerType = z.infer<typeof RandomCrawlTrigger>;
 
 // running            : 지역 선정 → 검색 → 후보 전송까지 진행 중

@@ -42,6 +42,8 @@ const RUN_HISTORY_LIMIT = 50;
 const SEARCH_PAGE_SIZE = 50;
 // startCrawl 의 actor — 동시성/dedup 키. 사람 actor 와 구분되는 시스템 식별자.
 const ACTOR_ID = 'system:random-crawl';
+// 신규 후보 0건 스킵 사유 — notifyEmpty 안내와 텔레그램 커맨드 중복 회신 억제에 공용.
+const EMPTY_REASON = '신규 후보 0건';
 // awaiting 만료 sweep 주기.
 const SWEEP_INTERVAL_MS = 60_000;
 
@@ -184,6 +186,7 @@ export class RandomCrawlService {
     this.applySchedule(cfg.enabled, cfg.cronExpr, cfg.timezone);
 
     this.deps.telegram.onCallback((cb) => this.handleTelegramCallback(cb));
+    this.deps.telegram.onMessage((m) => this.handleTelegramMessage(m));
     this.deps.telegram.startPolling();
 
     this.sweepTimer = setInterval(() => {
@@ -288,7 +291,7 @@ export class RandomCrawlService {
           runId,
           opRunId,
           step,
-          '신규 후보 0건',
+          EMPTY_REASON,
           region.label,
           cfg.keyword,
         );
@@ -521,6 +524,31 @@ export class RandomCrawlService {
     );
   }
 
+  // ── 텔레그램 커맨드 (사용자가 봇에 보낸 텍스트) ─────────────────────
+
+  // /discover(또는 한글 '발굴') → 즉시 1회차 발굴. 권한·staleness 는
+  // TelegramService 가 이미 걸러서(설정된 chat + 60초 이내) 넘긴다.
+  private async handleTelegramMessage(m: {
+    chatId: string;
+    text: string;
+  }): Promise<void> {
+    if (!isDiscoverCommand(m.text)) return; // 잡담은 조용히 무시.
+
+    await this.deps.telegram.notify('🔍 맛집 발굴을 시작합니다…');
+    const run = await this.runScheduled('telegram');
+
+    // awaiting_selection: 후보 카드는 runScheduled 가 이미 전송 → 추가 응답 불필요.
+    // 후보 0건(EMPTY_REASON)도 notifyEmpty 가 이미 안내 → 중복 회신 생략.
+    // 그 외 스킵(이전 회차 진행 중·지역 없음·전송 실패)과 실패만 사유를 회신한다.
+    if (run.status === 'skipped' && run.error && run.error !== EMPTY_REASON) {
+      await this.deps.telegram.notify(`⏭️ ${escapeHtml(run.error)}`);
+    } else if (run.status === 'failed') {
+      await this.deps.telegram.notify(
+        `⚠️ 발굴 실패: ${escapeHtml(run.error ?? '알 수 없는 오류')}`,
+      );
+    }
+  }
+
   // awaiting 만료 → skipped + 텔레그램 안내.
   private async sweepExpired(): Promise<void> {
     const now = new Date();
@@ -696,6 +724,14 @@ function buildCandidatesMessage(
 
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+// 발굴 트리거 커맨드 판별 — '/discover', '/discover@Bot', '/발굴', '발굴'.
+// 첫 토큰만 보고 @봇명 접미는 제거(그룹에선 '/discover@MyBot' 형태로 옴).
+export function isDiscoverCommand(text: string): boolean {
+  const first = text.trim().split(/\s+/)[0] ?? '';
+  const cmd = first.split('@')[0]!.toLowerCase();
+  return cmd === '/discover' || cmd === '/발굴' || cmd === '발굴';
 }
 
 function escapeHtml(s: string): string {

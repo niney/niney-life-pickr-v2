@@ -499,7 +499,11 @@ export const RandomCrawlSection = () => {
                           {formatDate(r.startedAt)}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {r.trigger === 'cron' ? '자동' : '수동'}
+                          {r.trigger === 'cron'
+                            ? '자동'
+                            : r.trigger === 'telegram'
+                              ? '텔레그램'
+                              : '수동'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {r.regionLabel ?? '-'}
