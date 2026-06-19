@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type {
@@ -9,6 +10,7 @@ import type {
 } from '@repo/api-contract';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
+import { env } from '../../config/env.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import type {
@@ -27,6 +29,21 @@ import {
 const TEMPERATURE = 0.1;
 const MAX_TOKENS = 4000;
 const NUM_CTX = 8192;
+// 청크 LLM 호출 재시도 횟수 — 일시 timeout/429/upstream 을 흡수한다. summary.service
+// 와 동일 패턴(첫 시도 포함 최대 N회). 모두 소진하면 호출자가 식별 매핑으로
+// 폴백하되 실패를 집계해 run meta 에 노출한다(조용한 손실 → 부분완료 가시화).
+const GLOBAL_MERGE_RETRY_LIMIT = 3;
+// Link 재작성 시 한 번에 createMany 하는 행 수. 전체 링크를 단일 배열로 쌓아
+// 한 방에 insert 하면 대량 데이터에서 피크 메모리가 터진다(pm2 max_memory_restart
+// 로 머지가 중단된 실제 원인). 같은 트랜잭션 안에서 배치로 흘려보내 원자성은
+// 유지하고 메모리만 상수화한다.
+const LINK_INSERT_BATCH = 1000;
+// 머지 청크를 병렬 호출할 때 동시에 띄우는 promise 수의 상한 = 계정 동시성
+// 한도와 동일. 실제 네트워크 동시성은 어댑터의 ConcurrencyGate 가
+// OLLAMA_CLOUD_MAX_CONCURRENT 로 강제하므로(우회 불가), 이 값은 "동시에 메모리에
+// 떠 있는 in-flight 청크 promise 수"를 그 한도와 맞춰 메모리를 보호하는 용도다.
+// 풀이 게이트 cap 과 같으니 게이트 큐 대기 없이 cap 을 꽉 채워 쓴다(풀 사용).
+const MERGE_POOL_SIZE = env.OLLAMA_CLOUD_MAX_CONCURRENT;
 
 // 통계 read 결과 TTL 캐시 — 반복 페이지 진입 / 잦은 새로고침 시 raw 쿼리
 // 부하 줄이기. 같은 키 동시 요청은 in-flight promise 공유로 dogpile 방어.
@@ -91,6 +108,29 @@ const TOP_WHITELIST = new Set([
   '기타',
 ]);
 
+// 캐시 무효화 축 — 프롬프트·버전·카테고리 화이트리스트·샘플링 파라미터를 한
+// 해시로 묶는다. 이 중 하나라도 바뀌면 캐시 키가 달라져 옛 청크 결과가 자연
+// 미스(무효화)된다. (자문 가드: "무효화 해시는 복합")
+const MERGE_SCHEMA_HASH = createHash('sha256')
+  .update(
+    [
+      GLOBAL_MERGE_SYSTEM_PROMPT,
+      String(GLOBAL_MERGE_VERSION),
+      [...TOP_WHITELIST].join(','),
+      `${TEMPERATURE}|${MAX_TOKENS}|${NUM_CTX}`,
+    ].join(' '),
+  )
+  .digest('hex')
+  .slice(0, 16);
+
+// 청크 캐시 키 = sha256(model | schemaHash | variants 그대로). variants 순서를
+// 보존하므로 정확히 같은 입력일 때만 히트 → 히트 결과 = 그 입력의 실제 LLM
+// 응답과 동일(무손실). 정렬은 히트율 개선용(별도)이라 이 키에는 쓰지 않는다.
+const mergeChunkCacheKey = (model: string, variants: string[]): string =>
+  createHash('sha256')
+    .update(`${model} ${MERGE_SCHEMA_HASH} ${JSON.stringify(variants)}`)
+    .digest('hex');
+
 export const normalizeCategoryPath = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -141,6 +181,9 @@ export interface GlobalMergeResult {
   finalGroupCount: number;
   totalChunks: number;
   doneChunks: number;
+  // 재시도까지 모두 실패해 식별 매핑으로 폴백한 청크 수. >0 이면 done 이어도
+  // 부분완료 — 일부 메뉴가 그룹화/categoryPath 없이 떨어졌다.
+  failedChunks: number;
   model: string;
   version: number;
 }
@@ -153,6 +196,12 @@ export class AnalyticsService {
   // 머지 잡 done 시 clear, 그 외엔 60s TTL.
   // unknown 캐스트는 동일 캐시로 세 종류 결과 보관하기 위함 — 키별 형이 다름.
   private readonly readCache = new TtlCache<unknown>(ANALYTICS_CACHE_TTL_MS);
+
+  // 머지 단일 락 — 어드민 수동 머지와 스케줄 자동 머지가 동시에 전량 리셋
+  // 트랜잭션(GlobalMenuCanonical/Link deleteMany + 재작성)에 진입하면 서로의
+  // 중간 상태를 덮어쓴다. 단일 프로세스 + 앱 전역 singleton service 이므로
+  // 인스턴스 플래그 하나로 상호배제. 이미 진행 중이면 skip(빈 결과) 반환.
+  private mergeInflight = false;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -186,72 +235,92 @@ export class AnalyticsService {
     },
     progress: GlobalMergeProgress = {},
   ): Promise<GlobalMergeResult> {
-    const oplog = this.opts.operationLog ?? null;
-    if (!oplog) {
-      return this.executeGlobalMerge(opts.full, progress, null);
+    if (this.mergeInflight) {
+      this.log?.warn('[global-merge] 다른 머지가 진행 중 — 이번 호출은 건너뜀');
+      return {
+        inputCount: 0,
+        finalGroupCount: 0,
+        totalChunks: 0,
+        doneChunks: 0,
+        failedChunks: 0,
+        model: '',
+        version: GLOBAL_MERGE_VERSION,
+      };
     }
-    const runId = await oplog.startRun({
-      feature: 'global-merge',
-      jobId: opts.jobId ?? null,
-      parentRunId: opts.parentRunId ?? null,
-      // jobId 있는 경로 = 어드민 수동 실행. 스케줄 경로의 트리거(cron/manual)는
-      // 부모 run 쪽에 기록되므로 여기서 추측해 오기록하지 않는다.
-      trigger: opts.jobId != null ? 'manual' : null,
-      meta: { full: opts.full },
-    });
+    this.mergeInflight = true;
     try {
-      const result = await this.executeGlobalMerge(opts.full, progress, runId);
-      // totalChunks=0 은 full=false 에서 신규(미링크) 입력이 없던 정상 스킵 —
-      // failed 로 기록하면 cron 경로에 무의미한 실패 run 이 쌓인다.
-      const skipped = result.totalChunks === 0;
-      await oplog.finishRun(runId, {
-        status: 'done',
-        meta: {
-          ...(skipped ? { skipped: 'no_new_inputs' } : {}),
-          inputCount: result.inputCount,
-          finalGroupCount: result.finalGroupCount,
-          totalChunks: result.totalChunks,
-          doneChunks: result.doneChunks,
-          model: result.model,
-          version: result.version,
-        },
+      const oplog = this.opts.operationLog ?? null;
+      if (!oplog) {
+        return await this.executeGlobalMerge(opts.full, progress, null);
+      }
+      const runId = await oplog.startRun({
+        feature: 'global-merge',
+        jobId: opts.jobId ?? null,
+        parentRunId: opts.parentRunId ?? null,
+        // jobId 있는 경로 = 어드민 수동 실행. 스케줄 경로의 트리거(cron/manual)는
+        // 부모 run 쪽에 기록되므로 여기서 추측해 오기록하지 않는다.
+        trigger: opts.jobId != null ? 'manual' : null,
+        meta: { full: opts.full },
       });
-      return result;
-    } catch (e) {
-      if (e instanceof AnalyticsError && e.code === 'no_inputs') {
-        // 머지할 입력이 아직 없는 것은 cron 경로의 정상 상태 — run 은 done 으로
-        // 마감하되 호출자 계약(AnalyticsError throw)은 그대로 유지한다.
-        this.logStep(runId, {
-          stage: 'load',
-          level: 'info',
-          message: '머지할 메뉴 그룹이 없어 종료',
-        });
+      try {
+        const result = await this.executeGlobalMerge(opts.full, progress, runId);
+        // totalChunks=0 은 full=false 에서 신규(미링크) 입력이 없던 정상 스킵 —
+        // failed 로 기록하면 cron 경로에 무의미한 실패 run 이 쌓인다.
+        const skipped = result.totalChunks === 0;
         await oplog.finishRun(runId, {
           status: 'done',
-          meta: { skipped: 'no_inputs' },
+          meta: {
+            ...(skipped ? { skipped: 'no_new_inputs' } : {}),
+            // 재시도까지 실패해 식별 매핑으로 떨어진 청크가 있으면 done 이어도
+            // 부분완료 — meta 로 노출해 사후 분석이 가능하게(조용한 손실 방지).
+            ...(result.failedChunks > 0 ? { failedChunks: result.failedChunks } : {}),
+            inputCount: result.inputCount,
+            finalGroupCount: result.finalGroupCount,
+            totalChunks: result.totalChunks,
+            doneChunks: result.doneChunks,
+            model: result.model,
+            version: result.version,
+          },
         });
-      } else if (e instanceof AnalyticsError) {
-        // no_provider — 설정 부재. 자동분석 제외 errorCode 라 보고서가 따라붙지 않는다.
-        this.logStep(runId, {
-          stage: 'resolve_provider',
-          level: 'error',
-          message: e.message,
-        });
-        await oplog.finishRun(runId, {
-          status: 'failed',
-          errorCode: e.code,
-          errorMessage: e.message,
-        });
-      } else {
-        const message = e instanceof Error ? e.message : String(e);
-        this.logStep(runId, { stage: 'merge', level: 'error', message });
-        await oplog.finishRun(runId, {
-          status: 'failed',
-          errorCode: 'unknown',
-          errorMessage: message,
-        });
+        return result;
+      } catch (e) {
+        if (e instanceof AnalyticsError && e.code === 'no_inputs') {
+          // 머지할 입력이 아직 없는 것은 cron 경로의 정상 상태 — run 은 done 으로
+          // 마감하되 호출자 계약(AnalyticsError throw)은 그대로 유지한다.
+          this.logStep(runId, {
+            stage: 'load',
+            level: 'info',
+            message: '머지할 메뉴 그룹이 없어 종료',
+          });
+          await oplog.finishRun(runId, {
+            status: 'done',
+            meta: { skipped: 'no_inputs' },
+          });
+        } else if (e instanceof AnalyticsError) {
+          // no_provider — 설정 부재. 자동분석 제외 errorCode 라 보고서가 따라붙지 않는다.
+          this.logStep(runId, {
+            stage: 'resolve_provider',
+            level: 'error',
+            message: e.message,
+          });
+          await oplog.finishRun(runId, {
+            status: 'failed',
+            errorCode: e.code,
+            errorMessage: e.message,
+          });
+        } else {
+          const message = e instanceof Error ? e.message : String(e);
+          this.logStep(runId, { stage: 'merge', level: 'error', message });
+          await oplog.finishRun(runId, {
+            status: 'failed',
+            errorCode: 'unknown',
+            errorMessage: message,
+          });
+        }
+        throw e;
       }
-      throw e;
+    } finally {
+      this.mergeInflight = false;
     }
   }
 
@@ -317,6 +386,7 @@ export class AnalyticsService {
           finalGroupCount: 0,
           totalChunks: 0,
           doneChunks: 0,
+          failedChunks: 0,
           model,
           version: GLOBAL_MERGE_VERSION,
         };
@@ -346,6 +416,7 @@ export class AnalyticsService {
     const variantToCategoryPath = new Map<string, string | null>();
     let totalChunks = chunks1.length;
     let doneChunks = 0;
+    let failedChunks = 0;
     this.log?.info({ total: inputVariants.length, chunks: chunks1.length }, '[global-merge] pass1 start');
     this.logStep(runId, {
       stage: 'pass1',
@@ -354,25 +425,20 @@ export class AnalyticsService {
       meta: { full, total: inputVariants.length, chunks: chunks1.length },
     });
 
+    // 청크 LLM 호출은 병렬(게이트가 실동시성 강제), 결과 반영은 인덱스 순 직렬.
+    const maps1 = await this.callChunksPooled(provider, model, chunks1, runId, 1, emitChunk);
     for (let i = 0; i < chunks1.length; i += 1) {
       const ch = chunks1[i]!;
-      const map = await this.callOneChunk(provider, model, ch, runId);
-      let mapped = 0;
+      const { map, failed } = maps1[i]!;
+      if (failed) failedChunks += 1;
       for (const v of ch) {
         const entry = map[v];
         const canonical =
           entry && entry.canonical.trim().length > 0 ? entry.canonical.trim() : v;
         variantToCanonical.set(v, canonical);
         variantToCategoryPath.set(v, entry?.categoryPath ?? null);
-        if (entry) mapped += 1;
       }
       doneChunks += 1;
-      emitChunk({
-        pass: 1,
-        chunkIndex: i,
-        chunkTotal: chunks1.length,
-        mappedInChunk: mapped,
-      });
     }
 
     // pass 2: pass1 결과의 distinct canonical 들 사이의 충돌 해소. pass2 가 새
@@ -388,10 +454,11 @@ export class AnalyticsService {
         meta: { total: pass1Canonicals.length, chunks: chunks2.length },
       });
       const pass2Map = new Map<string, string>();
+      const maps2 = await this.callChunksPooled(provider, model, chunks2, runId, 2, emitChunk);
       for (let i = 0; i < chunks2.length; i += 1) {
         const ch = chunks2[i]!;
-        const map = await this.callOneChunk(provider, model, ch, runId);
-        let mapped = 0;
+        const { map, failed } = maps2[i]!;
+        if (failed) failedChunks += 1;
         for (const v of ch) {
           const entry = map[v];
           const finalName =
@@ -400,15 +467,8 @@ export class AnalyticsService {
           if (entry?.categoryPath) {
             finalCategoryByCanonical.set(finalName, entry.categoryPath);
           }
-          if (entry) mapped += 1;
         }
         doneChunks += 1;
-        emitChunk({
-          pass: 2,
-          chunkIndex: i,
-          chunkTotal: chunks2.length,
-          mappedInChunk: mapped,
-        });
       }
       for (const [variant, c1] of variantToCanonical) {
         variantToFinal.set(variant, pass2Map.get(c1) ?? c1);
@@ -531,33 +591,41 @@ export class AnalyticsService {
       // Link 모두 비우고 다시 작성. menu_canonicals 가 onDelete: Cascade 라
       // 식당 삭제 시 자동 정리되므로 단순 reset 가능.
       await tx.globalMenuCanonicalLink.deleteMany({});
-      const links: {
-        menuCanonicalId: string;
-        restaurantId: string;
-        localCanonicalNorm: string;
-        globalCanonicalId: string;
-      }[] = [];
       // targets 에서 (id, restaurantId, canonicalNorm) 다시 가져와야 — Link
       // 행은 menuCanonicalId 가 있어야 한다. 위에서 select 안 된 컬럼이 있어
       // 다시 조회.
       const targetRows = await tx.menuCanonical.findMany({
         select: { id: true, restaurantId: true, canonicalNorm: true },
       });
+      // 전체 링크를 단일 배열로 쌓아 한 번에 createMany 하면 대량 데이터에서
+      // 피크 메모리가 터진다(pm2 OOM 으로 머지가 중단된 실제 원인). 같은
+      // 트랜잭션 안에서 LINK_INSERT_BATCH 단위로 흘려보내 원자성은 유지하고
+      // 메모리만 상수화한다.
+      let linkBuf: {
+        menuCanonicalId: string;
+        restaurantId: string;
+        localCanonicalNorm: string;
+        globalCanonicalId: string;
+      }[] = [];
+      const flushLinks = async (): Promise<void> => {
+        if (linkBuf.length === 0) return;
+        await tx.globalMenuCanonicalLink.createMany({ data: linkBuf });
+        linkBuf = [];
+      };
       for (const r of targetRows) {
         const info = finalByNorm.get(r.canonicalNorm);
         if (!info) continue;
         const gid = keyToId.get(info.globalKey);
         if (!gid) continue;
-        links.push({
+        linkBuf.push({
           menuCanonicalId: r.id,
           restaurantId: r.restaurantId,
           localCanonicalNorm: r.canonicalNorm,
           globalCanonicalId: gid,
         });
+        if (linkBuf.length >= LINK_INSERT_BATCH) await flushLinks();
       }
-      if (links.length > 0) {
-        await tx.globalMenuCanonicalLink.createMany({ data: links });
-      }
+      await flushLinks();
     });
 
     // 머지가 끝나면 통계 read 캐시 모두 무효화 — overview/menus/tree 모두 변함.
@@ -580,6 +648,7 @@ export class AnalyticsService {
       finalGroupCount: distinctGlobalKeys.size,
       totalChunks,
       doneChunks,
+      failedChunks,
       model,
       version: GLOBAL_MERGE_VERSION,
     };
@@ -645,33 +714,140 @@ export class AnalyticsService {
     // categoryPath 동시 소실). probe:merge 로 확인 — format 없이 프롬프트만
     // 주면 { mappings: [...] } 가 path 까지 안정적으로 온다. 파서가 JSON 을
     // 견고하게 추출하므로 grammar 강제 없이도 파싱 실패율이 낮다.
+    // 일시 timeout/429/upstream 은 재시도로 흡수한다 — 직렬+medium thinking 압박
+    // 일수록 타임아웃이 잦고, 한 번 실패하면 그 청크가 통째로 식별 매핑으로
+    // 떨어져 grouping·categoryPath 가 조용히 망가진다. summary.service 와 동일한
+    // 점증 백오프로 재시도하고, 모두 소진하면 throw 해 호출자가 식별 매핑으로
+    // 폴백하되 failedChunks 로 집계(부분완료 가시화)한다.
+    // 캐시 히트면 LLM 호출을 통째로 건너뛴다 — 같은 청크의 과거 성공 응답을
+    // 재사용(무손실). 전량 머지여도 변하지 않은 청크는 여기서 0 호출로 끝난다.
+    const cacheKey = mergeChunkCacheKey(model, variants);
+    let cached: { mappingsJson: string } | null = null;
     try {
-      const res = await provider.complete({
-        prompt: buildGlobalMergePrompt(variants),
-        model,
-        systemPrompt: GLOBAL_MERGE_SYSTEM_PROMPT,
-        temperature: TEMPERATURE,
-        maxTokens: MAX_TOKENS,
-        numCtx: NUM_CTX,
+      cached = await this.prisma.globalMergeChunkCache.findUnique({
+        where: { cacheKey },
+        select: { mappingsJson: true },
       });
-      return this.parseMergeResponse(res.text);
-    } catch (e) {
-      const { error, message } = classifyError(e);
-      this.log?.warn(
-        { error, message: message.slice(0, 200) },
-        '[global-merge] chunk failed — falling back to identity',
-      );
-      // run 전체는 계속 진행(식별 매핑 폴백)이지만, 어떤 청크가 왜 죽었는지는
-      // 영속 로그에 남겨야 사후 분석이 가능하다 — 실패가 흡수돼 done 으로
-      // 끝나는 run 에서 유일한 단서.
-      this.logStep(runId, {
-        stage: 'merge_chunk',
-        level: 'warn',
-        message: `청크 LLM 호출 실패 — 식별 매핑으로 폴백: ${message.slice(0, 200)}`,
-        meta: { error, size: variants.length },
-      });
-      return {};
+    } catch {
+      // 캐시 조회 실패(일시 DB 락 등) — 미스로 간주하고 LLM 을 호출한다.
+      // 캐시는 최적화일 뿐이라 실패가 머지를 멈추면 안 된다.
     }
+    if (cached) {
+      try {
+        return JSON.parse(cached.mappingsJson) as Record<
+          string,
+          { canonical: string; categoryPath: string | null }
+        >;
+      } catch {
+        // 손상된 캐시 행 — 무시하고 재계산해 아래에서 덮어쓴다.
+      }
+    }
+
+    let last: ReturnType<typeof classifyError> | null = null;
+    for (let attempt = 0; attempt < GLOBAL_MERGE_RETRY_LIMIT; attempt += 1) {
+      if (attempt > 0) {
+        const delayMs = 300 * attempt + Math.floor(Math.random() * 200);
+        await new Promise((res) => setTimeout(res, delayMs));
+      }
+      try {
+        const res = await provider.complete({
+          prompt: buildGlobalMergePrompt(variants),
+          model,
+          systemPrompt: GLOBAL_MERGE_SYSTEM_PROMPT,
+          temperature: TEMPERATURE,
+          maxTokens: MAX_TOKENS,
+          numCtx: NUM_CTX,
+        });
+        const parsed = this.parseMergeResponse(res.text);
+        // 성공 응답만 캐시 — 실패 청크는 저장 안 해 다음 머지가 재시도하게 한다.
+        // 저장 실패(일시 DB 락 등)는 무시 — 다음 머지가 재캐시하며, 머지 결과엔
+        // 영향이 없다(캐시는 최적화일 뿐).
+        try {
+          await this.prisma.globalMergeChunkCache.upsert({
+            where: { cacheKey },
+            create: {
+              cacheKey,
+              mappingsJson: JSON.stringify(parsed),
+              model,
+              schemaHash: MERGE_SCHEMA_HASH,
+            },
+            update: { mappingsJson: JSON.stringify(parsed), model, schemaHash: MERGE_SCHEMA_HASH },
+          });
+        } catch {
+          // 캐시 저장 실패는 삼킨다.
+        }
+        return parsed;
+      } catch (e) {
+        last = classifyError(e);
+        this.log?.warn(
+          { error: last.error, message: last.message.slice(0, 200), attempt: attempt + 1 },
+          '[global-merge] chunk failed — retrying',
+        );
+      }
+    }
+    // 재시도 모두 소진. 어떤 청크가 왜 죽었는지는 영속 로그에 남겨야 사후 분석이
+    // 가능하다 — 실패가 흡수돼 done 으로 끝나는 run 에서 유일한 단서.
+    this.logStep(runId, {
+      stage: 'merge_chunk',
+      level: 'warn',
+      message: `청크 LLM 호출 ${GLOBAL_MERGE_RETRY_LIMIT}회 실패 — 식별 매핑으로 폴백: ${
+        last?.message.slice(0, 200) ?? ''
+      }`,
+      meta: {
+        error: last?.error ?? 'unknown',
+        size: variants.length,
+        attempts: GLOBAL_MERGE_RETRY_LIMIT,
+      },
+    });
+    throw new Error(
+      `merge chunk failed after ${GLOBAL_MERGE_RETRY_LIMIT} attempts: ${last?.error ?? 'unknown'}`,
+    );
+  }
+
+  // 청크들을 병렬로 LLM 호출한다. 동시에 띄우는 promise 수는 MERGE_POOL_SIZE 로
+  // 제한(메모리 보호)하고, 실제 네트워크 동시성은 어댑터 게이트가
+  // OLLAMA_CLOUD_MAX_CONCURRENT 로 강제한다. 청크 완료 즉시 진행을 emit 하되(완료
+  // 순서), 결과는 인덱스 순 배열로 반환해 호출자가 순서대로 반영하게 한다 —
+  // categoryPath first-non-null 채택이 순서 의존이라 직렬 실행과 비트 동일을 유지.
+  private async callChunksPooled(
+    provider: LLMProvider,
+    model: string,
+    chunks: string[][],
+    runId: string | null,
+    pass: 1 | 2,
+    emitChunk: NonNullable<GlobalMergeProgress['onChunk']>,
+  ): Promise<
+    { map: Record<string, { canonical: string; categoryPath: string | null }>; failed: boolean }[]
+  > {
+    const results = new Array<{
+      map: Record<string, { canonical: string; categoryPath: string | null }>;
+      failed: boolean;
+    }>(chunks.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        // 단일 스레드라 인덱스 집기는 원자적 — 워커끼리 같은 청크를 안 잡는다.
+        const i = next;
+        next += 1;
+        if (i >= chunks.length) break;
+        const ch = chunks[i]!;
+        let map: Record<string, { canonical: string; categoryPath: string | null }> = {};
+        let failed = false;
+        try {
+          map = await this.callOneChunk(provider, model, ch, runId);
+        } catch {
+          // 재시도까지 실패 — 호출자가 식별 매핑 폴백 + failedChunks 집계.
+          failed = true;
+        }
+        results[i] = { map, failed };
+        let mapped = 0;
+        for (const v of ch) if (map[v]) mapped += 1;
+        emitChunk({ pass, chunkIndex: i, chunkTotal: chunks.length, mappedInChunk: mapped });
+      }
+    };
+    const concurrency = Math.max(1, Math.min(MERGE_POOL_SIZE, chunks.length));
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    return results;
   }
 
   // ── 통계 조회 ──────────────────────────────────────────────────────

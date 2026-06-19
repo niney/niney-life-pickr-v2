@@ -24,6 +24,7 @@
     "probe:tabling-bulk": "tsx --env-file=.env scripts/probe-tabling-bulk.ts",
     "probe:tabling-promote": "tsx --env-file=.env scripts/probe-tabling-promote.ts",
     "run-merge": "tsx --env-file=.env scripts/run-global-merge.ts",
+    "snapshot:merge": "tsx --env-file=.env scripts/snapshot-global-merge.ts",
     "dev:capture-visitor": "tsx scripts/dev-capture-visitor.ts",
     "dev:fetch-visitor-html": "tsx scripts/dev-fetch-visitor-html.ts",
     "dev:open-visitor-page": "tsx scripts/dev-open-visitor-page.ts",

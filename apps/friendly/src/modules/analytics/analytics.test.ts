@@ -176,6 +176,9 @@ describe('AnalyticsService.runGlobalMerge', () => {
     // MenuCanonical 까지 정리되지만 GlobalMenuCanonical 은 식당과 무관하다.
     // 다음 테스트가 깨끗한 상태에서 시작하도록 명시적 청소.
     await app.prisma.globalMenuCanonical.deleteMany({});
+    // 청크 캐시도 비워 다음 테스트가 항상 LLM 을 실제 호출하게 한다 — callIndex
+    // 기반 mock 이 캐시 히트로 호출이 줄면 깨지므로.
+    await app.prisma.globalMergeChunkCache.deleteMany({});
   });
 
   it('two-pass merge: pass1 keeps variant→canonical, pass2 collapses cross-chunk conflicts', async () => {
@@ -265,6 +268,109 @@ describe('AnalyticsService.runGlobalMerge', () => {
     expect(muekUnji?.global.globalKey).toBe('김치찌개');
     const kim = links.find((l) => l.menuCanonical.canonicalNorm === '김치찌개');
     expect(kim?.global.globalKey).toBe('김치찌개');
+  });
+
+  it('processes chunks in parallel and stays order-independent (직렬=병렬 동일)', async () => {
+    // 입력 25개 → pass1 이 3청크(GLOBAL_MERGE_CHUNK_SIZE=10)로 쪼개져 병렬 경로
+    // 를 강제한다. 응답을 일부러 역순으로 지연시켜 도착 순서를 뒤집어도 결과가
+    // 결정적인지 — categoryPath first-non-null 순서 의존이 병렬에서 안 깨지는지 확인.
+    const menus = Array.from({ length: 25 }, (_, i) => ({
+      name: `메뉴${i}`,
+      nameNorm: `메뉴${i}`,
+      canonicalName: `메뉴${i}`,
+      canonicalNorm: `메뉴${i}`,
+      mentions: [{ sentiment: 'positive' as const }],
+    }));
+    await seedRestaurant(app, menus);
+
+    let inflight = 0;
+    let maxInflight = 0;
+    let callNo = 0;
+    const provider: LLMProvider = {
+      complete: async ({ prompt }) => {
+        inflight += 1;
+        maxInflight = Math.max(maxInflight, inflight);
+        // 먼저 들어온 호출일수록 더 오래 대기 — 도착 순서를 역전시킨다.
+        const delay = 20 - Math.min(callNo, 18);
+        callNo += 1;
+        await new Promise((r) => setTimeout(r, delay));
+        // 응답은 prompt 의 variant 배열 기반 — 호출 인덱스에 의존하지 않는다.
+        const arr = JSON.parse(prompt.slice(prompt.indexOf('['))) as string[];
+        const mappings = arr.map((v) => ({ variant: v, canonical: v, categoryPath: `기타 > ${v}` }));
+        inflight -= 1;
+        return { text: JSON.stringify({ mappings }), model: 'm', promptTokens: 1, completionTokens: 1 };
+      },
+    };
+    const service = new AnalyticsService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'm' }),
+    });
+
+    const result = await service.runGlobalMerge({ full: true });
+
+    // 실제로 병렬로 돌았고(동시 호출 >1) 실패 청크 없음.
+    expect(maxInflight).toBeGreaterThan(1);
+    expect(result.failedChunks).toBe(0);
+    // 25개 norm 모두 자기 globalKey + categoryPath 로 — 도착 순서 역전과 무관하게 결정적.
+    const wanted = menus.map((m) => m.canonicalNorm);
+    const globals = await app.prisma.globalMenuCanonical.findMany({
+      where: { globalKey: { in: wanted } },
+      select: { globalKey: true, categoryPath: true },
+    });
+    expect(globals.length).toBe(25);
+    expect(globals.every((g) => g.categoryPath === `기타 > ${g.globalKey}`)).toBe(true);
+  });
+
+  it('caches chunk results — identical re-run hits cache (LLM 0회) and is bit-identical (무손실)', async () => {
+    const tag = stamp();
+    await seedRestaurant(app, [
+      {
+        name: `김치찌개${tag}`,
+        nameNorm: `김치찌개${tag}`,
+        canonicalName: `김치찌개${tag}`,
+        canonicalNorm: `김치찌개${tag}`,
+        mentions: [{ sentiment: 'positive' as const }],
+      },
+      {
+        name: `돈까스${tag}`,
+        nameNorm: `돈까스${tag}`,
+        canonicalName: `돈까스${tag}`,
+        canonicalNorm: `돈까스${tag}`,
+        mentions: [{ sentiment: 'positive' as const }],
+      },
+    ]);
+
+    let calls = 0;
+    const provider: LLMProvider = {
+      complete: async ({ prompt }) => {
+        calls += 1;
+        const arr = JSON.parse(prompt.slice(prompt.indexOf('['))) as string[];
+        const mappings = arr.map((v) => ({ variant: v, canonical: v, categoryPath: `기타 > ${v}` }));
+        return { text: JSON.stringify({ mappings }), model: 'm', promptTokens: 1, completionTokens: 1 };
+      },
+    };
+    const model = `cache-test-${tag}`;
+    const service = new AnalyticsService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model }),
+    });
+    const wanted = [`김치찌개${tag}`, `돈까스${tag}`];
+    const snapshot = () =>
+      app.prisma.globalMenuCanonical.findMany({
+        where: { displayName: { in: wanted } },
+        select: { globalKey: true, displayName: true, categoryPath: true },
+        orderBy: { displayName: 'asc' },
+      });
+
+    // 1차 — 캐시 비어 LLM 호출 발생.
+    await service.runGlobalMerge({ full: true });
+    const callsAfterFirst = calls;
+    expect(callsAfterFirst).toBeGreaterThan(0);
+    const snap1 = await snapshot();
+    expect(snap1.length).toBe(2);
+
+    // 2차 — 같은 데이터/모델 → 모든 청크 캐시 히트 → 추가 LLM 호출 0, 결과 동일.
+    await service.runGlobalMerge({ full: true });
+    expect(calls).toBe(callsAfterFirst);
+    expect(await snapshot()).toEqual(snap1);
   });
 
   it('falls back to identity when LLM omits a key', async () => {
