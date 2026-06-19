@@ -112,6 +112,11 @@ function absoluteUrl(origin: string, pathOrUrl: string): string {
 
 function thumbnailUrl(origin: string, imageUrl: string | null): string | null {
   if (!imageUrl) return null;
+  // 파노라마 사본 등 same-origin 절대경로(/api/v1/media/panorama/…)는 이미 우리
+  // JPEG 자산이므로 외부 전용 thumbnail 프록시(절대 URL + 네이버 호스트만 허용)를
+  // 거치지 않고 그대로 절대화한다. 프록시로 감싸면 z.string().url() 검증에 걸려
+  // og:image 가 400(querystring/url Invalid url) 으로 깨진다.
+  if (!imageUrl.startsWith('http')) return absoluteUrl(origin, imageUrl);
   const params = new URLSearchParams({ url: imageUrl, w: '1200', q: '80' });
   return `${origin}${Routes.Media.thumbnail}?${params.toString()}`;
 }
