@@ -59,6 +59,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { cn } from '~/lib/utils';
+import { RandomCrawlSection } from './RandomCrawlSection';
 
 // 식당 표 정렬 키 — api-contract 의 MenuGroupingRestaurantSortType 과 같음.
 const SORT_KEYS: MenuGroupingRestaurantSortType[] = ['unmapped', 'analyzed', 'name'];
@@ -264,6 +265,7 @@ export const AdminAnalyticsPage = () => {
       </section>
 
       <ScheduleSection />
+      <RandomCrawlSection />
       <GlobalMergeSection />
       <CategoryTreeSection />
       <GlobalMenusSection />

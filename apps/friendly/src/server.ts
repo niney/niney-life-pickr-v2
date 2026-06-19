@@ -24,6 +24,15 @@ const start = async (): Promise<void> => {
     //    직전 인스턴스에서 running 으로 남은 run 을 interrupted 로 정리한다.
     await app.schedule.bootstrap();
 
+    // 4) 텔레그램 설정 적용 — DB(설정>텔레그램) 값이 있으면 env 대신 그 값으로
+    //    봇을 재구성. random-crawl 이 폴링을 시작하기 전에 토큰/chatId 를 확정.
+    await app.telegramConfig.bootstrap();
+
+    // 5) 맛집 자동 발굴 부팅 — DB 설정으로 cron 등록 + 텔레그램 폴러 시작 +
+    //    awaiting 만료 sweep 타이머. running/crawling 고아만 interrupted 로
+    //    닫고 awaiting_selection 은 살려둔다(콜백이 DB 행을 찾아 이어감).
+    await app.randomCrawl.bootstrap();
+
     await app.listen({ port: env.PORT, host: env.HOST });
 
     // graceful shutdown — 중복 호출 가드, 스케줄러 정지, 진행 중 작업 취소,

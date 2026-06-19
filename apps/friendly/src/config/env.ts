@@ -21,6 +21,15 @@ const EnvSchema = z.object({
   // Empty means "no default" — UI must supply one for /test and /complete.
   OLLAMA_DEFAULT_MODEL: z.string().default(''),
 
+  // 텔레그램 봇 — 맛집 자동 발굴(random-crawl)이 후보를 보내고 사용자가
+  // 인라인 버튼으로 고르면 그 응답을 long-polling 으로 받는다. 둘 다 비어 있으면
+  // 텔레그램 비활성 — 자동 발굴 회차는 후보를 못 보내 skip 된다.
+  // - TELEGRAM_BOT_TOKEN: @BotFather 로 발급한 봇 토큰.
+  // - TELEGRAM_CHAT_ID: 후보를 받을 대상 chat id(개인/그룹). 봇과 1회 대화하거나
+  //   그룹에 추가한 뒤 getUpdates 로 확인할 수 있다.
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_CHAT_ID: z.string().default(''),
+
   // Deep link (Universal Links / App Links) 검증 파일 콘텐츠를 /.well-known/
   // 라우트가 동적으로 만든다. 비어 있으면 그 라우트가 404 — iOS/Android 도
   // 자동 검증 실패로 폴백(브라우저 오픈)한다.

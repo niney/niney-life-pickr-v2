@@ -264,6 +264,26 @@ export const AutoDiscover = {
     `${API_PREFIX}/admin/auto-discover/jobs/${id}/events`,
 } as const;
 
+// 맛집 자동 발굴 — cron 으로 지역을 (랜덤/고정) 골라 검색 → 후보를 텔레그램
+// 으로 보내고 사용자가 고른 가게만 크롤. schedule 과 같은 인프로세스 스케줄러를
+// 쓰지만 jobType('random-crawl')·파이프라인·상태머신이 달라 경로를 분리한다.
+export const RandomCrawl = {
+  // 설정 조회/변경 — GET(현재 설정+다음 실행 시각), PUT(enabled/cron/지역/후보수…).
+  config: `${API_PREFIX}/admin/random-crawl`,
+  // 지금 실행 — cron tick 을 기다리지 않고 즉시(manual).
+  run: `${API_PREFIX}/admin/random-crawl/run`,
+  // 실행 이력 — 최근 run 목록 + 진행 중 run id.
+  runs: `${API_PREFIX}/admin/random-crawl/runs`,
+  // 진행 SSE — 지역선정/검색/후보대기/크롤 단계를 push.
+  runEvents: `${API_PREFIX}/admin/random-crawl/run-events`,
+  // cron 식 검증 + 다음 실행 시각 미리보기.
+  preview: `${API_PREFIX}/admin/random-crawl/preview`,
+  // 지역 옵션 — 전체 시도→시군구 트리.
+  regions: `${API_PREFIX}/admin/random-crawl/regions`,
+  // 특정 시군구의 동 목록 (?sido=&sigungu=).
+  regionDongs: `${API_PREFIX}/admin/random-crawl/regions/dongs`,
+} as const;
+
 // provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며
 // 같은 provider 에 'image' 등 다른 용도를 따로 등록할 수 있다.
 export const Ai = {
@@ -309,6 +329,17 @@ export const SettingsMap = {
   secret: (id: string) => `${API_PREFIX}/admin/settings/map/${id}/secret`,
   // 공개 — 맛집 지도 페이지가 vworld WMTS 호출에 쓸 키. 키 미등록 시 404.
   publicConfig: `${API_PREFIX}/settings/map/public`,
+} as const;
+
+// 텔레그램 봇 설정 — 어드민 "설정 > 텔레그램". DB 우선 + .env fallback,
+// 토큰은 마스킹. 저장 시 즉시 봇 재구성(서버 재시작 불필요).
+export const SettingsTelegram = {
+  // GET(마스킹 설정 조회), PUT(토큰/chatId 설정), DELETE(DB 행 삭제 → env fallback).
+  config: `${API_PREFIX}/admin/settings/telegram`,
+  // 현재 저장된 설정으로 getMe → getChat → 테스트 메시지 전송 검증.
+  test: `${API_PREFIX}/admin/settings/telegram/test`,
+  // 폴러를 잠시 멈추고 message 롱폴로 chat_id 자동 탐색.
+  resolveChatId: `${API_PREFIX}/admin/settings/telegram/resolve-chat-id`,
 } as const;
 
 // 정산하기의 영수증 업로드/추출 엔드포인트. 인증된 사용자(USER+) 만 사용

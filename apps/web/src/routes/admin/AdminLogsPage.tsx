@@ -28,6 +28,7 @@ export const FEATURE_LABEL: Record<OperationFeatureType, string> = {
   schedule: '스케줄',
   'global-merge': '글로벌 메뉴 병합',
   'diningcode-bulk-save': '다이닝코드 일괄 저장',
+  'random-crawl': '맛집 자동 발굴',
 };
 
 const STATUS_LABEL: Record<OperationRunStatusType, string> = {

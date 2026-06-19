@@ -792,3 +792,76 @@ model ScheduleRun {
   @@index([jobType, startedAt])
   @@map("schedule_runs")
 }
+
+// 맛집 자동 발굴 설정 — cron 으로 지역을 (랜덤/고정) 골라 검색 → 후보를
+// 텔레그램으로 보내고 사용자가 고른 가게만 크롤. schedule_configs 와 같은
+// 형태지만 지역/검색 설정이 추가된다. 텔레그램 토큰은 env 에 두고 여기 저장
+// 안 한다(설정 화면에 노출 금지).
+model RandomCrawlConfig {
+  id                 String    @id @default(cuid())
+  // 'random-crawl' 고정. 행 식별 키.
+  jobType            String    @unique
+  enabled            Boolean   @default(false)
+  cronExpr           String    @default("0 11 * * *")
+  timezone           String    @default("Asia/Seoul")
+  // RandomCrawlRegion 직렬화 JSON (시/구/동 + 랜덤 플래그).
+  regionJson         String    @default("{}")
+  // 검색 키워드 — 동 이름과 결합. 기본 "맛집".
+  keyword            String    @default("맛집")
+  // 텔레그램으로 보낼 후보 수.
+  candidateCount     Int       @default(5)
+  // 무응답 시 회차를 skipped 로 닫기까지 대기할 분.
+  responseTimeoutMin Int       @default(180)
+  lastRunAt          DateTime?
+  lastStatus         String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("random_crawl_configs")
+}
+
+// 자동 발굴 한 회차. running → awaiting_selection(텔레그램 응답 대기) →
+// crawling → done. 무응답/후보0/overlap 은 skipped, 오류는 failed, 재시작
+// 고아는 interrupted. 텔레그램 콜백이 chatId+messageId 로 이 행을 찾아 선택을
+// 반영하므로 두 값을 영속한다(메모리만으로는 재시작에 약함).
+model RandomCrawlRun {
+  id                  String    @id @default(cuid())
+  // 'cron' | 'manual'
+  trigger             String
+  // running|awaiting_selection|crawling|done|skipped|failed|interrupted
+  status              String
+  // 선정된 지역 표시용. 예: "서울특별시 강남구 역삼동".
+  regionLabel         String?
+  keyword             String?
+  // RandomCrawlCandidate[] 직렬화 JSON.
+  candidatesJson      String    @default("[]")
+  selectedPlaceId     String?
+  crawledRestaurantId String?
+  // 텔레그램 응답 매칭용 — 후보를 보낸 메시지.
+  telegramChatId      String?
+  telegramMessageId   String?
+  // awaiting_selection 만료 시각 — 지난 회차는 sweep 이 skipped 로 닫는다.
+  expiresAt           DateTime?
+  error               String?
+  startedAt           DateTime  @default(now())
+  finishedAt          DateTime?
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("random_crawl_runs")
+}
+
+// 텔레그램 봇 설정 — 단일 행(key 고정). LlmProviderConfig/MapProviderConfig 와
+// 같은 "DB 우선 + .env fallback" 패턴. DB 행이 있으면 그 값을 쓰고, 없으면
+// env(TELEGRAM_*)로 폴백한다. 어드민 "설정 > 텔레그램"에서 관리.
+model TelegramConfig {
+  id          String   @id @default(cuid())
+  // 단일 행 보장용 고정 키.
+  key         String   @unique @default("telegram")
+  botToken    String   @default("")
+  chatId      String   @default("")
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("telegram_configs")
+}

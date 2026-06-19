@@ -16,6 +16,7 @@ export const OperationFeature = z.enum([
   'schedule',
   'global-merge',
   'diningcode-bulk-save',
+  'random-crawl',
 ]);
 export type OperationFeatureType = z.infer<typeof OperationFeature>;
 

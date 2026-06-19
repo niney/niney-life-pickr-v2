@@ -3,6 +3,7 @@ import {
   KeyRound,
   Map as MapIcon,
   ScrollText,
+  Send,
   Settings as SettingsIcon,
   type LucideIcon,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ interface Tab {
 const TABS: Tab[] = [
   { to: '/admin/settings/ai-keys', label: 'AI 키', icon: KeyRound },
   { to: '/admin/settings/map', label: '지도', icon: MapIcon },
+  { to: '/admin/settings/telegram', label: '텔레그램', icon: Send },
   { to: '/admin/settings/logs', label: '로그', icon: ScrollText },
 ];
 
