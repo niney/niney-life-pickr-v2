@@ -5,6 +5,7 @@ import type {
 } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type {
+  CrawlStageType,
   RandomCrawlCandidateType,
   RandomCrawlConfigInputType,
   RandomCrawlConfigType,
@@ -44,6 +45,19 @@ const SEARCH_PAGE_SIZE = 50;
 const ACTOR_ID = 'system:random-crawl';
 // 신규 후보 0건 스킵 사유 — notifyEmpty 안내와 텔레그램 커맨드 중복 회신 억제에 공용.
 const EMPTY_REASON = '신규 후보 0건';
+// 크롤 진행을 텔레그램 메시지에 제자리 갱신할 때의 최소 간격(ms). 텔레그램
+// editMessageText 레이트리밋 + "not modified" 오류를 피하려고 한번씩만 보낸다.
+const CRAWL_PROGRESS_THROTTLE_MS = 4000;
+// 크롤 단계 → 사용자용 한 줄. queued/done 은 생략(done 은 최종 메시지로 덮음).
+const CRAWL_STAGE_LABEL: Partial<Record<CrawlStageType, string>> = {
+  normalizing: '🔧 주소 정규화 중…',
+  launching: '🚀 브라우저 실행 중…',
+  loading_main: '📄 가게 정보 로딩 중…',
+  parsing_main: '📄 가게 정보 분석 중…',
+  loading_visitor: '💬 방문자 리뷰 로딩 중…',
+  paginating_visitor: '💬 방문자 리뷰 수집 중…',
+  finalizing: '💾 저장 중…',
+};
 // awaiting 만료 sweep 주기.
 const SWEEP_INTERVAL_MS = 60_000;
 
@@ -496,7 +510,19 @@ export class RandomCrawlService {
         status = 'failed';
         error = start.message ?? '크롤 시작 실패';
       } else {
-        await this.waitForCrawlTerminal(start.jobId);
+        // 진행 상황을 같은 텔레그램 메시지에 throttle 하며 제자리 갱신.
+        const stopProgress = this.streamCrawlProgress(
+          start.jobId,
+          cb.chatId,
+          cb.messageId,
+          cand.name,
+          run.regionLabel ?? '',
+        );
+        try {
+          await this.waitForCrawlTerminal(start.jobId);
+        } finally {
+          stopProgress();
+        }
         const rest = await this.deps.restaurants.findByPlaceId(cand.placeId);
         restaurantId = rest?.id ?? null;
         if (!restaurantId) {
@@ -629,6 +655,40 @@ export class RandomCrawlService {
     await this.deps.telegram.sendCandidates({
       text: `🍽️ <b>오늘의 맛집 발굴</b>\n📍 ${escapeHtml(regionLabel)}\n🔎 "${escapeHtml(query)}"\n\n신규 후보가 없어 이번 회차는 건너뜁니다.`,
       buttons: [],
+    });
+  }
+
+  // 크롤 진행을 같은 텔레그램 메시지에 제자리 갱신(editMessageText). 단계 전환과
+  // 방문자 리뷰 누적 수를 한 줄로 보여주되 CRAWL_PROGRESS_THROTTLE_MS 간격으로만
+  // 갱신하고, 직전과 동일한 텍스트는 건너뛴다(텔레그램 "not modified" 회피).
+  // 반환: 구독 해제 함수 — 호출부가 종료 대기 후 호출(최종 🎉/⚠️ 메시지가 덮음).
+  private streamCrawlProgress(
+    crawlJobId: string,
+    chatId: string,
+    messageId: number,
+    name: string,
+    regionLabel: string,
+  ): () => void {
+    const header = `🔄 <b>${escapeHtml(name)}</b> 크롤 중…\n📍 ${escapeHtml(regionLabel)}`;
+    let lastEditMs = 0;
+    let lastText = '';
+    const render = (line: string): void => {
+      const text = `${header}\n${line}`;
+      const now = Date.now();
+      if (text === lastText) return;
+      if (now - lastEditMs < CRAWL_PROGRESS_THROTTLE_MS) return;
+      lastEditMs = now;
+      lastText = text;
+      void this.deps.telegram.editMessageText(chatId, messageId, text);
+    };
+    return this.crawlRegistry.subscribe(crawlJobId, (ev) => {
+      if (ev.type === 'progress') {
+        const label = CRAWL_STAGE_LABEL[ev.stage];
+        if (label) render(label);
+      } else if (ev.type === 'visitor_progress') {
+        render(`💬 방문자 리뷰 ${ev.count}개 수집 중…`);
+      }
+      // done/error 는 waitForCrawlTerminal 가 처리 — 최종 메시지로 이 줄을 덮는다.
     });
   }
 
