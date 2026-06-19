@@ -29,6 +29,7 @@ import type { RestaurantService } from '../restaurant/restaurant.service.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
 import { scheduleRegistry } from '../schedule/schedule-registry.js';
 import type { TelegramService } from '../telegram/telegram.service.js';
+import { env } from '../../config/env.js';
 import { RegionStore, regionStore } from './region.js';
 import { randomCrawlRegistry } from './random-crawl-registry.js';
 
@@ -543,13 +544,30 @@ export class RandomCrawlService {
     });
     if (randomCrawlRegistry.runningRunId() === runId) randomCrawlRegistry.finish(status);
     await this.touchConfig(status);
-    await this.deps.telegram.editMessageText(
-      cb.chatId,
-      cb.messageId,
-      status === 'done'
-        ? `🎉 <b>등록 완료</b> — ${escapeHtml(cand.name)}\n📍 ${escapeHtml(run.regionLabel ?? '')}`
-        : `⚠️ <b>크롤 실패</b> — ${escapeHtml(cand.name)}\n${escapeHtml(error ?? '')}`,
-    );
+    // 카드(진행 메시지)는 조용히 최종 상태로 정리하고, 완료/실패는 별도 새
+    // 메시지(notify)로 보내 알림(핑)이 울리게 한다 — 편집은 핑을 안 울리므로.
+    const region = escapeHtml(run.regionLabel ?? '');
+    if (status === 'done') {
+      await this.deps.telegram.editMessageText(
+        cb.chatId,
+        cb.messageId,
+        `✅ <b>${escapeHtml(cand.name)}</b> 크롤 완료\n📍 ${region}`,
+      );
+      const url = `${env.PUBLIC_ORIGIN}/r/${encodeURIComponent(cand.placeId)}`;
+      const reviewLine = cand.reviewCount != null ? ` · 리뷰 ${cand.reviewCount}개` : '';
+      await this.deps.telegram.notify(
+        `🎉 <b>등록 완료</b> — ${escapeHtml(cand.name)}\n📍 ${region}${reviewLine}\n👉 <a href="${url}">가게 보기</a>`,
+      );
+    } else {
+      await this.deps.telegram.editMessageText(
+        cb.chatId,
+        cb.messageId,
+        `⚠️ <b>${escapeHtml(cand.name)}</b> 크롤 실패`,
+      );
+      await this.deps.telegram.notify(
+        `⚠️ <b>크롤 실패</b> — ${escapeHtml(cand.name)}\n${escapeHtml(error ?? '알 수 없는 오류')}`,
+      );
+    }
   }
 
   // ── 텔레그램 커맨드 (사용자가 봇에 보낸 텍스트) ─────────────────────
