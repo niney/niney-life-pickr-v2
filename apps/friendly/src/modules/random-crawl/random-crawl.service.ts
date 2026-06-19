@@ -521,7 +521,9 @@ export class RandomCrawlService {
         try {
           await this.waitForCrawlTerminal(start.jobId);
         } finally {
-          stopProgress();
+          // 진행 편집을 멈추고 in-flight 편집까지 await — 최종 메시지가
+          // 늦게 도착한 "수집 중" 편집에 덮이는 경쟁을 막는다.
+          await stopProgress();
         }
         const rest = await this.deps.restaurants.findByPlaceId(cand.placeId);
         restaurantId = rest?.id ?? null;
@@ -661,27 +663,35 @@ export class RandomCrawlService {
   // 크롤 진행을 같은 텔레그램 메시지에 제자리 갱신(editMessageText). 단계 전환과
   // 방문자 리뷰 누적 수를 한 줄로 보여주되 CRAWL_PROGRESS_THROTTLE_MS 간격으로만
   // 갱신하고, 직전과 동일한 텍스트는 건너뛴다(텔레그램 "not modified" 회피).
-  // 반환: 구독 해제 함수 — 호출부가 종료 대기 후 호출(최종 🎉/⚠️ 메시지가 덮음).
+  // 반환: async 정지 함수 — 구독 해제 + 진행 갱신 비활성 + in-flight 편집 await.
+  // 호출부가 종료 대기 후 이를 await 한 뒤 최종 🎉/⚠️ 메시지로 덮어야, 늦게
+  // 도착한 진행 편집이 최종 메시지를 덮는 경쟁(stuck "수집 중")이 없어진다.
   private streamCrawlProgress(
     crawlJobId: string,
     chatId: string,
     messageId: number,
     name: string,
     regionLabel: string,
-  ): () => void {
+  ): () => Promise<void> {
     const header = `🔄 <b>${escapeHtml(name)}</b> 크롤 중…\n📍 ${escapeHtml(regionLabel)}`;
     let lastEditMs = 0;
     let lastText = '';
+    let stopped = false;
+    let pending: Promise<void> = Promise.resolve();
     const render = (line: string): void => {
+      if (stopped) return;
       const text = `${header}\n${line}`;
       const now = Date.now();
       if (text === lastText) return;
       if (now - lastEditMs < CRAWL_PROGRESS_THROTTLE_MS) return;
       lastEditMs = now;
       lastText = text;
-      void this.deps.telegram.editMessageText(chatId, messageId, text);
+      // 직전 편집이 끝난 뒤 다음 편집을 보내 텔레그램이 순서대로 적용하게 한다.
+      pending = pending.then(() =>
+        this.deps.telegram.editMessageText(chatId, messageId, text),
+      );
     };
-    return this.crawlRegistry.subscribe(crawlJobId, (ev) => {
+    const unsubscribe = this.crawlRegistry.subscribe(crawlJobId, (ev) => {
       if (ev.type === 'progress') {
         const label = CRAWL_STAGE_LABEL[ev.stage];
         if (label) render(label);
@@ -690,6 +700,11 @@ export class RandomCrawlService {
       }
       // done/error 는 waitForCrawlTerminal 가 처리 — 최종 메시지로 이 줄을 덮는다.
     });
+    return async () => {
+      stopped = true;
+      unsubscribe();
+      await pending;
+    };
   }
 
   private async waitForCrawlTerminal(crawlJobId: string): Promise<void> {
