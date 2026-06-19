@@ -1,10 +1,11 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import type {
   RandomCrawlRegionType,
   RegionTreeType,
 } from '@repo/api-contract';
+// data/regions.json 은 빌드 스크립트(scripts/build-regions.mjs)로 생성한다.
+// 정적 import 로 가져와야 tsup(esbuild) 가 번들에 인라인한다 — fs 런타임 읽기로는
+// dist 에 JSON 이 복사되지 않아 운영(node dist/server.js)에서 빈 배열이 된다.
+import regionsData from './data/regions.json' with { type: 'json' };
 
 // 전국 시/군/구 좌표 + 동(읍면동) 이름 번들. data/regions.json 은 빌드 스크립트
 // (scripts/build-regions.mjs)로 생성한다. 시/구는 실좌표로 검색하고, 동은
@@ -29,18 +30,10 @@ export interface ResolvedRegion {
   label: string;
 }
 
-// data/regions.json 1회 로드(모듈 캐시). 파일이 없거나 깨졌으면 빈 배열로 —
-// 서비스는 빈 store 를 "지역 데이터 없음"으로 보고 해당 회차를 스킵한다.
-let cached: RegionEntry[] | null = null;
+// 번들에 인라인된 JSON 을 그대로 쓴다. 비었으면 서비스가 "지역 데이터 없음"으로
+// 보고 해당 회차를 스킵한다.
 function loadRegions(): RegionEntry[] {
-  if (cached) return cached;
-  try {
-    const p = join(dirname(fileURLToPath(import.meta.url)), 'data', 'regions.json');
-    cached = JSON.parse(readFileSync(p, 'utf8')) as RegionEntry[];
-  } catch {
-    cached = [];
-  }
-  return cached;
+  return regionsData as RegionEntry[];
 }
 
 function randomItem<T>(arr: readonly T[]): T | null {
