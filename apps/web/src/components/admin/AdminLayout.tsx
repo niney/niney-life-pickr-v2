@@ -5,6 +5,7 @@ import {
   BarChart3,
   Beaker,
   CalendarClock,
+  ChevronDown,
   ChevronLeft,
   Compass,
   Home,
@@ -23,10 +24,12 @@ import { AdminTopBar } from './AdminTopBar';
 import { LlmUsagePanel } from './LlmUsagePanel';
 
 interface NavItem {
-  to: string;
+  // 그룹 헤더(children 보유)는 라우트가 없으므로 to 가 없다.
+  to?: string;
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  children?: NavItem[];
 }
 
 const NAV: NavItem[] = [
@@ -38,14 +41,25 @@ const NAV: NavItem[] = [
   { to: '/admin/tabling', label: '테이블링 크롤링', icon: CalendarClock },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
   { to: '/admin/ai-usage', label: 'AI 사용량', icon: Activity },
-  { to: '/admin/crawl-test', label: '네이버 크롤링 테스트', icon: Beaker },
-  { to: '/admin/catchtable-test', label: '캐치테이블 크롤링 테스트', icon: Beaker },
-  { to: '/admin/diningcode-test', label: '다이닝코드 크롤링 테스트', icon: Beaker },
-  { to: '/admin/tabling-test', label: '테이블링 크롤링 테스트', icon: Beaker },
-  { to: '/admin/ai-test', label: 'AI 테스트', icon: Sparkles },
+  {
+    // 그룹 라벨이 "테스트"이므로 하위 라벨은 대상명만 (중복 "테스트" 제거).
+    label: '테스트',
+    icon: Beaker,
+    children: [
+      { to: '/admin/crawl-test', label: '네이버 크롤링', icon: Beaker },
+      { to: '/admin/catchtable-test', label: '캐치테이블', icon: Beaker },
+      { to: '/admin/diningcode-test', label: '다이닝코드', icon: Beaker },
+      { to: '/admin/tabling-test', label: '테이블링', icon: Beaker },
+      { to: '/admin/ai-test', label: 'AI', icon: Sparkles },
+    ],
+  },
   { to: '/admin/logs', label: '로그', icon: ScrollText },
   { to: '/admin/settings', label: '설정', icon: Settings },
 ];
+
+// 경로가 해당 메뉴(또는 그 하위 상세 라우트)에 속하는지.
+const matchesPath = (pathname: string, to: string): boolean =>
+  pathname === to || pathname.startsWith(`${to}/`);
 
 const STORAGE_KEY = 'lp:adminSidebarCollapsed';
 // 사이드바 폭은 두 곳(aside, main 의 좌측 패딩 등)에서 참조될 수 있으므로
@@ -67,11 +81,28 @@ export const AdminLayout = () => {
   // 항상 표시되므로 이 값은 사실상 무시된다. localStorage 와 무관 —
   // 페이지 이동 시마다 자연스럽게 닫히는 게 표준 UX.
   const [mobileOpen, setMobileOpen] = useState(false);
+  // 그룹(아코디언) 펼침 상태 — 라벨 기준. 하위 라우트로 이동하면 자동 펼침.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const { pathname } = useLocation();
   // 라우트 이동 시 자동 닫기. 햄버거로 열고 메뉴 클릭 → 페이지 이동 후
   // 드로어가 그대로 열려 있으면 본문을 가린다.
   useEffect(() => {
     setMobileOpen(false);
+  }, [pathname]);
+  // 현재 경로가 어떤 그룹의 하위면 그 그룹을 자동으로 펼친다. 수동으로
+  // 접은 그룹도 하위 페이지로 이동하면 다시 열려 위치를 보여준다.
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const item of NAV) {
+        if (item.children?.some((child) => matchesPath(pathname, child.to!)) && !next[item.label]) {
+          next[item.label] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [pathname]);
 
   const toggleCollapsed = () => {
@@ -84,6 +115,25 @@ export const AdminLayout = () => {
       }
       return next;
     });
+  };
+
+  // 그룹 헤더 클릭. 접힌(아이콘 전용) 데스크톱 사이드바에서는 펼칠 공간이
+  // 없으므로 → 사이드바를 펼치고 그룹을 연다. 그 외(펼친 데스크톱·모바일
+  // 드로어)에서는 단순 토글.
+  const toggleGroup = (groupKey: string, currentlyOpen: boolean) => {
+    const isDesktop =
+      typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
+    if (isDesktop && collapsed) {
+      setCollapsed(false);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, '0');
+      } catch {
+        // ignore
+      }
+      setOpenGroups((prev) => ({ ...prev, [groupKey]: true }));
+      return;
+    }
+    setOpenGroups((prev) => ({ ...prev, [groupKey]: !currentlyOpen }));
   };
 
   // 모바일에서는 collapsed 무시 — 드로어로 열리면 항상 전체 폭(w-60).
@@ -148,10 +198,81 @@ export const AdminLayout = () => {
         <nav className="flex flex-1 flex-col gap-1 px-2 py-4">
           {NAV.map((item) => {
             const Icon = item.icon;
+
+            // 그룹 헤더 + 하위 메뉴 (아코디언)
+            if (item.children) {
+              const open = openGroups[item.label] ?? false;
+              // 현재 보고 있는 페이지가 이 그룹의 하위인지 — 접힘 상태에서
+              // 그룹이 활성임을 표시하기 위해.
+              const groupActive = item.children.some((child) =>
+                matchesPath(pathname, child.to!),
+              );
+              return (
+                <div key={item.label} className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(item.label, open)}
+                    title={mdCollapsed ? item.label : undefined}
+                    aria-expanded={open}
+                    className={cn(
+                      'flex h-10 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                      mdCollapsed && 'md:justify-center',
+                      groupActive
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span
+                      className={cn(
+                        'overflow-hidden whitespace-nowrap',
+                        TRANSITION,
+                        'ml-3 max-w-[160px] opacity-100',
+                        mdCollapsed && 'md:ml-0 md:max-w-0 md:opacity-0',
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        'ml-auto size-4 shrink-0 transition-transform duration-200',
+                        open && 'rotate-180',
+                        // 접힘(아이콘 전용) 모드에서는 화살표 숨김
+                        mdCollapsed && 'md:hidden',
+                      )}
+                    />
+                  </button>
+                  {/* 하위 메뉴 — 펼침 시에만. 접힘(md) 모드에서는 항상 숨김
+                      (그룹 클릭 시 사이드바가 펼쳐지며 노출된다). */}
+                  {open && (
+                    <div className={cn('flex flex-col gap-1', mdCollapsed && 'md:hidden')}>
+                      {item.children.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to!}
+                          className={({ isActive }) =>
+                            cn(
+                              'flex h-9 items-center rounded-md py-0 pl-10 pr-3 text-sm transition-colors',
+                              isActive
+                                ? 'bg-primary text-primary-foreground shadow-xs font-medium'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                            )
+                          }
+                        >
+                          <span className="overflow-hidden whitespace-nowrap">{child.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // 일반(leaf) 항목
             return (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={item.to!}
                 end={item.end}
                 title={mdCollapsed ? item.label : undefined}
                 className={({ isActive }) =>
