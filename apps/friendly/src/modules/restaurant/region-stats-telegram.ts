@@ -17,6 +17,8 @@ const BAR_WIDTH = 12;
 const ROW_BUTTONS = 3;
 // 방어적 상한 — 현실 데이터(시도 ≤17, 시군구 ≤31)는 못 넘지만 폭주 방지.
 const MAX_LINES = 40;
+// 시도 뷰에서 "발굴할 구" 버튼 상한(키보드가 너무 길어지지 않게).
+const DISCOVER_BTN_MAX = 8;
 
 // /stats · /통계 · /지역 (또는 슬래시 없는 '통계').
 export function isStatsCommand(text: string): boolean {
@@ -54,7 +56,8 @@ export function buildRegionStatsOverview(
   return { text, buttons: chunk(btns, ROW_BUTTONS) };
 }
 
-// 한 시도의 시군구 분해 + "전체" 복귀 버튼.
+// 한 시도의 시군구 분해 + "발굴할 구" 버튼 + "전체" 복귀 버튼.
+// 발굴 버튼은 disc:<시도>:<시군구>(고정)·disc:<시도>(랜덤 구) 콜백을 낸다.
 export function buildRegionStatsSido(
   stats: RegionStatsResultType,
   sido: string,
@@ -62,11 +65,13 @@ export function buildRegionStatsSido(
   const entry = stats.sidos.find((s) => s.sido === sido);
   if (!entry) return buildRegionStatsOverview(stats); // 캐시 갱신으로 사라짐 → 폴백.
 
-  const back = [[{ text: '⬅️ 전체', callbackData: 'rs:*' }]];
+  const sidoDiscover = { text: `🔍 ${shortSido(sido)} 전체(랜덤 구)`, callbackData: `disc:${sido}` };
+  const back = { text: '⬅️ 전체', callbackData: 'rs:*' };
+
   if (entry.sigungus.length === 0) {
     return {
       text: `🗺️ <b>${escapeHtml(sido)}</b> — ${entry.count}곳\n\n세부 시/군/구 정보가 없습니다.`,
-      buttons: back,
+      buttons: [[sidoDiscover], [back]],
     };
   }
   const rows = entry.sigungus.slice(0, MAX_LINES);
@@ -82,8 +87,13 @@ export function buildRegionStatsSido(
       : '';
   const text =
     `🗺️ <b>${escapeHtml(sido)}</b> — ${entry.count}곳\n\n` +
-    `<pre>\n${lines.join('\n')}\n</pre>${more}`;
-  return { text, buttons: back };
+    `<pre>\n${lines.join('\n')}\n</pre>${more}\n` +
+    '🔍 발굴할 구를 고르세요 ↓';
+  const discBtns = rows.slice(0, DISCOVER_BTN_MAX).map((s) => ({
+    text: `🔍 ${s.sigungu}`,
+    callbackData: `disc:${sido}:${s.sigungu}`,
+  }));
+  return { text, buttons: [...chunk(discBtns, 2), [sidoDiscover], [back]] };
 }
 
 // ── 내부 헬퍼 ───────────────────────────────────────────────────────────

@@ -76,13 +76,21 @@ describe('buildRegionStatsOverview', () => {
 });
 
 describe('buildRegionStatsSido', () => {
-  it('해당 시도의 시군구 분해 + 전체 버튼', () => {
+  it('해당 시도의 시군구 분해 + 발굴/전체 버튼', () => {
     const { text, buttons } = buildRegionStatsSido(STATS, '서울특별시');
     expect(text).toContain('서울특별시');
     expect(text).toContain('강남구');
     expect(text).toContain('마포구');
     expect(text).toContain('종로구');
-    expect(buttons).toEqual([[{ text: '⬅️ 전체', callbackData: 'rs:*' }]]);
+
+    const flat = buttons.flat();
+    const cbs = flat.map((b) => b.callbackData);
+    // 시군구 발굴 버튼(고정).
+    expect(cbs).toContain('disc:서울특별시:강남구');
+    expect(cbs).toContain('disc:서울특별시:마포구');
+    // 시도 전체(랜덤 구) + 전체 복귀.
+    expect(cbs).toContain('disc:서울특별시');
+    expect(buttons[buttons.length - 1]).toEqual([{ text: '⬅️ 전체', callbackData: 'rs:*' }]);
   });
 
   it('없는 시도는 전체 뷰로 폴백', () => {
@@ -90,8 +98,12 @@ describe('buildRegionStatsSido', () => {
     expect(text).toContain('맛집 지역 통계'); // overview 로 폴백
   });
 
-  it('시군구 없는 시도는 안내', () => {
-    const { text } = buildRegionStatsSido(STATS, '부산광역시');
+  it('시군구 없는 시도는 안내 + 시도 발굴/전체 버튼', () => {
+    const { text, buttons } = buildRegionStatsSido(STATS, '부산광역시');
     expect(text).toContain('세부 시/군/구 정보가 없습니다');
+    expect(buttons).toEqual([
+      [{ text: '🔍 부산 전체(랜덤 구)', callbackData: 'disc:부산광역시' }],
+      [{ text: '⬅️ 전체', callbackData: 'rs:*' }],
+    ]);
   });
 });

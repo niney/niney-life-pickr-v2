@@ -233,7 +233,11 @@ export class RandomCrawlService {
 
   // ── 실행 (검색 → 후보 → 텔레그램 전송, 그리고 awaiting 으로 손 뗌) ──────
 
-  async runScheduled(trigger: RandomCrawlTriggerType): Promise<RandomCrawlRunType> {
+  // regionOverride 가 있으면 설정 지역 대신 그 지역으로만 발굴(텔레그램 지역 선택).
+  async runScheduled(
+    trigger: RandomCrawlTriggerType,
+    regionOverride?: RandomCrawlRegionType,
+  ): Promise<RandomCrawlRunType> {
     // 0) 만료된 awaiting 먼저 정리 — 막힌 슬롯을 풀어 새 회차가 시작될 수 있게.
     await this.sweepExpired();
 
@@ -274,9 +278,9 @@ export class RandomCrawlService {
     };
 
     try {
-      // 2) 지역 선정.
+      // 2) 지역 선정. override(텔레그램 지역 선택)가 있으면 그 지역으로 고정.
       randomCrawlRegistry.setPhase('selecting_region');
-      const region = this.regions.resolve(cfg.region);
+      const region = this.regions.resolve(regionOverride ?? cfg.region);
       if (!region) {
         return await this.skip(
           runId,
@@ -459,6 +463,11 @@ export class RandomCrawlService {
       await this.handleRegionStatsCallback(cb);
       return;
     }
+    // 지역 선택 발굴(disc:<시도>|disc:<시도>:<시군구>)도 별도 처리.
+    if (cb.data.startsWith('disc:')) {
+      await this.handleDiscoverHereCallback(cb);
+      return;
+    }
     const parts = cb.data.split(':');
     if (parts.length !== 3 || parts[0] !== 'rc') return; // 우리 콜백 아님
     const runId = parts[1]!;
@@ -624,13 +633,18 @@ export class RandomCrawlService {
       return;
     }
     if (!isDiscoverCommand(m.text)) return; // 잡담은 조용히 무시.
+    await this.runDiscoverAndReply('🔍 맛집 발굴을 시작합니다…');
+  }
 
-    await this.deps.telegram.notify('🔍 맛집 발굴을 시작합니다…');
-    const run = await this.runScheduled('telegram');
-
-    // awaiting_selection: 후보 카드는 runScheduled 가 이미 전송 → 추가 응답 불필요.
-    // 후보 0건(EMPTY_REASON)도 notifyEmpty 가 이미 안내 → 중복 회신 생략.
-    // 그 외 스킵(이전 회차 진행 중·지역 없음·전송 실패)과 실패만 사유를 회신한다.
+  // 발굴 1회차 실행 + 결과 회신. /discover(설정 지역)와 지역 선택 발굴(override)
+  // 이 공유한다. ack 후 runScheduled — 후보 카드는 그 안에서 전송되고, 스킵/실패만
+  // 사유를 회신(후보 0건은 notifyEmpty 가 이미 안내하므로 EMPTY_REASON 은 제외).
+  private async runDiscoverAndReply(
+    ackText: string,
+    regionOverride?: RandomCrawlRegionType,
+  ): Promise<void> {
+    await this.deps.telegram.notify(ackText);
+    const run = await this.runScheduled('telegram', regionOverride);
     if (run.status === 'skipped' && run.error && run.error !== EMPTY_REASON) {
       await this.deps.telegram.notify(`⏭️ ${escapeHtml(run.error)}`);
     } else if (run.status === 'failed') {
@@ -667,6 +681,36 @@ export class RandomCrawlService {
       cb.messageId,
       render.text,
       render.buttons,
+    );
+  }
+
+  // 지역 선택 발굴 콜백 — disc:<시도>(랜덤 구) / disc:<시도>:<시군구>(고정).
+  // 그 지역으로 한정해 /discover 와 동일 흐름(후보 카드 → 선택 → 크롤)을 돈다.
+  private async handleDiscoverHereCallback(cb: {
+    callbackQueryId: string;
+    chatId: string;
+    messageId: number;
+    data: string;
+  }): Promise<void> {
+    const [sido, sigungu] = cb.data.slice(5).split(':'); // 'disc:' 이후.
+    if (!sido) {
+      await this.deps.telegram.answerCallback(cb.callbackQueryId);
+      return;
+    }
+    const region: RandomCrawlRegionType = {
+      sidoRandom: false,
+      sido,
+      sigunguRandom: !sigungu, // 시군구 미지정이면 시도 내 랜덤 구.
+      sigungu: sigungu ?? null,
+      dongEnabled: false,
+      dongRandom: false,
+      dong: null,
+    };
+    const label = sigungu ? `${sido} ${sigungu}` : `${sido}(랜덤 구)`;
+    await this.deps.telegram.answerCallback(cb.callbackQueryId, `발굴: ${label}`);
+    await this.runDiscoverAndReply(
+      `🔍 <b>${escapeHtml(label)}</b> 맛집 발굴을 시작합니다…`,
+      region,
     );
   }
 
