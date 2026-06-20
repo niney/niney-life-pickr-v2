@@ -123,7 +123,8 @@ export const RandomCrawlSection = () => {
   });
   const [keyword, setKeyword] = useState('맛집');
   const [candidateCount, setCandidateCount] = useState(5);
-  const [timeoutMin, setTimeoutMin] = useState(180);
+  const [timeoutMin, setTimeoutMin] = useState(30);
+  const [timeoutAction, setTimeoutAction] = useState<'skip' | 'random'>('skip');
 
   // config 로드 시 draft 동기화.
   useEffect(() => {
@@ -135,6 +136,7 @@ export const RandomCrawlSection = () => {
     setKeyword(config.data.keyword);
     setCandidateCount(config.data.candidateCount);
     setTimeoutMin(config.data.responseTimeoutMin);
+    setTimeoutAction(config.data.timeoutAction);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.data?.updatedAt]);
 
@@ -164,9 +166,10 @@ export const RandomCrawlSection = () => {
       keyword !== config.data.keyword ||
       candidateCount !== config.data.candidateCount ||
       timeoutMin !== config.data.responseTimeoutMin ||
+      timeoutAction !== config.data.timeoutAction ||
       JSON.stringify(region) !== JSON.stringify(config.data.region)
     );
-  }, [config.data, draftCron, timezone, keyword, candidateCount, timeoutMin, region]);
+  }, [config.data, draftCron, timezone, keyword, candidateCount, timeoutMin, timeoutAction, region]);
 
   const patchRegion = (patch: Partial<RandomCrawlRegionType>): void =>
     setRegion((prev) => normalizeRegion({ ...prev, ...patch }));
@@ -195,6 +198,7 @@ export const RandomCrawlSection = () => {
     keyword,
     candidateCount,
     responseTimeoutMin: timeoutMin,
+    timeoutAction,
   });
 
   const save = (): void => {
@@ -403,6 +407,17 @@ export const RandomCrawlSection = () => {
                 setTimeoutMin(Math.min(1440, Math.max(5, Number(e.target.value) || 5)))
               }
             />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">응답 없을 때</span>
+            <select
+              className={SELECT_CLS}
+              value={timeoutAction}
+              onChange={(e) => setTimeoutAction(e.target.value as 'skip' | 'random')}
+            >
+              <option value="skip">건너뛰기</option>
+              <option value="random">랜덤 자동 크롤</option>
+            </select>
           </label>
         </div>
 

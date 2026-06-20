@@ -65,6 +65,12 @@ export type RandomCrawlRegionType = z.infer<typeof RandomCrawlRegion>;
 
 // ── 설정 ──────────────────────────────────────────────────────────────
 
+// 무응답(타임아웃) 시 회차 처리 방식.
+//  - skip   : 회차를 그냥 건너뜀(기존 기본 동작).
+//  - random : 후보 중 하나를 랜덤으로 골라 자동 크롤.
+export const RandomCrawlTimeoutAction = z.enum(['skip', 'random']);
+export type RandomCrawlTimeoutActionType = z.infer<typeof RandomCrawlTimeoutAction>;
+
 // 설정 조회 응답 (GET). 행이 없으면 서버가 기본값으로 채워 반환한다.
 export const RandomCrawlConfig = z.object({
   enabled: z.boolean(),
@@ -75,8 +81,10 @@ export const RandomCrawlConfig = z.object({
   keyword: z.string(),
   // 텔레그램으로 보낼 후보 수.
   candidateCount: z.number().int(),
-  // 무응답 시 회차를 skipped 로 닫기까지 대기할 분.
+  // 무응답 시 회차를 닫기까지 대기할 분.
   responseTimeoutMin: z.number().int(),
+  // 무응답 시 동작 — skip(건너뛰기) / random(랜덤 자동 크롤).
+  timeoutAction: RandomCrawlTimeoutAction,
   // 텔레그램 봇 토큰/chat id 가 env 에 설정됐는지(읽기 전용). false 면 후보를
   // 보낼 수 없어 enabled 여도 회차가 skip 된다 — UI 가 경고를 노출.
   telegramConfigured: z.boolean(),
@@ -96,7 +104,8 @@ export const RandomCrawlConfigInput = z.object({
   region: RandomCrawlRegion,
   keyword: z.string().trim().min(1).max(40).default('맛집'),
   candidateCount: z.coerce.number().int().min(1).max(10).default(5),
-  responseTimeoutMin: z.coerce.number().int().min(5).max(1440).default(180),
+  responseTimeoutMin: z.coerce.number().int().min(5).max(1440).default(30),
+  timeoutAction: RandomCrawlTimeoutAction.default('skip'),
 });
 export type RandomCrawlConfigInputType = z.infer<typeof RandomCrawlConfigInput>;
 

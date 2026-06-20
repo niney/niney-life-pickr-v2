@@ -810,8 +810,13 @@ model RandomCrawlConfig {
   keyword            String    @default("맛집")
   // 텔레그램으로 보낼 후보 수.
   candidateCount     Int       @default(5)
-  // 무응답 시 회차를 skipped 로 닫기까지 대기할 분.
+  // 무응답 시 회차를 닫기까지 대기할 분. (앱 기본값은 30 — DEFAULT_TIMEOUT_MIN.
+  // DB default 는 실사용 안 됨: updateConfig 가 항상 값을 지정하고 getConfig 는
+  // 행 없을 때 앱 상수로 폴백. 컬럼 default 변경은 SQLite 테이블 재생성을 유발해
+  // 일부러 180 유지.)
   responseTimeoutMin Int       @default(180)
+  // 무응답 시 동작 — "skip"(건너뛰기) | "random"(랜덤 자동 크롤).
+  timeoutAction      String    @default("skip")
   lastRunAt          DateTime?
   lastStatus         String?
   createdAt          DateTime  @default(now())

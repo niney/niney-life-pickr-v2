@@ -14,6 +14,7 @@ import type {
   RandomCrawlRunListType,
   RandomCrawlRunStatusType,
   RandomCrawlRunType,
+  RandomCrawlTimeoutActionType,
   RandomCrawlTriggerType,
   RegionDongListType,
   RegionTreeType,
@@ -39,7 +40,9 @@ const DEFAULT_CRON = '0 11 * * *';
 const DEFAULT_TZ = 'Asia/Seoul';
 const DEFAULT_KEYWORD = '맛집';
 const DEFAULT_CANDIDATES = 5;
-const DEFAULT_TIMEOUT_MIN = 180;
+// 무응답 대기 기본 30분(앱 기준값 — prisma DB default 180 은 실사용 안 됨, 스키마 주석 참고).
+const DEFAULT_TIMEOUT_MIN = 30;
+const DEFAULT_TIMEOUT_ACTION: RandomCrawlTimeoutActionType = 'skip';
 const RUN_HISTORY_LIMIT = 50;
 const SEARCH_PAGE_SIZE = 50;
 // startCrawl 의 actor — 동시성/dedup 키. 사람 actor 와 구분되는 시스템 식별자.
@@ -131,6 +134,9 @@ export class RandomCrawlService {
       keyword: row?.keyword ?? DEFAULT_KEYWORD,
       candidateCount: row?.candidateCount ?? DEFAULT_CANDIDATES,
       responseTimeoutMin: row?.responseTimeoutMin ?? DEFAULT_TIMEOUT_MIN,
+      timeoutAction:
+        (row?.timeoutAction as RandomCrawlTimeoutActionType | undefined) ??
+        DEFAULT_TIMEOUT_ACTION,
       telegramConfigured: this.deps.telegram.isConfigured(),
       lastRunAt: row?.lastRunAt?.toISOString() ?? null,
       lastStatus: (row?.lastStatus as RandomCrawlRunStatusType | null) ?? null,
@@ -155,6 +161,7 @@ export class RandomCrawlService {
         keyword: input.keyword,
         candidateCount: input.candidateCount,
         responseTimeoutMin: input.responseTimeoutMin,
+        timeoutAction: input.timeoutAction,
       },
       update: {
         enabled: input.enabled,
@@ -164,6 +171,7 @@ export class RandomCrawlService {
         keyword: input.keyword,
         candidateCount: input.candidateCount,
         responseTimeoutMin: input.responseTimeoutMin,
+        timeoutAction: input.timeoutAction,
       },
     });
     this.applySchedule(input.enabled, input.cronExpr, input.timezone);
@@ -480,26 +488,48 @@ export class RandomCrawlService {
       await this.deps.telegram.answerCallback(cb.callbackQueryId, '잘못된 선택입니다.');
       return;
     }
+    await this.deps.telegram.answerCallback(cb.callbackQueryId, `선택: ${cand.name}`);
+    await this.crawlChosenCandidate({
+      runId,
+      regionLabel: run.regionLabel ?? '',
+      chatId: cb.chatId,
+      messageId: cb.messageId,
+      candidates,
+      index,
+      introText: `✅ <b>${escapeHtml(cand.name)}</b> 선택됨 — 크롤을 시작합니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
+    });
+  }
 
-    // 선택 → crawling 전환.
+  // 고른 후보 1개를 크롤 → 진행 갱신 → 완료/실패 핑까지. 텔레그램 콜백(수동
+  // 선택)과 타임아웃 자동선택이 공유한다. awaiting_selection 일 때만 atomic claim
+  // 으로 crawling 전환해 콜백/스윕 동시 진입을 막는다(이미 처리됐으면 no-op).
+  private async crawlChosenCandidate(p: {
+    runId: string;
+    regionLabel: string;
+    chatId: string;
+    messageId: number;
+    candidates: RandomCrawlCandidateType[];
+    index: number;
+    introText: string;
+  }): Promise<void> {
+    const { runId, regionLabel, chatId, messageId, candidates, index } = p;
+    const cand = candidates[index];
+    if (!cand) return;
+
     const marked = candidates.map((c, i) => ({ ...c, selected: i === index }));
-    await this.prisma.randomCrawlRun.update({
-      where: { id: runId },
+    const claim = await this.prisma.randomCrawlRun.updateMany({
+      where: { id: runId, status: 'awaiting_selection' },
       data: {
         status: 'crawling',
         selectedPlaceId: cand.placeId,
         candidatesJson: JSON.stringify(marked),
       },
     });
+    if (claim.count === 0) return; // 이미 다른 경로(콜백/다른 스윕)가 가져감.
     if (randomCrawlRegistry.runningRunId() === runId) {
       randomCrawlRegistry.setPhase('crawling', { candidates: marked });
     }
-    await this.deps.telegram.answerCallback(cb.callbackQueryId, `선택: ${cand.name}`);
-    await this.deps.telegram.editMessageText(
-      cb.chatId,
-      cb.messageId,
-      `✅ <b>${escapeHtml(cand.name)}</b> 선택됨 — 크롤을 시작합니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
-    );
+    await this.deps.telegram.editMessageText(chatId, messageId, p.introText);
 
     // 크롤 시작 → 종료 대기 → 결과 반영.
     let status: RandomCrawlRunStatusType = 'done';
@@ -514,10 +544,10 @@ export class RandomCrawlService {
         // 진행 상황을 같은 텔레그램 메시지에 throttle 하며 제자리 갱신.
         const stopProgress = this.streamCrawlProgress(
           start.jobId,
-          cb.chatId,
-          cb.messageId,
+          chatId,
+          messageId,
           cand.name,
-          run.regionLabel ?? '',
+          regionLabel,
         );
         try {
           await this.waitForCrawlTerminal(start.jobId);
@@ -546,11 +576,11 @@ export class RandomCrawlService {
     await this.touchConfig(status);
     // 카드(진행 메시지)는 조용히 최종 상태로 정리하고, 완료/실패는 별도 새
     // 메시지(notify)로 보내 알림(핑)이 울리게 한다 — 편집은 핑을 안 울리므로.
-    const region = escapeHtml(run.regionLabel ?? '');
+    const region = escapeHtml(regionLabel);
     if (status === 'done') {
       await this.deps.telegram.editMessageText(
-        cb.chatId,
-        cb.messageId,
+        chatId,
+        messageId,
         `✅ <b>${escapeHtml(cand.name)}</b> 크롤 완료\n📍 ${region}`,
       );
       const url = `${env.PUBLIC_ORIGIN}/r/${encodeURIComponent(cand.placeId)}`;
@@ -560,8 +590,8 @@ export class RandomCrawlService {
       );
     } else {
       await this.deps.telegram.editMessageText(
-        cb.chatId,
-        cb.messageId,
+        chatId,
+        messageId,
         `⚠️ <b>${escapeHtml(cand.name)}</b> 크롤 실패`,
       );
       await this.deps.telegram.notify(
@@ -595,13 +625,50 @@ export class RandomCrawlService {
     }
   }
 
-  // awaiting 만료 → skipped + 텔레그램 안내.
+  // awaiting 만료 처리. timeoutAction='random' 이면 후보 중 하나를 랜덤으로
+  // 골라 자동 크롤, 아니면(기본 skip) 회차를 건너뛴다.
   private async sweepExpired(): Promise<void> {
     const now = new Date();
     const stale = await this.prisma.randomCrawlRun.findMany({
       where: { status: 'awaiting_selection', expiresAt: { lt: now } },
     });
+    if (stale.length === 0) return;
+    const timeoutAction = (await this.getConfig()).timeoutAction;
     for (const run of stale) {
+      const candidates = this.parseCandidates(run.candidatesJson);
+      // 랜덤 자동 크롤 — 후보·텔레그램 메시지가 있어야 가능.
+      if (
+        timeoutAction === 'random' &&
+        candidates.length > 0 &&
+        run.telegramChatId &&
+        run.telegramMessageId
+      ) {
+        const index = Math.floor(Math.random() * candidates.length);
+        const cand = candidates[index]!;
+        this.log?.info(
+          { runId: run.id, pick: cand.name },
+          '[random-crawl] awaiting 만료 → 랜덤 자동 크롤',
+        );
+        // 백그라운드로 — sweepExpired 는 runScheduled 시작부에서 await 되므로
+        // 수 분 걸리는 크롤을 여기서 기다리면 새 회차가 멈춘다. atomic claim 으로
+        // crawling 전환하니 overlap 가드(DB active)가 동시 진입을 막는다.
+        void this.crawlChosenCandidate({
+          runId: run.id,
+          regionLabel: run.regionLabel ?? '',
+          chatId: run.telegramChatId,
+          messageId: Number(run.telegramMessageId),
+          candidates,
+          index,
+          introText: `⏰ 응답이 없어 <b>${escapeHtml(cand.name)}</b> 자동 선택 — 크롤을 시작합니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
+        }).catch((e) => {
+          this.log?.error(
+            { runId: run.id, err: e instanceof Error ? e.message : String(e) },
+            '[random-crawl] 랜덤 자동 크롤 실패',
+          );
+        });
+        continue;
+      }
+      // 기본: 건너뛰기.
       await this.prisma.randomCrawlRun.update({
         where: { id: run.id },
         data: { status: 'skipped', error: '응답 시간 초과', finishedAt: now },
