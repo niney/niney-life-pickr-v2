@@ -4,6 +4,7 @@ import { useAdminUsers, useSetUserRole } from '@repo/shared';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import { RegionStatsPanel } from '~/components/admin/RegionStatsPanel';
 import {
   Table,
   TableBody,
@@ -45,6 +46,10 @@ export const AdminHomePage = () => {
             <CardTitle className="text-3xl">{admins}</CardTitle>
           </CardHeader>
         </Card>
+      </div>
+
+      <div className="mb-6">
+        <RegionStatsPanel />
       </div>
 
       <Card>

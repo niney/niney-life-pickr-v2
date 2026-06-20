@@ -7,6 +7,7 @@ import {
   MenuGroupRunResult,
   MenuRankingQuery,
   MenuRankingResult,
+  RegionStatsResult,
   RestaurantAnalyticsBackfillResult,
   RestaurantCancelSummaryResult,
   RestaurantCategoryTreeResult,
@@ -341,6 +342,17 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: RestaurantSmartPickResult },
     },
     handler: async (req) => service.smartPick(req.body),
+  });
+
+  // 등록된 가게의 시/도·시군구별 분포 — 어드민 홈 대시보드 지역 통계 위젯.
+  typed.get(Routes.Restaurant.regionStats, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: RegionStatsResult },
+    },
+    handler: async () => service.getRegionStats(),
   });
 
   // placeId 단위 누적 크롤 로그. 한 가게의 모든 잡(과거 재크롤 포함)이 한

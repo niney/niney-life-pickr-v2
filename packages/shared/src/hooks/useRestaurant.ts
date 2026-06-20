@@ -145,6 +145,15 @@ export const useRestaurantList = (
     placeholderData: (prev) => prev,
   });
 
+// 어드민 홈 대시보드 지역 통계. 서버 60s TTL 과 맞춰 staleTime 30s — 대시보드를
+// 자주 드나들어도 분당 두 번 정도만 fetch.
+export const useRegionStats = () =>
+  useQuery({
+    queryKey: ['restaurant', 'region-stats'],
+    queryFn: () => restaurantApi.regionStats(),
+    staleTime: 30_000,
+  });
+
 // 공개 랭킹 — 비로그인/게스트도 호출. 토글 변경 시 깜빡임 방지를 위해
 // placeholderData 로 이전 결과 유지. 서버 60s TTL 과 정렬을 맞춰 staleTime
 // 30s — 토글이 자주 바뀌어도 분당 두 번 정도만 fetch.

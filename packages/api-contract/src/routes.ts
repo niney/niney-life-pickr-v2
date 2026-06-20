@@ -179,6 +179,9 @@ export const Restaurant = {
   // 흐름으로 보임. 상세 페이지 "크롤 로그" 아코디언이 호출.
   crawlLogs: (placeId: string) =>
     `${API_PREFIX}/admin/restaurants/place/${placeId}/crawl-logs`,
+  // 등록된 가게(canonical)의 시/도·시군구별 분포 집계 — 어드민 홈 대시보드의
+  // 지역 통계 위젯이 호출. 주소 파싱 + 좌표 폴백으로 시군구를 파생해 집계한다.
+  regionStats: `${API_PREFIX}/admin/restaurants/region-stats`,
 } as const;
 
 // 가게 정체(canonical) 통합 — 출처 가로지르는 같은 가게 묶기. 어드민이

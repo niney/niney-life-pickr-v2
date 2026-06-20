@@ -22,6 +22,7 @@ import {
   type TablingSnapshot,
 } from './restaurant.merge.js';
 import { Routes } from '@repo/api-contract';
+import { deriveRegion } from './region-derive.js';
 import {
   cachePanoramaThumbnail,
   isVolatileNaverPhoto,
@@ -53,6 +54,7 @@ import type {
   RestaurantRankingResultType,
   RestaurantSmartPickInputType,
   RestaurantSmartPickResultType,
+  RegionStatsResultType,
   RestaurantSummaryProgressType,
   ReviewAnalysisMenuType,
   ReviewSentimentType,
@@ -138,6 +140,13 @@ const rankingPending = new Map<string, Promise<RankingCacheEntry['rows']>>();
 export const invalidateRankingCache = (): void => {
   rankingCache.clear();
 };
+
+// 지역 통계 캐시 — 어드민 대시보드 위젯 1곳만 호출하므로 단일 슬롯. 60s TTL +
+// in-flight dedup (동시 요청이 같은 전수 집계를 중복 실행하지 않도록). 데이터가
+// <1k canonical 이라 집계 자체는 가벼움.
+const REGION_STATS_CACHE_TTL_MS = 60_000;
+let regionStatsCache: { data: RegionStatsResultType; expiresAt: number } | null = null;
+let regionStatsPending: Promise<RegionStatsResultType> | null = null;
 
 export class RestaurantService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -1830,6 +1839,89 @@ export class RestaurantService {
       excludeNeutral: query.excludeNeutral,
       minMentions: query.minMentions,
     };
+  }
+
+  // 등록된 가게(canonical)를 시/도·시군구로 묶은 분포. 주소를 regions.json
+  // 사전과 매칭(deriveRegion)하고, 주소가 없거나 시군구를 못 뽑으면 canonical
+  // 좌표 최근접 시군구로 폴백한다. 둘 다 실패하면 unclassified. 60s 캐시.
+  async getRegionStats(): Promise<RegionStatsResultType> {
+    const now = Date.now();
+    if (regionStatsCache && regionStatsCache.expiresAt >= now) return regionStatsCache.data;
+    regionStatsCache = null;
+    if (regionStatsPending) return regionStatsPending;
+
+    regionStatsPending = this.computeRegionStats()
+      .then((data) => {
+        regionStatsCache = { data, expiresAt: Date.now() + REGION_STATS_CACHE_TTL_MS };
+        return data;
+      })
+      .finally(() => {
+        regionStatsPending = null;
+      });
+    return regionStatsPending;
+  }
+
+  private async computeRegionStats(): Promise<RegionStatsResultType> {
+    // 가게 단위(canonical) 1행 = 1집계. 주소는 source 행에 있으니 Naver 우선,
+    // 없으면 다른 출처 주소. 좌표는 canonical 에 있다(폴백용).
+    //
+    // restaurants:{some:{}} 로 실제 크롤된 source 행이 1개 이상인 canonical 만
+    // 센다 — 자동발굴 등으로 좌표만 박힌 빈 canonical(껍데기)이 다수 존재하며,
+    // 어드민 맛집 목록에도 안 뜨므로 통계에서도 제외해야 한다.
+    const canonicals = await this.prisma.canonicalRestaurant.findMany({
+      where: { restaurants: { some: {} } },
+      select: {
+        latitude: true,
+        longitude: true,
+        restaurants: { select: { source: true, address: true } },
+      },
+    });
+
+    const pickAddress = (
+      rows: Array<{ source: string; address: string | null }>,
+    ): string | null => {
+      const naver = rows.find((r) => r.source === 'naver' && r.address);
+      if (naver?.address) return naver.address;
+      return rows.find((r) => r.address)?.address ?? null;
+    };
+
+    interface SidoAgg {
+      count: number;
+      sigungus: Map<string, { count: number; lat: number | null; lng: number | null }>;
+    }
+    const bySido = new Map<string, SidoAgg>();
+    let unclassified = 0;
+
+    for (const c of canonicals) {
+      const region = deriveRegion(pickAddress(c.restaurants), c.latitude, c.longitude);
+      if (!region) {
+        unclassified += 1;
+        continue;
+      }
+      const sido = bySido.get(region.sido) ?? { count: 0, sigungus: new Map() };
+      sido.count += 1;
+      const sg = sido.sigungus.get(region.sigungu) ?? {
+        count: 0,
+        lat: region.lat,
+        lng: region.lng,
+      };
+      sg.count += 1;
+      sido.sigungus.set(region.sigungu, sg);
+      bySido.set(region.sido, sido);
+    }
+
+    const sidos = [...bySido.entries()]
+      .map(([sido, v]) => ({
+        sido,
+        count: v.count,
+        sigungus: [...v.sigungus.entries()]
+          .map(([sigungu, s]) => ({ sigungu, count: s.count, lat: s.lat, lng: s.lng }))
+          .sort((a, b) => b.count - a.count || a.sigungu.localeCompare(b.sigungu, 'ko')),
+      }))
+      .sort((a, b) => b.count - a.count || a.sido.localeCompare(b.sido, 'ko'));
+
+    const total = sidos.reduce((n, s) => n + s.count, 0);
+    return { total, unclassified, sidos };
   }
 
   private async getRankingRows(

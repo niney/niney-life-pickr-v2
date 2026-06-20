@@ -3,6 +3,7 @@ import {
   type CrawlJobLogsResultType,
   type CrawlLogLevelType,
   type PublicVisitorReviewType,
+  type RegionStatsResultType,
   type RestaurantCancelSummaryResultType,
   type RestaurantCategoryTreeResultType,
   type RestaurantDeleteResultType,
@@ -127,6 +128,10 @@ export const restaurantApi = {
 
   getByPlaceId: (placeId: string) =>
     apiFetch<RestaurantDetailType>(Routes.Restaurant.byPlaceId(placeId)),
+
+  // 어드민 홈 대시보드 지역 통계 — 시/도·시군구별 가게 분포 집계.
+  regionStats: () =>
+    apiFetch<RegionStatsResultType>(Routes.Restaurant.regionStats),
 
   getSummaryStatus: (placeId: string) =>
     apiFetch<RestaurantSummaryProgressType>(Routes.Restaurant.summaryStatus(placeId)),

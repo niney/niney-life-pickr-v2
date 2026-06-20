@@ -798,3 +798,35 @@ export const RestaurantSummaryLogEvent = RestaurantSummaryEventSource.extend({
   at: z.string(),
 });
 export type RestaurantSummaryLogEventType = z.infer<typeof RestaurantSummaryLogEvent>;
+
+// ── 지역 통계 (어드민 홈 대시보드) ─────────────────────────────────────────
+// 등록된 가게(canonical)를 시/도·시군구로 묶은 분포. 시군구는 주소 문자열을
+// regions.json 사전과 매칭해 파생하고, 주소가 없으면 좌표 최근접 시군구로
+// 폴백한다. 둘 다 실패하면 unclassified 로 집계되어 어디에도 속하지 않는다.
+export const RegionStatsSigungu = z.object({
+  sigungu: z.string(),
+  count: z.number().int(),
+  // regions.json 의 시군구 중심좌표 — 지도(클러스터/choropleth) 뷰가 센터링에
+  // 쓴다. 사전에 없는 시군구로 파생된 경우(이론상 드묾) null.
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+});
+export type RegionStatsSigunguType = z.infer<typeof RegionStatsSigungu>;
+
+export const RegionStatsSido = z.object({
+  sido: z.string(),
+  count: z.number().int(),
+  // count 내림차순 정렬됨. 동률은 시군구명 오름차순.
+  sigungus: z.array(RegionStatsSigungu),
+});
+export type RegionStatsSidoType = z.infer<typeof RegionStatsSido>;
+
+export const RegionStatsResult = z.object({
+  // 분류된 가게 수 (= sidos 전체 count 합). unclassified 는 제외.
+  total: z.number().int(),
+  // 주소·좌표 어느 쪽으로도 시군구를 못 뽑은 가게 수.
+  unclassified: z.number().int(),
+  // count 내림차순 정렬됨. 동률은 시도명 오름차순.
+  sidos: z.array(RegionStatsSido),
+});
+export type RegionStatsResultType = z.infer<typeof RegionStatsResult>;
