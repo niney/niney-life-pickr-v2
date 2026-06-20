@@ -23,6 +23,10 @@ import {
   searchPlacesViaMapNaver,
   type NaverSearchResult,
 } from '../crawl/adapters/naver-search.http.adapter.js';
+import {
+  fetchVisitorReviewStatsMany,
+  type VisitorReviewStats,
+} from '../crawl/adapters/naver-review-stats.http.adapter.js';
 import { jobRegistry as defaultCrawlRegistry } from '../crawl/job-registry.js';
 import type { JobRegistry } from '../crawl/job-registry.js';
 import type { CrawlService } from '../crawl/crawl.service.js';
@@ -101,6 +105,12 @@ export interface RandomCrawlServiceDeps {
     query: string,
     coord: { lng: number; lat: number } | undefined,
   ) => Promise<NaverSearchResult[]>;
+  // 테스트용 — 방문자 리뷰 통계 주입(네이버 호출 우회). 미지정이면 실제 HTTP
+  // 어댑터를 쓰되, searchOverride 가 설정된 테스트에서는 라이브콜을 건너뛴다.
+  reviewStatsOverride?: (
+    placeIds: string[],
+    opts: { signal?: AbortSignal },
+  ) => Promise<Map<string, VisitorReviewStats>>;
 }
 
 export class RandomCrawlService {
@@ -373,6 +383,12 @@ export class RandomCrawlService {
           keyword,
         );
       }
+
+      // 4.5) 후보의 reviewCount 를 "정확한 방문자 리뷰 수"로 보강(best-effort).
+      //      검색 API 의 visitorReviewCount 는 별점-only 까지 포함한 전체라, 네이버
+      //      페이지가 표시하는 방문자 리뷰(별점 제외)와 어긋난다. getVisitorReviewStats
+      //      를 병렬 호출(~90ms)해 displayReviewCount 로 교체. 실패는 원래 값 유지.
+      await this.enrichReviewCounts(candidates, signal);
 
       // 5) 후보 전송 → awaiting_selection 으로 전환하고 손을 뗀다. 직접 검색은
       //    지역 헤더 대신 검색 헤더로(이름=네이버지도 링크는 양쪽 공통).
@@ -873,6 +889,34 @@ export class RandomCrawlService {
   ): Promise<NaverSearchResult[]> {
     if (this.deps.searchOverride) return this.deps.searchOverride(query, coord);
     return searchPlacesViaMapNaver(query, { coord, pageSize: SEARCH_PAGE_SIZE, signal });
+  }
+
+  // 후보 reviewCount 를 네이버 페이지 표시값(별점-only 제외)으로 보강한다.
+  // best-effort: 통계 호출 실패/형식오류는 조용히 원래 값 유지. 테스트에서
+  // searchOverride 만 있고 reviewStatsOverride 가 없으면 라이브콜을 건너뛴다.
+  private async enrichReviewCounts(
+    candidates: RandomCrawlCandidateType[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    const fetcher =
+      this.deps.reviewStatsOverride ??
+      (this.deps.searchOverride ? null : fetchVisitorReviewStatsMany);
+    if (!fetcher) return;
+    try {
+      const stats = await fetcher(
+        candidates.map((c) => c.placeId),
+        { signal },
+      );
+      for (const c of candidates) {
+        const s = stats.get(c.placeId);
+        if (s) c.reviewCount = s.displayReviewCount;
+      }
+    } catch (e) {
+      this.log?.warn(
+        { err: e instanceof Error ? e.message : String(e) },
+        '[random-crawl] 리뷰수 보강 실패(무시)',
+      );
+    }
   }
 
   private async notifyEmpty(regionLabel: string, query: string): Promise<void> {

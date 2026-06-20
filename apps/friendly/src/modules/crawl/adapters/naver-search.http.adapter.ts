@@ -192,11 +192,15 @@ const mapItem = (raw: Record<string, unknown>): NaverSearchResult | null => {
     // 직영=phone, 가맹=virtualPhone — 둘 중 있는 거.
     phone: strOrNull(raw['phone']) ?? strOrNull(raw['virtualPhone']),
     thumbnailUrl: strOrNull(raw['imageUrl']),
-    // total > visitor > review 우선순위 (실제 응답에선 totalReviewCount 가
-    // 가장 자주 채워짐). 모두 string-with-comma 형식이라 parseReviewCount 가 처리.
+    // 방문자 리뷰 우선 — 네이버 지도 페이지에서 가장 크게 보이는 대표 수치라
+    // 사용자가 카드와 페이지를 비교했을 때 일치한다. 주의: nx-api 의
+    // totalReviewCount 는 "합계"가 아니라 실측상 blogCafeReviewCount(블로그/카페
+    // 리뷰)와 같은 값으로 와서, 이걸 1순위로 쓰면 방문자 수와 어긋난다(과거 버그).
+    // visitor 가 없을 때만 blogCafe(total)→reviewCount 로 폴백. 모두
+    // string-with-comma 형식이라 parseReviewCount 가 처리.
     reviewCount:
-      parseReviewCount(raw['totalReviewCount']) ??
       parseReviewCount(raw['visitorReviewCount']) ??
+      parseReviewCount(raw['totalReviewCount']) ??
       parseReviewCount(raw['reviewCount']),
     distance: strOrNull(raw['distance']),
     rawSourceUrl: `https://map.naver.com/p/entry/place/${placeId}`,
