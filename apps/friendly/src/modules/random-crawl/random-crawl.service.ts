@@ -27,6 +27,11 @@ import { jobRegistry as defaultCrawlRegistry } from '../crawl/job-registry.js';
 import type { JobRegistry } from '../crawl/job-registry.js';
 import type { CrawlService } from '../crawl/crawl.service.js';
 import type { RestaurantService } from '../restaurant/restaurant.service.js';
+import {
+  isStatsCommand,
+  buildRegionStatsOverview,
+  buildRegionStatsSido,
+} from '../restaurant/region-stats-telegram.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
 import { scheduleRegistry } from '../schedule/schedule-registry.js';
 import type { TelegramService } from '../telegram/telegram.service.js';
@@ -449,6 +454,11 @@ export class RandomCrawlService {
     messageId: number;
     data: string;
   }): Promise<void> {
+    // 지역 통계 드릴다운(rs:<시도>|rs:*)은 별도 처리.
+    if (cb.data.startsWith('rs:')) {
+      await this.handleRegionStatsCallback(cb);
+      return;
+    }
     const parts = cb.data.split(':');
     if (parts.length !== 3 || parts[0] !== 'rc') return; // 우리 콜백 아님
     const runId = parts[1]!;
@@ -608,6 +618,11 @@ export class RandomCrawlService {
     chatId: string;
     text: string;
   }): Promise<void> {
+    // /stats·/통계·/지역 → 지역 통계.
+    if (isStatsCommand(m.text)) {
+      await this.sendRegionStats();
+      return;
+    }
     if (!isDiscoverCommand(m.text)) return; // 잡담은 조용히 무시.
 
     await this.deps.telegram.notify('🔍 맛집 발굴을 시작합니다…');
@@ -623,6 +638,36 @@ export class RandomCrawlService {
         `⚠️ 발굴 실패: ${escapeHtml(run.error ?? '알 수 없는 오류')}`,
       );
     }
+  }
+
+  // 지역 통계 전체 뷰 전송(시도 랭킹 + 드릴다운 버튼). getRegionStats 는 60초 캐시.
+  private async sendRegionStats(): Promise<void> {
+    const stats = await this.deps.restaurants.getRegionStats();
+    const { text, buttons } = buildRegionStatsOverview(stats);
+    await this.deps.telegram.sendCandidates({ text, buttons });
+  }
+
+  // 지역 통계 드릴다운 콜백 — rs:<시도>(해당 시도 시군구) / rs:*(전체 복귀).
+  // 같은 메시지를 본문+버튼째 교체한다.
+  private async handleRegionStatsCallback(cb: {
+    callbackQueryId: string;
+    chatId: string;
+    messageId: number;
+    data: string;
+  }): Promise<void> {
+    const sel = cb.data.slice(3); // 'rs:' 이후 — 시도명 또는 '*'.
+    const stats = await this.deps.restaurants.getRegionStats();
+    const render =
+      sel === '*'
+        ? buildRegionStatsOverview(stats)
+        : buildRegionStatsSido(stats, sel);
+    await this.deps.telegram.answerCallback(cb.callbackQueryId);
+    await this.deps.telegram.editMessageWithButtons(
+      cb.chatId,
+      cb.messageId,
+      render.text,
+      render.buttons,
+    );
   }
 
   // awaiting 만료 처리. timeoutAction='random' 이면 후보 중 하나를 랜덤으로

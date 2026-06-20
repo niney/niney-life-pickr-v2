@@ -170,6 +170,29 @@ export class TelegramService {
     });
   }
 
+  // 본문 + 인라인 버튼을 함께 교체. 지역 통계 드릴다운(시도↔시군구)처럼 같은
+  // 메시지에서 버튼 묶음을 바꿔 끼울 때 쓴다(editMessageText 는 본문만 갱신).
+  async editMessageWithButtons(
+    chatId: string,
+    messageId: number,
+    text: string,
+    buttons: TelegramButton[][],
+  ): Promise<void> {
+    if (!this.isConfigured()) return;
+    await this.call('editMessageText', {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: buttons.map((row) =>
+          row.map((b) => ({ text: b.text, callback_data: b.callbackData })),
+        ),
+      },
+    });
+  }
+
   // ── 설정 검증 / chat_id 탐색 (어드민 설정 화면용) ──────────────────
 
   // getMe — 토큰 유효성 확인.
