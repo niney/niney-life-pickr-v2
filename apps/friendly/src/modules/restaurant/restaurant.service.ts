@@ -1871,6 +1871,7 @@ export class RestaurantService {
     const canonicals = await this.prisma.canonicalRestaurant.findMany({
       where: { restaurants: { some: {} } },
       select: {
+        name: true,
         latitude: true,
         longitude: true,
         restaurants: { select: { source: true, address: true } },
@@ -1891,9 +1892,22 @@ export class RestaurantService {
     }
     const bySido = new Map<string, SidoAgg>();
     let unclassified = 0;
+    const points: RegionStatsResultType['points'] = [];
 
     for (const c of canonicals) {
       const region = deriveRegion(pickAddress(c.restaurants), c.latitude, c.longitude);
+
+      // 지도 포인트 — 좌표 있는 가게만. 파생 지역은 색칠/필터용(없으면 null).
+      if (c.latitude !== null && c.longitude !== null) {
+        points.push({
+          name: c.name,
+          lat: c.latitude,
+          lng: c.longitude,
+          sido: region?.sido ?? null,
+          sigungu: region?.sigungu ?? null,
+        });
+      }
+
       if (!region) {
         unclassified += 1;
         continue;
@@ -1921,7 +1935,7 @@ export class RestaurantService {
       .sort((a, b) => b.count - a.count || a.sido.localeCompare(b.sido, 'ko'));
 
     const total = sidos.reduce((n, s) => n + s.count, 0);
-    return { total, unclassified, sidos };
+    return { total, unclassified, sidos, points };
   }
 
   private async getRankingRows(

@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
-import { BarChart3, ChevronLeft, ChevronRight, MapPin, Table as TableIcon } from 'lucide-react';
+import {
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Map as MapIcon,
+  MapPin,
+  Table as TableIcon,
+} from 'lucide-react';
 import { useRegionStats } from '@repo/shared';
 import { cn } from '~/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -11,13 +18,15 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
+import { RegionStatsMap } from './RegionStatsMap';
 
-type View = 'bar' | 'table';
+type View = 'bar' | 'table' | 'map';
 
-// 막대/표 두 뷰의 토글. 지도(클러스터/choropleth) 뷰는 후속 단계에서 추가한다.
+// 막대/표/지도 세 뷰의 토글. choropleth(시군구 경계 색칠) 뷰는 후속 단계.
 const TABS: Array<{ key: View; label: string; icon: typeof BarChart3 }> = [
   { key: 'bar', label: '막대', icon: BarChart3 },
   { key: 'table', label: '표', icon: TableIcon },
+  { key: 'map', label: '지도', icon: MapIcon },
 ];
 
 const pct = (count: number, total: number): number =>
@@ -211,6 +220,8 @@ export const RegionStatsPanel = () => {
             </TableBody>
           </Table>
         )}
+
+        {data && total > 0 && view === 'map' && <RegionStatsMap data={data} />}
       </CardContent>
     </Card>
   );

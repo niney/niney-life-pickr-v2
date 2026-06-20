@@ -821,6 +821,17 @@ export const RegionStatsSido = z.object({
 });
 export type RegionStatsSidoType = z.infer<typeof RegionStatsSido>;
 
+// 지도(클러스터/choropleth) 뷰용 개별 가게 포인트. 좌표가 있는 가게만 포함.
+// sido/sigungu 는 파생값(색칠·필터용) — 못 뽑았으면 null 이지만 좌표는 항상 있다.
+export const RegionStatsPoint = z.object({
+  name: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  sido: z.string().nullable(),
+  sigungu: z.string().nullable(),
+});
+export type RegionStatsPointType = z.infer<typeof RegionStatsPoint>;
+
 export const RegionStatsResult = z.object({
   // 분류된 가게 수 (= sidos 전체 count 합). unclassified 는 제외.
   total: z.number().int(),
@@ -828,5 +839,7 @@ export const RegionStatsResult = z.object({
   unclassified: z.number().int(),
   // count 내림차순 정렬됨. 동률은 시도명 오름차순.
   sidos: z.array(RegionStatsSido),
+  // 좌표 보유 가게의 개별 포인트(지도 뷰). 막대/표는 sidos 만 쓴다.
+  points: z.array(RegionStatsPoint),
 });
 export type RegionStatsResultType = z.infer<typeof RegionStatsResult>;
