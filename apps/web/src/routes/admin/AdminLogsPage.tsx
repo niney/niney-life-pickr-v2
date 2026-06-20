@@ -43,6 +43,7 @@ const TRIGGER_LABEL: Record<string, string> = {
   manual: '수동',
   cron: '크론',
   telegram: '텔레그램',
+  search: '검색',
   auto: '자동',
   user: '사용자',
 };

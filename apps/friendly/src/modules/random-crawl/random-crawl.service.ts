@@ -95,10 +95,11 @@ export interface RandomCrawlServiceDeps {
   crawlRegistry?: JobRegistry;
   logger?: FastifyBaseLogger;
   operationLog?: OperationLogService | null;
-  // 테스트용 — 검색 결과 주입(네이버 호출 우회).
+  // 테스트용 — 검색 결과 주입(네이버 호출 우회). coord 는 직접 검색(/search)에선
+  // undefined(검색어가 영역 결정).
   searchOverride?: (
     query: string,
-    coord: { lng: number; lat: number },
+    coord: { lng: number; lat: number } | undefined,
   ) => Promise<NaverSearchResult[]>;
 }
 
@@ -233,10 +234,12 @@ export class RandomCrawlService {
 
   // ── 실행 (검색 → 후보 → 텔레그램 전송, 그리고 awaiting 으로 손 뗌) ──────
 
-  // regionOverride 가 있으면 설정 지역 대신 그 지역으로만 발굴(텔레그램 지역 선택).
+  // override.region 이 있으면 설정 지역 대신 그 지역으로만 발굴(텔레그램 지역
+  // 선택). override.query 가 있으면 지역선정을 건너뛰고 그 검색어로 직접 발굴
+  // (텔레그램 /search — 검색어가 영역을 결정하므로 좌표 불필요).
   async runScheduled(
     trigger: RandomCrawlTriggerType,
-    regionOverride?: RandomCrawlRegionType,
+    override?: { region?: RandomCrawlRegionType; query?: string },
   ): Promise<RandomCrawlRunType> {
     // 0) 만료된 awaiting 먼저 정리 — 막힌 슬롯을 풀어 새 회차가 시작될 수 있게.
     await this.sweepExpired();
@@ -278,30 +281,48 @@ export class RandomCrawlService {
     };
 
     try {
-      // 2) 지역 선정. override(텔레그램 지역 선택)가 있으면 그 지역으로 고정.
+      // 2) 검색 대상 결정. query 오버라이드(텔레그램 직접 검색)면 지역선정을
+      //    건너뛰고 검색어를 그대로 쓴다(검색어가 영역을 결정 — 좌표 불필요).
+      //    아니면 지역을 (랜덤/고정) 골라 검색어를 만든다.
       randomCrawlRegistry.setPhase('selecting_region');
-      const region = this.regions.resolve(regionOverride ?? cfg.region);
-      if (!region) {
-        return await this.skip(
-          runId,
-          opRunId,
-          step,
-          '지역 데이터를 사용할 수 없습니다.',
-        );
+      let query: string;
+      let coord: { lng: number; lat: number } | undefined;
+      let regionLabel: string;
+      let keyword: string;
+      if (override?.query) {
+        query = override.query;
+        coord = undefined; // 검색어가 영역 결정 — 좌표 미지정(어댑터 default center).
+        regionLabel = `검색: "${override.query}"`;
+        keyword = override.query;
+        randomCrawlRegistry.setPhase('searching', { regionLabel });
+        step('info', 'select', `직접 검색: "${query}"`, { query });
+      } else {
+        const region = this.regions.resolve(override?.region ?? cfg.region);
+        if (!region) {
+          return await this.skip(
+            runId,
+            opRunId,
+            step,
+            '지역 데이터를 사용할 수 없습니다.',
+          );
+        }
+        query = region.dong ? `${region.dong} ${cfg.keyword}` : cfg.keyword;
+        coord = { lng: region.lng, lat: region.lat };
+        regionLabel = region.label;
+        keyword = cfg.keyword;
+        randomCrawlRegistry.setPhase('selecting_region', {
+          regionLabel,
+          keyword,
+        });
+        step('info', 'select', `지역 선정: ${regionLabel} / 검색어 "${query}"`, {
+          region: regionLabel,
+          query,
+        });
+        randomCrawlRegistry.setPhase('searching', { regionLabel });
       }
-      randomCrawlRegistry.setPhase('selecting_region', {
-        regionLabel: region.label,
-        keyword: cfg.keyword,
-      });
-      const query = region.dong ? `${region.dong} ${cfg.keyword}` : cfg.keyword;
-      step('info', 'select', `지역 선정: ${region.label} / 검색어 "${query}"`, {
-        region: region.label,
-        query,
-      });
 
       // 3) 검색 → dedupe → 기등록 제외 → 후보 N개.
-      randomCrawlRegistry.setPhase('searching', { regionLabel: region.label });
-      const items = await this.search(query, { lng: region.lng, lat: region.lat }, signal);
+      const items = await this.search(query, coord, signal);
       const deduped = new Map<string, NaverSearchResult>();
       for (const it of items) if (!deduped.has(it.placeId)) deduped.set(it.placeId, it);
       const ids = [...deduped.keys()];
@@ -318,14 +339,14 @@ export class RandomCrawlService {
       );
 
       if (chosen.length === 0) {
-        await this.notifyEmpty(region.label, query);
+        await this.notifyEmpty(regionLabel, query);
         return await this.skip(
           runId,
           opRunId,
           step,
           EMPTY_REASON,
-          region.label,
-          cfg.keyword,
+          regionLabel,
+          keyword,
         );
       }
 
@@ -348,14 +369,17 @@ export class RandomCrawlService {
           opRunId,
           step,
           '텔레그램 미설정 — 후보를 보낼 수 없음',
-          region.label,
-          cfg.keyword,
+          regionLabel,
+          keyword,
         );
       }
 
-      // 5) 후보 전송 → awaiting_selection 으로 전환하고 손을 뗀다.
+      // 5) 후보 전송 → awaiting_selection 으로 전환하고 손을 뗀다. 직접 검색은
+      //    지역 헤더 대신 검색 헤더로(이름=네이버지도 링크는 양쪽 공통).
       const sent = await this.deps.telegram.sendCandidates(
-        buildCandidatesMessage(runId, region.label, query, candidates),
+        override?.query
+          ? buildSearchCandidatesMessage(runId, query, candidates)
+          : buildCandidatesMessage(runId, regionLabel, query, candidates),
       );
       if (!sent) {
         return await this.skip(
@@ -363,8 +387,8 @@ export class RandomCrawlService {
           opRunId,
           step,
           '텔레그램 전송 실패',
-          region.label,
-          cfg.keyword,
+          regionLabel,
+          keyword,
         );
       }
 
@@ -373,8 +397,8 @@ export class RandomCrawlService {
         where: { id: runId },
         data: {
           status: 'awaiting_selection',
-          regionLabel: region.label,
-          keyword: cfg.keyword,
+          regionLabel,
+          keyword,
           candidatesJson: JSON.stringify(candidates),
           telegramChatId: sent.chatId,
           telegramMessageId: String(sent.messageId),
@@ -382,8 +406,8 @@ export class RandomCrawlService {
         },
       });
       randomCrawlRegistry.setPhase('awaiting_selection', {
-        regionLabel: region.label,
-        keyword: cfg.keyword,
+        regionLabel,
+        keyword,
         candidates,
       });
       step('info', 'await', `후보 ${candidates.length}건 텔레그램 전송 — 선택 대기 (만료 ${cfg.responseTimeoutMin}분)`, {
@@ -395,7 +419,7 @@ export class RandomCrawlService {
       if (oplog && opRunId) {
         await oplog.finishRun(opRunId, {
           status: 'done',
-          meta: { regionLabel: region.label, candidates: candidates.length, awaiting: true },
+          meta: { regionLabel, candidates: candidates.length, awaiting: true },
         });
       }
       await this.touchConfig('awaiting_selection');
@@ -632,19 +656,42 @@ export class RandomCrawlService {
       await this.sendRegionStats();
       return;
     }
+    // /search·/검색·'검색 …' → 직접 검색 발굴(지역 대신 검색어로).
+    const searchQuery = parseSearchCommand(m.text);
+    if (searchQuery !== null) {
+      if (searchQuery === '') {
+        await this.deps.telegram.notify(
+          '🔎 검색어를 함께 보내주세요. 예) <code>/search 강남 파스타</code>',
+        );
+        return;
+      }
+      await this.runDiscoverAndReply(`🔎 "${escapeHtml(searchQuery)}" 검색 중…`, {
+        trigger: 'search',
+        query: searchQuery,
+      });
+      return;
+    }
     if (!isDiscoverCommand(m.text)) return; // 잡담은 조용히 무시.
     await this.runDiscoverAndReply('🔍 맛집 발굴을 시작합니다…');
   }
 
-  // 발굴 1회차 실행 + 결과 회신. /discover(설정 지역)와 지역 선택 발굴(override)
-  // 이 공유한다. ack 후 runScheduled — 후보 카드는 그 안에서 전송되고, 스킵/실패만
-  // 사유를 회신(후보 0건은 notifyEmpty 가 이미 안내하므로 EMPTY_REASON 은 제외).
+  // 발굴 1회차 실행 + 결과 회신. /discover(설정 지역)·지역 선택 발굴(region)·
+  // 직접 검색(query)이 공유한다. ack 후 runScheduled — 후보 카드는 그 안에서
+  // 전송되고, 스킵/실패만 사유를 회신(후보 0건은 notifyEmpty 가 이미 안내하므로
+  // EMPTY_REASON 은 제외).
   private async runDiscoverAndReply(
     ackText: string,
-    regionOverride?: RandomCrawlRegionType,
+    override?: {
+      trigger?: RandomCrawlTriggerType;
+      region?: RandomCrawlRegionType;
+      query?: string;
+    },
   ): Promise<void> {
     await this.deps.telegram.notify(ackText);
-    const run = await this.runScheduled('telegram', regionOverride);
+    const run = await this.runScheduled(override?.trigger ?? 'telegram', {
+      region: override?.region,
+      query: override?.query,
+    });
     if (run.status === 'skipped' && run.error && run.error !== EMPTY_REASON) {
       await this.deps.telegram.notify(`⏭️ ${escapeHtml(run.error)}`);
     } else if (run.status === 'failed') {
@@ -710,7 +757,7 @@ export class RandomCrawlService {
     await this.deps.telegram.answerCallback(cb.callbackQueryId, `발굴: ${label}`);
     await this.runDiscoverAndReply(
       `🔍 <b>${escapeHtml(label)}</b> 맛집 발굴을 시작합니다…`,
-      region,
+      { region },
     );
   }
 
@@ -725,9 +772,11 @@ export class RandomCrawlService {
     const timeoutAction = (await this.getConfig()).timeoutAction;
     for (const run of stale) {
       const candidates = this.parseCandidates(run.candidatesJson);
-      // 랜덤 자동 크롤 — 후보·텔레그램 메시지가 있어야 가능.
+      // 랜덤 자동 크롤 — 후보·텔레그램 메시지가 있어야 가능. 단 직접 검색
+      // (/search)은 수동 의도라 자동 크롤하지 않고 그냥 만료시킨다.
       if (
         timeoutAction === 'random' &&
+        run.trigger !== 'search' &&
         candidates.length > 0 &&
         run.telegramChatId &&
         run.telegramMessageId
@@ -819,7 +868,7 @@ export class RandomCrawlService {
 
   private async search(
     query: string,
-    coord: { lng: number; lat: number },
+    coord: { lng: number; lat: number } | undefined,
     signal: AbortSignal,
   ): Promise<NaverSearchResult[]> {
     if (this.deps.searchOverride) return this.deps.searchOverride(query, coord);
@@ -946,29 +995,58 @@ export class RandomCrawlService {
 
 // ── 텔레그램 메시지 빌더 ──────────────────────────────────────────────
 
+type TelegramButtons = { text: string; callbackData: string }[][];
+
+// 지역 발굴 카드(cron/manual/지역선택). 이름=네이버지도 링크로 검증 가능.
 function buildCandidatesMessage(
   runId: string,
   regionLabel: string,
   query: string,
   candidates: RandomCrawlCandidateType[],
-): { text: string; buttons: { text: string; callbackData: string }[][] } {
-  const lines = candidates.map((c, i) => {
-    const parts = [`${i + 1}. <b>${escapeHtml(c.name)}</b>`];
-    if (c.category) parts.push(` · ${escapeHtml(c.category)}`);
-    const sub: string[] = [];
-    if (c.roadAddress) sub.push(escapeHtml(c.roadAddress));
-    if (c.reviewCount != null) sub.push(`리뷰 ${c.reviewCount}`);
-    return parts.join('') + (sub.length ? `\n   ${sub.join(' · ')}` : '');
-  });
+): { text: string; buttons: TelegramButtons } {
   const text =
     `🍽️ <b>오늘의 맛집 발굴</b>\n📍 ${escapeHtml(regionLabel)}\n🔎 "${escapeHtml(query)}"\n\n` +
-    `크롤할 가게를 선택하세요 (${candidates.length}곳):\n\n${lines.join('\n\n')}`;
+    `크롤할 가게를 선택하세요 (${candidates.length}곳):\n\n${renderCandidateLines(candidates)}`;
+  return { text, buttons: buildCandidateButtons(runId, candidates) };
+}
 
+// 직접 검색 카드(/search). 지역 헤더 대신 검색어 헤더 + "이름 누르면 지도 확인" 안내.
+function buildSearchCandidatesMessage(
+  runId: string,
+  query: string,
+  candidates: RandomCrawlCandidateType[],
+): { text: string; buttons: TelegramButtons } {
+  const text =
+    `🔎 <b>검색 결과</b> — "${escapeHtml(query)}"\n` +
+    `크롤할 가게를 선택하세요 (${candidates.length}곳):\n` +
+    `<i>가게명을 누르면 네이버지도에서 확인할 수 있어요.</i>\n\n${renderCandidateLines(candidates)}`;
+  return { text, buttons: buildCandidateButtons(runId, candidates) };
+}
+
+// 후보 한 줄 — 이름은 네이버지도 링크(검증용), 카테고리/주소/리뷰는 부가.
+function renderCandidateLines(candidates: RandomCrawlCandidateType[]): string {
+  return candidates
+    .map((c, i) => {
+      const name = `<a href="${escapeHtml(c.rawSourceUrl)}">${escapeHtml(c.name)}</a>`;
+      const head = `${i + 1}. <b>${name}</b>${c.category ? ` · ${escapeHtml(c.category)}` : ''}`;
+      const sub: string[] = [];
+      if (c.roadAddress) sub.push(escapeHtml(c.roadAddress));
+      if (c.reviewCount != null) sub.push(`리뷰 ${c.reviewCount}`);
+      return head + (sub.length ? `\n   ${sub.join(' · ')}` : '');
+    })
+    .join('\n\n');
+}
+
+// 후보별 선택 버튼 + 건너뛰기. 콜백은 rc:<runId>:<idx>|skip (선택 핸들러 공용).
+function buildCandidateButtons(
+  runId: string,
+  candidates: RandomCrawlCandidateType[],
+): TelegramButtons {
   const buttons = candidates.map((c, i) => [
     { text: `${i + 1}. ${truncate(c.name, 24)}`, callbackData: `rc:${runId}:${i}` },
   ]);
   buttons.push([{ text: '⏭️ 건너뛰기', callbackData: `rc:${runId}:skip` }]);
-  return { text, buttons };
+  return buttons;
 }
 
 function truncate(s: string, max: number): string {
@@ -981,6 +1059,17 @@ export function isDiscoverCommand(text: string): boolean {
   const first = text.trim().split(/\s+/)[0] ?? '';
   const cmd = first.split('@')[0]!.toLowerCase();
   return cmd === '/discover' || cmd === '/발굴' || cmd === '발굴';
+}
+
+// 직접 검색 커맨드 파서 — '/search 강남 파스타', '/검색 …', '검색 …'.
+// 반환: 검색어(트림). 커맨드지만 검색어가 없으면 '' (사용법 안내용). 검색
+// 커맨드가 아니면 null. 첫 토큰만 커맨드로 보고 @봇명 접미는 제거한다.
+export function parseSearchCommand(text: string): string | null {
+  const trimmed = text.trim();
+  const first = trimmed.split(/\s+/)[0] ?? '';
+  const cmd = first.split('@')[0]!.toLowerCase();
+  if (cmd !== '/search' && cmd !== '/검색' && cmd !== '검색') return null;
+  return trimmed.slice(first.length).trim();
 }
 
 function escapeHtml(s: string): string {

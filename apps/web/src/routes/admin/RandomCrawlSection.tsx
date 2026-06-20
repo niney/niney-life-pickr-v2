@@ -518,7 +518,9 @@ export const RandomCrawlSection = () => {
                             ? '자동'
                             : r.trigger === 'telegram'
                               ? '텔레그램'
-                              : '수동'}
+                              : r.trigger === 'search'
+                                ? '검색'
+                                : '수동'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {r.regionLabel ?? '-'}
