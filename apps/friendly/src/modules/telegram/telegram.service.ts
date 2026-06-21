@@ -26,6 +26,9 @@ export type TelegramCallbackHandler = (cb: TelegramCallback) => Promise<void>;
 export interface TelegramMessage {
   chatId: string;
   text: string;
+  // ForceReply 답장이면 답장 대상(봇 프롬프트)의 텍스트. 일반 메시지면 undefined.
+  // 인자가 필요한 커맨드(/search)를 2단계로 받을 때 핸들러가 이걸로 식별한다.
+  replyToText?: string;
 }
 
 export type TelegramMessageHandler = (m: TelegramMessage) => Promise<void>;
@@ -56,6 +59,8 @@ interface TgUpdate {
     message_id: number;
     date?: number; // unix seconds — 재시작 후 재전송된 옛 메시지 걸러내기용.
     text?: string;
+    // 답장이면 답장 대상 메시지(봇 프롬프트 식별용). text 만 필요.
+    reply_to_message?: { text?: string };
     chat: { id: number; type?: string; first_name?: string; title?: string };
   };
   callback_query?: {
@@ -142,6 +147,24 @@ export class TelegramService {
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
+    });
+  }
+
+  // force_reply 프롬프트 — 입력창을 자동 포커스시켜 인자 입력을 유도한다. 메뉴/
+  // 자동완성에서 탭하면 인자 없이 즉시 전송되는 명령어(/search)의 2단계 입력용.
+  // 사용자가 이 메시지에 답장하면 reply_to_message 로 식별된다. placeholder 는
+  // 입력창 흐린 글씨(≤64자). 미설정·실패는 no-op.
+  async askReply(text: string, placeholder?: string): Promise<void> {
+    if (!this.isConfigured()) return;
+    await this.call('sendMessage', {
+      chat_id: this.chatId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        force_reply: true,
+        ...(placeholder ? { input_field_placeholder: placeholder } : {}),
+      },
     });
   }
 
@@ -327,7 +350,11 @@ export class TelegramService {
           if (msg && typeof msg.text === 'string' && msg.text.length > 0) {
             if (String(msg.chat.id) !== this.chatId) continue;
             if (msg.date != null && Date.now() / 1000 - msg.date > 60) continue;
-            await this.dispatchMessage({ chatId: String(msg.chat.id), text: msg.text });
+            await this.dispatchMessage({
+              chatId: String(msg.chat.id),
+              text: msg.text,
+              replyToText: msg.reply_to_message?.text,
+            });
           }
         }
       } catch (e) {

@@ -58,6 +58,11 @@ const SEARCH_PAGE_SIZE = 50;
 const ACTOR_ID = 'system:random-crawl';
 // 신규 후보 0건 스킵 사유 — notifyEmpty 안내와 텔레그램 커맨드 중복 회신 억제에 공용.
 const EMPTY_REASON = '신규 후보 0건';
+// /search 2단계 입력 — 인자 없이 탭된 /search 에 force_reply 프롬프트를 띄우고,
+// 그 프롬프트에 대한 답장을 검색어로 받는다(MARKER 로 답장 식별).
+const SEARCH_PROMPT_MARKER = '검색할 가게나 지역';
+const SEARCH_PROMPT = `🔎 ${SEARCH_PROMPT_MARKER}을 입력해 주세요.\n예) 강남 파스타`;
+const SEARCH_PLACEHOLDER = '예) 강남 파스타';
 // 크롤 진행을 텔레그램 메시지에 제자리 갱신할 때의 최소 간격(ms). 텔레그램
 // editMessageText 레이트리밋 + "not modified" 오류를 피하려고 한번씩만 보낸다.
 const CRAWL_PROGRESS_THROTTLE_MS = 4000;
@@ -666,7 +671,17 @@ export class RandomCrawlService {
   private async handleTelegramMessage(m: {
     chatId: string;
     text: string;
+    replyToText?: string;
   }): Promise<void> {
+    // 검색 프롬프트(force_reply)에 대한 답장이면 그 텍스트가 검색어. 메뉴에서
+    // 탭하면 인자 없이 전송되는 /search 의 2단계 입력을 여기서 마무리한다.
+    if (m.replyToText && m.replyToText.includes(SEARCH_PROMPT_MARKER)) {
+      // 답장이 다시 '/search …' 형태일 수도 있어 파서로 정규화(아니면 원문).
+      const parsed = parseSearchCommand(m.text);
+      const q = (parsed !== null ? parsed : m.text).trim();
+      if (q) await this.runSearch(q);
+      return;
+    }
     // /stats·/통계·/지역 → 지역 통계.
     if (isStatsCommand(m.text)) {
       await this.sendRegionStats();
@@ -675,20 +690,24 @@ export class RandomCrawlService {
     // /search·/검색·'검색 …' → 직접 검색 발굴(지역 대신 검색어로).
     const searchQuery = parseSearchCommand(m.text);
     if (searchQuery !== null) {
+      // 인자 없이 탭됨 → force_reply 로 검색어를 받는다(입력창 자동 포커스).
       if (searchQuery === '') {
-        await this.deps.telegram.notify(
-          '🔎 검색어를 함께 보내주세요. 예) <code>/search 강남 파스타</code>',
-        );
+        await this.deps.telegram.askReply(SEARCH_PROMPT, SEARCH_PLACEHOLDER);
         return;
       }
-      await this.runDiscoverAndReply(`🔎 "${escapeHtml(searchQuery)}" 검색 중…`, {
-        trigger: 'search',
-        query: searchQuery,
-      });
+      await this.runSearch(searchQuery);
       return;
     }
     if (!isDiscoverCommand(m.text)) return; // 잡담은 조용히 무시.
     await this.runDiscoverAndReply('🔍 맛집 발굴을 시작합니다…');
+  }
+
+  // 검색어 1건으로 직접 검색 발굴 실행. /search 인자 입력과 force_reply 답장이 공유.
+  private async runSearch(query: string): Promise<void> {
+    await this.runDiscoverAndReply(`🔎 "${escapeHtml(query)}" 검색 중…`, {
+      trigger: 'search',
+      query,
+    });
   }
 
   // 발굴 1회차 실행 + 결과 회신. /discover(설정 지역)·지역 선택 발굴(region)·
