@@ -397,6 +397,10 @@ export const ReviewSearch = {
   restaurants: `${API_PREFIX}/admin/review-search/restaurants`,
   enrich: `${API_PREFIX}/admin/review-search/enrich`,
   ask: `${API_PREFIX}/admin/review-search/ask`,
+  // enrich 상태 관리 (어드민)
+  status: `${API_PREFIX}/admin/review-search/status`,
+  enrichBg: `${API_PREFIX}/admin/review-search/enrich-bg`,
+  enrichPending: `${API_PREFIX}/admin/review-search/enrich-pending`,
   // 공개 (placeId 기반)
   publicQaReady: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa/ready`,
   publicAsk: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa`,

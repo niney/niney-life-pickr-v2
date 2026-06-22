@@ -1,6 +1,10 @@
 import type {
   ReviewAskInputType,
   ReviewAskResultType,
+  ReviewEnrichBgResultType,
+  ReviewEnrichPendingResultType,
+  ReviewEnrichStatusListType,
+  ReviewEnrichStatusQueryType,
   ReviewQaReadyResultType,
   ReviewSearchEnrichResultType,
   ReviewSearchRestaurantsResultType,
@@ -20,6 +24,25 @@ export const reviewSearchApi = {
       method: 'POST',
       body: JSON.stringify({ restaurantId }),
     }),
+
+  // ── enrich 상태 관리 (어드민) ──
+  enrichStatus: (query: Partial<ReviewEnrichStatusQueryType> = {}) => {
+    const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
+    if (query.page !== undefined) params.set('page', String(query.page));
+    if (query.pageSize !== undefined) params.set('pageSize', String(query.pageSize));
+    const qs = params.toString();
+    return apiFetch<ReviewEnrichStatusListType>(`${RS_PREFIX}/status${qs ? `?${qs}` : ''}`);
+  },
+
+  enrichBg: (restaurantId: string) =>
+    apiFetch<ReviewEnrichBgResultType>(`${RS_PREFIX}/enrich-bg`, {
+      method: 'POST',
+      body: JSON.stringify({ restaurantId }),
+    }),
+
+  enrichPending: () =>
+    apiFetch<ReviewEnrichPendingResultType>(`${RS_PREFIX}/enrich-pending`, { method: 'POST' }),
 
   ask: (input: ReviewAskInputType) =>
     apiFetch<ReviewAskResultType>(`${RS_PREFIX}/ask`, {

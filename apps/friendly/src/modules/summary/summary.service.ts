@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { ReviewAnalysis, type ReviewAnalysisType } from '@repo/api-contract';
 import { LLMUpstreamError, type LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
+import type { ReviewSearchService } from '../review-search/review-search.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import { summaryEventsBus, type SummaryEventsBus } from './summary-events-bus.js';
@@ -192,6 +193,10 @@ export interface SummaryServiceOptions {
   // 흘려보내는 이유: 크롤 SSE 가 done 으로 닫혀도 어드민 UI 가 계속 받게.
   // 단, jobId 없는 run(backfill/resummarize/reschedule)은 'none' — DB+pino 만.
   operationLog?: OperationLogService;
+  // review-search enrich(관점/문맥/임베딩 영속). 주입되면 요약 종료 직후 해당 식당을
+  // 자동 enrich(fire-and-forget) — 새로 크롤된 식당이 추가 조작 없이 검색/RAG 가능해진다.
+  // 미주입(테스트 등) 이면 훅 비활성.
+  reviewSearch?: ReviewSearchService;
 }
 
 // Background AI summarization. The crawl pipeline calls
@@ -1134,6 +1139,15 @@ export class SummaryService {
       },
       channel,
     );
+    // 요약 완료 직후 자동 enrich(관점/문맥/임베딩) — fire-and-forget. 요약이 끝난 뒤라
+    // 같은 ReviewSummary 행 동시 쓰기(SQLite lock) 없음. 멱등이라 이미 enrich 된 건 스킵.
+    // 임베딩 엔드포인트 미도달 등 실패는 warn 만(요약 결과엔 영향 없음).
+    if (this.opts.reviewSearch) {
+      void this.opts.reviewSearch.ensureEnrichedByPlaceId(placeId).catch((e) => {
+        this.log?.warn({ err: e, placeId }, '[summary] post-summary enrich 실패');
+      });
+    }
+
     // 행 단위 실패는 ReviewSummary 에 남고 어드민이 재시도 가능 — run 자체는
     // 끝까지 돈 것이므로 done. 실패 수치는 meta 로 보존한다.
     return {

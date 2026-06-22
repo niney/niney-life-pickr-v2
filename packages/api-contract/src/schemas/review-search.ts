@@ -64,3 +64,42 @@ export const ReviewQaReadyResult = z.object({
   count: z.number().int().nonnegative(),
 });
 export type ReviewQaReadyResultType = z.infer<typeof ReviewQaReadyResult>;
+
+// ── enrich 상태 관리 (어드민) — "식당별 정규화 상태" 미러링 ──
+export const ReviewEnrichStatusItem = z.object({
+  restaurantId: z.string(),
+  placeId: z.string().nullable(),
+  name: z.string(),
+  totalReviews: z.number().int().nonnegative(),
+  enrichedReviews: z.number().int().nonnegative(), // embeddingJson 채워진(검색가능) 리뷰 수
+  ready: z.boolean(), // enrichedReviews > 0
+  inProgress: z.boolean(), // 백그라운드 enrich 진행 중
+});
+export type ReviewEnrichStatusItemType = z.infer<typeof ReviewEnrichStatusItem>;
+
+export const ReviewEnrichStatusQuery = z.object({
+  q: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ReviewEnrichStatusQueryType = z.infer<typeof ReviewEnrichStatusQuery>;
+
+export const ReviewEnrichStatusList = z.object({
+  items: z.array(ReviewEnrichStatusItem),
+  total: z.number().int().nonnegative(), // 필터 적용 후 식당 수
+  totalRestaurants: z.number().int().nonnegative(), // 리뷰 있는 전체 식당 수
+  readyCount: z.number().int().nonnegative(), // 검색가능(enrich됨) 식당 수
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type ReviewEnrichStatusListType = z.infer<typeof ReviewEnrichStatusList>;
+
+// 백그라운드 enrich 트리거(즉시 반환 — HTTP 타임아웃 회피, 상태는 폴링).
+export const ReviewEnrichBgInput = z.object({ restaurantId: z.string() });
+export type ReviewEnrichBgInputType = z.infer<typeof ReviewEnrichBgInput>;
+export const ReviewEnrichBgResult = z.object({ started: z.boolean(), inProgress: z.boolean() });
+export type ReviewEnrichBgResultType = z.infer<typeof ReviewEnrichBgResult>;
+
+// 미완료(검색가능 0) 식당 일괄 백그라운드 enrich(순차).
+export const ReviewEnrichPendingResult = z.object({ queued: z.number().int().nonnegative() });
+export type ReviewEnrichPendingResultType = z.infer<typeof ReviewEnrichPendingResult>;

@@ -4,6 +4,11 @@ import { z } from 'zod';
 import {
   ReviewAskInput,
   ReviewAskResult,
+  ReviewEnrichBgInput,
+  ReviewEnrichBgResult,
+  ReviewEnrichPendingResult,
+  ReviewEnrichStatusList,
+  ReviewEnrichStatusQuery,
   ReviewPublicAskBody,
   ReviewQaReadyResult,
   ReviewSearchEnrichInput,
@@ -11,7 +16,6 @@ import {
   ReviewSearchRestaurantsResult,
   Routes,
 } from '@repo/api-contract';
-import { ReviewSearchService } from './review-search.service.js';
 
 // 공개 ask 는 비싼 LLM 호출 → IP 당 분당 제한(인메모리 고정창, settlement 패턴 차용).
 const ASK_RATE_WINDOW_MS = 60_000;
@@ -29,7 +33,7 @@ const isAskRateLimited = (ip: string, now: number): boolean => {
 };
 
 const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
-  const service = new ReviewSearchService(app.prisma, app.aiConfig);
+  const service = app.reviewSearch; // app 전역 singleton(plugins/summaries.ts) — 요약 훅과 동일 인스턴스
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const guard = { onRequest: [app.authenticate, app.requireAdmin] };
   const tags = ['review-search'];
@@ -61,6 +65,26 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
     ...guard,
     schema: { tags, security, body: ReviewAskInput, response: { 200: ReviewAskResult } },
     handler: async (req) => service.ask(req.body.restaurantId, req.body.query),
+  });
+
+  // ── enrich 상태 관리 (어드민) ──────────────────────────────────────────────
+  typed.get(Routes.ReviewSearch.status, {
+    ...guard,
+    schema: { tags, security, querystring: ReviewEnrichStatusQuery, response: { 200: ReviewEnrichStatusList } },
+    handler: async (req) => service.enrichStatus(req.query),
+  });
+
+  // 백그라운드 enrich(즉시 반환 — 무거운 enrich 가 HTTP 타임아웃 안 나게). 상태는 status 폴링.
+  typed.post(Routes.ReviewSearch.enrichBg, {
+    ...guard,
+    schema: { tags, security, body: ReviewEnrichBgInput, response: { 200: ReviewEnrichBgResult } },
+    handler: async (req) => service.enrichInBackground(req.body.restaurantId),
+  });
+
+  typed.post(Routes.ReviewSearch.enrichPending, {
+    ...guard,
+    schema: { tags, security, response: { 200: ReviewEnrichPendingResult } },
+    handler: async () => service.enrichAllPendingInBackground(),
   });
 
   // ── 공개 QA (placeId 기반, 인증 없음) ──────────────────────────────────────

@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin';
 import { SummaryService } from '../modules/summary/summary.service.js';
+import { ReviewSearchService } from '../modules/review-search/review-search.service.js';
 import { AiConfigService } from '../modules/ai/ai.config.service.js';
 import { env } from '../config/env.js';
 
@@ -25,13 +26,19 @@ export default fp(
         'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
       },
     });
+    // review-search 도 app 전역 singleton — corpusCache(LRU)·enrich 진행상태를
+    // 라우트·요약 훅이 한 인스턴스로 공유해야 한다. 요약 종료 시 자동 enrich 를
+    // 위해 SummaryService 에 주입.
+    const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);
     const summaries = new SummaryService(app.prisma, aiConfig, {
       logger: app.log,
       operationLog: app.operationLog,
+      reviewSearch,
     });
 
     app.decorate('summaries', summaries);
     app.decorate('aiConfig', aiConfig);
+    app.decorate('reviewSearch', reviewSearch);
   },
   { name: 'summaries', dependencies: ['prisma', 'logs'] },
 );
@@ -40,5 +47,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     summaries: SummaryService;
     aiConfig: AiConfigService;
+    reviewSearch: ReviewSearchService;
   }
 }
