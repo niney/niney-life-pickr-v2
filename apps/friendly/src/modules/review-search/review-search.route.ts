@@ -36,6 +36,15 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
   const security = [{ bearerAuth: [] }];
   const placeIdParams = z.object({ placeId: z.string() });
 
+  // 부팅 헬스체크 — 임베딩 엔드포인트(로컬/사이드카 Ollama) 미도달이면 경고만(서버는 계속 —
+  // review-search 만 동작 불가). 운영 배포에서 OLLAMA_EMBED_BASE_URL 오설정을 즉시 발견. 테스트 제외.
+  if (process.env.NODE_ENV !== 'test') {
+    void service.embedHealth().then((h) => {
+      if (h.ok) app.log.info(`[review-search] 임베딩 OK — ${h.baseUrl} (${h.model}, dim ${h.dim})`);
+      else app.log.warn(`[review-search] 임베딩 미도달 — 검색/질문 불가: ${h.error}`);
+    });
+  }
+
   typed.get(Routes.ReviewSearch.restaurants, {
     ...guard,
     schema: { tags, security, response: { 200: ReviewSearchRestaurantsResult } },
@@ -72,7 +81,20 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
       if (isAskRateLimited(req.ip, Date.now())) {
         throw app.httpErrors.tooManyRequests('질문이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
       }
-      const r = await service.askByPlaceId(req.params.placeId, req.body.query);
+      // 임베딩/LLM 일시 장애(예: 임베딩 엔드포인트 미도달)는 공개 사용자에게 500 대신 graceful 안내.
+      let r;
+      try {
+        r = await service.askByPlaceId(req.params.placeId, req.body.query);
+      } catch (e) {
+        app.log.error({ err: e }, '[review-search] 공개 질문 처리 실패');
+        return {
+          answer: '일시적으로 답변을 만들 수 없어요. 잠시 후 다시 시도해 주세요.',
+          confidence: 'none' as const,
+          hyde: null,
+          citations: [],
+          verification: null,
+        };
+      }
       if (!r) throw app.httpErrors.notFound('식당을 찾을 수 없습니다.');
       return r;
     },

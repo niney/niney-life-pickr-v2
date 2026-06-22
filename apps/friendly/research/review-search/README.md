@@ -19,6 +19,12 @@
 - **enrich = on-demand**: 검색되는 식당만 첫 1회 관점+문맥+임베딩 생성→DB저장, 이후 멱등 스킵.
 - **답은 상위 6건만 읽는다**(전수 채점·top-6 생성). → "요지/합의"형 질문엔 충분, "전수 집계"형엔 한계(아래 천장).
 
+### ⚠️ 운영 배포 — 임베딩 엔드포인트 필수
+**Ollama Cloud 엔 임베딩 모델이 없다(401).** 생성/리랭크/검증은 ollama-cloud(원격)라 운영 OK지만,
+**임베딩(bge-m3)만은 도달 가능한 Ollama 가 따로 필요**하다 — enrich 뿐 아니라 **매 질문의 질의 임베딩**에도 쓰여 회피 불가.
+- 단일 인스턴스(SQLite, Docker 금지) 배포이므로 **운영 호스트에 Ollama 네이티브 실행**(systemd 등) + `ollama pull bge-m3`, `OLLAMA_EMBED_BASE_URL` 을 그 주소로. 질의 임베딩은 가벼워(짧은 텍스트 1건) 같은 VM 에서 충분, enrich 는 어드민 on-demand 라 느려도 무방.
+- **배포 전 확인**: `pnpm --filter friendly probe:embed-health` (도달성·차원 검증). 미설정/미도달이면 부팅 로그에도 경고가 찍히고, 공개 질문은 500 대신 graceful 안내로 처리된다.
+
 ## 2. 평가 방법론 — `probe:eval`
 
 | env | 의미 |

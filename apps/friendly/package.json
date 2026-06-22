@@ -33,7 +33,8 @@
     "probe:vision": "tsx --env-file=.env scripts/probe-vision.ts",
     "probe:review-search": "tsx --env-file=.env research/review-search/probe-e2e.ts",
     "probe:eval": "tsx --env-file=.env research/review-search/probe-eval.ts",
-    "probe:completeness": "tsx --env-file=.env research/review-search/probe-completeness.ts"
+    "probe:completeness": "tsx --env-file=.env research/review-search/probe-completeness.ts",
+    "probe:embed-health": "tsx --env-file=.env research/review-search/probe-embed-health.ts"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",

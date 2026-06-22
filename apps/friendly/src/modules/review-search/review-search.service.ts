@@ -366,17 +366,40 @@ export class ReviewSearchService {
     return entry;
   }
 
+  // 임베딩 엔드포인트(로컬/사이드카 Ollama) 도달성·차원 확인. 배포 preflight·부팅 헬스체크용.
+  async embedHealth(): Promise<{ ok: boolean; baseUrl: string; model: string; dim?: number; error?: string }> {
+    try {
+      const [v] = await this.embed(['헬스체크']);
+      if (!v?.length) return { ok: false, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, error: '빈 벡터 응답' };
+      return { ok: true, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, dim: v.length };
+    } catch (e) {
+      return { ok: false, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
   private async embed(texts: string[]): Promise<number[][]> {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += EMBED_BATCH) {
       const batch = texts.slice(i, i + EMBED_BATCH).map((t) => t.slice(0, MAX_CHARS) || ' ');
-      const res = await fetch(`${EMBED_BASE_URL}/api/embed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: EMBED_MODEL, input: batch }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${EMBED_BASE_URL}/api/embed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: EMBED_MODEL, input: batch }),
+        });
+      } catch (e) {
+        // 운영에서 가장 흔한 케이스 — 임베딩 엔드포인트(Ollama) 미실행/미도달.
+        throw new Error(
+          `임베딩 엔드포인트(${EMBED_BASE_URL})에 연결 실패 — Ollama 가 떠 있고 모델(${EMBED_MODEL})이 ` +
+            `pull 되어 있으며 OLLAMA_EMBED_BASE_URL 이 그곳을 가리키는지 확인하세요.`,
+          { cause: e },
+        );
+      }
       if (!res.ok) {
-        throw new Error(`임베딩 실패 HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        throw new Error(
+          `임베딩 실패 HTTP ${res.status} (${EMBED_BASE_URL}, model=${EMBED_MODEL}): ${(await res.text().catch(() => '')).slice(0, 200)}`,
+        );
       }
       const json = (await res.json().catch(() => null)) as { embeddings?: number[][] } | null;
       if (!json?.embeddings || json.embeddings.length !== batch.length) {
