@@ -26,7 +26,7 @@ const MAX_CHARS = 2000;
 const ENRICH_VERSION = 1; // enrich 프롬프트/모델 변경 시 ↑ → 재enrich 트리거
 const ENRICH_BATCH = 12; // enrich LLM 한 호출당 리뷰 수
 const ENRICH_CONCURRENCY = 6;
-const RERANK_POOL = 30;
+const RERANK_POOL = Number(process.env.RS_RERANK_POOL) || 30; // 리랭크 후보 풀(env 로 A/B 튜닝)
 const ASK_EVIDENCE = 6;
 
 export type SearchMode = 'dense' | 'hybrid' | 'rerank';
@@ -350,10 +350,11 @@ export class ReviewSearchService {
 
   async ask(restaurantId: string, query: string, opts?: { verify?: boolean }): Promise<AskResult> {
     await this.loadCorpus(restaurantId); // enrich 필요 시 에러
-    const hyde = await this.hyde(query);
-    const evidence = await this.search(restaurantId, query, ASK_EVIDENCE, 'rerank', hyde ?? undefined);
+    // HyDE 미사용 — A/B(probe:hyde) 측정상 짧은 한국어 리뷰에선 가상 리뷰가 다관점으로
+    // 신호를 희석해 dense recall 을 오히려 떨어뜨림(raw 65% vs HyDE 54%). 제거로 품질↑ + 1콜 절감.
+    const evidence = await this.search(restaurantId, query, ASK_EVIDENCE, 'rerank');
     if (evidence.length === 0) {
-      return { answer: '관련 리뷰를 찾지 못했습니다.', confidence: 'none', hyde, citations: [], verification: null };
+      return { answer: '관련 리뷰를 찾지 못했습니다.', confidence: 'none', hyde: null, citations: [], verification: null };
     }
     const ctx = evidence.map((h, i) => `[${i + 1}] ${h.body.slice(0, 300)}`).join('\n');
     const prompt =
@@ -390,7 +391,7 @@ export class ReviewSearchService {
       }
     }
 
-    return { answer, confidence, hyde, citations: evidence, verification };
+    return { answer, confidence, hyde: null, citations: evidence, verification };
   }
 
   // 검증 패스 — 답변을 사실 단위로 쪼개 각 주장이 근거 리뷰에 실제로 있는지 엄격 대조.
@@ -612,7 +613,8 @@ export class ReviewSearchService {
     return picked.slice(0, topN);
   }
 
-  private async hyde(query: string): Promise<string | null> {
+  // public — ask() 내부 + 평가 하니스(HyDE A/B)에서 사용.
+  async hyde(query: string): Promise<string | null> {
     const r = await this.chatJson<{ review?: string }>(
       `식당 리뷰 검색을 돕기 위해, 다음 질문이 찾고자 하는 내용을 담은 가상의 한국어 리뷰를 ` +
         `한두 문장으로 지어내라(검색용). 질문: "${query}"\nJSON {"review": "..."}`,
