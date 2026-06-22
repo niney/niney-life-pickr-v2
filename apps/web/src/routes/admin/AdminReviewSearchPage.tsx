@@ -13,6 +13,7 @@ import {
   useEnrichReviews,
   useReviewAsk,
   useReviewEnrichBg,
+  useReviewEnrichEvents,
   useReviewEnrichPending,
   useReviewEnrichStatus,
   useReviewSearchRestaurants,
@@ -214,6 +215,7 @@ const STATUS_PAGE_SIZE = 30;
 const EnrichStatusSection = () => {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  useReviewEnrichEvents(); // SSE — 진행률 라이브 push
   const statusQuery = useReviewEnrichStatus({ q: q || undefined, page, pageSize: STATUS_PAGE_SIZE });
   const enrichBg = useReviewEnrichBg();
   const enrichPending = useReviewEnrichPending();
@@ -321,7 +323,10 @@ const EnrichStatusRow = ({
     <td className="px-3 py-2">
       {item.inProgress ? (
         <Badge variant="secondary" className="gap-1 text-blue-600">
-          <Loader2 className="size-3 animate-spin" /> 진행 중
+          <Loader2 className="size-3 animate-spin" />
+          {item.progress && item.progress.total > 0
+            ? `${item.progress.processed}/${item.progress.total}`
+            : '진행 중'}
         </Badge>
       ) : item.ready ? (
         <Badge variant="secondary" className="text-emerald-600">검색가능</Badge>

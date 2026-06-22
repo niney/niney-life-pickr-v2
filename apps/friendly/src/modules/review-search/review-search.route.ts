@@ -87,6 +87,57 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
     handler: async () => service.enrichAllPendingInBackground(),
   });
 
+  // enrich 진행률 SSE — EventSource 는 Authorization 헤더를 못 실으므로 ?token= 폴백 인증
+  // (crawl/summary SSE 와 동일 패턴). 전체 enrich 진행 이벤트를 한 연결로 멀티플렉스.
+  app.get(Routes.ReviewSearch.enrichEvents, { schema: { tags } }, async (req, reply) => {
+    let role: string | null = null;
+    try {
+      await req.jwtVerify();
+      role = req.user.role;
+    } catch {
+      const token = (req.query as { token?: string }).token;
+      if (token) {
+        try {
+          role = (app.jwt.verify(token) as { role?: string }).role ?? null;
+        } catch {
+          /* 토큰 무효 — 아래서 401 */
+        }
+      }
+    }
+    if (role !== 'ADMIN') {
+      return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or missing token' });
+    }
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const unsubscribe = service.onEnrichProgress((e) => {
+      try {
+        reply.raw.write(`event: progress\ndata: ${JSON.stringify(e)}\n\n`);
+      } catch {
+        /* write 실패 시 close 핸들러가 정리 */
+      }
+    });
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(': hb\n\n');
+      } catch {
+        /* ignore */
+      }
+    }, 15_000);
+    heartbeat.unref?.();
+
+    req.raw.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
+
   // ── 공개 QA (placeId 기반, 인증 없음) ──────────────────────────────────────
   // 준비 여부 — enrich 된 리뷰가 있는지. LLM 호출 없음 → 레이트리밋 불필요.
   typed.get(Routes.ReviewSearch.publicQaReady(':placeId'), {

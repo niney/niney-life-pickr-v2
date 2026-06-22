@@ -9,7 +9,7 @@ import type {
   ReviewSearchEnrichResultType,
   ReviewSearchRestaurantsResultType,
 } from '@repo/api-contract';
-import { apiFetch } from './client.js';
+import { apiFetch, getApiConfig } from './client.js';
 
 // 경로는 하드코딩 — `Routes.ReviewSearch` 네임스페이스는 vite esbuild prebundle
 // 에서 드롭될 수 있어(ai.api.ts 관례) 직접 둔다.
@@ -59,4 +59,13 @@ export const reviewSearchApi = {
       method: 'POST',
       body: JSON.stringify({ query }),
     }),
+};
+
+// enrich 진행률 SSE URL. EventSource 는 Authorization 헤더를 못 실으므로 ?token= 으로 인증
+// (summary/crawl SSE 와 동일). baseUrl 포함 절대 URL 반환.
+export const buildReviewEnrichEventsUrl = async (): Promise<string> => {
+  const cfg = getApiConfig();
+  const token = (await cfg.getToken?.()) ?? '';
+  const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+  return `${cfg.baseUrl}${RS_PREFIX}/enrich-events${qs}`;
 };

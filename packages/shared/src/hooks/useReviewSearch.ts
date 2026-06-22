@@ -1,6 +1,12 @@
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
-import type { ReviewAskInputType, ReviewEnrichStatusQueryType } from '@repo/api-contract';
-import { reviewSearchApi } from '../api/review-search.api.js';
+import { useEffect } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  ReviewAskInputType,
+  ReviewEnrichProgressEventType,
+  ReviewEnrichStatusListType,
+  ReviewEnrichStatusQueryType,
+} from '@repo/api-contract';
+import { buildReviewEnrichEventsUrl, reviewSearchApi } from '../api/review-search.api.js';
 
 export const useReviewSearchRestaurants = () =>
   useQuery({
@@ -16,14 +22,59 @@ export const useReviewAsk = () =>
   useMutation({ mutationFn: (input: ReviewAskInputType) => reviewSearchApi.ask(input) });
 
 // ── enrich 상태 관리 (어드민) ──
-// 진행 중(inProgress)인 식당이 있으면 폴링해 진척을 라이브로 보여준다.
+// 진행률은 SSE(useReviewEnrichEvents)로 라이브 push. 폴링은 SSE 끊김 대비 안전망(10s).
 export const useReviewEnrichStatus = (query: Partial<ReviewEnrichStatusQueryType> = {}) =>
   useQuery({
     queryKey: ['review-search', 'enrich-status', query.q ?? '', query.page ?? 1, query.pageSize ?? 50],
     queryFn: () => reviewSearchApi.enrichStatus(query),
     placeholderData: keepPreviousData,
-    refetchInterval: (q) => (q.state.data?.items.some((i) => i.inProgress) ? 4000 : false),
+    refetchInterval: (q) => (q.state.data?.items.some((i) => i.inProgress) ? 10000 : false),
   });
+
+// enrich 진행률 SSE 구독 — 'progress' 이벤트로 enrich-status 캐시를 라이브 패치(진행률 %),
+// done 시 invalidate 로 최종 검색가능 수 갱신. EventSource 내장 재연결 사용.
+export const useReviewEnrichEvents = () => {
+  const qc = useQueryClient();
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let cancelled = false;
+    void buildReviewEnrichEventsUrl().then((url) => {
+      if (cancelled) return;
+      es = new EventSource(url);
+      es.addEventListener('progress', (ev) => {
+        let e: ReviewEnrichProgressEventType;
+        try {
+          e = JSON.parse((ev as MessageEvent).data) as ReviewEnrichProgressEventType;
+        } catch {
+          return;
+        }
+        qc.setQueriesData<ReviewEnrichStatusListType>(
+          { queryKey: ['review-search', 'enrich-status'] },
+          (old) =>
+            old
+              ? {
+                  ...old,
+                  items: old.items.map((it) =>
+                    it.restaurantId === e.restaurantId
+                      ? {
+                          ...it,
+                          inProgress: !e.done,
+                          progress: e.done ? null : { processed: e.processed, total: e.total },
+                        }
+                      : it,
+                  ),
+                }
+              : old,
+        );
+        if (e.done) void qc.invalidateQueries({ queryKey: ['review-search', 'enrich-status'] });
+      });
+    });
+    return () => {
+      cancelled = true;
+      es?.close();
+    };
+  }, [qc]);
+};
 
 export const useReviewEnrichBg = () =>
   useMutation({ mutationFn: (restaurantId: string) => reviewSearchApi.enrichBg(restaurantId) });

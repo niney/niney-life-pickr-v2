@@ -51,6 +51,13 @@ export interface EnrichResult {
   total: number; // 식당의 enrich 완료(=검색가능) 건수
   ms: number;
 }
+// SSE 로 push 되는 enrich 진행률 이벤트.
+export interface EnrichProgressEvent {
+  restaurantId: string;
+  processed: number;
+  total: number;
+  done: boolean;
+}
 
 interface CorpusItem {
   reviewId: string;
@@ -63,8 +70,11 @@ export class ReviewSearchService {
   // restaurantId → 검색 코퍼스(DB enrich 결과 로드, BM25 포함). enrich 시 무효화.
   // LRU 바운드 — 식당당 코퍼스가 ~수MB(임베딩)라 무한 증가 방지(단일 인스턴스 메모리 보호).
   private corpusCache = new LRUCache<string, { items: CorpusItem[]; bm25: Bm25 }>({ max: 16 });
-  // 백그라운드 enrich 진행 중인 restaurantId — 상태 뷰 표시 + 중복 트리거 방지(app 싱글톤이라 일관).
-  private enriching = new Set<string>();
+  // enrich 진행 중인 restaurantId → 진행률(processed/total). 상태 뷰 표시 + 중복 트리거 방지
+  // + SSE 진행률. app 싱글톤이라 라우트·요약 훅이 같은 상태를 본다.
+  private enriching = new Map<string, { processed: number; total: number }>();
+  // SSE 구독자 — enrich 진행률 이벤트를 push. 라우트가 onEnrichProgress 로 등록.
+  private enrichListeners = new Set<(e: EnrichProgressEvent) => void>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -86,7 +96,10 @@ export class ReviewSearchService {
 
   // 식당 리뷰 중 enrich 안 된 것을 채운다(on-demand). ReviewSummary 행 기준 —
   // 요약된 리뷰만 검색 코퍼스에 든다(미요약/junk 제외).
-  async ensureEnriched(restaurantId: string): Promise<EnrichResult> {
+  async ensureEnriched(
+    restaurantId: string,
+    onProgress?: (processed: number, total: number) => void,
+  ): Promise<EnrichResult> {
     const start = Date.now();
     const pending = await this.prisma.reviewSummary.findMany({
       where: {
@@ -103,6 +116,7 @@ export class ReviewSearchService {
     for (let i = 0; i < targets.length; i += ENRICH_BATCH) batches.push(targets.slice(i, i + ENRICH_BATCH));
 
     let enriched = 0;
+    onProgress?.(0, targets.length);
     const runBatch = async (batch: typeof targets): Promise<void> => {
       // 1) 관점+문맥 LLM 1콜.
       const meta = await this.extractMeta(batch.map((b) => b.body));
@@ -124,6 +138,7 @@ export class ReviewSearchService {
         ),
       );
       enriched += batch.length;
+      onProgress?.(enriched, targets.length); // 배치 완료마다 진행률 보고(SSE/상태용)
     };
     for (let i = 0; i < batches.length; i += ENRICH_CONCURRENCY) {
       await Promise.all(batches.slice(i, i + ENRICH_CONCURRENCY).map((b) => runBatch(b)));
@@ -137,11 +152,11 @@ export class ReviewSearchService {
   }
 
   // placeId 기반 enrich — 요약 종료 훅(post-summary)에서 사용. naver placeId 로 식당 해석.
-  // 식당 없음(비-naver 등) 이면 no-op(null). 임베딩 미도달 등 실패는 호출측에서 처리.
-  async ensureEnrichedByPlaceId(placeId: string): Promise<EnrichResult | null> {
+  // 식당 없음(비-naver 등) 이면 no-op. 추적(runTracked)으로 상태 뷰·SSE 에 자동 노출.
+  async ensureEnrichedByPlaceId(placeId: string): Promise<void> {
     const r = await this.prisma.restaurant.findUnique({ where: { placeId }, select: { id: true } });
-    if (!r) return null;
-    return this.ensureEnriched(r.id);
+    if (!r) return;
+    await this.runTracked(r.id);
   }
 
   // ── enrich 상태 관리 (어드민) ───────────────────────────────────────────────
@@ -156,6 +171,7 @@ export class ReviewSearchService {
 
     let rows = restaurants.map((r) => {
       const enriched = enrichedBy.get(r.id) ?? 0;
+      const prog = this.enriching.get(r.id);
       return {
         restaurantId: r.id,
         placeId: r.placeId,
@@ -163,7 +179,8 @@ export class ReviewSearchService {
         totalReviews: r._count.visitorReviews,
         enrichedReviews: enriched,
         ready: enriched > 0,
-        inProgress: this.enriching.has(r.id),
+        inProgress: prog !== undefined,
+        progress: prog ? { processed: prog.processed, total: prog.total } : null,
       };
     });
     const totalRestaurants = rows.length;
@@ -186,10 +203,16 @@ export class ReviewSearchService {
     };
   }
 
+  // SSE 구독 — 라우트가 등록, 해제 함수 반환. enrich 진행률 이벤트를 받는다.
+  onEnrichProgress(fn: (e: EnrichProgressEvent) => void): () => void {
+    this.enrichListeners.add(fn);
+    return () => this.enrichListeners.delete(fn);
+  }
+
   // 단일 식당 백그라운드 enrich(즉시 반환 — HTTP 타임아웃 회피). 이미 진행 중이면 no-op.
   enrichInBackground(restaurantId: string): { started: boolean; inProgress: boolean } {
     const already = this.enriching.has(restaurantId);
-    if (!already) this.fireEnrich(restaurantId);
+    if (!already) void this.runTracked(restaurantId);
     return { started: !already, inProgress: true };
   }
 
@@ -203,26 +226,40 @@ export class ReviewSearchService {
     const pending = restaurants.map((r) => r.id).filter((id) => (enrichedBy.get(id) ?? 0) === 0);
     if (pending.length === 0) return { queued: 0 };
     void (async () => {
-      for (const id of pending) {
-        if (this.enriching.has(id)) continue;
-        this.enriching.add(id);
-        try {
-          await this.ensureEnriched(id);
-        } catch {
-          /* 실패는 상태 뷰에서 enriched 0 으로 드러남 */
-        } finally {
-          this.enriching.delete(id);
-        }
-      }
+      for (const id of pending) await this.runTracked(id); // 순차 — runTracked 가 중복 가드
     })();
     return { queued: pending.length };
   }
 
-  private fireEnrich(restaurantId: string): void {
-    this.enriching.add(restaurantId);
-    void this.ensureEnriched(restaurantId)
-      .catch(() => {})
-      .finally(() => this.enriching.delete(restaurantId));
+  // enrich 를 진행상태(Map)에 등록하고 배치마다 진행률을 emit(SSE)하며 실행. 중복 시 no-op.
+  private async runTracked(restaurantId: string): Promise<void> {
+    if (this.enriching.has(restaurantId)) return;
+    this.enriching.set(restaurantId, { processed: 0, total: 0 });
+    this.emitEnrich(restaurantId, 0, 0, false);
+    let last = { processed: 0, total: 0 };
+    try {
+      await this.ensureEnriched(restaurantId, (processed, total) => {
+        last = { processed, total };
+        this.enriching.set(restaurantId, last);
+        this.emitEnrich(restaurantId, processed, total, false);
+      });
+    } catch {
+      /* 실패는 상태의 검색가능 수로 드러남 */
+    } finally {
+      this.enriching.delete(restaurantId);
+      this.emitEnrich(restaurantId, last.processed, last.total, true);
+    }
+  }
+
+  private emitEnrich(restaurantId: string, processed: number, total: number, done: boolean): void {
+    const e: EnrichProgressEvent = { restaurantId, processed, total, done };
+    for (const fn of this.enrichListeners) {
+      try {
+        fn(e);
+      } catch {
+        /* 리스너 오류 무시 — 다른 구독자 보호 */
+      }
+    }
   }
 
   // restaurantId → 검색가능(embeddingJson 채워진) 리뷰 수. ids 미지정 시 전체.

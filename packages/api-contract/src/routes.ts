@@ -401,6 +401,8 @@ export const ReviewSearch = {
   status: `${API_PREFIX}/admin/review-search/status`,
   enrichBg: `${API_PREFIX}/admin/review-search/enrich-bg`,
   enrichPending: `${API_PREFIX}/admin/review-search/enrich-pending`,
+  // enrich 진행률 SSE(EventSource — 인증은 ?token=). 전체 enrich 이벤트 멀티플렉스.
+  enrichEvents: `${API_PREFIX}/admin/review-search/enrich-events`,
   // 공개 (placeId 기반)
   publicQaReady: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa/ready`,
   publicAsk: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa`,

@@ -74,8 +74,19 @@ export const ReviewEnrichStatusItem = z.object({
   enrichedReviews: z.number().int().nonnegative(), // embeddingJson 채워진(검색가능) 리뷰 수
   ready: z.boolean(), // enrichedReviews > 0
   inProgress: z.boolean(), // 백그라운드 enrich 진행 중
+  // 진행 중일 때 처리 진척(processed/total). 비진행 시 null.
+  progress: z.object({ processed: z.number().int(), total: z.number().int() }).nullable(),
 });
 export type ReviewEnrichStatusItemType = z.infer<typeof ReviewEnrichStatusItem>;
+
+// SSE 로 push 되는 enrich 진행률 이벤트(클라이언트 파싱용 타입).
+export const ReviewEnrichProgressEvent = z.object({
+  restaurantId: z.string(),
+  processed: z.number().int(),
+  total: z.number().int(),
+  done: z.boolean(),
+});
+export type ReviewEnrichProgressEventType = z.infer<typeof ReviewEnrichProgressEvent>;
 
 export const ReviewEnrichStatusQuery = z.object({
   q: z.string().optional(),
