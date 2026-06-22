@@ -9,7 +9,7 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 //   search(hybrid) = dense + BM25/RRF(인앱)                      → 로컬
 //   search(rerank) = hybrid + listwise 리랭크 LLM 1콜
 //   verifyAnswer   = 검증 LLM 1콜
-//   ask(full)      = hyde LLM + search(rerank) + 생성 LLM + 검증 LLM (4콜)
+//   ask(full)      = search(rerank) + 생성 LLM + 검증 LLM (3콜, HyDE 제거됨)
 //   chat baseline  = ollama-cloud /api/chat 단일 왕복(참고)
 // 실행: cd apps/friendly && tsx --env-file=.env research/review-search/probe-latency.ts
 
@@ -90,17 +90,17 @@ const main = async (): Promise<void> => {
   row('search hybrid (+BM25/RRF)', H, '로컬');
   row('search rerank (+리랭크 LLM)', R, 'LLM 1콜');
   row('verifyAnswer (검증 LLM)', V, 'LLM 1콜');
-  row('ask (full pipeline)', A, 'LLM 4콜');
+  row('ask (full pipeline)', A, 'LLM 3콜');
   row('chat 단일 왕복 (baseline)', chatBaseline.dt, '참고');
 
-  // 분해.
+  // 분해. (HyDE 제거 후 ask = rerank + generate + verify 3콜)
   const embedLocal = D; // dense ≈ embed(local) + cosine(~ms)
   const retrCompute = Math.max(0, H - D); // BM25/RRF
   const rerankLlm = Math.max(0, R - H);
   const verifyLlm = V;
-  const hydeGen = Math.max(0, A - R - V); // hyde + generate (2 LLM 콜) 근사
+  const generateLlm = Math.max(0, A - R - V); // generate (1 LLM 콜) 근사
   const localTotal = embedLocal + retrCompute;
-  const llmTotal = rerankLlm + verifyLlm + hydeGen;
+  const llmTotal = rerankLlm + verifyLlm + generateLlm;
   const pct = (x: number): string => (A ? `${Math.round((x / A) * 100)}%` : '–');
 
   console.log('\n[분해 — ask 한 번 기준]');
@@ -108,10 +108,10 @@ const main = async (): Promise<void> => {
   row('회수 compute        ≈ hybrid−dense', retrCompute, pct(retrCompute));
   row('rerank LLM          ≈ rerank−hybrid', rerankLlm, pct(rerankLlm));
   row('verify LLM          ≈ verify', verifyLlm, pct(verifyLlm));
-  row('hyde+generate LLM   ≈ ask−rerank−verify', hydeGen, pct(hydeGen));
+  row('generate LLM        ≈ ask−rerank−verify', generateLlm, pct(generateLlm));
   console.log('  ' + '─'.repeat(46));
   row('▶ 로컬 합 (임베딩+회수)', localTotal, pct(localTotal));
-  row('▶ LLM 합 (4콜)', llmTotal, pct(llmTotal));
+  row('▶ LLM 합 (3콜)', llmTotal, pct(llmTotal));
 
   console.log(
     `\n결론: ask ${A}ms 중 LLM ${llmTotal}ms(${pct(llmTotal)}) vs 로컬 ${localTotal}ms(${pct(localTotal)}). ` +
