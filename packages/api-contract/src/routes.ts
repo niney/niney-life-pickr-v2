@@ -390,3 +390,14 @@ export const SettlementDraft = {
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;
+
+// review-search — 리뷰 문맥검색 / RAG (어드민 우선). 검색 단위는 식당(restaurantId).
+// 공개 QA 는 placeId 기반(공개 상세와 동일 식별자), 인증 없음·레이트리밋.
+export const ReviewSearch = {
+  restaurants: `${API_PREFIX}/admin/review-search/restaurants`,
+  enrich: `${API_PREFIX}/admin/review-search/enrich`,
+  ask: `${API_PREFIX}/admin/review-search/ask`,
+  // 공개 (placeId 기반)
+  publicQaReady: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa/ready`,
+  publicAsk: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa`,
+} as const;

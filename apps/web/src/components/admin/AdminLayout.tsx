@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   Compass,
   Home,
+  MessagesSquare,
   ScrollText,
   Settings,
   Shield,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { to: '/admin/tabling', label: '테이블링 크롤링', icon: CalendarClock },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
   { to: '/admin/ai-usage', label: 'AI 사용량', icon: Activity },
+  { to: '/admin/review-search', label: '리뷰 문맥검색', icon: MessagesSquare },
   {
     // 그룹 라벨이 "테스트"이므로 하위 라벨은 대상명만 (중복 "테스트" 제거).
     label: '테스트',

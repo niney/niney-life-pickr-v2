@@ -19,6 +19,7 @@ import { AdminLogsPage } from './AdminLogsPage';
 import { AdminMapKeysPage } from './AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './AdminRestaurantDetailPage';
 import { AdminRestaurantsPage } from './AdminRestaurantsPage';
+import { AdminReviewSearchPage } from './AdminReviewSearchPage';
 import { AdminSettingsPage } from './AdminSettingsPage';
 import { AdminTablingPage } from './AdminTablingPage';
 import { AdminTablingTestPage } from './AdminTablingTestPage';
@@ -53,6 +54,8 @@ const AdminRoutes = () => (
       <Route path="logs" element={<AdminLogsPage />} />
       <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />
       <Route path="ai-test" element={<AdminAiTestPage />} />
+      {/* review-search 정식 도메인 (DB 영속) */}
+      <Route path="review-search" element={<AdminReviewSearchPage />} />
       {/* /admin/ai-keys 로 들어와도 신규 위치로 보낸다 — 옛 북마크 호환. */}
       <Route path="ai-keys" element={<Navigate to="/admin/settings/ai-keys" replace />} />
       <Route path="settings" element={<AdminSettingsPage />}>

@@ -32,6 +32,7 @@ import type {
   RestaurantPublicReviewSortType,
 } from '@repo/api-contract';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
+import { AskTab } from './AskTab';
 import { HomeTab } from './HomeTab';
 import { InfoTab } from './InfoTab';
 import { InsightsTab } from './InsightsTab';
@@ -237,6 +238,8 @@ export const PublicRestaurantDetail = ({
           return (
             <MenuTab detail={d} insights={insights.data} onSelectMenu={handleSelectMenu} />
           );
+        case 'ask':
+          return <AskTab placeId={placeId} />;
         case 'photos':
           return <PhotosTab detail={d} />;
         case 'info':
@@ -246,6 +249,7 @@ export const PublicRestaurantDetail = ({
       }
     },
     [
+      placeId,
       detail.data,
       insights.data,
       insights.isLoading,

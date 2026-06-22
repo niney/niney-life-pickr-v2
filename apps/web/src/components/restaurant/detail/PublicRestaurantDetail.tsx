@@ -4,6 +4,7 @@ import { ChevronLeft, Loader2, Receipt, X } from 'lucide-react';
 import { ApiError, useAuthStore, useRestaurantPublic, useRestaurantPublicInsights } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { AskTab } from './AskTab';
 import { HomeTab } from './HomeTab';
 import { InfoTab } from './InfoTab';
 import { InsightsTab } from './InsightsTab';
@@ -280,6 +281,8 @@ const ActiveTab = ({
           onSelectMenu={onSelectMenu}
         />
       );
+    case 'ask':
+      return <AskTab placeId={placeId} />;
     case 'photos':
       return <PhotosTab detail={detail} />;
     case 'info':

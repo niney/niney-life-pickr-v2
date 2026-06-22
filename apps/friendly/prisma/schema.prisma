@@ -549,6 +549,15 @@ model ReviewSummary {
   keywordsJson      String?
   // 프롬프트/모델 변경 시 재분석 트리거용
   analysisVersion   Int?
+  // ── review-search(문맥검색/RAG) enrichment ─────────────────────────────
+  // bge-m3 임베딩(float[1024]) JSON 직렬화 — 인앱 코사인용.
+  embeddingJson     String?
+  // 관점→극성 {맛:"neg", 주차:"pos", ...} 직렬화 (구조 필터/검색).
+  aspectsJson       String?
+  // Contextual Retrieval 한 줄 — 임베딩 입력에 prepend(짧은 리뷰 recall↑).
+  contextLine       String?
+  // 위 enrichment 의 버전(프롬프트/모델 변경 시 재생성 트리거).
+  enrichVersion     Int?
   startedAt         DateTime?
   finishedAt        DateTime?
   createdAt         DateTime  @default(now())
