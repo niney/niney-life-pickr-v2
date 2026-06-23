@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { useAuthStore, useCurrentUser } from '@repo/shared';
 import { useThemeStore } from './stores/theme';
 import { ResummarizeToaster } from './components/ResummarizeToaster';
+import { ReviewAskToaster } from './components/ReviewAskToaster';
 import { PublicLayout } from './components/PublicLayout';
 import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
@@ -97,6 +98,9 @@ export const App = () => {
       {/* 진행 중 단건 재요약을 전역에서 지켜보다 완료 시 토스트 — 탭/페이지를
           떠나도 동작하도록 App 레벨에 상주. */}
       <ResummarizeToaster />
+      {/* 진행 중 공개 질문(AskTab)을 전역에서 지켜보다 완료 시 토스트 + '더보기'.
+          답변이 느려 탭/페이지를 떠나도 결과를 놓치지 않게 App 레벨에 상주. */}
+      <ReviewAskToaster />
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route element={<PublicLayout />}>

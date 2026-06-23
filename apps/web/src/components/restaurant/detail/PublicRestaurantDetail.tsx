@@ -282,7 +282,7 @@ const ActiveTab = ({
         />
       );
     case 'ask':
-      return <AskTab placeId={placeId} />;
+      return <AskTab placeId={placeId} restaurantName={detail.name} />;
     case 'photos':
       return <PhotosTab detail={detail} />;
     case 'info':

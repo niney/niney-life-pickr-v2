@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Loader2, MessageSquareText, Send, Sparkles, Star } from 'lucide-react';
-import { useReviewAskPublic, useReviewQaReady } from '@repo/shared';
+import { useReviewAskStore, useReviewQaReady } from '@repo/shared';
 import type { ReviewAskResultType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 
 interface Props {
   placeId: string;
+  // 완료 토스트 제목에 식당명을 싣기 위해 부모(상세)가 전달.
+  restaurantName?: string | null;
 }
 
 const SUGGESTED = [
@@ -50,20 +52,26 @@ const CONFIDENCE_LABEL: Record<ReviewAskResultType['confidence'], string> = {
 
 // 공개 질문(RAG) 탭 — 식당 리뷰 근거로 AI 가 답한다. 탭이 열릴 때만 ready 조회
 // (LLM 호출 없음), enrich 안 된 식당은 안내만. 질문은 레이트리밋되는 공개 엔드포인트.
-export const AskTab = ({ placeId }: Props) => {
+export const AskTab = ({ placeId, restaurantName }: Props) => {
   const ready = useReviewQaReady(placeId);
-  const askMut = useReviewAskPublic();
-  const [query, setQuery] = useState('');
-  const [result, setResult] = useState<ReviewAskResultType | null>(null);
+  // 진행 중 요청·결과는 전역 store — 탭/페이지를 떠나도 살아남고, 재진입 시
+  // 식당별 마지막 Q&A 가 즉시 복원된다(영속).
+  const ask = useReviewAskStore((s) => s.ask);
+  const pending = useReviewAskStore((s) => !!s.inFlight[placeId]);
+  const isError = useReviewAskStore((s) => !!s.errorByPlace[placeId]);
+  const last = useReviewAskStore((s) => s.lastByPlace[placeId]);
+  const [query, setQuery] = useState(last?.query ?? '');
+
+  const result: ReviewAskResultType | null = last?.result ?? null;
+  // 방금(5분 이내) 받은 답이 아니라 영속 복원된 '지난 답변'이면 안내. '더보기'로
+  // 막 받은 답을 보러 돌아온 경우(재마운트)도 시각 기준이라 오인하지 않는다.
+  const isRestored = !!last && Date.now() - last.answeredAt > 5 * 60_000;
 
   const submit = (q: string) => {
     const text = q.trim();
-    if (!text || askMut.isPending) return;
+    if (!text || pending) return;
     setQuery(text);
-    askMut.mutate(
-      { placeId, query: text },
-      { onSuccess: (r) => setResult(r), onError: () => setResult(null) },
-    );
+    void ask(placeId, text, restaurantName ?? null);
   };
 
   if (ready.isLoading) {
@@ -107,11 +115,11 @@ export const AskTab = ({ placeId }: Props) => {
         <button
           type="button"
           onClick={() => submit(query)}
-          disabled={!query.trim() || askMut.isPending}
+          disabled={!query.trim() || pending}
           className="flex items-center justify-center rounded-md bg-primary px-3 text-primary-foreground disabled:opacity-50"
           aria-label="질문하기"
         >
-          {askMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         </button>
       </div>
 
@@ -121,7 +129,7 @@ export const AskTab = ({ placeId }: Props) => {
             key={s}
             type="button"
             onClick={() => submit(s)}
-            disabled={askMut.isPending}
+            disabled={pending}
             className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
           >
             {s}
@@ -129,12 +137,24 @@ export const AskTab = ({ placeId }: Props) => {
         ))}
       </div>
 
-      {askMut.isError && (
+      {pending && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" /> 답변을 만드는 중이에요. 다른 화면을 봐도
+          완료되면 알려드릴게요.
+        </p>
+      )}
+
+      {isError && !pending && (
         <p className="text-sm text-destructive">답변을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
       )}
 
-      {result && !askMut.isPending && (
+      {result && !pending && (
         <section className="space-y-2">
+          {isRestored && (
+            <p className="text-[11px] text-muted-foreground">
+              지난번에 물어본 답변이에요. 다시 물어보면 최신 리뷰로 답해드려요.
+            </p>
+          )}
           <div className="rounded-md border bg-muted/30 p-3">
             <Badge
               variant="secondary"
