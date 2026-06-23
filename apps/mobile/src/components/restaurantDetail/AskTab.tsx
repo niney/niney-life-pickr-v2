@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useReviewAskPublic, useReviewQaReady, useTheme } from '@repo/shared';
+import { useReviewAskStore, useReviewQaReady, useTheme } from '@repo/shared';
 import type { ReviewAskResultType } from '@repo/api-contract';
 
 interface Props {
   placeId: string;
+  // 완료 배너 제목에 식당명을 싣기 위해 부모(상세)가 전달.
+  restaurantName?: string | null;
 }
 
 const SUGGESTED = [
@@ -49,21 +51,35 @@ const CONFIDENCE_LABEL: Record<ReviewAskResultType['confidence'], string> = {
 
 // 공개 질문(RAG) 탭 — 식당 리뷰 근거로 AI 가 답한다. 탭 진입 시에만 ready 조회
 // (LLM 호출 없음), enrich 안 된 식당은 안내만. 질문은 레이트리밋되는 공개 엔드포인트.
-export const AskTab = ({ placeId }: Props) => {
+export const AskTab = ({ placeId, restaurantName }: Props) => {
   const theme = useTheme();
   const ready = useReviewQaReady(placeId);
-  const askMut = useReviewAskPublic();
-  const [query, setQuery] = useState('');
-  const [result, setResult] = useState<ReviewAskResultType | null>(null);
+  // 진행 중 요청·결과는 전역 store — 탭/화면을 떠나도 살아남고, 재진입 시
+  // 식당별 마지막 Q&A 가 즉시 복원된다(영속).
+  const ask = useReviewAskStore((s) => s.ask);
+  const setAskTabVisible = useReviewAskStore((s) => s.setAskTabVisible);
+  const pending = useReviewAskStore((s) => !!s.inFlight[placeId]);
+  const isError = useReviewAskStore((s) => !!s.errorByPlace[placeId]);
+  const last = useReviewAskStore((s) => s.lastByPlace[placeId]);
+  const isFresh = useReviewAskStore((s) => !!s.freshThisSession[placeId]);
+  const [query, setQuery] = useState(last?.query ?? '');
+
+  const result: ReviewAskResultType | null = last?.result ?? null;
+  // 이번 세션에서 직접 물어본 답이 아니라 영속 복원된 '지난 답변'이면 안내.
+  const isRestored = !!result && !isFresh;
+
+  // 이 AskTab 이 화면에 있는 동안만 visible 등록 — 완료 배너 suppress 판정용.
+  // RN 은 탭 전환/화면 이탈 시 이 컴포넌트가 언마운트되므로 신뢰 가능.
+  useEffect(() => {
+    setAskTabVisible(placeId, true);
+    return () => setAskTabVisible(placeId, false);
+  }, [placeId, setAskTabVisible]);
 
   const submit = (q: string) => {
     const text = q.trim();
-    if (!text || askMut.isPending) return;
+    if (!text || pending) return;
     setQuery(text);
-    askMut.mutate(
-      { placeId, query: text },
-      { onSuccess: (r) => setResult(r), onError: () => setResult(null) },
-    );
+    void ask(placeId, text, restaurantName ?? null);
   };
 
   if (ready.isLoading) {
@@ -110,13 +126,13 @@ export const AskTab = ({ placeId }: Props) => {
         />
         <Pressable
           onPress={() => submit(query)}
-          disabled={!query.trim() || askMut.isPending}
+          disabled={!query.trim() || pending}
           style={[
             styles.sendBtn,
-            { backgroundColor: theme.colors.primary, opacity: !query.trim() || askMut.isPending ? 0.5 : 1 },
+            { backgroundColor: theme.colors.primary, opacity: !query.trim() || pending ? 0.5 : 1 },
           ]}
         >
-          {askMut.isPending ? (
+          {pending ? (
             <ActivityIndicator color={theme.colors.primaryText} size="small" />
           ) : (
             <Text style={{ color: theme.colors.primaryText, fontWeight: '600' }}>질문</Text>
@@ -129,7 +145,7 @@ export const AskTab = ({ placeId }: Props) => {
           <Pressable
             key={s}
             onPress={() => submit(s)}
-            disabled={askMut.isPending}
+            disabled={pending}
             style={[styles.chip, { borderColor: theme.colors.border }]}
           >
             <Text style={[styles.chipText, { color: theme.colors.textMuted }]}>{s}</Text>
@@ -137,14 +153,25 @@ export const AskTab = ({ placeId }: Props) => {
         ))}
       </View>
 
-      {askMut.isError && (
+      {pending && (
+        <Text style={[styles.muted, { color: theme.colors.textMuted }]}>
+          답변을 만드는 중이에요. 다른 화면을 봐도 완료되면 알려드릴게요.
+        </Text>
+      )}
+
+      {isError && !pending && (
         <Text style={[styles.muted, { color: theme.colors.danger }]}>
           답변을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.
         </Text>
       )}
 
-      {result && !askMut.isPending && (
+      {result && !pending && (
         <View style={{ gap: 8 }}>
+          {isRestored && (
+            <Text style={[styles.fine, { color: theme.colors.textMuted }]}>
+              지난번에 물어본 답변이에요. 다시 물어보면 최신 리뷰로 답해드려요.
+            </Text>
+          )}
           <View style={[styles.answerBox, { backgroundColor: theme.colors.surfaceAlt }]}>
             <Text style={[styles.badge, { color: theme.colors.textMuted }]}>
               {CONFIDENCE_LABEL[result.confidence]}

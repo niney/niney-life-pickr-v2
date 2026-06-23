@@ -60,12 +60,13 @@ export const AskTab = ({ placeId, restaurantName }: Props) => {
   const pending = useReviewAskStore((s) => !!s.inFlight[placeId]);
   const isError = useReviewAskStore((s) => !!s.errorByPlace[placeId]);
   const last = useReviewAskStore((s) => s.lastByPlace[placeId]);
+  const isFresh = useReviewAskStore((s) => !!s.freshThisSession[placeId]);
   const [query, setQuery] = useState(last?.query ?? '');
 
   const result: ReviewAskResultType | null = last?.result ?? null;
-  // 방금(5분 이내) 받은 답이 아니라 영속 복원된 '지난 답변'이면 안내. '더보기'로
-  // 막 받은 답을 보러 돌아온 경우(재마운트)도 시각 기준이라 오인하지 않는다.
-  const isRestored = !!last && Date.now() - last.answeredAt > 5 * 60_000;
+  // 이번 세션에서 직접 물어본 답이 아니라 영속 복원된 '지난 답변'이면 안내.
+  // '더보기'로 막 받은 답을 보러 돌아온 경우(재마운트)도 세션 내 질문이라 오인 X.
+  const isRestored = !!result && !isFresh;
 
   const submit = (q: string) => {
     const text = q.trim();

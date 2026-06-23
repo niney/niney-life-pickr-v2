@@ -56,6 +56,9 @@ interface Props {
   // 추가로 렌더된다. 미지정(deep-link 라우트) 이면 헤더 없이 stack 의 네이티브
   // 헤더가 처리한다.
   onBack?(): void;
+  // 진입 시 처음 보여줄 탭. 미지정이면 'home'. (질문 완료 배너 '더보기' →
+  // ?tab=ask 로 진입해 곧장 질문 탭을 열 때 사용.)
+  initialTab?: TabKey;
 }
 
 // 스크롤 루트인 단일 FlatList 의 행 타입. [hero, TabBar(sticky), ...콘텐츠].
@@ -88,6 +91,7 @@ export const PublicRestaurantDetail = ({
   onResolveName,
   List = FlatList,
   onBack,
+  initialTab,
 }: Props) => {
   const theme = useTheme();
   const { height: screenH } = useWindowDimensions();
@@ -96,7 +100,7 @@ export const PublicRestaurantDetail = ({
   const tabBarH = useTabBarHeight();
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
-  const [tab, setTab] = useState<TabKey>('home');
+  const [tab, setTab] = useState<TabKey>(initialTab ?? 'home');
   const [filter, setFilter] = useState<RestaurantPublicReviewSentimentType>('all');
   const [sort, setSort] = useState<RestaurantPublicReviewSortType>('recent');
   // 홈/메뉴 탭에서 클릭 → 리뷰 탭으로 넘기며 적용하는 필터. tip/menu 는 동시
@@ -141,8 +145,14 @@ export const PublicRestaurantDetail = ({
   }, []);
 
   // placeId 가 바뀌면 처음 탭(home)·기본 필터로 리셋. 같은 화면 안에서 일어날
-  // 일은 거의 없지만 안전망.
+  // 일은 거의 없지만 안전망. 단 첫 마운트는 스킵 — initialTab(?tab=ask 진입)을
+  // 'home' 으로 덮어쓰지 않도록.
+  const didMountRef = useRef(false);
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
     setTab('home');
     setFilter('all');
     setSort('recent');
@@ -239,7 +249,7 @@ export const PublicRestaurantDetail = ({
             <MenuTab detail={d} insights={insights.data} onSelectMenu={handleSelectMenu} />
           );
         case 'ask':
-          return <AskTab placeId={placeId} />;
+          return <AskTab placeId={placeId} restaurantName={d.name} />;
         case 'photos':
           return <PhotosTab detail={d} />;
         case 'info':

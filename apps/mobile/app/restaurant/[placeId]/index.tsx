@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { PublicRestaurantDetail } from '~/components/restaurantDetail/PublicRestaurantDetail';
+import { TAB_ORDER, type TabKey } from '~/components/restaurantDetail/tabs';
+
+const TAB_KEYS = TAB_ORDER.map((t) => t.key) as TabKey[];
+const asTabKey = (s: string | undefined): TabKey | undefined =>
+  s && (TAB_KEYS as string[]).includes(s) ? (s as TabKey) : undefined;
 
 // 라우트 entry — 식당명은 컨테이너에서 fetch 후 콜백으로 받아 Stack 헤더 title
 // 에 동적 주입. 헤더는 네이티브 Stack 그대로 (뒤로/스와이프 제스처 보존).
 // 탭 전환은 컨테이너 안 로컬 state — URL/history 누적 없음 (모바일 표준).
 export default function RestaurantDetailScreen() {
-  const { placeId } = useLocalSearchParams<{ placeId: string }>();
+  const { placeId, tab } = useLocalSearchParams<{ placeId: string; tab?: string }>();
   const [name, setName] = useState<string | null>(null);
 
   return (
@@ -22,7 +27,11 @@ export default function RestaurantDetailScreen() {
         }}
       />
       {placeId && (
-        <PublicRestaurantDetail placeId={placeId} onResolveName={setName} />
+        <PublicRestaurantDetail
+          placeId={placeId}
+          onResolveName={setName}
+          initialTab={asTabKey(tab)}
+        />
       )}
     </>
   );

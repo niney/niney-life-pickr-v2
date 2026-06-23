@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { configureApi, setSettlementDraftStorage, useAuthStore } from '@repo/shared';
+import {
+  configureApi,
+  setReviewAskStorage,
+  setSettlementDraftStorage,
+  useAuthStore,
+} from '@repo/shared';
 import { useSettlementPrefsStore } from './settlementPrefsStore';
 import { useThemeStore } from './themeStore';
 
@@ -10,6 +15,8 @@ import { useThemeStore } from './themeStore';
 // AsyncStorage 를 쓴다. zustand 의 createJSONStorage 는 async getItem 도
 // 받으므로 AsyncStorage 그대로 호환.
 setSettlementDraftStorage(AsyncStorage);
+// 공개 질문(AskTab) 의 식당별 마지막 Q&A persist 어댑터 — 같은 이유로 주입.
+setReviewAskStorage(AsyncStorage);
 
 const TOKEN_KEY = 'lp:token';
 const GUEST_KEY = 'lp:guest';

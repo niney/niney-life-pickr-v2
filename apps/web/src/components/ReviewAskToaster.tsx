@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useReviewAskStore } from '@repo/shared';
 
@@ -12,10 +12,6 @@ export const ReviewAskToaster = (): null => {
   const completion = useReviewAskStore((s) => s.completion);
   const clearCompletion = useReviewAskStore((s) => s.clearCompletion);
   const navigate = useNavigate();
-  const location = useLocation();
-  // location 을 effect dep 에 넣으면 탭 이동마다 재실행되므로 ref 로 최신값만 참조.
-  const locRef = useRef(location);
-  locRef.current = location;
   // 같은 완료 이벤트로 두 번 토스트하지 않도록 seq 추적.
   const lastSeq = useRef(0);
 
@@ -26,10 +22,11 @@ export const ReviewAskToaster = (): null => {
     clearCompletion();
 
     // 지금 그 식당 Ask 탭을 보고 있으면 토스트 생략(화면에 이미 결과/에러 표시).
-    const loc = locRef.current;
+    // 완료 시점의 현재 URL 을 직접 읽는다 — useLocation 을 구독하면 매 네비게이션
+    // 마다 effect 가 재실행되고 ref-during-render 도 생긴다.
     const onThisAskTab =
-      loc.pathname.endsWith(`/${placeId}`) &&
-      new URLSearchParams(loc.search).get('tab') === 'ask';
+      window.location.pathname.endsWith(`/${placeId}`) &&
+      new URLSearchParams(window.location.search).get('tab') === 'ask';
     if (onThisAskTab) return;
 
     // 어떤 상세 레이아웃에서 떠났든 canonical 상세 라우트의 Ask 탭으로 복귀.

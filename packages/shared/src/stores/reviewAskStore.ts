@@ -65,16 +65,26 @@ interface ReviewAskState {
   inFlight: Record<string, { query: string; startedAt: number }>;
   // placeId → 마지막 Q&A. (영속)
   lastByPlace: Record<string, ReviewAskEntry>;
+  // placeId → 이번 앱/탭 세션에서 직접 물어봤는지. lastByPlace 는 영속이라
+  // 재시작 시 복원되는데, 그 '지난 답변'과 방금 받은 답을 구분하는 데 쓴다.
+  // (메모리만 — 영속 X. 렌더 중 Date.now 같은 비순수 호출을 피하려는 목적도.)
+  freshThisSession: Record<string, true>;
   // placeId → 마지막 요청 실패 여부. (메모리)
   errorByPlace: Record<string, boolean>;
   // 마지막 완료 이벤트. (메모리)
   completion: ReviewAskCompletion | null;
+  // 지금 화면에서 보고 있는 Ask 탭의 placeId. 완료 시 그 식당 Ask 탭을 이미
+  // 보고 있으면 토스트/배너를 생략하는 데 쓴다(화면에 결과가 인라인으로 뜨므로).
+  // 앱(RN)은 탭이 언마운트되므로 AskTab 마운트=이 값으로 신뢰 가능. (메모리)
+  visiblePlaceId: string | null;
 
   // 질문 실행 — store 가 직접 호출해 컴포넌트 생사와 무관하게 완료된다.
   // 같은 식당이 이미 진행 중이면 무시(중복 제출 방지).
   ask(placeId: string, query: string, restaurantName?: string | null): Promise<void>;
   clearCompletion(): void;
   clearLast(placeId: string): void;
+  // AskTab 마운트/언마운트 시 호출 — 위 visiblePlaceId 를 갱신.
+  setAskTabVisible(placeId: string, visible: boolean): void;
 }
 
 // 영속 저장량 상한 — 가장 최근 답변 N개 식당만 유지(answeredAt 기준).
@@ -97,8 +107,10 @@ export const useReviewAskStore = create<ReviewAskState>()(
     (set, get) => ({
       inFlight: {},
       lastByPlace: {},
+      freshThisSession: {},
       errorByPlace: {},
       completion: null,
+      visiblePlaceId: null,
 
       async ask(placeId, query, restaurantName = null) {
         const text = query.trim();
@@ -125,6 +137,7 @@ export const useReviewAskStore = create<ReviewAskState>()(
                 ...s.lastByPlace,
                 [placeId]: { query: text, result, answeredAt: Date.now() },
               }),
+              freshThisSession: { ...s.freshThisSession, [placeId]: true },
               completion: {
                 seq: (s.completion?.seq ?? 0) + 1,
                 placeId,
@@ -164,6 +177,13 @@ export const useReviewAskStore = create<ReviewAskState>()(
           const lastByPlace = { ...s.lastByPlace };
           delete lastByPlace[placeId];
           return { lastByPlace };
+        });
+      },
+      setAskTabVisible(placeId, visible) {
+        set((s) => {
+          if (visible) return { visiblePlaceId: placeId };
+          // 다른 placeId 가 이미 visible 이면 건드리지 않음(언마운트 순서 race 방지).
+          return s.visiblePlaceId === placeId ? { visiblePlaceId: null } : s;
         });
       },
     }),

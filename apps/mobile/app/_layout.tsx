@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { QUERY_GC_TIME, QUERY_STALE_TIME, ThemeProvider, themes, useTheme } from '@repo/shared';
 import { bootstrapApi } from '../src/lib/api-setup';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
+import { ReviewAskBanner } from '../src/components/ReviewAskBanner';
 import { useResolvedThemeMode } from '../src/hooks/useResolvedThemeMode';
 
 // 네이티브 스플래시를 수동으로 끌 때까지 유지 — JS 가 떠서 인앱 풀배경
@@ -93,6 +94,9 @@ export default function RootLayout() {
                 로 직접 분기(style="auto" 는 OS 만 보므로 강제 모드와 어긋남). */}
             <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
             {ready && <RootNavigator />}
+            {/* 진행 중 공개 질문(AskTab) 완료를 전역에서 지켜보다 상단 배너로 알림 —
+                탭/화면을 떠나도 결과를 놓치지 않게 root 에 상주(웹 토스터 대응). */}
+            {ready && <ReviewAskBanner />}
           </BottomSheetModalProvider>
         </QueryClientProvider>
       </ThemeProvider>
