@@ -6,6 +6,7 @@ import { CrawlService } from '../modules/crawl/crawl.service.js';
 import { jobRegistry } from '../modules/crawl/job-registry.js';
 import { RestaurantService } from '../modules/restaurant/restaurant.service.js';
 import { SummaryService } from '../modules/summary/summary.service.js';
+import { ReviewSearchService } from '../modules/review-search/review-search.service.js';
 import { TelegramService } from '../modules/telegram/telegram.service.js';
 import { TelegramConfigService } from '../modules/settings/telegram-config.service.js';
 import { RandomCrawlService } from '../modules/random-crawl/random-crawl.service.js';
@@ -33,9 +34,13 @@ export default fp(
         'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
       },
     });
+    // 요약 완료 후 자동 enrich(관점/문맥/임베딩) 훅용 — 누락 시 이 경로(스케줄/
+    // 지역랜덤/텔레그램 선택 크롤)로 만든 요약이 검색 불가 상태로 남는다.
+    const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);
     const summaries = new SummaryService(app.prisma, aiConfig, {
       logger: app.log,
       operationLog: app.operationLog,
+      reviewSearch,
     });
     const canonical = new CanonicalService(app.prisma);
     const proposals = new ProposalService(app.prisma, canonical);

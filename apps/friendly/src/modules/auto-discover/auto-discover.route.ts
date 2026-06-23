@@ -13,6 +13,7 @@ import { jobRegistry } from '../crawl/job-registry.js';
 import { ProposalService } from '../canonical/proposal.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
+import { ReviewSearchService } from '../review-search/review-search.service.js';
 import { env } from '../../config/env.js';
 import {
   autoDiscoverRegistry,
@@ -35,9 +36,12 @@ const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
   });
   // operationLog 주입 — 누락 시 자동 발견에서 파생되는 크롤/요약 run 계측이
   // 무음 비활성된다 (두 서비스 모두 null 이면 silent 정책).
+  // 요약 완료 후 자동 enrich 훅용 — 누락 시 자동 발견 파생 요약이 검색 불가로 남는다.
+  const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);
   const summaries = new SummaryService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
+    reviewSearch,
   });
   const canonical = new CanonicalService(app.prisma);
   const proposals = new ProposalService(app.prisma, canonical);
