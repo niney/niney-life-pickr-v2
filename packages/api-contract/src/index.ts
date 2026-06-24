@@ -13,6 +13,7 @@ export * from './schemas/schedule.js';
 export * from './schemas/random-crawl.js';
 export * from './schemas/ai.js';
 export * from './schemas/review-search.js';
+export * from './schemas/review-clustering.js';
 export * from './schemas/logs.js';
 export * from './schemas/settings-map.js';
 export * from './schemas/telegram-settings.js';

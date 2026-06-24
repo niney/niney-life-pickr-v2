@@ -67,6 +67,10 @@ apps/friendly/src/modules/crawl/__debug__/
 
 *.tsbuildinfo
 
+# Python (리뷰 군집화 배치 계산기 / 연구 프로브)
+__pycache__/
+*.pyc
+
 # tsc -b emit artifacts beside .ts source (apps/web build script)
 apps/web/src/**/*.js
 apps/web/vite.config.js

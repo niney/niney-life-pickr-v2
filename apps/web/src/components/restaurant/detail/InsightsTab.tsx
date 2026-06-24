@@ -1,11 +1,12 @@
 import { ChefHat, FolderTree, Loader2, MessageSquare } from 'lucide-react';
-import { useRestaurantPublicCategoryTree } from '@repo/shared';
+import { useRestaurantPublicCategoryTree, useRestaurantClusters } from '@repo/shared';
 import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { AiSummary } from './shared';
 import { CategoryTree } from './CategoryTree';
+import { ClusterTopics } from './ClusterTopics';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -29,6 +30,8 @@ export const InsightsTab = ({
   // 카테고리 트리는 insights 와 별도 endpoint — 훅 규칙상 early return 위에서 호출.
   // 전역 머지가 닿은 식당만 roots 가 채워지므로 비면 섹션을 숨긴다.
   const categoryTree = useRestaurantPublicCategoryTree(detail.placeId);
+  // 리뷰 주제 군집(배치 결과 읽기 전용) — 아직 없으면(ready=false) 섹션 숨김.
+  const clusters = useRestaurantClusters(detail.placeId);
 
   if (insightsLoading) {
     return (
@@ -65,6 +68,14 @@ export const InsightsTab = ({
         </h3>
         <AiSummary insights={insights} onSelectTip={onSelectTip} />
       </section>
+
+      {clusters.data?.ready && (
+        <ClusterTopics
+          clusters={clusters.data.clusters}
+          total={clusters.data.total}
+          clustered={clusters.data.clustered}
+        />
+      )}
 
       {categoryTree.data && categoryTree.data.roots.length > 0 && (
         <section className="space-y-3 border-t pt-4">

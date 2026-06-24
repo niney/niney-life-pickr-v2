@@ -411,6 +411,7 @@ model Restaurant {
   canonical      CanonicalRestaurant @relation(fields: [canonicalId], references: [id])
   visitorReviews VisitorReview[]
   menuCanonicals MenuCanonical[]
+  reviewClusters ReviewCluster[]
 
   @@unique([source, sourceId])
   @@index([source])
@@ -558,6 +559,9 @@ model ReviewSummary {
   contextLine       String?
   // 위 enrichment 의 버전(프롬프트/모델 변경 시 재생성 트리거).
   enrichVersion     Int?
+  // ── review-clustering(비슷한 문맥 리뷰 군집화) 멤버십 ──────────────────────
+  // 배치로 재계산 시 함께 갱신. null = 노이즈/미분류("기타"). 군집 행 삭제 시 SetNull.
+  clusterId         String?
   startedAt         DateTime?
   finishedAt        DateTime?
   createdAt         DateTime  @default(now())
@@ -566,8 +570,34 @@ model ReviewSummary {
   review        VisitorReview   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   menuMentions  MenuMention[]
   tags          ReviewTag[]
+  cluster       ReviewCluster?  @relation(fields: [clusterId], references: [id], onDelete: SetNull)
 
+  @@index([clusterId])
   @@map("review_summaries")
+}
+
+// 한 식당 리뷰를 "비슷한 문맥"끼리 묶은 군집(토픽). 저장된 bge-m3 임베딩으로
+// UMAP→HDBSCAN→c-TF-IDF(Python 배치) 후 LLM 한 줄 라벨을 붙여 영속한다.
+// 식당 단위로 통째 재계산(delete+insert) — clusterVersion 으로 재계산 게이트.
+// 멤버십은 ReviewSummary.clusterId. 노이즈 리뷰는 어느 군집에도 속하지 않음(null).
+model ReviewCluster {
+  id               String   @id @default(cuid())
+  restaurantId     String
+  ordinal          Int      // 표시 순서 — size 내림차순.
+  label            String   // LLM 한 줄 라벨 (예: "웨이팅이 긴 편")
+  tone             String   // positive | negative | mixed | neutral
+  size             Int      // 멤버 리뷰 수 = 카운트
+  keywordsJson     String   // c-TF-IDF 상위 키워드 string[] 직렬화
+  repReviewIdsJson String   // 대표 리뷰 id[] 직렬화 (읽기 시 body join)
+  aspectsJson      String   // 집계 관점→극성 카운트 직렬화 (부가 라벨)
+  clusterVersion   Int      // = CLUSTERING_VERSION (알고리즘/프롬프트 변경 시 ↑)
+  createdAt        DateTime @default(now())
+
+  restaurant Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  members    ReviewSummary[]
+
+  @@index([restaurantId])
+  @@map("review_clusters")
 }
 
 // 분석 done 시 menusJson 을 행 단위로 풀어 쓴 테이블. 글로벌·필터·검색

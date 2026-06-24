@@ -1,0 +1,8 @@
+# 리뷰 군집화 배치 계산기(scripts/cluster_compute.py) 의존성.
+# 운영 호스트(단일 인스턴스·Docker 금지)에 설치: pip install -r scripts/requirements-cluster.txt
+# bertopic 패키지는 torch/sentence-transformers 를 끌고 와 무겁고, 임베딩은 이미
+# DB 에 있으므로 가벼운 의존성으로 같은 파이프라인(UMAP→HDBSCAN→c-TF-IDF)만 쓴다.
+numpy>=1.26
+scikit-learn>=1.4
+umap-learn>=0.5.5
+hdbscan>=0.8.33

@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRestaurantPublicCategoryTree, useTheme } from '@repo/shared';
+import { useRestaurantClusters, useRestaurantPublicCategoryTree, useTheme } from '@repo/shared';
 import type {
   RestaurantInsightsType,
   RestaurantPublicDetailType,
@@ -7,6 +7,7 @@ import type {
 import { SENTIMENT_COLORS } from './colors';
 import { AiSummary } from './shared/AiSummary';
 import { CategoryTree } from './shared/CategoryTree';
+import { ClusterTopics } from './shared/ClusterTopics';
 
 interface Props {
   detail: RestaurantPublicDetailType;
@@ -28,6 +29,8 @@ export const InsightsTab = ({
   // 카테고리 트리는 별도 endpoint — 훅 규칙상 early return 위에서 호출. 전역
   // 머지가 닿은 식당만 roots 가 채워지므로 비면 섹션을 숨긴다.
   const categoryTree = useRestaurantPublicCategoryTree(detail.placeId);
+  // 리뷰 주제 군집(배치 결과 읽기 전용) — 아직 없으면(ready=false) 섹션 숨김.
+  const clusters = useRestaurantClusters(detail.placeId);
 
   if (insightsLoading) {
     return (
@@ -70,6 +73,16 @@ export const InsightsTab = ({
         </View>
         <AiSummary insights={insights} onSelectTip={onSelectTip} />
       </View>
+
+      {clusters.data?.ready && (
+        <View style={[styles.section, { borderTopColor: theme.colors.border }]}>
+          <ClusterTopics
+            clusters={clusters.data.clusters}
+            total={clusters.data.total}
+            clustered={clusters.data.clustered}
+          />
+        </View>
+      )}
 
       {categoryTree.data && categoryTree.data.roots.length > 0 && (
         <View style={[styles.section, { borderTopColor: theme.colors.border }]}>

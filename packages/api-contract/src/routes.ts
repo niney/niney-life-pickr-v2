@@ -407,3 +407,10 @@ export const ReviewSearch = {
   publicQaReady: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa/ready`,
   publicAsk: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/qa`,
 } as const;
+
+// review-clustering — 비슷한 문맥 리뷰 군집화(배치). 계산은 어드민/크롤후 훅으로만,
+// 공개는 placeId 기반 읽기 전용(인증 없음).
+export const ReviewClustering = {
+  run: `${API_PREFIX}/admin/review-clustering/run`,
+  publicClusters: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/clusters`,
+} as const;

@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import { SummaryService } from '../modules/summary/summary.service.js';
 import { ReviewSearchService } from '../modules/review-search/review-search.service.js';
+import { ReviewClusteringService } from '../modules/review-clustering/review-clustering.service.js';
 import { AiConfigService } from '../modules/ai/ai.config.service.js';
 import { env } from '../config/env.js';
 
@@ -30,15 +31,20 @@ export default fp(
     // 라우트·요약 훅이 한 인스턴스로 공유해야 한다. 요약 종료 시 자동 enrich 를
     // 위해 SummaryService 에 주입.
     const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);
+    // review-clustering 도 전역 singleton — 요약 종료 훅에서 enrich 완료 후 군집화를
+    // 잇기 위해 SummaryService 에 주입(같은 인스턴스를 라우트가 공유).
+    const reviewClustering = new ReviewClusteringService(app.prisma, aiConfig);
     const summaries = new SummaryService(app.prisma, aiConfig, {
       logger: app.log,
       operationLog: app.operationLog,
       reviewSearch,
+      clustering: reviewClustering,
     });
 
     app.decorate('summaries', summaries);
     app.decorate('aiConfig', aiConfig);
     app.decorate('reviewSearch', reviewSearch);
+    app.decorate('reviewClustering', reviewClustering);
   },
   { name: 'summaries', dependencies: ['prisma', 'logs'] },
 );
@@ -48,5 +54,6 @@ declare module 'fastify' {
     summaries: SummaryService;
     aiConfig: AiConfigService;
     reviewSearch: ReviewSearchService;
+    reviewClustering: ReviewClusteringService;
   }
 }

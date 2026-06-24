@@ -34,7 +34,9 @@
     "probe:review-search": "tsx --env-file=.env research/review-search/probe-e2e.ts",
     "probe:eval": "tsx --env-file=.env research/review-search/probe-eval.ts",
     "probe:completeness": "tsx --env-file=.env research/review-search/probe-completeness.ts",
-    "probe:embed-health": "tsx --env-file=.env research/review-search/probe-embed-health.ts"
+    "probe:embed-health": "tsx --env-file=.env research/review-search/probe-embed-health.ts",
+    "probe:cluster": "tsx --env-file=.env research/review-clustering/probe-cluster.ts",
+    "probe:cluster-health": "python3 -c \"import numpy,sklearn,umap,hdbscan; print('cluster engine OK — numpy/sklearn/umap/hdbscan')\""
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",

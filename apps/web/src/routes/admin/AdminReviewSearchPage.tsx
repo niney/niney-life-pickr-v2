@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Database,
   FlaskConical,
+  Layers,
   ListChecks,
   Loader2,
   MessageSquareText,
@@ -17,9 +18,11 @@ import {
   useReviewEnrichPending,
   useReviewEnrichStatus,
   useReviewSearchRestaurants,
+  useRunClustering,
 } from '@repo/shared';
 import type {
   ReviewAskResultType,
+  ReviewClusterRunResultType,
   ReviewEnrichStatusItemType,
   ReviewSearchEnrichResultType,
 } from '@repo/api-contract';
@@ -42,10 +45,12 @@ export const AdminReviewSearchPage = () => {
   const [enrichInfo, setEnrichInfo] = useState<ReviewSearchEnrichResultType | null>(null);
   const [askQuery, setAskQuery] = useState('');
   const [ask, setAsk] = useState<ReviewAskResultType | null>(null);
+  const [clusterInfo, setClusterInfo] = useState<ReviewClusterRunResultType | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const enrichMut = useEnrichReviews();
   const askMut = useReviewAsk();
+  const clusterMut = useRunClustering();
 
   const ready = (enrichInfo?.total ?? 0) > 0;
 
@@ -53,6 +58,7 @@ export const AdminReviewSearchPage = () => {
     setRestaurantId(id);
     setEnrichInfo(null);
     setAsk(null);
+    setClusterInfo(null);
     setError(null);
   };
 
@@ -72,6 +78,10 @@ export const AdminReviewSearchPage = () => {
   const runAsk = () =>
     wrap(async () => {
       setAsk(await askMut.mutateAsync({ restaurantId, query: askQuery }));
+    });
+  const runCluster = () =>
+    wrap(async () => {
+      setClusterInfo(await clusterMut.mutateAsync(restaurantId));
     });
 
   return (
@@ -117,6 +127,31 @@ export const AdminReviewSearchPage = () => {
                 <Badge variant="secondary">신규 {enrichInfo.enriched}</Badge>
                 <Badge variant="secondary">검색가능 {enrichInfo.total}건</Badge>
                 <Badge variant="secondary">{enrichInfo.ms}ms</Badge>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              onClick={runCluster}
+              disabled={!restaurantId || clusterMut.isPending}
+              className="w-full"
+            >
+              {clusterMut.isPending ? <Loader2 className="animate-spin" /> : <Layers />}
+              군집화 {clusterMut.isPending ? '중…(Python+LLM)' : '실행'}
+            </Button>
+            {clusterInfo && (
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {clusterInfo.skipped ? (
+                  <Badge variant="secondary" className="text-destructive">
+                    건너뜀: {clusterInfo.reason}
+                  </Badge>
+                ) : (
+                  <>
+                    <Badge variant="secondary">주제 {clusterInfo.clusters}개</Badge>
+                    <Badge variant="secondary">노이즈 {clusterInfo.noise}건</Badge>
+                    <Badge variant="secondary">대상 {clusterInfo.total}건</Badge>
+                    <Badge variant="secondary">{clusterInfo.ms}ms</Badge>
+                  </>
+                )}
               </div>
             )}
             {error && (
