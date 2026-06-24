@@ -511,6 +511,12 @@ const ClusterStatusRow = ({
       ) : (
         <Badge variant="secondary" className="text-muted-foreground">enrich 부족</Badge>
       )}
+      {/* 군집이 안 되고 대기로 남는 원인(마지막 스킵/오류 사유)을 인라인 표시. */}
+      {!item.clustered && !item.inProgress && item.lastReason && (
+        <p className="mt-1 text-[11px] text-destructive" title={item.lastReason}>
+          {item.lastReason}
+        </p>
+      )}
     </td>
     <td className="px-3 py-2 text-right">
       <Button

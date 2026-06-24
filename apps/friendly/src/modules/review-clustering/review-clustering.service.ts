@@ -84,6 +84,10 @@ export class ReviewClusteringService {
   // 현재 군집화 진행 중인 restaurantId (어드민 상태 표시·중복 가드). enrich 의 진행
   // Map 미러이되, 군집은 식당당 단일 작업이라 진행률 없이 Set 으로 충분.
   private readonly clustering = new Set<string>();
+  // primaryId → 마지막 실행 사유. 군집이 "대기"로만 남는 원인(스킵 사유·오류)을 상태에
+  // 노출하기 위함(없으면 runTracked 빈 catch 가 삼켜 어드민이 원인을 못 봄). 메모리만 —
+  // 재시작 시 사라지지만 클릭 한 번이면 다시 채워진다. null = 마지막 실행이 성공.
+  private readonly lastRun = new Map<string, { reason: string | null; at: number }>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -276,20 +280,23 @@ export class ReviewClusteringService {
   // 가시성·post-summary 훅 graceful). 정상 경로만 throw 가능(상위에서 catch).
   async runForRestaurant(restaurantId: string): Promise<ReviewClusterRunResultType> {
     const startedAt = Date.now();
-    const skip = (reason: string, total = 0): ReviewClusterRunResultType => ({
-      clusters: 0,
-      noise: 0,
-      total,
-      skipped: true,
-      reason,
-      ms: Date.now() - startedAt,
-    });
 
     // 그 가게(canonical)의 공개 멤버 행 전체를 통합 코퍼스로 — 대표 키(primary)로
     // 영속한다(getPublicClusters/상태가 같은 키로 읽음).
     const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
     const memberIds = members?.memberIds ?? [restaurantId];
     const primaryId = members?.primaryId ?? restaurantId;
+
+    // 결과를 lastRun 에 기록하고 반환 — 스킵 사유가 상태페이지에 보이게(원인 파악).
+    const done = (
+      result: { clusters: number; noise: number; total: number; skipped: boolean; reason: string | null },
+    ): ReviewClusterRunResultType => {
+      this.lastRun.set(primaryId, { reason: result.skipped ? result.reason : null, at: Date.now() });
+      return { ...result, ms: Date.now() - startedAt };
+    };
+    const skip = (reason: string, total = 0): ReviewClusterRunResultType =>
+      done({ clusters: 0, noise: 0, total, skipped: true, reason });
+
     const docs = await this.loadDocs(memberIds);
     if (docs.length < MIN_REVIEWS)
       return skip(`리뷰 부족 또는 enrich 미완료 (검색가능 ${docs.length}건 < ${MIN_REVIEWS})`, docs.length);
@@ -311,14 +318,13 @@ export class ReviewClusteringService {
     const corpusSize = await this.countEnriched(memberIds);
     await this.persist(primaryId, computed.clusters, labels, docById, corpusSize);
 
-    return {
+    return done({
       clusters: computed.clusters.length,
       noise: computed.noise.length,
       total: docs.length,
       skipped: false,
       reason: null,
-      ms: Date.now() - startedAt,
-    };
+    });
   }
 
   // placeId → 식당 해석 후 **자동** 군집화(요약 종료 훅). 피처 플래그 + 재군집 게이트
@@ -386,8 +392,9 @@ export class ReviewClusteringService {
     this.clustering.add(key);
     try {
       await this.runForRestaurant(key);
-    } catch {
-      /* 실패는 상태(군집됨 여부)로 드러남 */
+    } catch (e) {
+      // 예기치 못한 throw(persist/DB 등) 도 사유로 기록 — 상태페이지에 노출.
+      this.lastRun.set(key, { reason: `오류: ${e instanceof Error ? e.message : String(e)}`, at: Date.now() });
     } finally {
       this.clustering.delete(key);
     }
@@ -422,6 +429,8 @@ export class ReviewClusteringService {
         clusterCount: cl?.count ?? 0,
         clusteredAt: cl?.at ? cl.at.toISOString() : null,
         inProgress: this.clustering.has(p.primaryId),
+        // 마지막 실행이 스킵/오류면 그 사유(군집 안 되는 원인). 성공·미실행이면 null.
+        lastReason: this.lastRun.get(p.primaryId)?.reason ?? null,
       };
     });
     const eligibleCount = rows.filter((r) => r.eligible).length;

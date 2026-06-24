@@ -71,6 +71,9 @@ export const ReviewClusterStatusItem = z.object({
   clusterCount: z.number().int().nonnegative(),
   clusteredAt: z.string().nullable(), // ISO, 마지막 군집 시각
   inProgress: z.boolean(),
+  // 마지막 실행이 스킵/오류면 그 사유("리뷰 부족…", "전부 노이즈", "계산 엔진 오류…").
+  // 성공·미실행이면 null. "대기로만 남는" 원인을 어드민에 노출.
+  lastReason: z.string().nullable(),
 });
 export type ReviewClusterStatusItemType = z.infer<typeof ReviewClusterStatusItem>;
 
