@@ -1,4 +1,11 @@
-import type { ReviewClusterRunResultType, ReviewClustersResultType } from '@repo/api-contract';
+import type {
+  ReviewClusterBgResultType,
+  ReviewClusterPendingResultType,
+  ReviewClusterRunResultType,
+  ReviewClusterStatusListType,
+  ReviewClusterStatusQueryType,
+  ReviewClustersResultType,
+} from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
 // 경로는 하드코딩 — Routes 네임스페이스가 vite esbuild prebundle 에서 드롭될 수 있어
@@ -13,6 +20,25 @@ export const reviewClusteringApi = {
       method: 'POST',
       body: JSON.stringify({ restaurantId }),
     }),
+
+  // ── 상태 관리 (어드민) ──
+  status: (query: Partial<ReviewClusterStatusQueryType> = {}) => {
+    const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
+    if (query.page !== undefined) params.set('page', String(query.page));
+    if (query.pageSize !== undefined) params.set('pageSize', String(query.pageSize));
+    const qs = params.toString();
+    return apiFetch<ReviewClusterStatusListType>(`${RC_PREFIX}/status${qs ? `?${qs}` : ''}`);
+  },
+
+  clusterBg: (restaurantId: string) =>
+    apiFetch<ReviewClusterBgResultType>(`${RC_PREFIX}/cluster-bg`, {
+      method: 'POST',
+      body: JSON.stringify({ restaurantId }),
+    }),
+
+  clusterPending: () =>
+    apiFetch<ReviewClusterPendingResultType>(`${RC_PREFIX}/cluster-pending`, { method: 'POST' }),
 
   // 공개 — 저장된 군집 조회(인증 없음).
   publicClusters: (placeId: string) =>

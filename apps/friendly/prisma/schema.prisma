@@ -591,6 +591,9 @@ model ReviewCluster {
   repReviewIdsJson String   // 대표 리뷰 id[] 직렬화 (읽기 시 body join)
   aspectsJson      String   // 집계 관점→극성 카운트 직렬화 (부가 라벨)
   clusterVersion   Int      // = CLUSTERING_VERSION (알고리즘/프롬프트 변경 시 ↑)
+  // 군집 시점의 검색가능(임베딩) 리뷰 수. 자동 재군집 게이트용 — 다음 크롤 때
+  // 현재 수와 비교해 충분히 늘었을 때만 재군집(비용·churn 방지). 같은 식당 행 동일값.
+  corpusSize       Int      @default(0)
   createdAt        DateTime @default(now())
 
   restaurant Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)

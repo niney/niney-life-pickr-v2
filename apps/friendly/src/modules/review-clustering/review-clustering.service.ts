@@ -3,7 +3,11 @@ import { resolve } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import type {
   ClusterToneType,
+  ReviewClusterBgResultType,
+  ReviewClusterPendingResultType,
   ReviewClusterRunResultType,
+  ReviewClusterStatusListType,
+  ReviewClusterStatusQueryType,
   ReviewClustersResultType,
 } from '@repo/api-contract';
 import type { AiConfigService } from '../ai/ai.config.service.js';
@@ -19,8 +23,14 @@ import { isJunk } from '../review-search/retrieval.js';
 // 공개 API 는 저장 결과 읽기 전용(질의 비용 0).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CLUSTERING_VERSION = 2; // 알고리즘/프롬프트 변경 시 ↑ → 재계산 트리거. v2: 극성 주입.
+const CLUSTERING_VERSION = 3; // ↑시 재계산. v2:극성주입 v3:corpusSize(자동 게이트)
 const MIN_REVIEWS = 30; // 이보다 적으면 군집화 의미 없음 → 스킵.
+// 자동 군집화(요약 종료 훅) on/off. Python 준비 전 코드만 배포하거나 churn/비용 제어용.
+const AUTO_ENABLED = (process.env.CLUSTER_AUTO_ENABLED ?? 'true') !== 'false';
+// 자동 재군집 게이트: 마지막 군집 이후 검색가능 리뷰가 max(GATE_MIN, base×GATE_PCT) 이상
+// 늘었을 때만 재군집(비용·라벨 churn 방지). 첫 군집·어드민 수동은 게이트 무시.
+const GATE_PCT = Number(process.env.CLUSTER_GATE_PCT) || 0.2;
+const GATE_MIN = Number(process.env.CLUSTER_GATE_MIN) || 20;
 const MIN_CLUSTER_SIZE = Number(process.env.CLUSTER_MIN_SIZE) || 8; // probe sweet spot(절대값).
 // 극성 주입(probe 2): 부정 리뷰가 충분(군집 형성 가능)할 때만 임베딩에 aspect 극성을
 // 가중 결합 → 부정("단점") 군집 회수(neg_recall 0→0.84). 부정 적은 식당엔 주입 안 함
@@ -66,6 +76,10 @@ const safeParse = <T,>(s: string | null, fallback: T): T => {
 const TONES: ClusterToneType[] = ['positive', 'negative', 'mixed', 'neutral'];
 
 export class ReviewClusteringService {
+  // 현재 군집화 진행 중인 restaurantId (어드민 상태 표시·중복 가드). enrich 의 진행
+  // Map 미러이되, 군집은 식당당 단일 작업이라 진행률 없이 Set 으로 충분.
+  private readonly clustering = new Set<string>();
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly aiConfig: AiConfigService,
@@ -211,6 +225,7 @@ export class ReviewClusteringService {
     clusters: ComputeResult['clusters'],
     labels: Map<number, { label: string; tone: ClusterToneType }>,
     docById: Map<string, Doc>,
+    corpusSize: number,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.reviewCluster.deleteMany({ where: { restaurantId } });
@@ -239,6 +254,7 @@ export class ReviewClusteringService {
             repReviewIdsJson: JSON.stringify(c.repReviewIds.slice(0, REP_PER_CLUSTER)),
             aspectsJson: JSON.stringify(aspects),
             clusterVersion: CLUSTERING_VERSION,
+            corpusSize,
           },
           select: { id: true },
         });
@@ -280,7 +296,9 @@ export class ReviewClusteringService {
     const docById = new Map(docs.map((d) => [d.reviewId, d]));
     const bodyById = new Map(docs.map((d) => [d.reviewId, d.body]));
     const labels = await this.labelClusters(computed.clusters, bodyById);
-    await this.persist(restaurantId, computed.clusters, labels, docById);
+    // 자동 재군집 게이트 기준값 — 검색가능(raw, 게이트 카운트와 동일 척도) 리뷰 수.
+    const corpusSize = await this.countEnriched(restaurantId);
+    await this.persist(restaurantId, computed.clusters, labels, docById, corpusSize);
 
     return {
       clusters: computed.clusters.length,
@@ -292,14 +310,146 @@ export class ReviewClusteringService {
     };
   }
 
-  // placeId → 식당 해석 후 군집화. 요약 종료 훅(fire-and-forget)·어드민에서 사용.
-  async ensureClusteredByPlaceId(placeId: string): Promise<ReviewClusterRunResultType | null> {
-    const r = await this.prisma.restaurant.findUnique({
-      where: { placeId },
-      select: { id: true },
+  // placeId → 식당 해석 후 **자동** 군집화(요약 종료 훅). 피처 플래그 + 재군집 게이트
+  // 적용 — 첫 군집이거나 리뷰가 충분히 늘었을 때만(어드민 수동은 게이트 없이 강제).
+  async ensureClusteredByPlaceId(placeId: string): Promise<void> {
+    if (!AUTO_ENABLED) return;
+    const r = await this.prisma.restaurant.findUnique({ where: { placeId }, select: { id: true } });
+    if (!r) return;
+    if (this.clustering.has(r.id)) return; // 이미 진행 중
+    if (!(await this.shouldRecluster(r.id))) return; // 최신 — 스킵(churn·비용 방지)
+    await this.runTracked(r.id);
+  }
+
+  // 자동 재군집 게이트: 현재 버전 군집이 없으면(첫 군집·버전↑) 무조건, 있으면 마지막
+  // 군집 이후 검색가능 리뷰가 max(GATE_MIN, base×GATE_PCT) 이상 늘었을 때만 true.
+  private async shouldRecluster(restaurantId: string): Promise<boolean> {
+    const existing = await this.prisma.reviewCluster.findFirst({
+      where: { restaurantId, clusterVersion: CLUSTERING_VERSION },
+      select: { corpusSize: true },
     });
-    if (!r) return null;
-    return this.runForRestaurant(r.id);
+    if (!existing) return true;
+    const current = await this.countEnriched(restaurantId);
+    const base = existing.corpusSize || 0;
+    return current - base >= Math.max(GATE_MIN, base * GATE_PCT);
+  }
+
+  // ── 상태 관리 (어드민) — enrich 상태 미러링 ───────────────────────────────────
+
+  // 단일 식당 백그라운드 군집화(즉시 반환). 이미 진행 중이면 no-op.
+  clusterInBackground(restaurantId: string): ReviewClusterBgResultType {
+    const already = this.clustering.has(restaurantId);
+    if (!already) void this.runTracked(restaurantId);
+    return { started: !already, inProgress: true };
+  }
+
+  // 군집화 가능(enrich≥MIN_REVIEWS)하나 현재 버전 군집이 없는 식당 일괄 백그라운드(순차).
+  async clusterAllEligibleInBackground(): Promise<ReviewClusterPendingResultType> {
+    const enrichedBy = await this.countEnrichedByRestaurant();
+    const done = await this.prisma.reviewCluster.groupBy({
+      by: ['restaurantId'],
+      where: { clusterVersion: CLUSTERING_VERSION },
+    });
+    const doneSet = new Set(done.map((d) => d.restaurantId));
+    const pending = [...enrichedBy.entries()]
+      .filter(([id, n]) => n >= MIN_REVIEWS && !doneSet.has(id))
+      .map(([id]) => id);
+    if (pending.length === 0) return { queued: 0 };
+    void (async () => {
+      for (const id of pending) await this.runTracked(id); // 순차 — runTracked 가 중복 가드
+    })();
+    return { queued: pending.length };
+  }
+
+  // 진행상태 Set 에 등록하고 실행. 중복 시 no-op. (어드민 수동·일괄·자동 공용 가드.)
+  private async runTracked(restaurantId: string): Promise<void> {
+    if (this.clustering.has(restaurantId)) return;
+    this.clustering.add(restaurantId);
+    try {
+      await this.runForRestaurant(restaurantId);
+    } catch {
+      /* 실패는 상태(군집됨 여부)로 드러남 */
+    } finally {
+      this.clustering.delete(restaurantId);
+    }
+  }
+
+  // 식당별 군집 상태(검색가능 수·군집됨·진행중). enrichStatus 미러링.
+  async clusterStatus(query: ReviewClusterStatusQueryType): Promise<ReviewClusterStatusListType> {
+    const restaurants = await this.prisma.restaurant.findMany({
+      where: { visitorReviews: { some: {} } },
+      select: { id: true, placeId: true, name: true, _count: { select: { visitorReviews: true } } },
+    });
+    const enrichedBy = await this.countEnrichedByRestaurant(restaurants.map((r) => r.id));
+    const clusterRows = await this.prisma.reviewCluster.groupBy({
+      by: ['restaurantId'],
+      where: { clusterVersion: CLUSTERING_VERSION },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    });
+    const clusterBy = new Map(
+      clusterRows.map((c) => [c.restaurantId, { count: c._count._all, at: c._max.createdAt }]),
+    );
+
+    let rows = restaurants.map((r) => {
+      const enriched = enrichedBy.get(r.id) ?? 0;
+      const cl = clusterBy.get(r.id);
+      return {
+        restaurantId: r.id,
+        placeId: r.placeId,
+        name: r.name,
+        totalReviews: r._count.visitorReviews,
+        enrichedReviews: enriched,
+        eligible: enriched >= MIN_REVIEWS,
+        clustered: !!cl,
+        clusterCount: cl?.count ?? 0,
+        clusteredAt: cl?.at ? cl.at.toISOString() : null,
+        inProgress: this.clustering.has(r.id),
+      };
+    });
+    const eligibleCount = rows.filter((r) => r.eligible).length;
+    const clusteredCount = rows.filter((r) => r.clustered).length;
+
+    const q = query.q?.trim().toLowerCase();
+    if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q));
+    // 가능하나 미군집 우선 → 검색가능 많은 순(작업 우선순위).
+    rows.sort(
+      (a, b) =>
+        Number(a.clustered) - Number(b.clustered) ||
+        Number(b.eligible) - Number(a.eligible) ||
+        b.enrichedReviews - a.enrichedReviews,
+    );
+    const total = rows.length;
+    const start = (query.page - 1) * query.pageSize;
+    return {
+      items: rows.slice(start, start + query.pageSize),
+      total,
+      eligibleCount,
+      clusteredCount,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+  }
+
+  // restaurantId → 검색가능(임베딩) 리뷰 수(단건).
+  private countEnriched(restaurantId: string): Promise<number> {
+    return this.prisma.reviewSummary.count({
+      where: { review: { restaurantId }, embeddingJson: { not: null } },
+    });
+  }
+
+  // restaurantId → 검색가능 리뷰 수 맵. ids 미지정 시 전체. (status·pending 용)
+  private async countEnrichedByRestaurant(ids?: string[]): Promise<Map<string, number>> {
+    const rows = await this.prisma.reviewSummary.findMany({
+      where: { embeddingJson: { not: null }, review: ids ? { restaurantId: { in: ids } } : {} },
+      select: { review: { select: { restaurantId: true } } },
+    });
+    const by = new Map<string, number>();
+    for (const r of rows) {
+      const rid = r.review.restaurantId;
+      by.set(rid, (by.get(rid) ?? 0) + 1);
+    }
+    return by;
   }
 
   // 공개 조회 — 저장된 군집을 읽어 반환(계산 없음). placeId 없거나 군집 없으면 ready=false.

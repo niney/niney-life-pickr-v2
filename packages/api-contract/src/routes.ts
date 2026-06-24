@@ -412,5 +412,9 @@ export const ReviewSearch = {
 // 공개는 placeId 기반 읽기 전용(인증 없음).
 export const ReviewClustering = {
   run: `${API_PREFIX}/admin/review-clustering/run`,
+  // 상태 관리(어드민) — enrich 상태 미러링.
+  status: `${API_PREFIX}/admin/review-clustering/status`,
+  bg: `${API_PREFIX}/admin/review-clustering/cluster-bg`,
+  pending: `${API_PREFIX}/admin/review-clustering/cluster-pending`,
   publicClusters: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/clusters`,
 } as const;

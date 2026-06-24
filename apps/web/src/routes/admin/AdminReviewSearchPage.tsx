@@ -19,10 +19,14 @@ import {
   useReviewEnrichStatus,
   useReviewSearchRestaurants,
   useRunClustering,
+  useClusterStatus,
+  useClusterBg,
+  useClusterPending,
 } from '@repo/shared';
 import type {
   ReviewAskResultType,
   ReviewClusterRunResultType,
+  ReviewClusterStatusItemType,
   ReviewEnrichStatusItemType,
   ReviewSearchEnrichResultType,
 } from '@repo/api-contract';
@@ -240,6 +244,7 @@ export const AdminReviewSearchPage = () => {
       </div>
 
       <EnrichStatusSection />
+      <ClusterStatusSection />
     </div>
   );
 };
@@ -378,6 +383,144 @@ const EnrichStatusRow = ({
         title={item.ready ? '새 리뷰만 보충 enrich' : 'enrich 실행'}
       >
         enrich
+      </Button>
+    </td>
+  </tr>
+);
+
+// 식당별 군집 상태 관리 (enrich 상태 미러링). enrich 선행 후 식당별/일괄로 군집화하고
+// 진척을 폴링으로 본다. 새로 크롤된 식당은 요약 후 조건부 자동 군집화.
+const ClusterStatusSection = () => {
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const statusQuery = useClusterStatus({ q: q || undefined, page, pageSize: STATUS_PAGE_SIZE });
+  const clusterBg = useClusterBg();
+  const clusterPending = useClusterPending();
+  const data = statusQuery.data;
+
+  const onCluster = async (restaurantId: string) => {
+    await clusterBg.mutateAsync(restaurantId);
+    void statusQuery.refetch();
+  };
+  const onClusterPending = async () => {
+    await clusterPending.mutateAsync();
+    void statusQuery.refetch();
+  };
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / STATUS_PAGE_SIZE)) : 1;
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Layers className="size-4" /> 식당별 군집 상태
+        </CardTitle>
+        <CardDescription>
+          군집됨 {data?.clusteredCount ?? 0} / 군집가능(enrich≥30) {data?.eligibleCount ?? 0}곳. 새로 크롤된
+          식당은 요약 후 조건부 자동 군집화되며, 여기서 백로그를 처리합니다(enrich 선행 필요).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Input
+            placeholder="식당 검색"
+            value={q}
+            onChange={(e) => {
+              setPage(1);
+              setQ(e.target.value);
+            }}
+            className="max-w-xs"
+          />
+          <Button variant="outline" onClick={onClusterPending} disabled={clusterPending.isPending}>
+            {clusterPending.isPending ? <Loader2 className="animate-spin" /> : <Layers />}
+            미군집 일괄 군집화
+          </Button>
+          {clusterPending.data && (
+            <span className="self-center text-xs text-muted-foreground">
+              {clusterPending.data.queued}곳 백그라운드 대기열에 추가됨
+            </span>
+          )}
+        </div>
+
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">식당</th>
+                <th className="px-3 py-2 text-right font-medium">검색가능</th>
+                <th className="px-3 py-2 text-right font-medium">군집</th>
+                <th className="px-3 py-2 font-medium">상태</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {data?.items.map((it) => (
+                <ClusterStatusRow key={it.restaurantId} item={it} onCluster={onCluster} />
+              ))}
+              {data && data.items.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    식당이 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {data && data.total > STATUS_PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-3 text-sm">
+            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              이전
+            </Button>
+            <span className="tabular-nums text-muted-foreground">
+              {page} / {totalPages}
+            </span>
+            <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              다음
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const ClusterStatusRow = ({
+  item,
+  onCluster,
+}: {
+  item: ReviewClusterStatusItemType;
+  onCluster(restaurantId: string): void;
+}) => (
+  <tr className="border-t">
+    <td className="px-3 py-2">{item.name}</td>
+    <td className="px-3 py-2 text-right tabular-nums">{item.enrichedReviews}</td>
+    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+      {item.clustered ? `${item.clusterCount}개` : '-'}
+    </td>
+    <td className="px-3 py-2">
+      {item.inProgress ? (
+        <Badge variant="secondary" className="gap-1 text-blue-600">
+          <Loader2 className="size-3 animate-spin" /> 진행 중
+        </Badge>
+      ) : item.clustered ? (
+        <Badge variant="secondary" className="text-emerald-600">군집됨</Badge>
+      ) : item.eligible ? (
+        <Badge variant="secondary" className="text-amber-600">대기</Badge>
+      ) : (
+        <Badge variant="secondary" className="text-muted-foreground">enrich 부족</Badge>
+      )}
+    </td>
+    <td className="px-3 py-2 text-right">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={item.inProgress || !item.eligible}
+        onClick={() => onCluster(item.restaurantId)}
+        title={item.eligible ? (item.clustered ? '재군집' : '군집화 실행') : 'enrich(검색가능 리뷰)가 30건 이상이어야 함'}
+      >
+        군집화
       </Button>
     </td>
   </tr>

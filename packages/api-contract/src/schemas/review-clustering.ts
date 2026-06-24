@@ -58,3 +58,45 @@ export const ReviewClusterRunResult = z.object({
   ms: z.number().int().nonnegative(),
 });
 export type ReviewClusterRunResultType = z.infer<typeof ReviewClusterRunResult>;
+
+// ── 군집 상태 관리 (어드민) — enrich 상태 미러링 ──
+export const ReviewClusterStatusItem = z.object({
+  restaurantId: z.string(),
+  placeId: z.string().nullable(),
+  name: z.string(),
+  totalReviews: z.number().int().nonnegative(),
+  enrichedReviews: z.number().int().nonnegative(), // 검색가능(임베딩) 리뷰 수
+  eligible: z.boolean(), // enrichedReviews >= MIN_REVIEWS (군집화 가능)
+  clustered: z.boolean(), // 현재 버전 군집 존재
+  clusterCount: z.number().int().nonnegative(),
+  clusteredAt: z.string().nullable(), // ISO, 마지막 군집 시각
+  inProgress: z.boolean(),
+});
+export type ReviewClusterStatusItemType = z.infer<typeof ReviewClusterStatusItem>;
+
+export const ReviewClusterStatusQuery = z.object({
+  q: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(30),
+});
+export type ReviewClusterStatusQueryType = z.infer<typeof ReviewClusterStatusQuery>;
+
+export const ReviewClusterStatusList = z.object({
+  items: z.array(ReviewClusterStatusItem),
+  total: z.number().int().nonnegative(), // 필터 적용 후
+  eligibleCount: z.number().int().nonnegative(), // 군집화 가능 식당 수
+  clusteredCount: z.number().int().nonnegative(), // 군집된 식당 수
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type ReviewClusterStatusListType = z.infer<typeof ReviewClusterStatusList>;
+
+// 단건 백그라운드 군집화(즉시 반환, 상태는 폴링).
+export const ReviewClusterBgInput = z.object({ restaurantId: z.string() });
+export type ReviewClusterBgInputType = z.infer<typeof ReviewClusterBgInput>;
+export const ReviewClusterBgResult = z.object({ started: z.boolean(), inProgress: z.boolean() });
+export type ReviewClusterBgResultType = z.infer<typeof ReviewClusterBgResult>;
+
+// 군집화 가능하나 아직 군집 안 된 식당 일괄 백그라운드 군집화(순차).
+export const ReviewClusterPendingResult = z.object({ queued: z.number().int().nonnegative() });
+export type ReviewClusterPendingResultType = z.infer<typeof ReviewClusterPendingResult>;
