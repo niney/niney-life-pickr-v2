@@ -1,7 +1,7 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-06-06
-topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics, auto-discover, schedule]
+last_compiled: 2026-06-25
+topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, logs]
 status: active
 ---
 
@@ -27,6 +27,11 @@ status: active
 - **2026-05-19** in [[../topics/crawl]] / [[../topics/friendly]] / [[../topics/api-contract]] / [[../topics/shared]] / [[../topics/web]] (CrawlJobLog 시스템 — `JobLogService` + `(jobId, seq)` Map dedup): 머지 패턴의 **로그 채널 적용** + **2-fan-out 1-dedup** 변형. 한 호출(`JobLogService.log`)이 (a) pino, (b) `prisma.crawlJobLog` DB 영속화, (c) `jobRegistry` SSE 채널, (d) (placeId 있으면) `summaryEventsBus` 양쪽으로 fan-out — 같은 모노톤 `seq` 가 박혀 클라가 `(jobId, seq)` Map 으로 단일 dedup. `useCrawl.logs[]` reducer 가 SSE 'log' 이벤트 받아 누적, `summarySseManager.subscribe({ onLog })` 콜백이 같은 채널 사용, `JobLogTab` 이 두 SSE 소스(crawl + summary) + DB 폴백(`useCrawlJobLogs` / `useRestaurantCrawlLogs` infiniteQuery) 세 소스를 같은 Map 으로 통합. 기존 머지 패턴이 "한 채널 → 한 캐시" 였다면, 이번엔 "한 origin 이벤트가 두 SSE 로 vector + 한 DB 로 영속 → 클라가 셋 다 같은 Map 으로 통합". `done` 이벤트 없는 영구 누적 케이스라 invalidate 카드도 없음 — `nextCursor` 페이지네이션이 그 역할 대체. 페이로드 설계가 머지를 가능케 하는 사례의 가장 강한 인스턴스: 서버가 한 ID 공간 (jobId, seq) 을 미리 발급해 멀티 채널 dedup 을 위탁 가능하게 만듦.
 
 - **2026-06**(17차) in [[../topics/schedule]] / [[../topics/shared]] (`packages/shared/src/hooks/useSchedule.ts` `useScheduleRunEvents`): 주기 스케줄러 진행 SSE 훅 — `useGlobalMergeJob` 과 **동형의 잡-단위 머지 모양**이되 구독 단위가 jobId 가 아닌 "시스템 전역 단일 run". `snapshot` 이벤트(status==='running' 일 때만)로 로컬 progress state 시드, `progress` 이벤트로 phase/processed/total/skipped/currentName 갱신, `done` 이벤트에서 `['schedule','runs']` + `['schedule','config']` 무효화 **+ `['analytics']` 통째 invalidate**(정규화→머지 결과가 전역 통계/overview 에 반영되도록). 재연결 백오프(`Math.min(30_000, 1000 * 2 ** retry)`)·closedRef/cancelled 가드는 global-merge 훅과 같은 라이프사이클. 차이점은 진행 상태를 React Query 캐시가 아닌 **훅 로컬 useState(`progress`)** 에 두는 점 — 단일 run 이라 캐시 키로 식별할 필요가 없고, `done` 에서 무효화하는 대상이 진행 상태가 아니라 머지 결과(runs/config/analytics)임. "한 origin run → 진행은 로컬 state, 완료는 cross-domain invalidate" 변형.
+
+- **2026-06**(18차) in [[../topics/review-search]] / [[../topics/shared]] (`useReviewEnrichEvents`): 리뷰 검색 enrich 진행 SSE 훅 — **클라 캐시 머지 변형**. SSE `progress` 이벤트로 enrich-status React Query 캐시를 `setQueriesData` 로 **라이브 패치**하고 `done` 시 invalidate. 기존 잡-단위 머지 훅들과 달리 재연결을 **지수 백오프 대신 EventSource 내장 재연결 + 폴링 안전망**으로 처리 — 진행 패치를 놓쳐도 폴링이 따라잡는다. 머지 방향이 서버측 청크 머지가 아니라 "클라가 SSE 신호로 자기 status 캐시를 부분 갱신"하는 쪽이라, 페이로드 완전성보다 라이브 진행 표시가 목적. `setQueryData` 가 아닌 `setQueriesData`(복수 매칭 키 일괄 패치)를 쓰는 점이 멀티플렉스 enrich 와 맞물림.
+- **2026-06**(18차) in [[../topics/random-crawl]] / [[../topics/shared]] (`useRandomCrawlRunEvents`): 랜덤 크롤 run 진행 SSE 훅 — `useScheduleRunEvents` 와 **동형**. `snapshot`(running 일 때만)으로 로컬 progress 시드, `progress` 로 phase/processed/total 갱신, `done` 에서 runs/config + cross-domain invalidate. 재연결 백오프·closedRef/cancelled 가드·로컬 useState 진행 모양까지 schedule 훅을 그대로 복붙. 또 한 도메인이 같은 "한 origin run → 진행은 로컬, 완료는 cross-domain invalidate" 골격을 흡수.
+- **2026-06**(18차) in [[../topics/ai]] / [[../topics/shared]] (`useLlmTelemetry`): LLM 텔레메트리 훅 — **비싱글톤 진실원 모양**. REST 스냅샷으로 초기 시드 + SSE 가 같은 캐시를 **덮어쓰는**(append 가 아니라 overwrite) 형태로 동기화 — 텔레메트리는 누적 prepend 가 아니라 현 상태 전체 스냅샷이 진실원이라, 도착하는 SSE 페이로드가 곧 최신 상태. "GET snapshot 시드 → SSE 가 부분 머지" 골격의 변형으로, 머지가 prepend/patch 가 아니라 replace 인 케이스. 1초 코얼레싱된 서버 push 와 맞물려 과도한 재렌더 방지.
+- **2026-06**(18차) in [[../topics/crawl]] / [[../topics/logs]] / [[../topics/shared]] (crawl single-seq dedup — `operationLog.allocSeq` 단일 발급기): 2026-05-19 CrawlJobLog 시스템의 **`(jobId, seq)` 서버 발급 멀티채널 dedup 강화**. 기존엔 SSE 채널과 DB 채널이 각자 seq 를 받을 여지가 있었는데, 이제 crawl 의 SSE seq 가 `operationLog.allocSeq` **단일 발급기**를 공유 — 한 발급기가 SSE+DB 두 채널의 seq 를 정합시켜 클라 `(jobId, seq)` Map dedup 이 항상 일관. 리뷰가 많을 때 진행이 **78% 에서 멈추고 done 이 드롭**되던 버그 fix 의 근본 원인 — 두 채널이 seq 를 따로 발급하면 클라가 같은 origin 을 두 seq 로 보거나 done 의 seq 를 못 맞춰 누락. "한 발급기가 SSE+DB 두 채널을 정합" 으로 강화. [[operation-log-instrumentation]] 와 직결.
 
 - **2026-06-01** in [[../topics/web]] (`AdminCrawlTestPage.tsx`): 잡 진행 SSE 가 아닌 **어드민 크롤 테스트 인터랙션**으로 머지가 번진 인스턴스. 크롤 테스트가 배치마다 결과를 받을 때 이전엔 상세를 re-GET 하던 것을 `setQueryData` 부분 머지로 교체 — 배치당 상세 전체 GET 제거. "페이로드 머지로 follow-up GET 회피" 골격이 잡 진행 UI 밖(일반 어드민 인터랙션)으로도 그대로 적용됨을 보여줌 — 패턴이 SSE 전용이 아니라 "이미 가진 데이터를 캐시에 직접 쓴다"는 더 넓은 규율임을 재확인.
 
@@ -56,3 +61,7 @@ status: active
 - [[../topics/analytics]]
 - [[../topics/auto-discover]]
 - [[../topics/schedule]]
+- [[../topics/review-search]]
+- [[../topics/random-crawl]]
+- [[../topics/ai]]
+- [[../topics/logs]]

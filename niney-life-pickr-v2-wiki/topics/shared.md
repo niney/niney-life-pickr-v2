@@ -1,12 +1,37 @@
 ---
 topic: shared
-last_compiled: 2026-06-06
-sources_count: 54
+last_compiled: 2026-06-25
+sources_count: 66
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto]
+aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-06-25 변경 흡수 (18차, 9db5204→HEAD) — 리뷰 문맥검색(RAG)·군집화 FE 플러밍 + 비동기 잡 완료를 탭 가로질러 토스트로 알리는 전역 스토어 패턴 + 작업 로그/LLM 텔레메트리/지역 랜덤 크롤/텔레그램 설정 FE + 정산 세부 분배(그룹 split)**:
+
+(1) **신규 `api/review-search.api.ts` + `hooks/useReviewSearch.ts`** — 리뷰 문맥검색/RAG([review-search](review-search.md)) FE 플러밍. 경로는 하드코딩(`RS_PREFIX='/api/v1/admin/review-search'`, `PUBLIC_PREFIX='/api/v1/restaurants'`) — `ai.api.ts` 관례를 따라 `Routes.ReviewSearch` 네임스페이스가 vite esbuild prebundle 에서 드롭되는 걸 피함. `reviewSearchApi` = 어드민 `restaurants`/`enrich`(POST)/`enrichStatus(query)`/`enrichBg`/`enrichPending` + 공개 `publicQaReady(placeId)`/`publicAsk(placeId, query)` + `buildReviewEnrichEventsUrl()`(token query SSE URL). 훅: `useReviewSearchRestaurants`/`useEnrichReviews`(mutation)/`useReviewAsk`(mutation)/`useReviewEnrichStatus(query)`(`keepPreviousData` + 진행 중이면 10s 폴링 안전망)/**`useReviewEnrichEvents()`**(enrich 진행률 SSE — `'progress'` 이벤트로 `['review-search','enrich-status']` 캐시를 `setQueriesData` 라이브 패치(진행률 %), done 시 invalidate; EventSource **내장** 재연결만 사용 — 백오프 직접 안 굴림) + 공개 `useReviewQaReady(placeId, enabled)`(`['review-qa','ready',placeId]`, staleTime 60s)/`useReviewAskPublic`(mutation).
+
+(2) **신규 `api/review-clustering.api.ts` + `hooks/useReviewClusters.ts`** — 리뷰 군집화([review-clustering](review-clustering.md)) FE 플러밍. 같은 하드코딩 PREFIX 관례. `reviewClusteringApi` = 어드민 `run`(POST, 동기 무거운 배치)/`status(query)`/`clusterBg`/`clusterPending` + 공개 `publicClusters(placeId)`. 훅: `useRestaurantClusters(placeId, enabled)`(`['review-clusters',placeId]`, staleTime 5분 — 저장된 결과 읽기, 계산 없음)/`useRunClustering()`(mutation, onSuccess 시 `['review-clusters']` invalidate)/`useClusterStatus(query)`(`keepPreviousData` + 진행 중이면 5s 폴링 — 군집은 짧아 SSE 대신 폴링)/`useClusterBg`/`useClusterPending`(mutation).
+
+(3) **신규 전역 스토어 — 비동기 잡 완료를 탭 가로질러 토스트/배너로 알리는 cross-cutting 패턴**:
+  - **`stores/reviewAskStore.ts`** (`useReviewAskStore`) — 공개 질문(Ask 탭/RAG) 진행을 앱 전역에서 추적. 답변이 LLM 3콜이라 15초+ 걸리는데 트리거한 화면(식당 상세 Ask 탭)을 떠나도(탭 전환/페이지 이동) 결과가 사라지지 않아야 한다 — **store 가 직접 `reviewSearchApi.publicAsk` 를 호출**해 컴포넌트 언마운트와 무관하게 완료되고, 전역 watcher(`ReviewAskToaster`)가 `completion.seq` 변화를 감지해 1회만 토스트. state: `inFlight`(placeId→진행중, 메모리)/`lastByPlace`(placeId→마지막 Q&A, **영속 — MAX_KEPT=20개 cap**)/`freshThisSession`(이번 세션에 직접 물었는지)/`errorByPlace`/`completion`(seq+ok+미리보기)/`visiblePlaceId`(Ask 탭이 보이면 토스트 생략). 액션 `ask`(중복 제출 방지 — 같은 placeId in-flight 면 무시)/`clearCompletion`/`clearLast`/`setAskTabVisible`. persist `review-ask-v1` v1, **`partialize: lastByPlace 만`** — 진행중/완료/에러는 메모리(하드 리로드하면 in-flight HTTP 는 어차피 죽음). storage 는 **`setReviewAskStorage(adapter)` lazy resolver**(웹 localStorage 자동 / 앱 AsyncStorage 주입 / NO_OP) — `settlementDraftStore` 와 동일 철학.
+  - **`stores/resummarizeStore.ts`** (`useResummarizeStore`) — 진행 중 단건 재요약을 앱 전역 추적. 재요약은 큐+SSE 라 수 초 걸리는데 트리거 화면(ReviewsTab)을 떠나도 완료 토스트·버튼 잠금이 유지돼야 한다 — `items: Record<reviewId, {reviewId, placeId(SSE 구독키), prevSentiment, model}>` + `add`/`remove`. **persist 없음**(메모리만). 전역 watcher(`ResummarizeToaster`)가 이 목록의 placeId 들을 SSE 구독해 완료 처리 + "부정 → 긍정" 델타 토스트.
+  - **`stores/activeTablingBulkSaveJobStore.ts`** (`useActiveTablingBulkSaveJobStore`) — 테이블링 일괄 저장 잡 활성 ID. `activeDiningcodeBulkSaveJobStore` 와 **완전 동형** — `jobId|null` + `setJobId`/`clear`, `lp:activeTablingBulkSaveJob` localStorage persist, 404 → `clear`(훅 책임).
+
+(4) **신규 `api/randomCrawl.api.ts` + `hooks/useRandomCrawl.ts`** — 지역 랜덤 자동 크롤([random-crawl](random-crawl.md)) FE 플러밍. `schedule` 과 동형(cron config/run/runs/preview + SSE) + 지역 트리. `randomCrawlApi` = `getConfig`/`updateConfig`(PUT)/`runNow`(POST — 진행 중이면 skipped run)/`listRuns`/`preview`/`getRegions`(시도→시군구 트리)/`getRegionDongs(sido, sigungu)` + `buildRandomCrawlRunEventsUrl()`. 훅: `useRandomCrawlConfig`/`useRandomCrawlRuns`/`useUpdateRandomCrawlConfig`(setQueryData 직접)/`useRunRandomCrawlNow`(runs+config invalidate)/`useRandomCrawlPreview(cron, tz, enabled)`/`useRegionTree`(staleTime Infinity)/`useRegionDongs`(sido/sigungu 있을 때만, staleTime Infinity) + **`useRandomCrawlRunEvents(enabled): { progress }`** — `useScheduleRunEvents` 와 동형 잡 단위 SSE 훅(enabled 토글, snapshot→non-terminal 이면 progress 정규화/progress/done, done 시 runs+config+`['restaurants']` invalidate, 1s→30s 백오프).
+
+(5) **신규 `api/logs.api.ts` + `hooks/useLogs.ts`** — 작업 로그([logs](logs.md)) FE 플러밍. crawl 외 feature 는 SSE 채널이 없어 **폴링(refetchInterval)으로 진행 추적**. `logsApi` = `listRuns({page,limit,feature,status})`/`getRun(id)`/`getRunLogs({runId,cursor,limit,level})`(cursor pagination, 최신순)/`analyzeRun(id)`(실패 run 수동 재분석 — ok=false 도 200)/`getLogConfig`/`updateLogConfig`(PUT). 훅: `useOperationRuns(query)`(running 보이면 5s 폴링)/`useOperationRun(runId)`(run running 또는 report pending/running 이면 3s 폴링)/`useOperationRunLogs(runId, {level,pageSize,enabled})`(infiniteQuery)/`flattenOperationLogPages`(헬퍼)/`useAnalyzeRun`(mutation, onSuccess 시 run+runs invalidate)/`useLogConfig`/`useUpdateLogConfig`.
+
+(6) **신규 `hooks/useLlmTelemetry.ts`** (+ `ai.api.ts` 의 `telemetry`/`buildAiTelemetryStreamUrl` 추가) — LLM 계정 사용량 실시간 텔레메트리. **초기 스냅샷은 REST(`aiApi.telemetry`), 이후는 SSE 가 React Query 캐시(`['ai','telemetry']`)를 덮어쓴다** — `staleTime: Infinity` + `refetchOnWindowFocus:false` 로 SSE 가 진실원. EventSource 직접 라이프사이클(`'snapshot'` 이벤트 → `setQueryData`, `connected` state, 1s→30s 백오프). **summary 매니저처럼 싱글톤은 아님** — 호출한 컴포넌트 수만큼 EventSource 가 생기지만 캐시는 공유.
+
+(7) **신규 `api/telegram-settings.api.ts` + `hooks/useTelegramSettings.ts`** — 텔레그램 봇 설정(자동 발굴 알림용). `telegramSettingsApi` = `getConfig`/`update`(PUT)/`clear`(DELETE → .env fallback)/`test`(POST — getMe→getChat→테스트 메시지)/`resolveChatId`(POST — 서버 ~25초 롱폴). 훅: `useTelegramConfig`(`['settings','telegram']`)/`useUpdateTelegramConfig`(setQueryData + **`['random-crawl','config']` invalidate** — telegramConfigured 표시 갱신)/`useDeleteTelegramConfig`/`useTestTelegram`/`useResolveTelegramChatId`(mutation).
+
+(8) **신규 `settlement/groupSuggestion.ts`** (`@repo/shared` 새 하위 디렉터리) — 정산 세부 분배 그룹 제안 순수 로직. `suggestItemGroups(items)` 가 항목명 키워드로 주류/음료를 종류 그룹(소주/맥주/콜라…)으로 묶음 — 종류 사전은 `@repo/api-contract` 의 `matchDrinkKind`/`isGroupableCategory` 를 재사용(영수증 추출 보정과 **단일 소스**). 그룹 카테고리는 항목 카테고리와 같아야 하는 스키마 제약 준수(다른 카테고리 종류로 매칭되면 제안 안 함).
+
+(9) **`stores/settlementDraftStore.ts` — 세부 분배 그룹(groupSplits) + 잔여 수령자 단일→배열**. round 에 **`groupSplits: DraftItemGroup[] | null`** 추가(카테고리 풀에서 특정 항목을 떼어 멤버끼리만 EQUAL/잔수 가중 분배). 새 타입 `DraftItemGroup`(label/category/itemClientIds/mode/members)·`DraftGroupMember`(participantClientId/glasses). 새 헬퍼 `isEligibleGroupMember`(참석+카테고리 미제외 단일 자격 기준 — 에디터/미리보기/저장 페이로드가 공유)·`draftGroupsToCalcInputs`(clientId → 인덱스 변환 + 자격 없는 멤버 필터). 새 액션 `applyGroupSplits`/`addGroupSplit`(returns clientId)/`updateGroupSplit`/`removeGroupSplit` + items 변경 시 `pruneGroupItems` 가 끊긴 항목 참조 자동 정리. `DraftCategoryAdjustment.leftoverParticipantClientId(string)` → **`leftoverParticipantClientIds(string[])`** 로 승격(잔여 수령자 다중). persist **version 4 → 6** (v4→v5 groupSplits 필드 추가 / v5→v6 잔여 수령자 배열 승격, `migrateCategoryAdjustments` 가 옛 단일 id 를 `[id]` 로).
+
+(10) **`hooks/useAutoDiscover.ts` / `useCrawl.ts` / `useRestaurant.ts` / `stores/activeCrawlJobStore.ts` 변경** — 자동 발견 순차 큐 전환 + 크롤 트레이 통합/완료 자동 정리 + 78% 멈춤 수정의 FE 측 플러밍(도메인 상세는 [crawl](crawl.md)/[auto-discover](auto-discover.md), 공개 맛집은 [web](web.md)). shared 관점에서는 기존 잡 SSE 훅·crawl 잡 스토어 패턴의 연장.
 
 **2026-06-06 변경 흡수 (17차, 13c10a5→HEAD) — 주기 자동 실행 어드민 FE 플러밍 + 다크 모드 토큰 + 공개 카테고리 트리 + useUserLocation auto 옵션**:
 (1) **신규 `api/schedule.api.ts` + `hooks/useSchedule.ts`** — 주기 자동 실행([schedule](schedule.md)) 어드민 FE 플러밍. `scheduleApi` = `getConfig`/`updateConfig`(PUT)/`runNow`(POST, 진행 중이면 서버가 skipped run 반환)/`listRuns`/`preview`(cron 다음 실행시각 검증) + `buildScheduleRunEventsUrl()`(token query SSE URL). 훅: `useScheduleConfig`/`useScheduleRuns`(useQuery), `useUpdateScheduleConfig`(성공 시 `['schedule','config']` 에 `setQueryData` 직접 박기), `useRunScheduleNow`(runs+config invalidate), `useSchedulePreview(cronExpr, timezone, enabled)`(저장 전 cron 미리보기, queryKey 에 입력 포함, caller 가 디바운스), **`useScheduleRunEvents(enabled)`** — 진행 중 run 의 live SSE 진행 구독. global-merge 잡 훅과 같은 패턴(자체 EventSource + 1s→30s cap 백오프 + closedRef/cancelled), `'snapshot'`(running 이면 progress 로 정규화)/`'progress'`/`'done'` 3 이벤트, done 시 `['schedule','runs']`+`['schedule','config']`+`['analytics']` invalidate(머지 결과를 통계에 반영). [stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md) 의 새 인스턴스(진행 머지). index.ts 가 둘 다 re-export.
@@ -103,13 +128,20 @@ packages/shared/src/
 │   ├── menu-grouping.api.ts# 식당 단위 그룹핑 + 잡 시작/스냅샷 + buildGroupingJobEventsUrl
 │   ├── autoDiscover.api.ts # 자동 발견 잡 start/get/cancel + buildAutoDiscoverEventsUrl
 │   ├── analytics.api.ts    # overview / global-menus / category-tree + 전역 머지 잡 + buildGlobalMergeJobEventsUrl
-│   ├── schedule.api.ts      # (신규) 주기 자동 실행: getConfig/updateConfig/runNow/listRuns/preview + buildScheduleRunEventsUrl(token query SSE)
+│   ├── schedule.api.ts      # 주기 자동 실행: getConfig/updateConfig/runNow/listRuns/preview + buildScheduleRunEventsUrl(token query SSE)
+│   ├── randomCrawl.api.ts   # (신규) 지역 랜덤 자동 크롤: config/run/runs/preview + getRegions/getRegionDongs + buildRandomCrawlRunEventsUrl
+│   ├── review-search.api.ts # (신규) 리뷰 RAG: 어드민 enrich*/ask + 공개 publicQaReady/publicAsk + buildReviewEnrichEventsUrl (경로 하드코딩)
+│   ├── review-clustering.api.ts # (신규) 리뷰 군집화: 어드민 run/status/cluster* + 공개 publicClusters (경로 하드코딩)
+│   ├── logs.api.ts          # (신규) 작업 로그: listRuns/getRun/getRunLogs(cursor)/analyzeRun + getLogConfig/updateLogConfig
+│   ├── telegram-settings.api.ts # (신규) 텔레그램 봇 설정: getConfig/update/clear/test/resolveChatId(롱폴)
 │   ├── settings-map.api.ts # 어드민 list/update/remove/getSecret + 공개 publicConfig (Routes.SettingsMap 단일 소스)
-│   ├── ai.api.ts           # LLM provider×purpose 관리 + complete/completeBatch (ProviderKey = {id, purpose}) + previewModels (저장 전 키 미리보기)
+│   ├── ai.api.ts           # LLM provider×purpose 관리 + complete/completeBatch (ProviderKey = {id, purpose}) + previewModels + telemetry + buildAiTelemetryStreamUrl (신규)
 │   ├── settlement.api.ts             # 정산 세션 CRUD + share 토큰 + update(전체 replace) + getShared(token)
 │   ├── settlement-extraction.api.ts  # 영수증 upload(Blob→FormData) + extract(imageToken→items) + previewBlob(인증 GET)
 │   ├── settlement-contact.api.ts     # /me/contacts 사용자별 단골 list/update/remove
-│   └── settlement-draft.api.ts       # (신규) /api/v1/settlement-drafts — list / upsert(PUT, userId+placeId 매칭) / remove
+│   └── settlement-draft.api.ts       # /api/v1/settlement-drafts — list / upsert(PUT, userId+placeId 매칭) / remove
+├── settlement/
+│   └── groupSuggestion.ts  # (신규) 세부 분배 그룹 제안 순수 로직 (suggestItemGroups — @repo/api-contract drink-kinds 사전 재사용)
 ├── hooks/
 │   ├── useAuth.ts          # useCurrentUser, useLogin, useRegister, useLogout
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
@@ -121,7 +153,13 @@ packages/shared/src/
 │   ├── useMenuGrouping.ts  # ranking/group/status/createJob + useGroupingJob (자체 EventSource + 백오프)
 │   ├── useAutoDiscover.ts  # useStartAutoDiscover / useAutoDiscoverJob / useCancelAutoDiscover (snapshot/keyword/candidate/phase/done SSE 머지)
 │   ├── useAnalytics.ts     # overview/globalMenus/categoryTree + useStartGlobalMerge + useGlobalMergeJob (chunk 진행)
-│   ├── useSchedule.ts       # (신규) useScheduleConfig/useScheduleRuns/useUpdateScheduleConfig/useRunScheduleNow/useSchedulePreview + useScheduleRunEvents (자체 EventSource, snapshot/progress/done, done 시 schedule+analytics invalidate)
+│   ├── useSchedule.ts       # useScheduleConfig/useScheduleRuns/useUpdateScheduleConfig/useRunScheduleNow/useSchedulePreview + useScheduleRunEvents (자체 EventSource, snapshot/progress/done, done 시 schedule+analytics invalidate)
+│   ├── useRandomCrawl.ts    # (신규) useRandomCrawl{Config,Runs,Preview,RunEvents} + useRun/useUpdate + useRegionTree/useRegionDongs (schedule 동형 잡 SSE)
+│   ├── useReviewSearch.ts   # (신규) 어드민 useReviewSearchRestaurants/useEnrichReviews/useReviewAsk/useReviewEnrichStatus/useReviewEnrichEvents(SSE 내장재연결) + 공개 useReviewQaReady/useReviewAskPublic
+│   ├── useReviewClusters.ts # (신규) useRestaurantClusters(공개,staleTime 5분) + useRunClustering/useClusterStatus(5s 폴링)/useClusterBg/useClusterPending
+│   ├── useLogs.ts           # (신규) useOperationRuns(5s 폴링)/useOperationRun(3s 폴링)/useOperationRunLogs(infinite) + flattenOperationLogPages + useAnalyzeRun + useLogConfig
+│   ├── useLlmTelemetry.ts   # (신규) LLM 사용량 — REST 초기 스냅샷 + SSE 가 ['ai','telemetry'] 캐시 덮어쓰기(staleTime Infinity), 1s→30s 백오프
+│   ├── useTelegramSettings.ts # (신규) useTelegramConfig/useUpdate(+random-crawl config invalidate)/useDelete/useTestTelegram/useResolveTelegramChatId
 │   ├── useSettingsMap.ts   # 어드민 providers/secret + 공개 useMapPublicConfig
 │   ├── useAi.ts            # ProviderKey({id,purpose}) 기반 provider CRUD + complete/test/models + usePreviewModels(=useProviderModelsPreview, 저장 전 키로 모델 fetch)
 │   ├── useUserLocation.ts  # geolocation 권한+위치 query (5s timeout, 60s maxAge) + { auto?: boolean } 옵션 (false 면 마운트 자동요청 스킵)
@@ -135,8 +173,11 @@ packages/shared/src/
 │   ├── activeGroupingJobStore.ts          # Zustand + persist: jobId (단일 슬롯, localStorage)
 │   ├── activeGlobalMergeJobStore.ts       # Zustand + persist: jobId (단일 슬롯, localStorage)
 │   ├── activeDiningcodeBulkSaveJobStore.ts# Zustand + persist: jobId (단일 슬롯, localStorage)
+│   ├── activeTablingBulkSaveJobStore.ts   # (신규) Zustand + persist: jobId (단일 슬롯, lp:activeTablingBulkSaveJob — DC bulk-save 동형)
 │   ├── activeAutoDiscoverJobStore.ts      # Zustand + persist: jobId (단일 슬롯, localStorage)
-│   └── settlementDraftStore.ts            # Zustand + persist (storage adapter 주입형 — 웹은 sessionStorage 자동, RN AsyncStorage 주입, SSR/test NO_OP). 마스터 participants + rounds[] N차 모델. v1→v4 migration.
+│   ├── settlementDraftStore.ts            # Zustand + persist (storage adapter 주입형 — 웹 sessionStorage / RN AsyncStorage / SSR·test NO_OP). 마스터 participants + rounds[] N차 모델 + groupSplits(세부 분배). v1→v6 migration.
+│   ├── reviewAskStore.ts                  # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 공개 Ask 비동기 — store 가 직접 publicAsk 호출, 완료를 탭 가로질러 ReviewAskToaster 가 토스트. lastByPlace 만 영속(MAX_KEPT=20).
+│   └── resummarizeStore.ts                # (신규) Zustand (persist 없음, 메모리만). 진행 중 단건 재요약 추적 — ResummarizeToaster 가 placeId SSE 구독해 완료 토스트.
 ├── design/ … (불변)
 ├── ui/ … (불변)
 └── constants/ …
@@ -317,6 +358,41 @@ overview/통계에 반영되도록). `enabled=false` 면 `progress` 를 null 로
 `{ progress }` 단일 필드. [stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md) 의
 새 인스턴스로, snapshot/progress 가 캐시가 아닌 로컬 state 로 흐르고 done 에서만 캐시를 무효화한다.
 
+**리뷰 RAG / 군집화 도메인** ([review-search.api.ts](../../packages/shared/src/api/review-search.api.ts) +
+[useReviewSearch.ts](../../packages/shared/src/hooks/useReviewSearch.ts) +
+[review-clustering.api.ts](../../packages/shared/src/api/review-clustering.api.ts) +
+[useReviewClusters.ts](../../packages/shared/src/hooks/useReviewClusters.ts)) — 어드민 enrich/군집화 운영 +
+공개 식당 상세의 Ask 탭(RAG) / 분석 탭(군집)을 위한 FE 플러밍. 도메인 자체 동작은
+[review-search](review-search.md) / [review-clustering](review-clustering.md) 가 다루고 여기는 HTTP 함수 +
+React Query 훅만. **두 api 모듈 모두 경로를 하드코딩** (`ai.api.ts` 관례) — `Routes.ReviewSearch` /
+`Routes.ReviewClustering` 네임스페이스가 vite esbuild prebundle 단계에서 트리쉐이킹으로 드롭될 수 있어
+직접 문자열로 둔다. 어드민 enrich/cluster 는 버튼 트리거 LLM/배치 작업이라 mutation, 상태 목록은
+폴링형 query(`useReviewEnrichStatus` 10s / `useClusterStatus` 5s — `keepPreviousData` 로 페이지 깜빡임
+방지, 진행 중 항목이 있을 때만 폴링). **`useReviewEnrichEvents` 는 다른 잡 SSE 훅과 달리 직접 백오프를
+굴리지 않고 EventSource 내장 재연결에 맡긴다** — 진행률 패치(`setQueriesData`)만 하는 짧은 작업이라
+끊겨도 폴링 안전망이 받쳐주기 때문. 공개 쪽 `useReviewQaReady`/`useRestaurantClusters` 는 가벼운 GET
+(staleTime 각각 60s / 5분).
+
+**비동기 잡 완료를 탭 가로질러 토스트로 알리는 전역 스토어 패턴 (새 cross-cutting 후보)** —
+[reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts) +
+[resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts). 둘 다 같은 문제를 푼다:
+**오래 걸리는(LLM/큐+SSE) 비동기 작업을 트리거한 화면을 떠나도 결과/완료 알림이 사라지면 안 된다.**
+컴포넌트 로컬 state 면 언마운트 시 in-flight 도 결과도 날아가므로, 진행/완료를 React 바깥의 Zustand
+전역 store 에 둔다. 두 변형:
+- **`reviewAskStore` (store 가 직접 fetch)** — `ask(placeId, query)` 가 store 안에서 곧장
+  `reviewSearchApi.publicAsk` 를 await 해 컴포넌트 생사와 무관하게 완료. 완료 시 `completion.seq` 를
+  +1 하고, 전역 watcher `ReviewAskToaster`(web)/배너(mobile)가 seq 변화를 감지해 **정확히 1회** 토스트.
+  `visiblePlaceId` 로 "그 Ask 탭을 이미 보고 있으면 토스트 생략"(인라인 결과로 충분). `lastByPlace` 만
+  영속(MAX_KEPT=20 cap) — 진행중/완료/에러는 메모리(하드 리로드하면 in-flight HTTP 가 어차피 죽음).
+- **`resummarizeStore` (store 는 목록만, watcher 가 SSE 구독)** — `add({reviewId, placeId, prevSentiment,
+  model})` 로 진행 중 재요약을 등록만 하고, 전역 watcher `ResummarizeToaster` 가 그 placeId 들을 SSE
+  구독해 완료를 처리(+캐시 무효화 + "부정 → 긍정" 델타 토스트) 후 `remove`. persist 없음(메모리만).
+
+이 패턴은 [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md) 의 클라이언트 측 거울이다 —
+서버가 in-memory 싱글톤으로 잡을 게이팅하듯, 클라가 React 바깥 store 싱글톤으로 잡 진행을 컴포넌트
+라이프사이클에서 분리한다. 토스트 watcher 컴포넌트(앱/웹 루트에 1개 마운트)가 store 의 완료 시그널
+(`completion.seq` 변화 / `items` 의 placeId SSE)을 구독해 탭을 가로질러 알린다.
+
 **SSE 매니저 확장** — `summarySseManager` 가 이전엔 placeId 단일 키였는데 이번에 `SubscriptionKey`
 를 union `{ kind: 'place'; placeId } | { kind: 'canonical'; canonicalId }` 로 확장. 서버는
 두 종류 키를 한 connection 에서 받아 각 이벤트마다 canonicalId / placeId 양쪽 태그를 흘려보내고,
@@ -370,12 +446,17 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - `summarySseManager` → `Routes.Restaurant.summaryEvents` 단일 EventSource. placeId / canonicalId 두 키 종류 멀티플렉싱.
   - `useGroupingJob` → `Routes.Analytics.groupingJobEvents(jobId)`, `useGlobalMergeJob` → `Routes.Analytics.globalMergeJobEvents(jobId)`.
   - **`useScheduleRunEvents` → `Routes.Schedule.runEvents` EventSource** (token query 인증). `scheduleApi` → `Routes.Schedule.{config,run,runs,preview}`.
+  - **`useRandomCrawlRunEvents` → `Routes.RandomCrawl.runEvents` EventSource** (token query). `randomCrawlApi` → `Routes.RandomCrawl.{config,run,runs,preview,regions,regionDongs}`.
+  - **`useReviewEnrichEvents` → `/api/v1/admin/review-search/enrich-events` EventSource** (token query, **경로 하드코딩**). `reviewSearchApi` → `/api/v1/admin/review-search/*` + 공개 `/api/v1/restaurants/:placeId/qa[/ready]`. `reviewClusteringApi` → `/api/v1/admin/review-clustering/*` + 공개 `/api/v1/restaurants/:placeId/clusters` (둘 다 경로 하드코딩).
+  - **`useLlmTelemetry` → `aiApi` `/telemetry/stream` EventSource** (token query, `buildAiTelemetryStreamUrl`). 초기 스냅샷은 `/telemetry` GET.
+  - **`useReviewAskStore.ask` → `reviewSearchApi.publicAsk` (`POST /api/v1/restaurants/:placeId/qa`)** — store 가 직접 호출(컴포넌트 밖).
+  - **`logsApi` → `Routes.Logs.*`**, **`telegramSettingsApi` → `Routes.SettingsTelegram.*`** (인증 필수).
   - `canonicalApi` → friendly의 `Routes.Canonical.*`.
   - **`settlementApi` → `/api/v1/settlements/*` + `/api/v1/share/settlements/:token` (공개)**.
   - **`settlementExtractionApi` → `/api/v1/settlement-extraction/upload|extract|preview/:token`** (preview 만 직접 fetch + Authorization 헤더).
   - **`settlementContactApi` → `/api/v1/me/contacts/*`** (인증 필수).
   - **`settlementDraftApi` → `/api/v1/settlement-drafts/*`** (인증 필수, upsert PUT, 서버가 userId+placeId 로 매칭).
-- UI 측 사용처는 [web](web.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행 도메인은 [schedule](schedule.md).
+- UI 측 사용처는 [web](web.md)/[mobile](mobile.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행은 [schedule](schedule.md), 리뷰 RAG/군집은 [review-search](review-search.md)/[review-clustering](review-clustering.md). 토스트 watcher 컴포넌트(`ReviewAskToaster`/`ResummarizeToaster`)는 [web](web.md)/[mobile](mobile.md) 루트에 마운트.
 
 ## 4. API Surface [coverage: high — 35 sources]
 
@@ -397,9 +478,15 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - `menuGroupingApi`: `groupForRestaurant(placeId)`, `getRanking(placeId, query?)`, `getRestaurantsStatus()`, `createGroupingJob({ placeIds })`, `getGroupingJob(jobId)` + `buildGroupingJobEventsUrl(jobId)`
 - `autoDiscoverApi`: `start(input)`, `get(jobId)`, `cancel(jobId)` + `buildAutoDiscoverEventsUrl(jobId)`
 - `analyticsApi`: `overview()`, `globalMenus(query?)`, `categoryTree()`, `startGlobalMerge({ full })`, `getGlobalMergeJob(jobId)` + `buildGlobalMergeJobEventsUrl(jobId)`
-- **`scheduleApi` (신규)**: `getConfig()`, `updateConfig(input: ScheduleConfigInputType)` (PUT), `runNow()` (POST — 진행 중이면 `skipped` run 반환), `listRuns(): ScheduleRunListType`, `preview(input: SchedulePreviewInputType): SchedulePreviewResultType` + `buildScheduleRunEventsUrl(): Promise<string>` (token query SSE URL).
+- `scheduleApi`: `getConfig()`, `updateConfig(input: ScheduleConfigInputType)` (PUT), `runNow()` (POST — 진행 중이면 `skipped` run 반환), `listRuns(): ScheduleRunListType`, `preview(input: SchedulePreviewInputType): SchedulePreviewResultType` + `buildScheduleRunEventsUrl(): Promise<string>` (token query SSE URL).
+- **`randomCrawlApi` (신규)**: `getConfig()`, `updateConfig(input)` (PUT), `runNow()` (POST — 진행 중이면 skipped run), `listRuns()`, `preview(input)`, `getRegions(): RegionTreeType` (시도→시군구), `getRegionDongs(sido, sigungu): RegionDongListType` + `buildRandomCrawlRunEventsUrl(): Promise<string>` (token query SSE). `scheduleApi` 와 거의 동형 + 지역 트리.
+- **`reviewSearchApi` (신규)**: 어드민 `restaurants()`, `enrich(restaurantId)` (POST), `enrichStatus(query)` (q/page/pageSize), `enrichBg(restaurantId)`, `enrichPending()` + 공개 `publicQaReady(placeId)`, `publicAsk(placeId, query)` (POST) + `buildReviewEnrichEventsUrl(): Promise<string>` (token query SSE). 경로 하드코딩(`/api/v1/admin/review-search`, `/api/v1/restaurants/:placeId/qa[/ready]`).
+- **`reviewClusteringApi` (신규)**: 어드민 `run(restaurantId)` (POST 동기 배치), `status(query)`, `clusterBg(restaurantId)`, `clusterPending()` + 공개 `publicClusters(placeId)`. 경로 하드코딩(`/api/v1/admin/review-clustering`, `/api/v1/restaurants/:placeId/clusters`).
+- **`logsApi` (신규)**: `listRuns({page,limit,feature,status})`, `getRun(id)`, `getRunLogs({runId,cursor,limit,level})` (cursor pagination, createdAt DESC), `analyzeRun(id)` (POST — 실패 run 수동 재분석, ok=false 도 200), `getLogConfig()`, `updateLogConfig(input)` (PUT).
+- **`telegramSettingsApi` (신규)**: `getConfig()`, `update(input)` (PUT), `clear()` (DELETE → .env fallback), `test()` (POST — getMe→getChat→테스트 메시지), `resolveChatId()` (POST — chat_id 자동 탐색, 서버 ~25초 롱폴).
 - `settingsMapApi`: 어드민 `list/update/remove/getSecret` + 공개 `publicConfig`
-- `aiApi`: **`ProviderKey = { id: LlmProviderIdType; purpose: LlmProviderPurposeType }`** 기반. `complete`, `completeBatch`, `listProviders`, `updateProvider(key, input)`, `deleteProvider(key)`, `testProvider(key, model?)`, `listModels(key)`, **`previewModels(key, input: PreviewLlmModelsInputType)` (신규 — 저장 전에 폼의 API 키로 모델 fetch, `ok=false` 분기로 에러 노출)** — URL 모양 `/providers/:id/:purpose[/models|/models/preview|/test]`.
+- `aiApi`: **`ProviderKey = { id: LlmProviderIdType; purpose: LlmProviderPurposeType }`** 기반. `complete`, `completeBatch`, `listProviders`, `updateProvider(key, input)`, `deleteProvider(key)`, `testProvider(key, model?)`, `listModels(key)`, `previewModels(key, input: PreviewLlmModelsInputType)` (저장 전에 폼의 API 키로 모델 fetch, `ok=false` 분기로 에러 노출), **`telemetry()` (신규 — LLM 사용량 스냅샷 GET) + `buildAiTelemetryStreamUrl(): Promise<string>` (신규 — `/telemetry/stream` token query SSE)** — URL 모양 `/providers/:id/:purpose[/models|/models/preview|/test]` + `/telemetry[/stream]`.
+- **`groupSuggestion` (신규, `settlement/`)**: `suggestItemGroups(items): ItemGroupSuggestion[]` (주류/음료를 종류 그룹으로 묶는 제안 — `@repo/api-contract` `matchDrinkKind` 재사용), `GROUPABLE_CATEGORIES`/`isGroupableCategory`/`GroupableCategoryType` re-export.
 - `settlementApi`: `create(input: CreateSettlementInputType)` (**input 에 `fromDraftId?: string` 옵션 필드** — 임시저장 draft 에서 출발한 저장 시 서버 트랜잭션이 그 draft 도 함께 삭제, mismatch 면 silent ignore), `list(query?)`, `get(id)`, `remove(id)`, **`update(id, input: UpdateSettlementInputType)` (전체 replace — 참여자/차수/items/attendees 모두 교체)**, **`createShare(id, ttl='7d', ogImage?, ogImageUrl?)`** (멱등 — 같은 세션 여러 번 호출 시 동일 토큰, ttl 로 만료 갱신; **`ogImage?: ShareOgImageType('restaurant'|'table')`** 미리보기 소스 토글 — 생략 시 서버가 기존 선택 유지; **`ogImageUrl?: string|null`** 트라이스테이트 — 생략→유지 / null→해제(랜덤) / URL→갤러리 사진 고정, `undefined` 일 때만 body 에서 키 제외; 응답 `SettlementShareType` 에 `ogImage`/`ogImageUrl`/**`ogImageCandidates: string[]`** 포함), `revokeShare(id)`, `getShared(token)` (공개 read-only, 비로그인 가능).
 - `settlementExtractionApi`: `upload(file: Blob)` (FormData with field name `'file'`), `extract(input)`, **`previewBlob(token): Promise<Blob>`** (apiFetch 미사용 — 직접 `fetch` + `getApiConfig().getToken?.()` 헤더 부착 후 `res.blob()` 반환; binary 라 JSON 파싱 우회).
 - `settlementContactApi`: `list(query? = { take: 50 })` (검색어 q 옵션), `update(id, input)`, `remove(id)`.
@@ -420,6 +507,12 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - 자동 발견: `useStartAutoDiscover`, `useCancelAutoDiscover`, `useAutoDiscoverJob`
 - 분석: `useAnalyticsOverview`, `useGlobalMenus`, `useCategoryTree`, `useStartGlobalMerge`, `useGlobalMergeJob`
 - **주기 자동 실행 (신규)**: `useScheduleConfig()` (`['schedule','config']`), `useScheduleRuns()` (`['schedule','runs']`), `useUpdateScheduleConfig()` (성공 시 config 에 `setQueryData` 직접 박기), `useRunScheduleNow()` (성공 시 runs+config invalidate), `useSchedulePreview(cronExpr, timezone, enabled)` (`['schedule','preview',cronExpr,timezone]`, `enabled && cronExpr.trim().length>0`), **`useScheduleRunEvents(enabled): { progress }`** (자체 EventSource — snapshot/progress/done, done 시 schedule+analytics invalidate, 1s→30s 백오프)
+- **지역 랜덤 자동 크롤 (신규)**: `useRandomCrawlConfig()` (`['random-crawl','config']`), `useRandomCrawlRuns()`, `useUpdateRandomCrawlConfig()` (성공 시 config `setQueryData`), `useRunRandomCrawlNow()` (runs+config invalidate), `useRandomCrawlPreview(cron, tz, enabled)`, `useRegionTree()` (`['random-crawl','regions']`, staleTime Infinity), `useRegionDongs(sido, sigungu)` (둘 다 있을 때만, staleTime Infinity), **`useRandomCrawlRunEvents(enabled): { progress }`** (schedule 동형 잡 SSE — snapshot→non-terminal 이면 progress 정규화/progress/done, done 시 runs+config+`['restaurants']` invalidate, 1s→30s 백오프)
+- **리뷰 RAG (신규)**: `useReviewSearchRestaurants()` (`['review-search','restaurants']`), `useEnrichReviews()`/`useReviewAsk()` (mutation), `useReviewEnrichStatus(query)` (`keepPreviousData` + 진행 중 10s 폴링), **`useReviewEnrichEvents()`** (진행률 SSE — `setQueriesData` 라이브 패치, EventSource 내장 재연결만), 공개 `useReviewQaReady(placeId, enabled)` (`['review-qa','ready',placeId]`, staleTime 60s), `useReviewAskPublic()` (mutation — *주: 식당 상세 Ask 탭은 이 훅 대신 `useReviewAskStore` 의 비동기 store 를 쓴다*)
+- **리뷰 군집화 (신규)**: `useRestaurantClusters(placeId, enabled)` (`['review-clusters',placeId]`, staleTime 5분 — 공개 읽기), `useRunClustering()` (mutation, 성공 시 `['review-clusters']` invalidate), `useClusterStatus(query)` (`keepPreviousData` + 진행 중 5s 폴링), `useClusterBg()`/`useClusterPending()` (mutation)
+- **작업 로그 (신규)**: `useOperationRuns(query)` (`['logs','runs',{...}]`, running 보이면 5s 폴링), `useOperationRun(runId)` (`['logs','runs',runId]`, run running 또는 report pending/running 이면 3s 폴링), `useOperationRunLogs(runId, {level,pageSize,enabled})` (infiniteQuery, cursor), `flattenOperationLogPages(data)` (헬퍼), `useAnalyzeRun()` (mutation — onSuccess 시 run+runs invalidate, ok 분기 없음), `useLogConfig()`/`useUpdateLogConfig()`
+- **LLM 텔레메트리 (신규)**: **`useLlmTelemetry(enabled): { data, connected, isLoading }`** — REST 초기 스냅샷(`['ai','telemetry']`, staleTime Infinity + refetchOnWindowFocus false) + SSE `'snapshot'` 이벤트가 `setQueryData` 로 캐시 덮어쓰기, `connected` state, 1s→30s 백오프. 싱글톤 아님(컴포넌트 수만큼 ES, 캐시는 공유).
+- **텔레그램 설정 (신규)**: `useTelegramConfig()` (`['settings','telegram']`), `useUpdateTelegramConfig()` (성공 시 config `setQueryData` + **`['random-crawl','config']` invalidate** — telegramConfigured 표시 갱신), `useDeleteTelegramConfig()`, `useTestTelegram()`/`useResolveTelegramChatId()` (mutation)
 - 지도: `useMapProviders`, `useUpdateMapProvider`, `useDeleteMapProvider`, `useMapProviderSecret`, `useMapPublicConfig`, **`useUserLocation(options? = { auto?: boolean })`** (auto=false 면 마운트 자동요청 스킵, refetch 로만 시작)
 - AI: `useCompleteAi`, `useCompleteBatchAi`, `useProviders`, `useUpdateProvider({ key, input })`, `useDeleteProvider(key)`, `useTestProvider({ key, model? })`, `useProviderModels(key, enabled?)`, **`usePreviewModels()` (a.k.a. `useProviderModelsPreview`) — mutation, `({ key, input }) => aiApi.previewModels(...)`, AdminAiKeysPage 저장 전 모델 미리보기**
 - 정산 세션:
@@ -455,13 +548,17 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - `useActiveGroupingJobStore`: `jobId | null` + `setJobId`, `clear` — `lp:activeGroupingJob` localStorage persist
 - `useActiveGlobalMergeJobStore`: `lp:activeGlobalMergeJob` localStorage persist
 - `useActiveDiningcodeBulkSaveJobStore`: `lp:activeDiningcodeBulkSaveJob` localStorage persist
+- **`useActiveTablingBulkSaveJobStore` (신규)**: `lp:activeTablingBulkSaveJob` localStorage persist — DC bulk-save 와 완전 동형(jobId|null + setJobId/clear, 404→clear 는 훅 책임)
 - `useActiveAutoDiscoverJobStore`: `lp:activeAutoDiscoverJob` localStorage persist
-- `useSettlementDraftStore`: **N차(rounds) 모델** — `{ participants: DraftParticipant[]; rounds: DraftRound[] }` + 액션:
+- **`useReviewAskStore` (신규)**: 공개 Ask 비동기 — `inFlight`/`lastByPlace`(영속, MAX_KEPT=20)/`freshThisSession`/`errorByPlace`/`completion`(seq)/`visiblePlaceId` + `ask`/`clearCompletion`/`clearLast`/`setAskTabVisible`. **store 가 직접 `publicAsk` 호출**. persist `review-ask-v1` v1, `partialize: lastByPlace 만`, `setReviewAskStorage(adapter)` lazy resolver(localStorage/AsyncStorage/NO_OP).
+- **`useResummarizeStore` (신규)**: `items: Record<reviewId, {reviewId, placeId, prevSentiment, model}>` + `add`/`remove`. persist 없음(메모리만) — watcher 가 placeId SSE 구독.
+- `useSettlementDraftStore`: **N차(rounds) 모델 + 세부 분배 그룹** — `{ participants: DraftParticipant[]; rounds: DraftRound[] }` + 액션:
   - lifecycle — `startFor(placeId, placeName)` / `startFromScratch()` / `reset()`
   - 마스터 참여자 — `setParticipants` / `addParticipant` (returns clientId) / `addParticipantsAndCompact` (빈 행 compaction + 다중 append) / `updateParticipant` / `removeParticipant` — 모두 내부에서 `syncAttendances` 호출해 모든 round 의 attendances 자동 정합화
   - 차수 — `addRound` (returns clientId) / `removeRound` / `updateRoundMeta` (placeId/Name/source/totalAmount/warning) / `setRoundItems` / `addRoundItem` (returns clientId) / `updateRoundItem` / `removeRoundItem` / **`setRoundReceipt({ imageToken, previewUrl, items?, totalAmount?, warning? })` — totalAmount/warning 은 `?? null` 강제 폴백** / `setAttendance` / `setExcludeOverride` (override === null 이면 마스터 default 로 복귀) / **`copyRoundAttendancesFrom(targetRoundCID, sourceRoundCID)`** (attendances 만 복사) / `setRoundDiscount` / `setCategoryAdjustment`
-  - persist key `settlement-draft-v1`, version `4` (v1→v2→v3→v4 마이그레이션 체인). storage 는 **`setSettlementDraftStorage(adapter)` 주입형** — 미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` (SSR/test 안전).
-  - 노출 타입: `SettlementDraft` / `DraftParticipant` / `DraftItem` / `DraftRound` / `DraftAttendance` / `DraftCategoryAdjustment` / `DraftCategoryAdjustments` / `ExcludeKey`.
+  - **세부 분배 그룹 (신규) — `applyGroupSplits(roundCID, groups[])` (통째 교체) / `addGroupSplit(roundCID, group)` (returns clientId) / `updateGroupSplit(roundCID, groupCID, patch)` / `removeGroupSplit(roundCID, groupCID)`**. items 변경 액션이 내부에서 `pruneGroupItems` 로 끊긴 항목 참조 자동 정리(전체 비면 `groupSplits: null` 압축). 그룹 멤버 자격은 `isEligibleGroupMember`, 계산기 입력 변환은 `draftGroupsToCalcInputs`.
+  - persist key `settlement-draft-v1`, **version `6`** (v1→…→v4→**v5(round 에 groupSplits 추가)→v6(잔여 수령자 단일 id → `leftoverParticipantClientIds` 배열 — `migrateCategoryAdjustments`)** 마이그레이션 체인). storage 는 **`setSettlementDraftStorage(adapter)` 주입형** — 미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` (SSR/test 안전).
+  - 노출 타입: `SettlementDraft` / `DraftParticipant` / `DraftItem` / `DraftRound` / `DraftAttendance` / `DraftCategoryAdjustment` (이제 `leftoverParticipantClientIds: string[]`) / `DraftCategoryAdjustments` / **`DraftItemGroup` / `DraftGroupMember`** / `ExcludeKey`.
 
 **UI / 디자인 / 상수** — UI 8 컴포넌트·상수 불변. **`design/tokens.ts` 다크 모드 토큰 가독성 개선** —
 `palette.zinc400(#a1a1aa)` 추가, `darkColors.textMuted` `zinc500→zinc400`(AA 4.5:1 회복), `darkColors.border`
@@ -507,6 +604,16 @@ interface DraftRound {
   discountAmount: number | null;                   // v3 도입
   discountCategory: ReceiptItemCategoryType | null;
   categoryAdjustments: DraftCategoryAdjustments | null;  // v4 도입 — 카테고리별 잔여 처리 규칙
+  groupSplits: DraftItemGroup[] | null;            // v5 도입 — 세부 분배 그룹 (소주/맥주/잔수)
+}
+
+interface DraftItemGroup {                           // v5 도입
+  clientId: string;
+  label: string;                                     // "소주" / "맥주" …
+  category: ReceiptItemCategoryType;                 // 그룹 카테고리 = 항목 카테고리 (스키마 제약)
+  itemClientIds: string[];                           // 풀에서 떼어낼 항목들
+  mode: SettlementGroupSplitModeType;                // EQUAL | 잔수 가중
+  members: DraftGroupMember[];                       // { participantClientId; glasses }
 }
 
 interface DraftAttendance {
@@ -519,8 +626,8 @@ interface DraftAttendance {
 }
 
 interface DraftCategoryAdjustment {
-  leftoverParticipantClientId: string;   // 잔여를 떠안을 마스터 참여자
-  roundUnit: number | null;              // 반올림 단위 (null = 보정 없음)
+  leftoverParticipantClientIds: string[];  // v6 — 잔여를 떠안을 마스터 참여자(들). v5 이하 단일 id → [id] 승격
+  roundUnit: number | null;                // 반올림 단위 (null = 보정 없음)
 }
 type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCategoryAdjustment | null>>;
 ```
@@ -530,8 +637,9 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   `NO_OP_STORAGE`(get/set/remove 모두 noop) 로 fallback — persist 가 메모리만 쓰는 효과.
   resolver 는 첫 read/write 시점에 평가되므로 앱 entry 가 zustand 첫 hydrate 이전에 한 번만
   호출하면 됨.
-- 키 `settlement-draft-v1`. **persist version `4`** — v1 → v2(rounds 도입) → v3(차수 할인) →
-  v4(카테고리 잔여 보정). `migrate(fromVersion)`:
+- 키 `settlement-draft-v1`. **persist version `6`** — v1 → v2(rounds 도입) → v3(차수 할인) →
+  v4(카테고리 잔여 보정) → **v5(round.groupSplits 추가) → v6(잔여 수령자 단일 id → `leftoverParticipantClientIds`
+  배열, `migrateCategoryAdjustments`)**. `migrate(fromVersion)`:
   - v2 이상 → 최신: rounds 각 항목에 누락 필드(`discountAmount`/`discountCategory`/`categoryAdjustments`)
     null fill (idempotent).
   - v1 → v4: 평면 draft 의 `placeId`/`items`/`receipt*`/`totalAmount`/`warning` 을 1차 round
@@ -567,6 +675,17 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   - `useUpdateScheduleConfig` onSuccess 가 `['schedule','config']` 에 `setQueryData(cfg)` 직접 박기(refetch 없이 반영).
   - `useRunScheduleNow` onSuccess → `['schedule','runs']` + `['schedule','config']` invalidate.
   - `useScheduleRunEvents` 의 `progress` 는 React Query 캐시가 아닌 훅 로컬 state. done 시 `['schedule','runs']` + `['schedule','config']` + `['analytics']` 무효화.
+- **지역 랜덤 크롤 (신규)**:
+  - `['random-crawl', 'config']` / `['random-crawl', 'runs']` / `['random-crawl', 'preview', cronExpr, timezone]` / `['random-crawl', 'regions']`(staleTime Infinity) / `['random-crawl', 'dongs', sido, sigungu]`(staleTime Infinity).
+  - `useRandomCrawlRunEvents` 의 `progress` 는 훅 로컬 state. done 시 runs+config+`['restaurants']` 무효화.
+- **리뷰 RAG / 군집 (신규)**:
+  - `['review-search', 'restaurants']` / `['review-search', 'enrich-status', q, page, pageSize]`(진행 중 10s 폴링, `useReviewEnrichEvents` 가 `setQueriesData` prefix 패치).
+  - `['review-qa', 'ready', placeId]`(staleTime 60s). 공개 Ask 답변은 캐시가 아니라 `useReviewAskStore.lastByPlace[placeId]` 에.
+  - `['review-clusters', placeId]`(staleTime 5분, `useRunClustering` 성공 시 `['review-clusters']` prefix invalidate) / `['review-clustering', 'status', q, page, pageSize]`(진행 중 5s 폴링).
+- **작업 로그 (신규)**:
+  - `['logs', 'runs', {page,limit,feature,status}]`(running 보이면 5s 폴링) / `['logs', 'runs', runId]`(running/report active 면 3s 폴링) / `['logs', 'runs', runId, 'logs', level, pageSize]`(infiniteQuery) / `['logs', 'config']`.
+- **LLM 텔레메트리 / 텔레그램 (신규)**:
+  - `['ai', 'telemetry']`(staleTime Infinity, SSE `setQueryData` 가 진실원) / `['settings', 'telegram']`(`useUpdateTelegramConfig` 가 `['random-crawl','config']` 까지 invalidate).
 - **정산 (신규)**:
   - `useListSettlements` → `['settlement', 'list', placeId ?? null, offset, limit]`
   - `useSettlement` → `['settlement', 'one', id]`
@@ -589,8 +708,34 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 
 **SSE 스트림 상태** (`useCrawlJobStream`) — 기존 동일.
 
-## 6. Key Decisions [coverage: high — 29 sources]
+## 6. Key Decisions [coverage: high — 33 sources]
 
+- **18차(2026-06-25): 비동기 잡 진행/완료를 React 바깥 전역 store 에 두고 토스트 watcher 가 탭을
+  가로질러 알린다.** 오래 걸리는 LLM/큐 작업(공개 Ask, 단건 재요약)을 트리거한 화면을 떠나도 결과·완료
+  알림이 살아 있어야 하므로 컴포넌트 로컬 state 가 아니라 Zustand 전역 store 에 둔다. 두 변형 — store 가
+  직접 fetch 하는 형(`reviewAskStore.ask`)과 목록만 들고 watcher 가 SSE 구독하는 형(`resummarizeStore`).
+  완료 시그널(`completion.seq` 증가 / `items` 변화)을 루트 watcher(`ReviewAskToaster`/`ResummarizeToaster`)가
+  구독해 정확히 1회 토스트. [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md) 의 클라
+  측 거울(서버 잡 게이트 ↔ 클라 잡 진행 분리). `setReviewAskStorage` lazy resolver 는
+  `settlementDraftStore` 의 storage 주입과 동일 철학.
+- **18차: 신규 review-search / review-clustering api 의 경로는 `Routes` 가 아니라 하드코딩** — `ai.api.ts`
+  관례. `Routes.ReviewSearch`/`Routes.ReviewClustering` 네임스페이스를 import 하면 vite esbuild prebundle
+  단계에서 트리쉐이킹으로 통째 드롭돼 런타임에 undefined 경로가 되는 사고가 있어, 모듈 상수 PREFIX 로 직접
+  문자열을 둔다. 같은 이유로 `aiApi` 도 PREFIX 하드코딩 유지.
+- **18차: `useReviewEnrichEvents` 만 잡 SSE 백오프를 직접 안 굴린다** — 다른 잡 SSE 훅(grouping/global-merge/
+  DC bulk-save/auto-discover/schedule/random-crawl)은 `closedRef`+1s→30s 백오프를 직접 들지만, enrich 진행률
+  SSE 는 진행률 패치만 하는 짧은 보조 채널이라 EventSource 내장 재연결에 맡기고 `useReviewEnrichStatus` 의
+  10s 폴링이 안전망. "라이브 push + 폴링 안전망" 조합 — `useClusterStatus`(5s 폴링, SSE 아예 없음)도 같은 철학.
+- **18차: 텔레메트리는 REST 초기 스냅샷 + SSE 가 캐시를 덮어쓰는 진실원** — `useLlmTelemetry` 가 `['ai','telemetry']`
+  를 `staleTime: Infinity`+`refetchOnWindowFocus:false` 로 두고 SSE `'snapshot'` 만 `setQueryData`. summary
+  매니저처럼 싱글톤은 아니어서 구독 컴포넌트 수만큼 EventSource 가 생기지만 캐시는 공유 — 어드민에선 패널 1곳만
+  구독하고 페이지는 캐시만 읽는 운용을 권장(둘 다 구독해도 ES 2개 수준이라 허용).
+- **18차: random-crawl 은 schedule 의 복제형 + 지역 트리** — config/run/runs/preview + 잡 SSE(`useRandomCrawlRunEvents`)
+  가 `useScheduleRunEvents` 와 동형(enabled 토글, snapshot→non-terminal 정규화, done invalidate, 1s→30s). 차이는
+  done 시 `['restaurants']` 까지 무효화(랜덤 크롤이 새 식당을 등록) + 지역 트리/동 목록(`staleTime Infinity`).
+- **18차: 정산 세부 분배 그룹 멤버 자격은 단일 함수(`isEligibleGroupMember`)로** — 에디터 후보 표시·미리보기 계산·
+  저장 페이로드가 모두 같은 함수를 거쳐, "참석 + 그 카테고리 미제외"(차수 override 반영) 기준이 한 곳에서만 정의된다.
+  잔여 수령자는 v6 에서 단일 id → `leftoverParticipantClientIds` 배열로 승격(다중 수령자 지원).
 - **17차(2026-06): `useScheduleRunEvents` SSE 진행 훅 추가, design 토큰 soft tonal+다크 —
   테마 저장소는 플랫폼별 분리, `@repo/shared` 는 토큰만 공유.** 주기 자동 실행 진행은 잡 단위 SSE
   훅 패턴(매니저 미사용 + 1s→30s 백오프)을 그대로 답습하되 jobId 없이 `enabled` 플래그만으로
@@ -739,11 +884,31 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   Content-Type 안 붙임, AI path 하드코드, 로직/UI 플랫폼 분리, 빌드 없는 소스 노출, 유연한
   React peer, SSE 토큰은 쿼리스트링, 중복 이벤트 방어** — 모두 기존 결정 유지.
 
-## 7. Gotchas [coverage: high — 26 sources]
+## 7. Gotchas [coverage: high — 30 sources]
 
+- **review-search/review-clustering 은 `Routes` 를 import 하면 안 된다** — vite esbuild prebundle 이
+  네임스페이스를 트리쉐이킹으로 드롭해 경로가 undefined 가 된다(ai.api.ts 가 같은 이유로 PREFIX 하드코딩).
+  두 api 모듈은 모듈 상수(`RS_PREFIX`/`RC_PREFIX`/`PUBLIC_PREFIX`)로 문자열을 직접 둔다. 백엔드 라우트가
+  바뀌면 이 상수를 손으로 맞춰야 함 — `Routes` 의 자동 동기화 안전망이 없다.
+- **`useReviewAskStore.ask` 의 답은 store 에 갇혀 React Query 캐시와 무관** — 식당 상세 Ask 탭은
+  `useReviewAskPublic` mutation 이 아니라 store 의 `ask` 를 쓴다(탭 떠나도 살아남게). 그래서 답변은
+  `['review-qa', ...]` 같은 캐시가 아니라 `lastByPlace[placeId]` 에 있다. mutation 훅과 store 를 헷갈리면
+  "왜 캐시에 답이 없지" 가 됨. 또 `lastByPlace` 만 영속이고 `completion`/`inFlight` 는 메모리라 하드 리로드 시
+  진행 중 질문은 사라진다(in-flight HTTP 도 죽으므로 의도된 동작).
+- **토스트 watcher 는 루트에 정확히 1개만** — `ReviewAskToaster`(seq 변화 감지)/`ResummarizeToaster`(items SSE
+  구독)를 여러 곳에 마운트하면 같은 완료가 중복 토스트되거나 SSE 가 중복 구독된다. 앱/웹 루트에 단일 마운트 계약.
+  `completion.seq` 는 단조 증가만 하므로 watcher 가 "마지막으로 본 seq" 를 들고 있어야 한 번만 띄운다.
+- **`useLlmTelemetry` 는 싱글톤이 아니다 — SSE 가 컴포넌트 수만큼 열린다** — summary 매니저와 달리 모듈
+  싱글톤이 없어 `useLlmTelemetry(true)` 를 두 곳에서 부르면 EventSource 2개. 캐시(`['ai','telemetry']`)는
+  공유되니 데이터는 일관되지만 연결이 늘어난다. 패널 1곳만 `enabled`, 나머지는 캐시만 읽거나(enabled=false)
+  허용 범위(2개)로 운용. `staleTime: Infinity` 때문에 REST 는 한 번만 — 끊긴 사이엔 stale 스냅샷이 남는다.
+- **`useReviewEnrichEvents` 는 백오프를 안 굴린다** — EventSource 내장 재연결만 쓰므로 서버가 오래 죽으면
+  브라우저 기본 재시도(보통 3s) 로만 두드린다. 진행률이 한동안 안 올라오면 `useReviewEnrichStatus` 의 10s
+  폴링이 따라잡는다 — 진행률 바가 잠깐 멈춰 보여도 정상. `cancelled` 가드로 cleanup 시 ES close 만 한다.
 - **EventSource 헤더 못 보냄 → token query 필수** — `buildJobEventsUrl`, `buildSummaryEventsUrl`,
   `buildGroupingJobEventsUrl`, `buildGlobalMergeJobEventsUrl`, `buildDiningcodeBulkSaveEventsUrl`,
-  `buildAutoDiscoverEventsUrl`, **`buildScheduleRunEventsUrl`** 모두 `?token=<jwt>`. URL/access log/Referer 노출 위험 동일. (`buildScheduleRunEventsUrl` 만 `async` — `getToken?.()` 가 Promise 일 수 있어 await; 따라서 `useScheduleRunEvents` 의 `connect` 도 async 이고 그 사이 cleanup 이 돌면 `cancelled` 가드로 ES 생성 자체를 막는다.)
+  `buildAutoDiscoverEventsUrl`, **`buildScheduleRunEventsUrl`, `buildRandomCrawlRunEventsUrl`,
+  `buildReviewEnrichEventsUrl`, `buildAiTelemetryStreamUrl`** 모두 `?token=<jwt>`. URL/access log/Referer 노출 위험 동일. (`buildScheduleRunEventsUrl` 만 `async` — `getToken?.()` 가 Promise 일 수 있어 await; 따라서 `useScheduleRunEvents` 의 `connect` 도 async 이고 그 사이 cleanup 이 돌면 `cancelled` 가드로 ES 생성 자체를 막는다.)
 - **`useScheduleRunEvents` 는 jobId 가 아니라 `enabled` 단일 dep** — 서버가 "현재 진행 중 run" 하나를 스트림하므로 클라가 runId 를 모르고도 연결. `enabled` 가 false→true 로 바뀔 때만 재연결하고, false 면 `progress`=null 리셋. caller 가 `enabled` 를 "지금 실행" 클릭/진행 중 run 존재 여부로 토글해야 함 — 안 끄면 done 후에도 빈 연결을 재시도(`onerror` 백오프) 할 수 있으니 done 직후 caller 가 enabled 를 내리거나 done 이벤트의 closed 가드에 의존.
 - **`useScheduleRunEvents` 의 done → `['analytics']` 통째 invalidate** — 주기 머지 결과를 overview/통계에 반영하려는 의도지만 analytics prefix 전체를 무효화하므로 그 화면이 떠 있으면 일괄 refetch. 머지 외 다른 schedule 작업이 추가되면 invalidate 범위 재검토 필요.
 - **공개 리뷰 queryKey 튜플 확장(tip/menu) — cold cache** — `['restaurant','public-reviews',placeId,sentiment,sort]` 가 `tip ?? null`/`menu ?? null` 두 칸 추가로 길어졌다. 기존 캐시 키와 안 맞아 배포 직후 한 번 cold(전부 refetch). 또한 tip 과 menu 를 동시에 설정하면 서버 동작이 정의돼 있지 않으니(계약상 동시 1개만) 호출처에서 상호배타 보장 필요.
@@ -841,11 +1006,11 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   HTMLElement 필요**, **`invalidateQueries` prefix 매칭 주의**, **`testProvider`/`deleteProvider`
   빈 body** — 모두 기존 항목 유지.
 
-## 8. Sources [coverage: high — 54 sources]
+## 8. Sources [coverage: high — 66 sources]
 
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
-- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: schedule.api + useSchedule re-export 추가*
+- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: review-search/review-clustering/randomCrawl/logs/telegram-settings api + useReviewSearch/useReviewClusters/useRandomCrawl/useLogs/useLlmTelemetry/useTelegramSettings hook + reviewAskStore/resummarizeStore/activeTablingBulkSaveJobStore + settlement/groupSuggestion re-export 추가*
 - [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts)
 - [packages/shared/src/api/auth.api.ts](../../packages/shared/src/api/auth.api.ts)
 - [packages/shared/src/api/picks.api.ts](../../packages/shared/src/api/picks.api.ts)
@@ -856,8 +1021,14 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/api/menu-grouping.api.ts](../../packages/shared/src/api/menu-grouping.api.ts)
 - [packages/shared/src/api/autoDiscover.api.ts](../../packages/shared/src/api/autoDiscover.api.ts)
 - [packages/shared/src/api/analytics.api.ts](../../packages/shared/src/api/analytics.api.ts)
-- [packages/shared/src/api/schedule.api.ts](../../packages/shared/src/api/schedule.api.ts) (NEW)
-- [packages/shared/src/api/ai.api.ts](../../packages/shared/src/api/ai.api.ts)
+- [packages/shared/src/api/schedule.api.ts](../../packages/shared/src/api/schedule.api.ts)
+- [packages/shared/src/api/randomCrawl.api.ts](../../packages/shared/src/api/randomCrawl.api.ts) (NEW)
+- [packages/shared/src/api/review-search.api.ts](../../packages/shared/src/api/review-search.api.ts) (NEW)
+- [packages/shared/src/api/review-clustering.api.ts](../../packages/shared/src/api/review-clustering.api.ts) (NEW)
+- [packages/shared/src/api/logs.api.ts](../../packages/shared/src/api/logs.api.ts) (NEW)
+- [packages/shared/src/api/telegram-settings.api.ts](../../packages/shared/src/api/telegram-settings.api.ts) (NEW)
+- [packages/shared/src/api/ai.api.ts](../../packages/shared/src/api/ai.api.ts) — *modified: telemetry GET + buildAiTelemetryStreamUrl SSE 추가*
+- [packages/shared/src/settlement/groupSuggestion.ts](../../packages/shared/src/settlement/groupSuggestion.ts) (NEW)
 - [packages/shared/src/api/settings-map.api.ts](../../packages/shared/src/api/settings-map.api.ts)
 - [packages/shared/src/api/settlement.api.ts](../../packages/shared/src/api/settlement.api.ts) — *modified: createShare ogImage/ogImageUrl 트라이스테이트 + SettlementShare ogImageCandidates*
 - [packages/shared/src/api/settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts)
@@ -873,7 +1044,13 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/hooks/useMenuGrouping.ts](../../packages/shared/src/hooks/useMenuGrouping.ts)
 - [packages/shared/src/hooks/useAutoDiscover.ts](../../packages/shared/src/hooks/useAutoDiscover.ts)
 - [packages/shared/src/hooks/useAnalytics.ts](../../packages/shared/src/hooks/useAnalytics.ts)
-- [packages/shared/src/hooks/useSchedule.ts](../../packages/shared/src/hooks/useSchedule.ts) (NEW)
+- [packages/shared/src/hooks/useSchedule.ts](../../packages/shared/src/hooks/useSchedule.ts)
+- [packages/shared/src/hooks/useRandomCrawl.ts](../../packages/shared/src/hooks/useRandomCrawl.ts) (NEW)
+- [packages/shared/src/hooks/useReviewSearch.ts](../../packages/shared/src/hooks/useReviewSearch.ts) (NEW)
+- [packages/shared/src/hooks/useReviewClusters.ts](../../packages/shared/src/hooks/useReviewClusters.ts) (NEW)
+- [packages/shared/src/hooks/useLogs.ts](../../packages/shared/src/hooks/useLogs.ts) (NEW)
+- [packages/shared/src/hooks/useLlmTelemetry.ts](../../packages/shared/src/hooks/useLlmTelemetry.ts) (NEW)
+- [packages/shared/src/hooks/useTelegramSettings.ts](../../packages/shared/src/hooks/useTelegramSettings.ts) (NEW)
 - [packages/shared/src/hooks/useAi.ts](../../packages/shared/src/hooks/useAi.ts)
 - [packages/shared/src/hooks/useSettingsMap.ts](../../packages/shared/src/hooks/useSettingsMap.ts)
 - [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *modified: { auto?: boolean } 옵션 (auto=false 면 마운트 자동요청 스킵) — 기존 insecure-context 단정 + Permissions 'change' 구독 유지*
@@ -886,8 +1063,11 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/stores/activeGroupingJobStore.ts](../../packages/shared/src/stores/activeGroupingJobStore.ts)
 - [packages/shared/src/stores/activeGlobalMergeJobStore.ts](../../packages/shared/src/stores/activeGlobalMergeJobStore.ts)
 - [packages/shared/src/stores/activeDiningcodeBulkSaveJobStore.ts](../../packages/shared/src/stores/activeDiningcodeBulkSaveJobStore.ts)
+- [packages/shared/src/stores/activeTablingBulkSaveJobStore.ts](../../packages/shared/src/stores/activeTablingBulkSaveJobStore.ts) (NEW)
 - [packages/shared/src/stores/activeAutoDiscoverJobStore.ts](../../packages/shared/src/stores/activeAutoDiscoverJobStore.ts)
-- [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts)
+- [packages/shared/src/stores/reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts) (NEW)
+- [packages/shared/src/stores/resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts) (NEW)
+- [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — *modified: groupSplits(세부 분배 그룹) + DraftItemGroup/DraftGroupMember + 잔여 수령자 배열(v5→v6), persist version 4→6*
 - [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
 - [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts) — *modified: zinc400 추가 + 다크 textMuted/border 대비비 상향 + lightColors.bg=white*

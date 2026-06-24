@@ -1,12 +1,16 @@
 ---
 topic: canonical
-last_compiled: 2026-05-17
+last_compiled: 2026-06-25
+source_count: 21
 status: active
+aliases: [tabling-merge, place-partner-promote, canonical-members]
 ---
 
 # canonical — 출처 가로지르는 같은 가게 통합
 
-`apps/friendly/src/modules/canonical/` 와 `apps/friendly/src/lib/matching.ts` 를 묶은 어드민 전용 통합 레이어. Naver/캐치테이블/다이닝코드 같은 서로 다른 source 에서 들어온 `Restaurant` 행들을 "이 셋이 사실은 같은 가게" 로 묶어 한 개의 `CanonicalRestaurant` 정체로 만든다. bigram Jaccard + Haversine 으로 점수를 매긴 cross-source 후보를 세 채널로 어드민에게 노출한다 — (1) 풀 후보 패널, (2) list 행 위에 끼는 1차 알림 줄, (3) 등록 직후 후크가 채우는 검토 큐 — 그리고 2026-05-17 부터는 (4) **보수적 임계를 통과한 Naver→DC 쌍에 한해 자동 머지**(C안). 임계를 못 넘으면 그대로 검토 큐로 fallback 한다. merge/split/delete 는 모두 명시 호출이며 트랜잭션 안에서 FK 무결성을 손으로 관리한다.
+`apps/friendly/src/modules/canonical/` 와 `apps/friendly/src/lib/matching.ts` 를 묶은 어드민 전용 통합 레이어. Naver/캐치테이블/다이닝코드/**테이블링** 같은 서로 다른 source 에서 들어온 `Restaurant` 행들을 "이 넷이 사실은 같은 가게" 로 묶어 한 개의 `CanonicalRestaurant` 정체로 만든다. bigram Jaccard + Haversine 으로 점수를 매긴 cross-source 후보를 세 채널로 어드민에게 노출한다 — (1) 풀 후보 패널, (2) list 행 위에 끼는 1차 알림 줄, (3) 등록 직후 후크가 채우는 검토 큐 — 그리고 2026-05-17 부터는 (4) **보수적 임계를 통과한 Naver→DC 쌍에 한해 자동 머지**(C안). 임계를 못 넘으면 그대로 검토 큐로 fallback 한다. merge/split/delete 는 모두 명시 호출이며 트랜잭션 안에서 FK 무결성을 손으로 관리한다.
+
+**2026-06 변경 흡수 — 테이블링 4번째 소스 합류**: (1) **공개 표시 융합이 3소스로 일반화** — [restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) 의 머지 헬퍼 군집이 Naver + DC + **테이블링** 세 출처를 한 detail 로 합친다(`composeTablingAddon` 추가, 261→372줄, 커밋 49c3c1d). (2) **테이블링 place↔partner 자동 승격 머지** — 같은 가게의 미입점 `place` 행과 입점 `partner` 행은 둘 다 `source='tabling'` 이라 cross-source 후보 룰의 사각지대였다. 저장 시점 좌표+이름 매칭으로 둘을 잇고 partner 쪽으로 머지("승격")한다(커밋 be0f759). (3) **canonical 멤버 조회 헬퍼** — 신규 [canonical-members.ts](../../apps/friendly/src/modules/restaurant/canonical-members.ts) 가 공개 융합과 동일 소스 규칙(naver+diningcode+tabling partner)으로 한 canonical 의 멤버 행을 푼다 — review-search/clustering 코퍼스 로딩의 공용 진입점. 단, canonical **묶기 후보 점수 매칭**(`matching.ts`/`canonical.service`/`proposal.service`)·schema·UI 는 무변경 — 테이블링 합류는 전적으로 표시 융합 + 저장 시점 자동 승격 두 갈래다.
 
 ## Purpose [coverage: high — 4 sources]
 
@@ -22,7 +26,7 @@ status: active
 
 권한은 전부 `app.authenticate + app.requireAdmin`. 일반 사용자는 호출 불가.
 
-## Architecture [coverage: high — 8 sources]
+## Architecture [coverage: high — 10 sources]
 
 ```
                      ┌─ Restaurant (naver)   ┐
@@ -59,7 +63,9 @@ runJob(naver) ─done─▶ upsertRestaurantFromCrawl ─▶ generateProposalsFo
 5. **bbox prefilter** — `COORD_BOX_DELTA = 0.007`(위도 1°≈111km, 500m 임계의 약 1.5x). `findMany` 의 WHERE 절에 `latitude/longitude` 박스 조건을 걸어 Haversine 을 전수 호출하지 않게 좁힌다 ([canonical.service.ts:85-100](../../apps/friendly/src/modules/canonical/canonical.service.ts), [proposal.service.ts:41-59](../../apps/friendly/src/modules/canonical/proposal.service.ts)).
 6. **List 응답 통합** ([restaurant.service.ts:330-646](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) — 모든 Restaurant 를 한 번에 로드해 `byCanonical: Map<canonicalId, {canonical, sources[]}>` 로 그룹화 → 페어별 score 루프 안에서 각 canonical 의 `candidateCount` 와 `top1` 후보를 동시에 집계 → `suggestion` 은 `candidateCount ≥ 1 && suggestionDismissedAt === null` 일 때만 top1 으로 채움 → `CanonicalListItem` 한 줄에 `sources[] + candidateCount + suggestion?` 으로 반환.
 7. **자동 DC 매칭 후크** ([crawl.service.ts:142-210](../../apps/friendly/src/modules/crawl/crawl.service.ts)) — `CrawlService` 가 옵셔널로 `CanonicalService` 를 주입받아 Naver 등록 직후 같은 canonical 의 DC 형제를 자동 발견 + 머지한다. 보수적 임계(이름 0.85 / 거리 50m / top1-top2 ≥ 0.1)를 통과한 경우에만 `saveDiningcodeShop` → `canonical.merge(dcCanonicalId, naverCanonicalId)`. 좌표 없거나 DC source 이미 보유 시 진입 조건 단계에서 차단. `RestaurantService.getCanonicalCoreForAutoMatch` ([restaurant.service.ts:224](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) 가 canonical 한 행의 name/sources/좌표를 한 번에 돌려준다.
-8. **상세 응답 융합 헬퍼** ([restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts), 261줄) — canonical 1:N 그룹 안의 Naver 행 + DC 형제(들)를 한 detail 응답으로 합치는 순수 함수 군집: `mergeName`, `mergeCategory`, `mergeCoordinates`, `mergeAddress`, `mergePhone`, `mergeRating`, `mergeMenus`, `mergePhotos`, `mergeBlogReviews`, `mergeBusinessHours`, `mergeReviewCount`, `computeStoredReviewCount`, `composeDiningcodeAddon`, `computeSources`. canonical 모듈 외부(restaurant 모듈)에 있지만 **canonical 1:N 그룹의 표시 정책**을 담당. 어드민 발견 상세 패널에서 사용 ([restaurant.service.ts:1018-1102](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)).
+8. **상세 응답 융합 헬퍼** ([restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts), 372줄) — canonical 1:N 그룹 안의 Naver 행 + DC 형제(들) + **테이블링 partner 형제**를 한 detail 응답으로 합치는 순수 함수 군집: `mergeName`, `mergeCategory`, `mergeCoordinates`, `mergeAddress`, `mergePhone`, `mergeRating`, `mergeMenus`, `mergePhotos`, `mergeBlogReviews`, `mergeBusinessHours`, `mergeReviewCount`, `serializeTablingBusinessDays`, `computeStoredReviewCount`, `composeDiningcodeAddon`, `composeTablingAddon`, `computeSources`. **(2026-06)** 모든 머지 함수가 옵셔널 세 번째 인자 `tb: TablingSnapshot | null` 을 받아 "전 필드 Naver 1순위 + 필드별 폴백" 정책을 3소스로 일반화 — 영업시간은 Naver text > **테이블링 요일별 직렬화** > DC summary(테이블링이 가게 직접 관리라 DC 보다 정확), 메뉴는 Naver 비면 테이블링(가격+이미지 1차) > DC, 사진은 3소스 합집합 dedup. `composeTablingAddon` 은 테이블링 전용 부가정보(flags/4축 ratings/favoriteCount/businessDays — waitingCount 는 스테일이라 의도 제외). 테이블링 **partner 행만** 융합 대상 — `place` 행은 얕은 스냅샷이라 제외. canonical 모듈 외부(restaurant 모듈)에 있지만 **canonical 1:N 그룹의 표시 정책**을 담당. 어드민 발견 상세 패널에서 사용 ([restaurant.service.ts:1018-1102](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)).
+9. **canonical 멤버 조회 헬퍼** ([canonical-members.ts](../../apps/friendly/src/modules/restaurant/canonical-members.ts), 신규) — 공개 융합과 **동일 소스 규칙**(naver + diningcode + tabling partner)으로 한 canonical 의 멤버 `Restaurant` 행을 모으는 헬퍼 군집: `resolveCanonicalMembersByPlaceId`, `resolveCanonicalMembersByRestaurantId`, `listPublicPlaces`. 반환의 `primaryId` 는 placeId 보유(네이버) 행 — 공개 조회·코퍼스 캐시·군집 영속(`ReviewCluster.restaurantId`)의 대표 키. review-search(enrich/QA)·review-clustering 이 단일 restaurantId 대신 이 멤버 집합으로 코퍼스를 로드 → "리뷰 탭엔 보이는데 enrich/군집엔 빠지는" 불일치 방지. `listPublicPlaces` 는 placeId 보유 가게 1개당 한 줄로 부수 행(DC/테이블링) 리뷰를 합산하고 리뷰 0 가게는 제외(어드민 상태 목록 공용).
+10. **테이블링 place↔partner 자동 승격 후크** ([crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts), `tryLinkTablingPlacePartner`) — 같은 가게의 `place`(미입점 JSON-LD)·`partner`(입점, 풍부) 행은 둘 다 `source='tabling'` 이라 cross-source 후보 룰(다른 source 만 후보)·제안 큐(새 source 만 제안)가 양쪽 다 건너뛰는 사각지대. 저장 시점에 좌표+이름으로 둘을 잇고 **partner 쪽으로 머지("승격")**한다. `saveTablingShop`(partner 저장)·`saveTablingPlace`(place 저장) 양방향에서 배선되며 어느 방향이든 keep=partner. auto-match(Naver/DC)로 canonical 이 바뀐 경우까지 최종 canonical 기준. 임계는 DC 자동매칭과 동일(이름 ≥0.85 / 거리 ≤50m / top1-top2 ≥0.1), 미달 시 silent skip.
 
 ## Talks To [coverage: high — 7 sources]
 
@@ -69,7 +75,7 @@ runJob(naver) ─done─▶ upsertRestaurantFromCrawl ─▶ generateProposalsFo
   - `generateProposalsForRestaurant` — 검토 큐 적재 (실패 시 console.error 만, 등록 흐름 무관)
   - `tryAutoMatchDiningcode` — fire-and-forget(`void`). 통과 시 `canonical.merge` 호출, 미통과 시 silent skip. ProposalService 큐와 자동 머지는 **배타적** — 자동 머지가 성공하면 두 canonical 이 하나가 되어 같은 페어가 다시 큐에 안 들어옴.
 - **auto-discover** — 자동 발견 잡이 Naver Place 를 등록할 때 동일한 `runJob done` 경로를 거치므로 위 두 후크가 그대로 트리거된다. 즉 자동 발견의 결과로 DC 자동 매칭이 일어남(별도 분기 없음).
-- **restaurant** — `RestaurantService.upsertRestaurantFromCrawl` 등이 신규 행 생성 시 `canonical: { create: { ... } }` 로 1:1 canonical 을 함께 만든다 ([restaurant.service.ts:87-108](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)). `getCanonicalIdForRestaurant` 는 후크가 restaurantId → canonicalId 를 푸는 데 사용. `getCanonicalCoreForAutoMatch` ([:224](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) 는 자동 매칭이 name/sources/좌표 한 묶음을 받기 위한 헬퍼. **`restaurant.merge.ts`** ([restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts)) 의 머지 헬퍼 군집이 canonical 1:N 그룹을 detail 응답 한 덩어리로 융합 — canonical 토픽이 정의한 그룹 정체를 표시 레이어가 어떻게 펴는지의 정답지.
+- **restaurant** — `RestaurantService.upsertRestaurantFromCrawl` 등이 신규 행 생성 시 `canonical: { create: { ... } }` 로 1:1 canonical 을 함께 만든다 ([restaurant.service.ts:87-108](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)). `getCanonicalIdForRestaurant` 는 후크가 restaurantId → canonicalId 를 푸는 데 사용. `getCanonicalCoreForAutoMatch` ([:224](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) 는 자동 매칭이 name/sources/좌표 한 묶음을 받기 위한 헬퍼. **(2026-06)** `findTablingCanonicalsNear` 가 좌표 박스 안 tabling canonical 을 `sourceId` 까지 반환(place `'place:'` prefix / partner 숫자 분류용) — `tryLinkTablingPlacePartner` 가 사용. **`restaurant.merge.ts`** ([restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts)) 의 머지 헬퍼 군집이 canonical 1:N 그룹(Naver+DC+테이블링)을 detail 응답 한 덩어리로 융합 — canonical 토픽이 정의한 그룹 정체를 표시 레이어가 어떻게 펴는지의 정답지. **`canonical-members.ts`** ([canonical-members.ts](../../apps/friendly/src/modules/restaurant/canonical-members.ts)) 는 같은 소스 규칙으로 멤버 행을 모아 review-search/clustering 에 공급 — 토픽 [review-clustering](review-clustering.md)·[review-search](review-search.md) 의 코퍼스 진입점.
 - **shared / web** — [canonical.api.ts](../../packages/shared/src/api/canonical.api.ts), [useCanonical.ts](../../packages/shared/src/hooks/useCanonical.ts) (React Query 훅 8개). 어드민 UI 는 [CanonicalMergePanel.tsx](../../apps/web/src/components/restaurant/CanonicalMergePanel.tsx)(후보 패널 + merge/split 버튼), [MergeProposalQueue.tsx](../../apps/web/src/components/restaurant/MergeProposalQueue.tsx)(검토 큐 + 전체 다시 돌리기), [AdminRestaurantsPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx)(suggestion 알림 줄, "닫기", canonical 단위 삭제 다이얼로그).
 
 ## API Surface [coverage: high — 2 sources]
@@ -121,7 +127,10 @@ Proposal 의 status enum 은 `open | accepted | rejected | superseded` ([canonic
 
 NOT NULL FK → `canonical_restaurants(id)`. **`ON DELETE RESTRICT`**. INDEX `(canonicalId)`. 신규 row 는 `canonical: { create: ... }` 로 1:1 동시 생성.
 
-## Key Decisions [coverage: high — 7 sources]
+## Key Decisions [coverage: high — 8 sources]
+
+- **(h) 테이블링 합류는 "묶기 점수"가 아니라 두 갈래 — 표시 융합 + 저장 시점 자동 승격 (2026-06)** — 테이블링을 4번째 source 로 들이되 `matching.ts`/`canonical.service`/`proposal.service` 의 후보 점수 매칭은 손대지 않았다. 대신 (1) 표시 융합(`restaurant.merge.ts`)에 테이블링 partner 형제를 합류시켜 "전 필드 Naver 1순위" 정책을 3소스로 일반화, (2) `place`↔`partner` 처럼 같은 source 라 후보 룰이 못 잡는 쌍만 저장 시점 자동 승격(`tryLinkTablingPlacePartner`)으로 메운다. cross-source(Naver↔테이블링 등) 묶기는 여전히 검토 큐/자동매칭의 일반 경로가 처리. 점수 로직을 안 건드린 이유 — 테이블링은 좌표/이름 신뢰도가 높아 기존 임계가 그대로 통한다.
+- **(i) place↔partner 사각지대를 저장 시점 승격으로 — 같은 source 라 후보 룰이 못 잡음** — `place`(미입점 JSON-LD, 얕음)·`partner`(입점, 풍부) 행은 둘 다 `source='tabling'` 이라 "다른 source 만 후보" 룰·"새 source 만 제안" 큐가 양쪽 다 건너뛰어 영구히 별도 canonical 로 남는다. `saveTablingShop`/`saveTablingPlace` 양방향에서 좌표+이름으로 반대 역할을 찾아 **partner 쪽으로 머지(승격)** 하고, auto-match(Naver/DC)로 canonical 이 바뀐 뒤의 최종 canonical 을 기준으로 잡는다. 임계는 DC 자동매칭 상수(이름 0.85/거리 50m/tie 0.1)를 재사용. 스키마/UI 무변경 — 기존 `tryAutoMatch*` 자동머지 아키텍처에 편입. 라이브 프로브 `probe:tabling-promote` 로 실 배선 검증.
 
 - **(a) 자동 매칭 정책: C안 — "수동 확정만" 에서 "보수적 임계 통과 시 자동 머지, 미통과 시 검토 큐 fallback" 으로 진화 (2026-05-17)** — 기존에는 동명이인/주변 가게 false positive 우려로 임계 통과 쌍도 모두 검토 큐에만 넣었다. 운영 경험상 Naver→DC 페어 중 (이름 0.85 / 거리 50m / top1-top2 격차 0.1) 을 동시에 만족하는 케이스는 사실상 동일 가게로 판명되어, Naver 크롤 done 직후 한정으로 자동 머지를 허용. 통과 못 한 쌍은 그대로 ProposalService 큐로 들어가 어드민이 accept/reject. 임계 상수 (`AUTO_DC_NAME_THRESHOLD = 0.85`, `AUTO_DC_DISTANCE_THRESHOLD_M = 50`, `AUTO_DC_TIE_GAP = 0.1`) 는 [crawl.service.ts:86-88](../../apps/friendly/src/modules/crawl/crawl.service.ts) 에 모듈 상수로 노출 — 운영 중 false positive 가 보고되면 여기만 손대면 됨. **자동 머지는 Naver→DC 한 방향만** (현재 자동 발견 흐름이 Naver 기준이라). 캐치테이블 등 다른 source 는 여전히 검토 큐 경로.
 - **(b) cross-source 만 후보** — 같은 source 끼리는 `(source, sourceId)` UNIQUE 라 절대 같은 가게가 두 행으로 들어올 수 없다. 그래서 후보 룰에 "target 의 source 집합과 겹치지 않는 source 가 후보 측에 있어야" 한 조건 추가 ([canonical.service.ts:120-122](../../apps/friendly/src/modules/canonical/canonical.service.ts), [proposal.service.ts:62-64](../../apps/friendly/src/modules/canonical/proposal.service.ts)). 묶을 가치가 있는 건 오로지 cross-source.
@@ -144,7 +153,7 @@ NOT NULL FK → `canonical_restaurants(id)`. **`ON DELETE RESTRICT`**. INDEX `(c
 - **순수 DB 모듈, registry 의존성 없음** — crawl 의 JobRegistry, summary 의 큐 등과 달리 canonical 모듈은 메모리 상태가 0이다. 모든 진실은 두 테이블에 있고 후크 실패도 등록 흐름을 막지 않는다 ([crawl.service.ts:104-114](../../apps/friendly/src/modules/crawl/crawl.service.ts)). 데이터 복구는 항상 `proposals/run` 으로 전수 재계산하면 일관된 상태가 된다.
 - **좌표 추출 source 별 키 차이** — `split` 에서 snapshot json 을 읽을 때 Naver 는 `latitude/longitude`, 다이닝코드는 `lat/lng`. 둘 다 시도해 `??` 로 첫 truthy 선택 ([canonical.service.ts:230-241](../../apps/friendly/src/modules/canonical/canonical.service.ts)). 마이그레이션의 백필 COALESCE 와 같은 패턴.
 
-## Sources [coverage: high — 19 sources]
+## Sources [coverage: high — 21 sources]
 
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — `CanonicalRestaurant`, `CanonicalMergeProposal`, `Restaurant.canonicalId`
 - [apps/friendly/prisma/migrations/20260515083303_add_canonical_restaurant/migration.sql](../../apps/friendly/prisma/migrations/20260515083303_add_canonical_restaurant/migration.sql)
@@ -156,10 +165,12 @@ NOT NULL FK → `canonical_restaurants(id)`. **`ON DELETE RESTRICT`**. INDEX `(c
 - [apps/friendly/src/modules/canonical/proposal.service.ts](../../apps/friendly/src/modules/canonical/proposal.service.ts)
 - [apps/friendly/src/lib/matching.ts](../../apps/friendly/src/lib/matching.ts)
 - [apps/friendly/src/lib/matching.test.ts](../../apps/friendly/src/lib/matching.test.ts)
-- [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) — `generateProposalsForRestaurant`, `tryAutoMatchDiningcode` 후크 + `AUTO_DC_*` 임계 상수
-- [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) — `canonical: { create }`, `getCanonicalIdForRestaurant`, `getCanonicalCoreForAutoMatch`, `list` 안 suggestion/candidateCount 집계, detail 머지 호출부
-- [apps/friendly/src/modules/restaurant/restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) — canonical 1:N 그룹 detail 융합 헬퍼 (261줄)
+- [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) — `generateProposalsForRestaurant`, `tryAutoMatchDiningcode`, `tryAutoMatchTabling`, `tryLinkTablingPlacePartner` 후크 + `AUTO_DC_*` 임계 상수
+- [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) — `canonical: { create }`, `getCanonicalIdForRestaurant`, `getCanonicalCoreForAutoMatch`, `findTablingCanonicalsNear`, `list` 안 suggestion/candidateCount 집계, detail 머지 호출부
+- [apps/friendly/src/modules/restaurant/restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) — canonical 1:N 그룹 detail 융합 헬퍼 (Naver+DC+테이블링 3소스, 372줄, `composeTablingAddon` 포함)
 - [apps/friendly/src/modules/restaurant/restaurant.merge.test.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.test.ts)
+- [apps/friendly/src/modules/restaurant/canonical-members.ts](../../apps/friendly/src/modules/restaurant/canonical-members.ts) — *new: canonical 멤버 조회 헬퍼(naver+DC+tabling partner) — review-search/clustering 코퍼스 진입점*
+- [apps/friendly/src/modules/crawl/tabling.service.test.ts](../../apps/friendly/src/modules/crawl/tabling.service.test.ts) — *테이블링 place↔partner 자동 승격 머지 4건*
 - [packages/api-contract/src/schemas/canonical.ts](../../packages/api-contract/src/schemas/canonical.ts)
 - [packages/api-contract/src/schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts) — `CanonicalListItem`, `candidateCount`, `suggestion`
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Canonical`

@@ -1,14 +1,22 @@
 ---
 topic: settlement
-last_compiled: 2026-05-31
-sources_count: 103
+last_compiled: 2026-06-25
+sources_count: 109
 status: active
-aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증 추출, 단골, contact, share token, edited badge, rounds, N차, settlement-draft, draft-autosave, multi-receipt, MultiReceiptSplitDialog, RoundDiscountEditor, RoundCategoryAdjuster, SettlementBreakdownTable, RoundExceptionsEditor, leftover-routing, roundUnit-100-1000, calculateMultiRoundShares, fromDraftId, EXTRACTION_VERSION, ExtractReceiptSplit, roundIndex, roundTotal, universal-links, app-links, deep-link, settlement-mobile, RestaurantSearchDialog, confirm-dialog, attendees-100, items-200, share-preview, OG, og:image, settlement-card, satori, resvg, IBMPlexSansKR, ShareTtl, ShareOgImage, shareOgImageUrl, share-expiry, kakao-copy, receipt-lightbox, sharePreviewCache]
+aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증 추출, 단골, contact, share token, edited badge, rounds, N차, settlement-draft, draft-autosave, multi-receipt, MultiReceiptSplitDialog, RoundDiscountEditor, RoundCategoryAdjuster, SettlementBreakdownTable, RoundExceptionsEditor, leftover-routing, roundUnit-100-1000, calculateMultiRoundShares, fromDraftId, EXTRACTION_VERSION, ExtractReceiptSplit, roundIndex, roundTotal, universal-links, app-links, deep-link, settlement-mobile, RestaurantSearchDialog, confirm-dialog, attendees-100, items-200, share-preview, OG, og:image, settlement-card, satori, resvg, IBMPlexSansKR, ShareTtl, ShareOgImage, shareOgImageUrl, share-expiry, kakao-copy, receipt-lightbox, sharePreviewCache, group-split, 세부 분배, 그룹 카드, drink-kinds, 술 종류, 소주, 맥주, 잔수, glasses, GLASSES, EQUAL, RoundGroupSplitEditor, RoundGroupSplitNote, suggestItemGroups, matchDrinkKind, DRINK_KINDS, DRINK_BRAND_PROMPT_HINT, isGroupableCategory, GROUPABLE_CATEGORIES, toGroupCalcInputs, groupBreakdown, leftover-multi-receiver]
 ---
 
 # settlement — 정산하기 도메인
 
 식당에서 일행이 영수증을 나눠 부담할 때 "주류 안 마신 사람은 술값 빼고" 같은 카테고리별 제외 규칙으로 자동 분배해 주는 도메인. 영수증 사진을 vision LLM 으로 OCR/분류하거나 직접 입력으로 만들고, 결과를 저장/공유/수정하며 정산에 자주 나오는 사람은 "단골" 로 자동 적립된다.
+
+**2026-06-25 17차 컴파일 — 세부 분배(그룹 카드) + 술 종류 사전.** "주류 풀을 그냥 균등 분배" 가 아니라 **소주·맥주 같은 종류 그룹을 떼어내 마신 사람끼리만, 잔수 비례로** 나눌 수 있게 했다. 핵심 변경:
+
+- **세부 분배 그룹(groupSplits)** — 한 차수의 카테고리 풀(주류/음료)에서 특정 항목들을 떼어내 그룹을 만들고, `EQUAL`(그룹 내 균등) 또는 `GLASSES`(정수 잔수 가중치 비례)로 그룹 멤버끼리만 나눈다. 그룹에 안 묶인 항목은 '나머지 풀' 로 남아 기존 카테고리 균등 규칙 그대로. 새 [settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts) 의 `GroupCalcInput`/`GroupShareBreakdown`/`toGroupCalcInputs`, 스키마 `SettlementItemGroup(Input)`/`SettlementGroupMember(Input)`/`SettlementGroupSplitMode`, prisma `settlement_rounds.groupSplits TEXT`(JSON, 마이그레이션 `20260610011757_add_settlement_group_splits`).
+- **술·음료 종류 사전(drink-kinds)** — 새 [settlement.drink-kinds.ts](../../packages/api-contract/src/settlement.drink-kinds.ts) 가 `DRINK_KINDS`(소주/맥주/막걸리/하이볼/와인/사케·청주/위스키/칵테일/콜라/사이다/주스/커피·차/음료) 사전 1곳을 **세 군데에 먹인다**: ① FE 그룹 제안(`suggestItemGroups`) ② 영수증 추출 카테고리 결정적 보정 ③ 추출 프롬프트 제품명 힌트(`DRINK_BRAND_PROMPT_HINT`). `noHangul` 가드로 '새로 360ml'(소주)✅ vs '새로운안주'(안주)❌ 구분.
+- **영수증 추출 주류 오분류 보정 + EXTRACTION_VERSION 3→4** — '새로/대선/시원' 등 일반 단어형 국내 주류 제품명을 vision 모델이 안주/미분류로 찍는 회귀를, 추출 후 `matchDrinkKind` 로 카테고리를 결정적 교정(`settlement-extraction.service.ts`) + 프롬프트에 대표 브랜드 힌트 주입(`settlement-extraction.prompts.ts`)으로 이중 안전망.
+- **그룹 카드 UI (웹+앱)** — 새 web/[RoundGroupSplitEditor.tsx](../../apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx)(사람×그룹 매트릭스), 앱 [RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx)(그룹 카드 세로 스택) + [RoundGroupSplitNote.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx)(결과/공유 근거 풋노트). 점진 노출(접힘 기본) + 키워드 제안→원탭 생성. 안 건드리면 기존 균등 분배와 100% 동일.
+- **분담 다듬기 잔여 수령자 단일→다중** — `SettlementCategoryAdjustment.leftoverParticipantIds` 가 단일 → **배열 `.min(1)`** 로 승격(`distributeWith` 가 여러 수령자에게 잔여 재균등). draft store `version: 4 → 6` (v4→v5 groupSplits, v5→v6 leftover 단일→배열 migration).
 
 **2026-05-31 16차 컴파일 — 공유 기능 대확장 + 백엔드 perf.** 14차의 N차(차수) 재설계에 이어, 이번 라운드는 "정산을 카카오톡·텔레그램에 예쁘게 공유" 에 집중했다. 핵심 변경:
 
@@ -20,9 +28,11 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - **백엔드 perf** — `resolveRestaurantName` 을 `restaurant.findUnique(select:name)` 경량 조회로(이전 getPublicDetail 전체 리뷰 코퍼스 로드 제거), create 준비 단계 placeId 메모이즈 + Promise.all 병렬화, attendee 를 차수별 `createMany` 로 배칭, getSharePreviewMeta 경량 select(items/attendees 미로드 + _count) + (token,origin) 5분 캐시.
 - **영수증 OCR 빈 항목 회귀 수정** — `EXTRACTION_VERSION` 2→3, 소극적 시스템 프롬프트("읽기 어려우면 빼라/빈 배열 OK") 제거.
 
-## Purpose [coverage: high — 9 sources]
+## Purpose [coverage: high — 11 sources]
 
 `settlement` 은 로그인 사용자가 일행의 분담액을 계산·저장·공유·수정할 수 있게 한다. 한 세션은 1~10 차수로 구성되며 각 차수는 영수증 사진(vision LLM 추출) 또는 직접 입력으로 만들 수 있다. 차수마다 다른 식당·다른 참석자 부분집합·다른 할인을 가질 수 있다. 저장된 정산은 본인만 보지만, 공유 토큰을 발급하면 비로그인 사용자도 read-only 로 결과를 본다.
+
+분배는 카테고리(주류/음료/안주/미분류) 단위 풀 + 제외 플래그가 기본이지만, **세부 분배 그룹(group split)** 으로 한 단계 더 들어갈 수 있다 — "소주는 영희·철수만 3잔:1잔, 맥주는 전원 균등" 처럼 주류/음료 풀에서 종류 그룹을 떼어내 마신 사람끼리만, 균등(`EQUAL`) 또는 잔수 비례(`GLASSES`)로 나눈다. 그룹 멤버십·잔수는 영수증 항목명을 **술·음료 종류 사전(drink-kinds)** 으로 자동 제안하되, silent 자동 적용이 아니라 사용자 확인(원탭 생성)을 거친다. 같은 사전이 영수증 추출 단계에서 '새로/대선' 같은 일반 단어형 주류 제품명의 카테고리 오분류도 결정적으로 교정한다.
 
 공유 링크는 카카오톡·텔레그램 등 SNS 에서 펼쳐질 때 **OG 미리보기**(식당명·총액·인원수 + og:image)를 보여준다 — 순수 SPA 가 못 하는 일을 `share-preview.ts` 가 서버에서 `<head>` 메타만 주입해 해결한다. owner 는 미리보기 이미지를 식당 사진(갤러리 특정 1장 또는 토큰 시드 랜덤) 또는 정산표 PNG 중에서 고른다.
 
@@ -32,14 +42,15 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 
 의존자: `apps/web` 의 정산 라우트 + `apps/mobile` 의 expo-router 라우트가 직접 호출. `restaurant` 모듈을 `RestaurantService.resolveRestaurantName`(이름 한 컬럼) 과 `getPhotoUrls`(OG 후보 사진)로 가볍게 호출한다. `ai` 모듈의 vision LLM provider (purpose=`image`) 가 영수증 추출에 쓰인다. 공유 링크는 `well-known` 모듈이 발급하는 AASA/assetlinks.json 으로 검증돼 iOS/Android 앱이 직접 가로챈다. OG 식당 사진은 `media` 모듈의 thumbnail 프록시로 1200px 리사이즈해 노출.
 
-## Architecture [coverage: high — 20 sources]
+## Architecture [coverage: high — 24 sources]
 
 **Backend 모듈 4개 (`apps/friendly/src/modules/`)**:
 
 - [`settlement-extraction/`](../../apps/friendly/src/modules/settlement-extraction/) — 영수증 이미지 업로드/저장 + vision LLM 호출 + 추출 결과 정규화
   - [settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts) — `upload` / `extract` / `preview/:token` 3 엔드포인트. extract 가 `roundIndex/roundTotal/split` 까지 받는다.
   - [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts) — `storeImage` (sharp 로 JPEG 정규화 + 1600px 다운스케일, HEIC 는 heic-convert 폴백), `readImage`, `cropForSplit` (한 사진을 X 축 N등분), `extract` (vision LLM 호출 + 응답 파싱 + warning 산출)
-  - [settlement-extraction.prompts.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.prompts.ts) — `EXTRACTION_SYSTEM_PROMPT` + `EXTRACTION_JSON_SCHEMA` + `EXTRACTION_VERSION=3`. `buildExtractionUserPrompt` 가 roundHint 를 받아 "N차 회식 중 K차 영수증" 컨텍스트를 라인으로 추가. **v3: 소극적 지시 제거 → "모든 메뉴 줄 빠짐없이 추출"**.
+  - [settlement-extraction.prompts.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.prompts.ts) — `EXTRACTION_SYSTEM_PROMPT` + `EXTRACTION_JSON_SCHEMA` + **`EXTRACTION_VERSION=4`**. `buildExtractionUserPrompt` 가 roundHint 를 받아 "N차 회식 중 K차 영수증" 컨텍스트를 라인으로 추가. v3: 소극적 지시 제거 → "모든 메뉴 줄 빠짐없이 추출". **v4: ALCOHOL 카테고리 정의에 `${DRINK_BRAND_PROMPT_HINT}`(드링크 사전이 생성하는 대표 제품명 — "참이슬/처음처럼/진로/새로/…(소주), 카스/테라/…(맥주)") 주입 — 제품명만 적힌 줄도 주류로 찍게**. 서버 후보정(`matchDrinkKind`)과 이중 안전망.
+  - [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts) — extract 의 `correct` 단계에서 항목마다 `matchDrinkKind([matchedMenuName, name])` 으로 카테고리를 결정적 교정(LLM 카테고리를 덮어씀). 보정 건수(`categoryCorrections`)를 step 로그로 남겨 빈도 측정.
 - [`settlement/`](../../apps/friendly/src/modules/settlement/) — 정산 세션 CRUD + 공유 토큰/OG + 전체 replace
   - [settlement.route.ts](../../apps/friendly/src/modules/settlement/settlement.route.ts) — `create`/`list`/`one`/`update`(PUT)/`delete` + `share` POST/DELETE + `shared` GET(비인증, IP rate limit). 공유 토큰 길이 하한 `min(8)` 으로 낮춰 신·구 토큰 모두 통과.
   - [settlement.service.ts](../../apps/friendly/src/modules/settlement/settlement.service.ts) — `create`/`update` 가 transaction 안에서 마스터 participants + N round + N round × M attendees(createMany 배칭) + items + categoryAdjustments 직렬화까지 전체 wipe/rebuild. `create` 는 `fromDraftId` 가 있으면 같은 트랜잭션에서 draft 도 삭제. 공유: `createShare`/`revokeShare`/`getBySharedToken`/`getSharePreviewMeta`/`pickRestaurantOgImageUrl`/`collectCandidateImageUrls` + `seedFromToken` + (token,origin) 5분 캐시 `sharePreviewCache`/`invalidateSharePreview`.
@@ -57,18 +68,20 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - [scripts/backfill-contacts.ts](../../apps/friendly/scripts/backfill-contacts.ts)
 
 **API Contract (`packages/api-contract/src/`)**:
-- [schemas/settlement.ts](../../packages/api-contract/src/schemas/settlement.ts) — 마스터 `SettlementParticipant`, `SettlementRound`(차수), `SettlementRoundAttendee`(차수 attendance), `SettlementCategoryAdjustment(s)` (분담 다듬기), `CreateSettlementInput` (rounds + participants + optional fromDraftId), `UpdateSettlementInput = CreateSettlementInput`. **공유 신규**: `ShareTtl`('1d'|'7d'|'30d'), `ShareOgImage`('restaurant'|'table'), `CreateSettlementShareInput`(preprocess null→{} + ttl default '7d' + ogImage? + ogImageUrl?), `SettlementShare`(token/shareUrl/expiresAt/ogImage/ogImageUrl/ogImageCandidates), `SharedSettlementSession`(round 에서 receiptPreviewUrl/receiptImageToken omit). round.items.max(200), participants/attendees.max(100), rounds.max(10).
+- [schemas/settlement.ts](../../packages/api-contract/src/schemas/settlement.ts) — 마스터 `SettlementParticipant`, `SettlementRound`(차수), `SettlementRoundAttendee`(차수 attendance), `SettlementCategoryAdjustment(s)` (분담 다듬기), `CreateSettlementInput` (rounds + participants + optional fromDraftId), `UpdateSettlementInput = CreateSettlementInput`. 공유: `ShareTtl`/`ShareOgImage`/`CreateSettlementShareInput`/`SettlementShare`/`SharedSettlementSession`. round.items.max(200), participants/attendees.max(100), rounds.max(10). **세부 분배 신규**: `SettlementGroupSplitMode`('EQUAL'|'GLASSES'), `SettlementGroupMember`(participantId + glasses int 0..999)/`SettlementGroupMemberInput`(participantClientId + glasses), `SettlementItemGroup`(label≤40 + category + itemIndexes min(1) + mode + members min(1))/`SettlementItemGroupInput`(itemIndexes.max(200) + members.max(100)), `SettlementRound.groupSplits`(nullable 배열)·`SettlementRoundInput.groupSplits`(.max(30).nullable.default null). `SettlementRoundInput` 에 그룹용 refine 2개 — 항목참조(범위·카테고리 일치·그룹간 중복 없음) + 그룹 내 같은 참여자 중복 금지. **분담 다듬기 변경**: `SettlementCategoryAdjustment.leftoverParticipantIds`/`leftoverParticipantClientIds` 가 단일 → **배열 `.min(1)`**.
+- [settlement.drink-kinds.ts](../../packages/api-contract/src/settlement.drink-kinds.ts) (NEW) — 술·음료 종류 사전 단일 소스. `GROUPABLE_CATEGORIES`(ALCOHOL/NON_ALCOHOL) + `isGroupableCategory`, `DRINK_KINDS`(종류별 label/category/keywords/promptBrands), `matchDrinkKind(names[])`(사전 순서 우선순위 — 첫 매칭 승리), `DRINK_BRAND_PROMPT_HINT`(promptBrands 가진 종류만 "브랜드/…(라벨)" 로 join). 키워드는 평문(부분 문자열) 또는 `{kw, noHangul:'before'|'after'|'around'}` — 매칭 위치 지정 방향에 한글이 붙으면 다른 단어로 보고 무시('새로 360ml'✅/'새로운안주'❌, '카스'✅/'카스테라'❌). 이름은 공백 제거 후 비교.
 - [schemas/settlement-extraction.ts](../../packages/api-contract/src/schemas/settlement-extraction.ts) — `ReceiptItemCategory` 4-state, `ExtractReceiptSplit` (count 2..5, index 1..count), `ExtractReceiptInput` 에 `roundIndex/roundTotal/split` 옵션 필드.
 - [schemas/settlement-draft.ts](../../packages/api-contract/src/schemas/settlement-draft.ts) — `SettlementDraft`, `UpsertSettlementDraftInput` (payload `z.unknown()` + 200KB JSON 크기 refine), `ListSettlementDraftsResult`.
 - [schemas/settlement-contact.ts](../../packages/api-contract/src/schemas/settlement-contact.ts)
-- [settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts) — `calculateShares` (할인 + categoryAdjustments) + `calculateMultiRoundShares` (라운드별 호출 + 마스터 인덱스 합산, `perRound[].poolBreakdown`/`perCategoryShares`) + `effectiveExcludes`.
+- [settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts) — `calculateShares` (할인 + categoryAdjustments + **groups**) + `calculateMultiRoundShares` (라운드별 호출 + 마스터 인덱스 합산, `perRound[].poolBreakdown`/`perCategoryShares`/`groupBreakdown`) + `effectiveExcludes`. **세부 분배 신규**: `GroupCalcInput`(category/itemIndexes/mode/members{participantIndex,glasses}), `GroupShareBreakdown`(poolAmount/totalGlasses/shares/applied), `toGroupCalcInputs(groupSplits, participantIndexById)`(저장 응답의 participantId 멤버 → 인덱스 변환, 웹 매트릭스·서버 PNG 공용). `distributeByWeight`(정수 잔수 비례 + 1원 잔여 분산), `distributeWith`(잔여 수령자 **배열** — 1명=몰아주기/여러명=재균등/0명=첫 활성자 fallback). 카테고리 풀을 그룹 풀 + 나머지(균등) 풀로 분해, 할인은 비례 차감, 유효 멤버 0명 그룹은 나머지 풀로 환원(`applied=false`).
 - [routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Settlement.{create,list,one,update,share,shared}` + `Routes.SettlementDraft` + `Routes.Media.thumbnail`(OG 식당 사진 프록시).
 - [index.ts](../../packages/api-contract/src/index.ts) — 모든 신규 스키마 re-export.
 
 **FE Shared (`packages/shared/src/`)**:
+- 세부 분배 로직 — [settlement/groupSuggestion.ts](../../packages/shared/src/settlement/groupSuggestion.ts) (NEW) — `suggestItemGroups(items)` 가 항목명을 `matchDrinkKind` 로 묶어 종류 그룹 제안(`ItemGroupSuggestion[]`). 그룹 카테고리는 항목 카테고리와 같아야 매칭(스키마 제약 일치). `@repo/api-contract` 의 `GROUPABLE_CATEGORIES`/`isGroupableCategory` re-export. 멤버/모드는 안 채우고 호출부가 기본값(참석자 전원·균등) 채움.
 - API 래퍼 — [settlement.api.ts](../../packages/shared/src/api/settlement.api.ts) (`createShare(id, ttl, ogImage?, ogImageUrl?)` — ogImageUrl 트라이스테이트를 위해 undefined 일 때만 키를 뺀다), [settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts) (`previewBlob`), [settlement-contact.api.ts](../../packages/shared/src/api/settlement-contact.api.ts), [settlement-draft.api.ts](../../packages/shared/src/api/settlement-draft.api.ts)
 - React Query 훅 — [useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts) (`useCreateSettlementShare` 가 ttl/ogImage/ogImageUrl 받음), [useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts), [useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts), [useSettlementDraft.ts](../../packages/shared/src/hooks/useSettlementDraft.ts) — `useSettlementDraftHydrate` 가 **placeId당 1회만** hydrate(저장 in-flight 중 입력 덮어쓰기 방지), `useSettlementDraftAutoSync` debounce 자동 저장.
-- Zustand 스토어 — [settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — N차 모델. `version: 4`, `setSettlementDraftStorage(storage)` 어댑터 주입(RN AsyncStorage / 웹 sessionStorage / no-op).
+- Zustand 스토어 — [settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — N차 모델. **`version: 6`** (v4→v5 round.groupSplits 추가, v5→v6 leftover 단일→배열), `setSettlementDraftStorage(storage)` 어댑터 주입(RN AsyncStorage / 웹 sessionStorage / no-op). 그룹 액션 `applyGroupSplits`/`addGroupSplit`/`updateGroupSplit`/`removeGroupSplit` + `isEligibleGroupMember`(참석 + 카테고리 비제외 가드) export. 항목 삭제/카테고리 변경 시 그룹의 죽은 itemClientId 를 자동 청소(0개 되면 그룹 제거).
 
 **Web Routes (`apps/web/src/routes/settlement/`)** — App.tsx 에 등록:
 - `/restaurants/:placeId/settle/new` → [SettlementNewPage.tsx](../../apps/web/src/routes/settlement/SettlementNewPage.tsx) — 4단계 stepper.
@@ -82,15 +95,15 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - `/share/settlements/:token` (SPA) / `/s/:token` → [SharedSettlementPage.tsx](../../apps/web/src/routes/settlement/SharedSettlementPage.tsx) — 비인증 read-only. 같은 URL 을 서버 `share-preview.ts` 가 먼저 받아 OG 를 주입한 HTML 을 돌려주고 그 위에서 SPA 부팅.
 - [useReceiptPreviewUrl.ts](../../apps/web/src/routes/settlement/useReceiptPreviewUrl.ts) (NEW) — preview 라우트(JWT 필요)를 fetch → Blob → `URL.createObjectURL`. unmount 시 revoke. 반환 objectUrl 을 Lightbox 가 그대로 확대.
 
-**다이얼로그/카드 (web)** — [SettlementShareDialog.tsx](../../apps/web/src/routes/settlement/SettlementShareDialog.tsx) (TTL 토글 + OG 이미지 토글 + 식당 사진 갤러리 선택 + 이미지/카카오톡 클립보드 복사 + Web Share file), [ContactPickerDialog.tsx](../../apps/web/src/routes/settlement/ContactPickerDialog.tsx), [ContactSuggestions.tsx](../../apps/web/src/routes/settlement/ContactSuggestions.tsx), [ContactEditDialog.tsx](../../apps/web/src/routes/settlement/ContactEditDialog.tsx), [MenuPickerDialog.tsx](../../apps/web/src/routes/settlement/MenuPickerDialog.tsx), [RestaurantSearchDialog.tsx](../../apps/web/src/routes/settlement/RestaurantSearchDialog.tsx), [MultiReceiptSplitDialog.tsx](../../apps/web/src/routes/settlement/MultiReceiptSplitDialog.tsx), [RoundDiscountEditor.tsx](../../apps/web/src/routes/settlement/RoundDiscountEditor.tsx), [RoundCategoryAdjuster.tsx](../../apps/web/src/routes/settlement/RoundCategoryAdjuster.tsx), [RoundExceptionsEditor.tsx](../../apps/web/src/routes/settlement/RoundExceptionsEditor.tsx), [SettlementBreakdownTable.tsx](../../apps/web/src/routes/settlement/SettlementBreakdownTable.tsx) (settlement-card.ts 의 PNG 와 동일 매트릭스), [SettlementCards.tsx](../../apps/web/src/routes/settlement/SettlementCards.tsx), 공용 [confirm-dialog.tsx](../../apps/web/src/components/ui/confirm-dialog.tsx). [settlementPrefsStore.ts](../../apps/web/src/stores/settlementPrefsStore.ts) (localStorage).
+**다이얼로그/카드 (web)** — [SettlementShareDialog.tsx](../../apps/web/src/routes/settlement/SettlementShareDialog.tsx) (TTL 토글 + OG 이미지 토글 + 식당 사진 갤러리 선택 + 이미지/카카오톡 클립보드 복사 + Web Share file), [ContactPickerDialog.tsx](../../apps/web/src/routes/settlement/ContactPickerDialog.tsx), [ContactSuggestions.tsx](../../apps/web/src/routes/settlement/ContactSuggestions.tsx), [ContactEditDialog.tsx](../../apps/web/src/routes/settlement/ContactEditDialog.tsx), [MenuPickerDialog.tsx](../../apps/web/src/routes/settlement/MenuPickerDialog.tsx), [RestaurantSearchDialog.tsx](../../apps/web/src/routes/settlement/RestaurantSearchDialog.tsx), [MultiReceiptSplitDialog.tsx](../../apps/web/src/routes/settlement/MultiReceiptSplitDialog.tsx), [RoundDiscountEditor.tsx](../../apps/web/src/routes/settlement/RoundDiscountEditor.tsx), [RoundCategoryAdjuster.tsx](../../apps/web/src/routes/settlement/RoundCategoryAdjuster.tsx), [RoundExceptionsEditor.tsx](../../apps/web/src/routes/settlement/RoundExceptionsEditor.tsx), **[RoundGroupSplitEditor.tsx](../../apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx) (NEW — 세부 분배. '그룹 정의'(항목 묶음·모드) + '누가 마셨나' 사람×그룹 매트릭스. 점진 노출(접힘 기본) + `suggestItemGroups` 키워드 제안→원탭 생성)**, [SettlementBreakdownTable.tsx](../../apps/web/src/routes/settlement/SettlementBreakdownTable.tsx) (settlement-card.ts 의 PNG 와 동일 매트릭스 — 이제 groupSplits 도 반영), [SettlementCards.tsx](../../apps/web/src/routes/settlement/SettlementCards.tsx) (결과/공유 차수 카드 풋노트에 그룹 근거 표시), 공용 [confirm-dialog.tsx](../../apps/web/src/components/ui/confirm-dialog.tsx). [settlementPrefsStore.ts](../../apps/web/src/stores/settlementPrefsStore.ts) (localStorage). Step3Edit/Step4Review/SettlementResultPage/SharedSettlementPage 가 그룹 에디터·근거를 끼워넣는다.
 
 **Mobile (`apps/mobile/`)** — expo-router 라우트로 정산 도메인 전체 이식:
 - `/restaurant/[placeId]/settle/new` · `/settle/[id]/{index,edit}` · `/settlement/{new,history,contacts}` · `/share/settlements/[token]`(딥링크) 라우트.
-- 컴포넌트는 [apps/mobile/src/components/settlement/](../../apps/mobile/src/components/settlement/): SettlementWizard, Step1~4, ContactPickerSheet, ContactSuggestions, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, [SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx) (OG 토글 + 식당 사진 갤러리 + 카톡/클립보드 복사).
+- 컴포넌트는 [apps/mobile/src/components/settlement/](../../apps/mobile/src/components/settlement/): SettlementWizard, Step1~4, ContactPickerSheet, ContactSuggestions, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, [SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx) (OG 토글 + 식당 사진 갤러리 + 카톡/클립보드 복사). **세부 분배 신규**: [RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx) (웹과 동일 로직, 표현만 앱 관용구 — 사람×그룹 매트릭스 대신 **그룹 카드 세로 스택**, 멤버 체크/잔수 스테퍼는 카드 안 참석자 행; Step3Edit 에 삽입) + [RoundGroupSplitNote.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx) (읽기 전용 근거 풋노트 — 잔수 그룹은 멤버·잔수 나열, 균등 그룹은 '빠진 사람'만 명시; Step4Review·결과·공유에서 사용. `SharedSettlementSessionType` 과 `SettlementSessionType` 을 구조적 subtyping 으로 공용).
 - [apps/mobile/src/hooks/useReceiptPreviewUrl.ts](../../apps/mobile/src/hooks/useReceiptPreviewUrl.ts) (NEW) — 웹과 동일 패턴이되 RN `Image` 가 objectURL 을 못 받아 `FileReader` 로 **data URL** 변환(웹 훅과 유일한 차이).
 - [apps/mobile/src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts) (AsyncStorage), [app.config.ts](../../apps/mobile/app.config.ts) (associatedDomains/intentFilters), [DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md).
 
-## Talks To [coverage: medium — 6 sources]
+## Talks To [coverage: medium — 7 sources]
 
 - **`ai` 모듈 (vision LLM)** — `settlement-extraction.service.ts` 가 `AiConfigService.getResolved('ollama-cloud', 'image')` 로 vision provider 를 해결하고, `adapterCache` 의 `LLMProvider.complete` 를 호출. `format=EXTRACTION_JSON_SCHEMA` 로 토큰 샘플링 단계부터 JSON 모양 강제. `VISION_TIMEOUT_MS=60_000` 별도 타임아웃, `AbortController` 시그널.
 - **`restaurant` 모듈 (이번 라운드 경량화)** — 두 경로 모두 풀 `getPublicDetail`(전체 리뷰 코퍼스 + summary join + snapshot merge) 을 피한다:
@@ -99,6 +112,7 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
   - extract 라우트는 식당명 + 메뉴 이름을 LLM 프롬프트 힌트로 주입할 때만 풀 detail 을 사용.
 - **`media` 모듈** — OG 식당 사진은 원본 네이버 CDN URL 이 아니라 `${origin}${Routes.Media.thumbnail}?url=...&w=1200&q=80` 프록시로 감싸 노출(allowlist 호스트만, referrer-policy 회피).
 - **`summary` 모듈** — `extractFirstJsonObject` 유틸을 LLM 응답에서 첫 JSON 블록만 잘라낼 때 재사용.
+- **drink-kinds 단일 소스 (모듈 횡단)** — `settlement.drink-kinds.ts`(api-contract) 한 곳의 `DRINK_KINDS` 가 세 소비자를 먹인다: ① `@repo/shared` 의 `suggestItemGroups`(FE 그룹 제안) ② `settlement-extraction.service`(추출 후 `matchDrinkKind` 카테고리 보정) ③ `settlement-extraction.prompts`(`DRINK_BRAND_PROMPT_HINT` 프롬프트 힌트). 브랜드 추가는 사전 1곳이면 셋 다 반영 — FE 제안·서버 보정·프롬프트가 항상 같은 종류 판단을 공유한다.
 - **`well-known` 모듈** — 공유 링크 딥링크를 가능하게 만드는 동반 모듈. iOS/Android 가 `/.well-known/{apple-app-site-association,assetlinks.json}` 을 fetch 해 `/share/settlements/*` 가로채기 권한을 검증.
 - **인증** — 모든 `/api/v1/settlements*` 라우트 `app.authenticate` JWT onRequest. 예외: **`Routes.Settlement.shared(:token)` 만 비인증** — 토큰을 안다 = 접근 허용. 응답에서 `userId` 와 round 별 `receiptPreviewUrl`/`receiptImageToken` 가 빠진다. `share-preview.ts` 의 HTML/PNG 라우트(`/share/settlements/:token`, `/s/:token`, `.../image.png`)도 비인증(크롤러·메신저가 호출). `well-known` 두 엔드포인트도 비인증.
 
@@ -138,12 +152,12 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - `settlement-draft`: `not_found` → 404, `forbidden` → 403, 그 외 → 400
 - `contact`: `not_found`/`forbidden`/`conflict` → 404/403/409, `invalid_input` → 400
 
-## Data [coverage: high — 14 sources]
+## Data [coverage: high — 15 sources]
 
 **Prisma 모델 6개** (전부 [schema.prisma](../../apps/friendly/prisma/schema.prisma)):
 
 - **`SettlementSession`** (`settlement_sessions`) — `userId`, `restaurantPlaceId`/`restaurantName` (1차 식당 스냅샷, `rounds[0]` 과 동기화), `grandTotal`, `shareToken? @unique`, **`shareExpiresAt? DateTime`** (만료 시각, null=무제한/구버전 호환), **`shareOgImage? String`** ('restaurant'|'table'|null), **`shareOgImageUrl? String`** (갤러리에서 고른 식당 사진 원본 URL, null=토큰 시드 랜덤), `editedAt?`, `createdAt`, `updatedAt`. user `onDelete: Cascade`.
-- **`SettlementRound`** (`settlement_rounds`) — `sessionId`, `orderIndex`, `restaurantPlaceId`/`restaurantName` (차수 식당 스냅샷), `source`('MANUAL'|'RECEIPT'), `totalAmount?`, `warning?`, `receiptImageToken?`, `itemsSubtotal`, `discountAmount?`, `discountCategory?`, `categoryAdjustments?` (JSON). session `onDelete: Cascade`.
+- **`SettlementRound`** (`settlement_rounds`) — `sessionId`, `orderIndex`, `restaurantPlaceId`/`restaurantName` (차수 식당 스냅샷), `source`('MANUAL'|'RECEIPT'), `totalAmount?`, `warning?`, `receiptImageToken?`, `itemsSubtotal`, `discountAmount?`, `discountCategory?`, `categoryAdjustments?` (JSON), **`groupSplits? String`** (세부 분배 그룹 JSON 배열, null=없음). session `onDelete: Cascade`.
 - **`SettlementItem`** (`settlement_items`) — `roundId`, `name`, `unitPrice?`, `quantity?`, `amount`, `category`, `matchedMenuName?`, `orderIndex`. round `onDelete: Cascade`.
 - **`SettlementParticipant`** (`settlement_participants`) — 마스터 명단. `sessionId`, `name?`, `nickname?`, `excludeAlcohol/NonAlcohol/Side` (default), `shareAmount` (grand total per person), `orderIndex`, `contactId?`. contact `onDelete: SetNull`.
 - **`SettlementRoundParticipant`** (`settlement_round_participants`) — round × 마스터 참여자 join. `roundId`, `participantId`, `attended`, `excludeAlcoholOverride?`/`NonAlcohol`/`Side`, `shareAmount`. 유니크 `(roundId, participantId)`.
@@ -171,7 +185,11 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 
 **Zustand persist 스토어** ([settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts)) — storage 어댑터 주입(앱 AsyncStorage / 웹 sessionStorage / no-op). **version: 4** migration (v1→v2 rounds 배열, v2→v3 discount, v3→v4 categoryAdjustments).
 
-**Migrations 11개** (시간순, settlement 관련):
+**`groupSplits` 직렬화** — `serializeGroupSplits` 가 입력 멤버 clientId 를 db id 로 치환해 `[{ label, category, itemIndexes, mode, members:[{participantId, glasses}] }]` JSON 으로 저장. 매칭 안 되는 멤버는 빼고, 멤버 0명이 된 그룹은 통째 drop(=균등 분배 의미라 저장 가치 없음). 응답 시 `parseGroupSplits` 로 복원(파싱 실패면 null). 계산기 입력으로는 `toGroupCalcInputs`(응답 participantId→인덱스) / `buildRoundCalcInput`(입력 clientId→인덱스)가 변환. `itemIndexes` 는 round.items 배열 인덱스 — 한 항목은 최대 1개 그룹(스키마 refine + 계산기 첫 그룹만 인정 방어).
+
+**`leftoverParticipantIds` 배열화** — '분담 다듬기' 잔여 수령자가 단일 → 배열 `.min(1)` 로 승격(e3af75b). 1명=몰아주기 / 여러 명=잔여 재균등 / 활성 아닌 수령자 무시 / 유효 0명이면 첫 활성자 fallback. draft store v5→v6 migration 이 옛 단일 키를 배열로 승격.
+
+**Migrations 12개** (시간순, settlement 관련):
 1. [`20260523012752_add_settlement_models`](../../apps/friendly/prisma/migrations/20260523012752_add_settlement_models/migration.sql)
 2. [`20260523030833_add_settlement_share_token`](../../apps/friendly/prisma/migrations/20260523030833_add_settlement_share_token/migration.sql)
 3. [`20260524000000_add_settlement_contacts`](../../apps/friendly/prisma/migrations/20260524000000_add_settlement_contacts/migration.sql)
@@ -182,11 +200,12 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 8. [`20260525235559_add_settlement_drafts`](../../apps/friendly/prisma/migrations/20260525235559_add_settlement_drafts/migration.sql)
 9. **[`20260529215653_add_settlement_share_expiry`](../../apps/friendly/prisma/migrations/20260529215653_add_settlement_share_expiry/migration.sql)** (NEW) — `shareExpiresAt` 추가.
 10. **[`20260601090100_add_share_og_image`](../../apps/friendly/prisma/migrations/20260601090100_add_share_og_image/migration.sql)** (NEW) — `shareOgImage TEXT`.
-11. **[`20260601120000_add_share_og_image_url`](../../apps/friendly/prisma/migrations/20260601120000_add_share_og_image_url/migration.sql)** (NEW) — `shareOgImageUrl TEXT`.
+11. [`20260601120000_add_share_og_image_url`](../../apps/friendly/prisma/migrations/20260601120000_add_share_og_image_url/migration.sql) — `shareOgImageUrl TEXT`.
+12. **[`20260610011757_add_settlement_group_splits`](../../apps/friendly/prisma/migrations/20260610011757_add_settlement_group_splits/migration.sql)** (NEW) — `settlement_rounds.groupSplits TEXT`.
 
-## Key Decisions [coverage: high — 19 sources]
+## Key Decisions [coverage: high — 21 sources]
 
-시간순 진화 (MVP → 공유 → 단골 → 편집+배지 → N차/할인/임시저장/모바일/딥링크 → **OG 공유 대확장/perf/OCR 회귀**):
+시간순 진화 (MVP → 공유 → 단골 → 편집+배지 → N차/할인/임시저장/모바일/딥링크 → OG 공유 대확장/perf/OCR 회귀 → **세부 분배(그룹 split)/술 종류 사전**):
 
 **MVP 진입 (2026-05-23)** — 카테고리별 풀 + 제외 플래그 분배 알고리즘, 영수증 vision 추출, 서버 권위 + 클라 미리보기, 토큰 server 발급 + 정규식 검증, 멱등 shareToken, shared 응답에서 userId/receiptPreviewUrl 제거.
 
@@ -228,11 +247,24 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 **영수증 OCR 빈 항목 회귀 수정 (EXTRACTION_VERSION 2→3)**
 - **소극적 프롬프트 제거** — "읽기 어려우면 빼라 / items 가 빈 배열이어도 된다" 같은 지시가 qwen3-vl 류 vision 모델에서 항목을 통째로 비우는 회귀를 유발. "영수증에 보이는 상품/메뉴 줄을 하나도 빠짐없이 추출" 로 전환. 출력 형식은 `format=schema` 가 강제하므로 장황한 JSON 포맷 규칙도 축소. (probe-vision 으로 검증.)
 
+**세부 분배 그룹 (group split, 2026-06-25 17차 핵심)**
+- **풀 → 그룹 풀 + 나머지 풀 분해** — 카테고리 균등 분배를 깨지 않고 위에 얹는다. 한 카테고리 raw 풀을 묶인 항목(그룹 풀)과 안 묶인 항목(나머지 풀)로 나누고, 나머지 풀은 기존 제외-플래그 균등 규칙 그대로. 그룹에 아무 항목도 안 넣으면 동작이 100% 동일 — 점진적 도입.
+- **EQUAL vs GLASSES** — 그룹 내 균등 또는 정수 잔수 가중치 비례. `distributeByWeight` 가 floor 후 1원 잔여를 소수부 큰 순서로 분산해 합이 정확히 풀과 일치(정수 연산만). GLASSES 인데 잔수 합 0 이면 균등 fallback(전원 0잔 입력 방어).
+- **유효 멤버 0명 → 나머지 풀 환원** — 그룹 멤버가 그 차수에서 전부 비참석이면(`calculateMultiRoundShares` 가 비참석 멤버를 뺌) 그룹 풀을 나머지(균등) 풀로 되돌리고 `applied=false`. 그룹 때문에 금액이 증발하지 않는다.
+- **제안→확인, silent 자동 적용 안 함** — `suggestItemGroups` 가 항목명 키워드로 그룹을 감지하지만 자동 저장하지 않고 원탭 '생성' 으로 확인을 받는다. 오분류(예: '카스테라' 를 맥주로)가 모르게 박히는 걸 막는다. 기본 멤버십은 '전원 모든 그룹 포함' — 사용자는 예외(안 마신 칸)만 표시.
+- **계산기 카테고리 범용, UI 는 주류/음료만** — 스키마·calculator 는 어느 카테고리든 그룹을 받지만 `GROUPABLE_CATEGORIES`(ALCOHOL/NON_ALCOHOL)로 UI 노출을 좁힌다. 그룹 카테고리는 항목 카테고리와 같아야 한다(스키마 refine).
+- **웹 매트릭스 vs 앱 카드** — 웹은 사람×그룹 매트릭스(행=사람, 한 줄이 한 사람 음주 전체), 앱은 좁은 화면이라 그룹 카드 세로 스택. 로직 동일, 표현만 플랫폼 관용구.
+- **근거 풋노트(읽기 전용)** — 결과/공유 화면에서 "왜 내 주류가 더 비싸?" 를 바로 읽게: 잔수 그룹은 멤버·잔수 나열, 균등 그룹은 전원 대신 '빠진 사람'만 명시(예외만 보여 한눈에).
+
+**술·음료 종류 사전 + 추출 오분류 보정 (EXTRACTION_VERSION 3→4)**
+- **사전 단일 소스 → 세 소비자** — 제안·서버 보정·프롬프트 힌트가 같은 `DRINK_KINDS` 를 공유. 브랜드 추가는 한 곳. (위 Talks To.)
+- **결정적 후보정이 프롬프트보다 신뢰** — '새로/대선/시원' 같은 일반 단어형 제품명은 vision 모델이 안주로 찍기 쉽다. 프롬프트 힌트(v4)는 best-effort, `matchDrinkKind` 후보정이 결정적 안전망 — 어드민에서 모델을 바꿔도 보장. `noHangul` 가드로 '카스테라'(안주)·'새로운안주'(안주) 오매칭 회피.
+
 **기타 환경**
 - **dev CORS 전면 반사 (15차 정착)** — `cors.ts` 가 모든 origin 을 반사 허용하고 비-LAN origin 만 origin당 1회 warn. 이전 화이트리스트 `cb(Error)` 거부가 로그인 preflight 를 깨던 회귀 해소(Expo Web 모바일 단말 LAN IP 대응).
 - **운영 도메인 이전 + 배포 스크립트** — nlpp.easypcb.co.kr → ninelife.kr. host 미존재 시 OG og:url 폴백 도메인도 ninelife.kr. `deploy.sh`(케이스 번호 선택) 추가.
 
-## Gotchas [coverage: high — 12 sources]
+## Gotchas [coverage: high — 14 sources]
 
 - **공유 라우트는 두 군데로 나뉜다** — 인증 JSON 조회 `GET /api/v1/share/settlements/:token`(settlement.route.ts) 와 비인증 OG HTML/PNG `GET /share/settlements/:token`·`/s/:token`(share-preview.ts, prefix 밖)가 별개. 토큰 형식·만료 규칙은 같지만 등록 위치/응답 타입이 다르다. PNG 라우트는 `getBySharedToken` 을 거치므로 만료/없음이면 자동 404.
 - **index.html 못 찾으면 500 + 시도 경로 로깅** — dist 미빌드/경로 오설정 시 `share-preview` 가 후보 경로 전부와 cwd 를 error 로그로 남기고 500. 운영에서 `WEB_INDEX_PATH` 명시 지정 권장.
@@ -241,7 +273,10 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - **shareOgImageUrl 은 후보에 살아 있어야 적용** — owner 가 고른 사진이 식당 사진 목록(getPhotoUrls)에서 사라지면(스냅샷 갱신 등) `createShare` 가 `null` 로 정리하고 토큰 시드 랜덤으로 폴백. UI 의 '선택됨' 표시도 다음 share 호출 때 사라진다.
 - **shareToken 10자로 축소 + route 하한 min(8)** — 신 토큰(10자)과 구 토큰(43자) 모두 `TokenParams.min(8).max(64)` 안에 들어와 그대로 조회된다. 하한을 더 올리면 옛 링크가 깨진다.
 - **차수 attendee 의 마스터→인덱스 변환** — 입력 시 `participantClientId`, 저장 시 db id, 계산기는 참석자 배열 인덱스. categoryAdjustments 의 `leftoverParticipantClientId` 가 그 차수 비참석 마스터를 가리키면 calculator 가 첫 활성자 fallback. zod 가 아니라 service/calculator 가 정합성을 떠받친다.
-- **`roundUnit` 안전망** — UI/zod 가 활성 조건을 검사해도 calculator 는 안 떨어지는 값이 들어오면 무시(잔여 가산 모드)로 crash 회피.
+- **`roundUnit` 안전망** — UI/zod 가 활성 조건을 검사해도 calculator 는 안 떨어지는 값이 들어오면 무시(잔여 가산 모드)로 crash 회피. roundUnit 은 **나머지(균등) 풀에만** 적용 — 그룹 풀 잔여는 `distributeByWeight` 가 1원씩 자동 분산.
+- **groupSplits `itemIndexes` 는 배열 인덱스 — 항목 순서가 바뀌면 깨진다** — `orderIndex`(=round.items 배열 위치)를 참조하므로, 그룹을 만든 뒤 항목을 삭제/재정렬하면 인덱스가 어긋난다. draft store 가 항목 변경 시 그룹의 죽은 itemClientId 를 청소하지만, 저장 페이로드의 `itemIndexes` 정합성은 클라가 매번 다시 계산해 보낸다. 스키마 refine(범위·카테고리 일치·중복)이 마지막 방어선.
+- **그룹 멤버는 마스터 참여자 참조 + 차수 비참석 자동 제외** — 멤버는 `participantClientId`(입력)/`participantId`(응답)로 마스터를 가리킨다. `calculateMultiRoundShares` 가 그 차수 비참석 멤버를 자동으로 빼고, 남은 멤버 0명이면 그룹 풀을 나머지 풀로 환원(`applied=false`). service `validateInput` 이 마스터에 없는 멤버 참조를 `invalid_round` 로 차단.
+- **빈/단일 그룹은 저장 안 됨** — `serializeGroupSplits` 가 멤버 0명 그룹을 drop 하고, 전체가 비면 컬럼을 null 로. "한 그룹에 전원" 은 균등 분배와 같으므로 저장 가치가 없다 — 응답에서 groupSplits=null 로 보여도 정상.
 - **할인 페어 일관성** — `discountAmount`/`discountCategory` 양쪽 null 또는 양쪽 set, 풀 음수도 refine 가 거부. calculator 의 `Math.max(0,…)` 는 안전망.
 - **영수증 토큰 IMAGE_TOKEN_PATTERN 두 곳 복사** — `settlement.service` 와 `settlement-extraction.service` 가 동일 정규식을 따로 둔다(모듈 결합도 축소). 변경 시 두 곳.
 - **`normalizedKey` 정의 4곳 복사** — server `normalizeContactKey` SSOT + 클라 두 파일 + backfill. 바꾸려면 4곳 동시에.
@@ -255,7 +290,7 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - **카카오톡 '복사' 는 클립보드 PNG 일 뿐** — 카카오 SDK 미연동이라 톡을 직접 열지 않고 붙여넣기 안내만. Safari 제스처 만료 회피를 위해 `ClipboardItem` 에 `Promise<Blob>` 를 그대로 넘겨 클립보드 쓰기 '안'에서 fetch 가 받아오게 한다.
 - **AASA/assetlinks 미설정 시 404** — 빈 JSON 200 이면 iOS/Android 검증이 통과해 잘못된 권한을 얻으므로 의도적 404.
 
-## Sources [coverage: high — 103 sources]
+## Sources [coverage: high — 109 sources]
 
 **Backend — settlement-extraction 모듈**
 - [apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.route.ts)
@@ -301,6 +336,7 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - [apps/friendly/prisma/migrations/20260529215653_add_settlement_share_expiry/migration.sql](../../apps/friendly/prisma/migrations/20260529215653_add_settlement_share_expiry/migration.sql)
 - [apps/friendly/prisma/migrations/20260601090100_add_share_og_image/migration.sql](../../apps/friendly/prisma/migrations/20260601090100_add_share_og_image/migration.sql)
 - [apps/friendly/prisma/migrations/20260601120000_add_share_og_image_url/migration.sql](../../apps/friendly/prisma/migrations/20260601120000_add_share_og_image_url/migration.sql)
+- [apps/friendly/prisma/migrations/20260610011757_add_settlement_group_splits/migration.sql](../../apps/friendly/prisma/migrations/20260610011757_add_settlement_group_splits/migration.sql)
 
 **API Contract**
 - [packages/api-contract/src/schemas/settlement.ts](../../packages/api-contract/src/schemas/settlement.ts)
@@ -308,10 +344,12 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - [packages/api-contract/src/schemas/settlement-contact.ts](../../packages/api-contract/src/schemas/settlement-contact.ts)
 - [packages/api-contract/src/schemas/settlement-draft.ts](../../packages/api-contract/src/schemas/settlement-draft.ts)
 - [packages/api-contract/src/settlement.calculator.ts](../../packages/api-contract/src/settlement.calculator.ts)
+- [packages/api-contract/src/settlement.drink-kinds.ts](../../packages/api-contract/src/settlement.drink-kinds.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)
 - [packages/api-contract/src/index.ts](../../packages/api-contract/src/index.ts)
 
 **FE shared**
+- [packages/shared/src/settlement/groupSuggestion.ts](../../packages/shared/src/settlement/groupSuggestion.ts)
 - [packages/shared/src/api/settlement.api.ts](../../packages/shared/src/api/settlement.api.ts)
 - [packages/shared/src/api/settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts)
 - [packages/shared/src/api/settlement-contact.api.ts](../../packages/shared/src/api/settlement-contact.api.ts)
@@ -344,6 +382,7 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - [RoundCategoryAdjuster.tsx](../../apps/web/src/routes/settlement/RoundCategoryAdjuster.tsx)
 - [RoundDiscountEditor.tsx](../../apps/web/src/routes/settlement/RoundDiscountEditor.tsx)
 - [RoundExceptionsEditor.tsx](../../apps/web/src/routes/settlement/RoundExceptionsEditor.tsx)
+- [RoundGroupSplitEditor.tsx](../../apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx)
 - [SettlementBreakdownTable.tsx](../../apps/web/src/routes/settlement/SettlementBreakdownTable.tsx)
 - [SettlementCards.tsx](../../apps/web/src/routes/settlement/SettlementCards.tsx)
 - [apps/web/src/stores/settlementPrefsStore.ts](../../apps/web/src/stores/settlementPrefsStore.ts)
@@ -377,6 +416,8 @@ aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증
 - [apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx](../../apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx)
 - [apps/mobile/src/components/settlement/RoundDiscountEditor.tsx](../../apps/mobile/src/components/settlement/RoundDiscountEditor.tsx)
 - [apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx](../../apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx)
+- [apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx)
+- [apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx)
 - [apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx](../../apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx)
 - [apps/mobile/src/components/settlement/SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx)
 - [apps/mobile/src/hooks/useReceiptPreviewUrl.ts](../../apps/mobile/src/hooks/useReceiptPreviewUrl.ts)

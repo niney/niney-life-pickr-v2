@@ -1,7 +1,7 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
-last_compiled: 2026-06-06
-topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule]
+last_compiled: 2026-06-25
+topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram]
 status: active
 ---
 
@@ -29,6 +29,9 @@ status: active
 
 - **2026-06**(17차) in [[../topics/schedule]] / [[../topics/api-contract]] / [[../topics/friendly]] / [[../topics/shared]] / [[../topics/web]]: 주기 스케줄러 도메인 한 모듈 통째 추가. `schemas/schedule.ts` 12 export — 5 enum(`ScheduleJobType`['normalize-merge'] / `ScheduleTrigger`[cron|manual] / `ScheduleRunStatus`[running|done|failed|skipped|interrupted] / `SchedulePhase`[collecting|grouping|merging|done]) + `ScheduleConfig`/`ScheduleConfigInput` + `ScheduleRun`/`ScheduleRunList` + `ScheduleProgressEvent`/`ScheduleDoneEvent`(SSE) + `SchedulePreviewInput`/`SchedulePreviewResult`. 한 라운드에 friendly 의 `schedule.route.ts`(검증 + OpenAPI) + shared 의 `scheduleApi`/`useSchedule*` 훅 + web 의 `AdminAnalyticsPage`(스케줄 설정/이력 UI) 가 컴파일 타임 동기화. 흥미로운 신규 진입: (1) **검증 책임을 의도적으로 api-contract 밖에 둠** — `cronExpr: z.string().min(1).max(120)` 으로 형식 검증은 안 하고, 실제 cron 식 유효성은 서버 라우트에서 croner 로 위임. api-contract 가 croner 에 의존하면 leaf 순수성(shared → api-contract 만 허용)이 깨지므로, "zod 로 표현 못/안 하는 검증은 서버 측으로" 라는 SSOT 의 경계가 명시됨. (2) **이력 행과 live 스냅샷이 같은 `ScheduleRun` 모양 공유** — phase/totalTargets 가 진행 중에만 의미 있어 완료 이력에서는 nullable. 한 스키마가 영속(DB 이력)과 메모리(registry inflightSnapshot) 두 출처를 동시에 표현. (3) **SSE preview 페어** — `SchedulePreviewInput`/`Result` 가 저장 전 어드민 입력 검증용(디바운스 호출 → croner 가 다음 실행 시각 최대 5개 계산). 한 모듈 변경 → 4 컨슈머 동기화 약속이 또 한 라운드 유지.
 
+- **2026-06**(18차) in [[../topics/review-search]] / [[../topics/review-clustering]] / [[../topics/random-crawl]] / [[../topics/logs]] / [[../topics/telegram]] / [[../topics/api-contract]] / [[../topics/friendly]] / [[../topics/shared]] / [[../topics/web]]: **신규 zod 스키마 5종을 한 라운드에 흡수** — `schemas/review-search.ts`, `schemas/review-clustering.ts`, `schemas/random-crawl.ts`, `schemas/logs.ts`, `schemas/telegram-settings.ts`. 각각이 같은 약속을 반복: 모듈 1개 추가 + `src/index.ts` re-export → friendly 의 대응 라우트(`review-search.route.ts` / `review-clustering.route.ts` / `random-crawl.route.ts` / `logs.route.ts`)가 검증 + OpenAPI 자동 생성, shared 의 API 함수/훅이 `z.infer` 로 타입 도출, web 의 어드민/검색 UI 가 같은 타입 소비. 다섯 도메인이 **한 라운드에 동시 진입**한 것이 17차(schedule 1 도메인)보다 큰 너비 — 보일러플레이트가 도메인 수에 선형 비례하지 않고 "모듈 추가 + 1줄 re-export" 로 고정됨을 다섯 번 연속 확인. 이 다섯은 [[in-memory-singleton-gates]] 의 18차 게이트 인스턴스(reviewSearch/reviewClustering/randomCrawl/logs/telegram)와 **1:1 대응** — 각 도메인의 런타임 게이트와 그 I/O 계약이 같은 라운드에 함께 태어남(게이트가 회계하는 잡 상태/진행률/스킵사유가 곧 SSE 이벤트 스키마).
+- **2026-06**(18차) in [[../topics/settlement]] / [[../topics/api-contract]] / [[../topics/ai]] / [[../topics/friendly]] / [[../topics/web]] (`settlement.drink-kinds.ts` `DRINK_KINDS` 단일 사전): **"올바른 단일 소스" 의 모범 사례** — zod 스키마는 아니지만 같은 buildless leaf 모델 안에 사는 도메인 사전. `DRINK_KINDS` 배열 **한 곳**이 세 소비자를 동시에 먹임: (1) FE 그룹 제안(주류 카테고리 묶기 힌트), (2) 서버 추출 보정(LLM 영수증 추출 결과의 음료 정규화), (3) 프롬프트 힌트(`DRINK_BRAND_PROMPT_HINT` 가 같은 배열에서 파생). 사전을 고치면 세 소비자가 컴파일 타임에 정렬 — `settlement.calculator.ts` 헬퍼가 보여준 "zod 아닌 leaf 도 SSOT 1급 시민" 모델의 또 다른 적용. **이것은 [[in-memory-singleton-gates]]/[[four-source-canonical-merge]] 류 문서에 기록된 `normalizeContactKey` 4곳 복사 안티패턴과 정확히 대비되는 짝** — 같은 leaf 패키지 안에서 한쪽은 단일 사전으로 옳게, 한쪽은 4곳 복사로 틀리게 — "SSOT 의 가치는 자동으로 따라오지 않고, 사전/헬퍼를 leaf 로 끌어올리는 의식적 결정에서만 나온다" 를 한 패키지 안에서 대조 사례로 보여줌.
+
 ## What This Means
 
 빌드 없는 src export는 단순히 빌드 시간 절약이 아니다 — **Zod SSOT의 약속을 지키는 인프라**다. 만약 api-contract에 tsup 단계를 추가하면 즉각 watch 재기동·d.ts 캐시 무효화 문제가 따라붙고, "스키마 한 곳만 고치면 된다"는 약속이 부분적으로 깨진다. 그래서 두 결정은 사실상 한 묶음이다.
@@ -36,6 +39,10 @@ status: active
 **확장이 마찰 없음** — 새 도메인 스키마 추가 = 한 파일 추가 + `src/index.ts` re-export 1줄. 빌드 없는 src export 라 컨슈머(friendly · shared · web · mobile)가 즉시 컴파일 타임에 동기화된다. menu-grouping/analytics 처럼 도메인 수가 늘어나도 보일러플레이트가 증가하지 않는다. 재귀 스키마 (`z.lazy`) 는 이전 라운드에 처음 들어왔지만 같은 SSOT 모델 안에서 자연스럽게 흡수됐다 — type alias + 명시적 `z.ZodType` annotation 한 줄이면 끝이고, 컨슈머 측은 일반 스키마와 구분 없이 `z.infer` 로 타입을 받는다.
 
 **재형성도 마찰 없음** (2026-05-28) — settlement 도메인이 "단일 영수증·단일 라운드" 에서 "N 라운드 + 라운드별 참석자/보정/제외" 로 모델 자체가 재형성됐는데도, 스키마 수정 한 라운드 안에서 friendly + shared + web + mobile 4 컨슈머가 모두 컴파일 타임에 정렬됐다. 도메인 추가가 아닌 **모델 재구조화** 도 같은 SSOT 인프라가 흡수한다는 것이 두 라운드 연속 확인됨. 그리고 `settlement.calculator.ts` 에 `calculateMultiRoundShares` + `effectiveExcludes` 가 추가되며 **api-contract 의 "헬퍼 leaf" 역할이 zod 스키마와 동등한 1급 시민으로 안착** — FE 미리보기와 BE 권위 저장이 같은 함수를 호출한다는 약속이 단일 라운드 알고리즘에서 N-라운드 알고리즘으로 자연스럽게 확장.
+
+**다섯 도메인 동시 진입도 마찰 없음** (2026-06, 18차) — review-search / review-clustering / random-crawl / logs / telegram-settings 다섯 스키마 모듈이 한 라운드에 추가됐는데도 각각은 여전히 "모듈 1개 + re-export 1줄" 로 끝났다. 도메인 수가 늘어도 추가 비용이 도메인당 고정이라는 약속이 다섯 번 연속 깨지지 않음 — 17차의 1 도메인보다 너비가 컸지만 깊이(도메인당 작업)는 같았다. 그리고 이 다섯 스키마는 [[in-memory-singleton-gates]] 의 같은 라운드 런타임 게이트와 1:1 대응한다 — **런타임 동시성 게이트를 새로 만들 때 그 게이트가 회계하는 상태(잡 진행률·스킵사유·rate-limit)가 곧 SSE/응답 스키마가 되고, 둘이 같은 PR diff 안에서 태어난다.** SSOT 가 정적 I/O 계약뿐 아니라 "동시성 인프라의 관찰 가능한 표면" 까지 덮는다는 뜻.
+
+**zod 아닌 사전/헬퍼도 leaf 로 끌어올려야 SSOT 가 된다 — 자동이 아니다** (2026-06, drink-kinds) — `DRINK_KINDS` 단일 사전이 FE 그룹 제안·서버 추출 보정·프롬프트 힌트 세 소비자를 한 곳에서 먹이는 모범 사례인 반면, 같은 패키지 안의 `normalizeContactKey` 는 4곳에 복사돼 안티패턴으로 남아 있다. 둘의 차이는 기술이 아니라 **결정** — 도메인 지식(주류 종류, 연락처 정규화 규칙)을 leaf 로 끌어올리는 의식적 행동이 있었느냐 없었느냐. buildless src export 인프라는 SSOT 를 *가능하게* 하지만 *강제하지는 않는다*. zod 스키마는 라우트 검증이 강제하므로 자연히 단일화되지만, 순수 헬퍼/사전은 누가 의식적으로 leaf 로 옮기지 않으면 복사가 번진다. **새 도메인 상수/규칙이 2곳 이상에서 필요해지는 순간이 leaf 로 올릴 시점** — drink-kinds 가 그 패턴을 옳게, normalizeContactKey 가 틀리게 보여주는 한 패키지 안의 대조쌍.
 
 이게 깨질 수 있는 시점:
 - **api-contract가 외부 패키지를 npm에 publish해야 할 때** — 그 시점엔 빌드 단계가 필요해진다. 그 전까지는 workspace 안에서만 사용
@@ -59,3 +66,8 @@ status: active
 - [[../topics/auto-discover]]
 - [[../topics/settlement]]
 - [[../topics/schedule]]
+- [[../topics/review-search]]
+- [[../topics/review-clustering]]
+- [[../topics/random-crawl]]
+- [[../topics/logs]]
+- [[../topics/telegram]]

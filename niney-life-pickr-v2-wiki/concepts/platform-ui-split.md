@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-06-06
-topics_connected: [shared, web, mobile, project-overview, utils, map, settlement]
+last_compiled: 2026-06-25
+topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering]
 status: active
 ---
 
@@ -28,6 +28,10 @@ status: active
 
 - **2026-06**(17차) in [[../topics/mobile]] / [[../topics/web]] / [[../topics/shared]] / [[../topics/map]] (다크 모드 — 테마 저장소 플랫폼 분리 + 지도 다크 전략 동형): 패턴의 **저장소 물리 분리 + 공통 토큰 공유** 인스턴스로, settlement storage-adapter 주입(2026-05-28)과 같은 결의 "런타임/저장소 분리, 공통 토큰 공유". 테마 모드(`'light'|'dark'|'system'`) 영속화를 플랫폼별로 **물리적으로 다른 저장소**에 둔다 — 앱은 AsyncStorage `'lp:themeMode'`([apps/mobile/src/lib/themeStore.ts](../../apps/mobile/src/lib/themeStore.ts), zustand + `useResolvedThemeMode` 가 `system` 일 때 `useColorScheme` 와 결합), 웹은 자체 localStorage 스토어(`apps/web/src/stores/theme.ts`). 두 저장소가 충돌하지 않고 공유되는 것은 오직 `@repo/shared` 의 design 토큰([packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts)) — "값(토큰)은 1벌, 저장/적용 인프라는 N벌". 앱 themeStore 는 zustand persist 의 async rehydrate 타이밍 대신 bootstrap 에서 `await hydrate()` 로 한 번 당겨와 스플래시 동안 모드 확정(잘못된 테마 플래시 방지) — settlementPrefsStore 와 같은 수동 hydrate 패턴. **지도 다크는 같은 표현 다른 인프라**의 또 다른 사례: 웹은 OpenLayers `tileSource.setUrl(buildVworldTileUrl(...))`([apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx), 같은 URL 이면 skip 해 깜빡임 방지) 로 타일 소스를 바꾸고, 앱은 WebView 안 HTML 에 `window.__setMode(mode)` 를 `injectJavaScript` 로 주입([apps/mobile/src/components/publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 의 `tileSource.setUrl(darkBg ? DARK_TILE_URL : BASE_TILE_URL)`, 같은 모드면 no-op) — 둘 다 "OpenLayers 타일 URL 을 다크/라이트로 스왑" 이라는 **같은 표현**이지만 한쪽은 직접 OL 호출, 한쪽은 WebView 브릿지 주입. 2026-05-19 의 PublicRestaurantsWebMap quad(WebView vs web 컴포넌트)가 다크 모드 런타임 전환까지 확장된 셈 — WebView 재마운트 없이 `__setMode` 한 번으로 테마 토글.
 
+- **2026-06**(18차) in [[../topics/review-clustering]] / [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] (`ClusterTopics` 동형 컴포넌트 + 전부-노이즈 폴백): 군집 관점 토픽을 보여주는 `ClusterTopics` 가 웹([apps/web/src/components/restaurant/detail/ClusterTopics.tsx](../../apps/web/src/components/restaurant/detail/ClusterTopics.tsx)) / 앱([apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx](../../apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx)) **동형 컴포넌트**로 따로 작성된 듀얼 구현. 도메인 훅(`useRestaurantClusters`)만 `@repo/shared` 로 공유하고 **표현(렌더링)만 분기** — 정산 Step\*(2026-05-28)과 같은 "한 데이터 셰이프, 두 표현" 의 연장. 추가 결: **전부 노이즈일 때 `aspectSummary` 폴백** — 군집이 전부 노이즈로 떨어지면(소형 식당 등) 양쪽 컴포넌트가 관점집계(aspectSummary)로 폴백해 분석 탭이 항상 콘텐츠를 채운다. 이 클라이언트 폴백은 서버 폴백(전부 노이즈 시 관점집계로 폴백)과 **짝** — 한 약속("분석 탭은 비지 않는다")을 서버·웹·앱 세 곳이 같은 의미로 충족.
+- **2026-06**(18차) in [[../topics/settlement]] / [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] (`RoundGroupSplitEditor` 세부 분배 + `RoundGroupSplitNote` 구조적 subtyping): 정산 라운드의 그룹/잔수 세부 분배 편집기 `RoundGroupSplitEditor` 가 분배 로직 전부를 `@repo/shared` SSOT 로 두고 **표현만 동형 분기** — 웹은 사람×그룹 매트릭스([apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx](../../apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx)), 앱은 그룹 카드 세로 스택([apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx)). 2026-05-28 의 `Round*` 듀얼 구현(Discount/Category/Exceptions)에 그룹 분배가 합류. 곁들여 `RoundGroupSplitNote` 는 `SettlementSessionType` 과 `SharedSettlementSessionType` 을 **구조적 subtyping** 으로 받아 owner/shared 두 경로를 **단일 컴포넌트**로 처리 — 분기를 줄이는 반대 방향의 인스턴스(플랫폼이 아니라 세션 종류를 타입 호환으로 합침).
+- **2026-06**(18차) in [[../topics/review-search]] / [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] (비동기 질문 알림 UI 분기 — 본체는 [[cross-tab-async-job-toast]]): 비동기 리뷰 질문(QA) 결과 알림에서 `reviewAskStore`(`@repo/shared` 공유)는 한 벌, **알림 UI 만 플랫폼별** — 웹은 `ReviewAskToaster`(sonner 토스트), 앱은 `ReviewAskBanner`(reanimated 자작, 앱엔 sonner 같은 토스트 인프라가 없어 직접 구현). UI 분기 측면만 보면 이 패턴의 또 다른 "스토어 1벌 + 표현 N벌" 인스턴스지만, 이 인스턴스의 **본체는 신규 컨셉 [[cross-tab-async-job-toast]]** (탭 간 비동기 작업 결과를 토스트로 전파하는 메커니즘) — 자세한 맥락은 그쪽 참조.
+
 ## What This Means
 
 이 패턴은 두 가지 가치 판단을 코드에 박아 둔다:
@@ -51,3 +55,5 @@ status: active
 - [[../topics/utils]]
 - [[../topics/map]]
 - [[../topics/settlement]]
+- [[../topics/review-search]]
+- [[../topics/review-clustering]]

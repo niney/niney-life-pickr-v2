@@ -1,12 +1,14 @@
 ---
 topic: project-overview
-last_compiled: 2026-06-06
-sources_count: 41
+last_compiled: 2026-06-25
+sources_count: 52
 status: active
-aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, settlement, 정산, settlement-domain, share-token, public-share-read, ai-purpose, vision-llm, receipt-extraction, contacts-page, settlement-stepper, edited-badge, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, canonical-restaurant, multi-source, auto-dc-merge, sse-heartbeat, stale-summary-cleanup, crawl-job-log, summary-queued-cancelled, summary-resume, app-level-singleton-plugin, mobile-native-tabs, dev-client, webview-vworld, location-first-entry, public-reviews-pagination, naver-stealth, db-path-unified, mobile-production-build, settlement-rounds, settlement-draft-auto-save, universal-links-iOS, app-links-android, well-known-AASA, well-known-assetlinks, RFC1918-dev-cors, dev-cors-reflect-all, cors-preflight-fix, expo-web-lan-ip, multi-receipt-split, roundUnit-100-1000, refinement-leftover, ai-models-preview, settlement-PUT-full-replace, items-mutable-after-save, tailwind-v4-dark-fix, deep-link-fallback, share-settlements-deep, settlement-mobile-implementation, attendees-100, items-200, EXTRACTION_VERSION, headerBackTitle-fix, sticky-breakdown-z-30, tab-bar-inset, useTabBarHeight, awesome-gallery, lightbox-portal, home-ranking-link, public-reviews-sort-fix, share-og-ssr, og-image-png, settlement-card-png, share-preview, eslint-infra, turbo-lint, deploy-sh, ninelife-kr, nginx-caret-tilde, cloudflare-purge, vite-codesplitting, route-lazy, react-memo-hotpath, ibmplexsanskr, schedule, schedule-config, schedule-run, croner, normalize-merge-cron, in-process-scheduler, taxonomy-v3, ingredient-menu-group, GLOBAL_MERGE_VERSION-3, dark-mode, theme-mode, lp-themeMode, vworld-midnight, satellite-layer, android-custom-tabbar, splash-logo-fix, expo-prebuild-cleanup, soft-tonal, menu-thumbnail-lightbox, card-click-map, double-click-zoom, category-tree-shared, categoryPath-recovery, ollama-grammar-array]
+aliases: [monorepo, life-pickr, niney, root, turbo, pnpm-workspace, settlement, 정산, settlement-domain, share-token, public-share-read, ai-purpose, vision-llm, receipt-extraction, contacts-page, settlement-stepper, edited-badge, admin-discover, admin-auto-discover, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, captcha-aware-capture, mobile-ux, body-scroll, sticky-containing-block, terminology, web-mobile-app, expo-web, diningcode, catchtable, tabling, 테이블링, canonical-restaurant, multi-source, four-source, auto-dc-merge, place-partner-promotion, sse-heartbeat, stale-summary-cleanup, crawl-job-log, operation-log, operation-run, log-analysis, log-retention, summary-queued-cancelled, summary-resume, app-level-singleton-plugin, mobile-native-tabs, dev-client, webview-vworld, location-first-entry, public-reviews-pagination, naver-stealth, db-path-unified, mobile-production-build, settlement-rounds, settlement-group-split, drink-kinds, glasses-split, settlement-draft-auto-save, universal-links-iOS, app-links-android, well-known-AASA, well-known-assetlinks, RFC1918-dev-cors, dev-cors-reflect-all, cors-preflight-fix, expo-web-lan-ip, multi-receipt-split, roundUnit-100-1000, refinement-leftover, ai-models-preview, settlement-PUT-full-replace, items-mutable-after-save, tailwind-v4-dark-fix, deep-link-fallback, share-settlements-deep, settlement-mobile-implementation, attendees-100, items-200, EXTRACTION_VERSION, headerBackTitle-fix, sticky-breakdown-z-30, tab-bar-inset, useTabBarHeight, awesome-gallery, lightbox-portal, home-ranking-link, public-reviews-sort-fix, share-og-ssr, ssr-lite-head-injection, restaurant-share-r, restaurant-seo, sitemap, json-ld, og-image-png, settlement-card-png, share-preview, restaurant-preview, panorama-cache, eslint-infra, turbo-lint, deploy-sh, ninelife-kr, nginx-caret-tilde, cloudflare-purge, vite-codesplitting, route-lazy, react-memo-hotpath, ibmplexsanskr, schedule, schedule-config, schedule-run, croner, normalize-merge-cron, in-process-scheduler, random-crawl, 맛집-자동-발굴, telegram-bot, telegram-discover, telegram-stats, telegram-search, force-reply, review-search, rag, 리뷰-문맥검색, enrich, hybrid-retrieval, review-clustering, 리뷰-군집화, umap, hdbscan, python-sidecar, canonical-corpus, llm-telemetry, concurrency-gate, account-gate, db-config-env-fallback, region-stats, choropleth, sigungu-geo, smart-pick, taxonomy-v3, ingredient-menu-group, GLOBAL_MERGE_VERSION-3, dark-mode, theme-mode, lp-themeMode, vworld-midnight, satellite-layer, android-custom-tabbar, splash-logo-fix, expo-prebuild-cleanup, soft-tonal, menu-thumbnail-lightbox, card-click-map, double-click-zoom, category-tree-shared, categoryPath-recovery, ollama-grammar-array]
 ---
 
 # project-overview — 모노레포 개요
+
+**2026-06-25 변경 흡수 (18차) — 리뷰 지능화(RAG 문맥검색 + 군집화) + 운영 자동화(텔레그램 봇 자동 발굴 + 범용 작업 로그) + 4번째 출처(테이블링) + LLM 계정 게이트·텔레메트리 + 정산 세부 분배(잔수) + 맛집 공유/SEO.** 19일·~70커밋의 가장 큰 라운드. **신규 토픽 5개**: (1) [review-search](review-search.md) — 리뷰 RAG/문맥검색. enrich(관점+문맥+bge-m3 임베딩을 `review_summaries` 에 영속) → 하이브리드 회수(BM25 char-trigram ⊕ dense, RRF) → listwise LLM 리랭크 → 근거 RAG 생성 → 2차 LLM 검증 가드레일(claim↔span 대조). 어드민 `/admin/review-search` + 공개 무인증 QA(`restaurants/:placeId/qa`). (2) [review-clustering](review-clustering.md) — 비슷한 문맥 리뷰 군집화. bge-m3 임베딩 → UMAP → HDBSCAN → c-TF-IDF → LLM 라벨. **수학은 별도 Python 런타임**(`scripts/cluster_compute.py`, numpy/sklearn/umap-learn/hdbscan)을 Node 가 spawn. 전부 노이즈/소형 식당이면 관점집계 폴백. (3) [random-crawl](random-crawl.md) — 맛집 자동 발굴. cron 으로 지역 선정 → 검색 → 후보를 텔레그램 push → 사용자가 고른 가게만 크롤("사람이 끼는 2단계 비동기 상태머신"). (4) [telegram](telegram.md) — 텔레그램 봇(long-polling). `/search`·`/discover`·`/stats` 커맨드 + 크롤 진행/완료 알림 + 어드민 설정. (5) [logs](logs.md) — 전 기능 가로지르는 범용 작업 로그(`OperationRun`/`Log`/`Report`) + 실패 run LLM 자동 원인분석 + 보존 정리. crawl 의 CrawlJobLog 를 일반화한 후속. **신규 컨셉 5개**: [db-config-env-fallback](../concepts/db-config-env-fallback.md)(ai/map/telegram 설정 동형), [operation-log-instrumentation](../concepts/operation-log-instrumentation.md)(8+ 도메인 횡단 계측), [canonical-corpus-fanout](../concepts/canonical-corpus-fanout.md)(분석이 canonical 멤버 다소스 행에 fan-out), [cross-tab-async-job-toast](../concepts/cross-tab-async-job-toast.md)(전역 store 가 잡 수명을 UI 수명에서 분리 + 토스트), [ssr-lite-head-injection](../concepts/ssr-lite-head-injection.md)(정산+맛집 공유 OG/SEO head 주입 — 16차 보류 후보가 식당으로 번져 추출). **갱신 토픽 11개**: [crawl](crawl.md)(테이블링 4어댑터 + SSE seq 단일화 78% 멈춤 fix + 정확한 리뷰 수), [ai](ai.md)(계정 단위 2단 동시성 게이트 + LLM 텔레메트리 SSE + adapter-cache 키별 Map + 키 1계정 공유·용도별 모델 + log-analysis purpose), [settlement](settlement.md)(세부 분배 그룹 — 균등/잔수 + drink-kinds 사전 + EXTRACTION_VERSION 3→4 주류 오분류 보정 + 잔여 수령자 다중), [analytics](analytics.md)(전량 머지 청크 병렬 풀+캐시+OOM 수정), [menu-grouping](menu-grouping.md)(v2 분할·머지 재설계 — 에코→인덱스 계약, parse_failed 해소), [friendly](friendly.md)(5 신규 모듈 통합 + 파노라마 503 캐시 fix + 맛집 SEO/공유 + 지역 통계 파생 + smart-pick), [canonical](canonical.md)(테이블링 4번째 소스 + place↔partner 자동 승격), [map](map.md)(지역 통계 choropleth point-in-polygon + vworld 타일 probe 판정), [api-contract](api-contract.md)(5 신규 스키마 + 테이블링·그룹분배·텔레메트리), [shared](shared.md)(API 5+훅 6+스토어 3), [web](web.md)(Ask/군집 탭 + 어드민 콘솔 대확장 + 전역 토스터 + `/r` 공유)/[mobile](mobile.md)(Ask 탭/배너 + 군집 + 그룹분배 + `s/[token]`). 자세한 건 각 토픽.
 
 **2026-06-06 변경 흡수 — schedule 도메인 신규(croner in-process 주기 자동 실행) + 카테고리 택소노미 v3(재료·메뉴군 축) + 다크 모드(웹/앱) + 앱 안드로이드 정비.** 신규 토픽 [schedule](schedule.md) 1개 추가, 나머지는 기존 토픽으로 흡수. (1) **schedule 도메인** — "미분류 식당 메뉴 정규화 → 전역 머지(증분)" 파이프라인을 어드민이 설정한 cron 주기마다 자동 실행한다. `croner` **in-process** 스케줄러(단일 Fastify + no-Redis 전제와 일관 — 외부 잡 큐 없음). `plugins/schedule.ts` 가 `ScheduleService` 를 app 전역 singleton 으로 decorate 하고, cron 타이머 + 동시 1개 inflight(overlap 방지)는 `scheduleRegistry`(모듈 singleton)가 관리. 설정은 SQLite `schedule_configs` 에 영속돼 부팅 시 복원 + cron 등록, 부팅 직후 직전 인스턴스에서 `running` 으로 남은 run 을 `interrupted` 로 정리(`schedule.bootstrap()`). 크롤 진행 중 식당은 제외(`crawl.isPlaceCrawling`), SIGTERM 시 inflight abort + graceful close. 어드민 UI 는 별도 페이지 없이 `AdminAnalyticsPage` 에 "자동 실행 스케줄" 섹션(프리셋·cron 미리보기·실행 이력)으로 통합. 신규 테이블 `schedule_configs`/`schedule_runs`, `croner` 의존 추가. 자세한 건 [schedule](schedule.md). (2) **카테고리 택소노미 v3** — 전역 메뉴 머지 최상위 축을 음식 종류(한식/일식/양식) → **재료·메뉴군**(고기/면/김치/반찬/찌개·전골/회·초밥/튀김…)으로 전환. `GLOBAL_MERGE_VERSION` 2→3 → 기존 행 stale, 새 택소노미 채우려면 **full 재머지**(어드민 '전체 재실행' 또는 `run-merge --full`) 필요. 복합어는 가운뎃점(`/`는 path 구분자라 금지). LLM 출력 스키마를 맵→**배열**로(Ollama grammar fix) + 청크 50→10. 카테고리 트리 `buildCategoryTree` 가 공용(전역 어드민 + 식당별 공개 분석 탭 동일). 자세한 건 [analytics](analytics.md). (3) **다크 모드** — 웹/앱 둘 다 system/light/dark 3-way. **저장소는 플랫폼 분리** — 웹 localStorage / 앱 AsyncStorage `'lp:themeMode'`(수동 hydrate + `useResolvedThemeMode` 가 `useColorScheme` 결합), `@repo/shared` 의 design 토큰만 공유(다크 textMuted zinc400/border 0.14 AA). vworld 지도 다크(midnight 타일)/위성 레이어 토글이 좌하단 컨트롤로 캡슐화 + 앱 다크 진입 시 기본 midnight 자동 전환(직접 고르면 이후 비추종), `tileSource.setUrl()` 로 map 재생성 없이 전환. (4) **앱 안드로이드** — 표준 스타일 커스텀 하단 탭바, `splashscreen_logo` 누락 빌드 fix, 바텀시트 내 가로 스와이프 fix, iOS/Android 실기기·릴리즈 실행 스크립트, 루트 `expo run:ios` 오염(ios/·app.json) 정리 + 루트 `.gitignore` 에 `/ios /android /app.json` 추가로 재발 차단. (5) **UI 정비** — soft tonal 버튼/배지 variant 도입(어드민/상세/병합 일괄), 분석 탭 메뉴/팁 클릭→해당 리뷰 필터, 메뉴 썸네일 탭→라이트박스 확대, 목록 카드 클릭=지도 이동/더블클릭=확대(공개+어드민 통일), 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹/앱 통일). (6) 전역 머지 categoryPath 유실 복구 fix. 자세한 건 [analytics](analytics.md)·[web](web.md)·[mobile](mobile.md)·[map](map.md).
 
@@ -143,9 +145,14 @@ Catchtable  ──┘
 | `auth` | 회원가입 / 로그인 / JWT | — |
 | `user` | 프로필 / 관리자 role 토글 | — |
 | `picks` | 선택지 등록 + 무작위 픽 | — |
-| `crawl` | 네이버 / DC / 캐치테이블 크롤 (Playwright + 어댑터별 분기, Naver done 후 자동 DC 매칭+머지 후크, naver stealth/jitter, 배치 setQueryData 머지) | [crawl](crawl.md) |
-| `auto-discover` | AI 키워드 8개 → 다중 검색 → 그룹 5병렬 자동 발견 잡 | [auto-discover](auto-discover.md) |
-| `ai` | LLM 라우팅 + `purpose` 분리(chat/image) + 모델 preview(`GET /admin/ai/providers/:id/:purpose/models/preview`) | [ai](ai.md) |
+| `crawl` | 네이버 / DC / 캐치테이블 / **테이블링** 크롤 (Playwright + HTTP 어댑터별 분기, Naver done 후 자동 DC 매칭+머지 후크, naver stealth/jitter, SSE seq 단일화). 테이블링은 무인증 REST(검색/상세/사이트맵 발견) | [crawl](crawl.md) |
+| `auto-discover` | AI 키워드 8개 → 다중 검색 → 그룹 5병렬 자동 발견 잡 (순차 큐 + 후보 확인 후 등록) | [auto-discover](auto-discover.md) |
+| `random-crawl` | cron 으로 지역 랜덤 선정 → 검색 → 후보 텔레그램 push → 사용자가 고른 가게만 크롤 (사람이 끼는 2단계 비동기 상태머신) | [random-crawl](random-crawl.md) |
+| `telegram` | 텔레그램 봇 (long-polling) — `/search`·`/discover`·`/stats` 커맨드 + 크롤 진행/완료 알림 + 어드민 설정 | [telegram](telegram.md) |
+| `review-search` | 리뷰 RAG/문맥검색 — enrich(bge-m3 임베딩) → 하이브리드 회수 → 리랭크 → RAG 생성 → 검증 가드레일. 어드민 + 공개 무인증 QA | [review-search](review-search.md) |
+| `review-clustering` | 리뷰 군집화 — UMAP→HDBSCAN→c-TF-IDF→LLM 라벨 (Python 사이드카 런타임). 공개 읽기 전용 | [review-clustering](review-clustering.md) |
+| `logs` | 전 기능 횡단 범용 작업 로그(`OperationRun`/`Log`/`Report`) + 실패 run LLM 자동 분석 + 보존 정리 | [logs](logs.md) |
+| `ai` | LLM 라우팅 + `purpose` 분리(chat/image/log-analysis) + 모델 preview + **계정 단위 2단 동시성 게이트** + **사용량 텔레메트리 SSE** + 키 1계정 공유·용도별 모델 | [ai](ai.md) |
 | `settlement-extraction` | 영수증 업로드 + vision LLM 추출 + 멀티 영수증 분할 (`ExtractReceiptSplit { count, index }`) | [settlement](settlement.md) |
 | `settlement` | N차 세션 CRUD + 분배 계산(`calculateMultiRoundShares`) + 공유 토큰 + draft 자동저장 + **공유 OG SSR-lite**(`share-preview.ts`) + **정산표 PNG**(`settlement-card.ts`). `PUT /:id` 풀 리플레이스 | [settlement](settlement.md) |
 | `contact` | 단골 참여자 자동 적립 + `/me/contacts` | [settlement](settlement.md) |
@@ -154,7 +161,7 @@ Catchtable  ──┘
 | `summary` | 리뷰 단위 분석 v4 (메뉴 멘션 + 태그) | [ai](ai.md) |
 | `restaurant` | 어드민 식당 CRUD + 공개 list/detail/insights/ranking (식당명 경량 조회 추가) | — |
 | `canonical` | 출처 가로지르는 같은 가게 묶기 + 머지 제안 큐 | [canonical](canonical.md) |
-| `media` | 리뷰 사진/동영상 + 썸네일 프록시 | [media](media.md) |
+| `media` | 리뷰 사진/동영상 + 썸네일 프록시 + 파노라마 503/TTL 영구 사본 캐시 | [friendly](friendly.md) (media 모듈) |
 | `menu-grouping` | 식당별 메뉴 정규화 (synonym → canonical) | [menu-grouping](menu-grouping.md) |
 | `analytics` | 전역 메뉴 머지 + 카테고리 path + 통계 트리. 택소노미 v3(재료·메뉴군 축, `GLOBAL_MERGE_VERSION` 3), LLM 출력 배열 스키마(Ollama grammar) + 청크 10, `buildCategoryTree` 공용 | [analytics](analytics.md) |
 | `settings` | 외부 SDK 키 — 현재 `map.route.ts`만 (vworld) | — |
@@ -262,7 +269,7 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint — esl
 - friendly → 디스크 (`apps/friendly/data/receipts/<token>.jpg` — 영수증 이미지. 멀티 분할은 같은 token 재사용 + sharp crop)
 - friendly → 디스크 (`apps/friendly/assets/fonts/IBMPlexSansKR-*.ttf` — 정산표 PNG 한글 렌더 + `apps/web/dist/index.html` 읽어 OG 메타 주입)
 - friendly → 네이버 / DC / 캐치테이블 (Playwright + 어댑터, naver stealth + jitter)
-- friendly → 네이버 CDN (`/api/v1/media/thumbnail` 프록시) → [media](media.md)
+- friendly → 네이버 CDN (`/api/v1/media/thumbnail` 프록시) → [friendly](friendly.md) (media 모듈)
 - friendly → LLM provider — `purpose` 분리(`chat`/`image`). 모델 preview 라우트로 키 검증 후 저장
 - 웹 → vworld WMTS (OpenLayers 직접 fetch)
 - 웹 → jsDelivr CDN (Pretendard 변수 폰트 — 공개 페이지)
@@ -314,8 +321,11 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint — esl
 ├── restaurants/
 │   ├── ranking .................... 공개 랭킹
 │   ├── public ..................... 공개 리스트
-│   ├── public/:placeId ............ 공개 상세
-│   └── public/:placeId/insights ... 공개 인사이트
+│   ├── public/:placeId ............ 공개 상세 (+ /insights /category-tree /reviews 페이지네이션)
+│   ├── :placeId/qa ................ 공개 리뷰 QA (RAG, 무인증·IP 레이트리밋) + /qa/ready
+│   └── :placeId/clusters .......... 공개 리뷰 군집 (읽기 전용)
+├── r/:placeId ..................... 맛집 공유 SSR-lite (OG/JSON-LD head 주입, 봇=서버 / 사람=SPA)
+├── sitemap.xml / robots.txt ....... 맛집 SEO (restaurant-preview)
 ├── settlement-extraction/         정산 영수증 vision 추출 (인증)
 │   ├── upload .................... POST multipart jpg → imageToken
 │   ├── extract ................... POST { imageToken, placeId, split?: { count, index } } → items[]
@@ -336,14 +346,19 @@ config        ← 의존 ←  모든 워크스페이스 (tsconfig/eslint — esl
 │   └── assetlinks.json .............. env 기반 동적 응답 (미설정 시 404)
 ├── health
 └── admin/
-    ├── crawl/* .................... 크롤 잡 + SSE + 배치 setQueryData 머지
+    ├── crawl/* .................... 크롤 잡 + SSE + 배치 머지 (네이버/DC/캐치테이블/테이블링)
     ├── auto-discover/* ............ AI 키워드 → 다중 검색 → 그룹 5병렬
-    ├── ai/* ....................... LLM 호출 + provider 키 (purpose=chat/image) + models/preview
+    ├── random-crawl/* ............. 지역 랜덤 자동 발굴 설정/실행/이력 (텔레그램 후보 선택)
+    ├── ai/* ....................... LLM 호출 + provider 키 (purpose=chat/image/log-analysis) + models/preview + telemetry SSE
     ├── analytics/* ................ 그룹핑 잡 + 글로벌 머지(택소노미 v3) + 카테고리 트리
     ├── schedule/* ................. 주기 자동 실행 설정 CRUD / 수동 실행 / 이력 (정규화→머지)
+    ├── review-search/* ............ enrich/ask/status/enrich-bg + enrich-events SSE
+    ├── review-clustering/* ........ run/status/cluster-bg/cluster-pending
+    ├── logs/* ..................... 작업 run 목록/상세/로그 + 실패 분석 + 보존 설정
     ├── canonical/* ................ 머지 제안 큐 / 수락·거절
     ├── settings/map ............... 지도 SDK 키 (admin)
-    └── restaurants/* .............. 어드민 식당 CRUD + 인사이트 + smart-pick + summary SSE
+    ├── settings/telegram .......... 텔레그램 봇 토큰/chatId (DB+env fallback)
+    └── restaurants/* .............. 어드민 식당 CRUD + 인사이트 + smart-pick + region-stats + summary SSE
 ```
 
 > 비-`/api/v1` 루트 경로: `/share/settlements/:token`(별칭 `/s/:token`) 의 OG HTML + `image.png` 와 `/.well-known/*` 는 Fastify 루트에 직접 매핑(nginx 가 prefix 그대로 proxy).
@@ -420,19 +435,22 @@ packages/api-contract (Zod schema)
 
 `settlementDraftStore` (zustand) 는 storage 어댑터를 **외부 주입** — 부팅 직후 `setSettlementDraftStorage(...)` 가 호출되어야 store 의 첫 read/write 가 안전. 웹은 entry 에서 sessionStorage 어댑터, 앱은 `apps/mobile/src/lib/api-setup.ts` 에서 AsyncStorage 어댑터 주입.
 
-### 도메인 테이블 그룹 (전 25개)
+### 도메인 테이블 그룹 (전 ~34개)
 
-| 그룹 | 테이블 (자세한 모델은 friendly/canonical/analytics/settlement 토픽) |
+| 그룹 | 테이블 (자세한 모델은 friendly/canonical/analytics/settlement/logs 토픽) |
 |---|---|
 | 사용자 (3) | `User`, `Pick`, `PickResult` |
-| 외부 SDK 키 (2) | `LlmProviderConfig` (`@@unique(provider, purpose)`), `MapProviderConfig` |
+| 외부 SDK·봇 설정 (3) | `LlmProviderConfig` (`@@unique(provider, purpose)`), `MapProviderConfig`, `TelegramConfig` (단일 행, 18차) — 셋 다 [db-config-env-fallback](../concepts/db-config-env-fallback.md) 동형 |
 | canonical (2) | `CanonicalRestaurant`, `CanonicalMergeProposal` |
 | 식당/크롤 (3) | `Restaurant` ((source, sourceId) unique + canonicalId), `VisitorReview`, `ReviewSummary` |
 | 분석 v4 (2) | `MenuMention`, `ReviewTag` |
+| 리뷰 RAG·군집 (18차) | `ReviewSummary` enrichment 컬럼(`embeddingJson`/`aspectsJson`/`contextLine`/`enrichVersion`) + `clusterId` FK, `ReviewCluster` (군집 1행/주제, clusterVersion/corpusSize) |
 | 메뉴 그룹핑 (1) | `MenuCanonical` |
-| 전역 머지 + 통계 (2) | `GlobalMenuCanonical`, `GlobalMenuCanonicalLink` |
-| 정산 (6) | `SettlementSession`, `SettlementParticipant`, `SettlementItem`(→Round), `SettlementRound`, `SettlementRoundAttendee`, `SettlementContact` |
-| 정산 보조 (2) | `SettlementCategoryAdjustment` (round × category — leftoverParticipantId + roundUnit nullable), `SettlementDraft` ((userId, placeIdKey) unique — '' sentinel for null placeId) |
+| 전역 머지 + 통계 (3) | `GlobalMenuCanonical`, `GlobalMenuCanonicalLink`, `GlobalMenuMergeChunkCache` (청크 캐시 — `20260619075115` 마이그레이션 정식 등재. 과거 수동 생성 운영 DB 는 `_prisma_migrations` 정합 확인 필요) |
+| 작업 로그 (4, 18차) | `OperationRun`(run 헤더, feature 8+종), `OperationLog`(스텝, 4 level), `OperationReport`(실패당 0~1 LLM 분석), `LogConfig`(보존 기본 30일) — [logs](logs.md) |
+| 자동 발굴 (2, 18차) | `RandomCrawlConfig`(jobType unique), `RandomCrawlRun`(telegramChatId/MessageId/expiresAt/candidatesJson) |
+| 정산 (6) | `SettlementSession` (`shareExpiresAt`), `SettlementParticipant`, `SettlementItem`(→Round), `SettlementRound` (`groupSplits` JSON — 균등/잔수 세부 분배, 18차), `SettlementRoundAttendee`, `SettlementContact` |
+| 정산 보조 (2) | `SettlementCategoryAdjustment` (round × category — `leftoverParticipantIds[]` 배열 '나눠 받기' + roundUnit nullable), `SettlementDraft` ((userId, placeIdKey) unique — '' sentinel for null placeId) |
 | 스케줄 (2) | `ScheduleConfig` (`jobType @unique`, cronExpr/timezone/enabled + lastRunAt/lastStatus 비정규화 — nextRunAt 미저장), `ScheduleRun` (`@@index([jobType, startedAt])`, status running/done/failed/skipped/interrupted, trigger cron|manual) |
 
 `SettlementSession.shareToken @unique` 가 공유 OG/정산표 PNG 라우트의 진입 키 — 토큰으로 세션을 찾아 satori 매트릭스를 렌더한다.
@@ -453,6 +471,11 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정. (revers
 
 | 결정 | 이유 |
 |---|---|
+| **리뷰 지능화 — RAG 문맥검색 + 군집화 (18차 2026-06)** | 리뷰를 bge-m3 임베딩으로 enrich 해 하이브리드 회수→리랭크→RAG 답변(2차 검증 가드레일)하는 [review-search](review-search.md), UMAP→HDBSCAN→c-TF-IDF→LLM 라벨로 묶는 [review-clustering](review-clustering.md). 군집 수학은 **Python 사이드카**(spawn), 임베딩은 로컬 Ollama bge-m3(`/api/embed`, Cloud 엔 임베딩 없음). 둘 다 canonical 멤버 다소스 행을 통합 코퍼스로([canonical-corpus-fanout](../concepts/canonical-corpus-fanout.md)). HyDE 제거·rerank-합집합 기각·span-grounding 채택은 `research/<domain>/probe-*` 로 실측 판정 |
+| **운영 자동화 — 텔레그램 봇 + 자동 발굴 + 작업 로그 (18차 2026-06)** | [telegram](telegram.md) 봇(long-polling)이 `/search`·`/discover`·`/stats` 와 크롤 알림을 담당. [random-crawl](random-crawl.md) 이 cron 으로 지역을 골라 후보를 텔레그램으로 보내고 사용자가 고른 가게만 크롤(사람이 끼는 2단계). [logs](logs.md) 가 전 기능 run/step 을 [operation-log-instrumentation](../concepts/operation-log-instrumentation.md) 으로 통합 기록 + 실패 LLM 자동분석. 모두 no-Redis in-process 전제 유지 |
+| **LLM 계정 게이트 + 사용량 텔레메트리 (18차 2026-06)** | 호출이 purpose 게이트→계정 게이트 2단 직렬 통과([in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md)), DB maxConcurrent 동기화. 모든 호출이 AdapterCache→OllamaCloudAdapter 단일 경로로 수렴해 onEvent 훅으로 전 지점 계측 → telemetry SSE. AI 키 1계정 공유 + 용도별(chat/image/log-analysis) 모델만 분리 |
+| **4번째 출처 테이블링 + 세부 분배(잔수) (18차 2026-06)** | 테이블링(무인증 REST) 합류로 canonical 이 4소스 묶기, 같은 source 얕은/풍부 티어는 place↔partner 자동 승격. 정산은 한 차수 카테고리 풀을 멤버끼리 균등/잔수(GLASSES) 분배 — `drink-kinds` 단일 사전이 FE 제안·BE 추출보정·프롬프트 힌트 셋을 먹임(EXTRACTION_VERSION 3→4 주류 오분류 이중 안전망) |
+| **맛집 공유/SEO — SSR-lite head 주입 (18차 2026-06)** | `/r/:placeId` + sitemap.xml + robots.txt 가 빌드된 index.html `<head>` 에 OG/JSON-LD 주입(봇=서버 / 사람=SPA). 정산 공유와 같은 [ssr-lite-head-injection](../concepts/ssr-lite-head-injection.md) 메커니즘(16차 정산 단독→식당으로 번져 컨셉 추출). 네이버 파노라마 대표이미지 503/TTL 만료는 영구 사본 캐시(panorama-cache)로 해소 |
 | **schedule 도메인 신규 — croner in-process 주기 자동 실행 (17차 2026-06)** | "정규화→글로벌 머지(증분)" 를 어드민 cron 주기로 자동화. `croner` **in-process**(단일 Fastify + no-Redis 전제와 일관 — 외부 잡 큐 안 둠). `plugins/schedule.ts` 가 `ScheduleService` 전역 singleton + `scheduleRegistry`(cron 타이머 + 동시 1개 inflight, overlap 시 skip). 부팅 시 stale `running`→`interrupted` 정리 + 설정 cron 등록, SIGTERM 시 abort + graceful close. 어드민 UI 는 `AdminAnalyticsPage` 에 섹션 통합. 신규 테이블 `schedule_configs`/`schedule_runs`, croner 의존 추가. nextRunAt 은 croner 로 매번 계산(미저장) |
 | **카테고리 택소노미 v3 — 재료·메뉴군 축 전환 (17차 2026-06)** | 전역 머지 최상위를 음식 종류(한식/일식/양식)→재료·메뉴군(고기/면/김치/반찬/찌개·전골/회·초밥/튀김…)으로. `GLOBAL_MERGE_VERSION` 2→3 → 기존 행 stale, full 재머지 필요. 복합어는 가운뎃점(`/`는 path 구분자라 금지). LLM 출력 맵→**배열** 스키마(Ollama grammar fix) + 청크 50→10. `buildCategoryTree` 공용(전역 어드민 + 식당별 공개 분석 탭) |
 | **다크 모드 — 저장소 플랫폼 분리 / design 토큰 공유 (17차 2026-06)** | 웹/앱 둘 다 system/light/dark 3-way. 웹 localStorage / 앱 AsyncStorage `'lp:themeMode'`(수동 hydrate + `useResolvedThemeMode`=useColorScheme 결합) — shared 가 RN/web storage 직접 import 안 하도록 저장소는 플랫폼별, `@repo/shared` design 토큰만 공유. vworld 다크(midnight)/위성 레이어 토글 + 앱 테마 연동(`tileSource.setUrl()` 로 map 재생성 없이 전환) |
@@ -495,6 +518,12 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정. (revers
 
 ## Gotchas [coverage: medium — 13 sources]
 
+- **리뷰 군집화는 Python 런타임 필요 (18차)** — `review-clustering` 의 UMAP/HDBSCAN/c-TF-IDF 는 `scripts/cluster_compute.py`(numpy/sklearn/umap-learn/hdbscan)를 Node 가 spawn. venv/`CLUSTER_PYTHON_BIN` 미설치 시 graceful skip(군집 없음 → 관점집계 폴백). 운영 설치는 `docs/deploy-friendly.md` 참조. 임베딩(bge-m3)은 별개로 **로컬 Ollama `/api/embed`** 필요 — Ollama Cloud 엔 임베딩 모델 없음(`OLLAMA_EMBED_BASE_URL`)
+- **enrich/군집은 canonical 멤버 합산 코퍼스 (18차)** — 단일 placeId 가 아니라 canonical 멤버(다소스) 행 전체로 fan-out([canonical-corpus-fanout](../concepts/canonical-corpus-fanout.md)). `corpusSize` 가 재enrich/재군집 게이트(20% 또는 +20건 이상 늘면). 캐시·진행상태 키는 `primaryId` 통일
+- **텔레그램 진행 편집 vs 완료 알림 (18차)** — 진행 상황은 같은 메시지 in-place 편집(편집은 푸시 알림 안 울림) + throttle + 직전 동일 텍스트 skip("not modified" 회피). 완료/실패는 **새 메시지**로 보내야 핑이 울린다. 정지 시 in-flight 편집을 await 후 덮어야 "수집 중" 멈춤 경쟁 회피
+- **operation-log 보존 정리 — 보고서 있는 run 은 영구 (18차)** — `LogConfig` 보존(기본 30일) 매일 04시 정리. 단 `OperationReport`(LLM 실패 분석) 달린 run·진행 중 run 은 제외. 자동 분석은 `AUTO_ANALYSIS_EXCLUDED_ERROR_CODES`/`trigger='user'` 제외 + 세마포어(동시1+대기열5)로 비용 폭주 차단
+- **LLM 계정 게이트는 어댑터 캐시와 독립 수명 (18차)** — purpose 게이트→계정 게이트 2단. 계정 게이트(키=apiKey|baseUrl)가 어댑터 캐시 회전과 분리돼 설정 변경 중 일시 초과 방지. 텔레메트리는 **표시 전용 인메모리** — 서버 재시작 시 리셋(영속 아님)
+- **테이블링 place↔partner 승격 (18차)** — 같은 source 의 얕은(place, JSON-LD) / 풍부(partner) 티어가 일반 canonical 후보 룰의 사각지대 → 저장 시 좌표+이름으로 partner 쪽 자동 흡수(임계 DC 와 동일 0.85/50m)
 - **schedule overlap 방지 — 이전 실행 미완료면 tick skip (신규)** — `scheduleRegistry` 가 동시 1개 inflight 만 허용. cron tick 시 이전 실행이 안 끝났으면 `schedule_runs status='skipped'` 행만 남기고 건너뛴다. 부팅 시 직전 인스턴스의 `running` 행은 `interrupted` 로 정리(`schedule.bootstrap()`) — 다음 tick 에 자연 재개
 - **schedule plugin 은 자체 AiConfigService 생성 (신규)** — autoload 알파벳순 `'schedule'` < `'summaries'` 라 `app.aiConfig` 가 아직 없다. plugin 로드 순서 의존을 피하려 schedule 이 자체 AiConfig 를 만든다 — `app.aiConfig` 재사용 불가
 - **택소노미 v3 = `GLOBAL_MERGE_VERSION` 3, full 재머지 필요 (신규)** — 최상위 축 교체로 기존 머지 행 전부 stale. 어드민 '전체 재실행' / `run-merge --full` 안 돌리면 옛 음식종류 트리 그대로. 카테고리 path 복합어는 가운뎃점 — `/`는 segment 구분자
@@ -536,7 +565,7 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정. (revers
 - **앱 Expo Web 은 SPA 모드 고정** — `web.output: 'single'`
 - **SQLite 락 + Prisma migrate dev** — friendly dev 떠 있으면 `database is locked` 더 자주. 운영은 `migrate deploy` + pm2 fork 단일 인스턴스(cluster 금지)
 
-## Sources [coverage: high — 41 sources]
+## Sources [coverage: high — 52 sources]
 
 - [README.md](../../README.md)
 - [CLAUDE.md](../../CLAUDE.md) — "용어" 섹션 포함
@@ -590,4 +619,17 @@ CLAUDE.md / TECH_STACK.md / 도메인 토픽에 명시된 핵심 결정. (revers
 - [apps/mobile/docs/production-build.md](../../apps/mobile/docs/production-build.md) — 앱 운영 빌드 가이드
 - [docs/menu-hierarchy.md](../../docs/menu-hierarchy.md)
 - [docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md)
-- 토픽 — [schedule](schedule.md), [settlement](settlement.md), [auto-discover](auto-discover.md), [friendly](friendly.md), [web](web.md), [api-contract](api-contract.md), [analytics](analytics.md), [menu-grouping](menu-grouping.md), [media](media.md), [ai](ai.md), [map](map.md), [crawl](crawl.md), [canonical](canonical.md), [shared](shared.md), [mobile](mobile.md), [config](config.md), [utils](utils.md)
+- [apps/friendly/src/modules/review-search/](../../apps/friendly/src/modules/review-search/) — RAG enrich/회수/리랭크/생성/검증 (18차 신규)
+- [apps/friendly/research/review-search/](../../apps/friendly/research/review-search/) — probe-* 실측 검증(HyDE 기각/rerank/latency)
+- [apps/friendly/src/modules/review-clustering/](../../apps/friendly/src/modules/review-clustering/) + [scripts/cluster_compute.py](../../apps/friendly/scripts/cluster_compute.py) — UMAP→HDBSCAN→c-TF-IDF Python 사이드카 (18차 신규)
+- [apps/friendly/src/modules/random-crawl/](../../apps/friendly/src/modules/random-crawl/) — cron 지역 랜덤 발굴 + 텔레그램 후보 선택 (18차 신규)
+- [apps/friendly/src/modules/telegram/telegram.service.ts](../../apps/friendly/src/modules/telegram/telegram.service.ts) + [settings/telegram.route.ts](../../apps/friendly/src/modules/settings/telegram.route.ts) — 봇 long-polling + 설정 (18차 신규)
+- [apps/friendly/src/modules/logs/](../../apps/friendly/src/modules/logs/) — operation-log + LLM 실패 분석 (18차 신규)
+- [apps/friendly/src/modules/ai/](../../apps/friendly/src/modules/ai/) — concurrency-gate / llm-telemetry / adapter-cache (계정 게이트·텔레메트리, 18차)
+- [apps/friendly/src/modules/crawl/adapters/tabling-*.http.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/) — 테이블링 4어댑터 (18차)
+- [apps/friendly/src/modules/restaurant/restaurant-preview.ts](../../apps/friendly/src/modules/restaurant/restaurant-preview.ts) + [region-derive.ts](../../apps/friendly/src/modules/restaurant/region-derive.ts) + [canonical-members.ts](../../apps/friendly/src/modules/restaurant/canonical-members.ts) — 맛집 SSR-lite SEO / 지역 통계 / canonical 멤버 (18차)
+- [apps/friendly/src/modules/media/panorama-cache.ts](../../apps/friendly/src/modules/media/panorama-cache.ts) — 파노라마 대표이미지 503/TTL 영구 사본 (18차)
+- [packages/api-contract/src/settlement.drink-kinds.ts](../../packages/api-contract/src/settlement.drink-kinds.ts) — 술·음료 종류 단일 사전 (18차)
+- [apps/web/src/components/admin/RegionStatsMap.tsx](../../apps/web/src/components/admin/RegionStatsMap.tsx) + [public/sigungu-geo.json](../../apps/web/public/sigungu-geo.json) — 지역 통계 choropleth (18차)
+- 토픽 — [schedule](schedule.md), [settlement](settlement.md), [auto-discover](auto-discover.md), [friendly](friendly.md), [web](web.md), [api-contract](api-contract.md), [analytics](analytics.md), [menu-grouping](menu-grouping.md), [ai](ai.md), [map](map.md), [crawl](crawl.md), [canonical](canonical.md), [shared](shared.md), [mobile](mobile.md), [config](config.md), [utils](utils.md), [review-search](review-search.md), [review-clustering](review-clustering.md), [random-crawl](random-crawl.md), [telegram](telegram.md), [logs](logs.md)
+- 컨셉 — [db-config-env-fallback](../concepts/db-config-env-fallback.md), [operation-log-instrumentation](../concepts/operation-log-instrumentation.md), [canonical-corpus-fanout](../concepts/canonical-corpus-fanout.md), [cross-tab-async-job-toast](../concepts/cross-tab-async-job-toast.md), [ssr-lite-head-injection](../concepts/ssr-lite-head-injection.md)

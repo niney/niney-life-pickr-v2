@@ -1,12 +1,14 @@
 ---
 topic: mobile
-last_compiled: 2026-06-06
-sources_count: 56
+last_compiled: 2026-06-25
+sources_count: 62
 status: active
-aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token, useTabBarHeight, tab-bar-inset, bottom-tab-bleed, awesome-gallery, react-native-awesome-gallery, lightbox-gallery, pinch-zoom, double-tap-zoom, swipe-to-close, virtualized-reviews, review-infinite-scroll, ReviewsControls, single-flatlist-detail, row-discriminated-union, hero-hide-on-tab, scrollToOffset-hero, thumbUrl, thumbnail-proxy, pstatic-proxy, eslint-react-compiler, react-compiler-lint, flatlist-virtualization, contacts-flatlist, history-flatlist, lightbox-shared, png-asset-compression, short-share-path, enable-applinks-flag, dark-mode, theme-mode, themeStore, useResolvedThemeMode, useColorScheme, manual-hydrate, theme-flash, vworld-midnight, midnight-tile, setMode-injection, android-custom-tabbar, AndroidTabBar, splash-transparent, splashscreen_logo, gesture-handler-scrollview, bottomsheet-horizontal-swipe, CategoryTree, useRestaurantPublicCategoryTree, review-tip-filter, review-menu-filter, card-borderless, full-bleed-photos, menu-thumbnail-lightbox, root-prebuild-pollution, device-release-scripts]
+aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, native-tabs, dev-client, webview-map, vworld-html, r8-minify, swift-concurrency-plugin, restaurants-tab, bottom-sheet-detail, scroll-snap-hero, notch-fade, marker-fly-zoom, reanimated-worklet, production-build, env-production, release-build, eas-env, settlement-mobile, 정산-모바일, mobile-settlement-wizard, SettlementWizard, ContactPickerSheet, MenuPickerSheet, RestaurantPickerSheet, MultiReceiptSplitSheet, settlementPrefsStore, deep-link, universal-links, app-links, applinks, intentFilters, DEEP_LINK_SETUP, lifepickr-scheme, tabs-layout-web, lucide-inline-svg, expo-web-lan-ip, ios-back-title-fix, headerBackTitle, zustand-import-meta, storage-adapter-injection, AsyncStorage-draft, share-settlements-token, useTabBarHeight, tab-bar-inset, bottom-tab-bleed, awesome-gallery, react-native-awesome-gallery, lightbox-gallery, pinch-zoom, double-tap-zoom, swipe-to-close, virtualized-reviews, review-infinite-scroll, ReviewsControls, single-flatlist-detail, row-discriminated-union, hero-hide-on-tab, scrollToOffset-hero, thumbUrl, thumbnail-proxy, pstatic-proxy, eslint-react-compiler, react-compiler-lint, flatlist-virtualization, contacts-flatlist, history-flatlist, lightbox-shared, png-asset-compression, short-share-path, enable-applinks-flag, dark-mode, theme-mode, themeStore, useResolvedThemeMode, useColorScheme, manual-hydrate, theme-flash, vworld-midnight, midnight-tile, setMode-injection, android-custom-tabbar, AndroidTabBar, splash-transparent, splashscreen_logo, gesture-handler-scrollview, bottomsheet-horizontal-swipe, CategoryTree, useRestaurantPublicCategoryTree, review-tip-filter, review-menu-filter, card-borderless, full-bleed-photos, menu-thumbnail-lightbox, root-prebuild-pollution, device-release-scripts, AskTab, review-qa, review-ask, useReviewAskStore, ReviewAskBanner, ask-banner, async-question, ask-tab-deep-link, tab-ask-query, initialTab, ClusterTopics, review-clusters, useRestaurantClusters, aspect-summary, RoundGroupSplitEditor, RoundGroupSplitNote, group-split, glasses-split, group-card-editor, s-token-route, settle-short-url, panorama-copy-absolutize, relative-url-absolutize]
 ---
 
 # mobile — Expo + React Native 앱
+
+**2026-06-25 변경 흡수 — 리뷰 질문(RAG) 탭 + 비동기 답변 전역 배너 + 리뷰 주제 군집 표시 + 정산 세부 분배(그룹/잔수) 그룹 카드 에디터 + 정산 공유 짧은 URL 라우트(`s/[token]`) + 대표 이미지 상대경로 절대화 fix.** (1) **리뷰 질문(RAG) 탭 + 비동기 답변** — 신규 [AskTab.tsx](../../apps/mobile/src/components/restaurantDetail/AskTab.tsx)(상세 '질문' 탭 — 방문자 리뷰를 근거로 AI 가 답, 예시 질문 29개 칩, citations·신뢰도·검증 제외 표시). 답변은 LLM 3콜이라 15초+ 걸려 사용자가 탭/화면을 떠나기 쉬운데, 진행 요청·결과를 [`@repo/shared`](shared.md) 전역 `useReviewAskStore`(웹과 공유) 에 두어 탭/화면 이탈 후에도 살아남고 재진입 시 식당별 마지막 Q&A 가 즉시 복원(영속)된다. 완료를 root 상주 신규 [ReviewAskBanner.tsx](../../apps/mobile/src/components/ReviewAskBanner.tsx)(하단 슬라이드 배너 — 웹 `ReviewAskToaster`(Sonner) 대응, 앱엔 지속형 토스트가 없어 직접 reanimated 로 구현)가 지켜보다 알린다 — 그 식당 질문 탭을 보고 있으면(`store.visiblePlaceId`) 인라인으로 이미 떠 노이즈 방지로 suppress, '더보기' 탭 → `/restaurant/[placeId]?tab=ask` deep link 로 복귀. (2) **리뷰 주제 군집 표시** — 신규 [shared/ClusterTopics.tsx](../../apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx)(분석 탭 — 비슷한 문맥 리뷰 묶음을 라벨·tone·비중 막대·키워드 칩·대표리뷰로, 배치 결과 읽기 전용 `useRestaurantClusters`). 전부 노이즈/소형 식당은 관점별 긍/부/중립 집계(`AspectSummary`)로 폴백 — 분석 탭이 항상 콘텐츠를 갖게. [InsightsTab.tsx](../../apps/mobile/src/components/restaurantDetail/InsightsTab.tsx) 가 `clusters.data?.ready` 일 때 섹션 추가. (3) **정산 세부 분배 그룹 카드 에디터(앱)** — 신규 [settlement/RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx)(주류/음료 풀에서 소주·맥주 같은 항목 그룹을 떼어 균등 또는 잔수(정수 가중치)로 — 웹은 사람×그룹 매트릭스, 앱은 **그룹 카드 세로 스택**) + 신규 [RoundGroupSplitNote.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx)(결과/공유 화면 차수 카드 아래 읽기 전용 근거). 로직 SSOT 는 [`@repo/shared`](shared.md)(상세 [settlement.md](settlement.md)), 앱은 RN UI 만. (4) **정산 공유 짧은 URL 라우트 이동** — `app/share/settlements/[token].tsx` → **[app/s/[token].tsx](../../apps/mobile/app/s/[token].tsx)** 로 이동(deep link `pathPrefix:'/s/'` 와 일치). (5) **대표 이미지 깨짐 fix** — [thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) 가 만료되는 네이버 파노라마의 same-origin 사본(`/api/v1/media/panorama/…` 상대경로)을 못 풀어 목록/상세/사진탭 대표 이미지가 깨지던 것을, `/` 로 시작하는 상대경로는 `baseUrl` 만 붙여 절대화하는 분기로 해결(*.pstatic.net 프록시는 안 거침). 외 안드로이드 바텀시트 내 가로 스와이프 fix([TabBar](../../apps/mobile/src/components/restaurantDetail/TabBar.tsx)·[ReviewCard](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) 의 가로 스크롤러를 `react-native-gesture-handler` 의 `ScrollView` 로) + 실기기/릴리즈 스크립트는 이전(17차) 라운드 흡수분.
 
 **2026-06-06 변경 흡수 — 앱 다크 모드 + vworld 야간 타일 + 안드로이드 커스텀 표준 탭바 + 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹 통일) + 카테고리 트리·필터 연결.** (1) **앱 다크 모드** (system/light/dark) — 신규 [themeStore.ts](../../apps/mobile/src/lib/themeStore.ts)(zustand + AsyncStorage `lp:themeMode`) + [useResolvedThemeMode.ts](../../apps/mobile/src/hooks/useResolvedThemeMode.ts)(`'system'` 이면 `useColorScheme` 결합). 영속화는 `settlementPrefsStore` 와 같은 **수동 hydrate** 패턴 — zustand persist 의 async rehydrate 타이밍 대신 [bootstrapApi](../../apps/mobile/src/lib/api-setup.ts) 에서 `await` 로 당겨와 스플래시가 떠 있는 동안 모드를 확정(잘못된 테마 플래시 방지). 저장소는 웹과 물리 분리(앱 AsyncStorage / 웹 localStorage), [@repo/shared](shared.md) design 토큰만 공유. [_layout.tsx](../../apps/mobile/app/_layout.tsx) 가 resolved mode 를 `ThemeProvider`/`StatusBar`/Stack 헤더에 cascade, [(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) 의 "화면 모드" `SegmentedControl` 로 선택. (2) **vworld 야간(midnight) 타일** — [PublicRestaurantsWebMap.native](../../apps/mobile/src/components/PublicRestaurantsWebMap.native.tsx)/[.web](../../apps/mobile/src/components/PublicRestaurantsWebMap.web.tsx) + [publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) 가 WebView 안 vworld 베이스맵을 다크 모드에서 `midnight` 타일로 — HTML 재생성/WebView 재마운트 없이 `window.__setMode` 런타임 주입(native injectJavaScript / web postMessage)으로 타일·라벨 색만 교체(줌/센터/선택 유지, 같은 모드면 no-op). (3) **안드로이드 커스텀 하단 탭바(표준 스타일)** — [tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx) 가 Android 에서만 `tabBar` 렌더 prop 으로 JS `AndroidTabBar`(아이콘 위/라벨 아래 세로 배치, 활성은 primary 색 전환만 — 네이티브 Material 의 보라 인디케이터·elevation 회피)를 그린다. iOS 는 네이티브 `UITabBarController` 유지. splash_logo 누락 안드로이드 빌드 실패 fix(투명 [splash-transparent.png](../../apps/mobile/assets/splash-transparent.png) + [app.config.ts](../../apps/mobile/app.config.ts) `expo-splash-screen.android.image`) + 맛집 탭 바텀시트 내 가로 스와이프 동작 수정([TabBar](../../apps/mobile/src/components/restaurantDetail/TabBar.tsx)·[ReviewCard](../../apps/mobile/src/components/restaurantDetail/shared/ReviewCard.tsx) 의 가로 스크롤러를 `react-native-gesture-handler` 의 `ScrollView` 로 교체). (4) **상세 탭 카드 테두리 제거 + 리뷰 사진 풀폭 스와이프**(웹과 통일) — `restaurantDetail/` 다수가 카드 `borderWidth`/`backgroundColor` 를 떼고 hairline divider 로 구분, 리뷰 가로 사진 스크롤러는 `marginHorizontal:-16` 로 좌우 패딩을 뚫어 화면 끝까지. (5) **카테고리 트리 + 필터 연결** — 신규 [CategoryTree.tsx](../../apps/mobile/src/components/restaurantDetail/shared/CategoryTree.tsx)(분석 탭, 새 [`useRestaurantPublicCategoryTree`](shared.md) 훅) + AiSummary 방문 팁·InsightsTab/MenuGrid 인기 메뉴 클릭 → 리뷰 탭으로 점프하며 `tip`/`menu` 필터 적용(해제 칩 행) + MenuGrid 메뉴 썸네일 라이트박스. (6) **빌드 스크립트** — `ios:device`/`ios:release`/`android:device`/`android:release` 실기기·릴리즈 스크립트([package.json](../../apps/mobile/package.json)) + 루트 [.gitignore](../../apps/mobile/../../.gitignore) 에 `/ios`·`/android`·`/app.json`(루트에서 실수로 돈 `expo prebuild` 산출물 무시).
 
@@ -34,7 +36,7 @@ aliases: [expo, react-native, expo-router, eas, ios, android, expo-web, rn-web, 
 
 App config의 표시명은 `Life Pickr`, slug `life-pickr`, 번들 ID `com.niney.lifepickr` (iOS/Android 공통), URL scheme `lifepickr` ([app.config.ts](../../apps/mobile/app.config.ts)). 게스트 모드와 이메일 가입/로그인 두 진입로를 제공하며, 게스트는 Pick 저장이 불가하다고 명시적으로 안내한다.
 
-추가로 **공개 "맛집" 탭** ([restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx)) 이 풀스크린 WebView 지도 + 바텀시트로 위치 기반 식당 검색을 제공하고, ADMIN 한정으로 식당 상세 메뉴 순위(SentimentBar + 글로벌 비교 + 미분류 메뉴 분류 트리거) 화면도 노출 ([restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx), [MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)). 매장/메뉴/리뷰 크롤·관리 같은 본격 어드민은 여전히 웹 전용이다.
+추가로 **공개 "맛집" 탭** ([restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx)) 이 풀스크린 WebView 지도 + 바텀시트로 위치 기반 식당 검색을 제공하고, ADMIN 한정으로 식당 상세 메뉴 순위(SentimentBar + 글로벌 비교 + 미분류 메뉴 분류 트리거) 화면도 노출 ([restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx), [MenuRankingCard.tsx](../../apps/mobile/src/components/MenuRankingCard.tsx)). 매장/메뉴/리뷰 크롤·관리 같은 본격 어드민은 여전히 웹 전용이다. 상세는 공개 사용자용으로 **리뷰 분석**(분석 탭 — AI 종합 + 리뷰 주제 군집 + 메뉴 카테고리 트리 + 인기 메뉴 순위)과 **리뷰 질문(RAG) 탭**(방문자 리뷰 근거로 AI 가 답, 비동기 + 완료 전역 배너)도 제공한다.
 
 **정산 도메인은 이제 앱에서도 풀 구현.** [SettlementWizard](../../apps/mobile/src/components/settlement/SettlementWizard.tsx) 4단계 + 결과 + 수정 + 공유 토큰 view + 단골 관리 + 이력까지. 웹과 동일한 [`@repo/shared`](shared.md) 훅(`useSettlement`, `useListSettlements`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUploadReceipt`, `useExtractReceipt`) 위에서 RN 프리미티브 + `@gorhom/bottom-sheet` UI 만 다르게 그린다. 공유 페이지는 deep link 로 native 앱이 가로채고, 미설치 단말은 web SPA fallback. 자세한 흐름은 [settlement.md](settlement.md).
 
@@ -116,6 +118,7 @@ setSettlementDraftStorage(AsyncStorage);
 app/
 ├── _layout.tsx                          ← 루트: GestureHandler + BottomSheetModalProvider + ThemeProvider + QueryClient + bootstrap
 │                                          + screenOptions.headerBackButtonDisplayMode='minimal' (iOS 백 라벨 차단)
+│                                          + ReviewAskBanner (질문 완료 전역 배너 root 상주)
 ├── index.tsx                            ← 토큰/게스트 보고 redirect
 ├── (auth)/
 │   ├── _layout.tsx
@@ -127,19 +130,18 @@ app/
 │   └── profile.tsx                      ← 로그인 시 '정산 이력' / '내 단골' 메뉴 추가
 ├── restaurant/
 │   └── [placeId]/                       ← [디렉터리 승격] 식당 상세 + 정산 하위 트리
-│       ├── index.tsx                    ← 식당 상세 (탭형 — Home/Info/Menu/Photos/Reviews)
+│       ├── index.tsx                    ← 식당 상세 (탭형 — Home/분석/Menu/Reviews/질문/Photos/Info), ?tab=ask 쿼리로 진입 탭 지정
 │       └── settle/
 │           ├── new.tsx                  ← 4단계 위저드 (placeId prefill)
 │           └── [id]/
-│               ├── index.tsx            ← 결과 view
+│               ├── index.tsx            ← 결과 view (RoundGroupSplitNote 세부 분배 근거)
 │               └── edit.tsx             ← 편집 모드
 ├── settlement/                          ← 식당 미지정 + 이력/단골 진입
 │   ├── new.tsx                          ← placeless 위저드
 │   ├── history.tsx                      ← useListSettlements (+ 임시저장 draft) — FlatList 가상화
 │   └── contacts.tsx                     ← useSettlementContacts — FlatList 가상화
-└── share/                               ← 공유 토큰 진입 (deep link 가 가로채는 경로)
-    └── settlements/
-        └── [token].tsx                  ← useSharedSettlement(token) — read-only view
+└── s/                                   ← [이동 2026-06-25] 공유 토큰 진입 (deep link pathPrefix:'/s/' 가로채는 경로)
+    └── [token].tsx                      ← useSharedSettlement(token) — read-only view (구 share/settlements/[token].tsx)
 ```
 
 루트 레이아웃 ([_layout.tsx](../../apps/mobile/app/_layout.tsx)) 은 `bootstrapApi()` 가 끝날(`ready`) 때까지 `RootNavigator` 를 안 그리고 풀배경 `AnimatedSplash` 오버레이를 유지(`SplashScreen.preventAutoHideAsync` + GHRV `onLayout` 에서 `hideAsync`, 최소 노출 `MIN_SPLASH_MS=2200`). 구조: `GestureHandlerRootView`(배경 `themes[mode].colors.bg`) → **`ThemeProvider mode={useResolvedThemeMode()}`** (이전 `mode="light"` 고정 → resolved mode) → `QueryClientProvider` → **`BottomSheetModalProvider`** (정산 picker 시트들의 portal 호스트) → `Stack`. Stack(`RootNavigator`) 은 `useTheme` 로 헤더/scene 을 테마화하고 `screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal', headerStyle/headerTintColor/contentStyle }}` — `headerBackButtonDisplayMode` 가 iOS 백 라벨 회귀 방지(아래 Gotchas), `contentStyle.backgroundColor` 가 전환 중 흰 깜빡임 방지.
@@ -157,13 +159,16 @@ app/
 
 서버측 `.well-known` 응답은 [friendly](friendly.md) 가 책임지고, prebuild + 재빌드 + env(`APP_TEAM_ID`, `APP_BUNDLE_ID`, `ANDROID_APP_PACKAGE`, `ANDROID_SHA256_FINGERPRINTS`) 채우기 절차는 [DEEP_LINK_SETUP.md](../../apps/mobile/DEEP_LINK_SETUP.md) 가 단계별로 정리 (Team ID 추출 / SHA-256 추출 / `pm get-app-links` / `adb shell am start` 검증 / 트러블슈팅 매트릭스).
 
-흐름: **사용자가 카톡으로 받은 공유 링크 탭 → 앱 설치됨 → OS 의도가 앱으로 → expo-router 가 `share/settlements/[token]` 매칭 → `useSharedSettlement(token)`** . 미설치 / 검증 실패 단말은 동일 URL 의 웹 SharedSettlementPage 가 폴백 — 같은 read-only view 라 UX 안 깨짐.
+흐름: **사용자가 카톡으로 받은 공유 링크 탭 → 앱 설치됨 → OS 의도가 앱으로 → expo-router 가 `s/[token]` 매칭 → `useSharedSettlement(token)`** . 미설치 / 검증 실패 단말은 동일 URL 의 웹 SharedSettlementPage 가 폴백 — 같은 read-only view 라 UX 안 깨짐. (2026-06-25 라우트 이동: `app/share/settlements/[token].tsx` → `app/s/[token].tsx` — 라우트 경로가 deep link `pathPrefix:'/s/'` 와 같은 위치로 정렬됐다. `s/[token]` 화면은 결과 차수 카드마다 [RoundGroupSplitNote](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx) 세부 분배 근거를 함께 렌더.)
 
-### 맛집 / 식당 상세 화면 [coverage: high — 5 sources]
+### 맛집 / 식당 상세 화면 [coverage: high — 8 sources]
 
 - **`(tabs)/restaurants.tsx`** — 풀스크린 WebView 지도 + `@gorhom/bottom-sheet` 2개 적층(list / detail). list 시트는 항상 mount, detail 시트는 `placeId` 가 truthy 일 때만 conditional mount. list 시트의 `BottomSheetFlatList` 와 detail 의 `PublicRestaurantDetail` 모두 `useTabBarHeight()` 만큼 하단 패딩.
-- **`restaurant/[placeId]/index.tsx`** — 식당 상세. `useLocalSearchParams<{ placeId: string }>()` + `PublicRestaurantDetail` 컨테이너. `Stack.Screen` 으로 `headerBackTitle: '뒤로'` 명시 — 부모 Stack 의 `headerShown:false` 를 여기서만 켠다.
-- **`src/components/restaurantDetail/PublicRestaurantDetail.tsx`** — 공개 맛집 상세 컨테이너. 스크롤 루트가 단일 `FlatList` (시트 모드는 `List=BottomSheetFlatList` 주입, deep-link route 는 기본 `FlatList`). 데이터 fetch(상세 + 인사이트 + **리뷰 페이지네이션**)는 여기 한 번. 행을 `Row` discriminated union 으로 펼쳐 `[hero, TabBar(sticky idx 1), ...콘텐츠]` 구성 — 비-리뷰 탭은 콘텐츠 통째로 한 행, **리뷰 탭만** (`review-filter` 칩?) + controls + 카드 N행 + footer 로 펼쳐 가상화. `useRestaurantPublicReviews(detail ? placeId : null, { sentiment, sort, tip, menu }, reviewSeed)` 가 `detail.reviewsFirstPage` 를 seed 로 첫 페이지 즉시 + `onEndReached` → `fetchNextPage`. 탭 변경은 `scrollToOffset({ offset: heroH, animated: true })` 로 hero 숨김. hero 이미지는 `thumbUrl(hero, 900)`. **[17차] 방문 팁/메뉴 클릭 → 리뷰 필터** — `tipFilter`/`menuFilter` state(동시 1개만 활성, 한쪽 고르면 다른 쪽 해제)를 리뷰 쿼리 `tip`/`menu` 파라미터로 넘기고, 활성 시 `review-filter` 행에 "방문 팁 · 〈term〉 (N)" / "메뉴 · 〈name〉 (N)" 칩 + "✕ 해제" 를 렌더. `handleSelectTip`/`handleSelectMenu` 가 `reviews` 탭으로 점프시킨다. 리뷰 카드 행 끝엔 `theme.colors.border` 1px divider(카드 테두리 대신).
+- **`restaurant/[placeId]/index.tsx`** — 식당 상세. `useLocalSearchParams<{ placeId: string; tab?: string }>()` + `PublicRestaurantDetail` 컨테이너. **[18차] `?tab=ask` 쿼리** 를 `asTabKey()`(TAB_ORDER 키만 통과) 로 검증해 `initialTab` 으로 넘긴다 — 질문 완료 배너 '더보기' deep link 가 곧장 질문 탭을 열 때. `Stack.Screen` 으로 `headerBackTitle: '뒤로'` 명시 — 부모 Stack 의 `headerShown:false` 를 여기서만 켠다.
+- **`src/components/restaurantDetail/PublicRestaurantDetail.tsx`** — 공개 맛집 상세 컨테이너. 스크롤 루트가 단일 `FlatList` (시트 모드는 `List=BottomSheetFlatList` 주입, deep-link route 는 기본 `FlatList`). 데이터 fetch(상세 + 인사이트 + **리뷰 페이지네이션**)는 여기 한 번. 행을 `Row` discriminated union 으로 펼쳐 `[hero, TabBar(sticky idx 1), ...콘텐츠]` 구성 — 비-리뷰 탭은 콘텐츠 통째로 한 행, **리뷰 탭만** (`review-filter` 칩?) + controls + 카드 N행 + footer 로 펼쳐 가상화. `useRestaurantPublicReviews(detail ? placeId : null, { sentiment, sort, tip, menu }, reviewSeed)` 가 `detail.reviewsFirstPage` 를 seed 로 첫 페이지 즉시 + `onEndReached` → `fetchNextPage`. 탭 변경은 `scrollToOffset({ offset: heroH, animated: true })` 로 hero 숨김. hero 이미지는 `thumbUrl(hero, 900)`. **[17차] 방문 팁/메뉴 클릭 → 리뷰 필터** — `tipFilter`/`menuFilter` state(동시 1개만 활성, 한쪽 고르면 다른 쪽 해제)를 리뷰 쿼리 `tip`/`menu` 파라미터로 넘기고, 활성 시 `review-filter` 행에 "방문 팁 · 〈term〉 (N)" / "메뉴 · 〈name〉 (N)" 칩 + "✕ 해제" 를 렌더. `handleSelectTip`/`handleSelectMenu` 가 `reviews` 탭으로 점프시킨다. 리뷰 카드 행 끝엔 `theme.colors.border` 1px divider(카드 테두리 대신). **[18차] `initialTab` prop** — `useState<TabKey>(initialTab ?? 'home')`. placeId 변경 시 'home' 으로 리셋하는 effect 는 **첫 마운트를 `didMountRef` 로 스킵** — initialTab(`ask`) 을 'home' 으로 덮어쓰지 않게. `ask` 탭은 `<AskTab placeId restaurantName={d.name} />` 한 행. 탭 7종: `home`(홈)/`insights`(분석)/`menu`(메뉴)/`reviews`(리뷰)/`ask`(질문)/`photos`(사진)/`info`(정보) — [tabs.ts](../../apps/mobile/src/components/restaurantDetail/tabs.ts) `TAB_ORDER`.
+- **`restaurantDetail/AskTab.tsx`** **[18차 신규]** — 상세 '질문' 탭. 방문자 리뷰 근거로 AI 가 답하는 공개 RAG. 탭 진입 시 `useReviewQaReady(placeId)` 로 enrich 여부만 조회(LLM 호출 X), 미준비면 안내만. 질문은 전역 `useReviewAskStore.ask(placeId, text, restaurantName)` 로 던지고, `inFlight`/`errorByPlace`/`lastByPlace`/`freshThisSession` 을 구독. 영속 복원된 '지난 답변'(`!isFresh`)이면 "다시 물어보면 최신 리뷰로" 안내. 예시 질문 29개 칩(일반 관점 + 니치 주제), 답변엔 신뢰도 배지(`high/medium/low/none`)·근거 리뷰 citations·검증 제외 건수. `useEffect` 로 `setAskTabVisible(placeId, true/false)` 등록(언마운트 = 탭 이탈) — 배너 suppress 판정용.
+- **`src/components/ReviewAskBanner.tsx`** **[18차 신규 — root 상주]** — 진행 중 공개 질문(AskTab) 완료를 앱 전역에서 지켜보다 하단 슬라이드 배너로 알린다. `_layout` 에 1개만 상주. 웹 `ReviewAskToaster`(Sonner) 대응 — 앱엔 지속형 토스트 인프라가 없어 reanimated(`withTiming`/`useSharedValue`, AnimatedSplash 와 동일 계열)로 직접 구현, 8초 자동 닫힘. `useReviewAskStore.completion`(seq 로 새 이벤트 감지) → 표시 여부 결정 후 `clearCompletion`. **그 식당 질문 탭을 보고 있으면**(완료 시점 `useReviewAskStore.getState().visiblePlaceId === placeId`) 인라인으로 이미 떠 노이즈 방지로 suppress. 탭/`더보기` → `router.push('/restaurant/${placeId}?tab=ask')` 로 복귀. 상단은 네이티브 헤더와 겹쳐 가려져 하단 배치(웹 Sonner bottom-center 와 일관).
+- **`restaurantDetail/shared/ClusterTopics.tsx`** **[18차 신규]** — 분석(InsightsTab) 탭의 리뷰 주제 군집. 비슷한 문맥 리뷰 묶음(`useRestaurantClusters` 배치 결과 읽기 전용)을 라벨·tone(긍정/부정/혼합/중립 — `MIXED='#f59e0b'`)·카운트·상대 비중 막대·키워드 칩 6개 + 대표 리뷰 펼치기 행으로. **`clusters.length === 0` 이면 `aspectSummary`(관점별 긍/부/중립 집계)로 폴백** — 전부 노이즈/소형 식당도 분석 탭이 빈 화면이 안 되게(서버 폴백과 짝). `InsightsTab` 이 `clusters.data?.ready` 일 때 섹션 추가(AiSummary → ClusterTopics → CategoryTree → 인기 메뉴 순위 순).
 - **`restaurantDetail/ReviewsControls.tsx`** — 리뷰 sentiment 필터(전체/긍정/부정, `detail.reviewCounts` 카운트) + 정렬(최근 방문순/별점 높은순) 칩. FlatList 의 `review-controls` 행으로 렌더. 폐기된 `ReviewsTab.tsx` 에서 칩 UI 만 분리.
 - **`restaurantDetail/shared/CategoryTree.tsx`** **[17차 신규]** — 분석(InsightsTab) 탭의 메뉴 카테고리 트리(RN). 웹 `CategoryTree` 와 같은 데이터·규칙: 재귀 펼침(루트=depth 0 펼침), 행마다 "N회"(`totalMentions`) + `+positive`/`-negative`. 데이터는 신규 [`useRestaurantPublicCategoryTree(placeId)`](shared.md) 훅(별도 endpoint — 전역 머지가 닿은 식당만 `roots` 가 차므로 비면 섹션 숨김). 훅 규칙상 InsightsTab 의 early return 위에서 호출.
 - **상세 탭 카드 테두리 제거(웹 통일)** **[17차]** — `ReviewCard`/`MenuGrid`/`InsightsTab` 메뉴 행 등이 카드 `borderWidth`/`surface 배경`/`borderRadius` 를 떼고, 행 사이는 hairline divider(`borderBottomColor`) 로만 구분. 더 평평하고 웹과 통일된 룩.
@@ -187,7 +192,7 @@ app/
 
 `.web.tsx` 형제([tabs-layout.web.tsx](../../apps/mobile/src/components/tabs-layout.web.tsx))는 여전히 `@react-navigation/bottom-tabs` + inline SVG — 셔틀 분리는 그대로([platform-ui-split](../concepts/platform-ui-split.md)).
 
-### 정산 — Mobile 구현 [coverage: high — 16 sources]
+### 정산 — Mobile 구현 [coverage: high — 18 sources]
 
 [`apps/mobile/src/components/settlement/`](../../apps/mobile/src/components/settlement) — 위저드/시트/에디터 일습. 비즈니스 로직은 [`@repo/shared`](shared.md) 훅이 들고, 이 디렉터리는 RN 프리미티브 + bottom-sheet UI 만 다룬다.
 
@@ -198,6 +203,8 @@ app/
 - [RestaurantPickerSheet.tsx](../../apps/mobile/src/components/settlement/RestaurantPickerSheet.tsx) — 식당 검색 시트 (식당 미지정 진입 / 차수 추가용).
 - [MultiReceiptSplitSheet.tsx](../../apps/mobile/src/components/settlement/MultiReceiptSplitSheet.tsx) — 영수증 한 장에 여러 차수가 섞여 있을 때 split.
 - [RoundDiscountEditor.tsx](../../apps/mobile/src/components/settlement/RoundDiscountEditor.tsx) / [RoundCategoryAdjuster.tsx](../../apps/mobile/src/components/settlement/RoundCategoryAdjuster.tsx) / [RoundExceptionsEditor.tsx](../../apps/mobile/src/components/settlement/RoundExceptionsEditor.tsx) — 차수 단위 할인/카테고리/예외 편집.
+- [RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx) **[18차 신규]** — 세부 분배 에디터. 주류/음료 풀에서 소주·맥주 같은 항목 그룹을 떼어 그룹 멤버끼리 **균등(EQUAL)** 또는 **잔수(GLASSES — 정수 가중치)** 로 나눈다. Step4Review 의 차수 카드 안에서 `RoundCategoryAdjuster` 와 나란히 호출. 로직(`suggestItemGroups`/`isEligibleGroupMember`/`isGroupableCategory`/draft store `applyGroupSplits`/`addGroupSplit`/`updateGroupSplit`/`removeGroupSplit`)은 전부 [`@repo/shared`](shared.md) — 웹 동명 컴포넌트와 **동형**(같은 로직, 표현만 다름). 웹의 사람×그룹 매트릭스 대신 **그룹 카드 세로 스택**(좁은 화면 + 그룹 보통 1~3개), 멤버 체크/잔수 스테퍼는 각 카드 안 참석자 리스트 행. 점진 노출(접힘 = 라벨+요약 칩, 펼치면 키워드 제안 → 원탭 생성, 안 건드리면 기존 카테고리 균등과 100% 동일). hover 툴팁이 없어 자격 없는 행(카테고리 제외자) 안내는 인라인 텍스트. 항목 칩은 최대 1개 그룹 — 다른 그룹 항목을 누르면 옮겨오고 빈 그룹은 제거.
+- [RoundGroupSplitNote.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx) **[18차 신규]** — 세부 분배 근거(읽기 전용). 결과(`settle/[id]/index`)·공유(`s/[token]`) 화면의 차수 카드 아래에서 "왜 내 주류가 더 비싸?" 를 바로 읽게. 잔수 그룹은 멤버·잔수 나열, 균등 그룹은 전원 대신 '빠진 사람' 명시(`effectiveExcludes` 로 자격자 역산). `SharedSettlementSessionType`·`SettlementSessionType` 둘 다 구조적 subtyping 으로 받아 결과/공유 페이지가 같은 컴포넌트.
 - [SettlementBreakdownTable.tsx](../../apps/mobile/src/components/settlement/SettlementBreakdownTable.tsx) — 참여자 × (차수 × 카테고리) 매트릭스 RN 렌더.
 - [SettlementShareSheet.tsx](../../apps/mobile/src/components/settlement/SettlementShareSheet.tsx) — 공유 토큰 발급 + 네이티브 share intent.
 
@@ -251,8 +258,8 @@ Babel 은 `babel-preset-expo` + inline `replace-import-meta` 플러그인 + `rea
 
 ## Talks To [coverage: high — 5 sources]
 
-- **[`@repo/api-contract`](api-contract.md)** — zod 스키마/타입. 정산 도메인: `SharedSettlementSessionType`, `ReceiptItemCategoryType`, `SettlementSessionType`, `SettlementParticipantType`, `SettlementRoundType`, `SettlementContactType`, `SettlementDraftType`, `SettlementSessionSummaryType`. 맛집: `RestaurantPublicListItemType`, `RestaurantPublicDetailType`, `PublicVisitorReviewType`, `RestaurantPublicReviewSentimentType`, `RestaurantPublicReviewSortType`.
-- **[`@repo/shared`](shared.md)** — API 클라이언트 (`configureApi`, `getApiConfig`), 인증·맛집 훅 (`useLogin`, `useRegister`, `useLogout`, `useCurrentUser`, `usePicks`, `useRandomPick`, `useRestaurantList`, `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, `useRestaurantPublicReviews`(이번에 `tip`/`menu` 필터 파라미터 추가), **`useRestaurantPublicCategoryTree`**(17차 신규 — 분석 탭 메뉴 카테고리 트리), `useMenuRanking`, `useMapPublicConfig`), Zustand 스토어 (`useAuthStore`), UI (`Screen`, `Stack`, `Text`, `Button`, `Input`, `SegmentedControl`, `Divider`, `ErrorBanner`), `ThemeProvider`/`useTheme`/`Theme`/**`themes`**(앱 GHRV 배경에 직접 참조). **정산 훅**: `useSettlement`, `useListSettlements`, `useListSettlementDrafts`, `useDeleteSettlement`, `useDeleteSettlementDraft`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUpdateSettlementContact`, `useDeleteSettlementContact`, `useUploadReceipt`, `useExtractReceipt`, `setSettlementDraftStorage` (스토리지 어댑터 주입), `ApiError`.
+- **[`@repo/api-contract`](api-contract.md)** — zod 스키마/타입. 정산 도메인: `SharedSettlementSessionType`, `ReceiptItemCategoryType`, `SettlementSessionType`, `SettlementParticipantType`, `SettlementRoundType`, `SettlementContactType`, `SettlementDraftType`, `SettlementSessionSummaryType`, `effectiveExcludes`(18차 — RoundGroupSplitNote 가 자격자 역산). 맛집: `RestaurantPublicListItemType`, `RestaurantPublicDetailType`, `PublicVisitorReviewType`, `RestaurantPublicReviewSentimentType`, `RestaurantPublicReviewSortType`. **18차 신규**: `ReviewAskResultType`(질문 답변 — answer/confidence/citations/verification), `ReviewClusterItemType`/`ReviewClusterAspectSummaryType`/`ClusterToneType`(리뷰 주제 군집).
+- **[`@repo/shared`](shared.md)** — API 클라이언트 (`configureApi`, `getApiConfig`), 인증·맛집 훅 (`useLogin`, `useRegister`, `useLogout`, `useCurrentUser`, `usePicks`, `useRandomPick`, `useRestaurantList`, `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, `useRestaurantPublicReviews`(`tip`/`menu` 필터 파라미터), `useRestaurantPublicCategoryTree`(분석 탭 메뉴 카테고리 트리), **`useRestaurantClusters`**(18차 — 리뷰 주제 군집 배치 결과), **`useReviewAsk`**/**`useReviewQaReady`**(18차 — 리뷰 RAG 질문/준비 여부), **`useReviewAskStore`**(18차 — 진행 질문·결과·완료 이벤트 전역 store, 웹/앱 공유), `useMenuRanking`, `useMapPublicConfig`), Zustand 스토어 (`useAuthStore`), UI (`Screen`, `Stack`, `Text`, `Button`, `Input`, `SegmentedControl`, `Divider`, `ErrorBanner`), `ThemeProvider`/`useTheme`/`Theme`/**`themes`**(앱 GHRV 배경에 직접 참조). **정산 훅·헬퍼**: `useSettlement`, `useListSettlements`, `useListSettlementDrafts`, `useDeleteSettlement`, `useDeleteSettlementDraft`, `useSettlementDraft`, `useSharedSettlement`, `useSettlementContacts`, `useUpdateSettlementContact`, `useDeleteSettlementContact`, `useUploadReceipt`, `useExtractReceipt`, `setSettlementDraftStorage` (스토리지 어댑터 주입), **세부 분배(18차)**: `useSettlementDraftStore`, `suggestItemGroups`, `isEligibleGroupMember`, `isGroupableCategory` + 타입 `DraftItem`/`DraftItemGroup`/`DraftRound`/`DraftParticipant`/`GroupableCategoryType`, `ApiError`.
 - **[`@repo/utils`](utils.md)** — `computeBboxAround`, `isInKorea`, `formatWonPrice`, **`reviewThumbnailUrl`** (thumbUrl 이 base 와 조합), `resolveRestaurantCategoryKey`, `RestaurantCategoryKey`.
 - **[friendly](friendly.md) 백엔드** — `EXPO_PUBLIC_API_URL` 로 baseUrl 주입. dev 는 LAN/localhost/web-hostname 자동 추종, production 은 `.env.production` 의 `https://ninelife.kr`. `/media/thumbnail` 썸네일 프록시 + `.well-known/{apple-app-site-association,assetlinks.json}` 응답도 friendly 가 책임.
 
@@ -267,14 +274,14 @@ expo-router 파일 트리가 곧 라우트다.
 | `/(tabs)/home` | [`app/(tabs)/home.tsx`](../../apps/mobile/app/(tabs)/home.tsx) | Pick 리스트 + 랜덤 픽 |
 | `/(tabs)/restaurants` | [`app/(tabs)/restaurants.tsx`](../../apps/mobile/app/(tabs)/restaurants.tsx) | 공개 맛집 — 풀스크린 WebView 지도 + 2-시트 적층 |
 | `/(tabs)/profile` | [`app/(tabs)/profile.tsx`](../../apps/mobile/app/(tabs)/profile.tsx) | 사용자 정보 + 로그아웃. **로그인 시 '내 정산 이력' / '내 단골' 행** → `/settlement/history`, `/settlement/contacts` |
-| `/restaurant/[placeId]` | [`app/restaurant/[placeId]/index.tsx`](../../apps/mobile/app/restaurant/[placeId]/index.tsx) | 식당 상세 (탭형 — 메뉴 탭 상단 정산 CTA) |
+| `/restaurant/[placeId]` | [`app/restaurant/[placeId]/index.tsx`](../../apps/mobile/app/restaurant/[placeId]/index.tsx) | 식당 상세 (탭형 7종 — 홈/분석/메뉴/리뷰/질문/사진/정보, 메뉴 탭 상단 정산 CTA). `?tab=ask` 쿼리로 진입 탭 지정 (질문 완료 배너 deep link) |
 | `/restaurant/[placeId]/settle/new` | [`new.tsx`](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx) | 정산 신규 위저드 (placeId prefill) |
 | `/restaurant/[placeId]/settle/[id]` | [`[id]/index.tsx`](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx) | 정산 결과 view |
 | `/restaurant/[placeId]/settle/[id]/edit` | [`[id]/edit.tsx`](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx) | 정산 편집 모드 |
 | `/settlement/new` | [`app/settlement/new.tsx`](../../apps/mobile/app/settlement/new.tsx) | 식당 미지정 위저드 — Step2 에서 식당 검색 |
 | `/settlement/history` | [`app/settlement/history.tsx`](../../apps/mobile/app/settlement/history.tsx) | `useListSettlements()` + `useListSettlementDrafts(true)` — FlatList, 헤더에 새 정산/이어 입력 draft |
 | `/settlement/contacts` | [`app/settlement/contacts.tsx`](../../apps/mobile/app/settlement/contacts.tsx) | `useSettlementContacts()` 단골 검색/수정/삭제 — FlatList |
-| `/share/settlements/[token]` | [`app/share/settlements/[token].tsx`](../../apps/mobile/app/share/settlements/[token].tsx) | **deep link 가로채기 대상** — `useSharedSettlement(token)` read-only view (비로그인 OK) |
+| `/s/[token]` | [`app/s/[token].tsx`](../../apps/mobile/app/s/[token].tsx) | **deep link 가로채기 대상**(`pathPrefix:'/s/'`) — `useSharedSettlement(token)` read-only view (비로그인 OK) + 차수별 `RoundGroupSplitNote`. *[18차 이동] 구 `app/share/settlements/[token].tsx`* |
 
 `(auth)`/`(tabs)` 는 expo-router group(URL 영향 없음). 루트 Stack 은 `headerShown:false` + `headerBackButtonDisplayMode:'minimal'` 글로벌 적용 — 자식이 명시적으로 `<Stack.Screen options={{ headerShown: true, ... }} />` 로 덮어쓸 때만 헤더 노출 (식당 상세 / 정산 이력 / 단골 등).
 
@@ -301,8 +308,13 @@ expo-router 파일 트리가 곧 라우트다.
    - `useAuthStore.subscribe` 로 양방향 sync.
    - `configureApi({ baseUrl, getToken, onUnauthorized })`.
 
-## Key Decisions [coverage: high — 18 sources]
+## Key Decisions [coverage: high — 22 sources]
 
+- **18차(2026-06-25): 리뷰 질문(RAG) 탭 + 비동기 답변 전역 store/배너, 리뷰 주제 군집 표시, 정산 세부 분배 그룹 카드 에디터, 정산 공유 짧은 URL 라우트 이동, 대표 이미지 상대경로 절대화 fix.** 질문 답변은 15초+ 라 진행/결과를 `@repo/shared` 전역 `useReviewAskStore`(웹/앱 공유)에 두어 탭/화면 이탈 후에도 살리고 식당별 마지막 Q&A 를 영속 복원, root 상주 `ReviewAskBanner`(웹 Sonner 토스터 대응 — 앱엔 토스트 인프라 없어 직접 구현)가 완료를 알리되 그 식당 질문 탭을 보고 있으면 suppress. 군집은 `useRestaurantClusters` 배치 결과 읽기 전용, 전부 노이즈면 `aspectSummary` 폴백으로 분석 탭이 항상 콘텐츠. 정산 세부 분배 `RoundGroupSplitEditor`(웹/앱 동형 — 로직 shared SSOT, 웹 매트릭스 vs 앱 그룹 카드 세로 스택)·`RoundGroupSplitNote`(결과/공유 근거). 공유 라우트 `share/settlements/[token]` → `s/[token]`(deep link pathPrefix 정렬).
+- **비동기 질문은 전역 store, 완료는 root 배너(웹 토스터 대응)** — AskTab 이 언마운트돼도(탭/화면 이탈) 진행/결과가 `useReviewAskStore` 에 살아 재진입 시 즉시 복원. `ReviewAskBanner` 가 `_layout` root 에 1개 상주해 `completion`(seq 단조 증가) 을 감지하고, 보고 있는 식당이면(`visiblePlaceId`) 인라인 중복이라 suppress — 웹 `ReviewAskToaster`(Sonner) 의 앱 대응([platform-ui-split](../concepts/platform-ui-split.md): store 공유, 알림 UI 는 플랫폼별).
+- **세부 분배는 web/app 동형, 표현만 분기** — `RoundGroupSplitEditor` 의 그룹 생성/잔수/멤버 로직(`suggestItemGroups`/`isEligibleGroupMember`/draft store mutator)은 [`@repo/shared`](shared.md) 단일 SSOT. 웹은 사람×그룹 매트릭스(가로 공간), 앱은 그룹 카드 세로 스택(좁은 폭)으로만 다르다 — [platform-ui-split](../concepts/platform-ui-split.md) 의 또 한 인스턴스. `RoundGroupSplitNote` 는 `SharedSettlementSessionType`/`SettlementSessionType` 구조적 subtyping 으로 결과·공유 화면이 같은 컴포넌트.
+- **공유 라우트 `s/[token]` 으로 이동** — 구 `app/share/settlements/[token].tsx` 를 `app/s/[token].tsx` 로. deep link `pathPrefix:'/s/'` 와 expo-router 라우트 경로가 같은 위치로 정렬돼 매핑이 직관적. 동작은 동일(`useSharedSettlement` read-only).
+- **대표 이미지 상대경로 절대화 (thumbUrl)** — 만료되는 네이버 파노라마는 크롤 시점에 same-origin 사본(`/api/v1/media/panorama/{placeId}` 상대경로)으로 치환되는데, thumbUrl 이 `*.pstatic.net` 만 절대화하고 상대경로는 그대로 반환해 expo-image 가 호스트 없는 경로를 못 풀어 대표 이미지가 깨졌다. `/` 로 시작하면 `baseUrl` 만 붙여 절대화(우리 JPEG 사본이라 thumbnail 프록시는 안 거침 — 서버 og:image 처리와 동일 논리). base 미설정 시 원본 폴백 유지.
 - **17차(2026-06): 앱 다크 모드(themeStore AsyncStorage + 수동 hydrate 스플래시 중 확정으로 테마 플래시 방지 + useResolvedThemeMode/useColorScheme), vworld midnight 타일, 안드로이드 커스텀 표준 탭바, 상세 탭 카드 테두리 제거·리뷰 사진 풀폭(웹 통일).** 다크 테마 저장소는 앱(AsyncStorage)/웹(localStorage) 으로 물리 분리하되 `@repo/shared` design 토큰만 공유 — [platform-ui-split](../concepts/platform-ui-split.md) 의 또 한 인스턴스. OS 색상 스킴 해석(`useColorScheme`)은 web 번들을 안 깨도록 `ThemeProvider` 가 아닌 앱 레벨 `useResolvedThemeMode` 가 맡고 `_layout` 이 mode prop 주입. 지도 다크 타일은 HTML 재마운트 없이 `__setMode` 런타임 주입(native injectJavaScript / web postMessage, `theme.mode` 는 빌드 deps 제외). Android 탭바는 네이티브 Material 의 보라끼를 피해 `tabBar` 렌더 prop 으로 커스텀 JS 바, iOS 는 네이티브 유지.
 - **수동 hydrate 패턴 (theme/prefs)** — zustand persist 의 async rehydrate 는 첫 렌더 뒤에 비동기로 들어와 플래시(테마)나 stale 기본값(prefs)을 만든다. `themeStore.hydrate()` 를 `bootstrapApi` 가 **`await`** 로 스플래시 중에 끝내고(테마), `settlementPrefsStore` 는 fire-and-forget. 둘 다 zustand persist 미사용 — `AsyncStorage` 직접 read/write.
 - **네이버 썸네일은 friendly 프록시 경유 (앱도 웹과 동일)** — 앱만 원본(최대 ~1.5MB)을 받던 격차를 `thumbUrl()` 로 메움. `*.pstatic.net` 만 프록시(allowlist), 그 외/base 미설정은 원본 폴백 — 깨진 이미지 대신 graceful degrade. 웹/앱이 `@repo/utils` 의 `reviewThumbnailUrl` 을 공유해 쿼리 포맷·프록시가 단일 SSOT.
@@ -326,8 +338,13 @@ expo-router 파일 트리가 곧 라우트다.
 - **앱 다크 모드 (17차부터 — 더 이상 light only)** — `ThemeProvider mode={useResolvedThemeMode()}` (이전 `"light"` 고정). system/light/dark 3택, profile 탭에서 선택. **게스트 우선 진입** — 로그인 화면 최상단 "바로 시작하기 →".
 - **안드로이드 splash 는 단색 + 투명 로고** — `expo-splash-screen` 의 prebuild-config 는 `styles.xml` 에 항상 `windowSplashScreenAnimatedIcon=@drawable/splashscreen_logo` 를 박지만 image 가 없으면 그 drawable 을 안 만들어 링크가 깨진다. 투명 PNG(`assets/splash-transparent.png`)를 `android.image` 로 줘 drawable 은 생성되되 로고는 안 보이게 — "단색만"(인앱 `AnimatedSplash` 가 로고/핀 담당) 의도 유지하며 빌드 통과.
 
-## Gotchas [coverage: high — 18 sources]
+## Gotchas [coverage: high — 22 sources]
 
+- **`?tab=ask` deep link 가 첫 마운트 리셋에 덮이지 않게 `didMountRef`** — PublicRestaurantDetail 은 placeId 변경 시 탭을 'home' 으로 리셋하는 effect 가 있는데, 그게 첫 마운트에도 돌면 `initialTab='ask'`(질문 완료 배너 '더보기' 진입)를 'home' 으로 덮어버린다. `didMountRef` 로 첫 실행을 스킵해야 진입 탭이 보존된다.
+- **질문 완료 배너는 보고 있는 식당이면 suppress — 완료 시점 store 직접 read** — `ReviewAskBanner` 가 `visiblePlaceId === placeId` 면 인라인 중복이라 배너를 띄우지 않는다. 단 이 판정은 완료 이벤트 처리 시점에 `useReviewAskStore.getState().visiblePlaceId` 로 **직접 읽어야** 한다(구독값 ref-during-render 회피). AskTab 의 `setAskTabVisible` 등록/해제(언마운트)가 신뢰의 근거 — RN 은 탭 전환/화면 이탈 시 AskTab 을 언마운트하므로.
+- **질문 답변은 LLM 3콜 ~15초+ — store 가 화면 이탈을 견뎌야** — `ask()` 결과를 컴포넌트 state 가 아니라 전역 `useReviewAskStore.inFlight`/`lastByPlace` 에 둬야 사용자가 다른 탭/화면을 봐도 결과를 안 잃는다. 영속 복원된 답(`!freshThisSession`)은 '지난 답변' 안내를 붙여 최신 리뷰 반영이 아님을 알린다.
+- **군집은 배치 결과 — `ready=false` 면 섹션 숨김, 전부 노이즈면 aspectSummary 폴백** — `ClusterTopics` 는 `useRestaurantClusters` 가 사전 배치(UMAP→HDBSCAN→c-TF-IDF)한 결과를 읽기만 한다. `ready` 가 아니면 InsightsTab 이 섹션 자체를 안 그리고, `clusters.length === 0`(전부 노이즈/소형 식당)이면 ClusterTopics 내부에서 관점별 집계로 폴백 — 빈 분석 탭 방지. 실시간 계산 아님.
+- **대표 이미지 깨짐 — 상대경로(`/api/v1/...`) 는 thumbUrl 이 절대화해야** — 파노라마 사본은 same-origin 상대경로라 호스트가 없어 기기 expo-image 가 못 푼다. thumbUrl 이 `/` 로 시작하면 baseUrl 만 붙여 절대화(프록시 안 거침). 이 분기가 빠지면 목록 카드/상세 hero/사진 탭의 대표 이미지가 전부 깨진다.
 - **테마는 수동 hydrate — persist async rehydrate 면 플래시** — `themeStore` 가 zustand persist 의 자동 rehydrate 를 쓰면 첫 렌더가 기본 `'system'` 으로 그려진 뒤 비동기로 저장값(예: dark)이 들어와 라이트→다크 플래시가 난다. 그래서 `bootstrapApi` 가 `await themeStore.hydrate()` 로 스플래시 떠 있는 동안 모드를 확정하고, 그 전엔 `_layout` 이 `RootNavigator` 를 안 그린다. theme 만 `await`(prefs 는 fire-and-forget) 이라 부트가 theme read 만큼만 늦어진다.
 - **안드로이드 splash 빌드 실패 `resource drawable/splashscreen_logo not found`** — `expo-splash-screen` android image 누락 시. fix 는 투명 PNG 를 `android.image` 로 주는 것(위 Key Decisions). 라이트 단색 의도라 로고를 안 넣었던 게 회귀로 표면화.
 - **루트에서 `expo prebuild`/`run` 돌리면 모노레포 루트 오염** — 앱은 `apps/mobile` 에 있으므로 루트에서 prebuild 를 돌리면 루트 직속 `/ios`·`/android`·`/app.json` 이 잘못 생긴다. 루트 [.gitignore](../../apps/mobile/../../.gitignore) 가 **leading slash** 로 그 셋만 무시(`apps/*` 하위는 영향 없음 — 거긴 `apps/mobile/.gitignore` 가 관리). 실수로 생기면 지우고 항상 `apps/mobile` 에서 prebuild.
@@ -358,7 +375,7 @@ expo-router 파일 트리가 곧 라우트다.
 - **`useBottomTabBarHeight()` 직접 호출 금지** — 탭 네비게이터 밖(`restaurant/[placeId]` 같은 deep-link route)에서 throw. `useTabBarHeight` 는 그래서 `BottomTabBarHeightContext` 를 `useContext` 로 직접 읽는다.
 - **`noUncheckedIndexedAccess: true`** — 배열/객체 인덱스가 `T | undefined`.
 
-## Sources [coverage: high — 56 sources]
+## Sources [coverage: high — 62 sources]
 
 설정·빌드:
 - [apps/mobile/package.json](../../apps/mobile/package.json) — *modified(17차): ios:device/ios:release/android:device/android:release 실기기·릴리즈 스크립트*
@@ -379,7 +396,7 @@ expo-router 파일 트리가 곧 라우트다.
 - *(에셋 PNG 무손실 압축 — assets/icon.png / adaptive-icon.png / splash.png / splash-logo.png)*
 
 라우트 (app/):
-- [apps/mobile/app/_layout.tsx](../../apps/mobile/app/_layout.tsx) — *modified(17차): ThemeProvider mode=useResolvedThemeMode + StatusBar/Stack 헤더 테마 cascade + AnimatedSplash*
+- [apps/mobile/app/_layout.tsx](../../apps/mobile/app/_layout.tsx) — *modified(18차): ReviewAskBanner root 상주. (17차) ThemeProvider mode=useResolvedThemeMode + StatusBar/Stack 헤더 테마 cascade + AnimatedSplash*
 - [apps/mobile/app/index.tsx](../../apps/mobile/app/index.tsx)
 - [apps/mobile/app/(auth)/_layout.tsx](../../apps/mobile/app/(auth)/_layout.tsx)
 - [apps/mobile/app/(auth)/login.tsx](../../apps/mobile/app/(auth)/login.tsx)
@@ -387,20 +404,25 @@ expo-router 파일 트리가 곧 라우트다.
 - [apps/mobile/app/(tabs)/home.tsx](../../apps/mobile/app/(tabs)/home.tsx) — *useTabBarHeight 하단 패딩*
 - [apps/mobile/app/(tabs)/restaurants.tsx](../../apps/mobile/app/(tabs)/restaurants.tsx) — *useTabBarHeight + List=BottomSheetFlatList 주입*
 - [apps/mobile/app/(tabs)/profile.tsx](../../apps/mobile/app/(tabs)/profile.tsx) — *modified(17차): "화면 모드" SegmentedControl(라이트/다크/시스템) + 정산 이력/내 단골 메뉴 + useTabBarHeight*
-- [apps/mobile/app/restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx)
+- [apps/mobile/app/restaurant/[placeId]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/index.tsx) — *modified(18차): ?tab=ask 쿼리 → initialTab (asTabKey 검증)*
 - [apps/mobile/app/restaurant/[placeId]/settle/new.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/new.tsx)
-- [apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx)
+- [apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/index.tsx) — *modified(18차): 차수 카드 RoundGroupSplitNote(세부 분배 근거)*
 - [apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx](../../apps/mobile/app/restaurant/[placeId]/settle/[id]/edit.tsx)
 - [apps/mobile/app/settlement/new.tsx](../../apps/mobile/app/settlement/new.tsx)
 - [apps/mobile/app/settlement/history.tsx](../../apps/mobile/app/settlement/history.tsx) — *modified: ScrollView → FlatList 가상화 (SessionRow/DraftRow 추출)*
 - [apps/mobile/app/settlement/contacts.tsx](../../apps/mobile/app/settlement/contacts.tsx) — *modified: ScrollView → FlatList 가상화 (ContactRow 추출) + ContactEditSheet key 리마운트*
-- [apps/mobile/app/share/settlements/[token].tsx](../../apps/mobile/app/share/settlements/[token].tsx) — *deep link target*
+- [apps/mobile/app/s/[token].tsx](../../apps/mobile/app/s/[token].tsx) — *MOVED(18차): 구 share/settlements/[token].tsx → deep link target(pathPrefix:'/s/') + RoundGroupSplitNote*
 
 컴포넌트·라이브러리:
 - [apps/mobile/src/lib/themeStore.ts](../../apps/mobile/src/lib/themeStore.ts) — *NEW(17차): 화면 모드 zustand + AsyncStorage lp:themeMode + 수동 hydrate*
 - [apps/mobile/src/hooks/useResolvedThemeMode.ts](../../apps/mobile/src/hooks/useResolvedThemeMode.ts) — *NEW(17차): themeStore + useColorScheme 결합 → 'light'|'dark'*
 - [apps/mobile/src/components/restaurantDetail/shared/CategoryTree.tsx](../../apps/mobile/src/components/restaurantDetail/shared/CategoryTree.tsx) — *NEW(17차): 분석 탭 메뉴 카테고리 트리(useRestaurantPublicCategoryTree)*
-- [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) — *네이버 phinf → friendly 썸네일 프록시, ~98% 절감*
+- [apps/mobile/src/components/restaurantDetail/AskTab.tsx](../../apps/mobile/src/components/restaurantDetail/AskTab.tsx) — *NEW(18차): 리뷰 질문(RAG) 탭 — useReviewAskStore 전역 비동기 질문 + 식당별 마지막 Q&A 영속 + visible 등록*
+- [apps/mobile/src/components/ReviewAskBanner.tsx](../../apps/mobile/src/components/ReviewAskBanner.tsx) — *NEW(18차): root 상주 질문 완료 하단 슬라이드 배너(웹 Sonner 토스터 대응) — visiblePlaceId suppress + ?tab=ask deep link 복귀*
+- [apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx](../../apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx) — *NEW(18차): 분석 탭 리뷰 주제 군집(useRestaurantClusters) + 전부 노이즈 시 AspectSummary 폴백*
+- [apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx) — *NEW(18차): 세부 분배 그룹 카드 에디터(균등/잔수) — 웹 동형, 앱은 세로 스택. Step4Review 에서 호출*
+- [apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx) — *NEW(18차): 결과/공유 화면 세부 분배 근거(읽기 전용) — settle/[id]/index + s/[token]*
+- [apps/mobile/src/lib/thumbUrl.ts](../../apps/mobile/src/lib/thumbUrl.ts) — *modified(18차): 상대경로(/api/v1/media/panorama/…) baseUrl 절대화 분기 — 대표 이미지 깨짐 fix. 네이버 phinf → friendly 썸네일 프록시 ~98% 절감*
 - [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) — *modified(17차): await themeStore.hydrate() (스플래시 중 테마 확정) + setSettlementDraftStorage + LAN IP web 추론*
 - [apps/mobile/src/lib/settlementPrefsStore.ts](../../apps/mobile/src/lib/settlementPrefsStore.ts)
 - [apps/mobile/src/components/tabs-layout.tsx](../../apps/mobile/src/components/tabs-layout.tsx) — *modified(17차): Android 커스텀 AndroidTabBar(표준 세로 배치 + primary 색 전환), iOS 네이티브 유지*
@@ -412,8 +434,9 @@ expo-router 파일 트리가 곧 라우트다.
 - [apps/mobile/src/components/publicRestaurantsMapHtml.ts](../../apps/mobile/src/components/publicRestaurantsMapHtml.ts) — *modified(17차): mode 인자 + Base/midnight 타일 + window.__setMode 런타임 전환 + 라벨 색 반전*
 - [apps/mobile/src/components/RestaurantsFloatingHeader.tsx](../../apps/mobile/src/components/RestaurantsFloatingHeader.tsx)
 - [apps/mobile/src/components/NotchFade.tsx](../../apps/mobile/src/components/NotchFade.tsx)
-- [apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx) — *modified(17차): tip/menu 리뷰 필터 state + review-filter 칩 행 + 리뷰 카드 divider(카드 테두리 제거)*
-- [apps/mobile/src/components/restaurantDetail/InsightsTab.tsx](../../apps/mobile/src/components/restaurantDetail/InsightsTab.tsx) — *modified(17차): CategoryTree 섹션 + 메뉴 행 Pressable(onSelectMenu) + 카드 테두리 제거*
+- [apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx](../../apps/mobile/src/components/restaurantDetail/PublicRestaurantDetail.tsx) — *modified(18차): AskTab('ask') 탭 행 + initialTab prop(didMountRef 로 첫 마운트 리셋 스킵). (17차) tip/menu 리뷰 필터 + review-filter 칩 + 리뷰 divider*
+- [apps/mobile/src/components/restaurantDetail/tabs.ts](../../apps/mobile/src/components/restaurantDetail/tabs.ts) — *modified(18차): TabKey 에 'ask'(질문) 추가 — 탭 7종(home/insights/menu/reviews/ask/photos/info)*
+- [apps/mobile/src/components/restaurantDetail/InsightsTab.tsx](../../apps/mobile/src/components/restaurantDetail/InsightsTab.tsx) — *modified(18차): ClusterTopics 섹션(useRestaurantClusters ready 시). (17차) CategoryTree 섹션 + 메뉴 행 Pressable + 카드 테두리 제거*
 - [apps/mobile/src/components/restaurantDetail/HomeTab.tsx](../../apps/mobile/src/components/restaurantDetail/HomeTab.tsx) — *modified(17차): onSelectTip/onSelectMenu 전달 + 리뷰 divider*
 - [apps/mobile/src/components/restaurantDetail/shared/AiSummary.tsx](../../apps/mobile/src/components/restaurantDetail/shared/AiSummary.tsx) — *modified(17차): onSelectTip 시 방문 팁 Pressable(리뷰 필터 연결)*
 - [apps/mobile/src/components/restaurantDetail/TabBar.tsx](../../apps/mobile/src/components/restaurantDetail/TabBar.tsx) — *modified(17차): gesture-handler ScrollView(시트 내 가로 스와이프)*
@@ -431,7 +454,7 @@ expo-router 파일 트리가 곧 라우트다.
 - [apps/mobile/src/components/settlement/Step1Participants.tsx](../../apps/mobile/src/components/settlement/Step1Participants.tsx)
 - [apps/mobile/src/components/settlement/Step2Rounds.tsx](../../apps/mobile/src/components/settlement/Step2Rounds.tsx)
 - [apps/mobile/src/components/settlement/Step3Edit.tsx](../../apps/mobile/src/components/settlement/Step3Edit.tsx) — *영수증 Lightbox*
-- [apps/mobile/src/components/settlement/Step4Review.tsx](../../apps/mobile/src/components/settlement/Step4Review.tsx)
+- [apps/mobile/src/components/settlement/Step4Review.tsx](../../apps/mobile/src/components/settlement/Step4Review.tsx) — *modified(18차): 차수 카드에 RoundGroupSplitEditor(세부 분배)*
 - [apps/mobile/src/components/settlement/ContactPickerSheet.tsx](../../apps/mobile/src/components/settlement/ContactPickerSheet.tsx)
 - [apps/mobile/src/components/settlement/ContactSuggestions.tsx](../../apps/mobile/src/components/settlement/ContactSuggestions.tsx)
 - [apps/mobile/src/components/settlement/MenuPickerSheet.tsx](../../apps/mobile/src/components/settlement/MenuPickerSheet.tsx)

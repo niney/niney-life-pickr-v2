@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-06-06
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule]
+last_compiled: 2026-06-25
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram]
 status: active
 ---
 
@@ -34,6 +34,15 @@ status: active
 
 - **2026-06-01** in [[../topics/settlement]] / [[../topics/friendly]] (`settlement.service.ts` `sharePreviewCache` + `invalidateSharePreview`): 게이트 패턴의 **read 캐시 변형** — 정산 공유 OG 미리보기가 카카오/슬랙 크롤러의 반복 펼침을 흡수하려 모듈 스코프 Map(키 = `token + " " + origin`) + 5분 TTL 캐시를 둔다. owner 가 share 를 갱신/회수하면 `invalidateSharePreview(token)` 가 해당 토큰의 모든 origin 변형 엔트리를 제거 — "TTL 자연 만료 + 쓰기 이벤트 명시적 무효화" 두 채널. 같은 모듈의 `rateHits`(공유 토큰 IP rate limiter)와 같은 모양의 in-memory 게이트(Redis 없이 단일 인스턴스 전제). 동시성 슬롯이 아니라 **read 결과**를 회계한다는 점만 다른 형제 패턴 — 게이트 모양이 "동시성 제어" 를 넘어 "공개 핫패스 캐시" 로도 재사용됨.
 
+- **2026-06**(18차) in [[../topics/review-search]] / [[../topics/friendly]] (`review-search.service.ts` `app.reviewSearch` 싱글톤): 한 싱글톤 안에 **세 게이트 변형이 공존**. (1) `corpusCache: LRUCache(max:16)` — placeId 별 코퍼스+BM25 인덱스 read 캐시(2026-06-01 `sharePreviewCache` 의 LRU 친척), enrich 시 `corpusCache.delete(key)` 로 대표 키 무효화(쓰기 이벤트 무효화 채널). (2) `enriching: Map<string, {processed,total}>` — **진행상태를 겸한 중복 트리거 가드**. `enriching.has(key)` 면 두 번째 enrich 요청을 즉시 거절, 진행률은 같은 Map 의 값으로 노출(slot 회계 + UI 진행률 한 자료구조). (3) `askRateHits` 인메모리 고정창 레이트리밋 — settlement 의 `rateHits` 패턴을 그대로 차용(QA 호출 폭주 방어). 단일 도메인이 read 캐시·진행 가드·레이트리밋 세 형제 변형을 동시에 끌어안은 첫 사례.
+- **2026-06**(18차) in [[../topics/review-clustering]] / [[../topics/friendly]] (`review-clustering.service.ts` `ReviewClusteringService.clustering` + `lastRun` + `plugins/summaries.ts`): 게이트의 **진행률 없는 최소 변형**. `clustering: Set<string>` 가 식당당 단일 진행 가드(`clustering.has(primaryId)` → 이미 진행 중이면 즉시 return, `.finally` 에서 `clustering.delete`). review-search 의 `enriching` 이 진행률(processed/total)을 Map 값으로 들고 있던 것과 달리, 군집은 진행률이 의미 없어 **Set 하나로 충분**한 단순화 — slot 회계만 필요할 때 Map 을 Set 으로 축소. 별도로 `lastRun: Map<primaryId, {reason, at}>` 가 **스킵 사유**를 보관해 상태 페이지가 "대기"로만 남던 원인을 노출(상태 가시화 채널). `plugins/summaries.ts` 가 `app.decorate('reviewClustering', ...)` 로 app 전역 singleton 승격(2026-05-19 plugin-singleton 패턴 답습).
+- **2026-06**(18차) in [[../topics/random-crawl]] / [[../topics/friendly]] (`random-crawl-registry.ts` `randomCrawlRegistry`): **또 하나의 단일-잡 게이트** — `globalMergeJobRegistry`/`scheduleRegistry` 계보. 핵심 특이점: **schedule 과 동일한 `scheduleRegistry` 를 jobType 만 다르게 공유**(croner cron 타이머 자원을 한 레지스트리가 jobType 별로 들고 있음 — 타이머 자원 중복 방지). 게이트 책임 분담이 명확히 갈림: **DB 가 진짜 가드** — 재시작 시 `awaiting` 행은 살려 다음 큐가 줍고 `running`/`crawling` 만 `interrupted` 로 마킹(영속성은 DB). `begin` 은 **in-process 경쟁만 차단**하는 보조 가드(같은 프로세스 내 동시 요청 dedup). TTL GC 없이 `finish` 후에도 `active` 유지(직후 SSE/조회가 마지막 스냅샷을 봄, 다음 `begin` 이 교체) — schedule 의 `finishRun` 과 동형. "in-memory 게이트 = 보조, DB = 권위" 분담이 가장 명시적인 인스턴스.
+- **2026-06**(18차) in [[../topics/ai]] (`concurrency-gate.ts` `ConcurrencyGate` + `adapter-cache.ts` `accountGateRegistry`): AI 동시성 게이트가 **2단 직렬 + 추출된 클래스**로 진화. 2026-05-07 의 `maxConcurrent` 단일 게이트가 (1) `ConcurrencyGate` 클래스로 추출되어 재사용 가능해지고, (2) 호출이 **purpose 게이트 → 계정 게이트 두 단계를 직렬로** 통과. `accountGateRegistry`(키 = `apiKey|baseUrl`, cap = 해당 purpose 한도들의 max)가 **어댑터 캐시 회전과 독립 수명** — 설정 변경으로 어댑터가 재생성돼도 계정 게이트는 살아남아 같은 계정의 in-flight 합이 일시적으로 cap 을 초과하지 않게 막음. DB `maxConcurrent` 변경 시 `setLimit` 으로 게이트 cap 동기화. 게이트의 **수명 분리**(게이트 ≠ 그 게이트를 쓰는 캐시 엔트리)가 명시화된 사례.
+- **2026-06**(18차) in [[../topics/logs]] / [[../topics/friendly]] (`logs.route.ts` + log 서비스들): 두 가지 프로세스-스코프 게이트. (1) `OperationLogService` 프로세스당 1개 — **단일 seq 카운터**로 로그 순번을 매김(여러 인스턴스면 seq 충돌, 단일 인스턴스 전제의 또 다른 의존). (2) `LogAnalysisService` 가 `inflight: Set` (분석 중 dedup) + `autoActive` 세마포어(**동시 1 + 대기열 5**) — analytics/menu-grouping 의 잡 게이트보다 작은 cap 의 인메모리 세마포어 변형.
+- **2026-06**(18차) in [[../topics/analytics]] / [[../topics/friendly]] (글로벌 머지 청크 병렬 풀 `callChunksPooled` + `mergeInflight`): 글로벌 머지가 **청크 병렬 풀**을 도입 — `MERGE_POOL_SIZE`(= 어댑터 cap 에 맞춤)만큼의 청크를 동시 처리하는 in-memory 풀(2026-05-17 auto-discover 의 "게이트 cap 을 컨슈머 디자인에 맞춤" 사례의 재현 — 풀 크기를 어댑터 동시성 cap 과 일치). 동시에 `mergeInflight` **단일 머지 락**으로 시스템 전체 머지가 1개만 돌게 함(`globalMergeJobRegistry` inflight 가드 계보).
+- **2026-06**(18차) in [[../topics/telegram]] / [[../topics/friendly]] (long-polling 단일성): 텔레그램 long-polling 봇이 `polling` 플래그 + `pollGen` **세대 게이트**로 단일성 보장 — 재기동/설정 변경 시 `pollGen` 을 증가시켜 이전 세대의 폴링 루프를 무력화(stale 루프가 새 루프와 동시에 getUpdates 를 치지 않게). cron 타이머(schedule)·SSE connection(shared)·동시성 슬롯(ai)에 이어 **long-polling 루프**라는 또 다른 자원 종류가 같은 모듈-싱글턴 모양에 흡수됨.
+- **2026-06**(18차) **friendly 메타패턴** (`plugins/schedule.ts` → `logs.ts` → `random-crawl` → `summaries.ts`): "plugin-singleton 이 **자체 AiConfig 를 들고 있어 autoload 알파벳순 의존 문제를 회피**" 하는 모양이 4곳으로 확산. autoload 가 파일명 알파벳순으로 플러그인을 등록하므로, 한 플러그인이 다른 플러그인이 decorate 한 `aiConfig` 에 의존하면 등록 순서에 따라 깨질 수 있음 — 각 plugin-singleton 이 자기 `AiConfigService` 인스턴스를 직접 구성해 순서 의존을 끊음(2026-05-19 plugin-singleton 승격 패턴의 운영상 후속 학습).
+
 ## What This Means
 
 이 패턴이 알려주는 것:
@@ -43,7 +52,10 @@ status: active
 3. **fire-and-forget + finally 깨우기 = 자동 dequeue** — `runJob.finally(() => flushQueue(actorId))` 한 줄로 잡 종료가 다음 잡 시작을 트리거. 명시적 워커 루프가 없어도 동작. 같은 패턴이 `persistTail`에도 — `then(...)` 체인이 자동으로 다음 batch를 깨운다.
 4. **클라이언트 사이드도 같은 패턴이 통한다** — `summarySseManager`는 인프라가 다를 뿐 모양이 똑같음 (refcount + reconnect coalescing). 동시성 자원이 "AI provider slot"이든 "브라우저 connection slot"이든, 같은 in-memory FIFO 싱글턴으로 풀린다.
 5. **이번 라운드(2026-05-09)에 패턴이 6개 인스턴스로 굳어짐** — (1) AI 동시성 cap 게이트(`adapter-cache`), (2) 크롤 job-registry + pending FIFO, (3) summary `persistTail` / per-placeId run 체인, (4) summary SSE 매니저(서버 fan-out + 클라 refcount), (5) 메뉴 그룹핑 batch jobs(`groupingJobRegistry`, multi-job + actor 격리), (6) 글로벌 머지 inflight 가드(`globalMergeJobRegistry`, single-job + 409 snapshot). 모두 같은 모양 — 모듈 스코프 싱글턴 + Map/Set 회계 + TTL GC + (해당되면) actorId 격리. Redis/외부 큐 없이 단일 인스턴스 가정 위에서 충분히 동작하지만, **다중 인스턴스 배포로 가는 순간 가장 먼저 깨지는 가지**가 바로 이 패턴이다 — cross-process에서는 cap도 dedupe도 inflight 가드도 의미가 없어지므로.
-6. **윈도우 기반 rate-limit 은 게이트와 충돌한다** (2026-05-09 follow-up) — `RATE_LIMIT_WINDOW_MS` 같은 시간 윈도우 검사를 게이트 옆에 같이 두면, 정상 사용 패턴이 "다중 시작" 일 때 둘째부터 차단되는 사고가 일어난다. 응답이 수 ms 안에 떨어지면 직렬 await 도 윈도우 안에 들어가고, 윈도우를 줄여도 (1초 → 50ms) 동일. 게이트가 (a) 같은 키 중복(`findInFlightByPlace`)과 (b) 시스템 전체 폭주(`max_concurrent` 큐) 두 layer 로 spam 방어를 끝내고 있으면, 시간 윈도우는 잘못된 보조 — 정상 사용을 깨뜨리는 데 더 가깝다. **게이트가 충분히 spam 방어하면 윈도우는 빼라**.
+6. **윈도우 기반 rate-limit 은 게이트와 충돌한다** (2026-05-09 follow-up) — `RATE_LIMIT_WINDOW_MS` 같은 시간 윈도우 검사를 게이트 옆에 같이 두면, 정상 사용 패턴이 "다중 시작" 일 때 둘째부터 차단되는 사고가 일어난다. 응답이 수 ms 안에 떨어지면 직렬 await 도 윈도우 안에 들어가고, 윈도우를 줄여도 (1초 → 50ms) 동일. 게이트가 (a) 같은 키 중복(`findInFlightByPlace`)과 (b) 시스템 전체 폭주(`max_concurrent` 큐) 두 layer 로 spam 방어를 끝내고 있으면, 시간 윈도우는 잘못된 보조 — 정상 사용을 깨뜨리는 데 더 가깝다. **게이트가 충분히 spam 방어하면 윈도우는 빼라**. (단, 외부 호출이 아닌 사용자-facing QA 같은 경로엔 고정창 rate-limit 이 옳은 곳도 있다 — review-search 의 `askRateHits` 가 그 사례. 차이는 "정상 패턴이 버스트인가" — 다중 시작은 버스트가 정상, QA 폭주는 비정상.)
+7. **한 게이트 모양이 여러 자원 종류를 흡수한다** (2026-06, 18차) — 18차 라운드는 같은 모듈-싱글턴 모양이 (a) 동시성 슬롯(ai 2단 게이트, logs 세마포어, analytics 청크 풀), (b) read 캐시(review-search corpusCache LRU), (c) 진행 가드(review-search enriching, review-clustering Set), (d) 단일-잡 inflight(random-crawl, analytics mergeInflight), (e) cron 타이머(random-crawl 이 scheduleRegistry 공유), (f) long-polling 루프(telegram pollGen 세대), (g) seq 카운터(logs)까지 7가지 자원 종류를 같은 모양으로 흡수함을 보여준다. **새 자원 종류가 등장할 때마다 외부 인프라 대신 이 모양이 디폴트로 채택된다** — 단일 인스턴스 전제 위에서 일관성이 계속 강화되는 중.
+8. **게이트 cap 을 컨슈머 디자인에 맞춘다** (2026-05-17 → 2026-06 재확인) — auto-discover 가 `MAX_CONCURRENT_PER_ACTOR` 를 그룹 크기 5 에 맞춘 사례가, analytics 글로벌 머지의 `MERGE_POOL_SIZE = 어댑터 cap` 으로 재현됨. 게이트 크기는 임의 상수가 아니라 그 게이트를 쓰는 쪽(그룹 크기·어댑터 동시성)에서 역산하는 값.
+9. **게이트 수명과 그 게이트를 쓰는 캐시 수명을 분리하라** (2026-06, ai) — `accountGateRegistry` 가 어댑터 캐시 회전과 독립 수명을 가지는 이유: 설정 변경으로 어댑터가 재생성되는 순간 새 어댑터가 새 게이트를 만들면, 옛 어댑터의 in-flight 와 합쳐져 같은 계정에 cap 초과 호출이 일시적으로 발생한다. **게이트는 그것이 보호하는 자원(계정)의 정체성에 묶여야지, 그 자원을 쓰는 캐시 엔트리에 묶이면 안 된다**.
 
 이 패턴이 깨질 수 있는 시점:
 - **다중 Fastify 인스턴스로 스케일 아웃** — 모듈 싱글턴은 프로세스 안에서만 의미. 여러 인스턴스가 같은 placeId 잡을 돌리면 dedupe도 cap도 cross-process에서 안 통함. 그 시점이 진짜 외부 큐가 필요한 시점.
@@ -62,3 +74,8 @@ status: active
 - [[../topics/auto-discover]]
 - [[../topics/settlement]]
 - [[../topics/schedule]]
+- [[../topics/review-search]]
+- [[../topics/review-clustering]]
+- [[../topics/random-crawl]]
+- [[../topics/logs]]
+- [[../topics/telegram]]

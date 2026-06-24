@@ -22,6 +22,8 @@
 - **scheduleRegistry** ([`schedule-registry.ts`](../../apps/friendly/src/modules/schedule/schedule-registry.ts)) — 모듈 singleton. 두 가지 메모리 상태만 관리: ① `Map<jobType, Cron>` cron 타이머, ② 시스템 전체 동시 1개인 `ActiveRun`(overlap 가드 + live 진행 + SSE 구독자 + graceful abort). 파이프라인 로직은 없고 상태/타이머만 담당.
 - **schedule plugin** ([`plugins/schedule.ts`](../../apps/friendly/src/plugins/schedule.ts)) — `fastify-plugin`, `dependencies: ['prisma']`. `app.decorate('schedule', ...)` 로 ScheduleService 를 전역 singleton 으로 노출. 라우트와 부팅 cron tick 이 같은 인스턴스를 공유한다.
 
+**2026-06-25 변경 흡수 — 범용 작업 로그(operation-log) 이중 기록**: `ScheduleServiceDeps` 에 옵셔널 `operationLog?: OperationLogService | null` 추가 ([logs](logs.md) 토픽). `runScheduled` 가 `ScheduleRun`(스케줄 화면용)과 별개로 operation-log run 도 시작(`oplog.startRun({ feature: 'schedule', jobId: runId, trigger })`)하고, `jobId` 에 `ScheduleRun.id` 를 넣어 두 기록을 상호 추적한다. 단계별 step 로그(`collect`/`grouping`/`merge`)를 흘리고, 자식 `menuGrouping.groupForRestaurant(placeId, { parentRunId })` · `analytics.runGlobalMerge({ full: false, parentRunId })` 호출에 `parentRunId` 를 넘겨 부모-자식 run 을 연계한다. **미주입(null)이면 완전 no-op** — 기존 단위 테스트가 계측 없이도 깨지지 않게 설계됐다. 개별 식당 실패는 `failedCount` 로 세어 run 은 `done` 으로 유지하되 meta 에 단서를 남긴다.
+
 상태 분리가 핵심이다: **설정·이력은 SQLite 에 영속**(재시작 후 복원), **진행 중 상태·cron 타이머는 메모리**(registry). 이는 [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md) 패턴 — `crawl` 의 `job-registry`, `analytics` 의 global-merge registry 와 같은 단일 모델이다.
 
 ### 실행 흐름 (runScheduled)
@@ -38,6 +40,7 @@
 - **[menu-grouping](menu-grouping.md)** — `groupForRestaurant(placeId)` 로 식당별 정규화(grouping 단계), `getRestaurantsStatus({ attention: true, ... })` 로 처리 대상 수집(collecting 단계). attention 정의를 그대로 재사용한다.
 - **[analytics](analytics.md)** — `runGlobalMerge({ full: false })` 로 증분 글로벌 머지(merging 단계). `AnalyticsError` 코드 `no_inputs` 는 정상(머지할 신규 입력 없음)으로 간주하고 통과시킨다.
 - **[crawl](crawl.md) job-registry** — `jobRegistry.isPlaceCrawling(placeId)` 로 크롤 진행 중인 식당을 제외. collecting 시점과 grouping 직전에 두 번 확인(수집 후 크롤이 시작됐을 수 있어서).
+- **[logs](logs.md) operation-log** — `OperationLogService` 옵셔널 주입. run/step 을 범용 작업 로그에 이중 기록하고 `parentRunId` 로 자식 menu-grouping/analytics run 을 연계. 어드민 `/admin/logs` 에서 스케줄 실행이 다른 기능 run 과 같은 화면으로 보인다.
 - **[friendly](friendly.md)** — `app.prisma`, `app.authenticate`/`app.requireAdmin`, `app.jwt`, `app.httpErrors`.
 - **[shared](shared.md) / [web](web.md)** — `schedule.api.ts` + `useSchedule.ts` 훅을 통해 어드민 UI([AdminAnalyticsPage](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx))가 소비.
 

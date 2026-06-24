@@ -1,7 +1,7 @@
 ---
 concept: workspace 패키지 해결 체인 (injected → vite prebundle → namespace re-export)
-last_compiled: 2026-05-28
-topics_connected: [friendly, shared, web, api-contract, project-overview, mobile]
+last_compiled: 2026-06-25
+topics_connected: [friendly, shared, web, api-contract, project-overview, mobile, review-search, review-clustering]
 status: active
 ---
 
@@ -26,6 +26,8 @@ status: active
 - **2026-05-07** in [web](../topics/web.md): vite dev 서버가 deps prebundle을 캐싱 — workspace 패키지에 새 export가 추가되어도 옛 prebundle을 들고 있어 `does not provide an export named 'X'` 에러. 해결: `apps/web/node_modules/.vite/` 삭제 + dev 재시작.
 - **2026-05-07** in [project-overview](../topics/project-overview.md): pnpm `injected: true`가 lock에서 빠지면 `apps/*/node_modules/@repo/*`가 symlink가 아닌 실제 복사로 마운트됨 → workspace 소스 변경이 컨슈머에 자동 반영되지 않아 수동 `cp`로 동기화. AI 모듈 작업 도중 lock이 `dependenciesMeta` 7줄을 잃으면서 이 증상 재현됨.
 - **2026-05-28** in [mobile](../topics/mobile.md) (`apps/mobile/babel.config.js` — `replaceImportMeta` plugin): Expo Web 번들이 `@repo/shared` 와 직간접 의존인 zustand 의 ESM 빌드(`zustand/esm/middleware.mjs`) 를 끌어오는데, 그 안의 `import.meta.env` 가 일반 `<script defer>` 컨텍스트에서 SyntaxError 를 냄 (`<script type="module">` 아님). Metro/babel-preset-expo 는 `import.meta` 를 변환하지 않으므로 커스텀 babel plugin (`MetaProperty` visitor) 가 `import.meta` 를 `{ env: { MODE: 'production' } }` 객체 리터럴로 치환. 부수효과로 zustand devtools 가 prod 경로로 평가돼 비활성 — native 에서도 무해. **체인의 또 다른 단계가 표면화** — quad 패턴(`.web.tsx`/`.native.tsx`) 만으로는 풀리지 않고 **ESM-only 의존성이 비-ESM 스크립트 컨텍스트에 떨어질 때** babel transform 으로 흡수해야 함. 같은 디버깅 절차 — "어느 단계가 깨진 건가" 를 추적해 babel transform 으로 끝냄.
+
+- **2026-06**(18차) in [[../topics/review-search]] / [[../topics/review-clustering]] / [[../topics/shared]] ([packages/shared/src/api/review-search.api.ts](../../packages/shared/src/api/review-search.api.ts) · [review-clustering.api.ts](../../packages/shared/src/api/review-clustering.api.ts) — 경로 하드코딩): 두 새 API 클라이언트가 `Routes.*` namespace 를 안 쓰고 엔드포인트 경로를 직접 하드코딩한다. 이유는 2026-05-07 의 vite esbuild prebundle 이 `export * as` namespace re-export 의 inner export 를 드롭하는 함정 회피 — `aiApi` 가 이미 `AI_PREFIX` 하드코드로 같은 우회를 쓰던 관례를 따랐다. 체인의 "namespace re-export 우회" 단계의 새 인스턴스 — SSOT 약속을 경로 한 줄만큼 양보하는 패턴이 review-search/review-clustering 으로 번졌다.
 
 ## What This Means
 
@@ -52,3 +54,5 @@ status: active
 - [web](../topics/web.md)
 - [project-overview](../topics/project-overview.md)
 - [mobile](../topics/mobile.md)
+- [review-search](../topics/review-search.md)
+- [review-clustering](../topics/review-clustering.md)
