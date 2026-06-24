@@ -196,9 +196,51 @@ ls apps/friendly/data/                      # prod.db, prod.db-wal, prod.db-shm 
 curl -I https://<domain>/api/v1/health      # 헬스 라우트 있다면
 ```
 
+## 리뷰 군집화 (Python 배치 계산기)
+
+리뷰 군집화(분석 탭 "리뷰 주제")는 저장된 임베딩을 **Python**(UMAP→HDBSCAN→c-TF-IDF)으로
+계산한다. Node 단일 인스턴스라 호스트에 python3 + 패키지가 필요(임베딩 endpoint 요구와 동급).
+**미설치여도 서버는 정상** — 군집화만 graceful skip 되고 분석 탭 섹션이 안 뜰 뿐. 연구·알고리즘
+배경은 `apps/friendly/research/review-clustering/README.md`.
+
+### 최초 1회 설치
+
+```bash
+# python3 (대부분 기본 설치). venv 권장 — base 오염 방지.
+python3 -m venv /home/samplepcb/cluster-venv
+/home/samplepcb/cluster-venv/bin/pip install -r apps/friendly/scripts/requirements-cluster.txt
+# 의존성: numpy, scikit-learn, umap-learn, hdbscan (torch 불필요 — bertopic 패키지 안 씀)
+```
+
+`.env` 에 venv 의 python 경로 지정(미지정 시 PATH 의 `python3`):
+
+```env
+CLUSTER_PYTHON_BIN=/home/samplepcb/cluster-venv/bin/python
+# 자동 군집화(요약 종료 훅) on/off. 기본 on.
+CLUSTER_AUTO_ENABLED=true
+# (선택) 자동 재군집 게이트·파라미터 — 기본값으로 충분.
+# CLUSTER_GATE_PCT=0.2   CLUSTER_GATE_MIN=20   CLUSTER_MIN_SIZE=8   CLUSTER_ASPECT_WEIGHT=0.5
+```
+
+### 검증 (배포 후)
+
+```bash
+pnpm --filter friendly probe:cluster-health   # numpy/sklearn/umap/hdbscan 도달 확인
+```
+
+### 운영 흐름
+
+- **스키마**: 군집 테이블은 일반 마이그레이션에 포함 — 재배포의 `migrate deploy` 가 처리(별도 작업 없음).
+- **임베딩 선행**: 군집화는 enrich(임베딩)된 리뷰가 있어야 한다 — review-search 의 임베딩 endpoint 설정이
+  먼저 되어 있어야 함(해당 README 참고).
+- **자동**: 새로 크롤·요약된 식당은 요약 종료 후 **조건부 자동 군집화**(첫 군집이거나 리뷰가 충분히 늘었을 때만).
+- **수동 백필**: 기존 식당은 어드민 `/admin/review-search` 하단 **"식당별 군집 상태"** 에서 enrich 후
+  식당별 "군집화" / "미군집 일괄" 로 채운다.
+
 ## 주의
 
-- **cluster 모드 금지** — SQLite 다중 프로세스 쓰기 시 `SQLITE_BUSY` 다발
+- **cluster 모드 금지** — SQLite 다중 프로세스 쓰기 시 `SQLITE_BUSY` 다발 (PM2 cluster 모드 — 리뷰 군집화와 무관)
 - 빌드는 **서버에서 직접** — `sharp`, `@prisma/client` 같은 native 의존성이 OS별로 다름
 - `.env` 변경 후 반드시 `pm2 reload friendly --update-env`
 - Playwright 버전 올라가면 `playwright install chromium` 다시 실행
+- 리뷰 군집화는 python3 + 패키지 필요(위 섹션) — 미설치 시 군집만 skip(서버는 정상)
