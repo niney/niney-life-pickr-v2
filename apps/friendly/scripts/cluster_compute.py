@@ -51,6 +51,8 @@ def ctfidf_keywords(labels, bodies, clusters, topn=6):
     import numpy as np
     from sklearn.feature_extraction.text import CountVectorizer
 
+    if not clusters:
+        return {}  # 빈 군집 — np.vstack([]) 방지.
     labels = np.asarray(labels)
     try:
         cv = CountVectorizer(token_pattern=r"(?u)\b\w\w+\b", min_df=2)
@@ -110,6 +112,14 @@ def compute(payload):
     labels = np.asarray(labels)
 
     clusters_ids = sorted(c for c in set(labels) if c >= 0)
+    # HDBSCAN 이 군집을 0개(전부 노이즈) 만들면 ctfidf 의 np.vstack([]) 가 터진다
+    # ("need at least one array to concatenate"). 우아하게 빈 결과로 반환 → Node 가
+    # "군집 형성 안 됨(전부 노이즈)" 스킵으로 처리.
+    if not clusters_ids:
+        return {"ok": True,
+                "params": {"minClusterSize": min_cluster, "n": n,
+                           "reduced": int(reduced.shape[1]), "aspectWeight": weight},
+                "clusters": [], "noise": ids}
     keywords = ctfidf_keywords(labels, bodies, clusters_ids)
 
     clusters = []
