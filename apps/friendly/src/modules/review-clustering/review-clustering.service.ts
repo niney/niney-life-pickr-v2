@@ -478,7 +478,35 @@ export class ReviewClusteringService {
     return by;
   }
 
-  // 공개 조회 — 저장된 군집을 읽어 반환(계산 없음). placeId 없거나 군집 없으면 ready=false.
+  // 관점별 집계(폴백용) — 통합 멤버의 aspectsJson 을 관점→긍/부/중립 카운트로. 언급 많은 순.
+  private async aggregateAspects(
+    memberIds: string[],
+  ): Promise<Array<{ aspect: string; pos: number; neg: number; neu: number }>> {
+    const rows = await this.prisma.reviewSummary.findMany({
+      where: {
+        review: { restaurantId: { in: memberIds } },
+        embeddingJson: { not: null },
+        aspectsJson: { not: null },
+      },
+      select: { aspectsJson: true },
+    });
+    const agg = new Map<string, { pos: number; neg: number; neu: number }>();
+    for (const r of rows) {
+      const asp = safeParse<Record<string, string>>(r.aspectsJson, {});
+      for (const [k, p] of Object.entries(asp)) {
+        const e = agg.get(k) ?? { pos: 0, neg: 0, neu: 0 };
+        if (p === 'pos') e.pos += 1;
+        else if (p === 'neg') e.neg += 1;
+        else if (p === 'neu') e.neu += 1;
+        agg.set(k, e);
+      }
+    }
+    return [...agg.entries()]
+      .map(([aspect, c]) => ({ aspect, ...c }))
+      .sort((a, b) => b.pos + b.neg + b.neu - (a.pos + a.neg + a.neu));
+  }
+
+  // 공개 조회 — 저장된 군집을 읽어 반환(계산 없음). 군집 없으면 관점집계 폴백, 그것도 없으면 ready=false.
   async getPublicClusters(placeId: string): Promise<ReviewClustersResultType> {
     const empty: ReviewClustersResultType = {
       ready: false,
@@ -488,20 +516,35 @@ export class ReviewClusteringService {
       version: CLUSTERING_VERSION,
       clusteredAt: null,
       clusters: [],
+      aspectSummary: [],
     };
     const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
     if (!members) return empty;
+
+    // 검색가능 리뷰 총수(노이즈/폴백 판정) — 통합 멤버 기준.
+    const total = await this.prisma.reviewSummary.count({
+      where: { review: { restaurantId: { in: members.memberIds } }, embeddingJson: { not: null } },
+    });
 
     const rows = await this.prisma.reviewCluster.findMany({
       where: { restaurantId: members.primaryId },
       orderBy: { ordinal: 'asc' },
     });
-    if (rows.length === 0) return empty;
-
-    // 검색가능 리뷰 총수(노이즈 산출용) — 통합 멤버 기준.
-    const total = await this.prisma.reviewSummary.count({
-      where: { review: { restaurantId: { in: members.memberIds } }, embeddingJson: { not: null } },
-    });
+    // 군집 없음(미군집·전부 노이즈) → 관점별 집계 폴백.
+    if (rows.length === 0) {
+      const aspectSummary = await this.aggregateAspects(members.memberIds);
+      if (aspectSummary.length === 0) return empty;
+      return {
+        ready: true,
+        total,
+        clustered: 0,
+        noiseCount: total,
+        version: CLUSTERING_VERSION,
+        clusteredAt: null,
+        clusters: [],
+        aspectSummary,
+      };
+    }
 
     // 대표 리뷰 body 일괄 조회.
     const repIds = rows.flatMap((c) => safeParse<string[]>(c.repReviewIdsJson, []));
@@ -536,6 +579,7 @@ export class ReviewClusteringService {
       version: rows[0]!.clusterVersion,
       clusteredAt: rows[0]!.createdAt.toISOString(),
       clusters,
+      aspectSummary: [], // 군집 있으면 폴백 불필요.
     };
   }
 }

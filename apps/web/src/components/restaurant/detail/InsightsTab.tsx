@@ -72,6 +72,7 @@ export const InsightsTab = ({
       {clusters.data?.ready && (
         <ClusterTopics
           clusters={clusters.data.clusters}
+          aspectSummary={clusters.data.aspectSummary}
           total={clusters.data.total}
           clustered={clusters.data.clustered}
         />

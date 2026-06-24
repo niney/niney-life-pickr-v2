@@ -1,11 +1,60 @@
-import { Layers, Star } from 'lucide-react';
-import type { ReviewClusterItemType, ClusterToneType } from '@repo/api-contract';
+import { Layers, MessageSquare, Star } from 'lucide-react';
+import type {
+  ClusterToneType,
+  ReviewClusterAspectSummaryType,
+  ReviewClusterItemType,
+} from '@repo/api-contract';
 
 interface Props {
   clusters: ReviewClusterItemType[];
+  aspectSummary: ReviewClusterAspectSummaryType[];
   total: number;
   clustered: number;
 }
+
+// 토픽 군집이 안 잡히는(전부 노이즈) 식당의 폴백 — 관점별 긍/부/중립 집계.
+const AspectSummary = ({
+  aspects,
+  total,
+}: {
+  aspects: ReviewClusterAspectSummaryType[];
+  total: number;
+}) => (
+  <section className="space-y-3 border-t pt-4">
+    <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+      <MessageSquare className="size-4" />
+      리뷰 관점별 평
+      <span className="text-xs font-normal text-muted-foreground">
+        (리뷰 {total.toLocaleString()}건 · 관점별 긍정/부정)
+      </span>
+    </h3>
+    <ul className="space-y-2">
+      {aspects.map((a) => {
+        const sum = a.pos + a.neg + a.neu || 1;
+        return (
+          <li key={a.aspect}>
+            <div className="mb-1 flex items-center justify-between text-sm">
+              <span className="font-medium">{a.aspect}</span>
+              <span className="flex gap-2 text-[11px] tabular-nums text-muted-foreground">
+                {a.pos > 0 && <span className="text-emerald-600 dark:text-emerald-400">👍 {a.pos}</span>}
+                {a.neg > 0 && <span className="text-rose-600 dark:text-rose-400">👎 {a.neg}</span>}
+                {a.neu > 0 && <span>· {a.neu}</span>}
+              </span>
+            </div>
+            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="bg-emerald-500" style={{ width: `${(a.pos / sum) * 100}%` }} />
+              <div className="bg-zinc-400" style={{ width: `${(a.neu / sum) * 100}%` }} />
+              <div className="bg-rose-500" style={{ width: `${(a.neg / sum) * 100}%` }} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+    <p className="text-[11px] text-muted-foreground">
+      이 식당은 뚜렷한 주제 묶음이 형성되지 않아 관점별 집계로 보여드려요.
+    </p>
+  </section>
+);
 
 // 군집 tone → 색/한글 라벨. positive/negative/mixed/neutral.
 const TONE: Record<ClusterToneType, { dot: string; label: string; text: string }> = {
@@ -17,8 +66,11 @@ const TONE: Record<ClusterToneType, { dot: string; label: string; text: string }
 
 // 리뷰 주제 군집 — 비슷한 문맥 리뷰를 묶어 라벨·카운트·대표리뷰로 보여준다.
 // 막대 너비 = 군집 크기 / 최대 군집(상대 비중 직관). 배치 계산 결과를 읽기만.
-export const ClusterTopics = ({ clusters, total, clustered }: Props) => {
-  if (clusters.length === 0) return null;
+export const ClusterTopics = ({ clusters, aspectSummary, total, clustered }: Props) => {
+  // 토픽 군집이 없으면 관점별 집계 폴백(그것도 없으면 미표시).
+  if (clusters.length === 0) {
+    return aspectSummary.length > 0 ? <AspectSummary aspects={aspectSummary} total={total} /> : null;
+  }
   const max = Math.max(...clusters.map((c) => c.size));
 
   return (

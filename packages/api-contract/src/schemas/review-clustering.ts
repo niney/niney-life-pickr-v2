@@ -32,7 +32,16 @@ export const ReviewClusterItem = z.object({
 });
 export type ReviewClusterItemType = z.infer<typeof ReviewClusterItem>;
 
-// 공개 조회 결과(placeId 기반, 인증 없음). 군집 없으면 ready=false.
+// 관점별 집계 — 토픽 군집이 안 잡히는(전부 노이즈) 식당의 폴백. aspectsJson 집계.
+export const ReviewClusterAspectSummary = z.object({
+  aspect: z.string(), // 맛/서비스/웨이팅 …
+  pos: z.number().int().nonnegative(),
+  neg: z.number().int().nonnegative(),
+  neu: z.number().int().nonnegative(),
+});
+export type ReviewClusterAspectSummaryType = z.infer<typeof ReviewClusterAspectSummary>;
+
+// 공개 조회 결과(placeId 기반, 인증 없음). 군집도 관점집계도 없으면 ready=false.
 export const ReviewClustersResult = z.object({
   ready: z.boolean(),
   total: z.number().int().nonnegative(), // 군집 대상 리뷰 수(분류+노이즈)
@@ -41,6 +50,8 @@ export const ReviewClustersResult = z.object({
   version: z.number().int().nonnegative(),
   clusteredAt: z.string().nullable(), // ISO 8601
   clusters: z.array(ReviewClusterItem),
+  // 토픽 군집이 비었을 때(전부 노이즈) 폴백 — 관점별 긍/부/중립 집계. 군집 있으면 빈 배열.
+  aspectSummary: z.array(ReviewClusterAspectSummary),
 });
 export type ReviewClustersResultType = z.infer<typeof ReviewClustersResult>;
 

@@ -78,6 +78,7 @@ export const InsightsTab = ({
         <View style={[styles.section, { borderTopColor: theme.colors.border }]}>
           <ClusterTopics
             clusters={clusters.data.clusters}
+            aspectSummary={clusters.data.aspectSummary}
             total={clusters.data.total}
             clustered={clusters.data.clustered}
           />

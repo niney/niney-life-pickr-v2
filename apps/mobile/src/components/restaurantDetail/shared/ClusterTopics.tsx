@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
-import type { ClusterToneType, ReviewClusterItemType } from '@repo/api-contract';
+import type {
+  ClusterToneType,
+  ReviewClusterAspectSummaryType,
+  ReviewClusterItemType,
+} from '@repo/api-contract';
 import { SENTIMENT_COLORS } from '../colors';
 
 interface Props {
   clusters: ReviewClusterItemType[];
+  aspectSummary: ReviewClusterAspectSummaryType[];
   total: number;
   clustered: number;
 }
@@ -82,9 +87,13 @@ const ClusterRow = ({ c, max }: { c: ReviewClusterItemType; max: number }) => {
 };
 
 // 리뷰 주제 군집 — 비슷한 문맥 리뷰를 묶어 라벨·카운트·대표리뷰로. 배치 결과 읽기 전용.
-export const ClusterTopics = ({ clusters, total, clustered }: Props) => {
+export const ClusterTopics = ({ clusters, aspectSummary, total, clustered }: Props) => {
   const theme = useTheme();
-  if (clusters.length === 0) return null;
+  if (clusters.length === 0) {
+    return aspectSummary.length > 0 ? (
+      <AspectSummary aspects={aspectSummary} total={total} />
+    ) : null;
+  }
   const max = Math.max(...clusters.map((c) => c.size));
   return (
     <View style={{ gap: 10 }}>
@@ -97,6 +106,57 @@ export const ClusterTopics = ({ clusters, total, clustered }: Props) => {
       {clusters.map((c) => (
         <ClusterRow key={c.id} c={c} max={max} />
       ))}
+    </View>
+  );
+};
+
+// 토픽 군집이 안 잡히는(전부 노이즈) 식당의 폴백 — 관점별 긍/부/중립 집계.
+const AspectSummary = ({
+  aspects,
+  total,
+}: {
+  aspects: ReviewClusterAspectSummaryType[];
+  total: number;
+}) => {
+  const theme = useTheme();
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={styles.h3Row}>
+        <Text style={[styles.h3, { color: theme.colors.text }]}>리뷰 관점별 평</Text>
+        <Text style={[styles.h3Sub, { color: theme.colors.textMuted }]}>
+          (리뷰 {total.toLocaleString()}건 · 긍정/부정)
+        </Text>
+      </View>
+      {aspects.map((a) => {
+        const sum = a.pos + a.neg + a.neu || 1;
+        return (
+          <View key={a.aspect} style={{ gap: 4 }}>
+            <View style={styles.aspRow}>
+              <Text style={[styles.aspName, { color: theme.colors.text }]}>{a.aspect}</Text>
+              <View style={styles.aspStats}>
+                {a.pos > 0 && (
+                  <Text style={[styles.aspStat, { color: SENTIMENT_COLORS.positive }]}>👍 {a.pos}</Text>
+                )}
+                {a.neg > 0 && (
+                  <Text style={[styles.aspStat, { color: SENTIMENT_COLORS.negative }]}>👎 {a.neg}</Text>
+                )}
+                {a.neu > 0 && (
+                  <Text style={[styles.aspStat, { color: theme.colors.textMuted }]}>· {a.neu}</Text>
+                )}
+              </View>
+            </View>
+            <View style={[styles.bar, { backgroundColor: theme.colors.surfaceAlt }]}>
+              {a.pos > 0 && <View style={{ flex: a.pos, backgroundColor: SENTIMENT_COLORS.positive }} />}
+              {a.neu > 0 && <View style={{ flex: a.neu, backgroundColor: SENTIMENT_COLORS.neutral }} />}
+              {a.neg > 0 && <View style={{ flex: a.neg, backgroundColor: SENTIMENT_COLORS.negative }} />}
+              {sum === 0 && <View style={{ flex: 1 }} />}
+            </View>
+          </View>
+        );
+      })}
+      <Text style={[styles.fine, { color: theme.colors.textMuted }]}>
+        뚜렷한 주제 묶음이 형성되지 않아 관점별 집계로 보여드려요.
+      </Text>
     </View>
   );
 };
@@ -119,4 +179,9 @@ const styles = StyleSheet.create({
   rep: { borderWidth: 1, borderRadius: 8, padding: 9, gap: 3 },
   repRating: { fontSize: 11, fontWeight: '600' },
   repBody: { fontSize: 12, lineHeight: 18 },
+  aspRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  aspName: { fontSize: 13, fontWeight: '600' },
+  aspStats: { flexDirection: 'row', gap: 8 },
+  aspStat: { fontSize: 11, fontVariant: ['tabular-nums'] },
+  fine: { fontSize: 11, lineHeight: 16 },
 });
