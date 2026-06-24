@@ -11,6 +11,11 @@ import type {
   ReviewClustersResultType,
 } from '@repo/api-contract';
 import type { AiConfigService } from '../ai/ai.config.service.js';
+import {
+  listPublicPlaces,
+  resolveCanonicalMembersByPlaceId,
+  resolveCanonicalMembersByRestaurantId,
+} from '../restaurant/canonical-members.js';
 import { isJunk } from '../review-search/retrieval.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,7 +28,7 @@ import { isJunk } from '../review-search/retrieval.js';
 // 공개 API 는 저장 결과 읽기 전용(질의 비용 0).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CLUSTERING_VERSION = 3; // ↑시 재계산. v2:극성주입 v3:corpusSize(자동 게이트)
+const CLUSTERING_VERSION = 4; // ↑시 재계산. v2:극성주입 v3:corpusSize(자동 게이트) v4:canonical 통합 코퍼스
 const MIN_REVIEWS = 30; // 이보다 적으면 군집화 의미 없음 → 스킵.
 // 자동 군집화(요약 종료 훅) on/off. Python 준비 전 코드만 배포하거나 churn/비용 제어용.
 const AUTO_ENABLED = (process.env.CLUSTER_AUTO_ENABLED ?? 'true') !== 'false';
@@ -85,10 +90,11 @@ export class ReviewClusteringService {
     private readonly aiConfig: AiConfigService,
   ) {}
 
-  // 식당의 검색가능(임베딩 있는) 리뷰를 코퍼스로 로드. junk·중복 제외.
-  private async loadDocs(restaurantId: string): Promise<Doc[]> {
+  // 가게(canonical) 의 공개 멤버 행 전체에서 검색가능(임베딩 있는) 리뷰를 코퍼스로
+  // 로드 — 공개 리뷰 탭과 동일한 통합 코퍼스. junk·중복(본문) 제외.
+  private async loadDocs(restaurantIds: string[]): Promise<Doc[]> {
     const rows = await this.prisma.reviewSummary.findMany({
-      where: { review: { restaurantId }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: restaurantIds } }, embeddingJson: { not: null } },
       select: {
         reviewId: true,
         embeddingJson: true,
@@ -279,7 +285,12 @@ export class ReviewClusteringService {
       ms: Date.now() - startedAt,
     });
 
-    const docs = await this.loadDocs(restaurantId);
+    // 그 가게(canonical)의 공개 멤버 행 전체를 통합 코퍼스로 — 대표 키(primary)로
+    // 영속한다(getPublicClusters/상태가 같은 키로 읽음).
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    const memberIds = members?.memberIds ?? [restaurantId];
+    const primaryId = members?.primaryId ?? restaurantId;
+    const docs = await this.loadDocs(memberIds);
     if (docs.length < MIN_REVIEWS)
       return skip(`리뷰 부족 또는 enrich 미완료 (검색가능 ${docs.length}건 < ${MIN_REVIEWS})`, docs.length);
 
@@ -297,8 +308,8 @@ export class ReviewClusteringService {
     const bodyById = new Map(docs.map((d) => [d.reviewId, d.body]));
     const labels = await this.labelClusters(computed.clusters, bodyById);
     // 자동 재군집 게이트 기준값 — 검색가능(raw, 게이트 카운트와 동일 척도) 리뷰 수.
-    const corpusSize = await this.countEnriched(restaurantId);
-    await this.persist(restaurantId, computed.clusters, labels, docById, corpusSize);
+    const corpusSize = await this.countEnriched(memberIds);
+    await this.persist(primaryId, computed.clusters, labels, docById, corpusSize);
 
     return {
       clusters: computed.clusters.length,
@@ -314,22 +325,23 @@ export class ReviewClusteringService {
   // 적용 — 첫 군집이거나 리뷰가 충분히 늘었을 때만(어드민 수동은 게이트 없이 강제).
   async ensureClusteredByPlaceId(placeId: string): Promise<void> {
     if (!AUTO_ENABLED) return;
-    const r = await this.prisma.restaurant.findUnique({ where: { placeId }, select: { id: true } });
-    if (!r) return;
-    if (this.clustering.has(r.id)) return; // 이미 진행 중
-    if (!(await this.shouldRecluster(r.id))) return; // 최신 — 스킵(churn·비용 방지)
-    await this.runTracked(r.id);
+    const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
+    if (!members) return;
+    const { primaryId, memberIds } = members;
+    if (this.clustering.has(primaryId)) return; // 이미 진행 중
+    if (!(await this.shouldRecluster(primaryId, memberIds))) return; // 최신 — 스킵(churn·비용 방지)
+    await this.runTracked(primaryId);
   }
 
   // 자동 재군집 게이트: 현재 버전 군집이 없으면(첫 군집·버전↑) 무조건, 있으면 마지막
   // 군집 이후 검색가능 리뷰가 max(GATE_MIN, base×GATE_PCT) 이상 늘었을 때만 true.
-  private async shouldRecluster(restaurantId: string): Promise<boolean> {
+  private async shouldRecluster(restaurantId: string, memberIds: string[]): Promise<boolean> {
     const existing = await this.prisma.reviewCluster.findFirst({
       where: { restaurantId, clusterVersion: CLUSTERING_VERSION },
       select: { corpusSize: true },
     });
     if (!existing) return true;
-    const current = await this.countEnriched(restaurantId);
+    const current = await this.countEnriched(memberIds);
     const base = existing.corpusSize || 0;
     return current - base >= Math.max(GATE_MIN, base * GATE_PCT);
   }
@@ -343,17 +355,21 @@ export class ReviewClusteringService {
     return { started: !already, inProgress: true };
   }
 
-  // 군집화 가능(enrich≥MIN_REVIEWS)하나 현재 버전 군집이 없는 식당 일괄 백그라운드(순차).
+  // 군집화 가능(통합 enrich≥MIN_REVIEWS)하나 현재 버전 군집이 없는 가게 일괄(순차).
   async clusterAllEligibleInBackground(): Promise<ReviewClusterPendingResultType> {
-    const enrichedBy = await this.countEnrichedByRestaurant();
+    const places = await listPublicPlaces(this.prisma);
+    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
     const done = await this.prisma.reviewCluster.groupBy({
       by: ['restaurantId'],
       where: { clusterVersion: CLUSTERING_VERSION },
     });
-    const doneSet = new Set(done.map((d) => d.restaurantId));
-    const pending = [...enrichedBy.entries()]
-      .filter(([id, n]) => n >= MIN_REVIEWS && !doneSet.has(id))
-      .map(([id]) => id);
+    const doneSet = new Set(done.map((d) => d.restaurantId)); // primary 키
+    const pending = places
+      .filter((p) => {
+        const enriched = p.memberIds.reduce((s, id) => s + (enrichedBy.get(id) ?? 0), 0);
+        return enriched >= MIN_REVIEWS && !doneSet.has(p.primaryId);
+      })
+      .map((p) => p.primaryId);
     if (pending.length === 0) return { queued: 0 };
     void (async () => {
       for (const id of pending) await this.runTracked(id); // 순차 — runTracked 가 중복 가드
@@ -363,24 +379,25 @@ export class ReviewClusteringService {
 
   // 진행상태 Set 에 등록하고 실행. 중복 시 no-op. (어드민 수동·일괄·자동 공용 가드.)
   private async runTracked(restaurantId: string): Promise<void> {
-    if (this.clustering.has(restaurantId)) return;
-    this.clustering.add(restaurantId);
+    // 진행 가드·영속은 대표 키(primary)로 — 부수 행으로 트리거돼도 같은 가게.
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    const key = members?.primaryId ?? restaurantId;
+    if (this.clustering.has(key)) return;
+    this.clustering.add(key);
     try {
-      await this.runForRestaurant(restaurantId);
+      await this.runForRestaurant(key);
     } catch {
       /* 실패는 상태(군집됨 여부)로 드러남 */
     } finally {
-      this.clustering.delete(restaurantId);
+      this.clustering.delete(key);
     }
   }
 
-  // 식당별 군집 상태(검색가능 수·군집됨·진행중). enrichStatus 미러링.
+  // 가게별 군집 상태(검색가능 수·군집됨·진행중). canonical 단위 집계
+  // (listPublicPlaces) — enrichStatus 와 동일 척도. 군집은 primary 키로 영속.
   async clusterStatus(query: ReviewClusterStatusQueryType): Promise<ReviewClusterStatusListType> {
-    const restaurants = await this.prisma.restaurant.findMany({
-      where: { visitorReviews: { some: {} } },
-      select: { id: true, placeId: true, name: true, _count: { select: { visitorReviews: true } } },
-    });
-    const enrichedBy = await this.countEnrichedByRestaurant(restaurants.map((r) => r.id));
+    const places = await listPublicPlaces(this.prisma);
+    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
     const clusterRows = await this.prisma.reviewCluster.groupBy({
       by: ['restaurantId'],
       where: { clusterVersion: CLUSTERING_VERSION },
@@ -391,20 +408,20 @@ export class ReviewClusteringService {
       clusterRows.map((c) => [c.restaurantId, { count: c._count._all, at: c._max.createdAt }]),
     );
 
-    let rows = restaurants.map((r) => {
-      const enriched = enrichedBy.get(r.id) ?? 0;
-      const cl = clusterBy.get(r.id);
+    let rows = places.map((p) => {
+      const enriched = p.memberIds.reduce((s, id) => s + (enrichedBy.get(id) ?? 0), 0);
+      const cl = clusterBy.get(p.primaryId);
       return {
-        restaurantId: r.id,
-        placeId: r.placeId,
-        name: r.name,
-        totalReviews: r._count.visitorReviews,
+        restaurantId: p.primaryId,
+        placeId: p.placeId,
+        name: p.name,
+        totalReviews: p.totalReviews,
         enrichedReviews: enriched,
         eligible: enriched >= MIN_REVIEWS,
         clustered: !!cl,
         clusterCount: cl?.count ?? 0,
         clusteredAt: cl?.at ? cl.at.toISOString() : null,
-        inProgress: this.clustering.has(r.id),
+        inProgress: this.clustering.has(p.primaryId),
       };
     });
     const eligibleCount = rows.filter((r) => r.eligible).length;
@@ -431,10 +448,10 @@ export class ReviewClusteringService {
     };
   }
 
-  // restaurantId → 검색가능(임베딩) 리뷰 수(단건).
-  private countEnriched(restaurantId: string): Promise<number> {
+  // 멤버 행 전체 → 검색가능(임베딩) 리뷰 수(통합 코퍼스 크기).
+  private countEnriched(restaurantIds: string[]): Promise<number> {
     return this.prisma.reviewSummary.count({
-      where: { review: { restaurantId }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: restaurantIds } }, embeddingJson: { not: null } },
     });
   }
 
@@ -463,21 +480,18 @@ export class ReviewClusteringService {
       clusteredAt: null,
       clusters: [],
     };
-    const r = await this.prisma.restaurant.findUnique({
-      where: { placeId },
-      select: { id: true },
-    });
-    if (!r) return empty;
+    const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
+    if (!members) return empty;
 
     const rows = await this.prisma.reviewCluster.findMany({
-      where: { restaurantId: r.id },
+      where: { restaurantId: members.primaryId },
       orderBy: { ordinal: 'asc' },
     });
     if (rows.length === 0) return empty;
 
-    // 검색가능 리뷰 총수(노이즈 산출용).
+    // 검색가능 리뷰 총수(노이즈 산출용) — 통합 멤버 기준.
     const total = await this.prisma.reviewSummary.count({
-      where: { review: { restaurantId: r.id }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: members.memberIds } }, embeddingJson: { not: null } },
     });
 
     // 대표 리뷰 body 일괄 조회.

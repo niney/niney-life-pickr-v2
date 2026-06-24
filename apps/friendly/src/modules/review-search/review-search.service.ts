@@ -3,6 +3,11 @@ import { LRUCache } from 'lru-cache';
 import type { ReviewEnrichStatusListType, ReviewEnrichStatusQueryType } from '@repo/api-contract';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import {
+  listPublicPlaces,
+  resolveCanonicalMembersByPlaceId,
+  resolveCanonicalMembersByRestaurantId,
+} from '../restaurant/canonical-members.js';
+import {
   ASPECTS,
   Bm25,
   RRF_K,
@@ -101,9 +106,14 @@ export class ReviewSearchService {
     onProgress?: (processed: number, total: number) => void,
   ): Promise<EnrichResult> {
     const start = Date.now();
+    // 그 가게(canonical)의 공개 멤버 행 전체를 enrich — 공개 리뷰 탭이 보여주는
+    // 통합 코퍼스와 일치(다이닝코드/테이블링 리뷰도 임베딩 생성).
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    const ids = members?.memberIds ?? [restaurantId];
+    const key = members?.primaryId ?? restaurantId;
     const pending = await this.prisma.reviewSummary.findMany({
       where: {
-        review: { restaurantId },
+        review: { restaurantId: { in: ids } },
         OR: [{ embeddingJson: null }, { enrichVersion: null }, { enrichVersion: { lt: ENRICH_VERSION } }],
       },
       select: { id: true, review: { select: { body: true } } },
@@ -144,9 +154,9 @@ export class ReviewSearchService {
       await Promise.all(batches.slice(i, i + ENRICH_CONCURRENCY).map((b) => runBatch(b)));
     }
 
-    this.corpusCache.delete(restaurantId); // 무효화
+    this.corpusCache.delete(key); // 무효화(대표 키)
     const total = await this.prisma.reviewSummary.count({
-      where: { review: { restaurantId }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: ids } }, embeddingJson: { not: null } },
     });
     return { enriched, total, ms: Date.now() - start };
   }
@@ -154,29 +164,27 @@ export class ReviewSearchService {
   // placeId 기반 enrich — 요약 종료 훅(post-summary)에서 사용. naver placeId 로 식당 해석.
   // 식당 없음(비-naver 등) 이면 no-op. 추적(runTracked)으로 상태 뷰·SSE 에 자동 노출.
   async ensureEnrichedByPlaceId(placeId: string): Promise<void> {
-    const r = await this.prisma.restaurant.findUnique({ where: { placeId }, select: { id: true } });
-    if (!r) return;
-    await this.runTracked(r.id);
+    const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
+    if (!members) return;
+    await this.runTracked(members.primaryId);
   }
 
   // ── enrich 상태 관리 (어드민) ───────────────────────────────────────────────
 
-  // 식당별 enrich 상태(전체/검색가능 건수·진행중). "식당별 정규화 상태" 미러링.
+  // 가게별 enrich 상태(전체/검색가능 건수·진행중). canonical 단위 집계
+  // (listPublicPlaces) — 부수 행 중복 없이 통합 코퍼스 기준.
   async enrichStatus(query: ReviewEnrichStatusQueryType): Promise<ReviewEnrichStatusListType> {
-    const restaurants = await this.prisma.restaurant.findMany({
-      where: { visitorReviews: { some: {} } },
-      select: { id: true, placeId: true, name: true, _count: { select: { visitorReviews: true } } },
-    });
-    const enrichedBy = await this.countEnrichedByRestaurant(restaurants.map((r) => r.id));
+    const places = await listPublicPlaces(this.prisma);
+    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
 
-    let rows = restaurants.map((r) => {
-      const enriched = enrichedBy.get(r.id) ?? 0;
-      const prog = this.enriching.get(r.id);
+    let rows = places.map((p) => {
+      const enriched = p.memberIds.reduce((s, id) => s + (enrichedBy.get(id) ?? 0), 0);
+      const prog = this.enriching.get(p.primaryId);
       return {
-        restaurantId: r.id,
-        placeId: r.placeId,
-        name: r.name,
-        totalReviews: r._count.visitorReviews,
+        restaurantId: p.primaryId,
+        placeId: p.placeId,
+        name: p.name,
+        totalReviews: p.totalReviews,
         enrichedReviews: enriched,
         ready: enriched > 0,
         inProgress: prog !== undefined,
@@ -216,14 +224,14 @@ export class ReviewSearchService {
     return { started: !already, inProgress: true };
   }
 
-  // 검색가능 0 인 식당 전체를 백그라운드에서 순차 enrich(Ollama 과부하 방지). queued 수 반환.
+  // 검색가능 0 인 가게 전체를 백그라운드에서 순차 enrich(Ollama 과부하 방지). queued 수 반환.
+  // canonical 단위 — 통합 멤버 enrich 수가 0 인 가게의 primary 를 큐잉.
   async enrichAllPendingInBackground(): Promise<{ queued: number }> {
-    const enrichedBy = await this.countEnrichedByRestaurant();
-    const restaurants = await this.prisma.restaurant.findMany({
-      where: { visitorReviews: { some: {} } },
-      select: { id: true },
-    });
-    const pending = restaurants.map((r) => r.id).filter((id) => (enrichedBy.get(id) ?? 0) === 0);
+    const places = await listPublicPlaces(this.prisma);
+    const enrichedBy = await this.countEnrichedByRestaurant(places.flatMap((p) => p.memberIds));
+    const pending = places
+      .filter((p) => p.memberIds.reduce((s, id) => s + (enrichedBy.get(id) ?? 0), 0) === 0)
+      .map((p) => p.primaryId);
     if (pending.length === 0) return { queued: 0 };
     void (async () => {
       for (const id of pending) await this.runTracked(id); // 순차 — runTracked 가 중복 가드
@@ -233,21 +241,25 @@ export class ReviewSearchService {
 
   // enrich 를 진행상태(Map)에 등록하고 배치마다 진행률을 emit(SSE)하며 실행. 중복 시 no-op.
   private async runTracked(restaurantId: string): Promise<void> {
-    if (this.enriching.has(restaurantId)) return;
-    this.enriching.set(restaurantId, { processed: 0, total: 0 });
-    this.emitEnrich(restaurantId, 0, 0, false);
+    // 진행 상태·SSE 는 대표 키(primary)로 — 어드민 목록이 가게(canonical) 단위라
+    // 부수 행으로 트리거돼도 같은 가게로 합쳐 추적된다.
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    const key = members?.primaryId ?? restaurantId;
+    if (this.enriching.has(key)) return;
+    this.enriching.set(key, { processed: 0, total: 0 });
+    this.emitEnrich(key, 0, 0, false);
     let last = { processed: 0, total: 0 };
     try {
-      await this.ensureEnriched(restaurantId, (processed, total) => {
+      await this.ensureEnriched(key, (processed, total) => {
         last = { processed, total };
-        this.enriching.set(restaurantId, last);
-        this.emitEnrich(restaurantId, processed, total, false);
+        this.enriching.set(key, last);
+        this.emitEnrich(key, processed, total, false);
       });
     } catch {
       /* 실패는 상태의 검색가능 수로 드러남 */
     } finally {
-      this.enriching.delete(restaurantId);
-      this.emitEnrich(restaurantId, last.processed, last.total, true);
+      this.enriching.delete(key);
+      this.emitEnrich(key, last.processed, last.total, true);
     }
   }
 
@@ -451,10 +463,10 @@ export class ReviewSearchService {
   // 공개 상세는 placeId 로 식별. enrich 된 리뷰 수만 센다(LLM 호출 없음).
   // 식당 없음 → null(라우트에서 404). enrich 0건 → ready:false (질문 무의미).
   async qaReady(placeId: string): Promise<{ ready: boolean; count: number } | null> {
-    const r = await this.prisma.restaurant.findUnique({ where: { placeId }, select: { id: true } });
-    if (!r) return null;
+    const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
+    if (!members) return null;
     const count = await this.prisma.reviewSummary.count({
-      where: { review: { restaurantId: r.id }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: members.memberIds } }, embeddingJson: { not: null } },
     });
     return { ready: count > 0, count };
   }
@@ -462,10 +474,10 @@ export class ReviewSearchService {
   // 공개 질문 — placeId → 식당 해석 후 ask. 자동 enrich 안 함(비용). 식당 없음 → null.
   // enrich 안 된 식당은 graceful 'none' 으로 안내(에러 대신).
   async askByPlaceId(placeId: string, query: string, opts?: { verify?: boolean }): Promise<AskResult | null> {
-    const r = await this.prisma.restaurant.findUnique({ where: { placeId }, select: { id: true } });
-    if (!r) return null;
+    const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
+    if (!members) return null;
     const ready = await this.prisma.reviewSummary.count({
-      where: { review: { restaurantId: r.id }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: members.memberIds } }, embeddingJson: { not: null } },
     });
     if (ready === 0) {
       return {
@@ -476,18 +488,24 @@ export class ReviewSearchService {
         verification: null,
       };
     }
-    return this.ask(r.id, query, opts);
+    return this.ask(members.primaryId, query, opts);
   }
 
   // ── 내부: 코퍼스 로드 / LLM ────────────────────────────────────────────────
 
   // DB enrich 결과를 로드해 코퍼스+BM25 구축(캐시). junk 제외 + 본문 dedup.
+  // 단일 행이 아니라 그 가게(canonical)의 공개 멤버 행 전체에서 로드 — 공개 리뷰
+  // 탭이 보여주는 통합 코퍼스와 동일하게(다이닝코드/테이블링 리뷰 포함). 캐시·
+  // 대표 키는 primaryId(placeId 보유 네이버 행).
   private async loadCorpus(restaurantId: string): Promise<{ items: CorpusItem[]; bm25: Bm25 }> {
-    const cached = this.corpusCache.get(restaurantId);
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    const ids = members?.memberIds ?? [restaurantId];
+    const key = members?.primaryId ?? restaurantId;
+    const cached = this.corpusCache.get(key);
     if (cached) return cached;
 
     const rows = await this.prisma.reviewSummary.findMany({
-      where: { review: { restaurantId }, embeddingJson: { not: null } },
+      where: { review: { restaurantId: { in: ids } }, embeddingJson: { not: null } },
       select: {
         reviewId: true,
         embeddingJson: true,
@@ -509,7 +527,7 @@ export class ReviewSearchService {
     }
     if (items.length === 0) throw new Error('먼저 리뷰 enrich 를 실행하세요 (ensureEnriched)');
     const entry = { items, bm25: new Bm25(items.map((c) => ({ id: c.reviewId, text: c.body }))) };
-    this.corpusCache.set(restaurantId, entry);
+    this.corpusCache.set(key, entry);
     return entry;
   }
 
