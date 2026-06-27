@@ -7,11 +7,13 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-extra';
-import type { Browser, BrowserContext } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import type {
   BlogReviewType,
   CrawlStageType,
+  MenuGroupItemType,
+  MenuGroupType,
   MenuItemType,
   NaverPlaceDataType,
   RatingDistributionBucketType,
@@ -62,10 +64,7 @@ const throwIfAborted = (signal?: AbortSignal): void => {
 };
 
 const DEBUG_CAPTURE = process.env.CRAWL_DEBUG_CAPTURE === '1';
-const DEBUG_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../__debug__',
-);
+const DEBUG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../__debug__');
 
 // Debug toggles for one-off experiments. Off by default.
 const HEADLESS = process.env.CRAWL_HEADLESS !== '0';
@@ -87,16 +86,12 @@ const VISITOR_PAGE_DELAY_JITTER_MS = Number(
 );
 const computeVisitorPageDelay = (): number => {
   const jitter =
-    VISITOR_PAGE_DELAY_JITTER_MS > 0
-      ? Math.floor(Math.random() * VISITOR_PAGE_DELAY_JITTER_MS)
-      : 0;
+    VISITOR_PAGE_DELAY_JITTER_MS > 0 ? Math.floor(Math.random() * VISITOR_PAGE_DELAY_JITTER_MS) : 0;
   return VISITOR_PAGE_DELAY_MS + jitter;
 };
 // In headed mode, pause the visitor subpage before closing so a human can
 // visually verify the "더보기" clicks landed. Headless mode never holds.
-const VISITOR_HOLD_MS = HEADLESS
-  ? 0
-  : Number(process.env.CRAWL_HOLD_MS ?? '5000');
+const VISITOR_HOLD_MS = HEADLESS ? 0 : Number(process.env.CRAWL_HOLD_MS ?? '5000');
 
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -145,13 +140,9 @@ export class PlaceParseError extends Error {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
-const isRef = (v: unknown): v is { __ref: string } =>
-  isObject(v) && typeof v['__ref'] === 'string';
+const isRef = (v: unknown): v is { __ref: string } => isObject(v) && typeof v['__ref'] === 'string';
 
-const deref = (
-  state: Record<string, unknown> | null,
-  v: unknown,
-): unknown => {
+const deref = (state: Record<string, unknown> | null, v: unknown): unknown => {
   if (state && isRef(v)) return state[v.__ref] ?? null;
   return v;
 };
@@ -159,10 +150,7 @@ const deref = (
 // Apollo cache encodes field arguments into the storage key (e.g.
 // `images({"source":["starbucks"]})`). We don't know the exact arg shape so we
 // match by prefix.
-const findFieldByPrefix = (
-  node: Record<string, unknown>,
-  prefix: string,
-): unknown => {
+const findFieldByPrefix = (node: Record<string, unknown>, prefix: string): unknown => {
   for (const key of Object.keys(node)) {
     if (key === prefix || key.startsWith(`${prefix}(`)) return node[key];
   }
@@ -228,12 +216,7 @@ const normalizeImageUrl = (raw: string): string => {
 // pollute menu/visitor-review image lists. Match only the *review entity*
 // typenames — NOT subtypes like VisitorReviewMedia/Author/Stats which
 // legitimately carry image refs we want to harvest.
-const REVIEW_TYPENAMES = new Set([
-  'VisitorReview',
-  'BlogReview',
-  'FsasReview',
-  'BlogPost',
-]);
+const REVIEW_TYPENAMES = new Set(['VisitorReview', 'BlogReview', 'FsasReview', 'BlogPost']);
 const isReviewTypename = (resolved: Record<string, unknown>): boolean => {
   const tn = resolved['__typename'];
   return typeof tn === 'string' && REVIEW_TYPENAMES.has(tn);
@@ -251,7 +234,10 @@ const collectImagesFromContainer = (
   if (typeof resolved === 'string') {
     if (/^https?:\/\//.test(resolved)) {
       const u = normalizeImageUrl(resolved);
-      if (!seen.has(u)) { seen.add(u); out.push(u); }
+      if (!seen.has(u)) {
+        seen.add(u);
+        out.push(u);
+      }
     }
     return;
   }
@@ -285,12 +271,7 @@ const collectImagesFromContainer = (
   }
 
   for (const value of Object.values(resolved)) {
-    if (
-      typeof value === 'string' ||
-      Array.isArray(value) ||
-      isRef(value) ||
-      isObject(value)
-    ) {
+    if (typeof value === 'string' || Array.isArray(value) || isRef(value) || isObject(value)) {
       collectImagesFromContainer(state, value, out, seen);
     }
   }
@@ -345,7 +326,8 @@ const extractImageUrls = (
             pushImageUrl(item, out, seen);
           } else {
             const obj = deref(state, item);
-            if (isObject(obj)) pushImageUrl(obj['origin'] ?? obj['url'] ?? obj['imageUrl'], out, seen);
+            if (isObject(obj))
+              pushImageUrl(obj['origin'] ?? obj['url'] ?? obj['imageUrl'], out, seen);
           }
         }
       }
@@ -359,8 +341,7 @@ const formatBusinessHourEntry = (
   state: Record<string, unknown> | null,
   entry: Record<string, unknown>,
 ): string | null => {
-  const day =
-    pickString(entry, 'day', 'dayOfWeek', 'businessDay', 'date', 'displayDay') ?? '';
+  const day = pickString(entry, 'day', 'dayOfWeek', 'businessDay', 'date', 'displayDay') ?? '';
   const isClosed =
     entry['isDayOff'] === true ||
     entry['isClosed'] === true ||
@@ -474,10 +455,7 @@ const extractBusinessHours = (
   return null;
 };
 
-const collectMenuImageUrls = (
-  state: Record<string, unknown> | null,
-  raw: unknown,
-): string[] => {
+const collectMenuImageUrls = (state: Record<string, unknown> | null, raw: unknown): string[] => {
   const out: string[] = [];
   const seen = new Set<string>();
   collectImagesFromContainer(state, raw, out, seen);
@@ -548,6 +526,108 @@ const extractMenus = (
 
   return out.slice(0, 100);
 };
+
+const MENU_GROUP_SOURCE = 'naver-baemin';
+
+const buildMenuGroupItem = (
+  state: Record<string, unknown> | null,
+  raw: unknown,
+  sortOrder: number,
+): MenuGroupItemType | null => {
+  const obj = deref(state, raw);
+  if (!isObject(obj)) return null;
+  const name = pickString(obj, 'name', 'menuName');
+  if (!name) return null;
+  const recommend =
+    typeof obj['isRepresentative'] === 'boolean'
+      ? (obj['isRepresentative'] as boolean)
+      : typeof obj['recommend'] === 'boolean'
+        ? (obj['recommend'] as boolean)
+        : typeof obj['isRecommend'] === 'boolean'
+          ? (obj['isRecommend'] as boolean)
+          : null;
+  const imageContainer =
+    obj['images'] ?? obj['imageUrls'] ?? obj['imageUrl'] ?? obj['image'] ?? obj['thumbnail'];
+
+  return {
+    name,
+    price: pickString(obj, 'price', 'priceText', 'menuPrice'),
+    description: pickString(obj, 'description', 'desc'),
+    recommend,
+    imageUrls: collectMenuImageUrls(state, imageContainer),
+    sourceMenuId: pickString(obj, 'id', 'menuId'),
+    sortOrder,
+  };
+};
+
+const extractBaeminMenuGroups = (state: Record<string, unknown> | null): MenuGroupType[] => {
+  if (!state) return [];
+  const groups: MenuGroupType[] = [];
+  const groupKeys = Object.keys(state).filter((key) =>
+    key.startsWith('PlaceDetail_BaeminMenuGroup:'),
+  );
+
+  groupKeys.forEach((key, groupIndex) => {
+    const group = deref(state, state[key]);
+    if (!isObject(group)) return;
+
+    const name = pickString(group, 'name', 'groupName', 'title');
+    if (!name) return;
+
+    const rawMenus = Array.isArray(group['menus']) ? group['menus'] : [];
+    const seen = new Set<string>();
+    const menus = rawMenus.flatMap((raw, menuIndex) => {
+      const item = buildMenuGroupItem(state, raw, menuIndex);
+      if (!item) return [];
+      const keyForItem =
+        item.sourceMenuId ?? `${item.name.replace(/\s+/g, ' ').trim()}|${item.price ?? ''}`;
+      if (seen.has(keyForItem)) return [];
+      seen.add(keyForItem);
+      return [item];
+    });
+    if (menus.length === 0) return;
+
+    groups.push({
+      source: MENU_GROUP_SOURCE,
+      sourceGroupId:
+        pickString(group, 'id', 'groupId') ?? key.replace(/^PlaceDetail_BaeminMenuGroup:/, ''),
+      name,
+      sortOrder: groupIndex,
+      menus,
+    });
+  });
+
+  return groups;
+};
+
+const flattenMenuGroups = (groups: MenuGroupType[]): MenuItemType[] => {
+  const effectiveGroups = groups.some((group) => group.name !== '대표메뉴')
+    ? groups.filter((group) => group.name !== '대표메뉴')
+    : groups;
+  const out: MenuItemType[] = [];
+  const seen = new Set<string>();
+  for (const group of effectiveGroups) {
+    for (const menu of group.menus) {
+      const dedupKey =
+        menu.sourceMenuId ?? `${menu.name.replace(/\s+/g, ' ').trim()}|${menu.price ?? ''}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        name: menu.name,
+        price: menu.price,
+        description: menu.description,
+        recommend: menu.recommend,
+        imageUrls: menu.imageUrls,
+      });
+    }
+  }
+  return out.slice(0, 200);
+};
+
+export const __test_extractBaeminMenuGroups = (state: unknown): MenuGroupType[] =>
+  extractBaeminMenuGroups(isObject(state) ? state : null);
+
+export const __test_flattenMenuGroups = flattenMenuGroups;
 
 const extractReviewStats = (
   state: Record<string, unknown> | null,
@@ -625,7 +705,10 @@ const buildBlogReview = (
   const seenThumbs = new Set<string>();
   const pushThumb = (u: string) => {
     const norm = normalizeImageUrl(u);
-    if (!seenThumbs.has(norm)) { seenThumbs.add(norm); thumbnailUrls.push(norm); }
+    if (!seenThumbs.has(norm)) {
+      seenThumbs.add(norm);
+      thumbnailUrls.push(norm);
+    }
   };
   const thumbList = obj['thumbnailUrlList'];
   if (Array.isArray(thumbList)) {
@@ -636,7 +719,10 @@ const buildBlogReview = (
   const single = pickString(obj, 'thumbnailUrl');
   if (single) {
     const norm = normalizeImageUrl(single);
-    if (!seenThumbs.has(norm)) { seenThumbs.add(norm); thumbnailUrls.unshift(norm); }
+    if (!seenThumbs.has(norm)) {
+      seenThumbs.add(norm);
+      thumbnailUrls.unshift(norm);
+    }
   }
 
   return {
@@ -720,10 +806,8 @@ const collectVisitorReviewVideos = (
     if (!isObject(node)) return;
     if (isReviewTypename(node)) return;
     if (node['type'] === 'video') {
-      const posterUrl =
-        (typeof node['thumbnail'] === 'string' && node['thumbnail']) || null;
-      const videoUrl =
-        (typeof node['trailerUrl'] === 'string' && node['trailerUrl']) || null;
+      const posterUrl = (typeof node['thumbnail'] === 'string' && node['thumbnail']) || null;
+      const videoUrl = (typeof node['trailerUrl'] === 'string' && node['trailerUrl']) || null;
       if (
         posterUrl &&
         videoUrl &&
@@ -787,7 +871,9 @@ const reviewId = (raw: unknown): string | null => {
 // kept as a local copy so the adapter has no dependency on the persistence
 // layer (data flows adapter → service, never the reverse).
 const contentHashOfReview = (review: VisitorReviewType): string =>
-  createHash('sha1').update(`${review.authorName ?? ''} ${review.body}`).digest('hex');
+  createHash('sha1')
+    .update(`${review.authorName ?? ''} ${review.body}`)
+    .digest('hex');
 
 const extractVisitorReviewsFromState = (
   state: Record<string, unknown>,
@@ -852,9 +938,8 @@ const extractVisitorReviewsFromState = (
 // pagination pages live only in wire responses, which this parser walks.
 // Exported for tests. Same shape used by both pagination wire bodies and
 // the after-bodies fixture in __debug__.
-export const __test_parseVisitorReviewsFromCaptured = (
-  captured: unknown[],
-): VisitorReviewType[] => parseVisitorReviewsFromCaptured(captured);
+export const __test_parseVisitorReviewsFromCaptured = (captured: unknown[]): VisitorReviewType[] =>
+  parseVisitorReviewsFromCaptured(captured);
 
 const parseVisitorReviewsFromCaptured = (
   captured: unknown[],
@@ -958,9 +1043,7 @@ const fetchVisitorReviewsViaSubpage = async (
     await page.route('**/*', (route) => {
       const req = route.request();
       const type = req.resourceType();
-      const block = HEADLESS
-        ? SHOULD_BLOCK.has(type)
-        : type === 'media';
+      const block = HEADLESS ? SHOULD_BLOCK.has(type) : type === 'media';
       if (block) return route.abort();
 
       const u = req.url();
@@ -986,7 +1069,11 @@ const fetchVisitorReviewsViaSubpage = async (
     // Intercept any JSON response from Naver place hosts — wider than just
     // /graphql because visitor reviews may come from other paths/methods.
     // Each item carries its url so we can post-filter and diagnose.
-    interface CapturedResponse { url: string; method: string; body: unknown }
+    interface CapturedResponse {
+      url: string;
+      method: string;
+      body: unknown;
+    }
     const captured: CapturedResponse[] = [];
     page.on('response', async (res) => {
       const u = res.url();
@@ -1037,18 +1124,14 @@ const fetchVisitorReviewsViaSubpage = async (
       if (!u.includes(`/restaurant/${placeId}/review/visitor`)) return;
       try {
         const html = await res.text();
-        const m = html.match(
-          /window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\})\s*;[\s\S]*?<\/script>/,
-        );
+        const m = html.match(/window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\})\s*;[\s\S]*?<\/script>/);
         if (!m || !m[1]) return;
         const state = JSON.parse(m[1]);
         if (!isObject(state)) return;
         const initial = extractVisitorReviewsFromState(state, placeId, ssrSeenIds);
         if (initial.length === 0) return;
         // eslint-disable-next-line no-console
-        console.log(
-          `[crawl-debug] visitor SSR initial batch from document: ${initial.length}`,
-        );
+        console.log(`[crawl-debug] visitor SSR initial batch from document: ${initial.length}`);
         hooks?.onVisitorBatch?.(initial);
       } catch {
         // best-effort — swallow and let pagination continue
@@ -1061,9 +1144,7 @@ const fetchVisitorReviewsViaSubpage = async (
     throwIfAborted(hooks?.signal);
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 });
-      await page
-        .waitForLoadState('networkidle', { timeout: 5_000 })
-        .catch(() => undefined);
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
     } catch {
       return [];
     }
@@ -1072,18 +1153,13 @@ const fetchVisitorReviewsViaSubpage = async (
     // Settle the SSR document handler before we start clicking 더보기 — gives
     // the (async) html parse a chance to land its batch first. Bound the wait
     // so a missing/changed HTML shape doesn't stall the pager.
-    await Promise.race([
-      ssrReady,
-      new Promise<void>((r) => setTimeout(r, 1500)),
-    ]);
+    await Promise.race([ssrReady, new Promise<void>((r) => setTimeout(r, 1500))]);
     settleSsr();
 
     const snapshotApolloState = (): Promise<unknown> =>
       page
         .evaluate<unknown>(
-          () =>
-            (globalThis as unknown as { __APOLLO_STATE__?: unknown })
-              .__APOLLO_STATE__ ?? null,
+          () => (globalThis as unknown as { __APOLLO_STATE__?: unknown }).__APOLLO_STATE__ ?? null,
         )
         .catch(() => null);
 
@@ -1206,7 +1282,9 @@ const fetchVisitorReviewsViaSubpage = async (
 
         if (!clicked) {
           // eslint-disable-next-line no-console
-          console.log(`[crawl-debug] visitor pagination: click failed at page ${pages + 1}, stopping`);
+          console.log(
+            `[crawl-debug] visitor pagination: click failed at page ${pages + 1}, stopping`,
+          );
           break;
         }
 
@@ -1245,10 +1323,7 @@ const fetchVisitorReviewsViaSubpage = async (
         // flight — the whole point of the partial-save design.
         if (newResponses > 0 && (hooks?.onVisitorBatch || hooks?.existingReviewKeys)) {
           const newWireBodies = captured.slice(beforeCaptured).map((c) => c.body);
-          const newBatch = parseVisitorReviewsFromCaptured(
-            newWireBodies,
-            pageBatchSeenIds,
-          );
+          const newBatch = parseVisitorReviewsFromCaptured(newWireBodies, pageBatchSeenIds);
           if (newBatch.length > 0) {
             hooks?.onVisitorBatch?.(newBatch);
 
@@ -1360,15 +1435,93 @@ const fetchVisitorReviewsViaSubpage = async (
   }
 };
 
+const clickExpandableMenuButtons = async (page: Page): Promise<void> => {
+  for (let i = 0; i < 10; i += 1) {
+    const loc = page.locator(
+      'button:has-text("펼쳐서 더보기"), a[role="button"]:has-text("펼쳐서 더보기")',
+    );
+    const count = await loc.count().catch(() => 0);
+    if (count > 0) {
+      await loc
+        .first()
+        .click({ timeout: 2_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(350);
+    }
+    await page.evaluate(() => window.scrollBy(0, 700)).catch(() => undefined);
+    await page.waitForTimeout(250);
+  }
+};
+
+const fetchMenuGroupsViaMenuList = async (
+  ctx: BrowserContext,
+  placeId: string,
+  hooks?: AdapterHooks,
+): Promise<MenuGroupType[]> => {
+  const url = `https://m.place.naver.com/restaurant/${placeId}/menu/list`;
+  const page = await ctx.newPage();
+  try {
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (SHOULD_BLOCK.has(type)) return route.abort();
+      return route.continue();
+    });
+
+    throwIfAborted(hooks?.signal);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12_000 });
+    await page.waitForLoadState('networkidle', { timeout: 6_000 }).catch(() => undefined);
+    await clickExpandableMenuButtons(page);
+    throwIfAborted(hooks?.signal);
+
+    const apolloState = await page
+      .evaluate<unknown>(
+        () => (globalThis as unknown as { __APOLLO_STATE__?: unknown }).__APOLLO_STATE__ ?? null,
+      )
+      .catch(() => null);
+    const apolloStateObj = isObject(apolloState) ? apolloState : null;
+    const groups = extractBaeminMenuGroups(apolloStateObj);
+
+    if (DEBUG_CAPTURE) {
+      await mkdir(DEBUG_DIR, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = join(DEBUG_DIR, `menu-list-${placeId}-${stamp}.json`);
+      await writeFile(
+        file,
+        JSON.stringify(
+          {
+            placeId,
+            url,
+            groupCount: groups.length,
+            menuCount: flattenMenuGroups(groups).length,
+            groups,
+            apolloState,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+      // eslint-disable-next-line no-console
+      console.log(`[crawl-debug] menu list groups=${groups.length} → ${file}`);
+    }
+
+    return groups;
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+};
+
 const buildPlaceData = (
   placeId: string,
   canonicalUrl: string,
   node: Record<string, unknown>,
   state: Record<string, unknown> | null,
   placeDetail: Record<string, unknown> | null,
+  menuGroups: MenuGroupType[],
   visitorReviews: VisitorReviewType[] | null,
 ): NaverPlaceDataType => {
   const coordinates = isObject(node['coordinate']) ? node['coordinate'] : node;
+  const groupedMenus = flattenMenuGroups(menuGroups);
   return {
     placeId,
     name: pickString(node, 'name') ?? '',
@@ -1382,7 +1535,8 @@ const buildPlaceData = (
     imageUrls: extractImageUrls(node, state, placeDetail),
     rating: pickNumber(node, 'visitorReviewsScore', 'rating', 'reviewScore'),
     reviewCount: pickNumber(node, 'visitorReviewsTotal', 'reviewCount'),
-    menus: extractMenus(placeId, state, placeDetail),
+    menus: groupedMenus.length > 0 ? groupedMenus : extractMenus(placeId, state, placeDetail),
+    menuGroups,
     reviewStats: extractReviewStats(state, placeDetail, placeId),
     blogReviews: extractBlogReviews(state, placeDetail),
     visitorReviews: visitorReviews ?? [],
@@ -1475,9 +1629,7 @@ export const fetchNaverPlaceWithPlaywright = async (
     throwIfAborted(hooks?.signal);
     try {
       await page.goto(canonicalUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
-      await page
-        .waitForLoadState('networkidle', { timeout: 5_000 })
-        .catch(() => undefined);
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
     } catch (e) {
       throw new PlaywrightFetchError(
         e instanceof Error ? `Navigation failed: ${e.message}` : 'Navigation failed',
@@ -1488,9 +1640,7 @@ export const fetchNaverPlaceWithPlaywright = async (
 
     const apolloState = await page
       .evaluate<unknown>(
-        () =>
-          (globalThis as unknown as { __APOLLO_STATE__?: unknown })
-            .__APOLLO_STATE__ ?? null,
+        () => (globalThis as unknown as { __APOLLO_STATE__?: unknown }).__APOLLO_STATE__ ?? null,
       )
       .catch(() => null);
     const apolloStateObj = isObject(apolloState) ? apolloState : null;
@@ -1539,6 +1689,17 @@ export const fetchNaverPlaceWithPlaywright = async (
     }
 
     const placeDetailContainer = findPlaceDetailContainer(apolloStateObj, placeId);
+    let menuGroups: MenuGroupType[] = [];
+    try {
+      menuGroups = await fetchMenuGroupsViaMenuList(ctx, placeId, hooks);
+    } catch (e) {
+      if (e instanceof CrawlCancelledError) throw e;
+      // Best-effort: if /menu/list changes or fails, keep the legacy home-menu
+      // extraction path below so the crawl still completes.
+      // eslint-disable-next-line no-console
+      console.warn(`[crawl-debug] menu/list extraction failed for placeId=${placeId}`, e);
+      menuGroups = [];
+    }
 
     // Emit a partial snapshot — main page parsed, visitor reviews still
     // pending. Lets the UI render the place card immediately while visitor
@@ -1551,6 +1712,7 @@ export const fetchNaverPlaceWithPlaywright = async (
           placeNode,
           apolloStateObj,
           placeDetailContainer,
+          menuGroups,
           [],
         ),
       );
@@ -1574,6 +1736,7 @@ export const fetchNaverPlaceWithPlaywright = async (
       placeNode,
       apolloStateObj,
       placeDetailContainer,
+      menuGroups,
       visitorReviews,
     );
   } finally {

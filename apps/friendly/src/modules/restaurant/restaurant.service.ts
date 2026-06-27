@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
 import { normalizeTerm } from '../summary/summary.service.js';
@@ -13,6 +13,7 @@ import {
   mergeBusinessHours,
   mergeCategory,
   mergeCoordinates,
+  mergeMenuGroups,
   mergeMenus,
   mergeName,
   mergePhone,
@@ -23,13 +24,11 @@ import {
 } from './restaurant.merge.js';
 import { Routes } from '@repo/api-contract';
 import { deriveRegion } from './region-derive.js';
-import {
-  cachePanoramaThumbnail,
-  isVolatileNaverPhoto,
-} from '../media/panorama-cache.js';
+import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import type {
   CategoryTreeNodeType,
   DiningcodeShopDataType,
+  MenuGroupType,
   DiningcodeShopReviewType,
   TablingShopDataType,
   TablingShopReviewType,
@@ -160,10 +159,7 @@ export class RestaurantService {
   // 우리 사본 URL(/media/panorama/:placeId)을 대신 넣는다. 받기 실패(만료/없음)
   // 하면 그 URL 은 버린다 — 저장해봐야 곧 죽는 URL 이라 의미가 없다. placeId 당
   // 파노라마는 1장이므로 첫 휘발성 URL 만 캐시하고 나머지 휘발성은 드롭한다.
-  private async persistVolatilePhotos(
-    placeId: string,
-    urls: string[],
-  ): Promise<string[]> {
+  private async persistVolatilePhotos(placeId: string, urls: string[]): Promise<string[]> {
     const out: string[] = [];
     let panoramaCached = false;
     for (const u of urls) {
@@ -189,6 +185,92 @@ export class RestaurantService {
       }
     }
     return out;
+  }
+
+  private async replaceRestaurantMenuGroups(
+    restaurantId: string,
+    groups: MenuGroupType[],
+  ): Promise<void> {
+    if (groups.length === 0) return;
+    const sources = [...new Set(groups.map((group) => group.source))];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const source of sources) {
+        await tx.$executeRaw`
+          DELETE FROM restaurant_menus
+          WHERE restaurantId = ${restaurantId} AND source = ${source}
+        `;
+        await tx.$executeRaw`
+          DELETE FROM restaurant_menu_groups
+          WHERE restaurantId = ${restaurantId} AND source = ${source}
+        `;
+      }
+
+      for (const [groupIndex, group] of groups.entries()) {
+        const groupId = `rmg_${randomUUID()}`;
+        await tx.$executeRaw`
+          INSERT INTO restaurant_menu_groups (
+            id,
+            restaurantId,
+            source,
+            sourceGroupId,
+            name,
+            sortOrder,
+            rawJson,
+            createdAt,
+            updatedAt
+          )
+          VALUES (
+            ${groupId},
+            ${restaurantId},
+            ${group.source},
+            ${group.sourceGroupId ?? null},
+            ${group.name},
+            ${group.sortOrder ?? groupIndex},
+            ${JSON.stringify(group)},
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          )
+        `;
+
+        for (const [menuIndex, menu] of group.menus.entries()) {
+          await tx.$executeRaw`
+            INSERT INTO restaurant_menus (
+              id,
+              restaurantId,
+              groupId,
+              source,
+              sourceMenuId,
+              name,
+              price,
+              description,
+              imageUrlsJson,
+              isRepresentative,
+              sortOrder,
+              rawJson,
+              createdAt,
+              updatedAt
+            )
+            VALUES (
+              ${`rm_${randomUUID()}`},
+              ${restaurantId},
+              ${groupId},
+              ${group.source},
+              ${menu.sourceMenuId ?? null},
+              ${menu.name},
+              ${menu.price},
+              ${menu.description},
+              ${JSON.stringify(menu.imageUrls)},
+              ${menu.recommend === true},
+              ${menu.sortOrder ?? menuIndex},
+              ${JSON.stringify(menu)},
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            )
+          `;
+        }
+      }
+    });
   }
 
   async upsertRestaurantFromCrawl(data: NaverPlaceDataType): Promise<{ id: string }> {
@@ -232,6 +314,14 @@ export class RestaurantService {
       },
       select: { id: true },
     });
+    if (data.menuGroups && data.menuGroups.length > 0) {
+      await this.replaceRestaurantMenuGroups(r.id, data.menuGroups).catch((err) => {
+        // The snapshot still carries menuGroups. Keep old crawl/write paths
+        // working even if a local DB has not applied the additive migration yet.
+        // eslint-disable-next-line no-console
+        console.warn('[restaurant-menu] normalized menu write skipped', err);
+      });
+    }
     return r;
   }
 
@@ -463,9 +553,7 @@ export class RestaurantService {
   // 미입점 place(/place/:objectId, JSON-LD) → Restaurant upsert. 얕은 좌표·메타
   // 티어. partner 와 구분되게 sourceId='place:<objectId>' prefix 로 둔다(같은
   // source='tabling' 안에서 idx 와 충돌 방지).
-  async upsertRestaurantFromTablingPlace(
-    data: TablingPlaceDataType,
-  ): Promise<{ id: string }> {
+  async upsertRestaurantFromTablingPlace(data: TablingPlaceDataType): Promise<{ id: string }> {
     const snapshotJson = JSON.stringify(data);
     const sourceId = `place:${data.objectId}`;
     const category = data.cuisines[0] ?? null;
@@ -1296,11 +1384,7 @@ export class RestaurantService {
       }
     }
 
-    const ids = [
-      ...naverIds,
-      ...dcSiblings.map((dc) => dc.id),
-      ...tbSiblings.map((tb) => tb.id),
-    ];
+    const ids = [...naverIds, ...dcSiblings.map((dc) => dc.id), ...tbSiblings.map((tb) => tb.id)];
     const summaryRows =
       ids.length > 0
         ? await this.prisma.reviewSummary.findMany({
@@ -1378,11 +1462,9 @@ export class RestaurantService {
       const dcBucket = dc ? (byId.get(dc.id) ?? null) : null;
       const tb = tbByCanonical.get(r.canonicalId) ?? null;
       const tbBucket = tb ? (byId.get(tb.id) ?? null) : null;
-      const sentSum =
-        naverBucket.sentSum + (dcBucket?.sentSum ?? 0) + (tbBucket?.sentSum ?? 0);
+      const sentSum = naverBucket.sentSum + (dcBucket?.sentSum ?? 0) + (tbBucket?.sentSum ?? 0);
       const sentN = naverBucket.sentN + (dcBucket?.sentN ?? 0) + (tbBucket?.sentN ?? 0);
-      const satSum =
-        naverBucket.satSum + (dcBucket?.satSum ?? 0) + (tbBucket?.satSum ?? 0);
+      const satSum = naverBucket.satSum + (dcBucket?.satSum ?? 0) + (tbBucket?.satSum ?? 0);
       const satN = naverBucket.satN + (dcBucket?.satN ?? 0) + (tbBucket?.satN ?? 0);
       return {
         placeId: r.placeId,
@@ -1398,15 +1480,11 @@ export class RestaurantService {
         firstCrawledAt: r.firstCrawledAt.toISOString(),
         totalReviews:
           r.totalReviews + (dc?.visitorReviewCount ?? 0) + (tb?.visitorReviewCount ?? 0),
-        summaryPending:
-          naverBucket.pending + (dcBucket?.pending ?? 0) + (tbBucket?.pending ?? 0),
-        summaryRunning:
-          naverBucket.running + (dcBucket?.running ?? 0) + (tbBucket?.running ?? 0),
+        summaryPending: naverBucket.pending + (dcBucket?.pending ?? 0) + (tbBucket?.pending ?? 0),
+        summaryRunning: naverBucket.running + (dcBucket?.running ?? 0) + (tbBucket?.running ?? 0),
         summaryDone: naverBucket.done + (dcBucket?.done ?? 0) + (tbBucket?.done ?? 0),
-        summaryFailed:
-          naverBucket.failed + (dcBucket?.failed ?? 0) + (tbBucket?.failed ?? 0),
-        analyzedCount:
-          naverBucket.analyzed + (dcBucket?.analyzed ?? 0) + (tbBucket?.analyzed ?? 0),
+        summaryFailed: naverBucket.failed + (dcBucket?.failed ?? 0) + (tbBucket?.failed ?? 0),
+        analyzedCount: naverBucket.analyzed + (dcBucket?.analyzed ?? 0) + (tbBucket?.analyzed ?? 0),
         avgSentimentScore: sentN > 0 ? sentSum / sentN : null,
         avgSatisfactionScore: satN > 0 ? satSum / satN : null,
         positiveCount: naverBucket.pos + (dcBucket?.pos ?? 0) + (tbBucket?.pos ?? 0),
@@ -1468,6 +1546,7 @@ export class RestaurantService {
       longitude: coords.longitude,
       imageUrls: mergePhotos(naverSnap, dcSnap, tbSnap),
       menus: mergeMenus(naverSnap, dcSnap, tbSnap),
+      menuGroups: mergeMenuGroups(naverSnap, dcSnap, tbSnap),
       blogReviews: mergeBlogReviews(naverSnap, dcSnap),
       rawSourceUrl: naverRow.rawSourceUrl,
       firstCrawledAt: naverRow.firstCrawledAt.toISOString(),
@@ -1494,11 +1573,7 @@ export class RestaurantService {
             }
           : null,
       ),
-      storedReviewCount: computeStoredReviewCount(
-        naverReviewCount,
-        dcReviewCount,
-        tbReviewCount,
-      ),
+      storedReviewCount: computeStoredReviewCount(naverReviewCount, dcReviewCount, tbReviewCount),
       diningcode: dcSnap ? composeDiningcodeAddon(dcSnap) : null,
       tabling: tbSnap ? composeTablingAddon(tbSnap) : null,
     };
@@ -1733,11 +1808,9 @@ export class RestaurantService {
     const tbReviews = tbRow
       ? tbRow.visitorReviews.map((v) => this.toPublicReview(v, 'tabling'))
       : [];
-    const reviews: PublicVisitorReviewType[] = [
-      ...naverReviews,
-      ...dcReviews,
-      ...tbReviews,
-    ].sort((a, b) => +new Date(a.fetchedAt) - +new Date(b.fetchedAt));
+    const reviews: PublicVisitorReviewType[] = [...naverReviews, ...dcReviews, ...tbReviews].sort(
+      (a, b) => +new Date(a.fetchedAt) - +new Date(b.fetchedAt),
+    );
 
     return {
       naverRow,
