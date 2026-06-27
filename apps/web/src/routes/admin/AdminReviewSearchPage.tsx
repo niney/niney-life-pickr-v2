@@ -492,7 +492,11 @@ const ClusterStatusRow = ({
 }: {
   item: ReviewClusterStatusItemType;
   onCluster(restaurantId: string): void;
-}) => (
+}) => {
+  // "전부 노이즈"는 실패가 아니라 정상 — 공개엔 관점집계 폴백으로 표시됨. 다른 사유
+  // (계산 오류·리뷰 부족)는 실제 조치 필요 → 빨강.
+  const noiseFallback = !item.clustered && !!item.lastReason && item.lastReason.includes('노이즈');
+  return (
   <tr className="border-t">
     <td className="px-3 py-2">{item.name}</td>
     <td className="px-3 py-2 text-right tabular-nums">{item.enrichedReviews}</td>
@@ -506,13 +510,20 @@ const ClusterStatusRow = ({
         </Badge>
       ) : item.clustered ? (
         <Badge variant="secondary" className="text-emerald-600">군집됨</Badge>
+      ) : noiseFallback ? (
+        <Badge variant="secondary" className="text-sky-600">관점집계</Badge>
       ) : item.eligible ? (
         <Badge variant="secondary" className="text-amber-600">대기</Badge>
       ) : (
         <Badge variant="secondary" className="text-muted-foreground">enrich 부족</Badge>
       )}
-      {/* 군집이 안 되고 대기로 남는 원인(마지막 스킵/오류 사유)을 인라인 표시. */}
-      {!item.clustered && !item.inProgress && item.lastReason && (
+      {/* 노이즈=정상(공개 관점집계). 그 외 사유는 조치 필요 → 빨강. */}
+      {!item.clustered && !item.inProgress && noiseFallback && (
+        <p className="mt-1 text-[11px] text-sky-600 dark:text-sky-400">
+          토픽 없음 — 공개는 관점집계로 표시
+        </p>
+      )}
+      {!item.clustered && !item.inProgress && !noiseFallback && item.lastReason && (
         <p className="mt-1 text-[11px] text-destructive" title={item.lastReason}>
           {item.lastReason}
         </p>
@@ -530,4 +541,5 @@ const ClusterStatusRow = ({
       </Button>
     </td>
   </tr>
-);
+  );
+};
