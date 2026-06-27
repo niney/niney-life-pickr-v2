@@ -18,6 +18,21 @@ export const MenuItem = z.object({
 });
 export type MenuItemType = z.infer<typeof MenuItem>;
 
+export const MenuGroupItem = MenuItem.extend({
+  sourceMenuId: z.string().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+});
+export type MenuGroupItemType = z.infer<typeof MenuGroupItem>;
+
+export const MenuGroup = z.object({
+  source: z.string(),
+  sourceGroupId: z.string().nullable().optional(),
+  name: z.string(),
+  sortOrder: z.number().int().optional(),
+  menus: z.array(MenuGroupItem),
+});
+export type MenuGroupType = z.infer<typeof MenuGroup>;
+
 export const ReviewThemeKeyword = z.object({
   code: z.string(),
   label: z.string(),
@@ -107,6 +122,7 @@ export const NaverPlaceData = z.object({
   rating: z.number().nullable(),
   reviewCount: z.number().nullable(),
   menus: z.array(MenuItem),
+  menuGroups: z.array(MenuGroup).optional(),
   reviewStats: ReviewStats.nullable(),
   blogReviews: z.array(BlogReview),
   visitorReviews: z.array(VisitorReview),
@@ -519,7 +535,9 @@ export const CatchtableShopReviewOverviewResponse = z.object({
   elapsedMs: z.number().int(),
   source: z.literal('playwright'),
 });
-export type CatchtableShopReviewOverviewResponseType = z.infer<typeof CatchtableShopReviewOverviewResponse>;
+export type CatchtableShopReviewOverviewResponseType = z.infer<
+  typeof CatchtableShopReviewOverviewResponse
+>;
 
 export const CatchtableShopData = z.object({
   shopRef: z.string(),
@@ -1007,9 +1025,7 @@ export const DiningcodeBulkSaveJobItemEvent = z.object({
   jobId: z.string(),
   item: DiningcodeBulkSaveJobItem,
 });
-export type DiningcodeBulkSaveJobItemEventType = z.infer<
-  typeof DiningcodeBulkSaveJobItemEvent
->;
+export type DiningcodeBulkSaveJobItemEventType = z.infer<typeof DiningcodeBulkSaveJobItemEvent>;
 
 export const DiningcodeBulkSaveJobDoneEvent = z.object({
   type: z.literal('done'),
@@ -1017,9 +1033,7 @@ export const DiningcodeBulkSaveJobDoneEvent = z.object({
   state: DiningcodeBulkSaveJobState,
   finishedAt: z.string(),
 });
-export type DiningcodeBulkSaveJobDoneEventType = z.infer<
-  typeof DiningcodeBulkSaveJobDoneEvent
->;
+export type DiningcodeBulkSaveJobDoneEventType = z.infer<typeof DiningcodeBulkSaveJobDoneEvent>;
 
 // ── 크롤+요약 잡 로그 조회 ─────────────────────────────────────────────────
 // SSE 의 실시간 'log' 이벤트와 동일한 데이터를 DB 에 영속화해, 잡 종료 후에도
@@ -1371,9 +1385,7 @@ export const TablingSearchRecommendedMenu = z.object({
   price: z.number().nullable(),
   imageUrl: z.string().url().nullable(),
 });
-export type TablingSearchRecommendedMenuType = z.infer<
-  typeof TablingSearchRecommendedMenu
->;
+export type TablingSearchRecommendedMenuType = z.infer<typeof TablingSearchRecommendedMenu>;
 
 export const TablingSearchResult = z.object({
   // restaurantIdx — partner 가게 idx. tablingShop/:idx, 저장의 그 키.

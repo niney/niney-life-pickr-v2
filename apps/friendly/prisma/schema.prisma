@@ -411,12 +411,63 @@ model Restaurant {
   canonical      CanonicalRestaurant @relation(fields: [canonicalId], references: [id])
   visitorReviews VisitorReview[]
   menuCanonicals MenuCanonical[]
+  menuGroups     RestaurantMenuGroup[]
+  sourceMenus    RestaurantMenu[]
   reviewClusters ReviewCluster[]
 
   @@unique([source, sourceId])
   @@index([source])
   @@index([canonicalId])
   @@map("restaurants")
+}
+
+// 크롤 소스에서 읽은 원본 메뉴 그룹. 공개 응답의 기존 flat `menus` 는 계속
+// snapshotJson 에서 제공하고, 이 테이블은 원본 그룹/정렬/출처를 손실 없이
+// 보존해 재가공·비교·관리 화면에서 쓸 수 있게 한다.
+model RestaurantMenuGroup {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  source        String
+  sourceGroupId String?
+  name          String
+  sortOrder     Int
+  rawJson       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menus      RestaurantMenu[]
+
+  @@unique([restaurantId, source, sourceGroupId])
+  @@index([restaurantId, source, sortOrder])
+  @@map("restaurant_menu_groups")
+}
+
+// 크롤 소스에서 읽은 원본 메뉴. 같은 메뉴가 "대표메뉴"와 실제 카테고리에
+// 동시에 노출될 수 있어 sourceMenuId 는 unique 로 묶지 않는다.
+model RestaurantMenu {
+  id               String   @id @default(cuid())
+  restaurantId     String
+  groupId          String?
+  source           String
+  sourceMenuId     String?
+  name             String
+  price            String?
+  description      String?
+  imageUrlsJson    String   @default("[]")
+  isRepresentative Boolean  @default(false)
+  sortOrder        Int
+  rawJson          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  group      RestaurantMenuGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, source, sortOrder])
+  @@index([groupId, sortOrder])
+  @@index([restaurantId, source, sourceMenuId])
+  @@map("restaurant_menus")
 }
 
 // 식당 내 메뉴 표기 변형을 canonical 그룹으로 매핑하는 테이블.

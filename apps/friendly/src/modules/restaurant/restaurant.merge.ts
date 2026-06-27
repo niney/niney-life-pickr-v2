@@ -19,6 +19,7 @@
 import type {
   BlogReviewType,
   DiningcodeShopDataType,
+  MenuGroupType,
   MenuItemType,
   NaverPlaceDataType,
   PublicDiningcodeAddonType,
@@ -80,8 +81,7 @@ export const mergeAddress = (
   tbSnap: TablingSnapshot | null = null,
 ): { address: string | null; roadAddress: string | null } => {
   const address = naverRow?.address ?? dcSnap?.address ?? tbSnap?.address ?? null;
-  const roadAddress =
-    naverSnap?.roadAddress ?? dcSnap?.roadAddress ?? tbSnap?.roadAddress ?? null;
+  const roadAddress = naverSnap?.roadAddress ?? dcSnap?.roadAddress ?? tbSnap?.roadAddress ?? null;
   return { address, roadAddress };
 };
 
@@ -108,9 +108,7 @@ const fmtTablingTime = (t: string | null): string | null => {
   if (!t) return null;
   return /^\d{2}:\d{2}/.test(t) ? t.slice(0, 5) : t;
 };
-export const serializeTablingBusinessDays = (
-  days: TablingBusinessDayType[],
-): string | null => {
+export const serializeTablingBusinessDays = (days: TablingBusinessDayType[]): string | null => {
   if (days.length === 0) return null;
   const lines: string[] = [];
   for (const d of days) {
@@ -252,6 +250,36 @@ export const mergeMenus = (
   );
 };
 
+export const mergeMenuGroups = (
+  naverSnap: NaverSnapshot | null,
+  dcSnap: DiningcodeSnapshot | null,
+  tbSnap: TablingSnapshot | null = null,
+): MenuGroupType[] => {
+  if (naverSnap?.menuGroups && naverSnap.menuGroups.length > 0) {
+    return naverSnap.menuGroups;
+  }
+
+  const menus = mergeMenus(naverSnap, dcSnap, tbSnap);
+  if (menus.length === 0) return [];
+
+  return [
+    {
+      source:
+        naverSnap && naverSnap.menus.length > 0
+          ? 'naver'
+          : tbSnap && tbSnap.menuCategories.some((c) => c.menus.length > 0)
+            ? 'tabling'
+            : dcSnap && dcSnap.menus.length > 0
+              ? 'diningcode'
+              : 'merged',
+      sourceGroupId: null,
+      name: '메뉴',
+      sortOrder: 0,
+      menus: menus.map((menu, index) => ({ ...menu, sortOrder: index })),
+    },
+  ];
+};
+
 // Naver blogReviews + DC blogsFirstPage.list. URL 동일 dedup. DC URL 이 http
 // 접두 없을 수 있어 정규화 후 비교 — 직렬화 결과는 정규화된 URL.
 // (테이블링은 블로그 데이터가 없어 이 함수는 두 출처만 다룬다.)
@@ -313,14 +341,15 @@ export const computeSources = (
   dc: DiningcodeRowMeta | null,
   tabling: TablingRowMeta | null = null,
 ): PublicSourcesType => {
-  const naver = naverRow && naverSnap
-    ? {
-        placeId: naverSnap.placeId,
-        rating: naverRow.rating,
-        siteReviewCount: naverRow.reviewCount,
-        rawSourceUrl: naverRow.rawSourceUrl,
-      }
-    : null;
+  const naver =
+    naverRow && naverSnap
+      ? {
+          placeId: naverSnap.placeId,
+          rating: naverRow.rating,
+          siteReviewCount: naverRow.reviewCount,
+          rawSourceUrl: naverRow.rawSourceUrl,
+        }
+      : null;
   return { naver, diningcode: dc, tabling };
 };
 
@@ -336,9 +365,7 @@ export const computeStoredReviewCount = (
 });
 
 // DC 보조 정보 평탄화. canonical 에 DC 행이 없으면 호출자가 null 반환.
-export const composeDiningcodeAddon = (
-  dcSnap: DiningcodeSnapshot,
-): PublicDiningcodeAddonType => ({
+export const composeDiningcodeAddon = (dcSnap: DiningcodeSnapshot): PublicDiningcodeAddonType => ({
   scoreDetail: dcSnap.scoreDetail
     ? {
         average: dcSnap.scoreDetail.average,
@@ -362,9 +389,7 @@ export const composeDiningcodeAddon = (
 
 // 테이블링 보조 정보 평탄화. canonical 에 partner 행이 없으면 호출자가 null
 // 반환. waitingCount 는 크롤 시점 스냅샷(스테일) 이라 의도적으로 누락.
-export const composeTablingAddon = (
-  tbSnap: TablingSnapshot,
-): PublicTablingAddonType => ({
+export const composeTablingAddon = (tbSnap: TablingSnapshot): PublicTablingAddonType => ({
   flags: tbSnap.flags,
   ratings: tbSnap.ratings,
   favoriteCount: tbSnap.favoriteCount,

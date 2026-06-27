@@ -5,6 +5,7 @@ import {
   BlogReview,
   CrawlLogLevel,
   DiningcodeShopBusinessHour,
+  MenuGroup,
   MenuItem,
   NaverPlaceData,
   TablingBusinessDay,
@@ -256,9 +257,7 @@ export const recomputeCanonicalAggregates = (
 export const RestaurantListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(25),
   offset: z.coerce.number().int().min(0).default(0),
-  sort: z
-    .enum(['recent', 'satisfaction', 'positive', 'negativeRatio'])
-    .default('recent'),
+  sort: z.enum(['recent', 'satisfaction', 'positive', 'negativeRatio']).default('recent'),
 });
 export type RestaurantListQueryType = z.infer<typeof RestaurantListQuery>;
 
@@ -305,9 +304,7 @@ export const RestaurantCancelSummaryResult = z.object({
   ok: z.literal(true),
   cancelled: z.number().int(),
 });
-export type RestaurantCancelSummaryResultType = z.infer<
-  typeof RestaurantCancelSummaryResult
->;
+export type RestaurantCancelSummaryResultType = z.infer<typeof RestaurantCancelSummaryResult>;
 
 // 요약 재개 응답. resumed = 'cancelled' → 'queued' 로 다시 큐잉된 행 수.
 // 명시적으로 중지(cancelled)했던 행만 재투입한다. failed/parse_failed 같은
@@ -316,9 +313,7 @@ export const RestaurantResumeSummaryResult = z.object({
   ok: z.literal(true),
   resumed: z.number().int(),
 });
-export type RestaurantResumeSummaryResultType = z.infer<
-  typeof RestaurantResumeSummaryResult
->;
+export type RestaurantResumeSummaryResultType = z.infer<typeof RestaurantResumeSummaryResult>;
 
 // 정규화 분석 테이블 백필 응답. processed = 새로 행을 채운 summary 수.
 export const RestaurantAnalyticsBackfillResult = z.object({
@@ -392,9 +387,7 @@ export type RestaurantInsightsType = z.infer<typeof RestaurantInsights>;
 export const RestaurantCategoryTreeResult = z.object({
   roots: z.array(CategoryTreeNode),
 });
-export type RestaurantCategoryTreeResultType = z.infer<
-  typeof RestaurantCategoryTreeResult
->;
+export type RestaurantCategoryTreeResultType = z.infer<typeof RestaurantCategoryTreeResult>;
 
 // 공개 식당 랭킹 — 비로그인/게스트도 볼 수 있는 루트 페이지용. 정렬은 긍정/부정
 // 비율, 중립 포함/제외 토글로 분모를 바꾼다. 표본 부족 식당이 1·2건 멘션으로
@@ -521,10 +514,12 @@ export const PublicVisitorReview = z.object({
   body: z.string(),
   visitedAt: z.string().nullable(),
   imageUrls: z.array(z.string().url()),
-  videos: z.array(z.object({
-    posterUrl: z.string().url(),
-    videoUrl: z.string().url(),
-  })),
+  videos: z.array(
+    z.object({
+      posterUrl: z.string().url(),
+      videoUrl: z.string().url(),
+    }),
+  ),
   fetchedAt: z.string(),
   analysis: PublicReviewAnalysis.nullable(),
 });
@@ -597,9 +592,7 @@ export const PublicDiningcodeScoreDetail = z.object({
   }),
   text: z.string().nullable(),
 });
-export type PublicDiningcodeScoreDetailType = z.infer<
-  typeof PublicDiningcodeScoreDetail
->;
+export type PublicDiningcodeScoreDetailType = z.infer<typeof PublicDiningcodeScoreDetail>;
 
 export const PublicDiningcodeAddon = z.object({
   scoreDetail: PublicDiningcodeScoreDetail.nullable(),
@@ -651,6 +644,9 @@ export const RestaurantPublicDetail = z.object({
   imageUrls: z.array(z.string().url().or(z.string().startsWith('/'))),
   // Naver 가 비어있을 때만 테이블링 menus, 그것도 없으면 DC menus 를 매핑해 채움.
   menus: z.array(MenuItem),
+  // 원본 메뉴 그룹. 기존 `menus` 는 계속 평탄화 목록으로 제공하고, 그룹을
+  // 표시할 수 있는 클라이언트만 이 optional 필드를 사용한다.
+  menuGroups: z.array(MenuGroup).optional(),
   // Naver blogReviews + DC blogsFirstPage 합쳐 dedup.
   blogReviews: z.array(BlogReview),
   rawSourceUrl: z.string(),
@@ -680,9 +676,7 @@ export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
 // `/restaurants/public/:placeId/reviews` 쿼리. ReviewsTab 의 chip + 정렬을 그대로
 // 백엔드 페이지네이션으로 위임. UI 의 SentimentFilter / SortMode 와 같은 값.
 export const RestaurantPublicReviewSentiment = z.enum(['all', 'positive', 'negative']);
-export type RestaurantPublicReviewSentimentType = z.infer<
-  typeof RestaurantPublicReviewSentiment
->;
+export type RestaurantPublicReviewSentimentType = z.infer<typeof RestaurantPublicReviewSentiment>;
 
 export const RestaurantPublicReviewSort = z.enum(['recent', 'rating']);
 export type RestaurantPublicReviewSortType = z.infer<typeof RestaurantPublicReviewSort>;
@@ -700,18 +694,14 @@ export const RestaurantPublicReviewsQuery = z.object({
   // 카드의 'N회 언급' 카운트와 결과 수가 일치한다(약어/표기 변형 포함).
   menu: z.string().trim().min(1).optional(),
 });
-export type RestaurantPublicReviewsQueryType = z.infer<
-  typeof RestaurantPublicReviewsQuery
->;
+export type RestaurantPublicReviewsQueryType = z.infer<typeof RestaurantPublicReviewsQuery>;
 
 export const RestaurantPublicReviewsResult = z.object({
   items: z.array(PublicVisitorReview),
   // 현재 필터(sentiment) 적용 후 총 카운트. hasMore 판단용.
   total: z.number().int(),
 });
-export type RestaurantPublicReviewsResultType = z.infer<
-  typeof RestaurantPublicReviewsResult
->;
+export type RestaurantPublicReviewsResultType = z.infer<typeof RestaurantPublicReviewsResult>;
 
 // SSE per-review payload pushed by the summary-events stream when a single
 // row's AI summary finishes (success or failure). The client merges this
@@ -728,9 +718,7 @@ export const RestaurantSummaryEventSource = z.object({
   sourceId: z.string(),
   placeId: z.string().nullable(),
 });
-export type RestaurantSummaryEventSourceType = z.infer<
-  typeof RestaurantSummaryEventSource
->;
+export type RestaurantSummaryEventSourceType = z.infer<typeof RestaurantSummaryEventSource>;
 
 export const RestaurantSummaryReviewEvent = RestaurantSummaryEventSource.extend({
   type: z.literal('review'),
@@ -776,9 +764,7 @@ export type RestaurantSummaryProgressType = z.infer<typeof RestaurantSummaryProg
 export const RestaurantSummarySnapshotEvent = RestaurantSummaryProgress.merge(
   RestaurantSummaryEventSource,
 );
-export type RestaurantSummarySnapshotEventType = z.infer<
-  typeof RestaurantSummarySnapshotEvent
->;
+export type RestaurantSummarySnapshotEventType = z.infer<typeof RestaurantSummarySnapshotEvent>;
 
 // 요약 SSE 스트림(/summary-events)으로 흘려보내는 단계별 로그 이벤트. 크롤
 // SSE 의 'log' 이벤트와 같은 페이로드 + source 식별자. UI 는 SummaryEvent 와

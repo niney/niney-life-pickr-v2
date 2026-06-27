@@ -1,8 +1,5 @@
 import { ArrowRight, MapPin, Star } from 'lucide-react';
-import type {
-  RestaurantInsightsType,
-  RestaurantPublicDetailType,
-} from '@repo/api-contract';
+import type { RestaurantInsightsType, RestaurantPublicDetailType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import {
@@ -37,7 +34,10 @@ export const HomeTab = ({
   onSelectMenu,
 }: Props) => {
   const hero = detail.imageUrls[0] ?? null;
-  const previewMenus = detail.menus.slice(0, HOME_MENU_PREVIEW);
+  const representativeMenus =
+    detail.menuGroups?.find((group) => group.name === '대표메뉴')?.menus ?? [];
+  const previewMenuSource = representativeMenus.length > 0 ? representativeMenus : detail.menus;
+  const previewMenus = previewMenuSource.slice(0, HOME_MENU_PREVIEW);
   // 분석된 리뷰 우선 — 사용자에게 가장 정보량 큰 미리보기.
   // detail.reviewsFirstPage 는 fetchedAt desc 정렬된 첫 페이지 (10개) — 그 안에서
   // 분석된 리뷰를 위로 한 번 더 stable sort.

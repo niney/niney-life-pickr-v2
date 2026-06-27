@@ -1,5 +1,5 @@
+import { createRequire } from 'node:module';
 import type { PrismaClient } from '@prisma/client';
-import { LRUCache } from 'lru-cache';
 import type { ReviewEnrichStatusListType, ReviewEnrichStatusQueryType } from '@repo/api-contract';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import {
@@ -7,15 +7,7 @@ import {
   resolveCanonicalMembersByPlaceId,
   resolveCanonicalMembersByRestaurantId,
 } from '../restaurant/canonical-members.js';
-import {
-  ASPECTS,
-  Bm25,
-  RRF_K,
-  cosine,
-  isJunk,
-  type Aspect,
-  type Polarity,
-} from './retrieval.js';
+import { ASPECTS, Bm25, RRF_K, cosine, isJunk, type Aspect, type Polarity } from './retrieval.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // review-search — DB 영속 문맥검색/RAG. vector-lab 프로토타입에서 검증된
@@ -71,10 +63,28 @@ interface CorpusItem {
   vec: number[];
 }
 
+interface LruCacheCompat<K, V> {
+  get(key: K): V | undefined;
+  set(key: K, value: V): unknown;
+  delete(key: K): boolean;
+}
+
+interface LruCacheConstructor {
+  new <K, V>(options: { max: number }): LruCacheCompat<K, V>;
+}
+
+const require = createRequire(import.meta.url);
+const lruCacheModule = require('lru-cache') as unknown;
+const LruCache = (
+  typeof lruCacheModule === 'function'
+    ? lruCacheModule
+    : (lruCacheModule as { LRUCache?: unknown }).LRUCache
+) as LruCacheConstructor;
+
 export class ReviewSearchService {
   // restaurantId → 검색 코퍼스(DB enrich 결과 로드, BM25 포함). enrich 시 무효화.
   // LRU 바운드 — 식당당 코퍼스가 ~수MB(임베딩)라 무한 증가 방지(단일 인스턴스 메모리 보호).
-  private corpusCache = new LRUCache<string, { items: CorpusItem[]; bm25: Bm25 }>({ max: 16 });
+  private corpusCache = new LruCache<string, { items: CorpusItem[]; bm25: Bm25 }>({ max: 16 });
   // enrich 진행 중인 restaurantId → 진행률(processed/total). 상태 뷰 표시 + 중복 트리거 방지
   // + SSE 진행률. app 싱글톤이라 라우트·요약 훅이 같은 상태를 본다.
   private enriching = new Map<string, { processed: number; total: number }>();
@@ -114,7 +124,11 @@ export class ReviewSearchService {
     const pending = await this.prisma.reviewSummary.findMany({
       where: {
         review: { restaurantId: { in: ids } },
-        OR: [{ embeddingJson: null }, { enrichVersion: null }, { enrichVersion: { lt: ENRICH_VERSION } }],
+        OR: [
+          { embeddingJson: null },
+          { enrichVersion: null },
+          { enrichVersion: { lt: ENRICH_VERSION } },
+        ],
       },
       select: { id: true, review: { select: { body: true } } },
     });
@@ -123,7 +137,8 @@ export class ReviewSearchService {
       .filter((p) => !isJunk(p.body));
 
     const batches: Array<typeof targets> = [];
-    for (let i = 0; i < targets.length; i += ENRICH_BATCH) batches.push(targets.slice(i, i + ENRICH_BATCH));
+    for (let i = 0; i < targets.length; i += ENRICH_BATCH)
+      batches.push(targets.slice(i, i + ENRICH_BATCH));
 
     let enriched = 0;
     onProgress?.(0, targets.length);
@@ -310,7 +325,8 @@ export class ReviewSearchService {
       `1) aspects: 평가/언급된 관점만 극성과 함께. 관점(이것만): ${ASPECTS.join(', ')} / 극성: pos|neg|neu (없으면 {}).\n` +
       `2) context: 이 리뷰가 무엇에 대한 평인지 한국어 한 줄(검색용 문맥).\n` +
       `리뷰 순서대로 JSON 배열 [{"aspects":{"맛":"pos"},"context":"..."}, ...].\n\n${list}`;
-    const arr = await this.chatJson<Array<{ aspects?: Record<string, string>; context?: string }>>(prompt);
+    const arr =
+      await this.chatJson<Array<{ aspects?: Record<string, string>; context?: string }>>(prompt);
     return bodies.map((_, j) => {
       const a = arr?.[j]?.aspects ?? {};
       const clean: Partial<Record<Aspect, Polarity>> = {};
@@ -347,11 +363,16 @@ export class ReviewSearchService {
     }));
 
     if (mode === 'dense') {
-      return scored.sort((a, b) => b.hit.score - a.hit.score).slice(0, topK).map((s) => s.hit);
+      return scored
+        .sort((a, b) => b.hit.score - a.hit.score)
+        .slice(0, topK)
+        .map((s) => s.hit);
     }
 
     const denseRank = new Map<string, number>();
-    [...scored].sort((a, b) => b.hit.score - a.hit.score).forEach((s, i) => denseRank.set(s.hit.reviewId, i));
+    [...scored]
+      .sort((a, b) => b.hit.score - a.hit.score)
+      .forEach((s, i) => denseRank.set(s.hit.reviewId, i));
     const lexRank = new Map<string, number>();
     [...scoreMap.entries()].sort((a, b) => b[1] - a[1]).forEach(([id], i) => lexRank.set(id, i));
     const hybridRanked = scored
@@ -375,7 +396,13 @@ export class ReviewSearchService {
     // 신호를 희석해 dense recall 을 오히려 떨어뜨림(raw 65% vs HyDE 54%). 제거로 품질↑ + 1콜 절감.
     const evidence = await this.search(restaurantId, query, ASK_EVIDENCE, 'rerank');
     if (evidence.length === 0) {
-      return { answer: '관련 리뷰를 찾지 못했습니다.', confidence: 'none', hyde: null, citations: [], verification: null };
+      return {
+        answer: '관련 리뷰를 찾지 못했습니다.',
+        confidence: 'none',
+        hyde: null,
+        citations: [],
+        verification: null,
+      };
     }
     const ctx = evidence.map((h, i) => `[${i + 1}] ${h.body.slice(0, 300)}`).join('\n');
     const prompt =
@@ -391,7 +418,10 @@ export class ReviewSearchService {
       `JSON {"answer": "...[n]...", "confidence": "high"|"medium"|"low"|"none"}`;
     const parsed = await this.chatJson<{ answer?: string; confidence?: string }>(prompt, {
       type: 'object',
-      properties: { answer: { type: 'string' }, confidence: { enum: ['high', 'medium', 'low', 'none'] } },
+      properties: {
+        answer: { type: 'string' },
+        confidence: { enum: ['high', 'medium', 'low', 'none'] },
+      },
       required: ['answer', 'confidence'],
     });
     const c = parsed?.confidence;
@@ -482,7 +512,11 @@ export class ReviewSearchService {
 
   // 공개 질문 — placeId → 식당 해석 후 ask. 자동 enrich 안 함(비용). 식당 없음 → null.
   // enrich 안 된 식당은 graceful 'none' 으로 안내(에러 대신).
-  async askByPlaceId(placeId: string, query: string, opts?: { verify?: boolean }): Promise<AskResult | null> {
+  async askByPlaceId(
+    placeId: string,
+    query: string,
+    opts?: { verify?: boolean },
+  ): Promise<AskResult | null> {
     const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
     if (!members) return null;
     const ready = await this.prisma.reviewSummary.count({
@@ -541,13 +575,25 @@ export class ReviewSearchService {
   }
 
   // 임베딩 엔드포인트(로컬/사이드카 Ollama) 도달성·차원 확인. 배포 preflight·부팅 헬스체크용.
-  async embedHealth(): Promise<{ ok: boolean; baseUrl: string; model: string; dim?: number; error?: string }> {
+  async embedHealth(): Promise<{
+    ok: boolean;
+    baseUrl: string;
+    model: string;
+    dim?: number;
+    error?: string;
+  }> {
     try {
       const [v] = await this.embed(['헬스체크']);
-      if (!v?.length) return { ok: false, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, error: '빈 벡터 응답' };
+      if (!v?.length)
+        return { ok: false, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, error: '빈 벡터 응답' };
       return { ok: true, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, dim: v.length };
     } catch (e) {
-      return { ok: false, baseUrl: EMBED_BASE_URL, model: EMBED_MODEL, error: e instanceof Error ? e.message : String(e) };
+      return {
+        ok: false,
+        baseUrl: EMBED_BASE_URL,
+        model: EMBED_MODEL,
+        error: e instanceof Error ? e.message : String(e),
+      };
     }
   }
 
@@ -600,7 +646,9 @@ export class ReviewSearchService {
         }),
       });
       if (!res.ok) return null;
-      const json = (await res.json().catch(() => null)) as { message?: { content?: string } } | null;
+      const json = (await res.json().catch(() => null)) as {
+        message?: { content?: string };
+      } | null;
       const content = (json?.message?.content ?? '').replace(/```(?:json)?/gi, '').trim();
       const m = content.match(/[[{][\s\S]*[\]}]/);
       return JSON.parse(m ? m[0] : content) as T;
