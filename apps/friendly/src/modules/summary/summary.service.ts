@@ -1143,17 +1143,26 @@ export class SummaryService {
       },
       channel,
     );
-    // 요약 완료 직후 자동 enrich(관점/문맥/임베딩) — fire-and-forget. 요약이 끝난 뒤라
-    // 같은 ReviewSummary 행 동시 쓰기(SQLite lock) 없음. 멱등이라 이미 enrich 된 건 스킵.
-    // 임베딩 엔드포인트 미도달 등 실패는 warn 만(요약 결과엔 영향 없음).
-    // enrich 가 임베딩을 채운 뒤에야 군집화가 가능하므로, 군집화는 enrich 완료에 체이닝.
-    if (this.opts.reviewSearch) {
-      void this.opts.reviewSearch
-        .ensureEnrichedByPlaceId(placeId)
-        .then(() => this.opts.clustering?.ensureClusteredByPlaceId(placeId))
-        .catch((e) => {
-          this.log?.warn({ err: e, placeId }, '[summary] post-summary enrich/clustering 실패');
+    // 요약 완료 직후 자동 enrich(관점/문맥/임베딩) → 군집화 — fire-and-forget. 요약이
+    // 끝난 뒤라 같은 ReviewSummary 행 동시 쓰기(SQLite lock) 없음. 멱등이라 이미 된 건 스킵.
+    // 실패는 warn 만(요약 결과엔 영향 없음). enrich 완료 후에야 군집화 가능 → 체이닝.
+    //
+    // ⚠️ placeId 인자는 크롤 요약 키라 소스별로 자유형(naver=placeId, diningcode='dc:..',
+    // tabling='tb:..')이다. 그래서 placeId 로 canonical 을 풀면 비-네이버는 해석 실패 →
+    // 자동 enrich/군집이 조용히 스킵됐다. reviewId 에서 실제 restaurantId 를 풀어 모든 소스 커버.
+    if ((this.opts.reviewSearch || this.opts.clustering) && reviewIds.length > 0) {
+      const firstReviewId = reviewIds[0]!;
+      void (async () => {
+        const rv = await this.prisma.visitorReview.findUnique({
+          where: { id: firstReviewId },
+          select: { restaurantId: true },
         });
+        if (!rv) return;
+        await this.opts.reviewSearch?.ensureEnrichedByRestaurantId(rv.restaurantId);
+        await this.opts.clustering?.ensureClusteredByRestaurantId(rv.restaurantId);
+      })().catch((e) => {
+        this.log?.warn({ err: e, placeId }, '[summary] post-summary enrich/clustering 실패');
+      });
     }
 
     // 행 단위 실패는 ReviewSummary 에 남고 어드민이 재시도 가능 — run 자체는

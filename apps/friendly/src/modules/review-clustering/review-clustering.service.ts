@@ -327,13 +327,24 @@ export class ReviewClusteringService {
     });
   }
 
-  // placeId → 식당 해석 후 **자동** 군집화(요약 종료 훅). 피처 플래그 + 재군집 게이트
-  // 적용 — 첫 군집이거나 리뷰가 충분히 늘었을 때만(어드민 수동은 게이트 없이 강제).
+  // placeId → 식당 해석 후 **자동** 군집화(공개 키 기반). 피처 플래그 + 재군집 게이트.
   async ensureClusteredByPlaceId(placeId: string): Promise<void> {
     if (!AUTO_ENABLED) return;
     const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
-    if (!members) return;
-    const { primaryId, memberIds } = members;
+    if (members) await this.ensureClusteredForMembers(members.primaryId, members.memberIds);
+  }
+
+  // restaurantId(임의 소스 행) → 자동 군집화. 요약 종료 훅용 — 크롤 요약 키가 소스별로
+  // 자유형(naver=placeId, diningcode='dc:..', tabling='tb:..')이라 placeId 로는 비-네이버가
+  // 해석 안 됨. reviewId 에서 푼 restaurantId 로 canonical 해석해 모든 소스 자동 군집.
+  async ensureClusteredByRestaurantId(restaurantId: string): Promise<void> {
+    if (!AUTO_ENABLED) return;
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    if (members) await this.ensureClusteredForMembers(members.primaryId, members.memberIds);
+  }
+
+  // 첫 군집이거나 리뷰가 충분히 늘었을 때만(어드민 수동은 게이트 없이 강제).
+  private async ensureClusteredForMembers(primaryId: string, memberIds: string[]): Promise<void> {
     if (this.clustering.has(primaryId)) return; // 이미 진행 중
     if (!(await this.shouldRecluster(primaryId, memberIds))) return; // 최신 — 스킵(churn·비용 방지)
     await this.runTracked(primaryId);

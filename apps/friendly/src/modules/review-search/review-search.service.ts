@@ -169,6 +169,15 @@ export class ReviewSearchService {
     await this.runTracked(members.primaryId);
   }
 
+  // restaurantId(임의 소스 행) 기반 enrich — 요약 종료 훅용. 크롤 요약 키가 소스별로
+  // 자유형(naver=placeId, diningcode='dc:..', tabling='tb:..')이라 placeId 로는 비-네이버
+  // 가 해석 안 됨 → reviewId 에서 푼 restaurantId 로 canonical 을 해석해 모든 소스 커버.
+  async ensureEnrichedByRestaurantId(restaurantId: string): Promise<void> {
+    const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
+    if (!members) return;
+    await this.runTracked(members.primaryId);
+  }
+
   // ── enrich 상태 관리 (어드민) ───────────────────────────────────────────────
 
   // 가게별 enrich 상태(전체/검색가능 건수·진행중). canonical 단위 집계
