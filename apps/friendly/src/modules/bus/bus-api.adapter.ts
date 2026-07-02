@@ -25,7 +25,7 @@ const BASE_URL = 'http://ws.bus.go.kr/api/rest';
 const FETCH_TIMEOUT_MS = 10_000;
 
 // '결과 없음' 계열 headerCd — 에러가 아니라 빈 목록으로 정상 반환한다.
-// 서울시 문서상 '4' 로 추정 — probe:bus 실응답으로 확정 필요.
+// 실응답 확정(2026-07-02): headerCd=4, headerMsg "결과가 없습니다."
 export const NO_RESULT_HEADER_CDS = ['4'];
 
 export class BusApiError extends Error {
@@ -271,8 +271,9 @@ export interface BusApiRequestOptions {
 }
 
 // getStationByName 원시 행. 좌표 후보 필드를 전부 옵셔널로 보존한다 —
-// 서울시가 tmX/tmY 필드명에 WGS84 경위도 값을 넣어주는 사례가 알려져 있어
-// 필드명을 믿지 않고 toLatLng 가 값 범위로 판정한다.
+// probe:bus 실측(2026-07-02): 서울시는 tmX/tmY 필드명에 WGS84 경위도 값을,
+// posX/posY 에 GRS80 TM 값을 넣어준다. 필드명을 믿지 않고 toLatLng 가
+// 값 범위로 판정한다.
 export interface RawBusStation {
   stId: string;
   // '0' = 가상정류장 (도착정보 조회 불가).
@@ -321,8 +322,10 @@ const LNG_MAX = 132;
 
 // 좌표 정규화 — 후보 (x=경도, y=위도) 쌍을 순회하며 WGS84 값 범위에 들어오는
 // 쌍을 채택한다. 필드명(tmX 등)은 신뢰하지 않는다.
-// 모든 쌍이 범위 밖이면 null — GRS80 TM 좌표로 판명되면 proj4 변환을 추가할
-// 예정이며, 어느 쪽인지는 probe:bus 가 확정한다.
+// probe:bus 확정(2026-07-02): stationinfo/buspos 모두 tmX/tmY=WGS84,
+// posX/posY=GRS80 TM(18만~46만 단위), getBusPosByRtid 는 gpsX/gpsY(WGS84)도
+// 제공 — WGS84 쌍이 항상 존재하므로 proj4 변환 불필요. 모든 쌍이 범위 밖이면
+// null(호출측이 좌표계 이상 신호로 처리).
 export const toLatLng = (raw: {
   tmX: number | null;
   tmY: number | null;

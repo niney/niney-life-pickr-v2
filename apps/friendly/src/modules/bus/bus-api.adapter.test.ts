@@ -10,8 +10,9 @@ import {
   toLatLng,
 } from './bus-api.adapter.js';
 
-// __fixtures__/*.xml 은 공식 문서 형식 기반 합성 응답 — probe:bus 실응답으로
-// 교체/검증 예정 (각 파일 상단 주석 참조).
+// __fixtures__/*.xml — 검색 다건/단건/결과없음/headerCd7 은 2026-07-02
+// probe:bus 실응답 기반. header-error/auth-error(cmmMsgHeader)는 공식 문서
+// 형식 합성 (실환경에서 재현 어려운 케이스 — 각 파일 상단 주석 참조).
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string =>
   readFileSync(join(__dirname, '__fixtures__', name), 'utf8');
@@ -32,26 +33,29 @@ afterEach(() => {
 });
 
 describe('callBusApi / getStationsByName — 응답 파싱', () => {
-  it('다건 itemList 를 배열로 파싱하고 필드를 보존한다 (arsId 선행 0 포함)', async () => {
+  it('다건 itemList 를 배열로 파싱하고 필드를 보존한다 (실응답 발췌)', async () => {
     stubFetch(fixture('stations-multi.xml'));
     const items = await getStationsByName('강남', { serviceKey: 'plain-key' });
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
     expect(items[0]).toMatchObject({
-      stId: '105000127',
-      stNm: '강남역',
-      // parseTagValue: false 가 아니면 '02013' 이 2013 으로 깨진다.
-      arsId: '02013',
-      tmX: 127.0276368,
-      tmY: 37.4979462,
+      stId: '122000175',
+      stNm: 'KT강남지사',
+      arsId: '23278',
+      // tmX/tmY 필드에 WGS84 값이 실려오는 실구조 (probe:bus 확정).
+      tmX: 127.0419791463,
+      tmY: 37.5047549674,
     });
-    expect(items[1]?.arsId).toBe('0');
+    // 가상정류장("(미정차)") — arsId '0'.
+    expect(items[2]?.arsId).toBe('0');
   });
 
-  it('단건 응답도 isArray 옵션으로 배열 1건이 된다', async () => {
+  it('단건 응답도 isArray 옵션으로 배열 1건이 된다 (arsId 선행 0 보존)', async () => {
     stubFetch(fixture('station-single.xml'));
-    const items = await getStationsByName('강남', { serviceKey: 'plain-key' });
+    const items = await getStationsByName('창경궁', { serviceKey: 'plain-key' });
     expect(items).toHaveLength(1);
-    expect(items[0]?.stId).toBe('105000127');
+    expect(items[0]?.stId).toBe('101000004');
+    // parseTagValue: false 가 아니면 '02013' 이 2013 으로 깨진다.
+    expect(items[0]?.arsId).toBe('02013');
   });
 
   it('headerCd != 0 → BusApiError (headerCd/statusCode 보존)', async () => {

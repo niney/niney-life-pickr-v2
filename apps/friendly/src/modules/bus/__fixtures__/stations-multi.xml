@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
-     tmX/tmY 에 WGS84 경위도가 들어있는 알려진 사례 + posX/posY 에 GRS80 TM 값 동거. -->
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 실응답 기반: 2026-07-02 probe:bus stSrch='강남' 덤프 발췌 (114건 중 3건).
+     tmX/tmY 에 WGS84 경위도, posX/posY 에 GRS80 TM 이 함께 오는 실구조 그대로.
+     마지막 항목은 arsId=0 가상정류장("(미정차)") — 도착정보 조회 불가 케이스. -->
 <ServiceResult>
   <comMsgHeader/>
   <msgHeader>
@@ -10,24 +11,31 @@
   </msgHeader>
   <msgBody>
     <itemList>
-      <stId>105000127</stId>
-      <stNm>강남역</stNm>
-      <arsId>02013</arsId>
-      <tmX>127.0276368</tmX>
-      <tmY>37.4979462</tmY>
-      <posX>200228.41</posX>
-      <posY>443382.21</posY>
-      <stationTp>0</stationTp>
+      <arsId>23278</arsId>
+      <posX>203711.31281205805</posX>
+      <posY>445038.5801412943</posY>
+      <stId>122000175</stId>
+      <stNm>KT강남지사</stNm>
+      <tmX>127.0419791463</tmX>
+      <tmY>37.5047549674</tmY>
     </itemList>
     <itemList>
-      <stId>105000128</stId>
-      <stNm>강남역사거리(가상)</stNm>
+      <arsId>23279</arsId>
+      <posX>203665.81388642304</posX>
+      <posY>445038.8801335776</posY>
+      <stId>122000176</stId>
+      <stNm>KT강남지사</stNm>
+      <tmX>127.0414645036</tmX>
+      <tmY>37.5047578524</tmY>
+    </itemList>
+    <itemList>
       <arsId>0</arsId>
-      <tmX>127.0286521</tmX>
-      <tmY>37.4985301</tmY>
-      <posX>200318.77</posX>
-      <posY>443447.05</posY>
-      <stationTp>0</stationTp>
+      <posX>203345.26396300335</posX>
+      <posY>442871.80516569363</posY>
+      <stId>277104253</stId>
+      <stNm>강남베드로병원(미정차)</stNm>
+      <tmX>127.0378288708</tmX>
+      <tmY>37.4852314894</tmY>
     </itemList>
   </msgBody>
 </ServiceResult>

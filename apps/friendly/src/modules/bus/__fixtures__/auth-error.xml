@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 합성 fixture: data.go.kr 공통 인증 실패 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
-     인증 실패는 ServiceResult 가 아니라 OpenAPI_ServiceResponse 로 온다. -->
+<!-- 합성 fixture: data.go.kr 공통 인증 실패 응답 형식(OpenAPI_ServiceResponse).
+     실관측(2026-07-02)에서는 인증 실패가 ServiceResult headerCd=7 로 왔다
+     (auth-error-headercd7.xml — 실응답 기반). 이 형태는 게이트웨이 공통 문서
+     형식 방어용으로 합성 유지. -->
 <OpenAPI_ServiceResponse>
   <cmmMsgHeader>
     <errMsg>SERVICE ERROR</errMsg>

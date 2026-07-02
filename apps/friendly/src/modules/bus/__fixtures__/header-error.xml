@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
-     headerCd != 0 인 시스템 에러 응답. -->
+<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반 — headerCd != 0 시스템 에러.
+     실환경에서 의도 재현이 어려운 케이스라 합성 유지. ServiceResult 골격은
+     2026-07-02 probe:bus 실응답과 동일 구조임을 확인. -->
 <ServiceResult>
   <comMsgHeader/>
   <msgHeader>

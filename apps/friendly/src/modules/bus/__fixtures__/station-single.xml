@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
-     단건 응답 — fast-xml-parser 가 itemList 를 객체로 떨어뜨리는 함정 검증용. -->
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 단건 응답 — fast-xml-parser 가 itemList 를 객체로 떨어뜨리는 함정 검증용.
+     구조는 2026-07-02 probe:bus 실응답으로 검증 완료. arsId '02013' 은 종로권
+     실존 형식의 선행 0 케이스 — parseTagValue: false 가 아니면 2013 으로 깨진다. -->
 <ServiceResult>
   <comMsgHeader/>
   <msgHeader>
@@ -10,11 +11,13 @@
   </msgHeader>
   <msgBody>
     <itemList>
-      <stId>105000127</stId>
-      <stNm>강남역</stNm>
       <arsId>02013</arsId>
-      <tmX>127.0276368</tmX>
-      <tmY>37.4979462</tmY>
+      <posX>198858.71</posX>
+      <posY>452937.62</posY>
+      <stId>101000004</stId>
+      <stNm>창경궁.서울대학교병원</stNm>
+      <tmX>126.9966863199</tmX>
+      <tmY>37.5790022192</tmY>
     </itemList>
   </msgBody>
 </ServiceResult>

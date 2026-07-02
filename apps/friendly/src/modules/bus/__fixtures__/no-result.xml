@@ -1,11 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- 합성 fixture: 서울시 공식 문서 응답 형식 기반. probe:bus 실응답으로 교체/검증 예정.
-     '결과 없음' 코드 — 문서상 4 로 추정(NO_RESULT_HEADER_CDS), 프로브가 확정. -->
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 실응답 기반: 2026-07-02 무결과 키워드 실호출 관측 — headerCd=4,
+     headerMsg "결과가 없습니다.", msgBody 는 빈 자기닫힘 태그. -->
 <ServiceResult>
   <comMsgHeader/>
   <msgHeader>
     <headerCd>4</headerCd>
-    <headerMsg>결과가 존재하지 않습니다.</headerMsg>
+    <headerMsg>결과가 없습니다.</headerMsg>
     <itemCount>0</itemCount>
   </msgHeader>
   <msgBody/>
