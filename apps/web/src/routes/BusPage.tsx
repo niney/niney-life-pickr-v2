@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import type { BusStationItemType } from '@repo/api-contract';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -118,14 +119,42 @@ export const BusPage = () => {
     ? nearby.isPlaceholderData
     : search.isPlaceholderData;
 
+  // 지도 마커 누적 — 주변 모드에서 자동 재조회로 결과가 교체될 때 이전 지점
+  // 마커까지 사라지면 이동 중 화면이 간헐적으로 비어 보인다. 지도에는 이번
+  // 주변 세션의 합집합을 유지하고(리스트는 현재 지점 결과만), 모드 이탈 시
+  // 리셋한다. ref 는 렌더 간 누적 저장소 — useMemo 안에서만 갱신.
+  const accumRef = useRef(new Map<string, BusStationItemType>());
+  // 명시 액션(📍/재검색 버튼)으로 URL near 가 바뀌면 누적을 비운다 — 안 비우면
+  // 직후 fitToMarkers 가 이전 지점 마커까지 포함해 크게 줌아웃된다.
+  const nearRaw = searchParams.get('near');
+  const prevNearRawRef = useRef(nearRaw);
+  const mapItems = useMemo(() => {
+    if (!nearMode) {
+      accumRef.current = new Map();
+      return items;
+    }
+    if (prevNearRawRef.current !== nearRaw) {
+      prevNearRawRef.current = nearRaw;
+      accumRef.current = new Map();
+    }
+    const acc = accumRef.current;
+    for (const it of nearItems) acc.set(it.stId, it);
+    // 무한 성장 방지 — 상한 초과 시 현재 지점 결과만 남기고 리셋.
+    if (acc.size > 600) {
+      accumRef.current = new Map(nearItems.map((it) => [it.stId, it]));
+    }
+    return [...accumRef.current.values()];
+  }, [nearMode, nearRaw, nearItems, items]);
+
   // 선택 정류장(stId)이 확정된 결과에 없음(다른 검색어로 재검색 등) — 안내만
   // 하고 URL 은 건드리지 않는다. placeholder 표시 중에는 판정 보류.
+  // 주변 모드는 지도 누적(mapItems)에 있으면 유효 — 누적 마커 클릭도 선택이다.
   const selectedMissing =
     stId !== null &&
     (nearMode || hasQ) &&
     activeSuccess &&
     !activePlaceholder &&
-    !activeItems.some((it) => it.stId === stId);
+    !mapItems.some((it) => it.stId === stId);
 
   // 새 검색 제출 — q 교체 + 이전 선택(stId/routeId) 해제를 한 번의 history
   // 교체로. setParam 2회 호출은 함수형 updater 가 같은 렌더의 searchParams 를
@@ -301,7 +330,7 @@ export const BusPage = () => {
   // 선택 정류장 실체 — 현재 결과에 있어야만 도착정보 뷰로 전환한다. 없으면
   // (다른 검색어로 재검색 등 죽은 stId) 기존 selectedMissing 안내 경로 유지.
   const selectedStation =
-    stId !== null ? (activeItems.find((it) => it.stId === stId) ?? null) : null;
+    stId !== null ? (mapItems.find((it) => it.stId === stId) ?? null) : null;
 
   // 도착정보 30초 폴링 — 가상정류장(arsId '0')은 훅 enabled 가 차단.
   const arrivals = useBusStationArrivals(selectedStation?.arsId ?? null);
@@ -371,7 +400,7 @@ export const BusPage = () => {
         </aside>
         <section className="relative flex-1">
           <BusStationsMap
-            items={activeItems}
+            items={mapItems}
             vehicles={vehicles}
             myLocation={effectiveNear}
             selectedStId={stId}
@@ -379,6 +408,7 @@ export const BusPage = () => {
             onResearchAt={nearMode ? handleResearchAt : undefined}
             onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
             suppressFit={autoNear !== null}
+            loading={nearMode && nearby.isFetching}
           />
         </section>
       </div>
@@ -404,7 +434,7 @@ export const BusPage = () => {
         </div>
         <div className="relative min-h-[40dvh] flex-1">
           <BusStationsMap
-            items={activeItems}
+            items={mapItems}
             vehicles={vehicles}
             myLocation={effectiveNear}
             selectedStId={stId}
@@ -412,6 +442,7 @@ export const BusPage = () => {
             onResearchAt={nearMode ? handleResearchAt : undefined}
             onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
             suppressFit={autoNear !== null}
+            loading={nearMode && nearby.isFetching}
           />
         </div>
         {/* 정류장 선택 시 하단 리스트 영역이 도착정보 뷰로 전환 — 패널은 내부

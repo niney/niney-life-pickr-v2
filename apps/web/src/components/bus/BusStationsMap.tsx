@@ -47,6 +47,9 @@ interface Props {
   // 자동 재조회로 결과가 갱신될 때 fitToMarkers 억제 — 사용자가 보던 화면을
   // 지도가 되받아치지 않게 한다(명시 액션 시에만 fit).
   suppressFit?: boolean;
+  // 주변 조회 진행 중 — 지도 상단에 로딩 칩을 띄워 "조회가 돌고 있음"을
+  // 즉시 인지시킨다(마커가 늦게 떠도 미동작으로 오해하지 않게).
+  loading?: boolean;
 }
 
 // 재검색(수동/자동) 트리거 임계 — 기준점에서 지도 중심이 이만큼 벗어나야.
@@ -55,8 +58,9 @@ const RESEARCH_THRESHOLD_M = 300;
 // 자동 재조회 최소 줌 — 반경 500m 결과가 화면에 들어오는 수준. 그보다 멀면
 // 자동 조회는 의미가 없어(100건 절단만 남음) 수동 버튼으로 강등.
 const AUTO_RESEARCH_MIN_ZOOM = 15;
-// 자동 재조회 스로틀 — 관성 스크롤/연속 패닝으로 moveend 가 몰릴 때 최소 간격.
-const AUTO_RESEARCH_MIN_INTERVAL_MS = 2_500;
+// 자동 재조회 최소 간격 — 트레일링 예약이라 마지막 이동은 반드시 조회된다.
+// 셀 단위 DB 30일 캐시 덕에 대부분 업스트림 없이 서빙돼 짧게 잡아도 안전.
+const AUTO_RESEARCH_MIN_INTERVAL_MS = 1_200;
 
 // 같은 이름 정류장 쌍(상·하행 마주보는 표지판)의 라벨 겹침 판정 거리.
 const LABEL_DEDUP_DIST_M = 60;
@@ -83,6 +87,7 @@ export const BusStationsMap = ({
   onResearchAt,
   onAutoResearchAt,
   suppressFit,
+  loading,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -98,23 +103,37 @@ export const BusStationsMap = ({
     null,
   );
   const lastAutoAtRef = useRef(0);
+  // 트레일링 예약 타이머 — 스로틀 간격 안에 온 이벤트를 버리지 않고 남은
+  // 시간 뒤에 마지막 좌표로 발사한다. 드롭 방식은 "패닝을 멈췄는데 조회가
+  // 영영 안 나가는" 간헐 미표시를 만든다.
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+    },
+    [],
+  );
   const handleViewportChangeEnd = useCallback(
     (vp: MapViewport) => {
       const center = { lat: vp.centerLat, lng: vp.centerLng };
       setUserView({ ...center, zoom: vp.zoom });
-      // 자동 재조회 — 줌이 충분히 가깝고 기준점에서 임계 이상 벗어났을 때만,
-      // 스로틀 간격으로. 자동 조회 자체는 URL 을 안 건드린다(호출자 정책).
+      // 자동 재조회 — 줌이 충분히 가깝고 기준점에서 임계 이상 벗어났을 때만.
+      // 자동 조회 자체는 URL 을 안 건드린다(호출자 정책).
       if (
         onAutoResearchAt &&
         myLocation &&
         vp.zoom >= AUTO_RESEARCH_MIN_ZOOM &&
         approxDistanceM(myLocation, center) > RESEARCH_THRESHOLD_M
       ) {
-        const now = Date.now();
-        if (now - lastAutoAtRef.current >= AUTO_RESEARCH_MIN_INTERVAL_MS) {
-          lastAutoAtRef.current = now;
+        if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+        const fire = () => {
+          lastAutoAtRef.current = Date.now();
           onAutoResearchAt(center);
-        }
+        };
+        const wait =
+          AUTO_RESEARCH_MIN_INTERVAL_MS - (Date.now() - lastAutoAtRef.current);
+        if (wait <= 0) fire();
+        else autoTimerRef.current = setTimeout(fire, wait);
       }
     },
     [onAutoResearchAt, myLocation],
@@ -246,7 +265,15 @@ export const BusStationsMap = ({
       />
       {/* '이 위치에서 재검색' — 지도 상단 중앙 오버레이. 클릭 시 지도 중심으로
           주변 조회를 다시 던진다(자동 조회 금지 — 명시 클릭만). */}
-      {showResearch && (
+      {/* 조회 진행 칩 — 자동/수동 재조회가 도는 동안. 재검색 버튼과 같은 슬롯
+          (버튼은 조회가 시작되면 조건상 숨는 흐름이라 겹치지 않는다). */}
+      {loading && (
+        <div className="absolute left-1/2 top-3 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md">
+          <Loader2 className="size-3.5 animate-spin" />
+          주변 정류장 불러오는 중…
+        </div>
+      )}
+      {showResearch && !loading && (
         <button
           type="button"
           onClick={() => onResearchAt?.({ lat: userView!.lat, lng: userView!.lng })}
