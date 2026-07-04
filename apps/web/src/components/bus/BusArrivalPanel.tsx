@@ -2,6 +2,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import type {
   BusArrivalEntryType,
   BusArrivalItemType,
+  BusRouteInfoType,
   BusStationItemType,
 } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
@@ -44,6 +45,10 @@ export interface BusArrivalPanelProps {
   onToggleStationFavorite(): void;
   isRouteFavorite(busRouteId: string): boolean;
   onToggleRouteFavorite(item: BusArrivalItemType): void;
+  // 추적 중(selectedRouteId) 노선의 기본정보. 상위(BusPage)가 useBusRouteDetail
+  // 로 조회해 내려준다(패널은 훅을 직접 호출하지 않는 기존 패턴 준수). 로딩/실패/
+  // 미추적이면 null → 카드 생략(조용히).
+  routeInfo?: BusRouteInfoType | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +72,7 @@ export const BusArrivalPanel = ({
   onToggleStationFavorite,
   isRouteFavorite,
   onToggleRouteFavorite,
+  routeInfo,
 }: BusArrivalPanelProps) => {
   // arsId '0' = 가상정류장 — 도착정보 API 자체가 없다(훅도 호출 안 함).
   const virtual = station.arsId === '0';
@@ -104,6 +110,9 @@ export const BusArrivalPanel = ({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {/* 추적 중 노선의 정보 카드 — 목록 위. 미추적/로딩/실패면 routeInfo 가
+            null 이라 자연히 생략된다. */}
+        {selectedRouteId && routeInfo && <RouteInfoCard info={routeInfo} />}
         <PanelBody
           virtual={virtual}
           items={items}
@@ -230,6 +239,39 @@ const ArrivalMessage = ({
     >
       {entry.message}
     </span>
+  );
+};
+
+// 추적 중 노선의 기본정보 카드 — 기점↔종점/배차/운행시간/운수사/노선거리.
+// null 필드는 행을 생략한다(부분 정보라도 있는 것만 보여준다).
+const RouteInfoCard = ({ info }: { info: BusRouteInfoType }) => {
+  const rows: { label: string; value: string }[] = [];
+  if (info.stStationName || info.edStationName) {
+    rows.push({ label: '구간', value: `${info.stStationName} ↔ ${info.edStationName}` });
+  }
+  if (info.termMin != null) rows.push({ label: '배차', value: `${info.termMin}분` });
+  if (info.firstBusTime && info.lastBusTime) {
+    rows.push({ label: '운행', value: `${info.firstBusTime} ~ ${info.lastBusTime}` });
+  }
+  if (info.corpName) rows.push({ label: '운수사', value: info.corpName });
+  if (info.lengthKm != null) rows.push({ label: '노선거리', value: `${info.lengthKm}km` });
+  // 표시할 정보가 하나도 없으면 카드 자체를 그리지 않는다.
+  if (rows.length === 0) return null;
+  return (
+    <div className="mb-3 rounded-md border bg-muted/40 p-3">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="text-sm font-semibold tabular-nums">{info.routeName}</span>
+        <span className="text-xs text-muted-foreground">노선 정보</span>
+      </div>
+      <dl className="flex flex-col gap-1 text-xs">
+        {rows.map((r) => (
+          <div key={r.label} className="flex gap-2">
+            <dt className="w-14 shrink-0 text-muted-foreground">{r.label}</dt>
+            <dd className="min-w-0 break-words">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 };
 

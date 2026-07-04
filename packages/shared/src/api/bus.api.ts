@@ -3,6 +3,7 @@ import {
   type BusArrivalsResultType,
   type BusNearbyResultType,
   type BusPositionsResultType,
+  type BusRouteDetailResultType,
   type BusStationSearchResultType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
@@ -44,4 +45,8 @@ export const busApi = {
       `${Routes.Bus.busPositions(busRouteId)}?${params.toString()}`,
     );
   },
+  // 노선 상세 합본 — 형상(path) + 경유 정류소(stations) + 기본정보(info).
+  // 서버가 3콜을 합쳐 DB 30일 캐시로 서빙(형상 정적) — 노선당 최초 1회만 업스트림.
+  routeDetail: (busRouteId: string) =>
+    apiFetch<BusRouteDetailResultType>(Routes.Bus.routeDetail(busRouteId)),
 };

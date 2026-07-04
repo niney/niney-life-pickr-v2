@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MapPin, RotateCw } from 'lucide-react';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
-import type { BusPositionItemType, BusStationItemType } from '@repo/api-contract';
+import type {
+  BusPositionItemType,
+  BusRouteStationItemType,
+  BusStationItemType,
+} from '@repo/api-contract';
 import {
+  buildBusRouteStopDotDataUrl,
   buildBusStopMarkerDataUrl,
   buildBusVehicleMarkerDataUrl,
   buildMyLocationMarkerDataUrl,
@@ -50,6 +55,12 @@ interface Props {
   // 주변 조회 진행 중 — 지도 상단에 로딩 칩을 띄워 "조회가 돌고 있음"을
   // 즉시 인지시킨다(마커가 늦게 떠도 미동작으로 오해하지 않게).
   loading?: boolean;
+  // 노선 보기 — 추적 중 노선의 형상 폴리라인. MapCanvas 전용 레이어로 넘긴다.
+  routeLine?: { points: { lat: number; lng: number }[]; color: string } | null;
+  // 노선 보기 — 추적 중 노선의 경유 정류소. 기존 마커 파이프라인에 작은 점으로
+  // 합류. 검색/선택 마커와 같은 stId 는 그쪽이 우선(점 생략), 점 클릭은 정류장
+  // 선택(stId) 흐름 그대로. 색은 routeLine.color 와 맞춘다.
+  routeStops?: BusRouteStationItemType[];
 }
 
 // 재검색(수동/자동) 트리거 임계 — 기준점에서 지도 중심이 이만큼 벗어나야.
@@ -88,6 +99,8 @@ export const BusStationsMap = ({
   onAutoResearchAt,
   suppressFit,
   loading,
+  routeLine,
+  routeStops,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -191,8 +204,26 @@ export const BusStationsMap = ({
           },
         ]
       : [];
-    return [...stationMarkers, ...vehicleMarkers, ...myLocationMarkers];
-  }, [items, vehicles, myLocation]);
+    // 경유 정류소 점 — 활성 마커(items)에 이미 있는 stId 는 제외(정류장 마커
+    // 우선). 라벨 없이 노선색 점만(105개 과밀 방지). 색 없으면 회색 폴백.
+    // 점을 배열 앞에 둬 뒤에 오는 정류장/차량 마커가 위에 그려지게 한다.
+    const activeStIds = new Set(items.map((it) => it.stId));
+    const dotUrl = buildBusRouteStopDotDataUrl(routeLine?.color ?? '#6b7280');
+    const routeStopMarkers: MapMarker[] = (routeStops ?? [])
+      .filter((s) => !activeStIds.has(s.stId))
+      .map((s) => ({
+        id: s.stId,
+        lat: s.lat,
+        lng: s.lng,
+        icon: { src: dotUrl, selectedSrc: dotUrl },
+      }));
+    return [
+      ...routeStopMarkers,
+      ...stationMarkers,
+      ...vehicleMarkers,
+      ...myLocationMarkers,
+    ];
+  }, [items, vehicles, myLocation, routeStops, routeLine?.color]);
 
   // 차량·내 위치 마커 클릭은 no-op — 정류장 선택(stId)으로 오염시키지 않는다.
   const handleMarkerSelect = useCallback(
@@ -273,6 +304,7 @@ export const BusStationsMap = ({
         selectedMarkerId={selectedStId}
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}
+        routeLine={routeLine}
       />
       {/* '이 위치에서 재검색' — 지도 상단 중앙 오버레이. 클릭 시 지도 중심으로
           주변 조회를 다시 던진다(자동 조회 금지 — 명시 클릭만). */}

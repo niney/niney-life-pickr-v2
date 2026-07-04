@@ -15,22 +15,30 @@ const mocks = vi.hoisted(() => ({
   getStationArrivals: vi.fn(),
   getBusPositionsByRouteSt: vi.fn(),
   getStationsByPos: vi.fn(),
+  getRoutePath: vi.fn(),
+  getStationsByRoute: vi.fn(),
+  getRouteInfo: vi.fn(),
 }));
 vi.mock('./bus-api.adapter.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./bus-api.adapter.js')>();
   return { ...actual, ...mocks };
 });
 
+import type { BusRouteDetailResultType } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import {
   BusApiError,
   type RawBusPosition,
   type RawBusStation,
   type RawNearbyStation,
+  type RawRouteInfo,
+  type RawRoutePathPoint,
+  type RawRouteStation,
   type RawStationArrival,
 } from './bus-api.adapter.js';
 import {
   BUS_NEARBY_TTL_MS,
+  BUS_ROUTE_TTL_MS,
   BUS_SEARCH_TTL_MS,
   BusService,
   FORCE_MIN_INTERVAL_MS,
@@ -101,6 +109,47 @@ const rawNearby = (over: Partial<RawNearbyStation> = {}): RawNearbyStation => ({
   ...over,
 });
 
+// 5차(노선 보기) raw 팩토리 — 서비스 정규화 검증용 (좌표는 gpsX/gpsY WGS84).
+const rawRoutePath = (over: Partial<RawRoutePathPoint> = {}): RawRoutePathPoint => ({
+  no: 1,
+  tmX: null,
+  tmY: null,
+  gpsX: 127.039507,
+  gpsY: 37.686917,
+  posX: null,
+  posY: null,
+  ...over,
+});
+const rawRouteStation = (over: Partial<RawRouteStation> = {}): RawRouteStation => ({
+  seq: 1,
+  stId: `${ST_PREFIX}${stamp()}`,
+  arsId: '10153',
+  stNm: '도봉산입구',
+  direction: '염곡동',
+  transYn: 'N',
+  tmX: null,
+  tmY: null,
+  gpsX: 127.040722,
+  gpsY: 37.687083,
+  posX: null,
+  posY: null,
+  ...over,
+});
+const rawRouteInfo = (over: Partial<RawRouteInfo> = {}): RawRouteInfo => ({
+  busRouteId: '100100020',
+  busRouteNm: '141',
+  busRouteAbrv: '141',
+  length: '54.1',
+  routeType: '3',
+  stStationNm: '도봉산',
+  edStationNm: '염곡동',
+  term: '11',
+  firstBusTm: '20260704040000',
+  lastBusTm: '20260704224000',
+  corpNm: '아진교통  02-955-2321',
+  ...over,
+});
+
 const searchUrl = (q: string, force?: boolean): string =>
   `/api/v1/bus/stations/search?q=${encodeURIComponent(q)}${force ? '&force=true' : ''}`;
 const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
@@ -108,6 +157,8 @@ const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
 const arrivalsUrl = (arsId: string): string => `/api/v1/bus/stations/${arsId}/arrivals`;
 const positionsUrl = (busRouteId: string, startOrd: number, endOrd: number): string =>
   `/api/v1/bus/routes/${busRouteId}/positions?startOrd=${startOrd}&endOrd=${endOrd}`;
+const routeDetailUrl = (busRouteId: string): string =>
+  `/api/v1/bus/routes/${busRouteId}/detail`;
 
 // app 은 파일 단위 공유 — 검색/도착/위치 describe 모두 같은 인스턴스를 쓴다.
 let app: FastifyInstance;
@@ -133,6 +184,9 @@ beforeEach(() => {
   mocks.getStationArrivals.mockReset();
   mocks.getBusPositionsByRouteSt.mockReset();
   mocks.getStationsByPos.mockReset();
+  mocks.getRoutePath.mockReset();
+  mocks.getStationsByRoute.mockReset();
+  mocks.getRouteInfo.mockReset();
 });
 
 describe('GET /api/v1/bus/stations/search', () => {
@@ -747,5 +801,142 @@ describe('BusService — 도착/위치 쿼터·키 가드 (서비스 직접 생�
     });
     expect(mocks.getStationArrivals).not.toHaveBeenCalled();
     expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/bus/routes/:busRouteId/detail (5차 노선 보기)', () => {
+  // 라우트 BusService 는 파일 공유 + 캐시는 DB 30일 — 테스트마다 겹치지 않는
+  // busRouteId 를 쓰고 afterAll 에서 prefix 로 정리한다(숫자여야 params 통과).
+  let ridSeq = 0;
+  const rid = (): string => `9990${Date.now()}${ridSeq++}`;
+
+  afterAll(async () => {
+    await app.prisma.busRouteShape.deleteMany({
+      where: { busRouteId: { startsWith: '9990' } },
+    });
+  });
+
+  it('miss → api + 정규화(path no정렬/station seq정렬/isTurnPoint/info 시간·회사명) + 행 생성', async () => {
+    const busRouteId = rid();
+    // 어댑터 입력 순서와 무관하게 no/seq 오름차순으로 서빙됨을 역순 입력으로 검증.
+    mocks.getRoutePath.mockResolvedValueOnce([
+      rawRoutePath({ no: 2, gpsX: 127.041, gpsY: 37.688 }),
+      rawRoutePath({ no: 1, gpsX: 127.039507, gpsY: 37.686917 }),
+    ]);
+    mocks.getStationsByRoute.mockResolvedValueOnce([
+      rawRouteStation({ seq: 2, stId: 'route-b', stNm: '정류장B', transYn: 'Y' }),
+      rawRouteStation({ seq: 1, stId: 'route-a', stNm: '정류장A', transYn: 'N' }),
+    ]);
+    mocks.getRouteInfo.mockResolvedValueOnce(rawRouteInfo());
+
+    const res = await app.inject({ url: routeDetailUrl(busRouteId) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as BusRouteDetailResultType;
+    expect(body.source).toBe('api');
+    expect(body.busRouteId).toBe(busRouteId);
+    // 형상: no 오름차순 → 첫 점이 no1.
+    expect(body.path).toHaveLength(2);
+    expect(body.path[0]).toEqual({ lat: 37.686917, lng: 127.039507 });
+    // 정류소: seq 오름차순 + isTurnPoint=transYn 'Y'.
+    expect(body.stations.map((s) => s.stId)).toEqual(['route-a', 'route-b']);
+    expect(body.stations[0]!.isTurnPoint).toBe(false);
+    expect(body.stations[1]!.isTurnPoint).toBe(true);
+    expect(body.stations[0]).toMatchObject({
+      seq: 1,
+      name: '정류장A',
+      arsId: '10153',
+      direction: '염곡동',
+    });
+    // info 정규화: 시간 HH:mm, 회사명 연속 공백 접힘, length/term 숫자.
+    expect(body.info).toMatchObject({
+      routeName: '141',
+      routeType: '3',
+      stStationName: '도봉산',
+      edStationName: '염곡동',
+      lengthKm: 54.1,
+      termMin: 11,
+      firstBusTime: '04:00',
+      lastBusTime: '22:40',
+      corpName: '아진교통 02-955-2321',
+    });
+    expect(Number.isNaN(Date.parse(body.fetchedAt))).toBe(false);
+
+    const row = await app.prisma.busRouteShape.findUnique({ where: { busRouteId } });
+    expect(row).not.toBeNull();
+  });
+
+  it('TTL 내 재요청 → cache, 어댑터 미호출', async () => {
+    const busRouteId = rid();
+    mocks.getRoutePath.mockResolvedValueOnce([rawRoutePath()]);
+    mocks.getStationsByRoute.mockResolvedValueOnce([rawRouteStation()]);
+    mocks.getRouteInfo.mockResolvedValueOnce(rawRouteInfo());
+    await app.inject({ url: routeDetailUrl(busRouteId) });
+    expect(mocks.getRouteInfo).toHaveBeenCalledTimes(1);
+
+    const res = await app.inject({ url: routeDetailUrl(busRouteId) });
+    expect((res.json() as BusRouteDetailResultType).source).toBe('cache');
+    expect(mocks.getRouteInfo).toHaveBeenCalledTimes(1);
+    expect(mocks.getRoutePath).toHaveBeenCalledTimes(1);
+    expect(mocks.getStationsByRoute).toHaveBeenCalledTimes(1);
+  });
+
+  it('업스트림 실패 + 만료 캐시 → stale 로 기존 목록 반환', async () => {
+    const busRouteId = rid();
+    mocks.getRoutePath.mockResolvedValueOnce([rawRoutePath()]);
+    mocks.getStationsByRoute.mockResolvedValueOnce([rawRouteStation({ stId: 'route-orig' })]);
+    mocks.getRouteInfo.mockResolvedValueOnce(rawRouteInfo());
+    await app.inject({ url: routeDetailUrl(busRouteId) });
+
+    await app.prisma.busRouteShape.update({
+      where: { busRouteId },
+      data: { fetchedAt: new Date(Date.now() - BUS_ROUTE_TTL_MS - 1000) },
+    });
+
+    mocks.getRouteInfo.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: routeDetailUrl(busRouteId) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as BusRouteDetailResultType;
+    expect(body.source).toBe('stale');
+    expect(body.stations[0]!.stId).toBe('route-orig');
+  });
+
+  it('업스트림 실패 + 캐시 없음 → 502', async () => {
+    mocks.getRoutePath.mockResolvedValueOnce([rawRoutePath()]);
+    mocks.getStationsByRoute.mockResolvedValueOnce([rawRouteStation()]);
+    mocks.getRouteInfo.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: routeDetailUrl(rid()) });
+    expect(res.statusCode).toBe(502);
+  });
+
+  it('getRouteInfo 결과 없음(노선 부재) → 502', async () => {
+    mocks.getRoutePath.mockResolvedValueOnce([]);
+    mocks.getStationsByRoute.mockResolvedValueOnce([]);
+    mocks.getRouteInfo.mockResolvedValueOnce(null);
+    const res = await app.inject({ url: routeDetailUrl(rid()) });
+    expect(res.statusCode).toBe(502);
+  });
+
+  it('비숫자 busRouteId → 400, 어댑터 미호출', async () => {
+    const res = await app.inject({ url: '/api/v1/bus/routes/abc12/detail' });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getRouteInfo).not.toHaveBeenCalled();
+  });
+
+  it('일일 쿼터 소진 → 503 (3콜분 확보 실패, 어댑터 미호출)', async () => {
+    const adapter = {
+      getRoutePath: vi.fn(),
+      getStationsByRoute: vi.fn(),
+      getRouteInfo: vi.fn(),
+    };
+    // dailyLimit 2 < 3콜 — 쿼터 확보 단계에서 503, 업스트림 미호출.
+    const svc = new BusService(app.prisma, { serviceKey: 'svc-key', adapter, dailyLimit: 2 });
+    await expect(svc.getRouteDetail(rid())).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRoutePath).not.toHaveBeenCalled();
+    expect(adapter.getRouteInfo).not.toHaveBeenCalled();
+  });
+
+  it('serviceKey 빈 값 → 503', async () => {
+    const svc = new BusService(app.prisma, { serviceKey: '' });
+    await expect(svc.getRouteDetail(rid())).rejects.toMatchObject({ statusCode: 503 });
   });
 });

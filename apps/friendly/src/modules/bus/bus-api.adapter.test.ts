@@ -7,9 +7,12 @@ import {
   BusApiError,
   callBusApi,
   getBusPositionsByRouteSt,
+  getRouteInfo,
+  getRoutePath,
   getStationArrivals,
   getStationsByName,
   getStationsByPos,
+  getStationsByRoute,
   toLatLng,
 } from './bus-api.adapter.js';
 
@@ -183,6 +186,75 @@ describe('getBusPositionsByRouteSt — 노선 구간 버스 위치 파싱', () =
     expect(fetchedUrl(fn)).toContain('busRouteId=100100020');
     expect(fetchedUrl(fn)).toContain('startOrd=62');
     expect(fetchedUrl(fn)).toContain('endOrd=65');
+  });
+});
+
+describe('getRoutePath — 노선 형상 파싱 (5차)', () => {
+  it('no/gpsX/gpsY 를 파싱하고 tmX/tmY 는 없어 null (toLatLng 는 gpsX/gpsY 채택)', async () => {
+    const fn = stubFetch(fixture('route-path.xml'));
+    const items = await getRoutePath('100100020', { serviceKey: 'plain-key' });
+    expect(items).toHaveLength(6);
+    expect(items[0]).toMatchObject({
+      no: 1,
+      tmX: null,
+      tmY: null,
+      gpsX: 127.039507,
+      gpsY: 37.686917,
+    });
+    // 형상 점도 값-범위 판정으로 gpsX/gpsY(WGS84)를 채택한다.
+    expect(toLatLng(items[0]!)).toEqual({ lat: 37.686917, lng: 127.039507 });
+    expect(fetchedUrl(fn)).toContain('busRouteInfo/getRoutePath');
+    expect(fetchedUrl(fn)).toContain('busRouteId=100100020');
+  });
+});
+
+describe('getStationsByRoute — 경유 정류소 파싱 (5차)', () => {
+  it("'station'→stId 매핑, seq 숫자 변환, direction/transYn 원문 보존", async () => {
+    const fn = stubFetch(fixture('route-stations.xml'));
+    const items = await getStationsByRoute('100100020', { serviceKey: 'plain-key' });
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      seq: 1,
+      stId: '109000068',
+      arsId: '10153',
+      stNm: '도봉산입구',
+      direction: '염곡동',
+      transYn: 'N',
+      gpsX: 127.040722,
+      gpsY: 37.687083,
+    });
+    expect(toLatLng(items[0]!)).toEqual({ lat: 37.687083, lng: 127.040722 });
+    // 서울시 원문 오타 'Staion' 을 그대로 호출한다.
+    expect(fetchedUrl(fn)).toContain('busRouteInfo/getStaionByRoute');
+    expect(fetchedUrl(fn)).toContain('busRouteId=100100020');
+  });
+});
+
+describe('getRouteInfo — 노선 기본정보 파싱 (5차)', () => {
+  it('단건 원문 보존 — corpNm 연속 공백/length·term 문자열은 서비스가 정규화', async () => {
+    stubFetch(fixture('route-info.xml'));
+    const info = await getRouteInfo('100100020', { serviceKey: 'plain-key' });
+    expect(info).not.toBeNull();
+    expect(info).toMatchObject({
+      busRouteId: '100100020',
+      busRouteAbrv: '141',
+      busRouteNm: '141',
+      length: '54.1',
+      routeType: '3',
+      stStationNm: '도봉산',
+      edStationNm: '염곡동',
+      term: '11',
+      firstBusTm: '20260704040000',
+      lastBusTm: '20260704224000',
+      // 어댑터는 원문 보존 — 연속 공백은 서비스가 접는다.
+      corpNm: '아진교통  02-955-2321',
+    });
+  });
+
+  it('결과 없음(headerCd 4) → null', async () => {
+    stubFetch(fixture('no-result.xml'));
+    const info = await getRouteInfo('999999999', { serviceKey: 'plain-key' });
+    expect(info).toBeNull();
   });
 });
 

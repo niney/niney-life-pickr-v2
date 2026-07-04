@@ -8,6 +8,8 @@ import {
   BusPositionsParams,
   BusPositionsQuery,
   BusPositionsResult,
+  BusRouteDetailParams,
+  BusRouteDetailResult,
   BusStationSearchQuery,
   BusStationSearchResult,
   ErrorResponseSchema,
@@ -131,6 +133,35 @@ const busRoutes: FastifyPluginAsync = async (app) => {
           req.query.startOrd,
           req.query.endOrd,
         );
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 502 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
+            message: e instanceof Error ? e.message : '버스 API 호출 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 노선 상세(형상+경유 정류소+기본정보) 합본 — busRouteInfo 3콜을 서버가 한 번에
+  // 수집해 DB 30일 캐싱. 비숫자 busRouteId 는 zod 가 400. 502/503 은 직접 응답.
+  typed.get(Routes.Bus.routeDetail(':busRouteId'), {
+    schema: {
+      tags: ['bus'],
+      params: BusRouteDetailParams,
+      response: {
+        200: BusRouteDetailResult,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getRouteDetail(req.params.busRouteId);
       } catch (e) {
         const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
         if (sc === 502 || sc === 503) {

@@ -103,3 +103,15 @@ export const useBusPositions = (
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
+
+// 노선 상세(형상+경유 정류소+기본정보) — 형상은 사실상 정적이라 서버 DB 30일
+// 캐시 + 클라이언트 staleTime 24h. 재조회가 무의미하고 폴링도 없다(도착/위치와
+// 달리 실시간 아님). busRouteId 선택(추적) 시에만 조회.
+export const useBusRouteDetail = (busRouteId: string | null) => {
+  return useQuery({
+    queryKey: ['bus', 'routes', busRouteId, 'detail'],
+    queryFn: () => busApi.routeDetail(busRouteId!),
+    enabled: busRouteId !== null,
+    staleTime: 86_400_000,
+  });
+};

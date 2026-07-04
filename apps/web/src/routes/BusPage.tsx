@@ -2,10 +2,12 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { BusStationItemType } from '@repo/api-contract';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { busRouteTypeColor } from '@repo/utils';
 import {
   useBusFavorites,
   useBusNearbyStations,
   useBusPositions,
+  useBusRouteDetail,
   useBusStationArrivals,
   useBusStationSearch,
   useBusStationsRefresh,
@@ -274,14 +276,25 @@ export const BusPage = () => {
     );
   }, [setSearchParams]);
 
-  // 정류장 선택 — 다른 정류장으로 바뀌면 노선 선택(routeId)은 의미가 없어
-  // 같은 history 교체 안에서 함께 해제.
+  // 추적 노선의 경유 정류소 stId 집합 — handleSelect 가 클릭 시점에 읽어(ref)
+  // 정류장 전환이 '노선 위 이동'인지 판정한다. 값은 routeDetail 확정 후 아래에서
+  // 갱신(MapCanvas 의 latest-value ref 패턴과 동일하게 렌더 중 대입).
+  const routeStationIdsRef = useRef<Set<string>>(new Set());
+
+  // 정류장 선택 — 다른 정류장으로 바뀌면 노선 선택(routeId)은 보통 의미가 없어
+  // 해제한다. 단 새 정류장이 추적 중 노선의 경유 정류소면(노선 점 클릭 등)
+  // routeId 를 유지 — 노선 위를 정류장 단위로 이어 탐색할 수 있게(도착정보에도
+  // 그 노선이 있어 staOrd 윈도우가 자연 갱신).
   const handleSelect = useCallback(
     (id: string) => {
       setSearchParams(
         (prev) => {
           const sp = new URLSearchParams(prev);
-          if (sp.get('stId') !== id) sp.delete('routeId');
+          if (sp.get('stId') !== id) {
+            const staysOnRoute =
+              sp.get('routeId') !== null && routeStationIdsRef.current.has(id);
+            if (!staysOnRoute) sp.delete('routeId');
+          }
           sp.set('stId', id);
           return sp;
         },
@@ -352,11 +365,34 @@ export const BusPage = () => {
     });
   }, [nearMode, nearbyRefetch, q, refreshMutate, refreshPending]);
 
+  // 노선 보기(추적 중) — 선택 노선의 형상 + 경유 정류소 + 기본정보. 형상이
+  // 정적이라 24h 캐시·폴링 없음. routeId 선택 시에만 조회.
+  const routeDetail = useBusRouteDetail(routeId);
+  // 카드용 노선 기본정보 — 미추적/로딩/실패면 null(패널이 카드 생략).
+  const routeInfo = routeId ? (routeDetail.data?.info ?? null) : null;
+  // 노선색 — 유형 코드 매핑. 형상 폴리라인과 경유지 점이 같은 색을 공유한다.
+  const routeColor = routeDetail.data
+    ? busRouteTypeColor(routeDetail.data.info.routeType)
+    : '#6b7280';
+  // 지도 폴리라인 — 점 2개 미만이면 null. 참조 안정화(memo)로 1,986점 LineString
+  // 을 매 렌더 재생성하지 않는다.
+  const routeLine = useMemo(() => {
+    if (!routeId || !routeDetail.data || routeDetail.data.path.length < 2) return null;
+    return { points: routeDetail.data.path, color: routeColor };
+  }, [routeId, routeDetail.data, routeColor]);
+  // 경유 정류소 — 추적 중일 때만 지도 점 마커로.
+  const routeStops = routeId ? routeDetail.data?.stations : undefined;
+  // handleSelect(클릭 시점)가 읽을 경유 정류소 stId 집합을 최신화.
+  routeStationIdsRef.current = useMemo(
+    () => new Set((routeDetail.data?.stations ?? []).map((s) => s.stId)),
+    [routeDetail.data],
+  );
+
   // 선택 정류장 실체 — 현재 결과에 있으면 그것으로 도착정보 뷰로 전환한다.
-  // 활성 결과(검색/주변)에 없더라도 즐겨찾기 스냅샷(정류장 또는 노선)에 있으면
-  // 그 스냅샷으로 복원 — 즐겨찾기로 진입한 stId 는 목록에 없기 때문. 활성 결과가
-  // 항상 먼저 이기므로 기존 검색/딥링크 동작은 바뀌지 않는다. 셋 다 없으면 null
-  // (죽은 stId → 기존 selectedMissing 안내 경로 유지).
+  // 활성 결과(검색/주변)에 없더라도 즐겨찾기 스냅샷(정류장 또는 노선), 나아가
+  // 노선 보기 경유 정류소 스냅샷에 있으면 그 값으로 복원 — 즐겨찾기/노선 점으로
+  // 진입한 stId 는 검색 목록에 없기 때문. 활성 결과가 항상 먼저 이기므로 기존
+  // 검색/딥링크 동작은 바뀌지 않는다. 다 없으면 null(죽은 stId → selectedMissing).
   const selectedStation = useMemo<BusStationItemType | null>(() => {
     if (stId === null) return null;
     const fromActive = mapItems.find((it) => it.stId === stId);
@@ -375,8 +411,19 @@ export const BusPage = () => {
         lng: favRoute.lng,
       };
     }
+    // 노선 경유지 점 클릭으로 목록에 없는 정류장 선택 시 도착 패널이 살아야 한다.
+    const routeStation = routeDetail.data?.stations.find((s) => s.stId === stId);
+    if (routeStation) {
+      return {
+        stId: routeStation.stId,
+        arsId: routeStation.arsId,
+        name: routeStation.name,
+        lat: routeStation.lat,
+        lng: routeStation.lng,
+      };
+    }
     return null;
-  }, [stId, mapItems, favorites.stations, favorites.routes]);
+  }, [stId, mapItems, favorites.stations, favorites.routes, routeDetail.data]);
 
   // 지도용 마커 목록 — 선택 정류장이 활성 결과에 없으면(즐겨찾기 진입) 덧대어
   // 마커 표시·센터링(BusStationsMap 의 fit/flyTo)이 동작하게 한다. 활성 결과에
@@ -442,6 +489,7 @@ export const BusPage = () => {
           lng: selectedStation.lng,
         })
       }
+      routeInfo={routeInfo}
     />
   ) : null;
 
@@ -502,7 +550,11 @@ export const BusPage = () => {
             onSelectMarker={handleSelect}
             onResearchAt={nearMode ? handleResearchAt : undefined}
             onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
-            suppressFit={autoNear !== null}
+            routeLine={routeLine}
+            routeStops={routeStops}
+            // 노선 추적 중에는 fit 억제 — 선택 정류장이 활성결과에 없어 mapItems
+            // 가 바뀌어도(경유지 점 클릭 등) 지도가 노선 전체로 줌아웃되지 않게.
+            suppressFit={autoNear !== null || routeId !== null}
             loading={nearMode && nearby.isFetching}
           />
         </section>
@@ -536,7 +588,11 @@ export const BusPage = () => {
             onSelectMarker={handleSelect}
             onResearchAt={nearMode ? handleResearchAt : undefined}
             onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
-            suppressFit={autoNear !== null}
+            routeLine={routeLine}
+            routeStops={routeStops}
+            // 노선 추적 중에는 fit 억제 — 선택 정류장이 활성결과에 없어 mapItems
+            // 가 바뀌어도(경유지 점 클릭 등) 지도가 노선 전체로 줌아웃되지 않게.
+            suppressFit={autoNear !== null || routeId !== null}
             loading={nearMode && nearby.isFetching}
           />
         </div>

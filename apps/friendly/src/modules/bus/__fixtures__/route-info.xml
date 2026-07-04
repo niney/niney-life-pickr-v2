@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 2026-07-04 probe 실응답 — busRouteInfo/getRouteInfo?busRouteId=100100020(141).
+     단건(itemList 1개). corpNm 은 상호+전화가 연속 공백으로 붙어 옴('아진교통  02-955-2321').
+     firstLowTm/lastBusYn 은 공백만 — 파서(trimValues)가 '' 로 만들어 strOrNull→null. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader><headerCd>0</headerCd><headerMsg>정상적으로 처리되었습니다.</headerMsg><itemCount>0</itemCount></msgHeader>
+  <msgBody>
+    <itemList><busRouteAbrv>141</busRouteAbrv><busRouteId>100100020</busRouteId><busRouteNm>141</busRouteNm><corpNm>아진교통  02-955-2321</corpNm><edStationNm>염곡동</edStationNm><firstBusTm>20260704040000</firstBusTm><firstLowTm>              </firstLowTm><lastBusTm>20260704224000</lastBusTm><lastBusYn> </lastBusYn><lastLowTm>20240130000000</lastLowTm><length>54.1</length><routeType>3</routeType><stStationNm>도봉산</stStationNm><term>11</term></itemList>
+  </msgBody>
+</ServiceResult>

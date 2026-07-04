@@ -17,19 +17,29 @@ import type {
   BusArrivalsResultType,
   BusNearbyResultType,
   BusPositionsResultType,
+  BusRouteDetailResultType,
+  BusRouteInfoType,
+  BusRoutePathPointType,
+  BusRouteStationItemType,
   BusStationSearchResultType,
 } from '@repo/api-contract';
 import {
   BusApiError,
   getBusPositionsByRouteSt,
+  getRouteInfo,
+  getRoutePath,
   getStationArrivals,
   getStationsByName,
   getStationsByPos,
+  getStationsByRoute,
   toLatLng,
   type BusApiRequestOptions,
   type RawBusPosition,
   type RawBusStation,
   type RawNearbyStation,
+  type RawRouteInfo,
+  type RawRoutePathPoint,
+  type RawRouteStation,
   type RawStationArrival,
 } from './bus-api.adapter.js';
 
@@ -44,6 +54,8 @@ export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
 // 셀 한 변 0.005° ≈ 550m. 쿼리 좌표를 셀에 스냅해 cellKey 로 쓴다.
 export const NEARBY_CELL_DEG = 0.005;
 export const BUS_NEARBY_TTL_MS = BUS_SEARCH_TTL_MS;
+// 노선 상세(형상+정류소+기본정보)도 사실상 정적 — 검색과 동일 30일 TTL.
+export const BUS_ROUTE_TTL_MS = BUS_SEARCH_TTL_MS;
 // 업스트림 호출 반경 — 셀 중심에서 셀 내 임의 지점(반 대각 ≈390m) + 최대 요청
 // 반경(1000m)을 다 덮어야 셀 캐시를 어떤 쿼리에도 재사용할 수 있다. 1500m.
 export const NEARBY_UPSTREAM_RADIUS_M = 1500;
@@ -94,6 +106,18 @@ export interface BusServiceDeps {
       radiusM: number,
       opts: BusApiRequestOptions,
     ) => Promise<RawNearbyStation[]>;
+    getRoutePath?: (
+      busRouteId: string,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawRoutePathPoint[]>;
+    getStationsByRoute?: (
+      busRouteId: string,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawRouteStation[]>;
+    getRouteInfo?: (
+      busRouteId: string,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawRouteInfo | null>;
   };
   // 테스트 주입용 — TTL/60초 가드 시간 제어 (가짜 타이머 불필요).
   now?: () => Date;
@@ -175,6 +199,80 @@ const toResult = (
   fetchedAt: cached.fetchedAt.toISOString(),
   source,
 });
+
+// ── 5차(노선 보기) 정규화 ────────────────────────────────────────────────
+// DB payload 에 담기는 정규화 blob — 서빙 시 busRouteId/fetchedAt/source 만 덧댄다.
+interface RouteDetailBlob {
+  info: BusRouteInfoType;
+  path: BusRoutePathPointType[];
+  stations: BusRouteStationItemType[];
+}
+
+// 연속 공백을 한 칸으로 접고 trim — corpNm('아진교통  02-955-2321') 정리. 비면 null.
+const collapseSpaces = (v: string | null): string | null => {
+  if (v === null) return null;
+  const t = v.replace(/\s+/g, ' ').trim();
+  return t.length > 0 ? t : null;
+};
+
+// 'yyyyMMddHHmm(ss)' → 'HH:mm'. 날짜 8자리 뒤 시:분을 취한다(초 유무 무관).
+// 공백/자릿수 부족/시분 범위 밖이면 null.
+const toHhmm = (v: string | null): string | null => {
+  if (v === null) return null;
+  const t = v.trim();
+  if (!/^\d{12}/.test(t)) return null;
+  const hh = t.slice(8, 10);
+  const mm = t.slice(10, 12);
+  if (Number(hh) > 23 || Number(mm) > 59) return null;
+  return `${hh}:${mm}`;
+};
+
+const parseFloatOrNull = (v: string | null): number | null => {
+  if (v === null) return null;
+  const n = Number.parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const parseIntOrNull = (v: string | null): number | null => {
+  if (v === null) return null;
+  const n = Number.parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+};
+
+const trimOrNull = (v: string | null): string | null => {
+  if (v === null) return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+};
+
+const normalizeRouteInfo = (raw: RawRouteInfo): BusRouteInfoType => ({
+  // busRouteAbrv 우선, 비면 busRouteNm, 둘 다 비면 ''.
+  routeName: trimOrNull(raw.busRouteAbrv) ?? trimOrNull(raw.busRouteNm) ?? '',
+  routeType: raw.routeType ?? '',
+  stStationName: raw.stStationNm ?? '',
+  edStationName: raw.edStationNm ?? '',
+  lengthKm: parseFloatOrNull(raw.length),
+  termMin: parseIntOrNull(raw.term),
+  firstBusTime: toHhmm(raw.firstBusTm),
+  lastBusTime: toHhmm(raw.lastBusTm),
+  corpName: collapseSpaces(raw.corpNm),
+});
+
+const toRouteResult = (
+  busRouteId: string,
+  cached: { payload: string; fetchedAt: Date },
+  source: 'cache' | 'stale',
+): BusRouteDetailResultType => {
+  const blob = JSON.parse(cached.payload) as RouteDetailBlob;
+  return {
+    busRouteId,
+    info: blob.info,
+    path: blob.path,
+    stations: blob.stations,
+    fetchedAt: cached.fetchedAt.toISOString(),
+    source,
+  };
+};
 
 export class BusService {
   // 동일 키워드 동시 요청 합류용 — 진행 중 Promise 를 공유하고 finally 에서 제거.
@@ -532,5 +630,109 @@ export class BusService {
     }
 
     return { busRouteId, items, fetchedAt: now.toISOString() };
+  }
+
+  // 노선 상세 — 형상+경유 정류소+기본정보 합본. busRouteInfo 3콜을 한 번에
+  // 수집해 정규화 blob 을 DB 30일 캐싱한다(노선당 최초 1회만 업스트림, 쿼터 3).
+  // 실패/쿼터 소진 시 만료 캐시라도 있으면 stale — 검색·주변과 동일 정책.
+  async getRouteDetail(busRouteId: string): Promise<BusRouteDetailResultType> {
+    if (!this.deps.serviceKey) {
+      throw new BusServiceError(
+        'BUS_API_KEY 가 설정되지 않아 노선 조회를 사용할 수 없습니다.',
+        503,
+      );
+    }
+    const now = this.deps.now?.() ?? new Date();
+
+    const cached = await this.prisma.busRouteShape.findUnique({ where: { busRouteId } });
+    if (cached && now.getTime() - cached.fetchedAt.getTime() < BUS_ROUTE_TTL_MS) {
+      return toRouteResult(busRouteId, cached, 'cache');
+    }
+
+    // 3콜분 쿼터를 한 번에 소비 — 중간에 소진돼 1콜만 하고 실패하는 걸 막는다.
+    // 소진 시 만료 캐시가 있으면 stale, 없으면 503(consumeQuota throw).
+    try {
+      this.consumeQuota(now);
+      this.consumeQuota(now);
+      this.consumeQuota(now);
+    } catch (e) {
+      if (cached) return toRouteResult(busRouteId, cached, 'stale');
+      throw e;
+    }
+
+    let blob: RouteDetailBlob;
+    try {
+      blob = await this.collectRouteDetail(busRouteId);
+    } catch (e) {
+      // 업스트림/정규화 실패 — 만료 캐시라도 있으면 stale 로 가용성 우선.
+      if (cached) return toRouteResult(busRouteId, cached, 'stale');
+      if (e instanceof BusApiError || e instanceof BusServiceError) throw e;
+      throw new BusServiceError(
+        e instanceof Error ? e.message : '버스 API 호출 실패',
+        502,
+        { cause: e },
+      );
+    }
+
+    await this.prisma.busRouteShape.upsert({
+      where: { busRouteId },
+      create: { busRouteId, payload: JSON.stringify(blob), fetchedAt: now },
+      update: { payload: JSON.stringify(blob), fetchedAt: now },
+    });
+
+    return {
+      busRouteId,
+      info: blob.info,
+      path: blob.path,
+      stations: blob.stations,
+      fetchedAt: now.toISOString(),
+      source: 'api',
+    };
+  }
+
+  // 업스트림 3콜 + 정규화. 쿼터는 호출측(getRouteDetail)이 이미 소비했다.
+  private async collectRouteDetail(busRouteId: string): Promise<RouteDetailBlob> {
+    const fetchPath = this.deps.adapter?.getRoutePath ?? getRoutePath;
+    const fetchStations = this.deps.adapter?.getStationsByRoute ?? getStationsByRoute;
+    const fetchInfo = this.deps.adapter?.getRouteInfo ?? getRouteInfo;
+    const key = { serviceKey: this.deps.serviceKey };
+
+    const [rawPath, rawStations, rawInfo] = await Promise.all([
+      fetchPath(busRouteId, key),
+      fetchStations(busRouteId, key),
+      fetchInfo(busRouteId, key),
+    ]);
+
+    // 기본정보가 없으면 사실상 존재하지 않는 노선 — 계약상 info 는 필수라 502.
+    if (!rawInfo) {
+      throw new BusServiceError('해당 노선 정보를 찾을 수 없습니다.', 502);
+    }
+
+    // 형상: no 오름차순 + 좌표 정규화 실패 점 drop(검색과 동일 정책).
+    const path: BusRoutePathPointType[] = [...rawPath]
+      .sort((a, b) => (a.no ?? Number.POSITIVE_INFINITY) - (b.no ?? Number.POSITIVE_INFINITY))
+      .map((p) => toLatLng(p))
+      .filter((c): c is BusRoutePathPointType => c !== null);
+
+    // 정류소: seq 오름차순 + 좌표/seq 없는 행 drop. isTurnPoint=transYn 'Y'.
+    const stations: BusRouteStationItemType[] = [...rawStations]
+      .sort((a, b) => (a.seq ?? Number.POSITIVE_INFINITY) - (b.seq ?? Number.POSITIVE_INFINITY))
+      .map((s): BusRouteStationItemType | null => {
+        const coord = toLatLng(s);
+        if (!coord || s.seq === null) return null;
+        return {
+          seq: s.seq,
+          stId: s.stId,
+          arsId: s.arsId,
+          name: s.stNm,
+          lat: coord.lat,
+          lng: coord.lng,
+          direction: s.direction ?? '',
+          isTurnPoint: s.transYn === 'Y',
+        };
+      })
+      .filter((s): s is BusRouteStationItemType => s !== null);
+
+    return { info: normalizeRouteInfo(rawInfo), path, stations };
   }
 }

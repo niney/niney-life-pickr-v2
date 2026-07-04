@@ -67,3 +67,47 @@ export function buildMyLocationMarkerDataUrl(): string {
     encodeURIComponent(buildMyLocationMarkerSvg())
   );
 }
+
+// ── 5차(노선 보기) ──────────────────────────────────────────────────────────
+// 노선 유형 코드 → 대표색. 서울시 원문 routeType: 1 공항/2 마을/3 간선/
+// 4 지선/5 순환/6 광역/그 외(7 인천·8 경기·0 공용 등). 폴리라인·경유지 점이
+// 같은 색을 쓴다. 간선 파랑(#2563eb)은 정류장 마커와 같은 톤이라 "간선 노선 위의
+// 정류장"이 색으로 자연히 묶인다.
+export function busRouteTypeColor(routeType: string): string {
+  switch (routeType) {
+    case '1':
+      return '#0ea5e9'; // 공항 — 하늘
+    case '2':
+      return '#84cc16'; // 마을 — 연두
+    case '3':
+      return '#2563eb'; // 간선 — 파랑
+    case '4':
+      return '#16a34a'; // 지선 — 초록
+    case '5':
+      return '#eab308'; // 순환 — 노랑
+    case '6':
+      return '#dc2626'; // 광역 — 빨강
+    default:
+      return '#6b7280'; // 그 외 — 회색
+  }
+}
+
+// 경유 정류소 점 마커 — 노선 형상 위에 얹는 작은 점(노선색 + 흰 링). 정류장
+// 핀(26×26)·차량(26×26)보다 의도적으로 작은 16×16 규격이라 105개가 깔려도
+// 과밀하지 않다. 라벨은 붙이지 않으므로(호출처가 label 생략) MapCanvas 의 라벨
+// offset 규격과는 무관하고, 중심 anchor([0.5,0.5])·축소 스케일만 공유한다.
+export function buildBusRouteStopDotSvg(color: string): string {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">' +
+    `<circle fill="#fff" cx="8" cy="8" r="6"/>` +
+    `<circle fill="${color}" cx="8" cy="8" r="4"/>` +
+    '</svg>'
+  );
+}
+
+export function buildBusRouteStopDotDataUrl(color: string): string {
+  return (
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(buildBusRouteStopDotSvg(color))
+  );
+}

@@ -400,6 +400,9 @@ export const Bus = {
   stationArrivals: (arsId: string) => `${API_PREFIX}/bus/stations/${arsId}/arrivals`,
   // 노선 구간 실시간 버스 위치 — startOrd/endOrd 는 도착정보의 staOrd 윈도우.
   busPositions: (busRouteId: string) => `${API_PREFIX}/bus/routes/${busRouteId}/positions`,
+  // 노선 상세 합본 — 형상(폴리라인)+경유 정류소+기본정보. 정적 데이터라
+  // DB 30일 캐시, 노선당 최초 1회만 업스트림 3콜 소비.
+  routeDetail: (busRouteId: string) => `${API_PREFIX}/bus/routes/${busRouteId}/detail`,
   // ── 즐겨찾기 (여기만 인증 필요 — 로그인 사용자의 서버 저장분) ──
   // 비로그인은 클라이언트 저장. PUT/DELETE 응답 = 전체 목록(캐시 통째 교체).
   favorites: `${API_PREFIX}/bus/favorites`,

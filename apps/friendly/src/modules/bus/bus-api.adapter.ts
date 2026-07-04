@@ -481,3 +481,120 @@ export const getBusPositionsByRtid = async (
   const { items } = await callBusApi('buspos/getBusPosByRtid', { busRouteId }, opts);
   return items.map(toRawBusPosition);
 };
+
+// ---------------------------------------------------------------------------
+// 5차(노선 보기) — busRouteInfo 서비스 3종. 형상(getRoutePath) / 경유 정류소
+// (getStaionByRoute — 서울시 원문 오타 'Staion' 그대로 유지) / 노선 기본정보
+// (getRouteInfo). probe 실측(2026-07-04, 141=100100020): 좌표는 gpsX/gpsY 가
+// WGS84(posX/posY 는 GRS80 TM) — toLatLng 값-범위 판정을 그대로 재사용한다.
+
+// getRoutePath 원시 점 — no(순번) + 좌표. 응답에 tmX/tmY 는 없어 coordFields 가
+// null 로 채우고 toLatLng 가 gpsX/gpsY 를 채택한다.
+export interface RawRoutePathPoint {
+  no: number | null;
+  tmX: number | null;
+  tmY: number | null;
+  gpsX: number | null;
+  gpsY: number | null;
+  posX: number | null;
+  posY: number | null;
+}
+
+const toRawRoutePathPoint = (raw: Record<string, unknown>): RawRoutePathPoint => ({
+  no: numOrNull(raw['no']),
+  ...coordFields(raw),
+});
+
+export const getRoutePath = async (
+  busRouteId: string,
+  opts: BusApiRequestOptions,
+): Promise<RawRoutePathPoint[]> => {
+  const { items } = await callBusApi('busRouteInfo/getRoutePath', { busRouteId }, opts);
+  return items.map(toRawRoutePathPoint);
+};
+
+// getStaionByRoute 원시 행 — 경유 정류소. 'station' 필드가 정류소 고유 ID
+// (stId 와 동일 ID 공간). direction=이 정류소에서 향하는 종점 표기('염곡동'),
+// transYn 'Y'=회차 지점.
+export interface RawRouteStation {
+  seq: number | null;
+  stId: string;
+  arsId: string;
+  stNm: string;
+  direction: string | null;
+  transYn: string | null;
+  tmX: number | null;
+  tmY: number | null;
+  gpsX: number | null;
+  gpsY: number | null;
+  posX: number | null;
+  posY: number | null;
+}
+
+const toRawRouteStation = (raw: Record<string, unknown>): RawRouteStation | null => {
+  const stId = strOrNull(raw['station']);
+  const stNm = strOrNull(raw['stationNm']);
+  if (!stId || !stNm) return null;
+  return {
+    seq: numOrNull(raw['seq']),
+    stId,
+    arsId: strOrNull(raw['arsId']) ?? '0',
+    stNm,
+    direction: strOrNull(raw['direction']),
+    transYn: strOrNull(raw['transYn']),
+    ...coordFields(raw),
+  };
+};
+
+export const getStationsByRoute = async (
+  busRouteId: string,
+  opts: BusApiRequestOptions,
+): Promise<RawRouteStation[]> => {
+  const { items } = await callBusApi('busRouteInfo/getStaionByRoute', { busRouteId }, opts);
+  return items.map(toRawRouteStation).filter((s): s is RawRouteStation => s !== null);
+};
+
+// getRouteInfo 원시 행 — 노선 기본정보(단건). length/term 은 문자열로 오고
+// (parseTagValue:false) 서비스가 숫자 정규화한다. corpNm 은 전화번호가 연속
+// 공백으로 붙어 옴('아진교통  02-955-2321') — 서비스가 공백을 접는다.
+export interface RawRouteInfo {
+  busRouteId: string;
+  busRouteNm: string | null;
+  busRouteAbrv: string | null;
+  length: string | null;
+  routeType: string | null;
+  stStationNm: string | null;
+  edStationNm: string | null;
+  term: string | null;
+  firstBusTm: string | null;
+  lastBusTm: string | null;
+  corpNm: string | null;
+}
+
+const toRawRouteInfo = (raw: Record<string, unknown>): RawRouteInfo | null => {
+  const busRouteId = strOrNull(raw['busRouteId']);
+  if (!busRouteId) return null;
+  return {
+    busRouteId,
+    busRouteNm: strOrNull(raw['busRouteNm']),
+    busRouteAbrv: strOrNull(raw['busRouteAbrv']),
+    length: strOrNull(raw['length']),
+    routeType: strOrNull(raw['routeType']),
+    stStationNm: strOrNull(raw['stStationNm']),
+    edStationNm: strOrNull(raw['edStationNm']),
+    term: strOrNull(raw['term']),
+    firstBusTm: strOrNull(raw['firstBusTm']),
+    lastBusTm: strOrNull(raw['lastBusTm']),
+    corpNm: strOrNull(raw['corpNm']),
+  };
+};
+
+// 단건 응답 — itemList 가 1개(또는 0개). 없으면 null(호출측이 노선 부재로 처리).
+export const getRouteInfo = async (
+  busRouteId: string,
+  opts: BusApiRequestOptions,
+): Promise<RawRouteInfo | null> => {
+  const { items } = await callBusApi('busRouteInfo/getRouteInfo', { busRouteId }, opts);
+  const raw = items[0];
+  return raw ? toRawRouteInfo(raw) : null;
+};

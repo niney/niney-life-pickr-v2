@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 2026-07-04 probe 실응답 발췌 — busRouteInfo/getStaionByRoute?busRouteId=100100020(141).
+     실응답 105정류소 중 상위 2건. 'station' 이 정류소 고유 ID(stId 와 동일 공간),
+     direction=향하는 종점('염곡동'), transYn 'N'=회차 아님. gpsX/gpsY 가 WGS84. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader><headerCd>0</headerCd><headerMsg>정상적으로 처리되었습니다.</headerMsg><itemCount>0</itemCount></msgHeader>
+  <msgBody>
+    <itemList><arsId>10153</arsId><beginTm>:</beginTm><busRouteAbrv>141</busRouteAbrv><busRouteId>100100020</busRouteId><busRouteNm>141</busRouteNm><direction>염곡동</direction><gpsX>127.040722</gpsX><gpsY>37.687083</gpsY><lastTm>:</lastTm><posX>203591.39646323587</posX><posY>465272.7438965072</posY><routeType>3</routeType><sectSpd>0</sectSpd><section>0</section><seq>1</seq><station>109000068</station><stationNm>도봉산입구</stationNm><stationNo>10153</stationNo><transYn>N</transYn><fullSectDist>0</fullSectDist><trnstnid>122000263</trnstnid></itemList>
+    <itemList><arsId>10154</arsId><beginTm>03:59</beginTm><busRouteAbrv>141</busRouteAbrv><busRouteId>100100020</busRouteId><busRouteNm>141</busRouteNm><direction>염곡동</direction><gpsX>127.0441871881</gpsX><gpsY>37.6873184373</gpsY><lastTm>22:23</lastTm><posX>203896.9895879115</posX><posY>465299.0108559709</posY><routeType>3</routeType><sectSpd>44</sectSpd><section>109602333</section><seq>2</seq><station>109000069</station><stationNm>도봉산성당</stationNm><stationNo>10154</stationNo><transYn>N</transYn><fullSectDist>307</fullSectDist><trnstnid>122000263</trnstnid></itemList>
+  </msgBody>
+</ServiceResult>

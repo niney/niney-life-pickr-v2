@@ -1086,3 +1086,18 @@ model BusFavoriteRoute {
   @@index([userId])
   @@map("bus_favorite_routes")
 }
+
+// 노선 상세(형상+경유 정류소+기본정보) 합본 캐시 — busRouteInfo 3콜(getRoutePath/
+// getStaionByRoute/getRouteInfo)을 한 번에 수집해 정규화한 JSON blob 을 노선
+// 단위로 보존한다. 형상·정류소·기본정보는 사실상 정적이라 TTL 30일(검색 캐시와
+// 동일). 노선 단위 원자 조회라 정규화 테이블 없이 payload 한 컬럼에 담는다.
+model BusRouteShape {
+  busRouteId String   @id
+  // 정규화된 { info, path, stations } JSON 직렬화.
+  payload    String
+  fetchedAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("bus_route_shapes")
+}

@@ -317,8 +317,40 @@ const main = async (): Promise<void> => {
     }
   }
 
-  // ── ⑦ 최종 요약 ─────────────────────────────────────────────────────────
-  console.log('\n⑦ 최종 요약');
+  // ── ⑦~⑨ 노선 보기(5차) — busRouteInfo 3종 ─────────────────────────────
+  // 141=100100020 고정(브리프 verdict 대상) — 형상은 1,000+점이라 dump 후
+  // __fixtures__ 에는 상위 몇 점만 발췌해 넣는다. getStaionByRoute 는 서울시
+  // 원문 오타('Staion') 그대로 호출한다.
+  const ROUTE_PROBE_ID = '100100020';
+  console.log(`\n⑦~⑨ busRouteInfo 3종 (busRouteId=${ROUTE_PROBE_ID})`);
+  for (const [step, path] of [
+    ['07-route-path', 'busRouteInfo/getRoutePath'],
+    ['08-route-stations', 'busRouteInfo/getStaionByRoute'],
+    ['09-route-info', 'busRouteInfo/getRouteInfo'],
+  ] as const) {
+    try {
+      const res = await callBusApi(path, { busRouteId: ROUTE_PROBE_ID }, {
+        serviceKey: workingKey.key,
+      });
+      noteHeader(path, res);
+      // 형상 전량(1,000+점)은 무겁다 — 파싱 검증엔 상위 8점이면 충분. xmlText
+      // 전문도 함께 저장해 __fixtures__ 발췌 원본으로 쓴다.
+      await dump(step, {
+        requestUrl: res.requestUrl,
+        headerCd: res.headerCd,
+        itemCount: res.items.length,
+        items: res.items.slice(0, 8),
+        xmlText: res.xmlText,
+      });
+      console.log(`   ${path}: headerCd=${res.headerCd}, items=${res.items.length}`);
+    } catch (e) {
+      console.error(`   ${path} 실패: ${errMsg(e)}`);
+      process.exitCode = 1;
+    }
+  }
+
+  // ── ⑩ 최종 요약 ─────────────────────────────────────────────────────────
+  console.log('\n⑩ 최종 요약');
   // keyPart dedupe 로 변형이 합쳐질 수 있어 '키 형태' 단정이 아니라 어댑터가
   // 실제 택한 처리 경로를 보고한다.
   console.log(`   어댑터 처리 경로 확인: ${workingKey.label} 성공 — ` +

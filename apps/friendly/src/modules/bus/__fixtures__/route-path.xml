@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 2026-07-04 probe 실응답 발췌 — busRouteInfo/getRoutePath?busRouteId=100100020(141).
+     실응답 1,986점 중 상위 6점. no(순번) + gpsX/gpsY(WGS84) + posX/posY(GRS80 TM).
+     tmX/tmY 필드는 없음 — toLatLng 가 gpsX/gpsY 를 값-범위로 채택한다. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader><headerCd>0</headerCd><headerMsg>정상적으로 처리되었습니다.</headerMsg><itemCount>0</itemCount></msgHeader>
+  <msgBody>
+    <itemList><gpsX>127.039507</gpsX><gpsY>37.686917</gpsY><no>1</no><posX>203484.2496964836</posX><posY>465254.2755706692</posY></itemList>
+    <itemList><gpsX>127.039559</gpsX><gpsY>37.686922</gpsY><no>2</no><posX>203488.83551008967</posX><posY>465254.8323985459</posY></itemList>
+    <itemList><gpsX>127.040829</gpsX><gpsY>37.687059</gpsY><no>3</no><posX>203600.83427794545</posX><posY>465270.0845137695</posY></itemList>
+    <itemList><gpsX>127.040886</gpsX><gpsY>37.687065</gpsY><no>4</no><posX>203605.86099185067</posX><posY>465270.75257739844</posY></itemList>
+    <itemList><gpsX>127.040949</gpsX><gpsY>37.687072</gpsY><no>5</no><posX>203611.41681472896</posX><posY>465271.53185395664</posY></itemList>
+    <itemList><gpsX>127.042103</gpsX><gpsY>37.6872</gpsY><no>6</no><posX>203713.18520632456</posX><posY>465285.78222046606</posY></itemList>
+  </msgBody>
+</ServiceResult>

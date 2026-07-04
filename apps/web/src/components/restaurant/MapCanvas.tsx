@@ -14,6 +14,7 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
+import LineString from 'ol/geom/LineString';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { Style, Icon, Text as OlText, Fill, Stroke } from 'ol/style';
 import 'ol/ol.css';
@@ -83,10 +84,27 @@ interface Props {
   onTileError?(hasError: boolean): void;
   // 좌하단 레이어 전환 컨트롤(일반/다크/위성) 표시. 기본 true.
   layerControl?: boolean;
+  // 노선 형상 폴리라인 — 마커 레이어보다 아래 전용 VectorLayer 에 그린다(마커를
+  // 가리지 않음). null/미지정이면 미표시. fit/flyTo 대상에서 제외(별도 소스라
+  // fitToMarkers 의 마커 extent 에 포함되지 않는다).
+  routeLine?: { points: { lat: number; lng: number }[]; color: string } | null;
   className?: string;
 }
 
 const DEFAULT_ZOOM = 15;
+
+// 노선 폴리라인 색 — 실선 hex(#rrggbb)를 살짝 투명한 rgba 로. 반투명이라 아래
+// 도로/지명이 비쳐 노선이 지도를 뭉개지 않는다. busRouteTypeColor 는 항상 6자리
+// hex 를 반환하므로 파싱은 단순.
+const strokeColorWithAlpha = (hex: string, alpha: number): string => {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1]!, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 // 앱 테마 → 지도 기본 레이어. 라이트=일반(Base), 다크=야간(midnight).
 const layerForTheme = (mode: ThemeMode): VworldLayer =>
@@ -126,6 +144,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onViewportSync,
     onTileError,
     layerControl = true,
+    routeLine,
     className,
   },
   ref,
@@ -133,6 +152,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<OlMap | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
+  // 노선 형상 전용 소스 — 마커 소스와 분리해 fitToMarkers 가 54km 노선까지
+  // 끌어안아 줌아웃되는 것을 막는다.
+  const routeLineSourceRef = useRef<VectorSource | null>(null);
   // 현재 베이스 타일 소스 — 레이어 변경 시 map 을 재생성하지 않고 URL 만 교체한다
   // (줌/센터/마커 유지).
   const tileSourceRef = useRef<XYZ | null>(null);
@@ -269,13 +291,22 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
 
+    // 노선 형상 소스/레이어 — 베이스 타일과 마커 레이어 사이(마커 아래).
+    const routeLineSource = new VectorSource();
+    routeLineSourceRef.current = routeLineSource;
+
     const map = new OlMap({
       target: containerRef.current,
       // declutter 끔 — OL 의 layer declutter 는 Feature 단위라 라벨이 겹치면
       // 핀까지 같이 가려진다. 라벨 가시성은 style function 안에서 줌 임계값
       // (LABEL_VISIBLE_ZOOM)으로 직접 제어하고, 충돌 박스를 작게 만들어 핀이
       // 사라지지 않도록 한다.
-      layers: [baseLayer, new VectorLayer({ source: vectorSource })],
+      // 레이어 순서 = 그리는 순서(뒤일수록 위): 타일 → 노선 형상 → 마커.
+      layers: [
+        baseLayer,
+        new VectorLayer({ source: routeLineSource }),
+        new VectorLayer({ source: vectorSource }),
+      ],
       view,
       controls: [],
     });
@@ -351,6 +382,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       map.setTarget(undefined);
       mapRef.current = null;
       vectorSourceRef.current = null;
+      routeLineSourceRef.current = null;
       tileSourceRef.current = null;
       userInteractedRef.current = false;
     };
@@ -407,6 +439,29 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     }
     featureByIdRef.current = byId;
   }, [markers]);
+
+  // 노선 형상 갱신 — routeLine 이 바뀔 때만 전용 소스를 다시 칠한다. 점이 2개
+  // 미만이면(형상 없음/해제) 소스를 비운다. 이전 피처는 clear 로 확실히 제거해
+  // 노선 전환/해제 시 누수가 없다.
+  useEffect(() => {
+    const src = routeLineSourceRef.current;
+    if (!src) return;
+    src.clear();
+    if (!routeLine || routeLine.points.length < 2) return;
+    const coords = routeLine.points.map((p) => fromLonLat([p.lng, p.lat]));
+    const feature = new Feature({ geometry: new LineString(coords) });
+    feature.setStyle(
+      new Style({
+        stroke: new Stroke({
+          color: strokeColorWithAlpha(routeLine.color, 0.85),
+          width: 5,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }),
+      }),
+    );
+    src.addFeature(feature);
+  }, [routeLine]);
 
   // 선택 변경 — vectorSource 는 건드리지 않고 이전/현재 마커 feature 2개만
   // changed() 로 다시 칠한다 (style function 이 selectedIdRef 를 다시 읽음). N→2.

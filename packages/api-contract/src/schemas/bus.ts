@@ -169,3 +169,75 @@ export const BusPositionsResult = z.object({
   fetchedAt: z.string(),
 });
 export type BusPositionsResultType = z.infer<typeof BusPositionsResult>;
+
+// ── 5차(노선 보기): 노선 상세 합본 — 형상 + 경유 정류소 + 기본정보 ──────────
+// busRouteInfo 서비스(getRoutePath/getStaionByRoute/getRouteInfo) 3콜을 서버가
+// 한 번에 수집해 하나의 응답으로 합본한다. 프로브 실측(2026-07-04, 141번):
+// getRoutePath 1,986점 — gpsX/gpsY 가 WGS84 그대로(posX/posY 는 GRS80 TM),
+// 형상은 상행+하행 왕복 전체가 한 줄(첫점≈끝점). 형상·정류소·기본정보는 사실상
+// 정적이라 DB 30일 캐시 — 노선당 최초 1회만 업스트림 3콜(쿼터 3)을 소비한다.
+
+export const BusRouteDetailParams = z.object({
+  // 기존 BusPositionsParams 와 동일 형식.
+  busRouteId: z.string().regex(/^\d+$/),
+});
+export type BusRouteDetailParamsType = z.infer<typeof BusRouteDetailParams>;
+
+// 형상 점 — 검색/위치와 동일한 WGS84 정규화·한국 범위 계약.
+export const BusRoutePathPoint = z.object({
+  lat: z.number().min(33).max(39),
+  lng: z.number().min(124).max(132),
+});
+export type BusRoutePathPointType = z.infer<typeof BusRoutePathPoint>;
+
+export const BusRouteStationItem = z.object({
+  // 노선 내 순번(getStaionByRoute seq) — 도착정보 staOrd 와 같은 순번 공간.
+  seq: z.number().int().min(1),
+  // station 필드 — 정류소 고유 ID(stId 와 동일 ID 공간). 지도 점 클릭 시
+  // 기존 정류장 선택 흐름(stId 쿼리)으로 그대로 연결한다.
+  stId: z.string().min(1),
+  // '0' = 가상정류장(도착정보 없음) — 검색 결과와 동일 계약.
+  arsId: z.string(),
+  name: z.string(),
+  lat: z.number().min(33).max(39),
+  lng: z.number().min(124).max(132),
+  // 진행 방향 — 이 정류소에서 향하는 종점 표기('염곡동'). 상행/하행 구분용.
+  direction: z.string(),
+  // transYn 'Y' — 회차 지점.
+  isTurnPoint: z.boolean(),
+});
+export type BusRouteStationItemType = z.infer<typeof BusRouteStationItem>;
+
+export const BusRouteInfo = z.object({
+  // busRouteAbrv 우선('141', 'N61') — 도착정보 routeName 과 같은 표기.
+  routeName: z.string(),
+  // 원문 노선 유형 코드 보존 — 1 공항/2 마을/3 간선/4 지선/5 순환/6 광역/
+  // 7 인천/8 경기/0 공용. FE 가 폴리라인 색으로 매핑한다.
+  routeType: z.string(),
+  stStationName: z.string(),
+  edStationName: z.string(),
+  // length(km) — 원문이 비어 있거나 숫자가 아니면 null.
+  lengthKm: z.number().nullable(),
+  // term(배차간격 분).
+  termMin: z.number().int().nullable(),
+  // firstBusTm/lastBusTm('yyyyMMddHHmmss')을 'HH:mm' 으로 정규화. 공백이면 null.
+  firstBusTime: z.string().nullable(),
+  lastBusTime: z.string().nullable(),
+  // corpNm 원문에 전화번호가 섞여 옴('아진교통  02-955-2321') — 연속 공백은
+  // 한 칸으로 접어 보존. 비면 null.
+  corpName: z.string().nullable(),
+});
+export type BusRouteInfoType = z.infer<typeof BusRouteInfo>;
+
+export const BusRouteDetailResult = z.object({
+  busRouteId: z.string(),
+  info: BusRouteInfo,
+  path: z.array(BusRoutePathPoint),
+  stations: z.array(BusRouteStationItem),
+  // 서울시 원본 수집 시각 (ISO).
+  fetchedAt: z.string(),
+  // cache = TTL 내 DB 응답 / api = 방금 수집 / stale = 수집 실패로 만료
+  // 캐시라도 반환(가용성 우선) — 검색·주변과 동일 의미.
+  source: z.enum(['cache', 'api', 'stale']),
+});
+export type BusRouteDetailResultType = z.infer<typeof BusRouteDetailResult>;
