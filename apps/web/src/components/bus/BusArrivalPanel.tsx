@@ -7,6 +7,7 @@ import type {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { BusFavoriteStar } from './BusFavoriteStar';
 
 // 실시간 데이터(30초 폴링)라 초 단위 상대시각 — 검색 리스트의 분 단위
 // formatRelative 와 달리 '방금/N초 전'이 의미를 가진다.
@@ -36,6 +37,13 @@ export interface BusArrivalPanelProps {
   onToggleRoute(busRouteId: string): void;
   onBack(): void;
   onRetry(): void;
+  // 즐겨찾기 — 정류장 별(헤더)과 노선 별(행). 지도 추적 토글(onToggleRoute)과
+  // 별개다. 정류장 스냅샷은 station 프로퍼티에서, 노선 스냅샷은 각 도착 항목에서
+  // 상위(BusPage)가 조립한다.
+  stationFavorite: boolean;
+  onToggleStationFavorite(): void;
+  isRouteFavorite(busRouteId: string): boolean;
+  onToggleRouteFavorite(item: BusArrivalItemType): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,6 +63,10 @@ export const BusArrivalPanel = ({
   onToggleRoute,
   onBack,
   onRetry,
+  stationFavorite,
+  onToggleStationFavorite,
+  isRouteFavorite,
+  onToggleRouteFavorite,
 }: BusArrivalPanelProps) => {
   // arsId '0' = 가상정류장 — 도착정보 API 자체가 없다(훅도 호출 안 함).
   const virtual = station.arsId === '0';
@@ -76,6 +88,12 @@ export const BusArrivalPanel = ({
               {station.arsId}
             </Badge>
           )}
+          <BusFavoriteStar
+            active={stationFavorite}
+            onToggle={onToggleStationFavorite}
+            label={`${station.name} 즐겨찾기`}
+            className="ml-auto"
+          />
         </div>
         {!virtual && fetchedAt && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
@@ -95,6 +113,8 @@ export const BusArrivalPanel = ({
           selectedRouteId={selectedRouteId}
           onToggleRoute={onToggleRoute}
           onRetry={onRetry}
+          isRouteFavorite={isRouteFavorite}
+          onToggleRouteFavorite={onToggleRouteFavorite}
         />
       </div>
     </div>
@@ -110,6 +130,8 @@ const PanelBody = ({
   selectedRouteId,
   onToggleRoute,
   onRetry,
+  isRouteFavorite,
+  onToggleRouteFavorite,
 }: {
   virtual: boolean;
   items: BusArrivalItemType[];
@@ -119,6 +141,8 @@ const PanelBody = ({
   selectedRouteId: string | null;
   onToggleRoute(busRouteId: string): void;
   onRetry(): void;
+  isRouteFavorite(busRouteId: string): boolean;
+  onToggleRouteFavorite(item: BusArrivalItemType): void;
 }) => {
   if (virtual) {
     return <Hint>가상정류장 — 도착정보를 제공하지 않습니다.</Hint>;
@@ -153,7 +177,8 @@ const PanelBody = ({
         // staOrd 가 없으면 위치 구간(startOrd/endOrd) 계산 불가 — 클릭 비활성.
         const trackable = it.staOrd !== null;
         return (
-          <li key={it.busRouteId}>
+          // 지도 추적(행 버튼)과 즐겨찾기 별을 형제로 — 버튼 중첩(무효 HTML) 회피.
+          <li key={it.busRouteId} className="flex items-start gap-1">
             <button
               type="button"
               disabled={!trackable}
@@ -161,7 +186,7 @@ const PanelBody = ({
               onClick={() => onToggleRoute(it.busRouteId)}
               aria-pressed={selected}
               className={cn(
-                'flex w-full items-start justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+                'flex min-w-0 flex-1 items-start justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
                 selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
                 !trackable && 'opacity-60',
               )}
@@ -172,6 +197,12 @@ const PanelBody = ({
                 {it.first && it.second && <ArrivalMessage entry={it.second} />}
               </span>
             </button>
+            <BusFavoriteStar
+              active={isRouteFavorite(it.busRouteId)}
+              onToggle={() => onToggleRouteFavorite(it)}
+              label={`${it.routeName} 즐겨찾기`}
+              className="mt-1"
+            />
           </li>
         );
       })}

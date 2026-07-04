@@ -20,6 +20,9 @@ model User {
   contacts    SettlementContact[]
   drafts      SettlementDraft[]
 
+  busFavoriteStations BusFavoriteStation[]
+  busFavoriteRoutes   BusFavoriteRoute[]
+
   @@map("users")
 }
 
@@ -1040,4 +1043,46 @@ model BusStationSearchHit {
 
   @@id([searchId, stId])
   @@map("bus_station_search_hits")
+}
+
+// 로그인 사용자의 버스 정류장 즐겨찾기. 저장 시점 정류장 스냅샷(name/lat/lng)을
+// 그대로 보존해 목록 렌더·지도 이동에 재조회가 필요 없다(정류소는 사실상 정적).
+// 캐시 테이블 BusStation 을 참조하지 않는다 — 그건 전 정류장 마스터가 아니라
+// 검색/주변 조회로 우연히 캐시된 부분집합이라 FK 로 묶으면 캐시 정리가 즐겨찾기를
+// 깨뜨린다. (userId, stId) 유니크로 사용자당 한 정류장 1행(upsert 멱등).
+model BusFavoriteStation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stId      String
+  arsId     String
+  name      String
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+
+  @@unique([userId, stId])
+  @@index([userId])
+  @@map("bus_favorite_stations")
+}
+
+// 정류장×노선 조합 즐겨찾기 — 특정 정류장에서 특정 노선의 도착정보로 재진입하기
+// 위한 스냅샷. routeName/stationName/arsId/lat/lng 를 저장 시점 그대로 보존한다.
+// (userId, stId, busRouteId) 유니크.
+model BusFavoriteRoute {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stId        String
+  busRouteId  String
+  routeName   String
+  stationName String
+  arsId       String
+  lat         Float
+  lng         Float
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, stId, busRouteId])
+  @@index([userId])
+  @@map("bus_favorite_routes")
 }

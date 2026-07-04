@@ -400,6 +400,14 @@ export const Bus = {
   stationArrivals: (arsId: string) => `${API_PREFIX}/bus/stations/${arsId}/arrivals`,
   // 노선 구간 실시간 버스 위치 — startOrd/endOrd 는 도착정보의 staOrd 윈도우.
   busPositions: (busRouteId: string) => `${API_PREFIX}/bus/routes/${busRouteId}/positions`,
+  // ── 즐겨찾기 (여기만 인증 필요 — 로그인 사용자의 서버 저장분) ──
+  // 비로그인은 클라이언트 저장. PUT/DELETE 응답 = 전체 목록(캐시 통째 교체).
+  favorites: `${API_PREFIX}/bus/favorites`,
+  favoriteStation: (stId: string) => `${API_PREFIX}/bus/favorites/stations/${stId}`,
+  favoriteRoute: (stId: string, busRouteId: string) =>
+    `${API_PREFIX}/bus/favorites/routes/${stId}/${busRouteId}`,
+  // 로그인 직후 게스트 저장분 union 병합 (POST, 멱등).
+  favoritesSync: `${API_PREFIX}/bus/favorites/sync`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;

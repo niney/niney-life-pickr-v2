@@ -3,6 +3,7 @@ import type { BusStationItemType } from '@repo/api-contract';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
+  useBusFavorites,
   useBusNearbyStations,
   useBusPositions,
   useBusStationArrivals,
@@ -11,6 +12,7 @@ import {
 } from '@repo/shared';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
+import { BusFavoriteSection } from '~/components/bus/BusFavoriteSection';
 import {
   BusStationList,
   BusStationListBody,
@@ -81,6 +83,11 @@ export const BusPage = () => {
 
   const search = useBusStationSearch(q);
   const refresh = useBusStationsRefresh();
+  // 즐겨찾기 — 게스트/로그인 하이브리드. 로그인 직후 게스트 저장분을 서버로
+  // 1회 병합하는 부수효과도 이 훅이 담당(BusPage 에서 단 한 번만 호출).
+  const favorites = useBusFavorites();
+  const hasFavorites =
+    favorites.stations.length > 0 || favorites.routes.length > 0;
 
   // 소비 게이트 — 유효 검색어(2~50자, 훅 enabled 와 동일 조건)가 아닐 때는
   // 캐시에 남은 이전 응답을 마커·배너로 흘리지 않는다.
@@ -284,6 +291,24 @@ export const BusPage = () => {
     [setSearchParams],
   );
 
+  // 즐겨찾는 버스 선택 — 정류장 + 노선을 한 번에 설정(도착 패널 + 지도 추적).
+  // 즐겨찾기 섹션은 초기 화면(q/near 없음)에서만 노출되므로 q/near 는 이미 비어
+  // 있다 — 별도 정리 없이 stId/routeId 만 세팅한다.
+  const handleSelectFavoriteRoute = useCallback(
+    (favStId: string, busRouteId: string) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          sp.set('stId', favStId);
+          sp.set('routeId', busRouteId);
+          return sp;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   // '← 목록' — 정류장/노선 선택을 한 번에 해제해 검색 목록으로 복귀.
   const handleBack = useCallback(() => {
     setSearchParams(
@@ -327,10 +352,40 @@ export const BusPage = () => {
     });
   }, [nearMode, nearbyRefetch, q, refreshMutate, refreshPending]);
 
-  // 선택 정류장 실체 — 현재 결과에 있어야만 도착정보 뷰로 전환한다. 없으면
-  // (다른 검색어로 재검색 등 죽은 stId) 기존 selectedMissing 안내 경로 유지.
-  const selectedStation =
-    stId !== null ? (mapItems.find((it) => it.stId === stId) ?? null) : null;
+  // 선택 정류장 실체 — 현재 결과에 있으면 그것으로 도착정보 뷰로 전환한다.
+  // 활성 결과(검색/주변)에 없더라도 즐겨찾기 스냅샷(정류장 또는 노선)에 있으면
+  // 그 스냅샷으로 복원 — 즐겨찾기로 진입한 stId 는 목록에 없기 때문. 활성 결과가
+  // 항상 먼저 이기므로 기존 검색/딥링크 동작은 바뀌지 않는다. 셋 다 없으면 null
+  // (죽은 stId → 기존 selectedMissing 안내 경로 유지).
+  const selectedStation = useMemo<BusStationItemType | null>(() => {
+    if (stId === null) return null;
+    const fromActive = mapItems.find((it) => it.stId === stId);
+    if (fromActive) return fromActive;
+    const favStation = favorites.stations.find((s) => s.stId === stId);
+    if (favStation) return favStation;
+    // 노선 즐겨찾기 스냅샷도 정류장 정보를 품고 있어 폴백 소스가 된다
+    // (그 정류장이 즐겨찾기에 없을 수 있음). name 은 stationName 스냅샷.
+    const favRoute = favorites.routes.find((r) => r.stId === stId);
+    if (favRoute) {
+      return {
+        stId: favRoute.stId,
+        arsId: favRoute.arsId,
+        name: favRoute.stationName,
+        lat: favRoute.lat,
+        lng: favRoute.lng,
+      };
+    }
+    return null;
+  }, [stId, mapItems, favorites.stations, favorites.routes]);
+
+  // 지도용 마커 목록 — 선택 정류장이 활성 결과에 없으면(즐겨찾기 진입) 덧대어
+  // 마커 표시·센터링(BusStationsMap 의 fit/flyTo)이 동작하게 한다. 활성 결과에
+  // 이미 있으면 그대로라 기존 지도 동작은 바뀌지 않는다.
+  const mapItemsForMap = useMemo(() => {
+    if (!selectedStation) return mapItems;
+    if (mapItems.some((it) => it.stId === selectedStation.stId)) return mapItems;
+    return [...mapItems, selectedStation];
+  }, [mapItems, selectedStation]);
 
   // 도착정보 30초 폴링 — 가상정류장(arsId '0')은 훅 enabled 가 차단.
   const arrivals = useBusStationArrivals(selectedStation?.arsId ?? null);
@@ -363,8 +418,45 @@ export const BusPage = () => {
       onToggleRoute={handleToggleRoute}
       onBack={handleBack}
       onRetry={() => void arrivals.refetch()}
+      stationFavorite={favorites.isStationFavorite(selectedStation.stId)}
+      onToggleStationFavorite={() =>
+        favorites.toggleStation({
+          stId: selectedStation.stId,
+          arsId: selectedStation.arsId,
+          name: selectedStation.name,
+          lat: selectedStation.lat,
+          lng: selectedStation.lng,
+        })
+      }
+      isRouteFavorite={(busRouteId) =>
+        favorites.isRouteFavorite(selectedStation.stId, busRouteId)
+      }
+      onToggleRouteFavorite={(arrival) =>
+        favorites.toggleRoute({
+          stId: selectedStation.stId,
+          busRouteId: arrival.busRouteId,
+          routeName: arrival.routeName,
+          stationName: selectedStation.name,
+          arsId: selectedStation.arsId,
+          lat: selectedStation.lat,
+          lng: selectedStation.lng,
+        })
+      }
     />
   ) : null;
+
+  // 초기 화면(검색어·주변·선택 정류장 없음)에 노출할 즐겨찾기 섹션. 0개면
+  // undefined 를 넘겨 리스트 본체가 기존 빈 상태 안내를 그대로 보여준다.
+  const favoritesSection = hasFavorites ? (
+    <BusFavoriteSection
+      stations={favorites.stations}
+      routes={favorites.routes}
+      onSelectStation={handleSelect}
+      onSelectRoute={handleSelectFavoriteRoute}
+      onToggleStation={favorites.toggleStation}
+      onToggleRoute={favorites.toggleRoute}
+    />
+  ) : undefined;
 
   const listProps = {
     q,
@@ -386,6 +478,9 @@ export const BusPage = () => {
     onForceRefresh: handleForceRefresh,
     onNearby: handleNearby,
     onClearNear: handleClearNear,
+    isStationFavorite: favorites.isStationFavorite,
+    onToggleStationFavorite: favorites.toggleStation,
+    favoritesContent: favoritesSection,
   };
 
   return (
@@ -400,7 +495,7 @@ export const BusPage = () => {
         </aside>
         <section className="relative flex-1">
           <BusStationsMap
-            items={mapItems}
+            items={mapItemsForMap}
             vehicles={vehicles}
             myLocation={effectiveNear}
             selectedStId={stId}
@@ -434,7 +529,7 @@ export const BusPage = () => {
         </div>
         <div className="relative min-h-[40dvh] flex-1">
           <BusStationsMap
-            items={mapItems}
+            items={mapItemsForMap}
             vehicles={vehicles}
             myLocation={effectiveNear}
             selectedStId={stId}
@@ -463,6 +558,9 @@ export const BusPage = () => {
               refreshing={refreshPending}
               onSelect={handleSelect}
               onRetry={handleForceRefresh}
+              isStationFavorite={favorites.isStationFavorite}
+              onToggleStationFavorite={favorites.toggleStation}
+              favoritesContent={favoritesSection}
             />
           </div>
         )}

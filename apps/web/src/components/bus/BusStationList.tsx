@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Loader2, LocateFixed, RefreshCcw, Search, X } from 'lucide-react';
-import type { BusStationItemType } from '@repo/api-contract';
+import type {
+  BusFavoriteStationItemType,
+  BusStationItemType,
+} from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
+import { BusFavoriteStar } from './BusFavoriteStar';
 
 // 주변 모드 정류장 행 — 검색 결과(BusStationItemType)에 서버가 계산한 거리(m)를
 // 덧댄 형태. 키워드 모드 항목은 dist 가 없어(undefined) 배지를 생략한다.
@@ -197,6 +201,13 @@ export interface BusStationListBodyProps {
   // 에러 시 재시도. force 재호출(useBusStationsRefresh)을 그대로 물려도 된다 —
   // 성공하면 같은 검색 키 캐시가 교체돼 에러 상태가 풀린다.
   onRetry(): void;
+  // 즐겨찾기 — 행 별 토글. 미지정이면 별을 렌더하지 않는다(공개 페이지에서도
+  // 접근 가능하지만 통합 지점을 좁게 유지).
+  isStationFavorite?(stId: string): boolean;
+  onToggleStationFavorite?(item: BusFavoriteStationItemType): void;
+  // 초기 화면(검색어 없음)일 때 기본 안내 대신 렌더할 즐겨찾기 섹션. 즐겨찾기
+  // 0개면 호출부가 undefined 를 넘겨 기존 빈 상태(안내)를 그대로 보여준다.
+  favoritesContent?: React.ReactNode;
 }
 
 export const BusStationListBody = ({
@@ -211,6 +222,9 @@ export const BusStationListBody = ({
   refreshing,
   onSelect,
   onRetry,
+  isStationFavorite,
+  onToggleStationFavorite,
+  favoritesContent,
 }: BusStationListBodyProps) => {
   // Geolocation 실패는 모드 무관 최우선 — 좌표를 못 얻어 주변 조회 자체가 불가.
   if (geoError) {
@@ -220,7 +234,8 @@ export const BusStationListBody = ({
   // q 길이 힌트는 키워드 모드에서만 — 주변 모드는 검색어 없이 좌표로 조회한다.
   if (!nearMode) {
     if (trimmed.length < 2) {
-      return <Hint>정류장 이름을 2자 이상 입력해 검색하세요.</Hint>;
+      // 초기 화면 — 즐겨찾기가 있으면 섹션을, 없으면 기존 안내를 보여준다.
+      return favoritesContent ?? <Hint>정류장 이름을 2자 이상 입력해 검색하세요.</Hint>;
     }
     // 인풋 maxLength 로는 못 막는 URL 직접 진입 케이스 — 서버 제약(50자) 안내.
     if (trimmed.length > 50) {
@@ -271,13 +286,14 @@ export const BusStationListBody = ({
         {items.map((it) => {
           const selected = it.stId === selectedStId;
           return (
-            <li key={it.stId}>
+            // 행 버튼과 별을 형제로 둔다 — 버튼 중첩(무효 HTML) 회피.
+            <li key={it.stId} className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => onSelect(it.stId)}
                 aria-current={selected ? 'true' : undefined}
                 className={cn(
-                  'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+                  'flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
                   selected
                     ? 'bg-accent text-accent-foreground'
                     : 'hover:bg-accent/50',
@@ -299,6 +315,21 @@ export const BusStationListBody = ({
                   )}
                 </span>
               </button>
+              {isStationFavorite && onToggleStationFavorite && (
+                <BusFavoriteStar
+                  active={isStationFavorite(it.stId)}
+                  onToggle={() =>
+                    onToggleStationFavorite({
+                      stId: it.stId,
+                      arsId: it.arsId,
+                      name: it.name,
+                      lat: it.lat,
+                      lng: it.lng,
+                    })
+                  }
+                  label={`${it.name} 즐겨찾기`}
+                />
+              )}
             </li>
           );
         })}
@@ -335,6 +366,9 @@ interface Props {
   onForceRefresh(): void;
   onNearby(): void;
   onClearNear(): void;
+  isStationFavorite?(stId: string): boolean;
+  onToggleStationFavorite?(item: BusFavoriteStationItemType): void;
+  favoritesContent?: React.ReactNode;
 }
 
 export const BusStationList = ({
@@ -355,6 +389,9 @@ export const BusStationList = ({
   onForceRefresh,
   onNearby,
   onClearNear,
+  isStationFavorite,
+  onToggleStationFavorite,
+  favoritesContent,
 }: Props) => (
   <div className="flex min-h-0 flex-1 flex-col">
     <div className="border-b">
@@ -385,6 +422,9 @@ export const BusStationList = ({
         refreshing={refreshing}
         onSelect={onSelect}
         onRetry={onForceRefresh}
+        isStationFavorite={isStationFavorite}
+        onToggleStationFavorite={onToggleStationFavorite}
+        favoritesContent={favoritesContent}
       />
     </div>
   </div>
