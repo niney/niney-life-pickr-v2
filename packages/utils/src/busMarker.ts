@@ -31,16 +31,83 @@ export function buildBusStopMarkerDataUrl(selected: boolean): string {
   );
 }
 
-// 차량(실시간 버스 위치) 마커 — 정류장(파랑)과 즉시 구분되는 초록. 차량은
-// 선택 개념이 없어 26×26 원형 1종만 제공한다(아이콘 실루엣은 정류장과 공유).
-const BUS_VEHICLE_COLOR = '#16a34a';
+// 차량(실시간 버스 위치) 알약 마커 — 노선 번호를 그대로 보여주는 버스 앱 관용
+// 표현(카카오맵/네이버지도). 정류장(원/핀)과 형태가 완전히 달라 노선색이 정류장
+// 색과 겹쳐도 헷갈리지 않는다.
+//
+// 앵커 트릭: MapCanvas 는 비선택 아이콘을 [0.5, 0.5](이미지 중앙) 앵커로 배치하고
+// 차량은 선택 개념이 없어 항상 비선택이다. 그래서 SVG 아래 절반을 투명 여백으로
+// 채워 '꼬리 끝'이 세로 중앙에 오게 그린다 — 꼬리 끝이 정차 좌표를 정확히 가리키고,
+// compact 축소(중앙 기준 scale)에도 그 지점이 고정된다. 정류장 26×26 규격과 달리
+// 라벨을 붙이지 않으므로(호출처가 label 생략) 라벨 offset 규격과는 무관하다.
 
-export function buildBusVehicleMarkerDataUrl(): string {
+const escapeXml = (s: string): string =>
+  s.replace(/[<>&'"]/g, (c) =>
+    c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c === "'" ? '&apos;' : '&quot;',
+  );
+
+export interface BusVehiclePillOptions {
+  // 노선 번호 표기('141', 'N61', '6411'). 빈 문자열이면 번호 없이 색 알약만.
+  label: string;
+  // 노선색(폴리라인·경유지 점과 동일). '#rrggbb'.
+  color: string;
+  // '정차 중'(stopFlag='1') 강조 — 알약 뒤에 은은한 노선색 후광 1겹.
+  stopped?: boolean;
+}
+
+export function buildBusVehiclePillSvg({
+  label,
+  color,
+  stopped = false,
+}: BusVehiclePillOptions): string {
+  const fontSize = 13;
+  // SVG 텍스트 실측이 불가 → bold 숫자·대문자 기준 문자폭 근사(넉넉히).
+  const textW = Math.max(label.length * 8.4, 8);
+  const padX = 9;
+  const pillH = 24;
+  const r = pillH / 2; // stadium(양끝 반원)
+  const pillW = Math.max(pillH, Math.round(textW + padX * 2));
+  const tailH = 8;
+  const tailHalf = 6;
+  // 정차 후광(halo)이 삐져나올 여백 — 주행 시엔 흰 스트로크만 감안.
+  const margin = stopped ? 6 : 3;
+  const w = pillW + margin * 2;
+  const h = (pillH + tailH + margin) * 2; // 꼬리 끝 = 세로 중앙
+  const cx = w / 2;
+  const tipY = h / 2;
+  const pillTop = tipY - tailH - pillH;
+  const pillBottom = tipY - tailH;
+  const left = cx - pillW / 2;
+  const right = cx + pillW / 2;
+  const midY = (pillTop + pillBottom) / 2;
+  // 알약 + 하단 중앙 꼬리를 하나의 path 로(이음새 없는 말풍선).
+  const bubble =
+    `M${left + r} ${pillTop} H${right - r} ` +
+    `A${r} ${r} 0 0 1 ${right - r} ${pillBottom} ` +
+    `H${cx + tailHalf} L${cx} ${tipY} L${cx - tailHalf} ${pillBottom} ` +
+    `H${left + r} ` +
+    `A${r} ${r} 0 0 1 ${left + r} ${pillTop} Z`;
+  const halo = stopped
+    ? `<rect x="${left - 3}" y="${pillTop - 3}" width="${pillW + 6}" height="${pillH + 6}" rx="${r + 3}" fill="${color}" opacity="0.28"/>`
+    : '';
+  const text = label
+    ? `<text x="${cx}" y="${midY + fontSize * 0.34}" text-anchor="middle" ` +
+      `fill="#fff" font-family="system-ui, -apple-system, 'Malgun Gothic', sans-serif" ` +
+      `font-size="${fontSize}" font-weight="700">${escapeXml(label)}</text>`
+    : '';
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    halo +
+    `<path d="${bubble}" fill="${color}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>` +
+    text +
+    '</svg>'
+  );
+}
+
+export function buildBusVehiclePillDataUrl(options: BusVehiclePillOptions): string {
   return (
     'data:image/svg+xml;charset=utf-8,' +
-    encodeURIComponent(
-      buildCircleMarkerSvg({ fill: BUS_VEHICLE_COLOR, innerSvg: BUS_ICON_PATH }),
-    )
+    encodeURIComponent(buildBusVehiclePillSvg(options))
   );
 }
 

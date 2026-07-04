@@ -9,7 +9,7 @@ import type {
 import {
   buildBusRouteStopDotDataUrl,
   buildBusStopMarkerDataUrl,
-  buildBusVehicleMarkerDataUrl,
+  buildBusVehiclePillDataUrl,
   buildMyLocationMarkerDataUrl,
 } from '@repo/utils';
 import {
@@ -20,11 +20,10 @@ import {
 } from '~/components/restaurant/MapCanvas';
 
 // 모듈 레벨 상수 — 모든 마커가 같은 data URL 문자열을 공유해 OL 아이콘
-// 캐시가 이미지를 1회만 디코드한다.
+// 캐시가 이미지를 1회만 디코드한다. (차량 알약은 노선번호·색·정차여부에 의존해
+// 컴포넌트 안에서 memo 로 생성한다.)
 const BUS_MARKER_URL = buildBusStopMarkerDataUrl(false);
 const BUS_MARKER_SELECTED_URL = buildBusStopMarkerDataUrl(true);
-// 차량은 선택 개념이 없어 1종 — selectedSrc 도 같은 이미지로 채운다.
-const BUS_VEHICLE_MARKER_URL = buildBusVehicleMarkerDataUrl();
 const MY_LOCATION_MARKER_URL = buildMyLocationMarkerDataUrl();
 
 // 차량 마커 id 접두사 — 정류장 stId 와 네임스페이스 충돌 방지 + 클릭 무시 판별.
@@ -36,6 +35,13 @@ interface Props {
   items: BusStationItemType[];
   // 선택 노선의 실시간 버스 위치(15초 폴링) — 없으면 정류장 마커만.
   vehicles?: BusPositionItemType[];
+  // 차량 알약에 표기할 노선 번호('141'). vehicles 가 있을 때만 의미 — 도착정보
+  // (selectedArrival)에서 오므로 차량이 뜨는 시점엔 항상 확보된다. 없으면 번호
+  // 없는 색 알약.
+  vehicleLabel?: string | null;
+  // 차량 알약 색 — 노선색(폴리라인·경유지 점과 동일 톤). 미지정 시 routeLine
+  // 색을 따르고 그마저 없으면 회색 폴백.
+  vehicleColor?: string;
   // 주변 모드의 조회 기준점(Geolocation 내 위치 또는 지도 재검색 좌표) —
   // 파란 점 마커. 없으면 미표시.
   myLocation?: { lat: number; lng: number } | null;
@@ -92,6 +98,8 @@ const approxDistanceM = (
 export const BusStationsMap = ({
   items,
   vehicles,
+  vehicleLabel,
+  vehicleColor,
   myLocation,
   selectedStId,
   onSelectMarker,
@@ -164,6 +172,28 @@ export const BusStationsMap = ({
     userView !== null &&
     approxDistanceM(myLocation, userView) > RESEARCH_THRESHOLD_M;
 
+  // 차량 알약 — 노선번호·색은 노선당 고정이고 정차여부(stopFlag)만 2종이라
+  // 주행/정차 두 URL 만 생성해 공유한다(OL 아이콘 캐시가 이미지를 1회만 디코드).
+  const vehiclePillColor = vehicleColor ?? routeLine?.color ?? '#6b7280';
+  const vehicleMoveUrl = useMemo(
+    () =>
+      buildBusVehiclePillDataUrl({
+        label: vehicleLabel ?? '',
+        color: vehiclePillColor,
+        stopped: false,
+      }),
+    [vehicleLabel, vehiclePillColor],
+  );
+  const vehicleStopUrl = useMemo(
+    () =>
+      buildBusVehiclePillDataUrl({
+        label: vehicleLabel ?? '',
+        color: vehiclePillColor,
+        stopped: true,
+      }),
+    [vehicleLabel, vehiclePillColor],
+  );
+
   const markers: MapMarker[] = useMemo(() => {
     // 같은 이름 + 60m 이내 정류장 그룹은 첫 항목만 라벨 유지 — 마주보는
     // 쌍의 라벨이 글자 단위로 겹쳐 읽히지 않는 문제 방지. label 미지정은
@@ -185,14 +215,6 @@ export const BusStationsMap = ({
         icon: { src: BUS_MARKER_URL, selectedSrc: BUS_MARKER_SELECTED_URL },
       };
     });
-    // 차량 마커 — 라벨 생략(밀집 시 declutter 부담). 15초 폴링마다 위치를
-    // 통째로 교체(부드러운 이동 불필요).
-    const vehicleMarkers: MapMarker[] = (vehicles ?? []).map((v) => ({
-      id: `${VEHICLE_ID_PREFIX}${v.vehId}`,
-      lat: v.lat,
-      lng: v.lng,
-      icon: { src: BUS_VEHICLE_MARKER_URL, selectedSrc: BUS_VEHICLE_MARKER_URL },
-    }));
     // 내 위치 마커 — 주변 모드에서만. 라벨 없이 파란 점만.
     const myLocationMarkers: MapMarker[] = myLocation
       ? [
@@ -217,15 +239,24 @@ export const BusStationsMap = ({
         lng: s.lng,
         icon: { src: dotUrl, selectedSrc: dotUrl },
       }));
-    return [
-      ...routeStopMarkers,
-      ...stationMarkers,
-      ...vehicleMarkers,
-      ...myLocationMarkers,
-    ];
-  }, [items, vehicles, myLocation, routeStops, routeLine?.color]);
+    return [...routeStopMarkers, ...stationMarkers, ...myLocationMarkers];
+  }, [items, myLocation, routeStops, routeLine?.color]);
 
-  // 차량·내 위치 마커 클릭은 no-op — 정류장 선택(stId)으로 오염시키지 않는다.
+  // 차량은 전용 애니메이션 레이어로 분리 — MapCanvas 가 id(vehId)로 이전/새 위치를
+  // 매칭해 직선 등속 보간한다. 아이콘은 정차/주행에 따라 알약 2종.
+  const vehicleItems = useMemo(
+    () =>
+      (vehicles ?? []).map((v) => ({
+        id: `${VEHICLE_ID_PREFIX}${v.vehId}`,
+        lat: v.lat,
+        lng: v.lng,
+        iconSrc: v.stopFlag === '1' ? vehicleStopUrl : vehicleMoveUrl,
+      })),
+    [vehicles, vehicleMoveUrl, vehicleStopUrl],
+  );
+
+  // 내 위치 마커 클릭은 no-op — 정류장 선택(stId)으로 오염시키지 않는다. 차량은
+  // 전용 레이어라 애초에 클릭이 여기 오지 않지만(markerId 미설정) 방어적으로 무시.
   const handleMarkerSelect = useCallback(
     (id: string) => {
       if (id.startsWith(VEHICLE_ID_PREFIX) || id === MY_LOCATION_ID) return;
@@ -301,6 +332,7 @@ export const BusStationsMap = ({
         ref={handleRef}
         apiKey={apiKey}
         markers={markers}
+        vehicles={vehicleItems}
         selectedMarkerId={selectedStId}
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}

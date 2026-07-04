@@ -44,6 +44,18 @@ export interface MapMarker {
   icon?: { src: string; selectedSrc: string };
 }
 
+// 실시간 차량 마커 — 정류장 마커(MapMarker)와 분리된 전용 레이어. 선택·라벨
+// 개념이 없고, 위치가 폴링으로 갱신되면 이전 표시 위치에서 새 위치로 보간된다.
+export interface VehicleMarker {
+  // 차량 식별자(vehId 기반). 폴링 간 이전/새 위치 매칭 키.
+  id: string;
+  lat: number;
+  lng: number;
+  // OL Icon.src 로 그대로 쓰는 아이콘 data URL(알약). 정차/주행에 따라 호출자가
+  // 다른 URL 을 넘긴다. anchor 는 [0.5, 0.5](이미지 중앙) 고정.
+  iconSrc: string;
+}
+
 export interface MapViewport {
   // longitude/latitude (EPSG:4326). bbox 도 같이 — 호출자가 뷰포트 검색에
   // 그대로 박아 쓰기 좋게.
@@ -88,6 +100,13 @@ interface Props {
   // 가리지 않음). null/미지정이면 미표시. fit/flyTo 대상에서 제외(별도 소스라
   // fitToMarkers 의 마커 extent 에 포함되지 않는다).
   routeLine?: { points: { lat: number; lng: number }[]; color: string } | null;
+  // 실시간 차량 마커 — 정류장 마커(markers) 위 전용 레이어. 폴링으로 위치가
+  // 통째로 바뀌면 id 로 이전/새 위치를 매칭해 직선 등속 보간(rAF)한다. 클릭은
+  // 무시(markerId 미설정 → 아래 정류장으로 통과). 미지정/빈 배열이면 미표시.
+  vehicles?: VehicleMarker[];
+  // 차량 보간 지속(ms). 폴링 간격보다 살짝 짧게 잡아 도착 후 잠깐 멈췄다 다음
+  // 위치로 이어진다(등속). 데이터가 늦으면 목표점에서 대기. 기본 14초(15초 폴링).
+  vehicleTweenMs?: number;
   className?: string;
 }
 
@@ -145,6 +164,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onTileError,
     layerControl = true,
     routeLine,
+    vehicles,
+    vehicleTweenMs = 14_000,
     className,
   },
   ref,
@@ -155,6 +176,17 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // 노선 형상 전용 소스 — 마커 소스와 분리해 fitToMarkers 가 54km 노선까지
   // 끌어안아 줌아웃되는 것을 막는다.
   const routeLineSourceRef = useRef<VectorSource | null>(null);
+  // 차량 전용 소스/보간 상태 — 정류장 마커 파이프라인(선언적 재생성)과 분리해
+  // feature 를 재사용하고 geometry 만 rAF 로 갱신한다(프레임 단위 clear 금지).
+  const vehicleSourceRef = useRef<VectorSource | null>(null);
+  const vehicleFeaturesRef = useRef(new Map<string, Feature>());
+  const vehicleAnimRef = useRef(
+    new Map<
+      string,
+      { from: [number, number]; to: [number, number]; start: number; dur: number }
+    >(),
+  );
+  const vehicleRafRef = useRef<number | null>(null);
   // 현재 베이스 타일 소스 — 레이어 변경 시 map 을 재생성하지 않고 URL 만 교체한다
   // (줌/센터/마커 유지).
   const tileSourceRef = useRef<XYZ | null>(null);
@@ -295,17 +327,26 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     const routeLineSource = new VectorSource();
     routeLineSourceRef.current = routeLineSource;
 
+    // 차량 소스 — 정류장 마커보다 위(맨 앞) 레이어. 재생성 시 이전 feature/보간
+    // 상태를 비워 옛 소스 소속 feature 가 새 소스에 남지 않게 한다.
+    const vehicleSource = new VectorSource();
+    vehicleSourceRef.current = vehicleSource;
+    vehicleFeaturesRef.current.clear();
+    vehicleAnimRef.current.clear();
+
     const map = new OlMap({
       target: containerRef.current,
       // declutter 끔 — OL 의 layer declutter 는 Feature 단위라 라벨이 겹치면
       // 핀까지 같이 가려진다. 라벨 가시성은 style function 안에서 줌 임계값
       // (LABEL_VISIBLE_ZOOM)으로 직접 제어하고, 충돌 박스를 작게 만들어 핀이
       // 사라지지 않도록 한다.
-      // 레이어 순서 = 그리는 순서(뒤일수록 위): 타일 → 노선 형상 → 마커.
+      // 레이어 순서 = 그리는 순서(뒤일수록 위): 타일 → 노선 형상 → 정류장 →
+      // 차량. 차량이 맨 위라 정류장과 겹쳐도 가려지지 않는다.
       layers: [
         baseLayer,
         new VectorLayer({ source: routeLineSource }),
         new VectorLayer({ source: vectorSource }),
+        new VectorLayer({ source: vehicleSource }),
       ],
       view,
       controls: [],
@@ -358,9 +399,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     });
 
     map.on('click', (evt) => {
-      const f = map.forEachFeatureAtPixel(evt.pixel, (feat) => feat, {
-        hitTolerance: 4,
-      });
+      // markerId 가 있는 feature 만 후보 — 차량 feature(markerId 미설정)는 건너뛰고
+      // 그 아래 정류장이 선택되게 한다.
+      const f = map.forEachFeatureAtPixel(
+        evt.pixel,
+        (feat) => (feat.get('markerId') ? feat : undefined),
+        { hitTolerance: 4 },
+      );
       if (f) {
         const id = f.get('markerId') as string | undefined;
         if (id) onMarkerSelectRef.current?.(id);
@@ -379,10 +424,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     return () => {
       ro.disconnect();
       containerRef.current?.removeEventListener('wheel', handleWheel);
+      if (vehicleRafRef.current != null) cancelAnimationFrame(vehicleRafRef.current);
+      vehicleRafRef.current = null;
+      vehicleFeaturesRef.current.clear();
+      vehicleAnimRef.current.clear();
       map.setTarget(undefined);
       mapRef.current = null;
       vectorSourceRef.current = null;
       routeLineSourceRef.current = null;
+      vehicleSourceRef.current = null;
       tileSourceRef.current = null;
       userInteractedRef.current = false;
     };
@@ -462,6 +512,75 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     );
     src.addFeature(feature);
   }, [routeLine]);
+
+  // 차량 보간 — vehicles 가 바뀌면(폴링) 각 id 의 현재 표시 좌표에서 새 좌표로
+  // 직선 등속 tween 을 예약하고 rAF 를 돌린다. 신규 id 는 즉시 배치, 사라진 id 는
+  // 제거, 아이콘(정차/주행)은 매번 갱신. geometry 만 프레임마다 바꾸므로(스타일
+  // 재생성 없음) 버스 수 대비 가볍다. from/to 는 EPSG:3857(m) — 0.5m 이하 이동은
+  // tween 을 생략해 정차·미동 시 떨림을 없앤다.
+  useEffect(() => {
+    const src = vehicleSourceRef.current;
+    if (!src) return;
+    const now = performance.now();
+    const feats = vehicleFeaturesRef.current;
+    const anims = vehicleAnimRef.current;
+    const seen = new Set<string>();
+    for (const v of vehicles ?? []) {
+      seen.add(v.id);
+      const to = fromLonLat([v.lng, v.lat]) as [number, number];
+      const style = new Style({ image: new Icon({ anchor: [0.5, 0.5], src: v.iconSrc }) });
+      const existing = feats.get(v.id);
+      if (!existing) {
+        const f = new Feature({ geometry: new Point(to) });
+        f.setStyle(style);
+        src.addFeature(f);
+        feats.set(v.id, f);
+        anims.delete(v.id); // 신규는 tween 없이 즉시 위치
+      } else {
+        const geom = existing.getGeometry() as Point;
+        const from = geom.getCoordinates() as [number, number];
+        // 아이콘(정차/주행/색) 변화 반영 — 같은 src 면 OL 이미지 캐시 재사용.
+        existing.setStyle(style);
+        if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.5) {
+          geom.setCoordinates(to);
+          anims.delete(v.id);
+        } else {
+          anims.set(v.id, { from, to, start: now, dur: vehicleTweenMs });
+        }
+      }
+    }
+    // 이번 폴링에 없는 차량 제거(운행 종료/구간 이탈).
+    for (const [id, f] of feats) {
+      if (!seen.has(id)) {
+        src.removeFeature(f);
+        feats.delete(id);
+        anims.delete(id);
+      }
+    }
+    // rAF 구동 — 이미 돌고 있으면(vehicleRafRef!=null) 갱신된 anims 를 그대로
+    // 이어받는다(anims/feats 는 렌더 간 고정 ref 객체).
+    if (anims.size > 0 && vehicleRafRef.current == null) {
+      const tick = () => {
+        const t = performance.now();
+        let active = false;
+        for (const [id, a] of anims) {
+          const f = feats.get(id);
+          if (!f) {
+            anims.delete(id);
+            continue;
+          }
+          const p = Math.min(1, (t - a.start) / a.dur);
+          const x = a.from[0] + (a.to[0] - a.from[0]) * p;
+          const y = a.from[1] + (a.to[1] - a.from[1]) * p;
+          (f.getGeometry() as Point).setCoordinates([x, y]);
+          if (p < 1) active = true;
+          else anims.delete(id);
+        }
+        vehicleRafRef.current = active ? requestAnimationFrame(tick) : null;
+      };
+      vehicleRafRef.current = requestAnimationFrame(tick);
+    }
+  }, [vehicles, vehicleTweenMs]);
 
   // 선택 변경 — vectorSource 는 건드리지 않고 이전/현재 마커 feature 2개만
   // changed() 로 다시 칠한다 (style function 이 selectedIdRef 를 다시 읽음). N→2.

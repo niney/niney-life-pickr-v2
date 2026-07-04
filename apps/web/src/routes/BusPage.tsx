@@ -545,6 +545,8 @@ export const BusPage = () => {
           <BusStationsMap
             items={mapItemsForMap}
             vehicles={vehicles}
+            vehicleLabel={selectedArrival?.routeName ?? null}
+            vehicleColor={routeColor}
             myLocation={effectiveNear}
             selectedStId={stId}
             onSelectMarker={handleSelect}
@@ -583,6 +585,8 @@ export const BusPage = () => {
           <BusStationsMap
             items={mapItemsForMap}
             vehicles={vehicles}
+            vehicleLabel={selectedArrival?.routeName ?? null}
+            vehicleColor={routeColor}
             myLocation={effectiveNear}
             selectedStId={stId}
             onSelectMarker={handleSelect}
