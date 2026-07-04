@@ -24,6 +24,27 @@ export const useBusStationSearch = (q: string) => {
   });
 };
 
+// 좌표 기반 주변 정류장 — 좌표는 호출자가 Geolocation 으로 확정해 넘긴다.
+// 서버가 60초 격자 캐시를 들고 있어 staleTime 을 맞춰 같은 자리 재조회를
+// 클라이언트에서도 차단한다. 좌표 키는 소수 4자리 스냅(≈11m) — 사소한 GPS
+// 흔들림으로 쿼리 키가 갈라져 재호출되는 것을 방지.
+export const useBusNearbyStations = (
+  lat: number | null,
+  lng: number | null,
+  radius?: number,
+) => {
+  const enabled = lat !== null && lng !== null;
+  const keyLat = lat !== null ? lat.toFixed(4) : null;
+  const keyLng = lng !== null ? lng.toFixed(4) : null;
+  return useQuery({
+    queryKey: ['bus', 'stations', 'nearby', keyLat, keyLng, radius ?? null],
+    queryFn: () => busApi.nearbyStations(lat!, lng!, radius !== undefined ? { radius } : {}),
+    enabled,
+    staleTime: 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
 // 강제 새로고침(force=true). 성공 시 같은 검색 키 캐시를 응답으로 직접 교체 —
 // invalidate 로 일반(force 없는) 요청을 한 번 더 보내지 않는다.
 export const useBusStationsRefresh = () => {

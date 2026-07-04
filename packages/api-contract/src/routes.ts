@@ -393,6 +393,8 @@ export const SettlementDraft = {
 // 검색은 DB 30일 캐시, 도착/위치는 무캐싱 실시간 프록시(폴링은 화면 활성 시만).
 export const Bus = {
   stationSearch: `${API_PREFIX}/bus/stations/search`,
+  // 좌표 기반 주변 정류장 — lat/lng(WGS84) + radius(m, 기본 500·상한 1000).
+  stationsNearby: `${API_PREFIX}/bus/stations/nearby`,
   // 정류소 실시간 도착정보 — 노선별 busRouteId/staOrd/도착메시지.
   // arsId '0'(가상정류장)은 400.
   stationArrivals: (arsId: string) => `${API_PREFIX}/bus/stations/${arsId}/arrivals`,

@@ -287,6 +287,23 @@ export interface RawBusStation {
   posY: number | null;
 }
 
+// getStationByPos 원시 행 — 좌표 기반 근접 정류소. probe 실측(2026-07-04):
+// 검색(getStationByName)과 필드명이 다르다 — stationId(stId 와 동일한 9자리
+// ID 공간)/stationNm/gpsX·gpsY(WGS84)/posX·posY(GRS80 TM)/dist(m, 오름차순).
+export interface RawNearbyStation {
+  stId: string;
+  arsId: string;
+  stNm: string;
+  // 요청 좌표로부터의 거리(m).
+  dist: number | null;
+  tmX: number | null;
+  tmY: number | null;
+  gpsX: number | null;
+  gpsY: number | null;
+  posX: number | null;
+  posY: number | null;
+}
+
 // getStationByUid 원시 행 — 정류소 경유 노선별 도착정보.
 export interface RawStationArrival {
   busRouteId: string;
@@ -404,6 +421,35 @@ export const getStationsByName = async (
 ): Promise<RawBusStation[]> => {
   const { items } = await callBusApi('stationinfo/getStationByName', { stSrch: keyword }, opts);
   return items.map(toRawBusStation).filter((s): s is RawBusStation => s !== null);
+};
+
+const toRawNearbyStation = (raw: Record<string, unknown>): RawNearbyStation | null => {
+  const stId = strOrNull(raw['stationId']);
+  const stNm = strOrNull(raw['stationNm']);
+  if (!stId || !stNm) return null;
+  return {
+    stId,
+    arsId: strOrNull(raw['arsId']) ?? '0',
+    stNm,
+    dist: numOrNull(raw['dist']),
+    ...coordFields(raw),
+  };
+};
+
+// 좌표 기반 근접 정류소 — 파라미터 tmX(경도)/tmY(위도)는 필드명과 달리 WGS84
+// 를 그대로 받는다(probe 실측 2026-07-04). radius 는 미터.
+export const getStationsByPos = async (
+  lng: number,
+  lat: number,
+  radiusM: number,
+  opts: BusApiRequestOptions,
+): Promise<RawNearbyStation[]> => {
+  const { items } = await callBusApi(
+    'stationinfo/getStationByPos',
+    { tmX: String(lng), tmY: String(lat), radius: String(radiusM) },
+    opts,
+  );
+  return items.map(toRawNearbyStation).filter((s): s is RawNearbyStation => s !== null);
 };
 
 export const getStationArrivals = async (

@@ -98,6 +98,38 @@ export const BusArrivalsResult = z.object({
 });
 export type BusArrivalsResultType = z.infer<typeof BusArrivalsResult>;
 
+// ── 3차: 좌표 기반 주변 정류장 (getStationByPos) ──────────────────────────
+// probe 실측(2026-07-04): 파라미터 tmX(경도)/tmY(위도)에 WGS84 를 그대로 수용,
+// radius 는 미터. 응답 필드는 검색과 다름 — stationId(=stId 와 동일 ID 공간)/
+// stationNm/gpsX·gpsY(WGS84)/dist(m). 서버는 셀(0.005°≈550m) 단위 DB 30일
+// 캐시 + 일일 쿼터 공유 — 지도 자동 조회(패닝 재조회)를 감당한다. dist 는
+// 셀 캐시와 무관하게 쿼리 지점 기준으로 서버가 재계산해 내려준다.
+
+export const BusNearbyQuery = z.object({
+  // WGS84 한국 범위 강제 — 범위 밖 좌표는 서울시 API 를 때리기 전에 400.
+  lat: z.coerce.number().min(33).max(39),
+  lng: z.coerce.number().min(124).max(132),
+  // 반경(m). 상한 1000 — 노선 전체를 훑는 남용 방지, 기본 500.
+  radius: z.coerce.number().int().min(50).max(1000).default(500),
+});
+export type BusNearbyQueryType = z.infer<typeof BusNearbyQuery>;
+
+export const BusNearbyItem = BusStationItem.extend({
+  // 요청 좌표로부터의 거리(m) — 서울시가 계산해 내려주며 오름차순 정렬 계약.
+  dist: z.number().int().min(0),
+});
+export type BusNearbyItemType = z.infer<typeof BusNearbyItem>;
+
+export const BusNearbyResult = z.object({
+  items: z.array(BusNearbyItem),
+  total: z.number().int().min(0),
+  fetchedAt: z.string(),
+  // cache = 셀 TTL 내 DB 응답 / api = 방금 셀 수집 / stale = 수집 실패(쿼터
+  // 소진 포함)로 만료 셀 반환. 검색과 동일 의미.
+  source: z.enum(['cache', 'api', 'stale']),
+});
+export type BusNearbyResultType = z.infer<typeof BusNearbyResult>;
+
 export const BusPositionsParams = z.object({
   busRouteId: z.string().regex(/^\d+$/),
 });

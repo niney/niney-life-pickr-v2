@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getStationsByName: vi.fn(),
   getStationArrivals: vi.fn(),
   getBusPositionsByRouteSt: vi.fn(),
+  getStationsByPos: vi.fn(),
 }));
 vi.mock('./bus-api.adapter.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./bus-api.adapter.js')>();
@@ -25,9 +26,15 @@ import {
   BusApiError,
   type RawBusPosition,
   type RawBusStation,
+  type RawNearbyStation,
   type RawStationArrival,
 } from './bus-api.adapter.js';
-import { BUS_SEARCH_TTL_MS, BusService, FORCE_MIN_INTERVAL_MS } from './bus.service.js';
+import {
+  BUS_NEARBY_TTL_MS,
+  BUS_SEARCH_TTL_MS,
+  BusService,
+  FORCE_MIN_INTERVAL_MS,
+} from './bus.service.js';
 
 // shared dev.db — 전용 prefix 로 시드하고 afterAll 에서 bus_* 테이블을 정리한다.
 const KEYWORD_PREFIX = '버스테스트';
@@ -78,8 +85,26 @@ const rawPosition = (over: Partial<RawBusPosition> = {}): RawBusPosition => ({
   ...over,
 });
 
+// 2026-07-04 probe 실덤프(getStationByPos, 강남역 반경 300m) 형태 기반 —
+// nearby 응답은 tmX/tmY 없이 gpsX/gpsY(WGS84)만 온다.
+const rawNearby = (over: Partial<RawNearbyStation> = {}): RawNearbyStation => ({
+  stId: `${ST_PREFIX}${stamp()}`,
+  arsId: '22859',
+  stNm: '강남역.삼성전자',
+  dist: 14,
+  tmX: null,
+  tmY: null,
+  gpsX: 127.0278698411,
+  gpsY: 37.4970515618,
+  posX: 202464.18360829516,
+  posY: 444183.23039598204,
+  ...over,
+});
+
 const searchUrl = (q: string, force?: boolean): string =>
   `/api/v1/bus/stations/search?q=${encodeURIComponent(q)}${force ? '&force=true' : ''}`;
+const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
+  `/api/v1/bus/stations/nearby?lat=${lat}&lng=${lng}${radius !== undefined ? `&radius=${radius}` : ''}`;
 const arrivalsUrl = (arsId: string): string => `/api/v1/bus/stations/${arsId}/arrivals`;
 const positionsUrl = (busRouteId: string, startOrd: number, endOrd: number): string =>
   `/api/v1/bus/routes/${busRouteId}/positions?startOrd=${startOrd}&endOrd=${endOrd}`;
@@ -107,6 +132,7 @@ beforeEach(() => {
   mocks.getStationsByName.mockReset();
   mocks.getStationArrivals.mockReset();
   mocks.getBusPositionsByRouteSt.mockReset();
+  mocks.getStationsByPos.mockReset();
 });
 
 describe('GET /api/v1/bus/stations/search', () => {
@@ -394,6 +420,161 @@ describe('GET /api/v1/bus/stations/search', () => {
     // 완료 후 in-flight 해제 확인 — 재호출은 캐시 경로(어댑터 추가 호출 없음).
     expect((await svc.searchStations(keyword, false)).source).toBe('cache');
     expect(adapter.getStationsByName).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GET /api/v1/bus/stations/nearby', () => {
+  // 라우트의 BusService 인스턴스는 파일 내 공유 + 셀 캐시는 DB 30일 —
+  // 테스트마다 겹치지 않는 셀(0.005° 격자)을 쓴다. lng 127.775 는 테스트 전용
+  // 격자(afterAll 정리 기준).
+  const TEST_LNG = 127.775;
+  let coordSeq = 0;
+  const freshCoord = (): { lat: number; lng: number } => {
+    coordSeq += 1;
+    return { lat: 37.4 + coordSeq * 0.01, lng: TEST_LNG };
+  };
+
+  afterAll(async () => {
+    // 셀 행 삭제가 hits 를 cascade 정리 (정류소는 파일 afterAll 의 ST_PREFIX).
+    await app.prisma.busNearbyCell.deleteMany({
+      where: { cellKey: { endsWith: `,${TEST_LNG.toFixed(3)}` } },
+    });
+  });
+
+  it('정상 매핑 — 쿼리 지점 기준 dist 재계산·오름차순·반경 필터, 셀 중심+고정 반경 호출', async () => {
+    const { lat, lng } = freshCoord();
+    // 쿼리 지점과 같은 좌표(dist 0) / 북쪽 ~222m / 북쪽 ~1.1km(기본 500 밖).
+    const at = rawNearby({ gpsY: lat, gpsX: lng });
+    const near = rawNearby({ stId: `${ST_PREFIX}${stamp()}`, gpsY: lat + 0.002, gpsX: lng });
+    const out = rawNearby({ stId: `${ST_PREFIX}${stamp()}`, gpsY: lat + 0.01, gpsX: lng });
+    // 어댑터 순서와 무관하게 dist 오름차순으로 서빙된다.
+    mocks.getStationsByPos.mockResolvedValueOnce([out, near, at]);
+
+    const res = await app.inject({ url: nearbyUrl(lat, lng) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: { stId: string; dist: number; lat: number; lng: number }[];
+      total: number;
+      fetchedAt: string;
+      source: string;
+    };
+    // 반경(기본 500m) 밖 정류소는 total 에서도 제외 — 셀은 1500m 로 넓게 수집
+    // 하지만 응답은 쿼리 반경으로 자른다.
+    expect(body.total).toBe(2);
+    expect(body.source).toBe('api');
+    expect(body.items.map((i) => i.stId)).toEqual([at.stId, near.stId]);
+    expect(body.items[0]!.dist).toBe(0);
+    expect(body.items[1]!.dist).toBeGreaterThan(200);
+    expect(body.items[1]!.dist).toBeLessThan(250);
+    expect(Number.isNaN(Date.parse(body.fetchedAt))).toBe(false);
+    // 업스트림은 쿼리 좌표가 아니라 셀 스냅 좌표 + 고정 반경(1500m)으로 호출 —
+    // 셀 캐시를 셀 내 어떤 쿼리에도 재사용하기 위함. (freshCoord 는 0.005 의
+    // 배수라 스냅 결과가 입력과 같다.)
+    // 스냅은 round(v/0.005)*0.005 — 부동소수 오차가 붙을 수 있어 closeTo.
+    expect(mocks.getStationsByPos).toHaveBeenCalledWith(
+      expect.closeTo(lng, 6) as number,
+      expect.closeTo(lat, 6) as number,
+      1500,
+      { serviceKey: expect.any(String) as string },
+    );
+  });
+
+  it('셀 DB 캐시 — 같은 셀 재요청은 업스트림 미호출(radius 달라도), 다른 셀은 재호출', async () => {
+    const { lat, lng } = freshCoord();
+    mocks.getStationsByPos.mockResolvedValue([rawNearby({ gpsY: lat, gpsX: lng })]);
+
+    expect((await app.inject({ url: nearbyUrl(lat, lng) })).statusCode).toBe(200);
+    // 같은 셀 내 다른 좌표(+0.001° < 셀 반변) + 다른 radius — DB 캐시 서빙.
+    const hit = await app.inject({ url: nearbyUrl(lat + 0.001, lng, 300) });
+    expect((hit.json() as { source: string }).source).toBe('cache');
+    expect(mocks.getStationsByPos).toHaveBeenCalledTimes(1);
+
+    // 다른 셀(+0.005°) — 재수집.
+    await app.inject({ url: nearbyUrl(lat + 0.005, lng) });
+    expect(mocks.getStationsByPos).toHaveBeenCalledTimes(2);
+  });
+
+  it('만료 셀 + 업스트림 실패 → stale 로 기존 목록 반환', async () => {
+    const { lat, lng } = freshCoord();
+    const st = rawNearby({ gpsY: lat, gpsX: lng });
+    mocks.getStationsByPos.mockResolvedValueOnce([st]);
+    await app.inject({ url: nearbyUrl(lat, lng) });
+
+    await app.prisma.busNearbyCell.update({
+      where: { cellKey: `${lat.toFixed(3)},${lng.toFixed(3)}` },
+      data: { fetchedAt: new Date(Date.now() - BUS_NEARBY_TTL_MS - 1000) },
+    });
+
+    mocks.getStationsByPos.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: nearbyUrl(lat, lng) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { source: string; items: { stId: string }[] };
+    expect(body.source).toBe('stale');
+    expect(body.items[0]?.stId).toBe(st.stId);
+  });
+
+  it('좌표 정규화 실패(TM-only) 행은 drop, 전량 실패면 502 + 셀 미기록', async () => {
+    const { lat, lng } = freshCoord();
+    const good = rawNearby({ gpsY: lat, gpsX: lng });
+    mocks.getStationsByPos.mockResolvedValueOnce([
+      rawNearby({ gpsX: null, gpsY: null }), // WGS84 쌍 없음(posX/posY TM 만)
+      good,
+    ]);
+    const res = await app.inject({ url: nearbyUrl(lat, lng) });
+    const body = res.json() as { items: { stId: string }[]; total: number };
+    expect(body.items.map((i) => i.stId)).toEqual([good.stId]);
+    expect(body.total).toBe(1);
+
+    // 전량 실패 — 다른 셀에서 502, 빈 셀로 박제되지 않아야 한다.
+    const { lat: lat2, lng: lng2 } = freshCoord();
+    mocks.getStationsByPos.mockResolvedValueOnce([rawNearby({ gpsX: null, gpsY: null })]);
+    expect((await app.inject({ url: nearbyUrl(lat2, lng2) })).statusCode).toBe(502);
+    const cell = await app.prisma.busNearbyCell.findUnique({
+      where: { cellKey: `${lat2.toFixed(3)},${lng2.toFixed(3)}` },
+    });
+    expect(cell).toBeNull();
+  });
+
+  it('lat 범위 밖(50)/radius 상한 초과(1001) → 400, 업스트림 미호출', async () => {
+    expect((await app.inject({ url: nearbyUrl(50, 127.02) })).statusCode).toBe(400);
+    expect((await app.inject({ url: nearbyUrl(37.5, 127.02, 1001) })).statusCode).toBe(400);
+    expect(mocks.getStationsByPos).not.toHaveBeenCalled();
+  });
+
+  it('업스트림 실패 → 502 (캐시 미기록 — 재요청 시 재시도)', async () => {
+    const { lat, lng } = freshCoord();
+    mocks.getStationsByPos.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: nearbyUrl(lat, lng) });
+    expect(res.statusCode).toBe(502);
+
+    mocks.getStationsByPos.mockResolvedValueOnce([rawNearby()]);
+    const retry = await app.inject({ url: nearbyUrl(lat, lng) });
+    expect(retry.statusCode).toBe(200);
+    expect(mocks.getStationsByPos).toHaveBeenCalledTimes(2);
+  });
+
+  it('일일 쿼터 공유 — 검색이 소진하면 nearby 도 503 (서비스 직접 생성)', async () => {
+    const adapter = { getStationsByName: vi.fn(), getStationsByPos: vi.fn() };
+    const svc = new BusService(app.prisma, {
+      serviceKey: 'svc-key',
+      adapter,
+      dailyLimit: 1,
+    });
+    adapter.getStationsByName.mockResolvedValueOnce([rawStation()]);
+    await svc.searchStations(kw(), false);
+
+    await expect(svc.getNearbyStations(37.5, 127.02, 500)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(adapter.getStationsByPos).not.toHaveBeenCalled();
+  });
+
+  it('serviceKey 빈 값 → 503', async () => {
+    const svc = new BusService(app.prisma, { serviceKey: '' });
+    await expect(svc.getNearbyStations(37.5, 127.02, 500)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(mocks.getStationsByPos).not.toHaveBeenCalled();
   });
 });
 

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 2026-07-04 probe 실응답 기반 — getStationByPos(tmX=127.027926, tmY=37.497175, radius=300).
+     검색(getStationByName)과 달리 stationId/stationNm 필드명, gpsX/gpsY(WGS84)만 제공.
+     실응답 27건 중 상위 3건 채집. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>0</headerCd>
+    <headerMsg>정상적으로 처리되었습니다.</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody>
+    <itemList>
+      <arsId>22859</arsId>
+      <dist>14</dist>
+      <gpsX>127.0278698411</gpsX>
+      <gpsY>37.4970515618</gpsY>
+      <posX>202464.18360829516</posX>
+      <posY>444183.23039598204</posY>
+      <stationId>121900198</stationId>
+      <stationNm>강남역.삼성전자</stationNm>
+      <stationTp>1</stationTp>
+    </itemList>
+    <itemList>
+      <arsId>22348</arsId>
+      <dist>26</dist>
+      <gpsX>127.0277969551</gpsX>
+      <gpsY>37.4969583114</gpsY>
+      <posX>202457.74226137347</posX>
+      <posY>444172.8800171418</posY>
+      <stationId>121000271</stationId>
+      <stationNm>강남역7번출구</stationNm>
+      <stationTp>0</stationTp>
+    </itemList>
+    <itemList>
+      <arsId>22652</arsId>
+      <dist>78</dist>
+      <gpsX>127.0280084862</gpsX>
+      <gpsY>37.4964688083</gpsY>
+      <posX>202476.4615155754</posX>
+      <posY>444118.5629049358</posY>
+      <stationId>121000541</stationId>
+      <stationNm>강남역서초현대타워앞</stationNm>
+      <stationTp>0</stationTp>
+    </itemList>
+  </msgBody>
+</ServiceResult>

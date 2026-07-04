@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Loader2, RefreshCcw, Search } from 'lucide-react';
+import { Loader2, LocateFixed, RefreshCcw, Search, X } from 'lucide-react';
 import type { BusStationItemType } from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
+
+// 주변 모드 정류장 행 — 검색 결과(BusStationItemType)에 서버가 계산한 거리(m)를
+// 덧댄 형태. 키워드 모드 항목은 dist 가 없어(undefined) 배지를 생략한다.
+export type BusStationRow = BusStationItemType & { dist?: number };
+
+// 거리(m) → 배지 문구. 1km 미만은 정수 m, 이상은 소수 1자리 km.
+const formatDist = (m: number): string =>
+  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 
 // 서울시 원본 수집 시각 → '갱신 N분 전' 표기. 분 단위면 충분 — 서버 캐시
 // TTL 이 30일이라 초 단위 정밀도는 의미 없다.
@@ -26,6 +34,9 @@ const formatRelative = (iso: string): string => {
 
 export interface BusStationSearchBarProps {
   q: string;
+  // 주변 모드 여부 — true 면 메타 행이 '내 주변' 라벨 + 총수/갱신으로 바뀌고
+  // 강제 새로고침 대신 모드 해제(X) 버튼을 노출한다.
+  nearMode: boolean;
   total: number;
   fetchedAt: string | null;
   refreshing: boolean;
@@ -35,10 +46,15 @@ export interface BusStationSearchBarProps {
   stale: boolean;
   onSubmitQ(next: string): void;
   onForceRefresh(): void;
+  // 주변 정류장 버튼 클릭 — Geolocation 요청은 상위(BusPage)에서.
+  onNearby(): void;
+  // 주변 모드 해제 — near 파라미터 제거.
+  onClearNear(): void;
 }
 
 export const BusStationSearchBar = ({
   q,
+  nearMode,
   total,
   fetchedAt,
   refreshing,
@@ -46,6 +62,8 @@ export const BusStationSearchBar = ({
   stale,
   onSubmitQ,
   onForceRefresh,
+  onNearby,
+  onClearNear,
 }: BusStationSearchBarProps) => {
   // 제출형이라 draft 는 로컬 — 제출 전까지 URL/q 를 건드리지 않는다.
   // q 가 외부(다른 인스턴스 제출, 뒤로가기)에서 바뀌면 렌더 중 동기화.
@@ -91,9 +109,21 @@ export const BusStationSearchBar = ({
         <Button type="submit" size="sm">
           검색
         </Button>
+        {/* 주변 정류장 — 클릭 시 상위가 Geolocation 을 요청해 near 모드로 전환. */}
+        <Button
+          type="button"
+          size="sm"
+          variant={nearMode ? 'default' : 'outline'}
+          onClick={onNearby}
+          aria-label="내 주변 정류장"
+          title="내 주변 정류장 찾기"
+        >
+          <LocateFixed className="size-4" />
+        </Button>
       </form>
 
-      {hasQ && fetchedAt && (
+      {/* 키워드 모드 메타 — 총수/갱신 + 강제 새로고침. */}
+      {!nearMode && hasQ && fetchedAt && (
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex min-w-0 flex-wrap items-center gap-1.5 tabular-nums">
             총 {total}개 · 갱신 {formatRelative(fetchedAt)}
@@ -116,6 +146,27 @@ export const BusStationSearchBar = ({
         </div>
       )}
 
+      {/* 주변 모드 메타 — '내 주변' 라벨 + 총수/갱신 + 모드 해제(X). */}
+      {nearMode && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5 tabular-nums">
+            <Badge variant="secondary" className="gap-1">
+              <LocateFixed className="size-3" /> 내 주변
+            </Badge>
+            {fetchedAt && <>총 {total}개 · 갱신 {formatRelative(fetchedAt)}</>}
+          </span>
+          <button
+            type="button"
+            onClick={onClearNear}
+            aria-label="주변 모드 해제"
+            title="주변 모드 해제"
+            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+
       {truncated && (
         <p className="text-xs text-muted-foreground">결과가 많아 일부만 표시합니다.</p>
       )}
@@ -130,7 +181,11 @@ export const BusStationSearchBar = ({
 
 export interface BusStationListBodyProps {
   q: string;
-  items: BusStationItemType[];
+  items: BusStationRow[];
+  // 주변 모드 — q 길이 힌트 대신 거리 배지·주변 전용 문구를 쓴다.
+  nearMode: boolean;
+  // Geolocation 실패 안내(권한 거부/타임아웃/미지원/비보안). 있으면 최우선 표시.
+  geoError: string | null;
   isLoading: boolean;
   isError: boolean;
   selectedStId: string | null;
@@ -147,6 +202,8 @@ export interface BusStationListBodyProps {
 export const BusStationListBody = ({
   q,
   items,
+  nearMode,
+  geoError,
   isLoading,
   isError,
   selectedStId,
@@ -155,13 +212,20 @@ export const BusStationListBody = ({
   onSelect,
   onRetry,
 }: BusStationListBodyProps) => {
-  const trimmed = q.trim();
-  if (trimmed.length < 2) {
-    return <Hint>정류장 이름을 2자 이상 입력해 검색하세요.</Hint>;
+  // Geolocation 실패는 모드 무관 최우선 — 좌표를 못 얻어 주변 조회 자체가 불가.
+  if (geoError) {
+    return <Hint>{geoError}</Hint>;
   }
-  // 인풋 maxLength 로는 못 막는 URL 직접 진입 케이스 — 서버 제약(50자) 안내.
-  if (trimmed.length > 50) {
-    return <Hint>검색어는 50자 이하로 입력하세요.</Hint>;
+  const trimmed = q.trim();
+  // q 길이 힌트는 키워드 모드에서만 — 주변 모드는 검색어 없이 좌표로 조회한다.
+  if (!nearMode) {
+    if (trimmed.length < 2) {
+      return <Hint>정류장 이름을 2자 이상 입력해 검색하세요.</Hint>;
+    }
+    // 인풋 maxLength 로는 못 막는 URL 직접 진입 케이스 — 서버 제약(50자) 안내.
+    if (trimmed.length > 50) {
+      return <Hint>검색어는 50자 이하로 입력하세요.</Hint>;
+    }
   }
   if (isLoading && items.length === 0) {
     return (
@@ -187,7 +251,7 @@ export const BusStationListBody = ({
     );
   }
   if (items.length === 0) {
-    return <Hint>검색 결과가 없습니다.</Hint>;
+    return <Hint>{nearMode ? '주변에 정류장이 없습니다.' : '검색 결과가 없습니다.'}</Hint>;
   }
   return (
     <>
@@ -220,12 +284,20 @@ export const BusStationListBody = ({
                 )}
               >
                 <span className="truncate font-medium">{it.name}</span>
-                {/* arsId '0' = 가상정류장(표지판 번호 없음) — 배지 숨김. */}
-                {it.arsId !== '0' && (
-                  <Badge variant="secondary" className="shrink-0 tabular-nums">
-                    {it.arsId}
-                  </Badge>
-                )}
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {/* 주변 모드 — 서버가 준 거리 배지(파란 톤). */}
+                  {it.dist !== undefined && (
+                    <Badge variant="default" className="tabular-nums">
+                      {formatDist(it.dist)}
+                    </Badge>
+                  )}
+                  {/* arsId '0' = 가상정류장(표지판 번호 없음) — 배지 숨김. */}
+                  {it.arsId !== '0' && (
+                    <Badge variant="secondary" className="tabular-nums">
+                      {it.arsId}
+                    </Badge>
+                  )}
+                </span>
               </button>
             </li>
           );
@@ -247,7 +319,9 @@ const Hint = ({ children }: { children: React.ReactNode }) => (
 
 interface Props {
   q: string;
-  items: BusStationItemType[];
+  nearMode: boolean;
+  geoError: string | null;
+  items: BusStationRow[];
   total: number;
   fetchedAt: string | null;
   isLoading: boolean;
@@ -259,10 +333,14 @@ interface Props {
   onSubmitQ(next: string): void;
   onSelect(stId: string): void;
   onForceRefresh(): void;
+  onNearby(): void;
+  onClearNear(): void;
 }
 
 export const BusStationList = ({
   q,
+  nearMode,
+  geoError,
   items,
   total,
   fetchedAt,
@@ -275,11 +353,14 @@ export const BusStationList = ({
   onSubmitQ,
   onSelect,
   onForceRefresh,
+  onNearby,
+  onClearNear,
 }: Props) => (
   <div className="flex min-h-0 flex-1 flex-col">
     <div className="border-b">
       <BusStationSearchBar
         q={q}
+        nearMode={nearMode}
         total={total}
         fetchedAt={fetchedAt}
         refreshing={refreshing}
@@ -287,11 +368,15 @@ export const BusStationList = ({
         stale={stale}
         onSubmitQ={onSubmitQ}
         onForceRefresh={onForceRefresh}
+        onNearby={onNearby}
+        onClearNear={onClearNear}
       />
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <BusStationListBody
         q={q}
+        nearMode={nearMode}
+        geoError={geoError}
         items={items}
         isLoading={isLoading}
         isError={isError}

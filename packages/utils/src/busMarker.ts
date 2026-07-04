@@ -43,3 +43,27 @@ export function buildBusVehicleMarkerDataUrl(): string {
     )
   );
 }
+
+// 내 위치(Geolocation) 마커 — 정류장(파랑 핀)·차량(초록 원)과 구분되는 단순
+// '파란 점'. 지도 앱 관용 표현(진한 파란 점 + 흰 링 + 옅은 정확도 후광)을
+// 26×26 규격으로 그려 정류장 마커와 라벨 offset·축소 스케일을 공유한다.
+const MY_LOCATION_COLOR = '#2563eb';
+
+export function buildMyLocationMarkerSvg(): string {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">' +
+    // 옅은 후광(정확도 느낌) → 흰 링 → 파란 점 순으로 겹쳐 그린다.
+    `<circle fill="${MY_LOCATION_COLOR}" fill-opacity="0.2" cx="13" cy="13" r="12"/>` +
+    '<circle fill="#fff" cx="13" cy="13" r="7"/>' +
+    `<circle fill="${MY_LOCATION_COLOR}" cx="13" cy="13" r="5"/>` +
+    '</svg>'
+  );
+}
+
+// data URL 직접 사용 시 — OL Icon.src 에 그대로 넣는다. 선택 개념이 없어 1종.
+export function buildMyLocationMarkerDataUrl(): string {
+  return (
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(buildMyLocationMarkerSvg())
+  );
+}

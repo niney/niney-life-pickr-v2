@@ -3,6 +3,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   BusArrivalsParams,
   BusArrivalsResult,
+  BusNearbyQuery,
+  BusNearbyResult,
   BusPositionsParams,
   BusPositionsQuery,
   BusPositionsResult,
@@ -37,6 +39,35 @@ const busRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req, reply) => {
       try {
         return await service.searchStations(req.query.q, req.query.force);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 502 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
+            message: e instanceof Error ? e.message : '버스 API 호출 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 좌표 기반 주변 정류장 — 좌표 범위(WGS84 한국)·radius 상한(1000m)은 zod 가
+  // 400 으로 거절. 셀 단위 DB 30일 캐시가 지도 자동 조회를 흡수한다.
+  typed.get(Routes.Bus.stationsNearby, {
+    schema: {
+      tags: ['bus'],
+      querystring: BusNearbyQuery,
+      response: {
+        200: BusNearbyResult,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getNearbyStations(req.query.lat, req.query.lng, req.query.radius);
       } catch (e) {
         const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
         if (sc === 502 || sc === 503) {

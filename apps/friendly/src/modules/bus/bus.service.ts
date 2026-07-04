@@ -15,6 +15,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import type {
   BusArrivalEntryType,
   BusArrivalsResultType,
+  BusNearbyResultType,
   BusPositionsResultType,
   BusStationSearchResultType,
 } from '@repo/api-contract';
@@ -23,10 +24,12 @@ import {
   getBusPositionsByRouteSt,
   getStationArrivals,
   getStationsByName,
+  getStationsByPos,
   toLatLng,
   type BusApiRequestOptions,
   type RawBusPosition,
   type RawBusStation,
+  type RawNearbyStation,
   type RawStationArrival,
 } from './bus-api.adapter.js';
 
@@ -36,6 +39,14 @@ export const FORCE_MIN_INTERVAL_MS = 60_000;
 const MAX_ITEMS = 100;
 // 일일 업스트림 호출 한도 기본값 — 개발계정 일 1,000건에서 여유를 둔 900.
 export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
+// 주변 정류장 격자 캐시 — 지도 자동 조회를 감당하기 위해 셀 단위로 DB 에
+// 30일 캐싱한다(정류소는 사실상 불변 — 키워드 검색과 동일 정책).
+// 셀 한 변 0.005° ≈ 550m. 쿼리 좌표를 셀에 스냅해 cellKey 로 쓴다.
+export const NEARBY_CELL_DEG = 0.005;
+export const BUS_NEARBY_TTL_MS = BUS_SEARCH_TTL_MS;
+// 업스트림 호출 반경 — 셀 중심에서 셀 내 임의 지점(반 대각 ≈390m) + 최대 요청
+// 반경(1000m)을 다 덮어야 셀 캐시를 어떤 쿼리에도 재사용할 수 있다. 1500m.
+export const NEARBY_UPSTREAM_RADIUS_M = 1500;
 
 // Asia/Seoul 기준 YYYY-MM-DD — 쿼터 리셋 경계. en-CA 로캘이 ISO 형식을 낸다.
 const SEOUL_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
@@ -77,6 +88,12 @@ export interface BusServiceDeps {
       endOrd: number,
       opts: BusApiRequestOptions,
     ) => Promise<RawBusPosition[]>;
+    getStationsByPos?: (
+      lng: number,
+      lat: number,
+      radiusM: number,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawNearbyStation[]>;
   };
   // 테스트 주입용 — TTL/60초 가드 시간 제어 (가짜 타이머 불필요).
   now?: () => Date;
@@ -95,6 +112,53 @@ const toArrivalEntry = (
   message: string | null,
 ): BusArrivalEntryType | null =>
   message === null ? null : { vehId: vehId === '0' ? null : vehId, message };
+
+// 셀 캐시 서빙에 필요한 정류소 필드 (dist 는 쿼리 시점 재계산).
+interface CellStation {
+  stId: string;
+  arsId: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+// 쿼리 좌표 → 셀 스냅(0.005° 격자 중심이 아닌 격자점 — 키 일관성만 중요).
+const snapToCell = (v: number): number =>
+  Math.round(v / NEARBY_CELL_DEG) * NEARBY_CELL_DEG;
+
+// 등거리 사각 근사 거리(m) — 반경 1.5km 내 판정·표시용으로 하버사인 불필요.
+const approxDistanceM = (
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+): number => {
+  const mPerLatDeg = 111_320;
+  const dLat = (aLat - bLat) * mPerLatDeg;
+  const dLng = (aLng - bLng) * mPerLatDeg * Math.cos((aLat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+};
+
+// 셀 정류소 목록 → 쿼리 지점 기준 반경 필터 + dist 재계산 + 오름차순.
+const serveNearby = (
+  stations: CellStation[],
+  lat: number,
+  lng: number,
+  radiusM: number,
+  fetchedAt: Date,
+  source: BusNearbyResultType['source'],
+): BusNearbyResultType => {
+  const items = stations
+    .map((s) => ({ ...s, dist: Math.round(approxDistanceM(lat, lng, s.lat, s.lng)) }))
+    .filter((s) => s.dist <= radiusM)
+    .sort((a, b) => a.dist - b.dist);
+  return {
+    items: items.slice(0, MAX_ITEMS),
+    total: items.length,
+    fetchedAt: fetchedAt.toISOString(),
+    source,
+  };
+};
 
 const toResult = (
   cached: CachedSearch,
@@ -117,6 +181,8 @@ export class BusService {
   private readonly inflight = new Map<string, Promise<BusStationSearchResultType>>();
   // Asia/Seoul 날짜 단위 업스트림 호출 카운터 — 단일 인스턴스 전제(메모리).
   private quota = { dateKey: '', count: 0 };
+  // 주변 셀 동시 요청 합류 — 같은 셀의 업스트림 수집은 1회만.
+  private readonly nearbyInflight = new Map<string, Promise<CellStation[]>>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -260,6 +326,144 @@ export class BusService {
     }
     // 실패해도 호출 시도 자체가 한도를 소모하므로 호출 직전 증가.
     this.quota.count += 1;
+  }
+
+  // 좌표 기반 주변 정류장 — 셀(0.005°≈550m) 단위 DB 30일 캐시 프록시.
+  // 지도 자동 조회(패닝 시 재조회)를 감당하는 층: 같은 동네는 셀당 한 달에
+  // 업스트림 1회. 응답 dist 는 쿼리 지점마다 달라 저장하지 않고 서빙 시
+  // 정류소 좌표로 재계산한다.
+  async getNearbyStations(
+    lat: number,
+    lng: number,
+    radiusM: number,
+  ): Promise<BusNearbyResultType> {
+    if (!this.deps.serviceKey) {
+      throw new BusServiceError(
+        'BUS_API_KEY 가 설정되지 않아 주변 정류장 조회를 사용할 수 없습니다.',
+        503,
+      );
+    }
+    const now = this.deps.now?.() ?? new Date();
+
+    const cellLat = snapToCell(lat);
+    const cellLng = snapToCell(lng);
+    const cellKey = `${cellLat.toFixed(3)},${cellLng.toFixed(3)}`;
+
+    const cached = await this.prisma.busNearbyCell.findUnique({
+      where: { cellKey },
+      include: { hits: { include: { station: true }, orderBy: { rank: 'asc' } } },
+    });
+    const cachedStations: CellStation[] | null = cached
+      ? cached.hits.map((h) => ({
+          stId: h.station.stId,
+          arsId: h.station.arsId,
+          name: h.station.name,
+          lat: h.station.lat,
+          lng: h.station.lng,
+        }))
+      : null;
+
+    if (cached && now.getTime() - cached.fetchedAt.getTime() < BUS_NEARBY_TTL_MS) {
+      return serveNearby(cachedStations!, lat, lng, radiusM, cached.fetchedAt, 'cache');
+    }
+
+    // 만료/부재 — 셀 재수집. 실패(쿼터 소진 포함) 시 만료 캐시라도 stale 반환.
+    let stations: CellStation[];
+    try {
+      stations = await this.collectNearbyCell(cellKey, cellLat, cellLng, now);
+    } catch (e) {
+      if (cached) {
+        return serveNearby(cachedStations!, lat, lng, radiusM, cached.fetchedAt, 'stale');
+      }
+      if (e instanceof BusApiError || e instanceof BusServiceError) throw e;
+      throw new BusServiceError(
+        e instanceof Error ? e.message : '버스 API 호출 실패',
+        502,
+        { cause: e },
+      );
+    }
+    return serveNearby(stations, lat, lng, radiusM, now, 'api');
+  }
+
+  // 셀 업스트림 수집 + DB 반영 — 동일 셀 동시 요청은 in-flight 합류.
+  private collectNearbyCell(
+    cellKey: string,
+    cellLat: number,
+    cellLng: number,
+    now: Date,
+  ): Promise<CellStation[]> {
+    const existing = this.nearbyInflight.get(cellKey);
+    if (existing) return existing;
+    const task = this.executeCollectNearbyCell(cellKey, cellLat, cellLng, now).finally(
+      () => {
+        this.nearbyInflight.delete(cellKey);
+      },
+    );
+    this.nearbyInflight.set(cellKey, task);
+    return task;
+  }
+
+  private async executeCollectNearbyCell(
+    cellKey: string,
+    cellLat: number,
+    cellLng: number,
+    now: Date,
+  ): Promise<CellStation[]> {
+    this.consumeQuota(now);
+
+    const fetchNearby = this.deps.adapter?.getStationsByPos ?? getStationsByPos;
+    // 셀 중심 + 고정 반경 — 셀 내 어떤 쿼리(반경 ≤1000m)도 커버(주석: 상수 정의).
+    const raw = await fetchNearby(cellLng, cellLat, NEARBY_UPSTREAM_RADIUS_M, {
+      serviceKey: this.deps.serviceKey,
+    });
+
+    // 검색과 동일 정책 — 좌표 정규화 실패 행 drop + stId 중복 첫 등장만.
+    const seen = new Set<string>();
+    const stations: CellStation[] = [];
+    for (const r of raw) {
+      const coord = toLatLng(r);
+      if (!coord || seen.has(r.stId)) continue;
+      seen.add(r.stId);
+      stations.push({
+        stId: r.stId,
+        arsId: r.arsId,
+        name: r.stNm,
+        lat: coord.lat,
+        lng: coord.lng,
+      });
+    }
+
+    // 전량 좌표 정규화 실패 = 좌표계 이상 신호 — 빈 셀로 30일 박제 금지, 502.
+    if (raw.length > 0 && stations.length === 0) {
+      throw new BusServiceError(
+        '좌표 정규화 실패 — 서울시 응답이 WGS84 가 아닙니다(좌표계 미지원, probe:bus 확인 필요).',
+        502,
+      );
+    }
+
+    // 빈 결과도 셀 행을 남긴다 — 네거티브 캐싱(정류장 없는 지역 반복 호출 방지).
+    await this.prisma.$transaction(async (tx) => {
+      for (const s of stations) {
+        await tx.busStation.upsert({
+          where: { stId: s.stId },
+          create: s,
+          update: { arsId: s.arsId, name: s.name, lat: s.lat, lng: s.lng },
+        });
+      }
+      const cell = await tx.busNearbyCell.upsert({
+        where: { cellKey },
+        create: { cellKey, fetchedAt: now },
+        update: { fetchedAt: now },
+      });
+      await tx.busNearbyCellHit.deleteMany({ where: { cellId: cell.id } });
+      if (stations.length > 0) {
+        await tx.busNearbyCellHit.createMany({
+          data: stations.map((s, i) => ({ cellId: cell.id, stId: s.stId, rank: i })),
+        });
+      }
+    });
+
+    return stations;
   }
 
   // 정류소 실시간 도착정보 — 무캐싱 프록시. 캐시가 없어 stale 폴백도 없고,

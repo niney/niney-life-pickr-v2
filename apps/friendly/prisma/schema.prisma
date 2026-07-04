@@ -977,9 +977,41 @@ model BusStation {
   updatedAt DateTime @updatedAt
 
   searchHits BusStationSearchHit[]
+  cellHits   BusNearbyCellHit[]
 
   @@index([arsId])
   @@map("bus_stations")
+}
+
+// 좌표 기반 주변 정류장 격자 캐시 헤더 — 지도 자동 조회를 위해 셀(0.005°≈550m
+// 스냅) 단위로 서울시 getStationByPos 결과를 30일 캐싱한다. 업스트림은 셀 중심
+// + 고정 반경(스냅 오차 + 최대 요청 반경 커버)으로 호출하고, 응답 dist 는 쿼리
+// 지점마다 다르므로 저장하지 않는다 — 서빙 시 정류소 좌표로 재계산.
+// 빈 결과도 행을 남긴다(네거티브 캐싱).
+model BusNearbyCell {
+  id        String   @id @default(cuid())
+  // "lat,lng" 셀 스냅 키 (예: "37.495,127.025").
+  cellKey   String   @unique
+  fetchedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hits BusNearbyCellHit[]
+
+  @@map("bus_nearby_cells")
+}
+
+// 셀 ↔ 정류소 조인. rank 는 업스트림 응답 순서 보존(서빙 정렬은 dist 재계산).
+model BusNearbyCellHit {
+  cellId String
+  stId   String
+  rank   Int
+
+  cell    BusNearbyCell @relation(fields: [cellId], references: [id], onDelete: Cascade)
+  station BusStation    @relation(fields: [stId], references: [stId], onDelete: Cascade)
+
+  @@id([cellId, stId])
+  @@map("bus_nearby_cell_hits")
 }
 
 // 키워드 검색 캐시 헤더 — fetchedAt 이 TTL(30일) 안이면 서울시 API 재호출 없이
