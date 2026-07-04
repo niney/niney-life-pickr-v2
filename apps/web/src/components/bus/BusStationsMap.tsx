@@ -223,10 +223,21 @@ export const BusStationsMap = ({
   }, [items, apiKey, myLocation, suppressFit]);
 
   // 선택 정류장으로 부드럽게 이동 — 리스트 행/마커 클릭 공통.
+  // "선택이 바뀐 순간" 1회만 발사한다. items 를 deps 에 두되 이동 트리거로
+  // 쓰지 않는 이유: 주변 모드는 자동 조회·폴링으로 items 가 수시로 바뀌는데,
+  // 그때마다 재발사하면 사용자가 지도를 옮겨도 선택 정류장으로 계속 끌려간다
+  // (실측 재현된 버그). 선택 시점에 items 에 아직 없으면(즐겨찾기 진입 직후
+  // 로드 전) flownRef 를 남겨두고 items 도착 후 1회 발사한다.
+  const flownStIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!apiKey || !selectedStId) return;
+    if (!selectedStId) {
+      flownStIdRef.current = null;
+      return;
+    }
+    if (!apiKey || flownStIdRef.current === selectedStId) return;
     const target = items.find((it) => it.stId === selectedStId);
     if (!target) return;
+    flownStIdRef.current = selectedStId;
     handleRef.current?.flyTo(target.lat, target.lng);
   }, [selectedStId, items, apiKey]);
 
