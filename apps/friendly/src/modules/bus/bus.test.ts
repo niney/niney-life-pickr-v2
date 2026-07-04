@@ -8,18 +8,25 @@ vi.hoisted(() => {
   process.env.BUS_API_KEY = process.env.BUS_API_KEY || 'test-bus-key';
 });
 
-// 실제 서울시 API 호출 차단 — getStationsByName 만 mock, 나머지(BusApiError,
+// 실제 서울시 API 호출 차단 — 업스트림 함수 3개만 mock, 나머지(BusApiError,
 // toLatLng 등)는 실구현 유지 (서비스가 instanceof / 좌표 정규화에 사용).
 const mocks = vi.hoisted(() => ({
   getStationsByName: vi.fn(),
+  getStationArrivals: vi.fn(),
+  getBusPositionsByRouteSt: vi.fn(),
 }));
 vi.mock('./bus-api.adapter.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./bus-api.adapter.js')>();
-  return { ...actual, getStationsByName: mocks.getStationsByName };
+  return { ...actual, ...mocks };
 });
 
 import { buildApp } from '../../app.js';
-import { BusApiError, type RawBusStation } from './bus-api.adapter.js';
+import {
+  BusApiError,
+  type RawBusPosition,
+  type RawBusStation,
+  type RawStationArrival,
+} from './bus-api.adapter.js';
 import { BUS_SEARCH_TTL_MS, BusService, FORCE_MIN_INTERVAL_MS } from './bus.service.js';
 
 // shared dev.db — 전용 prefix 로 시드하고 afterAll 에서 bus_* 테이블을 정리한다.
@@ -43,32 +50,66 @@ const rawStation = (over: Partial<RawBusStation> = {}): RawBusStation => ({
   ...over,
 });
 
+// 2026-07-02 probe:bus 실덤프(arsId=23278 / busRouteId=100100020) 형태 기반.
+const rawArrival = (over: Partial<RawStationArrival> = {}): RawStationArrival => ({
+  busRouteId: '100100020',
+  rtNm: '141',
+  staOrd: 65,
+  vehId1: '109042241',
+  arrmsg1: '곧 도착',
+  vehId2: '109042059',
+  arrmsg2: '8분후[2번째 전]',
+  ...over,
+});
+
+const rawPosition = (over: Partial<RawBusPosition> = {}): RawBusPosition => ({
+  vehId: '109042059',
+  plainNo: '서울74사6477',
+  sectOrd: 62,
+  stopFlag: '1',
+  dataTm: '20260702102707',
+  // tmX/tmY 에 WGS84, posX/posY 에 GRS80 TM — 실구조 그대로.
+  tmX: 127.047265,
+  tmY: 37.493328,
+  gpsX: null,
+  gpsY: null,
+  posX: 204179.2639923757,
+  posY: 443770.69227223843,
+  ...over,
+});
+
 const searchUrl = (q: string, force?: boolean): string =>
   `/api/v1/bus/stations/search?q=${encodeURIComponent(q)}${force ? '&force=true' : ''}`;
+const arrivalsUrl = (arsId: string): string => `/api/v1/bus/stations/${arsId}/arrivals`;
+const positionsUrl = (busRouteId: string, startOrd: number, endOrd: number): string =>
+  `/api/v1/bus/routes/${busRouteId}/positions?startOrd=${startOrd}&endOrd=${endOrd}`;
+
+// app 은 파일 단위 공유 — 검색/도착/위치 describe 모두 같은 인스턴스를 쓴다.
+let app: FastifyInstance;
+
+beforeAll(async () => {
+  app = await buildApp({ logger: false });
+  await app.ready();
+});
+
+afterAll(async () => {
+  // 검색 행 삭제가 hits 를 cascade 정리, 정류소는 prefix 로 별도 정리.
+  await app.prisma.busStationSearch.deleteMany({
+    where: { keyword: { startsWith: KEYWORD_PREFIX } },
+  });
+  await app.prisma.busStation.deleteMany({
+    where: { stId: { startsWith: ST_PREFIX } },
+  });
+  await app.close();
+});
+
+beforeEach(() => {
+  mocks.getStationsByName.mockReset();
+  mocks.getStationArrivals.mockReset();
+  mocks.getBusPositionsByRouteSt.mockReset();
+});
 
 describe('GET /api/v1/bus/stations/search', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    app = await buildApp({ logger: false });
-    await app.ready();
-  });
-
-  afterAll(async () => {
-    // 검색 행 삭제가 hits 를 cascade 정리, 정류소는 prefix 로 별도 정리.
-    await app.prisma.busStationSearch.deleteMany({
-      where: { keyword: { startsWith: KEYWORD_PREFIX } },
-    });
-    await app.prisma.busStation.deleteMany({
-      where: { stId: { startsWith: ST_PREFIX } },
-    });
-    await app.close();
-  });
-
-  beforeEach(() => {
-    mocks.getStationsByName.mockReset();
-  });
-
   it('q 1자 → 400 (zod 길이 검증)', async () => {
     const res = await app.inject({ url: searchUrl('가') });
     expect(res.statusCode).toBe(400);
@@ -353,5 +394,177 @@ describe('GET /api/v1/bus/stations/search', () => {
     // 완료 후 in-flight 해제 확인 — 재호출은 캐시 경로(어댑터 추가 호출 없음).
     expect((await svc.searchStations(keyword, false)).source).toBe('cache');
     expect(adapter.getStationsByName).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GET /api/v1/bus/stations/:arsId/arrivals', () => {
+  it("정상 매핑 — vehId '0' → null, arrmsg 없으면 항목 null, rtNm null → ''", async () => {
+    mocks.getStationArrivals.mockResolvedValueOnce([
+      rawArrival(),
+      rawArrival({
+        busRouteId: '104000006',
+        rtNm: '242',
+        staOrd: 71,
+        vehId1: '0',
+        arrmsg1: '운행종료',
+        vehId2: null,
+        arrmsg2: null,
+      }),
+      rawArrival({ busRouteId: '100100290', rtNm: null, staOrd: null }),
+    ]);
+
+    const res = await app.inject({ url: arrivalsUrl('23278') });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      arsId: string;
+      items: unknown[];
+      fetchedAt: string;
+    };
+    expect(body.arsId).toBe('23278');
+    expect(body.items).toHaveLength(3);
+    expect(body.items[0]).toEqual({
+      busRouteId: '100100020',
+      routeName: '141',
+      staOrd: 65,
+      first: { vehId: '109042241', message: '곧 도착' },
+      second: { vehId: '109042059', message: '8분후[2번째 전]' },
+    });
+    // vehId '0'(도착예정 차량 없음) → null 정규화, 메시지 원문 보존.
+    expect(body.items[1]).toMatchObject({
+      first: { vehId: null, message: '운행종료' },
+      second: null,
+    });
+    // rtNm/staOrd 누락 노선 — routeName '' + staOrd null (위치 조회 비활성 신호).
+    expect(body.items[2]).toMatchObject({ routeName: '', staOrd: null });
+    expect(Number.isNaN(Date.parse(body.fetchedAt))).toBe(false);
+    expect(mocks.getStationArrivals).toHaveBeenCalledWith('23278', {
+      serviceKey: expect.any(String) as string,
+    });
+  });
+
+  it("arsId '0'(가상정류장) → 400, 업스트림 미호출", async () => {
+    const res = await app.inject({ url: arrivalsUrl('0') });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getStationArrivals).not.toHaveBeenCalled();
+  });
+
+  it('arsId 비숫자 → 400', async () => {
+    const res = await app.inject({ url: arrivalsUrl('abc12') });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getStationArrivals).not.toHaveBeenCalled();
+  });
+
+  it('업스트림 실패 → 502 (실시간 데이터라 stale 폴백 없음)', async () => {
+    mocks.getStationArrivals.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: arrivalsUrl('23278') });
+    expect(res.statusCode).toBe(502);
+    expect((res.json() as { statusCode: number }).statusCode).toBe(502);
+  });
+});
+
+describe('GET /api/v1/bus/routes/:busRouteId/positions', () => {
+  it('정상 매핑 — 좌표 정규화 실패/vehId 누락 행은 drop', async () => {
+    mocks.getBusPositionsByRouteSt.mockResolvedValueOnce([
+      rawPosition(),
+      // vehId 누락 — 계약(vehId min 1)을 만족 못 해 drop.
+      rawPosition({ vehId: null }),
+      // WGS84 쌍 없음(TM-only) — drop.
+      rawPosition({ vehId: '109042999', tmX: null, tmY: null, gpsX: null, gpsY: null }),
+    ]);
+
+    const res = await app.inject({ url: positionsUrl('100100020', 62, 65) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      busRouteId: string;
+      items: unknown[];
+      fetchedAt: string;
+    };
+    expect(body.busRouteId).toBe('100100020');
+    expect(body.items).toEqual([
+      {
+        vehId: '109042059',
+        plainNo: '서울74사6477',
+        lat: 37.493328,
+        lng: 127.047265,
+        sectOrd: 62,
+        stopFlag: '1',
+      },
+    ]);
+    expect(Number.isNaN(Date.parse(body.fetchedAt))).toBe(false);
+    // querystring 이 coerce 되어 숫자로 어댑터에 전달된다.
+    expect(mocks.getBusPositionsByRouteSt).toHaveBeenCalledWith('100100020', 62, 65, {
+      serviceKey: expect.any(String) as string,
+    });
+  });
+
+  it('endOrd < startOrd → 400', async () => {
+    const res = await app.inject({ url: positionsUrl('100100020', 5, 4) });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+  });
+
+  it('구간 51 정류장(> 50) → 400', async () => {
+    const res = await app.inject({ url: positionsUrl('100100020', 1, 52) });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+  });
+
+  it('busRouteId 비숫자 → 400', async () => {
+    const res = await app.inject({ url: positionsUrl('abc123', 1, 5) });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+  });
+
+  it('업스트림 실패 → 502', async () => {
+    mocks.getBusPositionsByRouteSt.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: positionsUrl('100100020', 62, 65) });
+    expect(res.statusCode).toBe(502);
+  });
+});
+
+describe('BusService — 도착/위치 쿼터·키 가드 (서비스 직접 생성)', () => {
+  it('일일 쿼터 공유 — 검색으로 소진하면 도착/위치도 503, 리셋 후 역방향도 공유', async () => {
+    const adapter = {
+      getStationsByName: vi.fn(),
+      getStationArrivals: vi.fn(),
+      getBusPositionsByRouteSt: vi.fn(),
+    };
+    let nowMs = Date.now();
+    const svc = new BusService(app.prisma, {
+      serviceKey: 'svc-key',
+      adapter,
+      dailyLimit: 1,
+      now: () => new Date(nowMs),
+    });
+
+    adapter.getStationsByName.mockResolvedValueOnce([rawStation()]);
+    expect((await svc.searchStations(kw(), false)).source).toBe('api');
+
+    // 검색이 소진한 카운터를 도착/위치가 그대로 본다 — 업스트림 미호출 503.
+    await expect(svc.getArrivals('23278')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(svc.getPositions('100100020', 62, 65)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(adapter.getStationArrivals).not.toHaveBeenCalled();
+    expect(adapter.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+
+    // 하루 경과(Asia/Seoul 날짜 변경) → 리셋. 도착 조회가 소진하면 검색도 503.
+    nowMs += 24 * 60 * 60 * 1000;
+    adapter.getStationArrivals.mockResolvedValueOnce([rawArrival()]);
+    expect((await svc.getArrivals('23278')).items).toHaveLength(1);
+    await expect(svc.searchStations(kw(), false)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(adapter.getStationsByName).toHaveBeenCalledTimes(1);
+  });
+
+  it('serviceKey 빈 값 → 도착/위치 모두 statusCode 503', async () => {
+    const svc = new BusService(app.prisma, { serviceKey: '' });
+    await expect(svc.getArrivals('23278')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(svc.getPositions('100100020', 62, 65)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(mocks.getStationArrivals).not.toHaveBeenCalled();
+    expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
   });
 });

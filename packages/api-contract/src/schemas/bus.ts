@@ -52,3 +52,88 @@ export const BusStationSearchResult = z.object({
   source: z.enum(['cache', 'api', 'stale']),
 });
 export type BusStationSearchResultType = z.infer<typeof BusStationSearchResult>;
+
+// ── 2차: 실시간 도착정보 / 버스 위치 ──────────────────────────────────────
+// 둘 다 캐싱 없는 실시간 프록시(getStationByUid / getBusPosByRouteSt).
+// 폴링은 화면 활성 + 패널 열림일 때만 — 일 1,000건 한도가 최대 제약이라
+// 서버의 일일 쿼터 카운터를 검색과 공유한다.
+
+export const BusArrivalsParams = z.object({
+  // 5자리 정류소번호. '0'(가상정류장, "(미정차)")은 도착정보 조회가 불가능해
+  // 라우트가 400 으로 거절 — FE 는 목록에서 미리 비활성 처리한다.
+  arsId: z
+    .string()
+    .regex(/^\d{1,5}$/)
+    .refine((v) => v !== '0', { message: '가상정류장은 도착정보를 제공하지 않습니다.' }),
+});
+export type BusArrivalsParamsType = z.infer<typeof BusArrivalsParams>;
+
+export const BusArrivalEntry = z.object({
+  // 도착예정 차량 ID — 업스트림 vehId '0'(도착예정 없음)은 null 로 정규화.
+  // 이 값이 있으면 위치 API 의 차량 단건 추적(vehId) 입력으로 쓸 수 있다.
+  vehId: z.string().nullable(),
+  // 도착예정 메시지 원문 — "곧 도착", "12분후[4번째 전]", "운행종료" 등.
+  message: z.string(),
+});
+export type BusArrivalEntryType = z.infer<typeof BusArrivalEntry>;
+
+export const BusArrivalItem = z.object({
+  busRouteId: z.string().min(1),
+  // rtNm — 노선 번호 표기('141', '6411', 'N61').
+  routeName: z.string(),
+  // 이 정류장의 노선 내 순번 — 버스 위치 구간 조회(startOrd/endOrd)의 입력.
+  // null 이면 위치 조회 불가(FE 가 해당 노선의 지도 표시를 비활성).
+  staOrd: z.number().int().min(1).nullable(),
+  // 1·2번째 도착예정 — 메시지 자체가 없으면 null.
+  first: BusArrivalEntry.nullable(),
+  second: BusArrivalEntry.nullable(),
+});
+export type BusArrivalItemType = z.infer<typeof BusArrivalItem>;
+
+export const BusArrivalsResult = z.object({
+  arsId: z.string(),
+  items: z.array(BusArrivalItem),
+  // 서울시 호출 시각 (ISO).
+  fetchedAt: z.string(),
+});
+export type BusArrivalsResultType = z.infer<typeof BusArrivalsResult>;
+
+export const BusPositionsParams = z.object({
+  busRouteId: z.string().regex(/^\d+$/),
+});
+export type BusPositionsParamsType = z.infer<typeof BusPositionsParams>;
+
+export const BusPositionsQuery = z
+  .object({
+    startOrd: z.coerce.number().int().min(1),
+    endOrd: z.coerce.number().int().min(1),
+  })
+  .refine((v) => v.endOrd >= v.startOrd, {
+    message: 'endOrd 는 startOrd 이상이어야 합니다.',
+  })
+  // 구간 상한 — 노선 전체를 훑는 남용 방지(정류장 접근 구간 조회 용도).
+  .refine((v) => v.endOrd - v.startOrd <= 50, {
+    message: '조회 구간은 50 정류장 이하여야 합니다.',
+  });
+export type BusPositionsQueryType = z.infer<typeof BusPositionsQuery>;
+
+export const BusPositionItem = z.object({
+  vehId: z.string().min(1),
+  // 차량번호판 ('서울74사6531') — getBusPosByRouteSt 응답엔 없을 수 있어 nullable.
+  plainNo: z.string().nullable(),
+  // 검색과 동일한 WGS84 정규화 계약 (서울시는 tmX/tmY 필드에 WGS84 를 준다).
+  lat: z.number().min(33).max(39),
+  lng: z.number().min(124).max(132),
+  // 현재 구간 순번 — 정류장 staOrd 와 비교해 '몇 정류장 전'인지 계산 가능.
+  sectOrd: z.number().int().nullable(),
+  // '1' = 정류소 정차 중, '0' = 주행 중 (서울시 원문 보존).
+  stopFlag: z.string().nullable(),
+});
+export type BusPositionItemType = z.infer<typeof BusPositionItem>;
+
+export const BusPositionsResult = z.object({
+  busRouteId: z.string(),
+  items: z.array(BusPositionItem),
+  fetchedAt: z.string(),
+});
+export type BusPositionsResultType = z.infer<typeof BusPositionsResult>;

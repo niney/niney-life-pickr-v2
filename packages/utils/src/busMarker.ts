@@ -30,3 +30,16 @@ export function buildBusStopMarkerDataUrl(selected: boolean): string {
     encodeURIComponent(buildBusStopMarkerSvg(selected))
   );
 }
+
+// 차량(실시간 버스 위치) 마커 — 정류장(파랑)과 즉시 구분되는 초록. 차량은
+// 선택 개념이 없어 26×26 원형 1종만 제공한다(아이콘 실루엣은 정류장과 공유).
+const BUS_VEHICLE_COLOR = '#16a34a';
+
+export function buildBusVehicleMarkerDataUrl(): string {
+  return (
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(
+      buildCircleMarkerSvg({ fill: BUS_VEHICLE_COLOR, innerSvg: BUS_ICON_PATH }),
+    )
+  );
+}

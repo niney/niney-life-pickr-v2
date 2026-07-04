@@ -1,6 +1,6 @@
-// 버스 정류장 검색 — 서울시 API 프록시 + DB 장기 캐싱.
+// 버스 정류장 검색 + 실시간 도착정보/버스 위치 — 서울시 API 프록시.
 //
-// 캐싱 정책 (개발계정 일 1,000건 한도 보호):
+// 검색 캐싱 정책 (개발계정 일 1,000건 한도 보호):
 //   - TTL 30일 — 정류소 정보는 거의 안 바뀐다.
 //   - force(사용자 강제 갱신)라도 60초 내 재수집은 캐시로 응답.
 //   - 빈 결과도 검색 행을 남긴다(네거티브 캐싱 — 무의미 키워드 반복 차단).
@@ -8,15 +8,26 @@
 //   - 동일 키워드 동시 요청은 in-flight 합류 — 업스트림 1회만 호출.
 //   - 일일 업스트림 쿼터 가드(기본 900) — 단일 인스턴스 전제라 메모리 카운터로
 //     충분(Redis 금지 정책).
+// 도착정보/버스 위치는 무캐싱 실시간 프록시 — 캐시가 없어 stale 폴백도 없고,
+// 일일 쿼터 카운터만 검색과 공유한다(세 경로 합산으로 한도 보호).
 
 import type { Prisma, PrismaClient } from '@prisma/client';
-import type { BusStationSearchResultType } from '@repo/api-contract';
+import type {
+  BusArrivalEntryType,
+  BusArrivalsResultType,
+  BusPositionsResultType,
+  BusStationSearchResultType,
+} from '@repo/api-contract';
 import {
   BusApiError,
+  getBusPositionsByRouteSt,
+  getStationArrivals,
   getStationsByName,
   toLatLng,
   type BusApiRequestOptions,
+  type RawBusPosition,
   type RawBusStation,
+  type RawStationArrival,
 } from './bus-api.adapter.js';
 
 export const BUS_SEARCH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -56,6 +67,16 @@ export interface BusServiceDeps {
       keyword: string,
       opts: BusApiRequestOptions,
     ) => Promise<RawBusStation[]>;
+    getStationArrivals?: (
+      arsId: string,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawStationArrival[]>;
+    getBusPositionsByRouteSt?: (
+      busRouteId: string,
+      startOrd: number,
+      endOrd: number,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawBusPosition[]>;
   };
   // 테스트 주입용 — TTL/60초 가드 시간 제어 (가짜 타이머 불필요).
   now?: () => Date;
@@ -66,6 +87,14 @@ export interface BusServiceDeps {
 type CachedSearch = Prisma.BusStationSearchGetPayload<{
   include: { hits: { include: { station: true } } };
 }>;
+
+// 도착예정 항목 정규화 — 서울시는 '도착예정 차량 없음'을 vehId '0' 으로
+// 표현하므로 null 로 정규화한다. 메시지 자체가 없으면 항목이 없는 것.
+const toArrivalEntry = (
+  vehId: string | null,
+  message: string | null,
+): BusArrivalEntryType | null =>
+  message === null ? null : { vehId: vehId === '0' ? null : vehId, message };
 
 const toResult = (
   cached: CachedSearch,
@@ -134,17 +163,13 @@ export class BusService {
     }
 
     // 일일 쿼터 가드 — 한도 초과 시 업스트림 호출 없이 만료 캐시(stale)나 503.
-    const dateKey = seoulDateKey(now);
-    if (this.quota.dateKey !== dateKey) this.quota = { dateKey, count: 0 };
-    if (this.quota.count >= (this.deps.dailyLimit ?? DEFAULT_DAILY_UPSTREAM_LIMIT)) {
+    // consumeQuota 는 초과 시 소비 없이 throw 하므로 stale 폴백이 쿼터를 안 먹는다.
+    try {
+      this.consumeQuota(now);
+    } catch (e) {
       if (cached) return toResult(cached, 'stale');
-      throw new BusServiceError(
-        '서울시 버스 API 일일 호출 한도를 소진해 새 검색을 처리할 수 없습니다. 내일 다시 시도해주세요.',
-        503,
-      );
+      throw e;
     }
-    // 실패해도 호출 시도 자체가 한도를 소모하므로 호출 직전 증가.
-    this.quota.count += 1;
 
     const fetchStations = this.deps.adapter?.getStationsByName ?? getStationsByName;
     let raw: RawBusStation[];
@@ -220,5 +245,88 @@ export class BusService {
       fetchedAt: now.toISOString(),
       source: 'api',
     };
+  }
+
+  // 일일 업스트림 쿼터 소비 — 검색·도착·위치가 공유하는 단일 카운터.
+  // 초과 시 소비 없이 503 throw — 검색은 만료 캐시(stale) 폴백을 위해 catch.
+  private consumeQuota(now: Date): void {
+    const dateKey = seoulDateKey(now);
+    if (this.quota.dateKey !== dateKey) this.quota = { dateKey, count: 0 };
+    if (this.quota.count >= (this.deps.dailyLimit ?? DEFAULT_DAILY_UPSTREAM_LIMIT)) {
+      throw new BusServiceError(
+        '서울시 버스 API 일일 호출 한도를 소진해 요청을 처리할 수 없습니다. 내일 다시 시도해주세요.',
+        503,
+      );
+    }
+    // 실패해도 호출 시도 자체가 한도를 소모하므로 호출 직전 증가.
+    this.quota.count += 1;
+  }
+
+  // 정류소 실시간 도착정보 — 무캐싱 프록시. 캐시가 없어 stale 폴백도 없고,
+  // 업스트림 실패는 BusApiError(statusCode 내장) 그대로 라우트에 전달된다.
+  async getArrivals(arsId: string): Promise<BusArrivalsResultType> {
+    if (!this.deps.serviceKey) {
+      throw new BusServiceError(
+        'BUS_API_KEY 가 설정되지 않아 버스 도착정보 조회를 사용할 수 없습니다.',
+        503,
+      );
+    }
+    const now = this.deps.now?.() ?? new Date();
+    this.consumeQuota(now);
+
+    const fetchArrivals = this.deps.adapter?.getStationArrivals ?? getStationArrivals;
+    const raw = await fetchArrivals(arsId, { serviceKey: this.deps.serviceKey });
+
+    return {
+      arsId,
+      items: raw.map((r) => ({
+        busRouteId: r.busRouteId,
+        routeName: r.rtNm ?? '',
+        staOrd: r.staOrd,
+        first: toArrivalEntry(r.vehId1, r.arrmsg1),
+        second: toArrivalEntry(r.vehId2, r.arrmsg2),
+      })),
+      fetchedAt: now.toISOString(),
+    };
+  }
+
+  // 노선 구간 실시간 버스 위치 — 무캐싱 프록시 (가드/에러 정책은 도착정보와 동일).
+  async getPositions(
+    busRouteId: string,
+    startOrd: number,
+    endOrd: number,
+  ): Promise<BusPositionsResultType> {
+    if (!this.deps.serviceKey) {
+      throw new BusServiceError(
+        'BUS_API_KEY 가 설정되지 않아 버스 위치 조회를 사용할 수 없습니다.',
+        503,
+      );
+    }
+    const now = this.deps.now?.() ?? new Date();
+    this.consumeQuota(now);
+
+    const fetchPositions =
+      this.deps.adapter?.getBusPositionsByRouteSt ?? getBusPositionsByRouteSt;
+    const raw = await fetchPositions(busRouteId, startOrd, endOrd, {
+      serviceKey: this.deps.serviceKey,
+    });
+
+    // 검색과 동일 정책 — 좌표 정규화 실패(WGS84 쌍 없음)나 vehId 누락 행은
+    // 계약(lat 33~39, vehId min 1)을 만족할 수 없어 drop.
+    const items: BusPositionsResultType['items'] = [];
+    for (const r of raw) {
+      const coord = toLatLng(r);
+      if (!coord || r.vehId === null) continue;
+      items.push({
+        vehId: r.vehId,
+        plainNo: r.plainNo,
+        lat: coord.lat,
+        lng: coord.lng,
+        sectOrd: r.sectOrd,
+        stopFlag: r.stopFlag,
+      });
+    }
+
+    return { busRouteId, items, fetchedAt: now.toISOString() };
   }
 }

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 실응답 기반: 2026-07-02 probe:bus arsId=23278(getStationByUid) 덤프 발췌
+     (4개 노선 중 3개, 파싱 대상 필드만). 두 번째 항목(242)은 실덤프에 없던
+     '도착예정 차량 없음' 케이스를 위해 vehId1·vehId2 를 '0', arrmsg 를
+     '운행종료' 로 바꾼 합성값 — 나머지는 원문 그대로. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>0</headerCd>
+    <headerMsg>정상적으로 처리되었습니다.</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody>
+    <itemList>
+      <stId>122000175</stId>
+      <stNm>KT강남지사</stNm>
+      <arsId>23278</arsId>
+      <busRouteId>100100020</busRouteId>
+      <rtNm>141</rtNm>
+      <staOrd>65</staOrd>
+      <vehId1>109042241</vehId1>
+      <arrmsg1>곧 도착</arrmsg1>
+      <vehId2>109042059</vehId2>
+      <arrmsg2>8분후[2번째 전]</arrmsg2>
+      <adirection>도봉산</adirection>
+    </itemList>
+    <itemList>
+      <stId>122000175</stId>
+      <stNm>KT강남지사</stNm>
+      <arsId>23278</arsId>
+      <busRouteId>104000006</busRouteId>
+      <rtNm>242</rtNm>
+      <staOrd>71</staOrd>
+      <vehId1>0</vehId1>
+      <arrmsg1>운행종료</arrmsg1>
+      <vehId2>0</vehId2>
+      <arrmsg2>운행종료</arrmsg2>
+      <adirection>중랑공영차고지</adirection>
+    </itemList>
+    <itemList>
+      <stId>122000175</stId>
+      <stNm>KT강남지사</stNm>
+      <arsId>23278</arsId>
+      <busRouteId>100100290</busRouteId>
+      <rtNm>6411</rtNm>
+      <staOrd>60</staOrd>
+      <vehId1>103055031</vehId1>
+      <arrmsg1>1분후[1번째 전]</arrmsg1>
+      <vehId2>103055148</vehId2>
+      <arrmsg2>11분후[6번째 전]</arrmsg2>
+      <adirection>신정동</adirection>
+    </itemList>
+  </msgBody>
+</ServiceResult>

@@ -389,10 +389,15 @@ export const SettlementDraft = {
   one: (id: string) => `${API_PREFIX}/settlement-drafts/${id}`,
 } as const;
 
-// 서울시 버스 — 정류장 검색은 비로그인 공개 (맛집 공개 지도와 동일 정책).
-// 도착정보/실시간 위치 라우트는 차기 단계에서 이 객체에 추가.
+// 서울시 버스 — 전부 비로그인 공개 (맛집 공개 지도와 동일 정책).
+// 검색은 DB 30일 캐시, 도착/위치는 무캐싱 실시간 프록시(폴링은 화면 활성 시만).
 export const Bus = {
   stationSearch: `${API_PREFIX}/bus/stations/search`,
+  // 정류소 실시간 도착정보 — 노선별 busRouteId/staOrd/도착메시지.
+  // arsId '0'(가상정류장)은 400.
+  stationArrivals: (arsId: string) => `${API_PREFIX}/bus/stations/${arsId}/arrivals`,
+  // 노선 구간 실시간 버스 위치 — startOrd/endOrd 는 도착정보의 staOrd 윈도우.
+  busPositions: (busRouteId: string) => `${API_PREFIX}/bus/routes/${busRouteId}/positions`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;

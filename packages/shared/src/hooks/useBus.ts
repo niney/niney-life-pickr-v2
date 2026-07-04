@@ -2,6 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BusStationSearchResultType } from '@repo/api-contract';
 import { busApi } from '../api/bus.api.js';
 
+// 실시간(도착/위치) 폴링 × 일 1,000건(개발계정) 한도 제약 — 폴링은 화면이
+// 활성이고 정류장/노선이 선택된 동안에만 돈다. enabled(선택 시)만 켜고,
+// refetchIntervalInBackground 는 기본 false 라 탭 비활성 시 자동 중단.
+
 // 제출형 검색 — q 는 호출자가 Enter/버튼으로 확정한 검색어. 서버가 30일
 // DB 캐시를 들고 있고 정류장 정보는 장기 불변이라 staleTime 24h — 같은
 // 키워드 재방문 시 일 1,000건(개발계정) 한도를 안 깎는다.
@@ -33,5 +37,48 @@ export const useBusStationsRefresh = () => {
       await queryClient.cancelQueries({ queryKey });
       queryClient.setQueryData<BusStationSearchResultType>(queryKey, data);
     },
+  });
+};
+
+// 정류소 실시간 도착정보 — 30초 폴링. refetchIntervalInBackground 기본 false
+// — 탭이 비활성이면 폴링이 자동 중단돼 일일 한도를 아낀다. placeholderData 로
+// 30초 갱신 사이 패널이 깜빡(로딩 상태로 리셋)이지 않게 유지.
+export const useBusStationArrivals = (arsId: string | null) => {
+  // arsId '0' = 가상정류장 — 서버가 400 으로 거절하므로 호출 자체를 막는다.
+  const enabled = !!arsId && arsId !== '0';
+  return useQuery({
+    queryKey: ['bus', 'stations', 'arrivals', arsId],
+    queryFn: () => busApi.stationArrivals(arsId!),
+    enabled,
+    refetchInterval: 30_000,
+    staleTime: 0,
+    gcTime: 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
+// 노선 구간 실시간 버스 위치 — 15초 폴링. startOrd/endOrd 는 호출자가
+// 도착정보의 staOrd 로 계산해 넘긴다(셋 다 유효할 때만 조회).
+export const useBusPositions = (
+  busRouteId: string | null,
+  startOrd: number | null,
+  endOrd: number | null,
+) => {
+  // 서버 제약(1 이상, endOrd ≥ startOrd) FE 미러 — 범위 밖이면 호출 차단.
+  const enabled =
+    !!busRouteId &&
+    startOrd !== null &&
+    endOrd !== null &&
+    startOrd >= 1 &&
+    endOrd >= startOrd;
+  return useQuery({
+    queryKey: ['bus', 'positions', busRouteId, startOrd, endOrd],
+    queryFn: () =>
+      busApi.busPositions(busRouteId!, { startOrd: startOrd!, endOrd: endOrd! }),
+    enabled,
+    refetchInterval: 15_000,
+    staleTime: 0,
+    gcTime: 30_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
   });
 };

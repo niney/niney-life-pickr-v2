@@ -6,6 +6,8 @@ import {
   BusApiAuthError,
   BusApiError,
   callBusApi,
+  getBusPositionsByRouteSt,
+  getStationArrivals,
   getStationsByName,
   toLatLng,
 } from './bus-api.adapter.js';
@@ -103,6 +105,58 @@ describe('callBusApi / getStationsByName — 응답 파싱', () => {
     });
     expect(res.headerCd).toBe('4');
     expect(res.items).toEqual([]);
+  });
+});
+
+describe('getStationArrivals — 정류소 도착정보 파싱', () => {
+  it('노선별 도착 행을 파싱한다 (staOrd 숫자 변환, vehId/arrmsg 원문 보존)', async () => {
+    stubFetch(fixture('arrivals.xml'));
+    const items = await getStationArrivals('23278', { serviceKey: 'plain-key' });
+    expect(items).toHaveLength(3);
+    expect(items[0]).toEqual({
+      busRouteId: '100100020',
+      rtNm: '141',
+      staOrd: 65,
+      vehId1: '109042241',
+      arrmsg1: '곧 도착',
+      vehId2: '109042059',
+      arrmsg2: '8분후[2번째 전]',
+    });
+    // vehId '0'(도착예정 차량 없음) → null 정규화는 서비스 책임 — 어댑터는 원문 보존.
+    expect(items[1]).toMatchObject({ vehId1: '0', arrmsg1: '운행종료', staOrd: 71 });
+  });
+
+  it('arsId 가 쿼리스트링에 실린다', async () => {
+    const fn = stubFetch(fixture('arrivals.xml'));
+    await getStationArrivals('23278', { serviceKey: 'plain-key' });
+    expect(fetchedUrl(fn)).toContain('stationinfo/getStationByUid');
+    expect(fetchedUrl(fn)).toContain('arsId=23278');
+  });
+});
+
+describe('getBusPositionsByRouteSt — 노선 구간 버스 위치 파싱', () => {
+  it('차량 행을 파싱한다 (sectOrd 숫자 변환, tmX/tmY 에 WGS84 실구조)', async () => {
+    const fn = stubFetch(fixture('buspos-route-st.xml'));
+    const items = await getBusPositionsByRouteSt('100100020', 62, 65, {
+      serviceKey: 'plain-key',
+    });
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      vehId: '109042059',
+      plainNo: '서울74사6477',
+      sectOrd: 62,
+      stopFlag: '1',
+      dataTm: '20260702102707',
+      tmX: 127.047265,
+      tmY: 37.493328,
+    });
+    // 값-범위 판정이 tmX/tmY(WGS84)를 채택하고 posX/posY(TM)는 건너뛴다.
+    expect(toLatLng(items[0]!)).toEqual({ lat: 37.493328, lng: 127.047265 });
+    // startOrd/endOrd 가 숫자 → 문자열로 쿼리스트링에 실린다.
+    expect(fetchedUrl(fn)).toContain('buspos/getBusPosByRouteSt');
+    expect(fetchedUrl(fn)).toContain('busRouteId=100100020');
+    expect(fetchedUrl(fn)).toContain('startOrd=62');
+    expect(fetchedUrl(fn)).toContain('endOrd=65');
   });
 });
 

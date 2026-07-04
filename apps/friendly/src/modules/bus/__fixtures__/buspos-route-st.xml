@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- 실응답 기반: 2026-07-02 probe:bus busRouteId=100100020 startOrd=62 endOrd=65
+     (getBusPosByRouteSt) 덤프 발췌 (차량 2건, 파싱 대상 필드만).
+     tmX/tmY 에 WGS84 경위도, posX/posY 에 GRS80 TM 이 오는 실구조 그대로. -->
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>0</headerCd>
+    <headerMsg>정상적으로 처리되었습니다.</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody>
+    <itemList>
+      <dataTm>20260702102707</dataTm>
+      <plainNo>서울74사6477</plainNo>
+      <posX>204179.2639923757</posX>
+      <posY>443770.69227223843</posY>
+      <sectOrd>62</sectOrd>
+      <stopFlag>1</stopFlag>
+      <tmX>127.047265</tmX>
+      <tmY>37.493328</tmY>
+      <vehId>109042059</vehId>
+    </itemList>
+    <itemList>
+      <dataTm>20260702102713</dataTm>
+      <plainNo>서울74사6476</plainNo>
+      <posX>203911.18607703794</posX>
+      <posY>444485.907666103</posY>
+      <sectOrd>64</sectOrd>
+      <stopFlag>1</stopFlag>
+      <tmX>127.044237</tmX>
+      <tmY>37.499774</tmY>
+      <vehId>109042241</vehId>
+    </itemList>
+  </msgBody>
+</ServiceResult>
