@@ -11,6 +11,9 @@ import {
   buildBusStopMarkerDataUrl,
   buildBusVehiclePillDataUrl,
   buildMyLocationMarkerDataUrl,
+  createRoutePathIndex,
+  projectOnRoutePath,
+  sliceRoutePath,
 } from '@repo/utils';
 import {
   MapCanvas,
@@ -242,18 +245,89 @@ export const BusStationsMap = ({
     return [...routeStopMarkers, ...stationMarkers, ...myLocationMarkers];
   }, [items, myLocation, routeStops, routeLine?.color]);
 
+  // ── 노선 형상 따라가기 — 차량 위치를 형상 위 호길이(s)로 환산해, 폴링 간
+  //    이동을 도로 웨이포인트(via)로 MapCanvas 에 넘긴다. 형상이 상·하행 왕복
+  //    한 줄이라 좌표만으로는 두 후보가 생기는데, 차량 sectOrd(구간 순번)와
+  //    정류소 seq 가 같은 순번 공간임을 이용해 구간 윈도우로 모호성을 푼다. ──
+  const pathIndex = useMemo(
+    () => (routeLine ? createRoutePathIndex(routeLine.points) : null),
+    [routeLine],
+  );
+  // 정류소 seq → 호길이. seq 순서대로 '직전 정류소 이후' 윈도우로 단조 투영 —
+  // 상·하행에서 같은 자리에 두 번 나타나는 정류소가 올바른 방향 쪽에 붙는다.
+  // 형상과 150m 넘게 어긋난 정류소는 스킵(해당 구간은 직선 폴백).
+  const stationS = useMemo(() => {
+    if (!pathIndex || !routeStops?.length) return null;
+    const bySeq = new Map<number, number>();
+    let prevS = 0;
+    for (const st of [...routeStops].sort((a, b) => a.seq - b.seq)) {
+      const proj = projectOnRoutePath(pathIndex, st, Math.max(0, prevS - 30));
+      if (proj.distM > 150) continue;
+      bySeq.set(st.seq, proj.s);
+      prevS = proj.s;
+    }
+    return bySeq;
+  }, [pathIndex, routeStops]);
+
+  // 폴링 세대별 차량 호길이 스냅샷 — cur 는 이번 vehicles 배열의 s, prev 는
+  // 직전 폴링의 s. 같은 vehicles 로 memo 가 재실행돼도(deps 변화·StrictMode
+  // 이중 호출) prev 가 밀리지 않아 via 가 일관되게 나온다. accumRef 와 같은
+  // '렌더 간 저장소는 useMemo 안에서만 갱신' 패턴.
+  const vehPollRef = useRef<{
+    path: unknown;
+    cur: { v: unknown; s: Map<string, number> } | null;
+    prev: Map<string, number> | null;
+  }>({ path: null, cur: null, prev: null });
+
   // 차량은 전용 애니메이션 레이어로 분리 — MapCanvas 가 id(vehId)로 이전/새 위치를
-  // 매칭해 직선 등속 보간한다. 아이콘은 정차/주행에 따라 알약 2종.
-  const vehicleItems = useMemo(
-    () =>
-      (vehicles ?? []).map((v) => ({
+  // 매칭해 via(도로 경유) 또는 직선으로 등속 보간한다. 아이콘은 정차/주행 알약 2종.
+  const vehicleItems = useMemo(() => {
+    const store = vehPollRef.current;
+    // 노선(형상)이 바뀌면 s 공간 자체가 달라진다 — 스냅샷 전부 리셋.
+    if (store.path !== pathIndex) {
+      store.path = pathIndex;
+      store.cur = null;
+      store.prev = null;
+    }
+    // 명시 null 체크 — `store.cur?.v !== vehicles` 는 vehicles 가 undefined 이고
+    // cur 가 null 일 때 같다고 판정돼(undefined === undefined) 크래시한다.
+    if (store.cur === null || store.cur.v !== vehicles) {
+      store.prev = store.cur === null ? null : store.cur.s;
+      store.cur = { v: vehicles, s: new Map() };
+    } else {
+      store.cur.s = new Map(); // 같은 폴링 재계산 — cur 만 다시 채운다.
+    }
+    const prevS = store.prev;
+    const curS = store.cur.s;
+    return (vehicles ?? []).map((v) => {
+      let via: { lat: number; lng: number }[] | undefined;
+      if (pathIndex && stationS && v.sectOrd !== null) {
+        const s0 = stationS.get(v.sectOrd);
+        if (s0 !== undefined) {
+          // 구간 = [정류소 sectOrd, sectOrd+1]. 다음 정류소 s 가 없으면(형상
+          // 불일치 스킵/종점) 넉넉한 상한. 마진 ±150m — GPS·형상 오차 흡수.
+          const s1 = stationS.get(v.sectOrd + 1) ?? s0 + 2_000;
+          const proj = projectOnRoutePath(pathIndex, v, Math.max(0, s0 - 150), s1 + 150);
+          if (proj.distM <= 120) {
+            curS.set(v.vehId, proj.s);
+            const before = prevS?.get(v.vehId);
+            // 전진(s 증가)일 때만 도로 슬라이스 — 후진/왕복 시임 랩/데이터
+            // 점프(15초에 2km 초과)는 직선 폴백.
+            if (before !== undefined && proj.s > before && proj.s - before <= 2_000) {
+              via = sliceRoutePath(pathIndex, before, proj.s);
+            }
+          }
+        }
+      }
+      return {
         id: `${VEHICLE_ID_PREFIX}${v.vehId}`,
         lat: v.lat,
         lng: v.lng,
         iconSrc: v.stopFlag === '1' ? vehicleStopUrl : vehicleMoveUrl,
-      })),
-    [vehicles, vehicleMoveUrl, vehicleStopUrl],
-  );
+        via,
+      };
+    });
+  }, [vehicles, pathIndex, stationS, vehicleMoveUrl, vehicleStopUrl]);
 
   // 내 위치 마커 클릭은 no-op — 정류장 선택(stId)으로 오염시키지 않는다. 차량은
   // 전용 레이어라 애초에 클릭이 여기 오지 않지만(markerId 미설정) 방어적으로 무시.

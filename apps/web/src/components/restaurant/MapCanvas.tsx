@@ -54,7 +54,58 @@ export interface VehicleMarker {
   // OL Icon.src 로 그대로 쓰는 아이콘 data URL(알약). 정차/주행에 따라 호출자가
   // 다른 URL 을 넘긴다. anchor 는 [0.5, 0.5](이미지 중앙) 고정.
   iconSrc: string;
+  // 노선 형상 따라가기 — 이전 위치→현재 위치의 도로 경유 웨이포인트(호출자가
+  // 노선 폴리라인에서 잘라 넘김). 있으면 이 경로를 따라 등속 이동하고 마지막
+  // 점(도로 투영점)에 멈춘다. 없으면 직선 보간 폴백. 점 2개 이상이어야 유효.
+  via?: { lat: number; lng: number }[];
 }
+
+// ── 차량 tween 웨이포인트 소기하 — EPSG:3857 평면 좌표 전용 ──────────────────
+type XY = [number, number];
+
+const buildCumLengths = (pts: XY[]): number[] => {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1]! + Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]));
+  }
+  return cum;
+};
+
+// 호길이 s 지점 좌표 — 웨이포인트가 십수 개 수준이라 선형 탐색으로 충분.
+const samplePathAt = (pts: XY[], cum: number[], s: number): XY => {
+  if (s <= 0) return pts[0]!;
+  const total = cum[cum.length - 1]!;
+  if (s >= total) return pts[pts.length - 1]!;
+  let i = 1;
+  while (cum[i]! < s) i++;
+  const segLen = cum[i]! - cum[i - 1]!;
+  const t = segLen > 0 ? (s - cum[i - 1]!) / segLen : 0;
+  return [
+    pts[i - 1]![0] + (pts[i]![0] - pts[i - 1]![0]) * t,
+    pts[i - 1]![1] + (pts[i]![1] - pts[i - 1]![1]) * t,
+  ];
+};
+
+// p 의 경로 최근접 호길이 — 새 tween 이 현재 표시 좌표에서 이어지게 하는 투영.
+// 반환 dist 는 경로 이탈 판정용(3857 단위 ≈ m, 위도 배율 차이는 판정에 무해).
+const projectPathS = (pts: XY[], cum: number[], p: XY): { s: number; dist: number } => {
+  let bestS = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const ax = pts[i]![0];
+    const ay = pts[i]![1];
+    const dx = pts[i + 1]![0] - ax;
+    const dy = pts[i + 1]![1] - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 > 0 ? Math.min(1, Math.max(0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / len2)) : 0;
+    const d = Math.hypot(p[0] - (ax + dx * t), p[1] - (ay + dy * t));
+    if (d < bestD) {
+      bestD = d;
+      bestS = cum[i]! + Math.sqrt(len2) * t;
+    }
+  }
+  return { s: bestS, dist: bestD };
+};
 
 export interface MapViewport {
   // longitude/latitude (EPSG:4326). bbox 도 같이 — 호출자가 뷰포트 검색에
@@ -181,10 +232,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const vehicleSourceRef = useRef<VectorSource | null>(null);
   const vehicleFeaturesRef = useRef(new Map<string, Feature>());
   const vehicleAnimRef = useRef(
-    new Map<
-      string,
-      { from: [number, number]; to: [number, number]; start: number; dur: number }
-    >(),
+    new Map<string, { pts: XY[]; cum: number[]; s0: number; start: number; dur: number }>(),
   );
   const vehicleRafRef = useRef<number | null>(null);
   // 현재 베이스 타일 소스 — 레이어 변경 시 map 을 재생성하지 않고 URL 만 교체한다
@@ -513,11 +561,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     src.addFeature(feature);
   }, [routeLine]);
 
-  // 차량 보간 — vehicles 가 바뀌면(폴링) 각 id 의 현재 표시 좌표에서 새 좌표로
-  // 직선 등속 tween 을 예약하고 rAF 를 돌린다. 신규 id 는 즉시 배치, 사라진 id 는
-  // 제거, 아이콘(정차/주행)은 매번 갱신. geometry 만 프레임마다 바꾸므로(스타일
-  // 재생성 없음) 버스 수 대비 가볍다. from/to 는 EPSG:3857(m) — 0.5m 이하 이동은
-  // tween 을 생략해 정차·미동 시 떨림을 없앤다.
+  // 차량 보간 — vehicles 가 바뀌면(폴링) 각 id 의 현재 표시 좌표에서 목표
+  // 지점까지 등속 tween 을 예약하고 rAF 를 돌린다. via(도로 경유 웨이포인트)가
+  // 있으면 그 경로를 따라, 없으면 직선(2점 경로) — 둘 다 같은 웨이포인트 tween
+  // 으로 처리한다. 신규 id 는 즉시 배치, 사라진 id 는 제거, 아이콘(정차/주행)은
+  // 매번 갱신. geometry 만 프레임마다 바꾸므로(스타일 재생성 없음) 버스 수 대비
+  // 가볍다. 좌표는 EPSG:3857(≈m) — 잔여 0.5m 미만은 tween 생략(정차 떨림 방지).
   useEffect(() => {
     const src = vehicleSourceRef.current;
     if (!src) return;
@@ -527,7 +576,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     const seen = new Set<string>();
     for (const v of vehicles ?? []) {
       seen.add(v.id);
-      const to = fromLonLat([v.lng, v.lat]) as [number, number];
+      const to = fromLonLat([v.lng, v.lat]) as XY;
       const style = new Style({ image: new Icon({ anchor: [0.5, 0.5], src: v.iconSrc }) });
       const existing = feats.get(v.id);
       if (!existing) {
@@ -536,17 +585,45 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         src.addFeature(f);
         feats.set(v.id, f);
         anims.delete(v.id); // 신규는 tween 없이 즉시 위치
-      } else {
-        const geom = existing.getGeometry() as Point;
-        const from = geom.getCoordinates() as [number, number];
-        // 아이콘(정차/주행/색) 변화 반영 — 같은 src 면 OL 이미지 캐시 재사용.
-        existing.setStyle(style);
-        if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.5) {
-          geom.setCoordinates(to);
-          anims.delete(v.id);
-        } else {
-          anims.set(v.id, { from, to, start: now, dur: vehicleTweenMs });
+        continue;
+      }
+      const geom = existing.getGeometry() as Point;
+      const from = geom.getCoordinates() as XY;
+      // 아이콘(정차/주행/색) 변화 반영 — 같은 src 면 OL 이미지 캐시 재사용.
+      existing.setStyle(style);
+      // 웨이포인트 결정 — via 는 이전 폴링 위치→현재 위치의 도로 슬라이스라
+      // 현재 표시 좌표(from, 직전 tween 미완 지점)와 어긋날 수 있다. 투영으로
+      // 이어 붙이되, 경로에서 40m 넘게 벗어나 있으면(모드 전환/데이터 점프)
+      // 직선 폴백 — 시작 순간 마커가 경로 위로 순간이동하지 않게.
+      let pts: XY[] = [from, to];
+      if (v.via && v.via.length >= 2) {
+        const viaPts = v.via.map((w) => fromLonLat([w.lng, w.lat]) as XY);
+        const cum = buildCumLengths(viaPts);
+        const proj = projectPathS(viaPts, cum, from);
+        if (proj.dist <= 40) {
+          pts = viaPts;
+          const remain = cum[cum.length - 1]! - proj.s;
+          if (remain < 0.5) {
+            geom.setCoordinates(viaPts[viaPts.length - 1]!);
+            anims.delete(v.id);
+            continue;
+          }
+          anims.set(v.id, { pts, cum, s0: proj.s, start: now, dur: vehicleTweenMs });
+          continue;
         }
+      }
+      // 직선 폴백 — from→to 2점 경로.
+      if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.5) {
+        geom.setCoordinates(to);
+        anims.delete(v.id);
+      } else {
+        anims.set(v.id, {
+          pts,
+          cum: buildCumLengths(pts),
+          s0: 0,
+          start: now,
+          dur: vehicleTweenMs,
+        });
       }
     }
     // 이번 폴링에 없는 차량 제거(운행 종료/구간 이탈).
@@ -569,10 +646,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
             anims.delete(id);
             continue;
           }
+          const total = a.cum[a.cum.length - 1]!;
           const p = Math.min(1, (t - a.start) / a.dur);
-          const x = a.from[0] + (a.to[0] - a.from[0]) * p;
-          const y = a.from[1] + (a.to[1] - a.from[1]) * p;
-          (f.getGeometry() as Point).setCoordinates([x, y]);
+          const s = a.s0 + (total - a.s0) * p;
+          (f.getGeometry() as Point).setCoordinates(samplePathAt(a.pts, a.cum, s));
           if (p < 1) active = true;
           else anims.delete(id);
         }

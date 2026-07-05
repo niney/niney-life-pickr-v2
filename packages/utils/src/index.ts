@@ -6,5 +6,6 @@ export * from './geo.js';
 export * from './markerFrame.js';
 export * from './random.js';
 export * from './restaurantCategory.js';
+export * from './routePath.js';
 export * from './thumbnail.js';
 export * from './vworld.js';
