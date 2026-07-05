@@ -180,6 +180,17 @@ interface Props {
   // 차량 보간 지속(ms). 폴링 간격보다 살짝 짧게 잡아 도착 후 잠깐 멈췄다 다음
   // 위치로 이어진다(등속). 데이터가 늦으면 목표점에서 대기. 기본 14초(15초 폴링).
   vehicleTweenMs?: number;
+  // 차량 마커 클릭 — 정류장(onMarkerSelect)과 분리된 채널. 넘겨진 id 는
+  // VehicleMarker.id 그대로. 미지정이면 차량 클릭은 무시된다.
+  onVehicleSelect?(vehicleId: string): void;
+  // 따라가기 대상 차량 id(VehicleMarker.id). 지정되면 그 차량이 이동할 때 매
+  // 프레임 지도 중심을 차량 위치로 옮긴다(카메라 추적). null/미지정이면 추적
+  // 안 함. 값이 새로 지정되는 순간 한 번 부드럽게 센터링한다.
+  followVehicleId?: string | null;
+  // 추적 중 사용자가 지도를 드래그/휠하면 1회 호출 — 카메라 추적을 그 즉시
+  // 멈춘다(호출자가 '일시정지' 상태로 전환해 재개 UI 를 띄우는 용도). 토글
+  // 자체는 호출자가 관리한다.
+  onFollowInterrupted?(): void;
   className?: string;
 }
 
@@ -239,6 +250,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     routeLine,
     vehicles,
     vehicleTweenMs = 14_000,
+    onVehicleSelect,
+    followVehicleId,
+    onFollowInterrupted,
     className,
   },
   ref,
@@ -262,6 +276,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const vehicleArrowsRef = useRef(
     new Map<string, { feature: Feature; icon: Icon; src: string }>(),
   );
+  // 따라가기 대상 차량 id — rAF tick 이 매 프레임 이 차량 좌표로 지도 중심을
+  // 옮긴다. 사용자 드래그/휠 시 즉시 null 로 지워 추적을 끊는다(prop 은 곧
+  // 호출자가 일시정지로 내려 동기화). prop 을 stale 없이 읽는 미러 ref.
+  const followIdRef = useRef<string | null | undefined>(followVehicleId);
   // 현재 베이스 타일 소스 — 레이어 변경 시 map 을 재생성하지 않고 URL 만 교체한다
   // (줌/센터/마커 유지).
   const tileSourceRef = useRef<XYZ | null>(null);
@@ -301,11 +319,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const onViewportChangeEndRef = useRef(onViewportChangeEnd);
   const onViewportSyncRef = useRef(onViewportSync);
   const onTileErrorRef = useRef(onTileError);
+  const onVehicleSelectRef = useRef(onVehicleSelect);
+  const onFollowInterruptedRef = useRef(onFollowInterrupted);
   useEffect(() => {
     onMarkerSelectRef.current = onMarkerSelect;
     onViewportChangeEndRef.current = onViewportChangeEnd;
     onViewportSyncRef.current = onViewportSync;
     onTileErrorRef.current = onTileError;
+    onVehicleSelectRef.current = onVehicleSelect;
+    onFollowInterruptedRef.current = onFollowInterrupted;
   });
 
   // map 한 번만 생성. apiKey 가 바뀌면 reload (드물게 일어남 — 키 갱신 시).
@@ -428,12 +450,22 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       controls: [],
     });
 
-    // 사용자 인터랙션 마크. pointerdrag = 드래그(panning), 휠은 별도.
+    // 사용자 인터랙션 마크. pointerdrag = 드래그(panning), 휠은 별도. 추적
+    // 중이면 그 즉시 끊고(followIdRef 비움 → tick 이 센터 이동 중단) 호출자에
+    // 알린다(일시정지 UI). 재개는 호출자가 followVehicleId 를 다시 내려서 한다.
+    const interruptFollow = () => {
+      if (followIdRef.current) {
+        followIdRef.current = null;
+        onFollowInterruptedRef.current?.();
+      }
+    };
     map.on('pointerdrag', () => {
       userInteractedRef.current = true;
+      interruptFollow();
     });
     const handleWheel = () => {
       userInteractedRef.current = true;
+      interruptFollow();
     };
     containerRef.current.addEventListener('wheel', handleWheel);
 
@@ -475,17 +507,21 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     });
 
     map.on('click', (evt) => {
-      // markerId 가 있는 feature 만 후보 — 차량 feature(markerId 미설정)는 건너뛰고
-      // 그 아래 정류장이 선택되게 한다.
+      // markerId(정류장) 또는 vehicleId(차량) 가 있는 feature 만 후보 — 화살표
+      // 등 그 외 feature 는 건너뛴다. 알약은 화살표 위(zIndex)라 먼저 히트된다.
       const f = map.forEachFeatureAtPixel(
         evt.pixel,
-        (feat) => (feat.get('markerId') ? feat : undefined),
+        (feat) => (feat.get('markerId') || feat.get('vehicleId') ? feat : undefined),
         { hitTolerance: 4 },
       );
-      if (f) {
-        const id = f.get('markerId') as string | undefined;
-        if (id) onMarkerSelectRef.current?.(id);
+      if (!f) return;
+      const markerId = f.get('markerId') as string | undefined;
+      if (markerId) {
+        onMarkerSelectRef.current?.(markerId);
+        return;
       }
+      const vehicleId = f.get('vehicleId') as string | undefined;
+      if (vehicleId) onVehicleSelectRef.current?.(vehicleId);
     });
 
     mapRef.current = map;
@@ -646,6 +682,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       const existing = feats.get(v.id);
       if (!existing) {
         const f = new Feature({ geometry: new Point(to) });
+        f.set('vehicleId', v.id); // 클릭 → onVehicleSelect(따라가기 대상 지정)
         f.setStyle(style);
         src.addFeature(f);
         feats.set(v.id, f);
@@ -737,11 +774,36 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           if (p < 1) active = true;
           else anims.delete(id);
         }
+        // 따라가기 — 대상 차량 위치로 지도 중심을 매 프레임 이동(추적). tween
+        // 이 부드러움을 이미 만드니 setCenter(즉시)로도 자연스럽게 붙는다.
+        const fid = followIdRef.current;
+        if (fid) {
+          const ff = feats.get(fid);
+          if (ff) mapRef.current?.getView().setCenter((ff.getGeometry() as Point).getCoordinates());
+        }
         vehicleRafRef.current = active ? requestAnimationFrame(tick) : null;
       };
       vehicleRafRef.current = requestAnimationFrame(tick);
     }
   }, [vehicles, vehicleTweenMs]);
+
+  // 따라가기 대상 지정/재개 — prop 이 새 id 로 바뀌는 순간(탭 또는 '다시
+  // 따라가기') 한 번 부드럽게 센터링하고, 이후엔 tick 이 추적을 이어간다.
+  // 이 effect 는 미러 ref 동기화도 겸한다(사용자 조작으로 ref 만 null 이 된 뒤
+  // 같은 값으로 재개될 때 prop 변화가 없으면 재센터링이 안 되므로, 호출자는
+  // 재개 시 반드시 값 전환(null→id)을 만든다).
+  useEffect(() => {
+    followIdRef.current = followVehicleId ?? null;
+    if (!followVehicleId) return;
+    const f = vehicleFeaturesRef.current.get(followVehicleId);
+    const map = mapRef.current;
+    if (!f || !map) return;
+    userInteractedRef.current = false;
+    map.getView().animate({
+      center: (f.getGeometry() as Point).getCoordinates(),
+      duration: 300,
+    });
+  }, [followVehicleId]);
 
   // 선택 변경 — vectorSource 는 건드리지 않고 이전/현재 마커 feature 2개만
   // changed() 로 다시 칠한다 (style function 이 selectedIdRef 를 다시 읽음). N→2.

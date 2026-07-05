@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MapPin, RotateCw } from 'lucide-react';
+import { Loader2, MapPin, Navigation, RotateCw, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
 import type {
   BusPositionItemType,
@@ -123,6 +124,28 @@ export const BusStationsMap = ({
 
   const handleRef = useRef<MapCanvasHandle>(null);
 
+  // 따라가기 — 지도에서 버스 알약을 탭하면 그 차량(followId=VehicleMarker.id)을
+  // 카메라가 추적한다. paused 는 사용자가 지도를 조작해 추적만 끊긴 상태(토글=
+  // followId 는 유지, '다시 따라가기' 칩으로 재개). MapCanvas 에는 paused 아닐
+  // 때만 대상을 내려 추적하게 한다.
+  const [followId, setFollowId] = useState<string | null>(null);
+  const [followPaused, setFollowPaused] = useState(false);
+  const handleVehicleSelect = useCallback((id: string) => {
+    setFollowPaused(false);
+    setFollowId((prev) => (prev === id ? null : id)); // 같은 버스 재탭 → 해제
+  }, []);
+  const handleFollowInterrupted = useCallback(() => setFollowPaused(true), []);
+  // 재개 — followId 는 그대로 두고 paused 만 푼다. MapCanvas 로 내려가는
+  // followVehicleId 가 null→id 로 전환되며 재센터링 effect 가 발사된다.
+  const handleResumeFollow = useCallback(() => setFollowPaused(false), []);
+  const handleStopFollow = useCallback(() => {
+    setFollowId(null);
+    setFollowPaused(false);
+  }, []);
+  // paused 아닐 때만 추적 대상을 내린다 — 조작으로 끊기면 null 이 되고, 재개
+  // 시 다시 id 로 돌아와 재센터링을 트리거한다.
+  const followVehicleId = followId && !followPaused ? followId : null;
+
   // 사용자가 직접 패닝/줌을 끝낸 시점의 지도 상태 — MapCanvas 가 programmatic
   // move(fit/flyTo)는 걸러주므로(userInteractedRef) 여기엔 사용자 이동만 쌓인다.
   const [userView, setUserView] = useState<{ lat: number; lng: number; zoom: number } | null>(
@@ -203,8 +226,47 @@ export const BusStationsMap = ({
     () => buildBusVehicleDirDataUrl(vehiclePillColor),
     [vehiclePillColor],
   );
+  // 따라가는 버스 강조 알약 — 주행/정차 2종 추가(대상 1대만 사용).
+  const vehicleHiMoveUrl = useMemo(
+    () =>
+      buildBusVehiclePillDataUrl({
+        label: vehicleLabel ?? '',
+        color: vehiclePillColor,
+        stopped: false,
+        highlighted: true,
+      }),
+    [vehicleLabel, vehiclePillColor],
+  );
+  const vehicleHiStopUrl = useMemo(
+    () =>
+      buildBusVehiclePillDataUrl({
+        label: vehicleLabel ?? '',
+        color: vehiclePillColor,
+        stopped: true,
+        highlighted: true,
+      }),
+    [vehicleLabel, vehiclePillColor],
+  );
+
+  // 따라가기 중에는 화면을 비워 버스에 집중 — 검색 정류장·경유지 점을 숨기고
+  // '현재(선택) 정류장' 하나만 남긴다. 폴리라인·차량은 그대로(별도 레이어).
+  const following = followId !== null;
 
   const markers: MapMarker[] = useMemo(() => {
+    if (following) {
+      const sel = selectedStId ? items.find((it) => it.stId === selectedStId) : undefined;
+      return sel
+        ? [
+            {
+              id: sel.stId,
+              lat: sel.lat,
+              lng: sel.lng,
+              label: sel.name,
+              icon: { src: BUS_MARKER_URL, selectedSrc: BUS_MARKER_SELECTED_URL },
+            },
+          ]
+        : [];
+    }
     // 같은 이름 + 60m 이내 정류장 그룹은 첫 항목만 라벨 유지 — 마주보는
     // 쌍의 라벨이 글자 단위로 겹쳐 읽히지 않는 문제 방지. label 미지정은
     // MapCanvas 가 텍스트 스타일 자체를 생략하는 안전한 경로.
@@ -250,7 +312,7 @@ export const BusStationsMap = ({
         icon: { src: dotUrl, selectedSrc: dotUrl },
       }));
     return [...routeStopMarkers, ...stationMarkers, ...myLocationMarkers];
-  }, [items, myLocation, routeStops, routeLine?.color]);
+  }, [items, myLocation, routeStops, routeLine?.color, following, selectedStId]);
 
   // ── 노선 형상 따라가기 — 차량 위치를 형상 위 호길이(s)로 환산해, 폴링 간
   //    이동을 도로 웨이포인트(via)로 MapCanvas 에 넘긴다. 형상이 상·하행 왕복
@@ -332,17 +394,50 @@ export const BusStationsMap = ({
       // 형상 투영 실패 시 null — MapCanvas 가 tween 이동 방향으로 폴백.
       const bearingDeg =
         pathIndex && sOnPath !== null ? bearingAtRoutePathS(pathIndex, sOnPath) : null;
+      const id = `${VEHICLE_ID_PREFIX}${v.vehId}`;
+      // 따라가는 대상만 강조 알약. 나머지는 일반.
+      const followed = id === followId;
+      const stopped = v.stopFlag === '1';
+      const iconSrc = followed
+        ? stopped
+          ? vehicleHiStopUrl
+          : vehicleHiMoveUrl
+        : stopped
+          ? vehicleStopUrl
+          : vehicleMoveUrl;
       return {
-        id: `${VEHICLE_ID_PREFIX}${v.vehId}`,
+        id,
         lat: v.lat,
         lng: v.lng,
-        iconSrc: v.stopFlag === '1' ? vehicleStopUrl : vehicleMoveUrl,
+        iconSrc,
         via,
         dirIconSrc: vehicleDirUrl,
         bearingDeg,
       };
     });
-  }, [vehicles, pathIndex, stationS, vehicleMoveUrl, vehicleStopUrl, vehicleDirUrl]);
+  }, [
+    vehicles,
+    pathIndex,
+    stationS,
+    followId,
+    vehicleMoveUrl,
+    vehicleStopUrl,
+    vehicleHiMoveUrl,
+    vehicleHiStopUrl,
+    vehicleDirUrl,
+  ]);
+
+  // 추적 대상이 이번 폴링에 없으면(운행 종료/구간 이탈) 따라가기 해제 + 안내.
+  // 외부(폴링) 이벤트라 effect 가 적합 — vehicles 갱신 시에만 판정한다.
+  useEffect(() => {
+    if (followId === null) return;
+    const vid = followId.slice(VEHICLE_ID_PREFIX.length);
+    if (!(vehicles ?? []).some((v) => v.vehId === vid)) {
+      setFollowId(null);
+      setFollowPaused(false);
+      toast.info('버스 운행이 종료되어 따라가기를 멈췄어요.');
+    }
+  }, [vehicles, followId]);
 
   // 내 위치 마커 클릭은 no-op — 정류장 선택(stId)으로 오염시키지 않는다. 차량은
   // 전용 레이어라 애초에 클릭이 여기 오지 않지만(markerId 미설정) 방어적으로 무시.
@@ -422,6 +517,9 @@ export const BusStationsMap = ({
         apiKey={apiKey}
         markers={markers}
         vehicles={vehicleItems}
+        onVehicleSelect={handleVehicleSelect}
+        followVehicleId={followVehicleId}
+        onFollowInterrupted={handleFollowInterrupted}
         selectedMarkerId={selectedStId}
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}
@@ -445,6 +543,32 @@ export const BusStationsMap = ({
         >
           <RotateCw className="size-3.5" />
           이 위치에서 재검색
+        </button>
+      )}
+      {/* 따라가기 상태 — 하단 중앙(상단 loading·재검색 슬롯과 분리). 추적 중엔
+          안내 배지 + 종료(X), 조작으로 끊기면 '다시 따라가기' 칩. */}
+      {following && !followPaused && (
+        <div className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md">
+          <Navigation className="size-3.5 text-primary" />
+          {vehicleLabel ? `${vehicleLabel}번 따라가는 중` : '버스 따라가는 중'}
+          <button
+            type="button"
+            onClick={handleStopFollow}
+            aria-label="따라가기 종료"
+            className="-mr-1 ml-0.5 rounded-full p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+      {following && followPaused && (
+        <button
+          type="button"
+          onClick={handleResumeFollow}
+          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md hover:bg-accent"
+        >
+          <Navigation className="size-3.5" />
+          다시 따라가기
         </button>
       )}
     </div>

@@ -53,12 +53,16 @@ export interface BusVehiclePillOptions {
   color: string;
   // '정차 중'(stopFlag='1') 강조 — 알약 뒤에 은은한 노선색 후광 1겹.
   stopped?: boolean;
+  // '따라가는 버스' 강조 — 알약 바깥에 흰 링 + 옅은 확산으로 살짝 도드라지게.
+  // 정차 후광과 독립(둘 다일 수 있어 레이어를 나눠 그린다).
+  highlighted?: boolean;
 }
 
 export function buildBusVehiclePillSvg({
   label,
   color,
   stopped = false,
+  highlighted = false,
 }: BusVehiclePillOptions): string {
   const fontSize = 13;
   // SVG 텍스트 실측이 불가 → bold 숫자·대문자 기준 문자폭 근사(넉넉히).
@@ -69,8 +73,8 @@ export function buildBusVehiclePillSvg({
   const pillW = Math.max(pillH, Math.round(textW + padX * 2));
   const tailH = 8;
   const tailHalf = 6;
-  // 정차 후광(halo)이 삐져나올 여백 — 주행 시엔 흰 스트로크만 감안.
-  const margin = stopped ? 6 : 3;
+  // 후광/강조 링이 삐져나올 여백 — 주행·미강조 시엔 흰 스트로크만 감안.
+  const margin = Math.max(stopped ? 6 : 3, highlighted ? 6 : 0);
   const w = pillW + margin * 2;
   const h = (pillH + tailH + margin) * 2; // 꼬리 끝 = 세로 중앙
   const cx = w / 2;
@@ -87,6 +91,11 @@ export function buildBusVehiclePillSvg({
     `H${cx + tailHalf} L${cx} ${tipY} L${cx - tailHalf} ${pillBottom} ` +
     `H${left + r} ` +
     `A${r} ${r} 0 0 1 ${left + r} ${pillTop} Z`;
+  // 강조 링 — 맨 뒤에 옅은 확산(라이트/다크 배경 모두 대응) + 흰 링 1겹.
+  const highlight = highlighted
+    ? `<rect x="${left - 5}" y="${pillTop - 5}" width="${pillW + 10}" height="${pillH + 10}" rx="${r + 5}" fill="${color}" opacity="0.22"/>` +
+      `<rect x="${left - 3}" y="${pillTop - 3}" width="${pillW + 6}" height="${pillH + 6}" rx="${r + 3}" fill="none" stroke="#fff" stroke-width="2.5" opacity="0.95"/>`
+    : '';
   const halo = stopped
     ? `<rect x="${left - 3}" y="${pillTop - 3}" width="${pillW + 6}" height="${pillH + 6}" rx="${r + 3}" fill="${color}" opacity="0.28"/>`
     : '';
@@ -97,6 +106,7 @@ export function buildBusVehiclePillSvg({
     : '';
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    highlight +
     halo +
     `<path d="${bubble}" fill="${color}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>` +
     text +
