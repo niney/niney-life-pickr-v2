@@ -183,21 +183,18 @@ const PanelBody = ({
     >
       {items.map((it) => {
         const selected = it.busRouteId === selectedRouteId;
-        // staOrd 가 없으면 위치 구간(startOrd/endOrd) 계산 불가 — 클릭 비활성.
-        const trackable = it.staOrd !== null;
+        // 위치 조회가 노선 전체(getBusPosByRtid)로 바뀌어 staOrd 없는 노선도
+        // 추적 가능 — 예전의 staOrd 기반 클릭 비활성은 제거.
         return (
           // 지도 추적(행 버튼)과 즐겨찾기 별을 형제로 — 버튼 중첩(무효 HTML) 회피.
           <li key={it.busRouteId} className="flex items-start gap-1">
             <button
               type="button"
-              disabled={!trackable}
-              title={trackable ? undefined : '이 노선은 버스 위치를 조회할 수 없습니다'}
               onClick={() => onToggleRoute(it.busRouteId)}
               aria-pressed={selected}
               className={cn(
                 'flex min-w-0 flex-1 items-start justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
                 selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
-                !trackable && 'opacity-60',
               )}
             >
               <span className="shrink-0 font-semibold tabular-nums">{it.routeName}</span>

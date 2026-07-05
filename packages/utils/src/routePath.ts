@@ -105,6 +105,23 @@ export function pointAtRoutePathS(index: RoutePathIndex, sM: number): LatLng {
   return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
 }
 
+// 호길이 s 지점의 진행 방위각(도, 북=0 시계방향) — 전진(s 증가) 방향의 형상
+// 접선. 차량 방향 화살표용: 정차 중이어도 '앞으로 갈 방향'이 나온다. 세그먼트
+// 길이가 0(중복점)이면 앞쪽으로 넘어가며 탐색, 전부 0이면 null.
+export function bearingAtRoutePathS(index: RoutePathIndex, sM: number): number | null {
+  const { xs, ys, cum, totalM } = index;
+  const s = Math.min(Math.max(sM, 0), totalM);
+  for (let i = segIndexAt(cum, s); i < xs.length - 1; i++) {
+    const dx = xs[i + 1]! - xs[i]!;
+    const dy = ys[i + 1]! - ys[i]!;
+    if (dx !== 0 || dy !== 0) {
+      const deg = (Math.atan2(dx, dy) * 180) / Math.PI;
+      return (deg + 360) % 360;
+    }
+  }
+  return null;
+}
+
 // [s0, s1] 구간의 경유 웨이포인트 — 보간된 양 끝점 + 사이의 원본 점들.
 // s0 > s1 (후진/왕복 시임 랩)은 호출자가 걸러 직선 폴백할 것.
 export function sliceRoutePath(index: RoutePathIndex, s0M: number, s1M: number): LatLng[] {

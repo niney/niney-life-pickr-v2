@@ -111,6 +111,26 @@ export function buildBusVehiclePillDataUrl(options: BusVehiclePillOptions): stri
   );
 }
 
+// 차량 진행 방향 화살표 — 알약 꼬리 끝(정차 좌표) 아래에 겹쳐 그리는 작은
+// 다트(북쪽 기준, 지도 레이어가 방위각만큼 회전). 노선색 채움 + 흰 외곽선.
+// 16×16 중앙 anchor — 알약보다 아래 zIndex 로 그려 시각적으로 '바닥 방향
+// 표시등' 역할.
+export function buildBusVehicleDirSvg(color: string): string {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">' +
+    // 위(북)를 가리키는 다트 — 꼬리를 살짝 파서 화살촉 실루엣.
+    `<path d="M8 1.5 L13.5 13 L8 10.2 L2.5 13 Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>` +
+    '</svg>'
+  );
+}
+
+export function buildBusVehicleDirDataUrl(color: string): string {
+  return (
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(buildBusVehicleDirSvg(color))
+  );
+}
+
 // 내 위치(Geolocation) 마커 — 정류장(파랑 핀)·차량(초록 원)과 구분되는 단순
 // '파란 점'. 지도 앱 관용 표현(진한 파란 점 + 흰 링 + 옅은 정확도 후광)을
 // 26×26 규격으로 그려 정류장 마커와 라벨 offset·축소 스케일을 공유한다.

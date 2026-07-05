@@ -26,6 +26,7 @@ import type {
 import {
   BusApiError,
   getBusPositionsByRouteSt,
+  getBusPositionsByRtid,
   getRouteInfo,
   getRoutePath,
   getStationArrivals,
@@ -98,6 +99,10 @@ export interface BusServiceDeps {
       busRouteId: string,
       startOrd: number,
       endOrd: number,
+      opts: BusApiRequestOptions,
+    ) => Promise<RawBusPosition[]>;
+    getBusPositionsByRtid?: (
+      busRouteId: string,
       opts: BusApiRequestOptions,
     ) => Promise<RawBusPosition[]>;
     getStationsByPos?: (
@@ -592,11 +597,14 @@ export class BusService {
     };
   }
 
-  // 노선 구간 실시간 버스 위치 — 무캐싱 프록시 (가드/에러 정책은 도착정보와 동일).
+  // 노선 실시간 버스 위치 — 무캐싱 프록시 (가드/에러 정책은 도착정보와 동일).
+  // startOrd/endOrd 지정 시 구간(getBusPosByRouteSt), 둘 다 생략 시 노선 전체
+  // (getBusPosByRtid) — 업스트림 둘 다 1콜이라 쿼터 비용 동일. 페어 검증은
+  // 라우트 zod(BusPositionsQuery)가 담당하고, 여기선 startOrd 유무만 본다.
   async getPositions(
     busRouteId: string,
-    startOrd: number,
-    endOrd: number,
+    startOrd?: number,
+    endOrd?: number,
   ): Promise<BusPositionsResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
@@ -607,11 +615,17 @@ export class BusService {
     const now = this.deps.now?.() ?? new Date();
     this.consumeQuota(now);
 
-    const fetchPositions =
-      this.deps.adapter?.getBusPositionsByRouteSt ?? getBusPositionsByRouteSt;
-    const raw = await fetchPositions(busRouteId, startOrd, endOrd, {
-      serviceKey: this.deps.serviceKey,
-    });
+    let raw: RawBusPosition[];
+    if (startOrd !== undefined && endOrd !== undefined) {
+      const fetchPositions =
+        this.deps.adapter?.getBusPositionsByRouteSt ?? getBusPositionsByRouteSt;
+      raw = await fetchPositions(busRouteId, startOrd, endOrd, {
+        serviceKey: this.deps.serviceKey,
+      });
+    } else {
+      const fetchAll = this.deps.adapter?.getBusPositionsByRtid ?? getBusPositionsByRtid;
+      raw = await fetchAll(busRouteId, { serviceKey: this.deps.serviceKey });
+    }
 
     // 검색과 동일 정책 — 좌표 정규화 실패(WGS84 쌍 없음)나 vehId 누락 행은
     // 계약(lat 33~39, vehId min 1)을 만족할 수 없어 drop.

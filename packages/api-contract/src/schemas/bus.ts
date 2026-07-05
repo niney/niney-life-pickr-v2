@@ -135,16 +135,22 @@ export const BusPositionsParams = z.object({
 });
 export type BusPositionsParamsType = z.infer<typeof BusPositionsParams>;
 
+// startOrd/endOrd 둘 다 생략 = 노선 전체 차량(getBusPosByRtid — 업스트림 1콜로
+// 구간 조회와 쿼터 동일). 둘 다 지정 = 구간 조회(getBusPosByRouteSt). 하나만
+// 지정은 400 — 의도 모호.
 export const BusPositionsQuery = z
   .object({
-    startOrd: z.coerce.number().int().min(1),
-    endOrd: z.coerce.number().int().min(1),
+    startOrd: z.coerce.number().int().min(1).optional(),
+    endOrd: z.coerce.number().int().min(1).optional(),
   })
-  .refine((v) => v.endOrd >= v.startOrd, {
+  .refine((v) => (v.startOrd === undefined) === (v.endOrd === undefined), {
+    message: 'startOrd/endOrd 는 함께 지정하거나 함께 생략해야 합니다.',
+  })
+  .refine((v) => v.startOrd === undefined || v.endOrd! >= v.startOrd, {
     message: 'endOrd 는 startOrd 이상이어야 합니다.',
   })
-  // 구간 상한 — 노선 전체를 훑는 남용 방지(정류장 접근 구간 조회 용도).
-  .refine((v) => v.endOrd - v.startOrd <= 50, {
+  // 구간 상한 — 남용 방지(전체가 필요하면 구간 대신 생략 형태를 쓸 것).
+  .refine((v) => v.startOrd === undefined || v.endOrd! - v.startOrd <= 50, {
     message: '조회 구간은 50 정류장 이하여야 합니다.',
   });
 export type BusPositionsQueryType = z.infer<typeof BusPositionsQuery>;

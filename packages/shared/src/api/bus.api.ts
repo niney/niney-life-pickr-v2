@@ -35,9 +35,12 @@ export const busApi = {
   // 400 으로 거절하므로 호출 전 차단은 훅(enabled)이 담당.
   stationArrivals: (arsId: string) =>
     apiFetch<BusArrivalsResultType>(Routes.Bus.stationArrivals(arsId)),
-  // 노선 구간 실시간 버스 위치 — startOrd/endOrd 는 도착정보 staOrd 기반 윈도우
-  // (서버 제약: endOrd ≥ startOrd, 구간 ≤ 50).
-  busPositions: (busRouteId: string, opts: { startOrd: number; endOrd: number }) => {
+  // 노선 실시간 버스 위치 — opts 생략 시 노선 전체 차량(getBusPosByRtid,
+  // 쿼터 비용 동일), 지정 시 구간(서버 제약: endOrd ≥ startOrd, 구간 ≤ 50).
+  busPositions: (busRouteId: string, opts?: { startOrd: number; endOrd: number }) => {
+    if (!opts) {
+      return apiFetch<BusPositionsResultType>(Routes.Bus.busPositions(busRouteId));
+    }
     const params = new URLSearchParams();
     params.set('startOrd', String(opts.startOrd));
     params.set('endOrd', String(opts.endOrd));

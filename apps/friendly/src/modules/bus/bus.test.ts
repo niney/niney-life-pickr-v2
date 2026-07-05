@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getStationsByName: vi.fn(),
   getStationArrivals: vi.fn(),
   getBusPositionsByRouteSt: vi.fn(),
+  getBusPositionsByRtid: vi.fn(),
   getStationsByPos: vi.fn(),
   getRoutePath: vi.fn(),
   getStationsByRoute: vi.fn(),
@@ -183,6 +184,7 @@ beforeEach(() => {
   mocks.getStationsByName.mockReset();
   mocks.getStationArrivals.mockReset();
   mocks.getBusPositionsByRouteSt.mockReset();
+  mocks.getBusPositionsByRtid.mockReset();
   mocks.getStationsByPos.mockReset();
   mocks.getRoutePath.mockReset();
   mocks.getStationsByRoute.mockReset();
@@ -753,6 +755,39 @@ describe('GET /api/v1/bus/routes/:busRouteId/positions', () => {
   it('업스트림 실패 → 502', async () => {
     mocks.getBusPositionsByRouteSt.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
     const res = await app.inject({ url: positionsUrl('100100020', 62, 65) });
+    expect(res.statusCode).toBe(502);
+  });
+
+  // ── 노선 전체 조회 — startOrd/endOrd 둘 다 생략 시 getBusPosByRtid 분기 ──
+  it('쿼리 생략 → 노선 전체(getBusPosByRtid) 호출 + 동일 매핑/drop 정책', async () => {
+    mocks.getBusPositionsByRtid.mockResolvedValueOnce([
+      rawPosition(),
+      rawPosition({ vehId: null }), // drop
+    ]);
+
+    const res = await app.inject({ url: `/api/v1/bus/routes/100100020/positions` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { busRouteId: string; items: unknown[] };
+    expect(body.busRouteId).toBe('100100020');
+    expect(body.items).toHaveLength(1);
+    expect(mocks.getBusPositionsByRtid).toHaveBeenCalledWith('100100020', {
+      serviceKey: expect.any(String) as string,
+    });
+    expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+  });
+
+  it('startOrd 만 지정(페어 깨짐) → 400, 업스트림 미호출', async () => {
+    const res = await app.inject({
+      url: `/api/v1/bus/routes/100100020/positions?startOrd=62`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mocks.getBusPositionsByRouteSt).not.toHaveBeenCalled();
+    expect(mocks.getBusPositionsByRtid).not.toHaveBeenCalled();
+  });
+
+  it('전체 조회도 업스트림 실패 → 502', async () => {
+    mocks.getBusPositionsByRtid.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
+    const res = await app.inject({ url: `/api/v1/bus/routes/100100020/positions` });
     expect(res.statusCode).toBe(502);
   });
 });

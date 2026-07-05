@@ -78,24 +78,15 @@ export const useBusStationArrivals = (arsId: string | null) => {
   });
 };
 
-// 노선 구간 실시간 버스 위치 — 15초 폴링. startOrd/endOrd 는 호출자가
-// 도착정보의 staOrd 로 계산해 넘긴다(셋 다 유효할 때만 조회).
-export const useBusPositions = (
-  busRouteId: string | null,
-  startOrd: number | null,
-  endOrd: number | null,
-) => {
-  // 서버 제약(1 이상, endOrd ≥ startOrd) FE 미러 — 범위 밖이면 호출 차단.
-  const enabled =
-    !!busRouteId &&
-    startOrd !== null &&
-    endOrd !== null &&
-    startOrd >= 1 &&
-    endOrd >= startOrd;
+// 노선 전체 실시간 버스 위치 — 15초 폴링. 구간(startOrd/endOrd) 조회에서 노선
+// 전체(getBusPosByRtid)로 전환 — 업스트림 쿼터 비용이 같고(1콜), 도착정보
+// staOrd 를 기다릴 필요가 없어 노선 선택 즉시 조회된다. 노선 보기(폴리라인)
+// 위에 전 차량이 얹히는 그림이 완성형.
+export const useBusPositions = (busRouteId: string | null) => {
+  const enabled = !!busRouteId;
   return useQuery({
-    queryKey: ['bus', 'positions', busRouteId, startOrd, endOrd],
-    queryFn: () =>
-      busApi.busPositions(busRouteId!, { startOrd: startOrd!, endOrd: endOrd! }),
+    queryKey: ['bus', 'positions', busRouteId],
+    queryFn: () => busApi.busPositions(busRouteId!),
     enabled,
     refetchInterval: 15_000,
     staleTime: 0,

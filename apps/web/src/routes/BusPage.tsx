@@ -438,17 +438,14 @@ export const BusPage = () => {
   const arrivals = useBusStationArrivals(selectedStation?.arsId ?? null);
   const arrivalItems = arrivals.data?.items ?? [];
 
-  // 선택 노선의 staOrd 로 위치 조회 구간(직전 5개 정류장 윈도우) 계산.
-  // staOrd 가 null 인 노선은 패널에서 클릭 비활성이라 여기 못 들어온다.
+  // 알약 라벨용 노선 표기 — 도착정보의 routeName 우선, 없으면(도착 로딩 전/
+  // 운행종료 노선) 노선 상세의 routeName 폴백.
   const selectedArrival = routeId
     ? (arrivalItems.find((it) => it.busRouteId === routeId) ?? null)
     : null;
-  const staOrd = selectedArrival?.staOrd ?? null;
-  const positions = useBusPositions(
-    routeId,
-    staOrd !== null ? Math.max(1, staOrd - 5) : null,
-    staOrd,
-  );
+  // 노선 전체 실시간 위치 — 구간(staOrd 윈도우) 조회에서 전환. 쿼터 비용 동일
+  // (1콜)하고 도착정보를 기다릴 필요가 없어 노선 선택 즉시 전 차량이 뜬다.
+  const positions = useBusPositions(routeId);
   // 노선 선택 중일 때만 지도에 차량 마커 — 해제 시 즉시 제거.
   const vehicles = routeId ? (positions.data?.items ?? []) : [];
 
@@ -545,7 +542,7 @@ export const BusPage = () => {
           <BusStationsMap
             items={mapItemsForMap}
             vehicles={vehicles}
-            vehicleLabel={selectedArrival?.routeName ?? null}
+            vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}
             vehicleColor={routeColor}
             myLocation={effectiveNear}
             selectedStId={stId}
@@ -585,7 +582,7 @@ export const BusPage = () => {
           <BusStationsMap
             items={mapItemsForMap}
             vehicles={vehicles}
-            vehicleLabel={selectedArrival?.routeName ?? null}
+            vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}
             vehicleColor={routeColor}
             myLocation={effectiveNear}
             selectedStId={stId}

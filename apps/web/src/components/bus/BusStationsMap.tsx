@@ -7,8 +7,10 @@ import type {
   BusStationItemType,
 } from '@repo/api-contract';
 import {
+  bearingAtRoutePathS,
   buildBusRouteStopDotDataUrl,
   buildBusStopMarkerDataUrl,
+  buildBusVehicleDirDataUrl,
   buildBusVehiclePillDataUrl,
   buildMyLocationMarkerDataUrl,
   createRoutePathIndex,
@@ -196,6 +198,11 @@ export const BusStationsMap = ({
       }),
     [vehicleLabel, vehiclePillColor],
   );
+  // 진행 방향 화살표 — 노선색 다트. 회전(방위각)은 형상 접선에서 계산해 차량별로.
+  const vehicleDirUrl = useMemo(
+    () => buildBusVehicleDirDataUrl(vehiclePillColor),
+    [vehiclePillColor],
+  );
 
   const markers: MapMarker[] = useMemo(() => {
     // 같은 이름 + 60m 이내 정류장 그룹은 첫 항목만 라벨 유지 — 마주보는
@@ -301,6 +308,7 @@ export const BusStationsMap = ({
     const curS = store.cur.s;
     return (vehicles ?? []).map((v) => {
       let via: { lat: number; lng: number }[] | undefined;
+      let sOnPath: number | null = null;
       if (pathIndex && stationS && v.sectOrd !== null) {
         const s0 = stationS.get(v.sectOrd);
         if (s0 !== undefined) {
@@ -309,6 +317,7 @@ export const BusStationsMap = ({
           const s1 = stationS.get(v.sectOrd + 1) ?? s0 + 2_000;
           const proj = projectOnRoutePath(pathIndex, v, Math.max(0, s0 - 150), s1 + 150);
           if (proj.distM <= 120) {
+            sOnPath = proj.s;
             curS.set(v.vehId, proj.s);
             const before = prevS?.get(v.vehId);
             // 전진(s 증가)일 때만 도로 슬라이스 — 후진/왕복 시임 랩/데이터
@@ -319,15 +328,21 @@ export const BusStationsMap = ({
           }
         }
       }
+      // 진행 방위각 — 형상 접선(전진 방향). 정차 중에도 '갈 방향'이 나온다.
+      // 형상 투영 실패 시 null — MapCanvas 가 tween 이동 방향으로 폴백.
+      const bearingDeg =
+        pathIndex && sOnPath !== null ? bearingAtRoutePathS(pathIndex, sOnPath) : null;
       return {
         id: `${VEHICLE_ID_PREFIX}${v.vehId}`,
         lat: v.lat,
         lng: v.lng,
         iconSrc: v.stopFlag === '1' ? vehicleStopUrl : vehicleMoveUrl,
         via,
+        dirIconSrc: vehicleDirUrl,
+        bearingDeg,
       };
     });
-  }, [vehicles, pathIndex, stationS, vehicleMoveUrl, vehicleStopUrl]);
+  }, [vehicles, pathIndex, stationS, vehicleMoveUrl, vehicleStopUrl, vehicleDirUrl]);
 
   // 내 위치 마커 클릭은 no-op — 정류장 선택(stId)으로 오염시키지 않는다. 차량은
   // 전용 레이어라 애초에 클릭이 여기 오지 않지만(markerId 미설정) 방어적으로 무시.

@@ -58,6 +58,12 @@ export interface VehicleMarker {
   // 노선 폴리라인에서 잘라 넘김). 있으면 이 경로를 따라 등속 이동하고 마지막
   // 점(도로 투영점)에 멈춘다. 없으면 직선 보간 폴백. 점 2개 이상이어야 유효.
   via?: { lat: number; lng: number }[];
+  // 진행 방향 화살표 아이콘(북쪽 기준 다트 data URL) — 지정 시 마커 좌표에
+  // 회전 화살표를 함께 그린다. 회전은 bearingDeg(호출자가 노선 접선으로 계산)
+  // 또는 tween 진행 방향에서 얻고, 둘 다 없으면 화살표를 그리지 않는다.
+  dirIconSrc?: string;
+  // 진행 방위각(도, 북=0 시계방향). null/미지정이면 tween 방향에만 의존.
+  bearingDeg?: number | null;
 }
 
 // ── 차량 tween 웨이포인트 소기하 — EPSG:3857 평면 좌표 전용 ──────────────────
@@ -84,6 +90,22 @@ const samplePathAt = (pts: XY[], cum: number[], s: number): XY => {
     pts[i - 1]![0] + (pts[i]![0] - pts[i - 1]![0]) * t,
     pts[i - 1]![1] + (pts[i]![1] - pts[i - 1]![1]) * t,
   ];
+};
+
+// 호길이 s 지점의 진행 방향(라디안, 위쪽=0 시계방향) — OL Icon.rotation 과 같은
+// 규약(3857 에서 +y=북, +x=동 → atan2(dx, dy)). 중복점 세그먼트는 앞으로 넘어가
+// 탐색, 방향을 못 찾으면 null.
+const pathDirectionAt = (pts: XY[], cum: number[], s: number): number | null => {
+  const total = cum[cum.length - 1]!;
+  const sc = Math.min(Math.max(s, 0), total);
+  let i = 1;
+  while (i < cum.length - 1 && cum[i]! < sc) i++;
+  for (; i < pts.length; i++) {
+    const dx = pts[i]![0] - pts[i - 1]![0];
+    const dy = pts[i]![1] - pts[i - 1]![1];
+    if (dx !== 0 || dy !== 0) return Math.atan2(dx, dy);
+  }
+  return null;
 };
 
 // p 의 경로 최근접 호길이 — 새 tween 이 현재 표시 좌표에서 이어지게 하는 투영.
@@ -235,6 +257,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     new Map<string, { pts: XY[]; cum: number[]; s0: number; start: number; dur: number }>(),
   );
   const vehicleRafRef = useRef<number | null>(null);
+  // 방향 화살표 — 알약 feature 와 Point geometry 를 공유해(이동 자동 동기)
+  // 회전만 Icon 인스턴스를 직접 돌린다. src 는 재생성 판별용.
+  const vehicleArrowsRef = useRef(
+    new Map<string, { feature: Feature; icon: Icon; src: string }>(),
+  );
   // 현재 베이스 타일 소스 — 레이어 변경 시 map 을 재생성하지 않고 URL 만 교체한다
   // (줌/센터/마커 유지).
   const tileSourceRef = useRef<XYZ | null>(null);
@@ -381,6 +408,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     vehicleSourceRef.current = vehicleSource;
     vehicleFeaturesRef.current.clear();
     vehicleAnimRef.current.clear();
+    vehicleArrowsRef.current.clear();
 
     const map = new OlMap({
       target: containerRef.current,
@@ -476,6 +504,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       vehicleRafRef.current = null;
       vehicleFeaturesRef.current.clear();
       vehicleAnimRef.current.clear();
+      vehicleArrowsRef.current.clear();
       map.setTarget(undefined);
       mapRef.current = null;
       vectorSourceRef.current = null;
@@ -573,11 +602,47 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     const now = performance.now();
     const feats = vehicleFeaturesRef.current;
     const anims = vehicleAnimRef.current;
+    const arrows = vehicleArrowsRef.current;
     const seen = new Set<string>();
+    // 방향 화살표 동기화 — 알약과 geometry 를 공유하는 별도 feature. 회전
+    // 소스(형상 접선 bearingDeg 또는 tween 진행 방향)가 전혀 없으면 생성 보류
+    // (북쪽 고정 화살표 오표시 방지), 기존 화살표는 마지막 회전을 유지한다.
+    const syncArrow = (v: VehicleMarker, pill: Feature, rotationRad: number | null) => {
+      const cur = arrows.get(v.id);
+      if (!v.dirIconSrc) {
+        if (cur) {
+          src.removeFeature(cur.feature);
+          arrows.delete(v.id);
+        }
+        return;
+      }
+      if (cur && cur.src === v.dirIconSrc) {
+        if (rotationRad !== null) cur.icon.setRotation(rotationRad);
+        return;
+      }
+      // 신규 또는 색(노선) 변경 — 재생성. 이전 회전이라도 있으면 물려받는다.
+      const rot = rotationRad ?? cur?.icon.getRotation() ?? null;
+      if (cur) {
+        src.removeFeature(cur.feature);
+        arrows.delete(v.id);
+      }
+      if (rot === null) return;
+      const icon = new Icon({ anchor: [0.5, 0.5], src: v.dirIconSrc, rotation: rot });
+      const f = new Feature({ geometry: pill.getGeometry()! });
+      f.setStyle(new Style({ image: icon, zIndex: 0 }));
+      src.addFeature(f);
+      arrows.set(v.id, { feature: f, icon, src: v.dirIconSrc });
+    };
     for (const v of vehicles ?? []) {
       seen.add(v.id);
       const to = fromLonLat([v.lng, v.lat]) as XY;
-      const style = new Style({ image: new Icon({ anchor: [0.5, 0.5], src: v.iconSrc }) });
+      // 알약은 화살표(zIndex 0) 위에 — 같은 소스 내 렌더 순서 보장.
+      const style = new Style({
+        zIndex: 1,
+        image: new Icon({ anchor: [0.5, 0.5], src: v.iconSrc }),
+      });
+      // 형상 접선 방위각(도) → OL rotation(라디안). 정차 중에도 '갈 방향'.
+      const bearingRad = v.bearingDeg != null ? (v.bearingDeg * Math.PI) / 180 : null;
       const existing = feats.get(v.id);
       if (!existing) {
         const f = new Feature({ geometry: new Point(to) });
@@ -585,6 +650,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         src.addFeature(f);
         feats.set(v.id, f);
         anims.delete(v.id); // 신규는 tween 없이 즉시 위치
+        syncArrow(v, f, bearingRad);
         continue;
       }
       const geom = existing.getGeometry() as Point;
@@ -595,35 +661,42 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       // 현재 표시 좌표(from, 직전 tween 미완 지점)와 어긋날 수 있다. 투영으로
       // 이어 붙이되, 경로에서 40m 넘게 벗어나 있으면(모드 전환/데이터 점프)
       // 직선 폴백 — 시작 순간 마커가 경로 위로 순간이동하지 않게.
-      let pts: XY[] = [from, to];
+      let handled = false;
       if (v.via && v.via.length >= 2) {
         const viaPts = v.via.map((w) => fromLonLat([w.lng, w.lat]) as XY);
         const cum = buildCumLengths(viaPts);
         const proj = projectPathS(viaPts, cum, from);
         if (proj.dist <= 40) {
-          pts = viaPts;
+          handled = true;
           const remain = cum[cum.length - 1]! - proj.s;
           if (remain < 0.5) {
             geom.setCoordinates(viaPts[viaPts.length - 1]!);
             anims.delete(v.id);
-            continue;
+            syncArrow(v, existing, bearingRad);
+          } else {
+            anims.set(v.id, {
+              pts: viaPts,
+              cum,
+              s0: proj.s,
+              start: now,
+              dur: vehicleTweenMs,
+            });
+            syncArrow(v, existing, bearingRad ?? pathDirectionAt(viaPts, cum, proj.s));
           }
-          anims.set(v.id, { pts, cum, s0: proj.s, start: now, dur: vehicleTweenMs });
-          continue;
         }
       }
-      // 직선 폴백 — from→to 2점 경로.
-      if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.5) {
-        geom.setCoordinates(to);
-        anims.delete(v.id);
-      } else {
-        anims.set(v.id, {
-          pts,
-          cum: buildCumLengths(pts),
-          s0: 0,
-          start: now,
-          dur: vehicleTweenMs,
-        });
+      if (!handled) {
+        // 직선 폴백 — from→to 2점 경로.
+        if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.5) {
+          geom.setCoordinates(to);
+          anims.delete(v.id);
+          syncArrow(v, existing, bearingRad);
+        } else {
+          const pts: XY[] = [from, to];
+          const cum = buildCumLengths(pts);
+          anims.set(v.id, { pts, cum, s0: 0, start: now, dur: vehicleTweenMs });
+          syncArrow(v, existing, bearingRad ?? pathDirectionAt(pts, cum, 0));
+        }
       }
     }
     // 이번 폴링에 없는 차량 제거(운행 종료/구간 이탈).
@@ -632,6 +705,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         src.removeFeature(f);
         feats.delete(id);
         anims.delete(id);
+        const arrow = arrows.get(id);
+        if (arrow) {
+          src.removeFeature(arrow.feature);
+          arrows.delete(id);
+        }
       }
     }
     // rAF 구동 — 이미 돌고 있으면(vehicleRafRef!=null) 갱신된 anims 를 그대로
@@ -650,6 +728,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           const p = Math.min(1, (t - a.start) / a.dur);
           const s = a.s0 + (total - a.s0) * p;
           (f.getGeometry() as Point).setCoordinates(samplePathAt(a.pts, a.cum, s));
+          // 화살표 회전 — 현재 세그먼트 진행 방향(geometry 공유라 위치는 자동).
+          const arrow = arrows.get(id);
+          if (arrow) {
+            const dir = pathDirectionAt(a.pts, a.cum, s);
+            if (dir !== null) arrow.icon.setRotation(dir);
+          }
           if (p < 1) active = true;
           else anims.delete(id);
         }

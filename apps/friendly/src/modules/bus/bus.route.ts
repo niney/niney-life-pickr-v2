@@ -114,7 +114,8 @@ const busRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  // 노선 구간 실시간 버스 위치 — startOrd/endOrd 는 도착정보 staOrd 윈도우.
+  // 노선 실시간 버스 위치 — startOrd/endOrd 지정 시 구간(도착정보 staOrd
+  // 윈도우), 둘 다 생략 시 노선 전체 차량. 페어 검증은 querystring zod 가 담당.
   typed.get(Routes.Bus.busPositions(':busRouteId'), {
     schema: {
       tags: ['bus'],
