@@ -18,6 +18,7 @@
     "promote-admin": "tsx --env-file=.env scripts/promote-admin.ts",
     "backfill:contacts": "tsx --env-file=.env scripts/backfill-contacts.ts",
     "load:subway-stations": "tsx --env-file=.env scripts/load-subway-stations.ts",
+    "verify:subway-lines": "tsx --env-file=.env scripts/verify-subway-lines.ts",
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "probe:bus": "tsx --env-file=.env scripts/probe-bus-api.ts",
     "probe:subway": "tsx --env-file=.env scripts/probe-subway-api.ts",
