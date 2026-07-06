@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import type {
+  SubwayCongestionDirectionType,
+  SubwayCongestionResultType,
   SubwayTimetableDirectionType,
   SubwayTimetableResultType,
 } from '@repo/api-contract';
@@ -8,6 +10,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { SubwayLineBadge } from './SubwayLineBadge';
+import { congestionBand, congestionDirForUpdn, slotLevel, timeToSlotKey } from './congestionUtils';
 import {
   formatHHMM,
   isSubwayExpressTag,
@@ -31,6 +34,9 @@ export interface SubwayTimetableProps {
   dayType: SubwayDayType;
   onDayType(dayType: SubwayDayType): void;
   onBack(): void;
+  // 10차 — 이 역·요일 혼잡도(정적 통계). 각 열차 행 시각의 슬롯 level 을 색 dot 으로.
+  // coverage false 면 dot 없음(조용히).
+  congestion?: SubwayCongestionResultType | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +54,7 @@ export const SubwayTimetable = ({
   dayType,
   onDayType,
   onBack,
+  congestion,
 }: SubwayTimetableProps) => {
   const directions = timetable?.coverage ? timetable.directions : [];
 
@@ -59,6 +66,12 @@ export const SubwayTimetable = ({
     // 선택 방향이 없어져(요일/역 변경) 첫 방향으로 어긋난 경우 동기화.
     setSelectedUpdn(activeDir.updn);
   }
+
+  // 활성 방향의 혼잡도 direction — 시간표 updn 과 같은 방향 매칭(coverage false 면 null).
+  const congestionDir =
+    congestion?.coverage && activeDir
+      ? congestionDirForUpdn(activeDir.updn, congestion.directions)
+      : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -130,6 +143,7 @@ export const SubwayTimetable = ({
           coverage={timetable?.coverage ?? true}
           dir={activeDir ?? null}
           fetchedAt={timetable?.fetchedAt ?? null}
+          congestionDir={congestionDir}
           // dir·dayType 이 바뀔 때만 자동 스크롤(effect 1회).
           scrollKey={`${dayType}:${activeDir?.updn ?? ''}:${timetable?.stationId ?? ''}`}
         />
@@ -144,6 +158,7 @@ const TimetableBody = ({
   coverage,
   dir,
   fetchedAt,
+  congestionDir,
   scrollKey,
 }: {
   isLoading: boolean;
@@ -151,6 +166,7 @@ const TimetableBody = ({
   coverage: boolean;
   dir: SubwayTimetableDirectionType | null;
   fetchedAt: string | null;
+  congestionDir: SubwayCongestionDirectionType | null;
   scrollKey: string;
 }) => {
   // 현재 시각 이후 첫 열차 — 하이라이트 + 자동 스크롤 기준. 렌더 중 파생(분).
@@ -203,10 +219,17 @@ const TimetableBody = ({
         </div>
       </div>
 
+      {congestionDir && (
+        <p className="px-1 text-xs text-muted-foreground">혼잡도: 시간대 평균(분기 통계)</p>
+      )}
+
       <ul className="flex flex-col gap-0.5" data-testid="subway-timetable-list">
         {trains.map((t, idx) => {
           const isNext = idx === nextIdx;
           const express = isSubwayExpressTag(t.expressTag);
+          // 이 열차 시각의 슬롯 혼잡 — coverage/슬롯 없으면 null(dot 없음, 조용히).
+          const congLevel = slotLevel(congestionDir, timeToSlotKey(t.arriveTime));
+          const congBand = congLevel !== null ? congestionBand(congLevel) : null;
           return (
             <li
               key={`${t.trainNo ?? 'x'}-${idx}`}
@@ -216,6 +239,15 @@ const TimetableBody = ({
                 isNext && 'bg-emerald-50 dark:bg-emerald-950/40',
               )}
             >
+              {/* 혼잡 색 dot — 좌측. dot 없으면(coverage/슬롯 밖) 자리만 비운다. */}
+              <span className="flex w-2 shrink-0 justify-center">
+                {congBand && congLevel !== null && (
+                  <span
+                    className={cn('size-2 rounded-full', congBand.dotClass)}
+                    title={`${congBand.label} ${Math.round(congLevel)}% (시간대 평균 통계)`}
+                  />
+                )}
+              </span>
               <span
                 className={cn(
                   'w-12 shrink-0 tabular-nums',

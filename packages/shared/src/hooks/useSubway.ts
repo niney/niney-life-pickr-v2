@@ -98,3 +98,15 @@ export const useSubwayTimetable = (stationId: string | null, dayType: string) =>
     staleTime: 86_400_000,
   });
 };
+
+// 시간대별 혼잡도(정적 통계) — 분기 갱신 통계라 정적(staleTime 24h, 폴링 없음). 한 응답에
+// 상·하행 슬롯 전량이라 방향 토글도 재요청 없음. 시간표와 같은 dayType 체계.
+export const useSubwayCongestion = (stationId: string | null, dayType: string) => {
+  const enabled = !!stationId;
+  return useQuery({
+    queryKey: ['subway', 'congestion', stationId, dayType],
+    queryFn: () => subwayApi.congestion(stationId!, dayType),
+    enabled,
+    staleTime: 86_400_000,
+  });
+};

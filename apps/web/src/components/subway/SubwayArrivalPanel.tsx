@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Clock, Loader2, MapPin, Route } from 'lucide-react';
 import type {
   SubwayArrivalItemType,
+  SubwayCongestionDirectionType,
+  SubwayCongestionResultType,
   SubwayTimetableDirectionType,
   SubwayTimetableResultType,
 } from '@repo/api-contract';
@@ -11,6 +13,7 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { SubwayLineBadge } from './SubwayLineBadge';
+import { congestionBand, currentSlotKey, matchCongestionDir, slotLevel } from './congestionUtils';
 import { arrivalUpdnToTimetable, formatHHMM, lastTrainRemainMin } from './timetableUtils';
 
 // 실시간(30초 폴링)이라 초 단위 상대시각 — '방금/N초 전'이 의미를 가진다(검색
@@ -87,6 +90,9 @@ export interface SubwayArrivalPanelProps {
   footerTimetable?: SubwayTimetableResultType | null;
   // 섹션 헤더 '시간표' 버튼 — 그 호선 시간표 뷰로 전환. 미지정이면 버튼 숨김.
   onOpenTimetable?(lineId: string): void;
+  // 10차 혼잡도(정적 통계) — 선택 stn 의 호선. coverage·lineId 매칭 섹션의 updn 그룹
+  // 헤더에 현재 시간대 슬롯 게이지. 실시간 아님('통계' 라벨). 시간표 푸터와 동일 배선.
+  footerCongestion?: SubwayCongestionResultType | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +118,7 @@ export const SubwayArrivalPanel = ({
   onLocateTrain,
   footerTimetable,
   onOpenTimetable,
+  footerCongestion,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -193,6 +200,7 @@ export const SubwayArrivalPanel = ({
           onLocateTrain={onLocateTrain}
           footerTimetable={footerTimetable}
           onOpenTimetable={onOpenTimetable}
+          footerCongestion={footerCongestion}
         />
       </div>
     </div>
@@ -219,6 +227,7 @@ const PanelBody = ({
   onLocateTrain,
   footerTimetable,
   onOpenTimetable,
+  footerCongestion,
 }: {
   sections: LineSection[];
   nowMs: number;
@@ -234,6 +243,7 @@ const PanelBody = ({
   onLocateTrain?(lineId: string, trainNo: string): void;
   footerTimetable?: SubwayTimetableResultType | null;
   onOpenTimetable?(lineId: string): void;
+  footerCongestion?: SubwayCongestionResultType | null;
 }) => {
   if (isLoading && isEmpty) {
     return (
@@ -323,12 +333,20 @@ const PanelBody = ({
                 footerTimetable.lineId === sec.lineId
                   ? footerTimetable
                   : null;
+              // 혼잡도도 같은 섹션(선택 stn 호선)만 — coverage·lineId 매칭 시.
+              const secCong =
+                footerCongestion &&
+                footerCongestion.coverage &&
+                footerCongestion.lineId === sec.lineId
+                  ? footerCongestion
+                  : null;
               return sec.groups.map((g) => {
                 const ttUpdn = arrivalUpdnToTimetable(g.updn);
                 const ttDir =
                   secTt && ttUpdn
                     ? (secTt.directions.find((d) => d.updn === ttUpdn) ?? null)
                     : null;
+                const congDir = secCong ? matchCongestionDir(g.updn, secCong.directions) : null;
                 return (
                   <UpDnGroup
                     key={g.updn}
@@ -338,6 +356,7 @@ const PanelBody = ({
                     lineId={sec.lineId}
                     onLocateTrain={onLocateTrain}
                     timetableDir={ttDir}
+                    congestionDir={congDir}
                   />
                 );
               });
@@ -360,6 +379,7 @@ const UpDnGroup = ({
   lineId,
   onLocateTrain,
   timetableDir,
+  congestionDir,
 }: {
   updn: string;
   list: SubwayArrivalItemType[];
@@ -368,6 +388,8 @@ const UpDnGroup = ({
   onLocateTrain?(lineId: string, trainNo: string): void;
   // 8차 — 이 방향의 시간표(첫차/막차). 없으면 푸터 생략.
   timetableDir?: SubwayTimetableDirectionType | null;
+  // 10차 — 이 방향의 혼잡도(정적 통계). 현재 슬롯 게이지. 없으면 생략.
+  congestionDir?: SubwayCongestionDirectionType | null;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? list : list.slice(0, VISIBLE_LIMIT);
@@ -377,15 +399,32 @@ const UpDnGroup = ({
     ? lastTrainRemainMin(timetableDir.lastTrain, new Date(nowMs))
     : null;
   const lastImminent = lastRemain !== null && lastRemain >= 0 && lastRemain <= 30;
+  // 현재 시간대 혼잡 — 30분 슬롯 전환은 nowMs tick 으로 자연 갱신(파생). 슬롯 밖/null 이면 미표시.
+  const congLevel = congestionDir
+    ? slotLevel(congestionDir, currentSlotKey(new Date(nowMs)))
+    : null;
+  const congBand = congLevel !== null ? congestionBand(congLevel) : null;
   return (
     <div>
-      {(updn || lastImminent) && (
-        <div className="mb-0.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+      {(updn || lastImminent || congBand) && (
+        <div className="mb-0.5 flex flex-wrap items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
           {updn && <span>{updn}</span>}
           {lastImminent && (
             <Badge variant="amber" className="shrink-0">
               막차 {lastRemain}분 전
             </Badge>
+          )}
+          {congBand && congLevel !== null && (
+            <span
+              className="flex items-center gap-1"
+              title="이 시간대 평균 혼잡도(정적 통계 — 실시간 아님)"
+            >
+              <span className={cn('size-2 shrink-0 rounded-full', congBand.dotClass)} />
+              <span className={congBand.textClass}>
+                {congBand.label} {Math.round(congLevel)}%
+              </span>
+              <span className="text-[10px] font-normal text-muted-foreground">통계</span>
+            </span>
           )}
         </div>
       )}

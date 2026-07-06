@@ -1,6 +1,7 @@
 import {
   Routes,
   type SubwayArrivalsResultType,
+  type SubwayCongestionResultType,
   type SubwayLineDetailResultType,
   type SubwayNearbyResultType,
   type SubwayPositionsResultType,
@@ -53,6 +54,15 @@ export const subwayApi = {
     params.set('dayType', dayType);
     return apiFetch<SubwayTimetableResultType>(
       `${Routes.Subway.stationTimetable(stationId)}?${params.toString()}`,
+    );
+  },
+  // 시간대별 혼잡도(정적 통계, 1~8호선) — 정원 대비 %(좌석 만석 34%) 30분 슬롯. 실시간
+  // 아님(FE '통계' 라벨). 9호선·광역·경전철은 coverage:false.
+  congestion: (stationId: string, dayType: string) => {
+    const params = new URLSearchParams();
+    params.set('dayType', dayType);
+    return apiFetch<SubwayCongestionResultType>(
+      `${Routes.Subway.stationCongestion(stationId)}?${params.toString()}`,
     );
   },
 };

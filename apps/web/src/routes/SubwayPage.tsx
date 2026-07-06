@@ -4,6 +4,7 @@ import type { SubwayStationGroupItemType } from '@repo/api-contract';
 import { subwayLineColor, subwayLineName } from '@repo/utils';
 import {
   ApiError,
+  useSubwayCongestion,
   useSubwayFavorites,
   useSubwayLineDetail,
   useSubwayLinePositions,
@@ -160,6 +161,9 @@ export const SubwayPage = () => {
   const timetableStationId = timetableView ? timetableView.stationId : stn;
   const timetableQueryDayType = timetableView ? timetableDayType : todayDayType;
   const timetable = useSubwayTimetable(timetableStationId, timetableQueryDayType);
+  // 혼잡도 — 시간표와 같은 stationId·dayType 축(뷰 열림=그 호선/토글, 닫힘=선택 stn/오늘).
+  // 정적 통계라 staleTime 24h(추가 호출이어도 부담 없음).
+  const congestion = useSubwayCongestion(timetableStationId, timetableQueryDayType);
 
   // ── 활성 소스 — 주변 모드면 nearby, 아니면 검색. 아래 로직(선택/지도/도착)은
   //    소스만 다를 뿐 동일하게 흐른다. 마커 누적은 없다(30그룹 상한 — 현재 결과만). ──
@@ -442,6 +446,13 @@ export const SubwayPage = () => {
     timetableView && timetable.data?.stationId === timetableView.stationId
       ? timetable.data
       : null;
+  // 혼잡도 — 시간표와 동일 게이팅(뷰 닫힘=도착 패널 푸터 게이지, 열림=시간표 뷰 dot).
+  const footerCongestion =
+    !timetableView && congestion.data?.stationId === stn ? congestion.data : null;
+  const viewCongestion =
+    timetableView && congestion.data?.stationId === timetableView.stationId
+      ? congestion.data
+      : null;
   // 현재 stn 응답이 아직 없으면(최초/역 전환) 로딩 — placeholder(직전 역)를 목록으로
   // 흘리지 않고 스피너를 보인다. 같은 역 30초 폴링 중에는 arrivalsForStn 이 유지돼
   // 로딩이 뜨지 않는다(잔상 없이 교체).
@@ -585,6 +596,7 @@ export const SubwayPage = () => {
       onLocateTrain={handleLocateTrain}
       footerTimetable={footerTimetable}
       onOpenTimetable={handleOpenTimetable}
+      footerCongestion={footerCongestion}
       {...lineFavoriteProps}
     />
   ) : null;
@@ -601,6 +613,7 @@ export const SubwayPage = () => {
         dayType={timetableDayType}
         onDayType={setTimetableDayType}
         onBack={handleCloseTimetable}
+        congestion={viewCongestion}
       />
     ) : (
       arrivalPanel
