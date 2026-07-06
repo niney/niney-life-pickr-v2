@@ -57,3 +57,14 @@ export const useSubwayStationArrivals = (stationId: string | null) => {
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
+
+// 호선 상세(역 순서 + 지선 sections) — 적재 데이터라 사실상 정적. staleTime 24h,
+// 폴링 없음. lineId 선택('노선 보기') 시에만 조회.
+export const useSubwayLineDetail = (lineId: string | null) => {
+  return useQuery({
+    queryKey: ['subway', 'lines', lineId, 'detail'],
+    queryFn: () => subwayApi.lineDetail(lineId!),
+    enabled: lineId !== null,
+    staleTime: 86_400_000,
+  });
+};

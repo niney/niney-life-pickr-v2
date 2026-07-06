@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Route } from 'lucide-react';
 import type { SubwayArrivalItemType } from '@repo/api-contract';
 import { subwayLineName } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
@@ -69,6 +69,10 @@ export interface SubwayArrivalPanelProps {
   // 경우 상위가 미지정 → 별 숨김. 스냅샷 조립(stationId/좌표)은 상위(SubwayPage).
   isLineFavorite?(lineId: string): boolean;
   onToggleLineFavorite?(lineId: string): void;
+  // 5차 노선 보기 — 추적 중 lineId(있으면 그 섹션 버튼이 '노선 닫기'로). onTrackLine
+  // 미지정이면 버튼 자체를 숨긴다. 토글은 상위(SubwayPage)가 line URL 로 처리.
+  trackedLineId?: string | null;
+  onTrackLine?(lineId: string): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +93,8 @@ export const SubwayArrivalPanel = ({
   onRetry,
   isLineFavorite,
   onToggleLineFavorite,
+  trackedLineId,
+  onTrackLine,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -165,6 +171,8 @@ export const SubwayArrivalPanel = ({
           onRetry={onRetry}
           isLineFavorite={isLineFavorite}
           onToggleLineFavorite={onToggleLineFavorite}
+          trackedLineId={trackedLineId}
+          onTrackLine={onTrackLine}
         />
       </div>
     </div>
@@ -186,6 +194,8 @@ const PanelBody = ({
   onRetry,
   isLineFavorite,
   onToggleLineFavorite,
+  trackedLineId,
+  onTrackLine,
 }: {
   sections: LineSection[];
   nowMs: number;
@@ -196,6 +206,8 @@ const PanelBody = ({
   onRetry(): void;
   isLineFavorite?(lineId: string): boolean;
   onToggleLineFavorite?(lineId: string): void;
+  trackedLineId?: string | null;
+  onTrackLine?(lineId: string): void;
 }) => {
   if (isLoading && isEmpty) {
     return (
@@ -237,14 +249,32 @@ const PanelBody = ({
           <div className="mb-1.5 flex items-center gap-1.5">
             <SubwayLineBadge lineId={sec.lineId} />
             <span className="text-sm font-semibold">{subwayLineName(sec.lineId)}</span>
-            {isLineFavorite && onToggleLineFavorite && (
-              <BusFavoriteStar
-                active={isLineFavorite(sec.lineId)}
-                onToggle={() => onToggleLineFavorite(sec.lineId)}
-                label={`${subwayLineName(sec.lineId)} 즐겨찾기`}
-                className="ml-auto"
-              />
-            )}
+            <div className="ml-auto flex items-center gap-0.5">
+              {/* 노선 보기 토글 — 추적 중인 호선이면 '노선 닫기'. */}
+              {onTrackLine && (
+                <button
+                  type="button"
+                  onClick={() => onTrackLine(sec.lineId)}
+                  aria-pressed={trackedLineId === sec.lineId}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                    trackedLineId === sec.lineId
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  )}
+                >
+                  <Route className="size-3.5" />
+                  {trackedLineId === sec.lineId ? '노선 닫기' : '노선 보기'}
+                </button>
+              )}
+              {isLineFavorite && onToggleLineFavorite && (
+                <BusFavoriteStar
+                  active={isLineFavorite(sec.lineId)}
+                  onToggle={() => onToggleLineFavorite(sec.lineId)}
+                  label={`${subwayLineName(sec.lineId)} 즐겨찾기`}
+                />
+              )}
+            </div>
           </div>
           <div className="flex flex-col gap-2">
             {sec.groups.map((g) => (

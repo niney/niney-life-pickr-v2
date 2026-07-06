@@ -55,3 +55,29 @@ export function buildSubwayStationMarkerDataUrl(options: SubwayStationMarkerOpti
     encodeURIComponent(buildSubwayStationMarkerSvg(options))
   );
 }
+
+// ── 5차(호선 보기) ──────────────────────────────────────────────────────────
+// 경유역 점 마커 — 호선 형상 위에 얹는 작은 점(호선색). 정류장 핀(26×26)보다 의도적
+// 으로 작은 16×16 규격(중심 anchor·라벨 없음 — 버스 buildBusRouteStopDotDataUrl 과
+// 같은 규격이라 MapCanvas 축소 스케일을 공유한다). 환승역은 흰 링을 한 겹 더 둘러
+// (도넛) 일반 경유역과 구분한다.
+export function buildSubwayStopDotSvg(color: string, transfer: boolean): string {
+  const inner = transfer
+    ? `<circle fill="#fff" cx="8" cy="8" r="7"/>` +
+      `<circle fill="${color}" cx="8" cy="8" r="5"/>` +
+      `<circle fill="#fff" cx="8" cy="8" r="2.2"/>`
+    : `<circle fill="#fff" cx="8" cy="8" r="6"/>` +
+      `<circle fill="${color}" cx="8" cy="8" r="4"/>`;
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">' +
+    inner +
+    '</svg>'
+  );
+}
+
+export function buildSubwayStopDotDataUrl(color: string, transfer: boolean): string {
+  return (
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(buildSubwayStopDotSvg(color, transfer))
+  );
+}

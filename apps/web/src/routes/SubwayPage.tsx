@@ -1,10 +1,11 @@
-import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
-import { subwayLineName } from '@repo/utils';
+import { subwayLineColor, subwayLineName } from '@repo/utils';
 import {
   ApiError,
   useSubwayFavorites,
+  useSubwayLineDetail,
   useSubwayNearbyStations,
   useSubwayStationArrivals,
   useSubwayStationSearch,
@@ -48,6 +49,10 @@ const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
 export const SubwayPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const stn = searchParams.get('stn');
+  // 추적 호선(line) — 4자리 lineId. '노선 보기'가 세팅하고 stn 과 공존한다. 쓰레기
+  // 값(딥링크 편집)은 null(폴리라인 미표시).
+  const rawLine = searchParams.get('line');
+  const line = rawLine && /^\d{4}$/.test(rawLine) ? rawLine : null;
 
   // 검색 입력의 진실은 로컬 state — URL q 는 쓰기 전용 미러다. URL 을 input value 에
   // 직결하면(useSearchParams 왕복) 라우터 리렌더가 한글 IME 조합 세션을 리셋해 첫
@@ -121,6 +126,11 @@ export const SubwayPage = () => {
   const nearSearching =
     nearby.isLoading || (nearby.isFetching && nearby.isPlaceholderData);
 
+  // 추적 호선 상세(형상+경유역, 지선 sections) — line 선택 시에만. 적재 데이터라
+  // 정적(폴링 없음). 색은 SUBWAY_LINES 상수에서 파생(폴리라인·경유역 점 공용).
+  const lineDetail = useSubwayLineDetail(line);
+  const lineColor = line ? subwayLineColor(line) : undefined;
+
   // ── 활성 소스 — 주변 모드면 nearby, 아니면 검색. 아래 로직(선택/지도/도착)은
   //    소스만 다를 뿐 동일하게 흐른다. 마커 누적은 없다(30그룹 상한 — 현재 결과만). ──
   const activeItems = nearMode ? nearItems : items;
@@ -143,6 +153,33 @@ export const SubwayPage = () => {
     !activePlaceholder &&
     !activeItems.some((it) => it.id === stn);
 
+  // 경유역 점 클릭 시 그룹 대표 id 재해석용 — 활성 결과의 각 호선 stationId → 그룹 id.
+  // 렌더 중 갱신(ref) — handleSelectStop 이 클릭 시점의 최신 값을 읽는다(버스 패턴).
+  const groupIdByLineStationRef = useRef<Map<string, string>>(new Map());
+  groupIdByLineStationRef.current = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of activeItems) for (const l of g.lines) m.set(l.stationId, g.id);
+    return m;
+  }, [activeItems]);
+
+  // 추적 호선의 경유역 집합(id + 역명) — 역 전환 시 line 유지 판정용. 환승역 딥링크는
+  // 그룹 대표 id 가 달라(다른 lineId 접두) 역명 비교도 병행한다.
+  const lineStationKeyRef = useRef<{ ids: Set<string>; names: Set<string> }>({
+    ids: new Set(),
+    names: new Set(),
+  });
+  lineStationKeyRef.current = useMemo(() => {
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    for (const sec of lineDetail.data?.sections ?? []) {
+      for (const st of sec.stations) {
+        ids.add(st.stationId);
+        names.add(st.name);
+      }
+    }
+    return { ids, names };
+  }, [lineDetail.data]);
+
   // 라이브 검색 — 로컬 state 를 먼저 갱신(IME 안전한 input 진실)하고, URL q 는 그 뒤에
   // replace 로 미러링한다. 검색어 입력은 주변 모드와 배타라 near 를 제거하고, 이전
   // 선택(stn)도 다른 결과셋의 것이라 해제한다.
@@ -158,6 +195,7 @@ export const SubwayPage = () => {
           else sp.delete('q');
           sp.delete('near');
           sp.delete('stn');
+          sp.delete('line');
           return sp;
         },
         { replace: true },
@@ -166,9 +204,72 @@ export const SubwayPage = () => {
     [setSearchParams],
   );
 
-  const handleSelect = useCallback((id: string) => setParam('stn', id), [setParam]);
-  // '← 목록' — 선택(stn) 해제로 리스트 뷰 복귀. 지도/검색/주변은 그대로.
-  const handleBack = useCallback(() => setParam('stn', null), [setParam]);
+  // 역 선택 — stn 세팅 + 추적 호선(line) 유지 판정. 새 역이 추적 호선 경유역(id 또는
+  // 역명 일치)이면 line 유지(노선 위를 역 단위로 이어 탐색), 아니면 해제(다른 호선
+  // 맥락). line 미추적이면 stn 만 바꾼다.
+  const selectStation = useCallback(
+    (id: string) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          if (sp.get('line')) {
+            const name = id.slice(id.indexOf(':') + 1);
+            const onLine =
+              lineStationKeyRef.current.ids.has(id) ||
+              lineStationKeyRef.current.names.has(name);
+            if (!onLine) sp.delete('line');
+          }
+          sp.set('stn', id);
+          return sp;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const handleSelect = selectStation;
+
+  // 경유역 점 클릭 — 환승역은 활성 결과의 그룹 대표 id 로 재해석(각 호선 stationId →
+  // 그룹 id), 없으면 원본 stationId 그대로. 점은 항상 추적 호선 위라 line 은 유지된다.
+  const handleSelectStop = useCallback(
+    (stationId: string) => {
+      selectStation(groupIdByLineStationRef.current.get(stationId) ?? stationId);
+    },
+    [selectStation],
+  );
+
+  // '← 목록' — 선택(stn)·추적 호선(line) 해제로 리스트 뷰 복귀. 지도/검색/주변은 그대로.
+  const handleBack = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.delete('stn');
+        sp.delete('line');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  // '노선 보기' 토글 — 같은 호선 재탭이면 해제. stn 은 유지(현재 역 패널 그대로).
+  const handleTrackLine = useCallback(
+    (lineId: string) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          if (sp.get('line') === lineId) sp.delete('line');
+          else sp.set('line', lineId);
+          return sp;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // 노선 정보 카드 '노선 닫기' — line 만 해제(stn 유지).
+  const handleCloseLine = useCallback(() => setParam('line', null), [setParam]);
 
   // '주변 역' — Geolocation 으로 좌표를 얻어 near 모드로. 성공 시 q(입력 포함)를 지워
   // (배타) URL 을 near 로 교체, 실패 시 리스트 영역에 안내만 남긴다.
@@ -195,6 +296,7 @@ export const SubwayPage = () => {
             sp.set('near', `${lat},${lng}`);
             sp.delete('q');
             sp.delete('stn');
+            sp.delete('line');
             return sp;
           },
           { replace: true },
@@ -226,6 +328,7 @@ export const SubwayPage = () => {
           sp.set('near', `${roundCoord(center.lat)},${roundCoord(center.lng)}`);
           sp.delete('q');
           sp.delete('stn');
+          sp.delete('line');
           return sp;
         },
         { replace: true },
@@ -249,6 +352,7 @@ export const SubwayPage = () => {
         const sp = new URLSearchParams(prev);
         sp.delete('near');
         sp.delete('stn');
+        sp.delete('line');
         return sp;
       },
       { replace: true },
@@ -413,6 +517,8 @@ export const SubwayPage = () => {
       notFound={arrivalNotFound}
       onBack={handleBack}
       onRetry={() => void arrivals.refetch()}
+      trackedLineId={line}
+      onTrackLine={handleTrackLine}
       {...lineFavoriteProps}
     />
   ) : null;
@@ -437,8 +543,12 @@ export const SubwayPage = () => {
               myLocation={effectiveNear}
               onResearchAt={nearMode ? handleResearchAt : undefined}
               onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
-              suppressFit={autoNear !== null}
+              suppressFit={autoNear !== null || line !== null}
               loading={nearMode && nearby.isFetching}
+              lineDetail={line ? (lineDetail.data ?? null) : null}
+              lineColor={lineColor}
+              onSelectStop={handleSelectStop}
+              onCloseLine={handleCloseLine}
             />
           </section>
         </div>
@@ -467,8 +577,12 @@ export const SubwayPage = () => {
               myLocation={effectiveNear}
               onResearchAt={nearMode ? handleResearchAt : undefined}
               onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
-              suppressFit={autoNear !== null}
+              suppressFit={autoNear !== null || line !== null}
               loading={nearMode && nearby.isFetching}
+              lineDetail={line ? (lineDetail.data ?? null) : null}
+              lineColor={lineColor}
+              onSelectStop={handleSelectStop}
+              onCloseLine={handleCloseLine}
             />
           </div>
           {/* 역 선택 시 하단 영역이 도착정보 뷰로 전환 — 패널은 내부 스크롤이라

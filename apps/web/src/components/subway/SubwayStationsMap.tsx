@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MapPin, RotateCw } from 'lucide-react';
+import { Loader2, MapPin, RotateCw, X } from 'lucide-react';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
-import type { SubwayStationGroupItemType } from '@repo/api-contract';
-import { buildMyLocationMarkerDataUrl, buildSubwayStationMarkerDataUrl } from '@repo/utils';
+import type {
+  SubwayLineDetailResultType,
+  SubwayLineStationItemType,
+  SubwayStationGroupItemType,
+} from '@repo/api-contract';
+import {
+  buildMyLocationMarkerDataUrl,
+  buildSubwayStationMarkerDataUrl,
+  buildSubwayStopDotDataUrl,
+} from '@repo/utils';
 import {
   MapCanvas,
   type MapCanvasHandle,
   type MapMarker,
   type MapViewport,
 } from '~/components/restaurant/MapCanvas';
+import { SubwayLineBadge } from './SubwayLineBadge';
 
 // 모듈 레벨 상수 — 선택×환승 4종을 미리 만들어 모든 마커가 같은 data URL 문자열을
 // 공유한다(OL 아이콘 캐시가 이미지를 1회만 디코드). 정류장 마커와 규격이 같아
@@ -57,19 +66,27 @@ interface Props {
   // '이 위치에서 재검색'(수동) — 자동 조건이 아닐 때 버튼으로 지도 중심을 넘긴다.
   onResearchAt?(center: { lat: number; lng: number }): void;
   // 자동 재조회 — 줌이 충분히 가까울 때 사용자 패닝이 끝나면 지도 중심으로 조회.
-  // 미지정이면 수동 버튼만.
   onAutoResearchAt?(center: { lat: number; lng: number }): void;
-  // 자동 재조회로 결과가 갱신될 때 fitToMarkers 억제 — 사용자가 보던 화면을 지도가
-  // 되받아치지 않게.
+  // 자동 재조회/노선 추적 중 fitToMarkers 억제 — 사용자가 보던 화면을 지도가
+  // 되받아치지 않게(노선 경유역 점이 화면을 줌아웃시키지 않게).
   suppressFit?: boolean;
   // 주변 조회 진행 중 — 지도 상단 로딩 칩.
   loading?: boolean;
+  // 5차 — 추적 호선 상세(sections). 있으면 폴리라인 + 경유역 점을 그린다.
+  lineDetail?: SubwayLineDetailResultType | null;
+  // 추적 호선색(subwayLineColor) — 폴리라인·경유역 점 공용.
+  lineColor?: string;
+  // 경유역 점 클릭 — 역 마커(onSelect)와 분리된 채널(환승역 id 재해석은 호출부에서).
+  onSelectStop?(stationId: string): void;
+  // 노선 정보 카드 '노선 닫기'.
+  onCloseLine?(): void;
   className?: string;
 }
 
-// 역 검색/주변 결과를 vworld 지도에 마커로. 키 로딩/미등록/에러 3분기는 BusStationsMap
-// 과 동일 정책(문구만 지하철용). 자동 재조회 파이프라인은 버스 3차 검증본 이식(수치만
-// 조정, 마커 누적은 30그룹 상한이라 생략 — 현재 결과만). follow/차량은 여전히 제외.
+// 역 검색/주변/노선 결과를 vworld 지도에 마커+폴리라인으로. 키 로딩/미등록/에러
+// 3분기는 BusStationsMap 과 동일 정책(문구만 지하철용). 자동 재조회 파이프라인은
+// 버스 3차 검증본 이식. 노선 형상은 MapCanvas routeLine(별도 소스)이라 fit 대상에서
+// 제외되고, 경유역 점은 마커 소스라 노선 추적 중 suppressFit 로 줌아웃을 막는다.
 export const SubwayStationsMap = ({
   groups,
   selectedId,
@@ -79,6 +96,10 @@ export const SubwayStationsMap = ({
   onAutoResearchAt,
   suppressFit,
   loading,
+  lineDetail,
+  lineColor,
+  onSelectStop,
+  onCloseLine,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -88,7 +109,57 @@ export const SubwayStationsMap = ({
 
   const handleRef = useRef<MapCanvasHandle>(null);
 
+  // 폴리라인 — 각 section 을 개별 줄로(이어지지 않는 지선이 지그재그가 되지 않게).
+  // 순환(isLoop)은 첫 좌표를 끝에 복제해 닫는다. 색은 호선색 공용.
+  const routeLines = useMemo(() => {
+    if (!lineDetail || !lineColor) return null;
+    return lineDetail.sections.map((sec) => {
+      const points = sec.stations.map((s) => ({ lat: s.lat, lng: s.lng }));
+      if (sec.isLoop && points.length > 1) points.push({ ...points[0]! });
+      return { points, color: lineColor };
+    });
+  }, [lineDetail, lineColor]);
+
+  // 경유역 점 — 추적 호선의 stations(중복 stationId 제거). 활성 결과(groups)에 같은
+  // 역명 그룹이 이미 있으면 그 마커가 우선이라 점을 생략(환승역 이중 마커 방지).
+  const lineStops = useMemo<SubwayLineStationItemType[]>(() => {
+    if (!lineDetail) return [];
+    const groupNames = new Set(groups.map((g) => g.name));
+    const seen = new Set<string>();
+    const out: SubwayLineStationItemType[] = [];
+    for (const sec of lineDetail.sections) {
+      for (const st of sec.stations) {
+        if (seen.has(st.stationId)) continue;
+        seen.add(st.stationId);
+        if (groupNames.has(st.name)) continue;
+        out.push(st);
+      }
+    }
+    return out;
+  }, [lineDetail, groups]);
+
+  const stopIds = useMemo(() => new Set(lineStops.map((s) => s.stationId)), [lineStops]);
+  // 점 마커 2종(일반/환승) — 호선색 고정이라 memo 로 공유(OL 아이콘 캐시).
+  const stopDotUrl = useMemo(
+    () => (lineColor ? buildSubwayStopDotDataUrl(lineColor, false) : ''),
+    [lineColor],
+  );
+  const stopDotTransferUrl = useMemo(
+    () => (lineColor ? buildSubwayStopDotDataUrl(lineColor, true) : ''),
+    [lineColor],
+  );
+
   const markers: MapMarker[] = useMemo(() => {
+    // 경유역 점을 먼저(아래) 그려 역 마커/내 위치가 위에 오게 한다. 라벨 없음.
+    const stopMarkers: MapMarker[] = lineStops.map((s) => {
+      const url = s.isTransfer ? stopDotTransferUrl : stopDotUrl;
+      return {
+        id: s.stationId,
+        lat: s.lat,
+        lng: s.lng,
+        icon: { src: url, selectedSrc: url },
+      };
+    });
     const stationMarkers: MapMarker[] = groups.map((g) => {
       const transfer = g.lines.length > 1;
       return {
@@ -101,17 +172,17 @@ export const SubwayStationsMap = ({
           : { src: STATION_URL, selectedSrc: STATION_SELECTED_URL },
       };
     });
-    // 내 위치 마커 — 주변 모드에서만. 라벨 없이 파란 점만.
+    const out = [...stopMarkers, ...stationMarkers];
     if (myLocation) {
-      stationMarkers.push({
+      out.push({
         id: MY_LOCATION_ID,
         lat: myLocation.lat,
         lng: myLocation.lng,
         icon: { src: MY_LOCATION_MARKER_URL, selectedSrc: MY_LOCATION_MARKER_URL },
       });
     }
-    return stationMarkers;
-  }, [groups, myLocation]);
+    return out;
+  }, [groups, myLocation, lineStops, stopDotUrl, stopDotTransferUrl]);
 
   // 사용자가 직접 패닝/줌을 끝낸 시점의 지도 상태 — MapCanvas 가 programmatic
   // move(fit/flyTo)는 걸러주므로 여기엔 사용자 이동만 쌓인다.
@@ -165,7 +236,8 @@ export const SubwayStationsMap = ({
 
   // 결과가 갱신되면 전체 마커가 보이게 fit. apiKey 가 늦게 와서 MapCanvas mount
   // 이전에 groups 가 먼저 도착한 경우를 위해 apiKey 도 deps 에 포함한다. 자동
-  // 재조회로 인한 갱신(suppressFit)은 사용자가 보던 화면을 유지한다.
+  // 재조회/노선 추적(suppressFit)은 사용자가 보던 화면을 유지한다. deps 는 groups
+  // 만 — 노선 경유역 점(markers)이 바뀌어도 fit 하지 않는다(줌아웃 방지).
   useEffect(() => {
     if (!apiKey) return;
     if (suppressFit) return;
@@ -179,10 +251,8 @@ export const SubwayStationsMap = ({
   }, [groups, apiKey, myLocation, suppressFit]);
 
   // 선택 역으로 확대 포커스 — "선택이 바뀐 순간" 1회만 발사(데이터 갱신마다 재센터링
-  // 금지 — ref 가드). 자동 조회로 groups 가 바뀌어도 flownIdRef 가 같아 재발화하지
-  // 않는다. flyToZoomIn 이라 넓은 fit 에서 선택하면 SUBWAY_SELECT_ZOOM 까지 당기고,
-  // 이미 더 확대돼 있으면 줌을 유지한다. 선택 시점에 groups 에 아직 없으면 flownRef
-  // 를 남겨 두고 도착 후 1회 발사한다.
+  // 금지 — ref 가드). 대상은 활성 결과(groups) 우선, 없으면 경유역 점(lineStops) —
+  // 노선 위 점을 클릭해 목록에 없는 역을 골라도 지도가 그 역으로 이동한다.
   const flownIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedId) {
@@ -190,20 +260,39 @@ export const SubwayStationsMap = ({
       return;
     }
     if (!apiKey || flownIdRef.current === selectedId) return;
-    const target = groups.find((g) => g.id === selectedId);
+    const target =
+      groups.find((g) => g.id === selectedId) ??
+      lineStops.find((s) => s.stationId === selectedId);
     if (!target) return;
     flownIdRef.current = selectedId;
     handleRef.current?.flyToZoomIn(target.lat, target.lng, SUBWAY_SELECT_ZOOM);
-  }, [selectedId, groups, apiKey]);
+  }, [selectedId, groups, lineStops, apiKey]);
 
-  // 내 위치 마커 클릭은 no-op — 역 선택(stn)으로 오염시키지 않는다.
+  // 마커 클릭 라우팅 — 내 위치는 무시, 경유역 점은 onSelectStop(id 재해석), 나머지는
+  // 역 마커라 onSelect(그룹 id 그대로).
   const handleMarkerSelect = useCallback(
     (id: string) => {
       if (id === MY_LOCATION_ID) return;
-      onSelect(id);
+      if (stopIds.has(id)) onSelectStop?.(id);
+      else onSelect(id);
     },
-    [onSelect],
+    [onSelect, onSelectStop, stopIds],
   );
+
+  // 노선 정보 카드 — 본선 구간/역 수. 본선(branchName null) 기준, 순환선은 구간 대신 표기.
+  const lineInfo = useMemo(() => {
+    if (!lineDetail) return null;
+    const main =
+      lineDetail.sections.find((s) => s.branchName === null) ?? lineDetail.sections[0];
+    if (!main) return null;
+    const branches = lineDetail.sections.filter((s) => s !== main);
+    const first = main.stations[0]?.name ?? '';
+    const last = main.stations[main.stations.length - 1]?.name ?? '';
+    const section = main.isLoop ? '순환선' : `${first} ↔ ${last}`;
+    const count =
+      `본선 ${main.stations.length}역` + (branches.length ? ` · 지선 ${branches.length}` : '');
+    return { section, count };
+  }, [lineDetail]);
 
   if (config.isLoading) {
     return (
@@ -237,7 +326,29 @@ export const SubwayStationsMap = ({
         selectedMarkerId={selectedId}
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}
+        routeLine={routeLines}
       />
+      {/* 노선 정보 카드 — 좌상단(로딩·재검색 칩은 상단 중앙이라 겹치지 않는다). */}
+      {lineDetail && lineInfo && (
+        <div className="absolute left-3 top-3 z-10 flex max-w-[85%] items-center gap-2 rounded-lg border bg-background/95 px-3 py-1.5 shadow-md">
+          <SubwayLineBadge lineId={lineDetail.lineId} />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold leading-tight">{lineDetail.lineName}</div>
+            <div className="truncate text-xs text-muted-foreground">
+              {lineInfo.section} · {lineInfo.count}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onCloseLine}
+            aria-label="노선 닫기"
+            title="노선 닫기"
+            className="ml-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
       {/* 조회 진행 칩 — 자동/수동 재조회가 도는 동안(재검색 버튼과 같은 슬롯). */}
       {loading && (
         <div className="absolute left-1/2 top-3 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md">

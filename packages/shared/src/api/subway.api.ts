@@ -1,6 +1,7 @@
 import {
   Routes,
   type SubwayArrivalsResultType,
+  type SubwayLineDetailResultType,
   type SubwayNearbyResultType,
   type SubwayStationSearchResultType,
 } from '@repo/api-contract';
@@ -35,4 +36,8 @@ export const subwayApi = {
   // 책임진다. 서버가 그룹 lineId 집합으로 동명이역 응답을 필터해 돌려준다.
   stationArrivals: (stationId: string) =>
     apiFetch<SubwayArrivalsResultType>(Routes.Subway.stationArrivals(stationId)),
+  // 호선 상세 — 노선별 역 순서(sections, 지선 분리) + 근사 폴리라인 원천. 로컬 적재
+  // 데이터라 캐시·쿼터 없음. 폴리라인은 FE 가 sections[].stations 좌표로 그린다.
+  lineDetail: (lineId: string) =>
+    apiFetch<SubwayLineDetailResultType>(Routes.Subway.lineDetail(lineId)),
 };

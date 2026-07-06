@@ -171,8 +171,12 @@ interface Props {
   layerControl?: boolean;
   // 노선 형상 폴리라인 — 마커 레이어보다 아래 전용 VectorLayer 에 그린다(마커를
   // 가리지 않음). null/미지정이면 미표시. fit/flyTo 대상에서 제외(별도 소스라
-  // fitToMarkers 의 마커 extent 에 포함되지 않는다).
-  routeLine?: { points: { lat: number; lng: number }[]; color: string } | null;
+  // fitToMarkers 의 마커 extent 에 포함되지 않는다). 단일 객체(버스 노선) 또는 배열
+  // (지하철 지선처럼 이어지지 않는 여러 폴리라인 — 하나로 이으면 지그재그) 모두 허용.
+  routeLine?:
+    | { points: { lat: number; lng: number }[]; color: string }
+    | { points: { lat: number; lng: number }[]; color: string }[]
+    | null;
   // 실시간 차량 마커 — 정류장 마커(markers) 위 전용 레이어. 폴링으로 위치가
   // 통째로 바뀌면 id 로 이전/새 위치를 매칭해 직선 등속 보간(rAF)한다. 클릭은
   // 무시(markerId 미설정 → 아래 정류장으로 통과). 미지정/빈 배열이면 미표시.
@@ -610,20 +614,25 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     const src = routeLineSourceRef.current;
     if (!src) return;
     src.clear();
-    if (!routeLine || routeLine.points.length < 2) return;
-    const coords = routeLine.points.map((p) => fromLonLat([p.lng, p.lat]));
-    const feature = new Feature({ geometry: new LineString(coords) });
-    feature.setStyle(
-      new Style({
-        stroke: new Stroke({
-          color: strokeColorWithAlpha(routeLine.color, 0.85),
-          width: 5,
-          lineCap: 'round',
-          lineJoin: 'round',
+    if (!routeLine) return;
+    // 단일 객체는 배열 1개로 정규화 — 지하철 지선은 여러 줄을 각각 피처로 그린다.
+    const lines = Array.isArray(routeLine) ? routeLine : [routeLine];
+    for (const line of lines) {
+      if (line.points.length < 2) continue;
+      const coords = line.points.map((p) => fromLonLat([p.lng, p.lat]));
+      const feature = new Feature({ geometry: new LineString(coords) });
+      feature.setStyle(
+        new Style({
+          stroke: new Stroke({
+            color: strokeColorWithAlpha(line.color, 0.85),
+            width: 5,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }),
         }),
-      }),
-    );
-    src.addFeature(feature);
+      );
+      src.addFeature(feature);
+    }
   }, [routeLine]);
 
   // 차량 보간 — vehicles 가 바뀌면(폴링) 각 id 의 현재 표시 좌표에서 목표
