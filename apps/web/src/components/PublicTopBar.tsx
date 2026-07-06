@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Link, NavLink, useMatch } from 'react-router-dom';
+import { Link, NavLink, useLocation, useMatch } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useAuthStore, useLogout } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -10,12 +10,15 @@ interface NavItem {
   to: string;
   label: string;
   end?: boolean;
+  // 한 메뉴가 여러 경로를 대표할 때 활성 판정 경로들('대중교통' = /bus·/subway).
+  // 미지정이면 NavLink 기본 isActive(to 기준)를 쓴다.
+  match?: string[];
 }
 
 const NAV: NavItem[] = [
   { to: '/', label: '홈', end: true },
   { to: '/restaurants-v2', label: '맛집' },
-  { to: '/bus', label: '버스' },
+  { to: '/bus', label: '대중교통', match: ['/bus', '/subway'] },
 ];
 
 interface Props {
@@ -39,6 +42,8 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
   const detailMatch = useMatch('/restaurants/:placeId');
   const shareDetailMatch = useMatch('/r/:placeId');
   const hideOnMobile = !!detailMatch || !!shareDetailMatch;
+
+  const { pathname } = useLocation();
 
   const headerRef = useRef<HTMLElement>(null);
 
@@ -82,12 +87,15 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) =>
-                  cn(
+                className={({ isActive }) => {
+                  const active = item.match
+                    ? item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+                    : isActive;
+                  return cn(
                     'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-                  )
-                }
+                    active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  );
+                }}
               >
                 {item.label}
               </NavLink>

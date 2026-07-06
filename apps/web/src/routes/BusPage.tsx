@@ -21,6 +21,7 @@ import {
   BusStationSearchBar,
 } from '~/components/bus/BusStationList';
 import { BusStationsMap } from '~/components/bus/BusStationsMap';
+import { TransitTabs } from '~/components/transit/TransitTabs';
 
 // GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m)면 정류장 식별에 충분하고, URL 에
 // 원시 좌표를 그대로 노출하지 않아 공유 시 위치 정밀도도 낮춘다.
@@ -529,7 +530,10 @@ export const BusPage = () => {
   };
 
   return (
-    <div className="w-full" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
+    <div className="flex w-full flex-col" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
+      {/* 대중교통 서브탭 — 버스/지하철 전환. 아래 콘텐츠가 잔여 높이를 채운다. */}
+      <TransitTabs active="bus" />
+      <div className="min-h-0 flex-1">
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           데스크톱 (xl+) — 좌 검색 패널(400px) + 우 지도.
           ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -621,6 +625,7 @@ export const BusPage = () => {
             />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

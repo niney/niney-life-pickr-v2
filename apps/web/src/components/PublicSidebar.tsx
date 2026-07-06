@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Bus, Home, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
 import { cn } from '~/lib/utils';
 
@@ -8,12 +8,15 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  // 한 메뉴가 여러 경로를 대표할 때 활성 판정 경로들('대중교통' = /bus·/subway).
+  // 미지정이면 NavLink 기본 isActive(to 기준)를 쓴다.
+  match?: string[];
 }
 
 const NAV: NavItem[] = [
   { to: '/', label: '홈', icon: Home, end: true },
   { to: '/restaurants-v2', label: '맛집', icon: UtensilsCrossed },
-  { to: '/bus', label: '버스', icon: Bus },
+  { to: '/bus', label: '대중교통', icon: Bus, match: ['/bus', '/subway'] },
 ];
 
 interface Props {
@@ -22,6 +25,7 @@ interface Props {
 }
 
 export const PublicSidebar = ({ open, onClose }: Props) => {
+  const { pathname } = useLocation();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -58,20 +62,23 @@ export const PublicSidebar = ({ open, onClose }: Props) => {
           </button>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {NAV.map(({ to, label, icon: Icon, end, match }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               onClick={onClose}
-              className={({ isActive }) =>
-                cn(
+              className={({ isActive }) => {
+                const active = match
+                  ? match.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+                  : isActive;
+                return cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
+                  active
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                )
-              }
+                );
+              }}
             >
               <Icon className="size-4" />
               {label}

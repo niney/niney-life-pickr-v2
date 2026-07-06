@@ -28,6 +28,9 @@ const RestaurantsV2Page = lazy(() =>
 const BusPage = lazy(() =>
   import('./routes/BusPage').then((m) => ({ default: m.BusPage })),
 );
+const SubwayPage = lazy(() =>
+  import('./routes/SubwayPage').then((m) => ({ default: m.SubwayPage })),
+);
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -121,6 +124,8 @@ export const App = () => {
             </Route>
             {/* 서울시 버스 정류장 검색 + 지도. 비로그인 공개 (맛집과 동일 정책). */}
             <Route path="/bus" element={<BusPage />} />
+            {/* 수도권 전철 역 검색 + 지도. 버스와 '대중교통' 탭으로 묶인 공개 페이지. */}
+            <Route path="/subway" element={<SubwayPage />} />
             <Route
               path="/me/settlements"
               element={
