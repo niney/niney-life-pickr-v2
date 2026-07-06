@@ -428,6 +428,9 @@ export const Subway = {
   // 호선 상세 — 노선별 역 순서(sections, 지선 분리) + 근사 폴리라인 원천.
   // 로컬 적재 데이터라 캐시·쿼터 없음.
   lineDetail: (lineId: string) => `${API_PREFIX}/subway/lines/${lineId}/detail`,
+  // 호선 전체 실시간 열차 위치 — 역 기준 상태(GPS 없음), 서버가 역 좌표 enrich.
+  // 도착과 같은 15초 마이크로 캐시·쿼터 공유.
+  linePositions: (lineId: string) => `${API_PREFIX}/subway/lines/${lineId}/positions`,
   // ── 즐겨찾기 (여기만 인증 필요 — 버스 즐겨찾기와 동일 정책) ──
   // 비로그인은 클라이언트 저장. PUT/DELETE 응답 = 전체 목록(캐시 통째 교체).
   favorites: `${API_PREFIX}/subway/favorites`,

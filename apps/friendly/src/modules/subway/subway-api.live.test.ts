@@ -64,6 +64,25 @@ describe.skipIf(!swopenRunnable)('subway swopen live smoke (SUBWAY_API_KEY 필�
       await app.close();
     }
   });
+
+  it('노선 위치(2호선) — 라우트 200 + items>0', { timeout: 15_000 }, async (ctx) => {
+    const app = await buildApp({ logger: false });
+    await app.ready();
+    try {
+      const res = await app.inject({ url: '/api/v1/subway/lines/1002/positions' });
+      if (res.statusCode !== 200) {
+        console.warn(`[subway live] 위치 status ${res.statusCode} — skip`);
+        ctx.skip();
+        return;
+      }
+      const body = res.json() as { items: { trainNo: string; lat: number | null }[] };
+      expect(Array.isArray(body.items)).toBe(true);
+      // 운행 시간대면 열차가 있다.
+      expect(body.items.length).toBeGreaterThan(0);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 describe.skipIf(!OPENAPI_KEY)('subway master live smoke (SEOUL_OPEN_API_KEY 필요)', () => {

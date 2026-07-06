@@ -141,6 +141,53 @@ export const SubwayLineDetailResult = z.object({
 });
 export type SubwayLineDetailResultType = z.infer<typeof SubwayLineDetailResult>;
 
+// ── 6차: 실시간 열차 위치 (realtimePosition 프록시) ─────────────────────────
+// 버스와 결정적 차이 — GPS 가 없다. 응답은 현재역(statnId)+상태(trainSttus)뿐이라
+// 서버가 마스터 statnId 조인으로 역 좌표를 enrich 해 내려주고(실패 시 null —
+// 좌표는 부가 정보라 전량 null 도 정상), FE 가 5차 노선 순서(sections)와 조합해
+// 역간 위치를 보간한다. 도착정보와 같은 실시간 인프라(15초 마이크로 캐시·쿼터·
+// in-flight)를 노선명 키로 공유한다.
+
+export const SubwayPositionsParams = z.object({
+  lineId: z.string().regex(/^\d{4}$/),
+});
+export type SubwayPositionsParamsType = z.infer<typeof SubwayPositionsParams>;
+
+export const SubwayTrainPositionItem = z.object({
+  // 열차 번호 — 도착정보 trainNo(btrainNo)와 동일 체계(프로브 ⑨ 실측). 7차
+  // 도착↔지도 열차 연계의 조인 키이자 rAF 보간의 identity.
+  trainNo: z.string().min(1),
+  // 현재(또는 직전 이벤트) 역 — 실시간 10자리. FE 가 sections 의 statnId 와
+  // 조인해 보간 기준점을 잡는다.
+  statnId: z.string().min(1),
+  statnNm: z.string(),
+  // trainSttus 원문 보존 — '0' 진입 / '1' 도착 / '2' 출발 / '3' 전역출발.
+  trainStatus: z.string(),
+  // updnLine 원문 — '0'/'1' (도착정보의 텍스트 인코딩과 다름 — 변환하지 않음).
+  // 진행 방향의 1차 근거는 destinationId(행선)와 노선 순서 비교, updn 은 보조.
+  updnLine: z.string(),
+  // statnTid/statnTnm — 행선(종착) 역. 보간의 진행 방향 판정 근거.
+  destinationId: z.string().nullable(),
+  destinationName: z.string().nullable(),
+  // directAt — 급행/직통 여부('1' 급행·'7' 특급 등 비'0' 값 — 원문 보존).
+  expressType: z.string().nullable(),
+  isLastTrain: z.boolean(),
+  // 원천 수신 시각(ISO) — 이동 보간의 시간 기준.
+  receivedAt: z.string().nullable(),
+  // 마스터 statnId 조인 역 좌표 — 조인 실패 시 null(정상).
+  lat: z.number().min(33).max(39).nullable(),
+  lng: z.number().min(124).max(132).nullable(),
+});
+export type SubwayTrainPositionItemType = z.infer<typeof SubwayTrainPositionItem>;
+
+export const SubwayPositionsResult = z.object({
+  lineId: z.string(),
+  items: z.array(SubwayTrainPositionItem),
+  // 업스트림 호출 시각 (ISO) — 마이크로 캐시 히트 시 캐시 생성 시각 보존.
+  fetchedAt: z.string(),
+});
+export type SubwayPositionsResultType = z.infer<typeof SubwayPositionsResult>;
+
 // ── 2차: 실시간 도착정보 (realtimeStationArrival 프록시) ─────────────────────
 // 조회 단위는 역명 그룹 — 서버가 stationId 로 그룹을 재구성해 그룹의 유니크
 // 조회역명(realtimeName ?? name — 신촌은 '신촌'+'신촌(경의중앙선)' 2개)별로

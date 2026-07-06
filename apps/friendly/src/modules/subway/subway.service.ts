@@ -11,13 +11,17 @@ import type {
   SubwayArrivalsResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
+  SubwayPositionsResultType,
   SubwayStationSearchResultType,
+  SubwayTrainPositionItemType,
 } from '@repo/api-contract';
-import { subwayLineName } from '@repo/utils';
+import { subwayLineById, subwayLineName } from '@repo/utils';
 import { isLoopSection } from './subway-line-order.service.js';
 import {
   getRealtimeArrivals,
+  getRealtimePositions,
   type RawSubwayArrival,
+  type RawSubwayPosition,
   type SubwayApiRequestOptions,
 } from './subway-api.adapter.js';
 import {
@@ -73,6 +77,10 @@ export interface SubwayServiceDeps {
       stationName: string,
       opts: SubwayApiRequestOptions,
     ) => Promise<RawSubwayArrival[]>;
+    getRealtimePositions?: (
+      lineNameParam: string,
+      opts: SubwayApiRequestOptions,
+    ) => Promise<RawSubwayPosition[]>;
   };
 }
 
@@ -114,6 +122,27 @@ const compareArrival = (a: SubwayArrivalItemType, b: SubwayArrivalItemType): num
   return ac < bc ? -1 : ac > bc ? 1 : 0;
 };
 
+// RawSubwayPosition → 계약 항목. trainNo/statnId 는 호출측이 non-null 필터하고
+// 넘긴다. directAt '0'(일반)은 null, 나머지는 원문. coord 는 마스터 statnId 배치
+// 조인 결과(없으면 null — 좌표는 부가 정보라 정상).
+const toPositionItem = (
+  p: RawSubwayPosition,
+  coord: { lat: number; lng: number } | null,
+): SubwayTrainPositionItemType => ({
+  trainNo: p.trainNo as string,
+  statnId: p.statnId as string,
+  statnNm: p.statnNm ?? '',
+  trainStatus: p.trainSttus ?? '',
+  updnLine: p.updnLine ?? '',
+  destinationId: p.statnTid,
+  destinationName: p.statnTnm,
+  expressType: p.directAt === '0' ? null : p.directAt,
+  isLastTrain: p.lstcarAt === '1',
+  receivedAt: recptnToIso(p.recptnDt),
+  lat: coord?.lat ?? null,
+  lng: coord?.lng ?? null,
+});
+
 const toGrouping = (r: {
   id: string;
   name: string;
@@ -130,10 +159,11 @@ const toGrouping = (r: {
   lng: r.lng,
 });
 
-// 역명 단위 마이크로 캐시 엔트리 — 필터 전 raw 배열을 담아 동명이역 두 그룹이
-// 같은 조회명 캐시를 공유하고, 필터는 서빙 시점에 그룹 lineId 로 건다.
-interface ArrivalCacheEntry {
-  data: RawSubwayArrival[];
+// 실시간 마이크로 캐시 엔트리 — 필터/정규화 전 raw 배열을 담는다(도착은 동명이역
+// 두 그룹이 같은 조회명 캐시를 공유하고 필터는 서빙 시점에 건다). 도착
+// (RawSubwayArrival[])·위치(RawSubwayPosition[])가 같은 캐시를 쓰므로 unknown[].
+interface RealtimeCacheEntry {
+  data: unknown[];
   fetchedAt: Date;
   expiresAt: number;
 }
@@ -141,10 +171,10 @@ interface ArrivalCacheEntry {
 export class SubwayService {
   // 'realtime' 단일 그룹 카운터 — 도착(2차)·위치(6차)가 공유. 단일 인스턴스 전제(메모리).
   private readonly quota = new Map<string, { dateKey: string; count: number }>();
-  // 조회역명 단위 15초 마이크로 캐시.
-  private readonly microCache = new Map<string, ArrivalCacheEntry>();
-  // 같은 조회역명 동시 요청 합류.
-  private readonly inflight = new Map<string, Promise<{ data: RawSubwayArrival[]; fetchedAt: Date }>>();
+  // 키(`arrivals:역명` / `positions:호선명`) 단위 15초 마이크로 캐시.
+  private readonly microCache = new Map<string, RealtimeCacheEntry>();
+  // 같은 키 동시 요청 합류.
+  private readonly inflight = new Map<string, Promise<{ data: unknown[]; fetchedAt: Date }>>();
 
   constructor(private readonly deps: SubwayServiceDeps) {}
 
@@ -378,15 +408,22 @@ export class SubwayService {
     ];
 
     const now = this.deps.now?.() ?? new Date();
+    const fetchArrivals = this.deps.adapter?.getRealtimeArrivals ?? getRealtimeArrivals;
 
     // 조회역명별 병렬 — 각자 캐시/in-flight, 미스는 쿼터 소비 후 업스트림.
-    const results = await Promise.all(queryNames.map((qn) => this.fetchArrivals(qn, now)));
+    const results = await Promise.all(
+      queryNames.map((qn) =>
+        this.fetchRealtime(`arrivals:${qn}`, now, () =>
+          fetchArrivals(qn, { apiKey: this.deps.serviceKey! }),
+        ),
+      ),
+    );
 
     // 합본 → 그룹 lineId 필터(동명이역 오염 차단) → normalize → 정렬.
     const merged: RawSubwayArrival[] = [];
     let earliest: Date | null = null;
     for (const r of results) {
-      merged.push(...r.data);
+      merged.push(...(r.data as RawSubwayArrival[]));
       if (!earliest || r.fetchedAt < earliest) earliest = r.fetchedAt;
     }
     const items = merged
@@ -403,14 +440,59 @@ export class SubwayService {
     };
   }
 
-  // 조회역명 1개의 도착 raw 배열 — 캐시 히트 시 캐시 fetchedAt 보존, 미스는
-  // in-flight 합류(같은 역명 동시 요청 업스트림 1콜).
-  private fetchArrivals(
-    queryName: string,
-    now: Date,
-  ): Promise<{ data: RawSubwayArrival[]; fetchedAt: Date }> {
-    const key = `arrivals:${queryName}`;
+  // 노선 실시간 열차 위치 — lineId → positionParam(호선명) 해석 후 도착과 같은
+  // 실시간 인프라(캐시 `positions:${호선명}`·쿼터 'realtime'·in-flight)로 조회.
+  // 응답 statnId 를 마스터 statnId 배치 조인해 좌표 enrich(실패 null). 미등재
+  // lineId 는 404, 빈 키 503, INFO-200 은 빈 배열(어댑터가 처리).
+  async getLinePositions(lineId: string): Promise<SubwayPositionsResultType> {
+    if (!this.deps.serviceKey) {
+      throw new SubwayServiceError(
+        'SUBWAY_API_KEY 가 설정되지 않아 실시간 위치 조회를 사용할 수 없습니다.',
+        503,
+      );
+    }
+    const line = subwayLineById(lineId);
+    if (!line || !line.positionParam) {
+      throw new SubwayServiceError('해당 노선의 실시간 위치를 지원하지 않습니다.', 404);
+    }
+    const { prisma } = this.deps;
+    const now = this.deps.now?.() ?? new Date();
+    const fetchPositions = this.deps.adapter?.getRealtimePositions ?? getRealtimePositions;
 
+    const { data, fetchedAt } = await this.fetchRealtime(`positions:${line.positionParam}`, now, () =>
+      fetchPositions(line.positionParam!, { apiKey: this.deps.serviceKey! }),
+    );
+    // trainNo/statnId 필수(계약 min 1) — 누락 행 drop.
+    const valid = (data as RawSubwayPosition[]).filter((p) => p.trainNo && p.statnId);
+
+    // 좌표 enrich — statnId 배치 조인(행당 쿼리 금지). 미조인은 null.
+    const statnIds = [...new Set(valid.map((p) => p.statnId as string))];
+    const coordRows =
+      statnIds.length > 0
+        ? await prisma.subwayStation.findMany({
+            where: { statnId: { in: statnIds } },
+            select: { statnId: true, lat: true, lng: true },
+          })
+        : [];
+    const coordByStatnId = new Map<string, { lat: number; lng: number }>();
+    for (const c of coordRows) {
+      if (c.statnId) coordByStatnId.set(c.statnId, { lat: c.lat, lng: c.lng });
+    }
+
+    const items = valid.map((p) =>
+      toPositionItem(p, coordByStatnId.get(p.statnId as string) ?? null),
+    );
+
+    return { lineId, items, fetchedAt: fetchedAt.toISOString() };
+  }
+
+  // 실시간 키 1개의 raw 배열 — 캐시 히트 시 캐시 fetchedAt 보존, 미스는 in-flight
+  // 합류(같은 키 동시 요청 업스트림 1콜). 도착/위치가 공유하는 골격.
+  private fetchRealtime(
+    key: string,
+    now: Date,
+    load: () => Promise<unknown[]>,
+  ): Promise<{ data: unknown[]; fetchedAt: Date }> {
     const cached = this.microCache.get(key);
     if (cached) {
       if (now.getTime() <= cached.expiresAt) {
@@ -422,22 +504,21 @@ export class SubwayService {
     const existing = this.inflight.get(key);
     if (existing) return existing;
 
-    const task = this.loadArrivals(queryName, key, now).finally(() => {
+    const task = this.loadRealtime(key, now, load).finally(() => {
       this.inflight.delete(key);
     });
     this.inflight.set(key, task);
     return task;
   }
 
-  private async loadArrivals(
-    queryName: string,
+  private async loadRealtime(
     key: string,
     now: Date,
-  ): Promise<{ data: RawSubwayArrival[]; fetchedAt: Date }> {
+    load: () => Promise<unknown[]>,
+  ): Promise<{ data: unknown[]; fetchedAt: Date }> {
     // 쿼터는 실제 업스트림 콜 직전(캐시 미스 확정)에만 소비.
     this.consumeQuota('realtime', now);
-    const fetch = this.deps.adapter?.getRealtimeArrivals ?? getRealtimeArrivals;
-    const data = await fetch(queryName, { apiKey: this.deps.serviceKey! });
+    const data = await load();
     const ttl = this.deps.microCacheTtlMs ?? ARRIVALS_MICRO_CACHE_TTL_MS;
     this.microCache.set(key, { data, fetchedAt: now, expiresAt: now.getTime() + ttl });
     return { data, fetchedAt: now };

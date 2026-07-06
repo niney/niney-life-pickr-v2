@@ -11,7 +11,7 @@ vi.hoisted(() => {
 
 // 실 swopenAPI 호출 차단 — getRealtimeArrivals 만 mock, 나머지(에러 클래스 등)는
 // 실구현 유지.
-const mocks = vi.hoisted(() => ({ getRealtimeArrivals: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getRealtimeArrivals: vi.fn(), getRealtimePositions: vi.fn() }));
 vi.mock('./subway-api.adapter.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./subway-api.adapter.js')>();
   return { ...actual, ...mocks };
@@ -21,10 +21,11 @@ import type {
   SubwayArrivalsResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
+  SubwayPositionsResultType,
   SubwayStationSearchResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
-import type { RawSubwayArrival } from './subway-api.adapter.js';
+import type { RawSubwayArrival, RawSubwayPosition } from './subway-api.adapter.js';
 import { SubwayService } from './subway.service.js';
 
 // 공유 dev.db — 역명 prefix '지하철테스트' 로 시드하고 afterAll 에서 prefix 로
@@ -40,6 +41,7 @@ interface SeedRow {
   lng: number;
   lineName?: string;
   realtimeName?: string;
+  statnId?: string;
 }
 const seed = (app: FastifyInstance, rows: SeedRow[]) =>
   app.prisma.subwayStation.createMany({
@@ -49,6 +51,7 @@ const seed = (app: FastifyInstance, rows: SeedRow[]) =>
       lineId: r.lineId,
       lineName: r.lineName ?? `${r.lineId}호선`,
       realtimeName: r.realtimeName ?? null,
+      statnId: r.statnId ?? null,
       lat: r.lat,
       lng: r.lng,
     })),
@@ -61,6 +64,25 @@ const arrivalsUrl = (stationId: string): string =>
 const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
   `/api/v1/subway/stations/nearby?lat=${lat}&lng=${lng}${radius !== undefined ? `&radius=${radius}` : ''}`;
 const lineDetailUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId}/detail`;
+const positionsUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId}/positions`;
+
+// realtimePosition 원시 행 팩토리 (data/subway-probe 2호선 실덤프 형태).
+const rawPosition = (over: Partial<RawSubwayPosition> = {}): RawSubwayPosition => ({
+  subwayId: '1002',
+  subwayNm: '2호선',
+  statnId: '1002000222',
+  statnNm: '강남',
+  trainNo: '2361',
+  lastRecptnDt: '20260706',
+  recptnDt: '2026-07-06 16:00:30',
+  updnLine: '0',
+  statnTid: '1002000211',
+  statnTnm: '성수',
+  trainSttus: '1',
+  directAt: '0',
+  lstcarAt: '0',
+  ...over,
+});
 
 // SubwayLineStation 시드 — stationId 는 '지하철테스트' 를 포함해 afterAll 이 정리.
 const seedLineStations = (
@@ -124,6 +146,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   mocks.getRealtimeArrivals.mockReset();
+  mocks.getRealtimePositions.mockReset();
 });
 
 describe('GET /api/v1/subway/stations/search — 입력 검증', () => {
@@ -483,6 +506,108 @@ describe('GET /api/v1/subway/stations/nearby — 주변 역', () => {
     await expect(svc.getNearbyStations(37.5, 127.0, 1500)).rejects.toMatchObject({
       statusCode: 503,
     });
+  });
+});
+
+describe('GET /api/v1/subway/lines/:lineId/positions — 실시간 위치', () => {
+  it('미등재 lineId → 404 (라우트)', async () => {
+    const res = await app.inject({ url: positionsUrl('1099') });
+    expect(res.statusCode).toBe(404);
+    expect(mocks.getRealtimePositions).not.toHaveBeenCalled();
+  });
+
+  it('정상 변환 + 좌표 조인 + 미조인 null (원문 보존·directAt 0→null·recptnDt ISO)', async () => {
+    const stId = `TESTSTATN${stamp()}`;
+    const name = `${NAME_PREFIX}위치${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.4979, lng: 127.0276, statnId: stId }]);
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getRealtimePositions: vi.fn().mockResolvedValue([
+        // 조인됨 + 급행('1')·상태('2')·상행('1')·막차 원문 보존.
+        rawPosition({
+          trainNo: 'T1',
+          statnId: stId,
+          directAt: '1',
+          trainSttus: '2',
+          updnLine: '1',
+          lstcarAt: '1',
+          statnTid: 'DEST1',
+          statnTnm: '성수',
+        }),
+        // 미조인 statnId → 좌표 null, directAt '0' → expressType null.
+        rawPosition({ trainNo: 'T2', statnId: `UNKNOWN${stamp()}` }),
+      ]),
+    };
+    const svc = new SubwayService({ prisma: app.prisma, serviceKey: 'k', adapter });
+    const res = await svc.getLinePositions('1002');
+    expect(res.lineId).toBe('1002');
+    expect(res.items).toHaveLength(2);
+
+    const t1 = res.items.find((i) => i.trainNo === 'T1')!;
+    expect(t1.lat).toBeCloseTo(37.4979, 4);
+    expect(t1.lng).toBeCloseTo(127.0276, 4);
+    expect(t1.expressType).toBe('1'); // directAt 원문
+    expect(t1.trainStatus).toBe('2'); // 원문
+    expect(t1.updnLine).toBe('1'); // 원문
+    expect(t1.isLastTrain).toBe(true);
+    expect(t1.destinationId).toBe('DEST1');
+    expect(t1.destinationName).toBe('성수');
+    expect(t1.receivedAt).toBe('2026-07-06T07:00:30.000Z'); // KST 16:00:30 → UTC
+
+    const t2 = res.items.find((i) => i.trainNo === 'T2')!;
+    expect(t2.lat).toBeNull();
+    expect(t2.lng).toBeNull();
+    expect(t2.expressType).toBeNull(); // directAt '0'
+  });
+
+  it('INFO-200(빈 배열) → items []', async () => {
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getRealtimePositions: vi.fn().mockResolvedValue([]),
+    };
+    const svc = new SubwayService({ prisma: app.prisma, serviceKey: 'k', adapter });
+    expect((await svc.getLinePositions('1002')).items).toEqual([]);
+  });
+
+  it('쿼터 공유 — 도착이 소진하면 위치도 503 (같은 realtime 카운터)', async () => {
+    const name = `${NAME_PREFIX}쿼터공유${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0 }]);
+    const adapter = {
+      getRealtimeArrivals: vi.fn().mockResolvedValue([rawArrival()]),
+      getRealtimePositions: vi.fn().mockResolvedValue([rawPosition()]),
+    };
+    const svc = new SubwayService({ prisma: app.prisma, serviceKey: 'k', adapter, dailyLimit: 1 });
+    await svc.getStationArrivals(`1002:${name}`); // 도착이 쿼터 1 소비
+    await expect(svc.getLinePositions('1002')).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRealtimePositions).not.toHaveBeenCalled();
+  });
+
+  it('마이크로 캐시 — TTL 내 2회 1콜, 만료 후 재조회', async () => {
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getRealtimePositions: vi.fn().mockResolvedValue([rawPosition()]),
+    };
+    let nowMs = Date.now();
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      serviceKey: 'k',
+      adapter,
+      now: () => new Date(nowMs),
+      microCacheTtlMs: 15_000,
+    });
+    await svc.getLinePositions('1002');
+    await svc.getLinePositions('1002');
+    expect(adapter.getRealtimePositions).toHaveBeenCalledTimes(1);
+    nowMs += 16_000;
+    await svc.getLinePositions('1002');
+    expect(adapter.getRealtimePositions).toHaveBeenCalledTimes(2);
+  });
+
+  it('serviceKey 빈 값 → 503 (업스트림 미호출)', async () => {
+    const adapter = { getRealtimeArrivals: vi.fn(), getRealtimePositions: vi.fn() };
+    const svc = new SubwayService({ prisma: app.prisma, serviceKey: '', adapter });
+    await expect(svc.getLinePositions('1002')).rejects.toMatchObject({ statusCode: 503 });
+    expect(adapter.getRealtimePositions).not.toHaveBeenCalled();
   });
 });
 

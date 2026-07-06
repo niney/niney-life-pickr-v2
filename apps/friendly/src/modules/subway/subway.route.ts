@@ -9,6 +9,8 @@ import {
   SubwayLineDetailResult,
   SubwayNearbyQuery,
   SubwayNearbyResult,
+  SubwayPositionsParams,
+  SubwayPositionsResult,
   SubwayStationSearchQuery,
   SubwayStationSearchResult,
 } from '@repo/api-contract';
@@ -79,6 +81,38 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
             statusCode: sc,
             error: 'Service Unavailable',
             message: e instanceof Error ? e.message : '지하철 주변 역 조회 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 노선 실시간 열차 위치 — 도착과 같은 실시간 인프라(캐시·쿼터·in-flight) 공유.
+  // 미등재 노선 404, 업스트림 실패 502, 키 미설정·쿼터 소진 503. lineId 4자리라
+  // 인코딩 불필요.
+  typed.get(Routes.Subway.linePositions(':lineId'), {
+    schema: {
+      tags: ['subway'],
+      params: SubwayPositionsParams,
+      response: {
+        200: SubwayPositionsResult,
+        404: ErrorResponseSchema,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getLinePositions(req.params.lineId);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 404 || sc === 502 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error:
+              sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
+            message: e instanceof Error ? e.message : '지하철 위치 조회 실패',
           });
         }
         throw e;
