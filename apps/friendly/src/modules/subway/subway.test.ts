@@ -19,6 +19,7 @@ vi.mock('./subway-api.adapter.js', async (importOriginal) => {
 
 import type {
   SubwayArrivalsResultType,
+  SubwayLineDetailResultType,
   SubwayNearbyResultType,
   SubwayStationSearchResultType,
 } from '@repo/api-contract';
@@ -59,6 +60,13 @@ const arrivalsUrl = (stationId: string): string =>
   `/api/v1/subway/stations/${encodeURIComponent(stationId)}/arrivals`;
 const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
   `/api/v1/subway/stations/nearby?lat=${lat}&lng=${lng}${radius !== undefined ? `&radius=${radius}` : ''}`;
+const lineDetailUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId}/detail`;
+
+// SubwayLineStation 시드 — stationId 는 '지하철테스트' 를 포함해 afterAll 이 정리.
+const seedLineStations = (
+  app: FastifyInstance,
+  rows: { lineId: string; branchKey: string; branchName: string | null; seq: number; stationId: string }[],
+) => app.prisma.subwayLineStation.createMany({ data: rows });
 
 // 등거리 근사(서비스 approxDistanceM 과 동일 식) — 시드 좌표를 결정적으로 만든다.
 const M_PER_LAT = 111_320;
@@ -104,6 +112,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // 노선 순서 시드 정리 — stationId 에 prefix 포함(실적재 행은 미포함이라 안전).
+  await app.prisma.subwayLineStation.deleteMany({
+    where: { stationId: { contains: NAME_PREFIX } },
+  });
   // contains — 정렬 테스트의 '뒤…' 접두어 케이스도 잡는다(startsWith 로는 누락).
   await app.prisma.subwayStation.deleteMany({ where: { name: { contains: NAME_PREFIX } } });
   await app.prisma.subwayMasterSync.deleteMany({ where: { count: 0 } });
@@ -471,6 +483,79 @@ describe('GET /api/v1/subway/stations/nearby — 주변 역', () => {
     await expect(svc.getNearbyStations(37.5, 127.0, 1500)).rejects.toMatchObject({
       statusCode: 503,
     });
+  });
+});
+
+describe('GET /api/v1/subway/lines/:lineId/detail — 노선 상세', () => {
+  // 가짜 노선 '9002'(4자리, 실데이터 없음)로 조립을 검증. 실데이터 스모크는 1002.
+  const FAKE = '9002';
+
+  it('시드 — sections 조립·seq 정렬·지선 분리·isTransfer', async () => {
+    // 크래시 잔여 대비 가짜 노선 순서 선제 정리(실 노선과 무관).
+    await app.prisma.subwayLineStation.deleteMany({ where: { lineId: FAKE } });
+    const L = `${NAME_PREFIX}노선${stamp()}`;
+    await seed(app, [
+      { lineId: FAKE, name: `${L}A`, lat: 37.5, lng: 127.0 },
+      { lineId: FAKE, name: `${L}B`, lat: 37.5, lng: 127.0 },
+      { lineId: FAKE, name: `${L}C`, lat: 37.5, lng: 127.0 },
+      { lineId: FAKE, name: `${L}D`, lat: 37.5, lng: 127.0 },
+      { lineId: FAKE, name: `${L}P`, lat: 37.5, lng: 127.0 },
+      { lineId: FAKE, name: `${L}Q`, lat: 37.5, lng: 127.0 },
+      // 환승 상대 — 같은 name(C) 다른 호선 근접 → 노선C 가 isTransfer.
+      { lineId: '9003', name: `${L}C`, lat: 37.5001, lng: 127.0001 },
+    ]);
+    await seedLineStations(app, [
+      // 삽입 순서를 섞어 seq 정렬을 검증.
+      { lineId: FAKE, branchKey: 'main', branchName: null, seq: 2, stationId: `${FAKE}:${L}B` },
+      { lineId: FAKE, branchKey: 'main', branchName: null, seq: 1, stationId: `${FAKE}:${L}A` },
+      { lineId: FAKE, branchKey: 'main', branchName: null, seq: 4, stationId: `${FAKE}:${L}D` },
+      { lineId: FAKE, branchKey: 'main', branchName: null, seq: 3, stationId: `${FAKE}:${L}C` },
+      { lineId: FAKE, branchKey: 'testbr', branchName: '테스트지선', seq: 1, stationId: `${FAKE}:${L}P` },
+      { lineId: FAKE, branchKey: 'testbr', branchName: '테스트지선', seq: 2, stationId: `${FAKE}:${L}Q` },
+    ]);
+
+    const res = await app.inject({ url: lineDetailUrl(FAKE) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayLineDetailResultType;
+    expect(body.source).toBe('db');
+    expect(body.sections).toHaveLength(2);
+
+    const main = body.sections.find((s) => s.branchKey === 'main')!;
+    expect(main.branchName).toBeNull();
+    expect(main.isLoop).toBe(false); // 9002:main 은 LOOP_SECTIONS 아님
+    expect(main.stations.map((x) => x.seq)).toEqual([1, 2, 3, 4]);
+    expect(main.stations.map((x) => x.name)).toEqual([`${L}A`, `${L}B`, `${L}C`, `${L}D`]);
+    // 노선C 만 환승.
+    expect(main.stations.find((x) => x.name === `${L}C`)?.isTransfer).toBe(true);
+    expect(main.stations.find((x) => x.name === `${L}A`)?.isTransfer).toBe(false);
+
+    const branch = body.sections.find((s) => s.branchKey === 'testbr')!;
+    expect(branch.branchName).toBe('테스트지선');
+    expect(branch.stations.map((x) => x.name)).toEqual([`${L}P`, `${L}Q`]);
+
+    // main 이 sections[0] (본선 우선).
+    expect(body.sections[0]?.branchKey).toBe('main');
+  });
+
+  it('순서 데이터 없는 lineId → 404', async () => {
+    const res = await app.inject({ url: lineDetailUrl('9998') });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('실데이터 스모크 — 2호선(1002) 본선 순환 + 지선', async () => {
+    const res = await app.inject({ url: lineDetailUrl('1002') });
+    if (res.statusCode === 404) {
+      console.warn('[line detail] 1002 순서 미적재 — load:subway-line-orders 필요, skip');
+      return;
+    }
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayLineDetailResultType;
+    expect(body.lineName).toBe('2호선');
+    // 본선 + 성수지선 + 신정지선 ≥ 3 section.
+    expect(body.sections.length).toBeGreaterThanOrEqual(3);
+    const main = body.sections.find((s) => s.branchKey === 'main')!;
+    expect(main.isLoop).toBe(true); // 2호선 본선 순환
+    expect(main.stations.some((x) => x.name === '강남')).toBe(true);
   });
 });
 

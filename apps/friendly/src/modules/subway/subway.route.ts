@@ -5,6 +5,8 @@ import {
   Routes,
   SubwayArrivalsParams,
   SubwayArrivalsResult,
+  SubwayLineDetailParams,
+  SubwayLineDetailResult,
   SubwayNearbyQuery,
   SubwayNearbyResult,
   SubwayStationSearchQuery,
@@ -77,6 +79,35 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
             statusCode: sc,
             error: 'Service Unavailable',
             message: e instanceof Error ? e.message : '지하철 주변 역 조회 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 노선 상세(호선 보기) — 로컬 순서 데이터 조립. lineId 는 4자리라 인코딩·디코드
+  // 불필요. 순서 데이터 없는 노선 404, 그 외 로컬 조회라 502 없음.
+  typed.get(Routes.Subway.lineDetail(':lineId'), {
+    schema: {
+      tags: ['subway'],
+      params: SubwayLineDetailParams,
+      response: {
+        200: SubwayLineDetailResult,
+        404: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getLineDetail(req.params.lineId);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 404 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error: sc === 404 ? 'Not Found' : 'Service Unavailable',
+            message: e instanceof Error ? e.message : '지하철 노선 조회 실패',
           });
         }
         throw e;

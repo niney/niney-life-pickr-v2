@@ -91,6 +91,56 @@ export const SubwayNearbyResult = z.object({
 });
 export type SubwayNearbyResultType = z.infer<typeof SubwayNearbyResult>;
 
+// ── 5차: 호선 보기 — 노선별 역 순서 + 근사 폴리라인 ─────────────────────────
+// 지하철은 노선 형상 공공 API 가 없어 역 좌표를 운행 순서로 이은 근사 폴리라인을
+// 쓴다(FE 가 sections[].stations 좌표로 그림 — 별도 path 배열 없음). 지선(2호선
+// 성수/신정, 5호선 마천 등)은 section 으로 분리 — 단일 배열로 이으면 지도에서
+// 지그재그가 된다. 순서 데이터는 load-subway-line-orders 가 적재한 로컬 DB
+// (업스트림 0콜, source 'db').
+
+export const SubwayLineDetailParams = z.object({
+  lineId: z.string().regex(/^\d{4}$/),
+});
+export type SubwayLineDetailParamsType = z.infer<typeof SubwayLineDetailParams>;
+
+export const SubwayLineStationItem = z.object({
+  // `${lineId}:${name}` — 경유역 점 클릭 시 역 선택(stn) 입력. 단 환승역의
+  // stn 딥링크는 그룹 대표 id 가 다를 수 있어 FE 가 검색 그룹으로 재해석한다.
+  stationId: z.string().min(1),
+  name: z.string(),
+  // section 내 운행 순서 (1부터, 연속).
+  seq: z.number().int().min(1),
+  // 같은 물리 역에 다른 호선이 있는지(근접 그룹 기준) — 경유역 점 시각 구분.
+  isTransfer: z.boolean(),
+  lat: z.number().min(33).max(39),
+  lng: z.number().min(124).max(132),
+});
+export type SubwayLineStationItemType = z.infer<typeof SubwayLineStationItem>;
+
+export const SubwayLineSection = z.object({
+  // 'main' + 지선 슬러그('seongsu', 'sinjeong' 등 — 적재 데이터 정의).
+  branchKey: z.string().min(1),
+  // 표시명 — 본선은 null, 지선은 '성수지선' 등.
+  branchName: z.string().nullable(),
+  // 운행 순서(seq asc). 폴리라인 = 이 좌표들의 연결. 2호선 본선 순환은
+  // 서버가 첫 역을 끝에 복제하지 않는다 — FE 가 isLoop 로 닫는다.
+  stations: z.array(SubwayLineStationItem).min(2),
+  // 순환 구간(2호선 본선) — FE 가 폴리라인을 닫고 열차 보간(6차)에서 시임 처리.
+  isLoop: z.boolean(),
+});
+export type SubwayLineSectionType = z.infer<typeof SubwayLineSection>;
+
+export const SubwayLineDetailResult = z.object({
+  lineId: z.string(),
+  // SUBWAY_LINES 표기 ('2호선') — FE 상수와 동일하지만 응답 자체 완결성을 위해 포함.
+  lineName: z.string(),
+  sections: z.array(SubwayLineSection).min(1),
+  // 순서 데이터 적재 시각 (ISO).
+  fetchedAt: z.string(),
+  source: z.literal('db'),
+});
+export type SubwayLineDetailResultType = z.infer<typeof SubwayLineDetailResult>;
+
 // ── 2차: 실시간 도착정보 (realtimeStationArrival 프록시) ─────────────────────
 // 조회 단위는 역명 그룹 — 서버가 stationId 로 그룹을 재구성해 그룹의 유니크
 // 조회역명(realtimeName ?? name — 신촌은 '신촌'+'신촌(경의중앙선)' 2개)별로

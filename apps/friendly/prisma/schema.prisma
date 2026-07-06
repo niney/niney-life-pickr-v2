@@ -1143,6 +1143,24 @@ model SubwayMasterSync {
   @@map("subway_master_syncs")
 }
 
+// 노선별 역 운행 순서(5차 호선 보기). load-subway-line-orders 가 openapi
+// SearchSTNBySubwayLineInfo 의 FR_CODE 순서로 적재한다(본선/지선 section 분리,
+// seq 1부터 연속). stationId 는 SubwayStation.id 를 참조하되 FK 는 없다 —
+// 마스터/순서 재적재가 서로를 깨지 않도록(스냅샷 내성). 순환/지선명은 적재
+// 데이터로 정해진다. isLoop 는 DB 컬럼 대신 서비스 상수(LOOP_SECTIONS).
+model SubwayLineStation {
+  id         Int     @id @default(autoincrement())
+  lineId     String
+  branchKey  String  @default("main") // 'main' | 지선 슬러그('seongsu' 등)
+  branchName String? // 표시명 — 본선 null, 지선 '성수지선' 등
+  seq        Int // section 내 운행 순서 (1부터 연속)
+  stationId  String // SubwayStation.id (`${lineId}:${name}`) — FK 없음(재적재 내성)
+
+  @@unique([lineId, branchKey, seq])
+  @@index([lineId])
+  @@map("subway_line_stations")
+}
+
 // 로그인 사용자의 지하철 역 즐겨찾기(그룹 단위). 저장 시점 스냅샷(name/lat/lng/
 // lines)을 그대로 보존해 목록 렌더·지도 이동에 재조회가 필요 없다. 버스 즐겨찾기와
 // 동일하게 SubwayStation(캐시가 아닌 마스터지만) 을 FK 로 묶지 않는다 — 스냅샷이라

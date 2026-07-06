@@ -9,9 +9,12 @@ import type { PrismaClient } from '@prisma/client';
 import type {
   SubwayArrivalItemType,
   SubwayArrivalsResultType,
+  SubwayLineDetailResultType,
   SubwayNearbyResultType,
   SubwayStationSearchResultType,
 } from '@repo/api-contract';
+import { subwayLineName } from '@repo/utils';
+import { isLoopSection } from './subway-line-order.service.js';
 import {
   getRealtimeArrivals,
   type RawSubwayArrival,
@@ -240,6 +243,95 @@ export class SubwayService {
       items: withDist.slice(0, MAX_GROUPS),
       total: withDist.length,
       fetchedAt,
+      source: 'db',
+    };
+  }
+
+  // 노선 상세(호선 보기) — load-subway-line-orders 가 적재한 SubwayLineStation
+  // (본선/지선 section, seq)을 SubwayStation(이름·좌표)과 조인해 조립한다.
+  // isTransfer 는 역명 그룹핑(같은 name 근접 ≥2 호선)으로 파생. 순서 데이터 없는
+  // lineId 는 404. 로컬 조회라 업스트림/쿼터 무관.
+  async getLineDetail(lineId: string): Promise<SubwayLineDetailResultType> {
+    const { prisma } = this.deps;
+    const [lineRows, sync] = await Promise.all([
+      prisma.subwayLineStation.findMany({
+        where: { lineId },
+        orderBy: [{ branchKey: 'asc' }, { seq: 'asc' }],
+      }),
+      prisma.subwayMasterSync.findFirst({
+        where: { source: 'line-orders' },
+        orderBy: { loadedAt: 'desc' },
+      }),
+    ]);
+    if (lineRows.length === 0) {
+      throw new SubwayServiceError('해당 노선의 순서 데이터가 없습니다.', 404);
+    }
+
+    // 역 좌표/이름 — stationId 조인. 재적재 내성으로 FK 가 없어 누락 가능(필터).
+    const stationIds = [...new Set(lineRows.map((r) => r.stationId))];
+    const stations = await prisma.subwayStation.findMany({ where: { id: { in: stationIds } } });
+    const stationById = new Map(stations.map((s) => [s.id, s]));
+
+    // isTransfer — 이 노선 역들의 name 근접 그룹이 ≥2 호선이면 환승역.
+    const names = [...new Set(stations.map((s) => s.name))];
+    const neighbors = await prisma.subwayStation.findMany({ where: { name: { in: names } } });
+    const transferIds = new Set<string>();
+    for (const g of groupStations(neighbors.map(toGrouping))) {
+      if (new Set(g.lines.map((l) => l.lineId)).size >= 2) {
+        for (const l of g.lines) transferIds.add(l.stationId);
+      }
+    }
+
+    // section 조립 — branchKey 별(main 먼저), seq 순. 누락 역 제외 후 seq 재번호로
+    // 계약(1부터 연속) 보장. <2 역 section 은 제외.
+    const byBranch = new Map<string, typeof lineRows>();
+    const branchOrder: string[] = [];
+    for (const r of lineRows) {
+      let bucket = byBranch.get(r.branchKey);
+      if (!bucket) {
+        bucket = [];
+        byBranch.set(r.branchKey, bucket);
+        branchOrder.push(r.branchKey);
+      }
+      bucket.push(r);
+    }
+    branchOrder.sort((a, b) => (a === 'main' ? -1 : b === 'main' ? 1 : 0));
+
+    const sections = branchOrder
+      .map((branchKey) => {
+        const rows = byBranch.get(branchKey)!;
+        const built = rows
+          .map((r) => {
+            const st = stationById.get(r.stationId);
+            if (!st) return null;
+            return {
+              stationId: r.stationId,
+              name: st.name,
+              isTransfer: transferIds.has(r.stationId),
+              lat: st.lat,
+              lng: st.lng,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null)
+          .map((x, i) => ({ ...x, seq: i + 1 }));
+        return {
+          branchKey,
+          branchName: rows[0]?.branchName ?? null,
+          isLoop: isLoopSection(lineId, branchKey),
+          stations: built,
+        };
+      })
+      .filter((s) => s.stations.length >= 2);
+
+    if (sections.length === 0) {
+      throw new SubwayServiceError('해당 노선의 순서 데이터가 없습니다.', 404);
+    }
+
+    return {
+      lineId,
+      lineName: subwayLineName(lineId),
+      sections,
+      fetchedAt: (sync?.loadedAt ?? this.deps.now?.() ?? new Date()).toISOString(),
       source: 'db',
     };
   }
