@@ -31,6 +31,10 @@ import {
   type MapViewport,
   type VehicleMarker,
 } from '~/components/restaurant/MapCanvas';
+import {
+  readTransitViewport,
+  saveTransitViewport,
+} from '~/components/transit/transitMapViewport';
 import { SubwayLineBadge } from './SubwayLineBadge';
 
 // 모듈 레벨 상수 — 선택×환승 4종을 미리 만들어 모든 마커가 같은 data URL 문자열을
@@ -141,6 +145,15 @@ export const SubwayStationsMap = ({
     config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
 
   const handleRef = useRef<MapCanvasHandle>(null);
+
+  // 탭 전환 뷰포트 이어보기 — 마운트 시 공유 싱글턴에서 초기 뷰 복원(없으면 기본
+  // 뷰), moveend(onViewportSync)마다 저장. 저장 뷰포트로 시작했으면 아래 fit effect
+  // 가 첫 검색 fit 1회를 억제해 복원이 즉시 덮이지 않게 한다.
+  const [initialViewport] = useState(() => readTransitViewport());
+  const restoreGuardRef = useRef(initialViewport !== null);
+  const handleViewportSync = useCallback((vp: MapViewport) => {
+    saveTransitViewport({ lat: vp.centerLat, lng: vp.centerLng, zoom: vp.zoom });
+  }, []);
 
   // ── 7차 열차 따라가기 (버스 8차 미러) ──────────────────────────────────────
   // 알약 탭 → 그 열차(followId = VehicleMarker.id = 'train-'+trainNo) 카메라 추적.
@@ -386,15 +399,21 @@ export const SubwayStationsMap = ({
   // 만 — 노선 경유역 점(markers)이 바뀌어도 fit 하지 않는다(줌아웃 방지).
   useEffect(() => {
     if (!apiKey) return;
+    // 첫 apiKey 런(≈마운트)에서만 복원 가드가 살아 있다 — 이후엔 항상 정상 fit(사용자
+    // 새 검색은 억제하지 않게). 데이터가 없는 bare 마운트에서도 이 런에 가드를 소진한다.
+    const armed = restoreGuardRef.current;
+    restoreGuardRef.current = false;
     if (suppressFit || pathResult) return; // 경로 모드는 전용 fit(아래).
     if (groups.length > 0) {
+      // 저장 뷰포트로 시작한 마운트에 이미 결과가 있으면 첫 fit 1회 억제(복원 유지).
+      if (armed && initialViewport) return;
       // 주변 모드면 기준점 마커도 markers 에 포함돼 함께 fit 된다.
       handleRef.current?.fitToMarkers();
     } else if (myLocation) {
       // 주변에 역이 하나도 없을 때 — 최소한 기준점으로 센터링.
       handleRef.current?.flyTo(myLocation.lat, myLocation.lng);
     }
-  }, [groups, apiKey, myLocation, suppressFit, pathResult]);
+  }, [groups, apiKey, myLocation, suppressFit, pathResult, initialViewport]);
 
   // 경로 로드 시 경로 전체가 보이게 fit — 결과가 바뀔 때 1회(ref 가드). 폴리라인은
   // 별도 소스라 fitToMarkers 로는 안 잡혀 leg 좌표로 fitToCoords 한다.
@@ -653,9 +672,15 @@ export const SubwayStationsMap = ({
         ref={handleRef}
         apiKey={apiKey}
         markers={markers}
+        initialCenter={
+          initialViewport
+            ? { lat: initialViewport.lat, lng: initialViewport.lng, zoom: initialViewport.zoom }
+            : undefined
+        }
         selectedMarkerId={selectedId}
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}
+        onViewportSync={handleViewportSync}
         routeLine={routeLines}
         vehicles={vehicleItems}
         // 역 단위 30초 폴링이라 버스(14초)보다 길게 — 폴링 간 등속 이동이 이어지게.

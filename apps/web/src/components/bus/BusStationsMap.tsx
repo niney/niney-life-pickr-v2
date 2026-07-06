@@ -24,6 +24,10 @@ import {
   type MapMarker,
   type MapViewport,
 } from '~/components/restaurant/MapCanvas';
+import {
+  readTransitViewport,
+  saveTransitViewport,
+} from '~/components/transit/transitMapViewport';
 
 // 모듈 레벨 상수 — 모든 마커가 같은 data URL 문자열을 공유해 OL 아이콘
 // 캐시가 이미지를 1회만 디코드한다. (차량 알약은 노선번호·색·정차여부에 의존해
@@ -123,6 +127,14 @@ export const BusStationsMap = ({
     config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
 
   const handleRef = useRef<MapCanvasHandle>(null);
+
+  // 탭 전환 뷰포트 이어보기(버스↔지하철 공용) — 마운트 시 초기 뷰 복원(없으면 기본
+  // 뷰), moveend 마다 저장. 버스는 결과 없는 마운트(탭 전환)에선 fit 이 안 돌아
+  // 복원이 그대로 보인다(별도 억제 불필요). 검색/주변/노선 fit·flyTo 는 무변경.
+  const [initialViewport] = useState(() => readTransitViewport());
+  const handleViewportSync = useCallback((vp: MapViewport) => {
+    saveTransitViewport({ lat: vp.centerLat, lng: vp.centerLng, zoom: vp.zoom });
+  }, []);
 
   // 따라가기 — 지도에서 버스 알약을 탭하면 그 차량(followId=VehicleMarker.id)을
   // 카메라가 추적한다. paused 는 사용자가 지도를 조작해 추적만 끊긴 상태(토글=
@@ -516,6 +528,11 @@ export const BusStationsMap = ({
         ref={handleRef}
         apiKey={apiKey}
         markers={markers}
+        initialCenter={
+          initialViewport
+            ? { lat: initialViewport.lat, lng: initialViewport.lng, zoom: initialViewport.zoom }
+            : undefined
+        }
         vehicles={vehicleItems}
         onVehicleSelect={handleVehicleSelect}
         followVehicleId={followVehicleId}
@@ -523,6 +540,7 @@ export const BusStationsMap = ({
         selectedMarkerId={selectedStId}
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}
+        onViewportSync={handleViewportSync}
         routeLine={routeLine}
       />
       {/* '이 위치에서 재검색' — 지도 상단 중앙 오버레이. 클릭 시 지도 중심으로
