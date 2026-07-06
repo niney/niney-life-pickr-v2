@@ -13,6 +13,7 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { SubwayLineBadge } from './SubwayLineBadge';
+import { SubwayNearbyBusSection } from './SubwayNearbyBusSection';
 import { congestionBand, currentSlotKey, matchCongestionDir, slotLevel } from './congestionUtils';
 import { arrivalUpdnToTimetable, formatHHMM, lastTrainRemainMin } from './timetableUtils';
 
@@ -95,6 +96,9 @@ export interface SubwayArrivalPanelProps {
   footerCongestion?: SubwayCongestionResultType | null;
   // 11차 길찾기 — 헤더 버튼. 이 역을 출발로 길찾기 뷰 전환. 미지정이면 버튼 숨김.
   onOpenPath?(): void;
+  // 12차 주변 버스 — 선택 역 대표 좌표. 있으면 스크롤 하단에 접이식 섹션. 좌표를
+  // 못 구하면(딥링크 직진입 등) 미표시.
+  nearbyBusCoord?: { lat: number; lng: number } | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,6 +126,7 @@ export const SubwayArrivalPanel = ({
   onOpenTimetable,
   footerCongestion,
   onOpenPath,
+  nearbyBusCoord,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -218,6 +223,10 @@ export const SubwayArrivalPanel = ({
           onOpenTimetable={onOpenTimetable}
           footerCongestion={footerCongestion}
         />
+        {/* 12차 — 스크롤 영역 끝 접이식 주변 버스 정류장(도착 뷰 전용). 좌표 없으면 생략. */}
+        {nearbyBusCoord && (
+          <SubwayNearbyBusSection lat={nearbyBusCoord.lat} lng={nearbyBusCoord.lng} />
+        )}
       </div>
     </div>
   );

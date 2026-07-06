@@ -639,6 +639,7 @@ export const SubwayPage = () => {
       onOpenTimetable={handleOpenTimetable}
       footerCongestion={footerCongestion}
       onOpenPath={handleOpenPath}
+      nearbyBusCoord={selectedCoord}
       {...lineFavoriteProps}
     />
   ) : null;
