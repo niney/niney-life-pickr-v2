@@ -7,5 +7,7 @@ export * from './markerFrame.js';
 export * from './random.js';
 export * from './restaurantCategory.js';
 export * from './routePath.js';
+export * from './subwayLine.js';
+export * from './subwayMarker.js';
 export * from './thumbnail.js';
 export * from './vworld.js';

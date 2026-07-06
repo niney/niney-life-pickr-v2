@@ -413,6 +413,13 @@ export const Bus = {
   favoritesSync: `${API_PREFIX}/bus/favorites/sync`,
 } as const;
 
+// 수도권 전철 — 전부 비로그인 공개 (버스와 동일 정책). 역사마스터를 DB 에
+// 전량 적재해 검색은 로컬 조회(업스트림 0콜) — 라이브 검색 허용. 실시간
+// 도착/열차위치는 차수 진행에 따라 추가된다.
+export const Subway = {
+  stationSearch: `${API_PREFIX}/subway/stations/search`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;
 
 // review-search — 리뷰 문맥검색 / RAG (어드민 우선). 검색 단위는 식당(restaurantId).
