@@ -1,6 +1,7 @@
 import {
   Routes,
   type SubwayArrivalsResultType,
+  type SubwayNearbyResultType,
   type SubwayStationSearchResultType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
@@ -16,6 +17,17 @@ export const subwayApi = {
     params.set('q', q);
     return apiFetch<SubwayStationSearchResultType>(
       `${Routes.Subway.stationSearch}?${params.toString()}`,
+    );
+  },
+  // 좌표 기반 주변 역 — 로컬 마스터 조회(업스트림 0콜)라 버스의 셀 캐시·쿼터가
+  // 없다. 반경(m)은 서버 기본 1500·상한 3000. dist 오름차순 30그룹 절단.
+  nearbyStations: (lat: number, lng: number, opts: { radius?: number } = {}) => {
+    const params = new URLSearchParams();
+    params.set('lat', String(lat));
+    params.set('lng', String(lng));
+    if (opts.radius !== undefined) params.set('radius', String(opts.radius));
+    return apiFetch<SubwayNearbyResultType>(
+      `${Routes.Subway.stationsNearby}?${params.toString()}`,
     );
   },
   // 역 실시간 도착정보 — 서버 15초 마이크로 캐시를 얹은 프록시. stationId 는

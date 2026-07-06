@@ -20,6 +20,27 @@ export const useSubwayStationSearch = (q: string) => {
   });
 };
 
+// 좌표 기반 주변 역 — 좌표는 호출자가 Geolocation(또는 지도 재조회)으로 확정해
+// 넘긴다. 로컬 마스터 조회라 staleTime 60s 로 같은 자리 재조회를 클라이언트에서도
+// 차단한다. 좌표 키는 소수 4자리 스냅(≈11m) — 사소한 GPS 흔들림으로 쿼리 키가
+// 갈라져 재호출되는 것을 방지(useBusNearbyStations 미러). 반경 기본 1500m.
+export const useSubwayNearbyStations = (
+  lat: number | null,
+  lng: number | null,
+  radius = 1500,
+) => {
+  const enabled = lat !== null && lng !== null;
+  const keyLat = lat !== null ? lat.toFixed(4) : null;
+  const keyLng = lng !== null ? lng.toFixed(4) : null;
+  return useQuery({
+    queryKey: ['subway', 'stations', 'nearby', keyLat, keyLng, radius],
+    queryFn: () => subwayApi.nearbyStations(lat!, lng!, { radius }),
+    enabled,
+    staleTime: 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
 // 역 실시간 도착정보 — 30초 폴링. refetchIntervalInBackground 기본 false 라 탭이
 // 비활성이면 폴링이 자동 중단돼 업스트림 쿼터를 아낀다(버스 도착 패턴). placeholderData
 // 로 30초 갱신 사이 패널이 깜빡(로딩 리셋)이지 않게 유지한다. stationId 는 검색 결과
