@@ -136,6 +136,13 @@ export const SubwayPage = () => {
   const positions = useSubwayLinePositions(line);
   const trainItems = line ? positions.data?.items : undefined;
 
+  // 도착 패널 '지도에서 보기' 대기 요청 — 로컬 상태(URL 미포함, 버스 follow 와 동일).
+  // nonce 로 매 탭을 구분해 같은 열차 재요청도 지도가 재발화하게 한다.
+  const [pendingFollow, setPendingFollow] = useState<{
+    trainNo: string;
+    nonce: number;
+  } | null>(null);
+
   // ── 활성 소스 — 주변 모드면 nearby, 아니면 검색. 아래 로직(선택/지도/도착)은
   //    소스만 다를 뿐 동일하게 흐른다. 마커 누적은 없다(30그룹 상한 — 현재 결과만). ──
   const activeItems = nearMode ? nearItems : items;
@@ -275,6 +282,16 @@ export const SubwayPage = () => {
 
   // 노선 정보 카드 '노선 닫기' — line 만 해제(stn 유지).
   const handleCloseLine = useCallback(() => setParam('line', null), [setParam]);
+
+  // 도착 패널 '지도에서 보기' — 그 호선을 추적(이미 추적 중이면 URL no-op)하고, 해당
+  // 열차 따라가기 대기를 건다(지도가 positions 에 나타나는 순간 follow). stn 은 유지.
+  const handleLocateTrain = useCallback(
+    (lineId: string, trainNo: string) => {
+      setPendingFollow({ trainNo, nonce: Date.now() });
+      setParam('line', lineId);
+    },
+    [setParam],
+  );
 
   // '주변 역' — Geolocation 으로 좌표를 얻어 near 모드로. 성공 시 q(입력 포함)를 지워
   // (배타) URL 을 near 로 교체, 실패 시 리스트 영역에 안내만 남긴다.
@@ -524,6 +541,7 @@ export const SubwayPage = () => {
       onRetry={() => void arrivals.refetch()}
       trackedLineId={line}
       onTrackLine={handleTrackLine}
+      onLocateTrain={handleLocateTrain}
       {...lineFavoriteProps}
     />
   ) : null;
@@ -555,6 +573,7 @@ export const SubwayPage = () => {
               onSelectStop={handleSelectStop}
               onCloseLine={handleCloseLine}
               positions={trainItems}
+              pendingFollow={pendingFollow}
             />
           </section>
         </div>
@@ -590,6 +609,7 @@ export const SubwayPage = () => {
               onSelectStop={handleSelectStop}
               onCloseLine={handleCloseLine}
               positions={trainItems}
+              pendingFollow={pendingFollow}
             />
           </div>
           {/* 역 선택 시 하단 영역이 도착정보 뷰로 전환 — 패널은 내부 스크롤이라

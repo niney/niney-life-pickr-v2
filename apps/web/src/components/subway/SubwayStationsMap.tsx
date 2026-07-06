@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MapPin, RotateCw, X } from 'lucide-react';
+import { Loader2, MapPin, Navigation, RotateCw, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
 import type {
   SubwayLineDetailResultType,
@@ -43,6 +44,9 @@ const MY_LOCATION_MARKER_URL = buildMyLocationMarkerDataUrl();
 const MY_LOCATION_ID = 'my-location';
 // 열차 마커 id 접두사 — 전용 vehicles 레이어라 클릭 라우팅과 무관하지만 식별용.
 const VEHICLE_ID_PREFIX = 'train-';
+// 도착 패널 '지도에서 보기' 대기 마감(ms) — 폴링 1회(30초)+여유. 이 안에 대상
+// trainNo 가 positions 에 안 나타나면 대기 해제 + 안내(아직 미진입/방금 종료).
+const PENDING_FOLLOW_MS = 32_000;
 
 // 역 선택 시 확대 포커스 목표 줌 — 식당 지도의 ZOOM_IN_LEVEL(및 fitToMarkers
 // maxZoom)과 통일한 17. flyToZoomIn 이라 현재 줌이 더 크면 그대로 둔다(줌아웃 없음).
@@ -96,6 +100,9 @@ interface Props {
   // 6차 — 추적 호선의 실시간 열차 위치(30초 폴링). lineDetail(sections)과 조합해
   // 역간 보간 → 알약 마커 + rAF 이동. line 추적 중일 때만 의미.
   positions?: SubwayTrainPositionItemType[];
+  // 7차 도착↔지도 연계 — 도착 패널에서 '지도에서 보기'한 열차. nonce 로 매 요청을
+  // 구분(같은 열차 재요청도 재발화). 그 trainNo 가 positions 에 나타나면 1회 follow.
+  pendingFollow?: { trainNo: string; nonce: number } | null;
   className?: string;
 }
 
@@ -117,6 +124,7 @@ export const SubwayStationsMap = ({
   onSelectStop,
   onCloseLine,
   positions,
+  pendingFollow,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -125,6 +133,47 @@ export const SubwayStationsMap = ({
     config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
 
   const handleRef = useRef<MapCanvasHandle>(null);
+
+  // ── 7차 열차 따라가기 (버스 8차 미러) ──────────────────────────────────────
+  // 알약 탭 → 그 열차(followId = VehicleMarker.id = 'train-'+trainNo) 카메라 추적.
+  // paused 는 사용자가 지도를 조작해 추적만 끊긴 상태(followId 유지, '다시 따라가기'
+  // 로 재개). 카메라는 MapCanvas rAF 소유 — 여기선 대상 id 만 내린다.
+  const [followId, setFollowId] = useState<string | null>(null);
+  const [followPaused, setFollowPaused] = useState(false);
+  // 도착 패널 '지도에서 보기' 대기 — 대상이 아직 positions 에 없을 때 무장하고,
+  // 나타나는 폴링에 follow 시작한다(타이머는 마감 백스톱 1개뿐).
+  const pendingRef = useRef<{ trainNo: string } | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearPending = useCallback(() => {
+    pendingRef.current = null;
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
+  }, []);
+  const handleVehicleSelect = useCallback(
+    (id: string) => {
+      clearPending();
+      setFollowPaused(false);
+      setFollowId((prev) => (prev === id ? null : id)); // 같은 열차 재탭 → 해제
+    },
+    [clearPending],
+  );
+  const handleFollowInterrupted = useCallback(() => setFollowPaused(true), []);
+  const handleResumeFollow = useCallback(() => setFollowPaused(false), []);
+  const handleStopFollow = useCallback(() => {
+    setFollowId(null);
+    setFollowPaused(false);
+  }, []);
+  // paused 아닐 때만 추적 대상을 내린다 — 조작으로 끊기면 null, 재개 시 다시 id.
+  const followVehicleId = followId && !followPaused ? followId : null;
+  const following = followId !== null;
+  // 추적 배지 라벨 — 따라가는 열차의 행선지.
+  const followedDest = useMemo(() => {
+    if (!followId || !positions) return '';
+    const t = positions.find((p) => `${VEHICLE_ID_PREFIX}${p.trainNo}` === followId);
+    return t ? subwayDestinationLabel(t.destinationName) : '';
+  }, [followId, positions]);
 
   // 폴리라인 — 각 section 을 개별 줄로(이어지지 않는 지선이 지그재그가 되지 않게).
   // 순환(isLoop)은 첫 좌표를 끝에 복제해 닫는다. 색은 호선색 공용.
@@ -167,6 +216,24 @@ export const SubwayStationsMap = ({
   );
 
   const markers: MapMarker[] = useMemo(() => {
+    // 따라가기 중에는 화면을 비워 열차에 집중 — 검색 역·경유역 점을 숨기고 선택 역
+    // 하나만 남긴다(폴리라인·열차는 별도 레이어라 그대로). 버스 8차 미러.
+    if (following) {
+      const sel = selectedId ? groups.find((g) => g.id === selectedId) : undefined;
+      if (!sel) return [];
+      const transfer = sel.lines.length > 1;
+      return [
+        {
+          id: sel.id,
+          lat: sel.lat,
+          lng: sel.lng,
+          label: sel.name,
+          icon: transfer
+            ? { src: TRANSFER_URL, selectedSrc: TRANSFER_SELECTED_URL }
+            : { src: STATION_URL, selectedSrc: STATION_SELECTED_URL },
+        },
+      ];
+    }
     // 경유역 점을 먼저(아래) 그려 역 마커/내 위치가 위에 오게 한다. 라벨 없음.
     const stopMarkers: MapMarker[] = lineStops.map((s) => {
       const url = s.isTransfer ? stopDotTransferUrl : stopDotUrl;
@@ -199,7 +266,7 @@ export const SubwayStationsMap = ({
       });
     }
     return out;
-  }, [groups, myLocation, lineStops, stopDotUrl, stopDotTransferUrl]);
+  }, [groups, myLocation, lineStops, stopDotUrl, stopDotTransferUrl, following, selectedId]);
 
   // 사용자가 직접 패닝/줌을 끝낸 시점의 지도 상태 — MapCanvas 가 programmatic
   // move(fit/flyTo)는 걸러주므로 여기엔 사용자 이동만 쌓인다.
@@ -396,15 +463,17 @@ export const SubwayStationsMap = ({
         continue; // 좌표 없음 → 스킵.
       }
       // 행선지 라벨 — '종착'→'행'('성수종착'→'성수행'), '지선'은 그대로('성수지선'),
-      // 일반 역명은 '행' 접미('신도림'→'신도림행').
+      // 일반 역명은 '행' 접미('신도림'→'신도림행'). 따라가는 대상만 강조 알약.
+      const id = `${VEHICLE_ID_PREFIX}${t.trainNo}`;
       const iconSrc = buildSubwayTrainPillDataUrl({
         label: subwayDestinationLabel(t.destinationName),
         color,
         stopped: t.trainStatus === '1',
         express: t.expressType !== null,
+        highlighted: id === followId,
       });
       out.push({
-        id: `${VEHICLE_ID_PREFIX}${t.trainNo}`,
+        id,
         lat,
         lng,
         via,
@@ -414,7 +483,69 @@ export const SubwayStationsMap = ({
       });
     }
     return out;
-  }, [trainSections, positions, lineColor]);
+  }, [trainSections, positions, lineColor, followId]);
+
+  // 도착 패널 '지도에서 보기' 요청(nonce) — 대상이 이미 지도에 있으면 즉시 follow,
+  // 없으면 무장 + 마감 타이머 1개. (즉시 판정에만 vehicleItems 를 읽어 deps 는
+  // 요청만 — 매 폴링 재무장 방지. 나타날 때 follow 는 아래 effect 담당.)
+  useEffect(() => {
+    if (!pendingFollow) return;
+    const id = `${VEHICLE_ID_PREFIX}${pendingFollow.trainNo}`;
+    if (vehicleItems.some((v) => v.id === id)) {
+      clearPending();
+      setFollowPaused(false);
+      setFollowId(id);
+      return;
+    }
+    pendingRef.current = { trainNo: pendingFollow.trainNo };
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    pendingTimerRef.current = setTimeout(() => {
+      pendingTimerRef.current = null;
+      if (pendingRef.current) {
+        pendingRef.current = null;
+        // 여러 지도 인스턴스(데스크톱/모바일)가 동시에 울리지 않게 고정 id 로 dedup.
+        toast.info(
+          '열차를 지도에서 찾지 못했습니다. 아직 노선에 진입하지 않았거나 방금 운행을 마쳤을 수 있어요.',
+          { id: 'subway-locate-notfound' },
+        );
+      }
+    }, PENDING_FOLLOW_MS);
+    return () => {
+      if (pendingTimerRef.current) {
+        clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFollow]);
+
+  // 무장된 대기 대상이 폴링에 나타나면 follow 시작(1회).
+  useEffect(() => {
+    const pend = pendingRef.current;
+    if (!pend) return;
+    const id = `${VEHICLE_ID_PREFIX}${pend.trainNo}`;
+    if (vehicleItems.some((v) => v.id === id)) {
+      clearPending();
+      setFollowPaused(false);
+      setFollowId(id);
+    }
+  }, [vehicleItems, clearPending]);
+
+  // 추적 대상이 지도에서 사라지면(운행 종료·구간 이탈·노선 해제) 따라가기 해제.
+  // 노선 해제(형상 없음)는 조용히, 운행 중 소멸은 안내(dedup id). 외부(폴링) 이벤트라
+  // effect 가 적합 — vehicleItems 갱신 시에만 판정.
+  useEffect(() => {
+    if (followId === null) return;
+    if (vehicleItems.some((v) => v.id === followId)) return;
+    setFollowId(null);
+    setFollowPaused(false);
+    if (lineDetail) {
+      toast.info('열차 운행이 종료되어 따라가기를 멈췄어요.', { id: 'subway-follow-ended' });
+    }
+  }, [vehicleItems, lineDetail, followId]);
+
+  // 언마운트 시 대기 타이머 정리.
+  useEffect(() => () => clearPending(), [clearPending]);
 
   if (config.isLoading) {
     return (
@@ -452,6 +583,9 @@ export const SubwayStationsMap = ({
         vehicles={vehicleItems}
         // 역 단위 30초 폴링이라 버스(14초)보다 길게 — 폴링 간 등속 이동이 이어지게.
         vehicleTweenMs={28_000}
+        onVehicleSelect={handleVehicleSelect}
+        followVehicleId={followVehicleId}
+        onFollowInterrupted={handleFollowInterrupted}
       />
       {/* 노선 정보 카드 — 좌상단(로딩·재검색 칩은 상단 중앙이라 겹치지 않는다). */}
       {lineDetail && lineInfo && (
@@ -489,6 +623,32 @@ export const SubwayStationsMap = ({
         >
           <RotateCw className="size-3.5" />
           이 위치에서 재검색
+        </button>
+      )}
+      {/* 따라가기 상태 — 하단 중앙(상단 슬롯과 분리). 추적 중엔 안내 배지 + 종료(X),
+          조작으로 끊기면 '다시 따라가기' 칩. */}
+      {following && !followPaused && (
+        <div className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md">
+          <Navigation className="size-3.5 text-primary" />
+          {followedDest ? `${followedDest} 열차 따라가는 중` : '열차 따라가는 중'}
+          <button
+            type="button"
+            onClick={handleStopFollow}
+            aria-label="따라가기 종료"
+            className="-mr-1 ml-0.5 rounded-full p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+      {following && followPaused && (
+        <button
+          type="button"
+          onClick={handleResumeFollow}
+          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md hover:bg-accent"
+        >
+          <Navigation className="size-3.5" />
+          다시 따라가기
         </button>
       )}
     </div>

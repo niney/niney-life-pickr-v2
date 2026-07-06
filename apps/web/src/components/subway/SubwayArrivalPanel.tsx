@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Loader2, Route } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Route } from 'lucide-react';
 import type { SubwayArrivalItemType } from '@repo/api-contract';
 import { subwayLineName } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
@@ -73,6 +73,9 @@ export interface SubwayArrivalPanelProps {
   // 미지정이면 버튼 자체를 숨긴다. 토글은 상위(SubwayPage)가 line URL 로 처리.
   trackedLineId?: string | null;
   onTrackLine?(lineId: string): void;
+  // 7차 도착↔지도 연계 — 열차 행 '지도에서 보기'. trainNo 있을 때만 버튼 노출.
+  // 상위(SubwayPage)가 line 세팅 + 그 열차 따라가기 대기를 건다.
+  onLocateTrain?(lineId: string, trainNo: string): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +98,7 @@ export const SubwayArrivalPanel = ({
   onToggleLineFavorite,
   trackedLineId,
   onTrackLine,
+  onLocateTrain,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -173,6 +177,7 @@ export const SubwayArrivalPanel = ({
           onToggleLineFavorite={onToggleLineFavorite}
           trackedLineId={trackedLineId}
           onTrackLine={onTrackLine}
+          onLocateTrain={onLocateTrain}
         />
       </div>
     </div>
@@ -196,6 +201,7 @@ const PanelBody = ({
   onToggleLineFavorite,
   trackedLineId,
   onTrackLine,
+  onLocateTrain,
 }: {
   sections: LineSection[];
   nowMs: number;
@@ -208,6 +214,7 @@ const PanelBody = ({
   onToggleLineFavorite?(lineId: string): void;
   trackedLineId?: string | null;
   onTrackLine?(lineId: string): void;
+  onLocateTrain?(lineId: string, trainNo: string): void;
 }) => {
   if (isLoading && isEmpty) {
     return (
@@ -278,7 +285,14 @@ const PanelBody = ({
           </div>
           <div className="flex flex-col gap-2">
             {sec.groups.map((g) => (
-              <UpDnGroup key={g.updn} updn={g.updn} list={g.list} nowMs={nowMs} />
+              <UpDnGroup
+                key={g.updn}
+                updn={g.updn}
+                list={g.list}
+                nowMs={nowMs}
+                lineId={sec.lineId}
+                onLocateTrain={onLocateTrain}
+              />
             ))}
           </div>
         </section>
@@ -295,10 +309,14 @@ const UpDnGroup = ({
   updn,
   list,
   nowMs,
+  lineId,
+  onLocateTrain,
 }: {
   updn: string;
   list: SubwayArrivalItemType[];
   nowMs: number;
+  lineId: string;
+  onLocateTrain?(lineId: string, trainNo: string): void;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? list : list.slice(0, VISIBLE_LIMIT);
@@ -310,7 +328,13 @@ const UpDnGroup = ({
       )}
       <ul className="flex flex-col gap-0.5">
         {visible.map((it, idx) => (
-          <ArrivalRow key={`${it.trainNo ?? 'x'}-${idx}`} item={it} nowMs={nowMs} />
+          <ArrivalRow
+            key={`${it.trainNo ?? 'x'}-${idx}`}
+            item={it}
+            nowMs={nowMs}
+            lineId={lineId}
+            onLocateTrain={onLocateTrain}
+          />
         ))}
       </ul>
       {hidden > 0 && (
@@ -335,7 +359,17 @@ const UpDnGroup = ({
   );
 };
 
-const ArrivalRow = ({ item, nowMs }: { item: SubwayArrivalItemType; nowMs: number }) => {
+const ArrivalRow = ({
+  item,
+  nowMs,
+  lineId,
+  onLocateTrain,
+}: {
+  item: SubwayArrivalItemType;
+  nowMs: number;
+  lineId: string;
+  onLocateTrain?(lineId: string, trainNo: string): void;
+}) => {
   const remain = remainSec(item, nowMs);
   // 카운트다운(양수)이면 'm분 s초', 아니면 상태 문구. '곧 도착' 계열(≤30초 또는
   // 진입/도착 코드)은 색 강조.
@@ -366,15 +400,30 @@ const ArrivalRow = ({ item, nowMs }: { item: SubwayArrivalItemType; nowMs: numbe
           </span>
         )}
       </span>
-      <span
-        className={cn(
-          'shrink-0 whitespace-nowrap text-right tabular-nums',
-          imminent
-            ? 'font-semibold text-emerald-600 dark:text-emerald-400'
-            : 'text-muted-foreground',
+      <span className="flex shrink-0 items-center gap-1.5">
+        <span
+          className={cn(
+            'whitespace-nowrap text-right tabular-nums',
+            imminent
+              ? 'font-semibold text-emerald-600 dark:text-emerald-400'
+              : 'text-muted-foreground',
+          )}
+        >
+          {text}
+        </span>
+        {/* 지도에서 보기 — trainNo 있을 때만(위치 API 조인 키). 상위가 line 세팅 +
+            그 열차 따라가기. 과밀 방지로 아이콘만. */}
+        {onLocateTrain && item.trainNo && (
+          <button
+            type="button"
+            onClick={() => onLocateTrain(lineId, item.trainNo!)}
+            aria-label={`${label} 지도에서 보기`}
+            title="지도에서 보기"
+            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <MapPin className="size-3.5" />
+          </button>
         )}
-      >
-        {text}
       </span>
     </li>
   );
