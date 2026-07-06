@@ -9,6 +9,7 @@ import {
   useSubwayLineDetail,
   useSubwayLinePositions,
   useSubwayNearbyStations,
+  useSubwayPath,
   useSubwayStationArrivals,
   useSubwayStationSearch,
   useSubwayTimetable,
@@ -17,6 +18,7 @@ import { usePublicLayout } from '~/components/PublicLayout';
 import { TransitTabs } from '~/components/transit/TransitTabs';
 import { SubwayArrivalPanel } from '~/components/subway/SubwayArrivalPanel';
 import { SubwayFavoriteSection } from '~/components/subway/SubwayFavoriteSection';
+import { SubwayPathPanel } from '~/components/subway/SubwayPathPanel';
 import {
   SubwayStationList,
   SubwayStationListBody,
@@ -54,6 +56,8 @@ const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
 export const SubwayPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const stn = searchParams.get('stn');
+  // 도착역(to) — 경로 모드(stn 출발 + to 도착). 딥링크 복원. line 추적과 배타.
+  const to = searchParams.get('to');
   // 추적 호선(line) — 4자리 lineId. '노선 보기'가 세팅하고 stn 과 공존한다. 쓰레기
   // 값(딥링크 편집)은 null(폴리라인 미표시).
   const rawLine = searchParams.get('line');
@@ -147,6 +151,12 @@ export const SubwayPage = () => {
     nonce: number;
   } | null>(null);
 
+  // 길찾기 뷰 열림 — 로컬 상태(도착역 선택 전 단계). to(URL)가 있으면 딥링크로도 열린
+  // 것으로 본다. 경로 결과는 to 세팅 시 조회.
+  const [pathViewOpen, setPathViewOpen] = useState(false);
+  const inPathView = !!stn && (pathViewOpen || to !== null);
+  const path = useSubwayPath(inPathView ? stn : null, to);
+
   // ── 8차 시간표 ── 뷰 상태는 URL 미포함(패널 로컬). 오늘 dayType 은 요일 파생(렌더 중).
   const todayDayType = useMemo(() => dayTypeForToday(), []);
   // 시간표 뷰가 열렸을 때 그 대상(호선·역×호선 stationId). null = 도착 패널.
@@ -230,6 +240,7 @@ export const SubwayPage = () => {
           sp.delete('near');
           sp.delete('stn');
           sp.delete('line');
+          sp.delete('to');
           return sp;
         },
         { replace: true },
@@ -243,7 +254,8 @@ export const SubwayPage = () => {
   // 맥락). line 미추적이면 stn 만 바꾼다.
   const selectStation = useCallback(
     (id: string) => {
-      setTimetableView(null); // 새 역 선택 → 시간표 뷰 닫고 도착 패널로.
+      setTimetableView(null); // 새 역 선택 → 시간표/길찾기 뷰 닫고 도착 패널로.
+      setPathViewOpen(false);
       setSearchParams(
         (prev) => {
           const sp = new URLSearchParams(prev);
@@ -255,6 +267,7 @@ export const SubwayPage = () => {
             if (!onLine) sp.delete('line');
           }
           sp.set('stn', id);
+          sp.delete('to'); // 새 출발역 → 이전 도착 해제.
           return sp;
         },
         { replace: true },
@@ -274,14 +287,16 @@ export const SubwayPage = () => {
     [selectStation],
   );
 
-  // '← 목록' — 선택(stn)·추적 호선(line) 해제로 리스트 뷰 복귀. 지도/검색/주변은 그대로.
+  // '← 목록' — 선택(stn)·추적 호선(line)·도착(to) 해제로 리스트 뷰 복귀. 지도/검색/주변 유지.
   const handleBack = useCallback(() => {
     setTimetableView(null);
+    setPathViewOpen(false);
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
         sp.delete('stn');
         sp.delete('line');
+        sp.delete('to');
         return sp;
       },
       { replace: true },
@@ -343,6 +358,7 @@ export const SubwayPage = () => {
             sp.delete('q');
             sp.delete('stn');
             sp.delete('line');
+            sp.delete('to');
             return sp;
           },
           { replace: true },
@@ -375,6 +391,7 @@ export const SubwayPage = () => {
           sp.delete('q');
           sp.delete('stn');
           sp.delete('line');
+          sp.delete('to');
           return sp;
         },
         { replace: true },
@@ -399,6 +416,7 @@ export const SubwayPage = () => {
         sp.delete('near');
         sp.delete('stn');
         sp.delete('line');
+        sp.delete('to');
         return sp;
       },
       { replace: true },
@@ -437,6 +455,23 @@ export const SubwayPage = () => {
   );
   const handleCloseTimetable = useCallback(() => setTimetableView(null), []);
 
+  // 길찾기 열기 — 이 역을 출발로. 시간표 뷰를 닫고, line 추적은 배타(폴리라인 충돌
+  // 방지)라 해제한다. 도착역은 아직 없어(to null) 도착역 검색 단계로 진입.
+  const handleOpenPath = useCallback(() => {
+    setTimetableView(null);
+    setPathViewOpen(true);
+    setParam('line', null);
+  }, [setParam]);
+  // 도착역 선택 — to 세팅(그룹 대표 id). stn(출발)·pathViewOpen 유지 → 경로 조회.
+  const handleSelectDest = useCallback((id: string) => setParam('to', id), [setParam]);
+  // '다시 선택' — to 만 해제(도착역 검색으로 복귀). pathViewOpen 유지.
+  const handleClearDest = useCallback(() => setParam('to', null), [setParam]);
+  // '← 도착정보' — 길찾기 뷰 닫기(pathViewOpen off + to 해제).
+  const handleClosePath = useCallback(() => {
+    setPathViewOpen(false);
+    setParam('to', null);
+  }, [setParam]);
+
   // 도착 패널 푸터용 시간표 — 뷰가 닫혀 있을 때(쿼리=선택 stn·오늘)의 결과만. 응답
   // stationId 가 stn 과 맞아야 전환 중 이전 데이터가 새지 않는다.
   const footerTimetable =
@@ -453,6 +488,12 @@ export const SubwayPage = () => {
     timetableView && congestion.data?.stationId === timetableView.stationId
       ? congestion.data
       : null;
+
+  // 경로 결과 — 길찾기 뷰에서만(경로 모드). 지도는 found 일 때만 폴리라인/핀.
+  const pathData = inPathView ? (path.data ?? null) : null;
+  const pathForMap = pathData?.found ? pathData : null;
+  // 도착역명 — 응답 우선, 없으면 to id 의 역명 부분.
+  const toName = pathData?.to.name ?? (to ? to.slice(to.indexOf(':') + 1) : '');
   // 현재 stn 응답이 아직 없으면(최초/역 전환) 로딩 — placeholder(직전 역)를 목록으로
   // 흘리지 않고 스피너를 보인다. 같은 역 30초 폴링 중에는 arrivalsForStn 이 유지돼
   // 로딩이 뜨지 않는다(잔상 없이 교체).
@@ -597,11 +638,13 @@ export const SubwayPage = () => {
       footerTimetable={footerTimetable}
       onOpenTimetable={handleOpenTimetable}
       footerCongestion={footerCongestion}
+      onOpenPath={handleOpenPath}
       {...lineFavoriteProps}
     />
   ) : null;
 
-  // 패널 슬롯 — 시간표 뷰가 열려 있으면 그 뷰로 전환, 아니면 도착 패널.
+  // 패널 슬롯 — 시간표 뷰 > 길찾기 뷰 > 도착 패널(모두 배타). timetableView 와
+  // inPathView 는 열기 핸들러가 서로를 닫아 동시에 참이 아니다.
   const panelContent =
     timetableView && stn ? (
       <SubwayTimetable
@@ -614,6 +657,19 @@ export const SubwayPage = () => {
         onDayType={setTimetableDayType}
         onBack={handleCloseTimetable}
         congestion={viewCongestion}
+      />
+    ) : inPathView && stn ? (
+      <SubwayPathPanel
+        fromName={panelStationName}
+        fromId={stn}
+        to={to}
+        toName={toName}
+        path={pathData}
+        isLoading={path.isLoading}
+        isError={path.isError}
+        onSelectDest={handleSelectDest}
+        onClearDest={handleClearDest}
+        onBack={handleClosePath}
       />
     ) : (
       arrivalPanel
@@ -647,6 +703,7 @@ export const SubwayPage = () => {
               onCloseLine={handleCloseLine}
               positions={trainItems}
               pendingFollow={pendingFollow}
+              pathResult={pathForMap}
             />
           </section>
         </div>
@@ -683,6 +740,7 @@ export const SubwayPage = () => {
               onCloseLine={handleCloseLine}
               positions={trainItems}
               pendingFollow={pendingFollow}
+              pathResult={pathForMap}
             />
           </div>
           {/* 역 선택 시 하단 영역이 도착정보(→시간표) 뷰로 전환 — 패널은 내부

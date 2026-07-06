@@ -4,6 +4,7 @@ import {
   type SubwayCongestionResultType,
   type SubwayLineDetailResultType,
   type SubwayNearbyResultType,
+  type SubwayPathResultType,
   type SubwayPositionsResultType,
   type SubwayStationSearchResultType,
   type SubwayTimetableResultType,
@@ -64,5 +65,13 @@ export const subwayApi = {
     return apiFetch<SubwayCongestionResultType>(
       `${Routes.Subway.stationCongestion(stationId)}?${params.toString()}`,
     );
+  },
+  // 경로 탐색 — 로컬 그래프 다익스트라(외부 API 없음). from/to 는 역×호선 stationId.
+  // 소요는 근사('약 N분'). legs 경계가 곧 환승(별도 leg 없음).
+  path: (from: string, to: string) => {
+    const params = new URLSearchParams();
+    params.set('from', from);
+    params.set('to', to);
+    return apiFetch<SubwayPathResultType>(`${Routes.Subway.path}?${params.toString()}`);
   },
 };

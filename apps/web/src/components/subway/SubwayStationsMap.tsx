@@ -5,6 +5,7 @@ import { ApiError, useMapPublicConfig } from '@repo/shared';
 import type {
   SubwayLineDetailResultType,
   SubwayLineStationItemType,
+  SubwayPathResultType,
   SubwayStationGroupItemType,
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
@@ -19,6 +20,7 @@ import {
   pointAtRoutePathS,
   sliceForMove,
   subwayDestinationLabel,
+  subwayLineColor,
   type LatLng,
   type TrainSection,
 } from '@repo/utils';
@@ -44,6 +46,8 @@ const MY_LOCATION_MARKER_URL = buildMyLocationMarkerDataUrl();
 const MY_LOCATION_ID = 'my-location';
 // 열차 마커 id 접두사 — 전용 vehicles 레이어라 클릭 라우팅과 무관하지만 식별용.
 const VEHICLE_ID_PREFIX = 'train-';
+// 경로(길찾기) 마커 — 출발/도착 선택 핀 + 환승 도트(중립 회색 도넛). 클릭 무시.
+const PATH_TRANSFER_DOT_URL = buildSubwayStopDotDataUrl('#6b7280', true);
 // 도착 패널 '지도에서 보기' 대기 마감(ms) — 폴링 1회(30초)+여유. 이 안에 대상
 // trainNo 가 positions 에 안 나타나면 대기 해제 + 안내(아직 미진입/방금 종료).
 const PENDING_FOLLOW_MS = 32_000;
@@ -103,6 +107,9 @@ interface Props {
   // 7차 도착↔지도 연계 — 도착 패널에서 '지도에서 보기'한 열차. nonce 로 매 요청을
   // 구분(같은 열차 재요청도 재발화). 그 trainNo 가 positions 에 나타나면 1회 follow.
   pendingFollow?: { trainNo: string; nonce: number } | null;
+  // 11차 경로 모드 — 있으면 leg 폴리라인(leg별 호선색) + 출발/도착 핀 + 환승 도트만
+  // 그리고 나머지(검색 역·경유역 점·열차·내 위치)는 숨긴다. 경로 전체로 fit(1회).
+  pathResult?: SubwayPathResultType | null;
   className?: string;
 }
 
@@ -125,6 +132,7 @@ export const SubwayStationsMap = ({
   onCloseLine,
   positions,
   pendingFollow,
+  pathResult,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -175,16 +183,24 @@ export const SubwayStationsMap = ({
     return t ? subwayDestinationLabel(t.destinationName) : '';
   }, [followId, positions]);
 
-  // 폴리라인 — 각 section 을 개별 줄로(이어지지 않는 지선이 지그재그가 되지 않게).
-  // 순환(isLoop)은 첫 좌표를 끝에 복제해 닫는다. 색은 호선색 공용.
+  // 폴리라인 — 경로 모드면 leg별 폴리라인(호선색), 아니면 추적 호선 sections. leg 는
+  // 이미 탑승~하차 순서라 그대로 잇고, 노선 sections 는 지선을 개별 줄로(지그재그
+  // 방지) + 순환 닫기.
   const routeLines = useMemo(() => {
+    if (pathResult) {
+      if (!pathResult.found) return null;
+      return pathResult.legs.map((leg) => ({
+        points: leg.stations.map((s) => ({ lat: s.lat, lng: s.lng })),
+        color: subwayLineColor(leg.lineId),
+      }));
+    }
     if (!lineDetail || !lineColor) return null;
     return lineDetail.sections.map((sec) => {
       const points = sec.stations.map((s) => ({ lat: s.lat, lng: s.lng }));
       if (sec.isLoop && points.length > 1) points.push({ ...points[0]! });
       return { points, color: lineColor };
     });
-  }, [lineDetail, lineColor]);
+  }, [pathResult, lineDetail, lineColor]);
 
   // 경유역 점 — 추적 호선의 stations(중복 stationId 제거). 활성 결과(groups)에 같은
   // 역명 그룹이 이미 있으면 그 마커가 우선이라 점을 생략(환승역 이중 마커 방지).
@@ -216,6 +232,43 @@ export const SubwayStationsMap = ({
   );
 
   const markers: MapMarker[] = useMemo(() => {
+    // 경로 모드 — 출발/도착 핀 + 환승 도트만(검색 역·경유역 점·내 위치는 숨김). 좌표는
+    // path.from/to 에 없고 legs 에만 있어 leg 양 끝에서 취한다. 경계=환승.
+    if (pathResult) {
+      if (!pathResult.found || pathResult.legs.length === 0) return [];
+      const legs = pathResult.legs;
+      const firstLeg = legs[0]!;
+      const lastLeg = legs[legs.length - 1]!;
+      const start = firstLeg.stations[0]!;
+      const end = lastLeg.stations[lastLeg.stations.length - 1]!;
+      // 환승점 — 두 번째 leg 부터 각 leg 의 첫 역(앞 leg 마지막 역과 같은 물리 역).
+      const transfers: MapMarker[] = legs.slice(1).map((leg) => {
+        const s = leg.stations[0]!;
+        return {
+          id: `xfer-${leg.lineId}-${s.stationId}`,
+          lat: s.lat,
+          lng: s.lng,
+          icon: { src: PATH_TRANSFER_DOT_URL, selectedSrc: PATH_TRANSFER_DOT_URL },
+        };
+      });
+      return [
+        ...transfers,
+        {
+          id: 'path-from',
+          lat: start.lat,
+          lng: start.lng,
+          label: start.name,
+          icon: { src: STATION_SELECTED_URL, selectedSrc: STATION_SELECTED_URL },
+        },
+        {
+          id: 'path-to',
+          lat: end.lat,
+          lng: end.lng,
+          label: end.name,
+          icon: { src: STATION_SELECTED_URL, selectedSrc: STATION_SELECTED_URL },
+        },
+      ];
+    }
     // 따라가기 중에는 화면을 비워 열차에 집중 — 검색 역·경유역 점을 숨기고 선택 역
     // 하나만 남긴다(폴리라인·열차는 별도 레이어라 그대로). 버스 8차 미러.
     if (following) {
@@ -266,7 +319,16 @@ export const SubwayStationsMap = ({
       });
     }
     return out;
-  }, [groups, myLocation, lineStops, stopDotUrl, stopDotTransferUrl, following, selectedId]);
+  }, [
+    groups,
+    myLocation,
+    lineStops,
+    stopDotUrl,
+    stopDotTransferUrl,
+    following,
+    selectedId,
+    pathResult,
+  ]);
 
   // 사용자가 직접 패닝/줌을 끝낸 시점의 지도 상태 — MapCanvas 가 programmatic
   // move(fit/flyTo)는 걸러주므로 여기엔 사용자 이동만 쌓인다.
@@ -324,7 +386,7 @@ export const SubwayStationsMap = ({
   // 만 — 노선 경유역 점(markers)이 바뀌어도 fit 하지 않는다(줌아웃 방지).
   useEffect(() => {
     if (!apiKey) return;
-    if (suppressFit) return;
+    if (suppressFit || pathResult) return; // 경로 모드는 전용 fit(아래).
     if (groups.length > 0) {
       // 주변 모드면 기준점 마커도 markers 에 포함돼 함께 fit 된다.
       handleRef.current?.fitToMarkers();
@@ -332,13 +394,28 @@ export const SubwayStationsMap = ({
       // 주변에 역이 하나도 없을 때 — 최소한 기준점으로 센터링.
       handleRef.current?.flyTo(myLocation.lat, myLocation.lng);
     }
-  }, [groups, apiKey, myLocation, suppressFit]);
+  }, [groups, apiKey, myLocation, suppressFit, pathResult]);
+
+  // 경로 로드 시 경로 전체가 보이게 fit — 결과가 바뀔 때 1회(ref 가드). 폴리라인은
+  // 별도 소스라 fitToMarkers 로는 안 잡혀 leg 좌표로 fitToCoords 한다.
+  const pathFitRef = useRef<SubwayPathResultType | null>(null);
+  useEffect(() => {
+    if (!apiKey || !pathResult || !pathResult.found) return;
+    if (pathFitRef.current === pathResult) return;
+    pathFitRef.current = pathResult;
+    const coords = pathResult.legs.flatMap((leg) =>
+      leg.stations.map((s) => ({ lat: s.lat, lng: s.lng })),
+    );
+    if (coords.length > 0) handleRef.current?.fitToCoords(coords);
+  }, [pathResult, apiKey]);
 
   // 선택 역으로 확대 포커스 — "선택이 바뀐 순간" 1회만 발사(데이터 갱신마다 재센터링
   // 금지 — ref 가드). 대상은 활성 결과(groups) 우선, 없으면 경유역 점(lineStops) —
-  // 노선 위 점을 클릭해 목록에 없는 역을 골라도 지도가 그 역으로 이동한다.
+  // 노선 위 점을 클릭해 목록에 없는 역을 골라도 지도가 그 역으로 이동한다. 경로
+  // 모드에서는 카메라를 경로 fit 이 쥐므로 선택 flyTo 는 쉰다.
   const flownIdRef = useRef<string | null>(null);
   useEffect(() => {
+    if (pathResult) return;
     if (!selectedId) {
       flownIdRef.current = null;
       return;
@@ -350,13 +427,13 @@ export const SubwayStationsMap = ({
     if (!target) return;
     flownIdRef.current = selectedId;
     handleRef.current?.flyToZoomIn(target.lat, target.lng, SUBWAY_SELECT_ZOOM);
-  }, [selectedId, groups, lineStops, apiKey]);
+  }, [selectedId, groups, lineStops, apiKey, pathResult]);
 
-  // 마커 클릭 라우팅 — 내 위치는 무시, 경유역 점은 onSelectStop(id 재해석), 나머지는
-  // 역 마커라 onSelect(그룹 id 그대로).
+  // 마커 클릭 라우팅 — 내 위치·경로 마커는 무시, 경유역 점은 onSelectStop(id 재해석),
+  // 나머지는 역 마커라 onSelect(그룹 id 그대로).
   const handleMarkerSelect = useCallback(
     (id: string) => {
-      if (id === MY_LOCATION_ID) return;
+      if (id === MY_LOCATION_ID || id.startsWith('path-') || id.startsWith('xfer-')) return;
       if (stopIds.has(id)) onSelectStop?.(id);
       else onSelect(id);
     },

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Clock, Loader2, MapPin, Route } from 'lucide-react';
+import { ArrowLeft, Clock, Loader2, MapPin, Navigation, Route } from 'lucide-react';
 import type {
   SubwayArrivalItemType,
   SubwayCongestionDirectionType,
@@ -93,6 +93,8 @@ export interface SubwayArrivalPanelProps {
   // 10차 혼잡도(정적 통계) — 선택 stn 의 호선. coverage·lineId 매칭 섹션의 updn 그룹
   // 헤더에 현재 시간대 슬롯 게이지. 실시간 아님('통계' 라벨). 시간표 푸터와 동일 배선.
   footerCongestion?: SubwayCongestionResultType | null;
+  // 11차 길찾기 — 헤더 버튼. 이 역을 출발로 길찾기 뷰 전환. 미지정이면 버튼 숨김.
+  onOpenPath?(): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,6 +121,7 @@ export const SubwayArrivalPanel = ({
   footerTimetable,
   onOpenTimetable,
   footerCongestion,
+  onOpenPath,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -171,10 +174,23 @@ export const SubwayArrivalPanel = ({
               </Badge>
             )}
           </span>
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            {lines.map((l) => (
-              <SubwayLineBadge key={l} lineId={l} />
-            ))}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {/* 길찾기 — 이 역을 출발로. */}
+            {onOpenPath && (
+              <button
+                type="button"
+                onClick={onOpenPath}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <Navigation className="size-3.5" />
+                길찾기
+              </button>
+            )}
+            <span className="flex items-center gap-1">
+              {lines.map((l) => (
+                <SubwayLineBadge key={l} lineId={l} />
+              ))}
+            </span>
           </span>
         </div>
         {fetchedAt && (

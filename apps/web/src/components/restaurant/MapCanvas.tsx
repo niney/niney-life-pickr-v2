@@ -147,6 +147,9 @@ export interface MapCanvasHandle {
   flyToZoomIn(lat: number, lng: number, minZoom: number): void;
   // bbox 에 모든 마커가 들어오게 fit. ol fit duration 짧게.
   fitToMarkers(padding?: number): void;
+  // 임의 좌표 집합의 bbox 에 맞춰 fit — 마커가 아닌 경로(길찾기 폴리라인) 전체가
+  // 보이게 할 때. 마커 소스와 무관하게 넘겨받은 좌표만으로 extent 를 만든다.
+  fitToCoords(coords: { lat: number; lng: number }[], padding?: number): void;
 }
 
 interface Props {
@@ -863,6 +866,28 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         if (!ext || !Number.isFinite(ext[0])) return;
         userInteractedRef.current = false;
         map.getView().fit(ext, {
+          padding: [padding, padding, padding, padding],
+          duration: 350,
+          maxZoom: 17,
+        });
+      },
+      fitToCoords(coords, padding = 60) {
+        const map = mapRef.current;
+        if (!map || coords.length === 0) return;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const c of coords) {
+          const [x, y] = fromLonLat([c.lng, c.lat]);
+          if (x! < minX) minX = x!;
+          if (x! > maxX) maxX = x!;
+          if (y! < minY) minY = y!;
+          if (y! > maxY) maxY = y!;
+        }
+        if (!Number.isFinite(minX)) return;
+        userInteractedRef.current = false;
+        map.getView().fit([minX, minY, maxX, maxY], {
           padding: [padding, padding, padding, padding],
           duration: 350,
           maxZoom: 17,

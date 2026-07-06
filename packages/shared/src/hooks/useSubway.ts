@@ -110,3 +110,15 @@ export const useSubwayCongestion = (stationId: string | null, dayType: string) =
     staleTime: 86_400_000,
   });
 };
+
+// 경로 탐색 — 로컬 그래프 다익스트라라 사실상 정적(staleTime 24h, 폴링 없음). 출발·도착
+// 이 모두 있고 서로 다를 때만 조회(from===to 는 계약 refine 거절).
+export const useSubwayPath = (from: string | null, to: string | null) => {
+  const enabled = !!from && !!to && from !== to;
+  return useQuery({
+    queryKey: ['subway', 'path', from, to],
+    queryFn: () => subwayApi.path(from!, to!),
+    enabled,
+    staleTime: 86_400_000,
+  });
+};
