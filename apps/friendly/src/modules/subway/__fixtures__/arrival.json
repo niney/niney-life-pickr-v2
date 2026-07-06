@@ -1,0 +1,62 @@
+{
+  "errorMessage": {
+    "status": 200,
+    "code": "INFO-000",
+    "message": "정상 처리되었습니다.",
+    "link": "",
+    "developerMessage": "",
+    "total": 2
+  },
+  "realtimeArrivalList": [
+    {
+      "totalCount": 2,
+      "rowNum": 1,
+      "selectedCount": 2,
+      "subwayId": "1002",
+      "updnLine": "외선",
+      "trainLineNm": "성수행 - 역삼방면",
+      "statnFid": "1002000223",
+      "statnTid": "1002000221",
+      "statnId": "1002000222",
+      "statnNm": "강남",
+      "trnsitCo": "2",
+      "subwayList": "1002,1077",
+      "statnList": "1002000222,1077000687",
+      "btrainSttus": "일반",
+      "barvlDt": "90",
+      "btrainNo": "2293",
+      "bstatnId": "1002000211",
+      "bstatnNm": "성수",
+      "recptnDt": "2026-07-06 16:01:37",
+      "arvlMsg2": "전역 도착",
+      "arvlMsg3": "교대",
+      "arvlCd": "5",
+      "lstcarAt": "0"
+    },
+    {
+      "totalCount": 2,
+      "rowNum": 2,
+      "selectedCount": 2,
+      "subwayId": "1077",
+      "updnLine": "상행",
+      "trainLineNm": "신사행 - 신논현방면",
+      "statnFid": "1077000688",
+      "statnTid": "1077000686",
+      "statnId": "1077000687",
+      "statnNm": "강남",
+      "trnsitCo": "2",
+      "subwayList": "1002,1077",
+      "statnList": "1002000222,1077000687",
+      "btrainSttus": "일반",
+      "barvlDt": "0",
+      "btrainNo": "10",
+      "bstatnId": "1077000684",
+      "bstatnNm": "신사",
+      "recptnDt": "2026-07-06 16:03:04",
+      "arvlMsg2": "전역 도착",
+      "arvlMsg3": "양재",
+      "arvlCd": "5",
+      "lstcarAt": "0"
+    }
+  ]
+}

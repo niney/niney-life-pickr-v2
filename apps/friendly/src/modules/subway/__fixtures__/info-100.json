@@ -1,0 +1,8 @@
+{
+  "status": 500,
+  "code": "INFO-100",
+  "message": "인증키가 유효하지 않습니다.",
+  "link": "",
+  "developerMessage": "",
+  "total": 0
+}

@@ -1101,3 +1101,41 @@ model BusRouteShape {
 
   @@map("bus_route_shapes")
 }
+
+// 수도권 전철 역사마스터 — openapi subwayStationMaster(784행)를 전량 적재해
+// 로컬 검색한다(업스트림 쿼터 0). 버스와 달리 캐시가 아니라 마스터 테이블:
+// load:subway-stations 스크립트가 채우고 검색은 여기만 읽는다.
+//
+// PK 설계(플랜 B): 역사마스터의 BLDN_ID(4자리)는 실시간 API 의 statnId(10자리)와
+// 불일치해 조인 키로 못 쓴다. 내부 id 는 `${lineId}:${name}` 합성이며, 실시간
+// 조회(2차~)는 역명 기반이라 이 설계로 완결된다. 같은 물리 역이라도 호선마다
+// 마스터 행(좌표 포함)이 따로 있다 — (lineId, name) 유니크.
+model SubwayStation {
+  id           String   @id // `${lineId}:${name}` 합성 — 플랜 B
+  name         String // BLDN_NM ('강남')
+  realtimeName String? // 실시간 API 조회 역명이 다를 때만 ('서울역'→'서울')
+  lineId       String // 실시간 subwayId 체계 ('1002')
+  lineName     String // SUBWAY_LINES.name 표기
+  statnId      String? // 실시간 10자리 — 추후 관측 backfill
+  stationCd    String? // 4자리 역코드(BLDN_ID) — 8차 시간표 조인 후보
+  frCode       String? // 외부코드 — 5차 정렬 후보 (마스터엔 없음, 추후)
+  lat          Float
+  lng          Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([lineId, name])
+  @@index([name])
+  @@index([lineId])
+  @@map("subway_stations")
+}
+
+// 역사마스터 적재 이력 — 검색 응답의 fetchedAt(마스터 기준일) 산출용.
+model SubwayMasterSync {
+  id       Int      @id @default(autoincrement())
+  source   String // 'subwayStationMaster'
+  count    Int
+  loadedAt DateTime @default(now())
+
+  @@map("subway_master_syncs")
+}

@@ -1,0 +1,48 @@
+{
+  "errorMessage": {
+    "status": 200,
+    "code": "INFO-000",
+    "message": "정상 처리되었습니다.",
+    "link": "",
+    "developerMessage": "",
+    "total": 2
+  },
+  "realtimePositionList": [
+    {
+      "totalCount": 2,
+      "rowNum": 1,
+      "selectedCount": 2,
+      "subwayId": "1002",
+      "subwayNm": "2호선",
+      "statnId": "1002002114",
+      "statnNm": "신설동",
+      "trainNo": "1626",
+      "lastRecptnDt": "20260706",
+      "recptnDt": "2026-07-06 16:00:30",
+      "updnLine": "0",
+      "statnTid": "1002000211",
+      "statnTnm": "성수지선",
+      "trainSttus": "1",
+      "directAt": "0",
+      "lstcarAt": "0"
+    },
+    {
+      "totalCount": 2,
+      "rowNum": 2,
+      "selectedCount": 2,
+      "subwayId": "1002",
+      "subwayNm": "2호선",
+      "statnId": "1002000212",
+      "statnNm": "용답",
+      "trainNo": "2287",
+      "lastRecptnDt": "20260706",
+      "recptnDt": "2026-07-06 16:00:58",
+      "updnLine": "0",
+      "statnTid": "1002000211",
+      "statnTnm": "성수지선",
+      "trainSttus": "0",
+      "directAt": "0",
+      "lstcarAt": "0"
+    }
+  ]
+}

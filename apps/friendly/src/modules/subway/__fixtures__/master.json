@@ -1,0 +1,14 @@
+{
+  "subwayStationMaster": {
+    "list_total_count": 784,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      { "BLDN_ID": "0150", "BLDN_NM": "서울역", "ROUTE": "1호선", "LAT": "37.556228", "LOT": "126.972135" },
+      { "BLDN_ID": "0151", "BLDN_NM": "시청", "ROUTE": "1호선", "LAT": "37.565715", "LOT": "126.977088" },
+      { "BLDN_ID": "0426", "BLDN_NM": "서울역", "ROUTE": "공항철도1호선", "LAT": "37.552628", "LOT": "126.972010" }
+    ]
+  }
+}

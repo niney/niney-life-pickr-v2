@@ -1,0 +1,10 @@
+{
+  "subwayStationMaster": {
+    "list_total_count": 1,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": { "BLDN_ID": "0150", "BLDN_NM": "서울역", "ROUTE": "1호선", "LAT": "37.556228", "LOT": "126.972135" }
+  }
+}

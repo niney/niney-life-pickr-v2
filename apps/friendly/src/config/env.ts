@@ -65,6 +65,15 @@ const EnvSchema = z.object({
   // 처리하며, 확신이 없으면 probe:bus 스크립트가 판별해 알려준다.
   BUS_API_KEY: z.string().default(''),
 
+  // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
+  // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,
+  // '일반 인증키'는 openapi.seoul.go.kr:8088 정적(역사마스터) 전용 — 서로 호환
+  // 되지 않는다. 각 기능은 자기 키가 빈 값이면 비활성(라우트/스크립트가 503).
+  //  - SUBWAY_API_KEY:     실시간 swopenAPI(도착/위치) — 2차~ 라우트가 사용.
+  //  - SEOUL_OPEN_API_KEY: openapi 정적(역사마스터) — load:subway-stations 가 사용.
+  SUBWAY_API_KEY: z.string().default(''),
+  SEOUL_OPEN_API_KEY: z.string().default(''),
+
   // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치
   // (apps/web/dist/index.html) 를 빌드 산출물 기준 상대경로로 탐색.
