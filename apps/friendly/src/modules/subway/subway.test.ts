@@ -26,6 +26,7 @@ import type {
   SubwayCongestionResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
+  SubwayPathResultType,
   SubwayPositionsResultType,
   SubwayStationSearchResultType,
   SubwayTimetableResultType,
@@ -81,6 +82,8 @@ const timetableUrl = (stationId: string, dayType?: string): string =>
   `/api/v1/subway/stations/${encodeURIComponent(stationId)}/timetable${dayType !== undefined ? `?dayType=${dayType}` : ''}`;
 const congestionUrl = (stationId: string, dayType?: string): string =>
   `/api/v1/subway/stations/${encodeURIComponent(stationId)}/congestion${dayType !== undefined ? `?dayType=${dayType}` : ''}`;
+const pathUrl = (from: string, to: string): string =>
+  `/api/v1/subway/path?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
 
 // SubwayCongestion 시드 — stationName 에 '지하철테스트' 를 넣어 afterAll 이 정리.
 const seedCongestion = (
@@ -792,6 +795,65 @@ describe('GET /api/v1/subway/stations/:stationId/congestion — 혼잡도', () =
     await expect(svc.getStationCongestion('1002:x', '1')).rejects.toMatchObject({
       statusCode: 503,
     });
+  });
+});
+
+describe('GET /api/v1/subway/path — 경로 탐색', () => {
+  it('from == to → 400 (zod refine)', async () => {
+    const id = `1002:${NAME_PREFIX}같은역${stamp()}`;
+    const res = await app.inject({ url: pathUrl(id, id) });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('없는 역 → 404 (라우트)', async () => {
+    const res = await app.inject({
+      url: pathUrl(`1002:${NAME_PREFIX}경로없음${stamp()}`, `1002:${NAME_PREFIX}경로없음2${stamp()}`),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('정상 봉투 — 직행(seed 그래프) found·leg 1·rideCount·approxMinutes', async () => {
+    // 실 노선과 안 섞이게 가짜 비순환 lineId(1091) + 고유 역명으로 격리 그래프.
+    const a = `${NAME_PREFIX}경로가${stamp()}`;
+    const b = `${NAME_PREFIX}경로나${stamp()}`;
+    await seed(app, [
+      { lineId: '1091', name: a, lat: 37.5, lng: 127.0 },
+      { lineId: '1091', name: b, lat: 37.51, lng: 127.0 },
+    ]);
+    await seedLineStations(app, [
+      { lineId: '1091', branchKey: 'main', branchName: null, seq: 1, stationId: `1091:${a}` },
+      { lineId: '1091', branchKey: 'main', branchName: null, seq: 2, stationId: `1091:${b}` },
+    ]);
+    const res = await app.inject({ url: pathUrl(`1091:${a}`, `1091:${b}`) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayPathResultType;
+    expect(body.found).toBe(true);
+    expect(body.source).toBe('db');
+    expect(body.from.stationId).toBe(`1091:${a}`);
+    expect(body.to.stationId).toBe(`1091:${b}`);
+    expect(body.legs).toHaveLength(1);
+    expect(body.legs[0]!.lineId).toBe('1091');
+    expect(body.legs[0]!.rideCount).toBe(1);
+    expect(body.legs[0]!.stations.map((s) => s.stationId)).toEqual([`1091:${a}`, `1091:${b}`]);
+    expect(body.transferCount).toBe(0);
+    expect(body.totalRideStations).toBe(1);
+    expect(body.approxMinutes).toBe(2); // 1 ride × 120s
+  });
+
+  it('미연결 → found:false·legs [] (200)', async () => {
+    // 순서 데이터 없는 격리 역 2개 — 그래프에 노드만 있고 간선 없음.
+    const a = `${NAME_PREFIX}고립가${stamp()}`;
+    const b = `${NAME_PREFIX}고립나${stamp()}`;
+    await seed(app, [
+      { lineId: '1092', name: a, lat: 37.5, lng: 128.0 },
+      { lineId: '1093', name: b, lat: 37.6, lng: 128.5 },
+    ]);
+    const res = await app.inject({ url: pathUrl(`1092:${a}`, `1093:${b}`) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayPathResultType;
+    expect(body.found).toBe(false);
+    expect(body.legs).toEqual([]);
+    expect(body.approxMinutes).toBeNull();
   });
 });
 

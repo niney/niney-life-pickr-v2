@@ -1,3 +1,4 @@
+import type { SubwayPathResultType } from '@repo/api-contract';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import {
@@ -145,6 +146,89 @@ describe.skipIf(!OPENAPI_KEY)('subway master live smoke (SEOUL_OPEN_API_KEY 필�
     } finally {
       await app.close();
     }
+  });
+});
+
+// 경로 탐색은 로컬 그래프(마스터+노선순서) — 키 무관. 상식 정합만 느슨히 단언.
+describe('subway path smoke (로컬 적재 필요)', () => {
+  const findStation = async (
+    app: Awaited<ReturnType<typeof buildApp>>,
+    name: string,
+    lineId: string,
+  ): Promise<string | null> => {
+    const s = await app.prisma.subwayStation.findFirst({ where: { name, lineId } });
+    return s?.id ?? null;
+  };
+  const runPath = async (
+    ctx: { skip: () => void },
+    fromName: string,
+    fromLine: string,
+    toName: string,
+    toLine: string,
+  ): Promise<SubwayPathResultType | null> => {
+    const app = await buildApp({ logger: false });
+    await app.ready();
+    try {
+      const orderCount = await app.prisma.subwayLineStation.count();
+      if (orderCount === 0) {
+        console.warn('[path smoke] 노선 순서 미적재 — skip (load:subway-line-orders)');
+        ctx.skip();
+        return null;
+      }
+      const [from, to] = await Promise.all([
+        findStation(app, fromName, fromLine),
+        findStation(app, toName, toLine),
+      ]);
+      if (!from || !to) {
+        console.warn(`[path smoke] ${fromName}/${toName} 미적재 — skip`);
+        ctx.skip();
+        return null;
+      }
+      const res = await app.inject({
+        url: `/api/v1/subway/path?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json() as SubwayPathResultType;
+    } finally {
+      await app.close();
+    }
+  };
+
+  it('강남(2호선)→서울역(1호선) — found·환승 1~3·약 20~50분', async (ctx) => {
+    const body = await runPath(ctx, '강남', '1002', '서울역', '1001');
+    if (!body) return;
+    expect(body.found).toBe(true);
+    expect(body.legs.length).toBeGreaterThan(0);
+    expect(body.transferCount).toBeGreaterThanOrEqual(1);
+    expect(body.transferCount).toBeLessThanOrEqual(3);
+    expect(body.approxMinutes).not.toBeNull();
+    expect(body.approxMinutes!).toBeGreaterThan(15);
+    expect(body.approxMinutes!).toBeLessThan(60);
+    // 인접 leg 경계 = 환승 = 같은 물리역(다른 호선 stationId).
+    for (let i = 0; i + 1 < body.legs.length; i += 1) {
+      const prev = body.legs[i]!;
+      const next = body.legs[i + 1]!;
+      expect(prev.lineId).not.toBe(next.lineId);
+    }
+  });
+
+  it('강남→역삼(2호선 직행) — leg 1·환승 0·rideCount 1', async (ctx) => {
+    const body = await runPath(ctx, '강남', '1002', '역삼', '1002');
+    if (!body) return;
+    expect(body.found).toBe(true);
+    expect(body.transferCount).toBe(0);
+    expect(body.legs).toHaveLength(1);
+    expect(body.legs[0]!.lineId).toBe('1002');
+    expect(body.legs[0]!.rideCount).toBe(1); // 강남-역삼 인접
+    expect(body.totalRideStations).toBe(1);
+  });
+
+  it('잠실(2호선)→성수(2호선) — 200·found (순환/지선 정합)', async (ctx) => {
+    const body = await runPath(ctx, '잠실', '1002', '성수', '1002');
+    if (!body) return;
+    expect(body.found).toBe(true);
+    expect(body.legs.length).toBeGreaterThan(0);
+    expect(body.approxMinutes).not.toBeNull();
   });
 });
 

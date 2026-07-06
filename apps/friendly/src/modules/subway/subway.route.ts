@@ -12,6 +12,8 @@ import {
   SubwayLineDetailResult,
   SubwayNearbyQuery,
   SubwayNearbyResult,
+  SubwayPathQuery,
+  SubwayPathResult,
   SubwayPositionsParams,
   SubwayPositionsResult,
   SubwayStationSearchQuery,
@@ -219,6 +221,36 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
             statusCode: sc,
             error: sc === 404 ? 'Not Found' : 'Service Unavailable',
             message: e instanceof Error ? e.message : '지하철 혼잡도 조회 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 경로 탐색(로컬 그래프 다익스트라) — ?from=&to=. path param 이 없어 디코드
+  // 불필요(from/to 는 쿼리 값). 없는 역 404, 마스터/순서 미적재 503. 미연결은
+  // found:false 로 200(로컬이라 502 없음). from==to 는 zod refine 이 400.
+  typed.get(Routes.Subway.path, {
+    schema: {
+      tags: ['subway'],
+      querystring: SubwayPathQuery,
+      response: {
+        200: SubwayPathResult,
+        404: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getPath(req.query.from, req.query.to);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 404 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error: sc === 404 ? 'Not Found' : 'Service Unavailable',
+            message: e instanceof Error ? e.message : '지하철 경로 조회 실패',
           });
         }
         throw e;

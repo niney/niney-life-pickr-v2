@@ -202,6 +202,58 @@ export const SubwayTimetableResult = z.object({
 });
 export type SubwayTimetableResultType = z.infer<typeof SubwayTimetableResult>;
 
+// ── 11차: 경로 탐색 (로컬 그래프 — 외부 API 불필요) ─────────────────────────
+// 노선 순서(SubwayLineStation)의 인접 역 간선 + 역명 근접 그룹의 환승 간선으로
+// 역 그래프를 만들어 다익스트라로 푼다. 가중치는 근사(역간/환승 고정 초 —
+// 서버 상수)라 소요 시간은 '약 N분' 표기 계약. 순환(2호선)·지선 분기(공용
+// 정차역의 동일 stationId)가 그래프에 자연 반영된다.
+
+export const SubwayPathQuery = z
+  .object({
+    // 출발/도착 — 역×호선 stationId(`${lineId}:${name}`). 그룹 내 어느 호선
+    // id 든 무방(환승 간선 비용으로 자연 보정).
+    from: z.string().min(1),
+    to: z.string().min(1),
+  })
+  .refine((v) => v.from !== v.to, { message: '출발역과 도착역이 같습니다.' });
+export type SubwayPathQueryType = z.infer<typeof SubwayPathQuery>;
+
+export const SubwayPathLegStation = z.object({
+  stationId: z.string(),
+  name: z.string(),
+  lat: z.number().min(33).max(39),
+  lng: z.number().min(124).max(132),
+});
+export type SubwayPathLegStationType = z.infer<typeof SubwayPathLegStation>;
+
+// 한 leg = 같은 호선으로 연속 탑승하는 구간. 인접 leg 경계가 곧 환승(앞 leg 의
+// 마지막 역과 뒤 leg 의 첫 역은 같은 물리 역·다른 호선 stationId) — 별도 환승
+// leg 는 없다(FE 가 경계에 '환승' 라벨).
+export const SubwayPathLeg = z.object({
+  lineId: z.string(),
+  lineName: z.string(),
+  // 탑승역~하차역 운행 순서(min 2) — 지도 폴리라인·역 수 표기의 원천.
+  stations: z.array(SubwayPathLegStation).min(2),
+  // 이동 역 수 (= stations.length - 1).
+  rideCount: z.number().int().min(1),
+});
+export type SubwayPathLegType = z.infer<typeof SubwayPathLeg>;
+
+export const SubwayPathResult = z.object({
+  // 그래프 미연결(이론상 희귀 — 순서 데이터 공백 역 등)이면 false + legs [].
+  found: z.boolean(),
+  from: z.object({ stationId: z.string(), name: z.string() }),
+  to: z.object({ stationId: z.string(), name: z.string() }),
+  legs: z.array(SubwayPathLeg),
+  transferCount: z.number().int().min(0),
+  // 근사 소요(분) — 역간/환승 고정 가중치 합. FE 는 '약 N분' 필수.
+  approxMinutes: z.number().int().min(0).nullable(),
+  totalRideStations: z.number().int().min(0),
+  fetchedAt: z.string(),
+  source: z.literal('db'),
+});
+export type SubwayPathResultType = z.infer<typeof SubwayPathResult>;
+
 // ── 10차: 시간대별 혼잡도 (서울교통공사 정적 통계 — 1~8호선 한정) ───────────
 // odcloud 파일데이터(분기 갱신)를 load-subway-congestion 이 전량 적재한 로컬
 // 통계 — 실시간이 아니다(FE 는 "정적 통계" 라벨 필수). 값은 정원 대비 %

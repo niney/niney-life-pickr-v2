@@ -13,6 +13,7 @@ import type {
   SubwayCongestionResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
+  SubwayPathResultType,
   SubwayPositionsResultType,
   SubwayStationSearchResultType,
   SubwayTimetableDirectionType,
@@ -36,6 +37,15 @@ import {
   groupStations,
   type StationForGrouping,
 } from './subway-master.service.js';
+import {
+  buildSubwayGraph,
+  compressPathLegs,
+  findPath,
+  RIDE_SEC_PER_STATION,
+  SUBWAY_GRAPH_TTL_MS,
+  TRANSFER_SEC,
+  type SubwayGraph,
+} from './subway-path.service.js';
 
 // 검색 응답 상한 — total 은 절단 전 그룹 수(FE 가 '일부만 표시' 안내).
 export const MAX_GROUPS = 30;
@@ -245,6 +255,9 @@ export class SubwayService {
   private readonly inflight = new Map<string, Promise<{ data: unknown[]; fetchedAt: Date }>>();
   // 시간표 수집 동시 요청 합류 (cacheKey 단위) — 캐시 미스 시 업스트림 2콜 공유.
   private readonly timetableInflight = new Map<string, Promise<TimetableBlob>>();
+  // 경로 그래프(11차) lazy 캐시 — 재적재 드물어 TTL 로 충분. 동시 구축 합류.
+  private graphCache?: { graph: SubwayGraph; builtAt: number };
+  private graphInflight?: Promise<SubwayGraph>;
 
   constructor(private readonly deps: SubwayServiceDeps) {}
 
@@ -651,6 +664,81 @@ export class SubwayService {
       slots: JSON.parse(r.slots) as SubwayCongestionDirectionType['slots'],
     }));
     return { ...meta, coverage: true, directions, fetchedAt, source: 'db' };
+  }
+
+  // 경로 탐색(11차) — 로컬 그래프 다익스트라. 두 역 없으면 404, 마스터/순서 미적재
+  // 503. 미연결(순서 공백 등)은 found:false·legs [] 로 200. 업스트림 무관.
+  async getPath(fromId: string, toId: string): Promise<SubwayPathResultType> {
+    const { prisma } = this.deps;
+    const [stationCount, orderCount] = await Promise.all([
+      prisma.subwayStation.count(),
+      prisma.subwayLineStation.count(),
+    ]);
+    if (stationCount === 0 || orderCount === 0) {
+      throw new SubwayServiceError(
+        '경로 데이터가 없습니다 — 역사 마스터/노선 순서 적재 필요',
+        503,
+      );
+    }
+    const [fromStation, toStation] = await Promise.all([
+      prisma.subwayStation.findUnique({ where: { id: fromId } }),
+      prisma.subwayStation.findUnique({ where: { id: toId } }),
+    ]);
+    if (!fromStation || !toStation) {
+      throw new SubwayServiceError('해당 역을 찾을 수 없습니다.', 404);
+    }
+
+    const graph = await this.loadGraph();
+    const path = findPath(graph, fromId, toId);
+    const legs = compressPathLegs(graph, path);
+    // 지표는 legs 기반 — 출발/도착역의 플랫폼 이동(선두/후미 환승 간선)은 "무의미"
+    // 라 제외한다. 실제 탑승 leg 사이 경계만 환승(=legs-1). 소요도 탑승·환승만.
+    const totalRideStations = legs.reduce((sum, l) => sum + l.rideCount, 0);
+    const transferCount = legs.length > 0 ? legs.length - 1 : 0;
+    const approxMinutes = path.found
+      ? Math.round((totalRideStations * RIDE_SEC_PER_STATION + transferCount * TRANSFER_SEC) / 60)
+      : null;
+    const fetchedAt = (this.deps.now?.() ?? new Date()).toISOString();
+    return {
+      found: path.found,
+      from: { stationId: fromId, name: fromStation.name },
+      to: { stationId: toId, name: toStation.name },
+      legs,
+      transferCount,
+      approxMinutes,
+      totalRideStations,
+      fetchedAt,
+      source: 'db',
+    };
+  }
+
+  // 그래프 lazy 구축 + TTL 캐시. 동시 첫 요청은 하나의 구축에 합류.
+  private async loadGraph(): Promise<SubwayGraph> {
+    const nowMs = (this.deps.now?.() ?? new Date()).getTime();
+    if (this.graphCache && nowMs - this.graphCache.builtAt < SUBWAY_GRAPH_TTL_MS) {
+      return this.graphCache.graph;
+    }
+    if (this.graphInflight) return this.graphInflight;
+    const build = (async (): Promise<SubwayGraph> => {
+      const { prisma } = this.deps;
+      const [stations, lineStations] = await Promise.all([
+        prisma.subwayStation.findMany({
+          select: { id: true, name: true, lineId: true, lineName: true, lat: true, lng: true },
+        }),
+        prisma.subwayLineStation.findMany({
+          select: { lineId: true, branchKey: true, seq: true, stationId: true },
+        }),
+      ]);
+      const graph = buildSubwayGraph(stations, lineStations);
+      this.graphCache = { graph, builtAt: nowMs };
+      return graph;
+    })();
+    this.graphInflight = build;
+    try {
+      return await build;
+    } finally {
+      this.graphInflight = undefined;
+    }
   }
 
   private collectTimetable(
