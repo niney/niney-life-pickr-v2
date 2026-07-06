@@ -23,6 +23,9 @@ model User {
   busFavoriteStations BusFavoriteStation[]
   busFavoriteRoutes   BusFavoriteRoute[]
 
+  subwayFavoriteStations SubwayFavoriteStation[]
+  subwayFavoriteLines    SubwayFavoriteLine[]
+
   @@map("users")
 }
 
@@ -1138,4 +1141,45 @@ model SubwayMasterSync {
   loadedAt DateTime @default(now())
 
   @@map("subway_master_syncs")
+}
+
+// 로그인 사용자의 지하철 역 즐겨찾기(그룹 단위). 저장 시점 스냅샷(name/lat/lng/
+// lines)을 그대로 보존해 목록 렌더·지도 이동에 재조회가 필요 없다. 버스 즐겨찾기와
+// 동일하게 SubwayStation(캐시가 아닌 마스터지만) 을 FK 로 묶지 않는다 — 스냅샷이라
+// 마스터 보정·삭제가 즐겨찾기를 깨뜨리지 않게 한다. (userId, stationId) 유니크.
+model SubwayFavoriteStation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // 검색 그룹 대표 id `${lineId}:${name}` 스냅샷.
+  stationId String
+  name      String
+  // 그룹 lineId 목록(오름차순)을 콤마 결합한 문자열 — SQLite 라 배열 컬럼이 없어
+  // 서비스 경계에서 join/split 한다(계약은 string[]).
+  lines     String
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+
+  @@unique([userId, stationId])
+  @@index([userId])
+  @@map("subway_favorite_stations")
+}
+
+// 역×호선 즐겨찾기 — 도착 패널의 호선 섹션에서 추가. stationName/lat/lng 를
+// 저장 시점 그대로 보존한다. (userId, stationId, lineId) 유니크.
+model SubwayFavoriteLine {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stationId   String
+  lineId      String
+  stationName String
+  lat         Float
+  lng         Float
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, stationId, lineId])
+  @@index([userId])
+  @@map("subway_favorite_lines")
 }

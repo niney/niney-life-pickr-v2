@@ -425,6 +425,15 @@ export const Subway = {
   // 이라 빌더가 인코딩까지 책임진다. 서버는 역명 단위 15초 마이크로 캐시.
   stationArrivals: (stationId: string) =>
     `${API_PREFIX}/subway/stations/${encodeURIComponent(stationId)}/arrivals`,
+  // ── 즐겨찾기 (여기만 인증 필요 — 버스 즐겨찾기와 동일 정책) ──
+  // 비로그인은 클라이언트 저장. PUT/DELETE 응답 = 전체 목록(캐시 통째 교체).
+  favorites: `${API_PREFIX}/subway/favorites`,
+  favoriteStation: (stationId: string) =>
+    `${API_PREFIX}/subway/favorites/stations/${encodeURIComponent(stationId)}`,
+  favoriteLine: (stationId: string, lineId: string) =>
+    `${API_PREFIX}/subway/favorites/lines/${encodeURIComponent(stationId)}/${lineId}`,
+  // 로그인 직후 게스트 저장분 union 병합 (POST, 멱등).
+  favoritesSync: `${API_PREFIX}/subway/favorites/sync`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;
