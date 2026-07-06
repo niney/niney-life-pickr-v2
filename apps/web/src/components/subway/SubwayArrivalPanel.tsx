@@ -5,6 +5,7 @@ import { subwayLineName } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { SubwayLineBadge } from './SubwayLineBadge';
 
 // 실시간(30초 폴링)이라 초 단위 상대시각 — '방금/N초 전'이 의미를 가진다(검색
@@ -59,8 +60,15 @@ export interface SubwayArrivalPanelProps {
   fetchedAt: string | null;
   isLoading: boolean;
   isError: boolean;
+  // 도착 조회가 404 — 즐겨찾기로 진입한 죽은 stationId(마스터 재적재로 대표 id
+  // 소멸). 일반 에러와 다른 안내(재등록 유도)를 띄운다.
+  notFound?: boolean;
   onBack(): void;
   onRetry(): void;
+  // 역×호선 즐겨찾기 — 호선 섹션 헤더 별. 좌표를 확보할 수 없는(딥링크 직진입 등)
+  // 경우 상위가 미지정 → 별 숨김. 스냅샷 조립(stationId/좌표)은 상위(SubwayPage).
+  isLineFavorite?(lineId: string): boolean;
+  onToggleLineFavorite?(lineId: string): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,8 +84,11 @@ export const SubwayArrivalPanel = ({
   fetchedAt,
   isLoading,
   isError,
+  notFound,
   onBack,
   onRetry,
+  isLineFavorite,
+  onToggleLineFavorite,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -149,8 +160,11 @@ export const SubwayArrivalPanel = ({
           nowMs={nowMs}
           isLoading={isLoading}
           isError={isError}
+          notFound={notFound}
           isEmpty={items.length === 0}
           onRetry={onRetry}
+          isLineFavorite={isLineFavorite}
+          onToggleLineFavorite={onToggleLineFavorite}
         />
       </div>
     </div>
@@ -167,15 +181,21 @@ const PanelBody = ({
   nowMs,
   isLoading,
   isError,
+  notFound,
   isEmpty,
   onRetry,
+  isLineFavorite,
+  onToggleLineFavorite,
 }: {
   sections: LineSection[];
   nowMs: number;
   isLoading: boolean;
   isError: boolean;
+  notFound?: boolean;
   isEmpty: boolean;
   onRetry(): void;
+  isLineFavorite?(lineId: string): boolean;
+  onToggleLineFavorite?(lineId: string): void;
 }) => {
   if (isLoading && isEmpty) {
     return (
@@ -185,6 +205,14 @@ const PanelBody = ({
     );
   }
   if (isError) {
+    // 404(죽은 즐겨찾기 id)는 재시도해도 소용없어 재등록을 안내한다.
+    if (notFound) {
+      return (
+        <Hint>
+          역 정보가 갱신되어 찾을 수 없습니다. 즐겨찾기를 다시 등록해 주세요.
+        </Hint>
+      );
+    }
     return (
       <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-destructive">
         도착정보를 불러오지 못했습니다.
@@ -209,6 +237,14 @@ const PanelBody = ({
           <div className="mb-1.5 flex items-center gap-1.5">
             <SubwayLineBadge lineId={sec.lineId} />
             <span className="text-sm font-semibold">{subwayLineName(sec.lineId)}</span>
+            {isLineFavorite && onToggleLineFavorite && (
+              <BusFavoriteStar
+                active={isLineFavorite(sec.lineId)}
+                onToggle={() => onToggleLineFavorite(sec.lineId)}
+                label={`${subwayLineName(sec.lineId)} 즐겨찾기`}
+                className="ml-auto"
+              />
+            )}
           </div>
           <div className="flex flex-col gap-2">
             {sec.groups.map((g) => (

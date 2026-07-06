@@ -1,9 +1,13 @@
 import { Loader2, LocateFixed, Search, X } from 'lucide-react';
-import type { SubwayStationGroupItemType } from '@repo/api-contract';
+import type {
+  SubwayFavoriteStationItemType,
+  SubwayStationGroupItemType,
+} from '@repo/api-contract';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
+import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { SubwayLineBadge } from './SubwayLineBadge';
 
 // 주변 모드 행 — 검색 그룹(SubwayStationGroupItemType)에 서버가 계산한 거리(m)를
@@ -144,8 +148,12 @@ export interface SubwayStationListBodyProps {
   selectedMissing: boolean;
   onSelect(id: string): void;
   onRetry(): void;
-  // 초기 화면(검색어 없음)일 때 기본 안내 대신 렌더할 즐겨찾기 섹션. 즐겨찾기는
-  // 4차 예정이라 지금은 미사용(자리만) — 미지정이면 기존 안내를 그대로 보여준다.
+  // 즐겨찾기 — 행 별 토글. 미지정이면 별을 렌더하지 않는다(공개 페이지에서도
+  // 접근 가능하지만 통합 지점을 좁게 유지). 스냅샷은 행이 그룹에서 조립한다.
+  isStationFavorite?(stationId: string): boolean;
+  onToggleStationFavorite?(item: SubwayFavoriteStationItemType): void;
+  // 초기 화면(검색어 없음)일 때 기본 안내 대신 렌더할 즐겨찾기 섹션. 미지정이면
+  // 기존 빈 상태(안내)를 그대로 보여준다.
   favoritesContent?: React.ReactNode;
 }
 
@@ -160,6 +168,8 @@ export const SubwayStationListBody = ({
   selectedMissing,
   onSelect,
   onRetry,
+  isStationFavorite,
+  onToggleStationFavorite,
   favoritesContent,
 }: SubwayStationListBodyProps) => {
   // Geolocation 실패는 모드 무관 최우선 — 좌표를 못 얻어 주변 조회 자체가 불가.
@@ -217,13 +227,14 @@ export const SubwayStationListBody = ({
           const selected = it.id === selectedId;
           const transfer = it.lines.length > 1;
           return (
-            <li key={it.id}>
+            // 행 버튼과 별을 형제로 둔다 — 버튼 중첩(무효 HTML) 회피.
+            <li key={it.id} className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => onSelect(it.id)}
                 aria-current={selected ? 'true' : undefined}
                 className={cn(
-                  'flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+                  'flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors',
                   selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
                 )}
               >
@@ -249,6 +260,21 @@ export const SubwayStationListBody = ({
                   </span>
                 </span>
               </button>
+              {isStationFavorite && onToggleStationFavorite && (
+                <BusFavoriteStar
+                  active={isStationFavorite(it.id)}
+                  onToggle={() =>
+                    onToggleStationFavorite({
+                      stationId: it.id,
+                      name: it.name,
+                      lat: it.lat,
+                      lng: it.lng,
+                      lines: it.lines.map((l) => l.lineId),
+                    })
+                  }
+                  label={`${it.name} 즐겨찾기`}
+                />
+              )}
             </li>
           );
         })}
@@ -283,6 +309,8 @@ interface Props {
   onRetry(): void;
   onNearby(): void;
   onClearNear(): void;
+  isStationFavorite?(stationId: string): boolean;
+  onToggleStationFavorite?(item: SubwayFavoriteStationItemType): void;
   favoritesContent?: React.ReactNode;
 }
 
@@ -302,6 +330,8 @@ export const SubwayStationList = ({
   onRetry,
   onNearby,
   onClearNear,
+  isStationFavorite,
+  onToggleStationFavorite,
   favoritesContent,
 }: Props) => (
   <div className="flex min-h-0 flex-1 flex-col">
@@ -329,6 +359,8 @@ export const SubwayStationList = ({
         selectedMissing={selectedMissing}
         onSelect={onSelect}
         onRetry={onRetry}
+        isStationFavorite={isStationFavorite}
+        onToggleStationFavorite={onToggleStationFavorite}
         favoritesContent={favoritesContent}
       />
     </div>

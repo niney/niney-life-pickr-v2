@@ -1,6 +1,10 @@
-import { useCallback, useDeferredValue, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import type { SubwayStationGroupItemType } from '@repo/api-contract';
+import { subwayLineName } from '@repo/utils';
 import {
+  ApiError,
+  useSubwayFavorites,
   useSubwayNearbyStations,
   useSubwayStationArrivals,
   useSubwayStationSearch,
@@ -8,6 +12,7 @@ import {
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TransitTabs } from '~/components/transit/TransitTabs';
 import { SubwayArrivalPanel } from '~/components/subway/SubwayArrivalPanel';
+import { SubwayFavoriteSection } from '~/components/subway/SubwayFavoriteSection';
 import {
   SubwayStationList,
   SubwayStationListBody,
@@ -18,6 +23,11 @@ import { SubwayStationsMap } from '~/components/subway/SubwayStationsMap';
 // GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m). URL 에 원시 좌표를 그대로 노출하지
 // 않아 공유 시 위치 정밀도도 낮춘다(버스와 동일).
 const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
+
+// 빈 결과의 안정 참조 — 매 렌더 새 `[]` 를 만들면 지도 groups 가 identity 만으로
+// 바뀐 것처럼 보여 fitToMarkers 가 재발화(선택 역으로 화면이 튐)한다. 한 인스턴스를
+// 공유해 memo·effect 의존성을 안정화한다.
+const EMPTY_GROUPS: SubwayStationGroupItemType[] = [];
 
 // near 파라미터('lat,lng') 파싱 — 형식/한국 WGS84 범위(계약과 동일)를 통과해야
 // 주변 모드로 인정. 딥링크·수동 편집으로 들어온 쓰레기 값은 null → 검색 모드.
@@ -65,6 +75,12 @@ export const SubwayPage = () => {
   // 내부 스크롤로만 동작하게 한다.
   const { headerHeight } = usePublicLayout();
 
+  // 즐겨찾기 — 게스트/로그인 하이브리드. 로그인 직후 게스트 저장분을 서버로 1회
+  // 병합하는 부수효과도 이 훅이 담당(SubwayPage 에서 단 한 번만 호출).
+  const favorites = useSubwayFavorites();
+  const hasFavorites =
+    favorites.stations.length > 0 || favorites.lines.length > 0;
+
   const setParam = useCallback(
     (key: string, value: string | null) => {
       setSearchParams(
@@ -89,7 +105,7 @@ export const SubwayPage = () => {
   // 남은 이전 응답을 마커·리스트로 흘리지 않는다.
   const trimmedQ = deferredQ.trim();
   const hasQ = trimmedQ.length >= 1 && trimmedQ.length <= 50;
-  const items = hasQ ? (search.data?.items ?? []) : [];
+  const items = hasQ ? (search.data?.items ?? EMPTY_GROUPS) : EMPTY_GROUPS;
   const total = hasQ ? (search.data?.total ?? 0) : 0;
   const fetchedAt = hasQ ? (search.data?.fetchedAt ?? null) : null;
   const searching =
@@ -101,7 +117,7 @@ export const SubwayPage = () => {
     effectiveNear?.lat ?? null,
     effectiveNear?.lng ?? null,
   );
-  const nearItems = nearMode ? (nearby.data?.items ?? []) : [];
+  const nearItems = nearMode ? (nearby.data?.items ?? EMPTY_GROUPS) : EMPTY_GROUPS;
   const nearSearching =
     nearby.isLoading || (nearby.isFetching && nearby.isPlaceholderData);
 
@@ -265,6 +281,105 @@ export const SubwayPage = () => {
   const arrivalLoading =
     arrivals.isLoading || (arrivals.isFetching && arrivalsForStn === null);
 
+  // 도착 404 = 죽은 즐겨찾기 id(마스터 재적재로 대표 소멸) — 재시도 무의미, 재등록 안내.
+  const arrivalNotFound =
+    arrivals.isError &&
+    arrivals.error instanceof ApiError &&
+    arrivals.error.statusCode === 404;
+
+  // 역×호선 즐겨찾기용 좌표 — 활성 결과 그룹 우선, 없으면 기존 즐겨찾기(역/노선)
+  // 스냅샷에서 복원. 셋 다 없으면 null(딥링크 직진입 등) → 패널이 호선 별을 숨긴다.
+  const favStationHit = stn
+    ? favorites.stations.find((s) => s.stationId === stn)
+    : undefined;
+  const favLineHit = stn ? favorites.lines.find((l) => l.stationId === stn) : undefined;
+  const selectedCoord = selectedGroup
+    ? { lat: selectedGroup.lat, lng: selectedGroup.lng }
+    : favStationHit
+      ? { lat: favStationHit.lat, lng: favStationHit.lng }
+      : favLineHit
+        ? { lat: favLineHit.lat, lng: favLineHit.lng }
+        : null;
+
+  // 즐겨찾기 탭 진입 등으로 stn 이 선택됐지만 활성 결과(items)에 그 그룹이 없을 때,
+  // 즐겨찾기 스냅샷(역 우선, 없으면 역×호선)으로 가상 그룹 1개를 조립해 지도 groups
+  // 에만 합류시킨다. 그러면 기존 flyTo/마커/라벨이 그대로 동작해 별도 지도 배선이
+  // 필요 없다. 리스트에는 넣지 않는다(검색/주변 결과 오염·중복 마커 방지). 좌표
+  // 소스가 없는 순수 stn 딥링크(즐겨찾기도 없음)에는 적용 불가 — 기존 동작 유지.
+  // useMemo — 안정 참조라야 도착 30초 폴링 리렌더마다 지도 fit 이 재발화하지 않는다.
+  const favoriteMapGroup = useMemo<SubwayStationGroupItemType | null>(() => {
+    if (!stn || selectedGroup) return null;
+    if (favStationHit) {
+      return {
+        id: stn,
+        name: favStationHit.name,
+        lat: favStationHit.lat,
+        lng: favStationHit.lng,
+        lines: favStationHit.lines.map((lineId) => ({
+          stationId: stn,
+          lineId,
+          lineName: subwayLineName(lineId),
+          lat: favStationHit.lat,
+          lng: favStationHit.lng,
+        })),
+      };
+    }
+    if (favLineHit) {
+      return {
+        id: stn,
+        name: favLineHit.stationName,
+        lat: favLineHit.lat,
+        lng: favLineHit.lng,
+        lines: [
+          {
+            stationId: stn,
+            lineId: favLineHit.lineId,
+            lineName: subwayLineName(favLineHit.lineId),
+            lat: favLineHit.lat,
+            lng: favLineHit.lng,
+          },
+        ],
+      };
+    }
+    return null;
+  }, [stn, selectedGroup, favStationHit, favLineHit]);
+
+  // 지도 전용 그룹 — 활성 결과 + (필요 시) 즐겨찾기 가상 그룹. 리스트는 activeItems 만.
+  const mapGroups = useMemo(
+    () => (favoriteMapGroup ? [...activeItems, favoriteMapGroup] : activeItems),
+    [activeItems, favoriteMapGroup],
+  );
+
+  // 호선 별 콜백 — 좌표를 확보할 수 있을 때만 제공(없으면 패널이 별을 숨긴다).
+  // 스냅샷 조립(stationId=현재 stn, 좌표 대표)은 여기서 완결한다.
+  const lineFavoriteProps =
+    stn && selectedCoord
+      ? {
+          isLineFavorite: (lineId: string) => favorites.isLineFavorite(stn, lineId),
+          onToggleLineFavorite: (lineId: string) =>
+            favorites.toggleLine({
+              stationId: stn,
+              lineId,
+              stationName: panelStationName,
+              lat: selectedCoord.lat,
+              lng: selectedCoord.lng,
+            }),
+        }
+      : {};
+
+  // 초기 화면(검색어·주변·선택 역 없음)에 노출할 즐겨찾기 섹션. 0개면 undefined 를
+  // 넘겨 리스트 본체가 기존 빈 상태 안내를 그대로 보여준다.
+  const favoritesSection = hasFavorites ? (
+    <SubwayFavoriteSection
+      stations={favorites.stations}
+      lines={favorites.lines}
+      onSelectStation={handleSelect}
+      onSelectLine={handleSelect}
+      onToggleStation={favorites.toggleStation}
+      onToggleLine={favorites.toggleLine}
+    />
+  ) : undefined;
+
   const listProps = {
     q: qInput,
     nearMode,
@@ -281,6 +396,9 @@ export const SubwayPage = () => {
     onRetry: handleRetry,
     onNearby: handleNearby,
     onClearNear: handleClearNear,
+    isStationFavorite: favorites.isStationFavorite,
+    onToggleStationFavorite: favorites.toggleStation,
+    favoritesContent: favoritesSection,
   };
 
   // 역 선택 시 목록 대신 뜨는 도착 패널 — 데스크톱 좌패널/모바일 하단 공용.
@@ -292,8 +410,10 @@ export const SubwayPage = () => {
       fetchedAt={arrivalsForStn?.fetchedAt ?? null}
       isLoading={arrivalLoading}
       isError={arrivals.isError}
+      notFound={arrivalNotFound}
       onBack={handleBack}
       onRetry={() => void arrivals.refetch()}
+      {...lineFavoriteProps}
     />
   ) : null;
 
@@ -311,7 +431,7 @@ export const SubwayPage = () => {
           </aside>
           <section className="relative flex-1">
             <SubwayStationsMap
-              groups={activeItems}
+              groups={mapGroups}
               selectedId={stn}
               onSelect={handleSelect}
               myLocation={effectiveNear}
@@ -341,7 +461,7 @@ export const SubwayPage = () => {
           </div>
           <div className="relative min-h-[40dvh] flex-1">
             <SubwayStationsMap
-              groups={activeItems}
+              groups={mapGroups}
               selectedId={stn}
               onSelect={handleSelect}
               myLocation={effectiveNear}
@@ -368,6 +488,9 @@ export const SubwayPage = () => {
                 selectedMissing={selectedMissing}
                 onSelect={handleSelect}
                 onRetry={handleRetry}
+                isStationFavorite={favorites.isStationFavorite}
+                onToggleStationFavorite={favorites.toggleStation}
+                favoritesContent={favoritesSection}
               />
             </div>
           )}
