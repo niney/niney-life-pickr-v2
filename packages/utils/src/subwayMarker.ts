@@ -3,6 +3,7 @@
 // 그대로 유효하다. 버스(파랑)와 즉시 구분되는 청록 톤을 쓰고, 환승역은 프레임 흰
 // 외곽선 안쪽에 흰 링을 한 겹 더 둘러 '이중 링'으로 도드라지게 한다.
 import { buildCircleMarkerSvg, buildPinMarkerSvg } from './markerFrame.js';
+import { buildVehicleDirDataUrl, buildVehiclePillDataUrl } from './vehiclePill.js';
 
 // 청록 톤 — 정류장(파랑 #2563eb)·식당(빨강)과 즉시 구분. selected 는 한 단계 진하게.
 const SUBWAY_COLORS = { base: '#0d9488', selected: '#0f766e' } as const;
@@ -80,4 +81,41 @@ export function buildSubwayStopDotDataUrl(color: string, transfer: boolean): str
     'data:image/svg+xml;charset=utf-8,' +
     encodeURIComponent(buildSubwayStopDotSvg(color, transfer))
   );
+}
+
+// ── 6차(실시간 열차) ──────────────────────────────────────────────────────
+// 열차 알약 — 차량 알약 기하(vehiclePill) 공용. 라벨은 행선지 축약('성수행'),
+// 색은 호선색. stopped(trainStatus '1' 도착)는 후광, express(급행)는 '급' 접두
+// 표식으로 구분한다. 같은 옵션은 같은 문자열을 반환해 OL 아이콘 캐시가 유효하다.
+export interface SubwayTrainPillOptions {
+  // 행선지 축약('성수행'). 빈 문자열이면 번호 없이 색 알약만.
+  label: string;
+  // 호선색.
+  color: string;
+  // trainStatus '1' 도착 — 정차 후광.
+  stopped?: boolean;
+  // expressType 비null — 급행 표식('급' 접두).
+  express?: boolean;
+  // 따라가기 강조(향후 차수).
+  highlighted?: boolean;
+}
+
+export function buildSubwayTrainPillDataUrl({
+  label,
+  color,
+  stopped,
+  express,
+  highlighted,
+}: SubwayTrainPillOptions): string {
+  return buildVehiclePillDataUrl({
+    label: express && label ? `급 ${label}` : label,
+    color,
+    stopped,
+    highlighted,
+  });
+}
+
+// 진행 방향 다트 — 차량 다트 공용(호선색). 지도 레이어가 방위각만큼 회전한다.
+export function buildSubwayTrainDirDataUrl(color: string): string {
+  return buildVehicleDirDataUrl(color);
 }

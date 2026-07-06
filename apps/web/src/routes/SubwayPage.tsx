@@ -6,6 +6,7 @@ import {
   ApiError,
   useSubwayFavorites,
   useSubwayLineDetail,
+  useSubwayLinePositions,
   useSubwayNearbyStations,
   useSubwayStationArrivals,
   useSubwayStationSearch,
@@ -130,6 +131,10 @@ export const SubwayPage = () => {
   // 정적(폴링 없음). 색은 SUBWAY_LINES 상수에서 파생(폴리라인·경유역 점 공용).
   const lineDetail = useSubwayLineDetail(line);
   const lineColor = line ? subwayLineColor(line) : undefined;
+  // 추적 호선 실시간 열차 위치 — 30초 폴링(line 선택 시에만). 지도가 sections 와
+  // 조합해 역간 보간 + 알약 rAF 이동.
+  const positions = useSubwayLinePositions(line);
+  const trainItems = line ? positions.data?.items : undefined;
 
   // ── 활성 소스 — 주변 모드면 nearby, 아니면 검색. 아래 로직(선택/지도/도착)은
   //    소스만 다를 뿐 동일하게 흐른다. 마커 누적은 없다(30그룹 상한 — 현재 결과만). ──
@@ -549,6 +554,7 @@ export const SubwayPage = () => {
               lineColor={lineColor}
               onSelectStop={handleSelectStop}
               onCloseLine={handleCloseLine}
+              positions={trainItems}
             />
           </section>
         </div>
@@ -583,6 +589,7 @@ export const SubwayPage = () => {
               lineColor={lineColor}
               onSelectStop={handleSelectStop}
               onCloseLine={handleCloseLine}
+              positions={trainItems}
             />
           </div>
           {/* 역 선택 시 하단 영역이 도착정보 뷰로 전환 — 패널은 내부 스크롤이라

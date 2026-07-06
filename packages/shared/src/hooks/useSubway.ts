@@ -68,3 +68,20 @@ export const useSubwayLineDetail = (lineId: string | null) => {
     staleTime: 86_400_000,
   });
 };
+
+// 노선 실시간 열차 위치 — 30초 폴링(역 단위 상태라 버스 15초보다 밀도 낮음 + 쿼터,
+// recptnDt 실측상 30초 적정). refetchIntervalInBackground 기본 false 라 탭 비활성 시
+// 자동 중단. placeholderData 로 폴링 사이 잔상 유지(rAF 보간이 이어지게). line
+// 추적('노선 보기') 시에만 조회.
+export const useSubwayLinePositions = (lineId: string | null) => {
+  const enabled = !!lineId;
+  return useQuery({
+    queryKey: ['subway', 'positions', lineId],
+    queryFn: () => subwayApi.linePositions(lineId!),
+    enabled,
+    refetchInterval: 30_000,
+    staleTime: 0,
+    gcTime: 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};

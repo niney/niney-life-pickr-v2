@@ -3,6 +3,7 @@ import {
   type SubwayArrivalsResultType,
   type SubwayLineDetailResultType,
   type SubwayNearbyResultType,
+  type SubwayPositionsResultType,
   type SubwayStationSearchResultType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
@@ -40,4 +41,8 @@ export const subwayApi = {
   // 데이터라 캐시·쿼터 없음. 폴리라인은 FE 가 sections[].stations 좌표로 그린다.
   lineDetail: (lineId: string) =>
     apiFetch<SubwayLineDetailResultType>(Routes.Subway.lineDetail(lineId)),
+  // 노선 실시간 열차 위치 — 현재역+상태만(GPS 없음). 좌표는 서버가 마스터 조인으로
+  // enrich(실패 시 null). FE 가 5차 sections 와 조합해 역간 위치를 보간한다.
+  linePositions: (lineId: string) =>
+    apiFetch<SubwayPositionsResultType>(Routes.Subway.linePositions(lineId)),
 };

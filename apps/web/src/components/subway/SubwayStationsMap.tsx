@@ -5,17 +5,28 @@ import type {
   SubwayLineDetailResultType,
   SubwayLineStationItemType,
   SubwayStationGroupItemType,
+  SubwayTrainPositionItemType,
 } from '@repo/api-contract';
 import {
   buildMyLocationMarkerDataUrl,
   buildSubwayStationMarkerDataUrl,
   buildSubwayStopDotDataUrl,
+  buildSubwayTrainDirDataUrl,
+  buildSubwayTrainPillDataUrl,
+  createRoutePathIndex,
+  locateTrain,
+  pointAtRoutePathS,
+  sliceForMove,
+  subwayDestinationLabel,
+  type LatLng,
+  type TrainSection,
 } from '@repo/utils';
 import {
   MapCanvas,
   type MapCanvasHandle,
   type MapMarker,
   type MapViewport,
+  type VehicleMarker,
 } from '~/components/restaurant/MapCanvas';
 import { SubwayLineBadge } from './SubwayLineBadge';
 
@@ -30,6 +41,8 @@ const TRANSFER_SELECTED_URL = buildSubwayStationMarkerDataUrl({ selected: true, 
 const MY_LOCATION_MARKER_URL = buildMyLocationMarkerDataUrl();
 // 내 위치 마커 id — 역 마커와 충돌 없는 고정 id, 클릭은 무시.
 const MY_LOCATION_ID = 'my-location';
+// 열차 마커 id 접두사 — 전용 vehicles 레이어라 클릭 라우팅과 무관하지만 식별용.
+const VEHICLE_ID_PREFIX = 'train-';
 
 // 역 선택 시 확대 포커스 목표 줌 — 식당 지도의 ZOOM_IN_LEVEL(및 fitToMarkers
 // maxZoom)과 통일한 17. flyToZoomIn 이라 현재 줌이 더 크면 그대로 둔다(줌아웃 없음).
@@ -80,6 +93,9 @@ interface Props {
   onSelectStop?(stationId: string): void;
   // 노선 정보 카드 '노선 닫기'.
   onCloseLine?(): void;
+  // 6차 — 추적 호선의 실시간 열차 위치(30초 폴링). lineDetail(sections)과 조합해
+  // 역간 보간 → 알약 마커 + rAF 이동. line 추적 중일 때만 의미.
+  positions?: SubwayTrainPositionItemType[];
   className?: string;
 }
 
@@ -100,6 +116,7 @@ export const SubwayStationsMap = ({
   lineColor,
   onSelectStop,
   onCloseLine,
+  positions,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -294,6 +311,111 @@ export const SubwayStationsMap = ({
     return { section, count };
   }, [lineDetail]);
 
+  // ── 6차 실시간 열차 — section 마다 RoutePathIndex 를 구축(순환은 첫 좌표 복제로
+  //    닫는다). subwayPosition.locateTrain 이 이 기하로 역간 호길이를 잡는다. ──
+  const trainSections = useMemo(() => {
+    if (!lineDetail) return null;
+    const list: TrainSection[] = [];
+    for (const sec of lineDetail.sections) {
+      const coords = sec.stations.map((s) => ({ lat: s.lat, lng: s.lng }));
+      const pts = sec.isLoop && coords.length > 1 ? [...coords, { ...coords[0]! }] : coords;
+      const index = createRoutePathIndex(pts);
+      if (!index) continue;
+      list.push({
+        sectionKey: sec.branchKey,
+        index,
+        isLoop: sec.isLoop,
+        byName: new Map(sec.stations.map((s, i) => [s.name, i])),
+        stationCount: sec.stations.length,
+      });
+    }
+    if (list.length === 0) return null;
+    return { list, byKey: new Map(list.map((s) => [s.sectionKey, s])) };
+  }, [lineDetail]);
+
+  // 폴링 세대별 열차 호길이 스냅샷 — cur 는 이번 positions 의 (sectionKey,s), prev 는
+  // 직전 폴링. 같은 positions 로 memo 가 재실행돼도(deps 변화·StrictMode 이중 호출)
+  // prev 가 밀리지 않아 via 가 일관되게 나온다(버스 vehPollRef 패턴 — useMemo 내부에서만 갱신).
+  const vehPollRef = useRef<{
+    sections: unknown;
+    cur: { v: unknown; s: Map<string, { sectionKey: string; s: number }> } | null;
+    prev: Map<string, { sectionKey: string; s: number }> | null;
+  }>({ sections: null, cur: null, prev: null });
+
+  const vehicleItems = useMemo<VehicleMarker[]>(() => {
+    if (!trainSections || !positions || positions.length === 0) {
+      vehPollRef.current = { sections: trainSections, cur: null, prev: null };
+      return [];
+    }
+    const store = vehPollRef.current;
+    // 노선(형상)이 바뀌면 s 공간 자체가 달라진다 — 스냅샷 전부 리셋.
+    if (store.sections !== trainSections) {
+      store.sections = trainSections;
+      store.cur = null;
+      store.prev = null;
+    }
+    if (store.cur === null || store.cur.v !== positions) {
+      store.prev = store.cur === null ? null : store.cur.s;
+      store.cur = { v: positions, s: new Map() };
+    } else {
+      store.cur.s = new Map(); // 같은 폴링 재계산 — cur 만 다시 채운다.
+    }
+    const prevS = store.prev;
+    const curS = store.cur.s;
+    const color = lineColor ?? '#6b7280';
+    const dirUrl = buildSubwayTrainDirDataUrl(color);
+    const out: VehicleMarker[] = [];
+    for (const t of positions) {
+      const loc = locateTrain(trainSections.list, {
+        statnNm: t.statnNm,
+        trainStatus: t.trainStatus,
+        updnLine: t.updnLine,
+        destinationName: t.destinationName,
+      });
+      let lat: number;
+      let lng: number;
+      let via: LatLng[] | undefined;
+      let bearingDeg: number | null = null;
+      if (loc) {
+        const sec = trainSections.byKey.get(loc.sectionKey)!;
+        const p = pointAtRoutePathS(sec.index, loc.s);
+        lat = p.lat;
+        lng = p.lng;
+        bearingDeg = loc.bearing;
+        curS.set(t.trainNo, { sectionKey: loc.sectionKey, s: loc.s });
+        // 같은 section 안에서만 도로 슬라이스 — 세그먼트 전환(지선↔본선)은 직선 폴백.
+        const prev = prevS?.get(t.trainNo);
+        if (prev && prev.sectionKey === loc.sectionKey) {
+          via = sliceForMove(sec.index, prev.s, loc.s, { isLoop: sec.isLoop }) ?? undefined;
+        }
+      } else if (t.lat !== null && t.lng !== null) {
+        // 노선 순서에 없는 역(형상 밖) — 서버 enrich 좌표로 강등(보간 없음).
+        lat = t.lat;
+        lng = t.lng;
+      } else {
+        continue; // 좌표 없음 → 스킵.
+      }
+      // 행선지 라벨 — '종착'→'행'('성수종착'→'성수행'), '지선'은 그대로('성수지선'),
+      // 일반 역명은 '행' 접미('신도림'→'신도림행').
+      const iconSrc = buildSubwayTrainPillDataUrl({
+        label: subwayDestinationLabel(t.destinationName),
+        color,
+        stopped: t.trainStatus === '1',
+        express: t.expressType !== null,
+      });
+      out.push({
+        id: `${VEHICLE_ID_PREFIX}${t.trainNo}`,
+        lat,
+        lng,
+        via,
+        iconSrc,
+        dirIconSrc: dirUrl,
+        bearingDeg,
+      });
+    }
+    return out;
+  }, [trainSections, positions, lineColor]);
+
   if (config.isLoading) {
     return (
       <Placeholder>
@@ -327,6 +449,9 @@ export const SubwayStationsMap = ({
         onMarkerSelect={handleMarkerSelect}
         onViewportChangeEnd={handleViewportChangeEnd}
         routeLine={routeLines}
+        vehicles={vehicleItems}
+        // 역 단위 30초 폴링이라 버스(14초)보다 길게 — 폴링 간 등속 이동이 이어지게.
+        vehicleTweenMs={28_000}
       />
       {/* 노선 정보 카드 — 좌상단(로딩·재검색 칩은 상단 중앙이라 겹치지 않는다). */}
       {lineDetail && lineInfo && (
