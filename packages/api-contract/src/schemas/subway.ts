@@ -202,6 +202,54 @@ export const SubwayTimetableResult = z.object({
 });
 export type SubwayTimetableResultType = z.infer<typeof SubwayTimetableResult>;
 
+// ── 10차: 시간대별 혼잡도 (서울교통공사 정적 통계 — 1~8호선 한정) ───────────
+// odcloud 파일데이터(분기 갱신)를 load-subway-congestion 이 전량 적재한 로컬
+// 통계 — 실시간이 아니다(FE 는 "정적 통계" 라벨 필수). 값은 정원 대비 %
+// (좌석 만석 = 34%). 30분 슬롯 05:30~00:30(익일 00시 표기 포함). 9호선·광역·
+// 경전철은 데이터가 없어 coverage:false.
+
+export const SubwayCongestionParams = z.object({
+  stationId: z.string().min(1),
+});
+export type SubwayCongestionParamsType = z.infer<typeof SubwayCongestionParams>;
+
+export const SubwayCongestionQuery = z.object({
+  // 시간표와 같은 체계 — '1' 평일 / '2' 토요일 / '3' 휴일. 원본 요일구분
+  // (평일/토요일/일요일)을 적재 시 이 코드로 접는다(일요일→'3').
+  dayType: z.enum(['1', '2', '3']).default('1'),
+});
+export type SubwayCongestionQueryType = z.infer<typeof SubwayCongestionQuery>;
+
+export const SubwayCongestionSlot = z.object({
+  // 'HH:MM' — '05:30'~'23:30' + 자정 이후 '00:00'/'00:30'(익일).
+  time: z.string(),
+  // 정원 대비 % — 원본 공백/비수치는 null.
+  level: z.number().nullable(),
+});
+export type SubwayCongestionSlotType = z.infer<typeof SubwayCongestionSlot>;
+
+export const SubwayCongestionDirection = z.object({
+  // 원본 상하구분 원문 보존(표기는 적재 관찰로 확정 — FE 가 도착 updnLine 과
+  // 매핑). 슬롯은 time 순.
+  updn: z.string(),
+  slots: z.array(SubwayCongestionSlot),
+});
+export type SubwayCongestionDirectionType = z.infer<typeof SubwayCongestionDirection>;
+
+export const SubwayCongestionResult = z.object({
+  stationId: z.string(),
+  name: z.string(),
+  lineId: z.string(),
+  dayType: z.string(),
+  // false = 데이터 없는 노선/역(9호선·광역·경전철·미조인) — directions 빈 배열.
+  coverage: z.boolean(),
+  directions: z.array(SubwayCongestionDirection),
+  // 적재 시각 (ISO) — 원본은 분기 단위 갱신.
+  fetchedAt: z.string(),
+  source: z.literal('db'),
+});
+export type SubwayCongestionResultType = z.infer<typeof SubwayCongestionResult>;
+
 // ── 6차: 실시간 열차 위치 (realtimePosition 프록시) ─────────────────────────
 // 버스와 결정적 차이 — GPS 가 없다. 응답은 현재역(statnId)+상태(trainSttus)뿐이라
 // 서버가 마스터 statnId 조인으로 역 좌표를 enrich 해 내려주고(실패 시 null —

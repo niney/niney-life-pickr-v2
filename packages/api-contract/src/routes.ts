@@ -434,6 +434,9 @@ export const Subway = {
   // 역 시간표(1~9호선) — DB blob 30일 캐시. stationId 인코딩은 빌더 책임.
   stationTimetable: (stationId: string) =>
     `${API_PREFIX}/subway/stations/${encodeURIComponent(stationId)}/timetable`,
+  // 시간대별 혼잡도(정적 통계, 1~8호선) — 로컬 적재 데이터.
+  stationCongestion: (stationId: string) =>
+    `${API_PREFIX}/subway/stations/${encodeURIComponent(stationId)}/congestion`,
   // ── 즐겨찾기 (여기만 인증 필요 — 버스 즐겨찾기와 동일 정책) ──
   // 비로그인은 클라이언트 저장. PUT/DELETE 응답 = 전체 목록(캐시 통째 교체).
   favorites: `${API_PREFIX}/subway/favorites`,

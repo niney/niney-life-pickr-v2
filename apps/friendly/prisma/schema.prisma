@@ -1175,6 +1175,26 @@ model SubwayTimetableCache {
   @@map("subway_timetable_caches")
 }
 
+// 시간대별 혼잡도(10차) — 서울교통공사 1~8호선 정적 통계(odcloud 파일데이터,
+// 분기 갱신). load-subway-congestion 이 wide(39슬롯)→slots JSON 으로 전량 적재한다.
+// (호선, 출발역, dayType, 상하구분) 단위 1행. stationId 는 우리 SubwayStation.id
+// 조인 성공 시만(역번호↔stationCd + 역명 폴백) — 실시간이 아니라 FK 없이 스냅샷.
+model SubwayCongestion {
+  id          Int      @id @default(autoincrement())
+  stationId   String? // 조인 성공 시 SubwayStation.id (미조인 null)
+  lineId      String // '1001'~'1008'
+  stationName String // 원본 출발역명('서울역')
+  dayType     String // '1' 평일 / '2' 토 / '3' 휴일(일요일)
+  updn        String // 원문 '상선'/'하선'/'내선'/'외선'
+  slots       String // [{time:'HH:MM', level:number|null}] JSON (39개, time 순)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([lineId, stationName, dayType, updn])
+  @@index([stationId])
+  @@map("subway_congestions")
+}
+
 // 로그인 사용자의 지하철 역 즐겨찾기(그룹 단위). 저장 시점 스냅샷(name/lat/lng/
 // lines)을 그대로 보존해 목록 렌더·지도 이동에 재조회가 필요 없다. 버스 즐겨찾기와
 // 동일하게 SubwayStation(캐시가 아닌 마스터지만) 을 FK 로 묶지 않는다 — 스냅샷이라

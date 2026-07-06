@@ -5,6 +5,9 @@ import {
   Routes,
   SubwayArrivalsParams,
   SubwayArrivalsResult,
+  SubwayCongestionParams,
+  SubwayCongestionQuery,
+  SubwayCongestionResult,
   SubwayLineDetailParams,
   SubwayLineDetailResult,
   SubwayNearbyQuery,
@@ -185,6 +188,37 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
             error:
               sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
             message: e instanceof Error ? e.message : '지하철 도착 조회 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 역 시간대별 혼잡도(1~8호선 정적 통계) — 로컬 조회. stationId 인코딩이라 도착
+  // 라우트와 동일하게 등록 경로만 디코드. 없는 역 404, 미적재 503, 미제공 노선은
+  // coverage:false 로 200(404 아님). 로컬이라 502 없음.
+  typed.get(decodeURIComponent(Routes.Subway.stationCongestion(':stationId')), {
+    schema: {
+      tags: ['subway'],
+      params: SubwayCongestionParams,
+      querystring: SubwayCongestionQuery,
+      response: {
+        200: SubwayCongestionResult,
+        404: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getStationCongestion(req.params.stationId, req.query.dayType);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 404 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error: sc === 404 ? 'Not Found' : 'Service Unavailable',
+            message: e instanceof Error ? e.message : '지하철 혼잡도 조회 실패',
           });
         }
         throw e;

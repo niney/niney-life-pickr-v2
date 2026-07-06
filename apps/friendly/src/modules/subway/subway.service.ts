@@ -9,6 +9,8 @@ import type { PrismaClient } from '@prisma/client';
 import type {
   SubwayArrivalItemType,
   SubwayArrivalsResultType,
+  SubwayCongestionDirectionType,
+  SubwayCongestionResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
   SubwayPositionsResultType,
@@ -604,6 +606,51 @@ export class SubwayService {
       );
     }
     return { ...meta, ...blob, fetchedAt: now.toISOString(), source: 'api' };
+  }
+
+  // 시간대별 혼잡도(1~8호선 정적 통계) — load-subway-congestion 이 적재한 로컬
+  // SubwayCongestion 을 조회. 역 없으면 404, 이 역 데이터 없으면 coverage:false
+  // (9호선·광역·경전철·미조인), 전체 테이블 0행이면 503(미적재). 업스트림 무관.
+  async getStationCongestion(
+    stationId: string,
+    dayType: string,
+  ): Promise<SubwayCongestionResultType> {
+    const { prisma } = this.deps;
+    const station = await prisma.subwayStation.findUnique({ where: { id: stationId } });
+    if (!station) {
+      throw new SubwayServiceError('해당 역을 찾을 수 없습니다.', 404);
+    }
+    const meta = { stationId, name: station.name, lineId: station.lineId, dayType };
+
+    const [rows, sync] = await Promise.all([
+      prisma.subwayCongestion.findMany({
+        where: { stationId, dayType },
+        orderBy: { updn: 'asc' },
+      }),
+      prisma.subwayMasterSync.findFirst({
+        where: { source: 'congestion' },
+        orderBy: { loadedAt: 'desc' },
+      }),
+    ]);
+    const fetchedAt = (sync?.loadedAt ?? this.deps.now?.() ?? new Date()).toISOString();
+
+    if (rows.length === 0) {
+      // 이 역 데이터 없음 — 테이블 자체가 비었으면 미적재(503), 아니면 coverage:false.
+      const total = await prisma.subwayCongestion.count();
+      if (total === 0) {
+        throw new SubwayServiceError(
+          '혼잡도 데이터가 없습니다 — load:subway-congestion 실행 필요',
+          503,
+        );
+      }
+      return { ...meta, coverage: false, directions: [], fetchedAt, source: 'db' };
+    }
+
+    const directions = rows.map((r) => ({
+      updn: r.updn,
+      slots: JSON.parse(r.slots) as SubwayCongestionDirectionType['slots'],
+    }));
+    return { ...meta, coverage: true, directions, fetchedAt, source: 'db' };
   }
 
   private collectTimetable(

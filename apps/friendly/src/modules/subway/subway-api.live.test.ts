@@ -77,8 +77,14 @@ describe.skipIf(!swopenRunnable)('subway swopen live smoke (SUBWAY_API_KEY 필�
       }
       const body = res.json() as { items: { trainNo: string; lat: number | null }[] };
       expect(Array.isArray(body.items)).toBe(true);
-      // 운행 시간대면 열차가 있다.
-      expect(body.items.length).toBeGreaterThan(0);
+      // 심야 운행 종료 시간대(대략 01~05시)에는 열차 0대(INFO-200)가 정상이라
+      // items>0 을 강제하면 시간대 의존 실패가 난다 — 빈 배열이면 관측만 남기고
+      // 통과, 열차가 있으면 형태를 검증한다.
+      if (body.items.length === 0) {
+        console.warn('[subway live] 위치 items 0 — 운행 종료 시간대로 판단, 형태 검증 skip');
+        return;
+      }
+      expect(typeof body.items[0]!.trainNo).toBe('string');
     } finally {
       await app.close();
     }
@@ -136,6 +142,44 @@ describe.skipIf(!OPENAPI_KEY)('subway master live smoke (SEOUL_OPEN_API_KEY 필�
       expect(body.coverage).toBe(true);
       expect(body.directions.length).toBeGreaterThan(0);
       expect(body.directions[0]!.firstTrain).not.toBeNull();
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+// 혼잡도는 로컬 적재(odcloud) — 키 무관, load:subway-congestion 실행 후에만 통과.
+describe('subway congestion smoke (로컬 적재 필요)', () => {
+  it('혼잡도(강남 dayType 1) — 라우트 200 + coverage true·slots', async (ctx) => {
+    const app = await buildApp({ logger: false });
+    await app.ready();
+    try {
+      const total = await app.prisma.subwayCongestion.count();
+      if (total === 0) {
+        console.warn('[congestion smoke] 미적재 — skip (pnpm --filter friendly load:subway-congestion)');
+        ctx.skip();
+        return;
+      }
+      const st = await app.prisma.subwayStation.findFirst({
+        where: { name: '강남', lineId: '1002' },
+      });
+      if (!st) {
+        console.warn('[congestion smoke] 강남(1002) 미적재 — skip');
+        ctx.skip();
+        return;
+      }
+      const res = await app.inject({
+        url: `/api/v1/subway/stations/${encodeURIComponent(st.id)}/congestion?dayType=1`,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        coverage: boolean;
+        directions: { updn: string; slots: { time: string; level: number | null }[] }[];
+      };
+      expect(body.coverage).toBe(true);
+      expect(body.directions.length).toBeGreaterThan(0);
+      // 2호선 강남 — 순환선이라 내선/외선. slots 는 time 순 다수.
+      expect(body.directions[0]!.slots.length).toBeGreaterThan(0);
     } finally {
       await app.close();
     }

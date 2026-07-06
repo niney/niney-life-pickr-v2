@@ -20,6 +20,7 @@
     "load:subway-stations": "tsx --env-file=.env scripts/load-subway-stations.ts",
     "verify:subway-lines": "tsx --env-file=.env scripts/verify-subway-lines.ts",
     "load:subway-line-orders": "tsx --env-file=.env scripts/load-subway-line-orders.ts",
+    "load:subway-congestion": "tsx --env-file=.env scripts/load-subway-congestion.ts",
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "probe:bus": "tsx --env-file=.env scripts/probe-bus-api.ts",
     "probe:subway": "tsx --env-file=.env scripts/probe-subway-api.ts",

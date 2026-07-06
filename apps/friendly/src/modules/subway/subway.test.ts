@@ -23,6 +23,7 @@ vi.mock('./subway-api.adapter.js', async (importOriginal) => {
 
 import type {
   SubwayArrivalsResultType,
+  SubwayCongestionResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
   SubwayPositionsResultType,
@@ -78,6 +79,24 @@ const lineDetailUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId
 const positionsUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId}/positions`;
 const timetableUrl = (stationId: string, dayType?: string): string =>
   `/api/v1/subway/stations/${encodeURIComponent(stationId)}/timetable${dayType !== undefined ? `?dayType=${dayType}` : ''}`;
+const congestionUrl = (stationId: string, dayType?: string): string =>
+  `/api/v1/subway/stations/${encodeURIComponent(stationId)}/congestion${dayType !== undefined ? `?dayType=${dayType}` : ''}`;
+
+// SubwayCongestion 시드 — stationName 에 '지하철테스트' 를 넣어 afterAll 이 정리.
+const seedCongestion = (
+  app: FastifyInstance,
+  rows: {
+    stationId: string;
+    lineId: string;
+    stationName: string;
+    dayType: string;
+    updn: string;
+    slots: { time: string; level: number | null }[];
+  }[],
+) =>
+  app.prisma.subwayCongestion.createMany({
+    data: rows.map((r) => ({ ...r, slots: JSON.stringify(r.slots) })),
+  });
 
 // SearchSTNTimeTableByIDService 원시 행 팩토리 (프로브 실측 강남/9호선 형태).
 const rawTimetableRow = (over: Partial<RawSubwayTimetableRow> = {}): RawSubwayTimetableRow => ({
@@ -169,6 +188,10 @@ afterAll(async () => {
   // 시간표 캐시 시드 정리 — cacheKey `${stationId}|${dayType}` 에 prefix 포함.
   await app.prisma.subwayTimetableCache.deleteMany({
     where: { cacheKey: { contains: NAME_PREFIX } },
+  });
+  // 혼잡도 시드 정리 — stationName 에 prefix 포함(실적재 행은 미포함이라 안전).
+  await app.prisma.subwayCongestion.deleteMany({
+    where: { stationName: { contains: NAME_PREFIX } },
   });
   // contains — 정렬 테스트의 '뒤…' 접두어 케이스도 잡는다(startsWith 로는 누락).
   await app.prisma.subwayStation.deleteMany({ where: { name: { contains: NAME_PREFIX } } });
@@ -664,6 +687,111 @@ describe('GET /api/v1/subway/stations/:stationId/timetable — 시간표', () =>
     expect(stale.source).toBe('stale');
     expect(stale.coverage).toBe(true);
     expect(stale.directions.length).toBeGreaterThan(0);
+  });
+});
+
+describe('GET /api/v1/subway/stations/:stationId/congestion — 혼잡도', () => {
+  it('없는 stationId → 404 (라우트)', async () => {
+    const res = await app.inject({ url: congestionUrl(`1002:${NAME_PREFIX}없음${stamp()}`) });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('잘못된 dayType → 400 (zod enum)', async () => {
+    const name = `${NAME_PREFIX}혼잡데이${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0 }]);
+    const res = await app.inject({ url: congestionUrl(`1002:${name}`, '9') });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('정상 조립 — directions(updn 원문)·slots(time 순, level null 보존)·coverage true', async () => {
+    const name = `${NAME_PREFIX}혼잡강남${stamp()}`;
+    const stationId = `1002:${name}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.4979, lng: 127.0276 }]);
+    await seedCongestion(app, [
+      {
+        stationId,
+        lineId: '1002',
+        stationName: name,
+        dayType: '1',
+        updn: '내선',
+        slots: [
+          { time: '05:30', level: 8 },
+          { time: '08:30', level: 90.7 },
+          { time: '06:00', level: null }, // 시드 순서를 섞어도 저장은 이미 time 순
+        ],
+      },
+      {
+        stationId,
+        lineId: '1002',
+        stationName: name,
+        dayType: '1',
+        updn: '외선',
+        slots: [{ time: '05:30', level: 12 }],
+      },
+      // 다른 dayType — 필터로 제외되어야.
+      {
+        stationId,
+        lineId: '1002',
+        stationName: name,
+        dayType: '2',
+        updn: '내선',
+        slots: [{ time: '05:30', level: 3 }],
+      },
+    ]);
+    const res = await app.inject({ url: congestionUrl(stationId, '1') });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayCongestionResultType;
+    expect(body.coverage).toBe(true);
+    expect(body.source).toBe('db');
+    expect(body.dayType).toBe('1');
+    // dayType '1' 만 — 내선/외선 2방향(updn asc).
+    expect(body.directions.map((d) => d.updn)).toEqual(['내선', '외선']);
+    const inner = body.directions[0];
+    expect(inner.slots).toEqual([
+      { time: '05:30', level: 8 },
+      { time: '08:30', level: 90.7 },
+      { time: '06:00', level: null },
+    ]);
+  });
+
+  it('coverage false — 데이터 없는 역(테이블 비어있지 않음)은 200·directions []', async () => {
+    // 다른 역의 혼잡도를 심어 테이블을 비지 않게 한 뒤, 데이터 없는 역을 조회.
+    const seeded = `${NAME_PREFIX}혼잡타역${stamp()}`;
+    await seed(app, [{ lineId: '1002', name: seeded, lat: 37.5, lng: 127.0 }]);
+    await seedCongestion(app, [
+      {
+        stationId: `1002:${seeded}`,
+        lineId: '1002',
+        stationName: seeded,
+        dayType: '1',
+        updn: '내선',
+        slots: [{ time: '05:30', level: 5 }],
+      },
+    ]);
+    const empty = `${NAME_PREFIX}혼잡없음${stamp()}`;
+    await seed(app, [{ lineId: '1077', name: empty, lat: 37.5, lng: 127.0 }]);
+    const res = await app.inject({ url: congestionUrl(`1077:${empty}`, '1') });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayCongestionResultType;
+    expect(body.coverage).toBe(false);
+    expect(body.directions).toEqual([]);
+  });
+
+  it('전체 테이블 0행이면 503 (prisma mock)', async () => {
+    const mockPrisma = {
+      subwayStation: {
+        findUnique: vi.fn().mockResolvedValue({ id: '1002:x', name: 'x', lineId: '1002' }),
+      },
+      subwayCongestion: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+      },
+      subwayMasterSync: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaClient;
+    const svc = new SubwayService({ prisma: mockPrisma });
+    await expect(svc.getStationCongestion('1002:x', '1')).rejects.toMatchObject({
+      statusCode: 503,
+    });
   });
 });
 
