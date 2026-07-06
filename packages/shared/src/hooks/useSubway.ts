@@ -19,3 +19,20 @@ export const useSubwayStationSearch = (q: string) => {
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
+
+// 역 실시간 도착정보 — 30초 폴링. refetchIntervalInBackground 기본 false 라 탭이
+// 비활성이면 폴링이 자동 중단돼 업스트림 쿼터를 아낀다(버스 도착 패턴). placeholderData
+// 로 30초 갱신 사이 패널이 깜빡(로딩 리셋)이지 않게 유지한다. stationId 는 검색 결과
+// 그룹의 id(`${lineId}:${name}`) — 선택(패널 열림) 시에만 조회.
+export const useSubwayStationArrivals = (stationId: string | null) => {
+  const enabled = !!stationId;
+  return useQuery({
+    queryKey: ['subway', 'arrivals', stationId],
+    queryFn: () => subwayApi.stationArrivals(stationId!),
+    enabled,
+    refetchInterval: 30_000,
+    staleTime: 0,
+    gcTime: 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};

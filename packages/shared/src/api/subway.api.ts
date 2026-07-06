@@ -1,4 +1,8 @@
-import { Routes, type SubwayStationSearchResultType } from '@repo/api-contract';
+import {
+  Routes,
+  type SubwayArrivalsResultType,
+  type SubwayStationSearchResultType,
+} from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
 // 수도권 전철 역 검색 — friendly 가 역사마스터를 DB 에 전량 적재해 로컬 조회한다
@@ -14,4 +18,9 @@ export const subwayApi = {
       `${Routes.Subway.stationSearch}?${params.toString()}`,
     );
   },
+  // 역 실시간 도착정보 — 서버 15초 마이크로 캐시를 얹은 프록시. stationId 는
+  // `${lineId}:${name}` 합성(콜론·한글)이라 Routes 빌더가 encodeURIComponent 를
+  // 책임진다. 서버가 그룹 lineId 집합으로 동명이역 응답을 필터해 돌려준다.
+  stationArrivals: (stationId: string) =>
+    apiFetch<SubwayArrivalsResultType>(Routes.Subway.stationArrivals(stationId)),
 };

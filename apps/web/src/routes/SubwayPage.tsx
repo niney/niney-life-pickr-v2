@@ -1,8 +1,9 @@
 import { useCallback, useDeferredValue, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useSubwayStationSearch } from '@repo/shared';
+import { useSubwayStationArrivals, useSubwayStationSearch } from '@repo/shared';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TransitTabs } from '~/components/transit/TransitTabs';
+import { SubwayArrivalPanel } from '~/components/subway/SubwayArrivalPanel';
 import {
   SubwayStationList,
   SubwayStationListBody,
@@ -92,6 +93,29 @@ export const SubwayPage = () => {
   );
 
   const handleSelect = useCallback((id: string) => setParam('stn', id), [setParam]);
+  // '← 목록' — 선택(stn) 해제로 리스트 뷰 복귀. 지도/검색은 그대로.
+  const handleBack = useCallback(() => setParam('stn', null), [setParam]);
+
+  // 선택 역 도착정보 — 30초 폴링(stn 있을 때만). 패널 헤더 소스는 "현재 stn 의
+  // 응답"이 진실이라 딥링크로 검색 결과가 없어도 헤더가 선다. 단 placeholder(직전
+  // 역 응답)는 stationId 불일치라 걸러내 역 전환 순간 이전 역명이 새지 않게 한다.
+  const arrivals = useSubwayStationArrivals(stn);
+  const arrivalsForStn =
+    arrivals.data && arrivals.data.stationId === stn ? arrivals.data : null;
+  // 응답 → 검색 결과 그룹 → stn id 의 역명 부분(`${lineId}:${name}`) 순 폴백.
+  const selectedGroup = stn ? items.find((it) => it.id === stn) : undefined;
+  const panelStationName =
+    arrivalsForStn?.name ??
+    selectedGroup?.name ??
+    (stn ? stn.slice(stn.indexOf(':') + 1) : '');
+  const panelLines =
+    arrivalsForStn?.lines ?? selectedGroup?.lines.map((l) => l.lineId) ?? [];
+  const arrivalItems = arrivalsForStn?.items ?? [];
+  // 현재 stn 응답이 아직 없으면(최초/역 전환) 로딩 — placeholder(직전 역)를 목록으로
+  // 흘리지 않고 스피너를 보인다. 같은 역 30초 폴링 중에는 arrivalsForStn 이 유지돼
+  // 로딩이 뜨지 않는다(잔상 없이 교체).
+  const arrivalLoading =
+    arrivals.isLoading || (arrivals.isFetching && arrivalsForStn === null);
 
   const listProps = {
     q: qInput,
@@ -107,6 +131,20 @@ export const SubwayPage = () => {
     onRetry: () => void search.refetch(),
   };
 
+  // 역 선택 시 목록 대신 뜨는 도착 패널 — 데스크톱 좌패널/모바일 하단 공용.
+  const arrivalPanel = stn ? (
+    <SubwayArrivalPanel
+      stationName={panelStationName}
+      lines={panelLines}
+      items={arrivalItems}
+      fetchedAt={arrivalsForStn?.fetchedAt ?? null}
+      isLoading={arrivalLoading}
+      isError={arrivals.isError}
+      onBack={handleBack}
+      onRetry={() => void arrivals.refetch()}
+    />
+  ) : null;
+
   return (
     <div className="flex w-full flex-col" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
       <TransitTabs active="subway" />
@@ -115,8 +153,9 @@ export const SubwayPage = () => {
             데스크톱 (xl+) — 좌 검색 패널(400px) + 우 지도.
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <div className="hidden h-full xl:flex">
+          {/* 역 선택 시 좌패널이 도착정보 뷰로 전환 — '← 목록'으로 복귀. */}
           <aside className="flex w-[400px] shrink-0 flex-col border-r">
-            <SubwayStationList {...listProps} />
+            {arrivalPanel ?? <SubwayStationList {...listProps} />}
           </aside>
           <section className="relative flex-1">
             <SubwayStationsMap groups={items} selectedId={stn} onSelect={handleSelect} />
@@ -139,18 +178,24 @@ export const SubwayPage = () => {
           <div className="relative min-h-[40dvh] flex-1">
             <SubwayStationsMap groups={items} selectedId={stn} onSelect={handleSelect} />
           </div>
-          <div className="h-[38dvh] overflow-y-auto border-t p-3">
-            <SubwayStationListBody
-              q={qInput}
-              items={items}
-              isLoading={searching}
-              isError={search.isError}
-              selectedId={stn}
-              selectedMissing={selectedMissing}
-              onSelect={handleSelect}
-              onRetry={() => void search.refetch()}
-            />
-          </div>
+          {/* 역 선택 시 하단 영역이 도착정보 뷰로 전환 — 패널은 내부 스크롤이라
+              컨테이너는 flex 로만 감싼다. */}
+          {arrivalPanel ? (
+            <div className="flex h-[38dvh] flex-col border-t">{arrivalPanel}</div>
+          ) : (
+            <div className="h-[38dvh] overflow-y-auto border-t p-3">
+              <SubwayStationListBody
+                q={qInput}
+                items={items}
+                isLoading={searching}
+                isError={search.isError}
+                selectedId={stn}
+                selectedMissing={selectedMissing}
+                onSelect={handleSelect}
+                onRetry={() => void search.refetch()}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
