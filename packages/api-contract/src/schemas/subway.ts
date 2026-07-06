@@ -61,3 +61,63 @@ export const SubwayStationSearchResult = z.object({
   source: z.literal('db'),
 });
 export type SubwayStationSearchResultType = z.infer<typeof SubwayStationSearchResult>;
+
+// ── 2차: 실시간 도착정보 (realtimeStationArrival 프록시) ─────────────────────
+// 조회 단위는 역명 그룹 — 서버가 stationId 로 그룹을 재구성해 그룹의 유니크
+// 조회역명(realtimeName ?? name — 신촌은 '신촌'+'신촌(경의중앙선)' 2개)별로
+// 업스트림을 부르고 합본한 뒤, 그룹 lineId 집합으로 필터한다(동명이역 응답 오염
+// 차단 — '양평' 조회에 5호선/경의중앙 두 물리 역이 섞여 온다). 서버는 역명 단위
+// 15초 마이크로 캐시 + in-flight 합류로 동시 사용자의 업스트림 콜을 공유한다
+// (실시간이라 stale 폴백은 없음 — 쿼터 소진/실패는 503/502).
+
+export const SubwayArrivalsParams = z.object({
+  // 내부 합성 ID `${lineId}:${name}` — 검색 결과 그룹의 id(lines[0].stationId).
+  // 콜론·한글이 있어 클라이언트는 encodeURIComponent 로 넣는다(Routes 빌더가 처리).
+  stationId: z.string().min(1),
+});
+export type SubwayArrivalsParamsType = z.infer<typeof SubwayArrivalsParams>;
+
+export const SubwayArrivalItem = z.object({
+  // 실시간 subwayId — SUBWAY_LINES 매핑으로 뱃지/색.
+  lineId: z.string().regex(/^\d{4}$/),
+  // 상하행 원문 보존 — '상행'/'하행'/'내선'/'외선' (호선마다 표기가 다르고
+  // 위치 API('0'/'1')와도 인코딩이 달라 변환하지 않는다).
+  updnLine: z.string(),
+  // '성수행 - 역삼방면' — 행선지 주 표기의 원천.
+  trainLineNm: z.string().nullable(),
+  // bstatnNm — 종착역명.
+  destination: z.string().nullable(),
+  // btrainSttus 원문 — '일반'/'급행'/'ITX'/'특급' (값 집합이 노선마다 달라
+  // 원문 보존, FE 는 '일반'이 아닐 때만 뱃지).
+  trainKind: z.string().nullable(),
+  // btrainNo — 위치 API 의 trainNo 와 동일 체계(프로브 ⑨ 실측). 7차
+  // 도착↔지도 열차 연계의 조인 키라 지금부터 계약에 포함.
+  trainNo: z.string().nullable(),
+  // barvlDt(초). 0 은 도착/출발 등 상태 국면(arrivalCode 로 구분) — FE 는
+  // 양수일 때만 카운트다운을 그린다.
+  arrivalSec: z.number().int().nullable(),
+  // arvlMsg2 — '전역 도착', '3분 후 (2번째 전역)' 등 보조 문구.
+  arrivalMsg: z.string().nullable(),
+  // arvlCd 원문 — 0접근/1도착/2출발/3전역출발/4전역진입/5전역도착/99운행중.
+  arrivalCode: z.string().nullable(),
+  // lstcarAt '1' — 막차.
+  isLastTrain: z.boolean(),
+  // recptnDt('yyyy-MM-dd HH:mm:ss', KST)를 ISO 로 정규화. 공식 가이드가
+  // "현재시각과 recptnDt 차이만큼 보정"을 명시 — 카운트다운의 기준 시각이라
+  // fetchedAt(캐시 생성 시각)이 아니라 이 값을 쓴다.
+  receivedAt: z.string().nullable(),
+});
+export type SubwayArrivalItemType = z.infer<typeof SubwayArrivalItem>;
+
+export const SubwayArrivalsResult = z.object({
+  // 요청한 stationId (그룹 대표가 아니어도 그대로 반환).
+  stationId: z.string(),
+  name: z.string(),
+  // 그룹의 lineId 집합(오름차순) — 패널 헤더 뱃지·필터 근거 노출.
+  lines: z.array(z.string()),
+  // barvlDt 오름차순 정렬(null 은 뒤로).
+  items: z.array(SubwayArrivalItem),
+  // 업스트림 호출 시각 (ISO) — 마이크로 캐시 히트 시 캐시 생성 시각 보존.
+  fetchedAt: z.string(),
+});
+export type SubwayArrivalsResultType = z.infer<typeof SubwayArrivalsResult>;

@@ -418,6 +418,10 @@ export const Bus = {
 // 도착/열차위치는 차수 진행에 따라 추가된다.
 export const Subway = {
   stationSearch: `${API_PREFIX}/subway/stations/search`,
+  // 역 실시간 도착정보 — stationId 는 `${lineId}:${name}` 합성(콜론·한글 포함)
+  // 이라 빌더가 인코딩까지 책임진다. 서버는 역명 단위 15초 마이크로 캐시.
+  stationArrivals: (stationId: string) =>
+    `${API_PREFIX}/subway/stations/${encodeURIComponent(stationId)}/arrivals`,
 } as const;
 
 export const Health = `${API_PREFIX}/health` as const;
