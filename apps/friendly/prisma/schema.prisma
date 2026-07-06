@@ -1161,6 +1161,20 @@ model SubwayLineStation {
   @@map("subway_line_stations")
 }
 
+// 역×호선 시간표 blob 캐시(8차) — 서울시 SearchSTNTimeTableByIDService(1~9호선)를
+// (stationId, dayType) 단위로 30일 캐싱한다. 시간표는 사실상 정적이고 방향별
+// 2콜이라 원자 조회(정규화 { coverage, directions } JSON 한 컬럼). coverage:false
+// (광역·경전철, 또는 1~9호선인데 데이터 0)도 캐싱해 무의미 재호출을 막는다.
+model SubwayTimetableCache {
+  cacheKey  String   @id // `${stationId}|${dayType}`
+  payload   String // 정규화 { coverage, directions } JSON 직렬화
+  fetchedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subway_timetable_caches")
+}
+
 // 로그인 사용자의 지하철 역 즐겨찾기(그룹 단위). 저장 시점 스냅샷(name/lat/lng/
 // lines)을 그대로 보존해 목록 렌더·지도 이동에 재조회가 필요 없다. 버스 즐겨찾기와
 // 동일하게 SubwayStation(캐시가 아닌 마스터지만) 을 FK 로 묶지 않는다 — 스냅샷이라

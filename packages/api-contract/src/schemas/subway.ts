@@ -141,6 +141,67 @@ export const SubwayLineDetailResult = z.object({
 });
 export type SubwayLineDetailResultType = z.infer<typeof SubwayLineDetailResult>;
 
+// ── 8차: 역 시간표 (SearchSTNTimeTableByIDService — 1~9호선 한정) ───────────
+// 프로브 실측(2026-07-06): 서울시 시간표는 1~9호선(중전철)만 제공 — 경전철·광역
+// (신분당/수인분당/공항철도/GTX 등 10개 노선)은 미제공이라 coverage:false 로
+// 200 을 내려 FE 가 "시간표 미제공" 을 안내한다(역이 없는 게 아니므로 404 아님).
+// 시간표는 사실상 정적이라 (역×호선, dayType) 단위 DB blob 30일 캐시 + stale
+// 폴백(버스 노선상세 패턴 — source 3값 봉투). 한 응답에 상·하행을 모두 담아
+// FE 토글이 재요청 없이 동작한다(업스트림은 방향별 2콜 — 캐시 미스 시만).
+
+export const SubwayTimetableParams = z.object({
+  // `${lineId}:${name}` — 시간표는 역×호선 단위(환승역은 호선 섹션에서 진입).
+  stationId: z.string().min(1),
+});
+export type SubwayTimetableParamsType = z.infer<typeof SubwayTimetableParams>;
+
+export const SubwayTimetableQuery = z.object({
+  // 주중구분 원문 체계 — '1' 평일 / '2' 토요일 / '3' 휴일(일요일·공휴일).
+  // 공휴일 자동 판정은 불가능해 FE 기본값은 요일 기반(토=2, 일=3, 그 외 1).
+  dayType: z.enum(['1', '2', '3']).default('1'),
+});
+export type SubwayTimetableQueryType = z.infer<typeof SubwayTimetableQuery>;
+
+export const SubwayTimetableTrainItem = z.object({
+  // ARRIVETIME/LEFTTIME 'HH:MM:SS' 원문 — 종착행 '00:00:00' 등 경계값이 있어
+  // FE 가 표기 시 정규화한다.
+  arriveTime: z.string(),
+  leaveTime: z.string(),
+  trainNo: z.string().nullable(),
+  // EXPRESS_YN 원문 보존('G' 일반 관측, 급행 값은 9호선 실측으로 확정) —
+  // FE 는 'G'/null 이 아닐 때 급행 뱃지.
+  expressTag: z.string().nullable(),
+  // DESTSTATION — 종착역명(정규화).
+  destination: z.string().nullable(),
+});
+export type SubwayTimetableTrainItemType = z.infer<typeof SubwayTimetableTrainItem>;
+
+export const SubwayTimetableDirection = z.object({
+  // INOUT_TAG 원문 — '1' 상행(내선) / '2' 하행(외선).
+  updn: z.string(),
+  // arriveTime 오름차순.
+  trains: z.array(SubwayTimetableTrainItem),
+  // 첫차/막차 — trains 에서 서버가 파생(빈 방향이면 null).
+  firstTrain: z.string().nullable(),
+  lastTrain: z.string().nullable(),
+});
+export type SubwayTimetableDirectionType = z.infer<typeof SubwayTimetableDirection>;
+
+export const SubwayTimetableResult = z.object({
+  stationId: z.string(),
+  name: z.string(),
+  lineId: z.string(),
+  dayType: z.string(),
+  // false = 시간표 미제공 노선(광역·경전철) — directions 는 빈 배열.
+  coverage: z.boolean(),
+  directions: z.array(SubwayTimetableDirection),
+  // 업스트림 수집 시각 (ISO).
+  fetchedAt: z.string(),
+  // cache = TTL 내 blob / api = 방금 수집 / stale = 수집 실패로 만료 blob 반환.
+  source: z.enum(['cache', 'api', 'stale']),
+});
+export type SubwayTimetableResultType = z.infer<typeof SubwayTimetableResult>;
+
 // ── 6차: 실시간 열차 위치 (realtimePosition 프록시) ─────────────────────────
 // 버스와 결정적 차이 — GPS 가 없다. 응답은 현재역(statnId)+상태(trainSttus)뿐이라
 // 서버가 마스터 statnId 조인으로 역 좌표를 enrich 해 내려주고(실패 시 null —

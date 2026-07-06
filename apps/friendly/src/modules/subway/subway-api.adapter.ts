@@ -292,6 +292,56 @@ export const getStationMaster = async (
   return rows.map(toRawSubwayMasterRow);
 };
 
+// SearchSTNTimeTableByIDService 원시 행 (8차 시간표, 프로브 실측 2026-07-06).
+// 종착역명은 코드(DESTSTATION)가 아니라 SUBWAYENAME 이 이름('성수'), SUBWAYSNAME
+// 은 시발역명이다. EXPRESS_YN 은 'G'=일반·'D'=급행(9호선 실측). ARRIVETIME 은
+// 자정 넘김을 24/25시로 표기('24:46:00' — '00:00:00' 미관측)라 문자열 정렬이 곧
+// 시각 정렬이다.
+export interface RawSubwayTimetableRow {
+  arriveTime: string | null; // ARRIVETIME 'HH:MM:SS'
+  leaveTime: string | null; // LEFTTIME
+  trainNo: string | null; // TRAIN_NO
+  expressYn: string | null; // EXPRESS_YN 'G'/'D'
+  destName: string | null; // SUBWAYENAME — 종착역명
+  destCode: string | null; // DESTSTATION — 종착역 코드
+  weekTag: string | null; // WEEK_TAG
+  inoutTag: string | null; // INOUT_TAG '1' 상행/'2' 하행
+  branchLine: string | null; // BRANCH_LINE
+  frCode: string | null; // FR_CODE
+}
+
+const toRawSubwayTimetableRow = (raw: Record<string, unknown>): RawSubwayTimetableRow => ({
+  arriveTime: strOrNull(raw['ARRIVETIME']),
+  leaveTime: strOrNull(raw['LEFTTIME']),
+  trainNo: strOrNull(raw['TRAIN_NO']),
+  expressYn: strOrNull(raw['EXPRESS_YN']),
+  destName: strOrNull(raw['SUBWAYENAME']),
+  destCode: strOrNull(raw['DESTSTATION']),
+  weekTag: strOrNull(raw['WEEK_TAG']),
+  inoutTag: strOrNull(raw['INOUT_TAG']),
+  branchLine: strOrNull(raw['BRANCH_LINE']),
+  frCode: strOrNull(raw['FR_CODE']),
+});
+
+// 역×주중구분×상하행 시간표(1~9호선). stationCd 는 BLDN_ID(4자리), weekTag
+// 1평일/2토/3휴일, inoutTag 1상행/2하행. 광역·경전철은 INFO-200(빈 배열 정상).
+// SEOUL_OPEN_API_KEY 를 apiKey 로 넘겨야 한다.
+export const getStationTimetable = async (
+  stationCd: string,
+  weekTag: string,
+  inoutTag: string,
+  opts: SubwayApiRequestOptions,
+): Promise<RawSubwayTimetableRow[]> => {
+  const { rows } = await callSeoulOpenApi(
+    'SearchSTNTimeTableByIDService',
+    1,
+    500,
+    [stationCd, weekTag, inoutTag],
+    opts,
+  );
+  return rows.map(toRawSubwayTimetableRow);
+};
+
 // realtimeStationArrival 원시 행 — 관측 필드 그대로 보존(2차 도착 라우트 대비).
 // 숫자가 문자열로 오는 barvlDt("90")는 numOrNull 로 초 단위 숫자화한다.
 export interface RawSubwayArrival {

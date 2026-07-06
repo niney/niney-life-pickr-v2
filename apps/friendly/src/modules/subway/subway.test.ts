@@ -11,7 +11,11 @@ vi.hoisted(() => {
 
 // 실 swopenAPI 호출 차단 — getRealtimeArrivals 만 mock, 나머지(에러 클래스 등)는
 // 실구현 유지.
-const mocks = vi.hoisted(() => ({ getRealtimeArrivals: vi.fn(), getRealtimePositions: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getRealtimeArrivals: vi.fn(),
+  getRealtimePositions: vi.fn(),
+  getStationTimetable: vi.fn(),
+}));
 vi.mock('./subway-api.adapter.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./subway-api.adapter.js')>();
   return { ...actual, ...mocks };
@@ -23,9 +27,14 @@ import type {
   SubwayNearbyResultType,
   SubwayPositionsResultType,
   SubwayStationSearchResultType,
+  SubwayTimetableResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
-import type { RawSubwayArrival, RawSubwayPosition } from './subway-api.adapter.js';
+import type {
+  RawSubwayArrival,
+  RawSubwayPosition,
+  RawSubwayTimetableRow,
+} from './subway-api.adapter.js';
 import { SubwayService } from './subway.service.js';
 
 // 공유 dev.db — 역명 prefix '지하철테스트' 로 시드하고 afterAll 에서 prefix 로
@@ -42,6 +51,7 @@ interface SeedRow {
   lineName?: string;
   realtimeName?: string;
   statnId?: string;
+  stationCd?: string;
 }
 const seed = (app: FastifyInstance, rows: SeedRow[]) =>
   app.prisma.subwayStation.createMany({
@@ -52,6 +62,7 @@ const seed = (app: FastifyInstance, rows: SeedRow[]) =>
       lineName: r.lineName ?? `${r.lineId}호선`,
       realtimeName: r.realtimeName ?? null,
       statnId: r.statnId ?? null,
+      stationCd: r.stationCd ?? null,
       lat: r.lat,
       lng: r.lng,
     })),
@@ -65,6 +76,23 @@ const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
   `/api/v1/subway/stations/nearby?lat=${lat}&lng=${lng}${radius !== undefined ? `&radius=${radius}` : ''}`;
 const lineDetailUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId}/detail`;
 const positionsUrl = (lineId: string): string => `/api/v1/subway/lines/${lineId}/positions`;
+const timetableUrl = (stationId: string, dayType?: string): string =>
+  `/api/v1/subway/stations/${encodeURIComponent(stationId)}/timetable${dayType !== undefined ? `?dayType=${dayType}` : ''}`;
+
+// SearchSTNTimeTableByIDService 원시 행 팩토리 (프로브 실측 강남/9호선 형태).
+const rawTimetableRow = (over: Partial<RawSubwayTimetableRow> = {}): RawSubwayTimetableRow => ({
+  arriveTime: '05:35:30',
+  leaveTime: '05:36:00',
+  trainNo: '2016',
+  expressYn: 'G',
+  destName: '성수',
+  destCode: '0211',
+  weekTag: '1',
+  inoutTag: '1',
+  branchLine: '',
+  frCode: '222',
+  ...over,
+});
 
 // realtimePosition 원시 행 팩토리 (data/subway-probe 2호선 실덤프 형태).
 const rawPosition = (over: Partial<RawSubwayPosition> = {}): RawSubwayPosition => ({
@@ -138,6 +166,10 @@ afterAll(async () => {
   await app.prisma.subwayLineStation.deleteMany({
     where: { stationId: { contains: NAME_PREFIX } },
   });
+  // 시간표 캐시 시드 정리 — cacheKey `${stationId}|${dayType}` 에 prefix 포함.
+  await app.prisma.subwayTimetableCache.deleteMany({
+    where: { cacheKey: { contains: NAME_PREFIX } },
+  });
   // contains — 정렬 테스트의 '뒤…' 접두어 케이스도 잡는다(startsWith 로는 누락).
   await app.prisma.subwayStation.deleteMany({ where: { name: { contains: NAME_PREFIX } } });
   await app.prisma.subwayMasterSync.deleteMany({ where: { count: 0 } });
@@ -147,6 +179,7 @@ afterAll(async () => {
 beforeEach(() => {
   mocks.getRealtimeArrivals.mockReset();
   mocks.getRealtimePositions.mockReset();
+  mocks.getStationTimetable.mockReset();
 });
 
 describe('GET /api/v1/subway/stations/search — 입력 검증', () => {
@@ -506,6 +539,131 @@ describe('GET /api/v1/subway/stations/nearby — 주변 역', () => {
     await expect(svc.getNearbyStations(37.5, 127.0, 1500)).rejects.toMatchObject({
       statusCode: 503,
     });
+  });
+});
+
+describe('GET /api/v1/subway/stations/:stationId/timetable — 시간표', () => {
+  it('없는 stationId → 404 (라우트)', async () => {
+    const res = await app.inject({ url: timetableUrl(`1002:${NAME_PREFIX}없음${stamp()}`) });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('잘못된 dayType → 400 (zod enum)', async () => {
+    const name = `${NAME_PREFIX}데이${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0, stationCd: `TC${stamp()}` }]);
+    const res = await app.inject({ url: timetableUrl(`1002:${name}`, '9') });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('coverage false — 광역 노선(1077)은 즉시 200·directions [] (업스트림 미호출)', async () => {
+    const name = `${NAME_PREFIX}광역${stamp()}`;
+    await seed(app, [{ lineId: '1077', name, lat: 37.5, lng: 127.0, stationCd: `TC${stamp()}` }]);
+    const res = await app.inject({ url: timetableUrl(`1077:${name}`, '1') });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayTimetableResultType;
+    expect(body.coverage).toBe(false);
+    expect(body.directions).toEqual([]);
+    expect(mocks.getStationTimetable).not.toHaveBeenCalled();
+  });
+
+  it('coverage false — stationCd 없으면 즉시 200 (업스트림 미호출)', async () => {
+    const name = `${NAME_PREFIX}코드없음${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0 }]); // stationCd null
+    const adapter = { getRealtimeArrivals: vi.fn(), getStationTimetable: vi.fn() };
+    const svc = new SubwayService({ prisma: app.prisma, seoulKey: 'k', adapter });
+    const res = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(res.coverage).toBe(false);
+    expect(res.directions).toEqual([]);
+    expect(adapter.getStationTimetable).not.toHaveBeenCalled();
+  });
+
+  it('캐시 미스 2콜 → blob 저장·first/last 파생(24시 정렬), TTL 내 재요청은 cache 0콜', async () => {
+    const name = `${NAME_PREFIX}시간표${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0, stationCd: `TC${stamp()}` }]);
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getStationTimetable: vi.fn((_cd: string, _wk: string, io: string) =>
+        Promise.resolve(
+          io === '1'
+            ? [
+                // 삽입 순서를 뒤집어 정렬 검증(24시 표기가 막차).
+                rawTimetableRow({ arriveTime: '24:46:00', trainNo: '2514', destName: '  성수  ' }),
+                rawTimetableRow({ arriveTime: '05:35:30', trainNo: '2016' }),
+              ]
+            : [rawTimetableRow({ inoutTag: '2', arriveTime: '05:40:00', expressYn: 'D' })],
+        ),
+      ),
+    };
+    let nowMs = Date.now();
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      seoulKey: 'k',
+      adapter,
+      now: () => new Date(nowMs),
+    });
+    const res = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(res.source).toBe('api');
+    expect(res.coverage).toBe(true);
+    expect(res.directions).toHaveLength(2);
+    expect(adapter.getStationTimetable).toHaveBeenCalledTimes(2);
+
+    const up = res.directions.find((d) => d.updn === '1')!;
+    expect(up.trains.map((t) => t.arriveTime)).toEqual(['05:35:30', '24:46:00']); // 문자열 정렬
+    expect(up.firstTrain).toBe('05:35:30');
+    expect(up.lastTrain).toBe('24:46:00'); // 24시 표기가 막차
+    expect(up.trains[1]!.destination).toBe('성수'); // 공백 정리
+    expect(up.trains[0]!.expressTag).toBe('G');
+    const down = res.directions.find((d) => d.updn === '2')!;
+    expect(down.trains[0]!.expressTag).toBe('D'); // 급행 원문
+
+    // TTL 내 재요청 → cache, 추가 콜 없음.
+    const res2 = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(res2.source).toBe('cache');
+    expect(adapter.getStationTimetable).toHaveBeenCalledTimes(2);
+  });
+
+  it('coverage false — 1~9호선인데 양방향 0행이면 cache false 저장', async () => {
+    const name = `${NAME_PREFIX}빈시간표${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0, stationCd: `TC${stamp()}` }]);
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getStationTimetable: vi.fn().mockResolvedValue([]),
+    };
+    const svc = new SubwayService({ prisma: app.prisma, seoulKey: 'k', adapter });
+    const res = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(res.coverage).toBe(false);
+    expect(res.directions).toEqual([]);
+    expect(adapter.getStationTimetable).toHaveBeenCalledTimes(2);
+    // 저장돼 재요청은 cache(무의미 재호출 방지).
+    const res2 = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(res2.source).toBe('cache');
+    expect(adapter.getStationTimetable).toHaveBeenCalledTimes(2);
+  });
+
+  it('stale 폴백 — 만료 blob + 업스트림 실패', async () => {
+    const name = `${NAME_PREFIX}스테일${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0, stationCd: `TC${stamp()}` }]);
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getStationTimetable: vi.fn().mockResolvedValue([rawTimetableRow()]),
+    };
+    let nowMs = Date.now();
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      seoulKey: 'k',
+      adapter,
+      now: () => new Date(nowMs),
+    });
+    const first = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(first.source).toBe('api');
+
+    // TTL(30일) 경과 + 업스트림 실패 → stale.
+    nowMs += 31 * 24 * 60 * 60 * 1000;
+    adapter.getStationTimetable.mockRejectedValue(new Error('upstream down'));
+    const stale = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(stale.source).toBe('stale');
+    expect(stale.coverage).toBe(true);
+    expect(stale.directions.length).toBeGreaterThan(0);
   });
 });
 

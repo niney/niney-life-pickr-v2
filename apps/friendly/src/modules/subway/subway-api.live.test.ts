@@ -108,4 +108,36 @@ describe.skipIf(!OPENAPI_KEY)('subway master live smoke (SEOUL_OPEN_API_KEY 필�
       expect(r.lng!).toBeLessThanOrEqual(132);
     }
   });
+
+  it('시간표(강남 dayType 1) — 라우트 200 + coverage true·directions', { timeout: 15_000 }, async (ctx) => {
+    const app = await buildApp({ logger: false });
+    await app.ready();
+    try {
+      const st = await app.prisma.subwayStation.findFirst({
+        where: { name: '강남', lineId: '1002' },
+      });
+      if (!st) {
+        console.warn('[subway timetable live] 강남(1002) 미적재 — skip');
+        ctx.skip();
+        return;
+      }
+      const res = await app.inject({
+        url: `/api/v1/subway/stations/${encodeURIComponent(st.id)}/timetable?dayType=1`,
+      });
+      if (res.statusCode !== 200) {
+        console.warn(`[subway timetable live] status ${res.statusCode} — skip`);
+        ctx.skip();
+        return;
+      }
+      const body = res.json() as {
+        coverage: boolean;
+        directions: { updn: string; firstTrain: string | null; lastTrain: string | null }[];
+      };
+      expect(body.coverage).toBe(true);
+      expect(body.directions.length).toBeGreaterThan(0);
+      expect(body.directions[0]!.firstTrain).not.toBeNull();
+    } finally {
+      await app.close();
+    }
+  });
 });

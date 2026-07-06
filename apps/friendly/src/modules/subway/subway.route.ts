@@ -13,6 +13,9 @@ import {
   SubwayPositionsResult,
   SubwayStationSearchQuery,
   SubwayStationSearchResult,
+  SubwayTimetableParams,
+  SubwayTimetableQuery,
+  SubwayTimetableResult,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
 import { SubwayService } from './subway.service.js';
@@ -28,7 +31,11 @@ import { SubwayService } from './subway.service.js';
 // autoload 가 `*.route.ts` 를 자동 등록한다.
 
 const subwayRoutes: FastifyPluginAsync = async (app) => {
-  const service = new SubwayService({ prisma: app.prisma, serviceKey: env.SUBWAY_API_KEY });
+  const service = new SubwayService({
+    prisma: app.prisma,
+    serviceKey: env.SUBWAY_API_KEY,
+    seoulKey: env.SEOUL_OPEN_API_KEY,
+  });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   // 공개 라우트 — 버스 검색과 동일 정책(비로그인 허용).
@@ -178,6 +185,39 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
             error:
               sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
             message: e instanceof Error ? e.message : '지하철 도착 조회 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 역 시간표(1~9호선) — (stationId, dayType) blob 30일 캐시. stationId 인코딩이라
+  // 도착 라우트와 동일하게 등록 경로만 디코드. 없는 역 404, 업스트림 실패 502,
+  // 키 미설정·쿼터 소진 503. 미제공 노선은 coverage:false 로 200(404 아님).
+  typed.get(decodeURIComponent(Routes.Subway.stationTimetable(':stationId')), {
+    schema: {
+      tags: ['subway'],
+      params: SubwayTimetableParams,
+      querystring: SubwayTimetableQuery,
+      response: {
+        200: SubwayTimetableResult,
+        404: ErrorResponseSchema,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getStationTimetable(req.params.stationId, req.query.dayType);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 404 || sc === 502 || sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error:
+              sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
+            message: e instanceof Error ? e.message : '지하철 시간표 조회 실패',
           });
         }
         throw e;

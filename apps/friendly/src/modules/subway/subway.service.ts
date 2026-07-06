@@ -13,6 +13,8 @@ import type {
   SubwayNearbyResultType,
   SubwayPositionsResultType,
   SubwayStationSearchResultType,
+  SubwayTimetableDirectionType,
+  SubwayTimetableResultType,
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
 import { subwayLineById, subwayLineName } from '@repo/utils';
@@ -20,8 +22,11 @@ import { isLoopSection } from './subway-line-order.service.js';
 import {
   getRealtimeArrivals,
   getRealtimePositions,
+  getStationTimetable,
+  SubwayApiError,
   type RawSubwayArrival,
   type RawSubwayPosition,
+  type RawSubwayTimetableRow,
   type SubwayApiRequestOptions,
 } from './subway-api.adapter.js';
 import {
@@ -37,6 +42,21 @@ export const MAX_GROUPS = 30;
 export const ARRIVALS_MICRO_CACHE_TTL_MS = 15_000;
 // 일일 업스트림 호출 한도 기본값 — 도착/위치(6차)가 'realtime' 그룹으로 공유한다.
 export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
+
+// 시간표(8차) blob 캐시 TTL — 사실상 정적이라 30일(버스 노선상세 미러).
+export const SUBWAY_TIMETABLE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// 서울시 시간표 제공 노선 — 1~9호선(중전철). 경전철·광역은 미제공(프로브 실측).
+const TIMETABLE_LINES = new Set([
+  '1001',
+  '1002',
+  '1003',
+  '1004',
+  '1005',
+  '1006',
+  '1007',
+  '1008',
+  '1009',
+]);
 
 // Asia/Seoul 기준 YYYY-MM-DD — 쿼터 리셋 경계. en-CA 로캘이 ISO 형식을 낸다.
 const SEOUL_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
@@ -65,6 +85,8 @@ export interface SubwayServiceDeps {
   // 실시간(도착/위치) 업스트림 키 — 빈 값이면 실시간 메서드가 첫 줄에서 503.
   // 검색은 로컬 DB 조회라 키가 불필요하다.
   serviceKey?: string;
+  // 시간표(8차) 업스트림 키(SEOUL_OPEN_API_KEY) — 실시간 키와 발급처가 다르다.
+  seoulKey?: string;
   // 테스트 주입 — fetchedAt/TTL/쿼터 시간 제어.
   now?: () => Date;
   // 테스트 주입 — 일일 업스트림 한도(기본 900).
@@ -81,6 +103,12 @@ export interface SubwayServiceDeps {
       lineNameParam: string,
       opts: SubwayApiRequestOptions,
     ) => Promise<RawSubwayPosition[]>;
+    getStationTimetable?: (
+      stationCd: string,
+      weekTag: string,
+      inoutTag: string,
+      opts: SubwayApiRequestOptions,
+    ) => Promise<RawSubwayTimetableRow[]>;
   };
 }
 
@@ -143,6 +171,44 @@ const toPositionItem = (
   lng: coord?.lng ?? null,
 });
 
+// 연속 공백 접기 + trim — DESTSTATION(SUBWAYENAME) 역명 정리. 비면 null.
+const collapseSpaces = (v: string | null): string | null => {
+  if (v === null) return null;
+  const t = v.replace(/\s+/g, ' ').trim();
+  return t.length > 0 ? t : null;
+};
+
+// 방향(상/하행) 시간표 정규화 — arriveTime 오름차순, first/last 파생. ARRIVETIME 은
+// 자정 넘김을 24/25시로 표기('24:46:00', '00:00:00' 미관측)라 문자열 정렬이 곧
+// 시각 순서다(0시 wraparound 없음). 빈 arriveTime 행은 제외한다.
+const normalizeDirection = (
+  updn: string,
+  rows: RawSubwayTimetableRow[],
+): SubwayTimetableDirectionType => {
+  const trains = rows
+    .filter((r) => r.arriveTime && r.arriveTime.length > 0)
+    .map((r) => ({
+      arriveTime: r.arriveTime as string,
+      leaveTime: r.leaveTime ?? '',
+      trainNo: r.trainNo,
+      expressTag: r.expressYn, // 'G' 일반 / 'D' 급행(9호선 실측)
+      destination: collapseSpaces(r.destName), // SUBWAYENAME(종착역명)
+    }))
+    .sort((a, b) => (a.arriveTime < b.arriveTime ? -1 : a.arriveTime > b.arriveTime ? 1 : 0));
+  return {
+    updn,
+    trains,
+    firstTrain: trains.length > 0 ? trains[0]!.arriveTime : null,
+    lastTrain: trains.length > 0 ? trains[trains.length - 1]!.arriveTime : null,
+  };
+};
+
+// blob 캐시 payload — 서빙 시 stationId/name/lineId/dayType/fetchedAt/source 덧댐.
+interface TimetableBlob {
+  coverage: boolean;
+  directions: SubwayTimetableDirectionType[];
+}
+
 const toGrouping = (r: {
   id: string;
   name: string;
@@ -175,6 +241,8 @@ export class SubwayService {
   private readonly microCache = new Map<string, RealtimeCacheEntry>();
   // 같은 키 동시 요청 합류.
   private readonly inflight = new Map<string, Promise<{ data: unknown[]; fetchedAt: Date }>>();
+  // 시간표 수집 동시 요청 합류 (cacheKey 단위) — 캐시 미스 시 업스트림 2콜 공유.
+  private readonly timetableInflight = new Map<string, Promise<TimetableBlob>>();
 
   constructor(private readonly deps: SubwayServiceDeps) {}
 
@@ -484,6 +552,111 @@ export class SubwayService {
     );
 
     return { lineId, items, fetchedAt: fetchedAt.toISOString() };
+  }
+
+  // 역 시간표(1~9호선) — (stationId, dayType) blob 30일 캐시 + stale 폴백(버스
+  // 노선상세 미러). 광역·경전철(또는 1~9호선인데 데이터 0)은 coverage:false.
+  // 한 응답에 상·하행을 모두 담는다(업스트림은 방향별 2콜 — 캐시 미스 시만).
+  async getStationTimetable(
+    stationId: string,
+    dayType: string,
+  ): Promise<SubwayTimetableResultType> {
+    const { prisma } = this.deps;
+    const station = await prisma.subwayStation.findUnique({ where: { id: stationId } });
+    if (!station) {
+      throw new SubwayServiceError('해당 역을 찾을 수 없습니다.', 404);
+    }
+    const meta = { stationId, name: station.name, lineId: station.lineId, dayType };
+
+    // coverage 판정 — 미제공 노선/코드 없음은 즉시 200(캐시·업스트림 없이).
+    if (!TIMETABLE_LINES.has(station.lineId) || !station.stationCd) {
+      return {
+        ...meta,
+        coverage: false,
+        directions: [],
+        fetchedAt: (this.deps.now?.() ?? new Date()).toISOString(),
+        source: 'api',
+      };
+    }
+
+    const cacheKey = `${stationId}|${dayType}`;
+    const now = this.deps.now?.() ?? new Date();
+    const cached = await prisma.subwayTimetableCache.findUnique({ where: { cacheKey } });
+    if (cached && now.getTime() - cached.fetchedAt.getTime() < SUBWAY_TIMETABLE_TTL_MS) {
+      const blob = JSON.parse(cached.payload) as TimetableBlob;
+      return { ...meta, ...blob, fetchedAt: cached.fetchedAt.toISOString(), source: 'cache' };
+    }
+
+    // 미스 — 업스트림 2콜 수집(in-flight 합류). 실패/쿼터 소진 시 만료 blob 이면 stale.
+    let blob: TimetableBlob;
+    try {
+      blob = await this.collectTimetable(cacheKey, station.stationCd, dayType, now);
+    } catch (e) {
+      if (cached) {
+        const stale = JSON.parse(cached.payload) as TimetableBlob;
+        return { ...meta, ...stale, fetchedAt: cached.fetchedAt.toISOString(), source: 'stale' };
+      }
+      if (e instanceof SubwayApiError || e instanceof SubwayServiceError) throw e;
+      throw new SubwayServiceError(
+        e instanceof Error ? e.message : '지하철 시간표 호출 실패',
+        502,
+        { cause: e },
+      );
+    }
+    return { ...meta, ...blob, fetchedAt: now.toISOString(), source: 'api' };
+  }
+
+  private collectTimetable(
+    cacheKey: string,
+    stationCd: string,
+    dayType: string,
+    now: Date,
+  ): Promise<TimetableBlob> {
+    const existing = this.timetableInflight.get(cacheKey);
+    if (existing) return existing;
+    const task = this.doCollectTimetable(cacheKey, stationCd, dayType, now).finally(() => {
+      this.timetableInflight.delete(cacheKey);
+    });
+    this.timetableInflight.set(cacheKey, task);
+    return task;
+  }
+
+  private async doCollectTimetable(
+    cacheKey: string,
+    stationCd: string,
+    dayType: string,
+    now: Date,
+  ): Promise<TimetableBlob> {
+    if (!this.deps.seoulKey) {
+      throw new SubwayServiceError(
+        'SEOUL_OPEN_API_KEY 가 설정되지 않아 시간표 조회를 사용할 수 없습니다.',
+        503,
+      );
+    }
+    // openapi 그룹으로 방향 2콜분 선소비(중간 소진 방지) — 실시간('realtime')과 별도.
+    this.consumeQuota('openapi', now);
+    this.consumeQuota('openapi', now);
+
+    const fetch = this.deps.adapter?.getStationTimetable ?? getStationTimetable;
+    const opts = { apiKey: this.deps.seoulKey };
+    const [up, down] = await Promise.all([
+      fetch(stationCd, dayType, '1', opts),
+      fetch(stationCd, dayType, '2', opts),
+    ]);
+
+    // 방향별 정규화 — 빈 방향은 계약상 제외(0행 방향 미노출). 양쪽 0 이면 coverage
+    // false 로 저장(1~9호선인데 데이터 없음 — 무의미 재호출 방지).
+    const directions = [normalizeDirection('1', up), normalizeDirection('2', down)].filter(
+      (d) => d.trains.length > 0,
+    );
+    const blob: TimetableBlob = { coverage: directions.length > 0, directions };
+
+    await this.deps.prisma.subwayTimetableCache.upsert({
+      where: { cacheKey },
+      create: { cacheKey, payload: JSON.stringify(blob), fetchedAt: now },
+      update: { payload: JSON.stringify(blob), fetchedAt: now },
+    });
+    return blob;
   }
 
   // 실시간 키 1개의 raw 배열 — 캐시 히트 시 캐시 fetchedAt 보존, 미스는 in-flight
