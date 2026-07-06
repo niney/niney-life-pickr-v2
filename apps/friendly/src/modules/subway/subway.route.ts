@@ -5,6 +5,8 @@ import {
   Routes,
   SubwayArrivalsParams,
   SubwayArrivalsResult,
+  SubwayNearbyQuery,
+  SubwayNearbyResult,
   SubwayStationSearchQuery,
   SubwayStationSearchResult,
 } from '@repo/api-contract';
@@ -46,6 +48,35 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
             statusCode: sc,
             error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
             message: e instanceof Error ? e.message : '지하철 API 호출 실패',
+          });
+        }
+        throw e;
+      }
+    },
+  });
+
+  // 좌표 기반 주변 역 — 로컬 바운딩박스 조회(업스트림 0콜). 좌표 범위(WGS84
+  // 한국)·radius 상한(3000m)은 zod 가 400. path param 이 없어 등록 경로 디코드
+  // 불필요. 마스터 미적재만 503(그 외 로컬 조회라 502 없음).
+  typed.get(Routes.Subway.stationsNearby, {
+    schema: {
+      tags: ['subway'],
+      querystring: SubwayNearbyQuery,
+      response: {
+        200: SubwayNearbyResult,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getNearbyStations(req.query.lat, req.query.lng, req.query.radius);
+      } catch (e) {
+        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
+        if (sc === 503) {
+          return reply.code(sc).send({
+            statusCode: sc,
+            error: 'Service Unavailable',
+            message: e instanceof Error ? e.message : '지하철 주변 역 조회 실패',
           });
         }
         throw e;

@@ -17,7 +17,11 @@ vi.mock('./subway-api.adapter.js', async (importOriginal) => {
   return { ...actual, ...mocks };
 });
 
-import type { SubwayArrivalsResultType, SubwayStationSearchResultType } from '@repo/api-contract';
+import type {
+  SubwayArrivalsResultType,
+  SubwayNearbyResultType,
+  SubwayStationSearchResultType,
+} from '@repo/api-contract';
 import { buildApp } from '../../app.js';
 import type { RawSubwayArrival } from './subway-api.adapter.js';
 import { SubwayService } from './subway.service.js';
@@ -53,6 +57,14 @@ const searchUrl = (q: string): string =>
   `/api/v1/subway/stations/search?q=${encodeURIComponent(q)}`;
 const arrivalsUrl = (stationId: string): string =>
   `/api/v1/subway/stations/${encodeURIComponent(stationId)}/arrivals`;
+const nearbyUrl = (lat: number, lng: number, radius?: number): string =>
+  `/api/v1/subway/stations/nearby?lat=${lat}&lng=${lng}${radius !== undefined ? `&radius=${radius}` : ''}`;
+
+// 등거리 근사(서비스 approxDistanceM 과 동일 식) — 시드 좌표를 결정적으로 만든다.
+const M_PER_LAT = 111_320;
+const offsetLat = (base: number, meters: number): number => base + meters / M_PER_LAT;
+const offsetLng = (baseLat: number, baseLng: number, meters: number): number =>
+  baseLng + meters / (M_PER_LAT * Math.cos((baseLat * Math.PI) / 180));
 
 // realtimeStationArrival 원시 행 팩토리 (data/subway-probe 강남 실덤프 형태).
 // barvlDt 는 어댑터가 이미 숫자화한 값(number|null)으로 온다.
@@ -361,6 +373,104 @@ describe('SubwayService — 실시간 인프라 (직접 주입)', () => {
       statusCode: 503,
     });
     expect(adapter.getRealtimeArrivals).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/subway/stations/nearby — 주변 역', () => {
+  // 시드 좌표는 서남해 앞바다(실 지하철 없음)라 박스가 테스트 시드만 잡는다.
+  // 각 테스트 base 를 0.3° 이상 벌려 박스가 겹치지 않게 격리한다.
+  it('① 범위 밖 입력 → 400 (radius 3001 / lat 40)', async () => {
+    const over = await app.inject({ url: nearbyUrl(34.0, 125.0, 3001) });
+    expect(over.statusCode).toBe(400);
+    const badLat = await app.inject({ url: nearbyUrl(40.0, 125.0, 1500) });
+    expect(badLat.statusCode).toBe(400);
+  });
+
+  it('② 반경 내/외 필터 + dist asc + dist 값 (대표 좌표가 박스 안이어도 반경 밖이면 제외)', async () => {
+    const bLat = 34.0;
+    const bLng = 125.0;
+    const tag = `${NAME_PREFIX}근처${stamp()}`;
+    await seed(app, [
+      { lineId: '1002', name: `${tag}A`, lat: bLat, lng: bLng }, // dist 0
+      { lineId: '1002', name: `${tag}B`, lat: offsetLat(bLat, 500), lng: bLng }, // dist ~500
+      // 박스 안(각 축 1200<1500)이나 대각 dist ~1697 > 1500 → 반경 필터로 제외.
+      {
+        lineId: '1002',
+        name: `${tag}D`,
+        lat: offsetLat(bLat, 1200),
+        lng: offsetLng(bLat, bLng, 1200),
+      },
+    ]);
+
+    const res = await app.inject({ url: nearbyUrl(bLat, bLng, 1500) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayNearbyResultType;
+    expect(body.source).toBe('db');
+    expect(body.total).toBe(2);
+    expect(body.items).toHaveLength(2);
+    // dist 오름차순.
+    expect(body.items[0]!.dist).toBeLessThanOrEqual(body.items[1]!.dist);
+    expect(body.items[0]!.dist).toBe(0);
+    expect(body.items[1]!.dist).toBeGreaterThanOrEqual(498);
+    expect(body.items[1]!.dist).toBeLessThanOrEqual(502);
+    // 반경 밖(D)은 없다.
+    expect(body.items.every((g) => g.dist <= 1500)).toBe(true);
+  });
+
+  it('③ 환승 그룹 — dist 는 대표(평균) 좌표 기준', async () => {
+    const bLat = 34.3;
+    const bLng = 125.0;
+    const name = `${NAME_PREFIX}주변환승${stamp()}`;
+    // 같은 name 근접 2행(500m·600m) → 1그룹, 대표 좌표 = 평균(550m 지점).
+    await seed(app, [
+      { lineId: '1063', name, lat: offsetLat(bLat, 500), lng: bLng },
+      { lineId: '1002', name, lat: offsetLat(bLat, 600), lng: bLng },
+    ]);
+
+    const res = await app.inject({ url: nearbyUrl(bLat, bLng, 1500) });
+    const body = res.json() as SubwayNearbyResultType;
+    expect(body.total).toBe(1);
+    const group = body.items[0]!;
+    expect(group.lines.map((l) => l.lineId)).toEqual(['1002', '1063']);
+    // 500 도 600 도 아닌 평균 550 — 대표 좌표 기준임을 증명.
+    expect(group.dist).toBeGreaterThanOrEqual(548);
+    expect(group.dist).toBeLessThanOrEqual(552);
+  });
+
+  it('④ 31그룹 → 30 절단, total 은 절단 전', async () => {
+    const bLat = 34.6;
+    const bLng = 125.0;
+    const key = `${NAME_PREFIX}주변절단${stamp()}`;
+    const rows: SeedRow[] = [];
+    for (let i = 0; i < 31; i++) {
+      // 모두 base 근처(≤155m)라 반경 내, 이름이 달라 31개 별개 그룹.
+      rows.push({
+        lineId: '1002',
+        name: `${key}${String(i).padStart(2, '0')}`,
+        lat: offsetLat(bLat, i * 5),
+        lng: bLng,
+      });
+    }
+    await seed(app, rows);
+
+    const res = await app.inject({ url: nearbyUrl(bLat, bLng, 1500) });
+    const body = res.json() as SubwayNearbyResultType;
+    expect(body.total).toBe(31);
+    expect(body.items).toHaveLength(30);
+  });
+
+  it('⑤ 전체 마스터 0행이면 503 (prisma mock)', async () => {
+    const mockPrisma = {
+      subwayStation: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+      },
+      subwayMasterSync: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaClient;
+    const svc = new SubwayService({ prisma: mockPrisma });
+    await expect(svc.getNearbyStations(37.5, 127.0, 1500)).rejects.toMatchObject({
+      statusCode: 503,
+    });
   });
 });
 

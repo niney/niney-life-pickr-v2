@@ -418,6 +418,9 @@ export const Bus = {
 // 도착/열차위치는 차수 진행에 따라 추가된다.
 export const Subway = {
   stationSearch: `${API_PREFIX}/subway/stations/search`,
+  // 좌표 기반 주변 역 — lat/lng(WGS84) + radius(m, 기본 1500·상한 3000).
+  // 로컬 마스터 조회라 버스와 달리 셀 캐시·쿼터가 없다.
+  stationsNearby: `${API_PREFIX}/subway/stations/nearby`,
   // 역 실시간 도착정보 — stationId 는 `${lineId}:${name}` 합성(콜론·한글 포함)
   // 이라 빌더가 인코딩까지 책임진다. 서버는 역명 단위 15초 마이크로 캐시.
   stationArrivals: (stationId: string) =>

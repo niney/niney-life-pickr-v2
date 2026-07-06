@@ -76,7 +76,8 @@ const LNG_MAX = 132;
 
 // 등거리 사각 근사 거리(m) — bus.service.approxDistanceM 복제(geo.ts 에 거리
 // 함수 없음). 역명 그룹 클러스터 판정용(≤1km)이라 하버사인 불필요.
-const approxDistanceM = (aLat: number, aLng: number, bLat: number, bLng: number): number => {
+// 3차 주변 역(getNearbyStations)이 그룹 대표 좌표 dist 계산에 재사용한다.
+export const approxDistanceM = (aLat: number, aLng: number, bLat: number, bLng: number): number => {
   const mPerLatDeg = 111_320;
   const dLat = (aLat - bLat) * mPerLatDeg;
   const dLng = (aLng - bLng) * mPerLatDeg * Math.cos((aLat * Math.PI) / 180);

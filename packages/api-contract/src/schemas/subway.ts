@@ -62,6 +62,35 @@ export const SubwayStationSearchResult = z.object({
 });
 export type SubwayStationSearchResultType = z.infer<typeof SubwayStationSearchResult>;
 
+// ── 3차: 좌표 기반 주변 역 ───────────────────────────────────────────────────
+// 로컬 마스터 조회(업스트림 0콜)라 버스의 셀 격자 캐시·쿼터 설계가 통째로 없다.
+// dist 는 그룹 대표 좌표(소속 호선 평균) 기준으로 서버가 계산해 오름차순 정렬.
+
+export const SubwayNearbyQuery = z.object({
+  // WGS84 한국 범위 강제 — 범위 밖 좌표는 400.
+  lat: z.coerce.number().min(33).max(39),
+  lng: z.coerce.number().min(124).max(132),
+  // 반경(m). 역 간격(도심 ~1km)이 버스 정류장보다 넓어 기본 1500, 상한 3000.
+  radius: z.coerce.number().int().min(100).max(3000).default(1500),
+});
+export type SubwayNearbyQueryType = z.infer<typeof SubwayNearbyQuery>;
+
+export const SubwayNearbyGroupItem = SubwayStationGroupItem.extend({
+  // 요청 좌표 → 그룹 대표 좌표 거리(m) — 오름차순 정렬 계약.
+  dist: z.number().int().min(0),
+});
+export type SubwayNearbyGroupItemType = z.infer<typeof SubwayNearbyGroupItem>;
+
+export const SubwayNearbyResult = z.object({
+  // dist 오름차순, 검색과 동일하게 30그룹 절단(total 과 다르면 '일부만 표시').
+  items: z.array(SubwayNearbyGroupItem),
+  total: z.number().int().min(0),
+  // 역사마스터 적재 시각 (ISO) — 검색과 동일 의미.
+  fetchedAt: z.string(),
+  source: z.literal('db'),
+});
+export type SubwayNearbyResultType = z.infer<typeof SubwayNearbyResult>;
+
 // ── 2차: 실시간 도착정보 (realtimeStationArrival 프록시) ─────────────────────
 // 조회 단위는 역명 그룹 — 서버가 stationId 로 그룹을 재구성해 그룹의 유니크
 // 조회역명(realtimeName ?? name — 신촌은 '신촌'+'신촌(경의중앙선)' 2개)별로

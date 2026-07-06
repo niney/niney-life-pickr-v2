@@ -9,6 +9,7 @@ import type { PrismaClient } from '@prisma/client';
 import type {
   SubwayArrivalItemType,
   SubwayArrivalsResultType,
+  SubwayNearbyResultType,
   SubwayStationSearchResultType,
 } from '@repo/api-contract';
 import {
@@ -16,7 +17,11 @@ import {
   type RawSubwayArrival,
   type SubwayApiRequestOptions,
 } from './subway-api.adapter.js';
-import { groupStations, type StationForGrouping } from './subway-master.service.js';
+import {
+  approxDistanceM,
+  groupStations,
+  type StationForGrouping,
+} from './subway-master.service.js';
 
 // 검색 응답 상한 — total 은 절단 전 그룹 수(FE 가 '일부만 표시' 안내).
 export const MAX_GROUPS = 30;
@@ -181,6 +186,59 @@ export class SubwayService {
     return {
       items: groups.slice(0, MAX_GROUPS),
       total: groups.length,
+      fetchedAt,
+      source: 'db',
+    };
+  }
+
+  // 좌표 기반 주변 역 — 로컬 마스터 바운딩박스 조회(업스트림 0콜, 쿼터/캐시/키 무관).
+  // 박스로 후보 행을 좁힌 뒤 groupStations 로 묶고, 그룹 대표 좌표(평균) 기준
+  // approxDistanceM 으로 dist 를 계산해 반경 내만 남긴다(행은 박스 안이어도 대표
+  // 좌표가 반경 밖일 수 있어 대표 좌표가 계약 기준). dist 오름차순 30그룹 절단.
+  async getNearbyStations(
+    lat: number,
+    lng: number,
+    radius: number,
+  ): Promise<SubwayNearbyResultType> {
+    const { prisma } = this.deps;
+
+    // 등거리 근사 바운딩박스 — 경도는 위도만큼 좁아지므로 cos 보정.
+    const degLat = radius / 111_320;
+    const degLng = radius / (111_320 * Math.cos((lat * Math.PI) / 180));
+
+    const [rows, sync] = await Promise.all([
+      prisma.subwayStation.findMany({
+        where: {
+          lat: { gte: lat - degLat, lte: lat + degLat },
+          lng: { gte: lng - degLng, lte: lng + degLng },
+        },
+      }),
+      prisma.subwayMasterSync.findFirst({ orderBy: { loadedAt: 'desc' } }),
+    ]);
+
+    // 박스 내 0행이면 마스터 자체가 비었는지 확인 — 미적재는 503, 단순 주변 없음은
+    // 빈 결과(200)로 구분(검색과 동일 규율).
+    if (rows.length === 0) {
+      const total = await prisma.subwayStation.count();
+      if (total === 0) {
+        throw new SubwayServiceError(
+          '지하철 역 데이터가 없습니다 — load:subway-stations 실행 필요',
+          503,
+        );
+      }
+    }
+
+    const withDist = groupStations(rows.map(toGrouping))
+      .map((g) => ({ ...g, dist: Math.round(approxDistanceM(lat, lng, g.lat, g.lng)) }))
+      // 대표 좌표가 반경 밖(박스 모서리)인 그룹 제거.
+      .filter((g) => g.dist <= radius)
+      .sort((a, b) => a.dist - b.dist);
+
+    const fetchedAt = (sync?.loadedAt ?? this.deps.now?.() ?? new Date()).toISOString();
+
+    return {
+      items: withDist.slice(0, MAX_GROUPS),
+      total: withDist.length,
       fetchedAt,
       source: 'db',
     };
