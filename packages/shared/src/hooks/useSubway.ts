@@ -85,3 +85,16 @@ export const useSubwayLinePositions = (lineId: string | null) => {
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
+
+// 역 시간표 — DB blob 캐시 데이터라 사실상 정적(staleTime 24h, 폴링 없음). 한 응답에
+// 상·하행 모두라 방향 토글은 재요청이 없고, dayType(평일/토/휴일)만 queryKey 에 포함해
+// 요일 전환 시 재조회(대부분 캐시 히트). stationId 는 역×호선(`${lineId}:${name}`).
+export const useSubwayTimetable = (stationId: string | null, dayType: string) => {
+  const enabled = !!stationId;
+  return useQuery({
+    queryKey: ['subway', 'timetable', stationId, dayType],
+    queryFn: () => subwayApi.timetable(stationId!, dayType),
+    enabled,
+    staleTime: 86_400_000,
+  });
+};

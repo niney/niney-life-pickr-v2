@@ -5,6 +5,7 @@ import {
   type SubwayNearbyResultType,
   type SubwayPositionsResultType,
   type SubwayStationSearchResultType,
+  type SubwayTimetableResultType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
@@ -45,4 +46,13 @@ export const subwayApi = {
   // enrich(실패 시 null). FE 가 5차 sections 와 조합해 역간 위치를 보간한다.
   linePositions: (lineId: string) =>
     apiFetch<SubwayPositionsResultType>(Routes.Subway.linePositions(lineId)),
+  // 역 시간표(1~9호선) — 한 응답에 상·하행 모두(방향 토글 재요청 없음). dayType 은
+  // '1' 평일/'2' 토/'3' 휴일. 미제공 노선은 coverage:false(directions 빈 배열).
+  timetable: (stationId: string, dayType: string) => {
+    const params = new URLSearchParams();
+    params.set('dayType', dayType);
+    return apiFetch<SubwayTimetableResultType>(
+      `${Routes.Subway.stationTimetable(stationId)}?${params.toString()}`,
+    );
+  },
 };

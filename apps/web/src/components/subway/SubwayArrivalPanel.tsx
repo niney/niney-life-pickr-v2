@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Loader2, MapPin, Route } from 'lucide-react';
-import type { SubwayArrivalItemType } from '@repo/api-contract';
+import { ArrowLeft, Clock, Loader2, MapPin, Route } from 'lucide-react';
+import type {
+  SubwayArrivalItemType,
+  SubwayTimetableDirectionType,
+  SubwayTimetableResultType,
+} from '@repo/api-contract';
 import { subwayLineName } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { SubwayLineBadge } from './SubwayLineBadge';
+import { arrivalUpdnToTimetable, formatHHMM, lastTrainRemainMin } from './timetableUtils';
 
 // 실시간(30초 폴링)이라 초 단위 상대시각 — '방금/N초 전'이 의미를 가진다(검색
 // 리스트의 분 단위와 다르다).
@@ -76,6 +81,12 @@ export interface SubwayArrivalPanelProps {
   // 7차 도착↔지도 연계 — 열차 행 '지도에서 보기'. trainNo 있을 때만 버튼 노출.
   // 상위(SubwayPage)가 line 세팅 + 그 열차 따라가기 대기를 건다.
   onLocateTrain?(lineId: string, trainNo: string): void;
+  // 8차 시간표 — 선택 stn 의 호선 시간표(오늘 dayType). coverage·lineId 가 맞는 섹션의
+  // updn 그룹 푸터에 첫차/막차 + 막차 임박 뱃지. 요청 절제로 stn 의 호선 1개만
+  // 조회하므로(환승역의 다른 호선 섹션은 푸터 생략) footerTimetable.lineId 로 매칭.
+  footerTimetable?: SubwayTimetableResultType | null;
+  // 섹션 헤더 '시간표' 버튼 — 그 호선 시간표 뷰로 전환. 미지정이면 버튼 숨김.
+  onOpenTimetable?(lineId: string): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +110,8 @@ export const SubwayArrivalPanel = ({
   trackedLineId,
   onTrackLine,
   onLocateTrain,
+  footerTimetable,
+  onOpenTimetable,
 }: SubwayArrivalPanelProps) => {
   // 카운트다운 tick — 패널 하나의 1초 interval 만 둔다(행마다 interval 금지). 외부
   // 시계 동기화라 useEffect 허용, cleanup 필수. 각 행 잔여초는 렌더 중 파생.
@@ -178,6 +191,8 @@ export const SubwayArrivalPanel = ({
           trackedLineId={trackedLineId}
           onTrackLine={onTrackLine}
           onLocateTrain={onLocateTrain}
+          footerTimetable={footerTimetable}
+          onOpenTimetable={onOpenTimetable}
         />
       </div>
     </div>
@@ -202,6 +217,8 @@ const PanelBody = ({
   trackedLineId,
   onTrackLine,
   onLocateTrain,
+  footerTimetable,
+  onOpenTimetable,
 }: {
   sections: LineSection[];
   nowMs: number;
@@ -215,6 +232,8 @@ const PanelBody = ({
   trackedLineId?: string | null;
   onTrackLine?(lineId: string): void;
   onLocateTrain?(lineId: string, trainNo: string): void;
+  footerTimetable?: SubwayTimetableResultType | null;
+  onOpenTimetable?(lineId: string): void;
 }) => {
   if (isLoading && isEmpty) {
     return (
@@ -257,6 +276,17 @@ const PanelBody = ({
             <SubwayLineBadge lineId={sec.lineId} />
             <span className="text-sm font-semibold">{subwayLineName(sec.lineId)}</span>
             <div className="ml-auto flex items-center gap-0.5">
+              {/* 시간표 — 그 호선 시간표 뷰로 전환. */}
+              {onOpenTimetable && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTimetable(sec.lineId)}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  <Clock className="size-3.5" />
+                  시간표
+                </button>
+              )}
               {/* 노선 보기 토글 — 추적 중인 호선이면 '노선 닫기'. */}
               {onTrackLine && (
                 <button
@@ -284,16 +314,34 @@ const PanelBody = ({
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            {sec.groups.map((g) => (
-              <UpDnGroup
-                key={g.updn}
-                updn={g.updn}
-                list={g.list}
-                nowMs={nowMs}
-                lineId={sec.lineId}
-                onLocateTrain={onLocateTrain}
-              />
-            ))}
+            {(() => {
+              // 이 호선 섹션에 첫차/막차 푸터를 붙일지 — footerTimetable(선택 stn 의 호선
+              // 1개만 조회)의 lineId·coverage 가 맞을 때만. 다른 호선 섹션은 생략.
+              const secTt =
+                footerTimetable &&
+                footerTimetable.coverage &&
+                footerTimetable.lineId === sec.lineId
+                  ? footerTimetable
+                  : null;
+              return sec.groups.map((g) => {
+                const ttUpdn = arrivalUpdnToTimetable(g.updn);
+                const ttDir =
+                  secTt && ttUpdn
+                    ? (secTt.directions.find((d) => d.updn === ttUpdn) ?? null)
+                    : null;
+                return (
+                  <UpDnGroup
+                    key={g.updn}
+                    updn={g.updn}
+                    list={g.list}
+                    nowMs={nowMs}
+                    lineId={sec.lineId}
+                    onLocateTrain={onLocateTrain}
+                    timetableDir={ttDir}
+                  />
+                );
+              });
+            })()}
           </div>
         </section>
       ))}
@@ -311,20 +359,35 @@ const UpDnGroup = ({
   nowMs,
   lineId,
   onLocateTrain,
+  timetableDir,
 }: {
   updn: string;
   list: SubwayArrivalItemType[];
   nowMs: number;
   lineId: string;
   onLocateTrain?(lineId: string, trainNo: string): void;
+  // 8차 — 이 방향의 시간표(첫차/막차). 없으면 푸터 생략.
+  timetableDir?: SubwayTimetableDirectionType | null;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? list : list.slice(0, VISIBLE_LIMIT);
   const hidden = list.length - visible.length;
+  // 막차 임박 — 현재 시각(1초 tick 재사용) 기준 ≤30분. 자정 넘김은 헬퍼가 보정.
+  const lastRemain = timetableDir
+    ? lastTrainRemainMin(timetableDir.lastTrain, new Date(nowMs))
+    : null;
+  const lastImminent = lastRemain !== null && lastRemain >= 0 && lastRemain <= 30;
   return (
     <div>
-      {updn && (
-        <div className="mb-0.5 px-1 text-xs font-medium text-muted-foreground">{updn}</div>
+      {(updn || lastImminent) && (
+        <div className="mb-0.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+          {updn && <span>{updn}</span>}
+          {lastImminent && (
+            <Badge variant="amber" className="shrink-0">
+              막차 {lastRemain}분 전
+            </Badge>
+          )}
+        </div>
       )}
       <ul className="flex flex-col gap-0.5">
         {visible.map((it, idx) => (
@@ -354,6 +417,13 @@ const UpDnGroup = ({
         >
           접기
         </button>
+      )}
+      {/* 첫차/막차 푸터 — 이 방향 시간표가 있을 때만(오늘 dayType). */}
+      {timetableDir && (timetableDir.firstTrain || timetableDir.lastTrain) && (
+        <div className="mt-1 px-3 text-xs text-muted-foreground tabular-nums">
+          첫차 {timetableDir.firstTrain ? formatHHMM(timetableDir.firstTrain) : '—'} · 막차{' '}
+          {timetableDir.lastTrain ? formatHHMM(timetableDir.lastTrain) : '—'}
+        </div>
       )}
     </div>
   );

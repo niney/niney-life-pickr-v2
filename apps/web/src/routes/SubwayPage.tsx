@@ -10,6 +10,7 @@ import {
   useSubwayNearbyStations,
   useSubwayStationArrivals,
   useSubwayStationSearch,
+  useSubwayTimetable,
 } from '@repo/shared';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TransitTabs } from '~/components/transit/TransitTabs';
@@ -21,6 +22,8 @@ import {
   SubwayStationSearchBar,
 } from '~/components/subway/SubwayStationList';
 import { SubwayStationsMap } from '~/components/subway/SubwayStationsMap';
+import { SubwayTimetable } from '~/components/subway/SubwayTimetable';
+import { dayTypeForToday, type SubwayDayType } from '~/components/subway/timetableUtils';
 
 // GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m). URL 에 원시 좌표를 그대로 노출하지
 // 않아 공유 시 위치 정밀도도 낮춘다(버스와 동일).
@@ -143,6 +146,21 @@ export const SubwayPage = () => {
     nonce: number;
   } | null>(null);
 
+  // ── 8차 시간표 ── 뷰 상태는 URL 미포함(패널 로컬). 오늘 dayType 은 요일 파생(렌더 중).
+  const todayDayType = useMemo(() => dayTypeForToday(), []);
+  // 시간표 뷰가 열렸을 때 그 대상(호선·역×호선 stationId). null = 도착 패널.
+  const [timetableView, setTimetableView] = useState<{
+    lineId: string;
+    stationId: string;
+  } | null>(null);
+  // 뷰의 평일/토/휴일 토글 — 진입 시 오늘로 리셋. 조회 dayType 을 좌우.
+  const [timetableDayType, setTimetableDayType] = useState<SubwayDayType>(todayDayType);
+  // 단일 시간표 쿼리 — 뷰 닫힘=선택 stn(오늘)로 도착 패널 푸터, 뷰 열림=그 호선
+  // stationId(토글 dayType)로 시간표 뷰. staleTime 24h 캐시라 전환 비용이 낮다.
+  const timetableStationId = timetableView ? timetableView.stationId : stn;
+  const timetableQueryDayType = timetableView ? timetableDayType : todayDayType;
+  const timetable = useSubwayTimetable(timetableStationId, timetableQueryDayType);
+
   // ── 활성 소스 — 주변 모드면 nearby, 아니면 검색. 아래 로직(선택/지도/도착)은
   //    소스만 다를 뿐 동일하게 흐른다. 마커 누적은 없다(30그룹 상한 — 현재 결과만). ──
   const activeItems = nearMode ? nearItems : items;
@@ -221,6 +239,7 @@ export const SubwayPage = () => {
   // 맥락). line 미추적이면 stn 만 바꾼다.
   const selectStation = useCallback(
     (id: string) => {
+      setTimetableView(null); // 새 역 선택 → 시간표 뷰 닫고 도착 패널로.
       setSearchParams(
         (prev) => {
           const sp = new URLSearchParams(prev);
@@ -253,6 +272,7 @@ export const SubwayPage = () => {
 
   // '← 목록' — 선택(stn)·추적 호선(line) 해제로 리스트 뷰 복귀. 지도/검색/주변은 그대로.
   const handleBack = useCallback(() => {
+    setTimetableView(null);
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
@@ -401,6 +421,27 @@ export const SubwayPage = () => {
   const panelLines =
     arrivalsForStn?.lines ?? selectedGroup?.lines.map((l) => l.lineId) ?? [];
   const arrivalItems = arrivalsForStn?.items ?? [];
+
+  // 시간표 뷰 열기 — 그 호선의 역×호선 stationId(`${lineId}:${name}`)로 전환. 진입
+  // 시 dayType 을 오늘로 리셋. panelStationName 이 역명(합성 id 의 뒤 부분).
+  const handleOpenTimetable = useCallback(
+    (lineId: string) => {
+      setTimetableDayType(todayDayType);
+      setTimetableView({ lineId, stationId: `${lineId}:${panelStationName}` });
+    },
+    [todayDayType, panelStationName],
+  );
+  const handleCloseTimetable = useCallback(() => setTimetableView(null), []);
+
+  // 도착 패널 푸터용 시간표 — 뷰가 닫혀 있을 때(쿼리=선택 stn·오늘)의 결과만. 응답
+  // stationId 가 stn 과 맞아야 전환 중 이전 데이터가 새지 않는다.
+  const footerTimetable =
+    !timetableView && timetable.data?.stationId === stn ? timetable.data : null;
+  // 시간표 뷰용 데이터 — 뷰가 그 stationId 로 조회한 결과만(dayType 전환 중 잔상 차단).
+  const timetableForView =
+    timetableView && timetable.data?.stationId === timetableView.stationId
+      ? timetable.data
+      : null;
   // 현재 stn 응답이 아직 없으면(최초/역 전환) 로딩 — placeholder(직전 역)를 목록으로
   // 흘리지 않고 스피너를 보인다. 같은 역 30초 폴링 중에는 arrivalsForStn 이 유지돼
   // 로딩이 뜨지 않는다(잔상 없이 교체).
@@ -542,9 +583,28 @@ export const SubwayPage = () => {
       trackedLineId={line}
       onTrackLine={handleTrackLine}
       onLocateTrain={handleLocateTrain}
+      footerTimetable={footerTimetable}
+      onOpenTimetable={handleOpenTimetable}
       {...lineFavoriteProps}
     />
   ) : null;
+
+  // 패널 슬롯 — 시간표 뷰가 열려 있으면 그 뷰로 전환, 아니면 도착 패널.
+  const panelContent =
+    timetableView && stn ? (
+      <SubwayTimetable
+        stationName={panelStationName}
+        lineId={timetableView.lineId}
+        timetable={timetableForView}
+        isLoading={timetable.isLoading}
+        isError={timetable.isError}
+        dayType={timetableDayType}
+        onDayType={setTimetableDayType}
+        onBack={handleCloseTimetable}
+      />
+    ) : (
+      arrivalPanel
+    );
 
   return (
     <div className="flex w-full flex-col" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
@@ -554,9 +614,9 @@ export const SubwayPage = () => {
             데스크톱 (xl+) — 좌 검색 패널(400px) + 우 지도.
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <div className="hidden h-full xl:flex">
-          {/* 역 선택 시 좌패널이 도착정보 뷰로 전환 — '← 목록'으로 복귀. */}
+          {/* 역 선택 시 좌패널이 도착정보(→시간표) 뷰로 전환 — '← 목록'으로 복귀. */}
           <aside className="flex w-[400px] shrink-0 flex-col border-r">
-            {arrivalPanel ?? <SubwayStationList {...listProps} />}
+            {panelContent ?? <SubwayStationList {...listProps} />}
           </aside>
           <section className="relative flex-1">
             <SubwayStationsMap
@@ -612,10 +672,10 @@ export const SubwayPage = () => {
               pendingFollow={pendingFollow}
             />
           </div>
-          {/* 역 선택 시 하단 영역이 도착정보 뷰로 전환 — 패널은 내부 스크롤이라
-              컨테이너는 flex 로만 감싼다. */}
-          {arrivalPanel ? (
-            <div className="flex h-[38dvh] flex-col border-t">{arrivalPanel}</div>
+          {/* 역 선택 시 하단 영역이 도착정보(→시간표) 뷰로 전환 — 패널은 내부
+              스크롤이라 컨테이너는 flex 로만 감싼다. */}
+          {panelContent ? (
+            <div className="flex h-[38dvh] flex-col border-t">{panelContent}</div>
           ) : (
             <div className="h-[38dvh] overflow-y-auto border-t p-3">
               <SubwayStationListBody
