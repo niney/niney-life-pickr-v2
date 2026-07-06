@@ -1,12 +1,14 @@
 ---
 topic: friendly
-last_compiled: 2026-06-25
+last_compiled: 2026-07-06
 status: active
-aliases: [naver-search-adapter, search-route, crawl-job-log, plugins-summaries, settlement, 정산, multipart, vision LLM, 단골, contacts, llm-purpose, settlement-rounds, settlement-draft, settlement-draft-module, well-known, well-known-module, universal-links, app-links, assetlinks-json, AASA, RFC1918, cors-dev, dev-cors-private-lan, dev-cors-reflect-all, cors-preflight-fix, multi-receipt-split, ExtractReceiptSplit, roundIndex, roundTotal, settlement-PUT, full-replace-update, ai-model-preview, models-preview, attendees-100, items-200, calculateMultiRoundShares, SettlementRound, SettlementRoundAttendee, SettlementDraft, placeIdKey-sentinel, fromDraftId, public-reviews-sort-recent, fetchedAt-asc, contentHash-NUL, assemblePublicReviews, share-preview, og-ssr-lite, og-image, settlement-card-png, satori, resvg, IBMPlexSansKR, getPhotoUrls, getSharePreviewMeta, shareOgImage, shareOgImageUrl, pickRestaurantOgImageUrl, seedFromToken, sharePreviewCache, ALLOWED_HOSTS-export, isThumbnailProxyable, OG_IMAGE_PATH, WEB_INDEX_PATH, eval-extraction, probe-extraction, probe-vision, eslint-config, FastifyError-annotation, schedule, scheduler, cron, croner, normalize-merge, ScheduleConfig, ScheduleRun, scheduleRegistry, plugins-schedule, bootstrap, interrupted-run, isPlaceCrawling, forceCloseConnections, publicCategoryTree, getCategoryTree, restaurant-preview, og-ssr-restaurant, /r/:placeId, sitemap.xml, robots.txt, json-ld, getPublicSeoMeta, getPublicSitemapEntries, PUBLIC_ORIGIN, panorama, panorama-cache, isVolatileNaverPhoto, naver-panorama-503, region-derive, deriveRegion, region-stats, regionStats, region-stats-telegram, smartPick, tabling, tabling-promote, canonical-members, listPublicPlaces, plugins-logs, operationLog, OperationRun, OperationLog, OperationReport, LogConfig, plugins-random-crawl, randomCrawl, telegram, telegramConfig, RandomCrawlConfig, RandomCrawlRun, TelegramConfig, ReviewCluster, review-clustering, review-search, enrich, embeddingJson, clusterId, groupSplits, shareExpiresAt, log-analysis, OLLAMA_LOG_ANALYSIS_MODEL, publicReviews, reviewResummarize]
+aliases: [naver-search-adapter, search-route, crawl-job-log, plugins-summaries, settlement, 정산, multipart, vision LLM, 단골, contacts, llm-purpose, settlement-rounds, settlement-draft, settlement-draft-module, well-known, well-known-module, universal-links, app-links, assetlinks-json, AASA, RFC1918, cors-dev, dev-cors-private-lan, dev-cors-reflect-all, cors-preflight-fix, multi-receipt-split, ExtractReceiptSplit, roundIndex, roundTotal, settlement-PUT, full-replace-update, ai-model-preview, models-preview, attendees-100, items-200, calculateMultiRoundShares, SettlementRound, SettlementRoundAttendee, SettlementDraft, placeIdKey-sentinel, fromDraftId, public-reviews-sort-recent, fetchedAt-asc, contentHash-NUL, assemblePublicReviews, share-preview, og-ssr-lite, og-image, settlement-card-png, satori, resvg, IBMPlexSansKR, getPhotoUrls, getSharePreviewMeta, shareOgImage, shareOgImageUrl, pickRestaurantOgImageUrl, seedFromToken, sharePreviewCache, ALLOWED_HOSTS-export, isThumbnailProxyable, OG_IMAGE_PATH, WEB_INDEX_PATH, eval-extraction, probe-extraction, probe-vision, eslint-config, FastifyError-annotation, schedule, scheduler, cron, croner, normalize-merge, ScheduleConfig, ScheduleRun, scheduleRegistry, plugins-schedule, bootstrap, interrupted-run, isPlaceCrawling, forceCloseConnections, publicCategoryTree, getCategoryTree, restaurant-preview, og-ssr-restaurant, /r/:placeId, sitemap.xml, robots.txt, json-ld, getPublicSeoMeta, getPublicSitemapEntries, PUBLIC_ORIGIN, panorama, panorama-cache, isVolatileNaverPhoto, naver-panorama-503, region-derive, deriveRegion, region-stats, regionStats, region-stats-telegram, smartPick, tabling, tabling-promote, canonical-members, listPublicPlaces, plugins-logs, operationLog, OperationRun, OperationLog, OperationReport, LogConfig, plugins-random-crawl, randomCrawl, telegram, telegramConfig, RandomCrawlConfig, RandomCrawlRun, TelegramConfig, ReviewCluster, review-clustering, review-search, enrich, embeddingJson, clusterId, groupSplits, shareExpiresAt, log-analysis, OLLAMA_LOG_ANALYSIS_MODEL, publicReviews, reviewResummarize, bus, BUS_API_KEY, bus-station-search, bus-nearby, bus-arrivals, bus-positions, bus-route-detail, bus-favorite, bus-quota-gate, restaurant-menu-groups, restaurant-menus, menu-grouping-persist]
 sources_count: 113
 ---
 
 # friendly — Fastify 백엔드
+
+**2026-07-06 변경 흡수 — 신규 모듈 `bus`(서울시 버스 API 프록시) + 메뉴 그룹 영속 테이블.** friendly 위에 백엔드 모듈 하나가 더 얹혔다 — [modules/bus/](../../apps/friendly/src/modules/bus/) 가 서울시 버스 오픈 API(ws.bus.go.kr) 를 프록시한다: 정류소 검색·주변 정류소·실시간 도착·노선 실시간 차량 위치·노선 상세(형상+경유 정류소) + 로그인 사용자 즐겨찾기. 구조는 어댑터([bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts) — XML 파싱 + 인증키 인/디코딩 자동 처리) + 서비스([bus.service.ts](../../apps/friendly/src/modules/bus/bus.service.ts)) + 공개 라우트([bus.route.ts](../../apps/friendly/src/modules/bus/bus.route.ts)) + 즐겨찾기 라우트([bus-favorite.route.ts](../../apps/friendly/src/modules/bus/bus-favorite.route.ts), 인증 필수) 로 나뉜다. 정류소/주변/노선 상세는 사실상 정적이라 DB 30일 캐시 + **in-memory 일일 업스트림 쿼터 게이트**(기본 900 — 개발계정 일 1,000건 보호. 단일 인스턴스 전제라 메모리 카운터로 충분, Redis 금지 정책과 일관), 도착/차량 위치는 무캐싱 실시간 프록시. 신규 env `BUS_API_KEY`(env-only — DB 설정 경로 없음, 비면 검색 라우트가 503) 가 [config/env.ts](../../apps/friendly/src/config/env.ts)·`.env.example` 에 추가됐다. 캐시 정책·좌표 셀 스냅·차량 위치 보간 등 도메인 내부는 [bus 토픽](./bus.md) 참조 — friendly 문서는 "백엔드 모듈 하나 추가" 관점만. 함께 **메뉴 그룹 영속 가산 테이블**(`restaurant_menu_groups`/`restaurant_menus`) 이 신설됐다(상세는 [menu-grouping 토픽](./menu-grouping.md)).
 
 **2026-06-25 변경 흡수 — 신규 도메인 5종(review-search·review-clustering·random-crawl·telegram·logs) 앱 통합 + 백엔드 셸 확장.** 이번 라운드는 friendly 위에 다섯 도메인이 추가됐고, 이들은 **각각 자체 위키 토픽**으로 분리됐다 — friendly 문서는 앱 레벨 wiring(autoload·plugin 데코·부팅/셧다운 훅·DB 모델 추가)만 흡수하고 내부는 위임한다.
 - **신규 plugin 2종** (app-singleton 데코 패턴): [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts) (`operationLog`/`logAnalysis` — 범용 작업 로그/실패 run LLM 분석, `dependencies:['prisma']`) + [plugins/random-crawl.ts](../../apps/friendly/src/plugins/random-crawl.ts) (`randomCrawl`/`telegram`/`telegramConfig` — 맛집 자동 발굴 cron + 텔레그램 폴러, `dependencies:['prisma','logs']`). 기존 [plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts) 는 `reviewSearch`/`reviewClustering` 도 함께 decorate 하고 `SummaryService` 에 주입(요약 종료 → 자동 enrich → 군집화 체인) — JobLogService 가 퇴역하고 잡 단계 로그가 전부 `OperationLogService` 단일 인스턴스로 흐른다. `plugins/schedule.ts` 도 `dependencies:['prisma','logs']` 로 바뀌어 cron run 과 자식 run 을 `parentRunId` 로 연계.
@@ -56,6 +58,7 @@ sources_count: 113
 - **contact** — **(2026-05-25)** 사용자별 "단골 참여자" CRUD (`/me/contacts`). 정산 저장 시 participant 가 `(userId, normalizedKey)` 로 자동 upsert 되어 다음 정산에서 자동완성·다중 선택 모달로 재사용. 자세한 건 [settlement 토픽](./settlement.md).
 - **well-known** — **(NEW 2026-05-28)** iOS Universal Links / Android App Links 검증 파일을 동적 응답. `/.well-known/apple-app-site-association` (AASA) + `/.well-known/assetlinks.json`. env (`APP_TEAM_ID`/`APP_BUNDLE_ID`/`ANDROID_APP_PACKAGE`/`ANDROID_SHA256_FINGERPRINTS`) 기반, 비어 있으면 404. components 의 path 가 `/share/settlements/*` 라 설치된 앱이 정산 공유 링크를 인터셉트. 인증 불필요, `Cache-Control: public, max-age=300`.
 - **media** — Naver CDN 이미지 썸네일 프록시 + 디스크 캐시 (`Routes.Media.*`)
+- **bus** — **(NEW 2026-07-06)** 서울시 버스 API 프록시. 정류소 검색/주변/실시간 도착/노선 실시간 차량 위치/노선 상세는 공개(`Routes.Bus.*`), 즐겨찾기(`/bus/favorites/*`) 만 인증. 어댑터+서비스+라우트+즐겨찾기 + in-memory 일일 쿼터 게이트, `BUS_API_KEY` env. 자세한 건 [bus 토픽](./bus.md).
 - **settings** — 외부 지도 SDK 키(vworld) 관리. admin CRUD + 평문 reveal + 공개 키 노출 (`Routes.SettingsMap.*`)
 - **health** — 라이브니스 체크 (`Routes.Health`, `/health`)
 - **crawl** — 별도 위키 토픽 ([crawl 토픽 참조](./crawl.md))
@@ -100,6 +103,7 @@ modules/
 ├── analytics/                ← 글로벌 메뉴 통계 + 전역 LLM 머지 (analytics 토픽)
 ├── auth/
 ├── auto-discover/            ← AI 키워드 → 다중 검색 → 그룹 직렬 크롤 자동 발견 잡 (auto-discover 토픽)
+├── bus/                      ← (NEW 2026-07-06) 서울시 버스 API 프록시 — 어댑터+서비스+공개 라우트+즐겨찾기 (bus 토픽)
 ├── canonical/                ← cross-source 가게 통합 + 자동 매칭 제안 (canonical 토픽)
 ├── contact/                  ← /me/contacts — 단골 참여자 CRUD (settlement 토픽)
 ├── crawl/
@@ -291,6 +295,12 @@ autoload는 route 파일만 픽업하므로 `summary/`처럼 라우트 파일이
 ├── /admin/settings/map[/...]                     (admin)
 ├── /admin/settings/telegram[/...]                 (admin)         ← (NEW 2026-06-25) telegram 토픽
 ├── /settings/map/public                          (public)
+├── /bus/stations/search                          (public)        ← (NEW 2026-07-06) 정류소 이름 검색 (30일 캐시)
+├── /bus/stations/nearby                          (public)        ← (NEW 2026-07-06) 좌표 기반 주변 정류소 (셀 캐시)
+├── /bus/stations/:arsId/arrivals                 (public)        ← (NEW 2026-07-06) 실시간 도착 (무캐싱)
+├── /bus/routes/:busRouteId/positions             (public)        ← (NEW 2026-07-06) 노선 실시간 차량 위치 (무캐싱)
+├── /bus/routes/:busRouteId/detail                (public)        ← (NEW 2026-07-06) 노선 상세(형상+경유 정류소)
+├── /bus/favorites[/...]                          (bearer)        ← (NEW 2026-07-06) 즐겨찾기 목록/추가/삭제/sync
 ├── /settlement-extractions/*                     (bearer)        ← 영수증 multipart → vision LLM + split
 ├── /settlements/*                                (bearer, owner) ← 세션 CRUD + 차수 + 분배 + 공유 토큰
 │   └── PUT /:id                                  (bearer, owner) ← (UPDATED 2026-05-28) 전체 replace
@@ -386,6 +396,8 @@ vworld JS SDK 키. 공개 한 개 + admin 네 개. **(2026-06-25)** `MapSettings
 - **logs** (NEW 2026-06-25): `OperationRun` · `OperationLog` · `OperationReport` · `LogConfig` — CrawlJobLog 를 일반화. (레거시 `CrawlJobLog` 테이블은 잔존.)
 - **random-crawl** (NEW 2026-06-25): `RandomCrawlConfig` · `RandomCrawlRun`.
 - **telegram** (NEW 2026-06-25): `TelegramConfig`(단일 행, DB 우선 + env fallback).
+- **bus** (NEW 2026-07-06): `BusStation` · `BusNearbyCell`(+`BusNearbyCellHit`) · `BusStationSearch`(+`BusStationSearchHit`) · `BusRouteShape` — 정류소/주변/노선 상세 30일 캐시(사실상 정적). `BusFavoriteStation`/`BusFavoriteRoute` — 로그인 사용자 즐겨찾기(User Cascade). 상세는 [bus 토픽](./bus.md).
+- **menu-grouping** (NEW 2026-07-06): `RestaurantMenuGroup`(`restaurant_menu_groups`) · `RestaurantMenu`(`restaurant_menus`) — 식당별 메뉴 그룹 영속 가산. 상세는 [menu-grouping 토픽](./menu-grouping.md).
 - **settings(map)**: MapProviderConfig. **ai**: LlmProviderConfig(`(provider,purpose)` unique — chat/image/log-analysis).
 
 [prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) 모델 — 코어:

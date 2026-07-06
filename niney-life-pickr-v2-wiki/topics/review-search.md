@@ -1,7 +1,7 @@
 ---
 topic: review-search
 type: codebase
-last_compiled: 2026-06-25
+last_compiled: 2026-07-06
 source_count: 18
 status: active
 ---
@@ -109,10 +109,14 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
   `enrichVersion`)이 검색 코퍼스의 영속 소스. `Restaurant`/`ReviewSummary` 조인으로 로드.
 - **[restaurant](friendly.md) canonical-members** — `resolveCanonicalMembersBy*` /
   `listPublicPlaces` 로 가게 정체 통합(멤버 행 합산).
-- **[summary](friendly.md) SummaryService** — 요약 종료 직후 `ensureEnrichedByPlaceId(placeId)`
-  를 fire-and-forget 호출(자동 enrich), 이어서 [review-clustering](review-clustering.md)
-  `ensureClusteredByPlaceId` 로 체이닝. 미주입(테스트)이면 훅 비활성.
-  ([summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts) L1146~1157)
+- **[summary](friendly.md) SummaryService** — 요약 종료 직후 자동 enrich → 군집화를
+  fire-and-forget 로 체이닝. **reviewId 기반 해석**(commit 7407de9): 요약 큐 키(`placeId`
+  인자)는 소스별 자유형(naver=placeId, diningcode=`dc:..`, tabling=`tb:..`)이라 placeId 로
+  canonical 을 풀면 비-네이버는 null → 자동 enrich/군집이 조용히 스킵됐다. 그래서 훅이
+  `reviewIds[0]` 로 실제 `restaurantId` 를 조회해 `ensureEnrichedByRestaurantId` (이어
+  [review-clustering](review-clustering.md) `ensureClusteredByRestaurantId`) 를 호출 —
+  **모든 소스** 커버. 미주입(테스트)이면 훅 비활성.
+  ([summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts) L1146~1165)
 - **[review-clustering](review-clustering.md)** — 같은 `embeddingJson` 임베딩을 읽어
   군집화. `isJunk` 헬퍼와 `chatJson` 견고 파싱 관례를 review-search 에서 차용.
 - **FE 공유 레이어** — [@repo/shared](../../packages/shared/src/api/review-search.api.ts)
@@ -231,6 +235,9 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
 - **eval 노이즈** — rerank·생성·판정이 다 LLM(N=12)이라 run 간 절대치 비교는 노이즈. **같은
   생성 within-run on/off 비교만** 깨끗이 귀인. recall 메트릭 정답이 aspects 라벨이므로 aspect
   라벨을 회수 레버로 쓰면 순환(무의미).
+- **lru-cache ESM interop** — `corpusCache` 의 `lru-cache` 는 `import { LRUCache }` 대신
+  `createRequire(import.meta.url)` 로 require 해 default/named export 양쪽을 흡수한다(commit
+  808c447). 번들·모듈 해석 차이로 named import 가 깨지는 걸 회피하는 ESM/CJS 상호운용 처리.
 
 ## Sources [coverage: high — 18 sources]
 

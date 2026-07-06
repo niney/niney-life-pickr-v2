@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
 last_compiled: 2026-06-25
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram]
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus]
 status: active
 ---
 
@@ -43,6 +43,8 @@ status: active
 - **2026-06**(18차) in [[../topics/telegram]] / [[../topics/friendly]] (long-polling 단일성): 텔레그램 long-polling 봇이 `polling` 플래그 + `pollGen` **세대 게이트**로 단일성 보장 — 재기동/설정 변경 시 `pollGen` 을 증가시켜 이전 세대의 폴링 루프를 무력화(stale 루프가 새 루프와 동시에 getUpdates 를 치지 않게). cron 타이머(schedule)·SSE connection(shared)·동시성 슬롯(ai)에 이어 **long-polling 루프**라는 또 다른 자원 종류가 같은 모듈-싱글턴 모양에 흡수됨.
 - **2026-06**(18차) **friendly 메타패턴** (`plugins/schedule.ts` → `logs.ts` → `random-crawl` → `summaries.ts`): "plugin-singleton 이 **자체 AiConfig 를 들고 있어 autoload 알파벳순 의존 문제를 회피**" 하는 모양이 4곳으로 확산. autoload 가 파일명 알파벳순으로 플러그인을 등록하므로, 한 플러그인이 다른 플러그인이 decorate 한 `aiConfig` 에 의존하면 등록 순서에 따라 깨질 수 있음 — 각 plugin-singleton 이 자기 `AiConfigService` 인스턴스를 직접 구성해 순서 의존을 끊음(2026-05-19 plugin-singleton 승격 패턴의 운영상 후속 학습).
 
+- **2026-07**(버스) in [[../topics/bus]] / [[../topics/friendly]] (`bus.service.ts` 일일 쿼터 카운터 + in-flight 합류 + 네거티브 캐시): 게이트 패턴이 **외부 API 호출 예산**이라는 새 자원 종류로 확장. `bus.service.ts` 가 서비스 스코프 싱글턴으로 (1) **일일 업스트림 쿼터 단일 카운터**(기본 900, 검색·도착·위치 세 경로가 한 카운터를 공유 — ai `adapter-cache` 가 라우트+summary 가 한 인스턴스를 공유해야 진짜 cap 이 되던 것과 같은 논리, 세 경로가 따로 세면 예산이 3× 로 새어나감), (2) **in-flight 합류** — 같은 정류장 검색이 동시에 여러 번 들어오면 첫 호출의 Promise 에 합류해 업스트림 중복 호출 0(`findInFlightByPlace` dedup 과 같은 모양, 키가 검색어), (3) **네거티브 캐싱** — '결과 없음'(`headerCd=4`)도 캐시에 기록해 없는 정류장 반복 조회가 쿼터를 갉지 않게. 게이트가 회계하는 자원이 "동시성 슬롯"이 아니라 **하루 단위 외부 예산**이라는 점만 다르고 구조(서비스 싱글턴 + 공유 카운터 + in-flight dedup)는 동일. 개발계정 1,000건/일 한도가 게이트의 존재 이유 — cap 이 임의 상수가 아니라 외부 계약에서 역산된 값(2026-05-17 "게이트 cap 을 컨슈머 디자인에 맞춘다" 의 **외부-제약 버전**). 실시간 폴링은 [[../topics/shared]] `useBus` 훅이 탭 비활성 시 자동 정지(`refetchIntervalInBackground=false`)해 클라이언트에서도 예산을 아낌 — 게이트가 서버(카운터)+클라(폴링 가드) 양쪽에 걸친다.
+
 ## What This Means
 
 이 패턴이 알려주는 것:
@@ -53,7 +55,7 @@ status: active
 4. **클라이언트 사이드도 같은 패턴이 통한다** — `summarySseManager`는 인프라가 다를 뿐 모양이 똑같음 (refcount + reconnect coalescing). 동시성 자원이 "AI provider slot"이든 "브라우저 connection slot"이든, 같은 in-memory FIFO 싱글턴으로 풀린다.
 5. **이번 라운드(2026-05-09)에 패턴이 6개 인스턴스로 굳어짐** — (1) AI 동시성 cap 게이트(`adapter-cache`), (2) 크롤 job-registry + pending FIFO, (3) summary `persistTail` / per-placeId run 체인, (4) summary SSE 매니저(서버 fan-out + 클라 refcount), (5) 메뉴 그룹핑 batch jobs(`groupingJobRegistry`, multi-job + actor 격리), (6) 글로벌 머지 inflight 가드(`globalMergeJobRegistry`, single-job + 409 snapshot). 모두 같은 모양 — 모듈 스코프 싱글턴 + Map/Set 회계 + TTL GC + (해당되면) actorId 격리. Redis/외부 큐 없이 단일 인스턴스 가정 위에서 충분히 동작하지만, **다중 인스턴스 배포로 가는 순간 가장 먼저 깨지는 가지**가 바로 이 패턴이다 — cross-process에서는 cap도 dedupe도 inflight 가드도 의미가 없어지므로.
 6. **윈도우 기반 rate-limit 은 게이트와 충돌한다** (2026-05-09 follow-up) — `RATE_LIMIT_WINDOW_MS` 같은 시간 윈도우 검사를 게이트 옆에 같이 두면, 정상 사용 패턴이 "다중 시작" 일 때 둘째부터 차단되는 사고가 일어난다. 응답이 수 ms 안에 떨어지면 직렬 await 도 윈도우 안에 들어가고, 윈도우를 줄여도 (1초 → 50ms) 동일. 게이트가 (a) 같은 키 중복(`findInFlightByPlace`)과 (b) 시스템 전체 폭주(`max_concurrent` 큐) 두 layer 로 spam 방어를 끝내고 있으면, 시간 윈도우는 잘못된 보조 — 정상 사용을 깨뜨리는 데 더 가깝다. **게이트가 충분히 spam 방어하면 윈도우는 빼라**. (단, 외부 호출이 아닌 사용자-facing QA 같은 경로엔 고정창 rate-limit 이 옳은 곳도 있다 — review-search 의 `askRateHits` 가 그 사례. 차이는 "정상 패턴이 버스트인가" — 다중 시작은 버스트가 정상, QA 폭주는 비정상.)
-7. **한 게이트 모양이 여러 자원 종류를 흡수한다** (2026-06, 18차) — 18차 라운드는 같은 모듈-싱글턴 모양이 (a) 동시성 슬롯(ai 2단 게이트, logs 세마포어, analytics 청크 풀), (b) read 캐시(review-search corpusCache LRU), (c) 진행 가드(review-search enriching, review-clustering Set), (d) 단일-잡 inflight(random-crawl, analytics mergeInflight), (e) cron 타이머(random-crawl 이 scheduleRegistry 공유), (f) long-polling 루프(telegram pollGen 세대), (g) seq 카운터(logs)까지 7가지 자원 종류를 같은 모양으로 흡수함을 보여준다. **새 자원 종류가 등장할 때마다 외부 인프라 대신 이 모양이 디폴트로 채택된다** — 단일 인스턴스 전제 위에서 일관성이 계속 강화되는 중.
+7. **한 게이트 모양이 여러 자원 종류를 흡수한다** (2026-06, 18차) — 18차 라운드는 같은 모듈-싱글턴 모양이 (a) 동시성 슬롯(ai 2단 게이트, logs 세마포어, analytics 청크 풀), (b) read 캐시(review-search corpusCache LRU), (c) 진행 가드(review-search enriching, review-clustering Set), (d) 단일-잡 inflight(random-crawl, analytics mergeInflight), (e) cron 타이머(random-crawl 이 scheduleRegistry 공유), (f) long-polling 루프(telegram pollGen 세대), (g) seq 카운터(logs), (h) 외부 API 일일 호출 예산(bus 쿼터 카운터)까지 8가지 자원 종류를 같은 모양으로 흡수함을 보여준다. **새 자원 종류가 등장할 때마다 외부 인프라 대신 이 모양이 디폴트로 채택된다** — 단일 인스턴스 전제 위에서 일관성이 계속 강화되는 중.
 8. **게이트 cap 을 컨슈머 디자인에 맞춘다** (2026-05-17 → 2026-06 재확인) — auto-discover 가 `MAX_CONCURRENT_PER_ACTOR` 를 그룹 크기 5 에 맞춘 사례가, analytics 글로벌 머지의 `MERGE_POOL_SIZE = 어댑터 cap` 으로 재현됨. 게이트 크기는 임의 상수가 아니라 그 게이트를 쓰는 쪽(그룹 크기·어댑터 동시성)에서 역산하는 값.
 9. **게이트 수명과 그 게이트를 쓰는 캐시 수명을 분리하라** (2026-06, ai) — `accountGateRegistry` 가 어댑터 캐시 회전과 독립 수명을 가지는 이유: 설정 변경으로 어댑터가 재생성되는 순간 새 어댑터가 새 게이트를 만들면, 옛 어댑터의 in-flight 와 합쳐져 같은 계정에 cap 초과 호출이 일시적으로 발생한다. **게이트는 그것이 보호하는 자원(계정)의 정체성에 묶여야지, 그 자원을 쓰는 캐시 엔트리에 묶이면 안 된다**.
 
@@ -79,3 +81,4 @@ status: active
 - [[../topics/random-crawl]]
 - [[../topics/logs]]
 - [[../topics/telegram]]
+- [[../topics/bus]]

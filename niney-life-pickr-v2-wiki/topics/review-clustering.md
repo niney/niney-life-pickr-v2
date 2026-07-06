@@ -1,8 +1,8 @@
 ---
 topic: review-clustering
 type: codebase
-last_compiled: 2026-06-25
-source_count: 24
+last_compiled: 2026-07-06
+source_count: 25
 status: active
 ---
 
@@ -38,7 +38,7 @@ status: active
 **영속** (`persist`) — `ReviewCluster.deleteMany → create → ReviewSummary.updateMany(clusterId 배정)` 를 **한 트랜잭션**으로 통째 교체. 군집 행 삭제 시 멤버의 `clusterId` 는 FK `SetNull`.
 
 **트리거 경로** (세 갈래, 모두 `runForRestaurant` 로 수렴):
-- **자동** — 요약 종료 → enrich(임베딩) → `ensureClusteredByPlaceId` 체이닝([`summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) fire-and-forget). 피처 플래그(`CLUSTER_AUTO_ENABLED`) + 재군집 게이트 적용.
+- **자동** — 요약 종료 → enrich(임베딩) → 군집화 체이닝([`summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) fire-and-forget). **reviewId 기반 해석**(commit 7407de9): 요약 큐 키가 소스별 자유형(naver=placeId, diningcode=`dc:..`, tabling=`tb:..`)이라 placeId 로는 비-네이버가 canonical 해석 안 돼 조용히 스킵됐다 → 훅이 `reviewIds[0]`→실제 `restaurantId` 를 풀어 `ensureClusteredByRestaurantId` 를 호출해 **모든 소스** 커버. 기존 `ensureClusteredByPlaceId`(공개 키)와 신규 `ensureClusteredByRestaurantId` 는 게이트·트래킹 로직을 담은 private `ensureClusteredForMembers(primaryId, memberIds)` 로 수렴. 피처 플래그(`CLUSTER_AUTO_ENABLED`) + 재군집 게이트 적용.
 - **어드민 수동** — 단건 동기(`run`) / 단건 백그라운드(`cluster-bg`) / 미군집 일괄 순차(`cluster-pending`). 게이트 없이 강제.
 - **서비스 등록** — [`plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) 에서 `ReviewClusteringService` 를 app 전역 singleton(`app.reviewClustering`)으로 decorate. 요약 훅과 라우트가 **같은 인스턴스**를 공유해야 진행 가드(in-memory Set)가 의미를 가진다 → [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
@@ -95,7 +95,7 @@ status: active
 
 **API 와이어 타입** ([`schemas/review-clustering.ts`](../../packages/api-contract/src/schemas/review-clustering.ts)) — `ClusterTone` enum, `ReviewClusterItem`(id/ordinal/label/tone/size/keywords/aspects/repReviews), `ReviewClusterAspect`(`{key, count}` — record 대신 배열로 zod 버전 무관·와이어 명시), `ReviewClusterAspectSummary`(폴백용 `{aspect, pos, neg, neu}`), `ReviewClustersResult`(공개), `ReviewClusterStatus*`(어드민), run/bg/pending 입출력.
 
-## Key Decisions [coverage: high — 9 sources]
+## Key Decisions [coverage: high — 10 sources]
 
 **방법 = UMAP→HDBSCAN→c-TF-IDF (probe 비교로 채택)** — `research/review-clustering/README.md` 가 조연탄(793건)에 4종 비교: ② 연결요소(체이닝 붕괴 ✗), ③ HDBSCAN 직접(UMAP 없이, 노이즈 96% ✗), ① 응집 avg-linkage(○ 폴백, 자동 라벨 없음), ④ **UMAP→HDBSCAN→c-TF-IDF**(k9·노이즈7%·키워드 변별 ◎ 채택). 핵심 교훈: **정확도의 출처는 LLM 라벨이 아니라 UMAP 차원축소** — ③(UMAP 없이)이 96% 노이즈로 죽고 ④가 사는 차이가 증거.
 
@@ -109,7 +109,7 @@ status: active
 
 **우아한 스킵 + 스킵 사유 노출** — `runForRestaurant` 는 정상 경로만 throw, 스킵 사유는 결과로 반환(어드민 가시성·post-summary 훅 graceful). 사유는 `lastRun` 인메모리 Map 에 기록되어 상태 페이지 `lastReason` 으로 노출 — 군집이 "대기"로만 남던 원인(리뷰 부족/전부 노이즈/계산 엔진 오류)을 어드민이 본다. `runTracked` 의 예기치 못한 throw(persist/DB)도 사유로 기록(과거엔 빈 catch 가 삼킴).
 
-**전부 노이즈/소형 식당 폴백 = 관점 집계** — HDBSCAN 이 군집을 0개 만들면(전부 노이즈) `getPublicClusters` 가 `aggregateAspects` 로 폴백 — `aspectsJson` 을 관점→긍/부/중립 카운트로 집계해 `aspectSummary` 로 반환. 분석 탭이 항상 콘텐츠를 갖게. 그것도 비면 `ready=false`.
+**전부 노이즈/소형 식당 폴백 = 관점 집계** — HDBSCAN 이 군집을 0개 만들면(전부 노이즈) `getPublicClusters` 가 `aggregateAspects` 로 폴백 — `aspectsJson` 을 관점→긍/부/중립 카운트로 집계해 `aspectSummary` 로 반환. 분석 탭이 항상 콘텐츠를 갖게. 그것도 비면 `ready=false`. **어드민 상태 표기도 이에 정합**(commit 135cada) — '전부 노이즈'(`lastReason` 에 '노이즈' 포함)는 실패가 아니라 공개에 관점집계로 뜨는 정상이므로, [`AdminReviewSearchPage.tsx`](../../apps/web/src/routes/admin/AdminReviewSearchPage.tsx) `ClusterStatusRow` 가 하늘색 '관점집계' 뱃지 + "토픽 없음 — 공개는 관점집계로 표시"로 보여주고, 실제 조치가 필요한 사유(계산 엔진 오류·리뷰 부족)만 빨강으로 남긴다(정상을 실패로 오인하지 않게).
 
 **LLM `format` 무시 대비 견고 파싱** — 운영 Ollama(gpt-oss)는 Ollama `format` 스키마를 무시하고 마크다운 펜스 + 최상위 배열 + `cluster`(≠`id`) 키로 답한다. 그래서 format 을 강제하지 않고 review-search.chatJson 패턴(`[`/`{` 양쪽 시작 허용 + `id/cluster/index` 키 모두 수용)을 쓴다.
 
@@ -124,7 +124,7 @@ status: active
 - **medoid vs 군집화 공간 분리** — 극성 주입 시 군집화는 증강 공간(9D concat)에서 하지만 대표 리뷰(medoid)는 **원본 임베딩 공간**에서 뽑는다(증강 좌표가 대표성을 왜곡하지 않게). 품질 지표(silhouette 등)도 원본 공간 기준.
 - **소량 코퍼스 조기 반환** — `cluster_compute` 는 `n < max(2*min, 10)` 이면 UMAP 도 안 돌리고 전부 노이즈로 반환. c-TF-IDF 는 빈 군집(`np.vstack([])`)·어휘 부족(`CountVectorizer` ValueError) 모두 우아하게 빈 결과/키워드 생략으로 처리.
 
-## Sources [coverage: high — 24 sources]
+## Sources [coverage: high — 25 sources]
 
 운영 (Node):
 - [`apps/friendly/src/modules/review-clustering/review-clustering.route.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.route.ts)
@@ -146,6 +146,7 @@ status: active
 UI:
 - [`apps/web/src/components/restaurant/detail/ClusterTopics.tsx`](../../apps/web/src/components/restaurant/detail/ClusterTopics.tsx)
 - [`apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx`](../../apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx)
+- [`apps/web/src/routes/admin/AdminReviewSearchPage.tsx`](../../apps/web/src/routes/admin/AdminReviewSearchPage.tsx) (군집 상태 표 · '관점집계' 뱃지)
 
 DB:
 - [`apps/friendly/prisma/schema.prisma`](../../apps/friendly/prisma/schema.prisma) (`ReviewCluster` + `ReviewSummary.clusterId`)

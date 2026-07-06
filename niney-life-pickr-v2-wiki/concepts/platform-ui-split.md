@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
 last_compiled: 2026-06-25
-topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering]
+topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus]
 status: active
 ---
 
@@ -32,6 +32,8 @@ status: active
 - **2026-06**(18차) in [[../topics/settlement]] / [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] (`RoundGroupSplitEditor` 세부 분배 + `RoundGroupSplitNote` 구조적 subtyping): 정산 라운드의 그룹/잔수 세부 분배 편집기 `RoundGroupSplitEditor` 가 분배 로직 전부를 `@repo/shared` SSOT 로 두고 **표현만 동형 분기** — 웹은 사람×그룹 매트릭스([apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx](../../apps/web/src/routes/settlement/RoundGroupSplitEditor.tsx)), 앱은 그룹 카드 세로 스택([apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx](../../apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx)). 2026-05-28 의 `Round*` 듀얼 구현(Discount/Category/Exceptions)에 그룹 분배가 합류. 곁들여 `RoundGroupSplitNote` 는 `SettlementSessionType` 과 `SharedSettlementSessionType` 을 **구조적 subtyping** 으로 받아 owner/shared 두 경로를 **단일 컴포넌트**로 처리 — 분기를 줄이는 반대 방향의 인스턴스(플랫폼이 아니라 세션 종류를 타입 호환으로 합침).
 - **2026-06**(18차) in [[../topics/review-search]] / [[../topics/web]] / [[../topics/mobile]] / [[../topics/shared]] (비동기 질문 알림 UI 분기 — 본체는 [[cross-tab-async-job-toast]]): 비동기 리뷰 질문(QA) 결과 알림에서 `reviewAskStore`(`@repo/shared` 공유)는 한 벌, **알림 UI 만 플랫폼별** — 웹은 `ReviewAskToaster`(sonner 토스트), 앱은 `ReviewAskBanner`(reanimated 자작, 앱엔 sonner 같은 토스트 인프라가 없어 직접 구현). UI 분기 측면만 보면 이 패턴의 또 다른 "스토어 1벌 + 표현 N벌" 인스턴스지만, 이 인스턴스의 **본체는 신규 컨셉 [[cross-tab-async-job-toast]]** (탭 간 비동기 작업 결과를 토스트로 전파하는 메커니즘) — 자세한 맥락은 그쪽 참조.
 
+- **2026-07**(버스) in [[../topics/shared]] / [[../topics/utils]] / [[../topics/web]] (`busFavoriteStore` lazy storage resolver + `markerFrame` 공용 골격): 두 개의 자매-패턴 인스턴스 — 단, 버스 UI 자체는 **웹 전용**이라 `.web.tsx`/`.native.tsx` quad 는 없다. 이 인스턴스가 기여하는 건 UI 분기가 아니라 **분기를 대비한 store/util 계층의 크로스플랫폼 관용**. (1) **storage adapter 주입의 3번째 인스턴스** — `busFavoriteStore`(zustand)의 `setBusFavoriteStorage`(웹 localStorage / 앱 AsyncStorage / NO_OP 폴백)가 `settlementDraftStore`(2026-05-28)·`themeStore`(17차)와 문자 그대로 같은 "라이브러리 모듈은 abstract storage, 플랫폼 entry 가 주입" 모양. 세 번째라 storage-adapter 주입이 확립된 하위 패턴으로 굳음 — 앱 화면이 아직 없어도 store 는 처음부터 크로스플랫폼 계약을 따라 작성돼, 앱이 붙으면 어댑터 등록 한 줄만 추가된다. (2) **`markerFrame.ts` 공용 골격 추출** — 식당 카테고리 마커의 인라인 SVG 프레임을 `@repo/utils/markerFrame`(핀 32×48 / 원 26×26)로 떼어내 식당·버스가 공유하고 도메인은 안쪽 콘텐츠만 채운다. 리팩터 시 76조합 바이트 동일 검증(커밋 a9c1fe4)으로 회귀 0 — "공용 골격 + 도메인이 안쪽만 채움" 이 UI 프리미티브(quad)에서 마커 렌더로 번진 사례.
+
 ## What This Means
 
 이 패턴은 두 가지 가치 판단을 코드에 박아 둔다:
@@ -57,3 +59,4 @@ status: active
 - [[../topics/settlement]]
 - [[../topics/review-search]]
 - [[../topics/review-clustering]]
+- [[../topics/bus]]

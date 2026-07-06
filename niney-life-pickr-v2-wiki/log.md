@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-07-06 (19th compile)
+
+**Topics updated:** friendly(bus 모듈 + 메뉴그룹 테이블), project-overview(공개 기능), web(BusPage/bus 컴포넌트/네비/MapCanvas + MenuTab 그룹 렌더 + 어드민 노이즈→관점집계), shared(66→71), utils(9→13), api-contract(31→ bus/bus-favorite + MenuGroup + menuGroups), crawl(26→29 naver /menu/list), menu-grouping(11→19 원본 메뉴그룹 크롤·영속), review-search(모든 소스 reviewId enrich + lru createRequire interop), review-clustering(모든 소스 군집)
+**New topics:** bus(ws.bus.go.kr friendly 프록시 — 정류장 키워드/주변 검색 + 실시간 도착 + 노선 보기(폴리라인+정류소+운행정보) + 실시간 차량 위치·이동보간·노선형상 따라가기·방향화살표·따라가기토글 + 즐겨찾기 게스트로컬+로그인서버 하이브리드; 공개·비로그인; 30일 정류소 캐시 + 셀격자 주변 캐시 + in-memory 일일 업스트림 쿼터 게이트(1,000건/일); 좌표 서버 toLatLng 값범위 WGS84 판정+zod 강제; 폴링(SSE 아님)+탭 비활성 자동정지; **웹 전용—앱 미구현**; 1~8차)
+**Concepts updated:** in-memory-singleton-gates(+bus 일일 업스트림 쿼터 단일 카운터 + in-flight 합류 + 네거티브 캐시 — 외부 API 예산이라는 8번째 자원 종류), zod-ssot-buildless(+bus/bus-favorite 스키마 + 좌표 값범위 계약), platform-ui-split(+busFavoriteStore lazy storage resolver 3번째 인스턴스 + markerFrame 공용 골격; bus UI 는 웹 전용이라 quad 없음 — store/util 크로스플랫폼 관용만 기여)
+**New concepts:** external-api-proxy-fixture(외부 API 를 friendly 단일 신뢰 경계로 — 저수준 어댑터 프록시(CORS/평문 회피) + 시크릿 키/토큰 마스킹 + 응답 필드명 불신 정규화(좌표 값범위 WGS84) + probe 스크립트 실응답을 __fixtures__ 로 박아 테스트; bus 4다리 정본, crawl playwright/HTTP 변형, map(타일 프록시 뺌·키검증 probe)·telegram(단일 서버 long-polling) 발산 변형 정직 기록)
+**Deferred candidates:** guest-local-server-hybrid(bus 즐겨찾기 zustand persist+서버 union sync — 아직 1토픽, reviewAskStore storage-adapter 와 겹칠 여지 다음 라운드 재평가), url-as-screen-state-ssot(bus q/stId/routeId/near URL 동기화 — 다른 공개 페이지에도 있으면 컨셉화)
+**Sources scanned:** ~800 (18차 ~760 + 버스/메뉴그룹 신규 ~50)
+**Sources changed:** ~55 파일 — 16 커밋 (18차 위키 커밋 `8fa69bb` 이후 2026-06-25 ~ 07-06; 버스 1~8차 + 네이버 메뉴그룹 크롤 + 리뷰 수정)
+**Notes:** 서울시 버스 조회 기능이 주력. friendly 가 `ws.bus.go.kr` 평문 HTTP(CORS 없음)를 프록시하고 서울시 3종 API 키 체인(정류소 15000303 getStationByName/getStationByUid → 위치 15000332 getBusPosByRouteSt/getBusPosByRtid → 노선 15000193)을 잇는다. 핵심 결정: (1) **좌표 필드명 불신** — tmX/tmY/gpsX/posX 후보를 `toLatLng` 가 한국 WGS84 값범위(lat 33~39/lng 124~132)로 판정, proj4 불필요. (2) **in-memory 일일 쿼터 단일 카운터**(검색·도착·위치 공유, 개발계정 1,000건/일) + in-flight 합류 + 네거티브 캐싱 — `in-memory-singleton-gates` 의 외부 예산 변형. (3) **즐겨찾기 게스트 로컬(zustand persist) + 로그인 서버 union sync 1회 하이브리드**. (4) 실시간은 **폴링**(refetchInterval, 탭 비활성 자동정지) — SSE 아님; 클라 tween 보간 + `routePath` 왕복 형상 모호성 해소; 8차 카메라 추적. (5) 앱 미구현이나 `busFavoriteStore`/`markerFrame` 은 크로스플랫폼 계약을 미리 따름. 신규 컨셉 `external-api-proxy-fixture` 는 bus·crawl·map·telegram 을 잇되 map/telegram 의 발산(프록시 다리 뺌 / 단일 서버 클라)까지 정직히 기록. 부수: 네이버 `/menu/list` 메뉴 그룹 크롤(`extractBaeminMenuGroups`) + 원본 그룹 영속 가산 테이블(`restaurant_menu_groups`/`restaurant_menus`, source 단위 delete+재삽입 best-effort). `docs/HANDOFF-bus-station-search.md`(2차까지만 서술) 는 커밋 안 함(untracked 유지). bus(신규) + 10 갱신 토픽 + 신규 컨셉을 병렬 서브에이전트로 컴파일(부모는 기존 컨셉 3개 갱신 + 스키마/INDEX/state 담당).
+
 ## 2026-06-25 (18th compile)
 
 **Topics updated:** crawl(17→26), ai(25→37), settlement(103→109), analytics(13→16), menu-grouping(9→11), friendly(99→113), canonical(19→21), map(24→26), api-contract(25→31), shared(54→66), web(98→116), mobile(56→62), utils(8→9), schedule(13), project-overview(41→52)

@@ -1,14 +1,16 @@
 ---
 topic: crawl
-last_compiled: 2026-06-25
+last_compiled: 2026-06-27
 status: active
-source_count: 26
+source_count: 29
 aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, stealth, jitter, 429, playwright-extra, anti-bot, tabling, 테이블링, tabling-search, tabling-sitemap, tabling-place, tabling-bulk-save, sse-seq, review-stats, visitor-review-stats, place-partner-promotion]
 ---
 
 # crawl — 다중 출처 크롤러 (Naver Place + 캐치테이블 + 다이닝코드 + 테이블링)
 
 `apps/friendly/src/modules/crawl/`에 위치한 어드민 전용 크롤러. Naver Place / 캐치테이블 / 다이닝코드 / **테이블링** 네 출처를 다루며, 각 출처마다 어댑터 비용 분포가 다르다 (Naver = Playwright 풀세션, 캐치테이블 = Playwright 안에서 fetch 가로채기, 다이닝코드·테이블링 = HTTP 직접). 잡 패턴은 5가지 — 단일 Naver 크롤(SSE), Naver/캐치테이블/다이닝코드/테이블링 키워드 검색(동기), 다이닝코드·테이블링 가게 저장(단일 동기), 다이닝코드 일괄 저장(SSE), 테이블링 일괄 저장(SSE).
+
+**2026-06-27 변경 흡수 — Naver `/menu/list` 서브페이지 메뉴 그룹 크롤 (발견 누락 해소)**: place 홈 Apollo state 만 보던 `extractMenus` 가 메뉴판을 다 못 담아 발견 누락이 잦던 문제를, 메뉴 전용 서브페이지 `m.place.naver.com/restaurant/:id/menu/list` 를 별도 페이지로 크롤해 해소. [naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts) 의 `fetchMenuGroupsViaMenuList` 가 서브페이지 진입 → `clickExpandableMenuButtons`("펼쳐서 더보기" 최대 10회 클릭+스크롤) → `__APOLLO_STATE__` 스냅샷 → `extractBaeminMenuGroups`(키 prefix `PlaceDetail_BaeminMenuGroup:` 파싱) 순으로 **원본 그룹/정렬/출처를 손실 없이** 뽑는다. `flattenMenuGroups` 가 기존 flat `menus` 를 채우되 실제 카테고리 그룹이 있으면 '대표메뉴' 중복 그룹을 빼고 dedup. `/menu/list` 실패 시 기존 `extractMenus` 로 폴백(best-effort — 크롤은 항상 완료). 계약에 `MenuGroup`/`MenuGroupItem` 추가, `NaverPlaceData.menuGroups`(optional) 노출. 영속·병합·표시(restaurant_menu_groups 테이블 등)는 [menu-grouping](menu-grouping.md) 참조. 프로브: `probe-menu-extraction.ts`/`probe-menu-storage.ts`/`probe-naver-menu-methods.ts`.
 
 **2026-06-25 변경 흡수 — ① 테이블링(tabling) 신규 출처(무인증 REST), ② 정확한 방문자 리뷰 수 어댑터, ③ SSE seq 단일화(78% 멈춤 fix), ④ 백그라운드 크롤→자동 enrich 체인**:
 
@@ -32,7 +34,7 @@ aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, s
 
 권한은 항상 `app.authenticate + app.requireAdmin`.
 
-## Architecture [coverage: high — 16 sources]
+## Architecture [coverage: high — 17 sources]
 
 ### 테이블링 어댑터 4종 (무인증 REST + JSON-LD + 사이트맵)
 
@@ -52,6 +54,18 @@ aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, s
 ### 더보기 jitter (랜덤 지연)
 
 `computeVisitorPageDelay()` 가 매 클릭마다 `VISITOR_PAGE_DELAY_MS` (기본 5000) + `Math.floor(Math.random() * VISITOR_PAGE_DELAY_JITTER_MS)` (기본 3000) 를 계산. 결과적으로 5~8초 사이 랜덤 — 고정 3s 대비 패턴 인식 회피. 이전 글의 "3s 정적 지연" 흐름은 더 이상 없음. env 로 둘 다 조정 가능 (`CRAWL_VISITOR_PAGE_DELAY_MS` / `CRAWL_VISITOR_PAGE_DELAY_JITTER_MS`). jitter=0 이면 비활성 (고정 cadence).
+
+### Naver /menu/list 메뉴 그룹 크롤 (2026-06-27)
+
+place 홈 페이지 Apollo state 만 보던 `extractMenus` 는 메뉴판 전체를 못 담아 발견 누락이 잦았다. 이제 메인 페이지 파싱 뒤 **메뉴 전용 서브페이지**를 한 번 더 연다:
+
+- **`fetchMenuGroupsViaMenuList(ctx, placeId, hooks)`** — 같은 `BrowserContext` 에서 `ctx.newPage()` 로 `https://m.place.naver.com/restaurant/:placeId/menu/list` 진입(`SHOULD_BLOCK` 리소스 차단, `domcontentloaded` 12s + `networkidle` 6s). `clickExpandableMenuButtons` 후 `__APOLLO_STATE__` 스냅샷 → `extractBaeminMenuGroups`. `finally` 로 서브페이지 close. `CRAWL_DEBUG_CAPTURE=1` 이면 `__debug__/menu-list-<placeId>-<stamp>.json`(groupCount/menuCount/groups/apolloState) 덤프.
+- **`clickExpandableMenuButtons(page)`** — 최대 10 라운드: "펼쳐서 더보기" 버튼(`button` 또는 `a[role="button"]`)이 있으면 first 클릭(2s timeout) + 350ms 대기, 매 라운드 `scrollBy(0, 700)` + 250ms. lazy 로드되는 메뉴판을 끝까지 펼침.
+- **`extractBaeminMenuGroups(state)`** — `PlaceDetail_BaeminMenuGroup:` prefix 키만 골라 그룹으로. 각 그룹 name(name/groupName/title), menus 배열을 `buildMenuGroupItem` 으로 매핑, 그룹 내 `sourceMenuId ?? name|price` dedup, 메뉴 0개 그룹 제외. `source: 'naver-baemin'`(`MENU_GROUP_SOURCE` 상수), `sourceGroupId` = 그룹 id/groupId 또는 키 suffix, `sortOrder` = 그룹 등장 순서.
+- **`buildMenuGroupItem(state, raw, sortOrder)`** — `deref` 후 name(name/menuName) 필수, recommend(isRepresentative/recommend/isRecommend 순), imageUrls(images/imageUrls/imageUrl/image/thumbnail → `collectMenuImageUrls`), price(price/priceText/menuPrice), description(description/desc), sourceMenuId(id/menuId).
+- **`flattenMenuGroups(groups)`** — 공개 flat `menus` 생성기. 그룹 중 '대표메뉴' 아닌 게 하나라도 있으면 '대표메뉴' 그룹 전체를 뺀다(실제 카테고리와 중복이라). 그룹 넘어 `sourceMenuId ?? name|price` dedup, 상한 200, `MenuItem` 모양으로 축소. `__test_extractBaeminMenuGroups`/`__test_flattenMenuGroups` 로 export(단위 테스트).
+
+`buildPlaceData` 가 `groupedMenus = flattenMenuGroups(menuGroups)` 를 계산해 **`menus` = groupedMenus 우선, 비면 `extractMenus` 폴백** — /menu/list 성공 시 홈 추출을 대체하고, `menuGroups` 는 원본 그룹째로 함께 싣는다(partial 스냅샷에도 포함). 서브페이지 자체가 실패하면 `CrawlCancelledError` 만 rethrow 하고 나머지는 `console.warn` + `menuGroups=[]` — 홈 추출 경로가 살아 크롤은 완료.
 
 ### 정확한 방문자 리뷰 수 어댑터 (naver-review-stats)
 
@@ -73,7 +87,7 @@ aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, s
 
 | 출처 | 어댑터 | 비용 모델 | 비고 |
 |---|---|---|---|
-| Naver Place | `naver-place.playwright.adapter.ts` | `playwright-extra` Chromium + stealth (모바일 UA, iPhone viewport) + Apollo cache + GraphQL wire 가로채기 + 더보기 jitter | SSR Apollo SPA → Playwright 필수, 429 우회 위해 stealth + jitter |
+| Naver Place | `naver-place.playwright.adapter.ts` | `playwright-extra` Chromium + stealth (모바일 UA, iPhone viewport) + Apollo cache + GraphQL wire 가로채기 + 더보기 jitter + `/menu/list` 메뉴 그룹 서브페이지 | SSR Apollo SPA → Playwright 필수, 429 우회 위해 stealth + jitter, 메뉴판은 서브페이지에서 그룹째 |
 | Naver Search | `naver-search.http.adapter.ts` | HTTP nx-api GraphQL 직접 호출 | (이전 Playwright 어댑터에서 HTTP 로 이행 — `source: 'http'`) |
 | Naver Review Stats | `naver-review-stats.http.adapter.ts` | HTTP `api.place.naver.com/graphql` 직접(페이지 없음) | 검색 카드 "방문자 리뷰" 수 보강, best-effort null |
 | 캐치테이블 Search | `catchtable-search.playwright.adapter.ts` | Playwright 페이지 1개를 warm 유지 + `page.evaluate(fetch(...))` | CF 봇 보호 — 직접 fetch 차단, 페이지 안에서 호출 |
@@ -144,7 +158,7 @@ Naver 단일 크롤이 `done` 직전, `generateProposalsForRestaurant` 와 별�
 - **다이닝코드** — HTTP 직접. `POST /API/isearch/` (검색, `application/x-www-form-urlencoded`), `POST /API/profile/` (가게 상세 + 리뷰 페이지네이션, 같은 endpoint). 응답 `result_code === '100'` 이 정상. `poi_section.total_cnt` 는 10000 캡 — 실제 매칭은 `params.rcount`.
 - **테이블링** — HTTP 직접, 무인증. REST host `mobile-v2-api.tabling.co.kr`: `POST /v1/search/restaurants/map`(검색), `GET /v1/restaurant/:idx`/`/menu`/`/review`(상세·메뉴·리뷰). 웹 host `www.tabling.co.kr`: `GET /place/:objectId`(미입점 HTML JSON-LD), `GET /sitemap-shop.xml`·`/sitemap-place-{1..5}.xml`(발견). 모두 토큰/쿠키 불필요, CORS 열림. `Referer`/`Origin: https://www.tabling.co.kr` + (검색) `app-platform:WEB`/`app-version:4.11.0` 헤더 동봉(정합성용).
 - **Naver Review Stats** — `naver-review-stats.http.adapter.ts` 가 `POST https://api.place.naver.com/graphql` `getVisitorReviewStats` 직접 호출. `x-wtm-graphql` 헤더 필수. 검색 카드 보강 — best-effort null.
-- **api-contract 스키마** — `packages/api-contract/src/schemas/crawl.ts` 에 zod 정의. 기존 Naver/캐치테이블/다이닝코드 외 **테이블링 추가**: `TablingShopData`/`TablingShopReview`/`TablingShopReviewsSection`/`TablingShopReviewsResponse`, `TablingPlaceData`, `TablingMenu(Category)`/`TablingBusinessDay`/`TablingRatingItem`/`TablingServiceFlags`, `SaveTablingShopResult`/`SaveTablingPlaceResult`, `TablingSearchQuery`/`TablingSearchResult`/`TablingSearchResponse`/`TablingSearchSort`, `TablingDiscoverQuery`/`TablingDiscoverResult`, `TablingRegisteredQuery`/`TablingRegisteredResult`, `TablingBulkSaveJobInput`/`TablingBulkSaveJobSnapshot`/`TablingBulkSaveJobItem`(+item/done 이벤트). `routes.ts` 의 `Crawl` namespace 에 `tablingSearch`/`tablingShop`/`tablingShopReviews`/`tablingShopSave`/`tablingPlaceSave`/`tablingRegistered`/`tablingDiscover`/`tablingBulkSaveJobs`/`tablingBulkSaveJob`/`tablingBulkSaveJobEvents` 추가.
+- **api-contract 스키마** — `packages/api-contract/src/schemas/crawl.ts` 에 zod 정의. 기존 Naver/캐치테이블/다이닝코드 외 **테이블링 추가**: `TablingShopData`/`TablingShopReview`/`TablingShopReviewsSection`/`TablingShopReviewsResponse`, `TablingPlaceData`, `TablingMenu(Category)`/`TablingBusinessDay`/`TablingRatingItem`/`TablingServiceFlags`, `SaveTablingShopResult`/`SaveTablingPlaceResult`, `TablingSearchQuery`/`TablingSearchResult`/`TablingSearchResponse`/`TablingSearchSort`, `TablingDiscoverQuery`/`TablingDiscoverResult`, `TablingRegisteredQuery`/`TablingRegisteredResult`, `TablingBulkSaveJobInput`/`TablingBulkSaveJobSnapshot`/`TablingBulkSaveJobItem`(+item/done 이벤트). `routes.ts` 의 `Crawl` namespace 에 `tablingSearch`/`tablingShop`/`tablingShopReviews`/`tablingShopSave`/`tablingPlaceSave`/`tablingRegistered`/`tablingDiscover`/`tablingBulkSaveJobs`/`tablingBulkSaveJob`/`tablingBulkSaveJobEvents` 추가. **2026-06-27**: `MenuGroup`/`MenuGroupItem`(MenuGroupItem = MenuItem.extend + `sourceMenuId?`/`sortOrder?`; MenuGroup = `source`/`sourceGroupId?`/`name`/`sortOrder?`/`menus[]`) 추가 + `NaverPlaceData.menuGroups`(optional) 노출.
 - **RestaurantService** — `upsertRestaurantFromCrawl` (네이버), `upsertRestaurantFromDiningcode`, `upsertRestaurantFromTabling`/`upsertRestaurantFromTablingPlace`, `findByPlaceId`, `getExistingReviewKeys`, `clearReviewsAndSummaries`, `persistReviewBatch`, `findRegisteredDiningcodeByVRids`/`findRegisteredTablingByIdxs`, `getCanonicalIdForRestaurant`, `getCanonicalCoreForAutoMatch`, `findCanonicalAutoMatchCandidates`, `findTablingCanonicalsNear`, `getDiningcodeReviewSummaryMap`/`getTablingReviewSummaryMap`, 정적 `mapDiningcodeReviewToRaw`/`mapTablingReviewToRaw`.
 - **SummaryService** — `queueSummariesForReviews(key, ids, jobId?, _, parentRunId?)`. Naver 는 `placeId`, 다이닝코드는 `'dc:<vRid>'`, 테이블링은 `'tb:<idx>'` 키 — 같은 SummaryService 풀 안에서 키 namespace 분리. 요약 종료 시 review-search enrich + 군집화를 자동 트리거(아래 enrich 후크).
 - **review-search enrich + review-clustering (간접)** — 백그라운드 크롤이 리뷰를 적재·요약 큐잉하면, 요약 종료 훅([plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts))이 `reviewSearch` enrich → `reviewClustering` 군집화를 자동 호출한다. crawl 모듈은 트리거(요약 큐잉)만 하고, 실제 enrich 와이어링은 summaries 플러그인 — 상세는 [logs](logs.md) / review-search·review-clustering 토픽.
@@ -273,8 +287,9 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - 다이닝코드 일괄 저장 input vRid 1~50개, TTL 10분, 페이지 간 200ms, fetch timeout 8초.
 - 캐치테이블 검색 limit 1~30, 첫 호출 timeout 30s, networkidle 12s; 상세 lazy settle 2.5s.
 
-## Key Decisions [coverage: high — 18 sources]
+## Key Decisions [coverage: high — 19 sources]
 
+- **Naver 메뉴는 `/menu/list` 서브페이지에서 그룹째로** — 홈 Apollo state 의 `extractMenus` 는 메뉴판을 다 못 담아 발견 누락이 잦았다. 메뉴 전용 서브페이지를 "펼쳐서 더보기" 펼친 뒤 `PlaceDetail_BaeminMenuGroup` 를 파싱해 원본 그룹/정렬/출처 보존. 네이버 메뉴 데이터가 배민(Baemin) 메뉴 연동으로 들어와 Apollo typename 이 `Baemin*` — source 상수도 `'naver-baemin'`. flat `menus` 는 `flattenMenuGroups` 로 '대표메뉴' 중복 뺀 평탄화, 성공 시 홈 추출 대체·실패 시 폴백(best-effort — 크롤은 항상 완료). 영속·병합·표시는 [menu-grouping](menu-grouping.md).
 - **테이블링은 무인증 REST — 다이닝코드와 같은 순수 HTTP 어댑터** — `mobile-v2-api.tabling.co.kr` 가 웹·앱 공유 백엔드인데 토큰/쿠키 불필요 + CORS 열림이라 Playwright 불필요(캐치테이블 CF 와 대비). 좌표가 응답에 number/string 으로 들어와 머지에 그대로 쓸 수 있다. 근거 문서 `docs/research/tabling-crawl-feasibility.md`.
 - **테이블링 검색 `distance:700` 은 반경이 아니라 모드 스위치** — 좌표 없이 distance 키를 실으면 ES 가 "내주변 추천" 을 끄고 키워드 관련성 정렬로 전환. 없으면 키워드를 거의 무시. 공식 웹 검색창 고정 기본값을 그대로 차용. (조사 초기 GET 만 시도해 404 → "검색 API 없음" 오판했으나 실제는 POST.)
 - **테이블링 발견은 사이트맵 백본 + 키워드 검색 보조** — 키워드 검색 JSON API 가 partner(`/restaurant/:idx`) 만 커버하고 미입점 place 는 사이트맵에만 있어, 전수 발견은 `/sitemap-place-{1..5}.xml`(각 ~45k) 이 유일한 백본. 검색은 partner idx 타깃 발견용.
@@ -295,8 +310,10 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - **캐치테이블 fallback/keywordSearch/warm page** — `totalShopCount >= 10000` 이면 fallback(16849 고정), `keywordSearch.keyword` 필수, warm page 첫 호출 ~14s 이후 ~200-900ms.
 - **DC/테이블링 bulk save TTL 10분** — Naver 잡(5분)보다 길게(`FINISHED_TTL_MS = 10 * 60_000`).
 
-## Gotchas [coverage: high — 14 sources]
+## Gotchas [coverage: high — 15 sources]
 
+- **`/menu/list` 추출은 배민 typename 의존 — 깨질 수 있음** — `PlaceDetail_BaeminMenuGroup:` prefix + `menus` 배열 모양에 묶여 있어 네이버가 메뉴 스키마를 바꾸면 그룹이 빈다. 그래도 `extractMenus`(홈) 폴백 + best-effort 라 크롤 자체는 안 막힌다. "펼쳐서 더보기" 는 최대 10회만 클릭 — 초대형 메뉴판은 잘릴 수 있음.
+- **flat `menus` 에서 '대표메뉴' 그룹은 빠진다** — 실제 카테고리 그룹이 하나라도 있으면 `flattenMenuGroups` 가 '대표메뉴'(중복 노출)를 제거. 원본 그룹은 `menuGroups` 에 그대로 남으므로 대표메뉴 자체가 필요하면 flat 이 아니라 그룹을 봐야 함.
 - **테이블링 리뷰 페이지네이션은 `lastIdx`, `cursorId` 아님** — `fetchTablingShopReviews` 가 직전 페이지 마지막 리뷰의 `idx`(ObjectId)를 `lastIdx` 파라미터로 넘긴다. 리뷰 응답의 `cursorId` 필드는 페이지네이션 토큰이 아니므로 헷갈리면 무한 첫 페이지. 응답이 `REVIEW_PAGE_SIZE` 만큼 차야 nextCursor 반환.
 - **테이블링 place JSON-LD 는 이중 인코딩 RSC flight 안** — `<script type="application/ld+json">` 태그가 아니라 `self.__next_f.push([1,"…"])` flight 청크 안에 stringified prop 으로 박혀 있어, flight 디코드 + 한 번 더 JSON.parse 가 필요. 옛 `<script>` 태그 fallback 도 있지만 현재 페이지는 flight 경로. 테이블링이 Next.js 렌더링을 바꾸면 이 추출이 깨질 수 있음.
 - **테이블링 검색 distance 키 빠지면 키워드 무시** — 좌표 없이 `distance:700` 없으면 "내주변 추천" 모드로 기본 좌표 부근만 돌려줌(예: "숯돈 목동점" → 양재/청담 가게). 어댑터가 항상 distance 를 실으므로 라우트로 우회하면 안 됨.
@@ -314,8 +331,11 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - **DC/테이블링 bulk save SSE 인증** — EventSource 가 헤더 못 실어 `?token=<jwt>` 수락. 본인 잡(`actorId === userId`) + `role === 'ADMIN'` 만 통과. registry `get(id, actorId)` 가 actor 미스매치면 null → 404.
 - **Naver Search 어댑터 이행** — `naver-search.playwright.adapter.ts` 사라지고 `naver-search.http.adapter.ts` 로 nx-api GraphQL 직접 호출(`source: 'http'`). reviewCount 는 `visitorReviewCount`(visitor) → `blogCafe`(total) → `reviewCount` 폴백 순. `CrawlSearchResult.source` enum 의 `'playwright'` 는 backward-compat.
 
-## Sources [coverage: high — 26 sources]
+## Sources [coverage: high — 29 sources]
 
+- [apps/friendly/scripts/probe-menu-extraction.ts](../../apps/friendly/scripts/probe-menu-extraction.ts)
+- [apps/friendly/scripts/probe-menu-storage.ts](../../apps/friendly/scripts/probe-menu-storage.ts)
+- [apps/friendly/scripts/probe-naver-menu-methods.ts](../../apps/friendly/scripts/probe-naver-menu-methods.ts)
 - [apps/friendly/src/modules/crawl/crawl.route.ts](../../apps/friendly/src/modules/crawl/crawl.route.ts)
 - [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts)
 - [apps/friendly/src/modules/crawl/job-registry.ts](../../apps/friendly/src/modules/crawl/job-registry.ts)

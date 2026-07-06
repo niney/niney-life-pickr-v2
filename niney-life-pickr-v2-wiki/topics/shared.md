@@ -1,12 +1,24 @@
 ---
 topic: shared
-last_compiled: 2026-06-25
-sources_count: 66
+last_compiled: 2026-07-06
+sources_count: 71
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds]
+aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds, busApi, bus-api, useBusStationSearch, useBusNearbyStations, useBusStationsRefresh, useBusStationArrivals, useBusPositions, useBusRouteDetail, busFavoriteApi, useBusFavorites, busFavoriteStore, useBusFavoriteStore, setBusFavoriteStorage, bus-favorites, 버스즐겨찾기, guest-server-hybrid-favorites, bus-favorites-v1, BUS_FAVORITES_MAX, refetchIntervalInBackground, arsId-guard, 버스폴링]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-07-06 변경 흡수 — 서울시 버스 도메인 FE 플러밍(API 2 + 훅 2 + 게스트 즐겨찾기 store 1)**: 버스 정류장 검색/실시간 조회 + 즐겨찾기 하이브리드를 웹/앱 공용으로 노출. 버스 도메인 자체(백엔드 프록시·좌표계·캐시 정책)는 [bus](bus.md), 마커 SVG·노선 형상 계산은 [utils](utils.md), 여기서는 **공유 HTTP 함수 + React Query 훅 + 게스트 store** 만 정리.
+
+(1) **신규 `api/bus.api.ts` (`busApi`)** — 공개 라우트(토큰 불필요) 5함수: `searchStations(q, { force? })`(force=true 면 `?force=true` 부착 — 강제 새로고침 버튼) / `nearbyStations(lat, lng, { radius? })`(반경 m, 서버 기본 500·상한 1000) / `stationArrivals(arsId)`(무캐싱 실시간 도착) / `busPositions(busRouteId, { startOrd, endOrd }?)`(opts 생략 시 노선 전체 차량 `getBusPosByRtid`, 지정 시 구간) / `routeDetail(busRouteId)`(형상+경유 정류소+기본정보 합본, 서버 DB 30일 캐시). 전부 `Routes.Bus.*` 사용.
+
+(2) **신규 `api/bus-favorite.api.ts` (`busFavoriteApi`)** — 로그인 사용자의 서버 저장분, 전부 Bearer 인증(미로그인 401). `list()` / `upsertStation(stId, body)`(PUT) / `removeStation(stId)`(DELETE) / `upsertRoute(stId, busRouteId, body)`(PUT) / `removeRoute(stId, busRouteId)`(DELETE) / `sync(body)`(로그인 직후 게스트 저장분 union 병합, 멱등). **모든 변경 함수가 변경 후 전체 목록(`BusFavoritesResult`)을 반환** — 클라가 diff 없이 캐시를 통째 교체. 상한 초과 PUT 은 서버 400.
+
+(3) **신규 `hooks/useBus.ts`** — 6훅. 실시간(도착/위치)은 폴링, 정적(검색/주변/노선상세)은 긴 staleTime. `useBusStationSearch(q)`(제출형, staleTime 24h, q 2~50자 FE 미러 가드, placeholderData 잔상 차단) / `useBusNearbyStations(lat, lng, radius?)`(좌표 소수 4자리 스냅으로 GPS 흔들림에 키 안 갈라짐, staleTime 60s) / `useBusStationsRefresh()`(force mutation — `cancelQueries` 후 `setQueryData` 로 같은 키 직접 교체, invalidate 안 함) / `useBusStationArrivals(arsId)`(30s 폴링, arsId `'0'` 가상정류장 enabled 차단) / `useBusPositions(busRouteId)`(15s 폴링, 노선 전체 차량) / `useBusRouteDetail(busRouteId)`(폴링 없음, staleTime 24h). **폴링 3훅 공통 — `refetchIntervalInBackground` 기본 false 에 의존해 탭 비활성 시 폴링 자동 중단**(일 1,000건 개발계정 한도 절약), enabled 로 선택 시에만 구독.
+
+(4) **신규 `hooks/useBusFavorites.ts` (`useBusFavorites`)** — 게스트 로컬 + 로그인 서버 하이브리드 단일 인터페이스. 반환 `{ stations, routes, isStationFavorite, isRouteFavorite, toggleStation, toggleRoute }`. 게스트(`!token`)면 `busFavoriteStore` 를 그대로, 로그인이면 서버 목록(React Query)을 쓰고 토글은 현재 포함 여부로 upsert/remove 를 골라 호출 후 응답(전체 목록)으로 `setQueryData` 교체(낙관적 업데이트 불필요). pending 중 같은 항목 연타는 in-flight `useRef` Set 으로 무시. **로그인 직후 게스트 저장분이 있으면 `sync` 1회 fire**(외부 시스템 동기화라 useEffect 허용, `syncedRef` StrictMode 이중 실행 가드) → 성공 시 게스트 `clearAll` + 캐시 교체, 실패 시 로컬 유지(다음 마운트 재시도). 401 로 `clearSession` 되면 token null → 자연히 게스트 폴백.
+
+(5) **신규 `stores/busFavoriteStore.ts` (`useBusFavoriteStore`)** — 게스트 즐겨찾기 zustand persist. `stations`/`routes` 등록순 배열 + `toggleStation`/`toggleRoute`(상한 `BUS_FAVORITES_MAX` 도달 시 추가 무동작+false 반환)/`removeStation`/`removeRoute`/`clearAll`. persist key `bus-favorites-v1` v1, `partialize` 데이터만. **storage 는 `setBusFavoriteStorage(adapter)` lazy resolver**(웹 localStorage 자동 / 앱 AsyncStorage 주입 / NO_OP) — `reviewAskStore`·`settlementDraftStore` 와 동일 철학.
 
 **2026-06-25 변경 흡수 (18차, 9db5204→HEAD) — 리뷰 문맥검색(RAG)·군집화 FE 플러밍 + 비동기 잡 완료를 탭 가로질러 토스트로 알리는 전역 스토어 패턴 + 작업 로그/LLM 텔레메트리/지역 랜덤 크롤/텔레그램 설정 FE + 정산 세부 분배(그룹 split)**:
 
@@ -97,11 +109,11 @@ AdminAiKeysPage 가 저장 전 미리보기에 사용. ([ai.api.ts](../../packag
 
 - 타입 안전한 fetch 래퍼와 도메인별 API 함수 (auth, picks, admin, crawl, restaurant,
   canonical, menu-grouping, analytics, ai, settings-map, **settlement / settlement-extraction
-  / settlement-contact**). 어드민/공개/공유(read-only) 라우트가 같은 `apiFetch` 위에 얹힌다.
+  / settlement-contact**, **bus / bus-favorite**). 어드민/공개/공유(read-only) 라우트가 같은 `apiFetch` 위에 얹힌다.
 - TanStack Query 훅 (서버 상태) — 메뉴 그룹핑/전역 머지/다이닝코드 일괄 저장 잡 SSE 훅 +
   공개 맛집 리스트/상세/인사이트/지도 설정 훅 + 캐노니컬(병합/분리/제안 큐) 훅 + **정산 세션 CRUD
   + 영수증 업로드/추출 + 단골 CRUD 훅** 포함
-- Zustand 스토어 (인증, 활성 크롤 잡, 활성 그룹핑/전역 머지/DC 일괄 저장 잡, **정산 draft**)
+- Zustand 스토어 (인증, 활성 크롤 잡, 활성 그룹핑/전역 머지/DC 일괄 저장 잡, **정산 draft**, **게스트 버스 즐겨찾기**)
 - 프로세스 전역 SSE 매니저 싱글톤 (요약 진행률 + review 분석 멀티플렉싱 — placeId + canonicalId 두 키 종류 동시)
 - 잡 단위 SSE 라이프사이클 훅 (그룹핑/전역 머지/DC 일괄 저장 — 매니저를 쓰지 않고 hook 자체가
   EventSource 를 직접 들고 백오프 재연결 관리)
@@ -112,7 +124,7 @@ AdminAiKeysPage 가 저장 전 미리보기에 사용. ([ai.api.ts](../../packag
 빌드 산출물 없이 `src/index.ts`를 그대로 노출(`"main": "./src/index.ts"`)하므로
 Turborepo 컨슈머는 별도 빌드 단계 없이 TS 소스를 바로 import한다.
 
-## 2. Architecture [coverage: high — 26 sources]
+## 2. Architecture [coverage: high — 31 sources]
 
 ```
 packages/shared/src/
@@ -139,7 +151,9 @@ packages/shared/src/
 │   ├── settlement.api.ts             # 정산 세션 CRUD + share 토큰 + update(전체 replace) + getShared(token)
 │   ├── settlement-extraction.api.ts  # 영수증 upload(Blob→FormData) + extract(imageToken→items) + previewBlob(인증 GET)
 │   ├── settlement-contact.api.ts     # /me/contacts 사용자별 단골 list/update/remove
-│   └── settlement-draft.api.ts       # /api/v1/settlement-drafts — list / upsert(PUT, userId+placeId 매칭) / remove
+│   ├── settlement-draft.api.ts       # /api/v1/settlement-drafts — list / upsert(PUT, userId+placeId 매칭) / remove
+│   ├── bus.api.ts           # (신규) 서울시 버스 공개 조회: searchStations/nearbyStations/stationArrivals/busPositions/routeDetail
+│   └── bus-favorite.api.ts  # (신규) 버스 즐겨찾기 서버 저장분(Bearer): list/upsert·remove Station·Route/sync (변경 시 전체 목록 반환)
 ├── settlement/
 │   └── groupSuggestion.ts  # (신규) 세부 분배 그룹 제안 순수 로직 (suggestItemGroups — @repo/api-contract drink-kinds 사전 재사용)
 ├── hooks/
@@ -166,7 +180,9 @@ packages/shared/src/
 │   ├── useSettlement.ts           # useListSettlements / useSettlement / useCreateSettlement(fromDraftId 옵션) / useDeleteSettlement / useUpdateSettlement(전체 replace, setQueryData) / useCreateSettlementShare / useRevokeSettlementShare / useSharedSettlement
 │   ├── useSettlementExtraction.ts # useUploadReceipt / useExtractReceipt (둘 다 useMutation)
 │   ├── useSettlementContact.ts    # useSettlementContacts(검색어 키별) / useUpdateSettlementContact / useDeleteSettlementContact (삭제 시 settlement 캐시도 무효화)
-│   └── useSettlementDraft.ts      # (신규) useListSettlementDrafts / useUpsertSettlementDraft / useDeleteSettlementDraft + useSettlementDraftHydrate(placeId) + useSettlementDraftAutoSync({placeId, placeNameHint, hydrated, initialDraftId, debounceMs=3000})
+│   ├── useSettlementDraft.ts      # (신규) useListSettlementDrafts / useUpsertSettlementDraft / useDeleteSettlementDraft + useSettlementDraftHydrate(placeId) + useSettlementDraftAutoSync({placeId, placeNameHint, hydrated, initialDraftId, debounceMs=3000})
+│   ├── useBus.ts           # (신규) useBusStationSearch(24h)/useBusNearbyStations(60s)/useBusStationsRefresh(force)/useBusStationArrivals(30s 폴링)/useBusPositions(15s 폴링)/useBusRouteDetail(24h) — refetchIntervalInBackground=false 가드
+│   └── useBusFavorites.ts  # (신규) 게스트 로컬 + 로그인 서버 하이브리드 단일 훅 — 응답 전체목록 setQueryData 교체 + 로그인 직후 sync 1회
 ├── stores/
 │   ├── authStore.ts                       # Zustand: user / token / isGuest
 │   ├── activeCrawlJobStore.ts             # Zustand: jobs by jobId (멀티 슬롯)
@@ -177,7 +193,8 @@ packages/shared/src/
 │   ├── activeAutoDiscoverJobStore.ts      # Zustand + persist: jobId (단일 슬롯, localStorage)
 │   ├── settlementDraftStore.ts            # Zustand + persist (storage adapter 주입형 — 웹 sessionStorage / RN AsyncStorage / SSR·test NO_OP). 마스터 participants + rounds[] N차 모델 + groupSplits(세부 분배). v1→v6 migration.
 │   ├── reviewAskStore.ts                  # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 공개 Ask 비동기 — store 가 직접 publicAsk 호출, 완료를 탭 가로질러 ReviewAskToaster 가 토스트. lastByPlace 만 영속(MAX_KEPT=20).
-│   └── resummarizeStore.ts                # (신규) Zustand (persist 없음, 메모리만). 진행 중 단건 재요약 추적 — ResummarizeToaster 가 placeId SSE 구독해 완료 토스트.
+│   ├── resummarizeStore.ts                # (신규) Zustand (persist 없음, 메모리만). 진행 중 단건 재요약 추적 — ResummarizeToaster 가 placeId SSE 구독해 완료 토스트.
+│   └── busFavoriteStore.ts                # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 게스트 버스 즐겨찾기(stations/routes 등록순 배열, BUS_FAVORITES_MAX 상한). key bus-favorites-v1.
 ├── design/ … (불변)
 ├── ui/ … (불변)
 └── constants/ …
@@ -430,13 +447,13 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 파일 확장자 해석으로 구현체를 골라간다 (Vite/Webpack은 `.web.tsx`, Metro는
 `.native.tsx`). `tsconfig.json`은 `@repo/config/tsconfig/react.json`을 상속.
 
-## 3. Talks To [coverage: high — 8 sources]
+## 3. Talks To [coverage: high — 10 sources]
 
 - 의존성: `@repo/api-contract` (zod 스키마/타입/`Routes` 상수 + `recomputeCanonicalAggregates` 유틸 + **정산/단골/추출 타입**), `@repo/utils`,
   `@tanstack/react-query`, `zustand` + `zustand/middleware` (persist).
 - peerDependencies: `react >=18.0.0`, `react-native >=0.76.0` (옵셔널).
 - 컨슈머:
-  - `apps/web` — 어드민 콘솔(맛집/메뉴/분석/AI/지도 설정 + 발견 페이지 + 다이닝코드 검증/정식 페이지 + 캐치테이블 검증 페이지), 공개 맛집 페이지, 로그인, **정산하기 진입/입력/결과/공유/단골 관리 페이지**.
+  - `apps/web` — 어드민 콘솔(맛집/메뉴/분석/AI/지도 설정 + 발견 페이지 + 다이닝코드 검증/정식 페이지 + 캐치테이블 검증 페이지), 공개 맛집 페이지, 로그인, **정산하기 진입/입력/결과/공유/단골 관리 페이지**, **버스 정류장/노선/즐겨찾기 페이지(`/bus`)**.
   - `apps/mobile` — 어드민 게이트.
 - 외부:
   - `apiFetch`로 [friendly](friendly.md) API에 HTTP. `FormData` 본문이면 Content-Type 자동 미설정 (영수증 업로드 호환).
@@ -456,9 +473,10 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - **`settlementExtractionApi` → `/api/v1/settlement-extraction/upload|extract|preview/:token`** (preview 만 직접 fetch + Authorization 헤더).
   - **`settlementContactApi` → `/api/v1/me/contacts/*`** (인증 필수).
   - **`settlementDraftApi` → `/api/v1/settlement-drafts/*`** (인증 필수, upsert PUT, 서버가 userId+placeId 로 매칭).
-- UI 측 사용처는 [web](web.md)/[mobile](mobile.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행은 [schedule](schedule.md), 리뷰 RAG/군집은 [review-search](review-search.md)/[review-clustering](review-clustering.md). 토스트 watcher 컴포넌트(`ReviewAskToaster`/`ResummarizeToaster`)는 [web](web.md)/[mobile](mobile.md) 루트에 마운트.
+  - **`busApi` → `Routes.Bus.{stationSearch, stationsNearby, stationArrivals, busPositions, routeDetail}`** (공개, 토큰 불필요 — [friendly](friendly.md) 가 서울시 API 프록시). **`busFavoriteApi` → `Routes.Bus.{favorites, favoriteStation, favoriteRoute, favoritesSync}`** (Bearer 인증 필수). 폴링 훅(도착 30s/위치 15s)이 실시간 조회를 반복하지만 서버 셀 캐시로 업스트림 부하는 낮음.
+- UI 측 사용처는 [web](web.md)/[mobile](mobile.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행은 [schedule](schedule.md), 리뷰 RAG/군집은 [review-search](review-search.md)/[review-clustering](review-clustering.md), 버스는 [bus](bus.md)(마커/형상은 [utils](utils.md)). 토스트 watcher 컴포넌트(`ReviewAskToaster`/`ResummarizeToaster`)는 [web](web.md)/[mobile](mobile.md) 루트에 마운트.
 
-## 4. API Surface [coverage: high — 35 sources]
+## 4. API Surface [coverage: high — 37 sources]
 
 **API 클라이언트 (`api/`)**
 - `configureApi(cfg)`, `getApiConfig()`, `apiFetch<T>(path, init)`, `ApiError`. `FormData` body 면 Content-Type 자동 스킵.
@@ -491,6 +509,8 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - `settlementExtractionApi`: `upload(file: Blob)` (FormData with field name `'file'`), `extract(input)`, **`previewBlob(token): Promise<Blob>`** (apiFetch 미사용 — 직접 `fetch` + `getApiConfig().getToken?.()` 헤더 부착 후 `res.blob()` 반환; binary 라 JSON 파싱 우회).
 - `settlementContactApi`: `list(query? = { take: 50 })` (검색어 q 옵션), `update(id, input)`, `remove(id)`.
 - **`settlementDraftApi` (신규)**: `list(): Promise<ListSettlementDraftsResultType>`, `upsert(input: UpsertSettlementDraftInputType): Promise<SettlementDraftType>` (PUT — 서버가 userId+placeId 로 매칭 후 upsert, id 모르고도 호출 가능), `remove(id): Promise<void>`.
+- **`busApi` (신규, 공개 — 토큰 불필요)**: `searchStations(q, { force? })` (force=true 만 `?force=true` 부착), `nearbyStations(lat, lng, { radius? })` (radius m 지정 시만 쿼리 부착), `stationArrivals(arsId)`, `busPositions(busRouteId, { startOrd, endOrd }?)` (opts 생략 시 노선 전체 차량, 지정 시 구간 — 서버 제약 endOrd ≥ startOrd·구간 ≤ 50), `routeDetail(busRouteId)`. 전부 `Routes.Bus.*`.
+- **`busFavoriteApi` (신규, Bearer 인증)**: `list()`, `upsertStation(stId, body: BusFavoriteStationUpsertBodyType)` (PUT), `removeStation(stId)` (DELETE), `upsertRoute(stId, busRouteId, body: BusFavoriteRouteUpsertBodyType)` (PUT), `removeRoute(stId, busRouteId)` (DELETE), `sync(body: BusFavoritesSyncBodyType)` (POST — 게스트 저장분 union 병합, 멱등). **변경 함수는 전부 변경 후 전체 `BusFavoritesResultType` 반환** (클라가 diff 없이 캐시 교체), 상한 초과 PUT 은 400.
 
 **React Query 훅 (`hooks/`)**
 - 인증: `useCurrentUser`, `useLogin`, `useRegister`, `useLogout`
@@ -537,6 +557,16 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - `useDeleteSettlementDraft()` — mutation, 같은 invalidate
   - **`useSettlementDraftHydrate(placeId: string | null): { hydrated: boolean; matched: SettlementDraftType | null }`** — list fetch, placeId 매치되는 draft 가 있으면 `useSettlementDraftStore.setState` 로 store 의 `participants` / `rounds` overwrite. **`hydratedForRef` 로 placeId당 1회만 hydrate** — list invalidate→refetch 로 `list.data` 가 새 참조여도 같은 placeId 면 재overwrite 안 함(자동저장 in-flight 입력 보호). 비로그인이거나 list 가 실패하면 즉시 `hydrated = true` 로 진행(sessionStorage-only 모드).
   - **`useSettlementDraftAutoSync({ placeId, placeNameHint, hydrated, initialDraftId?, enabled?, debounceMs = 3000 }): { status, savedAt, draftId }`** — store subscribe + debounce 후 upsert. 마운트 시점 baseline 을 잡아 실 편집 있을 때만 저장. 로그인(`useAuthStore.token`) + `hydrated` 일 때만 활성, 아니면 `status: 'disabled'`. 반환 `draftId` 는 `useCreateSettlement` 의 `fromDraftId` 로 그대로 사용.
+- **버스 (신규)**:
+  - `useBusStationSearch(q: string)` — `['bus', 'stations', 'search', trimmed]`, `staleTime: 24h`. q trim 후 2~50자일 때만 `enabled`(서버 제약 FE 미러). `placeholderData: enabled ? (prev) => prev : undefined` — 짧은 검색어로 돌아오면 잔상 제거.
+  - `useBusNearbyStations(lat: number | null, lng: number | null, radius?)` — `['bus', 'stations', 'nearby', keyLat, keyLng, radius ?? null]`, `staleTime: 60s`. 좌표가 null 아닐 때만 `enabled`, **키에 `toFixed(4)`(≈11m) 스냅** 으로 사소한 GPS 흔들림에 재호출 안 됨.
+  - `useBusStationsRefresh()` — mutation, `busApi.searchStations(q, { force: true })`. onSuccess 시 같은 search 키를 `cancelQueries` 후 응답으로 `setQueryData` 직접 교체(일반 쿼리 뒤늦은 응답의 롤백 레이스 차단, invalidate 안 함).
+  - `useBusStationArrivals(arsId: string | null)` — `['bus', 'stations', 'arrivals', arsId]`, **`refetchInterval: 30_000`**, `staleTime: 0`, `gcTime: 60s`. arsId 존재 && `!== '0'`(가상정류장 서버 400) 일 때만 `enabled`. placeholderData 로 30s 갱신 사이 패널 깜빡임 방지.
+  - `useBusPositions(busRouteId: string | null)` — `['bus', 'positions', busRouteId]`, **`refetchInterval: 15_000`**, `staleTime: 0`, `gcTime: 30s`. 노선 전체 실시간 차량(구간 조회에서 전환 — 쿼터 비용 동일, 선택 즉시 조회).
+  - `useBusRouteDetail(busRouteId: string | null)` — `['bus', 'routes', busRouteId, 'detail']`, `staleTime: 24h`, 폴링 없음(형상 사실상 정적). busRouteId 선택 시에만 조회.
+  - **폴링 3훅(도착/위치)은 `refetchIntervalInBackground` 기본 false 에 의존** — 탭 비활성 시 폴링 자동 중단으로 일 1,000건(개발계정) 한도 절약.
+- **버스 즐겨찾기 (신규)**:
+  - `useBusFavorites(): BusFavoritesApi` — 게스트 로컬 + 로그인 서버 하이브리드 단일 훅. `{ stations, routes, isStationFavorite(stId), isRouteFavorite(stId, busRouteId), toggleStation(item), toggleRoute(item) }`. 서버 목록 키 `['bus', 'favorites']`(`enabled: loggedIn`, staleTime 60s). 토글은 서버 목록 포함 여부로 upsert/remove 분기 → 응답(전체 목록)으로 `setQueryData` 교체. pending 중 같은 항목 연타는 in-flight ref Set 무시. 로그인 직후 게스트 저장분 있으면 `sync` 1회(useEffect, `syncedRef` StrictMode 가드) → 성공 시 게스트 `clearAll` + 캐시 교체.
 
 **SSE 매니저 (`hooks/summarySseManager.ts`)** — 변경 없음. `subscribe(key, { onSnapshot(snap, prev), onReview, onLog? })`, place/canonical 키 union, heartbeat 5s, idle 15s, backoff 1.5s→60s.
 
@@ -559,6 +589,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - **세부 분배 그룹 (신규) — `applyGroupSplits(roundCID, groups[])` (통째 교체) / `addGroupSplit(roundCID, group)` (returns clientId) / `updateGroupSplit(roundCID, groupCID, patch)` / `removeGroupSplit(roundCID, groupCID)`**. items 변경 액션이 내부에서 `pruneGroupItems` 로 끊긴 항목 참조 자동 정리(전체 비면 `groupSplits: null` 압축). 그룹 멤버 자격은 `isEligibleGroupMember`, 계산기 입력 변환은 `draftGroupsToCalcInputs`.
   - persist key `settlement-draft-v1`, **version `6`** (v1→…→v4→**v5(round 에 groupSplits 추가)→v6(잔여 수령자 단일 id → `leftoverParticipantClientIds` 배열 — `migrateCategoryAdjustments`)** 마이그레이션 체인). storage 는 **`setSettlementDraftStorage(adapter)` 주입형** — 미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` (SSR/test 안전).
   - 노출 타입: `SettlementDraft` / `DraftParticipant` / `DraftItem` / `DraftRound` / `DraftAttendance` / `DraftCategoryAdjustment` (이제 `leftoverParticipantClientIds: string[]`) / `DraftCategoryAdjustments` / **`DraftItemGroup` / `DraftGroupMember`** / `ExcludeKey`.
+- **`useBusFavoriteStore` (신규)**: 게스트 버스 즐겨찾기 — `{ stations: BusFavoriteStationItemType[]; routes: BusFavoriteRouteItemType[] }`(등록순 배열) + `toggleStation`/`toggleRoute`(일치 있으면 제거, 없으면 push; 상한 `BUS_FAVORITES_MAX` 도달 상태 추가 시도면 무동작+`false`, 그 외 `true`)/`removeStation`/`removeRoute`/`clearAll`(sync 성공 후 비움). persist key `bus-favorites-v1` v1, `partialize` 로 `{stations, routes}` 만 영속. storage 는 **`setBusFavoriteStorage(adapter)` lazy resolver** — 웹 `window.localStorage` 자동 / 앱 AsyncStorage 주입 / 둘 다 없으면 `NO_OP_STORAGE`. `reviewAskStore` 와 같은 패턴.
 
 **UI / 디자인 / 상수** — UI 8 컴포넌트·상수 불변. **`design/tokens.ts` 다크 모드 토큰 가독성 개선** —
 `palette.zinc400(#a1a1aa)` 추가, `darkColors.textMuted` `zinc500→zinc400`(AA 4.5:1 회복), `darkColors.border`
@@ -566,7 +597,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 선택의 영속화는 플랫폼별(웹 localStorage / 앱 AsyncStorage) — Key Decisions 참고. (`palette/lightColors/
 darkColors/space/radius/typography/duration`, `APP_NAME` / `QUERY_STALE_TIME` / `QUERY_GC_TIME` 노출 모양 불변.)
 
-## 5. Data [coverage: high — 16 sources]
+## 5. Data [coverage: high — 18 sources]
 
 **Auth 상태 모양** (`stores/authStore.ts`)
 ```ts
@@ -701,6 +732,21 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   - `useListSettlementDrafts` → `['settlement-draft', 'list']`, `staleTime: 30_000`
   - `useUpsertSettlementDraft` / `useDeleteSettlementDraft` onSuccess → `['settlement-draft', 'list']` invalidate
   - `useCreateSettlement` 의 onSuccess 가 `['settlement']` 전체 invalidate 하지만 draft 캐시는 직접 안 건드림 — 서버가 `fromDraftId` 로 함께 삭제했으면 다음 list refetch 때 빠짐. 호출자가 즉시 UI 에서 제거하고 싶으면 별도 `qc.invalidateQueries(['settlement-draft'])` 또는 mutation cache eviction 필요.
+- **버스 (신규)** — 전부 `['bus', ...]` prefix:
+  - `['bus', 'stations', 'search', trimmed]` (staleTime 24h) / `['bus', 'stations', 'nearby', keyLat(toFixed4), keyLng(toFixed4), radius ?? null]` (staleTime 60s) / `['bus', 'stations', 'arrivals', arsId]` (30s 폴링, staleTime 0) / `['bus', 'positions', busRouteId]` (15s 폴링, staleTime 0) / `['bus', 'routes', busRouteId, 'detail']` (staleTime 24h).
+  - `['bus', 'favorites']` (로그인만 `enabled`, staleTime 60s) — 즐겨찾기 mutation(upsert/remove/sync)이 응답 전체 목록을 `setQueryData` 로 직접 교체(invalidate 아님).
+  - 폴링 훅은 `refetchIntervalInBackground` 기본 false 라 탭 비활성 시 자동 정지. `useBusStationsRefresh` 는 search 키를 `cancelQueries` 후 force 응답으로 교체.
+
+**Bus favorites 게스트 상태** (`stores/busFavoriteStore.ts`)
+```ts
+interface BusFavoriteState {
+  stations: BusFavoriteStationItemType[];  // 등록순 배열 (persist)
+  routes: BusFavoriteRouteItemType[];      // 등록순 배열 (persist)
+}
+```
+- 키 `bus-favorites-v1`, version 1, `partialize` 로 `{stations, routes}` 만 영속(액션 제외).
+- storage 는 `setBusFavoriteStorage(storage)` lazy resolver — 웹 `window.localStorage` 자동 / 앱 AsyncStorage 주입 / SSR·test `NO_OP_STORAGE`. `settlementDraftStore`·`reviewAskStore` 와 동일 주입 패턴.
+- 로그인 사용자의 즐겨찾기는 이 store 가 아니라 서버(`busFavoriteApi`) + React Query 캐시(`['bus','favorites']`). `useBusFavorites` 가 token 유무로 둘 중 하나를 반환.
 
 **ReviewSummary 분석 필드 머지** — 기존 동일.
 
@@ -708,8 +754,13 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 
 **SSE 스트림 상태** (`useCrawlJobStream`) — 기존 동일.
 
-## 6. Key Decisions [coverage: high — 33 sources]
+## 6. Key Decisions [coverage: high — 35 sources]
 
+- **버스 실시간 폴링은 `refetchIntervalInBackground` 기본 false 에 의존해 쿼터를 지킨다** — 도착(30s)/위치(15s) 폴링이 개발계정 일 1,000건 한도를 빨리 소진할 수 있어, 별도 visibilityState 리스너를 붙이는 대신 React Query 가 탭 비활성/비포커스 시 interval 을 자동 멈추는 기본 동작(`refetchIntervalInBackground: false`)을 그대로 활용한다. + `enabled` 로 정류장/노선 선택 시에만 구독, arsId `'0'`(가상정류장) 은 서버 400 이라 훅에서 `enabled` 차단. 정적 데이터(검색/노선상세)는 폴링 없이 staleTime 24h 로 재호출 억제.
+- **버스 좌표 쿼리 키는 `toFixed(4)`(≈11m) 스냅** — `useBusNearbyStations` 가 원좌표를 그대로 키에 쓰면 GPS 미세 흔들림마다 키가 갈라져 서버(셀 캐시)를 계속 때린다. 소수 4자리로 스냅해 같은 자리 재조회를 클라에서도 차단(서버 격자 캐시 staleTime 60s 와 짝).
+- **버스 즐겨찾기는 게스트 로컬 + 로그인 서버 하이브리드, 변경 함수가 전체 목록을 반환** — `useBusFavorites` 단일 훅이 token 유무로 게스트 store / 서버 캐시를 고른다. 서버 변경(upsert/remove/sync) 응답이 **변경 후 전체 `BusFavoritesResult`** 라 클라가 diff·낙관적 업데이트 없이 `setQueryData` 로 통째 교체 — 정합성 단순화. 로그인 직후 게스트 저장분을 `sync` 로 union 병합(멱등) 후 게스트 `clearAll`, 실패 시 로컬 유지(다음 마운트 재시도). 병합만 외부 시스템 동기화라 useEffect 허용(`syncedRef` StrictMode 이중 실행 가드), 나머지 파생 판정(`isStationFavorite` 등)은 렌더 중 계산.
+- **버스 강제 새로고침은 `cancelQueries` 후 `setQueryData`(invalidate 아님)** — `useBusStationsRefresh` 가 force=true 로 서울시 API 재호출 후, 같은 search 키로 진행 중이던 일반(force 없는) 쿼리가 뒤늦게 응답해 force 결과를 롤백하는 레이스를 `cancelQueries` 로 막고 응답을 캐시에 직접 박는다 — invalidate 하면 일반 요청을 한 번 더 보내 한도를 깎으므로 회피.
+- **버스 게스트 store 도 `setBusFavoriteStorage` lazy resolver** — `reviewAskStore`/`settlementDraftStore` 와 같은 storage 주입 패턴(웹 localStorage 자동 / 앱 AsyncStorage 주입 / NO_OP). 크로스플랫폼 persist store 의 공통 관용으로 굳어짐.
 - **18차(2026-06-25): 비동기 잡 진행/완료를 React 바깥 전역 store 에 두고 토스트 watcher 가 탭을
   가로질러 알린다.** 오래 걸리는 LLM/큐 작업(공개 Ask, 단건 재요약)을 트리거한 화면을 떠나도 결과·완료
   알림이 살아 있어야 하므로 컴포넌트 로컬 state 가 아니라 Zustand 전역 store 에 둔다. 두 변형 — store 가
@@ -884,8 +935,14 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   Content-Type 안 붙임, AI path 하드코드, 로직/UI 플랫폼 분리, 빌드 없는 소스 노출, 유연한
   React peer, SSE 토큰은 쿼리스트링, 중복 이벤트 방어** — 모두 기존 결정 유지.
 
-## 7. Gotchas [coverage: high — 30 sources]
+## 7. Gotchas [coverage: high — 32 sources]
 
+- **버스 실시간 폴링은 탭이 활성이면 계속 돈다 — 화면에서 선택 해제 책임은 호출자** — `useBusStationArrivals`/`useBusPositions` 는 `enabled`(arsId/busRouteId 존재) + 탭 활성 조건에서만 폴링을 멈춘다. 탭을 켜둔 채 정류장/노선을 선택 상태로 오래 방치하면 30s/15s 폴링이 한도(개발계정 1,000건/일)를 소진하므로, 페이지가 상세 패널을 닫을 때 arsId/busRouteId 를 null 로 내려 `enabled` 를 꺼야 한다. `refetchIntervalInBackground` false 는 "다른 탭/최소화" 만 커버하지, 같은 탭에서 보고만 있는 상태는 못 막는다.
+- **arsId `'0'` 은 가상정류장 — 도착정보 호출 전 반드시 차단** — 서버가 arsId `'0'` 을 400 으로 거절한다. `useBusStationArrivals` 가 `enabled: !!arsId && arsId !== '0'` 로 막고 있으니, 직접 `busApi.stationArrivals('0')` 를 부르거나 다른 경로로 호출하면 400. 마주보는 동일 이름 정류장에 `'0'` 이 섞일 수 있어 리스트 렌더에서도 도착 조회 비활성 처리 필요.
+- **버스 강제 새로고침에 `invalidateQueries` 를 쓰면 한도가 깎인다** — `useBusStationsRefresh` 는 의도적으로 `cancelQueries` + `setQueryData` 만 한다. 여기서 `invalidateQueries` 로 바꾸면 force 응답을 받은 뒤 일반(캐시) 쿼리가 한 번 더 재호출돼 서울시 API 를 이중으로 때린다. 캐시 교체 방식을 유지할 것.
+- **버스 즐겨찾기 `sync` 는 성공해야 게스트 store 를 비운다** — `useBusFavorites` 의 로그인 직후 병합이 실패하면 `syncedRef` 를 다시 false 로 돌리고 게스트 저장분을 **남겨둔다**(다음 마운트 재시도, UI 없음). 그래서 sync 실패 상태에서는 게스트 로컬과 서버가 잠시 어긋날 수 있음 — 서버 목록이 진실원이고 게스트분은 아직 미병합 대기라는 걸 감안. 로그아웃(token null) 시 `syncedRef` 리셋으로 재로그인 때 다시 병합.
+- **버스 nearby 좌표 `toFixed(4)` 스냅 — 11m 이내 이동은 재조회 안 됨** — 의도된 동작(GPS 흔들림 차단)이지만, 사용자가 10m 남짓 움직여도 새 주변 정류장을 안 가져온다. "내 위치" 재조회로 반경을 실제로 벗어나야 키가 갱신됨.
+- **`busApi.busPositions` 는 opts 생략 시 노선 전체 차량** — 구간(startOrd/endOrd) 조회에서 노선 전체(`getBusPosByRtid`)로 전환됐다. `useBusPositions(busRouteId)` 는 opts 없이 호출해 전 차량을 받는다 — 특정 구간만 필요하면 `busApi.busPositions(id, { startOrd, endOrd })` 를 직접 호출(서버 제약: endOrd ≥ startOrd, 구간 ≤ 50).
 - **review-search/review-clustering 은 `Routes` 를 import 하면 안 된다** — vite esbuild prebundle 이
   네임스페이스를 트리쉐이킹으로 드롭해 경로가 undefined 가 된다(ai.api.ts 가 같은 이유로 PREFIX 하드코딩).
   두 api 모듈은 모듈 상수(`RS_PREFIX`/`RC_PREFIX`/`PUBLIC_PREFIX`)로 문자열을 직접 둔다. 백엔드 라우트가
@@ -1006,11 +1063,11 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   HTMLElement 필요**, **`invalidateQueries` prefix 매칭 주의**, **`testProvider`/`deleteProvider`
   빈 body** — 모두 기존 항목 유지.
 
-## 8. Sources [coverage: high — 66 sources]
+## 8. Sources [coverage: high — 71 sources]
 
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
-- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: review-search/review-clustering/randomCrawl/logs/telegram-settings api + useReviewSearch/useReviewClusters/useRandomCrawl/useLogs/useLlmTelemetry/useTelegramSettings hook + reviewAskStore/resummarizeStore/activeTablingBulkSaveJobStore + settlement/groupSuggestion re-export 추가*
+- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: review-search/review-clustering/randomCrawl/logs/telegram-settings api + useReviewSearch/useReviewClusters/useRandomCrawl/useLogs/useLlmTelemetry/useTelegramSettings hook + reviewAskStore/resummarizeStore/activeTablingBulkSaveJobStore + settlement/groupSuggestion + **bus.api/bus-favorite.api + useBus/useBusFavorites + busFavoriteStore** re-export 추가*
 - [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts)
 - [packages/shared/src/api/auth.api.ts](../../packages/shared/src/api/auth.api.ts)
 - [packages/shared/src/api/picks.api.ts](../../packages/shared/src/api/picks.api.ts)
@@ -1034,6 +1091,8 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/api/settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts)
 - [packages/shared/src/api/settlement-contact.api.ts](../../packages/shared/src/api/settlement-contact.api.ts)
 - [packages/shared/src/api/settlement-draft.api.ts](../../packages/shared/src/api/settlement-draft.api.ts) (NEW)
+- [packages/shared/src/api/bus.api.ts](../../packages/shared/src/api/bus.api.ts) (NEW) — 서울시 버스 공개 조회(검색/주변/도착/위치/노선상세)
+- [packages/shared/src/api/bus-favorite.api.ts](../../packages/shared/src/api/bus-favorite.api.ts) (NEW) — 버스 즐겨찾기 서버 저장분(Bearer, 변경 시 전체 목록 반환)
 - [packages/shared/src/hooks/useAuth.ts](../../packages/shared/src/hooks/useAuth.ts)
 - [packages/shared/src/hooks/usePicks.ts](../../packages/shared/src/hooks/usePicks.ts)
 - [packages/shared/src/hooks/useAdmin.ts](../../packages/shared/src/hooks/useAdmin.ts)
@@ -1058,6 +1117,8 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/hooks/useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts)
 - [packages/shared/src/hooks/useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts)
 - [packages/shared/src/hooks/useSettlementDraft.ts](../../packages/shared/src/hooks/useSettlementDraft.ts) — *modified: useSettlementDraftHydrate placeId당 1회 가드(hydratedForRef) — 자동저장 중 입력 보호*
+- [packages/shared/src/hooks/useBus.ts](../../packages/shared/src/hooks/useBus.ts) (NEW) — 검색/주변/도착/위치/노선상세 훅(폴링 + refetchIntervalInBackground=false 가드)
+- [packages/shared/src/hooks/useBusFavorites.ts](../../packages/shared/src/hooks/useBusFavorites.ts) (NEW) — 게스트 로컬 + 로그인 서버 하이브리드 즐겨찾기 훅
 - [packages/shared/src/stores/authStore.ts](../../packages/shared/src/stores/authStore.ts)
 - [packages/shared/src/stores/activeCrawlJobStore.ts](../../packages/shared/src/stores/activeCrawlJobStore.ts)
 - [packages/shared/src/stores/activeGroupingJobStore.ts](../../packages/shared/src/stores/activeGroupingJobStore.ts)
@@ -1068,6 +1129,7 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - [packages/shared/src/stores/reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts) (NEW)
 - [packages/shared/src/stores/resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts) (NEW)
 - [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — *modified: groupSplits(세부 분배 그룹) + DraftItemGroup/DraftGroupMember + 잔여 수령자 배열(v5→v6), persist version 4→6*
+- [packages/shared/src/stores/busFavoriteStore.ts](../../packages/shared/src/stores/busFavoriteStore.ts) (NEW) — 게스트 버스 즐겨찾기 zustand persist(bus-favorites-v1, setBusFavoriteStorage lazy resolver)
 - [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
 - [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts) — *modified: zinc400 추가 + 다크 textMuted/border 대비비 상향 + lightColors.bg=white*

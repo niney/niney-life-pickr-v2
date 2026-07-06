@@ -1,9 +1,9 @@
 # niney-life-pickr-v2 Knowledge Base
 
-Last compiled: 2026-06-25
-Total topics: 22 | Total concepts: 13 | Mode: codebase
+Last compiled: 2026-07-06
+Total topics: 23 | Total concepts: 14 | Mode: codebase
 
-선택을 대신 골라주는 서비스 — pnpm + Turborepo 모노레포(Fastify API + Vite 웹 + Expo 앱)의 컴파일된 위키. 처음 본다면 [project-overview](topics/project-overview.md) → 관심 토픽 순서로 읽는 것을 권장. 공개 페이지(`/`, `/restaurants`, `/r/:placeId` 공유)·정산하기·어드민 운영 도구가 한 SPA 안에 분리되어 있고, 18차 라운드에 **리뷰 RAG 문맥검색·군집화·텔레그램 봇 자동 발굴·범용 작업 로그**가 신규로 들어왔다.
+선택을 대신 골라주는 서비스 — pnpm + Turborepo 모노레포(Fastify API + Vite 웹 + Expo 앱)의 컴파일된 위키. 처음 본다면 [project-overview](topics/project-overview.md) → 관심 토픽 순서로 읽는 것을 권장. 공개 페이지(`/`, `/restaurants`, `/r/:placeId` 공유)·정산하기·어드민 운영 도구가 한 SPA 안에 분리되어 있고, 18차 라운드에 **리뷰 RAG 문맥검색·군집화·텔레그램 봇 자동 발굴·범용 작업 로그**가 신규로 들어왔다. 이어 19차에 **서울시 버스 조회**(정류장 검색·실시간 도착·노선·실시간 차량 위치·즐겨찾기)가 공개 기능으로 합류했다(현재 웹 전용).
 
 > **용어**: 이 위키는 **웹**(`apps/web`) / **앱**(`apps/mobile`) / **모바일**(=웹의 작은 화면)을 구분해서 쓴다. 슬러그·디렉터리·스크립트 식별자는 `mobile`/`web` 그대로. 자세한 규칙은 [schema.md Terminology](schema.md#terminology--웹--앱--모바일).
 
@@ -21,6 +21,7 @@ Total topics: 22 | Total concepts: 13 | Mode: codebase
 | [random-crawl](topics/random-crawl.md) | random-crawl, 맛집-자동-발굴, discover, /discover, 지역-랜덤-발굴, awaiting_selection, timeout-action, randomCrawlRegistry, RandomCrawlConfig, RandomCrawlRun, regions, regions.json, build-regions, 사람이-끼는-2단계, run-events | 20 | 2026-06-25 | active |
 | [telegram](topics/telegram.md) | telegram, telegram-bot, long-polling-bot, getUpdates, force-reply, inline-keyboard, callback-query, discover-command, search-command, stats-command, region-stats-telegram, telegram-config, telegram-settings, reconfigure-bot, resolve-chat-id, chat-id-discovery, db-config-env-fallback, crawl-progress-edit, in-place-edit-race, token-masking | 16 | 2026-06-25 | active |
 | [logs](topics/logs.md) | logs, operation-log, operation-run, operation-report, log-analysis, failure-report, retention, log-retention, OperationLogService, LogAnalysisService, run-instrumentation, log-config, parentRunId, allocSeq, crawl-job-log-legacy, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage | 16 | 2026-06-25 | active |
+| [bus](topics/bus.md) | seoul-bus, 서울시-버스, ws-bus-go-kr, 정류장-검색, bus-station-search, 도착정보, bus-arrivals, 노선-보기, bus-route, 실시간-버스, bus-position, 버스-위치, 즐겨찾기, bus-favorites, favorite-hybrid, guest-local-server, toLatLng, arsId, busRouteId, getStationByName, getStationByUid, getBusPosByRouteSt, route-path-follow, 차량-마커, vehicle-interpolation, markerFrame, routePath, nearby-cell-cache, daily-quota, BUS_API_KEY | 39 | 2026-07-06 | active |
 | [schedule](topics/schedule.md) | schedule, scheduler, cron, croner, normalize-merge, 정규화-머지, 주기-자동-실행, ScheduleConfig, ScheduleRun, scheduleRegistry, schedule-sse, overlap-skip, single-inflight, bootstrap-interrupted, MAX_TARGETS_PER_RUN, operation-log-dual, parentRunId | 13 | 2026-06-25 | active |
 | [analytics](topics/analytics.md) | global-menu-merge, categoryPath, category-tree, buildCategoryTree, GLOBAL_MERGE_VERSION, taxonomy-v3, 재료-메뉴군, callChunksPooled, MERGE_POOL_SIZE, 청크-캐시, GlobalMenuMergeChunkCache, OOM, LINK_INSERT_BATCH, mergeInflight, 청크-재시도, snapshot-global-merge, mappings-array, ollama-grammar, chunk-10 | 16 | 2026-06-25 | active |
 | [menu-grouping](topics/menu-grouping.md) | menu-canonical, restaurant-menu-normalization, menusGroup, menusRanking, grouping-job, MENU_GROUPING_VERSION, split-merge-redesign, parse_failed, packBySimilarity, pickCanonicalName, union-find, 인덱스-배열-출력, unmappedMenus | 11 | 2026-06-25 | active |
@@ -38,19 +39,20 @@ Total topics: 22 | Total concepts: 13 | Mode: codebase
 
 | Concept | Connects | Last Updated |
 |---------|----------|-------------|
-| [zod-ssot-buildless](concepts/zod-ssot-buildless.md) | api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram | 2026-06-25 |
+| [zod-ssot-buildless](concepts/zod-ssot-buildless.md) | api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus | 2026-07-06 |
 | [public-admin-route-split](concepts/public-admin-route-split.md) | friendly, api-contract, shared, web, map, settlement, review-search, review-clustering, logs | 2026-06-25 |
 | [sse-token-auth](concepts/sse-token-auth.md) | friendly, crawl, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai | 2026-06-25 |
-| [platform-ui-split](concepts/platform-ui-split.md) | shared, web, mobile, utils, map, settlement, review-search, review-clustering | 2026-06-25 |
+| [platform-ui-split](concepts/platform-ui-split.md) | shared, web, mobile, utils, map, settlement, review-search, review-clustering, bus | 2026-07-06 |
 | [workspace-package-resolution](concepts/workspace-package-resolution.md) | api-contract, friendly, shared, web, review-search, review-clustering | 2026-06-25 |
 | [stream-driven-cache-merge](concepts/stream-driven-cache-merge.md) | crawl, friendly, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, logs | 2026-06-25 |
-| [in-memory-singleton-gates](concepts/in-memory-singleton-gates.md) | ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram | 2026-06-25 |
+| [in-memory-singleton-gates](concepts/in-memory-singleton-gates.md) | ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus | 2026-07-06 |
 | [versioned-llm-prompts](concepts/versioned-llm-prompts.md) | ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs | 2026-06-25 |
 | [db-config-env-fallback](concepts/db-config-env-fallback.md) | ai, map, telegram, friendly | 2026-06-25 |
 | [operation-log-instrumentation](concepts/operation-log-instrumentation.md) | logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai | 2026-06-25 |
 | [canonical-corpus-fanout](concepts/canonical-corpus-fanout.md) | canonical, review-search, review-clustering, friendly | 2026-06-25 |
 | [cross-tab-async-job-toast](concepts/cross-tab-async-job-toast.md) | shared, web, mobile, review-search | 2026-06-25 |
 | [ssr-lite-head-injection](concepts/ssr-lite-head-injection.md) | friendly, settlement, web | 2026-06-25 |
+| [external-api-proxy-fixture](concepts/external-api-proxy-fixture.md) | bus, crawl, map, telegram | 2026-07-06 |
 
 ## How to navigate
 
@@ -63,6 +65,8 @@ Total topics: 22 | Total concepts: 13 | Mode: codebase
 - **정산하기** (N차 + 세부 분배 잔수 + 공유) → [settlement](topics/settlement.md) (도메인 전체 — rounds·extraction·group-split·share·draft). 앱 풀구현은 [mobile](topics/mobile.md)
 - **공유 링크 미리보기 / SEO** (`/share/settlements/:token`, `/r/:placeId`, sitemap) → [ssr-lite-head-injection](concepts/ssr-lite-head-injection.md) → [friendly](topics/friendly.md) share-preview/restaurant-preview
 - **백엔드 작업** → [friendly](topics/friendly.md), 크롤이면 [crawl](topics/crawl.md)(네이버/DC/캐치테이블/**테이블링**), LLM 이면 [ai](topics/ai.md), 지도 키면 [map](topics/map.md)
+- **버스 정류장/도착/노선/실시간 차량** (`/bus`, 공개·비로그인) → [bus](topics/bus.md)(`ws.bus.go.kr` friendly 프록시 — 검색·도착·위치·노선·즐겨찾기, **웹 전용**) → [shared](topics/shared.md) `useBus` 폴링 + [utils](topics/utils.md) `busMarker`/`routePath`
+- **외부 API 어댑터 패턴** (버스·크롤·지도·텔레그램 — 프록시+정규화+마스킹+probe→fixture) → [external-api-proxy-fixture](concepts/external-api-proxy-fixture.md)
 - **출처 가로지르기 같은 가게 묶기** → [canonical](topics/canonical.md) (4소스 — 테이블링 합류 + place↔partner 승격). 분석이 멤버 전체에 fan-out 하는 패턴은 [canonical-corpus-fanout](concepts/canonical-corpus-fanout.md)
 - **지역 통계 / choropleth 지도** → [web](topics/web.md) `RegionStatsPanel`/`RegionStatsMap`(시군구 색칠) → [map](topics/map.md) point-in-polygon → [friendly](topics/friendly.md) region-derive → [telegram](topics/telegram.md) `/stats`
 - **메뉴 분석 도메인** → [menu-grouping](topics/menu-grouping.md)(v2 분할·머지 재설계, parse_failed 해소) → [analytics](topics/analytics.md)(택소노미 v3 + 청크 병렬·캐시·OOM 수정)
@@ -75,10 +79,11 @@ Total topics: 22 | Total concepts: 13 | Mode: codebase
 - **LLM 프롬프트/스키마 변경** → [versioned-llm-prompts](concepts/versioned-llm-prompts.md) (`ANALYSIS/MENU_GROUPING/GLOBAL_MERGE/EXTRACTION/ENRICH/CLUSTERING_VERSION`)
 - **`@repo/*` import 에러로 막힐 때** → [workspace-package-resolution](concepts/workspace-package-resolution.md)
 - **SSE/캐시 머지 패턴** → [stream-driven-cache-merge](concepts/stream-driven-cache-merge.md), 동시성 제어는 [in-memory-singleton-gates](concepts/in-memory-singleton-gates.md)
-- **횡단 패턴** → [concepts/](concepts/) 디렉터리 (13개)
+- **횡단 패턴** → [concepts/](concepts/) 디렉터리 (14개)
 
 ## Recent Changes
 
+- **2026-07-06 (19th compile)**: **서울시 버스 조회 기능(1~8차) 신규 + 네이버 메뉴 그룹 크롤.** 신규 토픽 1개: [bus](topics/bus.md)(`ws.bus.go.kr` friendly 프록시 — 정류장 키워드/주변 검색 + 실시간 도착 + 노선 보기(폴리라인+정류소) + 실시간 차량 위치·이동보간·노선 형상 따라가기·방향 화살표·따라가기 토글 + 즐겨찾기 **게스트 로컬 + 로그인 서버 하이브리드**. 공개·비로그인. 30일 정류소 캐시 + 셀 격자 주변 캐시 + in-memory 일일 업스트림 쿼터 게이트(1,000건/일 한도). 좌표는 서버가 `toLatLng` **값범위로 WGS84 판정**(필드명 불신) + zod 강제. 폴링(SSE 아님) + 탭 비활성 자동정지. **웹 전용 — 앱 미구현**). 신규 컨셉 1개: [external-api-proxy-fixture](concepts/external-api-proxy-fixture.md)(외부 API 를 friendly 단일 신뢰 경계로 — 어댑터 프록시 + 시크릿 마스킹 + 필드명 불신 정규화 + probe→fixture; bus 정본, crawl playwright/HTTP 변형, map(타일 프록시 안 함·키검증 probe)·telegram(단일 서버 long-polling) 발산 변형). 갱신 토픽 10개: [friendly](topics/friendly.md)(113→bus 모듈)/[project-overview](topics/project-overview.md)(공개 기능 흡수)/[web](topics/web.md)(BusPage/bus 컴포넌트/네비/MapCanvas + MenuTab 그룹 렌더 + 어드민 리뷰 노이즈→관점집계)/[shared](topics/shared.md)(66→71 busApi/busFavoriteApi + useBus 6훅/useBusFavorites + busFavoriteStore)/[utils](topics/utils.md)(9→13 busMarker/markerFrame 공용골격/routePath 호길이 투영)/[api-contract](topics/api-contract.md)(31→bus/bus-favorite + MenuGroup + menuGroups)/[crawl](topics/crawl.md)(26→29 naver `/menu/list` extractBaeminMenuGroups + 폴백)/[menu-grouping](topics/menu-grouping.md)(11→19 원본 메뉴 그룹 크롤·영속 `restaurant_menu_groups`/`restaurant_menus` — canonical LLM 정규화와 별개 계층)/[review-search](topics/review-search.md)·[review-clustering](topics/review-clustering.md)(크롤 자동 enrich/군집을 모든 소스 reviewId 기반으로 + lru-cache createRequire interop). 기존 컨셉 3개 신규 인스턴스: [in-memory-singleton-gates](concepts/in-memory-singleton-gates.md)(bus 일일 쿼터 카운터 — 외부 API 예산이라는 8번째 자원 종류), [zod-ssot-buildless](concepts/zod-ssot-buildless.md)(bus 스키마 + 좌표 값범위 계약), [platform-ui-split](concepts/platform-ui-split.md)(busFavoriteStore storage-adapter 3번째 인스턴스 + markerFrame 공용 골격, 단 bus UI 는 웹 전용). 토픽 22→23, 컨셉 13→14. bus + 갱신 토픽 + 신규 컨셉을 병렬 서브에이전트로 컴파일.
 - **2026-06-25 (18th compile)**: **위키 역대 가장 큰 라운드(~70커밋·19일) — 리뷰 지능화 + 운영 자동화 + 4번째 출처 + LLM 게이트/텔레메트리 + 정산 세부 분배 + 맛집 공유/SEO.** 신규 토픽 5개: [review-search](topics/review-search.md)(RAG 문맥검색 — bge-m3 enrich → BM25⊕dense RRF → LLM 리랭크 → RAG → 검증 가드레일), [review-clustering](topics/review-clustering.md)(UMAP→HDBSCAN→c-TF-IDF→LLM 라벨, **Python 사이드카**, canonical 통합 코퍼스), [random-crawl](topics/random-crawl.md)(cron 지역 발굴→텔레그램 후보 선택→크롤, 사람이 끼는 2단계), [telegram](topics/telegram.md)(long-polling 봇 `/search`·`/discover`·`/stats` + 알림 + 설정), [logs](topics/logs.md)(전 기능 횡단 operation-log + 실패 LLM 분석 + 보존). 신규 컨셉 5개: [db-config-env-fallback](concepts/db-config-env-fallback.md)(ai/map/telegram 설정 동형), [operation-log-instrumentation](concepts/operation-log-instrumentation.md)(8+ 도메인 횡단 계측), [canonical-corpus-fanout](concepts/canonical-corpus-fanout.md)(분석이 canonical 멤버 다소스 행 fan-out), [cross-tab-async-job-toast](concepts/cross-tab-async-job-toast.md)(전역 store 가 잡 수명을 UI 수명에서 분리), [ssr-lite-head-injection](concepts/ssr-lite-head-injection.md)(정산+맛집 공유 OG/SEO head 주입 — 16차 보류 후보 추출). 갱신 토픽 11개: [crawl](topics/crawl.md)(17→26 테이블링 4어댑터 + SSE seq 단일화), [ai](topics/ai.md)(25→37 계정 2단 게이트 + 텔레메트리 SSE + 키 1계정 공유·용도별 모델), [settlement](topics/settlement.md)(103→109 세부 분배 잔수 + drink-kinds + EXTRACTION_VERSION 3→4), [analytics](topics/analytics.md)(13→16 청크 병렬·캐시·OOM), [menu-grouping](topics/menu-grouping.md)(9→11 v2 분할·머지 재설계 parse_failed 해소), [friendly](topics/friendly.md)(99→113), [canonical](topics/canonical.md)(19→21 테이블링 4소스 + place↔partner 승격), [map](topics/map.md)(24→26 choropleth + 타일 probe), [api-contract](topics/api-contract.md)(25→31), [shared](topics/shared.md)(54→66), [web](topics/web.md)(98→116)/[mobile](topics/mobile.md)(56→62). 기존 컨셉 8개에 신규 인스턴스. 토픽 17→22, 컨셉 8→13. 모든 토픽 문서를 병렬 서브에이전트로 컴파일.
 - **2026-06-06 (17th compile)**: 주기 자동 실행 스케줄러([schedule](topics/schedule.md)) 신규 + 카테고리 택소노미 v3(재료·메뉴군) + 웹/앱 다크 모드 + 앱 안드로이드 커스텀 탭바. 갱신 토픽 8개. 기존 컨셉 6개 신규 인스턴스.
 - **2026-06-01 (16th compile)**: 정산 공유 OG SSR-lite(미리보기 + 정산표 PNG) + 전방위 perf + ESLint 인프라 전면 연결. 갱신 토픽 9개.

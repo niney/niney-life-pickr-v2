@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_compiled": "2026-06-25",
+  "last_compiled": "2026-07-06",
   "mode": "codebase",
   "topics": [
     "project-overview",
@@ -24,7 +24,8 @@
     "review-clustering",
     "random-crawl",
     "telegram",
-    "logs"
+    "logs",
+    "bus"
   ],
   "concepts": [
     "zod-ssot-buildless",
@@ -39,7 +40,8 @@
     "operation-log-instrumentation",
     "canonical-corpus-fanout",
     "cross-tab-async-job-toast",
-    "ssr-lite-head-injection"
+    "ssr-lite-head-injection",
+    "external-api-proxy-fixture"
   ],
   "source_locations": [
     "README.md",
@@ -242,7 +244,37 @@
     "apps/mobile/src/components/ReviewAskBanner.tsx",
     "apps/mobile/src/components/restaurantDetail/shared/ClusterTopics.tsx",
     "apps/mobile/src/components/settlement/RoundGroupSplitEditor.tsx",
-    "apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx"
+    "apps/mobile/src/components/settlement/RoundGroupSplitNote.tsx",
+    "apps/friendly/src/modules/bus/",
+    "apps/friendly/src/modules/bus/bus-api.adapter.ts",
+    "apps/friendly/src/modules/bus/bus.service.ts",
+    "apps/friendly/src/modules/bus/bus.route.ts",
+    "apps/friendly/src/modules/bus/bus-favorite.service.ts",
+    "apps/friendly/src/modules/bus/bus-favorite.route.ts",
+    "apps/friendly/src/modules/bus/__fixtures__/",
+    "apps/friendly/scripts/probe-bus-api.ts",
+    "apps/friendly/prisma/migrations/20260612102026_add_bus_station_cache/",
+    "apps/friendly/prisma/migrations/20260704074500_add_bus_nearby_cell_cache/",
+    "apps/friendly/prisma/migrations/20260704120000_bus_favorites/",
+    "apps/friendly/prisma/migrations/20260704130000_bus_route_shapes/",
+    "apps/friendly/prisma/migrations/20260627073000_add_restaurant_source_menus/",
+    "packages/api-contract/src/schemas/bus.ts",
+    "packages/api-contract/src/schemas/bus-favorite.ts",
+    "packages/shared/src/api/bus.api.ts",
+    "packages/shared/src/api/bus-favorite.api.ts",
+    "packages/shared/src/hooks/useBus.ts",
+    "packages/shared/src/hooks/useBusFavorites.ts",
+    "packages/shared/src/stores/busFavoriteStore.ts",
+    "packages/utils/src/busMarker.ts",
+    "packages/utils/src/markerFrame.ts",
+    "packages/utils/src/routePath.ts",
+    "apps/web/src/routes/BusPage.tsx",
+    "apps/web/src/components/bus/",
+    "apps/web/src/components/restaurant/detail/MenuTab.tsx",
+    "apps/web/src/components/restaurant/detail/HomeTab.tsx",
+    "apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts",
+    "apps/friendly/src/modules/summary/summary.service.ts",
+    "docs/HANDOFF-bus-station-search.md"
   ],
-  "total_sources_scanned": 760
+  "total_sources_scanned": 800
 }

@@ -1,7 +1,7 @@
 ---
 concept: Zod SSOT + 빌드 없는 src export
 last_compiled: 2026-06-25
-topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram]
+topics_connected: [api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, project-overview, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus]
 status: active
 ---
 
@@ -31,6 +31,8 @@ status: active
 
 - **2026-06**(18차) in [[../topics/review-search]] / [[../topics/review-clustering]] / [[../topics/random-crawl]] / [[../topics/logs]] / [[../topics/telegram]] / [[../topics/api-contract]] / [[../topics/friendly]] / [[../topics/shared]] / [[../topics/web]]: **신규 zod 스키마 5종을 한 라운드에 흡수** — `schemas/review-search.ts`, `schemas/review-clustering.ts`, `schemas/random-crawl.ts`, `schemas/logs.ts`, `schemas/telegram-settings.ts`. 각각이 같은 약속을 반복: 모듈 1개 추가 + `src/index.ts` re-export → friendly 의 대응 라우트(`review-search.route.ts` / `review-clustering.route.ts` / `random-crawl.route.ts` / `logs.route.ts`)가 검증 + OpenAPI 자동 생성, shared 의 API 함수/훅이 `z.infer` 로 타입 도출, web 의 어드민/검색 UI 가 같은 타입 소비. 다섯 도메인이 **한 라운드에 동시 진입**한 것이 17차(schedule 1 도메인)보다 큰 너비 — 보일러플레이트가 도메인 수에 선형 비례하지 않고 "모듈 추가 + 1줄 re-export" 로 고정됨을 다섯 번 연속 확인. 이 다섯은 [[in-memory-singleton-gates]] 의 18차 게이트 인스턴스(reviewSearch/reviewClustering/randomCrawl/logs/telegram)와 **1:1 대응** — 각 도메인의 런타임 게이트와 그 I/O 계약이 같은 라운드에 함께 태어남(게이트가 회계하는 잡 상태/진행률/스킵사유가 곧 SSE 이벤트 스키마).
 - **2026-06**(18차) in [[../topics/settlement]] / [[../topics/api-contract]] / [[../topics/ai]] / [[../topics/friendly]] / [[../topics/web]] (`settlement.drink-kinds.ts` `DRINK_KINDS` 단일 사전): **"올바른 단일 소스" 의 모범 사례** — zod 스키마는 아니지만 같은 buildless leaf 모델 안에 사는 도메인 사전. `DRINK_KINDS` 배열 **한 곳**이 세 소비자를 동시에 먹임: (1) FE 그룹 제안(주류 카테고리 묶기 힌트), (2) 서버 추출 보정(LLM 영수증 추출 결과의 음료 정규화), (3) 프롬프트 힌트(`DRINK_BRAND_PROMPT_HINT` 가 같은 배열에서 파생). 사전을 고치면 세 소비자가 컴파일 타임에 정렬 — `settlement.calculator.ts` 헬퍼가 보여준 "zod 아닌 leaf 도 SSOT 1급 시민" 모델의 또 다른 적용. **이것은 [[in-memory-singleton-gates]]/[[four-source-canonical-merge]] 류 문서에 기록된 `normalizeContactKey` 4곳 복사 안티패턴과 정확히 대비되는 짝** — 같은 leaf 패키지 안에서 한쪽은 단일 사전으로 옳게, 한쪽은 4곳 복사로 틀리게 — "SSOT 의 가치는 자동으로 따라오지 않고, 사전/헬퍼를 leaf 로 끌어올리는 의식적 결정에서만 나온다" 를 한 패키지 안에서 대조 사례로 보여줌.
+
+- **2026-07**(버스) in [[../topics/bus]] / [[../topics/api-contract]] / [[../topics/friendly]] / [[../topics/shared]] / [[../topics/web]]: 버스 도메인 두 스키마 모듈(`schemas/bus.ts`, `schemas/bus-favorite.ts`)이 같은 약속으로 진입. 한 곳 정의 → friendly `bus.route.ts`/`bus-favorite.route.ts` 검증 + OpenAPI 자동 생성, shared `busApi`/`busFavoriteApi` + `useBus`(6훅)/`useBusFavorites` 가 `z.infer` 로 타입 도출, 웹 `BusPage`/`BusStationList`/`BusArrivalPanel`/`BusStationsMap`/`BusFavoriteSection` 이 같은 타입 소비(**앱 컨슈머는 아직 없음 — 웹 전용**). 신규 진입: **좌표 정합성을 zod 값범위로 강제** — 서울시 응답이 필드명(`tmX`/`gpsX`/`posX`)을 신뢰할 수 없어 서버가 `toLatLng` 로 WGS84 를 뽑은 뒤 `z.number().min/max`(lat 33~39, lng 124~132)로 응답 스키마 자체가 좌표계 계약을 강제한다 — "값 범위가 곧 타입" 이 SSOT 에 좌표 정규화 보증까지 얹은 사례([[external-api-proxy-fixture]] 어댑터가 만든 정규화 결과를 계약이 재확인하는 이중 방어). 한 모듈 변경 → 컨슈머 3~4개 동기화 약속이 또 한 라운드 유지.
 
 ## What This Means
 
@@ -71,3 +73,4 @@ status: active
 - [[../topics/random-crawl]]
 - [[../topics/logs]]
 - [[../topics/telegram]]
+- [[../topics/bus]]
