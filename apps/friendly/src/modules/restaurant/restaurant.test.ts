@@ -17,6 +17,7 @@ import {
   RestaurantService,
   type RawReview,
 } from './restaurant.service.js';
+import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -304,6 +305,9 @@ describe('Restaurant routes — auth guards', () => {
 
 describe('GET /restaurants/ranking — public', () => {
   let app: FastifyInstance;
+  // 랭킹은 테이블 전역을 집계 후 기본 limit(20)로 자른다. 실 dev.db 데이터가
+  // 시드(A/B)를 페이지 밖으로 밀어내 순서 단언이 깨지므로 빈 DB 로 격리한다.
+  let isolated: IsolatedDatabase;
 
   const RANK_PREFIX = 'tr-rank-';
   const rankPlaceId = (s: string) => `${RANK_PREFIX}${s}-${Date.now().toString(36)}`;
@@ -356,11 +360,13 @@ describe('GET /restaurants/ranking — public', () => {
   };
 
   beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
     app = await buildTestApp();
   });
 
   afterAll(async () => {
     await app.close();
+    isolated.restore();
   });
 
   afterEach(async () => {

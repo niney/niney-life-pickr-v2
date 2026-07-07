@@ -11,6 +11,24 @@ import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import settingsMapRoutes from './map.route.js';
 import { MapSettingsService } from './map.service.js';
+import { env } from '../../config/env.js';
+
+// 라우트(map.route.ts)는 전역 env 싱글톤의 VWORLD_* 를 읽어 MapSettingsService
+// 의 .env fallback 으로 주입한다. 테스트 실행 환경(.env)에 실제 VWORLD_API_KEY
+// 가 있으면 "설정 없음"을 가정하는 라우트 테스트들이 env fallback 키를 잡아
+// 깨진다(synthesized empty row / DELETE 후 hasApiKey / public 404). 파일 전역
+// 에서 env 키를 비워 "DB·env 어디에도 키 없음" 전제를 복원한다. 아래 env
+// fallback describe 는 서비스에 명시적 env 를 넘기므로 이 싱글톤과 무관하다.
+const savedVworldApiKey = env.VWORLD_API_KEY;
+const savedVworldDomains = env.VWORLD_DOMAINS;
+beforeAll(() => {
+  env.VWORLD_API_KEY = '';
+  env.VWORLD_DOMAINS = '';
+});
+afterAll(() => {
+  env.VWORLD_API_KEY = savedVworldApiKey;
+  env.VWORLD_DOMAINS = savedVworldDomains;
+});
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();

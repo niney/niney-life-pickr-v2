@@ -16,6 +16,7 @@ import {
   AnalyticsService,
   normalizeCategoryPath,
 } from './analytics.service.js';
+import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -529,8 +530,13 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
   let app: FastifyInstance;
   let aiConfig: AiConfigService;
   let service: AnalyticsService;
+  // getGlobalMenus 는 전역 MenuCanonical 을 정렬 후 pageSize(max 200)로 자른다.
+  // 실 dev.db 데이터가 시드(unlinked 돈까스)를 첫 페이지 밖으로 밀어내므로
+  // 빈 DB 로 격리해 시드만 집계되게 한다.
+  let isolated: IsolatedDatabase;
 
   beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
     app = await buildApp();
     aiConfig = new AiConfigService(app.prisma, {
       apiKey: '',
@@ -547,6 +553,7 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
 
   afterAll(async () => {
     await app.close();
+    isolated.restore();
   });
 
   afterEach(async () => {
