@@ -208,6 +208,9 @@ export interface BusStationListBodyProps {
   // 초기 화면(검색어 없음)일 때 기본 안내 대신 렌더할 즐겨찾기 섹션. 즐겨찾기
   // 0개면 호출부가 undefined 를 넘겨 기존 빈 상태(안내)를 그대로 보여준다.
   favoritesContent?: React.ReactNode;
+  // 검색 결과 하단에 붙일 상대 도메인 크로스 섹션(15차). 호출부가 검색 모드에서만
+  // 넘긴다 — 결과 있음/없음(빈 상태) 분기에서 리스트 뒤에 렌더한다.
+  crossSearchContent?: React.ReactNode;
 }
 
 export const BusStationListBody = ({
@@ -225,6 +228,7 @@ export const BusStationListBody = ({
   isStationFavorite,
   onToggleStationFavorite,
   favoritesContent,
+  crossSearchContent,
 }: BusStationListBodyProps) => {
   // Geolocation 실패는 모드 무관 최우선 — 좌표를 못 얻어 주변 조회 자체가 불가.
   if (geoError) {
@@ -266,7 +270,12 @@ export const BusStationListBody = ({
     );
   }
   if (items.length === 0) {
-    return <Hint>{nearMode ? '주변에 정류장이 없습니다.' : '검색 결과가 없습니다.'}</Hint>;
+    return (
+      <>
+        <Hint>{nearMode ? '주변에 정류장이 없습니다.' : '검색 결과가 없습니다.'}</Hint>
+        {crossSearchContent}
+      </>
+    );
   }
   return (
     <>
@@ -334,6 +343,7 @@ export const BusStationListBody = ({
           );
         })}
       </ul>
+      {crossSearchContent}
     </>
   );
 };
@@ -369,6 +379,7 @@ interface Props {
   isStationFavorite?(stId: string): boolean;
   onToggleStationFavorite?(item: BusFavoriteStationItemType): void;
   favoritesContent?: React.ReactNode;
+  crossSearchContent?: React.ReactNode;
 }
 
 export const BusStationList = ({
@@ -392,6 +403,7 @@ export const BusStationList = ({
   isStationFavorite,
   onToggleStationFavorite,
   favoritesContent,
+  crossSearchContent,
 }: Props) => (
   <div className="flex min-h-0 flex-1 flex-col">
     <div className="border-b">
@@ -425,6 +437,7 @@ export const BusStationList = ({
         isStationFavorite={isStationFavorite}
         onToggleStationFavorite={onToggleStationFavorite}
         favoritesContent={favoritesContent}
+        crossSearchContent={crossSearchContent}
       />
     </div>
   </div>

@@ -29,6 +29,7 @@ import {
   TransitFavoritesSection,
   type TransitFavTarget,
 } from '~/components/transit/TransitFavoritesSection';
+import { SubwayCrossSection } from '~/components/transit/CrossSearchSection';
 
 // GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m)면 정류장 식별에 충분하고, URL 에
 // 원시 좌표를 그대로 노출하지 않아 공유 시 위치 정밀도도 낮춘다.
@@ -580,6 +581,10 @@ export const BusPage = () => {
     />
   ) : undefined;
 
+  // 검색 모드 결과 하단 크로스 섹션(15차) — 제출된 q 로 지하철역을 자동 크로스
+  // 조회(로컬 DB, 쿼터 0). 주변/초기/선택 화면엔 미표시(검색 모드에서만 넘긴다).
+  const crossSearchSection = !nearMode && hasQ ? <SubwayCrossSection q={q} /> : undefined;
+
   const listProps = {
     q,
     nearMode,
@@ -603,6 +608,7 @@ export const BusPage = () => {
     isStationFavorite: favorites.isStationFavorite,
     onToggleStationFavorite: favorites.toggleStation,
     favoritesContent: favoritesSection,
+    crossSearchContent: crossSearchSection,
   };
 
   return (
@@ -710,6 +716,7 @@ export const BusPage = () => {
               isStationFavorite={favorites.isStationFavorite}
               onToggleStationFavorite={favorites.toggleStation}
               favoritesContent={favoritesSection}
+              crossSearchContent={crossSearchSection}
             />
           </div>
         )}

@@ -22,6 +22,7 @@ import {
   TransitFavoritesSection,
   type TransitFavTarget,
 } from '~/components/transit/TransitFavoritesSection';
+import { BusCrossSection } from '~/components/transit/CrossSearchSection';
 import { SubwayArrivalPanel } from '~/components/subway/SubwayArrivalPanel';
 import { SubwayPathPanel } from '~/components/subway/SubwayPathPanel';
 import {
@@ -81,6 +82,15 @@ export const SubwayPage = () => {
   // 딥링크/새로고침을 살린다. 뒤로가기 등 외부 URL 변경은 input 에 역반영하지 않는다
   // (1차 수용) — URL→state effect 를 넣으면 조합 중 롤백 레이스로 같은 버그가 재발한다.
   const [qInput, setQInput] = useState(() => searchParams.get('q') ?? '');
+
+  // 확정 검색어(제출) — 상대 도메인(버스) 크로스 조회의 기준. 라이브 검색
+  // (qInput→URL→역 결과)과 별개 채널로, Enter/검색 버튼에만 갱신된다. 마운트 시 URL
+  // q 가 있으면(딥링크·새로고침) 제출된 것으로 간주해 크로스를 즉시 노출(/subway?q=
+  // 더보기 딥링크가 이 경로). submittedQ 는 URL 에 안 넣는다 — q 라이브 미러는 불변.
+  const [submittedQ, setSubmittedQ] = useState(() => {
+    const urlQ = searchParams.get('q') ?? '';
+    return urlQ.trim().length >= 2 ? urlQ : '';
+  });
 
   // 주변 모드 — near 파라미터가 유효 좌표일 때. 검색어(q)와 배타이며, URL 이 유일
   // 진실이라 새로고침/딥링크 시 Geolocation 재요청 없이 좌표로 복원된다.
@@ -280,6 +290,10 @@ export const SubwayPage = () => {
   const handleChangeQ = useCallback(
     (next: string) => {
       setQInput(next);
+      // 검색어를 비우면(검색 모드 이탈) 확정 검색어도 리셋 — 크로스 섹션 제거 +
+      // 지웠다 다른 검색어를 칠 때 이전 제출 결과가 남지 않게. 비우지 않은 편집은
+      // submittedQ 유지(다음 제출로 갱신).
+      if (next.trim() === '') setSubmittedQ('');
       setGeoError(null);
       setAutoNear(null);
       setSearchParams(
@@ -298,6 +312,11 @@ export const SubwayPage = () => {
     },
     [setSearchParams],
   );
+
+  // Enter/검색 버튼 — 현재 검색어를 확정해 버스 크로스 조회를 발화한다(라이브 역
+  // 검색은 무관하게 계속 동작). 2자 미만이면 크로스 게이트가 걸러 표시되지 않는다
+  // (버스 탭 제출이 <2 를 URL 에 넣되 Body 가 힌트로 거르는 것과 동일 톤).
+  const handleSubmitQ = useCallback(() => setSubmittedQ(qInput), [qInput]);
 
   // 역 선택 — stn 세팅 + 추적 호선(line) 유지 판정. 새 역이 추적 호선 경유역(id 또는
   // 역명 일치)이면 line 유지(노선 위를 역 단위로 이어 탐색), 아니면 해제(다른 호선
@@ -673,6 +692,16 @@ export const SubwayPage = () => {
     />
   ) : undefined;
 
+  // 검색 모드 결과 하단 크로스 섹션(15차) — **확정 검색어(submittedQ)** 로 버스
+  // 정류장을 자동 조회(제출 게이트 — 라이브 타이핑엔 발화 X). 검색 모드(현재 q ≥1자)
+  // 이고 확정 검색어가 유효(≥2자)일 때만 노출. 제출 후 더 타이핑해도 submittedQ 기준을
+  // 유지하며(BusCrossSection 헤더가 그 검색어를 보여줌), 다음 제출로 갱신. 주변/초기/
+  // 선택 화면엔 미표시.
+  const crossSearchSection =
+    !nearMode && trimmedQ.length >= 1 && submittedQ.trim().length >= 2 ? (
+      <BusCrossSection q={submittedQ} />
+    ) : undefined;
+
   const listProps = {
     q: qInput,
     nearMode,
@@ -685,6 +714,7 @@ export const SubwayPage = () => {
     selectedId: stn,
     selectedMissing,
     onChangeQ: handleChangeQ,
+    onSubmit: handleSubmitQ,
     onSelect: handleSelect,
     onRetry: handleRetry,
     onNearby: handleNearby,
@@ -692,6 +722,7 @@ export const SubwayPage = () => {
     isStationFavorite: favorites.isStationFavorite,
     onToggleStationFavorite: favorites.toggleStation,
     favoritesContent: favoritesSection,
+    crossSearchContent: crossSearchSection,
   };
 
   // 역 선택 시 목록 대신 뜨는 도착 패널 — 데스크톱 좌패널/모바일 하단 공용.
@@ -802,6 +833,7 @@ export const SubwayPage = () => {
               fetchedAt={activeFetchedAt}
               truncated={truncated}
               onChangeQ={handleChangeQ}
+              onSubmit={handleSubmitQ}
               onNearby={handleNearby}
               onClearNear={handleClearNear}
             />
@@ -850,6 +882,7 @@ export const SubwayPage = () => {
                 isStationFavorite={favorites.isStationFavorite}
                 onToggleStationFavorite={favorites.toggleStation}
                 favoritesContent={favoritesSection}
+                crossSearchContent={crossSearchSection}
               />
             </div>
           )}

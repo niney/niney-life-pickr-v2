@@ -30,10 +30,11 @@ const formatRelative = (iso: string): string => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SubwayStationSearchBar — 라이브 검색 인풋 + '주변 역' 버튼 + 메타 행. 로컬 DB
-// 조회라 쿼터 부담이 없어 제출 버튼/Enter 없이 onChange 즉시 검색한다(IME 안전은
-// 호출부의 로컬 state 가 담당). 주변 모드면 메타가 '주변 역' 라벨 + 반경/총수로
-// 바뀌고 강제 새로고침 대신 모드 해제(X)를 노출한다.
+// SubwayStationSearchBar — 라이브 검색 인풋 + '검색' 버튼 + '주변 역' 버튼 + 메타 행.
+// 역 검색은 로컬 DB(쿼터 0)라 onChange 즉시 조회를 유지한다(IME 안전은 호출부의
+// 로컬 state 가 담당). '검색' 버튼/Enter 는 이와 별개로 검색어를 '확정'해 상대
+// 도메인(버스) 크로스 조회를 발화하는 채널이다(버스 검색바와 형태 대칭·IME 가드
+// 재사용). 주변 모드면 메타가 '주변 역' 라벨 + 반경/총수로 바뀌고 모드 해제(X)를 노출.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SubwayStationSearchBarProps {
@@ -45,6 +46,9 @@ export interface SubwayStationSearchBarProps {
   // items.length < total — 서버가 그룹 수를 절단했음을 알린다.
   truncated: boolean;
   onChangeQ(next: string): void;
+  // Enter/검색 버튼 — 이 검색어를 '확정'해 상대 도메인(버스) 크로스 조회를 발화한다.
+  // 라이브 검색(역 결과)은 onChangeQ 로 계속 즉시 동작하며, 이건 그와 별개 채널이다.
+  onSubmit(): void;
   // 주변 역 버튼 — Geolocation 요청은 상위(SubwayPage)에서.
   onNearby(): void;
   // 주변 모드 해제 — near 파라미터 제거.
@@ -58,13 +62,22 @@ export const SubwayStationSearchBar = ({
   fetchedAt,
   truncated,
   onChangeQ,
+  onSubmit,
   onNearby,
   onClearNear,
 }: SubwayStationSearchBarProps) => {
   const hasQ = q.trim().length >= 1;
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-center gap-2">
+      {/* 라이브 검색(onChange) 유지 + Enter/검색 버튼으로 크로스 조회 확정. form
+          제출형 — Android 가상 키보드 '검색' 키가 submit 이벤트로 들어와도 동작한다. */}
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -75,8 +88,17 @@ export const SubwayStationSearchBar = ({
             maxLength={50}
             value={q}
             onChange={(e) => onChangeQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              // 한글 조합 확정용 Enter 는 제출로 새지 않게 차단(버스 검색바와 동일
+              // 가드 — keyCode 229 는 isComposing 이 false 로 오는 일부 IME).
+              if (e.nativeEvent.isComposing || e.keyCode === 229) e.preventDefault();
+            }}
           />
         </div>
+        <Button type="submit" size="sm">
+          검색
+        </Button>
         {/* 주변 역 — 클릭 시 상위가 Geolocation 을 요청해 near 모드로 전환. */}
         <Button
           type="button"
@@ -88,7 +110,7 @@ export const SubwayStationSearchBar = ({
         >
           <LocateFixed className="size-4" />
         </Button>
-      </div>
+      </form>
 
       {/* 주변 모드 메타 — '주변 역' 라벨 + 반경/총수/갱신 + 모드 해제(X). */}
       {nearMode && (
@@ -113,12 +135,11 @@ export const SubwayStationSearchBar = ({
         </div>
       )}
 
-      {/* 검색 모드 메타 — 총수/갱신. */}
+      {/* 검색 모드 메타 — 총수만. 갱신/새로고침(캐시 프레시니스)은 버스 셀 캐시
+          고유 개념이라 정적 역사마스터인 지하철엔 부적절해 표기하지 않는다. */}
       {!nearMode && hasQ && fetchedAt && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            총 {total}개 · 갱신 {formatRelative(fetchedAt)}
-          </span>
+          <span className="tabular-nums">총 {total}개</span>
         </div>
       )}
 
@@ -155,6 +176,9 @@ export interface SubwayStationListBodyProps {
   // 초기 화면(검색어 없음)일 때 기본 안내 대신 렌더할 즐겨찾기 섹션. 미지정이면
   // 기존 빈 상태(안내)를 그대로 보여준다.
   favoritesContent?: React.ReactNode;
+  // 검색 결과 하단에 붙일 상대 도메인 크로스 섹션(15차). 호출부가 검색 모드에서만
+  // 넘긴다 — 결과 있음/없음(빈 상태) 분기에서 리스트 뒤에 렌더한다.
+  crossSearchContent?: React.ReactNode;
 }
 
 export const SubwayStationListBody = ({
@@ -171,6 +195,7 @@ export const SubwayStationListBody = ({
   isStationFavorite,
   onToggleStationFavorite,
   favoritesContent,
+  crossSearchContent,
 }: SubwayStationListBodyProps) => {
   // Geolocation 실패는 모드 무관 최우선 — 좌표를 못 얻어 주변 조회 자체가 불가.
   if (geoError) {
@@ -206,7 +231,12 @@ export const SubwayStationListBody = ({
     );
   }
   if (items.length === 0) {
-    return <Hint>{nearMode ? '주변에 역이 없습니다.' : '검색 결과가 없습니다.'}</Hint>;
+    return (
+      <>
+        <Hint>{nearMode ? '주변에 역이 없습니다.' : '검색 결과가 없습니다.'}</Hint>
+        {crossSearchContent}
+      </>
+    );
   }
   return (
     <>
@@ -279,6 +309,7 @@ export const SubwayStationListBody = ({
           );
         })}
       </ul>
+      {crossSearchContent}
     </>
   );
 };
@@ -305,6 +336,7 @@ interface Props {
   selectedId: string | null;
   selectedMissing: boolean;
   onChangeQ(next: string): void;
+  onSubmit(): void;
   onSelect(id: string): void;
   onRetry(): void;
   onNearby(): void;
@@ -312,6 +344,7 @@ interface Props {
   isStationFavorite?(stationId: string): boolean;
   onToggleStationFavorite?(item: SubwayFavoriteStationItemType): void;
   favoritesContent?: React.ReactNode;
+  crossSearchContent?: React.ReactNode;
 }
 
 export const SubwayStationList = ({
@@ -326,6 +359,7 @@ export const SubwayStationList = ({
   selectedId,
   selectedMissing,
   onChangeQ,
+  onSubmit,
   onSelect,
   onRetry,
   onNearby,
@@ -333,6 +367,7 @@ export const SubwayStationList = ({
   isStationFavorite,
   onToggleStationFavorite,
   favoritesContent,
+  crossSearchContent,
 }: Props) => (
   <div className="flex min-h-0 flex-1 flex-col">
     <div className="border-b">
@@ -343,6 +378,7 @@ export const SubwayStationList = ({
         fetchedAt={fetchedAt}
         truncated={items.length < total}
         onChangeQ={onChangeQ}
+        onSubmit={onSubmit}
         onNearby={onNearby}
         onClearNear={onClearNear}
       />
@@ -362,6 +398,7 @@ export const SubwayStationList = ({
         isStationFavorite={isStationFavorite}
         onToggleStationFavorite={onToggleStationFavorite}
         favoritesContent={favoritesContent}
+        crossSearchContent={crossSearchContent}
       />
     </div>
   </div>
