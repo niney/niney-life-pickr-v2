@@ -5,6 +5,7 @@ import {
   getRealtimeArrivals,
   getStationMaster,
   SubwayApiAuthError,
+  SubwayApiError,
 } from './subway-api.adapter.js';
 
 // 실 서울시 API 스모크 — 각 키가 설정된 환경에서만 1콜씩. swopen(도착)과
@@ -24,6 +25,15 @@ describe.skipIf(!swopenRunnable)('subway swopen live smoke (SUBWAY_API_KEY 필�
       // 키 미승인/동기화 지연은 코드 결함이 아니라 외부 상태 — skip.
       if (e instanceof SubwayApiAuthError) {
         console.warn(`[subway live] 키 인증 실패로 skip — ${e.message}`);
+        ctx.skip();
+        return;
+      }
+      // 일일 쿼터 초과(ERROR-337)도 외부 상태 — 폴링·적재 스크립트가 쿼터를
+      // 소진한 날 스위트가 종일 빨개지는 것을 막는다. 이 코드만 정밀하게 skip —
+      // SubwayApiError 전체를 삼키면 실 응답 형식 회귀(이 스모크의 존재 이유)까지
+      // 가려진다.
+      if (e instanceof SubwayApiError && e.code === 'ERROR-337') {
+        console.warn(`[subway live] 일일 쿼터 초과로 skip — ${e.message}`);
         ctx.skip();
         return;
       }
