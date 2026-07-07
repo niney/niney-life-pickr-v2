@@ -544,6 +544,10 @@ export const BusPage = () => {
         </aside>
         <section className="relative flex-1">
           <BusStationsMap
+            // 데스크톱·모바일 지도 래퍼는 CSS 숨김(hidden xl:flex / xl:hidden)이라
+            // 둘 다 항상 마운트된다 — MapCanvas 가 페이지당 2개 동시 생존. 풀 키를
+            // 레이아웃별로 나눠 각자 재사용시켜야 모바일 폭에서도 플래시가 사라진다.
+            poolKey="transit-desktop"
             items={mapItemsForMap}
             vehicles={vehicles}
             vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}
@@ -584,6 +588,8 @@ export const BusPage = () => {
         </div>
         <div className="relative min-h-[40dvh] flex-1">
           <BusStationsMap
+            // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
+            poolKey="transit-mobile"
             items={mapItemsForMap}
             vehicles={vehicles}
             vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}

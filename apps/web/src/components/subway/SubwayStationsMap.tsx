@@ -114,6 +114,9 @@ interface Props {
   // 11차 경로 모드 — 있으면 leg 폴리라인(leg별 호선색) + 출발/도착 핀 + 환승 도트만
   // 그리고 나머지(검색 역·경유역 점·열차·내 위치)는 숨긴다. 경로 전체로 fit(1회).
   pathResult?: SubwayPathResultType | null;
+  // MapCanvas 지도 인스턴스 풀 키 — 그대로 전달한다. 키 결정(레이아웃별 분리
+  // 등)은 호출자 몫. 미지정이면 풀링 없이 기존 동작.
+  poolKey?: string;
   className?: string;
 }
 
@@ -137,6 +140,7 @@ export const SubwayStationsMap = ({
   positions,
   pendingFollow,
   pathResult,
+  poolKey,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -671,6 +675,8 @@ export const SubwayStationsMap = ({
       <MapCanvas
         ref={handleRef}
         apiKey={apiKey}
+        // 탭 전환 시 OL Map 인스턴스 재사용(타일 플래시 제거). 키는 호출자가 지정.
+        poolKey={poolKey}
         markers={markers}
         initialCenter={
           initialViewport

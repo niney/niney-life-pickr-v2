@@ -77,6 +77,9 @@ interface Props {
   // 합류. 검색/선택 마커와 같은 stId 는 그쪽이 우선(점 생략), 점 클릭은 정류장
   // 선택(stId) 흐름 그대로. 색은 routeLine.color 와 맞춘다.
   routeStops?: BusRouteStationItemType[];
+  // MapCanvas 지도 인스턴스 풀 키 — 그대로 전달한다. 키 결정(레이아웃별 분리
+  // 등)은 호출자 몫. 미지정이면 풀링 없이 기존 동작.
+  poolKey?: string;
 }
 
 // 재검색(수동/자동) 트리거 임계 — 기준점에서 지도 중심이 이만큼 벗어나야.
@@ -119,6 +122,7 @@ export const BusStationsMap = ({
   loading,
   routeLine,
   routeStops,
+  poolKey,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -527,6 +531,8 @@ export const BusStationsMap = ({
       <MapCanvas
         ref={handleRef}
         apiKey={apiKey}
+        // 탭 전환 시 OL Map 인스턴스 재사용(타일 플래시 제거). 키는 호출자가 지정.
+        poolKey={poolKey}
         markers={markers}
         initialCenter={
           initialViewport

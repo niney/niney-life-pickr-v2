@@ -17,6 +17,8 @@ import Point from 'ol/geom/Point';
 import LineString from 'ol/geom/LineString';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { Style, Icon, Text as OlText, Fill, Stroke } from 'ol/style';
+import { unByKey } from 'ol/Observable';
+import type { EventsKey } from 'ol/events';
 import 'ol/ol.css';
 import {
   buildRestaurantMarkerDataUrl,
@@ -198,6 +200,11 @@ interface Props {
   // 멈춘다(호출자가 '일시정지' 상태로 전환해 재개 UI 를 띄우는 용도). 토글
   // 자체는 호출자가 관리한다.
   onFollowInterrupted?(): void;
+  // 지정 시 이 키로 OL Map 인스턴스를 모듈 풀에 보관/재사용한다(탭 전환 플래시
+  // 제거). 마운트 수명 동안 불변으로 간주 — 값이 바뀌어도 재획득하지 않는다.
+  // 미지정이면 풀링 없이 기존 동작(언마운트 시 GC)과 완전히 동일. 같은 키를
+  // 동시에 두 MapCanvas 가 쓰면 안 된다(대중교통 탭은 한 번에 하나만 마운트).
+  poolKey?: string;
   className?: string;
 }
 
@@ -232,6 +239,27 @@ const LABEL_VISIBLE_ZOOM = 14;
 // 도심 밀집 지역에서도 핀 충돌 거의 없음.
 const SMALL_ICON_SCALE = 0.55;
 
+// ── 지도 인스턴스 풀 ─────────────────────────────────────────────────────────
+// 탭 전환(버스↔지하철)은 라우트 언마운트라 지도가 매번 재생성 → 타일 재로드
+// 플래시가 생긴다. poolKey 를 준 MapCanvas 는 언마운트 시 OL Map 을 파괴하지
+// 않고 여기 보관했다가, 다음 마운트가 setTarget 으로 이어받는다. 타일 캐시·
+// 뷰포트가 통째로 살아남아 플래시가 사라진다. poolKey 미지정(식당·어드민 지도)
+// 은 이 풀에 손대지 않고 기존처럼 GC — 공용 컴포넌트 회귀를 원천 차단한다.
+// transitMapViewport(A안)와는 보완 관계: 새로고침/직접 진입으로 풀이 비었을
+// 때는 그쪽 저장값이 initialCenter 로 뷰포트를 복원한다.
+interface PooledMap {
+  map: OlMap;
+  tileSource: XYZ;
+  // 타일 URL 이 apiKey 를 포함 — 재사용 시 불일치면 폐기하고 신규 생성.
+  apiKey: string;
+  // 마지막 레이어 선택(일반/야간/위성). 재사용 마운트가 이 값으로 layer state 를
+  // 초기화해야 setUrl 없이 이어받아 플래시가 재발하지 않는다.
+  layer: VworldLayer;
+  // 사용자가 토글로 직접 골랐는지 — 재사용 시 테마 기본값으로 되돌아가지 않게.
+  userPickedLayer: boolean;
+}
+const mapPool = new Map<string, PooledMap>();
+
 // vworld WMTS 타일을 OpenLayers 가 직접 받아 그리는 저레벨 캔버스. 단일/다중
 // 마커 모두 처리 — 마커 배열만 넘겨주면 된다. 좌표 없는 상태 / 키 없는 상태
 // 등 렌더 분기는 호출자 책임 (placeholder 포함).
@@ -260,6 +288,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onVehicleSelect,
     followVehicleId,
     onFollowInterrupted,
+    poolKey,
     className,
   },
   ref,
@@ -294,8 +323,16 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // 레이어(일반/다크/위성). 초기값은 앱 테마를 따른다. 사용자가 토글로 한 번
   // 직접 고르면(userPickedLayerRef) 이후 테마 변경에 끌려가지 않는다.
   const themeMode = useThemeStore((s) => s.mode);
-  const [layer, setLayer] = useState<VworldLayer>(() => layerForTheme(themeMode));
-  const userPickedLayerRef = useRef(false);
+  // 풀에 보관된 Map 이 있으면 그 레이어 선택을 이어받아 초기화한다 — 재사용 첫
+  // 렌더에서 layer state 가 테마 기본값으로 튀면 layer effect 가 setUrl 로 타일을
+  // 통째로 리프레시해 플래시가 재발한다. 여기선 peek(get)만 — 실제 take(delete)
+  // 는 map 생성 effect 에서(readTransitViewport 초기화와 같은 관례). 마운트 수명
+  // 동안 poolKey 는 불변이라 이 peek 는 초기값 계산에만 쓰인다.
+  const pooledInit = poolKey ? mapPool.get(poolKey) : undefined;
+  const [layer, setLayer] = useState<VworldLayer>(
+    () => pooledInit?.layer ?? layerForTheme(themeMode),
+  );
+  const userPickedLayerRef = useRef(pooledInit?.userPickedLayer ?? false);
   // map 생성 effect 가 최신 layer 값을 stale closure 없이 읽도록 ref 동기화.
   const layerRef = useRef(layer);
   layerRef.current = layer;
@@ -337,14 +374,37 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onFollowInterruptedRef.current = onFollowInterrupted;
   });
 
-  // map 한 번만 생성. apiKey 가 바뀌면 reload (드물게 일어남 — 키 갱신 시).
+  // map 생성/획득. 풀에 보관된 인스턴스가 있으면 재사용(탭 전환 플래시 제거),
+  // 없으면 신규. apiKey 가 바뀌면 재생성(드물게 — 키 갱신 시). poolKey 는 마운트
+  // 수명 동안 불변으로 간주해 deps 에 넣지 않는다.
   useEffect(() => {
-    if (!containerRef.current || !apiKey) return;
+    const container = containerRef.current;
+    if (!container || !apiKey) return;
 
-    const tileSource = new XYZ({
-      url: buildVworldTileUrl(apiKey, layerRef.current),
-      crossOrigin: 'anonymous',
-    });
+    // map/tileSource 에 붙인 리스너 키 — cleanup 에서 unByKey 로 전부 해제한다.
+    // 풀링하면 map/tileSource 가 살아남으므로 이전 마운트의 콜백 클로저가 남아
+    // 중복 발화 + 누수가 된다. 미풀링(GC)이어도 해제는 무해.
+    const eventKeys: EventsKey[] = [];
+
+    // ── 풀에서 꺼내기(take) ─ delete 로 소유권을 가져와 StrictMode 이중 마운트/
+    // 동시 마운트가 한 map 을 공유하는 사고를 막는다. apiKey 가 다르면(타일 URL
+    // 에 키가 박혀 있음) 폐기 후 신규 경로로 폴백.
+    const pooled = poolKey ? mapPool.get(poolKey) : undefined;
+    if (poolKey && pooled) mapPool.delete(poolKey);
+    const reusable = pooled && pooled.apiKey === apiKey ? pooled : undefined;
+    if (pooled && !reusable) {
+      pooled.map.setTarget(undefined);
+      pooled.map.dispose();
+    }
+
+    // 재사용이면 풀의 tileSource 를 그대로 이어받는다(setUrl 금지 — 같은 URL 도
+    // OL 이 타일 전체를 리프레시해 플래시). 신규면 새로 만든다.
+    const tileSource =
+      reusable?.tileSource ??
+      new XYZ({
+        url: buildVworldTileUrl(apiKey, layerRef.current),
+        crossOrigin: 'anonymous',
+      });
     tileSourceRef.current = tileSource;
     // 타일 실패(tileloaderror)는 키 거부와 동의어가 아니다 — 실측 결과 대부분은
     // 클라이언트 측 일시적 실패다: 빠른 패닝/줌으로 대량 타일을 동시에 요청하면
@@ -401,61 +461,74 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       }
     };
 
-    tileSource.on('tileloaderror', () => {
-      consecutiveErrors += 1;
-      if (consecutiveErrors >= FAIL_THRESHOLD && !probing) {
-        const now = Date.now();
-        if (now - lastProbeAt >= PROBE_COOLDOWN_MS) {
-          lastProbeAt = now;
-          void probeKeyOnBurst();
+    eventKeys.push(
+      tileSource.on('tileloaderror', () => {
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= FAIL_THRESHOLD && !probing) {
+          const now = Date.now();
+          if (now - lastProbeAt >= PROBE_COOLDOWN_MS) {
+            lastProbeAt = now;
+            void probeKeyOnBurst();
+          }
         }
-      }
-    });
-    tileSource.on('tileloadend', () => {
-      consecutiveErrors = 0;
-      setReported(false);
-    });
+      }),
+    );
+    eventKeys.push(
+      tileSource.on('tileloadend', () => {
+        consecutiveErrors = 0;
+        setReported(false);
+      }),
+    );
 
-    const baseLayer = new TileLayer({ source: tileSource });
+    // ── map: 재사용 또는 신규 ─ 재사용이면 View 를 절대 건드리지 않는다(풀 뷰포
+    // 트 = 마지막으로 보던 위치 ≈ transitMapViewport 저장값이라 initialCenter 로
+    // 덮으면 이어보기가 깨진다). 신규면 baseLayer + View 만으로 만들고 벡터 레이어
+    // 3종은 아래 addLayer 로 얹는다(재사용 경로와 공통).
+    let map: OlMap;
+    if (reusable) {
+      map = reusable.map;
+    } else {
+      const baseLayer = new TileLayer({ source: tileSource });
+      const center = initialCenter ?? markers[0] ?? { lat: 37.5665, lng: 126.978 };
+      const view = new OlView({
+        center: fromLonLat([center.lng, center.lat]),
+        zoom: initialCenter?.zoom ?? DEFAULT_ZOOM,
+      });
+      map = new OlMap({
+        target: container,
+        // declutter 끔 — OL 의 layer declutter 는 Feature 단위라 라벨이 겹치면
+        // 핀까지 같이 가려진다. 라벨 가시성은 style function 안에서 줌 임계값
+        // (LABEL_VISIBLE_ZOOM)으로 직접 제어하고, 충돌 박스를 작게 만들어 핀이
+        // 사라지지 않도록 한다.
+        // baseLayer(index 0)만 생성자에 — 노선/정류장/차량 벡터 레이어는 아래
+        // addLayer 로 얹는다(재사용 경로와 동일 순서).
+        layers: [baseLayer],
+        view,
+        controls: [],
+      });
+    }
+    mapRef.current = map;
 
-    const center = initialCenter ?? markers[0] ?? { lat: 37.5665, lng: 126.978 };
-    const view = new OlView({
-      center: fromLonLat([center.lng, center.lat]),
-      zoom: initialCenter?.zoom ?? DEFAULT_ZOOM,
-    });
-
+    // ── 벡터 소스/레이어 3종 — 재사용/신규 공통, 마운트마다 새로 생성해 이전
+    // 마운트의 feature/보간 상태를 이어받지 않는다. addLayer 순서 = 그리는 순서
+    // (뒤일수록 위): 노선 형상(마커 아래) → 정류장 → 차량(맨 위, 정류장과 겹쳐도
+    // 안 가려짐). baseLayer 가 index 0 이라 append 순서만 맞으면 된다.
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
-
-    // 노선 형상 소스/레이어 — 베이스 타일과 마커 레이어 사이(마커 아래).
     const routeLineSource = new VectorSource();
     routeLineSourceRef.current = routeLineSource;
-
-    // 차량 소스 — 정류장 마커보다 위(맨 앞) 레이어. 재생성 시 이전 feature/보간
-    // 상태를 비워 옛 소스 소속 feature 가 새 소스에 남지 않게 한다.
     const vehicleSource = new VectorSource();
     vehicleSourceRef.current = vehicleSource;
     vehicleFeaturesRef.current.clear();
     vehicleAnimRef.current.clear();
     vehicleArrowsRef.current.clear();
 
-    const map = new OlMap({
-      target: containerRef.current,
-      // declutter 끔 — OL 의 layer declutter 는 Feature 단위라 라벨이 겹치면
-      // 핀까지 같이 가려진다. 라벨 가시성은 style function 안에서 줌 임계값
-      // (LABEL_VISIBLE_ZOOM)으로 직접 제어하고, 충돌 박스를 작게 만들어 핀이
-      // 사라지지 않도록 한다.
-      // 레이어 순서 = 그리는 순서(뒤일수록 위): 타일 → 노선 형상 → 정류장 →
-      // 차량. 차량이 맨 위라 정류장과 겹쳐도 가려지지 않는다.
-      layers: [
-        baseLayer,
-        new VectorLayer({ source: routeLineSource }),
-        new VectorLayer({ source: vectorSource }),
-        new VectorLayer({ source: vehicleSource }),
-      ],
-      view,
-      controls: [],
-    });
+    const routeLineLayer = new VectorLayer({ source: routeLineSource });
+    const markerLayer = new VectorLayer({ source: vectorSource });
+    const vehicleLayer = new VectorLayer({ source: vehicleSource });
+    map.addLayer(routeLineLayer);
+    map.addLayer(markerLayer);
+    map.addLayer(vehicleLayer);
 
     // 사용자 인터랙션 마크. pointerdrag = 드래그(panning), 휠은 별도. 추적
     // 중이면 그 즉시 끊고(followIdRef 비움 → tick 이 센터 이동 중단) 호출자에
@@ -466,15 +539,17 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         onFollowInterruptedRef.current?.();
       }
     };
-    map.on('pointerdrag', () => {
-      userInteractedRef.current = true;
-      interruptFollow();
-    });
+    eventKeys.push(
+      map.on('pointerdrag', () => {
+        userInteractedRef.current = true;
+        interruptFollow();
+      }),
+    );
     const handleWheel = () => {
       userInteractedRef.current = true;
       interruptFollow();
     };
-    containerRef.current.addEventListener('wheel', handleWheel);
+    container.addEventListener('wheel', handleWheel);
 
     const computeViewport = (): MapViewport | null => {
       const v = map.getView();
@@ -493,62 +568,102 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       };
     };
 
-    map.on('moveend', () => {
-      const viewport = computeViewport();
-      if (!viewport) return;
-      // sync 는 user/programmatic 무관 — 항상 최신 viewport 를 흘려서 호출자가
-      // 검색 시점에 현재 영역을 알 수 있게 한다.
-      onViewportSyncRef.current?.(viewport);
-      // 기존 onViewportChangeEnd 의미는 보존 — 사용자가 직접 패닝/줌한 후에만
-      // 발사. "이 지역 재검색" 버튼 노출 트리거.
-      if (userInteractedRef.current) {
-        onViewportChangeEndRef.current?.(viewport);
-      }
-    });
+    eventKeys.push(
+      map.on('moveend', () => {
+        const viewport = computeViewport();
+        if (!viewport) return;
+        // sync 는 user/programmatic 무관 — 항상 최신 viewport 를 흘려서 호출자가
+        // 검색 시점에 현재 영역을 알 수 있게 한다.
+        onViewportSyncRef.current?.(viewport);
+        // 기존 onViewportChangeEnd 의미는 보존 — 사용자가 직접 패닝/줌한 후에만
+        // 발사. "이 지역 재검색" 버튼 노출 트리거.
+        if (userInteractedRef.current) {
+          onViewportChangeEndRef.current?.(viewport);
+        }
+      }),
+    );
 
     // 첫 렌더 완료 직후 한 번 sync — 사용자가 패닝 안 하고 곧장 검색해도
-    // viewport ref 가 비어 있지 않게.
-    map.once('postrender', () => {
-      const viewport = computeViewport();
-      if (viewport) onViewportSyncRef.current?.(viewport);
-    });
+    // viewport ref 가 비어 있지 않게. 재사용 경로에서도 아래 setTarget 후 재렌더로
+    // 발화한다(마운트마다 재등록하므로 자연히 됨).
+    eventKeys.push(
+      map.once('postrender', () => {
+        const viewport = computeViewport();
+        if (viewport) onViewportSyncRef.current?.(viewport);
+      }),
+    );
 
-    map.on('click', (evt) => {
-      // markerId(정류장) 또는 vehicleId(차량) 가 있는 feature 만 후보 — 화살표
-      // 등 그 외 feature 는 건너뛴다. 알약은 화살표 위(zIndex)라 먼저 히트된다.
-      const f = map.forEachFeatureAtPixel(
-        evt.pixel,
-        (feat) => (feat.get('markerId') || feat.get('vehicleId') ? feat : undefined),
-        { hitTolerance: 4 },
-      );
-      if (!f) return;
-      const markerId = f.get('markerId') as string | undefined;
-      if (markerId) {
-        onMarkerSelectRef.current?.(markerId);
-        return;
-      }
-      const vehicleId = f.get('vehicleId') as string | undefined;
-      if (vehicleId) onVehicleSelectRef.current?.(vehicleId);
-    });
+    eventKeys.push(
+      map.on('click', (evt) => {
+        // markerId(정류장) 또는 vehicleId(차량) 가 있는 feature 만 후보 — 화살표
+        // 등 그 외 feature 는 건너뛴다. 알약은 화살표 위(zIndex)라 먼저 히트된다.
+        const f = map.forEachFeatureAtPixel(
+          evt.pixel,
+          (feat) => (feat.get('markerId') || feat.get('vehicleId') ? feat : undefined),
+          { hitTolerance: 4 },
+        );
+        if (!f) return;
+        const markerId = f.get('markerId') as string | undefined;
+        if (markerId) {
+          onMarkerSelectRef.current?.(markerId);
+          return;
+        }
+        const vehicleId = f.get('vehicleId') as string | undefined;
+        if (vehicleId) onVehicleSelectRef.current?.(vehicleId);
+      }),
+    );
 
-    mapRef.current = map;
+    // 재사용 마운트 — 새 컨테이너 DOM 에 붙이고 크기를 재측정한다. View 는 그대로
+    // 두므로(뷰포트 유지) 타일 재요청 없이 캐시된 타일이 즉시 그려진다(플래시 X).
+    if (reusable) {
+      map.setTarget(container);
+      map.updateSize();
+    }
 
     // 컨테이너 크기가 바뀌면 OL 가 자체적으로 재측정하지 않으므로 직접 트리거.
     // 좌/우 패널 토글이나 윈도우 리사이즈 모두 한 번에 커버.
     const ro = new ResizeObserver(() => {
       mapRef.current?.updateSize();
     });
-    ro.observe(containerRef.current);
+    ro.observe(container);
 
     return () => {
       ro.disconnect();
-      containerRef.current?.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('wheel', handleWheel);
       if (vehicleRafRef.current != null) cancelAnimationFrame(vehicleRafRef.current);
       vehicleRafRef.current = null;
       vehicleFeaturesRef.current.clear();
       vehicleAnimRef.current.clear();
       vehicleArrowsRef.current.clear();
+      // map/tileSource 리스너 전부 해제 — 풀링으로 살아남는 map 에 이전 마운트의
+      // 콜백 클로저가 남아 중복 발화/누수 되는 것을 막는다(미풀링이어도 무해).
+      for (const k of eventKeys) unByKey(k);
+      // 벡터 레이어 3종 제거 — 다음 마운트가 새 소스로 다시 addLayer 한다.
+      // baseLayer(index 0)만 남겨 재사용 시 타일 캐시를 그대로 잇는다.
+      map.removeLayer(routeLineLayer);
+      map.removeLayer(markerLayer);
+      map.removeLayer(vehicleLayer);
       map.setTarget(undefined);
+
+      if (poolKey) {
+        // 반납(release) — 다음 마운트가 setTarget 으로 이어받는다. layer/
+        // userPickedLayer 도 함께 넘겨 재사용 시 setUrl(플래시) 없이 레이어 선택을
+        // 잇는다. 방어: 정상 흐름에선 불가하나 이미 같은 키 엔트리가 있으면 지금
+        // map 을 폐기하고 기존 풀을 보존한다(한 키를 둘이 다투는 상황 회피).
+        if (mapPool.has(poolKey)) {
+          map.dispose();
+        } else {
+          mapPool.set(poolKey, {
+            map,
+            tileSource,
+            apiKey,
+            layer: layerRef.current,
+            userPickedLayer: userPickedLayerRef.current,
+          });
+        }
+      }
+      // poolKey 없으면 GC — map 은 이미 setTarget(undefined)(기존 동작 유지).
+
       mapRef.current = null;
       vectorSourceRef.current = null;
       routeLineSourceRef.current = null;
@@ -557,7 +672,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       userInteractedRef.current = false;
     };
     // initialCenter / markers 는 의도적으로 deps 에서 빼고 별도 effect 에서 갱신.
-    // 처음 mount 직후 외 reflow 가 필요한 입력은 apiKey 뿐.
+    // 처음 mount 직후 외 reflow 가 필요한 입력은 apiKey 뿐. poolKey 도 마운트
+    // 수명 동안 불변으로 간주 — deps 에 넣지 않는다(값이 바뀌어도 재획득 안 함).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
