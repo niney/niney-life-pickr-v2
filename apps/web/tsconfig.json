@@ -2,7 +2,11 @@
   "extends": "@repo/config/tsconfig/react.json",
   "compilerOptions": {
     "paths": { "~/*": ["./src/*"] },
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // 타입체크 전용 — 번들은 Vite(esbuild/rollup)가 담당한다. tsc 가 src 옆에
+    // .js 를 토해내는 사고를 원천 차단(과거 일괄 emit 흔적 정리). base 에
+    // composite/references 가 없어 noEmit 과 충돌하지 않는다.
+    "noEmit": true
   },
   "include": ["src/**/*", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]
