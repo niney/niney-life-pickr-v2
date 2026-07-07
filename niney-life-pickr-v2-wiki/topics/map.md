@@ -1,13 +1,15 @@
 ---
 topic: map
 type: codebase
-last_compiled: 2026-06-25
-source_count: 26
+last_compiled: 2026-07-07
+source_count: 28
 status: active
-aliases: [muted-marker, gray-pin, map-resize-observer, discover-map, registered-vs-search-marker, webview-vworld, fly-to-zoom, marker-fly, selected-marker-pin, label-always-visible, location-fly-bbox, public-restaurants-webview-map, line-icon, category-icon, restaurant-category-icon, declutter, zoom-label, compact-marker, generic-fork-knife-icon, my-location-button, geolocation-guide, insecure-context, native-location-permission-ux, open-settings-alert, map-layer-control, dark-tile, midnight-layer, satellite-layer, theme-linked-map, fly-to-zoom-in, double-click-zoom, set-mode-webview, choropleth, sigungu-geo, region-stats-map, point-in-polygon, vworld-tile-probe, tile-error-probe, selected-marker-zindex]
+aliases: [muted-marker, gray-pin, map-resize-observer, discover-map, registered-vs-search-marker, webview-vworld, fly-to-zoom, marker-fly, selected-marker-pin, label-always-visible, location-fly-bbox, public-restaurants-webview-map, line-icon, category-icon, restaurant-category-icon, declutter, zoom-label, compact-marker, generic-fork-knife-icon, my-location-button, geolocation-guide, insecure-context, native-location-permission-ux, open-settings-alert, map-layer-control, dark-tile, midnight-layer, satellite-layer, theme-linked-map, fly-to-zoom-in, double-click-zoom, set-mode-webview, choropleth, sigungu-geo, region-stats-map, point-in-polygon, vworld-tile-probe, tile-error-probe, selected-marker-zindex, map-instance-pool, pooled-map, poolKey, take-semantics, tab-switch-flash, transit-desktop-mobile, overlay-markers, fit-excluded-layer, transit-map-viewport]
 ---
 
 # map
+
+**2026-07-07 변경 흡수 (대중교통 통합 — OL 지도 인스턴스 풀링 D안 + 겸표시 오버레이 레이어)** — 렌더 코어에 두 가지가 추가된다(둘 다 opt-in prop 이라 식당·어드민 지도는 기존 동작 그대로). (1) **`poolKey` 지도 인스턴스 풀링(D안)** — 버스↔지하철 탭 전환은 라우트 언마운트라 `MapCanvas` 가 매번 재생성돼 타일 재로드 플래시가 남았다. `poolKey` 를 준 `MapCanvas` 는 언마운트 시 OL `Map` 을 파괴하지 않고 모듈 `mapPool`(`Map<string, PooledMap>`)에 보관하고, 다음 마운트가 `get`+`delete`(**take 시맨틱** — StrictMode 이중/동시 마운트가 한 map 을 다투지 않게)로 이어받아 `setTarget` 만 다시 건다 — 타일 캐시·뷰포트가 통째로 살아 플래시가 사라진다. 벡터 레이어 4종(노선 형상·겸표시·정류장·차량 — 대중교통이 도입)은 **마운트마다 새로 생성**하고 `map`/`tileSource` 리스너는 `EventsKey` 로 모아 cleanup 에서 `unByKey` — 살아남는 map 에 이전 마운트 클로저가 중복 발화·누수되는 걸 막는다. 재사용 시 레이어 선택(`layer`/`userPickedLayer`)도 풀에서 승계(테마 기본값으로 `setUrl` 하면 플래시 재발)하고, `apiKey` 불일치(타일 URL 에 키가 박힘)면 폐기 후 신규. 데스크톱·모바일 지도가 CSS 숨김으로 동시 마운트라 키를 `transit-desktop`/`transit-mobile` 로 분리(총 인스턴스 수는 종전과 동일). (2) **`overlayMarkers` 겸표시 레이어** — `markers`(자기 도메인)와 별개 `VectorSource` 로, `fitToMarkers`/fit extent 에서 제외돼 겸표시가 화면을 넓히지 않는다. z순서는 노선 형상→겸표시→정류장→차량(뒤일수록 위)이라 자기 마커가 위에 그려지고 클릭도 먼저 히트된다. 풀 반납 시 이 레이어도 제거 목록에 든다. 두 delta 는 `transitMapViewport`(A안, 탭 전환 뷰포트 이어보기)와 **보완 관계** — 풀이 살아 있으면 뷰포트가 인스턴스째 유지되고, 새로고침·직접 진입으로 풀이 비었을 때만 A안 저장값이 `initialCenter` 로 복원한다. 상세는 [Architecture](#architecture-coverage-high----12-sources)·[Key Decisions](#key-decisions-coverage-high----18-sources). 대중교통 화면 쪽 맥락은 [bus](bus.md)·[transit](transit.md).
 
 **2026-06-25 변경 흡수 (18차, choropleth 지역 통계 지도 + vworld 타일 오탐 probe + 선택 마커 위로)** — 렌더 코어를 일부 건드린다. 핵심 3가지: (1) **지역 통계 choropleth 지도(신규 사용처)** — 어드민 지역 통계 위젯에 신규 [RegionStatsMap.tsx](../../apps/web/src/components/admin/RegionStatsMap.tsx) 가 들어왔다. `MapCanvas`(레스토랑 핀 전용)를 안 거치고 **OpenLayers 를 직접** 쓰는 별도 컴포넌트로, vworld 타일 위에 `색칠(choropleth)/버블/마커` 3모드를 토글한다. 색칠 모드는 시군구 경계 GeoJSON([public/sigungu-geo.json](../../apps/web/public/sigungu-geo.json), 552KB)을 지연 fetch 해 `GeoJSON().readFeatures` 로 폴리곤 레이어를 얹고, 카운트는 **이름 매칭이 아니라** 가게 좌표의 point-in-polygon(`geometry.intersectsCoordinate`)으로 매겨 명칭/구·시 단위 차이를 회피한다. 타일 빌더(`buildVworldTileUrl`)·테마 연동(`useThemeStore.mode → midnight/Base`)은 `MapCanvas` 와 같은 패턴 재사용. (2) **vworld 타일 오류 배너를 키 직접 검사(probe)로 판정** — `tileloaderror` 단발/연속은 키 거부와 동의어가 아니다(빠른 패닝 시 브라우저 리소스 한계로 `net::ERR_INSUFFICIENT_RESOURCES`, 서버는 정상). `MapCanvas` 가 연속 실패 8회 임계를 넘으면 즉시 배너 대신 저줌 단일 타일을 `fetch` 로 직접 probe 해 401/403(거부)일 때만 배너를 띄우고, 200+image 면 억제/해제, throw·기타는 상태 유지. `onTileError` 시그니처가 `()=>void` 에서 `(hasError: boolean)=>void` 로 바뀌어 해제도 전달. (3) **선택 마커를 다른 마커 위로** — OL Style 에 `zIndex`(선택 1000 / 비선택 0)를 줘 클릭 강조 핀이 인접 핀에 안 가린다. **이번 라운드는 16/17차의 호버·레이어·더블클릭 정책에 변경 없음** — 위 셋만 추가.
 
@@ -37,7 +39,7 @@ vworld 지도 타일을 OpenLayers 위에 직접 그려, 여러 화면에 같은
 
 저레벨 캔버스 한 개와 세 개의 화면별 wrapper 로 구성되고, 모바일(WebView/iframe) 측에 동형 코어가 한 벌 더 있다. **(2026-06)** 여기에 `MapCanvas` 를 거치지 않고 타일/테마 헬퍼만 공유하는 어드민 통계용 `RegionStatsMap` 한 개가 더 붙는다.
 
-1. **`MapCanvas`** ([apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx)) — vworld WMTS 키를 받아 OpenLayers `Map` 인스턴스를 만들고, 마커 배열·선택 상태·viewport 콜백·tile 에러 콜백을 props 로 받는다. 마커 클릭 → `onMarkerSelect`, 사용자 패닝/줌 → `onViewportChangeEnd`, 모든 viewport 변경 → `onViewportSync`. `useImperativeHandle` 로 `flyTo` / `flyToZoomIn` / `fitToMarkers` 를 외부에 노출 — 카드 호버/클릭/더블클릭의 imperative 동작 전용. **(2026-06)** 좌하단 레이어 토글(`MapLayerControl`)을 React 형제로 오버레이하기 위해, OL 타깃 div(`containerRef`)를 `absolute inset-0` 으로 감싸 OL 이 관리하는 DOM 과 분리했다. 레이어 상태(`layer`)는 컴포넌트 state 이고 초기값은 `useThemeStore.mode` 를 따른다. **(2026-06, 18차)** 선택 마커가 인접 핀에 가리지 않도록 style 에 `zIndex`(선택 1000 / 비선택 0)를 준다 — 선택 변경이 style 함수를 재평가하므로 클릭 즉시 반영. 타일 에러 판정은 단순 `tileloaderror` 1회 플래그에서 **연속 실패 임계 + 키 직접 probe** 로 바뀌었다(아래 "타일 에러 — probe 판정" 절).
+1. **`MapCanvas`** ([apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx)) — vworld WMTS 키를 받아 OpenLayers `Map` 인스턴스를 만들고, 마커 배열·선택 상태·viewport 콜백·tile 에러 콜백을 props 로 받는다. 마커 클릭 → `onMarkerSelect`, 사용자 패닝/줌 → `onViewportChangeEnd`, 모든 viewport 변경 → `onViewportSync`. `useImperativeHandle` 로 `flyTo` / `flyToZoomIn` / `fitToMarkers` 를 외부에 노출 — 카드 호버/클릭/더블클릭의 imperative 동작 전용. **(2026-06)** 좌하단 레이어 토글(`MapLayerControl`)을 React 형제로 오버레이하기 위해, OL 타깃 div(`containerRef`)를 `absolute inset-0` 으로 감싸 OL 이 관리하는 DOM 과 분리했다. 레이어 상태(`layer`)는 컴포넌트 state 이고 초기값은 `useThemeStore.mode` 를 따른다. **(2026-06, 18차)** 선택 마커가 인접 핀에 가리지 않도록 style 에 `zIndex`(선택 1000 / 비선택 0)를 준다 — 선택 변경이 style 함수를 재평가하므로 클릭 즉시 반영. 타일 에러 판정은 단순 `tileloaderror` 1회 플래그에서 **연속 실패 임계 + 키 직접 probe** 로 바뀌었다(아래 "타일 에러 — probe 판정" 절). **(2026-07, 대중교통 통합)** 두 opt-in prop 이 붙었다 — `poolKey`(지정 시 언마운트에 OL Map 을 `mapPool` 에 보관·재사용, 탭 전환 타일 플래시 제거)와 `overlayMarkers`(자기 마커와 별도 소스인 fit 제외 겸표시 레이어). 벡터 레이어는 이제 **4종**(노선 형상→겸표시→정류장→차량, `addLayer` 순서=그리는 순서)이고, 풀링 때문에 이들은 마운트마다 새로 생성하고 리스너는 `unByKey` 로 정리한다(아래 "지도 인스턴스 풀링" 절). 미지정(식당·어드민)은 GC·마커 레이어만 — 기존과 완전 동일.
 2. **`VWorldMap`** ([apps/web/src/components/restaurant/VWorldMap.tsx](../../apps/web/src/components/restaurant/VWorldMap.tsx)) — 어드민 식당 상세 단일 마커 wrapper. `useMapProviderSecret('vworld')` 로 평문 키를 가져와 `MapCanvas` 에 박는다. 좌표 누락/키 누락/로딩/타일에러 4가지를 `<Placeholder>` 로 분기.
 3. **`PublicRestaurantsMap`** ([apps/web/src/components/restaurant/PublicRestaurantsMap.tsx](../../apps/web/src/components/restaurant/PublicRestaurantsMap.tsx)) — 공개 `/restaurants` 지도 wrapper. `useMapPublicConfig` 로 키 가져옴. 각 마커에 `categoryKey: resolveRestaurantCategoryKey(it.category)` 를 박는다. "이 지역에서 재검색" 버튼, "전체 영역" 토글, "내 위치"(`MyLocationButton`)가 여기 살고, 핸들 ref 로 `flyTo`/`flyToZoomIn` 을 호출한다. **(2026-06)** 더 이상 `hoveredPlaceId` 를 받지 않는다 — 단순 호버 패닝을 없애고 `selectedPlaceId`(카드/마커 클릭)로만 `flyTo`. 더블클릭 "확대"는 신규 `zoomFocus: { placeId } | null` prop 으로 — 참조가 바뀔 때마다 해당 식당으로 `flyToZoomIn(...ZOOM_IN_LEVEL=17)`. `MyLocationButton` 은 이제 [MyLocationButton.tsx](../../apps/web/src/components/restaurant/MyLocationButton.tsx) 로 추출돼 이 파일은 import 만 한다.
 4. **`DiscoverMap`** ([apps/web/src/components/admin/discover/DiscoverMap.tsx](../../apps/web/src/components/admin/discover/DiscoverMap.tsx)) — 어드민 발견(`/admin/discover`) wrapper. 검색 결과(빨강) + 등록 맛집(회색)을 한 지도에 합성, 같은 placeId 는 `muted` 우선. **(2026-06)** 공개 지도와 동일한 `zoomFocus`(더블클릭→`flyToZoomIn` ZOOM_IN_LEVEL=17) + `focusCoord`/`locationStatus`/`onRequestLocation`(내 위치) prop 을 받게 됐다. 어드민은 첫 진입 자동 도착이 없고(등록 마커 `fitToMarkers` 우선), "내 위치" 버튼 클릭으로만 `focusCoord` 가 들어와 `MY_LOCATION_ZOOM=16` 동네 수준으로 fly. `MyLocationButton` 은 패널 반대편 모서리에 고정 배치(좌측 모서리면 먼저, 우측이면 "전체 영역" 뒤) — "전체 영역" 토글 시 흔들리지 않게.
@@ -111,6 +113,23 @@ interface MapMarker {
 - `consecutiveErrors >= FAIL_THRESHOLD(8)` 이고 쿨다운(`PROBE_COOLDOWN_MS=5000`)이 지났으면 즉시 배너 대신 **키를 직접 probe** — `buildVworldTileUrl(apiKey,'Base')` 템플릿의 `{z}/{y}/{x}` 를 `7/44/109`(서울 부근 저줌 단일 타일)로 치환해 `fetch`(4s 타임아웃 AbortController).
 - probe 결과 3분기: **401/403**(서버가 키 명시 거부) → 배너 표시. **200 + `content-type: image/*`** → `consecutiveErrors=0` + 배너 억제/해제(일시적 실패였음). **그 외(throw·타임아웃·비이미지·기타 status)** → 판정 불가, 상태 유지. probe fetch 자체의 throw 를 "무효"로 안 보는 게 핵심 — 오탐 회피.
 - 콜백 시그니처가 `onTileError(hasError: boolean)` 로 바뀌어 표시뿐 아니라 해제도 전달. `setReported` 가 직전 보고 상태와 다를 때만 콜백을 쏴 중복 토글을 막는다.
+
+### 지도 인스턴스 풀링 — 탭 전환 플래시 제거 (D안, 2026-07)
+
+**(대중교통 통합)** 버스↔지하철 탭 전환은 라우트 언마운트라 `MapCanvas` 가 매번 새로 생성돼, 뷰포트 이어보기(A안)로도 **타일 재로드 플래시**가 남았다. `poolKey` prop 을 준 `MapCanvas` 는 OL `Map` 인스턴스를 파괴하지 않고 모듈 `mapPool`(`Map<string, PooledMap>`)에 보관했다가 다음 마운트가 이어받는다.
+
+- **`PooledMap`** = `{ map, tileSource, apiKey, layer, userPickedLayer }`. `tileSource` 는 URL 에 `apiKey` 가 박혀 있어 재사용 판정에 쓰고, `layer`/`userPickedLayer` 는 재사용 첫 렌더가 테마 기본값으로 `setUrl`(→타일 전체 리프레시=플래시) 하지 않도록 레이어 선택을 승계하기 위함.
+- **take 시맨틱** — 획득은 `mapPool.get(poolKey)` + 즉시 `delete`. StrictMode 이중 마운트·동시 마운트가 한 map 을 공유하는 사고를 원천 차단한다. `apiKey` 불일치면 꺼낸 map 을 `dispose` 하고 신규 경로로 폴백(키 갱신 대응).
+- **레이어 4종은 마운트마다 재생성** — 노선 형상·겸표시·정류장·차량 `VectorSource`/`VectorLayer` 는 재사용이든 신규든 새로 만들어 이전 마운트의 feature·보간 상태를 잇지 않는다. baseLayer(index 0, 타일)만 남겨 타일 캐시를 이어받는다. 재사용 마운트는 `setTarget(container)` + `updateSize()` 로 새 DOM 에 붙이되 `View` 는 안 건드려(뷰포트 유지) 캐시 타일이 즉시 그려진다.
+- **리스너 정리(`unByKey`)** — `map`/`tileSource` 에 건 리스너 키(`pointerdrag`/`wheel`/`moveend`/`click`/`postrender`)를 `EventsKey[]` 로 모아 cleanup 에서 전부 해제. 풀링으로 map 이 살아남으므로 안 하면 이전 마운트 클로저가 중복 발화·누수된다(미풀링이어도 무해).
+- **반납(release)** — 언마운트 cleanup 이 레이어 4종 제거 + `setTarget(undefined)` 후, `poolKey` 있으면 `mapPool.set(poolKey, {...})`. 방어적으로 이미 같은 키 엔트리가 있으면 지금 map 을 `dispose` 하고 기존 풀을 보존(한 키를 둘이 다투는 상황 회피).
+- **이중 마운트 대응 키 분리** — Bus/SubwayPage 는 데스크톱·모바일 지도를 CSS 숨김(`hidden xl:flex`/`xl:hidden`)으로 **동시 마운트**한다. 단일 키면 한쪽만 재사용돼 나머지가 플래시하므로 `transit-desktop`/`transit-mobile` 로 나눈다(페이지당 풀 엔트리 2개, 총 인스턴스 수는 종전과 동일).
+
+풀링은 [transitMapViewport](../../apps/web/src/components/transit/transitMapViewport.ts)(A안)와 보완재다 — 풀이 살아 있으면 뷰포트가 인스턴스째 유지되고, 새로고침·직접 진입으로 풀이 빈 상태에서만 A안 저장값이 `initialCenter` 로 복원한다.
+
+### 겸표시(overlay) 마커 레이어 — fit 제외 보조 마커 (2026-07)
+
+**(대중교통 통합)** `overlayMarkers` prop 은 주변 모드에서 상대 도메인(버스 탭→지하철역, 지하철 탭→정류장)을 함께 그리는 보조 마커다. `markers`(자기 도메인)와 **별도 `VectorSource`** 라 `fitToMarkers`/fit extent 를 넓히지 않는다 — 겸표시 때문에 지도가 줌아웃되지 않는다. z순서는 노선 형상→**겸표시**→정류장→차량이라 자기 마커가 위에 그려지고 클릭도 먼저 히트된다. 클릭은 `markerId` 로 잡혀 `onMarkerSelect` 로 전달되고(호출자가 `x-` 등 id prefix 로 자기/상대 도메인 구분), 라벨은 호출자가 안 넘겨 생략, 선택 개념이 없어 항상 비선택 스타일. `overlayMarkers` 가 바뀔 때만 전용 소스를 `clear` 후 다시 칠해(주변 모드 이탈/토글 off 시 잔상 제거) 마커 파이프라인과 독립적으로 갱신된다. 미지정/빈 배열이면 빈 레이어 — 식당·어드민 지도는 기존과 완전 동일.
 
 ### 모바일 (WebView/iframe) 동형 코어
 
@@ -201,7 +220,11 @@ interface Props {
   onViewportSync?(viewport: MapViewport): void;          // 모든 viewport 변경 (첫 렌더 포함)
   onTileError?(hasError: boolean): void;                 // (18차) 연속 실패 임계+probe 판정 → 표시(true)/해제(false)
   layerControl?: boolean;                                // 좌하단 레이어 토글(일반/다크/위성). 기본 true.
+  overlayMarkers?: MapMarker[];                          // (2026-07) fit 제외 겸표시 레이어(노선→겸표시→마커→차량 z순서). 미지정=빈 레이어.
+  poolKey?: string;                                      // (2026-07) 지정 시 OL Map 인스턴스를 mapPool 에 보관·재사용(탭 전환 플래시 제거). 마운트 수명 동안 불변.
   className?: string;
+  // 대중교통(버스/지하철)이 도입한 routeLine·vehicles·followVehicleId·onVehicleSelect·
+  // onFollowInterrupted·fitToCoords 확장은 [bus](bus.md)·[subway](subway.md) 에 상술.
 }
 interface MapCanvasHandle {
   flyTo(lat: number, lng: number, zoom?: number): void;
@@ -302,6 +325,8 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 
 ## Key Decisions [coverage: high -- 18 sources]
 
+- **2026-07(대중교통 통합): 탭 전환 플래시 — 페이지 keep-alive(C안) 대신 지도 인스턴스 풀링(D안)** -- 탭 전환=라우트 언마운트라 지도가 재생성돼 뷰포트 이어보기(A안)로도 타일 재로드 플래시가 남았다. 후보는 세 가지였다 — A안(뷰포트만 저장/복원, 플래시 잔존), C안(숨긴 페이지를 keep-alive), D안(OL Map 인스턴스를 풀에 보관). C안은 숨은 페이지가 상대 탭 URL 파라미터에 반응하는 구조 충돌로 기각하고, `poolKey` opt-in D안을 택했다. **opt-in 이 핵심** — 미지정(식당·어드민 지도)은 풀에 손대지 않고 기존처럼 GC 하므로 공용 컴포넌트 회귀가 원천 차단된다. 획득은 take(get+delete) 시맨틱, `apiKey` 불일치는 폐기 후 신규, 레이어 선택 승계로 재사용 첫 렌더 `setUrl` 플래시 회피. A안은 새로고침·직접 진입(풀 빈 상태) 복원용 보완재로 유지(둘 다 유지). 상세는 [Architecture](#architecture-coverage-high----12-sources)의 "지도 인스턴스 풀링" 절.
+- **2026-07(대중교통 통합): 겸표시는 별도 소스 — fit extent 오염 회피** -- 상대 도메인 겸표시(`overlayMarkers`)를 자기 마커(`markers`)와 같은 소스에 넣으면 `fitToMarkers` 가 겸표시까지 끌어안아 화면이 넓어진다. 노선 형상 레이어를 마커 fit 에서 뺀 것과 같은 이유로 별도 `VectorSource` 에 그려 fit 에서 제외한다. z순서(노선→겸표시→마커→차량)로 자기 마커가 위에 오고 클릭도 먼저 히트, 클릭 자체는 `markerId`→`onMarkerSelect` 로 자기 마커와 같은 채널을 타되 호출자가 id prefix(`x-`)로 상대 도메인을 가려낸다(별도 클릭 채널을 안 만든다).
 - **18차(2026-06): 지역 통계 choropleth 지도 — `MapCanvas` 분기 대신 별도 컴포넌트** -- 시군구 폴리곤 색칠 + 가변 사이즈 버블은 `MapCanvas` 의 마커 빌더(고정 SVG 핀)와 모델이 안 맞아, 타일/테마/키 헬퍼만 공유하고 OL `Map` 을 직접 만드는 `RegionStatsMap` 으로 분리했다. 색칠 카운트는 **이름 매칭이 아니라** 가게 좌표의 point-in-polygon(`geometry.intersectsCoordinate`)으로 매겨 시군구 명칭/구·시 단위 차이를 통째로 회피한다(이름 정규화 불필요). 경계 GeoJSON(552KB)은 대용량이라 src import 시 tsc 폭주 + 메인 번들 영향을 피하려 **색칠 모드 진입 시에만 런타임 fetch** 하고 `geoCacheRef` 로 캐시(모드 토글마다 재요청 안 함).
 - **18차(2026-06): vworld 타일 오류 배너를 키 직접 검사(probe)로 — 단발 실패로 굳던 회귀 수정** -- 기존엔 `tileloaderror` 1회만으로 "키 무효" 배너를 띄우고 굳었는데, 빠른 패닝/줌의 브라우저 리소스 한계 실패(서버 정상)까지 키 무효로 오판했다. 연속 실패 8회 임계를 넘을 때만 저줌 단일 타일을 `fetch` probe 해 **401/403 일 때만** 배너, 200+image 면 해제, throw·기타는 상태 유지(probe 자체의 throw 를 무효로 안 봄). 타일 1장이라도 성공하면 즉시 리셋. `onTileError(hasError)` 로 해제도 전달. 키 검증 URL 은 `buildVworldTileUrl` 템플릿 재사용(엔드포인트 중복 회피).
 - **18차(2026-06): 선택 마커를 다른 마커 위로 — Style zIndex** -- 클릭 강조 핀이 인접 핀에 일부 가리던 문제를 OL Style `zIndex`(선택 1000 / 비선택 0)로 해결. `setTarget`/레이어 분리 같은 무거운 수단 대신 기존 style 재평가 경로에 zIndex 한 줄만 얹어 클릭 즉시 반영.
@@ -324,6 +349,9 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 
 ## Gotchas [coverage: high -- 15 sources]
 
+- **(2026-07) 같은 `poolKey` 를 두 `MapCanvas` 가 동시에 쓰면 안 된다.** take(get+delete) 시맨틱이라 첫 마운트가 풀을 비우면 둘째는 재사용 실패로 플래시한다. Bus/SubwayPage 는 데스크톱·모바일 지도를 CSS 숨김으로 동시 마운트하므로 키를 `transit-desktop`/`transit-mobile` 로 나눴다 — 새 대중교통 지도를 붙일 때 레이아웃마다 고유 키를 줄 것. 반납 시 이미 같은 키 엔트리가 있으면 지금 map 을 `dispose` 하는 방어가 있지만, 정상 흐름은 한 시점에 한 레이아웃만 실제 표시되는 것을 전제한다.
+- **(2026-07) 풀링 map 은 레이어/리스너를 마운트마다 재생성해야 한다.** 살아남는 map 에 이전 마운트의 벡터 레이어·리스너 클로저가 남으면 중복 발화·누수·잔상이 된다. cleanup 이 레이어 4종 제거 + `unByKey`(모은 `EventsKey`) 를 반드시 수행하고, 재사용 마운트는 새 소스로 다시 `addLayer` 한다. 또 재사용 첫 렌더가 테마 기본값으로 `setUrl` 하면 타일 전체 리프레시=플래시가 재발하므로 풀의 `layer`/`userPickedLayer` 를 승계해야 한다 — 풀 로직을 손볼 때 이 세 가지(레이어 재생성·리스너 해제·레이어 승계)를 함께 유지.
+- **(2026-07) `overlayMarkers` 는 fit 에서 빠진다 — 겸표시가 안 보이면 자기 마커 fit 을 의심하지 말 것.** 별도 소스라 `fitToMarkers` extent 에 안 들어간다(의도). 겸표시가 화면 밖이면 지도가 자동으로 그쪽으로 맞추지 않는다 — 자기 정류장/역 기준으로 fit 된 화면 안에 들어오는 겸표시만 보인다.
 - **레이어 변경 첫 렌더 skip — `layerInitRef` 가드** -- map-create effect 가 이미 `layerRef.current` 로 올바른 타일을 만들었으므로, layer effect 의 첫 실행은 `setUrl` 을 건너뛴다. 같은 URL 로 `setUrl` 하면 OL 이 타일을 통째 리프레시해 깜빡인다. layer effect 를 손볼 때 이 가드를 깨면 첫 렌더 깜빡임 회귀.
 - **테마-레이어 추종은 사용자가 직접 고르기 전까지만** -- `userPickedLayerRef` 가 true 가 되면 테마 변경 effect 가 `return` 으로 빠진다. 다크모드 토글 시 지도가 안 따라온다면 그 세션에서 이미 컨트롤을 눌렀기 때문 — 의도된 동작. 새로고침하면 다시 테마를 따른다(레이어는 비영속).
 - **앱 WebView `__setMode` no-op 가드** -- `ready` 직후 첫 `__setMode` 호출은 초기 HTML 이 이미 그 모드로 빌드돼 있어 `nextDark === darkBg` 라 no-op(깜빡임 없음). `theme.mode` 를 HTML-빌드 메모의 deps 에 넣으면 모드 변경마다 WebView 가 재마운트되어 worklets 충돌 + 지도 상태 유실 — 의도적으로 deps 에서 제외했다. 새 런타임 채널을 추가할 때 같은 분리 유지.
@@ -347,7 +375,7 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 - **(18차) `RegionStatsMap` 은 `MapCanvas` 와 별개 — 코어 변경 시 양쪽 다 손봐야** -- 타일/테마 헬퍼만 공유할 뿐 OL 구성·레이어 교체·테마 effect 가 `RegionStatsMap` 안에 독립 복제돼 있다. `buildVworldTileUrl`/`layerForTheme` 시그니처를 바꾸거나 새 레이어를 추가하면 `MapCanvas` 와 `RegionStatsMap` 두 곳을 같이 고쳐야 한다(공유 빌더는 같지만 effect 는 미공유).
 - **단일 슬라이드오버는 별도 인스턴스** -- 어드민 식당 상세 280px 카드와 풀 슬라이드오버는 각각 별도 `VWorldMap`(=별도 OL Map). `setTarget` 이동 트릭은 view/layer 상태가 어색해져 안 쓴다.
 
-## Sources [coverage: high -- 26 sources]
+## Sources [coverage: high -- 28 sources]
 
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)
 - [apps/friendly/prisma/migrations/20260508173216_add_map_provider_configs/migration.sql](../../apps/friendly/prisma/migrations/20260508173216_add_map_provider_configs/migration.sql)
@@ -361,7 +389,9 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 - [packages/utils/src/restaurantCategory.ts](../../packages/utils/src/restaurantCategory.ts)
 - [packages/utils/src/vworld.ts](../../packages/utils/src/vworld.ts) — *VworldLayer / buildVworldTileUrl / probeVworldKey (lib 에서 utils 로 공용화)*
 - [apps/web/src/stores/theme.ts](../../apps/web/src/stores/theme.ts) — *17차: MapCanvas 초기 레이어 결정 + 테마 추종*
-- [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) — *modified (18차): tileloaderror 연속 임계+키 probe 판정, 선택 마커 zIndex / (17차): 레이어 토글 + flyToZoomIn + 다크 라벨 반전 + 컨테이너 wrapper 분리*
+- [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) — *modified (2026-07 대중교통 통합): poolKey 인스턴스 풀링(D안, mapPool·take·unByKey·레이어 승계) + overlayMarkers fit 제외 겸표시 레이어 / (18차): tileloaderror 연속 임계+키 probe 판정, 선택 마커 zIndex / (17차): 레이어 토글 + flyToZoomIn + 다크 라벨 반전 + 컨테이너 wrapper 분리*
+- [apps/web/src/components/transit/transitMapViewport.ts](../../apps/web/src/components/transit/transitMapViewport.ts) — *new (2026-07): 탭 전환 뷰포트 이어보기 싱글턴(A안) — 풀링(D안)의 보완재*
+- [apps/web/src/components/bus/BusStationsMap.tsx](../../apps/web/src/components/bus/BusStationsMap.tsx) — *new(참조): poolKey(transit-desktop/mobile)·overlayMarkers·initialViewport 배선 주 소비자. 대중교통 지도 래퍼는 [bus](bus.md)·[subway](subway.md)*
 - [apps/web/src/components/admin/RegionStatsMap.tsx](../../apps/web/src/components/admin/RegionStatsMap.tsx) — *new (18차): 지역 통계 choropleth/버블/마커 지도 — MapCanvas 비경유 별도 OL Map, point-in-polygon 색칠*
 - [apps/web/public/sigungu-geo.json](../../apps/web/public/sigungu-geo.json) — *new (18차): 시군구 경계 GeoJSON 에셋(2018 KOSTAT, mapshaper 4% 단순화, 552KB) — choropleth 지연 fetch*
 - [apps/web/src/components/restaurant/MapLayerControl.tsx](../../apps/web/src/components/restaurant/MapLayerControl.tsx) — *new (17차): 좌하단 일반/다크/위성 토글*

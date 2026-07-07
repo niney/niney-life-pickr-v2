@@ -1,12 +1,14 @@
 ---
 topic: api-contract
-last_compiled: 2026-07-06
-sources_count: 33
+last_compiled: 2026-07-07
+sources_count: 36
 status: active
-aliases: [zod, schemas, ssot, contracts, "@repo/api-contract", canonical, canonical-merge, canonical-split, canonical-proposal, canonical-suggestion, catchtable, catchtable-search, catchtable-shop, diningcode, diningcode-search, diningcode-shop, diningcode-bulk-save, tabling, tabling-search, tabling-shop, tabling-discover, tabling-bulk-save, naver-search-result, crawl-search-query, crawl-search-result, search-bbox, auto-discover, auto-discover-job, auto-discover-phase, auto-discover-snapshot, auto-discover-confirm, awaiting-confirmation, fused-detail, public-sources, public-source-tabling, public-tabling-addon, public-stored-review-count, public-diningcode-addon, crawl-log, crawl-log-level, crawl-job-log-entry, review-summary-queued, review-summary-cancelled, restaurant-cancel-summary, restaurant-resume-summary, summary-log-event, public-reviews-pagination, public-review-sentiment, public-review-sort, settlement, settlement-session, settlement-participant, settlement-item, settlement-share, settlement-shared, settlement-contact, settlement-extraction, receipt-item, receipt-item-category, settlement-calculator, calculate-shares, llm-provider-purpose, ai-purpose, log-analysis-purpose, settlement-draft, settlement-draft-schema, SettlementDraft, UpsertSettlementDraftInput, settlement-rounds, SettlementRound, SettlementRoundAttendee, calculateMultiRoundShares, effectiveExcludes, perCategoryShares, ExtractReceiptSplit, roundIndex, roundTotal, fromDraftId, update-PUT, full-replace, leftoverParticipantClientId, leftoverParticipantClientIds, leftover-nanueo-batgi, roundUnit-100-1000, categoryAdjustments, SharedSettlementRound, omit-extend, attendees-100, items-200, models-preview, share-og-image, ShareOgImage, og-image, og-image-url, og-image-candidates, ogImageUrl, ogImageCandidates, share-ttl, ShareTtl, expiresAt, receiptImageToken, eslint-config, schedule, schedule-config, schedule-run, schedule-runs, schedule-preview, schedule-progress, schedule-done, ScheduleJobType, ScheduleTrigger, ScheduleRunStatus, SchedulePhase, ScheduleConfig, ScheduleConfigInput, ScheduleRun, ScheduleRunList, ScheduleProgressEvent, ScheduleDoneEvent, SchedulePreviewInput, SchedulePreviewResult, normalize-merge, cron, croner, normalize-merge-pipeline, restaurant-category-tree, RestaurantCategoryTreeResult, public-category-tree, review-tip-filter, review-menu-filter, review-search, ReviewAskInput, ReviewAskResult, ReviewPublicAskBody, ReviewQaReadyResult, ReviewSearchEnrichInput, ReviewEnrichStatusList, ReviewEnrichProgressEvent, rag, hyde, qa, review-clustering, ReviewClustersResult, ReviewClusterItem, ReviewClusterAspectSummary, ReviewClusterRunResult, ReviewClusterStatusList, ClusterTone, hdbscan, c-tf-idf, random-crawl, RandomCrawlConfig, RandomCrawlConfigInput, RandomCrawlRun, RandomCrawlRunList, RandomCrawlCandidate, RandomCrawlRegion, RandomCrawlTrigger, RandomCrawlTimeoutAction, RegionTree, RegionDongList, telegram-discover, logs, operation-log, OperationFeature, OperationRunSchema, OperationLogEntrySchema, OperationReportSchema, OperationRunList, OperationRunDetail, AnalyzeRunResult, LogConfigSchema, log-analysis, telegram-settings, TelegramConfig, UpdateTelegramConfigInput, TelegramTestResult, TelegramChatIdResult, resolve-chat-id, llm-telemetry, LlmTelemetrySnapshot, LlmGateSnapshot, LlmTelemetryCall, LlmKeySource, LlmModelSource, group-split, SettlementItemGroup, SettlementGroupMember, SettlementGroupSplitMode, GLASSES, glasses, groupSplits, drink-kinds, DRINK_KINDS, matchDrinkKind, isGroupableCategory, GROUPABLE_CATEGORIES, region-stats, RegionStatsResult, RegionStatsSido, RegionStatsSigungu, smart-pick, RestaurantSmartPickInput, bus, bus-station, bus-station-search, BusStationSearchQuery, BusStationItem, BusStationSearchResult, BusArrivalsParams, BusArrivalEntry, BusArrivalItem, BusArrivalsResult, BusNearbyQuery, BusNearbyItem, BusNearbyResult, BusPositionsParams, BusPositionsQuery, BusPositionItem, BusPositionsResult, BusRouteDetailParams, BusRoutePathPoint, BusRouteStationItem, BusRouteInfo, BusRouteDetailResult, bus-favorite, bus-favorites, BusFavoriteStationItem, BusFavoriteRouteItem, BusFavoriteStationParams, BusFavoriteRouteParams, BusFavoriteStationUpsertBody, BusFavoriteRouteUpsertBody, BusFavoritesResult, BusFavoritesSyncBody, BUS_FAVORITES_MAX, arsId, stId, staOrd, wgs84, wgs84-range, menuGroups, MenuGroup, MenuGroupItem]
+aliases: [zod, schemas, ssot, contracts, "@repo/api-contract", canonical, canonical-merge, canonical-split, canonical-proposal, canonical-suggestion, catchtable, catchtable-search, catchtable-shop, diningcode, diningcode-search, diningcode-shop, diningcode-bulk-save, tabling, tabling-search, tabling-shop, tabling-discover, tabling-bulk-save, naver-search-result, crawl-search-query, crawl-search-result, search-bbox, auto-discover, auto-discover-job, auto-discover-phase, auto-discover-snapshot, auto-discover-confirm, awaiting-confirmation, fused-detail, public-sources, public-source-tabling, public-tabling-addon, public-stored-review-count, public-diningcode-addon, crawl-log, crawl-log-level, crawl-job-log-entry, review-summary-queued, review-summary-cancelled, restaurant-cancel-summary, restaurant-resume-summary, summary-log-event, public-reviews-pagination, public-review-sentiment, public-review-sort, settlement, settlement-session, settlement-participant, settlement-item, settlement-share, settlement-shared, settlement-contact, settlement-extraction, receipt-item, receipt-item-category, settlement-calculator, calculate-shares, llm-provider-purpose, ai-purpose, log-analysis-purpose, settlement-draft, settlement-draft-schema, SettlementDraft, UpsertSettlementDraftInput, settlement-rounds, SettlementRound, SettlementRoundAttendee, calculateMultiRoundShares, effectiveExcludes, perCategoryShares, ExtractReceiptSplit, roundIndex, roundTotal, fromDraftId, update-PUT, full-replace, leftoverParticipantClientId, leftoverParticipantClientIds, leftover-nanueo-batgi, roundUnit-100-1000, categoryAdjustments, SharedSettlementRound, omit-extend, attendees-100, items-200, models-preview, share-og-image, ShareOgImage, og-image, og-image-url, og-image-candidates, ogImageUrl, ogImageCandidates, share-ttl, ShareTtl, expiresAt, receiptImageToken, eslint-config, schedule, schedule-config, schedule-run, schedule-runs, schedule-preview, schedule-progress, schedule-done, ScheduleJobType, ScheduleTrigger, ScheduleRunStatus, SchedulePhase, ScheduleConfig, ScheduleConfigInput, ScheduleRun, ScheduleRunList, ScheduleProgressEvent, ScheduleDoneEvent, SchedulePreviewInput, SchedulePreviewResult, normalize-merge, cron, croner, normalize-merge-pipeline, restaurant-category-tree, RestaurantCategoryTreeResult, public-category-tree, review-tip-filter, review-menu-filter, review-search, ReviewAskInput, ReviewAskResult, ReviewPublicAskBody, ReviewQaReadyResult, ReviewSearchEnrichInput, ReviewEnrichStatusList, ReviewEnrichProgressEvent, rag, hyde, qa, review-clustering, ReviewClustersResult, ReviewClusterItem, ReviewClusterAspectSummary, ReviewClusterRunResult, ReviewClusterStatusList, ClusterTone, hdbscan, c-tf-idf, random-crawl, RandomCrawlConfig, RandomCrawlConfigInput, RandomCrawlRun, RandomCrawlRunList, RandomCrawlCandidate, RandomCrawlRegion, RandomCrawlTrigger, RandomCrawlTimeoutAction, RegionTree, RegionDongList, telegram-discover, logs, operation-log, OperationFeature, OperationRunSchema, OperationLogEntrySchema, OperationReportSchema, OperationRunList, OperationRunDetail, AnalyzeRunResult, LogConfigSchema, log-analysis, telegram-settings, TelegramConfig, UpdateTelegramConfigInput, TelegramTestResult, TelegramChatIdResult, resolve-chat-id, llm-telemetry, LlmTelemetrySnapshot, LlmGateSnapshot, LlmTelemetryCall, LlmKeySource, LlmModelSource, group-split, SettlementItemGroup, SettlementGroupMember, SettlementGroupSplitMode, GLASSES, glasses, groupSplits, drink-kinds, DRINK_KINDS, matchDrinkKind, isGroupableCategory, GROUPABLE_CATEGORIES, region-stats, RegionStatsResult, RegionStatsSido, RegionStatsSigungu, smart-pick, RestaurantSmartPickInput, bus, bus-station, bus-station-search, BusStationSearchQuery, BusStationItem, BusStationSearchResult, BusArrivalsParams, BusArrivalEntry, BusArrivalItem, BusArrivalsResult, BusNearbyQuery, BusNearbyItem, BusNearbyResult, BusPositionsParams, BusPositionsQuery, BusPositionItem, BusPositionsResult, BusRouteDetailParams, BusRoutePathPoint, BusRouteStationItem, BusRouteInfo, BusRouteDetailResult, bus-favorite, bus-favorites, BusFavoriteStationItem, BusFavoriteRouteItem, BusFavoriteStationParams, BusFavoriteRouteParams, BusFavoriteStationUpsertBody, BusFavoriteRouteUpsertBody, BusFavoritesResult, BusFavoritesSyncBody, BUS_FAVORITES_MAX, arsId, stId, staOrd, wgs84, wgs84-range, menuGroups, MenuGroup, MenuGroupItem, subway, subway-station, SubwayStationSearchQuery, SubwayStationGroupItem, SubwayStationSearchResult, SubwayNearbyQuery, SubwayNearbyResult, SubwayLineDetailResult, SubwayLineSection, SubwayLineStationItem, SubwayTimetableResult, SubwayCongestionResult, SubwayPathQuery, SubwayPathResult, SubwayPositionsResult, SubwayTrainPositionItem, SubwayArrivalsParams, SubwayArrivalItem, subway-favorite, SubwayFavoriteStationItem, SubwayFavoriteLineItem, SubwayFavoritesResult, SubwayFavoritesSyncBody, SUBWAY_FAVORITES_MAX, subwayId, lineId, Routes-Subway]
 ---
 
 # api-contract — Zod 공유 스키마 (SSOT)
+
+**2026-07-07 변경 흡수 — 수도권 전철 도메인 신규(2 파일) + Routes.Subway namespace**: SSOT 패키지에 **신규 스키마 파일 2개**가 합류했다 — `schemas/subway.ts`(수도권 전철: 역 검색·좌표 주변 역·실시간 도착·호선 실시간 열차 위치·호선 상세(경유역 sections)·역 시간표·시간대별 혼잡도·경로 탐색 결과), `schemas/subway-favorite.ts`(전철 즐겨찾기 — 역 / 역×호선 두 종류, 버스와 동일하게 로그인 서버 저장 + 게스트 로컬을 로그인 시 union 병합, `SUBWAY_FAVORITES_MAX=100`). `index.ts` 가 2개 re-export 를 추가하고, `routes.ts` 에 **`Routes.Subway` namespace** 가 신설됐다 (`stationSearch`, `stationsNearby`, `stationArrivals(stationId)`, `lineDetail(lineId)`, `linePositions(lineId)`, `stationTimetable(stationId)`, `stationCongestion(stationId)`, `path`, `favorites`, `favoriteStation(stationId)`/`favoriteLine(stationId, lineId)`, `favoritesSync`) — 검색·주변·도착·위치·노선상세·시간표·혼잡·경로는 전부 **비로그인 공개**(버스·맛집 공개 지도와 동일 정책), 즐겨찾기만 인증. **버스와 대조되는 계약적 특징**: `stationId` 가 `${lineId}:${name}` 합성(콜론·한글 포함)이라 라우트 헬퍼(`stationArrivals`/`stationTimetable`/`stationCongestion`/`favoriteStation`)가 `encodeURIComponent` 까지 책임진다. `lineId` 는 서울시 실시간 API 의 `subwayId`(4자리) 체계를 그대로 채택. 버스가 WGS84 좌표를 zod 범위로 강제한 것과 달리 전철은 로컬 적재 데이터라 쿼터·셀 캐시 없이 좌표 주변 조회. 버스 2파일이 `bus.ts`↔`bus-favorite.ts` 한 방향 import(`BusFavoriteStationItem = BusStationItem`)였듯 전철도 `subway-favorite.ts` 가 즐겨찾기 항목을 자체 정의(역/호선 스냅샷). 도메인 상세는 [subway](subway.md) 토픽 — 여기선 SSOT 패키지 관점(스키마 인벤토리 + 공개/인증 라우트 분리 + stationId 인코딩 계약)만.
 
 **2026-07-06 변경 흡수 (19차) — 서울시 버스 도메인 신규(2 파일) + 네이버 메뉴 그룹(menuGroups) 노출**: 이번 라운드는 SSOT 패키지에 **신규 스키마 파일 2개**가 합류했다 — `schemas/bus.ts`(서울시 버스: 정류장 검색·실시간 도착·차량 위치·좌표 기반 주변 정류장·노선 상세 합본), `schemas/bus-favorite.ts`(버스 즐겨찾기 — 정류장 / 정류장×노선 조합 두 종류, 로그인 사용자 서버 저장 + 비로그인 로컬 저장분을 로그인 시 union 병합). `index.ts` 가 2개 re-export 를 추가하고, `routes.ts` 에 **`Routes.Bus` namespace** 가 신설됐다 (`stationSearch`, `stationsNearby`, `stationArrivals(arsId)`, `busPositions(busRouteId)`, `routeDetail(busRouteId)`, `favorites`, `favoriteStation(stId)`/`favoriteRoute(stId, busRouteId)`, `favoritesSync`) — 검색·도착·위치·주변·노선은 전부 **비로그인 공개**(맛집 공개 지도와 동일 정책), 즐겨찾기만 인증. **버스 스키마의 계약적 특징은 WGS84 좌표를 zod 숫자 범위(lat 33~39 / lng 124~132, 한국 범위)로 강제**한 것 — 서버가 GRS80 TM 원본을 항상 WGS84 로 정규화한다는 계약을 코드로 못박아, 변환이 새면 응답 직렬화 자체가 실패한다. 기존 파일 변경: `crawl.ts` 가 **`MenuGroup`/`MenuGroupItem`** zod 를 추가(네이버 `/menu/list` 그룹 크롤 원본 — `MenuGroupItem = MenuItem.extend`)하고 `NaverPlaceData.menuGroups` 를 optional 로 노출, `restaurant.ts` 가 그 `MenuGroup` 을 import 해 `RestaurantPublicDetail.menuGroups` 를 optional 로 추가 — 기존 평탄화 `menus` 는 그대로 두고 그룹을 표시할 수 있는 클라이언트만 쓰는 **additive** 확장(소비자 무해). 버스·메뉴 도메인 상세는 각각 [bus](bus.md) / [menu-grouping](menu-grouping.md) 토픽 참조 — 여기선 SSOT 패키지 관점(스키마 인벤토리 + WGS84 zod 범위 계약 + 공개/인증 라우트 분리)만 다룬다.
 
@@ -52,7 +54,7 @@ packages/api-contract/
 ├── eslint.config.mjs     # **신규** @repo/config/eslint/base flat config + dist/·node_modules/ ignore
 └── src/
     ├── index.ts          # 모든 스키마 + Routes namespace + calculator + drink-kinds 재내보내기
-    ├── routes.ts         # API_PREFIX + 도메인별 경로 상수 (Auth/Users/Picks/Admin/Media/Crawl(+tabling)/Restaurant/Canonical/Analytics/Schedule/AutoDiscover/RandomCrawl/Ai/Logs/SettingsMap/SettingsTelegram/Bus/ReviewSearch/ReviewClustering/SettlementExtraction/Settlement/SettlementContact/SettlementDraft/Health) — **이번 라운드(19차)**: Bus namespace 신설
+    ├── routes.ts         # API_PREFIX + 도메인별 경로 상수 (Auth/Users/Picks/Admin/Media/Crawl(+tabling)/Restaurant/Canonical/Analytics/Schedule/AutoDiscover/RandomCrawl/Ai/Logs/SettingsMap/SettingsTelegram/Bus/Subway/ReviewSearch/ReviewClustering/SettlementExtraction/Settlement/SettlementContact/SettlementDraft/Health) — **이번 라운드(2026-07-07)**: Subway namespace 신설 (직전 19차: Bus)
     ├── settlement.calculator.ts # FE/BE 공통 분배 알고리즘 — 카테고리별 풀 + 제외 플래그 → shareAmounts[]. 멀티라운드(calculateMultiRoundShares + effectiveExcludes + perCategoryShares 매트릭스). **이번 라운드(18차)**: 세부 분배 그룹(GroupCalcInput/GroupShareBreakdown/toGroupCalcInputs) — EQUAL/GLASSES(잔수 가중) 흡수
     ├── settlement.drink-kinds.ts # **신규(18차)** 술·음료 종류 사전 — FE 그룹제안·BE 추출보정·프롬프트 힌트 단일 소스. DRINK_KINDS + matchDrinkKind + isGroupableCategory + DRINK_BRAND_PROMPT_HINT. zod 아님(순수 데이터·함수, settlement-extraction 의 ReceiptItemCategoryType type-only import)
     └── schemas/
@@ -77,6 +79,8 @@ packages/api-contract/
         ├── telegram-settings.ts     # **신규(18차)** 텔레그램 봇 설정 — DB 우선 + .env fallback(source enum), 토큰 마스킹 + 연결테스트 + chat_id 자동탐색
         ├── bus.ts                   # **신규(19차)** 서울시 버스 — 정류장 검색(DB 30일 캐시) + 실시간 도착/차량 위치(무캐싱 프록시) + 좌표 주변 정류장 + 노선 상세 합본. WGS84 좌표 zod 범위 강제(lat 33~39/lng 124~132)
         ├── bus-favorite.ts          # **신규(19차)** 버스 즐겨찾기 — 정류장 / 정류장×노선 조합. 스냅샷 보존(재조회 불필요), BUS_FAVORITES_MAX=100, 게스트→로그인 union sync. BusStationItem 재사용(import)
+        ├── subway.ts                # **신규(2026-07-07)** 수도권 전철 — 역 검색 + 좌표 주변 역 + 실시간 도착/열차 위치 + 호선 상세(sections) + 역 시간표 + 시간대별 혼잡 + 경로 탐색 결과. stationId=`${lineId}:${name}` 합성, lineId=subwayId(4자리). 로컬 적재라 쿼터 없음
+        ├── subway-favorite.ts       # **신규(2026-07-07)** 전철 즐겨찾기 — 역 / 역×호선 조합. SUBWAY_FAVORITES_MAX=100, 게스트→로그인 union sync. 자체 역/호선 스냅샷 정의
         ├── settlement-extraction.ts # 영수증 업로드(token)/추출(vision LLM) + ReceiptItemCategory enum + ExtractReceiptSplit (count/index) + roundIndex/roundTotal
         ├── settlement.ts            # N차(rounds) 정산 — SettlementRound/RoundAttendee + 마스터 participants + categoryAdjustments + 할인 + ShareTtl/ShareOgImage. UpdateSettlementInput=CreateSettlementInput(전체 replace) + fromDraftId. **이번 라운드(18차)**: 세부 분배 그룹(SettlementItemGroup/GroupMember/GroupSplitMode=EQUAL/GLASSES) + categoryAdjustments leftover 단일→배열(leftoverParticipantIds[])
         ├── settlement-contact.ts    # 사용자별 단골 참여자 CRUD — list/update + lastExclude* 기억
@@ -108,9 +112,9 @@ packages/api-contract/
 
 [src/index.ts](../../packages/api-contract/src/index.ts) 는 단순한 배럴 — 도메인별
 파일을 그대로 `export *` 하고, `routes.ts` 는 `Routes` 네임스페이스로 재노출한다.
-이번 라운드(19차)에 신규 스키마 2개(`bus`/`bus-favorite`) re-export 가 추가됐다.
-(18차에는 5개 — `random-crawl`/`review-search`/`review-clustering`/`logs`/
-`telegram-settings` — 와 `settlement.drink-kinds.js` 한 줄이 추가됐다.)
+이번 라운드(2026-07-07)에 신규 스키마 2개(`subway`/`subway-favorite`) re-export 가 추가됐다.
+(직전 19차에는 `bus`/`bus-favorite` 2개, 18차에는 5개 — `random-crawl`/`review-search`/
+`review-clustering`/`logs`/`telegram-settings` — 와 `settlement.drink-kinds.js` 한 줄이 추가됐다.)
 
 ```ts
 export * from './schemas/common.js';
@@ -134,6 +138,8 @@ export * from './schemas/settings-map.js';
 export * from './schemas/telegram-settings.js';   // 신규 (18차)
 export * from './schemas/bus.js';                 // 신규 (19차)
 export * from './schemas/bus-favorite.js';        // 신규 (19차)
+export * from './schemas/subway.js';              // 신규 (2026-07-07)
+export * from './schemas/subway-favorite.js';     // 신규 (2026-07-07)
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';
 export * from './schemas/settlement-contact.js';
@@ -172,6 +178,13 @@ canonical·analytics 는 어떤 다른 도메인 스키마도 import 하지 않�
 `bus.ts` 의 `BusStationItem` 하나만 import** — 정류장 즐겨찾기 항목이 곧 정류장 스냅샷
 (`BusFavoriteStationItem = BusStationItem`)이고, PUT body 도 `BusStationItem.omit({ stId })`
 로 파생한다. 방향은 bus-favorite → bus 한쪽뿐.
+
+**신규 전철 2개 파일의 의존 방향(2026-07-07)**: 버스와 대칭이지만 한 가지 다르다 — `subway.ts` 는
+다른 schemas/ 를 import 하지 않는 자기완결 도메인. `subway-favorite.ts` 는 즐겨찾기 항목
+(`SubwayFavoriteStationItem`/`SubwayFavoriteLineItem`)을 **자체 정의**하고 PUT body 를 `.omit`
+으로 파생한다 — 버스가 `BusStationItem` 을 재사용(import)한 것과 달리 전철은 검색 결과 모양
+(`SubwayStationGroupItem`, 한 역에 여러 호선이 묶임)과 즐겨찾기 단위(역 하나 / 역×호선 하나)가
+어긋나 재사용하지 않고 스냅샷을 새로 뒀다. 방향 자체는 두 파일 모두 다른 schemas/ 미import.
 
 `schedule.ts` 는 다른 schemas/ 파일을 전혀 import 하지 않는다 — 자체 enum/object 만
 정의한다. 특히 cron 식의 형식 검증을 `croner` 같은 외부 런타임 라이브러리에 의존하지
@@ -236,7 +249,13 @@ canonical·analytics 는 어떤 다른 도메인 스키마도 import 하지 않�
   **이번 라운드(19차)** `BusStationSearchQuery`/`BusStationSearchResult`, `BusArrivalsParams`/
   `BusArrivalsResult`, `BusNearbyQuery`/`BusNearbyResult`, `BusPositionsParams`/`BusPositionsQuery`/
   `BusPositionsResult`, `BusRouteDetailParams`/`BusRouteDetailResult`, `BusFavoritesResult`/
-  `BusFavoritesSyncBody`/`BusFavoriteStationUpsertBody`/`BusFavoriteRouteUpsertBody` 등을
+  `BusFavoritesSyncBody`/`BusFavoriteStationUpsertBody`/`BusFavoriteRouteUpsertBody`,
+  **이번 라운드(2026-07-07)** `SubwayStationSearchQuery`/`SubwayStationSearchResult`,
+  `SubwayNearbyQuery`/`SubwayNearbyResult`, `SubwayArrivalsParams`/`SubwayArrivalsResult`,
+  `SubwayPositionsParams`/`SubwayPositionsResult`, `SubwayLineDetailParams`/`SubwayLineDetailResult`,
+  `SubwayTimetableParams`/`SubwayTimetableResult`, `SubwayCongestionParams`/`SubwayCongestionResult`,
+  `SubwayPathQuery`/`SubwayPathResult`, `SubwayFavoritesResult`/`SubwayFavoritesSyncBody`/
+  `SubwayFavoriteStationUpsertBody`/`SubwayFavoriteLineUpsertBody` 등을
   `schema: { body, response }` 로 등록. 도메인 흐름은 [review-search](review-search.md) /
   [review-clustering](review-clustering.md) / [random-crawl](random-crawl.md) / [logs](logs.md) /
   [schedule](schedule.md) / [analytics](analytics.md) 토픽 참조.
@@ -254,6 +273,10 @@ canonical·analytics 는 어떤 다른 도메인 스키마도 import 하지 않�
   pending, publicClusters(placeId)}`**, **`Routes.Bus.{stationSearch, stationsNearby,
   stationArrivals(arsId), busPositions(busRouteId), routeDetail(busRouteId), favorites,
   favoriteStation(stId), favoriteRoute(stId, busRouteId), favoritesSync}`**,
+  **`Routes.Subway.{stationSearch, stationsNearby, stationArrivals(stationId),
+  lineDetail(lineId), linePositions(lineId), stationTimetable(stationId),
+  stationCongestion(stationId), path, favorites, favoriteStation(stationId),
+  favoriteLine(stationId, lineId), favoritesSync}`**,
   `Routes.Settlement.{list, create, one(id), update(id),
   share(id), shared(token)}`, `Routes.SettlementDraft.{list, upsert, one(id)}`,
   `Routes.SettlementExtraction.*`, `Routes.SettlementContact.*` 의 경로 헬퍼와 `z.infer<typeof X>`

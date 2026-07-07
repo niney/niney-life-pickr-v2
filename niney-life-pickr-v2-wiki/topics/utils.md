@@ -1,12 +1,14 @@
 ---
 topic: utils
-last_compiled: 2026-07-06
-sources_count: 13
+last_compiled: 2026-07-07
+sources_count: 19
 status: active
-aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnail-url, geo, bbox, compute-bbox-around, is-in-korea, lat-lng, restaurantCategory, formatWonPrice, 원화, 콤마, 카테고리매핑, resolveRestaurantCategoryKey, buildRestaurantMarkerSvg, aiModel, parseModelFamily, groupModelsByFamily, recommendModelForPurpose, isVisionModel, model-family, 모델계열, markerFrame, buildPinMarkerSvg, buildCircleMarkerSvg, marker-frame, 마커프레임, busMarker, buildBusStopMarkerSvg, buildBusVehiclePillSvg, buildBusVehicleDirSvg, buildMyLocationMarkerSvg, buildBusRouteStopDotSvg, busRouteTypeColor, 버스마커, 노선유형색, routePath, createRoutePathIndex, projectOnRoutePath, pointAtRoutePathS, bearingAtRoutePathS, sliceRoutePath, 노선형상, 폴리라인투영, route-path-projection]
+aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnail-url, geo, bbox, compute-bbox-around, is-in-korea, lat-lng, restaurantCategory, formatWonPrice, 원화, 콤마, 카테고리매핑, resolveRestaurantCategoryKey, buildRestaurantMarkerSvg, aiModel, parseModelFamily, groupModelsByFamily, recommendModelForPurpose, isVisionModel, model-family, 모델계열, markerFrame, buildPinMarkerSvg, buildCircleMarkerSvg, marker-frame, 마커프레임, busMarker, buildBusStopMarkerSvg, buildBusVehiclePillSvg, buildBusVehicleDirSvg, buildMyLocationMarkerSvg, buildBusRouteStopDotSvg, busRouteTypeColor, 버스마커, 노선유형색, routePath, createRoutePathIndex, projectOnRoutePath, pointAtRoutePathS, bearingAtRoutePathS, sliceRoutePath, 노선형상, 폴리라인투영, route-path-projection, subwayLine, SUBWAY_LINES, SubwayLine, subwayMarker, buildSubwayStationMarkerSvg, buildSubwayStopDotSvg, buildSubwayTrainPillDataUrl, buildSubwayTrainDirDataUrl, subwayPosition, locateTrain, TRAIN_STATUS_FRACTION, sliceForMove, subwayDestinationLabel, normalizeStationName, TrainSection, vehiclePill, buildVehiclePillSvg, buildVehiclePillDataUrl, buildVehicleDirSvg, 지하철마커, 열차보간, 열차알약, vitest-config]
 ---
 
 # utils — 순수 유틸 패키지
+
+**2026-07-07 변경 흡수 — 지하철 도메인 순수 유틸 3종 신규(`subwayLine`/`subwayMarker`/`subwayPosition`) + 차량 알약/방향 기하 코어를 버스·지하철 공용으로 추출(`vehiclePill`) + vitest 설정 신설**: 대중교통이 버스에서 전철로 넓어지며 utils 에 지하철 도메인 파일이 붙고, 버스·지하철이 공유하던 마커 코어가 한 겹 더 추출됐다. (1) **[`vehiclePill.ts`](../../packages/utils/src/vehiclePill.ts) 신설 (공용 차량 알약/방향)** — 실시간 위치 '알약'(stadium 말풍선 + 라벨) + 진행 방향 '다트' SVG 의 도메인 중립 기하 코어. 버스 노선번호 알약과 지하철 열차 알약이 같은 규격(꼬리 끝이 세로 중앙 = 정차 좌표가 되는 **앵커 트릭** — SVG 아래 절반을 투명 여백으로 채워 MapCanvas 의 `[0.5,0.5]` 비선택 앵커·중앙 기준 축소에 정합)이라, 복제 드리프트를 막으려 한 곳으로 뺐다. `busMarker.ts` 의 기존 export(`buildBusVehiclePillSvg`/`...DataUrl`/`buildBusVehicleDirSvg`/`...DataUrl`)는 이제 이 함수들에 **재export 위임(바이트 동일 산출)** — busMarker 는 124→약 15줄로 축소. (2) **[`subwayLine.ts`](../../packages/utils/src/subwayLine.ts) 신설** — 수도권 전철 노선 상수(`SUBWAY_LINES`). 서울시 실시간 API 의 `subwayId`(4자리, 예 `'1002'`)를 `lineId` 로 채택(프로브 실측 2026-07-06 — 도착/위치 응답 체계와 동일), `{ lineId, name, shortLabel, color, positionParam }` — 공식 노선색 + realtimePosition path 파라미터(검증 여부 주석). (3) **[`subwayMarker.ts`](../../packages/utils/src/subwayMarker.ts) 신설** — 전철 도메인 마커: 역 마커(markerFrame 핀/원 프레임 재사용 + 지하철 아이콘)·경유역 점(`buildSubwayStopDotSvg` — 환승역 이중 링)·실시간 열차 알약/방향(`vehiclePill` 위임). (4) **[`subwayPosition.ts`](../../packages/utils/src/subwayPosition.ts) 신설(+테스트)** — 열차 역간 보간의 기하 코어. `locateTrain`(역 기준 상태를 역간 구간의 분수 위치로, `TRAIN_STATUS_FRACTION` 진입/도착/출발 등 상태→구간 비율) + `sliceForMove`(따라가기 이동 구간) + `subwayDestinationLabel`/`normalizeStationName`(행선지 표기 정규화). 버스가 도로 폴리라인을 추종한 것(`routePath`)과 달리 전철은 GPS 가 없어 역 순서(sections) 기반 보간이라 별도 모듈. (5) **[`vitest.config.ts`](../../packages/utils/vitest.config.ts) 신설** — utils 순수 함수 단위 테스트(`subwayPosition.test.ts`). 소스가 ESM `.js` import 라 `extensionAlias { '.js': ['.ts','.js'] }` 로 `.ts` 우선 해석(friendly 설정과 동일). 셋 다 순수 문자열/수치 처리라 utils leaf 에 적합. 지하철 도메인 전체는 [subway](subway.md), 웹 소비는 [web](web.md)/[map](map.md).
 
 **2026-07-06 변경 흡수 — 버스 마커 3종 신규 + 식당·버스 공용 마커 프레임 추출(`markerFrame.ts`) + 노선 형상 투영/보간(`routePath.ts`)**: 지도([map](map.md)) 마커 코드가 커지며 세 파일로 정리됐다. (1) **[`markerFrame.ts`](../../packages/utils/src/markerFrame.ts) 신설 (공용 프레임)** — 식당(`restaurantCategory`)·버스(`busMarker`) 마커가 문자 단위로 동일했던 SVG 골격(선택 = 32×48 핀 / 비선택 = 26×26 원)을 `buildPinMarkerSvg`/`buildCircleMarkerSvg` 두 함수로 통합. `{ fill, innerSvg }` 를 받아 흰 외곽선(stroke 2) + 24×24 viewBox 아이콘을 16×16 영역으로 0.667 scale 배치. `restaurantCategory.ts` 는 인라인으로 갖고 있던 두 프레임을 이 모듈 import 로 대체 — **동작 변화 없음(76개 마커 조합 바이트 동일 검증, 커밋 `a9c1fe4`)**. MapCanvas 의 anchor·라벨 offset·SMALL_ICON_SCALE 이 이 규격에 묶여 있어 수치는 MapCanvas 와 함께 봐야 한다. (2) **[`busMarker.ts`](../../packages/utils/src/busMarker.ts) 신설** — 버스 도메인 마커 일습: 정류장(파랑 핀/원, 버스 실루엣 아이콘)·실시간 차량 알약(노선번호 stadium 말풍선 + 정차 후광 + 따라가기 강조 링)·진행 방향 다트·내 위치(파란 점)·경유 정류소 점(16×16) + 노선유형 코드→대표색(`busRouteTypeColor`). 정류장/내위치/경유점은 markerFrame 과 같은 26×26·16×16 규격을 공유하고, 차량 알약만 꼬리 끝이 좌표를 가리키는 자체 규격. (3) **[`routePath.ts`](../../packages/utils/src/routePath.ts) 신설** — '노선 형상 따라가기'(차량이 도로 형상을 추종해 이동)의 기하 코어. 폴리라인 위 호길이(arc-length) 투영/보간 순수 함수. 상행+하행이 한 줄인 왕복 형상의 상/하행 모호성을 호길이 윈도우 입력으로 호출자가 푼다. 셋 다 순수 문자열/수치 처리라 utils leaf 에 적합. 버스 도메인 전체는 [bus](bus.md), FE 플러밍은 [shared](shared.md).
 
@@ -18,7 +20,7 @@ aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnai
 
 ## Purpose [coverage: high — 2 sources]
 
-`@repo/utils` — 순수 함수 모음. FE/BE 모두에서 import 가능한 사이드 이펙트 없는 헬퍼만 모아 둔다. 외부 npm 의존이 0개고 어떤 런타임(Node, 브라우저, RN)에서도 실행된다. CLAUDE.md의 의존 그래프상 leaf 노드 — `shared`, `api-contract`, 모든 앱이 여기로 들어올 수 있지만 utils는 어디로도 의존하지 않는다. 도메인 함수(`pickRandom`/`shuffle`은 Pick 추첨, `restaurantCategory`/`busMarker`는 지도 마커 SVG, `routePath`는 버스 노선 형상 위 위치 계산)와 표현 헬퍼(`reviewThumbnailUrl`은 friendly 미디어 프록시 URL, `formatWonPrice`는 메뉴 가격 통일)가 공존한다. 지도 마커는 `markerFrame.ts` 가 식당·버스 공용 SVG 골격을 대고, 각 도메인 모듈이 안쪽 아이콘/색만 채운다.
+`@repo/utils` — 순수 함수 모음. FE/BE 모두에서 import 가능한 사이드 이펙트 없는 헬퍼만 모아 둔다. 외부 npm 의존이 0개고 어떤 런타임(Node, 브라우저, RN)에서도 실행된다. CLAUDE.md의 의존 그래프상 leaf 노드 — `shared`, `api-contract`, 모든 앱이 여기로 들어올 수 있지만 utils는 어디로도 의존하지 않는다. 도메인 함수(`pickRandom`/`shuffle`은 Pick 추첨, `restaurantCategory`/`busMarker`/`subwayMarker`는 지도 마커 SVG, `vehiclePill`은 버스·지하철 공용 차량 알약, `routePath`는 버스 노선 형상 위 위치, `subwayPosition`은 전철 역간 보간)와 표현 헬퍼(`reviewThumbnailUrl`은 friendly 미디어 프록시 URL, `formatWonPrice`는 메뉴 가격 통일)가 공존한다. 지도 마커는 `markerFrame.ts` 가 식당·버스·지하철 공용 SVG 골격을 대고, 각 도메인 모듈이 안쪽 아이콘/색만 채운다.
 
 ## Architecture [coverage: high — 11 sources]
 
@@ -27,25 +29,30 @@ aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnai
 ```
 packages/utils/
 ├── src/
-│   ├── index.ts             // export * (11개 모듈 re-export)
+│   ├── index.ts             // export * (15개 모듈 re-export)
 │   ├── aiModel.ts           // 모델 id → 계열 묶음 + 용도별 추천 휴리스틱
-│   ├── busMarker.ts         // (신설) 버스 정류장/차량/내위치/경유점 마커 SVG + 노선유형 색
+│   ├── busMarker.ts         // 버스 정류장/내위치/경유점 마커 + 노선유형 색 (차량 알약/방향은 vehiclePill 위임)
 │   ├── date.ts              // toISOString, fromISOString, isValidDate
 │   ├── format.ts            // truncate, capitalize, slugify, formatWonPrice (078cbe1)
 │   ├── geo.ts               // LatLng, Bbox, computeBboxAround, isInKorea
-│   ├── markerFrame.ts       // (신설) 식당·버스 공용 마커 프레임 (핀 32×48 / 원 26×26)
+│   ├── markerFrame.ts       // 식당·버스·지하철 공용 마커 프레임 (핀 32×48 / 원 26×26)
 │   ├── random.ts            // pickRandom, shuffle
 │   ├── restaurantCategory.ts // 카테고리 키 정규화 + 마커 SVG (프레임은 markerFrame 위임)
-│   ├── routePath.ts         // (신설) 노선 형상 투영/보간 (따라가기 이동 코어)
+│   ├── routePath.ts         // 노선 형상 투영/보간 (버스 따라가기 이동 코어)
+│   ├── subwayLine.ts        // (신설) 수도권 전철 노선 상수 SUBWAY_LINES (subwayId=lineId)
+│   ├── subwayMarker.ts      // (신설) 전철 역/경유역 점(환승 이중링)/열차 알약·방향 마커
+│   ├── subwayPosition.ts    // (신설, +test) 열차 역간 보간 (locateTrain/TRAIN_STATUS_FRACTION/sliceForMove)
+│   ├── vehiclePill.ts       // (신설) 버스·지하철 공용 차량 알약/방향 다트 기하 코어
 │   ├── thumbnail.ts         // reviewThumbnailUrl
 │   └── vworld.ts            // vworld 타일 헬퍼
 ├── package.json             // build 없음 — src 그대로 export
+├── vitest.config.ts         // (신설) 순수 함수 단위 테스트 (.js→.ts extensionAlias)
 └── tsconfig.json
 ```
 
-api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 직접 main/types/exports로 노출. 서브패스 import 지원: `@repo/utils/date`, `@repo/utils/format`, `@repo/utils/random` 3종만 `exports` 맵에 등록. 나머지(`aiModel` / `busMarker` / `geo` / `markerFrame` / `restaurantCategory` / `routePath` / `thumbnail` / `vworld`)는 서브패스 미등록이라 배럴 경유로만 접근 — `import { ... } from '@repo/utils'`.
+api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 직접 main/types/exports로 노출. 서브패스 import 지원: `@repo/utils/date`, `@repo/utils/format`, `@repo/utils/random` 3종만 `exports` 맵에 등록. 나머지(`aiModel` / `busMarker` / `geo` / `markerFrame` / `restaurantCategory` / `routePath` / `subwayLine` / `subwayMarker` / `subwayPosition` / `vehiclePill` / `thumbnail` / `vworld`)는 서브패스 미등록이라 배럴 경유로만 접근 — `import { ... } from '@repo/utils'`.
 
-**마커 모듈 3층 구조** — `markerFrame.ts`(공용 골격) ← `restaurantCategory.ts`·`busMarker.ts`(도메인 아이콘/색). 프레임을 한 곳에 두어 두 도메인 마커가 같은 anchor·라벨 offset·축소 스케일 규격을 강제로 공유한다. `routePath.ts` 는 마커가 아니라 형상 위 위치 계산이라 `geo.ts` 의 `LatLng` 만 참조(마커 모듈과 독립).
+**마커 모듈 구조** — `markerFrame.ts`(공용 핀/원 골격) ← `restaurantCategory.ts`·`busMarker.ts`·`subwayMarker.ts`(도메인 아이콘/색). 프레임을 한 곳에 두어 세 도메인 마커가 같은 anchor·라벨 offset·축소 스케일 규격을 강제로 공유한다. 별도로 `vehiclePill.ts`(차량 알약/방향)는 markerFrame 을 안 쓰는 자체 SVG 골격이지만 `busMarker`·`subwayMarker` 두 도메인 차량이 공유하는 코어라 한 겹 더 추출. `routePath.ts`(버스 형상 투영)·`subwayPosition.ts`(전철 역간 보간)는 마커가 아니라 이동 위치 계산이라 `geo.ts` 의 `LatLng` 만 참조(마커 모듈과 독립) — 버스는 도로 폴리라인 추종, 전철은 GPS 없이 역 순서 기반이라 코어가 갈린다.
 
 ## Talks To [coverage: medium — 2 sources]
 
@@ -143,18 +150,24 @@ api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 �
 - 카테고리 매칭 우선순위는 정규식 순서 의존 — `bar > dessert > cafe > japanese > chinese > western > snack > korean`. 새 키워드 추가 시 더 specific 한 것을 위로 둬야 (예: "이자카야" 가 일식보다 술집으로 잡혀야 함)
 - `formatWonPrice` 의 범위 구분자는 `~|〜|-|–|—` 만 인식 — `to`, `→` 등은 단일 숫자/혼합 텍스트 분기로 빠짐. 백엔드/크롤러가 다른 구분자를 쓰기 시작하면 정규식 보강 필요
 
-## Sources [coverage: high — 13 sources]
+## Sources [coverage: high — 19 sources]
 
-- [packages/utils/package.json](../../packages/utils/package.json)
-- [packages/utils/src/index.ts](../../packages/utils/src/index.ts) — *modified: busMarker/markerFrame/routePath re-export 추가*
+- [packages/utils/package.json](../../packages/utils/package.json) — *modified: subwayLine/subwayMarker/subwayPosition/vehiclePill 반영*
+- [packages/utils/vitest.config.ts](../../packages/utils/vitest.config.ts) (NEW) — 순수 함수 단위 테스트(.js→.ts extensionAlias)
+- [packages/utils/src/index.ts](../../packages/utils/src/index.ts) — *modified: subwayLine/subwayMarker/subwayPosition/vehiclePill re-export 추가*
 - [packages/utils/src/aiModel.ts](../../packages/utils/src/aiModel.ts)
-- [packages/utils/src/busMarker.ts](../../packages/utils/src/busMarker.ts) (NEW) — 버스 정류장/차량/내위치/경유점 마커 + 노선유형 색
+- [packages/utils/src/busMarker.ts](../../packages/utils/src/busMarker.ts) — *modified: 차량 알약/방향을 vehiclePill 로 위임(124→축소, 바이트 동일)*
 - [packages/utils/src/date.ts](../../packages/utils/src/date.ts)
 - [packages/utils/src/format.ts](../../packages/utils/src/format.ts)
 - [packages/utils/src/geo.ts](../../packages/utils/src/geo.ts)
-- [packages/utils/src/markerFrame.ts](../../packages/utils/src/markerFrame.ts) (NEW) — 식당·버스 공용 마커 프레임(핀/원)
+- [packages/utils/src/markerFrame.ts](../../packages/utils/src/markerFrame.ts) — 식당·버스·지하철 공용 마커 프레임(핀/원)
 - [packages/utils/src/random.ts](../../packages/utils/src/random.ts)
-- [packages/utils/src/restaurantCategory.ts](../../packages/utils/src/restaurantCategory.ts) — *modified: 인라인 프레임 → markerFrame 위임(바이트 동일)*
-- [packages/utils/src/routePath.ts](../../packages/utils/src/routePath.ts) (NEW) — 노선 형상 투영/보간(따라가기 코어)
+- [packages/utils/src/restaurantCategory.ts](../../packages/utils/src/restaurantCategory.ts)
+- [packages/utils/src/routePath.ts](../../packages/utils/src/routePath.ts) — 노선 형상 투영/보간(버스 따라가기 코어)
+- [packages/utils/src/subwayLine.ts](../../packages/utils/src/subwayLine.ts) (NEW) — 수도권 전철 노선 상수(subwayId=lineId)
+- [packages/utils/src/subwayMarker.ts](../../packages/utils/src/subwayMarker.ts) (NEW) — 전철 역/경유역/열차 마커
+- [packages/utils/src/subwayPosition.ts](../../packages/utils/src/subwayPosition.ts) (NEW) — 열차 역간 보간(locateTrain/sliceForMove)
+- [packages/utils/src/subwayPosition.test.ts](../../packages/utils/src/subwayPosition.test.ts) (NEW) — subwayPosition 단위 테스트
+- [packages/utils/src/vehiclePill.ts](../../packages/utils/src/vehiclePill.ts) (NEW) — 버스·지하철 공용 차량 알약/방향 코어
 - [packages/utils/src/thumbnail.ts](../../packages/utils/src/thumbnail.ts)
 - [packages/utils/src/vworld.ts](../../packages/utils/src/vworld.ts)

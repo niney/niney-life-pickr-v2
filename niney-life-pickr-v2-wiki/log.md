@@ -1,5 +1,13 @@
 # Wiki Compile Log
 
+## 2026-07-07 (20th compile)
+
+**Topics updated:** bus(통합 배선 — 지하철 즐겨찾기 병합·겸표시 overlayMarkers·크로스 검색 슬롯·poolKey, 도메인별 BusFavoriteSection 삭제→transit 위임), map(OL 지도 인스턴스 풀링 D안 — poolKey opt-in 모듈 풀·take 시맨틱·레이어 4종 마운트별 재생성+unByKey·레이어 선택 승계 + overlayMarkers fit-제외 보조 레이어), friendly(subway 모듈 합류 + DB drift 보정 20260707140000_realign_drifted_tables + test-utils/temp-db useIsolatedDatabase + 환경 의존 테스트 6건 해소 + logs 플레이크 수정 + 라이브 스모크 ERROR-337 skip), web(/subway 라우트 + 대중교통 네비 + tsconfig noEmit — stale .js 101개 정리·재발 차단), utils(subwayLine/subwayMarker/subwayPosition/vehiclePill + vitest 인프라), shared(subway api/hooks/store 5종), api-contract(subway/subway-favorite 스키마)
+**New topics:** subway(수도권 전철 1~12차 — 역 검색·실시간 도착/열차 위치·노선 폴리라인·시간표·혼잡도·경로 탐색·즐겨찾기; 내부 ID `${lineId}:${name}` 플랜 B; 정적=로컬 DB 쿼터 0 / 실시간=15s 마이크로캐시+쿼터 게이트 / 시간표=블롭 30일; 9차 환승·출구는 TAGO 게이트웨이 대기; 웹 전용), transit(버스↔지하철 통합 레이어 13~15차 — 서브탭·지도 연속성(A안 뷰포트 싱글턴+D안 풀)·통합 즐겨찾기 홈(펼침 시 도착)·주변 겸표시(x- prefix+토글)·검색 크로스 섹션 + "Enter=크로스 포함 확정 검색" 문법 통일)
+**New concepts:** quota-proportional-loading(외부 공공 API 소비를 사용자 명시 행동에 비례 — 정적 로컬/반복 캐시/의도 트리거/쿼터 게이트 4층; 비용 차이가 UX 형태를 결정하되 공통 문법으로 감싼다), dual-mount-shared-state(데스크톱/모바일 CSS 숨김 동시 마운트 → 상태 결정 트리: 공유=스토어·페이지 state / 소멸성·불가시=로컬 / 무거운 자원=풀 키 분리; RQ dedupe가 네트워크 해결)
+**Sources scanned:** ~870 (19차 ~800 + 지하철/통합 신규 71)
+**Sources changed:** 94 파일 — 36 커밋 (19차 위키 커밋 c40dea5 이후 2026-07-06 ~ 07-07; 지하철 1~12차 24커밋 + D안·drift·테스트·통합 13~15차 12커밋)
+**Notes:** 수도권 전철이 주력. bus 의 자매 도메인으로 같은 4층 쿼터 구조를 따르되 소스 3분할(정적 로컬 적재/실시간 마이크로캐시/시간표 블롭)이 다르다 — 서울시 밖 실시간 미제공, 마스터 BLDN_ID ≠ 실시간 statnId 라 verify 스크립트(도착 API 관측 기반 보정)가 존재. 통합 13~15차는 전부 FE 조합(BE 무변경)으로 "버스+지하철 어떤 것이든 되는 느낌"을 즐겨찾기·주변·검색 3축에 구현 — 쿼터 비대칭이 로딩 정책 비대칭(자동 vs 제출 게이트)으로 번역됐고, 검색 UX 통일이 그 차이를 공통 제출 시맨틱으로 감쌌다. 지도는 D안 풀링으로 탭 전환 타일 플래시 제거(이중 마운트 실측 → 레이아웃별 풀 키), overlayMarkers 로 겸표시가 fit 을 안 넓힌다. 운영 정비: prisma drift 해소(migrate dev 부활), 테스트 환경 의존 6건 해소(진짜 원인은 dev.db 가 아니라 .env 실키의 env fallback 이었던 map 3건 포함), swopen 쿼터 소진일에도 스위트 그린(ERROR-337 skip). 신규 2토픽+갱신 7토픽을 병렬 서브에이전트 4개로 컴파일(부모는 컨셉 2개 신규 + 스키마/INDEX/log/state 담당).
 ## 2026-07-06 (19th compile)
 
 **Topics updated:** friendly(bus 모듈 + 메뉴그룹 테이블), project-overview(공개 기능), web(BusPage/bus 컴포넌트/네비/MapCanvas + MenuTab 그룹 렌더 + 어드민 노이즈→관점집계), shared(66→71), utils(9→13), api-contract(31→ bus/bus-favorite + MenuGroup + menuGroups), crawl(26→29 naver /menu/list), menu-grouping(11→19 원본 메뉴그룹 크롤·영속), review-search(모든 소스 reviewId enrich + lru createRequire interop), review-clustering(모든 소스 군집)

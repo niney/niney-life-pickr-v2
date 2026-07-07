@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_compiled": "2026-07-06",
+  "last_compiled": "2026-07-07",
   "mode": "codebase",
   "topics": [
     "project-overview",
@@ -25,7 +25,9 @@
     "random-crawl",
     "telegram",
     "logs",
-    "bus"
+    "bus",
+    "subway",
+    "transit"
   ],
   "concepts": [
     "zod-ssot-buildless",
@@ -41,7 +43,9 @@
     "canonical-corpus-fanout",
     "cross-tab-async-job-toast",
     "ssr-lite-head-injection",
-    "external-api-proxy-fixture"
+    "external-api-proxy-fixture",
+    "quota-proportional-loading",
+    "dual-mount-shared-state"
   ],
   "source_locations": [
     "README.md",
@@ -274,7 +278,50 @@
     "apps/web/src/components/restaurant/detail/HomeTab.tsx",
     "apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts",
     "apps/friendly/src/modules/summary/summary.service.ts",
-    "docs/HANDOFF-bus-station-search.md"
+    "apps/friendly/src/modules/subway/",
+    "apps/friendly/src/modules/subway/subway-api.adapter.ts",
+    "apps/friendly/src/modules/subway/subway.service.ts",
+    "apps/friendly/src/modules/subway/subway.route.ts",
+    "apps/friendly/src/modules/subway/subway-path.service.ts",
+    "apps/friendly/src/modules/subway/subway-congestion.service.ts",
+    "apps/friendly/src/modules/subway/subway-favorite.service.ts",
+    "apps/friendly/src/modules/subway/subway-verify.service.ts",
+    "apps/friendly/src/modules/subway/subway-master.service.ts",
+    "apps/friendly/src/modules/subway/subway-line-order.service.ts",
+    "apps/friendly/src/modules/subway/__fixtures__/",
+    "apps/friendly/scripts/load-subway-stations.ts",
+    "apps/friendly/scripts/load-subway-line-orders.ts",
+    "apps/friendly/scripts/load-subway-congestion.ts",
+    "apps/friendly/scripts/probe-subway-api.ts",
+    "apps/friendly/scripts/probe-subway-positions.ts",
+    "apps/friendly/scripts/probe-subway-timetable.ts",
+    "apps/friendly/scripts/verify-subway-lines.ts",
+    "apps/friendly/prisma/migrations/20260706160000_add_subway_stations/",
+    "apps/friendly/prisma/migrations/20260706170000_add_subway_favorites/",
+    "apps/friendly/prisma/migrations/20260706180000_add_subway_line_stations/",
+    "apps/friendly/prisma/migrations/20260706190000_add_subway_timetable_caches/",
+    "apps/friendly/prisma/migrations/20260707120000_add_subway_congestions/",
+    "apps/friendly/prisma/migrations/20260707140000_realign_drifted_tables/",
+    "apps/friendly/src/test-utils/temp-db.ts",
+    "packages/api-contract/src/schemas/subway.ts",
+    "packages/api-contract/src/schemas/subway-favorite.ts",
+    "packages/shared/src/api/subway.api.ts",
+    "packages/shared/src/api/subway-favorite.api.ts",
+    "packages/shared/src/hooks/useSubway.ts",
+    "packages/shared/src/hooks/useSubwayFavorites.ts",
+    "packages/shared/src/stores/subwayFavoriteStore.ts",
+    "packages/utils/src/subwayLine.ts",
+    "packages/utils/src/subwayMarker.ts",
+    "packages/utils/src/subwayPosition.ts",
+    "packages/utils/src/vehiclePill.ts",
+    "packages/utils/vitest.config.ts",
+    "apps/web/src/routes/SubwayPage.tsx",
+    "apps/web/src/components/subway/",
+    "apps/web/src/components/transit/",
+    "apps/web/src/stores/transitFavExpandStore.ts",
+    "apps/web/src/stores/transitCrossShowStore.ts",
+    "docs/PLAN-subway.md",
+    "docs/PLAN-transit-unified.md"
   ],
-  "total_sources_scanned": 800
+  "total_sources_scanned": 870
 }
