@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { BusStationItemType } from '@repo/api-contract';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { busRouteTypeColor } from '@repo/utils';
+import { busRouteTypeColor, buildSubwayStationMarkerDataUrl } from '@repo/utils';
 import {
   useBusFavorites,
   useBusNearbyStations,
@@ -12,6 +12,7 @@ import {
   useBusStationSearch,
   useBusStationsRefresh,
   useSubwayFavorites,
+  useSubwayNearbyStations,
 } from '@repo/shared';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
@@ -21,6 +22,8 @@ import {
   BusStationSearchBar,
 } from '~/components/bus/BusStationList';
 import { BusStationsMap } from '~/components/bus/BusStationsMap';
+import type { MapMarker } from '~/components/restaurant/MapCanvas';
+import { useTransitCrossShowStore } from '~/stores/transitCrossShowStore';
 import { TransitTabs } from '~/components/transit/TransitTabs';
 import {
   TransitFavoritesSection,
@@ -42,6 +45,15 @@ const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
   if (lat < 33 || lat > 39 || lng < 124 || lng > 132) return null;
   return { lat, lng };
 };
+
+// 겸표시(지하철역) 마커 아이콘 — 자기 정류장(파랑)과 즉시 구분되는 지하철 톤
+// (청록, 환승역 이중 링). 기존 지하철 역 마커 빌더 재사용(신규 아이콘 없음).
+// 겸표시는 선택 개념이 없어 selectedSrc 도 같은 URL.
+const SUBWAY_OVERLAY_URL = buildSubwayStationMarkerDataUrl({ selected: false, transfer: false });
+const SUBWAY_OVERLAY_TRANSFER_URL = buildSubwayStationMarkerDataUrl({
+  selected: false,
+  transfer: true,
+});
 
 // 서울시 버스 정류장 검색 + 지도 + 실시간 도착정보. 검색어(q)·선택 정류장(stId)·
 // 선택 노선(routeId)·주변 좌표(near)를 URL 에 동기화 — 새로고침/공유 시 같은 화면
@@ -69,6 +81,38 @@ export const BusPage = () => {
   const [autoNear, setAutoNear] = useState<{ lat: number; lng: number } | null>(null);
   // 실제 조회·기준점 마커에 쓰는 좌표 — 자동 조회가 있으면 그쪽이 우선.
   const effectiveNear = nearMode ? (autoNear ?? near) : null;
+
+  // ── 통합 겸표시(지하철역) — 주변 모드에 상대 도메인 마커를 함께 ─────────────
+  const crossShow = useTransitCrossShowStore((s) => s.show);
+  // 토글 칩 노출·조회 조건 = 주변 모드 && 노선 보기(집중) 아님. 버스 따라가기는
+  // 노선 추적 중에만 발생하므로 routeId === null 로 함께 커버된다.
+  const crossToggleVisible = nearMode && routeId === null;
+  // 주변 모드일 때만 enabled(집중 모드/키워드 모드에선 조회·표시 모두 없음). 토글
+  // off 여도 조회는 해둔다 — 지하철 nearby 는 로컬 DB(쿼터 0)라 켤 때 즉시 표시.
+  const crossNear = crossToggleVisible ? effectiveNear : null;
+  const subwayNearby = useSubwayNearbyStations(crossNear?.lat ?? null, crossNear?.lng ?? null);
+  // 표시는 토글 on 일 때만. MapCanvas 오버레이(별도 소스)라 자기 정류장 fit 을
+  // 넓히지 않는다. id 는 'x-subway:' prefix — 클릭 시 지하철 탭 딥링크로 라우팅.
+  const overlayMarkers = useMemo<MapMarker[] | undefined>(() => {
+    if (!crossToggleVisible || !crossShow) return undefined;
+    return (subwayNearby.data?.items ?? []).map((g) => {
+      const transfer = g.lines.length >= 2;
+      const src = transfer ? SUBWAY_OVERLAY_TRANSFER_URL : SUBWAY_OVERLAY_URL;
+      return { id: `x-subway:${g.id}`, lat: g.lat, lng: g.lng, icon: { src, selectedSrc: src } };
+    });
+  }, [crossToggleVisible, crossShow, subwayNearby.data]);
+
+  // 겸표시(지하철역) 클릭 → 지하철 탭 딥링크. near 는 현재 기준점 그대로 넘겨 상대
+  // 탭도 주변 모드로 이어진다(12차 SubwayNearbyBusSection 의 /bus 딥링크 대칭).
+  const handleOverlaySelect = useCallback(
+    (id: string) => {
+      const stationId = id.slice('x-subway:'.length);
+      const c = effectiveNear;
+      const nearQ = c ? `near=${roundCoord(c.lat)},${roundCoord(c.lng)}&` : '';
+      navigate(`/subway?${nearQ}stn=${encodeURIComponent(stationId)}`);
+    },
+    [navigate, effectiveNear],
+  );
 
   // 통합 헤더(TopBar+subBar) 실측 높이 — 루트 높이를 viewport 잔여분으로 고정해
   // 지도/리스트가 내부 스크롤로만 동작하게 한다.
@@ -580,6 +624,9 @@ export const BusPage = () => {
             // 둘 다 항상 마운트된다 — MapCanvas 가 페이지당 2개 동시 생존. 풀 키를
             // 레이아웃별로 나눠 각자 재사용시켜야 모바일 폭에서도 플래시가 사라진다.
             poolKey="transit-desktop"
+            overlayMarkers={overlayMarkers}
+            onOverlaySelect={handleOverlaySelect}
+            crossToggleVisible={crossToggleVisible}
             items={mapItemsForMap}
             vehicles={vehicles}
             vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}
@@ -622,6 +669,9 @@ export const BusPage = () => {
           <BusStationsMap
             // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
             poolKey="transit-mobile"
+            overlayMarkers={overlayMarkers}
+            onOverlaySelect={handleOverlaySelect}
+            crossToggleVisible={crossToggleVisible}
             items={mapItemsForMap}
             vehicles={vehicles}
             vehicleLabel={selectedArrival?.routeName ?? routeInfo?.routeName ?? null}

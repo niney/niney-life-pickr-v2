@@ -28,6 +28,7 @@ import {
   readTransitViewport,
   saveTransitViewport,
 } from '~/components/transit/transitMapViewport';
+import { TransitCrossToggleChip } from '~/components/transit/TransitCrossToggleChip';
 
 // 모듈 레벨 상수 — 모든 마커가 같은 data URL 문자열을 공유해 OL 아이콘
 // 캐시가 이미지를 1회만 디코드한다. (차량 알약은 노선번호·색·정차여부에 의존해
@@ -80,6 +81,14 @@ interface Props {
   // MapCanvas 지도 인스턴스 풀 키 — 그대로 전달한다. 키 결정(레이아웃별 분리
   // 등)은 호출자 몫. 미지정이면 풀링 없이 기존 동작.
   poolKey?: string;
+  // 통합 겸표시 — 주변 모드에 함께 그릴 지하철역 마커(id 는 'x-subway:' prefix).
+  // MapCanvas 의 fit 제외 오버레이 레이어로 넘긴다(자기 정류장 fit 을 안 넓힘).
+  overlayMarkers?: MapMarker[];
+  // 겸표시 마커 클릭 — prefix id 를 그대로 넘긴다(호출자가 지하철 탭 딥링크).
+  onOverlaySelect?(id: string): void;
+  // 겸표시 토글 칩 노출 여부(주변 모드 && 집중 모드 아님). 칩의 on/off 상태는
+  // transitCrossShowStore 가 관리.
+  crossToggleVisible?: boolean;
 }
 
 // 재검색(수동/자동) 트리거 임계 — 기준점에서 지도 중심이 이만큼 벗어나야.
@@ -123,6 +132,9 @@ export const BusStationsMap = ({
   routeLine,
   routeStops,
   poolKey,
+  overlayMarkers,
+  onOverlaySelect,
+  crossToggleVisible,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -459,10 +471,16 @@ export const BusStationsMap = ({
   // 전용 레이어라 애초에 클릭이 여기 오지 않지만(markerId 미설정) 방어적으로 무시.
   const handleMarkerSelect = useCallback(
     (id: string) => {
+      // 겸표시(지하철역) 마커 — 자기 도메인 선택이 아니라 상대 탭 딥링크. 다른
+      // 무시/선택 로직보다 먼저 가로챈다.
+      if (id.startsWith('x-')) {
+        onOverlaySelect?.(id);
+        return;
+      }
       if (id.startsWith(VEHICLE_ID_PREFIX) || id === MY_LOCATION_ID) return;
       onSelectMarker(id);
     },
-    [onSelectMarker],
+    [onSelectMarker, onOverlaySelect],
   );
 
   // 검색 결과가 갱신되면 전체 마커가 보이게 fit. apiKey 가 늦게 와서 MapCanvas
@@ -548,7 +566,10 @@ export const BusStationsMap = ({
         onViewportChangeEnd={handleViewportChangeEnd}
         onViewportSync={handleViewportSync}
         routeLine={routeLine}
+        overlayMarkers={overlayMarkers}
       />
+      {/* 겸표시 토글 칩 — 우상단. 주변 모드 && 집중 모드 아님일 때만(crossToggleVisible). */}
+      <TransitCrossToggleChip label="지하철역 표시" visible={!!crossToggleVisible} />
       {/* '이 위치에서 재검색' — 지도 상단 중앙 오버레이. 클릭 시 지도 중심으로
           주변 조회를 다시 던진다(자동 조회 금지 — 명시 클릭만). */}
       {/* 조회 진행 칩 — 자동/수동 재조회가 도는 동안. 재검색 버튼과 같은 슬롯

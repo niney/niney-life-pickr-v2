@@ -35,6 +35,7 @@ import {
   readTransitViewport,
   saveTransitViewport,
 } from '~/components/transit/transitMapViewport';
+import { TransitCrossToggleChip } from '~/components/transit/TransitCrossToggleChip';
 import { SubwayLineBadge } from './SubwayLineBadge';
 
 // 모듈 레벨 상수 — 선택×환승 4종을 미리 만들어 모든 마커가 같은 data URL 문자열을
@@ -117,6 +118,13 @@ interface Props {
   // MapCanvas 지도 인스턴스 풀 키 — 그대로 전달한다. 키 결정(레이아웃별 분리
   // 등)은 호출자 몫. 미지정이면 풀링 없이 기존 동작.
   poolKey?: string;
+  // 통합 겸표시 — 주변 모드에 함께 그릴 정류장 마커(id 는 'x-bus:' prefix).
+  // MapCanvas 의 fit 제외 오버레이 레이어로 넘긴다(자기 역 fit 을 안 넓힘).
+  overlayMarkers?: MapMarker[];
+  // 겸표시 마커 클릭 — prefix id 를 그대로 넘긴다(호출자가 버스 탭 딥링크).
+  onOverlaySelect?(id: string): void;
+  // 겸표시 토글 칩 노출 여부(주변 모드 && 집중 모드 아님).
+  crossToggleVisible?: boolean;
   className?: string;
 }
 
@@ -141,6 +149,9 @@ export const SubwayStationsMap = ({
   pendingFollow,
   pathResult,
   poolKey,
+  overlayMarkers,
+  onOverlaySelect,
+  crossToggleVisible,
 }: Props) => {
   const config = useMapPublicConfig();
   const apiKey = config.data?.apiKey ?? null;
@@ -456,11 +467,17 @@ export const SubwayStationsMap = ({
   // 나머지는 역 마커라 onSelect(그룹 id 그대로).
   const handleMarkerSelect = useCallback(
     (id: string) => {
+      // 겸표시(정류장) 마커 — 자기 도메인 선택이 아니라 상대 탭 딥링크. 다른
+      // 무시/선택 로직보다 먼저 가로챈다.
+      if (id.startsWith('x-')) {
+        onOverlaySelect?.(id);
+        return;
+      }
       if (id === MY_LOCATION_ID || id.startsWith('path-') || id.startsWith('xfer-')) return;
       if (stopIds.has(id)) onSelectStop?.(id);
       else onSelect(id);
     },
-    [onSelect, onSelectStop, stopIds],
+    [onSelect, onSelectStop, stopIds, onOverlaySelect],
   );
 
   // 노선 정보 카드 — 본선 구간/역 수. 본선(branchName null) 기준, 순환선은 구간 대신 표기.
@@ -694,7 +711,10 @@ export const SubwayStationsMap = ({
         onVehicleSelect={handleVehicleSelect}
         followVehicleId={followVehicleId}
         onFollowInterrupted={handleFollowInterrupted}
+        overlayMarkers={overlayMarkers}
       />
+      {/* 겸표시 토글 칩 — 우상단. 주변 모드 && 집중 모드 아님일 때만(crossToggleVisible). */}
+      <TransitCrossToggleChip label="정류장 표시" visible={!!crossToggleVisible} />
       {/* 노선 정보 카드 — 좌상단(로딩·재검색 칩은 상단 중앙이라 겹치지 않는다). */}
       {lineDetail && lineInfo && (
         <div className="absolute left-3 top-3 z-10 flex max-w-[85%] items-center gap-2 rounded-lg border bg-background/95 px-3 py-1.5 shadow-md">

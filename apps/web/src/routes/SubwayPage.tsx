@@ -1,10 +1,11 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
-import { subwayLineColor, subwayLineName } from '@repo/utils';
+import { buildBusStopMarkerDataUrl, subwayLineColor, subwayLineName } from '@repo/utils';
 import {
   ApiError,
   useBusFavorites,
+  useBusNearbyStations,
   useSubwayCongestion,
   useSubwayFavorites,
   useSubwayLineDetail,
@@ -31,6 +32,8 @@ import {
 import { SubwayStationsMap } from '~/components/subway/SubwayStationsMap';
 import { SubwayTimetable } from '~/components/subway/SubwayTimetable';
 import { dayTypeForToday, type SubwayDayType } from '~/components/subway/timetableUtils';
+import type { MapMarker } from '~/components/restaurant/MapCanvas';
+import { useTransitCrossShowStore } from '~/stores/transitCrossShowStore';
 
 // GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m). URL 에 원시 좌표를 그대로 노출하지
 // 않아 공유 시 위치 정밀도도 낮춘다(버스와 동일).
@@ -52,6 +55,10 @@ const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
   if (lat < 33 || lat > 39 || lng < 124 || lng > 132) return null;
   return { lat, lng };
 };
+
+// 겸표시(정류장) 마커 아이콘 — 기존 버스 정류장 마커(파랑) 재사용(신규 아이콘
+// 없음). 겸표시는 선택 개념이 없어 selectedSrc 도 같은 URL.
+const BUS_OVERLAY_URL = buildBusStopMarkerDataUrl(false);
 
 // 수도권 전철 역 검색 + 지도 + 주변 역. 검색어(q)·선택 역(stn)·주변 좌표(near)를
 // URL 에 동기화 — 새로고침/공유 시 같은 화면 복원. 역사마스터를 로컬 DB 에서
@@ -167,6 +174,38 @@ export const SubwayPage = () => {
   const [pathViewOpen, setPathViewOpen] = useState(false);
   const inPathView = !!stn && (pathViewOpen || to !== null);
   const path = useSubwayPath(inPathView ? stn : null, to);
+
+  // ── 통합 겸표시(정류장) — 주변 모드에 상대 도메인 마커를 함께 ───────────────
+  const crossShow = useTransitCrossShowStore((s) => s.show);
+  // 토글 칩 노출·조회 조건 = 주변 모드 && 집중 모드(노선 보기/경로) 아님. 열차
+  // 따라가기는 노선 추적(line) 중에만 발생하므로 line === null 로 함께 커버된다.
+  const crossToggleVisible = nearMode && line === null && !inPathView;
+  // 주변 모드일 때만 enabled. 버스 nearby 는 셀 단위 DB 캐시라 부담이 낮다.
+  const crossNear = crossToggleVisible ? effectiveNear : null;
+  const busNearby = useBusNearbyStations(crossNear?.lat ?? null, crossNear?.lng ?? null);
+  // 표시는 토글 on 일 때만. MapCanvas 오버레이(별도 소스)라 자기 역 fit 을 안
+  // 넓힌다. id 는 'x-bus:' prefix — 클릭 시 버스 탭 딥링크로 라우팅.
+  const overlayMarkers = useMemo<MapMarker[] | undefined>(() => {
+    if (!crossToggleVisible || !crossShow) return undefined;
+    return (busNearby.data?.items ?? []).map((s) => ({
+      id: `x-bus:${s.stId}`,
+      lat: s.lat,
+      lng: s.lng,
+      icon: { src: BUS_OVERLAY_URL, selectedSrc: BUS_OVERLAY_URL },
+    }));
+  }, [crossToggleVisible, crossShow, busNearby.data]);
+
+  // 겸표시(정류장) 클릭 → 버스 탭 딥링크. near 는 현재 기준점 그대로 넘겨 상대 탭도
+  // 주변 모드로 이어진다(12차 SubwayNearbyBusSection 의 /bus 딥링크와 동일 계약).
+  const handleOverlaySelect = useCallback(
+    (id: string) => {
+      const stId = id.slice('x-bus:'.length);
+      const c = effectiveNear;
+      const nearQ = c ? `near=${roundCoord(c.lat)},${roundCoord(c.lng)}&` : '';
+      navigate(`/bus?${nearQ}stId=${encodeURIComponent(stId)}`);
+    },
+    [navigate, effectiveNear],
+  );
 
   // ── 8차 시간표 ── 뷰 상태는 URL 미포함(패널 로컬). 오늘 dayType 은 요일 파생(렌더 중).
   const todayDayType = useMemo(() => dayTypeForToday(), []);
@@ -729,6 +768,9 @@ export const SubwayPage = () => {
               // 둘 다 항상 마운트된다 — MapCanvas 가 페이지당 2개 동시 생존. 풀 키를
               // 레이아웃별로 나눠 각자 재사용시켜야 모바일 폭에서도 플래시가 사라진다.
               poolKey="transit-desktop"
+              overlayMarkers={overlayMarkers}
+              onOverlaySelect={handleOverlaySelect}
+              crossToggleVisible={crossToggleVisible}
               groups={mapGroups}
               selectedId={stn}
               onSelect={handleSelect}
@@ -768,6 +810,9 @@ export const SubwayPage = () => {
             <SubwayStationsMap
               // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
               poolKey="transit-mobile"
+              overlayMarkers={overlayMarkers}
+              onOverlaySelect={handleOverlaySelect}
+              crossToggleVisible={crossToggleVisible}
               groups={mapGroups}
               selectedId={stn}
               onSelect={handleSelect}

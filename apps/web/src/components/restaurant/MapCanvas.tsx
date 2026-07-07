@@ -182,6 +182,12 @@ interface Props {
     | { points: { lat: number; lng: number }[]; color: string }
     | { points: { lat: number; lng: number }[]; color: string }[]
     | null;
+  // 겸표시(보조) 마커 — 자기 도메인 마커(markers) 아래 전용 VectorLayer 에 그린다.
+  // markers 와 달리 fitToMarkers/fit extent 에서 제외(별도 소스)돼 겸표시가 화면을
+  // 넓히지 않는다. 클릭은 markerId 로 잡혀 onMarkerSelect 로 전달(호출자가 id prefix
+  // 로 자기/상대 도메인 구분). 라벨은 호출자가 label 을 안 넘겨 생략. 미지정/빈
+  // 배열이면 빈 레이어 — 식당·어드민 지도는 미지정이라 기존 동작과 완전 동일.
+  overlayMarkers?: MapMarker[];
   // 실시간 차량 마커 — 정류장 마커(markers) 위 전용 레이어. 폴링으로 위치가
   // 통째로 바뀌면 id 로 이전/새 위치를 매칭해 직선 등속 보간(rAF)한다. 클릭은
   // 무시(markerId 미설정 → 아래 정류장으로 통과). 미지정/빈 배열이면 미표시.
@@ -283,6 +289,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onTileError,
     layerControl = true,
     routeLine,
+    overlayMarkers,
     vehicles,
     vehicleTweenMs = 14_000,
     onVehicleSelect,
@@ -299,6 +306,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // 노선 형상 전용 소스 — 마커 소스와 분리해 fitToMarkers 가 54km 노선까지
   // 끌어안아 줌아웃되는 것을 막는다.
   const routeLineSourceRef = useRef<VectorSource | null>(null);
+  // 겸표시(보조) 마커 전용 소스 — 마커 소스와 분리해 fit extent 에서 제외한다.
+  const overlayMarkerSourceRef = useRef<VectorSource | null>(null);
   // 차량 전용 소스/보간 상태 — 정류장 마커 파이프라인(선언적 재생성)과 분리해
   // feature 를 재사용하고 geometry 만 rAF 로 갱신한다(프레임 단위 clear 금지).
   const vehicleSourceRef = useRef<VectorSource | null>(null);
@@ -509,14 +518,17 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     }
     mapRef.current = map;
 
-    // ── 벡터 소스/레이어 3종 — 재사용/신규 공통, 마운트마다 새로 생성해 이전
+    // ── 벡터 소스/레이어 4종 — 재사용/신규 공통, 마운트마다 새로 생성해 이전
     // 마운트의 feature/보간 상태를 이어받지 않는다. addLayer 순서 = 그리는 순서
-    // (뒤일수록 위): 노선 형상(마커 아래) → 정류장 → 차량(맨 위, 정류장과 겹쳐도
-    // 안 가려짐). baseLayer 가 index 0 이라 append 순서만 맞으면 된다.
+    // (뒤일수록 위): 노선 형상(맨 아래) → 겸표시(보조) → 정류장 → 차량(맨 위).
+    // 겸표시를 정류장 아래 둬 자기 도메인 마커가 위에 그려지고 클릭도 먼저 히트된다.
+    // baseLayer 가 index 0 이라 append 순서만 맞으면 된다.
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
     const routeLineSource = new VectorSource();
     routeLineSourceRef.current = routeLineSource;
+    const overlayMarkerSource = new VectorSource();
+    overlayMarkerSourceRef.current = overlayMarkerSource;
     const vehicleSource = new VectorSource();
     vehicleSourceRef.current = vehicleSource;
     vehicleFeaturesRef.current.clear();
@@ -524,9 +536,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     vehicleArrowsRef.current.clear();
 
     const routeLineLayer = new VectorLayer({ source: routeLineSource });
+    const overlayMarkerLayer = new VectorLayer({ source: overlayMarkerSource });
     const markerLayer = new VectorLayer({ source: vectorSource });
     const vehicleLayer = new VectorLayer({ source: vehicleSource });
     map.addLayer(routeLineLayer);
+    map.addLayer(overlayMarkerLayer);
     map.addLayer(markerLayer);
     map.addLayer(vehicleLayer);
 
@@ -638,9 +652,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       // map/tileSource 리스너 전부 해제 — 풀링으로 살아남는 map 에 이전 마운트의
       // 콜백 클로저가 남아 중복 발화/누수 되는 것을 막는다(미풀링이어도 무해).
       for (const k of eventKeys) unByKey(k);
-      // 벡터 레이어 3종 제거 — 다음 마운트가 새 소스로 다시 addLayer 한다.
+      // 벡터 레이어 4종 제거 — 다음 마운트가 새 소스로 다시 addLayer 한다.
       // baseLayer(index 0)만 남겨 재사용 시 타일 캐시를 그대로 잇는다.
       map.removeLayer(routeLineLayer);
+      map.removeLayer(overlayMarkerLayer);
       map.removeLayer(markerLayer);
       map.removeLayer(vehicleLayer);
       map.setTarget(undefined);
@@ -667,6 +682,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       mapRef.current = null;
       vectorSourceRef.current = null;
       routeLineSourceRef.current = null;
+      overlayMarkerSourceRef.current = null;
       vehicleSourceRef.current = null;
       tileSourceRef.current = null;
       userInteractedRef.current = false;
@@ -725,6 +741,37 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     }
     featureByIdRef.current = byId;
   }, [markers]);
+
+  // 겸표시 마커 갱신 — overlayMarkers 가 바뀔 때만 전용 소스를 다시 칠한다. 별도
+  // 소스라 fitToMarkers extent 에 안 들어간다(겸표시가 화면을 넓히지 않음). 선택
+  // 개념이 없어(상대 도메인 prefix id 라 selectedMarkerId 와 안 겹침) 항상 비선택
+  // 스타일이고, label 미지정이라 라벨도 없다. clear 로 이전 겸표시를 확실히 제거해
+  // 주변 모드 이탈/토글 off 시 잔상이 남지 않는다.
+  useEffect(() => {
+    const src = overlayMarkerSourceRef.current;
+    if (!src) return;
+    src.clear();
+    for (const m of overlayMarkers ?? []) {
+      const f = new Feature({ geometry: new Point(fromLonLat([m.lng, m.lat])) });
+      f.set('markerId', m.id);
+      const variant = m.variant ?? 'primary';
+      const categoryKey = m.categoryKey ?? null;
+      f.setStyle((_feature, resolution) => {
+        const zoom =
+          mapRef.current?.getView().getZoomForResolution(resolution) ?? DEFAULT_ZOOM;
+        return makeMarkerStyle(
+          m.label,
+          false,
+          variant,
+          categoryKey,
+          zoom,
+          isDarkBaseRef.current,
+          m.icon,
+        );
+      });
+      src.addFeature(f);
+    }
+  }, [overlayMarkers]);
 
   // 노선 형상 갱신 — routeLine 이 바뀔 때만 전용 소스를 다시 칠한다. 점이 2개
   // 미만이면(형상 없음/해제) 소스를 비운다. 이전 피처는 clear 로 확실히 제거해
