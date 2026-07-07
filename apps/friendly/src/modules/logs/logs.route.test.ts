@@ -459,6 +459,13 @@ describe('Logs routes', () => {
       });
       expect(second.json()).toMatchObject({ ok: false, error: 'analysis_in_flight' });
 
+      // release 는 백그라운드 분석이 provider(mock LLM)에 도달해야 할당된다 —
+      // 스위트 부하로 백그라운드가 밀리면 undefined 인 채 호출돼 간헐 실패
+      // ("release is not a function"). 할당될 때까지 기다려 결정적으로 만든다.
+      // in-flight 는 release 전까지 유지되므로 위 중복 거절 단언과 무관.
+      await vi.waitFor(() => {
+        expect(release).toBeTypeOf('function');
+      });
       release();
       await vi.waitFor(async () => {
         const report = await app.prisma.operationReport.findUnique({
