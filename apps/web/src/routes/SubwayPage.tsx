@@ -1,9 +1,10 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
 import { subwayLineColor, subwayLineName } from '@repo/utils';
 import {
   ApiError,
+  useBusFavorites,
   useSubwayCongestion,
   useSubwayFavorites,
   useSubwayLineDetail,
@@ -16,8 +17,11 @@ import {
 } from '@repo/shared';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TransitTabs } from '~/components/transit/TransitTabs';
+import {
+  TransitFavoritesSection,
+  type TransitFavTarget,
+} from '~/components/transit/TransitFavoritesSection';
 import { SubwayArrivalPanel } from '~/components/subway/SubwayArrivalPanel';
-import { SubwayFavoriteSection } from '~/components/subway/SubwayFavoriteSection';
 import { SubwayPathPanel } from '~/components/subway/SubwayPathPanel';
 import {
   SubwayStationList,
@@ -55,6 +59,7 @@ const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
 // useDeferredValue 로만 완화한다(디바운스 타이머/useEffect 없음).
 export const SubwayPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const stn = searchParams.get('stn');
   // 도착역(to) — 경로 모드(stn 출발 + to 도착). 딥링크 복원. line 추적과 배타.
   const to = searchParams.get('to');
@@ -92,8 +97,14 @@ export const SubwayPage = () => {
   // 즐겨찾기 — 게스트/로그인 하이브리드. 로그인 직후 게스트 저장분을 서버로 1회
   // 병합하는 부수효과도 이 훅이 담당(SubwayPage 에서 단 한 번만 호출).
   const favorites = useSubwayFavorites();
+  // 통합 즐겨찾기 섹션은 양 도메인을 함께 보여준다 — 버스 즐겨찾기도 여기서
+  // 읽는다(각 훅은 페이지당 1회 호출 규칙, SubwayPage 에선 이 한 번뿐).
+  const busFavorites = useBusFavorites();
   const hasFavorites =
-    favorites.stations.length > 0 || favorites.lines.length > 0;
+    favorites.stations.length > 0 ||
+    favorites.lines.length > 0 ||
+    busFavorites.stations.length > 0 ||
+    busFavorites.routes.length > 0;
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -277,6 +288,33 @@ export const SubwayPage = () => {
   );
 
   const handleSelect = selectStation;
+
+  // 통합 즐겨찾기 '이동' — 지하철 항목은 기존 in-page 핸들러(selectStation, 동일
+  // stn 계약)로 재사용하고, 버스 항목은 버스 탭으로 navigate(stId[+routeId] 딥링크).
+  // 새 URL 시맨틱을 만들지 않는다.
+  const handleFavNavigate = useCallback(
+    (t: TransitFavTarget) => {
+      switch (t.kind) {
+        case 'subway-station':
+        case 'subway-line':
+          selectStation(t.stationId);
+          break;
+        case 'bus-station':
+          navigate({
+            pathname: '/bus',
+            search: `?${new URLSearchParams({ stId: t.stId })}`,
+          });
+          break;
+        case 'bus-route':
+          navigate({
+            pathname: '/bus',
+            search: `?${new URLSearchParams({ stId: t.stId, routeId: t.busRouteId })}`,
+          });
+          break;
+      }
+    },
+    [selectStation, navigate],
+  );
 
   // 경유역 점 클릭 — 환승역은 활성 결과의 그룹 대표 id 로 재해석(각 호선 stationId →
   // 그룹 id), 없으면 원본 stationId 그대로. 점은 항상 추적 호선 위라 line 은 유지된다.
@@ -589,13 +627,10 @@ export const SubwayPage = () => {
   // 초기 화면(검색어·주변·선택 역 없음)에 노출할 즐겨찾기 섹션. 0개면 undefined 를
   // 넘겨 리스트 본체가 기존 빈 상태 안내를 그대로 보여준다.
   const favoritesSection = hasFavorites ? (
-    <SubwayFavoriteSection
-      stations={favorites.stations}
-      lines={favorites.lines}
-      onSelectStation={handleSelect}
-      onSelectLine={handleSelect}
-      onToggleStation={favorites.toggleStation}
-      onToggleLine={favorites.toggleLine}
+    <TransitFavoritesSection
+      bus={busFavorites}
+      subway={favorites}
+      onNavigate={handleFavNavigate}
     />
   ) : undefined;
 

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { BusStationItemType } from '@repo/api-contract';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { busRouteTypeColor } from '@repo/utils';
 import {
@@ -11,10 +11,10 @@ import {
   useBusStationArrivals,
   useBusStationSearch,
   useBusStationsRefresh,
+  useSubwayFavorites,
 } from '@repo/shared';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
-import { BusFavoriteSection } from '~/components/bus/BusFavoriteSection';
 import {
   BusStationList,
   BusStationListBody,
@@ -22,6 +22,10 @@ import {
 } from '~/components/bus/BusStationList';
 import { BusStationsMap } from '~/components/bus/BusStationsMap';
 import { TransitTabs } from '~/components/transit/TransitTabs';
+import {
+  TransitFavoritesSection,
+  type TransitFavTarget,
+} from '~/components/transit/TransitFavoritesSection';
 
 // GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m)면 정류장 식별에 충분하고, URL 에
 // 원시 좌표를 그대로 노출하지 않아 공유 시 위치 정밀도도 낮춘다.
@@ -45,6 +49,7 @@ const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
 // 한도 보호 정책이 클라이언트 UX 까지 관통한다.
 export const BusPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const q = searchParams.get('q') ?? '';
   const stId = searchParams.get('stId');
   const routeId = searchParams.get('routeId');
@@ -89,8 +94,14 @@ export const BusPage = () => {
   // 즐겨찾기 — 게스트/로그인 하이브리드. 로그인 직후 게스트 저장분을 서버로
   // 1회 병합하는 부수효과도 이 훅이 담당(BusPage 에서 단 한 번만 호출).
   const favorites = useBusFavorites();
+  // 통합 즐겨찾기 섹션은 양 도메인을 함께 보여준다 — 지하철 즐겨찾기도 여기서
+  // 읽는다(각 훅은 페이지당 1회 호출 규칙, BusPage 에선 이 한 번뿐).
+  const subwayFavorites = useSubwayFavorites();
   const hasFavorites =
-    favorites.stations.length > 0 || favorites.routes.length > 0;
+    favorites.stations.length > 0 ||
+    favorites.routes.length > 0 ||
+    subwayFavorites.stations.length > 0 ||
+    subwayFavorites.lines.length > 0;
 
   // 소비 게이트 — 유효 검색어(2~50자, 훅 enabled 와 동일 조건)가 아닐 때는
   // 캐시에 남은 이전 응답을 마커·배너로 흘리지 않는다.
@@ -323,6 +334,30 @@ export const BusPage = () => {
     [setSearchParams],
   );
 
+  // 통합 즐겨찾기 '이동' — 버스 항목은 기존 in-page 핸들러(동일 URL 계약)로
+  // 재사용하고, 지하철 항목은 지하철 탭으로 navigate(stn 딥링크). 새 URL 시맨틱을
+  // 만들지 않는다.
+  const handleFavNavigate = useCallback(
+    (t: TransitFavTarget) => {
+      switch (t.kind) {
+        case 'bus-station':
+          handleSelect(t.stId);
+          break;
+        case 'bus-route':
+          handleSelectFavoriteRoute(t.stId, t.busRouteId);
+          break;
+        case 'subway-station':
+        case 'subway-line':
+          navigate({
+            pathname: '/subway',
+            search: `?${new URLSearchParams({ stn: t.stationId })}`,
+          });
+          break;
+      }
+    },
+    [handleSelect, handleSelectFavoriteRoute, navigate],
+  );
+
   // '← 목록' — 정류장/노선 선택을 한 번에 해제해 검색 목록으로 복귀.
   const handleBack = useCallback(() => {
     setSearchParams(
@@ -494,13 +529,10 @@ export const BusPage = () => {
   // 초기 화면(검색어·주변·선택 정류장 없음)에 노출할 즐겨찾기 섹션. 0개면
   // undefined 를 넘겨 리스트 본체가 기존 빈 상태 안내를 그대로 보여준다.
   const favoritesSection = hasFavorites ? (
-    <BusFavoriteSection
-      stations={favorites.stations}
-      routes={favorites.routes}
-      onSelectStation={handleSelect}
-      onSelectRoute={handleSelectFavoriteRoute}
-      onToggleStation={favorites.toggleStation}
-      onToggleRoute={favorites.toggleRoute}
+    <TransitFavoritesSection
+      bus={favorites}
+      subway={subwayFavorites}
+      onNavigate={handleFavNavigate}
     />
   ) : undefined;
 
