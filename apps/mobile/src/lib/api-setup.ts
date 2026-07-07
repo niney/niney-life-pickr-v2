@@ -3,8 +3,10 @@ import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import {
   configureApi,
+  setBusFavoriteStorage,
   setReviewAskStorage,
   setSettlementDraftStorage,
+  setSubwayFavoriteStorage,
   useAuthStore,
 } from '@repo/shared';
 import { useSettlementPrefsStore } from './settlementPrefsStore';
@@ -17,6 +19,10 @@ import { useThemeStore } from './themeStore';
 setSettlementDraftStorage(AsyncStorage);
 // 공개 질문(AskTab) 의 식당별 마지막 Q&A persist 어댑터 — 같은 이유로 주입.
 setReviewAskStorage(AsyncStorage);
+// 대중교통 즐겨찾기(게스트 로컬 저장분) persist 어댑터 — 미주입이면 NO_OP
+// 스토리지로 떨어져 앱 재시작 시 게스트 즐겨찾기가 소실된다.
+setBusFavoriteStorage(AsyncStorage);
+setSubwayFavoriteStorage(AsyncStorage);
 
 const TOKEN_KEY = 'lp:token';
 const GUEST_KEY = 'lp:guest';

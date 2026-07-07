@@ -63,11 +63,27 @@ function UserIcon({ color, size = 22 }: IconProps) {
   );
 }
 
+// Lucide tram-front.
+function TramIcon({ color, size = 22 }: IconProps) {
+  return (
+    <svg {...baseSvg(size, color)}>
+      <rect width="16" height="16" x="4" y="3" rx="2" />
+      <path d="M4 11h16" />
+      <path d="M12 3v8" />
+      <path d="m8 19-2 3" />
+      <path d="m18 22-2-3" />
+      <path d="M8 15h.01" />
+      <path d="M16 15h.01" />
+    </svg>
+  );
+}
+
 export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="home" options={{ title: '홈', tabBarIcon: HomeIcon }} />
       <Tabs.Screen name="restaurants" options={{ title: '맛집', tabBarIcon: UtensilsIcon }} />
+      <Tabs.Screen name="transit" options={{ title: '대중교통', tabBarIcon: TramIcon }} />
       <Tabs.Screen name="profile" options={{ title: '프로필', tabBarIcon: UserIcon }} />
     </Tabs>
   );

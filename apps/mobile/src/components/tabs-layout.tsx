@@ -33,6 +33,7 @@ const tabIcon =
 const ANDROID_ICON: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   home: 'home',
   restaurants: 'restaurant',
+  transit: 'directions-transit',
   profile: 'person',
 };
 
@@ -128,6 +129,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="restaurants"
         options={{ title: '맛집', tabBarIcon: tabIcon('fork.knife') }}
+      />
+      <Tabs.Screen
+        name="transit"
+        options={{ title: '대중교통', tabBarIcon: tabIcon('tram.fill') }}
       />
       <Tabs.Screen
         name="profile"

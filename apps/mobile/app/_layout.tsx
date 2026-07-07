@@ -7,6 +7,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { QUERY_GC_TIME, QUERY_STALE_TIME, ThemeProvider, themes, useTheme } from '@repo/shared';
 import { bootstrapApi } from '../src/lib/api-setup';
+import { setupQueryFocus } from '../src/lib/queryFocus';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { ReviewAskBanner } from '../src/components/ReviewAskBanner';
 import { useResolvedThemeMode } from '../src/hooks/useResolvedThemeMode';
@@ -18,6 +19,10 @@ void SplashScreen.preventAutoHideAsync();
 // 애니메이션 스플래시 최소 노출 시간(ms). 2단 시퀀스를 다 보여준 뒤 페이드아웃:
 // 핀 바운스(~700) → splash.png 크로스페이드(950+550) → 잠깐 hold.
 const MIN_SPLASH_MS = 2200;
+
+// AppState → focusManager 배선 — 백그라운드에서 폴링 쿼리(대중교통 도착 등)
+// 가 계속 도는 것을 막는다. 모듈 로드 시 1회.
+setupQueryFocus();
 
 const queryClient = new QueryClient({
   defaultOptions: {
