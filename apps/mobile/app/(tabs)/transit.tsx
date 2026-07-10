@@ -1313,15 +1313,16 @@ export default function TransitScreen() {
         />
       </BottomSheet>
 
-      {/* Detail 시트 — 선택 시에만 mount(진입 애니메이션 + race 회피). */}
+      {/* Detail 시트 — 선택 시에만 mount(진입 애니메이션 + race 회피). 핸들을
+          끝까지 내려도 닫히지 않고 최저 스냅(20%)까지만 접힌다 — 드래그로 닫으면
+          선택(stId/routeId·stn/line)이 통째로 해제되며 리스트로 튕기던 현상 방지.
+          닫기는 패널 뒤로가기 버튼 / 안드로이드 하드웨어 백(handleBack)으로만. */}
       {detailVisible ? (
         <BottomSheet
           index={1}
           snapPoints={SNAP_POINTS}
           topInset={detailTopInset}
           animatedIndex={detailSheetIndex}
-          enablePanDownToClose
-          onClose={handleBack}
           keyboardBehavior="extend"
           keyboardBlurBehavior="restore"
           containerStyle={styles.detailSheetContainer}
