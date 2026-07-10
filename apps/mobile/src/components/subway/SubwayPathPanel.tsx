@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { useSubwayStationSearch, useTheme } from '@repo/shared';
 import type { SubwayPathResultType } from '@repo/api-contract';
 import { SubwayLineBadge } from './SubwayLineBadge';
@@ -85,7 +85,7 @@ export const SubwayPathPanel = ({
               { backgroundColor: theme.colors.bg, borderColor: theme.colors.border },
             ]}
           >
-            <TextInput
+            <BottomSheetTextInput
               value={destInput}
               onChangeText={setDestInput}
               placeholder="도착역 검색"
