@@ -59,6 +59,7 @@ import {
   SubwayCrossSection,
 } from '~/components/transit/CrossSearchSection';
 import { FavoriteStar } from '~/components/transit/FavoriteStar';
+import { NearestTransitSection } from '~/components/transit/NearestTransitSection';
 import { TransitCrossToggleChip } from '~/components/transit/TransitCrossToggleChip';
 import {
   TransitFavoritesSection,
@@ -85,7 +86,7 @@ import {
   type SubwayStationRowData,
 } from '~/components/subway/SubwayStationListRows';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
-import { useTransitScreen, type TransitMode } from '~/hooks/useTransitScreen';
+import { roundCoord, useTransitScreen, type TransitMode } from '~/hooks/useTransitScreen';
 import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 // 권한 거부/한국 밖 폴백 — 서울시청(restaurants 탭과 동일).
@@ -135,12 +136,13 @@ export default function TransitScreen() {
 
   // ── 위치 권한 선해석 — WebView(지도) mount 전에 확정(restaurants 선례) ──
   const userLoc = useUserLocationNative();
+  const refetchUserLocation = userLoc.refetch;
   const triggeredRef = useRef(false);
   useEffect(() => {
     if (triggeredRef.current) return;
     triggeredRef.current = true;
-    userLoc.refetch();
-  }, [userLoc.refetch]);
+    refetchUserLocation();
+  }, [refetchUserLocation]);
 
   const resolved =
     userLoc.status === 'granted' ||
@@ -152,6 +154,9 @@ export default function TransitScreen() {
       ? userLoc.coords
       : null;
   const initialCenter = usableUserCoords ?? SEOUL;
+  // 통합 빠른 선택은 사용자 명시 액션 뒤에만 좌표를 세팅해 양쪽 nearby 조회를
+  // 발화한다. null 이면 네트워크 0·섹션 미표시.
+  const [quickNear, setQuickNear] = useState<{ lat: number; lng: number } | null>(null);
 
   // ── 화면 상태 — 웹 URL 계약을 이식한 단일 reducer ──────────────────────────
   const [state, dispatch] = useTransitScreen();
@@ -510,6 +515,17 @@ export default function TransitScreen() {
   );
   const busArrivalItems = busArrivals.data?.items ?? [];
 
+  // 통합 '근처' 빠른 선택 — 버스 500m / 지하철 1.5km 기존 기본 반경과 캐시를
+  // 그대로 재사용한다. 사용자가 버튼을 누르기 전에는 둘 다 disabled.
+  const quickBusNearby = useBusNearbyStations(
+    quickNear?.lat ?? null,
+    quickNear?.lng ?? null,
+  );
+  const quickSubwayNearby = useSubwayNearbyStations(
+    quickNear?.lat ?? null,
+    quickNear?.lng ?? null,
+  );
+
   // 차량 알약 라벨 — 도착정보 routeName 우선, 없으면 노선 상세 폴백.
   const selectedBusArrival = bus.routeId
     ? (busArrivalItems.find((it) => it.busRouteId === bus.routeId) ?? null)
@@ -539,6 +555,32 @@ export default function TransitScreen() {
     mode === 'bus' && crossNear ? crossNear.lng : null,
   );
   const overlayMarkers = useMemo<BridgeMarker[]>(() => {
+    // 빠른 선택이 열려 있으면 카드와 동일한 거리순 상위 3개씩을 이름·거리 라벨과
+    // 함께 표시한다. 일반 겸표시보다 우선해 두 종류가 한 지도에 동시에 보인다.
+    if (quickNear) {
+      const buses = quickBusNearby.isPlaceholderData
+        ? []
+        : (quickBusNearby.data?.items ?? []).slice(0, 3);
+      const subways = quickSubwayNearby.isPlaceholderData
+        ? []
+        : (quickSubwayNearby.data?.items ?? []).slice(0, 3);
+      return [
+        ...buses.map((s) => ({
+          id: `quick-bus:${s.stId}`,
+          lat: s.lat,
+          lng: s.lng,
+          label: `${s.name} · ${s.dist}m`,
+          icon: BUS_OVERLAY_URL,
+        })),
+        ...subways.map((g) => ({
+          id: `quick-subway:${g.id}`,
+          lat: g.lat,
+          lng: g.lng,
+          label: `${g.name} · ${g.dist}m`,
+          icon: g.lines.length >= 2 ? SUBWAY_OVERLAY_TRANSFER_URL : SUBWAY_OVERLAY_URL,
+        })),
+      ];
+    }
     if (!crossToggleVisible || !crossShow) return EMPTY_OVERLAY;
     if (mode === 'subway') {
       return (crossBusNearby.data?.items ?? []).map((s) => ({
@@ -554,7 +596,18 @@ export default function TransitScreen() {
       lng: g.lng,
       icon: g.lines.length >= 2 ? SUBWAY_OVERLAY_TRANSFER_URL : SUBWAY_OVERLAY_URL,
     }));
-  }, [crossToggleVisible, crossShow, mode, crossBusNearby.data, crossSubwayNearby.data]);
+  }, [
+    quickNear,
+    quickBusNearby.data,
+    quickBusNearby.isPlaceholderData,
+    quickSubwayNearby.data,
+    quickSubwayNearby.isPlaceholderData,
+    crossToggleVisible,
+    crossShow,
+    mode,
+    crossBusNearby.data,
+    crossSubwayNearby.data,
+  ]);
 
   // ── 시트 상태 — restaurants.tsx 패턴 그대로 ────────────────────────────────
   const [headerCardH, setHeaderCardH] = useState(FALLBACK_HEADER_H);
@@ -591,12 +644,16 @@ export default function TransitScreen() {
   );
 
   const handleChangeSubwayQ = useCallback(
-    (next: string) => dispatch({ type: 'SUBWAY_CHANGE_Q', q: next }),
+    (next: string) => {
+      setQuickNear(null);
+      dispatch({ type: 'SUBWAY_CHANGE_Q', q: next });
+    },
     [dispatch],
   );
 
   const handleSubmitQ = useCallback(
     (draft: string) => {
+      setQuickNear(null);
       if (mode === 'subway') {
         // 제출 = 검색어 확정(크로스 조회 채널, M11) — 라이브 검색과 별개.
         dispatch({ type: 'SUBWAY_CHANGE_Q', q: draft });
@@ -697,6 +754,59 @@ export default function TransitScreen() {
     closeDetail();
   }, [mode, dispatch, closeDetail]);
 
+  // '근처' — 현재 모드와 무관하게 버스/지하철 nearby 를 함께 여는 명시 액션.
+  // 두 번째 탭은 닫기 동작. 상세 위에서 실행하면 기존 선택을 해제하고 리스트를
+  // half 로 올려 후보가 즉시 보이게 한다.
+  const handleNearest = useCallback(async () => {
+    if (quickNear) {
+      setQuickNear(null);
+      return;
+    }
+    const result = await refetchUserLocation();
+    if (result.status === 'granted' && result.coords) {
+      if (!isInKorea(result.coords)) {
+        Alert.alert('서비스 지역 밖', '현재 위치가 서비스 지역(한국) 밖이에요.');
+        return;
+      }
+      if (detailVisible) handleBack();
+      setQuickNear({
+        lat: roundCoord(result.coords.lat),
+        lng: roundCoord(result.coords.lng),
+      });
+      listSheetRef.current?.snapToIndex(1);
+      return;
+    }
+    if (result.status === 'pending' || result.status === 'idle') return;
+    const message =
+      result.status === 'denied'
+        ? '위치 권한이 꺼져 있어요. 설정에서 허용한 뒤 다시 시도해 주세요.'
+        : '이 환경에서는 위치를 사용할 수 없어요. 설정을 확인해 주세요.';
+    Alert.alert('위치 권한 필요', message, [
+      { text: '취소', style: 'cancel' },
+      { text: '설정 열기', onPress: () => Linking.openSettings().catch(() => {}) },
+    ]);
+  }, [quickNear, refetchUserLocation, detailVisible, handleBack]);
+
+  const handleSelectNearestBus = useCallback(
+    (id: string) => {
+      if (!quickNear) return;
+      dispatch({ type: 'CROSS_JUMP_TO_BUS', stId: id, near: quickNear });
+      setQuickNear(null);
+      openDetail();
+    },
+    [quickNear, dispatch, openDetail],
+  );
+
+  const handleSelectNearestSubway = useCallback(
+    (id: string) => {
+      if (!quickNear) return;
+      dispatch({ type: 'CROSS_JUMP_TO_SUBWAY', stn: id, near: quickNear });
+      setQuickNear(null);
+      openDetail();
+    },
+    [quickNear, dispatch, openDetail],
+  );
+
   const handleToggleBusRoute = useCallback(
     (busRouteId: string) => dispatch({ type: 'BUS_TOGGLE_ROUTE', routeId: busRouteId }),
     [dispatch],
@@ -724,6 +834,15 @@ export default function TransitScreen() {
   const subwayStopIdsRef = useRef<Set<string>>(new Set());
   const handleMarkerSelect = useCallback(
     (id: string) => {
+      // '근처' 빠른 선택 마커 — 카드 행과 동일한 모드 전환·상세 진입 경로.
+      if (id.startsWith('quick-bus:')) {
+        handleSelectNearestBus(id.slice('quick-bus:'.length));
+        return;
+      }
+      if (id.startsWith('quick-subway:')) {
+        handleSelectNearestSubway(id.slice('quick-subway:'.length));
+        return;
+      }
       // 겸표시 — 상대 모드로 전환 + near 승계 + 선택(웹 크로스 딥링크 대응).
       if (id.startsWith('x-bus:')) {
         dispatch({
@@ -758,6 +877,8 @@ export default function TransitScreen() {
       openDetail,
       subwayEffectiveNear,
       busEffectiveNear,
+      handleSelectNearestBus,
+      handleSelectNearestSubway,
       handleSelectStop,
       handleSelectSubwayStation,
       handleSelectBusStation,
@@ -768,7 +889,7 @@ export default function TransitScreen() {
   // Alert(설정 유도) + 리스트 안내(geoError).
   const handleNearby = useCallback(async () => {
     const geoErrorType = mode === 'subway' ? 'SUBWAY_GEO_ERROR' : 'BUS_GEO_ERROR';
-    const result = await userLoc.refetch();
+    const result = await refetchUserLocation();
     if (result.status === 'granted' && result.coords) {
       if (!isInKorea(result.coords)) {
         dispatch({
@@ -781,6 +902,7 @@ export default function TransitScreen() {
         type: mode === 'subway' ? 'SUBWAY_SET_NEAR' : 'BUS_SET_NEAR',
         coord: result.coords,
       });
+      setQuickNear(null);
       closeDetail();
       return;
     }
@@ -794,7 +916,7 @@ export default function TransitScreen() {
       { text: '취소', style: 'cancel' },
       { text: '설정 열기', onPress: () => Linking.openSettings().catch(() => {}) },
     ]);
-  }, [mode, userLoc.refetch, dispatch, closeDetail]);
+  }, [mode, refetchUserLocation, dispatch, closeDetail]);
 
   const handleClearNear = useCallback(() => {
     dispatch({ type: mode === 'subway' ? 'SUBWAY_CLEAR_NEAR' : 'BUS_CLEAR_NEAR' });
@@ -877,6 +999,25 @@ export default function TransitScreen() {
 
   // ── 지도 조립 — 활성 모드의 모델만 지도에 스프레드 ──────────────────────────
   const mapRef = useRef<TransitMapHandle | null>(null);
+  const quickMapCoords = useMemo(
+    () =>
+      quickNear
+        ? [
+            quickNear,
+            ...overlayMarkers.map((marker) => ({ lat: marker.lat, lng: marker.lng })),
+          ]
+        : [],
+    [quickNear, overlayMarkers],
+  );
+  useEffect(() => {
+    if (!quickNear) return;
+    if (quickMapCoords.length === 1) {
+      mapRef.current?.flyTo(quickNear.lat, quickNear.lng, 15);
+      return;
+    }
+    mapRef.current?.fitToCoords(quickMapCoords, 72);
+  }, [quickNear, quickMapCoords]);
+
   const subwayModel = useSubwayMapModel({
     active: mode === 'subway',
     mapRef,
@@ -906,9 +1047,15 @@ export default function TransitScreen() {
     vehicleColor: busRouteColor,
   });
 
-  const mapMarkers = mode === 'subway' ? subwayModel.markers : busModel.markers;
-  const mapSelectedId = mode === 'subway' ? stn : stId;
-  const mapMyLocation = mode === 'subway' ? subwayEffectiveNear : busEffectiveNear;
+  // 빠른 선택 중에는 기존 검색 마커를 숨겨 후보 오버레이와 클릭이 겹치지 않게
+  // 하고, 기준 GPS 좌표를 내 위치 점으로 명확히 표시한다.
+  const mapMarkers = quickNear
+    ? EMPTY_OVERLAY
+    : mode === 'subway'
+      ? subwayModel.markers
+      : busModel.markers;
+  const mapSelectedId = quickNear ? null : mode === 'subway' ? stn : stId;
+  const mapMyLocation = quickNear ?? (mode === 'subway' ? subwayEffectiveNear : busEffectiveNear);
   const mapViewportChangeEnd =
     mode === 'subway' ? subwayModel.handleViewportChangeEnd : busModel.handleViewportChangeEnd;
   const research = mode === 'subway' ? subwayModel.research : busModel.research;
@@ -1006,6 +1153,8 @@ export default function TransitScreen() {
     ) : null;
 
   const renderEmpty = () => {
+    // 빠른 선택 섹션이 FlatList header 를 채우므로 기본 빈 상태 안내는 숨긴다.
+    if (quickNear) return null;
     if (geoError) return <ListHint text={geoError} />;
     const initialScreen =
       mode === 'subway'
@@ -1298,13 +1447,46 @@ export default function TransitScreen() {
             )
           }
           ListHeaderComponent={
-            selectedMissing ? (
-              <View style={[styles.noticeBox, { backgroundColor: theme.colors.surfaceAlt }]}>
-                <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
-                  {mode === 'subway'
-                    ? '선택한 역이 현재 결과에 없습니다.'
-                    : '선택한 정류장이 현재 결과에 없습니다.'}
-                </Text>
+            quickNear || selectedMissing ? (
+              <View>
+                {quickNear && (
+                  <NearestTransitSection
+                    busItems={
+                      quickBusNearby.isPlaceholderData ? [] : (quickBusNearby.data?.items ?? [])
+                    }
+                    subwayItems={
+                      quickSubwayNearby.isPlaceholderData
+                        ? []
+                        : (quickSubwayNearby.data?.items ?? [])
+                    }
+                    busLoading={
+                      quickBusNearby.isLoading ||
+                      (quickBusNearby.isFetching &&
+                        (!quickBusNearby.data || quickBusNearby.isPlaceholderData))
+                    }
+                    subwayLoading={
+                      quickSubwayNearby.isLoading ||
+                      (quickSubwayNearby.isFetching &&
+                        (!quickSubwayNearby.data || quickSubwayNearby.isPlaceholderData))
+                    }
+                    busError={quickBusNearby.isError}
+                    subwayError={quickSubwayNearby.isError}
+                    onSelectBus={handleSelectNearestBus}
+                    onSelectSubway={handleSelectNearestSubway}
+                    onRetryBus={() => void quickBusNearby.refetch()}
+                    onRetrySubway={() => void quickSubwayNearby.refetch()}
+                    onClose={() => setQuickNear(null)}
+                  />
+                )}
+                {selectedMissing && (
+                  <View style={[styles.noticeBox, { backgroundColor: theme.colors.surfaceAlt }]}>
+                    <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
+                      {mode === 'subway'
+                        ? '선택한 역이 현재 결과에 없습니다.'
+                        : '선택한 정류장이 현재 결과에 없습니다.'}
+                    </Text>
+                  </View>
+                )}
               </View>
             ) : null
           }
@@ -1477,6 +1659,8 @@ export default function TransitScreen() {
         nearMode={nearMode}
         onNearby={() => void handleNearby()}
         onClearNear={handleClearNear}
+        nearestActive={quickNear !== null}
+        onNearest={() => void handleNearest()}
         meta={headerMeta}
         truncated={truncated}
         stale={mode === 'bus' && !busNearMode ? !!busStale : false}

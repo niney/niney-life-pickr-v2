@@ -27,6 +27,8 @@ interface Props {
   nearMode: boolean;
   onNearby(): void;
   onClearNear(): void;
+  nearestActive: boolean;
+  onNearest(): void;
   // 메타 행 문자열("총 N개 · 갱신 N분 전" 등) — null 이면 행 생략.
   meta: string | null;
   // 결과 절단 안내(items < total).
@@ -59,6 +61,8 @@ export const TransitFloatingHeader = ({
   nearMode,
   onNearby,
   onClearNear,
+  nearestActive,
+  onNearest,
   meta,
   truncated,
   stale,
@@ -177,6 +181,20 @@ export const TransitFloatingHeader = ({
               </Pressable>
             )}
             <Pressable
+              onPress={onNearest}
+              style={[
+                styles.quickBtn,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: nearestActive ? theme.colors.surfaceAlt : 'transparent',
+                },
+              ]}
+              accessibilityLabel="내 위치에서 가까운 정류장과 역"
+              accessibilityState={{ selected: nearestActive }}
+            >
+              <Text style={[styles.quickBtnText, { color: theme.colors.text }]}>근처</Text>
+            </Pressable>
+            <Pressable
               onPress={onNearby}
               style={[
                 styles.iconBtn,
@@ -283,6 +301,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  quickBtn: {
+    width: 44,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickBtnText: { fontSize: 12, fontWeight: '600' },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
