@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   BackHandler,
+  Keyboard,
   Linking,
   Pressable,
   StyleSheet,
@@ -61,12 +62,19 @@ import {
 import { FavoriteStar } from '~/components/transit/FavoriteStar';
 import { NearestTransitSection } from '~/components/transit/NearestTransitSection';
 import { TransitCrossToggleChip } from '~/components/transit/TransitCrossToggleChip';
+import { TransitRecentSection } from '~/components/transit/TransitRecentSection';
 import {
   TransitFavoritesSection,
   type TransitFavTarget,
 } from '~/components/transit/TransitFavoritesSection';
 import { SubwayNearbyBusSection } from '~/components/subway/SubwayNearbyBusSection';
 import { useTransitCrossShowStore } from '~/lib/transitCrossShowStore';
+import {
+  matchesTransitRecent,
+  useTransitRecentStore,
+  type TransitRecentQuery,
+  type TransitRecentTarget,
+} from '~/lib/transitRecentStore';
 import { TransitFloatingHeader } from '~/components/transit/TransitFloatingHeader';
 import { TransitMapView } from '~/components/transit/TransitMapView';
 import type { TransitMapHandle } from '~/components/transit/useTransitMapSync';
@@ -157,12 +165,58 @@ export default function TransitScreen() {
   // 통합 빠른 선택은 사용자 명시 액션 뒤에만 좌표를 세팅해 양쪽 nearby 조회를
   // 발화한다. null 이면 네트워크 0·섹션 미표시.
   const [quickNear, setQuickNear] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (searchBlurTimerRef.current) clearTimeout(searchBlurTimerRef.current);
+    },
+    [],
+  );
 
   // ── 화면 상태 — 웹 URL 계약을 이식한 단일 reducer ──────────────────────────
   const [state, dispatch] = useTransitScreen();
   const { mode, subway, bus } = state;
   const stn = subway.stn;
   const stId = bus.stId;
+
+  // 최근 검색/선택은 로그인과 무관한 기기 로컬 기록. 현재 모드 기록만 검색창
+  // 자동완성에 노출하고, 입력 중이면 이름/정류소번호/호선명 부분일치로 좁힌다.
+  const recentQueries = useTransitRecentStore((s) => s.queries);
+  const recentTargets = useTransitRecentStore((s) => s.targets);
+  const addRecentQuery = useTransitRecentStore((s) => s.addQuery);
+  const addRecentBusTarget = useTransitRecentStore((s) => s.addBusTarget);
+  const addRecentSubwayTarget = useTransitRecentStore((s) => s.addSubwayTarget);
+  const removeRecentQuery = useTransitRecentStore((s) => s.removeQuery);
+  const removeRecentTarget = useTransitRecentStore((s) => s.removeTarget);
+  const clearRecentMode = useTransitRecentStore((s) => s.clearMode);
+  const recentFiltering = searchDraft.trim().length > 0;
+  const visibleRecentQueries = useMemo(
+    () =>
+      recentQueries
+        .filter(
+          (item) => item.mode === mode && matchesTransitRecent(item.q, searchDraft),
+        )
+        .slice(0, 5),
+    [recentQueries, mode, searchDraft],
+  );
+  const visibleRecentTargets = useMemo(
+    () =>
+      recentTargets
+        .filter((item) => {
+          if (item.kind !== mode) return false;
+          if (matchesTransitRecent(item.name, searchDraft)) return true;
+          if (item.kind === 'bus') return matchesTransitRecent(item.arsId, searchDraft);
+          return item.lines.some((line) => matchesTransitRecent(line.lineName, searchDraft));
+        })
+        .slice(0, 5),
+    [recentTargets, mode, searchDraft],
+  );
+  const showRecent =
+    searchFocused &&
+    quickNear === null &&
+    (visibleRecentQueries.length > 0 || visibleRecentTargets.length > 0);
 
   // 즐겨찾기 — 게스트/로그인 하이브리드. 로그인 직후 게스트 저장분 서버 병합
   // 부수효과가 있어 **화면당 각 1회만** 호출(섹션/패널엔 props 전달).
@@ -264,6 +318,11 @@ export default function TransitScreen() {
   const favLineHit = stn
     ? subwayFavorites.lines.find((l) => l.stationId === stn)
     : undefined;
+  const recentSubwayMatch = stn
+    ? recentTargets.find((item) => item.kind === 'subway' && item.stationId === stn)
+    : undefined;
+  const recentSubwayHit =
+    recentSubwayMatch?.kind === 'subway' ? recentSubwayMatch : undefined;
 
   // 즐겨찾기 진입 등으로 stn 이 활성 결과에 없을 때 — 스냅샷으로 가상 그룹을
   // 조립해 지도에만 합류(마커/flyTo 가 그대로 동작). 리스트엔 넣지 않는다.
@@ -301,8 +360,17 @@ export default function TransitScreen() {
         ],
       };
     }
+    if (recentSubwayHit) {
+      return {
+        id: recentSubwayHit.stationId,
+        name: recentSubwayHit.name,
+        lat: recentSubwayHit.lat,
+        lng: recentSubwayHit.lng,
+        lines: recentSubwayHit.lines,
+      };
+    }
     return null;
-  }, [stn, favStationHit, favLineHit]);
+  }, [stn, favStationHit, favLineHit, recentSubwayHit]);
 
   // 지도 전용 그룹 — 활성 결과 + (활성에 없을 때만) 즐겨찾기 가상 그룹.
   const subwayMapGroups = useMemo(() => {
@@ -480,6 +548,11 @@ export default function TransitScreen() {
         lng: favRoute.lng,
       };
     }
+    const recentMatch = recentTargets.find(
+      (item) => item.kind === 'bus' && item.stId === stId,
+    );
+    const recentStation = recentMatch?.kind === 'bus' ? recentMatch : undefined;
+    if (recentStation) return recentStation;
     // 노선 경유지 점 클릭으로 목록에 없는 정류장 선택 시 도착 패널이 살아야 한다.
     const routeStation = busRouteDetail.data?.stations.find((s) => s.stId === stId);
     if (routeStation) {
@@ -492,7 +565,53 @@ export default function TransitScreen() {
       };
     }
     return null;
-  }, [stId, busMapItems, busFavorites.stations, busFavorites.routes, busRouteDetail.data]);
+  }, [
+    stId,
+    busMapItems,
+    busFavorites.stations,
+    busFavorites.routes,
+    recentTargets,
+    busRouteDetail.data,
+  ]);
+
+  // 어떤 진입 경로(검색·지도·근처·즐겨찾기·크로스)든 상세가 실제로 성립한
+  // 시점에 한 번만 최근 선택으로 기록한다. 뒤로 나갔다 같은 곳을 다시 열면
+  // ref가 리셋돼 최신 시각으로 위에 올라온다.
+  const selectedSubwayForRecent = stn
+    ? subwayMapGroups.find((group) => group.id === stn) ?? null
+    : null;
+  const lastRecordedTargetRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currentId = mode === 'bus' ? stId : stn;
+    if (!currentId) {
+      lastRecordedTargetRef.current = null;
+      return;
+    }
+    const key = `${mode}:${currentId}`;
+    if (lastRecordedTargetRef.current === key) return;
+
+    if (mode === 'bus') {
+      if (!selectedBusStation) return;
+      addRecentBusTarget(selectedBusStation);
+      if (bus.q.trim().length >= 2) addRecentQuery('bus', bus.q);
+    } else {
+      if (!selectedSubwayForRecent) return;
+      addRecentSubwayTarget(selectedSubwayForRecent);
+      if (subway.qInput.trim().length >= 1) addRecentQuery('subway', subway.qInput);
+    }
+    lastRecordedTargetRef.current = key;
+  }, [
+    mode,
+    stId,
+    stn,
+    selectedBusStation,
+    selectedSubwayForRecent,
+    bus.q,
+    subway.qInput,
+    addRecentBusTarget,
+    addRecentSubwayTarget,
+    addRecentQuery,
+  ]);
 
   // 지도용 정류장 — 선택 정류장이 활성 결과에 없으면(즐겨찾기 진입) 덧대어
   // 마커/flyTo 가 동작하게 한다(웹 mapItemsForMap).
@@ -638,9 +757,21 @@ export default function TransitScreen() {
   }, [detailOpenSV]);
 
   // ── 핸들러 ──────────────────────────────────────────────────────────────
+  const dismissSearchAssist = useCallback(() => {
+    if (searchBlurTimerRef.current) {
+      clearTimeout(searchBlurTimerRef.current);
+      searchBlurTimerRef.current = null;
+    }
+    setSearchFocused(false);
+    Keyboard.dismiss();
+  }, []);
+
   const handleChangeMode = useCallback(
-    (next: TransitMode) => dispatch({ type: 'SET_MODE', mode: next }),
-    [dispatch],
+    (next: TransitMode) => {
+      setSearchDraft(next === 'subway' ? subway.qInput : bus.q);
+      dispatch({ type: 'SET_MODE', mode: next });
+    },
+    [dispatch, subway.qInput, bus.q],
   );
 
   const handleChangeSubwayQ = useCallback(
@@ -654,6 +785,14 @@ export default function TransitScreen() {
   const handleSubmitQ = useCallback(
     (draft: string) => {
       setQuickNear(null);
+      const trimmed = draft.trim();
+      if (
+        (mode === 'subway' && trimmed.length >= 1) ||
+        (mode === 'bus' && trimmed.length >= 2)
+      ) {
+        addRecentQuery(mode, trimmed);
+      }
+      dismissSearchAssist();
       if (mode === 'subway') {
         // 제출 = 검색어 확정(크로스 조회 채널, M11) — 라이브 검색과 별개.
         dispatch({ type: 'SUBWAY_CHANGE_Q', q: draft });
@@ -663,7 +802,7 @@ export default function TransitScreen() {
         closeDetail();
       }
     },
-    [mode, dispatch, closeDetail],
+    [mode, dispatch, closeDetail, addRecentQuery, dismissSearchAssist],
   );
 
   const handleSelectSubwayStation = useCallback(
@@ -673,10 +812,11 @@ export default function TransitScreen() {
       const name = id.slice(id.indexOf(':') + 1);
       const onTrackedLine =
         lineStationKeyRef.current.ids.has(id) || lineStationKeyRef.current.names.has(name);
+      dismissSearchAssist();
       dispatch({ type: 'SUBWAY_SELECT_STATION', id, onTrackedLine });
       openDetail();
     },
-    [dispatch, openDetail],
+    [dispatch, openDetail, dismissSearchAssist],
   );
 
   // 경유역 점 클릭 — 환승역은 활성 결과의 그룹 대표 id 로 재해석.
@@ -739,6 +879,7 @@ export default function TransitScreen() {
   const handleSelectBusStation = useCallback(
     (id: string) => {
       // 새 정류장이 추적 노선의 경유 정류소면 routeId 유지(노선 위 이동).
+      dismissSearchAssist();
       dispatch({
         type: 'BUS_SELECT_STATION',
         stId: id,
@@ -746,13 +887,82 @@ export default function TransitScreen() {
       });
       openDetail();
     },
-    [dispatch, openDetail],
+    [dispatch, openDetail, dismissSearchAssist],
   );
 
   const handleBack = useCallback(() => {
     dispatch({ type: mode === 'subway' ? 'SUBWAY_BACK' : 'BUS_BACK' });
     closeDetail();
   }, [mode, dispatch, closeDetail]);
+
+  const handleSearchFocusChange = useCallback(
+    (nextFocused: boolean) => {
+      if (searchBlurTimerRef.current) {
+        clearTimeout(searchBlurTimerRef.current);
+        searchBlurTimerRef.current = null;
+      }
+      if (nextFocused) {
+        setQuickNear(null);
+        if (detailVisible) handleBack();
+        setSearchFocused(true);
+        listSheetRef.current?.snapToIndex(1);
+        return;
+      }
+      // 최근 행을 누를 때 TextInput blur가 press보다 먼저 와 섹션을 unmount하지
+      // 않도록 짧게 지연한다. 선택 핸들러는 즉시 타이머를 취소한다.
+      searchBlurTimerRef.current = setTimeout(() => {
+        setSearchFocused(false);
+        searchBlurTimerRef.current = null;
+      }, 160);
+    },
+    [detailVisible, handleBack],
+  );
+
+  const handleUseRecentQuery = useCallback(
+    (q: string) => {
+      const normalized = q.trim().normalize('NFC');
+      setQuickNear(null);
+      setSearchDraft(normalized);
+      addRecentQuery(mode, normalized);
+      dismissSearchAssist();
+      if (mode === 'subway') {
+        dispatch({ type: 'SUBWAY_CHANGE_Q', q: normalized });
+        dispatch({ type: 'SUBWAY_SUBMIT_Q' });
+      } else {
+        dispatch({ type: 'BUS_SUBMIT_Q', q: normalized });
+      }
+      listSheetRef.current?.snapToIndex(1);
+    },
+    [mode, dispatch, addRecentQuery, dismissSearchAssist],
+  );
+
+  const handleSelectRecentTarget = useCallback(
+    (target: TransitRecentTarget) => {
+      setQuickNear(null);
+      dismissSearchAssist();
+      if (target.kind === 'bus') {
+        dispatch({ type: 'CROSS_JUMP_TO_BUS', stId: target.stId, near: null });
+      } else {
+        dispatch({ type: 'CROSS_JUMP_TO_SUBWAY', stn: target.stationId, near: null });
+      }
+      openDetail();
+    },
+    [dispatch, openDetail, dismissSearchAssist],
+  );
+
+  const handleRemoveRecentQuery = useCallback(
+    (query: TransitRecentQuery) => removeRecentQuery(query.mode, query.q),
+    [removeRecentQuery],
+  );
+
+  const handleRemoveRecentTarget = useCallback(
+    (target: TransitRecentTarget) =>
+      removeRecentTarget(
+        target.kind,
+        target.kind === 'bus' ? target.stId : target.stationId,
+      ),
+    [removeRecentTarget],
+  );
 
   // '근처' — 현재 모드와 무관하게 버스/지하철 nearby 를 함께 여는 명시 액션.
   // 두 번째 탭은 닫기 동작. 상세 위에서 실행하면 기존 선택을 해제하고 리스트를
@@ -1085,12 +1295,16 @@ export default function TransitScreen() {
         : '열차 따라가는 중';
 
   // ── 리스트 행 — 판별 유니온(단일 BottomSheetFlatList, children swap 금지) ──
+  const busDraftPending =
+    mode === 'bus' &&
+    searchDraft.trim().normalize('NFC') !== bus.q.trim().normalize('NFC');
   const rows = useMemo<ListRow[]>(() => {
     if (mode === 'subway') {
       return subwayActive.items.map((item) => ({ kind: 'subway-station' as const, item }));
     }
+    if (busDraftPending) return [];
     return busActive.items.map((item) => ({ kind: 'bus-station' as const, item }));
-  }, [mode, subwayActive.items, busActive.items]);
+  }, [mode, subwayActive.items, busActive.items, busDraftPending]);
 
   // 헤더 메타 문자열 — 주변: 반경/총수/갱신, 검색: 총수(버스는 갱신 시각 포함).
   const headerMeta =
@@ -1155,6 +1369,18 @@ export default function TransitScreen() {
   const renderEmpty = () => {
     // 빠른 선택 섹션이 FlatList header 를 채우므로 기본 빈 상태 안내는 숨긴다.
     if (quickNear) return null;
+    if (showRecent) return null;
+    if (busDraftPending) {
+      return (
+        <ListHint
+          text={
+            searchDraft.trim().length < 2
+              ? '검색어는 2자 이상 입력하세요.'
+              : '키보드의 검색 버튼을 눌러 정류장을 검색하세요.'
+          }
+        />
+      );
+    }
     if (geoError) return <ListHint text={geoError} />;
     const initialScreen =
       mode === 'subway'
@@ -1447,8 +1673,20 @@ export default function TransitScreen() {
             )
           }
           ListHeaderComponent={
-            quickNear || selectedMissing ? (
+            showRecent || quickNear || selectedMissing ? (
               <View>
+                {showRecent && (
+                  <TransitRecentSection
+                    filtering={recentFiltering}
+                    queries={visibleRecentQueries}
+                    targets={visibleRecentTargets}
+                    onUseQuery={handleUseRecentQuery}
+                    onSelectTarget={handleSelectRecentTarget}
+                    onRemoveQuery={handleRemoveRecentQuery}
+                    onRemoveTarget={handleRemoveRecentTarget}
+                    onClear={() => clearRecentMode(mode)}
+                  />
+                )}
                 {quickNear && (
                   <NearestTransitSection
                     busItems={
@@ -1656,6 +1894,8 @@ export default function TransitScreen() {
         q={mode === 'subway' ? subway.qInput : bus.q}
         onChangeQ={mode === 'subway' ? handleChangeSubwayQ : undefined}
         onSubmitQ={handleSubmitQ}
+        onDraftChange={setSearchDraft}
+        onSearchFocusChange={handleSearchFocusChange}
         nearMode={nearMode}
         onNearby={() => void handleNearby()}
         onClearNear={handleClearNear}

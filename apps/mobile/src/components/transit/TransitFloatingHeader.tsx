@@ -24,6 +24,9 @@ interface Props {
   onChangeQ?(next: string): void;
   // 제출 채널(Enter/키보드 검색 키) — draft 를 그대로 넘긴다.
   onSubmitQ(q: string): void;
+  // 버스도 서버 호출 없이 로컬 자동완성을 갱신할 수 있도록 모든 키 입력 전달.
+  onDraftChange(q: string): void;
+  onSearchFocusChange(focused: boolean): void;
   nearMode: boolean;
   onNearby(): void;
   onClearNear(): void;
@@ -58,6 +61,8 @@ export const TransitFloatingHeader = ({
   q,
   onChangeQ,
   onSubmitQ,
+  onDraftChange,
+  onSearchFocusChange,
   nearMode,
   onNearby,
   onClearNear,
@@ -76,13 +81,16 @@ export const TransitFloatingHeader = ({
   const [draft, setDraft] = useState(q);
   // onChangeQ 최신 참조 — 디바운스 effect 가 콜백 참조 변경마다 재예약되지 않게.
   const changeQRef = useRef(onChangeQ);
+  const draftChangeRef = useRef(onDraftChange);
   useEffect(() => {
     changeQRef.current = onChangeQ;
+    draftChangeRef.current = onDraftChange;
   });
 
   // 외부(모드 전환·주변 진입 등)에서 q 가 바뀌면 draft 동기화.
   useEffect(() => {
     setDraft(q);
+    draftChangeRef.current(q);
   }, [q]);
 
   // 라이브 채널 — 300ms 디바운스(RestaurantSearchBar 관용구). 제출형(버스)은
@@ -143,7 +151,12 @@ export const TransitFloatingHeader = ({
             >
               <TextInput
                 value={draft}
-                onChangeText={setDraft}
+                onChangeText={(next) => {
+                  setDraft(next);
+                  onDraftChange(next);
+                }}
+                onFocus={() => onSearchFocusChange(true)}
+                onBlur={() => onSearchFocusChange(false)}
                 onSubmitEditing={() => onSubmitQ(draft)}
                 placeholder={mode === 'subway' ? '역 이름으로 검색' : '정류장 이름으로 검색'}
                 placeholderTextColor={theme.colors.textMuted}
@@ -156,6 +169,7 @@ export const TransitFloatingHeader = ({
                 <Pressable
                   onPress={() => {
                     setDraft('');
+                    onDraftChange('');
                     // 라이브(지하철)는 즉시 반영, 제출형(버스)은 빈 제출로 초기화.
                     if (onChangeQ) onChangeQ('');
                     else onSubmitQ('');
