@@ -46,9 +46,11 @@ import {
   buildBusStopMarkerDataUrl,
   buildSubwayStationMarkerDataUrl,
   busRouteTypeColor,
+  dayTypeForToday,
   formatRelativeMin,
   isInKorea,
   subwayLineName,
+  type SubwayDayType,
 } from '@repo/utils';
 import type { BusStationItemType, SubwayStationGroupItemType } from '@repo/api-contract';
 import type { BridgeMarker } from '~/components/transit/transitMapBridge';
@@ -78,7 +80,6 @@ import { SubwayArrivalPanel } from '~/components/subway/SubwayArrivalPanel';
 import { SubwayLineBadge } from '~/components/subway/SubwayLineBadge';
 import { SubwayPathPanel } from '~/components/subway/SubwayPathPanel';
 import { SubwayTimetable } from '~/components/subway/SubwayTimetable';
-import { dayTypeForToday, type SubwayDayType } from '~/components/subway/timetableUtils';
 import {
   SubwayStationRow,
   type SubwayStationRowData,

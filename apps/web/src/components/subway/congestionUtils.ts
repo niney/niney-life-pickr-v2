@@ -1,5 +1,5 @@
 import type { SubwayCongestionDirectionType } from '@repo/api-contract';
-import { arrivalUpdnToTimetable } from './timetableUtils';
+import { arrivalUpdnToTimetable } from '@repo/utils';
 
 // 혼잡도 순수 헬퍼 — 도착 패널 게이지·시간표 뷰 dot 공용. 값은 서울교통공사 정적
 // 통계의 '정원 대비 %'(좌석 만석 = 34%)이며 실시간이 아니다(FE 는 '통계' 라벨 필수).

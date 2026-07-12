@@ -7,15 +7,15 @@ import type {
   SubwayTimetableResultType,
   SubwayTimetableTrainItemType,
 } from '@repo/api-contract';
-import { SubwayLineBadge } from './SubwayLineBadge';
-import { congestionBand, congestionDirForUpdn, slotLevel, timeToSlotKey } from './congestionUtils';
 import {
   formatHHMM,
   isSubwayExpressTag,
   parseTimeMin,
   updnLabel,
   type SubwayDayType,
-} from './timetableUtils';
+} from '@repo/utils';
+import { SubwayLineBadge } from './SubwayLineBadge';
+import { congestionBand, congestionDirForUpdn, slotLevel, timeToSlotKey } from './congestionUtils';
 
 const DAY_TYPES: { value: SubwayDayType; label: string }[] = [
   { value: '1', label: '평일' },

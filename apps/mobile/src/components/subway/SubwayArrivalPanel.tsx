@@ -9,10 +9,15 @@ import type {
   SubwayTimetableDirectionType,
   SubwayTimetableResultType,
 } from '@repo/api-contract';
-import { formatRelativeSec, subwayLineName } from '@repo/utils';
+import {
+  arrivalUpdnToTimetable,
+  formatHHMM,
+  formatRelativeSec,
+  lastTrainRemainMin,
+  subwayLineName,
+} from '@repo/utils';
 import { SubwayLineBadge } from './SubwayLineBadge';
 import { congestionBand, currentSlotKey, matchCongestionDir, slotLevel } from './congestionUtils';
-import { arrivalUpdnToTimetable, formatHHMM, lastTrainRemainMin } from './timetableUtils';
 
 
 // arvlCd 원문 → 상태 문구. 0접근/1도착/2출발/3전역출발/4전역진입/5전역도착.

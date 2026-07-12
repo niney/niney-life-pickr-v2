@@ -10,6 +10,7 @@ export * from './routePath.js';
 export * from './subwayLine.js';
 export * from './subwayMarker.js';
 export * from './subwayPosition.js';
+export * from './subwayTimetable.js';
 export * from './vehiclePill.js';
 export * from './thumbnail.js';
 export * from './vworld.js';

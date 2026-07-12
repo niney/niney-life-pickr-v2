@@ -6,18 +6,18 @@ import type {
   SubwayTimetableDirectionType,
   SubwayTimetableResultType,
 } from '@repo/api-contract';
-import { Badge } from '~/components/ui/badge';
-import { Button } from '~/components/ui/button';
-import { cn } from '~/lib/utils';
-import { SubwayLineBadge } from './SubwayLineBadge';
-import { congestionBand, congestionDirForUpdn, slotLevel, timeToSlotKey } from './congestionUtils';
 import {
   formatHHMM,
   isSubwayExpressTag,
   parseTimeMin,
   updnLabel,
   type SubwayDayType,
-} from './timetableUtils';
+} from '@repo/utils';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
+import { SubwayLineBadge } from './SubwayLineBadge';
+import { congestionBand, congestionDirForUpdn, slotLevel, timeToSlotKey } from './congestionUtils';
 
 const DAY_TYPES: { value: SubwayDayType; label: string }[] = [
   { value: '1', label: '평일' },

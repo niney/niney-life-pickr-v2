@@ -1,5 +1,5 @@
-// 시간표 순수 헬퍼 — 시간표 뷰(SubwayTimetable)·도착 패널 푸터 공용(웹 동일
-// 파일 복사 — 완전 순수라 무수정).
+// 시간표 순수 헬퍼 — 시간표 뷰(SubwayTimetable)·도착 패널 푸터·화면 공용
+// (웹·앱 동일 소비).
 
 export type SubwayDayType = '1' | '2' | '3';
 
@@ -17,7 +17,9 @@ export const parseTimeMin = (t: string): number => {
   return (Number(h) || 0) * 60 + (Number(m) || 0);
 };
 
-// 'HH:MM:SS' → 'HH:MM' 표기. 자정 넘김(24+)은 지하철 관례대로 그대로 둔다.
+// 'HH:MM:SS' → 'HH:MM' 표기. 초만 떼고, 자정 넘김(24+, 실측 '24:46:00')은 지하철
+// 관례대로 '24:46' 그대로 둔다(익일 운행 구분 — '00:46' 로 접지 않음). '00:00:00'
+// 은 '00:00'.
 export const formatHHMM = (t: string): string => {
   const [hRaw, mRaw] = t.split(':');
   const h = Number(hRaw) || 0;
@@ -25,7 +27,7 @@ export const formatHHMM = (t: string): string => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-// 막차까지 남은 분 — 막차가 익일(24+)이고 현재가 자정 직후(04시 전)면 현재
+// 막차까지 남은 분 — 막차가 익일(24+)이고 현재가 자정 직후(새벽 04시 전)면 현재
 // 시각도 24+ 로 올려 같은 축에서 뺀다. 막차 없음/이미 지남은 음수/null.
 export const lastTrainRemainMin = (
   lastTrain: string | null,
@@ -39,16 +41,19 @@ export const lastTrainRemainMin = (
 };
 
 // 도착정보 updnLine 텍스트('상행'/'내선'/'하행'/'외선') → 시간표 updn('1'/'2').
+// 도착 API 는 노선마다 표기가 달라(2호선은 내선/외선) 원문 매핑이 필요하다.
 export const arrivalUpdnToTimetable = (updnText: string): '1' | '2' | null => {
   if (updnText.includes('상행') || updnText.includes('내선')) return '1';
   if (updnText.includes('하행') || updnText.includes('외선')) return '2';
   return null;
 };
 
-// 급행 판정 — 'G'/null 외의 태그는 급행 처리(웹 실측 확정치).
+// 급행 판정 — 실측 확정(2026-07-06 9호선 신논현: 'G' 일반 126건 / 'D' 급행 118건).
+// 'D' 가 급행이고, 안전망으로 'G'/null 외의 값도 급행 처리(신규 급행/특급 태그 대비).
+// EXPRESS_YN 분포가 더 확정되면 이 한 곳(정상 태그 집합)만 조정한다.
 const EXPRESS_NORMAL_TAGS = new Set(['G']);
 export const isSubwayExpressTag = (tag: string | null): boolean =>
   tag !== null && !EXPRESS_NORMAL_TAGS.has(tag);
 
-// 시간표 updn('1'/'2') → 방향 라벨.
+// 시간표 updn('1'/'2') → 방향 라벨. 2호선 내선/외선은 계약에 구분이 없어 일반 라벨.
 export const updnLabel = (updn: string): string => (updn === '1' ? '상행' : '하행');
