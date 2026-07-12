@@ -17,7 +17,7 @@ import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
-import { extractFirstJsonObject } from '../summary/summary.service.js';
+import { extractFirstJsonObject } from '../../lib/json.js';
 
 // 실패 run 1건에 대한 LLM 원인 분석. 'log-analysis' 용도 provider (DB row
 // 필수 — env fallback 없음) 로 스텝 로그를 요약/진단해 OperationReport 에

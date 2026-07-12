@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { env } from '../../config/env.js';
+import { escapeHtml, formatThousands } from '../../lib/html.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
 import { LRUCache } from 'lru-cache';
 import { renderSettlementCardPng } from './settlement-card.js';
@@ -69,21 +70,6 @@ async function loadIndex(): Promise<{ html: string } | { tried: string[] }> {
   return { tried };
 }
 
-const ESC: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC[c]!);
-}
-
-// 1234567 → "1,234,567" (원 단위 정수). ICU 의존 없이 천단위 콤마만.
-function formatWon(n: number): string {
-  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
 
 interface OgMeta {
   title: string;
@@ -168,7 +154,7 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
       //  크롤러 캐시 박제를 피하려면 식당 사진이 낫다.)
       og = {
         title: `${meta.restaurantName} 정산`,
-        description: `총 ${formatWon(meta.grandTotal)}원 · ${meta.participantCount}명`,
+        description: `총 ${formatThousands(meta.grandTotal)}원 · ${meta.participantCount}명`,
         url: pageUrl,
         image:
           meta.ogImageUrl ?? `${origin}/share/settlements/${encodeURIComponent(token)}/image.png`,

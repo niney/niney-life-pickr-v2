@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
-import { normalizeTerm } from '../summary/summary.service.js';
+import { normalizeTerm } from '../../lib/text.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from '../analytics/category-tree.js';
 import {
   composeDiningcodeAddon,

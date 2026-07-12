@@ -10,6 +10,7 @@ import {
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
+import { formatThousands } from '../../lib/html.js';
 
 // 공유 정산을 카카오톡 등에 '이미지'로 바로 보내기 위한 정산표 PNG 렌더.
 //
@@ -68,9 +69,6 @@ function loadFonts(): Promise<{ regular: Buffer; bold: Buffer }> {
   return fontsPromise;
 }
 
-function formatWon(n: number): string {
-  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
 
 const participantLabel = (
   p: { name: string | null; nickname: string | null },
@@ -364,13 +362,13 @@ function buildTable(session: SharedSettlementSessionType): {
           return [
             ...r.categories.map((c, j) => {
               const v = r.cells[pIdx]?.[c] ?? 0;
-              return cell(attended && v > 0 ? formatWon(v) : '', CAT_W, {
+              return cell(attended && v > 0 ? formatThousands(v) : '', CAT_W, {
                 align: 'right',
                 borderLeft: j === 0 ? 2 : 1,
                 color: v === 0 ? C.faint : C.text,
               });
             }),
-            cell(attended ? formatWon(r.rowSubtotals[pIdx] ?? 0) : '—', SUB_W, {
+            cell(attended ? formatThousands(r.rowSubtotals[pIdx] ?? 0) : '—', SUB_W, {
               align: 'right',
               fw: 700,
               bg: C.subBg,
@@ -379,7 +377,7 @@ function buildTable(session: SharedSettlementSessionType): {
             }),
           ];
         }),
-        cell(formatWon(p.shareAmount), TOTAL_W, {
+        cell(formatThousands(p.shareAmount), TOTAL_W, {
           align: 'right',
           fw: 700,
           bg: C.amountBg,
@@ -398,21 +396,21 @@ function buildTable(session: SharedSettlementSessionType): {
       cell('계', NAME_W, { fw: 700, bg: C.head }),
       ...m.rounds.flatMap((r) => [
         ...r.categories.map((c, j) =>
-          cell(formatWon(r.columnTotals[c] ?? 0), CAT_W, {
+          cell(formatThousands(r.columnTotals[c] ?? 0), CAT_W, {
             align: 'right',
             fw: 700,
             bg: C.head,
             borderLeft: j === 0 ? 2 : 1,
           }),
         ),
-        cell(formatWon(r.grandSubtotal), SUB_W, {
+        cell(formatThousands(r.grandSubtotal), SUB_W, {
           align: 'right',
           fw: 700,
           bg: C.subBg2,
           borderLeft: 1,
         }),
       ]),
-      cell(formatWon(m.grandTotal), TOTAL_W, {
+      cell(formatThousands(m.grandTotal), TOTAL_W, {
         align: 'right',
         fw: 700,
         bg: C.amountBg2,
@@ -447,7 +445,7 @@ function buildTree(session: SharedSettlementSessionType): {
 } {
   const { node: table, width: tableWidth } = buildTable(session);
   const n = session.participants.length;
-  const subtitle = `총 ${formatWon(session.grandTotal)}원 · ${n}명`;
+  const subtitle = `총 ${formatThousands(session.grandTotal)}원 · ${n}명`;
   const contentWidth = Math.max(tableWidth, 320);
 
   const root = h(

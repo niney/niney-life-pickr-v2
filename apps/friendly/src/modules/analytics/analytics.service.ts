@@ -17,7 +17,9 @@ import type {
   OperationLogInput,
   OperationLogService,
 } from '../logs/operation-log.service.js';
-import { extractFirstJsonObject, normalizeTerm } from '../summary/summary.service.js';
+import { chunk } from '../../lib/array.js';
+import { extractFirstJsonObject } from '../../lib/json.js';
+import { normalizeTerm } from '../../lib/text.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from './category-tree.js';
 import {
   GLOBAL_MERGE_CHUNK_SIZE,
@@ -1315,9 +1317,3 @@ const sortGlobal = (
   }
 };
 
-const chunk = <T>(arr: T[], n: number): T[][] => {
-  if (n <= 0) return [arr];
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-  return out;
-};

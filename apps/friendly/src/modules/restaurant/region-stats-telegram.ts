@@ -1,4 +1,6 @@
 import type { RegionStatsResultType } from '@repo/api-contract';
+import { chunk } from '../../lib/array.js';
+import { escapeTelegramHtml } from '../../lib/html.js';
 
 // 지역 통계(getRegionStats)를 텔레그램 메시지로 렌더하는 순수 함수들.
 // 텍스트 막대 + 시도 드릴다운 버튼. 부수효과·텔레그램 호출 없음(테스트 용이).
@@ -42,7 +44,7 @@ export function buildRegionStatsOverview(
   const nameW = Math.max(...rows.map((s) => visualWidth(s.sido)));
   const lines = rows.map(
     (s) =>
-      `${escapeHtml(padEndVisual(s.sido, nameW))}  ${String(s.count).padStart(3)}  ${bar(s.count, max)}`,
+      `${escapeTelegramHtml(padEndVisual(s.sido, nameW))}  ${String(s.count).padStart(3)}  ${bar(s.count, max)}`,
   );
   const text =
     `🗺️ <b>맛집 지역 통계</b> — 총 ${stats.total}곳\n` +
@@ -70,7 +72,7 @@ export function buildRegionStatsSido(
 
   if (entry.sigungus.length === 0) {
     return {
-      text: `🗺️ <b>${escapeHtml(sido)}</b> — ${entry.count}곳\n\n세부 시/군/구 정보가 없습니다.`,
+      text: `🗺️ <b>${escapeTelegramHtml(sido)}</b> — ${entry.count}곳\n\n세부 시/군/구 정보가 없습니다.`,
       buttons: [[sidoDiscover], [back]],
     };
   }
@@ -79,14 +81,14 @@ export function buildRegionStatsSido(
   const nameW = Math.max(...rows.map((s) => visualWidth(s.sigungu)));
   const lines = rows.map(
     (s) =>
-      `${escapeHtml(padEndVisual(s.sigungu, nameW))}  ${String(s.count).padStart(3)}  ${bar(s.count, max)}`,
+      `${escapeTelegramHtml(padEndVisual(s.sigungu, nameW))}  ${String(s.count).padStart(3)}  ${bar(s.count, max)}`,
   );
   const more =
     entry.sigungus.length > rows.length
       ? `\n외 ${entry.sigungus.length - rows.length}곳`
       : '';
   const text =
-    `🗺️ <b>${escapeHtml(sido)}</b> — ${entry.count}곳\n\n` +
+    `🗺️ <b>${escapeTelegramHtml(sido)}</b> — ${entry.count}곳\n\n` +
     `<pre>\n${lines.join('\n')}\n</pre>${more}\n` +
     '🔍 발굴할 구를 고르세요 ↓';
   const discBtns = rows.slice(0, DISCOVER_BTN_MAX).map((s) => ({
@@ -135,12 +137,3 @@ function padEndVisual(s: string, target: number): string {
   return pad > 0 ? s + ' '.repeat(pad) : s;
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}

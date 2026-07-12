@@ -14,7 +14,8 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
-import { normalizeTerm, extractFirstJsonObject } from '../summary/summary.service.js';
+import { extractFirstJsonObject } from '../../lib/json.js';
+import { normalizeTerm } from '../../lib/text.js';
 import {
   MENU_GROUPING_CHUNK_SIZE,
   MENU_GROUPING_JSON_SCHEMA,

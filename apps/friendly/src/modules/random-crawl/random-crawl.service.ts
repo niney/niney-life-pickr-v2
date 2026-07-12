@@ -1,4 +1,5 @@
 import { Cron } from 'croner';
+import { escapeTelegramHtml } from '../../lib/html.js';
 import type {
   PrismaClient,
   RandomCrawlRun as PrismaRandomCrawlRun,
@@ -540,7 +541,7 @@ export class RandomCrawlService {
       await this.deps.telegram.editMessageText(
         cb.chatId,
         cb.messageId,
-        `⏭️ <b>건너뜀</b> — 이번 회차는 크롤하지 않습니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
+        `⏭️ <b>건너뜀</b> — 이번 회차는 크롤하지 않습니다.\n📍 ${escapeTelegramHtml(run.regionLabel ?? '')}`,
       );
       await this.touchConfig('skipped');
       return;
@@ -560,7 +561,7 @@ export class RandomCrawlService {
       messageId: cb.messageId,
       candidates,
       index,
-      introText: `✅ <b>${escapeHtml(cand.name)}</b> 선택됨 — 크롤을 시작합니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
+      introText: `✅ <b>${escapeTelegramHtml(cand.name)}</b> 선택됨 — 크롤을 시작합니다.\n📍 ${escapeTelegramHtml(run.regionLabel ?? '')}`,
     });
   }
 
@@ -640,26 +641,26 @@ export class RandomCrawlService {
     await this.touchConfig(status);
     // 카드(진행 메시지)는 조용히 최종 상태로 정리하고, 완료/실패는 별도 새
     // 메시지(notify)로 보내 알림(핑)이 울리게 한다 — 편집은 핑을 안 울리므로.
-    const region = escapeHtml(regionLabel);
+    const region = escapeTelegramHtml(regionLabel);
     if (status === 'done') {
       await this.deps.telegram.editMessageText(
         chatId,
         messageId,
-        `✅ <b>${escapeHtml(cand.name)}</b> 크롤 완료\n📍 ${region}`,
+        `✅ <b>${escapeTelegramHtml(cand.name)}</b> 크롤 완료\n📍 ${region}`,
       );
       const url = `${env.PUBLIC_ORIGIN}/r/${encodeURIComponent(cand.placeId)}`;
       const reviewLine = cand.reviewCount != null ? ` · 리뷰 ${cand.reviewCount}개` : '';
       await this.deps.telegram.notify(
-        `🎉 <b>등록 완료</b> — ${escapeHtml(cand.name)}\n📍 ${region}${reviewLine}\n👉 <a href="${url}">가게 보기</a>`,
+        `🎉 <b>등록 완료</b> — ${escapeTelegramHtml(cand.name)}\n📍 ${region}${reviewLine}\n👉 <a href="${url}">가게 보기</a>`,
       );
     } else {
       await this.deps.telegram.editMessageText(
         chatId,
         messageId,
-        `⚠️ <b>${escapeHtml(cand.name)}</b> 크롤 실패`,
+        `⚠️ <b>${escapeTelegramHtml(cand.name)}</b> 크롤 실패`,
       );
       await this.deps.telegram.notify(
-        `⚠️ <b>크롤 실패</b> — ${escapeHtml(cand.name)}\n${escapeHtml(error ?? '알 수 없는 오류')}`,
+        `⚠️ <b>크롤 실패</b> — ${escapeTelegramHtml(cand.name)}\n${escapeTelegramHtml(error ?? '알 수 없는 오류')}`,
       );
     }
   }
@@ -704,7 +705,7 @@ export class RandomCrawlService {
 
   // 검색어 1건으로 직접 검색 발굴 실행. /search 인자 입력과 force_reply 답장이 공유.
   private async runSearch(query: string): Promise<void> {
-    await this.runDiscoverAndReply(`🔎 "${escapeHtml(query)}" 검색 중…`, {
+    await this.runDiscoverAndReply(`🔎 "${escapeTelegramHtml(query)}" 검색 중…`, {
       trigger: 'search',
       query,
     });
@@ -728,10 +729,10 @@ export class RandomCrawlService {
       query: override?.query,
     });
     if (run.status === 'skipped' && run.error && run.error !== EMPTY_REASON) {
-      await this.deps.telegram.notify(`⏭️ ${escapeHtml(run.error)}`);
+      await this.deps.telegram.notify(`⏭️ ${escapeTelegramHtml(run.error)}`);
     } else if (run.status === 'failed') {
       await this.deps.telegram.notify(
-        `⚠️ 발굴 실패: ${escapeHtml(run.error ?? '알 수 없는 오류')}`,
+        `⚠️ 발굴 실패: ${escapeTelegramHtml(run.error ?? '알 수 없는 오류')}`,
       );
     }
   }
@@ -791,7 +792,7 @@ export class RandomCrawlService {
     const label = sigungu ? `${sido} ${sigungu}` : `${sido}(랜덤 구)`;
     await this.deps.telegram.answerCallback(cb.callbackQueryId, `발굴: ${label}`);
     await this.runDiscoverAndReply(
-      `🔍 <b>${escapeHtml(label)}</b> 맛집 발굴을 시작합니다…`,
+      `🔍 <b>${escapeTelegramHtml(label)}</b> 맛집 발굴을 시작합니다…`,
       { region },
     );
   }
@@ -832,7 +833,7 @@ export class RandomCrawlService {
           messageId: Number(run.telegramMessageId),
           candidates,
           index,
-          introText: `⏰ 응답이 없어 <b>${escapeHtml(cand.name)}</b> 자동 선택 — 크롤을 시작합니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
+          introText: `⏰ 응답이 없어 <b>${escapeTelegramHtml(cand.name)}</b> 자동 선택 — 크롤을 시작합니다.\n📍 ${escapeTelegramHtml(run.regionLabel ?? '')}`,
         }).catch((e) => {
           this.log?.error(
             { runId: run.id, err: e instanceof Error ? e.message : String(e) },
@@ -851,7 +852,7 @@ export class RandomCrawlService {
         await this.deps.telegram.editMessageText(
           run.telegramChatId,
           Number(run.telegramMessageId),
-          `⏰ <b>시간 초과</b> — 이번 회차는 건너뜁니다.\n📍 ${escapeHtml(run.regionLabel ?? '')}`,
+          `⏰ <b>시간 초과</b> — 이번 회차는 건너뜁니다.\n📍 ${escapeTelegramHtml(run.regionLabel ?? '')}`,
         );
       }
       this.log?.info({ runId: run.id }, '[random-crawl] awaiting 만료 → skipped');
@@ -941,7 +942,7 @@ export class RandomCrawlService {
   private async notifyEmpty(regionLabel: string, query: string): Promise<void> {
     if (!this.deps.telegram.isConfigured()) return;
     await this.deps.telegram.sendCandidates({
-      text: `🍽️ <b>오늘의 맛집 발굴</b>\n📍 ${escapeHtml(regionLabel)}\n🔎 "${escapeHtml(query)}"\n\n신규 후보가 없어 이번 회차는 건너뜁니다.`,
+      text: `🍽️ <b>오늘의 맛집 발굴</b>\n📍 ${escapeTelegramHtml(regionLabel)}\n🔎 "${escapeTelegramHtml(query)}"\n\n신규 후보가 없어 이번 회차는 건너뜁니다.`,
       buttons: [],
     });
   }
@@ -959,7 +960,7 @@ export class RandomCrawlService {
     name: string,
     regionLabel: string,
   ): () => Promise<void> {
-    const header = `🔄 <b>${escapeHtml(name)}</b> 크롤 중…\n📍 ${escapeHtml(regionLabel)}`;
+    const header = `🔄 <b>${escapeTelegramHtml(name)}</b> 크롤 중…\n📍 ${escapeTelegramHtml(regionLabel)}`;
     let lastEditMs = 0;
     let lastText = '';
     let stopped = false;
@@ -1068,7 +1069,7 @@ function buildCandidatesMessage(
   candidates: RandomCrawlCandidateType[],
 ): { text: string; buttons: TelegramButtons } {
   const text =
-    `🍽️ <b>오늘의 맛집 발굴</b>\n📍 ${escapeHtml(regionLabel)}\n🔎 "${escapeHtml(query)}"\n\n` +
+    `🍽️ <b>오늘의 맛집 발굴</b>\n📍 ${escapeTelegramHtml(regionLabel)}\n🔎 "${escapeTelegramHtml(query)}"\n\n` +
     `크롤할 가게를 선택하세요 (${candidates.length}곳):\n\n${renderCandidateLines(candidates)}`;
   return { text, buttons: buildCandidateButtons(runId, candidates) };
 }
@@ -1080,7 +1081,7 @@ function buildSearchCandidatesMessage(
   candidates: RandomCrawlCandidateType[],
 ): { text: string; buttons: TelegramButtons } {
   const text =
-    `🔎 <b>검색 결과</b> — "${escapeHtml(query)}"\n` +
+    `🔎 <b>검색 결과</b> — "${escapeTelegramHtml(query)}"\n` +
     `크롤할 가게를 선택하세요 (${candidates.length}곳):\n` +
     `<i>가게명을 누르면 네이버지도에서 확인할 수 있어요.</i>\n\n${renderCandidateLines(candidates)}`;
   return { text, buttons: buildCandidateButtons(runId, candidates) };
@@ -1090,10 +1091,10 @@ function buildSearchCandidatesMessage(
 function renderCandidateLines(candidates: RandomCrawlCandidateType[]): string {
   return candidates
     .map((c, i) => {
-      const name = `<a href="${escapeHtml(c.rawSourceUrl)}">${escapeHtml(c.name)}</a>`;
-      const head = `${i + 1}. <b>${name}</b>${c.category ? ` · ${escapeHtml(c.category)}` : ''}`;
+      const name = `<a href="${escapeTelegramHtml(c.rawSourceUrl)}">${escapeTelegramHtml(c.name)}</a>`;
+      const head = `${i + 1}. <b>${name}</b>${c.category ? ` · ${escapeTelegramHtml(c.category)}` : ''}`;
       const sub: string[] = [];
-      if (c.roadAddress) sub.push(escapeHtml(c.roadAddress));
+      if (c.roadAddress) sub.push(escapeTelegramHtml(c.roadAddress));
       if (c.reviewCount != null) sub.push(`리뷰 ${c.reviewCount}`);
       return head + (sub.length ? `\n   ${sub.join(' · ')}` : '');
     })
@@ -1135,6 +1136,3 @@ export function parseSearchCommand(text: string): string | null {
   return trimmed.slice(first.length).trim();
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}

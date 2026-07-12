@@ -19,7 +19,7 @@ import { jobRegistry as defaultCrawlRegistry } from '../crawl/job-registry.js';
 import type { JobRegistry } from '../crawl/job-registry.js';
 import type { CrawlService } from '../crawl/crawl.service.js';
 import type { RestaurantService } from '../restaurant/restaurant.service.js';
-import { extractFirstJsonObject } from '../summary/summary.service.js';
+import { extractFirstJsonObject } from '../../lib/json.js';
 import {
   AUTO_DISCOVER_JSON_SCHEMA,
   AUTO_DISCOVER_KEYWORD_COUNT,

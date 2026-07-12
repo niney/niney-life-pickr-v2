@@ -17,7 +17,7 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
-import { extractFirstJsonObject } from '../summary/summary.service.js';
+import { extractFirstJsonObject } from '../../lib/json.js';
 import {
   EXTRACTION_JSON_SCHEMA,
   EXTRACTION_SYSTEM_PROMPT,

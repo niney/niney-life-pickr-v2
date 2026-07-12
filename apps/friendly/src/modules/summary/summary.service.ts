@@ -1,6 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { ReviewAnalysis, type ReviewAnalysisType } from '@repo/api-contract';
+import { extractFirstJsonObject } from '../../lib/json.js';
+import { normalizeTerm } from '../../lib/text.js';
 import { LLMUpstreamError, type LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { ReviewSearchService } from '../review-search/review-search.service.js';
@@ -131,10 +133,6 @@ const DEFAULT_CHUNK_SIZE = 10;
 // 어댑터의 동시성-한도 백오프와 별개 — 그쪽은 같은 호출 내부에서 회복.
 const RETRY_LIMIT = 3;
 
-// nameNorm/termNorm 정규화 — 대소문자/공백/특수문자만 제거하는 최소 정규화.
-// 동의어 사전("세트"="SET", "트러플"="truffle")은 별도 작업으로 미룬다.
-export const normalizeTerm = (s: string): string =>
-  s.toLowerCase().replace(/\s+/g, '').replace(/[^\p{L}\p{N}]/gu, '');
 
 const safeParseArray = (raw: string | null): unknown[] => {
   if (!raw) return [];
@@ -1368,34 +1366,4 @@ const parseAnalysis = (raw: string): ReviewAnalysisType | null => {
   }
   const result = ReviewAnalysis.safeParse(json);
   return result.success ? result.data : null;
-};
-
-// 균형잡힌 첫 JSON 객체 추출. 문자열 리터럴 안의 `{` `}` 와 이스케이프된
-// `\"` 를 무시하고, 깊이 0이 되는 시점에 종료한다. 다른 모듈(메뉴 그룹핑)
-// 에서도 재사용하므로 export.
-export const extractFirstJsonObject = (s: string): string | null => {
-  const start = s.indexOf('{');
-  if (start === -1) return null;
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-  for (let i = start; i < s.length; i += 1) {
-    const c = s[i];
-    if (inString) {
-      if (escape) escape = false;
-      else if (c === '\\') escape = true;
-      else if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') {
-      inString = true;
-      continue;
-    }
-    if (c === '{') depth += 1;
-    else if (c === '}') {
-      depth -= 1;
-      if (depth === 0) return s.slice(start, i + 1);
-    }
-  }
-  return null;
 };

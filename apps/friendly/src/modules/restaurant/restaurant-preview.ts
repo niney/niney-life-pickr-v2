@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Routes } from '@repo/api-contract';
 import { env } from '../../config/env.js';
+import { escapeHtml, formatThousands } from '../../lib/html.js';
 import { RestaurantService, type RestaurantPublicSeoMeta } from './restaurant.service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -39,24 +40,8 @@ async function loadIndex(): Promise<{ html: string } | { tried: string[] }> {
   return { tried };
 }
 
-const ESC: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC[c]!);
-}
-
 function escapeJsonLd(s: string): string {
   return s.replace(/</g, '\\u003c');
-}
-
-function formatCount(n: number): string {
-  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 interface RestaurantOgMeta {
@@ -133,7 +118,7 @@ function buildDescription(meta: RestaurantPublicSeoMeta): string {
     (v): v is string => typeof v === 'string' && v.length > 0,
   );
   if (meta.rating !== null) bits.push(`평점 ${meta.rating.toFixed(1)}`);
-  if (meta.reviewCount !== null) bits.push(`리뷰 ${formatCount(meta.reviewCount)}`);
+  if (meta.reviewCount !== null) bits.push(`리뷰 ${formatThousands(meta.reviewCount)}`);
   const prefix = bits.length > 0 ? `${bits.join(' · ')}. ` : '';
   return `${prefix}Life Pickr에서 메뉴, 사진, AI 리뷰 분석을 확인해보세요.`;
 }
@@ -181,7 +166,7 @@ function buildSeoBody(meta: RestaurantPublicSeoMeta, image: string): string {
     meta.category,
     address,
     meta.rating !== null ? `평점 ${meta.rating.toFixed(1)}` : null,
-    meta.reviewCount !== null ? `리뷰 ${formatCount(meta.reviewCount)}` : null,
+    meta.reviewCount !== null ? `리뷰 ${formatThousands(meta.reviewCount)}` : null,
   ].filter((v): v is string => typeof v === 'string' && v.length > 0);
   const menuItems = meta.menus
     .slice(0, 12)
@@ -210,9 +195,6 @@ function buildSeoBody(meta: RestaurantPublicSeoMeta, image: string): string {
     .join('\n    ');
 }
 
-function escapeXml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC[c]!);
-}
 
 export async function registerRestaurantPreview(app: FastifyInstance): Promise<void> {
   const service = new RestaurantService(app.prisma);
@@ -277,8 +259,8 @@ export async function registerRestaurantPreview(app: FastifyInstance): Promise<v
     const urls = entries.map((entry) =>
       [
         '  <url>',
-        `    <loc>${escapeXml(`${origin}/r/${encodeURIComponent(entry.placeId)}`)}</loc>`,
-        `    <lastmod>${escapeXml(entry.lastmod)}</lastmod>`,
+        `    <loc>${escapeHtml(`${origin}/r/${encodeURIComponent(entry.placeId)}`)}</loc>`,
+        `    <lastmod>${escapeHtml(entry.lastmod)}</lastmod>`,
         '    <changefreq>weekly</changefreq>',
         '    <priority>0.8</priority>',
         '  </url>',
