@@ -1,4 +1,5 @@
 export * from './aiModel.js';
+export * from './busArrival.js';
 export * from './busMarker.js';
 export * from './format.js';
 export * from './geo.js';

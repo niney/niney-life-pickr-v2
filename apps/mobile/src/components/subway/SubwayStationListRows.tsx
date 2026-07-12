@@ -1,14 +1,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
+import { formatDistanceM } from '@repo/utils';
 import { SubwayLineBadge } from './SubwayLineBadge';
 
 // 주변 모드 행 — 검색 그룹에 서버 계산 거리(m)를 덧댄 형태(웹 SubwayStationRow).
 export type SubwayStationRowData = SubwayStationGroupItemType & { dist?: number };
-
-// 거리(m) → 표기. 1km 미만은 정수 m, 이상은 소수 1자리 km.
-export const formatDist = (m: number): string =>
-  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 
 interface RowProps {
   item: SubwayStationRowData;
@@ -48,7 +45,7 @@ export const SubwayStationRow = ({ item, selected, onSelect, starContent }: RowP
         <View style={styles.rightCol}>
           {item.dist !== undefined && (
             <Text style={[styles.dist, { color: theme.colors.textMuted }]}>
-              {formatDist(item.dist)}
+              {formatDistanceM(item.dist)}
             </Text>
           )}
           <View style={styles.badges}>

@@ -68,3 +68,16 @@ export const haversineM = (a: LatLng, b: LatLng): number => {
 
 // 좌표 소수 5자리(≈1m) 반올림 — URL·브리지 직렬화 키 안정용.
 export const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
+
+// 'lat,lng' 문자열 파싱 — 형식 + 한국 WGS84 범위(lat 33~39, lng 124~132 — API
+// 계약과 동일)를 통과해야 유효 좌표. 딥링크·수동 편집 쓰레기 값은 null.
+// (KOREA_BBOX 보다 넉넉한 범위 — 계약 검증과 같은 경계를 쓴다.)
+export const parseLatLngParam = (raw: string | null): LatLng | null => {
+  if (!raw) return null;
+  const [latStr, lngStr] = raw.split(',');
+  const lat = Number(latStr);
+  const lng = Number(lngStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < 33 || lat > 39 || lng < 124 || lng > 132) return null;
+  return { lat, lng };
+};

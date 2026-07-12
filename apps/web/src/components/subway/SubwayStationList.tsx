@@ -3,6 +3,7 @@ import type {
   SubwayFavoriteStationItemType,
   SubwayStationGroupItemType,
 } from '@repo/api-contract';
+import { formatDistanceM, formatRelativeMin } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -14,20 +15,6 @@ import { SubwayLineBadge } from './SubwayLineBadge';
 // 덧댄 형태. 검색 모드 항목은 dist 가 없어(undefined) 거리 표기를 생략한다.
 export type SubwayStationRow = SubwayStationGroupItemType & { dist?: number };
 
-// 거리(m) → 표기. 1km 미만은 정수 m, 이상은 소수 1자리 km.
-const formatDist = (m: number): string =>
-  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
-
-// 역사마스터 적재 시각 → '갱신 N분 전' 표기. 마스터 기준일이라 분 단위면 충분.
-const formatRelative = (iso: string): string => {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60_000);
-  if (min < 1) return '방금 전';
-  if (min < 60) return `${min}분 전`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  return `${Math.floor(hours / 24)}일 전`;
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SubwayStationSearchBar — 라이브 검색 인풋 + '검색' 버튼 + '주변 역' 버튼 + 메타 행.
@@ -120,7 +107,7 @@ export const SubwayStationSearchBar = ({
               <LocateFixed className="size-3" /> 주변 역
             </Badge>
             {fetchedAt && (
-              <>반경 1.5km · 총 {total}개 · 갱신 {formatRelative(fetchedAt)}</>
+              <>반경 1.5km · 총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}</>
             )}
           </span>
           <button
@@ -280,7 +267,7 @@ export const SubwayStationListBody = ({
                   {/* 주변 모드 — 서버가 준 거리(m). */}
                   {it.dist !== undefined && (
                     <span className="text-xs text-muted-foreground tabular-nums">
-                      {formatDist(it.dist)}
+                      {formatDistanceM(it.dist)}
                     </span>
                   )}
                   <span className="flex items-center gap-1">

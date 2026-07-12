@@ -46,6 +46,7 @@ import {
   buildBusStopMarkerDataUrl,
   buildSubwayStationMarkerDataUrl,
   busRouteTypeColor,
+  formatRelativeMin,
   isInKorea,
   subwayLineName,
 } from '@repo/utils';
@@ -104,15 +105,6 @@ const SUBWAY_OVERLAY_TRANSFER_URL = buildSubwayStationMarkerDataUrl({
   transfer: true,
 });
 
-// 캐시/마스터 갱신 시각 → '갱신 N분 전'(분 단위면 충분 — 웹 formatRelative).
-const formatRelativeMin = (iso: string): string => {
-  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (min < 1) return '방금 전';
-  if (min < 60) return `${min}분 전`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  return `${Math.floor(hours / 24)}일 전`;
-};
 
 type ListRow =
   | { kind: 'subway-station'; item: SubwayStationRowData }

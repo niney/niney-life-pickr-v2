@@ -14,7 +14,7 @@ import {
   type BusFavoritesApi,
   type SubwayFavoritesApi,
 } from '@repo/shared';
-import { subwayLineName } from '@repo/utils';
+import { isBusArrivalImminent, subwayLineName } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { SubwayLineBadge } from '~/components/subway/SubwayLineBadge';
@@ -76,7 +76,7 @@ const PreviewNote = ({ children }: { children: ReactNode }) => (
 // 도착 메시지는 업스트림 원문 그대로 노출(기존 패널과 동일 — 남은시간 재파싱
 // 안 함). '곧 도착'은 패널과 같은 emerald 강조.
 const BusArrivalLine = ({ item }: { item: BusArrivalItemType }) => {
-  const imminent = item.first?.message?.includes('곧 도착') ?? false;
+  const imminent = isBusArrivalImminent(item.first?.message);
   return (
     <li className="flex items-start gap-2 text-sm">
       <span className="shrink-0 font-semibold tabular-nums">{item.routeName}</span>

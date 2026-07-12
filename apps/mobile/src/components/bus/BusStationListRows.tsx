@@ -1,12 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type { BusStationItemType } from '@repo/api-contract';
+import { formatDistanceM } from '@repo/utils';
 
 // 주변 모드 행 — 검색 항목에 서버 계산 거리(m)를 덧댄 형태(웹 BusStationRow).
 export type BusStationRowData = BusStationItemType & { dist?: number };
-
-const formatDist = (m: number): string =>
-  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 
 interface RowProps {
   item: BusStationRowData;
@@ -34,7 +32,7 @@ export const BusStationRow = ({ item, selected, onSelect, starContent }: RowProp
         <View style={styles.rightCol}>
           {item.dist !== undefined && (
             <Text style={[styles.dist, { color: theme.colors.textMuted }]}>
-              {formatDist(item.dist)}
+              {formatDistanceM(item.dist)}
             </Text>
           )}
           {item.arsId !== '0' && (

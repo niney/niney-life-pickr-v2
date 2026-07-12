@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useBusNearbyStations, useTheme } from '@repo/shared';
+import { formatDistanceM } from '@repo/utils';
 
 // 도보권(m) — 버스 기본 반경(500)보다 좁게. 역 바로 옆 정류장만.
 const NEARBY_RADIUS_M = 350;
-
-const formatDist = (m: number): string =>
-  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 
 // 도착 패널 하단의 접이식 '주변 버스 정류장' 섹션(웹 12차 이식). 버스 쿼터를
 // 아끼려 기본 접힘 + 펼쳤을 때만 조회(enabled 게이트). 행 탭 → 버스 모드 전환
@@ -77,7 +75,7 @@ export const SubwayNearbyBusSection = ({
                 </Text>
                 <View style={styles.right}>
                   <Text style={[styles.dist, { color: theme.colors.textMuted }]}>
-                    {formatDist(it.dist)}
+                    {formatDistanceM(it.dist)}
                   </Text>
                   {it.arsId !== '0' && (
                     <View style={[styles.pill, { backgroundColor: theme.colors.surfaceAlt }]}>

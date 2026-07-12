@@ -2,7 +2,12 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { BusStationItemType } from '@repo/api-contract';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { busRouteTypeColor, buildSubwayStationMarkerDataUrl, roundCoord } from '@repo/utils';
+import {
+  busRouteTypeColor,
+  buildSubwayStationMarkerDataUrl,
+  parseLatLngParam,
+  roundCoord,
+} from '@repo/utils';
 import {
   useBusFavorites,
   useBusNearbyStations,
@@ -32,17 +37,6 @@ import {
 import { SubwayCrossSection } from '~/components/transit/CrossSearchSection';
 
 
-// near 파라미터('lat,lng') 파싱 — 형식/한국 WGS84 범위(계약과 동일)를 통과해야
-// 주변 모드로 인정. 딥링크·수동 편집으로 들어온 쓰레기 값은 null → 키워드 모드.
-const parseNear = (raw: string | null): { lat: number; lng: number } | null => {
-  if (!raw) return null;
-  const [latStr, lngStr] = raw.split(',');
-  const lat = Number(latStr);
-  const lng = Number(lngStr);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat < 33 || lat > 39 || lng < 124 || lng > 132) return null;
-  return { lat, lng };
-};
 
 // 겸표시(지하철역) 마커 아이콘 — 자기 정류장(파랑)과 즉시 구분되는 지하철 톤
 // (청록, 환승역 이중 링). 기존 지하철 역 마커 빌더 재사용(신규 아이콘 없음).
@@ -66,7 +60,8 @@ export const BusPage = () => {
 
   // 주변 모드 — near 파라미터가 유효 좌표일 때. 키워드(q)와 배타이며, URL 이
   // 유일 진실이라 새로고침/딥링크 시 Geolocation 재요청 없이 좌표로 복원된다.
-  const near = parseNear(searchParams.get('near'));
+  // near 형식/범위 불통과(딥링크·수동 편집 쓰레기 값)는 null → 키워드 모드.
+  const near = parseLatLngParam(searchParams.get('near'));
   const nearMode = near !== null;
 
   // Geolocation 실패 안내(권한 거부/타임아웃/미지원/비보안) — 좌표를 못 얻으면

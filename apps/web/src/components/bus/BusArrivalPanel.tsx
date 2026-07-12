@@ -5,24 +5,11 @@ import type {
   BusRouteInfoType,
   BusStationItemType,
 } from '@repo/api-contract';
+import { formatRelativeSec, isBusArrivalImminent } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { BusFavoriteStar } from './BusFavoriteStar';
-
-// 실시간 데이터(30초 폴링)라 초 단위 상대시각 — 검색 리스트의 분 단위
-// formatRelative 와 달리 '방금/N초 전'이 의미를 가진다.
-const formatRelativeSec = (iso: string): string => {
-  const sec = Math.floor(Math.max(0, Date.now() - new Date(iso).getTime()) / 1000);
-  if (sec < 10) return '방금 전';
-  if (sec < 60) return `${sec}초 전`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}분 전`;
-  return `${Math.floor(min / 60)}시간 전`;
-};
-
-// "곧 도착" 계열 메시지 강조 판정 — 서울시 원문이 "곧 도착" 단독 표기.
-const isImminent = (message: string): boolean => message.includes('곧 도착');
 
 export interface BusArrivalPanelProps {
   station: BusStationItemType;
@@ -231,7 +218,8 @@ const ArrivalMessage = ({
       className={cn(
         'truncate',
         primary ? 'text-sm' : 'text-xs text-muted-foreground',
-        isImminent(entry.message) && 'font-semibold text-emerald-600 dark:text-emerald-400',
+        isBusArrivalImminent(entry.message) &&
+          'font-semibold text-emerald-600 dark:text-emerald-400',
       )}
     >
       {entry.message}

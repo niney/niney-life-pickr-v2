@@ -2,16 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bus, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useBusNearbyStations } from '@repo/shared';
-import { roundCoord } from '@repo/utils';
+import { formatDistanceM, roundCoord } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 
 // 도보권(m) — 버스 기본 반경(500)보다 좁게. 역 바로 옆 정류장만.
 const NEARBY_RADIUS_M = 350;
 
-// 거리(m) → 표기. 1km 미만 정수 m, 이상 소수 1자리 km(버스 리스트와 동일).
-const formatDist = (m: number): string =>
-  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SubwayNearbyBusSection — 도착 패널 하단의 접이식 '주변 버스 정류장' 섹션. 버스
@@ -83,7 +80,7 @@ export const SubwayNearbyBusSection = ({ lat, lng }: { lat: number; lng: number 
                     <span className="truncate font-medium">{it.name}</span>
                     <span className="flex shrink-0 items-center gap-1.5">
                       <span className="text-xs text-muted-foreground tabular-nums">
-                        {formatDist(it.dist)}
+                        {formatDistanceM(it.dist)}
                       </span>
                       {/* arsId '0' = 가상정류장(표지판 번호 없음) — 배지 숨김(버스 규칙). */}
                       {it.arsId !== '0' && (

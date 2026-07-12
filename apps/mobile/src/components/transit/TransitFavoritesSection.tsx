@@ -15,7 +15,7 @@ import {
   type BusFavoritesApi,
   type SubwayFavoritesApi,
 } from '@repo/shared';
-import { subwayLineName } from '@repo/utils';
+import { isBusArrivalImminent, subwayLineName } from '@repo/utils';
 import { SubwayLineBadge } from '~/components/subway/SubwayLineBadge';
 import { FavoriteStar } from './FavoriteStar';
 
@@ -152,7 +152,7 @@ export const TransitFavoritesSection = ({
     return (
       <View style={styles.previewList}>
         {shown.map((it: BusArrivalItemType) => {
-          const imminent = it.first?.message?.includes('곧 도착') ?? false;
+          const imminent = isBusArrivalImminent(it.first?.message);
           return (
             <View key={it.busRouteId} style={styles.previewLine}>
               <Text style={[styles.previewRoute, { color: theme.colors.text }]}>

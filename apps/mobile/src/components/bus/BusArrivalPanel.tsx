@@ -8,19 +8,7 @@ import type {
   BusRouteInfoType,
   BusStationItemType,
 } from '@repo/api-contract';
-
-// 실시간(30초 폴링) — 초 단위 상대시각.
-const formatRelativeSec = (iso: string, nowMs: number): string => {
-  const sec = Math.floor(Math.max(0, nowMs - new Date(iso).getTime()) / 1000);
-  if (sec < 10) return '방금 전';
-  if (sec < 60) return `${sec}초 전`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}분 전`;
-  return `${Math.floor(min / 60)}시간 전`;
-};
-
-// "곧 도착" 계열 메시지 강조 판정 — 서울시 원문이 "곧 도착" 단독 표기.
-const isImminent = (message: string): boolean => message.includes('곧 도착');
+import { formatRelativeSec, isBusArrivalImminent } from '@repo/utils';
 
 export interface BusArrivalPanelProps {
   station: BusStationItemType;
@@ -188,13 +176,13 @@ const ArrivalMessage = ({
       style={[
         primary ? styles.arrivalMain : styles.arrivalSub,
         {
-          color: isImminent(entry.message)
+          color: isBusArrivalImminent(entry.message)
             ? imminentColor
             : primary
               ? theme.colors.text
               : theme.colors.textMuted,
         },
-        isImminent(entry.message) && { fontWeight: '600' },
+        isBusArrivalImminent(entry.message) && { fontWeight: '600' },
       ]}
     >
       {entry.message}

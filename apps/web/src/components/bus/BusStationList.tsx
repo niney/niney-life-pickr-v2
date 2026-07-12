@@ -4,6 +4,7 @@ import type {
   BusFavoriteStationItemType,
   BusStationItemType,
 } from '@repo/api-contract';
+import { formatDistanceM, formatRelativeMin } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -14,21 +15,6 @@ import { BusFavoriteStar } from './BusFavoriteStar';
 // 덧댄 형태. 키워드 모드 항목은 dist 가 없어(undefined) 배지를 생략한다.
 export type BusStationRow = BusStationItemType & { dist?: number };
 
-// 거리(m) → 배지 문구. 1km 미만은 정수 m, 이상은 소수 1자리 km.
-const formatDist = (m: number): string =>
-  m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
-
-// 서울시 원본 수집 시각 → '갱신 N분 전' 표기. 분 단위면 충분 — 서버 캐시
-// TTL 이 30일이라 초 단위 정밀도는 의미 없다.
-const formatRelative = (iso: string): string => {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60_000);
-  if (min < 1) return '방금 전';
-  if (min < 60) return `${min}분 전`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  return `${Math.floor(hours / 24)}일 전`;
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BusStationSearchBar — 제출형 검색 인풋 + 메타 행(총수·갱신·강제 새로고침).
@@ -130,7 +116,7 @@ export const BusStationSearchBar = ({
       {!nearMode && hasQ && fetchedAt && (
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex min-w-0 flex-wrap items-center gap-1.5 tabular-nums">
-            총 {total}개 · 갱신 {formatRelative(fetchedAt)}
+            총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}
             {stale && (
               <Badge variant="amber" title="서울시 API 오류 — 저장된 결과를 표시 중입니다">
                 서울시 API 오류 · 저장된 결과
@@ -157,7 +143,7 @@ export const BusStationSearchBar = ({
             <Badge variant="secondary" className="gap-1">
               <LocateFixed className="size-3" /> 내 주변
             </Badge>
-            {fetchedAt && <>총 {total}개 · 갱신 {formatRelative(fetchedAt)}</>}
+            {fetchedAt && <>총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}</>}
           </span>
           <button
             type="button"
@@ -313,7 +299,7 @@ export const BusStationListBody = ({
                   {/* 주변 모드 — 서버가 준 거리 배지(파란 톤). */}
                   {it.dist !== undefined && (
                     <Badge variant="default" className="tabular-nums">
-                      {formatDist(it.dist)}
+                      {formatDistanceM(it.dist)}
                     </Badge>
                   )}
                   {/* arsId '0' = 가상정류장(표지판 번호 없음) — 배지 숨김. */}
