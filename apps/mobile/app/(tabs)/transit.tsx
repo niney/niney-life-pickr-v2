@@ -50,6 +50,7 @@ import {
   dayTypeForToday,
   formatRelativeMin,
   isInKorea,
+  subwayDestinationLabel,
   subwayLineName,
   type SubwayDayType,
 } from '@repo/utils';
@@ -80,6 +81,7 @@ import { TransitMapView } from '~/components/transit/TransitMapView';
 import type { TransitMapHandle } from '~/components/transit/useTransitMapSync';
 import { useBusMapModel, isBusVehicleId } from '~/components/transit/useBusMapModel';
 import { useSubwayMapModel, isSubwayVehicleId } from '~/components/transit/useSubwayMapModel';
+import { usePinnedVehicle } from '~/components/transit/usePinnedVehicle';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
 import {
   BusStationRow,
@@ -177,7 +179,7 @@ export default function TransitScreen() {
 
   // ── 화면 상태 — 웹 URL 계약을 이식한 단일 reducer ──────────────────────────
   const [state, dispatch] = useTransitScreen();
-  const { mode, subway, bus } = state;
+  const { mode, subway, bus, pinned } = state;
   const stn = subway.stn;
   const stId = bus.stId;
 
@@ -1273,17 +1275,124 @@ export default function TransitScreen() {
     mode === 'subway'
       ? subwayNearMode && subwayNearby.isFetching
       : busNearMode && busNearby.isFetching;
-  // 지도 차량/폴리라인/따라가기 — 활성 모드 것만.
-  const mapRouteLines = mode === 'bus' ? busModel.routeLines : subwayModel.routeLines;
-  const mapVehicles = mode === 'bus' ? busModel.vehicles : subwayModel.vehicles;
-  const mapFollowVehicleId =
-    mode === 'bus' ? busModel.followVehicleId : subwayModel.followVehicleId;
-  // 버스 15초 폴링→14초 tween / 지하철 30초 폴링→28초 tween(웹과 동일).
-  const mapVehicleTweenMs = mode === 'bus' ? 14_000 : 28_000;
-  const mapVehicleSelect =
-    mode === 'bus' ? busModel.handleVehicleSelect : subwayModel.handleVehicleSelect;
-  const mapFollowInterrupted =
-    mode === 'bus' ? busModel.handleFollowInterrupted : subwayModel.handleFollowInterrupted;
+  // ── 탑승(핀) 오버레이 — 활성 모드 차량/노선 위에 핀 차량을 합성 ─────────────
+  // 핀이 지금 보는 맥락(활성 모델이 이미 그 노선을 그림)이면 모델이 전담하고
+  // 오버레이는 비운다(중복 방지). 맥락 밖(다른 모드/다른 노선 탐색 중)이면 raw
+  // 좌표 pill + 노선 라인을 덧대 어디를 보든 그 차량이 지도에 유지된다.
+  const [pinFollowPaused, setPinFollowPaused] = useState(false);
+  const [pinEndedNotice, setPinEndedNotice] = useState<string | null>(null);
+  const pinEndedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pin = usePinnedVehicle(pinned, focused);
+  const activeVehicles = mode === 'bus' ? busModel.vehicles : subwayModel.vehicles;
+  const activeRouteLines = mode === 'bus' ? busModel.routeLines : subwayModel.routeLines;
+  const pinnedIsActive =
+    pinned !== null &&
+    pinned.mode === mode &&
+    pinned.routeKey === (mode === 'bus' ? bus.routeId : subway.line);
+
+  const mapVehicles = useMemo(() => {
+    const overlay = pinnedIsActive ? null : pin.overlayVehicles;
+    if (!overlay || overlay.length === 0) return activeVehicles;
+    const seen = new Set(activeVehicles.map((v) => v.id));
+    const extra = overlay.filter((v) => !seen.has(v.id));
+    return extra.length ? [...activeVehicles, ...extra] : activeVehicles;
+  }, [activeVehicles, pin.overlayVehicles, pinnedIsActive]);
+  const mapRouteLines = useMemo(() => {
+    const overlay = pinnedIsActive ? null : pin.overlayRouteLines;
+    if (!overlay || overlay.length === 0) return activeRouteLines;
+    return [...(activeRouteLines ?? []), ...overlay];
+  }, [activeRouteLines, pin.overlayRouteLines, pinnedIsActive]);
+
+  // 카메라 follow — 핀이 있으면 그 차량(패닝으로 일시정지), 없으면 활성 모델.
+  const pinnedBridgeId = pinned
+    ? `${pinned.mode === 'bus' ? 'veh-' : 'train-'}${pinned.vehicleId}`
+    : null;
+  const mapFollowVehicleId = pinnedBridgeId
+    ? pinFollowPaused
+      ? null
+      : pinnedBridgeId
+    : mode === 'bus'
+      ? busModel.followVehicleId
+      : subwayModel.followVehicleId;
+  // 버스 15초→14초 / 지하철 30초→28초 tween. 맥락 밖 핀은 그 차량 페이스 우선.
+  const mapVehicleTweenMs =
+    pinned && !pinnedIsActive
+      ? pinned.mode === 'bus'
+        ? 14_000
+        : 28_000
+      : mode === 'bus'
+        ? 14_000
+        : 28_000;
+
+  // 차량 탭 = 탑승(핀) 토글 — 같은 차량 재탭/맥락 밖 핀 차량 탭은 UNPIN, 그 외는
+  // 새 핀(새로 탭한 차량은 활성 노선 소속이라 routeId/line 존재). 활성 모드 차량
+  // 이면 모델 내부 follow(강조/카메라)도 토글해 in-context 시각을 유지.
+  const busVehicleSelect = busModel.handleVehicleSelect;
+  const subwayVehicleSelect = subwayModel.handleVehicleSelect;
+  const mapVehicleSelect = useCallback(
+    (id: string) => {
+      setPinFollowPaused(false);
+      if (isBusVehicleId(id)) {
+        if (mode === 'bus') busVehicleSelect(id);
+        const vehId = id.slice('veh-'.length);
+        if (pinned?.mode === 'bus' && pinned.vehicleId === vehId) {
+          dispatch({ type: 'UNPIN_VEHICLE' });
+        } else if (bus.routeId) {
+          dispatch({
+            type: 'PIN_VEHICLE',
+            pinned: {
+              mode: 'bus',
+              routeKey: bus.routeId,
+              vehicleId: vehId,
+              label: busVehicleLabel ?? vehId,
+            },
+          });
+        }
+      } else if (isSubwayVehicleId(id)) {
+        if (mode === 'subway') subwayVehicleSelect(id);
+        const trainNo = id.slice('train-'.length);
+        if (pinned?.mode === 'subway' && pinned.vehicleId === trainNo) {
+          dispatch({ type: 'UNPIN_VEHICLE' });
+        } else if (subway.line) {
+          const t = subwayTrainItems?.find((x) => x.trainNo === trainNo);
+          dispatch({
+            type: 'PIN_VEHICLE',
+            pinned: {
+              mode: 'subway',
+              routeKey: subway.line,
+              vehicleId: trainNo,
+              label: t ? subwayDestinationLabel(t.destinationName) : trainNo,
+            },
+          });
+        }
+      }
+    },
+    [
+      mode,
+      busVehicleSelect,
+      subwayVehicleSelect,
+      pinned,
+      bus.routeId,
+      subway.line,
+      busVehicleLabel,
+      subwayTrainItems,
+      dispatch,
+    ],
+  );
+
+  // 지도 패닝으로 follow 끊김 — 핀이 있으면 카메라만 일시정지(핀·오버레이 유지,
+  // 칩에서 '다시 따라가기'), 없으면 기존 모델 일시정지.
+  const busFollowInterrupted = busModel.handleFollowInterrupted;
+  const subwayFollowInterrupted = subwayModel.handleFollowInterrupted;
+  const mapFollowInterrupted = useCallback(() => {
+    if (pinned) {
+      setPinFollowPaused(true);
+      return;
+    }
+    if (mode === 'bus') busFollowInterrupted();
+    else subwayFollowInterrupted();
+  }, [pinned, mode, busFollowInterrupted, subwayFollowInterrupted]);
+
   const follow = mode === 'bus' ? busModel.follow : subwayModel.follow;
   const followLabel =
     mode === 'bus'
@@ -1293,6 +1402,27 @@ export default function TransitScreen() {
       : subwayModel.follow.dest
         ? `${subwayModel.follow.dest} 열차 따라가는 중`
         : '열차 따라가는 중';
+
+  // 핀 차량 운행 종료(성공 폴링에 대상 없음) — 자동 UNPIN + 4초 안내 칩.
+  // 종료 effect 는 cleanup 을 두지 않는다(UNPIN→pinned=null 재실행 시 타이머가
+  // 취소돼 안내가 사라지는 것 방지). 타이머 누수는 언마운트 cleanup 이 처리.
+  useEffect(() => {
+    if (!pinned || !pin.ended) return;
+    dispatch({ type: 'UNPIN_VEHICLE' });
+    setPinEndedNotice(
+      pinned.mode === 'bus'
+        ? '버스 운행이 종료되어 탑승을 멈췄어요.'
+        : '열차 운행이 종료되어 탑승을 멈췄어요.',
+    );
+    if (pinEndedTimerRef.current) clearTimeout(pinEndedTimerRef.current);
+    pinEndedTimerRef.current = setTimeout(() => setPinEndedNotice(null), 4_000);
+  }, [pinned, pin.ended, dispatch]);
+  useEffect(
+    () => () => {
+      if (pinEndedTimerRef.current) clearTimeout(pinEndedTimerRef.current);
+    },
+    [],
+  );
 
   // ── 리스트 행 — 판별 유니온(단일 BottomSheetFlatList, children swap 금지) ──
   const busDraftPending =
@@ -1554,9 +1684,64 @@ export default function TransitScreen() {
         </View>
       )}
 
+      {/* 탑승(핀) 상태 — 하단 중앙 상시 칩(모드·선택 무관). 패닝 일시정지 시
+          '다시 따라가기', 운행 종료 시 안내 칩(4초). 종료(✕)=UNPIN. */}
+      {pinEndedNotice ? (
+        <View
+          style={[styles.followWrap, { bottom: insets.bottom + 96 }]}
+          pointerEvents="box-none"
+        >
+          <View
+            style={[
+              styles.mapChip,
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+            ]}
+          >
+            <Text style={[styles.mapChipText, { color: theme.colors.textMuted }]}>
+              {pinEndedNotice}
+            </Text>
+          </View>
+        </View>
+      ) : pinned ? (
+        <View
+          style={[styles.followWrap, { bottom: insets.bottom + 96 }]}
+          pointerEvents="box-none"
+        >
+          <View
+            style={[
+              styles.mapChip,
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+            ]}
+          >
+            {pinFollowPaused ? (
+              <Pressable onPress={() => setPinFollowPaused(false)} hitSlop={8}>
+                <Text style={[styles.mapChipText, { color: theme.colors.text }]}>
+                  ▶ 다시 따라가기
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={[styles.mapChipText, { color: theme.colors.text }]}>
+                {pinned.mode === 'bus' ? '🚌 ' : '🚈 '}
+                {pin.label ?? pinned.label} 탑승 중
+              </Text>
+            )}
+            <Pressable
+              onPress={() => {
+                setPinFollowPaused(false);
+                dispatch({ type: 'UNPIN_VEHICLE' });
+              }}
+              hitSlop={8}
+              accessibilityLabel="탑승 종료"
+            >
+              <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>✕</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       {/* 따라가기 상태 — 하단 중앙(List 시트 위). 추적 중엔 배지+종료, 조작으로
           끊기면 '다시 따라가기' 칩, 운행 종료 시 안내 칩(4초). */}
-      {follow && (follow.following || follow.notice) && (
+      {!pinned && !pinEndedNotice && follow && (follow.following || follow.notice) && (
         <View
           style={[styles.followWrap, { bottom: insets.bottom + 96 }]}
           pointerEvents="box-none"

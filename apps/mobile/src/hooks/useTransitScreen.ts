@@ -54,10 +54,23 @@ export interface BusScreenState {
   routeId: string | null;
 }
 
+// 탑승(핀) 차량 — 브라우징(mode/검색/주변/선택)과 완전 분리된 최상위 상태.
+// 어떤 액션에도 유지되고 명시 종료(UNPIN)·운행 종료(호출부 자동)만 해제한다.
+// routeKey: 버스 routeId | 지하철 lineId. vehicleId: 버스 vehId | 지하철 trainNo.
+export interface PinnedVehicle {
+  mode: TransitMode;
+  routeKey: string;
+  vehicleId: string;
+  // 칩 라벨(노선번호/행선) — 핀 시점 스냅샷(폴링으로 최신화는 호출부 몫).
+  label: string;
+}
+
 export interface TransitScreenState {
   mode: TransitMode;
   subway: SubwayScreenState;
   bus: BusScreenState;
+  // 탑승 중인 차량 — 없으면 null. bus/subway 브라우징 상태와 독립.
+  pinned: PinnedVehicle | null;
 }
 
 const INITIAL_SUBWAY: SubwayScreenState = {
@@ -87,6 +100,7 @@ const INITIAL: TransitScreenState = {
   mode: 'subway',
   subway: INITIAL_SUBWAY,
   bus: INITIAL_BUS,
+  pinned: null,
 };
 
 export type TransitScreenAction =
@@ -126,7 +140,10 @@ export type TransitScreenAction =
   // ── 통합(겸표시/즐겨찾기/크로스 검색) — 상대 모드 전환 + near/검색어 승계 +
   //    선택 세팅. q 는 크로스 검색 딥링크(같은 검색어로 상대 도메인 복원)용. ──
   | { type: 'CROSS_JUMP_TO_BUS'; stId?: string; routeId?: string; near: Coord | null; q?: string }
-  | { type: 'CROSS_JUMP_TO_SUBWAY'; stn?: string; near: Coord | null; q?: string };
+  | { type: 'CROSS_JUMP_TO_SUBWAY'; stn?: string; near: Coord | null; q?: string }
+  // ── 탑승(핀) — 브라우징과 독립. 차량 탭 시 set(같은 차량 재탭 시 UNPIN). ──
+  | { type: 'PIN_VEHICLE'; pinned: PinnedVehicle }
+  | { type: 'UNPIN_VEHICLE' };
 
 const round = (c: Coord): Coord => ({ lat: roundCoord(c.lat), lng: roundCoord(c.lng) });
 
@@ -178,12 +195,15 @@ const reducer = (
         },
       };
     case 'SUBWAY_BACK':
+      // 목록으로 복귀 — 선택 역과 길찾기/시간표 뷰만 해제하고 노선 추적(line)은
+      // 유지한다. 추적 호선이 살아 있어야 실시간 열차 폴링(useSubwayLinePositions)이
+      // 끊기지 않아 '따라가기'가 뒤로가기로 풀리지 않는다. line 은 노선 카드 ✕
+      // (SUBWAY_CLOSE_LINE)·새 검색/주변에서만 해제.
       return {
         ...state,
         subway: {
           ...state.subway,
           stn: null,
-          line: null,
           to: null,
           pathViewOpen: false,
           timetableView: null,
@@ -328,9 +348,13 @@ const reducer = (
         },
       };
     case 'BUS_BACK':
+      // 목록으로 복귀 — 선택 정류장만 해제하고 노선 추적(routeId)은 유지한다.
+      // 노선 추적이 살아 있어야 실시간 차량 폴링(useBusPositions)이 끊기지 않아
+      // '따라가기'가 뒤로가기로 풀리지 않는다. routeId 는 노선 재탭
+      // (BUS_TOGGLE_ROUTE)·새 검색/주변에서만 해제.
       return {
         ...state,
-        bus: { ...state.bus, stId: null, routeId: null },
+        bus: { ...state.bus, stId: null },
       };
     case 'BUS_TOGGLE_ROUTE':
       return {
@@ -424,6 +448,12 @@ const reducer = (
         },
       };
     }
+
+    // ── 탑승(핀) — bus/subway 브라우징 상태는 건드리지 않고 pinned 만 교체. ──
+    case 'PIN_VEHICLE':
+      return { ...state, pinned: action.pinned };
+    case 'UNPIN_VEHICLE':
+      return state.pinned === null ? state : { ...state, pinned: null };
   }
 };
 
