@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
@@ -595,8 +595,3 @@ const looksLikeHeif = (buf: Buffer): boolean =>
 // 토큰 검증 — 라우트에서 사용. SHA1 등은 쓰지 않고 단순 정규식.
 export const isValidImageToken = (token: string): boolean =>
   IMAGE_TOKEN_PATTERN.test(token);
-
-// 디버깅 편의 — image 토큰의 짧은 해시(로그 핸들). 같은 토큰을 다른 로그에
-// 묶어 보고 싶을 때 사용. 토큰 자체는 길어 로그 가독성을 해친다.
-export const imageTokenHandle = (token: string): string =>
-  createHash('sha1').update(token).digest('hex').slice(0, 8);

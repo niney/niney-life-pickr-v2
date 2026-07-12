@@ -1,6 +1,5 @@
 export * from './aiModel.js';
 export * from './busMarker.js';
-export * from './date.js';
 export * from './format.js';
 export * from './geo.js';
 export * from './markerFrame.js';
