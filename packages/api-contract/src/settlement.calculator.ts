@@ -349,7 +349,7 @@ const distributeWith = (
   activeIdx.forEach((i) => {
     out[i] = per;
   });
-  let remainder = amount - per * n;
+  const remainder = amount - per * n;
   if (remainder <= 0) return out;
 
   // 잔여 수령자 — 지정된 활성 수령자(중복 제거, 순서 유지), 없으면 첫 활성자.

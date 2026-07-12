@@ -116,13 +116,14 @@ const callJson = async (urls: { fetchUrl: string; requestUrl: string }): Promise
       res = await fetch(fetchUrl, { signal: ac.signal });
     } catch (e) {
       // 메시지에 fetchUrl(키 평문) 금지 — 마스킹본만. errMsg 가 한 번 더 scrub.
-      throw new Error(`fetch 실패 (${requestUrl}): ${errMsg(e)}`);
+      // (출력 경로는 전부 errMsg(message만) — cause 가 콘솔에 덤프될 일 없음.)
+      throw new Error(`fetch 실패 (${requestUrl}): ${errMsg(e)}`, { cause: e });
     }
     status = res.status;
     try {
       rawText = await res.text();
     } catch (e) {
-      throw new Error(`본문 읽기 실패 (${requestUrl}): ${errMsg(e)}`);
+      throw new Error(`본문 읽기 실패 (${requestUrl}): ${errMsg(e)}`, { cause: e });
     }
   } finally {
     clearTimeout(timeoutId);
