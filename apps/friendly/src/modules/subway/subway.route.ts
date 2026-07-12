@@ -23,6 +23,7 @@ import {
   SubwayTimetableResult,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
+import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { SubwayService } from './subway.service.js';
 
@@ -31,6 +32,7 @@ import { SubwayService } from './subway.service.js';
 // 직접 응답한다. 404(없는 역)는 error-handler 가 뭉개진 않지만 일관성을 위해
 // 같은 statusCode 스위치로 처리한다. typed 라우트는 response schema 에 없는
 // status 의 send() 를 타입 거부하므로 코드들을 공용 ErrorResponseSchema 로 등록.
+// 응답+진단 로깅은 replyUpstreamError(lib) 단일 구현.
 //
 // 검색은 로컬 DB 단일 소스라 키가 불필요하지만, 도착정보는 실시간 swopenAPI 라
 // serviceKey(SUBWAY_API_KEY)를 주입한다 — 빈 키면 도착 조회만 503(검색은 정상).
@@ -59,14 +61,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.searchStations(req.query.q);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '지하철 API 호출 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '지하철 역 검색 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -88,14 +84,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getNearbyStations(req.query.lat, req.query.lng, req.query.radius);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: 'Service Unavailable',
-            message: e instanceof Error ? e.message : '지하철 주변 역 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [503], '지하철 주변 역 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -120,15 +110,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getLinePositions(req.params.lineId);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 404 || sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error:
-              sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '지하철 위치 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '지하철 위치 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -150,14 +133,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getLineDetail(req.params.lineId);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 404 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 404 ? 'Not Found' : 'Service Unavailable',
-            message: e instanceof Error ? e.message : '지하철 노선 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [404, 503], '지하철 노선 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -186,15 +163,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getStationArrivals(req.params.stationId);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 404 || sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error:
-              sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '지하철 도착 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '지하철 도착 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -218,14 +188,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getStationCongestion(req.params.stationId, req.query.dayType);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 404 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 404 ? 'Not Found' : 'Service Unavailable',
-            message: e instanceof Error ? e.message : '지하철 혼잡도 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [404, 503], '지하철 혼잡도 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -248,14 +212,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getPath(req.query.from, req.query.to);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 404 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 404 ? 'Not Found' : 'Service Unavailable',
-            message: e instanceof Error ? e.message : '지하철 경로 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [404, 503], '지하철 경로 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -281,15 +239,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getStationTimetable(req.params.stationId, req.query.dayType);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 404 || sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error:
-              sc === 404 ? 'Not Found' : sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '지하철 시간표 조회 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [404, 502, 503], '지하철 시간표 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },

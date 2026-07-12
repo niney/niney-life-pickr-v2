@@ -16,6 +16,7 @@ import {
   Routes,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
+import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { BusService } from './bus.service.js';
 
@@ -23,6 +24,7 @@ import { BusService } from './bus.service.js';
 // 있는 502(업스트림 실패)/503(키 미설정·인증 실패·쿼터 소진)는 라우트가 직접
 // 응답한다. typed 라우트는 response schema 에 없는 status 의 send() 를 타입
 // 거부하므로 두 코드를 공용 ErrorResponseSchema 로 등록(로컬 중복 정의 금지).
+// 응답+진단 로깅은 replyUpstreamError(lib) 단일 구현.
 
 const busRoutes: FastifyPluginAsync = async (app) => {
   const service = new BusService(app.prisma, { serviceKey: env.BUS_API_KEY });
@@ -43,14 +45,8 @@ const busRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.searchStations(req.query.q, req.query.force);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '버스 API 호출 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '버스 정류장 검색 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -72,14 +68,8 @@ const busRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getNearbyStations(req.query.lat, req.query.lng, req.query.radius);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '버스 API 호출 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '주변 정류장 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -103,14 +93,8 @@ const busRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getArrivals(req.params.arsId);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '버스 API 호출 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '버스 도착정보 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -138,14 +122,8 @@ const busRoutes: FastifyPluginAsync = async (app) => {
           req.query.endOrd,
         );
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '버스 API 호출 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '버스 위치 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
@@ -167,14 +145,8 @@ const busRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await service.getRouteDetail(req.params.busRouteId);
       } catch (e) {
-        const sc = e instanceof Error ? (e as { statusCode?: unknown }).statusCode : null;
-        if (sc === 502 || sc === 503) {
-          return reply.code(sc).send({
-            statusCode: sc,
-            error: sc === 503 ? 'Service Unavailable' : 'Bad Gateway',
-            message: e instanceof Error ? e.message : '버스 API 호출 실패',
-          });
-        }
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '버스 노선 상세 조회 실패');
+        if (sent) return sent;
         throw e;
       }
     },
