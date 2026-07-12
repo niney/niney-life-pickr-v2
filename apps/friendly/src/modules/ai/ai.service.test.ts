@@ -7,7 +7,7 @@ import {
   type LLMCompleteResult,
   type LLMProvider,
 } from './adapters/llm-provider.js';
-import { AiService } from './ai.service.js';
+import { AiService, __resetAiRateLimit } from './ai.service.js';
 import type { ResolvedProviderConfig } from './ai.config.service.js';
 
 const RESOLVED: ResolvedProviderConfig = {
@@ -47,6 +47,9 @@ describe('AiService.complete', () => {
   let service: AiService;
 
   beforeEach(() => {
+    // 모듈 레벨 per-actor 레이트리밋 상태를 테스트마다 초기화 — 같은 actorId 를
+    // 여러 케이스에서 재사용해도 rate_limited 오탐이 나지 않게(운영 동작은 유지).
+    __resetAiRateLimit();
     provider = new FakeProvider();
     config = buildConfigStub();
     service = new AiService(provider, config as never);
@@ -137,6 +140,9 @@ describe('AiService.completeBatch', () => {
   let service: AiService;
 
   beforeEach(() => {
+    // 모듈 레벨 per-actor 레이트리밋 상태를 테스트마다 초기화 — 같은 actorId 를
+    // 여러 케이스에서 재사용해도 rate_limited 오탐이 나지 않게(운영 동작은 유지).
+    __resetAiRateLimit();
     provider = new FakeProvider();
     config = buildConfigStub();
     service = new AiService(provider, config as never);

@@ -437,35 +437,16 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: ['admin'] },
     handler: async (req, reply) => {
       const params = req.params as { id: string };
-      const rawQuery = req.query as { token?: string };
 
-      let userId: string | null = null;
-      let role: 'USER' | 'ADMIN' | null = null;
-      try {
-        await req.jwtVerify();
-        userId = req.user.userId;
-        role = req.user.role;
-      } catch {
-        if (typeof rawQuery.token === 'string' && rawQuery.token.length > 0) {
-          try {
-            const payload = app.jwt.verify(rawQuery.token) as {
-              userId: string;
-              role: 'USER' | 'ADMIN';
-            };
-            userId = payload.userId;
-            role = payload.role;
-          } catch {
-            // fall through
-          }
-        }
-      }
-      if (!userId || role !== 'ADMIN') {
+      const admin = await app.resolveSseAdmin(req);
+      if (!admin) {
         return reply.code(401).send({
           statusCode: 401,
           error: 'Unauthorized',
           message: 'Invalid or missing token',
         });
       }
+      const userId = admin.userId;
 
       const snapshot = tablingBulkSaveRegistry.get(params.id, userId);
       if (!snapshot) {
@@ -557,6 +538,12 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) => {
       const actorId = req.user.userId;
+      // actor 당 활성 잡 1개 강제 — 진행 중 잡이 있으면 409(동시 다중 잡 생성 방지).
+      if (diningcodeBulkSaveRegistry.activeJobIdFor(actorId)) {
+        throw app.httpErrors.conflict(
+          '이미 진행 중인 다이닝코드 저장 작업이 있습니다. 완료 후 다시 시도하세요.',
+        );
+      }
       // 중복 vRid 제거 — 클라이언트가 잘못 보냈을 때 같은 가게를 두 번 처리하지 않게.
       const vRids = Array.from(new Set(req.body.vRids));
       const { id } = diningcodeBulkSaveRegistry.create({ actorId, vRids });
@@ -606,35 +593,16 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: ['admin'] },
     handler: async (req, reply) => {
       const params = req.params as { id: string };
-      const rawQuery = req.query as { token?: string };
 
-      let userId: string | null = null;
-      let role: 'USER' | 'ADMIN' | null = null;
-      try {
-        await req.jwtVerify();
-        userId = req.user.userId;
-        role = req.user.role;
-      } catch {
-        if (typeof rawQuery.token === 'string' && rawQuery.token.length > 0) {
-          try {
-            const payload = app.jwt.verify(rawQuery.token) as {
-              userId: string;
-              role: 'USER' | 'ADMIN';
-            };
-            userId = payload.userId;
-            role = payload.role;
-          } catch {
-            // fall through
-          }
-        }
-      }
-      if (!userId || role !== 'ADMIN') {
+      const admin = await app.resolveSseAdmin(req);
+      if (!admin) {
         return reply.code(401).send({
           statusCode: 401,
           error: 'Unauthorized',
           message: 'Invalid or missing token',
         });
       }
+      const userId = admin.userId;
 
       const snapshot = diningcodeBulkSaveRegistry.get(params.id, userId);
       if (!snapshot) {

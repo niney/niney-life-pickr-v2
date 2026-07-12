@@ -23,6 +23,7 @@ import {
   SubwayTimetableResult,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
+import { RATE } from '../../plugins/rate-limit.js';
 import { SubwayService } from './subway.service.js';
 
 // error-handler 플러그인은 statusCode >= 500 을 일괄 500 으로 뭉개므로, 의미가
@@ -104,6 +105,7 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   // 미등재 노선 404, 업스트림 실패 502, 키 미설정·쿼터 소진 503. lineId 4자리라
   // 인코딩 불필요.
   typed.get(Routes.Subway.linePositions(':lineId'), {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['subway'],
       params: SubwayPositionsParams,
@@ -169,6 +171,7 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   // '%3AstationId' 가 되어 fastify 파라미터 패턴이 깨지므로, 등록 경로만 디코드해
   // ':stationId' 로 되돌린다(경로 구조는 여전히 Routes 단일 소스에서 파생).
   typed.get(decodeURIComponent(Routes.Subway.stationArrivals(':stationId')), {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['subway'],
       params: SubwayArrivalsParams,
@@ -262,6 +265,7 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   // 도착 라우트와 동일하게 등록 경로만 디코드. 없는 역 404, 업스트림 실패 502,
   // 키 미설정·쿼터 소진 503. 미제공 노선은 coverage:false 로 200(404 아님).
   typed.get(decodeURIComponent(Routes.Subway.stationTimetable(':stationId')), {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['subway'],
       params: SubwayTimetableParams,

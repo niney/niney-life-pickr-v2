@@ -14,6 +14,9 @@ model User {
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // 세션 무효화 카운터 — logout/비밀번호 변경 시 증가시켜 발급된 모든 JWT 를 무효화.
+  // JWT 의 tv 클레임과 다르면 authenticate 가 401. 기본 0(기존 토큰은 tv 없음→0 취급).
+  tokenVersion Int      @default(0)
 
   picks       Pick[]
   settlements SettlementSession[]

@@ -692,8 +692,9 @@ describe('GET /api/v1/bus/stations/:arsId/arrivals', () => {
   });
 
   it('업스트림 실패 → 502 (실시간 데이터라 stale 폴백 없음)', async () => {
+    // 15초 마이크로 캐시 도입 후 — 미사용 arsId(캐시 미스)로 업스트림 콜을 강제해 502 검증.
     mocks.getStationArrivals.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
-    const res = await app.inject({ url: arrivalsUrl('23278') });
+    const res = await app.inject({ url: arrivalsUrl('23111') });
     expect(res.statusCode).toBe(502);
     expect((res.json() as { statusCode: number }).statusCode).toBe(502);
   });
@@ -753,8 +754,9 @@ describe('GET /api/v1/bus/routes/:busRouteId/positions', () => {
   });
 
   it('업스트림 실패 → 502', async () => {
+    // 마이크로 캐시 미스(미사용 busRouteId)로 업스트림 콜을 강제.
     mocks.getBusPositionsByRouteSt.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
-    const res = await app.inject({ url: positionsUrl('100100020', 62, 65) });
+    const res = await app.inject({ url: positionsUrl('100100099', 62, 65) });
     expect(res.statusCode).toBe(502);
   });
 
@@ -786,8 +788,9 @@ describe('GET /api/v1/bus/routes/:busRouteId/positions', () => {
   });
 
   it('전체 조회도 업스트림 실패 → 502', async () => {
+    // 마이크로 캐시 미스(미사용 busRouteId)로 업스트림 콜을 강제.
     mocks.getBusPositionsByRtid.mockRejectedValueOnce(new BusApiError('업스트림 장애'));
-    const res = await app.inject({ url: `/api/v1/bus/routes/100100020/positions` });
+    const res = await app.inject({ url: `/api/v1/bus/routes/100100098/positions` });
     expect(res.statusCode).toBe(502);
   });
 });

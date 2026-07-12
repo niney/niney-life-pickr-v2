@@ -22,6 +22,8 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementDraftError): never => {
       throw app.httpErrors.notFound(e.message);
     case 'forbidden':
       throw app.httpErrors.forbidden(e.message);
+    case 'too_many':
+      throw app.httpErrors.conflict(e.message);
     default:
       throw app.httpErrors.badRequest(e.message);
   }
@@ -50,7 +52,14 @@ const settlementDraftRoutes: FastifyPluginAsync = async (app) => {
       body: UpsertSettlementDraftInput,
       response: { 200: SettlementDraft },
     },
-    handler: async (req) => service.upsert(req.user.userId, req.body),
+    handler: async (req) => {
+      try {
+        return await service.upsert(req.user.userId, req.body);
+      } catch (e) {
+        if (e instanceof SettlementDraftError) return throwAsHttp(app, e);
+        throw e;
+      }
+    },
   });
 
   typed.delete(S.one(':id'), {

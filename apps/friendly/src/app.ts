@@ -19,6 +19,11 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     // 매달리지 않게 한다(처리 중인 요청은 그대로 완료 대기). SIGTERM 핸들러의
     // 스케줄러 정리 후 close 가 지연되는 것을 막는다.
     forceCloseConnections: 'idle',
+    // 배포는 Cloudflare→nginx→앱 구성 — nginx 가 X-Forwarded-For 를 세팅하므로
+    // req.ip 가 프록시(127.0.0.1)가 아니라 실제 클라이언트 IP 가 되게 신뢰한다.
+    // 이게 없으면 per-IP 레이트리밋이 전체 사용자 단일 버킷으로 붕괴한다.
+    // (dev/test 는 XFF 헤더가 없어 영향 없음.) 스푸핑 방지는 :3000 방화벽 전제.
+    trustProxy: true,
     logger: {
       level: env.LOG_LEVEL,
       // Redact `?token=...` (used by EventSource for SSE auth — EventSource

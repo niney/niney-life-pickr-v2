@@ -9,6 +9,7 @@ import sensiblePlugin from '../../plugins/sensible.js';
 import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import canonicalRoutes from './canonical.route.js';
 import { Routes } from '@repo/api-contract';
 
@@ -22,6 +23,10 @@ const buildTestApp = async (): Promise<FastifyInstance> => {
   await app.register(prismaPlugin);
   await app.register(canonicalRoutes);
   await app.ready();
+  await seedAuthUsers(app, [
+    { id: 'admin-test', role: 'ADMIN' },
+    { id: 'user-test', role: 'USER' },
+  ]);
   return app;
 };
 

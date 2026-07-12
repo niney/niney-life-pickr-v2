@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useDebounced } from '~/lib/useDebounced';
 import type { SettlementContactType } from '@repo/api-contract';
 import { useSettlementContacts } from '@repo/shared';
 
@@ -96,15 +96,4 @@ const displayName = (c: SettlementContactType): string => {
   const nick = (c.nickname ?? '').trim();
   if (nm && nick) return `${nm} (${nick})`;
   return nm || nick || '(이름 없음)';
-};
-
-// 외부 시스템(서버 검색 요청)을 keystroke 마다 두드리지 않도록 입력값을 N ms
-// 지난 뒤의 안정 값으로 늦춰 반환. setTimeout 정리가 필요해 useEffect 사용.
-const useDebounced = <T,>(value: T, delay: number): T => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(value), delay);
-    return () => window.clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
 };

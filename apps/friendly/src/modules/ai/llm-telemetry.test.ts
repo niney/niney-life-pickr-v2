@@ -8,6 +8,8 @@ import {
 import sensiblePlugin from '../../plugins/sensible.js';
 import jwtPlugin from '../../plugins/jwt.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
+import prismaPlugin from '../../plugins/prisma.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { LlmTelemetry } from './llm-telemetry.js';
 import telemetryRoutes from './telemetry.route.js';
 
@@ -125,8 +127,13 @@ describe('telemetry routes — auth guards', () => {
     await app.register(sensiblePlugin);
     await app.register(errorHandlerPlugin);
     await app.register(jwtPlugin);
+    await app.register(prismaPlugin);
     await app.register(telemetryRoutes);
     await app.ready();
+    await seedAuthUsers(app, [
+      { id: 'a', role: 'ADMIN' },
+      { id: 'u', role: 'USER' },
+    ]);
   });
 
   afterAll(async () => {

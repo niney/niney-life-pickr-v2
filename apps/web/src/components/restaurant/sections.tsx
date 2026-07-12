@@ -8,6 +8,7 @@ import type {
 import { reviewThumbnailUrl } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { safeExternalHref } from '~/lib/utils';
 
 // Small icon + label + optional trailing meta. Used as a header inside flat
 // section layouts (CardContent + divide-y), replacing nested Card/CardHeader.
@@ -215,7 +216,7 @@ export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) =>
           {r.imageUrls.map((u) => (
             <li key={u}>
               <a
-                href={u}
+                href={safeExternalHref(u)}
                 target="_blank"
                 rel="noreferrer"
                 className="block"

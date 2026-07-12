@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
-import { cn } from '~/lib/utils';
+import { cn, safeExternalHref } from '~/lib/utils';
 import { Lightbox } from '~/components/Lightbox';
 
 // 패널 탭들에서 공유하는 시각 요소. 데이터 fetch 는 root 에서, 여기는 순수
@@ -60,7 +60,7 @@ export const QuickActions = ({ detail }: { detail: RestaurantPublicDetailType })
           길찾기
         </Button>
       </a>
-      <a href={detail.rawSourceUrl} target="_blank" rel="noreferrer">
+      <a href={safeExternalHref(detail.rawSourceUrl)} target="_blank" rel="noreferrer">
         <Button type="button" size="sm" variant="outline" className="gap-1">
           <ExternalLink className="size-3.5" />
           네이버 지도

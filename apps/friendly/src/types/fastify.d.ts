@@ -13,16 +13,21 @@ declare module 'fastify' {
       request: import('fastify').FastifyRequest,
       reply: import('fastify').FastifyReply,
     ) => Promise<void>;
+    // SSE(쿼리 토큰) 또는 헤더 토큰에서 어드민을 확인 + tokenVersion 무효화 반영.
+    // 유효한 어드민이면 최신 role 을, 아니면 null 을 반환한다.
+    resolveSseAdmin: (
+      request: import('fastify').FastifyRequest,
+    ) => Promise<{ userId: string; role: Role } | null>;
   }
 
   interface FastifyRequest {
-    user: { userId: string; email: string; role: Role };
+    user: { userId: string; email: string; role: Role; tv?: number };
   }
 }
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { userId: string; email: string; role: Role };
-    user: { userId: string; email: string; role: Role };
+    payload: { userId: string; email: string; role: Role; tv?: number };
+    user: { userId: string; email: string; role: Role; tv?: number };
   }
 }

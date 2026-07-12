@@ -10,6 +10,7 @@ import type {
   ReviewClusterStatusQueryType,
   ReviewClustersResultType,
 } from '@repo/api-contract';
+import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import {
   listPublicPlaces,
@@ -193,15 +194,22 @@ export class ReviewClusteringService {
     try {
       // gpt-oss 등은 Ollama format 스키마를 무시하고 마크다운+최상위 배열로 답하므로,
       // format 을 강제하지 않고 review-search.chatJson 과 같은 견고 파싱을 쓴다.
-      const res = await fetch(`${resolved.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${resolved.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: resolved.defaultModel,
-          stream: false,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
+      const res = await fetchWithTimeout(
+        `${resolved.baseUrl}/api/chat`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resolved.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: resolved.defaultModel,
+            stream: false,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        },
+        60_000, // 군집 라벨링 LLM 타임아웃 60s — 배치가 업스트림에 무기한 블록되지 않게.
+      );
       if (!res.ok) return new Map();
       const json = (await res.json().catch(() => null)) as { message?: { content?: string } } | null;
       const content = (json?.message?.content ?? '').replace(/```(?:json)?/gi, '').trim();

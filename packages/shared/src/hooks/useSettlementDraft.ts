@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ListSettlementDraftsResultType,
   SettlementDraftType,
   UpsertSettlementDraftInputType,
 } from '@repo/api-contract';
@@ -32,7 +33,15 @@ export const useUpsertSettlementDraft = () => {
   return useMutation({
     mutationFn: (input: UpsertSettlementDraftInputType) =>
       settlementDraftApi.upsert(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'list'] }),
+    // 자동저장마다 list 를 invalidate→refetch 하면 저장 1회당 전체 draft(payload 포함,
+    // 최대 수 MB)를 재전송한다. 대신 서버가 돌려준 최신 draft 로 캐시를 국소 갱신(refetch
+    // 없음). 최신(updatedAt desc)이 맨 앞이므로 saved 를 앞으로. 다기기 동기화는
+    // staleTime(30s)/포커스 refetch 가 담당.
+    onSuccess: (saved) => {
+      qc.setQueryData<ListSettlementDraftsResultType>([...KEY, 'list'], (prev) =>
+        prev ? { items: [saved, ...prev.items.filter((d) => d.id !== saved.id)] } : prev,
+      );
+    },
   });
 };
 

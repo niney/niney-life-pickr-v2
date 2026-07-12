@@ -8,6 +8,7 @@ import {
   resolveCanonicalMembersByRestaurantId,
 } from '../restaurant/canonical-members.js';
 import { ASPECTS, Bm25, RRF_K, cosine, isJunk, type Aspect, type Polarity } from './retrieval.js';
+import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // review-search — DB 영속 문맥검색/RAG. vector-lab 프로토타입에서 검증된
@@ -299,19 +300,19 @@ export class ReviewSearchService {
   }
 
   // restaurantId → 검색가능(embeddingJson 채워진) 리뷰 수. ids 미지정 시 전체.
+  // ReviewSummary.reviewId 가 @unique(1:1)라, 전체 행을 로드해 메모리 집계하는 대신
+  // DB GROUP BY(groupBy) 로 카운트만 받아온다 — 카운트를 위한 과다로드 제거.
   private async countEnrichedByRestaurant(ids?: string[]): Promise<Map<string, number>> {
-    const rows = await this.prisma.reviewSummary.findMany({
+    const grouped = await this.prisma.visitorReview.groupBy({
+      by: ['restaurantId'],
       where: {
-        embeddingJson: { not: null },
-        review: ids ? { restaurantId: { in: ids } } : {},
+        summary: { is: { embeddingJson: { not: null } } },
+        ...(ids ? { restaurantId: { in: ids } } : {}),
       },
-      select: { review: { select: { restaurantId: true } } },
+      _count: { _all: true },
     });
     const by = new Map<string, number>();
-    for (const r of rows) {
-      const rid = r.review.restaurantId;
-      by.set(rid, (by.get(rid) ?? 0) + 1);
-    }
+    for (const g of grouped) by.set(g.restaurantId, g._count._all);
     return by;
   }
 
@@ -603,11 +604,15 @@ export class ReviewSearchService {
       const batch = texts.slice(i, i + EMBED_BATCH).map((t) => t.slice(0, MAX_CHARS) || ' ');
       let res: Response;
       try {
-        res = await fetch(`${EMBED_BASE_URL}/api/embed`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: EMBED_MODEL, input: batch }),
-        });
+        res = await fetchWithTimeout(
+          `${EMBED_BASE_URL}/api/embed`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: EMBED_MODEL, input: batch }),
+          },
+          30_000, // 임베딩 배치 타임아웃 30s — 무기한 매달림 방지.
+        );
       } catch (e) {
         // 운영에서 가장 흔한 케이스 — 임베딩 엔드포인트(Ollama) 미실행/미도달.
         throw new Error(
@@ -635,16 +640,23 @@ export class ReviewSearchService {
     const resolved = await this.aiConfig.getResolved('ollama-cloud', 'chat');
     if (!resolved?.defaultModel) return null;
     try {
-      const res = await fetch(`${resolved.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${resolved.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: resolved.defaultModel,
-          stream: false,
-          messages: [{ role: 'user', content: prompt }],
-          ...(schema ? { format: schema } : {}),
-        }),
-      });
+      const res = await fetchWithTimeout(
+        `${resolved.baseUrl}/api/chat`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resolved.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: resolved.defaultModel,
+            stream: false,
+            messages: [{ role: 'user', content: prompt }],
+            ...(schema ? { format: schema } : {}),
+          }),
+        },
+        60_000, // LLM chat 타임아웃 60s.
+      );
       if (!res.ok) return null;
       const json = (await res.json().catch(() => null)) as {
         message?: { content?: string };

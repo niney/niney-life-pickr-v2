@@ -28,11 +28,11 @@ export type BusStationSearchQueryType = z.infer<typeof BusStationSearchQuery>;
 export const BusStationItem = z.object({
   // 서울시 9자리 정류소 고유 ID — PK. arsId 가 '0' 인 가상정류장이 여럿이라
   // arsId 는 식별자로 못 쓴다.
-  stId: z.string().min(1),
+  stId: z.string().min(1).max(64),
   // 5자리 정류소번호(승차대 표지판 번호). '0' = 가상정류장 — 도착정보 조회
   // 불가, FE 는 arsId === '0' 으로 판별해 번호 배지를 숨긴다.
-  arsId: z.string(),
-  name: z.string(),
+  arsId: z.string().max(64),
+  name: z.string().max(100),
   // 항상 WGS84 로 정규화해 내려준다 — 원본이 GRS80 TM 이어도 서버가 변환.
   // 한국 범위 검증으로 이 계약을 코드로 강제(TM 값이 새면 직렬화에서 실패).
   lat: z.number().min(33).max(39),

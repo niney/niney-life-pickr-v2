@@ -16,21 +16,7 @@ import {
   ReviewSearchRestaurantsResult,
   Routes,
 } from '@repo/api-contract';
-
-// 공개 ask 는 비싼 LLM 호출 → IP 당 분당 제한(인메모리 고정창, settlement 패턴 차용).
-const ASK_RATE_WINDOW_MS = 60_000;
-const ASK_RATE_MAX = 15; // IP·분당 공개 질문 수
-const askRateHits = new Map<string, { count: number; resetAt: number }>();
-const isAskRateLimited = (ip: string, now: number): boolean => {
-  if (askRateHits.size > 10_000) askRateHits.clear();
-  const cur = askRateHits.get(ip);
-  if (!cur || cur.resetAt <= now) {
-    askRateHits.set(ip, { count: 1, resetAt: now + ASK_RATE_WINDOW_MS });
-    return false;
-  }
-  cur.count += 1;
-  return cur.count > ASK_RATE_MAX;
-};
+import { RATE } from '../../plugins/rate-limit.js';
 
 const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
   const service = app.reviewSearch; // app 전역 singleton(plugins/summaries.ts) — 요약 훅과 동일 인스턴스
@@ -151,11 +137,9 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
 
   // 공개 질문 — 비싼 LLM 파이프라인 → IP 레이트리밋. enrich 안 된 식당은 graceful none.
   typed.post(Routes.ReviewSearch.publicAsk(':placeId'), {
+    config: { rateLimit: RATE.publicAsk },
     schema: { tags: ['public'], params: placeIdParams, body: ReviewPublicAskBody, response: { 200: ReviewAskResult } },
     handler: async (req) => {
-      if (isAskRateLimited(req.ip, Date.now())) {
-        throw app.httpErrors.tooManyRequests('질문이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
-      }
       // 임베딩/LLM 일시 장애(예: 임베딩 엔드포인트 미도달)는 공개 사용자에게 500 대신 graceful 안내.
       let r;
       try {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 
 // Naver image CDN (ldb-phinf.pstatic.net 등) 이 Referer 헤더를 검사해
@@ -21,11 +21,14 @@ export const ImgWithFallback = ({
   loading = 'lazy',
 }: Props) => {
   const [failed, setFailed] = useState(false);
-  // src 가 바뀌면 실패 상태 리셋 — 캐러셀처럼 같은 컴포넌트가 다른 이미지를
-  // 연속으로 그리는 케이스에서 한 번 실패한 뒤 다음 이미지가 안 보이는 걸 방지.
-  useEffect(() => {
+  // src 가 바뀌면 실패 상태를 렌더 중 리셋(useEffect 대신 파생) — 이중 렌더/1프레임
+  // stale placeholder 없이, 캐러셀처럼 같은 컴포넌트가 다른 이미지를 연속으로 그릴 때
+  // 이전 실패가 다음 이미지를 가리지 않게 한다.
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) {
+    setPrevSrc(src);
     setFailed(false);
-  }, [src]);
+  }
 
   if (failed) {
     return (

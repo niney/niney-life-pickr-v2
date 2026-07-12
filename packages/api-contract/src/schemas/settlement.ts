@@ -41,7 +41,7 @@ export type SettlementRoundAttendeeType = z.infer<typeof SettlementRoundAttendee
 // 임의의 안정적인 participantClientId 를 부여하고, round.attendees 는 그 키로
 // 마스터 참여자를 참조한다. 서버는 매핑 후 폐기.
 export const SettlementRoundAttendeeInput = z.object({
-  participantClientId: z.string().min(1),
+  participantClientId: z.string().min(1).max(100),
   attended: z.boolean().default(true),
   excludeAlcoholOverride: z.boolean().nullable(),
   excludeNonAlcoholOverride: z.boolean().nullable(),
@@ -128,7 +128,7 @@ export type SettlementItemGroupType = z.infer<typeof SettlementItemGroup>;
 
 // 입력형 — 마스터 참여자를 clientId 로 참조 (attendees 와 동일한 방식).
 export const SettlementGroupMemberInput = z.object({
-  participantClientId: z.string().min(1),
+  participantClientId: z.string().min(1).max(100),
   glasses: z.number().int().nonnegative().max(999),
 });
 export type SettlementGroupMemberInputType = z.infer<typeof SettlementGroupMemberInput>;
@@ -174,12 +174,12 @@ export type SettlementRoundType = z.infer<typeof SettlementRound>;
 
 export const SettlementRoundInput = z
   .object({
-    restaurantPlaceId: z.string().min(1),
+    restaurantPlaceId: z.string().min(1).max(100),
     source: SettlementSource,
     totalAmount: z.number().int().nonnegative().nullable(),
-    warning: z.string().nullable(),
+    warning: z.string().max(1000).nullable(),
     // 영수증 분기에서 업로드한 이미지 토큰. MANUAL 은 null.
-    receiptImageToken: z.string().nullable(),
+    receiptImageToken: z.string().max(200).nullable(),
     // 할인 — null/null 또는 (양수, 카테고리) 페어. 풀 음수 차단은 아래 refine.
     // 키 자체가 빠진 페이로드(기존 클라이언트)는 둘 다 null 로 본다.
     discountAmount: z.number().int().positive().nullable().optional().default(null),
@@ -268,7 +268,7 @@ export type SettlementParticipantType = z.infer<typeof SettlementParticipant>;
 // 입력 시 clientId 는 round.attendees.participantClientId 와 매칭하기 위한
 // 클라이언트 측 임시 키. 서버는 cuid 부여 후 폐기.
 export const SettlementParticipantInput = z.object({
-  clientId: z.string().min(1),
+  clientId: z.string().min(1).max(100),
   name: z.string().trim().max(40).nullable(),
   nickname: z.string().trim().max(40).nullable(),
   excludeAlcohol: z.boolean().default(false),

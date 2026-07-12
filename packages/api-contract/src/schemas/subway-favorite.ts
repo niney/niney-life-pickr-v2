@@ -34,7 +34,7 @@ export type SubwayFavoriteLineParamsType = z.infer<typeof SubwayFavoriteLinePara
 // (lineName/색은 FE 가 SUBWAY_LINES 상수로 파생).
 export const SubwayFavoriteStationItem = z.object({
   stationId: stationIdSchema,
-  name: z.string().min(1),
+  name: z.string().min(1).max(100),
   // 그룹 대표 좌표 — WGS84 한국 범위 강제(다른 지하철 계약과 동일).
   lat: z.number().min(33).max(39),
   lng: z.number().min(124).max(132),
@@ -48,7 +48,7 @@ export const SubwayFavoriteLineItem = z.object({
   stationId: stationIdSchema,
   lineId: z.string().regex(/^\d{4}$/),
   // 역명 스냅샷 — "역명 · 호선" 렌더용.
-  stationName: z.string().min(1),
+  stationName: z.string().min(1).max(100),
   // 그룹 대표 좌표 스냅샷 — 단독 진입 시 지도 이동용(역 즐겨찾기에 같은 역이
   // 없을 수 있다).
   lat: z.number().min(33).max(39),

@@ -30,15 +30,15 @@ export const BusFavoriteStationItem = BusStationItem;
 export type BusFavoriteStationItemType = z.infer<typeof BusFavoriteStationItem>;
 
 export const BusFavoriteRouteItem = z.object({
-  stId: z.string().min(1),
-  busRouteId: z.string().min(1),
+  stId: z.string().min(1).max(64),
+  busRouteId: z.string().min(1).max(64),
   // rtNm 표기('141', 'N61') — 목록 표시용 스냅샷.
-  routeName: z.string(),
+  routeName: z.string().max(50),
   // 정류장명 스냅샷 — 조합 항목을 "정류장명 · 노선" 으로 렌더하기 위함.
-  stationName: z.string(),
+  stationName: z.string().max(100),
   // 도착정보 재진입용. 도착 패널(arsId 유효)에서만 추가되므로 '0' 은
   // 정상 흐름에선 없지만 계약으로 금지하진 않는다.
-  arsId: z.string(),
+  arsId: z.string().max(64),
   // 정류장 좌표 스냅샷 — 조합 항목 단독 진입 시 지도 이동에 필요
   // (정류장 즐겨찾기에 같은 정류장이 없을 수 있다). BusStationItem 과 동일 계약.
   lat: z.number().min(33).max(39),

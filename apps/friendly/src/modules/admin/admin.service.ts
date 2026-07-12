@@ -5,7 +5,12 @@ export class AdminService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async listUsers(): Promise<User[]> {
-    const rows = await this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
+    // passwordHash·tokenVersion 컬럼은 응답에 안 쓰이므로 로드하지 않는다(과다로드
+    // 제거 + 민감 컬럼 미노출). 사용자 수가 적어 페이지네이션은 불필요.
+    const rows = await this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true },
+    });
     return rows.map((u) => ({
       id: u.id,
       email: u.email,

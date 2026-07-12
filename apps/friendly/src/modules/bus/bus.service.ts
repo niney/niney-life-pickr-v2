@@ -57,6 +57,10 @@ export const NEARBY_CELL_DEG = 0.005;
 export const BUS_NEARBY_TTL_MS = BUS_SEARCH_TTL_MS;
 // 노선 상세(형상+정류소+기본정보)도 사실상 정적 — 검색과 동일 30일 TTL.
 export const BUS_ROUTE_TTL_MS = BUS_SEARCH_TTL_MS;
+
+// 실시간(도착/위치) 마이크로 캐시 TTL — 동시 사용자의 업스트림 중복콜을 흡수해
+// 일일 쿼터를 지킨다. 실시간성 훼손을 막기 위해 15초로 짧게(지하철과 동일 규율).
+export const BUS_REALTIME_MICRO_CACHE_TTL_MS = 15_000;
 // 업스트림 호출 반경 — 셀 중심에서 셀 내 임의 지점(반 대각 ≈390m) + 최대 요청
 // 반경(1000m)을 다 덮어야 셀 캐시를 어떤 쿼리에도 재사용할 수 있다. 1500m.
 export const NEARBY_UPSTREAM_RADIUS_M = 1500;
@@ -286,6 +290,16 @@ export class BusService {
   private quota = { dateKey: '', count: 0 };
   // 주변 셀 동시 요청 합류 — 같은 셀의 업스트림 수집은 1회만.
   private readonly nearbyInflight = new Map<string, Promise<CellStation[]>>();
+  // 실시간(도착/위치) 키 단위 15초 마이크로 캐시 + in-flight 합류 — 동시 폴링의
+  // 업스트림 중복콜을 흡수한다(지하철 fetchRealtime 골격 이식). 쿼터는 캐시 미스 시만.
+  private readonly realtimeCache = new Map<
+    string,
+    { data: unknown[]; fetchedAt: Date; expiresAt: number }
+  >();
+  private readonly realtimeInflight = new Map<
+    string,
+    Promise<{ data: unknown[]; fetchedAt: Date }>
+  >();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -429,6 +443,48 @@ export class BusService {
     }
     // 실패해도 호출 시도 자체가 한도를 소모하므로 호출 직전 증가.
     this.quota.count += 1;
+  }
+
+  // 실시간 키 1개 — 캐시 히트 시 fetchedAt 보존, 미스는 in-flight 합류(같은 키 동시
+  // 요청 업스트림 1콜). 쿼터는 실제 업스트림 직전(미스 확정)에만 소비. 도착/위치 공용.
+  private fetchRealtime<T>(
+    key: string,
+    now: Date,
+    load: () => Promise<T[]>,
+  ): Promise<{ data: T[]; fetchedAt: Date }> {
+    const cached = this.realtimeCache.get(key);
+    if (cached) {
+      if (now.getTime() <= cached.expiresAt) {
+        return Promise.resolve({ data: cached.data as T[], fetchedAt: cached.fetchedAt });
+      }
+      this.realtimeCache.delete(key); // 만료 청소.
+    }
+
+    const existing = this.realtimeInflight.get(key) as
+      | Promise<{ data: T[]; fetchedAt: Date }>
+      | undefined;
+    if (existing) return existing;
+
+    const task = this.loadRealtime(key, now, load).finally(() => {
+      this.realtimeInflight.delete(key);
+    });
+    this.realtimeInflight.set(key, task as Promise<{ data: unknown[]; fetchedAt: Date }>);
+    return task;
+  }
+
+  private async loadRealtime<T>(
+    key: string,
+    now: Date,
+    load: () => Promise<T[]>,
+  ): Promise<{ data: T[]; fetchedAt: Date }> {
+    this.consumeQuota(now); // 캐시 미스 확정 — 실제 업스트림 콜 직전에만 쿼터 소비.
+    const data = await load();
+    this.realtimeCache.set(key, {
+      data,
+      fetchedAt: now,
+      expiresAt: now.getTime() + BUS_REALTIME_MICRO_CACHE_TTL_MS,
+    });
+    return { data, fetchedAt: now };
   }
 
   // 좌표 기반 주변 정류장 — 셀(0.005°≈550m) 단위 DB 30일 캐시 프록시.
@@ -579,21 +635,23 @@ export class BusService {
       );
     }
     const now = this.deps.now?.() ?? new Date();
-    this.consumeQuota(now);
-
+    const serviceKey = this.deps.serviceKey;
     const fetchArrivals = this.deps.adapter?.getStationArrivals ?? getStationArrivals;
-    const raw = await fetchArrivals(arsId, { serviceKey: this.deps.serviceKey });
+    // 15초 마이크로 캐시 + in-flight 합류 — 동시/연속 폴링의 업스트림 중복콜 흡수.
+    const { data, fetchedAt } = await this.fetchRealtime(`arrivals:${arsId}`, now, () =>
+      fetchArrivals(arsId, { serviceKey }),
+    );
 
     return {
       arsId,
-      items: raw.map((r) => ({
+      items: data.map((r) => ({
         busRouteId: r.busRouteId,
         routeName: r.rtNm ?? '',
         staOrd: r.staOrd,
         first: toArrivalEntry(r.vehId1, r.arrmsg1),
         second: toArrivalEntry(r.vehId2, r.arrmsg2),
       })),
-      fetchedAt: now.toISOString(),
+      fetchedAt: fetchedAt.toISOString(),
     };
   }
 
@@ -613,19 +671,19 @@ export class BusService {
       );
     }
     const now = this.deps.now?.() ?? new Date();
-    this.consumeQuota(now);
-
-    let raw: RawBusPosition[];
-    if (startOrd !== undefined && endOrd !== undefined) {
-      const fetchPositions =
-        this.deps.adapter?.getBusPositionsByRouteSt ?? getBusPositionsByRouteSt;
-      raw = await fetchPositions(busRouteId, startOrd, endOrd, {
-        serviceKey: this.deps.serviceKey,
-      });
-    } else {
+    const serviceKey = this.deps.serviceKey;
+    // 15초 마이크로 캐시 + in-flight 합류(구간별 키). 쿼터는 캐시 미스 시에만 소비.
+    const load = (): Promise<RawBusPosition[]> => {
+      if (startOrd !== undefined && endOrd !== undefined) {
+        const fetchPositions =
+          this.deps.adapter?.getBusPositionsByRouteSt ?? getBusPositionsByRouteSt;
+        return fetchPositions(busRouteId, startOrd, endOrd, { serviceKey });
+      }
       const fetchAll = this.deps.adapter?.getBusPositionsByRtid ?? getBusPositionsByRtid;
-      raw = await fetchAll(busRouteId, { serviceKey: this.deps.serviceKey });
-    }
+      return fetchAll(busRouteId, { serviceKey });
+    };
+    const key = `positions:${busRouteId}:${startOrd ?? ''}:${endOrd ?? ''}`;
+    const { data: raw, fetchedAt } = await this.fetchRealtime(key, now, load);
 
     // 검색과 동일 정책 — 좌표 정규화 실패(WGS84 쌍 없음)나 vehId 누락 행은
     // 계약(lat 33~39, vehId min 1)을 만족할 수 없어 drop.
@@ -643,7 +701,7 @@ export class BusService {
       });
     }
 
-    return { busRouteId, items, fetchedAt: now.toISOString() };
+    return { busRouteId, items, fetchedAt: fetchedAt.toISOString() };
   }
 
   // 노선 상세 — 형상+경유 정류소+기본정보 합본. busRouteInfo 3콜을 한 번에

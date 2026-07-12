@@ -18,6 +18,7 @@ import {
   type RawReview,
 } from './restaurant.service.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
 
 const buildTestApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -29,6 +30,10 @@ const buildTestApp = async (): Promise<FastifyInstance> => {
   await app.register(prismaPlugin);
   await app.register(restaurantRoutes);
   await app.ready();
+  await seedAuthUsers(app, [
+    { id: 'admin-test', role: 'ADMIN' },
+    { id: 'user-test', role: 'USER' },
+  ]);
   return app;
 };
 

@@ -4,7 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { env } from '../../config/env.js';
 import { SettlementError, SettlementService } from './settlement.service.js';
+import { LRUCache } from 'lru-cache';
 import { renderSettlementCardPng } from './settlement-card.js';
+
+// 렌더된 정산 카드 PNG 캐시 — satori 레이아웃 + resvg(동기 네이티브 render)는 요청
+// 마다 이벤트 루프를 점유한다. (token, updatedAt) 키로 캐시해 편집 전까지 재렌더를
+// 회피. 편집되면 updatedAt 이 바뀌어 새 키 → 미스 → 재렌더(즉시 반영). PNG 는 수십 KB
+// 라 max 200 이면 메모리 부담이 작다.
+const pngCache = new LRUCache<string, Buffer>({ max: 200 });
 
 // 정산 공유 링크의 SNS 미리보기(Open Graph) 처리.
 //
@@ -198,7 +205,14 @@ export async function registerSharePreview(app: FastifyInstance): Promise<void> 
       return reply.code(404).type('text/plain; charset=utf-8').send('not found');
     }
     try {
-      const png = await renderSettlementCardPng(session);
+      // (token, updatedAt) 캐시 — 미편집 세션의 반복 요청(og:image 크롤러·이미지 공유)은
+      // satori+resvg 재실행 없이 캐시 버퍼로 응답.
+      const key = `${token}:${session.updatedAt}`;
+      let png = pngCache.get(key);
+      if (!png) {
+        png = await renderSettlementCardPng(session);
+        pngCache.set(key, png);
+      }
       return (
         reply
           .code(200)

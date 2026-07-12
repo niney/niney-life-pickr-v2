@@ -7,7 +7,7 @@ export const PickSchema = z.object({
   id: z.string(),
   userId: z.string(),
   title: z.string().min(1).max(100),
-  options: z.array(z.string().min(1)).min(2).max(20),
+  options: z.array(z.string().min(1).max(200)).min(2).max(20),
   category: PickCategorySchema,
   createdAt: z.string(),
   updatedAt: z.string(),

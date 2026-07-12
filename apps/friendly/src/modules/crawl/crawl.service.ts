@@ -540,7 +540,10 @@ export class CrawlService {
       ...detail.reviewsFirstPage.list,
     ];
     let fetchedPages = 1;
-    const totalPage = detail.reviewsFirstPage.totalPage;
+    // 외부(다이닝코드) totalPage 를 무상한 신뢰하면 리뷰 페이지를 무한 fetch 할 수
+    // 있어, 테이블링과 동일하게 상한을 둔다(가게당 200페이지면 충분).
+    const MAX_DININGCODE_REVIEW_PAGES = 200;
+    const totalPage = Math.min(detail.reviewsFirstPage.totalPage, MAX_DININGCODE_REVIEW_PAGES);
     for (let page = 2; page <= totalPage; page += 1) {
       // 다이닝코드 부담 줄이려 페이지 간 200ms 간격. 어드민 작업이라 동기 응답은 받지만
       // 평균적으로 가게당 수 초 이내 끝난다.

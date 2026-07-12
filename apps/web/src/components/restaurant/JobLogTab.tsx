@@ -113,6 +113,11 @@ export const JobLogTab = ({
       .sort((a, b) => a.at.localeCompare(b.at));
   }, [streamLogs, summaryLogs, dbItems, levelFilter]);
 
+  // 렌더는 최근 MAX_DISPLAY 개만 — 장시간 잡의 수천 로그를 전량 DOM 으로 그리지
+  // 않게 한다(가상화 없이 DOM 노드 수를 상한). 카운트는 전체를 그대로 보여준다.
+  const MAX_DISPLAY = 500;
+  const visible = merged.length > MAX_DISPLAY ? merged.slice(-MAX_DISPLAY) : merged;
+
   const toggle = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -153,8 +158,14 @@ export const JobLogTab = ({
         </div>
       )}
 
+      {merged.length > MAX_DISPLAY && (
+        <div className="text-center text-[11px] text-muted-foreground">
+          이전 {merged.length - MAX_DISPLAY}건 생략 — 최근 {MAX_DISPLAY}건만 표시
+        </div>
+      )}
+
       <ul className="space-y-1 max-h-[420px] overflow-y-auto">
-        {merged.map((e) => {
+        {visible.map((e) => {
           const isOpen = expanded.has(e.key);
           const hasMeta = e.meta !== null && Object.keys(e.meta).length > 0;
           return (

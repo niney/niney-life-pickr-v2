@@ -9,6 +9,7 @@ import sensiblePlugin from '../../plugins/sensible.js';
 import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import aiRoutes from './ai.route.js';
 
 // Minimal test app — bypasses @fastify/autoload's dynamic import (which
@@ -25,6 +26,10 @@ const buildAiTestApp = async (): Promise<FastifyInstance> => {
   await app.register(prismaPlugin);
   await app.register(aiRoutes);
   await app.ready();
+  await seedAuthUsers(app, [
+    { id: 'admin-test', role: 'ADMIN' },
+    { id: 'user-test', role: 'USER' },
+  ]);
   return app;
 };
 

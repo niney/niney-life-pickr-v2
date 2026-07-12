@@ -37,5 +37,19 @@ export default fp(async (app) => {
     return;
   }
 
-  await app.register(cors, { origin: allowList, credentials: true });
+  // prod — CORS_ORIGIN='*'(기본/미설정)는 origin 반사 + credentials:true 라
+  // 모든 사이트가 사용자 세션으로 API 를 호출할 수 있어 위험하다. 명시하지
+  // 않으면 공개 origin(PUBLIC_ORIGIN)으로 폐쇄(fail-closed). 웹은 API 와 동일
+  // origin 이라 CORS 자체가 불필요하고, 크로스 origin 허용이 필요하면 CORS_ORIGIN
+  // 에 콤마 구분으로 명시해야 한다.
+  const prodOrigin: string[] =
+    env.CORS_ORIGIN === '*'
+      ? [env.PUBLIC_ORIGIN.replace(/\/+$/, '')]
+      : env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  if (env.CORS_ORIGIN === '*') {
+    app.log.warn(
+      `CORS: CORS_ORIGIN 미설정 — 반사 허용 대신 ${prodOrigin[0]} 로 폐쇄. 크로스 origin 이 필요하면 CORS_ORIGIN 을 명시하라.`,
+    );
+  }
+  await app.register(cors, { origin: prodOrigin, credentials: true });
 });

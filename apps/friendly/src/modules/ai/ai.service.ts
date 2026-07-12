@@ -22,9 +22,15 @@ const RATE_LIMIT_WINDOW_MS = 1_000;
 // per-actor rate limit. Concurrency is the adapter's job (FIFO gate); this
 // service runs batch items via Promise.allSettled so partial failures don't
 // abort the whole batch.
-export class AiService {
-  private readonly lastCallByActor = new Map<string, number>();
+// per-actor 레이트리밋 상태는 모듈 레벨 — AiService 는 config 핫리로드를 위해 요청마다
+// 새로 생성되므로(ai.route.buildService), 인스턴스 필드면 매 요청 리셋돼 죽는다. 모듈
+// 레벨로 올려 인스턴스 수명과 무관하게 per-actor 1초 제한이 실제로 동작하게 한다.
+const lastCallByActor = new Map<string, number>();
 
+// 테스트용 — 모듈 레벨 per-actor 레이트리밋 상태를 초기화(테스트 간 격리). 운영에선 미사용.
+export const __resetAiRateLimit = (): void => lastCallByActor.clear();
+
+export class AiService {
   constructor(
     private readonly provider: LLMProvider,
     private readonly config: AiConfigService,
@@ -123,9 +129,9 @@ export class AiService {
 
   private isRateLimited(actorId: string): boolean {
     const now = Date.now();
-    const last = this.lastCallByActor.get(actorId) ?? 0;
+    const last = lastCallByActor.get(actorId) ?? 0;
     if (now - last < RATE_LIMIT_WINDOW_MS) return true;
-    this.lastCallByActor.set(actorId, now);
+    lastCallByActor.set(actorId, now);
     return false;
   }
 }

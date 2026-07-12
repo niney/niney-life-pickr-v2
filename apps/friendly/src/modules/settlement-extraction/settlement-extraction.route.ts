@@ -104,7 +104,9 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) => {
       const { imageToken, placeId, roundIndex, roundTotal, split } = req.body;
-      const detail = await restaurantService.getPublicDetail(placeId);
+      // 추출은 식당명 + 메뉴명만 쓴다 — 3개 출처 리뷰 코퍼스까지 로드하는
+      // getPublicDetail 대신 name/menus 만 뽑는 경량 getPublicSeoMeta 를 사용.
+      const detail = await restaurantService.getPublicSeoMeta(placeId);
       if (!detail) {
         throw app.httpErrors.notFound('식당을 찾을 수 없습니다.');
       }

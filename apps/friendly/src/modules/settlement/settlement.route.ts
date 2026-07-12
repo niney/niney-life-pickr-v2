@@ -13,6 +13,7 @@ import {
   UpdateSettlementInput,
 } from '@repo/api-contract';
 import { SettlementError, SettlementService } from './settlement.service.js';
+import { RATE } from '../../plugins/rate-limit.js';
 
 const S = Routes.Settlement;
 
@@ -37,24 +38,6 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementError): never => {
     default:
       throw app.httpErrors.badRequest(e.message);
   }
-};
-
-// 공개 공유 조회(GET /share/settlements/:token)용 경량 IP rate limiter. 토큰이
-// 56bit 라 brute-force 는 비현실적이지만, 방어적으로 분당 한도를 둔다. 단일
-// 인스턴스 전제(CLAUDE.md) 라 in-memory 고정 윈도우로 충분 — Redis 불필요.
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 120; // IP 당 분당 120회
-const rateHits = new Map<string, { count: number; resetAt: number }>();
-const isRateLimited = (ip: string, now: number): boolean => {
-  // 메모리 무한 증가 방지 — 윈도우 만료분은 접근 시 정리, 과도하면 통째 비움.
-  if (rateHits.size > 10_000) rateHits.clear();
-  const cur = rateHits.get(ip);
-  if (!cur || cur.resetAt <= now) {
-    rateHits.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return false;
-  }
-  cur.count += 1;
-  return cur.count > RATE_MAX;
 };
 
 const settlementRoutes: FastifyPluginAsync = async (app) => {
@@ -202,15 +185,13 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
   // userId/round.receiptPreviewUrl 은 제거되어 영수증 원본 사진은 못 본다.
   // 만료된 링크는 410, 없는 토큰은 404. IP rate limit 으로 추측 시도 방어.
   typed.get(S.shared(':token'), {
+    config: { rateLimit: RATE.publicShare },
     schema: {
       tags: ['settlement'],
       params: TokenParams,
       response: { 200: SharedSettlementSession },
     },
     handler: async (req) => {
-      if (isRateLimited(req.ip, Date.now())) {
-        throw app.httpErrors.tooManyRequests('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
-      }
       try {
         return await service.getBySharedToken(req.params.token);
       } catch (e) {

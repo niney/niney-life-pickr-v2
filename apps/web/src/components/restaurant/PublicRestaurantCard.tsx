@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { Star } from 'lucide-react';
+import { reviewThumbnailUrl } from '@repo/utils';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import { cn } from '~/lib/utils';
@@ -47,7 +48,7 @@ export const PublicRestaurantCard = memo(function PublicRestaurantCard({
       <div className="size-20 shrink-0 overflow-hidden rounded-md bg-muted">
         {item.thumbnailUrl ? (
           <ImgWithFallback
-            src={item.thumbnailUrl}
+            src={reviewThumbnailUrl(item.thumbnailUrl, 160)}
             className="size-full object-cover"
           />
         ) : (

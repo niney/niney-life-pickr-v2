@@ -561,6 +561,10 @@ describe('AnalyticsService.getGlobalMenus / getOverview', () => {
       where: { placeId: { startsWith: PLACE_PREFIX } },
     });
     await app.prisma.globalMenuCanonical.deleteMany({});
+    // 공유 service 의 읽기 캐시는 데이터 상태와 무관한 키(overview/tree/menuAgg)도
+    // 쓰므로, 테스트가 데이터를 갈아엎으면 반드시 무효화해야 다음 테스트가 stale 를
+    // 받지 않는다(운영에선 머지/그룹핑 잡이 동일하게 invalidate 한다).
+    service.invalidateReadCache();
   });
 
   // 두 식당의 같은 캐논(김치찌개) 을 글로벌 한 그룹으로 직접 연결 + 통계 검증.

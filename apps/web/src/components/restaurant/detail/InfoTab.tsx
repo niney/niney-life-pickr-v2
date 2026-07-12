@@ -5,6 +5,7 @@ import type {
 } from '@repo/api-contract';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import { Badge } from '~/components/ui/badge';
+import { safeExternalHref } from '~/lib/utils';
 import { TablingServiceBadges } from './shared';
 
 interface Props {
@@ -100,7 +101,7 @@ export const InfoTab = ({ detail }: Props) => {
         <div className="flex flex-wrap gap-x-3 gap-y-1 pl-6 text-xs">
           {detail.sources.naver && (
             <a
-              href={detail.sources.naver.rawSourceUrl}
+              href={safeExternalHref(detail.sources.naver.rawSourceUrl)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
@@ -111,7 +112,7 @@ export const InfoTab = ({ detail }: Props) => {
           )}
           {detail.sources.diningcode && (
             <a
-              href={detail.sources.diningcode.rawSourceUrl}
+              href={safeExternalHref(detail.sources.diningcode.rawSourceUrl)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
@@ -122,7 +123,7 @@ export const InfoTab = ({ detail }: Props) => {
           )}
           {detail.sources.tabling && (
             <a
-              href={detail.sources.tabling.rawSourceUrl}
+              href={safeExternalHref(detail.sources.tabling.rawSourceUrl)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
@@ -189,7 +190,7 @@ export const InfoTab = ({ detail }: Props) => {
             {detail.blogReviews.map((b, idx) => (
               <li key={idx}>
                 <a
-                  href={b.url}
+                  href={safeExternalHref(b.url)}
                   target="_blank"
                   rel="noreferrer"
                   className="flex gap-2 py-2.5 hover:bg-muted/40"

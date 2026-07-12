@@ -903,7 +903,16 @@ export class AnalyticsService {
     ) as Promise<GlobalMenuResultType>;
   }
 
-  private async computeGlobalMenus(query: GlobalMenuQueryType): Promise<GlobalMenuResultType> {
+  // 페이지/정렬/검색과 무관한 무거운 집계(전체 글로벌 그룹 + 멘션 GROUP BY + items
+  // 구축)를 분리 — includeUnlinked 별로만 캐시해, page/sort/q 가 바뀌어도 전량 재집계
+  // 없이 값싼 필터/정렬/슬라이스만 다시 한다. 무효화는 readCache.clear() 전체 비움이라
+  // 별도 키 관리 불필요.
+  private async computeMenuAggregation(includeUnlinked: boolean): Promise<{
+    items: GlobalMenuStatType[];
+    totalGroups: number;
+    linkedRestaurantCount: number;
+    linkedRatio: number | null;
+  }> {
     // 매핑된 항목과 (옵션) 매핑 안 된 항목 두 갈래 처리.
     const linked = await this.prisma.globalMenuCanonical.findMany({
       include: {
@@ -1040,7 +1049,7 @@ export class AnalyticsService {
       });
     }
 
-    if (query.includeUnlinked) {
+    if (includeUnlinked) {
       // 링크 없는 식당 그룹들 — 자기 자신을 globalKey 로 fallback.
       const unlinkedTargets = await this.prisma.menuCanonical.findMany({
         where: { globalLink: null },
@@ -1139,8 +1148,34 @@ export class AnalyticsService {
       }
     }
 
-    // 검색 + 필터.
-    let filtered = items.filter((i) => i.totalMentions >= query.minMentions);
+    const linkedTotal = await this.prisma.menuCanonical.count();
+    const linkedRatio =
+      linkedTotal === 0 ? null : linked.reduce((sum, g) => sum + g.links.length, 0) / linkedTotal;
+
+    return {
+      items,
+      totalGroups: linked.length,
+      linkedRestaurantCount: new Set(
+        linked.flatMap((g) => g.links.map((l) => l.restaurantId)),
+      ).size,
+      linkedRatio,
+    };
+  }
+
+  private async computeGlobalMenus(query: GlobalMenuQueryType): Promise<GlobalMenuResultType> {
+    // 무거운 집계는 includeUnlinked 별 캐시에서 재사용 — page/sort/q 변경에도 재집계 없음.
+    const agg = (await this.readCache.getOrCompute(
+      `menuAgg:${query.includeUnlinked ? 1 : 0}`,
+      () => this.computeMenuAggregation(query.includeUnlinked),
+    )) as {
+      items: GlobalMenuStatType[];
+      totalGroups: number;
+      linkedRestaurantCount: number;
+      linkedRatio: number | null;
+    };
+
+    // 검색 + 필터 (값싼 인메모리 — 캐시된 집계 items 재사용).
+    let filtered = agg.items.filter((i) => i.totalMentions >= query.minMentions);
     if (query.q) {
       const q = query.q.trim().toLowerCase();
       filtered = filtered.filter(
@@ -1165,15 +1200,10 @@ export class AnalyticsService {
     const offset = (query.page - 1) * query.pageSize;
     const pageItems = filtered.slice(offset, offset + query.pageSize);
 
-    const linkedTotal = await this.prisma.menuCanonical.count();
-    const linkedRatio = linkedTotal === 0 ? null : linked.reduce((sum, g) => sum + g.links.length, 0) / linkedTotal;
-
     return {
-      totalGroups: linked.length,
-      linkedRestaurantCount: new Set(
-        linked.flatMap((g) => g.links.map((l) => l.restaurantId)),
-      ).size,
-      linkedRatio,
+      totalGroups: agg.totalGroups,
+      linkedRestaurantCount: agg.linkedRestaurantCount,
+      linkedRatio: agg.linkedRatio,
       currentVersion: GLOBAL_MERGE_VERSION,
       items: pageItems,
       total,

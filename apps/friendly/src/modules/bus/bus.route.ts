@@ -16,6 +16,7 @@ import {
   Routes,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
+import { RATE } from '../../plugins/rate-limit.js';
 import { BusService } from './bus.service.js';
 
 // error-handler 플러그인은 statusCode >= 500 을 일괄 500 으로 뭉개므로, 의미가
@@ -88,6 +89,7 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   // 의 400 은 zod 밸리데이터가 자동 응답 — 기존 파라미터 라우트들과 동일하게
   // response 에 등록하지 않는다.
   typed.get(Routes.Bus.stationArrivals(':arsId'), {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['bus'],
       params: BusArrivalsParams,
@@ -117,6 +119,7 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   // 노선 실시간 버스 위치 — startOrd/endOrd 지정 시 구간(도착정보 staOrd
   // 윈도우), 둘 다 생략 시 노선 전체 차량. 페어 검증은 querystring zod 가 담당.
   typed.get(Routes.Bus.busPositions(':busRouteId'), {
+    config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['bus'],
       params: BusPositionsParams,

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../app.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import {
   normalizeToPlaceId,
   RedirectFailedError,
@@ -78,6 +79,10 @@ describe('POST /api/v1/admin/crawl/naver-place — guards', () => {
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
+    await seedAuthUsers(app, [
+      { id: 'admin1', role: 'ADMIN' },
+      { id: 'u1', role: 'USER' },
+    ]);
   });
 
   afterAll(async () => {
@@ -125,6 +130,10 @@ describe('GET /api/v1/admin/crawl/search — guards & shape', () => {
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
+    await seedAuthUsers(app, [
+      { id: 'admin1', role: 'ADMIN' },
+      { id: 'u1', role: 'USER' },
+    ]);
   });
 
   afterAll(async () => {

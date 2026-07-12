@@ -8,6 +8,7 @@ import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsM
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { usePanelSide } from '~/stores/panelPrefsStore';
+import { useDebounced } from '~/lib/useDebounced';
 
 type SortKey = NonNullable<RestaurantPublicListQueryType['sort']>;
 const VALID_SORTS: SortKey[] = ['recent', 'satisfaction', 'positive', 'rating'];
@@ -26,6 +27,9 @@ type MobileView = 'list' | 'map';
 export const RestaurantsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') ?? '';
+  // 입력은 q(URL)로 즉시 반영하되 리스트 쿼리엔 디바운스된 값을 넘겨, 타이핑마다
+  // limit=80 리스트 API 를 재요청하지 않게 한다(입력 반응성은 그대로).
+  const debouncedQ = useDebounced(q, 300);
   const category = searchParams.get('category');
   const sortRaw = searchParams.get('sort');
   const sort: SortKey = isSortKey(sortRaw) ? sortRaw : 'recent';
@@ -52,7 +56,7 @@ export const RestaurantsPage = () => {
   );
 
   const list = useRestaurantsPublic({
-    q: q || undefined,
+    q: debouncedQ || undefined,
     category: category ?? undefined,
     sort,
     bbox: bbox ?? undefined,

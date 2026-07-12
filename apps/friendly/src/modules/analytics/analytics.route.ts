@@ -120,35 +120,16 @@ const analyticsRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: ['admin'] },
     handler: async (req, reply) => {
       const params = req.params as { id: string };
-      const rawQuery = req.query as { token?: string };
 
-      let userId: string | null = null;
-      let role: 'USER' | 'ADMIN' | null = null;
-      try {
-        await req.jwtVerify();
-        userId = req.user.userId;
-        role = req.user.role;
-      } catch {
-        if (typeof rawQuery.token === 'string' && rawQuery.token.length > 0) {
-          try {
-            const payload = app.jwt.verify(rawQuery.token) as {
-              userId: string;
-              role: 'USER' | 'ADMIN';
-            };
-            userId = payload.userId;
-            role = payload.role;
-          } catch {
-            // ignore
-          }
-        }
-      }
-      if (!userId || role !== 'ADMIN') {
+      const admin = await app.resolveSseAdmin(req);
+      if (!admin) {
         return reply.code(401).send({
           statusCode: 401,
           error: 'Unauthorized',
           message: 'Invalid or missing token',
         });
       }
+      const userId = admin.userId;
 
       const snapshot = globalMergeJobRegistry.get(params.id, userId);
       if (!snapshot) {

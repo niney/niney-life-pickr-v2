@@ -38,7 +38,7 @@ export type ReviewSearchEnrichResultType = z.infer<typeof ReviewSearchEnrichResu
 // RAG.
 export const ReviewAskInput = z.object({
   restaurantId: z.string(),
-  query: z.string().min(1),
+  query: z.string().min(1).max(1000),
 });
 export type ReviewAskInputType = z.infer<typeof ReviewAskInput>;
 

@@ -13,6 +13,7 @@ import type {
 import sensiblePlugin from '../../plugins/sensible.js';
 import jwtPlugin from '../../plugins/jwt.js';
 import prismaPlugin from '../../plugins/prisma.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import logsRoutes from './logs.route.js';
 import { LogAnalysisService } from './log-analysis.service.js';
@@ -96,6 +97,10 @@ describe('Logs routes', () => {
     app.decorate('logAnalysis', logAnalysis);
     await app.register(logsRoutes);
     await app.ready();
+    await seedAuthUsers(app, [
+      { id: 'admin-test', role: 'ADMIN' },
+      { id: 'user-test', role: 'USER' },
+    ]);
 
     await cleanupRows();
     const cfg = await app.prisma.logConfig.findUnique({ where: { key: 'global' } });
