@@ -1,4 +1,5 @@
 export * from './schemas/common.js';
+export * from './schemas/bulk-job.js';
 export * from './schemas/auth.js';
 export * from './schemas/user.js';
 export * from './schemas/picks.js';

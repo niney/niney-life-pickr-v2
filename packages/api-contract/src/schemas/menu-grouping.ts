@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  BulkJobItemState,
+  BulkJobState,
+  bulkJobItemTailFields,
+  makeBulkJobSchemas,
+} from './bulk-job.js';
 
 // MENU_GROUPING_VERSION 변경 시 이전 매핑은 stale — UI 가 "재실행 권장" 배지
 // 노출. 서버는 ranking 응답에 modelVersion 을 같이 내려서 클라가 판단한다.
@@ -161,57 +167,32 @@ export const MenuGroupingJobInput = z.object({
 });
 export type MenuGroupingJobInputType = z.infer<typeof MenuGroupingJobInput>;
 
-export const MenuGroupingJobState = z.enum(['pending', 'running', 'done', 'failed']);
+// 잡/아이템 상태·이벤트 shape 는 공용 bulk-job 패밀리 — 기존 이름은 alias 로 유지.
+export const MenuGroupingJobState = BulkJobState;
 export type MenuGroupingJobStateType = z.infer<typeof MenuGroupingJobState>;
 
-export const MenuGroupingJobItemState = z.enum([
-  'pending',
-  'running',
-  'done',
-  'failed',
-  'skipped',
-]);
+export const MenuGroupingJobItemState = BulkJobItemState;
 export type MenuGroupingJobItemStateType = z.infer<typeof MenuGroupingJobItemState>;
 
 export const MenuGroupingJobItem = z.object({
   placeId: z.string(),
-  state: MenuGroupingJobItemState,
+  state: BulkJobItemState,
   // 그 식당의 그룹핑 결과 요약 — done 만 채움.
   inputCount: z.number().int().nullable(),
   groupCount: z.number().int().nullable(),
   mappedCount: z.number().int().nullable(),
-  errorCode: z.string().nullable(),
-  errorMessage: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
+  ...bulkJobItemTailFields,
 });
 export type MenuGroupingJobItemType = z.infer<typeof MenuGroupingJobItem>;
 
-export const MenuGroupingJobSnapshot = z.object({
-  jobId: z.string(),
-  state: MenuGroupingJobState,
-  total: z.number().int(),
-  doneCount: z.number().int(),
-  failedCount: z.number().int(),
-  skippedCount: z.number().int(),
-  startedAt: z.string(),
-  finishedAt: z.string().nullable(),
-  items: z.array(MenuGroupingJobItem),
-});
+const menuGroupingJob = makeBulkJobSchemas(MenuGroupingJobItem);
+
+export const MenuGroupingJobSnapshot = menuGroupingJob.snapshot;
 export type MenuGroupingJobSnapshotType = z.infer<typeof MenuGroupingJobSnapshot>;
 
 // SSE per-event — 한 식당이 끝날 때마다 push.
-export const MenuGroupingJobItemEvent = z.object({
-  type: z.literal('item'),
-  jobId: z.string(),
-  item: MenuGroupingJobItem,
-});
+export const MenuGroupingJobItemEvent = menuGroupingJob.itemEvent;
 export type MenuGroupingJobItemEventType = z.infer<typeof MenuGroupingJobItemEvent>;
 
-export const MenuGroupingJobDoneEvent = z.object({
-  type: z.literal('done'),
-  jobId: z.string(),
-  state: MenuGroupingJobState,
-  finishedAt: z.string(),
-});
+export const MenuGroupingJobDoneEvent = menuGroupingJob.doneEvent;
 export type MenuGroupingJobDoneEventType = z.infer<typeof MenuGroupingJobDoneEvent>;

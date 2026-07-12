@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  BulkJobItemState,
+  BulkJobState,
+  bulkJobItemTailFields,
+  makeBulkJobSchemas,
+} from './bulk-job.js';
 
 export const CrawlMode = z.enum(['create', 'recrawl', 'update']);
 export type CrawlModeType = z.infer<typeof CrawlMode>;
@@ -978,61 +984,36 @@ export const DiningcodeBulkSaveJobInput = z.object({
 });
 export type DiningcodeBulkSaveJobInputType = z.infer<typeof DiningcodeBulkSaveJobInput>;
 
-export const DiningcodeBulkSaveJobState = z.enum(['pending', 'running', 'done', 'failed']);
+// 잡 상태·이벤트 shape 는 공용 bulk-job 패밀리(menu-grouping 과 동형) — 기존
+// 이름은 alias 로 유지.
+export const DiningcodeBulkSaveJobState = BulkJobState;
 export type DiningcodeBulkSaveJobStateType = z.infer<typeof DiningcodeBulkSaveJobState>;
 
-export const DiningcodeBulkSaveJobItemState = z.enum([
-  'pending',
-  'running',
-  'done',
-  'failed',
-  'skipped',
-]);
+export const DiningcodeBulkSaveJobItemState = BulkJobItemState;
 export type DiningcodeBulkSaveJobItemStateType = z.infer<typeof DiningcodeBulkSaveJobItemState>;
 
 export const DiningcodeBulkSaveJobItem = z.object({
   vRid: z.string(),
-  state: DiningcodeBulkSaveJobItemState,
+  state: BulkJobItemState,
   // 성공 시 채워짐 — UI 에서 "등록된 가게 보기" link.
   restaurantId: z.string().nullable(),
   // 끌어온 리뷰 페이지 수 (성공 시).
   fetchedPages: z.number().int().nullable(),
   // 신규 저장된 리뷰 수 (dedup 후, 성공 시).
   newReviewCount: z.number().int().nullable(),
-  errorCode: z.string().nullable(),
-  errorMessage: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
+  ...bulkJobItemTailFields,
 });
 export type DiningcodeBulkSaveJobItemType = z.infer<typeof DiningcodeBulkSaveJobItem>;
 
-export const DiningcodeBulkSaveJobSnapshot = z.object({
-  jobId: z.string(),
-  state: DiningcodeBulkSaveJobState,
-  total: z.number().int(),
-  doneCount: z.number().int(),
-  failedCount: z.number().int(),
-  skippedCount: z.number().int(),
-  startedAt: z.string(),
-  finishedAt: z.string().nullable(),
-  items: z.array(DiningcodeBulkSaveJobItem),
-});
+const diningcodeBulkSaveJob = makeBulkJobSchemas(DiningcodeBulkSaveJobItem);
+
+export const DiningcodeBulkSaveJobSnapshot = diningcodeBulkSaveJob.snapshot;
 export type DiningcodeBulkSaveJobSnapshotType = z.infer<typeof DiningcodeBulkSaveJobSnapshot>;
 
-// SSE per-event — snapshot/item/done. menu-grouping 과 동일 shape.
-export const DiningcodeBulkSaveJobItemEvent = z.object({
-  type: z.literal('item'),
-  jobId: z.string(),
-  item: DiningcodeBulkSaveJobItem,
-});
+export const DiningcodeBulkSaveJobItemEvent = diningcodeBulkSaveJob.itemEvent;
 export type DiningcodeBulkSaveJobItemEventType = z.infer<typeof DiningcodeBulkSaveJobItemEvent>;
 
-export const DiningcodeBulkSaveJobDoneEvent = z.object({
-  type: z.literal('done'),
-  jobId: z.string(),
-  state: DiningcodeBulkSaveJobState,
-  finishedAt: z.string(),
-});
+export const DiningcodeBulkSaveJobDoneEvent = diningcodeBulkSaveJob.doneEvent;
 export type DiningcodeBulkSaveJobDoneEventType = z.infer<typeof DiningcodeBulkSaveJobDoneEvent>;
 
 // ── 크롤+요약 잡 로그 조회 ─────────────────────────────────────────────────
@@ -1310,60 +1291,35 @@ export const TablingBulkSaveJobInput = z.object({
 });
 export type TablingBulkSaveJobInputType = z.infer<typeof TablingBulkSaveJobInput>;
 
-export const TablingBulkSaveJobState = z.enum(['pending', 'running', 'done', 'failed']);
+// 잡 상태·이벤트 shape 는 공용 bulk-job 패밀리 — 기존 이름은 alias 로 유지.
+export const TablingBulkSaveJobState = BulkJobState;
 export type TablingBulkSaveJobStateType = z.infer<typeof TablingBulkSaveJobState>;
 
-export const TablingBulkSaveJobItemState = z.enum([
-  'pending',
-  'running',
-  'done',
-  'failed',
-  'skipped',
-]);
+export const TablingBulkSaveJobItemState = BulkJobItemState;
 export type TablingBulkSaveJobItemStateType = z.infer<typeof TablingBulkSaveJobItemState>;
 
 export const TablingBulkSaveJobItem = z.object({
   idx: z.number().int(),
-  state: TablingBulkSaveJobItemState,
+  state: BulkJobItemState,
   restaurantId: z.string().nullable(),
   fetchedPages: z.number().int().nullable(),
   newReviewCount: z.number().int().nullable(),
   // 좌표 기반 로컬 canonical 자동매칭 결과(성공 시).
   autoMatched: z.boolean().nullable(),
   matchedCanonicalId: z.string().nullable(),
-  errorCode: z.string().nullable(),
-  errorMessage: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
+  ...bulkJobItemTailFields,
 });
 export type TablingBulkSaveJobItemType = z.infer<typeof TablingBulkSaveJobItem>;
 
-export const TablingBulkSaveJobSnapshot = z.object({
-  jobId: z.string(),
-  state: TablingBulkSaveJobState,
-  total: z.number().int(),
-  doneCount: z.number().int(),
-  failedCount: z.number().int(),
-  skippedCount: z.number().int(),
-  startedAt: z.string(),
-  finishedAt: z.string().nullable(),
-  items: z.array(TablingBulkSaveJobItem),
-});
+const tablingBulkSaveJob = makeBulkJobSchemas(TablingBulkSaveJobItem);
+
+export const TablingBulkSaveJobSnapshot = tablingBulkSaveJob.snapshot;
 export type TablingBulkSaveJobSnapshotType = z.infer<typeof TablingBulkSaveJobSnapshot>;
 
-export const TablingBulkSaveJobItemEvent = z.object({
-  type: z.literal('item'),
-  jobId: z.string(),
-  item: TablingBulkSaveJobItem,
-});
+export const TablingBulkSaveJobItemEvent = tablingBulkSaveJob.itemEvent;
 export type TablingBulkSaveJobItemEventType = z.infer<typeof TablingBulkSaveJobItemEvent>;
 
-export const TablingBulkSaveJobDoneEvent = z.object({
-  type: z.literal('done'),
-  jobId: z.string(),
-  state: TablingBulkSaveJobState,
-  finishedAt: z.string(),
-});
+export const TablingBulkSaveJobDoneEvent = tablingBulkSaveJob.doneEvent;
 export type TablingBulkSaveJobDoneEventType = z.infer<typeof TablingBulkSaveJobDoneEvent>;
 
 // ── 테이블링 키워드 검색 (어드민 /tabling-test 페이지) ───────────────────────
