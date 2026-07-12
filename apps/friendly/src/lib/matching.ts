@@ -3,6 +3,8 @@
 // 동명이인/주변 가게 false positive 가 데이터 오염을 일으키므로 사람 눈
 // 확인이 마지막 단계.
 
+import { haversineM } from '@repo/utils';
+
 // 가게명 정규화. 비교용 키 — 표시용 X.
 // - 소문자/공백/구두점 제거
 // - 자주 붙는 분점 suffix("본점", "지점", "점") 끝에서 1회 제거
@@ -13,24 +15,6 @@ export const normalizeName = (s: string): string =>
     .toLowerCase()
     .replace(/[\s\-_·.,!?()()\[\]【】「」]/g, '')
     .replace(/(본점|지점|점)$/u, '');
-
-// 두 좌표 간 거리(m). Haversine. 둘 중 하나라도 null 이면 호출자가 거리
-// 비교를 스킵해야 한다.
-export const distanceMeters = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number => {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-};
 
 // Bigram 집합. 한국어 짧은 가게명에서 trigram 보다 안정적 (음절 단위 변형
 // — "스시경" vs "스시 경" 같은 띄어쓰기 차이는 normalizeName 단계에서 흡수).
@@ -75,7 +59,7 @@ export const scoreMatch = (a: MatchInput, b: MatchInput): MatchScore => {
   let distanceM: number | null = null;
   let distanceScore: number | null = null;
   if (a.latitude != null && a.longitude != null && b.latitude != null && b.longitude != null) {
-    distanceM = distanceMeters(
+    distanceM = haversineM(
       { lat: a.latitude, lng: a.longitude },
       { lat: b.latitude, lng: b.longitude },
     );

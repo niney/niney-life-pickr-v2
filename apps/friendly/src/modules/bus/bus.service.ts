@@ -12,6 +12,7 @@
 // 일일 쿼터 카운터만 검색과 공유한다(세 경로 합산으로 한도 보호).
 
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { approxDistanceM } from '@repo/utils';
 import type {
   BusArrivalEntryType,
   BusArrivalsResultType,
@@ -159,18 +160,6 @@ interface CellStation {
 const snapToCell = (v: number): number =>
   Math.round(v / NEARBY_CELL_DEG) * NEARBY_CELL_DEG;
 
-// 등거리 사각 근사 거리(m) — 반경 1.5km 내 판정·표시용으로 하버사인 불필요.
-const approxDistanceM = (
-  aLat: number,
-  aLng: number,
-  bLat: number,
-  bLng: number,
-): number => {
-  const mPerLatDeg = 111_320;
-  const dLat = (aLat - bLat) * mPerLatDeg;
-  const dLng = (aLng - bLng) * mPerLatDeg * Math.cos((aLat * Math.PI) / 180);
-  return Math.hypot(dLat, dLng);
-};
 
 // 셀 정류소 목록 → 쿼리 지점 기준 반경 필터 + dist 재계산 + 오름차순.
 const serveNearby = (
@@ -182,7 +171,7 @@ const serveNearby = (
   source: BusNearbyResultType['source'],
 ): BusNearbyResultType => {
   const items = stations
-    .map((s) => ({ ...s, dist: Math.round(approxDistanceM(lat, lng, s.lat, s.lng)) }))
+    .map((s) => ({ ...s, dist: Math.round(approxDistanceM({ lat, lng }, s)) }))
     .filter((s) => s.dist <= radiusM)
     .sort((a, b) => a.dist - b.dist);
   return {

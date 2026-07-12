@@ -1,4 +1,5 @@
 import { useReducer } from 'react';
+import { roundCoord } from '@repo/utils';
 
 // 대중교통 화면 상태 오케스트레이션 — 웹 BusPage/SubwayPage 의 URL-as-truth
 // 계약(setSearchParams 곳곳의 배타 규칙)을 단일 reducer 액션으로 중앙화한 것.
@@ -22,8 +23,6 @@ interface Coord {
   lng: number;
 }
 
-// GPS 좌표 반올림 — 소수 5자리(≈1.1m). 쿼리키 안정화(웹과 동일 자릿수).
-export const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
 
 export interface SubwayScreenState {
   // 라이브 검색어(디바운스 반영값) — 입력 draft 는 헤더 로컬(IME 안전).

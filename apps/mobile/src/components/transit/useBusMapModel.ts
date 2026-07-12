@@ -5,6 +5,7 @@ import type {
   BusStationItemType,
 } from '@repo/api-contract';
 import {
+  approxDistanceM,
   bearingAtRoutePathS,
   buildBusRouteStopDotDataUrl,
   buildBusStopMarkerDataUrl,
@@ -12,12 +13,12 @@ import {
   buildBusVehiclePillDataUrl,
   createRoutePathIndex,
   projectOnRoutePath,
+  roundCoord,
   sliceRoutePath,
 } from '@repo/utils';
 import type { BridgeMarker, BridgeRouteLine, BridgeVehicle } from './transitMapBridge';
 import type { TransitMapHandle } from './useTransitMapSync';
 import { useMapResearch } from './useMapResearch';
-import { roundCoord } from '~/hooks/useTransitScreen';
 
 // 모듈 상수 — 모든 정류장 마커가 같은 data URL 을 공유(OL 아이콘 캐시 1회 디코드).
 const BUS_MARKER_URL = buildBusStopMarkerDataUrl(false);
@@ -32,17 +33,6 @@ const RESEARCH_THRESHOLD_M = 300;
 const AUTO_RESEARCH_MIN_ZOOM = 15;
 // 같은 이름 정류장 쌍(상·하행 마주보는 표지판)의 라벨 겹침 판정 거리.
 const LABEL_DEDUP_DIST_M = 60;
-
-// 등거리 사각 근사 거리(m) — 60m/300m 판정에 하버사인급 정밀도 불필요.
-const approxDistanceM = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number => {
-  const mPerLatDeg = 111_320;
-  const dLat = (a.lat - b.lat) * mPerLatDeg;
-  const dLng = (a.lng - b.lng) * mPerLatDeg * Math.cos((a.lat * Math.PI) / 180);
-  return Math.hypot(dLat, dLng);
-};
 
 const EMPTY_MARKERS: BridgeMarker[] = [];
 const EMPTY_VEHICLES: BridgeVehicle[] = [];

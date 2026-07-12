@@ -20,7 +20,7 @@ import type {
   SubwayTimetableResultType,
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
-import { subwayLineById, subwayLineName } from '@repo/utils';
+import { approxDistanceM, subwayLineById, subwayLineName } from '@repo/utils';
 import { isLoopSection } from './subway-line-order.service.js';
 import {
   getRealtimeArrivals,
@@ -32,11 +32,7 @@ import {
   type RawSubwayTimetableRow,
   type SubwayApiRequestOptions,
 } from './subway-api.adapter.js';
-import {
-  approxDistanceM,
-  groupStations,
-  type StationForGrouping,
-} from './subway-master.service.js';
+import { groupStations, type StationForGrouping } from './subway-master.service.js';
 import {
   buildSubwayGraph,
   compressPathLegs,
@@ -345,7 +341,7 @@ export class SubwayService {
     }
 
     const withDist = groupStations(rows.map(toGrouping))
-      .map((g) => ({ ...g, dist: Math.round(approxDistanceM(lat, lng, g.lat, g.lng)) }))
+      .map((g) => ({ ...g, dist: Math.round(approxDistanceM({ lat, lng }, g)) }))
       // 대표 좌표가 반경 밖(박스 모서리)인 그룹 제거.
       .filter((g) => g.dist <= radius)
       .sort((a, b) => a.dist - b.dist);

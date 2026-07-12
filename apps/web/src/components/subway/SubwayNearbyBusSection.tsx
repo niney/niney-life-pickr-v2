@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bus, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useBusNearbyStations } from '@repo/shared';
+import { roundCoord } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 
 // 도보권(m) — 버스 기본 반경(500)보다 좁게. 역 바로 옆 정류장만.
 const NEARBY_RADIUS_M = 350;
-
-// 버스 딥링크 near 좌표 반올림 — BusPage 와 동일한 소수 5자리(≈1.1m).
-const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
 
 // 거리(m) → 표기. 1km 미만 정수 m, 이상 소수 1자리 km(버스 리스트와 동일).
 const formatDist = (m: number): string =>

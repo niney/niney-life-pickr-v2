@@ -7,7 +7,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
-import { subwayLineName } from '@repo/utils';
+import { approxDistanceM, subwayLineName } from '@repo/utils';
 import type { RawSubwayMasterRow } from './subway-api.adapter.js';
 
 // ROUTE(마스터 39종) → lineId(실시간 subwayId 체계). 프로브 실측(2026-07-06)의
@@ -74,15 +74,6 @@ const LAT_MAX = 39;
 const LNG_MIN = 124;
 const LNG_MAX = 132;
 
-// 등거리 사각 근사 거리(m) — bus.service.approxDistanceM 복제(geo.ts 에 거리
-// 함수 없음). 역명 그룹 클러스터 판정용(≤1km)이라 하버사인 불필요.
-// 3차 주변 역(getNearbyStations)이 그룹 대표 좌표 dist 계산에 재사용한다.
-export const approxDistanceM = (aLat: number, aLng: number, bLat: number, bLng: number): number => {
-  const mPerLatDeg = 111_320;
-  const dLat = (aLat - bLat) * mPerLatDeg;
-  const dLng = (aLng - bLng) * mPerLatDeg * Math.cos((aLat * Math.PI) / 180);
-  return Math.hypot(dLat, dLng);
-};
 
 // 동명이역 분리 임계 — 같은 역명이라도 이 거리 넘게 떨어지면 별개 그룹(환승 아님).
 export const STATION_CLUSTER_RADIUS_M = 1000;
@@ -260,7 +251,7 @@ export const groupStations = (
     const clusters: StationForGrouping[][] = [];
     for (const s of bucket) {
       const joined = clusters.find((c) =>
-        c.some((m) => approxDistanceM(s.lat, s.lng, m.lat, m.lng) <= STATION_CLUSTER_RADIUS_M),
+        c.some((m) => approxDistanceM(s, m) <= STATION_CLUSTER_RADIUS_M),
       );
       if (joined) joined.push(s);
       else clusters.push([s]);

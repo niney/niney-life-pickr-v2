@@ -10,6 +10,7 @@ import type {
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
 import {
+  approxDistanceM,
   buildMyLocationMarkerDataUrl,
   buildSubwayStationMarkerDataUrl,
   buildSubwayStopDotDataUrl,
@@ -69,17 +70,6 @@ const RESEARCH_THRESHOLD_M = 500;
 const AUTO_RESEARCH_MIN_ZOOM = 13;
 // 자동 재조회 최소 간격 — 트레일링 예약이라 마지막 이동은 반드시 조회된다.
 const AUTO_RESEARCH_MIN_INTERVAL_MS = 1_200;
-
-// 등거리 사각 근사 거리(m) — 이탈 판정에는 하버사인급 정밀도가 불필요.
-const approxDistanceM = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number => {
-  const mPerLatDeg = 111_320;
-  const dLat = (a.lat - b.lat) * mPerLatDeg;
-  const dLng = (a.lng - b.lng) * mPerLatDeg * Math.cos((a.lat * Math.PI) / 180);
-  return Math.hypot(dLat, dLng);
-};
 
 interface Props {
   // 역명 그룹 — 그룹당 마커 1개(대표 좌표). 2개 이상 호선 = 환승(이중 링).

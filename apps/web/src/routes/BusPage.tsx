@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { BusStationItemType } from '@repo/api-contract';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { busRouteTypeColor, buildSubwayStationMarkerDataUrl } from '@repo/utils';
+import { busRouteTypeColor, buildSubwayStationMarkerDataUrl, roundCoord } from '@repo/utils';
 import {
   useBusFavorites,
   useBusNearbyStations,
@@ -31,9 +31,6 @@ import {
 } from '~/components/transit/TransitFavoritesSection';
 import { SubwayCrossSection } from '~/components/transit/CrossSearchSection';
 
-// GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m)면 정류장 식별에 충분하고, URL 에
-// 원시 좌표를 그대로 노출하지 않아 공유 시 위치 정밀도도 낮춘다.
-const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
 
 // near 파라미터('lat,lng') 파싱 — 형식/한국 WGS84 범위(계약과 동일)를 통과해야
 // 주변 모드로 인정. 딥링크·수동 편집으로 들어온 쓰레기 값은 null → 키워드 모드.

@@ -19,6 +19,8 @@
 //     → 광진구 본점). 좌표 검색 의미를 살리려면 어댑터에서 후필터링 필수.
 //     기본값으로 좌표+distance 가 모두 들어오면 strictDistance 적용.
 
+import { haversineM } from '@repo/utils';
+
 const ENDPOINT = 'https://im.diningcode.com/API/isearch/';
 
 // 다이닝코드는 데스크톱·모바일 통합 — 모바일 UA 라도 동일하게 동작. 그냥
@@ -382,21 +384,6 @@ const parseDistanceM = (raw: string | null): number | null => {
   return m[2]!.toLowerCase() === 'km' ? v * 1000 : v;
 };
 
-// 응답 lat/lng 와 center 거리(미터). EPSG:4326 평면 근사 — 도시 스케일에서
-// 충분한 정확도, 비싸지 않다. 응답 distance 문자열을 우선 사용하므로 폴백용.
-const haversineM = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number => {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-};
 
 const withinRadius = (
   item: DiningcodeSearchResult,

@@ -1,7 +1,7 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
-import { buildBusStopMarkerDataUrl, subwayLineColor, subwayLineName } from '@repo/utils';
+import { buildBusStopMarkerDataUrl, roundCoord, subwayLineColor, subwayLineName } from '@repo/utils';
 import {
   ApiError,
   useBusFavorites,
@@ -36,9 +36,6 @@ import { dayTypeForToday, type SubwayDayType } from '~/components/subway/timetab
 import type { MapMarker } from '~/components/restaurant/MapCanvas';
 import { useTransitCrossShowStore } from '~/stores/transitCrossShowStore';
 
-// GPS 좌표 반올림 자릿수 — 소수 5자리(≈1.1m). URL 에 원시 좌표를 그대로 노출하지
-// 않아 공유 시 위치 정밀도도 낮춘다(버스와 동일).
-const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
 
 // 빈 결과의 안정 참조 — 매 렌더 새 `[]` 를 만들면 지도 groups 가 identity 만으로
 // 바뀐 것처럼 보여 fitToMarkers 가 재발화(선택 역으로 화면이 튐)한다. 한 인스턴스를

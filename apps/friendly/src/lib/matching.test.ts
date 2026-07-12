@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  distanceMeters,
-  isCandidate,
-  nameSimilarity,
-  normalizeName,
-  scoreMatch,
-} from './matching.js';
+import { isCandidate, nameSimilarity, normalizeName, scoreMatch } from './matching.js';
 
 describe('normalizeName', () => {
   it('소문자/공백/구두점 제거', () => {
@@ -42,18 +36,6 @@ describe('nameSimilarity', () => {
   });
 });
 
-describe('distanceMeters', () => {
-  it('동일 좌표 = 0', () => {
-    expect(distanceMeters({ lat: 37.5, lng: 127.0 }, { lat: 37.5, lng: 127.0 })).toBe(0);
-  });
-
-  it('서울 시내 약 1km 케이스', () => {
-    // 위도 0.009 ≈ 1km
-    const d = distanceMeters({ lat: 37.5, lng: 127.0 }, { lat: 37.509, lng: 127.0 });
-    expect(d).toBeGreaterThan(950);
-    expect(d).toBeLessThan(1050);
-  });
-});
 
 describe('scoreMatch + isCandidate', () => {
   it('같은 가게 같은 위치 → 후보 채택', () => {

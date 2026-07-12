@@ -14,6 +14,7 @@ import {
   createRoutePathIndex,
   locateTrain,
   pointAtRoutePathS,
+  roundCoord,
   sliceForMove,
   subwayDestinationLabel,
   subwayLineColor,
@@ -22,7 +23,6 @@ import {
 import type { BridgeMarker, BridgeRouteLine, BridgeVehicle } from './transitMapBridge';
 import type { TransitMapHandle } from './useTransitMapSync';
 import { useMapResearch } from './useMapResearch';
-import { roundCoord } from '~/hooks/useTransitScreen';
 
 // 모듈 상수 — 선택×환승 4종을 미리 만들어 모든 마커가 같은 data URL 을 공유
 // (OL 아이콘 캐시 1회 디코드). 웹 SubwayStationsMap 과 동일.

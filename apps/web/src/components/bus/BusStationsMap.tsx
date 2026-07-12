@@ -8,6 +8,7 @@ import type {
   BusStationItemType,
 } from '@repo/api-contract';
 import {
+  approxDistanceM,
   bearingAtRoutePathS,
   buildBusRouteStopDotDataUrl,
   buildBusStopMarkerDataUrl,
@@ -103,17 +104,6 @@ const AUTO_RESEARCH_MIN_INTERVAL_MS = 1_200;
 
 // 같은 이름 정류장 쌍(상·하행 마주보는 표지판)의 라벨 겹침 판정 거리.
 const LABEL_DEDUP_DIST_M = 60;
-
-// 등거리 사각 근사 거리(m) — 60m 판정에는 하버사인급 정밀도가 불필요.
-const approxDistanceM = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number => {
-  const mPerLatDeg = 111_320;
-  const dLat = (a.lat - b.lat) * mPerLatDeg;
-  const dLng = (a.lng - b.lng) * mPerLatDeg * Math.cos((a.lat * Math.PI) / 180);
-  return Math.hypot(dLat, dLng);
-};
 
 // 정류장 검색 결과를 vworld 지도에 마커로. 키 로딩/미등록/에러 3분기는
 // PublicRestaurantsMap 과 동일 정책 (문구만 버스용).

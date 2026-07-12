@@ -1,5 +1,4 @@
-// 위경도 좌표를 다루는 순수 유틸. 현재는 사용자 위치 → 주변 검색 bbox
-// 계산 한 가지만 — 추가 필요해지면 같은 파일에 모은다.
+// 위경도 좌표를 다루는 순수 유틸 — bbox·거리·좌표 반올림.
 
 export interface LatLng {
   lat: number;
@@ -44,3 +43,28 @@ export const isInKorea = (coords: LatLng): boolean =>
   coords.lat <= KOREA_BBOX.maxLat &&
   coords.lng >= KOREA_BBOX.minLng &&
   coords.lng <= KOREA_BBOX.maxLng;
+
+// 등거리 사각 근사 거리(m) — 짧은 거리(≤수 km) 임계 판정·표시용.
+// 하버사인급 정밀도가 필요하면 haversineM 을 쓴다.
+export const approxDistanceM = (a: LatLng, b: LatLng): number => {
+  const mPerLatDeg = 111_320;
+  const dLat = (a.lat - b.lat) * mPerLatDeg;
+  const dLng = (a.lng - b.lng) * mPerLatDeg * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+};
+
+// 두 좌표 간 측지 거리(m). Haversine — asin 인자는 부동소수점 오차로 1 을
+// 넘을 수 있어 클램프.
+export const haversineM = (a: LatLng, b: LatLng): number => {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat));
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+
+// 좌표 소수 5자리(≈1m) 반올림 — URL·브리지 직렬화 키 안정용.
+export const roundCoord = (n: number): number => Math.round(n * 1e5) / 1e5;
