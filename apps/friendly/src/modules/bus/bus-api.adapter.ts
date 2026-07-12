@@ -19,6 +19,7 @@
 //
 // 로깅/에러에는 키 평문 URL 을 절대 싣지 않는다 — 마스킹본(requestUrl)만.
 
+import { isObject, coerceStrOrNull, numOrNull } from '../../lib/narrow.js';
 import { XMLParser } from 'fast-xml-parser';
 
 const BASE_URL = 'http://ws.bus.go.kr/api/rest';
@@ -75,25 +76,8 @@ export class BusApiAuthError extends BusApiError {
   }
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
 // parseTagValue: false 라 보통 string 이지만, 옵션이 바뀌어도 안전하게 number
 // 도 받는다 (단 arsId '02013' 의 선행 0 보존은 parseTagValue: false 가 책임).
-const strOrNull = (v: unknown): string | null => {
-  if (typeof v === 'string' && v.length > 0) return v;
-  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
-  return null;
-};
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
 
 const xmlParser = new XMLParser({
   ignoreAttributes: true,
@@ -214,8 +198,8 @@ export const callBusApi = async (
   const cmm = authWrap && isObject(authWrap['cmmMsgHeader']) ? authWrap['cmmMsgHeader'] : null;
   if (cmm) {
     throw new BusApiAuthError(
-      strOrNull(cmm['returnAuthMsg']) ?? '인증 실패',
-      strOrNull(cmm['returnReasonCode']),
+      coerceStrOrNull(cmm['returnAuthMsg']) ?? '인증 실패',
+      coerceStrOrNull(cmm['returnReasonCode']),
       { requestUrl, responseText: xmlText },
     );
   }
@@ -228,8 +212,8 @@ export const callBusApi = async (
       responseText: xmlText,
     });
   }
-  const headerCd = strOrNull(header['headerCd']) ?? '';
-  const headerMsg = strOrNull(header['headerMsg']) ?? '';
+  const headerCd = coerceStrOrNull(header['headerCd']) ?? '';
+  const headerMsg = coerceStrOrNull(header['headerMsg']) ?? '';
 
   // sr null check 는 header 가드가 보장하지만 TS narrowing 이 못 따라온다.
   const body = sr && isObject(sr['msgBody']) ? sr['msgBody'] : null;
@@ -381,37 +365,37 @@ const coordFields = (raw: Record<string, unknown>) => ({
 });
 
 const toRawBusStation = (raw: Record<string, unknown>): RawBusStation | null => {
-  const stId = strOrNull(raw['stId']);
-  const stNm = strOrNull(raw['stNm']);
+  const stId = coerceStrOrNull(raw['stId']);
+  const stNm = coerceStrOrNull(raw['stNm']);
   if (!stId || !stNm) return null;
   return {
     stId,
-    arsId: strOrNull(raw['arsId']) ?? '0',
+    arsId: coerceStrOrNull(raw['arsId']) ?? '0',
     stNm,
     ...coordFields(raw),
   };
 };
 
 const toRawStationArrival = (raw: Record<string, unknown>): RawStationArrival | null => {
-  const busRouteId = strOrNull(raw['busRouteId']);
+  const busRouteId = coerceStrOrNull(raw['busRouteId']);
   if (!busRouteId) return null;
   return {
     busRouteId,
-    rtNm: strOrNull(raw['rtNm']),
+    rtNm: coerceStrOrNull(raw['rtNm']),
     staOrd: numOrNull(raw['staOrd']),
-    vehId1: strOrNull(raw['vehId1']),
-    arrmsg1: strOrNull(raw['arrmsg1']),
-    vehId2: strOrNull(raw['vehId2']),
-    arrmsg2: strOrNull(raw['arrmsg2']),
+    vehId1: coerceStrOrNull(raw['vehId1']),
+    arrmsg1: coerceStrOrNull(raw['arrmsg1']),
+    vehId2: coerceStrOrNull(raw['vehId2']),
+    arrmsg2: coerceStrOrNull(raw['arrmsg2']),
   };
 };
 
 const toRawBusPosition = (raw: Record<string, unknown>): RawBusPosition => ({
-  vehId: strOrNull(raw['vehId']),
-  plainNo: strOrNull(raw['plainNo']),
+  vehId: coerceStrOrNull(raw['vehId']),
+  plainNo: coerceStrOrNull(raw['plainNo']),
   sectOrd: numOrNull(raw['sectOrd']),
-  stopFlag: strOrNull(raw['stopFlag']),
-  dataTm: strOrNull(raw['dataTm']),
+  stopFlag: coerceStrOrNull(raw['stopFlag']),
+  dataTm: coerceStrOrNull(raw['dataTm']),
   ...coordFields(raw),
 });
 
@@ -424,12 +408,12 @@ export const getStationsByName = async (
 };
 
 const toRawNearbyStation = (raw: Record<string, unknown>): RawNearbyStation | null => {
-  const stId = strOrNull(raw['stationId']);
-  const stNm = strOrNull(raw['stationNm']);
+  const stId = coerceStrOrNull(raw['stationId']);
+  const stNm = coerceStrOrNull(raw['stationNm']);
   if (!stId || !stNm) return null;
   return {
     stId,
-    arsId: strOrNull(raw['arsId']) ?? '0',
+    arsId: coerceStrOrNull(raw['arsId']) ?? '0',
     stNm,
     dist: numOrNull(raw['dist']),
     ...coordFields(raw),
@@ -532,16 +516,16 @@ export interface RawRouteStation {
 }
 
 const toRawRouteStation = (raw: Record<string, unknown>): RawRouteStation | null => {
-  const stId = strOrNull(raw['station']);
-  const stNm = strOrNull(raw['stationNm']);
+  const stId = coerceStrOrNull(raw['station']);
+  const stNm = coerceStrOrNull(raw['stationNm']);
   if (!stId || !stNm) return null;
   return {
     seq: numOrNull(raw['seq']),
     stId,
-    arsId: strOrNull(raw['arsId']) ?? '0',
+    arsId: coerceStrOrNull(raw['arsId']) ?? '0',
     stNm,
-    direction: strOrNull(raw['direction']),
-    transYn: strOrNull(raw['transYn']),
+    direction: coerceStrOrNull(raw['direction']),
+    transYn: coerceStrOrNull(raw['transYn']),
     ...coordFields(raw),
   };
 };
@@ -572,20 +556,20 @@ export interface RawRouteInfo {
 }
 
 const toRawRouteInfo = (raw: Record<string, unknown>): RawRouteInfo | null => {
-  const busRouteId = strOrNull(raw['busRouteId']);
+  const busRouteId = coerceStrOrNull(raw['busRouteId']);
   if (!busRouteId) return null;
   return {
     busRouteId,
-    busRouteNm: strOrNull(raw['busRouteNm']),
-    busRouteAbrv: strOrNull(raw['busRouteAbrv']),
-    length: strOrNull(raw['length']),
-    routeType: strOrNull(raw['routeType']),
-    stStationNm: strOrNull(raw['stStationNm']),
-    edStationNm: strOrNull(raw['edStationNm']),
-    term: strOrNull(raw['term']),
-    firstBusTm: strOrNull(raw['firstBusTm']),
-    lastBusTm: strOrNull(raw['lastBusTm']),
-    corpNm: strOrNull(raw['corpNm']),
+    busRouteNm: coerceStrOrNull(raw['busRouteNm']),
+    busRouteAbrv: coerceStrOrNull(raw['busRouteAbrv']),
+    length: coerceStrOrNull(raw['length']),
+    routeType: coerceStrOrNull(raw['routeType']),
+    stStationNm: coerceStrOrNull(raw['stStationNm']),
+    edStationNm: coerceStrOrNull(raw['edStationNm']),
+    term: coerceStrOrNull(raw['term']),
+    firstBusTm: coerceStrOrNull(raw['firstBusTm']),
+    lastBusTm: coerceStrOrNull(raw['lastBusTm']),
+    corpNm: coerceStrOrNull(raw['corpNm']),
   };
 };
 

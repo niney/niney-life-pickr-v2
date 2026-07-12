@@ -20,6 +20,8 @@
 //   - 인증 실패 INFO-100(양 포털 공통, 미관측) → SubwayApiAuthError(503).
 //   - 그 외 ERROR-*/비정상 코드 → SubwayApiError(502).
 
+import { isObject, coerceStrOrNull, numOrNull } from '../../lib/narrow.js';
+
 const SWOPEN_BASE = 'http://swopenAPI.seoul.go.kr/api/subway';
 const SEOUL_OPEN_BASE = 'http://openapi.seoul.go.kr:8088';
 const FETCH_TIMEOUT_MS = 10_000;
@@ -67,24 +69,8 @@ export class SubwayApiAuthError extends SubwayApiError {
   }
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
 // JSON 응답이어도 숫자가 문자열로 온다(서울 openapi 관례: LAT "37.556228",
 // barvlDt "90") — 명시 변환. 선행 0 이 있는 코드성 값은 strOrNull 로 보존한다.
-const strOrNull = (v: unknown): string | null => {
-  if (typeof v === 'string' && v.length > 0) return v;
-  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
-  return null;
-};
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
 
 // 예외 메시지가 키 평문을 물고 올 여지를 봉인 — 어떤 문자열이든 키를 '***' 로.
 const scrubKey = (s: string, apiKey: string): string =>
@@ -170,8 +156,8 @@ const readSwopenStatus = (
         : null;
   if (!box) return { code: null, message: null, total: null };
   return {
-    code: strOrNull(box['code']),
-    message: strOrNull(box['message']),
+    code: coerceStrOrNull(box['code']),
+    message: coerceStrOrNull(box['message']),
     total: numOrNull(box['total']),
   };
 };
@@ -205,8 +191,8 @@ const readSeoulResult = (
       ? [rowsRaw]
       : [];
   return {
-    code: result ? strOrNull(result['CODE']) : null,
-    message: result ? strOrNull(result['MESSAGE']) : null,
+    code: result ? coerceStrOrNull(result['CODE']) : null,
+    message: result ? coerceStrOrNull(result['MESSAGE']) : null,
     total: numOrNull(box['list_total_count']),
     rows,
   };
@@ -276,9 +262,9 @@ export interface RawSubwayMasterRow {
 }
 
 const toRawSubwayMasterRow = (raw: Record<string, unknown>): RawSubwayMasterRow => ({
-  bldnId: strOrNull(raw['BLDN_ID']),
-  name: strOrNull(raw['BLDN_NM']),
-  route: strOrNull(raw['ROUTE']),
+  bldnId: coerceStrOrNull(raw['BLDN_ID']),
+  name: coerceStrOrNull(raw['BLDN_NM']),
+  route: coerceStrOrNull(raw['ROUTE']),
   lat: numOrNull(raw['LAT']),
   lng: numOrNull(raw['LOT']),
 });
@@ -311,16 +297,16 @@ export interface RawSubwayTimetableRow {
 }
 
 const toRawSubwayTimetableRow = (raw: Record<string, unknown>): RawSubwayTimetableRow => ({
-  arriveTime: strOrNull(raw['ARRIVETIME']),
-  leaveTime: strOrNull(raw['LEFTTIME']),
-  trainNo: strOrNull(raw['TRAIN_NO']),
-  expressYn: strOrNull(raw['EXPRESS_YN']),
-  destName: strOrNull(raw['SUBWAYENAME']),
-  destCode: strOrNull(raw['DESTSTATION']),
-  weekTag: strOrNull(raw['WEEK_TAG']),
-  inoutTag: strOrNull(raw['INOUT_TAG']),
-  branchLine: strOrNull(raw['BRANCH_LINE']),
-  frCode: strOrNull(raw['FR_CODE']),
+  arriveTime: coerceStrOrNull(raw['ARRIVETIME']),
+  leaveTime: coerceStrOrNull(raw['LEFTTIME']),
+  trainNo: coerceStrOrNull(raw['TRAIN_NO']),
+  expressYn: coerceStrOrNull(raw['EXPRESS_YN']),
+  destName: coerceStrOrNull(raw['SUBWAYENAME']),
+  destCode: coerceStrOrNull(raw['DESTSTATION']),
+  weekTag: coerceStrOrNull(raw['WEEK_TAG']),
+  inoutTag: coerceStrOrNull(raw['INOUT_TAG']),
+  branchLine: coerceStrOrNull(raw['BRANCH_LINE']),
+  frCode: coerceStrOrNull(raw['FR_CODE']),
 });
 
 // 역×주중구분×상하행 시간표(1~9호선). stationCd 는 BLDN_ID(4자리), weekTag
@@ -368,26 +354,26 @@ export interface RawSubwayArrival {
 }
 
 const toRawSubwayArrival = (raw: Record<string, unknown>): RawSubwayArrival => ({
-  subwayId: strOrNull(raw['subwayId']),
-  updnLine: strOrNull(raw['updnLine']),
-  trainLineNm: strOrNull(raw['trainLineNm']),
-  statnFid: strOrNull(raw['statnFid']),
-  statnTid: strOrNull(raw['statnTid']),
-  statnId: strOrNull(raw['statnId']),
-  statnNm: strOrNull(raw['statnNm']),
-  trnsitCo: strOrNull(raw['trnsitCo']),
-  subwayList: strOrNull(raw['subwayList']),
-  statnList: strOrNull(raw['statnList']),
-  btrainSttus: strOrNull(raw['btrainSttus']),
+  subwayId: coerceStrOrNull(raw['subwayId']),
+  updnLine: coerceStrOrNull(raw['updnLine']),
+  trainLineNm: coerceStrOrNull(raw['trainLineNm']),
+  statnFid: coerceStrOrNull(raw['statnFid']),
+  statnTid: coerceStrOrNull(raw['statnTid']),
+  statnId: coerceStrOrNull(raw['statnId']),
+  statnNm: coerceStrOrNull(raw['statnNm']),
+  trnsitCo: coerceStrOrNull(raw['trnsitCo']),
+  subwayList: coerceStrOrNull(raw['subwayList']),
+  statnList: coerceStrOrNull(raw['statnList']),
+  btrainSttus: coerceStrOrNull(raw['btrainSttus']),
   barvlDt: numOrNull(raw['barvlDt']),
-  btrainNo: strOrNull(raw['btrainNo']),
-  bstatnId: strOrNull(raw['bstatnId']),
-  bstatnNm: strOrNull(raw['bstatnNm']),
-  recptnDt: strOrNull(raw['recptnDt']),
-  arvlMsg2: strOrNull(raw['arvlMsg2']),
-  arvlMsg3: strOrNull(raw['arvlMsg3']),
-  arvlCd: strOrNull(raw['arvlCd']),
-  lstcarAt: strOrNull(raw['lstcarAt']),
+  btrainNo: coerceStrOrNull(raw['btrainNo']),
+  bstatnId: coerceStrOrNull(raw['bstatnId']),
+  bstatnNm: coerceStrOrNull(raw['bstatnNm']),
+  recptnDt: coerceStrOrNull(raw['recptnDt']),
+  arvlMsg2: coerceStrOrNull(raw['arvlMsg2']),
+  arvlMsg3: coerceStrOrNull(raw['arvlMsg3']),
+  arvlCd: coerceStrOrNull(raw['arvlCd']),
+  lstcarAt: coerceStrOrNull(raw['lstcarAt']),
 });
 
 // realtimeStationArrival/0/30/{역명} — 역명 기반 도착정보(전 호선 한 콜).
@@ -423,19 +409,19 @@ export interface RawSubwayPosition {
 }
 
 const toRawSubwayPosition = (raw: Record<string, unknown>): RawSubwayPosition => ({
-  subwayId: strOrNull(raw['subwayId']),
-  subwayNm: strOrNull(raw['subwayNm']),
-  statnId: strOrNull(raw['statnId']),
-  statnNm: strOrNull(raw['statnNm']),
-  trainNo: strOrNull(raw['trainNo']),
-  lastRecptnDt: strOrNull(raw['lastRecptnDt']),
-  recptnDt: strOrNull(raw['recptnDt']),
-  updnLine: strOrNull(raw['updnLine']),
-  statnTid: strOrNull(raw['statnTid']),
-  statnTnm: strOrNull(raw['statnTnm']),
-  trainSttus: strOrNull(raw['trainSttus']),
-  directAt: strOrNull(raw['directAt']),
-  lstcarAt: strOrNull(raw['lstcarAt']),
+  subwayId: coerceStrOrNull(raw['subwayId']),
+  subwayNm: coerceStrOrNull(raw['subwayNm']),
+  statnId: coerceStrOrNull(raw['statnId']),
+  statnNm: coerceStrOrNull(raw['statnNm']),
+  trainNo: coerceStrOrNull(raw['trainNo']),
+  lastRecptnDt: coerceStrOrNull(raw['lastRecptnDt']),
+  recptnDt: coerceStrOrNull(raw['recptnDt']),
+  updnLine: coerceStrOrNull(raw['updnLine']),
+  statnTid: coerceStrOrNull(raw['statnTid']),
+  statnTnm: coerceStrOrNull(raw['statnTnm']),
+  trainSttus: coerceStrOrNull(raw['trainSttus']),
+  directAt: coerceStrOrNull(raw['directAt']),
+  lstcarAt: coerceStrOrNull(raw['lstcarAt']),
 });
 
 // realtimePosition/0/100/{호선명} — 호선 전체 차량 위치. lineNameParam 은

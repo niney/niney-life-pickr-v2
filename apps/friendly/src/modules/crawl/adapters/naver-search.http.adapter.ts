@@ -15,6 +15,8 @@
 //   - display 1~99 (100 이상 거부), 페이지네이션 ~300개까지.
 //   - GraphQL 응답이지만 schema 가 비공식 — 우리가 query 자체 정의.
 
+import { isObject, strOrNull, numOrNull } from '../../../lib/narrow.js';
+
 const ENDPOINT = 'https://nx-api.place.naver.com/graphql';
 
 // 모바일 UA. 데스크톱 UA 로 바꿔도 동작은 하지만 모바일 origin 으로 일관 유지.
@@ -115,21 +117,6 @@ const QUERY = `query getItems($input: RestaurantListInput) {
     __typename
   }
 }`;
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
 
 // reviewCount 는 응답에 string with comma 로 옴 ("3,651"). 숫자 변환.
 const parseReviewCount = (v: unknown): number | null => {

@@ -14,6 +14,7 @@
 //     응답은 여전히 16섹션 다 옴 (대역폭 낭비) — 리뷰 페이지네이션을 자주
 //     하는 화면에선 어댑터가 review 섹션만 추려 반환.
 
+import { isObject, strOrNull, numOrNull, strArray, httpUrlOrNull } from '../../../lib/narrow.js';
 import type {
   DiningcodeShopDataType,
   DiningcodeShopReviewType,
@@ -51,33 +52,6 @@ export class DiningcodeShopError extends Error {
   }
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
-
-const httpUrlOrNull = (v: unknown): string | null => {
-  const s = strOrNull(v);
-  if (!s) return null;
-  // 다이닝코드 일부 응답이 protocol 누락 URL ("blog.naver.com/...") 을 박아 보냄
-  // — zod 가 .url() 에서 reject 하므로 어댑터가 https:// 보강 후 반환.
-  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
-};
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
-
-const intOrZero = (v: unknown): number => {
-  const n = numOrNull(v);
-  return n !== null ? Math.trunc(n) : 0;
-};
 
 // 다이닝코드는 카운트류를 종종 string 으로 — "0,1185" 등 콤마 포함 케이스도 방어.
 const parseIntLoose = (v: unknown): number => {
@@ -87,12 +61,6 @@ const parseIntLoose = (v: unknown): number => {
     if (Number.isFinite(n)) return Math.trunc(n);
   }
   return 0;
-};
-
-// 응답이 string array 일 때만 정상값으로 보고 빈 배열로 폴백.
-const strArray = (v: unknown): string[] => {
-  if (!Array.isArray(v)) return [];
-  return v.filter((s): s is string => typeof s === 'string' && s.length > 0);
 };
 
 const findSection = (

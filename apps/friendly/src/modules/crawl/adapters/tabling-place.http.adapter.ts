@@ -5,6 +5,7 @@
 // 있어 머지키(이름+좌표)는 충족하나 메뉴·리뷰는 없다. 입점 partner 와 매칭되면
 // 풍부 데이터로 승격. 근거: docs/research/tabling-crawl-feasibility.md.
 
+import { isObject, strOrNull, numOrNull, httpUrlOrNull } from '../../../lib/narrow.js';
 import type { TablingPlaceDataType } from '@repo/api-contract';
 
 const HOST = 'https://www.tabling.co.kr';
@@ -20,27 +21,6 @@ export class TablingPlaceError extends Error {
     this.name = 'TablingPlaceError';
   }
 }
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
-
-const httpUrlOrNull = (v: unknown): string | null => {
-  const s = strOrNull(v);
-  if (!s) return null;
-  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
-};
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
 
 // 테이블링 place 페이지는 JSON-LD 를 실제 <script> 태그로 두지 않고, Next.js
 // App Router 의 RSC flight(self.__next_f.push([1,"…"])) 안에 **이중 인코딩**된

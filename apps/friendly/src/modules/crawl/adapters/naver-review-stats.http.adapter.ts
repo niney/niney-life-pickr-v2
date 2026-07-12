@@ -14,6 +14,8 @@
 //     남긴 리뷰(ratingReviewsTotal)를 뺀 값이라, displayReviewCount 로 그 차를 준다.
 //   - 실패는 throw 하지 않고 null 반환(미리보기 보강용 — best-effort).
 
+import { isObject } from '../../../lib/narrow.js';
+
 const ENDPOINT = 'https://api.place.naver.com/graphql';
 
 const MOBILE_UA =
@@ -52,9 +54,8 @@ export interface ReviewStatsOptions {
   signal?: AbortSignal;
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
+// lib/narrow 의 numOrNull 과 달리 "1,234" 같은 콤마 표기를 허용 — 네이버가
+// 카운트를 표시용 문자열로 주는 케이스 방어(로컬 변형으로 의도적 유지).
 const numOrNull = (v: unknown): number | null => {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string' && v.length > 0) {

@@ -24,6 +24,7 @@
 //     idx 로 dedup 한다. distance 와 함께도 정상 동작(라이브 검증).
 //   - 정렬은 RECOMMEND(기본)·DISTANCE·RATING 만 유효(그 외 ONLY_SORT 400).
 
+import { isObject, strOrNull, numOrNull, intOrNull, boolOf, httpUrlOrNull } from '../../../lib/narrow.js';
 import type {
   TablingSearchResultType,
   TablingSearchResponseType,
@@ -55,34 +56,6 @@ export class TablingSearchError extends Error {
     this.name = 'TablingSearchError';
   }
 }
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
-
-const httpUrlOrNull = (v: unknown): string | null => {
-  const s = strOrNull(v);
-  if (!s) return null;
-  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
-};
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
-
-const intOrNull = (v: unknown): number | null => {
-  const n = numOrNull(v);
-  return n !== null ? Math.trunc(n) : null;
-};
-
-const boolOf = (v: unknown): boolean => v === true;
 
 // classification(+classification2)를 단일 카테고리 문자열로. 둘째가 있고 첫째와
 // 다르면 " · " 결합("양식 · 이탈리안"), 없으면 첫째만.

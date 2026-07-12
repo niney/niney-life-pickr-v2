@@ -19,6 +19,7 @@
 //     → 광진구 본점). 좌표 검색 의미를 살리려면 어댑터에서 후필터링 필수.
 //     기본값으로 좌표+distance 가 모두 들어오면 strictDistance 적용.
 
+import { isObject, strOrNull, numOrNull } from '../../../lib/narrow.js';
 import { haversineM } from '@repo/utils';
 
 const ENDPOINT = 'https://im.diningcode.com/API/isearch/';
@@ -108,21 +109,6 @@ export class DiningcodeSearchError extends Error {
     this.name = 'DiningcodeSearchError';
   }
 }
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
 
 // "325" 처럼 string 으로 오는 카운트 → 숫자. 응답 비공식이라 string/number 혼재.
 const intOrZero = (v: unknown): number => {
@@ -383,7 +369,6 @@ const parseDistanceM = (raw: string | null): number | null => {
   if (!Number.isFinite(v)) return null;
   return m[2]!.toLowerCase() === 'km' ? v * 1000 : v;
 };
-
 
 const withinRadius = (
   item: DiningcodeSearchResult,

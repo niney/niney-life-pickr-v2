@@ -2,6 +2,7 @@
 // page.evaluate(() => window.scrollTo(...)) 같은 in-browser 콜백이 있어
 // DOM 타입이 필요. playwright 단독 import 시엔 그 패키지가 DOM 타입을
 // ambient 로 끌어오지만, playwright-extra 래퍼는 그렇지 않아 명시 reference.
+import { isObject } from '../../../lib/narrow.js';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -136,9 +137,6 @@ export class PlaceParseError extends Error {
     this.name = 'PlaceParseError';
   }
 }
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const isRef = (v: unknown): v is { __ref: string } => isObject(v) && typeof v['__ref'] === 'string';
 

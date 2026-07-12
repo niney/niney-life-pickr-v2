@@ -9,6 +9,7 @@
 // Playwright 불필요(캐치테이블과 대비). 좌표(lat/lng)가 응답에 들어와 머지에
 // 그대로 쓸 수 있다. 상세 근거: docs/research/tabling-crawl-feasibility.md.
 
+import { isObject, strOrNull, numOrNull, intOrNull, boolOf, strArray, httpUrlOrNull } from '../../../lib/narrow.js';
 import type {
   TablingShopDataType,
   TablingShopReviewType,
@@ -35,42 +36,7 @@ export class TablingShopError extends Error {
   }
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
-
-const httpUrlOrNull = (v: unknown): string | null => {
-  const s = strOrNull(v);
-  if (!s) return null;
-  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
-};
-
-const numOrNull = (v: unknown): number | null => {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  // 테이블링은 좌표를 string("37.54...") 으로 내려보낸다.
-  if (typeof v === 'string' && v.length > 0) {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-};
-
-const intOrNull = (v: unknown): number | null => {
-  const n = numOrNull(v);
-  return n !== null ? Math.trunc(n) : null;
-};
-
 const intOrZero = (v: unknown): number => intOrNull(v) ?? 0;
-
-const boolOf = (v: unknown): boolean => v === true;
-
-// string[] 만 통과, 그 외 빈 배열.
-const strArray = (v: unknown): string[] => {
-  if (!Array.isArray(v)) return [];
-  return v.filter((s): s is string => typeof s === 'string' && s.length > 0);
-};
 
 // ── 내부 GET 헬퍼 ────────────────────────────────────────────────────────
 
