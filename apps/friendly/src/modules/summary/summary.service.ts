@@ -6,7 +6,6 @@ import { normalizeTerm } from '../../lib/text.js';
 import { LLMUpstreamError, type LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { ReviewSearchService } from '../review-search/review-search.service.js';
-import type { ReviewClusteringService } from '../review-clustering/review-clustering.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import { summaryEventsBus, type SummaryEventsBus } from './summary-events-bus.js';
@@ -194,11 +193,9 @@ export interface SummaryServiceOptions {
   operationLog?: OperationLogService;
   // review-search enrich(관점/문맥/임베딩 영속). 주입되면 요약 종료 직후 해당 식당을
   // 자동 enrich(fire-and-forget) — 새로 크롤된 식당이 추가 조작 없이 검색/RAG 가능해진다.
-  // 미주입(테스트 등) 이면 훅 비활성.
+  // 미주입(테스트 등) 이면 훅 비활성. 군집화는 여기서 직접 잇지 않는다 — enrich 완료
+  // 이벤트에 배선돼(plugins/summaries.ts) 어드민 단건/일괄 enrich 완료에도 이어진다.
   reviewSearch?: ReviewSearchService;
-  // review-clustering — 주입되면 요약 종료 후 enrich 완료에 이어 군집화(배치)를 잇는다.
-  // enrich 가 임베딩을 채운 뒤라야 군집 계산이 가능하므로 enrich 다음에 체이닝한다.
-  clustering?: ReviewClusteringService;
 }
 
 // Background AI summarization. The crawl pipeline calls
@@ -1141,14 +1138,18 @@ export class SummaryService {
       },
       channel,
     );
-    // 요약 완료 직후 자동 enrich(관점/문맥/임베딩) → 군집화 — fire-and-forget. 요약이
-    // 끝난 뒤라 같은 ReviewSummary 행 동시 쓰기(SQLite lock) 없음. 멱등이라 이미 된 건 스킵.
-    // 실패는 warn 만(요약 결과엔 영향 없음). enrich 완료 후에야 군집화 가능 → 체이닝.
+    // 요약 완료 직후 자동 enrich(관점/문맥/임베딩) — fire-and-forget. 요약이 끝난 뒤라
+    // 같은 ReviewSummary 행 동시 쓰기(SQLite lock) 없음. 멱등이라 이미 된 건 스킵.
+    // 실패는 warn 만(요약 결과엔 영향 없음). 군집화는 여기서 직접 잇지 않는다 —
+    // enrich 완료 이벤트에 배선(plugins/summaries.ts). 과거엔 여기서 enrich→군집을
+    // 순차 await 했는데, enrich 가 이미 진행 중이면(다소스 요약 경합·어드민 enrich)
+    // ensureEnriched 가 no-op 즉시 반환 → 군집화가 미완 코퍼스 위에서 돌고 스킵된 뒤
+    // 재시도 경로가 없어 영영 "대기"로 남았다.
     //
     // ⚠️ placeId 인자는 크롤 요약 키라 소스별로 자유형(naver=placeId, diningcode='dc:..',
     // tabling='tb:..')이다. 그래서 placeId 로 canonical 을 풀면 비-네이버는 해석 실패 →
     // 자동 enrich/군집이 조용히 스킵됐다. reviewId 에서 실제 restaurantId 를 풀어 모든 소스 커버.
-    if ((this.opts.reviewSearch || this.opts.clustering) && reviewIds.length > 0) {
+    if (this.opts.reviewSearch && reviewIds.length > 0) {
       const firstReviewId = reviewIds[0]!;
       void (async () => {
         const rv = await this.prisma.visitorReview.findUnique({
@@ -1157,9 +1158,8 @@ export class SummaryService {
         });
         if (!rv) return;
         await this.opts.reviewSearch?.ensureEnrichedByRestaurantId(rv.restaurantId);
-        await this.opts.clustering?.ensureClusteredByRestaurantId(rv.restaurantId);
       })().catch((e) => {
-        this.log?.warn({ err: e, placeId }, '[summary] post-summary enrich/clustering 실패');
+        this.log?.warn({ err: e, placeId }, '[summary] post-summary enrich 실패');
       });
     }
 

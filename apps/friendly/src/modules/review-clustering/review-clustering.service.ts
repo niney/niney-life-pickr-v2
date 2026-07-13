@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import type { FastifyBaseLogger } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type {
   ClusterToneType,
@@ -37,6 +38,8 @@ const AUTO_ENABLED = (process.env.CLUSTER_AUTO_ENABLED ?? 'true') !== 'false';
 // 늘었을 때만 재군집(비용·라벨 churn 방지). 첫 군집·어드민 수동은 게이트 무시.
 const GATE_PCT = Number(process.env.CLUSTER_GATE_PCT) || 0.2;
 const GATE_MIN = Number(process.env.CLUSTER_GATE_MIN) || 20;
+// 기동 리컨실 지연 — 부팅 직후 마이그레이션/워밍업과 겹치지 않게 잠시 늦춘다.
+const RECONCILE_DELAY_MS = Number(process.env.CLUSTER_RECONCILE_DELAY_MS) || 60_000;
 const MIN_CLUSTER_SIZE = Number(process.env.CLUSTER_MIN_SIZE) || 8; // probe sweet spot(절대값).
 // 극성 주입(probe 2): 부정 리뷰가 충분(군집 형성 가능)할 때만 임베딩에 aspect 극성을
 // 가중 결합 → 부정("단점") 군집 회수(neg_recall 0→0.84). 부정 적은 식당엔 주입 안 함
@@ -400,6 +403,23 @@ export class ReviewClusteringService {
       for (const id of pending) await this.runTracked(id); // 순차 — runTracked 가 중복 가드
     })();
     return { queued: pending.length };
+  }
+
+  // 기동 리컨실 — 자동 체인(요약→enrich→군집)은 원샷이라 재시작/배포로 중간에 끊기면
+  // 그 식당은 재시도 경로 없이 영영 "대기"로 남았다(운영에서 다수 확인). 기동 후 일정
+  // 지연 뒤 미군집 백로그를 일괄 군집화해 자체 회복한다. 시도가 다시 돌므로 인메모리
+  // lastReason 도 재충전 — 실패(계산 엔진 오류 등) 원인이 상태 페이지에 다시 보인다.
+  // AUTO_ENABLED=false 면 비활성(수동 운영 모드). unref — 프로세스 종료를 막지 않는다.
+  scheduleStartupReconcile(log?: FastifyBaseLogger): void {
+    if (!AUTO_ENABLED) return;
+    setTimeout(() => {
+      void this.clusterAllEligibleInBackground()
+        .then((r) => {
+          if (r.queued > 0)
+            log?.info({ queued: r.queued }, '[clustering] 기동 리컨실 — 미군집 백로그 군집화 시작');
+        })
+        .catch((e) => log?.warn({ err: e }, '[clustering] 기동 리컨실 실패'));
+    }, RECONCILE_DELAY_MS).unref();
   }
 
   // 진행상태 Set 에 등록하고 실행. 중복 시 no-op. (어드민 수동·일괄·자동 공용 가드.)
