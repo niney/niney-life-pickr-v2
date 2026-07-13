@@ -50,8 +50,7 @@ export const Crawl = {
   catchtableSearch: `${API_PREFIX}/admin/crawl/catchtable/search`,
   // 캐치테이블 가게 상세 (가벼운 미리보기) — 검색 결과 카드에서 "상세 보기"
   // 클릭 시 같은 페이지의 모달에서 펼침.
-  catchtableShop: (shopRef: string) =>
-    `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}`,
+  catchtableShop: (shopRef: string) => `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}`,
   // 캐치테이블 가게 메뉴 — lazy 페치 (상세 페이지에서 "메뉴 불러오기" 클릭 시).
   catchtableShopMenus: (shopRef: string) =>
     `${API_PREFIX}/admin/crawl/catchtable/shop/${shopRef}/menus`,
@@ -63,16 +62,14 @@ export const Crawl = {
   diningcodeSearch: `${API_PREFIX}/admin/crawl/diningcode/search`,
   // 다이닝코드 가게 상세 — POST /API/profile/ 한 방에 메뉴·사진·리뷰 첫 페이지·
   // 블로그·평점 분포 모두 옴. 검색 카드의 "상세 보기" 가 이 경로 호출.
-  diningcodeShop: (vRid: string) =>
-    `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}`,
+  diningcodeShop: (vRid: string) => `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}`,
   // 다이닝코드 리뷰 페이지네이션 — 같은 /API/profile/ 에 tab=review&page=N
   // 으로 호출. 응답이 16섹션 모두 오지만 어댑터가 review 만 추려서 가볍게 반환.
   diningcodeShopReviews: (vRid: string) =>
     `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/reviews`,
   // 다이닝코드 가게를 DB 에 저장(+모든 리뷰 페이지 끌어와 persist + AI 분석 큐잉).
   // POST. 어드민 상세 페이지의 "DB 에 저장" 버튼이 호출.
-  diningcodeShopSave: (vRid: string) =>
-    `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/save`,
+  diningcodeShopSave: (vRid: string) => `${API_PREFIX}/admin/crawl/diningcode/shop/${vRid}/save`,
   // 정식 /admin/diningcode 페이지 — 검색 결과 카드의 '등록됨' 배지용. vRid 다수를
   // 한 번에 조회. ids=콤마 분리.
   diningcodeRegistered: `${API_PREFIX}/admin/crawl/diningcode/registered`,
@@ -87,14 +84,11 @@ export const Crawl = {
   // 별개로 키워드로 partner idx 를 바로 찾는다. ?q=&cursor=&pageSize=&sort=.
   tablingSearch: `${API_PREFIX}/admin/crawl/tabling/search`,
   // 가게 상세 — GET /v1/restaurant/:idx + /menu + /review 합본. /admin/tabling-test.
-  tablingShop: (idx: string) =>
-    `${API_PREFIX}/admin/crawl/tabling/shop/${idx}`,
+  tablingShop: (idx: string) => `${API_PREFIX}/admin/crawl/tabling/shop/${idx}`,
   // 리뷰 커서 페이지네이션 — ?cursor=<응답 nextCursor>.
-  tablingShopReviews: (idx: string) =>
-    `${API_PREFIX}/admin/crawl/tabling/shop/${idx}/reviews`,
+  tablingShopReviews: (idx: string) => `${API_PREFIX}/admin/crawl/tabling/shop/${idx}/reviews`,
   // 가게를 DB 저장(+리뷰 persist + AI 큐 + 좌표 기반 로컬 canonical 자동매칭). POST.
-  tablingShopSave: (idx: string) =>
-    `${API_PREFIX}/admin/crawl/tabling/shop/${idx}/save`,
+  tablingShopSave: (idx: string) => `${API_PREFIX}/admin/crawl/tabling/shop/${idx}/save`,
   // 미입점 place(JSON-LD 얕은 티어) 저장. POST.
   tablingPlaceSave: (objectId: string) =>
     `${API_PREFIX}/admin/crawl/tabling/place/${objectId}/save`,
@@ -105,8 +99,7 @@ export const Crawl = {
   tablingDiscover: `${API_PREFIX}/admin/crawl/tabling/discover`,
   // 일괄 저장 잡 — 발견에서 다수 선택 후 한 번에 저장. 진행률은 SSE.
   tablingBulkSaveJobs: `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs`,
-  tablingBulkSaveJob: (id: string) =>
-    `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs/${id}`,
+  tablingBulkSaveJob: (id: string) => `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs/${id}`,
   tablingBulkSaveJobEvents: (id: string) =>
     `${API_PREFIX}/admin/crawl/tabling/bulk-save/jobs/${id}/events`,
 } as const;
@@ -116,17 +109,17 @@ export const Restaurant = {
   ranking: `${API_PREFIX}/restaurants/ranking`,
   // 공개 식당 리스트(지도 페이지). 좌표·대표 이미지·AI 통계 포함.
   publicList: `${API_PREFIX}/restaurants/public`,
-  publicByPlaceId: (placeId: string) =>
-    `${API_PREFIX}/restaurants/public/${placeId}`,
-  publicInsights: (placeId: string) =>
-    `${API_PREFIX}/restaurants/public/${placeId}/insights`,
+  publicByPlaceId: (placeId: string) => `${API_PREFIX}/restaurants/public/${placeId}`,
+  publicInsights: (placeId: string) => `${API_PREFIX}/restaurants/public/${placeId}/insights`,
   // 이 식당의 언급 메뉴를 카테고리 계층 트리로. 멘션 횟수 + 긍/부 누적.
   publicCategoryTree: (placeId: string) =>
     `${API_PREFIX}/restaurants/public/${placeId}/category-tree`,
   // 페이지네이션 방문자 리뷰. detail 응답엔 reviewsFirstPage (10개) 만 동봉되고
   // 나머지는 여기서 offset/limit + sentiment/sort 로 가져온다.
-  publicReviews: (placeId: string) =>
-    `${API_PREFIX}/restaurants/public/${placeId}/reviews`,
+  publicReviews: (placeId: string) => `${API_PREFIX}/restaurants/public/${placeId}/reviews`,
+  // 공개 가중 랜덤 픽 — 홈 "오늘 뭐 먹지?" 슬롯. 어드민 smartPick 과 같은 서비스를
+  // 입력만 바운드해 무인증으로 연다. POST — 후보 200개 placeId 배열이 URL 한도를 넘는다.
+  publicSmartPick: `${API_PREFIX}/restaurants/public/smart-pick`,
   list: `${API_PREFIX}/admin/restaurants`,
   byPlaceId: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
@@ -139,8 +132,7 @@ export const Restaurant = {
   summaryEvents: `${API_PREFIX}/admin/restaurants/summary-events`,
   // analysisVersion 이 비었거나 구버전인 done/failed 행을 다시 큐잉.
   // 재크롤 없이 새 분석 스키마를 기존 리뷰에 채울 때 쓴다.
-  reanalyze: (placeId: string) =>
-    `${API_PREFIX}/admin/restaurants/place/${placeId}/reanalyze`,
+  reanalyze: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}/reanalyze`,
   // 이 가게의 진행 중인 요약 작업을 중지. queued/pending 행을 'cancelled' 로
   // 마킹 + chain 클리어. 진행 중 청크는 끝까지 흘러간 뒤 자연 종료. 부팅
   // 자동 재큐잉에서도 cancelled 는 제외.
@@ -156,8 +148,7 @@ export const Restaurant = {
   reviewResummarize: (reviewId: string) =>
     `${API_PREFIX}/admin/restaurants/review/${reviewId}/resummarize`,
   // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
-  insights: (placeId: string) =>
-    `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,
+  insights: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,
   // 기존 done 행의 menusJson/tipsJson/keywordsJson 을 정규화 분석 테이블
   // (menu_mentions / review_tags) 로 풀어쓰는 일회성 백필. LLM 재호출 없이
   // 이미 저장된 분석을 그대로 사용 — 분석 스키마 변경 없이 통계 인덱스만
@@ -165,8 +156,7 @@ export const Restaurant = {
   analyticsBackfill: `${API_PREFIX}/admin/restaurants/analytics/backfill`,
   // 단일 식당 메뉴 그룹핑 — distinct nameNorm 들을 LLM 으로 canonical 그룹에
   // 매핑. 동기 응답 (보통 2~5초). 미분류 메뉴가 있는 식당 상세에서 호출.
-  menusGroup: (placeId: string) =>
-    `${API_PREFIX}/admin/restaurants/place/${placeId}/menus/group`,
+  menusGroup: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}/menus/group`,
   // 메뉴 그룹핑 결과 + 긍/부 카운트 순위. canonical 매핑 없는 nameNorm 은
   // 자기 자신을 그룹키로 fallback 처리하고 unmappedMenus 에도 같이 노출.
   menusRanking: (placeId: string) =>
@@ -177,8 +167,7 @@ export const Restaurant = {
   smartPick: `${API_PREFIX}/admin/restaurants/smart-pick`,
   // placeId 단위 누적 크롤 로그. 같은 가게의 여러 잡(과거 재크롤 포함)이 한
   // 흐름으로 보임. 상세 페이지 "크롤 로그" 아코디언이 호출.
-  crawlLogs: (placeId: string) =>
-    `${API_PREFIX}/admin/restaurants/place/${placeId}/crawl-logs`,
+  crawlLogs: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}/crawl-logs`,
   // 등록된 가게(canonical)의 시/도·시군구별 분포 집계 — 어드민 홈 대시보드의
   // 지역 통계 위젯이 호출. 주소 파싱 + 좌표 폴백으로 시군구를 파생해 집계한다.
   regionStats: `${API_PREFIX}/admin/restaurants/region-stats`,
@@ -188,24 +177,20 @@ export const Restaurant = {
 // 후보 보고 수동 확정. 자동 매칭은 의도적으로 안 함.
 export const Canonical = {
   // 후보 조회 — 좌표/이름 매칭 점수 임계 통과한 다른 canonical 들.
-  candidates: (id: string) =>
-    `${API_PREFIX}/admin/canonical/${id}/candidates`,
+  candidates: (id: string) => `${API_PREFIX}/admin/canonical/${id}/candidates`,
   // 두 canonical 통합. body: { sourceCanonicalId, targetCanonicalId }
   merge: `${API_PREFIX}/admin/canonical/merge`,
   // canonical 분리 — 한 Restaurant 만 새 canonical 로 떼어냄.
   // body: { restaurantId }
   split: (id: string) => `${API_PREFIX}/admin/canonical/${id}/split`,
   // list 응답에 1차 매칭 제안이 끼는 걸 영구 닫기. body 없음.
-  dismissSuggestion: (id: string) =>
-    `${API_PREFIX}/admin/canonical/${id}/suggestion/dismiss`,
+  dismissSuggestion: (id: string) => `${API_PREFIX}/admin/canonical/${id}/suggestion/dismiss`,
   // 자동 매칭 큐 — 두 canonical 이 같은 가게일 수 있다는 검토 대기 쌍.
   proposals: `${API_PREFIX}/admin/canonical/proposals`,
   // 전수 재계산. 어드민 "전체 다시 돌리기" 버튼.
   proposalsRun: `${API_PREFIX}/admin/canonical/proposals/run`,
-  proposalAccept: (id: string) =>
-    `${API_PREFIX}/admin/canonical/proposals/${id}/accept`,
-  proposalReject: (id: string) =>
-    `${API_PREFIX}/admin/canonical/proposals/${id}/reject`,
+  proposalAccept: (id: string) => `${API_PREFIX}/admin/canonical/proposals/${id}/accept`,
+  proposalReject: (id: string) => `${API_PREFIX}/admin/canonical/proposals/${id}/reject`,
   // canonical 행 통째로 삭제 — DC만 등록된 행도 지울 수 있게 placeId 기반 라우트와
   // 별개로 신설. FK Cascade 로 Restaurant/review/summary/proposal 모두 따라간다.
   delete: (id: string) => `${API_PREFIX}/admin/canonical/${id}`,
@@ -221,8 +206,7 @@ export const Analytics = {
   // 잡 스냅샷 조회 (재접속/새로고침 직후 SSE 보다 먼저 호출).
   groupingJob: (id: string) => `${API_PREFIX}/admin/analytics/grouping-jobs/${id}`,
   // 잡 진행 SSE — 식당별 done/failed event push.
-  groupingJobEvents: (id: string) =>
-    `${API_PREFIX}/admin/analytics/grouping-jobs/${id}/events`,
+  groupingJobEvents: (id: string) => `${API_PREFIX}/admin/analytics/grouping-jobs/${id}/events`,
   // ── 글로벌 (식당 가로지르기) ────────────────────────────────────
   // 대시보드 카드용 핵심 카운터.
   overview: `${API_PREFIX}/admin/analytics/overview`,
@@ -230,8 +214,7 @@ export const Analytics = {
   globalMenus: `${API_PREFIX}/admin/analytics/global-menus`,
   // 글로벌 머지 잡 시작 (body: {full:boolean}) + 스냅샷 + SSE.
   globalMergeJobs: `${API_PREFIX}/admin/analytics/global-merge-jobs`,
-  globalMergeJob: (id: string) =>
-    `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}`,
+  globalMergeJob: (id: string) => `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}`,
   globalMergeJobEvents: (id: string) =>
     `${API_PREFIX}/admin/analytics/global-merge-jobs/${id}/events`,
   // 카테고리 트리 — 글로벌 머지 이후 채워진 categoryPath 기반 누적 통계.
@@ -261,10 +244,8 @@ export const AutoDiscover = {
   jobs: `${API_PREFIX}/admin/auto-discover/jobs`,
   job: (id: string) => `${API_PREFIX}/admin/auto-discover/jobs/${id}`,
   // 후보 리스트 확인 후 등록(크롤) 시작 — awaiting_confirmation 해제.
-  jobConfirm: (id: string) =>
-    `${API_PREFIX}/admin/auto-discover/jobs/${id}/confirm`,
-  jobEvents: (id: string) =>
-    `${API_PREFIX}/admin/auto-discover/jobs/${id}/events`,
+  jobConfirm: (id: string) => `${API_PREFIX}/admin/auto-discover/jobs/${id}/confirm`,
+  jobEvents: (id: string) => `${API_PREFIX}/admin/auto-discover/jobs/${id}/events`,
 } as const;
 
 // 맛집 자동 발굴 — cron 으로 지역을 (랜덤/고정) 골라 검색 → 후보를 텔레그램
@@ -293,8 +274,7 @@ export const Ai = {
   complete: `${API_PREFIX}/admin/ai/complete`,
   completeBatch: `${API_PREFIX}/admin/ai/complete-batch`,
   providers: `${API_PREFIX}/admin/ai/providers`,
-  provider: (id: string, purpose: string) =>
-    `${API_PREFIX}/admin/ai/providers/${id}/${purpose}`,
+  provider: (id: string, purpose: string) => `${API_PREFIX}/admin/ai/providers/${id}/${purpose}`,
   testProvider: (id: string, purpose: string) =>
     `${API_PREFIX}/admin/ai/providers/${id}/${purpose}/test`,
   providerModels: (id: string, purpose: string) =>
@@ -351,8 +331,7 @@ export const SettingsTelegram = {
 export const SettlementExtraction = {
   upload: `${API_PREFIX}/settlement-extraction/upload`,
   extract: `${API_PREFIX}/settlement-extraction/extract`,
-  preview: (token: string) =>
-    `${API_PREFIX}/settlement-extraction/preview/${token}`,
+  preview: (token: string) => `${API_PREFIX}/settlement-extraction/preview/${token}`,
 } as const;
 
 // 정산 세션 — 로그인 사용자 본인만 사용한다. list/get/delete 모두 소유자

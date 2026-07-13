@@ -32,6 +32,8 @@ export const RATE = {
   // 실시간 대중교통 프록시(도착/위치/시간표) — 업스트림 일일 쿼터 보호. 30s 폴링
   // 다수 항목도 여유롭게 흡수(분당 60 = 30개 항목 동시 폴링분).
   transitRealtime: { max: 60, timeWindow: '1 minute' },
+  // 공개 스마트 픽 — DB 2쿼리로 싸지만 무인증 POST. 재굴리기 연타 + CGNAT 고려 분당 60.
+  publicPick: { max: 60, timeWindow: '1 minute' },
   // 공개 리뷰 질문 — 비싼 임베딩/LLM 파이프라인. 기존 인메모리 한도(15/분) 유지.
   publicAsk: { max: 15, timeWindow: '1 minute' },
   // 공개 공유 정산 조회 — 토큰 추측 억제. 기존 인메모리 한도(120/분) 유지.

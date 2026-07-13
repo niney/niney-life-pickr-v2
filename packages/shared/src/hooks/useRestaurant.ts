@@ -15,6 +15,7 @@ import type {
   RestaurantPublicListQueryType,
   RestaurantPublicListResultType,
   RestaurantPublicReviewsResultType,
+  RestaurantPublicSmartPickInputType,
   RestaurantPublicReviewSentimentType,
   RestaurantPublicReviewSortType,
   RestaurantRankingQueryType,
@@ -28,13 +29,9 @@ import { recomputeCanonicalAggregates } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
 import { restaurantApi } from '../api/restaurant.api.js';
 import { summarySseManager } from './summarySseManager.js';
-import {
-  useResummarizeStore,
-  type ResummarizeInFlight,
-} from '../stores/resummarizeStore.js';
+import { useResummarizeStore, type ResummarizeInFlight } from '../stores/resummarizeStore.js';
 
-const isNotFound = (e: unknown): boolean =>
-  e instanceof ApiError && e.statusCode === 404;
+const isNotFound = (e: unknown): boolean => e instanceof ApiError && e.statusCode === 404;
 
 // SSE summary snapshot 이 도착했을 때 어드민 list (`['restaurant', 'list']`)
 // 와 공개 list (`['restaurant', 'public', 'list', ...]`) 양쪽 캐시의 해당 행을
@@ -80,8 +77,7 @@ const patchSummaryInListCaches = (
   // 공개 list 는 placeId 가 key — DC source 이벤트(placeId=null)는 공개 list
   // 행에 직접 매칭 안 됨. 단 그런 이벤트도 합산 카운트의 변경분(예: DC 쪽 done
   // +1)을 같은 canonical 의 Naver placeId 행에 반영해야 라이브가 정확.
-  const targetPlaceId =
-    snap.placeId ?? prev?.placeId ?? null;
+  const targetPlaceId = snap.placeId ?? prev?.placeId ?? null;
   // prev/snap 모두 placeId 가 없으면 어느 행에 적용할지 알 수 없음 — skip.
   // (DC source 의 첫 catch-up 이 이 케이스. 다음 이벤트부터는 prev 가 채워져
   // 정상 delta 적용.)
@@ -90,8 +86,7 @@ const patchSummaryInListCaches = (
   const dRunning = snap.running - (prev?.running ?? snap.running);
   const dDone = snap.done - (prev?.done ?? snap.done);
   const dFailed = snap.failed - (prev?.failed ?? snap.failed);
-  const allZero =
-    dTotal === 0 && dPending === 0 && dRunning === 0 && dDone === 0 && dFailed === 0;
+  const allZero = dTotal === 0 && dPending === 0 && dRunning === 0 && dDone === 0 && dFailed === 0;
   if (allZero) return;
   // delta 적용은 같은 canonical 의 어떤 placeId 행에 해야 한다. 공개 list 는
   // Naver placeId 만 노출하므로 그 placeId 를 알아야 함. snap.placeId 가 있으면
@@ -130,17 +125,9 @@ const patchSummaryInListCaches = (
 // 페이징 — queryKey 에 limit/offset/sort 가 들어가서 페이지/정렬 변경마다 다른
 // 캐시 인스턴스. placeholderData 로 페이지 전환 시 깜빡임 방지. SSE patch 는
 // 모든 인스턴스를 prefix 매칭으로 갱신 (patchSummaryInListCaches 참고).
-export const useRestaurantList = (
-  query: Partial<RestaurantListQueryType> = {},
-) =>
+export const useRestaurantList = (query: Partial<RestaurantListQueryType> = {}) =>
   useQuery({
-    queryKey: [
-      'restaurant',
-      'list',
-      query.limit ?? 25,
-      query.offset ?? 0,
-      query.sort ?? 'recent',
-    ],
+    queryKey: ['restaurant', 'list', query.limit ?? 25, query.offset ?? 0, query.sort ?? 'recent'],
     queryFn: () => restaurantApi.list(query),
     placeholderData: (prev) => prev,
   });
@@ -212,6 +199,14 @@ export const useRestaurantPublic = (placeId: string | null) =>
     },
     enabled: !!placeId,
     staleTime: 60_000,
+  });
+
+// 공개 가중 랜덤 픽 — 사용자 트리거(굴리기 버튼) 액션이라 mutation. 매 굴림이
+// 새 랜덤이어야 하므로 캐싱하지 않는다.
+export const useRestaurantSmartPick = () =>
+  useMutation({
+    mutationFn: (input: Partial<RestaurantPublicSmartPickInputType>) =>
+      restaurantApi.publicSmartPick(input),
   });
 
 // 공개 식당 방문자 리뷰 페이지네이션. detail 응답엔 reviewsFirstPage(10) 만
@@ -421,21 +416,19 @@ export const useRestaurantSummaryEvents = (
     return summarySseManager.subscribe(
       { kind: 'place', placeId },
       {
-      onSnapshot: (snap, prev) => {
-        setData(snap);
-        // 리스트 캐시도 같이 갱신 — 디테일에서 진행이 발생하면 리스트 행 배지도
-        // 함께 stale 해소.
-        patchSummaryInListCaches(qc, snap, prev);
-      },
-      onReview: (ev) => {
-        // 자신의 placeId 가 아닌 review (=같은 canonical 의 다른 source) 는 무시.
-        if (ev.placeId !== placeId) return;
-        // Per-row patch — merge the new summary directly into the detail
-        // cache. Without this we'd have to invalidate the whole detail query
-        // (which carries every review body) every time one summary lands.
-        qc.setQueryData<RestaurantDetailType | null>(
-          ['restaurant', placeId],
-          (prev) => {
+        onSnapshot: (snap, prev) => {
+          setData(snap);
+          // 리스트 캐시도 같이 갱신 — 디테일에서 진행이 발생하면 리스트 행 배지도
+          // 함께 stale 해소.
+          patchSummaryInListCaches(qc, snap, prev);
+        },
+        onReview: (ev) => {
+          // 자신의 placeId 가 아닌 review (=같은 canonical 의 다른 source) 는 무시.
+          if (ev.placeId !== placeId) return;
+          // Per-row patch — merge the new summary directly into the detail
+          // cache. Without this we'd have to invalidate the whole detail query
+          // (which carries every review body) every time one summary lands.
+          qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (prev) => {
             if (!prev) return prev;
             const reviews = prev.reviews.map((r) =>
               r.id === ev.reviewId
@@ -460,14 +453,14 @@ export const useRestaurantSummaryEvents = (
                 : r,
             );
             return { ...prev, reviews };
-          },
-        );
+          });
+        },
+        onLog: (ev) => {
+          if (ev.placeId !== placeId) return;
+          onLogRef.current?.(ev);
+        },
       },
-      onLog: (ev) => {
-        if (ev.placeId !== placeId) return;
-        onLogRef.current?.(ev);
-      },
-    });
+    );
   }, [placeId, qc]);
 
   return { data };
@@ -543,10 +536,7 @@ export const useResummarizeReview = (placeId: string | null) => {
 //   3) store 에서 제거 → 버튼 잠금 해제
 // ReviewsTab 과 독립이라 사용자가 어디로 이동해도 동작한다.
 export const useResummarizeWatcher = (opts: {
-  onResult: (
-    ev: RestaurantSummaryReviewEventType,
-    inFlight: ResummarizeInFlight,
-  ) => void;
+  onResult: (ev: RestaurantSummaryReviewEventType, inFlight: ResummarizeInFlight) => void;
 }): void => {
   const qc = useQueryClient();
   const items = useResummarizeStore((s) => s.items);
@@ -556,9 +546,7 @@ export const useResummarizeWatcher = (opts: {
   }, [opts.onResult]);
 
   // 구독해야 할 distinct placeId 들. 안정 키로 묶어 set 이 바뀔 때만 재구독.
-  const placeIds = Array.from(
-    new Set(Object.values(items).map((it) => it.placeId)),
-  );
+  const placeIds = Array.from(new Set(Object.values(items).map((it) => it.placeId)));
   const key = placeIds.slice().sort().join(',');
 
   useEffect(() => {

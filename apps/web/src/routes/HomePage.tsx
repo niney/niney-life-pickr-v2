@@ -4,6 +4,7 @@ import { useRestaurantRanking } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
+import { SmartPickSection } from '~/components/restaurant/SmartPickSection';
 
 const PAGE_SIZE = 20;
 
@@ -40,8 +41,10 @@ export const HomePage = () => {
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
+      <SmartPickSection />
+
       <header className="mb-6 flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">맛집 랭킹</h1>
+        <h2 className="text-2xl font-bold tracking-tight">맛집 랭킹</h2>
         <p className="text-sm text-muted-foreground">
           AI가 분석한 리뷰의 긍정/부정 비율로 정렬한 식당 랭킹입니다. 멘션 5건 이상.
         </p>
@@ -71,9 +74,7 @@ export const HomePage = () => {
       {ranking.isLoading ? (
         <p className="py-12 text-center text-sm text-muted-foreground">불러오는 중…</p>
       ) : ranking.isError ? (
-        <p className="py-12 text-center text-sm text-destructive">
-          랭킹을 불러오지 못했습니다.
-        </p>
+        <p className="py-12 text-center text-sm text-destructive">랭킹을 불러오지 못했습니다.</p>
       ) : items.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
           조건에 맞는 식당이 아직 없습니다.
@@ -198,7 +199,9 @@ const RankingRow = ({ item, sort }: RankingRowProps) => {
               <div
                 className={cn(
                   'shrink-0 text-lg font-bold tabular-nums',
-                  sort === 'positive' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+                  sort === 'positive'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-rose-600 dark:text-rose-400',
                 )}
               >
                 {Math.round(item.score * 100)}%
@@ -212,7 +215,9 @@ const RankingRow = ({ item, sort }: RankingRowProps) => {
             </div>
 
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
-              <span className="text-emerald-600 dark:text-emerald-400">긍정 {item.positiveCount}</span>
+              <span className="text-emerald-600 dark:text-emerald-400">
+                긍정 {item.positiveCount}
+              </span>
               <span>중립 {item.neutralCount}</span>
               <span className="text-rose-600 dark:text-rose-400">부정 {item.negativeCount}</span>
               <span>· 총 {item.totalMentions}</span>

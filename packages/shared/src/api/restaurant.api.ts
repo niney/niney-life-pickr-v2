@@ -16,6 +16,8 @@ import {
   type RestaurantPublicListResultType,
   type RestaurantPublicReviewsQueryType,
   type RestaurantPublicReviewsResultType,
+  type RestaurantPublicSmartPickInputType,
+  type RestaurantSmartPickResultType,
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
   type RestaurantReanalyzeResultType,
@@ -60,9 +62,7 @@ export const restaurantApi = {
     if (query.offset !== undefined) params.set('offset', String(query.offset));
     if (query.sort) params.set('sort', query.sort);
     const qs = params.toString();
-    return apiFetch<RestaurantListResultType>(
-      `${Routes.Restaurant.list}${qs ? `?${qs}` : ''}`,
-    );
+    return apiFetch<RestaurantListResultType>(`${Routes.Restaurant.list}${qs ? `?${qs}` : ''}`);
   },
 
   ranking: (query: Partial<RestaurantRankingQueryType> = {}) => {
@@ -121,17 +121,22 @@ export const restaurantApi = {
   publicInsights: (placeId: string) =>
     apiFetch<RestaurantInsightsType>(Routes.Restaurant.publicInsights(placeId)),
 
+  // 공개 가중 랜덤 픽 — 홈 "오늘 뭐 먹지?" 슬롯머신. 무인증 POST.
+  // strategy 는 서버 zod default(balanced)가 채우므로 Partial (publicList 관례).
+  publicSmartPick: (input: Partial<RestaurantPublicSmartPickInputType> = {}) =>
+    apiFetch<RestaurantSmartPickResultType>(Routes.Restaurant.publicSmartPick, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
   publicCategoryTree: (placeId: string) =>
-    apiFetch<RestaurantCategoryTreeResultType>(
-      Routes.Restaurant.publicCategoryTree(placeId),
-    ),
+    apiFetch<RestaurantCategoryTreeResultType>(Routes.Restaurant.publicCategoryTree(placeId)),
 
   getByPlaceId: (placeId: string) =>
     apiFetch<RestaurantDetailType>(Routes.Restaurant.byPlaceId(placeId)),
 
   // 어드민 홈 대시보드 지역 통계 — 시/도·시군구별 가게 분포 집계.
-  regionStats: () =>
-    apiFetch<RegionStatsResultType>(Routes.Restaurant.regionStats),
+  regionStats: () => apiFetch<RegionStatsResultType>(Routes.Restaurant.regionStats),
 
   getSummaryStatus: (placeId: string) =>
     apiFetch<RestaurantSummaryProgressType>(Routes.Restaurant.summaryStatus(placeId)),
@@ -149,26 +154,24 @@ export const restaurantApi = {
   // 이 가게의 진행 중인 요약 작업 중지. queued/pending 행을 'cancelled' 로
   // 마킹 + chain 클리어. 진행 중 청크는 끝까지 흘러간다.
   cancelSummary: (placeId: string) =>
-    apiFetch<RestaurantCancelSummaryResultType>(
-      Routes.Restaurant.cancelSummary(placeId),
-      { method: 'POST' },
-    ),
+    apiFetch<RestaurantCancelSummaryResultType>(Routes.Restaurant.cancelSummary(placeId), {
+      method: 'POST',
+    }),
 
   // 중지(cancelled)된 행만 골라 다시 큐잉. failed 행은 손대지 않으므로
   // reanalyze 와 명확히 분리된 의도 — "내가 멈췄던 것만 이어서".
   resumeSummary: (placeId: string) =>
-    apiFetch<RestaurantResumeSummaryResultType>(
-      Routes.Restaurant.resumeSummary(placeId),
-      { method: 'POST' },
-    ),
+    apiFetch<RestaurantResumeSummaryResultType>(Routes.Restaurant.resumeSummary(placeId), {
+      method: 'POST',
+    }),
 
   // 단건 리뷰를 고른 모델로 다시 요약. 모델은 1회성 — 전역 defaultModel 은
   // 안 바뀐다. 진행/결과는 summary-events SSE 로 흘러온다.
   resummarizeReview: (reviewId: string, model: string) =>
-    apiFetch<ReviewResummarizeResultType>(
-      Routes.Restaurant.reviewResummarize(reviewId),
-      { method: 'POST', body: JSON.stringify({ model }) },
-    ),
+    apiFetch<ReviewResummarizeResultType>(Routes.Restaurant.reviewResummarize(reviewId), {
+      method: 'POST',
+      body: JSON.stringify({ model }),
+    }),
 
   // placeId 단위 누적 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언이 호출.
   // 한 가게의 모든 잡(과거 재크롤 포함) 가로지름. cursor pagination.
@@ -192,9 +195,7 @@ export const restaurantApi = {
     if (stage) params.set('stage', stage);
     const qs = params.toString();
     const sep = qs ? '?' : '';
-    return apiFetch<CrawlJobLogsResultType>(
-      `${Routes.Restaurant.crawlLogs(placeId)}${sep}${qs}`,
-    );
+    return apiFetch<CrawlJobLogsResultType>(`${Routes.Restaurant.crawlLogs(placeId)}${sep}${qs}`);
   },
 };
 
@@ -204,9 +205,10 @@ export const restaurantApi = {
 // number of placeIds + canonicalIds over a single connection.
 // canonicalId 는 한 가게의 모든 source(Naver+DC) 를 한 번에 구독 — 리스트 화면용.
 // placeId 는 단일 Naver 행 — 디테일 페이지용 (기존 흐름 유지).
-export const buildSummaryEventsUrl = async (
-  keys: { placeIds?: string[]; canonicalIds?: string[] },
-): Promise<string> => {
+export const buildSummaryEventsUrl = async (keys: {
+  placeIds?: string[];
+  canonicalIds?: string[];
+}): Promise<string> => {
   const cfg = getApiConfig();
   const token = (await cfg.getToken?.()) ?? '';
   const params = new URLSearchParams();

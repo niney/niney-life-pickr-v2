@@ -332,6 +332,14 @@ export const RestaurantSmartPickInput = z.object({
 });
 export type RestaurantSmartPickInputType = z.infer<typeof RestaurantSmartPickInput>;
 
+// 공개 스마트 픽 입력 — 무인증 표면이라 후보 배열을 계약으로 바운드(상한 200 =
+// publicList limit 최대와 정렬). 응답은 어드민과 동일한 RestaurantSmartPickResult.
+export const RestaurantPublicSmartPickInput = z.object({
+  candidatePlaceIds: z.array(z.string().min(1).max(64)).max(200).optional(),
+  strategy: z.enum(['balanced', 'satisfaction', 'positive']).default('balanced'),
+});
+export type RestaurantPublicSmartPickInputType = z.infer<typeof RestaurantPublicSmartPickInput>;
+
 export const RestaurantSmartPickResult = z.object({
   // 후보가 없거나 모두 가중치 0이면 picked = null.
   picked: z

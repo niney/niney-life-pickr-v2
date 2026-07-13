@@ -21,6 +21,7 @@ import {
   RestaurantPublicListResult,
   RestaurantPublicReviewsQuery,
   RestaurantPublicReviewsResult,
+  RestaurantPublicSmartPickInput,
   RestaurantRankingQuery,
   RestaurantRankingResult,
   RestaurantReanalyzeResult,
@@ -35,11 +36,9 @@ import {
   type CrawlLogLevelType,
 } from '@repo/api-contract';
 import { RestaurantService } from './restaurant.service.js';
+import { RATE } from '../../plugins/rate-limit.js';
 import { jobRegistry } from '../crawl/job-registry.js';
-import {
-  summaryEventsBus,
-  type SummarySignal,
-} from '../summary/summary-events-bus.js';
+import { summaryEventsBus, type SummarySignal } from '../summary/summary-events-bus.js';
 import { MenuGroupingError, MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
 
 // OperationLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
@@ -143,6 +142,19 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       if (roots === null) throw app.httpErrors.notFound('Restaurant not found');
       return { roots };
     },
+  });
+
+  // 공개 가중 랜덤 픽 — 홈 "오늘 뭐 먹지?" 슬롯머신. 서비스는 어드민 smartPick
+  // 그대로(source:'naver' 필터, 분석 0 후보 자동 배제, 전부 0이면 picked:null).
+  // 무인증 POST 라 입력은 바운드된 공개 스키마 + 레이트리밋으로 조인다.
+  typed.post(Routes.Restaurant.publicSmartPick, {
+    config: { rateLimit: RATE.publicPick },
+    schema: {
+      tags: ['public'],
+      body: RestaurantPublicSmartPickInput,
+      response: { 200: RestaurantSmartPickResult },
+    },
+    handler: async (req) => service.smartPick(req.body),
   });
 
   typed.get(Routes.Restaurant.list, {
@@ -254,10 +266,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: ReviewResummarizeResult },
     },
     handler: async (req) => {
-      const { placeId } = await summaries.resummarizeReview(
-        req.params.reviewId,
-        req.body.model,
-      );
+      const { placeId } = await summaries.resummarizeReview(req.params.reviewId, req.body.model);
       return { ok: true as const, placeId };
     },
   });
@@ -487,11 +496,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       // ?placeId=X 와 ?canonicalId=Y 둘 다 받아 union 으로 구독. placeId 는
       // Naver source 단일 행, canonicalId 는 그 가게에 묶인 모든 source 행.
       const toArr = (raw: string | string[] | undefined): string[] =>
-        Array.isArray(raw)
-          ? raw
-          : typeof raw === 'string' && raw.length > 0
-            ? [raw]
-            : [];
+        Array.isArray(raw) ? raw : typeof raw === 'string' && raw.length > 0 ? [raw] : [];
       const placeIdsParam = toArr(rawQuery.placeId);
       const canonicalIdsParam = Array.from(new Set(toArr(rawQuery.canonicalId)));
 
@@ -515,7 +520,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
         }
       >();
       for (const r of canonicalRows) {
-        const busKey = r.source === 'naver' ? r.placeId ?? '' : `dc:${r.sourceId}`;
+        const busKey = r.source === 'naver' ? (r.placeId ?? '') : `dc:${r.sourceId}`;
         if (!busKey) continue;
         byRestaurantId.set(r.restaurantId, { ...r, busKey });
       }
@@ -596,9 +601,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       // DB 한 번만 읽어 한 번만 push. review 이벤트는 페이로드가 이미 완전해서
       // coalescing 안 함.
       const pendingProgressPush = new Set<string>();
-      const pushSnapshotNow = async (
-        sub: (typeof subscriptions)[number],
-      ): Promise<void> => {
+      const pushSnapshotNow = async (sub: (typeof subscriptions)[number]): Promise<void> => {
         pendingProgressPush.delete(sub.restaurantId);
         try {
           const snap = await service.getSummaryProgressByRestaurantId(sub.restaurantId);
@@ -686,6 +689,5 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 };
-
 
 export default restaurantRoutes;
