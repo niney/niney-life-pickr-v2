@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BusApiAuthError,
+  BusApiError,
   getStationsByName,
   toLatLng,
   type RawBusStation,
@@ -26,6 +27,14 @@ describe.skipIf(!runnable)('bus-api live smoke (BUS_API_KEY 필요)', () => {
         // BusApiAuthError 로 분류한다.
         if (e instanceof BusApiAuthError) {
           console.warn(`[bus live] 키 인증 실패로 skip — ${e.message}`);
+          ctx.skip();
+          return;
+        }
+        // 업스트림 HTTP 5xx = 서울시 API 장애(2026-07-13 실관측 503) — 코드
+        // 결함이 아닌 외부 상태라 skip. 지하철 live 스모크의 쿼터 초과 skip
+        // (ERROR-337)과 동일 규율.
+        if (e instanceof BusApiError && /bus api status 5\d\d/.test(e.message)) {
+          console.warn(`[bus live] 업스트림 장애로 skip — ${e.message}`);
           ctx.skip();
           return;
         }

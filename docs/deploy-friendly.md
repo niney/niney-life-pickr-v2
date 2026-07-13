@@ -43,6 +43,19 @@ pnpm --filter friendly build
 
 `prisma migrate dev` 는 개발용. 운영은 반드시 `migrate deploy`.
 
+## 대중교통 정적 데이터 적재 (최초 1회 + 필요 시 갱신)
+
+`SEOUL_OPEN_API_KEY`(열린데이터광장 일반 인증키) 필요 — 미적재면 해당 API 가 503 안내를 낸다.
+
+```bash
+pnpm --filter friendly load:bus-stations       # 버스 정류소 마스터 (주변 정류장 찾기)
+pnpm --filter friendly load:subway-stations    # 지하철 역사 마스터
+pnpm --filter friendly load:subway-line-orders # 지하철 노선 순서
+pnpm --filter friendly load:subway-congestion  # 지하철 혼잡도(정적)
+```
+
+정류소·역사는 사실상 정적이라 분기~반기 1회 재실행이면 충분하다.
+
 ## pm2 기동
 
 루트의 `ecosystem.config.cjs`:

@@ -17,6 +17,7 @@
     "db:studio": "prisma studio",
     "promote-admin": "tsx --env-file=.env scripts/promote-admin.ts",
     "backfill:contacts": "tsx --env-file=.env scripts/backfill-contacts.ts",
+    "load:bus-stations": "tsx --env-file=.env scripts/load-bus-stations.ts",
     "load:subway-stations": "tsx --env-file=.env scripts/load-subway-stations.ts",
     "verify:subway-lines": "tsx --env-file=.env scripts/verify-subway-lines.ts",
     "load:subway-line-orders": "tsx --env-file=.env scripts/load-subway-line-orders.ts",

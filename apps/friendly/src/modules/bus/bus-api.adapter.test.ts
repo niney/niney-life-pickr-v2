@@ -11,7 +11,6 @@ import {
   getRoutePath,
   getStationArrivals,
   getStationsByName,
-  getStationsByPos,
   getStationsByRoute,
   toLatLng,
 } from './bus-api.adapter.js';
@@ -135,31 +134,6 @@ describe('getStationArrivals — 정류소 도착정보 파싱', () => {
     await getStationArrivals('23278', { serviceKey: 'plain-key' });
     expect(fetchedUrl(fn)).toContain('stationinfo/getStationByUid');
     expect(fetchedUrl(fn)).toContain('arsId=23278');
-  });
-});
-
-describe('getStationsByPos — 좌표 기반 근접 정류소 파싱', () => {
-  it('stationId/stationNm 필드명을 stId/stNm 으로 매핑, dist 숫자 변환', async () => {
-    const fn = stubFetch(fixture('stations-nearby.xml'));
-    const items = await getStationsByPos(127.027926, 37.497175, 300, {
-      serviceKey: 'plain-key',
-    });
-    expect(items).toHaveLength(3);
-    expect(items[0]).toMatchObject({
-      stId: '121900198',
-      arsId: '22859',
-      stNm: '강남역.삼성전자',
-      dist: 14,
-      gpsX: 127.0278698411,
-      gpsY: 37.4970515618,
-    });
-    // nearby 응답은 tmX/tmY 가 없고 gpsX/gpsY(WGS84)만 온다 — 값-범위 판정 채택.
-    expect(toLatLng(items[0]!)).toEqual({ lat: 37.4970515618, lng: 127.0278698411 });
-    // 파라미터 tmX(경도)/tmY(위도)는 WGS84 그대로 실린다 (probe 실측 2026-07-04).
-    expect(fetchedUrl(fn)).toContain('stationinfo/getStationByPos');
-    expect(fetchedUrl(fn)).toContain('tmX=127.027926');
-    expect(fetchedUrl(fn)).toContain('tmY=37.497175');
-    expect(fetchedUrl(fn)).toContain('radius=300');
   });
 });
 

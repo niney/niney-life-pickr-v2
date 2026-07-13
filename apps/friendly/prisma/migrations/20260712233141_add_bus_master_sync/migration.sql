@@ -1,0 +1,7 @@
+-- CreateTable
+CREATE TABLE "bus_master_syncs" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "source" TEXT NOT NULL,
+    "count" INTEGER NOT NULL,
+    "loadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

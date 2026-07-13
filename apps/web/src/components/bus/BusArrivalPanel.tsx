@@ -21,6 +21,10 @@ export interface BusArrivalPanelProps {
   // 정류장 전환 직후 이전 정류장 데이터(placeholder) 표시 중 — 디밍 처리.
   isPlaceholder: boolean;
   isError: boolean;
+  // 서버가 업스트림 장애로 last-known(≤10분)을 대신 서빙 중 — 경고 배너 표시.
+  stale: boolean;
+  // 에러가 서울시 API 쪽(502/503)인지 — 에러 문구에 원인 안내를 덧붙인다.
+  isUpstreamError: boolean;
   selectedRouteId: string | null;
   onToggleRoute(busRouteId: string): void;
   onBack(): void;
@@ -51,6 +55,8 @@ export const BusArrivalPanel = ({
   isFetching,
   isPlaceholder,
   isError,
+  stale,
+  isUpstreamError,
   selectedRouteId,
   onToggleRoute,
   onBack,
@@ -94,6 +100,12 @@ export const BusArrivalPanel = ({
             {isFetching && <Loader2 className="size-3 animate-spin" />}
           </div>
         )}
+        {/* 서버가 업스트림 장애로 최근 성공본을 대신 서빙 중 — 정보 나이를 명시. */}
+        {!virtual && stale && fetchedAt && (
+          <div className="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
+            서울시 버스 API 장애 — {formatRelativeSec(fetchedAt)} 정보를 표시하고 있습니다.
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -106,6 +118,7 @@ export const BusArrivalPanel = ({
           isLoading={isLoading}
           isPlaceholder={isPlaceholder}
           isError={isError}
+          isUpstreamError={isUpstreamError}
           selectedRouteId={selectedRouteId}
           onToggleRoute={onToggleRoute}
           onRetry={onRetry}
@@ -123,6 +136,7 @@ const PanelBody = ({
   isLoading,
   isPlaceholder,
   isError,
+  isUpstreamError,
   selectedRouteId,
   onToggleRoute,
   onRetry,
@@ -134,6 +148,7 @@ const PanelBody = ({
   isLoading: boolean;
   isPlaceholder: boolean;
   isError: boolean;
+  isUpstreamError: boolean;
   selectedRouteId: string | null;
   onToggleRoute(busRouteId: string): void;
   onRetry(): void;
@@ -154,6 +169,11 @@ const PanelBody = ({
     return (
       <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-destructive">
         도착정보를 불러오지 못했습니다.
+        {isUpstreamError && (
+          <span className="text-xs text-muted-foreground">
+            서울시 버스 API 장애입니다. 복구되면 자동으로 다시 표시됩니다.
+          </span>
+        )}
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
           재시도
         </Button>

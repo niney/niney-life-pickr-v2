@@ -93,17 +93,18 @@ export type BusArrivalItemType = z.infer<typeof BusArrivalItem>;
 export const BusArrivalsResult = z.object({
   arsId: z.string(),
   items: z.array(BusArrivalItem),
-  // 서울시 호출 시각 (ISO).
+  // 서울시 호출 시각 (ISO). stale 이면 마지막 성공 수집 시각.
   fetchedAt: z.string(),
+  // true = 업스트림 실패(장애·쿼터 소진)로 최근 성공본(last-known ≤10분)을
+  // 대신 서빙 — FE 가 "○분 전 정보" 안내를 띄운다.
+  stale: z.boolean(),
 });
 export type BusArrivalsResultType = z.infer<typeof BusArrivalsResult>;
 
-// ── 3차: 좌표 기반 주변 정류장 (getStationByPos) ──────────────────────────
-// probe 실측(2026-07-04): 파라미터 tmX(경도)/tmY(위도)에 WGS84 를 그대로 수용,
-// radius 는 미터. 응답 필드는 검색과 다름 — stationId(=stId 와 동일 ID 공간)/
-// stationNm/gpsX·gpsY(WGS84)/dist(m). 서버는 셀(0.005°≈550m) 단위 DB 30일
-// 캐시 + 일일 쿼터 공유 — 지도 자동 조회(패닝 재조회)를 감당한다. dist 는
-// 셀 캐시와 무관하게 쿼리 지점 기준으로 서버가 재계산해 내려준다.
+// ── 3차: 좌표 기반 주변 정류장 ────────────────────────────────────────────
+// 정류소 마스터(busStopLocationXyInfo, load:bus-stations 적재) 로컬 바운딩박스
+// 조회 — 지하철 nearby 와 동일 설계(업스트림 0콜, 서울시 실시간 API 장애·쿼터
+// 무관). dist 는 쿼리 지점 기준으로 서버가 계산해 내려준다.
 
 export const BusNearbyQuery = z.object({
   // WGS84 한국 범위 강제 — 범위 밖 좌표는 서울시 API 를 때리기 전에 400.
@@ -115,7 +116,7 @@ export const BusNearbyQuery = z.object({
 export type BusNearbyQueryType = z.infer<typeof BusNearbyQuery>;
 
 export const BusNearbyItem = BusStationItem.extend({
-  // 요청 좌표로부터의 거리(m) — 서울시가 계산해 내려주며 오름차순 정렬 계약.
+  // 요청 좌표로부터의 거리(m) — 서버 계산, 오름차순 정렬 계약.
   dist: z.number().int().min(0),
 });
 export type BusNearbyItemType = z.infer<typeof BusNearbyItem>;
@@ -123,10 +124,11 @@ export type BusNearbyItemType = z.infer<typeof BusNearbyItem>;
 export const BusNearbyResult = z.object({
   items: z.array(BusNearbyItem),
   total: z.number().int().min(0),
+  // 마스터 적재 시각(loadedAt) — 데이터 기준일.
   fetchedAt: z.string(),
-  // cache = 셀 TTL 내 DB 응답 / api = 방금 셀 수집 / stale = 수집 실패(쿼터
-  // 소진 포함)로 만료 셀 반환. 검색과 동일 의미.
-  source: z.enum(['cache', 'api', 'stale']),
+  // db = 로컬 마스터 조회(현행 유일값). cache/api/stale 은 셀 캐시 시절 값 —
+  // 앱 구버전 클라이언트가 파싱할 수 있게 enum 에 남겨둔다.
+  source: z.enum(['db', 'cache', 'api', 'stale']),
 });
 export type BusNearbyResultType = z.infer<typeof BusNearbyResult>;
 
@@ -172,7 +174,10 @@ export type BusPositionItemType = z.infer<typeof BusPositionItem>;
 export const BusPositionsResult = z.object({
   busRouteId: z.string(),
   items: z.array(BusPositionItem),
+  // 서울시 호출 시각 (ISO). stale 이면 마지막 성공 수집 시각.
   fetchedAt: z.string(),
+  // true = 업스트림 실패로 최근 성공본(last-known ≤10분) 서빙 — 도착정보와 동일.
+  stale: z.boolean(),
 });
 export type BusPositionsResultType = z.infer<typeof BusPositionsResult>;
 

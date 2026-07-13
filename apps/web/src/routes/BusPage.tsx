@@ -9,6 +9,7 @@ import {
   roundCoord,
 } from '@repo/utils';
 import {
+  ApiError,
   useBusFavorites,
   useBusNearbyStations,
   useBusPositions,
@@ -531,6 +532,11 @@ export const BusPage = () => {
       isFetching={arrivals.isFetching}
       isPlaceholder={arrivals.isPlaceholderData}
       isError={arrivals.isError}
+      stale={arrivals.data?.stale ?? false}
+      isUpstreamError={
+        arrivals.error instanceof ApiError &&
+        (arrivals.error.statusCode === 502 || arrivals.error.statusCode === 503)
+      }
       selectedRouteId={routeId}
       onToggleRoute={handleToggleRoute}
       onBack={handleBack}

@@ -8,8 +8,9 @@
 //   - 동일 키워드 동시 요청은 in-flight 합류 — 업스트림 1회만 호출.
 //   - 일일 업스트림 쿼터 가드(기본 900) — 단일 인스턴스 전제라 메모리 카운터로
 //     충분(Redis 금지 정책).
-// 도착정보/버스 위치는 무캐싱 실시간 프록시 — 캐시가 없어 stale 폴백도 없고,
-// 일일 쿼터 카운터만 검색과 공유한다(세 경로 합산으로 한도 보호).
+// 도착정보/버스 위치는 실시간 프록시 — 15초 마이크로 캐시로 동시 폴링을 흡수하고,
+// 업스트림 실패 시 last-known(≤10분)을 stale:true 로 서빙한다(가용성 우선).
+// 일일 쿼터 카운터는 검색과 공유한다(경로 합산으로 한도 보호).
 
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { approxDistanceM } from '@repo/utils';
@@ -32,13 +33,11 @@ import {
   getRoutePath,
   getStationArrivals,
   getStationsByName,
-  getStationsByPos,
   getStationsByRoute,
   toLatLng,
   type BusApiRequestOptions,
   type RawBusPosition,
   type RawBusStation,
-  type RawNearbyStation,
   type RawRouteInfo,
   type RawRoutePathPoint,
   type RawRouteStation,
@@ -51,20 +50,16 @@ export const FORCE_MIN_INTERVAL_MS = 60_000;
 const MAX_ITEMS = 100;
 // 일일 업스트림 호출 한도 기본값 — 개발계정 일 1,000건에서 여유를 둔 900.
 export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
-// 주변 정류장 격자 캐시 — 지도 자동 조회를 감당하기 위해 셀 단위로 DB 에
-// 30일 캐싱한다(정류소는 사실상 불변 — 키워드 검색과 동일 정책).
-// 셀 한 변 0.005° ≈ 550m. 쿼리 좌표를 셀에 스냅해 cellKey 로 쓴다.
-export const NEARBY_CELL_DEG = 0.005;
-export const BUS_NEARBY_TTL_MS = BUS_SEARCH_TTL_MS;
 // 노선 상세(형상+정류소+기본정보)도 사실상 정적 — 검색과 동일 30일 TTL.
 export const BUS_ROUTE_TTL_MS = BUS_SEARCH_TTL_MS;
 
 // 실시간(도착/위치) 마이크로 캐시 TTL — 동시 사용자의 업스트림 중복콜을 흡수해
 // 일일 쿼터를 지킨다. 실시간성 훼손을 막기 위해 15초로 짧게(지하철과 동일 규율).
 export const BUS_REALTIME_MICRO_CACHE_TTL_MS = 15_000;
-// 업스트림 호출 반경 — 셀 중심에서 셀 내 임의 지점(반 대각 ≈390m) + 최대 요청
-// 반경(1000m)을 다 덮어야 셀 캐시를 어떤 쿼리에도 재사용할 수 있다. 1500m.
-export const NEARBY_UPSTREAM_RADIUS_M = 1500;
+// last-known stale 상한 — 업스트림 실패(장애·쿼터 소진) 시 마지막 성공본을 이
+// 나이까지만 대신 서빙한다(stale:true + FE "○분 전 정보" 안내). 그보다 오래된
+// 도착정보는 오정보라 에러가 낫다. 2026-07-13 ws.bus.go.kr 503 장애로 도입.
+export const BUS_REALTIME_STALE_MAX_MS = 10 * 60_000;
 
 // Asia/Seoul 기준 YYYY-MM-DD — 쿼터 리셋 경계. en-CA 로캘이 ISO 형식을 낸다.
 const SEOUL_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
@@ -110,12 +105,6 @@ export interface BusServiceDeps {
       busRouteId: string,
       opts: BusApiRequestOptions,
     ) => Promise<RawBusPosition[]>;
-    getStationsByPos?: (
-      lng: number,
-      lat: number,
-      radiusM: number,
-      opts: BusApiRequestOptions,
-    ) => Promise<RawNearbyStation[]>;
     getRoutePath?: (
       busRouteId: string,
       opts: BusApiRequestOptions,
@@ -147,8 +136,8 @@ const toArrivalEntry = (
 ): BusArrivalEntryType | null =>
   message === null ? null : { vehId: vehId === '0' ? null : vehId, message };
 
-// 셀 캐시 서빙에 필요한 정류소 필드 (dist 는 쿼리 시점 재계산).
-interface CellStation {
+// 주변 서빙에 필요한 정류소 필드 (dist 는 쿼리 시점 계산).
+interface NearbyStation {
   stId: string;
   arsId: string;
   name: string;
@@ -156,14 +145,9 @@ interface CellStation {
   lng: number;
 }
 
-// 쿼리 좌표 → 셀 스냅(0.005° 격자 중심이 아닌 격자점 — 키 일관성만 중요).
-const snapToCell = (v: number): number =>
-  Math.round(v / NEARBY_CELL_DEG) * NEARBY_CELL_DEG;
-
-
-// 셀 정류소 목록 → 쿼리 지점 기준 반경 필터 + dist 재계산 + 오름차순.
+// 정류소 목록 → 쿼리 지점 기준 반경 필터 + dist 계산 + 오름차순.
 const serveNearby = (
-  stations: CellStation[],
+  stations: NearbyStation[],
   lat: number,
   lng: number,
   radiusM: number,
@@ -277,8 +261,6 @@ export class BusService {
   private readonly inflight = new Map<string, Promise<BusStationSearchResultType>>();
   // Asia/Seoul 날짜 단위 업스트림 호출 카운터 — 단일 인스턴스 전제(메모리).
   private quota = { dateKey: '', count: 0 };
-  // 주변 셀 동시 요청 합류 — 같은 셀의 업스트림 수집은 1회만.
-  private readonly nearbyInflight = new Map<string, Promise<CellStation[]>>();
   // 실시간(도착/위치) 키 단위 15초 마이크로 캐시 + in-flight 합류 — 동시 폴링의
   // 업스트림 중복콜을 흡수한다(지하철 fetchRealtime 골격 이식). 쿼터는 캐시 미스 시만.
   private readonly realtimeCache = new Map<
@@ -440,24 +422,35 @@ export class BusService {
     key: string,
     now: Date,
     load: () => Promise<T[]>,
-  ): Promise<{ data: T[]; fetchedAt: Date }> {
+  ): Promise<{ data: T[]; fetchedAt: Date; stale: boolean }> {
     const cached = this.realtimeCache.get(key);
-    if (cached) {
-      if (now.getTime() <= cached.expiresAt) {
-        return Promise.resolve({ data: cached.data as T[], fetchedAt: cached.fetchedAt });
+    if (cached && now.getTime() <= cached.expiresAt) {
+      return Promise.resolve({
+        data: cached.data as T[],
+        fetchedAt: cached.fetchedAt,
+        stale: false,
+      });
+    }
+    // 만료 엔트리는 지우지 않는다 — 업스트림 실패 시 last-known 폴백 재료.
+    // 대신 stale 상한을 넘긴 전 키를 청소해 메모리 무한 증가를 막는다.
+    for (const [k, v] of this.realtimeCache) {
+      if (now.getTime() - v.fetchedAt.getTime() > BUS_REALTIME_STALE_MAX_MS) {
+        this.realtimeCache.delete(k);
       }
-      this.realtimeCache.delete(key); // 만료 청소.
     }
 
     const existing = this.realtimeInflight.get(key) as
-      | Promise<{ data: T[]; fetchedAt: Date }>
+      | Promise<{ data: T[]; fetchedAt: Date; stale: boolean }>
       | undefined;
     if (existing) return existing;
 
     const task = this.loadRealtime(key, now, load).finally(() => {
       this.realtimeInflight.delete(key);
     });
-    this.realtimeInflight.set(key, task as Promise<{ data: unknown[]; fetchedAt: Date }>);
+    this.realtimeInflight.set(
+      key,
+      task as Promise<{ data: unknown[]; fetchedAt: Date; stale: boolean }>,
+    );
     return task;
   }
 
@@ -465,157 +458,72 @@ export class BusService {
     key: string,
     now: Date,
     load: () => Promise<T[]>,
-  ): Promise<{ data: T[]; fetchedAt: Date }> {
-    this.consumeQuota(now); // 캐시 미스 확정 — 실제 업스트림 콜 직전에만 쿼터 소비.
-    const data = await load();
-    this.realtimeCache.set(key, {
-      data,
-      fetchedAt: now,
-      expiresAt: now.getTime() + BUS_REALTIME_MICRO_CACHE_TTL_MS,
-    });
-    return { data, fetchedAt: now };
+  ): Promise<{ data: T[]; fetchedAt: Date; stale: boolean }> {
+    try {
+      this.consumeQuota(now); // 캐시 미스 확정 — 실제 업스트림 콜 직전에만 쿼터 소비.
+      const data = await load();
+      this.realtimeCache.set(key, {
+        data,
+        fetchedAt: now,
+        expiresAt: now.getTime() + BUS_REALTIME_MICRO_CACHE_TTL_MS,
+      });
+      return { data, fetchedAt: now, stale: false };
+    } catch (e) {
+      // 업스트림 실패(서울시 장애)·쿼터 소진 — 상한(10분) 내 last-known 이 있으면
+      // stale 로 서빙(가용성 우선, 검색의 stale 정책과 동일 정신). 없으면 그대로
+      // 던져 라우트가 502/503 을 내린다.
+      const lastKnown = this.realtimeCache.get(key);
+      if (
+        lastKnown &&
+        now.getTime() - lastKnown.fetchedAt.getTime() <= BUS_REALTIME_STALE_MAX_MS
+      ) {
+        return { data: lastKnown.data as T[], fetchedAt: lastKnown.fetchedAt, stale: true };
+      }
+      throw e;
+    }
   }
 
-  // 좌표 기반 주변 정류장 — 셀(0.005°≈550m) 단위 DB 30일 캐시 프록시.
-  // 지도 자동 조회(패닝 시 재조회)를 감당하는 층: 같은 동네는 셀당 한 달에
-  // 업스트림 1회. 응답 dist 는 쿼리 지점마다 달라 저장하지 않고 서빙 시
-  // 정류소 좌표로 재계산한다.
+  // 좌표 기반 주변 정류장 — 로컬 마스터(busStopLocationXyInfo, load:bus-stations
+  // 적재) 바운딩박스 조회. 지하철 nearby 와 동일 설계: 업스트림 0콜이라 서울시
+  // 실시간 API 장애·쿼터·키와 무관하다(2026-07-13 ws.bus.go.kr 503 장애로 전환).
   async getNearbyStations(
     lat: number,
     lng: number,
     radiusM: number,
   ): Promise<BusNearbyResultType> {
-    if (!this.deps.serviceKey) {
+    // 등거리 근사 바운딩박스 — 경도는 위도만큼 좁아지므로 cos 보정.
+    const degLat = radiusM / 111_320;
+    const degLng = radiusM / (111_320 * Math.cos((lat * Math.PI) / 180));
+
+    const [rows, sync] = await Promise.all([
+      this.prisma.busStation.findMany({
+        where: {
+          lat: { gte: lat - degLat, lte: lat + degLat },
+          lng: { gte: lng - degLng, lte: lng + degLng },
+          // 가상정류장(arsId '0' — ws 검색 캐시로 흘러든 미정차 행) 제외:
+          // 도착정보 조회가 불가해 주변 목록에 실어봐야 죽은 항목이다.
+          // 마스터 행은 전부 5자리 arsId 라 영향 없음(실측 2026-07-13).
+          arsId: { not: '0' },
+        },
+      }),
+      this.prisma.busMasterSync.findFirst({ orderBy: { loadedAt: 'desc' } }),
+    ]);
+
+    // 마스터 미적재는 503 — BusStation 에 검색 캐시로 흘러든 부분집합이 있어도
+    // 전 정류소 커버리지가 아니라 주변 조회 결과로 신뢰할 수 없다.
+    if (!sync) {
       throw new BusServiceError(
-        'BUS_API_KEY 가 설정되지 않아 주변 정류장 조회를 사용할 수 없습니다.',
+        '버스 정류소 마스터가 없습니다 — load:bus-stations 실행 필요',
         503,
       );
     }
-    const now = this.deps.now?.() ?? new Date();
 
-    const cellLat = snapToCell(lat);
-    const cellLng = snapToCell(lng);
-    const cellKey = `${cellLat.toFixed(3)},${cellLng.toFixed(3)}`;
-
-    const cached = await this.prisma.busNearbyCell.findUnique({
-      where: { cellKey },
-      include: { hits: { include: { station: true }, orderBy: { rank: 'asc' } } },
-    });
-    const cachedStations: CellStation[] | null = cached
-      ? cached.hits.map((h) => ({
-          stId: h.station.stId,
-          arsId: h.station.arsId,
-          name: h.station.name,
-          lat: h.station.lat,
-          lng: h.station.lng,
-        }))
-      : null;
-
-    if (cached && now.getTime() - cached.fetchedAt.getTime() < BUS_NEARBY_TTL_MS) {
-      return serveNearby(cachedStations!, lat, lng, radiusM, cached.fetchedAt, 'cache');
-    }
-
-    // 만료/부재 — 셀 재수집. 실패(쿼터 소진 포함) 시 만료 캐시라도 stale 반환.
-    let stations: CellStation[];
-    try {
-      stations = await this.collectNearbyCell(cellKey, cellLat, cellLng, now);
-    } catch (e) {
-      if (cached) {
-        return serveNearby(cachedStations!, lat, lng, radiusM, cached.fetchedAt, 'stale');
-      }
-      if (e instanceof BusApiError || e instanceof BusServiceError) throw e;
-      throw new BusServiceError(
-        e instanceof Error ? e.message : '버스 API 호출 실패',
-        502,
-        { cause: e },
-      );
-    }
-    return serveNearby(stations, lat, lng, radiusM, now, 'api');
+    return serveNearby(rows, lat, lng, radiusM, sync.loadedAt, 'db');
   }
 
-  // 셀 업스트림 수집 + DB 반영 — 동일 셀 동시 요청은 in-flight 합류.
-  private collectNearbyCell(
-    cellKey: string,
-    cellLat: number,
-    cellLng: number,
-    now: Date,
-  ): Promise<CellStation[]> {
-    const existing = this.nearbyInflight.get(cellKey);
-    if (existing) return existing;
-    const task = this.executeCollectNearbyCell(cellKey, cellLat, cellLng, now).finally(
-      () => {
-        this.nearbyInflight.delete(cellKey);
-      },
-    );
-    this.nearbyInflight.set(cellKey, task);
-    return task;
-  }
-
-  private async executeCollectNearbyCell(
-    cellKey: string,
-    cellLat: number,
-    cellLng: number,
-    now: Date,
-  ): Promise<CellStation[]> {
-    this.consumeQuota(now);
-
-    const fetchNearby = this.deps.adapter?.getStationsByPos ?? getStationsByPos;
-    // 셀 중심 + 고정 반경 — 셀 내 어떤 쿼리(반경 ≤1000m)도 커버(주석: 상수 정의).
-    const raw = await fetchNearby(cellLng, cellLat, NEARBY_UPSTREAM_RADIUS_M, {
-      serviceKey: this.deps.serviceKey,
-    });
-
-    // 검색과 동일 정책 — 좌표 정규화 실패 행 drop + stId 중복 첫 등장만.
-    const seen = new Set<string>();
-    const stations: CellStation[] = [];
-    for (const r of raw) {
-      const coord = toLatLng(r);
-      if (!coord || seen.has(r.stId)) continue;
-      seen.add(r.stId);
-      stations.push({
-        stId: r.stId,
-        arsId: r.arsId,
-        name: r.stNm,
-        lat: coord.lat,
-        lng: coord.lng,
-      });
-    }
-
-    // 전량 좌표 정규화 실패 = 좌표계 이상 신호 — 빈 셀로 30일 박제 금지, 502.
-    if (raw.length > 0 && stations.length === 0) {
-      throw new BusServiceError(
-        '좌표 정규화 실패 — 서울시 응답이 WGS84 가 아닙니다(좌표계 미지원, probe:bus 확인 필요).',
-        502,
-      );
-    }
-
-    // 빈 결과도 셀 행을 남긴다 — 네거티브 캐싱(정류장 없는 지역 반복 호출 방지).
-    await this.prisma.$transaction(async (tx) => {
-      for (const s of stations) {
-        await tx.busStation.upsert({
-          where: { stId: s.stId },
-          create: s,
-          update: { arsId: s.arsId, name: s.name, lat: s.lat, lng: s.lng },
-        });
-      }
-      const cell = await tx.busNearbyCell.upsert({
-        where: { cellKey },
-        create: { cellKey, fetchedAt: now },
-        update: { fetchedAt: now },
-      });
-      await tx.busNearbyCellHit.deleteMany({ where: { cellId: cell.id } });
-      if (stations.length > 0) {
-        await tx.busNearbyCellHit.createMany({
-          data: stations.map((s, i) => ({ cellId: cell.id, stId: s.stId, rank: i })),
-        });
-      }
-    });
-
-    return stations;
-  }
-
-  // 정류소 실시간 도착정보 — 무캐싱 프록시. 캐시가 없어 stale 폴백도 없고,
-  // 업스트림 실패는 BusApiError(statusCode 내장) 그대로 라우트에 전달된다.
+  // 정류소 실시간 도착정보 — 15초 마이크로 캐시 프록시. 업스트림 실패 시
+  // last-known(≤10분)을 stale 로 서빙하고, 그것도 없으면 BusApiError
+  // (statusCode 내장)가 그대로 라우트에 전달된다.
   async getArrivals(arsId: string): Promise<BusArrivalsResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
@@ -627,7 +535,7 @@ export class BusService {
     const serviceKey = this.deps.serviceKey;
     const fetchArrivals = this.deps.adapter?.getStationArrivals ?? getStationArrivals;
     // 15초 마이크로 캐시 + in-flight 합류 — 동시/연속 폴링의 업스트림 중복콜 흡수.
-    const { data, fetchedAt } = await this.fetchRealtime(`arrivals:${arsId}`, now, () =>
+    const { data, fetchedAt, stale } = await this.fetchRealtime(`arrivals:${arsId}`, now, () =>
       fetchArrivals(arsId, { serviceKey }),
     );
 
@@ -641,6 +549,7 @@ export class BusService {
         second: toArrivalEntry(r.vehId2, r.arrmsg2),
       })),
       fetchedAt: fetchedAt.toISOString(),
+      stale,
     };
   }
 
@@ -672,7 +581,7 @@ export class BusService {
       return fetchAll(busRouteId, { serviceKey });
     };
     const key = `positions:${busRouteId}:${startOrd ?? ''}:${endOrd ?? ''}`;
-    const { data: raw, fetchedAt } = await this.fetchRealtime(key, now, load);
+    const { data: raw, fetchedAt, stale } = await this.fetchRealtime(key, now, load);
 
     // 검색과 동일 정책 — 좌표 정규화 실패(WGS84 쌍 없음)나 vehId 누락 행은
     // 계약(lat 33~39, vehId min 1)을 만족할 수 없어 drop.
@@ -690,7 +599,7 @@ export class BusService {
       });
     }
 
-    return { busRouteId, items, fetchedAt: fetchedAt.toISOString() };
+    return { busRouteId, items, fetchedAt: fetchedAt.toISOString(), stale };
   }
 
   // 노선 상세 — 형상+경유 정류소+기본정보 합본. busRouteInfo 3콜을 한 번에
