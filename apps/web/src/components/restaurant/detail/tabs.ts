@@ -1,4 +1,12 @@
-export type TabKey = 'home' | 'menu' | 'reviews' | 'ask' | 'insights' | 'photos' | 'info';
+export type TabKey =
+  | 'home'
+  | 'menu'
+  | 'reviews'
+  | 'ask'
+  | 'insights'
+  | 'photos'
+  | 'info'
+  | 'transit';
 
 export const TAB_ORDER: Array<{ key: TabKey; label: string }> = [
   { key: 'home', label: '홈' },
@@ -8,4 +16,5 @@ export const TAB_ORDER: Array<{ key: TabKey; label: string }> = [
   { key: 'ask', label: '질문' },
   { key: 'photos', label: '사진' },
   { key: 'info', label: '정보' },
+  { key: 'transit', label: '가는 법' },
 ];

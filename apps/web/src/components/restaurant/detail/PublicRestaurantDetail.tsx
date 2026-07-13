@@ -18,6 +18,7 @@ import { InsightsTab } from './InsightsTab';
 import { MenuTab } from './MenuTab';
 import { PhotosTab } from './PhotosTab';
 import { ReviewsTab } from './ReviewsTab';
+import { TransitTab } from './TransitTab';
 import { TAB_ORDER, type TabKey } from './tabs';
 
 interface Props {
@@ -165,7 +166,13 @@ export const PublicRestaurantDetail = ({
         </header>
 
         {detail.data && (
-          <nav role="tablist" aria-label="식당 정보 탭" className="flex border-b bg-background">
+          // 탭 8개('가는 법' 합류)라 좁은 패널에서 라벨이 줄바꿈될 수 있다 —
+          // nowrap + 넘치면 가로 스크롤(칩 행과 동일한 패턴).
+          <nav
+            role="tablist"
+            aria-label="식당 정보 탭"
+            className="flex overflow-x-auto border-b bg-background"
+          >
             {TAB_ORDER.map((t) => {
               const active = tab === t.key;
               return (
@@ -176,7 +183,7 @@ export const PublicRestaurantDetail = ({
                   aria-selected={active}
                   onClick={() => handleChangeTab(t.key)}
                   className={cn(
-                    'relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors',
+                    'relative flex-1 shrink-0 whitespace-nowrap px-3 py-2.5 text-sm font-medium transition-colors',
                     active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
