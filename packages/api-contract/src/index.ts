@@ -6,6 +6,7 @@ export * from './schemas/picks.js';
 export * from './schemas/admin.js';
 export * from './schemas/crawl.js';
 export * from './schemas/restaurant.js';
+export * from './schemas/restaurant-favorite.js';
 export * from './schemas/canonical.js';
 export * from './schemas/menu-grouping.js';
 export * from './schemas/auto-discover.js';

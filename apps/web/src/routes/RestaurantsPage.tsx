@@ -1,9 +1,13 @@
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import { List, MapIcon } from 'lucide-react';
-import type { RestaurantPublicListQueryType } from '@repo/api-contract';
-import { useRestaurantsPublic } from '@repo/shared';
+import type {
+  RestaurantPublicListItemType,
+  RestaurantPublicListQueryType,
+} from '@repo/api-contract';
+import { useRestaurantFavorites, useRestaurantsPublic } from '@repo/shared';
 import { PublicRestaurantList } from '~/components/restaurant/PublicRestaurantList';
+import { toFavoriteItem } from '~/components/restaurant/favoriteSnapshot';
 import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsMap';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
@@ -65,6 +69,17 @@ export const RestaurantsPage = () => {
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
 
+  // 맛집 즐겨찾기 — 페이지당 1회 호출 원칙(RestaurantsV2Page 와 동일 구조).
+  // 상세(Outlet)엔 context 로, 카드엔 ref 경유 안정 콜백으로 내려 memo 보존.
+  const favorites = useRestaurantFavorites();
+  const favoritesRef = useRef(favorites);
+  useEffect(() => {
+    favoritesRef.current = favorites;
+  });
+  const handleToggleFavorite = useCallback((item: RestaurantPublicListItemType) => {
+    favoritesRef.current.toggle(toFavoriteItem(item));
+  }, []);
+
   // 더블클릭 = 해당 식당으로 지도 확대. 매번 새 객체라 같은 식당 재더블클릭도
   // PublicRestaurantsMap 의 effect 를 재실행시킨다.
   const [zoomFocus, setZoomFocus] = useState<{ placeId: string } | null>(null);
@@ -86,10 +101,7 @@ export const RestaurantsPage = () => {
     [navigate],
   );
 
-  const handleResearch = useCallback(
-    (b: string) => setParam('bbox', b),
-    [setParam],
-  );
+  const handleResearch = useCallback((b: string) => setParam('bbox', b), [setParam]);
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
 
   // 모바일에서 상세가 열려있으면 list/map/토글을 모두 숨겨 outlet 만 노출.
@@ -98,12 +110,7 @@ export const RestaurantsPage = () => {
 
   return (
     <div className="relative w-full">
-      <div
-        className={cn(
-          'relative flex w-full',
-          panelSide === 'right' && 'xl:flex-row-reverse',
-        )}
-      >
+      <div className={cn('relative flex w-full', panelSide === 'right' && 'xl:flex-row-reverse')}>
         <aside
           className={cn(
             'relative w-full bg-background',
@@ -135,6 +142,8 @@ export const RestaurantsPage = () => {
             onZoomItem={handleZoomItem}
             panelSide={panelSide}
             onTogglePanelSide={togglePanelSide}
+            isFavorite={favorites.isFavorite}
+            onToggleFavorite={handleToggleFavorite}
           />
         </aside>
 
@@ -152,7 +161,7 @@ export const RestaurantsPage = () => {
           >
             {/* 상세 탭 묶음은 lazy — 목록은 그대로 두고 이 패널만 로딩 표시. */}
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
-              <Outlet />
+              <Outlet context={favorites} />
             </Suspense>
           </aside>
         )}

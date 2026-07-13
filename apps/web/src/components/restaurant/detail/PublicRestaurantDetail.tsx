@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Loader2, Receipt, X } from 'lucide-react';
-import { ApiError, useAuthStore, useRestaurantPublic, useRestaurantPublicInsights } from '@repo/shared';
+import {
+  ApiError,
+  useAuthStore,
+  useRestaurantPublic,
+  useRestaurantPublicInsights,
+  type RestaurantFavoritesApi,
+} from '@repo/shared';
 import { Button } from '~/components/ui/button';
+import { BusFavoriteStar } from '~/components/bus/BusFavoriteStar';
 import { cn } from '~/lib/utils';
 import { AskTab } from './AskTab';
 import { HomeTab } from './HomeTab';
@@ -20,6 +27,10 @@ interface Props {
   // 위한 controlled 모드. 미지정 시 내부 state 로 동작 (admin 사이드 패널 등).
   tab?: TabKey;
   onChangeTab?(next: TabKey): void;
+  // 맛집 즐겨찾기 — 페이지가 소유한 useRestaurantFavorites 를 Outlet context/
+  // props 로 내려받는다(훅 직접 호출 금지 — sync 부수효과 중복 방지). 미지정
+  // 사용처(admin 발견 패널)는 별 버튼이 렌더되지 않는다.
+  favoritesApi?: Pick<RestaurantFavoritesApi, 'isFavorite' | 'toggle'>;
 }
 
 // 식당 상세 패널. 헤더 + sticky 탭 바 + 활성 탭 컨텐츠. 데이터 fetch 는 여기서
@@ -32,6 +43,7 @@ export const PublicRestaurantDetail = ({
   onClose,
   tab: tabProp,
   onChangeTab: onChangeTabProp,
+  favoritesApi,
 }: Props) => {
   const detail = useRestaurantPublic(placeId);
   const insights = useRestaurantPublicInsights(placeId);
@@ -77,9 +89,7 @@ export const PublicRestaurantDetail = ({
   );
 
   const isNotFound =
-    detail.isError &&
-    detail.error instanceof ApiError &&
-    detail.error.statusCode === 404;
+    detail.isError && detail.error instanceof ApiError && detail.error.statusCode === 404;
 
   return (
     <div
@@ -109,6 +119,25 @@ export const PublicRestaurantDetail = ({
           <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold">
             {detail.data?.name ?? '식당 상세'}
           </div>
+          {detail.data && favoritesApi && (
+            <BusFavoriteStar
+              active={favoritesApi.isFavorite(placeId)}
+              label={favoritesApi.isFavorite(placeId) ? '즐겨찾기에서 제거' : '즐겨찾기에 추가'}
+              onToggle={() => {
+                const d = detail.data;
+                if (!d) return;
+                favoritesApi.toggle({
+                  placeId,
+                  name: d.name,
+                  category: d.category,
+                  address: d.roadAddress ?? d.address,
+                  thumbnailUrl: d.imageUrls[0] ?? null,
+                  latitude: d.latitude,
+                  longitude: d.longitude,
+                });
+              }}
+            />
+          )}
           {detail.data && (
             <Button
               type="button"
@@ -130,23 +159,13 @@ export const PublicRestaurantDetail = ({
               <span className="hidden sm:inline">정산</span>
             </Button>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="닫기"
-          >
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="닫기">
             <X className="size-4" />
           </Button>
         </header>
 
         {detail.data && (
-          <nav
-            role="tablist"
-            aria-label="식당 정보 탭"
-            className="flex border-b bg-background"
-          >
+          <nav role="tablist" aria-label="식당 정보 탭" className="flex border-b bg-background">
             {TAB_ORDER.map((t) => {
               const active = tab === t.key;
               return (
@@ -158,9 +177,7 @@ export const PublicRestaurantDetail = ({
                   onClick={() => handleChangeTab(t.key)}
                   className={cn(
                     'relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors',
-                    active
-                      ? 'text-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
+                    active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {t.label}
@@ -287,5 +304,7 @@ const ActiveTab = ({
       return <PhotosTab detail={detail} />;
     case 'info':
       return <InfoTab detail={detail} />;
+    case 'transit':
+      return <TransitTab detail={detail} />;
   }
 };

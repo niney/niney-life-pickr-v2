@@ -173,6 +173,9 @@ export interface PublicRestaurantListBodyProps {
   selectedPlaceId: string | null;
   onSelectItem(placeId: string): void;
   onZoomItem(placeId: string): void;
+  // 즐겨찾기 — 페이지가 소유한 useRestaurantFavorites 파생. 미지정 시 별 미렌더.
+  isFavorite?(placeId: string): boolean;
+  onToggleFavorite?(item: RestaurantPublicListItemType): void;
 }
 
 export const PublicRestaurantListBody = ({
@@ -182,6 +185,8 @@ export const PublicRestaurantListBody = ({
   selectedPlaceId,
   onSelectItem,
   onZoomItem,
+  isFavorite,
+  onToggleFavorite,
 }: PublicRestaurantListBodyProps) => {
   if (isLoading && items.length === 0) {
     return (
@@ -215,6 +220,8 @@ export const PublicRestaurantListBody = ({
             selected={item.placeId === selectedPlaceId}
             onSelect={onSelectItem}
             onZoom={onZoomItem}
+            favoriteActive={isFavorite?.(item.placeId) ?? false}
+            onToggleFavorite={onToggleFavorite}
           />
         </li>
       ))}
@@ -243,6 +250,9 @@ interface Props {
   onZoomItem(placeId: string): void;
   panelSide: PanelSide;
   onTogglePanelSide(): void;
+  // 즐겨찾기 — Body 로 pass-through. 미지정 시 별 미렌더 (기존 사용처 무변경).
+  isFavorite?(placeId: string): boolean;
+  onToggleFavorite?(item: RestaurantPublicListItemType): void;
 }
 
 export const PublicRestaurantList = ({
@@ -261,6 +271,8 @@ export const PublicRestaurantList = ({
   onZoomItem,
   panelSide,
   onTogglePanelSide,
+  isFavorite,
+  onToggleFavorite,
 }: Props) => {
   return (
     <div className="flex flex-col">
@@ -289,6 +301,8 @@ export const PublicRestaurantList = ({
           selectedPlaceId={selectedPlaceId}
           onSelectItem={onSelectItem}
           onZoomItem={onZoomItem}
+          isFavorite={isFavorite}
+          onToggleFavorite={onToggleFavorite}
         />
       </div>
     </div>

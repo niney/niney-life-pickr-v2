@@ -120,6 +120,11 @@ export const Restaurant = {
   // 공개 가중 랜덤 픽 — 홈 "오늘 뭐 먹지?" 슬롯. 어드민 smartPick 과 같은 서비스를
   // 입력만 바운드해 무인증으로 연다. POST — 후보 200개 placeId 배열이 URL 한도를 넘는다.
   publicSmartPick: `${API_PREFIX}/restaurants/public/smart-pick`,
+  // 맛집 즐겨찾기 — 로그인 사용자 서버 저장분(비로그인은 클라 로컬 + 로그인 시
+  // sync 병합). 버스/지하철 즐겨찾기와 동일 계약, 대상 1종(placeId).
+  favorites: `${API_PREFIX}/restaurants/favorites`,
+  favorite: (placeId: string) => `${API_PREFIX}/restaurants/favorites/${placeId}`,
+  favoritesSync: `${API_PREFIX}/restaurants/favorites/sync`,
   list: `${API_PREFIX}/admin/restaurants`,
   byPlaceId: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,
   delete: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}`,

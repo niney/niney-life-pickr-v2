@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useRestaurantRanking } from '@repo/shared';
+import { useRestaurantFavorites, useRestaurantRanking } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { SmartPickSection } from '~/components/restaurant/SmartPickSection';
+import { RestaurantFavoritesStrip } from '~/components/restaurant/RestaurantFavoritesStrip';
 
 const PAGE_SIZE = 20;
 
@@ -14,6 +15,10 @@ export const HomePage = () => {
   const [sort, setSort] = useState<Sort>('positive');
   const [excludeNeutral, setExcludeNeutral] = useState(false);
   const [offset, setOffset] = useState(0);
+
+  // 맛집 즐겨찾기 — 페이지당 1회 호출 원칙. 픽 섹션(즐겨찾기 뽑기 모드)과
+  // 스트립이 같은 인스턴스를 공유한다.
+  const favorites = useRestaurantFavorites();
 
   const ranking = useRestaurantRanking({
     sort,
@@ -41,7 +46,9 @@ export const HomePage = () => {
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
-      <SmartPickSection />
+      <SmartPickSection favorites={favorites} />
+
+      <RestaurantFavoritesStrip items={favorites.items} onToggle={favorites.toggle} />
 
       <header className="mb-6 flex flex-col gap-2">
         <h2 className="text-2xl font-bold tracking-tight">맛집 랭킹</h2>

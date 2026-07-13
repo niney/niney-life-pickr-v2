@@ -1,5 +1,12 @@
 import { useCallback } from 'react';
-import { useMatch, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import {
+  useMatch,
+  useNavigate,
+  useOutletContext,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
+import type { RestaurantFavoritesApi } from '@repo/shared';
 import { PublicRestaurantDetail } from '~/components/restaurant/detail/PublicRestaurantDetail';
 import { TAB_ORDER, type TabKey } from '~/components/restaurant/detail/tabs';
 
@@ -16,6 +23,10 @@ export const RestaurantDetailRoute = () => {
   const { placeId = '' } = useParams<{ placeId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  // 즐겨찾기는 부모 페이지(RestaurantsPage/RestaurantsV2Page)가 훅을 1회 호출해
+  // Outlet context 로 내려준다 — 여기서 useRestaurantFavorites 를 다시 부르지
+  // 않는다(sync 부수효과 중복 방지).
+  const favorites = useOutletContext<RestaurantFavoritesApi | undefined>();
 
   const tabRaw = searchParams.get('tab');
   const tab: TabKey = isTabKey(tabRaw) ? tabRaw : 'home';
@@ -52,6 +63,7 @@ export const RestaurantDetailRoute = () => {
       onClose={handleClose}
       tab={tab}
       onChangeTab={handleChangeTab}
+      favoritesApi={favorites}
     />
   );
 };

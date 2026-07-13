@@ -12,9 +12,15 @@ import type {
   RestaurantPublicListItemType,
   RestaurantPublicListQueryType,
 } from '@repo/api-contract';
-import { useRestaurantPublic, useRestaurantsPublic, useUserLocation } from '@repo/shared';
+import {
+  useRestaurantFavorites,
+  useRestaurantPublic,
+  useRestaurantsPublic,
+  useUserLocation,
+} from '@repo/shared';
 import { computeBboxAround, isInKorea } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
+import { toFavoriteItem } from '~/components/restaurant/favoriteSnapshot';
 import {
   PublicRestaurantList,
   PublicRestaurantListBody,
@@ -105,6 +111,18 @@ export const RestaurantsV2Page = () => {
   });
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
+
+  // 맛집 즐겨찾기 — 페이지당 1회 호출 원칙. 상세(Outlet)에는 context 로 내려주고
+  // 카드에는 ref 경유 안정 콜백으로 넘겨 카드 memo 를 보존한다(시트 드래그 등
+  // 페이지 재렌더마다 80개 카드가 통째로 리렌더되지 않도록).
+  const favorites = useRestaurantFavorites();
+  const favoritesRef = useRef(favorites);
+  useEffect(() => {
+    favoritesRef.current = favorites;
+  });
+  const handleToggleFavorite = useCallback((item: RestaurantPublicListItemType) => {
+    favoritesRef.current.toggle(toFavoriteItem(item));
+  }, []);
   const shareDetail = useRestaurantPublic(isShareRoute ? placeId : null);
   const shareMapItem = useMemo<RestaurantPublicListItemType | null>(() => {
     const detail = shareDetail.data;
@@ -282,6 +300,8 @@ export const RestaurantsV2Page = () => {
               onZoomItem={handleZoomItem}
               panelSide={panelSide}
               onTogglePanelSide={togglePanelSide}
+              isFavorite={favorites.isFavorite}
+              onToggleFavorite={handleToggleFavorite}
             />
           </aside>
         )}
@@ -295,7 +315,7 @@ export const RestaurantsV2Page = () => {
             )}
           >
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
-              <Outlet />
+              <Outlet context={favorites} />
             </Suspense>
           </aside>
         )}
@@ -355,6 +375,8 @@ export const RestaurantsV2Page = () => {
               selectedPlaceId={placeId}
               onSelectItem={handleSelectItem}
               onZoomItem={handleZoomItem}
+              isFavorite={favorites.isFavorite}
+              onToggleFavorite={handleToggleFavorite}
             />
           </div>
         </BottomSheet>
@@ -370,7 +392,7 @@ export const RestaurantsV2Page = () => {
             zIndex={30}
           >
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
-              <Outlet />
+              <Outlet context={favorites} />
             </Suspense>
           </BottomSheet>
         )}

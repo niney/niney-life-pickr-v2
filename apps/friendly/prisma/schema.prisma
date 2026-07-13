@@ -29,6 +29,8 @@ model User {
   subwayFavoriteStations SubwayFavoriteStation[]
   subwayFavoriteLines    SubwayFavoriteLine[]
 
+  restaurantFavorites RestaurantFavorite[]
+
   @@map("users")
 }
 
@@ -1071,6 +1073,28 @@ model BusFavoriteRoute {
   @@unique([userId, stId, busRouteId])
   @@index([userId])
   @@map("bus_favorite_routes")
+}
+
+// 로그인 사용자의 맛집 즐겨찾기 — 저장 시점 스냅샷(name/category/address/썸네일/
+// 좌표)을 보존한다(BusFavoriteStation 과 동일 설계). Restaurant 마스터와 FK 로
+// 묶지 않는다 — 어드민 삭제/재크롤이 즐겨찾기를 깨뜨리지 않게. 좌표는 식당
+// 마스터가 nullable 이라 스냅샷도 nullable. (userId, placeId) 유니크(upsert 멱등).
+model RestaurantFavorite {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId      String
+  name         String
+  category     String?
+  address      String?
+  thumbnailUrl String?
+  latitude     Float?
+  longitude    Float?
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, placeId])
+  @@index([userId])
+  @@map("restaurant_favorites")
 }
 
 // 노선 상세(형상+경유 정류소+기본정보) 합본 캐시 — busRouteInfo 3콜(getRoutePath/

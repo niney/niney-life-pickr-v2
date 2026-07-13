@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Dices, Star } from 'lucide-react';
 import { pickRandom, reviewThumbnailUrl, shuffle } from '@repo/utils';
-import { useRestaurantSmartPick, useRestaurantsPublic } from '@repo/shared';
+import {
+  useRestaurantSmartPick,
+  useRestaurantsPublic,
+  type RestaurantFavoritesApi,
+} from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
@@ -41,8 +45,14 @@ const IDLE_REEL: ReelState = { rows: ['?'], position: 0, animate: false };
 // 릴에 태울 중간 행 수 — 스크롤 길이(연출 시간 동안 지나가는 이름 수).
 const SPIN_ROWS = 18;
 
-export const SmartPickSection = () => {
+export const SmartPickSection = ({
+  favorites,
+}: {
+  // 홈이 소유한 useRestaurantFavorites — "즐겨찾기에서 뽑기" 모드용(선택).
+  favorites?: RestaurantFavoritesApi;
+}) => {
   const [category, setCategory] = useState<string | null>(null);
+  const [fromFavorites, setFromFavorites] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [reel, setReel] = useState<ReelState>(IDLE_REEL);
   const [outcome, setOutcome] = useState<PickOutcome | null>(null);
@@ -51,14 +61,19 @@ export const SmartPickSection = () => {
   const pickMutation = useRestaurantSmartPick();
 
   const items = listQuery.data?.items ?? [];
+  // 즐겨찾기 모드는 2개 이상일 때만 의미 — 밑돌면(별 해제 등) 자동으로 전체
+  // 풀로 복귀 (렌더 중 파생, 상태 동기화 effect 불필요).
+  const favoritesAvailable = (favorites?.items.length ?? 0) >= 2;
+  const useFavPool = fromFavorites && favoritesAvailable;
+  const pool: Array<{ placeId: string; name: string }> = useFavPool ? favorites!.items : items;
   const busy = pickMutation.isPending || phase === 'spinning';
-  const canRoll = items.length > 0 && !busy;
+  const canRoll = pool.length > 0 && !busy;
 
   const rollFrom = (visibleName: string) => {
     if (!canRoll) return;
     // mutate 는 비동기 — 응답 시점의 풀이 아니라 굴린 시점의 풀로 폴백/릴을
     // 구성해야 하므로 스냅샷을 캡처한다.
-    const candidates = items.map((p) => ({ placeId: p.placeId, name: p.name }));
+    const candidates = pool.map((p) => ({ placeId: p.placeId, name: p.name }));
     setOutcome(null);
     pickMutation.mutate(
       { candidatePlaceIds: candidates.map((c) => c.placeId) },
@@ -111,13 +126,22 @@ export const SmartPickSection = () => {
     resetResult();
   };
 
-  // 결과 카드 보강 — 후보 풀(=목록 캐시)에서 매칭. 풀 변경 시 outcome 을
-  // 리셋하므로 여기서 못 찾는 경우는 없지만, 방어적으로 이름만이라도 보여준다.
-  const enriched = outcome ? items.find((i) => i.placeId === outcome.placeId) : undefined;
-  const resultThumbnail = enriched?.thumbnailUrl ?? null;
-  const resultCategory = enriched?.category ?? null;
+  const onToggleFromFavorites = () => {
+    if (busy) return;
+    setFromFavorites((v) => !v);
+    resetResult();
+  };
 
-  const poolEmpty = !listQuery.isLoading && items.length === 0;
+  // 결과 카드 보강 — 공개 목록 행(평점·AI 점수 보유) 우선, 즐겨찾기 모드에선
+  // 스냅샷(썸네일·카테고리만) 폴백. 풀 변경 시 outcome 을 리셋하므로 둘 다
+  // 못 찾는 경우는 없지만, 방어적으로 이름만이라도 보여준다.
+  const enriched = outcome ? items.find((i) => i.placeId === outcome.placeId) : undefined;
+  const enrichedFav =
+    outcome && favorites ? favorites.items.find((i) => i.placeId === outcome.placeId) : undefined;
+  const resultThumbnail = enriched?.thumbnailUrl ?? enrichedFav?.thumbnailUrl ?? null;
+  const resultCategory = enriched?.category ?? enrichedFav?.category ?? null;
+
+  const poolEmpty = !useFavPool && !listQuery.isLoading && items.length === 0;
 
   return (
     <section className="mb-10">
@@ -131,19 +155,30 @@ export const SmartPickSection = () => {
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <CategoryChip
           label="전체"
-          active={category === null}
-          disabled={busy}
+          active={!useFavPool && category === null}
+          disabled={busy || useFavPool}
           onClick={() => onChangeCategory(null)}
         />
         {CATEGORY_CHIPS.map((chip) => (
           <CategoryChip
             key={chip}
             label={chip}
-            active={category === chip}
-            disabled={busy}
+            active={!useFavPool && category === chip}
+            disabled={busy || useFavPool}
             onClick={() => onChangeCategory(chip)}
           />
         ))}
+        {favoritesAvailable && (
+          <>
+            <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+            <CategoryChip
+              label={`⭐ 즐겨찾기에서 뽑기 (${favorites!.items.length})`}
+              active={useFavPool}
+              disabled={busy}
+              onClick={onToggleFromFavorites}
+            />
+          </>
+        )}
       </div>
 
       <SlotMachineReel
