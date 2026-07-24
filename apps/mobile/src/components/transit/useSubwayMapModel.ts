@@ -151,20 +151,27 @@ export const useSubwayMapModel = ({
   }, [followId, positions]);
 
   // ── 폴리라인 — 경로 모드면 leg별(호선색), 아니면 추적 호선 sections(지선
-  //    개별 줄 + 순환 닫기). 좌표는 5자리 반올림 튜플. ────────────────────────
+  //    개별 줄 + 순환 닫기). 실형상(path)이 있으면 그대로(서버가 순환 링을 닫아
+  //    내려줌), 없으면 역 좌표 직선 폴백. 좌표는 5자리 반올림 튜플. ───────────
   const routeLines = useMemo<BridgeRouteLine[] | null>(() => {
     if (!active) return null;
     if (pathResult) {
       if (!pathResult.found) return null;
       return pathResult.legs.map((leg) => ({
-        pts: leg.stations.map(
-          (s) => [roundCoord(s.lat), roundCoord(s.lng)] as [number, number],
+        pts: (leg.path ?? leg.stations.map((s) => [s.lat, s.lng] as [number, number])).map(
+          ([lat, lng]) => [roundCoord(lat), roundCoord(lng)] as [number, number],
         ),
         color: subwayLineColor(leg.lineId),
       }));
     }
     if (!lineDetail || !lineColor) return null;
     return lineDetail.sections.map((sec) => {
+      if (sec.path) {
+        return {
+          pts: sec.path.map(([lat, lng]) => [roundCoord(lat), roundCoord(lng)] as [number, number]),
+          color: lineColor,
+        };
+      }
       const pts = sec.stations.map(
         (s) => [roundCoord(s.lat), roundCoord(s.lng)] as [number, number],
       );
@@ -285,14 +292,25 @@ export const useSubwayMapModel = ({
     pathResult,
   ]);
 
-  // ── 실시간 열차 — section 별 RoutePathIndex(순환은 첫 좌표 복제로 닫기) +
-  //    locateTrain 역간 보간 + sliceForMove 도로 슬라이스(웹 6차 이식). ────────
+  // ── 실시간 열차 — section 별 RoutePathIndex + locateTrain 역간 보간 +
+  //    sliceForMove 도로 슬라이스(웹 6차 이식). 실형상(path/stationS)이 있으면
+  //    열차가 선로 기하 위를 달리고(anchor 가 역 호길이), 없으면 역 좌표 직선
+  //    (순환은 첫 좌표 복제로 닫기) 폴백. ─────────────────────────────────────
   const trainSections = useMemo(() => {
     if (!lineDetail) return null;
     const list: TrainSection[] = [];
     for (const sec of lineDetail.sections) {
-      const coords = sec.stations.map((s) => ({ lat: s.lat, lng: s.lng }));
-      const pts = sec.isLoop && coords.length > 1 ? [...coords, { ...coords[0]! }] : coords;
+      const hasShape =
+        sec.path !== undefined &&
+        sec.stationS !== undefined &&
+        sec.stationS.length === sec.stations.length;
+      let pts;
+      if (hasShape) {
+        pts = sec.path!.map(([lat, lng]) => ({ lat, lng }));
+      } else {
+        const coords = sec.stations.map((s) => ({ lat: s.lat, lng: s.lng }));
+        pts = sec.isLoop && coords.length > 1 ? [...coords, { ...coords[0]! }] : coords;
+      }
       const index = createRoutePathIndex(pts);
       if (!index) continue;
       list.push({
@@ -301,6 +319,7 @@ export const useSubwayMapModel = ({
         isLoop: sec.isLoop,
         byName: new Map(sec.stations.map((s, i) => [s.name, i])),
         stationCount: sec.stations.length,
+        ...(hasShape ? { stationS: sec.stationS! } : {}),
       });
     }
     if (list.length === 0) return null;

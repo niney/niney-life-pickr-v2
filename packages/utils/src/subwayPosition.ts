@@ -19,11 +19,18 @@ export interface TrainSection {
   index: RoutePathIndex;
   isLoop: boolean;
   // 역명 → 역 순번(0-based, seq asc). 실시간 응답엔 마스터 statnId 가 없어(계약)
-  // 역명(statnNm)으로 조인한다. 역 i 의 호길이 = index.cum[i].
+  // 역명(statnNm)으로 조인한다. 역 i 의 호길이 = stationS?.[i] ?? index.cum[i].
   byName: Map<string, number>;
   // 역 개수 N. (isLoop 면 index.points 는 N+1, cum[N] = totalM.)
   stationCount: number;
+  // 실형상 anchor — index 가 역 좌표 직선이 아닌 실형상(선로 기하)일 때 역 i 의
+  // 호길이(m). 미지정이면 index.points 가 곧 역 좌표라 cum[i] 를 쓴다(기존 동작).
+  stationS?: ArrayLike<number>;
 }
+
+// 역 i 의 호길이 — 실형상 anchor 우선, 없으면 cum[i](역 좌표 = 형상 점).
+const stationSAt = (sec: TrainSection, i: number): number =>
+  sec.stationS !== undefined ? sec.stationS[i]! : sec.index.cum[i]!;
 
 // trainStatus → [직전역→현재역] 세그먼트 위 진행 분수. 프로브로 보정 가능하게 export.
 // '2'(출발)만 다음 세그먼트(현재역→다음역)의 시작 분수다.
@@ -97,20 +104,20 @@ const segmentEndpointsS = (
   toIdx: number,
   dir: 1 | -1,
 ): { sFrom: number; sTo: number } | null => {
-  const { cum, totalM } = sec.index;
+  const { totalM } = sec.index;
   const N = sec.stationCount;
   if (sec.isLoop) {
     const wf = ((fromIdx % N) + N) % N;
     const wt = ((toIdx % N) + N) % N;
-    const sFrom = cum[wf]!;
-    let sTo = cum[wt]!;
+    const sFrom = stationSAt(sec, wf);
+    let sTo = stationSAt(sec, wt);
     // 전진(+s)인데 to 가 from 이하면 시임을 넘은 것 → +totalM. 후진은 반대.
     if (dir === 1 && sTo < sFrom) sTo += totalM;
     if (dir === -1 && sTo > sFrom) sTo -= totalM;
     return { sFrom, sTo };
   }
   if (fromIdx < 0 || fromIdx > N - 1 || toIdx < 0 || toIdx > N - 1) return null;
-  return { sFrom: cum[fromIdx]!, sTo: cum[toIdx]! };
+  return { sFrom: stationSAt(sec, fromIdx), sTo: stationSAt(sec, toIdx) };
 };
 
 // 열차 위치 추정 — 현재역이 있는 section 선택(행선까지 포함하는 쪽 우선 = 지선
@@ -137,7 +144,6 @@ export function locateTrain(
 
   const cur = sec.byName.get(item.statnNm)!;
   const N = sec.stationCount;
-  const cum = sec.index.cum;
   const total = sec.index.totalM;
 
   // 방향 — 행선 seq 비교(순환은 짧은 호), 미발견 시 updn 보조.
@@ -156,7 +162,7 @@ export function locateTrain(
   }
 
   // 방향 미정 — 현재역에 정지(방위각 없음).
-  if (dir === 0) return { sectionKey: sec.sectionKey, s: cum[cur]!, bearing: null };
+  if (dir === 0) return { sectionKey: sec.sectionKey, s: stationSAt(sec, cur), bearing: null };
 
   const frac = opts.statusFraction ?? TRAIN_STATUS_FRACTION;
   const f = frac[item.trainStatus] ?? 1.0;
@@ -166,10 +172,11 @@ export function locateTrain(
   const toIdx = isNextSeg ? cur + dir : cur;
   const seg = segmentEndpointsS(sec, fromIdx, toIdx, dir);
   // 종점 밖(비순환 클램프) — 현재역에 정지.
-  if (!seg) return { sectionKey: sec.sectionKey, s: cum[cur]!, bearing: null };
+  if (!seg) return { sectionKey: sec.sectionKey, s: stationSAt(sec, cur), bearing: null };
 
   let s = seg.sFrom + f * (seg.sTo - seg.sFrom);
-  s = ((s % total) + total) % total; // 순환 랩
+  // 순환만 시임 랩 — 비순환은 클램프(종착역 s=total 이 0 으로 랩되면 시점으로 점프).
+  s = sec.isLoop ? ((s % total) + total) % total : Math.min(Math.max(s, 0), total);
   const base = bearingAtRoutePathS(sec.index, s);
   const bearing = base == null ? null : dir === 1 ? base : (base + 180) % 360;
   return { sectionKey: sec.sectionKey, s, bearing };

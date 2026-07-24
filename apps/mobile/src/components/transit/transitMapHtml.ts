@@ -48,10 +48,17 @@ export const buildTransitMapHtml = (
 <style>
   html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
   body { background: ${dark ? '#09090b' : '#f4f4f5'}; -webkit-tap-highlight-color: transparent; }
+  /* 출처 표기 — 베이스맵(V-World) + 지하철 노선 실형상(OSM, ODbL). */
+  #attrib {
+    position: absolute; right: 4px; bottom: 2px; z-index: 5;
+    font: 9px/1.4 -apple-system, sans-serif; color: #71717a; opacity: 0.85;
+    pointer-events: none; text-shadow: 0 0 2px ${dark ? '#09090b' : '#f4f4f5'};
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
+<div id="attrib">V-World · © OpenStreetMap</div>
 <script src="https://cdn.jsdelivr.net/npm/ol@10.3.1/dist/ol.js"></script>
 <script>
 (function() {
@@ -278,6 +285,46 @@ export const buildTransitMapHtml = (
     if (!mch) return hex;
     var n = parseInt(mch[1], 16);
     return 'rgba(' + ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ', ' + alpha + ')';
+  }
+
+  // 줌 연동 선폭 — 광역(축소)에선 가늘게, 확대에선 도톰하게. 해상도(m/px) 기준.
+  function routeLineWidth(resolution) {
+    if (resolution > 75) return 3;
+    if (resolution > 20) return 4;
+    if (resolution > 5) return 5;
+    return 6;
+  }
+
+  // 노선 스타일 팩토리 — casing(배경색 테두리) + 본색 이중 스트로크. style
+  // function 이 darkBg/해상도를 렌더 시점에 읽는다(테마 전환은 changed() 재평가).
+  // (선폭×테마) 조합별 캐시 — 렌더마다 스타일 객체 재생성 방지.
+  function makeRouteLineStyle(color) {
+    var cache = {};
+    return function(_feature, resolution) {
+      var w = routeLineWidth(resolution);
+      var key = w + (darkBg ? 'd' : 'l');
+      if (!cache[key]) {
+        cache[key] = [
+          new ol.style.Style({
+            stroke: new ol.style.Stroke({
+              color: darkBg ? 'rgba(9, 9, 11, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+              width: w + 3,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }),
+          }),
+          new ol.style.Style({
+            stroke: new ol.style.Stroke({
+              color: strokeColorWithAlpha(color, 0.9),
+              width: w,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }),
+          }),
+        ];
+      }
+      return cache[key];
+    };
   }
 
   // ── 차량 tween 소기하 — EPSG:3857 평면 전용(MapCanvas 포팅) ────────────────
@@ -510,6 +557,7 @@ export const buildTransitMapHtml = (
       // 라벨 색 재평가 — style function 이 darkBg 를 읽으므로 changed() 만.
       markerSource.changed();
       overlaySource.changed();
+      routeLineSource.changed();
     },
     setActive: function(cmd) {
       if (cmd.active) {
@@ -562,14 +610,7 @@ export const buildTransitMapHtml = (
           coords.push(ol.proj.fromLonLat([line.pts[j][1], line.pts[j][0]]));
         }
         var f = new ol.Feature({ geometry: new ol.geom.LineString(coords) });
-        f.setStyle(new ol.style.Style({
-          stroke: new ol.style.Stroke({
-            color: strokeColorWithAlpha(line.color, 0.85),
-            width: 5,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }),
-        }));
+        f.setStyle(makeRouteLineStyle(line.color));
         routeLineSource.addFeature(f);
       }
     },
