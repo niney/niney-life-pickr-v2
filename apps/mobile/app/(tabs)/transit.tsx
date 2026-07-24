@@ -10,10 +10,15 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
@@ -104,6 +109,12 @@ import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 const SNAP_POINTS = ['20%', '50%', '100%'];
 const FALLBACK_HEADER_H = 150;
+
+// 따라가기/탑승 칩 슬롯 — 시트 상단(animatedPosition)에 앵커. 시트가 미측정/
+// 언마운트면 이 센티넬이 앵커를 화면 밖으로 밀어 칩이 안 보이게 한다.
+const SHEET_TOP_UNSET = 10_000;
+const FOLLOW_CHIP_GAP = 10;
+const FOLLOW_CHIP_FALLBACK_H = 34;
 
 // 빈 결과 안정 참조 — 매 렌더 새 [] 는 지도 fit 재발화의 원인(웹과 동일 함정).
 const EMPTY_GROUPS: SubwayStationGroupItemType[] = [];
@@ -734,9 +745,14 @@ export default function TransitScreen() {
   // ── 시트 상태 — restaurants.tsx 패턴 그대로 ────────────────────────────────
   const [headerCardH, setHeaderCardH] = useState(FALLBACK_HEADER_H);
   const listSheetRef = useRef<BottomSheet | null>(null);
+  const detailSheetRef = useRef<BottomSheet | null>(null);
   const listSheetIndex = useSharedValue(1);
   const detailSheetIndex = useSharedValue(-1);
   const detailOpenSV = useSharedValue(0);
+  // 각 시트 상단 Y(px, 컨테이너=화면 기준). gorhom 이 드래그 중에도 매 프레임
+  // 갱신 — 따라가기 칩이 이 값을 따라 시트 위에 붙는다.
+  const listSheetTop = useSharedValue(SHEET_TOP_UNSET);
+  const detailSheetTop = useSharedValue(SHEET_TOP_UNSET);
   const headerSheetIndex = useDerivedValue(() => {
     'worklet';
     const v = detailOpenSV.value === 1 ? detailSheetIndex.value : listSheetIndex.value;
@@ -758,6 +774,17 @@ export default function TransitScreen() {
     detailOpenSV.value = 0;
     listSheetRef.current?.snapToIndex(listSnapBeforeDetailRef.current);
   }, [detailOpenSV]);
+
+  // 따라가기/탑승 시작 = 지도를 보려는 동작 — 열린 시트를 최저 스냅으로 내려
+  // 지도를 연다(디테일 시트는 미마운트면 ref 가 null 이라 no-op). 칩은 시트
+  // 상단에 앵커돼 있으니 이건 '가림 해소'가 아니라 시야 확보용.
+  const collapseSheetsForFollow = useCallback(() => {
+    // 디테일을 닫을 때 복귀할 스냅도 peek 으로 — 따라가다 뒤로가기 하면 리스트가
+    // 다시 half 로 튀어 지도를 덮던 것 방지.
+    listSnapBeforeDetailRef.current = 0;
+    listSheetRef.current?.snapToIndex(0);
+    detailSheetRef.current?.snapToIndex(0);
+  }, []);
 
   // ── 핸들러 ──────────────────────────────────────────────────────────────
   const dismissSearchAssist = useCallback(() => {
@@ -842,9 +869,11 @@ export default function TransitScreen() {
 
   // 도착 패널 '지도에서 보기' — 호선 추적 + 그 열차 따라가기 대기(nonce).
   const handleLocateTrain = useCallback(
-    (lineId: string, trainNo: string) =>
-      dispatch({ type: 'SUBWAY_LOCATE_TRAIN', lineId, trainNo, nonce: Date.now() }),
-    [dispatch],
+    (lineId: string, trainNo: string) => {
+      dispatch({ type: 'SUBWAY_LOCATE_TRAIN', lineId, trainNo, nonce: Date.now() });
+      collapseSheetsForFollow();
+    },
+    [dispatch, collapseSheetsForFollow],
   );
 
   // 시간표 뷰 열기 — 그 호선의 역×호선 stationId 로 전환, dayType 오늘로 리셋.
@@ -1348,6 +1377,7 @@ export default function TransitScreen() {
               label: busVehicleLabel ?? vehId,
             },
           });
+          collapseSheetsForFollow();
         }
       } else if (isSubwayVehicleId(id)) {
         if (mode === 'subway') subwayVehicleSelect(id);
@@ -1365,6 +1395,7 @@ export default function TransitScreen() {
               label: t ? subwayDestinationLabel(t.destinationName) : trainNo,
             },
           });
+          collapseSheetsForFollow();
         }
       }
     },
@@ -1378,6 +1409,7 @@ export default function TransitScreen() {
       busVehicleLabel,
       subwayTrainItems,
       dispatch,
+      collapseSheetsForFollow,
     ],
   );
 
@@ -1464,6 +1496,74 @@ export default function TransitScreen() {
     (h: number) => setHeaderCardH((prev) => (prev === h ? prev : h)),
     [],
   );
+
+  // ── 따라가기/탑승 칩 앵커 ────────────────────────────────────────────────
+  // 두 시트 중 더 위에 있는 것(=작은 Y) 바로 위에 칩을 띄운다. 고정 bottom 이면
+  // peek 에서도 시트에 걸리고 디테일 시트(zIndex 30)엔 통째로 가렸다.
+  const followChipH = useSharedValue(FOLLOW_CHIP_FALLBACK_H);
+  const followChipMinY = mapTopInset + 4;
+
+  const followChipY = useDerivedValue(() => {
+    'worklet';
+    const sheetTop = Math.min(listSheetTop.value, detailSheetTop.value);
+    return sheetTop - followChipH.value - FOLLOW_CHIP_GAP;
+  });
+  // full 스냅이면 칩이 헤더 밑으로 잠기며 시트 핸들 위를 덮는다 — 페이드아웃
+  // (opacity 0 은 RN 에서 터치를 그대로 먹으므로 pointerEvents 도 같이 끈다).
+  const [followChipCovered, setFollowChipCovered] = useState(false);
+  useAnimatedReaction(
+    () => followChipY.value < followChipMinY,
+    (covered, prev) => {
+      'worklet';
+      if (prev !== null && covered === prev) return;
+      runOnJS(setFollowChipCovered)(covered);
+    },
+    [followChipMinY],
+  );
+  const followChipStyle = useAnimatedStyle(() => {
+    'worklet';
+    const y = followChipY.value;
+    return {
+      transform: [{ translateY: Math.max(followChipMinY, y) }],
+      opacity: interpolate(
+        y,
+        [followChipMinY, followChipMinY + 20],
+        [0, 1],
+        Extrapolation.CLAMP,
+      ),
+    };
+  }, [followChipMinY]);
+  const handleMeasureFollowChip = useCallback(
+    (e: LayoutChangeEvent) => {
+      const h = e.nativeEvent.layout.height;
+      if (h > 0) followChipH.value = h;
+    },
+    [followChipH],
+  );
+  const followChipPointerEvents = followChipCovered ? 'none' : 'box-none';
+
+  // ── 지도 하단 인셋 — 추적 차량이 시트 뒤에 놓이지 않게 카메라를 위로 보정 ──
+  // 지도는 시트 뒤까지 풀블리드라 컨테이너 높이 = 지도 캔버스 높이. 시트가
+  // 스냅에 안착할 때만(onChange) 갱신 — 드래그 매 프레임 전송은 브리지 낭비다.
+  const [containerH, setContainerH] = useState(0);
+  const [mapBottomInset, setMapBottomInset] = useState(0);
+  const handleMeasureContainer = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    setContainerH((prev) => (prev === h ? prev : h));
+  }, []);
+  const syncMapBottomInset = useCallback(() => {
+    const top = Math.min(listSheetTop.value, detailSheetTop.value);
+    if (!containerH || top >= SHEET_TOP_UNSET) return;
+    const covered = Math.max(0, Math.round(containerH - top));
+    // 잔떨림 억제 — 8dp 미만 변화는 무시(스냅 안착값엔 기기별 소수점이 붙는다).
+    setMapBottomInset((prev) => (Math.abs(prev - covered) < 8 ? prev : covered));
+  }, [containerH, listSheetTop, detailSheetTop]);
+  // 디테일 시트는 조건부 mount — 언마운트 후 남은 값이 앵커/인셋을 끌어올리지
+  // 않게 리셋하고, 컨테이너 최초 측정 후에도 한 번 재계산한다.
+  useEffect(() => {
+    if (!detailVisible) detailSheetTop.value = SHEET_TOP_UNSET;
+    syncMapBottomInset();
+  }, [detailVisible, detailSheetTop, syncMapBottomInset]);
 
   // 검색 결과 하단 크로스 섹션(웹 15차) — 지하철 모드는 제출 게이트(submittedQ),
   // 버스 모드는 제출형이라 q 자체가 확정값. 주변/초기 화면엔 미표시.
@@ -1597,7 +1697,10 @@ export default function TransitScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.bg }]}
+      onLayout={handleMeasureContainer}
+    >
       <TransitMapView
         ref={mapRef}
         initialCenter={initialCenter}
@@ -1611,6 +1714,7 @@ export default function TransitScreen() {
         vehicleTweenMs={mapVehicleTweenMs}
         followVehicleId={mapFollowVehicleId}
         topInset={mapTopInset}
+        viewBottomInset={mapBottomInset}
         onSelectMarker={handleMarkerSelect}
         onSelectVehicle={mapVehicleSelect}
         onFollowInterrupted={mapFollowInterrupted}
@@ -1685,12 +1789,13 @@ export default function TransitScreen() {
         </View>
       )}
 
-      {/* 탑승(핀) 상태 — 하단 중앙 상시 칩(모드·선택 무관). 패닝 일시정지 시
-          '다시 따라가기', 운행 종료 시 안내 칩(4초). 종료(✕)=UNPIN. */}
+      {/* 탑승(핀) 상태 — 시트 상단에 붙는 상시 칩(모드·선택 무관). 패닝 일시정지
+          시 '다시 따라가기', 운행 종료 시 안내 칩(4초). 종료(✕)=UNPIN. */}
       {pinEndedNotice ? (
-        <View
-          style={[styles.followWrap, { bottom: insets.bottom + 96 }]}
-          pointerEvents="box-none"
+        <Animated.View
+          style={[styles.followWrap, followChipStyle]}
+          pointerEvents={followChipPointerEvents}
+          onLayout={handleMeasureFollowChip}
         >
           <View
             style={[
@@ -1702,11 +1807,12 @@ export default function TransitScreen() {
               {pinEndedNotice}
             </Text>
           </View>
-        </View>
+        </Animated.View>
       ) : pinned ? (
-        <View
-          style={[styles.followWrap, { bottom: insets.bottom + 96 }]}
-          pointerEvents="box-none"
+        <Animated.View
+          style={[styles.followWrap, followChipStyle]}
+          pointerEvents={followChipPointerEvents}
+          onLayout={handleMeasureFollowChip}
         >
           <View
             style={[
@@ -1737,15 +1843,16 @@ export default function TransitScreen() {
               <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>✕</Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       ) : null}
 
-      {/* 따라가기 상태 — 하단 중앙(List 시트 위). 추적 중엔 배지+종료, 조작으로
+      {/* 따라가기 상태 — 시트 상단에 붙는 칩. 추적 중엔 배지+종료, 조작으로
           끊기면 '다시 따라가기' 칩, 운행 종료 시 안내 칩(4초). */}
       {!pinned && !pinEndedNotice && follow && (follow.following || follow.notice) && (
-        <View
-          style={[styles.followWrap, { bottom: insets.bottom + 96 }]}
-          pointerEvents="box-none"
+        <Animated.View
+          style={[styles.followWrap, followChipStyle]}
+          pointerEvents={followChipPointerEvents}
+          onLayout={handleMeasureFollowChip}
         >
           {follow.notice ? (
             <View
@@ -1785,7 +1892,7 @@ export default function TransitScreen() {
               </Pressable>
             </View>
           )}
-        </View>
+        </Animated.View>
       )}
 
       {/* List 시트 — 항상 mount, 단일 FlatList 에 행 데이터만 교체. */}
@@ -1795,6 +1902,8 @@ export default function TransitScreen() {
         snapPoints={SNAP_POINTS}
         topInset={listTopInset}
         animatedIndex={listSheetIndex}
+        animatedPosition={listSheetTop}
+        onChange={syncMapBottomInset}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         containerStyle={styles.listSheetContainer}
@@ -1925,10 +2034,13 @@ export default function TransitScreen() {
           닫기는 패널 뒤로가기 버튼 / 안드로이드 하드웨어 백(handleBack)으로만. */}
       {detailVisible ? (
         <BottomSheet
+          ref={detailSheetRef}
           index={1}
           snapPoints={SNAP_POINTS}
           topInset={detailTopInset}
           animatedIndex={detailSheetIndex}
+          animatedPosition={detailSheetTop}
+          onChange={syncMapBottomInset}
           keyboardBehavior="extend"
           keyboardBlurBehavior="restore"
           containerStyle={styles.detailSheetContainer}
@@ -2185,12 +2297,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   mapChipText: { fontSize: 12, fontWeight: '600' },
+  // translateY 로 시트 상단에 앵커 — top 0 기준. zIndex 는 디테일 시트(30) 위.
   followWrap: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
     alignItems: 'center',
-    zIndex: 25,
+    zIndex: 40,
   },
   lineCard: {
     position: 'absolute',

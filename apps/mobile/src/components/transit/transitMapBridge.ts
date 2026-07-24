@@ -77,6 +77,9 @@ export type TransitMapCmd =
   | { type: 'setRouteLines'; lines: BridgeRouteLine[] | null }
   | { type: 'setVehicles'; vehicles: BridgeVehicle[]; tweenMs: number }
   | { type: 'setFollow'; id: string | null }
+  // 바텀시트가 지도 하단을 덮는 높이(CSS px). 따라가기 센터링을 이만큼 위로
+  // 보정해 추적 차량이 '보이는 영역' 중앙에 오게 한다(0 = 보정 없음).
+  | { type: 'setViewInset'; bottom: number }
   | { type: 'setMyLocation'; coord: { lat: number; lng: number } | null }
   | { type: 'flyTo'; lat: number; lng: number; zoom?: number }
   // 줌아웃 금지 — 현재 줌이 minZoom 보다 크면 유지하고 중심만 이동.

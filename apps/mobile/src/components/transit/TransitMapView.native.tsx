@@ -39,6 +39,7 @@ export const TransitMapView = forwardRef<TransitMapHandle, TransitMapViewProps>(
       followVehicleId = null,
       myLocation = null,
       topInset = 0,
+      viewBottomInset = 0,
       onSelectMarker,
       onSelectVehicle,
       onFollowInterrupted,
@@ -107,6 +108,7 @@ export const TransitMapView = forwardRef<TransitMapHandle, TransitMapViewProps>(
       vehicleTweenMs,
       followVehicleId,
       myLocation,
+      viewBottomInset,
     });
 
     useImperativeHandle(

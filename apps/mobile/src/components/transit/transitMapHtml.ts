@@ -172,6 +172,17 @@ export const buildTransitMapHtml = (
   // ── 상호작용/뷰포트 ─────────────────────────────────────────────────────────
   var userInteracted = false;
   var followId = null;
+  // 바텀시트가 덮는 하단 높이(CSS px). 지도는 시트 뒤까지 풀블리드라 캔버스
+  // 정중앙에 차량을 놓으면 시트에 가린다 — 그만큼 중심을 남쪽으로 밀어 차량이
+  // 가시 영역 중앙에 오게 한다(회전 없는 뷰 전제라 y 만 보정).
+  var viewBottomInset = 0;
+
+  function followCenterFor(coord) {
+    if (!viewBottomInset) return coord;
+    var res = map.getView().getResolution();
+    if (!res) return coord;
+    return [coord[0], coord[1] - (viewBottomInset / 2) * res];
+  }
 
   // 추적 중 제스처 → 같은 프레임에 자체 해제 후 RN 에 알림(일시정지 UI 는 RN).
   function interruptFollow() {
@@ -461,7 +472,7 @@ export const buildTransitMapHtml = (
       // 따라가기 — 대상 차량 좌표로 매 프레임 센터(tween 이 부드러움을 만든다).
       if (followId !== null) {
         var ff = vehicleFeatures[followId];
-        if (ff) map.getView().setCenter(ff.getGeometry().getCoordinates());
+        if (ff) map.getView().setCenter(followCenterFor(ff.getGeometry().getCoordinates()));
       }
       vehicleRaf = active ? requestAnimationFrame(tick) : null;
     };
@@ -625,9 +636,27 @@ export const buildTransitMapHtml = (
       if (!f) return;
       userInteracted = false;
       map.getView().animate({
-        center: f.getGeometry().getCoordinates(),
+        center: followCenterFor(f.getGeometry().getCoordinates()),
         duration: 300,
       });
+    },
+    setViewInset: function(cmd) {
+      var b = typeof cmd.bottom === 'number' && isFinite(cmd.bottom) ? cmd.bottom : 0;
+      var size = map.getSize();
+      // 과보정 방지 — 캔버스의 70% 이상은 무시(가시 영역이 사라진다).
+      var max = (size && size[1]) ? size[1] * 0.7 : 400;
+      var next = Math.max(0, Math.min(b, max));
+      if (next === viewBottomInset) return;
+      viewBottomInset = next;
+      // 추적 중이면 즉시 재정렬 — 다음 tween 프레임까지 기다리지 않는다.
+      if (followId === null) return;
+      var ff = vehicleFeatures[followId];
+      if (ff) {
+        map.getView().animate({
+          center: followCenterFor(ff.getGeometry().getCoordinates()),
+          duration: 200,
+        });
+      }
     },
     setMyLocation: function(cmd) {
       myLocationSource.clear();

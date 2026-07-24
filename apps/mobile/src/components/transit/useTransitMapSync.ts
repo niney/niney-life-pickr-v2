@@ -28,6 +28,8 @@ export interface TransitMapViewProps {
   myLocation?: { lat: number; lng: number } | null;
   // 타일 에러 토스트가 시작할 y 픽셀(플로팅 헤더 아래).
   topInset?: number;
+  // 바텀시트가 지도 하단을 덮는 높이(dp=CSS px) — 따라가기 센터링 보정용.
+  viewBottomInset?: number;
   onSelectMarker?(id: string): void;
   onSelectVehicle?(id: string): void;
   onFollowInterrupted?(): void;
@@ -55,6 +57,7 @@ export interface TransitMapSyncState {
   vehicleTweenMs: number;
   followVehicleId: string | null;
   myLocation: { lat: number; lng: number } | null;
+  viewBottomInset: number;
 }
 
 // props 변경 감시 → 명령 발행. 채널별 독립 effect 라 값이 바뀐 채널만 전송된다.
@@ -99,6 +102,11 @@ export const useTransitMapSync = (
   useEffect(() => {
     if (ready) send({ type: 'setVehicles', vehicles: s.vehicles, tweenMs: s.vehicleTweenMs });
   }, [ready, send, s.vehicles, s.vehicleTweenMs]);
+
+  // 인셋은 follow 앞에 — replay 시 첫 센터링부터 보정된 좌표로 잡힌다.
+  useEffect(() => {
+    if (ready) send({ type: 'setViewInset', bottom: s.viewBottomInset });
+  }, [ready, send, s.viewBottomInset]);
 
   // follow 는 차량이 먼저 배치돼 있어야 센터링이 되므로 vehicles 뒤에.
   useEffect(() => {
