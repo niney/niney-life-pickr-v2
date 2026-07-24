@@ -50,6 +50,7 @@ import {
   dayTypeForToday,
   formatRelativeMin,
   isInKorea,
+  roundCoord,
   subwayDestinationLabel,
   subwayLineName,
   type SubwayDayType,
@@ -96,7 +97,7 @@ import {
   type SubwayStationRowData,
 } from '~/components/subway/SubwayStationListRows';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
-import { roundCoord, useTransitScreen, type TransitMode } from '~/hooks/useTransitScreen';
+import { useTransitScreen, type TransitMode } from '~/hooks/useTransitScreen';
 import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 // 권한 거부/한국 밖 폴백 — 서울시청(restaurants 탭과 동일).

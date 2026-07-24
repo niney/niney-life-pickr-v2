@@ -11,11 +11,12 @@ import {
   buildSubwayTrainDirDataUrl,
   buildSubwayTrainPillDataUrl,
   busRouteTypeColor,
+  roundCoord,
   subwayDestinationLabel,
   subwayLineColor,
 } from '@repo/utils';
 import type { BridgeRouteLine, BridgeVehicle } from './transitMapBridge';
-import { roundCoord, type PinnedVehicle } from '~/hooks/useTransitScreen';
+import type { PinnedVehicle } from '~/hooks/useTransitScreen';
 
 const EMPTY_VEHICLES: BridgeVehicle[] = [];
 const EMPTY_LINES: BridgeRouteLine[] = [];
