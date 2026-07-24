@@ -196,6 +196,8 @@ afterAll(async () => {
   await app.prisma.subwayCongestion.deleteMany({
     where: { stationName: { contains: NAME_PREFIX } },
   });
+  // 실형상 시드 정리 — osmRelationId 'test' 로 표시(실적재 행은 relation id/조합 라벨).
+  await app.prisma.subwayLineShape.deleteMany({ where: { osmRelationId: 'test' } });
   // contains — 정렬 테스트의 '뒤…' 접두어 케이스도 잡는다(startsWith 로는 누락).
   await app.prisma.subwayStation.deleteMany({ where: { name: { contains: NAME_PREFIX } } });
   await app.prisma.subwayMasterSync.deleteMany({ where: { count: 0 } });
@@ -840,6 +842,50 @@ describe('GET /api/v1/subway/path — 경로 탐색', () => {
     expect(body.approxMinutes).toBe(2); // 1 ride × 120s
   });
 
+  it('leg 실형상 부착 — 노선 형상이 있으면 leg.path 에 탑승~하차 슬라이스', async () => {
+    const LINE = '1096';
+    await app.prisma.subwayLineStation.deleteMany({ where: { lineId: LINE } });
+    await app.prisma.subwayLineShape.deleteMany({ where: { lineId: LINE } });
+    const a = `${NAME_PREFIX}형상가${stamp()}`;
+    const b = `${NAME_PREFIX}형상나${stamp()}`;
+    const c = `${NAME_PREFIX}형상다${stamp()}`;
+    // 동서 직선 형상 — 역 3개가 1km 간격으로 형상 위에 정확히 얹힌다.
+    const p0: [number, number] = [37.5, 127.0];
+    const p1: [number, number] = [37.5, offsetLng(37.5, 127.0, 1000)];
+    const p2: [number, number] = [37.5, offsetLng(37.5, 127.0, 2000)];
+    await seed(app, [
+      { lineId: LINE, name: a, lat: p0[0], lng: p0[1] },
+      { lineId: LINE, name: b, lat: p1[0], lng: p1[1] },
+      { lineId: LINE, name: c, lat: p2[0], lng: p2[1] },
+    ]);
+    await seedLineStations(app, [
+      { lineId: LINE, branchKey: 'main', branchName: null, seq: 1, stationId: `${LINE}:${a}` },
+      { lineId: LINE, branchKey: 'main', branchName: null, seq: 2, stationId: `${LINE}:${b}` },
+      { lineId: LINE, branchKey: 'main', branchName: null, seq: 3, stationId: `${LINE}:${c}` },
+    ]);
+    await app.prisma.subwayLineShape.create({
+      data: {
+        lineId: LINE,
+        branchKey: 'main',
+        path: JSON.stringify([p0, p1, p2]),
+        stationS: JSON.stringify([0, 1000, 2000]),
+        osmRelationId: 'test',
+      },
+    });
+
+    // 라우트 서비스는 그래프를 TTL 캐시해 시드 이후 반영이 안 된다 — 새 인스턴스로
+    // 직접 호출(위치 마이크로 캐시 테스트와 같은 패턴).
+    const svc = new SubwayService({ prisma: app.prisma, serviceKey: '' });
+    const body = await svc.getPath(`${LINE}:${a}`, `${LINE}:${c}`);
+    expect(body.found).toBe(true);
+    expect(body.legs).toHaveLength(1);
+    const legPath = body.legs[0]!.path!;
+    expect(legPath.length).toBeGreaterThanOrEqual(3);
+    expect(legPath[0]![0]).toBeCloseTo(p0[0], 4);
+    expect(legPath[0]![1]).toBeCloseTo(p0[1], 4);
+    expect(legPath[legPath.length - 1]![1]).toBeCloseTo(p2[1], 4);
+  });
+
   it('미연결 → found:false·legs [] (200)', async () => {
     // 순서 데이터 없는 격리 역 2개 — 그래프에 노드만 있고 간선 없음.
     const a = `${NAME_PREFIX}고립가${stamp()}`;
@@ -1013,6 +1059,54 @@ describe('GET /api/v1/subway/lines/:lineId/detail — 노선 상세', () => {
   it('순서 데이터 없는 lineId → 404', async () => {
     const res = await app.inject({ url: lineDetailUrl('9998') });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('실형상 부착 — stationS 길이 일치 section 만 path/stationS 포함', async () => {
+    const FAKE2 = '9004';
+    await app.prisma.subwayLineStation.deleteMany({ where: { lineId: FAKE2 } });
+    await app.prisma.subwayLineShape.deleteMany({ where: { lineId: FAKE2 } });
+    const L = `${NAME_PREFIX}형상${stamp()}`;
+    await seed(app, [
+      { lineId: FAKE2, name: `${L}A`, lat: 37.5, lng: 127.0 },
+      { lineId: FAKE2, name: `${L}B`, lat: 37.5, lng: 127.02 },
+      { lineId: FAKE2, name: `${L}P`, lat: 37.6, lng: 127.0 },
+      { lineId: FAKE2, name: `${L}Q`, lat: 37.6, lng: 127.02 },
+    ]);
+    await seedLineStations(app, [
+      { lineId: FAKE2, branchKey: 'main', branchName: null, seq: 1, stationId: `${FAKE2}:${L}A` },
+      { lineId: FAKE2, branchKey: 'main', branchName: null, seq: 2, stationId: `${FAKE2}:${L}B` },
+      { lineId: FAKE2, branchKey: 'br', branchName: '지선', seq: 1, stationId: `${FAKE2}:${L}P` },
+      { lineId: FAKE2, branchKey: 'br', branchName: '지선', seq: 2, stationId: `${FAKE2}:${L}Q` },
+    ]);
+    await app.prisma.subwayLineShape.create({
+      data: {
+        lineId: FAKE2,
+        branchKey: 'main',
+        path: JSON.stringify([[37.5, 126.999], [37.501, 127.01], [37.5, 127.021]]),
+        stationS: JSON.stringify([0, 1850.5]),
+        osmRelationId: 'test',
+      },
+    });
+    // 길이 불일치(재적재 드리프트) — 부착 생략, 직선 폴백.
+    await app.prisma.subwayLineShape.create({
+      data: {
+        lineId: FAKE2,
+        branchKey: 'br',
+        path: JSON.stringify([[37.6, 127.0], [37.6, 127.02]]),
+        stationS: JSON.stringify([0]),
+        osmRelationId: 'test',
+      },
+    });
+
+    const res = await app.inject({ url: lineDetailUrl(FAKE2) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as SubwayLineDetailResultType;
+    const main = body.sections.find((s) => s.branchKey === 'main')!;
+    expect(main.path).toEqual([[37.5, 126.999], [37.501, 127.01], [37.5, 127.021]]);
+    expect(main.stationS).toEqual([0, 1850.5]);
+    const br = body.sections.find((s) => s.branchKey === 'br')!;
+    expect(br.path).toBeUndefined();
+    expect(br.stationS).toBeUndefined();
   });
 
   it('실데이터 스모크 — 2호선(1002) 본선 순환 + 지선', async () => {

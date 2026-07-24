@@ -1168,6 +1168,22 @@ model SubwayLineStation {
   @@map("subway_line_stations")
 }
 
+// section 실형상(OSM 선로 기하) — load-subway-shapes 가 적재. SubwayLineStation
+// 의 (lineId, branchKey) section 과 1:1. stationS 는 section stations seq 순서와
+// 정렬된 형상 호길이(m) — 재적재로 역 수가 어긋나면 서비스가 부착을 생략한다.
+model SubwayLineShape {
+  id            Int      @id @default(autoincrement())
+  lineId        String
+  branchKey     String   @default("main")
+  path          String // [ [lat,lng], ... ] JSON — 순환(isLoop)은 닫힌 링(첫점=끝점)
+  stationS      String // number[] JSON — stations[i]의 형상 호길이(m), seq asc
+  osmRelationId String? // 출처 OSM relation id — 재적재/디버깅 추적
+  loadedAt      DateTime @default(now())
+
+  @@unique([lineId, branchKey])
+  @@map("subway_line_shapes")
+}
+
 // 역×호선 시간표 blob 캐시(8차) — 서울시 SearchSTNTimeTableByIDService(1~9호선)를
 // (stationId, dayType) 단위로 30일 캐싱한다. 시간표는 사실상 정적이고 방향별
 // 2콜이라 원자 조회(정규화 { coverage, directions } JSON 한 컬럼). coverage:false

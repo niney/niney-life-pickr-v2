@@ -13,6 +13,7 @@ import type {
   SubwayCongestionResultType,
   SubwayLineDetailResultType,
   SubwayNearbyResultType,
+  SubwayPathLegType,
   SubwayPathResultType,
   SubwayPositionsResultType,
   SubwayStationSearchResultType,
@@ -20,8 +21,13 @@ import type {
   SubwayTimetableResultType,
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
-import { approxDistanceM, subwayLineById, subwayLineName } from '@repo/utils';
+import { approxDistanceM, roundCoord, subwayLineById, subwayLineName } from '@repo/utils';
 import { isLoopSection } from './subway-line-order.service.js';
+import {
+  buildSectionShapeIndex,
+  sliceLegPath,
+  type SectionShapeIndex,
+} from './subway-shape.service.js';
 import {
   getRealtimeArrivals,
   getRealtimePositions,
@@ -233,6 +239,21 @@ const toGrouping = (r: {
   lng: r.lng,
 });
 
+// SubwayLineShape 행 JSON 파싱 — 형식이 어긋나면 null(형상 부착 생략, 직선 폴백).
+const parseShapeRow = (
+  row: { path: string; stationS: string } | undefined,
+): { path: [number, number][]; stationS: number[] } | null => {
+  if (!row) return null;
+  try {
+    const path = JSON.parse(row.path) as unknown;
+    const stationS = JSON.parse(row.stationS) as unknown;
+    if (!Array.isArray(path) || path.length < 2 || !Array.isArray(stationS)) return null;
+    return { path: path as [number, number][], stationS: stationS as number[] };
+  } catch {
+    return null;
+  }
+};
+
 // 실시간 마이크로 캐시 엔트리 — 필터/정규화 전 raw 배열을 담는다(도착은 동명이역
 // 두 그룹이 같은 조회명 캐시를 공유하고 필터는 서빙 시점에 건다). 도착
 // (RawSubwayArrival[])·위치(RawSubwayPosition[])가 같은 캐시를 쓰므로 unknown[].
@@ -362,7 +383,7 @@ export class SubwayService {
   // lineId 는 404. 로컬 조회라 업스트림/쿼터 무관.
   async getLineDetail(lineId: string): Promise<SubwayLineDetailResultType> {
     const { prisma } = this.deps;
-    const [lineRows, sync] = await Promise.all([
+    const [lineRows, sync, shapeRows] = await Promise.all([
       prisma.subwayLineStation.findMany({
         where: { lineId },
         orderBy: [{ branchKey: 'asc' }, { seq: 'asc' }],
@@ -371,6 +392,7 @@ export class SubwayService {
         where: { source: 'line-orders' },
         orderBy: { loadedAt: 'desc' },
       }),
+      prisma.subwayLineShape.findMany({ where: { lineId } }),
     ]);
     if (lineRows.length === 0) {
       throw new SubwayServiceError('해당 노선의 순서 데이터가 없습니다.', 404);
@@ -423,11 +445,16 @@ export class SubwayService {
           })
           .filter((x): x is NonNullable<typeof x> => x !== null)
           .map((x, i) => ({ ...x, seq: i + 1 }));
+        // 실형상(OSM, load-subway-shapes) — stationS 길이가 조립된 역 수와 일치할
+        // 때만 부착(재적재 드리프트 내성). 없으면 FE 가 stations 직선 폴백.
+        const shape = parseShapeRow(shapeRows.find((r) => r.branchKey === branchKey));
+        const withShape = shape !== null && shape.stationS.length === built.length;
         return {
           branchKey,
           branchName: rows[0]?.branchName ?? null,
           isLoop: isLoopSection(lineId, branchKey),
           stations: built,
+          ...(withShape ? { path: shape.path, stationS: shape.stationS } : {}),
         };
       })
       .filter((s) => s.stations.length >= 2);
@@ -687,6 +714,7 @@ export class SubwayService {
     const graph = await this.loadGraph();
     const path = findPath(graph, fromId, toId);
     const legs = compressPathLegs(graph, path);
+    await this.attachLegShapes(legs);
     // 지표는 legs 기반 — 출발/도착역의 플랫폼 이동(선두/후미 환승 간선)은 "무의미"
     // 라 제외한다. 실제 탑승 leg 사이 경계만 환승(=legs-1). 소요도 탑승·환승만.
     const totalRideStations = legs.reduce((sum, l) => sum + l.rideCount, 0);
@@ -706,6 +734,74 @@ export class SubwayService {
       fetchedAt,
       source: 'db',
     };
+  }
+
+  // leg 실형상 부착 — 노선 형상(SubwayLineShape)이 있으면 탑승~하차 슬라이스를
+  // leg.path 에 담는다. 형상 미시드·정렬 드리프트·쌍 미해소는 조용히 생략(FE 가
+  // stations 직선 폴백). 경로 탐색은 저빈도라 요청 시 인덱스 구축로 충분.
+  private async attachLegShapes(legs: SubwayPathLegType[]): Promise<void> {
+    if (legs.length === 0) return;
+    const { prisma } = this.deps;
+    const lineIds = [...new Set(legs.map((l) => l.lineId))];
+    const shapeRows = await prisma.subwayLineShape.findMany({
+      where: { lineId: { in: lineIds } },
+    });
+    if (shapeRows.length === 0) return;
+    const lineSts = await prisma.subwayLineStation.findMany({
+      where: { lineId: { in: lineIds } },
+      orderBy: [{ lineId: 'asc' }, { branchKey: 'asc' }, { seq: 'asc' }],
+    });
+    // 형상 적재(load-subway-shapes)와 동일한 좌표-누락 필터로 section 역 id 열을
+    // 재구성해야 stationS anchor 와 인덱스가 맞는다.
+    const stIds = [...new Set(lineSts.map((r) => r.stationId))];
+    const existing = new Set(
+      (
+        await prisma.subwayStation.findMany({
+          where: { id: { in: stIds } },
+          select: { id: true },
+        })
+      ).map((s) => s.id),
+    );
+    const idsBySection = new Map<string, string[]>();
+    for (const r of lineSts) {
+      if (!existing.has(r.stationId)) continue;
+      const key = `${r.lineId}:${r.branchKey}`;
+      let ids = idsBySection.get(key);
+      if (!ids) {
+        ids = [];
+        idsBySection.set(key, ids);
+      }
+      ids.push(r.stationId);
+    }
+    const sectionsByLine = new Map<string, SectionShapeIndex[]>();
+    for (const row of shapeRows) {
+      const parsed = parseShapeRow(row);
+      if (!parsed) continue;
+      const sec = buildSectionShapeIndex(
+        parsed.path.map(([lat, lng]) => ({ lat, lng })),
+        parsed.stationS,
+        idsBySection.get(`${row.lineId}:${row.branchKey}`) ?? [],
+        isLoopSection(row.lineId, row.branchKey),
+      );
+      if (!sec) continue;
+      let list = sectionsByLine.get(row.lineId);
+      if (!list) {
+        list = [];
+        sectionsByLine.set(row.lineId, list);
+      }
+      list.push(sec);
+    }
+    for (const leg of legs) {
+      const secs = sectionsByLine.get(leg.lineId);
+      if (!secs) continue;
+      const sliced = sliceLegPath(
+        secs,
+        leg.stations.map((s) => s.stationId),
+      );
+      if (sliced) {
+        leg.path = sliced.map((p) => [roundCoord(p.lat), roundCoord(p.lng)]);
+      }
+    }
   }
 
   // 그래프 lazy 구축 + TTL 캐시. 동시 첫 요청은 하나의 구축에 합류.

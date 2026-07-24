@@ -91,12 +91,13 @@ export const SubwayNearbyResult = z.object({
 });
 export type SubwayNearbyResultType = z.infer<typeof SubwayNearbyResult>;
 
-// ── 5차: 호선 보기 — 노선별 역 순서 + 근사 폴리라인 ─────────────────────────
-// 지하철은 노선 형상 공공 API 가 없어 역 좌표를 운행 순서로 이은 근사 폴리라인을
-// 쓴다(FE 가 sections[].stations 좌표로 그림 — 별도 path 배열 없음). 지선(2호선
-// 성수/신정, 5호선 마천 등)은 section 으로 분리 — 단일 배열로 이으면 지도에서
-// 지그재그가 된다. 순서 데이터는 load-subway-line-orders 가 적재한 로컬 DB
-// (업스트림 0콜, source 'db').
+// ── 5차: 호선 보기 — 노선별 역 순서 + 폴리라인 ──────────────────────────────
+// 폴리라인은 2단계: 실형상(OSM 선로 기하, load-subway-shapes 적재)이 있으면
+// section.path/stationS 로 내려가고, 없으면(미시드·GTX-A 등) FE 가
+// sections[].stations 좌표를 직선으로 이어 폴백한다. 지선(2호선 성수/신정,
+// 5호선 마천 등)은 section 으로 분리 — 단일 배열로 이으면 지도에서 지그재그가
+// 된다. 순서 데이터는 load-subway-line-orders 가 적재한 로컬 DB(업스트림 0콜,
+// source 'db').
 
 export const SubwayLineDetailParams = z.object({
   lineId: z.string().regex(/^\d{4}$/),
@@ -117,6 +118,10 @@ export const SubwayLineStationItem = z.object({
 });
 export type SubwayLineStationItemType = z.infer<typeof SubwayLineStationItem>;
 
+// 실형상 좌표 튜플 [lat, lng] — OSM 선로 기하(ODbL, © OpenStreetMap contributors).
+export const SubwayShapePoint = z.tuple([z.number().min(33).max(39), z.number().min(124).max(132)]);
+export type SubwayShapePointType = z.infer<typeof SubwayShapePoint>;
+
 export const SubwayLineSection = z.object({
   // 'main' + 지선 슬러그('seongsu', 'sinjeong' 등 — 적재 데이터 정의).
   branchKey: z.string().min(1),
@@ -127,6 +132,12 @@ export const SubwayLineSection = z.object({
   stations: z.array(SubwayLineStationItem).min(2),
   // 순환 구간(2호선 본선) — FE 가 폴리라인을 닫고 열차 보간(6차)에서 시임 처리.
   isLoop: z.boolean(),
+  // 실형상(선로 기하) — 있으면 FE 는 stations 직선 대신 이걸 그리고 열차 보간도
+  // 이 위에서 한다. 순환은 닫힌 링(첫점=끝점)으로 내려간다 — FE 가 또 닫지 않는다.
+  path: z.array(SubwayShapePoint).min(2).optional(),
+  // stations[i]의 path 위 호길이(m) anchor — stations 와 길이 동일·단조 증가
+  // (순환은 링 위 위치라 랩 가능). path 와 함께만 존재.
+  stationS: z.array(z.number().min(0)).optional(),
 });
 export type SubwayLineSectionType = z.infer<typeof SubwayLineSection>;
 
@@ -236,6 +247,9 @@ export const SubwayPathLeg = z.object({
   stations: z.array(SubwayPathLegStation).min(2),
   // 이동 역 수 (= stations.length - 1).
   rideCount: z.number().int().min(1),
+  // 실형상 슬라이스(탑승~하차 선로 기하) — 노선 형상(SubwayLineShape)이 있으면
+  // 서버가 잘라 내려준다. 없으면 FE 가 stations 직선 폴백.
+  path: z.array(SubwayShapePoint).min(2).optional(),
 });
 export type SubwayPathLegType = z.infer<typeof SubwayPathLeg>;
 
