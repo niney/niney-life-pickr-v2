@@ -10,11 +10,11 @@ const row = (frCode: string, ref: string): FrRow<string> => ({ frCode, ref });
 
 describe('parseFrCode', () => {
   it('본선 숫자 / 접미(-N) / 접두(P·K·D)', () => {
-    expect(parseFrCode('201')).toEqual({ prefix: '', num: 201, sub: null });
-    expect(parseFrCode('211-1')).toEqual({ prefix: '', num: 211, sub: 1 });
-    expect(parseFrCode('P549')).toEqual({ prefix: 'P', num: 549, sub: null });
-    expect(parseFrCode('D4')).toEqual({ prefix: 'D', num: 4, sub: null });
-    expect(parseFrCode('K312')).toEqual({ prefix: 'K', num: 312, sub: null });
+    expect(parseFrCode('201')).toEqual({ prefix: '', num: 201, sub: null, digits: '201' });
+    expect(parseFrCode('211-1')).toEqual({ prefix: '', num: 211, sub: 1, digits: '211' });
+    expect(parseFrCode('P549')).toEqual({ prefix: 'P', num: 549, sub: null, digits: '549' });
+    expect(parseFrCode('D4')).toEqual({ prefix: 'D', num: 4, sub: null, digits: '4' });
+    expect(parseFrCode('K312')).toEqual({ prefix: 'K', num: 312, sub: null, digits: '312' });
   });
 });
 
@@ -71,6 +71,35 @@ describe('assignSections', () => {
     expect(sections).toHaveLength(1);
     expect(sections[0]!.branchKey).toBe('main');
     expect(sections[0]!.stations.map((x) => x.ref)).toEqual(['용산', '이촌', '서빙고']);
+  });
+
+  it('삽입역(자릿수 확장 코드) — 공항철도 A042/A071/A072 를 사이 순서로', () => {
+    const sections = assignSections(
+      [
+        row('A01', '서울역'),
+        row('A04', '디지털미디어시티'),
+        row('A042', '마곡나루'),
+        row('A05', '김포공항'),
+        row('A07', '검암'),
+        row('A071', '청라국제도시'),
+        row('A072', '영종'),
+        row('A08', '운서'),
+        row('A11', '인천공항2터미널'),
+      ],
+      '1065',
+    );
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.stations.map((x) => x.ref)).toEqual([
+      '서울역',
+      '디지털미디어시티',
+      '마곡나루',
+      '김포공항',
+      '검암',
+      '청라국제도시',
+      '영종',
+      '운서',
+      '인천공항2터미널',
+    ]);
   });
 });
 

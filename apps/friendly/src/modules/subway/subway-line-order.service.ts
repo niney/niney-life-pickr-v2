@@ -12,12 +12,56 @@ export interface ParsedFr {
   prefix: string; // 'P','K','D','X','S' 또는 '' (본선 숫자)
   num: number;
   sub: number | null; // '-N' 접미 (지선), 없으면 null
+  digits: string; // num 원문 자릿수 — 삽입역 재해석(normalizeInserted)용
 }
 
 export const parseFrCode = (fr: string): ParsedFr => {
   const m = /^([A-Za-z]*)(\d+)(?:-(\d+))?$/.exec((fr ?? '').trim());
-  if (!m) return { prefix: '', num: Number.POSITIVE_INFINITY, sub: null };
-  return { prefix: m[1] ?? '', num: Number(m[2]), sub: m[3] ? Number(m[3]) : null };
+  if (!m) return { prefix: '', num: Number.POSITIVE_INFINITY, sub: null, digits: '' };
+  return {
+    prefix: m[1] ?? '',
+    num: Number(m[2]),
+    sub: m[3] ? Number(m[3]) : null,
+    digits: m[2]!,
+  };
+};
+
+// 삽입역 재해석 — 공항철도 실측(2026-07-24): 기존 역은 A01~A11(2자리), 나중에
+// 삽입된 역은 A042(마곡나루, A04~A05 사이)·A071(청라)·A072(영종)처럼 자릿수를
+// 늘려 표기한다. prefix 그룹의 지배적 자릿수(L)보다 긴 코드는 앞 L자리를 num,
+// 나머지를 sub 로 재해석해야 (num, sub) 정렬이 실제 운행 순서가 된다.
+// (그대로 두면 A042=42 가 A11 뒤로 밀려 폴리라인이 지그재그가 된다.)
+export const normalizeInserted = (items: ParsedFr[]): void => {
+  const lenCount = new Map<string, Map<number, number>>();
+  for (const p of items) {
+    if (p.sub !== null || p.digits === '') continue;
+    let byLen = lenCount.get(p.prefix);
+    if (!byLen) {
+      byLen = new Map();
+      lenCount.set(p.prefix, byLen);
+    }
+    byLen.set(p.digits.length, (byLen.get(p.digits.length) ?? 0) + 1);
+  }
+  const modeLen = new Map<string, number>();
+  for (const [prefix, byLen] of lenCount) {
+    let bestLen = 0;
+    let bestCount = -1;
+    for (const [len, count] of byLen) {
+      if (count > bestCount || (count === bestCount && len < bestLen)) {
+        bestLen = len;
+        bestCount = count;
+      }
+    }
+    modeLen.set(prefix, bestLen);
+  }
+  for (const p of items) {
+    if (p.sub !== null || p.digits === '') continue;
+    const L = modeLen.get(p.prefix)!;
+    if (p.digits.length > L) {
+      p.num = Number(p.digits.slice(0, L));
+      p.sub = Number(p.digits.slice(L));
+    }
+  }
 };
 
 // 지선 판별 규칙 — 지정한 조건(prefix/subBase/num범위)을 모두 만족하면 그 section.
@@ -97,10 +141,13 @@ export interface AssignedSection<T> {
 // section 순서는 main 먼저, 그 뒤 첫 등장 순. <2 역 section 은 그대로 반환하며
 // (호출측이 계약 min 2 로 걸러 리포트) — 여기선 판정만 한다.
 export const assignSections = <T>(rows: FrRow<T>[], lineId: string): AssignedSection<T>[] => {
+  // 전체 파싱 후 삽입역 재해석(자릿수 확장 코드) — 그 다음 section 판정/정렬.
+  const parsed = rows.map((row) => ({ p: parseFrCode(row.frCode), ref: row.ref }));
+  normalizeInserted(parsed.map((x) => x.p));
+
   const buckets = new Map<string, { name: string | null; items: { p: ParsedFr; ref: T }[] }>();
   const order: string[] = [];
-  for (const row of rows) {
-    const p = parseFrCode(row.frCode);
+  for (const { p, ref } of parsed) {
     const sec = sectionFor(p, lineId);
     let b = buckets.get(sec.key);
     if (!b) {
@@ -108,7 +155,7 @@ export const assignSections = <T>(rows: FrRow<T>[], lineId: string): AssignedSec
       buckets.set(sec.key, b);
       order.push(sec.key);
     }
-    b.items.push({ p, ref: row.ref });
+    b.items.push({ p, ref });
   }
 
   // main 먼저, 나머지는 첫 등장 순.

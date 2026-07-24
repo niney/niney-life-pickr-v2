@@ -68,6 +68,15 @@ const knownRealtimeNameOverride = (name: string, lineId: string): string | null 
   return null;
 };
 
+// 업스트림 좌표가 실제 역사와 크게 어긋난 알려진 예외 — OSM railway=station
+// 노드와 대조 실측(2026-07-24). 인천공항2터미널은 T2 청사 건물 좌표(역과 1.1km),
+// 청산은 원인 불명 1.6km 이탈이 온다. 노선 실형상 anchor·주변 검색 정확도에
+// 직접 영향이라 마스터 적재 시점에 보정한다.
+const KNOWN_COORD_OVERRIDES: Record<string, { lat: number; lng: number }> = {
+  '1065:인천공항2터미널': { lat: 37.468942, lng: 126.433475 },
+  '1001:청산': { lat: 37.995154, lng: 127.074343 },
+};
+
 // WGS84 한국 범위 — 계약(lat 33~39, lng 124~132)과 동일. 밖이면 좌표 이상으로 drop.
 const LAT_MIN = 33;
 const LAT_MAX = 39;
@@ -157,6 +166,7 @@ export const normalizeMasterRows = (raw: RawSubwayMasterRow[]): MasterNormalizeR
       continue;
     }
     seen.add(id);
+    const coordFix = KNOWN_COORD_OVERRIDES[id];
     rows.push({
       id,
       name,
@@ -164,8 +174,8 @@ export const normalizeMasterRows = (raw: RawSubwayMasterRow[]): MasterNormalizeR
       lineId,
       lineName: subwayLineName(lineId),
       stationCd: r.bldnId,
-      lat: r.lat,
-      lng: r.lng,
+      lat: coordFix?.lat ?? r.lat,
+      lng: coordFix?.lng ?? r.lng,
     });
     byLine.set(lineId, (byLine.get(lineId) ?? 0) + 1);
   }
