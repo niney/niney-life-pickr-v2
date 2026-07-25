@@ -71,6 +71,23 @@ export interface TrainLocation {
   bearing: number | null;
 }
 
+// 좌표/호길이 없이 '운행 순서'만 있는 section — 지도 보간이 아니라 '다음 역·남은
+// 역' 같은 순서 질의용. TrainSection 이 구조적으로 이 타입을 만족한다.
+export interface TrainSectionOrder {
+  sectionKey: string;
+  isLoop: boolean;
+  byName: Map<string, number>;
+  stationCount: number;
+}
+
+export interface TrainSectionMatch {
+  sectionKey: string;
+  // 현재역의 section 내 순번(0-based).
+  stationIdx: number;
+  // 진행 방향 — +1 seq 증가 / -1 감소 / 0 미정(현재역 정지).
+  dir: 1 | -1 | 0;
+}
+
 // updnLine 기본 방향 매핑(폴백). 프로브 실측(2026-07-06 9호선 비순환): '0'=상행=seq
 // 감소(-1, 개화 방면 18/19), '1'=하행=seq 증가(+1, 보훈병원 13/13). 전 노선 동일
 // 보장은 없어 주입(opts.updnToDir)으로 덮어쓸 수 있고, 2호선 순환은 updn 이 혼재라
@@ -120,14 +137,14 @@ const segmentEndpointsS = (
   return { sFrom: stationSAt(sec, fromIdx), sTo: stationSAt(sec, toIdx) };
 };
 
-// 열차 위치 추정 — 현재역이 있는 section 선택(행선까지 포함하는 쪽 우선 = 지선
-// 분기 해소) → 방향 → 상태 분수 → 호길이 s + 방위각. 현재역이 어느 section 에도
-// 없으면 null(호출측이 item.lat/lng 마커로 강등).
-export function locateTrain(
-  sections: TrainSection[],
+// 현재역이 속한 section + 그 안의 순번 + 진행 방향. 좌표를 안 쓰므로 지도 보간
+// (locateTrain)과 순서 질의('다음 역'·'남은 역') 양쪽이 같은 판정을 공유한다 —
+// 지선 분기 해소·순환 방향 규칙을 두 번 구현하지 않기 위한 분리.
+export function resolveTrainSection<S extends TrainSectionOrder>(
+  sections: S[],
   item: LocateInput,
-  opts: LocateOptions = {},
-): TrainLocation | null {
+  opts: Pick<LocateOptions, 'updnToDir'> = {},
+): (TrainSectionMatch & { section: S }) | null {
   const cands = sections.filter((sec) => sec.byName.has(item.statnNm));
   if (cands.length === 0) return null;
   // 행선(statnTnm)은 '성수종착'/'성수지선'처럼 접미가 붙어 와 순수 역명으로 정규화해
@@ -135,7 +152,7 @@ export function locateTrain(
   // 지선 section 을 우선(statnTid 기반 seq 매칭의 FE 근사).
   const normDest = normalizeStationName(item.destinationName);
   const preferBranch = item.destinationName != null && item.destinationName.endsWith('지선');
-  let sec: TrainSection | undefined;
+  let sec: S | undefined;
   if (normDest != null) {
     const withDest = cands.filter((c) => c.byName.has(normDest));
     sec = preferBranch ? (withDest.find((c) => c.sectionKey !== 'main') ?? withDest[0]) : withDest[0];
@@ -144,7 +161,6 @@ export function locateTrain(
 
   const cur = sec.byName.get(item.statnNm)!;
   const N = sec.stationCount;
-  const total = sec.index.totalM;
 
   // 방향 — 행선 seq 비교(순환은 짧은 호), 미발견 시 updn 보조.
   let dir: 1 | -1 | 0 = 0;
@@ -160,6 +176,24 @@ export function locateTrain(
   } else {
     dir = (opts.updnToDir ?? DEFAULT_UPDN_TO_DIR)[item.updnLine] ?? 0;
   }
+
+  return { sectionKey: sec.sectionKey, stationIdx: cur, dir, section: sec };
+}
+
+// 열차 위치 추정 — 현재역이 있는 section 선택(행선까지 포함하는 쪽 우선 = 지선
+// 분기 해소) → 방향 → 상태 분수 → 호길이 s + 방위각. 현재역이 어느 section 에도
+// 없으면 null(호출측이 item.lat/lng 마커로 강등).
+export function locateTrain(
+  sections: TrainSection[],
+  item: LocateInput,
+  opts: LocateOptions = {},
+): TrainLocation | null {
+  const match = resolveTrainSection(sections, item, opts);
+  if (!match) return null;
+  const sec = match.section;
+  const cur = match.stationIdx;
+  const dir = match.dir;
+  const total = sec.index.totalM;
 
   // 방향 미정 — 현재역에 정지(방위각 없음).
   if (dir === 0) return { sectionKey: sec.sectionKey, s: stationSAt(sec, cur), bearing: null };

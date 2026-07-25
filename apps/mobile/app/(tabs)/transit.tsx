@@ -88,6 +88,7 @@ import type { TransitMapHandle } from '~/components/transit/useTransitMapSync';
 import { useBusMapModel, isBusVehicleId } from '~/components/transit/useBusMapModel';
 import { useSubwayMapModel, isSubwayVehicleId } from '~/components/transit/useSubwayMapModel';
 import { usePinnedVehicle } from '~/components/transit/usePinnedVehicle';
+import { RideDetailPanel } from '~/components/transit/RideDetailPanel';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
 import {
   BusStationRow,
@@ -1215,16 +1216,65 @@ export default function TransitScreen() {
     [dispatch, openDetail],
   );
 
-  // Android 하드웨어 백 — 안쪽 뷰부터 순서대로 해제: 시간표/길찾기 → 도착 패널
-  // → (통과: 탭 기본 동작). 웹의 브라우저 뒤로가기 부재를 메꾸는 유일한 지점.
-  const backStateRef = useRef({ hasTimetable: false, hasPath: false });
+  // ── 탑승 상세 뷰 — 칩 탭으로 열고 Detail 시트 안에 렌더(시간표/길찾기와 같은
+  // 뷰 교체 패턴). 역/정류장 선택과 독립이라 시트 mount 게이트를 따로 넓힌다.
+  const [rideView, setRideView] = useState(false);
+  const rideOpen = rideView && pinned !== null;
+  const openRideView = useCallback(() => {
+    setRideView(true);
+    openDetail();
+    // 따라가기로 peek 까지 접혀 있으면 읽을 수 있게 half 로. 새로 mount 되는
+    // 경우엔 ref 가 아직 null 이고, 그땐 시트 index prop(1)이 같은 결과를 낸다.
+    detailSheetRef.current?.snapToIndex(1);
+  }, [openDetail]);
+  const closeRideView = useCallback(() => {
+    setRideView(false);
+    // 선택된 역/정류장이 없으면 시트 자체를 닫는다(있으면 도착 패널로 복귀).
+    if (!detailVisible) closeDetail();
+  }, [detailVisible, closeDetail]);
+  // 탑승 종료(수동 ✕ / 운행 종료 자동 UNPIN) → 상세 뷰도 함께 닫는다.
+  useEffect(() => {
+    if (!rideView || pinned) return;
+    setRideView(false);
+    if (!detailVisible) closeDetail();
+  }, [rideView, pinned, detailVisible, closeDetail]);
+
+  // 탑승 상세의 정류장/역 행 탭 — 맥락 밖(다른 모드)이면 모드부터 전환한 뒤
+  // 기존 선택 흐름을 그대로 탄다(추적 노선/호선 유지는 각 핸들러가 담당).
+  const handleRideSelectBusStation = useCallback(
+    (stId: string) => {
+      setRideView(false);
+      if (mode !== 'bus') dispatch({ type: 'SET_MODE', mode: 'bus' });
+      handleSelectBusStation(stId);
+    },
+    [mode, dispatch, handleSelectBusStation],
+  );
+  const handleRideSelectSubwayStation = useCallback(
+    (stationId: string) => {
+      setRideView(false);
+      if (mode !== 'subway') dispatch({ type: 'SET_MODE', mode: 'subway' });
+      handleSelectStop(stationId);
+    },
+    [mode, dispatch, handleSelectStop],
+  );
+
+  // Android 하드웨어 백 — 안쪽 뷰부터 순서대로 해제: 탑승 상세 → 시간표/길찾기
+  // → 도착 패널 → (통과: 탭 기본 동작). 웹의 브라우저 뒤로가기 부재를 메꾸는
+  // 유일한 지점.
+  const backStateRef = useRef({ hasTimetable: false, hasPath: false, hasRide: false });
   backStateRef.current = {
     hasTimetable: mode === 'subway' && subway.timetableView !== null,
     hasPath: mode === 'subway' && (subway.pathViewOpen || subway.to !== null),
+    hasRide: rideOpen,
   };
   useEffect(() => {
-    if (!detailVisible) return;
+    if (!detailVisible && !rideOpen) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // 탑승 상세가 다른 뷰 위를 덮으므로 가장 먼저 닫는다.
+      if (backStateRef.current.hasRide) {
+        closeRideView();
+        return true;
+      }
       if (backStateRef.current.hasTimetable) {
         dispatch({ type: 'SUBWAY_CLOSE_TIMETABLE' });
         return true;
@@ -1237,7 +1287,7 @@ export default function TransitScreen() {
       return true;
     });
     return () => sub.remove();
-  }, [detailVisible, dispatch, handleBack]);
+  }, [detailVisible, rideOpen, dispatch, handleBack, closeRideView]);
 
   // ── 지도 조립 — 활성 모드의 모델만 지도에 스프레드 ──────────────────────────
   const mapRef = useRef<TransitMapHandle | null>(null);
@@ -1827,10 +1877,13 @@ export default function TransitScreen() {
                 </Text>
               </Pressable>
             ) : (
-              <Text style={[styles.mapChipText, { color: theme.colors.text }]}>
-                {pinned.mode === 'bus' ? '🚌 ' : '🚈 '}
-                {pin.label ?? pinned.label} 탑승 중
-              </Text>
+              // 탭 = 탑승 상세 열기(시트 뷰). 종료는 오른쪽 ✕ 전용.
+              <Pressable onPress={openRideView} hitSlop={8} accessibilityLabel="탑승 상세 보기">
+                <Text style={[styles.mapChipText, { color: theme.colors.text }]}>
+                  {pinned.mode === 'bus' ? '🚌 ' : '🚈 '}
+                  {pin.label ?? pinned.label} 탑승 중 ›
+                </Text>
+              </Pressable>
             )}
             <Pressable
               onPress={() => {
@@ -2031,8 +2084,9 @@ export default function TransitScreen() {
       {/* Detail 시트 — 선택 시에만 mount(진입 애니메이션 + race 회피). 핸들을
           끝까지 내려도 닫히지 않고 최저 스냅(20%)까지만 접힌다 — 드래그로 닫으면
           선택(stId/routeId·stn/line)이 통째로 해제되며 리스트로 튕기던 현상 방지.
-          닫기는 패널 뒤로가기 버튼 / 안드로이드 하드웨어 백(handleBack)으로만. */}
-      {detailVisible ? (
+          닫기는 패널 뒤로가기 버튼 / 안드로이드 하드웨어 백(handleBack)으로만.
+          탑승 상세(rideOpen)는 역/정류장 선택과 독립이라 mount 조건에 함께. */}
+      {detailVisible || rideOpen ? (
         <BottomSheet
           ref={detailSheetRef}
           index={1}
@@ -2053,7 +2107,20 @@ export default function TransitScreen() {
             />
           )}
         >
-          {mode === 'subway' && timetableView && stn ? (
+          {rideOpen ? (
+            <RideDetailPanel
+              detail={pin.detail}
+              label={pin.label ?? pinned?.label ?? null}
+              onBack={closeRideView}
+              onUnpin={() => {
+                setPinFollowPaused(false);
+                dispatch({ type: 'UNPIN_VEHICLE' });
+              }}
+              onSelectBusStation={handleRideSelectBusStation}
+              onSelectSubwayStation={handleRideSelectSubwayStation}
+              bottomPad={tabBarH + 24}
+            />
+          ) : mode === 'subway' && timetableView && stn ? (
             <SubwayTimetable
               stationName={panelStationName}
               lineId={timetableView.lineId}

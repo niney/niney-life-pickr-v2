@@ -3,6 +3,7 @@ import { createRoutePathIndex, type LatLng } from './index.js';
 import {
   locateTrain,
   normalizeStationName,
+  resolveTrainSection,
   sliceForMove,
   subwayDestinationLabel,
   TRAIN_STATUS_FRACTION,
@@ -199,5 +200,58 @@ describe('sliceForMove — 순환 시임', () => {
   it('시임 교차(마지막→첫 역)는 직선 폴백(null)', () => {
     // 마지막 역 직전(s≈total-10) → 첫 역 직후(s≈10): 전진이지만 sCur<sPrev = 시임 교차.
     expect(sliceForMove(ring.index, total - 10, 10, { isLoop: true })).toBeNull();
+  });
+});
+
+// 좌표/호길이 없는 순서 전용 section — 탑승 상세('앞으로 지날 역')가 쓰는 입력.
+const orderSection = (names: string[], isLoop: boolean, sectionKey = 'main') => ({
+  sectionKey,
+  isLoop,
+  byName: new Map(names.map((n, i) => [n, i])),
+  stationCount: names.length,
+});
+
+describe('resolveTrainSection — 순서 질의(좌표 없이 section·순번·방향)', () => {
+  const sec = orderSection(NAMES, false);
+
+  it('현재역이 없으면 null', () => {
+    expect(resolveTrainSection([sec], item({ statnNm: 'Z' }))).toBeNull();
+  });
+
+  it('행선으로 방향 판정 — 순번 증가/감소', () => {
+    expect(resolveTrainSection([sec], item({ destinationName: 'E' }))!.dir).toBe(1);
+    expect(resolveTrainSection([sec], item({ destinationName: 'A' }))!.dir).toBe(-1);
+  });
+
+  it('현재역 순번은 section 내 0-based', () => {
+    const m = resolveTrainSection([sec], item({ statnNm: 'D' }))!;
+    expect(m.stationIdx).toBe(3);
+  });
+
+  it('행선 미해석이면 updnLine 폴백, 그마저 없으면 dir 0', () => {
+    expect(
+      resolveTrainSection([sec], item({ destinationName: null, updnLine: '1' }))!.dir,
+    ).toBe(1);
+    expect(
+      resolveTrainSection([sec], item({ destinationName: null, updnLine: '9' }))!.dir,
+    ).toBe(0);
+  });
+
+  it('지선 행선은 지선 section 선택 — locateTrain 과 같은 판정', () => {
+    const main = orderSection(['A', 'B', '성수'], false);
+    const branch = orderSection(['성수', '용답', '신답'], false, 'seongsu');
+    const m = resolveTrainSection(
+      [main, branch],
+      item({ statnNm: '성수', destinationName: '성수지선' }),
+    )!;
+    expect(m.sectionKey).toBe('seongsu');
+  });
+
+  it('순환은 짧은 호 방향 — 시임을 넘는 행선도 전진으로', () => {
+    const ring = orderSection(['P', 'Q', 'R', 'S'], true);
+    // S(3) → Q(1): 전진 2칸 vs 후진 2칸 — 동률이면 전진.
+    expect(resolveTrainSection([ring], item({ statnNm: 'S', destinationName: 'Q' }))!.dir).toBe(1);
+    // P(0) → S(3): 전진 3칸 vs 후진 1칸 — 후진.
+    expect(resolveTrainSection([ring], item({ statnNm: 'P', destinationName: 'S' }))!.dir).toBe(-1);
   });
 });

@@ -15,11 +15,36 @@ import {
   subwayDestinationLabel,
   subwayLineColor,
 } from '@repo/utils';
+import type {
+  BusPositionItemType,
+  BusRouteDetailResultType,
+  SubwayLineDetailResultType,
+  SubwayTrainPositionItemType,
+} from '@repo/api-contract';
 import type { BridgeRouteLine, BridgeVehicle } from './transitMapBridge';
 import type { PinnedVehicle } from '~/hooks/useTransitScreen';
 
 const EMPTY_VEHICLES: BridgeVehicle[] = [];
 const EMPTY_LINES: BridgeRouteLine[] = [];
+
+// 탑승 상세 패널 입력 — 매칭된 실시간 항목 + 노선/호선 상세 원본. 지도용 필드와
+// 달리 가공하지 않는다(패널이 필요한 필드를 직접 고른다). 추가 네트워크 없음 —
+// 이미 이 훅이 구독 중인 쿼리의 데이터를 그대로 넘길 뿐이다.
+export type PinnedRideDetail =
+  | {
+      mode: 'bus';
+      vehicle: BusPositionItemType;
+      route: BusRouteDetailResultType | null;
+      fetchedAt: string | null;
+      // 업스트림 실패로 last-known 서빙 중 — 패널이 '지연' 뱃지.
+      stale: boolean;
+    }
+  | {
+      mode: 'subway';
+      train: SubwayTrainPositionItemType;
+      line: SubwayLineDetailResultType | null;
+      fetchedAt: string | null;
+    };
 
 export interface PinnedVehicleModel {
   // 지도에 얹을 핀 차량(0 또는 1) — 라벨 강조 pill. via 없음(직선 tween).
@@ -32,6 +57,8 @@ export interface PinnedVehicleModel {
   label: string | null;
   // 성공 폴링에 대상이 없음 = 운행 종료/구간 이탈(호출부가 자동 UNPIN).
   ended: boolean;
+  // 탑승 상세 패널용 원본 — 최신 폴링에 대상이 없으면 null.
+  detail: PinnedRideDetail | null;
 }
 
 const EMPTY_MODEL: PinnedVehicleModel = {
@@ -40,6 +67,7 @@ const EMPTY_MODEL: PinnedVehicleModel = {
   followId: null,
   label: null,
   ended: false,
+  detail: null,
 };
 
 // 탑승(핀) 차량 상시 추적 — 브라우징 상태/모드와 무관하게 대상 노선/호선의
@@ -97,7 +125,23 @@ export const usePinnedVehicle = (
           ]
         : EMPTY_LINES;
     const ended = busPositions.isSuccess && !!busPositions.data && veh === null;
-    return { overlayVehicles, overlayRouteLines, followId: `veh-${pinned.vehicleId}`, label, ended };
+    const detail: PinnedRideDetail | null = veh
+      ? {
+          mode: 'bus',
+          vehicle: veh,
+          route: busDetail.data ?? null,
+          fetchedAt: busPositions.data?.fetchedAt ?? null,
+          stale: busPositions.data?.stale ?? false,
+        }
+      : null;
+    return {
+      overlayVehicles,
+      overlayRouteLines,
+      followId: `veh-${pinned.vehicleId}`,
+      label,
+      ended,
+      detail,
+    };
   }, [isBus, pinned, busDetail.data, busPositions.data, busPositions.isSuccess]);
 
   const subwayModel = useMemo<PinnedVehicleModel | null>(() => {
@@ -135,7 +179,22 @@ export const usePinnedVehicle = (
         })
       : EMPTY_LINES;
     const ended = subwayPositions.isSuccess && !!subwayPositions.data && veh === null;
-    return { overlayVehicles, overlayRouteLines, followId: `train-${pinned.vehicleId}`, label, ended };
+    const detail: PinnedRideDetail | null = veh
+      ? {
+          mode: 'subway',
+          train: veh,
+          line: subwayDetail.data ?? null,
+          fetchedAt: subwayPositions.data?.fetchedAt ?? null,
+        }
+      : null;
+    return {
+      overlayVehicles,
+      overlayRouteLines,
+      followId: `train-${pinned.vehicleId}`,
+      label,
+      ended,
+      detail,
+    };
   }, [isSubway, pinned, subwayDetail.data, subwayPositions.data, subwayPositions.isSuccess]);
 
   return busModel ?? subwayModel ?? EMPTY_MODEL;
