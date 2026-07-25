@@ -88,6 +88,7 @@ import type { TransitMapHandle } from '~/components/transit/useTransitMapSync';
 import { useBusMapModel, isBusVehicleId } from '~/components/transit/useBusMapModel';
 import { useSubwayMapModel, isSubwayVehicleId } from '~/components/transit/useSubwayMapModel';
 import { usePinnedVehicle } from '~/components/transit/usePinnedVehicle';
+import { useAlightEta } from '~/components/transit/useAlightEta';
 import { RideDetailPanel } from '~/components/transit/RideDetailPanel';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
 import {
@@ -103,7 +104,11 @@ import {
   type SubwayStationRowData,
 } from '~/components/subway/SubwayStationListRows';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
-import { useTransitScreen, type TransitMode } from '~/hooks/useTransitScreen';
+import {
+  useTransitScreen,
+  type AlightTarget,
+  type TransitMode,
+} from '~/hooks/useTransitScreen';
 import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 // 권한 거부/한국 밖 폴백 — 서울시청(restaurants 탭과 동일).
@@ -192,7 +197,7 @@ export default function TransitScreen() {
 
   // ── 화면 상태 — 웹 URL 계약을 이식한 단일 reducer ──────────────────────────
   const [state, dispatch] = useTransitScreen();
-  const { mode, subway, bus, pinned } = state;
+  const { mode, subway, bus, pinned, alight } = state;
   const stn = subway.stn;
   const stId = bus.stId;
 
@@ -1216,6 +1221,14 @@ export default function TransitScreen() {
     [dispatch, openDetail],
   );
 
+  // 하차 지점 도착 예정 — 지정 시에만 그 역/정류장 도착정보를 조회(쿼터 절약).
+  const alightEta = useAlightEta(pinned, alight, focused);
+  const handleSetAlight = useCallback(
+    (target: AlightTarget) => dispatch({ type: 'SET_ALIGHT', alight: target }),
+    [dispatch],
+  );
+  const handleClearAlight = useCallback(() => dispatch({ type: 'CLEAR_ALIGHT' }), [dispatch]);
+
   // ── 탑승 상세 뷰 — 칩 탭으로 열고 Detail 시트 안에 렌더(시간표/길찾기와 같은
   // 뷰 교체 패턴). 역/정류장 선택과 독립이라 시트 mount 게이트를 따로 넓힌다.
   const [rideView, setRideView] = useState(false);
@@ -1881,7 +1894,10 @@ export default function TransitScreen() {
               <Pressable onPress={openRideView} hitSlop={8} accessibilityLabel="탑승 상세 보기">
                 <Text style={[styles.mapChipText, { color: theme.colors.text }]}>
                   {pinned.mode === 'bus' ? '🚌 ' : '🚈 '}
-                  {pin.label ?? pinned.label} 탑승 중 ›
+                  {pin.label ?? pinned.label}
+                  {/* 하차 지점이 걸려 있으면 칩에도 표시 — 남은 시간 카운트다운은
+                      패널에만 둔다(여기서 tick 하면 지도까지 매초 리렌더). */}
+                  {alight ? ` · 하차 ${alight.name}` : ' 탑승 중'} ›
                 </Text>
               </Pressable>
             )}
@@ -2118,6 +2134,10 @@ export default function TransitScreen() {
               }}
               onSelectBusStation={handleRideSelectBusStation}
               onSelectSubwayStation={handleRideSelectSubwayStation}
+              alight={alight}
+              eta={alightEta}
+              onSetAlight={handleSetAlight}
+              onClearAlight={handleClearAlight}
               bottomPad={tabBarH + 24}
             />
           ) : mode === 'subway' && timetableView && stn ? (

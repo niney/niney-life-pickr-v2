@@ -4,13 +4,17 @@ import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useTheme } from '@repo/shared';
 import {
   busRouteTypeColor,
+  formatCountdown,
   formatRelativeSec,
+  remainSecSince,
   resolveTrainSection,
   subwayDestinationLabel,
   subwayLineColor,
   subwayLineName,
 } from '@repo/utils';
 import type { PinnedRideDetail } from './usePinnedVehicle';
+import type { AlightEtaModel } from './useAlightEta';
+import type { AlightTarget } from '~/hooks/useTransitScreen';
 
 // 앞으로 지날 정류장/역 표시 상한 — 버스 노선상세는 왕복 전체(수백 개)가 한
 // 배열이라 전부 그리면 시트가 무거워진다. 넘치면 마지막 줄에 잔여 개수만.
@@ -34,6 +38,11 @@ export interface RideDetailPanelProps {
   // 정류장/역 행 탭 — 기존 선택 흐름으로 점프(미지정이면 행이 비활성).
   onSelectBusStation?(stId: string): void;
   onSelectSubwayStation?(stationId: string): void;
+  // 하차 지점 — 지정하면 그 역 도착정보에서 내 차량을 조인해 도착 예정을 띄운다.
+  alight: AlightTarget | null;
+  eta: AlightEtaModel;
+  onSetAlight(target: AlightTarget): void;
+  onClearAlight(): void;
   bottomPad?: number;
 }
 
@@ -46,6 +55,10 @@ export const RideDetailPanel = ({
   onUnpin,
   onSelectBusStation,
   onSelectSubwayStation,
+  alight,
+  eta,
+  onSetAlight,
+  onClearAlight,
   bottomPad = 24,
 }: RideDetailPanelProps) => {
   const theme = useTheme();
@@ -56,7 +69,29 @@ export const RideDetailPanel = ({
     return () => clearInterval(id);
   }, []);
 
-  const view = useMemo(() => buildView(detail, label), [detail, label]);
+  const view = useMemo(() => buildView(detail, label, alight), [detail, label, alight]);
+
+  // 하차 도착 예정 — 지하철은 초 카운트다운(발신시각 보정), 버스는 메시지 원문.
+  const alightRemain = remainSecSince(eta.arrivalSec, eta.receivedAt, nowMs);
+  const etaText = !alight
+    ? null
+    : eta.unavailable
+      ? '이 정류장은 도착정보를 제공하지 않아요.'
+      : eta.isError
+        ? '도착정보를 불러오지 못했어요.'
+        : alightRemain !== null && alightRemain > 0
+          ? `${formatCountdown(alightRemain)} 후 도착`
+          : eta.matched
+            ? (eta.message ?? '곧 도착')
+            : eta.isLoading
+              ? '도착정보 확인 중…'
+              : '아직 도착정보에 잡히지 않았어요.';
+  // 임박 — 다음 정차거나 1분 이내. 내릴 준비 문구로 강조.
+  const alightImminent =
+    !!alight &&
+    ((view.alightSteps !== null && view.alightSteps <= 1) ||
+      (alightRemain !== null && alightRemain > 0 && alightRemain <= 60));
+  const accent = theme.mode === 'dark' ? '#34d399' : '#059669';
 
   const onSelect =
     detail === null
@@ -120,6 +155,49 @@ export const RideDetailPanel = ({
         contentContainerStyle={[styles.scrollPad, { paddingBottom: bottomPad }]}
         keyboardShouldPersistTaps="handled"
       >
+        {/* 하차 지점 — 지정 시에만. 남은 정차 수 + 내 차량 도착 예정. */}
+        {alight && (
+          <View
+            style={[
+              styles.card,
+              styles.alightCard,
+              {
+                borderColor: alightImminent ? accent : theme.colors.border,
+                backgroundColor: theme.colors.surfaceAlt,
+              },
+            ]}
+          >
+            <View style={styles.alightHead}>
+              <Text
+                style={[styles.alightTitle, { color: theme.colors.text }]}
+                numberOfLines={1}
+              >
+                하차 {alight.name}
+              </Text>
+              <Pressable onPress={onClearAlight} hitSlop={8} accessibilityLabel="하차 지점 해제">
+                <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>✕</Text>
+              </Pressable>
+            </View>
+            <Text
+              style={[
+                styles.alightEta,
+                { color: alightImminent ? accent : theme.colors.text },
+              ]}
+            >
+              {etaText}
+            </Text>
+            <Text style={[styles.statusSub, { color: theme.colors.textMuted }]}>
+              {/* 문구는 위치(남은 정차 수) 기준 — ETA 임박(<=60s)은 색으로만
+                  강조한다. 두 소스가 어긋날 때 '다음에 내려요'가 거짓말하지 않게. */}
+              {view.alightSteps === null
+                ? '앞으로 지날 목록에 없어요 — 이미 지났을 수 있습니다.'
+                : view.alightSteps <= 1
+                  ? '다음에 내려요 — 준비하세요.'
+                  : `${view.alightSteps}번째 · ${view.alightSteps - 1}개 지나고 하차`}
+            </Text>
+          </View>
+        )}
+
         {/* 현재 위치 — 정차/주행 + 직전·다음 정류장(역). */}
         <View
           style={[
@@ -174,35 +252,68 @@ export const RideDetailPanel = ({
               { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
             ]}
           >
-            {view.upcoming.map((u, i) => (
-              <Pressable
-                key={u.key}
-                onPress={onSelect ? () => onSelect(u.id) : undefined}
-                disabled={!onSelect}
-                style={[
-                  styles.listRow,
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth },
-                  { borderTopColor: theme.colors.border },
-                ]}
-              >
-                <Text style={[styles.listOrd, { color: theme.colors.textMuted }]}>
-                  {i + 1}
-                </Text>
-                <Text
-                  style={[styles.listName, { color: theme.colors.text }]}
-                  numberOfLines={1}
+            {view.upcoming.map((u, i) => {
+              const isAlight =
+                alight != null &&
+                u.id === (alight.mode === 'bus' ? alight.stId : alight.stationId);
+              return (
+                <View
+                  key={u.key}
+                  style={[
+                    styles.listRow,
+                    i > 0 && { borderTopWidth: StyleSheet.hairlineWidth },
+                    { borderTopColor: theme.colors.border },
+                  ]}
                 >
-                  {u.name}
-                </Text>
-                {u.tag && (
-                  <View style={[styles.pill, { backgroundColor: theme.colors.surfaceAlt }]}>
-                    <Text style={[styles.pillText, { color: theme.colors.textMuted }]}>
-                      {u.tag}
+                  <Text style={[styles.listOrd, { color: theme.colors.textMuted }]}>
+                    {i + 1}
+                  </Text>
+                  {/* 이름 탭 = 그 역 도착정보로 점프(기존 선택 흐름). */}
+                  <Pressable
+                    onPress={onSelect ? () => onSelect(u.id) : undefined}
+                    disabled={!onSelect}
+                    style={styles.listNameWrap}
+                  >
+                    <Text
+                      style={[styles.listName, { color: theme.colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {u.name}
                     </Text>
-                  </View>
-                )}
-              </Pressable>
-            ))}
+                  </Pressable>
+                  {u.tag && (
+                    <View style={[styles.pill, { backgroundColor: theme.colors.surfaceAlt }]}>
+                      <Text style={[styles.pillText, { color: theme.colors.textMuted }]}>
+                        {u.tag}
+                      </Text>
+                    </View>
+                  )}
+                  {/* 하차 지정 토글 — 지정된 행은 해제 버튼이 된다. */}
+                  <Pressable
+                    onPress={() => (isAlight ? onClearAlight() : onSetAlight(u.target))}
+                    disabled={u.alightDisabled}
+                    hitSlop={6}
+                    style={[
+                      styles.alightBtn,
+                      {
+                        backgroundColor: isAlight ? accent : theme.colors.surfaceAlt,
+                        opacity: u.alightDisabled ? 0.4 : 1,
+                      },
+                    ]}
+                    accessibilityLabel={`${u.name} ${isAlight ? '하차 해제' : '하차 지정'}`}
+                  >
+                    <Text
+                      style={[
+                        styles.alightBtnText,
+                        { color: isAlight ? '#ffffff' : theme.colors.textMuted },
+                      ]}
+                    >
+                      하차
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
             {view.moreCount > 0 && (
               <View
                 style={[
@@ -228,6 +339,9 @@ interface UpcomingItem {
   id: string;
   name: string;
   tag?: string;
+  // 하차 지정 payload. 버스 가상정류장(arsId '0')은 도착정보가 없어 지정 불가.
+  target: AlightTarget;
+  alightDisabled?: boolean;
 }
 
 interface RideView {
@@ -243,10 +357,18 @@ interface RideView {
   moreCount: number;
   fetchedAt: string | null;
   stale: boolean;
+  // 하차 지점 — 앞으로 지날 목록에서 몇 번째인지(1 = 다음). 목록에 없으면 null
+  // (이미 지났거나 다른 분기).
+  alightName: string | null;
+  alightSteps: number | null;
 }
 
 // 상세 → 표시 모델. 모드 분기를 렌더에서 걷어내 JSX 를 한 벌로 유지한다.
-const buildView = (detail: PinnedRideDetail | null, label: string | null): RideView => {
+const buildView = (
+  detail: PinnedRideDetail | null,
+  label: string | null,
+  alight: AlightTarget | null,
+): RideView => {
   if (detail === null) {
     return {
       badge: label ?? '탑승',
@@ -261,14 +383,27 @@ const buildView = (detail: PinnedRideDetail | null, label: string | null): RideV
       moreCount: 0,
       fetchedAt: null,
       stale: false,
+      alightName: alight?.name ?? null,
+      alightSteps: null,
     };
   }
-  return detail.mode === 'bus' ? buildBusView(detail, label) : buildSubwayView(detail, label);
+  return detail.mode === 'bus'
+    ? buildBusView(detail, label, alight)
+    : buildSubwayView(detail, label, alight);
+};
+
+// 하차 지점이 '앞으로 지날' 목록의 몇 번째인지(1 = 다음). 못 찾으면 null.
+const stepsToAlight = (all: UpcomingItem[], alight: AlightTarget | null): number | null => {
+  if (!alight) return null;
+  const key = alight.mode === 'bus' ? alight.stId : alight.stationId;
+  const i = all.findIndex((u) => u.id === key);
+  return i < 0 ? null : i + 1;
 };
 
 const buildBusView = (
   detail: Extract<PinnedRideDetail, { mode: 'bus' }>,
   label: string | null,
+  alight: AlightTarget | null,
 ): RideView => {
   const { vehicle, route } = detail;
   const info = route?.info ?? null;
@@ -318,12 +453,15 @@ const buildBusView = (
   let rest = ord === null ? [] : stations.filter((s) => s.seq > ord);
   const turnAt = rest.findIndex((s) => s.isTurnPoint);
   if (turnAt >= 0) rest = rest.slice(0, turnAt + 1);
-  const upcoming: UpcomingItem[] = rest.slice(0, UPCOMING_LIMIT).map((s) => ({
+  const upcomingAll: UpcomingItem[] = rest.map((s) => ({
     key: `${s.seq}:${s.stId}`,
     id: s.stId,
     name: s.name,
     ...(s.isTurnPoint ? { tag: '회차' } : {}),
+    target: { mode: 'bus' as const, stId: s.stId, arsId: s.arsId, name: s.name },
+    ...(s.arsId === '0' ? { alightDisabled: true } : {}),
   }));
+  const upcoming = upcomingAll.slice(0, UPCOMING_LIMIT);
 
   return {
     badge,
@@ -338,15 +476,18 @@ const buildBusView = (
       ord === null
         ? '차량 구간 정보가 없어 남은 정류장을 계산할 수 없습니다.'
         : '남은 정류장 정보가 없습니다.',
-    moreCount: Math.max(0, rest.length - upcoming.length),
+    moreCount: Math.max(0, upcomingAll.length - upcoming.length),
     fetchedAt: detail.fetchedAt,
     stale: detail.stale,
+    alightName: alight?.name ?? null,
+    alightSteps: stepsToAlight(upcomingAll, alight),
   };
 };
 
 const buildSubwayView = (
   detail: Extract<PinnedRideDetail, { mode: 'subway' }>,
   label: string | null,
+  alight: AlightTarget | null,
 ): RideView => {
   const { train, line } = detail;
   const lineId = line?.lineId ?? null;
@@ -393,6 +534,7 @@ const buildSubwayView = (
         id: st.stationId,
         name: st.name,
         ...(st.isTransfer ? { tag: '환승' } : {}),
+        target: { mode: 'subway' as const, stationId: st.stationId, name: st.name },
       });
     }
   }
@@ -428,6 +570,8 @@ const buildSubwayView = (
     moreCount: Math.max(0, upcomingAll.length - upcoming.length),
     fetchedAt: train.receivedAt ?? detail.fetchedAt,
     stale: false,
+    alightName: alight?.name ?? null,
+    alightSteps: stepsToAlight(upcomingAll, alight),
   };
 };
 
@@ -497,7 +641,20 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     fontVariant: ['tabular-nums'],
   },
-  listName: { fontSize: 13, flexShrink: 1 },
+  listNameWrap: { flexShrink: 1, minWidth: 0 },
+  listName: { fontSize: 13 },
+  alightBtn: {
+    marginLeft: 'auto',
+    flexShrink: 0,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  alightBtnText: { fontSize: 11, fontWeight: '600' },
+  alightCard: { borderWidth: 1.5 },
+  alightHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  alightTitle: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  alightEta: { fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
   listMore: { fontSize: 12 },
   hint: {
     borderWidth: 1,

@@ -11,9 +11,11 @@ import type {
 } from '@repo/api-contract';
 import {
   arrivalUpdnToTimetable,
+  formatCountdown,
   formatHHMM,
   formatRelativeSec,
   lastTrainRemainMin,
+  remainSecSince,
   subwayLineName,
 } from '@repo/utils';
 import { SubwayLineBadge } from './SubwayLineBadge';
@@ -30,25 +32,14 @@ const STATUS_BY_CODE: Record<string, string> = {
   '5': '전역 도착',
 };
 
-// 잔여초 파생 — receivedAt(원문 수신시각) 기준 보정. arrivalSec 0·null 은
-// 카운트다운이 아니라 상태 문구로.
-const remainSec = (it: SubwayArrivalItemType, nowMs: number): number | null => {
-  if (it.arrivalSec === null || it.arrivalSec === 0) return null;
-  if (it.receivedAt === null) return it.arrivalSec;
-  const elapsed = Math.floor((nowMs - Date.parse(it.receivedAt)) / 1000);
-  return it.arrivalSec - elapsed;
-};
+// 잔여초 파생 — receivedAt(원문 수신시각) 기준 보정(@repo/utils 공용). arrivalSec
+// 0·null 은 카운트다운이 아니라 상태 문구로.
+const remainSec = (it: SubwayArrivalItemType, nowMs: number): number | null =>
+  remainSecSince(it.arrivalSec, it.receivedAt, nowMs);
 
 const statusText = (it: SubwayArrivalItemType): string => {
   const byCode = it.arrivalCode ? STATUS_BY_CODE[it.arrivalCode] : undefined;
   return byCode ?? it.arrivalMsg ?? '운행 중';
-};
-
-// 'm분 s초' — m 이 0이면 's초'만.
-const formatCountdown = (remain: number): string => {
-  const m = Math.floor(remain / 60);
-  const s = remain % 60;
-  return m > 0 ? `${m}분 ${s}초` : `${s}초`;
 };
 
 export interface SubwayArrivalPanelProps {

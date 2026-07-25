@@ -24,6 +24,28 @@ export const formatRelativeSec = (iso: string, nowMs = Date.now()): string => {
   return `${Math.floor(min / 60)}시간 전`;
 };
 
+// 발신 시각 기준 잔여초 보정 — 실시간 도착정보의 '몇 초 남음'은 업스트림 수집
+// 시점 값이라 화면 시각과 어긋난다(지하철 공식 가이드가 recptnDt 차이만큼 보정을
+// 명시). base 가 0/null 이면 카운트다운이 아니라 상태 국면이라 null.
+export const remainSecSince = (
+  baseSec: number | null,
+  issuedAt: string | null,
+  nowMs = Date.now(),
+): number | null => {
+  if (baseSec === null || baseSec === 0) return null;
+  if (issuedAt === null) return baseSec;
+  const elapsed = Math.floor((nowMs - Date.parse(issuedAt)) / 1000);
+  return baseSec - elapsed;
+};
+
+// 잔여초 → 'm분 s초'(m 이 0이면 's초'). 음수는 0초로 클램프.
+export const formatCountdown = (remainSec: number): string => {
+  const total = Math.max(0, remainSec);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m > 0 ? `${m}분 ${s}초` : `${s}초`;
+};
+
 const parseWonNumber = (text: string): number | null => {
   const normalized = text.replace(/[,\s₩원]/g, '');
   if (!/^\d+$/.test(normalized)) return null;

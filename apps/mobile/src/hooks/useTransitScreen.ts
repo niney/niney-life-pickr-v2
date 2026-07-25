@@ -65,12 +65,22 @@ export interface PinnedVehicle {
   label: string;
 }
 
+// 하차 지점 — 탑승 중 "여기서 내린다"고 찍은 역/정류장. 이게 있을 때만 그 역의
+// 도착정보를 폴링해 내 차량(trainNo/vehId)을 조인한다(쿼터는 지정 시에만 소비).
+// 버스는 도착정보 조회 키가 arsId 라 stId(선택 점프용)와 함께 보관 — 가상정류장
+// (arsId '0')은 도착정보가 없어 호출부가 지정 자체를 막는다.
+export type AlightTarget =
+  | { mode: 'bus'; stId: string; arsId: string; name: string }
+  | { mode: 'subway'; stationId: string; name: string };
+
 export interface TransitScreenState {
   mode: TransitMode;
   subway: SubwayScreenState;
   bus: BusScreenState;
   // 탑승 중인 차량 — 없으면 null. bus/subway 브라우징 상태와 독립.
   pinned: PinnedVehicle | null;
+  // 탑승 중 하차 지점 — pinned 에 종속(핀 교체/해제 시 함께 비워진다).
+  alight: AlightTarget | null;
 }
 
 const INITIAL_SUBWAY: SubwayScreenState = {
@@ -101,6 +111,7 @@ const INITIAL: TransitScreenState = {
   subway: INITIAL_SUBWAY,
   bus: INITIAL_BUS,
   pinned: null,
+  alight: null,
 };
 
 export type TransitScreenAction =
@@ -143,7 +154,10 @@ export type TransitScreenAction =
   | { type: 'CROSS_JUMP_TO_SUBWAY'; stn?: string; near: Coord | null; q?: string }
   // ── 탑승(핀) — 브라우징과 독립. 차량 탭 시 set(같은 차량 재탭 시 UNPIN). ──
   | { type: 'PIN_VEHICLE'; pinned: PinnedVehicle }
-  | { type: 'UNPIN_VEHICLE' };
+  | { type: 'UNPIN_VEHICLE' }
+  // ── 하차 지점 — 탑승 중에만 유효. 핀 교체/해제가 자동으로 비운다. ──
+  | { type: 'SET_ALIGHT'; alight: AlightTarget }
+  | { type: 'CLEAR_ALIGHT' };
 
 const round = (c: Coord): Coord => ({ lat: roundCoord(c.lat), lng: roundCoord(c.lng) });
 
@@ -451,9 +465,17 @@ const reducer = (
 
     // ── 탑승(핀) — bus/subway 브라우징 상태는 건드리지 않고 pinned 만 교체. ──
     case 'PIN_VEHICLE':
-      return { ...state, pinned: action.pinned };
+      // 다른 차량으로 갈아타면 이전 하차 지점은 의미가 없다.
+      return { ...state, pinned: action.pinned, alight: null };
     case 'UNPIN_VEHICLE':
-      return state.pinned === null ? state : { ...state, pinned: null };
+      return state.pinned === null && state.alight === null
+        ? state
+        : { ...state, pinned: null, alight: null };
+
+    case 'SET_ALIGHT':
+      return state.pinned === null ? state : { ...state, alight: action.alight };
+    case 'CLEAR_ALIGHT':
+      return state.alight === null ? state : { ...state, alight: null };
   }
 };
 

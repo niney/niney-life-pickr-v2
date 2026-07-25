@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatDistanceM, formatRelativeMin, formatRelativeSec } from './format.js';
+import {
+  formatCountdown,
+  formatDistanceM,
+  formatRelativeMin,
+  formatRelativeSec,
+  remainSecSince,
+} from './format.js';
 import { parseLatLngParam } from './geo.js';
 import { isBusArrivalImminent } from './busArrival.js';
 
@@ -71,5 +77,36 @@ describe('isBusArrivalImminent', () => {
     expect(isBusArrivalImminent('3분 후 [2번째 전]')).toBe(false);
     expect(isBusArrivalImminent(null)).toBe(false);
     expect(isBusArrivalImminent(undefined)).toBe(false);
+  });
+});
+
+describe('remainSecSince — 발신 시각 기준 잔여초 보정', () => {
+  const t0 = Date.parse('2026-07-25T09:00:00.000Z');
+
+  it('발신 후 흐른 만큼 깎는다', () => {
+    expect(remainSecSince(180, '2026-07-25T09:00:00.000Z', t0 + 20_000)).toBe(160);
+  });
+
+  it('발신 시각이 없으면 원본 그대로', () => {
+    expect(remainSecSince(180, null, t0)).toBe(180);
+  });
+
+  it('0·null 은 카운트다운이 아니라 상태 국면 — null', () => {
+    expect(remainSecSince(0, '2026-07-25T09:00:00.000Z', t0)).toBeNull();
+    expect(remainSecSince(null, '2026-07-25T09:00:00.000Z', t0)).toBeNull();
+  });
+});
+
+describe('formatCountdown — 잔여초 표기', () => {
+  it('분이 0이면 초만', () => {
+    expect(formatCountdown(45)).toBe('45초');
+  });
+
+  it('분·초 병기', () => {
+    expect(formatCountdown(185)).toBe('3분 5초');
+  });
+
+  it('음수는 0초로 클램프(보정이 과했을 때)', () => {
+    expect(formatCountdown(-3)).toBe('0초');
   });
 });
