@@ -7,7 +7,7 @@ import {
   remainSecSince,
 } from './format.js';
 import { parseLatLngParam } from './geo.js';
-import { isBusArrivalImminent } from './busArrival.js';
+import { isBusArrivalImminent, parseBusArrivalSec } from './busArrival.js';
 
 describe('formatDistanceM', () => {
   it('1km 미만은 정수 m', () => {
@@ -108,5 +108,23 @@ describe('formatCountdown — 잔여초 표기', () => {
 
   it('음수는 0초로 클램프(보정이 과했을 때)', () => {
     expect(formatCountdown(-3)).toBe('0초');
+  });
+});
+
+describe('parseBusArrivalSec — 도착 메시지 → 잔여초 근사', () => {
+  it("'곧 도착'은 0", () => {
+    expect(parseBusArrivalSec('곧 도착')).toBe(0);
+  });
+
+  it("'N분후[M번째 전]'은 분 → 초", () => {
+    expect(parseBusArrivalSec('3분후[2번째 전]')).toBe(180);
+    expect(parseBusArrivalSec('12분후[4번째 전]')).toBe(720);
+  });
+
+  it('운행종료·출발대기·빈 값은 null', () => {
+    expect(parseBusArrivalSec('운행종료')).toBeNull();
+    expect(parseBusArrivalSec('출발대기')).toBeNull();
+    expect(parseBusArrivalSec(null)).toBeNull();
+    expect(parseBusArrivalSec('')).toBeNull();
   });
 });

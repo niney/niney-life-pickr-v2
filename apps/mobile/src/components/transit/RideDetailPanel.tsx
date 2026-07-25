@@ -1,38 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useTheme } from '@repo/shared';
-import {
-  busRouteTypeColor,
-  formatCountdown,
-  formatRelativeSec,
-  remainSecSince,
-  resolveTrainSection,
-  subwayDestinationLabel,
-  subwayLineColor,
-  subwayLineName,
-} from '@repo/utils';
-import type { PinnedRideDetail } from './usePinnedVehicle';
+import { formatCountdown, formatRelativeSec, remainSecSince } from '@repo/utils';
 import type { AlightEtaModel } from './useAlightEta';
+import type { RideView } from './rideView';
 import type { AlightTarget } from '~/hooks/useTransitScreen';
 
-// 앞으로 지날 정류장/역 표시 상한 — 버스 노선상세는 왕복 전체(수백 개)가 한
-// 배열이라 전부 그리면 시트가 무거워진다. 넘치면 마지막 줄에 잔여 개수만.
-const UPCOMING_LIMIT = 20;
-
-// trainSttus 원문 → 상태 문구. 0진입/1도착/2출발/3전역출발.
-const TRAIN_STATUS_TEXT: Record<string, string> = {
-  '0': '진입 중',
-  '1': '정차 중',
-  '2': '출발',
-  '3': '전역 출발',
-};
-
 export interface RideDetailPanelProps {
-  // null = 최신 폴링에 대상이 없음(일시적) — 헤더는 유지하고 본문만 대기 문구.
-  detail: PinnedRideDetail | null;
-  // 칩과 같은 라벨(노선번호 / 행선) — detail 이 비기 전 마지막 값.
-  label: string | null;
+  // 표시 모델 — 계산은 rideView.buildRideView(호출부에서 memo). 하차 알림과 같은
+  // 모델을 공유해야 '몇 번째 정차'가 화면과 알림에서 어긋나지 않는다.
+  view: RideView;
   onBack(): void;
   onUnpin(): void;
   // 정류장/역 행 탭 — 기존 선택 흐름으로 점프(미지정이면 행이 비활성).
@@ -43,14 +21,17 @@ export interface RideDetailPanelProps {
   eta: AlightEtaModel;
   onSetAlight(target: AlightTarget): void;
   onClearAlight(): void;
+  // 하차 임박 로컬 알림 — 켤 때 권한을 요청하고, 거부되면 alertDenied 로 안내.
+  alertEnabled: boolean;
+  alertDenied: boolean;
+  onToggleAlert(enabled: boolean): void;
   bottomPad?: number;
 }
 
 // 탑승(핀) 차량 상세 — Detail 바텀시트 내부 뷰. 데이터는 usePinnedVehicle 이
 // 이미 구독 중인 실시간 위치 + 노선/호선 상세를 그대로 받는다(추가 요청 없음).
 export const RideDetailPanel = ({
-  detail,
-  label,
+  view,
   onBack,
   onUnpin,
   onSelectBusStation,
@@ -59,6 +40,9 @@ export const RideDetailPanel = ({
   eta,
   onSetAlight,
   onClearAlight,
+  alertEnabled,
+  alertDenied,
+  onToggleAlert,
   bottomPad = 24,
 }: RideDetailPanelProps) => {
   const theme = useTheme();
@@ -68,8 +52,6 @@ export const RideDetailPanel = ({
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-
-  const view = useMemo(() => buildView(detail, label, alight), [detail, label, alight]);
 
   // 하차 도착 예정 — 지하철은 초 카운트다운(발신시각 보정), 버스는 메시지 원문.
   const alightRemain = remainSecSince(eta.arrivalSec, eta.receivedAt, nowMs);
@@ -94,9 +76,9 @@ export const RideDetailPanel = ({
   const accent = theme.mode === 'dark' ? '#34d399' : '#059669';
 
   const onSelect =
-    detail === null
+    view.mode === null
       ? undefined
-      : detail.mode === 'bus'
+      : view.mode === 'bus'
         ? onSelectBusStation
         : onSelectSubwayStation;
 
@@ -195,6 +177,35 @@ export const RideDetailPanel = ({
                   ? '다음에 내려요 — 준비하세요.'
                   : `${view.alightSteps}번째 · ${view.alightSteps - 1}개 지나고 하차`}
             </Text>
+            {/* 도착 알림 — 앱을 닫아도 울리게 미리 예약한다(예약 시각은 폴링마다
+                더 정확한 값으로 갱신). 권한은 켤 때만 묻는다. */}
+            <Pressable
+              onPress={() => onToggleAlert(!alertEnabled)}
+              hitSlop={6}
+              style={[
+                styles.alertToggle,
+                {
+                  borderColor: alertEnabled ? accent : theme.colors.border,
+                  backgroundColor: alertEnabled ? accent : 'transparent',
+                },
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: alertEnabled }}
+            >
+              <Text
+                style={[
+                  styles.alertToggleText,
+                  { color: alertEnabled ? '#ffffff' : theme.colors.textMuted },
+                ]}
+              >
+                {alertEnabled ? '🔔 도착 알림 켜짐' : '🔕 도착 알림 켜기'}
+              </Text>
+            </Pressable>
+            {alertDenied && (
+              <Text style={[styles.statusSub, { color: theme.colors.danger }]}>
+                알림 권한이 없어 켤 수 없어요. 설정에서 알림을 허용해 주세요.
+              </Text>
+            )}
           </View>
         )}
 
@@ -333,248 +344,6 @@ export const RideDetailPanel = ({
   );
 };
 
-interface UpcomingItem {
-  key: string;
-  // 탭 시 넘길 식별자 — 버스는 stId, 지하철은 stationId.
-  id: string;
-  name: string;
-  tag?: string;
-  // 하차 지정 payload. 버스 가상정류장(arsId '0')은 도착정보가 없어 지정 불가.
-  target: AlightTarget;
-  alightDisabled?: boolean;
-}
-
-interface RideView {
-  badge: string;
-  color: string;
-  title: string;
-  status: string;
-  statusSub: string | null;
-  tags: string[];
-  rows: { label: string; value: string }[];
-  upcoming: UpcomingItem[];
-  upcomingEmpty: string;
-  moreCount: number;
-  fetchedAt: string | null;
-  stale: boolean;
-  // 하차 지점 — 앞으로 지날 목록에서 몇 번째인지(1 = 다음). 목록에 없으면 null
-  // (이미 지났거나 다른 분기).
-  alightName: string | null;
-  alightSteps: number | null;
-}
-
-// 상세 → 표시 모델. 모드 분기를 렌더에서 걷어내 JSX 를 한 벌로 유지한다.
-const buildView = (
-  detail: PinnedRideDetail | null,
-  label: string | null,
-  alight: AlightTarget | null,
-): RideView => {
-  if (detail === null) {
-    return {
-      badge: label ?? '탑승',
-      color: '#6b7280',
-      title: '탑승 중',
-      status: '차량 위치를 불러오는 중…',
-      statusSub: null,
-      tags: [],
-      rows: [],
-      upcoming: [],
-      upcomingEmpty: '다음 갱신을 기다리는 중입니다.',
-      moreCount: 0,
-      fetchedAt: null,
-      stale: false,
-      alightName: alight?.name ?? null,
-      alightSteps: null,
-    };
-  }
-  return detail.mode === 'bus'
-    ? buildBusView(detail, label, alight)
-    : buildSubwayView(detail, label, alight);
-};
-
-// 하차 지점이 '앞으로 지날' 목록의 몇 번째인지(1 = 다음). 못 찾으면 null.
-const stepsToAlight = (all: UpcomingItem[], alight: AlightTarget | null): number | null => {
-  if (!alight) return null;
-  const key = alight.mode === 'bus' ? alight.stId : alight.stationId;
-  const i = all.findIndex((u) => u.id === key);
-  return i < 0 ? null : i + 1;
-};
-
-const buildBusView = (
-  detail: Extract<PinnedRideDetail, { mode: 'bus' }>,
-  label: string | null,
-  alight: AlightTarget | null,
-): RideView => {
-  const { vehicle, route } = detail;
-  const info = route?.info ?? null;
-  const stations = route?.stations ?? [];
-  const badge = info?.routeName ?? label ?? '버스';
-  const color = info ? busRouteTypeColor(info.routeType) : '#6b7280';
-
-  // sectOrd = 현재 구간의 시작 정류소 seq(지도 보간과 같은 규약) — 직전 정류장.
-  const ord = vehicle.sectOrd;
-  const at = ord === null ? null : (stations.find((s) => s.seq === ord) ?? null);
-  const next = ord === null ? null : (stations.find((s) => s.seq === ord + 1) ?? null);
-  const stopped = vehicle.stopFlag === '1';
-
-  const status = stopped
-    ? at
-      ? `${at.name} 정차 중`
-      : '정차 중'
-    : at && next
-      ? `${at.name} → ${next.name}`
-      : next
-        ? `${next.name} 방면 주행 중`
-        : '주행 중';
-  const statusSub = stopped
-    ? next
-      ? `다음 ${next.name}`
-      : null
-    : at?.direction
-      ? `${at.direction} 방면`
-      : null;
-
-  const tags: string[] = [];
-  if (vehicle.plainNo) tags.push(vehicle.plainNo);
-
-  const rows: { label: string; value: string }[] = [];
-  if (info) {
-    if (info.stStationName || info.edStationName) {
-      rows.push({ label: '구간', value: `${info.stStationName} ↔ ${info.edStationName}` });
-    }
-    if (info.termMin != null) rows.push({ label: '배차', value: `${info.termMin}분` });
-    if (info.firstBusTime && info.lastBusTime) {
-      rows.push({ label: '운행', value: `${info.firstBusTime} ~ ${info.lastBusTime}` });
-    }
-    if (info.corpName) rows.push({ label: '운수사', value: info.corpName });
-  }
-
-  // 남은 경유 정류소 — 회차점(transYn)까지가 이번 편도. 이미 지났으면 종점까지.
-  let rest = ord === null ? [] : stations.filter((s) => s.seq > ord);
-  const turnAt = rest.findIndex((s) => s.isTurnPoint);
-  if (turnAt >= 0) rest = rest.slice(0, turnAt + 1);
-  const upcomingAll: UpcomingItem[] = rest.map((s) => ({
-    key: `${s.seq}:${s.stId}`,
-    id: s.stId,
-    name: s.name,
-    ...(s.isTurnPoint ? { tag: '회차' } : {}),
-    target: { mode: 'bus' as const, stId: s.stId, arsId: s.arsId, name: s.name },
-    ...(s.arsId === '0' ? { alightDisabled: true } : {}),
-  }));
-  const upcoming = upcomingAll.slice(0, UPCOMING_LIMIT);
-
-  return {
-    badge,
-    color,
-    title: info ? `${info.edStationName} 방면` : '탑승 중',
-    status,
-    statusSub,
-    tags,
-    rows,
-    upcoming,
-    upcomingEmpty:
-      ord === null
-        ? '차량 구간 정보가 없어 남은 정류장을 계산할 수 없습니다.'
-        : '남은 정류장 정보가 없습니다.',
-    moreCount: Math.max(0, upcomingAll.length - upcoming.length),
-    fetchedAt: detail.fetchedAt,
-    stale: detail.stale,
-    alightName: alight?.name ?? null,
-    alightSteps: stepsToAlight(upcomingAll, alight),
-  };
-};
-
-const buildSubwayView = (
-  detail: Extract<PinnedRideDetail, { mode: 'subway' }>,
-  label: string | null,
-  alight: AlightTarget | null,
-): RideView => {
-  const { train, line } = detail;
-  const lineId = line?.lineId ?? null;
-  const color = lineId ? subwayLineColor(lineId) : '#6b7280';
-  const dest = subwayDestinationLabel(train.destinationName) || (label ?? '');
-
-  const tags: string[] = [];
-  if (train.expressType !== null) tags.push('급행');
-  if (train.isLastTrain) tags.push('막차');
-
-  // 지도 보간과 같은 판정(지선 분기·순환 방향) — 순서만 쓰는 경량 section.
-  const order = (line?.sections ?? []).map((sec) => ({
-    sectionKey: sec.branchKey,
-    isLoop: sec.isLoop,
-    byName: new Map(sec.stations.map((s, i) => [s.name, i])),
-    stationCount: sec.stations.length,
-  }));
-  const match =
-    order.length > 0
-      ? resolveTrainSection(order, {
-          statnNm: train.statnNm,
-          trainStatus: train.trainStatus,
-          updnLine: train.updnLine,
-          destinationName: train.destinationName,
-        })
-      : null;
-  const section = match ? (line?.sections.find((s) => s.branchKey === match.sectionKey) ?? null) : null;
-
-  // 진행 방향으로 이후 역 — 순환은 한 바퀴(N-1) 상한, 비순환은 종점에서 끊김.
-  // '0'(진입)·'3'(전역 출발)은 아직 현재역에 닿지 않은 상태라 현재역부터 넣는다
-  // (locateTrain 의 상태 분수와 같은 해석 — 도착/출발만 '지났음').
-  const beforeCurrent = train.trainStatus === '0' || train.trainStatus === '3';
-  const upcomingAll: UpcomingItem[] = [];
-  if (section && match && match.dir !== 0) {
-    const n = section.stations.length;
-    const max = section.isLoop ? n - 1 : n;
-    for (let step = beforeCurrent ? 0 : 1; step <= max; step++) {
-      const raw = match.stationIdx + match.dir * step;
-      const idx = section.isLoop ? ((raw % n) + n) % n : raw;
-      if (idx < 0 || idx >= n) break;
-      const st = section.stations[idx]!;
-      upcomingAll.push({
-        key: `${step}:${st.stationId}`,
-        id: st.stationId,
-        name: st.name,
-        ...(st.isTransfer ? { tag: '환승' } : {}),
-        target: { mode: 'subway' as const, stationId: st.stationId, name: st.name },
-      });
-    }
-  }
-  const upcoming = upcomingAll.slice(0, UPCOMING_LIMIT);
-
-  const statusText = TRAIN_STATUS_TEXT[train.trainStatus] ?? '운행 중';
-  // 상태 문구가 이미 그 역을 말하고 있으면(진입 중 등) '다음 ○○' 중복 제거.
-  const firstUpcoming = upcomingAll[0]?.name ?? null;
-  const nextName = firstUpcoming === train.statnNm ? null : firstUpcoming;
-
-  const rows: { label: string; value: string }[] = [];
-  if (lineId) rows.push({ label: '호선', value: subwayLineName(lineId) });
-  if (train.destinationName) rows.push({ label: '행선', value: train.destinationName });
-  if (section?.branchName) rows.push({ label: '구간', value: section.branchName });
-  rows.push({ label: '열차번호', value: train.trainNo });
-  if (upcomingAll.length > 0) {
-    rows.push({ label: '남은 역', value: `${upcomingAll.length}개` });
-  }
-
-  return {
-    badge: lineId ? subwayLineName(lineId) : '열차',
-    color,
-    title: dest || '탑승 중',
-    status: `${train.statnNm} ${statusText}`,
-    statusSub: nextName ? `다음 ${nextName}` : null,
-    tags,
-    rows,
-    upcoming,
-    upcomingEmpty:
-      match && match.dir === 0
-        ? '진행 방향을 판정하지 못해 남은 역을 계산할 수 없습니다.'
-        : '노선 순서 정보가 없어 남은 역을 계산할 수 없습니다.',
-    moreCount: Math.max(0, upcomingAll.length - upcoming.length),
-    fetchedAt: train.receivedAt ?? detail.fetchedAt,
-    stale: false,
-    alightName: alight?.name ?? null,
-    alightSteps: stepsToAlight(upcomingAll, alight),
-  };
-};
-
 const styles = StyleSheet.create({
   container: { flex: 1, minHeight: 0 },
   header: {
@@ -655,6 +424,15 @@ const styles = StyleSheet.create({
   alightHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   alightTitle: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
   alightEta: { fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  alertToggle: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  alertToggleText: { fontSize: 12, fontWeight: '600' },
   listMore: { fontSize: 12 },
   hint: {
     borderWidth: 1,

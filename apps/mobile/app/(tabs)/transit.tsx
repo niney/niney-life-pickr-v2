@@ -55,6 +55,8 @@ import {
   dayTypeForToday,
   formatRelativeMin,
   isInKorea,
+  parseBusArrivalSec,
+  remainSecSince,
   roundCoord,
   subwayDestinationLabel,
   subwayLineName,
@@ -89,6 +91,8 @@ import { useBusMapModel, isBusVehicleId } from '~/components/transit/useBusMapMo
 import { useSubwayMapModel, isSubwayVehicleId } from '~/components/transit/useSubwayMapModel';
 import { usePinnedVehicle } from '~/components/transit/usePinnedVehicle';
 import { useAlightEta } from '~/components/transit/useAlightEta';
+import { useAlightAlert } from '~/components/transit/useAlightAlert';
+import { buildRideView } from '~/components/transit/rideView';
 import { RideDetailPanel } from '~/components/transit/RideDetailPanel';
 import { BusArrivalPanel } from '~/components/bus/BusArrivalPanel';
 import {
@@ -197,7 +201,7 @@ export default function TransitScreen() {
 
   // ── 화면 상태 — 웹 URL 계약을 이식한 단일 reducer ──────────────────────────
   const [state, dispatch] = useTransitScreen();
-  const { mode, subway, bus, pinned, alight } = state;
+  const { mode, subway, bus, pinned, alight, alightAlert } = state;
   const stn = subway.stn;
   const stId = bus.stId;
 
@@ -1228,35 +1232,39 @@ export default function TransitScreen() {
     [dispatch],
   );
   const handleClearAlight = useCallback(() => dispatch({ type: 'CLEAR_ALIGHT' }), [dispatch]);
+  const handleToggleAlightAlert = useCallback(
+    (enabled: boolean) => dispatch({ type: 'SET_ALIGHT_ALERT', enabled }),
+    [dispatch],
+  );
 
   // ── 탑승 상세 뷰 — 칩 탭으로 열고 Detail 시트 안에 렌더(시간표/길찾기와 같은
   // 뷰 교체 패턴). 역/정류장 선택과 독립이라 시트 mount 게이트를 따로 넓힌다.
-  const [rideView, setRideView] = useState(false);
-  const rideOpen = rideView && pinned !== null;
+  const [ridePanel, setRidePanel] = useState(false);
+  const rideOpen = ridePanel && pinned !== null;
   const openRideView = useCallback(() => {
-    setRideView(true);
+    setRidePanel(true);
     openDetail();
     // 따라가기로 peek 까지 접혀 있으면 읽을 수 있게 half 로. 새로 mount 되는
     // 경우엔 ref 가 아직 null 이고, 그땐 시트 index prop(1)이 같은 결과를 낸다.
     detailSheetRef.current?.snapToIndex(1);
   }, [openDetail]);
   const closeRideView = useCallback(() => {
-    setRideView(false);
+    setRidePanel(false);
     // 선택된 역/정류장이 없으면 시트 자체를 닫는다(있으면 도착 패널로 복귀).
     if (!detailVisible) closeDetail();
   }, [detailVisible, closeDetail]);
   // 탑승 종료(수동 ✕ / 운행 종료 자동 UNPIN) → 상세 뷰도 함께 닫는다.
   useEffect(() => {
-    if (!rideView || pinned) return;
-    setRideView(false);
+    if (!ridePanel || pinned) return;
+    setRidePanel(false);
     if (!detailVisible) closeDetail();
-  }, [rideView, pinned, detailVisible, closeDetail]);
+  }, [ridePanel, pinned, detailVisible, closeDetail]);
 
   // 탑승 상세의 정류장/역 행 탭 — 맥락 밖(다른 모드)이면 모드부터 전환한 뒤
   // 기존 선택 흐름을 그대로 탄다(추적 노선/호선 유지는 각 핸들러가 담당).
   const handleRideSelectBusStation = useCallback(
     (stId: string) => {
-      setRideView(false);
+      setRidePanel(false);
       if (mode !== 'bus') dispatch({ type: 'SET_MODE', mode: 'bus' });
       handleSelectBusStation(stId);
     },
@@ -1264,7 +1272,7 @@ export default function TransitScreen() {
   );
   const handleRideSelectSubwayStation = useCallback(
     (stationId: string) => {
-      setRideView(false);
+      setRidePanel(false);
       if (mode !== 'subway') dispatch({ type: 'SET_MODE', mode: 'subway' });
       handleSelectStop(stationId);
     },
@@ -1488,6 +1496,34 @@ export default function TransitScreen() {
     if (mode === 'bus') busFollowInterrupted();
     else subwayFollowInterrupted();
   }, [pinned, mode, busFollowInterrupted, subwayFollowInterrupted]);
+
+  // 탑승 표시 모델 — 패널 렌더와 하차 알림 스케줄이 같은 계산을 봐야 '몇 번째
+  // 정차'가 어긋나지 않는다(패널이 닫혀 있어도 알림은 돌아야 하므로 화면 레벨).
+  const rideView = useMemo(
+    () => buildRideView(pin.detail, pin.label ?? pinned?.label ?? null, alight),
+    [pin.detail, pin.label, pinned, alight],
+  );
+  // 알림 예약 근거가 될 잔여초 — 지하철은 초 카운트다운, 버스는 메시지에서 근사.
+  const alightEtaSec = useMemo(() => {
+    if (!alight || !alightEta.matched) return null;
+    return alight.mode === 'subway'
+      ? remainSecSince(alightEta.arrivalSec, alightEta.receivedAt)
+      : parseBusArrivalSec(alightEta.message);
+  }, [alight, alightEta]);
+  // 권한 거부 → 토글을 되돌린다(켜진 것처럼 보이는데 안 울리는 상태 방지).
+  const handleAlertDenied = useCallback(
+    () => dispatch({ type: 'SET_ALIGHT_ALERT', enabled: false }),
+    [dispatch],
+  );
+  const alightAlertState = useAlightAlert({
+    enabled: alightAlert,
+    pinned,
+    alight,
+    stepsAway: rideView.alightSteps,
+    etaSec: alightEtaSec,
+    label: pin.label ?? pinned?.label ?? null,
+    onDenied: handleAlertDenied,
+  });
 
   const follow = mode === 'bus' ? busModel.follow : subwayModel.follow;
   const followLabel =
@@ -2125,8 +2161,7 @@ export default function TransitScreen() {
         >
           {rideOpen ? (
             <RideDetailPanel
-              detail={pin.detail}
-              label={pin.label ?? pinned?.label ?? null}
+              view={rideView}
               onBack={closeRideView}
               onUnpin={() => {
                 setPinFollowPaused(false);
@@ -2138,6 +2173,9 @@ export default function TransitScreen() {
               eta={alightEta}
               onSetAlight={handleSetAlight}
               onClearAlight={handleClearAlight}
+              alertEnabled={alightAlert}
+              alertDenied={alightAlertState.denied}
+              onToggleAlert={handleToggleAlightAlert}
               bottomPad={tabBarH + 24}
             />
           ) : mode === 'subway' && timetableView && stn ? (

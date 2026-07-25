@@ -108,6 +108,11 @@ const config: ExpoConfig = {
         cameraPermission: '영수증을 바로 촬영하기 위해 카메라 접근이 필요합니다.',
       },
     ],
+    // 하차 알림(로컬 알림 전용 — 원격 푸시 없음). Android 13+ 의
+    // POST_NOTIFICATIONS 권한은 라이브러리 매니페스트가 병합해 주고, 런타임
+    // 요청은 알림 토글을 켤 때만 띄운다. 전용 아이콘 에셋이 없어 props 없이
+    // 등록 — Android 는 앱 아이콘을 실루엣으로 쓴다(전용 아이콘 생기면 icon 추가).
+    'expo-notifications',
     './plugins/with-swift-concurrency-fix',
     './plugins/with-android-minify',
   ],

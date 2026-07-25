@@ -81,6 +81,9 @@ export interface TransitScreenState {
   pinned: PinnedVehicle | null;
   // 탑승 중 하차 지점 — pinned 에 종속(핀 교체/해제 시 함께 비워진다).
   alight: AlightTarget | null;
+  // 하차 임박 로컬 알림 — 사용자가 명시로 켠다(권한 요청이 그때 뜬다).
+  // alight 에 종속: 하차 지점을 바꾸거나 지우면 함께 꺼진다.
+  alightAlert: boolean;
 }
 
 const INITIAL_SUBWAY: SubwayScreenState = {
@@ -112,6 +115,7 @@ const INITIAL: TransitScreenState = {
   bus: INITIAL_BUS,
   pinned: null,
   alight: null,
+  alightAlert: false,
 };
 
 export type TransitScreenAction =
@@ -157,7 +161,8 @@ export type TransitScreenAction =
   | { type: 'UNPIN_VEHICLE' }
   // ── 하차 지점 — 탑승 중에만 유효. 핀 교체/해제가 자동으로 비운다. ──
   | { type: 'SET_ALIGHT'; alight: AlightTarget }
-  | { type: 'CLEAR_ALIGHT' };
+  | { type: 'CLEAR_ALIGHT' }
+  | { type: 'SET_ALIGHT_ALERT'; enabled: boolean };
 
 const round = (c: Coord): Coord => ({ lat: roundCoord(c.lat), lng: roundCoord(c.lng) });
 
@@ -466,16 +471,19 @@ const reducer = (
     // ── 탑승(핀) — bus/subway 브라우징 상태는 건드리지 않고 pinned 만 교체. ──
     case 'PIN_VEHICLE':
       // 다른 차량으로 갈아타면 이전 하차 지점은 의미가 없다.
-      return { ...state, pinned: action.pinned, alight: null };
+      return { ...state, pinned: action.pinned, alight: null, alightAlert: false };
     case 'UNPIN_VEHICLE':
       return state.pinned === null && state.alight === null
         ? state
-        : { ...state, pinned: null, alight: null };
+        : { ...state, pinned: null, alight: null, alightAlert: false };
 
     case 'SET_ALIGHT':
-      return state.pinned === null ? state : { ...state, alight: action.alight };
+      // 하차 지점을 바꾸면 알림은 다시 켜야 한다 — 엉뚱한 역에서 울리지 않게.
+      return state.pinned === null ? state : { ...state, alight: action.alight, alightAlert: false };
     case 'CLEAR_ALIGHT':
-      return state.alight === null ? state : { ...state, alight: null };
+      return state.alight === null ? state : { ...state, alight: null, alightAlert: false };
+    case 'SET_ALIGHT_ALERT':
+      return state.alight === null ? state : { ...state, alightAlert: action.enabled };
   }
 };
 
