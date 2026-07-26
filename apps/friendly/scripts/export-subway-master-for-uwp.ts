@@ -23,7 +23,7 @@ const OUT_DIR =
     : path.resolve('data/export-uwp');
 
 const main = async (): Promise<void> => {
-  const [stations, lineStations, sync] = await Promise.all([
+  const [stations, lineStations, sync, congestions] = await Promise.all([
     prisma.subwayStation.findMany({ orderBy: [{ lineId: 'asc' }, { name: 'asc' }] }),
     prisma.subwayLineStation.findMany({
       orderBy: [{ lineId: 'asc' }, { branchKey: 'asc' }, { seq: 'asc' }],
@@ -31,6 +31,9 @@ const main = async (): Promise<void> => {
     prisma.subwayMasterSync.findFirst({
       where: { source: 'subwayStationMaster' },
       orderBy: { loadedAt: 'desc' },
+    }),
+    prisma.subwayCongestion.findMany({
+      orderBy: [{ lineId: 'asc' }, { stationName: 'asc' }, { dayType: 'asc' }, { updn: 'asc' }],
     }),
   ]);
 
@@ -75,8 +78,23 @@ const main = async (): Promise<void> => {
     })),
   };
 
+  // 혼잡도(10차 정적 통계) — slots 는 JSON 문자열 컬럼이라 파싱해 배열로 내보낸다.
+  const congestionFile = {
+    exportedAt,
+    count: congestions.length,
+    rows: congestions.map((c) => ({
+      stationId: c.stationId,
+      lineId: c.lineId,
+      stationName: c.stationName,
+      dayType: c.dayType,
+      updn: c.updn,
+      slots: JSON.parse(c.slots) as { time: string; level: number | null }[],
+    })),
+  };
+
   writeFileSync(path.join(OUT_DIR, 'subway-stations.json'), JSON.stringify(stationsFile), 'utf8');
   writeFileSync(path.join(OUT_DIR, 'subway-line-orders.json'), JSON.stringify(ordersFile), 'utf8');
+  writeFileSync(path.join(OUT_DIR, 'subway-congestion.json'), JSON.stringify(congestionFile), 'utf8');
   console.log(`export 완료 → ${OUT_DIR}`);
   console.log(
     `  subway-stations.json: ${stations.length}행 (마스터 적재 ${stationsFile.loadedAt ?? '이력 없음'})`,
@@ -84,6 +102,7 @@ const main = async (): Promise<void> => {
   console.log(
     `  subway-line-orders.json: ${lineStations.length}행, loop=${ordersFile.loopSections.join(',')}`,
   );
+  console.log(`  subway-congestion.json: ${congestions.length}행`);
 };
 
 main()
