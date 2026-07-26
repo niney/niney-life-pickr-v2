@@ -43,13 +43,17 @@ export const PublicRestaurantCard = memo(function PublicRestaurantCard({
   return (
     // 카드 본체가 <button> 이라 즐겨찾기 별(역시 button)을 안에 중첩할 수 없다
     // — relative 래퍼 + absolute 형제로 배치 (BusFavoriteStar 의 배치 규칙).
+    // 별에 z-index 를 주지 않는다: 이 래퍼는 z-auto 라 스태킹 컨텍스트가 아니고,
+    // 별의 z 는 목록 sticky 헤더(z-10)와 같은 컨텍스트에서 비교돼 동률이면 DOM
+    // 순서상 별이 헤더 위로 떠버린다. 포지션된 별은 z 없이도 비-포지션 형제
+    // <button> 위에 그려지므로 z-index 자체가 불필요.
     <div className="relative">
       {onToggleFavorite && (
         <BusFavoriteStar
           active={favoriteActive}
           label={favoriteActive ? '즐겨찾기에서 제거' : '즐겨찾기에 추가'}
           onToggle={() => onToggleFavorite(item)}
-          className="absolute right-2 top-2 z-10"
+          className="absolute right-2 top-2"
         />
       )}
       <button
