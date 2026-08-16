@@ -25,7 +25,7 @@
 
 ## Stats
 
-Compiled: 2026-07-07 | Topics: 25 | Concepts: 16 | Sources: ~870
+Compiled: 2026-08-17 | Topics: 26 | Concepts: 17 | Sources: ~905
 
 ## Topic map at a glance
 

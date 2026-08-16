@@ -1,15 +1,22 @@
 ---
 topic: subway
 type: codebase
-last_compiled: 2026-07-07
-source_count: 64
+last_compiled: 2026-08-17
+source_count: 68
 status: active
 aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArrival, realtimePosition, subwayStationMaster, SearchSTNTimeTableByIDService, SearchSTNBySubwayLineInfo, subway-station-search, subway-arrivals, subway-positions, subway-line-detail, subway-timetable, subway-congestion, subway-path, subway-favorites, station-name-grouping, groupStations, subway-line-order, fr-code, branch-section, loop-section, subway-verify, verify-subway-lines, subwayId, statnId-mismatch, realtimeName-override, dongmyeong-station, train-interpolation, locateTrain, subwayPosition, vehiclePill, transit-tabs, transit-cross, transit-map-pool, subway-dijkstra, SUBWAY_API_KEY, SEOUL_OPEN_API_KEY, INFO-200, ERROR-337, plan-b-station-id]
 ---
 
 # subway
 
-서울시 수도권 전철 공공 API 두 포털(실시간 `swopenAPI.seoul.go.kr` + 정적 `openapi.seoul.go.kr:8088`)을 friendly 가 프록시하고, **웹**(`apps/web`)이 역 검색·실시간 도착·주변 역·호선 보기·실시간 열차 추적·시간표·혼잡도·경로 탐색을 그리는 도메인. 자매 토픽 [bus](bus.md)의 검증된 설계(어댑터 규율·쿼터 게이트·즐겨찾기 하이브리드·지도 어댑터·URL-as-truth)를 이식하되, 지하철 고유의 구조적 차이(로컬 DB 검색·GPS 없는 열차 위치·노선 형상 API 부재)에 맞게 재설계했다. **버스와 하나의 '대중교통' 통합 페이지**(`/bus` + `/subway` 탭)로 묶여 있다. **앱**(`apps/mobile`)에는 지하철 화면이 없다 — 버스와 마찬가지로 웹 전용이다.
+서울시 수도권 전철 공공 API 두 포털(실시간 `swopenAPI.seoul.go.kr` + 정적 `openapi.seoul.go.kr:8088`)을 friendly 가 프록시하고, **웹**(`apps/web`)이 역 검색·실시간 도착·주변 역·호선 보기·실시간 열차 추적·시간표·혼잡도·경로 탐색을 그리는 도메인. 자매 토픽 [bus](bus.md)의 검증된 설계(어댑터 규율·쿼터 게이트·즐겨찾기 하이브리드·지도 어댑터·URL-as-truth)를 이식하되, 지하철 고유의 구조적 차이(로컬 DB 검색·GPS 없는 열차 위치·노선 형상 API 부재)에 맞게 재설계했다. **버스와 하나의 '대중교통' 통합 페이지**(`/bus` + `/subway` 탭)로 묶여 있다. ~~앱에는 지하철 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합, 탑승 모드·하차 알림 포함)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
+
+**2026-07-25~08-17 변경 흡수 — 노선 실형상(OSM) + 데이터 픽스 + UWP export + 시간표 캐시/스모크 견고화**:
+- **실형상 적재·서빙(`c9c5235`, 마이그레이션 `20260724140939_add_subway_line_shape`)** — 역 좌표 직선 연결이던 폴리라인을 실제 선로 기하로. `SubwayLineShape`(lineId+branchKey → path/stationS anchor) 모델 + [load-subway-shapes](../../apps/friendly/scripts/load-subway-shapes.ts)(Overpass route relation → way 체인 조립 → 역 투영 anchor, 키 불필요). 단일 운행계통이 전 구간을 못 덮는 노선(4호선·경의선)은 역 커버리지 set-cover union 폴백 — 26개 section 중 25개 성공, GTX-A 만 직선 폴백. 조립 순수 로직은 [subway-shape.service.ts](../../apps/friendly/src/modules/subway/subway-shape.service.ts)(6호선 응암 루프 재방문 처리 포함). 계약은 `SubwayLineSection`/`SubwayPathLeg` 에 **optional** path/stationS — 미시드 환경은 기존 직선 폴백(하위호환). 경로 legs 는 탑승~하차 실형상 슬라이스(순환 시임 랩 포함). 산출물은 ODbL — 지도 attribution 에 © OpenStreetMap 표기. 시드 순서: load:subway-stations → line-orders → shapes.
+- **순서·좌표 데이터 픽스(`83cee9a`)** — FR_CODE 삽입역(A042 마곡나루 등) 재해석(normalizeInserted: prefix 그룹 지배 자릿수보다 긴 코드는 num+sub 분해 — 기존엔 노선 끝에 밀려 공항철도 폴리라인 지그재그) + 업스트림 좌표 大오차 예외 보정(KNOWN_COORD_OVERRIDES: 인천공항2터미널 1.1km·청산 1.6km, OSM 실측 대조). 재적재 필요.
+- **UWP(NineyWeather) export(`afb3bd0`+`56d871b`)** — [export-subway-master-for-uwp.ts](../../apps/friendly/scripts/export-subway-master-for-uwp.ts): 가공 완료된 SubwayStation/SubwayLineStation/SubwayCongestion 을 JSON 3파일로 덤프(DB만 읽음, 업스트림 0콜) — 별도 UWP 앱의 Assets 번들 원천.
+- **시간표 빈 blob 짧은 TTL + 업스트림 데이터셋 결손(`81ccb6d`)** — ⚠️ 2026-08-17 관측: 서울시 시간표 API 가 에러 없이 **전 역·전 요일 0행** 반환(강남·시청·성수·서울역 교차 확인). 30일 캐시가 이 빈 응답을 굳히지 않도록 coverage:false blob 은 `SUBWAY_TIMETABLE_EMPTY_TTL_MS`(6h)로 자가 회복. live 스모크는 coverage:false 를 외부 상태로 warn+skip. subway.test.ts 시드 정리를 beforeAll 에서도 실행 — 크래시한 이전 실행의 잔여 시드가 "주변 역" 정확 개수 단언을 깨던 것의 자가 치유.
+- **대중교통 5xx 진단 로깅(`d3af987`)** — subway 라우트 catch 8벌이 [lib/reply-upstream-error](../../apps/friendly/src/lib/reply-upstream-error.ts) 로 통합, 5xx 시 upstreamUrl(키 마스킹)/upstreamCode/responseSnippet warn 기록.
 
 커밋 히스토리상 1차(탭+역 검색+지도)부터 15차(검색 크로스 섹션)까지 진행됐고, 이 문서는 그 최신 코드 기준이다. 차수별 로드맵·사용자 결정·프로브 체크리스트의 원문은 [docs/PLAN-subway.md](../../docs/PLAN-subway.md)에 있다(계획 시점 기록 — 실제 진행은 커밋이 진실). 계획상 **9차(환승·출구)는 아직 구현되지 않았다** — TAGO 지하철정보(15098554) 게이트웨이 반영 대기.
 
@@ -77,7 +84,7 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 |---|---|---|---|
 | **로컬 DB** | 검색·주변·호선 상세·경로·혼잡도 | `subway_stations`/`subway_line_stations`/`subway_congestions` 조회 | **쿼터 0** (`source: 'db'`) |
 | **실시간** | 도착·열차 위치 | swopenAPI 프록시 | 15초 마이크로 캐시 + in-flight 합류 + 일일 쿼터('realtime' 그룹, 기본 900). **stale 폴백 없음** |
-| **시간표** | 역 시간표 | openapi 프록시 | (역×dayType) DB blob 30일 TTL + **stale 폴백** + in-flight('openapi' 쿼터, 방향 2콜 선소비) |
+| **시간표** | 역 시간표 | openapi 프록시 | (역×dayType) DB blob 30일 TTL(빈 blob 은 6h — 81ccb6d) + **stale 폴백** + in-flight('openapi' 쿼터, 방향 2콜 선소비) |
 
 로컬 조회는 라이브 검색을 가능하게 한 핵심이다. 실시간은 조회역명/호선명 단위 15초 캐시로 동시 사용자 전원이 업스트림 1콜을 공유한다.
 
@@ -235,7 +242,7 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - **키 URL path 노출.** 키가 path 세그먼트라 쿼리파람보다 새기 쉽다 — 로그·에러·프로브 덤프 전부 `***` 마스킹(어댑터 `requestUrl` + `scrubKey` 이중, 프로브/스크립트도 동일 규율).
 - **개발 함정(버스 계승).** 브랜치 전환/rebase 후 `prisma generate` 필수(client 불일치면 `prisma.subwayStation` undefined), dev DB 에 vworld 키 미등록이면 지도는 placeholder(설계된 폴백, 리스트는 동작), 포트 3000 이중 바인딩. 1차 마이그레이션은 기존 무관 drift 때문에 `migrate diff` 수기 작성 + `migrate deploy` 로 비파괴 우회했다.
 - **미구현·미확정.** 9차(환승·출구)는 TAGO 게이트웨이 대기로 미구현. `SUBWAY_LINES` 의 신림선(1094)은 문헌 추정(프로브 미검증), 일부 `positionParam` 은 관례 표기 추정(주석의 `verified` 만 실검증). 실시간 미제공 역의 도착 실패는 `INFO-200` 이라 '표기 불일치로 조용히 실패'와 구분 불가 — 필요 시 전 역 1회 검증 스크립트(쿼터 ~800콜, 별도 날).
-- **앱 미구현.** 지하철은 웹 전용이다. 게스트 store 는 앱 storage 주입까지 준비돼 있으나 앱 화면·라우트는 없다.
+- ~~앱 미구현~~ → **앱 대중교통 화면 존재(2026-07~)** — 검색·도착·따라가기에 더해 탑승 모드·하차 지점/알림·실형상 렌더까지 앱이 앞서 있다([transit](transit.md)). 게스트 즐겨찾기 storage 주입(setSubwayFavoriteStorage)도 앱 entry 에 배선됨.
 
 ## Sources [coverage: high — 64 sources]
 

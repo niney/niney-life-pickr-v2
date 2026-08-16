@@ -1,12 +1,16 @@
 ---
 topic: utils
-last_compiled: 2026-07-07
-sources_count: 19
+last_compiled: 2026-08-17
+sources_count: 22
 status: active
 aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnail-url, geo, bbox, compute-bbox-around, is-in-korea, lat-lng, restaurantCategory, formatWonPrice, 원화, 콤마, 카테고리매핑, resolveRestaurantCategoryKey, buildRestaurantMarkerSvg, aiModel, parseModelFamily, groupModelsByFamily, recommendModelForPurpose, isVisionModel, model-family, 모델계열, markerFrame, buildPinMarkerSvg, buildCircleMarkerSvg, marker-frame, 마커프레임, busMarker, buildBusStopMarkerSvg, buildBusVehiclePillSvg, buildBusVehicleDirSvg, buildMyLocationMarkerSvg, buildBusRouteStopDotSvg, busRouteTypeColor, 버스마커, 노선유형색, routePath, createRoutePathIndex, projectOnRoutePath, pointAtRoutePathS, bearingAtRoutePathS, sliceRoutePath, 노선형상, 폴리라인투영, route-path-projection, subwayLine, SUBWAY_LINES, SubwayLine, subwayMarker, buildSubwayStationMarkerSvg, buildSubwayStopDotSvg, buildSubwayTrainPillDataUrl, buildSubwayTrainDirDataUrl, subwayPosition, locateTrain, TRAIN_STATUS_FRACTION, sliceForMove, subwayDestinationLabel, normalizeStationName, TrainSection, vehiclePill, buildVehiclePillSvg, buildVehiclePillDataUrl, buildVehicleDirSvg, 지하철마커, 열차보간, 열차알약, vitest-config]
 ---
 
 # utils — 순수 유틸 패키지
+
+**2026-08-16~17 변경 흡수 — `formatBbox` 통합(6곳 중복 제거) + geo/format 테스트 확충 + 죽은 `./date` 서브패스 제거**: (1) **[`geo.ts`](../../packages/utils/src/geo.ts) 에 `formatBbox(b: Bbox): string`** — bbox → 쿼리 문자열(`minLng,minLat,maxLng,maxLat`, `toFixed(5)`). 웹 4곳(DiscoverMap·PublicRestaurantsMap·SmartPickSection·RestaurantsV2Page)·앱 2곳(PublicRestaurantsWebMap native/web)의 동일 복제를 단일 정의로(커밋 `f293a3c`). 순서·5자리 패딩은 서버 bbox 파라미터 계약이라 [`geo.test.ts`](../../packages/utils/src/geo.test.ts) 로 고정. (2) **`./date` 서브패스 제거(`bb07762`)** — 2026-07-13 `date.ts` 삭제(참조 0) 때 exports 맵에 남아 있던 죽은 항목. 서브패스는 이제 `./format`/`./random` 2종. (3) 테스트 65케이스(geo/format/subwayPosition/subwayTimetable/thumbnail 5파일).
+
+**2026-07-13~25 변경 흡수 — 대대적 통합 리팩터: geo 거리 함수 흡수 + FE 대중교통 포맷터·파서 집결 + `busArrival`/`subwayTimetable` 신설 + dead code 삭제 + 썸네일 프록시 가드**: 웹→앱 포팅 과정에서 복제된 순수 함수들이 utils 단일 정의로 모였다. (1) **[`geo.ts`](../../packages/utils/src/geo.ts) 확장(`edafb6a`)** — `approxDistanceM`(등거리 사각 근사 — 웹2·앱2·friendly2 로컬 정의 제거), `haversineM`(측지 — matching.ts·diningcode 어댑터 통일, asin 클램프), `roundCoord`(소수 5자리 — 4곳 제거), `parseLatLngParam`(한국 WGS84 범위 가드 lat 33~39/lng 124~132 — BusPage/SubwayPage parseNear 2곳). (2) **[`format.ts`](../../packages/utils/src/format.ts) 재편(`c6ac5ba`·`ddb2a8e`)** — `truncate`/`capitalize`/`slugify` 삭제(참조 0, `91eff7d`)되고 대중교통 포맷터가 들어옴: `formatDistanceM`(6곳 복제 제거), `formatRelativeMin`/`formatRelativeSec`(nowMs 기본 인자로 웹·앱 시그니처 차 흡수), `remainSecSince`/`formatCountdown`(하차 알림 카운트다운 — 세 번째 복사본 방지, `ddb2a8e`), `formatWonPrice` 유지. (3) **[`busArrival.ts`](../../packages/utils/src/busArrival.ts) 신설** — `isBusArrivalImminent`("곧 도착" 판정 4곳 흩어짐 통일, null/undefined → false) + `parseBusArrivalSec`('N분후[…]' 분 해상도 파싱 — 하차 알림 실측 예약 근거). (4) **[`subwayTimetable.ts`](../../packages/utils/src/subwayTimetable.ts) 승격(`2507cdc`)** — 웹·앱 `components/subway/timetableUtils.ts` 파일 전체 복사본을 단일 정의로(소비처 8곳 교체): `dayTypeForToday`/`parseTimeMin`(자정 넘김 24+ 단조성)/`formatHHMM`/`lastTrainRemainMin`(24+ 축 보정)/`arrivalUpdnToTimetable`/`isSubwayExpressTag`(EXPRESS_YN 'D'=급행)/`updnLabel`. (5) **[`date.ts`] 전체 삭제(`91eff7d`)** — toISOString/fromISOString/isValidDate 리포 참조 0건. (6) **[`thumbnail.ts`](../../packages/utils/src/thumbnail.ts) 프록시 가드(`4c829ad`)** — `reviewThumbnailUrl` 이 `*.pstatic.net` 절대 URL 만 프록시로 감싸고 상대경로(파노라마 로컬 사본 `/api/v1/media/panorama/…`)·비네이버 호스트는 원본 통과 — 8차 하드닝이 모든 썸네일을 프록시로 감싸며 zod url() 400 으로 리스트 대표이미지가 깨진 회귀의 복구.
 
 **2026-07-07 변경 흡수 — 지하철 도메인 순수 유틸 3종 신규(`subwayLine`/`subwayMarker`/`subwayPosition`) + 차량 알약/방향 기하 코어를 버스·지하철 공용으로 추출(`vehiclePill`) + vitest 설정 신설**: 대중교통이 버스에서 전철로 넓어지며 utils 에 지하철 도메인 파일이 붙고, 버스·지하철이 공유하던 마커 코어가 한 겹 더 추출됐다. (1) **[`vehiclePill.ts`](../../packages/utils/src/vehiclePill.ts) 신설 (공용 차량 알약/방향)** — 실시간 위치 '알약'(stadium 말풍선 + 라벨) + 진행 방향 '다트' SVG 의 도메인 중립 기하 코어. 버스 노선번호 알약과 지하철 열차 알약이 같은 규격(꼬리 끝이 세로 중앙 = 정차 좌표가 되는 **앵커 트릭** — SVG 아래 절반을 투명 여백으로 채워 MapCanvas 의 `[0.5,0.5]` 비선택 앵커·중앙 기준 축소에 정합)이라, 복제 드리프트를 막으려 한 곳으로 뺐다. `busMarker.ts` 의 기존 export(`buildBusVehiclePillSvg`/`...DataUrl`/`buildBusVehicleDirSvg`/`...DataUrl`)는 이제 이 함수들에 **재export 위임(바이트 동일 산출)** — busMarker 는 124→약 15줄로 축소. (2) **[`subwayLine.ts`](../../packages/utils/src/subwayLine.ts) 신설** — 수도권 전철 노선 상수(`SUBWAY_LINES`). 서울시 실시간 API 의 `subwayId`(4자리, 예 `'1002'`)를 `lineId` 로 채택(프로브 실측 2026-07-06 — 도착/위치 응답 체계와 동일), `{ lineId, name, shortLabel, color, positionParam }` — 공식 노선색 + realtimePosition path 파라미터(검증 여부 주석). (3) **[`subwayMarker.ts`](../../packages/utils/src/subwayMarker.ts) 신설** — 전철 도메인 마커: 역 마커(markerFrame 핀/원 프레임 재사용 + 지하철 아이콘)·경유역 점(`buildSubwayStopDotSvg` — 환승역 이중 링)·실시간 열차 알약/방향(`vehiclePill` 위임). (4) **[`subwayPosition.ts`](../../packages/utils/src/subwayPosition.ts) 신설(+테스트)** — 열차 역간 보간의 기하 코어. `locateTrain`(역 기준 상태를 역간 구간의 분수 위치로, `TRAIN_STATUS_FRACTION` 진입/도착/출발 등 상태→구간 비율) + `sliceForMove`(따라가기 이동 구간) + `subwayDestinationLabel`/`normalizeStationName`(행선지 표기 정규화). 버스가 도로 폴리라인을 추종한 것(`routePath`)과 달리 전철은 GPS 가 없어 역 순서(sections) 기반 보간이라 별도 모듈. (5) **[`vitest.config.ts`](../../packages/utils/vitest.config.ts) 신설** — utils 순수 함수 단위 테스트(`subwayPosition.test.ts`). 소스가 ESM `.js` import 라 `extensionAlias { '.js': ['.ts','.js'] }` 로 `.ts` 우선 해석(friendly 설정과 동일). 셋 다 순수 문자열/수치 처리라 utils leaf 에 적합. 지하철 도메인 전체는 [subway](subway.md), 웹 소비는 [web](web.md)/[map](map.md).
 
@@ -29,28 +33,29 @@ aliases: ["@repo/utils", pure-functions, helpers, slugify, pick-random, thumbnai
 ```
 packages/utils/
 ├── src/
-│   ├── index.ts             // export * (15개 모듈 re-export)
+│   ├── index.ts             // export * (16개 모듈 re-export)
 │   ├── aiModel.ts           // 모델 id → 계열 묶음 + 용도별 추천 휴리스틱
+│   ├── busArrival.ts        // (신설) isBusArrivalImminent + parseBusArrivalSec
 │   ├── busMarker.ts         // 버스 정류장/내위치/경유점 마커 + 노선유형 색 (차량 알약/방향은 vehiclePill 위임)
-│   ├── date.ts              // toISOString, fromISOString, isValidDate
-│   ├── format.ts            // truncate, capitalize, slugify, formatWonPrice (078cbe1)
-│   ├── geo.ts               // LatLng, Bbox, computeBboxAround, isInKorea
+│   ├── format.ts            // formatWonPrice + 대중교통 포맷터(formatDistanceM/formatRelative*/remainSecSince/formatCountdown) (+test)
+│   ├── geo.ts               // LatLng, Bbox, computeBboxAround, formatBbox, isInKorea, approxDistanceM, haversineM, roundCoord, parseLatLngParam (+test)
 │   ├── markerFrame.ts       // 식당·버스·지하철 공용 마커 프레임 (핀 32×48 / 원 26×26)
 │   ├── random.ts            // pickRandom, shuffle
 │   ├── restaurantCategory.ts // 카테고리 키 정규화 + 마커 SVG (프레임은 markerFrame 위임)
 │   ├── routePath.ts         // 노선 형상 투영/보간 (버스 따라가기 이동 코어)
 │   ├── subwayLine.ts        // (신설) 수도권 전철 노선 상수 SUBWAY_LINES (subwayId=lineId)
 │   ├── subwayMarker.ts      // (신설) 전철 역/경유역 점(환승 이중링)/열차 알약·방향 마커
-│   ├── subwayPosition.ts    // (신설, +test) 열차 역간 보간 (locateTrain/TRAIN_STATUS_FRACTION/sliceForMove)
-│   ├── vehiclePill.ts       // (신설) 버스·지하철 공용 차량 알약/방향 다트 기하 코어
-│   ├── thumbnail.ts         // reviewThumbnailUrl
+│   ├── subwayPosition.ts    // (+test) 열차 역간 보간 (locateTrain/TRAIN_STATUS_FRACTION/sliceForMove)
+│   ├── subwayTimetable.ts   // (승격, +test) 시간표 파생 — 웹·앱 timetableUtils 복사본의 단일 정의
+│   ├── vehiclePill.ts       // 버스·지하철 공용 차량 알약/방향 다트 기하 코어
+│   ├── thumbnail.ts         // reviewThumbnailUrl (*.pstatic.net 만 프록시, 그 외 원본 통과) (+test)
 │   └── vworld.ts            // vworld 타일 헬퍼
 ├── package.json             // build 없음 — src 그대로 export
 ├── vitest.config.ts         // (신설) 순수 함수 단위 테스트 (.js→.ts extensionAlias)
 └── tsconfig.json
 ```
 
-api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 직접 main/types/exports로 노출. 서브패스 import 지원: `@repo/utils/date`, `@repo/utils/format`, `@repo/utils/random` 3종만 `exports` 맵에 등록. 나머지(`aiModel` / `busMarker` / `geo` / `markerFrame` / `restaurantCategory` / `routePath` / `subwayLine` / `subwayMarker` / `subwayPosition` / `vehiclePill` / `thumbnail` / `vworld`)는 서브패스 미등록이라 배럴 경유로만 접근 — `import { ... } from '@repo/utils'`.
+api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 직접 main/types/exports로 노출. 서브패스 import 지원: `@repo/utils/format`, `@repo/utils/random` 2종만 `exports` 맵에 등록(`./date` 는 date.ts 삭제와 함께 제거 — bb07762). 나머지(`aiModel` / `busMarker` / `geo` / `markerFrame` / `restaurantCategory` / `routePath` / `subwayLine` / `subwayMarker` / `subwayPosition` / `vehiclePill` / `thumbnail` / `vworld`)는 서브패스 미등록이라 배럴 경유로만 접근 — `import { ... } from '@repo/utils'`.
 
 **마커 모듈 구조** — `markerFrame.ts`(공용 핀/원 골격) ← `restaurantCategory.ts`·`busMarker.ts`·`subwayMarker.ts`(도메인 아이콘/색). 프레임을 한 곳에 두어 세 도메인 마커가 같은 anchor·라벨 offset·축소 스케일 규격을 강제로 공유한다. 별도로 `vehiclePill.ts`(차량 알약/방향)는 markerFrame 을 안 쓰는 자체 SVG 골격이지만 `busMarker`·`subwayMarker` 두 도메인 차량이 공유하는 코어라 한 겹 더 추출. `routePath.ts`(버스 형상 투영)·`subwayPosition.ts`(전철 역간 보간)는 마커가 아니라 이동 위치 계산이라 `geo.ts` 의 `LatLng` 만 참조(마커 모듈과 독립) — 버스는 도로 폴리라인 추종, 전철은 GPS 없이 역 순서 기반이라 코어가 갈린다.
 
@@ -65,22 +70,27 @@ api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 �
 
 ## API Surface [coverage: high — 11 sources]
 
-[`date.ts`](../../packages/utils/src/date.ts):
-- `toISOString(date?: Date): string` — 기본값 `new Date()`
-- `fromISOString(iso: string): Date`
-- `isValidDate(date: unknown): date is Date` — 타입 가드
+[`format.ts`](../../packages/utils/src/format.ts) — *truncate/capitalize/slugify 는 참조 0건으로 삭제(91eff7d)*:
+- `formatWonPrice(price: string | null | undefined): string | null` — (078cbe1). 빈/falsy → `null`. 단일 숫자(`12000` / `12,000원` / `₩12000`) → `12,000원`. 범위(`12000~18000`, `12,000 - 18,000원`, `–`/`—` 구분자 포함) → `12,000원 ~ 18,000원`. 혼합 텍스트는 안에 등장한 `숫자+원` 패턴만 콤마로 재포맷. 0 이하 / 숫자 외 입력은 원문 그대로 보존
+- `formatDistanceM(m: number): string` — 정수 m 가정(서버 dist 계약), 대중교통·스마트픽 거리 표기 (c6ac5ba — 6곳 복제 제거)
+- `formatRelativeMin(iso, nowMs?)` / `formatRelativeSec(iso, nowMs?)` — 상대 시각 표기. nowMs 기본 인자로 웹(Date.now 내장)·앱(주입) 시그니처 차를 흡수
+- `remainSecSince(receivedAt, remainSec, nowMs?)` / `formatCountdown(sec)` — 도착 카운트다운(수신 시점 보정). 하차 알림·SubwayArrivalPanel 공용 (ddb2a8e)
 
-[`format.ts`](../../packages/utils/src/format.ts):
-- `truncate(text: string, max: number): string` — 초과 시 `…` (말줄임표) 추가
-- `capitalize(text: string): string` — 첫 글자 대문자
-- `slugify(text: string): string` — lowercase + trim + 비단어 제거 + 공백/언더스코어 → 하이픈
-- `formatWonPrice(price: string | null | undefined): string | null` — 신설 (078cbe1). 빈/falsy → `null`. 단일 숫자(`12000` / `12,000원` / `₩12000`) → `12,000원`. 범위(`12000~18000`, `12,000 - 18,000원`, `–`/`—` 구분자 포함) → `12,000원 ~ 18,000원`. 혼합 텍스트는 안에 등장한 `숫자+원` 패턴만 콤마로 재포맷 (예: `점심 12000원 / 저녁 18000원` → `점심 12,000원 / 저녁 18,000원`). 0 이하 / 숫자 외 입력은 원문 그대로 보존 — 파싱 실패 시 안전한 fallback
-
-[`geo.ts`](../../packages/utils/src/geo.ts):
+[`geo.ts`](../../packages/utils/src/geo.ts) (+[`geo.test.ts`](../../packages/utils/src/geo.test.ts)):
 - `interface LatLng { lat: number; lng: number }`
 - `interface Bbox { minLng: number; minLat: number; maxLng: number; maxLat: number }`
 - `computeBboxAround(center: LatLng, radiusKm: number): Bbox` — 정사각 근사
+- `formatBbox(b: Bbox): string` — bbox → `minLng,minLat,maxLng,maxLat` 쿼리 문자열(toFixed 5). 웹·앱 지도/스마트픽 공용 (f293a3c)
 - `isInKorea(coords: LatLng): boolean` — vworld 타일 가드
+- `approxDistanceM(a, b)` — 등거리 사각 근사(도시 스케일 판정용, 하버사인과 1% 내) / `haversineM(a, b)` — 측지 거리(asin 클램프)
+- `roundCoord(n)` — 소수 5자리 반올림 / `parseLatLngParam(raw)` — `lat,lng` 파싱 + 한국 WGS84 범위 가드(lat 33~39, lng 124~132)
+
+[`busArrival.ts`](../../packages/utils/src/busArrival.ts) — 신설:
+- `isBusArrivalImminent(msg)` — "곧 도착" 판정(4곳 흩어짐 통일, null/undefined → false)
+- `parseBusArrivalSec(msg)` — `'N분후[…]'` 를 분 해상도 초로 파싱 — 하차 알림의 실측 예약 근거
+
+[`subwayTimetable.ts`](../../packages/utils/src/subwayTimetable.ts) — 웹·앱 timetableUtils 복사본의 승격(2507cdc, +test 15):
+- `dayTypeForToday()` / `parseTimeMin(hhmmss)`(자정 넘김 24+ 단조성) / `formatHHMM` / `lastTrainRemainMin`(24+ 축 보정) / `arrivalUpdnToTimetable`(updn 매핑) / `isSubwayExpressTag`(EXPRESS_YN 'D'=급행) / `updnLabel`
 
 [`random.ts`](../../packages/utils/src/random.ts):
 - `pickRandom<T>(items: readonly T[]): T` — 빈 배열 시 throw
@@ -138,7 +148,7 @@ api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 �
 ## Gotchas [coverage: high — 5 sources]
 
 - 새 헬퍼 모듈 추가 시 [`index.ts`](../../packages/utils/src/index.ts) 배럴에 `export *`를 빠뜨리기 쉬움 — `busMarker` / `markerFrame` / `routePath` 도 추가 때 같이 갱신해야 컨슈머가 찾을 수 있다 (현재 11개 모듈 전부 등록됨)
-- 새 모듈을 서브패스로 노출하려면 [`package.json`](../../packages/utils/package.json) `exports` 맵도 추가해야 함 — 현재 등록은 `date` / `format` / `random` 3종뿐, 나머지 8개(`aiModel` / `busMarker` / `geo` / `markerFrame` / `restaurantCategory` / `routePath` / `thumbnail` / `vworld`)는 배럴 경유만 가능
+- 새 모듈을 서브패스로 노출하려면 [`package.json`](../../packages/utils/package.json) `exports` 맵도 추가해야 함 — 현재 등록은 `format` / `random` 2종뿐, 나머지는 배럴 경유만 가능. **파일을 지울 땐 exports 맵도 같이** — date.ts 삭제 때 `./date` 항목이 남아 죽은 서브패스로 한 달 방치됐다(bb07762 에서 제거)
 - **`markerFrame.ts` 의 수치를 바꾸면 마커가 좌표에서 어긋난다** — 핀 32×48/원 26×26/scale 0.667/offset 은 [map](map.md) MapCanvas 의 anchor·라벨 offset·`SMALL_ICON_SCALE` 과 짝. 프레임만 고쳐도 식당·버스 마커가 동시에 밀리므로 반드시 MapCanvas 와 함께 조정. `innerSvg` 아이콘은 24×24 viewBox 를 전제(다른 크기 조각을 넣으면 16×16 영역을 벗어남)
 - **`busMarker` 아이콘 조각도 24×24 viewBox·`fill=none`/흰 stroke 규격** — markerFrame 이 흰색 stroke 라인으로 감싸므로, 새 아이콘을 넣을 때 규격을 안 맞추면 프레임 안에서 색이 뭉개진다(식당 `ICON_PATHS` 와 동일 제약). 단 차량 알약(`buildBusVehiclePillSvg`)은 프레임을 안 쓰는 자체 SVG라 이 규격과 무관
 - **`routePath` 의 상/하행 모호성은 라이브러리가 안 풀어준다** — 서울시 형상은 왕복이 한 줄(첫점≈끝점)이라 좌표만 주면 상행·하행 두 후보가 생긴다. `projectOnRoutePath` 에 `sMinM`/`sMaxM` 윈도우를 안 넘기면(기본 `0..Infinity`) 전체가 후보라 반대 방향에 붙을 수 있음 — 호출자가 sectOrd/정류소 seq 로 호길이 윈도우를 좁혀 넣는 게 계약. `sliceRoutePath` 에 `s0 > s1` 을 넘기면 빈 구간에 가까운 결과 → 호출자가 직선 폴백해야 함
@@ -150,16 +160,21 @@ api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 �
 - 카테고리 매칭 우선순위는 정규식 순서 의존 — `bar > dessert > cafe > japanese > chinese > western > snack > korean`. 새 키워드 추가 시 더 specific 한 것을 위로 둬야 (예: "이자카야" 가 일식보다 술집으로 잡혀야 함)
 - `formatWonPrice` 의 범위 구분자는 `~|〜|-|–|—` 만 인식 — `to`, `→` 등은 단일 숫자/혼합 텍스트 분기로 빠짐. 백엔드/크롤러가 다른 구분자를 쓰기 시작하면 정규식 보강 필요
 
-## Sources [coverage: high — 19 sources]
+## Sources [coverage: high — 22 sources]
 
-- [packages/utils/package.json](../../packages/utils/package.json) — *modified: subwayLine/subwayMarker/subwayPosition/vehiclePill 반영*
-- [packages/utils/vitest.config.ts](../../packages/utils/vitest.config.ts) (NEW) — 순수 함수 단위 테스트(.js→.ts extensionAlias)
-- [packages/utils/src/index.ts](../../packages/utils/src/index.ts) — *modified: subwayLine/subwayMarker/subwayPosition/vehiclePill re-export 추가*
+- [packages/utils/package.json](../../packages/utils/package.json) — *modified: 죽은 ./date 서브패스 제거*
+- [packages/utils/vitest.config.ts](../../packages/utils/vitest.config.ts) — 순수 함수 단위 테스트(.js→.ts extensionAlias)
+- [packages/utils/src/index.ts](../../packages/utils/src/index.ts) — *modified: busArrival/subwayTimetable re-export 추가, date 제거*
 - [packages/utils/src/aiModel.ts](../../packages/utils/src/aiModel.ts)
-- [packages/utils/src/busMarker.ts](../../packages/utils/src/busMarker.ts) — *modified: 차량 알약/방향을 vehiclePill 로 위임(124→축소, 바이트 동일)*
-- [packages/utils/src/date.ts](../../packages/utils/src/date.ts)
-- [packages/utils/src/format.ts](../../packages/utils/src/format.ts)
-- [packages/utils/src/geo.ts](../../packages/utils/src/geo.ts)
+- [packages/utils/src/busArrival.ts](../../packages/utils/src/busArrival.ts) (NEW) — 곧 도착 판정 + 도착 메시지 초 파싱
+- [packages/utils/src/busMarker.ts](../../packages/utils/src/busMarker.ts)
+- [packages/utils/src/format.ts](../../packages/utils/src/format.ts) — *modified: 대중교통 포맷터 집결, truncate 등 삭제*
+- [packages/utils/src/format.test.ts](../../packages/utils/src/format.test.ts) (NEW)
+- [packages/utils/src/geo.ts](../../packages/utils/src/geo.ts) — *modified: 거리 함수 흡수 + formatBbox*
+- [packages/utils/src/geo.test.ts](../../packages/utils/src/geo.test.ts) (NEW)
+- [packages/utils/src/subwayTimetable.ts](../../packages/utils/src/subwayTimetable.ts) (NEW) — 웹·앱 복사본 승격
+- [packages/utils/src/subwayTimetable.test.ts](../../packages/utils/src/subwayTimetable.test.ts) (NEW)
+- [packages/utils/src/thumbnail.test.ts](../../packages/utils/src/thumbnail.test.ts) (NEW) — pstatic 가드 회귀 테스트
 - [packages/utils/src/markerFrame.ts](../../packages/utils/src/markerFrame.ts) — 식당·버스·지하철 공용 마커 프레임(핀/원)
 - [packages/utils/src/random.ts](../../packages/utils/src/random.ts)
 - [packages/utils/src/restaurantCategory.ts](../../packages/utils/src/restaurantCategory.ts)

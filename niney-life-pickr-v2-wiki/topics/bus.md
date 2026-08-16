@@ -1,15 +1,21 @@
 ---
 topic: bus
 type: codebase
-last_compiled: 2026-07-07
-source_count: 48
+last_compiled: 2026-08-17
+source_count: 52
 status: active
 aliases: [seoul-bus, seoul-bus-api, ws-bus-go-kr, bus-station-search, getStationByName, getStationByPos, getStationByUid, getBusPosByRouteSt, getBusPosByRtid, getRoutePath, getStaionByRoute, getRouteInfo, bus-arrivals, bus-positions, bus-route-detail, bus-route-shape, bus-nearby-cell, nearby-cell-cache, bus-favorites, favorite-hybrid, toLatLng, serviceKey-encoding, service-key-double-encoding, bus-vehicle-pill, vehicle-marker, vehicle-interpolation, route-path-follow, bus-follow-toggle, busRouteTypeColor, daily-upstream-quota, negative-caching, virtual-station, arsId-zero, tmX-tmY-wgs84, transit-unified, transit-favorites, unified-favorites, transit-cross-search, subway-cross-section, cross-station-overlay, overlay-markers, x-subway-deeplink, transit-cross-show, transit-map-viewport, map-instance-pool, poolKey, transit-desktop-mobile, vehicle-pill-shared, transit-tabs]
 ---
 
 # bus
 
-서울시 버스 정보 API(`ws.bus.go.kr`)를 friendly 가 프록시하고, **웹**(`apps/web`)이 정류장 검색·실시간 도착정보·노선 보기·실시간 차량 추적을 그리는 도메인. **앱**(`apps/mobile`)에는 버스 화면이 없다 — 현재 웹 전용이다(검색으로 확인: `apps/mobile` 의 `bus` 매치는 전부 "business"/무관 문자열). 커밋 히스토리상 1차(정류장 검색+지도)부터 8차(실시간 따라가기 토글+대상 강조)까지가 버스 단독 단계였고, 이후 버스는 지하철과 함께 **대중교통(버스+지하철) 통합 화면**으로 접혔다 — `/bus` 와 `/subway` 가 상단 서브탭([TransitTabs](../../apps/web/src/components/transit/TransitTabs.tsx))으로 오가고, 초기 화면의 즐겨찾기·주변 겸표시·검색 결과 하단이 양 도메인을 함께 다룬다. 그 통합 라운드가 이 문서에 반영된 델타다(2026-07-07 기준): **통합 즐겨찾기**(도메인별 `BusFavoriteSection` **삭제** → [TransitFavoritesSection](../../apps/web/src/components/transit/TransitFavoritesSection.tsx) 로 대체), **주변 겸표시**(주변 모드에 지하철역 오버레이 마커), **크로스 검색**(검색 결과 하단 상대 도메인 섹션), **탭 전환 지도 이어보기**(뷰포트 이어보기 A안 + OL 인스턴스 풀링 D안). 지하철 쪽 짝·통합 화면의 공용 규약은 [transit](transit.md)·[subway](subway.md) 토픽. 1~2차의 WHY·API 키 체인·활용신청 현황은 [HANDOFF-bus-station-search.md](../../docs/HANDOFF-bus-station-search.md)에 정리돼 있으나 그 문서는 2차까지만 다룬다.
+서울시 버스 정보 API(`ws.bus.go.kr`)를 friendly 가 프록시하고, **웹**(`apps/web`)이 정류장 검색·실시간 도착정보·노선 보기·실시간 차량 추적을 그리는 도메인. ~~앱에는 버스 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
+
+**2026-07-13 변경 흡수 — 서울시 API 전면 503 장애를 계기로 한 장애 내성 재설계(`b0c4f0a`) + 15초 마이크로캐시(7차, `bc2db00`) + 5xx 진단 로깅(`d3af987`)**:
+- **주변 정류장 — 근본 해결(지하철 nearby 와 동일 설계로 전환)**: 열린데이터광장 busStopLocationXyInfo 마스터(11,248행)를 `BusStation` 에 적재하는 `load:bus-stations` 신설(+`BusMasterSync` 이력, ID 체계 실측 검증 — STOPS_NO=stId, NODE_ID=arsId). `getNearbyStations` 가 **로컬 바운딩박스 조회(업스트림 0콜)** 로 전환 — 장애·쿼터·키 무관, 미적재는 503 안내, 가상정류장(arsId '0') 제외. **셀 캐시 경로 폐기**: `bus_nearby_cells`/`hits` 테이블 드랍, `getStationsByPos` 어댑터 dead code 제거. 계약 nearby source 에 'db' 추가. 아래 본문의 "주변 셀 캐시" 서술은 **역사 기록**이다.
+- **도착·위치 — last-known stale 폴백**: 15초 마이크로캐시(7차 — `realtimeCache` + in-flight 합류, 쿼터는 캐시 미스 직전에만 소비)의 마지막 성공본을 보관, 업스트림 실패·쿼터 소진 시 10분 이내면 `stale:true` 로 서빙(초과 시 기존 502/503). 계약 BusArrivals/PositionsResult 에 stale 필드. 웹은 stale 배너("서울시 버스 API 장애 — ○분 전 정보")·5xx 원인 문구 표시.
+- **5xx 진단 로깅**: bus 라우트 catch 5벌이 [lib/reply-upstream-error](../../apps/friendly/src/lib/reply-upstream-error.ts) 로 통합 — upstreamUrl(키 마스킹)/upstreamCode/responseSnippet 을 warn 기록(운영에서 "request completed 502" 만으론 원인 구분 불가하던 것). bus live 스모크는 업스트림 5xx 를 skip(지하철 ERROR-337 전례).
+- ⚠️ 운영: 버스위치 API 키(15000332) **2026-12-27 만료 예정** — 포털 연장 필요(코드 무관). 커밋 히스토리상 1차(정류장 검색+지도)부터 8차(실시간 따라가기 토글+대상 강조)까지가 버스 단독 단계였고, 이후 버스는 지하철과 함께 **대중교통(버스+지하철) 통합 화면**으로 접혔다 — `/bus` 와 `/subway` 가 상단 서브탭([TransitTabs](../../apps/web/src/components/transit/TransitTabs.tsx))으로 오가고, 초기 화면의 즐겨찾기·주변 겸표시·검색 결과 하단이 양 도메인을 함께 다룬다. 그 통합 라운드가 이 문서에 반영된 델타다(2026-07-07 기준): **통합 즐겨찾기**(도메인별 `BusFavoriteSection` **삭제** → [TransitFavoritesSection](../../apps/web/src/components/transit/TransitFavoritesSection.tsx) 로 대체), **주변 겸표시**(주변 모드에 지하철역 오버레이 마커), **크로스 검색**(검색 결과 하단 상대 도메인 섹션), **탭 전환 지도 이어보기**(뷰포트 이어보기 A안 + OL 인스턴스 풀링 D안). 지하철 쪽 짝·통합 화면의 공용 규약은 [transit](transit.md)·[subway](subway.md) 토픽. 1~2차의 WHY·API 키 체인·활용신청 현황은 [HANDOFF-bus-station-search.md](../../docs/HANDOFF-bus-station-search.md)에 정리돼 있으나 그 문서는 2차까지만 다룬다.
 
 ## Purpose [coverage: high — 6 sources]
 
@@ -184,7 +190,7 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - `BusStationSearch`(`bus_station_searches`) — `keyword`(trim+NFC) unique, `fetchedAt`. 빈 결과도 행을 남긴다(네거티브 캐싱).
 - `BusStationSearchHit`(`bus_station_search_hits`) — 검색↔정류소 조인, `rank` 로 서울시 응답 순서 보존. `@@id([searchId, stId])`.
 
-**주변 셀 캐시** ([20260704074500_add_bus_nearby_cell_cache](../../apps/friendly/prisma/migrations/20260704074500_add_bus_nearby_cell_cache/migration.sql)):
+**주변 셀 캐시 — ⚠️ 폐기됨(2026-07-13 `b0c4f0a`, 테이블 드랍·마스터 로컬화로 대체. 아래는 역사 기록)** ([20260704074500_add_bus_nearby_cell_cache](../../apps/friendly/prisma/migrations/20260704074500_add_bus_nearby_cell_cache/migration.sql)):
 - `BusNearbyCell`(`bus_nearby_cells`) — `cellKey`(예: `"37.495,127.025"`) unique. 쿼리 좌표를 **0.005°≈550m 격자**에 스냅해 셀 단위로 캐싱. 업스트림은 셀 중심에서 고정 반경 1500m 로 1회 수집해, 셀 내 어떤 쿼리(반경 ≤1000m)에도 재사용. `dist` 는 지점마다 달라 저장하지 않고 서빙 시 정류소 좌표로 재계산.
 - `BusNearbyCellHit`(`bus_nearby_cell_hits`) — 셀↔정류소 조인, `rank`. `@@id([cellId, stId])`.
 

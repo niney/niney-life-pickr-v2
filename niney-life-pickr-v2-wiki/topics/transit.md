@@ -1,15 +1,17 @@
 ---
 topic: transit
 type: codebase
-last_compiled: 2026-07-07
-source_count: 17
+last_compiled: 2026-08-17
+source_count: 24
 status: active
 aliases: [transit, 대중교통, 버스-지하철-통합, 통합-레이어, TransitTabs, TransitFavoritesSection, CrossSearchSection, SubwayCrossSection, BusCrossSection, TransitCrossToggleChip, transitMapViewport, transitFavExpandStore, transitCrossShowStore, 통합-즐겨찾기, 통합-주변, 통합-검색, 크로스-검색, cross-search, 겸표시, overlay-marker, overlayMarkers, onOverlaySelect, x-subway, x-bus, marker-prefix, poolKey, transit-desktop, transit-mobile, map-instance-pool, 지도-인스턴스-풀, viewport-carryover, 뷰포트-이어보기, A안, D안, dual-mount, 이중-마운트, 데스크톱-모바일-동시마운트, submittedQ, 제출-게이트, quota-proportional, 쿼터-비례, deep-link-symmetry, 딥링크-대칭, SubwayNearbyBusSection, 주변-버스-정류장, 13차, 14차, 15차, 집중-모드, retry-pause, be-무변경]
 ---
 
 # transit
 
-버스(`/bus`)와 지하철(`/subway`)이라는 두 완성 도메인을 **하나의 "대중교통" 경험**으로 잇는 **웹 전용(`apps/web`) FE 통합 레이어**. 새 백엔드·새 라우트·새 테이블이 없다 — 세 축(즐겨찾기·주변·검색)의 크로스와 연속된 지도 경험 전부가 **기존 API·훅의 FE 조합**이다(계약 변경 0). 커밋 히스토리상 지도 연속성(A안 뷰포트 이어보기 `de382a0` → D안 인스턴스 풀 `4128d6b`)이 먼저 깔리고, 그 위에 통합 13차(즐겨찾기 `6a3e337`) → 14차(주변 겸표시 `8a48b49`) → 15차(검색 크로스 `dd1a9fe`)가 쌓였다. 지하철→버스 단방향 연계인 지하철 12차(`79a800b`, [SubwayNearbyBusSection](../../apps/web/src/components/subway/SubwayNearbyBusSection.tsx))가 통합의 딥링크 계약을 처음 확립한 씨앗이다. 계획·사용자 결정 4건은 [PLAN-transit-unified.md](../../docs/PLAN-transit-unified.md). 각 도메인 자체는 [bus](bus.md)·[subway](subway.md), 지도 인프라는 [map](map.md).
+**2026-07-10~25 변경 흡수 — 앱(`apps/mobile`) 대중교통 화면이 웹을 추월**: 이 문서의 본문은 웹 통합 레이어 기준이지만, 7월 중순 이후 앱 대중교통 화면([mobile](mobile.md) 의 transit.tsx + useTransitScreen + WebView 지도)이 대거 확장돼 **앱에만 있는 기능**이 생겼다. 요약(전부 BE·계약 무변경, 상세는 커밋 본문): ① **최근 검색 자동완성(`6867d66`)** — 모드별 검색어 10·선택 장소 20 을 AsyncStorage zustand 로 로컬 저장(NFC 정규화), 선택 장소만 좌표 스냅샷 기록·재선택 시 스냅샷 복원 후 도착만 최신 조회. ② **내 위치 근처 빠른 선택(`48ab6a0`)** — 헤더 근처 액션이 버스 500m·지하철 1.5km 를 한 카드로(각 최대 3), 반대편 정류장 오선택 방지를 위해 자동 선택 없음. ③ **탑승 모드(`481846d`)** — reducer 최상위 pinned 상태로 따라가던 차량이 검색·모드전환·뒤로가기에도 유지(usePinnedVehicle 상시 폴링, 명시 종료/운행 종료만 해제), 차량 탭=즉시 탑승. ④ **탑승 상세(`916d71e`)** — 핀 차량의 실시간 상세 패널(버스: 정차/주행·차량번호판·앞으로 지날 정류장 / 지하철: 현재역·급행/막차·이후 역), locateTrain 의 구간 판정을 resolveTrainSection 으로 분리해 지도 보간과 단일 판정. ⑤ **하차 지점(`ddb2a8e`)** — '앞으로 지나요' 행에서 하차 지정 → 그 역 도착정보에 내 차량(trainNo/vehId)을 조인해 카운트다운, 도착정보 미포착 시 위치 기반 N번째 폴백. ⑥ **하차 알림(`1d2a101`)** — 백그라운드 폴링 중단을 '감지'가 아닌 '예약'으로 우회: 실측(도착정보 잔여초) > 추정(남은 정차 수 × 평균 소요) 2단계 근거로 로컬 알림을 도착 90초 전 예약, 폴링마다 재예약(expo-notifications, CNG prebuild 필요). ⑦ UX 픽스 3건 — Detail 시트 드래그 닫힘 방지(`caf58ec`)·길찾기 키보드 시트 연동(`b0399d0`)·따라가기 칩이 시트에 가리던 것(`5660811`, animatedPosition 앵커 + zIndex 40). ⑧ **실형상 렌더(`a13eadc`)** — [subway](subway.md) 실형상을 앱 지도에서 폴리라인·열차 보간(stationS anchor)으로 소비 + 노선 casing. 웹 쪽 신규는 **식당 상세 "가는 법" 탭(`fa8f067`)** — 주변 정류장 500m·지하철역 1.5km 로컬 조회 즉시 로드 + 행 선택 시만 인라인 도착(섹션당 1개, 30초 폴링), 딥링크 `/bus?near=&stId=`·`/subway?near=&stn=` 재사용([web](web.md)).
+
+버스(`/bus`)와 지하철(`/subway`)이라는 두 완성 도메인을 **하나의 "대중교통" 경험**으로 잇는 **웹 FE 통합 레이어**(+ 위 흡수분처럼 앱 대중교통 화면이 별도로 존재). 새 백엔드·새 라우트·새 테이블이 없다 — 세 축(즐겨찾기·주변·검색)의 크로스와 연속된 지도 경험 전부가 **기존 API·훅의 FE 조합**이다(계약 변경 0). 커밋 히스토리상 지도 연속성(A안 뷰포트 이어보기 `de382a0` → D안 인스턴스 풀 `4128d6b`)이 먼저 깔리고, 그 위에 통합 13차(즐겨찾기 `6a3e337`) → 14차(주변 겸표시 `8a48b49`) → 15차(검색 크로스 `dd1a9fe`)가 쌓였다. 지하철→버스 단방향 연계인 지하철 12차(`79a800b`, [SubwayNearbyBusSection](../../apps/web/src/components/subway/SubwayNearbyBusSection.tsx))가 통합의 딥링크 계약을 처음 확립한 씨앗이다. 계획·사용자 결정 4건은 [PLAN-transit-unified.md](../../docs/PLAN-transit-unified.md). 각 도메인 자체는 [bus](bus.md)·[subway](subway.md), 지도 인프라는 [map](map.md).
 
 ## Purpose [coverage: high — 6 sources]
 
