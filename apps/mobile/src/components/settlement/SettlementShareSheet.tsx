@@ -127,7 +127,7 @@ export const SettlementShareSheet = ({ open, sessionId, onClose }: Props) => {
   // 후보 식당 사진을 thumbnail 프록시로 감싼 절대 URL. RN <Image> 는 상대경로를
   // 못 쓰므로 API base(origin)에 프록시 경로를 붙인다.
   const thumbSrc = (url: string, w: number): string => {
-    let base = '';
+    let base: string;
     try {
       base = getApiConfig().baseUrl.replace(/\/$/, '');
     } catch {

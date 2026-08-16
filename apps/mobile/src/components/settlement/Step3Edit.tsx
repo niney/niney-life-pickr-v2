@@ -40,6 +40,43 @@ const CATEGORIES: ReceiptItemCategoryType[] = [
   'UNCATEGORIZED',
 ];
 
+// 진행 가능 판정 — 모든 차수의 항목이 1개 이상, 이름·금액이 유효해야. 할인이
+// 활성화돼 있으면 (1) 양수 (2) 카테고리 풀 ≥ 할인금액. 막혔으면 *왜* 막혔는지
+// 첫 번째 위반 차수 index 와 사유 문구를 함께 반환해 사용자에게 노출한다.
+// rounds 만 읽는 순수 파생이라 컴포넌트 밖 함수 + 렌더 중 계산으로 둔다 —
+// 수동 useMemo 는 React Compiler 가 보존하지 못해(lint error) 걷어냈다.
+const computeBlock = (rounds: DraftRound[]): { idx: number; reason: string } | null => {
+  if (rounds.length === 0) {
+    return { idx: 0, reason: '차수가 없습니다. 이전 단계에서 추가하세요.' };
+  }
+  for (let idx = 0; idx < rounds.length; idx++) {
+    const r = rounds[idx];
+    if (!r) continue;
+    const label = `${idx + 1}차`;
+    if (r.items.length === 0) {
+      return { idx, reason: `${label}: 항목을 1개 이상 추가하세요.` };
+    }
+    if (r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0)) {
+      return { idx, reason: `${label}: 이름이 비었거나 금액이 0인 항목을 확인하세요.` };
+    }
+    if (r.discountAmount != null && r.discountCategory != null) {
+      if (r.discountAmount <= 0) {
+        return { idx, reason: `${label}: 할인금액은 0보다 커야 합니다.` };
+      }
+      const pool = r.items
+        .filter((it) => it.category === r.discountCategory)
+        .reduce((s, it) => s + it.amount, 0);
+      if (r.discountAmount > pool) {
+        return {
+          idx,
+          reason: `${label}: 할인금액이 해당 카테고리 항목 합계(${pool.toLocaleString('ko-KR')}원)를 초과합니다.`,
+        };
+      }
+    }
+  }
+  return null;
+};
+
 // Step3 — 차수별 항목 확인/편집. 메뉴 매칭 시트(#74)·할인(#75) 은 후속.
 export const Step3Edit = ({ onBack, onNext }: Props) => {
   const theme = useTheme();
@@ -51,40 +88,7 @@ export const Step3Edit = ({ onBack, onNext }: Props) => {
   const safeIdx = Math.min(activeIdx, Math.max(0, rounds.length - 1));
   const active = rounds[safeIdx];
 
-  // 진행 가능 — 모든 차수의 항목이 1개 이상, 이름·금액이 유효해야. 할인이
-  // 활성화돼 있으면 (1) 양수 (2) 카테고리 풀 ≥ 할인금액. 막혔으면 *왜* 막혔는지
-  // 첫 번째 위반 차수 index 와 사유 문구를 함께 반환해 사용자에게 노출한다.
-  const block = useMemo<{ idx: number; reason: string } | null>(() => {
-    if (rounds.length === 0) {
-      return { idx: 0, reason: '차수가 없습니다. 이전 단계에서 추가하세요.' };
-    }
-    for (let idx = 0; idx < rounds.length; idx++) {
-      const r = rounds[idx];
-      if (!r) continue;
-      const label = `${idx + 1}차`;
-      if (r.items.length === 0) {
-        return { idx, reason: `${label}: 항목을 1개 이상 추가하세요.` };
-      }
-      if (r.items.some((it) => it.name.trim().length === 0 || it.amount <= 0)) {
-        return { idx, reason: `${label}: 이름이 비었거나 금액이 0인 항목을 확인하세요.` };
-      }
-      if (r.discountAmount != null && r.discountCategory != null) {
-        if (r.discountAmount <= 0) {
-          return { idx, reason: `${label}: 할인금액은 0보다 커야 합니다.` };
-        }
-        const pool = r.items
-          .filter((it) => it.category === r.discountCategory)
-          .reduce((s, it) => s + it.amount, 0);
-        if (r.discountAmount > pool) {
-          return {
-            idx,
-            reason: `${label}: 할인금액이 해당 카테고리 항목 합계(${pool.toLocaleString('ko-KR')}원)를 초과합니다.`,
-          };
-        }
-      }
-    }
-    return null;
-  }, [rounds]);
+  const block = computeBlock(rounds);
 
   const canProceed = block === null;
 
