@@ -1,4 +1,7 @@
-import { defineConfig } from 'vite';
+// vitest/config 의 defineConfig — vite 설정을 그대로 쓰면서 test 필드까지
+// 타입이 잡힌다. 별도 vitest.config.ts 를 두지 않는 이유는 아래 resolve.alias
+// (react 단일 인스턴스 강제)를 테스트에서도 반드시 물려받아야 하기 때문.
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
@@ -57,5 +60,14 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    // 컴포넌트 렌더 검증이라 DOM 이 필요하다(friendly/utils 는 node 환경).
+    environment: 'jsdom',
+    // globals 를 켜지 않는다 — friendly 와 동일하게 describe/it/expect 를 명시
+    // import 한다. 대신 RTL 자동 cleanup 이 전역 afterEach 에 의존하므로
+    // setup 에서 직접 등록한다.
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });
