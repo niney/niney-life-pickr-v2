@@ -174,16 +174,11 @@ const rawArrival = (over: Partial<RawSubwayArrival> = {}): RawSubwayArrival => (
 
 let app: FastifyInstance;
 
-beforeAll(async () => {
-  app = await buildApp({ logger: false });
-  await app.ready();
-  // fetchedAt 산출용 적재 이력 1건 — 테스트 종료 시 정리.
-  await app.prisma.subwayMasterSync.create({
-    data: { source: 'subwayStationMaster', count: 0 },
-  });
-});
-
-afterAll(async () => {
+// 시드 일괄 정리 — afterAll 뿐 아니라 beforeAll 에서도 돌린다. 이전 실행이
+// 크래시(예: 마이그레이션 미적용)로 afterAll 을 못 타면 NAME_PREFIX 시드가
+// dev.db 에 남고, 주변 역 테스트는 고정 좌표 반경의 "정확한 개수" 를 단언하므로
+// 다음 실행이 잔여 행 때문에 무더기로 깨진다. 시작 시 청소로 자가 치유.
+const cleanupSeeds = async (): Promise<void> => {
   // 노선 순서 시드 정리 — stationId 에 prefix 포함(실적재 행은 미포함이라 안전).
   await app.prisma.subwayLineStation.deleteMany({
     where: { stationId: { contains: NAME_PREFIX } },
@@ -201,6 +196,20 @@ afterAll(async () => {
   // contains — 정렬 테스트의 '뒤…' 접두어 케이스도 잡는다(startsWith 로는 누락).
   await app.prisma.subwayStation.deleteMany({ where: { name: { contains: NAME_PREFIX } } });
   await app.prisma.subwayMasterSync.deleteMany({ where: { count: 0 } });
+};
+
+beforeAll(async () => {
+  app = await buildApp({ logger: false });
+  await app.ready();
+  await cleanupSeeds();
+  // fetchedAt 산출용 적재 이력 1건 — 테스트 종료 시 정리.
+  await app.prisma.subwayMasterSync.create({
+    data: { source: 'subwayStationMaster', count: 0 },
+  });
+});
+
+afterAll(async () => {
+  await cleanupSeeds();
   await app.close();
 });
 
@@ -666,6 +675,33 @@ describe('GET /api/v1/subway/stations/:stationId/timetable — 시간표', () =>
     const res2 = await svc.getStationTimetable(`1002:${name}`, '1');
     expect(res2.source).toBe('cache');
     expect(adapter.getStationTimetable).toHaveBeenCalledTimes(2);
+  });
+
+  it('빈 blob 은 짧은 TTL — 만료 후 재수집으로 회복한다', async () => {
+    const name = `${NAME_PREFIX}빈회복${stamp()}`;
+    await seed(app, [{ lineId: '1002', name, lat: 37.5, lng: 127.0, stationCd: `TC${stamp()}` }]);
+    const adapter = {
+      getRealtimeArrivals: vi.fn(),
+      getStationTimetable: vi.fn().mockResolvedValue([]),
+    };
+    let nowMs = Date.now();
+    const svc = new SubwayService({
+      prisma: app.prisma,
+      seoulKey: 'k',
+      adapter,
+      now: () => new Date(nowMs),
+    });
+    // 업스트림이 일시적으로 빈 응답 → coverage:false blob 저장.
+    const empty = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(empty.coverage).toBe(false);
+
+    // 30일이 아니라 빈 blob TTL(6h) 경과만으로 재수집 — 이번엔 데이터가 온다.
+    nowMs += 7 * 60 * 60 * 1000;
+    adapter.getStationTimetable.mockResolvedValue([rawTimetableRow()]);
+    const recovered = await svc.getStationTimetable(`1002:${name}`, '1');
+    expect(recovered.source).toBe('api');
+    expect(recovered.coverage).toBe(true);
+    expect(adapter.getStationTimetable).toHaveBeenCalledTimes(4);
   });
 
   it('stale 폴백 — 만료 blob + 업스트림 실패', async () => {

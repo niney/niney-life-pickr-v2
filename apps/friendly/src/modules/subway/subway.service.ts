@@ -59,6 +59,10 @@ export const DEFAULT_DAILY_UPSTREAM_LIMIT = 900;
 
 // 시간표(8차) blob 캐시 TTL — 사실상 정적이라 30일(버스 노선상세 미러).
 export const SUBWAY_TIMETABLE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// 빈 blob(coverage:false) 전용 짧은 TTL — 1~9호선인데 업스트림이 일시적으로 빈
+// 응답을 준 경우(쿼터 언저리 등) 30일 캐시로 굳으면 멀쩡한 역의 시간표가 한 달간
+// 죽는다. "무의미 재호출 방지" 는 유지하되 몇 시간 뒤 재시도로 자가 회복한다.
+export const SUBWAY_TIMETABLE_EMPTY_TTL_MS = 6 * 60 * 60 * 1000;
 // 서울시 시간표 제공 노선 — 1~9호선(중전철). 경전철·광역은 미제공(프로브 실측).
 const TIMETABLE_LINES = new Set([
   '1001',
@@ -620,9 +624,13 @@ export class SubwayService {
     const cacheKey = `${stationId}|${dayType}`;
     const now = this.deps.now?.() ?? new Date();
     const cached = await prisma.subwayTimetableCache.findUnique({ where: { cacheKey } });
-    if (cached && now.getTime() - cached.fetchedAt.getTime() < SUBWAY_TIMETABLE_TTL_MS) {
+    if (cached) {
       const blob = JSON.parse(cached.payload) as TimetableBlob;
-      return { ...meta, ...blob, fetchedAt: cached.fetchedAt.toISOString(), source: 'cache' };
+      // coverage 별 TTL — 데이터 있는 blob 30일, 빈 blob 은 짧게(위 상수 주석).
+      const ttlMs = blob.coverage ? SUBWAY_TIMETABLE_TTL_MS : SUBWAY_TIMETABLE_EMPTY_TTL_MS;
+      if (now.getTime() - cached.fetchedAt.getTime() < ttlMs) {
+        return { ...meta, ...blob, fetchedAt: cached.fetchedAt.toISOString(), source: 'cache' };
+      }
     }
 
     // 미스 — 업스트림 2콜 수집(in-flight 합류). 실패/쿼터 소진 시 만료 blob 이면 stale.
