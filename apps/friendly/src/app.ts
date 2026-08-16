@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { env, isDev } from './config/env.js';
 import { registerRestaurantPreview } from './modules/restaurant/restaurant-preview.js';
 import { registerSharePreview } from './modules/settlement/share-preview.js';
+import { registerVotePreview } from './modules/vote/vote-preview.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -69,6 +70,9 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
   await registerSharePreview(app);
   // 맛집 공유/SEO 대표 URL — `/r/:placeId` 를 상세 단독 HTML 로 응답한다.
   await registerRestaurantPreview(app);
+  // 그룹 투표 공유 링크 OG — /vote/:token (nginx `^~ /vote/` 프록시 필요, 없으면
+  // SPA 는 동작하고 OG 만 부재).
+  await registerVotePreview(app);
 
   return app;
 }

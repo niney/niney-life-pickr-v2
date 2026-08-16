@@ -149,6 +149,18 @@ location ^~ /s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
+# 그룹 투표 공유 링크(/vote/<token>) OG — friendly 가 head 메타를 주입한다.
+# 이 규칙이 없어도 nginx 가 정적 index.html 을 서빙해 SPA(투표)는 정상 동작하고
+# 카카오톡 등 미리보기(OG)만 빠진다. PNG 라우트는 없어 정규식 충돌 걱정은 없지만
+# 관례대로 ^~ 유지.
+location ^~ /vote/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
 ```
 
 - **Cloudflare 캐시**: `.png` 라 Cloudflare 가 엣지 캐시한다 — 잘못된 404 가 한 번

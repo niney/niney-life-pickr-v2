@@ -48,6 +48,17 @@ export const HomePage = () => {
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <SmartPickSection favorites={favorites} />
 
+      {/* 그룹 투표 진입 — 혼자 뽑기(위 슬롯) 옆의 소셜 갈래. 생성은 로그인 필요
+          (라우트 가드), 참여는 링크만 있으면 비로그인. */}
+      <div className="-mt-6 mb-10 text-center">
+        <Link
+          to="/vote/new"
+          className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          👥 혼자 못 정하겠다면? 친구들과 투표로 정하기 →
+        </Link>
+      </div>
+
       <RestaurantFavoritesStrip items={favorites.items} onToggle={favorites.toggle} />
 
       <header className="mb-6 flex flex-col gap-2">

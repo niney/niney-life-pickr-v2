@@ -363,6 +363,17 @@ export const Settlement = {
   shared: (token: string) => `${API_PREFIX}/share/settlements/${token}`,
 } as const;
 
+// 그룹 투표 픽 — 방장(로그인)이 맛집 후보로 투표방을 만들고 링크로 공유,
+// 참가자는 비로그인 복수 찬성(approval) 투표. 공개 경로는 정산 공유와 동일한
+// /share/* 관례. 토큰을 안다 = 접근 허용, 만료 410.
+export const Vote = {
+  list: `${API_PREFIX}/votes`,
+  create: `${API_PREFIX}/votes`,
+  close: (id: string) => `${API_PREFIX}/votes/${id}/close`,
+  shared: (token: string) => `${API_PREFIX}/share/votes/${token}`,
+  sharedBallot: (token: string) => `${API_PREFIX}/share/votes/${token}/ballot`,
+} as const;
+
 // 정산 입력 화면의 서버 임시저장. 자동저장으로 다기기 동기화. upsert 는
 // (userId, placeId) 키를 서버가 본문에서 추출해 사용 — id 를 클라이언트가
 // 모르는 상태에서 PUT 가능. 완성된 정산 저장 성공 시 매칭 draft 가 자동

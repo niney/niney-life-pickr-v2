@@ -38,6 +38,8 @@ export const RATE = {
   publicAsk: { max: 15, timeWindow: '1 minute' },
   // 공개 공유 정산 조회 — 토큰 추측 억제. 기존 인메모리 한도(120/분) 유지.
   publicShare: { max: 120, timeWindow: '1 minute' },
+  // 공개 투표 제출 — 무인증 쓰기. 재투표 연타 + CGNAT 고려 분당 30.
+  publicVote: { max: 30, timeWindow: '1 minute' },
 } as const;
 
 export default fp(async (app) => {

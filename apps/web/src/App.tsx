@@ -25,9 +25,7 @@ const RestaurantsPage = lazy(() =>
 const RestaurantsV2Page = lazy(() =>
   import('./routes/RestaurantsV2Page').then((m) => ({ default: m.RestaurantsV2Page })),
 );
-const BusPage = lazy(() =>
-  import('./routes/BusPage').then((m) => ({ default: m.BusPage })),
-);
+const BusPage = lazy(() => import('./routes/BusPage').then((m) => ({ default: m.BusPage })));
 const SubwayPage = lazy(() =>
   import('./routes/SubwayPage').then((m) => ({ default: m.SubwayPage })),
 );
@@ -51,6 +49,12 @@ const SharedSettlementPage = lazy(() =>
   import('./routes/settlement/SharedSettlementPage').then((m) => ({
     default: m.SharedSettlementPage,
   })),
+);
+const VoteNewPage = lazy(() =>
+  import('./routes/vote/VoteNewPage').then((m) => ({ default: m.VoteNewPage })),
+);
+const VotePage = lazy(() =>
+  import('./routes/vote/VotePage').then((m) => ({ default: m.VotePage })),
 );
 // 어드민 전체를 단일 lazy 청크로 — 진입 전엔 0바이트, 진입 시 한 번에 로드.
 const AdminRoutes = lazy(() => import('./routes/admin/AdminRoutes'));
@@ -180,6 +184,17 @@ export const App = () => {
           {/* 공유 토큰 read-only 보기 — 인증 불필요. PublicLayout 의 TopBar 도 띄우지
             않아 받는 사람이 단순히 결과만 보게 한다. 짧은 /s/:token 경로. */}
           <Route path="/s/:token" element={<SharedSettlementPage />} />
+          {/* 그룹 투표 픽 — 생성은 로그인, 투표는 링크만 있으면 비로그인.
+            v6 는 정적 세그먼트(new)가 :token 보다 우선 매칭이라 순서 무관. */}
+          <Route
+            path="/vote/new"
+            element={
+              <RequireUser>
+                <VoteNewPage />
+              </RequireUser>
+            }
+          />
+          <Route path="/vote/:token" element={<VotePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/admin/*"

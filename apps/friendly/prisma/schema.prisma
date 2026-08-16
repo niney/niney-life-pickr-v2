@@ -31,6 +31,8 @@ model User {
 
   restaurantFavorites RestaurantFavorite[]
 
+  votes VoteSession[]
+
   @@map("users")
 }
 
@@ -1073,6 +1075,66 @@ model BusFavoriteRoute {
   @@unique([userId, stId, busRouteId])
   @@index([userId])
   @@map("bus_favorite_routes")
+}
+
+// 그룹 투표 픽 — 방장이 맛집 후보로 만든 투표방. 토큰은 생성 시 즉시 발급
+// (링크가 곧 투표방, 정산 공유와 동일한 7바이트 base64url) + 7일 고정 TTL.
+// 마감 결과(winnerOptionId/decidedBy)는 마감 시 확정 저장 — 동점 티브레이크가
+// 랜덤이라 조회 시 재계산할 수 없다.
+model VoteSession {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  shareToken     String    @unique
+  shareExpiresAt DateTime
+  closedAt       DateTime?
+  winnerOptionId String?
+  // 'votes'(단독 최다) | 'smart-pick'(동점 → AI 가중) | 'random'(동점 → 균등)
+  decidedBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  options VoteOption[]
+  ballots VoteBallot[]
+
+  @@index([userId, createdAt])
+  @@map("vote_sessions")
+}
+
+// 투표 후보 — 등록 맛집의 저장 시점 스냅샷(즐겨찾기 계약의 축소판, 클라 제공).
+// Restaurant 마스터와 FK 로 묶지 않는다(삭제/재크롤에도 투표방 생존).
+model VoteOption {
+  id           String  @id @default(cuid())
+  sessionId    String
+  session      VoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  orderIndex   Int
+  placeId      String
+  name         String
+  category     String?
+  thumbnailUrl String?
+
+  ballots VoteBallot[]
+
+  @@index([sessionId])
+  @@map("vote_options")
+}
+
+// 찬성 1건 — approval 투표라 (후보, 투표자) 단위 1행. voterKey 는 클라 영속
+// UUID(기기 단위 식별, 완벽하지 않음 수용), voterLabel 은 표시 이름 스냅샷.
+model VoteBallot {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    VoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  optionId   String
+  option     VoteOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  voterKey   String
+  voterLabel String
+  createdAt  DateTime @default(now())
+
+  @@unique([optionId, voterKey])
+  @@index([sessionId, voterKey])
+  @@map("vote_ballots")
 }
 
 // 로그인 사용자의 맛집 즐겨찾기 — 저장 시점 스냅샷(name/category/address/썸네일/
