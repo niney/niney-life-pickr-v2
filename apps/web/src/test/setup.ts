@@ -1,7 +1,8 @@
 /// <reference types="@testing-library/jest-dom/vitest" />
-import { afterEach, expect } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
+import { server } from './msw';
 
 // 웹 테스트 공통 setup.
 //
@@ -18,3 +19,10 @@ expect.extend(matchers);
 // 등록하는 방식)이 걸리지 않는다. 직접 등록해야 테스트 간 DOM 이 격리되고,
 // 같은 텍스트 쿼리가 이전 렌더분까지 집어 "여러 개 매칭" 으로 깨지지 않는다.
 afterEach(cleanup);
+
+// MSW — 네트워크를 타지 않는 테스트가 대부분이라 서버가 떠 있어도 무해하고,
+// onUnhandledRequest: 'error' 로 "핸들러를 안 건 요청" 을 조용한 통과 대신
+// 실패로 드러낸다. 핸들러는 테스트마다 server.use() 로 등록하고 여기서 리셋.
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
