@@ -1,10 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Dices, Star } from 'lucide-react';
-import { pickRandom, reviewThumbnailUrl, shuffle } from '@repo/utils';
+import {
+  computeBboxAround,
+  formatDistanceM,
+  haversineM,
+  pickRandom,
+  reviewThumbnailUrl,
+  shuffle,
+} from '@repo/utils';
 import {
   useRestaurantSmartPick,
   useRestaurantsPublic,
+  useUserLocation,
   type RestaurantFavoritesApi,
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -45,6 +53,13 @@ const IDLE_REEL: ReelState = { rows: ['?'], position: 0, animate: false };
 // 릴에 태울 중간 행 수 — 스크롤 길이(연출 시간 동안 지나가는 이름 수).
 const SPIN_ROWS = 18;
 
+// "내 주변" 반경(km) — 공개 맛집 페이지 첫 진입 자동 검색과 동일(±1.5km).
+const NEAR_ME_KM = 1.5;
+
+// PublicRestaurantsMap/RestaurantsV2Page 의 formatBbox 와 동일 — 소수점 5자리.
+const formatBbox = (b: { minLng: number; minLat: number; maxLng: number; maxLat: number }) =>
+  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
+
 export const SmartPickSection = ({
   favorites,
 }: {
@@ -53,11 +68,24 @@ export const SmartPickSection = ({
 }) => {
   const [category, setCategory] = useState<string | null>(null);
   const [fromFavorites, setFromFavorites] = useState(false);
+  const [nearMe, setNearMe] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [reel, setReel] = useState<ReelState>(IDLE_REEL);
   const [outcome, setOutcome] = useState<PickOutcome | null>(null);
 
-  const listQuery = useRestaurantsPublic({ category: category ?? undefined, limit: 200 });
+  // "내 주변" — 홈 진입만으로 권한 prompt 를 띄우지 않도록 auto:false, 토글
+  // 시에만 refetch. 카테고리와 조합 가능(둘 다 공개 목록 쿼리 필터).
+  const userLoc = useUserLocation({ auto: false });
+  const nearBbox =
+    nearMe && userLoc.coords
+      ? formatBbox(computeBboxAround(userLoc.coords, NEAR_ME_KM))
+      : undefined;
+
+  const listQuery = useRestaurantsPublic({
+    category: category ?? undefined,
+    bbox: nearBbox,
+    limit: 200,
+  });
   const pickMutation = useRestaurantSmartPick();
 
   const items = listQuery.data?.items ?? [];
@@ -67,7 +95,11 @@ export const SmartPickSection = ({
   const useFavPool = fromFavorites && favoritesAvailable;
   const pool: Array<{ placeId: string; name: string }> = useFavPool ? favorites!.items : items;
   const busy = pickMutation.isPending || phase === 'spinning';
-  const canRoll = pool.length > 0 && !busy;
+  // 풀 준비 판정 — placeholderData 로 직전 필터의 목록이 보이는 전환 구간이나
+  // "내 주변" 좌표 대기 중에는 낡은/전체 풀로 굴리지 않게 막는다.
+  const poolReady =
+    useFavPool || (!listQuery.isPlaceholderData && (!nearMe || nearBbox !== undefined));
+  const canRoll = pool.length > 0 && !busy && poolReady;
 
   const rollFrom = (visibleName: string) => {
     if (!canRoll) return;
@@ -132,6 +164,16 @@ export const SmartPickSection = ({
     resetResult();
   };
 
+  const onToggleNearMe = () => {
+    if (busy) return;
+    const next = !nearMe;
+    // 켜는 순간에만 위치 요청 — 이미 좌표가 있으면(직전 허용) 즉시 반영되고,
+    // refetch 는 권한/신선도 갱신 겸 재시도 역할.
+    if (next) userLoc.refetch();
+    setNearMe(next);
+    resetResult();
+  };
+
   // 결과 카드 보강 — 공개 목록 행(평점·AI 점수 보유) 우선, 즐겨찾기 모드에선
   // 스냅샷(썸네일·카테고리만) 폴백. 풀 변경 시 outcome 을 리셋하므로 둘 다
   // 못 찾는 경우는 없지만, 방어적으로 이름만이라도 보여준다.
@@ -140,8 +182,19 @@ export const SmartPickSection = ({
     outcome && favorites ? favorites.items.find((i) => i.placeId === outcome.placeId) : undefined;
   const resultThumbnail = enriched?.thumbnailUrl ?? enrichedFav?.thumbnailUrl ?? null;
   const resultCategory = enriched?.category ?? enrichedFav?.category ?? null;
+  // 내 주변 모드에서만 거리 표시 — 목록 응답엔 dist 가 없어 클라에서 계산.
+  // formatDistanceM 은 정수(m)를 가정하므로(서버 dist 계약) 반올림해 넘긴다.
+  const resultDist =
+    nearMe &&
+    !useFavPool &&
+    userLoc.coords &&
+    enriched?.latitude != null &&
+    enriched.longitude != null
+      ? Math.round(haversineM(userLoc.coords, { lat: enriched.latitude, lng: enriched.longitude }))
+      : null;
 
-  const poolEmpty = !useFavPool && !listQuery.isLoading && items.length === 0;
+  const poolEmpty =
+    !useFavPool && !listQuery.isLoading && !listQuery.isPlaceholderData && items.length === 0;
 
   return (
     <section className="mb-10">
@@ -168,6 +221,12 @@ export const SmartPickSection = ({
             onClick={() => onChangeCategory(chip)}
           />
         ))}
+        <CategoryChip
+          label="📍 내 주변"
+          active={!useFavPool && nearMe}
+          disabled={busy || useFavPool}
+          onClick={onToggleNearMe}
+        />
         {favoritesAvailable && (
           <>
             <span className="mx-1 h-4 w-px bg-border" aria-hidden />
@@ -196,11 +255,28 @@ export const SmartPickSection = ({
       </div>
 
       <div aria-live="polite">
+        {nearMe && !useFavPool && userLoc.status === 'pending' && (
+          <p className="mt-3 text-center text-sm text-muted-foreground">내 위치를 확인하는 중…</p>
+        )}
+        {nearMe && !useFavPool && userLoc.status === 'denied' && (
+          <p className="mt-3 text-center text-sm text-muted-foreground">
+            위치 권한이 차단되어 있어요 — 브라우저 사이트 설정에서 허용한 뒤 다시 눌러 주세요.
+          </p>
+        )}
+        {nearMe && !useFavPool && userLoc.status === 'unavailable' && (
+          <p className="mt-3 text-center text-sm text-muted-foreground">
+            이 환경에서는 위치를 사용할 수 없어요.
+          </p>
+        )}
         {poolEmpty && (
           <p className="mt-3 text-center text-sm text-muted-foreground">
-            {category
-              ? `'${category}' 카테고리엔 아직 맛집이 없어요.`
-              : '등록된 맛집이 아직 없어요.'}
+            {nearMe
+              ? category
+                ? `주변 ${NEAR_ME_KM}km에 '${category}' 맛집이 없어요.`
+                : `주변 ${NEAR_ME_KM}km에 등록된 맛집이 없어요.`
+              : category
+                ? `'${category}' 카테고리엔 아직 맛집이 없어요.`
+                : '등록된 맛집이 아직 없어요.'}
           </p>
         )}
         {pickMutation.isError && phase === 'idle' && (
@@ -245,6 +321,7 @@ export const SmartPickSection = ({
                     {enriched && enriched.avgSatisfactionScore !== null && (
                       <span>😊 {enriched.avgSatisfactionScore.toFixed(1)}/5</span>
                     )}
+                    {resultDist !== null && <span>📍 {formatDistanceM(resultDist)}</span>}
                     {outcome.uniform && (
                       <span className="rounded bg-muted px-1.5 py-0.5">
                         분석 점수가 없어 균등 랜덤으로 뽑았어요
