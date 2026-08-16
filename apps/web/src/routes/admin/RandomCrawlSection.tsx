@@ -83,7 +83,8 @@ const PHASE_LABEL: Record<string, string> = {
 // 부모가 랜덤/미선택이면 자식 고정은 불가능 — 위에서 아래로 cascade 를 강제한다.
 const normalizeRegion = (r: RandomCrawlRegionType): RandomCrawlRegionType => {
   let { sido, sigungu, dong } = r;
-  let { sidoRandom, sigunguRandom, dongRandom } = r;
+  const { sidoRandom } = r;
+  let { sigunguRandom, dongRandom } = r;
   const dongEnabled = r.dongEnabled;
   if (sidoRandom) {
     sido = null;
