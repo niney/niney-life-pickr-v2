@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, MapPin, RefreshCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ApiError, useMapPublicConfig, type UserLocationStatus } from '@repo/shared';
+import { formatBbox } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { MyLocationButton } from '~/components/restaurant/MyLocationButton';
@@ -40,10 +41,6 @@ interface Props {
   // 컨트롤(전체 영역 등)을 패널 반대편 모서리에 붙이기 위해 받아둔다.
   panelSide: PanelSide;
 }
-
-const formatBbox = (b: MapViewport['bbox']): string =>
-  // 5자리 → vworld bbox 1m 정도 해상도면 충분.
-  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 
 // "내 위치" 도착 줌 — 동네/도로 수준. 등록 마커 전체 fit(시 단위로 축소)이나
 // 직전 패닝 줌과 무관하게, 클릭하면 항상 이 레벨로 확대해 주변 가게가 한눈에

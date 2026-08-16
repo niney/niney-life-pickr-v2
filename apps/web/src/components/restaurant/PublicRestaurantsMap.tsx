@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MapPin, RefreshCcw } from 'lucide-react';
 import { ApiError, useMapPublicConfig, type UserLocationStatus } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
-import { resolveRestaurantCategoryKey } from '@repo/utils';
+import { formatBbox, resolveRestaurantCategoryKey } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { MyLocationButton } from './MyLocationButton';
 import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from './MapCanvas';
@@ -210,6 +210,3 @@ const Placeholder = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-const formatBbox = (b: MapViewport['bbox']): string =>
-  // 소수점 5자리 — vworld bbox 1m 정도 해상도면 충분, URL 길이 절약.
-  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');

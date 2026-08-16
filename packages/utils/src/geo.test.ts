@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approxDistanceM, haversineM, roundCoord } from './geo.js';
+import { approxDistanceM, formatBbox, haversineM, roundCoord } from './geo.js';
 
 // 서울 시청 ↔ 강남역 — 실측 약 8.2km. 도시 스케일 판정용 근사가 이 범위에서
 // 하버사인과 1% 내로 일치하는지까지 함께 본다.
@@ -44,5 +44,18 @@ describe('roundCoord', () => {
     expect(roundCoord(37.123456789)).toBe(37.12346);
     expect(roundCoord(127.000004)).toBe(127);
     expect(roundCoord(-37.123455)).toBe(-37.12345);
+  });
+});
+
+describe('formatBbox', () => {
+  it('minLng,minLat,maxLng,maxLat 순서 + 소수 5자리 고정', () => {
+    // 서버 bbox 파라미터 계약 — 순서가 바뀌면 검색 영역이 뒤집힌다.
+    expect(
+      formatBbox({ minLng: 126.9, minLat: 37.4, maxLng: 127.1, maxLat: 37.6 }),
+    ).toBe('126.90000,37.40000,127.10000,37.60000');
+    // toFixed 라 5자리 미만 절삭이 아니라 0 패딩, 초과분은 반올림.
+    expect(
+      formatBbox({ minLng: 126.123456, minLat: 37, maxLng: 127.999999, maxLat: 38 }),
+    ).toBe('126.12346,37.00000,128.00000,38.00000');
   });
 });

@@ -12,6 +12,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { ApiError, useMapPublicConfig, useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import {
+  formatBbox,
   resolveRestaurantCategoryKey,
   type RestaurantCategoryKey,
 } from '@repo/utils';
@@ -61,9 +62,6 @@ interface Props {
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
 }
-
-const formatBbox = (b: Bbox): string =>
-  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 
 // 모바일 공개 맛집 지도. WebView 안에서 OpenLayers + VWorld 타일을 그대로
 // 사용 (웹 MapCanvas 와 동일 렌더 파이프). RN ↔ Web 은 postMessage 채널 하나로:

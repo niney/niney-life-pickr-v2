@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Dices, Star } from 'lucide-react';
 import {
   computeBboxAround,
+  formatBbox,
   formatDistanceM,
   haversineM,
   pickRandom,
@@ -55,10 +56,6 @@ const SPIN_ROWS = 18;
 
 // "내 주변" 반경(km) — 공개 맛집 페이지 첫 진입 자동 검색과 동일(±1.5km).
 const NEAR_ME_KM = 1.5;
-
-// PublicRestaurantsMap/RestaurantsV2Page 의 formatBbox 와 동일 — 소수점 5자리.
-const formatBbox = (b: { minLng: number; minLat: number; maxLng: number; maxLat: number }) =>
-  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 
 export const SmartPickSection = ({
   favorites,

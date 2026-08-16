@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { ApiError, useMapPublicConfig, useTheme } from '@repo/shared';
 import type { RestaurantPublicListItemType } from '@repo/api-contract';
 import {
+  formatBbox,
   resolveRestaurantCategoryKey,
   type RestaurantCategoryKey,
 } from '@repo/utils';
@@ -40,9 +41,6 @@ interface Props {
   onResearchInArea(bbox: string): void;
   onClearArea(): void;
 }
-
-const formatBbox = (b: Bbox): string =>
-  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
 
 // Expo Web 용 지도. react-native-webview 가 web 을 지원하지 않으므로 동일
 // HTML 을 <iframe srcDoc> 으로 띄우고 window.postMessage 채널을 사용한다.

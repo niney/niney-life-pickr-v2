@@ -28,6 +28,12 @@ export const computeBboxAround = (center: LatLng, radiusKm: number): Bbox => {
   };
 };
 
+// bbox → 쿼리 문자열 값("minLng,minLat,maxLng,maxLat"). 소수점 5자리 —
+// vworld bbox 1m 정도 해상도면 충분하고 URL 길이를 아낀다. 웹 지도 3곳·
+// 스마트픽·앱 WebView 지도가 전부 같은 포맷을 쓰므로 여기 한 곳으로 통일.
+export const formatBbox = (b: Bbox): string =>
+  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
+
 // vworld 타일은 한국 영토만 커버 — 시뮬레이터/실 사용자 좌표가 한국 밖이면
 // 타일 전부 404 가 떨어진다. bbox 는 본토·제주·울릉 포함 넉넉히 잡음.
 // (북쪽 38.7 은 휴전선 이남 — 북한은 어차피 데이터 없음.)

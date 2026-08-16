@@ -18,7 +18,7 @@ import {
   useRestaurantsPublic,
   useUserLocation,
 } from '@repo/shared';
-import { computeBboxAround, isInKorea } from '@repo/utils';
+import { computeBboxAround, formatBbox, isInKorea } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { toFavoriteItem } from '~/components/restaurant/favoriteSnapshot';
 import {
@@ -43,10 +43,6 @@ const INITIAL_NEARBY_KM = 1.5;
 // 권한 거부/한국 밖일 때 폴백 — 서울시청. vworld 가 한국 영토만 커버해서
 // 한국 밖 좌표는 타일 전부 404, 그래서 모바일과 동일 폴백 정책.
 const SEOUL: { lat: number; lng: number } = { lat: 37.5665, lng: 126.978 };
-const formatBbox = (b: { minLng: number; minLat: number; maxLng: number; maxLat: number }) =>
-  // PublicRestaurantsMap.tsx 의 formatBbox 와 동일 — 소수점 5자리.
-  [b.minLng, b.minLat, b.maxLng, b.maxLat].map((n) => n.toFixed(5)).join(',');
-
 // /restaurants 의 모바일 UX 를 네이버 지도식 바텀시트 패턴으로 교체한 v2.
 // xl+ 데스크톱은 기존 RestaurantsPage 와 동일한 3-column (단일 페이지 안에서
 // CSS 분기). 모바일 전용 변경:
