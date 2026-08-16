@@ -200,4 +200,63 @@ describe('VotePage', () => {
 
     expect(await screen.findByRole('button', { name: '마감하기' })).toBeInTheDocument();
   });
+
+  it('마감됐지만 승자 미확정(마감 중 크래시) — 방장이 확정 버튼으로 복구한다', async () => {
+    // closedAt 클레임 뒤 winner 확정 전에 서버가 죽은 상태의 스냅샷.
+    const crashed = openSession({
+      closedAt: '2026-08-16T03:00:00.000Z',
+      totalVoters: 2,
+      winnerOptionId: null,
+      decidedBy: null,
+      options: [
+        voteOption({ id: 'o1', orderIndex: 0, placeId: '9900000001', name: '초밥천국', count: 2 }),
+        voteOption({ id: 'o2', orderIndex: 1, placeId: '9900000002', name: '김밥나라', count: 1 }),
+      ],
+      isOwner: true,
+    });
+    server.use(
+      http.get(SHARED_URL, () => HttpResponse.json(crashed)),
+      // close 는 멱등 — 재호출이 곧 복구. 확정된 세션 전체를 돌려준다.
+      http.post(`/api/v1/votes/${crashed.id}/close`, () =>
+        HttpResponse.json({
+          ...crashed,
+          winnerOptionId: 'o1',
+          decidedBy: 'votes',
+          token: TOKEN,
+        }),
+      ),
+    );
+
+    renderVotePage();
+
+    fireEvent.click(await screen.findByRole('button', { name: '결과 확정하기' }));
+
+    // 응답으로 캐시가 통째로 교체돼 배너는 사라지고 우승 카드(유일한 링크)가 뜬다.
+    const winnerCard = await screen.findByRole('link');
+    expect(winnerCard).toHaveAttribute('href', '/r/9900000001');
+    expect(screen.queryByRole('button', { name: '결과 확정하기' })).not.toBeInTheDocument();
+  });
+
+  it('승자 미확정 마감이라도 참가자에게는 확정 버튼이 없다', async () => {
+    server.use(
+      http.get(SHARED_URL, () =>
+        HttpResponse.json(
+          openSession({
+            closedAt: '2026-08-16T03:00:00.000Z',
+            winnerOptionId: null,
+            options: [
+              voteOption({ id: 'o1', orderIndex: 0, placeId: '9900000001', name: '초밥천국' }),
+              voteOption({ id: 'o2', orderIndex: 1, placeId: '9900000002', name: '김밥나라' }),
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderVotePage();
+
+    // 집계는 보이되 복구 UI 는 방장 전용.
+    expect(await screen.findByRole('region', { name: '최종 집계' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '결과 확정하기' })).not.toBeInTheDocument();
+  });
 });

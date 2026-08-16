@@ -36,7 +36,15 @@ export const VotePage = () => {
         <VoteErrorView error={query.error} />
       ) : query.data ? (
         query.data.closedAt ? (
-          <VoteResultView data={query.data} />
+          <>
+            {/* 마감 클레임(closedAt) 뒤 winner 확정 전에 서버가 죽으면 결과 없는
+                마감 상태로 남는다. close 는 멱등이라 재호출이 곧 복구 — 방장에게만
+                확정 버튼을 노출한다(참가자는 집계만 보게 두고 폴링이 갱신). */}
+            {!query.data.winnerOptionId && query.data.isOwner && (
+              <FinalizePrompt token={token} sessionId={query.data.id} />
+            )}
+            <VoteResultView data={query.data} />
+          </>
         ) : (
           <VotingView token={token} data={query.data} />
         )
@@ -57,6 +65,39 @@ const VoteErrorView = ({ error }: { error: unknown }) => {
           ? '투표 링크는 생성 후 7일까지만 열 수 있어요.'
           : '링크가 정확한지 다시 확인해 주세요.'}
       </p>
+    </div>
+  );
+};
+
+// 마감 중 크래시 복구 — closedAt 은 있는데 winner 가 없는 세션을 방장이 다시
+// 확정한다. useCloseVote 의 onSuccess 가 공유 캐시를 통째로 교체하므로 성공
+// 즉시 이 배너는 사라지고 우승 카드가 나타난다.
+const FinalizePrompt = ({ token, sessionId }: { token: string; sessionId: string }) => {
+  const closeMutation = useCloseVote(token);
+  return (
+    <div className="mb-6 flex flex-col items-center gap-2 rounded-xl border border-dashed p-4 text-center">
+      <p className="text-sm text-muted-foreground">
+        마감 처리가 끝나지 않았어요 — 결과를 확정해 주세요.
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        disabled={closeMutation.isPending}
+        onClick={() => closeMutation.mutate(sessionId)}
+        className="gap-1.5"
+      >
+        {closeMutation.isPending ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Lock className="size-3.5" />
+        )}
+        결과 확정하기
+      </Button>
+      {closeMutation.isError && (
+        <p className="text-xs text-destructive" aria-live="polite">
+          확정에 실패했어요. 다시 시도해 주세요.
+        </p>
+      )}
     </div>
   );
 };

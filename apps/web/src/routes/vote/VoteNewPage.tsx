@@ -72,6 +72,13 @@ export const VoteNewPage = () => {
 
   return (
     <main className="container mx-auto max-w-2xl px-4 py-8">
+      {/* PublicLayout 밖 단독 라우트라 TopBar 가 없다 — 명시적 복귀 경로 제공. */}
+      <Link
+        to="/"
+        className="mb-4 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      >
+        ← 홈으로
+      </Link>
       <header className="mb-6 flex flex-col gap-2">
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Vote className="size-6" /> 투표 만들기

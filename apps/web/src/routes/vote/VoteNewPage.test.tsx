@@ -100,6 +100,8 @@ describe('VoteNewPage', () => {
     expect(screen.getByText('2곳 이상 골라주세요')).toBeInTheDocument();
     expect(screen.getByText(/후보를 추가하세요/)).toBeInTheDocument();
     expect(createButton()).toBeDisabled();
+    // PublicLayout 밖 단독 라우트 — 명시적 홈 복귀 경로가 있어야 한다.
+    expect(screen.getByRole('link', { name: /홈으로/ })).toHaveAttribute('href', '/');
   });
 
   it('검색에서 후보를 추가하면 목록·카운트가 갱신되고 같은 식당은 다시 못 넣는다', async () => {

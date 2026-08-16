@@ -64,7 +64,9 @@ export class VoteService {
       });
       if (!clash) return candidate;
     }
-    throw new VoteError('not_found', '공유 토큰 생성에 실패했습니다. 다시 시도해 주세요.');
+    // 56bit 랜덤이 5연속 충돌하는 건 사실상 서버 이상 — 도메인 에러(4xx)가
+    // 아니라 일반 Error 로 던져 에러 핸들러가 500 으로 처리하게 한다.
+    throw new Error('공유 토큰 생성에 실패했습니다. 다시 시도해 주세요.');
   }
 
   // 투표방 생성 — 토큰 즉시 발급(링크가 곧 투표방). 옵션은 nested create 라
