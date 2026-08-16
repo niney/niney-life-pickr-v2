@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { createInjectableStorage } from './injectableStorage.js';
 import {
   effectiveExcludes,
   type GroupCalcInput,
@@ -25,7 +26,9 @@ import {
 // setSettlementDraftStorage 로 어댑터를 주입한다. 미주입 + window 도 없으면
 // no-op 폴백 → persist 가 메모리만 쓰는 효과(SSR/테스트 안전).
 
-let injectedStorage: StateStorage | null = null;
+// 웹 폴백만 sessionStorage 다(다른 스토어는 local) — draft 는 탭 수명 동안만
+// 살아 있으면 되고, 완성된 정산은 서버에 저장되기 때문.
+const draftStorage = createInjectableStorage({ web: 'session' });
 
 /**
  * RN/외부 환경에서 persist 용 storage 를 주입한다. 모듈 import 후 한 번만
@@ -33,21 +36,7 @@ let injectedStorage: StateStorage | null = null;
  * 사용된다.
  */
 export const setSettlementDraftStorage = (storage: StateStorage): void => {
-  injectedStorage = storage;
-};
-
-const NO_OP_STORAGE: StateStorage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-};
-
-const resolveStorage = (): StateStorage => {
-  if (injectedStorage) return injectedStorage;
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    return window.sessionStorage;
-  }
-  return NO_OP_STORAGE;
+  draftStorage.setStorage(storage);
 };
 
 export interface DraftItem {
@@ -767,7 +756,12 @@ export const useSettlementDraftStore = create<SettlementDraftStore>()(
       // resolver 는 호출 시점에 평가 — 앱이 entry 에서 setStorage 를 호출한 뒤
       // 첫 read/write 가 일어나도록 zustand 가 보장. 웹은 sessionStorage 가
       // 자동 선택돼 기존 동작 유지.
-      storage: createJSONStorage(() => resolveStorage()),
+      storage: createJSONStorage(() => draftStorage.storage),
     },
   ),
 );
+
+// 주입은 이 모듈 평가 이후에 일어나므로(앱 entry), 그때 저장분을 다시 읽어온다.
+draftStorage.bindRehydrate(() => {
+  void useSettlementDraftStore.persist.rehydrate();
+});

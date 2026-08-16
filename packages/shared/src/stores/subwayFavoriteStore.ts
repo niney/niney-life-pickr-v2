@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { createInjectableStorage } from './injectableStorage.js';
 import {
   SUBWAY_FAVORITES_MAX,
   type SubwayFavoriteLineItemType,
@@ -16,28 +17,14 @@ import {
 // storage 어댑터는 busFavoriteStore 와 같은 lazy resolver 패턴 — 웹은
 // localStorage 자동, 앱은 entry 에서 setSubwayFavoriteStorage(AsyncStorage) 주입.
 
-let injectedStorage: StateStorage | null = null;
+const subwayStorage = createInjectableStorage();
 
 /**
  * RN/외부 환경에서 persist 용 storage 를 주입한다. 모듈 import 후 한 번만
  * 호출. 미호출 + 브라우저 환경이면 window.localStorage 가 자동 사용된다.
  */
 export const setSubwayFavoriteStorage = (storage: StateStorage): void => {
-  injectedStorage = storage;
-};
-
-const NO_OP_STORAGE: StateStorage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-};
-
-const resolveStorage = (): StateStorage => {
-  if (injectedStorage) return injectedStorage;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  return NO_OP_STORAGE;
+  subwayStorage.setStorage(storage);
 };
 
 interface SubwayFavoriteState {
@@ -105,7 +92,12 @@ export const useSubwayFavoriteStore = create<SubwayFavoriteState>()(
       version: 1,
       // 데이터만 영속 — 액션은 store 정의에서 매번 재생성.
       partialize: (s) => ({ stations: s.stations, lines: s.lines }),
-      storage: createJSONStorage(() => resolveStorage()),
+      storage: createJSONStorage(() => subwayStorage.storage),
     },
   ),
 );
+
+// 주입은 이 모듈 평가 이후에 일어나므로(앱 entry), 그때 저장분을 다시 읽어온다.
+subwayStorage.bindRehydrate(() => {
+  void useSubwayFavoriteStore.persist.rehydrate();
+});

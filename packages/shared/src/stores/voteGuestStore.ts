@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { createInjectableStorage } from './injectableStorage.js';
 
 // 투표 참가자(게스트) 로컬 상태 — 기기 영속 voterKey + 표시 이름 + 토큰별 내
 // 찬성 기록. 서버는 voterKey 로 (후보,투표자) 유니크를 걸 뿐 "내 찬성 목록"
@@ -8,27 +9,17 @@ import { persist, createJSONStorage, type StateStorage } from 'zustand/middlewar
 // voterKey 는 추측 불가 UUID 지만 클라 선언값 — 기기 단위 식별이며 완벽한
 // 중복 방지가 아님을 제품 결정으로 수용(localStorage 초기화 = 새 투표자).
 //
-// storage 어댑터는 busFavoriteStore 와 같은 lazy resolver — 웹 localStorage
-// 자동, 앱은 entry 에서 setVoteGuestStorage(AsyncStorage) 주입.
+// storage 어댑터는 busFavoriteStore 와 같은 주입 패턴 — 웹 localStorage 자동,
+// 앱은 entry 에서 setVoteGuestStorage(AsyncStorage) 주입.
 
-let injectedStorage: StateStorage | null = null;
+const guestStorage = createInjectableStorage();
 
+/**
+ * RN/외부 환경에서 persist 용 storage 를 주입한다. 모듈 import 후 한 번만
+ * 호출. 미호출 + 브라우저 환경이면 window.localStorage 가 자동 사용된다.
+ */
 export const setVoteGuestStorage = (storage: StateStorage): void => {
-  injectedStorage = storage;
-};
-
-const NO_OP_STORAGE: StateStorage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-};
-
-const resolveStorage = (): StateStorage => {
-  if (injectedStorage) return injectedStorage;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  return NO_OP_STORAGE;
+  guestStorage.setStorage(storage);
 };
 
 // settlementDraftStore 의 newClientId 와 동일 근거 — randomUUID 미지원 구형
@@ -95,7 +86,12 @@ export const useVoteGuestStore = create<VoteGuestState>()(
       name: 'vote-guest-v1',
       version: 1,
       partialize: (s) => ({ guestId: s.guestId, name: s.name, ballots: s.ballots }),
-      storage: createJSONStorage(() => resolveStorage()),
+      storage: createJSONStorage(() => guestStorage.storage),
     },
   ),
 );
+
+// 주입은 이 모듈 평가 이후에 일어나므로(앱 entry), 그때 저장분을 다시 읽어온다.
+guestStorage.bindRehydrate(() => {
+  void useVoteGuestStore.persist.rehydrate();
+});

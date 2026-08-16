@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { createInjectableStorage } from './injectableStorage.js';
 import type { ReviewAskResultType } from '@repo/api-contract';
 import { reviewSearchApi } from '../api/review-search.api.js';
 
@@ -17,28 +18,14 @@ import { reviewSearchApi } from '../api/review-search.api.js';
 // storage 어댑터는 settlementDraftStore 와 같은 lazy resolver 패턴 — 웹은
 // localStorage 자동, 앱은 entry 에서 setReviewAskStorage(AsyncStorage) 주입.
 
-let injectedStorage: StateStorage | null = null;
+const askStorage = createInjectableStorage();
 
 /**
  * RN/외부 환경에서 persist 용 storage 를 주입한다. 모듈 import 후 한 번만
  * 호출. 미호출 + 브라우저 환경이면 window.localStorage 가 자동 사용된다.
  */
 export const setReviewAskStorage = (storage: StateStorage): void => {
-  injectedStorage = storage;
-};
-
-const NO_OP_STORAGE: StateStorage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-};
-
-const resolveStorage = (): StateStorage => {
-  if (injectedStorage) return injectedStorage;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  return NO_OP_STORAGE;
+  askStorage.setStorage(storage);
 };
 
 // 식당별 마지막 질문·답변. 탭 재진입 시 재질문 없이 즉시 복원.
@@ -192,7 +179,12 @@ export const useReviewAskStore = create<ReviewAskState>()(
       version: 1,
       // 마지막 Q&A 만 영속 — 진행 중/완료 이벤트/에러는 메모리.
       partialize: (s) => ({ lastByPlace: s.lastByPlace }),
-      storage: createJSONStorage(() => resolveStorage()),
+      storage: createJSONStorage(() => askStorage.storage),
     },
   ),
 );
+
+// 주입은 이 모듈 평가 이후에 일어나므로(앱 entry), 그때 저장분을 다시 읽어온다.
+askStorage.bindRehydrate(() => {
+  void useReviewAskStore.persist.rehydrate();
+});

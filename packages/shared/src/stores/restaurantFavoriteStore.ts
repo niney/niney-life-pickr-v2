@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { createInjectableStorage } from './injectableStorage.js';
 import { RESTAURANT_FAVORITES_MAX, type RestaurantFavoriteItemType } from '@repo/api-contract';
 
 // 맛집 즐겨찾기 — 비로그인(게스트) 저장분. 로그인 사용자는 서버 저장분을
@@ -12,28 +13,14 @@ import { RESTAURANT_FAVORITES_MAX, type RestaurantFavoriteItemType } from '@repo
 // storage 어댑터는 busFavoriteStore 와 같은 lazy resolver 패턴 — 웹은
 // localStorage 자동, 앱은 entry 에서 setRestaurantFavoriteStorage(AsyncStorage) 주입.
 
-let injectedStorage: StateStorage | null = null;
+const favoriteStorage = createInjectableStorage();
 
 /**
  * RN/외부 환경에서 persist 용 storage 를 주입한다. 모듈 import 후 한 번만
  * 호출. 미호출 + 브라우저 환경이면 window.localStorage 가 자동 사용된다.
  */
 export const setRestaurantFavoriteStorage = (storage: StateStorage): void => {
-  injectedStorage = storage;
-};
-
-const NO_OP_STORAGE: StateStorage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-};
-
-const resolveStorage = (): StateStorage => {
-  if (injectedStorage) return injectedStorage;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  return NO_OP_STORAGE;
+  favoriteStorage.setStorage(storage);
 };
 
 interface RestaurantFavoriteState {
@@ -78,7 +65,12 @@ export const useRestaurantFavoriteStore = create<RestaurantFavoriteState>()(
       version: 1,
       // 데이터만 영속 — 액션은 store 정의에서 매번 재생성.
       partialize: (s) => ({ items: s.items }),
-      storage: createJSONStorage(() => resolveStorage()),
+      storage: createJSONStorage(() => favoriteStorage.storage),
     },
   ),
 );
+
+// 주입은 이 모듈 평가 이후에 일어나므로(앱 entry), 그때 저장분을 다시 읽어온다.
+favoriteStorage.bindRehydrate(() => {
+  void useRestaurantFavoriteStore.persist.rehydrate();
+});

@@ -15,7 +15,9 @@
     "./constants": "./src/constants/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@repo/api-contract": "workspace:*",
@@ -28,6 +30,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
     "zustand": "^5.0.2"
   },
   "peerDependencies": {
