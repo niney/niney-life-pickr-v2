@@ -1,12 +1,14 @@
 ---
 topic: crawl
-last_compiled: 2026-06-27
+last_compiled: 2026-08-17
 status: active
-source_count: 29
+source_count: 30
 aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, stealth, jitter, 429, playwright-extra, anti-bot, tabling, 테이블링, tabling-search, tabling-sitemap, tabling-place, tabling-bulk-save, sse-seq, review-stats, visitor-review-stats, place-partner-promotion]
 ---
 
 # crawl — 다중 출처 크롤러 (Naver Place + 캐치테이블 + 다이닝코드 + 테이블링)
+
+**2026-07-13 변경 흡수 — 정책 하드닝(감사 `bc2db00` 9차) + 어댑터 내로잉 통합(`0b3795b`)**: (1) diningcode 리뷰 페이지 루프에 totalPage **상한 200** — 업스트림 응답값 무상한 신뢰 제거(비정상 값이 무한 크롤로 이어지는 표면 차단). (2) diningcode bulk-save 에 **actor 당 활성 잡 1개 강제**(activeJobIdFor + 크래시 잡이 영구 차단하지 않게 30분 staleness 가드, 초과 409). (3) 10개 어댑터에 복사돼 있던 unknown JSON 내로잉 헬퍼(isObject 10벌/strOrNull 8벌/numOrNull 9벌 등)를 [lib/narrow.ts](../../apps/friendly/src/lib/narrow.ts) 로 통합 — strOrNull 은 시맨틱 2변종을 이름으로 분리(엄격 vs coerceStrOrNull), **의도적 로컬 유지 2곳**(subway-congestion trim 변형·naver-review-stats 콤마 numOrNull)은 주석으로 구분. diningcode-search 의 haversineM 도 @repo/utils 로(`edafb6a`).
 
 `apps/friendly/src/modules/crawl/`에 위치한 어드민 전용 크롤러. Naver Place / 캐치테이블 / 다이닝코드 / **테이블링** 네 출처를 다루며, 각 출처마다 어댑터 비용 분포가 다르다 (Naver = Playwright 풀세션, 캐치테이블 = Playwright 안에서 fetch 가로채기, 다이닝코드·테이블링 = HTTP 직접). 잡 패턴은 5가지 — 단일 Naver 크롤(SSE), Naver/캐치테이블/다이닝코드/테이블링 키워드 검색(동기), 다이닝코드·테이블링 가게 저장(단일 동기), 다이닝코드 일괄 저장(SSE), 테이블링 일괄 저장(SSE).
 

@@ -1,12 +1,14 @@
 ---
 topic: analytics
 type: codebase
-last_compiled: 2026-06-25
+last_compiled: 2026-08-17
 source_count: 16
 status: active
 ---
 
 # analytics
+
+**2026-07-13 변경 흡수 — 집계 캐시 분리(감사 `bc2db00` 5차)**: 어드민 목록의 page/sort 변경마다 전체 재집계가 돌던 과다로드를 집계 캐시 분리로 제거(페이지네이션·정렬은 캐시된 집계 위에서만 동작). 세부 구현은 [analytics.service.ts](../../apps/friendly/src/modules/analytics/analytics.service.ts) — 이 문단은 커밋 요약 기반 [coverage: low]. 글로벌 머지 파이프라인(스트리밍·재시도·락·병렬화·청크 캐시, `e45fb0c`)은 이전 컴파일에 반영돼 있다.
 
 ## Purpose [coverage: high — 6 sources]
 

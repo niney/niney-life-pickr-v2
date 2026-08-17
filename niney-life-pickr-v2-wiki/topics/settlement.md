@@ -1,12 +1,14 @@
 ---
 topic: settlement
-last_compiled: 2026-06-25
+last_compiled: 2026-08-17
 sources_count: 109
 status: active
 aliases: [정산, 정산하기, settlement, share-bill, receipt-split, 영수증 추출, 단골, contact, share token, edited badge, rounds, N차, settlement-draft, draft-autosave, multi-receipt, MultiReceiptSplitDialog, RoundDiscountEditor, RoundCategoryAdjuster, SettlementBreakdownTable, RoundExceptionsEditor, leftover-routing, roundUnit-100-1000, calculateMultiRoundShares, fromDraftId, EXTRACTION_VERSION, ExtractReceiptSplit, roundIndex, roundTotal, universal-links, app-links, deep-link, settlement-mobile, RestaurantSearchDialog, confirm-dialog, attendees-100, items-200, share-preview, OG, og:image, settlement-card, satori, resvg, IBMPlexSansKR, ShareTtl, ShareOgImage, shareOgImageUrl, share-expiry, kakao-copy, receipt-lightbox, sharePreviewCache, group-split, 세부 분배, 그룹 카드, drink-kinds, 술 종류, 소주, 맥주, 잔수, glasses, GLASSES, EQUAL, RoundGroupSplitEditor, RoundGroupSplitNote, suggestItemGroups, matchDrinkKind, DRINK_KINDS, DRINK_BRAND_PROMPT_HINT, isGroupableCategory, GROUPABLE_CATEGORIES, toGroupCalcInputs, groupBreakdown, leftover-multi-receiver]
 ---
 
 # settlement — 정산하기 도메인
+
+**2026-07-13~08-16 변경 흡수 — 감사 하드닝 3건(`bc2db00`) + 공유 토큰 패턴의 확산**: (1) 4차 — 정산 draft **사용자당 50개 상한**(초과 409) + api-contract 문자열·배열 max 전면 부여. (2) 5차 — settlement-extraction 경량화(과다로드 제거). (3) 6차 — 공유 정산표 PNG 에 **(token, updatedAt) 키 lru 캐시(max 200)**: 미편집 세션의 반복 og:image/공유 요청은 satori+resvg 재렌더 없이 캐시 응답, 편집 시 updatedAt 변경으로 즉시 반영. 9차 DEFERRED — 참여자 contact upsert 배치는 SQLite 단일 라이터 + 참여자 보통 <10 이라 이득 미미로 보류. 별개로 이 도메인의 **공유 토큰 설계(7바이트 base64url + TTL + /share/* 공개 라우트 + OG SSR-lite)** 가 그룹 투표([vote](vote.md), 2026-08-16)에 그대로 미러되며 리포의 공개 공유 표준 패턴이 됐다.
 
 식당에서 일행이 영수증을 나눠 부담할 때 "주류 안 마신 사람은 술값 빼고" 같은 카테고리별 제외 규칙으로 자동 분배해 주는 도메인. 영수증 사진을 vision LLM 으로 OCR/분류하거나 직접 입력으로 만들고, 결과를 저장/공유/수정하며 정산에 자주 나오는 사람은 "단골" 로 자동 적립된다.
 

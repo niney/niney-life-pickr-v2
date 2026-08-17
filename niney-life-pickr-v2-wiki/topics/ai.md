@@ -1,12 +1,14 @@
 ---
 topic: ai
-last_compiled: 2026-06-25
-sources_count: 37
+last_compiled: 2026-08-17
+sources_count: 38
 status: active
 aliases: [llm, ollama, ollama-cloud, provider, purpose, vision, image, chat, log-analysis, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think]
 ---
 
 # ai
+
+> **2026-07-13 변경 흡수 — 죽어있던 per-actor 레이트리밋 부활(모듈 레벨 Map) + LLM/임베딩 fetch 타임아웃(감사 `bc2db00` 6·9차)**: (1) AiService 의 per-actor 레이트리밋 상태가 **인스턴스 필드**였는데, 라우트가 config 핫리로드를 위해 요청마다 새 인스턴스를 만들어 카운터가 매번 0 에서 시작 — 사실상 죽어 있었다. **모듈 레벨 Map** 으로 이동해 부활. 함정: 모듈 상태는 테스트 간 지속 → 격리용 리셋 헬퍼 + ai.service.test beforeEach 리셋 필수(같은 함정이 재발하기 쉬움). (2) review-search embed(30s)·chat(60s), review-clustering chat(60s)의 무기한 fetch 에 [lib/fetch-timeout.ts](../../apps/friendly/src/lib/fetch-timeout.ts)(AbortController) 적용 — 업스트림 행이 이벤트루프에 좀비 요청으로 쌓이던 것 차단.
 
 > **2026-06-25 변경 흡수 — LLM 계정 단위 동시성 게이트 + 실시간 사용량 텔레메트리 + AI 키 1개 계정 공유(용도별 모델만 분리).** 두 줄기로 크게 바뀌었다. (1) **계정 게이트** — 어댑터 내부에 있던 FIFO 게이트를 [`concurrency-gate.ts`](../../apps/friendly/src/modules/ai/concurrency-gate.ts) 의 독립 `ConcurrencyGate` 로 추출하고, `apiKey|baseUrl` 단위로 게이트를 공유하는 `AccountGateRegistry` 를 새로 뒀다. 이제 호출은 **두 게이트를 직렬 통과** — purpose 게이트(어댑터 소유, `maxConcurrent`) → 계정 게이트(키 단위 공유, cap = 그 키로 해석된 purpose 한도들의 **max**). 같은 키를 쓰는 chat/image/log-analysis 합산 동시성이 계정 cap 을 절대 못 넘는다. 계정 게이트는 레지스트리에 살아 어댑터 캐시가 회전(설정 변경)해도 유지되고, `setLimit` 으로 웹 설정(DB)의 maxConcurrent 와 동기화된다 — env 는 부트스트랩 폴백일 뿐(bf883fc). (2) **계정 1키 공유** — `purpose` enum 에 `'log-analysis'` 가 추가돼 세 용도가 됐고, **키·baseUrl 은 계정 대표(chat)에서 상속**한다. image·log-analysis 는 자기 row 에 키가 없으면 chat(없으면 env) 키를 빌려 쓴다 — 키 하나로 세 용도가 다 돈다. **모델만은 상속하지 않고** 용도별 `.env` 폴백(`OLLAMA_DEFAULT_MODEL`/`OLLAMA_IMAGE_MODEL`/`OLLAMA_LOG_ANALYSIS_MODEL`)을 둔다. 와이어에 `keySource`(own/inherited/env/none) + `defaultModelSource`(own/env/none) 배지 필드 추가. `AdapterCache` 도 "마지막 1개" 슬롯에서 **키별 Map(MAX_ENTRIES=8)** 로 바뀌어 용도들이 공존한다(이전 gotcha 해소). 신규 [`packages/utils/src/aiModel.ts`](../../packages/utils/src/aiModel.ts) 가 모델 식별/추천 헬퍼(`recommendModelForPurpose`/`isVisionModel`/`groupModelsByFamily`)를 제공해 키 입력 후 용도별 모델을 자동 추천한다. **텔레메트리** — 모든 LLM 호출이 AdapterCache → OllamaCloudAdapter 한 경로로 수렴하므로 `onEvent` 훅으로 purpose 라벨을 붙여 [`llm-telemetry.ts`](../../apps/friendly/src/modules/ai/llm-telemetry.ts) 싱글턴(표시 전용 인메모리 집계)에 흘린다. `GET /telemetry`(스냅샷) + `GET /telemetry/stream`(SSE, 1초 코얼레싱) 어드민 라우트. 강제(예산 차단) 없음, 재시작 시 리셋(`startedAt` 노출). 웹: 어드민 전 페이지 플로팅 패널 `LlmUsagePanel` + 상세 `AdminAiUsagePage` + `useLlmTelemetry` 훅. `LLMCompleteOptions` 에 추론 제어 `think` 필드도 추가. 신규 LLM/임베딩 컨슈머로 [`log-analysis`](#talks-to)(`log-analysis` purpose, LLM 게이트 경유)·[`review-search`](review-search.md)(임베딩 — `/api/embed`, **별도 경로**)·[`review-clustering`](review-clustering.md) 이 합류 — 상세는 각 토픽.
 >

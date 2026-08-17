@@ -1,12 +1,14 @@
 ---
 topic: review-clustering
 type: codebase
-last_compiled: 2026-07-06
-source_count: 25
+last_compiled: 2026-08-17
+source_count: 26
 status: active
 ---
 
 # review-clustering
+
+**2026-07-13 변경 흡수 — 군집 '대기' 잔존 수복(`1f5ed30`): 원샷 체인 → enrich 완료 이벤트 체이닝 + 기동 리컨실**: 자동 군집화가 요약 종료 훅의 원샷 체인(enrich await→군집)뿐이라 두 경로로 영영 '대기'에 남았다 — ① enrich 가 이미 진행 중이면(다소스 요약 경합·어드민 enrich) ensureEnriched 가 no-op 즉시 반환 → 군집화가 **미완 코퍼스** 위에서 돌아 스킵된 뒤 재시도 주체가 없음, ② 재시작/배포가 긴 enrich 도중 체인을 끊으면 이후 임베딩이 채워져도 아무도 다시 걸어주지 않음. Python 120s 타임아웃 가설은 합성 벤치로 **기각**(978건 16.7s, 2000건 19s — 콜드 스폰 포함). 수복: (1) 군집화를 **enrich 완료 이벤트**에 배선(plugins/summaries) — 요약 훅뿐 아니라 어드민 단건/일괄 enrich 완료에도 이어지고 항상 최종 코퍼스 위에서 돈다. 요약 훅의 직접 군집 호출은 제거(경합 진원지, 단일 경로화). (2) **기동 리컨실**(scheduleStartupReconcile) — 기동 60s 후 미군집 백로그 일괄 군집화로 끊긴 체인·버전 범프 자체 회복(lastReason 인메모리 재충전 포함). `CLUSTER_RECONCILE_DELAY_MS` / `CLUSTER_AUTO_ENABLED` 로 제어. 회귀 테스트: no-op enrich 에서도 완료 이벤트 → 군집 시도 → 스킵 사유 노출.
 
 ## Purpose [coverage: high — 8 sources]
 
