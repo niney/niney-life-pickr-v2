@@ -350,7 +350,11 @@
     "apps/friendly/scripts/load-bus-stations.ts",
     "apps/friendly/scripts/export-subway-master-for-uwp.ts",
     "packages/utils/src/busArrival.ts",
-    "packages/utils/src/subwayTimetable.ts"
+    "packages/utils/src/subwayTimetable.ts",
+    "packages/utils/src/subwayCongestion.ts",
+    "packages/utils/src/subwayCongestion.test.ts",
+    "packages/shared/src/hooks/useMapResearch.ts",
+    "apps/web/src/test/useMapResearch.test.ts"
   ],
-  "total_sources_scanned": 905
+  "total_sources_scanned": 909
 }

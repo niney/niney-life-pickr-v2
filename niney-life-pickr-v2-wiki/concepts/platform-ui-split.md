@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-06-25
-topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus]
+last_compiled: 2026-08-17
+topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus, subway]
 status: active
 ---
 
@@ -34,6 +34,8 @@ status: active
 
 - **2026-07**(버스) in [[../topics/shared]] / [[../topics/utils]] / [[../topics/web]] (`busFavoriteStore` lazy storage resolver + `markerFrame` 공용 골격): 두 개의 자매-패턴 인스턴스 — 단, 버스 UI 자체는 **웹 전용**이라 `.web.tsx`/`.native.tsx` quad 는 없다. 이 인스턴스가 기여하는 건 UI 분기가 아니라 **분기를 대비한 store/util 계층의 크로스플랫폼 관용**. (1) **storage adapter 주입의 3번째 인스턴스** — `busFavoriteStore`(zustand)의 `setBusFavoriteStorage`(웹 localStorage / 앱 AsyncStorage / NO_OP 폴백)가 `settlementDraftStore`(2026-05-28)·`themeStore`(17차)와 문자 그대로 같은 "라이브러리 모듈은 abstract storage, 플랫폼 entry 가 주입" 모양. 세 번째라 storage-adapter 주입이 확립된 하위 패턴으로 굳음 — 앱 화면이 아직 없어도 store 는 처음부터 크로스플랫폼 계약을 따라 작성돼, 앱이 붙으면 어댑터 등록 한 줄만 추가된다. (2) **`markerFrame.ts` 공용 골격 추출** — 식당 카테고리 마커의 인라인 SVG 프레임을 `@repo/utils/markerFrame`(핀 32×48 / 원 26×26)로 떼어내 식당·버스가 공유하고 도메인은 안쪽 콘텐츠만 채운다. 리팩터 시 76조합 바이트 동일 검증(커밋 a9c1fe4)으로 회귀 0 — "공용 골격 + 도메인이 안쪽만 채움" 이 UI 프리미티브(quad)에서 마커 렌더로 번진 사례.
 
+- **2026-08**(승격 리팩터) in [[../topics/utils]] / [[../topics/shared]] / [[../topics/subway]] / [[../topics/web]] / [[../topics/mobile]] (`subwayCongestion` + `useMapResearch` — "로직 승격 + 표현/어댑터 facade 잔류"): 웹→앱 포팅으로 생긴 문자 단위 복제 2건이 사후 승격되며 이 패턴의 **역방향 경로**를 보여줬다 — quad 처럼 처음부터 분기를 설계한 게 아니라, 복제로 태어난 코드에서 "플랫폼 무관 로직"과 "플랫폼 표현"을 소급 분리. (1) 혼잡도(`9206346`): 임계표·슬롯 키·방향 매칭은 `@repo/utils` 단일 정의로, 웹·앱 `congestionUtils.ts` 는 색만 남는 facade(웹 Tailwind 클래스 / 앱 hex 토큰) — **밴드 라벨을 키로 쓰는 색 테이블**이라 임계를 바꿔도 두 플랫폼 색이 어긋날 수 없다. utils 는 의존 0 leaf 라 api-contract 타입 대신 구조적 타입(`CongestionDirectionLike`)+제네릭으로 호출자 계약을 보존 — 공유 계층이 낮을수록 타입도 구조적으로 낮춰 받는 관용. (2) 지도 재검색(`df9fcbd`): 타이밍 파이프라인은 `@repo/shared` 훅 단일 정의(입력을 플랫폼 뷰포트 타입에 안 묶는 순수 {lat,lng,zoom}), 웹 2곳은 인라인 제거, 앱은 BridgeViewport 어댑터 한 줄만 잔류(외부 시그니처 무변경). 소비처 import 경로가 안 바뀌는 facade 잔류 덕에 승격이 소비처 diff 0 에 가깝게 끝난다.
+
 ## What This Means
 
 이 패턴은 두 가지 가치 판단을 코드에 박아 둔다:
@@ -60,3 +62,4 @@ status: active
 - [[../topics/review-search]]
 - [[../topics/review-clustering]]
 - [[../topics/bus]]
+- [[../topics/subway]]

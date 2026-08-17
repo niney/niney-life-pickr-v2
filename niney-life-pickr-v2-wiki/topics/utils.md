@@ -174,6 +174,8 @@ api-contract와 같은 빌드 없는 패턴: `package.json`이 `./src/*.ts`를 �
 - [packages/utils/src/geo.test.ts](../../packages/utils/src/geo.test.ts) (NEW)
 - [packages/utils/src/subwayTimetable.ts](../../packages/utils/src/subwayTimetable.ts) (NEW) — 웹·앱 복사본 승격
 - [packages/utils/src/subwayTimetable.test.ts](../../packages/utils/src/subwayTimetable.test.ts) (NEW)
+- [packages/utils/src/subwayCongestion.ts](../../packages/utils/src/subwayCongestion.ts) (NEW 22차) — 혼잡도 임계/슬롯/방향 매칭 승격(`9206346`), 웹·앱 congestionUtils 는 색 facade 만
+- [packages/utils/src/subwayCongestion.test.ts](../../packages/utils/src/subwayCongestion.test.ts) (NEW 22차) — 임계 경계·24+ 슬롯 접기·방향 매칭 폴백·slotLevel null 전파 7건
 - [packages/utils/src/thumbnail.test.ts](../../packages/utils/src/thumbnail.test.ts) (NEW) — pstatic 가드 회귀 테스트
 - [packages/utils/src/markerFrame.ts](../../packages/utils/src/markerFrame.ts) — 식당·버스·지하철 공용 마커 프레임(핀/원)
 - [packages/utils/src/random.ts](../../packages/utils/src/random.ts)

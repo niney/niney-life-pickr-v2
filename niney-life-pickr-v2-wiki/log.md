@@ -1,5 +1,29 @@
 # Wiki Compile Log
 
+## 2026-08-17 (22nd compile)
+
+**Topics updated:** subway(승격 2건 소비처 반영 — congestionUtils 색-facade 화 + SubwayStationsMap 재검색 shared 훅 교체), bus(BusStationsMap 인라인 재검색 → shared useMapResearch, 신규 다이제스트 1건), web(테스트 24→29건 — useMapResearch 타이밍 계약 5건 + BusStationsMap 소스 주석), mobile(실기기 검증 갭 서술 갱신 — 코드 레벨 검증 완료로 + 앱 congestionUtils/useMapResearch facade 화 곁다리), shared(테스트 25→26건 — voteGuestStore 앱 시나리오 AsyncStorage형 비동기 복원 통합 + Sources 에 useMapResearch.ts), utils(Sources 에 subwayCongestion.ts/.test.ts 등재)
+**New topics:** none
+**New concepts:** none
+**Concepts updated:** platform-ui-split(+"사후 승격 facade" 인스턴스 — subwayCongestion `9206346` + useMapResearch `df9fcbd`, quad 의 역방향 경로: 복제로 태어난 코드에서 로직/표현을 소급 분리, 밴드 라벨 키 색 테이블·구조적 타입으로 leaf 계약 보존; +subway 연결, 10→11 토픽)
+**Sources scanned:** ~909 (21차 ~905 + 신규 4 — subwayCongestion.ts/.test.ts, shared useMapResearch.ts, web useMapResearch.test.ts)
+**Sources changed:** 13 파일 — 3 커밋 (21차 컴파일 ce179b7 이후 fbba748·df9fcbd·9206346; 21차 보강 8f82459 는 이 중 승격 2건을 utils/shared 다이제스트에만 반영)
+**Notes:** 21차 보강(8f82459)의 잔여 정리 라운드. 승격 리팩터 2건은 정의처(utils/shared) 다이제스트엔 이미 실렸지만 **소비처 4토픽**(subway·bus·web·mobile)의 서술이 인라인/복제 시절 그대로였다 — congestionUtils 는 "표현만 남는 facade"(웹 Tailwind / 앱 hex, 밴드 라벨 키 테이블이라 임계 변경에 두 플랫폼 색이 어긋날 수 없음), 재검색은 "소비처 import 경로 무변경 + 앱은 BridgeViewport 어댑터 한 줄"로 갱신. fbba748 은 persist 주입 수복(7520859)의 마지막 코드 레벨 갭(비동기 getItem 경로의 주입→재-rehydrate→복원 전이)을 닫은 통합 테스트 — mobile 의 "⚠️ 실기기 확인 미완"을 "코드 레벨 완료, 남은 건 순수 환경 문제"로 좁혔다. 또한 21차·21차 보강이 누락했던 log.md 항목(아래 2건 소급 기록)과 `.compile-state.json` 동기화를 이번에 복원.
+
+## 2026-08-17 (21st compile — 보강, 같은 날 2차 패스) *[22차에 소급 기록]*
+
+**Topics updated:** review-clustering(군집 '대기' 잔존 수복 1f5ed30 — 원샷 체인 2경로 실패 진단·타임아웃 가설 벤치 기각·enrich 완료 이벤트 체이닝+기동 리컨실), ai(죽어있던 per-actor 레이트리밋 부활 — 모듈 레벨 Map, 테스트 격리 함정 포함 + LLM/임베딩 fetch 타임아웃), analytics(집계 캐시 분리 — 커밋 요약 기반, coverage low 명시), crawl(totalPage 상한 200·bulk-save actor 1잡·어댑터 내로잉 lib/narrow 통합 — 의도적 로컬 유지 2곳 구분), settlement(draft 50 상한·extraction 경량화·카드 PNG lru 캐시 + 공유 토큰 설계의 vote 미러 = 리포 표준 패턴화), utils/shared(승격 2건 다이제스트 반영)
+**Notes:** 21차 1차 패스에서 "다음 컴파일 이월"로 남긴 5토픽을 같은 날 마저 흡수. 리팩터 백로그 판단: (2) 크롤 envelope 팩토리·(5) 도착 상태 상수는 이득 대비 보류. log.md·compile-state 는 이 패스에서 누락 — 22차에서 복원.
+
+## 2026-08-17 (21st compile) *[22차에 소급 기록]*
+
+**Topics updated:** utils, subway, bus, transit, mobile, web, shared, api-contract, friendly, project-overview (각 문서 상단 날짜별 변경 흡수 문단 + 낡은 사실 정정 — 앱 대중교통 존재·버스 셀 캐시 폐기·시간표 데이터셋 결손 관측)
+**New topics:** vote(그룹 투표 픽 — 방장 생성 + 링크 비로그인 복수 찬성 + 수동 마감 + 동점 smartPick 티브레이크, 공개 표면은 정산 공유 토큰 패턴 미러)
+**New concepts:** guest-server-hybrid
+**Sources scanned:** ~905
+**Sources changed:** 7~8월 델타 일괄(보안·성능 9차수 하드닝, 리팩터 lib/utils 집결, 버스 장애 내성, 지하철 실형상, 앱 대중교통 대확장 — 탑승 모드·하차 알림, 웹/shared 테스트 인프라 신설)
+**Notes:** crawl·ai·analytics·settlement·map·logs 등은 소폭이라 이월 → 같은 날 보강 패스에서 5토픽 흡수 완료(map·logs·menu-grouping 은 실변화 없음 확인). 상세는 INDEX.md Recent Changes·schema.md Evolution Log 참조.
+
 ## 2026-07-07 (20th compile)
 
 **Topics updated:** bus(통합 배선 — 지하철 즐겨찾기 병합·겸표시 overlayMarkers·크로스 검색 슬롯·poolKey, 도메인별 BusFavoriteSection 삭제→transit 위임), map(OL 지도 인스턴스 풀링 D안 — poolKey opt-in 모듈 풀·take 시맨틱·레이어 4종 마운트별 재생성+unByKey·레이어 선택 승계 + overlayMarkers fit-제외 보조 레이어), friendly(subway 모듈 합류 + DB drift 보정 20260707140000_realign_drifted_tables + test-utils/temp-db useIsolatedDatabase + 환경 의존 테스트 6건 해소 + logs 플레이크 수정 + 라이브 스모크 ERROR-337 skip), web(/subway 라우트 + 대중교통 네비 + tsconfig noEmit — stale .js 101개 정리·재발 차단), utils(subwayLine/subwayMarker/subwayPosition/vehiclePill + vitest 인프라), shared(subway api/hooks/store 5종), api-contract(subway/subway-favorite 스키마)

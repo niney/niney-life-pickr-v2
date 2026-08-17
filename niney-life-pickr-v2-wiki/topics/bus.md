@@ -11,6 +11,8 @@ aliases: [seoul-bus, seoul-bus-api, ws-bus-go-kr, bus-station-search, getStation
 
 서울시 버스 정보 API(`ws.bus.go.kr`)를 friendly 가 프록시하고, **웹**(`apps/web`)이 정류장 검색·실시간 도착정보·노선 보기·실시간 차량 추적을 그리는 도메인. ~~앱에는 버스 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
 
+**2026-08-17 변경 흡수 — 지도 재검색 파이프라인 shared 승격(`df9fcbd`)**: [BusStationsMap](../../apps/web/src/components/bus/BusStationsMap.tsx) 의 인라인 ~50줄(사용자 패닝 종료 추적 + 자동 재조회 트레일링 스로틀 1.2s + 수동 "이 위치에서 재검색" 버튼 판정)이 `@repo/shared` [useMapResearch](../../packages/shared/src/hooks/useMapResearch.ts) 호출로 교체됐다(버스 임계 300m·z15 유지, 동작 동일 — 웹 SubwayStationsMap·앱 transit 훅과 3곳 문자 단위 중복이던 것). 타이밍 계약 테스트 5건은 [web](web.md), 훅 상세는 [shared](shared.md).
+
 **2026-07-13 변경 흡수 — 서울시 API 전면 503 장애를 계기로 한 장애 내성 재설계(`b0c4f0a`) + 15초 마이크로캐시(7차, `bc2db00`) + 5xx 진단 로깅(`d3af987`)**:
 - **주변 정류장 — 근본 해결(지하철 nearby 와 동일 설계로 전환)**: 열린데이터광장 busStopLocationXyInfo 마스터(11,248행)를 `BusStation` 에 적재하는 `load:bus-stations` 신설(+`BusMasterSync` 이력, ID 체계 실측 검증 — STOPS_NO=stId, NODE_ID=arsId). `getNearbyStations` 가 **로컬 바운딩박스 조회(업스트림 0콜)** 로 전환 — 장애·쿼터·키 무관, 미적재는 503 안내, 가상정류장(arsId '0') 제외. **셀 캐시 경로 폐기**: `bus_nearby_cells`/`hits` 테이블 드랍, `getStationsByPos` 어댑터 dead code 제거. 계약 nearby source 에 'db' 추가. 아래 본문의 "주변 셀 캐시" 서술은 **역사 기록**이다.
 - **도착·위치 — last-known stale 폴백**: 15초 마이크로캐시(7차 — `realtimeCache` + in-flight 합류, 쿼터는 캐시 미스 직전에만 소비)의 마지막 성공본을 보관, 업스트림 실패·쿼터 소진 시 10분 이내면 `stale:true` 로 서빙(초과 시 기존 502/503). 계약 BusArrivals/PositionsResult 에 stale 필드. 웹은 stale 배너("서울시 버스 API 장애 — ○분 전 정보")·5xx 원인 문구 표시.
