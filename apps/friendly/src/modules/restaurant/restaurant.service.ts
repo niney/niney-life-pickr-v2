@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { isCandidate, scoreMatch } from '../../lib/matching.js';
 import { normalizeTerm } from '../../lib/text.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from '../analytics/category-tree.js';
@@ -849,9 +849,9 @@ export class RestaurantService {
   // 통합 카운트(분석 평균 등)는 sources 의 가중평균.
   //
   // 페이징/정렬: canonical 집계가 sources 합산이므로 정렬 키(만족도/긍정/부정비율)
-  // 를 DB SQL 하나로 빼기 어렵다 — 따라서 한 번에 모든 canonical 의 메타+집계
-  // +후보매칭까지 계산 후, 메모리에서 정렬·slice 한다. 데이터 규모(< 1k canonical)
-  // 에서 충분히 빠르고, 페이지 경계가 정렬과 무관하게 일관됨.
+  // 를 DB SQL 하나로 빼기 어렵다 — 메타데이터로 검색 대상을 먼저 좁힌 뒤 해당
+  // canonical 의 집계+후보매칭을 계산하고 메모리에서 정렬·slice 한다. 후보매칭은
+  // 검색 결과와 무관하게 전역 canonical 기준으로 유지한다.
   async list(query: RestaurantListQueryType): Promise<RestaurantListResultType> {
     const rows = await this.prisma.restaurant.findMany({
       orderBy: { lastCrawledAt: 'desc' },
@@ -885,20 +885,42 @@ export class RestaurantService {
       return { items: [], total: 0, limit: query.limit, offset: query.offset };
     }
 
-    const ids = rows.map((r) => r.id);
-    // 모든 Restaurant 의 ReviewSummary 를 한 번에 페치 후 JS 에서 그룹핑.
-    // Prisma groupBy 가 related field 그룹핑을 지원 안 해서 어차피 N+1 회피용
-    // 한 방 쿼리. 데이터 규모(어드민 식당 < 1k)에서 충분히 빠름.
-    const summaryRows = await this.prisma.reviewSummary.findMany({
-      where: { review: { restaurantId: { in: ids } } },
-      select: {
-        status: true,
-        sentiment: true,
-        sentimentScore: true,
-        satisfactionScore: true,
-        review: { select: { restaurantId: true } },
-      },
-    });
+    // 공백으로 나눈 토큰은 AND, 각 토큰은 통합명/출처별 이름·카테고리·식별자 중
+    // 어느 필드에서든 부분 일치하면 된다. canonical 단위 검색 문자열을 먼저
+    // 만들기 때문에 한 source 가 검색에 걸리면 그 canonical 의 형제 source 도
+    // 집계와 응답에 모두 남는다.
+    const searchTokens = (query.q ?? '')
+      .normalize('NFKC')
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    let selectedRows = rows;
+    if (searchTokens.length > 0) {
+      const searchablePartsByCanonical = new Map<string, string[]>();
+      for (const r of rows) {
+        const parts = searchablePartsByCanonical.get(r.canonicalId) ?? [
+          r.canonicalId,
+          r.canonical.name,
+          r.canonical.primaryCategory ?? '',
+        ];
+        parts.push(r.id, r.sourceId, r.placeId ?? '', r.name, r.category ?? '');
+        searchablePartsByCanonical.set(r.canonicalId, parts);
+      }
+
+      const matchedCanonicalIds = new Set<string>();
+      for (const [canonicalId, parts] of searchablePartsByCanonical) {
+        const searchable = parts.join(' ').normalize('NFKC').toLowerCase();
+        if (searchTokens.every((token) => searchable.includes(token))) {
+          matchedCanonicalIds.add(canonicalId);
+        }
+      }
+      if (matchedCanonicalIds.size === 0) {
+        return { items: [], total: 0, limit: query.limit, offset: query.offset };
+      }
+      selectedRows = rows.filter((r) => matchedCanonicalIds.has(r.canonicalId));
+    }
+
+    const ids = selectedRows.map((r) => r.id);
 
     interface Bucket {
       pending: number;
@@ -930,28 +952,64 @@ export class RestaurantService {
     });
     const byRestaurant = new Map<string, Bucket>();
     for (const id of ids) byRestaurant.set(id, emptyBucket());
-    for (const s of summaryRows) {
-      const bucket = byRestaurant.get(s.review.restaurantId);
-      if (!bucket) continue;
-      // queued/pending 둘 다 진행 중 의미로 list 카드의 pending 카운트에 합산.
-      // 디테일 페이지(RestaurantSummaryProgress) 만 두 단계를 분리 표시한다.
-      if (s.status === 'pending' || s.status === 'queued') bucket.pending += 1;
-      else if (s.status === 'running') bucket.running += 1;
-      else if (s.status === 'done') bucket.done += 1;
-      else if (s.status === 'failed') bucket.failed += 1;
-      if (s.status === 'done') {
-        if (s.sentiment === 'positive') bucket.positive += 1;
-        else if (s.sentiment === 'negative') bucket.negative += 1;
-        else if (s.sentiment === 'neutral') bucket.neutral += 1;
-        else if (s.sentiment === 'mixed') bucket.mixed += 1;
-        if (s.sentimentScore !== null) {
-          bucket.sentSum += s.sentimentScore;
-          bucket.sentN += 1;
-        }
-        if (s.satisfactionScore !== null) {
-          bucket.satSum += s.satisfactionScore;
-          bucket.satN += 1;
-        }
+
+    // ReviewSummary 원본을 전부 애플리케이션으로 가져오지 않고 DB 에서 식당별로
+    // 집계한다. 동적 IN 은 SQLite bind-variable 한도와 환경별 차이를 피하도록
+    // 500개씩 나눈다. queued/pending 은 기존 카드 의미대로 pending 에 합산한다.
+    type AggregateNumber = number | bigint | null;
+    interface SummaryAggregateRow {
+      restaurantId: string;
+      pending: AggregateNumber;
+      running: AggregateNumber;
+      done: AggregateNumber;
+      failed: AggregateNumber;
+      positive: AggregateNumber;
+      negative: AggregateNumber;
+      neutral: AggregateNumber;
+      mixed: AggregateNumber;
+      sentSum: AggregateNumber;
+      sentN: AggregateNumber;
+      satSum: AggregateNumber;
+      satN: AggregateNumber;
+    }
+    const aggregateNumber = (value: AggregateNumber): number =>
+      value === null ? 0 : Number(value);
+    const SUMMARY_AGGREGATE_BATCH_SIZE = 500;
+    for (let offset = 0; offset < ids.length; offset += SUMMARY_AGGREGATE_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + SUMMARY_AGGREGATE_BATCH_SIZE);
+      const aggregates = await this.prisma.$queryRaw<SummaryAggregateRow[]>`
+        SELECT v."restaurantId" AS "restaurantId",
+               SUM(CASE WHEN rs."status" IN ('queued', 'pending') THEN 1 ELSE 0 END) AS "pending",
+               SUM(CASE WHEN rs."status" = 'running' THEN 1 ELSE 0 END) AS "running",
+               SUM(CASE WHEN rs."status" = 'done' THEN 1 ELSE 0 END) AS "done",
+               SUM(CASE WHEN rs."status" = 'failed' THEN 1 ELSE 0 END) AS "failed",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'positive' THEN 1 ELSE 0 END) AS "positive",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'negative' THEN 1 ELSE 0 END) AS "negative",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'neutral' THEN 1 ELSE 0 END) AS "neutral",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."sentiment" = 'mixed' THEN 1 ELSE 0 END) AS "mixed",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."sentimentScore" IS NOT NULL THEN rs."sentimentScore" ELSE 0 END) AS "sentSum",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."sentimentScore" IS NOT NULL THEN 1 ELSE 0 END) AS "sentN",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."satisfactionScore" IS NOT NULL THEN rs."satisfactionScore" ELSE 0 END) AS "satSum",
+               SUM(CASE WHEN rs."status" = 'done' AND rs."satisfactionScore" IS NOT NULL THEN 1 ELSE 0 END) AS "satN"
+          FROM "review_summaries" rs
+          JOIN "visitor_reviews" v ON v."id" = rs."reviewId"
+         WHERE v."restaurantId" IN (${Prisma.join(batch)})
+         GROUP BY v."restaurantId"`;
+      for (const aggregate of aggregates) {
+        byRestaurant.set(aggregate.restaurantId, {
+          pending: aggregateNumber(aggregate.pending),
+          running: aggregateNumber(aggregate.running),
+          done: aggregateNumber(aggregate.done),
+          failed: aggregateNumber(aggregate.failed),
+          positive: aggregateNumber(aggregate.positive),
+          negative: aggregateNumber(aggregate.negative),
+          neutral: aggregateNumber(aggregate.neutral),
+          mixed: aggregateNumber(aggregate.mixed),
+          sentSum: aggregateNumber(aggregate.sentSum),
+          sentN: aggregateNumber(aggregate.sentN),
+          satSum: aggregateNumber(aggregate.satSum),
+          satN: aggregateNumber(aggregate.satN),
+        });
       }
     }
 
@@ -961,7 +1019,7 @@ export class RestaurantService {
       string,
       { canonical: (typeof rows)[number]['canonical']; sources: RestaurantSourceSummaryType[] }
     >();
-    for (const r of rows) {
+    for (const r of selectedRows) {
       const b = byRestaurant.get(r.id)!;
       const source: RestaurantSourceSummaryType = {
         restaurantId: r.id,
@@ -1005,17 +1063,23 @@ export class RestaurantService {
       longitude: number | null;
       sourceSet: Set<string>;
     }
-    const canonShapes: CanonShape[] = [];
-    for (const { canonical, sources } of byCanonical.values()) {
-      canonShapes.push({
-        id: canonical.id,
-        name: canonical.name,
-        primaryCategory: canonical.primaryCategory,
-        latitude: canonical.latitude,
-        longitude: canonical.longitude,
-        sourceSet: new Set(sources.map((s) => s.source)),
-      });
+    const shapeById = new Map<string, CanonShape>();
+    for (const r of rows) {
+      const shape = shapeById.get(r.canonicalId);
+      if (shape) {
+        shape.sourceSet.add(r.source);
+      } else {
+        shapeById.set(r.canonicalId, {
+          id: r.canonical.id,
+          name: r.canonical.name,
+          primaryCategory: r.canonical.primaryCategory,
+          latitude: r.canonical.latitude,
+          longitude: r.canonical.longitude,
+          sourceSet: new Set([r.source]),
+        });
+      }
     }
+    const canonShapes = [...shapeById.values()];
     const candidateCounts = new Map<string, number>();
     // 매칭 루프 중에 각 canonical 의 top1(점수 가장 높은 후보)도 같이 기록.
     // suggestion 렌더 조건(sources.length === 1 && !dismissedAt) 은 뒤에서 적용.
@@ -1088,10 +1152,6 @@ export class RestaurantService {
         }
       }
     }
-    // 빠른 조회용 — canonShape lookup. 위 byCanonical 도 같은 데이터를 갖고
-    // 있지만 이쪽이 가벼움.
-    const shapeById = new Map(canonShapes.map((s) => [s.id, s]));
-
     const items: CanonicalListItemType[] = [];
     for (const { canonical, sources } of byCanonical.values()) {
       let totalReviews = 0;
@@ -1166,38 +1226,6 @@ export class RestaurantService {
         suggestion,
       });
     }
-    // 검색은 canonical 조립과 전역 병합 후보 계산이 끝난 뒤 적용한다. 원본
-    // Restaurant 조회에 where 를 걸면 검색에 걸린 source 만 남아 같은 canonical 의
-    // 다른 source/리뷰 집계가 사라지고 candidateCount 도 검색 범위에 종속되기 때문.
-    // 공백으로 나눈 토큰은 AND, 각 토큰은 통합명/출처별 이름·카테고리·식별자 중
-    // 어느 필드에서든 부분 일치하면 된다.
-    const searchTokens = (query.q ?? '')
-      .normalize('NFKC')
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
-    const filteredItems =
-      searchTokens.length === 0
-        ? items
-        : items.filter((item) => {
-            const searchable = [
-              item.canonicalId,
-              item.name,
-              item.primaryCategory ?? '',
-              ...item.sources.flatMap((source) => [
-                source.restaurantId,
-                source.sourceId,
-                source.placeId ?? '',
-                source.name,
-                source.category ?? '',
-              ]),
-            ]
-              .join(' ')
-              .normalize('NFKC')
-              .toLowerCase();
-            return searchTokens.every((token) => searchable.includes(token));
-          });
-
     // 정렬 — query.sort 에 따라. null 값(분석 안 된 가게) 은 항상 가장 뒤.
     // recent 는 ISO 문자열 비교로 desc(=최근이 위).
     const cmpRecent = (a: CanonicalListItemType, b: CanonicalListItemType): number =>
@@ -1226,24 +1254,24 @@ export class RestaurantService {
       };
     switch (query.sort) {
       case 'satisfaction':
-        filteredItems.sort(byKeyDesc((it) => it.avgSatisfactionScore));
+        items.sort(byKeyDesc((it) => it.avgSatisfactionScore));
         break;
       case 'positive':
-        filteredItems.sort(byKeyDesc((it) => it.avgSentimentScore));
+        items.sort(byKeyDesc((it) => it.avgSentimentScore));
         break;
       case 'negativeRatio':
         // summaryDone===0 → 분모 없음 → null → nulls-last. 그 외엔 negative 비율 asc.
-        filteredItems.sort(
+        items.sort(
           byKeyAsc((it) => (it.summaryDone === 0 ? null : it.negativeCount / it.summaryDone)),
         );
         break;
       case 'recent':
       default:
-        filteredItems.sort(cmpRecent);
+        items.sort(cmpRecent);
         break;
     }
-    const total = filteredItems.length;
-    const sliced = filteredItems.slice(query.offset, query.offset + query.limit);
+    const total = items.length;
+    const sliced = items.slice(query.offset, query.offset + query.limit);
     return { items: sliced, total, limit: query.limit, offset: query.offset };
   }
 

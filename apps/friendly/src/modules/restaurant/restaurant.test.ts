@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
@@ -95,11 +95,13 @@ describe('RestaurantService', () => {
   });
 
   afterEach(async () => {
-    // Reviews are cascaded; restaurants left for the test that creates them
-    // are removed by id. We use unique placeIds per test so cross-test
-    // pollution doesn't matter, but we still clean up to keep dev.db tidy.
+    vi.restoreAllMocks();
+    // Reviews are cascaded. Naver 는 placeId, 다른 source 는 sourceId 에 파일별
+    // prefix 를 붙여 테스트가 만든 행만 정리한다.
     await app.prisma.restaurant.deleteMany({
-      where: { placeId: { startsWith: PLACE_PREFIX } },
+      where: {
+        OR: [{ placeId: { startsWith: PLACE_PREFIX } }, { sourceId: { startsWith: PLACE_PREFIX } }],
+      },
     });
   });
 
@@ -233,6 +235,47 @@ describe('RestaurantService', () => {
       where: { id: alias.id },
       data: { canonicalId: primaryRow.canonicalId },
     });
+    // 검색에는 걸리지 않지만 전역 병합 후보에는 잡히는 다른 source canonical.
+    // 검색 선필터 이후에도 candidateCount 가 검색 범위에 종속되지 않아야 한다.
+    await app.prisma.restaurant.create({
+      data: {
+        source: 'diningcode',
+        sourceId: `${marker}-candidate`,
+        name: `대표상호-${marker}`,
+        category: '한식',
+        rawSourceUrl: 'https://www.diningcode.com/profile.php?rid=test',
+        snapshotJson: '{}',
+        canonical: {
+          create: { name: `대표상호-${marker}`, primaryCategory: '한식' },
+        },
+      },
+    });
+    const primaryBatch = await service.persistReviewBatch(primary.id, [
+      review({ externalId: `${marker}-primary-review`, body: '대표 출처 리뷰' }),
+    ]);
+    const aliasBatch = await service.persistReviewBatch(alias.id, [
+      review({ externalId: `${marker}-alias-done`, body: '별칭 출처 분석 리뷰' }),
+      review({ externalId: `${marker}-alias-queued`, body: '별칭 출처 대기 리뷰' }),
+    ]);
+    await app.prisma.reviewSummary.createMany({
+      data: [
+        {
+          reviewId: primaryBatch.newReviews[0]!.id,
+          status: 'done',
+          sentiment: 'positive',
+          sentimentScore: 0.8,
+          satisfactionScore: 5,
+        },
+        {
+          reviewId: aliasBatch.newReviews[0]!.id,
+          status: 'done',
+          sentiment: 'negative',
+          sentimentScore: -0.4,
+          satisfactionScore: 2,
+        },
+        { reviewId: aliasBatch.newReviews[1]!.id, status: 'queued' },
+      ],
+    });
 
     const byAliasAndCategory = await service.list({
       q: `hiddenalias-${marker} 이탈리안`,
@@ -244,6 +287,16 @@ describe('RestaurantService', () => {
     expect(byAliasAndCategory.items[0]?.canonicalId).toBe(primaryRow.canonicalId);
     // 검색에 직접 걸리지 않은 primary source 도 통합 행에 그대로 남아야 한다.
     expect(byAliasAndCategory.items[0]?.sources).toHaveLength(2);
+    expect(byAliasAndCategory.items[0]?.candidateCount).toBe(1);
+    expect(byAliasAndCategory.items[0]).toMatchObject({
+      totalReviews: 3,
+      summaryPending: 1,
+      summaryDone: 2,
+      positiveCount: 1,
+      negativeCount: 1,
+    });
+    expect(byAliasAndCategory.items[0]?.avgSentimentScore).toBeCloseTo(0.2, 5);
+    expect(byAliasAndCategory.items[0]?.avgSatisfactionScore).toBeCloseTo(3.5, 5);
 
     const byPlaceId = await service.list({
       q: aliasPlaceId.toUpperCase(),
@@ -254,6 +307,7 @@ describe('RestaurantService', () => {
     expect(byPlaceId.total).toBe(1);
     expect(byPlaceId.items[0]?.canonicalId).toBe(primaryRow.canonicalId);
 
+    const aggregateSpy = vi.spyOn(app.prisma, '$queryRaw');
     const noMatch = await service.list({
       q: `not-found-${marker}`,
       limit: 25,
@@ -261,6 +315,8 @@ describe('RestaurantService', () => {
       sort: 'recent',
     });
     expect(noMatch).toMatchObject({ items: [], total: 0, limit: 25, offset: 0 });
+    // 검색 메타데이터가 하나도 일치하지 않으면 리뷰 집계 SQL 자체를 실행하지 않는다.
+    expect(aggregateSpy).not.toHaveBeenCalled();
   });
 });
 
