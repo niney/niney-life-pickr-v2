@@ -664,7 +664,8 @@ export const RestaurantPublicDetail = z.object({
   // 방문자 리뷰는 페이지네이션. 첫 페이지만 detail 에 동봉해서 ReviewsTab 첫
   // 진입을 추가 fetch 없이 즉시 그릴 수 있게 한다. 추가 페이지는 별도
   // 엔드포인트(Routes.Restaurant.publicReviews)로 가져옴.
-  // 정렬: fetchedAt desc, 필터: all. ReviewsTab 의 기본 UI 상태와 일치.
+  // 정렬: 실제 방문일 desc(해석 불가 시 fetchedAt desc), 필터: all.
+  // ReviewsTab 의 기본 UI 상태와 일치.
   reviewsFirstPage: z.array(PublicVisitorReview),
   // sentiment chip 의 카운트. 별도 fetch 안 하고 detail 에서 한 번에.
   reviewCounts: z.object({

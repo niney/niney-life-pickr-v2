@@ -5,6 +5,7 @@ export * from './format.js';
 export * from './geo.js';
 export * from './markerFrame.js';
 export * from './random.js';
+export * from './reviewDate.js';
 export * from './restaurantCategory.js';
 export * from './routePath.js';
 export * from './subwayLine.js';

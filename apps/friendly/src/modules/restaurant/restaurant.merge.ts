@@ -10,7 +10,7 @@
 //   menus                   → Naver 가 비었을 때만 테이블링 > DC
 //                             (테이블링 메뉴는 가격+이미지 1차 데이터)
 //   photos                  → Naver + DC + 테이블링 합쳐서 URL dedup
-//   reviews                 → 세 출처 모두 합쳐서 fetchedAt desc
+//   reviews                 → 세 출처 모두 합쳐서 방문일 desc (fetchedAt desc 폴백)
 //   descTags/facilities/scoreDetail/wordcloud  → DC 전용 → 항상 노출
 //   flags/4축평점/favoriteCount/businessDays   → 테이블링 전용 → 항상 노출
 //

@@ -39,8 +39,8 @@ export const HomeTab = ({
   const previewMenuSource = representativeMenus.length > 0 ? representativeMenus : detail.menus;
   const previewMenus = previewMenuSource.slice(0, HOME_MENU_PREVIEW);
   // 분석된 리뷰 우선 — 사용자에게 가장 정보량 큰 미리보기.
-  // detail.reviewsFirstPage 는 fetchedAt desc 정렬된 첫 페이지 (10개) — 그 안에서
-  // 분석된 리뷰를 위로 한 번 더 stable sort.
+  // detail.reviewsFirstPage 는 방문일 최신순인 첫 페이지(10개) — 그 안에서
+  // 분석된 리뷰를 위로 한 번 더 stable sort한다.
   const previewReviews = [...detail.reviewsFirstPage]
     .sort((a, b) => Number(!!b.analysis) - Number(!!a.analysis))
     .slice(0, HOME_REVIEW_PREVIEW);

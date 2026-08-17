@@ -1076,6 +1076,52 @@ describe('Public restaurant routes', () => {
     expect(unanalyzed?.body).toBe('아직 분석 전');
   });
 
+  it('GET /restaurants/public/:placeId — update 배치의 최근 방문 리뷰를 첫 페이지에 둔다', async () => {
+    const { id, placeId } = await seedRestaurant({ name: '업데이트정렬집' });
+    await app.prisma.visitorReview.createMany({
+      data: [
+        {
+          restaurantId: id,
+          externalId: `${placeId}-old`,
+          authorName: '기존',
+          rating: 4,
+          body: '최초 크롤 리뷰',
+          visitedAt: '6.5.금',
+          imageUrlsJson: '[]',
+          videosJson: '[]',
+          contentHash: `${placeId}-old-hash`,
+          fetchedAt: new Date('2026-06-05T13:56:23.000Z'),
+        },
+        {
+          restaurantId: id,
+          externalId: `${placeId}-new`,
+          authorName: '신규',
+          rating: 5,
+          body: '업데이트 신규 리뷰',
+          visitedAt: '8.15.토',
+          imageUrlsJson: '[]',
+          videosJson: '[]',
+          contentHash: `${placeId}-new-hash`,
+          fetchedAt: new Date('2026-08-17T10:33:14.000Z'),
+        },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/public/${placeId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      reviewsFirstPage: Array<{ body: string; visitedAt: string | null }>;
+    };
+    expect(body.reviewsFirstPage.map((review) => review.body)).toEqual([
+      '업데이트 신규 리뷰',
+      '최초 크롤 리뷰',
+    ]);
+    expect(body.reviewsFirstPage[0]?.visitedAt).toBe('8.15.토');
+  });
+
   it('GET /restaurants/public/:placeId/reviews — tip filter matches by normalized term', async () => {
     const { id, placeId } = await seedRestaurant({ name: '팁필터집' });
     // 팁이 다른 두 리뷰 + 분석 안 된 리뷰 하나.
@@ -1334,8 +1380,7 @@ describe('Public restaurant routes', () => {
       select: { id: true },
     });
 
-    // 양쪽에 1건씩 visitorReview. DC 가 먼저 수집(fetchedAt 1/15 < 2/1) —
-    // asc(저장 순서) 정렬 검증.
+    // 양쪽에 1건씩 visitorReview. 방문일이 없을 때는 최신 수집 시각 폴백.
     await app.prisma.visitorReview.create({
       data: {
         restaurantId: naverRow.id,
@@ -1412,12 +1457,11 @@ describe('Public restaurant routes', () => {
       'https://dc.example/p1.jpg',
     ]);
 
-    // 리뷰는 두 출처가 합쳐서 fetchedAt asc — 크롤러가 최신 작성글부터 순서대로
-    // 저장하므로 asc = 저장 순서 = 작성일 최신순 (bb9cd41 에서 desc → asc 교정).
-    // 먼저 수집된 DC(1/15) 가 Naver(2/1) 보다 위. 2개라 첫 페이지(10) 한 번에.
+    // 방문일이 없으므로 fetchedAt desc 폴백. 최근 수집된 Naver(2/1)가
+    // DC(1/15)보다 위에 온다. 2개라 첫 페이지(10) 한 번에.
     expect(body.reviewsFirstPage).toHaveLength(2);
-    expect(body.reviewsFirstPage[0]?.source).toBe('diningcode');
-    expect(body.reviewsFirstPage[1]?.source).toBe('naver');
+    expect(body.reviewsFirstPage[0]?.source).toBe('naver');
+    expect(body.reviewsFirstPage[1]?.source).toBe('diningcode');
     expect(body.reviewCounts.all).toBe(2);
 
     // 출처별 별점/리뷰수 노출.

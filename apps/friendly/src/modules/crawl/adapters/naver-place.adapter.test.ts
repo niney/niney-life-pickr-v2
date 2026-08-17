@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   __test_extractBaeminMenuGroups as extractBaeminMenuGroups,
   __test_flattenMenuGroups as flattenMenuGroups,
+  __test_isVisitorReviewsGraphqlRequestBody as isVisitorReviewsGraphqlRequestBody,
   __test_parseVisitorReviewsFromCaptured as parseVisitorReviews,
 } from './naver-place.playwright.adapter.js';
 
@@ -119,6 +120,29 @@ describe('visitor review media extraction', () => {
     const reviews = parseVisitorReviews(onlyImages);
     expect(reviews).toHaveLength(1);
     expect(reviews[0]!.videos).toEqual([]);
+  });
+});
+
+describe('visitor review pagination response guard', () => {
+  it('accepts only getVisitorReviews operations, not unrelated GraphQL traffic', () => {
+    expect(
+      isVisitorReviewsGraphqlRequestBody({
+        operationName: 'getVisitorReviews',
+        variables: { input: { businessId: '19878532', after: 'cursor' } },
+      }),
+    ).toBe(true);
+    expect(
+      isVisitorReviewsGraphqlRequestBody([
+        { operationName: 'getUnifiedCoupons', variables: { channelId: '19878532' } },
+        { operationName: 'getVisitorReviews', variables: { input: { sort: 'recent' } } },
+      ]),
+    ).toBe(true);
+    expect(
+      isVisitorReviewsGraphqlRequestBody({
+        operationName: 'getUnifiedCoupons',
+        query: 'query getUnifiedCoupons { unifiedCoupons { total } }',
+      }),
+    ).toBe(false);
   });
 });
 
