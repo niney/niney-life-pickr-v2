@@ -94,4 +94,45 @@ describe('voteGuestStore', () => {
 
     expect(mem.data.get('vote-guest-v1')).toContain('민수');
   });
+
+  it('앱 시나리오 — 비동기(AsyncStorage형) 스토리지의 저장분이 주입 시 복원된다', async () => {
+    // 앱 재시작을 흉내낸다: AsyncStorage 처럼 getItem 이 Promise 를 돌려주는
+    // 스토리지에 이전 세션의 persist JSON 이 이미 들어 있고, entry 가 주입을
+    // 호출하는 시점은 스토어 모듈 평가(=1차 rehydrate, 빈 스토리지) 이후다.
+    // 주입이 재-rehydrate 를 걸어 저장분을 실제로 되살리는지가 핵심 —
+    // 실기기 확인 전에 코드 레벨에서 좁힐 수 있는 마지막 갭.
+    const persisted = JSON.stringify({
+      state: {
+        guestId: 'app-guest-restored-uuid',
+        name: '복원이름',
+        ballots: { tokApp: { optionIds: ['o7'], votedAt: 1_755_300_000_000 } },
+      },
+      version: 1,
+    });
+    const data = new Map<string, string>([['vote-guest-v1', persisted]]);
+    const asyncStorage = {
+      getItem: async (name: string) => data.get(name) ?? null,
+      setItem: async (name: string, value: string) => {
+        data.set(name, value);
+      },
+      removeItem: async (name: string) => {
+        data.delete(name);
+      },
+    };
+
+    setVoteGuestStorage(asyncStorage);
+
+    // AsyncStorage 는 비동기라 복원까지 한 틱 걸린다 — 전이를 기다린다.
+    await vi.waitFor(() => {
+      expect(useVoteGuestStore.getState().name).toBe('복원이름');
+    });
+    expect(useVoteGuestStore.getState().guestId).toBe('app-guest-restored-uuid');
+    expect(useVoteGuestStore.getState().ballots.tokApp?.optionIds).toEqual(['o7']);
+
+    // 복원 이후의 쓰기도 같은 비동기 스토리지로 흘러간다.
+    useVoteGuestStore.getState().setName('이후이름');
+    await vi.waitFor(() => {
+      expect(data.get('vote-guest-v1')).toContain('이후이름');
+    });
+  });
 });
