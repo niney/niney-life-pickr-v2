@@ -207,6 +207,61 @@ describe('RestaurantService', () => {
     // assert ours are gone instead.
     expect(summariesLeft).toBeGreaterThanOrEqual(0);
   });
+
+  it('list: searches canonical rows across source names, categories, and ids', async () => {
+    const marker = stamp();
+    const primary = await service.upsertRestaurantFromCrawl(
+      placeData({
+        placeId: `${marker}-primary`,
+        name: `대표상호-${marker}`,
+        category: '한식',
+      }),
+    );
+    const aliasPlaceId = `${marker}-source-alias`;
+    const alias = await service.upsertRestaurantFromCrawl(
+      placeData({
+        placeId: aliasPlaceId,
+        name: `HiddenAlias-${marker}`,
+        category: '이탈리안 레스토랑',
+      }),
+    );
+    const primaryRow = await app.prisma.restaurant.findUniqueOrThrow({
+      where: { id: primary.id },
+      select: { canonicalId: true },
+    });
+    await app.prisma.restaurant.update({
+      where: { id: alias.id },
+      data: { canonicalId: primaryRow.canonicalId },
+    });
+
+    const byAliasAndCategory = await service.list({
+      q: `hiddenalias-${marker} 이탈리안`,
+      limit: 25,
+      offset: 0,
+      sort: 'recent',
+    });
+    expect(byAliasAndCategory.total).toBe(1);
+    expect(byAliasAndCategory.items[0]?.canonicalId).toBe(primaryRow.canonicalId);
+    // 검색에 직접 걸리지 않은 primary source 도 통합 행에 그대로 남아야 한다.
+    expect(byAliasAndCategory.items[0]?.sources).toHaveLength(2);
+
+    const byPlaceId = await service.list({
+      q: aliasPlaceId.toUpperCase(),
+      limit: 25,
+      offset: 0,
+      sort: 'recent',
+    });
+    expect(byPlaceId.total).toBe(1);
+    expect(byPlaceId.items[0]?.canonicalId).toBe(primaryRow.canonicalId);
+
+    const noMatch = await service.list({
+      q: `not-found-${marker}`,
+      limit: 25,
+      offset: 0,
+      sort: 'recent',
+    });
+    expect(noMatch).toMatchObject({ items: [], total: 0, limit: 25, offset: 0 });
+  });
 });
 
 describe('Restaurant routes — auth guards', () => {

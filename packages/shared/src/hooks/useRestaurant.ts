@@ -122,15 +122,25 @@ const patchSummaryInListCaches = (
 // restaurants page after a crawl completes (or after recrawl/update kicks
 // off, since the row stays present but counts change).
 //
-// 페이징 — queryKey 에 limit/offset/sort 가 들어가서 페이지/정렬 변경마다 다른
-// 캐시 인스턴스. placeholderData 로 페이지 전환 시 깜빡임 방지. SSE patch 는
-// 모든 인스턴스를 prefix 매칭으로 갱신 (patchSummaryInListCaches 참고).
-export const useRestaurantList = (query: Partial<RestaurantListQueryType> = {}) =>
-  useQuery({
-    queryKey: ['restaurant', 'list', query.limit ?? 25, query.offset ?? 0, query.sort ?? 'recent'],
+// 검색/페이징 — queryKey 에 q/limit/offset/sort 가 들어가서 조합마다 다른 캐시
+// 인스턴스. 같은 검색어 안에서 페이지/정렬만 바뀔 때는 placeholderData 로 전환
+// 깜빡임을 막되, 검색어가 바뀌면 이전 검색 결과를 잠깐 보여주지 않는다. SSE
+// patch 는 모든 인스턴스를 prefix 매칭으로 갱신 (patchSummaryInListCaches 참고).
+export const useRestaurantList = (query: Partial<RestaurantListQueryType> = {}) => {
+  const q = query.q?.trim() ?? '';
+  return useQuery({
+    queryKey: [
+      'restaurant',
+      'list',
+      q,
+      query.limit ?? 25,
+      query.offset ?? 0,
+      query.sort ?? 'recent',
+    ],
     queryFn: () => restaurantApi.list(query),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) => (previousQuery?.queryKey[2] === q ? prev : undefined),
   });
+};
 
 // 어드민 홈 대시보드 지역 통계. 서버 60s TTL 과 맞춰 staleTime 30s — 대시보드를
 // 자주 드나들어도 분당 두 번 정도만 fetch.

@@ -1166,6 +1166,38 @@ export class RestaurantService {
         suggestion,
       });
     }
+    // 검색은 canonical 조립과 전역 병합 후보 계산이 끝난 뒤 적용한다. 원본
+    // Restaurant 조회에 where 를 걸면 검색에 걸린 source 만 남아 같은 canonical 의
+    // 다른 source/리뷰 집계가 사라지고 candidateCount 도 검색 범위에 종속되기 때문.
+    // 공백으로 나눈 토큰은 AND, 각 토큰은 통합명/출처별 이름·카테고리·식별자 중
+    // 어느 필드에서든 부분 일치하면 된다.
+    const searchTokens = (query.q ?? '')
+      .normalize('NFKC')
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const filteredItems =
+      searchTokens.length === 0
+        ? items
+        : items.filter((item) => {
+            const searchable = [
+              item.canonicalId,
+              item.name,
+              item.primaryCategory ?? '',
+              ...item.sources.flatMap((source) => [
+                source.restaurantId,
+                source.sourceId,
+                source.placeId ?? '',
+                source.name,
+                source.category ?? '',
+              ]),
+            ]
+              .join(' ')
+              .normalize('NFKC')
+              .toLowerCase();
+            return searchTokens.every((token) => searchable.includes(token));
+          });
+
     // 정렬 — query.sort 에 따라. null 값(분석 안 된 가게) 은 항상 가장 뒤.
     // recent 는 ISO 문자열 비교로 desc(=최근이 위).
     const cmpRecent = (a: CanonicalListItemType, b: CanonicalListItemType): number =>
@@ -1194,24 +1226,24 @@ export class RestaurantService {
       };
     switch (query.sort) {
       case 'satisfaction':
-        items.sort(byKeyDesc((it) => it.avgSatisfactionScore));
+        filteredItems.sort(byKeyDesc((it) => it.avgSatisfactionScore));
         break;
       case 'positive':
-        items.sort(byKeyDesc((it) => it.avgSentimentScore));
+        filteredItems.sort(byKeyDesc((it) => it.avgSentimentScore));
         break;
       case 'negativeRatio':
         // summaryDone===0 → 분모 없음 → null → nulls-last. 그 외엔 negative 비율 asc.
-        items.sort(
+        filteredItems.sort(
           byKeyAsc((it) => (it.summaryDone === 0 ? null : it.negativeCount / it.summaryDone)),
         );
         break;
       case 'recent':
       default:
-        items.sort(cmpRecent);
+        filteredItems.sort(cmpRecent);
         break;
     }
-    const total = items.length;
-    const sliced = items.slice(query.offset, query.offset + query.limit);
+    const total = filteredItems.length;
+    const sliced = filteredItems.slice(query.offset, query.offset + query.limit);
     return { items: sliced, total, limit: query.limit, offset: query.offset };
   }
 
