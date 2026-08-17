@@ -33,6 +33,7 @@ import {
   PlaceParseError,
   PlaywrightFetchError,
   type ExistingReviewKeys,
+  type VisitorPaginationResult,
 } from './adapters/naver-place.playwright.adapter.js';
 import { searchPlacesViaMapNaver } from './adapters/naver-search.http.adapter.js';
 import { searchCatchtablePlaces } from './adapters/catchtable-search.playwright.adapter.js';
@@ -1120,6 +1121,7 @@ export class CrawlService {
 
     let restaurantId: string | null = null;
     let existingKeys: ExistingReviewKeys | undefined;
+    let visitorPagination: VisitorPaginationResult | null = null;
 
     // The persistence path is fire-and-forget so it doesn't block the next
     // page click — but we must still serialize *within* a job, since two
@@ -1223,6 +1225,16 @@ export class CrawlService {
           this.emit(jobId, { type: 'visitor_progress', count, page }),
         onVisitorBatch: (batch) => persistBatch(batch),
         existingReviewKeys: existingKeys,
+        onVisitorPagination: (result) => {
+          visitorPagination = result;
+          this.logStep(
+            jobId,
+            'paginating_visitor',
+            result.complete ? 'info' : 'warn',
+            result.complete ? '리뷰 페이지네이션 완료' : '리뷰 페이지네이션 부분 완료',
+            { ...result },
+          );
+        },
       });
 
       const fetchedAt = new Date().toISOString();
@@ -1264,6 +1276,7 @@ export class CrawlService {
         durationMs: Date.now() - startedAt,
         reviewCount: data.visitorReviews.length,
         restaurantId,
+        visitorPagination,
       });
       await this.finishJobRun(jobId, {
         status: 'done',
@@ -1271,6 +1284,7 @@ export class CrawlService {
           durationMs: Date.now() - startedAt,
           reviewCount: data.visitorReviews.length,
           restaurantId,
+          visitorPagination,
         },
       });
 

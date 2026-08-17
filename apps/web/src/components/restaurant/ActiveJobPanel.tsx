@@ -6,6 +6,7 @@ import {
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
 } from '@repo/shared';
+import { compareReviewRecencyDesc } from '@repo/utils';
 import type {
   CrawlModeType,
   CrawlNaverPlaceResultType,
@@ -236,7 +237,7 @@ export const ActiveJobPanel = ({
               summary: null,
             })),
           ...prev.reviews,
-        ];
+        ].sort(compareReviewRecencyDesc);
         return { ...prev, reviews: merged };
       },
     );

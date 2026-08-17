@@ -8,7 +8,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-extra';
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Locator, Page } from 'playwright';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import type {
   BlogReviewType,
@@ -33,12 +33,8 @@ export interface AdapterHooks {
   onStage?: (stage: CrawlStageType) => void;
   onPartial?: (data: NaverPlaceDataType) => void;
   onVisitorProgress?: (count: number, page: number) => void;
-  // Emitted once per "더보기" page after parsing the wire batch — the caller
-  // can persist + summarize concurrently with the next click. Fire-and-forget:
-  // the adapter does not await the callback. Initial Apollo-rendered reviews
-  // (~20 from server-side render) are NOT delivered here; they're returned in
-  // the final result instead so the caller can persist them once at the end
-  // (the dedup is idempotent).
+  // Emitted for the SSR initial page and once per review pager response. The
+  // caller can persist + summarize concurrently with the next click.
   onVisitorBatch?: (batch: VisitorReviewType[]) => void;
   // Update mode: caller-supplied set of keys for reviews already in the DB.
   // When a "더보기" wire batch contains 100% known reviews, we stop
@@ -46,11 +42,33 @@ export interface AdapterHooks {
   // a page made entirely of seen rows the rest is older than what we have.
   // Keys missing both id and contentHash are treated as new (conservative).
   existingReviewKeys?: ExistingReviewKeys;
+  // Exactly once after the visitor pager stops. `complete=false` means the
+  // initial/new pages are usable but a selector/response/cap prevented us from
+  // proving that every page up to the known-review boundary was consumed.
+  onVisitorPagination?: (result: VisitorPaginationResult) => void;
 }
 
 export interface ExistingReviewKeys {
   externalIds: ReadonlySet<string>;
   contentHashes: ReadonlySet<string>;
+}
+
+export type VisitorPaginationStopReason =
+  | 'no_more'
+  | 'known_boundary'
+  | 'disabled'
+  | 'max_pages'
+  | 'button_missing'
+  | 'click_failed'
+  | 'response_missing'
+  | 'invalid_response';
+
+export interface VisitorPaginationResult {
+  complete: boolean;
+  reason: VisitorPaginationStopReason;
+  pagesAttempted: number;
+  pagesFetched: number;
+  reviewsFetched: number;
 }
 
 export class CrawlCancelledError extends Error {
@@ -1022,6 +1040,105 @@ const forceRecentSort = (body: unknown): { body: unknown; changed: boolean } => 
   return { body, changed };
 };
 
+const isVisitorReviewsGraphqlRequestBody = (body: unknown): boolean => {
+  const operations = Array.isArray(body) ? body : [body];
+  return operations.some((operation) => {
+    if (!isObject(operation)) return false;
+    const operationName = operation['operationName'];
+    if (typeof operationName === 'string' && /visitorReviews/i.test(operationName)) return true;
+    const query = operation['query'];
+    return typeof query === 'string' && /\bvisitorReviews\b/.test(query);
+  });
+};
+
+export const __test_isVisitorReviewsGraphqlRequestBody =
+  isVisitorReviewsGraphqlRequestBody;
+
+const isVisitorReviewsGraphqlPostData = (raw: string | null): boolean => {
+  if (!raw) return false;
+  try {
+    return isVisitorReviewsGraphqlRequestBody(JSON.parse(raw));
+  } catch {
+    return false;
+  }
+};
+
+const reviewBatchIsKnown = (
+  reviews: VisitorReviewType[],
+  known: ExistingReviewKeys | undefined,
+): boolean =>
+  Boolean(
+    known &&
+      reviews.length > 0 &&
+      reviews.every((review) =>
+        review.externalId && known.externalIds.has(review.externalId)
+          ? true
+          : known.contentHashes.has(contentHashOfReview(review)),
+      ),
+  );
+
+// Naver currently renders multiple unrelated "더보기" controls below the
+// review list. The old global `matches.last()` selected another section's
+// "펼쳐서 더보기" and produced no review request. Resolve the review section
+// first, then accept only its exact pager control.
+const findVisitorReviewSection = async (page: Page): Promise<Locator | null> => {
+  const headers = page.locator('h2.place_section_header');
+  const headerCount = await headers.count().catch(() => 0);
+  for (let i = 0; i < headerCount; i += 1) {
+    const header = headers.nth(i);
+    const text = await header.innerText().catch(() => '');
+    if (!/(?:^|\s)(?:방문자\s*)?리뷰\s*[\d,]+/.test(text.replace(/\s+/g, ' '))) continue;
+    const section = header.locator(
+      'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " place_section ")][1]',
+    );
+    if ((await section.count().catch(() => 0)) > 0) return section;
+  }
+
+  // Header copy may change independently. Fall back to the list that contains
+  // Naver reviewer profile links, then walk to its stable place_section shell.
+  const lists = page.locator('ul:has(> li.place_apply_pui)');
+  const listCount = await lists.count().catch(() => 0);
+  for (let i = 0; i < listCount; i += 1) {
+    const list = lists.nth(i);
+    const profileLinks = list.locator('a[href*="/my/"][href*="/review"]');
+    if ((await profileLinks.count().catch(() => 0)) === 0) continue;
+    const section = list.locator(
+      'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " place_section ")][1]',
+    );
+    if ((await section.count().catch(() => 0)) > 0) return section;
+  }
+  return null;
+};
+
+const firstVisible = async (locator: Locator): Promise<Locator | null> => {
+  const count = await locator.count().catch(() => 0);
+  for (let i = 0; i < count; i += 1) {
+    const candidate = locator.nth(i);
+    if (await candidate.isVisible().catch(() => false)) return candidate;
+  }
+  return null;
+};
+
+const findVisitorReviewMoreButton = async (page: Page): Promise<Locator | null> => {
+  const section = await findVisitorReviewSection(page);
+  if (!section) return null;
+
+  // Current markup: place_section_content's next sibling contains the pager.
+  // This structural scope lets us safely support a plain "더보기" fallback
+  // without matching the same text inside individual review bodies.
+  const pagerShell = section.locator(':scope > .place_section_content + div');
+  const structural = pagerShell.getByRole('button', {
+    name: /^(?:펼쳐서\s*)?(?:리뷰\s*)?더보기$/,
+  });
+  const structuralMatch = await firstVisible(structural);
+  if (structuralMatch) return structuralMatch;
+
+  // Copy/class fallback, still confined to the review section and exact name.
+  return firstVisible(
+    section.getByRole('button', { name: /^(?:(?:펼쳐서|리뷰)\s*)?더보기$/ }),
+  );
+};
+
 const fetchVisitorReviewsViaSubpage = async (
   ctx: BrowserContext,
   placeId: string,
@@ -1104,6 +1221,7 @@ const fetchVisitorReviewsViaSubpage = async (
     // starts. Result: req1=document → batch 0, req2=graphql → batch 1, ...
     // matches the "fetch == save" invariant the persistence path expects.
     const ssrSeenIds = new Set<string>();
+    let ssrInitialCount = 0;
     let resolveSsr: () => void = () => undefined;
     const ssrReady = new Promise<void>((resolve) => {
       resolveSsr = resolve;
@@ -1128,6 +1246,7 @@ const fetchVisitorReviewsViaSubpage = async (
         if (!isObject(state)) return;
         const initial = extractVisitorReviewsFromState(state, placeId, ssrSeenIds);
         if (initial.length === 0) return;
+        ssrInitialCount = initial.length;
         // eslint-disable-next-line no-console
         console.log(`[crawl-debug] visitor SSR initial batch from document: ${initial.length}`);
         hooks?.onVisitorBatch?.(initial);
@@ -1201,25 +1320,13 @@ const fetchVisitorReviewsViaSubpage = async (
       await writeFile(bodiesFile, JSON.stringify(visitorBodies, null, 2), 'utf-8');
     };
 
-    let apolloState: unknown;
-    // Naver uses both inline "펼쳐서 더보기" (expand a single review body)
-    // and a pager more-button. Try multiple selectors; prefer the LAST match
-    // because the pager sits below all the inline expand buttons.
-    const candidates = [
-      'a[role="button"]:has-text("리뷰 더보기")',
-      'button:has-text("리뷰 더보기")',
-      'a[role="button"]:has-text("더보기")',
-      'button:has-text("더보기")',
-    ];
-
-    const findMoreButton = async () => {
-      for (const sel of candidates) {
-        const matches = page.locator(sel);
-        const count = await matches.count().catch(() => 0);
-        if (count > 0) return { sel, target: matches.last() };
-      }
-      return null;
-    };
+    const paginationBodies: unknown[] = [];
+    let pagesAttempted = 0;
+    let pagesFetched = 0;
+    let reviewsFetched = ssrInitialCount;
+    let paginationReason: VisitorPaginationStopReason =
+      VISITOR_MAX_PAGES > 0 ? 'max_pages' : 'disabled';
+    let paginationComplete = false;
 
     if (VISITOR_MAX_PAGES > 0) {
       hooks?.onStage?.('paginating_visitor');
@@ -1235,43 +1342,47 @@ const fetchVisitorReviewsViaSubpage = async (
       // pushed as the initial batch (DB would dedup either way, but we save
       // a roundtrip and keep the SSE event sequence clean).
       const pageBatchSeenIds = new Set<string>(ssrSeenIds);
-      let pages = 0;
-      let consecutiveFailures = 0;
-      while (pages < VISITOR_MAX_PAGES) {
+      while (pagesFetched < VISITOR_MAX_PAGES) {
         throwIfAborted(hooks?.signal);
         await page
           .evaluate(() => window.scrollTo(0, document.body.scrollHeight))
           .catch(() => undefined);
         await page.waitForTimeout(200);
 
-        const more = await findMoreButton();
+        const more = await findVisitorReviewMoreButton(page);
         if (!more) {
+          // 첫 SSR이 10건 미만이면 자연 종료로 볼 수 있다. 10건을 꽉 채웠는데
+          // pager가 없으면 DOM 변경 가능성이 있어 부분 완료로 명시한다.
+          paginationComplete = pagesFetched > 0 || ssrInitialCount < 10;
+          paginationReason = paginationComplete ? 'no_more' : 'button_missing';
           // eslint-disable-next-line no-console
           console.log(
-            `[crawl-debug] visitor pagination done — no "더보기" after ${pages} click(s)`,
+            `[crawl-debug] visitor pagination ${paginationReason} after ${pagesFetched} page(s)`,
           );
           break;
         }
 
-        // Pre-arm response wait so we don't miss the wire.
-        const beforeCaptured = captured.length;
+        // Pre-arm the exact getVisitorReviews response. Waiting for any
+        // GraphQL call can be satisfied by coupons/reactions and falsely mark
+        // a click as a review page.
         const wireWait = page
           .waitForResponse(
             (res) =>
               res.url().includes('api.place.naver.com/graphql') &&
-              res.request().method() === 'POST',
+              res.request().method() === 'POST' &&
+              isVisitorReviewsGraphqlPostData(res.request().postData()),
             { timeout: 7_000 },
           )
           .catch(() => null);
 
         let clicked = false;
         try {
-          await more.target.scrollIntoViewIfNeeded({ timeout: 2_000 });
-          await more.target.click({ timeout: 3_000 });
+          await more.scrollIntoViewIfNeeded({ timeout: 2_000 });
+          await more.click({ timeout: 3_000 });
           clicked = true;
         } catch {
           try {
-            await more.target.evaluate((el) => (el as HTMLElement).click());
+            await more.evaluate((el) => (el as HTMLElement).click());
             clicked = true;
           } catch {
             // unable to click — bail out
@@ -1279,72 +1390,71 @@ const fetchVisitorReviewsViaSubpage = async (
         }
 
         if (!clicked) {
+          paginationReason = 'click_failed';
           // eslint-disable-next-line no-console
           console.log(
-            `[crawl-debug] visitor pagination: click failed at page ${pages + 1}, stopping`,
+            `[crawl-debug] visitor pagination: click failed at page ${pagesFetched + 1}, stopping`,
           );
           break;
         }
 
-        await wireWait;
-        await page.waitForTimeout(computeVisitorPageDelay());
-
-        const newResponses = captured.length - beforeCaptured;
-        pages += 1;
-        if (newResponses === 0) {
-          consecutiveFailures += 1;
+        pagesAttempted += 1;
+        const wireResponse = await wireWait;
+        if (!wireResponse) {
+          paginationReason = 'response_missing';
           // eslint-disable-next-line no-console
           console.log(
-            `[crawl-debug] visitor page ${pages}: no new response (consecutive=${consecutiveFailures})`,
+            `[crawl-debug] visitor page ${pagesFetched + 1}: getVisitorReviews response missing`,
           );
-          if (consecutiveFailures >= 2) break;
-        } else {
-          consecutiveFailures = 0;
+          break;
         }
 
-        // Emit a running count after each successful page. We compute it
-        // optimistically from wire responses we've already captured plus
-        // Apollo's initial set — Apollo cache won't reflect "더보기" pages
-        // (Naver SPA doesn't writeQuery), so wire is what grows.
-        if (hooks?.onVisitorProgress) {
-          const probeIds = new Set<string>();
-          const wireSoFar = parseVisitorReviewsFromCaptured(
-            captured.map((c) => c.body),
-            probeIds,
-          );
-          hooks.onVisitorProgress(wireSoFar.length, pages);
+        const wireBody = await wireResponse.json().catch(() => null);
+        if (!wireBody) {
+          paginationReason = 'invalid_response';
+          // eslint-disable-next-line no-console
+          console.log(`[crawl-debug] visitor page ${pagesFetched + 1}: invalid JSON response`);
+          break;
         }
+        paginationBodies.push(wireBody);
 
         // Parse only the responses that arrived from this click and emit
         // them as a discrete batch. The persistence layer can write them to
         // the DB and kick off AI summarization while the next click is in
         // flight — the whole point of the partial-save design.
-        if (newResponses > 0 && (hooks?.onVisitorBatch || hooks?.existingReviewKeys)) {
-          const newWireBodies = captured.slice(beforeCaptured).map((c) => c.body);
-          const newBatch = parseVisitorReviewsFromCaptured(newWireBodies, pageBatchSeenIds);
-          if (newBatch.length > 0) {
-            hooks?.onVisitorBatch?.(newBatch);
+        const newBatch = parseVisitorReviewsFromCaptured([wireBody], pageBatchSeenIds);
+        if (newBatch.length === 0) {
+          paginationReason = 'invalid_response';
+          // eslint-disable-next-line no-console
+          console.log(`[crawl-debug] visitor page ${pagesFetched + 1}: no parsable reviews`);
+          break;
+        }
 
-            // Update mode: if the batch we just got is 100% reviews we've
-            // already stored, the rest of pagination is older still — bail.
-            const known = hooks?.existingReviewKeys;
-            if (known) {
-              const allKnown = newBatch.every((r) => {
-                if (r.externalId && known.externalIds.has(r.externalId)) return true;
-                return known.contentHashes.has(contentHashOfReview(r));
-              });
-              if (allKnown) {
-                // eslint-disable-next-line no-console
-                console.log(
-                  `[crawl-debug] update mode: page ${pages} entirely known — stop paginating`,
-                );
-                break;
-              }
-            }
-          }
+        pagesFetched += 1;
+        reviewsFetched += newBatch.length;
+        hooks?.onVisitorProgress?.(reviewsFetched, pagesFetched);
+        hooks?.onVisitorBatch?.(newBatch);
+
+        // Update mode: SSR 10건이 전부 known이어도 과거 부분 실패로 그 바로
+        // 아래에 미수집 gap이 있을 수 있다. 따라서 최소 첫 wire 페이지까지
+        // 확인하고, wire 배치가 100% known일 때만 연속 경계로 판단한다.
+        if (reviewBatchIsKnown(newBatch, hooks?.existingReviewKeys)) {
+          paginationReason = 'known_boundary';
+          paginationComplete = true;
+          // eslint-disable-next-line no-console
+          console.log(
+            `[crawl-debug] update mode: page ${pagesFetched} entirely known — stop paginating`,
+          );
+          break;
+        }
+
+        // Wait only when another request may follow. A known boundary exits
+        // immediately, while active pagination keeps the anti-rate-limit jitter.
+        if (pagesFetched < VISITOR_MAX_PAGES) {
+          await page.waitForTimeout(computeVisitorPageDelay());
         }
       }
-      if (pages >= VISITOR_MAX_PAGES) {
+      if (pagesFetched >= VISITOR_MAX_PAGES && paginationReason === 'max_pages') {
         // eslint-disable-next-line no-console
         console.log(
           `[crawl-debug] visitor pagination capped at CRAWL_VISITOR_MAX_PAGES=${VISITOR_MAX_PAGES}`,
@@ -1354,7 +1464,15 @@ const fetchVisitorReviewsViaSubpage = async (
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
     }
 
-    apolloState = await snapshotApolloState();
+    hooks?.onVisitorPagination?.({
+      complete: paginationComplete,
+      reason: paginationReason,
+      pagesAttempted,
+      pagesFetched,
+      reviewsFetched,
+    });
+
+    const apolloState = await snapshotApolloState();
     await dumpApolloState(VISITOR_MAX_PAGES > 0 ? 'after' : 'single', apolloState);
 
     if (VISITOR_HOLD_MS > 0) {
@@ -1375,7 +1493,7 @@ const fetchVisitorReviewsViaSubpage = async (
       ? extractVisitorReviewsFromState(apolloState, placeId, seenIds)
       : [];
     const fromWire = parseVisitorReviewsFromCaptured(
-      captured.map((c) => c.body),
+      [...captured.map((c) => c.body), ...paginationBodies],
       seenIds,
     );
     // eslint-disable-next-line no-console

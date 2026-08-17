@@ -29,7 +29,7 @@ import {
   useResumeSummary,
   useStartCrawl,
 } from '@repo/shared';
-import { formatWonPrice } from '@repo/utils';
+import { compareReviewRecencyDesc, formatWonPrice } from '@repo/utils';
 import type {
   BlogReviewType,
   CrawlModeType,
@@ -55,7 +55,7 @@ import {
 const PAGE_SIZE = 20;
 
 type RatingFilter = 'all' | 1 | 2 | 3 | 4 | 5;
-type SortMode = 'fetchedAt-asc' | 'rating-desc' | 'rating-asc' | 'visitedAt-desc';
+type SortMode = 'visitedAt-desc' | 'fetchedAt-desc' | 'rating-desc' | 'rating-asc';
 type SummaryFilter = 'all' | ReviewSummaryStatusType | 'none';
 
 const RATING_OPTIONS: { value: RatingFilter; label: string }[] = [
@@ -83,8 +83,8 @@ const SELECT_CLASS =
 const DETAIL_SECTION_CONTENT_CLASS = 'p-4 pt-6 sm:p-6 sm:pt-7';
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'fetchedAt-asc', label: '최근 수집순' },
   { value: 'visitedAt-desc', label: '방문일 최신순' },
+  { value: 'fetchedAt-desc', label: '최근 수집순' },
   { value: 'rating-desc', label: '별점 높은순' },
   { value: 'rating-asc', label: '별점 낮은순' },
 ];
@@ -98,31 +98,17 @@ const matchSummaryFilter = (
   return r.summary?.status === filter;
 };
 
-// "YY.M.D.요일" → "YYYY-MM-DD" 정렬 키. 월/일이 zero-pad가 안 돼 있어 원문 그대로
-// 비교하면 "25.8" > "25.12" 로 오판되므로 정규화 필수.
-const visitedSortKey = (v: string | null): string => {
-  if (!v) return '';
-  const m = v.match(/^(\d{2})\.(\d{1,2})\.(\d{1,2})/);
-  if (!m) return '';
-  const [, y, mo, d] = m;
-  return `20${y}-${mo!.padStart(2, '0')}-${d!.padStart(2, '0')}`;
-};
-
 const sortReviews = (
   list: VisitorReviewWithSummaryType[],
   mode: SortMode,
 ): VisitorReviewWithSummaryType[] => {
   const arr = [...list];
   switch (mode) {
-    case 'fetchedAt-asc':
-      // 어댑터가 SSR 초기(최신 방문) → 페이지 더보기(옛날) 순으로 즉시 저장하므로
-      // fetchedAt asc 가 곧 "Naver가 최신순으로 내려준 수집 순서".
-      arr.sort((a, b) => a.fetchedAt.localeCompare(b.fetchedAt));
-      break;
     case 'visitedAt-desc':
-      arr.sort((a, b) =>
-        visitedSortKey(b.visitedAt).localeCompare(visitedSortKey(a.visitedAt)),
-      );
+      arr.sort(compareReviewRecencyDesc);
+      break;
+    case 'fetchedAt-desc':
+      arr.sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
       break;
     case 'rating-desc':
       arr.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
@@ -305,7 +291,7 @@ const VisitorReviewsSection = ({
 }) => {
   const [rating, setRating] = useState<RatingFilter>('all');
   const [summary, setSummary] = useState<SummaryFilter>('all');
-  const [sort, setSort] = useState<SortMode>('fetchedAt-asc');
+  const [sort, setSort] = useState<SortMode>('visitedAt-desc');
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {

@@ -21,7 +21,7 @@ import {
   useRestaurantSummaryEvents,
   useStartCrawl,
 } from '@repo/shared';
-import { formatWonPrice } from '@repo/utils';
+import { compareReviewRecencyDesc, formatWonPrice } from '@repo/utils';
 import type {
   BlogReviewType,
   CrawlJobType,
@@ -582,8 +582,8 @@ export const AdminCrawlTestPage = () => {
   // Each new visitor_batch carries the rows that actually landed in the DB
   // (post-dedup) with their server ids — merge them straight into the detail
   // cache instead of invalidating (which would re-GET the whole review list
-  // every batch). New rows prepend with summary:null; ids already present are
-  // skipped. Mirrors the per-review SSE merge in useRestaurantSummaryEvents.
+  // every batch). New rows are merged with summary:null, ids already present are
+  // skipped, then the same visit-date comparator as the detail API is applied.
   // The final stream.result invalidate (effect above) still reconciles totals.
   useEffect(() => {
     const batch = stream.lastPersistedBatch;
@@ -595,7 +595,10 @@ export const AdminCrawlTestPage = () => {
         .filter((r) => !existing.has(r.id))
         .map((r) => ({ ...r, summary: null }));
       if (fresh.length === 0) return prev;
-      return { ...prev, reviews: [...fresh, ...prev.reviews] };
+      return {
+        ...prev,
+        reviews: [...fresh, ...prev.reviews].sort(compareReviewRecencyDesc),
+      };
     });
   }, [stream.lastPersistedBatch, placeId, qc]);
 

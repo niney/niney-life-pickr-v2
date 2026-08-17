@@ -42,7 +42,7 @@ export const HomeTab = ({
     () => detail.menus.slice(0, HOME_MENU_PREVIEW),
     [detail.menus],
   );
-  // reviewsFirstPage 가 이미 fetchedAt desc 로 정렬돼 있음. 분석된 리뷰를
+  // reviewsFirstPage 가 이미 방문일 최신순으로 정렬돼 있음. 분석된 리뷰를
   // 우선 노출하기 위해 한 번 더 stable sort + slice — 첫 페이지(10) 범위라
   // 비용은 무시할 수준.
   const previewReviews: PublicVisitorReviewType[] = useMemo(

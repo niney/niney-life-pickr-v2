@@ -23,6 +23,7 @@ import {
   type TablingSnapshot,
 } from './restaurant.merge.js';
 import { Routes } from '@repo/api-contract';
+import { compareReviewRecencyDesc } from '@repo/utils';
 import { deriveRegion } from './region-derive.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import type {
@@ -1760,11 +1761,10 @@ export class RestaurantService {
 
     if (query.sort === 'rating') {
       // 별점 desc. 별점 null 은 0 으로 떨어져 뒤로 밀린다. 같은 별점에서는
-      // 기본 정렬(fetchedAt asc = 최신순)이 안정성(stable sort) 으로 유지 —
-      // JS Array.sort 는 ES2019 부터 stable 보장.
+      // assemblePublicReviews 의 방문일 최신순이 stable sort 로 유지된다.
       filtered = [...filtered].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     }
-    // recent 는 assemblePublicReviews 에서 이미 fetchedAt asc(=최신순) 로 정렬됨.
+    // recent 는 assemblePublicReviews 에서 방문일 desc(수집일 desc 폴백) 정렬됨.
 
     return {
       items: filtered.slice(query.offset, query.offset + query.limit),
@@ -1808,10 +1808,10 @@ export class RestaurantService {
     return mergePhotos(naverSnap, dcSnap, tbSnap);
   }
 
-  // 세 source 의 reviews 를 합쳐 fetchedAt asc 로 정렬해 돌려준다.
-  // 크롤러가 네이버 최신순(sort=recent)으로 받아 최신글부터 순서대로 저장하므로
-  // fetchedAt asc = 작성일 최신순. (한계: 이후 update 모드로 새로 수집된 리뷰는
-  // fetchedAt 이 더 커서 끝에 붙는다 — 작성일 정렬이 필요하면 visitedAt 파싱 도입.)
+  // 세 source 의 reviews 를 합쳐 실제 방문일 최신순으로 돌려준다. Naver의
+  // `M.D.요일`처럼 연도가 빠진 값은 fetchedAt의 KST 연도로 복원하고, 방문일을
+  // 해석할 수 없는 출처만 fetchedAt desc로 폴백한다. 이 기준을 쓰지 않으면
+  // update 모드로 새로 수집한 리뷰가 최초 크롤 배치 뒤에 숨는다.
   // getPublicDetail 과 getPublicReviews 가 공유. 반환 타입은 inferred —
   // Prisma 의 visitorReviews + summary include 형태가 호출자에 그대로 노출됨.
   private async assemblePublicReviews(placeId: string) {
@@ -1819,7 +1819,7 @@ export class RestaurantService {
       where: { placeId },
       include: {
         visitorReviews: {
-          orderBy: { fetchedAt: 'asc' },
+          orderBy: { fetchedAt: 'desc' },
           include: { summary: true },
         },
       },
@@ -1830,7 +1830,7 @@ export class RestaurantService {
       where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
       include: {
         visitorReviews: {
-          orderBy: { fetchedAt: 'asc' },
+          orderBy: { fetchedAt: 'desc' },
           include: { summary: true },
         },
       },
@@ -1846,7 +1846,7 @@ export class RestaurantService {
       },
       include: {
         visitorReviews: {
-          orderBy: { fetchedAt: 'asc' },
+          orderBy: { fetchedAt: 'desc' },
           include: { summary: true },
         },
       },
@@ -1869,7 +1869,7 @@ export class RestaurantService {
       ? tbRow.visitorReviews.map((v) => this.toPublicReview(v, 'tabling'))
       : [];
     const reviews: PublicVisitorReviewType[] = [...naverReviews, ...dcReviews, ...tbReviews].sort(
-      (a, b) => +new Date(a.fetchedAt) - +new Date(b.fetchedAt),
+      compareReviewRecencyDesc,
     );
 
     return {
@@ -2370,9 +2370,9 @@ export class RestaurantService {
       where: { placeId },
       include: {
         visitorReviews: {
-          // 어댑터가 SSR 초기(최신 방문) → 페이지 더보기(옛날) 순으로 즉시
-          // persist하므로 fetchedAt asc 가 곧 방문일 desc.
-          orderBy: { fetchedAt: 'asc' },
+          // 방문일 파싱 불가 리뷰의 폴백 순서도 최신 수집 우선이 되게 DB에서
+          // 먼저 desc로 읽고, 아래 공용 비교 함수로 실제 방문일을 최종 정렬한다.
+          orderBy: { fetchedAt: 'desc' },
           include: { summary: true },
         },
       },
@@ -2409,6 +2409,7 @@ export class RestaurantService {
           }
         : null,
     }));
+    reviews.sort(compareReviewRecencyDesc);
 
     return {
       id: r.id,
