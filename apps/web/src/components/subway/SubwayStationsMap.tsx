@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MapPin, Navigation, RotateCw, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { ApiError, useMapPublicConfig } from '@repo/shared';
+import { ApiError, useMapPublicConfig, useMapResearch } from '@repo/shared';
 import type {
   SubwayLineDetailResultType,
   SubwayLineStationItemType,
@@ -10,7 +10,6 @@ import type {
   SubwayTrainPositionItemType,
 } from '@repo/api-contract';
 import {
-  approxDistanceM,
   buildMyLocationMarkerDataUrl,
   buildSubwayStationMarkerDataUrl,
   buildSubwayStopDotDataUrl,
@@ -68,8 +67,7 @@ const RESEARCH_THRESHOLD_M = 500;
 // 자동 재조회 최소 줌 — 역 밀도가 낮아 버스(15)보다 완화한 13. 그보다 멀면 자동
 // 조회는 의미가 없어(30그룹 절단만 남음) 수동 버튼으로 강등.
 const AUTO_RESEARCH_MIN_ZOOM = 13;
-// 자동 재조회 최소 간격 — 트레일링 예약이라 마지막 이동은 반드시 조회된다.
-const AUTO_RESEARCH_MIN_INTERVAL_MS = 1_200;
+// (자동 재조회 최소 간격 1.2s 는 shared useMapResearch 내장 — 트레일링 예약.)
 
 interface Props {
   // 역명 그룹 — 그룹당 마커 1개(대표 좌표). 2개 이상 호선 = 환승(이중 링).
@@ -348,55 +346,25 @@ export const SubwayStationsMap = ({
     pathResult,
   ]);
 
-  // 사용자가 직접 패닝/줌을 끝낸 시점의 지도 상태 — MapCanvas 가 programmatic
-  // move(fit/flyTo)는 걸러주므로 여기엔 사용자 이동만 쌓인다.
-  const [userView, setUserView] = useState<{ lat: number; lng: number; zoom: number } | null>(
-    null,
-  );
-  const lastAutoAtRef = useRef(0);
-  // 트레일링 예약 타이머 — 스로틀 간격 안에 온 이벤트를 버리지 않고 남은 시간 뒤에
-  // 마지막 좌표로 발사한다(드롭하면 "패닝을 멈췄는데 조회가 영영 안 나가는" 미표시).
-  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
-    },
-    [],
-  );
+  // 재검색 파이프라인(자동 트레일링 스로틀 + 수동 버튼 판정)은 @repo/shared
+  // useMapResearch 단일 정의 — MapCanvas 가 programmatic move(fit/flyTo)는
+  // 걸러주므로 여기엔 사용자 이동만 흘러든다.
+  const {
+    handleUserViewEnd,
+    showResearch: researchOutOfRange,
+    researchCenter,
+  } = useMapResearch({
+    thresholdM: RESEARCH_THRESHOLD_M,
+    minZoom: AUTO_RESEARCH_MIN_ZOOM,
+    myLocation,
+    onAutoResearchAt,
+  });
   const handleViewportChangeEnd = useCallback(
-    (vp: MapViewport) => {
-      const center = { lat: vp.centerLat, lng: vp.centerLng };
-      setUserView({ ...center, zoom: vp.zoom });
-      // 자동 재조회 — 줌이 충분히 가깝고 기준점에서 임계 이상 벗어났을 때만.
-      if (
-        onAutoResearchAt &&
-        myLocation &&
-        vp.zoom >= AUTO_RESEARCH_MIN_ZOOM &&
-        approxDistanceM(myLocation, center) > RESEARCH_THRESHOLD_M
-      ) {
-        if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
-        const fire = () => {
-          lastAutoAtRef.current = Date.now();
-          onAutoResearchAt(center);
-        };
-        const wait = AUTO_RESEARCH_MIN_INTERVAL_MS - (Date.now() - lastAutoAtRef.current);
-        if (wait <= 0) fire();
-        else autoTimerRef.current = setTimeout(fire, wait);
-      }
-    },
-    [onAutoResearchAt, myLocation],
+    (vp: MapViewport) =>
+      handleUserViewEnd({ lat: vp.centerLat, lng: vp.centerLng, zoom: vp.zoom }),
+    [handleUserViewEnd],
   );
-
-  // 수동 재검색 버튼 — 기준점에서 임계 이상 벗어났지만 자동 조건이 아닐 때(줌이
-  // 멀거나 자동 핸들러 미지정). 재검색 직후엔 기준점=지도 중심(dist≈0)이라 숨는다.
-  const autoActive =
-    !!onAutoResearchAt && userView !== null && userView.zoom >= AUTO_RESEARCH_MIN_ZOOM;
-  const showResearch =
-    !!onResearchAt &&
-    !autoActive &&
-    !!myLocation &&
-    userView !== null &&
-    approxDistanceM(myLocation, userView) > RESEARCH_THRESHOLD_M;
+  const showResearch = !!onResearchAt && researchOutOfRange;
 
   // 결과가 갱신되면 전체 마커가 보이게 fit. apiKey 가 늦게 와서 MapCanvas mount
   // 이전에 groups 가 먼저 도착한 경우를 위해 apiKey 도 deps 에 포함한다. 자동
@@ -736,7 +704,7 @@ export const SubwayStationsMap = ({
       {showResearch && !loading && (
         <button
           type="button"
-          onClick={() => onResearchAt?.({ lat: userView!.lat, lng: userView!.lng })}
+          onClick={() => onResearchAt?.(researchCenter!)}
           className="absolute left-1/2 top-3 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md hover:bg-accent"
         >
           <RotateCw className="size-3.5" />

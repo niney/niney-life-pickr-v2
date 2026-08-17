@@ -63,6 +63,7 @@ export * from './hooks/useSettlement.js';
 export * from './hooks/useSettlementContact.js';
 export * from './hooks/useSettlementDraft.js';
 export * from './hooks/useUserLocation.js';
+export * from './hooks/useMapResearch.js';
 export * from './hooks/useLogs.js';
 export * from './hooks/useBus.js';
 export * from './hooks/useBusFavorites.js';
