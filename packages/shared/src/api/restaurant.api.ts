@@ -58,6 +58,7 @@ const adaptPublicDetailResponse = (
 export const restaurantApi = {
   list: (query: Partial<RestaurantListQueryType> = {}) => {
     const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
     if (query.limit !== undefined) params.set('limit', String(query.limit));
     if (query.offset !== undefined) params.set('offset', String(query.offset));
     if (query.sort) params.set('sort', query.sort);

@@ -10,9 +10,11 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  Search,
   Scissors,
   Trash2,
   UtensilsCrossed,
+  X,
   XCircle,
 } from 'lucide-react';
 import {
@@ -337,6 +339,7 @@ export const AdminRestaurantsPage = () => {
 
   // URL 동기화 — 새로고침/뒤로가기/링크 공유 시 페이지·정렬 보존.
   const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get('q')?.trim() ?? '';
   const sortParam = searchParams.get('sort');
   const sortBy: SortKey = (SORT_KEYS as string[]).includes(sortParam ?? '')
     ? (sortParam as SortKey)
@@ -346,6 +349,18 @@ export const AdminRestaurantsPage = () => {
     const n = Number(searchParams.get('pageSize') ?? DEFAULT_PAGE_SIZE);
     return PAGE_SIZE_OPTIONS.includes(n) ? n : DEFAULT_PAGE_SIZE;
   })();
+  const [searchDraftState, setSearchDraftState] = useState({
+    urlQuery: searchQuery,
+    value: searchQuery,
+  });
+  // 브라우저 뒤로/앞으로 가기나 공유 URL 진입으로 q 가 바뀌면, effect 로 state 를
+  // 재설정하지 않고 새 URL 값을 즉시 표시한다. 다음 입력부터 그 URL 을 기준으로
+  // draft state 가 다시 이어진다.
+  const searchDraft =
+    searchDraftState.urlQuery === searchQuery ? searchDraftState.value : searchQuery;
+  const setSearchDraft = (value: string): void => {
+    setSearchDraftState({ urlQuery: searchQuery, value });
+  };
 
   const updateParams = (patch: Record<string, string | number | null>): void => {
     setSearchParams(
@@ -361,7 +376,20 @@ export const AdminRestaurantsPage = () => {
     );
   };
 
+  const handleSearch = (e: FormEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    const q = searchDraft.trim();
+    setSearchDraft(q);
+    updateParams({ q: q || null, page: null });
+  };
+
+  const handleClearSearch = (): void => {
+    setSearchDraft('');
+    updateParams({ q: null, page: null });
+  };
+
   const listQuery = useRestaurantList({
+    q: searchQuery || undefined,
     limit: pageSize,
     offset: (page - 1) * pageSize,
     sort: sortBy,
@@ -613,12 +641,16 @@ export const AdminRestaurantsPage = () => {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>등록된 맛집 ({total})</CardTitle>
+              <CardTitle>
+                등록된 맛집 {searchQuery ? `(검색 결과 ${total}개)` : `(${total})`}
+              </CardTitle>
               <CardDescription>
-                업데이트는 새 리뷰만 추가하고, 재크롤링은 리뷰 전체를 다시 수집·요약합니다.
+                {searchQuery
+                  ? `“${searchQuery}”에 일치하는 통합 가게와 출처를 표시합니다.`
+                  : '업데이트는 새 리뷰만 추가하고, 재크롤링은 리뷰 전체를 다시 수집·요약합니다.'}
               </CardDescription>
             </div>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -642,6 +674,39 @@ export const AdminRestaurantsPage = () => {
               </select>
             </label>
           </div>
+          <form onSubmit={handleSearch} role="search" className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                inputMode="search"
+                maxLength={120}
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                placeholder="가게명·카테고리·Place ID 검색"
+                aria-label="등록된 맛집 검색"
+                className="pl-9 pr-9"
+              />
+              {searchDraft.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  aria-label="검색 초기화"
+                  className="absolute right-2 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={searchDraft.trim().length === 0 && searchQuery.length === 0}
+            >
+              <Search />
+              검색
+            </Button>
+          </form>
         </CardHeader>
         <CardContent>
           {/* 크롤링 작업 트레이 — 진행 중/방금 끝난 모든 작업을 가게 이름과 함께
@@ -682,8 +747,18 @@ export const AdminRestaurantsPage = () => {
               <XCircle className="size-4" /> 목록을 불러올 수 없습니다.
             </div>
           ) : items.length === 0 ? (
-            <div className="flex h-32 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-              아직 등록된 맛집이 없습니다.
+            <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-md border border-dashed text-sm text-muted-foreground">
+              <span>
+                {searchQuery
+                  ? `“${searchQuery}” 검색 결과가 없습니다.`
+                  : '아직 등록된 맛집이 없습니다.'}
+              </span>
+              {searchQuery && (
+                <Button type="button" size="sm" variant="ghost" onClick={handleClearSearch}>
+                  <X />
+                  검색 초기화
+                </Button>
+              )}
             </div>
           ) : (
             <ul className="space-y-3">

@@ -250,11 +250,13 @@ export const recomputeCanonicalAggregates = (
   };
 };
 
-// 어드민 list 페이징/정렬 쿼리. 정렬 키는 클라 기존 옵션과 동일 —
+// 어드민 list 검색/페이징/정렬 쿼리. q 는 canonical 조립이 끝난 통합 행에서
+// 가게명·카테고리·출처별 식별자를 토큰 AND 방식으로 찾는다. 정렬 키는 클라 기존 옵션과 동일 —
 // recent(=lastCrawledAt desc) / satisfaction / positive / negativeRatio.
 // 정렬을 서버로 옮긴 이유: 클라가 페이지 단위로만 정렬하면 페이지 경계에서
 // 순서가 뒤섞여 사용자가 혼란을 겪는다.
 export const RestaurantListQuery = z.object({
+  q: z.string().trim().min(1).max(120).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(25),
   offset: z.coerce.number().int().min(0).default(0),
   sort: z.enum(['recent', 'satisfaction', 'positive', 'negativeRatio']).default('recent'),
