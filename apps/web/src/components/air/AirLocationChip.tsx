@@ -19,7 +19,17 @@ export const AirLocationChip = ({ className }: { className?: string }) => {
 
   const nearest = nearbyQ.data?.items[0] ?? null;
   const measure = nearest?.measure ?? null;
-  const grade = measure?.khaiGrade ?? null;
+  // 통합지수(CAI)는 한 항목만 결측이어도 비므로(실측 673개소 중 84곳) PM2.5 → PM10 등급으로
+  // 폴백해 칩이 '-' 로 비지 않게 한다. 툴팁에는 어느 등급인지 적는다.
+  const gradeSource =
+    measure?.khaiGrade != null
+      ? { grade: measure.khaiGrade, label: '통합지수' }
+      : measure?.pm25Grade != null
+        ? { grade: measure.pm25Grade, label: 'PM2.5' }
+        : measure?.pm10Grade != null
+          ? { grade: measure.pm10Grade, label: 'PM10' }
+          : null;
+  const grade = gradeSource?.grade ?? null;
   const style = grade ? airGradeStyle(grade) : AIR_GRADE_NONE;
   const loading = nearbyQ.isLoading && !nearbyQ.data;
   const failed = nearbyQ.isError && !nearbyQ.data;
@@ -37,7 +47,7 @@ export const AirLocationChip = ({ className }: { className?: string }) => {
   const gradeText = loading ? '…' : failed ? '대기' : noStation ? '근처 측정소 없음' : style.label;
   const pm25 = measure ? formatAirValue('pm25', measure.pm25) : '-';
   const title = nearest
-    ? `내 위치(${location.label ?? '저장 지점'}) 기준 가장 가까운 측정소 ${nearest.stationName} · ${formatDistanceM(nearest.dist)} · 통합지수 ${style.label} · PM10 ${formatAirValue('pm10', measure?.pm10)} / PM2.5 ${pm25} ㎍/㎥`
+    ? `내 위치(${location.label ?? '저장 지점'}) 기준 가장 가까운 측정소 ${nearest.stationName} · ${formatDistanceM(nearest.dist)} · ${gradeSource?.label ?? '등급'} ${style.label} · PM10 ${formatAirValue('pm10', measure?.pm10)} / PM2.5 ${pm25} ㎍/㎥`
     : failed
       ? '내 위치 공기질을 불러오지 못했습니다 — 눌러서 대기정보로 이동'
       : '내 위치 공기질';
