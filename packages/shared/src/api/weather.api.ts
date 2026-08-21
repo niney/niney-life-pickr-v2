@@ -1,5 +1,6 @@
 import {
   Routes,
+  type WeatherAwsResultType,
   type WeatherForecastResultType,
   type WeatherMidResultType,
   type WeatherMidSeaResultType,
@@ -33,5 +34,13 @@ export const weatherApi = {
   midSea: (regId: string) => {
     const params = new URLSearchParams({ regId });
     return apiFetch<WeatherMidSeaResultType>(`${Routes.Weather.midSea}?${params.toString()}`);
+  },
+  // AWS 방재기상관측 매분 자료 — 좌표 기준 가장 가까운 관측소. 서버에 API허브 키가 없으면
+  // enabled=false + 빈 items(200).
+  aws: (lat: number, lng: number, opts: { radius?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+    if (opts.radius !== undefined) params.set('radius', String(opts.radius));
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    return apiFetch<WeatherAwsResultType>(`${Routes.Weather.aws}?${params.toString()}`);
   },
 };

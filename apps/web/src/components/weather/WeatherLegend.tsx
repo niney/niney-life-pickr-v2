@@ -61,6 +61,7 @@ export const WeatherLegend = () => (
           <li>풍향(VEC)은 바람이 불어오는 방향(도) — 16방위 글자로 바꿔 적었습니다. 풍속 약함 &lt;4 · 약간 강함 4~9 · 강함 9~14 · 매우 강함 ≥14 m/s.</li>
           <li>낙뢰(LGT)는 초단기예보에만, kA 단위(0 = 없음). 파고(WAV)는 내륙 격자에서 0.</li>
           <li>이 페이지는 실황·초단기 10분, 단기 30분, 중기 60분 주기로 다시 묻습니다(탭이 보일 때만).</li>
+          <li>근처 관측소(AWS) 줄은 기상청 API허브 방재기상관측 매분 자료 — 가장 가까운 관측소의 1분 값으로 격자 실황을 보강(5분 주기). 서버에 API허브 키가 없으면 생략됩니다.</li>
         </ul>
       </div>
       <div className="flex flex-col gap-1">
@@ -73,6 +74,10 @@ export const WeatherLegend = () => (
           {' · '}
           <a href="https://www.data.go.kr/data/15059468/openapi.do" target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline-offset-2 hover:text-foreground hover:underline">
             기상청_중기예보 조회서비스 (15059468) <ExternalLink className="size-3" />
+          </a>
+          {' · '}
+          <a href="https://apihub.kma.go.kr/" target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline-offset-2 hover:text-foreground hover:underline">
+            기상청 API허브 방재기상관측(AWS) 매분자료 <ExternalLink className="size-3" />
           </a>
           <br />
           공공누리 제1유형(출처표시). 격자(nx, ny)는 기상청 LCC 5km 격자로 위·경도에서 변환했습니다.

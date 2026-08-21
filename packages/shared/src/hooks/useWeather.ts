@@ -67,6 +67,22 @@ export const useWeatherMid = (land: string | null, ta: string | null, stn?: stri
   });
 };
 
+// AWS 매분 관측(가장 가까운 관측소) — 좌표 null 이면 비활성. 소수 4자리 스냅(≈11m). 서버 2분
+// 캐시에 맞춰 2분 stale·5분 재조회(실황보다 촘촘한 리듬이 이 자료의 존재 이유).
+export const useWeatherAws = (lat: number | null, lng: number | null, opts: { radius?: number; limit?: number } = {}) => {
+  const enabled = lat !== null && lng !== null;
+  const keyLat = lat !== null ? lat.toFixed(4) : null;
+  const keyLng = lng !== null ? lng.toFixed(4) : null;
+  return useQuery({
+    queryKey: ['weather', 'aws', keyLat, keyLng, opts.radius ?? null, opts.limit ?? null],
+    queryFn: () => weatherApi.aws(lat!, lng!, opts),
+    enabled,
+    staleTime: 2 * 60_000,
+    refetchInterval: 5 * 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
 // 중기해상예보 — regId null 이면 비활성.
 export const useWeatherMidSea = (regId: string | null) => {
   const enabled = !!regId;

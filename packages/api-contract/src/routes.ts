@@ -494,6 +494,9 @@ export const Weather = {
   mid: `${API_PREFIX}/weather/mid`,
   // 중기해상예보 — ?regId=12A20000.
   midSea: `${API_PREFIX}/weather/mid/sea`,
+  // AWS 방재기상관측 매분 자료(기상청 API허브) — ?lat&lng[&radius&limit]. 가장 가까운 관측소의
+  // 지금 값으로 격자 실황을 보강. 키/활용신청 없으면 enabled=false 로 200.
+  aws: `${API_PREFIX}/weather/aws`,
 } as const;
 
 

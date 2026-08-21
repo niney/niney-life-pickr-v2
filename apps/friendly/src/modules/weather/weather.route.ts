@@ -3,6 +3,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   ErrorResponseSchema,
   Routes,
+  WeatherAwsQuery,
+  WeatherAwsResult,
   WeatherForecastResult,
   WeatherGridQuery,
   WeatherMidQuery,
@@ -15,6 +17,7 @@ import {
 import { env } from '../../config/env.js';
 import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
+import { AwsService } from './aws.service.js';
 import { WeatherService } from './weather.service.js';
 
 // 기상청 날씨 프록시(공개, 비로그인) — 단기예보 4개 + 중기예보 4개 오퍼레이션을 5개
@@ -27,7 +30,28 @@ import { WeatherService } from './weather.service.js';
 
 const weatherRoutes: FastifyPluginAsync = async (app) => {
   const service = new WeatherService({ serviceKey: env.KMA_API_KEY || env.BUS_API_KEY });
+  // AWS 보강(기상청 API허브) — 키가 비어 있으면 enabled=false 로 응답(503 아님, 선택 기능).
+  const aws = new AwsService({ authKey: env.KMA_APIHUB_KEY });
   const typed = app.withTypeProvider<ZodTypeProvider>();
+
+  // AWS 방재기상관측 매분 자료 — ?lat&lng[&radius&limit]. 가장 가까운 관측소의 지금 값.
+  typed.get(Routes.Weather.aws, {
+    config: { rateLimit: RATE.transitRealtime },
+    schema: {
+      tags: ['weather'],
+      querystring: WeatherAwsQuery,
+      response: { 200: WeatherAwsResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await aws.getNearby(req.query.lat, req.query.lng, req.query.radius, req.query.limit);
+      } catch (e) {
+        const sent = replyUpstreamError(req, reply, e, [502, 503], 'AWS 관측 조회 실패');
+        if (sent) return sent;
+        throw e;
+      }
+    },
+  });
 
   // 초단기실황 + 초단기예보 — ?nx&ny.
   typed.get(Routes.Weather.nowcast, {

@@ -72,6 +72,9 @@ const EnvSchema = z.object({
   // 기상청 단기예보(15084084)·중기예보(15059468) — 같은 data.go.kr 계정 키라 비우면
   // BUS_API_KEY 로 폴백(라우트). 둘 다 비면 날씨 라우트 503.
   KMA_API_KEY: z.string().default(''),
+  // 기상청 API허브(apihub.kma.go.kr) 인증키 — AWS 매분 관측으로 현재 날씨 보강(선택). data.go.kr
+  // 키와 별개. 비우면 /weather/aws 가 enabled=false 로 응답하고 페이지는 보강을 생략한다.
+  KMA_APIHUB_KEY: z.string().default(''),
 
   // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
   // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,

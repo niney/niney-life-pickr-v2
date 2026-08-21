@@ -268,3 +268,56 @@ export const WeatherMidSeaResult = z.object({
   stale: z.boolean(),
 });
 export type WeatherMidSeaResultType = z.infer<typeof WeatherMidSeaResult>;
+
+// ── AWS 방재기상관측 매분 자료 (기상청 API허브 nph-aws2_min + stn_inf) ─────────
+// 격자 실황(5km·정시)을 "가장 가까운 관측소의 지금 값"으로 보강한다. 서버가 전국 1콜을 2분
+// 캐시해 좌표별로 가까운 관측소를 골라 내려준다. API허브 키/활용신청이 없으면 enabled=false
+// + 빈 items(200) — 보강은 선택 기능이라 페이지가 조용히 생략한다.
+export const WeatherAwsQuery = z.object({
+  lat: z.coerce.number().min(33).max(39),
+  lng: z.coerce.number().min(124).max(132),
+  // 반경 m(기본 15km, 최대 50km), 개수(기본 3, 최대 10).
+  radius: z.coerce.number().int().min(1000).max(50_000).default(15_000),
+  limit: z.coerce.number().int().min(1).max(10).default(3),
+});
+export type WeatherAwsQueryType = z.infer<typeof WeatherAwsQuery>;
+
+export const WeatherAwsItem = z.object({
+  stn: z.string(),
+  name: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  // 해발고도 m(결측 null).
+  ht: z.number().nullable(),
+  // 요청 좌표로부터 거리 m.
+  dist: z.number(),
+  // 관측 시각 "YYYYMMDDHHmm" + ISO(+09:00). 관측이 없으면 둘 다 null.
+  tm: z.string().nullable(),
+  observedAt: z.string().nullable(),
+  // 기온 ℃ / 습도 % / 10분 풍향 deg·풍속 m/s / 강수감지(0·1) / 15분·60분·12시간·일 강수 mm / 이슬점.
+  ta: z.number().nullable(),
+  hm: z.number().nullable(),
+  wd10: z.number().nullable(),
+  ws10: z.number().nullable(),
+  re: z.number().nullable(),
+  rn15m: z.number().nullable(),
+  rn60m: z.number().nullable(),
+  rn12h: z.number().nullable(),
+  rnDay: z.number().nullable(),
+  td: z.number().nullable(),
+  pa: z.number().nullable(),
+});
+export type WeatherAwsItemType = z.infer<typeof WeatherAwsItem>;
+
+export const WeatherAwsResult = z.object({
+  // API허브 키·활용신청이 갖춰져 보강이 켜져 있는가.
+  enabled: z.boolean(),
+  center: z.object({ lat: z.number(), lng: z.number() }),
+  // 거리 오름차순.
+  items: z.array(WeatherAwsItem),
+  // 전국 관측 자료의 기준 시각(요청한 tm2) — 관측이 없으면 null.
+  tm: z.string().nullable(),
+  fetchedAt: z.string(),
+  stale: z.boolean(),
+});
+export type WeatherAwsResultType = z.infer<typeof WeatherAwsResult>;
