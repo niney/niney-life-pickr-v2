@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -10,12 +10,15 @@ import type {
   WeatherNowcastResultType,
   WeatherVersionsResultType,
 } from '@repo/api-contract';
+import { useAirLocationStore, useAuthStore } from '@repo/shared';
+import { latLngToKmaGrid } from '@repo/utils';
 import { server } from '~/test/msw';
 import { WeatherPage } from './WeatherPage';
 
 // 날씨 페이지 스모크 — 서버 프록시 응답(축약 합성)으로 ① 실황 히어로 ② 3일 메테오그램
-// ③ 열흘(단기+중기 병합) ④ 중기전망 ⑤ 해상 ⑥ 발표 정보가 한 화면에 그려지는지, 지점
-// 셀렉트가 URL(?p=) 과 격자를 바꾸는지, 업스트림 503 이 안내 문구로 떨어지는지.
+// ③ 열흘(단기+중기 병합) ④ 중기전망 ⑤ 해상 ⑥ 발표 정보가 한 화면에 그려지는지, 시도→지점
+// 2단 셀렉트가 URL(?p=)·격자·중기 구역을 바꾸는지, 저장한 내 위치(대기정보와 공유)로 기본
+// 진입·저장·해제가 되는지, 업스트림 503 이 안내 문구로 떨어지는지.
 // jsdom 에는 ResizeObserver 가 없어(메테오그램 폭 측정) 무해한 스텁을 심는다.
 
 beforeAll(() => {
@@ -30,6 +33,14 @@ beforeAll(() => {
 });
 afterAll(() => {
   vi.unstubAllGlobals();
+});
+beforeEach(() => {
+  window.localStorage.clear();
+  useAuthStore.setState({ token: null, user: null, isGuest: false });
+  useAirLocationStore.setState({ location: null });
+  seen.nowcast = [];
+  seen.mid = [];
+  seen.sea = [];
 });
 
 const precip = (text: string, value: number | null, none: boolean) => ({ text, value, none });
@@ -176,6 +187,9 @@ const useHandlers = () =>
     http.get('/api/v1/weather/versions', () => HttpResponse.json(versions)),
   );
 
+const sidoSelect = () => screen.getByRole('combobox', { name: '시도 선택' }) as HTMLSelectElement;
+const placeSelect = () => screen.getByRole('combobox', { name: '지점 선택' }) as HTMLSelectElement;
+
 describe('WeatherPage', () => {
   it('기본 지점(서울, 격자 60,127)으로 실황·6시간·3일·열흘·전망·해상·발표 정보를 한 화면에 그린다', async () => {
     useHandlers();
@@ -188,6 +202,10 @@ describe('WeatherPage', () => {
     // 초단기 6시간 띠.
     expect(within(now).getByRole('table', { name: '초단기예보 6시간' })).toBeInTheDocument();
     expect(seen.nowcast.at(-1)).toBe('?nx=60&ny=127');
+    expect(sidoSelect().value).toBe('서울');
+    expect(placeSelect().value).toBe('11B10101');
+    // 서울 지점 목록 = 시청(전체) + 25구.
+    expect(placeSelect().options).toHaveLength(26);
     // ② 메테오그램 + 표 쌍둥이(4시각).
     const three = screen.getByRole('region', { name: '3일 시간별' });
     expect(await within(three).findByRole('img', { name: /3일 시간별 예보 \(4시각\)/ })).toBeInTheDocument();
@@ -210,22 +228,63 @@ describe('WeatherPage', () => {
     expect(await within(info).findByText('8/21 15:55:56')).toBeInTheDocument();
   });
 
-  it('지점을 바꾸면 격자와 중기 구역이 바뀌어 다시 묻는다(부산 → 98,76 · 11H20000/11H20201/159 · 남해동부)', async () => {
+  it('시도→지점 2단 셀렉트: 부산을 고르면 시청(98,76)·중기 11H20000/11H20201/159·남해동부, 해운대구를 고르면 구청 격자·같은 중기 지점', async () => {
     useHandlers();
     renderPage();
     await screen.findByRole('region', { name: /지금 · 서울/ });
-    fireEvent.change(screen.getByRole('combobox', { name: '지점 선택' }), { target: { value: '11H20201' } });
-    await screen.findByRole('region', { name: /지금 · 부산/ });
+    fireEvent.change(sidoSelect(), { target: { value: '부산' } });
+    await screen.findByRole('region', { name: /지금 · 부산$/ });
     expect(seen.nowcast.at(-1)).toBe('?nx=98&ny=76');
     expect(seen.mid.at(-1)).toBe('?land=11H20000&ta=11H20201&stn=159');
     expect(seen.sea.at(-1)).toBe('?regId=12B20000');
+    // 부산 목록 = 시청(전체) + 16구·군.
+    expect(placeSelect().options).toHaveLength(17);
+    fireEvent.change(placeSelect(), { target: { value: '11H20201-해운대구' } });
+    await screen.findByRole('region', { name: /지금 · 부산 해운대구/ });
+    const g = latLngToKmaGrid(35.163, 129.1637);
+    expect(seen.nowcast.at(-1)).toBe(`?nx=${g.nx}&ny=${g.ny}`);
+    expect(seen.mid.at(-1)).toBe('?land=11H20000&ta=11H20201&stn=159');
   });
 
-  it('?ll= 좌표면 격자는 좌표로, 중기예보는 가장 가까운 지점 기준으로 라벨을 적는다', async () => {
+  it('?ll= 좌표면 격자는 좌표로, 중기예보·표시명은 가장 가까운 지점(구 단위) 기준으로 적는다', async () => {
     useHandlers();
-    renderPage('/weather?ll=37.5219,126.9245');
-    await screen.findByRole('region', { name: /지금 · 내 위치 · 서울 기준/ });
-    expect(seen.nowcast.at(-1)).toBe('?nx=59&ny=126');
+    renderPage('/weather?ll=37.52329,126.85869');
+    await screen.findByRole('region', { name: /지금 · 내 위치 · 서울 양천구 기준/ });
+    const g = latLngToKmaGrid(37.52329, 126.85869);
+    expect(seen.nowcast.at(-1)).toBe(`?nx=${g.nx}&ny=${g.ny}`);
+    expect(seen.mid.at(-1)).toBe('?land=11B00000&ta=11B10101&stn=109');
+    expect(sidoSelect().value).toBe('서울');
+    expect(placeSelect().value).toBe('');
+  });
+
+  it('URL 이 비어 있고 저장한 내 위치가 있으면(대기정보와 공유) 그 좌표로 열고 "내 위치(라벨)" + 저장됨·해제를 보인다', async () => {
+    useHandlers();
+    useAirLocationStore.getState().setLocation({ lat: 37.52329, lng: 126.85869, label: '양천구', source: 'station' });
+    renderPage();
+    await screen.findByRole('region', { name: /지금 · 내 위치\(양천구\)/ });
+    const g = latLngToKmaGrid(37.52329, 126.85869);
+    expect(seen.nowcast.at(-1)).toBe(`?nx=${g.nx}&ny=${g.ny}`);
+    expect(screen.getByRole('button', { name: /내 위치로 저장됨/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /저장한 내 위치/ })).toBeNull();
+    // 해제 → 저장 위치 없음 → 저장 버튼으로 돌아온다(화면은 그대로 그 좌표).
+    fireEvent.click(screen.getByRole('button', { name: '내 위치 해제' }));
+    await waitFor(() => expect(useAirLocationStore.getState().location).toBeNull());
+    expect(await screen.findByRole('button', { name: /이 지점을 내 위치로 저장/ })).toBeEnabled();
+  });
+
+  it("'이 지점을 내 위치로 저장'은 지점 좌표·이름을 공유 저장소에 place 출처로 넣고, 다른 지점으로 가면 '저장한 내 위치(부산)' 바로가기가 뜬다", async () => {
+    useHandlers();
+    renderPage('/weather?p=11H20201');
+    await screen.findByRole('region', { name: /지금 · 부산$/ });
+    fireEvent.click(screen.getByRole('button', { name: /이 지점을 내 위치로 저장/ }));
+    expect(useAirLocationStore.getState().location).toMatchObject({ lat: 35.1801, lng: 129.0754, label: '부산', source: 'place' });
+    expect(await screen.findByRole('button', { name: /내 위치로 저장됨/ })).toBeDisabled();
+    fireEvent.change(sidoSelect(), { target: { value: '서울' } });
+    await screen.findByRole('region', { name: /지금 · 서울$/ });
+    expect(screen.getByRole('button', { name: /이 지점을 내 위치로 저장/ })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /저장한 내 위치\(부산\)/ }));
+    await screen.findByRole('region', { name: /지금 · 내 위치\(부산\)/ });
+    expect(seen.nowcast.at(-1)).toBe('?nx=98&ny=76');
   });
 
   it('업스트림 503(키 없음)은 섹션 안내 문구로 떨어진다', async () => {

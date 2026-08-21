@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, LocateFixed, RefreshCw, Wind } from 'lucide-react';
+import { Check, Loader2, LocateFixed, MapPin, MapPinOff, RefreshCw } from 'lucide-react';
+import type { AirLocationItemType } from '@repo/api-contract';
 import {
   acquirePosition,
   useAirLocation,
@@ -13,17 +14,20 @@ import {
 } from '@repo/shared';
 import {
   WEATHER_DEFAULT_PLACE_ID,
-  WEATHER_MID_LAND_REGIONS,
   WEATHER_MID_NATION_STN_ID,
-  WEATHER_PLACES,
+  WEATHER_SIDOS,
   formatDistanceM,
   formatRelativeMin,
   latLngToKmaGrid,
   nearestWeatherPlace,
   parseLatLngParam,
+  weatherDefaultPlaceOfSido,
   weatherMidRegionForPlace,
   weatherPlaceById,
+  weatherPlaceLabel,
+  weatherPlacesBySido,
   type WeatherPlace,
+  type WeatherSido,
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { todayKst } from '~/components/air/airGrade';
@@ -38,12 +42,14 @@ import { WeatherVersions } from '~/components/weather/WeatherVersions';
 import { WeatherLegend } from '~/components/weather/WeatherLegend';
 
 // 날씨 예시 페이지 — 기상청 단기예보(15084084) 4개 + 중기예보(15059468) 4개 오퍼레이션으로
-// 보여줄 수 있는 것을 한 화면에 모두 펼친다. 지점 선택은 URL 에 동기화(?p=중기기온 regId
-// 또는 ?ll=위도,경도)해 새로고침/공유 시 같은 화면이 복원된다(대기정보와 같은 규율:
-// setSearchParams 함수형 업데이터 1회, replace).
+// 보여줄 수 있는 것을 한 화면에 모두 펼친다. 지점 선택은 URL 에 동기화(?p=지점 id 또는 ?ll=
+// 위도,경도)해 새로고침/공유 시 같은 화면이 복원된다(대기정보와 같은 규율: setSearchParams
+// 함수형 업데이터 1회, replace).
 //
-// 지점 해석: 지점(p) → 그 시·군청 좌표 → 격자(nx,ny) + 소속 중기 구역. 임의 좌표(ll: GPS·
-// 내 대기 위치) → 격자는 정확히, 중기예보는 가장 가까운 지점 기준(거리 표기).
+// 지점 해석: 지점(p: 시·군 또는 광역시 구·군) → 청사 좌표 → 격자(nx,ny) + 소속 중기 구역/지점.
+// 임의 좌표(ll: GPS) → 격자는 정확히, 중기예보·표시명은 가장 가까운 지점 기준(거리 표기).
+// URL 에 아무것도 없고 저장한 내 위치(대기정보·상단바 칩과 공유)가 있으면 그 좌표로 연다 —
+// 대기정보 페이지가 저장 위치의 가장 가까운 측정소로 열리는 것과 같은 규율.
 
 // 해역 기본값 — 지점 권역으로 고른다(사용자가 바꾸면 URL ?sea=).
 const DEFAULT_SEA_BY_LAND: Record<string, string> = {
@@ -65,32 +71,32 @@ interface ResolvedLocation {
   lng: number;
   nx: number;
   ny: number;
-  // 중기예보 기준 지점(임의 좌표면 가장 가까운 지점) + 거리.
+  // 중기예보·표시명 기준 지점(임의 좌표면 가장 가까운 지점) + 거리.
   place: WeatherPlace;
   distM: number | null;
-  label: string;
+  // 저장한 내 위치를 기본값으로 연 경우(URL 파라미터 없음).
+  fromSaved: boolean;
 }
 
-const resolveLocation = (pParam: string | null, llParam: string | null): ResolvedLocation => {
+const fromCoords = (lat: number, lng: number, fromSaved: boolean): ResolvedLocation => {
+  const nearest = nearestWeatherPlace(lat, lng);
+  const place = nearest?.place ?? weatherPlaceById(WEATHER_DEFAULT_PLACE_ID)!;
+  const grid = latLngToKmaGrid(lat, lng);
+  return { kind: 'coords', lat, lng, nx: grid.nx, ny: grid.ny, place, distM: nearest?.distM ?? null, fromSaved };
+};
+
+const resolveLocation = (pParam: string | null, llParam: string | null, saved: AirLocationItemType | null): ResolvedLocation => {
   const ll = parseLatLngParam(llParam);
-  if (ll) {
-    const nearest = nearestWeatherPlace(ll.lat, ll.lng);
-    const place = nearest?.place ?? weatherPlaceById(WEATHER_DEFAULT_PLACE_ID)!;
-    const grid = latLngToKmaGrid(ll.lat, ll.lng);
-    return {
-      kind: 'coords',
-      lat: ll.lat,
-      lng: ll.lng,
-      nx: grid.nx,
-      ny: grid.ny,
-      place,
-      distM: nearest?.distM ?? null,
-      label: `내 위치`,
-    };
+  if (ll) return fromCoords(ll.lat, ll.lng, false);
+  const place = weatherPlaceById(pParam);
+  if (place) {
+    const grid = latLngToKmaGrid(place.lat, place.lng);
+    return { kind: 'place', lat: place.lat, lng: place.lng, nx: grid.nx, ny: grid.ny, place, distM: null, fromSaved: false };
   }
-  const place = weatherPlaceById(pParam) ?? weatherPlaceById(WEATHER_DEFAULT_PLACE_ID)!;
-  const grid = latLngToKmaGrid(place.lat, place.lng);
-  return { kind: 'place', lat: place.lat, lng: place.lng, nx: grid.nx, ny: grid.ny, place, distM: null, label: place.name };
+  if (!pParam && saved) return fromCoords(saved.lat, saved.lng, true);
+  const fallback = weatherPlaceById(WEATHER_DEFAULT_PLACE_ID)!;
+  const grid = latLngToKmaGrid(fallback.lat, fallback.lng);
+  return { kind: 'place', lat: fallback.lat, lng: fallback.lng, nx: grid.nx, ny: grid.ny, place: fallback, distM: null, fromSaved: false };
 };
 
 type OutlookScope = 'region' | 'nation';
@@ -117,25 +123,30 @@ export const WeatherPage = () => {
     [setSearchParams],
   );
 
-  // URL 이 유일한 진실.
-  const loc = resolveLocation(searchParams.get('p'), searchParams.get('ll'));
+  // 저장한 내 위치(대기정보·상단바 칩과 공유, 로그인 서버/게스트 로컬).
+  const airLocation = useAirLocation();
+  const saved = airLocation.location;
+
+  // URL 이 유일한 진실 — 없으면 저장 위치, 그것도 없으면 서울.
+  const loc = resolveLocation(searchParams.get('p'), searchParams.get('ll'), saved);
+  // 지금 보는 지점이 저장 위치와 같은가(좌표 근사 ≈50m) — 저장 버튼/해제 분기.
+  const savedHere =
+    saved !== null && Math.abs(saved.lat - loc.lat) < 0.0005 && Math.abs(saved.lng - loc.lng) < 0.0005;
   const midRegion = weatherMidRegionForPlace(loc.place);
   const landRegId = midRegion?.land.regId ?? null;
   const stnId = midRegion?.stnId ?? null;
+  const taPlaceName = weatherPlaceById(loc.place.taRegId)?.name ?? loc.place.name;
   const seaParam = searchParams.get('sea');
   const seaRegId = seaParam && /^12[A-G]\d{5}$/.test(seaParam) ? seaParam : (DEFAULT_SEA_BY_LAND[landRegId ?? ''] ?? '12A20000');
   const [outlookScope, setOutlookScope] = useState<OutlookScope>('region');
   const [locating, setLocating] = useState<'idle' | 'pending' | 'denied' | 'timeout' | 'unavailable'>('idle');
 
-  // 내 대기 위치(저장 지점) — 있으면 한 번에 그 좌표로.
-  const airLocation = useAirLocation();
-
   // ── 조회 ──
   const nowcastQ = useWeatherNowcast(loc.nx, loc.ny);
   const forecastQ = useWeatherForecast(loc.nx, loc.ny);
-  const midQ = useWeatherMid(landRegId, loc.place.id, stnId);
+  const midQ = useWeatherMid(landRegId, loc.place.taRegId, stnId);
   // 전국 전망은 토글했을 때만(같은 육상/기온 + stn=108 — 서버 캐시 키가 달라 업스트림 2콜 추가).
-  const nationQ = useWeatherMid(outlookScope === 'nation' ? landRegId : null, loc.place.id, WEATHER_MID_NATION_STN_ID);
+  const nationQ = useWeatherMid(outlookScope === 'nation' ? landRegId : null, loc.place.taRegId, WEATHER_MID_NATION_STN_ID);
   const seaQ = useWeatherMidSea(seaRegId);
   const versionsQ = useWeatherVersions();
 
@@ -154,11 +165,27 @@ export const WeatherPage = () => {
     }
   };
   const selectPlace = (id: string) => setParams({ p: id, ll: null });
+  const selectSido = (sido: WeatherSido) => {
+    const first = weatherDefaultPlaceOfSido(sido);
+    if (first) selectPlace(first.id);
+  };
+  const saveHere = () =>
+    airLocation.save({
+      lat: loc.lat,
+      lng: loc.lng,
+      // 라벨은 항상 채운다 — 지점이면 그 이름, 좌표면 가장 가까운 지점 이름(대기정보 카드·
+      // 상단바 툴팁이 같은 라벨을 쓴다).
+      label: loc.place.name,
+      source: loc.kind === 'place' ? 'place' : 'geolocation',
+    });
 
+  const nearestLabel = weatherPlaceLabel(loc.place);
   const placeLabel =
-    loc.kind === 'coords'
-      ? `내 위치 · ${loc.place.name} 기준${loc.distM !== null ? ` (${formatDistanceM(loc.distM)})` : ''}`
-      : loc.place.name;
+    loc.kind === 'place'
+      ? nearestLabel
+      : savedHere
+        ? `내 위치(${saved?.label ?? nearestLabel})`
+        : `내 위치 · ${nearestLabel} 기준${loc.distM !== null ? ` (${formatDistanceM(loc.distM)})` : ''}`;
   const fetchedLabel = nowcastQ.data?.fetchedAt ? formatRelativeMin(nowcastQ.data.fetchedAt) : null;
   const locateHint =
     locating === 'denied'
@@ -169,6 +196,7 @@ export const WeatherPage = () => {
           ? '이 환경에서는 위치를 가져올 수 없습니다(HTTPS 또는 localhost 필요).'
           : null;
   const outlookActive = outlookScope === 'nation' ? nationQ : midQ;
+  const sidoPlaces = weatherPlacesBySido(loc.place.sido);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
@@ -184,6 +212,21 @@ export const WeatherPage = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-sm">
+              <span className="text-xs text-muted-foreground">시도</span>
+              <select
+                value={loc.place.sido}
+                onChange={(e) => selectSido(e.target.value as WeatherSido)}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                aria-label="시도 선택"
+              >
+                {WEATHER_SIDOS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
               <span className="text-xs text-muted-foreground">지점</span>
               <select
                 value={loc.kind === 'place' ? loc.place.id : ''}
@@ -191,15 +234,11 @@ export const WeatherPage = () => {
                 className="h-9 max-w-[14rem] rounded-md border border-input bg-background px-2 text-sm"
                 aria-label="지점 선택"
               >
-                {loc.kind === 'coords' && <option value="">내 위치 ({loc.place.name} 기준)</option>}
-                {WEATHER_MID_LAND_REGIONS.map((region) => (
-                  <optgroup key={region.regId} label={region.label}>
-                    {WEATHER_PLACES.filter((p) => p.landRegId === region.regId).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </optgroup>
+                {loc.kind === 'coords' && <option value="">{placeLabel}</option>}
+                {sidoPlaces.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.kind === 'city' && p.id === weatherDefaultPlaceOfSido(p.sido)?.id && sidoPlaces.length > 1 ? `${p.name} (전체)` : p.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -207,21 +246,51 @@ export const WeatherPage = () => {
               {locating === 'pending' ? <Loader2 className="animate-spin" /> : <LocateFixed />}
               내 위치
             </Button>
-            {airLocation.location && (
+            {saved && !savedHere && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                title={`대기정보에 저장한 내 대기 위치(${airLocation.location.label ?? '저장 지점'})로 보기`}
-                onClick={() =>
-                  setParams({ ll: `${airLocation.location!.lat.toFixed(5)},${airLocation.location!.lng.toFixed(5)}`, p: null })
-                }
+                title={`저장한 내 위치(${saved.label ?? '저장 지점'})로 보기 — 상단바 칩·대기정보 페이지와 같은 지점`}
+                onClick={() => setParams({ ll: `${saved.lat.toFixed(5)},${saved.lng.toFixed(5)}`, p: null })}
               >
-                <Wind /> 내 대기 위치{airLocation.location.label ? `(${airLocation.location.label})` : ''}
+                <MapPin /> 저장한 내 위치{saved.label ? `(${saved.label})` : ''}
+              </Button>
+            )}
+            {/* 이 지점을 내 위치로 저장 — 대기정보와 같은 저장소(로그인 서버/게스트 로컬). 저장하면
+                상단바 "내 위치" 칩(날씨+대기)이 이 지점으로 뜨고 대기정보 페이지도 여기로 열린다. */}
+            {savedHere ? (
+              <>
+                <Button type="button" variant="secondary" size="sm" disabled title="이 지점이 내 위치로 저장되어 있습니다(상단바 칩·대기정보와 공유)">
+                  <Check /> 내 위치로 저장됨
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={airLocation.isSaving}
+                  onClick={() => airLocation.clear()}
+                  aria-label="내 위치 해제"
+                  title="저장한 내 위치를 지웁니다 — 상단바 칩이 사라지고 대기정보도 기본 지점으로 돌아갑니다"
+                >
+                  <MapPinOff /> 해제
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={airLocation.isSaving}
+                title="이 지점을 내 위치로 저장합니다 — 상단바에 날씨·대기 칩이 뜨고, 대기정보 페이지도 이 지점을 기본으로 엽니다"
+                onClick={saveHere}
+              >
+                {airLocation.isSaving ? <Loader2 className="animate-spin" /> : <MapPin />}
+                이 지점을 내 위치로 저장
               </Button>
             )}
             <span className="text-xs text-muted-foreground">
-              격자 ({loc.nx},{loc.ny}) · 중기 {midRegion?.land.label ?? '-'} / {loc.place.name}
+              격자 ({loc.nx},{loc.ny}) · 중기 {midRegion?.land.label ?? '-'} / {taPlaceName}
             </span>
             <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
               {fetchedLabel && (
@@ -298,7 +367,7 @@ export const WeatherPage = () => {
           title="열흘"
           op="getVilageFcst + getMidLandFcst + getMidTa"
           opLabel="단기예보 일별 요약 · 중기육상예보 · 중기기온"
-          description={`오늘부터 3일은 단기예보를 하루 단위로 접은 값(오전/오후 대표 날씨·최대 강수확률·일 최저/최고), 그 뒤는 중기예보(발표일 +4~+10일 — ${midRegion?.land.label ?? '-'} 권역 날씨·강수확률, ${loc.place.name} 기온과 예측 오차). 기온 막대는 전체 기간 최저~최고 축 위의 위치입니다.`}
+          description={`오늘부터 3일은 단기예보를 하루 단위로 접은 값(오전/오후 대표 날씨·최대 강수확률·일 최저/최고), 그 뒤는 중기예보(발표일 +4~+10일 — ${midRegion?.land.label ?? '-'} 권역 날씨·강수확률, ${taPlaceName} 기온과 예측 오차${loc.place.kind === 'district' ? ` — 구·군은 소속 광역시 지점`  : ''}). 기온 막대는 전체 기간 최저~최고 축 위의 위치입니다.`}
         >
           {midQ.data?.stale && <WeatherStaleNote fetchedAtLabel={formatRelativeMin(midQ.data.fetchedAt)} />}
           {midQ.data && !midQ.data.stale && midQ.data.fallback && (

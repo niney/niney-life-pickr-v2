@@ -303,7 +303,9 @@ export type AirStationSearchResultType = z.infer<typeof AirStationSearchResult>;
 // 사용자가 지정·저장한 좌표 1곳. 상단바 칩이 이 좌표로 가장 가까운 측정소의 현재 등급을
 // 보여준다(해석은 /air/stations/nearby?limit=1). 로그인은 서버(PUT/GET/DELETE, 소유자
 // 스코프), 게스트는 클라이언트 persist — 로그인 직후 서버가 비어 있으면 게스트 값을 올린다.
-export const AIR_LOCATION_SOURCES = ['geolocation', 'manual', 'station'] as const;
+// geolocation 현재 위치(GPS) / station 대기 측정소 선택 / place 날씨 지점(시·군·구) 선택 /
+// manual 과거 '지도에서 직접 지정'(UI 제거, 저장된 값 호환용).
+export const AIR_LOCATION_SOURCES = ['geolocation', 'manual', 'station', 'place'] as const;
 export const AirLocationSource = z.enum(AIR_LOCATION_SOURCES);
 export type AirLocationSourceType = z.infer<typeof AirLocationSource>;
 

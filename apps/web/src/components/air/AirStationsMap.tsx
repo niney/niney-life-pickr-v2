@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Crosshair, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ApiError, useMapPublicConfig } from '@repo/shared';
 import type {
   AirMeasureItemType,
@@ -18,15 +18,12 @@ import {
   MapCanvas,
   type MapCanvasHandle,
   type MapMarker,
-  type MapViewport,
 } from '~/components/restaurant/MapCanvas';
 import { cn } from '~/lib/utils';
 
 // 전국 측정소 지도 — 측정소정보 API 의 좌표에 '전국' 실시간 캐시의 현재 통합지수
 // 등급을 색으로 얹는다(마커색 = 상태색, 선택은 핀). 마커 클릭 = 측정소 선택(시도도
 // 함께). 내 위치(파란 점)·저장 위치(보라 점)는 fit 에서 제외되는 오버레이 레이어.
-// picking 이면 화면 중앙에 십자선을 띄우고 지도 중심 좌표를 onCenterChange 로 올린다
-// (지도에서 직접 지정 — 지도를 움직여 십자선을 원하는 지점에 맞춘다).
 
 // 등급(0=없음,1~4)×선택 10종 — 모듈 레벨에서 한 번 만들어 공유(OL 아이콘 캐시).
 const ICONS: Record<0 | AirGradeLevel, { src: string; selectedSrc: string }> = {
@@ -51,13 +48,10 @@ interface Props {
   selectedStation: string | null;
   onSelect: (stationName: string, sidoOption: string | null) => void;
   myLocation: { lat: number; lng: number } | null;
-  // 저장한 내 대기 위치 — 보라 점.
+  // 저장한 내 위치 — 보라 점.
   savedLocation?: { lat: number; lng: number } | null;
   // 내 주변 결과 — 이 측정소들만 지도 라벨을 붙인다(650개 전부 라벨은 과밀).
   nearby: AirNearbyStationItemType[];
-  // 지도에서 직접 지정 모드 — 중앙 십자선 + 중심 좌표 보고.
-  picking?: boolean;
-  onCenterChange?: (center: { lat: number; lng: number }) => void;
   className?: string;
 }
 
@@ -73,8 +67,6 @@ export const AirStationsMap = ({
   myLocation,
   savedLocation,
   nearby,
-  picking,
-  onCenterChange,
   className,
 }: Props) => {
   const config = useMapPublicConfig();
@@ -146,10 +138,10 @@ export const AirStationsMap = ({
   useEffect(() => {
     if (myLocation) handleRef.current?.flyToZoomIn(myLocation.lat, myLocation.lng, SELECT_ZOOM);
   }, [myLocation]);
-  // 저장 위치가 새로 생기거나 바뀌면 그곳으로(지정 모드 중에는 사용자가 움직이는 중이라 제외).
+  // 저장 위치가 새로 생기거나 바뀌면 그곳으로.
   const savedKey = savedLocation ? `${savedLocation.lat},${savedLocation.lng}` : null;
   useEffect(() => {
-    if (picking || !savedLocation) return;
+    if (!savedLocation) return;
     handleRef.current?.flyToZoomIn(savedLocation.lat, savedLocation.lng, SELECT_ZOOM);
     // savedKey 로 좌표 변화만 추적(객체 identity 무시).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,10 +159,6 @@ export const AirStationsMap = ({
       onSelect(s.stationName, option);
     },
     [byId, onSelect],
-  );
-  const handleViewportSync = useCallback(
-    (vp: MapViewport) => onCenterChange?.({ lat: vp.centerLat, lng: vp.centerLng }),
-    [onCenterChange],
   );
 
   if (config.isLoading) {
@@ -197,20 +185,9 @@ export const AirStationsMap = ({
         initialCenter={KOREA_CENTER}
         onMarkerSelect={handleMarkerSelect}
         overlayMarkers={overlayMarkers}
-        onViewportSync={onCenterChange ? handleViewportSync : undefined}
         poolKey="air"
         className="h-full w-full"
       />
-      {picking && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-        >
-          <span className="rounded-full bg-background/70 p-1.5 shadow-md ring-1 ring-border">
-            <Crosshair className="size-6 text-violet-600 dark:text-violet-400" strokeWidth={2.25} />
-          </span>
-        </div>
-      )}
     </div>
   );
 };
