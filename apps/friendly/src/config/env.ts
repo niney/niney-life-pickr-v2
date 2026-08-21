@@ -65,6 +65,11 @@ const EnvSchema = z.object({
   // 처리하며, 확신이 없으면 probe:bus 스크립트가 판별해 알려준다.
   BUS_API_KEY: z.string().default(''),
 
+  // 에어코리아 대기오염정보 API(apis.data.go.kr/B552584, 15073861) 인증키 — data.go.kr
+  // 는 계정당 키 1개라 BUS_API_KEY 와 같은 값일 수 있다(해당 API 활용신청만 추가).
+  // 비우면 BUS_API_KEY 로 폴백(라우트), 둘 다 비면 대기정보 라우트 503.
+  AIRKOREA_API_KEY: z.string().default(''),
+
   // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
   // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,
   // '일반 인증키'는 openapi.seoul.go.kr:8088 정적(역사마스터) 전용 — 서로 호환

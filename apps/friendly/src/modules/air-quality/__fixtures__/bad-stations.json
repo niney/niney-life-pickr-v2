@@ -1,0 +1,27 @@
+{
+ "response": {
+  "body": {
+   "totalCount": 3,
+   "items": [
+    {
+     "addr": "인천 연수구 갯벌로 12 테크노파크 3층 옥상",
+     "stationName": "송도"
+    },
+    {
+     "addr": "인천 검단구 고산후로121번길 7(원당동) 검단선사박물관 옥상",
+     "stationName": "원당"
+    },
+    {
+     "addr": "인천 강화군 길상면 강화동로 15-1 길상면보건지소 2층",
+     "stationName": "길상"
+    }
+   ],
+   "pageNo": 1,
+   "numOfRows": 3
+  },
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  }
+ }
+}

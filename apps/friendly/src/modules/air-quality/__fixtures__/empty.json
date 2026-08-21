@@ -1,0 +1,14 @@
+{
+ "response": {
+  "body": {
+   "totalCount": 0,
+   "items": [],
+   "pageNo": 1,
+   "numOfRows": 10
+  },
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  }
+ }
+}

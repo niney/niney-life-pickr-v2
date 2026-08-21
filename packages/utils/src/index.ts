@@ -16,3 +16,4 @@ export * from './subwayTimetable.js';
 export * from './vehiclePill.js';
 export * from './thumbnail.js';
 export * from './vworld.js';
+export * from './airQuality.js';

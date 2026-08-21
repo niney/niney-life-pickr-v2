@@ -446,6 +446,28 @@ export const Subway = {
   favoritesSync: `${API_PREFIX}/subway/favorites/sync`,
 } as const;
 
+// ── 대기정보(에어코리아, data.go.kr 15073861 ArpltnInforInqireSvc) ────────────
+// 공개 프록시(비로그인). 업스트림 5개 오퍼레이션을 1:1 로 노출하되 서버가 캐시
+// (측정 10분·예보 20~60분)와 stale 폴백으로 개발계정 일 500건 쿼터를 지킨다.
+export const AirQuality = {
+  // 시도별 실시간 측정정보 — 서버는 업스트림 '전국' 1콜을 캐시해 sidoName 으로
+  // 거른다(광주·전남 통합 라벨 '전남광주' 포함 매칭). '전국' 이면 전체.
+  // 한글 경로라 빌더가 인코딩을 책임진다.
+  sidoRealtime: (sidoName: string) => `${API_PREFIX}/air/sido/${encodeURIComponent(sidoName)}`,
+  // 측정소별 실시간 측정정보 — ?term=DAILY|MONTH|3MONTH. DAILY 는 시간별 원본,
+  // MONTH/3MONTH 는 서버가 일평균으로 접어 내려준다.
+  stationHistory: (stationName: string) =>
+    `${API_PREFIX}/air/stations/${encodeURIComponent(stationName)}/history`,
+  // 통합대기환경지수 '나쁨' 이상 측정소 목록.
+  badStations: `${API_PREFIX}/air/bad-stations`,
+  // 대기질 예보통보(미세먼지·초미세먼지·오존, 오늘/내일/모레) — ?date=YYYY-MM-DD
+  // (기본 오늘, 당일 발표분이 없으면 전일로 폴백).
+  forecast: `${API_PREFIX}/air/forecast`,
+  // 초미세먼지 주간예보(D+3~D+6) — ?date=발표일(기본 오늘→전일 폴백).
+  weeklyForecast: `${API_PREFIX}/air/forecast/weekly`,
+} as const;
+
+
 export const Health = `${API_PREFIX}/health` as const;
 
 // review-search — 리뷰 문맥검색 / RAG (어드민 우선). 검색 단위는 식당(restaurantId).
