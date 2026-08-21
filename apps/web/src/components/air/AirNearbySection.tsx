@@ -121,6 +121,22 @@ export const AirNearbySection = ({
       source: 'geolocation',
     });
   };
+  // 선택한 측정소의 좌표를 그대로 저장 — "이 측정소를 내 기준으로" 라는 의도를 그대로
+  // 받는다(GPS 좌표를 저장하면 가장 가까운 다른 측정소로 해석될 수 있다 — 예: 영등포구·
+  // 양천구가 같은 2.0km 일 때 사용자가 고른 양천구가 아니라 영등포구가 칩에 뜬다).
+  const selectedInfo =
+    selectedStation !== null
+      ? (stations.find((s) => s.stationName === selectedStation && s.lat !== null && s.lng !== null) ?? null)
+      : null;
+  const saveSelected = () => {
+    if (!selectedInfo || selectedInfo.lat === null || selectedInfo.lng === null) return;
+    onSaveLocation({
+      lat: selectedInfo.lat,
+      lng: selectedInfo.lng,
+      label: selectedInfo.stationName,
+      source: 'station',
+    });
+  };
   const savePicked = () => {
     if (!mapCenter) return;
     onSaveLocation({
@@ -225,8 +241,12 @@ export const AirNearbySection = ({
               <span className="text-muted-foreground">
                 {' '}
                 · {savedLocation.lat.toFixed(4)}, {savedLocation.lng.toFixed(4)} ·{' '}
-                {savedLocation.source === 'geolocation' ? '내 위치로 찾기' : '지도에서 지정'} ·{' '}
-                {formatRelativeMin(savedLocation.updatedAt)}
+                {savedLocation.source === 'geolocation'
+                  ? '현재 위치(GPS)'
+                  : savedLocation.source === 'station'
+                    ? '측정소 위치'
+                    : '지도에서 지정'}{' '}
+                · {formatRelativeMin(savedLocation.updatedAt)}
               </span>
             </p>
           ) : (
@@ -249,14 +269,33 @@ export const AirNearbySection = ({
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
+              {selectedInfo && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={saveSelected}
+                  disabled={savingLocation}
+                  title={`${selectedInfo.stationName} 측정소의 좌표를 내 위치로 저장 — 상단바 칩이 이 측정소를 보여줍니다`}
+                >
+                  <MapPin /> 선택 측정소({selectedInfo.stationName}) 저장
+                </Button>
+              )}
+              {geoCoords && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={saveGeo}
+                  disabled={savingLocation}
+                  title="GPS 좌표를 저장 — 가장 가까운 측정소로 해석됩니다"
+                >
+                  <Crosshair /> 현재 위치(GPS) 저장
+                </Button>
+              )}
               <Button type="button" variant="outline" size="sm" onClick={() => setPicking(true)} disabled={savingLocation}>
                 <Crosshair /> 지도에서 직접 지정
               </Button>
-              {geoCoords && (
-                <Button type="button" variant="outline" size="sm" onClick={saveGeo} disabled={savingLocation}>
-                  <MapPin /> 현재 위치 저장
-                </Button>
-              )}
             </div>
           )}
         </div>

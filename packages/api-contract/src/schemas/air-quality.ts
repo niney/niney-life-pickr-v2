@@ -303,7 +303,7 @@ export type AirStationSearchResultType = z.infer<typeof AirStationSearchResult>;
 // 사용자가 지정·저장한 좌표 1곳. 상단바 칩이 이 좌표로 가장 가까운 측정소의 현재 등급을
 // 보여준다(해석은 /air/stations/nearby?limit=1). 로그인은 서버(PUT/GET/DELETE, 소유자
 // 스코프), 게스트는 클라이언트 persist — 로그인 직후 서버가 비어 있으면 게스트 값을 올린다.
-export const AIR_LOCATION_SOURCES = ['geolocation', 'manual'] as const;
+export const AIR_LOCATION_SOURCES = ['geolocation', 'manual', 'station'] as const;
 export const AirLocationSource = z.enum(AIR_LOCATION_SOURCES);
 export type AirLocationSourceType = z.infer<typeof AirLocationSource>;
 
@@ -312,7 +312,8 @@ export const AirLocationUpsertBody = z.object({
   lng: z.number().min(124).max(132),
   // 표시용 라벨(저장 시점의 가까운 측정소명 등). 없으면 null.
   label: z.string().trim().max(40).nullable().default(null),
-  // geolocation = '내 위치로 찾기' 결과 / manual = 지도에서 직접 지정.
+  // geolocation = '내 위치로 찾기'(GPS) 좌표 / manual = 지도에서 직접 지정 /
+  // station = 선택한 측정소의 좌표(그 측정소가 곧 가장 가까운 측정소가 된다).
   source: AirLocationSource,
 });
 export type AirLocationUpsertBodyType = z.infer<typeof AirLocationUpsertBody>;
