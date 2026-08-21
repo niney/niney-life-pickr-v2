@@ -17,8 +17,8 @@ const NAV: NavItem[] = [
   { to: '/', label: '홈', icon: Home, end: true },
   { to: '/restaurants-v2', label: '맛집', icon: UtensilsCrossed },
   { to: '/bus', label: '대중교통', icon: Bus, match: ['/bus', '/subway'] },
-  { to: '/air', label: '대기질', icon: Wind },
   { to: '/weather', label: '날씨', icon: CloudSun },
+  { to: '/air', label: '대기질', icon: Wind },
 ];
 
 interface Props {

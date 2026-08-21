@@ -20,8 +20,8 @@ const NAV: NavItem[] = [
   { to: '/', label: '홈', end: true },
   { to: '/restaurants-v2', label: '맛집' },
   { to: '/bus', label: '대중교통', match: ['/bus', '/subway'] },
-  { to: '/air', label: '대기질' },
   { to: '/weather', label: '날씨' },
+  { to: '/air', label: '대기질' },
 ];
 
 interface Props {
