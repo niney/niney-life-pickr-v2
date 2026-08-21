@@ -44,6 +44,9 @@ export interface MapMarker {
   // variant/categoryKey 빌더 대신 사용. 비선택/선택 이미지는 식당 마커와
   // 동일 규격(26×26 원 / 32×48 핀)이어야 라벨 offset·축소 스케일이 유효.
   icon?: { src: string; selectedSrc: string };
+  // 줌에 따른 축소(SMALL_ICON_SCALE)·라벨 숨김을 건너뛰고 아이콘을 원본 크기로 그린다 — 크기
+  // 자체가 의미인 작은 점(12px)·숫자를 새긴 집계 버블용(일상지도). 선택 시 핀 전환은 동일.
+  fixedScale?: boolean;
 }
 
 // 실시간 차량 마커 — 정류장 마커(MapMarker)와 분리된 전용 레이어. 선택·라벨
@@ -244,6 +247,9 @@ const LABEL_VISIBLE_ZOOM = 14;
 // LABEL_VISIBLE_ZOOM 미만에서 아이콘 축소 배율. 26×26 → ~14px. 작아질수록
 // 도심 밀집 지역에서도 핀 충돌 거의 없음.
 const SMALL_ICON_SCALE = 0.55;
+// 마커 Style 캐시(makeMarkerStyle 참조) — 같은 입력이면 같은 인스턴스를 재사용.
+const markerStyleCache = new Map<string, Style>();
+const MARKER_STYLE_CACHE_MAX = 6000;
 
 // ── 지도 인스턴스 풀 ─────────────────────────────────────────────────────────
 // 탭 전환(버스↔지하철)은 라우트 언마운트라 지도가 매번 재생성 → 타일 재로드
@@ -734,6 +740,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           zoom,
           isDarkBaseRef.current,
           m.icon,
+          m.fixedScale ?? false,
         );
       });
       src.addFeature(f);
@@ -767,6 +774,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           zoom,
           isDarkBaseRef.current,
           m.icon,
+          m.fixedScale ?? false,
         );
       });
       src.addFeature(f);
@@ -1088,13 +1096,22 @@ const makeMarkerStyle = (
   zoom: number,
   darkBg: boolean,
   icon?: MapMarker['icon'],
+  fixedScale = false,
 ): Style => {
-  const compact = !selected && zoom < LABEL_VISIBLE_ZOOM;
+  const compact = !selected && zoom < LABEL_VISIBLE_ZOOM && !fixedScale;
+  // 스타일 캐시 — OL 은 매 프레임 style function 을 부르므로 feature 가 수천 개(일상지도 CCTV
+  // 점)면 프레임마다 Style/Icon 을 수천 개 새로 만들어 메인 스레드가 수 초 멈춘다. 입력이 같으면
+  // 같은 Style 인스턴스를 돌려준다(OL 권장 패턴 — Style 은 feature 간 공유해도 안전). 라벨
+  // 문자열까지 키에 넣으므로 항목 수만큼만 불어나고, 상한을 넘으면 통째로 비운다.
+  const showLabel = !!label && !compact;
+  const cacheKey = `${icon?.src ?? ''}|${icon?.selectedSrc ?? ''}|${categoryKey ?? ''}|${variant}|${selected ? 1 : 0}|${compact ? 1 : 0}|${showLabel ? label : ''}|${darkBg ? 1 : 0}`;
+  const cached = markerStyleCache.get(cacheKey);
+  if (cached) return cached;
   // 어두운 베이스맵(야간/위성) 위에서는 글자/외곽선을 반전 — 흰 글자 + 어두운
   // 외곽선이라야 가독성이 산다. 밝은 맵에서는 기존 어두운 글자 + 흰 외곽선.
   const labelFill = darkBg ? '#f8fafc' : '#0f172a';
   const labelStroke = darkBg ? '#0f172a' : '#fff';
-  return new Style({
+  const style = new Style({
     // 선택 마커는 다른 마커 위로 — feature 들이 겹칠 때 강조 핀이 가려지지 않게
     // 렌더 순서를 끌어올린다 (OL 은 zIndex 큰 Style 을 나중에=위에 그린다).
     zIndex: selected ? 1000 : 0,
@@ -1108,7 +1125,7 @@ const makeMarkerStyle = (
       scale: compact ? SMALL_ICON_SCALE : 1,
     }),
     text:
-      label && !compact
+      showLabel
         ? new OlText({
             text: label,
             offsetY: selected ? -54 : 20,
@@ -1118,4 +1135,7 @@ const makeMarkerStyle = (
           })
         : undefined,
   });
+  if (markerStyleCache.size >= MARKER_STYLE_CACHE_MAX) markerStyleCache.clear();
+  markerStyleCache.set(cacheKey, style);
+  return style;
 };

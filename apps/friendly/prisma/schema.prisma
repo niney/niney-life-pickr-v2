@@ -1341,3 +1341,117 @@ model AirUserLocation {
 
   @@map("air_user_locations")
 }
+
+// ── 일상지도(전국 CCTV·공중화장실) ────────────────────────────────────────────
+// 지방행정인허가데이터개방(localdata.go.kr) 전국 CSV 를 load:life-cctv / load:life-toilets 가
+// 전량 교체 적재한다(관리번호 PK, FK 없음 — 재적재 내성). 조회는 지도 뷰포트 bbox 가 전부라
+// (lat,lng) 복합 인덱스가 핵심이고, 저줌은 같은 인덱스 위에서 GROUP BY 집계한다.
+model LifeCctv {
+  // 관리번호(전국 유일 — 실측 중복 0).
+  id          String @id
+  // 개방자치단체코드(7자리) — 관리 주체 식별.
+  orgCode     String
+  orgName     String
+  roadAddr    String?
+  lotAddr     String?
+  // 설치목적구분 — @repo/utils LIFE_CCTV_PURPOSES 10종으로 정규화.
+  purpose     String
+  cameraCount Int?
+  // 카메라화소수(만 화소).
+  pixels      Int?
+  direction   String?
+  keepDays    Int?
+  // 설치연월 'YYYYMM'.
+  installedYm String?
+  phone       String?
+  lat         Float
+  lng         Float
+  // 데이터기준일자 'YYYY-MM-DD'.
+  baseDate    String
+
+  @@index([lat, lng])
+  @@map("life_cctvs")
+}
+
+// 공중화장실 — 원본 CSV 에 좌표가 없어(표준데이터도 2025-02 부터 좌표 제외) 주소를 VWorld
+// 지오코더로 변환한 lat/lng 를 든다. 실패 건은 null(지도 미표시) — geoSource 가 출처.
+model LifeToilet {
+  id                   String   @id
+  orgCode              String
+  name                 String
+  // 구분명(공중/개방/간이/이동/기타).
+  kind                 String
+  roadAddr             String?
+  lotAddr              String?
+  orgName              String
+  phone                String?
+  // 개방시간 구분(상시/정시/불규칙/미개방/미상) + 상세 원문 + 24시간 판정(적재 시 계산).
+  openType             String
+  openDetail           String?
+  open24               Boolean
+  maleToilet           Int      @default(0)
+  maleUrinal           Int      @default(0)
+  maleDisabledToilet   Int      @default(0)
+  maleDisabledUrinal   Int      @default(0)
+  maleKidsToilet       Int      @default(0)
+  maleKidsUrinal       Int      @default(0)
+  femaleToilet         Int      @default(0)
+  femaleDisabledToilet Int      @default(0)
+  femaleKidsToilet     Int      @default(0)
+  // 장애인용/어린이용 변기 1개 이상 — 필터용 파생 불리언.
+  disabled             Boolean
+  kids                 Boolean
+  ownerType            String
+  disposal             String?
+  safetyTarget         Boolean?
+  bell                 Boolean
+  bellPlace            String?
+  entranceCctv         Boolean
+  diaper               Boolean
+  diaperPlace          String?
+  installedYm          String?
+  remodeledYm          String?
+  baseDate             String
+  lat                  Float?
+  lng                  Float?
+  // 'road' | 'parcel' — 어느 주소로 맞췄는지. null = 좌표 없음.
+  geoSource            String?
+
+  @@index([lat, lng])
+  @@map("life_toilets")
+}
+
+// 주소 → 좌표 지오코딩 캐시 — VWorld 지오코더 응답을 (type,address) 키로 영구 보관해 재적재
+// 때 업스트림 호출을 0 에 가깝게 만든다. notfound 도 기록(반복 호출 방지) — 재시도는 플래그로.
+model LifeGeocodeCache {
+  // 'road' | 'parcel'
+  type      String
+  address   String
+  // 'ok' | 'notfound'
+  status    String
+  lat       Float?
+  lng       Float?
+  // 지오코더가 정제해 돌려준 주소(표시·검증용).
+  refined   String?
+  checkedAt DateTime @default(now())
+
+  @@id([type, address])
+  @@map("life_geocode_caches")
+}
+
+// 적재 이력 — 레이어별 최신 행이 "적재됨" 판정·fetchedAt·상태 API 의 원천(버스/지하철
+// MasterSync 와 같은 패턴). geocoded 는 화장실의 좌표 확보 건수.
+model LifeMasterSync {
+  id         Int      @id @default(autoincrement())
+  // 'cctv' | 'toilet'
+  layer      String
+  count      Int
+  geocoded   Int?
+  // 적재 파일의 데이터기준일자 최댓값 'YYYY-MM-DD'.
+  baseDate   String?
+  sourceFile String?
+  loadedAt   DateTime @default(now())
+
+  @@index([layer, loadedAt])
+  @@map("life_master_syncs")
+}
