@@ -18,3 +18,5 @@ export * from './thumbnail.js';
 export * from './vworld.js';
 export * from './airQuality.js';
 export * from './airMarker.js';
+export * from './weather.js';
+export * from './weatherRegions.js';

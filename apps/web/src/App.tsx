@@ -32,6 +32,9 @@ const SubwayPage = lazy(() =>
 const AirQualityPage = lazy(() =>
   import('./routes/AirQualityPage').then((m) => ({ default: m.AirQualityPage })),
 );
+const WeatherPage = lazy(() =>
+  import('./routes/WeatherPage').then((m) => ({ default: m.WeatherPage })),
+);
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -135,6 +138,8 @@ export const App = () => {
             <Route path="/subway" element={<SubwayPage />} />
             {/* 에어코리아 대기정보(측정소·예보) — 공개 페이지, 대중교통과 같은 정책. */}
             <Route path="/air" element={<AirQualityPage />} />
+            {/* 기상청 날씨(단기·중기예보) — 공개 페이지, 대기정보와 같은 정책. */}
+            <Route path="/weather" element={<WeatherPage />} />
             <Route
               path="/me/settlements"
               element={

@@ -24,6 +24,7 @@ export * from './schemas/bus-favorite.js';
 export * from './schemas/subway.js';
 export * from './schemas/subway-favorite.js';
 export * from './schemas/air-quality.js';
+export * from './schemas/weather.js';
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';
 export * from './schemas/settlement-contact.js';
