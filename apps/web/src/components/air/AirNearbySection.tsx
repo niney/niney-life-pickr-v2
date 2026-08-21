@@ -99,12 +99,18 @@ export const AirNearbySection = ({
   const [picking, setPicking] = useState(false);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
 
+  // 상태별 안내 — 'timeout' 은 권한이 있는데 측위가 늦은 것(재시도하면 대개 됨)이라
+  // '환경 불가'와 분리해 다시 시도를 권한다.
   const locationHint =
     location.status === 'denied'
       ? '위치 권한이 거부되어 있습니다. 브라우저 사이트 설정에서 위치를 허용한 뒤 다시 누르세요.'
-      : location.status === 'unavailable'
-        ? '이 환경에서는 위치를 가져올 수 없습니다(비보안 HTTP·미지원 브라우저·시간 초과).'
-        : null;
+      : location.status === 'timeout'
+        ? '위치를 가져오는 데 시간이 오래 걸렸어요. 잠시 후 다시 눌러 주세요.'
+        : location.status === 'unavailable'
+          ? typeof window !== 'undefined' && window.isSecureContext === false
+            ? '평문 HTTP(예: IP 주소 접속)에서는 브라우저가 위치를 막습니다. localhost 나 HTTPS 로 접속하세요.'
+            : '현재 위치를 가져오지 못했습니다(기기 위치 서비스 꺼짐·미지원). 잠시 후 다시 시도해 주세요.'
+          : null;
 
   const saveGeo = () => {
     if (!geoCoords) return;

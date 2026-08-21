@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { forwardRef } from 'react';
+import { forwardRef, useImperativeHandle } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -9,11 +9,18 @@ import { server } from '~/test/msw';
 import { AirNearbySection, AirStationsErrorBlock } from './AirNearbySection';
 
 // 지도 엔진(OpenLayers)은 jsdom 에서 돌지 않는다 — 캔버스만 자리표시자로 바꾼다.
+// 카메라 핸들(flyToZoomIn 등)은 no-op 으로 채워 둔다(위치/선택 effect 가 부른다).
 // 여기서 검증하는 건 지도 주변의 계약: 검색 → 선택 콜백(측정소명 + 시도 옵션),
-// 위치 미지원 안내, 활용신청 전(인증 30) 안내 분기.
+// 내 위치 → 주변 목록, 위치 미지원 안내, 활용신청 전(인증 30) 안내 분기.
 vi.mock('~/components/restaurant/MapCanvas', () => ({
-  MapCanvas: forwardRef<HTMLDivElement>(function MockMapCanvas(_props, ref) {
-    return <div ref={ref} data-testid="map-canvas" />;
+  MapCanvas: forwardRef(function MockMapCanvas(_props, ref) {
+    useImperativeHandle(ref, () => ({
+      flyTo: () => {},
+      flyToZoomIn: () => {},
+      fitToMarkers: () => {},
+      fitToCoords: () => {},
+    }));
+    return <div data-testid="map-canvas" />;
   }),
 }));
 
@@ -142,7 +149,7 @@ describe('AirNearbySection', () => {
     );
     renderSection();
     fireEvent.click(screen.getByRole('button', { name: /내 위치로 찾기/ }));
-    expect(await screen.findByText(/위치를 가져올 수 없습니다/)).toBeInTheDocument();
+    expect(await screen.findByText(/위치를 가져오지 못했습니다/)).toBeInTheDocument();
     // MSW onUnhandledRequest:'error' — nearby 호출이 나갔다면 여기서 실패했을 것.
   });
 });
