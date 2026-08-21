@@ -9,6 +9,7 @@ import {
   useAirForecast,
   useAirSidoRealtime,
   useAirStationHistory,
+  useAirStations,
   useAirWeeklyForecast,
 } from '@repo/shared';
 import { AIR_HISTORY_TERMS, AIR_FORECAST_CODES } from '@repo/api-contract';
@@ -27,6 +28,7 @@ import { AirBadStations } from '~/components/air/AirBadStations';
 import { AirForecastSection } from '~/components/air/AirForecastSection';
 import { AirWeeklySection } from '~/components/air/AirWeeklySection';
 import { AirLegend } from '~/components/air/AirLegend';
+import { AirNearbySection, AirStationsErrorBlock } from '~/components/air/AirNearbySection';
 
 // 대기정보 예시 페이지 — 에어코리아 대기오염정보 API(15073861) 5개 오퍼레이션으로
 // 보여줄 수 있는 것을 한 화면에 모두 펼친다. 선택(시도·측정소·기간·예보항목)은
@@ -109,6 +111,8 @@ export const AirQualityPage = () => {
   const badQ = useAirBadStations();
   const forecastQ = useAirForecast();
   const weeklyQ = useAirWeeklyForecast();
+  // 측정소 좌표(별도 API) — 지도·내 주변·검색. 활용신청 전이면 503 이 오고 섹션이 안내한다.
+  const stationsQ = useAirStations();
 
   const refreshAll = () => queryClient.invalidateQueries({ queryKey: ['air'] });
   const anyFetching =
@@ -212,6 +216,32 @@ export const AirQualityPage = () => {
             </div>
           ) : (
             <AirStateBlock kind="empty" message="이 측정소의 최근 측정값이 없습니다." />
+          )}
+        </AirSection>
+
+        {/* ②-a 측정소 지도 · 내 주변 · 검색 (측정소정보 API) */}
+        <AirSection
+          title="측정소 지도 · 내 주변"
+          op="getMsrstnList"
+          opLabel="측정소정보 API(15073877) · 좌표/주소/측정항목"
+          description="전국 측정소 좌표에 현재 통합지수 등급을 색으로 얹은 지도, 측정소명·주소 검색, 내 위치 기준 가까운 측정소. 대기오염정보와 다른 API 라 활용신청이 따로 필요합니다."
+        >
+          {stationsQ.data?.stale && <AirStaleNote fetchedAtLabel={formatRelativeMin(stationsQ.data.fetchedAt)} />}
+          {stationsQ.isLoading && !stationsQ.data ? (
+            <AirStateBlock kind="loading" />
+          ) : stationsQ.isError && !stationsQ.data ? (
+            <AirStationsErrorBlock
+              error={stationsQ.error}
+              onRetry={() => stationsQ.refetch()}
+              retrying={stationsQ.isFetching}
+            />
+          ) : (
+            <AirNearbySection
+              stations={stationsQ.data?.items ?? []}
+              measures={nationItems ?? []}
+              selectedStation={station}
+              onSelect={(name, sidoValue) => selectStation(name, sidoValue)}
+            />
           )}
         </AirSection>
 

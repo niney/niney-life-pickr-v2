@@ -17,3 +17,4 @@ export * from './vehiclePill.js';
 export * from './thumbnail.js';
 export * from './vworld.js';
 export * from './airQuality.js';
+export * from './airMarker.js';

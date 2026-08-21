@@ -29,6 +29,9 @@ import { coerceStrOrNull, intOrNull, isObject } from '../../lib/narrow.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
 
 export const AIRKOREA_BASE_URL = 'https://apis.data.go.kr/B552584/ArpltnInforInqireSvc';
+// 측정소정보 서비스(data.go.kr 15073877, MsrstnInfoInqireSvc) — 측정소 좌표·주소·측정항목.
+// 대기오염정보와 별개 API 라 활용신청을 따로 해야 한다(미신청이면 게이트웨이 30).
+export const AIRKOREA_STATION_BASE_URL = 'https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc';
 // 업스트림이 느리다 — '전국'(673행·340KB)은 수 초, 게이트웨이 자체 타임아웃(504 SERVICETIMEOUT)
 // 도 ~10초 뒤에 온다. 10초로 끊으면 504 를 받아 재시도할 기회조차 없어 20초(버스/지하철 10초의 2배).
 const FETCH_TIMEOUT_MS = 20_000;
@@ -106,10 +109,11 @@ const buildUrls = (
   op: string,
   params: Record<string, string>,
   serviceKey: string,
+  base: string,
 ): { fetchUrl: string; requestUrl: string } => {
   const sp = new URLSearchParams({ returnType: 'json', ...params });
   const qs = sp.toString();
-  const prefix = `${AIRKOREA_BASE_URL}/${op}?serviceKey=`;
+  const prefix = `${base}/${op}?serviceKey=`;
   const suffix = qs ? `&${qs}` : '';
   return {
     fetchUrl: `${prefix}${toServiceKeyPart(serviceKey)}${suffix}`,
@@ -271,13 +275,15 @@ const interpret = (
   return { result: { requestUrl, items: parsed.items, totalCount: parsed.totalCount } };
 };
 
-// 단일 오퍼레이션 1페이지 호출. 게이트웨이 타임아웃/5xx 는 1회 재시도.
+// 단일 오퍼레이션 1페이지 호출. 게이트웨이 타임아웃/5xx 는 1회 재시도. base 로
+// 서비스(대기오염정보/측정소정보)를 고른다 — 봉투·오류 모델은 두 서비스가 같다.
 export const callAirKoreaApi = async (
   op: string,
   params: Record<string, string>,
   opts: AirKoreaApiRequestOptions,
+  base: string = AIRKOREA_BASE_URL,
 ): Promise<AirKoreaCallResult> => {
-  const { fetchUrl, requestUrl } = buildUrls(op, params, opts.serviceKey);
+  const { fetchUrl, requestUrl } = buildUrls(op, params, opts.serviceKey, base);
   let lastError: AirKoreaApiError | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) await sleep(RETRY_DELAY_MS);
@@ -295,6 +301,7 @@ const callAllPages = async (
   op: string,
   params: Record<string, string>,
   opts: AirKoreaApiRequestOptions,
+  base: string = AIRKOREA_BASE_URL,
 ): Promise<{ items: Record<string, unknown>[]; totalCount: number | null; pages: number }> => {
   const items: Record<string, unknown>[] = [];
   let totalCount: number | null = null;
@@ -304,6 +311,7 @@ const callAllPages = async (
       op,
       { ...params, numOfRows: String(AIRKOREA_PAGE_SIZE), pageNo: String(page) },
       opts,
+      base,
     );
     items.push(...res.items);
     totalCount = res.totalCount;
@@ -485,6 +493,50 @@ export const getDustForecast = async (
       imageUrls,
     };
   });
+};
+
+// ── 측정소정보 서비스(MsrstnInfoInqireSvc) ────────────────────────────────
+
+// 측정소 목록 1행 — 문서 샘플: stationName 종로구 / addr 서울 종로구 … / year 1997 /
+// mangName 도시대기 / item "SO2, CO, O3, NO2, PM10, PM2.5" / dmX 37.572025(위도, WGS84)
+// / dmY 127.005028(경도). 위·경도 축 배정은 서비스가 값 범위로 재판정한다(문서 샘플
+// 외 실측 미확보 — 키 승인 후 probe:airkorea 로 확인).
+export interface RawAirStationRow {
+  stationName: string | null;
+  addr: string | null;
+  year: string | null;
+  mangName: string | null;
+  item: string | null;
+  dmX: string | null;
+  dmY: string | null;
+  stationCode: string | null;
+}
+
+// 전국 측정소 목록(좌표 포함) — 파라미터 없이 전량(≈650개소, 1페이지). 측정소정보
+// API 활용신청이 없으면 게이트웨이 30(AirKoreaApiAuthError, 503)으로 떨어진다.
+export const getStationList = async (
+  opts: AirKoreaApiRequestOptions,
+): Promise<{ rows: RawAirStationRow[]; totalCount: number | null; pages: number }> => {
+  const { items, totalCount, pages } = await callAllPages(
+    'getMsrstnList',
+    {},
+    opts,
+    AIRKOREA_STATION_BASE_URL,
+  );
+  return {
+    rows: items.map((o) => ({
+      stationName: coerceStrOrNull(o['stationName']),
+      addr: coerceStrOrNull(o['addr']),
+      year: coerceStrOrNull(o['year']),
+      mangName: coerceStrOrNull(o['mangName']),
+      item: coerceStrOrNull(o['item']),
+      dmX: coerceStrOrNull(o['dmX']),
+      dmY: coerceStrOrNull(o['dmY']),
+      stationCode: coerceStrOrNull(o['stationCode']),
+    })),
+    totalCount,
+    pages,
+  };
 };
 
 // 초미세먼지 주간예보 — searchDate(발표일) 기준 1행. 당일 미발표면 빈 배열.

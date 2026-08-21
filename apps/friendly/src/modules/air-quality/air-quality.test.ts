@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getBadStations: vi.fn(),
   getDustForecast: vi.fn(),
   getWeeklyForecast: vi.fn(),
+  getStationList: vi.fn(),
 }));
 vi.mock('./airkorea-api.adapter.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./airkorea-api.adapter.js')>();
@@ -27,8 +28,11 @@ vi.mock('./airkorea-api.adapter.js', async (importOriginal) => {
 import type {
   AirBadStationsResultType,
   AirForecastResultType,
+  AirNearbyResultType,
   AirSidoRealtimeResultType,
   AirStationHistoryResultType,
+  AirStationSearchResultType,
+  AirStationsResultType,
   AirWeeklyForecastResultType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
@@ -37,6 +41,7 @@ import {
   AirKoreaApiError,
   type RawAirForecastRow,
   type RawAirMeasureRow,
+  type RawAirStationRow,
   type RawAirWeeklyRow,
 } from './airkorea-api.adapter.js';
 import {
@@ -94,6 +99,19 @@ const rawBadRows = () =>
   fixtureItems('bad-stations.json').map((o) => ({
     stationName: str(o['stationName']),
     addr: str(o['addr']),
+  }));
+// 측정소정보 — 문서 샘플 기반 합성 픽스처(실응답 미관측). 축 뒤집힌 행(과천시청)과
+// 좌표 결측 행(이도동)을 일부러 넣어 정규화 분기를 고정한다.
+const rawStationRows = (): RawAirStationRow[] =>
+  fixtureItems('msrstn-list.synthetic.json').map((o) => ({
+    stationName: str(o['stationName']),
+    addr: str(o['addr']),
+    year: str(o['year']),
+    mangName: str(o['mangName']),
+    item: str(o['item']),
+    dmX: str(o['dmX']),
+    dmY: str(o['dmY']),
+    stationCode: str(o['stationCode']),
   }));
 
 const sidoUrl = (sido: string): string => `/api/v1/air/sido/${encodeURIComponent(sido)}`;
@@ -301,6 +319,86 @@ describe('GET /api/v1/air/forecast/weekly', () => {
     expect(body.days[0]?.grades[0]).toEqual({ region: '서울', grade: '낮음' });
     expect(body.days[0]?.reliability).toBe('높음');
     expect(body.days[0]?.grades.some((g) => g.region === '신뢰도')).toBe(false);
+  });
+});
+
+describe('측정소 정보 — /air/stations · /nearby · /search (측정소정보 API)', () => {
+  // 캐시 전(첫 테스트)에 인증 실패를 검증해야 stale 폴백이 끼어들지 않는다.
+  it('활용신청 전(게이트웨이 30) → 503, 메시지에 코드 30', async () => {
+    mocks.getStationList.mockRejectedValue(
+      new AirKoreaApiAuthError('에어코리아 api 인증 실패(30: 등록되지 않은 서비스키)', { code: '30' }),
+    );
+    const res = await app.inject({ url: '/api/v1/air/stations' });
+    expect(res.statusCode).toBe(503);
+    expect((res.json() as { message: string }).message).toContain('30');
+  });
+
+  it('목록: dmX/dmY 값 범위로 위·경도 판정(뒤집힘 교정·결측 null), 주소→시도, 측정항목 배열, 24h 캐시', async () => {
+    mocks.getStationList.mockResolvedValue({ rows: rawStationRows(), totalCount: 5, pages: 1 });
+    const res = await app.inject({ url: '/api/v1/air/stations' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as AirStationsResultType;
+    expect(body.total).toBe(5);
+    const byName = Object.fromEntries(body.items.map((s) => [s.stationName, s]));
+    expect(byName['종로구']).toMatchObject({
+      lat: 37.572025,
+      lng: 127.005028,
+      sidoName: '서울',
+      mangName: '도시대기',
+      year: '1997',
+      items: ['SO2', 'CO', 'O3', 'NO2', 'PM10', 'PM2.5'],
+    });
+    // dmX/dmY 가 뒤집힌 행 — 값 범위로 교정.
+    expect(byName['과천시청']).toMatchObject({ lat: 37.429118, lng: 127.000172, sidoName: '경기' });
+    // 좌표 결측 "-" — null, 목록에는 남는다.
+    expect(byName['이도동']).toMatchObject({ lat: null, lng: null, sidoName: '제주', items: ['SO2', 'CO', 'O3', 'NO2', 'PM10'] });
+
+    await app.inject({ url: '/api/v1/air/stations' });
+    expect(mocks.getStationList).toHaveBeenCalledTimes(1);
+  });
+
+  it('내 주변: 반경 내 거리순 + 현재 측정값 조인(전국 캐시), limit/total, 좌표 범위 400', async () => {
+    mocks.getStationList.mockResolvedValue({ rows: rawStationRows(), totalCount: 5, pages: 1 });
+    mocks.getSidoRealtime.mockResolvedValue({ rows: rawMeasureRows('sido-all.json'), pages: 1 });
+    // 종로구 근처(약 450m) — 기본 반경 10km 안에 종로구·강남구, 과천(≈16km)·송도(≈37km)는 밖.
+    const res = await app.inject({ url: '/api/v1/air/stations/nearby?lat=37.57&lng=127.0' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as AirNearbyResultType;
+    expect(body.center).toEqual({ lat: 37.57, lng: 127.0 });
+    expect(body.items.map((i) => i.stationName)).toEqual(['종로구', '강남구']);
+    expect(body.total).toBe(2);
+    expect(body.items[0]!.dist).toBeLessThan(1000);
+    expect(body.items[1]!.dist).toBeGreaterThan(body.items[0]!.dist);
+    // 강남구는 전국 실시간 픽스처에 있어 조인, 종로구는 없어 null.
+    expect(body.items[1]!.measure).toMatchObject({ stationName: '강남구', pm10: 35, khaiGrade: 2 });
+    expect(body.items[0]!.measure).toBeNull();
+
+    const wide = await app.inject({ url: '/api/v1/air/stations/nearby?lat=37.57&lng=127.0&radius=50000&limit=2' });
+    const wb = wide.json() as AirNearbyResultType;
+    expect(wb.total).toBe(4);
+    expect(wb.items).toHaveLength(2);
+
+    const bad = await app.inject({ url: '/api/v1/air/stations/nearby?lat=45&lng=127.0' });
+    expect(bad.statusCode).toBe(400);
+    const badLimit = await app.inject({ url: '/api/v1/air/stations/nearby?lat=37.57&lng=127.0&limit=0' });
+    expect(badLimit.statusCode).toBe(400);
+  });
+
+  it('검색: 이름 앞머리 → 이름 포함 → 주소 포함 순, 빈 검색어 400', async () => {
+    mocks.getStationList.mockResolvedValue({ rows: rawStationRows(), totalCount: 5, pages: 1 });
+    const byName = await app.inject({ url: '/api/v1/air/stations/search?q=%EA%B0%95%EB%82%A8' });
+    expect(byName.statusCode).toBe(200);
+    const b1 = byName.json() as AirStationSearchResultType;
+    expect(b1.items.map((s) => s.stationName)).toEqual(['강남구']);
+    expect(b1.total).toBe(1);
+
+    // '서울' 은 이름엔 없고 주소에만 — 종로구·강남구(주소 포함) 이름순.
+    const byAddr = await app.inject({ url: '/api/v1/air/stations/search?q=%EC%84%9C%EC%9A%B8' });
+    const b2 = byAddr.json() as AirStationSearchResultType;
+    expect(b2.items.map((s) => s.stationName)).toEqual(['강남구', '종로구']);
+
+    const empty = await app.inject({ url: '/api/v1/air/stations/search?q=%20' });
+    expect(empty.statusCode).toBe(400);
   });
 });
 

@@ -16,6 +16,7 @@ import {
   getBadStations,
   getDustForecast,
   getSidoRealtime,
+  getStationList,
   getStationRealtime,
   getWeeklyForecast,
   type RawAirMeasureRow,
@@ -140,6 +141,32 @@ const main = async (): Promise<void> => {
   if (weekly) {
     dump('weekly', weekly);
     console.log(`  rows=${weekly.length} presnatnDt=${weekly[0]?.presnatnDt} days=${weekly[0]?.days.map((d) => d.date).join(',')}`);
+  }
+
+  // ⑥ 측정소정보 API(15073877) — 별도 활용신청 필요. 좌표 축(dmX=위도?) 값 범위로 판정.
+  const stations = await step('MsrstnInfoInqireSvc getMsrstnList (측정소정보 15073877)', () =>
+    getStationList(opts),
+  );
+  if (stations) {
+    dump('msrstn-list', stations.rows);
+    const rows = stations.rows;
+    const nums = (k: 'dmX' | 'dmY') =>
+      rows.map((r) => Number(r[k])).filter((v) => Number.isFinite(v));
+    const xs = nums('dmX');
+    const ys = nums('dmY');
+    console.log(`  rows=${rows.length} total=${stations.totalCount}`);
+    console.log(`  dmX ${Math.min(...xs)}~${Math.max(...xs)} / dmY ${Math.min(...ys)}~${Math.max(...ys)}`);
+    console.log(
+      `  → ${xs.every((v) => v >= 33 && v <= 39) ? 'dmX=위도(WGS84)' : 'dmX 축 재확인 필요'}, ` +
+        `${ys.every((v) => v >= 124 && v <= 132) ? 'dmY=경도' : 'dmY 축 재확인 필요'}`,
+    );
+    console.log('  keys:', Object.keys(rows[0] ?? {}).join(','));
+    console.log('  mangName:', count(rows, (r) => r.mangName));
+  } else {
+    console.log(
+      '  ※ 측정소정보 API 는 data.go.kr 15073877 활용신청이 따로 필요합니다(개발계정 자동승인,\n' +
+        '    같은 계정 키 사용). 승인 후 이 프로브를 다시 돌려 dmX/dmY 축을 확인하세요.',
+    );
   }
 
   console.log('\n완료 — 덤프:', OUT_DIR);

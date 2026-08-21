@@ -5,6 +5,7 @@ import {
   getBadStations,
   getDustForecast,
   getSidoRealtime,
+  getStationList,
 } from './airkorea-api.adapter.js';
 
 // 실 에어코리아 API 스모크 — 키가 있을 때만(AIRKOREA_API_KEY, 없으면 BUS_API_KEY:
@@ -73,6 +74,35 @@ describe.skipIf(!runnable)('airkorea live smoke (AIRKOREA_API_KEY 또는 BUS_API
     expect(r.stationName).toBeTruthy();
     expect(r.sidoName).toContain('서울');
     expect(r.dataTime === null || /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(r.dataTime)).toBe(true);
+  });
+
+  // 측정소정보 API(15073877) — 활용신청 전이면 인증 30 으로 skip(안내 출력). 승인 후엔
+  // dmX/dmY 가 WGS84 위·경도 범위에 들어오는지 본다(서비스 정규화의 전제).
+  it('getStationList — 좌표가 WGS84 범위(위도 33~39 / 경도 124~132)', { timeout: 30_000 }, async (ctx) => {
+    let rows;
+    try {
+      rows = (await getStationList(opts())).rows;
+    } catch (e) {
+      if (e instanceof AirKoreaApiAuthError) {
+        console.warn(
+          '[airkorea live] 측정소정보 API 미승인 — data.go.kr 15073877 활용신청 필요(같은 계정 키). skip.',
+        );
+        ctx.skip();
+        return;
+      }
+      if (skipIfExternal(e, ctx)) return;
+      throw e;
+    }
+    expect(rows.length).toBeGreaterThan(100);
+    const withCoords = rows.filter((r) => r.dmX && r.dmY && r.dmX !== '-' && r.dmY !== '-');
+    expect(withCoords.length).toBeGreaterThan(0);
+    for (const r of withCoords.slice(0, 50)) {
+      const x = Number(r.dmX);
+      const y = Number(r.dmY);
+      const latLng = x >= 33 && x <= 39 && y >= 124 && y <= 132;
+      const lngLat = y >= 33 && y <= 39 && x >= 124 && x <= 132;
+      expect(latLng || lngLat).toBe(true);
+    }
   });
 
   it('getDustForecast(오늘) — 0건 이상, 코드는 PM10/PM25/O3', { timeout: 30_000 }, async (ctx) => {

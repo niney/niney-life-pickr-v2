@@ -219,6 +219,86 @@ export const AirWeeklyForecastQuery = z.object({
 });
 export type AirWeeklyForecastQueryType = z.infer<typeof AirWeeklyForecastQuery>;
 
+// ── 측정소 정보 (MsrstnInfoInqireSvc getMsrstnList, data.go.kr 15073877) ─────
+// 측정소 좌표·주소·측정항목. 대기오염정보(15073861)와 다른 API 라 활용신청이 따로
+// 필요하다(같은 계정 키). 서버가 전량(≈650개소)을 24시간 캐시하고 지도·검색·내 주변을
+// 로컬로 계산한다(업스트림 근접측정소 TM 좌표 오퍼레이션은 쓰지 않는다).
+export const AirStationInfoItem = z.object({
+  stationName: z.string().min(1).max(60),
+  addr: z.string().max(200),
+  // addr 앞머리에서 추정한 시도 약칭 — 시도 선택지(AIR_SIDO_OPTIONS) 매핑용.
+  sidoName: z.string().max(20).nullable(),
+  mangName: z.string().max(30).nullable(),
+  // 설치년도(year) — 문자열 원문.
+  year: z.string().max(10).nullable(),
+  // 측정항목 원문("SO2, CO, O3, NO2, PM10, PM2.5") 을 쉼표로 나눈 배열.
+  items: z.array(z.string().max(20)),
+  // WGS84 — 업스트림 dmX(위도)/dmY(경도)를 값 범위로 판정해 정규화. 범위 밖이면 null
+  // (지도에는 안 그리고 목록에는 남는다).
+  lat: z.number().min(33).max(39).nullable(),
+  lng: z.number().min(124).max(132).nullable(),
+});
+export type AirStationInfoItemType = z.infer<typeof AirStationInfoItem>;
+
+export const AirStationsResult = z.object({
+  items: z.array(AirStationInfoItem),
+  total: z.number().int().min(0),
+  fetchedAt: z.string(),
+  stale: z.boolean(),
+});
+export type AirStationsResultType = z.infer<typeof AirStationsResult>;
+
+export const AirNearbyQuery = z.object({
+  // WGS84 한국 범위 강제.
+  lat: z.coerce.number().min(33).max(39),
+  lng: z.coerce.number().min(124).max(132),
+  // 반경(m). 측정소 간격이 넓어 기본 10km, 상한 50km.
+  radius: z.coerce.number().int().min(500).max(50_000).default(10_000),
+  // 거리순 상위 N — 기본 5, 상한 20.
+  limit: z.coerce.number().int().min(1).max(20).default(5),
+});
+export type AirNearbyQueryType = z.infer<typeof AirNearbyQuery>;
+
+export const AirNearbyStationItem = AirStationInfoItem.extend({
+  // 요청 좌표로부터의 거리(m) — 서버 계산, 오름차순 정렬 계약.
+  dist: z.number().int().min(0),
+  // 같은 이름의 측정소 현재 측정값('전국' 실시간 캐시 조인). 매칭 실패·캐시 없음 null.
+  measure: AirMeasureItem.nullable(),
+});
+export type AirNearbyStationItemType = z.infer<typeof AirNearbyStationItem>;
+
+export const AirNearbyResult = z.object({
+  center: z.object({ lat: z.number(), lng: z.number() }),
+  items: z.array(AirNearbyStationItem),
+  // 반경 내 전체 건수(절단 전).
+  total: z.number().int().min(0),
+  fetchedAt: z.string(),
+  stale: z.boolean(),
+});
+export type AirNearbyResultType = z.infer<typeof AirNearbyResult>;
+
+export const AirStationSearchQuery = z.object({
+  // 측정소명/주소 부분일치(NFC 정규화). 1~30자.
+  q: z
+    .string()
+    .trim()
+    .transform((v) => v.normalize('NFC'))
+    .refine((v) => v.length >= 1 && v.length <= 30, {
+      message: '검색어는 1자 이상 30자 이하여야 합니다.',
+    }),
+});
+export type AirStationSearchQueryType = z.infer<typeof AirStationSearchQuery>;
+
+export const AirStationSearchResult = z.object({
+  q: z.string(),
+  // 상위 30건으로 절단. total 은 절단 전 건수.
+  items: z.array(AirStationInfoItem),
+  total: z.number().int().min(0),
+  fetchedAt: z.string(),
+  stale: z.boolean(),
+});
+export type AirStationSearchResultType = z.infer<typeof AirStationSearchResult>;
+
 export const AirWeeklyForecastResult = z.object({
   // 발표일 "YYYY-MM-DD" — 조회 일자들에 발표분이 없으면 null(days 빈 배열).
   presentedAt: z.string().nullable(),

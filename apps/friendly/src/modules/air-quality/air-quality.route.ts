@@ -4,11 +4,16 @@ import {
   AirBadStationsResult,
   AirForecastQuery,
   AirForecastResult,
+  AirNearbyQuery,
+  AirNearbyResult,
   AirSidoParams,
   AirSidoRealtimeResult,
   AirStationHistoryParams,
   AirStationHistoryQuery,
   AirStationHistoryResult,
+  AirStationSearchQuery,
+  AirStationSearchResult,
+  AirStationsResult,
   AirWeeklyForecastQuery,
   AirWeeklyForecastResult,
   ErrorResponseSchema,
@@ -124,6 +129,82 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
         return await service.getForecast(req.query.date);
       } catch (e) {
         const sent = replyUpstreamError(req, reply, e, [502, 503], '대기질 예보 조회 실패');
+        if (sent) return sent;
+        throw e;
+      }
+    },
+  });
+
+  // ── 측정소 정보(측정소정보 API 15073877) — 좌표·주소·측정항목 ──────────
+  // 전국 목록(24시간 캐시). 활용신청 전이면 503(인증 30) — 메시지에 코드가 실려
+  // FE 가 신청 안내를 띄운다.
+  typed.get(Routes.AirQuality.stations, {
+    config: { rateLimit: RATE.transitRealtime },
+    schema: {
+      tags: ['air-quality'],
+      response: {
+        200: AirStationsResult,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getStations();
+      } catch (e) {
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '대기 측정소 목록 조회 실패');
+        if (sent) return sent;
+        throw e;
+      }
+    },
+  });
+
+  // 좌표 기반 내 주변 측정소 — 캐시 목록 거리 계산 + 현재 측정값 조인. 좌표 범위·
+  // radius/limit 상한은 zod 가 400.
+  typed.get(Routes.AirQuality.stationsNearby, {
+    config: { rateLimit: RATE.transitRealtime },
+    schema: {
+      tags: ['air-quality'],
+      querystring: AirNearbyQuery,
+      response: {
+        200: AirNearbyResult,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.getNearbyStations(
+          req.query.lat,
+          req.query.lng,
+          req.query.radius,
+          req.query.limit,
+        );
+      } catch (e) {
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '대기 주변 측정소 조회 실패');
+        if (sent) return sent;
+        throw e;
+      }
+    },
+  });
+
+  // 측정소명/주소 검색 — 캐시 목록 로컬 검색(업스트림 0콜).
+  typed.get(Routes.AirQuality.stationSearch, {
+    config: { rateLimit: RATE.transitRealtime },
+    schema: {
+      tags: ['air-quality'],
+      querystring: AirStationSearchQuery,
+      response: {
+        200: AirStationSearchResult,
+        502: ErrorResponseSchema,
+        503: ErrorResponseSchema,
+      },
+    },
+    handler: async (req, reply) => {
+      try {
+        return await service.searchStations(req.query.q);
+      } catch (e) {
+        const sent = replyUpstreamError(req, reply, e, [502, 503], '대기 측정소 검색 실패');
         if (sent) return sent;
         throw e;
       }

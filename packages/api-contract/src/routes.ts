@@ -465,6 +465,14 @@ export const AirQuality = {
   forecast: `${API_PREFIX}/air/forecast`,
   // 초미세먼지 주간예보(D+3~D+6) — ?date=발표일(기본 오늘→전일 폴백).
   weeklyForecast: `${API_PREFIX}/air/forecast/weekly`,
+  // ── 측정소 정보(별도 API: 측정소정보 15073877 MsrstnInfoInqireSvc) ──
+  // 전국 측정소 좌표·주소·측정항목 — 서버 24시간 캐시. 지도 마커 원천.
+  stations: `${API_PREFIX}/air/stations`,
+  // 좌표 기반 내 주변 측정소 — ?lat&lng&radius(m, 기본 10000)&limit(기본 5). 캐시된
+  // 목록에서 거리 계산 + 현재 측정값 조인(업스트림 추가 호출 없음).
+  stationsNearby: `${API_PREFIX}/air/stations/nearby`,
+  // 측정소명/주소 검색 — ?q=(1~30자), 캐시된 목록 로컬 검색.
+  stationSearch: `${API_PREFIX}/air/stations/search`,
 } as const;
 
 

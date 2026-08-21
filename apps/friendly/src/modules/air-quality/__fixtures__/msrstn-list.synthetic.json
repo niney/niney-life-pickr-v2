@@ -1,0 +1,60 @@
+{
+ "response": {
+  "body": {
+   "totalCount": 5,
+   "items": [
+    {
+     "stationName": "종로구",
+     "addr": "서울 종로구 종로35가길 19 종로5,6가 동 주민센터",
+     "year": "1997",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "37.572025",
+     "dmY": "127.005028"
+    },
+    {
+     "stationName": "강남구",
+     "addr": "서울 강남구 학동로 426 강남구청 별관 1동",
+     "year": "1997",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "37.517592",
+     "dmY": "127.047307"
+    },
+    {
+     "stationName": "송도",
+     "addr": "인천 연수구 갯벌로 12 테크노파크 3층 옥상",
+     "year": "2002",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "37.382428",
+     "dmY": "126.655472"
+    },
+    {
+     "stationName": "과천시청",
+     "addr": "경기도 과천시 관문로 69",
+     "year": "2003",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "127.000172",
+     "dmY": "37.429118"
+    },
+    {
+     "stationName": "이도동",
+     "addr": "제주 제주시 광양9길 5 제주보건소",
+     "year": "1999",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10",
+     "dmX": "-",
+     "dmY": "-"
+    }
+   ],
+   "pageNo": 1,
+   "numOfRows": 1000
+  },
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  }
+ }
+}
