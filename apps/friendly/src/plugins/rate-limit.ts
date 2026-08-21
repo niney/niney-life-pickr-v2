@@ -43,6 +43,8 @@ export const RATE = {
   // 일상지도 뷰포트/주변 조회 — 로컬 DB 라 싸지만 지도 이동마다 레이어당 1콜. 패닝 연타 +
   // CGNAT 고려 분당 240.
   lifeMapRead: { max: 240, timeWindow: '1 minute' },
+  // 일상지도 지역 이동 검색(VWorld 검색 프록시) — 타이핑 디바운스 뒤 호출이라 분당 60 이면 넉넉.
+  lifeMapSearch: { max: 60, timeWindow: '1 minute' },
 } as const;
 
 export default fp(async (app) => {

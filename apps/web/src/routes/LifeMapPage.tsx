@@ -21,6 +21,7 @@ import {
 import { usePublicLayout } from '~/components/PublicLayout';
 import type { MapCanvasHandle, MapViewport } from '~/components/restaurant/MapCanvas';
 import { LifeDetailCard } from '~/components/life-map/LifeDetailCard';
+import { LifeGoToBox, type LifeGoToTarget } from '~/components/life-map/LifeGoToBox';
 import { LifeLayerBar } from '~/components/life-map/LifeLayerBar';
 import { LifeMapFooter } from '~/components/life-map/LifeMapFooter';
 import { LifeMapView } from '~/components/life-map/LifeMapView';
@@ -184,6 +185,17 @@ export const LifeMapPage = () => {
     if (item.lat !== null && item.lng !== null) mapRef.current?.flyTo(item.lat, item.lng);
   }, [detailQ.data, sel, selectedMarkerId]);
 
+  // 지역 이동(옴니박스) — 선택한 곳으로 날아가고 URL 도 맞춘다(programmatic move 는 URL 동기 안 되므로 직접).
+  const [goToOpen, setGoToOpen] = useState(false);
+  const handleGo = useCallback(
+    (t: LifeGoToTarget) => {
+      userMovedRef.current = true;
+      mapRef.current?.flyTo(t.lat, t.lng, t.zoom);
+      setParams({ ll: `${t.lat.toFixed(5)},${t.lng.toFixed(5)}`, z: String(t.zoom) });
+    },
+    [setParams],
+  );
+
   // 내 위치 — 버튼으로만(auto:false). 얻으면 그곳으로 이동.
   const userLoc = useUserLocation({ auto: false });
   const myLocation = userLoc.status === 'granted' && userLoc.coords && isInKorea(userLoc.coords) ? userLoc.coords : null;
@@ -220,6 +232,14 @@ export const LifeMapPage = () => {
   return (
     <div className="flex w-full flex-col xl:flex-row" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
       <aside className="order-2 flex h-[42dvh] w-full shrink-0 flex-col border-t xl:order-1 xl:h-full xl:w-[400px] xl:border-r xl:border-t-0">
+        <LifeGoToBox
+          open={goToOpen}
+          onOpenChange={setGoToOpen}
+          savedLocation={saved ? { lat: saved.lat, lng: saved.lng, label: saved.label } : null}
+          onGo={handleGo}
+        />
+        {goToOpen ? null : (
+          <>
         <LifeLayerBar
           layers={layers}
           purposes={purposes}
@@ -257,6 +277,8 @@ export const LifeMapPage = () => {
             selectedId={sel?.layer === activeTab ? sel.id : null}
             onSelect={handleListSelect}
           />
+        )}
+          </>
         )}
         <LifeMapFooter status={statusQ.data} />
       </aside>

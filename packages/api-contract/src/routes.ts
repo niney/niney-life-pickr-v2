@@ -510,6 +510,8 @@ export const LifeMap = {
   points: `${API_PREFIX}/life-map/points`,
   // 좌표 기준 거리순 목록 — ?layer&lat&lng[&radius≤3000][&limit≤30][필터].
   nearby: `${API_PREFIX}/life-map/nearby`,
+  // 지역 이동 검색(주소·장소, VWorld 검색 프록시) — ?q=(2~60자)[&limit≤20]. 키 없으면 enabled=false.
+  search: `${API_PREFIX}/life-map/search`,
   // 단건 상세 — 인자는 빌더가 인코딩한다(라우트 등록은 decodeURIComponent 로 되돌린 패턴 사용).
   detail: (layer: string, id: string) =>
     `${API_PREFIX}/life-map/${encodeURIComponent(layer)}/${encodeURIComponent(id)}`,

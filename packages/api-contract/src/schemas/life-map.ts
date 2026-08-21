@@ -192,6 +192,40 @@ export const LifeMapNearbyResult = z.object({
 });
 export type LifeMapNearbyResultType = z.infer<typeof LifeMapNearbyResult>;
 
+// ── 지역 이동 검색(주소·장소) ─────────────────────────────────────────────────
+// VWorld 검색 API 프록시. 행정구역(로컬 245지점)·지하철역·버스정류장은 클라이언트가 각자 섞고,
+// 이 라우트는 주소·POI 만 — 키가 없으면 enabled=false 빈 목록(200).
+export const LifeMapSearchQuery = z.object({
+  q: z
+    .string()
+    .trim()
+    .transform((v) => v.normalize('NFC').replace(/\s+/g, ' '))
+    .refine((v) => v.length >= 2 && v.length <= 60, { message: '검색어는 2자 이상 60자 이하여야 합니다.' }),
+  limit: z.coerce.number().int().min(1).max(20).default(8),
+});
+export type LifeMapSearchQueryType = z.infer<typeof LifeMapSearchQuery>;
+
+export const LifeMapSearchItem = z.object({
+  // place = POI, road/parcel = 도로명/지번 주소.
+  kind: z.enum(['place', 'road', 'parcel']),
+  id: z.string(),
+  title: z.string(),
+  // 장소는 "분류 · 주소", 주소는 건물명(없으면 지번).
+  subtitle: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+});
+export type LifeMapSearchItemType = z.infer<typeof LifeMapSearchItem>;
+
+export const LifeMapSearchResult = z.object({
+  q: z.string(),
+  items: z.array(LifeMapSearchItem),
+  // false = 서버에 vworld 키가 없어 검색을 제공하지 않음(클라이언트는 섹션을 숨긴다).
+  enabled: z.boolean(),
+  fetchedAt: z.string(),
+});
+export type LifeMapSearchResultType = z.infer<typeof LifeMapSearchResult>;
+
 // ── 적재 상태 ────────────────────────────────────────────────────────────────
 export const LifeMapLayerStatus = z.object({
   layer: LifeMapLayer,
