@@ -29,6 +29,9 @@ const BusPage = lazy(() => import('./routes/BusPage').then((m) => ({ default: m.
 const SubwayPage = lazy(() =>
   import('./routes/SubwayPage').then((m) => ({ default: m.SubwayPage })),
 );
+const AirQualityPage = lazy(() =>
+  import('./routes/AirQualityPage').then((m) => ({ default: m.AirQualityPage })),
+);
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -130,6 +133,8 @@ export const App = () => {
             <Route path="/bus" element={<BusPage />} />
             {/* 수도권 전철 역 검색 + 지도. 버스와 '대중교통' 탭으로 묶인 공개 페이지. */}
             <Route path="/subway" element={<SubwayPage />} />
+            {/* 에어코리아 대기정보(측정소·예보) — 공개 페이지, 대중교통과 같은 정책. */}
+            <Route path="/air" element={<AirQualityPage />} />
             <Route
               path="/me/settlements"
               element={

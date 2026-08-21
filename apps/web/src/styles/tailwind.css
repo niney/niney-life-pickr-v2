@@ -54,6 +54,11 @@
   --tonal-teal-bg: oklch(0.95 0.035 195);
   --tonal-teal-bg-hover: oklch(0.92 0.045 195);
   --tonal-teal-fg: oklch(0.47 0.09 195);
+
+  /* 대기정보 시계열 차트 계열색(PM10 / PM2.5) — 2계열 범주색. dataviz 검증기로
+   * 라이트(#fcfcfb)·다크(#353535) 표면에서 CVD ΔE·명도대역·대비 통과값. */
+  --air-series-1: #2a78d6;
+  --air-series-2: #eb6834;
 }
 
 .dark {
@@ -96,6 +101,9 @@
   --tonal-teal-bg: oklch(0.33 0.045 195);
   --tonal-teal-bg-hover: oklch(0.38 0.055 195);
   --tonal-teal-fg: oklch(0.84 0.1 195);
+
+  --air-series-1: #3f86dc;
+  --air-series-2: #de6f3f;
 }
 
 @layer base {
