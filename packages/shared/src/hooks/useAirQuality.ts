@@ -69,19 +69,26 @@ export const useAirStations = () =>
 
 // 좌표 기반 내 주변 측정소 — 좌표는 호출자가 Geolocation 으로 확정해 넘긴다. 소수
 // 4자리 스냅(≈11m)으로 GPS 흔들림에 쿼리 키가 갈라지지 않게(버스/지하철 미러).
+// 측정값 조인이 붙어 있어 다른 측정 훅과 같은 10분 리듬으로 재조회한다(탭이 보일 때만;
+// 서버 10분 캐시 뒤라 업스트림 추가 호출은 없다). 재조회 중엔 기존 데이터가 유지돼
+// 상단바 칩처럼 상주하는 표시가 깜빡이지 않는다. refetchOnWindowFocus 는 상주 표시
+// (칩)만 켠다 — 오래 떠나 있다 돌아온 탭이 즉시 최신화되도록.
 export const useAirNearbyStations = (
   lat: number | null,
   lng: number | null,
-  opts: { radius?: number; limit?: number } = {},
+  opts: { radius?: number; limit?: number; refetchOnWindowFocus?: boolean } = {},
 ) => {
   const enabled = lat !== null && lng !== null;
   const keyLat = lat !== null ? lat.toFixed(4) : null;
   const keyLng = lng !== null ? lng.toFixed(4) : null;
+  const { refetchOnWindowFocus, ...apiOpts } = opts;
   return useQuery({
-    queryKey: ['air', 'stations', 'nearby', keyLat, keyLng, opts.radius ?? null, opts.limit ?? null],
-    queryFn: () => airQualityApi.nearbyStations(lat!, lng!, opts),
+    queryKey: ['air', 'stations', 'nearby', keyLat, keyLng, apiOpts.radius ?? null, apiOpts.limit ?? null],
+    queryFn: () => airQualityApi.nearbyStations(lat!, lng!, apiOpts),
     enabled,
     staleTime: MEASURE_STALE_MS,
+    refetchInterval: MEASURE_REFETCH_MS,
+    ...(refetchOnWindowFocus !== undefined ? { refetchOnWindowFocus } : {}),
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
