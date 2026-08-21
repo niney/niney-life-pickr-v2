@@ -299,6 +299,36 @@ export const AirStationSearchResult = z.object({
 });
 export type AirStationSearchResultType = z.infer<typeof AirStationSearchResult>;
 
+// ── 내 대기 위치(저장 지점) ──────────────────────────────────────────────
+// 사용자가 지정·저장한 좌표 1곳. 상단바 칩이 이 좌표로 가장 가까운 측정소의 현재 등급을
+// 보여준다(해석은 /air/stations/nearby?limit=1). 로그인은 서버(PUT/GET/DELETE, 소유자
+// 스코프), 게스트는 클라이언트 persist — 로그인 직후 서버가 비어 있으면 게스트 값을 올린다.
+export const AIR_LOCATION_SOURCES = ['geolocation', 'manual'] as const;
+export const AirLocationSource = z.enum(AIR_LOCATION_SOURCES);
+export type AirLocationSourceType = z.infer<typeof AirLocationSource>;
+
+export const AirLocationUpsertBody = z.object({
+  lat: z.number().min(33).max(39),
+  lng: z.number().min(124).max(132),
+  // 표시용 라벨(저장 시점의 가까운 측정소명 등). 없으면 null.
+  label: z.string().trim().max(40).nullable().default(null),
+  // geolocation = '내 위치로 찾기' 결과 / manual = 지도에서 직접 지정.
+  source: AirLocationSource,
+});
+export type AirLocationUpsertBodyType = z.infer<typeof AirLocationUpsertBody>;
+
+export const AirLocationItem = AirLocationUpsertBody.extend({
+  // 저장(갱신) 시각 ISO — 게스트 저장분도 같은 형태.
+  updatedAt: z.string(),
+});
+export type AirLocationItemType = z.infer<typeof AirLocationItem>;
+
+// GET/PUT/DELETE 응답 — 변경 후 상태(삭제면 null). 클라이언트가 캐시를 통째로 교체.
+export const AirLocationResult = z.object({
+  location: AirLocationItem.nullable(),
+});
+export type AirLocationResultType = z.infer<typeof AirLocationResult>;
+
 export const AirWeeklyForecastResult = z.object({
   // 발표일 "YYYY-MM-DD" — 조회 일자들에 발표분이 없으면 null(days 빈 배열).
   presentedAt: z.string().nullable(),

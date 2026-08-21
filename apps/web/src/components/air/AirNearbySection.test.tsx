@@ -40,6 +40,9 @@ const renderSection = (onSelect = vi.fn()) => {
         measures={[]}
         selectedStation={null}
         onSelect={onSelect}
+        savedLocation={null}
+        onSaveLocation={() => {}}
+        onClearLocation={() => {}}
       />
     </QueryClientProvider>,
   );
