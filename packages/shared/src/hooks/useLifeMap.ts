@@ -57,6 +57,22 @@ export const useLifeMapNearby = (
   });
 };
 
+// 지역 이동 검색(주소·장소) — 2자 미만이면 비활성. 서버가 10분 캐시를 들고 있어 같은 검색어
+// 재조회를 클라이언트에서도 10분 막는다. 디바운스는 호출부(웹)가 입력값에 건다.
+const SEARCH_STALE_MS = 10 * 60_000;
+export const useLifeMapSearch = (q: string, limit?: number) => {
+  const trimmed = q.trim().replace(/\s+/g, ' ');
+  const enabled = trimmed.length >= 2 && trimmed.length <= 60;
+  return useQuery({
+    queryKey: ['life-map', 'search', trimmed, limit ?? null],
+    queryFn: () => lifeMapApi.search(trimmed, limit),
+    enabled,
+    staleTime: SEARCH_STALE_MS,
+    retry: false,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
 export const useLifeMapDetail = (layer: LifeMapLayerType | null, id: string | null) => {
   const enabled = layer !== null && id !== null;
   return useQuery({

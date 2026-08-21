@@ -4,6 +4,7 @@ import {
   type LifeMapLayerType,
   type LifeMapNearbyResultType,
   type LifeMapPointsResultType,
+  type LifeMapSearchResultType,
   type LifeMapStatusResultType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
@@ -49,4 +50,10 @@ export const lifeMapApi = {
     return apiFetch<LifeMapNearbyResultType>(`${Routes.LifeMap.nearby}?${params.toString()}`);
   },
   detail: (layer: LifeMapLayerType, id: string) => apiFetch<LifeMapItemType>(Routes.LifeMap.detail(layer, id)),
+  // 지역 이동 검색(주소·장소) — 2자 이상. 서버에 키가 없으면 enabled=false 빈 목록.
+  search: (q: string, limit?: number) => {
+    const params = new URLSearchParams({ q });
+    if (limit !== undefined) params.set('limit', String(limit));
+    return apiFetch<LifeMapSearchResultType>(`${Routes.LifeMap.search}?${params.toString()}`);
+  },
 };

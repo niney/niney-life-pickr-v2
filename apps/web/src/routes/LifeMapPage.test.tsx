@@ -1,13 +1,14 @@
 import { forwardRef, useImperativeHandle } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type { LifeMapItemType, LifeMapNearbyResultType, LifeMapStatusResultType } from '@repo/api-contract';
 import { useAirLocationStore, useAuthStore } from '@repo/shared';
 import { server } from '~/test/msw';
 import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
+import { useLifeMapRecentStore } from '~/stores/lifeMapRecentStore';
 import { LifeMapPage } from './LifeMapPage';
 
 // 일상지도 페이지 스모크 — 지도(OL)는 목으로 바꾸고 패널 쪽 계약을 본다: ① 레이어/필터 칩 + 상태
@@ -97,10 +98,27 @@ const cctvItem = (id: string, purpose: string, dist: number) => ({
   dist,
 });
 
-const seen = { nearby: [] as URL[], detail: [] as string[] };
+const seen = { nearby: [] as URL[], detail: [] as string[], search: [] as string[] };
 const useHandlers = () =>
   server.use(
     http.get('/api/v1/settings/map/public', () => HttpResponse.json({ provider: 'vworld', apiKey: 'test-key' })),
+    // 지역 이동 — 지하철/버스 검색은 '강남' 에만 한 건씩, 주소·장소는 서버 키 없음(enabled=false).
+    http.get('/api/v1/subway/stations/search', ({ request }) => {
+      const q = new URL(request.url).searchParams.get('q') ?? '';
+      return HttpResponse.json({
+        items: q.includes('강남')
+          ? [{ id: '1002:강남', name: '강남', lat: 37.4979, lng: 127.0276, lines: [{ stationId: '1002:강남', lineId: '1002', lineName: '2호선', lat: 37.4979, lng: 127.0276 }] }]
+          : [],
+        total: q.includes('강남') ? 1 : 0,
+        fetchedAt: status.fetchedAt,
+        source: 'db',
+      });
+    }),
+    http.get('/api/v1/bus/stations/search', () => HttpResponse.json({ items: [], total: 0, fetchedAt: status.fetchedAt, source: 'cache' })),
+    http.get('/api/v1/life-map/search', ({ request }) => {
+      seen.search.push(new URL(request.url).searchParams.get('q') ?? '');
+      return HttpResponse.json({ q: '', items: [], enabled: false, fetchedAt: status.fetchedAt });
+    }),
     http.get('/api/v1/life-map/status', () => HttpResponse.json(status)),
     http.get('/api/v1/life-map/nearby', ({ request }) => {
       const url = new URL(request.url);
@@ -135,11 +153,15 @@ const useHandlers = () =>
     }),
   );
 
+// 현재 URL 검색 문자열을 DOM 에 노출 — 이동 후 ll/z 갱신 검증용.
+const LocationProbe = () => <div data-testid="location-search">{useLocation().search}</div>;
+
 const renderPage = (initialUrl = '/life-map') => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialUrl]}>
+        <LocationProbe />
         <Routes>
           <Route element={<Outlet context={{ setSubBar: () => {}, headerHeight: 56 }} />}>
             <Route path="/life-map" element={<LifeMapPage />} />
@@ -159,8 +181,10 @@ beforeEach(() => {
     purposes: [],
     toiletFilters: { open24: false, disabled: false, kids: false, diaper: false, bell: false },
   });
+  useLifeMapRecentStore.setState({ items: [] });
   seen.nearby = [];
   seen.detail = [];
+  seen.search = [];
   useHandlers();
 });
 
@@ -225,6 +249,33 @@ describe('LifeMapPage', () => {
       expect(seen.nearby.some((u) => u.searchParams.get('layer') === 'cctv' && u.searchParams.get('purpose') === '어린이보호')).toBe(true),
     );
     expect(useLifeMapPrefsStore.getState().purposes).toEqual(['어린이보호']);
+  });
+
+  it('지역 이동 — 입력 없으면 시도 칩, "강남" 입력 시 행정구역(로컬)·지하철역 섹션, 선택하면 URL ll/z 갱신 + 최근 기록', async () => {
+    renderPage();
+    const input = screen.getByTestId('life-goto-input');
+    fireEvent.focus(input);
+    const chips = await screen.findByTestId('life-goto-chips');
+    expect(within(chips).getByRole('button', { name: '서울' })).toBeInTheDocument();
+    // 패널 본문(레이어 바·목록)은 검색이 열린 동안 숨는다.
+    expect(screen.queryByTestId('life-nearby-list')).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: '강남' } });
+    const results = screen.getByTestId('life-goto-results');
+    const regionRow = await within(results).findByRole('option', { name: /서울 강남구/ });
+    await within(results).findByRole('option', { name: /강남역/ });
+    expect(within(results).getByText('행정구역')).toBeInTheDocument();
+    expect(within(results).getByText('지하철역(수도권)')).toBeInTheDocument();
+    // 서버 키 없음(enabled=false) → 주소·장소 섹션은 나오지 않는다.
+    await waitFor(() => expect(seen.search).toContain('강남'));
+    expect(within(results).queryByText('주소·장소')).not.toBeInTheDocument();
+
+    fireEvent.click(regionRow);
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).toMatch(/ll=37\.\d+%2C127\.\d+/));
+    expect(screen.getByTestId('location-search').textContent).toContain('z=14');
+    expect(useLifeMapRecentStore.getState().items[0]).toMatchObject({ label: '서울 강남구', zoom: 14 });
+    // 이동 후 검색이 닫히고 목록이 돌아온다.
+    expect(screen.getByTestId('life-nearby-list')).toBeInTheDocument();
   });
 
   it('저장한 내 위치(대기·날씨와 공유)가 진입 중심', async () => {
