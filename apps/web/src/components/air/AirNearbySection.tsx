@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Crosshair, ExternalLink, Loader2, MapPin, MapPinOff, Search } from 'lucide-react';
+import { Check, Crosshair, ExternalLink, Loader2, MapPin, MapPinOff, Search } from 'lucide-react';
 import { ApiError, useAirNearbyStations, useAirStationSearch, useUserLocation } from '@repo/shared';
 import type {
   AirLocationItemType,
@@ -27,16 +27,18 @@ import { AirGradeBadge, AirStateBlock } from './AirPrimitives';
 // 얹는 섹션. 위치는 '내 위치로 찾기' 버튼을 눌렀을 때만 요청한다(진입만으로 권한 prompt
 // 금지). 검색은 서버 캐시 로컬 검색이라 타이핑 즉시(디바운스 250ms).
 //
-// 내 대기 위치(저장 지점): '현재 위치 저장'(geolocation) 또는 '지도에서 직접 지정'(지도를
-// 움직여 십자선 지점 저장, manual). 저장하면 상단바 칩이 그 지점으로 가장 가까운 측정소의
-// 등급을 보여주고, 이 섹션의 '내 주변' 목록도 새 위치 요청 없이 저장 지점 기준으로 뜬다.
+// 내 위치(저장 지점, 날씨 페이지·상단바 칩과 공유): '선택 측정소 저장'(station) 또는 '현재
+// 위치(GPS) 저장'(geolocation). 날씨 페이지에서는 시·군·구 지점으로 저장한다(place). 저장하면
+// 상단바 칩이 그 지점의 날씨와 가장 가까운 측정소의 등급을 보여주고, 이 섹션의 '내 주변'
+// 목록도 새 위치 요청 없이 저장 지점 기준으로 뜬다. (지도에서 직접 지정은 제거 — 두 페이지가
+// 같은 단위(측정소/지점)로 고르게 해 동기화를 단순하게 유지.)
 
 interface Props {
   stations: AirStationInfoItemType[];
   measures: AirMeasureItemType[];
   selectedStation: string | null;
   onSelect: (stationName: string, sidoOption: string | null) => void;
-  // 내 대기 위치(하이브리드 훅 결과) — 페이지가 내려준다.
+  // 내 위치(하이브리드 훅 결과) — 페이지가 내려준다.
   savedLocation: AirLocationItemType | null;
   onSaveLocation: (body: AirLocationUpsertBodyType) => void;
   onClearLocation: () => void;
@@ -95,10 +97,6 @@ export const AirNearbySection = ({
   const searchQ = useAirStationSearch(debouncedQ);
   const searching = q.trim().length > 0;
 
-  // 지도에서 직접 지정 — 십자선 모드 + 지도 중심 좌표.
-  const [picking, setPicking] = useState(false);
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
-
   // 상태별 안내 — 'timeout' 은 권한이 있는데 측위가 늦은 것(재시도하면 대개 됨)이라
   // '환경 불가'와 분리해 다시 시도를 권한다.
   const locationHint =
@@ -128,6 +126,14 @@ export const AirNearbySection = ({
     selectedStation !== null
       ? (stations.find((s) => s.stationName === selectedStation && s.lat !== null && s.lng !== null) ?? null)
       : null;
+  // 선택 측정소가 이미 저장된 내 위치와 같은 좌표면(날씨 페이지·상단바와 동기화된 상태) 저장 대신 '저장됨'.
+  const selectedIsSaved =
+    !!savedLocation &&
+    !!selectedInfo &&
+    selectedInfo.lat !== null &&
+    selectedInfo.lng !== null &&
+    Math.abs(savedLocation.lat - selectedInfo.lat) < 0.0005 &&
+    Math.abs(savedLocation.lng - selectedInfo.lng) < 0.0005;
   const saveSelected = () => {
     if (!selectedInfo || selectedInfo.lat === null || selectedInfo.lng === null) return;
     onSaveLocation({
@@ -136,16 +142,6 @@ export const AirNearbySection = ({
       label: selectedInfo.stationName,
       source: 'station',
     });
-  };
-  const savePicked = () => {
-    if (!mapCenter) return;
-    onSaveLocation({
-      lat: Number(mapCenter.lat.toFixed(6)),
-      lng: Number(mapCenter.lng.toFixed(6)),
-      label: nearestStationName(stations, mapCenter),
-      source: 'manual',
-    });
-    setPicking(false);
   };
 
   return (
@@ -158,10 +154,6 @@ export const AirNearbySection = ({
         myLocation={geoCoords}
         savedLocation={savedLocation}
         nearby={nearby}
-        picking={picking}
-        // 항상 구독 — MapCanvas 는 초기 1회 + moveend 에만 보고하므로, 지정 모드에 들어간
-        // 시점에 이미 중심을 알고 있어야 '이 지점 저장'이 바로 활성화된다.
-        onCenterChange={setMapCenter}
         className="h-[420px] w-full overflow-hidden rounded-md border lg:h-[560px]"
       />
       <div className="flex min-w-0 flex-col gap-4">
@@ -218,19 +210,19 @@ export const AirNearbySection = ({
           )}
         </div>
 
-        {/* 내 대기 위치(저장 지점) */}
+        {/* 내 위치(저장 지점) — 날씨 페이지·상단바 칩과 공유 */}
         <div className="flex flex-col gap-2 rounded-md border border-violet-500/30 bg-violet-500/5 p-3">
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="flex items-center gap-1.5 text-sm font-medium">
-                <MapPin className="size-4 text-violet-600 dark:text-violet-400" /> 내 대기 위치
+                <MapPin className="size-4 text-violet-600 dark:text-violet-400" /> 내 위치
               </div>
               <div className="text-[11px] text-muted-foreground">
-                저장하면 상단바에 이 지점의 공기질이 항상 보입니다.
+                날씨·대기 공통. 저장하면 상단바에 이 지점의 날씨와 공기질이 항상 보이고, 날씨 페이지도 이 지점으로 열립니다.
               </div>
             </div>
             {savedLocation && (
-              <Button type="button" variant="ghost" size="sm" onClick={onClearLocation} disabled={savingLocation} aria-label="내 대기 위치 해제">
+              <Button type="button" variant="ghost" size="sm" onClick={onClearLocation} disabled={savingLocation} aria-label="내 위치 해제">
                 <MapPinOff /> 해제
               </Button>
             )}
@@ -245,38 +237,30 @@ export const AirNearbySection = ({
                   ? '현재 위치(GPS)'
                   : savedLocation.source === 'station'
                     ? '측정소 위치'
-                    : '지도에서 지정'}{' '}
+                    : savedLocation.source === 'place'
+                      ? '날씨 지점 선택'
+                      : '직접 지정'}{' '}
                 · {formatRelativeMin(savedLocation.updatedAt)}
               </span>
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">아직 저장한 위치가 없습니다.</p>
           )}
-          {picking ? (
-            <div className="flex flex-col gap-2 rounded-md bg-background/70 p-2 text-xs">
-              <span>지도를 움직여 십자선을 원하는 지점에 맞춘 뒤 저장하세요.</span>
-              <span className="text-muted-foreground tabular-nums">
-                {mapCenter ? `${mapCenter.lat.toFixed(4)}, ${mapCenter.lng.toFixed(4)} · 가까운 측정소 ${nearestStationName(stations, mapCenter) ?? '-'}` : '지도 중심을 읽는 중…'}
-              </span>
-              <div className="flex gap-2">
-                <Button type="button" size="sm" onClick={savePicked} disabled={!mapCenter || savingLocation}>
-                  이 지점 저장
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => setPicking(false)}>
-                  취소
-                </Button>
-              </div>
-            </div>
-          ) : (
+          {
             <div className="flex flex-wrap gap-2">
-              {selectedInfo && (
+              {selectedInfo && selectedIsSaved && (
+                <Button type="button" variant="secondary" size="sm" disabled title="이 측정소가 내 위치로 저장되어 있습니다(날씨 페이지·상단바 칩과 공유)">
+                  <Check /> 선택 측정소({selectedInfo.stationName}) 저장됨
+                </Button>
+              )}
+              {selectedInfo && !selectedIsSaved && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={saveSelected}
                   disabled={savingLocation}
-                  title={`${selectedInfo.stationName} 측정소의 좌표를 내 위치로 저장 — 상단바 칩이 이 측정소를 보여줍니다`}
+                  title={`${selectedInfo.stationName} 측정소의 좌표를 내 위치로 저장 — 상단바 칩(날씨·대기)과 날씨 페이지가 이 지점을 씁니다`}
                 >
                   <MapPin /> 선택 측정소({selectedInfo.stationName}) 저장
                 </Button>
@@ -293,11 +277,11 @@ export const AirNearbySection = ({
                   <Crosshair /> 현재 위치(GPS) 저장
                 </Button>
               )}
-              <Button type="button" variant="outline" size="sm" onClick={() => setPicking(true)} disabled={savingLocation}>
-                <Crosshair /> 지도에서 직접 지정
-              </Button>
+              {!selectedInfo && !geoCoords && (
+                <span className="text-xs text-muted-foreground">측정소를 고르거나 '내 위치로 찾기'를 누르면 저장 버튼이 나타납니다.</span>
+              )}
             </div>
-          )}
+          }
         </div>
 
         {/* 내 주변 */}

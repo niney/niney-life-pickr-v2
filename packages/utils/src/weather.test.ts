@@ -23,10 +23,14 @@ import {
   WEATHER_MID_LAND_REGIONS,
   WEATHER_MID_SEA_REGIONS,
   WEATHER_PLACES,
+  WEATHER_SIDOS,
   nearestWeatherPlace,
   searchWeatherPlaces,
+  weatherDefaultPlaceOfSido,
   weatherMidRegionForPlace,
   weatherPlaceById,
+  weatherPlaceLabel,
+  weatherPlacesBySido,
 } from './weatherRegions.js';
 
 // KST 벽시계 → Date. 테스트가 "KST 16:05" 처럼 읽히게.
@@ -175,36 +179,53 @@ describe('바람·상태', () => {
   });
 });
 
-describe('중기예보 지점', () => {
-  it('172개 지점, id 유일, 모두 10개 육상 구역 중 하나', () => {
-    expect(WEATHER_PLACES).toHaveLength(172);
-    expect(new Set(WEATHER_PLACES.map((p) => p.id)).size).toBe(172);
+describe('날씨 지점(시·군 + 광역시 구·군)', () => {
+  it('시·군 171 + 구·군 74 = 245개, id 유일, 모두 10개 육상 구역·17개 시도 중 하나', () => {
+    expect(WEATHER_PLACES.filter((p) => p.kind === 'city')).toHaveLength(171);
+    expect(WEATHER_PLACES.filter((p) => p.kind === 'district')).toHaveLength(74);
+    expect(new Set(WEATHER_PLACES.map((p) => p.id)).size).toBe(245);
     const land = new Set(WEATHER_MID_LAND_REGIONS.map((r) => r.regId));
     expect(land.size).toBe(10);
-    for (const p of WEATHER_PLACES) expect(land.has(p.landRegId)).toBe(true);
+    for (const p of WEATHER_PLACES) {
+      expect(land.has(p.landRegId)).toBe(true);
+      expect(WEATHER_SIDOS).toContain(p.sido);
+      // 구·군의 중기기온 지점은 실제 시·군 행이어야 한다(강화군은 자체 코드).
+      expect(weatherPlaceById(p.taRegId)?.kind ?? (p.taRegId === '11B20101' ? 'city' : null)).toBe('city');
+    }
     expect(WEATHER_MID_SEA_REGIONS).toHaveLength(12);
+    expect(weatherPlacesBySido('서울')).toHaveLength(26); // 시청 1 + 25구
+    expect(weatherPlacesBySido('세종').map((p) => p.name)).toEqual(['세종']);
+    expect(weatherPlacesBySido('인천').map((p) => p.name)).toContain('강화군');
   });
-  it('지점 → 중기육상 구역·전망 stnId', () => {
+  it('지점 → 중기육상 구역·전망 stnId, 구·군은 소속 광역시 중기기온 지점과 "시도 이름" 라벨', () => {
     const seoul = weatherPlaceById('11B10101');
     expect(seoul?.name).toBe('서울');
     expect(weatherMidRegionForPlace(seoul)).toEqual({
       land: { regId: '11B00000', label: '서울·인천·경기', stnId: '109' },
       stnId: '109',
     });
+    const yangcheon = weatherPlaceById('11B10101-양천구');
+    expect(yangcheon).toMatchObject({ name: '양천구', sido: '서울', kind: 'district', taRegId: '11B10101', landRegId: '11B00000' });
+    expect(weatherPlaceLabel(yangcheon!)).toBe('서울 양천구');
+    expect(weatherPlaceLabel(seoul!)).toBe('서울');
+    expect(weatherPlaceById('11B20101-강화군')?.taRegId).toBe('11B20101');
     expect(weatherPlaceById('nope')).toBeNull();
+    expect(weatherDefaultPlaceOfSido('서울')?.id).toBe('11B10101');
+    expect(weatherDefaultPlaceOfSido('경기')?.name).toBe('과천');
+    expect(weatherDefaultPlaceOfSido('부산')?.id).toBe('11H20201');
   });
-  it('가장 가까운 지점 — 여의도는 서울, 해운대는 부산, 광역시 반경 안(양천구)은 광명시청이 더 가까워도 서울', () => {
-    expect(nearestWeatherPlace(37.5219, 126.9245)?.place.name).toBe('서울');
-    expect(nearestWeatherPlace(35.1587, 129.1604)?.place.name).toBe('부산');
-    expect(nearestWeatherPlace(37.535, 126.876)?.place.name).toBe('서울');
-    // 반경 밖의 위성도시 청사는 그 도시.
+  it('가장 가까운 지점 — 양천구 좌표는 양천구(광명시청보다 가깝다), 해운대는 해운대구, 위성도시 청사는 그 도시', () => {
+    expect(nearestWeatherPlace(37.52329, 126.85869)?.place.name).toBe('양천구');
+    expect(nearestWeatherPlace(35.1587, 129.1604)?.place.name).toBe('해운대구');
     expect(nearestWeatherPlace(37.4777, 126.8646)?.place.name).toBe('광명');
     expect(nearestWeatherPlace(37.4292, 126.9878)?.place.name).toBe('과천');
-    // 강화는 인천 반경 밖 — 강화.
-    expect(nearestWeatherPlace(37.7474, 126.4878)?.place.name).toBe('강화');
+    expect(nearestWeatherPlace(37.7474, 126.4878)?.place.name).toBe('강화군');
+    expect(nearestWeatherPlace(36.48, 127.289)?.place.name).toBe('세종');
   });
-  it('이름/구역 검색', () => {
+  it('이름/시도/구역 검색 — 구 이름과 "시도+구" 모두', () => {
     expect(searchWeatherPlaces('고성').map((p) => p.name).sort()).toEqual(['고성(강원)', '고성(경남)']);
+    expect(searchWeatherPlaces('양천')[0]?.id).toBe('11B10101-양천구');
+    expect(searchWeatherPlaces('부산 중구')[0]?.id).toBe('11H20201-중구');
     expect(searchWeatherPlaces('제주').length).toBeGreaterThan(1);
     expect(searchWeatherPlaces('')).toEqual([]);
   });

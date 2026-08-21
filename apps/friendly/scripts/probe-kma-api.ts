@@ -146,7 +146,7 @@ if (land) {
   dump('mid-land', land);
   console.log(`   noData=${land.noData} keys=`, Object.keys(land.rows[0]?.fields ?? {}).join(','));
 }
-const ta = await step('⑥ getMidTa 중기기온', () => getMidTa(taId, tmFc, opts));
+const ta = await step('⑥ getMidTa 중기기온', () => getMidTa(place?.taRegId ?? taId, tmFc, opts));
 if (ta) {
   dump('mid-ta', ta);
   console.log(`   noData=${ta.noData} keys=`, Object.keys(ta.rows[0]?.fields ?? {}).join(','));

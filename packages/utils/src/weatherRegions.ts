@@ -1,11 +1,12 @@
 import { haversineM } from './geo.js';
 
-// 기상청 중기예보 구역 — 중기육상예보(getMidLandFcst) 10개 광역권, 중기해상예보
-// (getMidSeaFcst) 12개 해역, 중기전망(getMidFcst) 지점번호, 그리고 중기기온(getMidTa)
-// 172개 시·군 지점. 모든 코드는 2026-08-21 실호출로 응답(00, 1행)을 확인한 것만 싣는다
-// (군위 11H10603 은 NO_DATA — 2023 대구 편입 — 제외, 순천시 11F20405 는 순천 11F20603
-// 과 중복이라 제외). 지점 좌표는 시·군청(또는 관측 지점) 위·경도 — 단기예보 격자(nx,ny)
-// 변환과 "가장 가까운 중기예보 지점" 매칭에 쓴다(±1km 오차는 5km 격자에 흡수된다).
+// 기상청 중기예보 구역 + 날씨 지점 — 중기육상예보(getMidLandFcst) 10개 광역권, 중기해상예보
+// (getMidSeaFcst) 12개 해역, 중기전망(getMidFcst) 지점번호, 중기기온(getMidTa) 171개 시·군
+// 지점(실호출로 응답 확인한 코드만; 군위 11H10603 NO_DATA — 2023 대구 편입 — 제외, 순천시
+// 11F20405 는 순천 11F20603 과 중복 제외, 강화 11B20101 은 인천 '강화군' 구·군 행으로 편입),
+// 그리고 광역시·특별시의 구·군 74개(시·군청/구청 위·경도, 2026-08-21 VWorld 검색 + 수동
+// 보정 ±1km). 지점 좌표는 단기예보 격자(nx,ny) 변환과 "가장 가까운 지점" 매칭에 쓴다(5km
+// 격자에 ±1km 는 흡수된다). 구·군은 중기예보 코드가 없어 소속 광역시의 중기기온 지점을 쓴다.
 
 export interface WeatherMidLandRegion {
   regId: string;
@@ -52,24 +53,49 @@ export const WEATHER_MID_SEA_REGIONS: readonly WeatherMidSeaRegion[] = [
   { regId: '12G00000', label: '연해주' },
 ] as const;
 
+// 시도(17) — 지점 셀렉트의 1단계. 순서 = 화면 순서.
+export const WEATHER_SIDOS = [
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+  '세종',
+  '경기',
+  '강원',
+  '충북',
+  '충남',
+  '전북',
+  '전남',
+  '경북',
+  '경남',
+  '제주',
+] as const;
+export type WeatherSido = (typeof WEATHER_SIDOS)[number];
+
 export interface WeatherPlace {
-  // 중기기온 regId — 지점의 고유 식별자(URL ?p= 에 그대로 쓴다).
+  // 지점 식별자(URL ?p=). 시·군은 중기기온 regId 그대로, 구·군은 `${소속 중기기온 regId}-${이름}`.
   id: string;
   name: string;
   lat: number;
   lng: number;
   // 소속 중기육상예보 구역 regId(→ 중기전망 stnId 는 구역표에서).
   landRegId: string;
+  // 중기기온(getMidTa) 지점 regId — 구·군은 소속 광역시의 것.
+  taRegId: string;
+  sido: WeatherSido;
+  // city 시·군(광역시청 포함) / district 광역시·특별시의 구·군.
+  kind: 'city' | 'district';
 }
 
-// [regId, 이름, 위도, 경도, 중기육상 구역] — 권역 순(서울경기→강원→충청→전라→경상→제주),
-// 권역 안에서는 regId 순.
-const ROWS: ReadonlyArray<readonly [string, string, number, number, string]> = [
+// 시·군 지점 [regId, 이름, 위도, 경도, 중기육상 구역] — 권역 순, 권역 안에서는 regId 순.
+const CITY_ROWS: ReadonlyArray<readonly [string, string, number, number, string]> = [
   ['11A00101', '백령도', 37.966, 124.63, '11B00000'],
   ['11B10101', '서울', 37.5666, 126.9784, '11B00000'],
   ['11B10102', '과천', 37.4292, 126.9878, '11B00000'],
   ['11B10103', '광명', 37.4777, 126.8646, '11B00000'],
-  ['11B20101', '강화', 37.7474, 126.4878, '11B00000'],
   ['11B20102', '김포', 37.6153, 126.7156, '11B00000'],
   ['11B20201', '인천', 37.456, 126.7062, '11B00000'],
   ['11B20202', '시흥', 37.3803, 126.8031, '11B00000'],
@@ -239,16 +265,147 @@ const ROWS: ReadonlyArray<readonly [string, string, number, number, string]> = [
   ['11G00800', '추자도', 33.962, 126.3, '11G00000'],
 ];
 
-export const WEATHER_PLACES: readonly WeatherPlace[] = ROWS.map(([id, name, lat, lng, landRegId]) => ({
+// 시·군 행의 시도 — 중기기온 regId 접두로 권역이 정해지고, 광역시·특별시·세종은 예외 지정.
+const CITY_SIDO_BY_ID: Record<string, WeatherSido> = {
+  '11B10101': '서울',
+  '11B20201': '인천',
+  '11A00101': '인천',
+  '11C20401': '대전',
+  '11C20404': '세종',
+  '11F20501': '광주',
+  '11H10701': '대구',
+  '11H20201': '부산',
+  '11H20101': '울산',
+};
+const citySido = (id: string): WeatherSido => {
+  const fixed = CITY_SIDO_BY_ID[id];
+  if (fixed) return fixed;
+  const c = id.slice(2, 4);
+  if (c === 'B1' || c === 'B2' || c === 'A0') return '경기';
+  if (c === 'C1') return '충북';
+  if (c === 'C2') return '충남';
+  if (c === 'D1' || c === 'D2') return '강원';
+  if (c === 'E0') return '경북';
+  if (c === 'F1') return '전북';
+  if (c === 'F2') return '전남';
+  if (c === 'G0') return '제주';
+  if (c === 'H1') return '경북';
+  return '경남';
+};
+
+// 광역시·특별시 구·군 [시도, 소속 중기기온 regId, 이름, 위도, 경도] — 구청/군청 좌표.
+// 강화군은 자체 중기기온 지점(11B20101)을 쓴다. 옹진군(섬 산재, 군청은 미추홀구)은 제외 —
+// 백령도 지점이 대표한다. 군위군은 2023 대구 편입(중기기온 코드 NO_DATA) — 대구 코드.
+const DISTRICT_ROWS: ReadonlyArray<readonly [WeatherSido, string, string, number, number]> = [
+  ['서울', '11B10101', '종로구', 37.5735, 126.979],
+  ['서울', '11B10101', '중구', 37.5638, 126.9978],
+  ['서울', '11B10101', '용산구', 37.5325, 126.9905],
+  ['서울', '11B10101', '성동구', 37.5634, 127.037],
+  ['서울', '11B10101', '광진구', 37.5386, 127.0824],
+  ['서울', '11B10101', '동대문구', 37.5744, 127.0399],
+  ['서울', '11B10101', '중랑구', 37.6066, 127.0929],
+  ['서울', '11B10101', '성북구', 37.5894, 127.0167],
+  ['서울', '11B10101', '강북구', 37.6396, 127.0255],
+  ['서울', '11B10101', '도봉구', 37.6687, 127.0471],
+  ['서울', '11B10101', '노원구', 37.6542, 127.0567],
+  ['서울', '11B10101', '은평구', 37.6026, 126.9294],
+  ['서울', '11B10101', '서대문구', 37.5792, 126.9366],
+  ['서울', '11B10101', '마포구', 37.5664, 126.9016],
+  ['서울', '11B10101', '양천구', 37.517, 126.8665],
+  ['서울', '11B10101', '강서구', 37.5509, 126.8497],
+  ['서울', '11B10101', '구로구', 37.4953, 126.8877],
+  ['서울', '11B10101', '금천구', 37.4568, 126.8954],
+  ['서울', '11B10101', '영등포구', 37.5264, 126.896],
+  ['서울', '11B10101', '동작구', 37.5043, 126.9403],
+  ['서울', '11B10101', '관악구', 37.4782, 126.9517],
+  ['서울', '11B10101', '서초구', 37.4837, 127.0326],
+  ['서울', '11B10101', '강남구', 37.5176, 127.0475],
+  ['서울', '11B10101', '송파구', 37.5146, 127.1061],
+  ['서울', '11B10101', '강동구', 37.5299, 127.1241],
+  ['부산', '11H20201', '중구', 35.1062, 129.0323],
+  ['부산', '11H20201', '서구', 35.0974, 129.0238],
+  ['부산', '11H20201', '동구', 35.1292, 129.0454],
+  ['부산', '11H20201', '영도구', 35.0912, 129.068],
+  ['부산', '11H20201', '부산진구', 35.1629, 129.0532],
+  ['부산', '11H20201', '동래구', 35.2048, 129.0836],
+  ['부산', '11H20201', '남구', 35.1365, 129.0841],
+  ['부산', '11H20201', '북구', 35.1971, 128.9901],
+  ['부산', '11H20201', '해운대구', 35.163, 129.1637],
+  ['부산', '11H20201', '사하구', 35.1044, 128.9749],
+  ['부산', '11H20201', '금정구', 35.2429, 129.0924],
+  ['부산', '11H20201', '강서구', 35.2122, 128.9806],
+  ['부산', '11H20201', '연제구', 35.1763, 129.0795],
+  ['부산', '11H20201', '수영구', 35.1455, 129.113],
+  ['부산', '11H20201', '사상구', 35.1523, 128.9913],
+  ['부산', '11H20201', '기장군', 35.2443, 129.2223],
+  ['대구', '11H10701', '중구', 35.8693, 128.6062],
+  ['대구', '11H10701', '동구', 35.8865, 128.6355],
+  ['대구', '11H10701', '서구', 35.8718, 128.5592],
+  ['대구', '11H10701', '남구', 35.8458, 128.5977],
+  ['대구', '11H10701', '북구', 35.8855, 128.5829],
+  ['대구', '11H10701', '수성구', 35.8582, 128.6308],
+  ['대구', '11H10701', '달서구', 35.8297, 128.5329],
+  ['대구', '11H10701', '달성군', 35.7749, 128.4317],
+  ['대구', '11H10701', '군위군', 36.2429, 128.5727],
+  ['인천', '11B20201', '중구', 37.4738, 126.6216],
+  ['인천', '11B20201', '동구', 37.4736, 126.6432],
+  ['인천', '11B20201', '미추홀구', 37.4635, 126.6504],
+  ['인천', '11B20201', '연수구', 37.4098, 126.6782],
+  ['인천', '11B20201', '남동구', 37.4472, 126.7313],
+  ['인천', '11B20201', '부평구', 37.5068, 126.7219],
+  ['인천', '11B20201', '계양구', 37.5374, 126.7378],
+  ['인천', '11B20201', '서구', 37.5451, 126.6761],
+  ['인천', '11B20101', '강화군', 37.7474, 126.4878],
+  ['광주', '11F20501', '동구', 35.1459, 126.923],
+  ['광주', '11F20501', '서구', 35.152, 126.8901],
+  ['광주', '11F20501', '남구', 35.1327, 126.9025],
+  ['광주', '11F20501', '북구', 35.1741, 126.9121],
+  ['광주', '11F20501', '광산구', 35.1395, 126.7937],
+  ['대전', '11C20401', '동구', 36.312, 127.4549],
+  ['대전', '11C20401', '중구', 36.3255, 127.4213],
+  ['대전', '11C20401', '서구', 36.3551, 127.3838],
+  ['대전', '11C20401', '유성구', 36.3621, 127.3564],
+  ['대전', '11C20401', '대덕구', 36.3466, 127.4157],
+  ['울산', '11H20101', '중구', 35.5694, 129.3328],
+  ['울산', '11H20101', '남구', 35.5435, 129.3302],
+  ['울산', '11H20101', '동구', 35.5055, 129.4172],
+  ['울산', '11H20101', '북구', 35.5825, 129.3611],
+  ['울산', '11H20101', '울주군', 35.5221, 129.2419],
+];
+
+const LAND_BY_ID = new Map(WEATHER_MID_LAND_REGIONS.map((r) => [r.regId, r]));
+
+const CITY_PLACES: WeatherPlace[] = CITY_ROWS.map(([id, name, lat, lng, landRegId]) => ({
   id,
   name,
   lat,
   lng,
   landRegId,
+  taRegId: id,
+  sido: citySido(id),
+  kind: 'city',
 }));
+const CITY_BY_TA = new Map(CITY_PLACES.map((p) => [p.id, p]));
+
+export const WEATHER_PLACES: readonly WeatherPlace[] = [
+  ...CITY_PLACES,
+  ...DISTRICT_ROWS.map(([sido, taRegId, name, lat, lng]): WeatherPlace => {
+    // 소속 광역시의 중기기온 지점(강화군만 자체 코드 — 구역은 11B00000). 없으면 시·군청 행을 따른다.
+    const parent = CITY_BY_TA.get(taRegId);
+    return {
+      id: `${taRegId}-${name}`,
+      name,
+      lat,
+      lng,
+      landRegId: parent?.landRegId ?? '11B00000',
+      taRegId,
+      sido,
+      kind: 'district',
+    };
+  }),
+];
 
 const PLACE_BY_ID = new Map(WEATHER_PLACES.map((p) => [p.id, p]));
-const LAND_BY_ID = new Map(WEATHER_MID_LAND_REGIONS.map((r) => [r.regId, r]));
 
 // 기본 지점 — 서울(11B10101). URL/저장값이 없을 때.
 export const WEATHER_DEFAULT_PLACE_ID = '11B10101';
@@ -267,48 +424,44 @@ export const weatherMidRegionForPlace = (
   return land ? { land, stnId: land.stnId } : null;
 };
 
-// 광역시 반경(m) — 시청에서 이 거리 안이면 외곽 위성도시 청사가 더 가까워도 그 광역시로
-// 본다(예: 양천구 좌표는 광명시청이 더 가깝지만 서울). 행정경계 없이 쓰는 근사값으로,
-// 시역 대부분을 덮되 이웃 시 청사(광명·과천·김해·양산 등)는 밖에 두는 크기.
-const METRO_RADIUS_M: Record<string, number> = {
-  '11B10101': 13_000, // 서울
-  '11H20201': 15_000, // 부산
-  '11B20201': 11_000, // 인천(강화·옹진 제외)
-  '11H10701': 12_000, // 대구
-  '11C20401': 10_000, // 대전
-  '11F20501': 10_000, // 광주
-  '11H20101': 12_000, // 울산
+// 시도별 지점 목록 — 광역시·특별시는 시청(city) 한 줄 + 구·군, 도는 시·군. 표시 순서.
+export const weatherPlacesBySido = (sido: WeatherSido): WeatherPlace[] =>
+  WEATHER_PLACES.filter((p) => p.sido === sido);
+
+// 시도별 대표(첫) 지점 — 셀렉트에서 시도를 바꿨을 때 고를 값. 광역시는 시청 행, 도는 첫 시·군.
+export const weatherDefaultPlaceOfSido = (sido: WeatherSido): WeatherPlace | null => {
+  const list = weatherPlacesBySido(sido);
+  return list.find((p) => p.kind === 'city' && CITY_SIDO_BY_ID[p.id] === sido) ?? list[0] ?? null;
 };
 
-// 좌표에서 가장 가까운 중기예보 지점 — GPS/임의 지점의 중기예보를 이 지점 기준으로
-// 보여 준다(행정경계 데이터 없이 쓰는 근사). 광역시 반경 안이면 그 광역시, 아니면 최근접.
-// 거리(m)도 함께 돌려줘 화면이 "○○ 기준 (12km)" 처럼 적을 수 있게 한다.
+// 표시 라벨 — 구·군은 "서울 양천구", 시·군은 이름 그대로(광역시청 행은 "서울").
+export const weatherPlaceLabel = (place: WeatherPlace): string =>
+  place.kind === 'district' ? `${place.sido} ${place.name}` : place.name;
+
+// 좌표에서 가장 가까운 지점(시·군·구 전부) — GPS/임의 지점의 중기예보·표시명을 이 지점 기준으로
+// 쓴다(행정경계 데이터 없이 쓰는 근사). 거리(m)도 함께 돌려줘 화면이 "○○ 기준 (1.2km)" 처럼
+// 적을 수 있게 한다. 광역시 안은 구·군 행이 촘촘해 위성도시 청사로 새는 일이 드물다.
 export const nearestWeatherPlace = (
   lat: number,
   lng: number,
 ): { place: WeatherPlace; distM: number } | null => {
   let best: { place: WeatherPlace; distM: number } | null = null;
-  let metro: { place: WeatherPlace; distM: number; ratio: number } | null = null;
   for (const place of WEATHER_PLACES) {
     const distM = haversineM({ lat, lng }, { lat: place.lat, lng: place.lng });
     if (!best || distM < best.distM) best = { place, distM };
-    const radius = METRO_RADIUS_M[place.id];
-    if (radius !== undefined && distM <= radius) {
-      const ratio = distM / radius;
-      if (!metro || ratio < metro.ratio) metro = { place, distM, ratio };
-    }
   }
-  return metro ? { place: metro.place, distM: metro.distM } : best;
+  return best;
 };
 
-// 지점 이름/구역 라벨 검색(공백·대소문자 무시, 포함 매칭) — 셀렉트 보조용.
+// 지점 이름/시도/구역 라벨 검색(공백·대소문자 무시, 포함 매칭) — 셀렉트 보조용.
 export const searchWeatherPlaces = (q: string, limit = 10): WeatherPlace[] => {
   const needle = q.trim().replace(/\s+/g, '').toLowerCase();
   if (!needle) return [];
   const out: WeatherPlace[] = [];
   for (const p of WEATHER_PLACES) {
     const land = LAND_BY_ID.get(p.landRegId)?.label ?? '';
-    if (p.name.replace(/\s+/g, '').toLowerCase().includes(needle) || land.includes(needle)) out.push(p);
+    const hay = `${p.sido}${p.name}`.replace(/\s+/g, '').toLowerCase();
+    if (hay.includes(needle) || land.includes(needle)) out.push(p);
     if (out.length >= limit) break;
   }
   return out;
