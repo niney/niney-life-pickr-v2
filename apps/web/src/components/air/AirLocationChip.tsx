@@ -11,9 +11,13 @@ import { airGradeStyle, AIR_GRADE_NONE } from './airGrade';
 
 export const AirLocationChip = ({ className }: { className?: string }) => {
   const { location } = useAirLocation();
+  // 10분마다(탭이 보일 때만) + 탭 복귀 시 조용히 재조회 — 재조회 중엔 직전 값이 그대로
+  // 보이고(placeholder/기존 data 유지) 새 값이 오면 바뀐다. 서버가 측정값을 10분 캐시하므로
+  // 최악 지연 ≈ 20분(원천 에어코리아는 1시간 단위 갱신).
   const nearbyQ = useAirNearbyStations(location?.lat ?? null, location?.lng ?? null, {
     limit: 1,
     radius: 50_000,
+    refetchOnWindowFocus: true,
   });
   if (!location) return null;
 
