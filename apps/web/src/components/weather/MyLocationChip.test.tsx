@@ -9,6 +9,7 @@ import { MyLocationChip } from './MyLocationChip';
 
 // 상단바 "내 위치" 통합 칩 — 저장 위치(게스트 store)가 있으면 알약 하나에 [📍라벨 ☁기온 상태 ☂]
 // (→ /weather) · [●등급 PM2.5](→ /air), 없으면 아무것도. 한쪽 자료가 없으면 그 세그먼트만 빠진다.
+// 폭별 단계 노출(<sm 라벨·소수점 숨김, lg+ 상태·PM2.5)은 CSS 라 jsdom 에선 안 보고 내용만 본다.
 
 const renderChip = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -90,6 +91,8 @@ describe('MyLocationChip', () => {
     const chip = await screen.findByTestId('my-location-chip');
     const weather = screen.getByTestId('weather-location-chip');
     await waitFor(() => expect(weather).toHaveTextContent('27.3°'));
+    // <sm 컴팩트 표기(정수)도 같은 링크 안에 — CSS 로 폭별 하나만 보인다.
+    expect(weather).toHaveTextContent('27°');
     expect(weather).toHaveTextContent('종로구');
     expect(weather).toHaveTextContent('흐림');
     expect(weather).toHaveAttribute('href', '/weather?ll=37.57000,127.00000');
@@ -132,5 +135,23 @@ describe('MyLocationChip', () => {
     renderChip();
     await waitFor(() => expect(screen.queryByTestId('air-location-chip')).toBeNull());
     expect(screen.getByTestId('my-location-chip')).toBeInTheDocument();
+  });
+
+  it('측정소는 있어도 측정값이 없으면(업스트림 장애) 대기 세그먼트가 빠진다 — "● -" 를 남기지 않는다', async () => {
+    server.use(
+      http.get('/api/v1/air/stations/nearby', () =>
+        HttpResponse.json({ ...nearby, items: [{ ...nearby.items[0], measure: null }] }),
+      ),
+      http.get('/api/v1/weather/nowcast', () => HttpResponse.json(nowcast(20))),
+    );
+    saveGuest();
+    renderChip();
+    const weather = await screen.findByTestId('weather-location-chip');
+    await waitFor(() => expect(weather).toHaveTextContent('27.3°'));
+    await waitFor(() => expect(screen.queryByTestId('air-location-chip')).toBeNull());
+    const chip = screen.getByTestId('my-location-chip');
+    expect(chip).not.toHaveTextContent('-');
+    // 툴팁엔 사정을 적어 둔다(가장 가까운 측정소는 알려주되 등급은 없음).
+    expect(chip.getAttribute('title')).toContain('대기 자료 없음 — 가장 가까운 측정소 종로구 497m');
   });
 });

@@ -19,8 +19,16 @@ import { WeatherConditionIcon } from './weatherIcons';
 // 상단바 "내 위치" 칩 — 저장한 내 위치(대기정보·날씨 페이지에서 저장, 로그인 서버·게스트 로컬)
 // 하나를 알약 하나에: [📍라벨 ☁기온 상태 ☂] · [●등급 PM2.5]. 경계선 없이 두 클릭 영역만 —
 // 왼쪽(라벨+날씨) → /weather, 오른쪽(대기) → /air. 위치 이름은 앞에 한 번만(두 반쪽이 따로
-// 노는 느낌을 없앤다). 한쪽 자료를 못 받으면 그 세그먼트만 조용히 빠지고 알약은 그대로(칩은
-// 경고하는 자리가 아니다). 저장 위치가 없으면 아무것도 그리지 않는다(강요 없음).
+// 노는 느낌을 없앤다). 저장 위치가 없으면 아무것도 그리지 않는다(강요 없음).
+//
+// 폭에 따라 단계적으로 펼친다(상단바 폭 예산은 PublicTopBar 메모 참고):
+//   <sm : [📍 ☁26° ☂ · ●좋음] — 라벨 글자·기온 소수점 없이(라벨은 aria/title 에). 360px 에서
+//         '매우나쁨'까지 한 줄에 들어가는 폭(~190px)이 기준.
+//   sm+ : + 위치 라벨(최대 6.5rem, 말줄임) · 기온 소수 1자리.
+//   lg+ : + 하늘 상태 글자 · PM2.5 수치.
+// 한쪽 자료를 못 받으면 그 세그먼트만 조용히 빠지고 알약은 그대로(칩은 경고하는 자리가 아니다).
+// 대기는 측정소가 없을 때만이 아니라, 측정소는 있어도 측정값(등급)이 없을 때도 빠진다 —
+// 업스트림 장애 때 "● -" 를 남기지 않는다.
 // 날씨: 좌표→격자 실황 기온 + 초단기 첫 시각 하늘 + 앞 6시간 강수(형태 또는 확률 ≥60%) 우산.
 // 대기: /air/stations/nearby?limit=1 의 가장 가까운 측정소 등급(통합지수 → PM2.5 → PM10 폴백).
 // 둘 다 서버 캐시 뒤라 10분 조용한 갱신 + 탭 복귀 재조회.
@@ -52,11 +60,14 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
   const pops = hours.map((h) => h.pop).filter((v): v is number => v !== null);
   const popMax = pops.length ? Math.max(...pops) : null;
   const wet = hours.some((h) => (h.pty ?? 0) > 0) || (popMax !== null && popMax >= RAIN_POP_THRESHOLD);
-  const temp = now ? `${formatKmaTemp(now.t1h)}°` : '…';
+  const t1h = now?.t1h ?? null;
+  const temp = now ? `${formatKmaTemp(t1h)}°` : '…';
+  // <sm 컴팩트 표기 — 26.3° → 26°.
+  const tempShort = now ? `${formatKmaTemp(t1h === null ? null : Math.round(t1h))}°` : '…';
   const wxSummary = wxLoading
     ? '날씨 불러오는 중'
     : wxOk
-      ? `날씨 ${formatKmaTemp(now?.t1h)}℃ ${KMA_CONDITION_LABEL[condition]}${popMax !== null ? ` · 앞 6시간 강수확률 최대 ${popMax}%` : ''}${wxQ.data?.ncstBase ? ` (${formatBaseLabel(wxQ.data.ncstBase)} 관측)` : ''}`
+      ? `날씨 ${formatKmaTemp(t1h)}℃ ${KMA_CONDITION_LABEL[condition]}${popMax !== null ? ` · 앞 6시간 강수확률 최대 ${popMax}%` : ''}${wxQ.data?.ncstBase ? ` (${formatBaseLabel(wxQ.data.ncstBase)} 관측)` : ''}`
       : '날씨 자료 없음';
 
   // ── 대기 세그먼트 ──
@@ -72,7 +83,8 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
           : null;
   const style = gradeSource ? airGradeStyle(gradeSource.grade) : AIR_GRADE_NONE;
   const airLoading = airQ.isLoading && !airQ.data;
-  const airOk = airLoading || nearest !== null;
+  // 등급을 낼 수 있을 때만 세그먼트를 그린다 — 측정소만 있고 측정값이 없으면 생략.
+  const airOk = airLoading || gradeSource !== null;
   const pm25 = measure ? formatAirValue('pm25', measure.pm25) : '-';
   const sidoOption = nearest
     ? (AIR_SIDO_OPTIONS.find((o) => o.value !== '전국' && nearest.sidoName !== null && airSidoMatches(o.value, nearest.sidoName))?.value ?? null)
@@ -80,11 +92,14 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
   const airTo = nearest
     ? `/air?${new URLSearchParams({ ...(sidoOption ? { sido: sidoOption } : {}), station: nearest.stationName }).toString()}`
     : '/air';
+  const nearestLabel = nearest ? `가장 가까운 측정소 ${nearest.stationName} ${formatDistanceM(nearest.dist)}` : '';
   const airSummary = airLoading
     ? '대기 불러오는 중'
-    : nearest
-      ? `대기 ${style.label}(${gradeSource?.label ?? '등급'}) · PM10 ${formatAirValue('pm10', measure?.pm10)} / PM2.5 ${pm25} ㎍/㎥ — 가장 가까운 측정소 ${nearest.stationName} ${formatDistanceM(nearest.dist)}`
-      : '근처 측정소 없음';
+    : !nearest
+      ? '근처 측정소 없음'
+      : !gradeSource
+        ? `대기 자료 없음 — ${nearestLabel}`
+        : `대기 ${style.label}(${gradeSource.label}) · PM10 ${formatAirValue('pm10', measure?.pm10)} / PM2.5 ${pm25} ㎍/㎥ — ${nearestLabel}`;
 
   const title = `내 위치(${label}) · ${wxSummary} · ${airSummary}`;
 
@@ -93,7 +108,7 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
       data-testid="my-location-chip"
       title={title}
       className={cn(
-        'inline-flex h-8 max-w-[22rem] items-stretch overflow-hidden rounded-full border text-xs transition-colors hover:border-foreground/30',
+        'inline-flex h-8 min-w-0 max-w-[22rem] items-stretch overflow-hidden rounded-full border text-xs transition-colors hover:border-foreground/30',
         className,
       )}
     >
@@ -104,7 +119,7 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
         className="inline-flex min-w-0 items-center gap-1.5 pl-2.5 pr-2 transition-colors hover:bg-accent"
       >
         <MapPin aria-hidden className="size-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
-        <span className="max-w-[6.5rem] truncate font-medium">{label}</span>
+        <span className="hidden max-w-[6.5rem] truncate font-medium sm:inline">{label}</span>
         {wxOk && (
           <>
             {wxLoading ? (
@@ -112,8 +127,9 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
             ) : (
               <WeatherConditionIcon condition={condition} hour={ncstHour} className="size-3.5" />
             )}
-            <span className="shrink-0 font-medium tabular-nums">{temp}</span>
-            {!wxLoading && <span className="hidden shrink-0 text-muted-foreground md:inline">{KMA_CONDITION_LABEL[condition]}</span>}
+            <span className="shrink-0 font-medium tabular-nums sm:hidden">{tempShort}</span>
+            <span className="hidden shrink-0 font-medium tabular-nums sm:inline">{temp}</span>
+            {!wxLoading && <span className="hidden shrink-0 text-muted-foreground lg:inline">{KMA_CONDITION_LABEL[condition]}</span>}
             {wet && (
               <Umbrella
                 role="img"
@@ -134,7 +150,7 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
         >
           <span aria-hidden className={cn('size-2 shrink-0 rounded-full', style.dot, airLoading && 'animate-pulse')} />
           <span className="shrink-0">{airLoading ? '…' : style.label}</span>
-          {measure && <span className="hidden shrink-0 text-muted-foreground tabular-nums md:inline">PM2.5 {pm25}</span>}
+          {measure && <span className="hidden shrink-0 text-muted-foreground tabular-nums lg:inline">PM2.5 {pm25}</span>}
         </Link>
       )}
     </div>
