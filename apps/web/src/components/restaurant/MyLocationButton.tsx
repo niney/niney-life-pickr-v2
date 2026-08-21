@@ -23,6 +23,9 @@ export const MyLocationButton = ({
   const isPending = status === 'pending';
   const isDenied = status === 'denied';
   const isUnavailable = status === 'unavailable';
+  // 'timeout' — 권한은 있는데 측위가 늦은 것. 훅이 1회 재시도까지 한 뒤라 버튼은 그대로
+  // 살려 두고 문구만 "다시 시도"로 안내한다.
+  const isTimeout = status === 'timeout';
 
   const [guideOpen, setGuideOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -50,9 +53,11 @@ export const MyLocationButton = ({
     ? '위치 권한이 차단됨 — 클릭하면 해제 방법을 안내해요'
     : insecure
       ? 'HTTPS 또는 localhost 로 접속해야 위치를 쓸 수 있어요'
-      : isUnavailable
-        ? '위치를 가져오지 못했어요 — 다시 시도'
-        : '내 위치';
+      : isTimeout
+        ? '위치 측정이 오래 걸렸어요 — 다시 시도'
+        : isUnavailable
+          ? '위치를 가져오지 못했어요 — 다시 시도'
+          : '내 위치';
 
   // pending 만 비활성. unavailable 은 timeout/일시 실패도 포함하므로 재시도
   // 여지를 남긴다(disabled 면 title 툴팁도 안 뜨고 재시도도 막힘).

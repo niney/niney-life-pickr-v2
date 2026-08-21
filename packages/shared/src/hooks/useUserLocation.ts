@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // 'pending'   — getCurrentPosition 요청 중
 // 'granted'   — 좌표 받음
 // 'denied'    — 사용자가 거부하거나 Permissions API 가 'denied' 반환
-// 'unavailable' — geolocation 비지원, 비-secure context, timeout 등
+// 'timeout'   — 권한은 있으나 측위가 제한 시간 안에 끝나지 않음(재시도하면 보통 됨)
+// 'unavailable' — geolocation 비지원, 비-secure context, 측위 불가(code 2) 등
 export type UserLocationStatus =
   | 'idle'
   | 'pending'
   | 'granted'
   | 'denied'
+  | 'timeout'
   | 'unavailable';
 
 export interface UserLocationState {
@@ -28,19 +30,75 @@ export interface UseUserLocationOptions {
   // 띄우고 싶지 않은 화면용. 외부 설정 변경에 반응하는 permission 'change'
   // 구독은 auto 와 무관하게 유지(거부 callout → 설정 해제 시 자동 복구).
   auto?: boolean;
+  // getCurrentPosition 제한 시간(ms). 미지정 시 마운트 자동 요청은 5초(진입 직후
+  // 화면이 늦게 튀지 않게 일찍 포기), 명시 refetch(버튼)는 10초 — 버스/지하철
+  // 페이지의 직접 호출과 같은 값. 실측(2026-08-21, Windows/Chrome WiFi 측위)상 콜드
+  // 측위가 5초를 넘기는 일이 드물지 않아 5초면 간헐적으로 TIMEOUT(code 3)이 난다.
+  timeoutMs?: number;
 }
+
+// 기본 제한 시간 — 자동(마운트) 5초 / 명시(버튼) 10초.
+const AUTO_TIMEOUT_MS = 5_000;
+const EXPLICIT_TIMEOUT_MS = 10_000;
+
+export type AcquirePositionResult =
+  | { status: 'granted'; coords: { lat: number; lng: number } }
+  | { status: 'denied' | 'timeout' | 'unavailable' };
+
+export interface AcquirePositionOptions {
+  timeout: number;
+  // TIMEOUT(code 3) 시 같은 옵션으로 다시 시도하는 총 횟수(1 = 재시도 없음).
+  maxTries: number;
+  // 시도 사이/직후에 true 면 결과를 버린다(언마운트·새 요청으로 무효화).
+  isCancelled?: () => boolean;
+}
+
+// 브라우저 측위 캐시 허용 나이 — 5분. 실측(2026-08-21, Windows/Chrome WiFi 측위)에서
+// 콜드 fresh 측위는 ≈5초, 직후의 두 번째 fresh 요청은 10초도 넘겼지만 캐시 히트는 0ms
+// 였다. 주변 측정소/정류장(수백 m~km 단위) 용도엔 5분 전 위치면 충분하고, 같은 origin
+// 다른 화면이 막 받아 둔 위치도 그대로 재사용돼 버튼이 즉시 반응한다.
+export const POSITION_MAX_AGE_MS = 5 * 60_000;
+
+// geolocation 코어 — 훅 밖으로 빼 두어 가짜 navigator 로 계약을 테스트한다.
+// enableHighAccuracy: false — GPS 안 깨움, IP/WiFi 기반 정도면 동/구 단위 정확도로
+// 충분(주변 1.5km 검색 용도). TIMEOUT 만 재시도한다 — 늦은 것이지 불가능한 게 아니라
+// 두 번째는 대개 성공한다(첫 시도가 측위 캐시를 데운다). 거부(1)·측위 불가(2)는
+// 재시도해도 같으니 즉시 확정.
+export const acquirePosition = async (
+  opts: AcquirePositionOptions,
+): Promise<AcquirePositionResult | null> => {
+  const attemptOnce = (): Promise<AcquirePositionResult> =>
+    new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) =>
+          resolve({
+            status: 'granted',
+            coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          }),
+        (err) =>
+          // PERMISSION_DENIED=1, POSITION_UNAVAILABLE=2, TIMEOUT=3
+          resolve({ status: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' }),
+        { enableHighAccuracy: false, timeout: opts.timeout, maximumAge: POSITION_MAX_AGE_MS },
+      );
+    });
+  let last: AcquirePositionResult = { status: 'timeout' };
+  for (let i = 0; i < Math.max(1, opts.maxTries); i++) {
+    last = await attemptOnce();
+    if (opts.isCancelled?.()) return null;
+    if (last.status !== 'timeout') return last;
+  }
+  return last;
+};
 
 // 브라우저 geolocation 한 번 시도. 컴포넌트 마운트 시 자동 1회 + refetch 호출
 // 시 추가. 권한 prompt 가 이미 'denied' 상태면 호출 자체를 스킵 (재요청해도
-// 어차피 즉시 거부 + 사용자 짜증).
-//
-// enableHighAccuracy: false — GPS 안 깨움, IP/WiFi 기반 정도면 동/구 단위
-// 정확도로 충분 (주변 1.5km 검색 용도). 모바일 배터리/대기시간 절약.
-// timeout: 5s — 응답이 늦으면 UX 마비되니 일찍 포기하고 폴백.
+// 어차피 즉시 거부 + 사용자 짜증). 명시 요청(refetch)은 제한 시간 10초 + TIMEOUT
+// 1회 재시도, 자동 요청은 5초 단발 — 시간이 초과되면 'timeout' 으로 남겨 화면이
+// "다시 시도"를 안내하게 한다('unavailable' 과 구분).
 export const useUserLocation = (
   options: UseUserLocationOptions = {},
 ): UserLocationState => {
-  const { auto = true } = options;
+  const { auto = true, timeoutMs } = options;
   const [state, setState] = useState<{
     status: UserLocationStatus;
     coords: { lat: number; lng: number } | null;
@@ -53,66 +111,63 @@ export const useUserLocation = (
   // 무효화. 컴포넌트 unmount 시에도 ++ → 모든 in-flight 콜백 무시.
   const attemptRef = useRef(0);
 
-  const run = useCallback(async () => {
-    const myAttempt = ++attemptRef.current;
+  const run = useCallback(
+    async (kind: 'auto' | 'explicit') => {
+      const myAttempt = ++attemptRef.current;
 
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setState({ status: 'unavailable', coords: null });
-      return;
-    }
-
-    // 비-secure context(localhost 아닌 평문 HTTP — 예: http://192.168.x.x)에서는
-    // 브라우저가 geolocation 을 아예 차단한다. 권한 prompt 조차 안 뜨고
-    // getCurrentPosition 은 즉시 code 1 로 실패 → 'denied' 로 오분류될 수 있다.
-    // 권한과 무관한 환경 제약이므로 'unavailable' 로 단정 (사이트 설정으로 못 풂).
-    if (typeof window !== 'undefined' && window.isSecureContext === false) {
-      setState({ status: 'unavailable', coords: null });
-      return;
-    }
-
-    if (navigator.permissions?.query) {
-      try {
-        const result = await navigator.permissions.query({
-          name: 'geolocation' as PermissionName,
-        });
-        if (myAttempt !== attemptRef.current) return;
-        if (result.state === 'denied') {
-          setState({ status: 'denied', coords: null });
-          return;
-        }
-      } catch {
-        // 일부 환경에서 query 가 throw — 무시하고 진행.
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        setState({ status: 'unavailable', coords: null });
+        return;
       }
-    }
 
-    setState((prev) => ({ status: 'pending', coords: prev.coords }));
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (myAttempt !== attemptRef.current) return;
-        setState({
-          status: 'granted',
-          coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-        });
-      },
-      (err) => {
-        if (myAttempt !== attemptRef.current) return;
-        // PERMISSION_DENIED=1, POSITION_UNAVAILABLE=2, TIMEOUT=3
-        setState({
-          status: err.code === 1 ? 'denied' : 'unavailable',
-          coords: null,
-        });
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 5000,
-        maximumAge: 60_000,
-      },
-    );
-  }, []);
+      // 비-secure context(localhost 아닌 평문 HTTP — 예: http://192.168.x.x)에서는
+      // 브라우저가 geolocation 을 아예 차단한다. 권한 prompt 조차 안 뜨고
+      // getCurrentPosition 은 즉시 code 1 로 실패 → 'denied' 로 오분류될 수 있다.
+      // 권한과 무관한 환경 제약이므로 'unavailable' 로 단정 (사이트 설정으로 못 풂).
+      if (typeof window !== 'undefined' && window.isSecureContext === false) {
+        setState({ status: 'unavailable', coords: null });
+        return;
+      }
+
+      if (navigator.permissions?.query) {
+        try {
+          const result = await navigator.permissions.query({
+            name: 'geolocation' as PermissionName,
+          });
+          if (myAttempt !== attemptRef.current) return;
+          if (result.state === 'denied') {
+            setState({ status: 'denied', coords: null });
+            return;
+          }
+        } catch {
+          // 일부 환경에서 query 가 throw — 무시하고 진행.
+        }
+      }
+
+      setState((prev) => ({ status: 'pending', coords: prev.coords }));
+      const result = await acquirePosition({
+        timeout: timeoutMs ?? (kind === 'auto' ? AUTO_TIMEOUT_MS : EXPLICIT_TIMEOUT_MS),
+        maxTries: kind === 'explicit' ? 2 : 1,
+        isCancelled: () => myAttempt !== attemptRef.current,
+      });
+      if (result === null) return;
+      setState(
+        result.status === 'granted'
+          ? { status: 'granted', coords: result.coords }
+          : { status: result.status, coords: null },
+      );
+    },
+    [timeoutMs],
+  );
+
+  // refetch 는 명시 요청(버튼) — 긴 제한 시간 + 1회 재시도.
+  const refetch = useCallback(() => {
+    void run('explicit');
+  }, [run]);
 
   useEffect(() => {
     // auto=false 면 마운트 자동 요청을 건너뛴다('idle' 유지) — refetch 로만 시작.
-    if (auto) run();
+    if (auto) void run('auto');
     return () => {
       // unmount — 진행 중 콜백 무효화.
       attemptRef.current++;
@@ -130,7 +185,7 @@ export const useUserLocation = (
     }
     let permStatus: PermissionStatus | null = null;
     let cancelled = false;
-    const onChange = () => run();
+    const onChange = () => void run('explicit');
     navigator.permissions
       .query({ name: 'geolocation' as PermissionName })
       .then((status) => {
@@ -147,5 +202,5 @@ export const useUserLocation = (
     };
   }, [run]);
 
-  return { ...state, refetch: run };
+  return { ...state, refetch };
 };
