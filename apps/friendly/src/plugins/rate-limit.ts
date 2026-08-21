@@ -40,6 +40,9 @@ export const RATE = {
   publicShare: { max: 120, timeWindow: '1 minute' },
   // 공개 투표 제출 — 무인증 쓰기. 재투표 연타 + CGNAT 고려 분당 30.
   publicVote: { max: 30, timeWindow: '1 minute' },
+  // 일상지도 뷰포트/주변 조회 — 로컬 DB 라 싸지만 지도 이동마다 레이어당 1콜. 패닝 연타 +
+  // CGNAT 고려 분당 240.
+  lifeMapRead: { max: 240, timeWindow: '1 minute' },
 } as const;
 
 export default fp(async (app) => {

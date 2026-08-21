@@ -74,3 +74,6 @@ __pycache__/
 # tsc -b emit artifacts beside .ts source (apps/web build script)
 apps/web/src/**/*.js
 apps/web/vite.config.js
+
+# 일상지도 원천 CSV(지방행정인허가데이터 전국 CCTV·공중화장실, 95MB) — 로컬에만
+/data/open/

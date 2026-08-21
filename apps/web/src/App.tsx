@@ -35,6 +35,9 @@ const AirQualityPage = lazy(() =>
 const WeatherPage = lazy(() =>
   import('./routes/WeatherPage').then((m) => ({ default: m.WeatherPage })),
 );
+const LifeMapPage = lazy(() =>
+  import('./routes/LifeMapPage').then((m) => ({ default: m.LifeMapPage })),
+);
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -140,6 +143,8 @@ export const App = () => {
             <Route path="/air" element={<AirQualityPage />} />
             {/* 기상청 날씨(단기·중기예보) — 공개 페이지, 대기정보와 같은 정책. */}
             <Route path="/weather" element={<WeatherPage />} />
+            {/* 일상지도(전국 CCTV·공중화장실) — 공개 페이지, OL 지도라 lazy. */}
+            <Route path="/life-map" element={<LifeMapPage />} />
             <Route
               path="/me/settlements"
               element={

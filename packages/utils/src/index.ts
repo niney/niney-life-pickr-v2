@@ -20,3 +20,5 @@ export * from './airQuality.js';
 export * from './airMarker.js';
 export * from './weather.js';
 export * from './weatherRegions.js';
+export * from './lifeMap.js';
+export * from './lifeMapMarker.js';
