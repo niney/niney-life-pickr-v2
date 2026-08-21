@@ -13,8 +13,13 @@ const FORECAST_REFETCH_MS = 30 * 60_000;
 const MID_STALE_MS = 30 * 60_000;
 const MID_REFETCH_MS = 60 * 60_000;
 
-// 초단기실황 + 초단기예보 — 격자 null 이면 비활성.
-export const useWeatherNowcast = (nx: number | null, ny: number | null) => {
+// 초단기실황 + 초단기예보 — 격자 null 이면 비활성. refetchOnWindowFocus 는 상주 표시(상단바
+// 칩)만 켠다 — 오래 떠나 있다 돌아온 탭이 즉시 최신화되도록(대기 칩과 같은 규율).
+export const useWeatherNowcast = (
+  nx: number | null,
+  ny: number | null,
+  opts: { refetchOnWindowFocus?: boolean } = {},
+) => {
   const enabled = nx !== null && ny !== null;
   return useQuery({
     queryKey: ['weather', 'nowcast', nx, ny],
@@ -22,6 +27,7 @@ export const useWeatherNowcast = (nx: number | null, ny: number | null) => {
     enabled,
     staleTime: NOWCAST_STALE_MS,
     refetchInterval: NOWCAST_REFETCH_MS,
+    ...(opts.refetchOnWindowFocus !== undefined ? { refetchOnWindowFocus: opts.refetchOnWindowFocus } : {}),
     placeholderData: enabled ? (prev) => prev : undefined,
   });
 };
