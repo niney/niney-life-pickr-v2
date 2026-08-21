@@ -14,7 +14,8 @@ const toItem = (row: AirUserLocation): AirLocationItemType => ({
   lng: row.lng,
   label: row.label,
   // DB 는 문자열 — 계약 어휘로 접는다(미지 값은 manual 로).
-  source: row.source === 'geolocation' ? 'geolocation' : 'manual',
+  source:
+    row.source === 'geolocation' ? 'geolocation' : row.source === 'station' ? 'station' : 'manual',
   updatedAt: row.updatedAt.toISOString(),
 });
 

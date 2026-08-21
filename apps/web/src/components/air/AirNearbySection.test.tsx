@@ -3,7 +3,7 @@ import { forwardRef, useImperativeHandle } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
-import type { AirStationInfoItemType } from '@repo/api-contract';
+import type { AirLocationUpsertBodyType, AirStationInfoItemType } from '@repo/api-contract';
 import { ApiError } from '@repo/shared';
 import { server } from '~/test/msw';
 import { AirNearbySection, AirStationsErrorBlock } from './AirNearbySection';
@@ -36,24 +36,25 @@ const station = (over: Partial<AirStationInfoItemType> = {}): AirStationInfoItem
   ...over,
 });
 
-const renderSection = (onSelect = vi.fn()) => {
+const renderSection = (onSelect = vi.fn(), opts: { selectedStation?: string | null } = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  const onSaveLocation = vi.fn<(body: AirLocationUpsertBodyType) => void>();
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <AirNearbySection
         stations={[station()]}
         measures={[]}
-        selectedStation={null}
+        selectedStation={opts.selectedStation ?? null}
         onSelect={onSelect}
         savedLocation={null}
-        onSaveLocation={() => {}}
+        onSaveLocation={onSaveLocation}
         onClearLocation={() => {}}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onSelect };
+  return { ...utils, onSelect, onSaveLocation };
 };
 
 describe('AirNearbySection', () => {
@@ -141,6 +142,20 @@ describe('AirNearbySection', () => {
     } finally {
       Object.defineProperty(navigator, 'geolocation', { configurable: true, value: original });
     }
+  });
+
+  it("선택한 측정소가 있으면 '선택 측정소 저장' 으로 그 측정소 좌표·이름을 station 출처로 저장한다(GPS 가 아니라)", async () => {
+    server.use(
+      http.get('/api/v1/settings/map/public', () => HttpResponse.json({ apiKey: 'test-vworld-key' })),
+    );
+    const { onSaveLocation } = renderSection(vi.fn(), { selectedStation: '종로구' });
+    fireEvent.click(screen.getByRole('button', { name: /선택 측정소\(종로구\) 저장/ }));
+    expect(onSaveLocation).toHaveBeenCalledWith({
+      lat: 37.572025,
+      lng: 127.005028,
+      label: '종로구',
+      source: 'station',
+    });
   });
 
   it('위치를 가져올 수 없는 환경(jsdom)에서는 버튼을 누르면 안내 문구가 뜨고 주변 조회는 하지 않는다', async () => {
