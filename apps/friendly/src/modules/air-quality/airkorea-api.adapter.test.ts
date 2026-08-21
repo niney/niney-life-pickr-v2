@@ -208,8 +208,9 @@ describe('getBadStations / getDustForecast / getWeeklyForecast', () => {
   });
 
   it('측정소정보(getMsrstnList) — 별도 서비스 base URL, 좌표·주소·측정항목 원문', async () => {
-    // msrstn-list.synthetic.json 은 문서 샘플 기반 합성(실응답 미관측 — 키 승인 전).
-    const fn = stubFetch(fixture('msrstn-list.synthetic.json'));
+    // msrstn-list.json 은 2026-08-21 실응답(673개소) 발췌 5행 — dmX 위도/dmY 경도(WGS84),
+    // stationCode 키는 오지만 전부 null. 축 뒤집힘·결측 분기는 synthetic 픽스처가 맡는다.
+    const fn = stubFetch(fixture('msrstn-list.json'));
     const { rows, totalCount } = await getStationList(OPTS);
     expect(totalCount).toBe(5);
     expect(rows[0]).toEqual({
@@ -222,10 +223,19 @@ describe('getBadStations / getDustForecast / getWeeklyForecast', () => {
       dmY: '127.005028',
       stationCode: null,
     });
+    // 2026-07 통합 이후 주소 표기 — '전남광주통합특별시 …'(서비스가 airSidoFromAddr 로 접는다).
+    expect(rows.find((r) => r.stationName === '서석동')?.addr).toContain('전남광주통합특별시');
     const url = fetchedUrl(fn);
     expect(url).toContain('/MsrstnInfoInqireSvc/getMsrstnList?serviceKey=plain-key&');
     expect(url).toContain('numOfRows=1000');
     expect(url).not.toContain('ArpltnInforInqireSvc');
+  });
+
+  it('측정소정보 — 합성 픽스처(축 뒤집힘·결측 "-")도 문자열 원문 그대로 통과시킨다', async () => {
+    stubFetch(fixture('msrstn-list.synthetic.json'));
+    const { rows } = await getStationList(OPTS);
+    expect(rows.find((r) => r.stationName === '과천시청')).toMatchObject({ dmX: '127.000172', dmY: '37.429118' });
+    expect(rows.find((r) => r.stationName === '이도동')).toMatchObject({ dmX: '-', dmY: '-' });
   });
 
   it('측정소정보 활용신청 전(게이트웨이 30, HTTP 403) → AirKoreaApiAuthError(503)', async () => {

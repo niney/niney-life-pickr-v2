@@ -1,0 +1,65 @@
+{
+ "response": {
+  "body": {
+   "totalCount": 5,
+   "items": [
+    {
+     "stationName": "종로구",
+     "addr": "서울 종로구 종로35가길 19 종로5,6가 동 주민센터",
+     "year": "1997",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "37.572025",
+     "dmY": "127.005028",
+     "stationCode": null
+    },
+    {
+     "stationName": "강남구",
+     "addr": "서울특별시 강남구 학동로 426 (삼성동) 강남구청 별관 1동",
+     "year": "1978",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "37.515336",
+     "dmY": "127.049357",
+     "stationCode": null
+    },
+    {
+     "stationName": "송도",
+     "addr": "인천 연수구 갯벌로 12 테크노파크 3층 옥상",
+     "year": "2005",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "37.382084",
+     "dmY": "126.654663",
+     "stationCode": null
+    },
+    {
+     "stationName": "서석동",
+     "addr": "전남광주통합특별시 동구 서남로 1 동구청보건소",
+     "year": "1994",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "35.14583",
+     "dmY": "126.92333",
+     "stationCode": null
+    },
+    {
+     "stationName": "이도동",
+     "addr": "제주 제주시 이도2동 1176-1(제주시청) 제주시청",
+     "year": "1994",
+     "mangName": "도시대기",
+     "item": "SO2, CO, O3, NO2, PM10, PM2.5",
+     "dmX": "33.500116",
+     "dmY": "126.532371",
+     "stationCode": null
+    }
+   ],
+   "pageNo": 1,
+   "numOfRows": 1000
+  },
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  }
+ }
+}
