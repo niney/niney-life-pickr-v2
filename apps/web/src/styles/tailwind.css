@@ -59,6 +59,9 @@
    * 라이트(#fcfcfb)·다크(#353535) 표면에서 CVD ΔE·명도대역·대비 통과값. */
   --air-series-1: #2a78d6;
   --air-series-2: #eb6834;
+  /* 날씨 차트 — 기온(난색)/강수확률·강수량(한색). 위 검증된 2계열을 의미로 별칭. */
+  --weather-temp: var(--air-series-2);
+  --weather-precip: var(--air-series-1);
 }
 
 .dark {

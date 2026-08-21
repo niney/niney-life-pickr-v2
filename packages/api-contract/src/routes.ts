@@ -478,6 +478,24 @@ export const AirQuality = {
   location: `${API_PREFIX}/air/location`,
 } as const;
 
+// ── 날씨(기상청 단기예보 15084084 VilageFcstInfoService_2.0 · 중기예보 15059468
+// MidFcstInfoService) ──────────────────────────────────────────────────────────
+// 공개 프록시(비로그인). 업스트림 8개 오퍼레이션을 5개 읽기 엔드포인트로 묶되 서버가
+// 발표 시각(base) 계산·캐시(다음 발표 전까지)·stale 폴백을 맡는다. 격자(nx,ny)는
+// 위·경도에서 @repo/utils latLngToKmaGrid 로 만든다.
+export const Weather = {
+  // 초단기실황(정시 관측) + 초단기예보(6시간) — ?nx&ny.
+  nowcast: `${API_PREFIX}/weather/nowcast`,
+  // 단기예보(발표 +1시간 ~ +3일, 시각별 + 일별 요약) — ?nx&ny.
+  forecast: `${API_PREFIX}/weather/forecast`,
+  // 예보 버전(ODAM/VSRT/SHRT 파일 생성 시각).
+  versions: `${API_PREFIX}/weather/versions`,
+  // 중기육상예보 + 중기기온 + 중기전망(D+4~D+10) — ?land=11B00000&ta=11B10101&stn=109.
+  mid: `${API_PREFIX}/weather/mid`,
+  // 중기해상예보 — ?regId=12A20000.
+  midSea: `${API_PREFIX}/weather/mid/sea`,
+} as const;
+
 
 export const Health = `${API_PREFIX}/health` as const;
 

@@ -27,6 +27,7 @@
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "probe:bus": "tsx --env-file=.env scripts/probe-bus-api.ts",
     "probe:airkorea": "tsx --env-file=.env scripts/probe-airkorea-api.ts",
+    "probe:kma": "tsx --env-file=.env scripts/probe-kma-api.ts",
     "probe:telegram": "tsx --env-file=.env scripts/probe-telegram.ts",
     "probe:subway": "tsx --env-file=.env scripts/probe-subway-api.ts",
     "probe:subway-positions": "tsx --env-file=.env scripts/probe-subway-positions.ts",
