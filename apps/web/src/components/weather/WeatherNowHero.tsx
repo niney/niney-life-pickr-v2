@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Droplets, Navigation, Thermometer, Umbrella, Wind, Zap } from 'lucide-react';
-import type { WeatherNowcastResultType, WeatherUltraHourType } from '@repo/api-contract';
+import { Droplets, Navigation, RadioTower, Thermometer, Umbrella, Wind, Zap } from 'lucide-react';
+import type { WeatherAwsResultType, WeatherNowcastResultType, WeatherUltraHourType } from '@repo/api-contract';
 import {
   KMA_CONDITION_LABEL,
+  formatDistanceM,
   formatKmaTemp,
   kmaCondition,
   kmaPtyLabel,
@@ -20,12 +21,15 @@ import { WeatherConditionIcon } from './weatherIcons';
 interface Props {
   data: WeatherNowcastResultType;
   placeLabel: string;
+  // AWS 매분 관측(가장 가까운 관측소) — 있으면 실황 아래에 "근처 관측소" 줄로 보강(없거나
+  // enabled=false 면 조용히 생략).
+  aws?: WeatherAwsResultType | null;
   dim?: boolean;
 }
 
 const hourOf = (h: WeatherUltraHourType): number => Number(h.fcstTime.slice(0, 2));
 
-export const WeatherNowHero = ({ data, placeLabel, dim }: Props) => {
+export const WeatherNowHero = ({ data, placeLabel, aws, dim }: Props) => {
   const now = data.now;
   const first = data.hours[0] ?? null;
   const ncstHour = data.ncstBase ? Number(data.ncstBase.time.slice(0, 2)) : null;
@@ -95,6 +99,7 @@ export const WeatherNowHero = ({ data, placeLabel, dim }: Props) => {
                 value={now.uuu === null && now.vvv === null ? '-' : `동서 ${now.uuu ?? '-'} · 남북 ${now.vvv ?? '-'} m/s`}
               />
             </dl>
+            {aws?.enabled && aws.items.length > 0 && <AwsLine aws={aws} now={now} />}
           </>
         ) : (
           <div className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
@@ -169,3 +174,64 @@ const Tile = ({
     <dd className="mt-0.5 font-medium tabular-nums">{value}</dd>
   </div>
 );
+
+// 근처 AWS 관측소 줄 — 격자 실황(5km·정시)을 가장 가까운 관측소의 1분 값으로 보강한다. 실황을
+// 덮어쓰지 않고 나란히 적고, 두 신호가 어긋날 때만 배지: ① 관측소가 최근 15분 강수를 잡았는데
+// 실황 강수형태가 '없음' → "실황 반영 전 강수 감지"(즉시성) ② 기온 차 ≥2℃ → 차이 표기.
+const fmtHm = (iso: string | null): string => {
+  const m = iso ? /T(\d{2}):(\d{2})/.exec(iso) : null;
+  return m ? `${m[1]}:${m[2]}` : '-';
+};
+
+const AwsLine = ({ aws, now }: { aws: WeatherAwsResultType; now: WeatherNowcastResultType['now'] }) => {
+  // 값이 있는 가장 가까운 관측소(전 항목 결측인 곳은 건너뛴다).
+  const item = aws.items.find((i) => i.ta !== null || i.rn15m !== null || i.hm !== null) ?? aws.items[0];
+  if (!item) return null;
+  const hasValues = item.ta !== null || item.rn15m !== null || item.hm !== null;
+  const rainDetected = (item.rn15m ?? 0) > 0 || item.re === 1;
+  const nowDry = now !== null && (now.pty === null || now.pty === 0);
+  const tempDiff = now?.t1h !== null && now?.t1h !== undefined && item.ta !== null ? Number((item.ta - now.t1h).toFixed(1)) : null;
+  return (
+    <div className="rounded-md border border-dashed px-2.5 py-2 text-xs" data-testid="weather-aws-line">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="inline-flex items-center gap-1 font-medium">
+          <RadioTower className="size-3.5 text-muted-foreground" aria-hidden /> 근처 관측소(AWS) {item.name}
+        </span>
+        <span className="text-muted-foreground">
+          {formatDistanceM(item.dist)} · {fmtHm(item.observedAt)} 관측{aws.stale ? ' · 저장본' : ''}
+        </span>
+      </div>
+      {hasValues ? (
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
+          <span>
+            기온 <b>{formatKmaTemp(item.ta)}℃</b>
+          </span>
+          <span>
+            습도 <b>{item.hm ?? '-'}%</b>
+          </span>
+          <span>
+            바람 <b>{kmaWindDirection16(item.wd10)} {item.ws10 ?? '-'} m/s</b>
+          </span>
+          <span>
+            최근 15분 강수 <b>{item.rn15m ?? '-'} mm</b>
+          </span>
+          <span>
+            오늘 강수 <b>{item.rnDay ?? '-'} mm</b>
+          </span>
+        </div>
+      ) : (
+        <div className="mt-1 text-muted-foreground">최근 관측값이 없습니다(결측·통신 지연).</div>
+      )}
+      {rainDetected && nowDry && (
+        <div className="mt-1 inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-blue-700 dark:text-blue-300">
+          <Umbrella className="size-3" aria-hidden /> 관측소가 최근 15분 강수를 감지했습니다 — 정시 실황에는 아직 반영 전일 수 있어요.
+        </div>
+      )}
+      {tempDiff !== null && Math.abs(tempDiff) >= 2 && (
+        <div className="mt-1 text-muted-foreground">
+          격자 실황({formatKmaTemp(now?.t1h)}℃)과 {Math.abs(tempDiff)}℃ 차이 — 관측소 고도({item.ht ?? '-'}m)·위치에 따른 국지 차이입니다.
+        </div>
+      )}
+    </div>
+  );
+};

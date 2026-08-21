@@ -185,6 +185,22 @@ const useHandlers = () =>
       return HttpResponse.json(sea);
     }),
     http.get('/api/v1/weather/versions', () => HttpResponse.json(versions)),
+    http.get('/api/v1/weather/aws', ({ request }) => {
+      const u = new URL(request.url);
+      return HttpResponse.json({
+        enabled: true,
+        center: { lat: Number(u.searchParams.get('lat')), lng: Number(u.searchParams.get('lng')) },
+        items: [
+          {
+            stn: '400', name: '양천구', lat: 37.522, lng: 126.876, ht: 10.5, dist: 1100, tm: '202608211810', observedAt: '2026-08-21T18:10:00+09:00',
+            ta: 27.4, hm: 70, wd10: 227, ws10: 1.4, re: 1, rn15m: 0.5, rn60m: 1.0, rn12h: 2.0, rnDay: 3.5, td: 21.6, pa: 1004.2,
+          },
+        ],
+        tm: '202608211810',
+        fetchedAt: '2026-08-21T09:11:00.000Z',
+        stale: false,
+      });
+    }),
   );
 
 const sidoSelect = () => screen.getByRole('combobox', { name: '시도 선택' }) as HTMLSelectElement;
@@ -202,6 +218,12 @@ describe('WeatherPage', () => {
     // 초단기 6시간 띠.
     expect(within(now).getByRole('table', { name: '초단기예보 6시간' })).toBeInTheDocument();
     expect(seen.nowcast.at(-1)).toBe('?nx=60&ny=127');
+    // AWS 보강 줄 — 관측소·거리·값 + 실황(강수형태 없음)과 어긋나는 15분 강수 감지 배지.
+    const awsLine = await within(now).findByTestId('weather-aws-line');
+    expect(awsLine).toHaveTextContent('근처 관측소(AWS) 양천구');
+    expect(awsLine).toHaveTextContent('1.1km');
+    expect(awsLine).toHaveTextContent('27.4℃');
+    expect(awsLine).toHaveTextContent(/최근 15분 강수를 감지/);
     expect(sidoSelect().value).toBe('서울');
     expect(placeSelect().value).toBe('11B10101');
     // 서울 지점 목록 = 시청(전체) + 25구.
@@ -294,6 +316,9 @@ describe('WeatherPage', () => {
       http.get('/api/v1/weather/mid', () => HttpResponse.json(mid)),
       http.get('/api/v1/weather/mid/sea', () => HttpResponse.json(sea)),
       http.get('/api/v1/weather/versions', () => HttpResponse.json(versions)),
+      http.get('/api/v1/weather/aws', () =>
+        HttpResponse.json({ enabled: false, center: { lat: 37.5666, lng: 126.9784 }, items: [], tm: null, fetchedAt: '2026-08-21T09:11:00.000Z', stale: false }),
+      ),
     );
     renderPage();
     expect(await screen.findByText(/서버에 기상청 API 키가 없거나 일일 한도가 찼습니다/)).toBeInTheDocument();

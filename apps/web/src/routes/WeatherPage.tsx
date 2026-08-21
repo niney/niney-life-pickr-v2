@@ -6,6 +6,7 @@ import type { AirLocationItemType } from '@repo/api-contract';
 import {
   acquirePosition,
   useAirLocation,
+  useWeatherAws,
   useWeatherForecast,
   useWeatherMid,
   useWeatherMidSea,
@@ -143,6 +144,8 @@ export const WeatherPage = () => {
 
   // ── 조회 ──
   const nowcastQ = useWeatherNowcast(loc.nx, loc.ny);
+  // AWS 매분 관측(API허브) — 가장 가까운 관측소 2곳. 서버 키가 없으면 enabled=false 로 조용히 생략.
+  const awsQ = useWeatherAws(loc.lat, loc.lng, { limit: 2, radius: 15_000 });
   const forecastQ = useWeatherForecast(loc.nx, loc.ny);
   const midQ = useWeatherMid(landRegId, loc.place.taRegId, stnId);
   // 전국 전망은 토글했을 때만(같은 육상/기온 + stn=108 — 서버 캐시 키가 달라 업스트림 2콜 추가).
@@ -314,7 +317,7 @@ export const WeatherPage = () => {
           title={`지금 · ${placeLabel}`}
           op="getUltraSrtNcst + getUltraSrtFcst"
           opLabel="초단기실황 · 초단기예보"
-          description="정시 관측 8항목(기온·1시간 강수량·습도·강수형태·풍향·풍속·동서/남북 성분)과 앞으로 6시간의 시각별 예보(기온·하늘·강수형태·강수확률·강수량·습도·바람·낙뢰)."
+          description="정시 관측 8항목(기온·1시간 강수량·습도·강수형태·풍향·풍속·동서/남북 성분)과 앞으로 6시간의 시각별 예보(기온·하늘·강수형태·강수확률·강수량·습도·바람·낙뢰). 기상청 API허브 키가 있으면 가장 가까운 AWS 관측소의 1분 값을 아래에 나란히 보강합니다."
         >
           {nowcastQ.data?.stale && <WeatherStaleNote fetchedAtLabel={formatRelativeMin(nowcastQ.data.fetchedAt)} />}
           {nowcastQ.data && !nowcastQ.data.stale && (nowcastQ.data.ncstFallback || nowcastQ.data.ultraFallback) && (
@@ -333,7 +336,7 @@ export const WeatherPage = () => {
               retrying={nowcastQ.isFetching}
             />
           ) : nowcastQ.data ? (
-            <WeatherNowHero data={nowcastQ.data} placeLabel={placeLabel} dim={nowcastQ.isPlaceholderData} />
+            <WeatherNowHero data={nowcastQ.data} placeLabel={placeLabel} aws={awsQ.data ?? null} dim={nowcastQ.isPlaceholderData} />
           ) : null}
         </AirSection>
 
