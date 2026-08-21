@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { useAuthStore, useLogout } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { AirLocationChip } from '~/components/air/AirLocationChip';
 import { cn } from '~/lib/utils';
 
 interface NavItem {
@@ -104,6 +105,8 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
           </nav>
         </div>
         <div className="flex items-center gap-2">
+          {/* 저장한 내 대기 위치의 현재 공기질 — 저장 전엔 아무것도 안 그린다. */}
+          <AirLocationChip />
           <ThemeToggle />
           {user ? (
             <>

@@ -7,13 +7,15 @@ import {
   ApiError,
   useAirBadStations,
   useAirForecast,
+  useAirLocation,
+  useAirNearbyStations,
   useAirSidoRealtime,
   useAirStationHistory,
   useAirStations,
   useAirWeeklyForecast,
 } from '@repo/shared';
 import { AIR_HISTORY_TERMS, AIR_FORECAST_CODES } from '@repo/api-contract';
-import { AIR_SIDO_OPTIONS, formatRelativeMin } from '@repo/utils';
+import { AIR_SIDO_OPTIONS, airSidoMatches, formatRelativeMin } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { todayKst } from '~/components/air/airGrade';
@@ -63,10 +65,27 @@ export const AirQualityPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
-  // URL 이 유일한 진실 — 유효하지 않은 값은 기본값으로 읽는다(URL 은 건드리지 않음).
+  // 내 대기 위치(저장 지점) — 하이브리드(로그인 서버 / 게스트 로컬). URL 에 시도·측정소가
+  // 없을 때 기본 화면을 이 지점의 가장 가까운 측정소로 연다(상단바 칩과 같은 해석).
+  const airLocation = useAirLocation();
   const sidoParam = searchParams.get('sido');
-  const sido = AIR_SIDO_OPTIONS.some((o) => o.value === sidoParam) ? (sidoParam as string) : DEFAULT_SIDO;
   const stationParam = searchParams.get('station');
+  const useSavedDefault = !sidoParam && !stationParam && airLocation.location !== null;
+  const savedNearestQ = useAirNearbyStations(
+    useSavedDefault ? airLocation.location!.lat : null,
+    useSavedDefault ? airLocation.location!.lng : null,
+    { limit: 1, radius: 50_000 },
+  );
+  const savedNearest = useSavedDefault ? (savedNearestQ.data?.items[0] ?? null) : null;
+  const savedNearestSido =
+    savedNearest?.sidoName !== null && savedNearest !== null
+      ? (AIR_SIDO_OPTIONS.find((o) => o.value !== '전국' && airSidoMatches(o.value, savedNearest.sidoName!))?.value ?? null)
+      : null;
+
+  // URL 이 유일한 진실 — 유효하지 않은 값은 기본값으로 읽는다(URL 은 건드리지 않음).
+  const sido = AIR_SIDO_OPTIONS.some((o) => o.value === sidoParam)
+    ? (sidoParam as string)
+    : (savedNearestSido ?? DEFAULT_SIDO);
   const term: AirHistoryTermType = isTerm(searchParams.get('term')) ? (searchParams.get('term') as AirHistoryTermType) : 'DAILY';
   const code: AirForecastCodeType = isCode(searchParams.get('code')) ? (searchParams.get('code') as AirForecastCodeType) : 'PM10';
 
@@ -103,8 +122,14 @@ export const AirQualityPage = () => {
     .map((m) => m.stationName)
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .sort((a, b) => a.localeCompare(b, 'ko'));
-  // 선택 측정소 — URL 값이 목록에 있으면 그것, 아니면 목록 첫 번째(URL 은 그대로 둔다).
-  const station = stationParam && stations.includes(stationParam) ? stationParam : (stations[0] ?? null);
+  // 선택 측정소 — URL 값이 목록에 있으면 그것, 없으면 저장 지점의 가장 가까운 측정소, 그것도
+  // 없으면 목록 첫 번째(URL 은 그대로 둔다).
+  const station =
+    stationParam && stations.includes(stationParam)
+      ? stationParam
+      : savedNearest && stations.includes(savedNearest.stationName)
+        ? savedNearest.stationName
+        : (stations[0] ?? null);
 
   const dailyQ = useAirStationHistory(station, 'DAILY');
   const historyQ = useAirStationHistory(station, term);
@@ -241,6 +266,10 @@ export const AirQualityPage = () => {
               measures={nationItems ?? []}
               selectedStation={station}
               onSelect={(name, sidoValue) => selectStation(name, sidoValue)}
+              savedLocation={airLocation.location}
+              onSaveLocation={airLocation.save}
+              onClearLocation={airLocation.clear}
+              savingLocation={airLocation.isSaving}
             />
           )}
         </AirSection>

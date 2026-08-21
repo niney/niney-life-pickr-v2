@@ -33,6 +33,8 @@ model User {
 
   votes VoteSession[]
 
+  airLocation AirUserLocation?
+
   @@map("users")
 }
 
@@ -1319,4 +1321,23 @@ model SubwayFavoriteLine {
   @@unique([userId, stationId, lineId])
   @@index([userId])
   @@map("subway_favorite_lines")
+}
+
+// 내 대기 위치 — 사용자가 지정·저장한 좌표 1곳(상단바 대기 칩이 이 좌표로 가장 가까운
+// 측정소의 현재 등급을 보여준다). 로그인 사용자의 서버 저장분이며 게스트는 클라이언트
+// persist. 한 사용자당 1행(userId PK) — PUT 은 덮어쓰기. 해석(가까운 측정소)은 저장하지
+// 않고 조회 시 계산한다(측정소 신설·폐지에 자동 대응).
+model AirUserLocation {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  // 표시용 라벨(저장 시점의 가까운 측정소명 등) — 선택.
+  label     String?
+  // 'geolocation' | 'manual' — 계약(AirLocationSource)이 검증, SQLite 라 문자열.
+  source    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("air_user_locations")
 }

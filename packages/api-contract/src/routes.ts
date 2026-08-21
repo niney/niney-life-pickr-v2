@@ -473,6 +473,9 @@ export const AirQuality = {
   stationsNearby: `${API_PREFIX}/air/stations/nearby`,
   // 측정소명/주소 검색 — ?q=(1~30자), 캐시된 목록 로컬 검색.
   stationSearch: `${API_PREFIX}/air/stations/search`,
+  // ── 내 대기 위치(저장 지점, 인증 필요 — 게스트는 클라이언트 persist) ──
+  // GET 현재 / PUT 저장(덮어쓰기) / DELETE 해제. 응답은 변경 후 상태.
+  location: `${API_PREFIX}/air/location`,
 } as const;
 
 

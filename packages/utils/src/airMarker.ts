@@ -38,3 +38,22 @@ export function buildAirStationMarkerSvg({ grade, selected }: AirStationMarkerOp
 export function buildAirStationMarkerDataUrl(opts: AirStationMarkerOptions): string {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(buildAirStationMarkerSvg(opts));
 }
+
+// 저장한 '내 대기 위치' 마커 — 내 위치(파란 점)와 구분되는 보라 점 + 흰 링 + 옅은 후광.
+// 26×26 규격이라 측정소 마커와 라벨 offset·축소 스케일을 공유한다. 선택 개념 없음.
+const SAVED_LOCATION_COLOR = '#7c3aed';
+
+export function buildAirSavedLocationMarkerSvg(): string {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">' +
+    `<circle fill="${SAVED_LOCATION_COLOR}" fill-opacity="0.2" cx="13" cy="13" r="12"/>` +
+    '<circle fill="#fff" cx="13" cy="13" r="7.5"/>' +
+    `<circle fill="${SAVED_LOCATION_COLOR}" cx="13" cy="13" r="5.5"/>` +
+    '<circle fill="#fff" cx="13" cy="13" r="1.8"/>' +
+    '</svg>'
+  );
+}
+
+export function buildAirSavedLocationMarkerDataUrl(): string {
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(buildAirSavedLocationMarkerSvg());
+}
