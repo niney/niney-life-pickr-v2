@@ -56,6 +56,50 @@ export const useAirForecast = (date?: string) =>
     staleTime: FORECAST_STALE_MS,
   });
 
+// 전국 측정소 목록(좌표) — 사실상 정적. 24시간 stale, 재시도 없음(활용신청 전 503 은
+// 재시도해도 같다 — FE 가 안내를 띄운다).
+export const useAirStations = () =>
+  useQuery({
+    queryKey: ['air', 'stations'],
+    queryFn: () => airQualityApi.stations(),
+    staleTime: 24 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
+    retry: false,
+  });
+
+// 좌표 기반 내 주변 측정소 — 좌표는 호출자가 Geolocation 으로 확정해 넘긴다. 소수
+// 4자리 스냅(≈11m)으로 GPS 흔들림에 쿼리 키가 갈라지지 않게(버스/지하철 미러).
+export const useAirNearbyStations = (
+  lat: number | null,
+  lng: number | null,
+  opts: { radius?: number; limit?: number } = {},
+) => {
+  const enabled = lat !== null && lng !== null;
+  const keyLat = lat !== null ? lat.toFixed(4) : null;
+  const keyLng = lng !== null ? lng.toFixed(4) : null;
+  return useQuery({
+    queryKey: ['air', 'stations', 'nearby', keyLat, keyLng, opts.radius ?? null, opts.limit ?? null],
+    queryFn: () => airQualityApi.nearbyStations(lat!, lng!, opts),
+    enabled,
+    staleTime: MEASURE_STALE_MS,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
+// 측정소명/주소 라이브 검색 — 서버 로컬 검색이라 쿼터 부담 0. 1~30자일 때만.
+// 타이핑 지연은 호출부(useDeferredValue/디바운스)가 맡는다.
+export const useAirStationSearch = (q: string) => {
+  const trimmed = q.trim();
+  const enabled = trimmed.length >= 1 && trimmed.length <= 30;
+  return useQuery({
+    queryKey: ['air', 'stations', 'search', trimmed],
+    queryFn: () => airQualityApi.searchStations(trimmed),
+    enabled,
+    staleTime: 24 * 60 * 60_000,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+};
+
 // 초미세먼지 주간예보(D+3~D+6).
 export const useAirWeeklyForecast = (date?: string) =>
   useQuery({

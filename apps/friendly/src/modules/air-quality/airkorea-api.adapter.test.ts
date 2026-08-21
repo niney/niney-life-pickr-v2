@@ -9,6 +9,7 @@ import {
   getBadStations,
   getDustForecast,
   getSidoRealtime,
+  getStationList,
   getStationRealtime,
   getWeeklyForecast,
 } from './airkorea-api.adapter.js';
@@ -204,6 +205,34 @@ describe('getBadStations / getDustForecast / getWeeklyForecast', () => {
     expect(url).toContain('searchDate=2026-08-21');
     expect(url).toContain('ver=1.1');
     expect(url).not.toContain('InformCode');
+  });
+
+  it('측정소정보(getMsrstnList) — 별도 서비스 base URL, 좌표·주소·측정항목 원문', async () => {
+    // msrstn-list.synthetic.json 은 문서 샘플 기반 합성(실응답 미관측 — 키 승인 전).
+    const fn = stubFetch(fixture('msrstn-list.synthetic.json'));
+    const { rows, totalCount } = await getStationList(OPTS);
+    expect(totalCount).toBe(5);
+    expect(rows[0]).toEqual({
+      stationName: '종로구',
+      addr: '서울 종로구 종로35가길 19 종로5,6가 동 주민센터',
+      year: '1997',
+      mangName: '도시대기',
+      item: 'SO2, CO, O3, NO2, PM10, PM2.5',
+      dmX: '37.572025',
+      dmY: '127.005028',
+      stationCode: null,
+    });
+    const url = fetchedUrl(fn);
+    expect(url).toContain('/MsrstnInfoInqireSvc/getMsrstnList?serviceKey=plain-key&');
+    expect(url).toContain('numOfRows=1000');
+    expect(url).not.toContain('ArpltnInforInqireSvc');
+  });
+
+  it('측정소정보 활용신청 전(게이트웨이 30, HTTP 403) → AirKoreaApiAuthError(503)', async () => {
+    stubFetch(fixture('gateway-auth-error.json'), 403);
+    const err = await getStationList(OPTS).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AirKoreaApiAuthError);
+    expect((err as AirKoreaApiAuthError).code).toBe('30');
   });
 
   it('주간예보 — 발표일·전망·4일치 슬롯', async () => {

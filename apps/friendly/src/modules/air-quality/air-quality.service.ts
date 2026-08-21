@@ -6,8 +6,13 @@ import type {
   AirHistoryPointType,
   AirHistoryTermType,
   AirMeasureItemType,
+  AirNearbyResultType,
+  AirNearbyStationItemType,
   AirSidoRealtimeResultType,
   AirStationHistoryResultType,
+  AirStationInfoItemType,
+  AirStationSearchResultType,
+  AirStationsResultType,
   AirWeeklyForecastResultType,
 } from '@repo/api-contract';
 import {
@@ -15,6 +20,7 @@ import {
   airDataTimeToIso,
   airSidoFromAddr,
   airSidoMatches,
+  haversineM,
   parseAirDustImage,
   parseAirRegionGrades,
   splitAirReliability,
@@ -24,6 +30,7 @@ import {
   getBadStations,
   getDustForecast,
   getSidoRealtime,
+  getStationList,
   getStationRealtime,
   getWeeklyForecast,
   type AirKoreaApiRequestOptions,
@@ -31,6 +38,7 @@ import {
   type RawAirBadStationRow,
   type RawAirForecastRow,
   type RawAirMeasureRow,
+  type RawAirStationRow,
   type RawAirWeeklyRow,
 } from './airkorea-api.adapter.js';
 
@@ -49,6 +57,11 @@ export const AIR_MEASURE_STALE_MAX_MS = 3 * 60 * 60_000;
 export const AIR_FORECAST_TTL_MS = 20 * 60_000;
 export const AIR_WEEKLY_TTL_MS = 60 * 60_000;
 export const AIR_FORECAST_STALE_MAX_MS = 24 * 60 * 60_000;
+// 측정소 목록(좌표·주소) — 사실상 정적. 24시간 캐시, 장애 시 7일까지 last-known.
+export const AIR_STATIONS_TTL_MS = 24 * 60 * 60_000;
+export const AIR_STATIONS_STALE_MAX_MS = 7 * 24 * 60 * 60_000;
+// 로컬 검색 응답 상한.
+export const AIR_STATION_SEARCH_MAX = 30;
 // 일일 업스트림 호출 한도 기본값 — 개발계정 500건에서 여유를 둔 450.
 export const DEFAULT_DAILY_UPSTREAM_LIMIT = 450;
 
@@ -83,6 +96,7 @@ export interface AirQualityServiceDeps {
     getBadStations?: typeof getBadStations;
     getDustForecast?: typeof getDustForecast;
     getWeeklyForecast?: typeof getWeeklyForecast;
+    getStationList?: typeof getStationList;
   };
   // 테스트 주입용 — TTL/쿼터 경계 시간 제어(가짜 타이머 불필요).
   now?: () => Date;
@@ -247,6 +261,38 @@ export const toWeeklyResult = (
     days,
     fetchedAt: fetchedAt.toISOString(),
     stale,
+  };
+};
+
+// WGS84 한국 범위 — 업스트림 dmX/dmY 의 축 배정을 값으로 판정한다(문서: dmX 위도,
+// dmY 경도. 그러나 과거 버전은 TM 좌표였고 축이 뒤집힌 사례도 있어 믿지 않는다).
+const inLatRange = (v: number | null): v is number => v !== null && v >= 33 && v <= 39;
+const inLngRange = (v: number | null): v is number => v !== null && v >= 124 && v <= 132;
+
+export const toStationInfoItem = (r: RawAirStationRow): AirStationInfoItemType => {
+  const x = toNum(r.dmX);
+  const y = toNum(r.dmY);
+  let lat: number | null = null;
+  let lng: number | null = null;
+  if (inLatRange(x) && inLngRange(y)) {
+    lat = x;
+    lng = y;
+  } else if (inLatRange(y) && inLngRange(x)) {
+    lat = y;
+    lng = x;
+  }
+  return {
+    stationName: r.stationName ?? '',
+    addr: r.addr ?? '',
+    sidoName: airSidoFromAddr(r.addr),
+    mangName: r.mangName,
+    year: r.year,
+    items: (r.item ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+    lat,
+    lng,
   };
 };
 
@@ -454,6 +500,93 @@ export class AirQualityService {
       },
     );
     return { date: data.date, items: data.items, fetchedAt: fetchedAt.toISOString(), stale };
+  }
+
+  // ── 측정소 정보(측정소정보 API) ─────────────────────────────────────────
+  // 전량 24시간 캐시 — 지도 마커·검색·내 주변의 단일 원천. 활용신청 전이면 503
+  // (AirKoreaApiAuthError 30) — 라우트가 그대로 내려 FE 가 신청 안내를 띄운다.
+  private loadStations(): Promise<Cached<AirStationInfoItemType[]>> {
+    const opts = this.requireKey();
+    const fetchList = this.deps.adapter?.getStationList ?? getStationList;
+    return this.cached('stations', AIR_STATIONS_TTL_MS, AIR_STATIONS_STALE_MAX_MS, async (now) => {
+      this.consumeQuota(now);
+      const { rows } = await fetchList(opts);
+      return rows.filter((r) => !!r.stationName).map(toStationInfoItem);
+    });
+  }
+
+  async getStations(): Promise<AirStationsResultType> {
+    const { data, fetchedAt, stale } = await this.loadStations();
+    return { items: data, total: data.length, fetchedAt: fetchedAt.toISOString(), stale };
+  }
+
+  // 좌표 기반 내 주변 — 캐시된 목록에서 거리 계산(업스트림 0콜) + '전국' 실시간
+  // 캐시와 측정소명으로 조인해 현재 값을 붙인다. 실시간이 실패해도 목록은 돌려준다
+  // (measure null). 동명 측정소는 주소 시도 ↔ 측정 sidoName 매칭으로 고른다.
+  async getNearbyStations(
+    lat: number,
+    lng: number,
+    radiusM: number,
+    limit: number,
+  ): Promise<AirNearbyResultType> {
+    const { data: stations, fetchedAt, stale } = await this.loadStations();
+    let measures: AirMeasureItemType[] = [];
+    try {
+      measures = (await this.getSidoRealtime('전국')).items;
+    } catch {
+      // 측정값 조인은 부가 정보 — 실시간 장애가 '내 주변' 자체를 막지 않는다.
+    }
+    const byName = new Map<string, AirMeasureItemType[]>();
+    for (const m of measures) {
+      const list = byName.get(m.stationName);
+      if (list) list.push(m);
+      else byName.set(m.stationName, [m]);
+    }
+    const center = { lat, lng };
+    const withDist = stations
+      .filter((s): s is AirStationInfoItemType & { lat: number; lng: number } => s.lat !== null && s.lng !== null)
+      .map((s) => ({ s, dist: Math.round(haversineM(center, { lat: s.lat, lng: s.lng })) }))
+      .filter((x) => x.dist <= radiusM)
+      .sort((a, b) => a.dist - b.dist);
+    const items: AirNearbyStationItemType[] = withDist.slice(0, limit).map(({ s, dist }) => {
+      const candidates = byName.get(s.stationName) ?? [];
+      const measure =
+        candidates.find((m) => s.sidoName !== null && airSidoMatches(m.sidoName, s.sidoName)) ??
+        candidates[0] ??
+        null;
+      return { ...s, dist, measure };
+    });
+    return {
+      center,
+      items,
+      total: withDist.length,
+      fetchedAt: fetchedAt.toISOString(),
+      stale,
+    };
+  }
+
+  // 측정소명/주소 로컬 검색 — 이름 앞머리 일치 → 이름 포함 → 주소 포함 순, 상위 30.
+  async searchStations(q: string): Promise<AirStationSearchResultType> {
+    const { data: stations, fetchedAt, stale } = await this.loadStations();
+    const needle = q.trim().normalize('NFC');
+    const rank = (s: AirStationInfoItemType): number => {
+      const name = s.stationName.normalize('NFC');
+      if (name.startsWith(needle)) return 0;
+      if (name.includes(needle)) return 1;
+      if (s.addr.normalize('NFC').includes(needle)) return 2;
+      return -1;
+    };
+    const matched = stations
+      .map((s) => ({ s, r: rank(s) }))
+      .filter((x) => x.r >= 0)
+      .sort((a, b) => a.r - b.r || cmp(a.s.stationName, b.s.stationName));
+    return {
+      q: needle,
+      items: matched.slice(0, AIR_STATION_SEARCH_MAX).map((x) => x.s),
+      total: matched.length,
+      fetchedAt: fetchedAt.toISOString(),
+      stale,
+    };
   }
 
   // ── 초미세먼지 주간예보 ─────────────────────────────────────────────────
