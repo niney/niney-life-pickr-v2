@@ -2,17 +2,20 @@
 // 파싱 결과를 나란히 찍는다. 어떤 모델을 meal-photo 용도로 설정할지 고르는 근거를 만든다.
 //
 // 실행:
-//   pnpm --filter friendly probe:meal-vision -- --dir=data/meal-samples [--models=gemma4:31b,qwen3.5:397b]
+//   pnpm --filter friendly probe:meal-vision -- [--dir=data/open/eval/meal-photos] [--models=gemma4:31b,qwen3.5:397b]
 //                                                [--limit=5] [--place="숯토리 신촌점"] [--menus=삼겹살,김치찌개]
-//   --dir   : 사진 폴더(jpg/png/heic). 하위 폴더는 보지 않는다.
+//   --dir   : 사진 폴더(jpg/png/heic). 하위 폴더는 보지 않는다. 기본값은 AI Hub 추출 평가셋
+//            (data/open/eval/meal-photos — 150클래스 × 2장, 파일명이 곧 정답 라벨).
 //   --models: 비교할 모델(콤마). 미지정이면 meal-photo 용도의 현재 설정 모델 1개.
 //   --limit : 사진 수 상한(기본 5).
 //   --label-from-filename: 파일명 앞부분(첫 '_' 앞)을 정답으로 보고 top-1 정확도를 채점한다.
 //            AI Hub 「한국 이미지(음식)」처럼 폴더/파일명이 곧 라벨인 데이터셋에 쓴다.
 // 사진은 서버 저장 규칙과 같게 1600px JPEG 로 정규화해 보낸다(실제 인식과 같은 입력).
 
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import sharp from 'sharp';
 import { thinkOptionForModel } from '@repo/utils';
@@ -33,7 +36,7 @@ const opt = (name: string): string | null => {
   return hit ? hit.slice(name.length + 3) : null;
 };
 
-const DIR = opt('dir') ?? 'data/meal-samples';
+const DIR = opt('dir') ?? 'data/open/eval/meal-photos';
 const LIMIT = Number.parseInt(opt('limit') ?? '5', 10);
 const MODELS = (opt('models') ?? '')
   .split(',')
@@ -60,8 +63,15 @@ const hit = (answer: string, guess: string): boolean => {
   return a === g || a.includes(g) || g.includes(a);
 };
 
+// data/ 는 리포 루트에 있고 이 스크립트는 apps/friendly 에서 돈다 → 루트 기준으로도 찾는다.
+const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '../../../..');
+const resolveDir = (rel: string): string => {
+  const cwdPath = resolve(process.cwd(), rel);
+  return existsSync(cwdPath) ? cwdPath : resolve(REPO_ROOT, rel);
+};
+
 const main = async (): Promise<void> => {
-  const dir = resolve(DIR);
+  const dir = resolveDir(DIR);
   let files: string[];
   try {
     files = (await readdir(dir)).filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort();
