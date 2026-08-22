@@ -405,6 +405,9 @@ export const mapLlmItems = (
   return out;
 };
 
+// 카드에 보여 줄 주재료 수 — 재료 문자열이 길어(레시피 원문) 앞쪽 몇 개만 쓴다.
+const INGREDIENT_SHOW_MAX = 5;
+
 const toItem = (c: ScoredCandidate, reason: string): MealRecommendationItemType => ({
   name: c.name,
   foodId: c.foodId,
@@ -415,6 +418,8 @@ const toItem = (c: ScoredCandidate, reason: string): MealRecommendationItemType 
   tags: c.tags,
   score: c.score,
   lastEatenDate: c.lastEatenDate,
+  // 주재료는 레시피 출처가 있는 음식만 갖는다 — 화면은 있을 때만 보여 준다.
+  ingredients: c.ingredients.slice(0, INGREDIENT_SHOW_MAX),
 });
 
 const profileHash = (input: unknown): string =>
@@ -450,6 +455,9 @@ const parseItems = (json: string): MealRecommendationItemType[] => {
         tags: Array.isArray(x['tags']) ? (x['tags'] as unknown[]).filter((t): t is string => typeof t === 'string') : [],
         score: typeof x['score'] === 'number' ? x['score'] : 0,
         lastEatenDate: typeof x['lastEatenDate'] === 'string' ? x['lastEatenDate'] : null,
+        ingredients: Array.isArray(x['ingredients'])
+          ? (x['ingredients'] as unknown[]).filter((t): t is string => typeof t === 'string')
+          : [],
       }))
       .filter((i) => i.name.length > 0);
   } catch {

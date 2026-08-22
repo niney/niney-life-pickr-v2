@@ -168,6 +168,9 @@ export const MealRecommendView = () => {
                     </Text>
                   </View>
                   <Text style={styles.itemReason}>{item.reason}</Text>
+                  {item.ingredients.length > 0 ? (
+                    <Text style={styles.itemIngredients}>주재료 {item.ingredients.join(', ')}</Text>
+                  ) : null}
                   {item.tags.length > 0 ? (
                     <ChipRow>
                       {item.tags.map((t) => (
@@ -250,6 +253,7 @@ const createStyles = (theme: Theme) =>
     itemName: { fontSize: 16, fontWeight: '700', color: theme.colors.text },
     itemMeta: { fontSize: 11, color: theme.colors.textMuted },
     itemReason: { fontSize: 13, color: theme.colors.textMuted, lineHeight: 19 },
+    itemIngredients: { marginTop: 4, fontSize: 11, color: theme.colors.textMuted },
     itemActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     eatBtn: { paddingVertical: 6 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },

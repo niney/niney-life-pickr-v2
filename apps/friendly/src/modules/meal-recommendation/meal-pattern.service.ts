@@ -102,6 +102,8 @@ export interface CandidateInput {
   proteinG: number | null;
   // 재료 수 — 간편함(집밥) 근거.
   ingredientCount: number | null;
+  // 재료 이름 — 비선호 재료 제외와 화면 표시에 쓴다(레시피 출처가 없으면 빈 배열).
+  ingredients: string[];
 }
 
 export interface ScoreContext {
@@ -341,9 +343,16 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
 };
 
 // 제외 음식 판정 — 이름 정규화 포함 매칭(예: 제외 '오이' → '오이냉국' 도 제외).
+/**
+ * 제외 목록에 걸리는 후보인지. 음식 이름뿐 아니라 **카탈로그 재료 목록**도 본다 — 사용자가
+ * 적는 건 '오이'처럼 재료인 경우가 많은데, 이름만 보면 오이냉국은 걸러도 오이가 든 김밥은
+ * 그대로 추천되기 때문이다. 재료 데이터가 있는 행은 1,097종뿐이라 이름 매칭도 계속 필요하다.
+ */
 export const isExcluded = (c: CandidateInput, excluded: string[]): boolean => {
   const norms = excluded.map((e) => normalizeTerm(e)).filter((e) => e.length > 0);
-  return norms.some((e) => c.nameNorm.includes(e));
+  if (norms.length === 0) return false;
+  const ingredientNorms = (c.ingredients ?? []).map((i) => normalizeTerm(i));
+  return norms.some((e) => c.nameNorm.includes(e) || ingredientNorms.some((i) => i.includes(e)));
 };
 
 // ── 후보 풀 + 서비스 ─────────────────────────────────────────────────────────
@@ -428,6 +437,7 @@ export class MealPatternService {
         sodiumMg: row?.sodiumMg ?? null,
         proteinG: row?.proteinG ?? null,
         ingredientCount: countIngredients(row?.ingredientsJson ?? null),
+        ingredients: parseIngredients(row?.ingredientsJson),
       });
     }
 
@@ -450,6 +460,7 @@ export class MealPatternService {
         sodiumMg: row?.sodiumMg ?? null,
         proteinG: row?.proteinG ?? null,
         ingredientCount: countIngredients(row?.ingredientsJson ?? null),
+        ingredients: parseIngredients(row?.ingredientsJson),
       });
     }
 
@@ -515,7 +526,19 @@ const toCandidate = (row: {
   sodiumMg: row.sodiumMg,
   proteinG: row.proteinG,
   ingredientCount: countIngredients(row.ingredientsJson),
+  ingredients: parseIngredients(row.ingredientsJson),
 });
+
+// 재료 이름 목록(레시피 출처가 있는 행만). 후보 필터·화면 표시에 쓴다.
+export const parseIngredients = (json: string | null | undefined): string[] => {
+  if (!json) return [];
+  try {
+    const v: unknown = JSON.parse(json);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+};
 
 const countIngredients = (json: string | null): number | null => {
   if (!json) return null;

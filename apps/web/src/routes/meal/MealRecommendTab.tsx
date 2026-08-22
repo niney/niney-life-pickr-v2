@@ -184,6 +184,9 @@ const RecommendationCard = ({
               )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
+            {item.ingredients.length > 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">주재료 {item.ingredients.join(', ')}</p>
+            ) : null}
             {item.tags.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {item.tags.map((t) => (

@@ -325,7 +325,8 @@ export const MEAL_WEIGHT_PRESETS: Record<string, { label: string; weights: MealW
 
 export const MealPreference = z.object({
   weights: MealWeights,
-  // 못 먹는/싫어하는 음식명(정규화해 비교).
+  // 못 먹는/싫어하는 것 — 음식명뿐 아니라 **재료**도 여기에 적는다(오이·고수). 후보의 이름과
+  // 카탈로그 재료 목록 양쪽에서 걸러진다(오이 → 오이냉국, 그리고 재료에 오이가 든 김밥까지).
   excludedFoods: z.array(z.string()),
   likedFoods: z.array(z.string()),
   // 주로 하는 식사 유형(후보 풀 편성).
@@ -380,6 +381,8 @@ export const MealRecommendationItem = z.object({
   score: z.number(),
   // 마지막으로 먹은 날(있으면).
   lastEatenDate: DateString.nullable(),
+  // 주재료(레시피 출처가 있는 음식만, 최대 5개). 없으면 빈 배열.
+  ingredients: z.array(z.string()),
 });
 export type MealRecommendationItemType = z.infer<typeof MealRecommendationItem>;
 

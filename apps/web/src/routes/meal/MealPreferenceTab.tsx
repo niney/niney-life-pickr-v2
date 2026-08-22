@@ -133,7 +133,7 @@ export const MealPreferenceTab = () => {
         <CardContent className="space-y-4">
           <Field
             label="못 먹는 / 싫어하는 음식"
-            hint="쉼표로 구분. 이름이 포함된 음식은 추천에서 빠져요(예: 오이 → 오이냉국도 제외)."
+            hint="쉼표로 구분. 이름은 물론 재료까지 봐요 — '오이'를 적으면 오이냉국뿐 아니라 오이가 들어간 김밥도 빠져요."
             value={excluded}
             onChange={(v) => {
               setExcluded(v);

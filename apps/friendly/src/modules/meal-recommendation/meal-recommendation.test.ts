@@ -49,6 +49,7 @@ const candidate = (name: string, over: Partial<CandidateInput> = {}): CandidateI
   sodiumMg: null,
   proteinG: null,
   ingredientCount: null,
+  ingredients: [],
   ...over,
 });
 
@@ -385,5 +386,23 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
     expect(names).not.toContain('소스');
     expect(names).not.toContain('사이드');
     expect(names).not.toContain('콜라');
+  });
+});
+
+describe('isExcluded — 재료까지 본다', () => {
+  it('이름에 있으면 뺀다', () => {
+    expect(isExcluded(candidate('오이냉국'), ['오이'])).toBe(true);
+  });
+
+  it('이름에 없어도 재료 목록에 있으면 뺀다 — 오이가 든 김밥', () => {
+    expect(isExcluded(candidate('김밥', { ingredients: ['단무지', '오이', '햄'] }), ['오이'])).toBe(true);
+  });
+
+  it('상관없는 음식은 남긴다', () => {
+    expect(isExcluded(candidate('김치찌개', { ingredients: ['김치', '돼지고기'] }), ['오이'])).toBe(false);
+  });
+
+  it('제외 목록이 비면 아무것도 걸러지지 않는다', () => {
+    expect(isExcluded(candidate('오이무침', { ingredients: ['오이'] }), [])).toBe(false);
   });
 });

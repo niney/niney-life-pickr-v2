@@ -231,6 +231,7 @@ describe('MealPage — 추천·설정 탭', () => {
         tags: ['14일 만에'],
         score: 0.82,
         lastEatenDate: null,
+        ingredients: ['연어', '밥', '와사비'],
       },
     ],
     summary: '오늘은 담백하게',
