@@ -1,9 +1,15 @@
 import {
+  AIR_GRADE_HEX,
   AIR_GRADE_LABEL,
+  AIR_GRADE_NONE_HEX,
   airGradeFromText,
   airWeeklyLevel,
   type AirGradeLevel,
 } from '@repo/utils';
+
+// 날짜 라벨(오늘/내일/모레 · M/D (요일) · KST 오늘)은 @repo/utils 로 올라갔다(앱과 공용). 기존 import
+// 경로 호환용 재수출.
+export { formatYmdWithWeekday, relativeDayLabel, todayKst } from '@repo/utils';
 
 // 대기 등급(좋음/보통/나쁨/매우나쁨) 색 — 에어코리아가 쓰는 파랑/초록/노랑/빨강
 // 관행을 그대로 따라 사용자가 이미 아는 의미를 빌린다. 상태색(status)이라 계열색과
@@ -27,28 +33,28 @@ export const AIR_GRADE_STYLE: Record<AirGradeLevel, AirGradeStyle> = {
     dot: 'bg-sky-500',
     tint: 'bg-sky-500/15',
     ink: 'text-sky-600 dark:text-sky-400',
-    hex: '#0ea5e9',
+    hex: AIR_GRADE_HEX[1],
   },
   2: {
     label: AIR_GRADE_LABEL[2],
     dot: 'bg-emerald-500',
     tint: 'bg-emerald-500/15',
     ink: 'text-emerald-600 dark:text-emerald-400',
-    hex: '#10b981',
+    hex: AIR_GRADE_HEX[2],
   },
   3: {
     label: AIR_GRADE_LABEL[3],
     dot: 'bg-amber-500',
     tint: 'bg-amber-500/20',
     ink: 'text-amber-600 dark:text-amber-400',
-    hex: '#f59e0b',
+    hex: AIR_GRADE_HEX[3],
   },
   4: {
     label: AIR_GRADE_LABEL[4],
     dot: 'bg-rose-500',
     tint: 'bg-rose-500/15',
     ink: 'text-rose-600 dark:text-rose-400',
-    hex: '#f43f5e',
+    hex: AIR_GRADE_HEX[4],
   },
 };
 
@@ -58,7 +64,7 @@ export const AIR_GRADE_NONE: AirGradeStyle = {
   dot: 'bg-muted-foreground/40',
   tint: 'bg-muted',
   ink: 'text-muted-foreground',
-  hex: '#9ca3af',
+  hex: AIR_GRADE_NONE_HEX,
 };
 
 export const airGradeStyle = (grade: AirGradeLevel | null | undefined): AirGradeStyle =>
@@ -73,41 +79,4 @@ export const airGradeStyleFromText = (text: string | null | undefined): AirGrade
   if (w === 'low') return { ...AIR_GRADE_STYLE[1], label: text ?? '낮음' };
   if (w === 'high') return { ...AIR_GRADE_STYLE[3], label: text ?? '높음' };
   return { ...AIR_GRADE_NONE, label: text ?? '-' };
-};
-
-// 예보 대상일 → '오늘/내일/모레' 라벨(그 외는 M/D). todayYmd 는 KST 기준 YYYY-MM-DD.
-export const relativeDayLabel = (ymd: string, todayYmd: string): string => {
-  const toDays = (s: string): number | null => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-    if (!m) return null;
-    return Math.round(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86_400_000);
-  };
-  const a = toDays(ymd);
-  const b = toDays(todayYmd);
-  if (a === null || b === null) return ymd;
-  const diff = a - b;
-  if (diff === 0) return '오늘';
-  if (diff === 1) return '내일';
-  if (diff === 2) return '모레';
-  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(ymd);
-  return m ? `${Number(m[1])}/${Number(m[2])}` : ymd;
-};
-
-// KST 기준 오늘 YYYY-MM-DD — 예보 라벨(오늘/내일) 기준점. 렌더 중 계산해도 안전한
-// 순수 함수(분 단위로 바뀌지 않는다).
-export const todayKst = (now: Date = new Date()): string =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
-
-// "YYYY-MM-DD" → "8/21 (목)" — 주간예보 열 머리 등.
-export const formatYmdWithWeekday = (ymd: string): string => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
-  if (!m) return ymd;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  const wd = ['일', '월', '화', '수', '목', '금', '토'][d.getUTCDay()] ?? '';
-  return `${Number(m[2])}/${Number(m[3])} (${wd})`;
 };

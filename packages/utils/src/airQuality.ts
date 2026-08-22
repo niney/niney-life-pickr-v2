@@ -21,6 +21,17 @@ export const AIR_GRADE_LABEL: Record<AirGradeLevel, string> = {
 
 export const AIR_GRADE_LEVELS: readonly AirGradeLevel[] = [1, 2, 3, 4];
 
+// 등급 색 hex — 에어코리아가 쓰는 파랑/초록/노랑/빨강 관행. 웹은 Tailwind 클래스(airGrade.ts)와 함께,
+// 앱은 이 hex 를 직접 쓴다. 항상 등급 글자와 같이 쓴다(색만으로 뜻을 전하지 않는다).
+export const AIR_GRADE_HEX: Record<AirGradeLevel, string> = {
+  1: '#0ea5e9',
+  2: '#10b981',
+  3: '#f59e0b',
+  4: '#f43f5e',
+};
+// 결측/등급 없음.
+export const AIR_GRADE_NONE_HEX = '#9ca3af';
+
 export type AirPollutant = 'pm10' | 'pm25' | 'o3' | 'no2' | 'co' | 'so2' | 'khai';
 
 export interface AirPollutantMeta {

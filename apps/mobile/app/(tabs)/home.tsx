@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRestaurantRanking, useTheme } from '@repo/shared';
 import type { RestaurantRankingItemType } from '@repo/api-contract';
 import { NotchFade } from '~/components/NotchFade';
+import { MyLocationCard } from '~/components/home/MyLocationCard';
 import { RankingHeader } from '~/components/RankingHeader';
 import { RankingRow } from '~/components/RankingRow';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
@@ -126,14 +127,18 @@ export default function HomeScreen() {
   const isInitialLoading = query.isLoading && items.length === 0;
   const isError = query.isError && items.length === 0;
 
+  // 홈 머리 = 내 위치 날씨·공기 카드(저장 위치 없으면 설정 유도) + 랭킹 컨트롤.
   const listHeader = useMemo(
     () => (
-      <RankingHeader
-        sort={sort}
-        excludeNeutral={excludeNeutral}
-        onChangeSort={handleChangeSort}
-        onChangeNeutral={handleChangeNeutral}
-      />
+      <View style={styles.headerStack}>
+        <MyLocationCard />
+        <RankingHeader
+          sort={sort}
+          excludeNeutral={excludeNeutral}
+          onChangeSort={handleChangeSort}
+          onChangeNeutral={handleChangeNeutral}
+        />
+      </View>
     ),
     [sort, excludeNeutral, handleChangeSort, handleChangeNeutral],
   );
@@ -224,6 +229,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerStack: { gap: 16 },
   // paddingBottom 은 런타임에 tabBarH + 16 으로 주입 (위 contentContainerStyle).
   list: { paddingHorizontal: 16 },
   sep: { height: 8 },

@@ -453,5 +453,17 @@ export const formatKmaHourLabel = (iso: string, todayIsoDate: string): string =>
   return date === todayIsoDate ? `${hour}시` : `${Number(m[2])}/${Number(m[3])} ${hour}시`;
 };
 
+// 발표 시각 라벨 — {date:"YYYYMMDD", time:"HHMM"} → "8/21 15:00". 웹·앱 화면 공용.
+export const formatKmaBaseLabel = (base: { date: string; time: string } | null | undefined): string | null => {
+  if (!base) return null;
+  return `${Number(base.date.slice(4, 6))}/${Number(base.date.slice(6, 8))} ${base.time.slice(0, 2)}:${base.time.slice(2, 4)}`;
+};
+
+// 중기 발표 시각 "YYYYMMDDHHmm" → "8/21 06:00".
+export const formatKmaTmFcLabel = (tmFc: string | null | undefined): string | null => {
+  if (!tmFc || !/^\d{12}$/.test(tmFc)) return null;
+  return `${Number(tmFc.slice(4, 6))}/${Number(tmFc.slice(6, 8))} ${tmFc.slice(8, 10)}:${tmFc.slice(10, 12)}`;
+};
+
 // 낮/밤 근사 — 일출·일몰 API 없이 06~18시를 낮으로 본다(아이콘 해/달 선택용).
 export const kmaIsDaytimeHour = (hour: number): boolean => hour >= 6 && hour < 19;

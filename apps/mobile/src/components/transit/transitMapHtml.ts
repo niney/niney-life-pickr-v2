@@ -254,7 +254,7 @@ export const buildTransitMapHtml = (
       var selected = currentSelectedId === m.id;
       // iconSel 이 있어야 "선택 핀" 모양 — 없으면(경유지 점 등) 항상 icon.
       var pin = selected && m.iconSel;
-      var compact = !selected && zoom < LABEL_VISIBLE_ZOOM;
+      var compact = !selected && !m.fixedScale && zoom < LABEL_VISIBLE_ZOOM;
       var styleObj = {
         zIndex: selected ? 1000 : 0,
         image: new ol.style.Icon({
@@ -276,10 +276,15 @@ export const buildTransitMapHtml = (
     };
   }
 
-  function fillMarkerSource(src, markers) {
+  function fillMarkerSource(src, markers, icons) {
     src.clear();
     for (var i = 0; i < markers.length; i++) {
       var m = markers[i];
+      // 아이콘 사전 치환(setMarkers.icons) — 키가 아니면 그대로 data URL.
+      if (icons) {
+        if (m.icon && icons[m.icon]) m.icon = icons[m.icon];
+        if (m.iconSel && icons[m.iconSel]) m.iconSel = icons[m.iconSel];
+      }
       var f = new ol.Feature({
         geometry: new ol.geom.Point(ol.proj.fromLonLat([m.lng, m.lat])),
       });
@@ -590,7 +595,7 @@ export const buildTransitMapHtml = (
       }
     },
     setMarkers: function(cmd) {
-      fillMarkerSource(markerSource, cmd.markers || []);
+      fillMarkerSource(markerSource, cmd.markers || [], cmd.icons || null);
     },
     setSelected: function(cmd) {
       var nextId = (cmd.id === undefined || cmd.id === null || cmd.id === '') ? null : cmd.id;

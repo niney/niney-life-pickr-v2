@@ -3,6 +3,7 @@ import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import {
   configureApi,
+  setAirLocationStorage,
   setBusFavoriteStorage,
   setReviewAskStorage,
   setSettlementDraftStorage,
@@ -23,6 +24,9 @@ setReviewAskStorage(AsyncStorage);
 // 스토리지로 떨어져 앱 재시작 시 게스트 즐겨찾기가 소실된다.
 setBusFavoriteStorage(AsyncStorage);
 setSubwayFavoriteStorage(AsyncStorage);
+// 내 위치(날씨·대기 공용, 게스트 로컬 저장분) persist 어댑터 — 같은 이유로 주입. 로그인 사용자는
+// 서버 저장분을 쓰고 이 값은 로그인 직후 1회 업로드 후 비운다(useAirLocation).
+setAirLocationStorage(AsyncStorage);
 
 const TOKEN_KEY = 'lp:token';
 const GUEST_KEY = 'lp:guest';

@@ -25,6 +25,9 @@ export interface BridgeMarker {
   // 바뀐다 — markerFrame 규격(비선택 26×26 원 / 선택 32×48 핀) 전제.
   // 미지정이면 선택돼도 icon 그대로(중심 anchor, 경유지 점 등).
   iconSel?: string;
+  // true 면 줌이 낮아도 축소(SMALL_ICON_SCALE)하지 않는다 — 건수 글자가 그려진 셀 버블처럼 원본
+  // 크기가 의미인 마커(일상지도). 기본 false(기존 마커 동작 그대로).
+  fixedScale?: boolean;
 }
 
 export interface BridgeRouteLine {
@@ -70,7 +73,9 @@ export type TransitMapCmd =
   | { type: 'setMode'; mode: 'light' | 'dark' }
   // false: rAF 취소 + 진행 중 tween 을 목표점으로 스냅(백그라운드 절전).
   | { type: 'setActive'; active: boolean }
-  | { type: 'setMarkers'; markers: BridgeMarker[] }
+  // icons: 아이콘 사전 — marker.icon/iconSel 이 사전 키면 HTML 이 값(data URL)으로 치환한다. 같은
+  // 아이콘을 수천 마커가 나눠 쓸 때(일상지도 CCTV 점) 페이로드를 마커당 ~60B 로 줄이는 용도. 생략 가능.
+  | { type: 'setMarkers'; markers: BridgeMarker[]; icons?: Record<string, string> }
   | { type: 'setSelected'; id: string | null }
   // 겸표시(상대 도메인) 전용 레이어 — fitToMarkers extent 에서 제외.
   | { type: 'setOverlayMarkers'; markers: BridgeMarker[] }

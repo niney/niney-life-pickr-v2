@@ -96,6 +96,14 @@ export const normalizeLifeToiletOpenType = (raw: string | null | undefined): Lif
 
 // 24시간 개방 판정 — 구분이 '상시'이거나 상세가 24시간(00:00~24:00·연중무휴 등)을 말할 때.
 // '정시 + 24시간' 같은 조합이 실데이터에 흔해 상세도 본다. 미개방은 상세와 무관하게 false.
+// 개방시간 한 줄 — 24시간이면 그것만, 아니면 구분 + 상세(웹·앱 표시 공용).
+export const lifeToiletOpenLabel = (openType: string, openDetail: string | null, open24: boolean): string => {
+  if (open24) return '24시간';
+  if (openType === '미개방') return '미개방';
+  if (openDetail) return openType === '미상' ? openDetail : `${openType} ${openDetail}`;
+  return openType === '미상' ? '개방시간 미상' : openType;
+};
+
 export const lifeToiletOpen24 = (openType: string | null | undefined, openDetail: string | null | undefined): boolean => {
   const type = normalizeLifeToiletOpenType(openType);
   if (type === '미개방') return false;
