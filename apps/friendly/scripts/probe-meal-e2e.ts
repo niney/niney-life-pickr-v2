@@ -5,6 +5,8 @@
 //   운영 DB 를 건드리기 싫으면 사본을 가리킨다:
 //     DATABASE_URL="file:/tmp/e2e.db" pnpm --filter friendly probe:meal-e2e -- <사진폴더>
 //   (사본은 `cp apps/friendly/data/prod.db /tmp/e2e.db` — 카탈로그가 있어야 매칭까지 확인된다.)
+//   주의: DB 는 사본으로 가도 **사진은 실제 저장 경로**(apps/friendly/data/meal-photos/e2e-meal-user)
+//   에 쌓인다. 확인이 끝나면 그 폴더를 지운다.
 //
 // LLM 을 실제로 부르므로 일일 한도를 소비한다. 스키마 변경·프롬프트 변경 뒤 손으로 한 번 돌려
 // "앱이 하는 일" 전체가 살아 있는지 보는 용도다(단위 테스트는 FakeProvider 를 쓴다).
