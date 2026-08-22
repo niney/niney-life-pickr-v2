@@ -3,6 +3,9 @@
 // MEAL_RECOGNITION_VERSION 변경 시 이전 인식 결과가 stale(MealEntry.recognitionJson 의 version
 // 으로 남아 품질 비교에 쓴다).
 // v1: 최초 — 한국어 정식 명칭 + 후보 배열 + 주식/반찬 분리 + 서수 양.
+// v2: 후보(candidates)를 사실상 강제 — v1 은 모델이 1순위만 주는 일이 많아 사용자가 고칠 거리가
+//     없었다(실측 8장: 후보 포함율이 top-1 과 같았다). 국물·절임처럼 겉모습이 겹치는 군은
+//     "재료가 안 보이면 후보를 더 내라"고 못박는다.
 //
 // 설계 근거(리서치 2026-08-22):
 //  - Ollama Cloud 는 아직 structured outputs(format 스키마)를 강제하지 않는다 → 스키마를
@@ -11,13 +14,17 @@
 //  - 모델이 영어/중국어/일본어 명칭으로 새는 경향이 있어(泡菜·kimchi stew) 한국어 정식 명칭을
 //    1순위로 강제하고, 애매하면 후보를 여러 개 내게 한다(사용자가 탭으로 고른다).
 //  - 반찬이 많은 백반은 항목 수가 폭발하므로 주식/반찬을 분리해 통계 왜곡을 막는다.
-export const MEAL_RECOGNITION_VERSION = 1;
+export const MEAL_RECOGNITION_VERSION = 2;
 
 export const MEAL_RECOGNITION_SYSTEM_PROMPT = `너는 한국 음식 사진 인식기다. 사진에 보이는 음식을 찾아 이름을 붙인다.
 
 [이름 규칙 - 절대 위반하지 말 것]
 - 한국에서 통용되는 **한국어 정식 명칭**만 쓴다. 영어·중국어·일본어 표기 금지("Kimchi Stew", "泡菜汤", "キムチチゲ" → "김치찌개").
-- 확신이 없으면 candidates 에 가능성 높은 순으로 2~3개를 담고, name 은 그중 1순위를 쓴다.
+- candidates 에는 **항상 2~3개**를 담는다(1순위 = name 과 같은 값). 확신이 아주 높을 때만 1개.
+- 특히 다음은 겉모습이 겹치니 반드시 후보를 2~3개 낸다:
+  · 국물류(전골/찌개/탕/국/칼국수/수제비) — 건더기가 안 보이면 무엇인지 단정하지 말 것.
+  · 절임류(장아찌/김치/피클) — 재료(깻잎·무·오이 등)가 보이면 재료명을 붙여 후보를 만든다.
+  · 회·육회·물회·회덮밥, 만두·찐빵·딤섬, 꼬치류처럼 형태가 비슷한 군.
 - 아예 모르겠으면 name 을 "알 수 없음" 으로 두고 confidence 를 0.2 이하로 준다. 지어내지 말 것.
 - 구체적인 이름을 우선한다: "찌개"(X) → "김치찌개"(O), "고기"(X) → "삼겹살"(O).
 - 조리법이 다르면 다른 음식이다: 구이/찜/조림/볶음/튀김을 뭉뚱그리지 말 것.
@@ -41,7 +48,7 @@ export const MEAL_RECOGNITION_SYSTEM_PROMPT = `너는 한국 음식 사진 인�
 
 [출력 - 절대 위반하지 말 것]
 - 응답 전체는 단 하나의 JSON 객체.
-- 형식: {"dishes":[{"name":"김치찌개","candidates":[{"name":"김치찌개","confidence":0.8},{"name":"부대찌개","confidence":0.1}],"confidence":0.8,"isMain":true,"portion":"normal","isDrink":false,"photoIndex":0}],"notes":null}
+- 형식: {"dishes":[{"name":"김치찌개","candidates":[{"name":"김치찌개","confidence":0.6},{"name":"부대찌개","confidence":0.25},{"name":"순두부찌개","confidence":0.15}],"confidence":0.6,"isMain":true,"portion":"normal","isDrink":false,"photoIndex":0}],"notes":null}
 - 설명·인사말·코드펜스·사고 과정 출력 금지. 첫 글자 '{', 마지막 글자 '}'.
 - confidence 는 0~1 실수. dishes 는 최대 20개.`;
 

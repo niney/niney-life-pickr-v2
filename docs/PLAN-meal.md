@@ -358,8 +358,13 @@ model MealRecommendation {
   - **4차(추천)**: `meal-pattern`(프로필·후보 풀·가중치 점수 7종) + `meal-recommendation`(LLM 선택·이유, 후보 밖 이름 드롭, 부족분 점수 채움, 캐시·폴백) + 앱/웹 추천·설정 화면(가중치 0~5, 프리셋 4종, 제외·선호 음식).
   - **5차 일부**: 실시간 날씨(기상청 초단기실황) 연결, 인식 측정 도구(`MEAL_RECOGNITION_DEBUG` 덤프 + `eval:meal-recognition` + `probe:meal-vision`), 추천 → 맛집 검색("파는 곳 찾기", 앱 맛집 탭 `?q=`).
   - 테스트: friendly 81파일(식단 44건 추가) / 웹 75건 / shared 45건 / utils — 전 워크스페이스 typecheck·lint green.
+- **2026-08-22 — 실데이터 검증·시드 완료**:
+  - 준비된 데이터가 API 가 아니라 **배포 파일**이라 파일 적재 경로를 더했다(표준데이터 CSV 한글 헤더 매핑 + XLSX 최소 리더). **카탈로그 1,688종 적재 완료**(영양성분 1,236 + 800선 신규 452·병합 348), LLM 분류까지 돌려 3축 모두 채운 행 1,687/1,688, 1인분 영양 1,235행.
+  - **인식 실측**(AI Hub 라벨 사진 8장): 프롬프트 v1 → qwen3.5 top-1 63%·후보포함 63% / gemma4 38%·63%. **후보를 강제하는 v2 로 바꾼 뒤 qwen3.5 top-1 75%·후보포함 88%, gemma4 25%·88%**. 파싱 실패 0. `.env` 의 meal-photo 는 qwen3.5:397b(정확도 우선), 속도·비용 우선이면 gemma4:31b.
+  - **추론 모델 함정**: think 를 안 보내면 qwen3.5·gpt-oss 가 출력 토큰을 사고에 다 써 content 가 빈다(실측). JSON 을 받는 호출 전부에 thinkOptionForModel 을 실었다 — 영수증 추출도 같은 손해를 보고 있었다.
+  - 남은 데이터 소스: 식품안전나라 레시피(키만 넣으면 1,156건), MAFRA(패스), **menu-canonical 은 현재 global_menu_canonicals 0행**이라 비어 있다 — 어드민 > AI 분석 관리에서 글로벌 메뉴 병합을 한 번 돌려야 외식 메뉴 어휘가 합류한다.
 - **남은 것**:
-  1. **키가 있어야 진행**: `probe:food-api` 로 표준데이터 실응답 확정 → 파서·픽스처 조정 → `load:food-catalog`(또는 어드민 "지금 실행")로 실제 시드 → 카탈로그 규모·분류 커버리지 확인. 카탈로그가 비어 있으면 추천 후보는 사용자 이력만으로 만들어진다.
-  2. **모델 선택**: `probe:meal-vision --dir=<사진 폴더> --models=gemma4:31b,qwen3.5:397b` 로 비교 후 어드민 > 설정 > AI 키에서 `meal-photo`·`meal-recommend` 모델 지정.
+  1. **식품안전나라 키**를 `.env` 의 `FOOD_RECIPE_API_KEY=` 에 넣고 `load:food-catalog --source=recipe` — 재료·조리법이 붙어 추천의 간편함 가중치가 살아난다.
+  2. **글로벌 메뉴 병합 1회 실행**(어드민 > AI 분석 관리) 후 `load:food-catalog --source=menu-canonical` — 외식 메뉴 어휘(마라탕 등)가 카탈로그에 합류한다.
   3. **앱 권한 문구**: `app.config.ts` 의 expo-image-picker 문구가 아직 영수증 전용 — 식단 포함 문구로 바꾸고 `prebuild`/재빌드.
-  4. 실기기 확인(사진 촬영·HEIC·업로드·인식), 서버 쪽 메뉴→식당 매칭(현재는 검색어 전달), 끼니 시간 로컬 알림, 위키 재컴파일(`meal`/`food` 토픽).
+  4. 실기기 확인(사진 촬영·HEIC·업로드·인식), 더 큰 평가셋으로 모델 재비교(AI Hub 폴더명이 라벨이라 `--label-from-filename` 로 자동 채점된다), 서버 쪽 메뉴→식당 매칭(현재는 검색어 전달), 끼니 시간 로컬 알림, 위키 재컴파일(`meal`/`food` 토픽).

@@ -10,6 +10,7 @@ import type { AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/adapters/llm-provider.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
 import { MealPhotoService } from '../meal/meal-photo.service.js';
+import { MEAL_RECOGNITION_VERSION } from './meal-recognition.prompts.js';
 import {
   MealRecognitionError,
   MealRecognitionService,
@@ -145,7 +146,7 @@ describe('MealRecognitionService (격리 DB + FakeProvider)', () => {
     expect(call.systemPrompt).toContain('한국어 정식 명칭');
 
     expect(res.model).toBe('gemma4:31b');
-    expect(res.promptVersion).toBe(1);
+    expect(res.promptVersion).toBe(MEAL_RECOGNITION_VERSION);
     expect(res.dishes[0]).toMatchObject({
       name: '김치 찌개',
       matchedName: '김치찌개',
