@@ -175,9 +175,19 @@ export const MealRecommendView = () => {
                       ))}
                     </ChipRow>
                   ) : null}
-                  <Pressable accessibilityRole="button" onPress={() => eatThis(shown, item.name)} style={styles.eatBtn}>
-                    <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 13 }}>이거 먹었어요</Text>
-                  </Pressable>
+                  <View style={styles.itemActions}>
+                    <Pressable accessibilityRole="button" onPress={() => eatThis(shown, item.name)} style={styles.eatBtn}>
+                      <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 13 }}>이거 먹었어요</Text>
+                    </Pressable>
+                    {/* 파는 곳 — 맛집 탭 검색으로 넘긴다(서버 쪽 메뉴→식당 매칭은 아직 없다). */}
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => router.push({ pathname: '/(tabs)/restaurants', params: { q: item.name } } as never)}
+                      style={styles.eatBtn}
+                    >
+                      <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>파는 곳 찾기</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))}
             </View>
@@ -240,6 +250,7 @@ const createStyles = (theme: Theme) =>
     itemName: { fontSize: 16, fontWeight: '700', color: theme.colors.text },
     itemMeta: { fontSize: 11, color: theme.colors.textMuted },
     itemReason: { fontSize: 13, color: theme.colors.textMuted, lineHeight: 19 },
+    itemActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     eatBtn: { paddingVertical: 6 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
     feedbackLabel: { fontSize: 12, color: theme.colors.textMuted, flex: 1 },

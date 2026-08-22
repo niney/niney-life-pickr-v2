@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Loader2, RefreshCw, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Loader2, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type { MealRecommendationType, MealSlotType, MealTypeType } from '@repo/api-contract';
 import {
   useCreateMealRecommendation,
@@ -192,7 +193,7 @@ const RecommendationCard = ({
                 ))}
               </div>
             ) : null}
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -200,6 +201,13 @@ const RecommendationCard = ({
                 className={cn(rec.feedback?.pickedName === item.name && 'text-primary')}
               >
                 이걸로 할래요
+              </Button>
+              {/* 파는 곳 찾기 — 맛집 검색으로 넘긴다(메뉴명 검색). 서버 쪽 메뉴→식당 매칭은 아직 없다. */}
+              <Button variant="ghost" size="sm" asChild>
+                <Link to={`/restaurants-v2?q=${encodeURIComponent(item.name)}`}>
+                  <Search className="mr-1 size-3.5" />
+                  파는 곳 찾기
+                </Link>
               </Button>
             </div>
           </div>

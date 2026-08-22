@@ -76,6 +76,9 @@ export interface MealRecommendationDeps {
   operationLog?: OperationLogService | null;
   pattern?: MealPatternService;
   preferences?: MealPreferenceService;
+  // 좌표가 오면 현재 기온·강수를 채워 weather 가중치를 계절 추정 대신 실측으로 쓴다.
+  // 실패·미설정(키 없음)은 조용히 null — 추천이 날씨 때문에 막히면 안 된다.
+  weather?: (lat: number, lng: number) => Promise<{ tempC: number | null; rain: boolean | null } | null>;
 }
 
 export class MealRecommendationService {
@@ -145,6 +148,11 @@ export class MealRecommendationService {
     const candidatesRaw = await this.pattern.buildCandidates(profile, preference);
 
     const month = Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
+    // 날씨는 있으면 쓰고 없으면 계절로 — 어느 쪽이든 추천은 나온다.
+    const weather =
+      this.deps.weather && input.lat !== null && input.lat !== undefined && input.lng !== null && input.lng !== undefined
+        ? await this.deps.weather(input.lat, input.lng).catch(() => null)
+        : null;
     const scored = candidatesRaw
       .map((c) =>
         scoreCandidate(c, {
@@ -153,8 +161,8 @@ export class MealRecommendationService {
           targetSlot: input.targetSlot,
           mealType: input.mealType ?? null,
           month,
-          tempC: null,
-          rain: null,
+          tempC: weather?.tempC ?? null,
+          rain: weather?.rain ?? null,
           today,
         }),
       )
@@ -168,6 +176,9 @@ export class MealRecommendationService {
       targetDate: input.targetDate,
       mealType: input.mealType ?? null,
       note: input.note ?? null,
+      // 날씨가 바뀌면 근거도 바뀌므로 캐시 키에 넣는다(기온은 5도 단위로 뭉갠다).
+      weatherBucket: weather?.tempC !== null && weather?.tempC !== undefined ? Math.round(weather.tempC / 5) : null,
+      rain: weather?.rain ?? null,
       candidateNames: scored.slice(0, PROMPT_CANDIDATES).map((c) => c.name),
     });
     if (!input.force) {

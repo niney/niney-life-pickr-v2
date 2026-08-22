@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
@@ -67,7 +68,9 @@ export default function RestaurantsScreen() {
   // 리스트 마지막 카드가 하단 탭바 뒤로 안 가리게 그만큼 하단 패딩을 더한다.
   const tabBarH = useTabBarHeight();
 
-  const [q, setQ] = useState('');
+  // 다른 화면에서 검색어를 넘겨 열 수 있다(식단 추천의 "파는 곳 찾기" → ?q=김치찌개).
+  const params = useLocalSearchParams<{ q?: string }>();
+  const [q, setQ] = useState(() => (typeof params.q === 'string' ? params.q : ''));
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>('recent');
   const [bbox, setBbox] = useState<string | null>(null);

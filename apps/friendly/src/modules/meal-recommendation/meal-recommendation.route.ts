@@ -11,10 +11,12 @@ import {
   Routes,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
+import { latLngToKmaGrid } from '@repo/utils';
 import { RATE } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { mealQuota, recommendQuotaKey } from '../meal/meal-quota.js';
+import { WeatherService } from '../weather/weather.service.js';
 import { MealRecommendationError, MealRecommendationService } from './meal-recommendation.service.js';
 
 // 다음 끼니 추천 — 로그인 사용자 본인 것만. 캐시(같은 날·끼니·프로필)는 LLM 을 부르지 않으므로
@@ -27,9 +29,19 @@ const kstToday = (): string => new Date().toLocaleDateString('en-CA', { timeZone
 const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
+  // 날씨는 선택 보강 — 키가 없거나 업스트림이 죽어도 추천은 계절 추정으로 나온다.
+  const weather = new WeatherService({ serviceKey: env.KMA_API_KEY || env.BUS_API_KEY });
   const service = new MealRecommendationService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
+    weather: async (lat, lng) => {
+      const { nx, ny } = latLngToKmaGrid(lat, lng);
+      const res = await weather.getNowcast(nx, ny);
+      const now = res.now;
+      if (!now) return null;
+      // PTY: 0 없음 / 1 비 / 2 비·눈 / 3 눈 / 5 빗방울 / 6 빗방울·눈날림 / 7 눈날림.
+      return { tempC: now.t1h, rain: now.pty !== null ? now.pty > 0 : null };
+    },
   });
 
   typed.get(Routes.Meal.recommendationContext, {

@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
@@ -65,11 +67,19 @@ const LlmOutput = z.object({
   notes: z.string().nullable().optional(),
 });
 
+// 측정용 디버그 덤프 스위치 — 정확도를 정량화하려면 raw 응답을 모아야 하는데 프로덕션 로그를
+// 더럽히지 않게 env 로만 켠다(영수증 추출의 EXTRACTION_DEBUG 와 같은 장치).
+// `MEAL_RECOGNITION_DEBUG=1 pnpm --filter friendly dev` → data/meal-recognition-debug/*.json.
+const debugEnabled = (): boolean =>
+  process.env.MEAL_RECOGNITION_DEBUG === '1' || process.env.MEAL_RECOGNITION_DEBUG === 'true';
+
 export interface MealRecognitionDeps {
   photos: MealPhotoService;
   food?: FoodService;
   cache?: AdapterCache;
   logger?: FastifyBaseLogger;
+  // 디버그 덤프 디렉터리(기본 data/meal-recognition-debug). MEAL_RECOGNITION_DEBUG 일 때만 쓰인다.
+  debugDir?: string;
   operationLog?: OperationLogService | null;
   // 장소 힌트 조회 — 라우트가 RestaurantService 를 주입한다(모듈 결합 회피).
   placeHint?: (placeId: string) => Promise<{ name: string; menuNames: string[] } | null>;
@@ -95,6 +105,32 @@ export class MealRecognitionService {
 
   private get log(): FastifyBaseLogger | null {
     return this.deps.logger ?? null;
+  }
+
+  // best-effort — 절대 throw 하지 않는다(인식 흐름을 막으면 안 된다). 사진 토큰으로 원본과
+  // 짝지어 눈으로 대조할 수 있게 토큰도 남긴다(사용자 식별자는 남기지 않는다).
+  private async dumpDebug(record: {
+    phase: 'success' | 'parse_error' | 'llm_error';
+    model: string | null;
+    photoTokens: string[];
+    rawText?: string;
+    dishes?: unknown;
+    error?: string;
+  }): Promise<void> {
+    if (!debugEnabled()) return;
+    try {
+      const dir = this.deps.debugDir ?? join(process.cwd(), 'data', 'meal-recognition-debug');
+      await mkdir(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const name = `${stamp}__${record.phase}__${record.photoTokens[0] ?? 'none'}.json`;
+      await writeFile(
+        join(dir, name),
+        JSON.stringify({ version: MEAL_RECOGNITION_VERSION, ...record }, null, 2),
+        'utf-8',
+      );
+    } catch {
+      // 덤프 실패는 무시.
+    }
   }
 
   private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {
@@ -162,6 +198,12 @@ export class MealRecognitionService {
       } catch (e) {
         errorCode = 'llm_failed';
         step('error', 'vision', 'LLM 호출 실패', { model: resolved.model });
+        await this.dumpDebug({
+          phase: 'llm_error',
+          model: resolved.model,
+          photoTokens: input.photoTokens,
+          error: e instanceof Error ? e.message : String(e),
+        });
         throw new MealRecognitionError('llm_failed', e instanceof Error ? e.message : 'LLM 호출 실패');
       } finally {
         clearTimeout(timer);
@@ -192,6 +234,12 @@ export class MealRecognitionService {
       }
       if (!parsed) {
         errorCode = 'parse_failed';
+        await this.dumpDebug({
+          phase: 'parse_error',
+          model: resolved.model,
+          photoTokens: input.photoTokens,
+          rawText: rawText.slice(0, 4000),
+        });
         throw new MealRecognitionError('parse_failed', '인식 결과를 읽지 못했습니다. 직접 입력해 주세요.');
       }
 
@@ -203,6 +251,14 @@ export class MealRecognitionService {
         dishCount: dishes.length,
         matched: dishes.filter((d) => d.foodId !== null).length,
         durationMs: Date.now() - started,
+      });
+
+      await this.dumpDebug({
+        phase: 'success',
+        model: resolved.model,
+        photoTokens: input.photoTokens,
+        rawText: rawText.slice(0, 4000),
+        dishes,
       });
 
       if (oplog && opRunId) {
