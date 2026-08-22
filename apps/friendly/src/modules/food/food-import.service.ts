@@ -68,12 +68,17 @@ const PROGRESS_EVERY = 100;
 // 카탈로그에 합류시키는 외식 메뉴 어휘의 최소 식당 수(리뷰 어휘 노이즈 차단).
 export const MENU_CANONICAL_MIN_RESTAURANTS = 2;
 // 식약처 표준데이터에서 1인분 영양 산출 시 식품기원 우선순위(작을수록 우선).
+// 식품기원 우선순위(낮을수록 우선). **분석함량(실측)이 재료량 기반 산출(계산)보다 먼저**다 —
+// 국물 요리에서 산출값은 체계적으로 낮게 나온다(김치찌개 실측 61kcal/100g vs 산출 19kcal/100ml).
+// 옛 표에는 `/외식\(분석\)/` 이 있었는데 실제 값은 `외식(분석함량)` 이라 매칭되지 않아,
+// 계산값 행이 실측 행을 이기고 있었다.
 const MFDS_ORIGIN_PRIORITY: ReadonlyArray<[RegExp, number]> = [
-  [/가정식/u, 0],
-  [/외식\(분석\)/u, 1],
-  [/재료량/u, 2],
-  [/급식/u, 3],
-  [/프랜차이즈/u, 4],
+  [/가정식.*분석/u, 0],
+  [/분석/u, 1],
+  [/가정식/u, 2],
+  [/외식/u, 3],
+  [/급식/u, 4],
+  [/프랜차이즈/u, 5],
 ];
 // 표준데이터 "요리류" 대분류 — 이 밖(빵·과자/음료·차/유제품 등 프랜차이즈 상품 위주)은 대표식품 단위로만 합류.
 const MFDS_DISH_CATEGORIES = new Set([
@@ -279,7 +284,11 @@ export const normalizeMfdsNutritionRows = (
     // 요리류만 변형을 별칭으로 남긴다(프랜차이즈 상품명 수천 개는 노이즈).
     if (isDish && foodNm && normalizeTerm(foodNm) !== key) g.variants.add(variantLabel(foodNm));
 
-    const priority = originPriority(coerceStrOrNull(row['foodOriginNm']));
+    // 이름이 대표식품명과 같은 행을 가장 먼저 본다. '김치찌개' 그룹에는 김치찌개_햄·김치찌개_참치
+    // 같은 변형이 33행이나 있어서, 이 조건이 없으면 임의의 변형이 대표 영양이 된다(실측: 김치찌개가
+    // 김치찌개_햄 가정식 행을 물려받아 93kcal — 정작 같은 이름 행은 244kcal 였다).
+    const exactRank = normalizeTerm(foodNm) === key ? 0 : 1;
+    const priority = exactRank * 100 + originPriority(coerceStrOrNull(row['foodOriginNm']));
     const size = parseSize(coerceStrOrNull(row['foodSize']));
     const per100 = {
       kcal: numOrNull(row['enerc']),
@@ -678,6 +687,8 @@ export interface UpsertResult {
 export interface UpsertOptions {
   signal?: AbortSignal;
   onProgress?: (processed: number, total: number) => void;
+  /** 이미 값이 있는 행의 영양·1인분 중량을 시드 값으로 덮어쓴다(정규화 규칙을 고친 뒤 재적재용). */
+  refreshNutrition?: boolean;
 }
 
 export const upsertFoodSeeds = async (
@@ -760,14 +771,22 @@ export const upsertFoodSeeds = async (
       }
       if (existing.servingG === null && seedWithRules.servingG != null) data.servingG = seedWithRules.servingG;
       const n = seedWithRules.nutrition;
-      if (n && existing.kcal === null && existing.proteinG === null && existing.carbG === null) {
+      // 기본은 "빈 필드만 채우기"다(다른 출처가 덮어쓰지 않게). refreshNutrition 은 정규화 규칙을
+      // 고친 뒤 기존 값을 바로잡기 위한 명시적 재적재용 — 시드에 값이 있을 때만 덮어쓴다.
+      const canWriteNutrition =
+        n && (opts.refreshNutrition || (existing.kcal === null && existing.proteinG === null && existing.carbG === null));
+      if (n && canWriteNutrition) {
         data.kcal = n.kcal;
         data.carbG = n.carbG;
         data.proteinG = n.proteinG;
         data.fatG = n.fatG;
         data.sodiumMg = n.sodiumMg;
         data.sugarG = n.sugarG;
-        if (existing.servingG === null && seedWithRules.servingG != null) data.servingG = seedWithRules.servingG;
+        if ((opts.refreshNutrition || existing.servingG === null) && seedWithRules.servingG != null) {
+          data.servingG = seedWithRules.servingG;
+        }
+        // 직접 값으로 덮었으니 "빌려온 값" 표식은 지운다.
+        if (opts.refreshNutrition && existing.nutritionFrom) data.nutritionFrom = null;
       }
       if (!existing.sourceCategory && seedWithRules.sourceCategory) data.sourceCategory = seedWithRules.sourceCategory;
       const newAliases = seedWithRules.aliases ?? [];

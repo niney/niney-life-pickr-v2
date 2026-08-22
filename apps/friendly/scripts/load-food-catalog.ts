@@ -12,6 +12,7 @@
 //     만 돌려도 로컬 파일 기반 전체 재적재가 된다(공공 API 쿼터 소모 없음). 파일 출처는 docs/data-sources.md.
 //   - --dry-run: 정규화 리포트만(DB 쓰기 없음)
 //   - --classify: 적재 후 미분류 행 LLM 2축 분류(chat 모델 필요). --classify-limit 로 상한.
+//   - --refresh-nutrition: 이미 값이 있는 행의 영양도 시드 값으로 덮어쓴다(정규화 규칙 수정 후 재적재).
 //   - --backfill-nutrition: 영양이 빈 행에 같은 계열 행의 1인분 영양을 빌려온다(소불고기 → 불고기).
 //     --dry-run 과 함께 쓰면 무엇을 어디서 빌릴지만 찍는다.
 // 원본 CSV 는 리포에 넣지 않는다(data/open/ 은 .gitignore).
@@ -84,6 +85,8 @@ const fileFor = (kind: keyof typeof DEFAULT_FILES): string | null => {
 const DRY_RUN = flag('dry-run');
 const CLASSIFY = flag('classify');
 const BACKFILL_NUTRITION = flag('backfill-nutrition');
+// 정규화 규칙을 고친 뒤 기존 행의 영양을 바로잡는다(기본은 빈 필드만 채운다).
+const REFRESH_NUTRITION = flag('refresh-nutrition');
 const CLASSIFY_LIMIT = opt('classify-limit') ? Number.parseInt(opt('classify-limit')!, 10) : undefined;
 
 const prisma = new PrismaClient();
@@ -109,7 +112,7 @@ const upsert = async (label: string, seeds: FoodSeed[]): Promise<void> => {
     return;
   }
   const t0 = Date.now();
-  const r = await upsertFoodSeeds(prisma, seeds, { onProgress: progress(label) });
+  const r = await upsertFoodSeeds(prisma, seeds, { onProgress: progress(label), refreshNutrition: REFRESH_NUTRITION });
   console.log(`  [${label}] 신규 ${r.inserted} / 갱신 ${r.updated} / 건너뜀 ${r.skipped} (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
 };
 

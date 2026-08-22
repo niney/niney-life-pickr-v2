@@ -406,3 +406,25 @@ describe('deactivateUnclassifiedNoise (격리 DB)', () => {
     expect(byName.get('이름만 있는 레시피')).toBe(true);
   });
 });
+
+describe('normalizeMfdsNutritionRows — 대표 행 선택', () => {
+  // 실제 표준데이터의 김치찌개 그룹 축약: 이름이 같은 실측 행 / 변형의 가정식 행 / 계산 행.
+  const rows = [
+    { foodNm: '김치찌개_햄', foodLv4Nm: '김치찌개', foodLv3Nm: '찌개 및 전골류', foodOriginNm: '가정식(분석 함량)', foodSize: '300g', enerc: 31, nat: 500 },
+    { foodNm: '김치찌개', foodLv4Nm: '김치찌개', foodLv3Nm: '찌개 및 전골류', foodOriginNm: '외식(분석함량)', foodSize: '400g', enerc: 61, nat: 700 },
+    { foodNm: '김치찌개', foodLv4Nm: '김치찌개', foodLv3Nm: '찌개 및 전골류', foodOriginNm: '외식(재료량 기반 산출함량)', foodSize: '200ml', enerc: 19, nat: 300 },
+  ];
+
+  it('이름이 대표식품명과 같은 행을 쓴다 — 변형(김치찌개_햄)에 밀리지 않는다', () => {
+    const { seeds } = normalizeMfdsNutritionRows(rows as never);
+    const kimchi = seeds.find((s) => s.name === '김치찌개');
+    // 61kcal/100g × 400g = 244kcal. 변형 행(31×300=93)이나 계산 행(19×200=38)이 아니다.
+    expect(kimchi?.nutrition?.kcal).toBe(244);
+    expect(kimchi?.servingG).toBe(400);
+  });
+
+  it('같은 이름 안에서는 분석함량이 재료량 기반 산출보다 우선한다', () => {
+    const { seeds } = normalizeMfdsNutritionRows([rows[2]!, rows[1]!] as never);
+    expect(seeds.find((s) => s.name === '김치찌개')?.nutrition?.kcal).toBe(244);
+  });
+});
