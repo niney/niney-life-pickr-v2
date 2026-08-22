@@ -130,15 +130,12 @@ export class FoodClassifyService {
     }
     const provider = (this.opts.cache ?? adapterCache).get(resolved);
 
+    // 대상 = "이번 프롬프트 버전으로 아직 안 본 행". 축이 비었다고 계속 대상으로 잡으면
+    // LLM 이 응답에서 빼 버리는 비음식 어휘("기본 메뉴", "순한맛", "쿨피스")에 매 실행마다
+    // 토큰을 쓴다 — 실측 120행을 매번 다시 물어보고 39행만 반영됐다. 재시도는 버전을 올려서 한다.
     const where = {
       active: true,
-      OR: [
-        { dishType: null },
-        { mainIngredient: null },
-        { cuisine: null },
-        { classifyVersion: null },
-        { classifyVersion: { lt: FOOD_CLASSIFY_VERSION } },
-      ],
+      OR: [{ classifyVersion: null }, { classifyVersion: { lt: FOOD_CLASSIFY_VERSION } }],
     };
     const totalAll = await this.prisma.foodItem.count({ where });
     const total = opts.limit !== undefined ? Math.min(totalAll, opts.limit) : totalAll;
@@ -173,7 +170,16 @@ export class FoodClassifyService {
         // LLM 이 이름을 그대로 안 돌려주는 일이 있다(공백·표기 흔들림) — 정규화해서 찾는다.
         // 실측: 1,102행 중 362행이 이 때문에 반영되지 않았다.
         const c = out.get(r.name) ?? out.get(normalizeTerm(r.name));
-        if (!c) continue;
+        if (!c) {
+          // 응답에 아예 없던 행 — 축은 그대로 두되 "이번 버전으로 봤다" 는 표식만 남긴다.
+          // 그래야 다음 실행이 같은 것을 또 묻지 않고, 노이즈 정리(deactivateUnclassifiedNoise)가
+          // "분류를 시도했는데도 조리형태가 없는 행" 을 골라낼 수 있다.
+          await this.prisma.foodItem.update({
+            where: { id: r.id },
+            data: { classifyVersion: FOOD_CLASSIFY_VERSION, classifyModel: model },
+          });
+          continue;
+        }
         const next = mergeClassification(r, c);
         await this.prisma.foodItem.update({
           where: { id: r.id },

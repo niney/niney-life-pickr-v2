@@ -36,6 +36,7 @@ import {
   normalizeMfdsNutritionRows,
   normalizeMfdsRecipeRows,
   nutritionFileRowsToRecords,
+  deactivateUnclassifiedNoise,
   upsertFoodSeeds,
   type FoodSeed,
   type NormalizeReport,
@@ -179,6 +180,9 @@ const runClassify = async (): Promise<void> => {
   });
   if (r.noProvider) console.log('  chat 모델 미설정 — 분류 생략');
   else console.log(`  분류 ${r.updated}/${r.total}행, 실패 청크 ${r.failedChunks}, 모델 ${r.model}`);
+  // 분류가 끝난 뒤에도 조리형태를 못 붙인 외식 어휘는 음식이 아니다 — 비활성으로 내린다.
+  const deactivated = await deactivateUnclassifiedNoise(prisma);
+  if (deactivated > 0) console.log(`  음식이 아닌 외식 어휘 ${deactivated}건 비활성`);
 };
 
 const main = async (): Promise<void> => {

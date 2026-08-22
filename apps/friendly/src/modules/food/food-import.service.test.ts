@@ -13,6 +13,7 @@ import {
   normalizeMfdsNutritionRows,
   normalizeMfdsRecipeRows,
   nutritionFileRowsToRecords,
+  deactivateUnclassifiedNoise,
   parseRecipeIngredients,
   upsertFoodSeeds,
 } from './food-import.service.js';
@@ -364,5 +365,44 @@ describe('normalizeHansik800Rows — XLSX 배포본 모양', () => {
     ]);
     // '구이' 카테고리는 dishType grill 로 매핑된다.
     expect(seeds[1]).toMatchObject({ name: '갈비구이', dishType: 'grill', sourceCategory: '구이' });
+  });
+});
+
+describe('deactivateUnclassifiedNoise (격리 DB)', () => {
+  let app: FastifyInstance;
+  let isolated: IsolatedDatabase;
+
+  beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
+    app = await buildApp({ logger: false });
+    await app.ready();
+  });
+  afterAll(async () => {
+    await app.close();
+    isolated.restore();
+  });
+
+  it('LLM 이 본 뒤에도 조리형태가 없는 외식 어휘만 내린다', async () => {
+    await upsertFoodSeeds(app.prisma, [
+      { name: '다데기', source: 'menu-canonical' },
+      { name: '아직 안 본 어휘', source: 'menu-canonical' },
+      { name: '분류된 어휘', dishType: 'stew', source: 'menu-canonical' },
+      { name: '이름만 있는 레시피', source: 'mfds-recipe' },
+    ]);
+    // 이름 규칙이 dishType 을 붙이지 못한 행만 남기고, LLM 이 본 표식을 심는다.
+    await app.prisma.foodItem.updateMany({
+      where: { nameNorm: { in: ['다데기', '이름만있는레시피'] } },
+      data: { classifyVersion: 1, dishType: null },
+    });
+
+    const count = await deactivateUnclassifiedNoise(app.prisma);
+    expect(count).toBe(1);
+    const rows = await app.prisma.foodItem.findMany({ select: { name: true, active: true } });
+    const byName = new Map(rows.map((r) => [r.name, r.active]));
+    expect(byName.get('다데기')).toBe(false);
+    // 아직 LLM 이 안 본 행·분류된 행·다른 출처는 그대로 둔다.
+    expect(byName.get('아직 안 본 어휘')).toBe(true);
+    expect(byName.get('분류된 어휘')).toBe(true);
+    expect(byName.get('이름만 있는 레시피')).toBe(true);
   });
 });

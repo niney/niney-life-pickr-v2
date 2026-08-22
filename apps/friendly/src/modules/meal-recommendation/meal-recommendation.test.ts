@@ -9,6 +9,7 @@ import type { AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/adapters/llm-provider.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
 import {
+  MealPatternService,
   buildProfile,
   isExcluded,
   scoreCandidate,
@@ -345,5 +346,44 @@ describe('MealRecommendationService (격리 DB)', () => {
     provider.responses = [JSON.stringify({ items: [], summary: '' })];
     await build().create('rec-u', { targetDate: '2026-08-26', targetSlot: 'lunch', force: false }, TODAY);
     expect(provider.calls[0]!.prompt).not.toContain('연어초밥');
+  });
+});
+
+describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
+  let app: FastifyInstance;
+  let isolated: IsolatedDatabase;
+
+  beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
+    app = await buildApp({ logger: false });
+    await app.ready();
+    await upsertFoodSeeds(app.prisma, [
+      // 실제 요리 — 후보에 있어야 한다.
+      { name: '김치찌개', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean', source: 'menu-canonical', popularity: 40 },
+      // 외식 어휘인데 조리형태가 other — 범주어·부재료라 추천에 뜨면 안 된다.
+      { name: '소스', dishType: 'other', mainIngredient: 'other', cuisine: 'other', source: 'menu-canonical', popularity: 100 },
+      { name: '사이드', dishType: 'other', mainIngredient: 'other', cuisine: 'other', source: 'menu-canonical', popularity: 90 },
+      // 같은 other 라도 다른 출처(레시피·영양성분)는 진짜 음식일 수 있어 남긴다.
+      { name: '약고추장', dishType: 'other', mainIngredient: 'other', cuisine: 'korean', source: 'mfds-recipe', popularity: 80 },
+      // 음료·주류는 기존 규칙대로 제외.
+      { name: '콜라', dishType: 'beverage', source: 'menu-canonical', popularity: 95 },
+    ]);
+  });
+  afterAll(async () => {
+    await app.close();
+    isolated.restore();
+  });
+
+  it('menu-canonical + other 는 후보에서 빠지고, 다른 출처의 other 와 실제 요리는 남는다', async () => {
+    const pattern = new MealPatternService(app.prisma);
+    const profile = buildProfile([], 'dinner', TODAY);
+    const candidates = await pattern.buildCandidates(profile, prefs());
+    const names = candidates.map((c) => c.name);
+
+    expect(names).toContain('김치찌개');
+    expect(names).toContain('약고추장');
+    expect(names).not.toContain('소스');
+    expect(names).not.toContain('사이드');
+    expect(names).not.toContain('콜라');
   });
 });

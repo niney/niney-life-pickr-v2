@@ -35,6 +35,11 @@ const CATALOG_POPULAR_MAX = 14;
 const CATALOG_NOVEL_MAX = 8;
 // 추천 대상에서 제외할 조리형태 — 끼니 추천에 음료·주류가 섞이면 쓸모가 없다.
 const EXCLUDED_DISH_TYPES = new Set<FoodDishTypeType>(['beverage', 'alcohol', 'dairy']);
+// 외식 메뉴 어휘(menu-canonical)에서 조리형태가 'other' 인 행은 실제 요리가 아니라 범주어·부재료·
+// 옵션인 경우가 많다 — 실측 458건에 "고기/반찬/사이드/소스/세트/마늘/신메뉴" 가 대거 섞여 있었다.
+// 자동완성에는 남겨 두고(사용자가 "군고구마" 를 직접 적을 때 매칭돼야 한다) 추천 후보에서만 뺀다.
+const isVagueMenuVocabulary = (source: string, dishType: string | null): boolean =>
+  source === 'menu-canonical' && dishType === 'other';
 
 export interface HistoryItem {
   eatenDate: string;
@@ -392,9 +397,10 @@ export class MealPatternService {
     const seen = new Set<string>();
     const out: CandidateInput[] = [];
 
-    const push = (c: CandidateInput): void => {
+    const push = (c: CandidateInput, source = ''): void => {
       if (seen.has(c.nameNorm)) return;
       if (c.dishType && EXCLUDED_DISH_TYPES.has(c.dishType)) return;
+      if (isVagueMenuVocabulary(source, c.dishType)) return;
       if (isExcluded(c, preference.excludedFoods)) return;
       seen.add(c.nameNorm);
       out.push(c);
@@ -449,13 +455,17 @@ export class MealPatternService {
 
     // ③ 카탈로그 인기 — 외식·배달에서 실제로 고를 수 있는 메뉴.
     const popular = await this.prisma.foodItem.findMany({
-      where: { active: true, dishType: { notIn: [...EXCLUDED_DISH_TYPES] } },
+      where: {
+        active: true,
+        dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
+        NOT: { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] },
+      },
       orderBy: [{ popularity: 'desc' }, { name: 'asc' }],
       take: CATALOG_POPULAR_MAX * 3,
     });
     for (const row of popular.slice(0, CATALOG_POPULAR_MAX * 2)) {
       if (out.length >= CANDIDATE_POOL_SIZE - CATALOG_NOVEL_MAX) break;
-      push(toCandidate(row));
+      push(toCandidate(row), row.source);
     }
 
     // ④ 미경험 — 탐험용. 인기 낮은 쪽에서 고르되 분류가 있는 행만(설명 가능한 추천).
@@ -464,14 +474,14 @@ export class MealPatternService {
         active: true,
         dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
         nameNorm: { notIn: historyNorms.length ? historyNorms : ['-'] },
-        NOT: { dishType: null },
+        NOT: { OR: [{ dishType: null }, { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] }] },
       },
       orderBy: { updatedAt: 'desc' },
       take: CATALOG_NOVEL_MAX * 3,
     });
     for (const row of novel) {
       if (out.length >= CANDIDATE_POOL_SIZE) break;
-      push(toCandidate(row));
+      push(toCandidate(row), row.source);
     }
 
     return out.slice(0, CANDIDATE_POOL_SIZE);
@@ -482,6 +492,7 @@ const toCandidate = (row: {
   id: string;
   name: string;
   nameNorm: string;
+  source: string;
   dishType: string | null;
   mainIngredient: string | null;
   cuisine: string | null;

@@ -820,6 +820,24 @@ const parseRefs = (s: string | null): { source: string; sourceId: string | null 
   }
 };
 
+// 외식 메뉴 어휘(menu-canonical)는 리뷰에서 뽑은 말이라 음식이 아닌 것이 섞인다 — 실측으로
+// "기본 메뉴", "다데기", "순한맛", "매운 소스", "쿨피스" 같은 옵션·소스·브랜드가 남았다.
+// 이름 규칙도 LLM 도 조리형태를 못 붙인 행은 음식으로 보기 어려우니 비활성으로 내린다
+// (삭제하지 않는다 — 어드민에서 되살릴 수 있어야 하고, 사용자 기록이 이름으로 참조할 수 있다).
+export const deactivateUnclassifiedNoise = async (prisma: PrismaClient): Promise<number> => {
+  const res = await prisma.foodItem.updateMany({
+    where: {
+      source: 'menu-canonical',
+      active: true,
+      dishType: null,
+      // LLM 이 최소 한 번은 본 행만 — 아직 분류 전인 행을 성급히 내리지 않는다.
+      classifyVersion: { not: null },
+    },
+    data: { active: false },
+  });
+  return res.count;
+};
+
 // ── 서비스(설정·실행·이력) ───────────────────────────────────────────────────
 
 export interface FoodImportKeys {
