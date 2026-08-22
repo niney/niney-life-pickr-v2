@@ -146,18 +146,19 @@ export class FoodClassifyService {
     let failedChunks = 0;
     opts.onProgress?.(0, total);
 
-    // 커서 대신 "아직 이번 버전으로 분류 안 된 행"을 반복 조회 — 실패 청크는 classifyVersion 을 올리지
-    // 않으므로 무한 루프를 막기 위해 id 로 건너뛴다.
-    const seen = new Set<string>();
+    // id 오름차순 커서로 넘어간다. 처리된 행은 조건에서 빠지지만 실패 청크는 남으므로, "이미 본 id
+    // 를 notIn 으로 제외"하면 목록이 계속 길어져 SQLite 파라미터 한계(P2029: 부정 필터는 쿼리 분할
+    // 불가)에 걸린다 — 실제로 500행쯤에서 터졌다. 커서는 파라미터가 1개라 그 문제가 없다.
+    let lastId = '';
     while (processed < total) {
       if (opts.signal?.aborted) break;
       const rows = await this.prisma.foodItem.findMany({
-        where: { ...where, ...(seen.size > 0 ? { id: { notIn: [...seen] } } : {}) },
-        orderBy: [{ popularity: 'desc' }, { name: 'asc' }],
+        where: { ...where, ...(lastId ? { id: { gt: lastId } } : {}) },
+        orderBy: { id: 'asc' },
         take: Math.min(FOOD_CLASSIFY_CHUNK_SIZE, total - processed),
       });
       if (rows.length === 0) break;
-      for (const r of rows) seen.add(r.id);
+      lastId = rows[rows.length - 1]!.id;
 
       const inputs: FoodClassifyInputItem[] = rows.map((r) => ({ name: r.name, hint: buildHint(r) }));
       const out = await this.callChunk(provider, model, inputs, opts.signal);
