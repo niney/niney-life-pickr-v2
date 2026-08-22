@@ -20,7 +20,6 @@ export const NotchFade = ({ fade = 24, alpha = 'CC' }: Props) => {
 
   return (
     <LinearGradient
-      pointerEvents="none"
       colors={[
         theme.colors.bg + alpha,
         theme.colors.bg + alpha,
@@ -33,5 +32,5 @@ export const NotchFade = ({ fade = 24, alpha = 'CC' }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none' },
 });

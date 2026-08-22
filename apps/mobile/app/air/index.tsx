@@ -3,7 +3,7 @@ import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text } from 're
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { AirForecastCodeType, AirNearbyStationItemType } from '@repo/api-contract';
+import { AIR_HISTORY_TERMS, type AirForecastCodeType, type AirHistoryTermType, type AirNearbyStationItemType } from '@repo/api-contract';
 import {
   ApiError,
   useAirBadStations,
@@ -14,10 +14,13 @@ import {
   useAirStationHistory,
   useAirStations,
   useAirWeeklyForecast,
+  SegmentedControl,
   useTheme,
 } from '@repo/shared';
 import { AIR_SIDO_OPTIONS, airSidoMatches, formatRelativeMin, isInKorea, todayKst } from '@repo/utils';
 import { AirBadStationsCard } from '~/components/air/AirBadStationsCard';
+import { AirDailyStrip } from '~/components/air/AirDailyStrip';
+import { AirStationsMapCard } from '~/components/air/AirStationsMapCard';
 import { AirForecastCard } from '~/components/air/AirForecastCard';
 import { AirHourStrip } from '~/components/air/AirHourStrip';
 import { AirNearbyCard } from '~/components/air/AirNearbyCard';
@@ -31,12 +34,15 @@ import { useUserLocationNative } from '~/hooks/useUserLocationNative';
 
 // 대기정보 — 웹 /air 의 앱판. 데이터 훅·등급 규칙은 @repo/shared·@repo/utils 와 공용이고 화면만 세로
 // 카드로: 측정소 바 → 지금(CAI 히어로 + 6항목 + 24시간 띠) → 내 주변 측정소 → 예보(오늘/내일/모레) →
-// 주간예보 → 나쁨 이상 → 시도 비교. 30·90일 추이 차트와 측정소 지도는 2단계(차트·WebView 지도).
+// 주간예보 → 나쁨 이상 → 시도 비교. 30·90일 추이는 일평균 등급 막대(View), 측정소 지도는 대중교통과
+// 같은 WebView 지도를 카드 높이로 끼운다.
 //
 // 측정소 해석(웹과 같은 규칙): 파라미터(sido/station) → 저장한 내 위치(날씨·홈 카드와 공유)의 가장
 // 가까운 측정소 → 서울 첫 측정소. 선택은 화면 로컬 상태(URL 대신).
 
 const DEFAULT_SIDO = '서울';
+const TERM_LABEL: Record<AirHistoryTermType, string> = { DAILY: '24시간', MONTH: '30일', '3MONTH': '90일' };
+type DailyMetric = 'pm25' | 'pm10' | 'o3';
 
 type Selection = { kind: 'auto' } | { kind: 'station'; sido: string; station: string };
 
@@ -91,6 +97,10 @@ export default function AirScreen() {
         ? savedNearest.stationName
         : (stations[0] ?? null);
   const dailyQ = useAirStationHistory(station, 'DAILY');
+  // 추이 기간 — 24시간은 위 띠(dailyQ), 30·90일은 일평균 막대(historyQ).
+  const [term, setTerm] = useState<AirHistoryTermType>('DAILY');
+  const [dailyMetric, setDailyMetric] = useState<DailyMetric>('pm25');
+  const historyQ = useAirStationHistory(term === 'DAILY' ? null : station, term);
   const badQ = useAirBadStations();
   const forecastQ = useAirForecast();
   const weeklyQ = useAirWeeklyForecast();
@@ -209,10 +219,61 @@ export default function AirScreen() {
           ) : latest ? (
             <>
               <AirNowCard latest={latest} />
-              <AirHourStrip points={dailyQ.data?.points ?? []} todayYmd={todayYmd} />
+              <SegmentedControl
+                fullWidth={false}
+                value={term}
+                options={AIR_HISTORY_TERMS.map((t) => ({ value: t, label: TERM_LABEL[t] }))}
+                onChange={setTerm}
+              />
+              {term === 'DAILY' ? (
+                <AirHourStrip points={dailyQ.data?.points ?? []} todayYmd={todayYmd} />
+              ) : historyQ.isLoading && !historyQ.data ? (
+                <StateBlock kind="loading" />
+              ) : historyQ.isError && !historyQ.data ? (
+                <StateBlock kind="error" message={upstreamMessage(historyQ.error, '시계열을 불러오지 못했습니다.')} onRetry={() => void historyQ.refetch()} retrying={historyQ.isFetching} />
+              ) : (
+                <>
+                  <SegmentedControl
+                    fullWidth={false}
+                    value={dailyMetric}
+                    options={[
+                      { value: 'pm25', label: 'PM2.5' },
+                      { value: 'pm10', label: 'PM10' },
+                      { value: 'o3', label: '오존' },
+                    ]}
+                    onChange={setDailyMetric}
+                  />
+                  <AirDailyStrip points={historyQ.data?.points ?? []} metric={dailyMetric} />
+                </>
+              )}
             </>
           ) : (
             <StateBlock kind="empty" message="이 측정소의 최근 측정값이 없습니다." />
+          )}
+        </Card>
+
+        {/* ②-a 측정소 지도 — 측정소정보 API(활용신청 별도). 503 이면 안내만. */}
+        <Card>
+          <CardTitle title="측정소 지도" sub="전국 측정소에 현재 통합지수 등급을 색으로 — 마커를 탭하면 그 측정소로" />
+          {stationsQ.isLoading && !stationsQ.data ? (
+            <StateBlock kind="loading" />
+          ) : stationsQ.isError && !stationsQ.data ? (
+            <StateBlock
+              kind="error"
+              message={upstreamMessage(stationsQ.error, '측정소 좌표를 불러오지 못했습니다(측정소정보 API 활용신청이 필요할 수 있어요).')}
+              onRetry={() => void stationsQ.refetch()}
+              retrying={stationsQ.isFetching}
+            />
+          ) : (
+            <AirStationsMapCard
+              stations={stationsQ.data?.items ?? []}
+              measures={nationItems ?? []}
+              selectedStation={station}
+              nearby={nearbyQ.data?.items ?? []}
+              myLocation={gps}
+              savedLocation={saved ? { lat: saved.lat, lng: saved.lng } : null}
+              onSelect={selectStation}
+            />
           )}
         </Card>
 

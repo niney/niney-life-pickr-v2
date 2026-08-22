@@ -64,7 +64,7 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
         </Pressable>
 
         {images.length > 1 && (
-          <View style={styles.counter} pointerEvents="none">
+          <View style={[styles.counter, { pointerEvents: 'none' }]}>
             <Text style={styles.counterText}>
               {current + 1} / {images.length}
             </Text>

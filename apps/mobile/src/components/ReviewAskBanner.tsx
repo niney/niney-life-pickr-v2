@@ -89,7 +89,7 @@ export const ReviewAskBanner = () => {
     : '답변을 가져오지 못했어요';
 
   return (
-    <Animated.View pointerEvents="box-none" style={[styles.wrap, { bottom }, animStyle]}>
+    <Animated.View style={[styles.wrap, { bottom, pointerEvents: 'box-none' }, animStyle]}>
       <View
         style={[
           styles.card,
