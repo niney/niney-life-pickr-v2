@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
@@ -97,7 +99,8 @@ describe('MealRecognitionService (격리 DB + FakeProvider)', () => {
     isolated = await useIsolatedDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
-    photos = new MealPhotoService(app.prisma, {});
+    // 리포의 data/ 를 더럽히지 않게 임시 디렉터리에 저장한다.
+    photos = new MealPhotoService(app.prisma, { storageDir: join(tmpdir(), 'lifepickr-test-meal-photos') });
     provider = new FakeProvider();
     cache = { get: () => provider } as unknown as AdapterCache;
     await upsertFoodSeeds(app.prisma, [

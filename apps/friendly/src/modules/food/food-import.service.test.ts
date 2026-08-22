@@ -12,6 +12,7 @@ import {
   normalizeMenuCanonicalRows,
   normalizeMfdsNutritionRows,
   normalizeMfdsRecipeRows,
+  nutritionFileRowsToRecords,
   parseRecipeIngredients,
   upsertFoodSeeds,
 } from './food-import.service.js';
@@ -232,5 +233,107 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
     expect(stats.total).toBe(4);
     expect(stats.active).toBe(3);
     expect(stats.bySource.find((s) => s.source === 'manual')?.count).toBe(3);
+  });
+});
+
+describe('nutritionFileRowsToRecords — 배포 파일(CSV) 헤더 매핑', () => {
+  // 실제 배포본(2026-04-29) 헤더 일부. 컬럼 순서가 아니라 이름으로 찾는지 확인한다.
+  const header = [
+    '식품코드',
+    '식품명',
+    '데이터구분코드',
+    '데이터구분명',
+    '식품기원코드',
+    '식품기원명',
+    '식품대분류코드',
+    '식품대분류명',
+    '대표식품코드',
+    '대표식품명',
+    '영양성분함량기준량',
+    '에너지(kcal)',
+    '수분(g)',
+    '단백질(g)',
+    '지방(g)',
+    '탄수화물(g)',
+    '당류(g)',
+    '나트륨(mg)',
+    '1인(회)분량 참고량',
+    '식품중량',
+  ];
+  const row = [
+    'D504-212000000-0001',
+    '흰죽',
+    'D',
+    '음식',
+    '5',
+    '초등학교급식(재료량 기반 산출 함량)',
+    '04',
+    '죽 및 스프류',
+    '04212',
+    '흰죽',
+    '100ml',
+    '64',
+    '2.2',
+    '1.20',
+    '0.28',
+    '13.49',
+    '0.09',
+    '130',
+    '',
+    '291.90ml',
+  ];
+
+  it('한글 헤더를 API 필드명으로 옮기고 빈 값은 생략한다', () => {
+    const [rec] = nutritionFileRowsToRecords(header, [row]);
+    expect(rec).toMatchObject({
+      foodCd: 'D504-212000000-0001',
+      foodNm: '흰죽',
+      foodLv3Nm: '죽 및 스프류',
+      foodLv4Nm: '흰죽',
+      foodOriginNm: '초등학교급식(재료량 기반 산출 함량)',
+      enerc: '64',
+      nat: '130',
+      foodSize: '291.90ml',
+    });
+    // 빈 '1인(회)분량 참고량' 은 매핑 대상이 아니고, 값이 비면 키 자체를 안 만든다.
+    expect(rec).not.toHaveProperty('servSize');
+  });
+
+  it('같은 정규화 함수를 태우면 1인분으로 환산된다', () => {
+    const records = nutritionFileRowsToRecords(header, [row]);
+    const { seeds } = normalizeMfdsNutritionRows(records);
+    expect(seeds[0]).toMatchObject({ name: '흰죽', dishType: 'rice', servingG: 291.9 });
+    // 100ml 당 64kcal × 2.919 = 186.8
+    expect(seeds[0]?.nutrition?.kcal).toBeCloseTo(186.8, 1);
+    expect(seeds[0]?.nutrition?.sodiumMg).toBeCloseTo(379.5, 1);
+  });
+
+  it('BOM·공백이 섞인 헤더도 찾는다', () => {
+    const [rec] = nutritionFileRowsToRecords(['﻿식품코드', ' 식품명 '], [['A1', '김밥']]);
+    expect(rec).toMatchObject({ foodCd: 'A1', foodNm: '김밥' });
+  });
+});
+
+describe('normalizeHansik800Rows — XLSX 배포본 모양', () => {
+  // 배포본은 1행이 조판 번호 행이고 2행이 진짜 헤더, 카테고리에 로마자가 병기돼 있다.
+  const header = ['', '1', '', '', '', '', '2'];
+  const rows = [
+    ['', '요리번호', '800선 카테고리', '요리명', '라틴어 발음', '요리명', '설명(요리명제외)', '영어', '설명(요리명제외)', '일본어', '설명', '중문1', '설명'],
+    ['', '001', '상차림 [Sangcharim]', '간장게장정식', 'Ganjanggejangjeongsik', '간장게장정식', '설명…', 'Soy Sauce Marinated Crab', '…', 'カンジャンケジャン定食', '…', '酱生蟹套餐', '…'],
+    ['', '015', '구이 [Gui]', '갈비구이', 'Galbi-gui', '갈비구이', '설명…', 'Grilled Ribs', '…', 'カルビ焼き', '…', '烤排骨', '…'],
+  ];
+
+  it('헤더 행을 스스로 찾고 카테고리의 로마자를 떼어낸다', () => {
+    const { seeds, report } = normalizeHansik800Rows(header, rows);
+    expect(report.produced).toBe(2);
+    expect(seeds[0]).toMatchObject({ name: '간장게장정식', sourceCategory: '상차림', cuisine: 'korean', sourceId: '001' });
+    expect(seeds[0]?.aliases).toEqual([
+      'Ganjanggejangjeongsik',
+      'Soy Sauce Marinated Crab',
+      'カンジャンケジャン定食',
+      '酱生蟹套餐',
+    ]);
+    // '구이' 카테고리는 dishType grill 로 매핑된다.
+    expect(seeds[1]).toMatchObject({ name: '갈비구이', dishType: 'grill', sourceCategory: '구이' });
   });
 });

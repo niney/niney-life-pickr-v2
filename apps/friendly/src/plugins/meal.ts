@@ -1,4 +1,7 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import fp from 'fastify-plugin';
+import { isTest } from '../config/env.js';
 import { MealPhotoService } from '../modules/meal/meal-photo.service.js';
 import { scheduleRegistry } from '../modules/schedule/schedule-registry.js';
 
@@ -12,7 +15,11 @@ const GC_JOB_TYPE = 'meal-photo-gc';
 
 export default fp(
   async (app) => {
-    const mealPhotos = new MealPhotoService(app.prisma, { logger: app.log });
+    // 테스트는 실제 업로드를 하므로 리포의 data/meal-photos 를 더럽히지 않게 임시 디렉터리로 보낸다.
+    const mealPhotos = new MealPhotoService(app.prisma, {
+      logger: app.log,
+      ...(isTest ? { storageDir: join(tmpdir(), 'lifepickr-test-meal-photos') } : {}),
+    });
     app.decorate('mealPhotos', mealPhotos);
 
     // 부팅 직후 1회 + 매일 — 재시작이 잦아도 중복 정리는 무해하다(이미 지운 파일은 skip).

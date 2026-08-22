@@ -4,6 +4,7 @@ import {
   isVisionModel,
   parseModelFamily,
   recommendModelForPurpose,
+  thinkOptionForModel,
 } from './aiModel.js';
 
 describe('parseModelFamily', () => {
@@ -145,5 +146,20 @@ describe('recommendModelForPurpose', () => {
   it('빈 카탈로그면 null', () => {
     expect(recommendModelForPurpose('meal-photo', [])).toBeNull();
     expect(recommendModelForPurpose('meal-recommend', ['', ' '])).toBeNull();
+  });
+});
+
+describe('thinkOptionForModel', () => {
+  it('gpt-oss 는 끌 수 없어 low, 나머지는 false', () => {
+    expect(thinkOptionForModel('gpt-oss:120b')).toBe('low');
+    expect(thinkOptionForModel('gpt-oss:20b')).toBe('low');
+    expect(thinkOptionForModel('qwen3.5:397b')).toBe(false);
+    expect(thinkOptionForModel('gemma4:31b')).toBe(false);
+    expect(thinkOptionForModel('kimi-k3')).toBe(false);
+    expect(thinkOptionForModel('deepseek-v4-pro:preview')).toBe(false);
+  });
+  it('대소문자·공백·-cloud 접미사에 무관', () => {
+    expect(thinkOptionForModel(' GPT-OSS:120B ')).toBe('low');
+    expect(thinkOptionForModel('qwen3.5:397b-cloud')).toBe(false);
   });
 });

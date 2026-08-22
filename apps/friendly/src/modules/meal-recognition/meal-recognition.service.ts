@@ -9,7 +9,7 @@ import {
   type RecognizeMealResultType,
   type RecognizedDishType,
 } from '@repo/api-contract';
-import { MEAL_SLOT_LABEL } from '@repo/utils';
+import { MEAL_SLOT_LABEL, thinkOptionForModel } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
@@ -192,6 +192,8 @@ export class MealRecognitionService {
           maxTokens: VISION_MAX_TOKENS,
           numCtx: VISION_NUM_CTX,
           format: MEAL_RECOGNITION_JSON_SCHEMA as unknown as Record<string, unknown>,
+          // 추론 모델은 사고에 출력 토큰을 다 써 content 가 비어 온다(실측) — JSON 만 받으면 되므로 끈다.
+          think: thinkOptionForModel(resolved.model),
           signal: ac.signal,
         });
         rawText = res.text;
@@ -223,6 +225,7 @@ export class MealRecognitionService {
             maxTokens: VISION_MAX_TOKENS,
             numCtx: VISION_NUM_CTX,
             format: 'json',
+            think: thinkOptionForModel(resolved.model),
             signal: repairAc.signal,
           });
           parsed = parseRecognitionOutput(repaired.text);

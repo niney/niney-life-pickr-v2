@@ -9,6 +9,7 @@ import {
   type FoodDishTypeType,
   type FoodMainIngredientType,
 } from '@repo/api-contract';
+import { thinkOptionForModel } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
@@ -210,6 +211,7 @@ export class FoodClassifyService {
           maxTokens: LLM_MAX_TOKENS,
           numCtx: LLM_NUM_CTX,
           format: FOOD_CLASSIFY_JSON_SCHEMA as unknown as Record<string, unknown>,
+          think: thinkOptionForModel(model),
           signal: ac.signal,
         });
         const parsed = parseClassifyOutput(res.text);

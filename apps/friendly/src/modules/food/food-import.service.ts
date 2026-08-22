@@ -202,6 +202,53 @@ const originPriority = (origin: string | null): number => {
 // 식품명 "대표식품_변형_변형" → 사람이 읽는 변형 표기 "변형 변형 대표식품"은 무리 — 언더스코어를 공백으로만.
 const variantLabel = (foodNm: string): string => cleanName(foodNm.replace(/_/g, ' '));
 
+// 표준데이터를 **파일(CSV)** 로 받은 경우 — 배포본은 한글 컬럼명이라 API(camelCase) 필드명으로
+// 옮겨 같은 정규화 함수를 태운다. 실측 헤더(2026-04-29 배포본, 50컬럼):
+//   식품코드 / 식품명 / … / 식품기원명 / 식품대분류명 / 대표식품명 / … / 영양성분함량기준량 /
+//   에너지(kcal) / 수분(g) / 단백질(g) / 지방(g) / … / 나트륨(mg) / … / 1인(회)분량 참고량 / 식품중량
+// 컬럼 순서가 아니라 **이름**으로 찾는다(배포본마다 열이 붙고 빠진다).
+const CSV_FIELD_MAP: Record<string, string> = {
+  식품코드: 'foodCd',
+  식품명: 'foodNm',
+  식품기원명: 'foodOriginNm',
+  식품대분류명: 'foodLv3Nm',
+  대표식품명: 'foodLv4Nm',
+  식품중분류명: 'foodLv5Nm',
+  영양성분함량기준량: 'nutConSrtrQua',
+  '에너지(kcal)': 'enerc',
+  '단백질(g)': 'prot',
+  '지방(g)': 'fatce',
+  '탄수화물(g)': 'chocdf',
+  '당류(g)': 'sugar',
+  '나트륨(mg)': 'nat',
+  식품중량: 'foodSize',
+};
+
+export const nutritionFileRowsToRecords = (
+  header: string[],
+  rows: string[][],
+): Record<string, unknown>[] => {
+  // 헤더 이름 → 열 인덱스(공백·BOM 제거).
+  const index = new Map<string, number>();
+  header.forEach((h, i) => {
+    const key = h.replace(/^\uFEFF/, '').trim();
+    if (key && !index.has(key)) index.set(key, i);
+  });
+  const picks: [string, number][] = [];
+  for (const [ko, api] of Object.entries(CSV_FIELD_MAP)) {
+    const i = index.get(ko);
+    if (i !== undefined) picks.push([api, i]);
+  }
+  return rows.map((r) => {
+    const out: Record<string, unknown> = {};
+    for (const [api, i] of picks) {
+      const v = (r[i] ?? '').trim();
+      if (v) out[api] = v;
+    }
+    return out;
+  });
+};
+
 export const normalizeMfdsNutritionRows = (
   rows: Record<string, unknown>[],
 ): { seeds: FoodSeed[]; report: NormalizeReport } => {
@@ -526,9 +573,21 @@ export const normalizeMenuCanonicalRows = (
 
 // ── (5) 한식 800선 CSV(수동) — 요리번호, 800선 카테고리, 요리명, 라틴어 발음, 설명, 영어, 일본어, 중문1, 중문2 ──
 export const normalizeHansik800Rows = (
-  header: string[],
-  rows: string[][],
+  headerIn: string[],
+  rowsIn: string[][],
 ): { seeds: FoodSeed[]; report: NormalizeReport } => {
+  // 배포본(XLSX)은 첫 행이 조판용 번호 행이고 진짜 헤더가 2행에 있다 — '요리명' 이 보이는 행을
+  // 헤더로 삼고 그 아래를 데이터로 쓴다(CSV 로 저장한 경우엔 첫 행이 그대로 헤더).
+  const looksLikeHeader = (r: string[]): boolean => r.some((c) => c.replace(/\s+/g, '') === '요리명');
+  let header = headerIn;
+  let rows = rowsIn;
+  if (!looksLikeHeader(headerIn)) {
+    const at = rowsIn.findIndex(looksLikeHeader);
+    if (at >= 0) {
+      header = rowsIn[at]!;
+      rows = rowsIn.slice(at + 1);
+    }
+  }
   const report: NormalizeReport = { fetched: rows.length, produced: 0, dropped: {} };
   const idx = (names: string[]): number => {
     for (const n of names) {
@@ -566,7 +625,9 @@ export const normalizeHansik800Rows = (
       .filter((i) => i >= 0)
       .map((i) => cleanName(r[i] ?? ''))
       .filter((a) => a.length > 0 && a.length <= 60);
-    const cat = iCat >= 0 ? coerceStrOrNull(r[iCat] ?? null) : null;
+    // 카테고리에 로마자가 병기돼 있다: '상차림 [Sangcharim]' → '상차림'.
+    const catRaw = iCat >= 0 ? coerceStrOrNull(r[iCat] ?? null) : null;
+    const cat = catRaw ? cleanName(catRaw.replace(/\[[^\]]*\]/g, '')) || null : null;
     seeds.push({
       name,
       repName: null,

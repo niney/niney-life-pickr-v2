@@ -17,6 +17,7 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import { classifyError } from '../ai/ai.service.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
+import { thinkOptionForModel } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
 import {
   EXTRACTION_JSON_SCHEMA,
@@ -372,6 +373,9 @@ export class SettlementExtractionService {
             temperature: VISION_TEMPERATURE,
             maxTokens: VISION_MAX_TOKENS,
             numCtx: VISION_NUM_CTX,
+        // 추론 모델(qwen3.5 등)은 사고에 출력 토큰을 써 items 가 비어 오는 일이 있다 — JSON 만 받으면
+        // 되므로 끈다(gpt-oss 는 끌 수 없어 최저 레벨). 2026-08-22 실측 근거는 @repo/utils 주석 참고.
+        think: thinkOptionForModel(model),
             format: EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown>,
             signal: ac.signal,
           });

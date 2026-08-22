@@ -110,3 +110,20 @@ export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]
   // chat·meal-recommend — 규모 오름차순의 중앙값(작은 쪽으로 치우침).
   return bySize[Math.floor((bySize.length - 1) / 2)] ?? null;
 };
+
+// 추론(thinking) 제어 값 — Ollama /api/chat 의 최상위 `think`.
+//
+// 왜 필요한가(2026-08-22 실측, ollama.com 직접 API):
+//   qwen3.5:397b 는 think 를 안 보내면 응답 토큰을 사고에 다 쓰고 content 가 빈 문자열로 온다
+//   (num_predict 40 기준 thinking 119자 / content ""). gpt-oss 는 끄기가 안 되고 레벨만 받는다
+//   ('low' 를 주면 content 가 채워진다). gemma4·kimi-k3·deepseek-v4-pro 는 think:false 를 보내도
+//   200 이고 사고가 사라진다 — 즉 **모르는 모델에도 false 는 안전**하다.
+//
+// 그래서 JSON 을 뽑아야 하는 호출(추출·인식·분류·추천)은 이 값을 그대로 실어 보낸다.
+// 대화형 답변 품질이 중요한 곳에서는 굳이 끄지 않아도 된다(호출부 판단).
+export const thinkOptionForModel = (modelId: string): false | 'low' => {
+  const family = modelId.trim().toLowerCase().split(':')[0] ?? '';
+  // gpt-oss 는 사고를 끌 수 없다 — 최저 레벨로 낮춰 출력 토큰을 확보한다.
+  if (family.startsWith('gpt-oss')) return 'low';
+  return false;
+};

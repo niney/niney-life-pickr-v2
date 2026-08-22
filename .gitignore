@@ -76,4 +76,8 @@ apps/web/src/**/*.js
 apps/web/vite.config.js
 
 # 일상지도 원천 CSV(지방행정인허가데이터 전국 CCTV·공중화장실, 95MB) — 로컬에만
-/data/open/
+# 공공데이터 원본 — 리포에 넣지 않는다(수 GB). 적재 스크립트가 경로만 받는다.
+#   /data/open/            지방행정인허가 CSV(CCTV·화장실)
+#   /data/*.csv, *.xlsx    식약처 영양성분·한식 800선 배포본
+#   /data/한국 음식 이미지/  AI Hub 음식 이미지(평가셋)
+/data/

@@ -18,6 +18,7 @@ import {
   type MealSlotType,
 } from '@repo/api-contract';
 import { extractFirstJsonObject } from '../../lib/json.js';
+import { thinkOptionForModel } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
@@ -243,6 +244,8 @@ export class MealRecommendationService {
           maxTokens: LLM_MAX_TOKENS,
           numCtx: LLM_NUM_CTX,
           format: MEAL_RECOMMENDATION_JSON_SCHEMA as unknown as Record<string, unknown>,
+          // 이유 문장만 받으면 되므로 사고는 끈다(추론 모델이면 출력 토큰을 다 먹는다).
+          think: thinkOptionForModel(resolved.model),
           signal: ac.signal,
         });
         const parsed = parseRecommendationOutput(res.text);
