@@ -308,7 +308,10 @@ export default function LifeMapScreen() {
         <BottomSheet
           ref={listSheetRef}
           index={1}
+          // gorhom v5 기본 enableDynamicSizing 은 콘텐츠 높이 스냅 지점을 끼워 넣어(콘텐츠가 짧을 때)
+          // 지점이 4개가 되고 헤더·배경의 index 보간(1.5→2)이 full 이 아닌 중간에서 끝난다 → 끈다.
           snapPoints={SNAP_POINTS}
+          enableDynamicSizing={false}
           topInset={listTopInset}
           animatedIndex={listSheetIndex}
           animatedPosition={listSheetTop}
@@ -354,6 +357,7 @@ export default function LifeMapScreen() {
             ref={detailSheetRef}
             index={1}
             snapPoints={SNAP_POINTS}
+            enableDynamicSizing={false}
             topInset={detailTopInset}
             animatedIndex={detailSheetIndex}
             animatedPosition={detailSheetTop}
