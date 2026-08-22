@@ -3,7 +3,7 @@ import { Alert, Linking, StyleSheet, Text, View, type LayoutChangeEvent } from '
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet, { BottomSheetFlatList, type BottomSheetBackgroundProps } from '@gorhom/bottom-sheet';
-import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   useAirLocation,
@@ -205,10 +205,20 @@ export default function LifeMapScreen() {
     setMapBottomInset((prev) => (Math.abs(prev - covered) < 8 ? prev : covered));
   }, [containerH, listSheetTop, detailSheetTop]);
   const detailVisible = sel !== null;
+  // 플로팅 헤더는 맛집·대중교통처럼 '활성 시트'를 따라간다 — 상세가 열려 있으면 상세 index, 아니면 목록 index.
+  // 그래야 상세 시트가 full 에 닿을 때도 헤더가 sticky 로 펴지며 노치 영역을 surface 색으로 채운다
+  // (목록 index 만 보면 상세 full 에서 헤더가 플로팅으로 남아 상태바 뒤로 지도가 비친다).
+  const detailOpenSV = useSharedValue(0);
+  const headerSheetIndex = useDerivedValue(() => {
+    'worklet';
+    const v = detailOpenSV.value === 1 ? detailSheetIndex.value : listSheetIndex.value;
+    return Math.max(0, v); // 상세 닫힘(-1) 구간에서 음수 보간으로 가지 않게
+  });
   useEffect(() => {
+    detailOpenSV.value = detailVisible ? 1 : 0;
     if (!detailVisible) detailSheetTop.value = SHEET_TOP_UNSET;
     syncMapBottomInset();
-  }, [detailVisible, detailSheetTop, syncMapBottomInset]);
+  }, [detailVisible, detailOpenSV, detailSheetTop, syncMapBottomInset]);
 
   // ── 선택 핸들러 ──
   const select = useCallback((layer: LifeMapLayer, id: string) => {
@@ -380,7 +390,7 @@ export default function LifeMapScreen() {
 
         <LifeMapHeader
           topInset={insets.top}
-          sheetIndex={listSheetIndex}
+          sheetIndex={headerSheetIndex}
           layers={layers}
           status={statusQ.data}
           onToggleLayer={toggleLayer}
