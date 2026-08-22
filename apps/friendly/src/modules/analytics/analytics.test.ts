@@ -150,11 +150,18 @@ const seedRestaurant = async (
   return { placeId, restaurantId: rest.id, menuCanonicalIds: canonicalIds };
 };
 
+// ⚠️ 이 블록의 afterEach 는 GlobalMenuCanonical·GlobalMergeChunkCache 를 **전량** 비운다.
+// 격리 DB 없이 돌면 .env 의 실 DB(운영 스냅샷)에서 글로벌 머지 결과가 통째로 사라진다 —
+// 실제로 그렇게 5,446 그룹 + 링크 22,303 + 청크 캐시를 날려 재머지(LLM 1,352콜)를 다시 했다.
+// 전량 삭제가 이 테스트의 전제(청크 캐시가 비어야 mock 호출 순서가 맞는다)라 삭제를 좁히는 대신
+// DB 를 격리한다.
 describe('AnalyticsService.runGlobalMerge', () => {
   let app: FastifyInstance;
   let aiConfig: AiConfigService;
+  let isolated: IsolatedDatabase;
 
   beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
     app = await buildApp();
     aiConfig = new AiConfigService(app.prisma, {
       apiKey: '',
@@ -173,6 +180,7 @@ describe('AnalyticsService.runGlobalMerge', () => {
 
   afterAll(async () => {
     await app.close();
+    isolated.restore();
   });
 
   afterEach(async () => {
@@ -189,8 +197,10 @@ describe('AnalyticsService.runGlobalMerge', () => {
   });
 
   it('two-pass merge: pass1 keeps variant→canonical, pass2 collapses cross-chunk conflicts', async () => {
-    // 식당 두 개에서 distinct canonical 이 4개 — 입력은 한 청크 안에 들어간다
-    // (chunk size 60). 따라서 pass1 청크 1번 + pass2 한 번 = 2 LLM 호출.
+    // 의미 검증용 4개 + 채움용 8개 = distinct canonical 12개 (GLOBAL_MERGE_CHUNK_SIZE=10).
+    // 채움이 필요한 이유: 4개만 시드하면 pass1 청크와 pass2 입력이 **같은 변형 목록**이라
+    // 청크 캐시(cacheKey = model|schemaHash|variants)가 그대로 히트해 pass2 가 LLM 을 안 부른다.
+    // 12개면 pass1 이 2청크로 쪼개져 pass2 입력이 어느 pass1 청크와도 달라진다.
     await seedRestaurant(app, [
       {
         name: '김치찌개',
@@ -223,15 +233,34 @@ describe('AnalyticsService.runGlobalMerge', () => {
         mentions: [{ sentiment: 'positive' }],
       },
     ]);
+    // 채움 — 이름만 다르고 의미 검증에는 쓰이지 않는다(응답에 없으면 서비스가 항등 매핑).
+    await seedRestaurant(
+      app,
+      Array.from({ length: 8 }, (_, i) => ({
+        name: `채움메뉴${i}`,
+        nameNorm: `채움메뉴${i}`,
+        canonicalName: `채움메뉴${i}`,
+        canonicalNorm: `채움메뉴${i}`,
+        mentions: [{ sentiment: 'positive' as const }],
+      })),
+    );
 
     const { provider, trace } = fakeProvider((_p, idx) => {
       if (idx === 0) {
-        // pass1 — LLM 이 묵은지 김치찌개를 별도 그룹으로 분류 (실수 상정).
+        // pass1 첫 청크 — LLM 이 묵은지 김치찌개를 별도 그룹으로 분류(실수 상정).
+        // 채움은 한 그룹으로 접어 pass1 결과 집합이 입력과 달라지게 한다. 그래야 pass2 의
+        // 변형 목록이 pass1 청크와 달라져 청크 캐시에 걸리지 않고 실제로 LLM 을 부른다.
         return {
           김치찌개: '김치찌개',
           차돌박이된장찌개: '차돌박이된장찌개',
           '묵은지 김치찌개': '묵은지 김치찌개',
           돈까스: '돈까스',
+          채움메뉴0: '채움메뉴0',
+          채움메뉴1: '채움메뉴0',
+          채움메뉴2: '채움메뉴0',
+          채움메뉴3: '채움메뉴0',
+          채움메뉴4: '채움메뉴0',
+          채움메뉴5: '채움메뉴0',
         };
       }
       // pass2 — pass1 의 distinct canonical 들 사이에서 충돌 해소.
@@ -251,8 +280,9 @@ describe('AnalyticsService.runGlobalMerge', () => {
     const result = await service.runGlobalMerge({ full: true });
     // dev.db 에 다른 환경에서 만든 잔재가 있을 수 있어 절대값 대신 하한 비교.
     // 우리가 시드한 distinct nameNorm 4개는 입력에 반드시 포함된다.
-    expect(result.inputCount).toBeGreaterThanOrEqual(4);
-    expect(trace.calls.length).toBeGreaterThanOrEqual(2);
+    expect(result.inputCount).toBeGreaterThanOrEqual(12);
+    // pass1 2청크 + pass2 2청크 = 4호출(캐시 히트가 없어야 한다).
+    expect(trace.calls.length).toBeGreaterThanOrEqual(3);
     // 모든 호출의 system prompt 가 머지 프롬프트.
     expect(trace.calls[0].systemPrompt).toContain('식당 가로지르기');
 
