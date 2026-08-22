@@ -6,16 +6,20 @@ import { mealDateLabel, toLocalDateKey } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
+import { MealPreferenceView } from '~/components/meal/MealPreferenceView';
+import { MealRecommendView } from '~/components/meal/MealRecommendView';
 import { MealStatsView } from '~/components/meal/MealStatsView';
 
 // 식단 — 기록 / 달력 / 통계. 입력(사진)은 앱에서만 하므로 여기 FAB 가 진입점이다.
 // 게스트는 진입점을 볼 수 없지만(프로필에서 숨김) 딥링크로 올 수 있어 화면에서도 안내한다.
 
-type Tab = 'list' | 'calendar' | 'stats';
+type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'preference';
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: 'list', label: '기록' },
   { value: 'calendar', label: '달력' },
   { value: 'stats', label: '통계' },
+  { value: 'recommend', label: '추천' },
+  { value: 'preference', label: '설정' },
 ];
 
 export default function MealScreen() {
@@ -80,18 +84,24 @@ export default function MealScreen() {
             />
           ) : tab === 'calendar' ? (
             <MealCalendarView onOpenEntry={(id) => router.push(`/meal/${id}` as never)} />
-          ) : (
+          ) : tab === 'stats' ? (
             <MealStatsView />
+          ) : tab === 'recommend' ? (
+            <MealRecommendView />
+          ) : (
+            <MealPreferenceView />
           )}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="식단 기록하기"
-            onPress={() => router.push('/meal/new' as never)}
-            style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-          >
-            <Text style={[styles.fabText, { color: theme.colors.primaryText }]}>＋ 기록</Text>
-          </Pressable>
+          {tab === 'preference' ? null : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="식단 기록하기"
+              onPress={() => router.push('/meal/new' as never)}
+              style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+            >
+              <Text style={[styles.fabText, { color: theme.colors.primaryText }]}>＋ 기록</Text>
+            </Pressable>
+          )}
         </>
       )}
     </View>

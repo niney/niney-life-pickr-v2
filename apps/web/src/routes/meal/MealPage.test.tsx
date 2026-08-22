@@ -96,7 +96,11 @@ const renderPage = () =>
 
 describe('MealPage', () => {
   beforeEach(() => {
-    useAuthStore.setState({ token: 't', user: { id: 'u1', email: 'u@x.com', role: 'USER' }, isGuest: false });
+    useAuthStore.setState({
+      token: 't',
+      user: { id: 'u1', email: 'u@x.com', role: 'USER', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      isGuest: false,
+    });
   });
 
   it('기록 탭 — 목록을 날짜 머리글과 함께 보여준다', async () => {
@@ -191,5 +195,137 @@ describe('MealPage', () => {
     );
     renderPage();
     expect(await screen.findByAltText('식단 사진')).toBeInTheDocument();
+  });
+});
+
+// 추천·설정 탭 — LLM 호출은 서버가 하고 화면은 결과만 다룬다. 캐시/강제 재요청 계약(force)과
+// 가중치 저장 payload 를 고정한다.
+describe('MealPage — 추천·설정 탭', () => {
+  const CONTEXT_URL = '/api/v1/meals/recommendations/context';
+  const RECOMMENDATIONS_URL = '/api/v1/meals/recommendations';
+  const PREFERENCE_URL = '/api/v1/meals/preference';
+
+  const preference = {
+    weights: { variety: 4, taste: 4, balance: 3, health: 2, novelty: 2, weather: 1, convenience: 2 },
+    excludedFoods: ['오이'],
+    likedFoods: [],
+    mealTypes: [],
+    slots: ['breakfast', 'lunch', 'dinner'],
+    onboarded: true,
+    updatedAt: '2026-08-22T00:00:00.000Z',
+  };
+
+  const recommendation = {
+    id: 'r1',
+    targetDate: '2026-08-22',
+    targetSlot: 'dinner',
+    items: [
+      {
+        name: '연어초밥',
+        foodId: 'f2',
+        dishType: 'raw_fish',
+        mainIngredient: 'fish',
+        cuisine: 'japanese',
+        reason: '2주 동안 생선을 안 드셨어요.',
+        tags: ['14일 만에'],
+        score: 0.82,
+        lastEatenDate: null,
+      },
+    ],
+    summary: '오늘은 담백하게',
+    status: 'done',
+    model: 'gpt-oss:120b',
+    promptVersion: 1,
+    notice: null,
+    feedback: null,
+    createdAt: '2026-08-22T09:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      token: 't',
+      user: { id: 'u1', email: 'u@x.com', role: 'USER', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      isGuest: false,
+    });
+  });
+
+  it('추천 탭 — 추천받기는 force=false, 다시 추천은 force=true 로 보낸다', async () => {
+    const forces: boolean[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: ['김치찌개'], preference, latest: null }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [] })),
+      http.post(RECOMMENDATIONS_URL, async ({ request }) => {
+        const body = (await request.json()) as { force: boolean };
+        forces.push(body.force);
+        return HttpResponse.json(recommendation);
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /추천받기/ }));
+
+    expect(await screen.findByText('연어초밥')).toBeInTheDocument();
+    expect(screen.getByText('2주 동안 생선을 안 드셨어요.')).toBeInTheDocument();
+    expect(screen.getByText('오늘은 담백하게')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /다시 추천/ }));
+    await waitFor(() => expect(forces).toEqual([false, true]));
+  });
+
+  it('추천 피드백 — 👍 를 누르면 rating 1 을 보낸다', async () => {
+    const ratings: (number | null | undefined)[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: recommendation }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [recommendation] })),
+      http.post(`${RECOMMENDATIONS_URL}/r1/feedback`, async ({ request }) => {
+        const body = (await request.json()) as { rating?: number | null };
+        ratings.push(body.rating);
+        return HttpResponse.json({ ...recommendation, feedback: { pickedName: null, rating: 1, eatenEntryId: null } });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '추천이 좋아요' }));
+    await waitFor(() => expect(ratings).toEqual([1]));
+  });
+
+  it('설정 탭 — 슬라이더·제외 음식을 담아 PUT 한다', async () => {
+    let saved: Record<string, unknown> | null = null;
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(PREFERENCE_URL, () => HttpResponse.json(preference)),
+      http.put(PREFERENCE_URL, async ({ request }) => {
+        saved = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...preference, ...saved });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+
+    const slider = await screen.findByLabelText('건강');
+    fireEvent.change(slider, { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('못 먹는 / 싫어하는 음식'), { target: { value: '오이, 고수' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(saved).not.toBeNull());
+    expect((saved as unknown as { weights: { health: number } }).weights.health).toBe(5);
+    expect((saved as unknown as { excludedFoods: string[] }).excludedFoods).toEqual(['오이', '고수']);
+  });
+
+  it('설정 탭 — 프리셋은 가중치를 한 번에 바꾼다', async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(PREFERENCE_URL, () => HttpResponse.json(preference)),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /설정/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '새로운 도전' }));
+    expect((screen.getByLabelText('새로운 시도') as HTMLInputElement).value).toBe('5');
   });
 });

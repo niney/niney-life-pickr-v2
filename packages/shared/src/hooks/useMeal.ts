@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateMealEntryInputType,
+  CreateMealRecommendationInputType,
+  MealRecommendationFeedbackInputType,
   RecognizeMealInputType,
   UpdateMealEntryInputType,
   UpdateMealPreferenceInputType,
@@ -175,4 +177,39 @@ export const useMealPhotoUrl = (
   }, [token, variant, enabled]);
 
   return { url, error };
+};
+
+// ── 추천 ────────────────────────────────────────────────────────────────────
+// 화면 진입용 컨텍스트(기록 수·최근 음식·선호·최신 추천) — 추천 탭이 처음부터 뭔가 보여준다.
+export const useMealRecommendationContext = () =>
+  useQuery({
+    queryKey: [...KEY, 'recommendation', 'context'],
+    queryFn: mealApi.recommendationContext,
+  });
+
+export const useMealRecommendations = (limit = 10) =>
+  useQuery({
+    queryKey: [...KEY, 'recommendation', 'list', limit],
+    queryFn: () => mealApi.listRecommendations(limit),
+  });
+
+export const useCreateMealRecommendation = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateMealRecommendationInputType) => mealApi.recommend(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+    },
+  });
+};
+
+export const useMealRecommendationFeedback = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: MealRecommendationFeedbackInputType }) =>
+      mealApi.recommendationFeedback(id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+    },
+  });
 };

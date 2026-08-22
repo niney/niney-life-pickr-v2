@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, ChartNoAxesColumn, Loader2, UtensilsCrossed } from 'lucide-react';
+import { CalendarDays, ChartNoAxesColumn, Loader2, Settings2, Sparkles, UtensilsCrossed } from 'lucide-react';
 import type { MealEntryType, MealSlotType } from '@repo/api-contract';
 import { useMealCalendar, useMealEntries, useMealStats } from '@repo/shared';
 import {
@@ -18,16 +18,20 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 import { MealPhotoImg } from './MealPhotoImg';
+import { MealPreferenceTab } from './MealPreferenceTab';
+import { MealRecommendTab } from './MealRecommendTab';
 
 // 내 식단 — 기록/달력/통계. 입력(사진)은 앱에서만 하므로 이 페이지는 조회 전용이고,
 // 상단에 그 사실을 안내한다. 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
 
-type Tab = 'list' | 'calendar' | 'stats';
+type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'preference';
 
 const TABS: ReadonlyArray<{ value: Tab; label: string; icon: typeof UtensilsCrossed }> = [
   { value: 'list', label: '기록', icon: UtensilsCrossed },
   { value: 'calendar', label: '달력', icon: CalendarDays },
   { value: 'stats', label: '통계', icon: ChartNoAxesColumn },
+  { value: 'recommend', label: '추천', icon: Sparkles },
+  { value: 'preference', label: '설정', icon: Settings2 },
 ];
 
 const timeText = (iso: string): string => {
@@ -65,7 +69,17 @@ export const MealPage = () => {
         </div>
       </header>
 
-      {tab === 'list' ? <MealList /> : tab === 'calendar' ? <MealCalendar /> : <MealStats />}
+      {tab === 'list' ? (
+        <MealList />
+      ) : tab === 'calendar' ? (
+        <MealCalendar />
+      ) : tab === 'stats' ? (
+        <MealStats />
+      ) : tab === 'recommend' ? (
+        <MealRecommendTab />
+      ) : (
+        <MealPreferenceTab />
+      )}
     </div>
   );
 };

@@ -1,6 +1,11 @@
 import {
   Routes,
   type CreateMealEntryInputType,
+  type CreateMealRecommendationInputType,
+  type ListMealRecommendationsResultType,
+  type MealRecommendationContextType,
+  type MealRecommendationFeedbackInputType,
+  type MealRecommendationType,
   type ListMealEntriesQueryType,
   type ListMealEntriesResultType,
   type MealCalendarResultType,
@@ -88,6 +93,27 @@ export const mealApi = {
   // ── 인식 ──
   recognize: (input: RecognizeMealInputType) =>
     apiFetch<RecognizeMealResultType>(Routes.Meal.recognize, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  // ── 추천 ──
+  // 캐시(같은 날·끼니·프로필)면 서버가 LLM 을 부르지 않고 저장된 결과를 돌려준다.
+  recommend: (input: CreateMealRecommendationInputType) =>
+    apiFetch<MealRecommendationType>(Routes.Meal.recommendations, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  listRecommendations: (limit?: number) =>
+    apiFetch<ListMealRecommendationsResultType>(
+      `${Routes.Meal.recommendations}${limit !== undefined ? `?limit=${limit}` : ''}`,
+    ),
+
+  recommendationContext: () => apiFetch<MealRecommendationContextType>(Routes.Meal.recommendationContext),
+
+  recommendationFeedback: (id: string, input: MealRecommendationFeedbackInputType) =>
+    apiFetch<MealRecommendationType>(Routes.Meal.recommendationFeedback(id), {
       method: 'POST',
       body: JSON.stringify(input),
     }),
