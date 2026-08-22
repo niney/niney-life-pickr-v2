@@ -79,6 +79,22 @@ describe('normalizeMfdsRecipeRows / parseRecipeIngredients — 식품안전나�
     expect(parseRecipeIngredients(null)).toEqual([]);
   });
 
+  it('실측 형태 — 첫 줄 요리명과 "고명" 같은 섹션 제목 줄은 버린다', () => {
+    // COOKRCP01 RCP_SEQ=28 원문 그대로.
+    const raw = '새우두부계란찜\n연두부 75g(3/4모), 칵테일새우 20g(5마리), 달걀 30g(1/2개), 생크림 13g(1큰술), 설탕 5g(1작은술), 무염버터 5g(1작은술)\n고명\n시금치 10g(3줄기)';
+    expect(parseRecipeIngredients(raw, '새우 두부 계란찜')).toEqual([
+      '연두부',
+      '칵테일새우',
+      '달걀',
+      '생크림',
+      '설탕',
+      '무염버터',
+      '시금치',
+    ]);
+    // 요리명을 안 넘겨도 첫 줄은 "수량 없는 단독 줄" 이라 걸러진다.
+    expect(parseRecipeIngredients(raw)).not.toContain('고명');
+  });
+
   it('이름·조리법·영양·재료를 시드로 만든다(중복 이름 drop)', () => {
     const { seeds, report } = normalizeMfdsRecipeRows([
       { RCP_SEQ: '28', RCP_NM: '새우 두부 계란찜', RCP_WAY2: '찌기', RCP_PAT2: '반찬', INFO_WGT: '100', INFO_ENG: '220', INFO_CAR: '3', INFO_PRO: '14', INFO_FAT: '17', INFO_NA: '99', RCP_PARTS_DTLS: '연두부 75g, 칵테일새우 20g' },
@@ -90,10 +106,23 @@ describe('normalizeMfdsRecipeRows / parseRecipeIngredients — 식품안전나�
     const egg = seeds[0]!;
     expect(egg.dishType).toBe('steam');
     expect(egg.ingredients).toEqual(['연두부', '칵테일새우']);
+    // 이름에 '새우' 가 있으면 이름이 이긴다.
+    expect(egg.mainIngredient).toBe('seafood');
     expect(egg.nutrition?.kcal).toBe(220);
     expect(egg.sourceCategory).toBe('반찬/찌기');
     // 끓이기(soup) 보다 이름 규칙(찌개 → stew)이 우선.
     expect(seeds[1]!.dishType).toBe('stew');
+    // 한국 조리 DB 라 단서가 없으면 한식으로 채운다.
+    expect(egg.cuisine).toBe('korean');
+  });
+});
+
+describe('normalizeMfdsRecipeRows — 주재료 폴백', () => {
+  it('이름에 단서가 없으면 재료 목록의 첫 매칭으로 주재료를 채운다', () => {
+    const { seeds } = normalizeMfdsRecipeRows([
+      { RCP_SEQ: '99', RCP_NM: '오늘의 한상', RCP_WAY2: '찌기', RCP_PAT2: '반찬', RCP_PARTS_DTLS: '연두부 75g, 시금치 10g' },
+    ]);
+    expect(seeds[0]).toMatchObject({ mainIngredient: 'tofu_bean', ingredients: ['연두부', '시금치'] });
   });
 });
 

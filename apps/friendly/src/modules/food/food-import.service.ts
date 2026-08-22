@@ -335,13 +335,26 @@ export const normalizeMfdsNutritionRows = (
 const round1 = (v: number): number => Math.round(v * 10) / 10;
 
 // ── (2) 식약처 레시피 DB COOKRCP01 ────────────────────────────────────────────
-// RCP_PARTS_DTLS: "연두부 75g(3/4모), 칵테일새우 20g(5마리), 달걀 30g(1/2개)…" / 줄바꿈·'●' 섹션 표기도 섞임.
-export const parseRecipeIngredients = (raw: string | null): string[] => {
+// RCP_PARTS_DTLS 실측 형태(2026-08-22):
+//   "새우두부계란찜\n연두부 75g(3/4모), 칵테일새우 20g(5마리), 달걀 30g(1/2개)…\n고명\n시금치 10g(3줄기)"
+// 즉 **첫 줄이 요리명**이고 중간에 '고명'·'양념장' 같은 섹션 제목 줄이 낀다. 수량이 없고 콤마도 없는
+// 단독 줄은 제목으로 보고 버린다(재료 줄은 항상 "이름 수량" 이거나 콤마로 이어진다).
+// dishName 을 주면 요리명과 같은 항목도 제외한다(안전망).
+const looksLikeSectionLine = (line: string): boolean =>
+  !line.includes(',') && !/[\d½¼¾]/.test(line) && !/(약간|적당량|조금|취향껏)/u.test(line);
+
+export const parseRecipeIngredients = (raw: string | null, dishName?: string): string[] => {
   if (!raw) return [];
   const out: string[] = [];
-  const text = raw
+  const dishNorm = dishName ? normalizeTerm(dishName) : '';
+  const lines = raw
     .replace(/\r/g, '\n')
     .replace(/[●■▶•]/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !looksLikeSectionLine(l));
+  const text = lines
+    .join('\n')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\[[^\]]*\]/g, ' ');
   for (const part of text.split(/[\n,、，]/)) {
@@ -354,6 +367,7 @@ export const parseRecipeIngredients = (raw: string | null): string[] => {
     s = s.replace(/\s*(약간|적당량|조금|적당히|약간씩|취향껏)$/u, '').trim();
     s = s.replace(/^[-·\s]+|[-·\s]+$/g, '');
     if (s.length < 1 || s.length > 20) continue;
+    if (dishNorm && normalizeTerm(s) === dishNorm) continue;
     if (!out.includes(s)) out.push(s);
     if (out.length >= MAX_INGREDIENTS) break;
   }
@@ -380,7 +394,7 @@ export const normalizeMfdsRecipeRows = (
     seen.add(norm);
     const way = coerceStrOrNull(row['RCP_WAY2']);
     const pat = coerceStrOrNull(row['RCP_PAT2']);
-    const ingredients = parseRecipeIngredients(coerceStrOrNull(row['RCP_PARTS_DTLS']));
+    const ingredients = parseRecipeIngredients(coerceStrOrNull(row['RCP_PARTS_DTLS']), name);
     const servingG = numOrNull(row['INFO_WGT']);
     const kcal = numOrNull(row['INFO_ENG']);
     const carbG = numOrNull(row['INFO_CAR']);
@@ -393,8 +407,13 @@ export const normalizeMfdsRecipeRows = (
       repName: null,
       aliases: [],
       dishType: guessDishTypeFromName(name) ?? rcpWayToDishType(way),
-      mainIngredient: null,
-      cuisine: null,
+      // 이름으로 못 잡으면 재료 목록의 첫 매칭으로 채운다(MAFRA 와 같은 규칙) — LLM 분류 부담을 줄인다.
+      mainIngredient:
+        guessMainIngredientFromName(name) ??
+        (ingredients.map((i) => guessMainIngredientFromName(i)).find((v) => v !== null) ?? null),
+      // 식약처 '조리식품의 레시피 DB' 는 한국 조리 DB 라 이름에 다른 단서가 없으면 한식으로 본다.
+      // (LLM 은 '연근부각'·'참외깍두기' 같은 창작 반찬에서 cuisine 을 자주 비워 뒀다 — 실측 37건.)
+      cuisine: guessCuisineFromName(name) ?? 'korean',
       ingredients: ingredients.length > 0 ? ingredients : null,
       servingG,
       nutrition: hasNut ? { kcal, carbG, proteinG, fatG, sodiumMg, sugarG: null } : null,

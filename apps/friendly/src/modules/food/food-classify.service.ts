@@ -11,6 +11,7 @@ import {
 } from '@repo/api-contract';
 import { thinkOptionForModel } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
+import { normalizeTerm } from '../../lib/text.js';
 import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
@@ -169,7 +170,9 @@ export class FoodClassifyService {
         continue;
       }
       for (const r of rows) {
-        const c = out.get(r.name);
+        // LLM 이 이름을 그대로 안 돌려주는 일이 있다(공백·표기 흔들림) — 정규화해서 찾는다.
+        // 실측: 1,102행 중 362행이 이 때문에 반영되지 않았다.
+        const c = out.get(r.name) ?? out.get(normalizeTerm(r.name));
         if (!c) continue;
         const next = mergeClassification(r, c);
         await this.prisma.foodItem.update({
@@ -251,11 +254,15 @@ export const parseClassifyOutput = (text: string): Map<string, FoodClassificatio
   if (!parsed.success) return null;
   const map = new Map<string, FoodClassification>();
   for (const it of parsed.data.items) {
-    map.set(it.name.trim(), {
+    const value = {
       dishType: toEnumOrNull<FoodDishTypeType>(FoodDishType, it.dishType),
       mainIngredient: toEnumOrNull<FoodMainIngredientType>(FoodMainIngredient, it.mainIngredient),
       cuisine: toEnumOrNull<FoodCuisineType>(FoodCuisine, it.cuisine),
-    });
+    };
+    // 원문 키와 정규화 키를 둘 다 넣어 둔다(호출부가 어느 쪽으로 찾아도 맞게).
+    map.set(it.name.trim(), value);
+    const norm = normalizeTerm(it.name);
+    if (norm && !map.has(norm)) map.set(norm, value);
   }
   return map;
 };
