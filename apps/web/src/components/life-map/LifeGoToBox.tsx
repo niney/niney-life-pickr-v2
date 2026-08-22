@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Bus, Clock, Loader2, MapPin, Navigation, Search, TrainFront, X } from 'lucide-react';
 import { useBusStationSearch, useLifeMapSearch, useSubwayStationSearch } from '@repo/shared';
 import {
@@ -20,6 +20,8 @@ import { useLifeMapRecentStore } from '~/stores/lifeMapRecentStore';
 //              · 주소·장소(VWorld 검색 프록시 — 디바운스 250ms, 서버 키 없으면 섹션 숨김)
 // 선택 → onGo(종류별 줌: 시도 11 · 시 13 · 구 14 · 역/정류장 16 · 주소/장소 17) + 최근에 기록.
 // ↑↓ 로 결과 이동, Enter 선택(없으면 첫 결과), Esc 는 입력 지우기→닫기.
+// variant: 'panel'(데스크톱 좌패널 — 열리면 패널 본문 자리를 차지) / 'bar'(모바일 상단바 subBar —
+// 입력 한 줄만 차지하고 결과는 아래로 떨어지는 드롭다운, 바깥 탭으로 닫힘).
 
 export type LifeGoToKind = 'saved' | 'recent' | 'sido' | 'region' | 'subway' | 'bus' | 'place' | 'road' | 'parcel';
 export interface LifeGoToTarget {
@@ -58,10 +60,24 @@ interface Props {
   savedLocation: { lat: number; lng: number; label: string | null } | null;
   onGo: (target: LifeGoToTarget) => void;
   className?: string;
+  variant?: 'panel' | 'bar';
 }
 
-export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className }: Props) => {
+export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className, variant = 'panel' }: Props) => {
   const [q, setQ] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const isBar = variant === 'bar';
+
+  // bar: 드롭다운 바깥을 탭하면 닫는다(헤더가 backdrop-filter 라 fixed 백드롭은 헤더 안에 갇혀
+  // 못 쓰고, 문서 레벨 리스너로 처리).
+  useEffect(() => {
+    if (!isBar || !open) return;
+    const onDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onOpenChange(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [isBar, open, onOpenChange]);
   const [sido, setSido] = useState<WeatherSido | null>(null);
   const [active, setActive] = useState(0);
   const recent = useLifeMapRecentStore((s) => s.items);
@@ -152,7 +168,10 @@ export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className
   let flatIndex = -1;
 
   return (
-    <div className={cn('flex min-h-0 flex-col border-b', open && 'flex-1', className)}>
+    <div
+      ref={rootRef}
+      className={cn(isBar ? 'relative' : 'flex min-h-0 flex-col border-b', !isBar && open && 'flex-1', className)}
+    >
       <div className="flex items-center gap-1.5 px-3 py-2">
         <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <input
@@ -188,7 +207,15 @@ export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className
       </div>
 
       {open && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" data-testid="life-goto-results">
+        <div
+          className={cn(
+            'px-2 pb-2',
+            isBar
+              ? 'absolute inset-x-0 top-full z-50 max-h-[60dvh] overflow-y-auto border-y bg-background shadow-lg'
+              : 'min-h-0 flex-1 overflow-y-auto',
+          )}
+          data-testid="life-goto-results"
+        >
           {typing ? (
             sections.length === 0 ? (
               <p className="px-1 py-6 text-center text-sm text-muted-foreground">

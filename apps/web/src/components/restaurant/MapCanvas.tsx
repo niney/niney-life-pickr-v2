@@ -16,6 +16,7 @@ import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import LineString from 'ol/geom/LineString';
 import { fromLonLat, toLonLat } from 'ol/proj';
+import type { Coordinate } from 'ol/coordinate';
 import { Style, Icon, Text as OlText, Fill, Stroke } from 'ol/style';
 import { unByKey } from 'ol/Observable';
 import type { EventsKey } from 'ol/events';
@@ -146,10 +147,12 @@ export interface MapViewport {
 export interface MapCanvasHandle {
   // 외부에서 특정 좌표로 부드럽게 이동. 다중 마커 페이지에서 카드 클릭 시
   // 해당 마커로 fly-to 할 때 사용.
-  flyTo(lat: number, lng: number, zoom?: number): void;
+  // opts.bottomInset: 아래쪽을 덮는 높이(px, 모바일 바텀시트) — 그만큼 중심을 남쪽으로 밀어 지점이
+  // 보이는 영역의 세로 가운데에 오게 한다.
+  flyTo(lat: number, lng: number, zoom?: number, opts?: { bottomInset?: number }): void;
   // flyTo 와 같지만 최소 minZoom 까지 확대 — 이미 더 확대돼 있으면 줌은 유지하고
   // 중심만 옮긴다. 카드 더블클릭 "확대" 에 사용 (줌아웃은 하지 않음).
-  flyToZoomIn(lat: number, lng: number, minZoom: number): void;
+  flyToZoomIn(lat: number, lng: number, minZoom: number, opts?: { bottomInset?: number }): void;
   // bbox 에 모든 마커가 들어오게 fit. ol fit duration 짧게.
   fitToMarkers(padding?: number): void;
   // 임의 좌표 집합의 bbox 에 맞춰 fit — 마커가 아닌 경로(길찾기 폴리라인) 전체가
@@ -218,6 +221,19 @@ interface Props {
 }
 
 const DEFAULT_ZOOM = 15;
+
+// 아래쪽 inset(px — 예: 바텀시트가 덮는 높이)만큼 지도 중심을 남쪽으로 밀어, 목표 지점이 "보이는
+// 영역" 의 세로 가운데에 오게 한다. inset 이 없으면 그대로. (지도 중심 = 뷰포트 중심이라 inset/2 만큼.)
+const centerWithBottomInset = (
+  view: OlView,
+  center: Coordinate,
+  zoom: number,
+  bottomInset?: number,
+): Coordinate => {
+  if (!bottomInset || bottomInset <= 0) return center;
+  const res = view.getResolutionForZoom(zoom);
+  return [center[0]!, center[1]! - (bottomInset / 2) * res];
+};
 
 // 노선 폴리라인 색 — 실선 hex(#rrggbb)를 살짝 투명한 rgba 로. 반투명이라 아래
 // 도로/지명이 비쳐 노선이 지도를 뭉개지 않는다. busRouteTypeColor 는 항상 6자리
@@ -1004,28 +1020,30 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   useImperativeHandle(
     ref,
     () => ({
-      flyTo(lat, lng, zoom) {
+      flyTo(lat, lng, zoom, opts) {
         const map = mapRef.current;
         if (!map) return;
         const v = map.getView();
         // 외부 호출은 사용자 인터랙션이 아니라고 가정 — onViewportChangeEnd
         // 발사 안 함 (userInteractedRef false 유지).
         userInteractedRef.current = false;
+        const targetZoom = zoom ?? v.getZoom() ?? DEFAULT_ZOOM;
         v.animate({
-          center: fromLonLat([lng, lat]),
-          zoom: zoom ?? v.getZoom() ?? DEFAULT_ZOOM,
+          center: centerWithBottomInset(v, fromLonLat([lng, lat]), targetZoom, opts?.bottomInset),
+          zoom: targetZoom,
           duration: 350,
         });
       },
-      flyToZoomIn(lat, lng, minZoom) {
+      flyToZoomIn(lat, lng, minZoom, opts) {
         const map = mapRef.current;
         if (!map) return;
         const v = map.getView();
         userInteractedRef.current = false;
+        // 줌아웃 방지 — 현재 줌이 minZoom 보다 크면 그대로 둔다.
+        const targetZoom = Math.max(minZoom, v.getZoom() ?? minZoom);
         v.animate({
-          center: fromLonLat([lng, lat]),
-          // 줌아웃 방지 — 현재 줌이 minZoom 보다 크면 그대로 둔다.
-          zoom: Math.max(minZoom, v.getZoom() ?? minZoom),
+          center: centerWithBottomInset(v, fromLonLat([lng, lat]), targetZoom, opts?.bottomInset),
+          zoom: targetZoom,
           duration: 350,
         });
       },

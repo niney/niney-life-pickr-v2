@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SubwayStationGroupItemType } from '@repo/api-contract';
 import {
@@ -41,6 +41,8 @@ import {
 import { SubwayStationsMap } from '~/components/subway/SubwayStationsMap';
 import { SubwayTimetable } from '~/components/subway/SubwayTimetable';
 import type { MapMarker } from '~/components/restaurant/MapCanvas';
+import { BottomSheet } from '~/components/sheet/BottomSheet';
+import { SHEET_PEEK_HEIGHT, useMapSheets } from '~/components/sheet/useMapSheets';
 import { useTransitCrossShowStore } from '~/stores/transitCrossShowStore';
 
 
@@ -91,6 +93,13 @@ export const SubwayPage = () => {
   const near = parseLatLngParam(searchParams.get('near'));
   const nearMode = near !== null;
 
+  // 모바일 시트 스냅 조율 — 역(stn)이 잡히면 목록 시트 peek·숨김, 도착/시간표/길찾기 패널을 상세
+  // 시트 half 로. 검색어/주변 모드로 진입(딥링크)했으면 목록 시트를 half 로 시작.
+  // (React Compiler 메모 검증 때문에 useState 선언들보다 앞에 둔다 — 뒤에 두면 setter 들을 반응값으로 본다.)
+  const { listSnap, setListSnap, detailSnap, setDetailSnap, listHidden } = useMapSheets(stn !== null, {
+    initialListSnap: qInput.trim().length >= 1 || nearMode ? 'half' : 'peek',
+  });
+
   // Geolocation 실패 안내(권한 거부/타임아웃/미지원/비보안) — 좌표를 못 얻으면 URL 을
   // 바꾸지 않으므로 이 로컬 상태로만 리스트 영역에 노출한다.
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -101,9 +110,9 @@ export const SubwayPage = () => {
   const [autoNear, setAutoNear] = useState<{ lat: number; lng: number } | null>(null);
   const effectiveNear = nearMode ? (autoNear ?? near) : null;
 
-  // 통합 헤더 실측 높이 — 루트 높이를 viewport 잔여분으로 고정해 지도/리스트가
-  // 내부 스크롤로만 동작하게 한다.
-  const { headerHeight } = usePublicLayout();
+  // 통합 헤더 실측 높이 — 데스크톱은 루트 높이를 viewport 잔여분으로 고정해 지도/리스트가
+  // 내부 스크롤로만 동작하게 하고, 모바일은 시트의 topOffset·지도 fixed top 으로.
+  const { setSubBar, headerHeight } = usePublicLayout();
 
   // 즐겨찾기 — 게스트/로그인 하이브리드. 로그인 직후 게스트 저장분을 서버로 1회
   // 병합하는 부수효과도 이 훅이 담당(SubwayPage 에서 단 한 번만 호출).
@@ -303,8 +312,9 @@ export const SubwayPage = () => {
         },
         { replace: true },
       );
+      if (next.trim()) setListSnap((s) => (s === 'peek' ? 'half' : s));
     },
-    [setSearchParams],
+    [setSearchParams, setListSnap],
   );
 
   // Enter/검색 버튼 — 현재 검색어를 확정해 버스 크로스 조회를 발화한다(라이브 역
@@ -453,6 +463,7 @@ export const SubwayPage = () => {
           },
           { replace: true },
         );
+        setListSnap((s) => (s === 'peek' ? 'half' : s));
       },
       (err) => {
         // 코드별 안내 — 권한 거부(1)/위치 불가(2)/타임아웃(3).
@@ -466,7 +477,7 @@ export const SubwayPage = () => {
       },
       { enableHighAccuracy: false, timeout: 10_000 },
     );
-  }, [setSearchParams]);
+  }, [setSearchParams, setListSnap]);
 
   // '이 위치에서 재검색' — 지도 중심 좌표로 near 를 교체(명시 액션). 이전 선택(stn)은
   // 새 영역과 무관해 함께 해제. 자동 조회 좌표(autoNear)는 리셋.
@@ -486,8 +497,9 @@ export const SubwayPage = () => {
         },
         { replace: true },
       );
+      setListSnap((s) => (s === 'peek' ? 'half' : s));
     },
-    [setSearchParams],
+    [setSearchParams, setListSnap],
   );
 
   // 지도 자동 재조회 — 줌이 가까운 상태의 패닝 종료 시 지도에서 호출. URL 은 건드리지
@@ -775,9 +787,45 @@ export const SubwayPage = () => {
       arrivalPanel
     );
 
+  // ── 모바일 상단바 subBar — 탭 + 검색행(정류장 선택 중엔 검색행을 접어 공간 회수). xl+ 는 CSS 로
+  // 숨겨 데스크톱 레이아웃엔 영향 없음(헤더 높이도 subBar 가 display:none 이라 그대로). ──
+  const subBarContent = useMemo(
+    () => (
+      <div className="xl:hidden">
+        <TransitTabs active="subway" />
+        {!(stn !== null) && (
+          <SubwayStationSearchBar
+            q={qInput}
+            nearMode={nearMode}
+            total={activeTotal}
+            fetchedAt={activeFetchedAt}
+            truncated={truncated}
+            onChangeQ={handleChangeQ}
+            onSubmit={handleSubmitQ}
+            onNearby={handleNearby}
+            onClearNear={handleClearNear}
+          />
+        )}
+      </div>
+    ),
+    [stn, qInput, nearMode, activeTotal, activeFetchedAt, truncated, handleChangeQ, handleSubmitQ, handleNearby, handleClearNear],
+  );
+  useLayoutEffect(() => {
+    setSubBar(subBarContent);
+    return () => setSubBar(null);
+  }, [setSubBar, subBarContent]);
+
   return (
-    <div className="flex w-full flex-col" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
-      <TransitTabs active="subway" />
+    <div
+      // 데스크톱(xl+)만 viewport 잔여 높이로 고정(내부 스크롤). 모바일은 auto — 시트가 full 로 펼쳐질 때
+      // body 스크롤(주소창 minify)이 동작해야 해서 루트 높이를 묶지 않는다.
+      className="flex w-full flex-col xl:h-[calc(100dvh-var(--header-h))]"
+      style={{ '--header-h': `${headerHeight}px` } as React.CSSProperties}
+    >
+      {/* 대중교통 서브탭 — 데스크톱은 여기, 모바일은 상단바 subBar 안에 같은 탭. */}
+      <div className="hidden xl:block">
+        <TransitTabs active="subway" />
+      </div>
       <div className="min-h-0 flex-1">
         {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             데스크톱 (xl+) — 좌 검색 패널(400px) + 우 지도.
@@ -816,71 +864,81 @@ export const SubwayPage = () => {
         </div>
 
         {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            모바일 (xl 미만) — 검색바 고정 / 지도 / 리스트 세로 적층.
-            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        <div className="flex h-full flex-col xl:hidden">
-          <div className="border-b">
-            <SubwayStationSearchBar
-              q={qInput}
-              nearMode={nearMode}
-              total={activeTotal}
-              fetchedAt={activeFetchedAt}
-              truncated={truncated}
-              onChangeQ={handleChangeQ}
-              onSubmit={handleSubmitQ}
-              onNearby={handleNearby}
-              onClearNear={handleClearNear}
-            />
-          </div>
-          <div className="relative min-h-[40dvh] flex-1">
-            <SubwayStationsMap
-              // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
-              poolKey="transit-mobile"
-              overlayMarkers={overlayMarkers}
-              onOverlaySelect={handleOverlaySelect}
-              crossToggleVisible={crossToggleVisible}
-              groups={mapGroups}
-              selectedId={stn}
-              onSelect={handleSelect}
-              myLocation={effectiveNear}
-              onResearchAt={nearMode ? handleResearchAt : undefined}
-              onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
-              suppressFit={autoNear !== null || line !== null}
-              loading={nearMode && nearby.isFetching}
-              lineDetail={line ? (lineDetail.data ?? null) : null}
-              lineColor={lineColor}
-              onSelectStop={handleSelectStop}
-              onCloseLine={handleCloseLine}
-              positions={trainItems}
-              pendingFollow={pendingFollow}
-              pathResult={pathForMap}
-            />
-          </div>
-          {/* 역 선택 시 하단 영역이 도착정보(→시간표) 뷰로 전환 — 패널은 내부
-              스크롤이라 컨테이너는 flex 로만 감싼다. */}
-          {panelContent ? (
-            <div className="flex h-[38dvh] flex-col border-t">{panelContent}</div>
-          ) : (
-            <div className="h-[38dvh] overflow-y-auto border-t p-3">
-              <SubwayStationListBody
-                q={qInput}
-                items={activeItems}
-                nearMode={nearMode}
-                geoError={geoError}
-                isLoading={activeLoading}
-                isError={activeError}
-                selectedId={stn}
-                selectedMissing={selectedMissing}
-                onSelect={handleSelect}
-                onRetry={handleRetry}
-                isStationFavorite={favorites.isStationFavorite}
-                onToggleStationFavorite={favorites.toggleStation}
-                favoritesContent={favoritesSection}
-                crossSearchContent={crossSearchSection}
-              />
-            </div>
-          )}
+          모바일 (xl 미만) — 맛집 v2 와 같은 시트 패턴. 탭·검색행은 상단바 subBar(통합 sticky 헤더,
+          위 subBarContent)로 올리고, 지도는 그 아래 fixed 배경, 목록은 3-snap 바텀시트, stn 가 잡히면
+          패널을 상세 시트로 얹는다(useMapSheets). 지도 컨트롤은 --map-bottom-inset 으로 peek 시트 위로.
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="xl:hidden">
+        <div
+          className="fixed inset-x-0 bottom-0 z-0"
+          style={{ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties}
+        >
+          <SubwayStationsMap
+            // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
+            poolKey="transit-mobile"
+            overlayMarkers={overlayMarkers}
+            onOverlaySelect={handleOverlaySelect}
+            crossToggleVisible={crossToggleVisible}
+            groups={mapGroups}
+            selectedId={stn}
+            onSelect={handleSelect}
+            myLocation={effectiveNear}
+            onResearchAt={nearMode ? handleResearchAt : undefined}
+            onAutoResearchAt={nearMode ? handleAutoResearchAt : undefined}
+            suppressFit={autoNear !== null || line !== null}
+            loading={nearMode && nearby.isFetching}
+            lineDetail={line ? (lineDetail.data ?? null) : null}
+            lineColor={lineColor}
+            onSelectStop={handleSelectStop}
+            onCloseLine={handleCloseLine}
+            positions={trainItems}
+            pendingFollow={pendingFollow}
+            pathResult={pathForMap}
+          />
         </div>
+        <BottomSheet
+          snap={listSnap}
+          onSnapChange={setListSnap}
+          topOffset={headerHeight}
+          peekHeight={SHEET_PEEK_HEIGHT}
+          hidden={listHidden}
+          disableScrollLock={listHidden}
+          zIndex={20}
+        >
+          <div className="p-3 pb-8" data-testid="subway-list-sheet">
+            <SubwayStationListBody
+              q={qInput}
+              items={activeItems}
+              nearMode={nearMode}
+              geoError={geoError}
+              isLoading={activeLoading}
+              isError={activeError}
+              selectedId={stn}
+              selectedMissing={selectedMissing}
+              onSelect={handleSelect}
+              onRetry={handleRetry}
+              isStationFavorite={favorites.isStationFavorite}
+              onToggleStationFavorite={favorites.toggleStation}
+              favoritesContent={favoritesSection}
+              crossSearchContent={crossSearchSection}
+            />
+          </div>
+        </BottomSheet>
+        {stn !== null && (
+          <BottomSheet
+            key={stn}
+            snap={detailSnap}
+            onSnapChange={setDetailSnap}
+            topOffset={headerHeight}
+            peekHeight={SHEET_PEEK_HEIGHT}
+            zIndex={25}
+          >
+            <div className="pb-8" data-testid="subway-detail-sheet">
+              {panelContent}
+            </div>
+          </BottomSheet>
+        )}
+      </div>
       </div>
     </div>
   );

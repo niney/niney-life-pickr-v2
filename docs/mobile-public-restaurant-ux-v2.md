@@ -132,7 +132,7 @@ BottomSheet 의 `viewKey` prop. 값이 바뀌면:
 | `apps/web/src/components/PublicTopBar.tsx` | subBar slot + ResizeObserver 로 headerHeight 측정 |
 | `apps/web/src/components/PublicLayout.tsx` | subBar/headerHeight state, outlet context, `usePublicLayout()` 훅 |
 | `apps/web/src/components/restaurant/PublicRestaurantList.tsx` | `PublicRestaurantListHeader` / `PublicRestaurantListBody` / `PublicRestaurantList` 세 export — v2 가 헤더만 따로 가져다 쓰기 위한 분리 |
-| `apps/web/src/components/restaurant-v2/BottomSheet.tsx` | dual-mode 시트, 3-snap, viewKey 메모리, snap 자동 동기화 |
+| `apps/web/src/components/sheet/BottomSheet.tsx` | dual-mode 시트, 3-snap, snap 자동 동기화 (2026-08-22 `sheet/` 로 승격 — 대중교통·일상지도와 공용, 목록/상세 스냅 조율은 `sheet/useMapSheets.ts`) |
 | `apps/web/src/routes/RestaurantsV2Page.tsx` | xl+ 3-column + xl- 시트 패턴. subBar 등록/해제. snap 진입/복귀 |
 | `apps/web/src/routes/RestaurantDetailRoute.tsx` | useMatch 로 v2 경로 감지해 닫기 navigate 경로 동적 분기 |
 | `apps/web/src/App.tsx` | `/restaurants-v2` 와 nested `:placeId` 라우트 |

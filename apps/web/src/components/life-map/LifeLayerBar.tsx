@@ -17,6 +17,8 @@ import type { LifeToiletFilterState } from '~/stores/lifeMapPrefsStore';
 
 // 레이어 토글 + 필터 칩 — 패널 상단 고정. CCTV 설치목적은 다중 선택(빈 선택 = 전체), 화장실
 // 편의 조건은 AND. 칩 모양은 맛집 카테고리 칩과 동일(둥근 테두리, 활성 = primary).
+// section 으로 일부만 그릴 수 있다 — 모바일은 레이어 토글을 상단바(subBar)에, 필터 행은 시트
+// 안(주변 목록 머리 아래)에 나눠 둔다. 데스크톱 패널은 'all'.
 
 const FEATURE_LABEL = Object.fromEntries(LIFE_TOILET_FEATURES.map((f) => [f.key, f.label])) as Record<string, string>;
 
@@ -39,6 +41,8 @@ interface Props {
   onTogglePurpose: (purpose: LifeCctvPurpose) => void;
   onClearPurposes: () => void;
   onToggleToiletFilter: (key: LifeToiletFilterKey) => void;
+  section?: 'all' | 'layers' | 'filters';
+  className?: string;
 }
 
 export const LifeLayerBar = ({
@@ -50,13 +54,20 @@ export const LifeLayerBar = ({
   onTogglePurpose,
   onClearPurposes,
   onToggleToiletFilter,
+  section = 'all',
+  className,
 }: Props) => {
   const countOf = (layer: LifeMapLayer): number | null =>
     status?.layers.find((l) => l.layer === layer)?.count ?? null;
+  const showLayers = section !== 'filters';
+  const showFilters = section !== 'layers';
+  // 필터 행만 맡았는데 켜진 레이어가 없으면 빈 띠를 남기지 않는다.
+  if (section === 'filters' && !layers.cctv && !layers.toilet) return null;
 
   return (
-    <div className="flex flex-col gap-2 border-b px-3 py-2">
+    <div className={cn('flex flex-col gap-2 border-b px-3 py-2', className)}>
       {/* 레이어 토글 */}
+      {showLayers && (
       <div className="flex items-center gap-1.5" role="group" aria-label="레이어">
         {(['cctv', 'toilet'] as const).map((layer) => {
           const on = layers[layer];
@@ -85,9 +96,10 @@ export const LifeLayerBar = ({
           );
         })}
       </div>
+      )}
 
       {/* CCTV 설치목적 */}
-      {layers.cctv && (
+      {showFilters && layers.cctv && (
         <div className="flex items-start gap-2" data-testid="life-purpose-filters">
           <span className="mt-1 shrink-0 text-[11px] text-muted-foreground">설치목적</span>
           <div className="-mr-3 flex gap-1.5 overflow-x-auto whitespace-nowrap pr-3 [scrollbar-width:none] xl:flex-wrap xl:overflow-visible">
@@ -112,7 +124,7 @@ export const LifeLayerBar = ({
       )}
 
       {/* 화장실 편의 조건 */}
-      {layers.toilet && (
+      {showFilters && layers.toilet && (
         <div className="flex items-start gap-2" data-testid="life-toilet-filters">
           <span className="mt-1 shrink-0 text-[11px] text-muted-foreground">화장실</span>
           <div className="-mr-3 flex gap-1.5 overflow-x-auto whitespace-nowrap pr-3 [scrollbar-width:none] xl:flex-wrap xl:overflow-visible">

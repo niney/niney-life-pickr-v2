@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -286,5 +286,102 @@ describe('LifeMapPage', () => {
     await waitFor(() => expect(seen.nearby.length).toBeGreaterThan(0));
     expect(seen.nearby[0]!.searchParams.get('lat')).toBe('35.1796');
     expect(seen.nearby[0]!.searchParams.get('lng')).toBe('129.0756');
+  });
+});
+
+// ── 모바일(xl 미만) — 시트 패턴 ────────────────────────────────────────────────────────────────
+// useIsDesktopXl 은 matchMedia 가 없으면 데스크톱으로 보므로, 모바일은 matchMedia 를 목으로 바꿔 렌더한다.
+// 상단바 subBar 는 PublicLayout 흉내(LayoutStub)가 받아 DOM 에 그린다.
+
+const LayoutStub = () => {
+  const [subBar, setSubBar] = useState<React.ReactNode>(null);
+  const ctx = useMemo(() => ({ setSubBar, headerHeight: 148 }), []);
+  return (
+    <>
+      <div data-testid="layout-subbar">{subBar}</div>
+      <Outlet context={ctx} />
+    </>
+  );
+};
+
+const renderMobile = (initialUrl = '/life-map') => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialUrl]}>
+        <LocationProbe />
+        <Routes>
+          <Route element={<LayoutStub />}>
+            <Route path="/life-map" element={<LifeMapPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+};
+
+describe('LifeMapPage (모바일 시트)', () => {
+  const originalMatchMedia = window.matchMedia;
+  beforeEach(() => {
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('상단바 subBar 에 지역 이동 + 레이어 토글, 목록 시트(핸들)에 주변 목록·필터 행·푸터', async () => {
+    renderMobile();
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    const subbar = screen.getByTestId('layout-subbar');
+    expect(within(subbar).getByTestId('life-goto-input')).toBeInTheDocument();
+    expect(within(subbar).getByRole('button', { name: /^CCTV/ })).toHaveAttribute('aria-pressed', 'true');
+    // 필터 행은 헤더가 아니라 시트 안(목록 머리 행 아래).
+    expect(within(subbar).queryByTestId('life-purpose-filters')).toBeNull();
+
+    expect(document.querySelector('[data-sheet-handle]')).not.toBeNull();
+    const sheet = screen.getByTestId('life-list-sheet');
+    expect(within(sheet).getByTestId('life-purpose-filters')).toBeInTheDocument();
+    expect(within(sheet).getByTestId('life-toilet-filters')).toBeInTheDocument();
+    const list = within(sheet).getByTestId('life-nearby-list');
+    await waitFor(() => expect(within(list).getByText('시청 화장실')).toBeInTheDocument());
+    await waitFor(() => expect(within(sheet).getByTestId('life-map-footer')).toHaveTextContent('CCTV 377,243개'));
+    // 상세 시트는 선택 전엔 없다.
+    expect(screen.queryByTestId('life-detail-sheet')).toBeNull();
+  });
+
+  it('행 클릭 → 상세 시트가 따로 뜨고(목록 시트는 남아 있음) ← 목록 으로 닫힌다', async () => {
+    renderMobile();
+    const list = screen.getByTestId('life-nearby-list');
+    fireEvent.click(await within(list).findByText('시청 화장실'));
+    const detailSheet = await screen.findByTestId('life-detail-sheet');
+    const detail = await within(detailSheet).findByTestId('life-detail');
+    expect(within(detail).getByRole('heading', { name: '시청 화장실' })).toBeInTheDocument();
+    expect(screen.getByTestId('life-list-sheet')).toBeInTheDocument();
+    expect(screen.getByTestId('location-search').textContent).toContain('sel=toilet%3AT1');
+    fireEvent.click(within(detail).getByRole('button', { name: /목록/ }));
+    await waitFor(() => expect(screen.queryByTestId('life-detail-sheet')).toBeNull());
+    expect(screen.getByTestId('life-nearby-list')).toBeInTheDocument();
+  });
+
+  it('지역 이동 드롭다운이 열려도 주변 목록 시트는 그대로, 선택하면 닫히고 URL ll/z 갱신', async () => {
+    renderMobile();
+    const input = screen.getByTestId('life-goto-input');
+    fireEvent.focus(input);
+    await screen.findByTestId('life-goto-chips');
+    expect(screen.getByTestId('life-nearby-list')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '강남' } });
+    const results = screen.getByTestId('life-goto-results');
+    fireEvent.click(await within(results).findByRole('option', { name: /서울 강남구/ }));
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).toContain('z=14'));
+    expect(screen.queryByTestId('life-goto-results')).toBeNull();
   });
 });

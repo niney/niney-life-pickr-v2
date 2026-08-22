@@ -547,7 +547,7 @@ export const BusStationsMap = ({
       {/* 따라가기 상태 — 하단 중앙(상단 loading·재검색 슬롯과 분리). 추적 중엔
           안내 배지 + 종료(X), 조작으로 끊기면 '다시 따라가기' 칩. */}
       {following && !followPaused && (
-        <div className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md">
+        <div className="absolute bottom-[calc(0.75rem+var(--map-bottom-inset,0px))] left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md">
           <Navigation className="size-3.5 text-primary" />
           {vehicleLabel ? `${vehicleLabel}번 따라가는 중` : '버스 따라가는 중'}
           <button
@@ -564,7 +564,7 @@ export const BusStationsMap = ({
         <button
           type="button"
           onClick={handleResumeFollow}
-          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md hover:bg-accent"
+          className="absolute bottom-[calc(0.75rem+var(--map-bottom-inset,0px))] left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md hover:bg-accent"
         >
           <Navigation className="size-3.5" />
           다시 따라가기

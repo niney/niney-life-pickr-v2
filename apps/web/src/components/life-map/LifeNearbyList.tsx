@@ -14,6 +14,8 @@ import { openLabel } from './lifeMapFormat';
 
 // 지도 중심 기준 주변 목록 — 화장실/CCTV 탭. 행 클릭 = 선택(URL sel) + 지도 이동.
 // 화장실 행은 이름·구분·개방시간·편의 배지, CCTV 행은 목적·관리기관·대수·방면.
+// filters 슬롯: 머리 행(탭·반경·건수) 바로 아래 — 모바일 시트에선 peek 에 머리 행만 보이고
+// half 부터 필터 칩 행이 따라오도록 여기 끼운다.
 
 interface Props {
   tab: LifeMapLayer;
@@ -24,9 +26,10 @@ interface Props {
   radiusM: number;
   selectedId: string | null;
   onSelect: (item: LifeMapNearbyItemType) => void;
+  filters?: React.ReactNode;
 }
 
-export const LifeNearbyList = ({ tab, layers, onTab, data, isLoading, radiusM, selectedId, onSelect }: Props) => {
+export const LifeNearbyList = ({ tab, layers, onTab, data, isLoading, radiusM, selectedId, onSelect, filters }: Props) => {
   const layerOn = layers[tab];
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -52,6 +55,7 @@ export const LifeNearbyList = ({ tab, layers, onTab, data, isLoading, radiusM, s
           지도 중심 {formatDistanceM(radiusM)} 안{data ? ` · ${data.total.toLocaleString('ko-KR')}곳` : ''}
         </span>
       </div>
+      {filters}
 
       <div className="min-h-0 flex-1 overflow-y-auto" data-testid="life-nearby-list">
         {!layerOn ? (
