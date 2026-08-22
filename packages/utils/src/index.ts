@@ -23,3 +23,4 @@ export * from './dateLabel.js';
 export * from './weatherRegions.js';
 export * from './lifeMap.js';
 export * from './lifeMapMarker.js';
+export * from './foodTaxonomy.js';

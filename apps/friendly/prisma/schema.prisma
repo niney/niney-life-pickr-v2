@@ -1455,3 +1455,93 @@ model LifeMasterSync {
   @@index([layer, loadedAt])
   @@map("life_master_syncs")
 }
+
+// ── 음식 카탈로그(food) — 식단 관리(meal) 마스터 데이터. docs/PLAN-meal.md ──────────────
+// 행 식별 키는 nameNorm(normalizeTerm) — 출처가 달라도 같은 이름이면 한 행(적재가 병합:
+// 비어 있는 필드 채움 + 별칭·sourceRefs 추가 + popularity 누적). 사용자 식단 기록(MealItem)은
+// 이 행을 FK 없이 스냅샷(foodId 문자열)으로 가리킨다 — 재적재·삭제에 안전.
+model FoodItem {
+  id              String   @id @default(cuid())
+  name            String
+  // normalizeTerm(name) — 매칭/중복 키.
+  nameNorm        String   @unique
+  // 대표식품명(표준데이터 foodLv4Nm) — 변형 축약 키.
+  repName         String?
+  // 별칭 표시 문자열 JSON 배열 / 별칭 정규화(normalizeTerm) JSON 배열(LIKE 검색용).
+  aliasesJson     String   @default("[]")
+  aliasNormsJson  String   @default("[]")
+  // 2축 분류 + 요리 계통 — 값 집합은 @repo/api-contract FoodDishType/FoodMainIngredient/FoodCuisine.
+  dishType        String?
+  mainIngredient  String?
+  cuisine         String?
+  // 주요 재료 JSON 배열(레시피 DB). 없으면 null.
+  ingredientsJson String?
+  // 1인분 중량(g/ml) + 1인분 영양(표준데이터 100g 기준 × servingG/100 으로 환산).
+  servingG        Float?
+  kcal            Float?
+  carbG           Float?
+  proteinG        Float?
+  fatG            Float?
+  sodiumMg        Float?
+  sugarG          Float?
+  // 대표 출처('mfds-nutrition'|'mfds-recipe'|'mafra-recipe'|'hansik-800'|'menu-canonical'|'manual') + 그 id.
+  source          String
+  sourceId        String?
+  // 원본 분류명(식품대분류 / RCP_PAT2 / 800선 카테고리 / categoryPath).
+  sourceCategory  String?
+  // 병합된 다른 출처 참조 JSON 배열 [{source, sourceId}].
+  sourceRefsJson  String   @default("[]")
+  // 외식 등장 식당 수 등 — 후보 풀·자동완성 가중.
+  popularity      Int      @default(0)
+  active          Boolean  @default(true)
+  // LLM 2축 분류 버전/모델(매핑 테이블로만 채운 행은 null).
+  classifyVersion Int?
+  classifyModel   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([source, sourceId])
+  @@index([dishType, mainIngredient])
+  @@index([active, popularity])
+  @@map("food_items")
+}
+
+// 적재 잡 설정 — random-crawl 과 같은 "jobType 1행" 모델. cron 기본은 매월 1일 04:00
+// (표준데이터가 매월 초 병합 갱신).
+model FoodImportConfig {
+  id          String    @id @default(cuid())
+  // 'food-import' 고정.
+  jobType     String    @unique
+  enabled     Boolean   @default(false)
+  cronExpr    String    @default("0 4 1 * *")
+  timezone    String    @default("Asia/Seoul")
+  // FoodImportSource[] 직렬화 JSON.
+  sourcesJson String    @default("[\"mfds-nutrition\",\"mfds-recipe\",\"mafra-recipe\",\"menu-canonical\"]")
+  // 적재 후 미분류 행 LLM 2축 분류 수행 여부.
+  classify    Boolean   @default(true)
+  lastRunAt   DateTime?
+  lastStatus  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("food_import_configs")
+}
+
+model FoodImportRun {
+  id              String    @id @default(cuid())
+  // 'cron' | 'manual'
+  trigger         String
+  // running|done|failed|skipped|interrupted
+  status          String
+  // 이번 회차 소스 목록 JSON / 소스별 집계(FoodImportSourceStat[]) JSON.
+  sourcesJson     String    @default("[]")
+  statsJson       String    @default("[]")
+  classifiedCount Int       @default(0)
+  error           String?
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("food_import_runs")
+}

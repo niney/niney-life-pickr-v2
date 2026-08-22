@@ -273,6 +273,30 @@ export const RandomCrawl = {
   regionDongs: `${API_PREFIX}/admin/random-crawl/regions/dongs`,
 } as const;
 
+// 음식 카탈로그(food) — 식단 관리(meal)의 마스터 데이터. 사용자 표면은 자동완성 검색
+// 하나(인증 사용자, 레이트리밋), 나머지는 어드민(카탈로그 편집 + 적재 잡). 적재 잡은
+// random-crawl 과 같은 "설정 + 지금 실행 + 이력 + SSE" 골격(별도 모듈·별도 레지스트리).
+export const Food = {
+  // 자동완성 — ?q=(1~40자)[&limit≤20]. 인증 사용자.
+  search: `${API_PREFIX}/food/search`,
+  // 카탈로그 목록(필터·정렬·페이지) / 수기 등록(POST).
+  adminItems: `${API_PREFIX}/admin/food/items`,
+  // 단건 편집(PATCH).
+  adminItem: (id: string) => `${API_PREFIX}/admin/food/items/${id}`,
+  // 집계(총/활성/분류됨/출처별/조리형태별).
+  adminStats: `${API_PREFIX}/admin/food/stats`,
+  // 적재 잡 설정 조회/변경 — GET/PUT.
+  importConfig: `${API_PREFIX}/admin/food/import`,
+  // 지금 실행(manual) — body 로 이번 회차 소스/분류 여부 오버라이드 가능.
+  importRun: `${API_PREFIX}/admin/food/import/run`,
+  // 실행 이력 + 진행 중 run id.
+  importRuns: `${API_PREFIX}/admin/food/import/runs`,
+  // 진행 SSE(EventSource — 인증은 ?token=).
+  importRunEvents: `${API_PREFIX}/admin/food/import/run-events`,
+  // cron 식 검증 + 다음 실행 시각 미리보기.
+  importPreview: `${API_PREFIX}/admin/food/import/preview`,
+} as const;
+
 // provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며
 // 같은 provider 에 'image' 등 다른 용도를 따로 등록할 수 있다.
 export const Ai = {
