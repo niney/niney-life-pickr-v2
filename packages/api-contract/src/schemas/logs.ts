@@ -18,6 +18,8 @@ export const OperationFeature = z.enum([
   'diningcode-bulk-save',
   'random-crawl',
   'food-import',
+  'meal-recognition',
+  'meal-recommendation',
 ]);
 export type OperationFeatureType = z.infer<typeof OperationFeature>;
 

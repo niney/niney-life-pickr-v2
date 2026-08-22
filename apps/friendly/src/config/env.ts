@@ -100,6 +100,11 @@ const EnvSchema = z.object({
   FOOD_RECIPE_API_KEY: z.string().default(''),
   MAFRA_API_KEY: z.string().default(''),
 
+  // 식단 관리 per-user 일일 LLM 호출 한도(인메모리 카운터, Asia/Seoul 기준). 0 이면 무제한.
+  // 사용자 트리거 호출이라 계정 동시성 게이트만으론 비용이 안 막힌다.
+  MEAL_RECOGNIZE_DAILY_LIMIT: z.coerce.number().int().min(0).default(30),
+  MEAL_RECOMMEND_DAILY_LIMIT: z.coerce.number().int().min(0).default(20),
+
   // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치
   // (apps/web/dist/index.html) 를 빌드 산출물 기준 상대경로로 탐색.

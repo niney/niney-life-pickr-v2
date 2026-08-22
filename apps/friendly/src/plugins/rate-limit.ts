@@ -48,6 +48,13 @@ export const RATE = {
   // 음식 카탈로그 자동완성(식단 입력) — 로컬 DB 조회라 싸지만 인증 사용자 타이핑 디바운스 호출.
   // 음식 여러 개를 연달아 입력하는 흐름을 고려해 분당 120.
   foodSearch: { max: 120, timeWindow: '1 minute' },
+  // 식단 사진 업로드 — 장당 1요청 순차 업로드(최대 5장) + 재시도 여유. 분당 30.
+  mealPhotoUpload: { max: 30, timeWindow: '1 minute' },
+  // 식단 사진 인식 — 비전 LLM 1콜/요청. 일일 한도(MEAL_RECOGNIZE_DAILY_LIMIT)가 진짜 비용
+  // 방어선이고 이건 연타 억제용. 분당 10.
+  mealRecognize: { max: 10, timeWindow: '1 minute' },
+  // 식단 추천 — 텍스트 LLM 1콜/요청(캐시 히트는 0콜). 분당 10.
+  mealRecommend: { max: 10, timeWindow: '1 minute' },
 } as const;
 
 export default fp(async (app) => {

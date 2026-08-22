@@ -30,6 +30,8 @@ export const FEATURE_LABEL: Record<OperationFeatureType, string> = {
   'diningcode-bulk-save': '다이닝코드 일괄 저장',
   'random-crawl': '맛집 자동 발굴',
   'food-import': '음식 카탈로그 적재',
+  'meal-recognition': '식단 사진 인식',
+  'meal-recommendation': '식단 추천',
 };
 
 const STATUS_LABEL: Record<OperationRunStatusType, string> = {

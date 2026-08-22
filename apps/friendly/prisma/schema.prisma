@@ -34,6 +34,9 @@ model User {
   votes VoteSession[]
 
   airLocation AirUserLocation?
+  mealEntries MealEntry[]
+  mealPreference MealPreference?
+  mealRecommendations MealRecommendation[]
 
   @@map("users")
 }
@@ -1544,4 +1547,130 @@ model FoodImportRun {
   @@index([status])
   @@index([startedAt])
   @@map("food_import_runs")
+}
+
+// ── 식단 관리(meal) — 사용자 개인 기록. docs/PLAN-meal.md ──────────────────────────────
+// 카탈로그(FoodItem)·식당(Restaurant)에 FK 를 걸지 않는다: 카탈로그는 재적재로 갈리고
+// 식당은 재크롤/삭제된다. 필요한 값(foodId·분류·placeId·placeName)은 확정 시점 스냅샷.
+model MealEntry {
+  id              String   @id @default(cuid())
+  userId          String
+  // UTC. 정렬·표시용.
+  eatenAt         DateTime
+  // 'YYYY-MM-DD' 사용자 로컬 날짜 — 달력·통계 그룹 키(시간대 경계 오표시 방지).
+  eatenDate       String
+  // breakfast|lunch|dinner|snack|late_night
+  slot            String
+  // home|dining_out|delivery|convenience|other
+  mealType        String?
+  placeId         String?
+  placeName       String?
+  memo            String?
+  // photo|manual|recommendation
+  source          String   @default("manual")
+  // 인식 원본 JSON {model, version, dishes[]} — 확정 후에도 보존(품질 측정).
+  recognitionJson String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  MealItem[]
+  photos MealPhoto[]
+
+  @@index([userId, eatenAt])
+  @@index([userId, eatenDate])
+  @@map("meal_entries")
+}
+
+model MealItem {
+  id             String  @id @default(cuid())
+  entryId        String
+  name           String
+  // normalizeTerm(name) — 빈도·겹침 통계의 그룹 키(카탈로그 매칭 실패해도 묶인다).
+  nameNorm       String
+  // FoodItem.id 스냅샷(FK 아님).
+  foodId         String?
+  dishType       String?
+  mainIngredient String?
+  cuisine        String?
+  // small|normal|large
+  portion        String?
+  // false = 반찬·곁들임.
+  isMain         Boolean @default(true)
+  confidence     Float?
+  // recognized|manual|catalog|recommendation
+  source         String  @default("manual")
+  sortOrder      Int     @default(0)
+
+  entry MealEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@index([nameNorm])
+  @@map("meal_items")
+}
+
+model MealPhoto {
+  id        String   @id @default(cuid())
+  // 서버 발급 uuid — data/meal-photos/<userId>/<token>.jpg 와 썸네일 <token>_t.jpg.
+  token     String   @unique
+  entryId   String?
+  // 업로드 직후엔 기록이 없다(확정 전) — 소유 검증·고아 정리를 위해 사용자를 직접 들고 있다.
+  userId    String
+  width     Int?
+  height    Int?
+  byteSize  Int
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  entry MealEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId, sortOrder])
+  @@index([userId, createdAt])
+  @@map("meal_photos")
+}
+
+// 사용자당 1행(AirUserLocation 과 같은 PUT 덮어쓰기 모델).
+model MealPreference {
+  userId            String   @id
+  // MealWeights JSON — 추천 점수 함수의 가중치.
+  weightsJson       String
+  excludedFoodsJson String   @default("[]")
+  likedFoodsJson    String   @default("[]")
+  mealTypesJson     String   @default("[]")
+  slotsJson         String   @default("[\"breakfast\",\"lunch\",\"dinner\"]")
+  onboarded         Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("meal_preferences")
+}
+
+model MealRecommendation {
+  id            String   @id @default(cuid())
+  userId        String
+  targetDate    String
+  targetSlot    String
+  // 요청 컨텍스트 {mealType, note, weather…} JSON.
+  contextJson   String   @default("{}")
+  // LLM 에 준 프로필 스냅샷 JSON — 재현·디버깅용(원시 기록은 넣지 않는다).
+  profileJson   String   @default("{}")
+  // MealRecommendationItem[] JSON.
+  itemsJson     String   @default("[]")
+  summary       String   @default("")
+  notice        String?
+  // done|fallback|failed
+  status        String
+  model         String?
+  promptVersion Int      @default(1)
+  // 같은 날·끼니·프로필이면 캐시 재사용 — 프로필+컨텍스트 해시.
+  profileHash   String   @default("")
+  feedbackJson  String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, targetDate, targetSlot])
+  @@map("meal_recommendations")
 }

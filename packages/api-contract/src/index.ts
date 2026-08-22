@@ -27,6 +27,7 @@ export * from './schemas/air-quality.js';
 export * from './schemas/weather.js';
 export * from './schemas/life-map.js';
 export * from './schemas/food.js';
+export * from './schemas/meal.js';
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';
 export * from './schemas/settlement-contact.js';

@@ -297,6 +297,34 @@ export const Food = {
   importPreview: `${API_PREFIX}/admin/food/import/preview`,
 } as const;
 
+// 식단 관리(meal) — 개인 기록·사진 인식·통계·선호·추천. 전부 로그인 필수(공개 표면 없음).
+// 사진 입력은 앱에서만 하지만 API 는 플랫폼 구분이 없다(웹도 같은 계약으로 조회·추천).
+export const Meal = {
+  // 기록 목록(?from&to&slot&cursor&limit&withPhotos) / 생성.
+  entries: `${API_PREFIX}/meals`,
+  // 단건 조회·수정·삭제.
+  entry: (id: string) => `${API_PREFIX}/meals/${id}`,
+  // 달력 요약(?month=YYYY-MM).
+  calendar: `${API_PREFIX}/meals/calendar`,
+  // 기간 통계(?from&to).
+  stats: `${API_PREFIX}/meals/stats`,
+  // 사진 업로드(multipart, 필드 file) — 서버가 토큰 발급.
+  photos: `${API_PREFIX}/meals/photos`,
+  // 원본/썸네일 조회(JWT 필요 — <img src> 직접 불가) + 삭제.
+  photo: (token: string) => `${API_PREFIX}/meals/photos/${token}`,
+  photoThumb: (token: string) => `${API_PREFIX}/meals/photos/${token}/thumb`,
+  // 사진 → 음식 인식(동기, purpose meal-photo).
+  recognize: `${API_PREFIX}/meals/recognize`,
+  // 선호 설정 조회/저장(사용자당 1행).
+  preference: `${API_PREFIX}/meals/preference`,
+  // 추천 생성(POST) / 최근 목록(GET).
+  recommendations: `${API_PREFIX}/meals/recommendations`,
+  // 추천 화면 진입용 컨텍스트(기록 수·최근 음식·선호·최신 추천).
+  recommendationContext: `${API_PREFIX}/meals/recommendations/context`,
+  // 추천 피드백(👍👎·먹었어요).
+  recommendationFeedback: (id: string) => `${API_PREFIX}/meals/recommendations/${id}/feedback`,
+} as const;
+
 // provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며
 // 같은 provider 에 'image' 등 다른 용도를 따로 등록할 수 있다.
 export const Ai = {
