@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type { AirHistoryPointType } from '@repo/api-contract';
@@ -14,8 +15,13 @@ interface Props {
 
 const ROWS: Array<Exclude<AirPollutant, 'khai' | 'no2' | 'co' | 'so2'>> = ['pm10', 'pm25', 'o3'];
 
+const CELL_GAP = 2;
+const DAY_BREAK_GAP = 3;
+
 export const AirHourStrip = ({ points, todayYmd }: Props) => {
   const theme = useTheme();
+  // 축 라벨은 칸(≈12px)보다 넓어 플렉스 칸 안에 두면 네이티브에서 말줄임된다 → 칸 행 폭을 재서 절대 배치.
+  const [axisWidth, setAxisWidth] = useState(0);
   if (points.length === 0) return null;
   const n = points.length;
   const labelEvery = n > 30 ? 6 : 3;
@@ -24,6 +30,14 @@ export const AirHourStrip = ({ points, todayYmd }: Props) => {
     const p = points[i]!;
     return i === 0 || (prev !== undefined && prev.time.slice(0, 10) !== p.time.slice(0, 10));
   };
+  const breaksBefore = (i: number): number => {
+    let c = 0;
+    for (let j = 1; j <= i; j++) if (dayStartAt(j)) c++;
+    return c;
+  };
+  const totalBreaks = breaksBefore(n - 1);
+  const cellW = n > 0 ? (axisWidth - CELL_GAP * (n - 1) - DAY_BREAK_GAP * totalBreaks) / n : 0;
+  const cellLeft = (i: number): number => i * (cellW + CELL_GAP) + DAY_BREAK_GAP * breaksBefore(i);
   return (
     <View style={styles.wrap} accessibilityLabel="시간별 등급 띠">
       {ROWS.map((k) => {
@@ -41,7 +55,7 @@ export const AirHourStrip = ({ points, todayYmd }: Props) => {
                     style={[
                       styles.cell,
                       { backgroundColor: grade ? airGradeColor(grade).hex : theme.colors.surfaceAlt },
-                      dayBreak && { marginLeft: 3 },
+                      dayBreak && { marginLeft: DAY_BREAK_GAP },
                     ]}
                   />
                 );
@@ -52,22 +66,30 @@ export const AirHourStrip = ({ points, todayYmd }: Props) => {
       })}
       <View style={styles.row}>
         <Text style={styles.rowHead} />
-        <View style={styles.cells}>
-          {points.map((p, i) => {
-            const dayStart = dayStartAt(i);
-            const show = dayStart || i % labelEvery === 0 || i === n - 1;
-            const m = /^\d{4}-(\d{2})-(\d{2})\s+(\d{1,2}):/.exec(p.time);
-            const label = !show || !m ? '' : dayStart ? `${Number(m[1])}/${Number(m[2])}` : `${Number(m[3])}시`;
-            return (
-              <Text
-                key={p.time}
-                numberOfLines={1}
-                style={[styles.axis, { color: dayStart ? theme.colors.text : theme.colors.textMuted, fontWeight: dayStart ? '600' : '400' }]}
-              >
-                {label}
-              </Text>
-            );
-          })}
+        <View style={styles.axisRow} onLayout={(e) => setAxisWidth(e.nativeEvent.layout.width)}>
+          {axisWidth > 0 &&
+            points.map((p, i) => {
+              const dayStart = dayStartAt(i);
+              const last = i === n - 1;
+              // 정기(3시간) 라벨은 날짜 라벨·마지막(지금) 라벨과 2칸 이내면 생략 — 9px 글자가 겹치지 않게
+              const nearDayStart = [i - 2, i - 1, i + 1, i + 2].some((j) => j > 0 && j < n && dayStartAt(j));
+              const show = dayStart || last || (i % labelEvery === 0 && n - 1 - i >= 2 && !nearDayStart);
+              const m = /^\d{4}-(\d{2})-(\d{2})\s+(\d{1,2}):/.exec(p.time);
+              if (!show || !m) return null;
+              const label = dayStart ? `${Number(m[1])}/${Number(m[2])}` : `${Number(m[3])}시`;
+              return (
+                <Text
+                  key={p.time}
+                  style={[
+                    styles.axis,
+                    last ? { right: 0 } : { left: cellLeft(i) },
+                    { color: dayStart ? theme.colors.text : theme.colors.textMuted, fontWeight: dayStart ? '600' : '400' },
+                  ]}
+                >
+                  {label}
+                </Text>
+              );
+            })}
         </View>
       </View>
       <View style={styles.legend}>
@@ -91,9 +113,10 @@ const styles = StyleSheet.create({
   wrap: { gap: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowHead: { width: 40, fontSize: 11, fontWeight: '600' },
-  cells: { flex: 1, flexDirection: 'row', gap: 2 },
+  cells: { flex: 1, flexDirection: 'row', gap: CELL_GAP },
   cell: { flex: 1, height: 18, borderRadius: 3 },
-  axis: { flex: 1, fontSize: 9, fontVariant: ['tabular-nums'], overflow: 'visible' },
+  axisRow: { flex: 1, height: 14, position: 'relative' },
+  axis: { position: 'absolute', top: 0, fontSize: 9, fontVariant: ['tabular-nums'] },
   legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 2 },
