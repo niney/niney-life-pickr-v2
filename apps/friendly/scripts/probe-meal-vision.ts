@@ -7,7 +7,8 @@
 //   --dir   : 사진 폴더(jpg/png/heic). 하위 폴더는 보지 않는다. 기본값은 AI Hub 추출 평가셋
 //            (data/open/eval/meal-photos — 150클래스 × 2장, 파일명이 곧 정답 라벨).
 //   --models: 비교할 모델(콤마). 미지정이면 meal-photo 용도의 현재 설정 모델 1개.
-//   --limit : 사진 수 상한(기본 5).
+//   --limit : 사진 수 상한(기본 5). 앞에서 자르지 않고 목록 전체에 고르게 퍼뜨려 뽑는다 —
+//            파일명이 클래스순이라 앞에서 자르면 '가~' 클래스만 평가하게 된다.
 //   --label-from-filename: 파일명 앞부분(첫 '_' 앞)을 정답으로 보고 top-1 정확도를 채점한다.
 //            AI Hub 「한국 이미지(음식)」처럼 폴더/파일명이 곧 라벨인 데이터셋에 쓴다.
 // 사진은 서버 저장 규칙과 같게 1600px JPEG 로 정규화해 보낸다(실제 인식과 같은 입력).
@@ -85,7 +86,11 @@ const main = async (): Promise<void> => {
     process.exitCode = 1;
     return;
   }
-  const targets = files.slice(0, LIMIT);
+  // 클래스 편향 방지 — 정렬된 목록에서 균등 간격으로 고른다(같은 --limit 이면 항상 같은 표본).
+  const targets =
+    LIMIT >= files.length
+      ? files
+      : Array.from({ length: LIMIT }, (_, i) => files[Math.floor((i * files.length) / LIMIT)]!);
 
   const prisma = new PrismaClient();
   const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());

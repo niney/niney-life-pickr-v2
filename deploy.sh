@@ -26,11 +26,14 @@ set -euo pipefail
 ROOT="/home/samplepcb/niney-life-pickr-v2"
 WEB_DIST="$ROOT/apps/web/dist"
 
-# 일상지도 원천 CSV 는 git 밖(data/open/ 에 직접 업로드, 파일명은 localdata.go.kr 내려받은 그대로),
-# 화장실 지오코딩 캐시는 저장소 압축본. 경로는 환경변수 LIFE_CCTV_CSV / LIFE_TOILET_CSV 로 덮어쓸 수 있다.
+# 일상지도 원천 CSV 는 git 밖(data/open/ 에 직접 업로드), 화장실 지오코딩 캐시는 저장소 압축본.
+# 정리 규약(data/open/life/*.csv — docs/data-sources.md)을 먼저 보고, 없으면 localdata.go.kr 에서
+# 내려받은 원래 파일명도 찾는다. 이미 서버에 올려둔 파일을 깨지 않기 위한 폴백이다.
+# 경로는 환경변수 LIFE_CCTV_CSV / LIFE_TOILET_CSV 로 덮어쓸 수 있다.
 LIFE_DATA_DIR="${LIFE_DATA_DIR:-$ROOT/data/open}"
-LIFE_CCTV_CSV="${LIFE_CCTV_CSV:-$LIFE_DATA_DIR/CCTV정보.csv}"
-LIFE_TOILET_CSV="${LIFE_TOILET_CSV:-$LIFE_DATA_DIR/공중화장실정보.csv}"
+first_existing() { local p; for p in "$@"; do [[ -f "$p" ]] && { printf '%s' "$p"; return 0; }; done; printf '%s' "$1"; }
+LIFE_CCTV_CSV="${LIFE_CCTV_CSV:-$(first_existing "$LIFE_DATA_DIR/life/cctv.csv" "$LIFE_DATA_DIR/CCTV정보.csv")}"
+LIFE_TOILET_CSV="${LIFE_TOILET_CSV:-$(first_existing "$LIFE_DATA_DIR/life/toilet.csv" "$LIFE_DATA_DIR/공중화장실정보.csv")}"
 LIFE_GEOCODE_GZ="apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz"
 GZ_CHANGED=0   # 이번 pull 로 지오코딩 캐시 압축본이 바뀌었는지 — pull 이 채운다
 

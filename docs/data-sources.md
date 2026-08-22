@@ -20,7 +20,7 @@
 | `food/hansik-800.xlsx` | 한식진흥원 한식메뉴 외국어표기 800선 — data.go.kr **15129784** | 0.5MB | `pnpm --filter friendly load:food-catalog --source=hansik800` | 800행 → **452종**(+348종 별칭 보강) |
 | `life/cctv.csv` | 지방행정인허가데이터개방 전국 CCTV 설치현황 (CP949) | 79MB | `pnpm --filter friendly load:life-cctv data/open/life/cctv.csv` | **377,243행** |
 | `life/toilet.csv` | 지방행정인허가데이터개방 전국 공중화장실 (CP949) | 16MB | `pnpm --filter friendly load:life-toilets data/open/life/toilet.csv` | **53,559행** |
-| `eval/meal-photos/` | AI Hub 「한국 이미지(음식)」에서 **추출**한 평가셋 | 44MB | (적재 안 함 — 모델 평가 전용) | **150클래스 × 2장 = 300장** |
+| `eval/meal-photos/` | AI Hub 「한국 이미지(음식)」에서 **추출**한 평가셋 | 91MB | (적재 안 함 — 모델 평가 전용) | **150클래스 × 5장 = 750장** |
 
 파일이 아닌 **API** 로 받는 것: 식품안전나라 레시피 `COOKRCP01`(1,156건 → 1,101종). 키는
 `.env` 의 `FOOD_RECIPE_API_KEY`. `pnpm --filter friendly load:food-catalog --source=recipe`.
@@ -36,14 +36,20 @@
 pnpm --filter friendly probe:meal-vision -- --limit=30 --label-from-filename --models=qwen3.5:397b,gemma4:31b
 ```
 
-원본 `kfood.zip`(16GB, AI Hub 로그인·승인 필요)에서 클래스당 2장만 뽑은 것이다. 원본은
+`--limit` 은 앞에서 자르지 않고 **목록 전체에 균등 간격**으로 뽑는다(파일명이 클래스순이라
+앞에서 자르면 '가~' 클래스만 평가하게 된다). 같은 `--limit` 이면 표본이 항상 같아 비교가 재현된다.
+사진 1장에 약 4~7초 → 150장이면 모델당 10~15분.
+
+원본 `kfood.zip`(16GB)은 **150클래스 × 약 1,000장 = 150,507장**이다. 같은 접시를 각도·조명만
+바꿔 찍은 연속 컷이 대부분이라 모델 비교에는 클래스당 몇 장이면 충분하다 → 클래스 안에서 고르게
+5장씩만 뽑았다(750장, 0.5%). 재다운로드에 AI Hub 로그인·승인이 필요하므로 추출본은 남긴다. 원본은
 **중첩 zip 이 무압축 저장**이라 전체를 풀지 않고 필요한 멤버만 스트리밍해서 추출할 수 있다.
 재추출이 필요하면(클래스당 장수를 늘리려면) 아래를 쓴다.
 
 ```python
 # python3 extract_eval.py — kfood.zip → data/open/eval/meal-photos/<클래스>_<N>.jpg
 import zipfile, os, re
-SRC, OUT, PER_CLASS = "data/open/한국 음식 이미지/kfood.zip", "data/open/eval/meal-photos", 2
+SRC, OUT, PER_CLASS = "data/open/한국 음식 이미지/kfood.zip", "data/open/eval/meal-photos", 5
 dec = lambda n: n.encode('cp437').decode('cp949', 'replace')   # 원본 파일명이 CP949
 safe = lambda s: re.sub(r'[\\/:*?"<>|\s_]+', '', s)            # 라벨 파서는 첫 '_' 앞을 클래스로 본다
 os.makedirs(OUT, exist_ok=True)
@@ -57,8 +63,10 @@ for oi in z.infolist():                                        # 27개 대분류
             if ii.is_dir() or not n.lower().endswith(('.jpg', '.jpeg', '.png')): continue
             by.setdefault([p for p in n.split('/') if p][-2], []).append(ii)
         for cls, items in by.items():
-            for k, ii in enumerate(sorted(items, key=lambda i: dec(i.filename))[:PER_CLASS]):
-                with inner.open(ii) as src, open(f"{OUT}/{safe(cls)}_{k}.jpg", 'wb') as out:
+            picks = sorted(items, key=lambda i: dec(i.filename))
+            for k in range(PER_CLASS):                             # 앞 N장이 아니라 고르게 — 연속 컷 회피
+                with inner.open(picks[int(k * len(picks) / PER_CLASS)]) as src, \
+                     open(f"{OUT}/{safe(cls)}_{k}.jpg", 'wb') as out:
                     out.write(src.read())
 ```
 
