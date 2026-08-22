@@ -18,6 +18,7 @@ import type {
   OperationLogService,
 } from '../logs/operation-log.service.js';
 import { chunk } from '../../lib/array.js';
+import { thinkOptionForModel } from '@repo/utils';
 import { extractFirstJsonObject } from '../../lib/json.js';
 import { normalizeTerm } from '../../lib/text.js';
 import { buildCategoryTree, type CategoryTreeLeaf } from './category-tree.js';
@@ -759,6 +760,10 @@ export class AnalyticsService {
           temperature: TEMPERATURE,
           maxTokens: MAX_TOKENS,
           numCtx: NUM_CTX,
+          // 사고는 끈다(gpt-oss 는 못 끄니 최저 레벨). 위 주석의 "medium thinking 압박" 이 바로
+          // 이것 — 매핑 JSON 만 받으면 되는데 사고에 출력 토큰과 시간을 쓴다. 실측(2026-08-22)
+          // 으로 청크 처리량이 눈에 띄게 달라진다. 캐시 키는 model+variants 라 기존 캐시는 그대로 쓴다.
+          think: thinkOptionForModel(model),
         });
         const parsed = this.parseMergeResponse(res.text);
         // 성공 응답만 캐시 — 실패 청크는 저장 안 해 다음 머지가 재시도하게 한다.
