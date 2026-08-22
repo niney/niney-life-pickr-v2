@@ -28,6 +28,7 @@ const config: ExpoConfig = {
     // 무료(Personal) Apple 팀은 Associated Domains capability 를 지원하지 않아
     // 프로비저닝 프로파일 생성이 실패한다. 로컬 무료 빌드에선 비우고, EAS/유료
     // 팀 빌드에서만 EXPO_PUBLIC_ENABLE_APPLINKS=1 로 Universal Links 를 켠다.
+    // (Push capability 도 같은 깃발 — plugins/with-personal-team-entitlements 참고)
     // (커스텀 스킴 lifepickr:// 와 웹 fallback 은 깃발과 무관하게 항상 동작)
     ...(process.env.EXPO_PUBLIC_ENABLE_APPLINKS === '1'
       ? { associatedDomains: [`applinks:${WEB_HOST}`] }
@@ -112,6 +113,11 @@ const config: ExpoConfig = {
     // POST_NOTIFICATIONS 권한은 라이브러리 매니페스트가 병합해 주고, 런타임
     // 요청은 알림 토글을 켤 때만 띄운다. 전용 아이콘 에셋이 없어 props 없이
     // 등록 — Android 는 앱 아이콘을 실루엣으로 쓴다(전용 아이콘 생기면 icon 추가).
+    // 무료(Personal) 팀 로컬 빌드용 — expo-notifications 가 넣는 aps-environment(Push capability)를
+    // 뺀다. 앱은 로컬 알림만 쓰므로 영향 없음. EXPO_PUBLIC_ENABLE_APPLINKS=1(EAS/유료 팀)이면 유지.
+    // ※ config-plugins 의 mod 는 나중에 등록된 것이 먼저 실행되고 앞의 것으로 넘어간다 —
+    //    그래서 'expo-notifications' 보다 '앞'에 둬야 notifications 가 넣은 뒤에 지울 수 있다.
+    './plugins/with-personal-team-entitlements',
     'expo-notifications',
     './plugins/with-swift-concurrency-fix',
     './plugins/with-android-minify',
