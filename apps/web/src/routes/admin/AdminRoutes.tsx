@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { AdminAiKeysPage } from './AdminAiKeysPage';
@@ -25,6 +27,19 @@ import { AdminTablingPage } from './AdminTablingPage';
 import { AdminTablingTestPage } from './AdminTablingTestPage';
 import { AdminTelegramPage } from './AdminTelegramPage';
 
+// 음식 카탈로그 — 어드민 청크 안에서 한 번 더 lazy. 적재 잡·카탈로그 표·통계는 이
+// 페이지에서만 쓰는 코드라 다른 어드민 페이지 진입 비용에 얹히지 않게 분리한다.
+const AdminFoodPage = lazy(() =>
+  import('./AdminFoodPage').then((m) => ({ default: m.AdminFoodPage })),
+);
+
+// 어드민 레이아웃(사이드바) 안쪽에서만 도는 청크 폴백 — 본문 영역만 스피너.
+const SectionFallback = () => (
+  <div className="flex min-h-[40vh] items-center justify-center">
+    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+  </div>
+);
+
 // 어드민 서브트리 전체를 한 모듈로 모아 App.tsx 에서 React.lazy 로 1회만 import
 // 하기 위한 컴포넌트. 어드민 16개 페이지 + OpenLayers(지도) 코드가 메인 번들에서
 // 빠져, 공개 진입(익명 사용자)이 받는 첫 청크가 대폭 작아진다.
@@ -50,6 +65,14 @@ const AdminRoutes = () => (
       <Route path="diningcode/:vRid" element={<AdminDiningcodeShopPage />} />
       <Route path="tabling" element={<AdminTablingPage />} />
       <Route path="analytics" element={<AdminAnalyticsPage />} />
+      <Route
+        path="food"
+        element={
+          <Suspense fallback={<SectionFallback />}>
+            <AdminFoodPage />
+          </Suspense>
+        }
+      />
       <Route path="ai-usage" element={<AdminAiUsagePage />} />
       <Route path="logs" element={<AdminLogsPage />} />
       <Route path="logs/:runId" element={<AdminLogRunDetailPage />} />

@@ -13,6 +13,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  Soup,
   Sparkles,
   Utensils,
   UtensilsCrossed,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { to: '/admin/diningcode', label: '다이닝코드 크롤링', icon: Utensils },
   { to: '/admin/tabling', label: '테이블링 크롤링', icon: CalendarClock },
   { to: '/admin/analytics', label: 'AI 분석 관리', icon: BarChart3 },
+  { to: '/admin/food', label: '음식 카탈로그', icon: Soup },
   { to: '/admin/ai-usage', label: 'AI 사용량', icon: Activity },
   { to: '/admin/review-search', label: '리뷰 문맥검색', icon: MessagesSquare },
   {
