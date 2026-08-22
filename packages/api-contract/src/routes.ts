@@ -313,6 +313,10 @@ export const Meal = {
   // 원본/썸네일 조회(JWT 필요 — <img src> 직접 불가) + 삭제.
   photo: (token: string) => `${API_PREFIX}/meals/photos/${token}`,
   photoThumb: (token: string) => `${API_PREFIX}/meals/photos/${token}/thumb`,
+  // 사진 복제 — 지난 기록의 사진을 이번 기록에 쓸 때. 참조가 아니라 복사여야 원본을 지워도 안 사라진다.
+  photoCopy: (token: string) => `${API_PREFIX}/meals/photos/${token}/copy`,
+  // 이 음식을 지난번에 어떻게 먹었나(?name=) — 사진·양·분류. 수동 입력 자동완성 보조.
+  recentItem: `${API_PREFIX}/meals/items/recent`,
   // 사진 → 음식 인식(동기, purpose meal-photo).
   recognize: `${API_PREFIX}/meals/recognize`,
   // 선호 설정 조회/저장(사용자당 1행).

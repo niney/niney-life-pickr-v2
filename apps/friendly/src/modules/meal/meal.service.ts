@@ -18,6 +18,7 @@ import {
   type MealEntryType,
   type MealItemInputType,
   type MealItemType,
+  type RecentMealItemResultType,
   type MealPhotoType,
   type MealSlotType,
   type UpdateMealEntryInputType,
@@ -128,6 +129,45 @@ export class MealService {
     private readonly deps: MealServiceDeps,
   ) {
     this.food = deps.food ?? new FoodService(prisma);
+  }
+
+  /**
+   * "이 음식을 지난번에 어떻게 먹었나" — 수동 입력 보조. 같은 이름(정규화)으로 먹은 가장 최근
+   * 기록에서 양·분류와 그 끼니의 대표 사진을 돌려준다. 사진은 참고용이고 붙일지는 화면이 정한다.
+   */
+  async findRecentItem(userId: string, name: string): Promise<RecentMealItemResultType> {
+    const empty: RecentMealItemResultType = {
+      found: false,
+      name: null,
+      lastEatenDate: null,
+      portion: null,
+      isMain: null,
+      dishType: null,
+      mainIngredient: null,
+      cuisine: null,
+      photoToken: null,
+    };
+    const nameNorm = normalizeTerm(name);
+    if (!nameNorm) return empty;
+
+    const item = await this.prisma.mealItem.findFirst({
+      where: { nameNorm, entry: { userId } },
+      orderBy: { entry: { eatenAt: 'desc' } },
+      include: { entry: { include: { photos: { orderBy: { sortOrder: 'asc' }, take: 1 } } } },
+    });
+    if (!item) return empty;
+
+    return {
+      found: true,
+      name: item.name,
+      lastEatenDate: item.entry.eatenDate,
+      portion: enumOrNull(MealPortion, item.portion),
+      isMain: item.isMain,
+      dishType: enumOrNull<FoodDishTypeType>(FoodDishType, item.dishType),
+      mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, item.mainIngredient),
+      cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, item.cuisine),
+      photoToken: item.entry.photos[0]?.token ?? null,
+    };
   }
 
   // 항목 입력 → DB 행 데이터. 분류가 비어 있으면 카탈로그 매칭으로 채운다.

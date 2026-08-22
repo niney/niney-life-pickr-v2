@@ -74,6 +74,30 @@ export const MealItem = z.object({
 });
 export type MealItemType = z.infer<typeof MealItem>;
 
+// 수동 입력 보조 — "이 음식을 지난번에 어떻게 먹었나". 기록이 없으면 found=false.
+//
+// 사진은 **자동으로 붙이지 않는다**. 오늘 먹은 게 지난번과 같게 생겼을 리 없으니 자동 첨부는
+// 사실과 다른 기록이 된다. 화면은 참고용으로만 보여 주고, 쓸지 말지는 사용자가 정한다.
+export const RecentMealItemQuery = z.object({
+  name: z.string().trim().min(1).max(60),
+});
+export type RecentMealItemQueryType = z.infer<typeof RecentMealItemQuery>;
+
+export const RecentMealItemResult = z.object({
+  found: z.boolean(),
+  name: z.string().nullable(),
+  lastEatenDate: DateString.nullable(),
+  // 지난번에 먹은 양 — 비어 있는 입력을 채워 준다.
+  portion: MealPortion.nullable(),
+  isMain: z.boolean().nullable(),
+  dishType: FoodDishType.nullable(),
+  mainIngredient: FoodMainIngredient.nullable(),
+  cuisine: FoodCuisine.nullable(),
+  // 그때 그 끼니의 대표 사진(있으면). 복사해서 쓰려면 photoCopy 를 부른다.
+  photoToken: z.string().nullable(),
+});
+export type RecentMealItemResultType = z.infer<typeof RecentMealItemResult>;
+
 export const MealItemInput = z.object({
   name: z.string().trim().min(1).max(60),
   foodId: z.string().max(64).nullable().optional(),

@@ -93,6 +93,22 @@ export const useUploadMealPhoto = () =>
     mutationFn: (file: MealPhotoUploadFile) => mealApi.uploadPhoto(file),
   });
 
+/**
+ * 수동 입력 보조 — 이름이 정해지면 "지난번엔 어떻게 먹었나"를 가져온다.
+ * 이름은 사용자가 타이핑하는 중에 계속 바뀌므로 호출부에서 확정된 값만 넘긴다(빈 값이면 안 부른다).
+ * 기록은 자주 안 바뀌니 캐시를 넉넉히 둔다.
+ */
+export const useRecentMealItem = (name: string | null | undefined) =>
+  useQuery({
+    queryKey: [...KEY, 'recent-item', name ?? ''],
+    queryFn: () => mealApi.recentItem(name!),
+    enabled: !!name && name.trim().length > 0,
+    staleTime: 5 * 60_000,
+  });
+
+export const useCopyMealPhoto = () =>
+  useMutation({ mutationFn: (token: string) => mealApi.copyPhoto(token) });
+
 export const useDeleteMealPhoto = () =>
   useMutation({
     mutationFn: (token: string) => mealApi.removePhoto(token),

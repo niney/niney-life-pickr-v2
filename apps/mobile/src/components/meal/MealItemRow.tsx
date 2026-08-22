@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
+  useCopyMealPhoto,
   useFoodSearch,
+  useMealDraftStore,
+  useRecentMealItem,
   useTheme,
   type MealDraftItem,
   type Theme,
 } from '@repo/shared';
+import { MEAL_MAX_PHOTOS_PER_ENTRY } from '@repo/api-contract';
 import { FOOD_DISH_TYPE_LABEL, MEAL_PORTIONS, MEAL_PORTION_LABEL } from '@repo/utils';
+import { MealPhotoThumb } from './MealPhotoThumb';
 import { Chip, ChipRow } from './mealUi';
 
 // 식단 항목 한 줄 — 이름(자동완성) + 인식 후보 전환 + 주식/반찬 + 양 + 삭제.
@@ -30,6 +35,28 @@ export const MealItemRow = ({
   const search = useFoodSearch(item.name, { limit: 6, enabled: focused && item.name.trim().length >= 2 });
   const suggestions = focused ? (search.data?.items ?? []) : [];
 
+  // "지난번엔 어떻게 먹었나" — 이름을 **다 치고 난 뒤**에만 부른다(타이핑 중에는 안 부른다).
+  const settledName = !focused && item.name.trim().length >= 2 ? item.name.trim() : null;
+  const recent = useRecentMealItem(settledName);
+  const past = recent.data?.found ? recent.data : null;
+
+  // 사진은 자동으로 붙이지 않는다 — 오늘 먹은 게 지난번과 같게 생겼을 리 없다. 사용자가 누를 때만.
+  const draft = useMealDraftStore();
+  const copyPhoto = useCopyMealPhoto();
+  const [applied, setApplied] = useState(false);
+  const photoFull = draft.photos.length >= MEAL_MAX_PHOTOS_PER_ENTRY;
+
+  const applyPast = (): void => {
+    if (!past || applied) return;
+    if (past.portion && !item.portion) onChange({ portion: past.portion });
+    if (past.photoToken && !photoFull) {
+      copyPhoto.mutate(past.photoToken, {
+        onSuccess: (photo) => draft.addPhoto({ token: photo.token, localUri: null }),
+      });
+    }
+    setApplied(true);
+  };
+
   // 인식이 준 대안(후보) — 첫 후보가 현재 이름과 같으면 굳이 다시 보여주지 않는다.
   const altCandidates = item.candidates.filter((c) => c.name !== item.name).slice(0, 2);
   const lowConfidence = item.confidence !== null && item.confidence < 0.4;
@@ -51,6 +78,29 @@ export const MealItemRow = ({
           <Text style={{ color: theme.colors.danger, fontSize: 16 }}>✕</Text>
         </Pressable>
       </View>
+
+      {past && !focused ? (
+        <View style={styles.pastRow}>
+          {past.photoToken ? <MealPhotoThumb token={past.photoToken} size={36} /> : null}
+          <Text style={styles.pastText} numberOfLines={1}>
+            지난 {past.lastEatenDate?.slice(5).replace('-', '/')}
+            {past.portion ? ` · ${MEAL_PORTION_LABEL[past.portion]}` : ''}
+          </Text>
+          {applied ? (
+            <Text style={styles.pastDone}>{copyPhoto.isPending ? '가져오는 중…' : '적용됨'}</Text>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="지난번대로 채우기"
+              onPress={applyPast}
+              disabled={copyPhoto.isPending}
+              style={styles.pastBtn}
+            >
+              <Text style={styles.pastBtnText}>지난번대로</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : null}
 
       {suggestions.length > 0 ? (
         <View style={styles.suggestBox}>
@@ -136,6 +186,20 @@ const createStyles = (theme: Theme) =>
     suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
     suggestName: { flex: 1, fontSize: 14, color: theme.colors.text },
     suggestMeta: { fontSize: 11, color: theme.colors.textMuted },
+    pastRow: {
+      marginTop: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 4,
+      paddingHorizontal: 6,
+      borderRadius: 8,
+      backgroundColor: theme.colors.surfaceAlt,
+    },
+    pastText: { flex: 1, fontSize: 11, color: theme.colors.textMuted },
+    pastBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: theme.colors.surface },
+    pastBtnText: { fontSize: 11, color: theme.colors.text, fontWeight: '600' },
+    pastDone: { fontSize: 11, color: theme.colors.textMuted },
     altRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
     altLabel: { fontSize: 11, color: theme.colors.textMuted, marginRight: 2 },
     metaRow: { alignItems: 'center' },

@@ -12,6 +12,7 @@ import {
   type MealEntryType,
   type MealPreferenceType,
   type MealStatsResultType,
+  type RecentMealItemResultType,
   type RecognizeMealInputType,
   type RecognizeMealResultType,
   type UpdateMealEntryInputType,
@@ -76,6 +77,16 @@ export const mealApi = {
   },
 
   removePhoto: (token: string) => apiFetch<void>(Routes.Meal.photo(token), { method: 'DELETE' }),
+
+  // 지난 기록의 사진을 이번 기록용으로 복제(참조 공유가 아니다 — 원본을 지워도 안 사라진다).
+  copyPhoto: (token: string) =>
+    apiFetch<UploadMealPhotoResultType>(Routes.Meal.photoCopy(token), { method: 'POST' }),
+
+  // 이 음식을 지난번에 어떻게 먹었나 — 양·분류·그때 사진. 먹은 적 없으면 found=false.
+  recentItem: (name: string) =>
+    apiFetch<RecentMealItemResultType>(
+      `${Routes.Meal.recentItem}?${new URLSearchParams({ name }).toString()}`,
+    ),
 
   // 사진은 JWT 가 필요해 <img src> 로 직접 못 쓴다 — blob 으로 받아 화면에서 URL 로 바꾼다
   // (웹은 objectURL, RN 은 data URL — useMealPhotoUrl 훅이 처리).

@@ -244,4 +244,88 @@ describe('meal routes (격리 DB)', () => {
     expect(body.excludedFoods).toEqual(['오이']);
     expect(body.weights.variety).toBe(5);
   });
+
+  it('지난번 기록 조회 — 양·분류·그때 사진을 돌려준다', async () => {
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...multipart(jpeg).headers },
+      payload: multipart(jpeg).payload,
+    });
+    const photo = up.json<UploadMealPhotoResultType>();
+
+    await app.inject({
+      method: 'POST',
+      url: ENTRIES,
+      headers: auth,
+      payload: {
+        eatenAt: '2026-08-10T12:00:00.000Z',
+        eatenDate: '2026-08-10',
+        slot: 'lunch',
+        items: [{ name: '지난번확인찌개', portion: 'large', isMain: true }],
+        photoTokens: [photo.token],
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/items/recent?name=지난번 확인찌개',
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ found: boolean; portion: string | null; photoToken: string | null }>();
+    // 이름은 정규화해서 찾는다('지난번 확인찌개' → '지난번확인찌개').
+    expect(body.found).toBe(true);
+    expect(body.portion).toBe('large');
+    expect(body.photoToken).toBe(photo.token);
+  });
+
+  it('먹은 적 없는 음식은 found=false — 화면이 아무것도 안 그린다', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/items/recent?name=한번도안먹은것',
+      headers: auth,
+    });
+    expect(res.json<{ found: boolean; photoToken: string | null }>()).toMatchObject({ found: false, photoToken: null });
+  });
+
+  it('남의 기록은 안 보인다', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/items/recent?name=지난번확인찌개',
+      headers: otherAuth,
+    });
+    expect(res.json<{ found: boolean }>().found).toBe(false);
+  });
+
+  it('사진 복제 — 새 토큰이 나오고 원본을 지워도 살아 있다', async () => {
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...multipart(jpeg).headers },
+      payload: multipart(jpeg).payload,
+    });
+    const src = up.json<UploadMealPhotoResultType>();
+
+    const copied = await app.inject({ method: 'POST', url: `${PHOTOS}/${src.token}/copy`, headers: auth });
+    expect(copied.statusCode).toBe(201);
+    const dst = copied.json<UploadMealPhotoResultType>();
+    expect(dst.token).not.toBe(src.token);
+
+    await app.inject({ method: 'DELETE', url: `${PHOTOS}/${src.token}`, headers: auth });
+    const read = await app.inject({ method: 'GET', url: `${PHOTOS}/${dst.token}`, headers: auth });
+    expect(read.statusCode).toBe(200);
+  });
+
+  it('남의 사진은 복제할 수 없다', async () => {
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...multipart(jpeg).headers },
+      payload: multipart(jpeg).payload,
+    });
+    const src = up.json<UploadMealPhotoResultType>();
+    const res = await app.inject({ method: 'POST', url: `${PHOTOS}/${src.token}/copy`, headers: otherAuth });
+    expect(res.statusCode).toBe(403);
+  });
 });

@@ -10,6 +10,8 @@ import {
   MealEntry,
   MealPreference,
   MealStatsQuery,
+  RecentMealItemQuery,
+  RecentMealItemResult,
   MealStatsResult,
   Routes,
   UpdateMealEntryInput,
@@ -97,6 +99,18 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
         return throwAsHttp(e);
       }
     },
+  });
+
+  // 수동 입력 보조 — 이 음식을 지난번에 어떻게 먹었나(양·분류·그때 사진).
+  typed.get(Routes.Meal.recentItem, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      querystring: RecentMealItemQuery,
+      response: { 200: RecentMealItemResult },
+    },
+    handler: async (req) => meals.findRecentItem(req.user.userId, req.query.name),
   });
 
   typed.get(Routes.Meal.stats, {
@@ -217,6 +231,24 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: { tags: ['meal'], security: [{ bearerAuth: [] }], params: TokenParams },
     handler: servePhoto('thumb') as never,
+  });
+
+  // 지난 기록의 사진을 이번 기록용으로 복제 — 원본을 지워도 새 기록이 멀쩡하도록 참조가 아닌 복사.
+  typed.post(Routes.Meal.photoCopy(':token'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      params: TokenParams,
+      response: { 201: UploadMealPhotoResult },
+    },
+    handler: async (req, reply) => {
+      try {
+        return reply.code(201).send(await photos.copy(req.user.userId, req.params.token));
+      } catch (e) {
+        return throwAsHttp(e);
+      }
+    },
   });
 
   typed.delete(Routes.Meal.photo(':token'), {

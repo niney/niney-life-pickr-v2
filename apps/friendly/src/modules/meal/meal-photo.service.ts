@@ -158,6 +158,47 @@ export class MealPhotoService {
     return readFile(path);
   }
 
+  /**
+   * 지난 기록의 사진을 이번 기록용으로 **복제**한다(참조 공유가 아니다 — 원본 기록을 지웠을 때
+   * 새 기록의 사진까지 사라지면 안 된다). 새 행은 entryId=null 이라, 저장하지 않고 나가면
+   * 기존 고아 사진 청소(24시간)가 알아서 지운다.
+   */
+  async copy(userId: string, token: string): Promise<UploadMealPhotoResultType> {
+    if (!isValidMealPhotoToken(token)) throw new MealPhotoError('invalid_token', '토큰 형식이 올바르지 않습니다.');
+    const row = await this.prisma.mealPhoto.findUnique({ where: { token } });
+    if (!row) throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
+    if (row.userId !== userId) throw new MealPhotoError('forbidden', '권한이 없습니다.');
+
+    const full = await this.read(userId, token, 'full');
+    // 썸네일이 없던 과거 업로드는 read 가 원본으로 폴백하므로 여기서 다시 만든다.
+    const thumb = await this.normalize(full, THUMB_DIMENSION, THUMB_QUALITY);
+
+    const dir = this.userDir(userId);
+    await mkdir(dir, { recursive: true });
+    const newToken = randomUUID();
+    await writeFile(join(dir, `${newToken}.jpg`), full);
+    await writeFile(join(dir, `${newToken}_t.jpg`), thumb);
+
+    await this.prisma.mealPhoto.create({
+      data: {
+        token: newToken,
+        userId,
+        width: row.width,
+        height: row.height,
+        byteSize: full.byteLength,
+      },
+    });
+
+    return {
+      token: newToken,
+      previewUrl: Routes.Meal.photo(newToken),
+      thumbUrl: Routes.Meal.photoThumb(newToken),
+      width: row.width,
+      height: row.height,
+      byteSize: full.byteLength,
+    };
+  }
+
   // 인식 서비스용 — 소유자 검증 + 원본 바이트(여러 장).
   async readManyForOwner(userId: string, tokens: string[]): Promise<Buffer[]> {
     const out: Buffer[] = [];
