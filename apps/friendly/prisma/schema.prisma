@@ -1604,6 +1604,12 @@ model MealItem {
   // recognized|manual|catalog|recommendation
   source         String  @default("manual")
   sortOrder      Int     @default(0)
+  // 저장 시점 영양 스냅샷(1인분 × portion 배수). 카탈로그에 값이 없으면 null.
+  kcal           Float?
+  proteinG       Float?
+  sodiumMg       Float?
+  // 영양을 같은 계열 음식에서 빌려온 경우 그 출처 문구(FoodItem.nutritionFrom 스냅샷).
+  nutritionFrom  String?
 
   entry MealEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 

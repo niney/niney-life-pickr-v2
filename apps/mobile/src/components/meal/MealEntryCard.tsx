@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MealEntryType } from '@repo/api-contract';
 import { useTheme, type Theme } from '@repo/shared';
-import { MEAL_SLOT_LABEL, MEAL_TYPE_LABEL } from '@repo/utils';
+import { MEAL_SLOT_LABEL, MEAL_TYPE_LABEL, mealNutritionLabel, summarizeMealNutrition } from '@repo/utils';
 import { MealPhotoThumb } from './MealPhotoThumb';
 
 // 기록 한 줄 — 끼니 배지·시각·음식 칩·사진 썸네일. 목록(FlatList)과 상세 상단에서 함께 쓴다.
@@ -17,6 +17,8 @@ export const MealEntryCard = ({ entry, onPress }: { entry: MealEntryType; onPres
   const styles = useMemo(() => createStyles(theme), [theme]);
   const mains = entry.items.filter((i) => i.isMain);
   const sides = entry.items.filter((i) => !i.isMain);
+  // 카탈로그에 영양이 없는 음식이 많아(외식 브랜드 메뉴 등) 값이 하나도 없으면 줄을 그리지 않는다.
+  const kcalText = mealNutritionLabel(summarizeMealNutrition(entry.items));
 
   return (
     <Pressable
@@ -46,6 +48,7 @@ export const MealEntryCard = ({ entry, onPress }: { entry: MealEntryType; onPres
           곁들임 {sides.map((i) => i.name).join(', ')}
         </Text>
       ) : null}
+      {kcalText ? <Text style={styles.kcal}>{kcalText}</Text> : null}
       {entry.memo ? (
         <Text style={styles.memo} numberOfLines={1}>
           {entry.memo}
@@ -77,6 +80,7 @@ const createStyles = (theme: Theme) =>
     headRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     slotBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
     slotText: { fontSize: 11, color: theme.colors.text, fontWeight: '600' },
+    kcal: { marginTop: 4, fontSize: 12, color: theme.colors.textMuted },
     time: { fontSize: 12, color: theme.colors.textMuted },
     meta: { fontSize: 12, color: theme.colors.textMuted, flexShrink: 1 },
     mains: { fontSize: 15, color: theme.colors.text, fontWeight: '600' },

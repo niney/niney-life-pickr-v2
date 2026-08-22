@@ -52,7 +52,20 @@ export const MealStatsView = () => {
           <Tile icon="silverware-fork-knife" label="기록" value={`${data.entryCount}끼`} sub={`${data.recordedDays}/${data.totalDays}일`} />
           <Tile icon="fire" label="연속" value={`${data.streakDays}일`} sub="기록한 날" />
           <Tile icon="repeat" label="겹침" value={`${Math.round(data.repeatRate * 100)}%`} sub="7일 내 재등장" />
+          {data.nutrition.avgKcalPerDay !== null ? (
+            <Tile
+              icon="fire-circle"
+              label="하루 평균"
+              value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
+              sub={`기록한 날 기준 · ${Math.round(data.nutrition.coverage * 100)}% 반영`}
+            />
+          ) : null}
         </View>
+        {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
+          <Text style={styles.coverageNote}>
+            영양 정보가 있는 음식만 더한 값이라 실제보다 적게 나와요(외식 브랜드 메뉴는 공개된 값이 없어요).
+          </Text>
+        ) : null}
       </Card>
 
       {data.entryCount === 0 ? (
@@ -131,7 +144,8 @@ export const MealStatsView = () => {
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     content: { padding: 16, gap: 12 },
-    tiles: { flexDirection: 'row', gap: 8 },
+    tiles: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    coverageNote: { marginTop: 8, fontSize: 11, color: theme.colors.textMuted, lineHeight: 16 },
     muted: { fontSize: 12, color: theme.colors.textMuted },
     topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
     topName: { flex: 1, fontSize: 14, color: theme.colors.text },

@@ -138,6 +138,12 @@ export interface FoodMatch {
   cuisine: FoodCuisineType | null;
   score: number;
   matchedBy: 'exact' | 'alias' | 'fuzzy';
+  // 1인분 영양(양 배수 적용 전). 카탈로그에 값이 없으면 null.
+  kcal: number | null;
+  proteinG: number | null;
+  sodiumMg: number | null;
+  // 같은 계열에서 빌려온 값이면 그 출처 문구.
+  nutritionFrom: string | null;
 }
 
 export class FoodService {
@@ -175,6 +181,17 @@ export class FoodService {
 
   // ── 매칭(인식 결과·수동 입력 → 카탈로그) ─────────────────────────────────
   // 1) nameNorm 정확 2) 별칭 정확 3) 퍼지(bigram Jaccard/포함, 임계 FOOD_MATCH_FUZZY_MIN). 비활성 행 제외.
+  /** 이미 고른 카탈로그 행의 1인분 영양만 읽는다(기록 저장 시 스냅샷용). */
+  async getNutrition(
+    foodId: string,
+  ): Promise<{ kcal: number | null; proteinG: number | null; sodiumMg: number | null; nutritionFrom: string | null } | null> {
+    const r = await this.prisma.foodItem.findFirst({
+      where: { id: foodId, active: true },
+      select: { kcal: true, proteinG: true, sodiumMg: true, nutritionFrom: true },
+    });
+    return r ?? null;
+  }
+
   async matchFood(name: string): Promise<FoodMatch | null> {
     const norm = normalizeTerm(name);
     if (!norm) return null;
@@ -218,6 +235,10 @@ export class FoodService {
       cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, r.cuisine),
       score,
       matchedBy,
+      kcal: r.kcal,
+      proteinG: r.proteinG,
+      sodiumMg: r.sodiumMg,
+      nutritionFrom: r.nutritionFrom,
     };
   }
 

@@ -79,6 +79,7 @@ const stats = {
   topFoods: [{ name: '김치찌개', count: 2, lastEatenDate: '2026-08-21' }],
   repeatRate: 0.25,
   streakDays: 2,
+  nutrition: { avgKcalPerDay: 780, avgProteinGPerDay: 24.5, avgSodiumMgPerDay: 2100, coverage: 0.5, itemsWithNutrition: 2 },
   byDate: [
     { date: '2026-08-21', count: 1 },
     { date: '2026-08-22', count: 2 },

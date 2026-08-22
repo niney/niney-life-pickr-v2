@@ -10,7 +10,13 @@ import {
   useTheme,
   type Theme,
 } from '@repo/shared';
-import { FOOD_CUISINE_LABEL, FOOD_DISH_TYPE_LABEL, FOOD_MAIN_INGREDIENT_LABEL, MEAL_PORTION_LABEL } from '@repo/utils';
+import {
+  FOOD_CUISINE_LABEL,
+  FOOD_DISH_TYPE_LABEL,
+  FOOD_MAIN_INGREDIENT_LABEL,
+  MEAL_PORTION_LABEL,
+  summarizeMealNutrition,
+} from '@repo/utils';
 import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
 import { MealEntryEditor } from '~/components/meal/MealEntryEditor';
@@ -21,11 +27,14 @@ export default function MealDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+
   const router = useRouter();
   const { data, isLoading, error, refetch } = useMealEntry(id);
   const remove = useDeleteMealEntry();
   const draft = useMealDraftStore();
   const [editing, setEditing] = useState(false);
+  // 영양은 값이 있는 항목만 더한 합계다(카탈로그 커버리지가 100% 가 아니다) — 몇 개가 반영됐는지 같이 보여 준다.
+  const nutrition = useMemo(() => summarizeMealNutrition(data?.items ?? []), [data?.items]);
 
   const startEdit = (entry: MealEntryType) => {
     draft.start({
@@ -117,12 +126,29 @@ export default function MealDetailScreen() {
                     it.mainIngredient ? FOOD_MAIN_INGREDIENT_LABEL[it.mainIngredient] : null,
                     it.cuisine ? FOOD_CUISINE_LABEL[it.cuisine] : null,
                     it.portion ? MEAL_PORTION_LABEL[it.portion] : null,
+                    // 영양은 있을 때만 붙인다. 빌려온 값이면 어디서 왔는지까지 밝힌다.
+                    it.kcal !== null ? `${Math.round(it.kcal)}kcal` : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
                 </Text>
+                {it.nutritionFrom ? <Text style={styles.itemEstimate}>{it.nutritionFrom} 기준 추정</Text> : null}
               </View>
             ))}
+            {nutrition.kcal !== null ? (
+              <View style={styles.nutritionRow}>
+                <Text style={styles.nutritionMain}>
+                  약 {nutrition.kcal.toLocaleString('ko-KR')}kcal
+                  {nutrition.proteinG ? ` · 단백질 ${nutrition.proteinG}g` : ''}
+                  {nutrition.sodiumMg ? ` · 나트륨 ${nutrition.sodiumMg.toLocaleString('ko-KR')}mg` : ''}
+                </Text>
+                {nutrition.counted < nutrition.total ? (
+                  <Text style={styles.nutritionNote}>
+                    {nutrition.total}개 중 {nutrition.counted}개만 반영 — 나머지는 공개된 영양 정보가 없어요.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </Card>
 
           {data.recognition?.model ? (
@@ -160,6 +186,10 @@ const createStyles = (theme: Theme) =>
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
     itemName: { flex: 1, fontSize: 14, color: theme.colors.text },
     itemMeta: { fontSize: 11, color: theme.colors.textMuted },
+    itemEstimate: { fontSize: 10, color: theme.colors.textMuted, fontStyle: 'italic' },
+    nutritionRow: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+    nutritionMain: { fontSize: 13, color: theme.colors.text, fontWeight: '600' },
+    nutritionNote: { marginTop: 3, fontSize: 11, color: theme.colors.textMuted },
     actions: { flexDirection: 'row', gap: 10 },
     actionBtn: {
       flex: 1,

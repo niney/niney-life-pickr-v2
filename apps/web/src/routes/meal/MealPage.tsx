@@ -10,7 +10,9 @@ import {
   MEAL_SLOT_ORDER,
   MEAL_TYPE_LABEL,
   mealDateLabel,
+  mealNutritionLabel,
   monthRange,
+  summarizeMealNutrition,
   toLocalDateKey,
   toLocalMonthKey,
 } from '@repo/utils';
@@ -137,6 +139,8 @@ const MealList = () => {
 const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
   const mains = entry.items.filter((i) => i.isMain);
   const sides = entry.items.filter((i) => !i.isMain);
+  // 카탈로그에 영양이 없는 음식이 흔해서(외식 브랜드 메뉴 등) 값이 하나도 없으면 줄을 그리지 않는다.
+  const kcalText = mealNutritionLabel(summarizeMealNutrition(entry.items));
   return (
     <Card>
       <CardContent className="flex gap-3 py-4">
@@ -156,6 +160,7 @@ const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
           {sides.length > 0 ? (
             <p className="truncate text-xs text-muted-foreground">곁들임 {sides.map((i) => i.name).join(', ')}</p>
           ) : null}
+          {kcalText ? <p className="text-xs text-muted-foreground">{kcalText}</p> : null}
           {entry.memo ? <p className="truncate text-xs italic text-muted-foreground">{entry.memo}</p> : null}
         </div>
       </CardContent>
@@ -316,11 +321,23 @@ const MealStats = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className={data.nutrition.avgKcalPerDay !== null ? 'grid grid-cols-2 gap-3 sm:grid-cols-4' : 'grid grid-cols-3 gap-3'}>
         <StatTile label="기록" value={`${data.entryCount}끼`} sub={`${data.recordedDays}/${data.totalDays}일`} />
         <StatTile label="연속" value={`${data.streakDays}일`} sub="기록한 날" />
         <StatTile label="겹침" value={`${Math.round(data.repeatRate * 100)}%`} sub="7일 내 재등장" />
+        {data.nutrition.avgKcalPerDay !== null ? (
+          <StatTile
+            label="하루 평균"
+            value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
+            sub={`기록한 날 기준 · ${Math.round(data.nutrition.coverage * 100)}% 반영`}
+          />
+        ) : null}
       </div>
+      {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
+        <p className="text-xs text-muted-foreground">
+          영양 정보가 있는 음식만 더한 값이라 실제보다 적게 나와요(외식 브랜드 메뉴는 공개된 값이 없어요).
+        </p>
+      ) : null}
 
       {data.entryCount === 0 ? (
         <Card>

@@ -64,6 +64,13 @@ export const MealItem = z.object({
   confidence: z.number().nullable(),
   source: MealItemSource,
   sortOrder: z.number().int(),
+  // 저장 시점의 영양 스냅샷 — 1인분 값 × 양(portion) 배수. 카탈로그에 값이 없으면 null 이고
+  // UI 는 숫자를 지어내지 않고 비워 둔다(활성 카탈로그의 62%, 대표 한식의 80%만 값이 있다).
+  kcal: z.number().nullable(),
+  proteinG: z.number().nullable(),
+  sodiumMg: z.number().nullable(),
+  // 영양을 같은 계열 음식에서 빌려왔으면 그 출처("버섯콩불고기 외 8종 중앙값"). 직접 값이면 null.
+  nutritionFrom: z.string().nullable(),
 });
 export type MealItemType = z.infer<typeof MealItem>;
 
@@ -255,6 +262,16 @@ export const MealStatsResult = z.object({
   streakDays: z.number().int(),
   // 날짜별 끼니 수 — 막대 그래프용.
   byDate: z.array(z.object({ date: DateString, count: z.number().int() })),
+  // 영양 집계. 값이 있는 항목만 더하므로 **실제보다 적게** 나온다 — coverage 로 그 비율을 함께
+  // 내려보내 UI 가 "78% 반영"이라고 밝히게 한다. 값이 하나도 없으면 평균은 null.
+  nutrition: z.object({
+    avgKcalPerDay: z.number().nullable(),
+    avgProteinGPerDay: z.number().nullable(),
+    avgSodiumMgPerDay: z.number().nullable(),
+    // 영양 값이 있는 항목 / 전체 항목(0~1).
+    coverage: z.number(),
+    itemsWithNutrition: z.number().int(),
+  }),
 });
 export type MealStatsResultType = z.infer<typeof MealStatsResult>;
 

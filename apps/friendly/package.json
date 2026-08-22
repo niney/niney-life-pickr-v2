@@ -29,6 +29,7 @@
     "probe:food-api": "tsx --env-file=.env scripts/probe-food-api.ts",
     "probe:meal-vision": "tsx --env-file=.env scripts/probe-meal-vision.ts",
     "probe:meal-e2e": "tsx --env-file=.env scripts/probe-meal-e2e.ts",
+    "backfill:meal-nutrition": "tsx --env-file=.env scripts/backfill-meal-nutrition.ts",
     "eval:meal-recognition": "tsx scripts/eval-meal-recognition.ts",
     "export:life-geocode": "tsx --env-file=.env scripts/export-life-geocode.ts",
     "import:life-geocode": "tsx --env-file=.env scripts/import-life-geocode.ts",

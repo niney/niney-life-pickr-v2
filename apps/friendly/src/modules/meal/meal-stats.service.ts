@@ -30,6 +30,10 @@ export interface StatEntryRow {
     mainIngredient: string | null;
     cuisine: string | null;
     isMain: boolean;
+    // 저장 시점 영양 스냅샷(양 배수 반영). 카탈로그에 값이 없던 항목은 null 이라 합계에서 빠진다.
+    kcal?: number | null;
+    proteinG?: number | null;
+    sodiumMg?: number | null;
   }[];
 }
 
@@ -118,11 +122,38 @@ export const computeMealStats = (
     cursor = shiftDate(cursor, -1);
   }
 
+  // 영양 — 값이 있는 항목만 더한다. 그래서 합계는 실제보다 **적게** 나오고, coverage 로 그
+  // 사실을 함께 내려보낸다(UI 가 "78% 반영"이라고 밝힌다). 나눔의 분모는 기간 전체가 아니라
+  // **기록이 있는 날**이다 — 안 먹은 게 아니라 안 적은 날이기 때문이다.
+  let sumKcal = 0;
+  let sumProtein = 0;
+  let sumSodium = 0;
+  let itemsWithNutrition = 0;
+  for (const row of rows) {
+    for (const item of row.items) {
+      if (item.kcal === null || item.kcal === undefined) continue;
+      itemsWithNutrition += 1;
+      sumKcal += item.kcal;
+      sumProtein += item.proteinG ?? 0;
+      sumSodium += item.sodiumMg ?? 0;
+    }
+  }
+  const nutritionDays = byDate.size;
+  const perDay = (total: number): number | null =>
+    itemsWithNutrition === 0 || nutritionDays === 0 ? null : Math.round((total / nutritionDays) * 10) / 10;
+
   return {
     from,
     to,
     entryCount: rows.length,
     itemCount,
+    nutrition: {
+      avgKcalPerDay: perDay(sumKcal),
+      avgProteinGPerDay: perDay(sumProtein),
+      avgSodiumMgPerDay: perDay(sumSodium),
+      coverage: itemCount === 0 ? 0 : Math.round((itemsWithNutrition / itemCount) * 100) / 100,
+      itemsWithNutrition,
+    },
     recordedDays: recorded.size,
     totalDays: days.length,
     bySlot: bucket<MealSlot>(bySlot, (k) => labelOf(MEAL_SLOT_LABEL, k), MEAL_SLOT_ORDER),
@@ -160,7 +191,17 @@ export class MealStatsService {
         slot: true,
         mealType: true,
         items: {
-          select: { name: true, nameNorm: true, dishType: true, mainIngredient: true, cuisine: true, isMain: true },
+          select: {
+            name: true,
+            nameNorm: true,
+            dishType: true,
+            mainIngredient: true,
+            cuisine: true,
+            isMain: true,
+            kcal: true,
+            proteinG: true,
+            sodiumMg: true,
+          },
         },
       },
       orderBy: { eatenAt: 'asc' },

@@ -36,6 +36,18 @@ export const MEAL_TYPE_LABEL: Record<MealType, string> = {
 export const MEAL_PORTIONS = ['small', 'normal', 'large'] as const;
 export type MealPortion = (typeof MEAL_PORTIONS)[number];
 
+// 눈대중 양 → 1인분 배수. 비전 모델의 그램 추정은 오차가 커서(MAPE 50~400%) 서수 3단계만 받고,
+// 영양 환산은 이 배수로만 한다 — 정밀값인 척하지 않기 위한 의도적 단순화다.
+export const MEAL_PORTION_FACTOR: Record<MealPortion, number> = {
+  small: 0.6,
+  normal: 1,
+  large: 1.5,
+};
+
+/** 양이 없으면 1인분(1.0)으로 본다. */
+export const mealPortionFactor = (portion: string | null | undefined): number =>
+  (portion && MEAL_PORTION_FACTOR[portion as MealPortion]) || 1;
+
 export const MEAL_PORTION_LABEL: Record<MealPortion, string> = {
   small: '조금',
   normal: '보통',

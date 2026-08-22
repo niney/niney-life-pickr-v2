@@ -119,4 +119,42 @@ describe('computeMealStats', () => {
     );
     expect(s.byDishType[0]).toMatchObject({ key: 'unknown', label: '미분류', count: 1 });
   });
+
+  it('영양은 값이 있는 항목만 더하고 커버리지를 함께 낸다', () => {
+    const r = computeMealStats(
+      [
+        {
+          eatenDate: '2026-08-20',
+          slot: 'lunch',
+          mealType: null,
+          items: [
+            { name: '라면', nameNorm: '라면', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: 528, proteinG: 12, sodiumMg: 1800 },
+            { name: '양념치킨', nameNorm: '양념치킨', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null, proteinG: null, sodiumMg: null },
+          ],
+        },
+      ],
+      { from: '2026-08-20', to: '2026-08-21', today: '2026-08-21' },
+    );
+    // 기록이 있는 날은 하루 → 그 날 합계가 곧 하루 평균. 값 없는 항목은 빠진다.
+    expect(r.nutrition.avgKcalPerDay).toBe(528);
+    expect(r.nutrition.avgProteinGPerDay).toBe(12);
+    expect(r.nutrition.itemsWithNutrition).toBe(1);
+    expect(r.nutrition.coverage).toBe(0.5);
+  });
+
+  it('영양 값이 하나도 없으면 평균은 null 이다 — 0 으로 보이면 안 굶은 걸 굶었다고 말하게 된다', () => {
+    const r = computeMealStats(
+      [
+        {
+          eatenDate: '2026-08-20',
+          slot: 'lunch',
+          mealType: null,
+          items: [{ name: '양념치킨', nameNorm: '양념치킨', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null }],
+        },
+      ],
+      { from: '2026-08-20', to: '2026-08-21', today: '2026-08-21' },
+    );
+    expect(r.nutrition.avgKcalPerDay).toBeNull();
+    expect(r.nutrition.coverage).toBe(0);
+  });
 });

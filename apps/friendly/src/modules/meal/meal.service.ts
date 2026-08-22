@@ -22,7 +22,7 @@ import {
   type MealSlotType,
   type UpdateMealEntryInputType,
 } from '@repo/api-contract';
-import { monthRange } from '@repo/utils';
+import { mealPortionFactor, monthRange } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
 import type { MealPhotoService } from './meal-photo.service.js';
@@ -64,6 +64,10 @@ const toItem = (r: PrismaMealItem): MealItemType => ({
   confidence: r.confidence,
   source: enumOrNull(MealItemSource, r.source) ?? 'manual',
   sortOrder: r.sortOrder,
+  kcal: r.kcal,
+  proteinG: r.proteinG,
+  sodiumMg: r.sodiumMg,
+  nutritionFrom: r.nutritionFrom,
 });
 
 const toPhoto = (r: PrismaMealPhoto): MealPhotoType => ({
@@ -138,15 +142,33 @@ export class MealService {
       let dishType = item.dishType ?? null;
       let mainIngredient = item.mainIngredient ?? null;
       let cuisine = item.cuisine ?? null;
-      if (!foodId || !dishType || !mainIngredient || !cuisine) {
+      // 영양은 항상 서버가 붙인다(클라이언트가 보내지 않는다). 클라이언트가 foodId 를 이미
+      // 골라 왔으면 그 행을 그대로 보고, 아니면 이름으로 매칭한다.
+      let nutrition: { kcal: number | null; proteinG: number | null; sodiumMg: number | null; nutritionFrom: string | null } | null =
+        null;
+      if (foodId) {
+        const row = await this.food.getNutrition(foodId);
+        if (row) nutrition = row;
+      }
+      if (!foodId || !dishType || !mainIngredient || !cuisine || !nutrition) {
         const match = await this.food.matchFood(name);
         if (match) {
           foodId = foodId ?? match.foodId;
           dishType = dishType ?? match.dishType;
           mainIngredient = mainIngredient ?? match.mainIngredient;
           cuisine = cuisine ?? match.cuisine;
+          nutrition = nutrition ?? {
+            kcal: match.kcal,
+            proteinG: match.proteinG,
+            sodiumMg: match.sodiumMg,
+            nutritionFrom: match.nutritionFrom,
+          };
         }
       }
+      // 1인분 값 × 눈대중 배수. 소수점은 표시 단위(kcal 1, g 0.1)까지만 남긴다.
+      const f = mealPortionFactor(item.portion);
+      const scale = (v: number | null, digits: number): number | null =>
+        v === null ? null : Number((v * f).toFixed(digits));
       out.push({
         name,
         nameNorm,
@@ -159,6 +181,10 @@ export class MealService {
         confidence: item.confidence ?? null,
         source: item.source,
         sortOrder: i,
+        kcal: scale(nutrition?.kcal ?? null, 0),
+        proteinG: scale(nutrition?.proteinG ?? null, 1),
+        sodiumMg: scale(nutrition?.sodiumMg ?? null, 0),
+        nutritionFrom: nutrition?.nutritionFrom ?? null,
       });
     }
     return out;
