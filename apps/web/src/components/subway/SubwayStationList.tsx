@@ -107,7 +107,10 @@ export const SubwayStationSearchBar = ({
               <LocateFixed className="size-3" /> 주변 역
             </Badge>
             {fetchedAt && (
-              <>반경 1.5km · 총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}</>
+              <>
+                반경 1.5km · 총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}
+                {truncated && <span title="서버가 100건으로 절단했습니다">· 일부만 표시</span>}
+              </>
             )}
           </span>
           <button
@@ -126,13 +129,12 @@ export const SubwayStationSearchBar = ({
           고유 개념이라 정적 역사마스터인 지하철엔 부적절해 표기하지 않는다. */}
       {!nearMode && hasQ && fetchedAt && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="tabular-nums">총 {total}개</span>
+          <span className="tabular-nums">
+            총 {total}개{truncated && <span title="서버가 100건으로 절단했습니다"> · 일부만 표시</span>}
+          </span>
         </div>
       )}
 
-      {truncated && (
-        <p className="text-xs text-muted-foreground">결과가 많아 일부만 표시합니다.</p>
-      )}
     </div>
   );
 };

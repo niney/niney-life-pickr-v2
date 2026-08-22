@@ -27,7 +27,8 @@ import {
   PublicRestaurantListHeader,
 } from '~/components/restaurant/PublicRestaurantList';
 import { PublicRestaurantsMap } from '~/components/restaurant/PublicRestaurantsMap';
-import { BottomSheet, type Snap } from '~/components/restaurant-v2/BottomSheet';
+import { BottomSheet } from '~/components/sheet/BottomSheet';
+import { SHEET_PEEK_HEIGHT, useMapSheets } from '~/components/sheet/useMapSheets';
 import { cn } from '~/lib/utils';
 import { usePanelSide } from '~/stores/panelPrefsStore';
 
@@ -73,9 +74,9 @@ export const RestaurantsV2Page = () => {
 
   const viewMode: 'list' | 'detail' = placeId === null ? 'list' : 'detail';
 
-  const [listSnap, setListSnap] = useState<Snap>('peek');
-  const [detailSnap, setDetailSnap] = useState<Snap>('half');
-  const snapBeforeDetailRef = useRef<Snap>('peek');
+  // 목록/상세 두 시트의 스냅 조율(상세 진입 시 목록 스냅 기억 → peek, 상세 half / 닫히면 복원)은
+  // 공용 훅 — 대중교통·일상지도와 같은 규칙.
+  const { listSnap, setListSnap, detailSnap, setDetailSnap } = useMapSheets(placeId !== null);
 
   const [panelSide, togglePanelSide] = usePanelSide('public.restaurants');
   const effectivePanelSide = isShareRoute ? 'left' : panelSide;
@@ -165,25 +166,10 @@ export const RestaurantsV2Page = () => {
         pathname: isShareRoute ? `/r/${id}` : `/restaurants-v2/${id}`,
         search: isShareRoute ? '' : window.location.search,
       });
-      // prev 캡처로 진입 직전 snap 저장 — listSnap 을 deps 에 넣지 않아도 됨.
-      setListSnap((prev) => {
-        snapBeforeDetailRef.current = prev;
-        return 'peek';
-      });
-      setDetailSnap('half');
+      // 시트 스냅 전이(목록 peek·상세 half, 닫힐 때 복원)는 placeId 변화를 보고 useMapSheets 가 처리.
     },
     [navigate, isShareRoute],
   );
-
-  // 닫기는 RestaurantDetailRoute 의 onClose 가 navigate('/restaurants-v2') 로
-  // 처리. 그 결과 placeId 가 null 이 되는 걸 여기서 감지해서 snap 복원.
-  const prevPlaceIdRef = useRef(placeId);
-  useEffect(() => {
-    if (prevPlaceIdRef.current !== null && placeId === null) {
-      setListSnap(snapBeforeDetailRef.current);
-    }
-    prevPlaceIdRef.current = placeId;
-  }, [placeId]);
 
   const handleResearch = useCallback((b: string) => setParam('bbox', b), [setParam]);
   const handleClearArea = useCallback(() => setParam('bbox', null), [setParam]);
@@ -338,7 +324,11 @@ export const RestaurantsV2Page = () => {
           ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="xl:hidden">
         {/* 맵 배경. headerHeight 아래부터 viewport 하단까지. dvh 변동 시 즉시 따라감. */}
-        <div className="fixed inset-x-0 bottom-0 z-0" style={{ top: `${headerHeight}px` }}>
+        <div
+          className="fixed inset-x-0 bottom-0 z-0"
+          // --map-bottom-inset: 좌하단 레이어 컨트롤이 peek 시트 위로 올라오게(MapLayerControl).
+          style={{ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties}
+        >
           <PublicRestaurantsMap
             items={mapItems}
             selectedPlaceId={placeId}
@@ -358,7 +348,7 @@ export const RestaurantsV2Page = () => {
           snap={listSnap}
           onSnapChange={setListSnap}
           topOffset={headerHeight}
-          peekHeight={120}
+          peekHeight={SHEET_PEEK_HEIGHT}
           disableScrollLock={placeId !== null}
           hidden={placeId !== null}
           zIndex={20}
@@ -384,7 +374,7 @@ export const RestaurantsV2Page = () => {
             snap={detailSnap}
             onSnapChange={setDetailSnap}
             topOffset={headerHeight}
-            peekHeight={120}
+            peekHeight={SHEET_PEEK_HEIGHT}
             zIndex={30}
           >
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>

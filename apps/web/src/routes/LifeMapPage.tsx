@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useAirLocation,
@@ -26,15 +26,25 @@ import { LifeLayerBar } from '~/components/life-map/LifeLayerBar';
 import { LifeMapFooter } from '~/components/life-map/LifeMapFooter';
 import { LifeMapView } from '~/components/life-map/LifeMapView';
 import { LifeNearbyList } from '~/components/life-map/LifeNearbyList';
+import { BottomSheet } from '~/components/sheet/BottomSheet';
+import { SHEET_PEEK_HEIGHT, sheetHalfInset, useMapSheets } from '~/components/sheet/useMapSheets';
 import { useDebounced } from '~/lib/useDebounced';
+import { useIsDesktopXl } from '~/lib/useMediaQuery';
+import { cn } from '~/lib/utils';
 import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
 
 // 일상지도 — 전국 CCTV·공중화장실을 한 지도에. URL 이 진실: ?ll=lat,lng&z=줌(뷰포트), ?sel=layer:id
 // (선택). 레이어·필터는 persist 스토어. 진입 중심은 URL → 저장한 내 위치(날씨·대기와 공유) →
 // 서울시청. 지도를 움직이면 뷰포트(bbox·줌)로 점/셀을 다시 받고, 주변 목록은 지도 중심 기준.
 //
-// 레이아웃은 지도 한 장(OL 인스턴스 1개) + 패널: 데스크톱(xl+)은 좌 패널 400px / 우 지도,
-// 모바일은 위 지도 / 아래 패널(42dvh) — CSS 순서만 바꾼다(대중교통처럼 두 인스턴스를 두지 않음).
+// 레이아웃은 지도 한 장(OL 인스턴스 1개) + 패널.
+//   - 데스크톱(xl+): 좌 패널 400px(이동 검색 · 레이어/필터 · 주변 목록 또는 상세 · 푸터) / 우 지도.
+//   - 모바일: 맛집 v2 와 같은 시트 패턴 — 상단바 subBar 에 지역 이동 검색(드롭다운형) + 레이어 토글,
+//     지도는 그 아래 fixed 배경, 주변 목록은 3-snap 바텀시트(peek 은 탭·건수 머리 행만 보이고 half 부터
+//     필터 칩 행과 목록), 상세는 시트 하나를 더 얹는다(useMapSheets — 진입 half, 닫히면 목록 스냅 복원).
+// 분기는 CSS 이중 마운트(hidden xl:flex / xl:hidden)가 아니라 useIsDesktopXl(JS) — 지도·패널을 한 벌만
+// 두고 시트는 모바일에서만 마운트한다(데스크톱에 시트가 숨어 있으면 html overflow 락이 따라온다).
+// 지도 <section> 은 두 분기에서 같은 자리라 폭이 바뀌어도 OL 인스턴스를 다시 만들지 않는다.
 
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 const DEFAULT_ZOOM = 15;
@@ -65,7 +75,8 @@ interface InitialView {
 }
 
 export const LifeMapPage = () => {
-  const { headerHeight } = usePublicLayout();
+  const { setSubBar, headerHeight } = usePublicLayout();
+  const isDesktop = useIsDesktopXl();
   const [searchParams, setSearchParams] = useSearchParams();
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -91,6 +102,7 @@ export const LifeMapPage = () => {
   const togglePurpose = useLifeMapPrefsStore((s) => s.togglePurpose);
   const setPurposes = useLifeMapPrefsStore((s) => s.setPurposes);
   const toggleToiletFilter = useLifeMapPrefsStore((s) => s.toggleToiletFilter);
+  const clearPurposes = useCallback(() => setPurposes([]), [setPurposes]);
 
   // 저장한 내 위치(날씨·대기정보와 공유).
   const airLocation = useAirLocation();
@@ -168,12 +180,17 @@ export const LifeMapPage = () => {
     const current = viewportRef.current?.zoom ?? DEFAULT_ZOOM;
     mapRef.current?.flyToZoomIn(cell.lat, cell.lng, Math.floor(current) + 2);
   }, []);
+  // 모바일은 상세 시트(half)가 아래를 덮으므로 지점이 보이는 위쪽 영역 가운데에 오게 중심을 민다.
+  const flyInset = useCallback(
+    () => (isDesktop ? undefined : { bottomInset: sheetHalfInset(headerHeight) }),
+    [isDesktop, headerHeight],
+  );
   const handleListSelect = useCallback(
     (item: LifeMapNearbyItemType) => {
       select(item.layer, item.id);
-      if (item.lat !== null && item.lng !== null) mapRef.current?.flyTo(item.lat, item.lng);
+      if (item.lat !== null && item.lng !== null) mapRef.current?.flyTo(item.lat, item.lng, undefined, flyInset());
     },
-    [select],
+    [select, flyInset],
   );
   // URL 로 sel 을 들고 진입했을 때(마커 클릭이 아닌 경우) 상세가 오면 그 위치로 1회 이동.
   const flownSelRef = useRef<string | null>(null);
@@ -182,8 +199,11 @@ export const LifeMapPage = () => {
     if (!item || !sel || flownSelRef.current === selectedMarkerId) return;
     flownSelRef.current = selectedMarkerId;
     if (userMovedRef.current) return;
-    if (item.lat !== null && item.lng !== null) mapRef.current?.flyTo(item.lat, item.lng);
-  }, [detailQ.data, sel, selectedMarkerId]);
+    if (item.lat !== null && item.lng !== null) mapRef.current?.flyTo(item.lat, item.lng, undefined, flyInset());
+  }, [detailQ.data, sel, selectedMarkerId, flyInset]);
+
+  // 모바일 시트 스냅 조율 — 상세(sel)가 열리면 목록 시트 peek·숨김, 상세 시트 half.
+  const sheets = useMapSheets(sel !== null);
 
   // 지역 이동(옴니박스) — 선택한 곳으로 날아가고 URL 도 맞춘다(programmatic move 는 URL 동기 안 되므로 직접).
   const [goToOpen, setGoToOpen] = useState(false);
@@ -229,60 +249,94 @@ export const LifeMapPage = () => {
       ? Math.round(approxDistanceM(myLocation, { lat: detailQ.data.lat, lng: detailQ.data.lng }))
       : null;
 
-  return (
-    <div className="flex w-full flex-col xl:flex-row" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
-      <aside className="order-2 flex h-[42dvh] w-full shrink-0 flex-col border-t xl:order-1 xl:h-full xl:w-[400px] xl:border-r xl:border-t-0">
-        <LifeGoToBox
-          open={goToOpen}
-          onOpenChange={setGoToOpen}
-          savedLocation={saved ? { lat: saved.lat, lng: saved.lng, label: saved.label } : null}
-          onGo={handleGo}
-        />
-        {goToOpen ? null : (
-          <>
-        <LifeLayerBar
-          layers={layers}
-          purposes={purposes}
-          toiletFilters={toiletFilters}
-          status={statusQ.data}
-          onToggleLayer={toggleLayer}
-          onTogglePurpose={togglePurpose}
-          onClearPurposes={() => setPurposes([])}
-          onToggleToiletFilter={toggleToiletFilter}
-        />
-        {sel && detailQ.data ? (
-          <LifeDetailCard
-            item={detailQ.data}
-            distM={detailDist}
-            onBack={clearSelection}
-            onFlyTo={(lat, lng) => mapRef.current?.flyTo(lat, lng)}
-          />
-        ) : sel && detailQ.isLoading ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">상세 불러오는 중…</div>
-        ) : sel && detailQ.isError ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
-            항목을 찾을 수 없습니다(데이터가 갱신돼 빠졌을 수 있음).
-            <button type="button" onClick={clearSelection} className="text-xs underline underline-offset-2">
-              목록으로
-            </button>
-          </div>
-        ) : (
-          <LifeNearbyList
-            tab={activeTab}
+  // ── 모바일 상단바 subBar — 지역 이동(드롭다운형) + 레이어 토글. 데스크톱은 등록하지 않는다. ──
+  const savedForGoTo = saved ? { lat: saved.lat, lng: saved.lng, label: saved.label } : null;
+  const subBarContent = useMemo(
+    () =>
+      isDesktop ? null : (
+        <div data-testid="life-subbar">
+          <LifeGoToBox variant="bar" open={goToOpen} onOpenChange={setGoToOpen} savedLocation={savedForGoTo} onGo={handleGo} />
+          <LifeLayerBar
+            section="layers"
+            className="border-b-0 pt-0"
             layers={layers}
-            onTab={setListTab}
-            data={nearbyQ.data}
-            isLoading={nearbyQ.isFetching}
-            radiusM={NEARBY_RADIUS_M[activeTab]}
-            selectedId={sel?.layer === activeTab ? sel.id : null}
-            onSelect={handleListSelect}
+            purposes={purposes}
+            toiletFilters={toiletFilters}
+            status={statusQ.data}
+            onToggleLayer={toggleLayer}
+            onTogglePurpose={togglePurpose}
+            onClearPurposes={clearPurposes}
+            onToggleToiletFilter={toggleToiletFilter}
           />
-        )}
-          </>
-        )}
-        <LifeMapFooter status={statusQ.data} />
-      </aside>
-      <section className="relative order-1 min-h-0 flex-1 xl:order-2">
+        </div>
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- savedForGoTo 는 saved 에서만 파생
+    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter],
+  );
+  useLayoutEffect(() => {
+    setSubBar(subBarContent);
+    return () => setSubBar(null);
+  }, [setSubBar, subBarContent]);
+
+  // ── 패널 조각(데스크톱 패널 / 모바일 시트 공용) ──
+  const layerBarProps = {
+    layers,
+    purposes,
+    toiletFilters,
+    status: statusQ.data,
+    onToggleLayer: toggleLayer,
+    onTogglePurpose: togglePurpose,
+    onClearPurposes: clearPurposes,
+    onToggleToiletFilter: toggleToiletFilter,
+  };
+  const nearbyList = (filters?: React.ReactNode) => (
+    <LifeNearbyList
+      tab={activeTab}
+      layers={layers}
+      onTab={setListTab}
+      data={nearbyQ.data}
+      isLoading={nearbyQ.isFetching}
+      radiusM={NEARBY_RADIUS_M[activeTab]}
+      selectedId={sel?.layer === activeTab ? sel.id : null}
+      onSelect={handleListSelect}
+      filters={filters}
+    />
+  );
+  const detailContent =
+    sel && detailQ.data ? (
+      <LifeDetailCard
+        item={detailQ.data}
+        distM={detailDist}
+        onBack={clearSelection}
+        onFlyTo={(lat, lng) => mapRef.current?.flyTo(lat, lng, undefined, flyInset())}
+      />
+    ) : sel && detailQ.isLoading ? (
+      <div className="flex flex-1 items-center justify-center py-8 text-sm text-muted-foreground">상세 불러오는 중…</div>
+    ) : sel && detailQ.isError ? (
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-8 text-center text-sm text-muted-foreground">
+        항목을 찾을 수 없습니다(데이터가 갱신돼 빠졌을 수 있음).
+        <button type="button" onClick={clearSelection} className="text-xs underline underline-offset-2">
+          목록으로
+        </button>
+      </div>
+    ) : null;
+
+  return (
+    <div
+      className={cn('w-full', isDesktop ? 'flex flex-row' : 'relative')}
+      style={isDesktop ? { height: `calc(100dvh - ${headerHeight}px)` } : undefined}
+    >
+      {/* 지도 — 데스크톱은 우측 flex 칸, 모바일은 헤더 아래 fixed 배경(시트가 그 위에). 두 분기에서 같은
+          자리(첫 자식)라 폭이 바뀌어도 OL 인스턴스는 그대로. --map-bottom-inset: peek 시트가 덮는 높이만큼
+          좌하단 레이어 컨트롤·우하단 내 위치 버튼을 올린다. */}
+      <section
+        className={cn(isDesktop ? 'relative order-2 min-h-0 flex-1' : 'fixed inset-x-0 bottom-0 z-0')}
+        style={
+          isDesktop
+            ? undefined
+            : ({ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties)
+        }
+      >
         <LifeMapView
           ref={mapRef}
           cctv={layers.cctv ? cctvQ.data : undefined}
@@ -302,6 +356,52 @@ export const LifeMapPage = () => {
           onViewportChangeEnd={handleViewportChangeEnd}
         />
       </section>
+
+      {isDesktop ? (
+        /* ━━━ 데스크톱(xl+) — 좌 패널 400px ━━━ */
+        <aside className="order-1 flex h-full w-[400px] shrink-0 flex-col border-r">
+          <LifeGoToBox open={goToOpen} onOpenChange={setGoToOpen} savedLocation={savedForGoTo} onGo={handleGo} />
+          {goToOpen ? null : (
+            <>
+              <LifeLayerBar {...layerBarProps} />
+              {detailContent ?? nearbyList()}
+            </>
+          )}
+          <LifeMapFooter status={statusQ.data} />
+        </aside>
+      ) : (
+        /* ━━━ 모바일 — 목록 시트 + (선택 시) 상세 시트. topOffset 은 통합 헤더 실측 높이. ━━━ */
+        <>
+          <BottomSheet
+            snap={sheets.listSnap}
+            onSnapChange={sheets.setListSnap}
+            topOffset={headerHeight}
+            peekHeight={SHEET_PEEK_HEIGHT}
+            hidden={sheets.listHidden}
+            disableScrollLock={sheets.listHidden}
+            zIndex={20}
+          >
+            <div className="pb-4" data-testid="life-list-sheet">
+              {nearbyList(<LifeLayerBar section="filters" className="border-b-0 py-1" {...layerBarProps} />)}
+              <LifeMapFooter status={statusQ.data} />
+            </div>
+          </BottomSheet>
+          {sel && (
+            <BottomSheet
+              key={selectedMarkerId}
+              snap={sheets.detailSnap}
+              onSnapChange={sheets.setDetailSnap}
+              topOffset={headerHeight}
+              peekHeight={SHEET_PEEK_HEIGHT}
+              zIndex={25}
+            >
+              <div className="pb-4" data-testid="life-detail-sheet">
+                {detailContent}
+              </div>
+            </BottomSheet>
+          )}
+        </>
+      )}
     </div>
   );
 };

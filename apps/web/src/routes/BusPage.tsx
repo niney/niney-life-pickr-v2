@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { BusStationItemType } from '@repo/api-contract';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -29,6 +29,8 @@ import {
 } from '~/components/bus/BusStationList';
 import { BusStationsMap } from '~/components/bus/BusStationsMap';
 import type { MapMarker } from '~/components/restaurant/MapCanvas';
+import { BottomSheet } from '~/components/sheet/BottomSheet';
+import { SHEET_PEEK_HEIGHT, useMapSheets } from '~/components/sheet/useMapSheets';
 import { useTransitCrossShowStore } from '~/stores/transitCrossShowStore';
 import { TransitTabs } from '~/components/transit/TransitTabs';
 import {
@@ -64,6 +66,13 @@ export const BusPage = () => {
   // near 형식/범위 불통과(딥링크·수동 편집 쓰레기 값)는 null → 키워드 모드.
   const near = parseLatLngParam(searchParams.get('near'));
   const nearMode = near !== null;
+
+  // 모바일 시트 스냅 조율 — 정류장(stId)이 잡히면 목록 시트 peek·숨김, 도착 패널을 상세 시트 half 로.
+  // 검색어/주변 모드로 진입(딥링크)했으면 목록 시트를 half 로 시작해 결과가 바로 보이게.
+  // (React Compiler 메모 검증 때문에 useState 선언들보다 앞에 둔다 — 뒤에 두면 setter 들을 반응값으로 본다.)
+  const { listSnap, setListSnap, detailSnap, setDetailSnap, listHidden } = useMapSheets(stId !== null, {
+    initialListSnap: q.trim().length >= 2 || nearMode ? 'half' : 'peek',
+  });
 
   // Geolocation 실패 안내(권한 거부/타임아웃/미지원/비보안) — 좌표를 못 얻으면
   // URL 을 바꾸지 않으므로 이 로컬 상태로만 리스트 영역에 노출한다.
@@ -108,9 +117,9 @@ export const BusPage = () => {
     [navigate, effectiveNear],
   );
 
-  // 통합 헤더(TopBar+subBar) 실측 높이 — 루트 높이를 viewport 잔여분으로 고정해
-  // 지도/리스트가 내부 스크롤로만 동작하게 한다.
-  const { headerHeight } = usePublicLayout();
+  // 통합 헤더(TopBar+subBar) 실측 높이 — 데스크톱은 루트 높이를 viewport 잔여분으로 고정해
+  // 지도/리스트가 내부 스크롤로만 동작하게 하고, 모바일은 시트의 topOffset·지도 fixed top 으로.
+  const { setSubBar, headerHeight } = usePublicLayout();
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -236,8 +245,9 @@ export const BusPage = () => {
         },
         { replace: true },
       );
+      setListSnap((s) => (s === 'peek' ? 'half' : s));
     },
-    [setSearchParams],
+    [setSearchParams, setListSnap],
   );
 
   // '주변 정류장' 버튼 — Geolocation 으로 좌표를 얻어 near 모드로. 성공 시 q 를
@@ -267,6 +277,7 @@ export const BusPage = () => {
           },
           { replace: true },
         );
+        setListSnap((s) => (s === 'peek' ? 'half' : s));
       },
       (err) => {
         // 코드별 안내 — 권한 거부(1)/위치 불가(2)/타임아웃(3).
@@ -280,7 +291,7 @@ export const BusPage = () => {
       },
       { enableHighAccuracy: false, timeout: 10_000 },
     );
-  }, [setSearchParams]);
+  }, [setSearchParams, setListSnap]);
 
   // '이 위치에서 재검색' — 지도 중심 좌표로 near 를 교체. 기준점이 더 이상
   // 내 위치(GPS)가 아닐 수 있지만 파란 점 마커의 의미는 '조회 기준점'으로
@@ -300,8 +311,9 @@ export const BusPage = () => {
         },
         { replace: true },
       );
+      setListSnap((s) => (s === 'peek' ? 'half' : s));
     },
-    [setSearchParams],
+    [setSearchParams, setListSnap],
   );
 
   // 지도 자동 재조회 — 줌이 가까운 상태의 패닝 종료 시 지도에서 호출. URL 은
@@ -609,10 +621,48 @@ export const BusPage = () => {
     crossSearchContent: crossSearchSection,
   };
 
+  // ── 모바일 상단바 subBar — 탭 + 검색행(정류장 선택 중엔 검색행을 접어 공간 회수). xl+ 는 CSS 로
+  // 숨겨 데스크톱 레이아웃엔 영향 없음(헤더 높이도 subBar 가 display:none 이라 그대로). ──
+  const subBarContent = useMemo(
+    () => (
+      <div className="xl:hidden">
+        <TransitTabs active="bus" />
+        {!(stId !== null) && (
+          <BusStationSearchBar
+            q={q}
+            nearMode={nearMode}
+            total={activeTotal}
+            fetchedAt={activeFetchedAt}
+            refreshing={refreshPending}
+            truncated={(nearMode || hasQ) && activeItems.length < activeTotal}
+            stale={nearMode ? false : stale}
+            onSubmitQ={handleSubmitQ}
+            onForceRefresh={handleForceRefresh}
+            onNearby={handleNearby}
+            onClearNear={handleClearNear}
+          />
+        )}
+      </div>
+    ),
+    [stId, q, nearMode, activeTotal, activeFetchedAt, refreshPending, activeItems.length, hasQ, stale, handleSubmitQ, handleForceRefresh, handleNearby, handleClearNear],
+  );
+  useLayoutEffect(() => {
+    setSubBar(subBarContent);
+    return () => setSubBar(null);
+  }, [setSubBar, subBarContent]);
+
   return (
-    <div className="flex w-full flex-col" style={{ height: `calc(100dvh - ${headerHeight}px)` }}>
-      {/* 대중교통 서브탭 — 버스/지하철 전환. 아래 콘텐츠가 잔여 높이를 채운다. */}
-      <TransitTabs active="bus" />
+    <div
+      // 데스크톱(xl+)만 viewport 잔여 높이로 고정(내부 스크롤). 모바일은 auto — 시트가 full 로 펼쳐질 때
+      // body 스크롤(주소창 minify)이 동작해야 해서 루트 높이를 묶지 않는다.
+      className="flex w-full flex-col xl:h-[calc(100dvh-var(--header-h))]"
+      style={{ '--header-h': `${headerHeight}px` } as React.CSSProperties}
+    >
+      {/* 대중교통 서브탭 — 버스/지하철 전환. 데스크톱은 여기(아래 콘텐츠가 잔여 높이를 채운다),
+          모바일은 상단바 subBar 안에 같은 탭이 있다. */}
+      <div className="hidden xl:block">
+        <TransitTabs active="bus" />
+      </div>
       <div className="min-h-0 flex-1">
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           데스크톱 (xl+) — 좌 검색 패널(400px) + 우 지도.
@@ -651,25 +701,15 @@ export const BusPage = () => {
       </div>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          모바일 (xl 미만) — 검색바 고정 / 지도 / 리스트 세로 적층.
+          모바일 (xl 미만) — 맛집 v2 와 같은 시트 패턴. 탭·검색행은 상단바 subBar(통합 sticky 헤더,
+          위 subBarContent)로 올리고, 지도는 그 아래 fixed 배경, 목록은 3-snap 바텀시트, stId 가 잡히면
+          패널을 상세 시트로 얹는다(useMapSheets). 지도 컨트롤은 --map-bottom-inset 으로 peek 시트 위로.
           ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="flex h-full flex-col xl:hidden">
-        <div className="border-b">
-          <BusStationSearchBar
-            q={q}
-            nearMode={nearMode}
-            total={activeTotal}
-            fetchedAt={activeFetchedAt}
-            refreshing={refreshPending}
-            truncated={(nearMode || hasQ) && activeItems.length < activeTotal}
-            stale={nearMode ? false : stale}
-            onSubmitQ={handleSubmitQ}
-            onForceRefresh={handleForceRefresh}
-            onNearby={handleNearby}
-            onClearNear={handleClearNear}
-          />
-        </div>
-        <div className="relative min-h-[40dvh] flex-1">
+      <div className="xl:hidden">
+        <div
+          className="fixed inset-x-0 bottom-0 z-0"
+          style={{ top: `${headerHeight}px`, '--map-bottom-inset': `${SHEET_PEEK_HEIGHT}px` } as React.CSSProperties}
+        >
           <BusStationsMap
             // 데스크톱과 별개 인스턴스(동시 마운트) — 풀 키 분리.
             poolKey="transit-mobile"
@@ -693,12 +733,16 @@ export const BusPage = () => {
             loading={nearMode && nearby.isFetching}
           />
         </div>
-        {/* 정류장 선택 시 하단 리스트 영역이 도착정보 뷰로 전환 — 패널은 내부
-            스크롤(헤더 고정)이라 컨테이너는 flex 로만 감싼다. */}
-        {arrivalPanel ? (
-          <div className="flex h-[38dvh] flex-col border-t">{arrivalPanel}</div>
-        ) : (
-          <div className="h-[38dvh] overflow-y-auto border-t p-3">
+        <BottomSheet
+          snap={listSnap}
+          onSnapChange={setListSnap}
+          topOffset={headerHeight}
+          peekHeight={SHEET_PEEK_HEIGHT}
+          hidden={listHidden}
+          disableScrollLock={listHidden}
+          zIndex={20}
+        >
+          <div className="p-3 pb-8" data-testid="bus-list-sheet">
             <BusStationListBody
               q={q}
               nearMode={nearMode}
@@ -717,6 +761,29 @@ export const BusPage = () => {
               crossSearchContent={crossSearchSection}
             />
           </div>
+        </BottomSheet>
+        {stId !== null && (
+          <BottomSheet
+            key={stId}
+            snap={detailSnap}
+            onSnapChange={setDetailSnap}
+            topOffset={headerHeight}
+            peekHeight={SHEET_PEEK_HEIGHT}
+            zIndex={25}
+          >
+            <div className="pb-8" data-testid="bus-detail-sheet">
+              {arrivalPanel ?? (
+                <div className="flex flex-col items-start gap-2 px-4 py-6 text-sm text-muted-foreground">
+                  {selectedMissing
+                    ? '선택한 정류장이 현재 결과에 없습니다. 다시 검색하거나 목록으로 돌아가세요.'
+                    : '정류장 정보를 불러오는 중…'}
+                  <button type="button" onClick={handleBack} className="text-xs underline underline-offset-2">
+                    ← 목록
+                  </button>
+                </div>
+              )}
+            </div>
+          </BottomSheet>
         )}
       </div>
       </div>

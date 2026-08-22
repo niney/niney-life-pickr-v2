@@ -117,6 +117,7 @@ export const BusStationSearchBar = ({
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex min-w-0 flex-wrap items-center gap-1.5 tabular-nums">
             총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}
+            {truncated && <span title="서버가 100건으로 절단했습니다">· 일부만 표시</span>}
             {stale && (
               <Badge variant="amber" title="서울시 API 오류 — 저장된 결과를 표시 중입니다">
                 서울시 API 오류 · 저장된 결과
@@ -143,7 +144,12 @@ export const BusStationSearchBar = ({
             <Badge variant="secondary" className="gap-1">
               <LocateFixed className="size-3" /> 내 주변
             </Badge>
-            {fetchedAt && <>총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}</>}
+            {fetchedAt && (
+              <>
+                총 {total}개 · 갱신 {formatRelativeMin(fetchedAt)}
+                {truncated && <span title="서버가 100건으로 절단했습니다">· 일부만 표시</span>}
+              </>
+            )}
           </span>
           <button
             type="button"
@@ -157,9 +163,6 @@ export const BusStationSearchBar = ({
         </div>
       )}
 
-      {truncated && (
-        <p className="text-xs text-muted-foreground">결과가 많아 일부만 표시합니다.</p>
-      )}
     </div>
   );
 };

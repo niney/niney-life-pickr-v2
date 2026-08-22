@@ -146,8 +146,8 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
           <span className="truncate">{hint}</span>
         </div>
       ) : null}
-      {/* 우하단 — 내 위치(좌하단은 MapCanvas 레이어 컨트롤). */}
-      <div className="absolute bottom-3 right-3 z-10">
+      {/* 우하단 — 내 위치(좌하단은 MapCanvas 레이어 컨트롤). 아래 여백은 시트 inset 변수 반영. */}
+      <div className="absolute bottom-[calc(0.75rem+var(--map-bottom-inset,0px))] right-3 z-10">
         <MyLocationButton status={locationStatus} onClick={onLocate} />
       </div>
     </div>
