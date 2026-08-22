@@ -1,0 +1,178 @@
+import { useEffect, useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  CreateMealEntryInputType,
+  RecognizeMealInputType,
+  UpdateMealEntryInputType,
+  UpdateMealPreferenceInputType,
+} from '@repo/api-contract';
+import { mealApi, type ListMealEntriesInput, type MealPhotoUploadFile } from '../api/meal.api.js';
+
+// 쿼리 키 루트 ['meal', ...] — 목록 ['meal','list',query], 단건 ['meal','one',id],
+// 달력 ['meal','calendar',month], 통계 ['meal','stats',from,to], 선호 ['meal','preference'].
+// 기록이 바뀌면 목록·달력·통계가 모두 흔들리므로 루트 하나로 무효화한다.
+
+const KEY = ['meal'] as const;
+
+const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
+  void qc.invalidateQueries({ queryKey: [...KEY, 'list'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'calendar'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'stats'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+};
+
+export const useMealEntries = (query: ListMealEntriesInput = {}) =>
+  useQuery({
+    queryKey: [...KEY, 'list', query],
+    queryFn: () => mealApi.list(query),
+    placeholderData: keepPreviousData,
+  });
+
+export const useMealEntry = (id: string | null | undefined) =>
+  useQuery({
+    queryKey: [...KEY, 'one', id],
+    queryFn: () => mealApi.get(id!),
+    enabled: !!id,
+  });
+
+export const useMealCalendar = (month: string, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'calendar', month],
+    queryFn: () => mealApi.calendar(month),
+    enabled: enabled && /^\d{4}-\d{2}$/.test(month),
+    placeholderData: keepPreviousData,
+  });
+
+export const useMealStats = (from: string, to: string, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'stats', from, to],
+    queryFn: () => mealApi.stats(from, to),
+    enabled: enabled && !!from && !!to,
+    placeholderData: keepPreviousData,
+  });
+
+export const useCreateMealEntry = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateMealEntryInputType) => mealApi.create(input),
+    onSuccess: (entry) => {
+      qc.setQueryData([...KEY, 'one', entry.id], entry);
+      invalidateEntries(qc);
+    },
+  });
+};
+
+export const useUpdateMealEntry = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateMealEntryInputType }) =>
+      mealApi.update(id, input),
+    onSuccess: (entry) => {
+      qc.setQueryData([...KEY, 'one', entry.id], entry);
+      invalidateEntries(qc);
+    },
+  });
+};
+
+export const useDeleteMealEntry = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => mealApi.remove(id),
+    onSuccess: (_r, id) => {
+      qc.removeQueries({ queryKey: [...KEY, 'one', id] });
+      invalidateEntries(qc);
+    },
+  });
+};
+
+// 사진 업로드 — 여러 장은 화면에서 순차 호출(진행률 표시). 서버 한도는 요청당 1장·5MB.
+export const useUploadMealPhoto = () =>
+  useMutation({
+    mutationFn: (file: MealPhotoUploadFile) => mealApi.uploadPhoto(file),
+  });
+
+export const useDeleteMealPhoto = () =>
+  useMutation({
+    mutationFn: (token: string) => mealApi.removePhoto(token),
+  });
+
+// 사진 인식 — 실패해도 화면은 수동 입력으로 이어진다(에러를 던지되 흐름을 막지 않는다).
+export const useRecognizeMeal = () =>
+  useMutation({
+    mutationFn: (input: RecognizeMealInputType) => mealApi.recognize(input),
+  });
+
+export const useMealPreference = () =>
+  useQuery({
+    queryKey: [...KEY, 'preference'],
+    queryFn: mealApi.getPreference,
+    staleTime: 60_000,
+  });
+
+export const useUpdateMealPreference = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateMealPreferenceInputType) => mealApi.updatePreference(input),
+    onSuccess: (pref) => {
+      qc.setQueryData([...KEY, 'preference'], pref);
+      // 가중치가 바뀌면 캐시된 추천의 근거가 달라진다.
+      void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+    },
+  });
+};
+
+// 사진 URL — 서버가 JWT 를 요구해 <img src>/<Image source> 로 직접 못 쓴다. blob 을 받아
+// 플랫폼별로 URL 을 만든다: 웹은 objectURL(메모리 해제 필요), RN 은 data URL(Image 가
+// objectURL 을 못 읽는다). 외부 리소스 수명 관리라 useEffect 가 맞는 자리.
+export const useMealPhotoUrl = (
+  token: string | null | undefined,
+  opts: { variant?: 'full' | 'thumb'; enabled?: boolean } = {},
+): { url: string | null; error: string | null } => {
+  const variant = opts.variant ?? 'thumb';
+  const enabled = opts.enabled ?? true;
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || !enabled) {
+      setUrl(null);
+      return undefined;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setUrl(null);
+    setError(null);
+    void (async () => {
+      try {
+        const blob = await mealApi.photoBlob(token, variant);
+        if (cancelled) return;
+        // RN 에는 URL.createObjectURL 이 없다(또는 Image 가 못 읽는다) → FileReader data URL.
+        const canObjectUrl =
+          typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof document !== 'undefined';
+        if (canObjectUrl) {
+          objectUrl = URL.createObjectURL(blob);
+          setUrl(objectUrl);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (cancelled) return;
+          if (typeof reader.result === 'string') setUrl(reader.result);
+          else setError('사진 변환 실패');
+        };
+        reader.onerror = () => {
+          if (!cancelled) setError('사진 변환 실패');
+        };
+        reader.readAsDataURL(blob);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : '사진을 불러오지 못했습니다');
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [token, variant, enabled]);
+
+  return { url, error };
+};

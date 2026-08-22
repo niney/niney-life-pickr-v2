@@ -5,6 +5,7 @@ import {
   configureApi,
   setAirLocationStorage,
   setBusFavoriteStorage,
+  setMealDraftStorage,
   setReviewAskStorage,
   setSettlementDraftStorage,
   setSubwayFavoriteStorage,
@@ -27,6 +28,9 @@ setSubwayFavoriteStorage(AsyncStorage);
 // 내 위치(날씨·대기 공용, 게스트 로컬 저장분) persist 어댑터 — 같은 이유로 주입. 로그인 사용자는
 // 서버 저장분을 쓰고 이 값은 로그인 직후 1회 업로드 후 비운다(useAirLocation).
 setAirLocationStorage(AsyncStorage);
+// 식단 입력 draft(사진 인식 → 편집 → 저장 사이) persist 어댑터 — 미주입이면 앱이
+// 백그라운드에서 종료될 때 입력 중이던 기록이 사라진다.
+setMealDraftStorage(AsyncStorage);
 
 const TOKEN_KEY = 'lp:token';
 const GUEST_KEY = 'lp:guest';

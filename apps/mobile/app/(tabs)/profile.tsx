@@ -78,6 +78,14 @@ export default function ProfileScreen() {
     }
     return [
       {
+        key: 'meals',
+        icon: '🍚',
+        label: '내 식단',
+        hint: '사진으로 기록하고 다음 끼니를 추천받기',
+        // typedRoutes 는 새 라우트가 생성 타입에 반영되기 전까지 as never 캐스팅이 필요하다(리포 관용구).
+        onPress: () => router.push('/meal' as never),
+      },
+      {
         key: 'settlements',
         icon: '🧾',
         label: '내 정산 이력',
