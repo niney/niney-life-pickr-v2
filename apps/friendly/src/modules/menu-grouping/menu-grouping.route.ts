@@ -9,7 +9,7 @@ import {
   Routes,
 } from '@repo/api-contract';
 import { AiConfigService } from '../ai/ai.config.service.js';
-import { env } from '../../config/env.js';
+import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { MenuGroupingError, MenuGroupingService } from './menu-grouping.service.js';
 import {
   groupingJobRegistry,
@@ -18,17 +18,7 @@ import {
 import { MENU_GROUPING_VERSION } from './menu-grouping.prompts.js';
 
 const menuGroupingRoutes: FastifyPluginAsync = async (app) => {
-  const aiConfig = new AiConfigService(app.prisma, {
-    apiKey: env.OLLAMA_CLOUD_API_KEY,
-    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModels: {
-      chat: env.OLLAMA_DEFAULT_MODEL,
-      image: env.OLLAMA_IMAGE_MODEL,
-      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-    },
-  });
+  const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   const grouping = new MenuGroupingService(app.prisma, aiConfig, {
     logger: app.log,
     // 범용 작업 로그 — 식당별 그룹핑 1회 = OperationRun 1개.

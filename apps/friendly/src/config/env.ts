@@ -19,13 +19,18 @@ const EnvSchema = z.object({
   OLLAMA_CLOUD_MAX_CONCURRENT: z.coerce.number().int().positive().default(15),
   // 용도별 기본 모델 fallback — DB(LlmProviderConfig) row 의 defaultModel 이
   // 비어 있을 때만 사용. 비우면 "기본 없음" — 해당 용도는 model 을 명시받거나
-  // (chat) skip(image/log-analysis) 된다.
-  //  - OLLAMA_DEFAULT_MODEL:      텍스트(chat) 기본 모델.
-  //  - OLLAMA_IMAGE_MODEL:        이미지(vision) 기본 모델 (영수증 추출 등).
-  //  - OLLAMA_LOG_ANALYSIS_MODEL: 로그 분석(log-analysis) 기본 모델.
+  // (chat) skip(image/log-analysis/meal-photo/meal-recommend) 된다.
+  // .env → LlmProviderEnv 조립은 modules/ai/llm-provider-env.ts 한 곳에서 한다.
+  //  - OLLAMA_DEFAULT_MODEL:        텍스트(chat) 기본 모델.
+  //  - OLLAMA_IMAGE_MODEL:          이미지(vision) 기본 모델 (영수증 추출 등).
+  //  - OLLAMA_LOG_ANALYSIS_MODEL:   로그 분석(log-analysis) 기본 모델.
+  //  - OLLAMA_MEAL_PHOTO_MODEL:     식단 사진 인식(meal-photo, vision) 기본 모델 — 식단 관리.
+  //  - OLLAMA_MEAL_RECOMMEND_MODEL: 식단 추천(meal-recommend, 텍스트) 기본 모델 — 식단 관리.
   OLLAMA_DEFAULT_MODEL: z.string().default(''),
   OLLAMA_IMAGE_MODEL: z.string().default(''),
   OLLAMA_LOG_ANALYSIS_MODEL: z.string().default(''),
+  OLLAMA_MEAL_PHOTO_MODEL: z.string().default(''),
+  OLLAMA_MEAL_RECOMMEND_MODEL: z.string().default(''),
 
   // 텔레그램 봇 — 맛집 자동 발굴(random-crawl)이 후보를 보내고 사용자가
   // 인라인 버튼으로 고르면 그 응답을 long-polling 으로 받는다. 둘 다 비어 있으면
@@ -84,6 +89,16 @@ const EnvSchema = z.object({
   //  - SEOUL_OPEN_API_KEY: openapi 정적(역사마스터) — load:subway-stations 가 사용.
   SUBWAY_API_KEY: z.string().default(''),
   SEOUL_OPEN_API_KEY: z.string().default(''),
+
+  // 음식 카탈로그(food) 적재 소스 키 — 식단 관리. 요청 경로가 아니라 어드민 적재 잡/CLI 만 쓴다.
+  //  - FOOD_API_KEY:        data.go.kr 전국통합식품영양성분정보(음식) 표준데이터(15100070). 같은
+  //                         data.go.kr 계정 키라 비우면 BUS_API_KEY 로 폴백(해당 데이터셋 활용신청만 추가).
+  //  - FOOD_RECIPE_API_KEY: 식품안전나라(foodsafetykorea.go.kr) OpenAPI 키 — 조리식품 레시피 DB COOKRCP01.
+  //  - MAFRA_API_KEY:       data.mafra.go.kr 키 — 레시피 기본/재료(선택).
+  // 비어 있는 소스는 적재 회차에서 오류로 기록하고 건너뛴다(다른 소스는 진행).
+  FOOD_API_KEY: z.string().default(''),
+  FOOD_RECIPE_API_KEY: z.string().default(''),
+  MAFRA_API_KEY: z.string().default(''),
 
   // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치

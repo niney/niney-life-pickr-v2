@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // ── 검증 개입률 — 검증 가드레일이 "실제로" 답을 바꾸는 빈도 ──────────────────────
@@ -10,14 +10,6 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 //   - 개입률 높음 → 생성 답을 그대로 못 보여줌 → 검증은 critical path 유지해야 → 레버 기각.
 // 생성은 확률적이라 질의×ROUNDS. 실행:
 //   cd apps/friendly && pnpm exec tsx --env-file=.env research/review-search/probe-verify-rate.ts
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: { chat: env.OLLAMA_DEFAULT_MODEL, image: env.OLLAMA_IMAGE_MODEL, 'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL },
-});
 
 const ROUNDS = Math.max(1, Number(process.env.VR_ROUNDS || 2));
 const QUERIES = [
@@ -33,7 +25,7 @@ const QUERIES = [
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildEnvBlock()));
+  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildLlmProviderEnv()));
   const target = await prisma.restaurant.findFirst({
     where: { name: { contains: '조연탄' }, visitorReviews: { some: {} } },
     select: { id: true, name: true },

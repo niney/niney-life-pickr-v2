@@ -11,7 +11,7 @@ import {
   Routes,
 } from '@repo/api-contract';
 import { AiConfigService } from '../ai/ai.config.service.js';
-import { env } from '../../config/env.js';
+import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { AnalyticsError, AnalyticsService } from './analytics.service.js';
 import { GLOBAL_MERGE_VERSION } from './global-merge.prompts.js';
 import {
@@ -20,17 +20,7 @@ import {
 } from './global-merge-job-registry.js';
 
 const analyticsRoutes: FastifyPluginAsync = async (app) => {
-  const aiConfig = new AiConfigService(app.prisma, {
-    apiKey: env.OLLAMA_CLOUD_API_KEY,
-    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModels: {
-      chat: env.OLLAMA_DEFAULT_MODEL,
-      image: env.OLLAMA_IMAGE_MODEL,
-      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-    },
-  });
+  const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   // operationLog 주입 — runGlobalMerge 가 service 내부에서 OperationRun 을
   // 기록한다 (plugins/logs.ts 가 decorate, 플러그인이 라우트보다 먼저 로드됨).
   const service = new AnalyticsService(app.prisma, aiConfig, {

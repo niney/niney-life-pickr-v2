@@ -24,33 +24,20 @@ import {
 } from '@repo/api-contract';
 
 const AiRoutes = Routes.Ai;
-import { env } from '../../config/env.js';
+import { buildLlmProviderEnv } from './llm-provider-env.js';
 import { adapterCache } from './adapter-cache.js';
 import type { LLMProvider } from './adapters/llm-provider.js';
 import { OllamaCloudAdapter } from './adapters/ollama-cloud.adapter.js';
 import {
   AiConfigService,
-  type LlmProviderEnv,
   type ResolvedProviderConfig,
 } from './ai.config.service.js';
 import { AiService, classifyError } from './ai.service.js';
 
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
-
 const ProviderParams = z.object({ id: LlmProviderId, purpose: LlmProviderPurpose });
 
 const aiRoutes: FastifyPluginAsync = async (app) => {
-  const config = new AiConfigService(app.prisma, buildEnvBlock());
+  const config = new AiConfigService(app.prisma, buildLlmProviderEnv());
   const cache = adapterCache;
 
   // Lazy provider — picked per-request so config changes (incl. maxConcurrent)
@@ -187,7 +174,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       // 저장 없이 입력 폼의 키로 직접 어댑터를 만들어 listModels 만 호출한다.
       // adapterCache 는 거치지 않는다 — 미저장 키를 캐시 키로 박으면 다른
       // 요청에서 의도치 않게 이 키를 쓰게 된다.
-      const env = buildEnvBlock();
+      const env = buildLlmProviderEnv();
       const adapter = new OllamaCloudAdapter({
         apiKey: req.body.apiKey,
         baseUrl: req.body.baseUrl || env.baseUrl,

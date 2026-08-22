@@ -11,7 +11,13 @@ const resolved = (
   baseUrl: 'https://x',
   timeoutMs: 1_000,
   maxConcurrent: 5,
-  defaultModels: { chat: '', image: '', 'log-analysis': '' },
+  defaultModels: {
+    chat: '',
+    image: '',
+    'log-analysis': '',
+    'meal-photo': '',
+    'meal-recommend': '',
+  },
   enabled: true,
   ...overrides,
 });

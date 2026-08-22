@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // ── HyDE A/B ──────────────────────────────────────────────────────────────────
@@ -8,18 +8,6 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 // 도움이 안 되면 ask()에서 HyDE 1콜(~1.5~2초)을 제거해 지연 단축 — 품질 트레이드 없음.
 // 정답=aspects 라벨(probe-eval 과 동일). HyDE 는 생성이 확률적이라 N라운드 평균.
 // 실행: cd apps/friendly && pnpm exec tsx --env-file=.env research/review-search/probe-hyde.ts
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 const K = 10;
 const ROUNDS = Math.max(1, Number(process.env.HYDE_ROUNDS || 2));
@@ -40,7 +28,7 @@ const pc = (x: number): string => `${(x * 100).toFixed(0)}%`;
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildEnvBlock()));
+  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildLlmProviderEnv()));
 
   const target = await prisma.restaurant.findFirst({
     where: { name: { contains: '조연탄' }, visitorReviews: { some: {} } },

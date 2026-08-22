@@ -88,9 +88,20 @@ export type LlmProviderIdType = z.infer<typeof LlmProviderId>;
 
 // 같은 provider 를 용도별로 따로 설정한다 — 텍스트(chat)와 비전(image)은
 // 보통 모델이 달라 한 row 에 묶기 어렵다. env fallback 은 chat 에만 적용,
-// image/log-analysis 는 DB row 가 있을 때만 활성화된다 (log-analysis 미설정
+// 그 외 용도는 DB row 가 있을 때만 활성화된다 (log-analysis 미설정
 // 시 실패 잡 자동 분석은 조용히 스킵).
-export const LlmProviderPurpose = z.enum(['chat', 'image', 'log-analysis']);
+//  - chat           텍스트 기본(요약·메뉴 정규화·글로벌 머지·음식 카탈로그 분류 등)
+//  - image          비전 — 영수증 추출
+//  - log-analysis   실패 작업 로그 분석
+//  - meal-photo     비전 — 식단 사진 음식 인식(식단 관리). image 와 모델·게이트를 분리해 독립 튜닝
+//  - meal-recommend 텍스트 — 다음 끼니 추천(식단 관리)
+export const LlmProviderPurpose = z.enum([
+  'chat',
+  'image',
+  'log-analysis',
+  'meal-photo',
+  'meal-recommend',
+]);
 export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
 
 // 이 용도가 어떤 키로 동작하는지 — UI 배지용.

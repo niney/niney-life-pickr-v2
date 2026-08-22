@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // ── 단계별 지연 계측 ──────────────────────────────────────────────────────────
@@ -12,18 +12,6 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 //   ask(full)      = search(rerank) + 생성 LLM + 검증 LLM (3콜, HyDE 제거됨)
 //   chat baseline  = ollama-cloud /api/chat 단일 왕복(참고)
 // 실행: cd apps/friendly && tsx --env-file=.env research/review-search/probe-latency.ts
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 const ROUNDS = Math.max(1, Number(process.env.LAT_ROUNDS || 2));
 const Q = process.env.LAT_QUERY || '주차 돼요?';
@@ -40,7 +28,7 @@ const row = (label: string, v: number, tag = ''): void =>
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const aiConfig = new AiConfigService(prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const service = new ReviewSearchService(prisma, aiConfig);
   const resolved = await aiConfig.getResolved('ollama-cloud', 'chat');
 

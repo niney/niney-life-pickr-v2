@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService, type SearchMode } from '../../src/modules/review-search/review-search.service.js';
 
 // review-search 정확도 평가 하니스 — 무라벨.
@@ -17,18 +17,6 @@ const execFileAsync = promisify(execFile);
 
 const K = 10;
 const ROUNDS = Math.max(1, Number(process.env.EVAL_ROUNDS || 2));
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 // (질의, 관점, 극성) — 관점/극성으로 "관련 리뷰"를 aspects 라벨에서 자동 유도.
 const RETRIEVAL_QUERIES: Array<{ q: string; aspect: string; polarity: 'pos' | 'neg' | null }> = [
@@ -70,7 +58,7 @@ const pct = (hit: number, n: number): string => (n ? `${((hit / n) * 100).toFixe
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const aiConfig = new AiConfigService(prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const service = new ReviewSearchService(prisma, aiConfig);
   const resolved = await aiConfig.getResolved('ollama-cloud', 'chat');
 

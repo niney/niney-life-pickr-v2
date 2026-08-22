@@ -3,7 +3,7 @@ import { SummaryService } from '../modules/summary/summary.service.js';
 import { ReviewSearchService } from '../modules/review-search/review-search.service.js';
 import { ReviewClusteringService } from '../modules/review-clustering/review-clustering.service.js';
 import { AiConfigService } from '../modules/ai/ai.config.service.js';
-import { env } from '../config/env.js';
+import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 
 // SummaryService 를 app 전역 singleton 으로. 두 라우트(crawl/restaurant) 가
 // 같은 chain map · cancelledPlaces 를 공유해야 어드민의 "요약 중지" 같은
@@ -16,17 +16,7 @@ import { env } from '../config/env.js';
 // 드롭하지 않는다. dependencies 선언으로 autoload 가 두 플러그인을 선행 등록.
 export default fp(
   async (app) => {
-    const aiConfig = new AiConfigService(app.prisma, {
-      apiKey: env.OLLAMA_CLOUD_API_KEY,
-      baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-      timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-      maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-      defaultModels: {
-        chat: env.OLLAMA_DEFAULT_MODEL,
-        image: env.OLLAMA_IMAGE_MODEL,
-        'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-      },
-    });
+    const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
     // review-search 도 app 전역 singleton — corpusCache(LRU)·enrich 진행상태를
     // 라우트·요약 훅이 한 인스턴스로 공유해야 한다. 요약 종료 시 자동 enrich 를
     // 위해 SummaryService 에 주입.

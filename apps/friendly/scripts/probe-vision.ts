@@ -1,8 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { env } from '../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
 import { adapterCache } from '../src/modules/ai/adapter-cache.js';
 import {
   EXTRACTION_JSON_SCHEMA,
@@ -15,22 +15,10 @@ import {
 //
 // 실행: pnpm --filter friendly probe:vision -- <token>
 
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
-
 const main = async (): Promise<void> => {
   const token = process.argv[2] ?? '02c6920e-cd37-468f-87e9-925ba7584581';
   const prisma = new PrismaClient();
-  const aiConfig = new AiConfigService(prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const resolved = await aiConfig.getResolved('ollama-cloud', 'image');
   if (!resolved) {
     console.error('image 용도 provider 가 설정되지 않았습니다.');

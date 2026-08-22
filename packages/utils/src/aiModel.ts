@@ -51,11 +51,26 @@ export const groupModelsByFamily = (models: string[]): ModelFamilyGroup[] => {
     .sort((a, b) => a.family.localeCompare(b.family));
 };
 
-// 모델 id 가 vision(이미지 입력) 계열인지 — 이름 휴리스틱. 'llama3.2-vision',
-// 'llava', 'qwen3-vl', 'qwen2.5vl:7b', 'minicpm-v' 등을 잡는다. 완벽한 판별이
-// 아니라 image 용도 추천에서 텍스트 모델을 거르는 정도의 게이트.
-export const isVisionModel = (modelId: string): boolean =>
-  /vision|llava|vl(?=[-_:]|\d|$)|minicpm-v/i.test(modelId.trim());
+// 모델 id 가 vision(이미지 입력) 계열인지 — 이름 휴리스틱. 완벽한 판별이 아니라
+// image·meal-photo 용도 추천에서 텍스트 모델을 거르는 정도의 게이트.
+//  1) 이름에 vision/llava/vl/minicpm-v 가 들어가면 vision — 'llama3.2-vision',
+//     'llava', 'qwen3-vl', 'qwen2.5vl:7b', 'minicpm-v'.
+//  2) 이름에 vl/vision 이 없는데도 이미지 입력을 받는 멀티모달 계열 — Ollama
+//     Cloud 카탈로그(2026-08-22 확인) 기준. family(':' 앞)의 접두를 대소문자
+//     무시로 본다. 계열명 바로 뒤에 글자가 이어지면(gemma4x…) 다른 계열로 취급.
+//       gemma4 · gemma3 · qwen3.5 · kimi-k2.6 · kimi-k3 · minimax-m3 ·
+//       mistral-large-3 · llama4 · mistral-small3(.1/.2) · glm-4.5v / glm-4.6v
+//     카탈로그가 바뀌면 이 목록을 갱신한다 (aiModel.test.ts 도 함께).
+const VISION_NAME_RE = /vision|llava|vl(?=[-_:]|\d|$)|minicpm-v/i;
+const MULTIMODAL_FAMILY_RE =
+  /^(?:gemma[34]|qwen3\.5|kimi-k2\.6|kimi-k3|minimax-m3|mistral-large-3|llama4|mistral-small3|glm-4\.\dv)(?![a-z])/i;
+
+export const isVisionModel = (modelId: string): boolean => {
+  const id = modelId.trim();
+  if (VISION_NAME_RE.test(id)) return true;
+  const family = id.split(':')[0] ?? id;
+  return MULTIMODAL_FAMILY_RE.test(family);
+};
 
 // 모델 id 에서 파라미터 규모(B 단위)를 추출. '120b', ':235b', '7b' 등. 여러
 // 개면 가장 큰 값. 못 찾으면 0 — 정렬 시 맨 뒤로 밀린다.
@@ -65,20 +80,21 @@ const modelSizeB = (modelId: string): number => {
   return Math.max(...matches.map((m) => Number.parseFloat(m[1]!)));
 };
 
+// LLM 용도 — @repo/api-contract 의 LlmProviderPurpose 와 같은 값. utils 는
+// api-contract 에 의존할 수 없어(순환 금지) 리터럴 유니온으로 다시 적는다.
+type ModelPurpose = 'chat' | 'image' | 'log-analysis' | 'meal-photo' | 'meal-recommend';
+
 // 용도별로 카탈로그에서 합리적인 기본 모델을 한 개 고른다. UI 가 키 입력 후
 // "추천값"을 폼에 프리필하는 용도 — 강제가 아니라 시작점이다. 적합한 후보가
 // 없으면 null (그땐 프리필하지 않는다).
-//   image        vision 계열 중 가장 작은 모델 (대개 충분 + 저렴). 없으면 null.
-//   log-analysis 텍스트 계열 중 가장 큰 모델 (원인 추론은 추론력 우선).
-//   chat         텍스트 계열 중 중간 규모 (속도·품질 균형).
-export const recommendModelForPurpose = (
-  purpose: 'chat' | 'image' | 'log-analysis',
-  models: string[],
-): string | null => {
+//   image·meal-photo    vision 계열 중 가장 작은 모델 (대개 충분 + 저렴). 없으면 null.
+//   log-analysis        텍스트 계열 중 가장 큰 모델 (원인 추론은 추론력 우선).
+//   chat·meal-recommend 텍스트 계열 중 중간 규모 (속도·품질 균형).
+export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]): string | null => {
   const list = models.map((m) => m.trim()).filter((m) => m.length > 0);
   if (list.length === 0) return null;
 
-  if (purpose === 'image') {
+  if (purpose === 'image' || purpose === 'meal-photo') {
     const vision = list.filter(isVisionModel).sort((a, b) => modelSizeB(a) - modelSizeB(b));
     return vision[0] ?? null;
   }
@@ -91,6 +107,6 @@ export const recommendModelForPurpose = (
   if (purpose === 'log-analysis') {
     return bySize[bySize.length - 1] ?? null; // 가장 큰 모델
   }
-  // chat — 규모 오름차순의 중앙값(작은 쪽으로 치우침).
+  // chat·meal-recommend — 규모 오름차순의 중앙값(작은 쪽으로 치우침).
   return bySize[Math.floor((bySize.length - 1) / 2)] ?? null;
 };

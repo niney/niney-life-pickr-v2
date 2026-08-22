@@ -7,7 +7,7 @@ import {
   cleanupExpiredOperationLogs,
   sweepStaleOperationRuns,
 } from '../modules/logs/operation-log.service.js';
-import { env } from '../config/env.js';
+import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 
 // 범용 작업 로그 — OperationLogService(run/스텝 기록) 와 LogAnalysisService
 // (실패 run LLM 분석) 를 app 전역 singleton 으로 decorate 한다. 모든 기능
@@ -20,17 +20,7 @@ import { env } from '../config/env.js';
 // summaries 가 decorate 하는데 'logs' < 'summaries' 라 재사용 불가.
 export default fp(
   async (app) => {
-    const aiConfig = new AiConfigService(app.prisma, {
-      apiKey: env.OLLAMA_CLOUD_API_KEY,
-      baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-      timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-      maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-      defaultModels: {
-        chat: env.OLLAMA_DEFAULT_MODEL,
-        image: env.OLLAMA_IMAGE_MODEL,
-        'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-      },
-    });
+    const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
     const logAnalysis = new LogAnalysisService(app.prisma, aiConfig, {
       logger: app.log,
     });

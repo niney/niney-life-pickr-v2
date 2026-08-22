@@ -7,8 +7,8 @@ import {
   Routes,
   UploadReceiptResult,
 } from '@repo/api-contract';
-import { env } from '../../config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
+import { AiConfigService } from '../ai/ai.config.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import {
   SettlementExtractionError,
@@ -17,18 +17,6 @@ import {
 } from './settlement-extraction.service.js';
 
 const SE = Routes.SettlementExtraction;
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 const PreviewParams = z.object({ token: z.string().min(1) });
 
@@ -52,7 +40,7 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementExtractionError): never 
 };
 
 const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
-  const aiConfig = new AiConfigService(app.prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   // operationLog 주입 — extract 1회 = OperationRun 1개 계측. plugins/logs.ts
   // 가 라우트 autoload 보다 먼저 등록되므로 여기서 참조해도 안전하다.
   const service = new SettlementExtractionService(aiConfig, {

@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // ── 리랭크의 값어치 — 하이브리드 top-6 대비 리랭크 top-6 가 정말 더 관련 있나? ──
@@ -11,14 +11,6 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 // precision 은 특히 부정 질의에서 중요(리랭크가 칭찬 리뷰를 빼서 faithfulness 보호).
 // 리랭크는 확률적이라 ROUNDS 평균. 실행:
 //   cd apps/friendly && pnpm exec tsx --env-file=.env research/review-search/probe-rerank-value.ts
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: { chat: env.OLLAMA_DEFAULT_MODEL, image: env.OLLAMA_IMAGE_MODEL, 'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL },
-});
 
 const K = 6; // ASK_EVIDENCE
 const ROUNDS = Math.max(1, Number(process.env.RV_ROUNDS || 2));
@@ -41,7 +33,7 @@ const pc = (x: number): string => `${(x * 100).toFixed(0)}%`;
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildEnvBlock()));
+  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildLlmProviderEnv()));
 
   const target = await prisma.restaurant.findFirst({
     where: { name: { contains: '조연탄' }, visitorReviews: { some: {} } },

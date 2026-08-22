@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // ── recall 진단 프로브 ────────────────────────────────────────────────────────
@@ -23,18 +23,6 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 const execFileAsync = promisify(execFile);
 const ROUNDS = Math.max(1, Number(process.env.EVAL_ROUNDS || 1));
 const REF_CAP = 30; // 레퍼런스로 Claude 에 넘길 부정 리뷰 최대 수(프롬프트 크기 제한)
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 // 부정 의견의 "완전성"이 걸리는 질문들.
 const COMPLETENESS_QUERIES = ['이 식당 단점은 뭐야?', '안 좋다는 평가는 어떤 게 있어?'];
@@ -83,7 +71,7 @@ const judgeCompleteness = async (
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildEnvBlock()));
+  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildLlmProviderEnv()));
 
   const target = await prisma.restaurant.findFirst({
     where: { name: { contains: '조연탄' }, visitorReviews: { some: {} } },

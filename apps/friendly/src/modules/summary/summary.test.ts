@@ -122,7 +122,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'override-model' }),
@@ -179,7 +185,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'm' }),
@@ -216,7 +228,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'm' }),
@@ -246,7 +264,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'm' }),
@@ -279,7 +303,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'override-model' }),
@@ -318,7 +348,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => ({ provider, model: 'm' }),
@@ -341,7 +377,13 @@ describe('SummaryService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
     const service = new SummaryService(app.prisma, aiConfig, {
       resolveOverride: async () => null,

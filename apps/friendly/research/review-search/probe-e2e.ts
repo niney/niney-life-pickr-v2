@@ -1,28 +1,16 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // review-search 본구현 검증: enrich(DB 영속) → 검색/RAG → 2회차 캐시 스킵.
 // 실행: pnpm --filter friendly probe:review-search
 
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
-
 const oneLine = (s: string, n = 50): string => s.replace(/\s+/g, ' ').trim().slice(0, n);
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildEnvBlock()));
+  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildLlmProviderEnv()));
 
   const target = await prisma.restaurant.findFirst({
     where: { name: { contains: '조연탄' }, visitorReviews: { some: {} } },

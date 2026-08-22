@@ -11,6 +11,7 @@ import { TelegramService } from '../modules/telegram/telegram.service.js';
 import { TelegramConfigService } from '../modules/settings/telegram-config.service.js';
 import { RandomCrawlService } from '../modules/random-crawl/random-crawl.service.js';
 import { env } from '../config/env.js';
+import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 
 // 맛집 자동 발굴(random-crawl) 스케줄러. RandomCrawlService 를 app 전역 singleton
 // 으로 decorate — 라우트(설정/수동실행)와 부팅 cron tick + 텔레그램 폴러가 같은
@@ -23,17 +24,7 @@ import { env } from '../config/env.js';
 export default fp(
   async (app) => {
     const restaurants = new RestaurantService(app.prisma);
-    const aiConfig = new AiConfigService(app.prisma, {
-      apiKey: env.OLLAMA_CLOUD_API_KEY,
-      baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-      timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-      maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-      defaultModels: {
-        chat: env.OLLAMA_DEFAULT_MODEL,
-        image: env.OLLAMA_IMAGE_MODEL,
-        'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-      },
-    });
+    const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
     // 요약 완료 후 자동 enrich(관점/문맥/임베딩) 훅용 — 누락 시 이 경로(스케줄/
     // 지역랜덤/텔레그램 선택 크롤)로 만든 요약이 검색 불가 상태로 남는다.
     const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);

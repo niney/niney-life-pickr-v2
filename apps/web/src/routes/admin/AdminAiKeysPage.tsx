@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import {
+  Camera,
   CheckCircle2,
   Image as ImageIcon,
   KeyRound,
@@ -12,6 +13,7 @@ import {
   ScrollText,
   Sparkles,
   Trash2,
+  UtensilsCrossed,
   XCircle,
 } from 'lucide-react';
 import {
@@ -36,12 +38,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { Input } from '~/components/ui/input';
 import { ModelPickerPopup } from '~/components/restaurant/detail/ModelPickerPopup';
 
-// 계정(키)은 chat 용도 row 에 둔다 — image·log-analysis 는 키 없이 이 키를
-// 상속한다. 따라서 위쪽 "AI 계정" 카드가 chat row 의 키/URL/동시성을 편집하고,
-// 아래쪽 "용도별 모델" 섹션이 각 용도의 모델만 고른다.
+// 계정(키)은 chat 용도 row 에 둔다 — 그 외 용도(image·log-analysis·meal-photo·
+// meal-recommend)는 키 없이 이 키를 상속한다. 따라서 위쪽 "AI 계정" 카드가 chat
+// row 의 키/URL/동시성을 편집하고, 아래쪽 "용도별 모델" 섹션이 각 용도의 모델만
+// 고른다.
 const ACCOUNT_PURPOSE: LlmProviderPurposeType = 'chat';
 
-const PURPOSE_ORDER: LlmProviderPurposeType[] = ['chat', 'image', 'log-analysis'];
+// 용도별 모델 행의 표시 순서 — 계약 enum 의 모든 용도를 빠짐없이 적는다
+// (PURPOSE_META 가 Record 라 빠지면 typecheck 가 잡는다).
+const PURPOSE_ORDER: LlmProviderPurposeType[] = [
+  'chat',
+  'image',
+  'log-analysis',
+  'meal-photo',
+  'meal-recommend',
+];
 
 interface PurposeMeta {
   icon: typeof MessageSquare;
@@ -67,6 +78,18 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
     icon: ScrollText,
     label: '로그 분석',
     desc: '실패한 작업의 원인 분석·보고서',
+    placeholder: 'gpt-oss:120b',
+  },
+  'meal-photo': {
+    icon: Camera,
+    label: '식단 사진 인식',
+    desc: '식단 관리 — 음식 사진에서 음식명을 인식하는 비전 모델 (예: gemma4:31b, qwen3.5:397b)',
+    placeholder: 'gemma4:31b',
+  },
+  'meal-recommend': {
+    icon: UtensilsCrossed,
+    label: '식단 추천',
+    desc: '식단 관리 — 내 식사 패턴으로 다음 끼니를 추천하는 텍스트 모델',
     placeholder: 'gpt-oss:120b',
   },
 };
@@ -123,8 +146,8 @@ export const AdminAiKeysPage = () => {
     <div>
       <p className="mb-4 text-sm text-muted-foreground">
         키는 <strong>한 번만</strong> 입력하면 됩니다. 위 <strong>AI 계정</strong>에 키를 넣으면
-        텍스트·이미지·로그 분석 용도가 모두 그 키를 공유하고, 아래에서는 용도별 <strong>모델</strong>만
-        고르면 됩니다.
+        텍스트·이미지·로그 분석·식단(사진 인식·추천) 용도가 모두 그 키를 공유하고, 아래에서는 용도별{' '}
+        <strong>모델</strong>만 고르면 됩니다.
       </p>
 
       {providers.isLoading && <p className="text-sm text-muted-foreground">불러오는 중…</p>}

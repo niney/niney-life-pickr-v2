@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../../src/modules/ai/ai.config.service.js';
 import { ReviewSearchService } from '../../src/modules/review-search/review-search.service.js';
 
 // ── 단발 ask() 진짜 지연 ────────────────────────────────────────────────────────
@@ -10,21 +10,13 @@ import { ReviewSearchService } from '../../src/modules/review-search/review-sear
 // 라운드 사이엔 ask 끼리도 throttle 날 수 있으니 각 라운드 값을 따로 출력(누적 상승=throttle).
 // 실행: cd apps/friendly && pnpm exec tsx --env-file=.env research/review-search/probe-ask-clean.ts
 
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: { chat: env.OLLAMA_DEFAULT_MODEL, image: env.OLLAMA_IMAGE_MODEL, 'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL },
-});
-
 const ROUNDS = Math.max(1, Number(process.env.ASK_ROUNDS || 3));
 const Q = process.env.ASK_Q || '주차 돼요?';
 const now = () => Date.now();
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildEnvBlock()));
+  const service = new ReviewSearchService(prisma, new AiConfigService(prisma, buildLlmProviderEnv()));
   const target = await prisma.restaurant.findFirst({
     where: { name: { contains: '조연탄' }, visitorReviews: { some: {} } },
     select: { id: true, name: true },

@@ -6,9 +6,15 @@ const ENV: LlmProviderEnv = {
   baseUrl: 'https://env.example',
   timeoutMs: 60_000,
   maxConcurrent: 15,
-  // 용도별 .env 기본 모델 — chat 만 채워 기존 검증을 보존(image·log-analysis 는
-  // 빈 값이라 row 없으면 모델 ''). env fallback 동작은 아래 별도 describe 에서 검증.
-  defaultModels: { chat: 'env-default-model', image: '', 'log-analysis': '' },
+  // 용도별 .env 기본 모델 — chat 만 채워 기존 검증을 보존(그 외 용도는 빈 값이라
+  // row 없으면 모델 ''). env fallback 동작은 아래 별도 describe 에서 검증.
+  defaultModels: {
+    chat: 'env-default-model',
+    image: '',
+    'log-analysis': '',
+    'meal-photo': '',
+    'meal-recommend': '',
+  },
 };
 
 interface Row {
@@ -109,9 +115,15 @@ describe('AiConfigService', () => {
   });
 
   describe('list', () => {
-    it('synthesizes all three purposes when DB empty — chat env-backed, others inherit', async () => {
+    it('synthesizes all five purposes when DB empty — chat env-backed, others inherit', async () => {
       const out = await service.list();
-      expect(out.map((p) => p.purpose).sort()).toEqual(['chat', 'image', 'log-analysis']);
+      expect(out.map((p) => p.purpose).sort()).toEqual([
+        'chat',
+        'image',
+        'log-analysis',
+        'meal-photo',
+        'meal-recommend',
+      ]);
       const chat = out.find((p) => p.purpose === 'chat')!;
       expect(chat).toMatchObject({
         provider: 'ollama-cloud',
@@ -126,8 +138,8 @@ describe('AiConfigService', () => {
         maxConcurrent: ENV.maxConcurrent,
       });
       expect(chat.apiKeyMasked).toBe(maskApiKey(ENV.apiKey));
-      // image·log-analysis 는 계정(env) 키를 상속해 활성으로 보인다.
-      for (const purpose of ['image', 'log-analysis'] as const) {
+      // chat 외 용도는 계정(env) 키를 상속해 활성으로 보인다.
+      for (const purpose of ['image', 'log-analysis', 'meal-photo', 'meal-recommend'] as const) {
         const v = out.find((p) => p.purpose === purpose)!;
         expect(v).toMatchObject({ hasApiKey: true, keySource: 'inherited' });
       }
@@ -199,9 +211,15 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      // log-analysis 가상 row 까지 항상 세 장.
-      expect(out).toHaveLength(3);
-      expect(out.map((p) => p.purpose).sort()).toEqual(['chat', 'image', 'log-analysis']);
+      // 나머지 용도(log-analysis·meal-photo·meal-recommend) 가상 row 까지 항상 다섯 장.
+      expect(out).toHaveLength(5);
+      expect(out.map((p) => p.purpose).sort()).toEqual([
+        'chat',
+        'image',
+        'log-analysis',
+        'meal-photo',
+        'meal-recommend',
+      ]);
     });
 
     it('synthesizes virtual chat row alongside an existing image row', async () => {
@@ -221,7 +239,7 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      expect(out).toHaveLength(3);
+      expect(out).toHaveLength(5);
       const chat = out.find((p) => p.purpose === 'chat')!;
       const image = out.find((p) => p.purpose === 'image')!;
       expect(chat.updatedAt).toBeNull();
@@ -387,15 +405,25 @@ describe('AiConfigService', () => {
       });
     });
 
-    it('image·log-analysis 도 .env 용도별 기본 모델로 보충된다 (DB row 없을 때)', async () => {
+    it('chat 외 용도도 .env 용도별 기본 모델로 보충된다 (DB row 없을 때)', async () => {
       service = new AiConfigService(prisma as never, {
         ...ENV,
-        defaultModels: { chat: 'c-model', image: 'env-vision', 'log-analysis': 'env-logger' },
+        defaultModels: {
+          chat: 'c-model',
+          image: 'env-vision',
+          'log-analysis': 'env-logger',
+          'meal-photo': 'env-meal-vision',
+          'meal-recommend': 'env-meal-text',
+        },
       });
       const img = await service.getResolved('ollama-cloud', 'image');
       const log = await service.getResolved('ollama-cloud', 'log-analysis');
+      const mealPhoto = await service.getResolved('ollama-cloud', 'meal-photo');
+      const mealRecommend = await service.getResolved('ollama-cloud', 'meal-recommend');
       expect(img?.defaultModel).toBe('env-vision');
       expect(log?.defaultModel).toBe('env-logger');
+      expect(mealPhoto?.defaultModel).toBe('env-meal-vision');
+      expect(mealRecommend?.defaultModel).toBe('env-meal-text');
       // list/toView 도 유효 모델·출처(env)를 노출.
       const out = await service.list();
       expect(out.find((p) => p.purpose === 'image')).toMatchObject({
@@ -405,6 +433,16 @@ describe('AiConfigService', () => {
       expect(out.find((p) => p.purpose === 'log-analysis')).toMatchObject({
         defaultModel: 'env-logger',
         defaultModelSource: 'env',
+      });
+      expect(out.find((p) => p.purpose === 'meal-photo')).toMatchObject({
+        defaultModel: 'env-meal-vision',
+        defaultModelSource: 'env',
+        keySource: 'inherited',
+      });
+      expect(out.find((p) => p.purpose === 'meal-recommend')).toMatchObject({
+        defaultModel: 'env-meal-text',
+        defaultModelSource: 'env',
+        keySource: 'inherited',
       });
     });
 
@@ -425,7 +463,13 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, {
         ...ENV,
-        defaultModels: { chat: '', image: 'env-vision', 'log-analysis': '' },
+        defaultModels: {
+          chat: '',
+          image: 'env-vision',
+          'log-analysis': '',
+          'meal-photo': '',
+          'meal-recommend': '',
+        },
       });
       const img = await service.getResolved('ollama-cloud', 'image');
       expect(img?.defaultModel).toBe('own-vision');

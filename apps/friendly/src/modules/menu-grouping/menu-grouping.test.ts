@@ -122,7 +122,13 @@ describe('MenuGroupingService', () => {
       baseUrl: '',
       timeoutMs: 1000,
       maxConcurrent: 1,
-      defaultModels: { chat: '', image: '', 'log-analysis': '' },
+      defaultModels: {
+        chat: '',
+        image: '',
+        'log-analysis': '',
+        'meal-photo': '',
+        'meal-recommend': '',
+      },
     });
   });
 

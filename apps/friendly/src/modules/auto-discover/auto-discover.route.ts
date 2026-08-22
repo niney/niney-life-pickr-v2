@@ -14,7 +14,7 @@ import { ProposalService } from '../canonical/proposal.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { SummaryService } from '../summary/summary.service.js';
 import { ReviewSearchService } from '../review-search/review-search.service.js';
-import { env } from '../../config/env.js';
+import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import {
   autoDiscoverRegistry,
   type AutoDiscoverJobEvent,
@@ -23,17 +23,7 @@ import { AutoDiscoverService } from './auto-discover.service.js';
 
 const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
   const restaurants = new RestaurantService(app.prisma);
-  const aiConfig = new AiConfigService(app.prisma, {
-    apiKey: env.OLLAMA_CLOUD_API_KEY,
-    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModels: {
-      chat: env.OLLAMA_DEFAULT_MODEL,
-      image: env.OLLAMA_IMAGE_MODEL,
-      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-    },
-  });
+  const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   // operationLog 주입 — 누락 시 자동 발견에서 파생되는 크롤/요약 run 계측이
   // 무음 비활성된다 (두 서비스 모두 null 이면 silent 정책).
   // 요약 완료 후 자동 enrich 훅용 — 누락 시 자동 발견 파생 요약이 검색 불가로 남는다.

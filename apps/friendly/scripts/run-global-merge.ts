@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
 import { AnalyticsService } from '../src/modules/analytics/analytics.service.js';
 
 // 전역 메뉴 머지를 CLI 에서 직접 실행 (서버 우회). 어드민 버튼과 동일한
@@ -9,22 +9,10 @@ import { AnalyticsService } from '../src/modules/analytics/analytics.service.js'
 // 실행: pnpm --filter friendly run-merge -- [--full]
 //   --full 없으면 증분(이미 전부 링크면 noop). 보통 --full 로 전체 재작성.
 
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
-
 const main = async (): Promise<void> => {
   const full = process.argv.includes('--full');
   const prisma = new PrismaClient();
-  const aiConfig = new AiConfigService(prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const service = new AnalyticsService(prisma, aiConfig);
 
   console.log(`\n전역 머지 시작 (full=${full}) …`);

@@ -4,7 +4,7 @@ import { MenuGroupingService } from '../modules/menu-grouping/menu-grouping.serv
 import { AnalyticsService } from '../modules/analytics/analytics.service.js';
 import { ScheduleService } from '../modules/schedule/schedule.service.js';
 import { scheduleRegistry } from '../modules/schedule/schedule-registry.js';
-import { env } from '../config/env.js';
+import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 
 // 주기 자동 실행(정규화 → 글로벌 머지) 스케줄러. ScheduleService 를 app 전역
 // singleton 으로 decorate — 라우트(수동 실행/설정)와 부팅 cron tick 이 같은
@@ -17,17 +17,7 @@ import { env } from '../config/env.js';
 // global-merge) run 이 parentRunId 로 연계되려면 여기서도 주입해야 한다.
 export default fp(
   async (app) => {
-    const aiConfig = new AiConfigService(app.prisma, {
-      apiKey: env.OLLAMA_CLOUD_API_KEY,
-      baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-      timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-      maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-      defaultModels: {
-        chat: env.OLLAMA_DEFAULT_MODEL,
-        image: env.OLLAMA_IMAGE_MODEL,
-        'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-      },
-    });
+    const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
     const menuGrouping = new MenuGroupingService(app.prisma, aiConfig, {
       logger: app.log,
       operationLog: app.operationLog,

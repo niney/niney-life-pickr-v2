@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
 import { adapterCache } from '../src/modules/ai/adapter-cache.js';
 import {
   GLOBAL_MERGE_SYSTEM_PROMPT,
@@ -14,18 +14,6 @@ import {
 // 스키마 없음 / 배열 스키마 3변량으로 돌려 raw 응답을 그대로 찍는다.
 //
 // 실행: pnpm --filter friendly probe:merge
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 // 배열 스키마 변량 — additionalProperties 맵 대신 items 배열로 강제.
 const ARRAY_SCHEMA = {
@@ -60,7 +48,7 @@ const SAMPLE = [
 
 const main = async (): Promise<void> => {
   const prisma = new PrismaClient();
-  const aiConfig = new AiConfigService(prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const resolved = await aiConfig.getResolved('ollama-cloud', 'chat');
   if (!resolved) {
     console.error('provider 미설정 (ollama-cloud / chat)');

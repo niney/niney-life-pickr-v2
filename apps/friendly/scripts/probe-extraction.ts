@@ -1,8 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { env } from '../src/config/env.js';
-import { AiConfigService, type LlmProviderEnv } from '../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../src/modules/ai/llm-provider-env.js';
+import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
 import { SettlementExtractionService } from '../src/modules/settlement-extraction/settlement-extraction.service.js';
 
 // 영수증 추출 원인 진단 프로브.
@@ -14,18 +14,6 @@ import { SettlementExtractionService } from '../src/modules/settlement-extractio
 // 실행:
 //   pnpm --filter friendly probe:extraction -- <token> [dumpPath]
 //   (token 미지정 시 가장 최근 덤프의 token 자동 사용)
-
-const buildEnvBlock = (): LlmProviderEnv => ({
-  apiKey: env.OLLAMA_CLOUD_API_KEY,
-  baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-  timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-  maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-  defaultModels: {
-    chat: env.OLLAMA_DEFAULT_MODEL,
-    image: env.OLLAMA_IMAGE_MODEL,
-    'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-  },
-});
 
 // 덤프 userPrompt 에서 "- " 로 시작하는 등록 메뉴 줄을 복원한다.
 const menuNamesFromDump = (userPrompt: string): string[] =>
@@ -67,7 +55,7 @@ const main = async (): Promise<void> => {
   console.log(`등록 메뉴 힌트: ${fullMenu.length}개\n`);
 
   const prisma = new PrismaClient();
-  const aiConfig = new AiConfigService(prisma, buildEnvBlock());
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const service = new SettlementExtractionService(aiConfig, {
     storageDir: join(process.cwd(), 'data', 'receipts'),
   });

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../src/config/env.js';
+import { buildLlmProviderEnv } from '../src/modules/ai/llm-provider-env.js';
 import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
 import { RestaurantService } from '../src/modules/restaurant/restaurant.service.js';
 import { CanonicalService } from '../src/modules/canonical/canonical.service.js';
@@ -33,17 +33,7 @@ const main = async (): Promise<void> => {
   const restaurants = new RestaurantService(prisma);
   const canonical = new CanonicalService(prisma);
   const proposals = new ProposalService(prisma, canonical);
-  const aiConfig = new AiConfigService(prisma, {
-    apiKey: env.OLLAMA_CLOUD_API_KEY,
-    baseUrl: env.OLLAMA_CLOUD_BASE_URL,
-    timeoutMs: env.OLLAMA_CLOUD_TIMEOUT_MS,
-    maxConcurrent: env.OLLAMA_CLOUD_MAX_CONCURRENT,
-    defaultModels: {
-      chat: env.OLLAMA_DEFAULT_MODEL,
-      image: env.OLLAMA_IMAGE_MODEL,
-      'log-analysis': env.OLLAMA_LOG_ANALYSIS_MODEL,
-    },
-  });
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
   const summaries = new SummaryService(prisma, aiConfig);
   const crawl = new CrawlService(restaurants, summaries, jobRegistry, proposals, canonical, null);
 

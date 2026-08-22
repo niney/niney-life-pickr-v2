@@ -1,19 +1,21 @@
 import type { PrismaClient } from '@prisma/client';
-import type {
-  LlmKeySourceType,
-  LlmModelSourceType,
-  LlmProviderConfigType,
-  LlmProviderIdType,
-  LlmProviderPurposeType,
-  UpdateLlmProviderInputType,
+import {
+  LlmProviderPurpose,
+  type LlmKeySourceType,
+  type LlmModelSourceType,
+  type LlmProviderConfigType,
+  type LlmProviderIdType,
+  type LlmProviderPurposeType,
+  type UpdateLlmProviderInputType,
 } from '@repo/api-contract';
 
 // What the service needs from env to fill gaps in DB rows. Kept in this
 // module rather than read from `env` directly so tests can inject a fake.
 // 키·baseUrl 의 env fallback 은 계정 대표(chat)에만 적용한다 — image 등 다른
 // 용도는 키를 env 로 공유하기 어려워 DB row(또는 chat 상속)로만 동작한다.
-// 반면 defaultModels 는 용도별로 따로 두어 세 용도 모두 .env 기본 모델을 가질
+// 반면 defaultModels 는 용도별로 따로 두어 모든 용도가 .env 기본 모델을 가질
 // 수 있다 (모델은 용도마다 달라야 하므로 상속하지 않고 용도별 fallback).
+// .env 에서 이 객체를 만드는 곳은 llm-provider-env.ts 의 buildLlmProviderEnv() 하나.
 export interface LlmProviderEnv {
   apiKey: string;
   baseUrl: string;
@@ -43,14 +45,17 @@ export const maskApiKey = (key: string): string | null => {
 };
 
 // chat 이 "계정 대표" 용도다 — 키·baseUrl 은 chat row(없으면 env)에 두고,
-// image·log-analysis 는 자기 row 에 키가 없으면 이 계정 키를 상속한다. 따라서
-// 키 하나(chat 또는 env)만 있으면 세 용도가 모두 동작한다. 모델은 용도마다
-// 달라야 하므로 상속하지 않는다 (각 row 의 defaultModel 만 사용).
+// 그 외 용도(image·log-analysis·meal-photo·meal-recommend)는 자기 row 에 키가
+// 없으면 이 계정 키를 상속한다. 따라서 키 하나(chat 또는 env)만 있으면 모든
+// 용도가 동작한다. 모델은 용도마다 달라야 하므로 상속하지 않는다 (각 row 의
+// defaultModel 만 사용).
 const ENV_BACKED_PURPOSE: LlmProviderPurposeType = 'chat';
 
 // list 가 항상 카드로 노출하는 용도들 — DB row 가 없어도 계정 키 상속으로
-// 동작할 수 있으므로 가상 row 를 합성해 모두 보여준다.
-const ALL_PURPOSES: LlmProviderPurposeType[] = ['chat', 'image', 'log-analysis'];
+// 동작할 수 있으므로 가상 row 를 합성해 모두 보여준다. 계약의 enum 순서
+// (chat, image, log-analysis, meal-photo, meal-recommend)를 그대로 따라 용도가
+// 늘면 자동으로 카드가 는다.
+const ALL_PURPOSES: readonly LlmProviderPurposeType[] = LlmProviderPurpose.options;
 
 // Owns provider config: DB CRUD + env-fallback resolution + masking.
 // The service layer (AiService) calls getResolved() once per request to get
@@ -72,7 +77,7 @@ export class AiConfigService {
 
     // 모든 용도를 항상 한 장씩 노출한다 — DB row 가 없는 용도는 계정 키를
     // 상속해 동작할 수 있으므로 가상 row 로 합성한다. 계정 대표 키·baseUrl
-    // (chat row 또는 env)을 함께 넘겨 image·log-analysis 의 상속 표시를 채운다.
+    // (chat row 또는 env)을 함께 넘겨 chat 외 용도의 상속 표시를 채운다.
     for (const provider of known) {
       const providerRows = rows.filter((r) => r.provider === provider);
       const chatRow = providerRows.find((r) => r.purpose === ENV_BACKED_PURPOSE) ?? null;
@@ -200,7 +205,7 @@ export class AiConfigService {
   }
 
   // accountKey/accountBaseUrl 은 계정 대표(chat row 또는 env)에서 미리 구한
-  // 값 — image·log-analysis 가 자기 키 없이 상속할 때의 표시 기준이다.
+  // 값 — chat 외 용도가 자기 키 없이 상속할 때의 표시 기준이다.
   private toView(
     provider: LlmProviderIdType,
     purpose: LlmProviderPurposeType,
@@ -230,7 +235,7 @@ export class AiConfigService {
       effectiveKey = envKey;
       keySource = envKey.length > 0 ? 'env' : 'none';
     } else {
-      // image·log-analysis — 계정(chat row 또는 env) 키를 상속.
+      // chat 외 용도 — 계정(chat row 또는 env) 키를 상속.
       effectiveKey = accountKey;
       keySource = accountKey.length > 0 ? 'inherited' : 'none';
     }
