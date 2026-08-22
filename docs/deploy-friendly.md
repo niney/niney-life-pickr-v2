@@ -212,6 +212,22 @@ pm2 save
 0 4 * * * sqlite3 /home/samplepcb/niney-life-pickr-v2/apps/friendly/data/prod.db ".backup '/var/backups/niney/prod-$(date +\%F).db'"
 ```
 
+## 사용자 업로드 파일 (식단 사진·영수증)
+
+`apps/friendly/data/` 아래에 사용자 업로드가 쌓인다 — DB 백업만으로는 복구되지 않으니 같이 챙긴다.
+
+| 경로 | 내용 | 정리 |
+|---|---|---|
+| `data/meal-photos/<userId>/<token>.jpg` (+`_t.jpg` 썸네일) | 식단 사진(원본 1600px/썸네일 320px) | 기록 삭제 시 unlink, 기록에 안 붙은 업로드는 **매일 04:30 자동 정리**(24h TTL) |
+| `data/receipts/<token>.jpg` | 정산 영수증 | 자동 정리 없음(누적) |
+| `data/meal-recognition-debug/`, `data/extraction-debug/` | 인식 측정 덤프 | `MEAL_RECOGNITION_DEBUG=1` / `EXTRACTION_DEBUG=1` 일 때만 생성 — 운영에선 끈 채로 둔다 |
+
+```bash
+# 사진까지 포함한 주간 백업 예시
+0 5 * * 0 tar czf /var/backups/niney/meal-photos-$(date +\%F).tgz -C /home/samplepcb/niney-life-pickr-v2/apps/friendly/data meal-photos
+du -sh apps/friendly/data/*                 # 디스크 사용량 점검
+```
+
 ## 점검 명령
 
 ```bash

@@ -352,4 +352,14 @@ model MealRecommendation {
 ## 진행 기록
 
 - **2026-08-22 — 1차 기반 구현(미커밋)**: 계약(`schemas/food.ts`·`Routes.Food`·purpose 2개·`OperationFeature` `food-import`) / `@repo/utils` `foodTaxonomy.ts`(2축 키·라벨·원본 분류 매핑·이름 규칙) / Prisma `FoodItem`·`FoodImportConfig`·`FoodImportRun` + 마이그레이션 `20260822105913_add_food_catalog`(prod.db 적용, dev.db 는 `db push`로 동기화) / friendly `modules/food/`(data.go.kr·식품안전나라·MAFRA 어댑터, 정규화 순수 함수 5종, upsert 병합, LLM 2축 분류, 적재 잡 레지스트리·서비스·SSE 라우트, 자동완성·어드민 CRUD·통계) + `plugins/food-import.ts` + `server.ts` 부팅 + `RATE.foodSearch` + env `FOOD_API_KEY`/`FOOD_RECIPE_API_KEY`/`MAFRA_API_KEY` / AI purpose 배관(`buildLlmProviderEnv` 헬퍼로 9곳 통합, `isVisionModel` 현행 cloud 멀티모달 패밀리 인식, 어드민 AI 키 행 2개) / `@repo/shared` `foodApi`·`useFood*` 훅 / 웹 `/admin/food`(적재 잡·통계·카탈로그 편집) / 스크립트 `probe:food-api`·`load:food-catalog`. 테스트: friendly 77 파일 884 통과(food 3 파일 30), utils·shared·web 통과, 전 워크스페이스 typecheck 통과.
-- **남은 1차 항목(키 필요)**: 0차 프로브(`pnpm --filter friendly probe:food-api`)로 표준데이터 실응답 필드 확정 → 픽스처 갱신 → `load:food-catalog` 또는 어드민 "지금 실행"으로 실제 시드(①~⑤) → 카탈로그 규모·분류 커버리지 확인. 이후 2차(앱 입력·사진 인식) 착수.
+- **2026-08-22 — 2~5차 구현(브랜치 `feat/meal-food`)**:
+  - **2차(앱 입력·사진 인식)**: `schemas/meal.ts` + Prisma `add_meal_log`(MealEntry/Item/Photo/Preference/Recommendation) / friendly `meal`·`meal-recognition` 모듈(사진 저장·썸네일·EXIF 제거·소유 검증·고아 정리 cron, 인식 1콜 + 수리 재시도 + 카탈로그 매칭, 일일 한도·RATE) / `@repo/shared` api·훅·`mealDraftStore` / 앱 `app/meal/*`(사진 5장 순차 업로드 → 인식 → 편집 → 저장, EXIF 촬영시각으로 끼니 추정).
+  - **3차(조회·통계)**: 앱 3탭(기록·달력·통계) + 웹 `/me/meals`(로그인 전용, 네비는 로그인 시만). 통계는 순수 함수(`computeMealStats` — 분포는 주식만, 겹침 7일, 연속일).
+  - **4차(추천)**: `meal-pattern`(프로필·후보 풀·가중치 점수 7종) + `meal-recommendation`(LLM 선택·이유, 후보 밖 이름 드롭, 부족분 점수 채움, 캐시·폴백) + 앱/웹 추천·설정 화면(가중치 0~5, 프리셋 4종, 제외·선호 음식).
+  - **5차 일부**: 실시간 날씨(기상청 초단기실황) 연결, 인식 측정 도구(`MEAL_RECOGNITION_DEBUG` 덤프 + `eval:meal-recognition` + `probe:meal-vision`), 추천 → 맛집 검색("파는 곳 찾기", 앱 맛집 탭 `?q=`).
+  - 테스트: friendly 81파일(식단 44건 추가) / 웹 75건 / shared 45건 / utils — 전 워크스페이스 typecheck·lint green.
+- **남은 것**:
+  1. **키가 있어야 진행**: `probe:food-api` 로 표준데이터 실응답 확정 → 파서·픽스처 조정 → `load:food-catalog`(또는 어드민 "지금 실행")로 실제 시드 → 카탈로그 규모·분류 커버리지 확인. 카탈로그가 비어 있으면 추천 후보는 사용자 이력만으로 만들어진다.
+  2. **모델 선택**: `probe:meal-vision --dir=<사진 폴더> --models=gemma4:31b,qwen3.5:397b` 로 비교 후 어드민 > 설정 > AI 키에서 `meal-photo`·`meal-recommend` 모델 지정.
+  3. **앱 권한 문구**: `app.config.ts` 의 expo-image-picker 문구가 아직 영수증 전용 — 식단 포함 문구로 바꾸고 `prebuild`/재빌드.
+  4. 실기기 확인(사진 촬영·HEIC·업로드·인식), 서버 쪽 메뉴→식당 매칭(현재는 검색어 전달), 끼니 시간 로컬 알림, 위키 재컴파일(`meal`/`food` 토픽).
