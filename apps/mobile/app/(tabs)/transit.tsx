@@ -1829,7 +1829,7 @@ export default function TransitScreen() {
 
       {/* 지도 상단 칩 — 주변 조회 진행 / '이 위치에서 재검색'(같은 슬롯). */}
       {nearMode && nearbyFetching ? (
-        <View style={[styles.mapChipWrap, { top: mapTopInset + 4 }]} pointerEvents="none">
+        <View style={[styles.mapChipWrap, { top: mapTopInset + 4, pointerEvents: 'none' }]}>
           <View
             style={[
               styles.mapChip,
@@ -1843,7 +1843,7 @@ export default function TransitScreen() {
           </View>
         </View>
       ) : nearMode && research.show && research.center ? (
-        <View style={[styles.mapChipWrap, { top: mapTopInset + 4 }]} pointerEvents="box-none">
+        <View style={[styles.mapChipWrap, { top: mapTopInset + 4, pointerEvents: 'box-none' }]}>
           <Pressable
             onPress={() => research.center && handleResearchAt(research.center)}
             style={[

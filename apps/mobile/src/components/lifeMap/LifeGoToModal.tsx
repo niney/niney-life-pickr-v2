@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TextIn
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBusStationSearch, useLifeMapSearch, useSubwayStationSearch, useTheme } from '@repo/shared';
+import { useLifeMapRecentStore } from '~/lib/lifeMapRecentStore';
 import {
   WEATHER_SIDOS,
   searchWeatherPlaces,
@@ -14,11 +15,11 @@ import {
 } from '@repo/utils';
 
 // 지역 이동 옴니박스(앱, 모달) — 웹 LifeGoToBox 의 규칙 그대로:
-//   입력 없음: 저장한 내 위치 · 시도 칩 → 시·군·구 칩(로컬 245지점)
+//   입력 없음: 저장한 내 위치 · 최근 본 위치 · 시도 칩 → 시·군·구 칩(로컬 245지점)
 //   입력 중:   행정구역(로컬 즉시) · 지하철역(수도권) · 버스정류장(서울) · 주소·장소(VWorld 프록시, 250ms 디바운스)
 // 선택 → onGo(종류별 줌: 시도 11 · 시 13 · 구 14 · 역/정류장 16 · 주소/장소 17).
 
-export type LifeGoToKind = 'saved' | 'sido' | 'region' | 'subway' | 'bus' | 'place' | 'road' | 'parcel';
+export type LifeGoToKind = 'saved' | 'recent' | 'sido' | 'region' | 'subway' | 'bus' | 'place' | 'road' | 'parcel';
 export interface LifeGoToTarget {
   kind: LifeGoToKind;
   label: string;
@@ -47,12 +48,13 @@ interface Props {
 }
 
 type Row =
-  | { type: 'section'; key: string; title: string; loading?: boolean; error?: boolean }
+  | { type: 'section'; key: string; title: string; loading?: boolean; error?: boolean; action?: { label: string; onPress: () => void } }
   | { type: 'item'; key: string; target: LifeGoToTarget }
   | { type: 'note'; key: string; text: string };
 
-const KIND_ICON: Record<LifeGoToKind, 'navigation-variant' | 'map-marker' | 'train' | 'bus' | 'map-marker-outline'> = {
+const KIND_ICON: Record<LifeGoToKind, 'navigation-variant' | 'history' | 'map-marker' | 'train' | 'bus' | 'map-marker-outline'> = {
   saved: 'navigation-variant',
+  recent: 'history',
   sido: 'map-marker',
   region: 'map-marker',
   subway: 'train',
@@ -67,6 +69,9 @@ export const LifeGoToModal = ({ visible, onClose, savedLocation, onGo }: Props) 
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState('');
   const [sido, setSido] = useState<WeatherSido | null>(null);
+  const recent = useLifeMapRecentStore((st) => st.items);
+  const addRecent = useLifeMapRecentStore((st) => st.add);
+  const clearRecent = useLifeMapRecentStore((st) => st.clear);
   const trimmed = q.trim();
   const typing = trimmed.length > 0;
   // 원격 검색은 250ms 디바운스(타이머 콜백에서만 setState).
@@ -89,6 +94,12 @@ export const LifeGoToModal = ({ visible, onClose, savedLocation, onGo }: Props) 
           key: 'saved',
           target: { kind: 'saved', label: savedLocation.label ?? '내 위치', sub: '날씨·대기와 공유', lat: savedLocation.lat, lng: savedLocation.lng, zoom: 15 },
         });
+      }
+      if (recent.length > 0) {
+        out.push({ type: 'section', key: 's-recent', title: '최근 본 위치', action: { label: '지우기', onPress: clearRecent } });
+        recent.forEach((r) =>
+          out.push({ type: 'item', key: `recent:${r.label}:${r.lat}:${r.lng}`, target: { kind: 'recent', label: r.label, sub: r.sub, lat: r.lat, lng: r.lng, zoom: r.zoom } }),
+        );
       }
       return out;
     }
@@ -127,9 +138,10 @@ export const LifeGoToModal = ({ visible, onClose, savedLocation, onGo }: Props) 
     }
     if (out.length === 0) out.push({ type: 'note', key: 'empty', text: trimmed.length < 2 ? '두 글자 이상 입력하면 역·정류장·주소도 찾습니다.' : '찾는 곳이 없습니다. 다른 이름이나 주소로 해 보세요.' });
     return out;
-  }, [typing, trimmed, savedLocation, subwayQ.data, subwayQ.isFetching, busQ.data, busQ.isFetching, remoteQ.data, remoteQ.isFetching, remoteQ.isError, debouncedQ]);
+  }, [typing, trimmed, savedLocation, recent, clearRecent, subwayQ.data, subwayQ.isFetching, busQ.data, busQ.isFetching, remoteQ.data, remoteQ.isFetching, remoteQ.isError, debouncedQ]);
 
   const go = (t: LifeGoToTarget) => {
+    if (t.kind !== 'saved') addRecent({ label: t.label, sub: t.sub, lat: t.lat, lng: t.lng, zoom: t.zoom });
     onGo(t);
     setQ('');
     onClose();
@@ -202,6 +214,11 @@ export const LifeGoToModal = ({ visible, onClose, savedLocation, onGo }: Props) 
               <View style={styles.sectionRow}>
                 <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>{r.title}</Text>
                 {r.loading && <ActivityIndicator size="small" color={theme.colors.textMuted} />}
+                {r.action && (
+                  <Pressable accessibilityRole="button" onPress={r.action.onPress} hitSlop={8} style={{ marginLeft: 'auto' }}>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.textMuted, textDecorationLine: 'underline' }]}>{r.action.label}</Text>
+                  </Pressable>
+                )}
               </View>
             ) : r.type === 'note' ? (
               <Text style={[styles.note, { color: theme.colors.textMuted }]}>{r.text}</Text>

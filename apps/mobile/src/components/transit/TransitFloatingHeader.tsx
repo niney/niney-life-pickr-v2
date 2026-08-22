@@ -129,8 +129,7 @@ export const TransitFloatingHeader = ({
 
   return (
     <Animated.View
-      pointerEvents="box-none"
-      style={[styles.wrap, { paddingTop: topInset }, animatedWrapStyle]}
+      style={[styles.wrap, { paddingTop: topInset, pointerEvents: 'box-none' }, animatedWrapStyle]}
     >
       <Animated.View
         onLayout={handleLayout}

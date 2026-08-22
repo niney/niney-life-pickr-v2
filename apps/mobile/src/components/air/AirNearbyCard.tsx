@@ -24,7 +24,7 @@ export const AirNearbyCard = ({ centerLabel, items, loading, errorMessage, selec
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
-        <Text style={[styles.centerText, { color: theme.colors.textMuted }]} numberOfLines={1}>
+        <Text style={[styles.centerText, { color: theme.colors.textMuted }]} numberOfLines={centerLabel ? 1 : 3}>
           {centerLabel ? `기준 ${centerLabel}` : '기준점이 없어요 — 내 위치로 찾거나 날씨에서 내 위치를 저장하세요.'}
         </Text>
         <Pressable

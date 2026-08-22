@@ -74,7 +74,7 @@ export function AnimatedSplash({ visible, onHidden }: Props) {
   const splashStyle = useAnimatedStyle(() => ({ opacity: splashOpacity.value }));
 
   return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, containerStyle]}>
+    <Animated.View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }, containerStyle]}>
       {/* 1단 — 그라데이션 배경 + 바운스 핀 */}
       <LinearGradient
         colors={['#5e1dde', '#3916ae', '#161380']}

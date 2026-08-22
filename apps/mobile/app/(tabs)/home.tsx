@@ -211,7 +211,7 @@ export default function HomeScreen() {
 
       <NotchFade />
       {isPullRefreshing ? (
-        <View pointerEvents="none" style={[styles.refreshOverlay, { top: insets.top + 8 }]}>
+        <View style={[styles.refreshOverlay, { top: insets.top + 8, pointerEvents: 'none' }]}>
           <View
             style={[
               styles.refreshBadge,
