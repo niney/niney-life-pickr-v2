@@ -188,7 +188,8 @@ export default function LifeMapScreen() {
   const detailSheetTop = useSharedValue(SHEET_TOP_UNSET);
   const [headerCardH, setHeaderCardH] = useState(0);
   const handleMeasureHeader = useCallback((h: number) => setHeaderCardH((prev) => (Math.abs(prev - h) < 1 ? prev : h)), []);
-  const listTopInset = insets.top + headerCardH + 8;
+  // full 에선 헤더 카드가 sticky 바로 펴지고(마진 0) 시트가 그 바로 아래에 맞붙는다 — 맛집·대중교통과 동일.
+  const listTopInset = insets.top + headerCardH;
   const detailTopInset = insets.top;
   const mapTopInset = insets.top + headerCardH + 8;
   const [containerH, setContainerH] = useState(0);
@@ -375,6 +376,7 @@ export default function LifeMapScreen() {
 
         <LifeMapHeader
           topInset={insets.top}
+          sheetIndex={listSheetIndex}
           layers={layers}
           status={statusQ.data}
           onToggleLayer={toggleLayer}
