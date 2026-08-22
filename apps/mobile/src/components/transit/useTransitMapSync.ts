@@ -18,6 +18,9 @@ export interface TransitMapViewProps {
   // 화면 focus && AppState active. false 면 WebView 내부 rAF 를 멈춘다.
   active?: boolean;
   markers: BridgeMarker[];
+  // 마커 아이콘 사전(선택) — markers[].icon/iconSel 이 이 사전의 키면 WebView 쪽이 값으로 치환.
+  // 같은 아이콘을 수천 마커가 공유할 때(일상지도) 브리지 페이로드를 줄인다.
+  markerIcons?: Record<string, string> | null;
   selectedId?: string | null;
   overlayMarkers?: BridgeMarker[];
   routeLines?: BridgeRouteLine[] | null;
@@ -50,6 +53,7 @@ export interface TransitMapSyncState {
   mode: 'light' | 'dark';
   active: boolean;
   markers: BridgeMarker[];
+  markerIcons: Record<string, string> | null;
   selectedId: string | null;
   overlayMarkers: BridgeMarker[];
   routeLines: BridgeRouteLine[] | null;
@@ -80,8 +84,8 @@ export const useTransitMapSync = (
   }, [ready, send, s.active]);
 
   useEffect(() => {
-    if (ready) send({ type: 'setMarkers', markers: s.markers });
-  }, [ready, send, s.markers]);
+    if (ready) send({ type: 'setMarkers', markers: s.markers, ...(s.markerIcons ? { icons: s.markerIcons } : {}) });
+  }, [ready, send, s.markers, s.markerIcons]);
 
   useEffect(() => {
     if (ready) send({ type: 'setSelected', id: s.selectedId });

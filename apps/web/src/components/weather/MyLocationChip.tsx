@@ -1,16 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MapPin, Umbrella } from 'lucide-react';
-import { useAirLocation, useAirNearbyStations, useWeatherNowcast } from '@repo/shared';
-import {
-  AIR_SIDO_OPTIONS,
-  KMA_CONDITION_LABEL,
-  airSidoMatches,
-  formatAirValue,
-  formatDistanceM,
-  formatKmaTemp,
-  kmaCondition,
-  latLngToKmaGrid,
-} from '@repo/utils';
+import { GLANCE_AIR_GRADE_SOURCE_LABEL, useMyLocationGlance } from '@repo/shared';
+import { AIR_SIDO_OPTIONS, airSidoMatches, formatAirValue, formatDistanceM, formatKmaTemp } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { AIR_GRADE_NONE, airGradeStyle } from '~/components/air/airGrade';
 import { formatBaseLabel } from './weatherFormat';
@@ -20,6 +11,7 @@ import { WeatherConditionIcon } from './weatherIcons';
 // 하나를 알약 하나에: [📍라벨 ☁기온 상태 ☂] · [●등급 PM2.5]. 경계선 없이 두 클릭 영역만 —
 // 왼쪽(라벨+날씨) → /weather, 오른쪽(대기) → /air. 위치 이름은 앞에 한 번만(두 반쪽이 따로
 // 노는 느낌을 없앤다). 저장 위치가 없으면 아무것도 그리지 않는다(강요 없음).
+// 파생값(기온·상태·우산·등급·가장 가까운 측정소)은 앱 홈 카드와 공용 훅(useMyLocationGlance)에서.
 //
 // 폭에 따라 단계적으로 펼친다(상단바 폭 예산은 PublicTopBar 메모 참고):
 //   <sm : [📍 ☁26° ☂ · ●좋음] — 라벨 글자·기온 소수점 없이(라벨은 aria/title 에). 360px 에서
@@ -29,63 +21,27 @@ import { WeatherConditionIcon } from './weatherIcons';
 // 한쪽 자료를 못 받으면 그 세그먼트만 조용히 빠지고 알약은 그대로(칩은 경고하는 자리가 아니다).
 // 대기는 측정소가 없을 때만이 아니라, 측정소는 있어도 측정값(등급)이 없을 때도 빠진다 —
 // 업스트림 장애 때 "● -" 를 남기지 않는다.
-// 날씨: 좌표→격자 실황 기온 + 초단기 첫 시각 하늘 + 앞 6시간 강수(형태 또는 확률 ≥60%) 우산.
-// 대기: /air/stations/nearby?limit=1 의 가장 가까운 측정소 등급(통합지수 → PM2.5 → PM10 폴백).
-// 둘 다 서버 캐시 뒤라 10분 조용한 갱신 + 탭 복귀 재조회.
-
-const RAIN_POP_THRESHOLD = 60;
 
 export const MyLocationChip = ({ className }: { className?: string }) => {
-  const { location } = useAirLocation();
-  const grid = location ? latLngToKmaGrid(location.lat, location.lng) : null;
-  const wxQ = useWeatherNowcast(grid?.nx ?? null, grid?.ny ?? null, { refetchOnWindowFocus: true });
-  const airQ = useAirNearbyStations(location?.lat ?? null, location?.lng ?? null, {
-    limit: 1,
-    radius: 50_000,
-    refetchOnWindowFocus: true,
-  });
+  const { location, label, weather: wx, air } = useMyLocationGlance({ refetchOnWindowFocus: true });
   if (!location) return null;
 
-  const label = location.label ?? '내 위치';
   const ll = `${location.lat.toFixed(5)},${location.lng.toFixed(5)}`;
 
   // ── 날씨 세그먼트 ──
-  const now = wxQ.data?.now ?? null;
-  const hours = wxQ.data?.hours ?? [];
-  const first = hours[0] ?? null;
-  const wxLoading = wxQ.isLoading && !wxQ.data;
-  const wxOk = wxLoading || (now !== null && now.t1h !== null);
-  const condition = kmaCondition(first?.sky ?? null, now?.pty ?? first?.pty ?? null);
-  const ncstHour = wxQ.data?.ncstBase ? Number(wxQ.data.ncstBase.time.slice(0, 2)) : null;
-  const pops = hours.map((h) => h.pop).filter((v): v is number => v !== null);
-  const popMax = pops.length ? Math.max(...pops) : null;
-  const wet = hours.some((h) => (h.pty ?? 0) > 0) || (popMax !== null && popMax >= RAIN_POP_THRESHOLD);
-  const t1h = now?.t1h ?? null;
-  const temp = now ? `${formatKmaTemp(t1h)}°` : '…';
+  const temp = wx.loading ? '…' : `${formatKmaTemp(wx.tempC)}°`;
   // <sm 컴팩트 표기 — 26.3° → 26°.
-  const tempShort = now ? `${formatKmaTemp(t1h === null ? null : Math.round(t1h))}°` : '…';
-  const wxSummary = wxLoading
+  const tempShort = wx.loading ? '…' : `${formatKmaTemp(wx.tempC === null ? null : Math.round(wx.tempC))}°`;
+  const wxSummary = wx.loading
     ? '날씨 불러오는 중'
-    : wxOk
-      ? `날씨 ${formatKmaTemp(t1h)}℃ ${KMA_CONDITION_LABEL[condition]}${popMax !== null ? ` · 앞 6시간 강수확률 최대 ${popMax}%` : ''}${wxQ.data?.ncstBase ? ` (${formatBaseLabel(wxQ.data.ncstBase)} 관측)` : ''}`
+    : wx.ok
+      ? `날씨 ${formatKmaTemp(wx.tempC)}℃ ${wx.conditionLabel}${wx.popMax !== null ? ` · 앞 6시간 강수확률 최대 ${wx.popMax}%` : ''}${wx.ncstBase ? ` (${formatBaseLabel(wx.ncstBase)} 관측)` : ''}`
       : '날씨 자료 없음';
 
   // ── 대기 세그먼트 ──
-  const nearest = airQ.data?.items[0] ?? null;
-  const measure = nearest?.measure ?? null;
-  const gradeSource =
-    measure?.khaiGrade != null
-      ? { grade: measure.khaiGrade, label: '통합지수' }
-      : measure?.pm25Grade != null
-        ? { grade: measure.pm25Grade, label: 'PM2.5' }
-        : measure?.pm10Grade != null
-          ? { grade: measure.pm10Grade, label: 'PM10' }
-          : null;
-  const style = gradeSource ? airGradeStyle(gradeSource.grade) : AIR_GRADE_NONE;
-  const airLoading = airQ.isLoading && !airQ.data;
-  // 등급을 낼 수 있을 때만 세그먼트를 그린다 — 측정소만 있고 측정값이 없으면 생략.
-  const airOk = airLoading || gradeSource !== null;
-  const pm25 = measure ? formatAirValue('pm25', measure.pm25) : '-';
+  const style = air.grade !== null ? airGradeStyle(air.grade) : AIR_GRADE_NONE;
+  const nearest = air.station;
+  const pm25 = formatAirValue('pm25', air.pm25);
   const sidoOption = nearest
     ? (AIR_SIDO_OPTIONS.find((o) => o.value !== '전국' && nearest.sidoName !== null && airSidoMatches(o.value, nearest.sidoName))?.value ?? null)
     : null;
@@ -93,13 +49,13 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
     ? `/air?${new URLSearchParams({ ...(sidoOption ? { sido: sidoOption } : {}), station: nearest.stationName }).toString()}`
     : '/air';
   const nearestLabel = nearest ? `가장 가까운 측정소 ${nearest.stationName} ${formatDistanceM(nearest.dist)}` : '';
-  const airSummary = airLoading
+  const airSummary = air.loading
     ? '대기 불러오는 중'
     : !nearest
       ? '근처 측정소 없음'
-      : !gradeSource
+      : air.gradeSource === null
         ? `대기 자료 없음 — ${nearestLabel}`
-        : `대기 ${style.label}(${gradeSource.label}) · PM10 ${formatAirValue('pm10', measure?.pm10)} / PM2.5 ${pm25} ㎍/㎥ — ${nearestLabel}`;
+        : `대기 ${style.label}(${GLANCE_AIR_GRADE_SOURCE_LABEL[air.gradeSource]}) · PM10 ${formatAirValue('pm10', air.pm10)} / PM2.5 ${pm25} ㎍/㎥ — ${nearestLabel}`;
 
   const title = `내 위치(${label}) · ${wxSummary} · ${airSummary}`;
 
@@ -120,27 +76,27 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
       >
         <MapPin aria-hidden className="size-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
         <span className="hidden max-w-[6.5rem] truncate font-medium sm:inline">{label}</span>
-        {wxOk && (
+        {wx.ok && (
           <>
-            {wxLoading ? (
+            {wx.loading ? (
               <span aria-hidden className="size-3.5 shrink-0 animate-pulse rounded-full bg-muted-foreground/30" />
             ) : (
-              <WeatherConditionIcon condition={condition} hour={ncstHour} className="size-3.5" />
+              <WeatherConditionIcon condition={wx.condition} hour={wx.ncstHour} className="size-3.5" />
             )}
             <span className="shrink-0 font-medium tabular-nums sm:hidden">{tempShort}</span>
             <span className="hidden shrink-0 font-medium tabular-nums sm:inline">{temp}</span>
-            {!wxLoading && <span className="hidden shrink-0 text-muted-foreground lg:inline">{KMA_CONDITION_LABEL[condition]}</span>}
-            {wet && (
+            {!wx.loading && <span className="hidden shrink-0 text-muted-foreground lg:inline">{wx.conditionLabel}</span>}
+            {wx.wet && (
               <Umbrella
                 role="img"
-                aria-label={`강수 예상${popMax !== null ? ` (최대 ${popMax}%)` : ''}`}
+                aria-label={`강수 예상${wx.popMax !== null ? ` (최대 ${wx.popMax}%)` : ''}`}
                 className="size-3 shrink-0 text-blue-600 dark:text-blue-400"
               />
             )}
           </>
         )}
       </Link>
-      {airOk && (
+      {air.ok && (
         <Link
           to={airTo}
           aria-label={`내 위치(${label}) 공기질 — ${airSummary}. 대기정보 페이지로 이동`}
@@ -148,9 +104,9 @@ export const MyLocationChip = ({ className }: { className?: string }) => {
           // 앞 세그먼트와의 구분은 선이 아니라 가운뎃점 하나 — 두 링크가 한 알약으로 읽히게.
           className="inline-flex items-center gap-1.5 pl-1.5 pr-2.5 transition-colors hover:bg-accent before:pr-1.5 before:text-muted-foreground/60 before:content-['·']"
         >
-          <span aria-hidden className={cn('size-2 shrink-0 rounded-full', style.dot, airLoading && 'animate-pulse')} />
-          <span className="shrink-0">{airLoading ? '…' : style.label}</span>
-          {measure && <span className="hidden shrink-0 text-muted-foreground tabular-nums lg:inline">PM2.5 {pm25}</span>}
+          <span aria-hidden className={cn('size-2 shrink-0 rounded-full', style.dot, air.loading && 'animate-pulse')} />
+          <span className="shrink-0">{air.loading ? '…' : style.label}</span>
+          {air.grade !== null && <span className="hidden shrink-0 text-muted-foreground tabular-nums lg:inline">PM2.5 {pm25}</span>}
         </Link>
       )}
     </div>

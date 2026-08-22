@@ -1,30 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import type { WeatherBaseType } from '@repo/api-contract';
-import { ApiError } from '@repo/shared';
 
-// 날씨 페이지 비-컴포넌트 헬퍼 — 발표 시각 포맷, 업스트림 에러 문구, 차트 보조 훅/눈금.
+// 날씨 페이지 비-컴포넌트 헬퍼 — 차트 보조 훅/눈금만 여기 남고, 발표 시각 포맷은 @repo/utils
+// (formatKmaBaseLabel/formatKmaTmFcLabel), 업스트림 에러 문구는 @repo/shared(weatherUpstreamMessage)로
+// 올라갔다(앱 날씨 화면과 공용). 기존 import 경로 호환용 재수출.
 // (컴포넌트 파일과 분리해 Fast Refresh 경고를 피한다 — 대기정보의 airGrade.ts 와 같은 규율.)
-
-// "YYYYMMDD"+"HHMM" → "8/21 15:00".
-export const formatBaseLabel = (base: WeatherBaseType | null | undefined): string | null => {
-  if (!base) return null;
-  return `${Number(base.date.slice(4, 6))}/${Number(base.date.slice(6, 8))} ${base.time.slice(0, 2)}:${base.time.slice(2, 4)}`;
-};
-
-// "YYYYMMDDHHmm" → "8/21 06:00".
-export const formatTmFcLabel = (tmFc: string | null | undefined): string | null => {
-  if (!tmFc || !/^\d{12}$/.test(tmFc)) return null;
-  return `${Number(tmFc.slice(4, 6))}/${Number(tmFc.slice(6, 8))} ${tmFc.slice(8, 10)}:${tmFc.slice(10, 12)}`;
-};
-
-export const weatherUpstreamMessage = (e: unknown, fallback: string): string => {
-  if (e instanceof ApiError) {
-    if (e.statusCode === 503) return `서버에 기상청 API 키가 없거나 일일 한도가 찼습니다. (${e.message})`;
-    if (e.statusCode === 502) return `기상청 API가 응답하지 않습니다. 잠시 후 다시 시도하세요. (${e.message})`;
-    if (e.statusCode === 429) return '요청이 너무 잦습니다. 잠시 후 다시 시도하세요.';
-  }
-  return fallback;
-};
+export { formatKmaBaseLabel as formatBaseLabel, formatKmaTmFcLabel as formatTmFcLabel } from '@repo/utils';
+export { weatherUpstreamMessage } from '@repo/shared';
 
 // 컨테이너 실측 폭 — SVG 를 픽셀 단위로 그려 글자가 늘어나지 않게 한다. ResizeObserver 는
 // 외부 시스템이라 useEffect 가 맞는 자리(대기정보 차트와 같은 훅).
