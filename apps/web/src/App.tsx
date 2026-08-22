@@ -46,6 +46,7 @@ const SettlementHistoryPage = lazy(() =>
 const ContactsPage = lazy(() =>
   import('./routes/settlement/ContactsPage').then((m) => ({ default: m.ContactsPage })),
 );
+const MealPage = lazy(() => import('./routes/meal/MealPage').then((m) => ({ default: m.MealPage })));
 const SettlementNewPage = lazy(() =>
   import('./routes/settlement/SettlementNewPage').then((m) => ({ default: m.SettlementNewPage })),
 );
@@ -145,6 +146,15 @@ export const App = () => {
             <Route path="/weather" element={<WeatherPage />} />
             {/* 일상지도(전국 CCTV·공중화장실) — 공개 페이지, OL 지도라 lazy. */}
             <Route path="/life-map" element={<LifeMapPage />} />
+            {/* 내 식단 — 기록은 앱에서 사진으로 남기고 웹은 조회·통계·추천. 로그인 필수. */}
+            <Route
+              path="/me/meals"
+              element={
+                <RequireUser>
+                  <MealPage />
+                </RequireUser>
+              }
+            />
             <Route
               path="/me/settlements"
               element={

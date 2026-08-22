@@ -15,6 +15,8 @@ interface NavItem {
   // 한 메뉴가 여러 경로를 대표할 때 활성 판정 경로들('대중교통' = /bus·/subway).
   // 미지정이면 NavLink 기본 isActive(to 기준)를 쓴다.
   match?: string[];
+  // 로그인 사용자에게만 노출(개인 데이터 화면). 게스트·비로그인은 메뉴에서 숨긴다.
+  requiresAuth?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -24,6 +26,7 @@ const NAV: NavItem[] = [
   { to: '/life-map', label: '일상지도' },
   { to: '/weather', label: '날씨' },
   { to: '/air', label: '대기질' },
+  { to: '/me/meals', label: '식단', requiresAuth: true },
 ];
 
 interface Props {
@@ -99,7 +102,7 @@ export const PublicTopBar = ({ onMenuClick, subBar, onHeightChange }: Props) => 
             <span className="whitespace-nowrap text-base font-semibold">🎲 Life Pickr</span>
           </Link>
           <nav className="hidden items-center gap-1 lg:flex">
-            {NAV.map((item) => (
+            {NAV.filter((item) => !item.requiresAuth || !!user).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

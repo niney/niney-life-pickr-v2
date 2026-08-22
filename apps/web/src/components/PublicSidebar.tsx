@@ -8,6 +8,7 @@ import {
   LogOut,
   MapPinned,
   Receipt,
+  Salad,
   ShieldCheck,
   UtensilsCrossed,
   Wind,
@@ -26,6 +27,8 @@ interface NavItem {
   // 한 메뉴가 여러 경로를 대표할 때 활성 판정 경로들('대중교통' = /bus·/subway).
   // 미지정이면 NavLink 기본 isActive(to 기준)를 쓴다.
   match?: string[];
+  // 로그인 사용자에게만 노출(개인 데이터 화면).
+  requiresAuth?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -35,6 +38,7 @@ const NAV: NavItem[] = [
   { to: '/life-map', label: '일상지도', icon: MapPinned },
   { to: '/weather', label: '날씨', icon: CloudSun },
   { to: '/air', label: '대기질', icon: Wind },
+  { to: '/me/meals', label: '식단', icon: Salad, requiresAuth: true },
 ];
 
 const ROW = 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors';
@@ -90,7 +94,7 @@ export const PublicSidebar = ({ open, onClose }: Props) => {
         </div>
         {/* 가로 모드 등 낮은 화면에서도 하단 계정 영역이 밀려나지 않게 NAV 만 스크롤. */}
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-          {NAV.map(({ to, label, icon: Icon, end, match }) => (
+          {NAV.filter((item) => !item.requiresAuth || !!user).map(({ to, label, icon: Icon, end, match }) => (
             <NavLink
               key={to}
               to={to}
