@@ -1,23 +1,14 @@
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
 
 const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-  // pnpm hoists undeclared transitive deps (e.g. expo-router → debug,
-  // react-helmet-async) into this private folder. Metro needs to see it
-  // because we use `disableHierarchicalLookup = true`.
-  path.resolve(workspaceRoot, 'node_modules/.pnpm/node_modules'),
-];
-config.resolver.disableHierarchicalLookup = true;
-config.resolver.unstable_enableSymlinks = true;
-config.resolver.unstable_enablePackageExports = true;
+// Expo SDK 52+ detects pnpm workspaces and configures watch folders and module
+// search paths itself. Keep hierarchical lookup enabled so a package can load
+// its own nested dependency version instead of an unrelated hoisted version
+// from another workspace (for example Expo's webidl-conversions@5 rather than
+// jsdom's Node-only webidl-conversions@8).
 
 // Defer `require()` calls until first use. Cuts cold-start by lazily
 // evaluating modules instead of all of them up front.
@@ -29,16 +20,6 @@ config.transformer = {
       inlineRequires: true,
     },
   }),
-};
-
-// Pin react / react-dom to mobile's own copy. Workspace packages carry React 19
-// for `apps/web`, but mobile is on React 18 for RN 0.76 compat — without this
-// alias two copies can leak into the same bundle and `$$typeof` mismatches
-// cause "Objects are not valid as a React child" at render time.
-config.resolver.extraNodeModules = {
-  ...(config.resolver.extraNodeModules ?? {}),
-  react: path.resolve(projectRoot, 'node_modules/react'),
-  'react-dom': path.resolve(projectRoot, 'node_modules/react-dom'),
 };
 
 config.resolver.blockList = [
