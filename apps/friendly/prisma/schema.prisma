@@ -1487,6 +1487,9 @@ model FoodItem {
   fatG            Float?
   sodiumMg        Float?
   sugarG          Float?
+  // 영양을 같은 계열 행에서 빌려왔으면 그 행의 이름(예: 불고기 ← '소불고기'). 직접 값이면 null.
+  // UI 는 이 값이 있으면 "○○ 기준 추정"이라고 밝힌다.
+  nutritionFrom   String?
   // 대표 출처('mfds-nutrition'|'mfds-recipe'|'mafra-recipe'|'hansik-800'|'menu-canonical'|'manual') + 그 id.
   source          String
   sourceId        String?

@@ -12,6 +12,8 @@
 //     만 돌려도 로컬 파일 기반 전체 재적재가 된다(공공 API 쿼터 소모 없음). 파일 출처는 docs/data-sources.md.
 //   - --dry-run: 정규화 리포트만(DB 쓰기 없음)
 //   - --classify: 적재 후 미분류 행 LLM 2축 분류(chat 모델 필요). --classify-limit 로 상한.
+//   - --backfill-nutrition: 영양이 빈 행에 같은 계열 행의 1인분 영양을 빌려온다(소불고기 → 불고기).
+//     --dry-run 과 함께 쓰면 무엇을 어디서 빌릴지만 찍는다.
 // 원본 CSV 는 리포에 넣지 않는다(data/open/ 은 .gitignore).
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -31,6 +33,7 @@ import {
   fetchAllMfdsRecipes,
 } from '../src/modules/food/food-api.adapter.js';
 import { FoodClassifyService } from '../src/modules/food/food-classify.service.js';
+import { backfillNutrition } from '../src/modules/food/food-nutrition.service.js';
 import {
   FoodImportService,
   normalizeHansik800Rows,
@@ -80,6 +83,7 @@ const fileFor = (kind: keyof typeof DEFAULT_FILES): string | null => {
 };
 const DRY_RUN = flag('dry-run');
 const CLASSIFY = flag('classify');
+const BACKFILL_NUTRITION = flag('backfill-nutrition');
 const CLASSIFY_LIMIT = opt('classify-limit') ? Number.parseInt(opt('classify-limit')!, 10) : undefined;
 
 const prisma = new PrismaClient();
@@ -212,6 +216,15 @@ const runClassify = async (): Promise<void> => {
   if (deactivated > 0) console.log(`  음식이 아닌 외식 어휘 ${deactivated}건 비활성`);
 };
 
+const runBackfillNutrition = async (): Promise<void> => {
+  console.log(`\n[nutrition-backfill] 영양이 빈 행 보강${DRY_RUN ? ' (--dry-run)' : ''}…`);
+  const r = await backfillNutrition(prisma, { dryRun: DRY_RUN });
+  console.log(`  대상 ${r.targets}행 → 보강 ${r.filled}, 건너뜀 ${r.skipped}`);
+  for (const s of r.samples) {
+    console.log(`    ${s.name} ← ${s.from} (${Math.round(s.kcal)}kcal, 같은 계열 ${s.donorCount}개)`);
+  }
+};
+
 const main = async (): Promise<void> => {
   console.log(`=== 음식 카탈로그 적재 (source=${SOURCE}${DRY_RUN ? ', --dry-run' : ''}) ===`);
   try {
@@ -222,6 +235,7 @@ const main = async (): Promise<void> => {
     if (SOURCE === 'all' || SOURCE === 'menu-canonical') await runMenuCanonical();
     if (SOURCE === 'hansik800' || SOURCE === 'all') await runHansik800();
     if (CLASSIFY) await runClassify();
+    if (BACKFILL_NUTRITION) await runBackfillNutrition();
     const total = await prisma.foodItem.count();
     console.log(`\n카탈로그 총 ${total}행. 종료.`);
   } finally {
