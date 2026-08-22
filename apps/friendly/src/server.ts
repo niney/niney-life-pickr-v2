@@ -33,6 +33,9 @@ const start = async (): Promise<void> => {
     //    닫고 awaiting_selection 은 살려둔다(콜백이 DB 행을 찾아 이어감).
     await app.randomCrawl.bootstrap();
 
+    // 6) 음식 카탈로그 적재 잡 부팅 — DB 설정으로 cron 등록 + running 고아 interrupted 정리.
+    await app.foodImport.bootstrap();
+
     await app.listen({ port: env.PORT, host: env.HOST });
 
     // graceful shutdown — 중복 호출 가드, 스케줄러 정지, 진행 중 작업 취소,

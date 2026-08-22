@@ -1,0 +1,177 @@
+// 음식 카탈로그 CLI 적재 — 어드민 적재 잡과 같은 서비스(FoodImportService/upsertFoodSeeds)를 쓴다.
+//
+// 실행: pnpm --filter friendly load:food-catalog [--source=nutrition|recipe|mafra|menu-canonical|hansik800|all]
+//                                                [--file=<csv 경로>] [--dry-run] [--classify] [--classify-limit=N]
+//   - nutrition/recipe/mafra: 외부 API(키: FOOD_API_KEY||BUS_API_KEY / FOOD_RECIPE_API_KEY / MAFRA_API_KEY)
+//   - menu-canonical: 로컬 global_menu_canonicals(식당 ≥2) 합류
+//   - hansik800: 한식진흥원 800선 XLSX 를 CSV 로 저장한 파일(--file 필수, UTF-8/CP949 모두 가능)
+//   - all: nutrition → recipe → mafra → menu-canonical (hansik800 은 --file 있을 때만)
+//   - --dry-run: 정규화 리포트만(DB 쓰기 없음)
+//   - --classify: 적재 후 미분류 행 LLM 2축 분류(chat 모델 필요). --classify-limit 로 상한.
+// 원본 CSV 는 리포에 넣지 않는다(data/open/ 은 .gitignore).
+
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { PrismaClient } from '@prisma/client';
+import { env } from '../src/config/env.js';
+import { parseCsv } from '../src/lib/csv.js';
+import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
+import { buildLlmProviderEnv } from '../src/modules/ai/llm-provider-env.js';
+import {
+  MAFRA_INGREDIENT_GRID,
+  MAFRA_RECIPE_GRID,
+  fetchAllMafra,
+  fetchAllMfdsNutrition,
+  fetchAllMfdsRecipes,
+} from '../src/modules/food/food-api.adapter.js';
+import { FoodClassifyService } from '../src/modules/food/food-classify.service.js';
+import {
+  FoodImportService,
+  normalizeHansik800Rows,
+  normalizeMafraRows,
+  normalizeMenuCanonicalRows,
+  normalizeMfdsNutritionRows,
+  normalizeMfdsRecipeRows,
+  upsertFoodSeeds,
+  type FoodSeed,
+  type NormalizeReport,
+} from '../src/modules/food/food-import.service.js';
+import { decodeLifeCsv } from '../src/modules/life-map/life-map-master.service.js';
+
+const args = process.argv.slice(2);
+const opt = (name: string): string | null => {
+  const hit = args.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : null;
+};
+const flag = (name: string): boolean => args.includes(`--${name}`);
+
+const SOURCE = opt('source') ?? 'all';
+const FILE = opt('file');
+const DRY_RUN = flag('dry-run');
+const CLASSIFY = flag('classify');
+const CLASSIFY_LIMIT = opt('classify-limit') ? Number.parseInt(opt('classify-limit')!, 10) : undefined;
+
+const prisma = new PrismaClient();
+
+const printReport = (label: string, report: NormalizeReport): void => {
+  console.log(`\n[${label}] 원본 ${report.fetched}행 → 시드 ${report.produced}건`);
+  for (const [reason, n] of Object.entries(report.dropped)) console.log(`  drop ${reason}: ${n}`);
+};
+
+const progress = (label: string) => {
+  let last = 0;
+  return (processed: number, total: number): void => {
+    if (processed - last >= 500 || processed === total) {
+      console.log(`  [${label}] ${processed}/${total}`);
+      last = processed;
+    }
+  };
+};
+
+const upsert = async (label: string, seeds: FoodSeed[]): Promise<void> => {
+  if (DRY_RUN) {
+    console.log(`  (--dry-run) 예시 시드:`, seeds.slice(0, 3));
+    return;
+  }
+  const t0 = Date.now();
+  const r = await upsertFoodSeeds(prisma, seeds, { onProgress: progress(label) });
+  console.log(`  [${label}] 신규 ${r.inserted} / 갱신 ${r.updated} / 건너뜀 ${r.skipped} (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+};
+
+const runNutrition = async (): Promise<void> => {
+  const key = env.FOOD_API_KEY || env.BUS_API_KEY;
+  if (!key) {
+    console.log('\n[nutrition] 키 없음(FOOD_API_KEY/BUS_API_KEY) — 건너뜀');
+    return;
+  }
+  console.log('\n[nutrition] 수집 중…');
+  const res = await fetchAllMfdsNutrition({ serviceKey: key }, {}, {
+    onPage: (i) => console.log(`  ${i.page}페이지 누적 ${i.fetched}/${i.totalCount ?? '?'}`),
+  });
+  const { seeds, report } = normalizeMfdsNutritionRows(res.items);
+  printReport('nutrition', report);
+  await upsert('nutrition', seeds);
+};
+
+const runRecipe = async (): Promise<void> => {
+  const key = env.FOOD_RECIPE_API_KEY;
+  if (!key) {
+    console.log('\n[recipe] 키 없음(FOOD_RECIPE_API_KEY) — 건너뜀');
+    return;
+  }
+  console.log('\n[recipe] 수집 중…');
+  const res = await fetchAllMfdsRecipes({ serviceKey: key }, {
+    onPage: (i) => console.log(`  ${i.page}페이지 누적 ${i.fetched}/${i.totalCount ?? '?'}`),
+  });
+  const { seeds, report } = normalizeMfdsRecipeRows(res.items);
+  printReport('recipe', report);
+  await upsert('recipe', seeds);
+};
+
+const runMafra = async (): Promise<void> => {
+  const key = env.MAFRA_API_KEY;
+  if (!key) {
+    console.log('\n[mafra] 키 없음(MAFRA_API_KEY) — 건너뜀');
+    return;
+  }
+  console.log('\n[mafra] 수집 중…');
+  const recipes = await fetchAllMafra(MAFRA_RECIPE_GRID, { serviceKey: key });
+  const ingredients = await fetchAllMafra(MAFRA_INGREDIENT_GRID, { serviceKey: key });
+  const { seeds, report } = normalizeMafraRows(recipes.items, ingredients.items);
+  printReport('mafra', report);
+  await upsert('mafra', seeds);
+};
+
+const runMenuCanonical = async (): Promise<void> => {
+  console.log('\n[menu-canonical] 로컬 global_menu_canonicals 조회…');
+  const svc = new FoodImportService(prisma, { keys: { nutrition: '', recipe: '', mafra: '' } });
+  const rows = await svc.loadMenuCanonicalRows();
+  const { seeds, report } = normalizeMenuCanonicalRows(rows);
+  printReport('menu-canonical', report);
+  await upsert('menu-canonical', seeds);
+};
+
+const runHansik800 = async (): Promise<void> => {
+  if (!FILE) {
+    console.log('\n[hansik800] --file=<csv> 가 없어 건너뜀');
+    return;
+  }
+  const path = resolve(FILE);
+  const text = decodeLifeCsv(readFileSync(path));
+  const table = parseCsv(text);
+  console.log(`\n[hansik800] CSV ${table.header.length}열 × ${table.rows.length}행 (${path})`);
+  const { seeds, report } = normalizeHansik800Rows(table.header, table.rows);
+  printReport('hansik800', report);
+  await upsert('hansik800', seeds);
+};
+
+const runClassify = async (): Promise<void> => {
+  if (DRY_RUN) return;
+  console.log('\n[classify] LLM 2축 분류…');
+  const aiConfig = new AiConfigService(prisma, buildLlmProviderEnv());
+  const classify = new FoodClassifyService(prisma, aiConfig);
+  const r = await classify.classifyPending({
+    limit: CLASSIFY_LIMIT,
+    onProgress: (p, t) => console.log(`  [classify] ${p}/${t}`),
+  });
+  if (r.noProvider) console.log('  chat 모델 미설정 — 분류 생략');
+  else console.log(`  분류 ${r.updated}/${r.total}행, 실패 청크 ${r.failedChunks}, 모델 ${r.model}`);
+};
+
+const main = async (): Promise<void> => {
+  console.log(`=== 음식 카탈로그 적재 (source=${SOURCE}${DRY_RUN ? ', --dry-run' : ''}) ===`);
+  try {
+    if (SOURCE === 'all' || SOURCE === 'nutrition') await runNutrition();
+    if (SOURCE === 'all' || SOURCE === 'recipe') await runRecipe();
+    if (SOURCE === 'all' || SOURCE === 'mafra') await runMafra();
+    if (SOURCE === 'all' || SOURCE === 'menu-canonical') await runMenuCanonical();
+    if (SOURCE === 'hansik800' || (SOURCE === 'all' && FILE)) await runHansik800();
+    if (CLASSIFY) await runClassify();
+    const total = await prisma.foodItem.count();
+    console.log(`\n카탈로그 총 ${total}행. 종료.`);
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+
+void main();

@@ -25,6 +25,8 @@
     "load:subway-congestion": "tsx --env-file=.env scripts/load-subway-congestion.ts",
     "load:life-cctv": "tsx --env-file=.env scripts/load-life-cctv.ts",
     "load:life-toilets": "tsx --env-file=.env scripts/load-life-toilets.ts",
+    "load:food-catalog": "tsx --env-file=.env scripts/load-food-catalog.ts",
+    "probe:food-api": "tsx --env-file=.env scripts/probe-food-api.ts",
     "export:life-geocode": "tsx --env-file=.env scripts/export-life-geocode.ts",
     "import:life-geocode": "tsx --env-file=.env scripts/import-life-geocode.ts",
     "status:life-map": "tsx --env-file=.env scripts/life-map-status.ts",
