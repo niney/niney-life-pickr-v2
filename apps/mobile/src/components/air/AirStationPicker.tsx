@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAirSidoRealtime, useTheme } from '@repo/shared';
@@ -31,7 +31,8 @@ export const AirStationPicker = ({ visible, onClose, initialSido, currentStation
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[styles.root, { backgroundColor: theme.colors.bg, paddingTop: Math.max(insets.top, 12) }]}>
+      {/* iOS pageSheet 은 이미 상태바 아래에 카드로 뜨므로 상단 inset 을 또 더하지 않는다(안드로이드 edge-to-edge 만 inset) */}
+      <View style={[styles.root, { backgroundColor: theme.colors.bg, paddingTop: Platform.OS === 'ios' ? 12 : Math.max(insets.top, 12) }]}>
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <Text style={[styles.title, { color: theme.colors.text }]}>측정소 선택</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="닫기" onPress={onClose} hitSlop={8}>
