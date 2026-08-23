@@ -25,6 +25,11 @@
 파일이 아닌 **API** 로 받는 것: 식품안전나라 레시피 `COOKRCP01`(1,156건 → 1,101종). 키는
 `.env` 의 `FOOD_RECIPE_API_KEY`. `pnpm --filter friendly load:food-catalog --source=recipe`.
 
+영양성분은 [data.go.kr 15100070](https://www.data.go.kr/data/15100070/standard.do) 에 같은 내용의
+API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 배포본 CSV 가 같은 데이터이고
+쿼터를 안 쓴다. data.go.kr 는 **데이터셋마다 활용신청**이 따로라, 다른 데이터셋용 키를 그대로
+쓰면 `30 등록되지 않은 서비스키` 가 난다(키가 잘못된 게 아니라 그 데이터셋에 신청이 안 된 것).
+
 인자 없이 `pnpm --filter friendly load:food-catalog` 를 돌리면 위 파일 2개 + 레시피 API +
 로컬 외식 어휘까지 **전체 재적재**가 된다(`--classify` 를 붙이면 미분류 행 LLM 분류까지).
 
