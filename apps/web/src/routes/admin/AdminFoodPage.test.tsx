@@ -82,6 +82,9 @@ const stats: FoodAdminStatsType = {
   nutritionDirectCount: 50,
   nutritionEstimatedCount: 20,
   nutritionMissingCount: 50,
+  allergenUnknownCount: 80,
+  allergenInferredCount: 35,
+  allergenVerifiedCount: 5,
   bySource: [
     { source: 'mfds-nutrition', count: 100 },
     { source: 'manual', count: 20 },
@@ -156,6 +159,9 @@ const item = (over: Partial<FoodItemType> = {}): FoodItemType => ({
   mainIngredient: 'pork',
   cuisine: 'korean',
   ingredients: null,
+  allergens: [],
+  allergenEvidence: [],
+  allergenStatus: 'unknown',
   servingG: null,
   nutrition: null,
   source: 'mfds-nutrition',
@@ -531,7 +537,12 @@ describe('AdminFoodPage', () => {
 
     // 409 → 고정 문구 토스트, 다이얼로그는 열린 채(이름만 고쳐 재시도 가능).
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('이미 있는 음식명'));
-    expect(posted[0]).toEqual({ name: '새음식', dishType: 'rice', active: true });
+    expect(posted[0]).toEqual({
+      name: '새음식',
+      dishType: 'rice',
+      allergenStatus: 'inferred',
+      active: true,
+    });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: '등록' }));

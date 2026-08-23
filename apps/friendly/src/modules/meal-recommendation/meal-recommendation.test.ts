@@ -117,10 +117,10 @@ describe('buildProfile', () => {
 });
 
 describe('allergenData', () => {
-  it('이름·재료와 구조화 메타를 합쳐 best-effort 경고 근거를 만든다', () => {
+  it('음식명은 추정에서 제외하고 재료·구조화 메타를 합쳐 best-effort 경고를 만든다', () => {
     const result = allergenData(
-      '새우 크림 파스타',
-      JSON.stringify(['밀가루 면', '우유', '토마토']),
+      '이름에만 게가 들어간 음식',
+      JSON.stringify(['밀가루 면', '우유', '토마토', '새우']),
       JSON.stringify(['egg']),
       JSON.stringify(['알류: 제품 표시']),
     );
@@ -128,6 +128,7 @@ describe('allergenData', () => {
       expect.arrayContaining(['egg', 'milk', 'wheat', 'shrimp', 'tomato']),
     );
     expect(result.allergenEvidence.some((value) => value.includes('새우'))).toBe(true);
+    expect(result.allergenWarnings).not.toContain('crab');
     expect(result.allergenMetadataKnown).toBe(true);
   });
 });

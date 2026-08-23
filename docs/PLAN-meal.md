@@ -351,6 +351,11 @@ model MealRecommendation {
 
 ## 진행 기록
 
+- **2026-08-24 — 음식 근거·실동작 검증 보강**:
+  - **알레르기 provenance**: 19종 enum을 공통 계약으로 분리하고 `FoodItem`에 `unknown|inferred|verified` 상태를 추가했다. 자동 판정은 음식명이 아니라 공개 재료 문자열만 사용하며 근거 문구를 함께 저장하고, 운영자 검수값은 재적재·백필이 덮지 않는다. 어드민에는 상태 필터·통계·근거 툴팁·재료 편집·19종 검수 UI를 연결했다.
+  - **원천 감사 활성화**: 운영 DB를 별도 SQLite online backup으로 보존한 뒤 식약처 영양 1,236건, 한식 800선 800건, 외식 canonical 1,311건을 다시 병합했다. 최종 3,879종 중 재료가 있는 1,138종을 추론(알레르기 가능 1,011, 알려진 항목 없음 127)했고, source observation 28,379건과 검토 대기 conflict 1,545건을 만들었다. 복제본에서 동일 수집 2회째 수치가 늘지 않는 멱등성과 운영 DB `integrity_check=ok`를 확인했다.
+  - **평가·E2E**: 개인정보 보호형 v2 디버그 덤프(`photoTokenHashes`, `rawIncluded`)와 legacy 덤프를 함께 읽고, 원문 미보관 성공을 음식 0개로 오해하지 않는 evaluator 및 `--require-raw|--json`을 추가했다. 비운영 DB만 허용하는 E2E는 실제 사진 2장으로 업로드 → gemma4 인식 → lineage 저장 → 통계 → 추천 immutable event/`logged` → 사진 포함 백업·멱등 복원 → 텍스트를 남기는 사진 retention까지 통과했고 합성 사용자·파일을 정리한다.
+  - **네이티브·전체 검증**: clean Expo prebuild 후 iOS Release simulator 빌드·설치·실행과 권한 문구 반영을 확인했다. Android JS export는 통과했으나 로컬 Android SDK가 없고 연결된 iPhone은 offline이라 Android native/실기기 카메라·HEIC 확인은 남았다. 전체 typecheck·build 통과, lint 오류 0, friendly 1,063 + shared 65 + web 77 + utils 180 테스트 통과(실데이터 조건부 1건 skip).
 - **2026-08-23 — 권장 고도화 일괄 구현**:
   - **기록 안정성·입력 UX**: `(eatenAt,id)` 복합 커서 기반 무한 목록, 달력 월 전환 정합성, 사진 저장 트랜잭션·공통 한도·파일 GC, 재인식 시 사용자가 고친 항목 보존, 외식 장소 선택, 기존 기록을 현재 시각으로 다시 기록하는 빠른 복사를 추가했다. 모든 식단 쓰기와 전체 삭제는 사용자별 공통 FIFO 장벽을 공유해 진행 중 저장이 삭제 응답 뒤 데이터를 되살리지 못하며, 사진 폴더 삭제 실패는 성공으로 숨기지 않고 재호출로 복구한다.
   - **추천 폐쇄 루프**: 추천 카드의 선택 → `이거 먹었어요` 초안 → 저장 성공 시에만 피드백 연결, 추천 출처 스냅샷(`originRecommendationId`), 선택·실제 기록·평가의 시간 감쇠 학습과 수락률 통계를 연결했다. 추천 캐시 적중은 일일 쿼터를 쓰지 않고, 같은 요청은 진행 중 호출을 공유한다.
@@ -389,7 +394,7 @@ model MealRecommendation {
   - 앱 사진 권한 문구를 영수증+식단 둘 다 덮게 수정(적용은 prebuild 후 재빌드).
 - **남은 것**:
   1. ~~식품안전나라 레시피~~ / ~~글로벌 메뉴 병합 + 외식 어휘~~ / ~~앱 권한 문구~~ — 2026-08-22 완료.
-  2. **앱 재빌드**: 권한 문구는 `app.config.ts` 에 들어갔지만 `ios/` 는 gitignored 라 `prebuild` 후 재빌드해야 plist 에 반영된다.
-  3. **실기기 확인** — 카메라 촬영·HEIC·업로드·인식 흐름. 서버 파이프라인은 `probe:meal-e2e` 로 실제 사진·LLM 까지 확인했지만(업로드→인식→저장→통계→추천→피드백) 단말 카메라 경로는 남았다.
+  2. ~~**앱 재빌드**~~ — 2026-08-24 clean prebuild와 iOS Release simulator 빌드·설치·실행 완료. Android JS export는 완료했으나 이 환경에는 Android SDK가 없어 Gradle native build는 실행하지 못했다.
+  3. **실기기 확인** — 카메라 촬영·HEIC·업로드·인식 흐름. 서버 파이프라인은 사진 2장 E2E로 backup/restore/retention까지 확인했고 iOS simulator Release도 실행했지만, 연결된 iPhone이 offline이라 단말 카메라 경로는 남았다.
   4. ~~더 큰 평가셋 재비교~~ / ~~서버 메뉴→식당 역검색~~ / ~~끼니 시간 로컬 알림~~ / ~~`meal`·`food` 위키 컴파일~~ — 2026-08-23 완료.
   5. ~~운영 DB 마이그레이션 적용~~ — 2026-08-23 완료. `20260823160000_add_meal_recommendation_origin`의 선반영 스키마를 migration history와 맞춘 뒤, 사진 소유자 FK와 비선호 음식 분리 마이그레이션까지 `prod.db`에 적용했다.

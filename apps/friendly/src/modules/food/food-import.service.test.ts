@@ -223,6 +223,14 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
     expect(JSON.parse(row!.aliasesJson)).toEqual(['김치 찌개', '묵은지김치찌개']);
     expect(JSON.parse(row!.aliasNormsJson)).toEqual(['묵은지김치찌개']);
     expect(JSON.parse(row!.ingredientsJson!)).toEqual(['김치', '돼지고기', '두부']);
+    expect(row!.allergenStatus).toBe('inferred');
+    expect(JSON.parse(row!.allergensJson)).toEqual(['soybean', 'pork']);
+    expect(JSON.parse(row!.allergenEvidenceJson)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('두부'),
+        expect.stringContaining('돼지고기'),
+      ]),
+    );
     expect(row!.popularity).toBe(17);
     expect(JSON.parse(row!.sourceRefsJson)).toEqual([
       { source: 'mfds-recipe', sourceId: 'R9' },

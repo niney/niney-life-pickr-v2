@@ -1,19 +1,23 @@
 import type { FoodItem as PrismaFoodItem, Prisma, PrismaClient } from '@prisma/client';
 import {
+  FoodAllergenStatus,
   FoodCuisine,
   FoodDishType,
   FoodMainIngredient,
   FoodSource,
+  MealAllergen,
   FOOD_RESTAURANT_DATA_NOTICE,
   type FoodAdminCreateInputType,
   type FoodAdminListQueryType,
   type FoodAdminListResultType,
   type FoodAdminStatsType,
   type FoodAdminUpdateInputType,
+  type FoodAllergenStatusType,
   type FoodCuisineType,
   type FoodDishTypeType,
   type FoodItemType,
   type FoodMainIngredientType,
+  type MealAllergenType,
   type FoodRestaurantEvidenceType,
   type FoodRestaurantsQueryType,
   type FoodRestaurantsResultType,
@@ -23,6 +27,13 @@ import {
 } from '@repo/api-contract';
 import { haversineM } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
+import {
+  inferFoodAllergens,
+  parseFoodAllergenStatus,
+  serializeFoodAllergenMetadata,
+  unknownFoodAllergens,
+  verifiedFoodAllergens,
+} from './food-allergen.js';
 
 // 음식 카탈로그 조회/매칭/어드민 편집. 적재(import)와 LLM 분류는 별도 서비스.
 //
@@ -92,6 +103,12 @@ const hasNutrition = (r: PrismaFoodItem): boolean =>
   r.sodiumMg !== null ||
   r.sugarG !== null;
 
+const parseAllergens = (raw: string): MealAllergenType[] =>
+  parseJsonStringArray(raw).flatMap((value) => {
+    const parsed = MealAllergen.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  });
+
 export const toFoodItem = (r: PrismaFoodItem): FoodItemType => ({
   id: r.id,
   name: r.name,
@@ -101,6 +118,10 @@ export const toFoodItem = (r: PrismaFoodItem): FoodItemType => ({
   mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, r.mainIngredient),
   cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, r.cuisine),
   ingredients: r.ingredientsJson === null ? null : parseJsonStringArray(r.ingredientsJson),
+  allergens: parseAllergens(r.allergensJson),
+  allergenEvidence: parseJsonStringArray(r.allergenEvidenceJson),
+  allergenStatus:
+    enumOrNull<FoodAllergenStatusType>(FoodAllergenStatus, r.allergenStatus) ?? 'unknown',
   servingG: r.servingG,
   nutrition: hasNutrition(r)
     ? {
@@ -576,6 +597,7 @@ export class FoodService {
     if (query.mainIngredient) and.push({ mainIngredient: query.mainIngredient });
     if (query.cuisine) and.push({ cuisine: query.cuisine });
     if (query.source) and.push({ source: query.source });
+    if (query.allergenStatus) and.push({ allergenStatus: query.allergenStatus });
     if (query.active !== undefined) and.push({ active: query.active });
     if (query.unclassified) {
       and.push({ OR: [{ dishType: null }, { mainIngredient: null }, { cuisine: null }] });
@@ -609,6 +631,15 @@ export class FoodService {
     const dup = await this.prisma.foodItem.findUnique({ where: { nameNorm } });
     if (dup) throw new FoodServiceError('duplicate_name', `이미 있는 음식명입니다: ${dup.name}`);
     const aliases = (input.aliases ?? []).map((a) => a.trim()).filter((a) => a.length > 0);
+    const ingredients = input.ingredients ?? null;
+    const allergenMetadata =
+      input.allergenStatus === 'unknown'
+        ? unknownFoodAllergens()
+        : input.allergenStatus === 'inferred'
+          ? inferFoodAllergens(ingredients)
+          : input.allergenStatus === 'verified' || input.allergens !== undefined
+            ? verifiedFoodAllergens(input.allergens ?? [])
+            : inferFoodAllergens(ingredients);
     const row = await this.prisma.foodItem.create({
       data: {
         name,
@@ -619,7 +650,8 @@ export class FoodService {
         dishType: input.dishType ?? null,
         mainIngredient: input.mainIngredient ?? null,
         cuisine: input.cuisine ?? null,
-        ingredientsJson: input.ingredients ? JSON.stringify(input.ingredients) : null,
+        ingredientsJson: ingredients ? JSON.stringify(ingredients) : null,
+        ...serializeFoodAllergenMetadata(allergenMetadata),
         source: 'manual',
         sourceId: null,
         sourceCategory: null,
@@ -666,6 +698,27 @@ export class FoodService {
     if (input.ingredients !== undefined) {
       data.ingredientsJson = input.ingredients === null ? null : JSON.stringify(input.ingredients);
     }
+    const ingredients =
+      input.ingredients !== undefined
+        ? input.ingredients
+        : row.ingredientsJson === null
+          ? null
+          : parseJsonStringArray(row.ingredientsJson);
+    const currentStatus = parseFoodAllergenStatus(row.allergenStatus);
+    if (input.allergenStatus === 'unknown') {
+      Object.assign(data, serializeFoodAllergenMetadata(unknownFoodAllergens()));
+    } else if (input.allergenStatus === 'inferred') {
+      Object.assign(data, serializeFoodAllergenMetadata(inferFoodAllergens(ingredients)));
+    } else if (input.allergenStatus === 'verified' || input.allergens !== undefined) {
+      Object.assign(
+        data,
+        serializeFoodAllergenMetadata(
+          verifiedFoodAllergens(input.allergens ?? parseAllergens(row.allergensJson)),
+        ),
+      );
+    } else if (input.ingredients !== undefined && currentStatus !== 'verified') {
+      Object.assign(data, serializeFoodAllergenMetadata(inferFoodAllergens(ingredients)));
+    }
     if (input.active !== undefined) data.active = input.active;
 
     const updated = await this.prisma.foodItem.update({ where: { id }, data });
@@ -692,6 +745,9 @@ export class FoodService {
       nutritionDirectCount,
       nutritionEstimatedCount,
       nutritionMissingCount,
+      allergenUnknownCount,
+      allergenInferredCount,
+      allergenVerifiedCount,
       bySourceRaw,
       byDishRaw,
     ] = await Promise.all([
@@ -716,6 +772,9 @@ export class FoodService {
           sugarG: null,
         },
       }),
+      this.prisma.foodItem.count({ where: { allergenStatus: 'unknown' } }),
+      this.prisma.foodItem.count({ where: { allergenStatus: 'inferred' } }),
+      this.prisma.foodItem.count({ where: { allergenStatus: 'verified' } }),
       this.prisma.foodItem.groupBy({ by: ['source'], _count: { _all: true } }),
       this.prisma.foodItem.groupBy({ by: ['dishType'], _count: { _all: true } }),
     ]);
@@ -741,6 +800,9 @@ export class FoodService {
       nutritionDirectCount,
       nutritionEstimatedCount,
       nutritionMissingCount,
+      allergenUnknownCount,
+      allergenInferredCount,
+      allergenVerifiedCount,
       bySource,
       byDishType,
     };

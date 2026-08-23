@@ -16,8 +16,9 @@ import {
   MEAL_SLOT_LABEL,
   daysBetween,
 } from '@repo/utils';
-import { MealAllergen, MEAL_ALLERGEN_LABEL } from '@repo/api-contract';
+import { MealAllergen } from '@repo/api-contract';
 import { normalizeTerm } from '../../lib/text.js';
+import { inferFoodAllergens, parseFoodAllergenStatus } from '../food/food-allergen.js';
 import { parseMealRecommendationFeedback } from './meal-recommendation.feedback.js';
 
 // 추천의 "결정적" 절반 — 사용자 기록을 패턴 프로필로 집계하고, 후보 풀을 만들고, 가중치로
@@ -680,6 +681,7 @@ export class MealPatternService {
           row?.ingredientsJson,
           row?.allergensJson,
           row?.allergenEvidenceJson,
+          row?.allergenStatus,
         ),
       });
     }
@@ -716,6 +718,7 @@ export class MealPatternService {
           row?.ingredientsJson,
           row?.allergensJson,
           row?.allergenEvidenceJson,
+          row?.allergenStatus,
         ),
       });
     }
@@ -773,6 +776,7 @@ const toCandidate = (row: {
   ingredientsJson: string | null;
   allergensJson: string;
   allergenEvidenceJson: string;
+  allergenStatus: string;
 }): CandidateInput => ({
   name: row.name,
   nameNorm: row.nameNorm,
@@ -790,7 +794,13 @@ const toCandidate = (row: {
   nutritionBasis: nutritionBasis(row.nutritionFrom, row.kcal, row.proteinG, row.sodiumMg),
   ingredientCount: countIngredients(row.ingredientsJson),
   ingredients: parseIngredients(row.ingredientsJson),
-  ...allergenData(row.name, row.ingredientsJson, row.allergensJson, row.allergenEvidenceJson),
+  ...allergenData(
+    row.name,
+    row.ingredientsJson,
+    row.allergensJson,
+    row.allergenEvidenceJson,
+    row.allergenStatus,
+  ),
 });
 
 const nutritionBasis = (
@@ -801,28 +811,6 @@ const nutritionBasis = (
 ): MealNutritionBasisType => {
   if (from) return 'donor_estimate';
   return kcal !== null || proteinG !== null || sodiumMg !== null ? 'direct' : 'missing';
-};
-
-const ALLERGEN_KEYWORDS: Record<MealAllergenType, readonly string[]> = {
-  egg: ['달걀', '계란', '난백', '난황', '마요네즈'],
-  milk: ['우유', '버터', '치즈', '생크림', '연유', '유청', '카제인'],
-  buckwheat: ['메밀'],
-  peanut: ['땅콩'],
-  soybean: ['대두', '콩', '두부', '된장', '간장', '콩나물'],
-  wheat: ['밀가루', '밀', '빵', '파스타', '우동', '라면', '만두피'],
-  pine_nut: ['잣'],
-  walnut: ['호두'],
-  crab: ['꽃게', '대게', '게장', '게살', '크랩'],
-  shrimp: ['새우', '쉬림프'],
-  squid: ['오징어'],
-  mackerel: ['고등어'],
-  shellfish: ['조개', '굴', '홍합', '전복', '바지락', '꼬막', '가리비'],
-  peach: ['복숭아'],
-  tomato: ['토마토', '케첩'],
-  chicken: ['닭', '치킨'],
-  pork: ['돼지', '돈육', '삼겹', '제육', '족발', '햄', '베이컨', '소시지'],
-  beef: ['소고기', '쇠고기', '우육', '한우'],
-  sulfites: ['아황산', '메타중아황산'],
 };
 
 const parseAllergenJson = (json: string | null | undefined): MealAllergenType[] => {
@@ -852,31 +840,25 @@ const parseStringJson = (json: string | null | undefined): string[] => {
 };
 
 export const allergenData = (
-  name: string,
+  _name: string,
   ingredientsJson: string | null | undefined,
   explicitJson: string | null | undefined,
   evidenceJson: string | null | undefined,
+  statusValue: string | null | undefined = 'unknown',
 ): Pick<CandidateInput, 'allergenWarnings' | 'allergenEvidence' | 'allergenMetadataKnown'> => {
   const ingredients = parseIngredients(ingredientsJson);
-  const sources = [name, ...ingredients];
   const explicit = parseAllergenJson(explicitJson);
-  const warnings = new Set<MealAllergenType>(explicit);
+  const status = parseFoodAllergenStatus(statusValue ?? 'unknown');
+  // verified는 운영자 판단을 그대로 신뢰한다. 그 외에는 마이그레이션 직후 아직
+  // backfill되지 않은 행도 런타임에서 빠지지 않도록 같은 재료 규칙을 적용한다.
+  const inferred = status === 'verified' ? null : inferFoodAllergens(ingredients);
+  const warnings = new Set<MealAllergenType>([...explicit, ...(inferred?.allergens ?? [])]);
   const evidence = new Set(parseStringJson(evidenceJson));
-  for (const [allergen, keywords] of Object.entries(ALLERGEN_KEYWORDS) as Array<
-    [MealAllergenType, readonly string[]]
-  >) {
-    for (const source of sources) {
-      const norm = normalizeTerm(source);
-      if (!keywords.some((keyword) => norm.includes(normalizeTerm(keyword)))) continue;
-      warnings.add(allergen);
-      evidence.add(`${MEAL_ALLERGEN_LABEL[allergen]}: ${source}`);
-      break;
-    }
-  }
+  for (const item of inferred?.evidence ?? []) evidence.add(item);
   return {
-    allergenWarnings: [...warnings],
+    allergenWarnings: MealAllergen.options.filter((allergen) => warnings.has(allergen)),
     allergenEvidence: [...evidence].slice(0, 8),
-    allergenMetadataKnown: explicit.length > 0 || ingredients.length > 0,
+    allergenMetadataKnown: status !== 'unknown' || explicit.length > 0 || ingredients.length > 0,
   };
 };
 

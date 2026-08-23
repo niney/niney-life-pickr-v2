@@ -33,9 +33,13 @@ import {
   type FoodAdminListInput,
 } from '@repo/shared';
 import {
+  FoodAllergenStatus,
   FoodImportSource,
+  MealAllergen,
+  MEAL_ALLERGEN_LABEL,
   type FoodAdminCreateInputType,
   type FoodAdminUpdateInputType,
+  type FoodAllergenStatusType,
   type FoodCuisineType,
   type FoodDishTypeType,
   type FoodImportConfigType,
@@ -49,6 +53,7 @@ import {
   type FoodMergeConflictItemType,
   type FoodObservedValueType,
   type FoodSourceType,
+  type MealAllergenType,
 } from '@repo/api-contract';
 import {
   FOOD_CUISINES,
@@ -101,6 +106,12 @@ const isExternalSource = (s: FoodImportSourceType): s is ExternalSource =>
 
 const SELECT_CLS =
   'flex h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-base shadow-xs transition-colors sm:text-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50';
+
+const ALLERGEN_STATUS_LABEL: Record<FoodAllergenStatusType, string> = {
+  unknown: '미확인',
+  inferred: '재료 기반 추정',
+  verified: '운영자 검수',
+};
 
 const formatDate = (iso: string | null): string => {
   if (!iso) return '-';
@@ -644,6 +655,11 @@ const StatsSection = () => {
               <StatTile label="영양 추정값" value={s?.nutritionEstimatedCount} />
               <StatTile label="영양 없음" value={s?.nutritionMissingCount} />
             </div>
+            <div className="grid grid-cols-3 gap-3">
+              <StatTile label="알레르기 미확인" value={s?.allergenUnknownCount} />
+              <StatTile label="재료 기반 추정" value={s?.allergenInferredCount} />
+              <StatTile label="운영자 검수" value={s?.allergenVerifiedCount} />
+            </div>
             <div className="grid gap-5 md:grid-cols-2">
               <BarList title="출처별" rows={bySource} />
               <BarList title="조리형태별" rows={byDishType} />
@@ -1087,7 +1103,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 const SORT_KEYS = Object.keys(SORT_LABEL) as SortKey[];
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
-const COLS = 8;
+const COLS = 9;
 
 const CatalogSection = () => {
   const [searchInput, setSearchInput] = useState('');
@@ -1097,6 +1113,7 @@ const CatalogSection = () => {
   const [mainIngredient, setMainIngredient] = useState<FoodMainIngredientType | ''>('');
   const [cuisine, setCuisine] = useState<FoodCuisineType | ''>('');
   const [source, setSource] = useState<FoodSourceType | ''>('');
+  const [allergenStatus, setAllergenStatus] = useState<FoodAllergenStatusType | ''>('');
   const [active, setActive] = useState<'' | '1' | '0'>('');
   const [unclassified, setUnclassified] = useState(false);
   const [sort, setSort] = useState<SortKey>('popularity');
@@ -1110,6 +1127,7 @@ const CatalogSection = () => {
     mainIngredient: mainIngredient || undefined,
     cuisine: cuisine || undefined,
     source: source || undefined,
+    allergenStatus: allergenStatus || undefined,
     active: active === '' ? undefined : active === '1',
     unclassified: unclassified ? true : undefined,
     sort,
@@ -1144,8 +1162,8 @@ const CatalogSection = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 검색 + 필터 */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative sm:col-span-2 lg:col-span-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="relative sm:col-span-2 lg:col-span-5">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               aria-label="음식 검색"
@@ -1189,6 +1207,14 @@ const CatalogSection = () => {
             labels={FOOD_SOURCE_LABEL}
             emptyLabel="출처 전체"
             onChange={withReset(setSource)}
+          />
+          <TaxonomySelect
+            aria-label="알레르기 근거 필터"
+            value={allergenStatus}
+            options={FoodAllergenStatus.options}
+            labels={ALLERGEN_STATUS_LABEL}
+            emptyLabel="알레르기 근거 전체"
+            onChange={withReset(setAllergenStatus)}
           />
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -1247,6 +1273,7 @@ const CatalogSection = () => {
                 <TableHead>이름</TableHead>
                 <TableHead>별칭</TableHead>
                 <TableHead>분류</TableHead>
+                <TableHead>알레르기</TableHead>
                 <TableHead>출처</TableHead>
                 <TableHead className="text-right">인기도</TableHead>
                 <TableHead>활성</TableHead>
@@ -1336,6 +1363,30 @@ const ItemRow = ({ item, onEdit }: { item: FoodItemType; onEdit: () => void }) =
           {partiallyClassified && <Badge variant="amber">미분류</Badge>}
         </div>
       </TableCell>
+      <TableCell
+        className="max-w-[15rem] text-xs"
+        title={item.allergenEvidence.join('\n') || '알레르기 근거 없음'}
+      >
+        <div className="flex flex-wrap gap-1">
+          <Badge
+            variant={
+              item.allergenStatus === 'verified'
+                ? 'green'
+                : item.allergenStatus === 'inferred'
+                  ? 'amber'
+                  : 'secondary'
+            }
+          >
+            {ALLERGEN_STATUS_LABEL[item.allergenStatus]}
+          </Badge>
+          {item.allergens.slice(0, 2).map((allergen) => (
+            <Badge key={allergen} variant="red">
+              {MEAL_ALLERGEN_LABEL[allergen]}
+            </Badge>
+          ))}
+          {item.allergens.length > 2 && <Badge variant="red">+{item.allergens.length - 2}</Badge>}
+        </div>
+      </TableCell>
       <TableCell className="text-xs text-muted-foreground">
         {FOOD_SOURCE_LABEL[item.source]}
       </TableCell>
@@ -1362,9 +1413,12 @@ interface FoodForm {
   name: string;
   repName: string;
   aliases: string;
+  ingredients: string;
   dishType: FoodDishTypeType | '';
   mainIngredient: FoodMainIngredientType | '';
   cuisine: FoodCuisineType | '';
+  allergens: MealAllergenType[];
+  allergenStatus: FoodAllergenStatusType;
   active: boolean;
 }
 
@@ -1372,9 +1426,12 @@ const EMPTY_FORM: FoodForm = {
   name: '',
   repName: '',
   aliases: '',
+  ingredients: '',
   dishType: '',
   mainIngredient: '',
   cuisine: '',
+  allergens: [],
+  allergenStatus: 'inferred',
   active: true,
 };
 
@@ -1382,9 +1439,12 @@ const formFromItem = (item: FoodItemType): FoodForm => ({
   name: item.name,
   repName: item.repName ?? '',
   aliases: item.aliases.join(', '),
+  ingredients: item.ingredients?.join(', ') ?? '',
   dishType: item.dishType ?? '',
   mainIngredient: item.mainIngredient ?? '',
   cuisine: item.cuisine ?? '',
+  allergens: item.allergens,
+  allergenStatus: item.allergenStatus,
   active: item.active,
 });
 
@@ -1397,12 +1457,18 @@ const diffForm = (item: FoodItemType, form: FoodForm): FoodAdminUpdateInputType 
   if (repName !== item.repName) input.repName = repName;
   const aliases = splitAliases(form.aliases);
   if (!sameList(aliases, item.aliases)) input.aliases = aliases;
+  const ingredients = splitAliases(form.ingredients);
+  if (!sameList(ingredients, item.ingredients ?? [])) {
+    input.ingredients = ingredients.length > 0 ? ingredients : null;
+  }
   const dishType = form.dishType || null;
   if (dishType !== item.dishType) input.dishType = dishType;
   const mainIngredient = form.mainIngredient || null;
   if (mainIngredient !== item.mainIngredient) input.mainIngredient = mainIngredient;
   const cuisine = form.cuisine || null;
   if (cuisine !== item.cuisine) input.cuisine = cuisine;
+  if (!sameSet(form.allergens, item.allergens)) input.allergens = form.allergens;
+  if (form.allergenStatus !== item.allergenStatus) input.allergenStatus = form.allergenStatus;
   if (form.active !== item.active) input.active = form.active;
   return input;
 };
@@ -1414,9 +1480,13 @@ const createInputFromForm = (form: FoodForm): FoodAdminCreateInputType => {
   if (repName) input.repName = repName;
   const aliases = splitAliases(form.aliases);
   if (aliases.length > 0) input.aliases = aliases;
+  const ingredients = splitAliases(form.ingredients);
+  if (ingredients.length > 0) input.ingredients = ingredients;
   if (form.dishType) input.dishType = form.dishType;
   if (form.mainIngredient) input.mainIngredient = form.mainIngredient;
   if (form.cuisine) input.cuisine = form.cuisine;
+  input.allergenStatus = form.allergenStatus;
+  if (form.allergenStatus === 'verified') input.allergens = form.allergens;
   return input;
 };
 
@@ -1500,6 +1570,20 @@ const FoodFormFields = ({
         placeholder="예: 김치찌게, 묵은지찌개"
       />
     </Field>
+    <Field label="공개 재료 (쉼표 구분)" className="sm:col-span-2">
+      <Input
+        aria-label="공개 재료"
+        value={form.ingredients}
+        onChange={(e) =>
+          onChange({
+            ingredients: e.target.value,
+            // 재료가 달라지면 과거 운영자 검수도 더는 같은 근거가 아니므로 다시 추정한다.
+            ...(form.allergenStatus === 'verified' ? { allergenStatus: 'inferred' } : {}),
+          })
+        }
+        placeholder="예: 돼지고기, 두부, 저염간장"
+      />
+    </Field>
     <Field label="조리형태">
       <TaxonomySelect
         aria-label="조리형태"
@@ -1529,6 +1613,41 @@ const FoodFormFields = ({
         emptyLabel="—(미분류)"
         onChange={(v) => onChange({ cuisine: v })}
       />
+    </Field>
+    <Field label="알레르기 근거 상태">
+      <TaxonomySelect
+        aria-label="알레르기 근거 상태"
+        value={form.allergenStatus}
+        options={FoodAllergenStatus.options}
+        labels={ALLERGEN_STATUS_LABEL}
+        emptyLabel="미확인"
+        onChange={(value) => onChange({ allergenStatus: value || 'unknown' })}
+      />
+    </Field>
+    <Field label="표시 대상 알레르겐" className="sm:col-span-2">
+      <div className="grid grid-cols-2 gap-1.5 rounded-md border p-3 sm:grid-cols-4">
+        {MealAllergen.options.map((allergen) => (
+          <label key={allergen} className="flex items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              checked={form.allergens.includes(allergen)}
+              onChange={() =>
+                onChange({
+                  allergens: form.allergens.includes(allergen)
+                    ? form.allergens.filter((value) => value !== allergen)
+                    : [...form.allergens, allergen],
+                  allergenStatus: 'verified',
+                })
+              }
+            />
+            {MEAL_ALLERGEN_LABEL[allergen]}
+          </label>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        체크를 바꾸면 운영자 검수로 저장됩니다. 재료 기반 추정과 검수 모두 교차접촉·미표기 재료의
+        안전을 보장하지 않습니다.
+      </p>
     </Field>
     <label className="flex items-center gap-1.5 text-sm sm:col-span-2">
       <input

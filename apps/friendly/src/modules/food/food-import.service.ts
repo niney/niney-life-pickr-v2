@@ -41,6 +41,11 @@ import {
 import type { FoodClassifyService } from './food-classify.service.js';
 import { foodImportRegistry } from './food-import-registry.js';
 import { auditIncomingFoodSeed } from './food-source-audit.js';
+import {
+  inferFoodAllergens,
+  parseFoodAllergenStatus,
+  serializeFoodAllergenMetadata,
+} from './food-allergen.js';
 import { buildAliasNorms, parseJsonStringArray } from './food.service.js';
 
 // 음식 카탈로그 적재 — 외부 소스(식약처 영양성분 표준데이터 / 식약처 레시피 / MAFRA 레시피) + 로컬
@@ -767,6 +772,7 @@ export const upsertFoodSeeds = async (
       const existing = await tx.foodItem.findUnique({ where: { nameNorm: norm } });
       if (!existing) {
         const aliases = (seedWithRules.aliases ?? []).slice(0, MAX_ALIASES);
+        const allergenMetadata = inferFoodAllergens(seedWithRules.ingredients ?? null);
         const created = await tx.foodItem.create({
           data: {
             name: seedWithRules.name,
@@ -780,6 +786,7 @@ export const upsertFoodSeeds = async (
             ingredientsJson: seedWithRules.ingredients
               ? JSON.stringify(seedWithRules.ingredients)
               : null,
+            ...serializeFoodAllergenMetadata(allergenMetadata),
             servingG: seedWithRules.servingG ?? null,
             kcal: seedWithRules.nutrition?.kcal ?? null,
             carbG: seedWithRules.nutrition?.carbG ?? null,
@@ -866,6 +873,27 @@ export const upsertFoodSeeds = async (
       }
       if ((seedWithRules.popularity ?? 0) > existing.popularity) {
         data.popularity = seedWithRules.popularity;
+      }
+
+      // 운영자 검수값은 자동 적재가 덮지 않는다. 그 외에는 새로 채운 재료 또는 기존
+      // 재료를 같은 결정 규칙으로 다시 계산해 규칙 버전 변경도 재적재만으로 반영한다.
+      if (parseFoodAllergenStatus(existing.allergenStatus) !== 'verified') {
+        const ingredients =
+          seedWithRules.ingredients?.length && !existing.ingredientsJson
+            ? seedWithRules.ingredients
+            : existing.ingredientsJson
+              ? parseJsonStringArray(existing.ingredientsJson)
+              : null;
+        const inferred = serializeFoodAllergenMetadata(inferFoodAllergens(ingredients));
+        if (existing.allergensJson !== inferred.allergensJson) {
+          data.allergensJson = inferred.allergensJson;
+        }
+        if (existing.allergenEvidenceJson !== inferred.allergenEvidenceJson) {
+          data.allergenEvidenceJson = inferred.allergenEvidenceJson;
+        }
+        if (existing.allergenStatus !== inferred.allergenStatus) {
+          data.allergenStatus = inferred.allergenStatus;
+        }
       }
 
       // 빈 필드를 먼저 채운고 그 결과를 관측 비교 기준으로 삼는다. 그래야 처음 받은

@@ -119,7 +119,15 @@ describe('food routes (격리 DB)', () => {
       method: 'POST',
       url: ADMIN_ITEMS,
       headers: adminAuth,
-      payload: { name: '마라탕', aliases: ['마라탕면'], dishType: 'stew', cuisine: 'chinese' },
+      payload: {
+        name: '마라탕',
+        aliases: ['마라탕면'],
+        dishType: 'stew',
+        cuisine: 'chinese',
+        ingredients: ['두부', '돼지고기'],
+        allergens: ['egg'],
+        allergenStatus: 'inferred',
+      },
     });
     expect(created.statusCode).toBe(201);
     const item = created.json<FoodItemType>();
@@ -128,6 +136,25 @@ describe('food routes (격리 DB)', () => {
       source: 'manual',
       aliases: ['마라탕면'],
       cuisine: 'chinese',
+      allergens: ['soybean', 'pork'],
+      allergenStatus: 'inferred',
+    });
+
+    const reinferred = await app.inject({
+      method: 'PATCH',
+      url: `${ADMIN_ITEMS}/${item.id}`,
+      headers: adminAuth,
+      payload: {
+        ingredients: ['밀가루'],
+        // inferred를 명시하면 폼에 남은 이전 체크값보다 재료 재계산이 우선한다.
+        allergens: ['soybean'],
+        allergenStatus: 'inferred',
+      },
+    });
+    expect(reinferred.statusCode).toBe(200);
+    expect(reinferred.json<FoodItemType>()).toMatchObject({
+      allergens: ['wheat'],
+      allergenStatus: 'inferred',
     });
 
     const dup = await app.inject({
@@ -151,6 +178,27 @@ describe('food routes (격리 DB)', () => {
       repName: '마라탕',
     });
 
+    const verified = await app.inject({
+      method: 'PATCH',
+      url: `${ADMIN_ITEMS}/${item.id}`,
+      headers: adminAuth,
+      payload: { allergens: ['soybean'], allergenStatus: 'verified' },
+    });
+    expect(verified.statusCode).toBe(200);
+    expect(verified.json<FoodItemType>()).toMatchObject({
+      allergens: ['soybean'],
+      allergenStatus: 'verified',
+    });
+
+    const verifiedList = await app.inject({
+      method: 'GET',
+      url: `${ADMIN_ITEMS}?allergenStatus=verified`,
+      headers: adminAuth,
+    });
+    expect(verifiedList.json<FoodAdminListResultType>().items.map((food) => food.id)).toContain(
+      item.id,
+    );
+
     const missing = await app.inject({
       method: 'PATCH',
       url: `${ADMIN_ITEMS}/nope`,
@@ -168,6 +216,10 @@ describe('food routes (격리 DB)', () => {
     expect(stats.active).toBe(3);
     expect(stats.bySource.find((s) => s.source === 'mfds-nutrition')?.count).toBe(2);
     expect(stats.byDishType.find((s) => s.dishType === 'stew')?.count).toBe(3);
+    expect(stats.allergenVerifiedCount).toBe(1);
+    expect(
+      stats.allergenUnknownCount + stats.allergenInferredCount + stats.allergenVerifiedCount,
+    ).toBe(stats.total);
   });
 
   it('적재 잡: 기본 설정 조회 → 잘못된 cron 400 → 저장 → 미리보기 → 지금 실행(menu-canonical) → 이력', async () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MealAllergen } from './allergen.js';
 import { FoodCuisine, FoodDishType, FoodMainIngredient } from './food.js';
 
 // 식단 관리(meal) — 사용자 개인의 한 끼 기록 + 사진 인식 + 통계 + 선호 설정 + 다음 끼니 추천.
@@ -26,53 +27,6 @@ export type MealItemSourceType = z.infer<typeof MealItemSource>;
 // 양은 서수만 — 질량 추정은 비전 모델 신뢰도가 낮다(OmniFood-Bench MAPE 50~400%).
 export const MealPortion = z.enum(['small', 'normal', 'large']);
 export type MealPortionType = z.infer<typeof MealPortion>;
-
-// 식품안전나라 표시 기준의 알레르기 유발물질 19개 군. 이 값은 사용자가 주의를
-// 요청하는 구조화 힌트이며, 추천 결과가 교차접촉·미표기 재료까지 보장한다는 뜻은 아니다.
-export const MealAllergen = z.enum([
-  'egg',
-  'milk',
-  'buckwheat',
-  'peanut',
-  'soybean',
-  'wheat',
-  'pine_nut',
-  'walnut',
-  'crab',
-  'shrimp',
-  'squid',
-  'mackerel',
-  'shellfish',
-  'peach',
-  'tomato',
-  'chicken',
-  'pork',
-  'beef',
-  'sulfites',
-]);
-export type MealAllergenType = z.infer<typeof MealAllergen>;
-
-export const MEAL_ALLERGEN_LABEL: Record<MealAllergenType, string> = {
-  egg: '알류(달걀)',
-  milk: '우유',
-  buckwheat: '메밀',
-  peanut: '땅콩',
-  soybean: '대두',
-  wheat: '밀',
-  pine_nut: '잣',
-  walnut: '호두',
-  crab: '게',
-  shrimp: '새우',
-  squid: '오징어',
-  mackerel: '고등어',
-  shellfish: '조개류',
-  peach: '복숭아',
-  tomato: '토마토',
-  chicken: '닭고기',
-  pork: '돼지고기',
-  beef: '쇠고기',
-  sulfites: '아황산류',
-};
 
 export const MealPortionSource = z.enum(['vision_ordinal', 'user_serving']);
 export type MealPortionSourceType = z.infer<typeof MealPortionSource>;

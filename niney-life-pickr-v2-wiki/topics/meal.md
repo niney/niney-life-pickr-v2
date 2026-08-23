@@ -1,14 +1,14 @@
 ---
 topic: meal
-last_compiled: 2026-08-23
-sources_count: 53
+last_compiled: 2026-08-24
+sources_count: 57
 status: active
 aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recognition, 식단인식, meal-recommendation, 식단추천, meal-preference, 알레르기, 식단통계, meal-reminder, 식단알림, meal-backup, 식단백업, photo-retention, 사진보존, MealMutationBarrier]
 ---
 
 # meal — 개인 식단 기록·인식·추천·휴대성
 
-**2026-08-22~23 신설·확장**: 로그인 사용자의 식사 기록, 사진 인식, 카탈로그 연결, 선호·알레르기, 추천과 행동 학습, 통계, 로컬 초안·알림, 백업·복원과 사진 보존까지 잇는 개인 도메인이다. 공개/공유 표면은 없고, 건강 진단이 아니라 기록 기반 관찰과 선택 보조에 한정한다.
+**2026-08-22~24 신설·확장**: 로그인 사용자의 식사 기록, 사진 인식, 카탈로그 연결, 선호·알레르기, 추천과 행동 학습, 통계, 로컬 초안·알림, 백업·복원과 사진 보존까지 잇는 개인 도메인이다. 공개/공유 표면은 없고, 건강 진단이 아니라 기록 기반 관찰과 선택 보조에 한정한다.
 
 ## Purpose [coverage: high — 16 sources]
 
@@ -29,6 +29,7 @@ aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recogniti
 | 기록 | `meal.route.ts` → `MealService` | 검색·필터·compound cursor 목록, 단건·달력·최근 음식·시간 preset과 CRUD; 모든 쿼리를 `userId`로 한정 |
 | 사진 | `MealPhotoService` | JPEG 정규화, 원본·320px 썸네일, 소유권·토큰 검증, 복제, 고아·미추적 파일 청소 |
 | 인식 | `MealRecognitionService` | vision 호출, 결과 복구 재시도, 카탈로그 exact/alias/fuzzy 매칭, dish lineage·confidence·match 근거 영속 |
+| 인식 평가 | `meal-recognition-eval.ts`, `eval-meal-recognition.ts` | 개인정보 보호형 v2·legacy 덤프 파싱, 모델별 호출/파싱과 raw 표본 품질·선택 라벨 집계 |
 | 추천 | `MealPatternService` + `MealRecommendationService` | 패턴·균형·선호·날씨 후보 점수화, 알레르기 평가, LLM 선택/fallback, immutable event 학습 |
 | 사용량 | `MealDailyQuotaService` | `(userId,date,purpose)` SQLite 원자적 upsert로 인식·추천의 KST 일일 한도 영속 |
 | 통계 | `MealStatsService` + `computeWeeklyMealInsights` | 영양 provenance/coverage, 추천 funnel, 표본 안전한 주간 관찰 |
@@ -103,7 +104,7 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 
 - **확정 전 인간 교정 + lineage** — vision 출력은 draft 제안이다. 원본 snapshot과 최종 항목 사이의 dish id·match·confidence를 보존해 순서 변화에도 교정 품질을 비교한다.
 - **카탈로그는 참조, 기록은 스냅샷** — `foodId`만 믿지 않고 이름·분류·영양·provenance를 복사한다. 마스터 변경이 과거 식단과 통계를 소급 변경하지 않는다.
-- **알레르기는 best-effort 차단** — 명시된 카탈로그 allergen/근거와 이름·재료 keyword에서 알려진 일치를 제외한다. `possible|none_known|unknown`을 구분하며, 빈 metadata는 안전 보증도 교차접촉 보증도 아니다.
+- **알레르기는 best-effort 차단** — 검수된 카탈로그 값은 그대로 쓰고, 미검수 행은 공개 재료 문자열에서만 알려진 일치를 추론해 제외한다. `possible|none_known|unknown`을 구분하며, 음식명이나 빈 metadata는 안전 보증도 교차접촉 보증도 아니다.
 - **결정적 후보 생성 → 제한된 LLM 선택** — hard excluded와 알려진 알레르기를 제거한 pool을 먼저 점수화한다. LLM은 후보 밖 음식을 만들 수 없고 실패하면 점수 상위 결과를 쓴다.
 - **추천 행동은 불변 event** — 노출, 후보 선택, 후보별 평가, 식당 열기, dismiss를 append한다. 실제 기록 저장 transaction만 `logged`를 만들며 `feedbackJson`은 호환용 최신 projection이다.
 - **latest candidate learning** — 같은 추천·정규화 후보의 최신 rating만 쓰고, 최신 pick/logged를 시간 감쇠한다. `logged`는 선택보다 강하고 옛 set rating을 모든 후보에 임의 분배하지 않는다.
@@ -125,7 +126,7 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - **대기 사진은 저장·인식을 차단한다.** 관리 파일 copy가 실패해 원래 picker URI만 남은 사진은 현재 session에서만 쓸 수 있다. 앱은 관리 디렉터리의 직계 자식만 삭제한다.
 - **사진 cache의 stale fallback은 제한적이다.** 같은 principal의 network/5xx에서만 허용한다. 401/403/404는 cache를 지우며, token이 바뀐 뒤 끝난 download는 채택하지 않는다.
 - **재인식은 모든 현재 사진을 다시 본다.** `userEdited`와 manual/catalog/recommendation 항목은 보존하고 untouched recognition 항목만 교체하는 draft merge 규칙을 지켜야 한다.
-- **알레르기 `unknown`을 `none_known`으로 표시하면 안 된다.** 현재 import가 allergen 근거를 항상 채우는 것은 아니며 keyword 검사도 숨은 재료·교차접촉을 알 수 없다.
+- **알레르기 `unknown`을 `none_known`으로 표시하면 안 된다.** `inferred`의 빈 목록도 공개 재료에서 알려진 항목을 못 찾았다는 뜻뿐이다. 음식명은 배합 근거가 아니며 숨은 재료·미표기·교차접촉은 알 수 없다.
 - **인식 prompt 버전 필터는 손상 데이터 제외용이다.** 정상적인 과거 model/version snapshot도 품질 비교에 포함하고, version별로 필터할 수 있다. top correction/unmatched는 서로 다른 사용자 2명 이상만 노출한다.
 - **추천 event는 수정·삭제가 아니라 append다.** client는 `logged`를 보낼 수 없고 식단 저장이 만든다. 후보 rating은 누적 합이 아니라 후보별 최신값이 학습 신호다.
 - **추천 cache hit는 quota를 쓰지 않는다.** `force=true`는 cache를 우회하므로 quota를 소비한다. quota `limit<=0`은 기능을 막는 값이 아니라 해당 quota 검사를 끄는 무제한 설정이다.
@@ -172,6 +173,9 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - [apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts)
 - [apps/friendly/src/modules/meal-recognition/meal-recognition-quota.test.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition-quota.test.ts)
 - [apps/friendly/src/modules/meal-recognition/meal-recognition.prompts.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.prompts.ts) · [service test](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.test.ts)
+- [apps/friendly/src/modules/meal-recognition/meal-recognition-eval.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition-eval.ts) (+[test](../../apps/friendly/src/modules/meal-recognition/meal-recognition-eval.test.ts))
+- [apps/friendly/scripts/eval-meal-recognition.ts](../../apps/friendly/scripts/eval-meal-recognition.ts)
+- [apps/friendly/scripts/probe-meal-e2e.ts](../../apps/friendly/scripts/probe-meal-e2e.ts)
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts)
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.test.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.test.ts)

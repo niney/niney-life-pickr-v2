@@ -1486,6 +1486,8 @@ model FoodItem {
   // 구조화 알레르겐 best-effort 메타와 근거. 빈 배열은 안전 보장이 아니라 "알려진 항목 없음"이다.
   allergensJson        String   @default("[]")
   allergenEvidenceJson String   @default("[]")
+  // unknown|inferred|verified. inferred는 재료 문자열 규칙, verified는 운영자 검수.
+  allergenStatus       String   @default("unknown")
   // 1인분 중량(g/ml) + 1인분 영양(표준데이터 100g 기준 × servingG/100 으로 환산).
   servingG             Float?
   kcal                 Float?
@@ -1518,6 +1520,7 @@ model FoodItem {
 
   @@index([source, sourceId])
   @@index([dishType, mainIngredient])
+  @@index([allergenStatus, active])
   @@index([active, popularity])
   @@map("food_items")
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FoodAllergenStatus, MealAllergen } from './allergen.js';
 
 // 음식 카탈로그(food) — 식단 관리(meal) 도메인의 마스터 데이터. 사용자 식단 기록의
 // 음식 항목이 여기 행을 "스냅샷"으로 가리키고(FK 없음 — 재적재에 안전), 추천 후보
@@ -103,6 +104,10 @@ export const FoodItem = z.object({
   cuisine: FoodCuisine.nullable(),
   // 주요 재료(레시피 DB 에서). 없으면 null.
   ingredients: z.array(z.string()).nullable(),
+  // 재료 문자열 기반 추정 또는 운영자 검수 결과. 빈 목록도 안전 보장이 아니다.
+  allergens: z.array(MealAllergen),
+  allergenEvidence: z.array(z.string()),
+  allergenStatus: FoodAllergenStatus,
   // 1인분 중량(g 또는 ml). 없으면 null.
   servingG: z.number().nullable(),
   nutrition: FoodNutrition.nullable(),
@@ -212,6 +217,7 @@ export const FoodAdminListQuery = z.object({
   mainIngredient: FoodMainIngredient.optional(),
   cuisine: FoodCuisine.optional(),
   source: FoodSource.optional(),
+  allergenStatus: FoodAllergenStatus.optional(),
   // '1'/'0' — 미지정이면 전체.
   active: boolParam,
   // '1' 이면 dishType 또는 mainIngredient 또는 cuisine 이 비어 있는 행만.
@@ -237,6 +243,10 @@ export const FoodAdminCreateInput = z.object({
   mainIngredient: FoodMainIngredient.nullable().optional(),
   cuisine: FoodCuisine.nullable().optional(),
   ingredients: z.array(z.string().trim().min(1).max(40)).max(40).nullable().optional(),
+  // inferred를 보내면 ingredients에서 서버가 다시 계산한다. verified는 운영자 검수값,
+  // unknown은 목록·근거를 비운다.
+  allergens: z.array(MealAllergen).max(MealAllergen.options.length).optional(),
+  allergenStatus: FoodAllergenStatus.optional(),
   active: z.boolean().optional(),
 });
 export type FoodAdminCreateInputType = z.infer<typeof FoodAdminCreateInput>;
@@ -257,6 +267,9 @@ export const FoodAdminStats = z.object({
   nutritionDirectCount: z.number().int().nonnegative(),
   nutritionEstimatedCount: z.number().int().nonnegative(),
   nutritionMissingCount: z.number().int().nonnegative(),
+  allergenUnknownCount: z.number().int().nonnegative(),
+  allergenInferredCount: z.number().int().nonnegative(),
+  allergenVerifiedCount: z.number().int().nonnegative(),
   bySource: z.array(z.object({ source: FoodSource, count: z.number().int() })),
   byDishType: z.array(z.object({ dishType: FoodDishType.nullable(), count: z.number().int() })),
 });

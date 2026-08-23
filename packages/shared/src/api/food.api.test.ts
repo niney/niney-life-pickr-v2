@@ -42,6 +42,7 @@ describe('buildFoodAdminListQuery', () => {
         mainIngredient: 'pork',
         cuisine: 'korean',
         source: 'manual',
+        allergenStatus: 'verified',
         active: true,
         unclassified: false,
         sort: 'name',
@@ -49,7 +50,7 @@ describe('buildFoodAdminListQuery', () => {
         limit: 50,
       }),
     ).toBe(
-      'q=%EA%B9%80%EC%B9%98&dishType=stew&mainIngredient=pork&cuisine=korean&source=manual&active=1&unclassified=0&sort=name&offset=50&limit=50',
+      'q=%EA%B9%80%EC%B9%98&dishType=stew&mainIngredient=pork&cuisine=korean&source=manual&allergenStatus=verified&active=1&unclassified=0&sort=name&offset=50&limit=50',
     );
   });
 

@@ -67,6 +67,7 @@ export const buildFoodAdminListQuery = (input: FoodAdminListInput = {}): string 
   if (input.mainIngredient !== undefined) params.set('mainIngredient', input.mainIngredient);
   if (input.cuisine !== undefined) params.set('cuisine', input.cuisine);
   if (input.source !== undefined) params.set('source', input.source);
+  if (input.allergenStatus !== undefined) params.set('allergenStatus', input.allergenStatus);
   if (input.active !== undefined) params.set('active', input.active ? '1' : '0');
   if (input.unclassified !== undefined) params.set('unclassified', input.unclassified ? '1' : '0');
   if (input.sort !== undefined) params.set('sort', input.sort);
