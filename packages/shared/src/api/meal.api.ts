@@ -2,21 +2,28 @@ import {
   Routes,
   type CreateMealEntryInputType,
   type CreateMealRecommendationInputType,
+  type DeleteMealPhotosInputType,
+  type DeleteMealPhotosResultType,
   type DeleteMealDataInputType,
   type DeleteMealDataResultType,
   type ListMealRecommendationsResultType,
   type MealRecommendationContextType,
   type MealRecommendationFeedbackInputType,
+  type MealRecommendationEventInputType,
+  type MealRecommendationEventType,
   type MealRecommendationType,
   type ListMealEntriesQueryType,
   type ListMealEntriesResultType,
   type MealCalendarResultType,
+  type MealDataBackupType,
   type MealDataExportType,
   type MealEntryType,
   type MealPreferenceType,
+  type MealPhotoRetentionPreviewType,
   type MealStatsResultType,
   type MealTimePresetsResultType,
   type RecentMealItemResultType,
+  type RestoreMealDataResultType,
   type RecognizeMealInputType,
   type RecognizeMealResultType,
   type UpdateMealEntryInputType,
@@ -41,6 +48,9 @@ export const buildMealEntriesQuery = (input: ListMealEntriesInput = {}): string 
   if (input.from) params.set('from', input.from);
   if (input.to) params.set('to', input.to);
   if (input.slot) params.set('slot', input.slot);
+  if (input.mealType) params.set('mealType', input.mealType);
+  if (input.source) params.set('source', input.source);
+  if (input.q) params.set('q', input.q);
   if (input.cursor) params.set('cursor', input.cursor);
   if (input.limit !== undefined) params.set('limit', String(input.limit));
   if (input.withPhotos !== undefined) params.set('withPhotos', input.withPhotos ? '1' : '0');
@@ -50,6 +60,25 @@ export const buildMealEntriesQuery = (input: ListMealEntriesInput = {}): string 
 export const mealApi = {
   // ── 데이터 관리 ──
   exportData: () => apiFetch<MealDataExportType>(Routes.Meal.dataExport),
+
+  backupData: () => apiFetch<MealDataBackupType>(Routes.Meal.dataBackup),
+
+  restoreData: (archive: MealDataBackupType) =>
+    apiFetch<RestoreMealDataResultType>(Routes.Meal.dataRestore, {
+      method: 'POST',
+      body: JSON.stringify(archive),
+    }),
+
+  previewPhotoRetention: (before?: string) =>
+    apiFetch<MealPhotoRetentionPreviewType>(
+      `${Routes.Meal.photoRetention}${before ? `?before=${encodeURIComponent(before)}` : ''}`,
+    ),
+
+  deleteRetainedPhotos: (input: DeleteMealPhotosInputType) =>
+    apiFetch<DeleteMealPhotosResultType>(Routes.Meal.photoRetention, {
+      method: 'DELETE',
+      body: JSON.stringify(input),
+    }),
 
   deleteAllData: (input: DeleteMealDataInputType) =>
     apiFetch<DeleteMealDataResultType>(Routes.Meal.data, {
@@ -141,6 +170,12 @@ export const mealApi = {
 
   recommendationFeedback: (id: string, input: MealRecommendationFeedbackInputType) =>
     apiFetch<MealRecommendationType>(Routes.Meal.recommendationFeedback(id), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  recommendationEvent: (id: string, input: MealRecommendationEventInputType) =>
+    apiFetch<MealRecommendationEventType>(Routes.Meal.recommendationEvents(id), {
       method: 'POST',
       body: JSON.stringify(input),
     }),

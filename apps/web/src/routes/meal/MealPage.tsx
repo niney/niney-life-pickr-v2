@@ -1,15 +1,22 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, ChartNoAxesColumn, Loader2, Settings2, Sparkles, UtensilsCrossed } from 'lucide-react';
-import type { MealEntryType, MealSlotType } from '@repo/api-contract';
+import type {
+  MealEntrySourceType,
+  MealEntryType,
+  MealSlotType,
+  MealTypeType,
+} from '@repo/api-contract';
 import { useInfiniteMealEntries, useMealCalendar, useMealEntries, useMealStats } from '@repo/shared';
 import {
   FOOD_CUISINE_LABEL,
   FOOD_DISH_TYPE_LABEL,
   FOOD_MAIN_INGREDIENT_LABEL,
   MEAL_SLOT_LABEL,
+  MEAL_SLOTS,
   MEAL_SLOT_ORDER,
   MEAL_TYPE_LABEL,
+  MEAL_TYPES,
   mealDateLabel,
   mealNutritionLabel,
   monthRange,
@@ -89,9 +96,28 @@ export const MealPage = () => {
 
 // ── 기록 ────────────────────────────────────────────────────────────────────
 const MealList = () => {
-  const list = useInfiniteMealEntries({ limit: 30 });
+  const [q, setQ] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [slot, setSlot] = useState<MealSlotType | null>(null);
+  const [mealType, setMealType] = useState<MealTypeType | null>(null);
+  const [source, setSource] = useState<MealEntrySourceType | null>(null);
+  const filters = useMemo(
+    () => ({
+      limit: 30,
+      ...(q.trim() ? { q: q.trim() } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      ...(slot ? { slot } : {}),
+      ...(mealType ? { mealType } : {}),
+      ...(source ? { source } : {}),
+    }),
+    [from, mealType, q, slot, source, to],
+  );
+  const list = useInfiniteMealEntries(filters);
   const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
   const today = toLocalDateKey(new Date());
+  const filtered = Boolean(q.trim() || from || to || slot || mealType || source);
 
   if (list.isLoading) {
     return <Loading />;
@@ -99,18 +125,59 @@ const MealList = () => {
   if (list.error) {
     return <ErrorBox onRetry={() => void list.refetch()} />;
   }
-  if (items.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-10 text-center text-sm text-muted-foreground">
-          아직 기록이 없어요. 앱에서 사진으로 첫 끼니를 남겨 보세요.
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="space-y-3">
+      <Card>
+        <CardContent className="space-y-3 py-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              placeholder="음식·장소·메모 검색"
+              maxLength={80}
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+            />
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="rounded-md border bg-background px-2 py-2" />
+              <span>~</span>
+              <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="rounded-md border bg-background px-2 py-2" />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {MEAL_SLOTS.map((value) => (
+              <FilterChip key={value} label={MEAL_SLOT_LABEL[value]} selected={slot === value} onClick={() => setSlot(slot === value ? null : value)} />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {MEAL_TYPES.map((value) => (
+              <FilterChip key={value} label={MEAL_TYPE_LABEL[value]} selected={mealType === value} onClick={() => setMealType(mealType === value ? null : value)} />
+            ))}
+            {([
+              ['photo', '사진'],
+              ['manual', '수동'],
+              ['recommendation', '추천'],
+            ] as const).map(([value, label]) => (
+              <FilterChip key={value} label={label} selected={source === value} onClick={() => setSource(source === value ? null : value)} />
+            ))}
+            {filtered ? (
+              <button
+                type="button"
+                className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setQ(''); setFrom(''); setTo(''); setSlot(null); setMealType(null); setSource(null); }}
+              >
+                필터 초기화
+              </button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+      {items.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {filtered ? '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.' : '아직 기록이 없어요. 앱에서 사진으로 첫 끼니를 남겨 보세요.'}
+          </CardContent>
+        </Card>
+      ) : null}
       {items.map((entry, i) => {
         const prev = items[i - 1];
         const showDate = !prev || prev.eatenDate !== entry.eatenDate;
@@ -139,6 +206,20 @@ const MealList = () => {
     </div>
   );
 };
+
+const FilterChip = ({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) => (
+  <button
+    type="button"
+    aria-pressed={selected}
+    onClick={onClick}
+    className={cn(
+      'rounded-full border px-2.5 py-1 text-xs',
+      selected ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
+    )}
+  >
+    {label}
+  </button>
+);
 
 const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
   const mains = entry.items.filter((i) => i.isMain);
@@ -347,13 +428,18 @@ const MealStats = () => {
           <StatTile
             label="하루 평균"
             value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
-            sub={`기록한 날 기준 · ${Math.round(data.nutrition.coverage * 100)}% 반영`}
+            sub={`주식 ${Math.round(data.nutrition.mainItemCoverage * 100)}% · 직접 ${Math.round(data.nutrition.directCoverage * 100)}%`}
           />
         ) : null}
       </div>
+      {!data.nutrition.averageReliable && data.entryCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          주식 영양 근거가 {Math.round(data.nutrition.mainItemCoverage * 100)}%뿐이라 하루 평균은 숨겼어요.
+        </p>
+      ) : null}
       {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
         <p className="text-xs text-muted-foreground">
-          영양 정보가 있는 음식만 더한 값이라 실제보다 적게 나와요(외식 브랜드 메뉴는 공개된 값이 없어요).
+          직접값 {data.nutrition.itemsDirect}개, 유사 음식 추정 {data.nutrition.itemsEstimated}개만 반영한 값이라 실제와 다를 수 있어요.
         </p>
       ) : null}
 
@@ -388,9 +474,17 @@ const MealStats = () => {
           <p className="text-xs text-muted-foreground">선택한 추천이 실제 기록으로 이어졌는지 보여 줘요.</p>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="추천 선택" value={`${data.recommendation.chosenCount}건`} />
+          <StatTile
+            label="추천 선택"
+            value={`${data.recommendation.chosenCount}건`}
+            sub={`노출 ${data.recommendation.shownCount}건 · ${Math.round(data.recommendation.pickRate * 100)}%`}
+          />
           <StatTile label="추천 기록" value={`${data.recommendation.loggedCount}건`} />
-          <StatTile label="추천 평가" value={`${data.recommendation.ratedCount}건`} />
+          <StatTile
+            label="추천 평가"
+            value={`${data.recommendation.ratedCount}건`}
+            sub={`후보별 ${data.recommendation.candidateRatedCount}건`}
+          />
           <StatTile
             label="추천 수락률"
             value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}

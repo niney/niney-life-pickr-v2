@@ -36,12 +36,14 @@ export interface StatEntryRow {
     kcal?: number | null;
     proteinG?: number | null;
     sodiumMg?: number | null;
+    nutritionBasis?: string | null;
   }[];
 }
 
 export interface RecommendationStatRow {
   feedbackJson: string | null;
   targetDate?: string;
+  events?: { kind: string }[];
 }
 
 const TOP_FOODS_LIMIT = 10;
@@ -137,23 +139,39 @@ export const computeMealStats = (
   let sumProtein = 0;
   let sumSodium = 0;
   let itemsWithNutrition = 0;
+  let itemsDirect = 0;
+  let itemsEstimated = 0;
+  let mainItems = 0;
+  let mainItemsWithNutrition = 0;
   for (const row of rows) {
     for (const item of row.items) {
+      if (item.isMain) mainItems += 1;
       if (item.kcal === null || item.kcal === undefined) continue;
       itemsWithNutrition += 1;
+      if (item.isMain) mainItemsWithNutrition += 1;
+      if (item.nutritionBasis === 'donor_estimate') itemsEstimated += 1;
+      else itemsDirect += 1;
       sumKcal += item.kcal;
       sumProtein += item.proteinG ?? 0;
       sumSodium += item.sodiumMg ?? 0;
     }
   }
   const nutritionDays = byDate.size;
+  const mainItemCoverage = mainItems === 0 ? 0 : mainItemsWithNutrition / mainItems;
+  const averageReliable = itemsWithNutrition > 0 && mainItemCoverage >= 0.6;
   const perDay = (total: number): number | null =>
-    itemsWithNutrition === 0 || nutritionDays === 0 ? null : Math.round((total / nutritionDays) * 10) / 10;
+    !averageReliable || nutritionDays === 0 ? null : Math.round((total / nutritionDays) * 10) / 10;
 
   let chosenCount = 0;
   let loggedCount = 0;
   let ratedCount = 0;
+  let shownCount = 0;
+  let dismissedCount = 0;
+  let candidateRatedCount = 0;
   for (const row of recommendationRows) {
+    if (row.events?.some((event) => event.kind === 'shown')) shownCount += 1;
+    if (row.events?.some((event) => event.kind === 'dismissed')) dismissedCount += 1;
+    candidateRatedCount += row.events?.filter((event) => event.kind === 'candidate_rated').length ?? 0;
     const feedback = parseMealRecommendationFeedback(row.feedbackJson);
     if (!feedback) continue;
     if (feedback.pickedName) chosenCount += 1;
@@ -173,9 +191,26 @@ export const computeMealStats = (
       avgProteinGPerDay: perDay(sumProtein),
       avgSodiumMgPerDay: perDay(sumSodium),
       coverage: itemCount === 0 ? 0 : Math.round((itemsWithNutrition / itemCount) * 100) / 100,
+      mainItemCoverage: Math.round(mainItemCoverage * 100) / 100,
+      directCoverage: itemCount === 0 ? 0 : Math.round((itemsDirect / itemCount) * 100) / 100,
+      estimatedCoverage: itemCount === 0 ? 0 : Math.round((itemsEstimated / itemCount) * 100) / 100,
+      averageReliable,
       itemsWithNutrition,
+      itemsDirect,
+      itemsEstimated,
     },
-    recommendation: { chosenCount, loggedCount, ratedCount, acceptanceRate },
+    recommendation: {
+      chosenCount,
+      loggedCount,
+      ratedCount,
+      acceptanceRate,
+      shownCount,
+      dismissedCount,
+      candidateRatedCount,
+      pickRate: shownCount > 0 ? Math.min(1, Math.round((chosenCount / shownCount) * 1000) / 1000) : 0,
+      loggedFromShownRate:
+        shownCount > 0 ? Math.min(1, Math.round((loggedCount / shownCount) * 1000) / 1000) : 0,
+    },
     insights: computeWeeklyMealInsights(rows, from, to, recommendationRows),
     recordedDays: recorded.size,
     totalDays: days.length,
@@ -224,6 +259,7 @@ export class MealStatsService {
             kcal: true,
             proteinG: true,
             sodiumMg: true,
+            nutritionBasis: true,
           },
         },
       },
@@ -236,8 +272,10 @@ export class MealStatsService {
     const [rows, recommendationRows] = await Promise.all([
       this.load(userId, from, to),
       this.prisma.mealRecommendation.findMany({
-        where: { userId, targetDate: { gte: from, lte: to }, feedbackJson: { not: null } },
-        select: { feedbackJson: true, targetDate: true },
+        // 노출·닫기 이벤트는 legacy feedbackJson 없이도 존재한다. feedback 행만 읽으면
+        // funnel의 분모(shown)가 빠져 pick/logged 비율이 부풀려진다.
+        where: { userId, targetDate: { gte: from, lte: to } },
+        select: { feedbackJson: true, targetDate: true, events: { select: { kind: true } } },
       }),
     ]);
     return computeMealStats(rows, from, to, today, recommendationRows);

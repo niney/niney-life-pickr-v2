@@ -9,12 +9,13 @@ import type {
   FoodImportRunListType,
   FoodImportRunType,
   FoodItemType,
+  FoodMergeConflictItemType,
   FoodRecognitionQualityResultType,
 } from '@repo/api-contract';
 import { server } from '~/test/msw';
 import { AdminFoodPage } from './AdminFoodPage';
 
-// 음식 카탈로그 어드민 페이지 — 마운트만으로 여섯 요청이 나간다(적재 설정/이력, 통계,
+// 음식 카탈로그 어드민 페이지 — 마운트만으로 일곱 요청이 나간다(적재 설정/이력, 통계,
 // 인식 교정 품질,
 // 목록, cron 미리보기). onUnhandledRequest: 'error' 라 모두 기본 핸들러로 깔고, 각
 // 테스트는 자기 시나리오의 핸들러만 덧댄다. 토스트는 sonner 를 모킹해 호출만 본다
@@ -36,6 +37,7 @@ const RUN_URL = '/api/v1/admin/food/import/run';
 const RUNS_URL = '/api/v1/admin/food/import/runs';
 const PREVIEW_URL = '/api/v1/admin/food/import/preview';
 const STATS_URL = '/api/v1/admin/food/stats';
+const CONFLICTS_URL = '/api/v1/admin/food/merge-conflicts';
 const QUALITY_URL = '/api/v1/admin/food/recognition-quality';
 const ITEMS_URL = '/api/v1/admin/food/items';
 
@@ -75,6 +77,11 @@ const stats: FoodAdminStatsType = {
   total: 120,
   active: 110,
   classified: 60,
+  sourceObservationCount: 450,
+  openMergeConflictCount: 0,
+  nutritionDirectCount: 50,
+  nutritionEstimatedCount: 20,
+  nutritionMissingCount: 50,
   bySource: [
     { source: 'mfds-nutrition', count: 100 },
     { source: 'manual', count: 20 },
@@ -100,6 +107,44 @@ const recognitionQuality: FoodRecognitionQualityResultType = {
   unmatchedFinalItemCount: 2,
   topCorrections: [{ originalName: '계란말이', finalName: '달걀말이', count: 2 }],
   topUnmatched: [{ name: '오이무침', count: 2 }],
+  byModelVersion: [
+    {
+      model: 'vision-model',
+      version: 2,
+      recognitionEntryCount: 7,
+      originalDishCount: 11,
+      confirmedCount: 6,
+      correctedCount: 3,
+      deletedCount: 2,
+      correctionRate: 5 / 11,
+    },
+  ],
+  byConfidence: [
+    {
+      bucket: 'low',
+      originalDishCount: 2,
+      confirmedCount: 0,
+      correctedCount: 1,
+      deletedCount: 1,
+      correctionRate: 1,
+    },
+    {
+      bucket: 'medium',
+      originalDishCount: 3,
+      confirmedCount: 2,
+      correctedCount: 1,
+      deletedCount: 0,
+      correctionRate: 1 / 3,
+    },
+    {
+      bucket: 'high',
+      originalDishCount: 6,
+      confirmedCount: 4,
+      correctedCount: 1,
+      deletedCount: 1,
+      correctionRate: 2 / 6,
+    },
+  ],
 };
 
 const item = (over: Partial<FoodItemType> = {}): FoodItemType => ({
@@ -142,6 +187,7 @@ const useBaseHandlers = ({
     http.get(CONFIG_URL, () => HttpResponse.json(config)),
     http.get(RUNS_URL, () => HttpResponse.json(runs)),
     http.get(STATS_URL, () => HttpResponse.json(stats)),
+    http.get(CONFLICTS_URL, () => HttpResponse.json({ items: [], total: 0 })),
     http.get(QUALITY_URL, () => HttpResponse.json(recognitionQuality)),
     http.get(ITEMS_URL, ({ request }) => {
       itemRequests.push(request.url);
@@ -235,11 +281,72 @@ describe('AdminFoodPage', () => {
     expect(screen.getByText(/작은 표본의 방향성 지표/)).toBeInTheDocument();
     expect(screen.getByText('계란말이 → 달걀말이')).toBeInTheDocument();
     expect(screen.getByText('오이무침')).toBeInTheDocument();
+    expect(screen.getByText('vision-model · v2')).toBeInTheDocument();
+    expect(screen.getByLabelText('인식 모델 필터')).toBeInTheDocument();
+    expect(screen.getByLabelText('인식 프롬프트 버전 필터')).toBeInTheDocument();
+    expect(screen.getByLabelText('인식 신뢰도 필터')).toBeInTheDocument();
 
     // 이력 — 상태 칩 + 소스별 집계 + 분류 수.
     expect(await screen.findByText('완료')).toBeInTheDocument();
     expect(screen.getByText('1000 → 12 / 30 / 5')).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
+  });
+
+  it('열린 병합 충돌의 출처를 보여주고 새 값 반영 액션을 PATCH한다', async () => {
+    useBaseHandlers();
+    const conflict: FoodMergeConflictItemType = {
+      id: 'conflict-1',
+      foodItem: { id: 'food-1', name: '감자전' },
+      field: 'dishType',
+      existingValue: 'pancake',
+      incomingValue: 'fried',
+      source: 'mfds-recipe',
+      sourceId: 'R-7',
+      status: 'open',
+      createdAt: '2026-08-20T00:00:00.000Z',
+      resolvedAt: null,
+      observations: [
+        {
+          id: 'observation-1',
+          field: 'dishType',
+          value: 'pancake',
+          source: 'mfds-nutrition',
+          sourceId: 'N-1',
+          observedAt: '2026-08-19T00:00:00.000Z',
+        },
+        {
+          id: 'observation-2',
+          field: 'dishType',
+          value: 'fried',
+          source: 'mfds-recipe',
+          sourceId: 'R-7',
+          observedAt: '2026-08-20T00:00:00.000Z',
+        },
+      ],
+    };
+    const posted: unknown[] = [];
+    server.use(
+      http.get(CONFLICTS_URL, () => HttpResponse.json({ items: [conflict], total: 1 })),
+      http.patch(`${CONFLICTS_URL}/:id`, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json({
+          ...conflict,
+          status: 'accepted_incoming',
+          resolvedAt: '2026-08-20T01:00:00.000Z',
+        });
+      }),
+    );
+
+    renderPage();
+    const conflictRow = (await screen.findByText('감자전')).closest('li')!;
+    expect(within(conflictRow).getByText('전·부침')).toBeInTheDocument();
+    expect(within(conflictRow).getByText('튀김')).toBeInTheDocument();
+    expect(within(conflictRow).getByText(/관측 출처/)).toHaveTextContent('식약처 영양성분');
+    expect(within(conflictRow).getByText(/관측 출처/)).toHaveTextContent('식약처 레시피');
+
+    fireEvent.click(within(conflictRow).getByRole('button', { name: '새 값 반영' }));
+    await waitFor(() => expect(posted).toEqual([{ action: 'accept_incoming' }]));
+    expect(toast.success).toHaveBeenCalledWith('새 소스 값을 반영했어요');
   });
 
   it('검색어(디바운스)·필터·정렬이 목록 요청 쿼리에 반영되고 페이지는 1로 돌아간다', async () => {
@@ -286,7 +393,11 @@ describe('AdminFoodPage', () => {
         const text = await request.text();
         posted.push(text ? JSON.parse(text) : null);
         return HttpResponse.json(
-          run({ runId: 'r9', status: nextStatus, phase: nextStatus === 'running' ? 'fetching' : null }),
+          run({
+            runId: 'r9',
+            status: nextStatus,
+            phase: nextStatus === 'running' ? 'fetching' : null,
+          }),
         );
       }),
     );

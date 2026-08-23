@@ -20,12 +20,14 @@ import {
   useCreateFoodItem,
   useFoodAdminList,
   useFoodAdminStats,
+  useFoodMergeConflicts,
   useFoodRecognitionQuality,
   useFoodImportConfig,
   useFoodImportPreview,
   useFoodImportRunEvents,
   useFoodImportRuns,
   useRunFoodImportNow,
+  useResolveFoodMergeConflict,
   useUpdateFoodImportConfig,
   useUpdateFoodItem,
   type FoodAdminListInput,
@@ -43,6 +45,9 @@ import {
   type FoodImportTriggerType,
   type FoodItemType,
   type FoodMainIngredientType,
+  type FoodMergeConflictFieldType,
+  type FoodMergeConflictItemType,
+  type FoodObservedValueType,
   type FoodSourceType,
 } from '@repo/api-contract';
 import {
@@ -57,13 +62,7 @@ import {
 } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Pager } from '~/components/ui/pager';
 import {
@@ -92,7 +91,11 @@ const PRESETS: { label: string; cron: string }[] = [
 // 어드민 잡이 도는 소스(hansik-800 은 CLI 전용이라 없음) — api-contract enum 이 진실.
 const IMPORT_SOURCES = FoodImportSource.options;
 type ExternalSource = keyof FoodImportConfigType['apiConfigured'];
-const EXTERNAL_SOURCES: readonly ExternalSource[] = ['mfds-nutrition', 'mfds-recipe', 'mafra-recipe'];
+const EXTERNAL_SOURCES: readonly ExternalSource[] = [
+  'mfds-nutrition',
+  'mfds-recipe',
+  'mafra-recipe',
+];
 const isExternalSource = (s: FoodImportSourceType): s is ExternalSource =>
   (EXTERNAL_SOURCES as readonly string[]).includes(s);
 
@@ -161,6 +164,9 @@ const errorMessage = (e: unknown, fallback: string): string => {
   return fallback;
 };
 
+const conflictErrorMessage = (e: unknown, fallback: string): string =>
+  e instanceof ApiError ? e.message || fallback : fallback;
+
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
 export const AdminFoodPage = () => (
@@ -179,6 +185,7 @@ export const AdminFoodPage = () => (
 
     <ImportJobSection />
     <StatsSection />
+    <MergeConflictSection />
     <RecognitionQualitySection />
     <CatalogSection />
   </div>
@@ -307,8 +314,8 @@ const ImportJobSection = () => {
           </CardTitle>
           <CardDescription>
             설정한 시각마다 공공 데이터(식약처·농식품)와 외식 메뉴 어휘를 받아 카탈로그에
-            반영합니다. 분류를 켜 두면 적재 뒤 미분류 행을 LLM 으로 2축(조리형태×주재료)
-            분류까지 합니다.
+            반영합니다. 분류를 켜 두면 적재 뒤 미분류 행을 LLM 으로 2축(조리형태×주재료) 분류까지
+            합니다.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
@@ -557,10 +564,7 @@ const ImportJobSection = () => {
                                   {st.fetched} → {st.inserted} / {st.updated} / {st.skipped}
                                 </span>
                                 {st.error && (
-                                  <span
-                                    className="text-red-600 dark:text-red-400"
-                                    title={st.error}
-                                  >
+                                  <span className="text-red-600 dark:text-red-400" title={st.error}>
                                     오류
                                   </span>
                                 )}
@@ -616,8 +620,7 @@ const StatsSection = () => {
           통계
         </CardTitle>
         <CardDescription>
-          카탈로그 규모와 분류 진척. 분류 완료는 조리형태·주재료·요리 계통이 모두 채워진
-          행입니다.
+          카탈로그 규모와 분류 진척. 분류 완료는 조리형태·주재료·요리 계통이 모두 채워진 행입니다.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -634,6 +637,13 @@ const StatsSection = () => {
                 hint={s ? `${classifiedPct}%` : undefined}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <StatTile label="소스 관측" value={s?.sourceObservationCount} />
+              <StatTile label="검토 대기" value={s?.openMergeConflictCount} />
+              <StatTile label="영양 직접값" value={s?.nutritionDirectCount} />
+              <StatTile label="영양 추정값" value={s?.nutritionEstimatedCount} />
+              <StatTile label="영양 없음" value={s?.nutritionMissingCount} />
+            </div>
             <div className="grid gap-5 md:grid-cols-2">
               <BarList title="출처별" rows={bySource} />
               <BarList title="조리형태별" rows={byDishType} />
@@ -645,7 +655,15 @@ const StatsSection = () => {
   );
 };
 
-const StatTile = ({ label, value, hint }: { label: string; value: number | undefined; hint?: string }) => (
+const StatTile = ({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: number | undefined;
+  hint?: string;
+}) => (
   <div className="rounded-md border p-3">
     <div className="text-xs text-muted-foreground">{label}</div>
     <div className="mt-1 flex items-baseline gap-1.5">
@@ -697,11 +715,182 @@ const BarList = ({ title, rows }: { title: string; rows: BarRow[] }) => {
   );
 };
 
-// ── 카탈로그 ─────────────────────────────────────────────────────────────────
+// ── 소스 병합 충돌 ────────────────────────────────────────────────────────────────
+
+const CONFLICT_FIELD_LABEL: Record<FoodMergeConflictFieldType, string> = {
+  repName: '대표식품명',
+  dishType: '조리형태',
+  mainIngredient: '주재료',
+  cuisine: '요리 계통',
+  ingredients: '재료 목록',
+  servingG: '1인분 중량',
+  kcal: '칼로리',
+  carbG: '탄수화물',
+  proteinG: '단백질',
+  fatG: '지방',
+  sodiumMg: '나트륨',
+  sugarG: '당류',
+  sourceCategory: '원본 분류',
+};
+
+const formatConflictValue = (
+  field: FoodMergeConflictFieldType,
+  value: FoodObservedValueType,
+): string => {
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'number') {
+    const unit =
+      field === 'servingG' ? 'g' : field === 'sodiumMg' ? 'mg' : field.endsWith('G') ? 'g' : '';
+    return `${value.toLocaleString('ko-KR')}${unit}`;
+  }
+  if (field === 'dishType' && value in FOOD_DISH_TYPE_LABEL) {
+    return FOOD_DISH_TYPE_LABEL[value as FoodDishTypeType];
+  }
+  if (field === 'mainIngredient' && value in FOOD_MAIN_INGREDIENT_LABEL) {
+    return FOOD_MAIN_INGREDIENT_LABEL[value as FoodMainIngredientType];
+  }
+  if (field === 'cuisine' && value in FOOD_CUISINE_LABEL) {
+    return FOOD_CUISINE_LABEL[value as FoodCuisineType];
+  }
+  return value;
+};
+
+const MergeConflictSection = () => {
+  const conflicts = useFoodMergeConflicts({ status: 'open', limit: 20 });
+  const resolve = useResolveFoodMergeConflict();
+  const items = conflicts.data?.items ?? [];
+
+  const act = (
+    conflict: FoodMergeConflictItemType,
+    action: 'keep_existing' | 'accept_incoming' | 'dismiss',
+  ): void => {
+    resolve.mutate(
+      { id: conflict.id, action },
+      {
+        onSuccess: () => {
+          toast.success(
+            action === 'accept_incoming'
+              ? '새 소스 값을 반영했어요'
+              : action === 'keep_existing'
+                ? '기존 값 유지로 기록했어요'
+                : '검토 항목을 닫았어요',
+          );
+        },
+        onError: (error) => toast.error(conflictErrorMessage(error, '충돌 처리에 실패했어요')),
+      },
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <AlertTriangle className="size-4" />
+          소스 병합 검토
+          {conflicts.data && <Badge variant="amber">{conflicts.data.total}</Badge>}
+        </CardTitle>
+        <CardDescription>
+          적재 소스가 기존 대표값과 다른 값을 보낸 항목입니다. 선택해도 모든 원본 관측은 출처별로
+          남습니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {conflicts.isPending ? (
+          <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" />
+        ) : conflicts.isError ? (
+          <p className="text-sm text-red-600 dark:text-red-400">충돌 목록을 불러오지 못했어요</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">검토할 열린 충돌이 없어요.</p>
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {items.map((conflict) => {
+              const sourceNames = [
+                ...new Set(
+                  conflict.observations.map((observation) => FOOD_SOURCE_LABEL[observation.source]),
+                ),
+              ];
+              return (
+                <li key={conflict.id} className="space-y-3 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{conflict.foodItem.name}</span>
+                    <Badge variant="outline">{CONFLICT_FIELD_LABEL[conflict.field]}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {FOOD_SOURCE_LABEL[conflict.source]}
+                      {conflict.sourceId ? ` · ${conflict.sourceId}` : ''}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 text-sm sm:grid-cols-2">
+                    <div className="rounded bg-muted/50 p-2">
+                      <div className="text-xs text-muted-foreground">기존 대표값</div>
+                      <div className="mt-1 break-words">
+                        {formatConflictValue(conflict.field, conflict.existingValue)}
+                      </div>
+                    </div>
+                    <div className="rounded bg-amber-500/10 p-2">
+                      <div className="text-xs text-muted-foreground">새 소스 값</div>
+                      <div className="mt-1 break-words">
+                        {formatConflictValue(conflict.field, conflict.incomingValue)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      관측 출처 {sourceNames.length > 0 ? sourceNames.join(', ') : '-'}
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={resolve.isPending}
+                        onClick={() => act(conflict, 'keep_existing')}
+                      >
+                        기존 값 유지
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="amber"
+                        disabled={resolve.isPending}
+                        onClick={() => act(conflict, 'accept_incoming')}
+                      >
+                        새 값 반영
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={resolve.isPending}
+                        onClick={() => act(conflict, 'dismiss')}
+                      >
+                        닫기
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ── 인식 품질 / 카탈로그 ─────────────────────────────────────────────────────────
 
 const RecognitionQualitySection = () => {
   const [days, setDays] = useState(30);
-  const quality = useFoodRecognitionQuality(days);
+  const [modelInput, setModelInput] = useState('');
+  const model = useDebounced(modelInput.trim(), 300);
+  const [versionInput, setVersionInput] = useState('');
+  const [confidenceBucket, setConfidenceBucket] = useState<'' | 'low' | 'medium' | 'high'>('');
+  const parsedVersion = Number(versionInput);
+  const quality = useFoodRecognitionQuality({
+    days,
+    ...(model ? { model } : {}),
+    ...(versionInput && Number.isInteger(parsedVersion) && parsedVersion > 0
+      ? { version: parsedVersion }
+      : {}),
+    ...(confidenceBucket ? { confidenceBucket } : {}),
+  });
   const q = quality.data;
   const validEntries = q ? q.recognitionEntryCount - q.invalidRecognitionCount : undefined;
   const correctionPct = q ? Math.round(q.correctionRate * 100) : undefined;
@@ -715,8 +904,8 @@ const RecognitionQualitySection = () => {
             사진 인식 교정 품질
           </CardTitle>
           <CardDescription>
-            확정 저장된 작은 표본의 방향성 지표입니다. 음식명은 민감할 수 있어 서로
-            다른 사용자 2명 이상이 기여한 집계만 보입니다.
+            확정 저장된 작은 표본의 방향성 지표입니다. 음식명은 민감할 수 있어 서로 다른 사용자 2명
+            이상이 기여한 집계만 보입니다.
           </CardDescription>
         </div>
         <select
@@ -731,6 +920,45 @@ const RecognitionQualitySection = () => {
         </select>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-3">
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            모델
+            <Input
+              aria-label="인식 모델 필터"
+              value={modelInput}
+              onChange={(event) => setModelInput(event.target.value)}
+              placeholder="예: gemma4:31b"
+            />
+          </label>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            프롬프트 버전
+            <Input
+              aria-label="인식 프롬프트 버전 필터"
+              type="number"
+              min={1}
+              max={10_000}
+              value={versionInput}
+              onChange={(event) => setVersionInput(event.target.value)}
+              placeholder="전체"
+            />
+          </label>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            원본 신뢰도
+            <select
+              aria-label="인식 신뢰도 필터"
+              className={SELECT_CLS}
+              value={confidenceBucket}
+              onChange={(event) =>
+                setConfidenceBucket(event.target.value as typeof confidenceBucket)
+              }
+            >
+              <option value="">전체</option>
+              <option value="low">낮음 (&lt; 0.40)</option>
+              <option value="medium">보통 (0.40–0.74)</option>
+              <option value="high">높음 (≥ 0.75)</option>
+            </select>
+          </label>
+        </div>
         {quality.isError ? (
           <p className="text-sm text-red-600 dark:text-red-400">인식 품질을 불러오지 못했어요</p>
         ) : (
@@ -738,7 +966,7 @@ const RecognitionQualitySection = () => {
             <p className="text-xs text-muted-foreground">
               유효 표본 {validEntries ?? '-'}건
               {q && q.invalidRecognitionCount > 0
-                ? ` · 손상·구버전 ${q.invalidRecognitionCount}건 제외`
+                ? ` · 손상된 스냅샷 ${q.invalidRecognitionCount}건 제외`
                 : ''}
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
@@ -754,6 +982,50 @@ const RecognitionQualitySection = () => {
               <StatTile label="foodId 없음" value={q?.unmatchedFinalItemCount} />
               <StatTile label="원본 음식" value={q?.originalDishCount} />
             </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-md border p-3">
+                <p className="text-xs font-medium text-muted-foreground">모델 · 프롬프트 버전</p>
+                {q && q.byModelVersion.length > 0 ? (
+                  <ul className="mt-2 space-y-2 text-xs">
+                    {q.byModelVersion.map((item) => (
+                      <li
+                        key={`${item.model ?? 'unknown'}:${item.version ?? 'unknown'}`}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span className="min-w-0 truncate">
+                          {item.model ?? '모델 미상'} · v{item.version ?? '?'}
+                        </span>
+                        <span className="shrink-0 font-mono tabular-nums">
+                          {item.recognitionEntryCount}건 · 교정{' '}
+                          {Math.round(item.correctionRate * 100)}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">조건에 맞는 모델 표본 없음</p>
+                )}
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-xs font-medium text-muted-foreground">원본 신뢰도별 교정률</p>
+                <ul className="mt-2 space-y-2 text-xs">
+                  {q?.byConfidence.map((item) => (
+                    <li key={item.bucket} className="flex items-center justify-between gap-3">
+                      <span>
+                        {item.bucket === 'low'
+                          ? '낮음'
+                          : item.bucket === 'medium'
+                            ? '보통'
+                            : '높음'}
+                      </span>
+                      <span className="font-mono tabular-nums">
+                        {item.originalDishCount}개 · {Math.round(item.correctionRate * 100)}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-md border p-3">
                 <p className="text-xs font-medium text-muted-foreground">자주 고친 인식</p>
@@ -767,12 +1039,16 @@ const RecognitionQualitySection = () => {
                         <span className="min-w-0 truncate">
                           {item.originalName} → {item.finalName}
                         </span>
-                        <span className="shrink-0 font-mono text-xs tabular-nums">{item.count}</span>
+                        <span className="shrink-0 font-mono text-xs tabular-nums">
+                          {item.count}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">2명 이상이 공통으로 한 교정 없음</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    2명 이상이 공통으로 한 교정 없음
+                  </p>
                 )}
               </div>
               <div className="rounded-md border p-3">
@@ -782,12 +1058,16 @@ const RecognitionQualitySection = () => {
                     {q.topUnmatched.map((item) => (
                       <li key={item.name} className="flex items-center justify-between gap-3">
                         <span className="min-w-0 truncate">{item.name}</span>
-                        <span className="shrink-0 font-mono text-xs tabular-nums">{item.count}</span>
+                        <span className="shrink-0 font-mono text-xs tabular-nums">
+                          {item.count}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">2명 이상에서 반복된 미매칭 없음</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    2명 이상에서 반복된 미매칭 없음
+                  </p>
                 )}
               </div>
             </div>
@@ -856,8 +1136,8 @@ const CatalogSection = () => {
             카탈로그
           </CardTitle>
           <CardDescription>
-            적재된 음식을 검색·필터하고 이름·별칭·분류를 바로 고칩니다. 분류를 비우면 다음
-            적재의 LLM 분류 대상이 됩니다.
+            적재된 음식을 검색·필터하고 이름·별칭·분류를 바로 고칩니다. 분류를 비우면 다음 적재의
+            LLM 분류 대상이 됩니다.
           </CardDescription>
         </div>
         <CreateDialog />
@@ -992,7 +1272,10 @@ const CatalogSection = () => {
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={COLS} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={COLS}
+                    className="py-8 text-center text-sm text-muted-foreground"
+                  >
                     조건에 맞는 음식이 없어요
                   </TableCell>
                 </TableRow>
@@ -1053,7 +1336,9 @@ const ItemRow = ({ item, onEdit }: { item: FoodItemType; onEdit: () => void }) =
           {partiallyClassified && <Badge variant="amber">미분류</Badge>}
         </div>
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground">{FOOD_SOURCE_LABEL[item.source]}</TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {FOOD_SOURCE_LABEL[item.source]}
+      </TableCell>
       <TableCell className="text-right font-mono text-xs tabular-nums">{item.popularity}</TableCell>
       <TableCell className="text-xs">
         {item.active ? '활성' : <span className="text-muted-foreground">비활성</span>}

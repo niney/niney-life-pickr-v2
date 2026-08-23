@@ -6,13 +6,20 @@ import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, themes, useTheme } from '@repo/shared';
+import { ThemeProvider, themes, useCurrentUser, useTheme } from '@repo/shared';
+import { MEAL_SLOTS } from '@repo/utils';
 import { bootstrapApi } from '../src/lib/api-setup';
 import { mobileQueryClient } from '../src/lib/queryClient';
 import { setupQueryFocus } from '../src/lib/queryFocus';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { ReviewAskBanner } from '../src/components/ReviewAskBanner';
 import { useResolvedThemeMode } from '../src/hooks/useResolvedThemeMode';
+import {
+  MEAL_REMINDER_RECORD_ACTION,
+  MEAL_REMINDER_SNOOZE_ACTION,
+  shouldPresentMealReminder,
+  snoozeMealReminder,
+} from '../src/lib/mealReminders';
 
 // 네이티브 스플래시를 수동으로 끌 때까지 유지 — JS 가 떠서 인앱 풀배경
 // 스플래시(AnimatedSplash)가 화면을 덮은 뒤에야 hideAsync() 로 넘긴다.
@@ -29,12 +36,15 @@ setupQueryFocus();
 // 하차·식사 등 앱의 로컬 알림은 화면이 열려 있을 때도 배너로 보여 준다. 특정
 // 기능 화면이 한 번도 마운트되지 않아도 적용되도록 루트에서 한 번 설정한다.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const present = shouldPresentMealReminder(notification.request.content.data);
+    return {
+      shouldShowBanner: present,
+      shouldShowList: present,
+      shouldPlaySound: present,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 // 식사 알림을 누르면 식단 화면으로 이동한다. 허용한 내부 경로만 처리해 알림 data 가
@@ -46,11 +56,33 @@ function NotificationNavigation() {
   useEffect(() => {
     const open = (response: Notifications.NotificationResponse) => {
       const responseId = response.notification.request.identifier;
-      if (handledResponseId.current === responseId) return;
-      const href = response.notification.request.content.data?.href;
-      if (href !== '/meal' && href !== '/meal/new') return;
-      handledResponseId.current = responseId;
-      router.push(href as never);
+      const responseKey = `${responseId}:${response.actionIdentifier}`;
+      if (handledResponseId.current === responseKey) return;
+      const request = response.notification.request;
+      const data = request.content.data;
+
+      if (response.actionIdentifier === MEAL_REMINDER_SNOOZE_ACTION) {
+        handledResponseId.current = responseKey;
+        void snoozeMealReminder(request).finally(() => {
+          void Notifications.clearLastNotificationResponseAsync();
+        });
+        return;
+      }
+
+      const hrefValue =
+        response.actionIdentifier === MEAL_REMINDER_RECORD_ACTION ? data?.recordHref : data?.href;
+      if (typeof hrefValue !== 'string') return;
+      const allowed =
+        hrefValue === '/meal' ||
+        hrefValue === '/meal/new' ||
+        MEAL_SLOTS.some(
+          (slot) =>
+            hrefValue === `/meal?tab=recommend&slot=${slot}` ||
+            hrefValue === `/meal/new?slot=${slot}`,
+        );
+      if (!allowed) return;
+      handledResponseId.current = responseKey;
+      router.push(hrefValue as never);
       void Notifications.clearLastNotificationResponseAsync();
     };
 
@@ -69,6 +101,8 @@ function NotificationNavigation() {
 //  cascade 시킨다 — 각 화면은 headerShown/title 만 override.)
 function RootNavigator() {
   const theme = useTheme();
+  // 토큰만 복원된 cold start 에서도 /me 를 즉시 확인해 draft/알림 principal 을 확정한다.
+  useCurrentUser();
   return (
     <>
       <NotificationNavigation />

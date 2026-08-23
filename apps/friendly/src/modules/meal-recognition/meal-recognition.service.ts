@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
@@ -17,6 +16,7 @@ import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import { FoodService } from '../food/food.service.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
 import type { MealPhotoService } from '../meal/meal-photo.service.js';
+import { MealRecognitionDebugStore } from '../meal/meal-recognition-debug.store.js';
 import {
   MEAL_RECOGNITION_JSON_SCHEMA,
   MEAL_RECOGNITION_SYSTEM_PROMPT,
@@ -42,7 +42,7 @@ const OPLOG_ERROR_CAP = 300;
 
 export class MealRecognitionError extends Error {
   constructor(
-    readonly code: 'no_provider' | 'photo_not_found' | 'llm_failed' | 'parse_failed',
+    readonly code: 'no_provider' | 'photo_not_found' | 'llm_failed' | 'parse_failed' | 'quota',
     message: string,
   ) {
     super(message);
@@ -67,12 +67,6 @@ const LlmOutput = z.object({
   notes: z.string().nullable().optional(),
 });
 
-// 측정용 디버그 덤프 스위치 — 정확도를 정량화하려면 raw 응답을 모아야 하는데 프로덕션 로그를
-// 더럽히지 않게 env 로만 켠다(영수증 추출의 EXTRACTION_DEBUG 와 같은 장치).
-// `MEAL_RECOGNITION_DEBUG=1 pnpm --filter friendly dev` → data/meal-recognition-debug/*.json.
-const debugEnabled = (): boolean =>
-  process.env.MEAL_RECOGNITION_DEBUG === '1' || process.env.MEAL_RECOGNITION_DEBUG === 'true';
-
 export interface MealRecognitionDeps {
   photos: MealPhotoService;
   food?: FoodService;
@@ -80,7 +74,11 @@ export interface MealRecognitionDeps {
   logger?: FastifyBaseLogger;
   // 디버그 덤프 디렉터리(기본 data/meal-recognition-debug). MEAL_RECOGNITION_DEBUG 일 때만 쓰인다.
   debugDir?: string;
+  debugStore?: MealRecognitionDebugStore;
   operationLog?: OperationLogService | null;
+  // 사진 소유권·모델 설정 검증을 모두 통과한 뒤 실제 모델 호출 직전에만 소비한다.
+  // 라우트는 재시작 뒤에도 유지되는 SQLite 원자 카운터의 비동기 consume를 주입한다.
+  consumeQuota?: (userId: string) => boolean | Promise<boolean>;
   // 장소 힌트 조회 — 라우트가 RestaurantService 를 주입한다(모듈 결합 회피).
   placeHint?: (placeId: string) => Promise<{ name: string; menuNames: string[] } | null>;
 }
@@ -94,6 +92,7 @@ export interface RecognizeInput {
 
 export class MealRecognitionService {
   private readonly food: FoodService;
+  private readonly debugStore: MealRecognitionDebugStore;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -101,33 +100,26 @@ export class MealRecognitionService {
     private readonly deps: MealRecognitionDeps,
   ) {
     this.food = deps.food ?? new FoodService(prisma);
+    this.debugStore = deps.debugStore ?? new MealRecognitionDebugStore({ dir: deps.debugDir });
   }
 
   private get log(): FastifyBaseLogger | null {
     return this.deps.logger ?? null;
   }
 
-  // best-effort — 절대 throw 하지 않는다(인식 흐름을 막으면 안 된다). 사진 토큰으로 원본과
-  // 짝지어 눈으로 대조할 수 있게 토큰도 남긴다(사용자 식별자는 남기지 않는다).
+  // best-effort — 절대 throw 하지 않는다(인식 흐름을 막으면 안 된다). 사용자·사진 식별자는
+  // HMAC 해시로만 남겨 삭제 요청 시 찾아 지울 수 있게 한다.
   private async dumpDebug(record: {
     phase: 'success' | 'parse_error' | 'llm_error';
     model: string | null;
+    userId: string;
     photoTokens: string[];
     rawText?: string;
     dishes?: unknown;
     error?: string;
   }): Promise<void> {
-    if (!debugEnabled()) return;
     try {
-      const dir = this.deps.debugDir ?? join(process.cwd(), 'data', 'meal-recognition-debug');
-      await mkdir(dir, { recursive: true });
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const name = `${stamp}__${record.phase}__${record.photoTokens[0] ?? 'none'}.json`;
-      await writeFile(
-        join(dir, name),
-        JSON.stringify({ version: MEAL_RECOGNITION_VERSION, ...record }, null, 2),
-        'utf-8',
-      );
+      await this.debugStore.write({ version: MEAL_RECOGNITION_VERSION, ...record });
     } catch {
       // 덤프 실패는 무시.
     }
@@ -144,7 +136,11 @@ export class MealRecognitionService {
   async recognize(input: RecognizeInput): Promise<RecognizeMealResultType> {
     const oplog = this.deps.operationLog ?? null;
     const opRunId = oplog
-      ? await oplog.startRun({ feature: 'meal-recognition', trigger: 'user', meta: { photoCount: input.photoTokens.length } })
+      ? await oplog.startRun({
+          feature: 'meal-recognition',
+          trigger: 'user',
+          meta: { photoCount: input.photoTokens.length },
+        })
       : null;
     const step = (
       level: 'debug' | 'info' | 'warn' | 'error',
@@ -183,6 +179,13 @@ export class MealRecognitionService {
       const timer = setTimeout(() => ac.abort(), VISION_TIMEOUT_MS);
       let rawText: string;
       try {
+        if (this.deps.consumeQuota && !(await this.deps.consumeQuota(input.userId))) {
+          errorCode = 'quota';
+          throw new MealRecognitionError(
+            'quota',
+            '오늘 사진 인식 한도를 모두 썼습니다. 직접 입력해 주세요.',
+          );
+        }
         const res = await resolved.provider.complete({
           prompt,
           systemPrompt: MEAL_RECOGNITION_SYSTEM_PROMPT,
@@ -198,15 +201,20 @@ export class MealRecognitionService {
         });
         rawText = res.text;
       } catch (e) {
+        if (e instanceof MealRecognitionError && e.code === 'quota') throw e;
         errorCode = 'llm_failed';
         step('error', 'vision', 'LLM 호출 실패', { model: resolved.model });
         await this.dumpDebug({
           phase: 'llm_error',
           model: resolved.model,
+          userId: input.userId,
           photoTokens: input.photoTokens,
           error: e instanceof Error ? e.message : String(e),
         });
-        throw new MealRecognitionError('llm_failed', e instanceof Error ? e.message : 'LLM 호출 실패');
+        throw new MealRecognitionError(
+          'llm_failed',
+          e instanceof Error ? e.message : 'LLM 호출 실패',
+        );
       } finally {
         clearTimeout(timer);
       }
@@ -240,10 +248,14 @@ export class MealRecognitionService {
         await this.dumpDebug({
           phase: 'parse_error',
           model: resolved.model,
+          userId: input.userId,
           photoTokens: input.photoTokens,
           rawText: rawText.slice(0, 4000),
         });
-        throw new MealRecognitionError('parse_failed', '인식 결과를 읽지 못했습니다. 직접 입력해 주세요.');
+        throw new MealRecognitionError(
+          'parse_failed',
+          '인식 결과를 읽지 못했습니다. 직접 입력해 주세요.',
+        );
       }
 
       const dishes = await this.attachCatalog(parsed.dishes.slice(0, MAX_DISHES), images.length);
@@ -259,6 +271,7 @@ export class MealRecognitionService {
       await this.dumpDebug({
         phase: 'success',
         model: resolved.model,
+        userId: input.userId,
         photoTokens: input.photoTokens,
         rawText: rawText.slice(0, 4000),
         dishes,
@@ -267,7 +280,11 @@ export class MealRecognitionService {
       if (oplog && opRunId) {
         await oplog.finishRun(opRunId, {
           status: 'done',
-          meta: { model: resolved.model, dishCount: dishes.length, durationMs: Date.now() - started },
+          meta: {
+            model: resolved.model,
+            dishCount: dishes.length,
+            durationMs: Date.now() - started,
+          },
         });
       }
 
@@ -302,12 +319,19 @@ export class MealRecognitionService {
       if (!name) continue;
       const match = await this.food.matchFood(name);
       const portion = MealPortion.safeParse(d.portion);
+      const candidates = (d.candidates ?? [])
+        .filter((c) => c.name.trim().length > 0)
+        .slice(0, 3)
+        .map((c) => ({ name: c.name.trim(), confidence: clamp01(c.confidence) }));
+      const selectedCandidateRank = candidates.findIndex(
+        (candidate) => normalizeRecognitionName(candidate.name) === normalizeRecognitionName(name),
+      );
       out.push({
+        // LLM 출력 형식을 바꾸지 않고 서버가 발급한다. 이 id는 응답 → draft → recognitionJson과
+        // 최종 MealItem까지 유지되어 사용자가 순서를 바꾸거나 이름을 고쳐도 같은 원본을 찾는다.
+        recognitionDishId: randomUUID(),
         name,
-        candidates: (d.candidates ?? [])
-          .filter((c) => c.name.trim().length > 0)
-          .slice(0, 3)
-          .map((c) => ({ name: c.name.trim(), confidence: clamp01(c.confidence) })),
+        candidates,
         confidence: clamp01(d.confidence),
         isMain: d.isMain,
         portion: portion.success ? portion.data : null,
@@ -318,6 +342,15 @@ export class MealRecognitionService {
         dishType: match?.dishType ?? null,
         mainIngredient: match?.mainIngredient ?? null,
         cuisine: match?.cuisine ?? null,
+        selectedCandidateRank: selectedCandidateRank >= 0 ? selectedCandidateRank : null,
+        // 최초 인식 단계에는 클라이언트가 고른 foodId가 없으므로 이름/별칭/퍼지 매칭 계보를 남긴다.
+        catalogMatchedBy:
+          match === null
+            ? 'none'
+            : match.matchedBy === 'exact'
+              ? 'normalized_name'
+              : match.matchedBy,
+        catalogMatchScore: match?.score ?? null,
       });
     }
     return out;
@@ -325,6 +358,8 @@ export class MealRecognitionService {
 }
 
 const clamp01 = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+const normalizeRecognitionName = (value: string): string =>
+  value.trim().toLocaleLowerCase('ko').replaceAll(/\s+/g, '');
 
 export const parseRecognitionOutput = (text: string): z.infer<typeof LlmOutput> | null => {
   const candidate = extractFirstJsonObject(text) ?? text.trim();

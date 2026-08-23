@@ -3,19 +3,26 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   CreateMealEntryInput,
+  DeleteMealPhotosInput,
+  DeleteMealPhotosResult,
   DeleteMealDataInput,
   DeleteMealDataResult,
   ListMealEntriesQuery,
   ListMealEntriesResult,
   MealCalendarQuery,
   MealCalendarResult,
+  MealDataBackup,
   MealDataExport,
   MealEntry,
   MealPreference,
+  MealPhotoRetentionPreview,
+  MealPhotoRetentionQuery,
   MealStatsQuery,
   MealTimePresetsResult,
   RecentMealItemQuery,
   RecentMealItemResult,
+  RestoreMealDataResult,
+  MEAL_DATA_BACKUP_MAX_JSON_BYTES,
   MealStatsResult,
   Routes,
   UpdateMealEntryInput,
@@ -53,9 +60,18 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     if (e instanceof MealPhotoError) {
       if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
       if (e.code === 'forbidden') throw app.httpErrors.forbidden(e.message);
-      if (e.code === 'quota') throw app.httpErrors.conflict(e.message);
+      if (e.code === 'quota' || e.code === 'attached') throw app.httpErrors.conflict(e.message);
       throw app.httpErrors.badRequest(e.message);
     }
+    throw e;
+  };
+
+  const throwMealDataAsHttp = (e: unknown): never => {
+    if (e instanceof MealDataError) {
+      if (e.code === 'backup_too_large') throw app.httpErrors.payloadTooLarge(e.message);
+      throw app.httpErrors.badRequest(e.message);
+    }
+    if (e instanceof MealPhotoError) return throwAsHttp(e);
     throw e;
   };
 
@@ -160,6 +176,71 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => mealData.export(req.user.userId),
   });
 
+  typed.get(Routes.Meal.dataBackup, {
+    onRequest: [app.authenticate],
+    config: { rateLimit: RATE.mealDataArchive },
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: MealDataBackup },
+    },
+    handler: async (req) => {
+      try {
+        return await mealData.backup(req.user.userId);
+      } catch (e) {
+        return throwMealDataAsHttp(e);
+      }
+    },
+  });
+
+  typed.post(Routes.Meal.dataRestore, {
+    onRequest: [app.authenticate],
+    config: { rateLimit: RATE.mealDataArchive },
+    // base64 사진 50MiB + JSON 오버헤드 상한. 전역 body limit을 넓히지 않는다.
+    bodyLimit: MEAL_DATA_BACKUP_MAX_JSON_BYTES,
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      body: MealDataBackup,
+      response: { 200: RestoreMealDataResult },
+    },
+    handler: async (req) => {
+      try {
+        return await mealData.restore(req.user.userId, req.body);
+      } catch (e) {
+        return throwMealDataAsHttp(e);
+      }
+    },
+  });
+
+  typed.get(Routes.Meal.photoRetention, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      querystring: MealPhotoRetentionQuery,
+      response: { 200: MealPhotoRetentionPreview },
+    },
+    handler: async (req) => mealData.previewPhotoRetention(req.user.userId, req.query),
+  });
+
+  typed.delete(Routes.Meal.photoRetention, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      body: DeleteMealPhotosInput,
+      response: { 200: DeleteMealPhotosResult },
+    },
+    handler: async (req) => {
+      try {
+        return await mealData.deleteRetainedPhotos(req.user.userId, req.body);
+      } catch (e) {
+        return throwMealDataAsHttp(e);
+      }
+    },
+  });
+
   typed.delete(Routes.Meal.data, {
     onRequest: [app.authenticate],
     schema: {
@@ -172,8 +253,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await mealData.deleteAll(req.user.userId, req.body);
       } catch (e) {
-        if (e instanceof MealDataError) throw app.httpErrors.badRequest(e.message);
-        throw e;
+        return throwMealDataAsHttp(e);
       }
     },
   });

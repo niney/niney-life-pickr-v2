@@ -486,9 +486,7 @@ export class FoodService {
 
   // 1) nameNorm 정확 2) 별칭 정확 3) 퍼지(bigram Jaccard/포함, 임계 FOOD_MATCH_FUZZY_MIN). 비활성 행 제외.
   /** 이미 고른 카탈로그 행의 1인분 영양만 읽는다(기록 저장 시 스냅샷용). */
-  async getNutrition(
-    foodId: string,
-  ): Promise<{
+  async getNutrition(foodId: string): Promise<{
     kcal: number | null;
     proteinG: number | null;
     sodiumMg: number | null;
@@ -675,11 +673,48 @@ export class FoodService {
   }
 
   async adminStats(): Promise<FoodAdminStatsType> {
-    const [total, active, classified, bySourceRaw, byDishRaw] = await Promise.all([
+    const hasAnyNutrition: Prisma.FoodItemWhereInput = {
+      OR: [
+        { kcal: { not: null } },
+        { carbG: { not: null } },
+        { proteinG: { not: null } },
+        { fatG: { not: null } },
+        { sodiumMg: { not: null } },
+        { sugarG: { not: null } },
+      ],
+    };
+    const [
+      total,
+      active,
+      classified,
+      sourceObservationCount,
+      openMergeConflictCount,
+      nutritionDirectCount,
+      nutritionEstimatedCount,
+      nutritionMissingCount,
+      bySourceRaw,
+      byDishRaw,
+    ] = await Promise.all([
       this.prisma.foodItem.count(),
       this.prisma.foodItem.count({ where: { active: true } }),
       this.prisma.foodItem.count({
         where: { dishType: { not: null }, mainIngredient: { not: null }, cuisine: { not: null } },
+      }),
+      this.prisma.foodSourceObservation.count(),
+      this.prisma.foodMergeConflict.count({ where: { status: 'open' } }),
+      this.prisma.foodItem.count({ where: { AND: [{ nutritionFrom: null }, hasAnyNutrition] } }),
+      this.prisma.foodItem.count({
+        where: { AND: [{ nutritionFrom: { not: null } }, hasAnyNutrition] },
+      }),
+      this.prisma.foodItem.count({
+        where: {
+          kcal: null,
+          carbG: null,
+          proteinG: null,
+          fatG: null,
+          sodiumMg: null,
+          sugarG: null,
+        },
       }),
       this.prisma.foodItem.groupBy({ by: ['source'], _count: { _all: true } }),
       this.prisma.foodItem.groupBy({ by: ['dishType'], _count: { _all: true } }),
@@ -697,6 +732,17 @@ export class FoodService {
         count: g._count._all,
       }))
       .sort((a, b) => b.count - a.count);
-    return { total, active, classified, bySource, byDishType };
+    return {
+      total,
+      active,
+      classified,
+      sourceObservationCount,
+      openMergeConflictCount,
+      nutritionDirectCount,
+      nutritionEstimatedCount,
+      nutritionMissingCount,
+      bySource,
+      byDishType,
+    };
   }
 }

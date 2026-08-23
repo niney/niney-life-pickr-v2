@@ -87,7 +87,13 @@ const stats = {
       detail: '최근 7일은 4일·6끼, 직전 7일은 2일·3끼를 기록했어요.',
     },
   ],
-  nutrition: { avgKcalPerDay: 780, avgProteinGPerDay: 24.5, avgSodiumMgPerDay: 2100, coverage: 0.5, itemsWithNutrition: 2 },
+  nutrition: {
+    avgKcalPerDay: 780,
+    avgProteinGPerDay: 24.5,
+    avgSodiumMgPerDay: 2100,
+    coverage: 0.5,
+    itemsWithNutrition: 2,
+  },
   recommendation: { chosenCount: 2, loggedCount: 1, ratedCount: 1, acceptanceRate: 0.5 },
   byDate: [
     { date: '2026-08-21', count: 1 },
@@ -97,7 +103,9 @@ const stats = {
 
 const renderPage = () =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <MemoryRouter>
         <MealPage />
       </MemoryRouter>
@@ -108,17 +116,25 @@ describe('MealPage', () => {
   beforeEach(() => {
     useAuthStore.setState({
       token: 't',
-      user: { id: 'u1', email: 'u@x.com', role: 'USER', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      user: {
+        id: 'u1',
+        email: 'u@x.com',
+        role: 'USER',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
       isGuest: false,
     });
   });
 
   it('기록 탭 — 목록을 날짜 머리글과 함께 보여준다', async () => {
-    server.use(http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })));
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })),
+    );
     renderPage();
     expect(await screen.findByText('김치찌개')).toBeInTheDocument();
     expect(screen.getByText(/곁들임 김치/)).toBeInTheDocument();
-    expect(screen.getByText('점심')).toBeInTheDocument();
+    expect(screen.getByText('점심', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText(/숯토리/)).toBeInTheDocument();
     expect(screen.getByText(/2026-08-20/)).toBeInTheDocument();
   });
@@ -139,7 +155,13 @@ describe('MealPage', () => {
         return HttpResponse.json(
           cursor
             ? {
-                items: [entry({ id: 'e2', eatenDate: '2026-08-19', items: [{ ...entry().items[0], id: 'i2', name: '비빔밥' }] })],
+                items: [
+                  entry({
+                    id: 'e2',
+                    eatenDate: '2026-08-19',
+                    items: [{ ...entry().items[0], id: 'i2', name: '비빔밥' }],
+                  }),
+                ],
                 nextCursor: null,
               }
             : { items: [entry()], nextCursor: opaqueCursor },
@@ -213,11 +235,19 @@ describe('MealPage', () => {
     server.use(
       http.get(ENTRIES_URL, () =>
         HttpResponse.json({
-          items: [entry({ photos: [{ token: 'a'.repeat(8), width: 40, height: 30, byteSize: 100, sortOrder: 0 }] })],
+          items: [
+            entry({
+              photos: [
+                { token: 'a'.repeat(8), width: 40, height: 30, byteSize: 100, sortOrder: 0 },
+              ],
+            }),
+          ],
           nextCursor: null,
         }),
       ),
-      http.get(PHOTO_THUMB_URL, () => HttpResponse.arrayBuffer(new ArrayBuffer(8), { headers: { 'Content-Type': 'image/jpeg' } })),
+      http.get(PHOTO_THUMB_URL, () =>
+        HttpResponse.arrayBuffer(new ArrayBuffer(8), { headers: { 'Content-Type': 'image/jpeg' } }),
+      ),
     );
     renderPage();
     expect(await screen.findByAltText('식단 사진')).toBeInTheDocument();
@@ -232,8 +262,17 @@ describe('MealPage — 추천·설정 탭', () => {
   const PREFERENCE_URL = '/api/v1/meals/preference';
 
   const preference = {
-    weights: { variety: 4, taste: 4, balance: 3, health: 2, novelty: 2, weather: 1, convenience: 2 },
+    weights: {
+      variety: 4,
+      taste: 4,
+      balance: 3,
+      health: 2,
+      novelty: 2,
+      weather: 1,
+      convenience: 2,
+    },
     excludedFoods: ['오이'],
+    allergens: [],
     dislikedFoods: ['고수'],
     likedFoods: [],
     mealTypes: [],
@@ -258,6 +297,10 @@ describe('MealPage — 추천·설정 탭', () => {
         score: 0.82,
         lastEatenDate: null,
         ingredients: ['연어', '밥', '와사비'],
+        allergenWarnings: [],
+        allergenAssessment: 'known_safe',
+        nutritionBasis: 'missing',
+        nutritionFrom: null,
       },
     ],
     summary: '오늘은 담백하게',
@@ -266,15 +309,26 @@ describe('MealPage — 추천·설정 탭', () => {
     promptVersion: 1,
     notice: null,
     feedback: null,
+    candidateRatings: [],
     createdAt: '2026-08-22T09:00:00.000Z',
   };
 
   beforeEach(() => {
     useAuthStore.setState({
       token: 't',
-      user: { id: 'u1', email: 'u@x.com', role: 'USER', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      user: {
+        id: 'u1',
+        email: 'u@x.com',
+        role: 'USER',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
       isGuest: false,
     });
+    server.use(
+      http.get('/api/v1/air/location', () => HttpResponse.json({ location: null })),
+      http.post(`${RECOMMENDATIONS_URL}/:id/events`, () => HttpResponse.json({ ok: true })),
+    );
   });
 
   it('추천 탭 — 추천받기는 force=false, 다시 추천은 force=true 로 보낸다', async () => {
@@ -314,7 +368,10 @@ describe('MealPage — 추천·설정 탭', () => {
       http.post(`${RECOMMENDATIONS_URL}/r1/feedback`, async ({ request }) => {
         const body = (await request.json()) as { rating?: number | null };
         ratings.push(body.rating);
-        return HttpResponse.json({ ...recommendation, feedback: { pickedName: null, rating: 1, eatenEntryId: null } });
+        return HttpResponse.json({
+          ...recommendation,
+          feedback: { pickedName: null, rating: 1, eatenEntryId: null },
+        });
       }),
     );
     renderPage();
@@ -368,15 +425,25 @@ describe('MealPage — 추천·설정 탭', () => {
 
     const slider = await screen.findByLabelText('건강');
     fireEvent.change(slider, { target: { value: '5' } });
-    fireEvent.change(screen.getByLabelText('절대 제외 (알레르기·못 먹는 음식)'), { target: { value: '오이, 땅콩' } });
-    fireEvent.change(screen.getByLabelText('덜 선호하는 음식'), { target: { value: '고수, 내장' } });
-    expect(screen.getByText(/재료 정보가 없는 카탈로그 음식은 막지 못할 수 있어요/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('취향상 제외할 음식'), {
+      target: { value: '오이, 땅콩' },
+    });
+    fireEvent.change(screen.getByLabelText('덜 선호하는 음식'), {
+      target: { value: '고수, 내장' },
+    });
+    expect(screen.getByText(/재료 정보가 없는 음식은 남을 수 있어요/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(saved).not.toBeNull());
     expect((saved as unknown as { weights: { health: number } }).weights.health).toBe(5);
-    expect((saved as unknown as { excludedFoods: string[] }).excludedFoods).toEqual(['오이', '땅콩']);
-    expect((saved as unknown as { dislikedFoods: string[] }).dislikedFoods).toEqual(['고수', '내장']);
+    expect((saved as unknown as { excludedFoods: string[] }).excludedFoods).toEqual([
+      '오이',
+      '땅콩',
+    ]);
+    expect((saved as unknown as { dislikedFoods: string[] }).dislikedFoods).toEqual([
+      '고수',
+      '내장',
+    ]);
   });
 
   it('설정 탭 — 프리셋은 가중치를 한 번에 바꾼다', async () => {

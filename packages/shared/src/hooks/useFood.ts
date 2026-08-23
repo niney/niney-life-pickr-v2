@@ -7,11 +7,14 @@ import type {
   FoodImportProgressEventType,
   FoodImportRunInputType,
   FoodImportRunType,
+  FoodMergeConflictActionType,
 } from '@repo/api-contract';
 import {
   buildFoodImportRunEventsUrl,
   foodApi,
   type FoodAdminListInput,
+  type FoodMergeConflictListInput,
+  type FoodRecognitionQualityInput,
   type FoodRestaurantsInput,
 } from '../api/food.api.js';
 
@@ -61,10 +64,30 @@ export const useFoodAdminStats = () =>
     queryFn: foodApi.adminStats,
   });
 
-export const useFoodRecognitionQuality = (days = 30) =>
+export const useFoodMergeConflicts = (input: FoodMergeConflictListInput = {}) =>
   useQuery({
-    queryKey: ['food', 'admin', 'recognition-quality', days],
-    queryFn: () => foodApi.adminRecognitionQuality({ days }),
+    queryKey: ['food', 'admin', 'merge-conflicts', input],
+    queryFn: () => foodApi.adminMergeConflicts(input),
+    placeholderData: keepPreviousData,
+  });
+
+export const useResolveFoodMergeConflict = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: FoodMergeConflictActionType }) =>
+      foodApi.resolveMergeConflict(id, { action }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['food', 'admin', 'merge-conflicts'] });
+      void qc.invalidateQueries({ queryKey: ['food', 'admin', 'list'] });
+      void qc.invalidateQueries({ queryKey: ['food', 'stats'] });
+    },
+  });
+};
+
+export const useFoodRecognitionQuality = (input: FoodRecognitionQualityInput = {}) =>
+  useQuery({
+    queryKey: ['food', 'admin', 'recognition-quality', input],
+    queryFn: () => foodApi.adminRecognitionQuality(input),
     staleTime: 5 * 60_000,
   });
 

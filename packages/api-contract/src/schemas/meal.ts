@@ -27,6 +27,59 @@ export type MealItemSourceType = z.infer<typeof MealItemSource>;
 export const MealPortion = z.enum(['small', 'normal', 'large']);
 export type MealPortionType = z.infer<typeof MealPortion>;
 
+// 식품안전나라 표시 기준의 알레르기 유발물질 19개 군. 이 값은 사용자가 주의를
+// 요청하는 구조화 힌트이며, 추천 결과가 교차접촉·미표기 재료까지 보장한다는 뜻은 아니다.
+export const MealAllergen = z.enum([
+  'egg',
+  'milk',
+  'buckwheat',
+  'peanut',
+  'soybean',
+  'wheat',
+  'pine_nut',
+  'walnut',
+  'crab',
+  'shrimp',
+  'squid',
+  'mackerel',
+  'shellfish',
+  'peach',
+  'tomato',
+  'chicken',
+  'pork',
+  'beef',
+  'sulfites',
+]);
+export type MealAllergenType = z.infer<typeof MealAllergen>;
+
+export const MEAL_ALLERGEN_LABEL: Record<MealAllergenType, string> = {
+  egg: '알류(달걀)',
+  milk: '우유',
+  buckwheat: '메밀',
+  peanut: '땅콩',
+  soybean: '대두',
+  wheat: '밀',
+  pine_nut: '잣',
+  walnut: '호두',
+  crab: '게',
+  shrimp: '새우',
+  squid: '오징어',
+  mackerel: '고등어',
+  shellfish: '조개류',
+  peach: '복숭아',
+  tomato: '토마토',
+  chicken: '닭고기',
+  pork: '돼지고기',
+  beef: '쇠고기',
+  sulfites: '아황산류',
+};
+
+export const MealPortionSource = z.enum(['vision_ordinal', 'user_serving']);
+export type MealPortionSourceType = z.infer<typeof MealPortionSource>;
+
+export const MealNutritionBasis = z.enum(['direct', 'donor_estimate', 'missing']);
+export type MealNutritionBasisType = z.infer<typeof MealNutritionBasis>;
+
 // 'YYYY-MM-DD' — 사용자 로컬 날짜. 달력·통계의 그룹 키(서버는 형식만 검증).
 const DateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD 형식이어야 합니다');
 const MonthString = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM 형식이어야 합니다');
@@ -49,6 +102,9 @@ const RecognizedDishCandidate = z
 
 export const RecognizedDish = z
   .object({
+    // 한 번의 인식 응답 안에서 안정적으로 유지되는 항목 id. 확정 MealItem 과 품질 집계를
+    // 이름/순서 추정 없이 연결한다. 구버전 snapshot 은 이 필드가 없을 수 있다.
+    recognitionDishId: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(120),
     // 모델이 흔들린 후보(첫 항목이 name 과 같을 수 있다) — UI 가 탭으로 바꿔 고른다.
     candidates: z.array(RecognizedDishCandidate).max(3),
@@ -56,13 +112,23 @@ export const RecognizedDish = z
     isMain: z.boolean(),
     portion: MealPortion.nullable(),
     isDrink: z.boolean(),
-    photoIndex: z.number().int().min(0).max(MEAL_MAX_PHOTOS_PER_ENTRY - 1),
+    photoIndex: z
+      .number()
+      .int()
+      .min(0)
+      .max(MEAL_MAX_PHOTOS_PER_ENTRY - 1),
     // 카탈로그 매칭 스냅샷 — 못 찾으면 null.
     foodId: z.string().trim().min(1).max(64).nullable(),
     matchedName: z.string().trim().min(1).max(120).nullable(),
     dishType: FoodDishType.nullable(),
     mainIngredient: FoodMainIngredient.nullable(),
     cuisine: FoodCuisine.nullable(),
+    selectedCandidateRank: z.number().int().min(0).max(2).nullable().optional(),
+    catalogMatchedBy: z
+      .enum(['food_id', 'normalized_name', 'alias', 'fuzzy', 'none'])
+      .nullable()
+      .optional(),
+    catalogMatchScore: z.number().finite().min(0).max(1).nullable().optional(),
   })
   .strict();
 export type RecognizedDishType = z.infer<typeof RecognizedDish>;
@@ -93,7 +159,10 @@ const CreateMealRecognitionSnapshot = z
 const MealPhotoTokenList = z
   .array(MealPhotoToken)
   .max(MEAL_MAX_PHOTOS_PER_ENTRY)
-  .refine((tokens) => new Set(tokens).size === tokens.length, '같은 사진 토큰을 중복해서 사용할 수 없습니다');
+  .refine(
+    (tokens) => new Set(tokens).size === tokens.length,
+    '같은 사진 토큰을 중복해서 사용할 수 없습니다',
+  );
 
 // ── 기록 ────────────────────────────────────────────────────────────────────
 
@@ -115,10 +184,16 @@ export const MealItem = z.object({
   mainIngredient: FoodMainIngredient.nullable(),
   cuisine: FoodCuisine.nullable(),
   portion: MealPortion.nullable(),
+  servings: z.number().positive().nullable(),
+  portionSource: MealPortionSource.nullable(),
   // false = 반찬·곁들임. 빈도 통계에서 주식과 분리한다.
   isMain: z.boolean(),
   // 인식 confidence(0~1). 수동 입력은 null.
   confidence: z.number().nullable(),
+  recognitionDishId: z.string().nullable(),
+  selectedCandidateRank: z.number().int().nullable(),
+  catalogMatchedBy: z.enum(['food_id', 'normalized_name', 'alias', 'fuzzy', 'none']).nullable(),
+  catalogMatchScore: z.number().nullable(),
   source: MealItemSource,
   sortOrder: z.number().int(),
   // 저장 시점의 영양 스냅샷 — 1인분 값 × 양(portion) 배수. 카탈로그에 값이 없으면 null 이고
@@ -128,6 +203,7 @@ export const MealItem = z.object({
   sodiumMg: z.number().nullable(),
   // 영양을 같은 계열 음식에서 빌려왔으면 그 출처("버섯콩불고기 외 8종 중앙값"). 직접 값이면 null.
   nutritionFrom: z.string().nullable(),
+  nutritionBasis: MealNutritionBasis,
 });
 export type MealItemType = z.infer<typeof MealItem>;
 
@@ -164,6 +240,8 @@ export const RecentMealItemResult = z.object({
   lastEatenDate: DateString.nullable(),
   // 지난번에 먹은 양 — 비어 있는 입력을 채워 준다.
   portion: MealPortion.nullable(),
+  servings: z.number().positive().nullable(),
+  portionSource: MealPortionSource.nullable(),
   isMain: z.boolean().nullable(),
   dishType: FoodDishType.nullable(),
   mainIngredient: FoodMainIngredient.nullable(),
@@ -180,8 +258,18 @@ export const MealItemInput = z.object({
   mainIngredient: FoodMainIngredient.nullable().optional(),
   cuisine: FoodCuisine.nullable().optional(),
   portion: MealPortion.nullable().optional(),
+  // 사용자가 직접 아는 경우에만 넣는 인분 수. 사진으로 g/인분을 자동 추정하지 않는다.
+  servings: z.number().finite().min(0.25).max(10).nullable().optional(),
+  portionSource: MealPortionSource.nullable().optional(),
   isMain: z.boolean().default(true),
   confidence: z.number().min(0).max(1).nullable().optional(),
+  recognitionDishId: z.string().trim().min(1).max(64).nullable().optional(),
+  selectedCandidateRank: z.number().int().min(0).max(2).nullable().optional(),
+  catalogMatchedBy: z
+    .enum(['food_id', 'normalized_name', 'alias', 'fuzzy', 'none'])
+    .nullable()
+    .optional(),
+  catalogMatchScore: z.number().finite().min(0).max(1).nullable().optional(),
   source: MealItemSource.default('manual'),
 });
 export type MealItemInputType = z.infer<typeof MealItemInput>;
@@ -203,6 +291,8 @@ export const MealEntry = z.object({
   photos: z.array(MealPhoto),
   // 인식 원본(모델·버전·후보)을 확정 후에도 보존 — 인식 품질 측정용. 목록에선 생략(null).
   recognition: MealRecognitionSnapshot.nullable(),
+  // 사진 보존 정책으로 바이너리를 정리한 시각. 텍스트 기록은 그대로 남는다.
+  photoPurgedAt: z.string().datetime({ offset: true }).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -245,6 +335,10 @@ export const ListMealEntriesQuery = z.object({
   from: DateString.optional(),
   to: DateString.optional(),
   slot: MealSlot.optional(),
+  mealType: MealType.optional(),
+  source: MealEntrySource.optional(),
+  // 음식명·장소·메모를 함께 찾는다. 서버 페이지네이션 전에 적용해야 누적 기록 검색이 된다.
+  q: z.string().trim().min(1).max(80).optional(),
   // 커서 = 직전 페이지 마지막 항목의 eatenAt+id 를 담은 opaque 토큰. 클라이언트는 해석하지
   // 말고 응답의 nextCursor 를 그대로 돌려준다. 전환 전 ISO eatenAt 커서도 서버가 허용한다.
   cursor: z.string().max(512).optional(),
@@ -354,7 +448,9 @@ export const MealStatsResult = z.object({
   byCuisine: z.array(CountBucket),
   byMealType: z.array(CountBucket),
   // 많이 먹은 음식(주식 기준) — 이름 정규화로 묶는다.
-  topFoods: z.array(z.object({ name: z.string(), count: z.number().int(), lastEatenDate: DateString })),
+  topFoods: z.array(
+    z.object({ name: z.string(), count: z.number().int(), lastEatenDate: DateString }),
+  ),
   // 같은 음식을 7일 안에 다시 먹은 비율(0~1) — "겹침" 지표.
   repeatRate: z.number(),
   // 연속 기록 일수(오늘/마지막 기록일 기준).
@@ -371,7 +467,14 @@ export const MealStatsResult = z.object({
     avgSodiumMgPerDay: z.number().nullable(),
     // 영양 값이 있는 항목 / 전체 항목(0~1).
     coverage: z.number(),
+    mainItemCoverage: z.number(),
+    directCoverage: z.number(),
+    estimatedCoverage: z.number(),
+    // 주식 기준 근거가 부족하면 평균을 null로 숨긴다.
+    averageReliable: z.boolean(),
     itemsWithNutrition: z.number().int(),
+    itemsDirect: z.number().int(),
+    itemsEstimated: z.number().int(),
   }),
   recommendation: z.object({
     // 추천 후보를 고른 횟수 / 실제 기록까지 마친 횟수 / 평가한 횟수.
@@ -380,6 +483,12 @@ export const MealStatsResult = z.object({
     ratedCount: z.number().int(),
     // loggedCount / chosenCount. 선택이 없으면 0.
     acceptanceRate: z.number().min(0).max(1),
+    shownCount: z.number().int(),
+    dismissedCount: z.number().int(),
+    candidateRatedCount: z.number().int(),
+    // 선택/노출, 실제 기록/노출. shown 이벤트가 없던 구버전 기간은 0.
+    pickRate: z.number().min(0).max(1),
+    loggedFromShownRate: z.number().min(0).max(1),
   }),
 });
 export type MealStatsResultType = z.infer<typeof MealStatsResult>;
@@ -426,17 +535,61 @@ export const MEAL_DEFAULT_WEIGHTS: MealWeightsType = {
 
 // 프리셋 — UI 슬라이더 프리필.
 export const MEAL_WEIGHT_PRESETS: Record<string, { label: string; weights: MealWeightsType }> = {
-  balanced: { label: '골고루', weights: { variety: 5, taste: 3, balance: 5, health: 3, novelty: 3, weather: 1, convenience: 2 } },
-  taste: { label: '내 취향대로', weights: { variety: 2, taste: 5, balance: 2, health: 1, novelty: 1, weather: 1, convenience: 3 } },
-  health: { label: '가볍게·건강', weights: { variety: 3, taste: 2, balance: 4, health: 5, novelty: 2, weather: 2, convenience: 2 } },
-  novelty: { label: '새로운 도전', weights: { variety: 4, taste: 2, balance: 3, health: 2, novelty: 5, weather: 2, convenience: 1 } },
+  balanced: {
+    label: '골고루',
+    weights: {
+      variety: 5,
+      taste: 3,
+      balance: 5,
+      health: 3,
+      novelty: 3,
+      weather: 1,
+      convenience: 2,
+    },
+  },
+  taste: {
+    label: '내 취향대로',
+    weights: {
+      variety: 2,
+      taste: 5,
+      balance: 2,
+      health: 1,
+      novelty: 1,
+      weather: 1,
+      convenience: 3,
+    },
+  },
+  health: {
+    label: '가볍게·건강',
+    weights: {
+      variety: 3,
+      taste: 2,
+      balance: 4,
+      health: 5,
+      novelty: 2,
+      weather: 2,
+      convenience: 2,
+    },
+  },
+  novelty: {
+    label: '새로운 도전',
+    weights: {
+      variety: 4,
+      taste: 2,
+      balance: 3,
+      health: 2,
+      novelty: 5,
+      weather: 2,
+      convenience: 1,
+    },
+  },
 };
 
 export const MealPreference = z.object({
   weights: MealWeights,
-  // 절대 제외 — 알레르기·못 먹는 음식. 이름과 카탈로그 재료 목록에서 맞으면 후보를 삭제한다.
-  // 기존 필드/저장값 호환을 위해 이름은 유지한다.
+  // 취향상 제외. 알레르기는 아래 구조화 목록으로 분리한다.
   excludedFoods: z.array(z.string()),
+  allergens: z.array(MealAllergen),
   // 덜 선호 — 후보는 남기되 taste 점수를 강하게 낮춘다. 대안이 부족하면 추천될 수 있다.
   dislikedFoods: z.array(z.string()),
   likedFoods: z.array(z.string()),
@@ -452,6 +605,7 @@ export type MealPreferenceType = z.infer<typeof MealPreference>;
 export const UpdateMealPreferenceInput = z.object({
   weights: MealWeights.optional(),
   excludedFoods: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
+  allergens: z.array(MealAllergen).max(MealAllergen.options.length).optional(),
   dislikedFoods: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
   likedFoods: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
   mealTypes: z.array(MealType).max(5).optional(),
@@ -495,6 +649,12 @@ export const MealRecommendationItem = z.object({
   lastEatenDate: DateString.nullable(),
   // 주재료(레시피 출처가 있는 음식만, 최대 5개). 없으면 빈 배열.
   ingredients: z.array(z.string()),
+  // 알려진 이름/재료 메타에서 찾은 best-effort 경고. 빈 배열도 안전 보장을 뜻하지 않는다.
+  allergenWarnings: z.array(MealAllergen),
+  allergenEvidence: z.array(z.string()),
+  allergenAssessment: z.enum(['possible', 'none_known', 'unknown']),
+  nutritionBasis: MealNutritionBasis,
+  nutritionFrom: z.string().nullable(),
 });
 export type MealRecommendationItemType = z.infer<typeof MealRecommendationItem>;
 
@@ -523,6 +683,10 @@ export const MealRecommendation = z.object({
   // 기록이 적어 추천 근거가 약할 때의 안내(콜드 스타트 등).
   notice: z.string().nullable(),
   feedback: MealRecommendationFeedback.nullable(),
+  // 후보별 평가는 세트 평가와 분리해 취향 학습에만 사용한다.
+  candidateRatings: z.array(
+    z.object({ name: z.string(), rating: z.union([z.literal(-1), z.literal(1)]) }),
+  ),
   createdAt: z.string(),
 });
 export type MealRecommendationType = z.infer<typeof MealRecommendation>;
@@ -544,6 +708,95 @@ export const MealRecommendationFeedbackInput = z.object({
 });
 export type MealRecommendationFeedbackInputType = z.infer<typeof MealRecommendationFeedbackInput>;
 
+// 추천 반응의 불변 이벤트 원장. feedbackJson 은 최신 선택 상태를 빠르게 보여 주기 위한
+// 호환 projection 이고, 행동 순서·후보별 학습 신호의 출처는 이 이벤트다.
+export const MealRecommendationEventKind = z.enum([
+  'shown',
+  'candidate_picked',
+  'set_rated',
+  'candidate_rated',
+  'restaurant_opened',
+  'logged',
+  'dismissed',
+]);
+export type MealRecommendationEventKindType = z.infer<typeof MealRecommendationEventKind>;
+
+export const MealRecommendationPlatform = z.enum(['mobile', 'web', 'server']);
+export type MealRecommendationPlatformType = z.infer<typeof MealRecommendationPlatform>;
+
+export const MealRecommendationEventInput = z
+  .object({
+    kind: MealRecommendationEventKind,
+    candidateName: z.string().trim().min(1).max(60).nullable().optional(),
+    candidateFoodId: z.string().trim().min(1).max(64).nullable().optional(),
+    candidateRank: z.number().int().min(0).max(20).nullable().optional(),
+    rating: z
+      .union([z.literal(-1), z.literal(1)])
+      .nullable()
+      .optional(),
+    platform: MealRecommendationPlatform,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const candidateKinds: MealRecommendationEventKindType[] = [
+      'candidate_picked',
+      'candidate_rated',
+      'restaurant_opened',
+      'logged',
+    ];
+    const ratingKinds: MealRecommendationEventKindType[] = ['set_rated', 'candidate_rated'];
+    if (candidateKinds.includes(value.kind) && !value.candidateName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['candidateName'],
+        message: '후보 음식이 필요합니다',
+      });
+    }
+    if (!candidateKinds.includes(value.kind) && value.candidateName != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['candidateName'],
+        message: '이 이벤트에는 후보 음식을 넣을 수 없습니다',
+      });
+    }
+    if (!value.candidateName && (value.candidateFoodId != null || value.candidateRank != null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['candidateName'],
+        message: '후보 메타데이터에는 후보 음식이 필요합니다',
+      });
+    }
+    if (ratingKinds.includes(value.kind) && value.rating == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['rating'],
+        message: '평가 값이 필요합니다',
+      });
+    }
+    if (!ratingKinds.includes(value.kind) && value.rating != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['rating'],
+        message: '이 이벤트에는 평가 값을 넣을 수 없습니다',
+      });
+    }
+  });
+export type MealRecommendationEventInputType = z.infer<typeof MealRecommendationEventInput>;
+
+export const MealRecommendationEvent = z.object({
+  id: z.string(),
+  recommendationId: z.string(),
+  kind: MealRecommendationEventKind,
+  candidateName: z.string().nullable(),
+  candidateFoodId: z.string().nullable(),
+  candidateRank: z.number().int().nullable(),
+  rating: z.union([z.literal(-1), z.literal(1)]).nullable(),
+  platform: MealRecommendationPlatform,
+  rankingVersion: z.number().int(),
+  createdAt: z.string().datetime({ offset: true }),
+});
+export type MealRecommendationEventType = z.infer<typeof MealRecommendationEvent>;
+
 // 추천 화면 진입 시 한 번에 필요한 것 — 프로필 요약(기록 수·최근 먹은 것)과 캐시된 추천.
 export const MealRecommendationContext = z.object({
   entryCount: z.number().int(),
@@ -558,6 +811,7 @@ export type MealRecommendationContextType = z.infer<typeof MealRecommendationCon
 // 단순 확인 버튼 한 번으로 개인 기록을 전부 지우지 않도록 클라이언트와 서버가 공유하는
 // 정확 일치 문구다. 화면은 사용자가 이 문자열을 직접 입력한 뒤에만 DELETE 를 호출한다.
 export const MEAL_DATA_DELETE_CONFIRMATION = 'DELETE_ALL_MY_MEAL_DATA' as const;
+export const MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION = 'DELETE_OLD_MEAL_PHOTOS' as const;
 
 // 내보내기 형식은 이후 필드가 바뀌어도 소비자가 명시적으로 분기할 수 있게 이름+버전을 둔다.
 export const MEAL_DATA_EXPORT_FORMAT = 'niney-life-pickr.meal-data' as const;
@@ -579,6 +833,8 @@ export const MealDataExportRecommendation = MealRecommendation.extend({
   context: z.record(z.unknown()),
   profile: z.record(z.unknown()),
   profileHash: z.string(),
+  // 추천의 최신 projection뿐 아니라 후보 선택·평가의 불변 이력도 portability 범위다.
+  events: z.array(MealRecommendationEvent),
 });
 export type MealDataExportRecommendationType = z.infer<typeof MealDataExportRecommendation>;
 
@@ -599,6 +855,216 @@ export const MealDataExport = z.object({
 });
 export type MealDataExportType = z.infer<typeof MealDataExport>;
 
+// ── 사진 보존 정책 ──────────────────────────────────────────────────────────
+
+// before는 제외 경계다. 예: 2026-05-01이면 eatenDate가 그보다 앞선 기록의 사진과
+// 같은 경계 시각(Asia/Seoul 자정)보다 오래된 고아 업로드를 대상으로 한다. 생략하면
+// 본인의 모든 식단 사진을 대상으로 하되 텍스트 기록은 항상 남긴다.
+export const MealPhotoRetentionQuery = z.object({ before: DateString.optional() }).strict();
+export type MealPhotoRetentionQueryType = z.infer<typeof MealPhotoRetentionQuery>;
+
+export const MealPhotoRetentionPreview = z.object({
+  before: DateString.nullable(),
+  entries: z.number().int().nonnegative(),
+  attachedPhotos: z.number().int().nonnegative(),
+  orphanPhotos: z.number().int().nonnegative(),
+  totalPhotos: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+});
+export type MealPhotoRetentionPreviewType = z.infer<typeof MealPhotoRetentionPreview>;
+
+export const DeleteMealPhotosInput = z
+  .object({
+    before: DateString.optional(),
+    confirmation: z.literal(MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION),
+  })
+  .strict();
+export type DeleteMealPhotosInputType = z.infer<typeof DeleteMealPhotosInput>;
+
+export const DeleteMealPhotosResult = z.object({
+  before: DateString.nullable(),
+  deleted: z.object({
+    entriesMarked: z.number().int().nonnegative(),
+    attachedPhotos: z.number().int().nonnegative(),
+    orphanPhotos: z.number().int().nonnegative(),
+    totalPhotos: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    photoFileSets: z.number().int().nonnegative(),
+    // unlink 실패로 durable outbox에 남아 부팅/일일 정리에서 재시도할 파일 세트 수.
+    pendingFileSets: z.number().int().nonnegative(),
+  }),
+});
+export type DeleteMealPhotosResultType = z.infer<typeof DeleteMealPhotosResult>;
+
+// ── 사진 포함 휴대용 백업/복원 ──────────────────────────────────────────────
+
+// ZIP의 경로 순회·압축 폭탄 표면을 만들지 않고 앱/서버 양쪽에서 동일 Zod 계약으로
+// 검증할 수 있는 JSON+base64 아카이브다. 한도는 응답 생성과 요청 파싱 전에 모두 적용한다.
+export const MEAL_DATA_BACKUP_FORMAT = 'niney-life-pickr.meal-backup' as const;
+export const MEAL_DATA_BACKUP_VERSION = 1 as const;
+export const MEAL_DATA_BACKUP_MAX_PHOTOS = 100;
+export const MEAL_DATA_BACKUP_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+export const MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES = 50 * 1024 * 1024;
+export const MEAL_DATA_BACKUP_MAX_JSON_BYTES = 75 * 1024 * 1024;
+export const MEAL_DATA_BACKUP_MAX_ENTRIES = 5_000;
+export const MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS = 1_000;
+export const MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION = 200;
+
+const MealDataBackupRef = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const MealDataBackupBase64 = z
+  .string()
+  .min(4)
+  .max(Math.ceil((MEAL_DATA_BACKUP_MAX_PHOTO_BYTES * 4) / 3) + 4)
+  .regex(/^[A-Za-z0-9+/]+={0,2}$/);
+
+export const MealDataBackupPhoto = z
+  .object({
+    ref: MealDataBackupRef,
+    contentType: z.literal('image/jpeg'),
+    dataBase64: MealDataBackupBase64,
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    byteSize: z.number().int().min(1).max(MEAL_DATA_BACKUP_MAX_PHOTO_BYTES),
+    width: z.number().int().positive().nullable(),
+    height: z.number().int().positive().nullable(),
+  })
+  .strict();
+export type MealDataBackupPhotoType = z.infer<typeof MealDataBackupPhoto>;
+
+export const MealDataBackupItem = MealItem.omit({ id: true })
+  .extend({
+    name: z.string().trim().min(1).max(60),
+    foodId: z.string().max(64).nullable(),
+    servings: z.number().min(0.25).max(10).nullable(),
+    confidence: z.number().min(0).max(1).nullable(),
+    recognitionDishId: z.string().max(64).nullable(),
+    selectedCandidateRank: z.number().int().min(0).max(2).nullable(),
+    catalogMatchScore: z.number().min(0).max(1).nullable(),
+    nutritionFrom: z.string().max(240).nullable(),
+  })
+  .strict();
+export type MealDataBackupItemType = z.infer<typeof MealDataBackupItem>;
+
+export const MealDataBackupEntry = MealEntry.omit({
+  id: true,
+  originRecommendationId: true,
+  items: true,
+  photos: true,
+})
+  .extend({
+    ref: MealDataBackupRef,
+    originRecommendationRef: MealDataBackupRef.nullable(),
+    eatenAt: z.string().datetime({ offset: true }),
+    placeId: z.string().max(64).nullable(),
+    placeName: z.string().max(120).nullable(),
+    memo: z.string().max(500).nullable(),
+    items: z.array(MealDataBackupItem).min(1).max(MEAL_MAX_ITEMS_PER_ENTRY),
+    photoRefs: z.array(MealDataBackupRef).max(MEAL_MAX_PHOTOS_PER_ENTRY),
+    createdAt: z.string().datetime({ offset: true }),
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
+export type MealDataBackupEntryType = z.infer<typeof MealDataBackupEntry>;
+
+export const MealDataBackupRecommendationEvent = MealRecommendationEvent.omit({
+  id: true,
+  recommendationId: true,
+})
+  .extend({
+    candidateName: z.string().max(60).nullable(),
+    candidateFoodId: z.string().max(64).nullable(),
+  })
+  .strict();
+export type MealDataBackupRecommendationEventType = z.infer<
+  typeof MealDataBackupRecommendationEvent
+>;
+
+export const MealDataBackupRecommendation = MealDataExportRecommendation.omit({
+  id: true,
+  feedback: true,
+  candidateRatings: true,
+  events: true,
+})
+  .extend({
+    ref: MealDataBackupRef,
+    items: z
+      .array(
+        MealRecommendationItem.extend({
+          name: z.string().trim().min(1).max(60),
+          reason: z.string().max(500),
+          tags: z.array(z.string().max(40)).max(20),
+          ingredients: z.array(z.string().max(80)).max(50),
+          allergenEvidence: z.array(z.string().max(240)).max(50),
+        }).strict(),
+      )
+      .max(MEAL_MAX_ITEMS_PER_ENTRY),
+    summary: z.string().max(2_000),
+    model: z.string().max(120).nullable(),
+    notice: z.string().max(1_000).nullable(),
+    profileHash: z.string().max(128),
+    createdAt: z.string().datetime({ offset: true }),
+    feedback: z
+      .object({
+        pickedName: z.string().max(60).nullable(),
+        rating: z.union([z.literal(-1), z.literal(1)]).nullable(),
+        eatenEntryRef: MealDataBackupRef.nullable(),
+      })
+      .strict()
+      .nullable(),
+    events: z
+      .array(MealDataBackupRecommendationEvent)
+      .max(MEAL_DATA_BACKUP_MAX_EVENTS_PER_RECOMMENDATION),
+  })
+  .strict();
+export type MealDataBackupRecommendationType = z.infer<typeof MealDataBackupRecommendation>;
+
+const MealDataBackupPreference = MealPreference.extend({
+  excludedFoods: z.array(z.string().max(40)).max(50),
+  allergens: z.array(MealAllergen).max(MealAllergen.options.length),
+  dislikedFoods: z.array(z.string().max(40)).max(50),
+  likedFoods: z.array(z.string().max(40)).max(50),
+  mealTypes: z.array(MealType).max(5),
+  slots: z.array(MealSlot).min(1).max(5),
+  updatedAt: z.string().datetime({ offset: true }),
+}).strict();
+
+export const MealDataBackup = z
+  .object({
+    format: z.literal(MEAL_DATA_BACKUP_FORMAT),
+    version: z.literal(MEAL_DATA_BACKUP_VERSION),
+    archiveId: z.string().uuid(),
+    exportedAt: z.string().datetime({ offset: true }),
+    notice: z
+      .object({
+        encoding: z.literal('json-base64'),
+        orphanPhotosSkipped: z.number().int().nonnegative(),
+        duplicatePolicy: z.literal('same-archive-id-is-idempotent'),
+        mergePolicy: z.literal('append-records-keep-existing-preference'),
+      })
+      .strict(),
+    entries: z.array(MealDataBackupEntry).max(MEAL_DATA_BACKUP_MAX_ENTRIES),
+    photos: z.array(MealDataBackupPhoto).max(MEAL_DATA_BACKUP_MAX_PHOTOS),
+    preference: MealDataBackupPreference.nullable(),
+    recommendations: z
+      .array(MealDataBackupRecommendation)
+      .max(MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS),
+  })
+  .strict();
+export type MealDataBackupType = z.infer<typeof MealDataBackup>;
+
+export const RestoreMealDataResult = z.object({
+  archiveId: z.string().uuid(),
+  duplicate: z.boolean(),
+  restored: z.object({
+    entries: z.number().int().nonnegative(),
+    items: z.number().int().nonnegative(),
+    photos: z.number().int().nonnegative(),
+    recommendations: z.number().int().nonnegative(),
+    recommendationEvents: z.number().int().nonnegative(),
+    preference: z.enum(['restored', 'kept_existing', 'none']),
+  }),
+});
+export type RestoreMealDataResultType = z.infer<typeof RestoreMealDataResult>;
+
 export const DeleteMealDataInput = z
   .object({ confirmation: z.literal(MEAL_DATA_DELETE_CONFIRMATION) })
   .strict();
@@ -610,6 +1076,9 @@ export const DeleteMealDataResult = z.object({
     items: z.number().int().nonnegative(),
     photos: z.number().int().nonnegative(),
     recommendations: z.number().int().nonnegative(),
+    recommendationEvents: z.number().int().nonnegative(),
+    dailyQuotas: z.number().int().nonnegative(),
+    importLedgers: z.number().int().nonnegative(),
     preference: z.number().int().nonnegative(),
     // 원본+썸네일 한 쌍을 가진 사진 토큰 수. DB 커밋 뒤 멱등 삭제를 시도한 개수다.
     photoFileSets: z.number().int().nonnegative(),

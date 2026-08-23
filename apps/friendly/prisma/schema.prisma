@@ -33,11 +33,14 @@ model User {
 
   votes VoteSession[]
 
-  airLocation AirUserLocation?
-  mealEntries MealEntry[]
-  mealPhotos MealPhoto[]
-  mealPreference MealPreference?
-  mealRecommendations MealRecommendation[]
+  airLocation              AirUserLocation?
+  mealEntries              MealEntry[]
+  mealPhotos               MealPhoto[]
+  mealPreference           MealPreference?
+  mealRecommendations      MealRecommendation[]
+  mealRecommendationEvents MealRecommendationEvent[]
+  mealDailyQuotas          MealDailyQuota[]
+  mealDataImports          MealDataImport[]
 
   @@map("users")
 }
@@ -55,7 +58,7 @@ enum Role {
 // 로그인 사용자 본인만 보고 편집할 수 있다 (개인 전용). 영수증 토큰·source·
 // totalAmount 같은 차수 단위 정보는 모두 SettlementRound 로 이동했다.
 model SettlementSession {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   userId            String
   // 1차 식당의 placeId 스냅샷. rounds[0].restaurantPlaceId 와 동기화.
   restaurantPlaceId String
@@ -67,7 +70,7 @@ model SettlementSession {
   // 생성/만료갱신, DELETE 로 회수. 토큰 자체는 추측 불가능한 7바이트 base64url(10자).
   // 만료(shareExpiresAt)가 항상 걸려 노출 창이 닫히므로 짧아도 안전.
   // unique 인덱스로 GET /share/settlements/:token 조회 O(1).
-  shareToken        String?  @unique
+  shareToken        String?   @unique
   // 공유 링크 만료 시각 — 지나면 GET 공개 조회가 410. owner 가 다시 share 하면
   // ttl 기준으로 갱신(연장)된다. null = 만료 없음(구버전 토큰 호환).
   shareExpiresAt    DateTime?
@@ -84,8 +87,8 @@ model SettlementSession {
   // 했으면 null. updatedAt 과 분리한 이유: updatedAt 은 shareToken 발급/회수
   // 에도 갱신되어 '수정됨' 배지 기준으로 부적합.
   editedAt          DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   rounds       SettlementRound[]
@@ -100,24 +103,24 @@ model SettlementSession {
 // 2차이든 동일하게 round 1행. 식당 정보·영수증·source·totalAmount 가 모두
 // round 단위.
 model SettlementRound {
-  id                String   @id @default(cuid())
-  sessionId         String
-  orderIndex        Int
+  id                  String  @id @default(cuid())
+  sessionId           String
+  orderIndex          Int
   // 차수마다 다른 식당일 수 있으므로 round 단위 식당 snapshot.
-  restaurantPlaceId String
-  restaurantName    String
+  restaurantPlaceId   String
+  restaurantName      String
   // 'MANUAL' | 'RECEIPT' — 차수마다 다를 수 있다 (1차 영수증, 2차 직접 입력 등).
-  source            String
-  totalAmount       Int?
-  warning           String?
+  source              String
+  totalAmount         Int?
+  warning             String?
   // 영수증 이미지 토큰 — data/receipts/<token>.jpg. MANUAL 차수는 null.
-  receiptImageToken String?
+  receiptImageToken   String?
   // 이 차수 items.amount 합 - discountAmount. session.grandTotal 의 부품.
-  itemsSubtotal     Int
+  itemsSubtotal       Int
   // 차수 할인 — 영수증 쿠폰/멤버십 등. null 이면 할인 없음. 양수면 한
   // 카테고리(discountCategory) 풀에서만 차감. 풀 음수 차단은 zod refine.
-  discountAmount    Int?
-  discountCategory  String?
+  discountAmount      Int?
+  discountCategory    String?
   // 분담 다듬기 — 카테고리별 잔여 처리 규칙을 JSON 으로 직렬화. 모양:
   // { [Category]: { leftoverParticipantIds: string[], roundUnit: number|null } }.
   // 수령자 1명=몰아주기, 여러 명=잔여 균등 분배. null/미설정이면 default(첫
@@ -128,9 +131,9 @@ model SettlementRound {
   //    members: [{ participantId, glasses }] }]. null/미설정이면 없음.
   groupSplits         String?
 
-  session    SettlementSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  items      SettlementItem[]
-  attendees  SettlementRoundParticipant[]
+  session   SettlementSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  items     SettlementItem[]
+  attendees SettlementRoundParticipant[]
 
   @@index([sessionId])
   @@map("settlement_rounds")
@@ -179,8 +182,8 @@ model SettlementParticipant {
   // 단골이 삭제되면 SetNull 로 끊고 정산 본체는 그대로 둔다(이력 보존).
   contactId         String?
 
-  session     SettlementSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  contact     SettlementContact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  session      SettlementSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contact      SettlementContact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
   roundEntries SettlementRoundParticipant[]
 
   @@index([sessionId])
@@ -192,10 +195,10 @@ model SettlementParticipant {
 // non-null 이면 마스터 default 를 무시하고 이 차수에서만 다른 값으로 친다.
 // (예: 마스터에선 '술 X' 인데 이 차수에선 마심 → excludeAlcoholOverride=false)
 model SettlementRoundParticipant {
-  id                        String  @id @default(cuid())
+  id                        String   @id @default(cuid())
   roundId                   String
   participantId             String
-  attended                  Boolean @default(true)
+  attended                  Boolean  @default(true)
   excludeAlcoholOverride    Boolean?
   excludeNonAlcoholOverride Boolean?
   excludeSideOverride       Boolean?
@@ -220,7 +223,7 @@ model SettlementRoundParticipant {
 // 안에서 unique — 정확 일치 자동완성 매칭의 키. 사용자가 직접 같은 이름을
 // 타이핑해도 이 키로 기존 row 와 매칭된다.
 model SettlementContact {
-  id                    String    @id @default(cuid())
+  id                    String   @id @default(cuid())
   userId                String
   // 표시용 — 정산을 만들 때 사용자가 입력한 마지막 표기 그대로 보존.
   name                  String?
@@ -229,15 +232,15 @@ model SettlementContact {
   // 만들 일이 없도록 service 에 전담.
   normalizedKey         String
   // 가장 최근 정산에서의 카테고리별 exclude 값. 다음 정산의 default 제안.
-  lastExcludeAlcohol    Boolean   @default(false)
-  lastExcludeNonAlcohol Boolean   @default(false)
-  lastExcludeSide       Boolean   @default(false)
+  lastExcludeAlcohol    Boolean  @default(false)
+  lastExcludeNonAlcohol Boolean  @default(false)
+  lastExcludeSide       Boolean  @default(false)
   // 등장 횟수. 자동완성 정렬·UI 노출 우선순위 후보. 현재는 표시만.
-  useCount              Int       @default(1)
+  useCount              Int      @default(1)
   // 자동완성 정렬용 (가장 최근에 쓴 사람을 위로).
-  lastUsedAt            DateTime  @default(now())
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  lastUsedAt            DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   participants SettlementParticipant[]
@@ -345,24 +348,24 @@ model LlmProviderConfig {
 // 같은 canonicalId 를 공유한다. 마이그레이션 직후엔 1:1 (각 Restaurant 가 자기
 // 전용 Canonical 보유) 상태로 시작하고, merge API 호출로 점차 통합된다.
 model CanonicalRestaurant {
-  id              String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   // 표시용 가게명. merge 시 primary(보통 Naver) 행 이름 채택.
-  name            String
+  name                  String
   // 대표 카테고리 (primary 행).
-  primaryCategory String?
+  primaryCategory       String?
   // 후보 매칭용 위경도 — 보통 primary 행과 동일. merge 시 primary 좌표 유지.
-  latitude        Float?
-  longitude       Float?
+  latitude              Float?
+  longitude             Float?
   // 빠른 후보 검색용 정규화 키 (normalizeName + 좌표 round). matching 유틸
   // 에서 채운다. 인덱스로 prefix scan.
-  searchKey       String?
+  searchKey             String?
   // 어드민이 "이 가게는 다른 출처와 합칠게 없어" 라고 닫은 시각. 한 번 닫으면
   // list 응답의 suggestion 이 더 이상 노출되지 않는다. null 이면 노출 후보.
   // 새 등록 시점에 자동 산출되는 1차 제안에 한정 — 사용자가 직접 "병합" 패널을
   // 열면 별도 후보 API 가 풀 후보를 다시 계산한다.
   suggestionDismissedAt DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   restaurants Restaurant[]
   proposalsA  CanonicalMergeProposal[] @relation("ProposalCanonicalA")
@@ -386,16 +389,16 @@ model CanonicalRestaurant {
 //   rejected   — 어드민이 "같은 가게 아님" 거절. 같은 쌍이 다시 제안되지 않음.
 //   superseded — 다른 머지로 둘 중 한 canonical 이 사라짐(=stale). UI 에서 숨김.
 model CanonicalMergeProposal {
-  id             String   @id @default(cuid())
-  canonicalAId   String
-  canonicalBId   String
-  score          Float
-  nameScore      Float
+  id           String    @id @default(cuid())
+  canonicalAId String
+  canonicalBId String
+  score        Float
+  nameScore    Float
   // 둘 다 좌표 있을 때만 채워짐. null 이면 이름 단독 매칭.
-  distanceM      Float?
-  status         String   @default("open")
-  createdAt      DateTime @default(now())
-  resolvedAt     DateTime?
+  distanceM    Float?
+  status       String    @default("open")
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
 
   canonicalA CanonicalRestaurant @relation("ProposalCanonicalA", fields: [canonicalAId], references: [id], onDelete: Cascade)
   canonicalB CanonicalRestaurant @relation("ProposalCanonicalB", fields: [canonicalBId], references: [id], onDelete: Cascade)
@@ -427,7 +430,7 @@ model Restaurant {
   firstCrawledAt DateTime @default(now())
   lastCrawledAt  DateTime @updatedAt
 
-  canonical      CanonicalRestaurant @relation(fields: [canonicalId], references: [id])
+  canonical      CanonicalRestaurant   @relation(fields: [canonicalId], references: [id])
   visitorReviews VisitorReview[]
   menuCanonicals MenuCanonical[]
   menuGroups     RestaurantMenuGroup[]
@@ -495,16 +498,16 @@ model RestaurantMenu {
 // 통계 GROUP BY 키. version 은 MENU_GROUPING_VERSION — 프롬프트/모델 변경
 // 시 stale 매핑 식별용.
 model MenuCanonical {
-  id             String   @id @default(cuid())
-  restaurantId   String
-  nameNorm       String
-  canonicalName  String
-  canonicalNorm  String
-  version        Int      @default(1)
-  model          String?
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  restaurantId  String
+  nameNorm      String
+  canonicalName String
+  canonicalNorm String
+  version       Int      @default(1)
+  model         String?
+  createdAt     DateTime @default(now())
 
-  restaurant Restaurant                @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant               @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   globalLink GlobalMenuCanonicalLink?
 
   @@unique([restaurantId, nameNorm])
@@ -516,19 +519,19 @@ model MenuCanonical {
 // LLM 으로 묶어 만든 단일 진실. 글로벌 메뉴 통계의 GROUP BY 키.
 // version 변경 시 이전 매핑 stale.
 model GlobalMenuCanonical {
-  id            String   @id @default(cuid())
+  id           String   @id @default(cuid())
   // 표시용 표기 — 전역 대표 이름 (예: "김치찌개").
-  displayName   String
+  displayName  String
   // 그룹 키 (displayName 의 normalizeTerm). 통계 쿼리의 GROUP BY 키.
-  globalKey     String   @unique
+  globalKey    String   @unique
   // 계층 카테고리 path (예: "한식 > 찌개 > 김치찌개"). null = 분류 없음.
   // 마지막 segment 는 displayName 과 같거나 약간 더 일반적인 표기. 통계 쿼리는
   // 항상 globalKey 로 GROUP BY 하고 categoryPath 는 표시·prefix 필터용.
-  categoryPath  String?
-  version       Int      @default(1)
-  model         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  categoryPath String?
+  version      Int      @default(1)
+  model        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   links GlobalMenuCanonicalLink[]
 
@@ -540,14 +543,14 @@ model GlobalMenuCanonical {
 // (restaurantId, localCanonicalNorm) 가 유니크 — 한 식당의 한 그룹은
 // 정확히 한 전역 그룹에만 속한다.
 model GlobalMenuCanonicalLink {
-  id                  String  @id @default(cuid())
+  id                 String @id @default(cuid())
   // MenuCanonical row 의 id 와 1:1 — onDelete: Cascade 로 동기화.
-  menuCanonicalId     String  @unique
+  menuCanonicalId    String @unique
   // 빠른 조회용 비정규화 (restaurantId + localCanonicalNorm). MenuCanonical
   // 을 매번 조인하지 않아도 글로벌 키로 곧장 통계 가능.
-  restaurantId        String
-  localCanonicalNorm  String
-  globalCanonicalId   String
+  restaurantId       String
+  localCanonicalNorm String
+  globalCanonicalId  String
 
   menuCanonical MenuCanonical       @relation(fields: [menuCanonicalId], references: [id], onDelete: Cascade)
   global        GlobalMenuCanonical @relation(fields: [globalCanonicalId], references: [id], onDelete: Cascade)
@@ -637,10 +640,10 @@ model ReviewSummary {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  review        VisitorReview   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  menuMentions  MenuMention[]
-  tags          ReviewTag[]
-  cluster       ReviewCluster?  @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  review       VisitorReview  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  menuMentions MenuMention[]
+  tags         ReviewTag[]
+  cluster      ReviewCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
 
   @@index([clusterId])
   @@map("review_summaries")
@@ -653,14 +656,14 @@ model ReviewSummary {
 model ReviewCluster {
   id               String   @id @default(cuid())
   restaurantId     String
-  ordinal          Int      // 표시 순서 — size 내림차순.
-  label            String   // LLM 한 줄 라벨 (예: "웨이팅이 긴 편")
-  tone             String   // positive | negative | mixed | neutral
-  size             Int      // 멤버 리뷰 수 = 카운트
-  keywordsJson     String   // c-TF-IDF 상위 키워드 string[] 직렬화
-  repReviewIdsJson String   // 대표 리뷰 id[] 직렬화 (읽기 시 body join)
-  aspectsJson      String   // 집계 관점→극성 카운트 직렬화 (부가 라벨)
-  clusterVersion   Int      // = CLUSTERING_VERSION (알고리즘/프롬프트 변경 시 ↑)
+  ordinal          Int // 표시 순서 — size 내림차순.
+  label            String // LLM 한 줄 라벨 (예: "웨이팅이 긴 편")
+  tone             String // positive | negative | mixed | neutral
+  size             Int // 멤버 리뷰 수 = 카운트
+  keywordsJson     String // c-TF-IDF 상위 키워드 string[] 직렬화
+  repReviewIdsJson String // 대표 리뷰 id[] 직렬화 (읽기 시 body join)
+  aspectsJson      String // 집계 관점→극성 카운트 직렬화 (부가 라벨)
+  clusterVersion   Int // = CLUSTERING_VERSION (알고리즘/프롬프트 변경 시 ↑)
   // 군집 시점의 검색가능(임베딩) 리뷰 수. 자동 재군집 게이트용 — 다음 크롤 때
   // 현재 수와 비교해 충분히 늘었을 때만 재군집(비용·churn 방지). 같은 식당 행 동일값.
   corpusSize       Int      @default(0)
@@ -677,7 +680,7 @@ model ReviewCluster {
 // 통계용. summaryId 단위로 한 번에 다시 써(delete + insert) 재분석/백필
 // 결과와 자연스럽게 동기화된다.
 model MenuMention {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   summaryId    String
   restaurantId String
   // 원문 표기. UI 노출 시 사용.
@@ -689,9 +692,9 @@ model MenuMention {
   sentiment    String
   // 메뉴 traits 원본 (string[] 직렬화). 빈도 집계가 필요해지면 별도 테이블로
   // 분리하지만, 지금은 응답 라운드트립용으로만 보존.
-  traitsJson   String   @default("[]")
+  traitsJson   String @default("[]")
 
-  summary      ReviewSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  summary ReviewSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
 
   @@index([nameNorm])
   @@index([restaurantId, nameNorm])
@@ -842,7 +845,7 @@ model LogConfig {
 // 한국어 태그라 스키마가 같다. 별도 테이블로 쪼개면 조회 쿼리만 두 번 나서
 // 캐시 키도 늘어난다.
 model ReviewTag {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   summaryId    String
   restaurantId String
   // 'tip' | 'keyword'
@@ -850,7 +853,7 @@ model ReviewTag {
   term         String
   termNorm     String
 
-  summary      ReviewSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  summary ReviewSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
 
   @@index([kind, termNorm])
   @@index([restaurantId, kind])
@@ -1111,7 +1114,7 @@ model VoteSession {
 // 투표 후보 — 등록 맛집의 저장 시점 스냅샷(즐겨찾기 계약의 축소판, 클라 제공).
 // Restaurant 마스터와 FK 로 묶지 않는다(삭제/재크롤에도 투표방 생존).
 model VoteOption {
-  id           String  @id @default(cuid())
+  id           String      @id @default(cuid())
   sessionId    String
   session      VoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   orderIndex   Int
@@ -1129,14 +1132,14 @@ model VoteOption {
 // 찬성 1건 — approval 투표라 (후보, 투표자) 단위 1행. voterKey 는 클라 영속
 // UUID(기기 단위 식별, 완벽하지 않음 수용), voterLabel 은 표시 이름 스냅샷.
 model VoteBallot {
-  id         String   @id @default(cuid())
+  id         String      @id @default(cuid())
   sessionId  String
   session    VoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   optionId   String
   option     VoteOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
   voterKey   String
   voterLabel String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime    @default(now())
 
   @@unique([optionId, voterKey])
   @@index([sessionId, voterKey])
@@ -1352,7 +1355,7 @@ model AirUserLocation {
 // (lat,lng) 복합 인덱스가 핵심이고, 저줌은 같은 인덱스 위에서 GROUP BY 집계한다.
 model LifeCctv {
   // 관리번호(전국 유일 — 실측 중복 0).
-  id          String @id
+  id          String  @id
   // 개방자치단체코드(7자리) — 관리 주체 식별.
   orgCode     String
   orgName     String
@@ -1465,52 +1468,97 @@ model LifeMasterSync {
 // 비어 있는 필드 채움 + 별칭·sourceRefs 추가 + popularity 누적). 사용자 식단 기록(MealItem)은
 // 이 행을 FK 없이 스냅샷(foodId 문자열)으로 가리킨다 — 재적재·삭제에 안전.
 model FoodItem {
-  id              String   @id @default(cuid())
-  name            String
+  id                   String   @id @default(cuid())
+  name                 String
   // normalizeTerm(name) — 매칭/중복 키.
-  nameNorm        String   @unique
+  nameNorm             String   @unique
   // 대표식품명(표준데이터 foodLv4Nm) — 변형 축약 키.
-  repName         String?
+  repName              String?
   // 별칭 표시 문자열 JSON 배열 / 별칭 정규화(normalizeTerm) JSON 배열(LIKE 검색용).
-  aliasesJson     String   @default("[]")
-  aliasNormsJson  String   @default("[]")
+  aliasesJson          String   @default("[]")
+  aliasNormsJson       String   @default("[]")
   // 2축 분류 + 요리 계통 — 값 집합은 @repo/api-contract FoodDishType/FoodMainIngredient/FoodCuisine.
-  dishType        String?
-  mainIngredient  String?
-  cuisine         String?
+  dishType             String?
+  mainIngredient       String?
+  cuisine              String?
   // 주요 재료 JSON 배열(레시피 DB). 없으면 null.
-  ingredientsJson String?
+  ingredientsJson      String?
+  // 구조화 알레르겐 best-effort 메타와 근거. 빈 배열은 안전 보장이 아니라 "알려진 항목 없음"이다.
+  allergensJson        String   @default("[]")
+  allergenEvidenceJson String   @default("[]")
   // 1인분 중량(g/ml) + 1인분 영양(표준데이터 100g 기준 × servingG/100 으로 환산).
-  servingG        Float?
-  kcal            Float?
-  carbG           Float?
-  proteinG        Float?
-  fatG            Float?
-  sodiumMg        Float?
-  sugarG          Float?
+  servingG             Float?
+  kcal                 Float?
+  carbG                Float?
+  proteinG             Float?
+  fatG                 Float?
+  sodiumMg             Float?
+  sugarG               Float?
   // 영양을 같은 계열 행에서 빌려왔으면 그 행의 이름(예: 불고기 ← '소불고기'). 직접 값이면 null.
   // UI 는 이 값이 있으면 "○○ 기준 추정"이라고 밝힌다.
-  nutritionFrom   String?
+  nutritionFrom        String?
   // 대표 출처('mfds-nutrition'|'mfds-recipe'|'mafra-recipe'|'hansik-800'|'menu-canonical'|'manual') + 그 id.
-  source          String
-  sourceId        String?
+  source               String
+  sourceId             String?
   // 원본 분류명(식품대분류 / RCP_PAT2 / 800선 카테고리 / categoryPath).
-  sourceCategory  String?
+  sourceCategory       String?
   // 병합된 다른 출처 참조 JSON 배열 [{source, sourceId}].
-  sourceRefsJson  String   @default("[]")
+  sourceRefsJson       String   @default("[]")
   // 외식 등장 식당 수 등 — 후보 풀·자동완성 가중.
-  popularity      Int      @default(0)
-  active          Boolean  @default(true)
+  popularity           Int      @default(0)
+  active               Boolean  @default(true)
   // LLM 2축 분류 버전/모델(매핑 테이블로만 채운 행은 null).
-  classifyVersion Int?
-  classifyModel   String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  classifyVersion      Int?
+  classifyModel        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  sourceObservations FoodSourceObservation[]
+  mergeConflicts     FoodMergeConflict[]
 
   @@index([source, sourceId])
   @@index([dishType, mainIngredient])
   @@index([active, popularity])
   @@map("food_items")
+}
+
+// 적재에서 관찰한 필드별 원본. 대표 FoodItem 값과 달라도 버리지 않고 충돌 검토 근거로 남긴다.
+model FoodSourceObservation {
+  id         String   @id @default(cuid())
+  foodItemId String
+  field      String
+  valueJson  String
+  source     String
+  sourceId   String?
+  observedAt DateTime @default(now())
+
+  foodItem FoodItem @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+
+  @@index([foodItemId, field])
+  @@index([source, sourceId])
+  @@map("food_source_observations")
+}
+
+// 기존 비어 있지 않은 값과 새 원본이 다를 때 운영자가 확인할 검토 큐.
+model FoodMergeConflict {
+  id                String    @id @default(cuid())
+  foodItemId        String
+  field             String
+  existingValueJson String
+  incomingValueJson String
+  source            String
+  sourceId          String?
+  // open|kept_existing|accepted_incoming|dismissed
+  status            String    @default("open")
+  resolutionJson    String?
+  createdAt         DateTime  @default(now())
+  resolvedAt        DateTime?
+
+  foodItem FoodItem @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([foodItemId, field])
+  @@map("food_merge_conflicts")
 }
 
 // 적재 잡 설정 — random-crawl 과 같은 "jobType 1행" 모델. cron 기본은 매월 1일 04:00
@@ -1557,27 +1605,29 @@ model FoodImportRun {
 // 카탈로그(FoodItem)·식당(Restaurant)에 FK 를 걸지 않는다: 카탈로그는 재적재로 갈리고
 // 식당은 재크롤/삭제된다. 필요한 값(foodId·분류·placeId·placeName)은 확정 시점 스냅샷.
 model MealEntry {
-  id              String   @id @default(cuid())
-  userId          String
+  id                     String    @id @default(cuid())
+  userId                 String
   // UTC. 정렬·표시용.
-  eatenAt         DateTime
+  eatenAt                DateTime
   // 'YYYY-MM-DD' 사용자 로컬 날짜 — 달력·통계 그룹 키(시간대 경계 오표시 방지).
-  eatenDate       String
+  eatenDate              String
   // breakfast|lunch|dinner|snack|late_night
-  slot            String
+  slot                   String
   // home|dining_out|delivery|convenience|other
-  mealType        String?
-  placeId         String?
-  placeName       String?
-  memo            String?
+  mealType               String?
+  placeId                String?
+  placeName              String?
+  memo                   String?
   // photo|manual|recommendation
-  source          String   @default("manual")
+  source                 String    @default("manual")
   // 추천에서 시작한 기록의 원본 id 스냅샷(FK 아님 — 추천 이력 정리 뒤에도 출처를 보존).
   originRecommendationId String?
   // 인식 원본 JSON {model, version, dishes[]} — 확정 후에도 보존(품질 측정).
-  recognitionJson String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  recognitionJson        String?
+  // 사진만 정리한 기록은 텍스트를 유지하면서 그 사실을 명시한다.
+  photoPurgedAt          DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   items  MealItem[]
@@ -1590,30 +1640,42 @@ model MealEntry {
 }
 
 model MealItem {
-  id             String  @id @default(cuid())
-  entryId        String
-  name           String
+  id                    String  @id @default(cuid())
+  entryId               String
+  name                  String
   // normalizeTerm(name) — 빈도·겹침 통계의 그룹 키(카탈로그 매칭 실패해도 묶인다).
-  nameNorm       String
+  nameNorm              String
   // FoodItem.id 스냅샷(FK 아님).
-  foodId         String?
-  dishType       String?
-  mainIngredient String?
-  cuisine        String?
+  foodId                String?
+  dishType              String?
+  mainIngredient        String?
+  cuisine               String?
   // small|normal|large
-  portion        String?
+  portion               String?
+  // 사용자가 직접 입력한 인분 수. 자동 질량 추정은 저장하지 않는다.
+  servings              Float?
+  // vision_ordinal|user_serving
+  portionSource         String?
   // false = 반찬·곁들임.
-  isMain         Boolean @default(true)
-  confidence     Float?
+  isMain                Boolean @default(true)
+  confidence            Float?
+  // 원본 recognitionJson.dishes[].recognitionDishId 와 안정적으로 연결.
+  recognitionDishId     String?
+  selectedCandidateRank Int?
+  // food_id|normalized_name|alias|none
+  catalogMatchedBy      String?
+  catalogMatchScore     Float?
   // recognized|manual|catalog|recommendation
-  source         String  @default("manual")
-  sortOrder      Int     @default(0)
+  source                String  @default("manual")
+  sortOrder             Int     @default(0)
   // 저장 시점 영양 스냅샷(1인분 × portion 배수). 카탈로그에 값이 없으면 null.
-  kcal           Float?
-  proteinG       Float?
-  sodiumMg       Float?
+  kcal                  Float?
+  proteinG              Float?
+  sodiumMg              Float?
   // 영양을 같은 계열 음식에서 빌려온 경우 그 출처 문구(FoodItem.nutritionFrom 스냅샷).
-  nutritionFrom  String?
+  nutritionFrom         String?
+  // direct|donor_estimate|missing
+  nutritionBasis        String  @default("missing")
 
   entry MealEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
@@ -1649,6 +1711,7 @@ model MealPreference {
   // MealWeights JSON — 추천 점수 함수의 가중치.
   weightsJson       String
   excludedFoodsJson String   @default("[]")
+  allergensJson     String   @default("[]")
   dislikedFoodsJson String   @default("[]")
   likedFoodsJson    String   @default("[]")
   mealTypesJson     String   @default("[]")
@@ -1683,9 +1746,88 @@ model MealRecommendation {
   feedbackJson  String?
   createdAt     DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events MealRecommendationEvent[]
 
   @@index([userId, createdAt])
   @@index([userId, targetDate, targetSlot])
   @@map("meal_recommendations")
+}
+
+model MealRecommendationEvent {
+  id               String   @id @default(cuid())
+  recommendationId String
+  userId           String
+  // shown|candidate_picked|set_rated|candidate_rated|restaurant_opened|logged|dismissed
+  kind             String
+  candidateName    String?
+  candidateFoodId  String?
+  candidateRank    Int?
+  rating           Int?
+  // mobile|web|server
+  platform         String
+  rankingVersion   Int
+  createdAt        DateTime @default(now())
+
+  recommendation MealRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([recommendationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([userId, kind, createdAt])
+  @@map("meal_recommendation_events")
+}
+
+// 재시작에도 유지되는 일일 비용 한도. 같은 사용자/날짜/목적을 SQLite transaction 안에서 갱신한다.
+model MealDailyQuota {
+  userId    String
+  date      String
+  purpose   String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, date, purpose])
+  @@index([date, purpose])
+  @@map("meal_daily_quotas")
+}
+
+// 같은 휴대용 백업을 여러 번 선택해도 데이터를 중복 생성하지 않게 하는 사용자별 원장.
+// archiveId는 백업 생성 시 서버가 발급한 UUID이며 복원 트랜잭션과 함께 커밋된다.
+model MealDataImport {
+  id                   String   @id @default(cuid())
+  userId               String
+  archiveId            String
+  entries              Int
+  items                Int
+  photos               Int
+  recommendations      Int
+  recommendationEvents Int
+  preferenceResult     String
+  importedAt           DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, archiveId])
+  @@index([userId, importedAt])
+  @@map("meal_data_imports")
+}
+
+// DB에서 사진 소유 행을 지운 뒤 파일 unlink가 실패해도 토큰을 잃지 않게 하는 durable outbox.
+// User FK를 일부러 걸지 않는다. 계정 삭제와 경합해도 cron이 사용자 폴더의 파일을 끝까지 지워야 한다.
+model MealPhotoDeletion {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String
+  reason    String
+  attempts  Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, token])
+  @@index([userId, attempts, createdAt])
+  @@index([attempts, createdAt])
+  @@map("meal_photo_deletions")
 }

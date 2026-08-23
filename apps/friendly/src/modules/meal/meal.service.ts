@@ -1,4 +1,10 @@
-import type { MealEntry as PrismaMealEntry, MealItem as PrismaMealItem, MealPhoto as PrismaMealPhoto, Prisma, PrismaClient } from '@prisma/client';
+import type {
+  MealEntry as PrismaMealEntry,
+  MealItem as PrismaMealItem,
+  MealPhoto as PrismaMealPhoto,
+  Prisma,
+  PrismaClient,
+} from '@prisma/client';
 import {
   FoodCuisine,
   FoodDishType,
@@ -6,7 +12,9 @@ import {
   MEAL_MAX_ITEMS_PER_ENTRY,
   MealEntrySource,
   MealItemSource,
+  MealNutritionBasis,
   MealPortion,
+  MealPortionSource,
   MealSlot,
   MealType,
   RecognizedDish,
@@ -39,6 +47,7 @@ import { FoodService } from '../food/food.service.js';
 import {
   findMealRecommendationCandidate,
   parseMealRecommendationFeedback,
+  parseMealRecommendationItems,
 } from '../meal-recommendation/meal-recommendation.feedback.js';
 import { mealMutationBarrier } from './meal-mutation-barrier.js';
 import type { MealPhotoFileRef, MealPhotoService } from './meal-photo.service.js';
@@ -74,7 +83,11 @@ const PRESET_MIN_SAMPLES = 3;
 
 /** UTC Date → Asia/Seoul 기준 자정으로부터의 분. 서버 시간대와 무관하게 계산한다. */
 export const minutesOfDayInSeoul = (d: Date): number => {
-  const hhmm = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+  const hhmm = d.toLocaleTimeString('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
   return parseTimeOfDay(hhmm) ?? 0;
 };
 
@@ -105,7 +118,9 @@ interface DecodedMealEntryCursor {
 
 /** eatenAt+id 복합 정렬 키를 클라이언트가 해석하지 않는 base64url 토큰으로 만든다. */
 export const encodeMealEntryCursor = (eatenAt: Date, id: string): string =>
-  Buffer.from(JSON.stringify({ v: 1, t: eatenAt.toISOString(), i: id }), 'utf8').toString('base64url');
+  Buffer.from(JSON.stringify({ v: 1, t: eatenAt.toISOString(), i: id }), 'utf8').toString(
+    'base64url',
+  );
 
 /** 새 opaque 커서와 전환 전 ISO eatenAt 커서를 함께 읽는다. 잘못된 값은 기존처럼 무시한다. */
 export const decodeMealEntryCursor = (cursor: string): DecodedMealEntryCursor | null => {
@@ -113,7 +128,12 @@ export const decodeMealEntryCursor = (cursor: string): DecodedMealEntryCursor | 
     const raw: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
     if (typeof raw === 'object' && raw !== null) {
       const value = raw as { v?: unknown; t?: unknown; i?: unknown };
-      if (value.v === 1 && typeof value.t === 'string' && typeof value.i === 'string' && value.i.length > 0) {
+      if (
+        value.v === 1 &&
+        typeof value.t === 'string' &&
+        typeof value.i === 'string' &&
+        value.i.length > 0
+      ) {
         const eatenAt = new Date(value.t);
         if (!Number.isNaN(eatenAt.getTime())) return { eatenAt, id: value.i };
       }
@@ -134,14 +154,28 @@ const toItem = (r: PrismaMealItem): MealItemType => ({
   mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, r.mainIngredient),
   cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, r.cuisine),
   portion: enumOrNull(MealPortion, r.portion),
+  servings: r.servings,
+  portionSource: enumOrNull(MealPortionSource, r.portionSource),
   isMain: r.isMain,
   confidence: r.confidence,
+  recognitionDishId: r.recognitionDishId,
+  selectedCandidateRank: r.selectedCandidateRank,
+  catalogMatchedBy:
+    r.catalogMatchedBy === 'food_id' ||
+    r.catalogMatchedBy === 'normalized_name' ||
+    r.catalogMatchedBy === 'alias' ||
+    r.catalogMatchedBy === 'fuzzy' ||
+    r.catalogMatchedBy === 'none'
+      ? r.catalogMatchedBy
+      : null,
+  catalogMatchScore: r.catalogMatchScore,
   source: enumOrNull(MealItemSource, r.source) ?? 'manual',
   sortOrder: r.sortOrder,
   kcal: r.kcal,
   proteinG: r.proteinG,
   sodiumMg: r.sodiumMg,
   nutritionFrom: r.nutritionFrom,
+  nutritionBasis: enumOrNull(MealNutritionBasis, r.nutritionBasis) ?? 'missing',
 });
 
 const toPhoto = (r: PrismaMealPhoto): MealPhotoType => ({
@@ -200,8 +234,11 @@ export const toMealEntry = (
   originRecommendationId: row.originRecommendationId,
   items: [...row.items].sort((a, b) => a.sortOrder - b.sortOrder).map(toItem),
   photos:
-    opts.withPhotos === false ? [] : [...row.photos].sort((a, b) => a.sortOrder - b.sortOrder).map(toPhoto),
+    opts.withPhotos === false
+      ? []
+      : [...row.photos].sort((a, b) => a.sortOrder - b.sortOrder).map(toPhoto),
   recognition: opts.withRecognition ? parseRecognition(row.recognitionJson) : null,
+  photoPurgedAt: row.photoPurgedAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
@@ -263,6 +300,8 @@ export class MealService {
       name: null,
       lastEatenDate: null,
       portion: null,
+      servings: null,
+      portionSource: null,
       isMain: null,
       dishType: null,
       mainIngredient: null,
@@ -284,6 +323,8 @@ export class MealService {
       name: item.name,
       lastEatenDate: item.entry.eatenDate,
       portion: enumOrNull(MealPortion, item.portion),
+      servings: item.servings,
+      portionSource: enumOrNull(MealPortionSource, item.portionSource),
       isMain: item.isMain,
       dishType: enumOrNull<FoodDishTypeType>(FoodDishType, item.dishType),
       mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, item.mainIngredient),
@@ -304,16 +345,31 @@ export class MealService {
       let dishType = item.dishType ?? null;
       let mainIngredient = item.mainIngredient ?? null;
       let cuisine = item.cuisine ?? null;
+      let invalidSuppliedFoodId = false;
+      let validSuppliedFoodId = false;
       // 영양은 항상 서버가 붙인다(클라이언트가 보내지 않는다). 클라이언트가 foodId 를 이미
       // 골라 왔으면 그 행을 그대로 보고, 아니면 이름으로 매칭한다.
-      let nutrition: { kcal: number | null; proteinG: number | null; sodiumMg: number | null; nutritionFrom: string | null } | null =
-        null;
+      let nutrition: {
+        kcal: number | null;
+        proteinG: number | null;
+        sodiumMg: number | null;
+        nutritionFrom: string | null;
+      } | null = null;
       if (foodId) {
         const row = await this.food.getNutrition(foodId);
-        if (row) nutrition = row;
+        if (row) {
+          nutrition = row;
+          validSuppliedFoodId = true;
+        } else {
+          // 삭제·비활성·조작된 id를 이름 매칭 결과의 영양과 결합하지 않는다.
+          foodId = null;
+          invalidSuppliedFoodId = true;
+        }
       }
+      let fallbackMatch: Awaited<ReturnType<FoodService['matchFood']>> = null;
       if (!foodId || !dishType || !mainIngredient || !cuisine || !nutrition) {
         const match = await this.food.matchFood(name);
+        fallbackMatch = match;
         if (match) {
           foodId = foodId ?? match.foodId;
           dishType = dishType ?? match.dishType;
@@ -327,10 +383,27 @@ export class MealService {
           };
         }
       }
-      // 1인분 값 × 눈대중 배수. 소수점은 표시 단위(kcal 1, g 0.1)까지만 남긴다.
-      const f = mealPortionFactor(item.portion);
+      // 사용자가 직접 인분 수를 넣었으면 그 값이 우선이다. 없을 때만 서수(small/normal/large)
+      // 배수를 쓴다. 사진에서 g/인분을 자동으로 만들어 내지는 않는다.
+      const f = item.servings ?? mealPortionFactor(item.portion);
       const scale = (v: number | null, digits: number): number | null =>
         v === null ? null : Number((v * f).toFixed(digits));
+      const hasNutrition =
+        nutrition !== null &&
+        [nutrition.kcal, nutrition.proteinG, nutrition.sodiumMg].some((value) => value !== null);
+      const nutritionFrom = hasNutrition ? (nutrition?.nutritionFrom ?? null) : null;
+      const inferredMatchedBy = validSuppliedFoodId
+        ? 'food_id'
+        : fallbackMatch
+          ? fallbackMatch.matchedBy === 'exact'
+            ? 'normalized_name'
+            : fallbackMatch.matchedBy
+          : foodId
+            ? 'food_id'
+            : 'none';
+      const inferredMatchScore = validSuppliedFoodId
+        ? 1
+        : (fallbackMatch?.score ?? (foodId ? 1 : null));
       out.push({
         name,
         nameNorm,
@@ -339,14 +412,31 @@ export class MealService {
         mainIngredient,
         cuisine,
         portion: item.portion ?? null,
+        servings: item.servings ?? null,
+        portionSource:
+          item.portionSource ??
+          (item.servings !== null && item.servings !== undefined
+            ? 'user_serving'
+            : item.portion
+              ? 'vision_ordinal'
+              : null),
         isMain: item.isMain,
         confidence: item.confidence ?? null,
+        recognitionDishId: item.recognitionDishId ?? null,
+        selectedCandidateRank: item.selectedCandidateRank ?? null,
+        catalogMatchedBy: invalidSuppliedFoodId
+          ? inferredMatchedBy
+          : (item.catalogMatchedBy ?? inferredMatchedBy),
+        catalogMatchScore: invalidSuppliedFoodId
+          ? inferredMatchScore
+          : (item.catalogMatchScore ?? inferredMatchScore),
         source: item.source,
         sortOrder: i,
         kcal: scale(nutrition?.kcal ?? null, 0),
         proteinG: scale(nutrition?.proteinG ?? null, 1),
         sodiumMg: scale(nutrition?.sodiumMg ?? null, 0),
-        nutritionFrom: nutrition?.nutritionFrom ?? null,
+        nutritionFrom,
+        nutritionBasis: hasNutrition ? (nutritionFrom ? 'donor_estimate' : 'direct') : 'missing',
       });
     }
     return out;
@@ -356,7 +446,10 @@ export class MealService {
     return mealMutationBarrier.runExclusive(userId, () => this.createUnlocked(userId, input));
   }
 
-  private async createUnlocked(userId: string, input: CreateMealEntryInputType): Promise<MealEntryType> {
+  private async createUnlocked(
+    userId: string,
+    input: CreateMealEntryInputType,
+  ): Promise<MealEntryType> {
     const originRecommendationId = input.originRecommendationId?.trim() || null;
     if ((input.source === 'recommendation') !== (originRecommendationId !== null)) {
       throw new MealServiceError('invalid', '추천 출처와 원본 추천 id가 일치하지 않습니다.');
@@ -370,24 +463,39 @@ export class MealService {
       let recommendationFeedback: {
         id: string;
         pickedName: string;
+        candidateFoodId: string | null;
+        candidateRank: number;
+        rankingVersion: number;
         rating: number | null;
       } | null = null;
       if (originRecommendationId) {
         const recommendation = await tx.mealRecommendation.findFirst({
           where: { id: originRecommendationId, userId },
-          select: { id: true, itemsJson: true, feedbackJson: true },
+          select: { id: true, itemsJson: true, feedbackJson: true, promptVersion: true },
         });
         if (!recommendation) throw new MealServiceError('invalid', '원본 추천을 찾을 수 없습니다.');
         const pickedName = findMealRecommendationCandidate(
           recommendation.itemsJson,
           input.items.filter((item) => item.isMain).map((item) => item.name),
         );
-        if (!pickedName) throw new MealServiceError('invalid', '추천 후보와 일치하는 주 음식이 없습니다.');
+        if (!pickedName)
+          throw new MealServiceError('invalid', '추천 후보와 일치하는 주 음식이 없습니다.');
         const previous = parseMealRecommendationFeedback(recommendation.feedbackJson);
         if (previous?.eatenEntryId) {
           throw new MealServiceError('invalid', '이미 식단 기록으로 연결된 추천입니다.');
         }
-        recommendationFeedback = { id: recommendation.id, pickedName, rating: previous?.rating ?? null };
+        const candidates = parseMealRecommendationItems(recommendation.itemsJson);
+        const candidateRank = candidates.findIndex(
+          (candidate) => normalizeTerm(candidate.name) === normalizeTerm(pickedName),
+        );
+        recommendationFeedback = {
+          id: recommendation.id,
+          pickedName,
+          candidateFoodId: candidateRank >= 0 ? (candidates[candidateRank]?.foodId ?? null) : null,
+          candidateRank: Math.max(0, candidateRank),
+          rankingVersion: recommendation.promptVersion,
+          rating: previous?.rating ?? null,
+        };
       }
       const created = await tx.mealEntry.create({
         data: {
@@ -419,6 +527,18 @@ export class MealService {
             }),
           },
         });
+        await tx.mealRecommendationEvent.create({
+          data: {
+            recommendationId: recommendationFeedback.id,
+            userId,
+            kind: 'logged',
+            candidateName: recommendationFeedback.pickedName,
+            candidateFoodId: recommendationFeedback.candidateFoodId,
+            candidateRank: recommendationFeedback.candidateRank,
+            platform: 'server',
+            rankingVersion: recommendationFeedback.rankingVersion,
+          },
+        });
       }
       return created;
     });
@@ -434,12 +554,23 @@ export class MealService {
     return toMealEntry(row, { withRecognition: true });
   }
 
-  async update(userId: string, id: string, input: UpdateMealEntryInputType): Promise<MealEntryType> {
+  async update(
+    userId: string,
+    id: string,
+    input: UpdateMealEntryInputType,
+  ): Promise<MealEntryType> {
     return mealMutationBarrier.runExclusive(userId, () => this.updateUnlocked(userId, id, input));
   }
 
-  private async updateUnlocked(userId: string, id: string, input: UpdateMealEntryInputType): Promise<MealEntryType> {
-    const existing = await this.prisma.mealEntry.findFirst({ where: { id, userId }, select: { id: true } });
+  private async updateUnlocked(
+    userId: string,
+    id: string,
+    input: UpdateMealEntryInputType,
+  ): Promise<MealEntryType> {
+    const existing = await this.prisma.mealEntry.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
     if (!existing) throw new MealServiceError('not_found', '기록을 찾을 수 없습니다.');
 
     // 항목/기록을 바꾸기 전에 토큰 전체의 소유권·미사용 상태를 먼저 확인한다.
@@ -455,6 +586,9 @@ export class MealService {
     if (input.placeId !== undefined) data.placeId = input.placeId;
     if (input.placeName !== undefined) data.placeName = input.placeName;
     if (input.memo !== undefined) data.memo = input.memo;
+    // 보존 정책으로 사진만 정리된 기록에 새 사진을 붙이면 더 이상 "사진 정리됨" 상태가 아니다.
+    // 사진 attach와 같은 transaction에서 해제해 메타데이터와 실제 연결이 엇갈리지 않게 한다.
+    if (input.photoTokens !== undefined && input.photoTokens.length > 0) data.photoPurgedAt = null;
     // 영양/카탈로그 조회는 트랜잭션 밖에서 끝내 잠금 시간을 짧게 유지한다.
     const itemData = input.items !== undefined ? await this.buildItemData(input.items) : null;
     let detachedFiles: MealPhotoFileRef[] = [];
@@ -523,17 +657,32 @@ export class MealService {
       };
     }
     if (query.slot) where.slot = query.slot;
+    if (query.mealType) where.mealType = query.mealType;
+    if (query.source) where.source = query.source;
+    const and: Prisma.MealEntryWhereInput[] = [];
+    if (query.q) {
+      and.push({
+        OR: [
+          { placeName: { contains: query.q } },
+          { memo: { contains: query.q } },
+          { items: { some: { name: { contains: query.q } } } },
+        ],
+      });
+    }
     if (query.cursor) {
       const cursor = decodeMealEntryCursor(query.cursor);
       if (cursor?.id) {
-        where.OR = [
-          { eatenAt: { lt: cursor.eatenAt } },
-          { eatenAt: cursor.eatenAt, id: { lt: cursor.id } },
-        ];
+        and.push({
+          OR: [
+            { eatenAt: { lt: cursor.eatenAt } },
+            { eatenAt: cursor.eatenAt, id: { lt: cursor.id } },
+          ],
+        });
       } else if (cursor) {
         where.eatenAt = { lt: cursor.eatenAt };
       }
     }
+    if (and.length > 0) where.AND = and;
     const rows = await this.prisma.mealEntry.findMany({
       where,
       include: { items: true, photos: query.withPhotos !== false },
@@ -542,7 +691,8 @@ export class MealService {
     });
     const page = rows.slice(0, query.limit);
     const last = page[page.length - 1];
-    const nextCursor = rows.length > query.limit && last ? encodeMealEntryCursor(last.eatenAt, last.id) : null;
+    const nextCursor =
+      rows.length > query.limit && last ? encodeMealEntryCursor(last.eatenAt, last.id) : null;
     return {
       items: page.map((r) =>
         toMealEntry({ ...r, photos: 'photos' in r ? r.photos : [] } as EntryWithRelations, {

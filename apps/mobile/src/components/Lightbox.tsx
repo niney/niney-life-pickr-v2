@@ -3,12 +3,20 @@ import { Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-nativ
 import { Image } from 'expo-image';
 import Gallery from 'react-native-awesome-gallery';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   images: string[];
   index: number;
   onChangeIndex(next: number): void;
   onClose(): void;
+  actions?: ReadonlyArray<{
+    key: string;
+    label: string;
+    accessibilityLabel?: string;
+    disabled?: boolean;
+    onPress(index: number): void;
+  }>;
 }
 
 // 풀스크린 이미지 뷰어. 페이징·핀치/더블탭 줌·줌 상태 패닝·아래로 쓸어내려
@@ -17,7 +25,8 @@ interface Props {
 //
 // 닫기: 단일 탭(onTap) / 아래로 쓸어내리기(onSwipeToClose) / X 버튼 / 안드로이드
 //       뒤로가기(Modal onRequestClose). 줌: 핀치 + 더블탭.
-export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
+export const Lightbox = ({ images, index, onChangeIndex, onClose, actions = [] }: Props) => {
+  const insets = useSafeAreaInsets();
   const safeIdx =
     images.length > 0 ? ((index % images.length) + images.length) % images.length : 0;
   // 인디케이터 표시용 현재 인덱스 — 갤러리 스와이프에 맞춰 갱신.
@@ -59,17 +68,53 @@ export const Lightbox = ({ images, index, onChangeIndex, onClose }: Props) => {
           )}
         />
 
-        <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="닫기" style={styles.closeBtn}>
+        <Pressable
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityLabel="닫기"
+          style={[styles.closeBtn, { top: Math.max(16, insets.top + 8) }]}
+        >
           <Text style={styles.closeText}>✕</Text>
         </Pressable>
 
         {images.length > 1 && (
-          <View style={[styles.counter, { pointerEvents: 'none' }]}>
+          <View
+            style={[
+              styles.counter,
+              {
+                bottom:
+                  actions.length > 0
+                    ? Math.max(82, insets.bottom + 70)
+                    : Math.max(24, insets.bottom + 8),
+              },
+              { pointerEvents: 'none' },
+            ]}
+          >
             <Text style={styles.counterText}>
               {current + 1} / {images.length}
             </Text>
           </View>
         )}
+
+        {actions.length > 0 ? (
+          <View style={[styles.actionBar, { bottom: Math.max(20, insets.bottom + 8) }]}>
+            {actions.map((action) => (
+              <Pressable
+                key={action.key}
+                accessibilityRole="button"
+                accessibilityLabel={action.accessibilityLabel ?? action.label}
+                disabled={action.disabled}
+                onPress={() => action.onPress(current)}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  { opacity: action.disabled ? 0.45 : pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={styles.actionText}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </GestureHandlerRootView>
     </Modal>
   );
@@ -99,4 +144,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   counterText: { color: '#fff', fontSize: 12, fontVariant: ['tabular-nums'] },
+  actionBar: {
+    position: 'absolute',
+    bottom: 20,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    minWidth: 84,
+    height: 42,
+    paddingHorizontal: 18,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

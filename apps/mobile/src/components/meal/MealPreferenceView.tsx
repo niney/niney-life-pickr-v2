@@ -9,6 +9,9 @@ import {
 } from '@repo/shared';
 import {
   MEAL_WEIGHT_PRESETS,
+  MEAL_ALLERGEN_LABEL,
+  MealAllergen,
+  type MealAllergenType,
   type MealSlotType,
   type MealTypeType,
   type MealWeightsType,
@@ -42,6 +45,7 @@ export const MealPreferenceView = () => {
 
   const [weights, setWeights] = useState<MealWeightsType | null>(null);
   const [excluded, setExcluded] = useState('');
+  const [allergens, setAllergens] = useState<MealAllergenType[]>([]);
   const [disliked, setDisliked] = useState('');
   const [liked, setLiked] = useState('');
   const [slots, setSlots] = useState<MealSlotType[]>([]);
@@ -54,6 +58,7 @@ export const MealPreferenceView = () => {
     if (!pref.data || dirty) return;
     setWeights(pref.data.weights);
     setExcluded(pref.data.excludedFoods.join(', '));
+    setAllergens(pref.data.allergens);
     setDisliked(pref.data.dislikedFoods.join(', '));
     setLiked(pref.data.likedFoods.join(', '));
     setSlots(pref.data.slots);
@@ -85,6 +90,7 @@ export const MealPreferenceView = () => {
       {
         weights,
         excludedFoods: parseList(excluded),
+        allergens,
         dislikedFoods: parseList(disliked),
         likedFoods: parseList(liked),
         slots,
@@ -102,7 +108,7 @@ export const MealPreferenceView = () => {
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {pref.data && !pref.data.onboarded ? (
         <Note tone="muted">
-          첫 추천을 위해 좋아하는 음식, 덜 선호하는 음식, 절대 제외할 음식과 끼니를 고른 뒤 저장해 주세요.
+          첫 추천을 위해 좋아하는 음식, 덜 선호하는 음식, 알레르기 주의 항목과 끼니를 고른 뒤 저장해 주세요.
           기록이 적을 때도 이 설정을 먼저 반영해요.
         </Note>
       ) : null}
@@ -165,7 +171,30 @@ export const MealPreferenceView = () => {
 
       <Card>
         <CardTitle title="먹는 것" />
-        <FieldLabel>절대 제외 (알레르기·못 먹는 음식)</FieldLabel>
+        <FieldLabel>알레르기 주의 항목</FieldLabel>
+        <ChipRow>
+          {MealAllergen.options.map((allergen) => (
+            <Chip
+              key={allergen}
+              label={MEAL_ALLERGEN_LABEL[allergen]}
+              selected={allergens.includes(allergen)}
+              onPress={() => {
+                setAllergens(
+                  allergens.includes(allergen)
+                    ? allergens.filter((value) => value !== allergen)
+                    : [...allergens, allergen],
+                );
+                setDirty(true);
+              }}
+            />
+          ))}
+        </ChipRow>
+        <Note tone="warn">
+          알려진 음식명·재료만 보조적으로 걸러요. 원재료 누락이나 조리 중 교차접촉까지 확인할 수 없으므로,
+          심한 알레르기는 제품 표시와 식당에 반드시 다시 확인해 주세요.
+        </Note>
+
+        <FieldLabel>취향상 제외할 음식</FieldLabel>
         <TextInput
           value={excluded}
           onChangeText={(v) => {
@@ -177,7 +206,7 @@ export const MealPreferenceView = () => {
           style={styles.input}
         />
         <Text style={styles.hint}>
-          이름과 알려진 재료가 맞으면 완전히 빼요. 재료 정보가 없는 카탈로그 음식은 막지 못할 수 있어요.
+          이름과 알려진 재료가 맞으면 추천 후보에서 빼지만, 재료 정보가 없는 음식은 남을 수 있어요.
         </Text>
 
         <FieldLabel>덜 선호하는 음식</FieldLabel>

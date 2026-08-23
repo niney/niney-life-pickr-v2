@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FoodCuisine, FoodDishType, FoodMainIngredient, FoodSource } from '@repo/api-contract';
 import { FOOD_CUISINES, FOOD_DISH_TYPES, FOOD_MAIN_INGREDIENTS, FOOD_SOURCES } from '@repo/utils';
 import { buildApp } from '../../app.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import {
   __foodImportInternals,
+  FoodImportService,
   applyNameRules,
   normalizeHansik800Rows,
   normalizeMafraRows,
@@ -17,6 +19,7 @@ import {
   parseRecipeIngredients,
   upsertFoodSeeds,
 } from './food-import.service.js';
+import { foodImportRegistry } from './food-import-registry.js';
 import { FoodService, foodNameSimilarity } from './food.service.js';
 
 // 정규화는 순수 함수 — 픽스처(실응답 형식을 본뜬 최소 행)로 네트워크 없이 검증. upsert·검색·매칭은
@@ -426,5 +429,133 @@ describe('normalizeMfdsNutritionRows — 대표 행 선택', () => {
   it('같은 이름 안에서는 분석함량이 재료량 기반 산출보다 우선한다', () => {
     const { seeds } = normalizeMfdsNutritionRows([rows[2]!, rows[1]!] as never);
     expect(seeds.find((s) => s.name === '김치찌개')?.nutrition?.kcal).toBe(244);
+  });
+});
+
+describe('FoodImportService 실행 lifecycle (fake DB)', () => {
+  interface FakeRun {
+    id: string;
+    trigger: string;
+    status: string;
+    sourcesJson: string | null;
+    statsJson: string | null;
+    classifiedCount: number;
+    startedAt: Date;
+    finishedAt: Date | null;
+    error: string | null;
+  }
+
+  const makeDb = (opts: { failCreateOnce?: boolean; failUpdateOnce?: boolean } = {}) => {
+    const runs = new Map<string, FakeRun>();
+    let failCreate = opts.failCreateOnce ?? false;
+    let failUpdate = opts.failUpdateOnce ?? false;
+    const foodImportRun = {
+      findFirst: vi.fn(async () => {
+        const row = [...runs.values()].find((run) => run.status === 'running');
+        return row ? { id: row.id } : null;
+      }),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        if (failCreate) {
+          failCreate = false;
+          throw new Error('forced run create failure');
+        }
+        const row: FakeRun = {
+          id: String(data.id),
+          trigger: String(data.trigger),
+          status: String(data.status),
+          sourcesJson: typeof data.sourcesJson === 'string' ? data.sourcesJson : null,
+          statsJson: null,
+          classifiedCount: 0,
+          startedAt: new Date(),
+          finishedAt: null,
+          error: null,
+        };
+        runs.set(row.id, row);
+        return row;
+      }),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<FakeRun> }) => {
+        if (failUpdate) {
+          failUpdate = false;
+          throw new Error('forced terminal update failure');
+        }
+        const row = runs.get(where.id);
+        if (!row) throw new Error('run row missing');
+        Object.assign(row, data);
+        return row;
+      }),
+      updateMany: vi.fn(async ({ where, data }: { where: { id: string; status?: string }; data: Partial<FakeRun> }) => {
+        const row = runs.get(where.id);
+        if (!row || (where.status !== undefined && row.status !== where.status)) return { count: 0 };
+        Object.assign(row, data);
+        return { count: 1 };
+      }),
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => runs.get(where.id) ?? null),
+      findMany: vi.fn(async () => [...runs.values()]),
+    };
+    const prisma = {
+      foodImportRun,
+      foodImportConfig: {
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(async () => ({})),
+      },
+    } as unknown as PrismaClient;
+    return {
+      prisma,
+      runs,
+      runningCount: (): number => [...runs.values()].filter((run) => run.status === 'running').length,
+    };
+  };
+
+  const makeService = (prisma: PrismaClient, operationLog?: unknown): FoodImportService =>
+    new FoodImportService(prisma, {
+      keys: { nutrition: '', recipe: '', mafra: '' },
+      classify: null,
+      operationLog: operationLog as never,
+      fetchOverride: { nutrition: async () => [] },
+    });
+
+  it('begin 후 실행 행 생성이 실패해도 registry를 running으로 남기지 않는다', async () => {
+    const db = makeDb({ failCreateOnce: true });
+    const service = makeService(db.prisma);
+    await expect(
+      service.runScheduled('manual', { sources: ['mfds-nutrition'], classify: false }),
+    ).rejects.toThrow('forced run create failure');
+    expect(foodImportRegistry.isActive()).toBe(false);
+    expect(foodImportRegistry.snapshot()).toMatchObject({ status: 'failed' });
+    expect(db.runningCount()).toBe(0);
+
+    // 직전 실패가 메모리 가드를 고정하지 않아 다음 회차가 정상 시작된다.
+    const next = await service.runScheduled('manual', { sources: ['mfds-nutrition'], classify: false });
+    expect(next.status).toBe('done');
+    expect(foodImportRegistry.isActive()).toBe(false);
+  });
+
+  it('최종 update의 순간 실패를 조건부 보상 update로 복구해 DB와 registry를 terminal로 만든다', async () => {
+    const db = makeDb({ failUpdateOnce: true });
+    const service = makeService(db.prisma);
+    const run = await service.runScheduled('manual', { sources: ['mfds-nutrition'], classify: false });
+    expect(run.status).toBe('done');
+    expect(foodImportRegistry.isActive()).toBe(false);
+    expect(db.runs.get(run.runId)).toMatchObject({
+      status: 'done',
+      finishedAt: expect.any(Date),
+    });
+    expect(db.runningCount()).toBe(0);
+  });
+
+  it('부가 operation log 시작 실패는 본 실행의 terminal 저장을 막지 않는다', async () => {
+    const operationLog = {
+      startRun: vi.fn().mockRejectedValue(new Error('forced operation log failure')),
+      log: vi.fn(),
+      finishRun: vi.fn(),
+    };
+    const db = makeDb();
+    const run = await makeService(db.prisma, operationLog).runScheduled('manual', {
+      sources: ['mfds-nutrition'],
+      classify: false,
+    });
+    expect(run.status).toBe('done');
+    expect(foodImportRegistry.isActive()).toBe(false);
+    expect(operationLog.finishRun).not.toHaveBeenCalled();
   });
 });

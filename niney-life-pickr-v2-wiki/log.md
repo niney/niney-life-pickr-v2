@@ -3,12 +3,12 @@
 ## 2026-08-23 (23rd compile)
 
 **Topics updated:** none
-**New topics:** meal(개인 식단 — 앱 사진/수동 기록·vision 인식/인간 교정·선호/날씨 기반 추천+결정적 fallback·달력/영양/추천 funnel/주간 insight·앱 로컬 알림·JSON export/강한 확인 전체 삭제; 사용자별 공통 FIFO write barrier가 기록/사진/선호/추천/삭제를 직렬화, DB commit 뒤 strict 사진 폴더 삭제 실패는 200 차단+재호출 복구; request-token 401 guard와 principal 전환 QueryClient cancel/clear), food(6출처 음식 카탈로그 — 공공/내부 데이터 월간 import+ADMIN SSE·nameNorm 보존 병합·FOOD_CLASSIFY_VERSION 분류·설명 가능한 영양 추정·source/exact 기반 음식→식당 역검색·k=2 사진 인식 품질)
+**New topics:** meal(개인 식단 — 검색/필터·vision lineage/confidence·SQLite 일일 quota·알레르기 best-effort·immutable 추천 event/funnel과 latest-candidate 학습·영양 provenance/coverage·계정별 앱 draft/reminder/photo cache/offline queue·version 1 JSON+base64 backup/멱등 restore·사진 retention deletion outbox·사용자 공통 FIFO write barrier·request-token/principal cache 경계), food(6출처 카탈로그 — 월간 import+ADMIN SSE·nameNorm 병합·field observation/open conflict·optimistic 해결과 accept rebase·영양/allergen 근거·exact 식당 역검색·lineage/confidence+k=2 인식 품질)
 **New concepts:** none
-**Concepts updated:** zod-ssot-buildless(+food/meal 계약), sse-token-auth(+food import events), platform-ui-split(+mealDraftStore 웹 sessionStorage/앱 AsyncStorage + 입력 앱/조회 웹 역할 분리), in-memory-singleton-gates(+food 단일 import/meal quota·동일 추천 join·사용자 write barrier), versioned-llm-prompts(+food classify/meal recognition·recommendation), operation-log-instrumentation(+food import/meal AI 실행)
-**Sources scanned:** ~983 (22차 ~909 + meal 46 + food 28)
-**Sources changed:** 식단/음식 도메인 신설·하드닝 구현군 + 인증 principal/cache 경계; 신규 위키 source 74개
-**Notes:** food와 meal은 마스터/개인 데이터 경계로 분리했다. food는 자동완성·인식 매칭·영양·추천 후보/식당 근거를 제공하지만 meal은 값을 스냅샷으로 가져가 카탈로그 재적재가 과거 기록을 바꾸지 않는다. 식당 역검색은 fuzzy를 금지하고 현재 판매 보장 아님 notice를 계약에 고정했다. meal 전체 삭제 경쟁은 라우트별 서비스 락이 아니라 모듈 singleton 사용자 FIFO 한 곳에서 막고, 사진 파일 side effect는 DB commit 뒤 수행한다. 웹은 조회/분석/추천/설정, 앱은 촬영/편집/재기록/알림, 어드민은 food catalog/import/recognition-quality를 담당한다. 토픽 26→28, 컨셉 17 유지.
+**Concepts updated:** zod-ssot-buildless(+food/meal 계약), sse-token-auth(+food import events), platform-ui-split(+principal별 draft/reminder/photo queue/cache), in-memory-singleton-gates(+food 단일 import/meal 동일 추천 join·사용자 write barrier; SQLite quota와 구분), versioned-llm-prompts(+food classify/meal recognition·recommendation·quality version filter), operation-log-instrumentation(+food import/meal AI 실행)
+**Sources scanned:** ~994 (22차 ~909 + meal 53 + food 32)
+**Sources changed:** 식단/음식 도메인 신설·하드닝 구현군 + 인증/cache principal 경계 + backup/retention·source audit; 신규 위키 source 85개
+**Notes:** food와 meal은 마스터/개인 데이터 경계로 분리했다. food source의 필드 관측은 대표값 결정과 별도로 보존하고 충돌 accept 뒤 다른 대안을 새 baseline으로 rebase한다. meal은 카탈로그 값과 영양 provenance를 기록 시점에 snapshot하며 allergen 공백을 안전으로 보지 않는다. 추천은 불변 행동 event와 latest 후보 신호로 학습하고 SQLite quota는 재시작 뒤에도 유지된다. 백업은 민감한 평문 JSON+base64 v1이며 hash/ref/크기 검증과 archive ledger 멱등성을 갖는다. retention은 삭제 outbox를 DB 변경과 함께 commit하고 실패 파일을 재시도하며, 전체 삭제는 strict 폴더 제거 실패를 200으로 숨기지 않는다. 앱 로컬 상태와 QueryClient/401 처리는 principal 전환 경계를 공유한다. 토픽 26→28, 컨셉 17 유지.
 
 ## 2026-08-17 (22nd compile)
 

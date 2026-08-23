@@ -250,16 +250,126 @@ export const FoodAdminStats = z.object({
   active: z.number().int(),
   // dishType·mainIngredient·cuisine 셋 다 채워진 행.
   classified: z.number().int(),
+  // 적재가 남긴 필드 단위 관측과 아직 결정하지 않은 병합 충돌.
+  sourceObservationCount: z.number().int().nonnegative(),
+  openMergeConflictCount: z.number().int().nonnegative(),
+  // 카탈로그 영양 출처 엄밀도. nutritionFrom이 있으면 donor 추정으로 본다.
+  nutritionDirectCount: z.number().int().nonnegative(),
+  nutritionEstimatedCount: z.number().int().nonnegative(),
+  nutritionMissingCount: z.number().int().nonnegative(),
   bySource: z.array(z.object({ source: FoodSource, count: z.number().int() })),
   byDishType: z.array(z.object({ dishType: FoodDishType.nullable(), count: z.number().int() })),
 });
 export type FoodAdminStatsType = z.infer<typeof FoodAdminStats>;
+
+// ── 어드민: 출처 관측·병합 충돌 검토 큐 ──
+// 외부 소스가 보낸 값을 FoodItem 대표값과 별개로 남긴다. 단순 누적 필드
+// (aliases/popularity)는 관측만 남기고, 단일 대표값 필드만 충돌 검토 대상이다.
+export const FoodSourceObservationField = z.enum([
+  'name',
+  'repName',
+  'aliases',
+  'dishType',
+  'mainIngredient',
+  'cuisine',
+  'ingredients',
+  'servingG',
+  'kcal',
+  'carbG',
+  'proteinG',
+  'fatG',
+  'sodiumMg',
+  'sugarG',
+  'sourceCategory',
+  'popularity',
+]);
+export type FoodSourceObservationFieldType = z.infer<typeof FoodSourceObservationField>;
+
+export const FoodMergeConflictField = z.enum([
+  'repName',
+  'dishType',
+  'mainIngredient',
+  'cuisine',
+  'ingredients',
+  'servingG',
+  'kcal',
+  'carbG',
+  'proteinG',
+  'fatG',
+  'sodiumMg',
+  'sugarG',
+  'sourceCategory',
+]);
+export type FoodMergeConflictFieldType = z.infer<typeof FoodMergeConflictField>;
+
+export const FoodMergeConflictStatus = z.enum([
+  'open',
+  'kept_existing',
+  'accepted_incoming',
+  'dismissed',
+]);
+export type FoodMergeConflictStatusType = z.infer<typeof FoodMergeConflictStatus>;
+
+export const FoodObservedValue = z.union([z.string(), z.number(), z.array(z.string())]);
+export type FoodObservedValueType = z.infer<typeof FoodObservedValue>;
+
+export const FoodSourceObservation = z.object({
+  id: z.string(),
+  field: FoodSourceObservationField,
+  value: FoodObservedValue,
+  source: FoodSource,
+  sourceId: z.string().nullable(),
+  observedAt: z.string().datetime(),
+});
+export type FoodSourceObservationType = z.infer<typeof FoodSourceObservation>;
+
+export const FoodMergeConflictItem = z.object({
+  id: z.string(),
+  foodItem: z.object({ id: z.string(), name: z.string() }),
+  field: FoodMergeConflictField,
+  existingValue: FoodObservedValue,
+  incomingValue: FoodObservedValue,
+  source: FoodSource,
+  sourceId: z.string().nullable(),
+  status: FoodMergeConflictStatus,
+  createdAt: z.string().datetime(),
+  resolvedAt: z.string().datetime().nullable(),
+  // 같은 음식·필드의 최근 관측. 개별 식단/사용자 정보는 포함하지 않는다.
+  observations: z.array(FoodSourceObservation).max(20),
+});
+export type FoodMergeConflictItemType = z.infer<typeof FoodMergeConflictItem>;
+
+export const FoodMergeConflictListQuery = z.object({
+  status: FoodMergeConflictStatus.default('open'),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type FoodMergeConflictListQueryType = z.infer<typeof FoodMergeConflictListQuery>;
+
+export const FoodMergeConflictListResult = z.object({
+  items: z.array(FoodMergeConflictItem),
+  total: z.number().int().nonnegative(),
+});
+export type FoodMergeConflictListResultType = z.infer<typeof FoodMergeConflictListResult>;
+
+export const FoodMergeConflictAction = z.enum(['keep_existing', 'accept_incoming', 'dismiss']);
+export type FoodMergeConflictActionType = z.infer<typeof FoodMergeConflictAction>;
+
+export const FoodMergeConflictResolveInput = z.object({
+  action: FoodMergeConflictAction,
+});
+export type FoodMergeConflictResolveInputType = z.infer<typeof FoodMergeConflictResolveInput>;
 
 // ── 어드민: 식단 사진 인식 교정 품질 ──
 // 개별 식단이 아닌 운영 집계만 내린다. 음식명은 오탐 개선에 필요하지만
 // 민감할 수 있으므로 top 항목은 서버에서 서로 다른 사용자 2명 이상이 기여한 집계만 노출한다.
 export const FoodRecognitionQualityQuery = z.object({
   days: z.coerce.number().int().min(1).max(365).default(30),
+  // model/version 은 recognitionJson 에 남은 실제 실행 계보를 대상으로 한다.
+  // confidenceBucket 경계는 서버와 어드민 UI가 같은 enum 을 사용한다.
+  model: z.string().trim().min(1).max(120).optional(),
+  version: z.coerce.number().int().min(1).max(10_000).optional(),
+  confidenceBucket: z.enum(['low', 'medium', 'high']).optional(),
 });
 export type FoodRecognitionQualityQueryType = z.infer<typeof FoodRecognitionQualityQuery>;
 
@@ -269,7 +379,8 @@ export const FoodRecognitionQualityResult = z.object({
   days: z.number().int().min(1).max(365),
   from: z.string().datetime(),
   to: z.string().datetime(),
-  // recognitionJson 이 있는 전체 기록. 파싱 불가·현재 프롬프트 버전이 아닌 기록은 invalid.
+  // recognitionJson 이 있는 필터 일치 기록. 파싱 불가 JSON만 invalid 이며, 과거의 정상
+  // 프롬프트 버전은 버전별 품질 추이를 위해 유효 표본으로 유지한다.
   recognitionEntryCount: RecognitionQualityCount,
   invalidRecognitionCount: RecognitionQualityCount,
   originalDishCount: RecognitionQualityCount,
@@ -299,6 +410,34 @@ export const FoodRecognitionQualityResult = z.object({
       }),
     )
     .max(20),
+  // 음식명·사용자 식별자가 없는 운영 메타데이터별 집계. 사용자 유래 텍스트는 위의
+  // top* 에서만 나오며, 그 두 목록에는 서버가 distinct-user k=2를 적용한다.
+  byModelVersion: z
+    .array(
+      z.object({
+        model: z.string().min(1).max(120).nullable(),
+        version: z.number().int().min(1).max(10_000).nullable(),
+        recognitionEntryCount: RecognitionQualityCount,
+        originalDishCount: RecognitionQualityCount,
+        confirmedCount: RecognitionQualityCount,
+        correctedCount: RecognitionQualityCount,
+        deletedCount: RecognitionQualityCount,
+        correctionRate: z.number().min(0).max(1),
+      }),
+    )
+    .max(100),
+  byConfidence: z
+    .array(
+      z.object({
+        bucket: z.enum(['low', 'medium', 'high']),
+        originalDishCount: RecognitionQualityCount,
+        confirmedCount: RecognitionQualityCount,
+        correctedCount: RecognitionQualityCount,
+        deletedCount: RecognitionQualityCount,
+        correctionRate: z.number().min(0).max(1),
+      }),
+    )
+    .max(3),
 });
 export type FoodRecognitionQualityResultType = z.infer<typeof FoodRecognitionQualityResult>;
 

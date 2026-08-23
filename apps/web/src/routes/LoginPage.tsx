@@ -7,6 +7,7 @@ import {
   Input,
   Screen,
   SegmentedControl,
+  setMealDraftPrincipal,
   Stack,
   Text,
   useAuthStore,
@@ -40,8 +41,10 @@ export const LoginPage = () => {
   };
 
   const onGuest = () => {
-    enterGuest();
-    navigate('/');
+    void setMealDraftPrincipal(null).then(() => {
+      enterGuest();
+      navigate('/');
+    });
   };
 
   return (

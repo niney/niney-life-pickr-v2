@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { MealEntryType } from '@repo/api-contract';
 import {
   ApiError,
+  useAuthStore,
   useDeleteMealEntry,
   useMealDraftStore,
   useMealEntry,
@@ -22,7 +23,8 @@ import {
 import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
 import { MealEntryEditor } from '~/components/meal/MealEntryEditor';
-import { MealPhotoThumb } from '~/components/meal/MealPhotoThumb';
+import { MealPhotoGallery } from '~/components/meal/MealPhotoGallery';
+import { invalidateMealPhotoFiles } from '~/lib/mealPhotoCache';
 
 // 식단 상세 — 보기 / 수정 두 모드. 수정은 서버 기록을 draft 로 옮긴 뒤 같은 에디터를 쓴다.
 export default function MealDetailScreen() {
@@ -33,6 +35,7 @@ export default function MealDetailScreen() {
   const router = useRouter();
   const { data, isLoading, error, refetch } = useMealEntry(id);
   const remove = useDeleteMealEntry();
+  const authToken = useAuthStore((state) => state.token);
   const draft = useMealDraftStore();
   const [editing, setEditing] = useState(false);
   // 영양은 값이 있는 항목만 더한 합계다(카탈로그 커버리지가 100% 가 아니다) — 몇 개가 반영됐는지 같이 보여 준다.
@@ -58,8 +61,14 @@ export default function MealDetailScreen() {
         mainIngredient: it.mainIngredient,
         cuisine: it.cuisine,
         portion: it.portion,
+        servings: it.servings,
+        portionSource: it.portionSource,
         isMain: it.isMain,
         confidence: it.confidence,
+        recognitionDishId: it.recognitionDishId,
+        selectedCandidateRank: it.selectedCandidateRank,
+        catalogMatchedBy: it.catalogMatchedBy,
+        catalogMatchScore: it.catalogMatchScore,
         source: it.source,
         candidates: [],
         // 저장된 기록은 이미 한 번 확인한 값이다. 장소 힌트로 재인식해도 자동 교체하지 않는다.
@@ -90,6 +99,8 @@ export default function MealDetailScreen() {
         mainIngredient: item.mainIngredient,
         cuisine: item.cuisine,
         portion: item.portion,
+        servings: item.servings,
+        portionSource: item.portionSource,
         isMain: item.isMain,
         confidence: null,
         source: item.foodId ? 'catalog' : 'manual',
@@ -108,7 +119,15 @@ export default function MealDetailScreen() {
         style: 'destructive',
         onPress: () => {
           remove.mutate(id, {
-            onSuccess: () => router.back(),
+            onSuccess: () => {
+              if (authToken && data) {
+                void invalidateMealPhotoFiles(
+                  authToken,
+                  data.photos.map((photo) => photo.token),
+                );
+              }
+              router.back();
+            },
             onError: (e) => Alert.alert('삭제 실패', e instanceof ApiError ? e.message : '다시 시도해 주세요.'),
           });
         },
@@ -153,12 +172,10 @@ export default function MealDetailScreen() {
           {data.photos.length > 0 ? (
             <Card>
               <CardTitle title="사진" />
-              <View style={styles.photos}>
-                {data.photos.map((p) => (
-                  <MealPhotoThumb key={p.token} token={p.token} size={96} />
-                ))}
-              </View>
+              <MealPhotoGallery tokens={data.photos.map((photo) => photo.token)} />
             </Card>
+          ) : data.photoPurgedAt ? (
+            <Note tone="muted">보존 설정에 따라 사진은 {data.photoPurgedAt.slice(0, 10)}에 정리됐어요.</Note>
           ) : null}
 
           <Card>
@@ -175,13 +192,18 @@ export default function MealDetailScreen() {
                     it.mainIngredient ? FOOD_MAIN_INGREDIENT_LABEL[it.mainIngredient] : null,
                     it.cuisine ? FOOD_CUISINE_LABEL[it.cuisine] : null,
                     it.portion ? MEAL_PORTION_LABEL[it.portion] : null,
+                    it.servings !== null ? `${it.servings}인분(직접 입력)` : null,
                     // 영양은 있을 때만 붙인다. 빌려온 값이면 어디서 왔는지까지 밝힌다.
                     it.kcal !== null ? `${Math.round(it.kcal)}kcal` : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
                 </Text>
-                {it.nutritionFrom ? <Text style={styles.itemEstimate}>{it.nutritionFrom} 기준 추정</Text> : null}
+                {it.nutritionBasis === 'donor_estimate' ? (
+                  <Text style={styles.itemEstimate}>{it.nutritionFrom ?? '유사 음식'} 기준 추정</Text>
+                ) : it.nutritionBasis === 'missing' ? (
+                  <Text style={styles.itemEstimate}>공개된 영양 근거 없음</Text>
+                ) : null}
               </View>
             ))}
             {nutrition.kcal !== null ? (
@@ -245,7 +267,6 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
     content: { padding: 16, gap: 12 },
-    photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
     itemName: { flex: 1, fontSize: 14, color: theme.colors.text },
     itemMeta: { fontSize: 11, color: theme.colors.textMuted },

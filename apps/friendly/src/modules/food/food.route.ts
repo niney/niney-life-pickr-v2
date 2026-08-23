@@ -17,6 +17,10 @@ import {
   FoodImportRunInput,
   FoodImportRunList,
   FoodItem,
+  FoodMergeConflictItem,
+  FoodMergeConflictListQuery,
+  FoodMergeConflictListResult,
+  FoodMergeConflictResolveInput,
   FoodRestaurantsQuery,
   FoodRestaurantsResult,
   FoodSearchQuery,
@@ -25,6 +29,7 @@ import {
 } from '@repo/api-contract';
 import { RATE } from '../../plugins/rate-limit.js';
 import { foodImportRegistry, type FoodImportEvent } from './food-import-registry.js';
+import { FoodMergeConflictError, FoodMergeConflictService } from './food-merge-conflict.service.js';
 import { FoodRecognitionQualityService } from './food-recognition-quality.service.js';
 import { FoodService, FoodServiceError } from './food.service.js';
 
@@ -39,12 +44,20 @@ const throwAsHttp = (app: Parameters<FastifyPluginAsync>[0], e: unknown): never 
     if (e.code === 'duplicate_name') throw app.httpErrors.conflict(e.message);
     throw app.httpErrors.badRequest(e.message);
   }
+  if (e instanceof FoodMergeConflictError) {
+    if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
+    if (e.code === 'already_resolved' || e.code === 'stale') {
+      throw app.httpErrors.conflict(e.message);
+    }
+    throw app.httpErrors.badRequest(e.message);
+  }
   throw e;
 };
 
 const foodRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const food = new FoodService(app.prisma);
+  const mergeConflicts = new FoodMergeConflictService(app.prisma);
   const recognitionQuality = new FoodRecognitionQualityService(app.prisma);
   const importer = app.foodImport;
 
@@ -140,6 +153,35 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
     handler: async () => food.adminStats(),
   });
 
+  typed.get(Routes.Food.adminMergeConflicts, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: FoodMergeConflictListQuery,
+      response: { 200: FoodMergeConflictListResult },
+    },
+    handler: async (req) => mergeConflicts.list(req.query),
+  });
+
+  typed.patch(Routes.Food.adminMergeConflict(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+      body: FoodMergeConflictResolveInput,
+      response: { 200: FoodMergeConflictItem },
+    },
+    handler: async (req) => {
+      try {
+        return await mergeConflicts.resolve(req.params.id, req.body.action, req.user.userId);
+      } catch (e) {
+        return throwAsHttp(app, e);
+      }
+    },
+  });
+
   typed.get(Routes.Food.adminRecognitionQuality, {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
@@ -148,7 +190,7 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
       querystring: FoodRecognitionQualityQuery,
       response: { 200: FoodRecognitionQualityResult },
     },
-    handler: async (req) => recognitionQuality.aggregate(req.query.days),
+    handler: async (req) => recognitionQuality.aggregate(req.query),
   });
 
   // ── 어드민: 적재 잡 ───────────────────────────────────────────────────

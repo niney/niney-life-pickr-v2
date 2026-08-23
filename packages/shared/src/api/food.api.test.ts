@@ -100,15 +100,28 @@ describe('foodApi', () => {
     ]);
   });
 
-  it('인식 교정 품질 — 기본 기간은 생략하고 days 를 지정하면 제한된 쿼리로 GET', async () => {
+  it('인식 교정 품질 — 기간·모델·버전·신뢰도 계보 필터를 고정 순서로 직렬화한다', async () => {
     expect(buildFoodRecognitionQualityQuery()).toBe('');
     expect(buildFoodRecognitionQualityQuery({ days: 90 })).toBe('days=90');
+    expect(
+      buildFoodRecognitionQualityQuery({
+        days: 30,
+        model: ' vision-model ',
+        version: 2,
+        confidenceBucket: 'low',
+      }),
+    ).toBe('days=30&model=vision-model&version=2&confidenceBucket=low');
     const fetchMock = stubFetch({});
     await foodApi.adminRecognitionQuality();
-    await foodApi.adminRecognitionQuality({ days: 90 });
+    await foodApi.adminRecognitionQuality({
+      days: 90,
+      model: 'vision-model',
+      version: 2,
+      confidenceBucket: 'high',
+    });
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
       '/api/v1/admin/food/recognition-quality',
-      '/api/v1/admin/food/recognition-quality?days=90',
+      '/api/v1/admin/food/recognition-quality?days=90&model=vision-model&version=2&confidenceBucket=high',
     ]);
   });
 

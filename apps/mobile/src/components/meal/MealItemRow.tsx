@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   useCopyMealPhoto,
@@ -32,6 +32,10 @@ export const MealItemRow = ({
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [focused, setFocused] = useState(false);
+  const [servingsText, setServingsText] = useState(item.servings == null ? '' : String(item.servings));
+  useEffect(() => {
+    setServingsText(item.servings == null ? '' : String(item.servings));
+  }, [item.servings]);
   const search = useFoodSearch(item.name, { limit: 6, enabled: focused && item.name.trim().length >= 2 });
   const suggestions = focused ? (search.data?.items ?? []) : [];
 
@@ -48,7 +52,11 @@ export const MealItemRow = ({
 
   const applyPast = (): void => {
     if (!past || applied) return;
-    if (past.portion && !item.portion) onChange({ portion: past.portion });
+    if (past.servings && !item.servings) {
+      onChange({ servings: past.servings, portion: null, portionSource: 'user_serving' });
+    } else if (past.portion && !item.portion) {
+      onChange({ portion: past.portion, portionSource: past.portionSource ?? 'vision_ordinal' });
+    }
     if (past.photoToken && !photoFull) {
       copyPhoto.mutate(past.photoToken, {
         onSuccess: (photo) => draft.addPhoto({ token: photo.token, localUri: null }),
@@ -66,7 +74,15 @@ export const MealItemRow = ({
       <View style={styles.nameRow}>
         <TextInput
           value={item.name}
-          onChangeText={(name) => onChange({ name, foodId: null })}
+          onChangeText={(name) =>
+            onChange({
+              name,
+              foodId: null,
+              catalogMatchedBy: 'none',
+              catalogMatchScore: null,
+              selectedCandidateRank: null,
+            })
+          }
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
           placeholder="음식 이름"
@@ -85,6 +101,7 @@ export const MealItemRow = ({
           <Text style={styles.pastText} numberOfLines={1}>
             지난 {past.lastEatenDate?.slice(5).replace('-', '/')}
             {past.portion ? ` · ${MEAL_PORTION_LABEL[past.portion]}` : ''}
+            {past.servings ? ` · ${past.servings}인분` : ''}
           </Text>
           {applied ? (
             <Text style={styles.pastDone}>{copyPhoto.isPending ? '가져오는 중…' : '적용됨'}</Text>
@@ -116,6 +133,8 @@ export const MealItemRow = ({
                   mainIngredient: s.mainIngredient,
                   cuisine: s.cuisine,
                   source: 'catalog',
+                  catalogMatchedBy: 'food_id',
+                  catalogMatchScore: 1,
                 });
                 setFocused(false);
               }}
@@ -135,7 +154,16 @@ export const MealItemRow = ({
             <Chip
               key={c.name}
               label={c.name}
-              onPress={() => onChange({ name: c.name, foodId: null, source: 'recognized' })}
+              onPress={() =>
+                onChange({
+                  name: c.name,
+                  foodId: null,
+                  source: 'recognized',
+                  selectedCandidateRank: item.candidates.findIndex((candidate) => candidate.name === c.name),
+                  catalogMatchedBy: 'none',
+                  catalogMatchScore: null,
+                })
+              }
             />
           ))}
         </View>
@@ -148,12 +176,44 @@ export const MealItemRow = ({
             key={p}
             label={MEAL_PORTION_LABEL[p]}
             selected={item.portion === p}
-            onPress={() => onChange({ portion: item.portion === p ? null : p })}
+            onPress={() =>
+              onChange({
+                portion: item.portion === p ? null : p,
+                servings: null,
+                portionSource: item.portion === p ? null : 'vision_ordinal',
+              })
+            }
           />
         ))}
         {item.dishType ? <Text style={styles.badge}>{FOOD_DISH_TYPE_LABEL[item.dishType]}</Text> : null}
         {lowConfidence ? <Text style={styles.warn}>확인 필요</Text> : null}
       </ChipRow>
+      <View style={styles.servingRow}>
+        <Text style={styles.servingLabel}>인분 직접 입력 (선택)</Text>
+        <TextInput
+          value={servingsText}
+          onChangeText={(value) => {
+            setServingsText(value);
+            const parsed = Number(value.replace(',', '.'));
+            onChange({
+              servings:
+                value.trim() && Number.isFinite(parsed) && parsed >= 0.25 && parsed <= 10
+                  ? parsed
+                  : null,
+              portion: value.trim() ? null : item.portion,
+              portionSource: value.trim() ? 'user_serving' : item.portion ? 'vision_ordinal' : null,
+            });
+          }}
+          onBlur={() => {
+            if (item.servings == null) setServingsText('');
+          }}
+          keyboardType="decimal-pad"
+          placeholder="예: 0.5 / 1 / 1.5"
+          placeholderTextColor={theme.colors.textMuted}
+          style={styles.servingInput}
+          accessibilityLabel="인분 수 직접 입력"
+        />
+      </View>
     </View>
   );
 };
@@ -205,4 +265,16 @@ const createStyles = (theme: Theme) =>
     metaRow: { alignItems: 'center' },
     badge: { fontSize: 11, color: theme.colors.textMuted },
     warn: { fontSize: 11, color: theme.colors.danger },
+    servingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    servingLabel: { fontSize: 11, color: theme.colors.textMuted },
+    servingInput: {
+      flex: 1,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      borderRadius: 7,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      color: theme.colors.text,
+      fontSize: 12,
+    },
   });

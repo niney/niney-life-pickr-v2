@@ -2,6 +2,8 @@ import {
   FoodCuisine,
   FoodDishType,
   FoodMainIngredient,
+  MealAllergen,
+  MealNutritionBasis,
   type MealRecommendationFeedbackType,
   type MealRecommendationItemType,
 } from '@repo/api-contract';
@@ -40,6 +42,27 @@ export const parseMealRecommendationItems = (json: string): MealRecommendationIt
         ingredients: Array.isArray(x['ingredients'])
           ? (x['ingredients'] as unknown[]).filter((t): t is string => typeof t === 'string')
           : [],
+        allergenWarnings: Array.isArray(x['allergenWarnings'])
+          ? (x['allergenWarnings'] as unknown[]).flatMap((value) => {
+              const parsed = MealAllergen.safeParse(value);
+              return parsed.success ? [parsed.data] : [];
+            })
+          : [],
+        allergenEvidence: Array.isArray(x['allergenEvidence'])
+          ? (x['allergenEvidence'] as unknown[]).filter((t): t is string => typeof t === 'string')
+          : [],
+        allergenAssessment:
+          x['allergenAssessment'] === 'possible' ||
+          x['allergenAssessment'] === 'none_known' ||
+          x['allergenAssessment'] === 'unknown'
+            ? (x['allergenAssessment'] as MealRecommendationItemType['allergenAssessment'])
+            : ('unknown' as const),
+        nutritionBasis: MealNutritionBasis.safeParse(x['nutritionBasis']).success
+          ? (x['nutritionBasis'] as 'direct' | 'donor_estimate' | 'missing')
+          : typeof x['nutritionFrom'] === 'string'
+            ? 'donor_estimate'
+            : 'missing',
+        nutritionFrom: typeof x['nutritionFrom'] === 'string' ? x['nutritionFrom'] : null,
       }))
       .filter((i) => i.name.length > 0);
   } catch {

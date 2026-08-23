@@ -40,6 +40,7 @@ import {
 } from './food-api.adapter.js';
 import type { FoodClassifyService } from './food-classify.service.js';
 import { foodImportRegistry } from './food-import-registry.js';
+import { auditIncomingFoodSeed } from './food-source-audit.js';
 import { buildAliasNorms, parseJsonStringArray } from './food.service.js';
 
 // 음식 카탈로그 적재 — 외부 소스(식약처 영양성분 표준데이터 / 식약처 레시피 / MAFRA 레시피) + 로컬
@@ -278,7 +279,13 @@ export const normalizeMfdsNutritionRows = (
     }
     let g = groups.get(key);
     if (!g) {
-      g = { repName, category, variants: new Set(), best: null, firstCode: coerceStrOrNull(row['foodCd']) };
+      g = {
+        repName,
+        category,
+        variants: new Set(),
+        best: null,
+        firstCode: coerceStrOrNull(row['foodCd']),
+      };
       groups.set(key, g);
     }
     // 요리류만 변형을 별칭으로 남긴다(프랜차이즈 상품명 수천 개는 노이즈).
@@ -299,7 +306,11 @@ export const normalizeMfdsNutritionRows = (
       sugarG: numOrNull(row['sugar']),
     };
     const hasAny = Object.values(per100).some((v) => v !== null);
-    if (!g.best || priority < g.best.priority || (priority === g.best.priority && !g.best.servingG && size)) {
+    if (
+      !g.best ||
+      priority < g.best.priority ||
+      (priority === g.best.priority && !g.best.servingG && size)
+    ) {
       if (hasAny || size) {
         g.best = { priority, servingG: size?.value ?? null, per100, unit: size?.unit ?? null };
       }
@@ -372,7 +383,10 @@ export const parseRecipeIngredients = (raw: string | null, dishName?: string): s
     // "소스 :", "양념장:" 같은 섹션 라벨 제거.
     s = s.replace(/^[^:：]{1,10}[:：]\s*/u, '');
     // 수량/단위 제거 — "연두부 75g", "설탕 1큰술", "물 200ml", "소금 약간".
-    s = s.replace(/\s*[\d./½¼¾~]+\s*(g|kg|ml|l|컵|큰술|작은술|T|t|개|마리|모|장|줄기|쪽|줌|알|통|봉|스푼|숟가락|조각|포기|대|단|토막|캔|팩|공기|인분|cc|㎖|㎎)?\b.*$/iu, '');
+    s = s.replace(
+      /\s*[\d./½¼¾~]+\s*(g|kg|ml|l|컵|큰술|작은술|T|t|개|마리|모|장|줄기|쪽|줌|알|통|봉|스푼|숟가락|조각|포기|대|단|토막|캔|팩|공기|인분|cc|㎖|㎎)?\b.*$/iu,
+      '',
+    );
     s = s.replace(/\s*(약간|적당량|조금|적당히|약간씩|취향껏)$/u, '').trim();
     s = s.replace(/^[-·\s]+|[-·\s]+$/g, '');
     if (s.length < 1 || s.length > 20) continue;
@@ -419,7 +433,8 @@ export const normalizeMfdsRecipeRows = (
       // 이름으로 못 잡으면 재료 목록의 첫 매칭으로 채운다(MAFRA 와 같은 규칙) — LLM 분류 부담을 줄인다.
       mainIngredient:
         guessMainIngredientFromName(name) ??
-        (ingredients.map((i) => guessMainIngredientFromName(i)).find((v) => v !== null) ?? null),
+        ingredients.map((i) => guessMainIngredientFromName(i)).find((v) => v !== null) ??
+        null,
       // 식약처 '조리식품의 레시피 DB' 는 한국 조리 DB 라 이름에 다른 단서가 없으면 한식으로 본다.
       // (LLM 은 '연근부각'·'참외깍두기' 같은 창작 반찬에서 cuisine 을 자주 비워 뒀다 — 실측 37건.)
       cuisine: guessCuisineFromName(name) ?? 'korean',
@@ -525,7 +540,9 @@ export const normalizeMafraRows = (
       name,
       repName: null,
       aliases: [],
-      dishType: guessDishTypeFromName(name) ?? (type ? (MAFRA_TYPE_TO_DISH[categoryKey(type)] ?? null) : null),
+      dishType:
+        guessDishTypeFromName(name) ??
+        (type ? (MAFRA_TYPE_TO_DISH[categoryKey(type)] ?? null) : null),
       mainIngredient: mainFromIngredients,
       cuisine: nation ? (MAFRA_NATION_TO_CUISINE[categoryKey(nation)] ?? null) : null,
       ingredients: ingredientList.length > 0 ? ingredientList : null,
@@ -606,7 +623,8 @@ export const normalizeHansik800Rows = (
 ): { seeds: FoodSeed[]; report: NormalizeReport } => {
   // 배포본(XLSX)은 첫 행이 조판용 번호 행이고 진짜 헤더가 2행에 있다 — '요리명' 이 보이는 행을
   // 헤더로 삼고 그 아래를 데이터로 쓴다(CSV 로 저장한 경우엔 첫 행이 그대로 헤더).
-  const looksLikeHeader = (r: string[]): boolean => r.some((c) => c.replace(/\s+/g, '') === '요리명');
+  const looksLikeHeader = (r: string[]): boolean =>
+    r.some((c) => c.replace(/\s+/g, '') === '요리명');
   let header = headerIn;
   let rows = rowsIn;
   if (!looksLikeHeader(headerIn)) {
@@ -697,16 +715,26 @@ export const upsertFoodSeeds = async (
   opts: UpsertOptions = {},
 ): Promise<UpsertResult> => {
   const result: UpsertResult = { inserted: 0, updated: 0, skipped: 0 };
-  // 배치 내 중복(nameNorm) 접기 — 별칭·popularity 만 합친다.
+  // 배치 내 중복(nameNorm) 접기. 대표값 생성용 접힌 시드와 출처별 관측용
+  // 원본 시드를 따로 두어, 두 소스의 다른 값이 첫 시드의 출처로 잘못 기록되지 않게 한다.
   const byNorm = new Map<string, FoodSeed>();
+  const incomingByNorm = new Map<string, FoodSeed[]>();
   for (const s of seedsIn) {
     const norm = normalizeTerm(s.name);
     if (!norm) {
       result.skipped += 1;
       continue;
     }
+    const incoming = incomingByNorm.get(norm);
+    if (incoming) incoming.push(s);
+    else incomingByNorm.set(norm, [s]);
     const prev = byNorm.get(norm);
-    if (!prev) byNorm.set(norm, { ...s, aliases: [...(s.aliases ?? [])], sourceRefs: [...(s.sourceRefs ?? [])] });
+    if (!prev)
+      byNorm.set(norm, {
+        ...s,
+        aliases: [...(s.aliases ?? [])],
+        sourceRefs: [...(s.sourceRefs ?? [])],
+      });
     else {
       prev.aliases = [...new Set([...(prev.aliases ?? []), ...(s.aliases ?? [])])];
       prev.popularity = Math.max(prev.popularity ?? 0, s.popularity ?? 0);
@@ -720,7 +748,10 @@ export const upsertFoodSeeds = async (
       prev.nutrition = prev.nutrition ?? s.nutrition ?? null;
       prev.sourceCategory = prev.sourceCategory ?? s.sourceCategory ?? null;
       if (s.source !== prev.source && !(prev.sourceRefs ?? []).some((r) => r.source === s.source)) {
-        prev.sourceRefs = [...(prev.sourceRefs ?? []), { source: s.source, sourceId: s.sourceId ?? null }];
+        prev.sourceRefs = [
+          ...(prev.sourceRefs ?? []),
+          { source: s.source, sourceId: s.sourceId ?? null },
+        ];
       }
       result.skipped += 1;
     }
@@ -731,50 +762,64 @@ export const upsertFoodSeeds = async (
   for (const [norm, seed] of entries) {
     if (opts.signal?.aborted) break;
     const seedWithRules = applyNameRules(seed);
-    const existing = await prisma.foodItem.findUnique({ where: { nameNorm: norm } });
-    if (!existing) {
-      const aliases = (seedWithRules.aliases ?? []).slice(0, MAX_ALIASES);
-      await prisma.foodItem.create({
-        data: {
-          name: seedWithRules.name,
-          nameNorm: norm,
-          repName: seedWithRules.repName ?? null,
-          aliasesJson: JSON.stringify(aliases),
-          aliasNormsJson: JSON.stringify(buildAliasNorms(aliases, norm)),
-          dishType: seedWithRules.dishType ?? null,
-          mainIngredient: seedWithRules.mainIngredient ?? null,
-          cuisine: seedWithRules.cuisine ?? null,
-          ingredientsJson: seedWithRules.ingredients ? JSON.stringify(seedWithRules.ingredients) : null,
-          servingG: seedWithRules.servingG ?? null,
-          kcal: seedWithRules.nutrition?.kcal ?? null,
-          carbG: seedWithRules.nutrition?.carbG ?? null,
-          proteinG: seedWithRules.nutrition?.proteinG ?? null,
-          fatG: seedWithRules.nutrition?.fatG ?? null,
-          sodiumMg: seedWithRules.nutrition?.sodiumMg ?? null,
-          sugarG: seedWithRules.nutrition?.sugarG ?? null,
-          source: seedWithRules.source,
-          sourceId: seedWithRules.sourceId ?? null,
-          sourceCategory: seedWithRules.sourceCategory ?? null,
-          sourceRefsJson: JSON.stringify(seedWithRules.sourceRefs ?? []),
-          popularity: seedWithRules.popularity ?? 0,
-        },
-      });
-      result.inserted += 1;
-    } else {
+    const auditSeeds = (incomingByNorm.get(norm) ?? [seed]).map(applyNameRules);
+    const outcome = await prisma.$transaction(async (tx) => {
+      const existing = await tx.foodItem.findUnique({ where: { nameNorm: norm } });
+      if (!existing) {
+        const aliases = (seedWithRules.aliases ?? []).slice(0, MAX_ALIASES);
+        const created = await tx.foodItem.create({
+          data: {
+            name: seedWithRules.name,
+            nameNorm: norm,
+            repName: seedWithRules.repName ?? null,
+            aliasesJson: JSON.stringify(aliases),
+            aliasNormsJson: JSON.stringify(buildAliasNorms(aliases, norm)),
+            dishType: seedWithRules.dishType ?? null,
+            mainIngredient: seedWithRules.mainIngredient ?? null,
+            cuisine: seedWithRules.cuisine ?? null,
+            ingredientsJson: seedWithRules.ingredients
+              ? JSON.stringify(seedWithRules.ingredients)
+              : null,
+            servingG: seedWithRules.servingG ?? null,
+            kcal: seedWithRules.nutrition?.kcal ?? null,
+            carbG: seedWithRules.nutrition?.carbG ?? null,
+            proteinG: seedWithRules.nutrition?.proteinG ?? null,
+            fatG: seedWithRules.nutrition?.fatG ?? null,
+            sodiumMg: seedWithRules.nutrition?.sodiumMg ?? null,
+            sugarG: seedWithRules.nutrition?.sugarG ?? null,
+            source: seedWithRules.source,
+            sourceId: seedWithRules.sourceId ?? null,
+            sourceCategory: seedWithRules.sourceCategory ?? null,
+            sourceRefsJson: JSON.stringify(seedWithRules.sourceRefs ?? []),
+            popularity: seedWithRules.popularity ?? 0,
+          },
+        });
+        for (const incomingSeed of auditSeeds) {
+          await auditIncomingFoodSeed(tx, created, incomingSeed);
+        }
+        return 'inserted' as const;
+      }
+
       const data: Record<string, unknown> = {};
       if (!existing.repName && seedWithRules.repName) data.repName = seedWithRules.repName;
       if (!existing.dishType && seedWithRules.dishType) data.dishType = seedWithRules.dishType;
-      if (!existing.mainIngredient && seedWithRules.mainIngredient) data.mainIngredient = seedWithRules.mainIngredient;
+      if (!existing.mainIngredient && seedWithRules.mainIngredient) {
+        data.mainIngredient = seedWithRules.mainIngredient;
+      }
       if (!existing.cuisine && seedWithRules.cuisine) data.cuisine = seedWithRules.cuisine;
       if (!existing.ingredientsJson && seedWithRules.ingredients?.length) {
         data.ingredientsJson = JSON.stringify(seedWithRules.ingredients);
       }
-      if (existing.servingG === null && seedWithRules.servingG != null) data.servingG = seedWithRules.servingG;
+      if (existing.servingG === null && seedWithRules.servingG != null) {
+        data.servingG = seedWithRules.servingG;
+      }
       const n = seedWithRules.nutrition;
       // 기본은 "빈 필드만 채우기"다(다른 출처가 덮어쓰지 않게). refreshNutrition 은 정규화 규칙을
       // 고친 뒤 기존 값을 바로잡기 위한 명시적 재적재용 — 시드에 값이 있을 때만 덮어쓴다.
       const canWriteNutrition =
-        n && (opts.refreshNutrition || (existing.kcal === null && existing.proteinG === null && existing.carbG === null));
+        n &&
+        (opts.refreshNutrition ||
+          (existing.kcal === null && existing.proteinG === null && existing.carbG === null));
       if (n && canWriteNutrition) {
         data.kcal = n.kcal;
         data.carbG = n.carbG;
@@ -782,16 +827,23 @@ export const upsertFoodSeeds = async (
         data.fatG = n.fatG;
         data.sodiumMg = n.sodiumMg;
         data.sugarG = n.sugarG;
-        if ((opts.refreshNutrition || existing.servingG === null) && seedWithRules.servingG != null) {
+        if (
+          (opts.refreshNutrition || existing.servingG === null) &&
+          seedWithRules.servingG != null
+        ) {
           data.servingG = seedWithRules.servingG;
         }
         // 직접 값으로 덮었으니 "빌려온 값" 표식은 지운다.
         if (opts.refreshNutrition && existing.nutritionFrom) data.nutritionFrom = null;
       }
-      if (!existing.sourceCategory && seedWithRules.sourceCategory) data.sourceCategory = seedWithRules.sourceCategory;
+      if (!existing.sourceCategory && seedWithRules.sourceCategory) {
+        data.sourceCategory = seedWithRules.sourceCategory;
+      }
       const newAliases = seedWithRules.aliases ?? [];
       if (newAliases.length > 0) {
-        const merged = [...new Set([...parseJsonStringArray(existing.aliasesJson), ...newAliases])].slice(0, MAX_ALIASES);
+        const merged = [
+          ...new Set([...parseJsonStringArray(existing.aliasesJson), ...newAliases]),
+        ].slice(0, MAX_ALIASES);
         if (merged.length !== parseJsonStringArray(existing.aliasesJson).length) {
           data.aliasesJson = JSON.stringify(merged);
           data.aliasNormsJson = JSON.stringify(buildAliasNorms(merged, norm));
@@ -812,16 +864,25 @@ export const upsertFoodSeeds = async (
         }
         if (changed) data.sourceRefsJson = JSON.stringify(refs);
       }
-      if ((seedWithRules.popularity ?? 0) > existing.popularity) data.popularity = seedWithRules.popularity;
-      if (Object.keys(data).length > 0) {
-        await prisma.foodItem.update({ where: { id: existing.id }, data });
-        result.updated += 1;
-      } else {
-        result.skipped += 1;
+      if ((seedWithRules.popularity ?? 0) > existing.popularity) {
+        data.popularity = seedWithRules.popularity;
       }
-    }
+
+      // 빈 필드를 먼저 채운고 그 결과를 관측 비교 기준으로 삼는다. 그래야 처음 받은
+      // 값은 충돌이 아니고, 같은 배치의 두 소스가 서로 다른 값을 줄 때만 큐가 열린다.
+      const representative =
+        Object.keys(data).length > 0
+          ? await tx.foodItem.update({ where: { id: existing.id }, data })
+          : existing;
+      for (const incomingSeed of auditSeeds) {
+        await auditIncomingFoodSeed(tx, representative, incomingSeed);
+      }
+      return Object.keys(data).length > 0 ? ('updated' as const) : ('skipped' as const);
+    });
+    result[outcome] += 1;
     processed += 1;
-    if (processed % PROGRESS_EVERY === 0 || processed === total) opts.onProgress?.(processed, total);
+    if (processed % PROGRESS_EVERY === 0 || processed === total)
+      opts.onProgress?.(processed, total);
   }
   return result;
 };
@@ -832,7 +893,12 @@ const parseRefs = (s: string | null): { source: string; sourceId: string | null 
     const v: unknown = JSON.parse(s);
     if (!Array.isArray(v)) return [];
     return v
-      .filter((x): x is { source: string; sourceId?: string | null } => typeof x === 'object' && x !== null && typeof (x as { source?: unknown }).source === 'string')
+      .filter(
+        (x): x is { source: string; sourceId?: string | null } =>
+          typeof x === 'object' &&
+          x !== null &&
+          typeof (x as { source?: unknown }).source === 'string',
+      )
       .map((x) => ({ source: x.source, sourceId: x.sourceId ?? null }));
   } catch {
     return [];
@@ -991,7 +1057,10 @@ export class FoodImportService {
       orderBy: { startedAt: 'desc' },
       take: RUN_HISTORY_LIMIT,
     });
-    return { items: rows.map((r) => this.toRun(r)), inflightRunId: foodImportRegistry.runningRunId() };
+    return {
+      items: rows.map((r) => this.toRun(r)),
+      inflightRunId: foodImportRegistry.runningRunId(),
+    };
   }
 
   // ── 실행 ──────────────────────────────────────────────────────────────
@@ -1018,12 +1087,39 @@ export class FoodImportService {
       return this.toRun(skipped);
     }
     const { runId, signal } = begun;
-    await this.prisma.foodImportRun.create({
-      data: { id: runId, trigger, status: 'running', sourcesJson: JSON.stringify(sources) },
-    });
+    try {
+      await this.prisma.foodImportRun.create({
+        data: { id: runId, trigger, status: 'running', sourcesJson: JSON.stringify(sources) },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      // begin 후 최초 DB 쓰기가 실패해도 registry를 running으로 남기지 않는다. 응답은
+      // 실패했지만 DB에는 적용된 애매한 전송 오류일 수 있어 같은 id의 running 행도 보상한다.
+      foodImportRegistry.finish('failed', message);
+      try {
+        await this.prisma.foodImportRun.updateMany({
+          where: { id: runId, status: 'running' },
+          data: { status: 'failed', error: message, finishedAt: new Date() },
+        });
+      } catch (compensationError) {
+        this.log?.error(
+          { err: compensationError, firstError: e, runId },
+          '[food-import] create failure compensation failed',
+        );
+      }
+      throw e;
+    }
 
     const oplog = this.deps.operationLog ?? null;
-    const opRunId = oplog ? await oplog.startRun({ feature: 'food-import', jobId: runId, trigger }) : null;
+    let opRunId: string | null = null;
+    if (oplog) {
+      try {
+        opRunId = await oplog.startRun({ feature: 'food-import', jobId: runId, trigger });
+      } catch (e) {
+        // 부가 운영 로그 장애로 본 가져오기가 running 상태에 멈추지 않게 계속 진행한다.
+        this.log?.warn({ err: e, runId }, '[food-import] operation log start failed');
+      }
+    }
     const step = (
       level: 'debug' | 'info' | 'warn' | 'error',
       stage: string,
@@ -1054,7 +1150,11 @@ export class FoodImportService {
       }
 
       if (status === 'done' && classify && this.deps.classify) {
-        foodImportRegistry.setPhase('classifying', { source: null, total: null, message: 'LLM 2축 분류' });
+        foodImportRegistry.setPhase('classifying', {
+          source: null,
+          total: null,
+          message: 'LLM 2축 분류',
+        });
         step('info', 'classify', 'LLM 2축 분류 시작');
         const r = await this.deps.classify.classifyPending({
           signal,
@@ -1062,12 +1162,19 @@ export class FoodImportService {
         });
         classifiedCount = r.updated;
         foodImportRegistry.setClassifiedCount(classifiedCount);
-        step(r.noProvider ? 'warn' : 'info', 'classify', r.noProvider ? 'chat 모델 미설정 — 분류 생략' : `분류 ${r.updated}/${r.total}행 (실패 청크 ${r.failedChunks})`, {
-          updated: r.updated,
-          total: r.total,
-          failedChunks: r.failedChunks,
-          model: r.model,
-        });
+        step(
+          r.noProvider ? 'warn' : 'info',
+          'classify',
+          r.noProvider
+            ? 'chat 모델 미설정 — 분류 생략'
+            : `분류 ${r.updated}/${r.total}행 (실패 청크 ${r.failedChunks})`,
+          {
+            updated: r.updated,
+            total: r.total,
+            failedChunks: r.failedChunks,
+            model: r.model,
+          },
+        );
         if (signal.aborted) {
           status = 'interrupted';
           error = 'aborted';
@@ -1079,30 +1186,75 @@ export class FoodImportService {
       this.log?.error({ err: e }, '[food-import] run failed');
     }
 
+    // 종료 순서는 registry → DB. 뒤의 DB·로그 side effect가 실패해도 같은 프로세스에서
+    // 다음 회차를 막지 않으며, DB 일시 실패는 조건부 updateMany로 한 번 보상한다.
     foodImportRegistry.finish(status, error);
-    await this.prisma.foodImportRun.update({
-      where: { id: runId },
-      data: {
-        status,
-        statsJson: JSON.stringify(stats),
-        classifiedCount,
-        error,
-        finishedAt: new Date(),
-      },
-    });
-    await this.touchConfig(status);
+    const terminalData = {
+      status,
+      statsJson: JSON.stringify(stats),
+      classifiedCount,
+      error,
+      finishedAt: new Date(),
+    };
+    try {
+      await this.prisma.foodImportRun.update({ where: { id: runId }, data: terminalData });
+    } catch (firstError) {
+      try {
+        await this.prisma.foodImportRun.updateMany({
+          where: { id: runId, status: 'running' },
+          data: terminalData,
+        });
+        this.log?.warn(
+          { err: firstError, runId },
+          '[food-import] terminal update recovered by compensation',
+        );
+      } catch (compensationError) {
+        this.log?.error(
+          { err: compensationError, firstError, runId },
+          '[food-import] terminal update compensation failed',
+        );
+        throw compensationError;
+      }
+    }
+    try {
+      await this.touchConfig(status);
+    } catch (e) {
+      // 실행 행 자체는 이미 terminal 저장이다. 설정의 lastStatus 보조 갱신은 다음 회차를 막지 않는다.
+      this.log?.warn({ err: e, runId }, '[food-import] config status update failed');
+    }
 
     if (oplog && opRunId) {
       const meta = {
         sources,
-        stats: stats.map((s) => ({ source: s.source, fetched: s.fetched, inserted: s.inserted, updated: s.updated, skipped: s.skipped, error: s.error })),
+        stats: stats.map((s) => ({
+          source: s.source,
+          fetched: s.fetched,
+          inserted: s.inserted,
+          updated: s.updated,
+          skipped: s.skipped,
+          error: s.error,
+        })),
         classifiedCount,
       };
-      if (status === 'done') await oplog.finishRun(opRunId, { status: 'done', meta });
-      else if (status === 'interrupted') {
-        await oplog.finishRun(opRunId, { status: 'cancelled', errorCode: 'interrupted', errorMessage: error ?? undefined, meta });
-      } else {
-        await oplog.finishRun(opRunId, { status: 'failed', errorCode: 'import_failed', errorMessage: error ?? undefined, meta });
+      try {
+        if (status === 'done') await oplog.finishRun(opRunId, { status: 'done', meta });
+        else if (status === 'interrupted') {
+          await oplog.finishRun(opRunId, {
+            status: 'cancelled',
+            errorCode: 'interrupted',
+            errorMessage: error ?? undefined,
+            meta,
+          });
+        } else {
+          await oplog.finishRun(opRunId, {
+            status: 'failed',
+            errorCode: 'import_failed',
+            errorMessage: error ?? undefined,
+            meta,
+          });
+        }
+      } catch (e) {
+        this.log?.warn({ err: e, runId }, '[food-import] operation log finish failed');
       }
     }
 
@@ -1114,9 +1266,21 @@ export class FoodImportService {
   private async runSource(
     source: FoodImportSourceType,
     signal: AbortSignal,
-    step: (level: 'debug' | 'info' | 'warn' | 'error', stage: string, message: string, meta?: Record<string, unknown>) => void,
+    step: (
+      level: 'debug' | 'info' | 'warn' | 'error',
+      stage: string,
+      message: string,
+      meta?: Record<string, unknown>,
+    ) => void,
   ): Promise<FoodImportSourceStatType> {
-    const stat: FoodImportSourceStatType = { source, fetched: 0, inserted: 0, updated: 0, skipped: 0, error: null };
+    const stat: FoodImportSourceStatType = {
+      source,
+      fetched: 0,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      error: null,
+    };
     try {
       foodImportRegistry.setPhase('fetching', { source, total: null, message: null });
       const onPage = (info: { page: number; fetched: number; totalCount: number | null }): void => {
@@ -1157,12 +1321,17 @@ export class FoodImportService {
       stat.inserted = r.inserted;
       stat.updated = r.updated;
       stat.skipped = r.skipped + (report.fetched - report.produced);
-      step('info', 'upsert', `${source}: 신규 ${r.inserted} / 갱신 ${r.updated} / 건너뜀 ${stat.skipped}`, {
-        source,
-        inserted: r.inserted,
-        updated: r.updated,
-        skipped: stat.skipped,
-      });
+      step(
+        'info',
+        'upsert',
+        `${source}: 신규 ${r.inserted} / 갱신 ${r.updated} / 건너뜀 ${stat.skipped}`,
+        {
+          source,
+          inserted: r.inserted,
+          updated: r.updated,
+          skipped: stat.skipped,
+        },
+      );
     } catch (e) {
       stat.error = (e instanceof Error ? e.message : String(e)).slice(0, 300);
       step('error', 'source', `${source} 실패: ${stat.error}`, { source });
@@ -1177,7 +1346,11 @@ export class FoodImportService {
   ): Promise<Record<string, unknown>[]> {
     if (this.deps.fetchOverride?.nutrition) return this.deps.fetchOverride.nutrition();
     if (!this.deps.keys.nutrition) throw new Error('FOOD_API_KEY/BUS_API_KEY 미설정');
-    const res = await fetchAllMfdsNutrition({ serviceKey: this.deps.keys.nutrition, signal }, {}, { onPage });
+    const res = await fetchAllMfdsNutrition(
+      { serviceKey: this.deps.keys.nutrition, signal },
+      {},
+      { onPage },
+    );
     return res.items;
   }
 
@@ -1187,7 +1360,10 @@ export class FoodImportService {
   ): Promise<Record<string, unknown>[]> {
     if (this.deps.fetchOverride?.recipe) return this.deps.fetchOverride.recipe();
     if (!this.deps.keys.recipe) throw new Error('FOOD_RECIPE_API_KEY 미설정');
-    const res = await fetchAllMfdsRecipes({ serviceKey: this.deps.keys.recipe, signal }, { onPage });
+    const res = await fetchAllMfdsRecipes(
+      { serviceKey: this.deps.keys.recipe, signal },
+      { onPage },
+    );
     return res.items;
   }
 
@@ -1198,7 +1374,9 @@ export class FoodImportService {
     if (this.deps.fetchOverride?.mafraRecipes) {
       return {
         recipes: await this.deps.fetchOverride.mafraRecipes(),
-        ingredients: this.deps.fetchOverride.mafraIngredients ? await this.deps.fetchOverride.mafraIngredients() : [],
+        ingredients: this.deps.fetchOverride.mafraIngredients
+          ? await this.deps.fetchOverride.mafraIngredients()
+          : [],
       };
     }
     if (!this.deps.keys.mafra) throw new Error('MAFRA_API_KEY 미설정');
@@ -1211,7 +1389,13 @@ export class FoodImportService {
   // global_menu_canonicals + 링크의 distinct 식당 수.
   async loadMenuCanonicalRows(): Promise<MenuCanonicalRow[]> {
     const rows = await this.prisma.$queryRaw<
-      { id: string; displayName: string; globalKey: string; categoryPath: string | null; restaurantCount: number | bigint }[]
+      {
+        id: string;
+        displayName: string;
+        globalKey: string;
+        categoryPath: string | null;
+        restaurantCount: number | bigint;
+      }[]
     >`
       SELECT g.id AS id, g."displayName" AS "displayName", g."globalKey" AS "globalKey", g."categoryPath" AS "categoryPath",
              COUNT(DISTINCT l."restaurantId") AS "restaurantCount"
@@ -1230,7 +1414,10 @@ export class FoodImportService {
 
   // ── 내부 ──────────────────────────────────────────────────────────────
   private async hasActiveRun(): Promise<boolean> {
-    const active = await this.prisma.foodImportRun.findFirst({ where: { status: 'running' }, select: { id: true } });
+    const active = await this.prisma.foodImportRun.findFirst({
+      where: { status: 'running' },
+      select: { id: true },
+    });
     return active !== null;
   }
 
@@ -1286,11 +1473,21 @@ const parseStats = (json: string | null | undefined): FoodImportSourceStatType[]
     if (!Array.isArray(v)) return [];
     return v.filter(
       (x): x is FoodImportSourceStatType =>
-        typeof x === 'object' && x !== null && FoodImportSource.safeParse((x as { source?: unknown }).source).success,
+        typeof x === 'object' &&
+        x !== null &&
+        FoodImportSource.safeParse((x as { source?: unknown }).source).success,
     );
   } catch {
     return [];
   }
 };
 
-export const __foodImportInternals = { JOB_TYPE, DEFAULT_CRON, DEFAULT_SOURCES, parseSources, parseStats, parseSize, originPriority };
+export const __foodImportInternals = {
+  JOB_TYPE,
+  DEFAULT_CRON,
+  DEFAULT_SOURCES,
+  parseSources,
+  parseStats,
+  parseSize,
+  originPriority,
+};

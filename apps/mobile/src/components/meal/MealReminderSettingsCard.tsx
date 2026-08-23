@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useTheme, type Theme } from '@repo/shared';
+import { useMealTimePresets, useTheme, type Theme } from '@repo/shared';
 import type { MealSlotType } from '@repo/api-contract';
-import { MEAL_SLOT_LABEL } from '@repo/utils';
+import { MEAL_SLOT_LABEL, MEAL_SLOTS } from '@repo/utils';
 import { Card, CardTitle, Note } from '~/components/common/Cards';
 import {
   loadMealReminderSettings,
@@ -18,12 +18,16 @@ interface MealReminderSettingsCardProps {
 export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProps) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const timePresets = useMealTimePresets();
   const [ready, setReady] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [scheduledSlots, setScheduledSlots] = useState<MealSlotType[]>([]);
   const [times, setTimes] = useState<Record<MealSlotType, string>>({
     ...MEAL_REMINDER_DEFAULT_TIMES,
   });
+  const [customizedTimes, setCustomizedTimes] = useState<
+    Partial<Record<MealSlotType, boolean>>
+  >({});
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -35,7 +39,8 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
       if (cancelled) return;
       setEnabled(settings.enabled);
       setTimes(settings.times);
-      setScheduledSlots(Object.keys(settings.notificationIds) as MealSlotType[]);
+      setCustomizedTimes(settings.customizedTimes);
+      setScheduledSlots(settings.slots);
       setReady(true);
     });
     return () => {
@@ -43,10 +48,24 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
     };
   }, []);
 
+  const effectiveTimes = useMemo(() => {
+    const next = { ...times };
+    if (!timePresets.data) return next;
+    const personalized = new Map(timePresets.data.presets.map((preset) => [preset.slot, preset]));
+    for (const slot of MEAL_SLOTS) {
+      if (customizedTimes[slot]) continue;
+      const preset = personalized.get(slot);
+      if (preset) next[slot] = preset.time;
+    }
+    return next;
+  }, [customizedTimes, timePresets.data, times]);
+
   const slotKey = [...slots].sort().join(',');
   const scheduledSlotKey = [...scheduledSlots].sort().join(',');
   const needsSlotSync = ready && enabled && slotKey !== scheduledSlotKey;
-  const hasChanges = dirty || needsSlotSync;
+  const needsTimeSync =
+    ready && enabled && slots.some((slot) => effectiveTimes[slot] !== times[slot]);
+  const hasChanges = dirty || needsSlotSync || needsTimeSync;
 
   if (Platform.OS === 'web') {
     return (
@@ -62,10 +81,16 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
     setError(null);
     setSaved(false);
     try {
-      const next = await syncMealReminders({ enabled, slots, times });
+      const next = await syncMealReminders({
+        enabled,
+        slots,
+        times: effectiveTimes,
+        customizedTimes,
+      });
       setEnabled(next.enabled);
       setTimes(next.times);
-      setScheduledSlots(Object.keys(next.notificationIds) as MealSlotType[]);
+      setCustomizedTimes(next.customizedTimes);
+      setScheduledSlots(next.slots);
       setDirty(false);
       setSaved(true);
     } catch (e) {
@@ -77,7 +102,10 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
 
   return (
     <Card>
-      <CardTitle title="식사 알림" sub="선택한 시간마다 기기에서 알려드려요. 권한은 켤 때만 요청해요." />
+      <CardTitle
+        title="식사 알림"
+        sub="내 최근 기록 시각을 기본으로 알려드려요. 권한은 켤 때만 요청해요."
+      />
       {!ready ? (
         <Text style={styles.hint}>알림 설정을 불러오는 중…</Text>
       ) : (
@@ -100,12 +128,23 @@ export const MealReminderSettingsCard = ({ slots }: MealReminderSettingsCardProp
               <View style={styles.timeList}>
                 {slots.map((slot) => (
                   <View key={slot} style={styles.timeRow}>
-                    <Text style={styles.slotLabel}>{MEAL_SLOT_LABEL[slot]}</Text>
+                    <View style={styles.slotText}>
+                      <Text style={styles.slotLabel}>{MEAL_SLOT_LABEL[slot]}</Text>
+                      <Text style={styles.presetLabel}>
+                        {customizedTimes[slot]
+                          ? '직접 설정'
+                          : timePresets.data?.presets.find((preset) => preset.slot === slot)
+                                ?.fromRecords
+                            ? '최근 기록 기준'
+                            : '기본 시간'}
+                      </Text>
+                    </View>
                     <TextInput
                       accessibilityLabel={`${MEAL_SLOT_LABEL[slot]} 알림 시간`}
-                      value={times[slot]}
+                      value={effectiveTimes[slot]}
                       onChangeText={(value) => {
                         setTimes((current) => ({ ...current, [slot]: value }));
+                        setCustomizedTimes((current) => ({ ...current, [slot]: true }));
                         setDirty(true);
                         setSaved(false);
                       }}
@@ -150,7 +189,9 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     timeList: { gap: 8 },
     timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    slotText: { gap: 1 },
     slotLabel: { color: theme.colors.text, fontSize: 14, fontWeight: '600' },
+    presetLabel: { color: theme.colors.textMuted, fontSize: 10 },
     timeInput: {
       width: 92,
       borderWidth: StyleSheet.hairlineWidth,

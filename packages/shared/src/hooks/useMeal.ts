@@ -9,13 +9,17 @@ import {
 import type {
   CreateMealEntryInputType,
   CreateMealRecommendationInputType,
+  DeleteMealPhotosInputType,
   DeleteMealDataInputType,
+  MealDataBackupType,
   MealRecommendationFeedbackInputType,
+  MealRecommendationEventInputType,
   RecognizeMealInputType,
   UpdateMealEntryInputType,
   UpdateMealPreferenceInputType,
 } from '@repo/api-contract';
 import { mealApi, type ListMealEntriesInput, type MealPhotoUploadFile } from '../api/meal.api.js';
+import { isMealDraftPrincipalCurrent } from '../stores/mealDraftStore.js';
 
 // 쿼리 키 루트 ['meal', ...] — 목록 ['meal','list',query], 단건 ['meal','one',id],
 // 달력 ['meal','calendar',month], 통계 ['meal','stats',from,to], 선호 ['meal','preference'].
@@ -34,6 +38,33 @@ const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
 // 전체 내보내기는 사용자 동작 때만 큰 JSON 을 받도록 mutation 으로 제공한다.
 export const useExportMealData = () =>
   useMutation({ mutationFn: () => mealApi.exportData() });
+
+export const useBackupMealData = () =>
+  useMutation({ mutationFn: () => mealApi.backupData() });
+
+export const useRestoreMealData = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (archive: MealDataBackupType) => mealApi.restoreData(archive),
+    onSuccess: () => {
+      // append 복원으로 목록·통계·추천·선호가 모두 달라질 수 있다.
+      void qc.invalidateQueries({ queryKey: KEY });
+    },
+  });
+};
+
+export const usePreviewMealPhotoRetention = () =>
+  useMutation({ mutationFn: (before?: string) => mealApi.previewPhotoRetention(before) });
+
+export const useDeleteRetainedMealPhotos = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DeleteMealPhotosInputType) => mealApi.deleteRetainedPhotos(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: KEY });
+    },
+  });
+};
 
 export const useDeleteAllMealData = () => {
   const qc = useQueryClient();
@@ -91,11 +122,29 @@ export const useMealStats = (from: string, to: string, enabled = true) =>
     placeholderData: keepPreviousData,
   });
 
+export interface CreateMealEntryMutationVariables {
+  input: CreateMealEntryInputType;
+  /** 요청을 시작한 로그인 주체. 생략한 기존 호출자는 종전처럼 캐시를 반영한다. */
+  expectedPrincipalId?: string | null;
+}
+
+export interface UpdateMealEntryMutationVariables {
+  id: string;
+  input: UpdateMealEntryInputType;
+  expectedPrincipalId?: string | null;
+}
+
+export const shouldApplyMealMutationCache = (expectedPrincipalId?: string | null): boolean =>
+  expectedPrincipalId === undefined || isMealDraftPrincipalCurrent(expectedPrincipalId);
+
 export const useCreateMealEntry = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateMealEntryInputType) => mealApi.create(input),
-    onSuccess: (entry) => {
+    mutationFn: ({ input }: CreateMealEntryMutationVariables) => mealApi.create(input),
+    onSuccess: (entry, variables) => {
+      // 계정 전환 경계의 query clear 뒤 늦은 A mutation이 끝나도 B의 비네임스페이스
+      // meal 캐시에 A 응답을 다시 쓰지 않는다.
+      if (!shouldApplyMealMutationCache(variables.expectedPrincipalId)) return;
       qc.setQueryData([...KEY, 'one', entry.id], entry);
       invalidateEntries(qc);
     },
@@ -105,9 +154,10 @@ export const useCreateMealEntry = () => {
 export const useUpdateMealEntry = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateMealEntryInputType }) =>
+    mutationFn: ({ id, input }: UpdateMealEntryMutationVariables) =>
       mealApi.update(id, input),
-    onSuccess: (entry) => {
+    onSuccess: (entry, variables) => {
+      if (!shouldApplyMealMutationCache(variables.expectedPrincipalId)) return;
       qc.setQueryData([...KEY, 'one', entry.id], entry);
       invalidateEntries(qc);
     },
@@ -273,6 +323,17 @@ export const useMealRecommendationFeedback = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: MealRecommendationFeedbackInputType }) =>
       mealApi.recommendationFeedback(id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+    },
+  });
+};
+
+export const useMealRecommendationEvent = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: MealRecommendationEventInputType }) =>
+      mealApi.recommendationEvent(id, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
     },

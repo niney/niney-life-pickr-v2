@@ -120,7 +120,7 @@ describe('computeMealStats', () => {
     expect(s.byDishType[0]).toMatchObject({ key: 'unknown', label: '미분류', count: 1 });
   });
 
-  it('영양은 값이 있는 항목만 더하고 커버리지를 함께 낸다', () => {
+  it('주식 영양 커버리지가 낮으면 불완전한 하루 평균을 숨기고 근거 비율만 낸다', () => {
     const r = computeMealStats(
       [
         {
@@ -137,11 +137,14 @@ describe('computeMealStats', () => {
       '2026-08-21',
       '2026-08-21',
     );
-    // 기록이 있는 날은 하루 → 그 날 합계가 곧 하루 평균. 값 없는 항목은 빠진다.
-    expect(r.nutrition.avgKcalPerDay).toBe(528);
-    expect(r.nutrition.avgProteinGPerDay).toBe(12);
+    expect(r.nutrition.avgKcalPerDay).toBeNull();
+    expect(r.nutrition.avgProteinGPerDay).toBeNull();
     expect(r.nutrition.itemsWithNutrition).toBe(1);
     expect(r.nutrition.coverage).toBe(0.5);
+    expect(r.nutrition.mainItemCoverage).toBe(0.5);
+    expect(r.nutrition.directCoverage).toBe(0.5);
+    expect(r.nutrition.estimatedCoverage).toBe(0);
+    expect(r.nutrition.averageReliable).toBe(false);
   });
 
   it('영양 값이 하나도 없으면 평균은 null 이다 — 0 으로 보이면 안 굶은 걸 굶었다고 말하게 된다', () => {
@@ -164,9 +167,9 @@ describe('computeMealStats', () => {
 
   it('추천 선택·실제 기록·평가와 수락률을 집계한다', () => {
     const r = computeMealStats([], '2026-08-20', '2026-08-21', '2026-08-21', [
-      { feedbackJson: JSON.stringify({ pickedName: '김치찌개', eatenEntryId: 'e1', rating: 1 }) },
-      { feedbackJson: JSON.stringify({ pickedName: '비빔밥', eatenEntryId: null, rating: null }) },
-      { feedbackJson: JSON.stringify({ pickedName: null, eatenEntryId: null, rating: -1 }) },
+      { feedbackJson: JSON.stringify({ pickedName: '김치찌개', eatenEntryId: 'e1', rating: 1 }), events: [{ kind: 'shown' }, { kind: 'candidate_rated' }] },
+      { feedbackJson: JSON.stringify({ pickedName: '비빔밥', eatenEntryId: null, rating: null }), events: [{ kind: 'shown' }, { kind: 'dismissed' }] },
+      { feedbackJson: JSON.stringify({ pickedName: null, eatenEntryId: null, rating: -1 }), events: [{ kind: 'shown' }] },
       { feedbackJson: '{bad json' },
     ]);
     expect(r.recommendation).toEqual({
@@ -174,6 +177,11 @@ describe('computeMealStats', () => {
       loggedCount: 1,
       ratedCount: 2,
       acceptanceRate: 0.5,
+      shownCount: 3,
+      dismissedCount: 1,
+      candidateRatedCount: 1,
+      pickRate: 0.667,
+      loggedFromShownRate: 0.333,
     });
   });
 });

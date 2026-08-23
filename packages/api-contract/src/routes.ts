@@ -287,6 +287,9 @@ export const Food = {
   adminItem: (id: string) => `${API_PREFIX}/admin/food/items/${id}`,
   // 집계(총/활성/분류됨/출처별/조리형태별).
   adminStats: `${API_PREFIX}/admin/food/stats`,
+  // 서로 다른 소스의 필드 값이 충돌한 항목 검토 큐 / 단건 해결(PATCH).
+  adminMergeConflicts: `${API_PREFIX}/admin/food/merge-conflicts`,
+  adminMergeConflict: (id: string) => `${API_PREFIX}/admin/food/merge-conflicts/${id}`,
   // 사진 인식 원본 → 최종 식단 교정 품질 집계(?days=1..365). ADMIN 전용.
   adminRecognitionQuality: `${API_PREFIX}/admin/food/recognition-quality`,
   // 적재 잡 설정 조회/변경 — GET/PUT.
@@ -308,6 +311,11 @@ export const Meal = {
   entries: `${API_PREFIX}/meals`,
   // 내 식단 데이터 전체 JSON 내보내기 / 강한 확인 문자열을 요구하는 전체 삭제.
   dataExport: `${API_PREFIX}/meals/data/export`,
+  // 사진 바이너리까지 포함한 검증 가능한 휴대용 백업(JSON+base64) / 멱등 복원.
+  dataBackup: `${API_PREFIX}/meals/data/backup`,
+  dataRestore: `${API_PREFIX}/meals/data/backup/restore`,
+  // 텍스트 기록을 보존한 채 오래된 사진만 미리보기/정리.
+  photoRetention: `${API_PREFIX}/meals/data/photos/retention`,
   data: `${API_PREFIX}/meals/data`,
   // 단건 조회·수정·삭제.
   entry: (id: string) => `${API_PREFIX}/meals/${id}`,
@@ -336,6 +344,8 @@ export const Meal = {
   recommendationContext: `${API_PREFIX}/meals/recommendations/context`,
   // 추천 피드백(👍👎·먹었어요).
   recommendationFeedback: (id: string) => `${API_PREFIX}/meals/recommendations/${id}/feedback`,
+  // 후보 선택·후보별 평가·식당 열기 등 불변 행동 이벤트.
+  recommendationEvents: (id: string) => `${API_PREFIX}/meals/recommendations/${id}/events`,
 } as const;
 
 // provider × purpose 조합으로 row 를 식별한다. purpose='chat' 이 기본이며

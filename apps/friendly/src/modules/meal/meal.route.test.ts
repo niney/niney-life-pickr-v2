@@ -25,9 +25,7 @@ import { MealPhotoService } from './meal-photo.service.js';
 const ENTRIES = '/api/v1/meals';
 const PHOTOS = '/api/v1/meals/photos';
 
-const recognizedDish = (
-  overrides: Partial<RecognizedDishType> = {},
-): RecognizedDishType => ({
+const recognizedDish = (overrides: Partial<RecognizedDishType> = {}): RecognizedDishType => ({
   name: '김치찌개',
   candidates: [{ name: '김치찌개', confidence: 0.7 }],
   confidence: 0.7,
@@ -43,7 +41,10 @@ const recognizedDish = (
   ...overrides,
 });
 
-const multipart = (buf: Buffer, filename = 'meal.jpg'): { payload: Buffer; headers: Record<string, string> } => {
+const multipart = (
+  buf: Buffer,
+  filename = 'meal.jpg',
+): { payload: Buffer; headers: Record<string, string> } => {
   const boundary = '----lifepickrtest';
   const head = Buffer.from(
     `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: image/jpeg\r\n\r\n`,
@@ -70,12 +71,39 @@ describe('meal routes (격리 DB)', () => {
       { id: 'meal-user', role: 'USER' },
       { id: 'meal-other', role: 'USER' },
     ]);
-    auth = { authorization: `Bearer ${app.jwt.sign({ userId: 'meal-user', email: 'm@x.com', role: 'USER' })}` };
-    otherAuth = { authorization: `Bearer ${app.jwt.sign({ userId: 'meal-other', email: 'o@x.com', role: 'USER' })}` };
+    auth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'meal-user', email: 'm@x.com', role: 'USER' })}`,
+    };
+    otherAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'meal-other', email: 'o@x.com', role: 'USER' })}`,
+    };
     await upsertFoodSeeds(app.prisma, [
-      { name: '김치찌개', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean', source: 'manual' },
+      {
+        name: '김치찌개',
+        dishType: 'stew',
+        mainIngredient: 'pork',
+        cuisine: 'korean',
+        source: 'manual',
+      },
+      {
+        name: '영양덮밥',
+        dishType: 'rice',
+        mainIngredient: 'beef',
+        cuisine: 'korean',
+        nutrition: {
+          kcal: 500,
+          carbG: 70,
+          proteinG: 20,
+          fatG: 14,
+          sodiumMg: 800,
+          sugarG: 5,
+        },
+        source: 'manual',
+      },
     ]);
-    jpeg = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 200, g: 120, b: 60 } } })
+    jpeg = await sharp({
+      create: { width: 40, height: 30, channels: 3, background: { r: 200, g: 120, b: 60 } },
+    })
       .jpeg()
       .toBuffer();
   });
@@ -116,7 +144,13 @@ describe('meal routes (격리 DB)', () => {
     entryId = entry.id;
     expect(entry.items).toHaveLength(2);
     // '김치 찌개' → normalizeTerm 으로 카탈로그 '김치찌개' 와 매칭.
-    expect(entry.items[0]).toMatchObject({ name: '김치 찌개', dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean' });
+    expect(entry.items[0]).toMatchObject({
+      name: '김치 찌개',
+      dishType: 'stew',
+      mainIngredient: 'pork',
+      cuisine: 'korean',
+    });
+    expect(entry.items[0]?.nutritionBasis).toBe('missing');
     expect(entry.items[0]?.foodId).not.toBeNull();
     // 매칭 안 되는 항목은 이름 규칙만 반영(분류 null 가능) — 실패가 아니다.
     expect(entry.items[1]?.name).toBe('공깃밥');
@@ -133,14 +167,71 @@ describe('meal routes (격리 DB)', () => {
         eatenDate: '2026-08-21',
         slot: 'dinner',
         source: 'photo',
-        items: [{ name: '김치찌개', dishType: 'soup', mainIngredient: 'beef', cuisine: 'other', isMain: true, source: 'recognized', confidence: 0.7 }],
+        items: [
+          {
+            name: '김치찌개',
+            dishType: 'soup',
+            mainIngredient: 'beef',
+            cuisine: 'other',
+            isMain: true,
+            source: 'recognized',
+            confidence: 0.7,
+          },
+        ],
         recognition: { model: 'gemma4:31b', version: 1, dishes: [recognizedDish()] },
       },
     });
     expect(res.statusCode).toBe(201);
     const entry = res.json<MealEntryType>();
-    expect(entry.items[0]).toMatchObject({ dishType: 'soup', mainIngredient: 'beef', cuisine: 'other', confidence: 0.7 });
+    expect(entry.items[0]).toMatchObject({
+      dishType: 'soup',
+      mainIngredient: 'beef',
+      cuisine: 'other',
+      confidence: 0.7,
+    });
     expect(entry.recognition).toMatchObject({ model: 'gemma4:31b', version: 1 });
+  });
+
+  it('존재하지 않는 foodId는 이름으로 다시 매칭하고 다른 음식의 영양과 결합하지 않는다', async () => {
+    const expectedFood = await app.prisma.foodItem.findFirstOrThrow({
+      where: { name: '영양덮밥' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: ENTRIES,
+      headers: auth,
+      payload: {
+        eatenAt: '2026-08-21T10:30:00.000Z',
+        eatenDate: '2026-08-21',
+        slot: 'dinner',
+        source: 'manual',
+        items: [
+          {
+            name: '영양덮밥',
+            foodId: 'missing-food-id',
+            catalogMatchedBy: 'food_id',
+            catalogMatchScore: 1,
+            isMain: true,
+            source: 'manual',
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const created = res.json<MealEntryType>();
+    try {
+      expect(created.items[0]).toMatchObject({
+        foodId: expectedFood.id,
+        catalogMatchedBy: 'normalized_name',
+        catalogMatchScore: 1,
+        kcal: 500,
+        proteinG: 20,
+        sodiumMg: 800,
+        nutritionBasis: 'direct',
+      });
+    } finally {
+      await app.prisma.mealEntry.delete({ where: { id: created.id } });
+    }
   });
 
   it('불완전·범위 초과·임의 필드가 있는 인식 snapshot POST를 400으로 거절한다', async () => {
@@ -253,8 +344,15 @@ describe('meal routes (격리 DB)', () => {
     });
     expect(next.json<ListMealEntriesResultType>().items[0]?.eatenDate).toBe('2026-08-20');
 
-    expect((await app.inject({ method: 'GET', url: ENTRIES, headers: otherAuth })).json<ListMealEntriesResultType>().items).toHaveLength(0);
-    expect((await app.inject({ method: 'GET', url: `${ENTRIES}/${entryId}`, headers: otherAuth })).statusCode).toBe(404);
+    expect(
+      (
+        await app.inject({ method: 'GET', url: ENTRIES, headers: otherAuth })
+      ).json<ListMealEntriesResultType>().items,
+    ).toHaveLength(0);
+    expect(
+      (await app.inject({ method: 'GET', url: `${ENTRIES}/${entryId}`, headers: otherAuth }))
+        .statusCode,
+    ).toBe(404);
   });
 
   it('동일한 eatenAt 기록도 opaque 복합 커서로 빠짐없이 페이지네이션한다', async () => {
@@ -292,30 +390,122 @@ describe('meal routes (격리 DB)', () => {
   });
 
   it('날짜·끼니 필터', async () => {
-    const filtered = await app.inject({ method: 'GET', url: `${ENTRIES}?from=2026-08-21&to=2026-08-21&slot=dinner`, headers: auth });
+    const filtered = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}?from=2026-08-21&to=2026-08-21&slot=dinner`,
+      headers: auth,
+    });
     expect(filtered.json<ListMealEntriesResultType>().items).toHaveLength(1);
-    const none = await app.inject({ method: 'GET', url: `${ENTRIES}?from=2026-08-21&slot=lunch`, headers: auth });
+    const none = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}?from=2026-08-21&slot=lunch`,
+      headers: auth,
+    });
     expect(none.json<ListMealEntriesResultType>().items).toHaveLength(0);
   });
 
+  it('장소·메모·음식 검색과 식사 유형·기록 출처 필터를 함께 적용한다', async () => {
+    for (const q of ['숯토리', '맛있었다', '공깃밥']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `${ENTRIES}?q=${encodeURIComponent(q)}&mealType=dining_out&source=manual&slot=lunch`,
+        headers: auth,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<ListMealEntriesResultType>().items.map((item) => item.id)).toEqual([entryId]);
+    }
+
+    const incompatible = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}?q=${encodeURIComponent('김치찌개')}&mealType=dining_out&source=photo`,
+      headers: auth,
+    });
+    expect(incompatible.statusCode).toBe(200);
+    expect(incompatible.json<ListMealEntriesResultType>().items).toEqual([]);
+  });
+
   it('달력 — 날짜별 끼니 요약, 잘못된 월은 400', async () => {
-    const res = await app.inject({ method: 'GET', url: `${ENTRIES}/calendar?month=2026-08`, headers: auth });
+    const res = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/calendar?month=2026-08`,
+      headers: auth,
+    });
     expect(res.statusCode).toBe(200);
     const cal = res.json<MealCalendarResultType>();
     expect(cal.days.map((d) => d.date)).toEqual(['2026-08-20', '2026-08-21']);
     expect(cal.days[0]).toMatchObject({ count: 1, slots: ['lunch'], hasPhoto: false });
-    expect((await app.inject({ method: 'GET', url: `${ENTRIES}/calendar?month=202608`, headers: auth })).statusCode).toBe(400);
+    expect(
+      (await app.inject({ method: 'GET', url: `${ENTRIES}/calendar?month=202608`, headers: auth }))
+        .statusCode,
+    ).toBe(400);
   });
 
   it('통계 — 기간 역전은 400', async () => {
-    const res = await app.inject({ method: 'GET', url: `${ENTRIES}/stats?from=2026-08-15&to=2026-08-22`, headers: auth });
+    const res = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/stats?from=2026-08-15&to=2026-08-22`,
+      headers: auth,
+    });
     expect(res.statusCode).toBe(200);
     const stats = res.json<MealStatsResultType>();
     expect(stats.entryCount).toBe(2);
     expect(stats.byDishType.find((b) => b.key === 'stew')?.count).toBe(1);
-    expect(stats.recommendation).toEqual({ chosenCount: 0, loggedCount: 0, ratedCount: 0, acceptanceRate: 0 });
-    expect(stats.insights).toEqual([expect.objectContaining({ key: 'getting-started', tone: 'info' })]);
-    expect((await app.inject({ method: 'GET', url: `${ENTRIES}/stats?from=2026-08-22&to=2026-08-15`, headers: auth })).statusCode).toBe(400);
+    expect(stats.recommendation).toEqual({
+      chosenCount: 0,
+      loggedCount: 0,
+      ratedCount: 0,
+      acceptanceRate: 0,
+      shownCount: 0,
+      dismissedCount: 0,
+      candidateRatedCount: 0,
+      pickRate: 0,
+      loggedFromShownRate: 0,
+    });
+    expect(stats.insights).toEqual([
+      expect.objectContaining({ key: 'getting-started', tone: 'info' }),
+    ]);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `${ENTRIES}/stats?from=2026-08-22&to=2026-08-15`,
+          headers: auth,
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+
+  it('추천 통계는 legacy feedback이 없는 노출·닫기 이벤트도 분모에 포함한다', async () => {
+    const recommendation = await app.prisma.mealRecommendation.create({
+      data: {
+        userId: 'meal-user',
+        targetDate: '2026-08-22',
+        targetSlot: 'dinner',
+        itemsJson: '[]',
+        status: 'done',
+        events: {
+          create: [
+            { userId: 'meal-user', kind: 'shown', platform: 'mobile', rankingVersion: 1 },
+            { userId: 'meal-user', kind: 'dismissed', platform: 'mobile', rankingVersion: 1 },
+          ],
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/stats?from=2026-08-22&to=2026-08-22`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<MealStatsResultType>().recommendation).toMatchObject({
+      shownCount: 1,
+      dismissedCount: 1,
+      chosenCount: 0,
+      pickRate: 0,
+    });
+
+    await app.prisma.mealRecommendation.delete({ where: { id: recommendation.id } });
   });
 
   it('추천 출처 기록 — 저장 성공 시에만 소유 추천·후보를 검증해 feedback 을 연결한다', async () => {
@@ -352,13 +542,22 @@ describe('meal routes (격리 DB)', () => {
     };
 
     // 카드 선택만으로는 feedback 이 없다. 실제 기록 저장 뒤에만 연결된다.
-    expect((await app.prisma.mealRecommendation.findUnique({ where: { id: recommendation.id } }))?.feedbackJson).toBeNull();
+    expect(
+      (await app.prisma.mealRecommendation.findUnique({ where: { id: recommendation.id } }))
+        ?.feedbackJson,
+    ).toBeNull();
     const saved = await app.inject({ method: 'POST', url: ENTRIES, headers: auth, payload });
     expect(saved.statusCode).toBe(201);
     const entry = saved.json<MealEntryType>();
-    expect(entry).toMatchObject({ source: 'recommendation', originRecommendationId: recommendation.id });
+    expect(entry).toMatchObject({
+      source: 'recommendation',
+      originRecommendationId: recommendation.id,
+    });
     expect(
-      JSON.parse((await app.prisma.mealRecommendation.findUnique({ where: { id: recommendation.id } }))!.feedbackJson!),
+      JSON.parse(
+        (await app.prisma.mealRecommendation.findUnique({ where: { id: recommendation.id } }))!
+          .feedbackJson!,
+      ),
     ).toMatchObject({ pickedName: '김치찌개', eatenEntryId: entry.id });
 
     expect(
@@ -378,25 +577,36 @@ describe('meal routes (격리 DB)', () => {
     // 기록을 지우면 추천의 실제 기록 연결만 풀려야 한다. 선택은 남고 같은 추천으로 다시
     // 기록할 수 있어야 JSON 연결이 삭제된 id를 영구히 가리키지 않는다.
     expect(
-      (await app.inject({ method: 'DELETE', url: `${ENTRIES}/${entry.id}`, headers: auth })).statusCode,
+      (await app.inject({ method: 'DELETE', url: `${ENTRIES}/${entry.id}`, headers: auth }))
+        .statusCode,
     ).toBe(204);
     expect(
-      JSON.parse((await app.prisma.mealRecommendation.findUnique({ where: { id: recommendation.id } }))!.feedbackJson!),
+      JSON.parse(
+        (await app.prisma.mealRecommendation.findUnique({ where: { id: recommendation.id } }))!
+          .feedbackJson!,
+      ),
     ).toMatchObject({ pickedName: '김치찌개', eatenEntryId: null });
     const savedAgain = await app.inject({ method: 'POST', url: ENTRIES, headers: auth, payload });
     expect(savedAgain.statusCode).toBe(201);
     expect(
-      (await app.inject({
-        method: 'DELETE',
-        url: `${ENTRIES}/${savedAgain.json<MealEntryType>().id}`,
-        headers: auth,
-      })).statusCode,
+      (
+        await app.inject({
+          method: 'DELETE',
+          url: `${ENTRIES}/${savedAgain.json<MealEntryType>().id}`,
+          headers: auth,
+        })
+      ).statusCode,
     ).toBe(204);
   });
 
   it('사진 업로드 → 원본·썸네일 조회, 남의 사진은 403', async () => {
     const { payload, headers } = multipart(jpeg);
-    const up = await app.inject({ method: 'POST', url: PHOTOS, headers: { ...auth, ...headers }, payload });
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...headers },
+      payload,
+    });
     expect(up.statusCode).toBe(200);
     const photo = up.json<UploadMealPhotoResultType>();
     expect(photo.token).toMatch(/^[a-f0-9-]{36}$/);
@@ -411,17 +621,83 @@ describe('meal routes (격리 DB)', () => {
     expect(thumb.statusCode).toBe(200);
     expect(thumb.rawPayload.byteLength).toBeLessThanOrEqual(full.rawPayload.byteLength);
 
-    expect((await app.inject({ method: 'GET', url: photo.previewUrl, headers: otherAuth })).statusCode).toBe(403);
+    expect(
+      (await app.inject({ method: 'GET', url: photo.previewUrl, headers: otherAuth })).statusCode,
+    ).toBe(403);
     // 이미지가 아니면 400.
     const bad = multipart(Buffer.from('not an image'), 'x.jpg');
     expect(
-      (await app.inject({ method: 'POST', url: PHOTOS, headers: { ...auth, ...bad.headers }, payload: bad.payload })).statusCode,
+      (
+        await app.inject({
+          method: 'POST',
+          url: PHOTOS,
+          headers: { ...auth, ...bad.headers },
+          payload: bad.payload,
+        })
+      ).statusCode,
     ).toBe(400);
+  });
+
+  it('기록에 연결된 사진은 단독 DELETE를 거절하고 기록 PATCH로만 제거한다', async () => {
+    const upload = multipart(jpeg);
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...upload.headers },
+      payload: upload.payload,
+    });
+    const photo = up.json<UploadMealPhotoResultType>();
+    const created = await app.inject({
+      method: 'POST',
+      url: ENTRIES,
+      headers: auth,
+      payload: {
+        eatenAt: '2026-08-19T03:00:00.000Z',
+        eatenDate: '2026-08-19',
+        slot: 'lunch',
+        items: [{ name: '사진 삭제 경계 검증', isMain: true }],
+        photoTokens: [photo.token],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const meal = created.json<MealEntryType>();
+
+    const directDelete = await app.inject({
+      method: 'DELETE',
+      url: `${PHOTOS}/${photo.token}`,
+      headers: auth,
+    });
+    expect(directDelete.statusCode).toBe(409);
+    expect(directDelete.json<{ message: string }>().message).toContain('기록에 연결');
+    expect(await app.prisma.mealPhoto.findUnique({ where: { token: photo.token } })).toMatchObject({
+      entryId: meal.id,
+    });
+    expect(
+      (await app.inject({ method: 'GET', url: photo.previewUrl, headers: auth })).statusCode,
+    ).toBe(200);
+
+    const detached = await app.inject({
+      method: 'PATCH',
+      url: `${ENTRIES}/${meal.id}`,
+      headers: auth,
+      payload: { photoTokens: [] },
+    });
+    expect(detached.statusCode).toBe(200);
+    expect(detached.json<MealEntryType>().photos).toEqual([]);
+    expect(await app.prisma.mealPhoto.findUnique({ where: { token: photo.token } })).toBeNull();
+    expect(
+      (await app.inject({ method: 'GET', url: photo.previewUrl, headers: auth })).statusCode,
+    ).toBe(404);
   });
 
   it('사진을 기록에 붙이고 수정(항목 전량 교체) → 삭제하면 사진 행도 사라진다', async () => {
     const { payload, headers } = multipart(jpeg);
-    const up = await app.inject({ method: 'POST', url: PHOTOS, headers: { ...auth, ...headers }, payload });
+    const up = await app.inject({
+      method: 'POST',
+      url: PHOTOS,
+      headers: { ...auth, ...headers },
+      payload,
+    });
     const token = up.json<UploadMealPhotoResultType>().token;
 
     const patched = await app.inject({
@@ -443,12 +719,21 @@ describe('meal routes (격리 DB)', () => {
 
     // 남의 기록 수정 404.
     expect(
-      (await app.inject({ method: 'PATCH', url: `${ENTRIES}/${entryId}`, headers: otherAuth, payload: { memo: 'x' } })).statusCode,
+      (
+        await app.inject({
+          method: 'PATCH',
+          url: `${ENTRIES}/${entryId}`,
+          headers: otherAuth,
+          payload: { memo: 'x' },
+        })
+      ).statusCode,
     ).toBe(404);
 
     const del = await app.inject({ method: 'DELETE', url: `${ENTRIES}/${entryId}`, headers: auth });
     expect(del.statusCode).toBe(204);
-    expect((await app.inject({ method: 'GET', url: `${ENTRIES}/${entryId}`, headers: auth })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: 'GET', url: `${ENTRIES}/${entryId}`, headers: auth })).statusCode,
+    ).toBe(404);
     expect(await app.prisma.mealPhoto.findUnique({ where: { token } })).toBeNull();
   });
 
@@ -477,7 +762,9 @@ describe('meal routes (격리 DB)', () => {
         eatenDate: '2026-08-18',
         slot: 'lunch',
         memo: '원본',
-        items: { create: { name: '원본음식', nameNorm: '원본음식', isMain: true, source: 'manual' } },
+        items: {
+          create: { name: '원본음식', nameNorm: '원본음식', isMain: true, source: 'manual' },
+        },
       },
     });
     const update = await app.inject({
@@ -491,8 +778,15 @@ describe('meal routes (격리 DB)', () => {
       },
     });
     expect(update.statusCode).toBe(404);
-    const unchanged = await app.inject({ method: 'GET', url: `${ENTRIES}/${original.id}`, headers: auth });
-    expect(unchanged.json<MealEntryType>()).toMatchObject({ memo: '원본', items: [{ name: '원본음식' }] });
+    const unchanged = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/${original.id}`,
+      headers: auth,
+    });
+    expect(unchanged.json<MealEntryType>()).toMatchObject({
+      memo: '원본',
+      items: [{ name: '원본음식' }],
+    });
   });
 
   it('사진 연결 단계 실패 시 항목·메모 변경을 함께 롤백한다', async () => {
@@ -510,10 +804,14 @@ describe('meal routes (격리 DB)', () => {
         eatenDate: '2026-08-18',
         slot: 'lunch',
         memo: '트랜잭션 전',
-        items: { create: { name: '원래항목', nameNorm: '원래항목', isMain: true, source: 'manual' } },
+        items: {
+          create: { name: '원래항목', nameNorm: '원래항목', isMain: true, source: 'manual' },
+        },
       },
     });
-    const attach = vi.spyOn(app.mealPhotos, 'attachToEntry').mockRejectedValueOnce(new Error('forced attach failure'));
+    const attach = vi
+      .spyOn(app.mealPhotos, 'attachToEntry')
+      .mockRejectedValueOnce(new Error('forced attach failure'));
     const res = await app.inject({
       method: 'PATCH',
       url: `${ENTRIES}/${original.id}`,
@@ -526,13 +824,26 @@ describe('meal routes (격리 DB)', () => {
     });
     attach.mockRestore();
     expect(res.statusCode).toBe(500);
-    const unchanged = await app.inject({ method: 'GET', url: `${ENTRIES}/${original.id}`, headers: auth });
-    expect(unchanged.json<MealEntryType>()).toMatchObject({ memo: '트랜잭션 전', items: [{ name: '원래항목' }] });
-    expect(await app.prisma.mealPhoto.findUnique({ where: { token } })).toMatchObject({ entryId: null });
+    const unchanged = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/${original.id}`,
+      headers: auth,
+    });
+    expect(unchanged.json<MealEntryType>()).toMatchObject({
+      memo: '트랜잭션 전',
+      items: [{ name: '원래항목' }],
+    });
+    expect(await app.prisma.mealPhoto.findUnique({ where: { token } })).toMatchObject({
+      entryId: null,
+    });
   });
 
   it('선호 설정 — 행이 없어도 기본값, PUT 은 부분 병합', async () => {
-    const initial = await app.inject({ method: 'GET', url: `${ENTRIES}/preference`, headers: auth });
+    const initial = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/preference`,
+      headers: auth,
+    });
     expect(initial.statusCode).toBe(200);
     const pref = initial.json<MealPreferenceType>();
     expect(pref.onboarded).toBe(false);
@@ -545,7 +856,15 @@ describe('meal routes (격리 DB)', () => {
       url: `${ENTRIES}/preference`,
       headers: auth,
       payload: {
-        weights: { variety: 5, taste: 2, balance: 5, health: 4, novelty: 1, weather: 0, convenience: 3 },
+        weights: {
+          variety: 5,
+          taste: 2,
+          balance: 5,
+          health: 4,
+          novelty: 1,
+          weather: 0,
+          convenience: 3,
+        },
         excludedFoods: ['오이'],
         dislikedFoods: ['고수', '오 이'],
         likedFoods: ['고 수', '비빔밥'],
@@ -559,7 +878,12 @@ describe('meal routes (격리 DB)', () => {
       onboarded: true,
     });
 
-    const merged = await app.inject({ method: 'PUT', url: `${ENTRIES}/preference`, headers: auth, payload: { slots: ['lunch', 'dinner'] } });
+    const merged = await app.inject({
+      method: 'PUT',
+      url: `${ENTRIES}/preference`,
+      headers: auth,
+      payload: { slots: ['lunch', 'dinner'] },
+    });
     const body = merged.json<MealPreferenceType>();
     expect(body.slots).toEqual(['lunch', 'dinner']);
     // 앞서 저장한 값은 유지된다.
@@ -610,7 +934,10 @@ describe('meal routes (격리 DB)', () => {
       url: '/api/v1/meals/items/recent?name=한번도안먹은것',
       headers: auth,
     });
-    expect(res.json<{ found: boolean; photoToken: string | null }>()).toMatchObject({ found: false, photoToken: null });
+    expect(res.json<{ found: boolean; photoToken: string | null }>()).toMatchObject({
+      found: false,
+      photoToken: null,
+    });
   });
 
   it('남의 기록은 안 보인다', async () => {
@@ -631,7 +958,11 @@ describe('meal routes (격리 DB)', () => {
     });
     const src = up.json<UploadMealPhotoResultType>();
 
-    const copied = await app.inject({ method: 'POST', url: `${PHOTOS}/${src.token}/copy`, headers: auth });
+    const copied = await app.inject({
+      method: 'POST',
+      url: `${PHOTOS}/${src.token}/copy`,
+      headers: auth,
+    });
     expect(copied.statusCode).toBe(201);
     const dst = copied.json<UploadMealPhotoResultType>();
     expect(dst.token).not.toBe(src.token);
@@ -649,7 +980,11 @@ describe('meal routes (격리 DB)', () => {
       payload: multipart(jpeg).payload,
     });
     const src = up.json<UploadMealPhotoResultType>();
-    const res = await app.inject({ method: 'POST', url: `${PHOTOS}/${src.token}/copy`, headers: otherAuth });
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PHOTOS}/${src.token}/copy`,
+      headers: otherAuth,
+    });
     expect(res.statusCode).toBe(403);
   });
 
@@ -662,7 +997,8 @@ describe('meal routes (격리 DB)', () => {
         limited.store('meal-other', jpeg),
       ]);
       const fulfilled = writes.filter(
-        (result): result is PromiseFulfilledResult<UploadMealPhotoResultType> => result.status === 'fulfilled',
+        (result): result is PromiseFulfilledResult<UploadMealPhotoResultType> =>
+          result.status === 'fulfilled',
       );
       const rejected = writes.filter((result) => result.status === 'rejected');
       expect(fulfilled).toHaveLength(1);
@@ -670,7 +1006,9 @@ describe('meal routes (격리 DB)', () => {
       expect(rejected[0]).toMatchObject({ reason: { code: 'quota' } });
       expect(await app.prisma.mealPhoto.count({ where: { userId: 'meal-other' } })).toBe(1);
 
-      await expect(limited.copy('meal-other', fulfilled[0]!.value.token)).rejects.toMatchObject({ code: 'quota' });
+      await expect(limited.copy('meal-other', fulfilled[0]!.value.token)).rejects.toMatchObject({
+        code: 'quota',
+      });
       expect(await app.prisma.mealPhoto.count({ where: { userId: 'meal-other' } })).toBe(1);
       await limited.remove('meal-other', fulfilled[0]!.value.token);
     } finally {
@@ -701,9 +1039,15 @@ describe('meal routes (격리 DB)', () => {
   });
 
   it('시간 프리셋 — 기록이 적은 끼니는 일반 기본값을 준다', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/v1/meals/time-presets', headers: otherAuth });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/time-presets',
+      headers: otherAuth,
+    });
     expect(res.statusCode).toBe(200);
-    const { presets } = res.json<{ presets: { slot: string; time: string; fromRecords: boolean }[] }>();
+    const { presets } = res.json<{
+      presets: { slot: string; time: string; fromRecords: boolean }[];
+    }>();
     const breakfast = presets.find((p) => p.slot === 'breakfast');
     expect(breakfast).toMatchObject({ time: '08:00', fromRecords: false });
   });
@@ -714,7 +1058,8 @@ describe('meal routes (격리 DB)', () => {
     const kstEntry = async (daysAgo: number, hh: number, mm: number): Promise<void> => {
       const base = new Date(Date.now() - daysAgo * 86_400_000);
       const utc = new Date(
-        Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), hh, mm) - 9 * 3_600_000,
+        Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), hh, mm) -
+          9 * 3_600_000,
       );
       await app.inject({
         method: 'POST',
@@ -733,8 +1078,14 @@ describe('meal routes (격리 DB)', () => {
     await kstEntry(2, 8, 20);
     await kstEntry(1, 9, 0);
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/meals/time-presets', headers: auth });
-    const { presets } = res.json<{ presets: { slot: string; time: string; fromRecords: boolean; sampleCount: number }[] }>();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/time-presets',
+      headers: auth,
+    });
+    const { presets } = res.json<{
+      presets: { slot: string; time: string; fromRecords: boolean; sampleCount: number }[];
+    }>();
     expect(presets.find((p) => p.slot === 'breakfast')).toMatchObject({
       time: '08:20',
       fromRecords: true,

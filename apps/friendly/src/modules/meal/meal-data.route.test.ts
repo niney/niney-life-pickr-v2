@@ -6,10 +6,15 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import {
+  MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
   MEAL_DATA_DELETE_CONFIRMATION,
   type CreateMealEntryInputType,
+  type DeleteMealPhotosResultType,
   type DeleteMealDataResultType,
+  type MealDataBackupType,
   type MealDataExportType,
+  type MealPhotoRetentionPreviewType,
+  type RestoreMealDataResultType,
   type RecognizedDishType,
 } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
@@ -69,14 +74,32 @@ describe('meal data export/delete routes (격리 DB)', () => {
     isolated = await useIsolatedDatabase();
     // useIsolatedDatabase 는 dev.db 복사본을 쓰므로 아직 개발 DB에 적용하지 않은 신규 migration도
     // 실제 SQL 그대로 임시 DB에 적용해 FK 동작까지 검증한다.
-    const migrationSql = await readFile(
-      new URL('../../../prisma/migrations/20260823170000_add_meal_photo_user_fk/migration.sql', import.meta.url),
-      'utf8',
-    );
     const migrationClient = new PrismaClient();
     try {
-      for (const statement of migrationSql.split(';').map((part) => part.trim()).filter(Boolean)) {
-        await migrationClient.$executeRawUnsafe(statement);
+      for (const migration of [
+        '20260823170000_add_meal_photo_user_fk',
+        '20260823210000_meal_backup_restore',
+        '20260823220000_meal_photo_deletion_outbox',
+      ]) {
+        const existingTable =
+          migration === '20260823210000_meal_backup_restore'
+            ? 'meal_data_imports'
+            : migration === '20260823220000_meal_photo_deletion_outbox'
+              ? 'meal_photo_deletions'
+              : null;
+        if (existingTable !== null) {
+          const table = await migrationClient.$queryRawUnsafe<Array<{ name: string }>>(
+            `SELECT name FROM sqlite_master WHERE type='table' AND name='${existingTable}'`,
+          );
+          if (table.length > 0) continue;
+        }
+        const migrationSql = await readFile(
+          new URL(`../../../prisma/migrations/${migration}/migration.sql`, import.meta.url),
+          'utf8',
+        );
+        for (const statement of migrationSql.split(';').map((part) => part.trim()).filter(Boolean)) {
+          await migrationClient.$executeRawUnsafe(statement);
+        }
       }
     } finally {
       await migrationClient.$disconnect();
@@ -90,6 +113,11 @@ describe('meal data export/delete routes (격리 DB)', () => {
       { id: 'meal-data-race-before', role: 'USER' },
       { id: 'meal-data-race-during', role: 'USER' },
       { id: 'meal-data-delete-retry', role: 'USER' },
+      { id: 'meal-data-retention', role: 'USER' },
+      { id: 'meal-data-retention-other', role: 'USER' },
+      { id: 'meal-data-retention-retry', role: 'USER' },
+      { id: 'meal-data-restore', role: 'USER' },
+      { id: 'meal-data-restore-race', role: 'USER' },
     ]);
     auth = {
       authorization: `Bearer ${app.jwt.sign({ userId: 'meal-data-user', email: 'data@x.com', role: 'USER' })}`,
@@ -141,7 +169,7 @@ describe('meal data export/delete routes (격리 DB)', () => {
         onboarded: true,
       },
     });
-    await app.prisma.mealRecommendation.create({
+    const recommendation = await app.prisma.mealRecommendation.create({
       data: {
         userId: 'meal-data-user',
         targetDate: '2026-08-24',
@@ -165,6 +193,32 @@ describe('meal data export/delete routes (격리 DB)', () => {
         ]),
         summary: '따뜻한 메뉴',
         status: 'done',
+      },
+    });
+    await app.prisma.mealRecommendationEvent.create({
+      data: {
+        recommendationId: recommendation.id,
+        userId: 'meal-data-user',
+        kind: 'candidate_picked',
+        candidateName: '된장찌개',
+        candidateRank: 0,
+        platform: 'mobile',
+        rankingVersion: 1,
+      },
+    });
+    await app.prisma.mealDailyQuota.create({
+      data: { userId: 'meal-data-user', date: '2026-08-23', purpose: 'recognition', count: 1 },
+    });
+    await app.prisma.mealDataImport.create({
+      data: {
+        userId: 'meal-data-user',
+        archiveId: '00000000-0000-4000-8000-000000000001',
+        entries: 0,
+        items: 0,
+        photos: 0,
+        recommendations: 0,
+        recommendationEvents: 0,
+        preferenceResult: 'none',
       },
     });
 
@@ -206,6 +260,11 @@ describe('meal data export/delete routes (격리 DB)', () => {
       'meal-data-race-before',
       'meal-data-race-during',
       'meal-data-delete-retry',
+      'meal-data-retention',
+      'meal-data-retention-other',
+      'meal-data-retention-retry',
+      'meal-data-restore',
+      'meal-data-restore-race',
     ]) {
       await rm(userDir(userId), { recursive: true, force: true });
     }
@@ -214,6 +273,18 @@ describe('meal data export/delete routes (격리 DB)', () => {
 
   it('인증 없이는 내보내기와 전체 삭제 모두 401', async () => {
     expect((await app.inject({ method: 'GET', url: EXPORT })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/meals/data/backup' })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/v1/meals/data/backup/restore',
+      payload: {},
+    })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/meals/data/photos/retention' })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/meals/data/photos/retention',
+      payload: { confirmation: MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION },
+    })).statusCode).toBe(401);
     expect(
       (
         await app.inject({
@@ -256,6 +327,7 @@ describe('meal data export/delete routes (격리 DB)', () => {
       context: { mealType: 'home', note: '따뜻하게' },
       profile: { entryCount: 1, recentFoods: ['비빔밥'] },
       profileHash: 'profile-user',
+      events: [{ kind: 'candidate_picked', candidateName: '된장찌개' }],
     });
     expect(JSON.stringify(body)).not.toContain('남의 식단');
     expect(JSON.stringify(body)).not.toContain('남의 추천');
@@ -273,11 +345,323 @@ describe('meal data export/delete routes (격리 DB)', () => {
     expect(await app.prisma.mealEntry.count({ where: { userId: 'meal-data-user' } })).toBe(before);
   });
 
+  it('사진 포함 백업은 토큰·경로 없이 무결성 payload와 추천 이벤트를 내보내고 다른 사용자에게 멱등 복원한다', async () => {
+    const backupRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/data/backup',
+      headers: auth,
+    });
+    expect(backupRes.statusCode).toBe(200);
+    const backup = backupRes.json<MealDataBackupType>();
+    expect(backup).toMatchObject({
+      format: 'niney-life-pickr.meal-backup',
+      version: 1,
+      notice: {
+        encoding: 'json-base64',
+        orphanPhotosSkipped: 1,
+        duplicatePolicy: 'same-archive-id-is-idempotent',
+      },
+    });
+    expect(backup.photos).toHaveLength(1);
+    expect(backup.photos[0]).toMatchObject({ contentType: 'image/jpeg', byteSize: expect.any(Number) });
+    expect(backup.photos[0]!.dataBase64.length).toBeGreaterThan(10);
+    expect(backup.recommendations[0]?.events).toEqual([
+      expect.objectContaining({ kind: 'candidate_picked', candidateName: '된장찌개' }),
+    ]);
+    expect(JSON.stringify(backup)).not.toContain(attachedToken);
+    expect(JSON.stringify(backup)).not.toContain('meal-photos/');
+
+    const restoreAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'meal-data-restore', email: 'restore@x.com', role: 'USER' })}`,
+    };
+    const restoredRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/meals/data/backup/restore',
+      headers: restoreAuth,
+      payload: backup,
+    });
+    expect(restoredRes.statusCode).toBe(200);
+    expect(restoredRes.json<RestoreMealDataResultType>()).toMatchObject({
+      archiveId: backup.archiveId,
+      duplicate: false,
+      restored: {
+        entries: 1,
+        items: 1,
+        photos: 1,
+        recommendations: 1,
+        recommendationEvents: 1,
+        preference: 'restored',
+      },
+    });
+    const restoredEntry = await app.prisma.mealEntry.findFirst({
+      where: { userId: 'meal-data-restore' },
+      include: { photos: true },
+    });
+    expect(restoredEntry?.id).not.toBe(backup.entries[0]?.ref);
+    expect(restoredEntry?.photos[0]?.token).not.toBe(attachedToken);
+    await expect(app.mealPhotos.read('meal-data-restore', restoredEntry!.photos[0]!.token, 'full')).resolves.toBeTruthy();
+    expect(await app.prisma.mealRecommendationEvent.count({ where: { userId: 'meal-data-restore' } })).toBe(1);
+
+    const beforeCounts = await Promise.all([
+      app.prisma.mealEntry.count({ where: { userId: 'meal-data-restore' } }),
+      app.prisma.mealPhoto.count({ where: { userId: 'meal-data-restore' } }),
+    ]);
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/api/v1/meals/data/backup/restore',
+      headers: restoreAuth,
+      payload: backup,
+    });
+    expect(duplicate.statusCode).toBe(200);
+    expect(duplicate.json<RestoreMealDataResultType>().duplicate).toBe(true);
+    expect(await Promise.all([
+      app.prisma.mealEntry.count({ where: { userId: 'meal-data-restore' } }),
+      app.prisma.mealPhoto.count({ where: { userId: 'meal-data-restore' } }),
+    ])).toEqual(beforeCounts);
+
+    const unsafe = structuredClone(backup);
+    unsafe.archiveId = '11111111-1111-4111-8111-111111111111';
+    unsafe.entries[0]!.photoRefs[0] = '../../other-user/photo.jpg';
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/v1/meals/data/backup/restore',
+      headers: restoreAuth,
+      payload: unsafe,
+    })).statusCode).toBe(400);
+
+    const tampered = structuredClone(backup);
+    tampered.archiveId = '22222222-2222-4222-8222-222222222222';
+    tampered.photos[0]!.sha256 = '0'.repeat(64);
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/v1/meals/data/backup/restore',
+      headers: restoreAuth,
+      payload: tampered,
+    })).statusCode).toBe(400);
+  });
+
+  it('90일 이전 사진과 오래된 고아만 소유자 범위에서 DB 커밋 후 지우고 텍스트 기록을 남긴다', async () => {
+    const userId = 'meal-data-retention';
+    const retentionAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId, email: 'retention@x.com', role: 'USER' })}`,
+    };
+    const oldPhoto = await app.mealPhotos.store(userId, jpeg);
+    const recentPhoto = await app.mealPhotos.store(userId, jpeg);
+    const orphanPhoto = await app.mealPhotos.store(userId, jpeg);
+    const otherPhoto = await app.mealPhotos.store('meal-data-retention-other', jpeg);
+    const oldEntry = await app.prisma.mealEntry.create({
+      data: {
+        userId,
+        eatenAt: new Date('2026-01-02T03:00:00.000Z'),
+        eatenDate: '2026-01-02',
+        slot: 'lunch',
+        memo: '사진을 지워도 남을 메모',
+        items: { create: { name: '오래된 식사', nameNorm: '오래된식사', isMain: true } },
+      },
+    });
+    const recentEntry = await app.prisma.mealEntry.create({
+      data: {
+        userId,
+        eatenAt: new Date('2026-08-20T03:00:00.000Z'),
+        eatenDate: '2026-08-20',
+        slot: 'lunch',
+        items: { create: { name: '최근 식사', nameNorm: '최근식사', isMain: true } },
+      },
+    });
+    await Promise.all([
+      app.prisma.mealPhoto.update({ where: { token: oldPhoto.token }, data: { entryId: oldEntry.id } }),
+      app.prisma.mealPhoto.update({ where: { token: recentPhoto.token }, data: { entryId: recentEntry.id } }),
+      app.prisma.mealPhoto.update({ where: { token: orphanPhoto.token }, data: { createdAt: new Date('2026-01-01') } }),
+      app.prisma.mealPhoto.update({ where: { token: otherPhoto.token }, data: { createdAt: new Date('2026-01-01') } }),
+    ]);
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meals/data/photos/retention?before=2026-06-01',
+      headers: retentionAuth,
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json<MealPhotoRetentionPreviewType>()).toMatchObject({
+      before: '2026-06-01',
+      entries: 1,
+      attachedPhotos: 1,
+      orphanPhotos: 1,
+      totalPhotos: 2,
+    });
+
+    const targetTokens = [oldPhoto.token, orphanPhoto.token];
+    const originalRemoveFilesStrict = app.mealPhotos.removeFilesStrict.bind(app.mealPhotos);
+    const removeFilesStrict = vi
+      .spyOn(app.mealPhotos, 'removeFilesStrict')
+      .mockImplementationOnce(async (rows) => {
+        // strict 파일 삭제 callback에 진입했을 때 DB 행·purgedAt과 재시도 outbox가 함께
+        // 커밋돼 있어야 한다. unlink 성공 뒤에만 outbox 행이 사라진다.
+        expect(await app.prisma.mealPhoto.count({ where: { token: { in: targetTokens } } })).toBe(0);
+        expect(
+          (await app.prisma.mealEntry.findUnique({ where: { id: oldEntry.id } }))?.photoPurgedAt,
+        ).not.toBeNull();
+        expect(await app.prisma.mealPhotoDeletion.count({ where: { userId } })).toBe(2);
+        await originalRemoveFilesStrict(rows);
+      });
+    try {
+      const deleted = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/meals/data/photos/retention',
+        headers: retentionAuth,
+        payload: {
+          before: '2026-06-01',
+          confirmation: MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
+        },
+      });
+      expect(deleted.statusCode).toBe(200);
+      expect(deleted.json<DeleteMealPhotosResultType>().deleted).toMatchObject({
+        entriesMarked: 1,
+        attachedPhotos: 1,
+        orphanPhotos: 1,
+        totalPhotos: 2,
+        photoFileSets: 2,
+        pendingFileSets: 0,
+      });
+    } finally {
+      removeFilesStrict.mockRestore();
+    }
+    expect(await app.prisma.mealPhotoDeletion.count({ where: { userId } })).toBe(0);
+    expect((await app.prisma.mealEntry.findUnique({ where: { id: oldEntry.id } }))?.memo).toBe('사진을 지워도 남을 메모');
+    expect(await app.prisma.mealItem.count({ where: { entryId: oldEntry.id } })).toBe(1);
+    expect(await app.prisma.mealPhoto.findUnique({ where: { token: recentPhoto.token } })).not.toBeNull();
+    expect(await app.prisma.mealPhoto.findUnique({ where: { token: otherPhoto.token } })).not.toBeNull();
+
+    const replacementPhoto = await app.mealPhotos.store(userId, jpeg);
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/meals/${oldEntry.id}`,
+      headers: retentionAuth,
+      payload: { photoTokens: [replacementPhoto.token] },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json<{ photoPurgedAt: string | null }>().photoPurgedAt).toBeNull();
+    expect((await app.prisma.mealEntry.findUnique({ where: { id: oldEntry.id } }))?.photoPurgedAt).toBeNull();
+  });
+
+  it('사진 unlink 실패를 outbox에 남기고 같은 retention DELETE에서 명시적으로 재시도한다', async () => {
+    const userId = 'meal-data-retention-retry';
+    const retryAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId, email: 'retention-retry@x.com', role: 'USER' })}`,
+    };
+    const photo = await app.mealPhotos.store(userId, jpeg);
+    const entry = await app.prisma.mealEntry.create({
+      data: {
+        userId,
+        eatenAt: new Date('2026-01-03T03:00:00.000Z'),
+        eatenDate: '2026-01-03',
+        slot: 'dinner',
+        items: { create: { name: '재시도 식사', nameNorm: '재시도식사', isMain: true } },
+      },
+    });
+    await app.prisma.mealPhoto.update({ where: { token: photo.token }, data: { entryId: entry.id } });
+
+    const removeFilesStrict = vi
+      .spyOn(app.mealPhotos, 'removeFilesStrict')
+      .mockRejectedValueOnce(new Error('forced unlink failure'));
+    try {
+      const first = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/meals/data/photos/retention',
+        headers: retryAuth,
+        payload: {
+          before: '2026-06-01',
+          confirmation: MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
+        },
+      });
+      expect(first.statusCode).toBe(200);
+      expect(first.json<DeleteMealPhotosResultType>().deleted).toMatchObject({
+        totalPhotos: 1,
+        photoFileSets: 1,
+        pendingFileSets: 1,
+      });
+      expect(await app.prisma.mealPhoto.findUnique({ where: { token: photo.token } })).toBeNull();
+      expect(await app.prisma.mealPhotoDeletion.findUnique({
+        where: { userId_token: { userId, token: photo.token } },
+      })).toMatchObject({ attempts: 1, lastError: 'forced unlink failure' });
+      await expect(access(photoPath(userId, photo.token))).resolves.toBeUndefined();
+    } finally {
+      removeFilesStrict.mockRestore();
+    }
+
+    const retry = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/meals/data/photos/retention',
+      headers: retryAuth,
+      payload: {
+        before: '2026-06-01',
+        confirmation: MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION,
+      },
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json<DeleteMealPhotosResultType>().deleted).toMatchObject({
+      totalPhotos: 0,
+      photoFileSets: 0,
+      pendingFileSets: 0,
+    });
+    expect(await app.prisma.mealPhotoDeletion.count({ where: { userId } })).toBe(0);
+    await expect(access(photoPath(userId, photo.token))).rejects.toThrow();
+    await expect(access(photoPath(userId, photo.token, true))).rejects.toThrow();
+  });
+
+  it('백업 복원 사진 저장 중에는 같은 사용자의 전체 삭제가 끼어들지 않는다', async () => {
+    const userId = 'meal-data-restore-race';
+    const data = new MealDataService(app.prisma, {
+      photos: app.mealPhotos,
+      purgeRecognitionDebugForUser: vi.fn().mockResolvedValue(undefined),
+    });
+    const archive = await data.backup('meal-data-user');
+    const storeEntered = deferred();
+    const releaseStore = deferred();
+    const originalStore = app.mealPhotos.storeWhileMutationLocked.bind(app.mealPhotos);
+    const store = vi
+      .spyOn(app.mealPhotos, 'storeWhileMutationLocked')
+      .mockImplementationOnce(async (targetUserId, buffer) => {
+        storeEntered.resolve();
+        await releaseStore.promise;
+        return originalStore(targetUserId, buffer);
+      });
+
+    try {
+      const restoring = data.restore(userId, archive);
+      await storeEntered.promise;
+      let deletionSettled = false;
+      const deleting = data
+        .deleteAll(userId, { confirmation: MEAL_DATA_DELETE_CONFIRMATION })
+        .finally(() => {
+          deletionSettled = true;
+        });
+      await Promise.resolve();
+      expect(deletionSettled).toBe(false);
+
+      releaseStore.resolve();
+      await restoring;
+      await deleting;
+      expect(await app.prisma.mealEntry.count({ where: { userId } })).toBe(0);
+      expect(await app.prisma.mealPhoto.count({ where: { userId } })).toBe(0);
+      expect(await app.prisma.mealDataImport.count({ where: { userId } })).toBe(0);
+    } finally {
+      releaseStore.resolve();
+      store.mockRestore();
+    }
+  });
+
   it('본인 DB 데이터와 붙지 않은 사진 파일까지 지우고 재호출은 멱등이다', async () => {
     for (const token of [attachedToken, orphanToken]) {
       await expect(access(photoPath('meal-data-user', token))).resolves.toBeUndefined();
       await expect(access(photoPath('meal-data-user', token, true))).resolves.toBeUndefined();
     }
+    await app.prisma.mealPhotoDeletion.create({
+      data: {
+        userId: 'meal-data-user',
+        token: '00000000-0000-4000-8000-000000000099',
+        reason: 'retention',
+      },
+    });
 
     const res = await app.inject({
       method: 'DELETE',
@@ -291,12 +675,19 @@ describe('meal data export/delete routes (격리 DB)', () => {
       items: 1,
       photos: 2,
       recommendations: 1,
+      recommendationEvents: 1,
+      dailyQuotas: 1,
+      importLedgers: 1,
       preference: 1,
       photoFileSets: 2,
     });
     expect(await app.prisma.mealEntry.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealPhoto.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealRecommendation.count({ where: { userId: 'meal-data-user' } })).toBe(0);
+    expect(await app.prisma.mealRecommendationEvent.count({ where: { userId: 'meal-data-user' } })).toBe(0);
+    expect(await app.prisma.mealDailyQuota.count({ where: { userId: 'meal-data-user' } })).toBe(0);
+    expect(await app.prisma.mealDataImport.count({ where: { userId: 'meal-data-user' } })).toBe(0);
+    expect(await app.prisma.mealPhotoDeletion.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealPreference.count({ where: { userId: 'meal-data-user' } })).toBe(0);
     expect(await app.prisma.mealEntry.count({ where: { userId: 'meal-data-other' } })).toBe(1);
     expect(await app.prisma.mealPhoto.count({ where: { userId: 'meal-data-other' } })).toBe(1);
@@ -320,6 +711,9 @@ describe('meal data export/delete routes (격리 DB)', () => {
       items: 0,
       photos: 0,
       recommendations: 0,
+      recommendationEvents: 0,
+      dailyQuotas: 0,
+      importLedgers: 0,
       preference: 0,
       photoFileSets: 0,
     });
@@ -410,7 +804,8 @@ describe('meal data export/delete routes (격리 DB)', () => {
   it('사용자 폴더 삭제 실패는 오류로 전파하고 DB가 빈 재호출에서도 폴더 삭제를 복구한다', async () => {
     const userId = 'meal-data-delete-retry';
     const photo = await app.mealPhotos.store(userId, jpeg);
-    const data = new MealDataService(app.prisma, { photos: app.mealPhotos });
+    const purgeRecognitionDebugForUser = vi.fn().mockResolvedValue(undefined);
+    const data = new MealDataService(app.prisma, { photos: app.mealPhotos, purgeRecognitionDebugForUser });
     const removeAll = vi
       .spyOn(app.mealPhotos, 'removeAllFilesForUser')
       .mockRejectedValueOnce(new Error('forced directory removal failure'));
@@ -428,10 +823,16 @@ describe('meal data export/delete routes (격리 DB)', () => {
         items: 0,
         photos: 0,
         recommendations: 0,
+        recommendationEvents: 0,
+        dailyQuotas: 0,
+        importLedgers: 0,
         preference: 0,
         photoFileSets: 0,
       });
       expect(removeAll).toHaveBeenCalledTimes(2);
+      expect(purgeRecognitionDebugForUser).toHaveBeenCalledTimes(2);
+      expect(purgeRecognitionDebugForUser).toHaveBeenNthCalledWith(1, userId, [photo.token]);
+      expect(purgeRecognitionDebugForUser).toHaveBeenNthCalledWith(2, userId, []);
       await expect(access(userDir(userId))).rejects.toThrow();
     } finally {
       removeAll.mockRestore();

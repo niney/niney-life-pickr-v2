@@ -13,6 +13,10 @@ import {
   type FoodImportRunListType,
   type FoodImportRunType,
   type FoodItemType,
+  type FoodMergeConflictItemType,
+  type FoodMergeConflictListQueryType,
+  type FoodMergeConflictListResultType,
+  type FoodMergeConflictResolveInputType,
   type FoodRestaurantsQueryType,
   type FoodRestaurantsResultType,
   type FoodRecognitionQualityQueryType,
@@ -25,6 +29,7 @@ import { apiFetch, getApiConfig } from './client.js';
 // active/unclassified 는 boolean 으로 받고 쿼리스트링에서 '1'/'0' 으로 직렬화한다
 // (서버 boolParam 이 '1'/'0'/'true'/'false' 를 받는다).
 export type FoodAdminListInput = Partial<FoodAdminListQueryType>;
+export type FoodMergeConflictListInput = Partial<FoodMergeConflictListQueryType>;
 export type FoodRestaurantsInput = Partial<FoodRestaurantsQueryType>;
 export type FoodRecognitionQualityInput = Partial<FoodRecognitionQualityQueryType>;
 
@@ -42,6 +47,12 @@ export const buildFoodRecognitionQualityQuery = (
 ): string => {
   const params = new URLSearchParams();
   if (input.days !== undefined) params.set('days', String(input.days));
+  const model = input.model?.trim();
+  if (model) params.set('model', model);
+  if (input.version !== undefined) params.set('version', String(input.version));
+  if (input.confidenceBucket !== undefined) {
+    params.set('confidenceBucket', input.confidenceBucket);
+  }
   return params.toString();
 };
 
@@ -59,6 +70,14 @@ export const buildFoodAdminListQuery = (input: FoodAdminListInput = {}): string 
   if (input.active !== undefined) params.set('active', input.active ? '1' : '0');
   if (input.unclassified !== undefined) params.set('unclassified', input.unclassified ? '1' : '0');
   if (input.sort !== undefined) params.set('sort', input.sort);
+  if (input.offset !== undefined) params.set('offset', String(input.offset));
+  if (input.limit !== undefined) params.set('limit', String(input.limit));
+  return params.toString();
+};
+
+export const buildFoodMergeConflictListQuery = (input: FoodMergeConflictListInput = {}): string => {
+  const params = new URLSearchParams();
+  if (input.status !== undefined) params.set('status', input.status);
   if (input.offset !== undefined) params.set('offset', String(input.offset));
   if (input.limit !== undefined) params.set('limit', String(input.limit));
   return params.toString();
@@ -101,6 +120,19 @@ export const foodApi = {
     }),
 
   adminStats: () => apiFetch<FoodAdminStatsType>(Routes.Food.adminStats),
+
+  adminMergeConflicts: (input: FoodMergeConflictListInput = {}) => {
+    const qs = buildFoodMergeConflictListQuery(input);
+    return apiFetch<FoodMergeConflictListResultType>(
+      `${Routes.Food.adminMergeConflicts}${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  resolveMergeConflict: (id: string, input: FoodMergeConflictResolveInputType) =>
+    apiFetch<FoodMergeConflictItemType>(Routes.Food.adminMergeConflict(id), {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
 
   adminRecognitionQuality: (input: FoodRecognitionQualityInput = {}) => {
     const qs = buildFoodRecognitionQualityQuery(input);

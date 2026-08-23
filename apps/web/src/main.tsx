@@ -10,6 +10,7 @@ import {
   lightTheme,
   QUERY_GC_TIME,
   QUERY_STALE_TIME,
+  setMealDraftPrincipal,
   ThemeProvider,
   useAuthStore,
 } from '@repo/shared';
@@ -59,6 +60,7 @@ configureApi({
         // 로그인 상태가 끼어들지 않게 한다. clear()는 진행 query도 파기한다.
         void queryClient.cancelQueries();
         queryClient.clear();
+        void setMealDraftPrincipal(null);
         useAuthStore.getState().clearSession();
       },
     });

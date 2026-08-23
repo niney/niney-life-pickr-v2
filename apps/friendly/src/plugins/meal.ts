@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fp from 'fastify-plugin';
 import { isTest } from '../config/env.js';
+import { sweepMealRecognitionDebugDumps } from '../modules/meal/meal-recognition-debug.store.js';
 import { MealPhotoService } from '../modules/meal/meal-photo.service.js';
 import { scheduleRegistry } from '../modules/schedule/schedule-registry.js';
 
@@ -24,8 +25,10 @@ export default fp(
 
     // 부팅 직후 1회 + 매일 — DB 고아 행뿐 아니라 DB 기록 전에 종료돼 파일만 남은 경우도 정리한다.
     const runPhotoGc = async (): Promise<void> => {
+      await mealPhotos.drainDeletionOutbox();
       await mealPhotos.sweepOrphans();
       await mealPhotos.sweepUntrackedFiles();
+      await sweepMealRecognitionDebugDumps();
     };
     void runPhotoGc().catch((e: unknown) => {
       app.log.warn({ err: e }, '[meal] photo gc failed');

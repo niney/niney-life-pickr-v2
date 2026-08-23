@@ -27,12 +27,14 @@ const TOKEN_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]
 export const MAX_PHOTOS_PER_USER = 3000;
 const UNTRACKED_FILE_SWEEP_LIMIT = 2000;
 const DB_LOOKUP_CHUNK_SIZE = 500;
+const DELETION_OUTBOX_DRAIN_LIMIT = 500;
+const DELETION_ERROR_MAX_LENGTH = 1000;
 const USER_DIR_PATTERN = /^[A-Za-z0-9_-]+$/;
 const PHOTO_FILE_PATTERN = /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:_t)?\.jpg$/;
 
 export class MealPhotoError extends Error {
   constructor(
-    readonly code: 'invalid_token' | 'invalid_image' | 'not_found' | 'forbidden' | 'quota',
+    readonly code: 'invalid_token' | 'invalid_image' | 'not_found' | 'forbidden' | 'quota' | 'attached',
     message: string,
   ) {
     super(message);
@@ -139,6 +141,18 @@ export class MealPhotoService {
     return mealMutationBarrier.runExclusive(userId, () => this.storeUnlocked(userId, buffer));
   }
 
+  /**
+   * 여러 사진+메타데이터를 하나의 사용자 mutation 경계에서 복원할 때만 사용한다.
+   * 호출자는 반드시 mealMutationBarrier의 해당 userId lock을 이미 보유해야 한다. 일반 업로드는
+   * 위 store()를 써야 하며, 이 메서드 안에서 다시 lock을 잡으면 비재진입 lock이 교착된다.
+   */
+  async storeWhileMutationLocked(
+    userId: string,
+    buffer: Buffer,
+  ): Promise<UploadMealPhotoResultType> {
+    return this.storeUnlocked(userId, buffer);
+  }
+
   private async storeUnlocked(userId: string, buffer: Buffer): Promise<UploadMealPhotoResultType> {
     let source = buffer;
     let processed: Buffer;
@@ -236,6 +250,12 @@ export class MealPhotoService {
     const row = await this.prisma.mealPhoto.findUnique({ where: { token } });
     if (!row) throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
     if (row.userId !== userId) throw new MealPhotoError('forbidden', '권한이 없습니다.');
+    // 단독 DELETE 는 아직 기록에 붙지 않은 업로드를 취소하는 용도다. 연결된 행을
+    // 직접 지우면 MealEntry 응답의 photoTokens 와 파일이 동시에 변해 기록 수정의
+    // 일관된 경계를 우회한다. 붙은 사진은 MealEntry PATCH 의 photoTokens 로만 떼어 낸다.
+    if (row.entryId !== null) {
+      throw new MealPhotoError('attached', '기록에 연결된 사진입니다. 식단 기록 수정에서 제거해 주세요.');
+    }
     await this.prisma.mealPhoto.delete({ where: { token } });
     await this.deleteFiles(row.userId, token);
   }
@@ -289,6 +309,63 @@ export class MealPhotoService {
   // DB 커밋 뒤 실행하는 파일 side effect. 개별 삭제는 멱등이며 실패해도 다음 정리 작업을 막지 않는다.
   async removeFiles(rows: readonly MealPhotoFileRef[]): Promise<void> {
     for (const p of rows) await this.deleteFiles(p.userId, p.token);
+  }
+
+  /**
+   * durable deletion outbox 전용 파일 삭제. 없는 파일은 성공으로 보지만 실제 I/O 오류는 호출자에게
+   * 전파한다. retention 경로가 오류를 기록한 outbox 행을 지우지 않고 다음 실행에서 재시도할 수 있게
+   * best-effort removeFiles와 의도적으로 분리한다.
+   */
+  async removeFilesStrict(rows: readonly MealPhotoFileRef[]): Promise<void> {
+    for (const row of rows) await this.deleteFilesStrict(row.userId, row.token);
+  }
+
+  /**
+   * DB 메타데이터와 함께 먼저 커밋된 파일 삭제 의도를 처리한다. 행 하나의 실패가 나머지를 막지
+   * 않으며, 성공한 행만 지운다. userId를 주면 요청 직후 본인 대기분을 명시적으로 재시도하고,
+   * 생략하면 부팅/cron에서 전체 대기분을 제한된 배치로 처리한다.
+   */
+  async drainDeletionOutbox(
+    userId?: string,
+    limit: number = DELETION_OUTBOX_DRAIN_LIMIT,
+  ): Promise<{ removedFileSets: number; failedFileSets: number; pendingFileSets: number }> {
+    const take = Math.max(1, Math.min(DELETION_OUTBOX_DRAIN_LIMIT, Math.trunc(limit)));
+    const rows = await this.prisma.mealPhotoDeletion.findMany({
+      where: userId === undefined ? undefined : { userId },
+      // 계속 실패하는 일부 행이 제한 배치를 영구 점유하지 않도록 시도 횟수가 적은 행부터
+      // 순환한다. 같은 횟수 안에서는 오래된 삭제 의도를 먼저 처리한다.
+      orderBy: [{ attempts: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      take,
+    });
+    let removedFileSets = 0;
+    let failedFileSets = 0;
+
+    for (const row of rows) {
+      try {
+        await this.removeFilesStrict([{ userId: row.userId, token: row.token }]);
+        await this.prisma.mealPhotoDeletion.deleteMany({ where: { id: row.id } });
+        removedFileSets += 1;
+      } catch (error) {
+        failedFileSets += 1;
+        const message = (error instanceof Error ? error.message : String(error)).slice(
+          0,
+          DELETION_ERROR_MAX_LENGTH,
+        );
+        await this.prisma.mealPhotoDeletion.updateMany({
+          where: { id: row.id },
+          data: { attempts: { increment: 1 }, lastError: message },
+        });
+        this.log?.warn(
+          { err: error, userId: row.userId, token: row.token },
+          '[meal-photo] deferred photo deletion failed',
+        );
+      }
+    }
+
+    const pendingFileSets = await this.prisma.mealPhotoDeletion.count({
+      where: userId === undefined ? undefined : { userId },
+    });
+    return { removedFileSets, failedFileSets, pendingFileSets };
   }
 
   /**
@@ -411,5 +488,21 @@ export class MealPhotoService {
         this.log?.warn({ err: error, userId, token, path }, '[meal-photo] failed to remove photo file');
       }
     }
+  }
+
+  private async deleteFilesStrict(userId: string, token: string): Promise<void> {
+    if (!isValidMealPhotoToken(token)) {
+      throw new MealPhotoError('invalid_token', '사진 토큰 형식이 올바르지 않습니다.');
+    }
+    const dir = this.userDir(userId);
+    const errors: unknown[] = [];
+    for (const path of [join(dir, `${token}.jpg`), join(dir, `${token}_t.jpg`)]) {
+      try {
+        await rm(path, { force: true });
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) throw errors[0];
   }
 }

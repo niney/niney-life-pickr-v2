@@ -7,6 +7,8 @@ import {
   ListMealRecommendationsResult,
   MealRecommendation,
   MealRecommendationContext,
+  MealRecommendationEvent,
+  MealRecommendationEventInput,
   MealRecommendationFeedbackInput,
   Routes,
 } from '@repo/api-contract';
@@ -15,7 +17,7 @@ import { latLngToKmaGrid } from '@repo/utils';
 import { RATE } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
-import { mealQuota, recommendQuotaKey } from '../meal/meal-quota.js';
+import { MealDailyQuotaService } from '../meal/meal-daily-quota.service.js';
 import { WeatherService } from '../weather/weather.service.js';
 import { MealRecommendationError, MealRecommendationService } from './meal-recommendation.service.js';
 
@@ -31,11 +33,12 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   // 날씨는 선택 보강 — 키가 없거나 업스트림이 죽어도 추천은 계절 추정으로 나온다.
   const weather = new WeatherService({ serviceKey: env.KMA_API_KEY || env.BUS_API_KEY });
+  const dailyQuota = new MealDailyQuotaService(app.prisma);
   const service = new MealRecommendationService(app.prisma, aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
     consumeQuota: (userId) =>
-      mealQuota.consume(recommendQuotaKey(userId), env.MEAL_RECOMMEND_DAILY_LIMIT),
+      dailyQuota.consume(userId, kstToday(), 'recommendation', env.MEAL_RECOMMEND_DAILY_LIMIT),
     weather: async (lat, lng) => {
       const { nx, ny } = latLngToKmaGrid(lat, lng);
       const res = await weather.getNowcast(nx, ny);
@@ -107,6 +110,28 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       try {
         return await service.feedback(req.user.userId, req.params.id, req.body);
+      } catch (e) {
+        if (e instanceof MealRecommendationError) {
+          if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);
+          throw app.httpErrors.badRequest(e.message);
+        }
+        throw e;
+      }
+    },
+  });
+
+  typed.post(Routes.Meal.recommendationEvents(':id'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+      body: MealRecommendationEventInput,
+      response: { 200: MealRecommendationEvent },
+    },
+    handler: async (req) => {
+      try {
+        return await service.recordEvent(req.user.userId, req.params.id, req.body);
       } catch (e) {
         if (e instanceof MealRecommendationError) {
           if (e.code === 'not_found') throw app.httpErrors.notFound(e.message);

@@ -17,12 +17,16 @@ import {
   ErrorBanner,
   Input,
   SegmentedControl,
+  setMealDraftPrincipal,
   Stack,
   useAuthStore,
   useLogin,
   useRegister,
   useTheme,
 } from '@repo/shared';
+import { mobileQueryClient } from '~/lib/queryClient';
+import { setMealReminderPrincipal } from '~/lib/mealReminders';
+import { clearMealPhotoCache } from '~/lib/mealPhotoCache';
 
 type Mode = 'login' | 'register';
 
@@ -61,8 +65,16 @@ export default function LoginScreen() {
   };
 
   const onGuest = () => {
-    enterGuest();
-    router.replace('/(tabs)/home');
+    void (async () => {
+      mobileQueryClient.clear();
+      await Promise.all([
+        setMealDraftPrincipal(null),
+        setMealReminderPrincipal(null).catch(() => {}),
+        clearMealPhotoCache().catch(() => {}),
+      ]);
+      enterGuest();
+      router.replace('/(tabs)/home');
+    })();
   };
 
   return (

@@ -1,7 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import type { MealRecommendationType, MealSlotType, MealTypeType } from '@repo/api-contract';
+import {
+  MEAL_ALLERGEN_LABEL,
+  type MealRecommendationType,
+  type MealSlotType,
+  type MealTypeType,
+} from '@repo/api-contract';
 import {
   ApiError,
   useAirLocation,
@@ -9,7 +14,8 @@ import {
   useFoodRestaurants,
   useMealDraftStore,
   useMealRecommendationContext,
-  useMealRecommendationFeedback,
+  useMealRecommendationEvent,
+  useMealRecommendations,
   useTheme,
   type Theme,
 } from '@repo/shared';
@@ -30,22 +36,24 @@ import { Chip, ChipRow, FieldLabel } from './mealUi';
 //
 // "이거 먹었어요"는 추천을 그대로 기록으로 넘긴다 — draft 에 음식을 넣고 입력 화면으로 보낸다.
 
-export const MealRecommendView = () => {
+export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType }) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
   const draft = useMealDraftStore();
 
-  const [slot, setSlot] = useState<MealSlotType>(() => guessMealSlot(new Date()));
+  const [slot, setSlot] = useState<MealSlotType>(() => initialSlot ?? guessMealSlot(new Date()));
   const [mealType, setMealType] = useState<MealTypeType | null | undefined>(undefined);
   const [note, setNote] = useState('');
   const [current, setCurrent] = useState<MealRecommendationType | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const ctx = useMealRecommendationContext();
+  const history = useMealRecommendations(5);
   const airLocation = useAirLocation();
   const create = useCreateMealRecommendation();
-  const feedback = useMealRecommendationFeedback();
+  const recommendationEvent = useMealRecommendationEvent();
+  const shownEventIds = useRef(new Set<string>());
 
   const shown = current ?? ctx.data?.latest ?? null;
   const configuredSlots = ctx.data?.preference.slots.length
@@ -57,6 +65,17 @@ export const MealRecommendView = () => {
   const effectiveSlot = configuredSlots.includes(slot) ? slot : configuredSlots[0]!;
   const effectiveMealType =
     mealType === undefined ? (ctx.data?.preference.mealTypes[0] ?? null) : mealType;
+
+  useEffect(() => {
+    if (!shown || shownEventIds.current.has(shown.id)) return;
+    shownEventIds.current.add(shown.id);
+    recommendationEvent.mutate(
+      { id: shown.id, input: { kind: 'shown', platform: 'mobile' } },
+      { onError: () => shownEventIds.current.delete(shown.id) },
+    );
+    // 이벤트 기록 자체가 shown 객체를 바꾸지는 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown?.id]);
 
   const request = (force: boolean) => {
     setError(null);
@@ -101,6 +120,60 @@ export const MealRecommendView = () => {
       candidates: [],
     });
     router.push('/meal/new' as never);
+  };
+
+  const chooseCandidate = (rec: MealRecommendationType, name: string, rank: number) => {
+    const item = rec.items[rank];
+    recommendationEvent.mutate(
+      {
+        id: rec.id,
+        input: {
+          kind: 'candidate_picked',
+          candidateName: name,
+          candidateFoodId: item?.foodId ?? null,
+          candidateRank: rank,
+          platform: 'mobile',
+        },
+      },
+      {
+        onSuccess: () =>
+          setCurrent({
+            ...rec,
+            feedback: {
+              pickedName: name,
+              rating: rec.feedback?.rating ?? null,
+              eatenEntryId: rec.feedback?.eatenEntryId ?? null,
+            },
+          }),
+      },
+    );
+  };
+
+  const rateCandidate = (rec: MealRecommendationType, name: string, rank: number, rating: -1 | 1) => {
+    const item = rec.items[rank];
+    recommendationEvent.mutate(
+      {
+        id: rec.id,
+        input: {
+          kind: 'candidate_rated',
+          candidateName: name,
+          candidateFoodId: item?.foodId ?? null,
+          candidateRank: rank,
+          rating,
+          platform: 'mobile',
+        },
+      },
+      {
+        onSuccess: () =>
+          setCurrent({
+            ...rec,
+            candidateRatings: [
+              ...rec.candidateRatings.filter((candidate) => candidate.name !== name),
+              { name, rating },
+            ],
+          }),
+      },
+    );
   };
 
   return (
@@ -172,13 +245,18 @@ export const MealRecommendView = () => {
             sub={shown.summary || null}
           />
           {shown.notice ? <Note tone="warn">{shown.notice}</Note> : null}
+          {(ctx.data?.preference.allergens.length ?? 0) > 0 ? (
+            <Note tone="warn">
+              알레르기 필터는 알려진 정보만 확인해요. 추천 결과와 무관하게 원재료·교차접촉을 다시 확인해 주세요.
+            </Note>
+          ) : null}
           {shown.status === 'fallback' ? <Note tone="muted">AI 없이 기록 점수만으로 골랐어요.</Note> : null}
 
           {shown.items.length === 0 ? (
             <StateBlock kind="empty" message="추천할 음식을 찾지 못했어요." />
           ) : (
             <View style={styles.itemList}>
-              {shown.items.map((item) => (
+              {shown.items.map((item, rank) => (
                 <View key={item.name} style={styles.itemCard}>
                   <View style={styles.itemHead}>
                     <Text style={styles.itemName}>{item.name}</Text>
@@ -191,6 +269,18 @@ export const MealRecommendView = () => {
                   {item.ingredients.length > 0 ? (
                     <Text style={styles.itemIngredients}>주재료 {item.ingredients.join(', ')}</Text>
                   ) : null}
+                  {item.allergenWarnings.length > 0 ? (
+                    <Text style={[styles.itemIngredients, { color: theme.colors.danger }]}>
+                      알레르기 가능 정보 {item.allergenWarnings.map((value) => MEAL_ALLERGEN_LABEL[value]).join(', ')}
+                    </Text>
+                  ) : item.allergenAssessment === 'unknown' && (ctx.data?.preference.allergens.length ?? 0) > 0 ? (
+                    <Text style={[styles.itemIngredients, { color: theme.colors.danger }]}>알레르기 원재료 정보 부족</Text>
+                  ) : null}
+                  {item.nutritionBasis === 'donor_estimate' ? (
+                    <Text style={styles.itemIngredients}>영양은 {item.nutritionFrom ?? '유사 음식'} 기준 추정</Text>
+                  ) : item.nutritionBasis === 'missing' ? (
+                    <Text style={styles.itemIngredients}>영양 근거 없음</Text>
+                  ) : null}
                   {item.tags.length > 0 ? (
                     <ChipRow>
                       {item.tags.map((t) => (
@@ -199,14 +289,41 @@ export const MealRecommendView = () => {
                     </ChipRow>
                   ) : null}
                   <View style={styles.itemActions}>
+                    <Pressable accessibilityRole="button" onPress={() => chooseCandidate(shown, item.name, rank)} style={styles.eatBtn}>
+                      <Text style={{ color: shown.feedback?.pickedName === item.name ? theme.colors.primary : theme.colors.textMuted, fontWeight: '600', fontSize: 13 }}>
+                        {shown.feedback?.pickedName === item.name ? '선택했어요' : '이걸로 할래요'}
+                      </Text>
+                    </Pressable>
                     <Pressable accessibilityRole="button" onPress={() => eatThis(shown, item.name)} style={styles.eatBtn}>
                       <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 13 }}>이거 먹었어요</Text>
                     </Pressable>
+                    <Chip
+                      label="👍"
+                      selected={shown.candidateRatings.find((candidate) => candidate.name === item.name)?.rating === 1}
+                      onPress={() => rateCandidate(shown, item.name, rank, 1)}
+                    />
+                    <Chip
+                      label="👎"
+                      selected={shown.candidateRatings.find((candidate) => candidate.name === item.name)?.rating === -1}
+                      onPress={() => rateCandidate(shown, item.name, rank, -1)}
+                    />
                     <FoodRestaurantMatches
                       foodId={item.foodId}
                       foodName={item.name}
                       lat={airLocation.location?.lat ?? null}
                       lng={airLocation.location?.lng ?? null}
+                      onOpened={() =>
+                        recommendationEvent.mutate({
+                          id: shown.id,
+                          input: {
+                            kind: 'restaurant_opened',
+                            candidateName: item.name,
+                            candidateFoodId: item.foodId,
+                            candidateRank: rank,
+                            platform: 'mobile',
+                          },
+                        })
+                      }
                     />
                   </View>
                 </View>
@@ -220,9 +337,9 @@ export const MealRecommendView = () => {
               label="👍"
               selected={shown.feedback?.rating === 1}
               onPress={() =>
-                feedback.mutate(
-                  { id: shown.id, input: { rating: shown.feedback?.rating === 1 ? null : 1 } },
-                  { onSuccess: (rec) => setCurrent(rec) },
+                recommendationEvent.mutate(
+                  { id: shown.id, input: { kind: 'set_rated', rating: 1, platform: 'mobile' } },
+                  { onSuccess: () => setCurrent({ ...shown, feedback: { pickedName: shown.feedback?.pickedName ?? null, rating: 1, eatenEntryId: shown.feedback?.eatenEntryId ?? null } }) },
                 )
               }
             />
@@ -230,9 +347,9 @@ export const MealRecommendView = () => {
               label="👎"
               selected={shown.feedback?.rating === -1}
               onPress={() =>
-                feedback.mutate(
-                  { id: shown.id, input: { rating: shown.feedback?.rating === -1 ? null : -1 } },
-                  { onSuccess: (rec) => setCurrent(rec) },
+                recommendationEvent.mutate(
+                  { id: shown.id, input: { kind: 'set_rated', rating: -1, platform: 'mobile' } },
+                  { onSuccess: () => setCurrent({ ...shown, feedback: { pickedName: shown.feedback?.pickedName ?? null, rating: -1, eatenEntryId: shown.feedback?.eatenEntryId ?? null } }) },
                 )
               }
             />
@@ -240,6 +357,24 @@ export const MealRecommendView = () => {
         </Card>
       ) : ctx.isLoading ? (
         <StateBlock kind="loading" />
+      ) : null}
+
+      {(history.data?.items.length ?? 0) > 1 ? (
+        <Card>
+          <CardTitle title="지난 추천" sub="선택한 메뉴를 다시 열어 실제 기록으로 이어갈 수 있어요" />
+          <View style={styles.itemList}>
+            {history.data!.items
+              .filter((item) => item.id !== shown?.id)
+              .map((item) => (
+                <Pressable key={item.id} accessibilityRole="button" onPress={() => setCurrent(item)} style={styles.historyRow}>
+                  <Text style={styles.historyText} numberOfLines={1}>
+                    {item.targetDate} {MEAL_SLOT_LABEL[item.targetSlot]} · {item.feedback?.pickedName ?? item.items.map((candidate) => candidate.name).join(', ')}
+                  </Text>
+                  <Text style={styles.itemMeta}>{item.feedback?.eatenEntryId ? '기록 완료' : item.feedback?.pickedName ? '선택됨' : '보기'}</Text>
+                </Pressable>
+              ))}
+          </View>
+        </Card>
       ) : null}
     </ScrollView>
   );
@@ -250,11 +385,13 @@ const FoodRestaurantMatches = ({
   foodName,
   lat,
   lng,
+  onOpened,
 }: {
   foodId: string | null;
   foodName: string;
   lat: number | null;
   lng: number | null;
+  onOpened: () => void;
 }) => {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -273,9 +410,10 @@ const FoodRestaurantMatches = ({
     return (
       <Pressable
         accessibilityRole="button"
-        onPress={() =>
-          router.push({ pathname: '/(tabs)/restaurants', params: { q: foodName } } as never)
-        }
+        onPress={() => {
+          onOpened();
+          router.push({ pathname: '/(tabs)/restaurants', params: { q: foodName } } as never);
+        }}
         style={styles.eatBtn}
       >
         <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>이름으로 식당 검색</Text>
@@ -288,7 +426,10 @@ const FoodRestaurantMatches = ({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        onPress={() => setOpen((value) => !value)}
+        onPress={() => {
+          if (!open) onOpened();
+          setOpen((value) => !value);
+        }}
         style={styles.eatBtn}
       >
         <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>
@@ -391,4 +532,6 @@ const createStyles = (theme: Theme) =>
     restaurantNotice: { color: theme.colors.textMuted, fontSize: 10, lineHeight: 14 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
     feedbackLabel: { fontSize: 12, color: theme.colors.textMuted, flex: 1 },
+    historyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+    historyText: { flex: 1, color: theme.colors.text, fontSize: 13 },
   });

@@ -25,7 +25,7 @@
 
 ## Stats
 
-Compiled: 2026-08-23 (23rd) | Topics: 28 | Concepts: 17 | Sources: ~983
+Compiled: 2026-08-23 (23rd) | Topics: 28 | Concepts: 17 | Sources: ~994
 
 ## Topic map at a glance
 
@@ -39,8 +39,8 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── canonical    (출처 가로지르는 같은 가게 묶기 — 별도 토픽)
 │   ├── auto-discover (어드민 자동 발견 — AI 키워드 8개 + 그룹 직렬 크롤 — 별도 토픽)
 │   ├── settlement   (정산 N차 + draft 동기화 + 분할 영수증 + 공유 OG SSR-lite·정산표 PNG 서버 렌더 — 별도 토픽)
-│   ├── food         (음식 카탈로그 — 공공데이터 적재·LLM 분류·영양·식당 역검색·인식 품질 — 별도 토픽)
-│   ├── meal         (개인 식단 — 기록·사진 인식·추천·선호·통계·알림·export/delete — 별도 토픽)
+│   ├── food         (음식 카탈로그 — 다중 source 적재·관측/충돌 rebase·영양·식당 역검색·인식 품질 — 별도 토픽)
+│   ├── meal         (개인 식단 — 기록·인식 lineage·추천 event 학습·계정별 로컬 상태·backup/retention — 별도 토픽)
 │   └── bus          (서울시 버스 API 프록시 — 정류장 검색/주변 + 실시간 도착 + 노선 + 실시간 차량 위치·따라가기 + 즐겨찾기, **웹 전용** — 별도 토픽)
 ├── map              (vworld OpenLayers + WMTS, 카테고리 라인 아이콘 8종, 모바일 WebView)
 ├── web              (Vite + React 19, 공개 + 어드민 + 정산 N차 wizard + 식단 조회/추천/설정 + Tailwind v4 dark)

@@ -1,13 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
-import type { MealRecommendationType, MealSlotType, MealTypeType } from '@repo/api-contract';
+import {
+  MEAL_ALLERGEN_LABEL,
+  type MealRecommendationType,
+  type MealSlotType,
+  type MealTypeType,
+} from '@repo/api-contract';
 import {
   useAirLocation,
   useCreateMealRecommendation,
   useFoodRestaurants,
   useMealRecommendationContext,
   useMealRecommendationFeedback,
+  useMealRecommendationEvent,
   useMealRecommendations,
 } from '@repo/shared';
 import {
@@ -41,17 +47,29 @@ export const MealRecommendTab = () => {
   const history = useMealRecommendations(5);
   const create = useCreateMealRecommendation();
   const feedback = useMealRecommendationFeedback();
+  const recommendationEvent = useMealRecommendationEvent();
+  const shownEventIds = useRef(new Set<string>());
 
   const shown = current ?? ctx.data?.latest ?? null;
-  const configuredSlots = ctx.data?.preference.slots.length
+  const configuredSlots = ctx.data?.preference.slots?.length
     ? ctx.data.preference.slots
     : MEAL_SLOTS;
-  const configuredMealTypes = ctx.data?.preference.mealTypes.length
+  const configuredMealTypes = ctx.data?.preference.mealTypes?.length
     ? ctx.data.preference.mealTypes
     : MEAL_TYPES;
   const effectiveSlot = configuredSlots.includes(slot) ? slot : configuredSlots[0]!;
   const effectiveMealType =
-    mealType === undefined ? (ctx.data?.preference.mealTypes[0] ?? null) : mealType;
+    mealType === undefined ? (ctx.data?.preference.mealTypes?.[0] ?? null) : mealType;
+
+  useEffect(() => {
+    if (!shown || shownEventIds.current.has(shown.id)) return;
+    shownEventIds.current.add(shown.id);
+    recommendationEvent.mutate(
+      { id: shown.id, input: { kind: 'shown', platform: 'web' } },
+      { onError: () => shownEventIds.current.delete(shown.id) },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown?.id]);
 
   const request = (force: boolean) => {
     create.mutate(
@@ -79,7 +97,12 @@ export const MealRecommendTab = () => {
             <p className="text-xs font-medium text-muted-foreground">끼니</p>
             <div className="flex flex-wrap gap-2">
               {configuredSlots.map((s) => (
-                <Chip key={s} label={MEAL_SLOT_LABEL[s]} selected={effectiveSlot === s} onClick={() => setSlot(s)} />
+                <Chip
+                  key={s}
+                  label={MEAL_SLOT_LABEL[s]}
+                  selected={effectiveSlot === s}
+                  onClick={() => setSlot(s)}
+                />
               ))}
             </div>
           </div>
@@ -113,7 +136,11 @@ export const MealRecommendTab = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => request(false)} disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Sparkles className="mr-1 size-4" />}
+              {create.isPending ? (
+                <Loader2 className="mr-1 size-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1 size-4" />
+              )}
               추천받기
             </Button>
             {shown ? (
@@ -147,6 +174,48 @@ export const MealRecommendTab = () => {
               { onSuccess: (recommendation) => setCurrent(recommendation) },
             )
           }
+          allergyFilteringEnabled={(ctx.data?.preference.allergens?.length ?? 0) > 0}
+          onCandidateRating={(name, rank, rating) => {
+            const item = shown.items[rank];
+            recommendationEvent.mutate(
+              {
+                id: shown.id,
+                input: {
+                  kind: 'candidate_rated',
+                  candidateName: name,
+                  candidateFoodId: item?.foodId ?? null,
+                  candidateRank: rank,
+                  rating,
+                  platform: 'web',
+                },
+              },
+              {
+                onSuccess: () =>
+                  setCurrent({
+                    ...shown,
+                    candidateRatings: [
+                      ...(shown.candidateRatings ?? []).filter(
+                        (candidate) => candidate.name !== name,
+                      ),
+                      { name, rating },
+                    ],
+                  }),
+              },
+            );
+          }}
+          onRestaurantOpened={(name, rank) => {
+            const item = shown.items[rank];
+            recommendationEvent.mutate({
+              id: shown.id,
+              input: {
+                kind: 'restaurant_opened',
+                candidateName: name,
+                candidateFoodId: item?.foodId ?? null,
+                candidateRank: rank,
+                platform: 'web',
+              },
+            });
+          }}
         />
       ) : null}
 
@@ -156,8 +225,8 @@ export const MealRecommendTab = () => {
             <CardTitle className="text-base">지난 추천</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {history.data!.items
-              .filter((r) => r.id !== shown?.id)
+            {history
+              .data!.items.filter((r) => r.id !== shown?.id)
               .map((r) => (
                 <button
                   key={r.id}
@@ -166,9 +235,12 @@ export const MealRecommendTab = () => {
                   className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
                 >
                   <span className="truncate">
-                    {r.targetDate} {MEAL_SLOT_LABEL[r.targetSlot]} · {r.items.map((i) => i.name).join(', ')}
+                    {r.targetDate} {MEAL_SLOT_LABEL[r.targetSlot]} ·{' '}
+                    {r.items.map((i) => i.name).join(', ')}
                   </span>
-                  {r.feedback?.rating === 1 ? <ThumbsUp className="size-3.5 shrink-0 text-primary" /> : null}
+                  {r.feedback?.rating === 1 ? (
+                    <ThumbsUp className="size-3.5 shrink-0 text-primary" />
+                  ) : null}
                 </button>
               ))}
           </CardContent>
@@ -183,11 +255,17 @@ const RecommendationCard = ({
   lat,
   lng,
   onFeedback,
+  onCandidateRating,
+  onRestaurantOpened,
+  allergyFilteringEnabled,
 }: {
   rec: MealRecommendationType;
   lat: number | null;
   lng: number | null;
   onFeedback: (input: { rating?: -1 | 1 | null; pickedName?: string | null }) => void;
+  onCandidateRating: (name: string, rank: number, rating: -1 | 1) => void;
+  onRestaurantOpened: (name: string, rank: number) => void;
+  allergyFilteringEnabled: boolean;
 }) => (
   <Card>
     <CardHeader className="space-y-1">
@@ -195,39 +273,72 @@ const RecommendationCard = ({
         {rec.targetDate} {MEAL_SLOT_LABEL[rec.targetSlot]} 추천
       </CardTitle>
       {rec.summary ? <p className="text-sm text-muted-foreground">{rec.summary}</p> : null}
-      {rec.notice ? <p className="text-xs text-amber-600 dark:text-amber-500">{rec.notice}</p> : null}
+      {rec.notice ? (
+        <p className="text-xs text-amber-600 dark:text-amber-500">{rec.notice}</p>
+      ) : null}
       {rec.status === 'fallback' ? (
         <p className="text-xs text-muted-foreground">AI 없이 기록 점수만으로 골랐어요.</p>
+      ) : null}
+      {allergyFilteringEnabled ? (
+        <p className="text-xs text-amber-600 dark:text-amber-500">
+          알레르기 필터는 알려진 정보만 확인합니다. 원재료와 교차접촉 여부를 반드시 다시 확인하세요.
+        </p>
       ) : null}
     </CardHeader>
     <CardContent className="space-y-3">
       {rec.items.length === 0 ? (
         <p className="text-sm text-muted-foreground">추천할 음식을 찾지 못했어요.</p>
       ) : (
-        rec.items.map((item) => (
+        rec.items.map((item, rank) => (
           <div key={item.name} className="rounded-lg border p-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{item.name}</span>
               {item.dishType ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{FOOD_DISH_TYPE_LABEL[item.dishType]}</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                  {FOOD_DISH_TYPE_LABEL[item.dishType]}
+                </span>
               ) : null}
               {item.cuisine ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{FOOD_CUISINE_LABEL[item.cuisine]}</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                  {FOOD_CUISINE_LABEL[item.cuisine]}
+                </span>
               ) : null}
               {item.lastEatenDate ? (
-                <span className="text-xs text-muted-foreground">마지막 {item.lastEatenDate.slice(5)}</span>
+                <span className="text-xs text-muted-foreground">
+                  마지막 {item.lastEatenDate.slice(5)}
+                </span>
               ) : (
                 <span className="text-xs text-muted-foreground">안 먹어봄</span>
               )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
-            {item.ingredients.length > 0 ? (
-              <p className="mt-1 text-xs text-muted-foreground">주재료 {item.ingredients.join(', ')}</p>
+            {(item.ingredients?.length ?? 0) > 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                주재료 {item.ingredients.join(', ')}
+              </p>
             ) : null}
-            {item.tags.length > 0 ? (
+            {(item.allergenWarnings?.length ?? 0) > 0 ? (
+              <p className="mt-1 text-xs text-destructive">
+                알레르기 가능 정보{' '}
+                {item.allergenWarnings.map((value) => MEAL_ALLERGEN_LABEL[value]).join(', ')}
+              </p>
+            ) : item.allergenAssessment === 'unknown' && allergyFilteringEnabled ? (
+              <p className="mt-1 text-xs text-destructive">알레르기 원재료 정보 부족</p>
+            ) : null}
+            {item.nutritionBasis === 'donor_estimate' ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                영양은 {item.nutritionFrom ?? '유사 음식'} 기준 추정
+              </p>
+            ) : item.nutritionBasis === 'missing' ? (
+              <p className="mt-1 text-xs text-muted-foreground">영양 근거 없음</p>
+            ) : null}
+            {(item.tags?.length ?? 0) > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {item.tags.map((t) => (
-                  <span key={t} className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                  <span
+                    key={t}
+                    className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                  >
                     {t}
                   </span>
                 ))}
@@ -242,11 +353,36 @@ const RecommendationCard = ({
               >
                 이걸로 할래요
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`${item.name} 좋아요`}
+                onClick={() => onCandidateRating(item.name, rank, 1)}
+                className={cn(
+                  rec.candidateRatings?.find((candidate) => candidate.name === item.name)
+                    ?.rating === 1 && 'text-primary',
+                )}
+              >
+                <ThumbsUp className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`${item.name} 별로예요`}
+                onClick={() => onCandidateRating(item.name, rank, -1)}
+                className={cn(
+                  rec.candidateRatings?.find((candidate) => candidate.name === item.name)
+                    ?.rating === -1 && 'text-destructive',
+                )}
+              >
+                <ThumbsDown className="size-3.5" />
+              </Button>
               <FoodRestaurantMatches
                 foodId={item.foodId}
                 foodName={item.name}
                 lat={lat}
                 lng={lng}
+                onOpened={() => onRestaurantOpened(item.name, rank)}
               />
             </div>
           </div>
@@ -282,11 +418,13 @@ const FoodRestaurantMatches = ({
   foodName,
   lat,
   lng,
+  onOpened,
 }: {
   foodId: string | null;
   foodName: string;
   lat: number | null;
   lng: number | null;
+  onOpened: () => void;
 }) => {
   const [open, setOpen] = useState(false);
   const matches = useFoodRestaurants(
@@ -301,7 +439,7 @@ const FoodRestaurantMatches = ({
   if (!foodId) {
     return (
       <Button variant="ghost" size="sm" asChild>
-        <Link to={`/restaurants-v2?q=${encodeURIComponent(foodName)}`}>
+        <Link to={`/restaurants-v2?q=${encodeURIComponent(foodName)}`} onClick={onOpened}>
           <Search className="mr-1 size-3.5" />
           이름으로 식당 검색
         </Link>
@@ -311,7 +449,15 @@ const FoodRestaurantMatches = ({
 
   return (
     <div className="min-w-0 flex-1">
-      <Button variant="ghost" size="sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          if (!open) onOpened();
+          setOpen((value) => !value);
+        }}
+        aria-expanded={open}
+      >
         <Search className="mr-1 size-3.5" />
         {open ? '파는 곳 접기' : '파는 곳 보기'}
       </Button>
@@ -322,7 +468,11 @@ const FoodRestaurantMatches = ({
               <Loader2 className="size-3.5 animate-spin" /> 식당을 찾는 중…
             </p>
           ) : matches.isError ? (
-            <button type="button" onClick={() => void matches.refetch()} className="text-xs text-destructive">
+            <button
+              type="button"
+              onClick={() => void matches.refetch()}
+              className="text-xs text-destructive"
+            >
               불러오지 못했어요 · 다시 시도
             </button>
           ) : matches.data?.items.length ? (
@@ -339,8 +489,12 @@ const FoodRestaurantMatches = ({
                       {[
                         restaurant.distanceM !== null ? formatDistance(restaurant.distanceM) : null,
                         restaurant.category,
-                        restaurant.mentionCount > 0 ? `리뷰 언급 ${restaurant.mentionCount}` : '메뉴 확인',
-                      ].filter(Boolean).join(' · ')}
+                        restaurant.mentionCount > 0
+                          ? `리뷰 언급 ${restaurant.mentionCount}`
+                          : '메뉴 확인',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-primary">상세</span>
@@ -364,7 +518,15 @@ const FoodRestaurantMatches = ({
 const formatDistance = (distanceM: number): string =>
   distanceM < 1_000 ? `${distanceM}m` : `${(distanceM / 1_000).toFixed(1)}km`;
 
-const Chip = ({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) => (
+const Chip = ({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) => (
   <button
     type="button"
     onClick={onClick}

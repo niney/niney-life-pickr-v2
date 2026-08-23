@@ -1,9 +1,15 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { MealSlotType } from '@repo/api-contract';
-import { useAuthStore, useMealEntries, useMealRecommendationContext, useTheme } from '@repo/shared';
+import {
+  useAuthStore,
+  useMealEntries,
+  useMealRecommendationContext,
+  useMealTimePresets,
+  useTheme,
+} from '@repo/shared';
 import {
   guessMealSlot,
   MEAL_SLOT_DEFAULT_TIME,
@@ -11,14 +17,17 @@ import {
   parseTimeOfDay,
   toLocalDateKey,
 } from '@repo/utils';
+import { setRecordedMealSlotsForToday } from '~/lib/mealReminders';
 
 const DEFAULT_SLOTS: MealSlotType[] = ['breakfast', 'lunch', 'dinner'];
 
-const slotsByTime = (slots: readonly MealSlotType[]): MealSlotType[] =>
+const slotsByTime = (
+  slots: readonly MealSlotType[],
+  times: Readonly<Record<MealSlotType, string>> = MEAL_SLOT_DEFAULT_TIME,
+): MealSlotType[] =>
   [...new Set(slots)].sort(
     (a, b) =>
-      (parseTimeOfDay(MEAL_SLOT_DEFAULT_TIME[a]) ?? 0) -
-      (parseTimeOfDay(MEAL_SLOT_DEFAULT_TIME[b]) ?? 0),
+      (parseTimeOfDay(times[a]) ?? 0) - (parseTimeOfDay(times[b]) ?? 0),
   );
 
 /**
@@ -29,9 +38,10 @@ const resolveNextMealSlot = (
   preferredSlots: readonly MealSlotType[],
   recordedSlots: ReadonlySet<MealSlotType>,
   now: Date,
+  times: Readonly<Record<MealSlotType, string>> = MEAL_SLOT_DEFAULT_TIME,
 ): MealSlotType | null => {
   const configured = preferredSlots.length > 0 ? preferredSlots : DEFAULT_SLOTS;
-  const missing = slotsByTime(configured).filter((slot) => !recordedSlots.has(slot));
+  const missing = slotsByTime(configured, times).filter((slot) => !recordedSlots.has(slot));
   if (missing.length === 0) return null;
 
   const currentSlot = guessMealSlot(now);
@@ -39,7 +49,7 @@ const resolveNextMealSlot = (
 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const upcoming = missing.find(
-    (slot) => (parseTimeOfDay(MEAL_SLOT_DEFAULT_TIME[slot]) ?? 0) >= currentMinutes,
+    (slot) => (parseTimeOfDay(times[slot]) ?? 0) >= currentMinutes,
   );
   return upcoming ?? missing[missing.length - 1] ?? null;
 };
@@ -59,18 +69,36 @@ const AuthenticatedTodayMealCard = () => {
   const today = toLocalDateKey(new Date());
   const todayEntries = useMealEntries({ from: today, to: today, limit: 100, withPhotos: false });
   const recommendation = useMealRecommendationContext();
+  const timePresets = useMealTimePresets();
 
   const entries = useMemo(() => todayEntries.data?.items ?? [], [todayEntries.data?.items]);
   const recordedSlots = useMemo(
     () => new Set<MealSlotType>(entries.map((entry) => entry.slot)),
     [entries],
   );
+  const personalizedTimes = useMemo(() => {
+    const next = { ...MEAL_SLOT_DEFAULT_TIME };
+    for (const preset of timePresets.data?.presets ?? []) next[preset.slot] = preset.time;
+    return next;
+  }, [timePresets.data?.presets]);
   const registeredSlotLabels = useMemo(
-    () => slotsByTime([...recordedSlots]).map((slot) => MEAL_SLOT_LABEL[slot]),
-    [recordedSlots],
+    () =>
+      slotsByTime([...recordedSlots], personalizedTimes).map((slot) => MEAL_SLOT_LABEL[slot]),
+    [personalizedTimes, recordedSlots],
   );
   const preferredSlots = recommendation.data?.preference.slots ?? DEFAULT_SLOTS;
-  const nextSlot = resolveNextMealSlot(preferredSlots, recordedSlots, new Date());
+  const nextSlot = resolveNextMealSlot(
+    preferredSlots,
+    recordedSlots,
+    new Date(),
+    personalizedTimes,
+  );
+  const nextPreset = timePresets.data?.presets.find((preset) => preset.slot === nextSlot);
+
+  useEffect(() => {
+    if (!todayEntries.data) return;
+    setRecordedMealSlotsForToday(recordedSlots);
+  }, [recordedSlots, todayEntries.data]);
   const latest = recommendation.data?.latest ?? null;
   const latestSummary = latest
     ? latest.summary.trim() ||
@@ -135,7 +163,9 @@ const AuthenticatedTodayMealCard = () => {
               {nextSlot ? MEAL_SLOT_LABEL[nextSlot] : '오늘 기록 완료'}
             </Text>
             <Text style={[styles.metricSub, { color: theme.colors.textMuted }]} numberOfLines={1}>
-              {nextSlot ? '선호 끼니 기준' : '설정한 끼니를 모두 남겼어요'}
+              {nextSlot
+                ? `${personalizedTimes[nextSlot]} · ${nextPreset?.fromRecords ? '내 기록 기준' : '기본 시간'}`
+                : '설정한 끼니를 모두 남겼어요'}
             </Text>
           </View>
         </View>
@@ -178,7 +208,9 @@ const AuthenticatedTodayMealCard = () => {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="오늘 식단 기록하기"
-          onPress={() => router.push('/meal/new' as never)}
+          onPress={() =>
+            router.push((nextSlot ? `/meal/new?slot=${nextSlot}` : '/meal/new') as never)
+          }
           style={({ pressed }) => [
             styles.button,
             styles.primaryButton,

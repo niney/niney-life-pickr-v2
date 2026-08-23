@@ -12,12 +12,15 @@ interface SeedDish {
   name: string;
   matchedName?: string | null;
   foodId?: string | null;
+  recognitionDishId?: string;
+  confidence?: number;
 }
 
 interface SeedFinalItem {
   name: string;
   nameNorm: string;
   foodId?: string | null;
+  recognitionDishId?: string | null;
   source: 'recognized' | 'catalog' | 'manual';
 }
 
@@ -50,6 +53,7 @@ describe('food recognition quality admin route (격리 DB)', () => {
             name: item.name,
             nameNorm: item.nameNorm,
             foodId: item.foodId ?? null,
+            recognitionDishId: item.recognitionDishId ?? null,
             source: item.source,
             sortOrder,
           })),
@@ -64,7 +68,7 @@ describe('food recognition quality admin route (격리 DB)', () => {
     dishes: dishes.map((dish, photoIndex) => ({
       name: dish.name,
       candidates: [{ name: dish.name, confidence: 0.8 }],
-      confidence: 0.8,
+      confidence: dish.confidence ?? 0.8,
       isMain: true,
       portion: 'normal',
       isDrink: false,
@@ -74,6 +78,7 @@ describe('food recognition quality admin route (격리 DB)', () => {
       dishType: null,
       mainIngredient: null,
       cuisine: null,
+      ...(dish.recognitionDishId ? { recognitionDishId: dish.recognitionDishId } : {}),
     })),
   });
 
@@ -116,19 +121,15 @@ describe('food recognition quality admin route (격리 DB)', () => {
         { name: '오이무침', nameNorm: '오이무침', source: 'manual' },
       ],
     );
-    await seedEntry(
-      'quality-valid-2',
-      snapshot([{ name: '계란말이', foodId: 'food-egg' }]),
-      [
-        {
-          name: '달걀말이',
-          nameNorm: '달걀말이',
-          foodId: 'food-rolled-egg',
-          source: 'catalog',
-        },
-        { name: '오이무침', nameNorm: '오이무침', source: 'manual' },
-      ],
-    );
+    await seedEntry('quality-valid-2', snapshot([{ name: '계란말이', foodId: 'food-egg' }]), [
+      {
+        name: '달걀말이',
+        nameNorm: '달걀말이',
+        foodId: 'food-rolled-egg',
+        source: 'catalog',
+      },
+      { name: '오이무침', nameNorm: '오이무침', source: 'manual' },
+    ]);
     // 빈 인식 결과 후 직접 입력한 희소 음식은 총계에는 잡히지만 top(k=2)에서는 숨겨야 한다.
     await seedEntry('quality-valid-empty', snapshot([]), [
       { name: '희소한가정식', nameNorm: '희소한가정식', source: 'manual' },
@@ -152,15 +153,21 @@ describe('food recognition quality admin route (격리 DB)', () => {
 
   it('ADMIN 인증과 days 1..365 계약을 강제한다', async () => {
     expect((await app.inject({ method: 'GET', url: QUALITY })).statusCode).toBe(401);
-    expect(
-      (await app.inject({ method: 'GET', url: QUALITY, headers: userAuth })).statusCode,
-    ).toBe(403);
-    for (const days of ['0', '366', 'abc']) {
+    expect((await app.inject({ method: 'GET', url: QUALITY, headers: userAuth })).statusCode).toBe(
+      403,
+    );
+    for (const query of [
+      'days=0',
+      'days=366',
+      'days=abc',
+      'version=0',
+      'confidenceBucket=unknown',
+    ]) {
       expect(
         (
           await app.inject({
             method: 'GET',
-            url: `${QUALITY}?days=${days}`,
+            url: `${QUALITY}?${query}`,
             headers: adminAuth,
           })
         ).statusCode,
@@ -168,14 +175,14 @@ describe('food recognition quality admin route (격리 DB)', () => {
     }
   });
 
-  it('현재 버전 인식과 최종 항목을 집계하고 손상/구버전은 invalid 로 세다', async () => {
+  it('과거 정상 버전도 집계하고 실제 손상 스냅샷만 invalid 로 센다', async () => {
     const res = await app.inject({ method: 'GET', url: QUALITY, headers: adminAuth });
     expect(res.statusCode).toBe(200);
     const body = res.json<FoodRecognitionQualityResultType>();
     expect(body).toMatchObject({
       days: 30,
       recognitionEntryCount: 5,
-      invalidRecognitionCount: 2,
+      invalidRecognitionCount: 1,
       originalDishCount: 4,
       confirmedCount: 1,
       correctedCount: 2,
@@ -184,6 +191,15 @@ describe('food recognition quality admin route (격리 DB)', () => {
       correctionRate: 0.75,
       unmatchedFinalItemCount: 3,
     });
+    expect(body.byModelVersion).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ model: 'vision-model', version: MEAL_RECOGNITION_VERSION }),
+        expect.objectContaining({ model: 'old-model', version: MEAL_RECOGNITION_VERSION - 1 }),
+      ]),
+    );
+    expect(body.byConfidence).toEqual(
+      expect.arrayContaining([expect.objectContaining({ bucket: 'high', originalDishCount: 4 })]),
+    );
     // 같은 사용자가 두 기록에서 반복했어도 음식명을 노출하지 않는다.
     expect(body.topCorrections).toEqual([]);
     expect(body.topUnmatched).toEqual([]);
@@ -243,5 +259,95 @@ describe('food recognition quality admin route (격리 DB)', () => {
       originalDishCount: 5,
       deletedCount: 2,
     });
+  });
+
+  it('모델·버전·신뢰도 필터를 함께 적용한다', async () => {
+    const current = await app.inject({
+      method: 'GET',
+      url: `${QUALITY}?model=vision-model&version=${MEAL_RECOGNITION_VERSION}&confidenceBucket=high`,
+      headers: adminAuth,
+    });
+    expect(current.statusCode).toBe(200);
+    expect(current.json<FoodRecognitionQualityResultType>()).toMatchObject({
+      recognitionEntryCount: 2,
+      invalidRecognitionCount: 0,
+      originalDishCount: 4,
+      byConfidence: [
+        { bucket: 'low', originalDishCount: 0 },
+        { bucket: 'medium', originalDishCount: 0 },
+        { bucket: 'high', originalDishCount: 4 },
+      ],
+    });
+
+    const historical = await app.inject({
+      method: 'GET',
+      url: `${QUALITY}?model=old-model&version=${MEAL_RECOGNITION_VERSION - 1}`,
+      headers: adminAuth,
+    });
+    expect(historical.statusCode).toBe(200);
+    expect(historical.json<FoodRecognitionQualityResultType>()).toMatchObject({
+      recognitionEntryCount: 1,
+      invalidRecognitionCount: 0,
+      originalDishCount: 0,
+    });
+  });
+
+  it('recognitionDishId로 순서가 뒤집힌 교정도 원본과 정확히 연결하고 k=2 뒤에만 공개한다', async () => {
+    const ids = ['quality-lineage-1', 'quality-lineage-2'];
+    const recognition = snapshot([
+      { name: '원본낮음', recognitionDishId: 'lineage-low', confidence: 0.2 },
+      { name: '원본보통', recognitionDishId: 'lineage-medium', confidence: 0.6 },
+    ]);
+    const reversedFinals: SeedFinalItem[] = [
+      {
+        name: '수정보통',
+        nameNorm: '수정보통',
+        recognitionDishId: 'lineage-medium',
+        source: 'catalog',
+      },
+      {
+        name: '수정낮음',
+        nameNorm: '수정낮음',
+        recognitionDishId: 'lineage-low',
+        source: 'catalog',
+      },
+    ];
+    await seedEntry(ids[0]!, recognition, reversedFinals, new Date(), 'quality-user');
+    await seedEntry(ids[1]!, recognition, reversedFinals, new Date(), 'quality-user-2');
+
+    try {
+      const res = await app.inject({ method: 'GET', url: QUALITY, headers: adminAuth });
+      const body = res.json<FoodRecognitionQualityResultType>();
+      expect(body.topCorrections).toEqual(
+        expect.arrayContaining([
+          { originalName: '원본낮음', finalName: '수정낮음', count: 2 },
+          { originalName: '원본보통', finalName: '수정보통', count: 2 },
+        ]),
+      );
+      expect(body.byConfidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ bucket: 'low', correctedCount: 2 }),
+          expect.objectContaining({ bucket: 'medium', correctedCount: 2 }),
+        ]),
+      );
+
+      const low = await app.inject({
+        method: 'GET',
+        url: `${QUALITY}?confidenceBucket=low`,
+        headers: adminAuth,
+      });
+      expect(low.statusCode).toBe(200);
+      expect(low.json<FoodRecognitionQualityResultType>()).toMatchObject({
+        recognitionEntryCount: 2,
+        unmatchedFinalItemCount: 2,
+        topUnmatched: [{ name: '수정낮음', count: 2 }],
+      });
+      expect(JSON.stringify(low.json())).not.toContain('수정보통');
+      for (const forbidden of ['quality-user', 'quality-lineage', 'lineage-low']) {
+        expect(JSON.stringify(body)).not.toContain(forbidden);
+      }
+    } finally {
+      await app.prisma.mealEntry.deleteMany({ where: { id: { in: ids } } });
+    }
   });
 });

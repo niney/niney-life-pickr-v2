@@ -58,6 +58,9 @@ export const RATE = {
   mealRecognize: { max: 10, timeWindow: '1 minute' },
   // 식단 추천 — 텍스트 LLM 1콜/요청(캐시 히트는 0콜). 분당 10.
   mealRecommend: { max: 10, timeWindow: '1 minute' },
+  // 사진 포함 백업/복원은 최대 75MB JSON을 해시·이미지 정규화한다. 로그인 사용자라도
+  // 반복 대용량 요청이 단일 SQLite/프로세스를 오래 점유하지 않게 시간당 제한한다.
+  mealDataArchive: { max: 10, timeWindow: '1 hour' },
 } as const;
 
 export default fp(async (app) => {

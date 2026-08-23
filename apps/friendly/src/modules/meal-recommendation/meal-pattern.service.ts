@@ -3,6 +3,8 @@ import type {
   FoodCuisineType,
   FoodDishTypeType,
   FoodMainIngredientType,
+  MealAllergenType,
+  MealNutritionBasisType,
   MealPreferenceType,
   MealSlotType,
   MealTypeType,
@@ -14,11 +16,9 @@ import {
   MEAL_SLOT_LABEL,
   daysBetween,
 } from '@repo/utils';
+import { MealAllergen, MEAL_ALLERGEN_LABEL } from '@repo/api-contract';
 import { normalizeTerm } from '../../lib/text.js';
-import {
-  parseMealRecommendationFeedback,
-  parseMealRecommendationItems,
-} from './meal-recommendation.feedback.js';
+import { parseMealRecommendationFeedback } from './meal-recommendation.feedback.js';
 
 // 추천의 "결정적" 절반 — 사용자 기록을 패턴 프로필로 집계하고, 후보 풀을 만들고, 가중치로
 // 점수를 매긴다. LLM 은 이 결과 위에서 고르고 이유를 붙일 뿐이고, LLM 이 없거나 실패해도
@@ -124,10 +124,15 @@ export interface CandidateInput {
   kcal: number | null;
   sodiumMg: number | null;
   proteinG: number | null;
+  nutritionFrom: string | null;
+  nutritionBasis: MealNutritionBasisType;
   // 재료 수 — 간편함(집밥) 근거.
   ingredientCount: number | null;
   // 재료 이름 — 비선호 재료 제외와 화면 표시에 쓴다(레시피 출처가 없으면 빈 배열).
   ingredients: string[];
+  allergenWarnings: MealAllergenType[];
+  allergenEvidence: string[];
+  allergenMetadataKnown: boolean;
 }
 
 export interface ScoreContext {
@@ -171,8 +176,18 @@ export const buildProfile = (
   const recommendationFeedbackByNorm = new Map<string, RecommendationFeedbackStat>();
   let balanceTotal = 0;
 
+  // 마지막 섭취일은 **곁들임까지** 본다. 빈도 순위(topFoods)에서 반찬을 빼는 건 맞지만,
+  // "안 먹어봄" 판정까지 빼면 곁들임으로 적은 실제 요리가 새 음식으로 둔갑한다
+  // (실측: 7일 전 냉면을 곁들임으로 적었더니 추천 카드에 '안 먹어봄'이 붙었다).
+  const lastEatenAll = new Map<string, string>();
+
   for (const item of history) {
     entryKeys.add(`${item.eatenDate}|${item.slot}`);
+    {
+      const norm = item.nameNorm || normalizeTerm(item.name);
+      const prev = lastEatenAll.get(norm);
+      if (!prev || item.eatenDate > prev) lastEatenAll.set(norm, item.eatenDate);
+    }
     if (!item.isMain) continue;
     const daysSince = daysBetween(item.eatenDate, today) ?? 0;
     const norm = item.nameNorm || normalizeTerm(item.name);
@@ -205,7 +220,11 @@ export const buildProfile = (
     if (daysSince <= BALANCE_DAYS) {
       balanceTotal += 1;
       if (item.dishType) dishCount.set(item.dishType, (dishCount.get(item.dishType) ?? 0) + 1);
-      if (item.mainIngredient) ingredientCount.set(item.mainIngredient, (ingredientCount.get(item.mainIngredient) ?? 0) + 1);
+      if (item.mainIngredient)
+        ingredientCount.set(
+          item.mainIngredient,
+          (ingredientCount.get(item.mainIngredient) ?? 0) + 1,
+        );
       if (item.cuisine) cuisineCount.set(item.cuisine, (cuisineCount.get(item.cuisine) ?? 0) + 1);
     }
   }
@@ -258,7 +277,7 @@ export const buildProfile = (
     dishTypeShare: share(dishCount),
     ingredientShare: share(ingredientCount),
     cuisineShare: share(cuisineCount),
-    lastEatenByNorm: new Map([...byNorm.values()].map((f) => [f.nameNorm, f.lastEatenDate])),
+    lastEatenByNorm: lastEatenAll,
     recommendationFeedbackByNorm,
   };
 };
@@ -268,12 +287,25 @@ export const buildProfile = (
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 // 계절·날씨 적합도. 실제 기온이 있으면 그것을, 없으면 월로 판단한다.
-const weatherFit = (c: CandidateInput, ctx: ScoreContext): { score: number; tag: string | null } => {
-  const hot = ctx.tempC !== null && ctx.tempC !== undefined ? ctx.tempC >= 26 : [6, 7, 8].includes(ctx.month);
-  const cold = ctx.tempC !== null && ctx.tempC !== undefined ? ctx.tempC <= 8 : [12, 1, 2].includes(ctx.month);
+const weatherFit = (
+  c: CandidateInput,
+  ctx: ScoreContext,
+): { score: number; tag: string | null } => {
+  const hot =
+    ctx.tempC !== null && ctx.tempC !== undefined ? ctx.tempC >= 26 : [6, 7, 8].includes(ctx.month);
+  const cold =
+    ctx.tempC !== null && ctx.tempC !== undefined ? ctx.tempC <= 8 : [12, 1, 2].includes(ctx.month);
   const rainy = ctx.rain === true;
-  const warmDish = c.dishType === 'soup' || c.dishType === 'stew' || c.dishType === 'steam' || c.dishType === 'braise';
-  const coolDish = c.dishType === 'noodle' || c.dishType === 'salad' || c.dishType === 'raw_fish' || c.dishType === 'namul';
+  const warmDish =
+    c.dishType === 'soup' ||
+    c.dishType === 'stew' ||
+    c.dishType === 'steam' ||
+    c.dishType === 'braise';
+  const coolDish =
+    c.dishType === 'noodle' ||
+    c.dishType === 'salad' ||
+    c.dishType === 'raw_fish' ||
+    c.dishType === 'namul';
   if (rainy && (warmDish || c.dishType === 'pancake')) return { score: 1, tag: '비 오는 날' };
   if (cold && warmDish) return { score: 1, tag: '추운 날 국물' };
   if (hot && coolDish) return { score: 1, tag: '더운 날 시원하게' };
@@ -291,7 +323,11 @@ const healthFit = (c: CandidateInput): { score: number; tag: string | null } => 
     score += 0.25;
     tag = '가벼운 한 끼';
   }
-  if (c.mainIngredient === 'vegetable' || c.mainIngredient === 'tofu_bean' || c.mainIngredient === 'fish') {
+  if (
+    c.mainIngredient === 'vegetable' ||
+    c.mainIngredient === 'tofu_bean' ||
+    c.mainIngredient === 'fish'
+  ) {
     score += 0.15;
     tag = tag ?? '채소·단백질';
   }
@@ -350,7 +386,8 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     // 오래 쓴 사용자의 과거 반응이 최근 취향을 영구히 압도하지 않게 한다.
     const chosenBonus = 0.12 * Math.min(1, feedback.chosenWeight);
     const loggedBonus = 0.25 * Math.min(1, feedback.loggedWeight);
-    const ratingAverage = feedback.ratingWeight > 0 ? feedback.ratingSum / feedback.ratingWeight : 0;
+    const ratingAverage =
+      feedback.ratingWeight > 0 ? feedback.ratingSum / feedback.ratingWeight : 0;
     // 합계 자체가 날짜 감쇠를 포함한다. 평균만 쓰면 30일 전 👍 하나도 오늘 👍 하나와 같은
     // 크기가 되어 감쇠가 사라지므로, 점수에는 감쇠 합계를 상한 처리해 쓴다.
     const ratingSignal = Math.max(-1, Math.min(1, feedback.ratingSum));
@@ -368,7 +405,8 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
   }
 
   // balance — 최근 분포에서 덜 먹은 축일수록 높다(세 축 평균).
-  const shareOf = (rec: Record<string, number>, key: string | null): number => (key ? (rec[key] ?? 0) : 0);
+  const shareOf = (rec: Record<string, number>, key: string | null): number =>
+    key ? (rec[key] ?? 0) : 0;
   const balance = clamp01(
     1 -
       (shareOf(ctx.profile.dishTypeShare, c.dishType) +
@@ -401,7 +439,8 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
   };
 
   const w = ctx.preference.weights;
-  const totalWeight = w.variety + w.taste + w.balance + w.health + w.novelty + w.weather + w.convenience;
+  const totalWeight =
+    w.variety + w.taste + w.balance + w.health + w.novelty + w.weather + w.convenience;
   const raw =
     w.variety * variety +
     w.taste * taste +
@@ -434,7 +473,8 @@ export const matchesFoodTerms = (c: CandidateInput, terms: string[]): boolean =>
   return norms.some((e) => c.nameNorm.includes(e) || ingredientNorms.some((i) => i.includes(e)));
 };
 
-export const isExcluded = (c: CandidateInput, excluded: string[]): boolean => matchesFoodTerms(c, excluded);
+export const isExcluded = (c: CandidateInput, excluded: string[]): boolean =>
+  matchesFoodTerms(c, excluded);
 
 // ── 후보 풀 + 서비스 ─────────────────────────────────────────────────────────
 
@@ -482,28 +522,80 @@ export class MealPatternService {
     return out;
   }
 
-  async loadFeedbackSignals(userId: string, today: string): Promise<RecommendationFeedbackSignal[]> {
+  async loadFeedbackSignals(
+    userId: string,
+    today: string,
+  ): Promise<RecommendationFeedbackSignal[]> {
     const from = shiftDate(today, -HISTORY_DAYS);
     const rows = await this.prisma.mealRecommendation.findMany({
-      where: { userId, targetDate: { gte: from, lte: today }, feedbackJson: { not: null } },
-      select: { targetDate: true, itemsJson: true, feedbackJson: true },
+      where: { userId, targetDate: { gte: from, lte: today } },
+      select: {
+        targetDate: true,
+        feedbackJson: true,
+        events: {
+          where: { kind: { in: ['candidate_picked', 'candidate_rated', 'logged'] } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-    return rows.map((row) => {
+    return rows.flatMap((row) => {
       const feedback = parseMealRecommendationFeedback(row.feedbackJson);
-      return {
-        targetDate: row.targetDate,
-        candidateNames: parseMealRecommendationItems(row.itemsJson).map((item) => item.name),
-        pickedName: feedback?.pickedName ?? null,
-        rating: feedback?.rating ?? null,
-        logged: feedback?.eatenEntryId !== null && feedback?.eatenEntryId !== undefined,
-      };
+      const pickedEvent = [...row.events]
+        .reverse()
+        .find((event) => event.kind === 'candidate_picked');
+      const loggedEvent = [...row.events].reverse().find((event) => event.kind === 'logged');
+      const pickedName =
+        loggedEvent?.candidateName ?? pickedEvent?.candidateName ?? feedback?.pickedName ?? null;
+      const out: RecommendationFeedbackSignal[] = [];
+      if (pickedName) {
+        out.push({
+          targetDate: row.targetDate,
+          candidateNames: [pickedName],
+          pickedName,
+          // 구버전 후보 선택+평가만 후보별 신호로 보존한다. 후보가 없는 세트 평가는 학습하지 않는다.
+          rating: row.events.some((event) => event.kind === 'candidate_rated')
+            ? null
+            : (feedback?.rating ?? null),
+          logged: Boolean(loggedEvent || feedback?.eatenEntryId),
+        });
+      }
+      // 후보 평가는 현재 선호의 스냅샷이다. 같은 후보를 여러 번 누르거나
+      // +1 후 -1로 바꿠었을 때 전부 합산하면 현재 의도가 왜곡된다. 정렬된 이벤트를
+      // recommendation+정규화 후보 식별자로 덮어써 createdAt, id 기준 최신 1건만 학습한다.
+      const latestCandidateRatings = new Map<string, { candidateName: string; rating: -1 | 1 }>();
+      for (const event of row.events) {
+        if (
+          event.kind !== 'candidate_rated' ||
+          !event.candidateName ||
+          (event.rating !== -1 && event.rating !== 1)
+        ) {
+          continue;
+        }
+        latestCandidateRatings.set(normalizeTerm(event.candidateName), {
+          candidateName: event.candidateName,
+          rating: event.rating,
+        });
+      }
+      for (const event of latestCandidateRatings.values()) {
+        out.push({
+          targetDate: row.targetDate,
+          candidateNames: [event.candidateName],
+          pickedName: null,
+          rating: event.rating,
+          logged: false,
+        });
+      }
+      return out;
     });
   }
 
   // 후보 풀 = 내 이력(취향) + 좋아요 + 카탈로그 인기 + 미경험(탐험). 제외 음식·음료/주류는 뺀다.
-  async buildCandidates(profile: PatternProfile, preference: MealPreferenceType): Promise<CandidateInput[]> {
+  async buildCandidates(
+    profile: PatternProfile,
+    preference: MealPreferenceType,
+  ): Promise<CandidateInput[]> {
     const out: CandidateInput[] = [];
     const candidateByNorm = new Map<string, CandidateInput>();
 
@@ -521,14 +613,32 @@ export class MealPatternService {
         existing.kcal ??= c.kcal;
         existing.sodiumMg ??= c.sodiumMg;
         existing.proteinG ??= c.proteinG;
+        existing.nutritionFrom ??= c.nutritionFrom;
+        if (existing.nutritionBasis === 'missing') existing.nutritionBasis = c.nutritionBasis;
         existing.ingredientCount ??= c.ingredientCount;
-        if (existing.ingredients.length === 0 && c.ingredients.length > 0) existing.ingredients = c.ingredients;
+        if (existing.ingredients.length === 0 && c.ingredients.length > 0)
+          existing.ingredients = c.ingredients;
+        existing.allergenWarnings = [
+          ...new Set([...existing.allergenWarnings, ...c.allergenWarnings]),
+        ];
+        existing.allergenEvidence = [
+          ...new Set([...existing.allergenEvidence, ...c.allergenEvidence]),
+        ].slice(0, 8);
+        existing.allergenMetadataKnown ||= c.allergenMetadataKnown;
         existing.popularity = Math.max(existing.popularity, c.popularity);
         return;
       }
       if (c.dishType && EXCLUDED_DISH_TYPES.has(c.dishType)) return;
       if (isVagueMenuVocabulary(source, c.dishType)) return;
       if (isExcluded(c, preference.excludedFoods)) return;
+      // 구조화 알레르겐은 알려진 이름·재료 메타에 걸린 후보만 보수적으로 제거한다.
+      // 메타가 없거나 교차접촉 가능성이 있는 음식까지 안전하다고 단정하지 않는다.
+      if (
+        (preference.allergens ?? []).some((allergen) =>
+          (c.allergenWarnings ?? []).includes(allergen),
+        )
+      )
+        return;
       candidateByNorm.set(c.nameNorm, c);
       out.push(c);
     };
@@ -536,7 +646,9 @@ export class MealPatternService {
     // ① 내 이력 — 카탈로그 정보를 붙여 영양·재료까지 쓸 수 있게 한다.
     const historyNorms = profile.topFoods.map((f) => f.nameNorm);
     const historyRows = historyNorms.length
-      ? await this.prisma.foodItem.findMany({ where: { nameNorm: { in: historyNorms }, active: true } })
+      ? await this.prisma.foodItem.findMany({
+          where: { nameNorm: { in: historyNorms }, active: true },
+        })
       : [];
     const byNorm = new Map(historyRows.map((r) => [r.nameNorm, r]));
     for (const f of profile.topFoods) {
@@ -554,8 +666,21 @@ export class MealPatternService {
         kcal: row?.kcal ?? null,
         sodiumMg: row?.sodiumMg ?? null,
         proteinG: row?.proteinG ?? null,
+        nutritionFrom: row?.nutritionFrom ?? null,
+        nutritionBasis: nutritionBasis(
+          row?.nutritionFrom ?? null,
+          row?.kcal ?? null,
+          row?.proteinG ?? null,
+          row?.sodiumMg ?? null,
+        ),
         ingredientCount: countIngredients(row?.ingredientsJson ?? null),
         ingredients: parseIngredients(row?.ingredientsJson),
+        ...allergenData(
+          row?.name ?? f.name,
+          row?.ingredientsJson,
+          row?.allergensJson,
+          row?.allergenEvidenceJson,
+        ),
       });
     }
 
@@ -577,8 +702,21 @@ export class MealPatternService {
         kcal: row?.kcal ?? null,
         sodiumMg: row?.sodiumMg ?? null,
         proteinG: row?.proteinG ?? null,
+        nutritionFrom: row?.nutritionFrom ?? null,
+        nutritionBasis: nutritionBasis(
+          row?.nutritionFrom ?? null,
+          row?.kcal ?? null,
+          row?.proteinG ?? null,
+          row?.sodiumMg ?? null,
+        ),
         ingredientCount: countIngredients(row?.ingredientsJson ?? null),
         ingredients: parseIngredients(row?.ingredientsJson),
+        ...allergenData(
+          row?.name ?? liked,
+          row?.ingredientsJson,
+          row?.allergensJson,
+          row?.allergenEvidenceJson,
+        ),
       });
     }
 
@@ -603,7 +741,9 @@ export class MealPatternService {
         active: true,
         dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
         nameNorm: { notIn: historyNorms.length ? historyNorms : ['-'] },
-        NOT: { OR: [{ dishType: null }, { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] }] },
+        NOT: {
+          OR: [{ dishType: null }, { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] }],
+        },
       },
       orderBy: { updatedAt: 'desc' },
       take: CATALOG_NOVEL_MAX * 3,
@@ -629,7 +769,10 @@ const toCandidate = (row: {
   kcal: number | null;
   sodiumMg: number | null;
   proteinG: number | null;
+  nutritionFrom: string | null;
   ingredientsJson: string | null;
+  allergensJson: string;
+  allergenEvidenceJson: string;
 }): CandidateInput => ({
   name: row.name,
   nameNorm: row.nameNorm,
@@ -643,9 +786,99 @@ const toCandidate = (row: {
   kcal: row.kcal,
   sodiumMg: row.sodiumMg,
   proteinG: row.proteinG,
+  nutritionFrom: row.nutritionFrom,
+  nutritionBasis: nutritionBasis(row.nutritionFrom, row.kcal, row.proteinG, row.sodiumMg),
   ingredientCount: countIngredients(row.ingredientsJson),
   ingredients: parseIngredients(row.ingredientsJson),
+  ...allergenData(row.name, row.ingredientsJson, row.allergensJson, row.allergenEvidenceJson),
 });
+
+const nutritionBasis = (
+  from: string | null,
+  kcal: number | null,
+  proteinG: number | null,
+  sodiumMg: number | null,
+): MealNutritionBasisType => {
+  if (from) return 'donor_estimate';
+  return kcal !== null || proteinG !== null || sodiumMg !== null ? 'direct' : 'missing';
+};
+
+const ALLERGEN_KEYWORDS: Record<MealAllergenType, readonly string[]> = {
+  egg: ['달걀', '계란', '난백', '난황', '마요네즈'],
+  milk: ['우유', '버터', '치즈', '생크림', '연유', '유청', '카제인'],
+  buckwheat: ['메밀'],
+  peanut: ['땅콩'],
+  soybean: ['대두', '콩', '두부', '된장', '간장', '콩나물'],
+  wheat: ['밀가루', '밀', '빵', '파스타', '우동', '라면', '만두피'],
+  pine_nut: ['잣'],
+  walnut: ['호두'],
+  crab: ['꽃게', '대게', '게장', '게살', '크랩'],
+  shrimp: ['새우', '쉬림프'],
+  squid: ['오징어'],
+  mackerel: ['고등어'],
+  shellfish: ['조개', '굴', '홍합', '전복', '바지락', '꼬막', '가리비'],
+  peach: ['복숭아'],
+  tomato: ['토마토', '케첩'],
+  chicken: ['닭', '치킨'],
+  pork: ['돼지', '돈육', '삼겹', '제육', '족발', '햄', '베이컨', '소시지'],
+  beef: ['소고기', '쇠고기', '우육', '한우'],
+  sulfites: ['아황산', '메타중아황산'],
+};
+
+const parseAllergenJson = (json: string | null | undefined): MealAllergenType[] => {
+  if (!json) return [];
+  try {
+    const value: unknown = JSON.parse(json);
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+      const parsed = MealAllergen.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+const parseStringJson = (json: string | null | undefined): string[] => {
+  if (!json) return [];
+  try {
+    const value: unknown = JSON.parse(json);
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+export const allergenData = (
+  name: string,
+  ingredientsJson: string | null | undefined,
+  explicitJson: string | null | undefined,
+  evidenceJson: string | null | undefined,
+): Pick<CandidateInput, 'allergenWarnings' | 'allergenEvidence' | 'allergenMetadataKnown'> => {
+  const ingredients = parseIngredients(ingredientsJson);
+  const sources = [name, ...ingredients];
+  const explicit = parseAllergenJson(explicitJson);
+  const warnings = new Set<MealAllergenType>(explicit);
+  const evidence = new Set(parseStringJson(evidenceJson));
+  for (const [allergen, keywords] of Object.entries(ALLERGEN_KEYWORDS) as Array<
+    [MealAllergenType, readonly string[]]
+  >) {
+    for (const source of sources) {
+      const norm = normalizeTerm(source);
+      if (!keywords.some((keyword) => norm.includes(normalizeTerm(keyword)))) continue;
+      warnings.add(allergen);
+      evidence.add(`${MEAL_ALLERGEN_LABEL[allergen]}: ${source}`);
+      break;
+    }
+  }
+  return {
+    allergenWarnings: [...warnings],
+    allergenEvidence: [...evidence].slice(0, 8),
+    allergenMetadataKnown: explicit.length > 0 || ingredients.length > 0,
+  };
+};
 
 // 재료 이름 목록(레시피 출처가 있는 행만). 후보 필터·화면 표시에 쓴다.
 export const parseIngredients = (json: string | null | undefined): string[] => {
@@ -701,7 +934,11 @@ export const describeProfile = (profile: PatternProfile, targetSlot: MealSlotTyp
       return `${name}(선택 ${stat.chosenWeight.toFixed(1)}, 기록 ${stat.loggedWeight.toFixed(1)}, 평가 ${ratingSignal.toFixed(1)})`;
     });
   if (feedback.length > 0) lines.push(`최근 추천 반응: ${feedback.join(', ')}`);
-  const shareLine = (label: string, rec: Record<string, number>, labels: Record<string, string>): string | null => {
+  const shareLine = (
+    label: string,
+    rec: Record<string, number>,
+    labels: Record<string, string>,
+  ): string | null => {
     const top = Object.entries(rec)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)

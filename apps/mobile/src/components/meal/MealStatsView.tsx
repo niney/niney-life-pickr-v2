@@ -57,13 +57,18 @@ export const MealStatsView = () => {
               icon="fire-circle"
               label="하루 평균"
               value={`${Math.round(data.nutrition.avgKcalPerDay).toLocaleString('ko-KR')}kcal`}
-              sub={`기록한 날 기준 · ${Math.round(data.nutrition.coverage * 100)}% 반영`}
+              sub={`주식 ${Math.round(data.nutrition.mainItemCoverage * 100)}% · 직접 ${Math.round(data.nutrition.directCoverage * 100)}%`}
             />
           ) : null}
         </View>
+        {!data.nutrition.averageReliable && data.entryCount > 0 ? (
+          <Text style={styles.coverageNote}>
+            주식 영양 근거가 {Math.round(data.nutrition.mainItemCoverage * 100)}%뿐이라 하루 평균은 숨겼어요.
+          </Text>
+        ) : null}
         {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
           <Text style={styles.coverageNote}>
-            영양 정보가 있는 음식만 더한 값이라 실제보다 적게 나와요(외식 브랜드 메뉴는 공개된 값이 없어요).
+            직접값 {data.nutrition.itemsDirect}개, 유사 음식 추정 {data.nutrition.itemsEstimated}개만 반영한 값이라 실제와 다를 수 있어요.
           </Text>
         ) : null}
       </Card>
@@ -96,9 +101,19 @@ export const MealStatsView = () => {
       <Card>
         <CardTitle title="추천 반응" sub="선택한 추천이 실제 기록으로 이어졌는지 보여 줘요" />
         <View style={styles.tiles}>
-          <Tile icon="cursor-pointer" label="선택" value={`${data.recommendation.chosenCount}건`} />
+          <Tile
+            icon="cursor-pointer"
+            label="선택"
+            value={`${data.recommendation.chosenCount}건`}
+            sub={`노출 ${data.recommendation.shownCount}건 · ${Math.round(data.recommendation.pickRate * 100)}%`}
+          />
           <Tile icon="check-circle" label="기록 완료" value={`${data.recommendation.loggedCount}건`} />
-          <Tile icon="thumb-up" label="평가" value={`${data.recommendation.ratedCount}건`} />
+          <Tile
+            icon="thumb-up"
+            label="평가"
+            value={`${data.recommendation.ratedCount}건`}
+            sub={`후보별 ${data.recommendation.candidateRatedCount}건`}
+          />
           <Tile
             icon="chart-line"
             label="추천 수락률"

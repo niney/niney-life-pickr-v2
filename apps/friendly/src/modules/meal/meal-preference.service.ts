@@ -1,10 +1,12 @@
 import type { MealPreference as PrismaMealPreference, PrismaClient } from '@prisma/client';
 import {
   MEAL_DEFAULT_WEIGHTS,
+  MealAllergen,
   MealSlot,
   MealType,
   MealWeights,
   type MealPreferenceType,
+  type MealAllergenType,
   type MealSlotType,
   type MealTypeType,
   type MealWeightsType,
@@ -26,6 +28,15 @@ const parseJsonArray = (json: string | null | undefined): string[] => {
   } catch {
     return [];
   }
+};
+
+const parseAllergens = (json: string | null | undefined): MealAllergenType[] => {
+  const seen = new Set<MealAllergenType>();
+  for (const value of parseJsonArray(json)) {
+    const parsed = MealAllergen.safeParse(value);
+    if (parsed.success) seen.add(parsed.data);
+  }
+  return [...seen];
 };
 
 export interface MealFoodPreferenceLists {
@@ -84,6 +95,7 @@ export const toMealPreference = (row: PrismaMealPreference | null): MealPreferen
   return {
     weights: parseWeights(row?.weightsJson),
     ...foodPreferences,
+    allergens: parseAllergens(row?.allergensJson),
     mealTypes: parseJsonArray(row?.mealTypesJson).filter((v): v is MealTypeType => MealType.safeParse(v).success),
     slots: (() => {
       const parsed = parseJsonArray(row?.slotsJson).filter((v): v is MealSlotType => MealSlot.safeParse(v).success);
@@ -116,6 +128,7 @@ export class MealPreferenceService {
     const merged = {
       weightsJson: JSON.stringify(input.weights ?? parseWeights(current?.weightsJson)),
       excludedFoodsJson: JSON.stringify(foodPreferences.excludedFoods),
+      allergensJson: JSON.stringify(input.allergens ?? parseAllergens(current?.allergensJson)),
       dislikedFoodsJson: JSON.stringify(foodPreferences.dislikedFoods),
       likedFoodsJson: JSON.stringify(foodPreferences.likedFoods),
       mealTypesJson: JSON.stringify(input.mealTypes ?? parseJsonArray(current?.mealTypesJson)),
