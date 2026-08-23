@@ -133,7 +133,9 @@ describe('computeMealStats', () => {
           ],
         },
       ],
-      { from: '2026-08-20', to: '2026-08-21', today: '2026-08-21' },
+      '2026-08-20',
+      '2026-08-21',
+      '2026-08-21',
     );
     // 기록이 있는 날은 하루 → 그 날 합계가 곧 하루 평균. 값 없는 항목은 빠진다.
     expect(r.nutrition.avgKcalPerDay).toBe(528);
@@ -152,9 +154,26 @@ describe('computeMealStats', () => {
           items: [{ name: '양념치킨', nameNorm: '양념치킨', dishType: null, mainIngredient: null, cuisine: null, isMain: true, kcal: null }],
         },
       ],
-      { from: '2026-08-20', to: '2026-08-21', today: '2026-08-21' },
+      '2026-08-20',
+      '2026-08-21',
+      '2026-08-21',
     );
     expect(r.nutrition.avgKcalPerDay).toBeNull();
     expect(r.nutrition.coverage).toBe(0);
+  });
+
+  it('추천 선택·실제 기록·평가와 수락률을 집계한다', () => {
+    const r = computeMealStats([], '2026-08-20', '2026-08-21', '2026-08-21', [
+      { feedbackJson: JSON.stringify({ pickedName: '김치찌개', eatenEntryId: 'e1', rating: 1 }) },
+      { feedbackJson: JSON.stringify({ pickedName: '비빔밥', eatenEntryId: null, rating: null }) },
+      { feedbackJson: JSON.stringify({ pickedName: null, eatenEntryId: null, rating: -1 }) },
+      { feedbackJson: '{bad json' },
+    ]);
+    expect(r.recommendation).toEqual({
+      chosenCount: 2,
+      loggedCount: 1,
+      ratedCount: 2,
+      acceptanceRate: 0.5,
+    });
   });
 });

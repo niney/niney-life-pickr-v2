@@ -13,6 +13,10 @@ import {
   type FoodImportRunListType,
   type FoodImportRunType,
   type FoodItemType,
+  type FoodRestaurantsQueryType,
+  type FoodRestaurantsResultType,
+  type FoodRecognitionQualityQueryType,
+  type FoodRecognitionQualityResultType,
   type FoodSearchResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
@@ -21,6 +25,25 @@ import { apiFetch, getApiConfig } from './client.js';
 // active/unclassified 는 boolean 으로 받고 쿼리스트링에서 '1'/'0' 으로 직렬화한다
 // (서버 boolParam 이 '1'/'0'/'true'/'false' 를 받는다).
 export type FoodAdminListInput = Partial<FoodAdminListQueryType>;
+export type FoodRestaurantsInput = Partial<FoodRestaurantsQueryType>;
+export type FoodRecognitionQualityInput = Partial<FoodRecognitionQualityQueryType>;
+
+export const buildFoodRestaurantsQuery = (input: FoodRestaurantsInput = {}): string => {
+  const params = new URLSearchParams();
+  if (input.lat !== undefined) params.set('lat', String(input.lat));
+  if (input.lng !== undefined) params.set('lng', String(input.lng));
+  if (input.radiusM !== undefined) params.set('radiusM', String(input.radiusM));
+  if (input.limit !== undefined) params.set('limit', String(input.limit));
+  return params.toString();
+};
+
+export const buildFoodRecognitionQualityQuery = (
+  input: FoodRecognitionQualityInput = {},
+): string => {
+  const params = new URLSearchParams();
+  if (input.days !== undefined) params.set('days', String(input.days));
+  return params.toString();
+};
 
 // 목록 쿼리스트링 — undefined 는 생략, 빈 q 도 생략(서버가 trim 후 빈 문자열을 그대로
 // 받기보다 "필터 없음" 으로 해석되게). 키 순서는 입력 순서가 아니라 고정 순서라
@@ -49,6 +72,14 @@ export const foodApi = {
     return apiFetch<FoodSearchResultType>(`${Routes.Food.search}?${params.toString()}`);
   },
 
+  // 수집된 메뉴·리뷰에서 확인된 식당. 응답 notice/evidence를 UI에서 함께 노출해야 한다.
+  restaurants: (foodId: string, input: FoodRestaurantsInput = {}) => {
+    const qs = buildFoodRestaurantsQuery(input);
+    return apiFetch<FoodRestaurantsResultType>(
+      `${Routes.Food.restaurants(foodId)}${qs ? `?${qs}` : ''}`,
+    );
+  },
+
   // ── 어드민 카탈로그 ──
   adminList: (input: FoodAdminListInput = {}) => {
     const qs = buildFoodAdminListQuery(input);
@@ -70,6 +101,13 @@ export const foodApi = {
     }),
 
   adminStats: () => apiFetch<FoodAdminStatsType>(Routes.Food.adminStats),
+
+  adminRecognitionQuality: (input: FoodRecognitionQualityInput = {}) => {
+    const qs = buildFoodRecognitionQualityQuery(input);
+    return apiFetch<FoodRecognitionQualityResultType>(
+      `${Routes.Food.adminRecognitionQuality}${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   // ── 적재 잡 ──
   getImportConfig: () => apiFetch<FoodImportConfigType>(Routes.Food.importConfig),

@@ -9,11 +9,13 @@ import type {
   FoodImportRunListType,
   FoodImportRunType,
   FoodItemType,
+  FoodRecognitionQualityResultType,
 } from '@repo/api-contract';
 import { server } from '~/test/msw';
 import { AdminFoodPage } from './AdminFoodPage';
 
-// 음식 카탈로그 어드민 페이지 — 마운트만으로 다섯 요청이 나간다(적재 설정/이력, 통계,
+// 음식 카탈로그 어드민 페이지 — 마운트만으로 여섯 요청이 나간다(적재 설정/이력, 통계,
+// 인식 교정 품질,
 // 목록, cron 미리보기). onUnhandledRequest: 'error' 라 모두 기본 핸들러로 깔고, 각
 // 테스트는 자기 시나리오의 핸들러만 덧댄다. 토스트는 sonner 를 모킹해 호출만 본다
 // (<Toaster> 렌더·애니메이션 타이밍에 테스트가 묶이지 않게). SSE 는 EventSource 를
@@ -34,6 +36,7 @@ const RUN_URL = '/api/v1/admin/food/import/run';
 const RUNS_URL = '/api/v1/admin/food/import/runs';
 const PREVIEW_URL = '/api/v1/admin/food/import/preview';
 const STATS_URL = '/api/v1/admin/food/stats';
+const QUALITY_URL = '/api/v1/admin/food/recognition-quality';
 const ITEMS_URL = '/api/v1/admin/food/items';
 
 const importConfig = (over: Partial<FoodImportConfigType> = {}): FoodImportConfigType => ({
@@ -82,6 +85,23 @@ const stats: FoodAdminStatsType = {
   ],
 };
 
+const recognitionQuality: FoodRecognitionQualityResultType = {
+  days: 30,
+  from: '2026-07-21T00:00:00.000Z',
+  to: '2026-08-20T00:00:00.000Z',
+  recognitionEntryCount: 8,
+  invalidRecognitionCount: 1,
+  originalDishCount: 11,
+  confirmedCount: 6,
+  correctedCount: 3,
+  deletedCount: 2,
+  manuallyAddedCount: 2,
+  correctionRate: 5 / 11,
+  unmatchedFinalItemCount: 2,
+  topCorrections: [{ originalName: '계란말이', finalName: '달걀말이', count: 2 }],
+  topUnmatched: [{ name: '오이무침', count: 2 }],
+};
+
 const item = (over: Partial<FoodItemType> = {}): FoodItemType => ({
   id: 'f1',
   name: '김치찌개',
@@ -122,6 +142,7 @@ const useBaseHandlers = ({
     http.get(CONFIG_URL, () => HttpResponse.json(config)),
     http.get(RUNS_URL, () => HttpResponse.json(runs)),
     http.get(STATS_URL, () => HttpResponse.json(stats)),
+    http.get(QUALITY_URL, () => HttpResponse.json(recognitionQuality)),
     http.get(ITEMS_URL, ({ request }) => {
       itemRequests.push(request.url);
       return HttpResponse.json({ items, total: items.length });
@@ -208,6 +229,12 @@ describe('AdminFoodPage', () => {
     expect(await screen.findByText('120')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByText('미분류')).toBeInTheDocument();
+
+    // 사진 인식 품질 — 작은 표본/k=2 안내와 집계된 교정만 노출.
+    expect(screen.getByText('사진 인식 교정 품질')).toBeInTheDocument();
+    expect(screen.getByText(/작은 표본의 방향성 지표/)).toBeInTheDocument();
+    expect(screen.getByText('계란말이 → 달걀말이')).toBeInTheDocument();
+    expect(screen.getByText('오이무침')).toBeInTheDocument();
 
     // 이력 — 상태 칩 + 소스별 집계 + 분류 수.
     expect(await screen.findByText('완료')).toBeInTheDocument();

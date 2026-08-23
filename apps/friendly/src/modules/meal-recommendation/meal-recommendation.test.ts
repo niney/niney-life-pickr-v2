@@ -1,13 +1,15 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MEAL_DEFAULT_WEIGHTS, type MealPreferenceType } from '@repo/api-contract';
 import { buildApp } from '../../app.js';
+import { env } from '../../config/env.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { AiConfigService, type LlmProviderEnv } from '../ai/ai.config.service.js';
 import type { AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/adapters/llm-provider.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
+import { mealQuota, recommendQuotaKey } from '../meal/meal-quota.js';
 import {
   MealPatternService,
   buildProfile,
@@ -16,7 +18,12 @@ import {
   type CandidateInput,
   type HistoryItem,
 } from './meal-pattern.service.js';
-import { MealRecommendationService, mapLlmItems, parseRecommendationOutput } from './meal-recommendation.service.js';
+import {
+  MealRecommendationService,
+  mapLlmItems,
+  parseRecommendationOutput,
+  type MealRecommendationDeps,
+} from './meal-recommendation.service.js';
 
 // 추천 — 결정적 절반(프로필·점수·후보 매핑)은 순수 함수로, LLM 절반은 FakeProvider 로 검증한다.
 
@@ -56,6 +63,7 @@ const candidate = (name: string, over: Partial<CandidateInput> = {}): CandidateI
 const prefs = (over: Partial<MealPreferenceType> = {}): MealPreferenceType => ({
   weights: { ...MEAL_DEFAULT_WEIGHTS },
   excludedFoods: [],
+  dislikedFoods: [],
   likedFoods: [],
   mealTypes: [],
   slots: ['breakfast', 'lunch', 'dinner'],
@@ -130,6 +138,62 @@ describe('scoreCandidate', () => {
     const liked = scoreCandidate(candidate('돈까스', { liked: true }), ctx);
     expect(liked.features.taste).toBeGreaterThanOrEqual(0.5);
     expect(liked.tags).toContain('좋아하는 음식');
+  });
+
+  it('덜 선호는 이름·재료가 맞아도 후보를 남기고 taste 를 강하게 낮추며 좋아요보다 우선한다', () => {
+    const normal = scoreCandidate(candidate('김치찌개', { fromHistory: true, liked: true }), ctx);
+    const dislikedByName = scoreCandidate(candidate('김치찌개', { fromHistory: true, liked: true }), {
+      ...ctx,
+      preference: prefs({ dislikedFoods: ['김치'] }),
+    });
+    const likedGimbap = scoreCandidate(candidate('김밥', { liked: true, ingredients: ['단무지', '오이'] }), ctx);
+    const dislikedByIngredient = scoreCandidate(candidate('김밥', { liked: true, ingredients: ['단무지', '오이'] }), {
+      ...ctx,
+      preference: prefs({ dislikedFoods: ['오이'] }),
+    });
+
+    expect(dislikedByName.features.taste).toBeLessThan(normal.features.taste);
+    expect(dislikedByName.score).toBeLessThan(normal.score);
+    expect(dislikedByName.tags[0]).toBe('가능하면 피함');
+    expect(dislikedByIngredient.features.taste).toBeLessThan(likedGimbap.features.taste);
+    expect(dislikedByIngredient.tags).not.toContain('좋아하는 음식');
+  });
+
+  it('최근 추천 선택·실제 기록·평가를 오래된 반응보다 크게 taste 에 반영한다', () => {
+    const signals = (targetDate: string) => [
+      {
+        targetDate,
+        candidateNames: ['연어초밥'],
+        pickedName: '연어초밥',
+        rating: 1,
+        logged: true,
+      },
+    ];
+    const recentProfile = buildProfile([], 'lunch', TODAY, signals(TODAY));
+    const oldProfile = buildProfile([], 'lunch', TODAY, signals('2026-07-23'));
+    const baseProfile = buildProfile([], 'lunch', TODAY);
+    const score = (p: typeof profile) => scoreCandidate(candidate('연어초밥'), { ...ctx, profile: p }).features.taste;
+
+    expect(score(recentProfile)).toBeGreaterThan(score(oldProfile));
+    expect(score(oldProfile)).toBeGreaterThan(score(baseProfile));
+    expect(scoreCandidate(candidate('연어초밥'), { ...ctx, profile: recentProfile }).tags).toContain('추천 후 먹었어요');
+  });
+
+  it('평가만 남긴 경우에도 오래된 평가는 시간 감쇠된다', () => {
+    const profileWithRating = (targetDate: string) =>
+      buildProfile([], 'lunch', TODAY, [
+        {
+          targetDate,
+          candidateNames: ['비빔밥'],
+          pickedName: null,
+          rating: 1,
+          logged: false,
+        },
+      ]);
+    const taste = (targetDate: string) =>
+      scoreCandidate(candidate('비빔밥'), { ...ctx, profile: profileWithRating(targetDate) }).features.taste;
+
+    expect(taste(TODAY)).toBeGreaterThan(taste('2026-07-23'));
   });
 
   it('건강 — 튀김은 감점, 채소·저나트륨은 가점', () => {
@@ -222,8 +286,11 @@ describe('MealRecommendationService (격리 DB)', () => {
   let provider: FakeProvider;
   let cache: AdapterCache;
 
-  const build = (model = 'gpt-oss:120b') =>
-    new MealRecommendationService(app.prisma, new AiConfigService(app.prisma, envBlock(model)), { cache });
+  const build = (model = 'gpt-oss:120b', deps: Partial<MealRecommendationDeps> = {}) =>
+    new MealRecommendationService(app.prisma, new AiConfigService(app.prisma, envBlock(model)), {
+      cache,
+      ...deps,
+    });
 
   beforeAll(async () => {
     isolated = await useIsolatedDatabase();
@@ -306,6 +373,101 @@ describe('MealRecommendationService (격리 DB)', () => {
     expect(provider.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 
+  it('mealType 생략은 저장한 주 식사 유형을 쓰고 명시적 null은 덮어쓰지 않는다', async () => {
+    await app.prisma.mealPreference.upsert({
+      where: { userId: 'rec-u' },
+      create: {
+        userId: 'rec-u',
+        weightsJson: JSON.stringify(MEAL_DEFAULT_WEIGHTS),
+        mealTypesJson: JSON.stringify(['dining_out']),
+      },
+      update: { mealTypesJson: JSON.stringify(['dining_out']) },
+    });
+    try {
+      const omitted = await build('').create(
+        'rec-u',
+        { targetDate: '2026-09-01', targetSlot: 'dinner', force: false },
+        TODAY,
+      );
+      const explicitNull = await build('').create(
+        'rec-u',
+        { targetDate: '2026-09-02', targetSlot: 'dinner', mealType: null, force: false },
+        TODAY,
+      );
+      const rows = await app.prisma.mealRecommendation.findMany({
+        where: { id: { in: [omitted.recommendation.id, explicitNull.recommendation.id] } },
+        select: { id: true, contextJson: true },
+      });
+      const contextById = new Map(
+        rows.map((row) => [row.id, JSON.parse(row.contextJson) as { mealType: string | null }]),
+      );
+      expect(contextById.get(omitted.recommendation.id)?.mealType).toBe('dining_out');
+      expect(contextById.get(explicitNull.recommendation.id)?.mealType).toBeNull();
+    } finally {
+      await app.prisma.mealPreference.update({
+        where: { userId: 'rec-u' },
+        data: { mealTypesJson: '[]' },
+      });
+    }
+  });
+
+  it('cache miss 만 호출 전에 quota 를 소비하고, cache hit 는 0회·초과 force 는 LLM 0회다', async () => {
+    const consumeQuota = vi.fn<() => boolean>().mockReturnValueOnce(true).mockReturnValue(false);
+    const svc = build('gpt-oss:120b', { consumeQuota });
+    provider.responses = [JSON.stringify({ items: [{ name: '연어초밥', reason: 'r' }], summary: 's' })];
+
+    const input = { targetDate: '2026-08-27', targetSlot: 'dinner' as const, force: false };
+    await svc.create('rec-u', input, TODAY);
+    expect(consumeQuota).toHaveBeenCalledTimes(1);
+    expect(provider.calls).toHaveLength(1);
+
+    const cached = await svc.create('rec-u', input, TODAY);
+    expect(cached.cached).toBe(true);
+    expect(consumeQuota).toHaveBeenCalledTimes(1);
+    expect(provider.calls).toHaveLength(1);
+
+    await expect(svc.create('rec-u', { ...input, force: true }, TODAY)).rejects.toMatchObject({ code: 'quota' });
+    expect(consumeQuota).toHaveBeenCalledTimes(2);
+    expect(provider.calls).toHaveLength(1);
+  });
+
+  it('동일한 동시 요청은 한 in-flight Promise 에 합류해 quota·LLM 을 한 번만 쓴다', async () => {
+    const consumeQuota = vi.fn(() => true);
+    const svc = build('gpt-oss:120b', { consumeQuota });
+    provider.responses = [JSON.stringify({ items: [{ name: '연어초밥', reason: 'r' }], summary: 's' })];
+    const input = { targetDate: '2026-08-28', targetSlot: 'dinner' as const, force: false };
+
+    const [first, joined] = await Promise.all([
+      svc.create('rec-u', input, TODAY),
+      svc.create('rec-u', input, TODAY),
+    ]);
+
+    expect(first.recommendation.id).toBe(joined.recommendation.id);
+    expect(consumeQuota).toHaveBeenCalledTimes(1);
+    expect(provider.calls).toHaveLength(1);
+  });
+
+  it('HTTP route 는 서비스 quota 초과를 429로 응답한다', async () => {
+    if (env.MEAL_RECOMMEND_DAILY_LIMIT <= 0) return;
+    mealQuota.reset();
+    try {
+      for (let i = 0; i < env.MEAL_RECOMMEND_DAILY_LIMIT; i += 1) {
+        expect(mealQuota.consume(recommendQuotaKey('rec-u'), env.MEAL_RECOMMEND_DAILY_LIMIT)).toBe(true);
+      }
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/meals/recommendations',
+        headers: {
+          authorization: `Bearer ${app.jwt.sign({ userId: 'rec-u', email: 'rec@x.com', role: 'USER' })}`,
+        },
+        payload: { targetDate: '2099-01-01', targetSlot: 'lunch', force: false },
+      });
+      expect(res.statusCode).toBe(429);
+    } finally {
+      mealQuota.reset();
+    }
+  });
+
   it('LLM 실패·미설정이면 점수 상위로 폴백한다(추천은 항상 나온다)', async () => {
     provider.fail = true;
     const failed = await build().create('rec-u', { targetDate: '2026-08-24', targetSlot: 'dinner', force: false }, TODAY);
@@ -328,25 +490,64 @@ describe('MealRecommendationService (격리 DB)', () => {
 
     const list = await svc.list('rec-u', 10);
     expect(list.length).toBeGreaterThan(0);
+    const recommendation = list.find((row) => row.items.length > 0)!;
+    const pickedName = recommendation.items[0]!.name;
 
-    const withFeedback = await svc.feedback('rec-u', list[0]!.id, { rating: 1, pickedName: '연어초밥' });
-    expect(withFeedback.feedback).toMatchObject({ rating: 1, pickedName: '연어초밥' });
-    // 부분 갱신 — 앞서 준 값은 유지된다.
-    const merged = await svc.feedback('rec-u', list[0]!.id, { eatenEntryId: 'e1' });
-    expect(merged.feedback).toMatchObject({ rating: 1, pickedName: '연어초밥', eatenEntryId: 'e1' });
+    const withFeedback = await svc.feedback('rec-u', recommendation.id, { rating: 1, pickedName });
+    expect(withFeedback.feedback).toMatchObject({ rating: 1, pickedName });
+    await expect(svc.feedback('rec-u', recommendation.id, { pickedName: '후보에 없는 음식' })).rejects.toMatchObject({
+      code: 'invalid',
+    });
 
-    await expect(svc.feedback('other-user', list[0]!.id, { rating: -1 })).rejects.toMatchObject({ code: 'not_found' });
+    const linkedEntry = await app.prisma.mealEntry.create({
+      data: {
+        userId: 'rec-u',
+        eatenAt: new Date('2026-08-22T10:00:00Z'),
+        eatenDate: TODAY,
+        slot: 'dinner',
+        source: 'recommendation',
+        originRecommendationId: recommendation.id,
+        items: {
+          create: {
+            name: pickedName,
+            nameNorm: pickedName.replace(/\s+/g, ''),
+            isMain: true,
+            source: 'recommendation',
+          },
+        },
+      },
+    });
+    // 부분 갱신 — 앞서 준 값은 유지되며, 본인·원본 추천·후보가 일치하는 기록만 연결된다.
+    const merged = await svc.feedback('rec-u', recommendation.id, { eatenEntryId: linkedEntry.id });
+    expect(merged.feedback).toMatchObject({ rating: 1, pickedName, eatenEntryId: linkedEntry.id });
+    await expect(svc.feedback('rec-u', recommendation.id, { eatenEntryId: 'e1' })).rejects.toMatchObject({
+      code: 'invalid',
+    });
+
+    await expect(svc.feedback('other-user', recommendation.id, { rating: -1 })).rejects.toMatchObject({ code: 'not_found' });
   });
 
   it('제외 음식은 후보에서 빠진다', async () => {
     await app.prisma.mealPreference.upsert({
       where: { userId: 'rec-u' },
-      create: { userId: 'rec-u', weightsJson: JSON.stringify(MEAL_DEFAULT_WEIGHTS), excludedFoodsJson: JSON.stringify(['초밥']) },
-      update: { excludedFoodsJson: JSON.stringify(['초밥']) },
+      create: {
+        userId: 'rec-u',
+        weightsJson: JSON.stringify(MEAL_DEFAULT_WEIGHTS),
+        excludedFoodsJson: JSON.stringify(['초밥']),
+        dislikedFoodsJson: JSON.stringify(['김치찌개']),
+      },
+      update: {
+        excludedFoodsJson: JSON.stringify(['초밥']),
+        dislikedFoodsJson: JSON.stringify(['김치찌개']),
+      },
     });
     provider.responses = [JSON.stringify({ items: [], summary: '' })];
     await build().create('rec-u', { targetDate: '2026-08-26', targetSlot: 'lunch', force: false }, TODAY);
-    expect(provider.calls[0]!.prompt).not.toContain('연어초밥');
+    // 과거 패턴 요약에는 먹은 음식으로 남을 수 있지만, LLM 이 고르는 후보 목록에서는 빠져야 한다.
+    const candidateSection = provider.calls[0]!.prompt.split('[후보 목록]')[1] ?? '';
+    expect(candidateSection).not.toContain('연어초밥');
+    expect(candidateSection).toContain('김치찌개');
+    expect(provider.calls[0]!.prompt).toContain('[가능하면 피할 것] 김치찌개');
   });
 });
 
@@ -386,6 +587,23 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
     expect(names).not.toContain('소스');
     expect(names).not.toContain('사이드');
     expect(names).not.toContain('콜라');
+  });
+
+  it('이력 후보가 likedFoods 와 겹치면 좋아요 신호를 합친다', async () => {
+    const pattern = new MealPatternService(app.prisma);
+    const profile = buildProfile([item('김치찌개', '2026-08-20')], 'dinner', TODAY);
+    const candidates = await pattern.buildCandidates(profile, prefs({ likedFoods: ['김치찌개'] }));
+    expect(candidates.find((candidate) => candidate.nameNorm === '김치찌개')).toMatchObject({
+      fromHistory: true,
+      liked: true,
+    });
+  });
+
+  it('덜 선호 음식은 후보 풀에서 삭제하지 않는다', async () => {
+    const pattern = new MealPatternService(app.prisma);
+    const profile = buildProfile([], 'dinner', TODAY);
+    const candidates = await pattern.buildCandidates(profile, prefs({ dislikedFoods: ['김치찌개'] }));
+    expect(candidates.map((candidate) => candidate.name)).toContain('김치찌개');
   });
 });
 

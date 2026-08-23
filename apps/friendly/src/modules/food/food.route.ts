@@ -7,6 +7,8 @@ import {
   FoodAdminListResult,
   FoodAdminStats,
   FoodAdminUpdateInput,
+  FoodRecognitionQualityQuery,
+  FoodRecognitionQualityResult,
   FoodImportConfig,
   FoodImportConfigInput,
   FoodImportPreviewInput,
@@ -15,12 +17,15 @@ import {
   FoodImportRunInput,
   FoodImportRunList,
   FoodItem,
+  FoodRestaurantsQuery,
+  FoodRestaurantsResult,
   FoodSearchQuery,
   FoodSearchResult,
   Routes,
 } from '@repo/api-contract';
 import { RATE } from '../../plugins/rate-limit.js';
 import { foodImportRegistry, type FoodImportEvent } from './food-import-registry.js';
+import { FoodRecognitionQualityService } from './food-recognition-quality.service.js';
 import { FoodService, FoodServiceError } from './food.service.js';
 
 // 음식 카탈로그(food) — 사용자 자동완성 1개 + 어드민(카탈로그 편집·적재 잡). 적재 서비스는
@@ -40,6 +45,7 @@ const throwAsHttp = (app: Parameters<FastifyPluginAsync>[0], e: unknown): never 
 const foodRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const food = new FoodService(app.prisma);
+  const recognitionQuality = new FoodRecognitionQualityService(app.prisma);
   const importer = app.foodImport;
 
   // ── 사용자: 자동완성 ──────────────────────────────────────────────────
@@ -56,6 +62,27 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── 어드민: 카탈로그 ──────────────────────────────────────────────────
+  // 수집된 메뉴·리뷰 기반 역검색이며 실시간 판매 여부를 보장하지 않는다.
+  // 응답 notice/evidence에 같은 제한을 기계 판독 가능하게 담는다.
+  typed.get(Routes.Food.restaurants(':id'), {
+    onRequest: [app.authenticate],
+    config: { rateLimit: RATE.foodRestaurants },
+    schema: {
+      tags: ['food'],
+      security: [{ bearerAuth: [] }],
+      params: IdParams,
+      querystring: FoodRestaurantsQuery,
+      response: { 200: FoodRestaurantsResult },
+    },
+    handler: async (req) => {
+      try {
+        return await food.restaurants(req.params.id, req.query);
+      } catch (e) {
+        return throwAsHttp(app, e);
+      }
+    },
+  });
+
   typed.get(Routes.Food.adminItems, {
     onRequest: [app.authenticate, app.requireAdmin],
     schema: {
@@ -113,6 +140,17 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
     handler: async () => food.adminStats(),
   });
 
+  typed.get(Routes.Food.adminRecognitionQuality, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: FoodRecognitionQualityQuery,
+      response: { 200: FoodRecognitionQualityResult },
+    },
+    handler: async (req) => recognitionQuality.aggregate(req.query.days),
+  });
+
   // ── 어드민: 적재 잡 ───────────────────────────────────────────────────
   typed.get(Routes.Food.importConfig, {
     onRequest: [app.authenticate, app.requireAdmin],
@@ -136,7 +174,9 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
       try {
         return await importer.updateConfig(req.body);
       } catch (e) {
-        throw app.httpErrors.badRequest(e instanceof Error ? e.message : 'Invalid food-import config');
+        throw app.httpErrors.badRequest(
+          e instanceof Error ? e.message : 'Invalid food-import config',
+        );
       }
     },
   });

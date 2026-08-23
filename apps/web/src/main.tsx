@@ -6,6 +6,7 @@ import {
   applyCssVars,
   configureApi,
   darkTheme,
+  handleUnauthorizedForCurrentSession,
   lightTheme,
   QUERY_GC_TIME,
   QUERY_STALE_TIME,
@@ -35,19 +36,6 @@ useAuthStore.subscribe((state) => {
   else localStorage.removeItem(GUEST_KEY);
 });
 
-configureApi({
-  baseUrl: import.meta.env.VITE_API_URL ?? '',
-  getToken: () => useAuthStore.getState().token,
-  onUnauthorized: () => useAuthStore.getState().clearSession(),
-});
-
-const applyMode = (mode: 'light' | 'dark') => {
-  document.documentElement.classList.toggle('dark', mode === 'dark');
-  applyCssVars(mode === 'dark' ? darkTheme : lightTheme, document.documentElement);
-};
-applyMode(useThemeStore.getState().mode);
-useThemeStore.subscribe((state) => applyMode(state.mode));
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -58,6 +46,31 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+configureApi({
+  baseUrl: import.meta.env.VITE_API_URL ?? '',
+  getToken: () => useAuthStore.getState().token,
+  onUnauthorized: (requestToken) => {
+    handleUnauthorizedForCurrentSession({
+      requestToken,
+      getCurrentToken: () => useAuthStore.getState().token,
+      onCurrentSessionUnauthorized: () => {
+        // cancelQueries 호출과 cache/session 제거는 같은 JS turn에서 시작해 중간에 다른 계정의
+        // 로그인 상태가 끼어들지 않게 한다. clear()는 진행 query도 파기한다.
+        void queryClient.cancelQueries();
+        queryClient.clear();
+        useAuthStore.getState().clearSession();
+      },
+    });
+  },
+});
+
+const applyMode = (mode: 'light' | 'dark') => {
+  document.documentElement.classList.toggle('dark', mode === 'dark');
+  applyCssVars(mode === 'dark' ? darkTheme : lightTheme, document.documentElement);
+};
+applyMode(useThemeStore.getState().mode);
+useThemeStore.subscribe((state) => applyMode(state.mode));
 
 const ThemedApp = () => {
   const mode = useThemeStore((s) => s.mode);

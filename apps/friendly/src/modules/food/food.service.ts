@@ -4,6 +4,7 @@ import {
   FoodDishType,
   FoodMainIngredient,
   FoodSource,
+  FOOD_RESTAURANT_DATA_NOTICE,
   type FoodAdminCreateInputType,
   type FoodAdminListQueryType,
   type FoodAdminListResultType,
@@ -13,9 +14,14 @@ import {
   type FoodDishTypeType,
   type FoodItemType,
   type FoodMainIngredientType,
+  type FoodRestaurantEvidenceType,
+  type FoodRestaurantsQueryType,
+  type FoodRestaurantsResultType,
+  type FoodRestaurantType,
   type FoodSearchItemType,
   type FoodSourceType,
 } from '@repo/api-contract';
+import { haversineM } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 
 // 음식 카탈로그 조회/매칭/어드민 편집. 적재(import)와 LLM 분류는 별도 서비스.
@@ -49,6 +55,26 @@ export const parseJsonStringArray = (s: string | null | undefined): string[] => 
   }
 };
 
+const parseFoodSourceRefs = (
+  raw: string | null | undefined,
+): { source: string; sourceId: string | null }[] => {
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const source = (item as { source?: unknown }).source;
+      const sourceId = (item as { sourceId?: unknown }).sourceId;
+      if (typeof source !== 'string') return [];
+      if (sourceId !== null && typeof sourceId !== 'string') return [];
+      return [{ source, sourceId }];
+    });
+  } catch {
+    return [];
+  }
+};
+
 const enumOrNull = <T extends string>(
   schema: { safeParse: (v: unknown) => { success: boolean; data?: T } },
   v: string | null,
@@ -59,7 +85,12 @@ const enumOrNull = <T extends string>(
 };
 
 const hasNutrition = (r: PrismaFoodItem): boolean =>
-  r.kcal !== null || r.carbG !== null || r.proteinG !== null || r.fatG !== null || r.sodiumMg !== null || r.sugarG !== null;
+  r.kcal !== null ||
+  r.carbG !== null ||
+  r.proteinG !== null ||
+  r.fatG !== null ||
+  r.sodiumMg !== null ||
+  r.sugarG !== null;
 
 export const toFoodItem = (r: PrismaFoodItem): FoodItemType => ({
   id: r.id,
@@ -72,9 +103,16 @@ export const toFoodItem = (r: PrismaFoodItem): FoodItemType => ({
   ingredients: r.ingredientsJson === null ? null : parseJsonStringArray(r.ingredientsJson),
   servingG: r.servingG,
   nutrition: hasNutrition(r)
-    ? { kcal: r.kcal, carbG: r.carbG, proteinG: r.proteinG, fatG: r.fatG, sodiumMg: r.sodiumMg, sugarG: r.sugarG }
+    ? {
+        kcal: r.kcal,
+        carbG: r.carbG,
+        proteinG: r.proteinG,
+        fatG: r.fatG,
+        sodiumMg: r.sodiumMg,
+        sugarG: r.sugarG,
+      }
     : null,
-  source: (enumOrNull<FoodSourceType>(FoodSource, r.source) ?? 'manual'),
+  source: enumOrNull<FoodSourceType>(FoodSource, r.source) ?? 'manual',
   sourceId: r.sourceId,
   sourceCategory: r.sourceCategory,
   popularity: r.popularity,
@@ -174,17 +212,288 @@ export class FoodService {
     };
     return rows
       .map((r) => ({ r, k: rank(r) }))
-      .sort((a, b) => a.k - b.k || b.r.popularity - a.r.popularity || a.r.name.localeCompare(b.r.name, 'ko'))
+      .sort(
+        (a, b) =>
+          a.k - b.k || b.r.popularity - a.r.popularity || a.r.name.localeCompare(b.r.name, 'ko'),
+      )
       .slice(0, limit)
       .map(({ r }) => toFoodSearchItem(r));
   }
 
   // ── 매칭(인식 결과·수동 입력 → 카탈로그) ─────────────────────────────────
+  // FoodItem → GlobalMenuCanonical → 식당 역검색. FoodItem의 menu-canonical
+  // sourceId/sourceRefs 연결을 최우선으로 쓰고, 없거나 stale 하면 음식 이름·별칭의
+  // 정규화 키를 globalKey와 정확 비교한다. 퍼지 매칭은 다른 메뉴를 파는 식당으로
+  // 오안내할 위험이 있어 의도적으로 하지 않는다.
+  async restaurants(
+    foodId: string,
+    query: FoodRestaurantsQueryType,
+  ): Promise<FoodRestaurantsResultType> {
+    const food = await this.prisma.foodItem.findUnique({
+      where: { id: foodId },
+      select: {
+        id: true,
+        name: true,
+        nameNorm: true,
+        aliasNormsJson: true,
+        source: true,
+        sourceId: true,
+        sourceRefsJson: true,
+      },
+    });
+    if (!food) throw new FoodServiceError('not_found', '음식을 찾을 수 없습니다');
+
+    const referencedKeys = new Set<string>();
+    if (food.source === 'menu-canonical' && food.sourceId?.trim()) {
+      referencedKeys.add(food.sourceId.trim());
+    }
+    for (const ref of parseFoodSourceRefs(food.sourceRefsJson)) {
+      if (ref.source === 'menu-canonical' && ref.sourceId?.trim()) {
+        referencedKeys.add(ref.sourceId.trim());
+      }
+    }
+    const fallbackKeys = new Set<string>([
+      food.nameNorm,
+      ...parseJsonStringArray(food.aliasNormsJson),
+    ]);
+
+    const findGlobals = (keys: string[]) =>
+      keys.length === 0
+        ? Promise.resolve([])
+        : this.prisma.globalMenuCanonical.findMany({
+            where: { globalKey: { in: keys } },
+            select: {
+              id: true,
+              globalKey: true,
+              displayName: true,
+              links: {
+                select: {
+                  restaurantId: true,
+                  menuCanonical: {
+                    select: {
+                      restaurantId: true,
+                      nameNorm: true,
+                      canonicalNorm: true,
+                      restaurant: { select: { canonicalId: true } },
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+    let globals = await findGlobals([...referencedKeys]);
+    // 매핑 출처가 아예 없거나 재그룹핑으로 stale 해진 경우에만 정확 이름/별칭 폴백.
+    if (globals.length === 0) globals = await findGlobals([...fallbackKeys]);
+
+    const baseResult = {
+      foodId: food.id,
+      foodName: food.name,
+      matchedGlobalKeys: globals.map((g) => g.globalKey).sort(),
+      notice: FOOD_RESTAURANT_DATA_NOTICE,
+    } as const;
+    if (globals.length === 0) return { ...baseResult, items: [] };
+
+    const linkRows = globals.flatMap((global) =>
+      global.links.map((link) => ({
+        globalKey: global.globalKey,
+        displayName: global.displayName,
+        restaurantId: link.restaurantId,
+        canonicalId: link.menuCanonical.restaurant.canonicalId,
+        nameNorm: link.menuCanonical.nameNorm,
+        canonicalNorm: link.menuCanonical.canonicalNorm,
+      })),
+    );
+    if (linkRows.length === 0) return { ...baseResult, items: [] };
+
+    const canonicalIds = [...new Set(linkRows.map((link) => link.canonicalId))];
+    const restaurantRows = await this.prisma.restaurant.findMany({
+      where: { canonicalId: { in: canonicalIds } },
+      select: {
+        id: true,
+        source: true,
+        placeId: true,
+        name: true,
+        category: true,
+        address: true,
+        rating: true,
+        reviewCount: true,
+        canonicalId: true,
+        sourceMenus: { select: { name: true } },
+        canonical: {
+          select: {
+            name: true,
+            primaryCategory: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+      },
+    });
+
+    // MenuCanonical은 리뷰에서 추출한 MenuMention.nameNorm을 정규화한 결과다.
+    // 여러 global/local 링크가 한 식당에 병합될 수 있으므로 pair 단위로 한 번만 집계한다.
+    const uniquePairs = [
+      ...new Map(
+        linkRows.map((link) => [
+          `${link.restaurantId}\u0000${link.nameNorm}`,
+          { restaurantId: link.restaurantId, nameNorm: link.nameNorm },
+        ]),
+      ).values(),
+    ];
+    const mentionRows = await this.prisma.menuMention.groupBy({
+      by: ['restaurantId', 'nameNorm', 'sentiment'],
+      where: {
+        OR: uniquePairs.map((pair) => ({
+          restaurantId: pair.restaurantId,
+          nameNorm: pair.nameNorm,
+        })),
+      },
+      _count: { _all: true },
+    });
+    const mentionsByPair = new Map<string, { total: number; positive: number; negative: number }>();
+    for (const row of mentionRows) {
+      const key = `${row.restaurantId}\u0000${row.nameNorm}`;
+      const stat = mentionsByPair.get(key) ?? { total: 0, positive: 0, negative: 0 };
+      const count = row._count._all;
+      stat.total += count;
+      if (row.sentiment === 'positive') stat.positive += count;
+      else if (row.sentiment === 'negative') stat.negative += count;
+      mentionsByPair.set(key, stat);
+    }
+
+    const restaurantsByCanonical = new Map<string, typeof restaurantRows>();
+    for (const restaurant of restaurantRows) {
+      const rows = restaurantsByCanonical.get(restaurant.canonicalId) ?? [];
+      rows.push(restaurant);
+      restaurantsByCanonical.set(restaurant.canonicalId, rows);
+    }
+
+    interface CandidateAggregate {
+      item: FoodRestaurantType;
+      evidence: Set<FoodRestaurantEvidenceType>;
+      positive: number;
+      negative: number;
+    }
+    const byPlaceId = new Map<string, CandidateAggregate>();
+    for (const canonicalId of canonicalIds) {
+      const linked = linkRows.filter((link) => link.canonicalId === canonicalId);
+      const rows = restaurantsByCanonical.get(canonicalId) ?? [];
+      const placeRows = rows.filter((row) => row.placeId !== null);
+      if (linked.length === 0 || placeRows.length === 0) continue;
+
+      const exactMenuNorms = new Set<string>([
+        food.nameNorm,
+        ...fallbackKeys,
+        ...linked.flatMap((link) => [link.globalKey, link.nameNorm, link.canonicalNorm]),
+      ]);
+      const hasCatalogEvidence = rows.some((row) =>
+        row.sourceMenus.some((menu) => exactMenuNorms.has(normalizeTerm(menu.name))),
+      );
+      const matchedMenus = [...new Set(linked.map((link) => link.displayName))].sort((a, b) =>
+        a.localeCompare(b, 'ko'),
+      );
+      let mentionCount = 0;
+      let positive = 0;
+      let negative = 0;
+      const seenPairs = new Set<string>();
+      for (const link of linked) {
+        const pairKey = `${link.restaurantId}\u0000${link.nameNorm}`;
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+        const stat = mentionsByPair.get(pairKey);
+        if (!stat) continue;
+        mentionCount += stat.total;
+        positive += stat.positive;
+        negative += stat.negative;
+      }
+
+      for (const row of placeRows) {
+        const placeId = row.placeId!;
+        const latitude = row.canonical.latitude;
+        const longitude = row.canonical.longitude;
+        let distanceM: number | null = null;
+        if (query.lat !== undefined && query.lng !== undefined) {
+          if (latitude === null || longitude === null) continue;
+          distanceM = Math.round(
+            haversineM({ lat: query.lat, lng: query.lng }, { lat: latitude, lng: longitude }),
+          );
+          if (distanceM > query.radiusM) continue;
+        }
+
+        // Global/MenuCanonical 링크 자체가 리뷰 메뉴 언급을 그룹한 결과이므로
+        // 원본 MenuMention이 정리된 이후에도 review_mentions 근거는 유지한다.
+        const evidence = new Set<FoodRestaurantEvidenceType>(['review_mentions']);
+        if (hasCatalogEvidence) evidence.add('menu_catalog');
+        const existing = byPlaceId.get(placeId);
+        if (existing) {
+          for (const value of evidence) existing.evidence.add(value);
+          existing.item.mentionCount += mentionCount;
+          existing.positive += positive;
+          existing.negative += negative;
+          existing.item.matchedMenus = [
+            ...new Set([...existing.item.matchedMenus, ...matchedMenus]),
+          ].sort((a, b) => a.localeCompare(b, 'ko'));
+          continue;
+        }
+        byPlaceId.set(placeId, {
+          evidence,
+          positive,
+          negative,
+          item: {
+            placeId,
+            name: row.canonical.name || row.name,
+            category: row.category ?? row.canonical.primaryCategory,
+            address: row.address,
+            latitude,
+            longitude,
+            rating: row.rating,
+            reviewCount: row.reviewCount,
+            distanceM,
+            evidence: [],
+            mentionCount,
+            positiveRatio: null,
+            matchedMenus,
+          },
+        });
+      }
+    }
+
+    const candidates = [...byPlaceId.values()].map((candidate) => {
+      const denominator = candidate.positive + candidate.negative;
+      candidate.item.evidence = [...candidate.evidence].sort((a, b) => a.localeCompare(b));
+      candidate.item.positiveRatio = denominator === 0 ? null : candidate.positive / denominator;
+      return candidate.item;
+    });
+    candidates.sort((a, b) => {
+      if (query.lat !== undefined && query.lng !== undefined) {
+        return (
+          (a.distanceM ?? Number.POSITIVE_INFINITY) - (b.distanceM ?? Number.POSITIVE_INFINITY) ||
+          b.mentionCount - a.mentionCount ||
+          (b.rating ?? -1) - (a.rating ?? -1)
+        );
+      }
+      return (
+        b.evidence.length - a.evidence.length ||
+        b.mentionCount - a.mentionCount ||
+        (b.rating ?? -1) - (a.rating ?? -1) ||
+        (b.reviewCount ?? -1) - (a.reviewCount ?? -1) ||
+        a.name.localeCompare(b.name, 'ko')
+      );
+    });
+    return { ...baseResult, items: candidates.slice(0, query.limit) };
+  }
+
   // 1) nameNorm 정확 2) 별칭 정확 3) 퍼지(bigram Jaccard/포함, 임계 FOOD_MATCH_FUZZY_MIN). 비활성 행 제외.
   /** 이미 고른 카탈로그 행의 1인분 영양만 읽는다(기록 저장 시 스냅샷용). */
   async getNutrition(
     foodId: string,
-  ): Promise<{ kcal: number | null; proteinG: number | null; sodiumMg: number | null; nutritionFrom: string | null } | null> {
+  ): Promise<{
+    kcal: number | null;
+    proteinG: number | null;
+    sodiumMg: number | null;
+    nutritionFrom: string | null;
+  } | null> {
     const r = await this.prisma.foodItem.findFirst({
       where: { id: foodId, active: true },
       select: { kcal: true, proteinG: true, sodiumMg: true, nutritionFrom: true },
@@ -218,7 +527,12 @@ export class FoodService {
     let best: { row: PrismaFoodItem; score: number } | null = null;
     for (const row of candidates) {
       const score = foodNameSimilarity(norm, row.nameNorm);
-      if (score >= FOOD_MATCH_FUZZY_MIN && (!best || score > best.score || (score === best.score && row.popularity > best.row.popularity))) {
+      if (
+        score >= FOOD_MATCH_FUZZY_MIN &&
+        (!best ||
+          score > best.score ||
+          (score === best.score && row.popularity > best.row.popularity))
+      ) {
         best = { row, score };
       }
     }
@@ -371,11 +685,17 @@ export class FoodService {
       this.prisma.foodItem.groupBy({ by: ['dishType'], _count: { _all: true } }),
     ]);
     const bySource = bySourceRaw
-      .map((g) => ({ source: enumOrNull<FoodSourceType>(FoodSource, g.source), count: g._count._all }))
+      .map((g) => ({
+        source: enumOrNull<FoodSourceType>(FoodSource, g.source),
+        count: g._count._all,
+      }))
       .filter((g): g is { source: FoodSourceType; count: number } => g.source !== null)
       .sort((a, b) => b.count - a.count);
     const byDishType = byDishRaw
-      .map((g) => ({ dishType: enumOrNull<FoodDishTypeType>(FoodDishType, g.dishType), count: g._count._all }))
+      .map((g) => ({
+        dishType: enumOrNull<FoodDishTypeType>(FoodDishType, g.dishType),
+        count: g._count._all,
+      }))
       .sort((a, b) => b.count - a.count);
     return { total, active, classified, bySource, byDishType };
   }

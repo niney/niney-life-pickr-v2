@@ -35,6 +35,9 @@ export interface MealDraftItem {
   source: MealItemInputType['source'];
   // 인식이 준 대안 — UI 가 탭으로 바꿔 고른다. 저장 시엔 쓰이지 않는다.
   candidates: { name: string; confidence: number }[];
+  // 인식 항목이라도 사용자가 이름·양·주식 여부 등을 손봤으면 재인식 때 보존한다.
+  // 구버전 persist 값에는 없을 수 있어 optional 이다.
+  userEdited?: boolean;
 }
 
 export interface MealDraftPhoto {
@@ -46,6 +49,8 @@ export interface MealDraftPhoto {
 interface MealDraftState {
   // 수정 중인 기존 기록 id. 새 기록이면 null.
   entryId: string | null;
+  // 추천 카드에서 시작한 새 기록의 원본. 저장 성공 전에는 추천 feedback 을 만들지 않는다.
+  originRecommendationId: string | null;
   eatenAt: string;
   eatenDate: string;
   slot: MealSlotType;
@@ -56,7 +61,7 @@ interface MealDraftState {
   photos: MealDraftPhoto[];
   items: MealDraftItem[];
   // 인식 원본 — 저장 시 서버로 함께 보내 품질 측정에 남긴다.
-  recognition: { model: string; version: number; dishes: unknown[] } | null;
+  recognition: { model: string; version: number; dishes: RecognizedDishType[] } | null;
   updatedAt: number;
 
   start: (init: Partial<Omit<MealDraftState, keyof MealDraftActions>>) => void;
@@ -66,7 +71,11 @@ interface MealDraftState {
   addItem: (item: Omit<MealDraftItem, 'clientId'>) => void;
   updateItem: (clientId: string, patch: Partial<MealDraftItem>) => void;
   removeItem: (clientId: string) => void;
-  applyRecognition: (dishes: RecognizedDishType[], meta: { model: string; version: number }) => void;
+  applyRecognition: (
+    dishes: RecognizedDishType[],
+    meta: { model: string; version: number },
+    options?: { mode?: 'append' | 'replace-recognized' },
+  ) => void;
   clear: () => void;
 }
 
@@ -79,6 +88,7 @@ const nextClientId = (): string => `d${Date.now().toString(36)}${Math.floor(Math
 
 const emptyDraft = (): Omit<MealDraftState, keyof MealDraftActions> => ({
   entryId: null,
+  originRecommendationId: null,
   eatenAt: new Date().toISOString(),
   eatenDate: '',
   slot: 'lunch',
@@ -116,19 +126,38 @@ export const useMealDraftStore = create<MealDraftState>()(
 
       updateItem: (clientId, patch) =>
         set((s) => ({
-          items: s.items.map((it) => (it.clientId === clientId ? { ...it, ...patch } : it)),
+          items: s.items.map((it) =>
+            it.clientId === clientId ? { ...it, ...patch, userEdited: true } : it,
+          ),
           updatedAt: Date.now(),
         })),
 
       removeItem: (clientId) =>
         set((s) => ({ items: s.items.filter((it) => it.clientId !== clientId), updatedAt: Date.now() })),
 
-      // 인식 결과를 항목으로 바꾼다. 이미 손으로 넣은 항목은 남기고 뒤에 붙인다.
-      applyRecognition: (dishes, meta) =>
-        set((s) => ({
-          items: [
-            ...s.items,
-            ...dishes.map((d) => ({
+      // 새 사진만 인식할 때는 append, 전체 사진을 "다시 인식"할 때는 이전 자동 인식 항목만
+      // 교체한다. 사용자가 손본 인식 항목과 수동·카탈로그·추천 항목은 사실상 확정값이라 보존한다.
+      applyRecognition: (dishes, meta, options) =>
+        set((s) => {
+          const mode = options?.mode ?? 'append';
+          const kept =
+            mode === 'replace-recognized'
+              ? s.items.filter((item) => item.source !== 'recognized' || item.userEdited === true)
+              : s.items;
+          // 보존 항목과 같은 음식은 다시 추가하지 않는다. 모델 응답 안의 같은 이름 여러 개는
+          // 서로 다른 접시일 수 있어 그대로 둔다.
+          const keptFoodIds = new Set(kept.map((item) => item.foodId).filter((id): id is string => !!id));
+          const keptNames = new Set(
+            kept
+              .map((item) => item.name.trim().toLocaleLowerCase().replace(/\s+/g, ''))
+              .filter((name) => name.length > 0),
+          );
+          const recognized = dishes
+            .filter((dish) => {
+              const name = (dish.matchedName ?? dish.name).trim().toLocaleLowerCase().replace(/\s+/g, '');
+              return !(dish.foodId && keptFoodIds.has(dish.foodId)) && !keptNames.has(name);
+            })
+            .map((d) => ({
               clientId: nextClientId(),
               name: d.matchedName ?? d.name,
               foodId: d.foodId,
@@ -140,11 +169,22 @@ export const useMealDraftStore = create<MealDraftState>()(
               confidence: d.confidence,
               source: 'recognized' as const,
               candidates: d.candidates,
-            })),
-          ],
-          recognition: { model: meta.model, version: meta.version, dishes },
-          updatedAt: Date.now(),
-        })),
+              userEdited: false,
+            }));
+          const previousDishes =
+            mode === 'append' && s.recognition?.model === meta.model && s.recognition.version === meta.version
+              ? s.recognition.dishes
+              : [];
+          return {
+            items: [...kept, ...recognized],
+            recognition: {
+              model: meta.model,
+              version: meta.version,
+              dishes: [...previousDishes, ...dishes],
+            },
+            updatedAt: Date.now(),
+          };
+        }),
 
       clear: () => set({ ...emptyDraft() }),
     }),
@@ -154,6 +194,7 @@ export const useMealDraftStore = create<MealDraftState>()(
       // 액션은 저장하지 않는다.
       partialize: (s) => ({
         entryId: s.entryId,
+        originRecommendationId: s.originRecommendationId,
         eatenAt: s.eatenAt,
         eatenDate: s.eatenDate,
         slot: s.slot,

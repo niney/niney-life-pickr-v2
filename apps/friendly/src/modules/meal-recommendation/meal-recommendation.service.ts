@@ -3,9 +3,6 @@ import type { MealRecommendation as PrismaMealRecommendation, PrismaClient } fro
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
 import {
-  FoodCuisine,
-  FoodDishType,
-  FoodMainIngredient,
   MealRecommendationStatus,
   type CreateMealRecommendationInputType,
   type MealPreferenceType,
@@ -25,6 +22,7 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 import type { OperationLogService } from '../logs/operation-log.service.js';
 import { MealPreferenceService } from '../meal/meal-preference.service.js';
+import { mealMutationBarrier } from '../meal/meal-mutation-barrier.js';
 import {
   MealPatternService,
   buildProfile,
@@ -32,6 +30,11 @@ import {
   scoreCandidate,
   type ScoredCandidate,
 } from './meal-pattern.service.js';
+import {
+  findMealRecommendationCandidate,
+  parseMealRecommendationFeedback,
+  parseMealRecommendationItems,
+} from './meal-recommendation.feedback.js';
 import {
   MEAL_RECOMMENDATION_JSON_SCHEMA,
   MEAL_RECOMMENDATION_SYSTEM_PROMPT,
@@ -63,7 +66,7 @@ const LlmOutput = z.object({
 
 export class MealRecommendationError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid',
+    readonly code: 'not_found' | 'invalid' | 'quota',
     message: string,
   ) {
     super(message);
@@ -80,11 +83,17 @@ export interface MealRecommendationDeps {
   // 좌표가 오면 현재 기온·강수를 채워 weather 가중치를 계절 추정 대신 실측으로 쓴다.
   // 실패·미설정(키 없음)은 조용히 null — 추천이 날씨 때문에 막히면 안 된다.
   weather?: (lat: number, lng: number) => Promise<{ tempC: number | null; rain: boolean | null } | null>;
+  // 캐시 miss 에서만, LLM 가능 경로에 들어가기 전에 호출한다. false 면 호출·저장을 모두 막는다.
+  consumeQuota?: (userId: string) => boolean;
 }
 
 export class MealRecommendationService {
   private readonly pattern: MealPatternService;
   private readonly preferences: MealPreferenceService;
+  private readonly inFlight = new Map<
+    string,
+    Promise<{ recommendation: MealRecommendationType; cached: boolean }>
+  >();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -143,9 +152,53 @@ export class MealRecommendationService {
     input: CreateMealRecommendationInputType,
     today: string,
   ): Promise<{ recommendation: MealRecommendationType; cached: boolean }> {
+    // 동일 사용자의 같은 요청은 첫 Promise 에 합류한다. force 요청도 동시에 연타된 한 묶음은
+    // LLM·quota 를 한 번만 소비하되, 완료 뒤 다시 누르면 새 요청으로 처리한다.
+    const inFlightKey = JSON.stringify([
+      userId,
+      today,
+      input.targetDate,
+      input.targetSlot,
+      input.mealType === undefined ? '__preference__' : input.mealType,
+      input.note ?? null,
+      input.lat ?? null,
+      input.lng ?? null,
+      input.force,
+    ]);
+    const existing = this.inFlight.get(inFlightKey);
+    if (existing) return existing;
+
+    // 동일 요청 합류 Map은 장벽 바깥에 둔다. 첫 Promise만 사용자 FIFO에 들어가므로 quota/LLM도
+    // 한 번이고, 전체 삭제는 이 Promise(LLM과 저장 포함)가 끝난 뒤 실행된다. 즉 장기 LLM 중
+    // 들어온 삭제도 기다린다. 그래야 삭제 응답 뒤 이전 추천 저장이 다시 생기는 창이 없다.
+    const pending = mealMutationBarrier.runExclusive(userId, () => this.createOnce(userId, input, today));
+    this.inFlight.set(inFlightKey, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.inFlight.get(inFlightKey) === pending) this.inFlight.delete(inFlightKey);
+    }
+  }
+
+  private async createOnce(
+    userId: string,
+    input: CreateMealRecommendationInputType,
+    today: string,
+  ): Promise<{ recommendation: MealRecommendationType; cached: boolean }> {
     const preference = await this.preferences.get(userId);
-    const history = await this.pattern.loadHistory(userId, today);
-    const profile = buildProfile(history, input.targetSlot, today);
+    // mealType을 생략한 호출(홈 카드·구버전 클라이언트)은 저장한 주 식사 유형을 실제 점수에
+    // 사용한다. null은 사용자가 명시적으로 "상황 무관"을 고른 값이라 덮어쓰지 않는다.
+    const effectiveMealType =
+      input.mealType === undefined ? (preference.mealTypes[0] ?? null) : input.mealType;
+    const effectiveInput: CreateMealRecommendationInputType = {
+      ...input,
+      mealType: effectiveMealType,
+    };
+    const [history, feedbackSignals] = await Promise.all([
+      this.pattern.loadHistory(userId, today),
+      this.pattern.loadFeedbackSignals(userId, today),
+    ]);
+    const profile = buildProfile(history, input.targetSlot, today, feedbackSignals);
     const candidatesRaw = await this.pattern.buildCandidates(profile, preference);
 
     const month = Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
@@ -160,7 +213,7 @@ export class MealRecommendationService {
           profile,
           preference,
           targetSlot: input.targetSlot,
-          mealType: input.mealType ?? null,
+          mealType: effectiveMealType,
           month,
           tempC: weather?.tempC ?? null,
           rain: weather?.rain ?? null,
@@ -175,7 +228,7 @@ export class MealRecommendationService {
       profileText: describeProfile(profile, input.targetSlot),
       targetSlot: input.targetSlot,
       targetDate: input.targetDate,
-      mealType: input.mealType ?? null,
+      mealType: effectiveMealType,
       note: input.note ?? null,
       // 날씨가 바뀌면 근거도 바뀌므로 캐시 키에 넣는다(기온은 5도 단위로 뭉갠다).
       weatherBucket: weather?.tempC !== null && weather?.tempC !== undefined ? Math.round(weather.tempC / 5) : null,
@@ -190,9 +243,15 @@ export class MealRecommendationService {
       if (cached) return { recommendation: toRecommendation(cached), cached: true };
     }
 
+    // 일반/force 모두 cache miss 가 확정된 이 지점에서 먼저 차감한다. 한도 초과면 아래의
+    // provider resolve/complete 에 도달하지 않으므로 비싼 호출이 새어 나가지 않는다.
+    if (this.deps.consumeQuota && !this.deps.consumeQuota(userId)) {
+      throw new MealRecommendationError('quota', '오늘 추천 한도를 모두 썼습니다. 내일 다시 시도해 주세요.');
+    }
+
     if (scored.length === 0) {
       // 카탈로그가 비었고 기록도 없다 — 추천할 재료가 없다.
-      const saved = await this.save(userId, input, hash, {
+      const saved = await this.save(userId, effectiveInput, hash, {
         items: [],
         summary: '추천할 음식 정보가 아직 없어요. 음식 카탈로그를 먼저 적재해 주세요.',
         status: 'fallback',
@@ -227,9 +286,10 @@ export class MealRecommendationService {
         candidates: scored.slice(0, PROMPT_CANDIDATES),
         targetSlot: input.targetSlot,
         targetDate: input.targetDate,
-        mealType: input.mealType ?? null,
+        mealType: effectiveMealType,
         weights: preference.weights,
         excludedFoods: preference.excludedFoods,
+        dislikedFoods: preference.dislikedFoods,
         note: input.note ?? null,
         entryCount: profile.entryCount,
       });
@@ -291,7 +351,7 @@ export class MealRecommendationService {
     }
     items = items.slice(0, PICK_MAX);
 
-    const saved = await this.save(userId, input, hash, {
+    const saved = await this.save(userId, effectiveInput, hash, {
       items,
       summary,
       status,
@@ -314,13 +374,54 @@ export class MealRecommendationService {
     id: string,
     input: MealRecommendationFeedbackInputType,
   ): Promise<MealRecommendationType> {
+    return mealMutationBarrier.runExclusive(userId, () => this.feedbackUnlocked(userId, id, input));
+  }
+
+  private async feedbackUnlocked(
+    userId: string,
+    id: string,
+    input: MealRecommendationFeedbackInputType,
+  ): Promise<MealRecommendationType> {
     const row = await this.prisma.mealRecommendation.findFirst({ where: { id, userId } });
     if (!row) throw new MealRecommendationError('not_found', '추천을 찾을 수 없습니다.');
-    const prev = parseFeedback(row.feedbackJson);
+    const prev = parseMealRecommendationFeedback(row.feedbackJson);
+    if (input.eatenEntryId === null && prev?.eatenEntryId) {
+      throw new MealRecommendationError('invalid', '추천과 식단 기록의 연결은 해제할 수 없습니다.');
+    }
+    if (input.eatenEntryId && prev?.eatenEntryId && input.eatenEntryId !== prev.eatenEntryId) {
+      throw new MealRecommendationError('invalid', '이미 다른 식단 기록과 연결된 추천입니다.');
+    }
+
+    let pickedName = input.pickedName !== undefined ? input.pickedName : (prev?.pickedName ?? null);
+    if (pickedName) {
+      pickedName = findMealRecommendationCandidate(row.itemsJson, [pickedName]);
+      if (!pickedName) throw new MealRecommendationError('invalid', '추천 후보에 없는 음식입니다.');
+    }
+    const eatenEntryId = input.eatenEntryId !== undefined ? input.eatenEntryId : (prev?.eatenEntryId ?? null);
+    if (eatenEntryId) {
+      const entry = await this.prisma.mealEntry.findFirst({
+        where: { id: eatenEntryId, userId },
+        select: {
+          originRecommendationId: true,
+          items: { where: { isMain: true }, select: { name: true } },
+        },
+      });
+      if (!entry || entry.originRecommendationId !== id) {
+        throw new MealRecommendationError('invalid', '이 추천에서 만든 본인 식단 기록만 연결할 수 있습니다.');
+      }
+      const entryCandidate = findMealRecommendationCandidate(
+        row.itemsJson,
+        entry.items.map((item) => item.name),
+      );
+      if (!entryCandidate || (pickedName && normalizeTerm(pickedName) !== normalizeTerm(entryCandidate))) {
+        throw new MealRecommendationError('invalid', '선택한 추천 음식과 식단 기록이 일치하지 않습니다.');
+      }
+      pickedName = entryCandidate;
+    }
     const merged: MealRecommendationFeedbackType = {
-      pickedName: input.pickedName !== undefined ? input.pickedName : (prev?.pickedName ?? null),
+      pickedName,
       rating: input.rating !== undefined ? input.rating : (prev?.rating ?? null),
-      eatenEntryId: input.eatenEntryId !== undefined ? input.eatenEntryId : (prev?.eatenEntryId ?? null),
+      eatenEntryId,
     };
     const updated = await this.prisma.mealRecommendation.update({
       where: { id },
@@ -342,9 +443,10 @@ export class MealRecommendationService {
       profileText: string;
     },
   ): Promise<MealRecommendationType> {
-    // 이력이 무한히 쌓이지 않게 — 사용자당 최근 HISTORY_LIMIT 개만 남긴다.
+    // 반응이 없는 캐시 이력만 최근 HISTORY_LIMIT 개로 정리한다. 선택·기록·평가된 행은
+    // 학습 신호와 기간 통계의 근거이므로 보존한다.
     const old = await this.prisma.mealRecommendation.findMany({
-      where: { userId },
+      where: { userId, feedbackJson: null },
       orderBy: { createdAt: 'desc' },
       skip: HISTORY_LIMIT - 1,
       select: { id: true },
@@ -425,51 +527,11 @@ const toItem = (c: ScoredCandidate, reason: string): MealRecommendationItemType 
 const profileHash = (input: unknown): string =>
   createHash('sha1').update(JSON.stringify(input)).digest('hex').slice(0, 16);
 
-const parseFeedback = (json: string | null): MealRecommendationFeedbackType | null => {
-  if (!json) return null;
-  try {
-    const v = JSON.parse(json) as Partial<MealRecommendationFeedbackType>;
-    return {
-      pickedName: typeof v.pickedName === 'string' ? v.pickedName : null,
-      rating: typeof v.rating === 'number' ? v.rating : null,
-      eatenEntryId: typeof v.eatenEntryId === 'string' ? v.eatenEntryId : null,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const parseItems = (json: string): MealRecommendationItemType[] => {
-  try {
-    const v: unknown = JSON.parse(json);
-    if (!Array.isArray(v)) return [];
-    return v
-      .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
-      .map((x) => ({
-        name: String(x['name'] ?? ''),
-        foodId: typeof x['foodId'] === 'string' ? x['foodId'] : null,
-        dishType: FoodDishType.safeParse(x['dishType']).success ? (x['dishType'] as never) : null,
-        mainIngredient: FoodMainIngredient.safeParse(x['mainIngredient']).success ? (x['mainIngredient'] as never) : null,
-        cuisine: FoodCuisine.safeParse(x['cuisine']).success ? (x['cuisine'] as never) : null,
-        reason: String(x['reason'] ?? ''),
-        tags: Array.isArray(x['tags']) ? (x['tags'] as unknown[]).filter((t): t is string => typeof t === 'string') : [],
-        score: typeof x['score'] === 'number' ? x['score'] : 0,
-        lastEatenDate: typeof x['lastEatenDate'] === 'string' ? x['lastEatenDate'] : null,
-        ingredients: Array.isArray(x['ingredients'])
-          ? (x['ingredients'] as unknown[]).filter((t): t is string => typeof t === 'string')
-          : [],
-      }))
-      .filter((i) => i.name.length > 0);
-  } catch {
-    return [];
-  }
-};
-
 export const toRecommendation = (row: PrismaMealRecommendation): MealRecommendationType => ({
   id: row.id,
   targetDate: row.targetDate,
   targetSlot: row.targetSlot as MealSlotType,
-  items: parseItems(row.itemsJson),
+  items: parseMealRecommendationItems(row.itemsJson),
   summary: row.summary,
   status: MealRecommendationStatus.safeParse(row.status).success
     ? (row.status as MealRecommendationStatusType)
@@ -477,7 +539,7 @@ export const toRecommendation = (row: PrismaMealRecommendation): MealRecommendat
   model: row.model,
   promptVersion: row.promptVersion,
   notice: row.notice,
-  feedback: parseFeedback(row.feedbackJson),
+  feedback: parseMealRecommendationFeedback(row.feedbackJson),
   createdAt: row.createdAt.toISOString(),
 });
 

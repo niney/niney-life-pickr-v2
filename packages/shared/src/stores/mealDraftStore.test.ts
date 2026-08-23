@@ -37,12 +37,20 @@ describe('mealDraftStore', () => {
       source: 'manual',
       candidates: [],
     });
-    useMealDraftStore.getState().start({ eatenDate: '2026-08-22', slot: 'dinner' });
+    useMealDraftStore.getState().start({
+      eatenDate: '2026-08-22',
+      slot: 'dinner',
+      originRecommendationId: 'rec-1',
+    });
     const s = useMealDraftStore.getState();
     expect(s.items).toHaveLength(0);
     expect(s.eatenDate).toBe('2026-08-22');
     expect(s.slot).toBe('dinner');
     expect(s.entryId).toBeNull();
+    expect(s.originRecommendationId).toBe('rec-1');
+
+    useMealDraftStore.getState().clear();
+    expect(useMealDraftStore.getState().originRecommendationId).toBeNull();
   });
 
   it('항목 추가·수정·삭제 (clientId 는 고유)', () => {
@@ -54,10 +62,36 @@ describe('mealDraftStore', () => {
     expect(new Set(items.map((i) => i.clientId)).size).toBe(2);
 
     useMealDraftStore.getState().updateItem(items[0]!.clientId, { name: 'a2', portion: 'large' });
-    expect(useMealDraftStore.getState().items[0]).toMatchObject({ name: 'a2', portion: 'large' });
+    expect(useMealDraftStore.getState().items[0]).toMatchObject({
+      name: 'a2',
+      portion: 'large',
+      userEdited: true,
+    });
 
     useMealDraftStore.getState().removeItem(items[1]!.clientId);
     expect(useMealDraftStore.getState().items.map((i) => i.name)).toEqual(['a2']);
+  });
+
+  it('재인식은 손대지 않은 인식 항목만 교체하고 수동·사용자 교정 항목을 보존한다', () => {
+    const st = useMealDraftStore.getState();
+    st.applyRecognition([dish(), dish({ name: '된장찌개', matchedName: '된장찌개', foodId: 'food-2' })], {
+      model: 'old',
+      version: 1,
+    });
+    const recognized = useMealDraftStore.getState().items;
+    st.updateItem(recognized[0]!.clientId, { name: '참치김치찌개' });
+    st.addItem({ name: '밥', foodId: null, dishType: 'rice', mainIngredient: 'grain', cuisine: 'korean', portion: null, isMain: false, confidence: null, source: 'manual', candidates: [] });
+
+    st.applyRecognition(
+      [dish({ name: '순두부찌개', matchedName: '순두부찌개', foodId: 'food-3' })],
+      { model: 'new', version: 2 },
+      { mode: 'replace-recognized' },
+    );
+
+    const next = useMealDraftStore.getState();
+    expect(next.items.map((item) => item.name)).toEqual(['참치김치찌개', '밥', '순두부찌개']);
+    expect(next.recognition).toMatchObject({ model: 'new', version: 2 });
+    expect(next.recognition?.dishes).toHaveLength(1);
   });
 
   it('applyRecognition 은 기존 항목을 지우지 않고 뒤에 붙이며 매칭된 이름을 쓴다', () => {

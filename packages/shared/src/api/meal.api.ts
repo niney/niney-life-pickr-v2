@@ -2,6 +2,8 @@ import {
   Routes,
   type CreateMealEntryInputType,
   type CreateMealRecommendationInputType,
+  type DeleteMealDataInputType,
+  type DeleteMealDataResultType,
   type ListMealRecommendationsResultType,
   type MealRecommendationContextType,
   type MealRecommendationFeedbackInputType,
@@ -9,6 +11,7 @@ import {
   type ListMealEntriesQueryType,
   type ListMealEntriesResultType,
   type MealCalendarResultType,
+  type MealDataExportType,
   type MealEntryType,
   type MealPreferenceType,
   type MealStatsResultType,
@@ -45,6 +48,15 @@ export const buildMealEntriesQuery = (input: ListMealEntriesInput = {}): string 
 };
 
 export const mealApi = {
+  // ── 데이터 관리 ──
+  exportData: () => apiFetch<MealDataExportType>(Routes.Meal.dataExport),
+
+  deleteAllData: (input: DeleteMealDataInputType) =>
+    apiFetch<DeleteMealDataResultType>(Routes.Meal.data, {
+      method: 'DELETE',
+      body: JSON.stringify(input),
+    }),
+
   // ── 기록 ──
   list: (input: ListMealEntriesInput = {}) => {
     const qs = buildMealEntriesQuery(input);

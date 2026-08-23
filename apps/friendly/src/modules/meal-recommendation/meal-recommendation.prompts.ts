@@ -6,13 +6,14 @@ import type { ScoredCandidate } from './meal-pattern.service.js';
 //
 // MEAL_RECOMMENDATION_VERSION 변경 시 이전 추천이 stale(MealRecommendation.promptVersion 으로 남는다).
 // v1: 최초 — 후보 풀 안에서만 고르게 하고 이유를 붙인다.
+// v2: 절대 제외와 덜 선호를 분리하고, 덜 선호 후보는 대안이 부족할 때만 고른다.
 //
 // 설계 근거(docs/PLAN-meal.md 결정 E):
 //  - 원시 기록을 주지 않는다. 서버가 집계한 프로필 요약 + 코드가 점수를 매긴 후보 풀만 넘긴다.
 //  - LLM 은 "고르고 설명하는" 역할이다. 후보 밖 이름은 서버가 버린다 — 없는 음식을 추천하면
 //    사용자가 검색해도 안 나오고 통계도 안 잡힌다.
 //  - 건강보다 "패턴 분석 → 겹치지 않게·골고루 + 취향"이 기본 목표라는 걸 프롬프트에 명시한다.
-export const MEAL_RECOMMENDATION_VERSION = 1;
+export const MEAL_RECOMMENDATION_VERSION = 2;
 
 export const MEAL_RECOMMENDATION_SYSTEM_PROMPT = `너는 한 사람의 식사 기록을 보고 다음 끼니를 골라 주는 도우미다.
 
@@ -26,6 +27,7 @@ export const MEAL_RECOMMENDATION_SYSTEM_PROMPT = `너는 한 사람의 식사 �
 [고르는 규칙 - 절대 위반하지 말 것]
 - **반드시 주어진 후보 목록 안에서만** 고른다. 목록에 없는 음식 이름을 만들어 내면 안 된다.
 - 이름은 후보에 적힌 그대로 쓴다(띄어쓰기까지).
+- "가능하면 피할 것"과 "가능하면 피함" 후보는 충분한 대안이 있으면 고르지 않는다. 절대 금지는 아니다.
 - 3~5개를 고르고, 서로 성격이 겹치지 않게 한다(같은 조리형태·같은 주재료로 몰지 말 것).
 - 각 항목마다 왜 지금 이걸 권하는지 1~2문장. 기록에 근거해 구체적으로("2주 동안 국물 음식을 안 드셨어요").
 - 없는 사실을 지어내지 말 것. 기록이 적으면 "아직 기록이 적어 취향을 배우는 중"이라고 솔직하게 쓴다.
@@ -70,6 +72,7 @@ export interface RecommendationPromptInput {
   mealType: MealTypeType | null;
   weights: MealWeightsType;
   excludedFoods: string[];
+  dislikedFoods: string[];
   note: string | null;
   // 기록이 거의 없을 때 — 콜드 스타트 문구를 다르게 쓴다.
   entryCount: number;
@@ -87,7 +90,8 @@ export const buildMealRecommendationUserPrompt = (input: RecommendationPromptInp
       .map((k) => `${WEIGHT_LABEL[k]} ${input.weights[k]}`)
       .join(' / '),
   );
-  if (input.excludedFoods.length > 0) lines.push(`[못 먹는 것] ${input.excludedFoods.join(', ')}`);
+  if (input.excludedFoods.length > 0) lines.push(`[못 먹는 것 — 절대 제외] ${input.excludedFoods.join(', ')}`);
+  if (input.dislikedFoods.length > 0) lines.push(`[가능하면 피할 것] ${input.dislikedFoods.join(', ')}`);
   lines.push('');
   lines.push('[내 식사 패턴]');
   lines.push(input.entryCount === 0 ? '기록이 아직 없습니다.' : input.profileText);

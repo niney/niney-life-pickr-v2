@@ -48,7 +48,10 @@ export const RATE = {
   // 음식 카탈로그 자동완성(식단 입력) — 로컬 DB 조회라 싸지만 인증 사용자 타이핑 디바운스 호출.
   // 음식 여러 개를 연달아 입력하는 흐름을 고려해 분당 120.
   foodSearch: { max: 120, timeWindow: '1 minute' },
-  // 식단 사진 업로드 — 장당 1요청 순차 업로드(최대 5장) + 재시도 여유. 분당 30.
+  // 음식→식당 역검색 — 로컬 DB 조인·거리 계산. 추천 카드 연타를 허용하되
+  // 식당/리뷰 집계를 불필요하게 반복하지 않도록 분당 60으로 제한.
+  foodRestaurants: { max: 60, timeWindow: '1 minute' },
+  // 식단 사진 업로드·지난 사진 복제 — 장당 1요청(최대 5장) + 재시도 여유. 분당 30.
   mealPhotoUpload: { max: 30, timeWindow: '1 minute' },
   // 식단 사진 인식 — 비전 LLM 1콜/요청. 일일 한도(MEAL_RECOGNIZE_DAILY_LIMIT)가 진짜 비용
   // 방어선이고 이건 연타 억제용. 분당 10.

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CalendarDays, ChartNoAxesColumn, Loader2, Settings2, Sparkles, UtensilsCrossed } from 'lucide-react';
 import type { MealEntryType, MealSlotType } from '@repo/api-contract';
-import { useMealCalendar, useMealEntries, useMealStats } from '@repo/shared';
+import { useInfiniteMealEntries, useMealCalendar, useMealEntries, useMealStats } from '@repo/shared';
 import {
   FOOD_CUISINE_LABEL,
   FOOD_DISH_TYPE_LABEL,
@@ -88,9 +89,8 @@ export const MealPage = () => {
 
 // ── 기록 ────────────────────────────────────────────────────────────────────
 const MealList = () => {
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const list = useMealEntries({ limit: 30, cursor });
-  const items = list.data?.items ?? [];
+  const list = useInfiniteMealEntries({ limit: 30 });
+  const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
   const today = toLocalDateKey(new Date());
 
   if (list.isLoading) {
@@ -125,10 +125,14 @@ const MealList = () => {
           </div>
         );
       })}
-      {list.data?.nextCursor ? (
+      {list.hasNextPage ? (
         <div className="pt-2 text-center">
-          <Button variant="outline" onClick={() => setCursor(list.data!.nextCursor!)} disabled={list.isFetching}>
-            {list.isFetching ? '불러오는 중…' : '더 보기'}
+          <Button
+            variant="outline"
+            onClick={() => void list.fetchNextPage()}
+            disabled={list.isFetchingNextPage}
+          >
+            {list.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
           </Button>
         </div>
       ) : null}
@@ -154,7 +158,18 @@ const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
             </span>
             <span>{timeText(entry.eatenAt)}</span>
             {entry.mealType ? <span>{MEAL_TYPE_LABEL[entry.mealType]}</span> : null}
-            {entry.placeName ? <span className="truncate">· {entry.placeName}</span> : null}
+            {entry.placeName ? (
+              entry.placeId ? (
+                <Link
+                  to={`/restaurants-v2/${entry.placeId}`}
+                  className="truncate text-primary hover:underline"
+                >
+                  · {entry.placeName}
+                </Link>
+              ) : (
+                <span className="truncate">· {entry.placeName}</span>
+              )
+            ) : null}
           </div>
           <p className="truncate text-sm font-medium">{mains.map((i) => i.name).join(', ') || '(음식 없음)'}</p>
           {sides.length > 0 ? (
@@ -175,7 +190,10 @@ const MealCalendar = () => {
   const [month, setMonth] = useState(() => toLocalMonthKey(new Date()));
   const [selected, setSelected] = useState<string | null>(null);
   const cal = useMealCalendar(month);
-  const dayList = useMealEntries(selected ? { from: selected, to: selected, limit: 20 } : { limit: 0 });
+  const dayList = useMealEntries(
+    selected ? { from: selected, to: selected, limit: 20 } : {},
+    selected !== null,
+  );
 
   const cells = useMemo(() => {
     if (!monthRange(month)) return [];
@@ -338,6 +356,48 @@ const MealStats = () => {
           영양 정보가 있는 음식만 더한 값이라 실제보다 적게 나와요(외식 브랜드 메뉴는 공개된 값이 없어요).
         </p>
       ) : null}
+
+      <section className="space-y-2" aria-labelledby="meal-weekly-insights-title">
+        <div>
+          <h3 id="meal-weekly-insights-title" className="font-semibold">
+            주간 인사이트
+          </h3>
+          <p className="text-xs text-muted-foreground">최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요.</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {data.insights.map((insight) => (
+            <div
+              key={insight.key}
+              className={cn(
+                'rounded-lg border px-3 py-2.5',
+                insight.tone === 'positive' && 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30',
+                insight.tone === 'attention' && 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30',
+                insight.tone === 'info' && 'bg-muted/50',
+              )}
+            >
+              <p className="text-sm font-medium">{insight.title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="space-y-2">
+        <div>
+          <h3 className="font-semibold">추천 반응</h3>
+          <p className="text-xs text-muted-foreground">선택한 추천이 실제 기록으로 이어졌는지 보여 줘요.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="추천 선택" value={`${data.recommendation.chosenCount}건`} />
+          <StatTile label="추천 기록" value={`${data.recommendation.loggedCount}건`} />
+          <StatTile label="추천 평가" value={`${data.recommendation.ratedCount}건`} />
+          <StatTile
+            label="추천 수락률"
+            value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}
+            sub="선택 대비 기록"
+          />
+        </div>
+      </div>
 
       {data.entryCount === 0 ? (
         <Card>

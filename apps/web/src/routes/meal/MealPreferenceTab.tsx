@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
+  MEAL_DATA_DELETE_CONFIRMATION,
   MEAL_WEIGHT_PRESETS,
   type MealSlotType,
   type MealTypeType,
   type MealWeightsType,
 } from '@repo/api-contract';
-import { useMealPreference, useUpdateMealPreference } from '@repo/shared';
+import {
+  useDeleteAllMealData,
+  useExportMealData,
+  useMealPreference,
+  useUpdateMealPreference,
+} from '@repo/shared';
 import { MEAL_SLOTS, MEAL_SLOT_LABEL, MEAL_TYPES, MEAL_TYPE_LABEL } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 
-// 추천 중요도(가중치) + 하드 제약(제외 음식·식사 유형·기록 끼니). 가중치는 0~5 슬라이더,
+// 추천 중요도(가중치) + 절대 제외/소프트 비선호·식사 유형·기록 끼니. 가중치는 0~5 슬라이더,
 // 프리셋은 네 가지 성향을 한 번에 채운다.
 
 const WEIGHT_FIELDS: ReadonlyArray<{ key: keyof MealWeightsType; label: string; desc: string }> = [
@@ -30,25 +36,45 @@ export const MealPreferenceTab = () => {
   const save = useUpdateMealPreference();
   const [weights, setWeights] = useState<MealWeightsType | null>(null);
   const [excluded, setExcluded] = useState('');
+  const [disliked, setDisliked] = useState('');
   const [liked, setLiked] = useState('');
   const [slots, setSlots] = useState<MealSlotType[]>([]);
   const [mealTypes, setMealTypes] = useState<MealTypeType[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // 서버 값이 도착하면 폼 초기화(사용자가 이미 손댔으면 덮어쓰지 않는다).
   useEffect(() => {
     if (!pref.data || dirty) return;
     setWeights(pref.data.weights);
     setExcluded(pref.data.excludedFoods.join(', '));
+    setDisliked(pref.data.dislikedFoods.join(', '));
     setLiked(pref.data.likedFoods.join(', '));
     setSlots(pref.data.slots);
     setMealTypes(pref.data.mealTypes);
   }, [pref.data, dirty]);
 
-  if (pref.isLoading || !weights) {
+  if (pref.isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" /> 불러오는 중…
+      </div>
+    );
+  }
+  if (pref.isError) {
+    return (
+      <div className="space-y-3 rounded-lg border p-5 text-sm">
+        <p className="text-destructive">식단 설정을 불러오지 못했어요.</p>
+        <Button variant="outline" size="sm" onClick={() => void pref.refetch()}>
+          다시 시도
+        </Button>
+      </div>
+    );
+  }
+  if (!weights) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> 설정 준비 중…
       </div>
     );
   }
@@ -66,12 +92,14 @@ export const MealPreferenceTab = () => {
       .slice(0, 50);
 
   const onSave = () => {
+    setFormError(null);
     save.mutate(
       {
         weights,
         excludedFoods: parseList(excluded),
+        dislikedFoods: parseList(disliked),
         likedFoods: parseList(liked),
-        slots: slots.length > 0 ? slots : undefined,
+        slots,
         mealTypes,
         onboarded: true,
       },
@@ -81,6 +109,14 @@ export const MealPreferenceTab = () => {
 
   return (
     <div className="space-y-4">
+      {pref.data && !pref.data.onboarded ? (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <p className="text-sm font-medium">첫 추천을 위한 기본 설정</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            좋아하는 음식, 덜 선호하는 음식, 절대 제외할 음식과 끼니를 저장하면 기록이 적어도 반영돼요.
+          </p>
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">무엇을 중요하게 볼까요</CardTitle>
@@ -132,11 +168,20 @@ export const MealPreferenceTab = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <Field
-            label="못 먹는 / 싫어하는 음식"
-            hint="쉼표로 구분. 이름은 물론 재료까지 봐요 — '오이'를 적으면 오이냉국뿐 아니라 오이가 들어간 김밥도 빠져요."
+            label="절대 제외 (알레르기·못 먹는 음식)"
+            hint="이름과 알려진 재료가 맞으면 완전히 빼요. 재료 정보가 없는 카탈로그 음식은 막지 못할 수 있어요."
             value={excluded}
             onChange={(v) => {
               setExcluded(v);
+              setDirty(true);
+            }}
+          />
+          <Field
+            label="덜 선호하는 음식"
+            hint="후보에서 지우지 않고 점수를 크게 낮춰 가능하면 피해요. 대안이 부족하면 나올 수 있어요."
+            value={disliked}
+            onChange={(v) => {
+              setDisliked(v);
               setDirty(true);
             }}
           />
@@ -174,7 +219,12 @@ export const MealPreferenceTab = () => {
                   label={MEAL_SLOT_LABEL[s]}
                   selected={slots.includes(s)}
                   onClick={() => {
+                    if (slots.includes(s) && slots.length === 1) {
+                      setFormError('기록·추천할 끼니는 하나 이상 남겨 주세요.');
+                      return;
+                    }
                     setSlots(slots.includes(s) ? slots.filter((x) => x !== s) : [...slots, s]);
+                    setFormError(null);
                     setDirty(true);
                   }}
                 />
@@ -183,6 +233,8 @@ export const MealPreferenceTab = () => {
           </div>
         </CardContent>
       </Card>
+
+      <MealDataManagement />
 
       <div className="flex items-center gap-3">
         <Button onClick={onSave} disabled={save.isPending || !dirty}>
@@ -195,7 +247,109 @@ export const MealPreferenceTab = () => {
           </span>
         ) : null}
       </div>
+      {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
     </div>
+  );
+};
+
+const MealDataManagement = () => {
+  const exportData = useExportMealData();
+  const deleteAll = useDeleteAllMealData();
+  const [showDelete, setShowDelete] = useState(false);
+  const [confirmation, setConfirmation] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await exportData.mutateAsync();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `meal-data-${data.exportedAt.slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setNotice('JSON 파일을 만들었어요. 사진 원본은 포함되지 않아요.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '식단 데이터를 내보내지 못했어요.');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (confirmation !== MEAL_DATA_DELETE_CONFIRMATION) return;
+    if (!window.confirm('식단 기록·사진·추천·선호 설정을 모두 영구 삭제할까요? 계정은 유지됩니다.')) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await deleteAll.mutateAsync({ confirmation: MEAL_DATA_DELETE_CONFIRMATION });
+      setShowDelete(false);
+      setConfirmation('');
+      setNotice(`기록 ${result.deleted.entries}개와 사진 ${result.deleted.photos}개를 삭제했어요.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '식단 데이터를 삭제하지 못했어요.');
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">내 데이터</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          식단 기록은 공개되지 않으며 언제든 내보내거나 모두 삭제할 수 있어요.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void handleExport()} disabled={exportData.isPending || deleteAll.isPending}>
+            {exportData.isPending ? '파일 만드는 중…' : 'JSON으로 내보내기'}
+          </Button>
+          <Button
+            variant="outline"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setShowDelete((value) => !value)}
+            disabled={deleteAll.isPending}
+            aria-expanded={showDelete}
+          >
+            식단 데이터 전체 삭제
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          내보내기에는 기록·사진 메타·추천·선호 설정이 들어가며 사진 바이너리는 제외됩니다.
+        </p>
+        {showDelete ? (
+          <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+            <p className="text-xs text-destructive">
+              계정은 유지하고 식단 기능의 내 데이터만 삭제합니다. 아래 문구를 정확히 입력하세요.
+            </p>
+            <code className="block select-all rounded bg-muted px-2 py-1 text-xs">
+              {MEAL_DATA_DELETE_CONFIRMATION}
+            </code>
+            <input
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              aria-label="식단 데이터 전체 삭제 확인 문구"
+              placeholder="확인 문구 입력"
+              autoComplete="off"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+            <Button
+              variant="destructive"
+              onClick={() => void handleDelete()}
+              disabled={confirmation !== MEAL_DATA_DELETE_CONFIRMATION || deleteAll.isPending}
+            >
+              {deleteAll.isPending ? '삭제 중…' : '영구 삭제'}
+            </Button>
+          </div>
+        ) : null}
+        {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </CardContent>
+    </Card>
   );
 };
 

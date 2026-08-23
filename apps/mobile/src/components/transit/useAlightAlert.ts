@@ -19,16 +19,6 @@ const AVG_SEC_PER_STOP: Record<'bus' | 'subway', number> = { bus: 90, subway: 12
 const RESCHEDULE_DRIFT_SEC = 20;
 const ANDROID_CHANNEL_ID = 'alight';
 
-// 앱이 떠 있을 때도 배너를 띄운다 — 지도를 보는 중에도 하차 안내는 놓치면 안 된다.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
 export interface AlightAlertModel {
   // 권한 거부 — 호출부가 안내 문구를 띄우고 토글을 되돌린다.
   denied: boolean;

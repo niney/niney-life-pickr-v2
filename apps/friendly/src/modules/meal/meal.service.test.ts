@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { medianSlotTime } from './meal.service.js';
+import { decodeMealEntryCursor, encodeMealEntryCursor, medianSlotTime } from './meal.service.js';
 
 // 시간 입력 프리셋의 핵심 계산 — 평균이 아니라 중앙값이고, 야식은 자정을 걸친다.
 const at = (h: number, m = 0): number => h * 60 + m;
@@ -27,5 +27,20 @@ describe('medianSlotTime', () => {
 
   it('야식이 새벽에 몰려도 되감아 표시한다', () => {
     expect(medianSlotTime('late_night', [at(0, 30), at(1, 0), at(1, 30)])).toBe('01:00');
+  });
+});
+
+describe('meal entry cursor', () => {
+  it('eatenAt+id 를 opaque 토큰으로 왕복한다', () => {
+    const eatenAt = new Date('2026-08-23T03:30:00.000Z');
+    const encoded = encodeMealEntryCursor(eatenAt, 'entry-b');
+    expect(encoded).not.toContain(eatenAt.toISOString());
+    expect(decodeMealEntryCursor(encoded)).toEqual({ eatenAt, id: 'entry-b' });
+  });
+
+  it('전환 전 ISO eatenAt 커서를 계속 허용하고 잘못된 값은 무시한다', () => {
+    const iso = '2026-08-23T03:30:00.000Z';
+    expect(decodeMealEntryCursor(iso)).toEqual({ eatenAt: new Date(iso), id: null });
+    expect(decodeMealEntryCursor('not-a-cursor')).toBeNull();
   });
 });

@@ -35,6 +35,7 @@ model User {
 
   airLocation AirUserLocation?
   mealEntries MealEntry[]
+  mealPhotos MealPhoto[]
   mealPreference MealPreference?
   mealRecommendations MealRecommendation[]
 
@@ -1571,6 +1572,8 @@ model MealEntry {
   memo            String?
   // photo|manual|recommendation
   source          String   @default("manual")
+  // 추천에서 시작한 기록의 원본 id 스냅샷(FK 아님 — 추천 이력 정리 뒤에도 출처를 보존).
+  originRecommendationId String?
   // 인식 원본 JSON {model, version, dishes[]} — 확정 후에도 보존(품질 측정).
   recognitionJson String?
   createdAt       DateTime @default(now())
@@ -1582,6 +1585,7 @@ model MealEntry {
 
   @@index([userId, eatenAt])
   @@index([userId, eatenDate])
+  @@index([userId, originRecommendationId])
   @@map("meal_entries")
 }
 
@@ -1632,6 +1636,7 @@ model MealPhoto {
   createdAt DateTime @default(now())
 
   entry MealEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([entryId, sortOrder])
   @@index([userId, createdAt])
@@ -1644,6 +1649,7 @@ model MealPreference {
   // MealWeights JSON — 추천 점수 함수의 가중치.
   weightsJson       String
   excludedFoodsJson String   @default("[]")
+  dislikedFoodsJson String   @default("[]")
   likedFoodsJson    String   @default("[]")
   mealTypesJson     String   @default("[]")
   slotsJson         String   @default("[\"breakfast\",\"lunch\",\"dinner\"]")

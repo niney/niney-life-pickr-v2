@@ -15,9 +15,11 @@ import {
 } from '@repo/api-contract';
 import { MEAL_SLOTS, MEAL_SLOT_LABEL, MEAL_TYPES, MEAL_TYPE_LABEL } from '@repo/utils';
 import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
+import { MealDataManagementCard } from './MealDataManagementCard';
+import { MealReminderSettingsCard } from './MealReminderSettingsCard';
 import { Chip, ChipRow, FieldLabel } from './mealUi';
 
-// 추천 중요도(0~5) + 하드 제약. 앱에는 슬라이더 라이브러리가 없어 0~5 칩 스테퍼로 만든다
+// 추천 중요도(0~5) + 절대 제외/소프트 비선호. 앱에는 슬라이더 라이브러리가 없어 0~5 칩 스테퍼로 만든다
 // (새 네이티브 의존성을 들이지 않는다 — 리포 관례).
 
 const WEIGHT_FIELDS: ReadonlyArray<{ key: keyof MealWeightsType; label: string; desc: string }> = [
@@ -40,6 +42,7 @@ export const MealPreferenceView = () => {
 
   const [weights, setWeights] = useState<MealWeightsType | null>(null);
   const [excluded, setExcluded] = useState('');
+  const [disliked, setDisliked] = useState('');
   const [liked, setLiked] = useState('');
   const [slots, setSlots] = useState<MealSlotType[]>([]);
   const [mealTypes, setMealTypes] = useState<MealTypeType[]>([]);
@@ -51,12 +54,23 @@ export const MealPreferenceView = () => {
     if (!pref.data || dirty) return;
     setWeights(pref.data.weights);
     setExcluded(pref.data.excludedFoods.join(', '));
+    setDisliked(pref.data.dislikedFoods.join(', '));
     setLiked(pref.data.likedFoods.join(', '));
     setSlots(pref.data.slots);
     setMealTypes(pref.data.mealTypes);
   }, [pref.data, dirty]);
 
-  if (pref.isLoading || !weights) return <StateBlock kind="loading" />;
+  if (pref.isLoading) return <StateBlock kind="loading" />;
+  if (pref.isError) {
+    return (
+      <StateBlock
+        kind="error"
+        message="식단 설정을 불러오지 못했어요."
+        onRetry={() => void pref.refetch()}
+      />
+    );
+  }
+  if (!weights) return <StateBlock kind="loading" />;
 
   const parseList = (raw: string): string[] =>
     raw
@@ -71,8 +85,9 @@ export const MealPreferenceView = () => {
       {
         weights,
         excludedFoods: parseList(excluded),
+        dislikedFoods: parseList(disliked),
         likedFoods: parseList(liked),
-        slots: slots.length > 0 ? slots : undefined,
+        slots,
         mealTypes,
         onboarded: true,
       },
@@ -85,6 +100,12 @@ export const MealPreferenceView = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {pref.data && !pref.data.onboarded ? (
+        <Note tone="muted">
+          첫 추천을 위해 좋아하는 음식, 덜 선호하는 음식, 절대 제외할 음식과 끼니를 고른 뒤 저장해 주세요.
+          기록이 적을 때도 이 설정을 먼저 반영해요.
+        </Note>
+      ) : null}
       <Card>
         <CardTitle title="무엇을 중요하게 볼까요" sub="추천이 이 비중대로 골라요. 0이면 아예 보지 않아요." />
         <ChipRow>
@@ -144,7 +165,7 @@ export const MealPreferenceView = () => {
 
       <Card>
         <CardTitle title="먹는 것" />
-        <FieldLabel>못 먹는 / 싫어하는 음식</FieldLabel>
+        <FieldLabel>절대 제외 (알레르기·못 먹는 음식)</FieldLabel>
         <TextInput
           value={excluded}
           onChangeText={(v) => {
@@ -156,8 +177,21 @@ export const MealPreferenceView = () => {
           style={styles.input}
         />
         <Text style={styles.hint}>
-          이름은 물론 재료까지 봐요 — '오이'를 적으면 오이냉국뿐 아니라 오이가 들어간 김밥도 빠져요.
+          이름과 알려진 재료가 맞으면 완전히 빼요. 재료 정보가 없는 카탈로그 음식은 막지 못할 수 있어요.
         </Text>
+
+        <FieldLabel>덜 선호하는 음식</FieldLabel>
+        <TextInput
+          value={disliked}
+          onChangeText={(v) => {
+            setDisliked(v);
+            setDirty(true);
+          }}
+          placeholder="쉼표로 구분 — 예: 고수, 내장"
+          placeholderTextColor={theme.colors.textMuted}
+          style={styles.input}
+        />
+        <Text style={styles.hint}>후보에서 지우지는 않고 점수를 크게 낮춰 가능하면 피해요. 대안이 부족하면 나올 수 있어요.</Text>
 
         <FieldLabel>좋아하는 음식</FieldLabel>
         <TextInput
@@ -194,13 +228,22 @@ export const MealPreferenceView = () => {
               label={MEAL_SLOT_LABEL[s]}
               selected={slots.includes(s)}
               onPress={() => {
+                if (slots.includes(s) && slots.length === 1) {
+                  setError('기록·추천할 끼니는 하나 이상 남겨 주세요.');
+                  return;
+                }
                 setSlots(slots.includes(s) ? slots.filter((x) => x !== s) : [...slots, s]);
+                setError(null);
                 setDirty(true);
               }}
             />
           ))}
         </ChipRow>
       </Card>
+
+      <MealReminderSettingsCard slots={slots} />
+
+      <MealDataManagementCard />
 
       {error ? <Note tone="warn">{error}</Note> : null}
 

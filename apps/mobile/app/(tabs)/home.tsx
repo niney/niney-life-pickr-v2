@@ -14,6 +14,7 @@ import { useRestaurantRanking, useTheme } from '@repo/shared';
 import type { RestaurantRankingItemType } from '@repo/api-contract';
 import { NotchFade } from '~/components/NotchFade';
 import { MyLocationCard } from '~/components/home/MyLocationCard';
+import { TodayMealCard } from '~/components/home/TodayMealCard';
 import { RankingHeader } from '~/components/RankingHeader';
 import { RankingRow } from '~/components/RankingRow';
 import { useTabBarHeight } from '~/hooks/useTabBarHeight';
@@ -132,6 +133,7 @@ export default function HomeScreen() {
     () => (
       <View style={styles.headerStack}>
         <MyLocationCard />
+        <TodayMealCard />
         <RankingHeader
           sort={sort}
           excludeNeutral={excludeNeutral}

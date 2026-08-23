@@ -1,9 +1,9 @@
 # niney-life-pickr-v2 Knowledge Base
 
-Last compiled: 2026-08-17
-Total topics: 26 | Total concepts: 17 | Mode: codebase
+Last compiled: 2026-08-23
+Total topics: 28 | Total concepts: 17 | Mode: codebase
 
-선택을 대신 골라주는 서비스 — pnpm + Turborepo 모노레포(Fastify API + Vite 웹 + Expo 앱)의 컴파일된 위키. 처음 본다면 [project-overview](topics/project-overview.md) → 관심 토픽 순서로 읽는 것을 권장. 공개 페이지(`/`, `/restaurants`, `/r/:placeId` 공유)·정산하기·어드민 운영 도구가 한 SPA 안에 분리되어 있고, 18차 라운드에 **리뷰 RAG 문맥검색·군집화·텔레그램 봇 자동 발굴·범용 작업 로그**가 신규로 들어왔다. 이어 19차에 **서울시 버스 조회**가, 20차에 **수도권 전철 조회**와 **버스↔지하철 통합 레이어**(탭·지도 연속성·통합 즐겨찾기·겸표시·크로스 검색)가 공개 기능으로 합류했다(대중교통은 현재 웹 전용).
+선택을 대신 골라주는 서비스 — pnpm + Turborepo 모노레포(Fastify API + Vite 웹 + Expo 앱)의 컴파일된 위키. 처음 본다면 [project-overview](topics/project-overview.md) → 관심 토픽 순서로 읽는 것을 권장. 공개 페이지(`/`, `/restaurants`, `/r/:placeId` 공유)·정산하기·어드민 운영 도구가 한 SPA 안에 분리되어 있고, 18차 라운드에 **리뷰 RAG 문맥검색·군집화·텔레그램 봇 자동 발굴·범용 작업 로그**가 신규로 들어왔다. 이어 19차에 **서울시 버스 조회**가, 20차에 **수도권 전철 조회**와 **버스↔지하철 통합 레이어**(탭·지도 연속성·통합 즐겨찾기·겸표시·크로스 검색)가 공개 기능으로 합류했다(대중교통은 현재 웹 전용). 23차에는 **음식 카탈로그·적재/식당 역검색**과 **개인 식단 기록·사진 인식·추천·통계·데이터 관리**가 합류했다.
 
 > **용어**: 이 위키는 **웹**(`apps/web`) / **앱**(`apps/mobile`) / **모바일**(=웹의 작은 화면)을 구분해서 쓴다. 슬러그·디렉터리·스크립트 식별자는 `mobile`/`web` 그대로. 자세한 규칙은 [schema.md Terminology](schema.md#terminology--웹--앱--모바일).
 
@@ -14,6 +14,8 @@ Total topics: 26 | Total concepts: 17 | Mode: codebase
 | [project-overview](topics/project-overview.md) | monorepo, life-pickr, niney, root, turbo, pnpm-workspace, 공개-어드민-분리, settlement, 정산, share-token, ssr-lite, review-search, rag, review-clustering, random-crawl, telegram-bot, operation-log, tabling, db-config-env-fallback, llm-telemetry, region-stats, dark-mode, schedule, taxonomy-v3, deploy-sh, ninelife-kr | 55 | 2026-08-17 | active |
 | [friendly](topics/friendly.md) | fastify-api, backend, prisma-server, jwt-auth, restaurant-module, media-module, panorama-cache, restaurant-preview, sitemap, region-derive, smart-pick, canonical-members, settlement-modules, well-known, schedule-module, review-search-module, review-clustering-module, random-crawl-module, telegram-module, logs-module, operation-log, plugins-singleton, cors-reflect, tabling-fusion | 126 | 2026-08-17 | active |
 | [settlement](topics/settlement.md) | 정산, 정산하기, settlement, receipt-split, 영수증 추출, 단골, contact, share token, rounds, N차, settlement-draft, multi-receipt, group-split, 세부분배, 그룹카드, drink-kinds, 술종류, 소주, 맥주, 잔수, glasses, GLASSES, EQUAL, RoundGroupSplitEditor, RoundGroupSplitNote, suggestItemGroups, matchDrinkKind, EXTRACTION_VERSION, leftover-multi, share-preview, og-ssr-lite, settlement-card | 109 | 2026-08-17 | active |
+| [meal](topics/meal.md) | 식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recognition, 식단인식, meal-recommendation, 식단추천, meal-preference, 식단통계, 식단알림, meal-data-export, 식단데이터삭제, MealMutationBarrier | 46 | 2026-08-23 | active |
+| [food](topics/food.md) | 음식, 음식카탈로그, food-catalog, FoodItem, food-import, 음식적재, food-classify, 음식분류, nutrition, 영양정보, reverse-restaurant, 파는곳, recognition-quality, 인식품질 | 28 | 2026-08-23 | active |
 | [crawl](topics/crawl.md) | naver-place, scraping, playwright, sse-jobs, visitor-videos, naver-search, stealth, jitter, catchtable, diningcode, diningcode-bulk-save, tabling, 테이블링, tabling-search, tabling-shop, tabling-sitemap, tabling-place, tabling-bulk-save, naver-review-stats, visitor-review-stats, sse-seq, allocSeq, place-partner-promotion, job-log | 30 | 2026-08-17 | active |
 | [ai](topics/ai.md) | llm, ollama, ollama-cloud, llm-provider, ai-keys, purpose, chat, image, log-analysis, EXTRACTION_VERSION, models-preview, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, llm-telemetry, telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, adapter-cache, keySource, defaultModelSource, db-config-env-fallback, aiModel, recommendModelForPurpose, isVisionModel | 38 | 2026-08-17 | active |
 | [review-search](topics/review-search.md) | rag, 리뷰-문맥검색, retrieval, embedding, bge-m3, BM25, RRF, hybrid-search, rerank, hallucination-guardrail, enrich, ENRICH_VERSION, Ask-탭, AskTab, 공개-QA, publicAsk, reviewAskStore, ReviewSummary-embeddingJson, HyDE, faithfulness, citations, confidence, verification, span-grounding | 18 | 2026-06-25 | active |
@@ -42,16 +44,16 @@ Total topics: 26 | Total concepts: 17 | Mode: codebase
 
 | Concept | Connects | Last Updated |
 |---------|----------|-------------|
-| [zod-ssot-buildless](concepts/zod-ssot-buildless.md) | api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus | 2026-07-06 |
+| [zod-ssot-buildless](concepts/zod-ssot-buildless.md) | api-contract, friendly, shared, web, mobile, utils, ai, menu-grouping, analytics, map, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal | 2026-08-23 |
 | [public-admin-route-split](concepts/public-admin-route-split.md) | friendly, api-contract, shared, web, map, settlement, review-search, review-clustering, logs | 2026-06-25 |
-| [sse-token-auth](concepts/sse-token-auth.md) | friendly, crawl, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai | 2026-06-25 |
-| [platform-ui-split](concepts/platform-ui-split.md) | shared, web, mobile, utils, map, settlement, review-search, review-clustering, bus, subway | 2026-08-17 |
+| [sse-token-auth](concepts/sse-token-auth.md) | friendly, crawl, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, food | 2026-08-23 |
+| [platform-ui-split](concepts/platform-ui-split.md) | shared, web, mobile, utils, map, settlement, review-search, review-clustering, bus, subway, meal | 2026-08-23 |
 | [workspace-package-resolution](concepts/workspace-package-resolution.md) | api-contract, friendly, shared, web, review-search, review-clustering | 2026-06-25 |
 | [stream-driven-cache-merge](concepts/stream-driven-cache-merge.md) | crawl, friendly, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, logs | 2026-06-25 |
-| [in-memory-singleton-gates](concepts/in-memory-singleton-gates.md) | ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus | 2026-07-06 |
-| [versioned-llm-prompts](concepts/versioned-llm-prompts.md) | ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs | 2026-06-25 |
+| [in-memory-singleton-gates](concepts/in-memory-singleton-gates.md) | ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal | 2026-08-23 |
+| [versioned-llm-prompts](concepts/versioned-llm-prompts.md) | ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal | 2026-08-23 |
 | [db-config-env-fallback](concepts/db-config-env-fallback.md) | ai, map, telegram, friendly | 2026-06-25 |
-| [operation-log-instrumentation](concepts/operation-log-instrumentation.md) | logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai | 2026-06-25 |
+| [operation-log-instrumentation](concepts/operation-log-instrumentation.md) | logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai, food, meal | 2026-08-23 |
 | [canonical-corpus-fanout](concepts/canonical-corpus-fanout.md) | canonical, review-search, review-clustering, friendly | 2026-06-25 |
 | [cross-tab-async-job-toast](concepts/cross-tab-async-job-toast.md) | shared, web, mobile, review-search | 2026-06-25 |
 | [ssr-lite-head-injection](concepts/ssr-lite-head-injection.md) | friendly, settlement, web | 2026-06-25 |
@@ -69,6 +71,8 @@ Total topics: 26 | Total concepts: 17 | Mode: codebase
 - **작업 로그 / 실패 원인 분석** (`/admin/logs`) → [logs](topics/logs.md) (operation-log + LLM 자동분석 + 보존) → 횡단 패턴은 [operation-log-instrumentation](concepts/operation-log-instrumentation.md)
 - **LLM 사용량 / 동시성 한도 / 키 관리** → [ai](topics/ai.md) (계정 단위 2단 게이트 + 텔레메트리 SSE + 용도별 모델). 외부 설정 폴백 패턴은 [db-config-env-fallback](concepts/db-config-env-fallback.md)
 - **정산하기** (N차 + 세부 분배 잔수 + 공유) → [settlement](topics/settlement.md) (도메인 전체 — rounds·extraction·group-split·share·draft). 앱 풀구현은 [mobile](topics/mobile.md)
+- **식단 기록 / 사진 인식 / 추천 / 통계 / 내보내기·전체 삭제** → [meal](topics/meal.md) → 마스터 데이터·파는 곳 찾기는 [food](topics/food.md). 입력은 앱, 웹은 조회·추천·설정 중심
+- **음식 카탈로그 적재·분류 / 인식 품질 운영** (`/admin/food`) → [food](topics/food.md) (월간 다중 source import + SSE + k=2 품질 집계)
 - **공유 링크 미리보기 / SEO** (`/share/settlements/:token`, `/r/:placeId`, sitemap) → [ssr-lite-head-injection](concepts/ssr-lite-head-injection.md) → [friendly](topics/friendly.md) share-preview/restaurant-preview
 - **백엔드 작업** → [friendly](topics/friendly.md), 크롤이면 [crawl](topics/crawl.md)(네이버/DC/캐치테이블/**테이블링**), LLM 이면 [ai](topics/ai.md), 지도 키면 [map](topics/map.md)
 - **버스 정류장/도착/노선/실시간 차량** (`/bus`, 공개·비로그인) → [bus](topics/bus.md)(`ws.bus.go.kr` friendly 프록시 — 검색·도착·위치·노선·즐겨찾기, **웹 전용**) → [shared](topics/shared.md) `useBus` 폴링 + [utils](topics/utils.md) `busMarker`/`routePath`
@@ -90,6 +94,7 @@ Total topics: 26 | Total concepts: 17 | Mode: codebase
 
 ## Recent Changes
 
+- **2026-08-23 (23rd compile)**: 신규 토픽 2개 — [meal](topics/meal.md)(개인 식단 기록·사진 인식/교정·선호 기반 추천·달력/통계/주간 insight·앱 로컬 알림·JSON export/전체 삭제; 사용자별 공통 FIFO write barrier가 기록/사진/선호/추천/삭제 경쟁을 직렬화하고 DB commit 뒤 strict 사진 폴더 삭제 실패는 재호출로 복구; 요청 token 401 guard + principal 전환 QueryClient cancel/clear로 계정 간 private cache 차단) + [food](topics/food.md)(6출처 음식 카탈로그·월간 import/SSE·버전 LLM 분류·영양 추정·exact 근거 음식→식당 역검색·k=2 인식 품질). 앱은 촬영/편집/재기록, 웹은 조회/분석/추천/설정, 어드민은 catalog/import/quality. 신규 컨셉 없음; 기존 `zod-ssot-buildless`·`sse-token-auth`·`platform-ui-split`·`in-memory-singleton-gates`·`versioned-llm-prompts`·`operation-log-instrumentation` 연결 확장.
 - **2026-08-17 (22nd compile)**: 승격 리팩터 2건의 **소비처 쪽** 마저 흡수 — [subway](topics/subway.md)/[bus](topics/bus.md)/[web](topics/web.md)/[mobile](topics/mobile.md)에 congestionUtils 색-facade 화(`9206346`)·재검색 인라인→`@repo/shared` useMapResearch(`df9fcbd`, 웹 테스트 24→29건) 반영 + [shared](topics/shared.md) voteGuestStore **AsyncStorage형 비동기 복원 통합 테스트**(`fbba748`, 25→26건 — persist 주입 수복의 마지막 코드 레벨 갭, mobile "실기기 확인 미완" 서술 갱신). [platform-ui-split](concepts/platform-ui-split.md)에 "사후 승격 facade" 인스턴스 추가(+subway 연결). 신규 토픽·컨셉 0.
 - **2026-08-17 (21차 보강)**: 이월했던 5토픽 갱신([review-clustering](topics/review-clustering.md) 군집 '대기' 수복 / [ai](topics/ai.md) 레이트리밋 부활 / [analytics](topics/analytics.md) 집계 캐시 / [crawl](topics/crawl.md) 정책 하드닝·narrow 통합 / [settlement](topics/settlement.md) 감사 3건 + 공유 토큰 패턴 확산) + 승격 리팩터 2건 반영(shared useMapResearch·utils subwayCongestion — 각 테스트 동반).
 - **2026-07-07 (20th compile)**: **수도권 전철(1~12차) + 대중교통 통합(13~15차) + 지도 인스턴스 풀링(D안) + DB drift 해소.** 신규 토픽 2개: [subway](topics/subway.md)(역 검색·도착·열차 위치·시간표·혼잡·경로·즐겨찾기), [transit](topics/transit.md)(탭·지도 연속성·즐겨찾기 홈·겸표시·크로스 검색 — "Enter=크로스 포함 확정 검색" 문법). 신규 컨셉 2개: [quota-proportional-loading](concepts/quota-proportional-loading.md), [dual-mount-shared-state](concepts/dual-mount-shared-state.md). 갱신 토픽 7개(bus·map·friendly·web·utils·shared·api-contract).

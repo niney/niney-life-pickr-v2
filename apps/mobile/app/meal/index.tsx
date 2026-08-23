@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { SegmentedControl, useAuthStore, useMealEntries, useTheme, type Theme } from '@repo/shared';
+import { SegmentedControl, useAuthStore, useInfiniteMealEntries, useTheme, type Theme } from '@repo/shared';
 import { mealDateLabel, toLocalDateKey } from '@repo/utils';
 import { StateBlock } from '~/components/common/Cards';
 import { MealCalendarView } from '~/components/meal/MealCalendarView';
@@ -31,7 +31,8 @@ export default function MealScreen() {
   const isGuest = useAuthStore((s) => s.isGuest);
   const loggedIn = !!token && !isGuest;
 
-  const list = useMealEntries({ limit: 30 });
+  const list = useInfiniteMealEntries({ limit: 30 }, loggedIn);
+  const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
   const today = toLocalDateKey(new Date());
 
   return (
@@ -57,11 +58,18 @@ export default function MealScreen() {
 
           {tab === 'list' ? (
             <FlatList
-              data={list.data?.items ?? []}
+              data={items}
               keyExtractor={(e) => e.id}
               contentContainerStyle={styles.listContent}
-              refreshing={list.isFetching && !list.isLoading}
+              refreshing={list.isRefetching && !list.isFetchingNextPage}
               onRefresh={() => void list.refetch()}
+              onEndReached={() => {
+                if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage();
+              }}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                list.isFetchingNextPage ? <Text style={styles.loadingMore}>기록을 더 불러오는 중…</Text> : null
+              }
               ListEmptyComponent={
                 list.isLoading ? (
                   <StateBlock kind="loading" />
@@ -72,7 +80,7 @@ export default function MealScreen() {
                 )
               }
               renderItem={({ item, index }) => {
-                const prev = (list.data?.items ?? [])[index - 1];
+                const prev = items[index - 1];
                 const showDate = !prev || prev.eatenDate !== item.eatenDate;
                 return (
                   <View style={styles.itemWrap}>
@@ -122,6 +130,7 @@ const createStyles = (theme: Theme) =>
     listContent: { padding: 16, paddingTop: 8, gap: 10, paddingBottom: 96 },
     itemWrap: { gap: 6 },
     dateHeader: { fontSize: 12, fontWeight: '600', color: theme.colors.textMuted, marginTop: 6 },
+    loadingMore: { paddingVertical: 16, textAlign: 'center', fontSize: 12, color: theme.colors.textMuted },
     fab: {
       position: 'absolute',
       right: 20,

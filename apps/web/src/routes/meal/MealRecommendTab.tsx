@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type { MealRecommendationType, MealSlotType, MealTypeType } from '@repo/api-contract';
 import {
+  useAirLocation,
   useCreateMealRecommendation,
+  useFoodRestaurants,
   useMealRecommendationContext,
   useMealRecommendationFeedback,
   useMealRecommendations,
@@ -28,24 +30,38 @@ import { cn } from '~/lib/utils';
 export const MealRecommendTab = () => {
   const now = new Date();
   const [slot, setSlot] = useState<MealSlotType>(() => guessMealSlot(new Date()));
-  const [mealType, setMealType] = useState<MealTypeType | null>(null);
+  // undefined = 사용자가 아직 고르지 않음(설정의 첫 식사 유형을 기본값으로 사용),
+  // null = 사용자가 명시적으로 "상황 무관"을 고른 상태.
+  const [mealType, setMealType] = useState<MealTypeType | null | undefined>(undefined);
   const [note, setNote] = useState('');
   const [current, setCurrent] = useState<MealRecommendationType | null>(null);
 
   const ctx = useMealRecommendationContext();
+  const airLocation = useAirLocation();
   const history = useMealRecommendations(5);
   const create = useCreateMealRecommendation();
   const feedback = useMealRecommendationFeedback();
 
   const shown = current ?? ctx.data?.latest ?? null;
+  const configuredSlots = ctx.data?.preference.slots.length
+    ? ctx.data.preference.slots
+    : MEAL_SLOTS;
+  const configuredMealTypes = ctx.data?.preference.mealTypes.length
+    ? ctx.data.preference.mealTypes
+    : MEAL_TYPES;
+  const effectiveSlot = configuredSlots.includes(slot) ? slot : configuredSlots[0]!;
+  const effectiveMealType =
+    mealType === undefined ? (ctx.data?.preference.mealTypes[0] ?? null) : mealType;
 
   const request = (force: boolean) => {
     create.mutate(
       {
         targetDate: toLocalDateKey(now),
-        targetSlot: slot,
-        mealType,
+        targetSlot: effectiveSlot,
+        mealType: effectiveMealType,
         note: note.trim() ? note.trim() : null,
+        lat: airLocation.location?.lat ?? null,
+        lng: airLocation.location?.lng ?? null,
         force,
       },
       { onSuccess: (rec) => setCurrent(rec) },
@@ -62,24 +78,29 @@ export const MealRecommendTab = () => {
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">끼니</p>
             <div className="flex flex-wrap gap-2">
-              {MEAL_SLOTS.map((s) => (
-                <Chip key={s} label={MEAL_SLOT_LABEL[s]} selected={slot === s} onClick={() => setSlot(s)} />
+              {configuredSlots.map((s) => (
+                <Chip key={s} label={MEAL_SLOT_LABEL[s]} selected={effectiveSlot === s} onClick={() => setSlot(s)} />
               ))}
             </div>
           </div>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">상황</p>
             <div className="flex flex-wrap gap-2">
-              {MEAL_TYPES.map((t) => (
+              {configuredMealTypes.map((t) => (
                 <Chip
                   key={t}
                   label={MEAL_TYPE_LABEL[t]}
-                  selected={mealType === t}
-                  onClick={() => setMealType(mealType === t ? null : t)}
+                  selected={effectiveMealType === t}
+                  onClick={() => setMealType(effectiveMealType === t ? null : t)}
                 />
               ))}
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {airLocation.location
+              ? `저장된 위치(${airLocation.location.label ?? '내 위치'})의 실시간 날씨를 추천에 반영해요.`
+              : '날씨 탭에서 내 위치를 저장하면 실시간 날씨도 추천에 반영해요.'}
+          </p>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">한 마디 (선택)</p>
             <input
@@ -115,7 +136,19 @@ export const MealRecommendTab = () => {
         </CardContent>
       </Card>
 
-      {shown ? <RecommendationCard rec={shown} onFeedback={(input) => feedback.mutate({ id: shown.id, input })} /> : null}
+      {shown ? (
+        <RecommendationCard
+          rec={shown}
+          lat={airLocation.location?.lat ?? null}
+          lng={airLocation.location?.lng ?? null}
+          onFeedback={(input) =>
+            feedback.mutate(
+              { id: shown.id, input },
+              { onSuccess: (recommendation) => setCurrent(recommendation) },
+            )
+          }
+        />
+      ) : null}
 
       {(history.data?.items.length ?? 0) > 1 ? (
         <Card>
@@ -147,10 +180,14 @@ export const MealRecommendTab = () => {
 
 const RecommendationCard = ({
   rec,
+  lat,
+  lng,
   onFeedback,
 }: {
   rec: MealRecommendationType;
-  onFeedback: (input: { rating?: number | null; pickedName?: string | null }) => void;
+  lat: number | null;
+  lng: number | null;
+  onFeedback: (input: { rating?: -1 | 1 | null; pickedName?: string | null }) => void;
 }) => (
   <Card>
     <CardHeader className="space-y-1">
@@ -205,13 +242,12 @@ const RecommendationCard = ({
               >
                 이걸로 할래요
               </Button>
-              {/* 파는 곳 찾기 — 맛집 검색으로 넘긴다(메뉴명 검색). 서버 쪽 메뉴→식당 매칭은 아직 없다. */}
-              <Button variant="ghost" size="sm" asChild>
-                <Link to={`/restaurants-v2?q=${encodeURIComponent(item.name)}`}>
-                  <Search className="mr-1 size-3.5" />
-                  파는 곳 찾기
-                </Link>
-              </Button>
+              <FoodRestaurantMatches
+                foodId={item.foodId}
+                foodName={item.name}
+                lat={lat}
+                lng={lng}
+              />
             </div>
           </div>
         ))
@@ -240,6 +276,93 @@ const RecommendationCard = ({
     </CardContent>
   </Card>
 );
+
+const FoodRestaurantMatches = ({
+  foodId,
+  foodName,
+  lat,
+  lng,
+}: {
+  foodId: string | null;
+  foodName: string;
+  lat: number | null;
+  lng: number | null;
+}) => {
+  const [open, setOpen] = useState(false);
+  const matches = useFoodRestaurants(
+    foodId ?? '',
+    {
+      ...(lat !== null && lng !== null ? { lat, lng, radiusM: 5_000 } : {}),
+      limit: 5,
+    },
+    { enabled: open && !!foodId },
+  );
+
+  if (!foodId) {
+    return (
+      <Button variant="ghost" size="sm" asChild>
+        <Link to={`/restaurants-v2?q=${encodeURIComponent(foodName)}`}>
+          <Search className="mr-1 size-3.5" />
+          이름으로 식당 검색
+        </Link>
+      </Button>
+    );
+  }
+
+  return (
+    <div className="min-w-0 flex-1">
+      <Button variant="ghost" size="sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <Search className="mr-1 size-3.5" />
+        {open ? '파는 곳 접기' : '파는 곳 보기'}
+      </Button>
+      {open ? (
+        <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-2">
+          {matches.isLoading ? (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> 식당을 찾는 중…
+            </p>
+          ) : matches.isError ? (
+            <button type="button" onClick={() => void matches.refetch()} className="text-xs text-destructive">
+              불러오지 못했어요 · 다시 시도
+            </button>
+          ) : matches.data?.items.length ? (
+            <>
+              {matches.data.items.map((restaurant) => (
+                <Link
+                  key={restaurant.placeId}
+                  to={`/restaurants-v2/${restaurant.placeId}`}
+                  className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 hover:bg-accent"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{restaurant.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[
+                        restaurant.distanceM !== null ? formatDistance(restaurant.distanceM) : null,
+                        restaurant.category,
+                        restaurant.mentionCount > 0 ? `리뷰 언급 ${restaurant.mentionCount}` : '메뉴 확인',
+                      ].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-primary">상세</span>
+                </Link>
+              ))}
+              <p className="text-[11px] leading-4 text-muted-foreground">{matches.data.notice}</p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {lat !== null && lng !== null
+                ? '반경 5km 안에서 연결된 식당을 찾지 못했어요.'
+                : '수집된 메뉴·리뷰에서 연결된 식당을 찾지 못했어요.'}
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const formatDistance = (distanceM: number): string =>
+  distanceM < 1_000 ? `${distanceM}m` : `${(distanceM / 1_000).toFixed(1)}km`;
 
 const Chip = ({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) => (
   <button

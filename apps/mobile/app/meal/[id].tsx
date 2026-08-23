@@ -15,7 +15,9 @@ import {
   FOOD_DISH_TYPE_LABEL,
   FOOD_MAIN_INGREDIENT_LABEL,
   MEAL_PORTION_LABEL,
+  guessMealSlot,
   summarizeMealNutrition,
+  toLocalDateKey,
 } from '@repo/utils';
 import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
@@ -39,6 +41,7 @@ export default function MealDetailScreen() {
   const startEdit = (entry: MealEntryType) => {
     draft.start({
       entryId: entry.id,
+      originRecommendationId: entry.originRecommendationId,
       eatenAt: entry.eatenAt,
       eatenDate: entry.eatenDate,
       slot: entry.slot,
@@ -59,10 +62,42 @@ export default function MealDetailScreen() {
         confidence: it.confidence,
         source: it.source,
         candidates: [],
+        // 저장된 기록은 이미 한 번 확인한 값이다. 장소 힌트로 재인식해도 자동 교체하지 않는다.
+        userEdited: true,
       })),
       recognition: null,
     });
     setEditing(true);
+  };
+
+  const repeatEntry = (entry: MealEntryType) => {
+    const now = new Date();
+    draft.start({
+      eatenAt: now.toISOString(),
+      eatenDate: toLocalDateKey(now),
+      slot: guessMealSlot(now),
+      mealType: entry.mealType,
+      placeId: entry.placeId,
+      placeName: entry.placeName,
+      memo: '',
+      photos: [],
+      recognition: null,
+      items: entry.items.map((item, index) => ({
+        clientId: `repeat-${now.getTime()}-${index}`,
+        name: item.name,
+        foodId: item.foodId,
+        dishType: item.dishType,
+        mainIngredient: item.mainIngredient,
+        cuisine: item.cuisine,
+        portion: item.portion,
+        isMain: item.isMain,
+        confidence: null,
+        source: item.foodId ? 'catalog' : 'manual',
+        candidates: [],
+        userEdited: true,
+      })),
+    });
+    router.push('/meal/new' as never);
   };
 
   const confirmDelete = () => {
@@ -100,6 +135,20 @@ export default function MealDetailScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <MealEntryCard entry={data} />
+
+          {data.placeId ? (
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push(`/restaurant/${data.placeId}` as never)}
+              style={[styles.placeLink, { borderColor: theme.colors.border }]}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.placeLabel}>기록한 식당</Text>
+                <Text style={styles.placeName} numberOfLines={1}>{data.placeName ?? '식당 상세'}</Text>
+              </View>
+              <Text style={{ color: theme.colors.primary, fontSize: 13 }}>상세 보기</Text>
+            </Pressable>
+          ) : null}
 
           {data.photos.length > 0 ? (
             <Card>
@@ -155,6 +204,20 @@ export default function MealDetailScreen() {
             <Note tone="muted">사진 인식: {data.recognition.model}</Note>
           ) : null}
 
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="이 식단을 새 기록으로 복사"
+            onPress={() => repeatEntry(data)}
+            style={[styles.repeatBtn, { backgroundColor: theme.colors.primary }]}
+          >
+            <Text style={{ color: theme.colors.primaryText, fontSize: 15, fontWeight: '700' }}>
+              이 식단 다시 기록
+            </Text>
+            <Text style={{ color: theme.colors.primaryText, fontSize: 10, opacity: 0.8 }}>
+              음식·양·장소만 복사하고 사진과 메모는 제외해요
+            </Text>
+          </Pressable>
+
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
@@ -191,6 +254,17 @@ const createStyles = (theme: Theme) =>
     nutritionMain: { fontSize: 13, color: theme.colors.text, fontWeight: '600' },
     nutritionNote: { marginTop: 3, fontSize: 11, color: theme.colors.textMuted },
     actions: { flexDirection: 'row', gap: 10 },
+    repeatBtn: { borderRadius: 10, paddingVertical: 11, alignItems: 'center', gap: 2 },
+    placeLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: 10,
+      padding: 12,
+    },
+    placeLabel: { color: theme.colors.textMuted, fontSize: 10 },
+    placeName: { color: theme.colors.text, fontSize: 14, fontWeight: '600', marginTop: 2 },
     actionBtn: {
       flex: 1,
       borderWidth: StyleSheet.hairlineWidth,

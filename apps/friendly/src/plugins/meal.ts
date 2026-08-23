@@ -22,13 +22,17 @@ export default fp(
     });
     app.decorate('mealPhotos', mealPhotos);
 
-    // 부팅 직후 1회 + 매일 — 재시작이 잦아도 중복 정리는 무해하다(이미 지운 파일은 skip).
-    void mealPhotos.sweepOrphans().catch((e: unknown) => {
-      app.log.warn({ err: e }, '[meal] orphan sweep failed');
+    // 부팅 직후 1회 + 매일 — DB 고아 행뿐 아니라 DB 기록 전에 종료돼 파일만 남은 경우도 정리한다.
+    const runPhotoGc = async (): Promise<void> => {
+      await mealPhotos.sweepOrphans();
+      await mealPhotos.sweepUntrackedFiles();
+    };
+    void runPhotoGc().catch((e: unknown) => {
+      app.log.warn({ err: e }, '[meal] photo gc failed');
     });
     scheduleRegistry.setCron(GC_JOB_TYPE, GC_CRON, 'Asia/Seoul', () => {
-      void mealPhotos.sweepOrphans().catch((e: unknown) => {
-        app.log.warn({ err: e }, '[meal] orphan sweep failed');
+      void runPhotoGc().catch((e: unknown) => {
+        app.log.warn({ err: e }, '[meal] photo gc failed');
       });
     });
 

@@ -22,7 +22,15 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
   const [month, setMonth] = useState(() => toLocalMonthKey(new Date()));
   const [selected, setSelected] = useState<string | null>(null);
   const { data, isLoading, error, refetch, isFetching } = useMealCalendar(month);
-  const dayEntries = useMealEntries(selected ? { from: selected, to: selected, limit: 20 } : { limit: 0 });
+  const dayEntries = useMealEntries(
+    selected ? { from: selected, to: selected, limit: 20 } : {},
+    selected !== null,
+  );
+
+  const shift = (delta: number) => {
+    setMonth(shiftMonth(month, delta));
+    setSelected(null);
+  };
 
   // 월 그리드 — 1일의 요일만큼 앞을 비우고 말일까지 채운다.
   const cells = useMemo(() => {
@@ -45,9 +53,9 @@ export const MealCalendarView = ({ onOpenEntry }: { onOpenEntry: (id: string) =>
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Card>
         <View style={styles.monthRow}>
-          <Chip label="◀" onPress={() => setMonth(shiftMonth(month, -1))} />
+          <Chip label="◀" onPress={() => shift(-1)} />
           <Text style={styles.monthText}>{month.replace('-', '년 ')}월</Text>
-          <Chip label="▶" onPress={() => setMonth(shiftMonth(month, 1))} />
+          <Chip label="▶" onPress={() => shift(1)} />
         </View>
 
         {isLoading ? (

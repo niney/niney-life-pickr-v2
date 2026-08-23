@@ -41,6 +41,7 @@ import {
 import { Card, CardTitle, Note } from '~/components/common/Cards';
 import { MealItemRow } from './MealItemRow';
 import { MealPhotoThumb } from './MealPhotoThumb';
+import { RestaurantPickerSheet } from '~/components/settlement/RestaurantPickerSheet';
 import { Chip, ChipRow, FieldLabel } from './mealUi';
 
 // 식단 입력 — 사진 → 인식 → 편집 → 저장. 입력은 앱에서만 하고(계획 결정) 진행 중 상태는
@@ -87,6 +88,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
+  const [placePickerOpen, setPlacePickerOpen] = useState(false);
 
   // 새 기록이면 지금 시각으로 draft 를 연다. 수정이면 화면(부모)이 미리 draft 를 채워 둔다.
   useEffect(() => {
@@ -156,6 +158,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   // 장당 1요청 순차 업로드(서버 multipart 한도 files:1) — 진행률을 보여 준다.
   const uploadAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
     const list = assets.slice(0, MAX_PHOTOS - draft.photos.length);
+    const existingTokens = draft.photos.map((photo) => photo.token);
     setUploading({ done: 0, total: list.length });
     const tokens: string[] = [];
     try {
@@ -177,7 +180,11 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
         draft.setField('eatenDate', toLocalDateKey(exifTime));
         draft.setField('slot', guessMealSlot(exifTime));
       }
-      if (tokens.length > 0) await runRecognize(tokens);
+      // 새 사진만 따로 인식하면 이전 결과 뒤에 같은 음식이 계속 붙을 수 있다. 현재 사진 전체를
+      // 다시 보고, 사용자가 손보지 않은 자동 인식 항목만 교체한다.
+      if (tokens.length > 0) {
+        await runRecognize([...existingTokens, ...tokens], 'replace-recognized');
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '사진 업로드에 실패했어요.');
     } finally {
@@ -185,7 +192,10 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
     }
   };
 
-  const runRecognize = async (tokens?: string[]) => {
+  const runRecognize = async (
+    tokens?: string[],
+    mode: 'append' | 'replace-recognized' = 'replace-recognized',
+  ) => {
     const photoTokens = tokens ?? draft.photos.map((p) => p.token);
     if (photoTokens.length === 0) return;
     setError(null);
@@ -196,7 +206,11 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
         placeId: draft.placeId,
         slot: draft.slot,
       });
-      draft.applyRecognition(res.dishes, { model: res.model, version: res.promptVersion });
+      draft.applyRecognition(
+        res.dishes,
+        { model: res.model, version: res.promptVersion },
+        { mode },
+      );
       setNotice(res.warning ?? (res.dishes.length > 0 ? `${res.dishes.length}개 음식을 찾았어요. 확인해 주세요.` : null));
     } catch (e) {
       // 인식 실패는 막다른 길이 아니다 — 손으로 적으면 된다.
@@ -242,9 +256,12 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   };
 
   const items = draft.items.filter((it) => it.name.trim().length > 0);
-  const canSave = items.length > 0 && !create.isPending && !update.isPending;
+  const busy = uploading !== null || recognize.isPending;
+  const actionBusy = busy || create.isPending || update.isPending;
+  const canSave = items.length > 0 && !actionBusy;
 
   const save = async () => {
+    if (actionBusy) return;
     setError(null);
     if (items.length === 0) {
       setError('음식을 하나 이상 적어 주세요.');
@@ -258,7 +275,6 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
       placeId: draft.placeId,
       placeName: draft.placeName,
       memo: draft.memo.trim() ? draft.memo.trim() : null,
-      source: draft.recognition ? ('photo' as const) : ('manual' as const),
       items: items.map(draftItemToInput),
       photoTokens: draft.photos.map((p) => p.token),
     };
@@ -266,7 +282,16 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
       if (entryId) {
         await update.mutateAsync({ id: entryId, input: payload });
       } else {
-        await create.mutateAsync({ ...payload, recognition: draft.recognition });
+        await create.mutateAsync({
+          ...payload,
+          source: draft.originRecommendationId
+            ? 'recommendation'
+            : draft.recognition
+              ? 'photo'
+              : 'manual',
+          originRecommendationId: draft.originRecommendationId,
+          recognition: draft.recognition,
+        });
       }
       draft.clear();
       router.back();
@@ -274,8 +299,6 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
       setError(e instanceof ApiError ? e.message : '저장에 실패했어요.');
     }
   };
-
-  const busy = uploading !== null || recognize.isPending;
 
   return (
     <KeyboardAvoidingView
@@ -297,7 +320,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
                 key={p.token}
                 token={p.token}
                 localUri={p.localUri}
-                onRemove={() => draft.removePhoto(p.token)}
+                onRemove={busy ? undefined : () => draft.removePhoto(p.token)}
               />
             ))}
             {draft.photos.length < MAX_PHOTOS ? (
@@ -325,7 +348,11 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
               <Text style={styles.busyText}>음식을 찾는 중…</Text>
             </View>
           ) : draft.photos.length > 0 ? (
-            <Pressable accessibilityRole="button" onPress={() => void runRecognize()} style={styles.linkBtn}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void runRecognize(undefined, 'replace-recognized')}
+              style={styles.linkBtn}
+            >
               <Text style={{ color: theme.colors.primary, fontSize: 13 }}>다시 인식하기</Text>
             </Pressable>
           ) : null}
@@ -426,7 +453,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
             ))}
           </ChipRow>
 
-          <FieldLabel>어디서</FieldLabel>
+          <FieldLabel>식사 방식</FieldLabel>
           <ChipRow>
             {MEAL_TYPES.map((t: MealType) => (
               <Chip
@@ -437,6 +464,40 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
               />
             ))}
           </ChipRow>
+
+          <FieldLabel>식당 / 장소 (선택)</FieldLabel>
+          <View style={styles.placeRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={draft.placeName ? `선택한 식당 ${draft.placeName} 변경` : '식당 선택'}
+              onPress={() => setPlacePickerOpen(true)}
+              disabled={actionBusy}
+              style={[
+                styles.placeButton,
+                { borderColor: theme.colors.border, opacity: actionBusy ? 0.5 : 1 },
+              ]}
+            >
+              <Text
+                style={{ color: draft.placeName ? theme.colors.text : theme.colors.textMuted, fontSize: 14 }}
+                numberOfLines={1}
+              >
+                {draft.placeName ?? '식당 검색해서 선택'}
+              </Text>
+            </Pressable>
+            {draft.placeId ? (
+              <Chip
+                label="지우기"
+                disabled={actionBusy}
+                onPress={() => {
+                  draft.setField('placeId', null);
+                  draft.setField('placeName', null);
+                }}
+              />
+            ) : null}
+          </View>
+          {draft.placeId && draft.photos.length > 0 ? (
+            <Text style={styles.placeHint}>다시 인식하면 이 식당의 등록 메뉴를 힌트로 사용해요.</Text>
+          ) : null}
 
           <FieldLabel>메모</FieldLabel>
           <TextInput
@@ -459,7 +520,11 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
             draft.clear();
             router.back();
           }}
-          style={[styles.footerBtn, { borderColor: theme.colors.border }]}
+          disabled={actionBusy}
+          style={[
+            styles.footerBtn,
+            { borderColor: theme.colors.border, opacity: actionBusy ? 0.5 : 1 },
+          ]}
         >
           <Text style={{ color: theme.colors.text, fontSize: 15 }}>취소</Text>
         </Pressable>
@@ -477,6 +542,16 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
           </Text>
         </Pressable>
       </View>
+
+      <RestaurantPickerSheet
+        open={placePickerOpen}
+        onClose={() => setPlacePickerOpen(false)}
+        onPick={(restaurant) => {
+          draft.setField('placeId', restaurant.placeId);
+          draft.setField('placeName', restaurant.name);
+          if (draft.mealType === null) draft.setField('mealType', 'dining_out');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -542,6 +617,16 @@ const createStyles = (theme: Theme) =>
       fontSize: 14,
       textAlignVertical: 'top',
     },
+    placeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    placeButton: {
+      flex: 1,
+      minWidth: 0,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+    },
+    placeHint: { fontSize: 11, color: theme.colors.textMuted },
     footer: {
       flexDirection: 'row',
       gap: 10,

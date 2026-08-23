@@ -25,7 +25,7 @@
 
 ## Stats
 
-Compiled: 2026-08-17 (22nd) | Topics: 26 | Concepts: 17 | Sources: ~909
+Compiled: 2026-08-23 (23rd) | Topics: 28 | Concepts: 17 | Sources: ~983
 
 ## Topic map at a glance
 
@@ -39,13 +39,15 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── canonical    (출처 가로지르는 같은 가게 묶기 — 별도 토픽)
 │   ├── auto-discover (어드민 자동 발견 — AI 키워드 8개 + 그룹 직렬 크롤 — 별도 토픽)
 │   ├── settlement   (정산 N차 + draft 동기화 + 분할 영수증 + 공유 OG SSR-lite·정산표 PNG 서버 렌더 — 별도 토픽)
+│   ├── food         (음식 카탈로그 — 공공데이터 적재·LLM 분류·영양·식당 역검색·인식 품질 — 별도 토픽)
+│   ├── meal         (개인 식단 — 기록·사진 인식·추천·선호·통계·알림·export/delete — 별도 토픽)
 │   └── bus          (서울시 버스 API 프록시 — 정류장 검색/주변 + 실시간 도착 + 노선 + 실시간 차량 위치·따라가기 + 즐겨찾기, **웹 전용** — 별도 토픽)
 ├── map              (vworld OpenLayers + WMTS, 카테고리 라인 아이콘 8종, 모바일 WebView)
-├── web              (Vite + React 19, 공개 + 어드민 + 정산 N차 wizard + Tailwind v4 dark)
-├── mobile           (Expo SDK 54 + RN 0.81 + React 19, 맛집 탭 + 정산 풀 구현 + Universal/App Links)
+├── web              (Vite + React 19, 공개 + 어드민 + 정산 N차 wizard + 식단 조회/추천/설정 + Tailwind v4 dark)
+├── mobile           (Expo SDK 54 + RN 0.81 + React 19, 맛집·정산 + 식단 촬영/기록/알림 + Universal/App Links)
 └── packages/
-    ├── api-contract  (Zod SSOT, 권한 페어 스키마, settlement.calculator FE/BE 공유 + 멀티라운드)
-    ├── shared        (FE 공통, settlementDraftStore + storage adapter 주입(web sessionStorage / mobile AsyncStorage), useSettlementDraft 5s debounce)
+    ├── api-contract  (Zod SSOT, 권한 페어 + food/meal 스키마, settlement.calculator FE/BE 공유 + 멀티라운드)
+    ├── shared        (FE 공통 API/hooks/store, settlementDraftStore·mealDraftStore storage adapter 주입)
     ├── utils         (순수 유틸, restaurantCategory + formatWonPrice)
     └── config        (tsconfig + ESLint base — 모노레포 lint SSOT, 4 워크스페이스가 flat config 로 확장)
 ```

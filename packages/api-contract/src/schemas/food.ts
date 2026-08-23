@@ -145,6 +145,61 @@ export const FoodSearchResult = z.object({
 });
 export type FoodSearchResultType = z.infer<typeof FoodSearchResult>;
 
+// ── 사용자: 음식 → 수집된 메뉴·리뷰 식당 역검색 ──
+// 좌표는 둘 다 보내거나 둘 다 생략해야 한다. 좌표가 있으면 radiusM 안의
+// canonical 식당만 거리순으로, 없으면 수집 근거·평점순으로 돌려준다.
+export const FoodRestaurantsQuery = z
+  .object({
+    lat: z.coerce.number().finite().min(-90).max(90).optional(),
+    lng: z.coerce.number().finite().min(-180).max(180).optional(),
+    radiusM: z.coerce.number().int().min(100).max(50_000).default(5_000),
+    limit: z.coerce.number().int().min(1).max(30).default(10),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.lat === undefined) !== (value.lng === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'lat과 lng는 함께 보내야 합니다',
+        path: value.lat === undefined ? ['lat'] : ['lng'],
+      });
+    }
+  });
+export type FoodRestaurantsQueryType = z.infer<typeof FoodRestaurantsQuery>;
+
+// menu_catalog = 수집된 원본 메뉴, review_mentions = 리뷰에서 추출·정규화한
+// 메뉴 언급. 둘 모두 실시간 판매 여부를 의미하지 않는다.
+export const FoodRestaurantEvidence = z.enum(['menu_catalog', 'review_mentions']);
+export type FoodRestaurantEvidenceType = z.infer<typeof FoodRestaurantEvidence>;
+
+export const FoodRestaurant = z.object({
+  placeId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  address: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  rating: z.number().nullable(),
+  reviewCount: z.number().int().nullable(),
+  distanceM: z.number().int().nonnegative().nullable(),
+  evidence: z.array(FoodRestaurantEvidence).min(1),
+  mentionCount: z.number().int().nonnegative(),
+  positiveRatio: z.number().min(0).max(1).nullable(),
+  matchedMenus: z.array(z.string()),
+});
+export type FoodRestaurantType = z.infer<typeof FoodRestaurant>;
+
+export const FOOD_RESTAURANT_DATA_NOTICE =
+  '수집된 메뉴·리뷰에서 확인된 연결이며, 현재 판매 여부를 보장하지 않습니다.' as const;
+
+export const FoodRestaurantsResult = z.object({
+  foodId: z.string(),
+  foodName: z.string(),
+  matchedGlobalKeys: z.array(z.string()),
+  notice: z.literal(FOOD_RESTAURANT_DATA_NOTICE),
+  items: z.array(FoodRestaurant),
+});
+export type FoodRestaurantsResultType = z.infer<typeof FoodRestaurantsResult>;
+
 // ── 어드민: 카탈로그 목록/편집/통계 ───────────────────────────────────────────
 const boolParam = z
   .enum(['1', '0', 'true', 'false'])
@@ -200,6 +255,53 @@ export const FoodAdminStats = z.object({
 });
 export type FoodAdminStatsType = z.infer<typeof FoodAdminStats>;
 
+// ── 어드민: 식단 사진 인식 교정 품질 ──
+// 개별 식단이 아닌 운영 집계만 내린다. 음식명은 오탐 개선에 필요하지만
+// 민감할 수 있으므로 top 항목은 서버에서 서로 다른 사용자 2명 이상이 기여한 집계만 노출한다.
+export const FoodRecognitionQualityQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+export type FoodRecognitionQualityQueryType = z.infer<typeof FoodRecognitionQualityQuery>;
+
+const RecognitionQualityCount = z.number().int().nonnegative();
+
+export const FoodRecognitionQualityResult = z.object({
+  days: z.number().int().min(1).max(365),
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+  // recognitionJson 이 있는 전체 기록. 파싱 불가·현재 프롬프트 버전이 아닌 기록은 invalid.
+  recognitionEntryCount: RecognitionQualityCount,
+  invalidRecognitionCount: RecognitionQualityCount,
+  originalDishCount: RecognitionQualityCount,
+  confirmedCount: RecognitionQualityCount,
+  correctedCount: RecognitionQualityCount,
+  deletedCount: RecognitionQualityCount,
+  manuallyAddedCount: RecognitionQualityCount,
+  // (corrected + deleted) / originalDishCount. 원본이 없으면 0.
+  correctionRate: z.number().min(0).max(1),
+  // 최종 MealItem 중 카탈로그 foodId 를 찾지 못한 항목.
+  unmatchedFinalItemCount: RecognitionQualityCount,
+  // distinct-user k-anonymity(k=2) 적용 완료. 유저·메모·사진·개별 기록 id 는 계약에 없다.
+  topCorrections: z
+    .array(
+      z.object({
+        originalName: z.string().min(1).max(120),
+        finalName: z.string().min(1).max(120),
+        count: z.number().int().min(2),
+      }),
+    )
+    .max(20),
+  topUnmatched: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(120),
+        count: z.number().int().min(2),
+      }),
+    )
+    .max(20),
+});
+export type FoodRecognitionQualityResultType = z.infer<typeof FoodRecognitionQualityResult>;
+
 // ── 적재 잡(import) — random-crawl 과 같은 "설정 + 지금 실행 + 이력 + SSE" 골격 ──
 // 어드민 잡이 도는 소스. hansik-800 은 수동 CSV 파일이라 CLI(load:food-catalog --file)
 // 전용이고 어드민 잡 소스 목록에는 없다.
@@ -219,7 +321,13 @@ export const FoodImportRunStatus = z.enum(['running', 'done', 'failed', 'skipped
 export type FoodImportRunStatusType = z.infer<typeof FoodImportRunStatus>;
 
 // live 진행 단계 — 이력 행은 null.
-export const FoodImportPhase = z.enum(['fetching', 'normalizing', 'upserting', 'classifying', 'done']);
+export const FoodImportPhase = z.enum([
+  'fetching',
+  'normalizing',
+  'upserting',
+  'classifying',
+  'done',
+]);
 export type FoodImportPhaseType = z.infer<typeof FoodImportPhase>;
 
 export const FoodImportConfig = z.object({
@@ -280,7 +388,9 @@ export const FoodImportRun = z.object({
   // LLM 분류 반영 행 수.
   classifiedCount: z.number().int(),
   // live 진행(현재 단계의 처리/전체). 이력 행은 null.
-  progress: z.object({ processed: z.number().int(), total: z.number().int().nullable() }).nullable(),
+  progress: z
+    .object({ processed: z.number().int(), total: z.number().int().nullable() })
+    .nullable(),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
   error: z.string().nullable(),

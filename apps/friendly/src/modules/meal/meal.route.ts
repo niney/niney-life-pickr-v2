@@ -3,10 +3,13 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   CreateMealEntryInput,
+  DeleteMealDataInput,
+  DeleteMealDataResult,
   ListMealEntriesQuery,
   ListMealEntriesResult,
   MealCalendarQuery,
   MealCalendarResult,
+  MealDataExport,
   MealEntry,
   MealPreference,
   MealStatsQuery,
@@ -20,6 +23,7 @@ import {
   UploadMealPhotoResult,
 } from '@repo/api-contract';
 import { RATE } from '../../plugins/rate-limit.js';
+import { MealDataError, MealDataService } from './meal-data.service.js';
 import { MealPhotoError, isValidMealPhotoToken } from './meal-photo.service.js';
 import { MealPreferenceService } from './meal-preference.service.js';
 import { MealService, MealServiceError } from './meal.service.js';
@@ -36,6 +40,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const photos = app.mealPhotos;
   const meals = new MealService(app.prisma, { photos });
+  const mealData = new MealDataService(app.prisma, { photos });
   const stats = new MealStatsService(app.prisma);
   const preferences = new MealPreferenceService(app.prisma);
 
@@ -140,6 +145,36 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       // '오늘'은 서버 시간대(Asia/Seoul 배포)를 기준으로 잡는다 — 연속 일수 계산에만 쓰인다.
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
       return stats.stats(req.user.userId, req.query.from, req.query.to, today);
+    },
+  });
+
+  // 내보내기·전체 삭제는 /meals/:id 보다 먼저 등록한다. 특히 DELETE /meals/data 가
+  // 단건 id='data' 삭제로 해석되면 안 된다.
+  typed.get(Routes.Meal.dataExport, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: MealDataExport },
+    },
+    handler: async (req) => mealData.export(req.user.userId),
+  });
+
+  typed.delete(Routes.Meal.data, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      body: DeleteMealDataInput,
+      response: { 200: DeleteMealDataResult },
+    },
+    handler: async (req) => {
+      try {
+        return await mealData.deleteAll(req.user.userId, req.body);
+      } catch (e) {
+        if (e instanceof MealDataError) throw app.httpErrors.badRequest(e.message);
+        throw e;
+      }
     },
   });
 
@@ -248,6 +283,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
   // 지난 기록의 사진을 이번 기록용으로 복제 — 원본을 지워도 새 기록이 멀쩡하도록 참조가 아닌 복사.
   typed.post(Routes.Meal.photoCopy(':token'), {
     onRequest: [app.authenticate],
+    config: { rateLimit: RATE.mealPhotoUpload },
     schema: {
       tags: ['meal'],
       security: [{ bearerAuth: [] }],

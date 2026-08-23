@@ -68,6 +68,46 @@ export const MealStatsView = () => {
         ) : null}
       </Card>
 
+      <Card>
+        <CardTitle title="주간 인사이트" sub="최근 7일과 직전 7일을 비교한 기록 기반 관찰이에요" />
+        <View style={styles.insightList}>
+          {data.insights.map((insight) => (
+            <View
+              key={insight.key}
+              style={[
+                styles.insight,
+                {
+                  backgroundColor:
+                    insight.tone === 'positive'
+                      ? 'rgba(34,197,94,0.10)'
+                      : insight.tone === 'attention'
+                        ? 'rgba(245,158,11,0.12)'
+                        : theme.colors.surfaceAlt,
+                },
+              ]}
+            >
+              <Text style={[styles.insightTitle, { color: theme.colors.text }]}>{insight.title}</Text>
+              <Text style={[styles.insightDetail, { color: theme.colors.textMuted }]}>{insight.detail}</Text>
+            </View>
+          ))}
+        </View>
+      </Card>
+
+      <Card>
+        <CardTitle title="추천 반응" sub="선택한 추천이 실제 기록으로 이어졌는지 보여 줘요" />
+        <View style={styles.tiles}>
+          <Tile icon="cursor-pointer" label="선택" value={`${data.recommendation.chosenCount}건`} />
+          <Tile icon="check-circle" label="기록 완료" value={`${data.recommendation.loggedCount}건`} />
+          <Tile icon="thumb-up" label="평가" value={`${data.recommendation.ratedCount}건`} />
+          <Tile
+            icon="chart-line"
+            label="추천 수락률"
+            value={`${Math.round(data.recommendation.acceptanceRate * 100)}%`}
+            sub="선택 대비 기록"
+          />
+        </View>
+      </Card>
+
       {data.entryCount === 0 ? (
         <Card>
           <StateBlock kind="empty" message="이 기간에는 기록이 없어요." />
@@ -146,6 +186,10 @@ const createStyles = (theme: Theme) =>
     content: { padding: 16, gap: 12 },
     tiles: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     coverageNote: { marginTop: 8, fontSize: 11, color: theme.colors.textMuted, lineHeight: 16 },
+    insightList: { gap: 8 },
+    insight: { borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, gap: 3 },
+    insightTitle: { fontSize: 13, fontWeight: '600' },
+    insightDetail: { fontSize: 12, lineHeight: 17 },
     muted: { fontSize: 12, color: theme.colors.textMuted },
     topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
     topName: { flex: 1, fontSize: 14, color: theme.colors.text },

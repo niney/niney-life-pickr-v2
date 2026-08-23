@@ -3,11 +3,13 @@ import {
   FoodCuisine,
   FoodDishType,
   FoodMainIngredient,
+  MEAL_MAX_ITEMS_PER_ENTRY,
   MealEntrySource,
   MealItemSource,
   MealPortion,
   MealSlot,
   MealType,
+  RecognizedDish,
   type CreateMealEntryInputType,
   type FoodCuisineType,
   type FoodDishTypeType,
@@ -34,7 +36,12 @@ import {
 } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
-import type { MealPhotoService } from './meal-photo.service.js';
+import {
+  findMealRecommendationCandidate,
+  parseMealRecommendationFeedback,
+} from '../meal-recommendation/meal-recommendation.feedback.js';
+import { mealMutationBarrier } from './meal-mutation-barrier.js';
+import type { MealPhotoFileRef, MealPhotoService } from './meal-photo.service.js';
 
 // 식단 기록 CRUD — 전부 소유자(userId) 스코프. 항목은 저장 시 카탈로그에 매칭해 분류 스냅샷을
 // 채운다(FK 없음). 사용자가 이미 고른 값(foodId/dishType…)이 있으면 그대로 존중하고, 없을 때만
@@ -90,6 +97,35 @@ export const medianSlotTime = (slot: string, minutes: number[]): string | null =
   return formatTimeOfDay(mid);
 };
 
+interface DecodedMealEntryCursor {
+  eatenAt: Date;
+  // null 은 전환 전 ISO eatenAt 단독 커서다.
+  id: string | null;
+}
+
+/** eatenAt+id 복합 정렬 키를 클라이언트가 해석하지 않는 base64url 토큰으로 만든다. */
+export const encodeMealEntryCursor = (eatenAt: Date, id: string): string =>
+  Buffer.from(JSON.stringify({ v: 1, t: eatenAt.toISOString(), i: id }), 'utf8').toString('base64url');
+
+/** 새 opaque 커서와 전환 전 ISO eatenAt 커서를 함께 읽는다. 잘못된 값은 기존처럼 무시한다. */
+export const decodeMealEntryCursor = (cursor: string): DecodedMealEntryCursor | null => {
+  try {
+    const raw: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (typeof raw === 'object' && raw !== null) {
+      const value = raw as { v?: unknown; t?: unknown; i?: unknown };
+      if (value.v === 1 && typeof value.t === 'string' && typeof value.i === 'string' && value.i.length > 0) {
+        const eatenAt = new Date(value.t);
+        if (!Number.isNaN(eatenAt.getTime())) return { eatenAt, id: value.i };
+      }
+    }
+  } catch {
+    // 아래 ISO 커서 하위 호환 파싱으로 이어진다.
+  }
+
+  const legacy = new Date(cursor);
+  return Number.isNaN(legacy.getTime()) ? null : { eatenAt: legacy, id: null };
+};
+
 const toItem = (r: PrismaMealItem): MealItemType => ({
   id: r.id,
   name: r.name,
@@ -122,10 +158,26 @@ const parseRecognition = (json: string | null): MealEntryType['recognition'] => 
     const v: unknown = JSON.parse(json);
     if (typeof v !== 'object' || v === null) return null;
     const o = v as { model?: unknown; version?: unknown; dishes?: unknown };
+    const model = typeof o.model === 'string' ? o.model.trim() : '';
+    const version = o.version;
+    const dishes = Array.isArray(o.dishes)
+      ? o.dishes
+          .flatMap((dish) => {
+            const parsed = RecognizedDish.safeParse(dish);
+            return parsed.success ? [parsed.data] : [];
+          })
+          .slice(0, MEAL_MAX_ITEMS_PER_ENTRY)
+      : [];
     return {
-      model: typeof o.model === 'string' ? o.model : null,
-      version: typeof o.version === 'number' ? o.version : null,
-      dishes: Array.isArray(o.dishes) ? o.dishes : [],
+      model: model.length > 0 && model.length <= 120 ? model : null,
+      version:
+        typeof version === 'number' &&
+        Number.isInteger(version) &&
+        version >= 1 &&
+        version <= 10_000
+          ? version
+          : null,
+      dishes,
     };
   } catch {
     return null;
@@ -145,6 +197,7 @@ export const toMealEntry = (
   placeName: row.placeName,
   memo: row.memo,
   source: enumOrNull(MealEntrySource, row.source) ?? 'manual',
+  originRecommendationId: row.originRecommendationId,
   items: [...row.items].sort((a, b) => a.sortOrder - b.sortOrder).map(toItem),
   photos:
     opts.withPhotos === false ? [] : [...row.photos].sort((a, b) => a.sortOrder - b.sortOrder).map(toPhoto),
@@ -300,25 +353,75 @@ export class MealService {
   }
 
   async create(userId: string, input: CreateMealEntryInputType): Promise<MealEntryType> {
-    const itemData = await this.buildItemData(input.items);
-    const entry = await this.prisma.mealEntry.create({
-      data: {
-        userId,
-        eatenAt: new Date(input.eatenAt),
-        eatenDate: input.eatenDate,
-        slot: input.slot,
-        mealType: input.mealType ?? null,
-        placeId: input.placeId ?? null,
-        placeName: input.placeName ?? null,
-        memo: input.memo ?? null,
-        source: input.source,
-        recognitionJson: input.recognition ? JSON.stringify(input.recognition) : null,
-        items: { createMany: { data: itemData } },
-      },
-    });
-    if (input.photoTokens.length > 0) {
-      await this.deps.photos.attachToEntry(userId, entry.id, input.photoTokens);
+    return mealMutationBarrier.runExclusive(userId, () => this.createUnlocked(userId, input));
+  }
+
+  private async createUnlocked(userId: string, input: CreateMealEntryInputType): Promise<MealEntryType> {
+    const originRecommendationId = input.originRecommendationId?.trim() || null;
+    if ((input.source === 'recommendation') !== (originRecommendationId !== null)) {
+      throw new MealServiceError('invalid', '추천 출처와 원본 추천 id가 일치하지 않습니다.');
     }
+    // 토큰 오류가 기록 생성 뒤에 드러나 반쪽 기록이 남지 않도록 모든 DB 쓰기 전에 검증한다.
+    if (input.photoTokens.length > 0) {
+      await this.deps.photos.validateForEntry(userId, null, input.photoTokens);
+    }
+    const itemData = await this.buildItemData(input.items);
+    const entry = await this.prisma.$transaction(async (tx) => {
+      let recommendationFeedback: {
+        id: string;
+        pickedName: string;
+        rating: number | null;
+      } | null = null;
+      if (originRecommendationId) {
+        const recommendation = await tx.mealRecommendation.findFirst({
+          where: { id: originRecommendationId, userId },
+          select: { id: true, itemsJson: true, feedbackJson: true },
+        });
+        if (!recommendation) throw new MealServiceError('invalid', '원본 추천을 찾을 수 없습니다.');
+        const pickedName = findMealRecommendationCandidate(
+          recommendation.itemsJson,
+          input.items.filter((item) => item.isMain).map((item) => item.name),
+        );
+        if (!pickedName) throw new MealServiceError('invalid', '추천 후보와 일치하는 주 음식이 없습니다.');
+        const previous = parseMealRecommendationFeedback(recommendation.feedbackJson);
+        if (previous?.eatenEntryId) {
+          throw new MealServiceError('invalid', '이미 식단 기록으로 연결된 추천입니다.');
+        }
+        recommendationFeedback = { id: recommendation.id, pickedName, rating: previous?.rating ?? null };
+      }
+      const created = await tx.mealEntry.create({
+        data: {
+          userId,
+          eatenAt: new Date(input.eatenAt),
+          eatenDate: input.eatenDate,
+          slot: input.slot,
+          mealType: input.mealType ?? null,
+          placeId: input.placeId ?? null,
+          placeName: input.placeName ?? null,
+          memo: input.memo ?? null,
+          source: input.source,
+          originRecommendationId,
+          recognitionJson: input.recognition ? JSON.stringify(input.recognition) : null,
+          items: { createMany: { data: itemData } },
+        },
+      });
+      if (input.photoTokens.length > 0) {
+        await this.deps.photos.attachToEntry(userId, created.id, input.photoTokens, tx);
+      }
+      if (recommendationFeedback) {
+        await tx.mealRecommendation.update({
+          where: { id: recommendationFeedback.id },
+          data: {
+            feedbackJson: JSON.stringify({
+              pickedName: recommendationFeedback.pickedName,
+              rating: recommendationFeedback.rating,
+              eatenEntryId: created.id,
+            }),
+          },
+        });
+      }
+      return created;
+    });
     return this.get(userId, entry.id);
   }
 
@@ -332,8 +435,17 @@ export class MealService {
   }
 
   async update(userId: string, id: string, input: UpdateMealEntryInputType): Promise<MealEntryType> {
+    return mealMutationBarrier.runExclusive(userId, () => this.updateUnlocked(userId, id, input));
+  }
+
+  private async updateUnlocked(userId: string, id: string, input: UpdateMealEntryInputType): Promise<MealEntryType> {
     const existing = await this.prisma.mealEntry.findFirst({ where: { id, userId }, select: { id: true } });
     if (!existing) throw new MealServiceError('not_found', '기록을 찾을 수 없습니다.');
+
+    // 항목/기록을 바꾸기 전에 토큰 전체의 소유권·미사용 상태를 먼저 확인한다.
+    if (input.photoTokens !== undefined) {
+      await this.deps.photos.validateForEntry(userId, id, input.photoTokens);
+    }
 
     const data: Prisma.MealEntryUpdateInput = {};
     if (input.eatenAt !== undefined) data.eatenAt = new Date(input.eatenAt);
@@ -343,33 +455,65 @@ export class MealService {
     if (input.placeId !== undefined) data.placeId = input.placeId;
     if (input.placeName !== undefined) data.placeName = input.placeName;
     if (input.memo !== undefined) data.memo = input.memo;
-    if (input.source !== undefined) data.source = input.source;
-
-    // 항목은 전량 교체 — 편집 화면이 항상 전체를 들고 있다(부분 패치 계약이 아니다).
-    if (input.items !== undefined) {
-      const itemData = await this.buildItemData(input.items);
-      await this.prisma.mealItem.deleteMany({ where: { entryId: id } });
-      await this.prisma.mealItem.createMany({ data: itemData.map((d) => ({ ...d, entryId: id })) });
-    }
-    if (Object.keys(data).length > 0) {
-      await this.prisma.mealEntry.update({ where: { id }, data });
-    }
-    if (input.photoTokens !== undefined) {
-      await this.deps.photos.attachToEntry(userId, id, input.photoTokens);
-    }
+    // 영양/카탈로그 조회는 트랜잭션 밖에서 끝내 잠금 시간을 짧게 유지한다.
+    const itemData = input.items !== undefined ? await this.buildItemData(input.items) : null;
+    let detachedFiles: MealPhotoFileRef[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      // 항목은 전량 교체 — 편집 화면이 항상 전체를 들고 있다(부분 패치 계약이 아니다).
+      if (itemData !== null) {
+        await tx.mealItem.deleteMany({ where: { entryId: id } });
+        await tx.mealItem.createMany({ data: itemData.map((d) => ({ ...d, entryId: id })) });
+      }
+      if (Object.keys(data).length > 0) {
+        await tx.mealEntry.update({ where: { id }, data });
+      }
+      if (input.photoTokens !== undefined) {
+        detachedFiles = await this.deps.photos.attachToEntry(userId, id, input.photoTokens, tx);
+      }
+    });
+    // 파일 삭제는 롤백할 수 없으므로 DB 커밋 뒤에만 실행한다.
+    await this.deps.photos.removeFiles(detachedFiles);
     return this.get(userId, id);
   }
 
   async remove(userId: string, id: string): Promise<void> {
-    const row = await this.prisma.mealEntry.findFirst({ where: { id, userId }, select: { id: true } });
-    if (!row) throw new MealServiceError('not_found', '기록을 찾을 수 없습니다.');
-    // 파일은 Cascade 가 안 지운다 — 행 삭제 전에 먼저 지운다.
-    await this.deps.photos.removeForEntry(id);
-    await this.prisma.mealEntry.delete({ where: { id } });
+    return mealMutationBarrier.runExclusive(userId, () => this.removeUnlocked(userId, id));
   }
 
-  // 최신순 커서 페이지네이션. 커서는 직전 페이지 마지막 항목의 eatenAt(ISO) — 같은 시각이
-  // 여럿이면 id 내림차순으로 tie-break 한다.
+  private async removeUnlocked(userId: string, id: string): Promise<void> {
+    const row = await this.prisma.mealEntry.findFirst({
+      where: { id, userId },
+      select: {
+        id: true,
+        originRecommendationId: true,
+        photos: { select: { userId: true, token: true } },
+      },
+    });
+    if (!row) throw new MealServiceError('not_found', '기록을 찾을 수 없습니다.');
+    // 추천에서 만든 기록을 지우면 추천의 "실제 기록" 연결도 함께 해제한다. 선택·평가는
+    // 사용자가 남긴 별도 신호이므로 보존한다. 둘은 같은 트랜잭션이어야 통계가 어긋나지 않는다.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.mealEntry.delete({ where: { id } });
+      if (row.originRecommendationId) {
+        const recommendation = await tx.mealRecommendation.findFirst({
+          where: { id: row.originRecommendationId, userId },
+          select: { id: true, feedbackJson: true },
+        });
+        const feedback = parseMealRecommendationFeedback(recommendation?.feedbackJson ?? null);
+        if (recommendation && feedback?.eatenEntryId === id) {
+          await tx.mealRecommendation.update({
+            where: { id: recommendation.id },
+            data: { feedbackJson: JSON.stringify({ ...feedback, eatenEntryId: null }) },
+          });
+        }
+      }
+    });
+    // DB 삭제가 실패했는데 파일만 먼저 사라지는 일이 없도록 커밋 뒤 파일을 지운다.
+    await this.deps.photos.removeFiles(row.photos);
+  }
+
+  // 최신순 커서 페이지네이션. 새 커서는 eatenAt+id 복합 키라 같은 시각 기록도 빠지지 않는다.
+  // 전환 전 ISO eatenAt 단독 커서는 하위 호환으로 기존 lt 동작을 유지한다.
   async list(userId: string, query: ListMealEntriesQueryType): Promise<ListMealEntriesResultType> {
     const where: Prisma.MealEntryWhereInput = { userId };
     if (query.from || query.to) {
@@ -380,8 +524,15 @@ export class MealService {
     }
     if (query.slot) where.slot = query.slot;
     if (query.cursor) {
-      const cursorDate = new Date(query.cursor);
-      if (!Number.isNaN(cursorDate.getTime())) where.eatenAt = { lt: cursorDate };
+      const cursor = decodeMealEntryCursor(query.cursor);
+      if (cursor?.id) {
+        where.OR = [
+          { eatenAt: { lt: cursor.eatenAt } },
+          { eatenAt: cursor.eatenAt, id: { lt: cursor.id } },
+        ];
+      } else if (cursor) {
+        where.eatenAt = { lt: cursor.eatenAt };
+      }
     }
     const rows = await this.prisma.mealEntry.findMany({
       where,
@@ -390,7 +541,8 @@ export class MealService {
       take: query.limit + 1,
     });
     const page = rows.slice(0, query.limit);
-    const nextCursor = rows.length > query.limit ? (page[page.length - 1]?.eatenAt.toISOString() ?? null) : null;
+    const last = page[page.length - 1];
+    const nextCursor = rows.length > query.limit && last ? encodeMealEntryCursor(last.eatenAt, last.id) : null;
     return {
       items: page.map((r) =>
         toMealEntry({ ...r, photos: 'photos' in r ? r.photos : [] } as EntryWithRelations, {

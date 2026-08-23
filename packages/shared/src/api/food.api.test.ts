@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { configureApi } from './client.js';
-import { buildFoodAdminListQuery, buildFoodImportRunEventsUrl, foodApi } from './food.api.js';
+import {
+  buildFoodAdminListQuery,
+  buildFoodImportRunEventsUrl,
+  buildFoodRecognitionQualityQuery,
+  buildFoodRestaurantsQuery,
+  foodApi,
+} from './food.api.js';
 
 // food API 의 "경로·쿼리 조립" 계약을 고정한다 — 서버(FoodAdminListQuery)가 받는 키 이름과
 // boolean 직렬화('1'/'0'), undefined 생략, 빈 q 생략, 고정 키 순서(캐시 키 안정), 그리고
@@ -65,8 +71,23 @@ describe('foodApi', () => {
     await foodApi.search(' 비빔밥 ', 5);
 
     const call = fetchMock.mock.calls[0]!;
-    expect(call[0]).toBe('http://api.test/api/v1/food/search?q=%EB%B9%84%EB%B9%94%EB%B0%A5&limit=5');
+    expect(call[0]).toBe(
+      'http://api.test/api/v1/food/search?q=%EB%B9%84%EB%B9%94%EB%B0%A5&limit=5',
+    );
     expect((call[1]?.headers as Headers).get('Authorization')).toBe('Bearer tok');
+  });
+
+  it('restaurants — 좌표·반경·개수를 고정 순서 쿼리로 싣는다', async () => {
+    expect(buildFoodRestaurantsQuery()).toBe('');
+    expect(buildFoodRestaurantsQuery({ limit: 5, radiusM: 2_000, lng: 127, lat: 37.5 })).toBe(
+      'lat=37.5&lng=127&radiusM=2000&limit=5',
+    );
+
+    const fetchMock = stubFetch({ items: [] });
+    await foodApi.restaurants('food-1', { lat: 37.5, lng: 127, radiusM: 2_000, limit: 5 });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/api/v1/food/food-1/restaurants?lat=37.5&lng=127&radiusM=2000&limit=5',
+    );
   });
 
   it('adminList — 조건이 없으면 ? 없이, 있으면 조립한 쿼리스트링으로 GET', async () => {
@@ -76,6 +97,18 @@ describe('foodApi', () => {
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
       '/api/v1/admin/food/items',
       '/api/v1/admin/food/items?unclassified=1&limit=25',
+    ]);
+  });
+
+  it('인식 교정 품질 — 기본 기간은 생략하고 days 를 지정하면 제한된 쿼리로 GET', async () => {
+    expect(buildFoodRecognitionQualityQuery()).toBe('');
+    expect(buildFoodRecognitionQualityQuery({ days: 90 })).toBe('days=90');
+    const fetchMock = stubFetch({});
+    await foodApi.adminRecognitionQuality();
+    await foodApi.adminRecognitionQuality({ days: 90 });
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/v1/admin/food/recognition-quality',
+      '/api/v1/admin/food/recognition-quality?days=90',
     ]);
   });
 
@@ -97,7 +130,9 @@ describe('foodApi', () => {
     expect(first?.[1]?.method).toBe('POST');
     expect(first?.[1]?.body).toBeUndefined();
     expect((first?.[1]?.headers as Headers).has('Content-Type')).toBe(false);
-    expect(second?.[1]?.body).toBe(JSON.stringify({ sources: ['menu-canonical'], classify: false }));
+    expect(second?.[1]?.body).toBe(
+      JSON.stringify({ sources: ['menu-canonical'], classify: false }),
+    );
     expect((second?.[1]?.headers as Headers).get('Content-Type')).toBe('application/json');
   });
 });

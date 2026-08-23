@@ -279,12 +279,16 @@ export const RandomCrawl = {
 export const Food = {
   // 자동완성 — ?q=(1~40자)[&limit≤20]. 인증 사용자.
   search: `${API_PREFIX}/food/search`,
+  // 음식 → 수집된 메뉴·리뷰에서 확인된 식당 역검색. 좌표가 있으면 반경 필터.
+  restaurants: (foodId: string) => `${API_PREFIX}/food/${foodId}/restaurants`,
   // 카탈로그 목록(필터·정렬·페이지) / 수기 등록(POST).
   adminItems: `${API_PREFIX}/admin/food/items`,
   // 단건 편집(PATCH).
   adminItem: (id: string) => `${API_PREFIX}/admin/food/items/${id}`,
   // 집계(총/활성/분류됨/출처별/조리형태별).
   adminStats: `${API_PREFIX}/admin/food/stats`,
+  // 사진 인식 원본 → 최종 식단 교정 품질 집계(?days=1..365). ADMIN 전용.
+  adminRecognitionQuality: `${API_PREFIX}/admin/food/recognition-quality`,
   // 적재 잡 설정 조회/변경 — GET/PUT.
   importConfig: `${API_PREFIX}/admin/food/import`,
   // 지금 실행(manual) — body 로 이번 회차 소스/분류 여부 오버라이드 가능.
@@ -302,6 +306,9 @@ export const Food = {
 export const Meal = {
   // 기록 목록(?from&to&slot&cursor&limit&withPhotos) / 생성.
   entries: `${API_PREFIX}/meals`,
+  // 내 식단 데이터 전체 JSON 내보내기 / 강한 확인 문자열을 요구하는 전체 삭제.
+  dataExport: `${API_PREFIX}/meals/data/export`,
+  data: `${API_PREFIX}/meals/data`,
   // 단건 조회·수정·삭제.
   entry: (id: string) => `${API_PREFIX}/meals/${id}`,
   // 달력 요약(?month=YYYY-MM).
@@ -556,7 +563,6 @@ export const Weather = {
   // 지금 값으로 격자 실황을 보강. 키/활용신청 없으면 enabled=false 로 200.
   aws: `${API_PREFIX}/weather/aws`,
 } as const;
-
 
 // ── 일상지도(전국 CCTV·공중화장실 — 지방행정인허가데이터 CSV 적재) ──────────────
 // 공개(비로그인). 로컬 SQLite 조회뿐이라 업스트림 쿼터 없음. 지도 뷰포트(bbox)+줌이 조회 단위 —

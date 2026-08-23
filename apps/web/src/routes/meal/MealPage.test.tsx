@@ -79,7 +79,16 @@ const stats = {
   topFoods: [{ name: '김치찌개', count: 2, lastEatenDate: '2026-08-21' }],
   repeatRate: 0.25,
   streakDays: 2,
+  insights: [
+    {
+      key: 'weekly-activity',
+      tone: 'positive',
+      title: '최근 기록 빈도가 늘었어요',
+      detail: '최근 7일은 4일·6끼, 직전 7일은 2일·3끼를 기록했어요.',
+    },
+  ],
   nutrition: { avgKcalPerDay: 780, avgProteinGPerDay: 24.5, avgSodiumMgPerDay: 2100, coverage: 0.5, itemsWithNutrition: 2 },
+  recommendation: { chosenCount: 2, loggedCount: 1, ratedCount: 1, acceptanceRate: 0.5 },
   byDate: [
     { date: '2026-08-21', count: 1 },
     { date: '2026-08-22', count: 2 },
@@ -120,29 +129,38 @@ describe('MealPage', () => {
     expect(await screen.findByText(/앱에서 사진으로 첫 끼니/)).toBeInTheDocument();
   });
 
-  it('더 보기 — nextCursor 를 쿼리로 넘겨 다음 페이지를 받는다', async () => {
+  it('더 보기 — opaque nextCursor 를 그대로 넘기고 앞 페이지를 유지한다', async () => {
     const cursors: (string | null)[] = [];
+    const opaqueCursor = 'v2:2026-08-20T03:10:00.000Z|e1';
     server.use(
       http.get(ENTRIES_URL, ({ request }) => {
         const cursor = new URL(request.url).searchParams.get('cursor');
         cursors.push(cursor);
         return HttpResponse.json(
           cursor
-            ? { items: [entry({ id: 'e2', eatenDate: '2026-08-19', items: [] })], nextCursor: null }
-            : { items: [entry()], nextCursor: '2026-08-20T03:10:00.000Z' },
+            ? {
+                items: [entry({ id: 'e2', eatenDate: '2026-08-19', items: [{ ...entry().items[0], id: 'i2', name: '비빔밥' }] })],
+                nextCursor: null,
+              }
+            : { items: [entry()], nextCursor: opaqueCursor },
         );
       }),
     );
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: '더 보기' }));
-    await waitFor(() => expect(cursors).toContain('2026-08-20T03:10:00.000Z'));
+    await waitFor(() => expect(cursors).toContain(opaqueCursor));
+    expect(screen.getByText('김치찌개')).toBeInTheDocument();
+    expect(await screen.findByText('비빔밥')).toBeInTheDocument();
   });
 
   it('달력 탭 — 월 요약을 받고 날짜를 고르면 그날 기록을 조회한다', async () => {
     const dayQueries: string[] = [];
+    const limits: (string | null)[] = [];
     server.use(
       http.get(ENTRIES_URL, ({ request }) => {
-        const from = new URL(request.url).searchParams.get('from');
+        const params = new URL(request.url).searchParams;
+        const from = params.get('from');
+        limits.push(params.get('limit'));
         if (from) dayQueries.push(from);
         return HttpResponse.json({ items: from ? [entry()] : [], nextCursor: null });
       }),
@@ -157,6 +175,8 @@ describe('MealPage', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /달력/ }));
     const day = await screen.findByRole('button', { name: '5' });
+    expect(limits).not.toContain('0');
+    expect(dayQueries).toHaveLength(0);
     fireEvent.click(day);
     await waitFor(() => expect(dayQueries.length).toBeGreaterThan(0));
     expect(dayQueries[0]).toMatch(/-05$/);
@@ -177,6 +197,11 @@ describe('MealPage', () => {
     expect(await screen.findByText('찌개·전골')).toBeInTheDocument();
     expect(screen.getByText('2일')).toBeInTheDocument();
     expect(screen.getByText('25%')).toBeInTheDocument();
+    expect(screen.getByText('추천 수락률')).toBeInTheDocument();
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByText('주간 인사이트')).toBeInTheDocument();
+    expect(screen.getByText('최근 기록 빈도가 늘었어요')).toBeInTheDocument();
+    expect(screen.getByText(/기록 기반 관찰/)).toBeInTheDocument();
 
     const before = ranges.length;
     fireEvent.click(screen.getByRole('button', { name: '1주' }));
@@ -209,6 +234,7 @@ describe('MealPage — 추천·설정 탭', () => {
   const preference = {
     weights: { variety: 4, taste: 4, balance: 3, health: 2, novelty: 2, weather: 1, convenience: 2 },
     excludedFoods: ['오이'],
+    dislikedFoods: ['고수'],
     likedFoods: [],
     mealTypes: [],
     slots: ['breakfast', 'lunch', 'dinner'],
@@ -297,7 +323,37 @@ describe('MealPage — 추천·설정 탭', () => {
     await waitFor(() => expect(ratings).toEqual([1]));
   });
 
-  it('설정 탭 — 슬라이더·제외 음식을 담아 PUT 한다', async () => {
+  it('추천 피드백 — mutation 응답의 선택을 현재 카드에 즉시 반영한다', async () => {
+    const pickedNames: (string | null | undefined)[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      // feedback 성공 후 cache invalidation으로 재조회되어도 서버 컨텍스트는 아직 이전 snapshot이다.
+      // mutation 반환값을 local current에 적용하지 않으면 이 테스트의 선택 상태가 바뀌지 않는다.
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: recommendation }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [recommendation] })),
+      http.post(`${RECOMMENDATIONS_URL}/r1/feedback`, async ({ request }) => {
+        const body = (await request.json()) as { pickedName?: string | null };
+        pickedNames.push(body.pickedName);
+        return HttpResponse.json({
+          ...recommendation,
+          feedback: { pickedName: '연어초밥', rating: null, eatenEntryId: null },
+        });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+
+    const choice = await screen.findByRole('button', { name: '이걸로 할래요' });
+    expect(choice).not.toHaveClass('text-primary');
+    fireEvent.click(choice);
+
+    await waitFor(() => expect(pickedNames).toEqual(['연어초밥']));
+    await waitFor(() => expect(choice).toHaveClass('text-primary'));
+  });
+
+  it('설정 탭 — 슬라이더·절대 제외·덜 선호 음식을 나눠 PUT 한다', async () => {
     let saved: Record<string, unknown> | null = null;
     server.use(
       http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
@@ -312,12 +368,15 @@ describe('MealPage — 추천·설정 탭', () => {
 
     const slider = await screen.findByLabelText('건강');
     fireEvent.change(slider, { target: { value: '5' } });
-    fireEvent.change(screen.getByLabelText('못 먹는 / 싫어하는 음식'), { target: { value: '오이, 고수' } });
+    fireEvent.change(screen.getByLabelText('절대 제외 (알레르기·못 먹는 음식)'), { target: { value: '오이, 땅콩' } });
+    fireEvent.change(screen.getByLabelText('덜 선호하는 음식'), { target: { value: '고수, 내장' } });
+    expect(screen.getByText(/재료 정보가 없는 카탈로그 음식은 막지 못할 수 있어요/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(saved).not.toBeNull());
     expect((saved as unknown as { weights: { health: number } }).weights.health).toBe(5);
-    expect((saved as unknown as { excludedFoods: string[] }).excludedFoods).toEqual(['오이', '고수']);
+    expect((saved as unknown as { excludedFoods: string[] }).excludedFoods).toEqual(['오이', '땅콩']);
+    expect((saved as unknown as { dislikedFoods: string[] }).dislikedFoods).toEqual(['고수', '내장']);
   });
 
   it('설정 탭 — 프리셋은 가중치를 한 번에 바꾼다', async () => {

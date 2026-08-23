@@ -3,8 +3,29 @@ import { ErrorResponseSchema } from '@repo/api-contract';
 export interface ApiClientConfig {
   baseUrl: string;
   getToken?: () => string | null | Promise<string | null>;
-  onUnauthorized?: () => void;
+  /** 401을 받은 요청이 실제로 사용한 토큰. 현재 세션과 비교해 늦은 응답을 무시해야 한다. */
+  onUnauthorized?: (requestToken: string | null) => void | Promise<void>;
 }
+
+export interface UnauthorizedSessionGuardOptions {
+  requestToken: string | null;
+  getCurrentToken: () => string | null;
+  onCurrentSessionUnauthorized: () => void;
+}
+
+/**
+ * 이전 계정의 지연된 401이 새로 로그인한 세션을 종료하지 않게 한다. 토큰이 같은 현재 세션일
+ * 때만 캐시 제거와 로그아웃 같은 전환을 한 동기 콜백에서 실행한다.
+ */
+export const handleUnauthorizedForCurrentSession = ({
+  requestToken,
+  getCurrentToken,
+  onCurrentSessionUnauthorized,
+}: UnauthorizedSessionGuardOptions): boolean => {
+  if (!requestToken || getCurrentToken() !== requestToken) return false;
+  onCurrentSessionUnauthorized();
+  return true;
+};
 
 export class ApiError extends Error {
   constructor(
@@ -30,7 +51,10 @@ export const configureApi = (cfg: ApiClientConfig): void => {
 export const getApiConfig = (): ApiClientConfig => config;
 
 export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const token = await config.getToken?.();
+  // 요청 도중 configureApi가 다시 불려도 baseUrl/401 콜백이 뒤섞이지 않도록 한 요청의 설정을
+  // 스냅샷으로 고정한다.
+  const requestConfig = config;
+  const token = (await requestConfig.getToken?.()) ?? null;
   const headers = new Headers(init.headers);
   // Only declare JSON when we actually have a body — fastify rejects POST/PUT
   // requests that say `Content-Type: application/json` but send nothing.
@@ -41,10 +65,10 @@ export const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(`${config.baseUrl}${path}`, { ...init, headers });
+  const res = await fetch(`${requestConfig.baseUrl}${path}`, { ...init, headers });
 
   if (!res.ok) {
-    if (res.status === 401) config.onUnauthorized?.();
+    if (res.status === 401) await requestConfig.onUnauthorized?.(token);
     const body = await res.json().catch(() => null);
     const parsed = ErrorResponseSchema.safeParse(body);
     if (parsed.success) {

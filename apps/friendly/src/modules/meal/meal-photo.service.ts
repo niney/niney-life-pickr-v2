@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { PrismaClient } from '@prisma/client';
+import type { MealPhoto, Prisma, PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import sharp from 'sharp';
 import heicConvert from 'heic-convert';
 import type { UploadMealPhotoResultType } from '@repo/api-contract';
 import { Routes } from '@repo/api-contract';
+import { mealMutationBarrier } from './meal-mutation-barrier.js';
 
 // 식단 사진 저장 — 정산 영수증(settlement-extraction storeImage)의 골격을 이식하되 식단에서
 // 달라지는 3가지를 더한다:
@@ -24,6 +25,10 @@ export const ORPHAN_PHOTO_TTL_HOURS = 24;
 const TOKEN_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 // 사용자당 보관 사진 상한 — 초과 업로드는 409(무한 누적 방지).
 export const MAX_PHOTOS_PER_USER = 3000;
+const UNTRACKED_FILE_SWEEP_LIMIT = 2000;
+const DB_LOOKUP_CHUNK_SIZE = 500;
+const USER_DIR_PATTERN = /^[A-Za-z0-9_-]+$/;
+const PHOTO_FILE_PATTERN = /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:_t)?\.jpg$/;
 
 export class MealPhotoError extends Error {
   constructor(
@@ -48,7 +53,12 @@ const looksLikeHeif = (buf: Buffer): boolean => {
 export interface MealPhotoServiceOptions {
   storageDir?: string;
   logger?: FastifyBaseLogger;
+  // 테스트에서 작은 상한으로 store/copy 공통 쿼터를 검증한다. 운영 기본값은 3,000장.
+  maxPhotosPerUser?: number;
 }
+
+type MealPhotoDb = PrismaClient | Prisma.TransactionClient;
+export type MealPhotoFileRef = Pick<MealPhoto, 'userId' | 'token'>;
 
 export class MealPhotoService {
   private readonly storageDir: string;
@@ -65,10 +75,10 @@ export class MealPhotoService {
   }
 
   private userDir(userId: string): string {
-    // userId 는 cuid(영숫자)라 경로 조각으로 안전하지만 방어적으로 한 번 더 좁힌다.
-    const safe = userId.replace(/[^A-Za-z0-9_-]/g, '');
-    if (!safe) throw new MealPhotoError('forbidden', '잘못된 사용자입니다.');
-    return join(this.storageDir, safe);
+    // userId 는 cuid지만 디렉터리 전체 삭제에도 쓰이므로 변환해서 경로를 만들지 않고, 안전한
+    // 직계 자식 이름만 그대로 허용한다. 잘못된 값이 다른 사용자의 디렉터리와 충돌하면 안 된다.
+    if (!USER_DIR_PATTERN.test(userId)) throw new MealPhotoError('forbidden', '잘못된 사용자입니다.');
+    return join(this.storageDir, userId);
   }
 
   private async normalize(buffer: Buffer, dimension: number, quality: number): Promise<Buffer> {
@@ -79,13 +89,57 @@ export class MealPhotoService {
       .toBuffer();
   }
 
-  // 업로드 → JPEG 정규화(+HEIC 폴백) → 원본·썸네일 저장 → MealPhoto 행(entryId=null) 생성.
-  async store(userId: string, buffer: Buffer): Promise<UploadMealPhotoResultType> {
+  private async assertPhotoQuota(userId: string): Promise<void> {
+    const limit = this.opts.maxPhotosPerUser ?? MAX_PHOTOS_PER_USER;
     const count = await this.prisma.mealPhoto.count({ where: { userId } });
-    if (count >= MAX_PHOTOS_PER_USER) {
+    if (count >= limit) {
       throw new MealPhotoError('quota', '저장된 사진이 너무 많습니다. 오래된 기록을 정리해 주세요.');
     }
+  }
 
+  private async persistNewPhoto(
+    userId: string,
+    input: { full: Buffer; thumb: Buffer; width: number | null; height: number | null },
+  ): Promise<UploadMealPhotoResultType> {
+    await this.assertPhotoQuota(userId);
+
+    const dir = this.userDir(userId);
+    await mkdir(dir, { recursive: true });
+    const token = randomUUID();
+    try {
+      await writeFile(join(dir, `${token}.jpg`), input.full);
+      await writeFile(join(dir, `${token}_t.jpg`), input.thumb);
+      await this.prisma.mealPhoto.create({
+        data: {
+          token,
+          userId,
+          width: input.width,
+          height: input.height,
+          byteSize: input.full.byteLength,
+        },
+      });
+    } catch (e) {
+      // DB 행 생성이 실패하면 먼저 쓴 파일을 남기지 않는다.
+      await this.deleteFiles(userId, token);
+      throw e;
+    }
+
+    return {
+      token,
+      previewUrl: Routes.Meal.photo(token),
+      thumbUrl: Routes.Meal.photoThumb(token),
+      width: input.width,
+      height: input.height,
+      byteSize: input.full.byteLength,
+    };
+  }
+
+  // 업로드 → JPEG 정규화(+HEIC 폴백) → 원본·썸네일 저장 → MealPhoto 행(entryId=null) 생성.
+  async store(userId: string, buffer: Buffer): Promise<UploadMealPhotoResultType> {
+    return mealMutationBarrier.runExclusive(userId, () => this.storeUnlocked(userId, buffer));
+  }
+
+  private async storeUnlocked(userId: string, buffer: Buffer): Promise<UploadMealPhotoResultType> {
     let source = buffer;
     let processed: Buffer;
     try {
@@ -114,31 +168,12 @@ export class MealPhotoService {
 
     const meta = await sharp(processed).metadata();
     const thumb = await this.normalize(source, THUMB_DIMENSION, THUMB_QUALITY);
-
-    const dir = this.userDir(userId);
-    await mkdir(dir, { recursive: true });
-    const token = randomUUID();
-    await writeFile(join(dir, `${token}.jpg`), processed);
-    await writeFile(join(dir, `${token}_t.jpg`), thumb);
-
-    await this.prisma.mealPhoto.create({
-      data: {
-        token,
-        userId,
-        width: meta.width ?? null,
-        height: meta.height ?? null,
-        byteSize: processed.byteLength,
-      },
-    });
-
-    return {
-      token,
-      previewUrl: Routes.Meal.photo(token),
-      thumbUrl: Routes.Meal.photoThumb(token),
+    return this.persistNewPhoto(userId, {
+      full: processed,
+      thumb,
       width: meta.width ?? null,
       height: meta.height ?? null,
-      byteSize: processed.byteLength,
-    };
+    });
   }
 
   // 소유자 검증 후 원본/썸네일 바이트. 파일이 없으면 not_found(행만 남은 경우 포함).
@@ -164,6 +199,10 @@ export class MealPhotoService {
    * 기존 고아 사진 청소(24시간)가 알아서 지운다.
    */
   async copy(userId: string, token: string): Promise<UploadMealPhotoResultType> {
+    return mealMutationBarrier.runExclusive(userId, () => this.copyUnlocked(userId, token));
+  }
+
+  private async copyUnlocked(userId: string, token: string): Promise<UploadMealPhotoResultType> {
     if (!isValidMealPhotoToken(token)) throw new MealPhotoError('invalid_token', '토큰 형식이 올바르지 않습니다.');
     const row = await this.prisma.mealPhoto.findUnique({ where: { token } });
     if (!row) throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
@@ -173,30 +212,12 @@ export class MealPhotoService {
     // 썸네일이 없던 과거 업로드는 read 가 원본으로 폴백하므로 여기서 다시 만든다.
     const thumb = await this.normalize(full, THUMB_DIMENSION, THUMB_QUALITY);
 
-    const dir = this.userDir(userId);
-    await mkdir(dir, { recursive: true });
-    const newToken = randomUUID();
-    await writeFile(join(dir, `${newToken}.jpg`), full);
-    await writeFile(join(dir, `${newToken}_t.jpg`), thumb);
-
-    await this.prisma.mealPhoto.create({
-      data: {
-        token: newToken,
-        userId,
-        width: row.width,
-        height: row.height,
-        byteSize: full.byteLength,
-      },
-    });
-
-    return {
-      token: newToken,
-      previewUrl: Routes.Meal.photo(newToken),
-      thumbUrl: Routes.Meal.photoThumb(newToken),
+    return this.persistNewPhoto(userId, {
+      full,
+      thumb,
       width: row.width,
       height: row.height,
-      byteSize: full.byteLength,
-    };
+    });
   }
 
   // 인식 서비스용 — 소유자 검증 + 원본 바이트(여러 장).
@@ -207,6 +228,10 @@ export class MealPhotoService {
   }
 
   async remove(userId: string, token: string): Promise<void> {
+    return mealMutationBarrier.runExclusive(userId, () => this.removeUnlocked(userId, token));
+  }
+
+  private async removeUnlocked(userId: string, token: string): Promise<void> {
     if (!isValidMealPhotoToken(token)) throw new MealPhotoError('invalid_token', '토큰 형식이 올바르지 않습니다.');
     const row = await this.prisma.mealPhoto.findUnique({ where: { token } });
     if (!row) throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
@@ -215,35 +240,66 @@ export class MealPhotoService {
     await this.deleteFiles(row.userId, token);
   }
 
-  // 기록 저장/수정 시 호출 — 사용자가 보낸 토큰을 그 기록에 묶고, 빠진 토큰은 파일까지 지운다.
-  async attachToEntry(userId: string, entryId: string, tokens: string[]): Promise<void> {
-    const owned = await this.prisma.mealPhoto.findMany({ where: { token: { in: tokens }, userId } });
+  // 기록 DB 를 건드리기 전에 토큰 전체를 먼저 검증한다. create 는 entryId=null 로 호출해 아직
+  // 어떤 기록에도 붙지 않은 토큰만 허용하고, update 는 현재 기록에 붙은 토큰의 재사용도 허용한다.
+  async validateForEntry(
+    userId: string,
+    entryId: string | null,
+    tokens: string[],
+    db: MealPhotoDb = this.prisma,
+  ): Promise<void> {
+    if (new Set(tokens).size !== tokens.length || tokens.some((token) => !isValidMealPhotoToken(token))) {
+      throw new MealPhotoError('invalid_token', '사진 토큰 형식이 올바르지 않습니다.');
+    }
+    const owned = await db.mealPhoto.findMany({ where: { token: { in: tokens }, userId } });
     const ownedTokens = new Set(owned.map((p) => p.token));
     const missing = tokens.filter((t) => !ownedTokens.has(t));
     if (missing.length > 0) throw new MealPhotoError('not_found', '사진을 찾을 수 없습니다.');
 
     // 다른 기록에 붙어 있던 사진은 이 기록으로 옮기지 않는다(토큰 재사용 방지).
     for (const p of owned) {
-      if (p.entryId && p.entryId !== entryId) {
+      if (p.entryId && (entryId === null || p.entryId !== entryId)) {
         throw new MealPhotoError('forbidden', '이미 다른 기록에 사용된 사진입니다.');
       }
     }
-    const detached = await this.prisma.mealPhoto.findMany({
-      where: { entryId, token: { notIn: tokens.length > 0 ? tokens : ['-'] } },
-    });
-    for (const [i, token] of tokens.entries()) {
-      await this.prisma.mealPhoto.update({ where: { token }, data: { entryId, sortOrder: i } });
-    }
-    for (const p of detached) {
-      await this.prisma.mealPhoto.delete({ where: { token: p.token } });
-      await this.deleteFiles(p.userId, p.token);
-    }
   }
 
-  // 기록 삭제 시 — 행은 Cascade 로 사라지므로 파일만 지운다(삭제 전에 호출).
-  async removeForEntry(entryId: string): Promise<void> {
-    const rows = await this.prisma.mealPhoto.findMany({ where: { entryId } });
+  // 기록 저장/수정 트랜잭션 안에서 호출한다. DB 행만 바꾸고, 삭제할 파일 목록을 반환한다.
+  // 파일은 호출부가 커밋 뒤에 지워야 롤백 시 DB 행만 복구되고 파일은 사라지는 불일치가 없다.
+  async attachToEntry(
+    userId: string,
+    entryId: string,
+    tokens: string[],
+    db: MealPhotoDb = this.prisma,
+  ): Promise<MealPhotoFileRef[]> {
+    await this.validateForEntry(userId, entryId, tokens, db);
+    const detached = await db.mealPhoto.findMany({
+      where: { entryId, token: { notIn: tokens.length > 0 ? tokens : ['-'] } },
+      select: { userId: true, token: true },
+    });
+    for (const [i, token] of tokens.entries()) {
+      await db.mealPhoto.update({ where: { token }, data: { entryId, sortOrder: i } });
+    }
+    if (detached.length > 0) {
+      await db.mealPhoto.deleteMany({ where: { token: { in: detached.map((p) => p.token) } } });
+    }
+    return detached;
+  }
+
+  // DB 커밋 뒤 실행하는 파일 side effect. 개별 삭제는 멱등이며 실패해도 다음 정리 작업을 막지 않는다.
+  async removeFiles(rows: readonly MealPhotoFileRef[]): Promise<void> {
     for (const p of rows) await this.deleteFiles(p.userId, p.token);
+  }
+
+  /**
+   * 전체 식단 삭제 전용. DB에 추적되지 않은 과거 파일까지 빠짐없이 없애기 위해 사용자 전용
+   * 디렉터리 자체를 지운다. 오류를 삼키지 않아 호출자가 200을 반환하지 않게 하며, force라
+   * DB가 이미 빈 재시도에서도 같은 삭제를 안전하게 다시 수행할 수 있다.
+   *
+   * 사용자 mutation barrier를 이미 잡은 MealDataService에서만 호출한다(여기서 중첩 lock 금지).
+   */
+  async removeAllFilesForUser(userId: string): Promise<void> {
+    await rm(this.userDir(userId), { recursive: true, force: true });
   }
 
   // 고아 정리 — 기록에 붙지 않은 채 TTL 을 넘긴 업로드. 부팅 + 일 1회 cron 에서 호출.
@@ -253,17 +309,107 @@ export class MealPhotoService {
       where: { entryId: null, createdAt: { lt: cutoff } },
       take: 500,
     });
+    let removed = 0;
     for (const p of rows) {
-      await this.prisma.mealPhoto.delete({ where: { token: p.token } });
-      await this.deleteFiles(p.userId, p.token);
+      await mealMutationBarrier.runExclusive(p.userId, async () => {
+        // 후보 조회 뒤 전체 삭제나 기록 attach가 먼저 실행됐을 수 있으므로 조건부 삭제로 재확인한다.
+        const deleted = await this.prisma.mealPhoto.deleteMany({
+          where: { token: p.token, userId: p.userId, entryId: null, createdAt: { lt: cutoff } },
+        });
+        if (deleted.count === 0) return;
+        await this.deleteFiles(p.userId, p.token);
+        removed += 1;
+      });
     }
-    if (rows.length > 0) this.log?.info({ count: rows.length }, '[meal-photo] swept orphan photos');
-    return rows.length;
+    if (removed > 0) this.log?.info({ count: removed }, '[meal-photo] swept orphan photos');
+    return removed;
+  }
+
+  /**
+   * 파일은 생성됐지만 DB 행 생성 전에 프로세스가 종료된 경우를 정리한다. DB 기반 sweepOrphans 만으로는
+   * 이런 파일을 찾을 수 없으므로 저장소의 직계 사용자 디렉터리와 정해진 JPEG 이름만 제한적으로 훑는다.
+   * 최근 파일은 업로드 중일 수 있어 건드리지 않고, 심볼릭 링크도 따라가지 않는다.
+   */
+  async sweepUntrackedFiles(ttlHours: number = ORPHAN_PHOTO_TTL_HOURS): Promise<number> {
+    const cutoffMs = Date.now() - Math.max(0, ttlHours) * 3_600_000;
+    let userDirs;
+    try {
+      userDirs = await readdir(this.storageDir, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0;
+      throw error;
+    }
+
+    const candidates: Array<{ userId: string; token: string }> = [];
+    for (const userDir of userDirs) {
+      if (candidates.length >= UNTRACKED_FILE_SWEEP_LIMIT) break;
+      if (!userDir.isDirectory() || !USER_DIR_PATTERN.test(userDir.name)) continue;
+
+      const path = join(this.storageDir, userDir.name);
+      let files;
+      try {
+        files = await readdir(path, { withFileTypes: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        this.log?.warn({ err: error, userId: userDir.name }, '[meal-photo] failed to scan user directory');
+        continue;
+      }
+
+      const byToken = new Map<string, number>();
+      for (const file of files) {
+        if (!file.isFile()) continue;
+        const match = PHOTO_FILE_PATTERN.exec(file.name);
+        if (!match) continue;
+        try {
+          const info = await stat(join(path, file.name));
+          const token = match[1]!;
+          byToken.set(token, Math.max(byToken.get(token) ?? 0, info.mtimeMs));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            this.log?.warn({ err: error, file: file.name }, '[meal-photo] failed to inspect photo file');
+          }
+        }
+      }
+
+      for (const [token, newestMtimeMs] of byToken) {
+        if (newestMtimeMs >= cutoffMs) continue;
+        candidates.push({ userId: userDir.name, token });
+        if (candidates.length >= UNTRACKED_FILE_SWEEP_LIMIT) break;
+      }
+    }
+
+    if (candidates.length === 0) return 0;
+
+    const tracked = new Set<string>();
+    for (let i = 0; i < candidates.length; i += DB_LOOKUP_CHUNK_SIZE) {
+      const chunk = candidates.slice(i, i + DB_LOOKUP_CHUNK_SIZE);
+      const rows = await this.prisma.mealPhoto.findMany({
+        where: { token: { in: chunk.map((candidate) => candidate.token) } },
+        select: { userId: true, token: true },
+      });
+      for (const row of rows) tracked.add(`${row.userId}\0${row.token}`);
+    }
+
+    const untracked = candidates.filter(
+      (candidate) => !tracked.has(`${candidate.userId}\0${candidate.token}`),
+    );
+    for (const candidate of untracked) await this.deleteFiles(candidate.userId, candidate.token);
+    if (untracked.length > 0) {
+      this.log?.info({ count: untracked.length }, '[meal-photo] swept untracked photo files');
+    }
+    return untracked.length;
   }
 
   private async deleteFiles(userId: string, token: string): Promise<void> {
     const dir = this.userDir(userId);
-    await rm(join(dir, `${token}.jpg`), { force: true }).catch(() => undefined);
-    await rm(join(dir, `${token}_t.jpg`), { force: true }).catch(() => undefined);
+    for (const path of [join(dir, `${token}.jpg`), join(dir, `${token}_t.jpg`)]) {
+      try {
+        await rm(path, { force: true });
+      } catch (error) {
+        // 개별 정리는 best-effort를 유지한다. 특히 DB create 실패 catch 안에서는 이 오류가 원래
+        // DB 오류를 덮으면 안 되므로 경고만 남긴다. 전체 삭제는 위의 strict 메서드를 사용한다.
+        this.log?.warn({ err: error, userId, token, path }, '[meal-photo] failed to remove photo file');
+      }
+    }
   }
 }

@@ -3,6 +3,7 @@ import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import {
   configureApi,
+  handleUnauthorizedForCurrentSession,
   setAirLocationStorage,
   setBusFavoriteStorage,
   setMealDraftStorage,
@@ -13,6 +14,7 @@ import {
 } from '@repo/shared';
 import { useSettlementPrefsStore } from './settlementPrefsStore';
 import { useThemeStore } from './themeStore';
+import { mobileQueryClient } from './queryClient';
 
 // 정산하기 draft persist 어댑터 — 웹은 sessionStorage 가 자동, 앱은 모듈
 // 로드 시점에 AsyncStorage 를 주입해야 zustand persist 가 첫 read/write 부터
@@ -142,6 +144,16 @@ export const bootstrapApi = async (): Promise<void> => {
   configureApi({
     baseUrl: apiUrl,
     getToken: () => cachedToken,
-    onUnauthorized: () => useAuthStore.getState().clearSession(),
+    onUnauthorized: (requestToken) => {
+      handleUnauthorizedForCurrentSession({
+        requestToken,
+        getCurrentToken: () => cachedToken,
+        onCurrentSessionUnauthorized: () => {
+          void mobileQueryClient.cancelQueries();
+          mobileQueryClient.clear();
+          useAuthStore.getState().clearSession();
+        },
+      });
+    },
   });
 };

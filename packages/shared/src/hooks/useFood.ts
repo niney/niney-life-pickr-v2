@@ -8,7 +8,12 @@ import type {
   FoodImportRunInputType,
   FoodImportRunType,
 } from '@repo/api-contract';
-import { buildFoodImportRunEventsUrl, foodApi, type FoodAdminListInput } from '../api/food.api.js';
+import {
+  buildFoodImportRunEventsUrl,
+  foodApi,
+  type FoodAdminListInput,
+  type FoodRestaurantsInput,
+} from '../api/food.api.js';
 
 // 쿼리 키 루트 ['food', ...] — 어드민 목록은 ['food','admin',...], 통계는 ['food','stats'],
 // 적재 잡은 ['food','import',...]. 편집/적재 완료 시 이 접두사들로 무효화한다.
@@ -27,6 +32,21 @@ export const useFoodSearch = (q: string, opts: { limit?: number; enabled?: boole
   });
 };
 
+// 좌표가 있으면 반경 안 거리순, 없으면 수집 근거·평점순. foodId가 비어 있을 때는
+// 서버의 min(1) params 검증에 걸리지 않게 호출을 막는다.
+export const useFoodRestaurants = (
+  foodId: string,
+  input: FoodRestaurantsInput = {},
+  opts: { enabled?: boolean } = {},
+) =>
+  useQuery({
+    queryKey: ['food', 'restaurants', foodId, input],
+    queryFn: () => foodApi.restaurants(foodId, input),
+    enabled: (opts.enabled ?? true) && foodId.trim().length > 0,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
 // ── 어드민 카탈로그 ──────────────────────────────────────────────────────────
 export const useFoodAdminList = (query: FoodAdminListInput = {}) =>
   useQuery({
@@ -39,6 +59,13 @@ export const useFoodAdminStats = () =>
   useQuery({
     queryKey: ['food', 'stats'],
     queryFn: foodApi.adminStats,
+  });
+
+export const useFoodRecognitionQuality = (days = 30) =>
+  useQuery({
+    queryKey: ['food', 'admin', 'recognition-quality', days],
+    queryFn: () => foodApi.adminRecognitionQuality({ days }),
+    staleTime: 5 * 60_000,
   });
 
 const invalidateCatalog = (qc: ReturnType<typeof useQueryClient>): void => {

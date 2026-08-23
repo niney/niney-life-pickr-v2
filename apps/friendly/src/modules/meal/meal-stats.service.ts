@@ -15,6 +15,8 @@ import {
   type MealSlot,
   type MealType,
 } from '@repo/utils';
+import { parseMealRecommendationFeedback } from '../meal-recommendation/meal-recommendation.feedback.js';
+import { computeWeeklyMealInsights } from './meal-stats.insights.js';
 
 // 기간 통계 — 집계 로직은 순수 함수(computeMealStats)로 두고 서비스는 조회만 한다.
 // "겹침(repeatRate)"·"연속(streakDays)"은 추천의 variety 가중치와 같은 정의를 쓴다.
@@ -35,6 +37,11 @@ export interface StatEntryRow {
     proteinG?: number | null;
     sodiumMg?: number | null;
   }[];
+}
+
+export interface RecommendationStatRow {
+  feedbackJson: string | null;
+  targetDate?: string;
 }
 
 const TOP_FOODS_LIMIT = 10;
@@ -63,6 +70,7 @@ export const computeMealStats = (
   from: string,
   to: string,
   today: string,
+  recommendationRows: RecommendationStatRow[] = [],
 ): MealStatsResultType => {
   const days = dateKeyRange(from, to);
   const bySlot = new Map<string, number>();
@@ -142,6 +150,19 @@ export const computeMealStats = (
   const perDay = (total: number): number | null =>
     itemsWithNutrition === 0 || nutritionDays === 0 ? null : Math.round((total / nutritionDays) * 10) / 10;
 
+  let chosenCount = 0;
+  let loggedCount = 0;
+  let ratedCount = 0;
+  for (const row of recommendationRows) {
+    const feedback = parseMealRecommendationFeedback(row.feedbackJson);
+    if (!feedback) continue;
+    if (feedback.pickedName) chosenCount += 1;
+    if (feedback.eatenEntryId) loggedCount += 1;
+    if (feedback.rating !== null) ratedCount += 1;
+  }
+  const acceptanceRate =
+    chosenCount > 0 ? Math.min(1, Math.round((loggedCount / chosenCount) * 1000) / 1000) : 0;
+
   return {
     from,
     to,
@@ -154,6 +175,8 @@ export const computeMealStats = (
       coverage: itemCount === 0 ? 0 : Math.round((itemsWithNutrition / itemCount) * 100) / 100,
       itemsWithNutrition,
     },
+    recommendation: { chosenCount, loggedCount, ratedCount, acceptanceRate },
+    insights: computeWeeklyMealInsights(rows, from, to, recommendationRows),
     recordedDays: recorded.size,
     totalDays: days.length,
     bySlot: bucket<MealSlot>(bySlot, (k) => labelOf(MEAL_SLOT_LABEL, k), MEAL_SLOT_ORDER),
@@ -210,7 +233,13 @@ export class MealStatsService {
   }
 
   async stats(userId: string, from: string, to: string, today: string): Promise<MealStatsResultType> {
-    const rows = await this.load(userId, from, to);
-    return computeMealStats(rows, from, to, today);
+    const [rows, recommendationRows] = await Promise.all([
+      this.load(userId, from, to),
+      this.prisma.mealRecommendation.findMany({
+        where: { userId, targetDate: { gte: from, lte: to }, feedbackJson: { not: null } },
+        select: { feedbackJson: true, targetDate: true },
+      }),
+    ]);
+    return computeMealStats(rows, from, to, today, recommendationRows);
   }
 }

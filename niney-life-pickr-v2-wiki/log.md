@@ -1,5 +1,15 @@
 # Wiki Compile Log
 
+## 2026-08-23 (23rd compile)
+
+**Topics updated:** none
+**New topics:** meal(개인 식단 — 앱 사진/수동 기록·vision 인식/인간 교정·선호/날씨 기반 추천+결정적 fallback·달력/영양/추천 funnel/주간 insight·앱 로컬 알림·JSON export/강한 확인 전체 삭제; 사용자별 공통 FIFO write barrier가 기록/사진/선호/추천/삭제를 직렬화, DB commit 뒤 strict 사진 폴더 삭제 실패는 200 차단+재호출 복구; request-token 401 guard와 principal 전환 QueryClient cancel/clear), food(6출처 음식 카탈로그 — 공공/내부 데이터 월간 import+ADMIN SSE·nameNorm 보존 병합·FOOD_CLASSIFY_VERSION 분류·설명 가능한 영양 추정·source/exact 기반 음식→식당 역검색·k=2 사진 인식 품질)
+**New concepts:** none
+**Concepts updated:** zod-ssot-buildless(+food/meal 계약), sse-token-auth(+food import events), platform-ui-split(+mealDraftStore 웹 sessionStorage/앱 AsyncStorage + 입력 앱/조회 웹 역할 분리), in-memory-singleton-gates(+food 단일 import/meal quota·동일 추천 join·사용자 write barrier), versioned-llm-prompts(+food classify/meal recognition·recommendation), operation-log-instrumentation(+food import/meal AI 실행)
+**Sources scanned:** ~983 (22차 ~909 + meal 46 + food 28)
+**Sources changed:** 식단/음식 도메인 신설·하드닝 구현군 + 인증 principal/cache 경계; 신규 위키 source 74개
+**Notes:** food와 meal은 마스터/개인 데이터 경계로 분리했다. food는 자동완성·인식 매칭·영양·추천 후보/식당 근거를 제공하지만 meal은 값을 스냅샷으로 가져가 카탈로그 재적재가 과거 기록을 바꾸지 않는다. 식당 역검색은 fuzzy를 금지하고 현재 판매 보장 아님 notice를 계약에 고정했다. meal 전체 삭제 경쟁은 라우트별 서비스 락이 아니라 모듈 singleton 사용자 FIFO 한 곳에서 막고, 사진 파일 side effect는 DB commit 뒤 수행한다. 웹은 조회/분석/추천/설정, 앱은 촬영/편집/재기록/알림, 어드민은 food catalog/import/recognition-quality를 담당한다. 토픽 26→28, 컨셉 17 유지.
+
 ## 2026-08-17 (22nd compile)
 
 **Topics updated:** subway(승격 2건 소비처 반영 — congestionUtils 색-facade 화 + SubwayStationsMap 재검색 shared 훅 교체), bus(BusStationsMap 인라인 재검색 → shared useMapResearch, 신규 다이제스트 1건), web(테스트 24→29건 — useMapResearch 타이밍 계약 5건 + BusStationsMap 소스 주석), mobile(실기기 검증 갭 서술 갱신 — 코드 레벨 검증 완료로 + 앱 congestionUtils/useMapResearch facade 화 곁다리), shared(테스트 25→26건 — voteGuestStore 앱 시나리오 AsyncStorage형 비동기 복원 통합 + Sources 에 useMapResearch.ts), utils(Sources 에 subwayCongestion.ts/.test.ts 등재)

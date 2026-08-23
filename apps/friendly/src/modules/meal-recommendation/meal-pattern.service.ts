@@ -15,6 +15,10 @@ import {
   daysBetween,
 } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
+import {
+  parseMealRecommendationFeedback,
+  parseMealRecommendationItems,
+} from './meal-recommendation.feedback.js';
 
 // 추천의 "결정적" 절반 — 사용자 기록을 패턴 프로필로 집계하고, 후보 풀을 만들고, 가중치로
 // 점수를 매긴다. LLM 은 이 결과 위에서 고르고 이유를 붙일 뿐이고, LLM 이 없거나 실패해도
@@ -29,6 +33,8 @@ const DECAY_HALF_LIFE_DAYS = 30;
 const VARIETY_FULL_DAYS = 14;
 // 균형 계산 창.
 const BALANCE_DAYS = 14;
+// 덜 선호는 후보를 지우지 않되, 취향 만점도 거의 0으로 낮출 만큼 강하게 감점한다.
+export const SOFT_DISLIKE_TASTE_PENALTY = 0.85;
 export const CANDIDATE_POOL_SIZE = 40;
 // 후보 풀에서 카탈로그 인기·미경험이 차지하는 최대 수(취향 후보를 밀어내지 않게).
 const CATALOG_POPULAR_MAX = 14;
@@ -66,6 +72,22 @@ export interface FoodStat {
   cuisine: FoodCuisineType | null;
 }
 
+export interface RecommendationFeedbackSignal {
+  targetDate: string;
+  candidateNames: string[];
+  pickedName: string | null;
+  rating: number | null;
+  logged: boolean;
+}
+
+export interface RecommendationFeedbackStat {
+  // 모두 최근 반응일수록 크게 반영된 지수 감쇠 합계다.
+  chosenWeight: number;
+  loggedWeight: number;
+  ratingSum: number;
+  ratingWeight: number;
+}
+
 export interface PatternProfile {
   entryCount: number;
   itemCount: number;
@@ -81,6 +103,8 @@ export interface PatternProfile {
   cuisineShare: Record<string, number>;
   // 이름 정규화 → 마지막 섭취일.
   lastEatenByNorm: Map<string, string>;
+  // 추천 선택·실제 기록·평가를 다음 추천 취향 점수에 반영한다.
+  recommendationFeedbackByNorm: Map<string, RecommendationFeedbackStat>;
 }
 
 export interface CandidateInput {
@@ -135,6 +159,7 @@ export const buildProfile = (
   history: HistoryItem[],
   targetSlot: MealSlotType,
   today: string,
+  feedbackSignals: RecommendationFeedbackSignal[] = [],
 ): PatternProfile => {
   const byNorm = new Map<string, FoodStat>();
   const dishCount = new Map<string, number>();
@@ -143,6 +168,7 @@ export const buildProfile = (
   const recent = new Set<string>();
   const slotCount = new Map<string, number>();
   const entryKeys = new Set<string>();
+  const recommendationFeedbackByNorm = new Map<string, RecommendationFeedbackStat>();
   let balanceTotal = 0;
 
   for (const item of history) {
@@ -192,6 +218,34 @@ export const buildProfile = (
 
   const topFoods = [...byNorm.values()].sort((a, b) => b.weight - a.weight);
 
+  for (const signal of feedbackSignals) {
+    const daysSince = Math.max(0, daysBetween(signal.targetDate, today) ?? 0);
+    const weight = decayWeight(daysSince);
+    const pickedNorm = signal.pickedName ? normalizeTerm(signal.pickedName) : '';
+    const ratingTargets = pickedNorm
+      ? [pickedNorm]
+      : signal.candidateNames.map(normalizeTerm).filter((name) => name.length > 0);
+    const targets = new Set(ratingTargets);
+    if (pickedNorm) targets.add(pickedNorm);
+    for (const norm of targets) {
+      const stat = recommendationFeedbackByNorm.get(norm) ?? {
+        chosenWeight: 0,
+        loggedWeight: 0,
+        ratingSum: 0,
+        ratingWeight: 0,
+      };
+      if (norm === pickedNorm) {
+        stat.chosenWeight += weight;
+        if (signal.logged) stat.loggedWeight += weight;
+      }
+      if (signal.rating !== null && ratingTargets.includes(norm)) {
+        stat.ratingSum += signal.rating * weight;
+        stat.ratingWeight += weight;
+      }
+      recommendationFeedbackByNorm.set(norm, stat);
+    }
+  }
+
   return {
     entryCount: entryKeys.size,
     itemCount: history.length,
@@ -205,6 +259,7 @@ export const buildProfile = (
     ingredientShare: share(ingredientCount),
     cuisineShare: share(cuisineCount),
     lastEatenByNorm: new Map([...byNorm.values()].map((f) => [f.nameNorm, f.lastEatenDate])),
+    recommendationFeedbackByNorm,
   };
 };
 
@@ -282,11 +337,35 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
   const maxWeight = ctx.profile.topFoods[0]?.weight ?? 0;
   const own = ctx.profile.topFoods.find((f) => f.nameNorm === c.nameNorm);
   let taste = maxWeight > 0 && own ? clamp01(own.weight / maxWeight) : 0;
-  if (c.liked) {
+  const disliked = matchesFoodTerms(c, ctx.preference.dislikedFoods ?? []);
+  if (c.liked && !disliked) {
     taste = clamp01(taste + 0.5);
     tags.push('좋아하는 음식');
   }
   if (own && own.count >= 3) tags.push(`${own.count}번 먹음`);
+
+  const feedback = ctx.profile.recommendationFeedbackByNorm.get(c.nameNorm);
+  if (feedback) {
+    // 선택보다 실제 기록을 더 강하게, 평가는 방향(+/-)까지 반영한다. 각 항은 상한을 둬
+    // 오래 쓴 사용자의 과거 반응이 최근 취향을 영구히 압도하지 않게 한다.
+    const chosenBonus = 0.12 * Math.min(1, feedback.chosenWeight);
+    const loggedBonus = 0.25 * Math.min(1, feedback.loggedWeight);
+    const ratingAverage = feedback.ratingWeight > 0 ? feedback.ratingSum / feedback.ratingWeight : 0;
+    // 합계 자체가 날짜 감쇠를 포함한다. 평균만 쓰면 30일 전 👍 하나도 오늘 👍 하나와 같은
+    // 크기가 되어 감쇠가 사라지므로, 점수에는 감쇠 합계를 상한 처리해 쓴다.
+    const ratingSignal = Math.max(-1, Math.min(1, feedback.ratingSum));
+    const ratingBonus = 0.18 * ratingSignal;
+    taste = clamp01(taste + chosenBonus + loggedBonus + ratingBonus);
+    if (feedback.loggedWeight > 0) tags.push('추천 후 먹었어요');
+    else if (feedback.chosenWeight > 0) tags.push('추천에서 선택');
+    if (ratingAverage > 0) tags.push('좋은 평가 반영');
+  }
+  if (disliked) {
+    // 좋아요·과거 섭취·추천 반응보다 소프트 비선호를 우선한다. 후보는 남아 있어 다른
+    // feature가 매우 좋거나 대안이 부족하면 최종 추천에 포함될 수 있다.
+    taste = clamp01(taste - SOFT_DISLIKE_TASTE_PENALTY);
+    tags.unshift('가능하면 피함');
+  }
 
   // balance — 최근 분포에서 덜 먹은 축일수록 높다(세 축 평균).
   const shareOf = (rec: Record<string, number>, key: string | null): number => (key ? (rec[key] ?? 0) : 0);
@@ -348,12 +427,14 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
  * 적는 건 '오이'처럼 재료인 경우가 많은데, 이름만 보면 오이냉국은 걸러도 오이가 든 김밥은
  * 그대로 추천되기 때문이다. 재료 데이터가 있는 행은 1,097종뿐이라 이름 매칭도 계속 필요하다.
  */
-export const isExcluded = (c: CandidateInput, excluded: string[]): boolean => {
-  const norms = excluded.map((e) => normalizeTerm(e)).filter((e) => e.length > 0);
+export const matchesFoodTerms = (c: CandidateInput, terms: string[]): boolean => {
+  const norms = terms.map((e) => normalizeTerm(e)).filter((e) => e.length > 0);
   if (norms.length === 0) return false;
   const ingredientNorms = (c.ingredients ?? []).map((i) => normalizeTerm(i));
   return norms.some((e) => c.nameNorm.includes(e) || ingredientNorms.some((i) => i.includes(e)));
 };
+
+export const isExcluded = (c: CandidateInput, excluded: string[]): boolean => matchesFoodTerms(c, excluded);
 
 // ── 후보 풀 + 서비스 ─────────────────────────────────────────────────────────
 
@@ -401,17 +482,54 @@ export class MealPatternService {
     return out;
   }
 
+  async loadFeedbackSignals(userId: string, today: string): Promise<RecommendationFeedbackSignal[]> {
+    const from = shiftDate(today, -HISTORY_DAYS);
+    const rows = await this.prisma.mealRecommendation.findMany({
+      where: { userId, targetDate: { gte: from, lte: today }, feedbackJson: { not: null } },
+      select: { targetDate: true, itemsJson: true, feedbackJson: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return rows.map((row) => {
+      const feedback = parseMealRecommendationFeedback(row.feedbackJson);
+      return {
+        targetDate: row.targetDate,
+        candidateNames: parseMealRecommendationItems(row.itemsJson).map((item) => item.name),
+        pickedName: feedback?.pickedName ?? null,
+        rating: feedback?.rating ?? null,
+        logged: feedback?.eatenEntryId !== null && feedback?.eatenEntryId !== undefined,
+      };
+    });
+  }
+
   // 후보 풀 = 내 이력(취향) + 좋아요 + 카탈로그 인기 + 미경험(탐험). 제외 음식·음료/주류는 뺀다.
   async buildCandidates(profile: PatternProfile, preference: MealPreferenceType): Promise<CandidateInput[]> {
-    const seen = new Set<string>();
     const out: CandidateInput[] = [];
+    const candidateByNorm = new Map<string, CandidateInput>();
 
     const push = (c: CandidateInput, source = ''): void => {
-      if (seen.has(c.nameNorm)) return;
+      const existing = candidateByNorm.get(c.nameNorm);
+      if (existing) {
+        // 같은 음식이 이력과 likedFoods 양쪽에서 오면 먼저 들어온 이력 후보를 버리지 말고
+        // 좋아요 신호와 더 풍부한 카탈로그 필드를 합친다.
+        existing.liked ||= c.liked;
+        existing.fromHistory ||= c.fromHistory;
+        existing.foodId ??= c.foodId;
+        existing.dishType ??= c.dishType;
+        existing.mainIngredient ??= c.mainIngredient;
+        existing.cuisine ??= c.cuisine;
+        existing.kcal ??= c.kcal;
+        existing.sodiumMg ??= c.sodiumMg;
+        existing.proteinG ??= c.proteinG;
+        existing.ingredientCount ??= c.ingredientCount;
+        if (existing.ingredients.length === 0 && c.ingredients.length > 0) existing.ingredients = c.ingredients;
+        existing.popularity = Math.max(existing.popularity, c.popularity);
+        return;
+      }
       if (c.dishType && EXCLUDED_DISH_TYPES.has(c.dishType)) return;
       if (isVagueMenuVocabulary(source, c.dishType)) return;
       if (isExcluded(c, preference.excludedFoods)) return;
-      seen.add(c.nameNorm);
+      candidateByNorm.set(c.nameNorm, c);
       out.push(c);
     };
 
@@ -574,6 +692,15 @@ export const describeProfile = (profile: PatternProfile, targetSlot: MealSlotTyp
   if (profile.slotFoods.length > 0) {
     lines.push(`${MEAL_SLOT_LABEL[targetSlot]}에 자주: ${profile.slotFoods.join(', ')}`);
   }
+  const feedback = [...profile.recommendationFeedbackByNorm.entries()]
+    .filter(([, stat]) => stat.chosenWeight > 0 || stat.loggedWeight > 0 || stat.ratingWeight > 0)
+    .sort((a, b) => b[1].loggedWeight + b[1].chosenWeight - (a[1].loggedWeight + a[1].chosenWeight))
+    .slice(0, 5)
+    .map(([name, stat]) => {
+      const ratingSignal = Math.max(-1, Math.min(1, stat.ratingSum));
+      return `${name}(선택 ${stat.chosenWeight.toFixed(1)}, 기록 ${stat.loggedWeight.toFixed(1)}, 평가 ${ratingSignal.toFixed(1)})`;
+    });
+  if (feedback.length > 0) lines.push(`최근 추천 반응: ${feedback.join(', ')}`);
   const shareLine = (label: string, rec: Record<string, number>, labels: Record<string, string>): string | null => {
     const top = Object.entries(rec)
       .sort((a, b) => b[1] - a[1])

@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type {
   CreateMealEntryInputType,
   CreateMealRecommendationInputType,
+  DeleteMealDataInputType,
   MealRecommendationFeedbackInputType,
   RecognizeMealInputType,
   UpdateMealEntryInputType,
@@ -24,11 +31,41 @@ const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
   void qc.invalidateQueries({ queryKey: [...KEY, 'time-presets'] });
 };
 
-export const useMealEntries = (query: ListMealEntriesInput = {}) =>
+// 전체 내보내기는 사용자 동작 때만 큰 JSON 을 받도록 mutation 으로 제공한다.
+export const useExportMealData = () =>
+  useMutation({ mutationFn: () => mealApi.exportData() });
+
+export const useDeleteAllMealData = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DeleteMealDataInputType) => mealApi.deleteAllData(input),
+    onSuccess: () => {
+      // 단건·목록·통계·추천·선호 캐시에 삭제 전 개인정보가 남지 않게 전부 제거한다.
+      qc.removeQueries({ queryKey: KEY });
+    },
+  });
+};
+
+export const useMealEntries = (query: ListMealEntriesInput = {}, enabled = true) =>
   useQuery({
     queryKey: [...KEY, 'list', query],
     queryFn: () => mealApi.list(query),
+    enabled,
     placeholderData: keepPreviousData,
+  });
+
+// 목록 화면용 cursor 누적 조회. 서버 cursor 는 구조를 해석하지 않는 opaque string 으로
+// 취급하고, 응답의 nextCursor 를 다음 요청에 그대로 전달한다.
+export const useInfiniteMealEntries = (
+  query: Omit<ListMealEntriesInput, 'cursor'> = {},
+  enabled = true,
+) =>
+  useInfiniteQuery({
+    queryKey: [...KEY, 'list', 'infinite', query],
+    queryFn: ({ pageParam }) => mealApi.list({ ...query, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled,
   });
 
 export const useMealEntry = (id: string | null | undefined) =>

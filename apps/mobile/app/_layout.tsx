@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { QUERY_GC_TIME, QUERY_STALE_TIME, ThemeProvider, themes, useTheme } from '@repo/shared';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider, themes, useTheme } from '@repo/shared';
 import { bootstrapApi } from '../src/lib/api-setup';
+import { mobileQueryClient } from '../src/lib/queryClient';
 import { setupQueryFocus } from '../src/lib/queryFocus';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { ReviewAskBanner } from '../src/components/ReviewAskBanner';
@@ -24,15 +26,43 @@ const MIN_SPLASH_MS = 2200;
 // 가 계속 도는 것을 막는다. 모듈 로드 시 1회.
 setupQueryFocus();
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: QUERY_STALE_TIME,
-      gcTime: QUERY_GC_TIME,
-      retry: 1,
-    },
-  },
+// 하차·식사 등 앱의 로컬 알림은 화면이 열려 있을 때도 배너로 보여 준다. 특정
+// 기능 화면이 한 번도 마운트되지 않아도 적용되도록 루트에서 한 번 설정한다.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
 });
+
+// 식사 알림을 누르면 식단 화면으로 이동한다. 허용한 내부 경로만 처리해 알림 data 가
+// 임의 라우트가 되는 것을 막고, cold start 때 남은 마지막 응답도 한 번만 소비한다.
+function NotificationNavigation() {
+  const router = useRouter();
+  const handledResponseId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const open = (response: Notifications.NotificationResponse) => {
+      const responseId = response.notification.request.identifier;
+      if (handledResponseId.current === responseId) return;
+      const href = response.notification.request.content.data?.href;
+      if (href !== '/meal' && href !== '/meal/new') return;
+      handledResponseId.current = responseId;
+      router.push(href as never);
+      void Notifications.clearLastNotificationResponseAsync();
+    };
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(open);
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) open(response);
+    });
+    return () => subscription.remove();
+  }, [router]);
+
+  return null;
+}
 
 // ThemeProvider 안쪽에서 useTheme 로 네이티브 Stack 헤더/scene 배경을 테마화한다.
 // (헤더가 있는 화면들은 headerStyle/headerTintColor 를 따로 안 줘서 여기 한 번에
@@ -40,23 +70,26 @@ const queryClient = new QueryClient({
 function RootNavigator() {
   const theme = useTheme();
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        // headerBackButtonDisplayMode='minimal' — iOS 백 버튼에서 이전 화면
-        // title 라벨을 끄고 chevron(<)만 노출.
-        headerBackButtonDisplayMode: 'minimal',
-        headerStyle: { backgroundColor: theme.colors.bg },
-        headerTintColor: theme.colors.text,
-        headerTitleStyle: { color: theme.colors.text },
-        headerShadowVisible: false,
-        // scene 배경 — 화면 전환 시 흰 깜빡임 방지.
-        contentStyle: { backgroundColor: theme.colors.bg },
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(auth)" />
-    </Stack>
+    <>
+      <NotificationNavigation />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // headerBackButtonDisplayMode='minimal' — iOS 백 버튼에서 이전 화면
+          // title 라벨을 끄고 chevron(<)만 노출.
+          headerBackButtonDisplayMode: 'minimal',
+          headerStyle: { backgroundColor: theme.colors.bg },
+          headerTintColor: theme.colors.text,
+          headerTitleStyle: { color: theme.colors.text },
+          headerShadowVisible: false,
+          // scene 배경 — 화면 전환 시 흰 깜빡임 방지.
+          contentStyle: { backgroundColor: theme.colors.bg },
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(auth)" />
+      </Stack>
+    </>
   );
 }
 
@@ -90,7 +123,7 @@ export default function RootLayout() {
       onLayout={onLayout}
     >
       <ThemeProvider mode={mode}>
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={mobileQueryClient}>
           {/* BottomSheetModal portal 호스트 — 정산 입력 화면처럼 ScrollView 안에서
               호출되는 시트가 부모 tree 와 격리되도록 root 에 한 번만 둔다. */}
           <BottomSheetModalProvider>
