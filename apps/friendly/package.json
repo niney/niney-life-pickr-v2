@@ -34,6 +34,7 @@
     "export:life-geocode": "tsx --env-file=.env scripts/export-life-geocode.ts",
     "import:life-geocode": "tsx --env-file=.env scripts/import-life-geocode.ts",
     "status:life-map": "tsx --env-file=.env scripts/life-map-status.ts",
+    "status:food-catalog": "tsx --env-file=.env scripts/food-catalog-status.ts",
     "export:subway-uwp": "tsx --env-file=.env scripts/export-subway-master-for-uwp.ts",
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "probe:bus": "tsx --env-file=.env scripts/probe-bus-api.ts",

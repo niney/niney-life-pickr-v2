@@ -56,6 +56,28 @@ pnpm --filter friendly load:subway-congestion  # 지하철 혼잡도(정적)
 
 정류소·역사는 사실상 정적이라 분기~반기 1회 재실행이면 충분하다.
 
+## 음식 카탈로그 적재 (식단 관리 — 최초 1회 + 필요 시 갱신)
+
+**카탈로그가 비면 오류 없이 조용히 반쪽이 된다** — 자동완성이 안 뜨고, 영양이 안 붙고, 추천 후보가
+사용자 본인 기록으로만 좁아진다. 그래서 `deploy.sh` 가 API 배포(1·2·4)마다 종수를 점검하고,
+비어 있으면 배포본이 있을 때 자동으로 적재한다.
+
+배포본 2개를 서버에 올려 둔다(리포에 없다 — 출처는 [data-sources.md](data-sources.md)).
+
+```bash
+scp data/open/food/{mfds-nutrition.csv,hansik-800.xlsx} 서버:/home/samplepcb/niney-life-pickr-v2/data/open/food/
+```
+
+```bash
+./deploy.sh 7                                  # 배포본 + 레시피 API + 이 서버의 외식 어휘 재적재
+pnpm --filter friendly status:food-catalog     # ok items=N classified=C nutrition=U meals=M
+```
+
+- 영양성분은 **파일이 기본**이고 `FOOD_API_KEY`(data.go.kr 15100070)는 선택이다 — 같은 데이터를
+  쿼터 써 가며 받을 뿐이다. 레시피만 `FOOD_RECIPE_API_KEY`(식품안전나라)가 필요하다.
+- `--classify` 단계는 chat 모델이 설정돼 있을 때만 돈다(없으면 조용히 건너뛴다).
+- 외식 어휘는 **그 서버의 식당·리뷰 데이터**에서 나오므로 서버마다 종수가 다르다. 정상이다.
+
 ## pm2 기동
 
 루트의 `ecosystem.config.cjs`:
