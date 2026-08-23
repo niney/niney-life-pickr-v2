@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import type * as DocumentPickerModule from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
@@ -23,6 +23,18 @@ import {
 import { Card, CardTitle, Note } from '~/components/common/Cards';
 import { loadMealReminderSettings, syncMealReminders } from '~/lib/mealReminders';
 import { clearMealPhotoCache } from '~/lib/mealPhotoCache';
+
+// expo-document-picker 는 **네이티브 모듈**이라 JS 번들만 갱신된 dev client 에서는 없을 수 있다.
+// 최상위에서 import 하면 모듈 로드 자체가 터져 설정 탭은 물론 식단 화면 전체가 빈 화면이 된다
+// (시뮬레이터 실측). 그래서 실제로 파일을 고를 때만 지연 로드하고, 없으면 안내로 끝낸다.
+const loadDocumentPicker = (): typeof DocumentPickerModule | null => {
+  try {
+    return require('expo-document-picker') as typeof DocumentPickerModule;
+  } catch {
+    return null;
+  }
+};
+
 
 export const MealDataManagementCard = () => {
   const theme = useTheme();
@@ -113,7 +125,11 @@ export const MealDataManagementCard = () => {
     setError(null);
     setNotice(null);
     try {
-      const picked = await DocumentPicker.getDocumentAsync({
+      const documentPicker = loadDocumentPicker();
+      if (!documentPicker) {
+        throw new Error('이 앱 빌드에는 파일 선택 모듈이 없어요. 앱을 새로 빌드하면 백업 불러오기가 켜집니다.');
+      }
+      const picked = await documentPicker.getDocumentAsync({
         type: ['application/json', 'text/json', 'application/octet-stream'],
         copyToCacheDirectory: true,
         multiple: false,
