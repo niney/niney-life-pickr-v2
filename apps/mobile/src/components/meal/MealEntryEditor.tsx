@@ -221,6 +221,8 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   // 날짜는 그대로 두고 시:분만 바꾼다 — '◀ 하루'로 옮겨 둔 날짜가 되돌아가면 안 된다.
   // (시각은 기기 로컬 기준으로 적용한다. 서버 프리셋은 Asia/Seoul 기준이라 국내 사용에선 같다.)
   const setTimeOfDay = (minutesOfDay: number) => {
+    // 편집 중이었다면 닫는다 — 안 닫으면 입력칸이 그대로 떠 있어 바뀐 시각이 가려진다(시뮬레이터 실측).
+    setEditingTime(null);
     const d = new Date(draft.eatenAt);
     d.setHours(Math.floor(minutesOfDay / 60), minutesOfDay % 60, 0, 0);
     draft.setField('eatenAt', d.toISOString());
@@ -242,6 +244,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   };
 
   const shiftTime = (minutes: number) => {
+    setEditingTime(null);
     const d = new Date(draft.eatenAt);
     d.setMinutes(d.getMinutes() + minutes);
     draft.setField('eatenAt', d.toISOString());
@@ -249,6 +252,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   };
 
   const shiftDay = (days: number) => {
+    setEditingTime(null);
     const d = new Date(draft.eatenAt);
     d.setDate(d.getDate() + days);
     draft.setField('eatenAt', d.toISOString());
@@ -390,7 +394,9 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="시각 직접 입력"
-                onPress={() => setEditingTime(timeLabel(draft.eatenAt))}
+                // 빈 칸으로 열고 지금 시각을 placeholder 로 보여 준다. 값을 채워 두면 maxLength(5)에
+                // 걸려 한 글자도 못 치고 백스페이스를 다섯 번 눌러야 한다(시뮬레이터 실측).
+                onPress={() => setEditingTime('')}
                 style={styles.whenPress}
               >
                 <Text style={styles.whenText}>
@@ -407,7 +413,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
                 maxLength={5}
                 autoFocus
                 selectTextOnFocus
-                placeholder="12:40"
+                placeholder={timeLabel(draft.eatenAt)}
                 placeholderTextColor={theme.colors.textMuted}
                 style={styles.timeInput}
                 accessibilityLabel="시각 입력"
@@ -433,6 +439,7 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
             <Chip
               label="지금"
               onPress={() => {
+                setEditingTime(null);
                 const now = new Date();
                 draft.setField('eatenAt', now.toISOString());
                 draft.setField('eatenDate', toLocalDateKey(now));

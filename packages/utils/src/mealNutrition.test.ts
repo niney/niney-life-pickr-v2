@@ -30,4 +30,27 @@ describe('summarizeMealNutrition', () => {
     expect(s.hasEstimate).toBe(true);
     expect(mealNutritionLabel(s)).toBe('약 324kcal (추정)');
   });
+
+  it('주식이 있는데 곁들임만 반영됐으면 합계를 감춘다 — "약 2kcal"은 오해를 부른다', () => {
+    const s = summarizeMealNutrition([
+      { kcal: null, isMain: true },   // 양념치킨 — 공개된 영양이 없다
+      { kcal: 2, isMain: false },     // 단무지
+      { kcal: null, isMain: false },  // 맥주
+    ]);
+    expect(s.counted).toBe(1);
+    expect(s.countedMain).toBe(0);
+    expect(mealNutritionLabel(s)).toBeNull();
+  });
+
+  it('주식이 하나라도 반영되면 보여 준다', () => {
+    const s = summarizeMealNutrition([
+      { kcal: 451, isMain: true },
+      { kcal: null, isMain: false },
+    ]);
+    expect(mealNutritionLabel(s)).toBe('약 451kcal · 2개 중 1개 반영');
+  });
+
+  it('isMain 을 안 넘기면 전부 주식으로 본다 — 기존 호출부 호환', () => {
+    expect(mealNutritionLabel(summarizeMealNutrition([{ kcal: 300 }]))).toBe('약 300kcal');
+  });
 });

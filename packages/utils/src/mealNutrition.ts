@@ -10,6 +10,8 @@ export interface MealNutritionItem {
   proteinG?: number | null;
   sodiumMg?: number | null;
   nutritionFrom?: string | null;
+  /** false = 반찬·곁들임. 곁들임만 반영된 합계는 뜻이 없어서 감추는 데 쓴다. */
+  isMain?: boolean;
 }
 
 export interface MealNutritionSummary {
@@ -22,6 +24,9 @@ export interface MealNutritionSummary {
   total: number;
   /** 하나라도 같은 계열에서 빌려온 값(추정)이 섞였는지. */
   hasEstimate: boolean;
+  /** 주식이 하나라도 있는지 / 그 중 합계에 반영된 게 있는지. */
+  hasMain: boolean;
+  countedMain: number;
 }
 
 export const summarizeMealNutrition = (items: MealNutritionItem[]): MealNutritionSummary => {
@@ -30,9 +35,14 @@ export const summarizeMealNutrition = (items: MealNutritionItem[]): MealNutritio
   let sodiumMg = 0;
   let counted = 0;
   let hasEstimate = false;
+  let hasMain = false;
+  let countedMain = 0;
   for (const item of items) {
+    const main = item.isMain !== false;
+    if (main) hasMain = true;
     if (item.kcal === null || item.kcal === undefined) continue;
     counted += 1;
+    if (main) countedMain += 1;
     kcal += item.kcal;
     proteinG += item.proteinG ?? 0;
     sodiumMg += item.sodiumMg ?? 0;
@@ -45,6 +55,8 @@ export const summarizeMealNutrition = (items: MealNutritionItem[]): MealNutritio
     counted,
     total: items.length,
     hasEstimate,
+    hasMain,
+    countedMain,
   };
 };
 
@@ -54,6 +66,9 @@ export const summarizeMealNutrition = (items: MealNutritionItem[]): MealNutritio
  */
 export const mealNutritionLabel = (s: MealNutritionSummary): string | null => {
   if (s.kcal === null) return null;
+  // 주식이 있는데 반영된 게 곁들임뿐이면 합계를 감춘다. 실측(시뮬레이터): 양념치킨+단무지+맥주에서
+  // 단무지만 값이 있어 "약 2kcal"이 떴는데, 이건 정보가 아니라 오해를 부르는 잡음이다.
+  if (s.hasMain && s.countedMain === 0) return null;
   const base = `약 ${s.kcal.toLocaleString('ko-KR')}kcal`;
   if (s.counted < s.total) return `${base} · ${s.total}개 중 ${s.counted}개 반영`;
   return s.hasEstimate ? `${base} (추정)` : base;
