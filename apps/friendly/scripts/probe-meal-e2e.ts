@@ -103,8 +103,17 @@ const main = async (): Promise<void> => {
       recognition: { model: recognized.model, version: 2, dishes: recognized.dishes },
     },
   });
-  const entry = save.json<{ id: string; items: { name: string; dishType: string | null }[]; photos: unknown[] }>();
+  const entry = save.json<{
+    id: string;
+    items: { name: string; dishType: string | null; portion: string | null; kcal: number | null; nutritionFrom: string | null }[];
+    photos: unknown[];
+  }>();
   console.log(`\n③ 저장 → ${save.statusCode} id=${entry.id.slice(0, 8)}… 항목 ${entry.items.length} 사진 ${entry.photos.length}`);
+  // 저장 시점 영양 스냅샷(1인분 × 양 배수). 카탈로그에 값이 없는 음식은 null 이 정상이다.
+  for (const it of entry.items) {
+    const kcal = it.kcal === null ? '영양 없음' : `${Math.round(it.kcal)}kcal${it.nutritionFrom ? ` (${it.nutritionFrom} 기준 추정)` : ''}`;
+    console.log(`   - ${it.name}: ${kcal}`);
+  }
 
   // ④ 목록·통계
   const list = await app.inject({ method: 'GET', url: '/api/v1/meals?limit=5', headers: auth });
@@ -116,6 +125,36 @@ const main = async (): Promise<void> => {
   const st = stats.json<{ entryCount: number; itemCount: number; byDishType: { label: string; count: number }[] }>();
   console.log(
     `\n④ 목록 ${list.statusCode} (${list.json<{ items: unknown[] }>().items.length}건) · 통계 ${stats.statusCode}: ${st.entryCount}끼/${st.itemCount}항목 · ${st.byDishType.map((b) => `${b.label} ${b.count}`).join(', ')}`,
+  );
+
+  // ④-b 지난번대로 — 방금 저장한 음식으로 조회 + 사진 복제
+  const target = entry.items[0]?.name ?? '';
+  const recent = await app.inject({
+    method: 'GET',
+    url: `/api/v1/meals/items/recent?name=${encodeURIComponent(target)}`,
+    headers: auth,
+  });
+  const past = recent.json<{ found: boolean; lastEatenDate: string | null; portion: string | null; photoToken: string | null }>();
+  console.log(
+    `\n④-b 지난번대로 → ${recent.statusCode} '${target}' found=${past.found} · ${past.lastEatenDate ?? '-'} · 양 ${past.portion ?? '-'} · 사진 ${past.photoToken ? `${past.photoToken.slice(0, 8)}…` : '없음'}`,
+  );
+  if (past.photoToken) {
+    const copied = await app.inject({ method: 'POST', url: `/api/v1/meals/photos/${past.photoToken}/copy`, headers: auth });
+    const dup = copied.json<{ token: string; byteSize: number }>();
+    // 복제본이 실제로 읽히는지까지 본다(파일 복사 실패는 여기서만 드러난다).
+    const readBack = await app.inject({ method: 'GET', url: `/api/v1/meals/photos/${dup.token}`, headers: auth });
+    console.log(
+      `     사진 복제 → ${copied.statusCode} 새 토큰 ${dup.token.slice(0, 8)}… ${Math.round(dup.byteSize / 1024)}KB · 읽기 ${readBack.statusCode}`,
+    );
+    const other = await app.inject({ method: 'POST', url: `/api/v1/meals/photos/${past.photoToken}/copy` });
+    console.log(`     인증 없이 복제 시도 → ${other.statusCode} (401 이어야 정상)`);
+  }
+
+  // ④-c 시간 프리셋 — 내가 보통 먹는 시각
+  const presets = await app.inject({ method: 'GET', url: '/api/v1/meals/time-presets', headers: auth });
+  const pr = presets.json<{ presets: { slot: string; time: string; fromRecords: boolean; sampleCount: number }[] }>();
+  console.log(
+    `\n④-c 시간 프리셋 → ${presets.statusCode} ${pr.presets.map((x) => `${x.slot} ${x.time}${x.fromRecords ? `(내 기록 ${x.sampleCount}건)` : ''}`).join(' · ')}`,
   );
 
   // ⑤ 추천 (실제 텍스트 LLM)
