@@ -82,3 +82,7 @@ pnpm typecheck        # 전체 타입체크
 pnpm test             # 전체 테스트
 pnpm --filter <name>  # 특정 워크스페이스만
 ```
+
+앱 iOS 링크 오류(`Undefined symbol: facebook::react::...getDebug*` 등)는 prebuilt RN 아티팩트가
+Release 로 깔려서다 — 해결은 [docs/mobile-ios-build.md](docs/mobile-ios-build.md). `pod install`
+할 때마다 재발한다.
