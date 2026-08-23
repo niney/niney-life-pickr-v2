@@ -21,6 +21,7 @@ const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
   void qc.invalidateQueries({ queryKey: [...KEY, 'calendar'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'stats'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'time-presets'] });
 };
 
 export const useMealEntries = (query: ListMealEntriesInput = {}) =>
@@ -91,6 +92,17 @@ export const useDeleteMealEntry = () => {
 export const useUploadMealPhoto = () =>
   useMutation({
     mutationFn: (file: MealPhotoUploadFile) => mealApi.uploadPhoto(file),
+  });
+
+/**
+ * 끼니별 "내가 보통 먹는 시각". 기록이 쌓여야 바뀌는 값이라 캐시를 길게 둔다.
+ * 기록을 저장하면 다른 목록들과 함께 무효화된다.
+ */
+export const useMealTimePresets = () =>
+  useQuery({
+    queryKey: [...KEY, 'time-presets'],
+    queryFn: () => mealApi.timePresets(),
+    staleTime: 30 * 60_000,
   });
 
 /**

@@ -74,6 +74,24 @@ export const MealItem = z.object({
 });
 export type MealItemType = z.infer<typeof MealItem>;
 
+// 시간 입력 프리셋 — 끼니별 "내가 보통 먹는 시각".
+//
+// 일반값(점심 12:30)이 아니라 **내 기록의 중앙값**을 쓴다. 평균이 아닌 이유는 어쩌다 새벽에
+// 먹은 한 끼가 평균을 통째로 끌고 가기 때문이고, 표본이 적으면(3건 미만) 내 값 대신 일반값을
+// 쓰는 이유는 1건으로 "내 점심은 15시"라고 단정하면 오히려 방해가 되기 때문이다.
+export const MealTimePreset = z.object({
+  slot: MealSlot,
+  // 'HH:MM'(Asia/Seoul 기준). 화면은 날짜를 건드리지 않고 시:분만 이 값으로 바꾼다.
+  time: z.string(),
+  // 내 기록에서 뽑았는지 — false 면 일반 기본값이다.
+  fromRecords: z.boolean(),
+  sampleCount: z.number().int(),
+});
+export type MealTimePresetType = z.infer<typeof MealTimePreset>;
+
+export const MealTimePresetsResult = z.object({ presets: z.array(MealTimePreset) });
+export type MealTimePresetsResultType = z.infer<typeof MealTimePresetsResult>;
+
 // 수동 입력 보조 — "이 음식을 지난번에 어떻게 먹었나". 기록이 없으면 found=false.
 //
 // 사진은 **자동으로 붙이지 않는다**. 오늘 먹은 게 지난번과 같게 생겼을 리 없으니 자동 첨부는

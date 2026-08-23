@@ -16,15 +16,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ApiError,
+  draftItemToInput,
+  type MealDraftItem,
+  type Theme,
   useCreateMealEntry,
   useMealDraftStore,
+  useMealTimePresets,
   useRecognizeMeal,
   useTheme,
   useUpdateMealEntry,
   useUploadMealPhoto,
-  draftItemToInput,
-  type MealDraftItem,
-  type Theme,
 } from '@repo/shared';
 import {
   MEAL_SLOTS,
@@ -32,6 +33,7 @@ import {
   MEAL_TYPES,
   MEAL_TYPE_LABEL,
   guessMealSlot,
+  parseTimeOfDay,
   toLocalDateKey,
   type MealSlot,
   type MealType,
@@ -75,6 +77,8 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
   const insets = useSafeAreaInsets();
 
   const draft = useMealDraftStore();
+  const timePresets = useMealTimePresets();
+  const [editingTime, setEditingTime] = useState<string | null>(null);
   const upload = useUploadMealPhoto();
   const recognize = useRecognizeMeal();
   const create = useCreateMealEntry();
@@ -198,6 +202,29 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
       // 인식 실패는 막다른 길이 아니다 — 손으로 적으면 된다.
       setNotice(e instanceof ApiError ? `${e.message} 직접 입력해 주세요.` : '인식에 실패했어요. 직접 입력해 주세요.');
     }
+  };
+
+  // 날짜는 그대로 두고 시:분만 바꾼다 — '◀ 하루'로 옮겨 둔 날짜가 되돌아가면 안 된다.
+  // (시각은 기기 로컬 기준으로 적용한다. 서버 프리셋은 Asia/Seoul 기준이라 국내 사용에선 같다.)
+  const setTimeOfDay = (minutesOfDay: number) => {
+    const d = new Date(draft.eatenAt);
+    d.setHours(Math.floor(minutesOfDay / 60), minutesOfDay % 60, 0, 0);
+    draft.setField('eatenAt', d.toISOString());
+    draft.setField('eatenDate', toLocalDateKey(d));
+  };
+
+  const applyPreset = (slot: MealSlot, time: string) => {
+    const minutes = parseTimeOfDay(time);
+    if (minutes === null) return;
+    setTimeOfDay(minutes);
+    draft.setField('slot', slot);
+  };
+
+  // 시각 직접 입력 — '12:40' 도 '1240' 도 받는다. 형식이 틀리면 조용히 되돌린다.
+  const commitTime = () => {
+    const minutes = editingTime === null ? null : parseTimeOfDay(editingTime);
+    if (minutes !== null) setTimeOfDay(minutes);
+    setEditingTime(null);
   };
 
   const shiftTime = (minutes: number) => {
@@ -332,11 +359,47 @@ export const MealEntryEditor = ({ entryId }: { entryId?: string | null }) => {
           <CardTitle title="언제 먹었나요" />
           <View style={styles.whenRow}>
             <Chip label="◀ 하루" onPress={() => shiftDay(-1)} />
-            <Text style={styles.whenText}>
-              {draft.eatenDate} {timeLabel(draft.eatenAt)}
-            </Text>
+            {editingTime === null ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="시각 직접 입력"
+                onPress={() => setEditingTime(timeLabel(draft.eatenAt))}
+                style={styles.whenPress}
+              >
+                <Text style={styles.whenText}>
+                  {draft.eatenDate} {timeLabel(draft.eatenAt)}
+                </Text>
+              </Pressable>
+            ) : (
+              <TextInput
+                value={editingTime}
+                onChangeText={setEditingTime}
+                onBlur={commitTime}
+                onSubmitEditing={commitTime}
+                keyboardType="number-pad"
+                maxLength={5}
+                autoFocus
+                selectTextOnFocus
+                placeholder="12:40"
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.timeInput}
+                accessibilityLabel="시각 입력"
+              />
+            )}
             <Chip label="하루 ▶" onPress={() => shiftDay(1)} />
           </View>
+
+          {/* 끼니별 '내가 보통 먹는 시각' — 한 번에 시각+끼니를 정한다. 기록이 적으면 일반값. */}
+          <ChipRow>
+            {(timePresets.data?.presets ?? []).map((p) => (
+              <Chip
+                key={p.slot}
+                label={`${MEAL_SLOT_LABEL[p.slot]} ${p.time}`}
+                onPress={() => applyPreset(p.slot, p.time)}
+              />
+            ))}
+          </ChipRow>
+
           <ChipRow>
             <Chip label="-30분" onPress={() => shiftTime(-30)} />
             <Chip label="+30분" onPress={() => shiftTime(30)} />
@@ -458,6 +521,17 @@ const createStyles = (theme: Theme) =>
     addItemBtn: { paddingVertical: 8 },
     whenRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     whenText: { fontSize: 15, fontWeight: '600', color: theme.colors.text },
+    whenPress: { flex: 1, alignItems: 'center', paddingVertical: 4 },
+    timeInput: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 14,
+      fontVariant: ['tabular-nums'],
+      color: theme.colors.text,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.primary,
+      paddingVertical: 2,
+    },
     memo: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.border,

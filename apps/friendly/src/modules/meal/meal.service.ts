@@ -18,12 +18,20 @@ import {
   type MealEntryType,
   type MealItemInputType,
   type MealItemType,
+  type MealTimePresetsResultType,
   type RecentMealItemResultType,
   type MealPhotoType,
   type MealSlotType,
   type UpdateMealEntryInputType,
 } from '@repo/api-contract';
-import { mealPortionFactor, monthRange } from '@repo/utils';
+import {
+  MEAL_SLOTS,
+  MEAL_SLOT_DEFAULT_TIME,
+  formatTimeOfDay,
+  mealPortionFactor,
+  monthRange,
+  parseTimeOfDay,
+} from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
 import type { MealPhotoService } from './meal-photo.service.js';
@@ -51,6 +59,35 @@ const enumOrNull = <T extends string>(
   if (v === null) return null;
   const r = schema.safeParse(v);
   return r.success ? (r.data as T) : null;
+};
+
+// 프리셋을 뽑는 기간과 최소 표본. 1~2건으로 "내 점심은 15시"라고 단정하면 오히려 방해가 된다.
+const PRESET_WINDOW_DAYS = 90;
+const PRESET_MIN_SAMPLES = 3;
+
+/** UTC Date → Asia/Seoul 기준 자정으로부터의 분. 서버 시간대와 무관하게 계산한다. */
+export const minutesOfDayInSeoul = (d: Date): number => {
+  const hhmm = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+  return parseTimeOfDay(hhmm) ?? 0;
+};
+
+/**
+ * 끼니별 대표 시각(중앙값). 표본이 모자라면 null(호출부가 일반값을 쓴다).
+ *
+ * 평균이 아니라 중앙값인 이유: 어쩌다 새벽 3시에 먹은 한 끼가 평균을 통째로 끌고 간다.
+ * 야식은 자정을 걸쳐서(23:30, 00:30) 단순 중앙값이 정오로 튄다 — 그래서 새벽 시각을 +24시로
+ * 펴서 계산하고 마지막에 되감는다.
+ */
+export const medianSlotTime = (slot: string, minutes: number[]): string | null => {
+  if (minutes.length < PRESET_MIN_SAMPLES) return null;
+  const unwrapped =
+    slot === 'late_night' ? minutes.map((m) => (m < 6 * 60 ? m + 1440 : m)) : [...minutes];
+  unwrapped.sort((a, b) => a - b);
+  const mid =
+    unwrapped.length % 2 === 1
+      ? unwrapped[(unwrapped.length - 1) / 2]!
+      : (unwrapped[unwrapped.length / 2 - 1]! + unwrapped[unwrapped.length / 2]!) / 2;
+  return formatTimeOfDay(mid);
 };
 
 const toItem = (r: PrismaMealItem): MealItemType => ({
@@ -129,6 +166,38 @@ export class MealService {
     private readonly deps: MealServiceDeps,
   ) {
     this.food = deps.food ?? new FoodService(prisma);
+  }
+
+  /**
+   * 끼니별 "내가 보통 먹는 시각" — 시간 입력 프리셋. 최근 PRESET_WINDOW_DAYS 일 기록의 중앙값이고,
+   * 표본이 적으면 일반 기본값을 쓴다.
+   */
+  async timePresets(userId: string): Promise<MealTimePresetsResultType> {
+    const since = new Date(Date.now() - PRESET_WINDOW_DAYS * 86_400_000);
+    const rows = await this.prisma.mealEntry.findMany({
+      where: { userId, eatenAt: { gte: since } },
+      select: { slot: true, eatenAt: true },
+    });
+
+    const byslot = new Map<string, number[]>();
+    for (const r of rows) {
+      const list = byslot.get(r.slot) ?? [];
+      list.push(minutesOfDayInSeoul(r.eatenAt));
+      byslot.set(r.slot, list);
+    }
+
+    return {
+      presets: MEAL_SLOTS.map((slot) => {
+        const minutes = byslot.get(slot) ?? [];
+        const time = medianSlotTime(slot, minutes);
+        return {
+          slot,
+          time: time ?? MEAL_SLOT_DEFAULT_TIME[slot],
+          fromRecords: time !== null,
+          sampleCount: minutes.length,
+        };
+      }),
+    };
   }
 
   /**

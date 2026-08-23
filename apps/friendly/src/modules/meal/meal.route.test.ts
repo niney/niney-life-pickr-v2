@@ -328,4 +328,46 @@ describe('meal routes (격리 DB)', () => {
     const res = await app.inject({ method: 'POST', url: `${PHOTOS}/${src.token}/copy`, headers: otherAuth });
     expect(res.statusCode).toBe(403);
   });
+
+  it('시간 프리셋 — 기록이 적은 끼니는 일반 기본값을 준다', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/meals/time-presets', headers: otherAuth });
+    expect(res.statusCode).toBe(200);
+    const { presets } = res.json<{ presets: { slot: string; time: string; fromRecords: boolean }[] }>();
+    const breakfast = presets.find((p) => p.slot === 'breakfast');
+    expect(breakfast).toMatchObject({ time: '08:00', fromRecords: false });
+  });
+
+  it('시간 프리셋 — 기록이 쌓이면 내 중앙값을 준다', async () => {
+    // 조회 창(최근 90일) 안에 들어가도록 **오늘 기준 상대 날짜**로 넣는다. 고정 날짜로 두면
+    // 시간이 지나 창 밖으로 밀려나면서 테스트가 저절로 깨진다.
+    const kstEntry = async (daysAgo: number, hh: number, mm: number): Promise<void> => {
+      const base = new Date(Date.now() - daysAgo * 86_400_000);
+      const utc = new Date(
+        Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), hh, mm) - 9 * 3_600_000,
+      );
+      await app.inject({
+        method: 'POST',
+        url: ENTRIES,
+        headers: auth,
+        payload: {
+          eatenAt: utc.toISOString(),
+          eatenDate: utc.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }),
+          slot: 'breakfast',
+          items: [{ name: '토스트', isMain: true }],
+        },
+      });
+    };
+    // 아침 3건: 07:40 / 08:20 / 09:00(KST) → 중앙값 08:20.
+    await kstEntry(3, 7, 40);
+    await kstEntry(2, 8, 20);
+    await kstEntry(1, 9, 0);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/meals/time-presets', headers: auth });
+    const { presets } = res.json<{ presets: { slot: string; time: string; fromRecords: boolean; sampleCount: number }[] }>();
+    expect(presets.find((p) => p.slot === 'breakfast')).toMatchObject({
+      time: '08:20',
+      fromRecords: true,
+      sampleCount: 3,
+    });
+  });
 });

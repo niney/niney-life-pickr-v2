@@ -36,6 +36,32 @@ export const MEAL_TYPE_LABEL: Record<MealType, string> = {
 export const MEAL_PORTIONS = ['small', 'normal', 'large'] as const;
 export type MealPortion = (typeof MEAL_PORTIONS)[number];
 
+// 끼니별 일반 기본 시각(HH:MM) — 사용자 기록이 적을 때의 폴백.
+// 기록이 쌓이면 서버가 **그 사람의 중앙값**으로 바꿔서 내려준다.
+export const MEAL_SLOT_DEFAULT_TIME: Record<MealSlot, string> = {
+  breakfast: '08:00',
+  lunch: '12:30',
+  dinner: '19:00',
+  snack: '15:30',
+  late_night: '21:30',
+};
+
+/** 'HH:MM' → 자정 기준 분. 형식이 틀리면 null. */
+export const parseTimeOfDay = (hhmm: string): number | null => {
+  const m = /^(\d{1,2}):?(\d{2})$/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+};
+
+/** 자정 기준 분 → 'HH:MM'. 24시를 넘으면 되감는다(야식 중앙값이 25:10 로 나오는 경우). */
+export const formatTimeOfDay = (minutes: number): string => {
+  const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+
 // 눈대중 양 → 1인분 배수. 비전 모델의 그램 추정은 오차가 커서(MAPE 50~400%) 서수 3단계만 받고,
 // 영양 환산은 이 배수로만 한다 — 정밀값인 척하지 않기 위한 의도적 단순화다.
 export const MEAL_PORTION_FACTOR: Record<MealPortion, number> = {

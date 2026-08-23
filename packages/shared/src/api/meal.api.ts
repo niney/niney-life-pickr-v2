@@ -12,6 +12,7 @@ import {
   type MealEntryType,
   type MealPreferenceType,
   type MealStatsResultType,
+  type MealTimePresetsResultType,
   type RecentMealItemResultType,
   type RecognizeMealInputType,
   type RecognizeMealResultType,
@@ -81,6 +82,9 @@ export const mealApi = {
   // 지난 기록의 사진을 이번 기록용으로 복제(참조 공유가 아니다 — 원본을 지워도 안 사라진다).
   copyPhoto: (token: string) =>
     apiFetch<UploadMealPhotoResultType>(Routes.Meal.photoCopy(token), { method: 'POST' }),
+
+  // 끼니별 "내가 보통 먹는 시각" — 시간 입력 프리셋.
+  timePresets: () => apiFetch<MealTimePresetsResultType>(Routes.Meal.timePresets),
 
   // 이 음식을 지난번에 어떻게 먹었나 — 양·분류·그때 사진. 먹은 적 없으면 found=false.
   recentItem: (name: string) =>

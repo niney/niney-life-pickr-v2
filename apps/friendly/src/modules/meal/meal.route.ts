@@ -10,6 +10,7 @@ import {
   MealEntry,
   MealPreference,
   MealStatsQuery,
+  MealTimePresetsResult,
   RecentMealItemQuery,
   RecentMealItemResult,
   MealStatsResult,
@@ -99,6 +100,17 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
         return throwAsHttp(e);
       }
     },
+  });
+
+  // 끼니별 "내가 보통 먹는 시각" — 시간 입력 프리셋.
+  typed.get(Routes.Meal.timePresets, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      security: [{ bearerAuth: [] }],
+      response: { 200: MealTimePresetsResult },
+    },
+    handler: async (req) => meals.timePresets(req.user.userId),
   });
 
   // 수동 입력 보조 — 이 음식을 지난번에 어떻게 먹었나(양·분류·그때 사진).
