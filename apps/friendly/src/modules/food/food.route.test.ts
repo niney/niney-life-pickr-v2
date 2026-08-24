@@ -454,10 +454,38 @@ describe('food restaurants reverse lookup (격리 DB)', () => {
       },
     });
 
+    // 사용자 좌표에는 더 가깝지만 리뷰 언급만 있는 식당. 메뉴판+리뷰 근거가
+    // 거리보다 먼저 정렬되는지 검증하는 fixture다.
+    const reviewOnlyCanonical = await app.prisma.canonicalRestaurant.create({
+      data: {
+        id: 'canonical-review-only',
+        name: '가장 가까운 리뷰 식당',
+        primaryCategory: '한식',
+        latitude: 37.5001,
+        longitude: 127,
+      },
+    });
+    const reviewOnly = await app.prisma.restaurant.create({
+      data: {
+        id: 'restaurant-review-only',
+        source: 'naver',
+        sourceId: 'place-review-only',
+        placeId: 'place-review-only',
+        canonicalId: reviewOnlyCanonical.id,
+        name: '가장 가까운 리뷰 식당',
+        category: '한식',
+        rating: 4.1,
+        reviewCount: 10,
+        rawSourceUrl: 'https://example.test/place-review-only',
+        snapshotJson: '{}',
+      },
+    });
+
     for (const [restaurant, suffix] of [
       [near, 'near'],
       [nearOtherSource, 'near-dc'],
       [far, 'far'],
+      [reviewOnly, 'review-only'],
     ] as const) {
       const local = await app.prisma.menuCanonical.create({
         data: {
@@ -480,6 +508,7 @@ describe('food restaurants reverse lookup (격리 DB)', () => {
     await seedMention(near.id, '김치짜개', ['positive', 'negative']);
     await seedMention(nearOtherSource.id, '김치짜개', ['positive']);
     await seedMention(far.id, '김치짜개', ['positive']);
+    await seedMention(reviewOnly.id, '김치짜개', ['positive']);
   });
 
   afterAll(async () => {
@@ -514,7 +543,11 @@ describe('food restaurants reverse lookup (격리 DB)', () => {
     const body = res.json<FoodRestaurantsResultType>();
     expect(body.notice).toContain('현재 판매 여부를 보장하지 않습니다');
     expect(body.matchedGlobalKeys).toEqual(['김치짜개']);
-    expect(body.items.map((item) => item.placeId)).toEqual(['place-near', 'place-far']);
+    expect(body.items.map((item) => item.placeId)).toEqual([
+      'place-near',
+      'place-far',
+      'place-review-only',
+    ]);
     expect(body.items[0]).toMatchObject({
       placeId: 'place-near',
       evidence: ['menu_catalog', 'review_mentions'],
@@ -524,15 +557,16 @@ describe('food restaurants reverse lookup (격리 DB)', () => {
     expect(body.items[0]?.positiveRatio).toBeCloseTo(2 / 3);
   });
 
-  it('좌표가 있으면 canonical 거리로 반경 필터·거리순 정렬한다', async () => {
+  it('좌표가 있으면 반경 필터 뒤 근거 신뢰도를 거리보다 먼저 정렬한다', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/food/food-nearby-exact/restaurants?lat=37.5&lng=127&radiusM=1000',
+      url: '/api/v1/food/food-nearby-exact/restaurants?lat=37.5001&lng=127&radiusM=1000',
       headers: userAuth,
     });
     const body = res.json<FoodRestaurantsResultType>();
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0]).toMatchObject({ placeId: 'place-near', distanceM: 0 });
+    expect(body.items.map((item) => item.placeId)).toEqual(['place-near', 'place-review-only']);
+    expect(body.items[0]?.evidence).toEqual(['menu_catalog', 'review_mentions']);
+    expect(body.items[1]).toMatchObject({ placeId: 'place-review-only', distanceM: 0 });
   });
 
   it('menu-canonical 출처가 없으면 nameNorm/별칭 정확 매칭, 연결이 없으면 빈 목록', async () => {

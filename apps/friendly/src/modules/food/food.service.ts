@@ -56,6 +56,12 @@ export const FOOD_MATCH_FUZZY_MIN = 0.5;
 const FUZZY_CANDIDATE_LIMIT = 300;
 const SEARCH_CANDIDATE_MULTIPLIER = 4;
 
+// 현재 판매를 직접 보장할 수 없는 역검색에서는 가까운 리뷰 한 건보다 메뉴판과
+// 리뷰가 함께 확인된 근거를 먼저 보여 준다. 같은 근거 등급 안에서만 거리를 쓴다.
+const foodRestaurantEvidenceScore = (item: FoodRestaurantType): number =>
+  (item.evidence.includes('menu_catalog') ? 2 : 0) +
+  (item.evidence.includes('review_mentions') ? 1 : 0);
+
 export const parseJsonStringArray = (s: string | null | undefined): string[] => {
   if (!s) return [];
   try {
@@ -487,15 +493,17 @@ export class FoodService {
       return candidate.item;
     });
     candidates.sort((a, b) => {
+      const evidenceDiff = foodRestaurantEvidenceScore(b) - foodRestaurantEvidenceScore(a);
       if (query.lat !== undefined && query.lng !== undefined) {
         return (
+          evidenceDiff ||
           (a.distanceM ?? Number.POSITIVE_INFINITY) - (b.distanceM ?? Number.POSITIVE_INFINITY) ||
           b.mentionCount - a.mentionCount ||
           (b.rating ?? -1) - (a.rating ?? -1)
         );
       }
       return (
-        b.evidence.length - a.evidence.length ||
+        evidenceDiff ||
         b.mentionCount - a.mentionCount ||
         (b.rating ?? -1) - (a.rating ?? -1) ||
         (b.reviewCount ?? -1) - (a.reviewCount ?? -1) ||

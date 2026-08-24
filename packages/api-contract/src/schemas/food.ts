@@ -152,7 +152,7 @@ export type FoodSearchResultType = z.infer<typeof FoodSearchResult>;
 
 // ── 사용자: 음식 → 수집된 메뉴·리뷰 식당 역검색 ──
 // 좌표는 둘 다 보내거나 둘 다 생략해야 한다. 좌표가 있으면 radiusM 안의
-// canonical 식당만 거리순으로, 없으면 수집 근거·평점순으로 돌려준다.
+// canonical 식당만 근거 신뢰도→거리순으로, 없으면 수집 근거·평점순으로 돌려준다.
 export const FoodRestaurantsQuery = z
   .object({
     lat: z.coerce.number().finite().min(-90).max(90).optional(),
