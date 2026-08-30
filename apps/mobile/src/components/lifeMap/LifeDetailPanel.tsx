@@ -6,6 +6,7 @@ import { useTheme } from '@repo/shared';
 import type { LifeMapItemType } from '@repo/api-contract';
 import {
   LIFE_CCTV_GROUP_COLOR,
+  LIFE_HOSPITAL_COLOR,
   LIFE_TOILET_COLOR,
   LIFE_TOILET_FEATURES,
   formatDistanceM,
@@ -15,8 +16,8 @@ import {
   summarizeLifeToiletFixtures,
 } from '@repo/utils';
 
-// 선택 항목 상세(앱) — 화장실(개방시간·변기수·편의·관리기관·주소)과 CCTV(목적·대수·화소·방면·보관일수).
-// 웹 LifeDetailCard 이식. Detail 시트 안 콘텐츠.
+// 선택 항목 상세(앱) — 화장실(개방시간·변기수·편의·관리기관·주소)·CCTV(목적·대수·화소·방면·보관일수)·
+// 병의원(종별·주소·연락처·홈페이지·개설일·의사수). 웹 LifeDetailCard 이식. Detail 시트 안 콘텐츠.
 
 interface Props {
   item: LifeMapItemType | null;
@@ -57,6 +58,8 @@ export const LifeDetailPanel = ({ item, loading, error, distM, onBack, onFlyTo, 
           </View>
         ) : item.layer === 'toilet' ? (
           <ToiletDetail item={item} distM={distM} />
+        ) : item.layer === 'hospital' ? (
+          <HospitalDetail item={item} distM={distM} />
         ) : (
           <CctvDetail item={item} distM={distM} />
         )}
@@ -144,6 +147,55 @@ const ToiletDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer:
         {item.geoSource
           ? `위치는 ${item.geoSource === 'road' ? '도로명' : '지번'} 주소를 VWorld 지오코더로 변환한 값이라 실제 입구와 수십 m 차이 날 수 있습니다.`
           : '주소를 좌표로 변환하지 못해 지도에는 표시되지 않습니다.'}
+      </Text>
+    </>
+  );
+};
+
+const HospitalDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer: 'hospital' }>; distM: number | null }) => {
+  const theme = useTheme();
+  return (
+    <>
+      <View style={styles.titleRow}>
+        <View style={[styles.titleDot, { backgroundColor: LIFE_HOSPITAL_COLOR }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{item.name}</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
+            {item.kindName}
+            {distM !== null ? ` · 내 위치에서 ${formatDistanceM(distM)}` : ''}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.rows}>
+        <Row label="종별">{item.kindName}</Row>
+        <Row label="주소">
+          <Text style={[styles.rowText, { color: theme.colors.text }]}>{item.addr ?? '-'}</Text>
+          {item.postNo ? <Text style={[styles.rowSub, { color: theme.colors.textMuted }]}>우편번호 {item.postNo}</Text> : null}
+        </Row>
+        {item.phone ? (
+          <Row label="전화">
+            <PhoneLink phone={item.phone} />
+          </Row>
+        ) : null}
+        {item.url ? (
+          <Row label="홈페이지">
+            <Pressable accessibilityRole="link" onPress={() => Linking.openURL(item.url!).catch(() => {})}>
+              <Text style={{ color: theme.colors.primary, fontSize: 13, textDecorationLine: 'underline' }} numberOfLines={1}>
+                {item.url.replace(/^https?:\/\//, '')}
+              </Text>
+            </Pressable>
+          </Row>
+        ) : null}
+        <Row label="개설일">{item.openedDate ?? '-'}</Row>
+        <Row label="총의사수">{item.doctorCount !== null ? `${item.doctorCount}명` : '-'}</Row>
+      </View>
+      <Text style={[styles.note, { color: theme.colors.textMuted }]}>
+        출처: 건강보험심사평가원 병원정보서비스(요양기관 신고 기준 — 실제 운영·진료시간과 다를 수 있습니다).
+        {item.geoSource === 'road' || item.geoSource === 'parcel'
+          ? ' 위치는 주소를 지오코더로 변환한 값이라 실제 입구와 차이 날 수 있습니다.'
+          : item.geoSource === null
+            ? ' 좌표가 없어 지도에는 표시되지 않습니다.'
+            : ''}
       </Text>
     </>
   );

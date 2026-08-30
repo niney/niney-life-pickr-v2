@@ -1,10 +1,10 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type { LifeMapNearbyItemType } from '@repo/api-contract';
-import { LIFE_CCTV_GROUP_COLOR, LIFE_MAP_LAYER_LABEL, LIFE_TOILET_COLOR, LIFE_TOILET_FEATURES, formatDistanceM, lifeCctvPurposeGroup, lifeToiletOpenLabel, type LifeMapLayer } from '@repo/utils';
+import { LIFE_CCTV_GROUP_COLOR, LIFE_HOSPITAL_COLOR, LIFE_MAP_LAYER_LABEL, LIFE_TOILET_COLOR, LIFE_TOILET_FEATURES, formatDistanceM, lifeCctvPurposeGroup, lifeToiletOpenLabel, type LifeMapLayer } from '@repo/utils';
 
-// 주변 목록 조각 — 탭 머리(화장실/CCTV + 반경·건수)와 행(화장실: 이름·구분·개방시간·편의 배지 / CCTV:
-// 목적·관리기관·대수·방면). BottomSheetFlatList 의 header/row 로 쓴다.
+// 주변 목록 조각 — 탭 머리(화장실/CCTV/병의원 + 반경·건수)와 행(화장실: 이름·구분·개방시간·편의 배지 /
+// CCTV: 목적·관리기관·대수·방면 / 병의원: 이름·종별·주소). BottomSheetFlatList 의 header/row 로 쓴다.
 
 export const LifeNearbyHeader = ({
   tab,
@@ -21,7 +21,7 @@ export const LifeNearbyHeader = ({
   return (
     <View style={styles.head}>
       <View style={[styles.tabs, { borderColor: theme.colors.border }]}>
-        {(['toilet', 'cctv'] as const).map((l) => {
+        {(['toilet', 'cctv', 'hospital'] as const).map((l) => {
           const active = tab === l;
           return (
             <Pressable
@@ -45,7 +45,12 @@ export const LifeNearbyHeader = ({
 
 export const LifeNearbyRow = ({ item, selected, onPress }: { item: LifeMapNearbyItemType; selected: boolean; onPress: () => void }) => {
   const theme = useTheme();
-  const dot = item.layer === 'toilet' ? LIFE_TOILET_COLOR : LIFE_CCTV_GROUP_COLOR[lifeCctvPurposeGroup(item.purpose)];
+  const dot =
+    item.layer === 'toilet'
+      ? LIFE_TOILET_COLOR
+      : item.layer === 'hospital'
+        ? LIFE_HOSPITAL_COLOR
+        : LIFE_CCTV_GROUP_COLOR[lifeCctvPurposeGroup(item.purpose)];
   return (
     <Pressable
       accessibilityRole="button"
@@ -72,6 +77,16 @@ export const LifeNearbyRow = ({ item, selected, onPress }: { item: LifeMapNearby
                 ))}
               </View>
             )}
+          </>
+        ) : item.layer === 'hospital' ? (
+          <>
+            <Text style={[styles.name, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={[styles.sub, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              {item.kindName}
+              {item.addr ? ` · ${item.addr}` : ''}
+            </Text>
           </>
         ) : (
           <>
@@ -101,7 +116,7 @@ export const LifeNearbyEmpty = ({ kind, tab, radiusM }: { kind: 'off' | 'loading
           ? `${LIFE_MAP_LAYER_LABEL[tab]} 레이어가 꺼져 있습니다. 위에서 켜면 주변 목록이 나옵니다.`
           : kind === 'loading'
             ? '주변을 찾는 중…'
-            : `지도 중심 ${formatDistanceM(radiusM)} 안에 ${LIFE_MAP_LAYER_LABEL[tab]}${tab === 'toilet' ? '이' : '가'} 없습니다. 지도를 옮기거나 필터를 풀어 보세요.`}
+            : `지도 중심 ${formatDistanceM(radiusM)} 안에 ${LIFE_MAP_LAYER_LABEL[tab]}${tab === 'cctv' ? '가' : '이'} 없습니다. 지도를 옮기거나 필터를 풀어 보세요.`}
       </Text>
     </View>
   );

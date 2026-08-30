@@ -9,12 +9,14 @@ import {
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
-// 일상지도(전국 CCTV·공중화장실) — friendly 공개 프록시(토큰 불필요). 로컬 DB 조회라 싸지만
+// 일상지도(전국 CCTV·공중화장실·병의원) — friendly 공개 프록시(토큰 불필요). 로컬 DB 조회라 싸지만
 // 지도를 움직일 때마다 레이어당 1콜이 나가므로 훅 쪽에서 bbox 디바운스·24h staleTime 으로 누른다.
 
-// 필터 — purpose 는 CCTV 설치목적(@repo/utils LIFE_CCTV_PURPOSES), 불리언은 화장실 편의 조건(AND).
+// 필터 — purpose 는 CCTV 설치목적(@repo/utils LIFE_CCTV_PURPOSES), category 는 병의원 종별
+// (LIFE_HOSPITAL_CATEGORIES), 불리언은 화장실 편의 조건(AND).
 export interface LifeMapFilterParams {
   purpose?: readonly string[];
+  category?: readonly string[];
   open24?: boolean;
   disabled?: boolean;
   kids?: boolean;
@@ -26,6 +28,7 @@ export const LIFE_MAP_BOOLEAN_FILTERS = ['open24', 'disabled', 'kids', 'diaper',
 const applyFilters = (params: URLSearchParams, f: LifeMapFilterParams | undefined): void => {
   if (!f) return;
   if (f.purpose && f.purpose.length > 0) params.set('purpose', f.purpose.join(','));
+  if (f.category && f.category.length > 0) params.set('category', f.category.join(','));
   for (const k of LIFE_MAP_BOOLEAN_FILTERS) if (f[k]) params.set(k, '1');
 };
 

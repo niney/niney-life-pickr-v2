@@ -2,10 +2,10 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, type LayoutChange
 import Animated, { interpolateColor, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@repo/shared';
-import { LIFE_CCTV_GROUP_COLOR, LIFE_MAP_LAYER_LABEL, LIFE_TOILET_COLOR, type LifeMapLayer } from '@repo/utils';
+import { LIFE_CCTV_GROUP_COLOR, LIFE_HOSPITAL_COLOR, LIFE_MAP_LAYER_LABEL, LIFE_TOILET_COLOR, type LifeMapLayer } from '@repo/utils';
 import type { LifeMapStatusResultType } from '@repo/api-contract';
 
-// 지도 위 플로팅 헤더 — [검색(지역·역·정류장·주소로 이동) → 모달] + [레이어 칩 CCTV/공중화장실] + [내 위치].
+// 지도 위 플로팅 헤더 — [검색(지역·역·정류장·주소로 이동) → 모달] + [레이어 칩 CCTV/공중화장실/병의원] + [내 위치].
 // 맛집·대중교통 플로팅 헤더와 같은 카드 룩 + 같은 보간: 목록 시트 index 1.5→2(half→full 후반)에서
 // 플로팅 카드(마진·라운드·그림자) → sticky 바(마진 0, 각진 모서리, 노치 영역 surface 색)로 이어진다.
 // 시트 full 상단(listTopInset)은 insets.top + 카드 높이라 full 에선 카드 바로 아래에 시트가 맞붙는다.
@@ -85,9 +85,9 @@ export const LifeMapHeader = ({ topInset, sheetIndex, layers, status, onToggleLa
           </Pressable>
         </View>
         <View style={styles.chips}>
-          {(['cctv', 'toilet'] as const).map((layer) => {
+          {(['cctv', 'toilet', 'hospital'] as const).map((layer) => {
             const on = layers[layer];
-            const color = layer === 'cctv' ? LIFE_CCTV_GROUP_COLOR.safety : LIFE_TOILET_COLOR;
+            const color = layer === 'cctv' ? LIFE_CCTV_GROUP_COLOR.safety : layer === 'hospital' ? LIFE_HOSPITAL_COLOR : LIFE_TOILET_COLOR;
             const count = countOf(layer);
             return (
               <Pressable
@@ -101,7 +101,11 @@ export const LifeMapHeader = ({ topInset, sheetIndex, layers, status, onToggleLa
                 ]}
               >
                 <View style={[styles.dot, { backgroundColor: color, opacity: on ? 1 : 0.35 }]} />
-                <MaterialCommunityIcons name={layer === 'cctv' ? 'cctv' : 'toilet'} size={14} color={on ? theme.colors.text : theme.colors.textMuted} />
+                <MaterialCommunityIcons
+                  name={layer === 'cctv' ? 'cctv' : layer === 'hospital' ? 'hospital-box-outline' : 'toilet'}
+                  size={14}
+                  color={on ? theme.colors.text : theme.colors.textMuted}
+                />
                 <Text style={[styles.chipText, { color: on ? theme.colors.text : theme.colors.textMuted, textDecorationLine: on ? 'none' : 'line-through' }]}>
                   {LIFE_MAP_LAYER_LABEL[layer]}
                 </Text>
@@ -123,7 +127,8 @@ const styles = StyleSheet.create({
   search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, borderRadius: 8, paddingHorizontal: 10 },
   searchText: { fontSize: 13, flex: 1 },
   iconBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  chips: { flexDirection: 'row', gap: 6 },
+  // 3칩(+건수)이 좁은 화면에서 넘칠 수 있어 줄바꿈 허용 — 카드 높이는 onLayout 이 다시 잰다.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, height: 30 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 12, fontWeight: '600' },

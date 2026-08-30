@@ -68,7 +68,7 @@ pm_start()   { step "서버 기동";            pm2 start friendly --update-env;
 pm_reload()  { step "서버 reload";          pm2 reload friendly --update-env; pm2 save; }
 
 # ── 일상지도 데이터 ────────────────────────────────────────
-# status:life-map 은 "ok cctv=N toilet=M geocoded=G cache=C" 한 줄(테이블이 없으면 "missing").
+# status:life-map 은 "ok cctv=N toilet=M geocoded=G hospital=H cache=C" 한 줄(테이블이 없으면 "missing").
 life_status() { pnpm --filter friendly status:life-map 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 # "ok a=1 b=2" 한 줄에서 값 하나 뽑기 — 일상지도·음식 카탈로그 상태가 같은 형식이다.
 # sed 의 \b 는 GNU 확장이라 BSD sed(macOS)에서 조용히 빈 값이 된다 — 값이 비면 "0 건"으로
@@ -87,9 +87,9 @@ life_map_data() {
   if [[ "$st" != ok* ]]; then
     echo "  (일상지도 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
   fi
-  local cctv toilet geocoded
-  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"
-  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 캐시 압축본 변경=$GZ_CHANGED"
+  local cctv toilet geocoded hospital
+  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"
+  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 캐시 압축본 변경=$GZ_CHANGED"
   if [[ "$force" == 1 || "$GZ_CHANGED" == 1 || "${toilet:-0}" == 0 ]]; then
     step "일상지도 지오코딩 캐시 가져오기(압축본)"; pnpm --filter friendly import:life-geocode
   fi
@@ -100,6 +100,11 @@ life_map_data() {
   if [[ "$force" == 1 || "$GZ_CHANGED" == 1 || "${toilet:-0}" == 0 ]]; then
     if [[ -f "$LIFE_TOILET_CSV" ]]; then step "일상지도 화장실 적재(--offline, 호출 0건)"; pnpm --filter friendly load:life-toilets "$LIFE_TOILET_CSV" --offline
     else echo "  (화장실 CSV 없음: $LIFE_TOILET_CSV — 올린 뒤 ./deploy.sh 6)"; fi
+  fi
+  # 병의원 — CSV 가 아니라 심평원 API 전량 페이징(~80콜). 지오코더는 배포 예측성을 위해
+  # --offline(좌표 결측 소수는 지도 미표시 — 수동으로 옵션 없이 재실행하면 채워진다).
+  if [[ "$force" == 1 || "${hospital:-0}" == 0 ]]; then
+    step "일상지도 병의원 적재(HIRA API, 지오코더 --offline)"; pnpm --filter friendly load:life-hospitals --offline || echo "  (병의원 적재 실패 — HIRA_API_KEY/활용신청 확인 뒤 재실행)"
   fi
 }
 

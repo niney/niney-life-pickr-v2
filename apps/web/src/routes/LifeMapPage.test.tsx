@@ -32,6 +32,7 @@ const status: LifeMapStatusResultType = {
   layers: [
     { layer: 'cctv', loaded: true, count: 377243, geocoded: null, baseDate: '2026-07-30', loadedAt: '2026-08-21T10:00:00.000Z' },
     { layer: 'toilet', loaded: true, count: 53559, geocoded: 50881, baseDate: '2026-08-18', loadedAt: '2026-08-21T11:00:00.000Z' },
+    { layer: 'hospital', loaded: true, count: 78000, geocoded: 77500, baseDate: '2026-08-28', loadedAt: '2026-08-28T10:00:00.000Z' },
   ],
   fetchedAt: '2026-08-21T12:00:00.000Z',
 };
@@ -177,9 +178,10 @@ beforeEach(() => {
   useAuthStore.setState({ token: null, user: null, isGuest: false });
   useAirLocationStore.setState({ location: null });
   useLifeMapPrefsStore.setState({
-    layers: { cctv: true, toilet: true },
+    layers: { cctv: true, toilet: true, hospital: true },
     purposes: [],
     toiletFilters: { open24: false, disabled: false, kids: false, diaper: false, bell: false },
+    hospitalCategories: [],
   });
   useLifeMapRecentStore.setState({ items: [] });
   seen.nearby = [];

@@ -1,19 +1,23 @@
-// 일상지도(전국 CCTV·공중화장실) 순수 유틸 — 코드표·범례 그룹·편의시설 판정·저줌 집계 셀.
+// 일상지도(전국 CCTV·공중화장실·병의원) 순수 유틸 — 코드표·범례 그룹·편의시설 판정·저줌 집계 셀.
 // 원천은 지방행정인허가데이터개방(localdata.go.kr) 전국 CSV(실측 2026-08: CCTV 377,278행 /
-// 화장실 53,559행). 서버(적재·조회)와 웹(범례·필터·마커)이 같은 코드표를 쓰도록 한 곳에 둔다.
+// 화장실 53,559행)와 심평원 병원정보서비스 API(data.go.kr 15001698, 병의원 ~8만 기관).
+// 서버(적재·조회)와 웹(범례·필터·마커)이 같은 코드표를 쓰도록 한 곳에 둔다.
 
-export const LIFE_MAP_LAYERS = ['cctv', 'toilet'] as const;
+export const LIFE_MAP_LAYERS = ['cctv', 'toilet', 'hospital'] as const;
 export type LifeMapLayer = (typeof LIFE_MAP_LAYERS)[number];
 export const LIFE_MAP_LAYER_LABEL: Record<LifeMapLayer, string> = {
   cctv: 'CCTV',
   toilet: '공중화장실',
+  hospital: '병의원',
 };
-export const isLifeMapLayer = (v: unknown): v is LifeMapLayer => v === 'cctv' || v === 'toilet';
+export const isLifeMapLayer = (v: unknown): v is LifeMapLayer =>
+  v === 'cctv' || v === 'toilet' || v === 'hospital';
 
 // 개별 지점을 그리기 시작하는 줌 — 미만은 서버 집계 셀(버블 카운트). CCTV 는 서울 도심
 // 밀도(≈100개/km²) 기준 z15 뷰포트(≈16km²)에서 ~1,500점, 화장실(≈9개/km²)은 z13(≈260km²)
-// 에서 ~2,400점 — 요청당 점 상한 안에 들어온다.
-export const LIFE_MAP_POINT_MIN_ZOOM: Record<LifeMapLayer, number> = { cctv: 15, toilet: 13 };
+// 에서 ~2,400점 — 요청당 점 상한 안에 들어온다. 병의원은 서울 평균 ≈33개/km²(강남 의료몰은
+// 국지적으로 그 몇 배)라 z14(≈65km²)에서 보통 ~2천 점, 최밀집 뷰포트만 truncated 안내.
+export const LIFE_MAP_POINT_MIN_ZOOM: Record<LifeMapLayer, number> = { cctv: 15, toilet: 13, hospital: 14 };
 export const LIFE_MAP_POINTS_MAX = 4000;
 
 // ── CCTV 설치목적 ─────────────────────────────────────────────────────────────
@@ -149,6 +153,49 @@ export const summarizeLifeToiletFixtures = (f: LifeToiletFixtureCounts): string 
   if (male.length > 0) parts.push(`남 ${male.join('·')}`);
   if (female.length > 0) parts.push(`여 ${female.join('·')}`);
   return parts.length > 0 ? parts.join(' / ') : null;
+};
+
+// ── 병의원 ───────────────────────────────────────────────────────────────────
+// 필터·마커용 정규화 7종 — 심평원 종별코드명(clCdNm, 상급종합병원~조산원 15종 안팎)을 묶는다.
+// 원문 종별은 상세(kindName)에 그대로 보여 주고, 필터 칩·서버 category 열은 이 7종만 쓴다.
+export const LIFE_HOSPITAL_CATEGORIES = ['종합병원', '병원', '의원', '치과', '한방', '보건기관', '기타'] as const;
+export type LifeHospitalCategory = (typeof LIFE_HOSPITAL_CATEGORIES)[number];
+
+const LIFE_HOSPITAL_CATEGORY_OF: Record<string, LifeHospitalCategory> = {
+  // 심평원 실응답(프로브 2026-08-28)은 '상급종합병원'이 아니라 '상급종합'으로 온다.
+  상급종합: '종합병원',
+  상급종합병원: '종합병원',
+  종합병원: '종합병원',
+  병원: '병원',
+  요양병원: '병원',
+  정신병원: '병원',
+  치과병원: '치과',
+  치과의원: '치과',
+  한방병원: '한방',
+  한의원: '한방',
+  의원: '의원',
+  보건소: '보건기관',
+  보건지소: '보건기관',
+  보건진료소: '보건기관',
+  보건의료원: '보건기관',
+};
+
+export const normalizeLifeHospitalCategory = (clCdNm: string | null | undefined): LifeHospitalCategory => {
+  const s = (clCdNm ?? '').replace(/\s+/g, '').trim();
+  return LIFE_HOSPITAL_CATEGORY_OF[s] ?? '기타';
+};
+
+// 쉼표 구분 category 파라미터 → 유효 카테고리 배열(중복 제거, 모르는 값 무시). 빈 배열 = 전체.
+export const parseLifeHospitalCategories = (raw: string | null | undefined): LifeHospitalCategory[] => {
+  if (!raw) return [];
+  const out: LifeHospitalCategory[] = [];
+  for (const part of raw.split(',')) {
+    const s = part.trim();
+    if ((LIFE_HOSPITAL_CATEGORIES as readonly string[]).includes(s) && !out.includes(s as LifeHospitalCategory)) {
+      out.push(s as LifeHospitalCategory);
+    }
+  }
+  return out;
 };
 
 // ── 표시 도우미 ──────────────────────────────────────────────────────────────

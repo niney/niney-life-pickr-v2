@@ -1,6 +1,7 @@
-import { Prisma, type LifeCctv, type LifeToilet, type PrismaClient } from '@prisma/client';
+import { Prisma, type LifeCctv, type LifeHospital, type LifeToilet, type PrismaClient } from '@prisma/client';
 import type {
   LifeCctvItemType,
+  LifeHospitalItemType,
   LifeMapItemType,
   LifeMapLayerType,
   LifeMapNearbyItemType,
@@ -20,10 +21,11 @@ import {
   haversineM,
   lifeCellSizeDeg,
   parseLifeCctvPurposes,
+  parseLifeHospitalCategories,
 } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
 
-// 일상지도 조회 — 로컬 SQLite(LifeCctv 377k / LifeToilet 53k)만 읽는다. 업스트림 없음.
+// 일상지도 조회 — 로컬 SQLite(LifeCctv 377k / LifeToilet 53k / LifeHospital 78k)만 읽는다. 업스트림 없음.
 //
 // 뷰포트 조회는 두 모드: 줌이 레이어 임계 이상이고 bbox 가 좁으면 개별 점(인덱스 범위 조회,
 // 상한 LIFE_MAP_POINTS_MAX + truncated), 아니면 전국 고정 원점의 도(°) 격자로 GROUP BY 집계한
@@ -44,6 +46,7 @@ export class LifeMapServiceError extends Error {
 const LOAD_COMMAND: Record<LifeMapLayerType, string> = {
   cctv: 'load:life-cctv',
   toilet: 'load:life-toilets',
+  hospital: 'load:life-hospitals',
 };
 // 점 모드를 허용하는 bbox 최대 폭(도) — 줌 값을 속여 전국 bbox 로 점을 긁는 요청을 셀로 강등.
 const POINTS_MAX_SPAN_DEG = 1.5;
@@ -64,15 +67,20 @@ const parseBbox = (s: string): Bbox => {
 
 interface Filters {
   purposes: string[];
+  categories: string[];
   open24: boolean;
   disabled: boolean;
   kids: boolean;
   diaper: boolean;
   bell: boolean;
 }
-type FilterQuery = Pick<LifeMapPointsQueryType, 'purpose' | 'open24' | 'disabled' | 'kids' | 'diaper' | 'bell'>;
+type FilterQuery = Pick<
+  LifeMapPointsQueryType,
+  'purpose' | 'category' | 'open24' | 'disabled' | 'kids' | 'diaper' | 'bell'
+>;
 const toFilters = (q: FilterQuery): Filters => ({
   purposes: parseLifeCctvPurposes(q.purpose),
+  categories: parseLifeHospitalCategories(q.category),
   open24: q.open24,
   disabled: q.disabled,
   kids: q.kids,
@@ -80,7 +88,7 @@ const toFilters = (q: FilterQuery): Filters => ({
   bell: q.bell,
 });
 const filtersKey = (f: Filters): string =>
-  `${f.purposes.join(',')}|${Number(f.open24)}${Number(f.disabled)}${Number(f.kids)}${Number(f.diaper)}${Number(f.bell)}`;
+  `${f.purposes.join(',')}|${f.categories.join(',')}|${Number(f.open24)}${Number(f.disabled)}${Number(f.kids)}${Number(f.diaper)}${Number(f.bell)}`;
 
 const toCctvItem = (r: LifeCctv): LifeCctvItemType => ({
   layer: 'cctv',
@@ -142,6 +150,26 @@ const toToiletItem = (r: LifeToilet): LifeToiletItemType => ({
   geoSource: r.geoSource === 'road' || r.geoSource === 'parcel' ? r.geoSource : null,
 });
 
+const toHospitalItem = (r: LifeHospital): LifeHospitalItemType => ({
+  layer: 'hospital',
+  id: r.id,
+  lat: r.lat,
+  lng: r.lng,
+  name: r.name,
+  kindName: r.kindName,
+  category: r.category,
+  sidoName: r.sidoName,
+  sgguName: r.sgguName,
+  emdongName: r.emdongName,
+  postNo: r.postNo,
+  addr: r.addr,
+  phone: r.phone,
+  url: r.url,
+  openedDate: r.openedDate,
+  doctorCount: r.doctorCount,
+  geoSource: r.geoSource === 'api' || r.geoSource === 'road' || r.geoSource === 'parcel' ? r.geoSource : null,
+});
+
 export interface LifeMapServiceDeps {
   prisma: PrismaClient;
   now?: () => Date;
@@ -183,7 +211,7 @@ export class LifeMapService {
           layer,
           loaded: s !== null,
           count: s?.count ?? 0,
-          geocoded: layer === 'toilet' && s ? (s.geocoded ?? 0) : null,
+          geocoded: (layer === 'toilet' || layer === 'hospital') && s ? (s.geocoded ?? 0) : null,
           baseDate: s?.baseDate ?? null,
           loadedAt: s?.loadedAt.toISOString() ?? null,
         };
@@ -213,6 +241,14 @@ export class LifeMapService {
     };
   }
 
+  private hospitalWhere(b: Bbox, f: Filters): Prisma.LifeHospitalWhereInput {
+    return {
+      lat: { gte: b.minLat, lte: b.maxLat },
+      lng: { gte: b.minLng, lte: b.maxLng },
+      ...(f.categories.length > 0 ? { category: { in: f.categories } } : {}),
+    };
+  }
+
   async getPoints(q: LifeMapPointsQueryType): Promise<LifeMapPointsResultType> {
     const sync = await this.requireSync(q.layer);
     const bbox = parseBbox(q.bbox);
@@ -223,9 +259,9 @@ export class LifeMapService {
       bbox.maxLat - bbox.minLat <= POINTS_MAX_SPAN_DEG && bbox.maxLng - bbox.minLng <= POINTS_MAX_SPAN_DEG;
     const fetchedAt = sync.loadedAt.toISOString();
     if (zoom >= minPointZoom && narrow) {
-      return q.layer === 'cctv'
-        ? this.cctvPoints(bbox, filters, fetchedAt)
-        : this.toiletPoints(bbox, filters, fetchedAt);
+      if (q.layer === 'cctv') return this.cctvPoints(bbox, filters, fetchedAt);
+      if (q.layer === 'toilet') return this.toiletPoints(bbox, filters, fetchedAt);
+      return this.hospitalPoints(bbox, filters, fetchedAt);
     }
     return this.cells(q.layer, zoom, bbox, filters, sync.id, fetchedAt);
   }
@@ -283,6 +319,30 @@ export class LifeMapService {
     };
   }
 
+  private async hospitalPoints(bbox: Bbox, f: Filters, fetchedAt: string): Promise<LifeMapPointsResultType> {
+    const where = this.hospitalWhere(bbox, f);
+    const rows = await this.deps.prisma.lifeHospital.findMany({
+      where,
+      select: { id: true, lat: true, lng: true, name: true },
+      take: LIFE_MAP_POINTS_MAX + 1,
+    });
+    const truncated = rows.length > LIFE_MAP_POINTS_MAX;
+    const items = (truncated ? rows.slice(0, LIFE_MAP_POINTS_MAX) : rows).flatMap((r) =>
+      r.lat !== null && r.lng !== null ? [{ id: r.id, lat: r.lat, lng: r.lng, name: r.name }] : [],
+    );
+    const total = truncated ? await this.deps.prisma.lifeHospital.count({ where }) : items.length;
+    return {
+      layer: 'hospital',
+      mode: 'points',
+      items,
+      cells: [],
+      total,
+      truncated,
+      minPointZoom: LIFE_MAP_POINT_MIN_ZOOM.hospital,
+      fetchedAt,
+    };
+  }
+
   // 집계 셀 — 전국 고정 원점(LIFE_CELL_ORIGIN) 기준 도(°) 격자. bbox 를 셀 경계로 바깥 정렬해
   // (a) 경계 셀도 온전히 집계되고 (b) 셀 하나 안의 패닝은 같은 캐시 키를 맞춘다.
   private async cells(
@@ -305,7 +365,12 @@ export class LifeMapService {
     const hit = this.cellCache.get(key);
     if (hit) return hit;
 
-    const table = layer === 'cctv' ? Prisma.raw('"life_cctvs"') : Prisma.raw('"life_toilets"');
+    const table =
+      layer === 'cctv'
+        ? Prisma.raw('"life_cctvs"')
+        : layer === 'toilet'
+          ? Prisma.raw('"life_toilets"')
+          : Prisma.raw('"life_hospitals"');
     const conds: Prisma.Sql[] = [
       Prisma.sql`"lat" >= ${q.minLat}`,
       Prisma.sql`"lat" <= ${q.maxLat}`,
@@ -314,6 +379,8 @@ export class LifeMapService {
     ];
     if (layer === 'cctv') {
       if (f.purposes.length > 0) conds.push(Prisma.sql`"purpose" IN (${Prisma.join(f.purposes)})`);
+    } else if (layer === 'hospital') {
+      if (f.categories.length > 0) conds.push(Prisma.sql`"category" IN (${Prisma.join(f.categories)})`);
     } else {
       if (f.open24) conds.push(Prisma.sql`"open24" = 1`);
       if (f.disabled) conds.push(Prisma.sql`"disabled" = 1`);
@@ -377,6 +444,13 @@ export class LifeMapService {
     if (q.layer === 'cctv') {
       const rows = await this.deps.prisma.lifeCctv.findMany({ where: this.cctvWhere(bbox, f) });
       withDist = rows.map((r) => ({ ...toCctvItem(r), dist: Math.round(haversineM(center, { lat: r.lat, lng: r.lng })) }));
+    } else if (q.layer === 'hospital') {
+      const rows = await this.deps.prisma.lifeHospital.findMany({ where: this.hospitalWhere(bbox, f) });
+      withDist = rows.flatMap((r) =>
+        r.lat !== null && r.lng !== null
+          ? [{ ...toHospitalItem(r), dist: Math.round(haversineM(center, { lat: r.lat, lng: r.lng })) }]
+          : [],
+      );
     } else {
       const rows = await this.deps.prisma.lifeToilet.findMany({ where: this.toiletWhere(bbox, f) });
       withDist = rows.flatMap((r) =>
@@ -400,6 +474,11 @@ export class LifeMapService {
       const row = await this.deps.prisma.lifeCctv.findUnique({ where: { id } });
       if (!row) throw new LifeMapServiceError('해당 CCTV 를 찾을 수 없습니다.', 404);
       return toCctvItem(row);
+    }
+    if (layer === 'hospital') {
+      const row = await this.deps.prisma.lifeHospital.findUnique({ where: { id } });
+      if (!row) throw new LifeMapServiceError('해당 병의원을 찾을 수 없습니다.', 404);
+      return toHospitalItem(row);
     }
     const row = await this.deps.prisma.lifeToilet.findUnique({ where: { id } });
     if (!row) throw new LifeMapServiceError('해당 화장실을 찾을 수 없습니다.', 404);

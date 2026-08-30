@@ -4,12 +4,14 @@ import {
   LIFE_CCTV_GROUP_COLOR,
   LIFE_CCTV_PURPOSE_GROUPS,
   LIFE_CCTV_PURPOSE_GROUP_LABEL,
+  LIFE_HOSPITAL_COLOR,
   LIFE_TOILET_COLOR,
 } from '@repo/utils';
 
 // 범례 + 적재 상태 + 출처 표시 — 패널 하단. 색은 항상 글자와 함께(색만으로 뜻을 전하지 않는다).
-// 출처: 지방행정인허가데이터개방(localdata.go.kr) 전국 CCTV 설치 현황·공중화장실. 화장실 좌표는
-// 주소를 VWorld 지오코더로 변환한 값.
+// 출처: 지방행정인허가데이터개방(localdata.go.kr) 전국 CCTV 설치 현황·공중화장실 + 건강보험심사
+// 평가원 병원정보서비스(공공저작물 출처표시 의무). 화장실(및 병의원 좌표 결측분)은 주소를
+// VWorld 지오코더로 변환한 값.
 
 interface Props {
   status: LifeMapStatusResultType | undefined;
@@ -18,6 +20,7 @@ interface Props {
 export const LifeMapFooter = ({ status }: Props) => {
   const cctv = status?.layers.find((l) => l.layer === 'cctv');
   const toilet = status?.layers.find((l) => l.layer === 'toilet');
+  const hospital = status?.layers.find((l) => l.layer === 'hospital');
   const geocodedPct =
     toilet && toilet.count > 0 && toilet.geocoded !== null ? Math.round((toilet.geocoded / toilet.count) * 100) : null;
   return (
@@ -33,6 +36,10 @@ export const LifeMapFooter = ({ status }: Props) => {
           <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: LIFE_TOILET_COLOR }} />
           공중화장실
         </span>
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: LIFE_HOSPITAL_COLOR }} />
+          병의원
+        </span>
         <span>숫자 버블 = 그 칸의 건수(확대하면 개별 지점)</span>
       </div>
       <div className="mt-1">
@@ -41,6 +48,10 @@ export const LifeMapFooter = ({ status }: Props) => {
         {toilet?.loaded
           ? `화장실 ${toilet.count.toLocaleString('ko-KR')}개(기준 ${toilet.baseDate ?? '-'}${geocodedPct !== null ? `, 좌표 ${geocodedPct}%` : ''})`
           : '화장실 데이터 미적재'}
+        {' · '}
+        {hospital?.loaded
+          ? `병의원 ${hospital.count.toLocaleString('ko-KR')}곳(기준 ${hospital.baseDate ?? '-'})`
+          : '병의원 데이터 미적재'}
       </div>
       <div className="mt-0.5">
         출처{' '}
@@ -52,7 +63,16 @@ export const LifeMapFooter = ({ status }: Props) => {
         >
           지방행정인허가데이터개방 <ExternalLink className="size-3" />
         </a>{' '}
-        전국 CCTV 설치 현황·공중화장실 · 화장실 좌표는 VWorld 지오코더로 주소를 변환한 값
+        전국 CCTV 설치 현황·공중화장실 ·{' '}
+        <a
+          href="https://www.data.go.kr/data/15001698/openapi.do"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline"
+        >
+          건강보험심사평가원 병원정보서비스 <ExternalLink className="size-3" />
+        </a>{' '}
+        · 화장실 좌표는 VWorld 지오코더로 주소를 변환한 값
       </div>
     </div>
   );

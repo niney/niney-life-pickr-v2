@@ -4,6 +4,7 @@ import {
   buildLifeCctvDotDataUrl,
   buildLifeCctvPinDataUrl,
   buildLifeCellMarkerDataUrl,
+  buildLifeHospitalMarkerDataUrl,
   buildLifeToiletMarkerDataUrl,
   isLifeMapLayer,
   lifeCctvPurposeGroup,
@@ -20,6 +21,8 @@ const CCTV_KEY = (g: LifeCctvPurposeGroup) => `@cctv:${g}`;
 const CCTV_SEL_KEY = (g: LifeCctvPurposeGroup) => `@cctv-sel:${g}`;
 const TOILET_KEY = '@toilet';
 const TOILET_SEL_KEY = '@toilet-sel';
+const HOSPITAL_KEY = '@hospital';
+const HOSPITAL_SEL_KEY = '@hospital-sel';
 const cellKey = (layer: LifeMapLayer, count: number) => `@cell:${layer}:${count}`;
 
 // 고정 아이콘 사전 — 모듈 로드 시 1회.
@@ -27,6 +30,8 @@ const BASE_ICONS: Record<string, string> = {
   ...Object.fromEntries(LIFE_CCTV_PURPOSE_GROUPS.flatMap((g) => [[CCTV_KEY(g), buildLifeCctvDotDataUrl(g)], [CCTV_SEL_KEY(g), buildLifeCctvPinDataUrl(g)]])),
   [TOILET_KEY]: buildLifeToiletMarkerDataUrl(false),
   [TOILET_SEL_KEY]: buildLifeToiletMarkerDataUrl(true),
+  [HOSPITAL_KEY]: buildLifeHospitalMarkerDataUrl(false),
+  [HOSPITAL_SEL_KEY]: buildLifeHospitalMarkerDataUrl(true),
 };
 const cellIconCache = new Map<string, string>();
 
@@ -52,11 +57,13 @@ export interface LifeBridgeMarkers {
   icons: Record<string, string>;
 }
 
-// 두 레이어 응답 → 마커 + 사전. labeledToiletIds 에 든 화장실만 라벨(수백 개 전부는 과밀).
+// 세 레이어 응답 → 마커 + 사전. labeled*Ids 에 든 화장실/병의원만 라벨(수백 개 전부는 과밀).
 export const buildLifeBridgeMarkers = (
   cctv: LifeMapPointsResultType | undefined,
   toilet: LifeMapPointsResultType | undefined,
+  hospital: LifeMapPointsResultType | undefined,
   labeledToiletIds: ReadonlySet<string>,
+  labeledHospitalIds: ReadonlySet<string>,
 ): LifeBridgeMarkers => {
   const icons: Record<string, string> = { ...BASE_ICONS };
   const markers: BridgeMarker[] = [];
@@ -94,6 +101,21 @@ export const buildLifeBridgeMarkers = (
           icon: TOILET_KEY,
           iconSel: TOILET_SEL_KEY,
           ...(labeledToiletIds.has(p.id) ? { label: p.name } : {}),
+        });
+      }
+    }
+  }
+  if (hospital) {
+    if (hospital.mode === 'cells') pushCells('hospital', hospital.cells);
+    else {
+      for (const p of hospital.items) {
+        markers.push({
+          id: lifeMarkerId('hospital', p.id),
+          lat: p.lat,
+          lng: p.lng,
+          icon: HOSPITAL_KEY,
+          iconSel: HOSPITAL_SEL_KEY,
+          ...(labeledHospitalIds.has(p.id) ? { label: p.name } : {}),
         });
       }
     }

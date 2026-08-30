@@ -7,9 +7,9 @@ import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } fro
 import { MyLocationButton } from '~/components/restaurant/MyLocationButton';
 import { buildLifeMarkers, lifeCellAt, parseLifeMarkerId } from './lifeMapMarkers';
 
-// 일상지도 지도 뷰 — MapCanvas 한 장에 CCTV 점/셀 + 화장실 원/핀을 한 소스로 그린다(화장실을
-// 뒤에 넣어 점 위에 오게). 내 위치(파란 점)·저장 위치(보라 점)는 fit 에서 빠지는 오버레이.
-// 키 게이트(로딩/미등록/오류) 3분기는 대기·버스 지도와 같은 정책.
+// 일상지도 지도 뷰 — MapCanvas 한 장에 CCTV 점/셀 + 화장실·병의원 원/핀을 한 소스로 그린다
+// (화장실·병의원을 뒤에 넣어 점 위에 오게). 내 위치(파란 점)·저장 위치(보라 점)는 fit 에서
+// 빠지는 오버레이. 키 게이트(로딩/미등록/오류) 3분기는 대기·버스 지도와 같은 정책.
 
 const MY_LOCATION_URL = buildMyLocationMarkerDataUrl();
 const SAVED_LOCATION_URL = buildAirSavedLocationMarkerDataUrl();
@@ -20,8 +20,10 @@ const EMPTY_IDS: ReadonlySet<string> = new Set();
 interface Props {
   cctv: LifeMapPointsResultType | undefined;
   toilet: LifeMapPointsResultType | undefined;
-  // 라벨을 붙일 화장실 id(주변 목록 + 선택).
+  hospital: LifeMapPointsResultType | undefined;
+  // 라벨을 붙일 화장실/병의원 id(주변 목록 + 선택).
   labeledToiletIds?: ReadonlySet<string>;
+  labeledHospitalIds?: ReadonlySet<string>;
   selectedMarkerId: string | null;
   initialCenter: { lat: number; lng: number; zoom: number };
   myLocation: { lat: number; lng: number } | null;
@@ -42,7 +44,9 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
   {
     cctv,
     toilet,
+    hospital,
     labeledToiletIds = EMPTY_IDS,
+    labeledHospitalIds = EMPTY_IDS,
     selectedMarkerId,
     initialCenter,
     myLocation,
@@ -64,8 +68,12 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
   const keyMissing = config.isError && config.error instanceof ApiError && config.error.statusCode === 404;
 
   const markers = useMemo<MapMarker[]>(
-    () => [...buildLifeMarkers('cctv', cctv, EMPTY_IDS), ...buildLifeMarkers('toilet', toilet, labeledToiletIds)],
-    [cctv, toilet, labeledToiletIds],
+    () => [
+      ...buildLifeMarkers('cctv', cctv, EMPTY_IDS),
+      ...buildLifeMarkers('toilet', toilet, labeledToiletIds),
+      ...buildLifeMarkers('hospital', hospital, labeledHospitalIds),
+    ],
+    [cctv, toilet, hospital, labeledToiletIds, labeledHospitalIds],
   );
   const overlayMarkers = useMemo<MapMarker[]>(() => {
     const out: MapMarker[] = [];
@@ -92,10 +100,11 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
         onSelectPoint(parsed.layer, parsed.id);
         return;
       }
-      const cell = lifeCellAt(parsed.layer === 'cctv' ? cctv : toilet, parsed.index);
+      const source = parsed.layer === 'cctv' ? cctv : parsed.layer === 'toilet' ? toilet : hospital;
+      const cell = lifeCellAt(source, parsed.index);
       if (cell) onSelectCell(parsed.layer, cell);
     },
-    [cctv, toilet, onSelectPoint, onSelectCell],
+    [cctv, toilet, hospital, onSelectPoint, onSelectCell],
   );
 
   if (config.isLoading) {

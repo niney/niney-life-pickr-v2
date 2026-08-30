@@ -20,16 +20,23 @@ export const LIFE_CCTV_GROUP_COLOR: Record<LifeCctvPurposeGroup, string> = {
   etc: '#4a3aa7',
 };
 export const LIFE_TOILET_COLOR = '#c2185b';
+// 병의원 — 종별과 무관한 단색(CCTV 처럼 그룹색을 더 얹으면 한 화면 색이 8개를 넘어 전 쌍 분리가
+// 깨진다). 기존 5색과 색상환에서 떨어진 청록 — 분홍(화장실 원)과는 색상, 초록(CCTV 점)과는
+// 마커 형태(26px 원 + 십자 아이콘 vs 12px 점)로 갈린다.
+export const LIFE_HOSPITAL_COLOR = '#00897b';
 // 집계 버블·레이어 대표색.
 export const LIFE_LAYER_COLOR: Record<LifeMapLayer, string> = {
   cctv: '#2a78d6',
   toilet: LIFE_TOILET_COLOR,
+  hospital: LIFE_HOSPITAL_COLOR,
 };
 
-// 24×24 흰 라인 아이콘 조각(markerFrame 규약) — CCTV(기울어진 본체+렌즈+거치대), 화장실(물탱크+변기).
+// 24×24 흰 라인 아이콘 조각(markerFrame 규약) — CCTV(기울어진 본체+렌즈+거치대), 화장실(물탱크+변기),
+// 병의원(십자).
 const CCTV_ICON =
   '<path d="M3 9.5 14 5l1.8 5-11 4.5z"/><path d="M8 14.5V19"/><path d="M5 19h6"/><circle cx="14.3" cy="7.6" r="1"/>';
 const TOILET_ICON = '<path d="M7 4h10v5H7z"/><path d="M5 11h14v2a7 7 0 0 1-14 0z"/><path d="M9 20h6"/>';
+const HOSPITAL_ICON = '<path d="M9.5 4.5h5v5h5v5h-5v5h-5v-5h-5v-5h5z"/>';
 
 const toDataUrl = (svg: string): string => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 
@@ -55,6 +62,15 @@ export function buildLifeToiletMarkerDataUrl(selected: boolean): string {
     selected
       ? buildPinMarkerSvg({ fill: LIFE_TOILET_COLOR, innerSvg: TOILET_ICON })
       : buildCircleMarkerSvg({ fill: LIFE_TOILET_COLOR, innerSvg: TOILET_ICON }),
+  );
+}
+
+// 병의원 — 화장실과 같은 원/핀 프레임, 색·아이콘만 다르다.
+export function buildLifeHospitalMarkerDataUrl(selected: boolean): string {
+  return toDataUrl(
+    selected
+      ? buildPinMarkerSvg({ fill: LIFE_HOSPITAL_COLOR, innerSvg: HOSPITAL_ICON })
+      : buildCircleMarkerSvg({ fill: LIFE_HOSPITAL_COLOR, innerSvg: HOSPITAL_ICON }),
   );
 }
 

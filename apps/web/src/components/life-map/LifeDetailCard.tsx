@@ -1,7 +1,8 @@
-import { ArrowLeft, Crosshair, Phone } from 'lucide-react';
+import { ArrowLeft, Crosshair, ExternalLink, Phone } from 'lucide-react';
 import type { LifeMapItemType } from '@repo/api-contract';
 import {
   LIFE_CCTV_GROUP_COLOR,
+  LIFE_HOSPITAL_COLOR,
   LIFE_TOILET_COLOR,
   LIFE_TOILET_FEATURES,
   formatDistanceM,
@@ -12,8 +13,9 @@ import {
 import { Button } from '~/components/ui/button';
 import { openLabel } from './lifeMapFormat';
 
-// 선택 항목 상세 — 화장실(개방시간·변기수·편의·관리기관·주소)과 CCTV(목적·대수·화소·방면·보관일수).
-// 패널의 주변 목록 자리를 대신 차지하고 '← 목록' 으로 돌아간다.
+// 선택 항목 상세 — 화장실(개방시간·변기수·편의·관리기관·주소)·CCTV(목적·대수·화소·방면·보관일수)·
+// 병의원(종별·주소·연락처·홈페이지·개설일·의사수). 패널의 주변 목록 자리를 대신 차지하고
+// '← 목록' 으로 돌아간다.
 
 interface Props {
   item: LifeMapItemType;
@@ -38,7 +40,13 @@ export const LifeDetailCard = ({ item, distM, onBack, onFlyTo }: Props) => {
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        {item.layer === 'toilet' ? <ToiletDetail item={item} distM={distM} /> : <CctvDetail item={item} distM={distM} />}
+        {item.layer === 'toilet' ? (
+          <ToiletDetail item={item} distM={distM} />
+        ) : item.layer === 'hospital' ? (
+          <HospitalDetail item={item} distM={distM} />
+        ) : (
+          <CctvDetail item={item} distM={distM} />
+        )}
       </div>
     </div>
   );
@@ -131,6 +139,56 @@ const ToiletDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer:
     </>
   );
 };
+
+const HospitalDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer: 'hospital' }>; distM: number | null }) => (
+  <>
+    <div className="flex items-start gap-2">
+      <span aria-hidden className="mt-1.5 size-3 shrink-0 rounded-full" style={{ backgroundColor: LIFE_HOSPITAL_COLOR }} />
+      <div className="min-w-0">
+        <h2 className="text-base font-semibold leading-tight">{item.name}</h2>
+        <p className="text-xs text-muted-foreground">
+          {item.kindName}
+          {distM !== null ? ` · 내 위치에서 ${formatDistanceM(distM)}` : ''}
+        </p>
+      </div>
+    </div>
+    <dl className="mt-3 divide-y">
+      <Row label="종별">{item.kindName}</Row>
+      <Row label="주소">
+        {item.addr ?? '-'}
+        {item.postNo && <span className="block text-xs text-muted-foreground">우편번호 {item.postNo}</span>}
+      </Row>
+      {item.phone && (
+        <Row label="전화">
+          <PhoneLink phone={item.phone} />
+        </Row>
+      )}
+      {item.url && (
+        <Row label="홈페이지">
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex max-w-full items-center gap-1 underline-offset-2 hover:underline"
+          >
+            <span className="truncate">{item.url.replace(/^https?:\/\//, '')}</span>
+            <ExternalLink className="size-3 shrink-0" />
+          </a>
+        </Row>
+      )}
+      <Row label="개설일">{item.openedDate ?? '-'}</Row>
+      <Row label="총의사수">{item.doctorCount !== null ? `${item.doctorCount}명` : '-'}</Row>
+    </dl>
+    <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+      출처: 건강보험심사평가원 병원정보서비스(요양기관 신고 기준 — 실제 운영·진료시간과 다를 수 있습니다).
+      {item.geoSource === 'road' || item.geoSource === 'parcel'
+        ? ' 위치는 주소를 지오코더로 변환한 값이라 실제 입구와 차이 날 수 있습니다.'
+        : item.geoSource === null
+          ? ' 좌표가 없어 지도에는 표시되지 않습니다.'
+          : ''}
+    </p>
+  </>
+);
 
 const CctvDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer: 'cctv' }>; distM: number | null }) => (
   <>

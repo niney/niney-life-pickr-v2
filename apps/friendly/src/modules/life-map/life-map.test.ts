@@ -32,6 +32,12 @@ const TOILET_SEED = [
   { id: 'LMT-T3', name: '좌표 없는 화장실', lat: null, lng: null, open24: true, bell: false, diaper: false, disabled: false, kids: false },
   { id: 'LMT-T4', name: '부산 화장실', lat: 35.18, lng: 129.076, open24: false, bell: false, diaper: false, disabled: false, kids: true },
 ];
+const HOSPITAL_SEED = [
+  { id: 'LMT-H1', name: '시청내과의원', kindName: '의원', category: '의원', lat: 37.5667, lng: 126.9783, geoSource: 'api' },
+  { id: 'LMT-H2', name: '광화문치과의원', kindName: '치과의원', category: '치과', lat: 37.5681, lng: 126.9771, geoSource: 'road' },
+  { id: 'LMT-H3', name: '좌표 없는 의원', kindName: '의원', category: '의원', lat: null, lng: null, geoSource: null },
+  { id: 'LMT-H4', name: '부산종합병원', kindName: '종합병원', category: '종합병원', lat: 35.181, lng: 129.077, geoSource: 'api' },
+];
 const SEOUL_BBOX = '126.970,37.560,126.990,37.575';
 const KOREA_BBOX = '124,33,132,39';
 
@@ -98,6 +104,26 @@ describe('life-map routes (격리 DB)', () => {
         geoSource: t.lat === null ? null : 'road',
       })),
     });
+    await app.prisma.lifeHospital.createMany({
+      data: HOSPITAL_SEED.map((h) => ({
+        id: h.id,
+        name: h.name,
+        kindName: h.kindName,
+        category: h.category,
+        sidoName: '서울',
+        sgguName: '중구',
+        emdongName: '태평로1가',
+        postNo: '04524',
+        addr: '서울특별시 중구 세종대로 110',
+        phone: '02-1111-2222',
+        url: 'http://example.com',
+        openedDate: '2010-11-03',
+        doctorCount: 3,
+        lat: h.lat,
+        lng: h.lng,
+        geoSource: h.geoSource,
+      })),
+    });
   });
 
   afterAll(async () => {
@@ -112,6 +138,7 @@ describe('life-map routes (격리 DB)', () => {
     expect(body.layers.map((l) => [l.layer, l.loaded])).toEqual([
       ['cctv', false],
       ['toilet', false],
+      ['hospital', false],
     ]);
 
     const points = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: SEOUL_BBOX, zoom: '16' }) });
@@ -121,17 +148,24 @@ describe('life-map routes (격리 DB)', () => {
     const nearby = await app.inject({ method: 'GET', url: nearbyUrl({ layer: 'toilet', lat: '37.5665', lng: '126.978' }) });
     expect(nearby.statusCode).toBe(503);
     expect(nearby.json().message).toContain('load:life-toilets');
+
+    const hospital = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'hospital', bbox: SEOUL_BBOX, zoom: '16' }) });
+    expect(hospital.statusCode).toBe(503);
+    expect(hospital.json().message).toContain('load:life-hospitals');
   });
 
-  it('적재 이력 기록 후 status — 건수·기준일·화장실 좌표 확보 건수', async () => {
+  it('적재 이력 기록 후 status — 건수·기준일·화장실/병의원 좌표 확보 건수', async () => {
     await app.prisma.lifeMasterSync.create({ data: { layer: 'cctv', count: 4, geocoded: null, baseDate: '2026-07-30', sourceFile: 'cctv.csv' } });
     await app.prisma.lifeMasterSync.create({ data: { layer: 'toilet', count: 4, geocoded: 3, baseDate: '2026-08-18', sourceFile: 'toilet.csv' } });
+    await app.prisma.lifeMasterSync.create({ data: { layer: 'hospital', count: 4, geocoded: 3, baseDate: '2026-08-28', sourceFile: 'hira:getHospBasisList' } });
     const res = await app.inject({ method: 'GET', url: STATUS_URL });
     const body = res.json<LifeMapStatusResultType>();
     const cctv = body.layers.find((l) => l.layer === 'cctv')!;
     const toilet = body.layers.find((l) => l.layer === 'toilet')!;
+    const hospital = body.layers.find((l) => l.layer === 'hospital')!;
     expect(cctv).toMatchObject({ loaded: true, count: 4, geocoded: null, baseDate: '2026-07-30' });
     expect(toilet).toMatchObject({ loaded: true, count: 4, geocoded: 3, baseDate: '2026-08-18' });
+    expect(hospital).toMatchObject({ loaded: true, count: 4, geocoded: 3, baseDate: '2026-08-28' });
     expect(cctv.loadedAt).not.toBeNull();
   });
 
@@ -197,6 +231,59 @@ describe('life-map routes (격리 DB)', () => {
     // '0' 은 조건 없음.
     const zero = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'toilet', bbox: SEOUL_BBOX, zoom: '14', open24: '0' }) });
     expect(zero.json<LifeMapPointsResultType>().items).toHaveLength(2);
+  });
+
+  it('points — 병의원 점 모드 + category 필터, 셀 모드에서 좌표 없는 행 제외', async () => {
+    const all = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'hospital', bbox: SEOUL_BBOX, zoom: '15' }) });
+    const allBody = all.json<LifeMapPointsResultType>();
+    expect(allBody.mode).toBe('points');
+    expect(allBody.items.map((i) => i.id).sort()).toEqual(['LMT-H1', 'LMT-H2']);
+    expect(allBody.items.find((i) => i.id === 'LMT-H1')).toMatchObject({ name: '시청내과의원' });
+    expect(allBody.items[0]).not.toHaveProperty('purpose');
+    expect(allBody.minPointZoom).toBe(14);
+
+    const dental = await app.inject({
+      method: 'GET',
+      url: pointsUrl({ layer: 'hospital', bbox: SEOUL_BBOX, zoom: '15', category: '치과,없는종별' }),
+    });
+    expect(dental.json<LifeMapPointsResultType>().items.map((i) => i.id)).toEqual(['LMT-H2']);
+
+    // 줌 13(< 임계 14)은 셀 모드 — 좌표 없는 H3 는 집계에서 빠진다(서울 2 + 부산 1).
+    const cells = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'hospital', bbox: KOREA_BBOX, zoom: '13' }) });
+    const cellsBody = cells.json<LifeMapPointsResultType>();
+    expect(cellsBody.mode).toBe('cells');
+    expect(cellsBody.total).toBe(3);
+    const filteredCells = await app.inject({
+      method: 'GET',
+      url: pointsUrl({ layer: 'hospital', bbox: KOREA_BBOX, zoom: '7', category: '종합병원' }),
+    });
+    expect(filteredCells.json<LifeMapPointsResultType>().total).toBe(1);
+  });
+
+  it('nearby·detail — 병의원 거리순·상세 필드·404', async () => {
+    const res = await app.inject({ method: 'GET', url: nearbyUrl({ layer: 'hospital', lat: '37.5665', lng: '126.978', radius: '1000' }) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<LifeMapNearbyResultType>();
+    expect(body.items.map((i) => i.id)).toEqual(['LMT-H1', 'LMT-H2']);
+    expect(body.items[0]).toMatchObject({ layer: 'hospital', name: '시청내과의원', kindName: '의원', category: '의원', geoSource: 'api' });
+    expect(body.total).toBe(2); // 좌표 없는 H3·부산 H4 제외
+
+    const detail = await app.inject({ method: 'GET', url: detailUrl('hospital', 'LMT-H1') });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json<LifeMapItemType>()).toMatchObject({
+      layer: 'hospital',
+      id: 'LMT-H1',
+      addr: '서울특별시 중구 세종대로 110',
+      phone: '02-1111-2222',
+      url: 'http://example.com',
+      openedDate: '2010-11-03',
+      doctorCount: 3,
+    });
+
+    const noCoord = await app.inject({ method: 'GET', url: detailUrl('hospital', 'LMT-H3') });
+    expect(noCoord.json<LifeMapItemType>()).toMatchObject({ layer: 'hospital', lat: null, lng: null, geoSource: null });
+
+    expect((await app.inject({ method: 'GET', url: detailUrl('hospital', 'NOPE') })).statusCode).toBe(404);
   });
 
   it('nearby — 거리 오름차순·반경·limit·전체 건수', async () => {

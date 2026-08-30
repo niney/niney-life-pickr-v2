@@ -80,6 +80,10 @@ const EnvSchema = z.object({
   // 기상청 API허브(apihub.kma.go.kr) 인증키 — AWS 매분 관측으로 현재 날씨 보강(선택). data.go.kr
   // 키와 별개. 비우면 /weather/aws 가 enabled=false 로 응답하고 페이지는 보강을 생략한다.
   KMA_APIHUB_KEY: z.string().default(''),
+  // 심평원 병원정보서비스(apis.data.go.kr/B551182, 15001698) 인증키 — 일상지도 병의원 적재
+  // (load:life-hospitals·probe:hira)만 쓴다(요청 경로 없음). 같은 data.go.kr 계정 키라 비우면
+  // BUS_API_KEY 로 폴백(해당 API 활용신청만 추가).
+  HIRA_API_KEY: z.string().default(''),
 
   // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
   // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,

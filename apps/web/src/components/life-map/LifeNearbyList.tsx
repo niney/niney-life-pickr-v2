@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import type { LifeMapNearbyItemType, LifeMapNearbyResultType } from '@repo/api-contract';
 import {
   LIFE_CCTV_GROUP_COLOR,
+  LIFE_HOSPITAL_COLOR,
   LIFE_MAP_LAYER_LABEL,
   LIFE_TOILET_COLOR,
   LIFE_TOILET_FEATURES,
@@ -12,10 +13,10 @@ import {
 import { cn } from '~/lib/utils';
 import { openLabel } from './lifeMapFormat';
 
-// 지도 중심 기준 주변 목록 — 화장실/CCTV 탭. 행 클릭 = 선택(URL sel) + 지도 이동.
-// 화장실 행은 이름·구분·개방시간·편의 배지, CCTV 행은 목적·관리기관·대수·방면.
-// filters 슬롯: 머리 행(탭·반경·건수) 바로 아래 — 모바일 시트에선 peek 에 머리 행만 보이고
-// half 부터 필터 칩 행이 따라오도록 여기 끼운다.
+// 지도 중심 기준 주변 목록 — 화장실/CCTV/병의원 탭. 행 클릭 = 선택(URL sel) + 지도 이동.
+// 화장실 행은 이름·구분·개방시간·편의 배지, CCTV 행은 목적·관리기관·대수·방면, 병의원 행은
+// 이름·종별·주소. filters 슬롯: 머리 행(탭·반경·건수) 바로 아래 — 모바일 시트에선 peek 에
+// 머리 행만 보이고 half 부터 필터 칩 행이 따라오도록 여기 끼운다.
 
 interface Props {
   tab: LifeMapLayer;
@@ -35,7 +36,7 @@ export const LifeNearbyList = ({ tab, layers, onTab, data, isLoading, radiusM, s
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 px-3 pt-2">
         <div className="inline-flex rounded-md border p-0.5" role="tablist" aria-label="주변 목록">
-          {(['toilet', 'cctv'] as const).map((l) => (
+          {(['toilet', 'cctv', 'hospital'] as const).map((l) => (
             <button
               key={l}
               type="button"
@@ -67,7 +68,7 @@ export const LifeNearbyList = ({ tab, layers, onTab, data, isLoading, radiusM, s
         ) : !data || data.items.length === 0 ? (
           <Empty>
             지도 중심 {formatDistanceM(radiusM)} 안에 {LIFE_MAP_LAYER_LABEL[tab]}
-            {tab === 'toilet' ? '이' : '가'} 없습니다. 지도를 옮기거나 필터를 풀어 보세요.
+            {tab === 'cctv' ? '가' : '이'} 없습니다. 지도를 옮기거나 필터를 풀어 보세요.
           </Empty>
         ) : (
           <ul className="divide-y">
@@ -82,7 +83,7 @@ export const LifeNearbyList = ({ tab, layers, onTab, data, isLoading, radiusM, s
                     selectedId === item.id && 'bg-accent',
                   )}
                 >
-                  {item.layer === 'toilet' ? <ToiletRow item={item} /> : <CctvRow item={item} />}
+                  {item.layer === 'toilet' ? <ToiletRow item={item} /> : item.layer === 'hospital' ? <HospitalRow item={item} /> : <CctvRow item={item} />}
                   <span className="ml-auto shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">{formatDistanceM(item.dist)}</span>
                 </button>
               </li>
@@ -131,6 +132,19 @@ const CctvRow = ({ item }: { item: Extract<LifeMapNearbyItemType, { layer: 'cctv
         {item.orgName}
         {item.cameraCount !== null ? ` · ${item.cameraCount}대` : ''}
         {item.direction ? ` · ${item.direction}` : ''}
+      </span>
+    </span>
+  </>
+);
+
+const HospitalRow = ({ item }: { item: Extract<LifeMapNearbyItemType, { layer: 'hospital' }> }) => (
+  <>
+    <span aria-hidden className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: LIFE_HOSPITAL_COLOR }} />
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-sm font-medium">{item.name}</span>
+      <span className="block truncate text-xs text-muted-foreground">
+        {item.kindName}
+        {item.addr ? ` · ${item.addr}` : ''}
       </span>
     </span>
   </>

@@ -33,7 +33,7 @@ import { useIsDesktopXl } from '~/lib/useMediaQuery';
 import { cn } from '~/lib/utils';
 import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
 
-// 일상지도 — 전국 CCTV·공중화장실을 한 지도에. URL 이 진실: ?ll=lat,lng&z=줌(뷰포트), ?sel=layer:id
+// 일상지도 — 전국 CCTV·공중화장실·병의원을 한 지도에. URL 이 진실: ?ll=lat,lng&z=줌(뷰포트), ?sel=layer:id
 // (선택). 레이어·필터는 persist 스토어. 진입 중심은 URL → 저장한 내 위치(날씨·대기와 공유) →
 // 서울시청. 지도를 움직이면 뷰포트(bbox·줌)로 점/셀을 다시 받고, 주변 목록은 지도 중심 기준.
 //
@@ -48,7 +48,7 @@ import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
 
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 const DEFAULT_ZOOM = 15;
-const NEARBY_RADIUS_M: Record<LifeMapLayer, number> = { toilet: 1000, cctv: 500 };
+const NEARBY_RADIUS_M: Record<LifeMapLayer, number> = { toilet: 1000, cctv: 500, hospital: 1000 };
 const NEARBY_LIMIT = 15;
 // 뷰포트 → 조회 디바운스. 패닝 중 중간 프레임 bbox 로 요청이 연달아 나가지 않게.
 const VIEWPORT_DEBOUNCE_MS = 250;
@@ -98,11 +98,15 @@ export const LifeMapPage = () => {
   const layers = useLifeMapPrefsStore((s) => s.layers);
   const purposes = useLifeMapPrefsStore((s) => s.purposes);
   const toiletFilters = useLifeMapPrefsStore((s) => s.toiletFilters);
+  const hospitalCategories = useLifeMapPrefsStore((s) => s.hospitalCategories);
   const toggleLayer = useLifeMapPrefsStore((s) => s.toggleLayer);
   const togglePurpose = useLifeMapPrefsStore((s) => s.togglePurpose);
   const setPurposes = useLifeMapPrefsStore((s) => s.setPurposes);
   const toggleToiletFilter = useLifeMapPrefsStore((s) => s.toggleToiletFilter);
+  const toggleHospitalCategory = useLifeMapPrefsStore((s) => s.toggleHospitalCategory);
+  const setHospitalCategories = useLifeMapPrefsStore((s) => s.setHospitalCategories);
   const clearPurposes = useCallback(() => setPurposes([]), [setPurposes]);
+  const clearHospitalCategories = useCallback(() => setHospitalCategories([]), [setHospitalCategories]);
 
   // 저장한 내 위치(날씨·대기정보와 공유).
   const airLocation = useAirLocation();
@@ -146,25 +150,37 @@ export const LifeMapPage = () => {
   const zoom = debouncedViewport?.zoom ?? null;
   const cctvFilters = useMemo(() => ({ purpose: purposes }), [purposes]);
   const toiletFilterParams = useMemo(() => ({ ...toiletFilters }), [toiletFilters]);
+  const hospitalFilters = useMemo(() => ({ category: hospitalCategories }), [hospitalCategories]);
   const cctvQ = useLifeMapPoints(
     layers.cctv && bbox && zoom !== null ? { layer: 'cctv', bbox, zoom, filters: cctvFilters } : null,
   );
   const toiletQ = useLifeMapPoints(
     layers.toilet && bbox && zoom !== null ? { layer: 'toilet', bbox, zoom, filters: toiletFilterParams } : null,
   );
+  const hospitalQ = useLifeMapPoints(
+    layers.hospital && bbox && zoom !== null ? { layer: 'hospital', bbox, zoom, filters: hospitalFilters } : null,
+  );
   const statusQ = useLifeMapStatus();
 
-  // 주변 목록 — 탭(화장실/CCTV), 지도 중심 기준(뷰포트 동기 전엔 진입 중심). 꺼진 레이어 탭이면
-  // 켜진 쪽으로 보이되 사용자의 탭 선택은 보존.
+  // 주변 목록 — 탭(화장실/CCTV/병의원), 지도 중심 기준(뷰포트 동기 전엔 진입 중심). 꺼진 레이어
+  // 탭이면 켜진 쪽으로 보이되 사용자의 탭 선택은 보존.
   const [listTab, setListTab] = useState<LifeMapLayer>('toilet');
-  const activeTab: LifeMapLayer = layers[listTab] ? listTab : layers.toilet ? 'toilet' : layers.cctv ? 'cctv' : listTab;
+  const activeTab: LifeMapLayer = layers[listTab]
+    ? listTab
+    : layers.toilet
+      ? 'toilet'
+      : layers.cctv
+        ? 'cctv'
+        : layers.hospital
+          ? 'hospital'
+          : listTab;
   const center = debouncedViewport
     ? { lat: debouncedViewport.centerLat, lng: debouncedViewport.centerLng }
     : { lat: initial.lat, lng: initial.lng };
   const nearbyQ = useLifeMapNearby(activeTab, center.lat, center.lng, {
     radius: NEARBY_RADIUS_M[activeTab],
     limit: NEARBY_LIMIT,
-    filters: activeTab === 'cctv' ? cctvFilters : toiletFilterParams,
+    filters: activeTab === 'cctv' ? cctvFilters : activeTab === 'hospital' ? hospitalFilters : toiletFilterParams,
     enabled: layers[activeTab],
   });
 
@@ -229,6 +245,12 @@ export const LifeMapPage = () => {
     if (sel?.layer === 'toilet') ids.add(sel.id);
     return ids;
   }, [activeTab, nearbyQ.data, sel]);
+  const labeledHospitalIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (activeTab === 'hospital') for (const it of nearbyQ.data?.items ?? []) ids.add(it.id);
+    if (sel?.layer === 'hospital') ids.add(sel.id);
+    return ids;
+  }, [activeTab, nearbyQ.data, sel]);
 
   // 안내 — 켜진 레이어가 셀 모드면 "몇 이상 확대", 점이 잘렸으면 "일부만 표시".
   const hint = (() => {
@@ -236,13 +258,18 @@ export const LifeMapPage = () => {
     const parts: string[] = [];
     if (layers.cctv && cctvQ.data?.mode === 'cells') parts.push(`CCTV ${LIFE_MAP_POINT_MIN_ZOOM.cctv}`);
     if (layers.toilet && toiletQ.data?.mode === 'cells') parts.push(`화장실 ${LIFE_MAP_POINT_MIN_ZOOM.toilet}`);
+    if (layers.hospital && hospitalQ.data?.mode === 'cells') parts.push(`병의원 ${LIFE_MAP_POINT_MIN_ZOOM.hospital}`);
     if (parts.length > 0) return `${parts.join(' · ')} 이상 확대하면 개별 지점이 보입니다${zoomLabel}`;
-    if ((layers.cctv && cctvQ.data?.truncated) || (layers.toilet && toiletQ.data?.truncated)) {
+    if (
+      (layers.cctv && cctvQ.data?.truncated) ||
+      (layers.toilet && toiletQ.data?.truncated) ||
+      (layers.hospital && hospitalQ.data?.truncated)
+    ) {
       return '지점이 많아 일부만 표시 중 — 더 확대해 주세요';
     }
     return null;
   })();
-  const mapLoading = cctvQ.isFetching || toiletQ.isFetching;
+  const mapLoading = cctvQ.isFetching || toiletQ.isFetching || hospitalQ.isFetching;
 
   const detailDist =
     detailQ.data && myLocation && detailQ.data.lat !== null && detailQ.data.lng !== null
@@ -262,16 +289,19 @@ export const LifeMapPage = () => {
             layers={layers}
             purposes={purposes}
             toiletFilters={toiletFilters}
+            hospitalCategories={hospitalCategories}
             status={statusQ.data}
             onToggleLayer={toggleLayer}
             onTogglePurpose={togglePurpose}
             onClearPurposes={clearPurposes}
             onToggleToiletFilter={toggleToiletFilter}
+            onToggleHospitalCategory={toggleHospitalCategory}
+            onClearHospitalCategories={clearHospitalCategories}
           />
         </div>
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- savedForGoTo 는 saved 에서만 파생
-    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter],
+    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, hospitalCategories, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter, toggleHospitalCategory, clearHospitalCategories],
   );
   useLayoutEffect(() => {
     setSubBar(subBarContent);
@@ -283,11 +313,14 @@ export const LifeMapPage = () => {
     layers,
     purposes,
     toiletFilters,
+    hospitalCategories,
     status: statusQ.data,
     onToggleLayer: toggleLayer,
     onTogglePurpose: togglePurpose,
     onClearPurposes: clearPurposes,
     onToggleToiletFilter: toggleToiletFilter,
+    onToggleHospitalCategory: toggleHospitalCategory,
+    onClearHospitalCategories: clearHospitalCategories,
   };
   const nearbyList = (filters?: React.ReactNode) => (
     <LifeNearbyList
@@ -341,7 +374,9 @@ export const LifeMapPage = () => {
           ref={mapRef}
           cctv={layers.cctv ? cctvQ.data : undefined}
           toilet={layers.toilet ? toiletQ.data : undefined}
+          hospital={layers.hospital ? hospitalQ.data : undefined}
           labeledToiletIds={labeledToiletIds}
+          labeledHospitalIds={labeledHospitalIds}
           selectedMarkerId={selectedMarkerId}
           initialCenter={{ lat: initial.lat, lng: initial.lng, zoom: initial.zoom }}
           myLocation={myLocation}

@@ -2,7 +2,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@repo/shared';
 import type { LifeMapStatusResultType } from '@repo/api-contract';
-import { LIFE_CCTV_GROUP_COLOR, LIFE_CCTV_PURPOSE_GROUPS, LIFE_CCTV_PURPOSE_GROUP_LABEL, LIFE_TOILET_COLOR } from '@repo/utils';
+import { LIFE_CCTV_GROUP_COLOR, LIFE_CCTV_PURPOSE_GROUPS, LIFE_CCTV_PURPOSE_GROUP_LABEL, LIFE_HOSPITAL_COLOR, LIFE_TOILET_COLOR } from '@repo/utils';
 
 // 범례 + 적재 상태 + 출처 — 목록 시트 끝. 색은 항상 글자와 함께.
 
@@ -10,6 +10,7 @@ export const LifeFooter = ({ status }: { status: LifeMapStatusResultType | undef
   const theme = useTheme();
   const cctv = status?.layers.find((l) => l.layer === 'cctv');
   const toilet = status?.layers.find((l) => l.layer === 'toilet');
+  const hospital = status?.layers.find((l) => l.layer === 'hospital');
   const geocodedPct = toilet && toilet.count > 0 && toilet.geocoded !== null ? Math.round((toilet.geocoded / toilet.count) * 100) : null;
   return (
     <View style={[styles.wrap, { borderTopColor: theme.colors.border }]}>
@@ -24,15 +25,20 @@ export const LifeFooter = ({ status }: { status: LifeMapStatusResultType | undef
           <View style={[styles.dot, { backgroundColor: LIFE_TOILET_COLOR }]} />
           <Text style={[styles.text, { color: theme.colors.textMuted }]}>공중화장실</Text>
         </View>
+        <View style={styles.item}>
+          <View style={[styles.dot, { backgroundColor: LIFE_HOSPITAL_COLOR }]} />
+          <Text style={[styles.text, { color: theme.colors.textMuted }]}>병의원</Text>
+        </View>
       </View>
       <Text style={[styles.text, { color: theme.colors.textMuted }]}>숫자 버블 = 그 칸의 건수(확대하면 개별 지점)</Text>
       <Text style={[styles.text, { color: theme.colors.textMuted }]}>
         {cctv?.loaded ? `CCTV ${cctv.count.toLocaleString('ko-KR')}개(기준 ${cctv.baseDate ?? '-'})` : 'CCTV 데이터 미적재'} ·{' '}
-        {toilet?.loaded ? `화장실 ${toilet.count.toLocaleString('ko-KR')}개(기준 ${toilet.baseDate ?? '-'}${geocodedPct !== null ? `, 좌표 ${geocodedPct}%` : ''})` : '화장실 데이터 미적재'}
+        {toilet?.loaded ? `화장실 ${toilet.count.toLocaleString('ko-KR')}개(기준 ${toilet.baseDate ?? '-'}${geocodedPct !== null ? `, 좌표 ${geocodedPct}%` : ''})` : '화장실 데이터 미적재'} ·{' '}
+        {hospital?.loaded ? `병의원 ${hospital.count.toLocaleString('ko-KR')}곳(기준 ${hospital.baseDate ?? '-'})` : '병의원 데이터 미적재'}
       </Text>
       <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://www.localdata.go.kr').catch(() => {})} style={styles.src}>
         <Text style={[styles.text, { color: theme.colors.textMuted }]}>
-          출처 지방행정인허가데이터개방 <MaterialCommunityIcons name="open-in-new" size={10} /> 전국 CCTV 설치 현황·공중화장실 · 화장실 좌표는 VWorld 지오코더로 주소를 변환한 값
+          출처 지방행정인허가데이터개방 <MaterialCommunityIcons name="open-in-new" size={10} /> 전국 CCTV 설치 현황·공중화장실 · 건강보험심사평가원 병원정보서비스 · 화장실 좌표는 VWorld 지오코더로 주소를 변환한 값
         </Text>
       </Pressable>
     </View>

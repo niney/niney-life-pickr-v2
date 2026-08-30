@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
-// 일상지도 — 전국 CCTV·공중화장실(지방행정인허가데이터 CSV 적재) 공개 조회 계약.
-// 지도 뷰포트(bbox)+줌이 조회 단위: 줌이 충분하면 개별 지점(points), 아니면 서버 집계 셀
-// (cells)을 내려준다 — 377k 점을 브라우저에 다 보내지 않기 위한 유일한 분기. 필터는 CCTV
-// 설치목적(쉼표 목록)과 화장실 편의 조건(AND)뿐이며 양쪽 모드에 똑같이 걸린다.
+// 일상지도 — 전국 CCTV·공중화장실(지방행정인허가데이터 CSV 적재)·병의원(심평원 병원정보서비스
+// API 적재) 공개 조회 계약. 지도 뷰포트(bbox)+줌이 조회 단위: 줌이 충분하면 개별 지점(points),
+// 아니면 서버 집계 셀(cells)을 내려준다 — 377k 점을 브라우저에 다 보내지 않기 위한 유일한 분기.
+// 필터는 CCTV 설치목적·병의원 종별(쉼표 목록)과 화장실 편의 조건(AND)뿐이며 양쪽 모드에 똑같이
+// 걸린다.
 
-export const LifeMapLayer = z.enum(['cctv', 'toilet']);
+export const LifeMapLayer = z.enum(['cctv', 'toilet', 'hospital']);
 export type LifeMapLayerType = z.infer<typeof LifeMapLayer>;
 
 // "minLng,minLat,maxLng,maxLat" — 맛집 공개 목록의 bbox 와 같은 문자열 규약(@repo/utils formatBbox).
@@ -19,10 +20,12 @@ const LifeMapFlagParam = z
   .optional()
   .transform((v) => v === '1' || v === 'true');
 
-// 공통 필터 — purpose 는 CCTV 에만, 나머지는 화장실에만 의미(다른 레이어에선 무시).
+// 공통 필터 — purpose 는 CCTV, category 는 병의원, 불리언은 화장실에만 의미(다른 레이어에선 무시).
 const lifeMapFilterFields = {
   // 쉼표 구분 설치목적 목록(@repo/utils LIFE_CCTV_PURPOSES). 미지정/빈값=전체.
   purpose: z.string().max(200).optional(),
+  // 쉼표 구분 병의원 종별 목록(@repo/utils LIFE_HOSPITAL_CATEGORIES). 미지정/빈값=전체.
+  category: z.string().max(200).optional(),
   open24: LifeMapFlagParam,
   disabled: LifeMapFlagParam,
   kids: LifeMapFlagParam,
@@ -39,7 +42,8 @@ export const LifeMapPointsQuery = z.object({
 });
 export type LifeMapPointsQueryType = z.infer<typeof LifeMapPointsQuery>;
 
-// 지도 점 — 최소 필드만(한 번에 수천 점). 상세는 detail 라우트로. purpose 는 CCTV, name/open24 는 화장실.
+// 지도 점 — 최소 필드만(한 번에 수천 점). 상세는 detail 라우트로. purpose 는 CCTV,
+// name 은 화장실·병의원, open24 는 화장실.
 export const LifeMapPoint = z.object({
   id: z.string(),
   lat: z.number(),
@@ -152,12 +156,42 @@ export const LifeToiletItem = z.object({
 });
 export type LifeToiletItemType = z.infer<typeof LifeToiletItem>;
 
-export const LifeMapItem = z.discriminatedUnion('layer', [LifeCctvItem, LifeToiletItem]);
+export const LifeHospitalItem = z.object({
+  layer: z.literal('hospital'),
+  // 암호화 요양기호(ykiho) — 심평원이 주는 기관 식별자(재적재 때 전량 교체라 영속 보장은 없음).
+  id: z.string(),
+  // 업스트림 좌표(XPos/YPos)가 없는 소수 기관은 주소 지오코딩으로 보완 — 그래도 실패면 null
+  // (지도 미표시, 상세·주변 목록은 가능).
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  name: z.string(),
+  // 종별코드명 원문(상급종합병원~조산원).
+  kindName: z.string(),
+  // 필터용 정규화 종별(@repo/utils LIFE_HOSPITAL_CATEGORIES 7종).
+  category: z.string(),
+  sidoName: z.string().nullable(),
+  sgguName: z.string().nullable(),
+  emdongName: z.string().nullable(),
+  postNo: z.string().nullable(),
+  addr: z.string().nullable(),
+  phone: z.string().nullable(),
+  url: z.string().nullable(),
+  // 개설일자 'YYYY-MM-DD'.
+  openedDate: z.string().nullable(),
+  // 총의사수(의과+치과+한방 합) — 업스트림 미제공이면 null.
+  doctorCount: z.number().int().nullable(),
+  // 좌표 출처 — 'api' 는 심평원 제공, road/parcel 은 주소 지오코딩. null 이면 좌표 없음.
+  geoSource: z.enum(['api', 'road', 'parcel']).nullable(),
+});
+export type LifeHospitalItemType = z.infer<typeof LifeHospitalItem>;
+
+export const LifeMapItem = z.discriminatedUnion('layer', [LifeCctvItem, LifeToiletItem, LifeHospitalItem]);
 export type LifeMapItemType = z.infer<typeof LifeMapItem>;
 
 export const LifeMapDetailParams = z.object({
   layer: LifeMapLayer,
-  id: z.string().min(1).max(64),
+  // 병의원 id(암호화 요양기호)는 base64 ~100자 안팎이라 상한을 넉넉히 둔다.
+  id: z.string().min(1).max(200),
 });
 export type LifeMapDetailParamsType = z.infer<typeof LifeMapDetailParams>;
 
@@ -178,6 +212,7 @@ const distField = { dist: z.number().int().min(0) };
 export const LifeMapNearbyItem = z.discriminatedUnion('layer', [
   LifeCctvItem.extend(distField),
   LifeToiletItem.extend(distField),
+  LifeHospitalItem.extend(distField),
 ]);
 export type LifeMapNearbyItemType = z.infer<typeof LifeMapNearbyItem>;
 
@@ -231,9 +266,9 @@ export const LifeMapLayerStatus = z.object({
   layer: LifeMapLayer,
   loaded: z.boolean(),
   count: z.number().int().min(0),
-  // 화장실만 — 좌표를 확보한 건수(지오코딩 성공). CCTV 는 null.
+  // 화장실·병의원만 — 좌표를 확보한 건수. CCTV 는 null.
   geocoded: z.number().int().min(0).nullable(),
-  // 적재 파일의 데이터기준일자 최댓값 'YYYY-MM-DD'.
+  // 적재 파일의 데이터기준일자 최댓값 'YYYY-MM-DD'(병의원은 적재일).
   baseDate: z.string().nullable(),
   loadedAt: z.string().nullable(),
 });

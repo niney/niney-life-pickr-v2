@@ -574,13 +574,14 @@ export const Weather = {
   aws: `${API_PREFIX}/weather/aws`,
 } as const;
 
-// ── 일상지도(전국 CCTV·공중화장실 — 지방행정인허가데이터 CSV 적재) ──────────────
+// ── 일상지도(전국 CCTV·공중화장실 CSV + 병의원 심평원 API 적재) ─────────────────
 // 공개(비로그인). 로컬 SQLite 조회뿐이라 업스트림 쿼터 없음. 지도 뷰포트(bbox)+줌이 조회 단위 —
 // 줌이 임계 이상이면 개별 지점, 아니면 서버 집계 셀을 내려준다.
 export const LifeMap = {
-  // 레이어별 적재 상태(건수·기준일·적재시각·화장실 좌표 확보 건수).
+  // 레이어별 적재 상태(건수·기준일·적재시각·화장실/병의원 좌표 확보 건수).
   status: `${API_PREFIX}/life-map/status`,
-  // 뷰포트 조회 — ?layer=cctv|toilet&bbox=minLng,minLat,maxLng,maxLat&zoom=[&purpose=a,b][&open24=1…].
+  // 뷰포트 조회 — ?layer=cctv|toilet|hospital&bbox=minLng,minLat,maxLng,maxLat&zoom=
+  //   [&purpose=a,b][&category=a,b][&open24=1…].
   points: `${API_PREFIX}/life-map/points`,
   // 좌표 기준 거리순 목록 — ?layer&lat&lng[&radius≤3000][&limit≤30][필터].
   nearby: `${API_PREFIX}/life-map/nearby`,

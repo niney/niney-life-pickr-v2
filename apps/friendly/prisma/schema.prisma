@@ -1428,6 +1428,37 @@ model LifeToilet {
   @@map("life_toilets")
 }
 
+// 병의원 — 심평원 병원정보서비스 API(data.go.kr 15001698) 전량 적재. 좌표(XPos/YPos)는 업스트림
+// 제공이 원칙이고, 없는 소수 기관만 주소 지오코딩으로 보완(geoSource 가 출처) — 그래도 실패면
+// null(지도 미표시).
+model LifeHospital {
+  // 암호화 요양기호(ykiho).
+  id          String  @id
+  name        String
+  // 종별코드명 원문(상급종합병원~조산원).
+  kindName    String
+  // 필터용 정규화 종별 — @repo/utils LIFE_HOSPITAL_CATEGORIES 7종.
+  category    String
+  sidoName    String?
+  sgguName    String?
+  emdongName  String?
+  postNo      String?
+  addr        String?
+  phone       String?
+  url         String?
+  // 개설일자 'YYYY-MM-DD'.
+  openedDate  String?
+  // 총의사수 — 업스트림 미제공이면 null.
+  doctorCount Int?
+  lat         Float?
+  lng         Float?
+  // 'api' | 'road' | 'parcel' — 좌표 출처. null = 좌표 없음.
+  geoSource   String?
+
+  @@index([lat, lng])
+  @@map("life_hospitals")
+}
+
 // 주소 → 좌표 지오코딩 캐시 — VWorld 지오코더 응답을 (type,address) 키로 영구 보관해 재적재
 // 때 업스트림 호출을 0 에 가깝게 만든다. notfound 도 기록(반복 호출 방지) — 재시도는 플래그로.
 model LifeGeocodeCache {
@@ -1450,7 +1481,7 @@ model LifeGeocodeCache {
 // MasterSync 와 같은 패턴). geocoded 는 화장실의 좌표 확보 건수.
 model LifeMasterSync {
   id         Int      @id @default(autoincrement())
-  // 'cctv' | 'toilet'
+  // 'cctv' | 'toilet' | 'hospital'
   layer      String
   count      Int
   geocoded   Int?

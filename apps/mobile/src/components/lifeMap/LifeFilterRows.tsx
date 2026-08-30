@@ -3,16 +3,18 @@ import { useTheme } from '@repo/shared';
 import {
   LIFE_CCTV_GROUP_COLOR,
   LIFE_CCTV_PURPOSES,
+  LIFE_HOSPITAL_CATEGORIES,
   LIFE_TOILET_FEATURES,
   LIFE_TOILET_FILTER_KEYS,
   lifeCctvPurposeGroup,
   type LifeCctvPurpose,
+  type LifeHospitalCategory,
   type LifeMapLayer,
   type LifeToiletFilterKey,
 } from '@repo/utils';
 import type { LifeToiletFilterState } from '~/lib/lifeMapPrefsStore';
 
-// 필터 칩 행 — CCTV 설치목적(다중, 빈 선택 = 전체) / 화장실 편의 조건(AND). 가로 스크롤 한 줄씩.
+// 필터 칩 행 — CCTV 설치목적·병의원 종별(다중, 빈 선택 = 전체) / 화장실 편의 조건(AND). 가로 스크롤 한 줄씩.
 
 const FEATURE_LABEL = Object.fromEntries(LIFE_TOILET_FEATURES.map((f) => [f.key, f.label])) as Record<string, string>;
 
@@ -20,12 +22,25 @@ interface Props {
   layers: Record<LifeMapLayer, boolean>;
   purposes: LifeCctvPurpose[];
   toiletFilters: LifeToiletFilterState;
+  hospitalCategories: LifeHospitalCategory[];
   onTogglePurpose: (p: LifeCctvPurpose) => void;
   onClearPurposes: () => void;
   onToggleToiletFilter: (k: LifeToiletFilterKey) => void;
+  onToggleHospitalCategory: (c: LifeHospitalCategory) => void;
+  onClearHospitalCategories: () => void;
 }
 
-export const LifeFilterRows = ({ layers, purposes, toiletFilters, onTogglePurpose, onClearPurposes, onToggleToiletFilter }: Props) => {
+export const LifeFilterRows = ({
+  layers,
+  purposes,
+  toiletFilters,
+  hospitalCategories,
+  onTogglePurpose,
+  onClearPurposes,
+  onToggleToiletFilter,
+  onToggleHospitalCategory,
+  onClearHospitalCategories,
+}: Props) => {
   const theme = useTheme();
   const chip = (key: string, label: string, active: boolean, onPress: () => void, dot?: string) => (
     <Pressable
@@ -39,7 +54,7 @@ export const LifeFilterRows = ({ layers, purposes, toiletFilters, onTogglePurpos
       <Text style={[styles.chipText, { color: active ? theme.colors.primaryText : theme.colors.textMuted }]}>{label}</Text>
     </Pressable>
   );
-  if (!layers.cctv && !layers.toilet) return null;
+  if (!layers.cctv && !layers.toilet && !layers.hospital) return null;
   return (
     <View style={styles.wrap}>
       {layers.cctv && (
@@ -56,6 +71,15 @@ export const LifeFilterRows = ({ layers, purposes, toiletFilters, onTogglePurpos
           <Text style={[styles.label, { color: theme.colors.textMuted }]}>화장실</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {LIFE_TOILET_FILTER_KEYS.map((k) => chip(k, FEATURE_LABEL[k] ?? k, toiletFilters[k], () => onToggleToiletFilter(k)))}
+          </ScrollView>
+        </View>
+      )}
+      {layers.hospital && (
+        <View style={styles.row}>
+          <Text style={[styles.label, { color: theme.colors.textMuted }]}>병의원</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {chip('all', '전체', hospitalCategories.length === 0, onClearHospitalCategories)}
+            {LIFE_HOSPITAL_CATEGORIES.map((c) => chip(c, c, hospitalCategories.includes(c), () => onToggleHospitalCategory(c)))}
           </ScrollView>
         </View>
       )}
