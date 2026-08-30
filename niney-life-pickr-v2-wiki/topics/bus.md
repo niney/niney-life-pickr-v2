@@ -1,15 +1,17 @@
 ---
 topic: bus
 type: codebase
-last_compiled: 2026-08-17
-source_count: 52
+last_compiled: 2026-08-30
+sources_count: 56
 status: active
-aliases: [seoul-bus, seoul-bus-api, ws-bus-go-kr, bus-station-search, getStationByName, getStationByPos, getStationByUid, getBusPosByRouteSt, getBusPosByRtid, getRoutePath, getStaionByRoute, getRouteInfo, bus-arrivals, bus-positions, bus-route-detail, bus-route-shape, bus-nearby-cell, nearby-cell-cache, bus-favorites, favorite-hybrid, toLatLng, serviceKey-encoding, service-key-double-encoding, bus-vehicle-pill, vehicle-marker, vehicle-interpolation, route-path-follow, bus-follow-toggle, busRouteTypeColor, daily-upstream-quota, negative-caching, virtual-station, arsId-zero, tmX-tmY-wgs84, transit-unified, transit-favorites, unified-favorites, transit-cross-search, subway-cross-section, cross-station-overlay, overlay-markers, x-subway-deeplink, transit-cross-show, transit-map-viewport, map-instance-pool, poolKey, transit-desktop-mobile, vehicle-pill-shared, transit-tabs]
+aliases: [seoul-bus, seoul-bus-api, ws-bus-go-kr, bus-station-search, getStationByName, getStationByPos, getStationByUid, getBusPosByRouteSt, getBusPosByRtid, getRoutePath, getStaionByRoute, getRouteInfo, bus-arrivals, bus-positions, bus-route-detail, bus-route-shape, bus-nearby-cell, nearby-cell-cache, bus-favorites, favorite-hybrid, toLatLng, serviceKey-encoding, service-key-double-encoding, bus-vehicle-pill, vehicle-marker, vehicle-interpolation, route-path-follow, bus-follow-toggle, busRouteTypeColor, daily-upstream-quota, negative-caching, virtual-station, arsId-zero, tmX-tmY-wgs84, transit-unified, transit-favorites, unified-favorites, transit-cross-search, subway-cross-section, cross-station-overlay, overlay-markers, x-subway-deeplink, transit-cross-show, transit-map-viewport, map-instance-pool, poolKey, transit-desktop-mobile, vehicle-pill-shared, transit-tabs, bus-list-sheet, bus-detail-sheet, BottomSheet, useMapSheets, sheet-pattern, 시트-골격, subBar, map-bottom-inset, 일부만-표시, truncated-inline]
 ---
 
-# bus
+# bus — 서울시 버스 정보 API 프록시 + 웹 정류장·도착·노선·실시간 차량 화면
 
 서울시 버스 정보 API(`ws.bus.go.kr`)를 friendly 가 프록시하고, **웹**(`apps/web`)이 정류장 검색·실시간 도착정보·노선 보기·실시간 차량 추적을 그리는 도메인. ~~앱에는 버스 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
+
+**2026-08-22 변경 흡수 — 웹 모바일(=웹 작은 화면) 레이아웃을 공통 시트 골격으로 이전(`e84e4b9`)**: [BusPage](../../apps/web/src/routes/BusPage.tsx)의 모바일 블록이 "검색바 / 지도 / 리스트 38dvh 세로 적층"에서 맛집 v2·지하철·일상지도와 같은 **상단바 subBar + fixed 지도 + 바텀시트 2장** 골격으로 바뀌었다 — `TransitTabs`+`BusStationSearchBar` 는 상단바 subBar 로(정류장 선택 중엔 검색행을 접어 헤더 215→98px), 지도는 `fixed` 배경(`poolKey="transit-mobile"`·이중 마운트 유지), `BusStationListBody` 는 목록 [BottomSheet](../../apps/web/src/components/sheet/BottomSheet.tsx)(`data-testid="bus-list-sheet"`, `zIndex 20`), `stId` 가 잡히면 `BusArrivalPanel` 이 상세 시트(`key=stId`, `data-testid="bus-detail-sheet"`, `zIndex 25`)로 얹힌다. 스냅 조율은 [useMapSheets](../../apps/web/src/components/sheet/useMapSheets.ts) — 검색어 ≥2자·주변 모드로 진입하면 목록 `half` 시작, 제출·내 주변·재검색 뒤 `peek` 이면 `half` 로 승격, 상세가 열리면 목록은 peek·숨김. [BusStationList](../../apps/web/src/components/bus/BusStationList.tsx)의 "결과가 많아 일부만 표시합니다" 별도 줄은 메타 행 인라인 `· 일부만 표시`(title "서버가 100건으로 절단했습니다")로 접혔고, [BusStationsMap](../../apps/web/src/components/bus/BusStationsMap.tsx)의 따라가기/다시 따라가기 pill 은 `bottom-[calc(0.75rem+var(--map-bottom-inset,0px))]` 로 peek 시트(120px) 위에 뜬다. 데스크톱 블록·URL 계약(`q`/`stId`/`routeId`/`near`)·BE 는 무변경. 골격 규약(subBar·스냅 규칙·React Compiler 훅 순서·이중 마운트 함정)은 [transit](transit.md), 시트 컴포넌트 자체(dual-mode·스크롤 락)는 [web](web.md).
 
 **2026-08-17 변경 흡수 — 지도 재검색 파이프라인 shared 승격(`df9fcbd`)**: [BusStationsMap](../../apps/web/src/components/bus/BusStationsMap.tsx) 의 인라인 ~50줄(사용자 패닝 종료 추적 + 자동 재조회 트레일링 스로틀 1.2s + 수동 "이 위치에서 재검색" 버튼 판정)이 `@repo/shared` [useMapResearch](../../packages/shared/src/hooks/useMapResearch.ts) 호출로 교체됐다(버스 임계 300m·z15 유지, 동작 동일 — 웹 SubwayStationsMap·앱 transit 훅과 3곳 문자 단위 중복이던 것). 타이밍 계약 테스트 5건은 [web](web.md), 훅 상세는 [shared](shared.md).
 
@@ -104,7 +106,7 @@ aliases: [seoul-bus, seoul-bus-api, ws-bus-go-kr, bus-station-search, getStation
 
 통합 화면 전반(공용 스토어·탭·양방향 딥링크 대칭)은 [transit](transit.md), 지하철 쪽 짝은 [subway](subway.md).
 
-## Talks To [coverage: high — 8 sources]
+## Talks To [coverage: high — 10 sources]
 
 - **서울시 버스 API (`http://ws.bus.go.kr/api/rest/...`)** — 평문 HTTP, GET, `serviceKey` + 파라미터 쿼리스트링. XML 응답을 `fast-xml-parser` 로 파싱. friendly 만 호출하고 브라우저는 직접 접근하지 않는다(CORS 없음).
 - **friendly DB (Prisma/SQLite)** — `bus_stations`·`bus_station_searches`·`bus_station_search_hits`·`bus_nearby_cells`·`bus_nearby_cell_hits`·`bus_favorite_stations`·`bus_favorite_routes`·`bus_route_shapes`. 상세는 [Data](#data-coverage-high--6-sources).
@@ -115,6 +117,8 @@ aliases: [seoul-bus, seoul-bus-api, ws-bus-go-kr, bus-station-search, getStation
 - **`@repo/utils`** — `busMarker.ts`(마커/알약/화살표/점 SVG), `markerFrame.ts`(식당 마커와 공용 핀/원 골격), `routePath.ts`(형상 투영·슬라이스·방위각). 차량 알약·방향 다트 기하 코어는 [vehiclePill.ts](../../packages/utils/src/vehiclePill.ts) 로 추출돼 지하철 열차 마커와 공용이다 — `busMarker.ts` 는 기존 `buildBusVehiclePill*`/`buildBusVehicleDir*` 이름을 그대로 export 하되 바이트 동일 산출로 위임한다(호출처 무변경).
 - **auth (`authStore` / `app.authenticate`)** — 즐겨찾기 라우트만 Bearer 인증. 401 로 세션이 끊기면 훅이 자연히 게스트 모드로 폴백. 공개/소유자 라우트 분리는 컨셉 [public-admin-route-split](../concepts/public-admin-route-split.md)의 "소유자 vs 공개" 결과 같은 결.
 - **probe:bus 스크립트** — [scripts/probe-bus-api.ts](../../apps/friendly/scripts/probe-bus-api.ts). 코드에 박힌 추정(키 형태·좌표계·headerCd·JSON 지원)을 실응답으로 확정하는 1회성 진단 도구(`pnpm --filter friendly probe:bus [키워드]`).
+- **`toServiceKeyPart` 공유 의존(2026-08)** — [bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts)의 data.go.kr Encoding 키 raw 직결 헬퍼가 이제 4개 모듈에서 cross-module import 된다: [air-quality/airkorea-api.adapter.ts](../../apps/friendly/src/modules/air-quality/airkorea-api.adapter.ts)·[weather/kma-api.adapter.ts](../../apps/friendly/src/modules/weather/kma-api.adapter.ts)·[food/food-api.adapter.ts](../../apps/friendly/src/modules/food/food-api.adapter.ts)·[life-map/hira-hospital.adapter.ts](../../apps/friendly/src/modules/life-map/hira-hospital.adapter.ts). 버스 어댑터의 이 함수를 손보면(특히 `%XX` 판정) 대기·날씨·음식·병의원 적재까지 함께 움직인다([air-quality](air-quality.md)·[weather](weather.md)·[food](food.md)·[life-map](life-map.md)).
+- **일상지도 옴니박스 소비처(2026-08-21)** — [LifeGoToBox](../../apps/web/src/components/life-map/LifeGoToBox.tsx)(웹)·[LifeGoToModal](../../apps/mobile/src/components/lifeMap/LifeGoToModal.tsx)(앱)이 `useBusStationSearch` 를 **타이핑 250ms 디바운스**(`REMOTE_DEBOUNCE_MS`)로 호출한다 — 대중교통 화면의 제출 게이트와 달리 2자 이상 입력이 멈출 때마다 발화(`useSubwayStationSearch`·`useLifeMapSearch` 와 나란히). 서버 30일 검색 캐시에 없는 새 키워드는 서울시 쿼터를 소비하므로 옴니박스 사용량이 곧 버스 쿼터 소비다([life-map](life-map.md)).
 
 ## API Surface [coverage: high — 9 sources]
 
@@ -222,7 +226,7 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - **크로스 검색 — 검색 모드 한정, 로컬 DB 라 제출 게이트 불필요(15차).** 버스 검색 결과 하단에 `SubwayCrossSection`(제출 q 로 지하철역 자동 크로스). 지하철 검색은 로컬 DB(쿼터 0)라 타이핑 발화를 막을 필요가 없어 **제출된 q 를 그대로 자동 조회**한다(반대로 지하철 탭의 버스 크로스는 서울시 API 라 제출 게이트 — 대칭 아님). 리스트는 `crossSearchContent` 슬롯으로 결과 목록/빈 상태 뒤에 렌더하고, 주변/초기/선택 화면엔 미표시(`!nearMode && hasQ` 에서만 넘긴다).
 - **탭 전환 지도 이어보기 — 뷰포트(A안) + 인스턴스 풀링(D안).** 버스↔지하철 탭 전환은 라우트 언마운트라 지도가 재생성돼 뷰가 리셋·타일이 플래시했다. `BusStationsMap` 이 `transitMapViewport` 싱글턴에서 초기 뷰를 복원하고 `moveend` 마다 저장(A안, 검색/선택 fit·flyTo 규칙 무변경)하고, `MapCanvas.poolKey` 로 OL Map 인스턴스 자체를 풀에 보관·재사용(D안, 타일 플래시 제거)한다. 데스크톱·모바일 지도 래퍼가 CSS 숨김으로 **동시 마운트**라 한 풀 키를 공유하면 한쪽만 재사용돼, 키를 `transit-desktop`/`transit-mobile` 로 나눈다. 풀링 메커니즘 상세는 [map](map.md).
 
-## Gotchas [coverage: high — 7 sources]
+## Gotchas [coverage: high — 8 sources]
 
 - **인증 실패가 두 형태로 온다.** (1) `OpenAPI_ServiceResponse > cmmMsgHeader > returnReasonCode`, (2) `ServiceResult headerCd=7`("Key인증실패: … [인증모듈 에러코드(NN)]"). 어댑터가 둘 다 `BusApiAuthError`(503)로 분류하고, (2)는 `headerMsg` 에서 NN 을 정규식으로 뽑아 reasonCode 로 쓴다. '결과 없음'은 `headerCd=4`("결과가 없습니다.") — 에러 아니라 빈 목록.
 - **`arsId='0'` 가상정류장.** 도착정보 조회 불가 — 계약이 `arsId '0'` 을 400 으로 거부하고, FE 훅(`enabled`)이 호출 자체를 막고, 리스트/패널이 번호 배지를 숨긴다. `stId` 가 진짜 식별자.
@@ -233,14 +237,16 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - **fetch 타임아웃 사각.** `signal` 미지정 시 자체 10초 AbortController 를 걸되, `clearTimeout` 은 `res.text()` 완료 후 — fetch 직후 해제하면 헤더만 받고 본문이 매달리는 케이스(undici bodyTimeout ~300초)가 10초 보호를 못 받는다.
 - **버스위치(15000332) 활용신청이 2026-12-27 만료 예정** — 운영하려면 만료 전 연장 신청 필요(HANDOFF 활용신청 표).
 - **폴링 × 일 1,000건이 최대 운영 리스크.** 도착 30초 + 위치 15초 동시 폴링이면 사용자 1명이 시간당 수백 건. 탭 비활성 중단은 필수고, 운영 전 트래픽 증설 신청 검토.
+- **옴니박스 디바운스 검색은 제출 게이트를 우회한다(2026-08-21).** 일상지도 지역 이동 검색이 `useBusStationSearch` 를 250ms 디바운스 타이핑으로 부른다 — 훅의 `enabled`(2~50자)·`staleTime 24h`·서버 30일 캐시·in-flight 합류는 그대로지만, 캐시 미스마다 서울시 1콜이라 "한 글자씩 멈추며 치는" 입력은 키워드 수만큼 쿼터를 쓴다. 쿼터 소진(503)은 옴니박스에선 빈 결과로만 보인다.
 - **개발 환경 함정(HANDOFF).** 포트 3000 이중 바인딩(다른 dev 서버가 잡으면 엉뚱한 404), 브랜치 전환/rebase 후 `prisma generate` 필수(client 스키마 불일치면 `prisma.busStation` undefined), dev DB 에 vworld 키 미등록이면 지도는 placeholder(설계된 폴백, 리스트는 동작).
-- **데스크톱·모바일 지도는 동시 마운트 — 풀 키를 나눠야 한다.** BusPage 는 데스크톱(`hidden xl:flex`)·모바일(`xl:hidden`) 지도 래퍼를 CSS 로만 숨겨 둘 다 항상 마운트한다(`MapCanvas` 페이지당 2개 생존). 풀 키가 하나면 `take` 시맨틱상 한쪽만 재사용돼 나머지가 플래시하므로 `transit-desktop`/`transit-mobile` 로 분리했다. 같은 poolKey 를 두 MapCanvas 가 동시에 쓰면 안 된다(대중교통 탭 가정 — 한 시점에 한 레이아웃만 실제 표시).
+- **데스크톱·모바일 지도는 동시 마운트 — 풀 키를 나눠야 한다(2026-08-22 시트 골격 이후에도 동일).** BusPage 는 데스크톱(`hidden xl:flex`)·모바일(`xl:hidden`) 지도 래퍼를 CSS 로만 숨겨 둘 다 항상 마운트한다(`MapCanvas` 페이지당 2개 생존). 풀 키가 하나면 `take` 시맨틱상 한쪽만 재사용돼 나머지가 플래시하므로 `transit-desktop`/`transit-mobile` 로 분리했다. 같은 poolKey 를 두 MapCanvas 가 동시에 쓰면 안 된다(대중교통 탭 가정 — 한 시점에 한 레이아웃만 실제 표시).
 - **겸표시는 표시만 토글, 조회는 항상.** 주변 모드 && 비집중이면 토글 off 여도 `useSubwayNearbyStations` 는 계속 돈다(로컬 DB, 쿼터 0 이라 안전 — 켤 때 즉시 표시). 서울시 API 를 쓰는 버스 nearby 와 혼동해 "off 인데 왜 조회하나" 로 읽지 말 것. 반대로 지하철 탭의 버스 겸표시는 셀 DB 캐시라 다른 비용 특성.
 - **겸표시 클릭은 `x-` prefix 로 가장 먼저 가로챈다.** `handleMarkerSelect` 가 `id.startsWith('x-')` 를 차량(`veh-`)·내 위치(`my-location`) 무시 로직보다 **앞에서** 처리해 상대 탭 딥링크로 보낸다. 새 특수 마커 id 를 추가할 때 이 순서를 깨면 겸표시 클릭이 정류장 선택으로 샌다.
 - **차량 알약 빌더는 vehiclePill.ts 위임 — 산출은 바이트 동일.** `busMarker.ts` 의 `buildBusVehiclePill*` 은 이제 지하철과 공용인 `vehiclePill.ts` 재수출이다. 알약 기하를 바꾸면 지하철 열차 마커에도 반영된다(공용 코어) — 버스만 바꾸려면 재수출을 끊고 분기해야 한다.
-- **앱 미구현.** 버스는 웹 전용이다. 게스트 store 는 앱 storage 주입(`setBusFavoriteStorage`)까지 준비돼 있으나 앱 화면·라우트는 없다.
+- ~~앱 미구현~~ → **앱 대중교통 화면 존재(2026-07~).** 버스·지하철 통합 화면(탑승 모드·하차 알림 포함)이 `apps/mobile` 에 있다 — 이 문서의 웹 컴포넌트(BusPage·BusStationsMap·시트)는 공유하지 않고 `@repo/shared` 훅만 공유한다([transit](transit.md)·[mobile](mobile.md)). 게스트 즐겨찾기 storage 주입(`setBusFavoriteStorage`)도 앱 entry 에 배선됨.
+- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 지점을 가릴 수 있다. 상세는 [transit Gotchas](transit.md#gotchas-coverage-high--9-sources).
 
-## Sources [coverage: high — 48 sources]
+## Sources [coverage: high — 56 sources]
 
 **백엔드 (friendly)**
 - [apps/friendly/src/modules/bus/bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts)
@@ -286,7 +292,10 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - [apps/web/src/components/bus/BusStationsMap.tsx](../../apps/web/src/components/bus/BusStationsMap.tsx)
 - [apps/web/src/components/bus/BusArrivalPanel.tsx](../../apps/web/src/components/bus/BusArrivalPanel.tsx)
 - [apps/web/src/components/bus/BusFavoriteStar.tsx](../../apps/web/src/components/bus/BusFavoriteStar.tsx)
-- [apps/web/src/components/bus/BusStationList.tsx](../../apps/web/src/components/bus/BusStationList.tsx) — *crossSearchContent 슬롯 추가*
+- [apps/web/src/components/bus/BusStationList.tsx](../../apps/web/src/components/bus/BusStationList.tsx) — *crossSearchContent 슬롯 추가, "일부만 표시" 메타 행 인라인(2026-08-22)*
+- [apps/web/src/components/sheet/BottomSheet.tsx](../../apps/web/src/components/sheet/BottomSheet.tsx) — *모바일 목록/상세 시트(2026-08-22, 맛집 v2 와 공용)*
+- [apps/web/src/components/sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts) — *목록↔상세 스냅 조율, SHEET_PEEK_HEIGHT*
+- [apps/web/src/components/PublicLayout.tsx](../../apps/web/src/components/PublicLayout.tsx) — *setSubBar/headerHeight — 모바일 탭·검색행을 상단바로*
 - [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) — *overlayMarkers·poolKey 확장*
 - [apps/web/src/components/transit/TransitTabs.tsx](../../apps/web/src/components/transit/TransitTabs.tsx) — *버스↔지하철 서브탭*
 - [apps/web/src/components/transit/TransitFavoritesSection.tsx](../../apps/web/src/components/transit/TransitFavoritesSection.tsx) — *통합 즐겨찾기 홈(BusFavoriteSection 대체)*
@@ -297,6 +306,14 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - [apps/web/src/App.tsx](../../apps/web/src/App.tsx)
 - [apps/web/src/components/PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx)
 - [apps/web/src/components/PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx)
+
+**교차 소비처 (2026-08)**
+- [apps/web/src/components/life-map/LifeGoToBox.tsx](../../apps/web/src/components/life-map/LifeGoToBox.tsx) — *일상지도 옴니박스: useBusStationSearch 250ms 디바운스 호출(제출 게이트 없음)*
+- [apps/mobile/src/components/lifeMap/LifeGoToModal.tsx](../../apps/mobile/src/components/lifeMap/LifeGoToModal.tsx) — *앱 옴니박스, 동일 훅·디바운스*
+- [apps/friendly/src/modules/air-quality/airkorea-api.adapter.ts](../../apps/friendly/src/modules/air-quality/airkorea-api.adapter.ts) — *toServiceKeyPart cross-module import*
+- [apps/friendly/src/modules/weather/kma-api.adapter.ts](../../apps/friendly/src/modules/weather/kma-api.adapter.ts) — *toServiceKeyPart cross-module import*
+- [apps/friendly/src/modules/food/food-api.adapter.ts](../../apps/friendly/src/modules/food/food-api.adapter.ts) — *toServiceKeyPart cross-module import*
+- [apps/friendly/src/modules/life-map/hira-hospital.adapter.ts](../../apps/friendly/src/modules/life-map/hira-hospital.adapter.ts) — *toServiceKeyPart cross-module import*
 
 **배경 문서**
 - [docs/HANDOFF-bus-station-search.md](../../docs/HANDOFF-bus-station-search.md)

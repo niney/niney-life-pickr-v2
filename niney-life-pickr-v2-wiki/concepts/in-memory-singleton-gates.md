@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-06-25
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus]
+last_compiled: 2026-08-30
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality]
 status: active
 ---
 
@@ -45,6 +45,9 @@ status: active
 
 - **2026-07**(버스) in [[../topics/bus]] / [[../topics/friendly]] (`bus.service.ts` 일일 쿼터 카운터 + in-flight 합류 + 네거티브 캐시): 게이트 패턴이 **외부 API 호출 예산**이라는 새 자원 종류로 확장. `bus.service.ts` 가 서비스 스코프 싱글턴으로 (1) **일일 업스트림 쿼터 단일 카운터**(기본 900, 검색·도착·위치 세 경로가 한 카운터를 공유 — ai `adapter-cache` 가 라우트+summary 가 한 인스턴스를 공유해야 진짜 cap 이 되던 것과 같은 논리, 세 경로가 따로 세면 예산이 3× 로 새어나감), (2) **in-flight 합류** — 같은 정류장 검색이 동시에 여러 번 들어오면 첫 호출의 Promise 에 합류해 업스트림 중복 호출 0(`findInFlightByPlace` dedup 과 같은 모양, 키가 검색어), (3) **네거티브 캐싱** — '결과 없음'(`headerCd=4`)도 캐시에 기록해 없는 정류장 반복 조회가 쿼터를 갉지 않게. 게이트가 회계하는 자원이 "동시성 슬롯"이 아니라 **하루 단위 외부 예산**이라는 점만 다르고 구조(서비스 싱글턴 + 공유 카운터 + in-flight dedup)는 동일. 개발계정 1,000건/일 한도가 게이트의 존재 이유 — cap 이 임의 상수가 아니라 외부 계약에서 역산된 값(2026-05-17 "게이트 cap 을 컨슈머 디자인에 맞춘다" 의 **외부-제약 버전**). 실시간 폴링은 [[../topics/shared]] `useBus` 훅이 탭 비활성 시 자동 정지(`refetchIntervalInBackground=false`)해 클라이언트에서도 예산을 아낌 — 게이트가 서버(카운터)+클라(폴링 가드) 양쪽에 걸친다.
 
+- **2026-08-22~23**(food·meal) in [[../topics/food]] / [[../topics/meal]] / [[../topics/friendly]] (`food-import-registry.ts` `foodImportRegistry` · `meal-mutation-barrier.ts` `mealMutationBarrier` · `meal-recommendation.service.ts` `inFlight` · `meal-daily-quota.service.ts`): 게이트 세 변형이 한 라운드에 들어오고, **그 옆에 "게이트가 아닌 것" 이 의도적으로 놓였다**. (1) **단일-잡 게이트 4번째** — `foodImportRegistry`(`69dc0e2` 2026-08-22)는 random-crawl 골격 복제: `active: ActiveRun | null` 단일 슬롯, `begin(trigger, sources)` 가 active 면 `null`, `finish` 후에도 active 유지(직후 SSE 가 마지막 snapshot 을 봄), AbortController + subscriber Set, TTL GC 없음. 책임 분담도 random-crawl 과 같은 "DB 가 권위, 메모리는 보조" — `FoodImportService.run()` 은 `foodImportRegistry.isActive() || await hasActiveRun()`(DB `status='running'` 조회) 둘 중 하나면 `skipped` 행('이전 회차 진행 중')만 남기고, `bootstrap()` 이 재시작 시 `running` → `interrupted`('server restart'). cron 은 `scheduleRegistry.setCron('food-import', …)` — schedule/random-crawl 과 **같은 cron 레지스트리에 jobType 키만 다르게** 등록(`plugins/meal.ts` 의 고아 사진 정리 `meal-photo-gc` 04:30 도 같은 레지스트리). `plugins/food-import.ts` 가 `app.decorate('foodImport'|'foodClassify')` + `dependencies: ['prisma','logs']` + 자체 `AiConfigService`(autoload 순서 메타패턴 5번째). (2) **사용자 키 FIFO write barrier** — `MealMutationBarrier`(`9f39d53` 2026-08-23)는 `tails: Map<userId, Promise<void>>` 체인 — summary 의 per-placeId run 체인·crawl `persistTail` 과 정확히 같은 모양이되 키가 **사용자**. 꼬리는 항상 resolve, `finally` 에서 identity 확인 후 delete(실패 작업·일회성 키가 Map 에 안 남음), `pendingUserCount()` 로 누수 검증. 기록·사진·선호·추천·백업 복원·retention·전체 삭제 — 5개 서비스 15개 진입점이 `runExclusive(userId, …)` 로 한 FIFO 를 타 "전체 삭제 응답 뒤 이전 추천 저장이 되살아나는 창" 을 없앤다. 다른 사용자는 병렬 — slot 회계 단위가 userId. (3) **동일 요청 in-flight 합류** — `MealRecommendationService.inFlight: Map<key, Promise>`, 키 = `[userId, today, targetDate, targetSlot, mealType, note, lat, lng, force]` JSON. 연타된 같은 요청은 첫 Promise 에 합류해 LLM·quota 를 한 번만 쓰고, 완료 뒤 다시 누르면 새 요청(bus 의 검색 합류와 같은 모양). 합류 Map 은 barrier **바깥**, 첫 Promise 만 barrier 안 — 합류자가 FIFO 슬롯을 중복 점유하지 않게. (4) **의도적 대조: 일일 quota 는 게이트가 아니다** — `MealDailyQuotaService.consume(userId, kstDate, purpose, limit)` 는 SQLite `meal_daily_quotas(userId,date,purpose)` PK 행에 `INSERT … ON CONFLICT DO UPDATE SET count=count+1 WHERE count < limit` **한 문장**으로 확인+증가를 원자화하고 `changed===1` 로 판정. `MEAL_RECOGNIZE_DAILY_LIMIT`(기본 30)·`MEAL_RECOMMEND_DAILY_LIMIT`(기본 20, `config/env.ts`; `limit<=0` 은 차단이 아니라 비활성화). bus 의 일일 쿼터(2026-07)가 **in-memory 카운터**였던 것과 정반대 결정 — bus 는 시스템 전체의 외부 API 예산(재시작 리셋 허용, 하루 단위 회복)이고 meal 은 **사용자별 비용 사용권**이라 재시작·다중 인스턴스로 우회되면 안 된다. 그래서 meal 은 "cache hit·in-flight 합류 = 소비 없음, `force` cache miss = 소비" 를 DB 에서 세고, 메모리 게이트(barrier·합류)는 순서·중복만 맡는다. 라우트 rate limit(`RATE.mealRecognize`/`mealRecommend`)과 ai 계정 게이트가 그 위에 별도로 겹친다.
+- **2026-08-21~23** in [[../topics/weather]] / [[../topics/air-quality]] / [[../topics/schedule]] / [[../topics/friendly]]: 공공 API 3도메인이 bus 의 "외부 예산" 변형을 반복 — weather `DEFAULT_DAILY_UPSTREAM_LIMIT = 9000` 인메모리 일일 게이트(단, 식단 추천 라우트가 **별도 `WeatherService` 인스턴스**를 만들어 카운터가 둘로 갈라진 것이 이 컨셉의 "라우트별 인스턴스 분리" 결함의 재발), air 서비스 한도 450 + in-flight 합류 + 전국 1콜 캐시, air/weather/AWS 의 서비스 인메모리 TTL 캐시 + stale 폴백(DB 30일 캐시였던 bus 와 다른 층). `scheduleRegistry` 는 jobType 4개(`normalize-merge`·`random-crawl`·`food-import`·`meal-photo-gc`)를 호스팅하는 공용 타이머 싱글턴이 됐다.
+
 ## What This Means
 
 이 패턴이 알려주는 것:
@@ -58,6 +61,7 @@ status: active
 7. **한 게이트 모양이 여러 자원 종류를 흡수한다** (2026-06, 18차) — 18차 라운드는 같은 모듈-싱글턴 모양이 (a) 동시성 슬롯(ai 2단 게이트, logs 세마포어, analytics 청크 풀), (b) read 캐시(review-search corpusCache LRU), (c) 진행 가드(review-search enriching, review-clustering Set), (d) 단일-잡 inflight(random-crawl, analytics mergeInflight), (e) cron 타이머(random-crawl 이 scheduleRegistry 공유), (f) long-polling 루프(telegram pollGen 세대), (g) seq 카운터(logs), (h) 외부 API 일일 호출 예산(bus 쿼터 카운터)까지 8가지 자원 종류를 같은 모양으로 흡수함을 보여준다. **새 자원 종류가 등장할 때마다 외부 인프라 대신 이 모양이 디폴트로 채택된다** — 단일 인스턴스 전제 위에서 일관성이 계속 강화되는 중.
 8. **게이트 cap 을 컨슈머 디자인에 맞춘다** (2026-05-17 → 2026-06 재확인) — auto-discover 가 `MAX_CONCURRENT_PER_ACTOR` 를 그룹 크기 5 에 맞춘 사례가, analytics 글로벌 머지의 `MERGE_POOL_SIZE = 어댑터 cap` 으로 재현됨. 게이트 크기는 임의 상수가 아니라 그 게이트를 쓰는 쪽(그룹 크기·어댑터 동시성)에서 역산하는 값.
 9. **게이트 수명과 그 게이트를 쓰는 캐시 수명을 분리하라** (2026-06, ai) — `accountGateRegistry` 가 어댑터 캐시 회전과 독립 수명을 가지는 이유: 설정 변경으로 어댑터가 재생성되는 순간 새 어댑터가 새 게이트를 만들면, 옛 어댑터의 in-flight 와 합쳐져 같은 계정에 cap 초과 호출이 일시적으로 발생한다. **게이트는 그것이 보호하는 자원(계정)의 정체성에 묶여야지, 그 자원을 쓰는 캐시 엔트리에 묶이면 안 된다**.
+10. **회계 대상이 "사용권" 이면 게이트가 아니라 DB 다** (2026-08, meal) — 같은 "일일 한도" 라도 bus 는 시스템 외부 예산이라 in-memory 로 충분했고, meal 은 사용자별 사용권이라 SQLite 원자 upsert 로 갔다. 판별 기준은 "재시작으로 리셋돼도 되는가" 와 "우회되면 누가 손해를 보는가" — 사용자 간 공정성이나 비용이 새는 값은 영속화. 이 패턴이 디폴트라도 이 축에서는 예외가 옳고, 메모리 게이트(barrier·합류)는 그 옆에서 순서·중복만 맡는다.
 
 이 패턴이 깨질 수 있는 시점:
 - **다중 Fastify 인스턴스로 스케일 아웃** — 모듈 싱글턴은 프로세스 안에서만 의미. 여러 인스턴스가 같은 placeId 잡을 돌리면 dedupe도 cap도 cross-process에서 안 통함. 그 시점이 진짜 외부 큐가 필요한 시점.
@@ -82,3 +86,7 @@ status: active
 - [[../topics/logs]]
 - [[../topics/telegram]]
 - [[../topics/bus]]
+- [[../topics/food]]
+- [[../topics/meal]]
+- [[../topics/weather]]
+- [[../topics/air-quality]]

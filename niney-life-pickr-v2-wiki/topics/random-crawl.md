@@ -1,12 +1,14 @@
 ---
 topic: random-crawl
-type: codebase
-last_compiled: 2026-06-25
-source_count: 20
+last_compiled: 2026-08-30
+sources_count: 21
 status: active
+aliases: [맛집 자동 발굴, 자동 발굴, random-crawl, RandomCrawlService, randomCrawlRegistry, RegionStore, regions.json, build-regions, awaiting_selection, crawlChosenCandidate, timeoutAction, sweepExpired, /discover, /발굴, /search, /검색, /stats, random_crawl_configs, random_crawl_runs, RandomCrawlSection, useRandomCrawlRunEvents, system:random-crawl, buildLlmProviderEnv]
 ---
 
-# random-crawl
+# random-crawl — cron 지역 선정 → 네이버 검색 → 텔레그램 후보 선택 → 크롤 등록
+
+**2026-08-22 변경 흡수 — 플러그인 env 조립 `buildLlmProviderEnv()`(`cc8399a`)**: [plugins/random-crawl.ts](../../apps/friendly/src/plugins/random-crawl.ts) 가 자체 `LlmProviderEnv` 리터럴 대신 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 `AiConfigService` 를 만든다. 이 인스턴스는 발굴 파이프라인의 LLM 호출용이 아니라, 플러그인이 자체 조립하는 `ReviewSearchService`/`SummaryService`(선택 크롤 뒤 요약 → 자동 enrich 훅) 에 넘기는 것 — 발굴 자체는 LLM 을 쓰지 않는다. 배경(purpose 5종·조립 단일화)은 [ai](ai.md).
 
 > 맛집 자동 발굴. cron 으로 지역을 (랜덤/고정) 골라 네이버 검색 → 신규 후보 N개를 텔레그램으로 보내고, 사용자가 버튼으로 고른 가게만 크롤(=등록)한다. [schedule](schedule.md) 과 같은 croner 인프로세스 스케줄러를 쓰되 jobType·파이프라인·상태머신이 다르다.
 
@@ -33,7 +35,7 @@ status: active
 - **RandomCrawlService** ([`random-crawl.service.ts`](../../apps/friendly/src/modules/random-crawl/random-crawl.service.ts)) — 발굴 파이프라인 + 텔레그램 콜백/커맨드 상태머신. `getConfig`/`updateConfig`/`applySchedule`/`bootstrap`/`runScheduled`/`listRuns`/`preview` + 지역 조회(`getRegionTree`/`getRegionDongs`) + 텔레그램 핸들러(`handleTelegramCallback`/`handleTelegramMessage`) + `sweepExpired`. cron tick·"지금 실행"·`/discover`·지역 선택·`/search` 가 모두 `runScheduled(trigger, override?)` 한 경로로 수렴한다(차이는 `trigger` 값과 `override.region`/`override.query`).
 - **randomCrawlRegistry** ([`random-crawl-registry.ts`](../../apps/friendly/src/modules/random-crawl/random-crawl-registry.ts)) — 모듈 singleton. **동시 1개** `ActiveRun` 슬롯(runId·phase·candidates·`AbortController`·SSE 구독자 Set). live 진행 표시 + SSE fan-out + 보조 in-process overlap 가드(`begin`)만 담당. 진실의 원천은 DB 라, 재시작으로 레지스트리가 비어도 흐름은 DB 로 이어진다.
 - **RegionStore** ([`region.ts`](../../apps/friendly/src/modules/random-crawl/region.ts)) — 전국 시/군/구 좌표 + 동 이름 번들([`data/regions.json`](../../apps/friendly/src/modules/random-crawl/data/regions.json))을 감싼 모듈 singleton. `tree()`(시도→시군구, 동 제외) / `dongs(sido, sigungu)` / `resolve(region)`(설정을 위에서 아래로 풀어 좌표 1곳 확정).
-- **random-crawl plugin** ([`plugins/random-crawl.ts`](../../apps/friendly/src/plugins/random-crawl.ts)) — `fastify-plugin`, `dependencies: ['prisma', 'logs']`. `RandomCrawlService` + `TelegramService` + `TelegramConfigService` 를 `app.decorate` 로 전역 singleton 노출. CrawlService/RestaurantService/SummaryService 등은 여기서 **자체 조립**(autoload 순서 비의존)하되 `jobRegistry` 는 모듈 singleton 이라 다른 곳에서 만든 CrawlService 와 in-flight/dedup 상태를 공유한다.
+- **random-crawl plugin** ([`plugins/random-crawl.ts`](../../apps/friendly/src/plugins/random-crawl.ts)) — `fastify-plugin`, `dependencies: ['prisma', 'logs']`. `RandomCrawlService` + `TelegramService` + `TelegramConfigService` 를 `app.decorate` 로 전역 singleton 노출. CrawlService/RestaurantService/SummaryService/ReviewSearchService 등은 여기서 **자체 조립**(autoload 순서 비의존 — `AiConfigService` 는 `buildLlmProviderEnv()` 로, 2026-08-22)하되 `jobRegistry` 는 모듈 singleton 이라 다른 곳에서 만든 CrawlService 와 in-flight/dedup 상태를 공유한다.
 
 cron 타이머는 [schedule](schedule.md) 과 **같은** `scheduleRegistry`(모듈 singleton)에 `jobType: 'random-crawl'` 로 등록되어 `normalize-merge` 와 키만 다르게 공존한다. 상태 분리는 schedule 과 동일: **설정·이력·awaiting 상태는 SQLite 에 영속**, **live 진행·cron 타이머는 메모리**. 이는 [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md) 의 또 하나의 단일-잡 게이트다.
 
@@ -134,8 +136,9 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 - **텔레그램 staleness 60초.** 재시작 후 텔레그램이 재전송하는 옛 메시지가 새 회차를 트리거하지 않게 60초 넘은 텍스트는 무시(콜백은 awaiting 복구용이라 제외).
 - **`telegramConfigured=false` 면 enabled 여도 skip.** 봇 미설정이면 후보를 보낼 곳이 없어 회차가 자동 skip. UI 가 경고 배너를 노출.
 
-## Sources [coverage: high — 20 sources]
+## Sources [coverage: high — 21 sources]
 
+- [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) — `buildLlmProviderEnv()` 플러그인 env 조립(2026-08-22)
 - [`apps/friendly/src/modules/random-crawl/random-crawl.service.ts`](../../apps/friendly/src/modules/random-crawl/random-crawl.service.ts) — 발굴 파이프라인 + 텔레그램 상태머신
 - [`apps/friendly/src/modules/random-crawl/random-crawl-registry.ts`](../../apps/friendly/src/modules/random-crawl/random-crawl-registry.ts) — 동시 1개 ActiveRun + SSE singleton
 - [`apps/friendly/src/modules/random-crawl/random-crawl.route.ts`](../../apps/friendly/src/modules/random-crawl/random-crawl.route.ts) — HTTP/SSE 레이어
@@ -143,7 +146,7 @@ EventSource 가 헤더를 못 보내므로 `?token=` 쿼리로 JWT 인증한다(
 - [`apps/friendly/src/modules/random-crawl/region.test.ts`](../../apps/friendly/src/modules/random-crawl/region.test.ts) — RegionStore resolve/tree/dongs 단위 테스트
 - [`apps/friendly/src/modules/random-crawl/discover-command.test.ts`](../../apps/friendly/src/modules/random-crawl/discover-command.test.ts) — `isDiscoverCommand`/`parseSearchCommand` 파서 테스트
 - [`apps/friendly/src/modules/random-crawl/data/regions.json`](../../apps/friendly/src/modules/random-crawl/data/regions.json) — 전국 시군구 좌표 + 동 이름 번들
-- [`apps/friendly/src/plugins/random-crawl.ts`](../../apps/friendly/src/plugins/random-crawl.ts) — fastify-plugin decorate + 의존 조립
+- [`apps/friendly/src/plugins/random-crawl.ts`](../../apps/friendly/src/plugins/random-crawl.ts) — fastify-plugin decorate + 의존 조립 (2026-08-22 — `buildLlmProviderEnv()`)
 - [`apps/friendly/scripts/build-regions.mjs`](../../apps/friendly/scripts/build-regions.mjs) — regions.json 생성 스크립트
 - [`apps/friendly/src/server.ts`](../../apps/friendly/src/server.ts) — bootstrap(고아 정리 + cron + 폴링 + sweep)
 - [`packages/api-contract/src/schemas/random-crawl.ts`](../../packages/api-contract/src/schemas/random-crawl.ts) — zod 스키마

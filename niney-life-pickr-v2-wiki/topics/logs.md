@@ -1,13 +1,14 @@
 ---
 topic: logs
-type: codebase
-last_compiled: 2026-06-25
-source_count: 16
+last_compiled: 2026-08-30
+sources_count: 28
 status: active
-aliases: [operation-log, operation-run, operation-report, log-analysis, failure-report, retention, log-retention, OperationLogService, LogAnalysisService, run-instrumentation, log-config]
+aliases: [operation-log, operation-run, operation-report, log-analysis, failure-report, retention, log-retention, OperationLogService, LogAnalysisService, run-instrumentation, log-config, OperationFeature, FEATURE_LABEL, food-import, meal-recognition, meal-recommendation, trigger-user, 자동 분석 게이트, visitorPagination, paginating_visitor, allocSeq, parentRunId, AdminLogsPage, AdminLogRunDetailPage, buildLlmProviderEnv]
 ---
 
 # logs — 범용 작업(operation) 로그 + 실패 run LLM 분석 보고서
+
+**2026-08-17~08-22 변경 흡수 — `OperationFeature` 12종(+`food-import`·`meal-recognition`·`meal-recommendation`), crawl run meta `visitorPagination`, 플러그인 env 조립 `buildLlmProviderEnv()`**: (1) [schemas/logs.ts](../../packages/api-contract/src/schemas/logs.ts) 의 `OperationFeature` enum 에 `food-import`(`102ccdb`)·`meal-recognition`·`meal-recommendation`(`c5b5fe2`, 둘 다 2026-08-22)이 더해져 **12종**, 웹 [AdminLogsPage](../../apps/web/src/routes/admin/AdminLogsPage.tsx) `FEATURE_LABEL` 에 '음식 카탈로그 적재'/'식단 사진 인식'/'식단 추천' 라벨(`Record<OperationFeatureType, string>` 이라 enum 추가 시 typecheck 가 누락을 잡는다). 셋 다 `channel` 미지정(= DB+pino) 이고 `operationLog` 는 optional dep. meal 두 feature 는 **`trigger: 'user'`** 로 시작하므로 실패해도 [operation-log.service.ts](../../apps/friendly/src/modules/logs/operation-log.service.ts) 의 자동 분석 게이트(`(ctx?.trigger ?? null) !== 'user'`)에 걸려 LLM 비용을 만들지 않는다 — 인스턴스별 단계·status 매핑(폴백이 결과를 만든 run 은 `done` + `meta.status='fallback'`, food-import abort 는 `cancelled`/`interrupted`)은 [operation-log-instrumentation](../concepts/operation-log-instrumentation.md) 의 2026-08-22~23 항목과 [food](food.md)/[meal](meal.md) 참조. (2) crawl Naver 잡(`0d72380`, 2026-08-17)이 `paginating_visitor` 단계에 리뷰 페이지네이션 완료(info)/**부분 완료(warn)** 로그를 남기고, `done` 로그·`finishRun` meta 에 `visitorPagination`(`{ complete, reason, pagesAttempted, pagesFetched, reviewsFetched }`)을 싣는다 — 스키마 변경 없이 `run.meta` JSON 통과 규약 그대로. 사유 코드 8종은 [crawl](crawl.md). (3) [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts) 의 자체 `LlmProviderEnv` 리터럴이 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로(`cc8399a`) — "`app.aiConfig` 재사용 불가라 자체 `AiConfigService` 를 만든다"는 그대로이고 env 조립만 공용. `log-analysis` purpose 해석·`OLLAMA_LOG_ANALYSIS_MODEL` 폴백은 변경 없음([ai](ai.md)).
 
 `apps/friendly/src/modules/logs/` 에 위치한 어드민 전용 **작업 로그 시스템**. 크롤·요약·메뉴 그룹핑·정산 추출·자동 발견·스케줄·글로벌 병합 등 **모든 기능**의 실행을 단위(run)로 묶어 영속 기록하고, 실패한 run 은 LLM 이 단계별 로그를 읽어 **원인 분석 보고서**를 자동 생성한다. 운영자는 어드민 화면에서 run 목록/상세/스텝 로그를 훑고, 실패 보고서를 보고, 보존 기간을 설정한다.
 
@@ -21,7 +22,7 @@ aliases: [operation-log, operation-run, operation-report, log-analysis, failure-
 2. **실패 자가 진단** — `status='failed'` 로 끝난 run 은 (일부 제외 코드를 빼고) finishRun 직후 LLM 분석을 자동으로 띄워 `OperationReport`(summary/rootCause/details/suggestions/severity)를 만든다. 운영자는 보고서를 읽거나 '다시 분석'으로 재시도한다.
 3. **보존 관리** — 전역 보존 기간(`LogConfig`, 기본 30일)이 지난 로그/run 은 매일 04시 cron + 부팅 직후 정리된다. 분석 보고서가 있는 run 은 영구 보존한다.
 
-기존 크롤 전용 [job-log.service](../../apps/friendly/src/modules/crawl/job-log.service.ts) 의 3채널(pino / DB / SSE) fan-out 패턴을 그대로 일반화한 것이라, 크롤·요약 로그는 여전히 SSE 로 실시간 흐르면서도 동시에 이 시스템의 DB 에 영속된다.
+기존 크롤 전용 `job-log.service.ts`(2026-06-13 `9c0a1f9` 에서 이 모듈의 [operation-log.service.ts](../../apps/friendly/src/modules/logs/operation-log.service.ts) 로 흡수·삭제됨) 의 3채널(pino / DB / SSE) fan-out 패턴을 그대로 일반화한 것이라, 크롤·요약 로그는 여전히 SSE 로 실시간 흐르면서도 동시에 이 시스템의 DB 에 영속된다.
 
 소스: [operation-log.service.ts](../../apps/friendly/src/modules/logs/operation-log.service.ts), [log-analysis.service.ts](../../apps/friendly/src/modules/logs/log-analysis.service.ts), [logs.route.ts](../../apps/friendly/src/modules/logs/logs.route.ts), [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts), [schemas/logs.ts](../../packages/api-contract/src/schemas/logs.ts), [AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx), [AdminLogRunDetailPage.tsx](../../apps/web/src/routes/admin/AdminLogRunDetailPage.tsx), [AdminLogSettingsPage.tsx](../../apps/web/src/routes/admin/AdminLogSettingsPage.tsx), [useLogs.ts](../../packages/shared/src/hooks/useLogs.ts)
 
@@ -49,7 +50,7 @@ aliases: [operation-log, operation-run, operation-report, log-analysis, failure-
 `runId` 별 `inflight` Set 가 자동/수동 중복 실행을 막는다. LLM 호출은 첫 시도 + 재시도 2회(`MAX_ATTEMPTS=3`), `timeout`/`upstream_failed`/`parse_failed` 만 재시도. 프롬프트는 error/warn 전부(≤100행) + 마지막 info/debug 100행을 시간 오름차순으로 합쳐 16KB 캡 안에서 오래된 info/debug 부터 생략한다.
 
 ### 라우트 + 보존 유틸
-[logs.route.ts](../../apps/friendly/src/modules/logs/logs.route.ts) 는 전부 `app.authenticate + app.requireAdmin` 가드 아래의 어드민 라우트. [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts) 가 두 서비스를 decorate 하고, 부팅 sweep + 보존 cron(`0 4 * * *`, Asia/Seoul)을 건다. 의존: `prisma`(autoload 선행 보장). `app.aiConfig` 는 'summaries' 가 decorate 하는데 알파벳순상('logs' < 'summaries') 재사용 불가라 자체 `AiConfigService` 를 만든다.
+[logs.route.ts](../../apps/friendly/src/modules/logs/logs.route.ts) 는 전부 `app.authenticate + app.requireAdmin` 가드 아래의 어드민 라우트. [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts) 가 두 서비스를 decorate 하고, 부팅 sweep + 보존 cron(`0 4 * * *`, Asia/Seoul)을 건다. 의존: `prisma`(autoload 선행 보장). `app.aiConfig` 는 'summaries' 가 decorate 하는데 알파벳순상('logs' < 'summaries') 재사용 불가라 자체 `AiConfigService` 를 만든다(2026-08-22 부터 env 블록은 `buildLlmProviderEnv()` 공용 — 리터럴 복제 없음).
 
 소스: [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts), [operation-log.service.test.ts](../../apps/friendly/src/modules/logs/operation-log.service.test.ts), [logs.route.test.ts](../../apps/friendly/src/modules/logs/logs.route.test.ts), [config/env.ts](../../apps/friendly/src/config/env.ts)
 
@@ -62,11 +63,12 @@ aliases: [operation-log, operation-run, operation-report, log-analysis, failure-
 - `AiConfigService` + `adapterCache`([ai](./ai.md)) — 'log-analysis' 용도 LLM provider 해석. `OLLAMA_LOG_ANALYSIS_MODEL` env 가 기본 모델. row 없으면 미설정으로 취급.
 - `classifyError` / `extractFirstJsonObject`([ai](./ai.md), summary.service) — LLM 에러 분류 + reasoning 모델 `<think>` 제거 후 JSON 추출 재사용.
 
-**업스트림(이 모듈을 호출하는 계측 컨슈머)** — `OperationFeature` 8(+1)종을 각 모듈이 직접 기록한다:
-- [crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) — feature `crawl`, `channel='crawl'`. `allocSeq()` 를 공유해 emit 이벤트와 seq 정합.
+**업스트림(이 모듈을 호출하는 계측 컨슈머)** — `OperationFeature` 12종을 각 모듈이 직접 기록한다:
+- [crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) — feature `crawl`, `channel='crawl'`. `allocSeq()` 를 공유해 emit 이벤트와 seq 정합. Naver 잡 `done` meta 에 `visitorPagination`(2026-08-17) — 부분 완료는 `paginating_visitor` warn.
 - [summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts) — feature `summary`, `channel='summary'`.
 - [menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts), [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts), [auto-discover.service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts), [random-crawl.service.ts](../../apps/friendly/src/modules/random-crawl/random-crawl.service.ts), [analytics.service.ts](../../apps/friendly/src/modules/analytics/analytics.service.ts)(global-merge) — `channel='none'`(DB+pino만).
 - [schedule.service.ts](../../apps/friendly/src/modules/schedule/schedule.service.ts) — feature `schedule`. 자식 run(menu-grouping/global-merge)을 `parentRunId` 로 연계하는 중첩 run 의 대표 사례.
+- [food-import.service.ts](../../apps/friendly/src/modules/food/food-import.service.ts)(feature `food-import`, trigger cron/manual → 실패 시 자동 분석 대상), [meal-recognition.service.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts) / [meal-recommendation.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts)(**`trigger: 'user'`** → 자동 분석 제외) — 2026-08-22 합류, 모두 `channel='none'`. meta 에 사용자·사진 토큰·메모를 넣지 않는다(photoCount/dishCount/model/durationMs 만). 상세는 [operation-log-instrumentation](../concepts/operation-log-instrumentation.md) · [food](food.md) · [meal](meal.md).
 
 **FE 경계:** [logs.api.ts](../../packages/shared/src/api/logs.api.ts)(API 클라이언트) → [useLogs.ts](../../packages/shared/src/hooks/useLogs.ts)(React Query 훅) → 웹 어드민 페이지 3종. 타입은 모두 `@repo/api-contract` 의 [schemas/logs.ts](../../packages/api-contract/src/schemas/logs.ts) 단일 출처 ([zod-ssot-buildless](../concepts/zod-ssot-buildless.md)).
 
@@ -93,7 +95,7 @@ aliases: [operation-log, operation-run, operation-report, log-analysis, failure-
 
 [schema.prisma](../../apps/friendly/prisma/schema.prisma) 의 4 모델. 최초 도입: [20260612164108_add_operation_logs](../../apps/friendly/prisma/migrations/20260612164108_add_operation_logs/migration.sql), 잡 인덱스 추가: [20260612181456_add_operation_log_job_index](../../apps/friendly/prisma/migrations/20260612181456_add_operation_log_job_index/migration.sql).
 
-- **`OperationRun`**(`operation_runs`) — run 헤더. `feature`(8+1종), `jobId`/`subjectId`/`parentRunId`(전부 nullable), `status`(running|done|failed|cancelled, 기본 running), `trigger`(자유 문자열), `errorCode`/`errorMessage`(2000자 캡), `meta`(JSON 직렬화, 4096자 캡), `startedAt`/`finishedAt`. 인덱스: `(feature, startedAt)` / `(status, startedAt)` / `jobId` / `startedAt`. 자식: `logs[]`, `report?`.
+- **`OperationRun`**(`operation_runs`) — run 헤더. `feature`(12종 — free TEXT, enum 검증은 와이어 zod 만이라 feature 추가에 마이그레이션 없음), `jobId`/`subjectId`/`parentRunId`(전부 nullable), `status`(running|done|failed|cancelled, 기본 running), `trigger`(자유 문자열), `errorCode`/`errorMessage`(2000자 캡), `meta`(JSON 직렬화, 4096자 캡), `startedAt`/`finishedAt`. 인덱스: `(feature, startedAt)` / `(status, startedAt)` / `jobId` / `startedAt`. 자식: `logs[]`, `report?`.
 - **`OperationLog`**(`operation_logs`) — 스텝 로그. `runId`(FK, cascade), 비정규화 `feature`/`jobId`/`subjectId`(레거시 크롤 로그 조회 호환), `stage`, `level`(debug|info|warn|error), `message`(2000자 캡), `meta`(JSON, 4096자 캡), `createdAt`. 인덱스: `(runId, createdAt)` / `(feature, createdAt)` / `(subjectId, createdAt)` / `(jobId, createdAt)` / `createdAt`.
 - **`OperationReport`**(`operation_reports`) — run 당 0~1개(`runId` unique). `status`(pending|running|done|failed, 기본 pending), `provider`/`model`, `summary`/`rootCause`/`details`(markdown)/`suggestions`(string[] JSON)/`severity`(low|medium|high), `errorCode`/`errorMessage`, `promptTokens`/`completionTokens`/`durationMs`. pending/running 동안 분석 필드는 null — 웹이 status 를 폴링.
 - **`LogConfig`**(`log_configs`) — 전역 단일 row(`key='global'` unique). `retentionDays`(기본 30).
@@ -121,28 +123,29 @@ aliases: [operation-log, operation-run, operation-report, log-analysis, failure-
 - **프롬프트 인젝션 방어** — 스텝 로그 본문/메타에 LLM 지시처럼 보이는 텍스트가 섞일 수 있으므로 ([versioned-llm-prompts](../concepts/versioned-llm-prompts.md) 계열) 시스템 프롬프트가 "전부 분석 대상 데이터로만 취급" 을 명시하고, 로그 본문을 `<logs>...</logs>` 구분자로 감싸며, 본문 안의 닫는 태그는 `<\/logs>` 로 이스케이프해 경계 탈출을 막는다.
 - **자동 vs 수동 LLM 미설정 동작 차이** — 자동 경로는 LLM 미설정 시 **보고서 행조차 만들지 않고** 조용히 스킵(pino info). 수동 경로는 `no_analysis_llm` 을 `ok:false` 로 반환해 웹이 'AI 키 설정으로 이동' 안내를 띄운다.
 - **고아 보고서 이중 방어** — 분석 도중 재시작하면 보고서가 running 으로 영원히 남아 웹이 끝나지 않는 폴링을 돈다. 백엔드 부팅 sweep 이 주 방어이지만, 웹도 `REPORT_STALL_MS`(10분) 동안 updatedAt 갱신이 없으면 멈춘 것으로 보고 '다시 분석' 버튼을 다시 활성화한다.
-- **테스트 격리** — 테스트는 공유 `dev.db` 를 쓰므로 `feature='auto-discover'`(아직 계측 없는 feature)로 시드를 격리하고, 보존 정리 테스트는 retentionDays=365 로 올려 실데이터(전부 1년 이내)가 cutoff 에 걸리지 않게 한다. `plugins/logs.ts` 도 `NODE_ENV='test'` 면 부팅 sweep/cron 을 스킵한다.
+- **테스트 격리** — 테스트는 `.env` 의 `DATABASE_URL` 이 가리키는 공유 DB 를 그대로 쓰므로 `feature='auto-discover'` 로 시드를 격리하고(테스트 주석의 "아직 계측 없는 feature" 는 이제 사실이 아니다 — auto-discover 도 계측된다. 실데이터에 그 feature run 이 쌓이면 카운트 단언이 흔들릴 수 있으니 그때는 analytics 처럼 `useIsolatedDatabase()` 로 옮길 것), 보존 정리 테스트는 retentionDays=365 로 올려 실데이터(전부 1년 이내)가 cutoff 에 걸리지 않게 한다. `plugins/logs.ts` 도 `NODE_ENV='test'` 면 부팅 sweep/cron 을 스킵한다.
 - **non-failed run 분석 거부** — `prepare` 가 run 이 없거나 `status !== 'failed'` 면 `run_not_failed` 로 거부. 정상 완료 run 에는 보고서 카드를 노출하지 않는다.
 
 소스: [log-analysis.service.ts](../../apps/friendly/src/modules/logs/log-analysis.service.ts), [AdminLogRunDetailPage.tsx](../../apps/web/src/routes/admin/AdminLogRunDetailPage.tsx), [logs.route.test.ts](../../apps/friendly/src/modules/logs/logs.route.test.ts), [plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts)
 
-## Sources [coverage: high — 16 sources]
+## Sources [coverage: high — 17 sources]
 
-- [apps/friendly/src/modules/logs/operation-log.service.ts](../../apps/friendly/src/modules/logs/operation-log.service.ts) — run/스텝 기록 진입점, 3채널 fan-out, 자동 분석 게이트, 부팅 sweep + 보존 정리 유틸.
+- [apps/friendly/src/modules/logs/operation-log.service.ts](../../apps/friendly/src/modules/logs/operation-log.service.ts) — run/스텝 기록 진입점, 3채널 fan-out, 자동 분석 게이트(`trigger='user'` 제외), 부팅 sweep + 보존 정리 유틸.
+- [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) — `buildLlmProviderEnv()` 플러그인 env 조립(2026-08-22).
 - [apps/friendly/src/modules/logs/operation-log.service.test.ts](../../apps/friendly/src/modules/logs/operation-log.service.test.ts) — fan-out/caps/finishRun/seq/자동분석 게이트 단위 테스트.
 - [apps/friendly/src/modules/logs/log-analysis.service.ts](../../apps/friendly/src/modules/logs/log-analysis.service.ts) — 실패 run LLM 분석, 세마포어/대기열/재시도, 프롬프트 빌드 + 인젝션 방어.
 - [apps/friendly/src/modules/logs/logs.route.ts](../../apps/friendly/src/modules/logs/logs.route.ts) — 어드민 라우트(runs/run/runLogs/analyze/config).
 - [apps/friendly/src/modules/logs/logs.route.test.ts](../../apps/friendly/src/modules/logs/logs.route.test.ts) — 라우트 통합 테스트(auth/pagination/analyze/config/sweep/retention).
 - [apps/friendly/src/plugins/logs.ts](../../apps/friendly/src/plugins/logs.ts) — 두 서비스 app-singleton decorate + 보존 cron.
-- [packages/api-contract/src/schemas/logs.ts](../../packages/api-contract/src/schemas/logs.ts) — zod 스키마/타입 단일 출처.
+- [packages/api-contract/src/schemas/logs.ts](../../packages/api-contract/src/schemas/logs.ts) — zod 스키마/타입 단일 출처 (`OperationFeature` 12종, 2026-08-22 +3).
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — `Logs` namespace 경로.
 - [packages/shared/src/api/logs.api.ts](../../packages/shared/src/api/logs.api.ts) — API 클라이언트.
 - [packages/shared/src/hooks/useLogs.ts](../../packages/shared/src/hooks/useLogs.ts) — React Query 훅(폴링/무한스크롤/뮤테이션).
-- [apps/web/src/routes/admin/AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx) — run 목록 화면 + feature/status 라벨.
+- [apps/web/src/routes/admin/AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx) — run 목록 화면 + feature/status 라벨(`FEATURE_LABEL` 12종).
 - [apps/web/src/routes/admin/AdminLogRunDetailPage.tsx](../../apps/web/src/routes/admin/AdminLogRunDetailPage.tsx) — run 상세 + 스텝 로그 + 보고서 카드 + '다시 분석'.
 - [apps/web/src/routes/admin/AdminLogSettingsPage.tsx](../../apps/web/src/routes/admin/AdminLogSettingsPage.tsx) — 보존 기간 설정.
 - [apps/friendly/prisma/migrations/20260612164108_add_operation_logs/migration.sql](../../apps/friendly/prisma/migrations/20260612164108_add_operation_logs/migration.sql) — 4 테이블 생성 + 레거시 crawl_job_logs 백필.
 - [apps/friendly/prisma/migrations/20260612181456_add_operation_log_job_index/migration.sql](../../apps/friendly/prisma/migrations/20260612181456_add_operation_log_job_index/migration.sql) — operation_logs(jobId, createdAt) 인덱스.
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — OperationRun/OperationLog/OperationReport/LogConfig 모델.
 
-컨슈머(계측 호출자, cross-cutting): [crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts), [summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts), [menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts), [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts), [auto-discover.service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts), [random-crawl.service.ts](../../apps/friendly/src/modules/random-crawl/random-crawl.service.ts), [schedule.service.ts](../../apps/friendly/src/modules/schedule/schedule.service.ts), [analytics.service.ts](../../apps/friendly/src/modules/analytics/analytics.service.ts).
+컨슈머(계측 호출자, cross-cutting): [crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts), [summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts), [menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts), [settlement-extraction.service.ts](../../apps/friendly/src/modules/settlement-extraction/settlement-extraction.service.ts), [auto-discover.service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts), [random-crawl.service.ts](../../apps/friendly/src/modules/random-crawl/random-crawl.service.ts), [schedule.service.ts](../../apps/friendly/src/modules/schedule/schedule.service.ts), [analytics.service.ts](../../apps/friendly/src/modules/analytics/analytics.service.ts), [food-import.service.ts](../../apps/friendly/src/modules/food/food-import.service.ts), [meal-recognition.service.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts), [meal-recommendation.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts).

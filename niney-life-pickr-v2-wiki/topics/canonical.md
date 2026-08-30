@@ -1,6 +1,7 @@
 ---
 topic: canonical
 last_compiled: 2026-06-25
+sources_count: 24
 source_count: 21
 status: active
 aliases: [tabling-merge, place-partner-promote, canonical-members]

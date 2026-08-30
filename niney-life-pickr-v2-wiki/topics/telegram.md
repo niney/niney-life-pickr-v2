@@ -2,6 +2,7 @@
 topic: telegram
 type: codebase
 last_compiled: 2026-06-25
+sources_count: 17
 source_count: 16
 status: active
 aliases: [telegram-bot, long-polling-bot, getUpdates, force-reply, inline-keyboard, callback-query, discover-command, search-command, stats-command, region-stats-telegram, telegram-config, telegram-settings, reconfigure-bot, resolve-chat-id, chat-id-discovery, db-config-env-fallback, crawl-progress-edit, in-place-edit-race, token-masking]
@@ -11,7 +12,7 @@ aliases: [telegram-bot, long-polling-bot, getUpdates, force-reply, inline-keyboa
 
 텔레그램 봇 통합 도메인. 맛집 자동 발굴(random-crawl)이 후보 카드를 봇으로 보내고 사용자가 인라인 버튼으로 고른 가게를 크롤하는 양방향 채널이며, 동시에 사용자가 봇에 보내는 텍스트 커맨드(`/search`·`/discover`·`/stats`)로 발굴을 **역방향 트리거**한다. 봇 토큰·chat id 는 어드민 "설정 > 텔레그램"에서 관리하고(DB 우선 + `.env` fallback), 저장하면 서버 재시작 없이 폴러가 즉시 새 설정으로 갈아탄다. 전송 채널은 [auto-discover.md](auto-discover.md)·[crawl.md](crawl.md) 도메인이 소비하고, 설정 화면은 [friendly.md](friendly.md)·[shared.md](shared.md)·[web.md](web.md) 의 패턴을 따른다.
 
-## Purpose [coverage: high -- 8 sources]
+## Purpose [coverage: high — 8 sources]
 
 텔레그램을 발굴 워크플로의 **단일 인터랙션 표면**으로 쓰는 도메인이다. 책임 범위는 크게 셋:
 
@@ -23,7 +24,7 @@ aliases: [telegram-bot, long-polling-bot, getUpdates, force-reply, inline-keyboa
 
 봇이 비활성(토큰/chat id 미설정)이면 모든 송신은 no-op 이고, 자동 발굴 회차는 후보를 못 보내 skip 된다 — 즉 텔레그램은 발굴 파이프라인의 **필수 출력 단자**다(상세 발굴 흐름은 [auto-discover.md](auto-discover.md)).
 
-## Architecture [coverage: high -- 9 sources]
+## Architecture [coverage: high — 9 sources]
 
 friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling 봇이다(CLAUDE.md no-Redis · webhook 대신 long-polling 을 골라 공개 HTTPS URL 노출 불필요). 도메인은 트랜스포트 1 + 설정 서비스 1 + 렌더 순수함수 + 어드민 FE 스택으로 구성된다.
 
@@ -42,7 +43,7 @@ friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling �
 
 5. **어드민 FE 스택** — 라우트 namespace `Routes.SettingsTelegram` ([packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)) → API 클라이언트 [telegramSettingsApi](../../packages/shared/src/api/telegram-settings.api.ts) → React Query 훅 [useTelegramSettings.ts](../../packages/shared/src/hooks/useTelegramSettings.ts) → 페이지 [AdminTelegramPage.tsx](../../apps/web/src/routes/admin/AdminTelegramPage.tsx). 사이드바 탭 등록은 [AdminSettingsPage.tsx](../../apps/web/src/routes/admin/AdminSettingsPage.tsx) 의 `{ to: '/admin/settings/telegram', label: '텔레그램', icon: Send }`.
 
-## Talks To [coverage: high -- 6 sources]
+## Talks To [coverage: high — 6 sources]
 
 | 대상 | 방향 | 무엇을 |
 |---|---|---|
@@ -54,7 +55,7 @@ friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling �
 | env (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`) | R | DB 행 없을 때 fallback ([config.md](config.md)) |
 | 어드민 웹 (설정 > 텔레그램) | HTTP | config GET/PUT/DELETE · test · resolve-chat-id (모두 admin 보호) |
 
-## API Surface [coverage: high -- 5 sources]
+## API Surface [coverage: high — 5 sources]
 
 `Routes.SettingsTelegram` namespace — 전부 `app.authenticate` + `app.requireAdmin` 보호([friendly.md](friendly.md)). 라우트 정의는 [apps/friendly/src/modules/settings/telegram.route.ts](../../apps/friendly/src/modules/settings/telegram.route.ts), 스키마는 [packages/api-contract/src/schemas/telegram-settings.ts](../../packages/api-contract/src/schemas/telegram-settings.ts).
 
@@ -78,7 +79,7 @@ friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling �
 
 **콜백 data 규약**(64바이트 한도 내): `rc:<runId>:<n>`/`rc:<runId>:skip`(후보 선택), `rs:<시도>`/`rs:*`(통계 드릴다운), `disc:<시도>`/`disc:<시도>:<시군구>`(지역 선택 발굴).
 
-## Data [coverage: medium -- 3 sources]
+## Data [coverage: medium — 3 sources]
 
 단일 테이블 `telegram_configs` ([apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) `TelegramConfig`, 마이그레이션 [20260619091932_add_telegram_config](../../apps/friendly/prisma/migrations/20260619091932_add_telegram_config/migration.sql)):
 
@@ -93,7 +94,7 @@ friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling �
 
 행이 없으면 env(`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`)로 fallback. 폴링 상태(`offset`/`polling`/`pollGen`)는 DB 가 아니라 `TelegramService` 인스턴스의 인메모리 필드 — 재시작 시 `offset` 0 부터(텔레그램이 미확인 update 를 재전송하므로 staleness 게이트가 옛 메시지를 거른다).
 
-## Key Decisions [coverage: high -- 7 sources]
+## Key Decisions [coverage: high — 7 sources]
 
 - **Webhook 대신 long-polling** — 공개 HTTPS URL/인증서 노출 없이 단일 인스턴스에서 `getUpdates` 롱폴 하나만 돌린다(CLAUDE.md no-Docker/no-Redis 와 결).
 - **트랜스포트와 도메인 분리** — `TelegramService` 는 random-crawl 을 import 하지 않고 `onCallback`/`onMessage` 콜백만 노출. 순환 의존 회피 + 테스트 격리(`region-stats-telegram.ts` 는 텔레그램 호출 0).
@@ -104,7 +105,7 @@ friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling �
 - **`/search` 2단계 입력 (ForceReply)** — 메뉴/자동완성에서 `/search` 를 탭하면 인자 없이 전송되므로, force_reply 프롬프트로 입력창을 자동 포커스시켜 검색어를 받는다. 답장은 `SEARCH_PROMPT_MARKER` 포함 여부로 식별(커밋 d9aab3b).
 - **chat_id 자동 탐색** — 폴러를 잠시 멈추고 message 롱폴(`resolveChatId`)로 사용자가 그 사이 보낸 메시지에서 chat 후보를 추린다. `offset` 을 커밋하지 않아 콜백 폴러 진행엔 영향 없음. FE 가 클릭하면 입력칸에 채워준다.
 
-## Gotchas [coverage: high -- 6 sources]
+## Gotchas [coverage: high — 6 sources]
 
 - **진행 편집 vs 최종 메시지 경쟁** — 늦게 도착한 "수집 중" `editMessageText` 가 최종 🎉/⚠️ 메시지를 덮으면 카드가 "수집 중"에 멈춘다(stuck). `streamCrawlProgress` 는 async **정지 함수**를 반환하고, 호출부가 종료 대기 후 그걸 `await`(`stopProgress()`)해서 in-flight 편집을 비운 **뒤** 최종 메시지를 보낸다(커밋 c5a3b8b/b47f7bd). 편집은 `pending` 체인으로 순서 직렬화 + 직전과 동일 텍스트 스킵(텔레그램 `not modified` 회피) + `CRAWL_PROGRESS_THROTTLE_MS=4000` 스로틀(레이트리밋 회피).
 - **메시지 staleness 60초** — 재시작 후 텔레그램이 미확인 update 를 재전송하면 옛 `/discover` 가 새 회차를 트리거할 수 있다. `loop` 에서 `Date.now()/1000 - msg.date > 60` 이면 무시. **콜백은 제외**(awaiting 복구용이라 만료시키면 안 됨).
@@ -115,7 +116,7 @@ friendly 단일 인스턴스 안에서 **폴러 1개**만 도는 long-polling �
 - **getRegionStats 60초 캐시 → 시도 사라짐 가능** — 드릴다운 사이 캐시가 갱신돼 선택한 시도가 사라지면 `buildRegionStatsSido` 가 overview 로 폴백.
 - **마이그레이션 drift 주의** — `telegram_configs` 는 마이그레이션 `20260619091932` 로 생성. 운영 DB 에 이 마이그레이션이 적용 안 됐으면 설정 화면이 깨진다(관련: 다른 도메인의 수동 테이블 생성 drift 이력).
 
-## Sources [coverage: high -- 16 sources]
+## Sources [coverage: high — 16 sources]
 
 - [apps/friendly/src/modules/telegram/telegram.service.ts](../../apps/friendly/src/modules/telegram/telegram.service.ts) — long-polling 트랜스포트(송수신·검증·reconfigure)
 - [apps/friendly/src/modules/settings/telegram-config.service.ts](../../apps/friendly/src/modules/settings/telegram-config.service.ts) — DB 우선 + env fallback 설정 서비스

@@ -10,7 +10,7 @@
    - `[coverage: high]` — 이 섹션 신뢰, 원시 파일 안 봐도 됨
    - `[coverage: medium]` — 좋은 개요지만 코드 디테일은 원시 소스 확인
    - `[coverage: low]` — Sources에 적힌 원시 파일을 직접 읽기
-4. **`concepts/` 확인** — 횡단 패턴(Zod SSOT, 공개/어드민 라우트 페어 분리, SSE 인증, UI 플랫폼 분기, workspace 패키지 해결, 스트림 캐시 머지, 인메모리 동시성 게이트, LLM 프롬프트 버전). 여러 토픽에 걸친 결정의 "왜"가 여기 있음
+4. **`concepts/` 확인** — 횡단 패턴(Zod SSOT, 공개/어드민 라우트 페어 분리, SSE 인증, UI 플랫폼 분기, workspace 패키지 해결, 스트림 캐시 머지, 인메모리 동시성 게이트, LLM 프롬프트 버전, 외부 API 어댑터·픽스처, 쿼터 비례 로딩, 게스트/서버 하이브리드, 저장 위치 글랜스, 공공데이터 마스터 적재, 지도+시트 골격). 여러 토픽에 걸친 결정의 "왜"가 여기 있음
 5. **마지막에 원시 소스** — 코드 레벨 디테일이 필요할 때만
 
 ## When NOT to use the wiki
@@ -25,7 +25,7 @@
 
 ## Stats
 
-Compiled: 2026-08-23 (23rd) | Topics: 28 | Concepts: 17 | Sources: ~994
+Compiled: 2026-08-30 (24th) | Topics: 31 | Concepts: 21 | Sources: ~1,969 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 676) | Auto-updates on session start
 
 ## Topic map at a glance
 
@@ -41,13 +41,18 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── settlement   (정산 N차 + draft 동기화 + 분할 영수증 + 공유 OG SSR-lite·정산표 PNG 서버 렌더 — 별도 토픽)
 │   ├── food         (음식 카탈로그 — 다중 source 적재·관측/충돌 rebase·영양·식당 역검색·인식 품질 — 별도 토픽)
 │   ├── meal         (개인 식단 — 기록·인식 lineage·추천 event 학습·계정별 로컬 상태·backup/retention — 별도 토픽)
-│   └── bus          (서울시 버스 API 프록시 — 정류장 검색/주변 + 실시간 도착 + 노선 + 실시간 차량 위치·따라가기 + 즐겨찾기, **웹 전용** — 별도 토픽)
+│   ├── bus          (서울시 버스 API 프록시 — 정류장 검색/주변 + 실시간 도착 + 노선 + 실시간 차량 위치·따라가기 + 즐겨찾기 — 별도 토픽; 앱은 mobile 대중교통 탭)
+│   ├── subway / transit (수도권 전철 + 버스↔지하철 통합 레이어 — 별도 토픽)
+│   ├── air-quality  (에어코리아 대기정보 프록시 + 내 위치 저장(날씨·일상지도·식단 공유) + 상단바/홈 글랜스 — 별도 토픽)
+│   ├── weather      (기상청 단기·중기예보 + API허브 AWS, 발표 슬롯 캐시, 245지점 — 별도 토픽)
+│   ├── life-map     (일상지도 — CCTV·화장실·병의원 로컬 마스터 적재 + 지오코딩 gz 커밋 + 점/셀 조회 + 옴니박스 — 별도 토픽)
+│   └── vote         (그룹 투표 픽 — 별도 토픽)
 ├── map              (vworld OpenLayers + WMTS, 카테고리 라인 아이콘 8종, 모바일 WebView)
-├── web              (Vite + React 19, 공개 + 어드민 + 정산 N차 wizard + 식단 조회/추천/설정 + Tailwind v4 dark)
-├── mobile           (Expo SDK 54 + RN 0.81 + React 19, 맛집·정산 + 식단 촬영/기록/알림 + Universal/App Links)
+├── web              (Vite + React 19, 공개 홈·맛집·대중교통·일상지도·날씨·대기질·식단 + 어드민 + 정산 N차 wizard + 상단바 폭 예산·MyLocationChip + 지도 페이지 공통 시트 골격 sheet/useMapSheets + Tailwind v4 dark)
+├── mobile           (Expo SDK 54 + RN 0.81 + React 19, 맛집·대중교통·정산 + 날씨·대기·일상지도 + 식단 촬영/기록/알림 — 7도메인, TransitMapView 브리지 공용, principal 네임스페이스, iOS prebuilt RN 빌드 운영 + Universal/App Links)
 └── packages/
-    ├── api-contract  (Zod SSOT, 권한 페어 + food/meal 스키마, settlement.calculator FE/BE 공유 + 멀티라운드)
-    ├── shared        (FE 공통 API/hooks/store, settlementDraftStore·mealDraftStore storage adapter 주입)
-    ├── utils         (순수 유틸, restaurantCategory + formatWonPrice)
+    ├── api-contract  (Zod SSOT 36 스키마 — 권한 페어 + food/meal/air-quality/weather/life-map 스키마, settlement.calculator FE/BE 공유 + 멀티라운드)
+    ├── shared        (FE 공통 API/hooks/store, settlementDraftStore·mealDraftStore·airLocationStore storage adapter 주입, useMyLocationGlance·useUserLocation)
+    ├── utils         (순수 유틸 — 마커 SVG 빌더 계열(markerFrame·bus·subway·air·lifeMap), weather 격자·지점표, airQuality 등급, reviewDate, aiModel 휴리스틱)
     └── config        (tsconfig + ESLint base — 모노레포 lint SSOT, 4 워크스페이스가 flat config 로 확장)
 ```

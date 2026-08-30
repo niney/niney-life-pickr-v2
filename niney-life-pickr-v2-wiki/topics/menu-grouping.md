@@ -1,16 +1,18 @@
 ---
 topic: menu-grouping
-type: codebase
-last_compiled: 2026-06-27
-source_count: 19
+last_compiled: 2026-08-30
+sources_count: 21
 status: active
+aliases: [메뉴 정규화, 메뉴 그룹핑, menu-grouping, MenuCanonical, menu_canonicals, canonicalName, canonicalNorm, MENU_GROUPING_VERSION, MENU_GROUPING_CHUNK_SIZE, packBySimilarity, jamoBigramDice, toJamo, pickCanonicalName, callChunkWithSplit, callIndexGroups, groupingJobRegistry, grouping-jobs, restaurant_menu_groups, restaurant_menus, replaceRestaurantMenuGroups, mergeMenuGroups, menusGroup, menusRanking, MenuRankingResult, restaurantsStatus, buildLlmProviderEnv]
 ---
 
-# menu-grouping
+# menu-grouping — 식당 단위 메뉴 표기 LLM 정규화(canonical 그룹) + 원본 메뉴 그룹 영속
+
+**2026-08-22 변경 흡수 — 라우트 env 조립 `buildLlmProviderEnv()`(`cc8399a`); `MENU_GROUPING_VERSION = 2` 현재값 확인**: [menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts) 가 자체 `LlmProviderEnv` 리터럴 대신 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 `AiConfigService` 를 조립하고(스케줄러 경로의 인스턴스는 [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 가 같은 함수로), [menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) 의 가짜 `defaultModels` 는 5키(`meal-photo`·`meal-recommend`). 현재값 정합: `MENU_GROUPING_VERSION` 은 v2 분할·머지 재설계(`5dd2db8` 2026-06-13) 이후 **2** 그대로 — ai 토픽의 옛 표가 1 로 적혀 있던 것은 24차에서 정정됐다. 같은 날 다른 JSON 호출들이 `@repo/utils` `thinkOptionForModel` 로 사고를 끄도록 바뀌었지만(`5cdbc0f`) 이 모듈은 **미적용** — `callIndexGroups` 의 자체 분기(`model.includes('gpt-oss') ? { think: 'low' } : {}`)만 있어 다른 추론 모델엔 `think` 를 안 보낸다(아래 Gotchas).
 
 **2026-06-27 추가 — 원본(source) 메뉴 그룹 크롤·영속 계층**: 아래 canonical 그룹핑이 *리뷰 멘션*(`MenuMention.nameNorm`)을 LLM 으로 묶는 **분석 계층**이라면, 이번에 추가된 `restaurant_menu_groups`/`restaurant_menus` 는 크롤 시점 **공식 메뉴판**을 원본 그룹/정렬/출처째로 보존하는 **인입 계층**이다(둘은 별개 테이블·별개 목적·서로 GROUP BY 로 안 엮인다). 네이버 `/menu/list` 서브페이지에서 그룹 단위로 긁은 결과([crawl](crawl.md) 의 `extractBaeminMenuGroups`)를 `RestaurantService.replaceRestaurantMenuGroups` 가 source 단위로 재적재하고, 공개 detail 은 `mergeMenuGroups` 로 노출한다. 기존 flat `menus`·`snapshotJson`·`MenuCanonical` 은 불변 — 순수 가산.
 
-## Purpose [coverage: high -- 13 sources]
+## Purpose [coverage: high — 13 sources]
 
 식당별로 흩어진 메뉴 표기 변형을 LLM 으로 canonical 그룹에 묶어, 그 위에서 메뉴 단위 순위/긍부정 통계를 낼 수 있게 하는 도메인. 한 식당 안에 `김치찌개`, `김치 찌개`, `묵은지김치찌개` 같은 표기가 섞여 있으면 사람 눈엔 같은 메뉴지만, `MenuMention.nameNorm` 단위로만 집계하면 같은 음식이 셋으로 쪼개져 mention 통계가 망가진다. 이 모듈이 그 갭을 메운다 — `MenuCanonical` 테이블에 `(restaurantId, nameNorm) → canonicalName` 매핑을 보관하고, 순위 응답에서 그 키로 GROUP BY 한다. 매핑이 없는 행은 자기 자신을 그룹키로 쓰는 fallback 으로 자연 처리되므로 그룹핑 미실행 식당도 깨지지 않는다.
 
@@ -18,7 +20,7 @@ status: active
 
 **v2(2026-06) 분할·머지 재설계**: v1 은 "입력 전 항목을 에코"하는 출력 계약(O(N) 출력)이었는데, 이 출력이 reasoning 모델의 thinking 토큰과 `maxTokens` 예산을 나눠 쓰다가 큰 식당에서 응답이 잘려 `parse_failed` 운영 장애를 냈다. v2 는 출력을 "병합 그룹만, 인덱스 배열로"(`{"groups":[[0,1,2]]}`) 축소해 호출당 출력을 식당 크기와 무관한 수십 토큰으로 고정하고, canonical 이름 결정은 LLM 에서 코드로 옮겼다. 아키텍처 제안서는 [docs/menu-grouping-split-merge.html](../../docs/menu-grouping-split-merge.html)(보존 문서). 관련 컨셉 [versioned-llm-prompts](../concepts/versioned-llm-prompts.md).
 
-## Architecture [coverage: high -- 9 sources]
+## Architecture [coverage: high — 9 sources]
 
 코어는 `MenuGroupingService` 한 클래스. 두 개의 진입점이 있다.
 
@@ -57,9 +59,9 @@ Key files:
 
 `callIndexGroups` 가 `provider.complete` 를 부를 때: `TEMPERATURE=1.0`(v1 의 0.1 은 reasoning 반복 루프로 토큰을 태우는 보조 원인이었다), `MAX_TOKENS=2000`(출력이 수십 토큰뿐이라 나머지는 reasoning 여유분 — thinking 토큰도 `num_predict` 에 합산된다), `NUM_CTX=8192`, `format: MENU_GROUPING_JSON_SCHEMA`, 그리고 모델명에 `gpt-oss` 가 들어가면 `think: 'low'`(thinking 을 못 끄고 기본 medium 이라 low 로 줄여 토큰 예산을 지킨다; 다른 모델은 think 미지원일 수 있어 미전달).
 
-## Talks To [coverage: high -- 8 sources]
+## Talks To [coverage: high — 8 sources]
 
-- **ai** (in-process: `AiConfigService.getResolved('ollama-cloud', 'chat')` + `adapterCache`) -- LLM provider/model 해석. 미설정이면 `MenuGroupingError('no_provider')` 던지고 라우트가 422 로 변환.
+- **ai** (in-process: `AiConfigService.getResolved('ollama-cloud', 'chat')` + `adapterCache`) -- LLM provider/model 해석. 미설정이면 `MenuGroupingError('no_provider')` 던지고 라우트가 422 로 변환. `AiConfigService` 는 라우트·schedule 플러그인 모두 `buildLlmProviderEnv()`(2026-08-22)로 조립.
 - **crawl → 원본 메뉴 그룹** (DB write via RestaurantService) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** [crawl](crawl.md) 어댑터가 `/menu/list` 에서 `extractBaeminMenuGroups` 로 뽑은 `MenuGroup[]` 이 `restaurant_menu_groups`/`restaurant_menus` 적재의 입력. canonical(멘션) 그룹핑과는 무관 — 같은 도메인 이름을 쓰지만 데이터 경로가 다름.
 - **web → `RestaurantPublicDetail.menuGroups`** (HTTP read) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** MenuTab/HomeTab 이 공개 detail 의 `menuGroups` 를 그룹 섹션·대표메뉴 미리보기로 소비. [web](web.md).
 - **summary** (in-process: `normalizeTerm`, `extractFirstJsonObject`) -- canonicalNorm 정규화 규칙을 멘션과 일치시켜야 GROUP BY 키가 맞춰진다.
@@ -68,7 +70,7 @@ Key files:
 - **analytics → `GlobalMenuCanonicalLink`** (DB read) -- `getRanking` 의 `items[].global` 필드. 글로벌 머지를 돌렸을 때만 채워지고, 안 돌렸으면 null. 이 모듈이 글로벌 링크를 만드는 게 아니라 읽기만 한다. [analytics](analytics.md).
 - **prisma / SQLite** (DB: `menu_canonicals` 테이블 소유 + `menu_mentions` 읽기) -- delete + createMany 트랜잭션으로 idempotent 재실행.
 
-## API Surface [coverage: high -- 4 sources]
+## API Surface [coverage: high — 4 sources]
 
 단일 식당 (`restaurant.route.ts`):
 
@@ -87,7 +89,7 @@ Batch (`menu-grouping.route.ts`):
 
 Zod 계약 ([packages/api-contract/src/schemas/menu-grouping.ts](../../packages/api-contract/src/schemas/menu-grouping.ts)) 의 핵심 — `MenuRankingItem.global` 은 `{globalKey, displayName, totalMentions, positive, negative, positiveRatio, restaurantCount}` 또는 `null`. `mapped: false` 인 아이템은 정의상 global 도 없다. 스키마 상세는 [api-contract](api-contract.md).
 
-## Data [coverage: high -- 5 sources]
+## Data [coverage: high — 5 sources]
 
 `MenuCanonical` ([apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma), [migration](../../apps/friendly/prisma/migrations/20260508142840_add_menu_canonicals/migration.sql)):
 
@@ -147,7 +149,7 @@ rawJson          String?
 
 `replaceRestaurantMenuGroups` 가 source 단위 `deleteMany`(raw) + 재삽입으로 idempotent — 재크롤하면 그 source 그룹을 통째로 다시 만들고 다른 source 는 안 건드린다. 기존 `restaurants.snapshotJson` 과 공개 flat `menus` 는 불변.
 
-## Key Decisions [coverage: high -- 14 sources]
+## Key Decisions [coverage: high — 14 sources]
 
 - **2026-06-27: 원본 메뉴 그룹은 `MenuCanonical` 과 별개 가산 테이블** -- `restaurant_menu_groups`/`restaurant_menus` 는 공식 메뉴판 원본(그룹/정렬/출처/rawJson) 보존, `MenuCanonical` 은 리뷰 멘션 정규화 — 목적·입력·GROUP BY 가 다르다. 같은 "메뉴 그룹" 이름을 쓰지만 섞으면 안 됨. 기존 snapshotJson·flat menus·MenuCanonical 불변.
 - **2026-06-27: 영속은 best-effort raw SQL** -- `replaceRestaurantMenuGroups` 가 Prisma 모델 대신 `$executeRaw` + 호출 전체 `.catch(console.warn)`. 마이그레이션 미적용 DB 에서도 크롤/upsert 를 안 막으려는 방어(스냅샷은 여전히 `menuGroups` 를 들고 있어 손실 아님). drift 위험은 Gotchas.
@@ -166,7 +168,7 @@ rawJson          String?
 - **glob 비교는 식당 단위 N+1** -- `getRanking` 이 targetGlobalIds 모은 뒤 sibling 식당별로 한 쿼리씩 (식당당 1쿼리). 한 globalKey 에 1~10 식당이 일반적이라 OK. raw SQL 단일 쿼리화는 더 빨라야 할 때.
 - **batch in-memory only** -- 서버 재시작 시 in-flight 잡 사라짐. LLM 비용은 다시 들지만 결과는 idempotent — 사용자가 재실행 하면 됨. [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
-## Gotchas [coverage: high -- 9 sources]
+## Gotchas [coverage: high — 9 sources]
 
 - **(원본 메뉴 그룹) 마이그레이션 안 되면 조용히 스킵** -- `replaceRestaurantMenuGroups` 가 `.catch(console.warn)` 라 `restaurant_menu_groups`/`restaurant_menus` 테이블이 없으면 영속만 빠지고 크롤은 완료. 그 환경은 두 테이블이 비어 있을 수 있으나 스냅샷의 `menuGroups` 는 여전히 채워져 공개 detail 은 정상. (운영 배포 시 마이그레이션 적용 확인.)
 - **(원본 메뉴 그룹) `sourceMenuId` 는 unique 아님** -- 같은 메뉴가 '대표메뉴'와 실제 카테고리에 동시 노출되므로 `restaurant_menus` 에 unique 제약을 안 뒀다(스키마 주석). dedup 은 크롤 어댑터의 `flattenMenuGroups`(flat 용)와 그룹 내 dedup 이 담당.
@@ -180,16 +182,18 @@ rawJson          String?
 - **`MenuGroupingError('no_menus')` 는 batch 에서 skipped 로 분류** -- failed 가 아님. 멘션 없는 식당은 정상 케이스라 잡 전체를 실패시키지 않는다.
 - **storedVersion = MIN(version)** -- 한 식당의 매핑 행들 중 가장 옛 버전을 노출. 일부만 옛 버전이어도 "재실행 권장" 트리거. v1 매핑이 남은 식당은 v2 재실행 대상.
 - **유사도 블록이 maxChunk 를 넘으면 잘린다** -- 같은 계열 표기가 chunkSize(30)를 초과하면 블록이 maxChunk 단위로 슬라이스된다. 잘린 조각은 대표 머지가 다시 만나게 하므로 결과엔 영향 없지만, 매우 큰 동일 계열 식당에선 머지 라운드 콜이 늘 수 있다.
-- **dev.db 잔재로 테스트 입력 카운트 변동** -- analytics 와 공유하는 패턴. menu-grouping 테스트는 placeId prefix(`mg-`)로 격리하고 afterEach 청소, 단언은 절대값 대신 부분 매치/하한 비교.
+- **dev.db 잔재로 테스트 입력 카운트 변동** -- analytics 와 공유하던 패턴(analytics 는 2026-08-22 부터 `useIsolatedDatabase()` 로 격리 — [analytics](analytics.md)). menu-grouping 테스트는 여전히 `.env` 의 DB 위에서 placeId prefix(`mg-`)로 격리하고 afterEach 청소, 단언은 절대값 대신 부분 매치/하한 비교. 전량 삭제하는 테스트를 새로 쓰면 격리부터.
+- **`think` 는 gpt-oss 에만 보낸다 — `thinkOptionForModel` 미적용** -- `callIndexGroups` 는 모델명에 `gpt-oss` 가 있을 때만 `think: 'low'`, 그 외엔 필드를 아예 안 보낸다. 2026-08-22 실측으로 qwen3.5 계열은 `think` 미지정 시 출력 토큰을 사고에 다 써 content 가 빈 문자열로 온다는 것이 확인됐고 다른 JSON 호출들은 `thinkOptionForModel`(gpt-oss `'low'`/그 외 `false`)로 바뀌었다([ai](ai.md)). chat 기본 모델을 qwen3.5 류로 바꾸면 이 모듈은 `parse_failed` 로 되돌아갈 수 있다 — 그때 같은 헬퍼로 맞출 것.
 
-## Sources
+## Sources [coverage: high — 21 sources]
 
+- [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 라우트·플러그인 env 조립, 2026-08-22)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.ts)
-- [apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts)
+- [apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts) (2026-08-22 — `buildLlmProviderEnv()`)
 - [apps/friendly/src/modules/menu-grouping/grouping-job-registry.ts](../../apps/friendly/src/modules/menu-grouping/grouping-job-registry.ts)
-- [apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts)
+- [apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.similarity.test.ts)
 - [apps/friendly/src/modules/restaurant/restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts)
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)

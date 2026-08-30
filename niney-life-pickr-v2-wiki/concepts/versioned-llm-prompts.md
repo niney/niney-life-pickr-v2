@@ -1,7 +1,7 @@
 ---
 concept: 도메인별 LLM 프롬프트/스키마 버전 상수
-last_compiled: 2026-06-25
-topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs]
+last_compiled: 2026-08-30
+topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal]
 status: active
 ---
 
@@ -36,6 +36,10 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 - **2026-06-25**(18차) in [[../topics/review-clustering]] (`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`): **`CLUSTERING_VERSION = 4`** — 군집 알고리즘/프롬프트 버전(`// v2:극성주입 v3:corpusSize v4:canonical 통합 코퍼스`). `ReviewCluster.clusterVersion` 컬럼 + `corpusSize` 동반. 재군집 게이트 `shouldRecluster` 가 (현재 버전 군집 없으면 무조건 / 있으면 corpusSize 가 max(GATE_MIN=20, base×0.2) 이상 늘었을 때만) 트리거 — **버전 게이트 + 코퍼스 증가 게이트 결합**. 4 요소 풀세트의 군집 변형([[canonical-corpus-fanout]] 의 corpusSize 와 직결).
 - **2026-06-25**(18차) in [[../topics/logs]] (`apps/friendly/src/modules/logs/log-analysis.service.ts`): **명시 버전 토큰 없는 변형** — 실패 run LLM 분석의 `SYSTEM_PROMPT` + `REPORT_JSON_SCHEMA`(Ollama structured output)가 `summary.service` 의 `ANALYSIS_JSON_SCHEMA` 선례를 **손으로 미러링**(주석 명시). `*_VERSION` 상수는 없지만 "프롬프트/스키마를 손으로 미러링하고 변경 시 함께 갱신" 컨벤션을 공유 — 이 패턴의 versioning-less 사촌. 프롬프트 인젝션 방어(`<logs>` 펜싱 + 닫는 태그 이스케이프)도 동반.
 
+- **2026-08-22**(food) in [[../topics/food]] / [[../topics/ai]] (`apps/friendly/src/modules/food/food.prompts.ts`): **`FOOD_CLASSIFY_VERSION = 1`**(`// v1: 최초 — 3축 enum 키 출력, 청크 40`, `FOOD_CLASSIFY_CHUNK_SIZE = 40`, `69dc0e2`). chat purpose LLM 이 음식 이름(+원본 분류 힌트)을 `dishType`/`mainIngredient`/`cuisine` 3축 enum 으로 분류. **4 요소 중 3 채택 + 자동 흡수**: (1) 상수, (2) `FoodItem.classifyVersion Int?` + `classifyModel String?`, (3) stale 게이트 — `FoodClassifyService.classifyPending` 의 where 가 `active AND (classifyVersion IS NULL OR classifyVersion < FOOD_CLASSIFY_VERSION)`, (4) UI 배지 없음 — 대신 **매 import 회차의 `classifying` 단계가 stale 행을 자동 재분류**(summary 의 자동 재실행 쪽 다이얼; `FoodImportConfig.classify` 기본 true, 어드민 PATCH 로 축을 null 로 비우면 다시 대상). 두 가지 학습: (a) **"이번 버전으로 봤다" 표식** — LLM 응답에서 빠진 행(비음식 어휘 "기본 메뉴"·"순한맛")도 축은 두고 `classifyVersion=현재`·`classifyModel` 만 박아 다음 회차가 같은 것을 또 묻지 않게(실측 120행을 매번 재질문하고 39행만 반영되던 낭비 제거) — 재시도는 **버전을 올려서** 한다는 규약이 "상수 = 재질문의 유일한 트리거" 로 굳음. (b) 대상 집합이 실행 중에 줄어드는 조건이라 `notIn` 누적 대신 **id 오름차순 커서**(`6f20058`; SQLite 파라미터 한계 P2029 로 500행쯤에서 터짐). 출력은 `LlmClassifyOutput.safeParse` + 축별 enum `safeParse`(소문자 정규화) 재검증, 이름 불일치는 `normalizeTerm` 으로 재매칭(1,102행 중 362행 미반영 실측) — "결정적 후검증 > 프롬프트 신뢰"(extraction v4 와 같은 결).
+- **2026-08-22**(meal 인식) in [[../topics/meal]] / [[../topics/food]] / [[../topics/ai]] (`meal-recognition.prompts.ts`): **`MEAL_RECOGNITION_VERSION` v1 → v2 같은 날 bump** — v1(`c5b5fe2`) "한국어 정식 명칭 + 후보 배열 + 주식/반찬 분리 + 서수 양", v2(`836e33f`) "후보(candidates)를 사실상 강제 — 실측 8장에서 후보 포함율이 top-1 과 같아 사용자가 고칠 거리가 없었다". image purpose `meal-photo`(`cc8399a` 로 `LlmProviderPurpose` 에 `meal-photo`/`meal-recommend` 2종 추가) vision LLM, Ollama Cloud 가 structured output 을 강제하지 않아 스키마를 프롬프트에 박고 서버 zod 재검증 + 수리 재시도 1회. **새 변형: 재실행은 없는데 버전은 데이터에 박힌다** — 인식 결과는 settlement-extraction 처럼 사용자가 draft 에서 고쳐야 영속화되므로 stale 재실행이 무의미하지만(extraction 은 1요소), 여기서는 응답 `RecognizeMealResult.promptVersion` 을 클라가 기록 저장 시 `MealRecognitionSnapshot{model, version, dishes}` 로 되돌려 `MealEntry.recognitionJson` 에 원본 스냅샷으로 남긴다(신규 POST 는 둘 다 필수, 구버전 행은 nullable). 그 버전이 **품질 집계의 비교 축** — `FoodRecognitionQualityService`(`GET /admin/food/recognition-quality?days=&model=&version=&confidenceBucket=`)가 snapshot 의 model/version 으로 필터하고 `byModelVersion` 을 집계, 손상 JSON 만 제외하고 정상 과거 버전은 버리지 않는다; 어드민 `AdminFoodPage` 가 `{model} · v{version}` 행으로 노출. 즉 4 요소 중 (1) 상수 (2) 스냅샷 컬럼 (3) 비교/필터를 채택하되 (4) 는 "재실행" 이 아니라 **"버전별 교정률 비교"** 로 치환 — 버전 조약이 "무엇을 다시 돌릴까" 가 아니라 "v2 가 v1 보다 교정을 덜 받는가" 를 묻는 데 쓰이는 첫 사례. 곁들여 개인정보 보호형 디버그 덤프(`meal-recognition-debug.store.ts`, `version` 필드 + HMAC 토큰 해시 + 7일 TTL)와 `eval-meal-recognition.ts`(v2 덤프·legacy 덤프 모두 파싱)가 오프라인 채점에 같은 버전을 쓴다.
+- **2026-08-22~23**(meal 추천) in [[../topics/meal]] / [[../topics/ai]] (`meal-recommendation.prompts.ts`): **`MEAL_RECOMMENDATION_VERSION` v1 → v2** — v1(`2e41e63` 2026-08-22) "후보 풀 안에서만 고르게 하고 이유를 붙인다", v2(`9f39d53` 2026-08-23) "절대 제외와 덜 선호를 분리하고, 덜 선호 후보는 대안이 부족할 때만 고른다". chat purpose `meal-recommend`, `MEAL_RECOMMENDATION_JSON_SCHEMA` structured output + 후보 밖 이름은 서버가 버림(`mapLlmItems`) + 사고(think) 끔. 저장: `MealRecommendation.promptVersion Int @default(1)` + `model` + `status done|fallback|failed`. **버전이 학습 이벤트까지 전파** — `MealRecommendationEvent.rankingVersion` 에 그 추천의 `promptVersion` 을 복사해 shown/picked/rated/logged 이벤트가 어느 랭킹 버전에서 나왔는지 남기고, 백업/복원(`meal-data.service.ts`)도 그대로 운반. stale 재실행 없음(추천은 요청 단위, 다음 요청이 새 버전) — 단, 캐시 키 `profileHash`(sha1 16자: preference·profileText·slot·date·mealType·note·weatherBucket·rain·candidateNames)에는 **버전이 들어가지 않아** bump 직후 같은 날·끼니·프로필의 옛 버전 추천이 cache hit 로 돌아올 수 있고 `force`(quota 소비)로만 우회된다 — "VERSION 을 올렸는데도 옛 출력이 보이는" 새 형태의 함정.
+
 ## What This Means
 
 이 패턴이 알려주는 것:
@@ -45,6 +49,7 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 3. **같은 패턴이 3+ 도메인에 박혀 있고 새 LLM 도메인도 같은 모양으로 흡수될 가능성이 크다**. 새 LLM 호출 도메인이 추가되면 (a) `*_VERSION` 상수, (b) 응답 저장 테이블의 `version` 컬럼, (c) stale 비교 쿼리, (d) UI 배지 + 재실행 엔드포인트 — 이 4점 세트가 그대로 복제된다. 이미 표준이 됐다.
 4. **자주 발생하는 실수: VERSION 안 올리고 프롬프트만 수정**. 그 결과 새/구 데이터가 같은 `version` 으로 섞여서 통계가 noise 를 가진다. 매 PR 리뷰의 체크리스트가 됨 — "프롬프트 / schema / few-shot 변경했으면 `*_VERSION` 올렸나?". 이 체크가 빠지면 데이터 신뢰도가 조용히 무너진다.
 5. **summary 의 자동 재실행 vs grouping/global-merge 의 수동 재실행** 차이가 의미 있음. summary 는 행 단위가 작고(리뷰 1건) 비용이 낮아서 `analysisVersion < current` 를 자동 큐잉. grouping/global-merge 는 batch 단위가 크고 비용이 무거워서 명시적 job 생성을 요구. 같은 패턴 안에서도 "자동 흡수 vs 명시 트리거" 의 다이얼이 도메인 비용에 맞춰 조정된다.
+6. **버전의 세 번째 용도 — 비교 축** (2026-08, meal) — 재실행(summary/grouping)도, 무의미(extraction)도 아닌 제3의 자리: 인식 버전은 사용자 교정률을 버전별로 나눠 보는 필터가 되고, 추천 버전은 행동 이벤트의 `rankingVersion` 으로 흘러 funnel 을 버전별로 가른다. "프롬프트를 바꿨더니 좋아졌나" 를 데이터로 답하려면 재실행이 없는 도메인도 버전을 박아야 한다. 곁들여 food classify 의 "봤다 표식" 은 규칙 4 의 역방향 — 상수를 안 올리면 재질문이 영원히 안 일어나고, 추천의 `profileHash` 는 버전을 모르므로 bump 뒤 캐시가 옛 출력을 돌려준다. 버전 상수가 닿지 않는 캐시 키·게이트가 있는지가 새 체크 항목.
 
 ## Sources
 
@@ -54,3 +59,5 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 - [ai](../topics/ai.md)
 - [auto-discover](../topics/auto-discover.md)
 - [settlement](../topics/settlement.md)
+- [food](../topics/food.md)
+- [meal](../topics/meal.md)

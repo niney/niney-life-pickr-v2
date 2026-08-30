@@ -27,7 +27,7 @@ status: active
 
 ## What This Means
 
-출처가 1개(네이버)에서 4개(네이버/다이닝코드/캐치테이블/테이블링)로 늘면서 "같은 가게"가 DB 에서 여러 `Restaurant` 행으로 쪼개졌다 — [[canonical]] 토픽이 그 묶음(`CanonicalRestaurant` 1:N)을 만든다. 분석을 단일 행에 걸면 한 가게의 리뷰가 출처별로 분절돼 검색 recall·군집 응집도·관점 통계가 모두 깎인다. 그래서 분석 레이어는 묶음의 정체를 입력 단계에서 풀어 **canonical 멤버 전체로 fan-out** 하고, 출력 단계에서 결과를 `primaryId` 하나로 되돌린다. fan-out(읽기)과 fold-in(쓰기 키)이 한 쌍이다.
+출처가 1개(네이버)에서 4개(네이버/다이닝코드/캐치테이블/테이블링)로 늘면서 "같은 가게"가 DB 에서 여러 `Restaurant` 행으로 쪼개졌다 — [[../topics/canonical]] 토픽이 그 묶음(`CanonicalRestaurant` 1:N)을 만든다. 분석을 단일 행에 걸면 한 가게의 리뷰가 출처별로 분절돼 검색 recall·군집 응집도·관점 통계가 모두 깎인다. 그래서 분석 레이어는 묶음의 정체를 입력 단계에서 풀어 **canonical 멤버 전체로 fan-out** 하고, 출력 단계에서 결과를 `primaryId` 하나로 되돌린다. fan-out(읽기)과 fold-in(쓰기 키)이 한 쌍이다.
 
 이 패턴은 여러 기존 컨셉과 맞물린다:
 

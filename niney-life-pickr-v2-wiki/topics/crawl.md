@@ -1,12 +1,14 @@
 ---
 topic: crawl
-last_compiled: 2026-08-17
+last_compiled: 2026-08-30
+sources_count: 42
 status: active
-source_count: 30
-aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, stealth, jitter, 429, playwright-extra, anti-bot, tabling, 테이블링, tabling-search, tabling-sitemap, tabling-place, tabling-bulk-save, sse-seq, review-stats, visitor-review-stats, place-partner-promotion]
+aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, stealth, jitter, 429, playwright-extra, anti-bot, tabling, 테이블링, tabling-search, tabling-sitemap, tabling-place, tabling-bulk-save, sse-seq, review-stats, visitor-review-stats, place-partner-promotion, visitor-pagination, 리뷰 페이지네이션, VisitorPaginationResult, VisitorPaginationStopReason, known_boundary, onVisitorPagination, getVisitorReviews, findVisitorReviewMoreButton, findVisitorReviewSection, isVisitorReviewsGraphqlRequestBody, 리뷰 업데이트 누락, update-mode, CRAWL_VISITOR_MAX_PAGES, reviewDate, parseReviewVisitedAt, compareReviewRecencyDesc, 방문일 최신순, visitedAt]
 ---
 
 # crawl — 다중 출처 크롤러 (Naver Place + 캐치테이블 + 다이닝코드 + 테이블링)
+
+**2026-08-17~08-22 변경 흡수 — Naver 리뷰 업데이트 누락·최신순 표시 수정(`0d72380`) + provider env 조립 단일화의 테스트 픽스처 갱신(`cc8399a`)**: (1) **증상** — 기등록 맛집 업데이트(update 모드)에서 첫 SSR 리뷰(~10건)만 저장되고 그 뒤가 비거나, 새로 수집된 방문 리뷰가 기존 리뷰 뒤에 노출됐다. **원인 셋** — ① 더보기 탐색이 전역 `matches.last()` 라 네이버가 리뷰 목록 아래에 여러 개 깔아 둔 다른 섹션의 "펼쳐서 더보기" 를 눌러 리뷰 요청이 아예 안 나감, ② `waitForResponse` 가 `api.place.naver.com/graphql` POST 면 무엇이든(쿠폰 `getUnifiedCoupons` 등) 성공으로 판정해 클릭을 "리뷰 페이지" 로 오인, ③ 공개/어드민/SSE 캐시 정렬이 `fetchedAt`(수집 시각) 기반이라 update 배치의 신규 리뷰가 최초 크롤 배치 뒤에 숨음. (2) **어댑터 수정** — [naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts): `findVisitorReviewSection`(`h2.place_section_header` 텍스트가 `리뷰 N` 인 헤더 → 조상 `.place_section`; 폴백 = 리뷰어 프로필 링크(`a[href*="/my/"][href*="/review"]`)를 가진 `ul:has(> li.place_apply_pui)` 의 조상 섹션) → `findVisitorReviewMoreButton`(`:scope > .place_section_content + div` 페이저 셸 안 `role=button` 이름 `^(펼쳐서 )?(리뷰 )?더보기$`, 폴백은 섹션 내 같은 exact name — 둘 다 `firstVisible`). 응답은 `isVisitorReviewsGraphqlRequestBody`(operationName `/visitorReviews/i` 또는 query 본문 `\bvisitorReviews\b`, 배치 배열 허용)를 통과한 `getVisitorReviews` 만 기다리고, 페이지별 `wireResponse.json()` 을 `paginationBodies` 로 누적 + 즉시 `parseVisitorReviewsFromCaptured([wireBody])` 배치로 `onVisitorBatch`. 종료 사유 `VisitorPaginationStopReason` 8종(`no_more`/`known_boundary`/`disabled`/`max_pages`/`button_missing`/`click_failed`/`response_missing`/`invalid_response`)과 `complete` 판정 — SSR 이 10건 미만이고 버튼이 없으면 자연 종료(`no_more`, complete), SSR 10건을 꽉 채웠는데 버튼이 없으면 DOM 변경 의심으로 **부분 완료**(`button_missing`). update 모드는 SSR 전부가 known 이어도 **최소 첫 wire 페이지까지 확인**(과거 부분 실패로 SSR 바로 아래에 미수집 gap 이 있을 수 있어서) 후 wire 배치가 100% known 일 때만 `known_boundary` 로 종료하고, 지연(jitter)은 다음 요청이 있을 때만 건다. 종료 후 `onVisitorPagination` 훅 1회 → [crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) 가 `logStep('paginating_visitor', complete ? info : warn, '리뷰 페이지네이션 완료|부분 완료', result)` + `done` 로그·`finishJobRun` meta 에 `visitorPagination`(pagesAttempted/pagesFetched/reviewsFetched/reason) 동봉 — **와이어 계약·DB 스키마 변경 없음**, 작업 실행 메타에 진단만 추가. (3) **정렬은 실제 방문일** — 신규 [packages/utils/src/reviewDate.ts](../../packages/utils/src/reviewDate.ts): `parseReviewVisitedAt(visitedAt, fetchedAt)` 가 ISO / `2026.8.15.토` / `2026년 8월 15일` / `26.8.15.토` / 연도 없는 Naver `8.15.토`(수집 시각의 **KST 연도** 복원, 미래면 전년 보정 — 1월 크롤의 `12.31.수`) 를 UTC 자정 timestamp 로, `compareReviewRecencyDesc` 가 방문일 desc → 해석 불가는 뒤로 + `fetchedAt` desc 폴백. 소비처: `restaurant.service` `assemblePublicReviews`(공개 상세·리뷰 목록 — DB 는 `fetchedAt desc` 로 읽고 최종 정렬)·어드민 상세, [restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) 규칙 주석("세 출처 합쳐서 방문일 desc, fetchedAt desc 폴백"), 웹 `AdminRestaurantDetailPage`(정렬 기본 `visitedAt-desc`, `fetchedAt-asc` → `fetchedAt-desc`)·`ActiveJobPanel`/`AdminCrawlTestPage`(SSE `visitor_batch` 캐시 머지 뒤 같은 비교자), 웹/앱 `HomeTab` 은 "reviewsFirstPage 가 방문일 최신순" 주석 한 줄. 회귀 테스트: 쿠폰 GraphQL 오인식([naver-place.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts)), 연도 생략·연말 보정·폴백([reviewDate.test.ts](../../packages/utils/src/reviewDate.test.ts)), update 신규 리뷰 선두 노출·방문일 없는 출처의 fetchedAt desc 폴백([restaurant.test.ts](../../apps/friendly/src/modules/restaurant/restaurant.test.ts)). 실데이터 검증: 유치회관 업데이트 리뷰 921 → 976(+55), 동일 재실행 +0, 7개 wire 페이지 뒤 `known_boundary` 종료. (4) `cc8399a` — [tabling.service.test.ts](../../apps/friendly/src/modules/crawl/tabling.service.test.ts) 의 가짜 `LlmProviderEnv.defaultModels` 가 5키(`meal-photo`·`meal-recommend`)로 — 배경은 [ai](ai.md).
 
 **2026-07-13 변경 흡수 — 정책 하드닝(감사 `bc2db00` 9차) + 어댑터 내로잉 통합(`0b3795b`)**: (1) diningcode 리뷰 페이지 루프에 totalPage **상한 200** — 업스트림 응답값 무상한 신뢰 제거(비정상 값이 무한 크롤로 이어지는 표면 차단). (2) diningcode bulk-save 에 **actor 당 활성 잡 1개 강제**(activeJobIdFor + 크래시 잡이 영구 차단하지 않게 30분 staleness 가드, 초과 409). (3) 10개 어댑터에 복사돼 있던 unknown JSON 내로잉 헬퍼(isObject 10벌/strOrNull 8벌/numOrNull 9벌 등)를 [lib/narrow.ts](../../apps/friendly/src/lib/narrow.ts) 로 통합 — strOrNull 은 시맨틱 2변종을 이름으로 분리(엄격 vs coerceStrOrNull), **의도적 로컬 유지 2곳**(subway-congestion trim 변형·naver-review-stats 콤마 numOrNull)은 주석으로 구분. diningcode-search 의 haversineM 도 @repo/utils 로(`edafb6a`).
 
@@ -23,7 +25,7 @@ aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, s
 
 **2026-05-25 변경 흡수 — Naver Playwright 어댑터 stealth + 더보기 jitter (429 우회) + visitor 캡처 dev 스크립트 3종**: [naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts) 가 기존 `playwright` 대신 `playwright-extra` + `puppeteer-extra-plugin-stealth` 로 launch — `chromium.use(StealthPlugin())` 한 줄로 `navigator.webdriver`, plugins, permissions, `chrome.runtime` 등 자동화 시그널을 일반 Chrome 처럼 위장해 네이버 anti-bot 우회. "더보기" 클릭 사이 지연도 고정 3s 에서 base 5s + random(0..3s) 랜덤 jitter (`CRAWL_VISITOR_PAGE_DELAY_MS` + `CRAWL_VISITOR_PAGE_DELAY_JITTER_MS`) 로 변경 — 실제 429 차단 사고 후 패턴 인식 회피 목적. catchtable 어댑터들은 자체 `playwright` import 그대로라 영향 받지 않음. 디버깅용 dev 스크립트 3종 신규: [dev-capture-visitor.ts](../../apps/friendly/scripts/dev-capture-visitor.ts) (헤디드 + 더보기 1회 클릭, 모든 JSON wire 응답 → `__debug__/after.json` + 파서 E2E 검증), [dev-fetch-visitor-html.ts](../../apps/friendly/scripts/dev-fetch-visitor-html.ts) (Playwright 없이 `fetch()` 한 번 + 차단 페이지 감지 + Apollo state 추출), [dev-open-visitor-page.ts](../../apps/friendly/scripts/dev-open-visitor-page.ts) (홈 진입 → 리뷰 탭 클릭 자연 흐름, `DEV_OPEN_STEALTH=0` 으로 stealth 끄고 비교).
 
-**2026-05-19 변경 흡수 — 잡 단계별 영속 로그 시스템 도입**: 신규 [job-log.service.ts](../../apps/friendly/src/modules/crawl/job-log.service.ts) 가 모든 크롤+요약 단계의 로그를 (1) pino, (2) `prisma.crawlJobLog` DB, (3) `jobRegistry` SSE + 조건부 `summaryEventsBus` fan-out 까지 한 호출에 흘려보낸다. 모노톤 `seq` 카운터로 같은 로그가 두 SSE 양쪽에 가도 `(jobId, seq)` 로 클라이언트 dedup. `CrawlEvent` zod union 에 신규 `'log'` variant 추가 (`CrawlLogLevel: info|warn|error`, `stage`, `message`, `meta?`, `seq`, `at`). `crawl.service.ts` 가 페이지 로드/리뷰 적재/오류 등 모든 단계를 `channel: 'crawl'` 로 흘리고, `summary.service.ts` 는 LLM 단계(`summary_queue`/`summary_run`/`summary_chunk`/`summary_retry`/`summary_failed`) 를 `channel: 'summary'` 로 흘려보내 같은 잡의 크롤+요약 로그가 한 패널에서 보인다. 잡 종료 후에도 DB 의 `CrawlJobLog` 가 살아남아 패널 재진입 시 전체 로그 복원, 같은 placeId 의 재크롤 누적 로그는 상세 페이지 "크롤 로그" 아코디언이 cursor pagination 으로 가져온다. 자세한 건 [friendly 토픽](./friendly.md) 의 CrawlJobLog 시스템 / Data 섹션 참조.
+**2026-05-19 변경 흡수 — 잡 단계별 영속 로그 시스템 도입** (역사 기록 — `job-log.service.ts` 는 이후 [logs](logs.md) 의 `OperationLogService` 로 일반화되며 삭제됐다): 신규 `job-log.service.ts` 가 모든 크롤+요약 단계의 로그를 (1) pino, (2) `prisma.crawlJobLog` DB, (3) `jobRegistry` SSE + 조건부 `summaryEventsBus` fan-out 까지 한 호출에 흘려보낸다. 모노톤 `seq` 카운터로 같은 로그가 두 SSE 양쪽에 가도 `(jobId, seq)` 로 클라이언트 dedup. `CrawlEvent` zod union 에 신규 `'log'` variant 추가 (`CrawlLogLevel: info|warn|error`, `stage`, `message`, `meta?`, `seq`, `at`). `crawl.service.ts` 가 페이지 로드/리뷰 적재/오류 등 모든 단계를 `channel: 'crawl'` 로 흘리고, `summary.service.ts` 는 LLM 단계(`summary_queue`/`summary_run`/`summary_chunk`/`summary_retry`/`summary_failed`) 를 `channel: 'summary'` 로 흘려보내 같은 잡의 크롤+요약 로그가 한 패널에서 보인다. 잡 종료 후에도 DB 의 `CrawlJobLog` 가 살아남아 패널 재진입 시 전체 로그 복원, 같은 placeId 의 재크롤 누적 로그는 상세 페이지 "크롤 로그" 아코디언이 cursor pagination 으로 가져온다. 자세한 건 [friendly 토픽](./friendly.md) 의 CrawlJobLog 시스템 / Data 섹션 참조.
 
 ## Purpose [coverage: high — 6 sources]
 
@@ -56,6 +58,18 @@ aliases: [job-log, crawl-job-log, job-log-service, log-channel, log-seq-dedup, s
 ### 더보기 jitter (랜덤 지연)
 
 `computeVisitorPageDelay()` 가 매 클릭마다 `VISITOR_PAGE_DELAY_MS` (기본 5000) + `Math.floor(Math.random() * VISITOR_PAGE_DELAY_JITTER_MS)` (기본 3000) 를 계산. 결과적으로 5~8초 사이 랜덤 — 고정 3s 대비 패턴 인식 회피. 이전 글의 "3s 정적 지연" 흐름은 더 이상 없음. env 로 둘 다 조정 가능 (`CRAWL_VISITOR_PAGE_DELAY_MS` / `CRAWL_VISITOR_PAGE_DELAY_JITTER_MS`). jitter=0 이면 비활성 (고정 cadence).
+
+### Naver 방문자 리뷰 페이지네이션 경계 (2026-08-17)
+
+`fetchVisitorReviewsViaSubpage` 의 더보기 루프가 "리뷰 섹션 안의 정확한 페이저 + `getVisitorReviews` 응답" 만 신뢰하도록 재작성됐다(`0d72380`):
+
+- **버튼 탐색 2단계** — `findVisitorReviewSection(page)`: `h2.place_section_header` 중 텍스트가 `(방문자 )?리뷰 N` 패턴인 헤더의 조상 `div.place_section`; 헤더 문구가 바뀔 수 있어 폴백은 리뷰어 프로필 링크를 가진 `ul:has(> li.place_apply_pui)` 의 조상 섹션. `findVisitorReviewMoreButton(page)`: 섹션의 `:scope > .place_section_content + div`(페이저 셸) 안 `getByRole('button', { name: /^(?:펼쳐서\s*)?(?:리뷰\s*)?더보기$/ })` 를 우선, 없으면 섹션 안 exact name 폴백 — 둘 다 `firstVisible`. 개별 리뷰 본문의 "더보기" 나 다른 섹션의 "펼쳐서 더보기" 는 구조적으로 배제된다.
+- **응답 가드** — `page.waitForResponse` 조건에 `isVisitorReviewsGraphqlPostData(res.request().postData())` 추가. 순수 함수 `isVisitorReviewsGraphqlRequestBody(body)` 는 단일/배치 GraphQL 본문에서 `operationName` 이 `/visitorReviews/i` 이거나 `query` 문자열에 `\bvisitorReviews\b` 가 있으면 true(`__test_` export). timeout 7s.
+- **페이지 루프 상태** — `pagesAttempted`(클릭 성공 수) / `pagesFetched`(파싱 성공 페이지) / `reviewsFetched`(SSR 초기 `ssrInitialCount` + wire 누적) / `paginationReason` / `paginationComplete`. 루프 조건은 `pagesFetched < VISITOR_MAX_PAGES`(`CRAWL_VISITOR_MAX_PAGES`, 기본 **100**; 0 이면 `disabled`). 각 페이지의 body 는 `paginationBodies` 에 쌓여 마지막 `parseVisitorReviewsFromCaptured([...captured, ...paginationBodies], seenIds)` 에도 합류하고, 그 자리에서 `parseVisitorReviewsFromCaptured([wireBody], pageBatchSeenIds)` 로 배치를 만들어 `onVisitorProgress(reviewsFetched, pagesFetched)` + `onVisitorBatch(batch)` 를 즉시 emit(파싱 결과 0건이면 `invalid_response` 로 중단).
+- **update 모드 경계** — `reviewBatchIsKnown(batch, existingReviewKeys)`: 배치의 모든 리뷰가 `externalId` 또는 `contentHash` 로 기존 키에 있으면 `known_boundary`(complete=true). SSR 10건이 전부 known 이어도 첫 wire 페이지는 반드시 본다 — 과거 부분 실패로 SSR 바로 아래에 미수집 gap 이 남아 있을 수 있어서. 경계에서는 jitter 없이 즉시 종료, 계속 진행할 때만 `computeVisitorPageDelay()`(5~8s).
+- **결과 훅** — `onVisitorPagination({ complete, reason, pagesAttempted, pagesFetched, reviewsFetched })` 를 페이저 종료 후 정확히 1회. `complete=false` 는 "초기/신규 페이지는 쓸 수 있지만 기존 리뷰 경계까지 전부 소비했음을 증명 못 함" 의미(`button_missing`/`click_failed`/`response_missing`/`invalid_response`/`max_pages`).
+
+`crawl.service.ts` 는 이 훅으로 `paginating_visitor` 단계에 info(완료)/warn(부분 완료) 로그를 남기고 `done` 로그·OperationRun meta 에 `visitorPagination` 을 그대로 싣는다 — 어드민이 "왜 리뷰가 덜 들어왔나" 를 run 상세에서 사유 코드로 본다. 앞선 구현의 `consecutiveFailures >= 2` 휴리스틱과 "아무 GraphQL 응답이나 새 응답 수로 세던" 카운팅은 제거됐다.
 
 ### Naver /menu/list 메뉴 그룹 크롤 (2026-06-27)
 
@@ -103,7 +117,7 @@ place 홈 페이지 Apollo state 만 보던 `extractMenus` 는 메뉴판 전체�
 
 ### 5가지 잡 패턴
 
-1. **단일 Naver 크롤 (SSE)** — `POST /naver-place` → 백그라운드 `runJob` → `persistTail` 체인으로 `onPartial`/`onVisitorBatch` 직렬 영속화 → SSE `progress`/`partial`/`visitor_progress`/`visitor_batch`/`done` 이벤트. JobRegistry 가 actor 단위 max 5 + FIFO 큐 관리 (자동 발견 잡의 group-of-5 동시 시작과 맞춤). `done` 직전 `tryAutoMatchDiningcode` fire-and-forget.
+1. **단일 Naver 크롤 (SSE)** — `POST /naver-place` → 백그라운드 `runJob` → `persistTail` 체인으로 `onPartial`/`onVisitorBatch` 직렬 영속화 → SSE `progress`/`partial`/`visitor_progress`/`visitor_batch`/`done` 이벤트. JobRegistry 가 actor 단위 max 5 + FIFO 큐 관리 (자동 발견 잡의 group-of-5 동시 시작과 맞춤). update 모드는 `existingReviewKeys`(externalId·contentHash 집합)를 어댑터에 넘겨 `known_boundary` 에서 멈추고, 어댑터의 `onVisitorPagination` 결과를 `paginating_visitor` 로그 + run meta `visitorPagination` 으로 남긴다(2026-08-17). `done` 직전 `tryAutoMatchDiningcode` fire-and-forget.
 2. **Naver/캐치테이블/다이닝코드/테이블링 검색 (동기)** — `searchPlaces` / `searchCatchtable` / `searchDiningcode` / `searchTabling` 가 어댑터 호출 후 한 번에 반환. 잡 모델 없음.
 3. **단일 다이닝코드/테이블링 가게 저장 (동기)** — `POST /diningcode/shop/:vRid/save` 또는 `/tabling/shop/:idx/save` → fetch → 리뷰 전 페이지 직렬 fetch(페이지 간 200ms) → upsert → `generateProposalsForRestaurant` → review 매핑 → `persistReviewBatch` → `queueSummariesForReviews`. 테이블링은 추가로 좌표 기반 로컬 자동매칭 + place↔partner 승격을 **동기**로 수행해 결과를 응답에 싣는다. 응답은 fetch 가 다 끝나야 200 — 평균 가게당 수 초.
 4. **다이닝코드 일괄 저장 (SSE)** — `POST /diningcode/bulk-save/jobs` (body.vRids[]) → `diningcodeBulkSaveRegistry.create()` → 백그라운드 `runDiningcodeBulkSave` → vRid 직렬 loop. SSE `snapshot`/`item`/`done` named-event.
@@ -161,11 +175,12 @@ Naver 단일 크롤이 `done` 직전, `generateProposalsForRestaurant` 와 별�
 - **테이블링** — HTTP 직접, 무인증. REST host `mobile-v2-api.tabling.co.kr`: `POST /v1/search/restaurants/map`(검색), `GET /v1/restaurant/:idx`/`/menu`/`/review`(상세·메뉴·리뷰). 웹 host `www.tabling.co.kr`: `GET /place/:objectId`(미입점 HTML JSON-LD), `GET /sitemap-shop.xml`·`/sitemap-place-{1..5}.xml`(발견). 모두 토큰/쿠키 불필요, CORS 열림. `Referer`/`Origin: https://www.tabling.co.kr` + (검색) `app-platform:WEB`/`app-version:4.11.0` 헤더 동봉(정합성용).
 - **Naver Review Stats** — `naver-review-stats.http.adapter.ts` 가 `POST https://api.place.naver.com/graphql` `getVisitorReviewStats` 직접 호출. `x-wtm-graphql` 헤더 필수. 검색 카드 보강 — best-effort null.
 - **api-contract 스키마** — `packages/api-contract/src/schemas/crawl.ts` 에 zod 정의. 기존 Naver/캐치테이블/다이닝코드 외 **테이블링 추가**: `TablingShopData`/`TablingShopReview`/`TablingShopReviewsSection`/`TablingShopReviewsResponse`, `TablingPlaceData`, `TablingMenu(Category)`/`TablingBusinessDay`/`TablingRatingItem`/`TablingServiceFlags`, `SaveTablingShopResult`/`SaveTablingPlaceResult`, `TablingSearchQuery`/`TablingSearchResult`/`TablingSearchResponse`/`TablingSearchSort`, `TablingDiscoverQuery`/`TablingDiscoverResult`, `TablingRegisteredQuery`/`TablingRegisteredResult`, `TablingBulkSaveJobInput`/`TablingBulkSaveJobSnapshot`/`TablingBulkSaveJobItem`(+item/done 이벤트). `routes.ts` 의 `Crawl` namespace 에 `tablingSearch`/`tablingShop`/`tablingShopReviews`/`tablingShopSave`/`tablingPlaceSave`/`tablingRegistered`/`tablingDiscover`/`tablingBulkSaveJobs`/`tablingBulkSaveJob`/`tablingBulkSaveJobEvents` 추가. **2026-06-27**: `MenuGroup`/`MenuGroupItem`(MenuGroupItem = MenuItem.extend + `sourceMenuId?`/`sortOrder?`; MenuGroup = `source`/`sourceGroupId?`/`name`/`sortOrder?`/`menus[]`) 추가 + `NaverPlaceData.menuGroups`(optional) 노출.
-- **RestaurantService** — `upsertRestaurantFromCrawl` (네이버), `upsertRestaurantFromDiningcode`, `upsertRestaurantFromTabling`/`upsertRestaurantFromTablingPlace`, `findByPlaceId`, `getExistingReviewKeys`, `clearReviewsAndSummaries`, `persistReviewBatch`, `findRegisteredDiningcodeByVRids`/`findRegisteredTablingByIdxs`, `getCanonicalIdForRestaurant`, `getCanonicalCoreForAutoMatch`, `findCanonicalAutoMatchCandidates`, `findTablingCanonicalsNear`, `getDiningcodeReviewSummaryMap`/`getTablingReviewSummaryMap`, 정적 `mapDiningcodeReviewToRaw`/`mapTablingReviewToRaw`.
+- **RestaurantService** — `upsertRestaurantFromCrawl` (네이버), `upsertRestaurantFromDiningcode`, `upsertRestaurantFromTabling`/`upsertRestaurantFromTablingPlace`, `findByPlaceId`, `getExistingReviewKeys`(update 모드 경계용 externalId·contentHash 집합), `clearReviewsAndSummaries`, `persistReviewBatch`, `findRegisteredDiningcodeByVRids`/`findRegisteredTablingByIdxs`, `getCanonicalIdForRestaurant`, `getCanonicalCoreForAutoMatch`, `findCanonicalAutoMatchCandidates`, `findTablingCanonicalsNear`, `getDiningcodeReviewSummaryMap`/`getTablingReviewSummaryMap`, 정적 `mapDiningcodeReviewToRaw`/`mapTablingReviewToRaw`. 읽기 쪽 `assemblePublicReviews`·어드민 상세는 세 출처 리뷰를 합친 뒤 `compareReviewRecencyDesc`(`@repo/utils`) 로 **실제 방문일 최신순** 정렬(2026-08-17 — 크롤 저장 순서(`fetchedAt`)에 더는 의존하지 않는다).
+- **`@repo/utils` `reviewDate.ts`** — `parseReviewVisitedAt` / `compareReviewRecencyDesc`. 출처별 방문일 형식(ISO·`YY.M.D.요일`·`YYYY년 M월 D일`·연도 없는 Naver `M.D.요일`)을 서버·웹이 같은 규칙으로 정규화 — 웹 어드민 상세·크롤 테스트 페이지·활성 잡 패널이 SSE 배치 머지 후 같은 비교자를 쓴다.
 - **SummaryService** — `queueSummariesForReviews(key, ids, jobId?, _, parentRunId?)`. Naver 는 `placeId`, 다이닝코드는 `'dc:<vRid>'`, 테이블링은 `'tb:<idx>'` 키 — 같은 SummaryService 풀 안에서 키 namespace 분리. 요약 종료 시 review-search enrich + 군집화를 자동 트리거(아래 enrich 후크).
 - **review-search enrich + review-clustering (간접)** — 백그라운드 크롤이 리뷰를 적재·요약 큐잉하면, 요약 종료 훅([plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts))이 `reviewSearch` enrich → `reviewClustering` 군집화를 자동 호출한다. crawl 모듈은 트리거(요약 큐잉)만 하고, 실제 enrich 와이어링은 summaries 플러그인 — 상세는 [logs](logs.md) / review-search·review-clustering 토픽.
 - **ProposalService (CanonicalService)** — `proposals.generateForCanonical(canonicalId)` — 등록 직후 cross-source 후보 적재 후크. null 주입 가능 (테스트용). `canonical.merge(drop, keep)` 가 자동매칭/승격의 머지 실행자.
-- **OperationLogService** — `startRun`/`log`/`finishRun` + **`allocSeq()`** 단일 seq 발급기(SSE seq 단일화의 핵심). crawl run·step 로그 + 잡 단위 영속 로그(operation_logs, 레거시 crawl_job_logs 백필).
+- **OperationLogService** — `startRun`/`log`/`finishRun` + **`allocSeq()`** 단일 seq 발급기(SSE seq 단일화의 핵심). crawl run·step 로그 + 잡 단위 영속 로그(operation_logs, 레거시 crawl_job_logs 백필). Naver 잡의 `done` run meta 에 `durationMs`/`reviewCount`/`restaurantId` 와 함께 **`visitorPagination`**(`{ complete, reason, pagesAttempted, pagesFetched, reviewsFetched }`)이 실린다(2026-08-17) — 부분 완료는 `paginating_visitor` 단계 warn 로그로도 남는다.
 - **JobRegistry / DiningcodeBulkSaveRegistry / TablingBulkSaveRegistry singleton** — 셋 다 모듈 스코프 인스턴스를 라우트와 서비스가 공유.
 - **auto-discover 컨슈머** — [auto-discover](auto-discover.md) 잡이 그룹 5병렬로 `CrawlService.startCrawl` 을 호출하고 같은 jobRegistry 의 SSE 스트림(`progress`/`done`)을 await. `MAX_CONCURRENT_PER_ACTOR = 5` 가 이 그룹 크기와 맞춰져 있어 큐잉 없이 그룹이 동시에 active 로 진입.
 
@@ -278,8 +293,13 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 
 `CatchtableShopData` — `shopRef`/`alias`/`shopName`/`shopNameEn`, `category`, `landName`, `serviceDesc`, `address`/`addressDetail`/`lat`/`lon`, `subways[]`, `phone`, `images[]`, `priceRange`, `review`(averageScore + food/ambience/serviceScore), `schedule`, `disableDays[]`, `awardItems[]`, `relatedKeywords[]`, `bookmarkCount`, contract 플래그, lazy `menus`/`reviewSamples`.
 
+### Naver 리뷰 페이지네이션 진단 (run meta)
+
+`OperationRun.meta.visitorPagination`(`done` 로그에도 동일) — `{ complete: boolean, reason: VisitorPaginationStopReason, pagesAttempted, pagesFetched, reviewsFetched }`. 테이블·컬럼 추가 없이 기존 run meta JSON 에 실린다(2026-08-17). `reason` 8종: `no_more`(자연 종료) / `known_boundary`(update 경계) / `disabled`(`CRAWL_VISITOR_MAX_PAGES=0`) / `max_pages` / `button_missing` / `click_failed` / `response_missing` / `invalid_response` — 앞 둘만 `complete=true`.
+
 ### 상한
 
+- Naver 방문자 리뷰 더보기 `CRAWL_VISITOR_MAX_PAGES`(기본 100, 0 = 페이지네이션 끔), `getVisitorReviews` 응답 대기 7s, 클릭 3s(+DOM `click()` 폴백), 페이지 간 지연 `CRAWL_VISITOR_PAGE_DELAY_MS` 5000 + jitter 3000.
 - 테이블링 검색 pageSize 1~100(기본 20), `distance:700` 고정, `SEARCH_DISTANCE` 모드 스위치.
 - 테이블링 리뷰 페이지 크기 `CRAWL_TABLING_REVIEW_PAGE_SIZE`(기본 20), 일괄 저장 안전 상한 200페이지, 페이지 간 200ms.
 - 테이블링 일괄 저장 input idx 1~50개, 잡 TTL 10분.
@@ -289,8 +309,11 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - 다이닝코드 일괄 저장 input vRid 1~50개, TTL 10분, 페이지 간 200ms, fetch timeout 8초.
 - 캐치테이블 검색 limit 1~30, 첫 호출 timeout 30s, networkidle 12s; 상세 lazy settle 2.5s.
 
-## Key Decisions [coverage: high — 19 sources]
+## Key Decisions [coverage: high — 23 sources]
 
+- **2026-08-17: 리뷰 페이지네이션은 "리뷰 섹션 안의 정확한 페이저 + `getVisitorReviews` 응답" 만 믿는다** — 전역 `더보기` 텍스트 매칭의 `last()` 와 "아무 GraphQL POST" 대기는 네이버가 리뷰 아래에 다른 섹션의 펼침 버튼과 쿠폰 쿼리를 깔면서 둘 다 오탐이 됐고, 그 결과가 "첫 SSR 10건만 저장" 이라는 조용한 누락이었다. 구조(섹션 → 페이저 셸 → exact name)와 요청 본문(operationName/query)으로 범위를 좁히고, 못 찾으면 추측 클릭 대신 **사유 코드로 부분 완료를 선언**한다(`VisitorPaginationStopReason` + run meta). 완료를 증명할 수 없을 때 조용히 done 이 되던 것을 없앤 게 핵심 — 데이터는 쓰되(`complete=false` 여도 초기/신규 페이지는 저장) 상태는 정직하게.
+- **2026-08-17: update 모드 경계는 SSR 이 아니라 wire 배치로 판단** — SSR 10건이 전부 known 이어도 그 아래에 과거 부분 실패의 미수집 gap 이 있을 수 있어, 최소 첫 wire 페이지까지 보고 wire 배치가 100% known 일 때만 `known_boundary`. 경계 도달 시 jitter 없이 즉시 종료(요청이 더 없으니 anti-rate-limit 지연이 무의미). 실측: 유치회관 921 → 976(+55) 후 재실행 +0, 7 페이지에서 경계 종료.
+- **2026-08-17: 리뷰 정렬 키는 `fetchedAt` 이 아니라 실제 방문일(연도 복원 포함)** — "크롤러가 최신순으로 받아 순서대로 저장하니 `fetchedAt asc = 최신순`" 이라는 가정은 최초 크롤에서만 참이고, update 배치가 붙는 순간 신규 리뷰가 뒤로 밀린다. Naver 는 올해 리뷰에서 연도를 생략하므로 수집 시각의 KST 연도로 복원(1월의 `12.31` 은 전년)하고, 해석 불가만 `fetchedAt desc` 폴백. 파서를 `@repo/utils` 에 승격해 서버 응답·웹 어드민 정렬·SSE 캐시 머지가 **한 비교자**를 공유 — DB 스키마·공개 계약은 그대로(`visitedAt` 원문 유지).
 - **Naver 메뉴는 `/menu/list` 서브페이지에서 그룹째로** — 홈 Apollo state 의 `extractMenus` 는 메뉴판을 다 못 담아 발견 누락이 잦았다. 메뉴 전용 서브페이지를 "펼쳐서 더보기" 펼친 뒤 `PlaceDetail_BaeminMenuGroup` 를 파싱해 원본 그룹/정렬/출처 보존. 네이버 메뉴 데이터가 배민(Baemin) 메뉴 연동으로 들어와 Apollo typename 이 `Baemin*` — source 상수도 `'naver-baemin'`. flat `menus` 는 `flattenMenuGroups` 로 '대표메뉴' 중복 뺀 평탄화, 성공 시 홈 추출 대체·실패 시 폴백(best-effort — 크롤은 항상 완료). 영속·병합·표시는 [menu-grouping](menu-grouping.md).
 - **테이블링은 무인증 REST — 다이닝코드와 같은 순수 HTTP 어댑터** — `mobile-v2-api.tabling.co.kr` 가 웹·앱 공유 백엔드인데 토큰/쿠키 불필요 + CORS 열림이라 Playwright 불필요(캐치테이블 CF 와 대비). 좌표가 응답에 number/string 으로 들어와 머지에 그대로 쓸 수 있다. 근거 문서 `docs/research/tabling-crawl-feasibility.md`.
 - **테이블링 검색 `distance:700` 은 반경이 아니라 모드 스위치** — 좌표 없이 distance 키를 실으면 ES 가 "내주변 추천" 을 끄고 키워드 관련성 정렬로 전환. 없으면 키워드를 거의 무시. 공식 웹 검색창 고정 기본값을 그대로 차용. (조사 초기 GET 만 시도해 404 → "검색 API 없음" 오판했으나 실제는 POST.)
@@ -312,8 +335,13 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - **캐치테이블 fallback/keywordSearch/warm page** — `totalShopCount >= 10000` 이면 fallback(16849 고정), `keywordSearch.keyword` 필수, warm page 첫 호출 ~14s 이후 ~200-900ms.
 - **DC/테이블링 bulk save TTL 10분** — Naver 잡(5분)보다 길게(`FINISHED_TTL_MS = 10 * 60_000`).
 
-## Gotchas [coverage: high — 15 sources]
+## Gotchas [coverage: high — 19 sources]
 
+- **리뷰 페이저 탐색은 네이버 DOM 클래스에 묶여 있다** — `h2.place_section_header`(텍스트 `리뷰 N`) / `li.place_apply_pui` + `/my/…/review` 프로필 링크 / `.place_section_content + div` 페이저 셸. 네이버가 마크업을 바꾸면 리뷰 요청이 안 나가고 `button_missing`(SSR 10건 꽉 찼는데 버튼 없음) 부분 완료로 떨어진다 — 크롤은 done 이지만 run meta `visitorPagination.complete=false`. 재발 시 `dev-capture-visitor.ts` 로 wire 를 떠서 셀렉터부터 확인. SSR 이 10건 미만이면 버튼이 없어도 자연 종료(`no_more`)로 본다.
+- **`getVisitorReviews` 가 아닌 GraphQL 은 페이지로 세지 않는다** — 쿠폰(`getUnifiedCoupons`)·리액션 쿼리가 먼저 오면 예전엔 "새 응답 있음" 으로 페이지를 올렸다. 이제 요청 본문을 검사하므로 7s 안에 진짜 리뷰 응답이 없으면 `response_missing` 으로 중단 — 네이버가 operationName 을 바꾸면(`visitorReviews` 문자열이 사라지면) 같은 사유로 멈춘다.
+- **연도 없는 방문일은 `fetchedAt` 없이는 정렬 불가** — `parseReviewVisitedAt('8.15.토')` 는 기준 시각이 없으면 `null`. 서버·웹은 항상 `fetchedAt` 을 같이 넘기지만, 새 호출처가 `visitedAt` 만 넘기면 전부 폴백 정렬(수집 순)로 조용히 퇴화한다. 잘못된 날짜(`2.30`)도 `null`.
+- **정렬 옵션 `fetchedAt-asc` 는 사라졌다** — 어드민 상세의 기본이 `visitedAt-desc`, 수집순은 `fetchedAt-desc` 만 남았다. "최초 크롤 순서 = 최신순" 을 전제로 한 UI/테스트 가정(`bb9cd41` 시절 asc 교정)은 모두 폐기 — 공개 상세 테스트도 방문일 없는 출처는 최근 수집이 먼저(Naver 2/1 > DC 1/15)로 뒤집혔다.
+- **`CRAWL_VISITOR_MAX_PAGES` 기본 100** — 도달하면 `max_pages`(complete=false). 리뷰 1,000건 이상 가게의 최초 크롤은 여기서 잘리고, 다음 update 가 `known_boundary` 전까지 이어받는다(이때 SSR-아래 gap 규칙이 필요한 이유).
 - **`/menu/list` 추출은 배민 typename 의존 — 깨질 수 있음** — `PlaceDetail_BaeminMenuGroup:` prefix + `menus` 배열 모양에 묶여 있어 네이버가 메뉴 스키마를 바꾸면 그룹이 빈다. 그래도 `extractMenus`(홈) 폴백 + best-effort 라 크롤 자체는 안 막힌다. "펼쳐서 더보기" 는 최대 10회만 클릭 — 초대형 메뉴판은 잘릴 수 있음.
 - **flat `menus` 에서 '대표메뉴' 그룹은 빠진다** — 실제 카테고리 그룹이 하나라도 있으면 `flattenMenuGroups` 가 '대표메뉴'(중복 노출)를 제거. 원본 그룹은 `menuGroups` 에 그대로 남으므로 대표메뉴 자체가 필요하면 flat 이 아니라 그룹을 봐야 함.
 - **테이블링 리뷰 페이지네이션은 `lastIdx`, `cursorId` 아님** — `fetchTablingShopReviews` 가 직전 페이지 마지막 리뷰의 `idx`(ObjectId)를 `lastIdx` 파라미터로 넘긴다. 리뷰 응답의 `cursorId` 필드는 페이지네이션 토큰이 아니므로 헷갈리면 무한 첫 페이지. 응답이 `REVIEW_PAGE_SIZE` 만큼 차야 nextCursor 반환.
@@ -333,19 +361,32 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - **DC/테이블링 bulk save SSE 인증** — EventSource 가 헤더 못 실어 `?token=<jwt>` 수락. 본인 잡(`actorId === userId`) + `role === 'ADMIN'` 만 통과. registry `get(id, actorId)` 가 actor 미스매치면 null → 404.
 - **Naver Search 어댑터 이행** — `naver-search.playwright.adapter.ts` 사라지고 `naver-search.http.adapter.ts` 로 nx-api GraphQL 직접 호출(`source: 'http'`). reviewCount 는 `visitorReviewCount`(visitor) → `blogCafe`(total) → `reviewCount` 폴백 순. `CrawlSearchResult.source` enum 의 `'playwright'` 는 backward-compat.
 
-## Sources [coverage: high — 29 sources]
+## Sources [coverage: high — 42 sources]
 
+- [apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts) (2026-08-17 — `getVisitorReviews` 응답 가드 회귀)
+- [packages/utils/src/reviewDate.ts](../../packages/utils/src/reviewDate.ts) (신규 2026-08-17 — `parseReviewVisitedAt`/`compareReviewRecencyDesc`)
+- [packages/utils/src/reviewDate.test.ts](../../packages/utils/src/reviewDate.test.ts) (신규 — 연도 생략·연말 보정·폴백)
+- [packages/utils/src/index.ts](../../packages/utils/src/index.ts) (barrel — `reviewDate` re-export)
+- [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) (`assemblePublicReviews`·어드민 상세 — 방문일 최신순)
+- [apps/friendly/src/modules/restaurant/restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) (리뷰 머지 규칙 주석 — 방문일 desc, fetchedAt desc 폴백)
+- [apps/friendly/src/modules/restaurant/restaurant.test.ts](../../apps/friendly/src/modules/restaurant/restaurant.test.ts) (update 신규 리뷰 선두·fetchedAt desc 폴백 회귀)
+- [packages/api-contract/src/schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts) (`reviewsFirstPage` 정렬 주석 — 계약 모양 변경 없음)
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) (정렬 `visitedAt-desc` 기본, `fetchedAt-asc` 제거)
+- [apps/web/src/routes/admin/AdminCrawlTestPage.tsx](../../apps/web/src/routes/admin/AdminCrawlTestPage.tsx) (SSE `visitor_batch` 캐시 머지 후 `compareReviewRecencyDesc`)
+- [apps/web/src/components/restaurant/ActiveJobPanel.tsx](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx) (동일)
+- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) (주석 — reviewsFirstPage 방문일 최신순)
+- [apps/mobile/src/components/restaurantDetail/HomeTab.tsx](../../apps/mobile/src/components/restaurantDetail/HomeTab.tsx) (앱 — 동일 주석)
 - [apps/friendly/scripts/probe-menu-extraction.ts](../../apps/friendly/scripts/probe-menu-extraction.ts)
 - [apps/friendly/scripts/probe-menu-storage.ts](../../apps/friendly/scripts/probe-menu-storage.ts)
 - [apps/friendly/scripts/probe-naver-menu-methods.ts](../../apps/friendly/scripts/probe-naver-menu-methods.ts)
 - [apps/friendly/src/modules/crawl/crawl.route.ts](../../apps/friendly/src/modules/crawl/crawl.route.ts)
-- [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts)
+- [apps/friendly/src/modules/crawl/crawl.service.ts](../../apps/friendly/src/modules/crawl/crawl.service.ts) (2026-08-17 — `onVisitorPagination` 로그·run meta `visitorPagination`)
 - [apps/friendly/src/modules/crawl/job-registry.ts](../../apps/friendly/src/modules/crawl/job-registry.ts)
-- [apps/friendly/src/modules/crawl/job-log.service.ts](../../apps/friendly/src/modules/crawl/job-log.service.ts)
+- [apps/friendly/src/modules/logs/operation-log.service.ts](../../apps/friendly/src/modules/logs/operation-log.service.ts) (crawl 의 옛 `job-log.service.ts` 를 일반화한 `OperationLogService` — 원 파일은 삭제됨, [logs](logs.md))
 - [apps/friendly/src/modules/crawl/diningcode-bulk-save-registry.ts](../../apps/friendly/src/modules/crawl/diningcode-bulk-save-registry.ts)
 - [apps/friendly/src/modules/crawl/tabling-bulk-save-registry.ts](../../apps/friendly/src/modules/crawl/tabling-bulk-save-registry.ts)
 - [apps/friendly/src/modules/crawl/url-normalizer.ts](../../apps/friendly/src/modules/crawl/url-normalizer.ts)
-- [apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts)
+- [apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts) (2026-08-17 — 리뷰 섹션 스코프 페이저·`getVisitorReviews` 응답 가드·`VisitorPaginationResult`)
 - [apps/friendly/src/modules/crawl/adapters/naver-search.http.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-search.http.adapter.ts)
 - [apps/friendly/src/modules/crawl/adapters/naver-review-stats.http.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-review-stats.http.adapter.ts)
 - [apps/friendly/src/modules/crawl/adapters/naver-review-stats.http.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/naver-review-stats.http.adapter.test.ts)
@@ -360,7 +401,7 @@ Fastify `onClose` 훅이 `closeBrowser()` + `closeCatchtableSearchBrowser()` + `
 - [apps/friendly/src/modules/crawl/adapters/tabling-place.http.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/tabling-place.http.adapter.test.ts)
 - [apps/friendly/src/modules/crawl/adapters/tabling-sitemap.http.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/tabling-sitemap.http.adapter.ts)
 - [apps/friendly/src/modules/crawl/adapters/tabling-sitemap.http.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/tabling-sitemap.http.adapter.test.ts)
-- [apps/friendly/src/modules/crawl/tabling.service.test.ts](../../apps/friendly/src/modules/crawl/tabling.service.test.ts)
+- [apps/friendly/src/modules/crawl/tabling.service.test.ts](../../apps/friendly/src/modules/crawl/tabling.service.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처)
 - [apps/friendly/src/modules/crawl/crawl.test.ts](../../apps/friendly/src/modules/crawl/crawl.test.ts)
 - [packages/api-contract/src/schemas/crawl.ts](../../packages/api-contract/src/schemas/crawl.ts)
 - [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts)

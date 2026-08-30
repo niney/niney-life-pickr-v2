@@ -1,12 +1,22 @@
 ---
 topic: shared
-last_compiled: 2026-08-17
-sources_count: 86
+last_compiled: 2026-08-30
+sources_count: 120
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds, busApi, bus-api, useBusStationSearch, useBusNearbyStations, useBusStationsRefresh, useBusStationArrivals, useBusPositions, useBusRouteDetail, busFavoriteApi, useBusFavorites, busFavoriteStore, useBusFavoriteStore, setBusFavoriteStorage, bus-favorites, 버스즐겨찾기, guest-server-hybrid-favorites, bus-favorites-v1, BUS_FAVORITES_MAX, refetchIntervalInBackground, arsId-guard, 버스폴링, subwayApi, subway-api, useSubwayStationSearch, useSubwayNearbyStations, useSubwayStationArrivals, useSubwayLineDetail, useSubwayLinePositions, useSubwayTimetable, useSubwayCongestion, useSubwayPath, subwayFavoriteApi, useSubwayFavorites, subwayFavoriteStore, useSubwayFavoriteStore, setSubwayFavoriteStorage, SUBWAY_FAVORITES_MAX, subway-favorites, 지하철즐겨찾기, subway-favorites-v1]
+aliases: [react-query, zustand, design-tokens, ui-primitives, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds, busApi, bus-api, useBusStationSearch, useBusNearbyStations, useBusStationsRefresh, useBusStationArrivals, useBusPositions, useBusRouteDetail, busFavoriteApi, useBusFavorites, busFavoriteStore, useBusFavoriteStore, setBusFavoriteStorage, bus-favorites, 버스즐겨찾기, guest-server-hybrid-favorites, bus-favorites-v1, BUS_FAVORITES_MAX, refetchIntervalInBackground, arsId-guard, 버스폴링, subwayApi, subway-api, useSubwayStationSearch, useSubwayNearbyStations, useSubwayStationArrivals, useSubwayLineDetail, useSubwayLinePositions, useSubwayTimetable, useSubwayCongestion, useSubwayPath, subwayFavoriteApi, useSubwayFavorites, subwayFavoriteStore, useSubwayFavoriteStore, setSubwayFavoriteStorage, SUBWAY_FAVORITES_MAX, subway-favorites, 지하철즐겨찾기, subway-favorites-v1, airQualityApi, air-quality-api, useAirQuality, useAirSidoRealtime, useAirStationHistory, useAirNearbyStations, useAirStations, useAirForecast, useAirWeeklyForecast, useAirBadStations, useAirStationSearch, airLocationApi, useAirLocation, airLocationStore, useAirLocationStore, setAirLocationStorage, air-location-v1, 내대기위치, 내위치하이브리드, weatherApi, weather-api, useWeather, useWeatherNowcast, useWeatherForecast, useWeatherMid, useWeatherMidSea, useWeatherAws, useWeatherVersions, weatherDaily, mergeDailyRows, WeatherDailyRow, weatherMessages, weatherUpstreamMessage, 열흘병합, useMyLocationGlance, MyLocationGlance, GLANCE_RAIN_POP_THRESHOLD, GLANCE_AIR_RADIUS_M, 내위치한눈에, 상단바칩, lifeMapApi, life-map-api, useLifeMap, useLifeMapPoints, useLifeMapNearby, useLifeMapSearch, useLifeMapDetail, useLifeMapStatus, lifeMapFiltersKey, LifeMapFilterParams, 일상지도훅, foodApi, food-api, useFood, useFoodSearch, useFoodRestaurants, useFoodAdminList, useFoodImportRunEvents, buildFoodImportRunEventsUrl, buildFoodAdminListQuery, mealApi, meal-api, useMeal, useMealEntries, useInfiniteMealEntries, useMealCalendar, useMealStats, useCreateMealEntry, useMealPhotoUrl, useRecognizeMeal, useMealPreference, useMealRecommendations, useDeleteAllMealData, MealPhotoUploadFile, buildMealEntriesQuery, mealDraftStore, useMealDraftStore, setMealDraftStorage, setMealDraftPrincipal, setMealDraftLocalFileAdapter, MealDraftLocalFileAdapter, draftSessionId, isMealDraftPrincipalCurrent, runMealDraftSaveSingleFlight, beginMealDraftPhotoPreparation, principal-scoped-draft, 식단draft, handleUnauthorizedForCurrentSession, onUnauthorized-requestToken, 401세션경계, request-config-snapshot, acquirePosition, POSITION_MAX_AGE_MS, timeout-status, 측위재시도, injectableStorage, createInjectableStorage]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-08-17~08-30 변경 흡수 — 대기·날씨·일상지도·음식·식단 FE 플러밍(api 6 + 훅 7 + store 2 + `weather/` 2) + 401 세션 경계(`client.ts`) + 내 위치 측위 간헐 실패 수정 + 테스트 26→65건**: 2주 동안 shared 가 "맛집·정산·대중교통" 에서 생활 정보(대기·날씨·일상지도)와 식단 도메인까지 넓어졌고, 계정 전환·지연 401 을 다루는 세션 경계가 클라이언트 코어에 들어왔다. 도메인 자체는 [air-quality](air-quality.md)·[weather](weather.md)·[life-map](life-map.md)·[food](food.md)·[meal](meal.md) 가 다루고 여기서는 shared 계층이 제공하는 계약·훅·스토어와 플랫폼 주입 지점만.
+(1) **대기(에어코리아, `7340743`·`c6ac640`·`a4284aa`·`26947ba`, 2026-08-21)** — [api/air-quality.api.ts](../../packages/shared/src/api/air-quality.api.ts)(`airQualityApi`, 공개 8함수 — 전부 `Routes.AirQuality.*`) + [hooks/useAirQuality.ts](../../packages/shared/src/hooks/useAirQuality.ts)(8훅 — 측정값은 매시 정각 갱신이라 staleTime 5분·`refetchInterval` 10분, 예보 15분, 주간 30분, 측정소 목록 24h `retry:false`, nearby 는 좌표 `toFixed(4)` 스냅 + `refetchOnWindowFocus` 옵션). [api/air-location.api.ts](../../packages/shared/src/api/air-location.api.ts)(`airLocationApi` — Bearer `get`/`upsert`(PUT)/`remove`(DELETE), 응답 = 변경 후 상태) + [stores/airLocationStore.ts](../../packages/shared/src/stores/airLocationStore.ts)(게스트 persist `air-location-v1`, `createInjectableStorage()` 기본 localStorage, `setAirLocationStorage`) + [hooks/useAirLocation.ts](../../packages/shared/src/hooks/useAirLocation.ts)(**게스트 로컬 / 로그인 서버 하이브리드 — `useBusFavorites` 미러**; 값이 1개라 union 대신 "로그인 직후 서버가 비어 있을 때만 게스트 값을 PUT 1회 후 clear, 서버에 값이 있으면 서버 우선·게스트 값은 보존(로그아웃 시 복귀)").
+(2) **날씨(기상청, `37e0db0`·`7704f8c`·`17f281a`)** — [api/weather.api.ts](../../packages/shared/src/api/weather.api.ts)(`weatherApi` — `nowcast`/`forecast`(격자 nx,ny)/`versions`/`mid(land, ta, stn?)`/`midSea(regId)`/`aws(lat,lng)`) + [hooks/useWeather.ts](../../packages/shared/src/hooks/useWeather.ts)(6훅 — 실황 5분/10분, 단기 10분/30분, 중기 30분/60분, AWS 2분/5분; 서버가 발표 시각 단위로 캐시하므로 클라는 가볍게 폴링) + **새 하위 디렉터리 `weather/`**: [weatherDaily.ts](../../packages/shared/src/weather/weatherDaily.ts)(`mergeDailyRows(shortDays, mid)` — 단기 일별 요약(오늘~D+3)과 중기(D+4~D+10)를 날짜로 이어 붙여 최대 11행, 같은 날짜는 단기 우선) + [weatherMessages.ts](../../packages/shared/src/weather/weatherMessages.ts)(`weatherUpstreamMessage(e, fallback)` — `ApiError` 503/502/429 를 사용자 문구로). **왜 hooks 가 아니라 별도 디렉터리인가** — React 훅이 아닌 순수 함수인데 `@repo/api-contract` 타입과 `ApiError` 에 의존해 utils(leaf)에 둘 수 없다 → `settlement/groupSuggestion.ts` 와 같은 층(shared 의 "도메인 순수 로직" 디렉터리). `e348032` 에서 웹 `components/weather/weatherDaily.ts` 가 앱과 공용이 되며 shared 로 승격, 웹 파일은 재수출 facade 로 남았다([platform-ui-split](../concepts/platform-ui-split.md) 의 사후 승격 인스턴스).
+(3) **내 위치 한눈에(`9e197d3`·`e348032`, 2026-08-21~22)** — [hooks/useMyLocationGlance.ts](../../packages/shared/src/hooks/useMyLocationGlance.ts): 저장한 내 위치 1곳(`useAirLocation`) → `latLngToKmaGrid` → `useWeatherNowcast(nx, ny)` + `useAirNearbyStations(lat, lng, { limit: 1, radius: 50_000 })` **두 쿼리를 한 위치로 동시 구동**해 웹 상단바 칩([MyLocationChip](../../apps/web/src/components/weather/MyLocationChip.tsx))과 앱 홈 카드([MyLocationCard](../../apps/mobile/src/components/home/MyLocationCard.tsx))가 같은 파생값을 쓴다 — 기온(`t1h`)·상태(초단기 첫 시각 `sky` + 실황 `pty`)·우산(앞 6시간 `pty>0` 또는 `pop ≥ GLANCE_RAIN_POP_THRESHOLD=60`)·등급(`khai → pm25 → pm10` 폴백, `gradeSource` 라벨)·최근접 측정소. 갱신은 두 훅의 10분 조용한 폴링 + `refetchOnWindowFocus` 옵션(상주 표시만 켠다). 세그먼트별 `ok=false` 면 화면이 조용히 뺀다("● -" 를 남기지 않음). 문구·링크·색은 각 화면의 몫.
+(4) **일상지도(`1d92acb`·`a21de10`·`4fd6e22`)** — [api/life-map.api.ts](../../packages/shared/src/api/life-map.api.ts)(`lifeMapApi` — `status`/`points(layer, bbox, zoom, filters)`/`nearby`/`detail(layer, id)`/`search(q, limit)` + `LifeMapFilterParams`(purpose·category·불리언 5)·`LIFE_MAP_BOOLEAN_FILTERS`; bbox 는 utils `formatBbox` 문자열, zoom 은 `Math.floor`) + [hooks/useLifeMap.ts](../../packages/shared/src/hooks/useLifeMap.ts)(5훅 — CSV 재적재 때만 바뀌는 정적 마스터라 24h staleTime, bbox 가 바뀌는 동안 placeholder 유지, 검색 2~60자 10분 `retry:false`, `lifeMapFiltersKey` 로 필터 객체를 문자열 키로).
+(5) **음식·식단(23차 `d53fbe3`·`88751cd`·`c5b5fe2`… 를 24차에서 shared 관점으로 흡수)** — [api/food.api.ts](../../packages/shared/src/api/food.api.ts)(`foodApi` 14함수 — 사용자 `search`/`restaurants`, 어드민 카탈로그 7, 적재 잡 5 + `buildFoodImportRunEventsUrl()` token query SSE + 쿼리 빌더 4종: boolean `'1'/'0'`, 빈 q 생략, **고정 키 순서**) + [hooks/useFood.ts](../../packages/shared/src/hooks/useFood.ts)(15훅 — `useFoodImportRunEvents(enabled)` 는 schedule 동형 잡 SSE). [api/meal.api.ts](../../packages/shared/src/api/meal.api.ts)(`mealApi` 27함수 — 전부 로그인, `MealPhotoUploadFile = Blob | { uri, name, type }`(RN 은 Blob 을 넣으면 서버에 빈 파일), `photoBlob(token, variant)` 은 `apiFetch` 우회 — 정산 `previewBlob` 동형) + [hooks/useMeal.ts](../../packages/shared/src/hooks/useMeal.ts)(28훅 — 루트 키 `['meal']`, 기록 변경 시 list/calendar/stats/recommendation/time-presets 일괄 무효화, `useMealPhotoUrl` 이 blob → objectURL(웹)/FileReader data URL(RN), `useDeleteAllMealData` 는 `removeQueries(['meal'])`, `useCreate/UpdateMealEntry` 는 `expectedPrincipalId` 로 계정 경계 뒤 늦은 응답 캐시 반영 차단) + [stores/mealDraftStore.ts](../../packages/shared/src/stores/mealDraftStore.ts)(**`createInjectableStorage({ web: 'session' })` — settlementDraft 와 같은 어댑터·같은 웹 sessionStorage 정책이지만, persist `name` 은 고정(`lp:meal-draft-v1`)이고 물리 키를 `…:principal:<userId>` 로 바꾸는 `principalScopedDraftStorage` 를 한 겹 더 끼운다**; principal 미확정이면 read/write 모두 NO_OP, `setMealDraftPrincipal(id|null)` 이 동기 경계(메모리 즉시 비움) + 직렬 transition(이전 principal 키 삭제 → v1 고정 키 폐기 → 앱 파일 어댑터 `switchPrincipal` → `rehydrate`), 세대 id `draftSessionId` + `getMealDraftIdentity`/`isMealDraftIdentityCurrent`, 앱 소유 사진 파일 어댑터 `setMealDraftLocalFileAdapter({deleteFiles, clearAll, switchPrincipal})`(웹 NO_OP), 사진 준비 lease(`beginMealDraftPhotoPreparation`)·flush/저장 single-flight(`runMealDraftPhotoFlushSingleFlight`/`runMealDraftSaveSingleFlight`), `MEAL_DRAFT_MAX_PHOTOS=5`, `applyRecognition(mode 'append'|'replace-recognized')` 가 사용자 수정·수동 항목 보존). settlementDraftStore 와 비교: 정산은 "1차 식당 placeId" 가 draft 정체성이고 v1→v6 마이그레이션이 핵심, 식단은 "로그인 주체 + 세대" 가 정체성이고 마이그레이션 없이 principal 전환에서 v1 고정 키를 폐기한다.
+(6) **401 세션 경계(`9f39d53`, [api/client.ts](../../packages/shared/src/api/client.ts))** — `onUnauthorized(requestToken)` 가 401 을 받은 요청이 **실제 사용한 토큰**을 넘기고, `apiFetch` 가 요청 시작 시 `config` 를 스냅샷(`requestConfig`)해 요청 도중 `configureApi` 재호출·계정 전환에도 baseUrl/콜백/토큰이 그 요청에 귀속된다. 새 헬퍼 `handleUnauthorizedForCurrentSession({ requestToken, getCurrentToken, onCurrentSessionUnauthorized })` 는 **현재 세션 토큰과 같을 때만** 캐시 제거·로그아웃을 한 동기 콜백에서 실행 — 이전 계정의 지연된 401 이 새로 로그인한 세션을 끊지 않는다. 주입 지점: 웹 [main.tsx](../../apps/web/src/main.tsx)·앱 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 가 이 가드 안에서 `cancelQueries → clear → setMealDraftPrincipal(null) → clearSession`. [hooks/useAuth.ts](../../packages/shared/src/hooks/useAuth.ts)(`fd371d9`)도 같은 경계를 지킨다 — 로그인/가입 성공 시 `await cancelQueries → removeQueries → await setMealDraftPrincipal(user.id) → setSession`(사용자 id 가 키에 없는 비공개 캐시가 새 계정 화면에 순간 노출되지 않게), `useCurrentUser` 는 /me 확인 후 principal 설정 → 현재 token 재확인 후 `setUser`(전환 중 로그아웃됐다면 지연된 /me 가 user 를 되살리지 않음), 로그아웃은 `setMealDraftPrincipal(null)` 후 `clearSession`+`qc.clear()`. [client.test.ts](../../packages/shared/src/api/client.test.ts) 3건.
+(7) **내 위치 요청 간헐 실패 수정(`67f14cf`, [hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts))** — 원인: 공용 훅이 `timeout: 5000`·`maximumAge: 60_000` 단발이라 실측(2026-08-21, Windows/Chrome WiFi 측위) 콜드 측위가 5초를 넘기면 TIMEOUT(code 3) → `'unavailable'` 로 오분류(버스/지하철 페이지의 직접 호출은 10초라 멀쩡). 수정: geolocation 코어를 `acquirePosition({ timeout, maxTries, isCancelled })` 로 훅 밖에 빼고(가짜 navigator 로 테스트), **자동(마운트) 5초 1회 / 명시(`refetch`·permission `change`) 10초 + TIMEOUT 1회 재시도**(첫 시도가 측위 캐시를 데워 두 번째는 대개 성공), `maximumAge` 5분(`POSITION_MAX_AGE_MS` — 캐시 히트 0ms 실측, 다른 화면이 막 받은 위치 재사용), 새 상태 **`'timeout'`**(`unavailable` 과 구분해 화면이 "다시 시도" 안내), `timeoutMs` 옵션. 거부(1)·측위 불가(2)는 재시도 없이 즉시 확정. [useUserLocation.test.ts](../../packages/shared/src/hooks/useUserLocation.test.ts) 5건.
+(8) **테스트 65건 / 10파일**(+client 3, food.api 9 + food-conflict 2, meal.api 2, useUserLocation 5, mealDraftStore 18(store 15 + `buildMealEntriesQuery` 3); 기존 injectableStorage 4·voteGuestStore 6·settlementDraftStore 13·restaurantFavoriteStore 3). [index.ts](../../packages/shared/src/index.ts) 가 신규 전부 re-export(api 6·store 2·hook 7·weather 2). **앱 주입 지점** [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts): `setAirLocationStorage(AsyncStorage)`·`setMealDraftStorage(AsyncStorage)`·`setMealDraftLocalFileAdapter({...})` 모듈 로드 시 + 부팅 `bootstrapApi` 에서 JWT payload 의 `userId` 로 `setMealDraftPrincipal` 을 화면보다 먼저 세움; 웹은 미주입(localStorage/sessionStorage 자동) + `main.tsx` 의 401 가드만. 훅/api/스토어 규모: api 모듈 33, 훅 파일 38, 스토어 16.
 
 **2026-08-16~17 변경 흡수 — vitest 러너 신설 + persist 스토리지 주입 결함 수복(injectableStorage) + vote FE 플러밍**: (1) **⚠️ 중요 결함 수복(`7520859`)** — persist 스토어 6종이 쓰던 `createJSONStorage(() => resolveStorage())` 패턴은 **앱 주입이 전혀 반영되지 않았다**: zustand 의 createJSONStorage 는 팩토리를 스토어 정의 시점에 1회 호출·캡처하는데, ESM 은 import 를 먼저 평가하므로 앱 entry 의 `setXxxStorage(AsyncStorage)` 는 언제나 그 뒤 — RN 에선 NO_OP 으로 굳어 정산 draft·AskTab·게스트 버스/지하철 즐겨찾기가 저장·복원되지 않았다. [stores/injectableStorage.ts](../../packages/shared/src/stores/injectableStorage.ts) 신설: 캡처되는 어댑터를 **지연 위임**으로 만들고(실제 대상은 매 호출 시점 결정), 주입 시점에 `persist.rehydrate()` 를 다시 건다(주입 전 rehydrate 는 빈 스토리지를 읽고 끝났으므로). 6개 스토어 전부 통일(settlementDraft 만 웹 폴백 `web:'session'`). **앞으로 persist 스토어를 새로 만들 땐 반드시 이 헬퍼를 쓸 것.** (2) **테스트 러너 신설** — shared 는 vite 를 안 쓰므로 **vitest 2.x**(friendly/utils 와 동일 — web 만 Vite 8 때문에 4.x)로 [vitest.config.ts](../../packages/shared/vitest.config.ts)(`deps.inline: [/^@repo\//]` 로 api-contract `.js` 재export 해석). 테스트 26건: injectableStorage 4(캡처된 어댑터로도 나중 주입 위임) + voteGuestStore 6(guestId 가 서버 voterKey 계약 통과·풀 리플레이스 미러·철회 기록 유지·20개 캡 + **앱 시나리오 통합 1건(`fbba748`)** — AsyncStorage 처럼 getItem 이 Promise 인 비동기 스토리지에 이전 세션 persist JSON 을 넣고 스토어 모듈 평가(=빈 스토리지 1차 rehydrate) **이후** 주입 → 한 틱 뒤 guestId/name/ballots 복원 + 이후 쓰기도 같은 스토리지로 흐르는 전이까지 — 실기기 확인 전에 코드 레벨로 좁힐 수 있는 마지막 갭을 닫아, 남는 것은 순수 환경 문제뿐) + settlementDraftStore 13(참여자↔attendance 동기화·그룹 prune·순수 함수) + restaurantFavoriteStore 3(토글 반환값·상한 100 경계 — bus/subway 는 동일 복제라 대표 검증). (3) **vote FE 플러밍(`8951b31`)** — [api/vote.api.ts](../../packages/shared/src/api/vote.api.ts) + [hooks/useVote.ts](../../packages/shared/src/hooks/useVote.ts)(진행 중에만 15초 폴링·변경 응답으로 캐시 통째 교체) + [stores/voteGuestStore.ts](../../packages/shared/src/stores/voteGuestStore.ts)(기기 영속 voterKey + 토큰별 찬성 기록) — 도메인은 [vote](vote.md). (4) **[hooks/useMapResearch.ts](../../packages/shared/src/hooks/useMapResearch.ts) 승격(`df9fcbd`)** — 지도 재검색 파이프라인(패닝 종료 추적 + 자동 트레일링 스로틀 1.2s + 수동 버튼 판정)이 웹 Bus/SubwayStationsMap 인라인 2곳 + 앱 transit 훅 3벌이던 것을 단일 정의로. 입력은 플랫폼 뷰포트 타입에 안 묶이는 순수 {lat,lng,zoom} — 소비처가 한 줄 어댑터. 타이밍 계약 테스트 5건은 소비처 web 에(shared 는 node 환경이라 훅 렌더 불가). (5) 7월 중순 리팩터 흡수 — SSE 잡 구독 훅 3벌(~140줄씩)을 제네릭 [hooks/useBulkJob.ts](../../packages/shared/src/hooks/useBulkJob.ts) 로 통합(`267b7aa`, 외부 시그니처 무변경), 맛집 즐겨찾기 하이브리드(useRestaurantFavorites + restaurantFavoriteStore, `56b1c22` — 버스 패턴 1:1 미러, 페이지당 1회 호출 원칙).
 
@@ -114,20 +124,23 @@ AdminAiKeysPage 가 저장 전 미리보기에 사용. ([ai.api.ts](../../packag
 
 **2026-05-19 변경 흡수**: (1) `useUserLocation` 신규 훅 — 브라우저 geolocation 권한 query → getCurrentPosition (`enableHighAccuracy:false`, 5s timeout, 60s maximumAge), `idle|pending|granted|denied|unavailable` 5상태 + `refetch()`. ref 기반 attempt 카운터로 in-flight 무효화. 공개 맛집 지도 첫 진입에서 사용 — `@repo/utils` 의 `computeBboxAround` 와 짝. (2) `useRestaurant` — `useCancelSummary` / `useResumeSummary` 신규 mutation, `useRestaurantCrawlLogs(placeId)` infiniteQuery (cursor pagination), `useRestaurantSummaryEvents(placeId, { onLog })` 시그니처 확장 — onLog 콜백을 ref 안정화로 받아 SSE log 이벤트 누적 가능. (3) `summarySseManager` — `LogHandler` 타입 + `Subscribers.logs: Set<LogHandler>` 추가, `subscribe({ onLog?: ... })` 옵션 추가, 'log' named event 를 구독자에 라우팅. (4) `useCrawl` — `CrawlStreamState.logs: StreamLogEntry[]` 누적 필드 + `useCrawlJobLogs(jobId)` 신규 + reducer 가 (jobId, seq) Map dedup 으로 SSE 'log' 이벤트 누적. (5) `useRestaurantPublicReviews` 신규 infiniteQuery — detail 의 `reviewsFirstPage` 를 seed (sentiment='all', sort='recent' 일 때만) + 2 페이지부터 fetch. (6) `restaurantApi` — `cancelSummary`/`resumeSummary`/`crawlLogs`/`publicReviews` API 함수, `publicByPlaceId` 가 옛 백엔드 응답 어댑팅 (`reviews` 단일 배열 → `reviewsFirstPage` + `reviewCounts` 평탄화). `crawlApi.jobLogs(jobId)` 추가.
 
-## 1. Purpose [coverage: high — 5 sources]
+## Purpose [coverage: high — 7 sources]
 
 `@repo/shared`는 web과 mobile에서 동시에 사용되는 프론트엔드 공통 코드를 모아둔 워크스페이스
 패키지다. 어드민(인증 필요)과 공개(비로그인 허용) 두 모드를 모두 한 패키지에서 다루며,
-컨슈머는 `apps/web`(어드민 + 공개 + 로그인 페이지)과 `apps/mobile`(어드민 게이트)이다.
-책임 영역은 다음과 같다.
+컨슈머는 `apps/web`(어드민 + 공개 + 로그인 페이지)과 `apps/mobile`(어드민 게이트 + 2026-07~08 의 공개 화면 —
+대중교통·날씨·대기·일상지도·식단·홈 내 위치 카드)이다. 책임 영역은 다음과 같다.
 
-- 타입 안전한 fetch 래퍼와 도메인별 API 함수 (auth, picks, admin, crawl, restaurant,
+- 타입 안전한 fetch 래퍼(요청 단위 config 스냅샷 + 401 세션 경계 가드)와 도메인별 API 함수 (auth, picks, admin, crawl, restaurant,
   canonical, menu-grouping, analytics, ai, settings-map, **settlement / settlement-extraction
-  / settlement-contact**, **bus / bus-favorite**, **subway / subway-favorite**). 어드민/공개/공유(read-only) 라우트가 같은 `apiFetch` 위에 얹힌다.
+  / settlement-contact**, **bus / bus-favorite**, **subway / subway-favorite**, restaurant-favorite, vote,
+  **air-quality / air-location**, **weather**, **life-map**, **food**, **meal**). 어드민/공개/공유(read-only) 라우트가 같은 `apiFetch` 위에 얹힌다.
 - TanStack Query 훅 (서버 상태) — 메뉴 그룹핑/전역 머지/다이닝코드 일괄 저장 잡 SSE 훅 +
   공개 맛집 리스트/상세/인사이트/지도 설정 훅 + 캐노니컬(병합/분리/제안 큐) 훅 + **정산 세션 CRUD
-  + 영수증 업로드/추출 + 단골 CRUD 훅** 포함
-- Zustand 스토어 (인증, 활성 크롤 잡, 활성 그룹핑/전역 머지/DC 일괄 저장 잡, **정산 draft**, **게스트 버스·전철 즐겨찾기**)
+  + 영수증 업로드/추출 + 단골 CRUD 훅** + **대기·날씨·일상지도 공개 조회 훅(10분 조용한 폴링)** + **식단 기록/사진/추천/선호 훅** + 음식 카탈로그 어드민 훅 포함
+- 파생 훅 — `useMyLocationGlance`(저장한 내 위치 하나로 날씨·대기 두 쿼리를 동시 구동해 상단바 칩·홈 카드 공용 파생값)
+- Zustand 스토어 (인증, 활성 크롤 잡, 활성 그룹핑/전역 머지/DC 일괄 저장 잡, **정산 draft**, **식단 draft(principal 스코프)**, **게스트 버스·전철·맛집 즐겨찾기**, **게스트 내 대기 위치**, 투표 게스트)
+- 도메인 순수 로직 디렉터리 — `settlement/groupSuggestion.ts`, `weather/{weatherDaily,weatherMessages}.ts`(api-contract 타입·`ApiError` 에 의존해 utils 에 못 두는 순수 함수)
 - 프로세스 전역 SSE 매니저 싱글톤 (요약 진행률 + review 분석 멀티플렉싱 — placeId + canonicalId 두 키 종류 동시)
 - 잡 단위 SSE 라이프사이클 훅 (그룹핑/전역 머지/DC 일괄 저장 — 매니저를 쓰지 않고 hook 자체가
   EventSource 를 직접 들고 백오프 재연결 관리)
@@ -138,13 +151,13 @@ AdminAiKeysPage 가 저장 전 미리보기에 사용. ([ai.api.ts](../../packag
 빌드 산출물 없이 `src/index.ts`를 그대로 노출(`"main": "./src/index.ts"`)하므로
 Turborepo 컨슈머는 별도 빌드 단계 없이 TS 소스를 바로 import한다.
 
-## 2. Architecture [coverage: high — 31 sources]
+## Architecture [coverage: high — 52 sources]
 
 ```
 packages/shared/src/
 ├── index.ts                # barrel: 모든 하위 모듈 re-export
 ├── api/
-│   ├── client.ts           # apiFetch + ApiError + configureApi (토큰 게터 주입) — FormData 면 Content-Type 미설정
+│   ├── client.ts           # apiFetch + ApiError + configureApi (토큰 게터 주입) — FormData 면 Content-Type 미설정. 요청 단위 config 스냅샷 + onUnauthorized(requestToken) + handleUnauthorizedForCurrentSession (+test 3)
 │   ├── auth.api.ts
 │   ├── picks.api.ts
 │   ├── admin.api.ts
@@ -169,11 +182,22 @@ packages/shared/src/
 │   ├── bus.api.ts           # (신규) 서울시 버스 공개 조회: searchStations/nearbyStations/stationArrivals/busPositions/routeDetail
 │   ├── bus-favorite.api.ts  # (신규) 버스 즐겨찾기 서버 저장분(Bearer): list/upsert·remove Station·Route/sync (변경 시 전체 목록 반환)
 │   ├── subway.api.ts        # (신규) 수도권 전철 공개 조회: searchStations/nearbyStations/stationArrivals/lineDetail/linePositions/stationTimetable/stationCongestion/path
-│   └── subway-favorite.api.ts # (신규) 전철 즐겨찾기 서버 저장분(Bearer): list/upsert·remove Station·Line/sync (변경 시 전체 목록 반환)
+│   ├── subway-favorite.api.ts # (신규) 전철 즐겨찾기 서버 저장분(Bearer): list/upsert·remove Station·Line/sync (변경 시 전체 목록 반환)
+│   ├── restaurant-favorite.api.ts # 맛집 즐겨찾기 서버 저장분(Bearer, 버스 패턴 미러)
+│   ├── vote.api.ts          # 그룹 투표 픽(방장 CRUD + 공개 /share/* 투표)
+│   ├── air-quality.api.ts   # (신규 24차) 에어코리아 공개 8함수: sidoRealtime/stationHistory(term)/badStations/forecast/stations/nearbyStations/searchStations/weeklyForecast
+│   ├── air-location.api.ts  # (신규 24차) 내 대기 위치 서버 저장분(Bearer): get/upsert(PUT)/remove — 응답 = 변경 후 상태
+│   ├── weather.api.ts       # (신규 24차) 기상청 공개: nowcast/forecast(nx,ny)/versions/mid(land,ta,stn?)/midSea(regId)/aws(lat,lng)
+│   ├── life-map.api.ts      # (신규 24차) 일상지도 공개: status/points(layer,bbox,zoom,filters)/nearby/detail/search + LifeMapFilterParams·LIFE_MAP_BOOLEAN_FILTERS
+│   ├── food.api.ts          # (신규 23차) 음식 카탈로그: search/restaurants + 어드민 7 + 적재 잡 5 + buildFoodImportRunEventsUrl + 쿼리 빌더 4 (+test 9, food-conflict.api.test 2)
+│   └── meal.api.ts          # (신규 23차) 식단(로그인 필수) 27함수: 데이터 관리 6·기록 7·사진 6(photoBlob 은 fetch 직접)·인식·추천 5·선호 2 + buildMealEntriesQuery (+test 2)
 ├── settlement/
 │   └── groupSuggestion.ts  # (신규) 세부 분배 그룹 제안 순수 로직 (suggestItemGroups — @repo/api-contract drink-kinds 사전 재사용)
+├── weather/                # (신규 24차) 날씨 도메인 순수 로직 — 훅 아님, api-contract 타입·ApiError 의존이라 utils 불가
+│   ├── weatherDaily.ts     # mergeDailyRows(shortDays, mid) — 단기 오늘~D+3 + 중기 D+4~D+10 열흘 병합(최대 11행, 같은 날짜는 단기 우선)
+│   └── weatherMessages.ts  # weatherUpstreamMessage(e, fallback) — ApiError 503/502/429 → 사용자 문구
 ├── hooks/
-│   ├── useAuth.ts          # useCurrentUser, useLogin, useRegister, useLogout
+│   ├── useAuth.ts          # useCurrentUser, useLogin, useRegister, useLogout — 로그인/가입 시 cancelQueries+removeQueries → setMealDraftPrincipal → setSession, /me 후 token 재확인
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
 │   ├── useAdmin.ts
 │   ├── useCrawl.ts         # useStartCrawl/useCrawlJobs/useCancelCrawl/useNaverSearch + useCrawlJobStream + useCatchtable*/useDiningcode* + DC bulk-save 잡 훅
@@ -192,7 +216,7 @@ packages/shared/src/
 │   ├── useTelegramSettings.ts # (신규) useTelegramConfig/useUpdate(+random-crawl config invalidate)/useDelete/useTestTelegram/useResolveTelegramChatId
 │   ├── useSettingsMap.ts   # 어드민 providers/secret + 공개 useMapPublicConfig
 │   ├── useAi.ts            # ProviderKey({id,purpose}) 기반 provider CRUD + complete/test/models + usePreviewModels(=useProviderModelsPreview, 저장 전 키로 모델 fetch)
-│   ├── useUserLocation.ts  # geolocation 권한+위치 query (5s timeout, 60s maxAge) + { auto?: boolean } 옵션 (false 면 마운트 자동요청 스킵)
+│   ├── useUserLocation.ts  # geolocation 권한+위치 — acquirePosition 코어(자동 5s 1회 / 명시 10s + TIMEOUT 1회 재시도, maximumAge 5분) + 'timeout' 상태 + { auto?, timeoutMs? } 옵션 (+test 5)
 │   ├── useSettlement.ts           # useListSettlements / useSettlement / useCreateSettlement(fromDraftId 옵션) / useDeleteSettlement / useUpdateSettlement(전체 replace, setQueryData) / useCreateSettlementShare / useRevokeSettlementShare / useSharedSettlement
 │   ├── useSettlementExtraction.ts # useUploadReceipt / useExtractReceipt (둘 다 useMutation)
 │   ├── useSettlementContact.ts    # useSettlementContacts(검색어 키별) / useUpdateSettlementContact / useDeleteSettlementContact (삭제 시 settlement 캐시도 무효화)
@@ -200,7 +224,18 @@ packages/shared/src/
 │   ├── useBus.ts           # (신규) useBusStationSearch(24h)/useBusNearbyStations(60s)/useBusStationsRefresh(force)/useBusStationArrivals(30s 폴링)/useBusPositions(15s 폴링)/useBusRouteDetail(24h) — refetchIntervalInBackground=false 가드
 │   ├── useBusFavorites.ts  # (신규) 게스트 로컬 + 로그인 서버 하이브리드 단일 훅 — 응답 전체목록 setQueryData 교체 + 로그인 직후 sync 1회
 │   ├── useSubway.ts        # (신규) useSubwayStationSearch/NearbyStations/StationArrivals(폴링)/LineDetail/LinePositions(폴링)/Timetable/Congestion/Path — 버스 동형 폴링 가드
-│   └── useSubwayFavorites.ts # (신규) 전철 게스트 로컬 + 로그인 서버 하이브리드 단일 훅 (useBusFavorites 동형)
+│   ├── useSubwayFavorites.ts # (신규) 전철 게스트 로컬 + 로그인 서버 하이브리드 단일 훅 (useBusFavorites 동형)
+│   ├── useRestaurantFavorites.ts # 맛집 즐겨찾기 하이브리드(버스 1:1 미러)
+│   ├── useVote.ts          # 투표 진행 중 15초 폴링 + 변경 응답 캐시 통째 교체
+│   ├── useBulkJob.ts       # 잡 SSE 구독 제네릭(그룹핑/전역 머지/DC 일괄 저장 3벌 통합)
+│   ├── useMapResearch.ts   # 지도 재검색 파이프라인(패닝 종료 + 트레일링 스로틀 1.2s)
+│   ├── useAirQuality.ts    # (신규 24차) useAirSidoRealtime/StationHistory/BadStations/Forecast/Stations/NearbyStations/StationSearch/WeeklyForecast — 측정 5분 stale·10분 폴링
+│   ├── useAirLocation.ts   # (신규 24차) 내 대기 위치 하이브리드(게스트 store / 로그인 서버, 로그인 직후 서버 비면 1회 업로드)
+│   ├── useWeather.ts       # (신규 24차) useWeatherNowcast/Forecast/Versions/Mid/Aws/MidSea — 발표 주기별 stale/refetch 사다리
+│   ├── useMyLocationGlance.ts # (신규 24차) 저장한 내 위치 1곳 → 날씨 실황 + 최근접 측정소 동시 구동, 칩·홈 카드 공용 파생값
+│   ├── useLifeMap.ts       # (신규 24차) useLifeMapStatus/Points/Nearby/Search/Detail + lifeMapFiltersKey — 24h staleTime, placeholder 유지
+│   ├── useFood.ts          # (신규 23차) 자동완성/식당 역검색 + 어드민 카탈로그·병합 충돌·인식 품질 + 적재 잡(useFoodImportRunEvents SSE)
+│   └── useMeal.ts          # (신규 23차) 기록/달력/통계/사진(useMealPhotoUrl)/인식/추천/선호/데이터 관리 28훅 — 루트 키 ['meal'], expectedPrincipalId 가드
 ├── stores/
 │   ├── authStore.ts                       # Zustand: user / token / isGuest
 │   ├── activeCrawlJobStore.ts             # Zustand: jobs by jobId (멀티 슬롯)
@@ -213,7 +248,12 @@ packages/shared/src/
 │   ├── reviewAskStore.ts                  # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 공개 Ask 비동기 — store 가 직접 publicAsk 호출, 완료를 탭 가로질러 ReviewAskToaster 가 토스트. lastByPlace 만 영속(MAX_KEPT=20).
 │   ├── resummarizeStore.ts                # (신규) Zustand (persist 없음, 메모리만). 진행 중 단건 재요약 추적 — ResummarizeToaster 가 placeId SSE 구독해 완료 토스트.
 │   ├── busFavoriteStore.ts                # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 게스트 버스 즐겨찾기(stations/routes 등록순 배열, BUS_FAVORITES_MAX 상한). key bus-favorites-v1.
-│   └── subwayFavoriteStore.ts             # (신규) Zustand + persist (lazy storage resolver, busFavoriteStore 동형). 게스트 전철 즐겨찾기(stations/lines 등록순 배열, SUBWAY_FAVORITES_MAX 상한). key subway-favorites-v1.
+│   ├── subwayFavoriteStore.ts             # (신규) Zustand + persist (injectableStorage, busFavoriteStore 동형). 게스트 전철 즐겨찾기(stations/lines 등록순 배열, SUBWAY_FAVORITES_MAX 상한). key subway-favorites-v1.
+│   ├── restaurantFavoriteStore.ts         # 게스트 맛집 즐겨찾기(상한 100) (+test 3)
+│   ├── voteGuestStore.ts                  # 기기 영속 voterKey + 토큰별 찬성 기록(20개 cap) (+test 6)
+│   ├── injectableStorage.ts               # persist 스토리지 주입 공용 구현 — 지연 위임 어댑터 + 주입 시 rehydrate (+test 4)
+│   ├── airLocationStore.ts                # (신규 24차) 게스트 내 대기 위치 persist(air-location-v1, localStorage 기본, setAirLocationStorage) — 로그인은 서버(useAirLocation)
+│   └── mealDraftStore.ts                  # (신규 23차) 식단 입력 draft — injectableStorage(web:'session') 위에 principal 스코프 물리 키 + setMealDraftPrincipal 직렬 전환 + 세대 id + 앱 파일 어댑터 + 사진/저장 single-flight (+test 18)
 ├── design/ … (불변)
 ├── ui/ … (불변)
 └── constants/ …
@@ -307,9 +347,10 @@ querystring 빌더와 `apiFetch` 호출만 담당하고, 훅 모듈(`use*.ts`)�
     items/source/영수증 미변동) / `setRoundDiscount(roundCID, {amount, category}|null)` /
     `setCategoryAdjustment(roundCID, category, adjustment|null)` (null 이면 그 카테고리 보정 제거,
     전체가 비면 `categoryAdjustments: null` 로 압축).
-  - persist: zustand `persist` middleware + `createJSONStorage(() => resolveStorage())`. 키
-    `settlement-draft-v1`, version `4`. **storage adapter 주입형** — `setSettlementDraftStorage
-    (storage)` 로 RN(AsyncStorage 등) 환경에서 어댑터 주입, 미주입 시 `window.sessionStorage`
+  - persist: zustand `persist` middleware + `createJSONStorage(() => injectable.storage)`(22차부터
+    `createInjectableStorage({ web: 'session' })` 의 지연 위임 어댑터). 키
+    `settlement-draft-v1`, version `6`(아래는 v4 시점 서술). **storage adapter 주입형** — `setSettlementDraftStorage
+    (storage)` 로 RN(AsyncStorage 등) 환경에서 어댑터 주입(주입 즉시 `rehydrate`), 미주입 시 `window.sessionStorage`
     자동 선택, 둘 다 없으면 `NO_OP_STORAGE`(메모리만). 마이그레이션:
     - v1 → v2: 평면 draft(한 식당, 1 round) → rounds 배열. `placeId` 없는 옛 draft 는 의미
       없어 `emptyDraft()` 로 폐기.
@@ -449,7 +490,8 @@ canonical 의 두 source 가 공유하는 공개 list 캐시 합산 행을 한�
 있어도 그대로 통과(서버가 무시), 없어도 그대로 통과. 공유 read-only 라우트 (`/api/v1/share/
 settlements/:token`) 도 동일 — 비로그인도 호출 가능. **FormData body 분기** — `init.body
 instanceof FormData` 면 `Content-Type` 헤더를 안 붙임. 영수증 업로드처럼 multipart boundary
-는 브라우저가 자동으로 헤더에 채워야 하기 때문. `onUnauthorized` 콜백은 401 응답 때만 발동.
+는 브라우저가 자동으로 헤더에 채워야 하기 때문. `onUnauthorized(requestToken)` 콜백은 401 응답 때만 발동하며
+그 요청이 실제로 붙였던 토큰을 받는다(24차 — 현재 세션 토큰과 비교하는 `handleUnauthorizedForCurrentSession` 과 짝).
 
 훅 레이어는 `useQueryClient`로 TanStack Query 캐시를 직접 패치하는 패턴을 광범위하게 쓴다.
 정산 도메인에선 `useUpdateSettlementParticipants` 가 응답 세션을 `setQueryData
@@ -466,14 +508,14 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 파일 확장자 해석으로 구현체를 골라간다 (Vite/Webpack은 `.web.tsx`, Metro는
 `.native.tsx`). `tsconfig.json`은 `@repo/config/tsconfig/react.json`을 상속.
 
-## 3. Talks To [coverage: high — 10 sources]
+## Talks To [coverage: high — 20 sources]
 
-- 의존성: `@repo/api-contract` (zod 스키마/타입/`Routes` 상수 + `recomputeCanonicalAggregates` 유틸 + **정산/단골/추출 타입**), `@repo/utils`,
+- 의존성: `@repo/api-contract` (zod 스키마/타입/`Routes` 상수 + `recomputeCanonicalAggregates` 유틸 + **정산/단골/추출 타입** + 대기/날씨/일상지도/음식/식단 타입), `@repo/utils`(`useMyLocationGlance` 의 `latLngToKmaGrid`·`kmaCondition`, `weather/weatherDaily.ts` 의 `kmaCondition`·`kmaConditionFromText` — shared 가 utils 위에서 파생값을 만든다),
   `@tanstack/react-query`, `zustand` + `zustand/middleware` (persist).
 - peerDependencies: `react >=18.0.0`, `react-native >=0.76.0` (옵셔널).
 - 컨슈머:
-  - `apps/web` — 어드민 콘솔(맛집/메뉴/분석/AI/지도 설정 + 발견 페이지 + 다이닝코드 검증/정식 페이지 + 캐치테이블 검증 페이지), 공개 맛집 페이지, 로그인, **정산하기 진입/입력/결과/공유/단골 관리 페이지**, **버스 정류장/노선/즐겨찾기 페이지(`/bus`)**.
-  - `apps/mobile` — 어드민 게이트.
+  - `apps/web` — 어드민 콘솔(맛집/메뉴/분석/AI/지도 설정 + 발견 페이지 + 다이닝코드 검증/정식 페이지 + 캐치테이블 검증 페이지 + **음식 카탈로그**), 공개 맛집 페이지, 로그인, **정산하기 진입/입력/결과/공유/단골 관리 페이지**, **대중교통(`/bus`·`/subway`)**, **대기정보(`/air`)·날씨(`/weather`)·일상지도(`/life-map`)**, **내 식단(`/meal`)**, 상단바 내 위치 칩(`MyLocationChip`). 401 가드는 [main.tsx](../../apps/web/src/main.tsx) 의 `configureApi`.
+  - `apps/mobile` — 어드민 게이트 + 대중교통·날씨·대기·일상지도·식단(입력/사진 인식/목록/달력/통계) 화면 + 홈 내 위치 카드. 스토리지·파일 어댑터·401 가드 주입은 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 한 곳(`setSettlementDraftStorage`/`setReviewAskStorage`/`setBusFavoriteStorage`/`setSubwayFavoriteStorage`/`setAirLocationStorage`/`setMealDraftStorage`/`setMealDraftLocalFileAdapter` + `bootstrapApi` 의 `setMealDraftPrincipal`).
 - 외부:
   - `apiFetch`로 [friendly](friendly.md) API에 HTTP. `FormData` 본문이면 Content-Type 자동 미설정 (영수증 업로드 호환).
   - `useCrawlJobStream` → `Routes.Crawl.jobEvents` EventSource.
@@ -493,12 +535,18 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - **`settlementContactApi` → `/api/v1/me/contacts/*`** (인증 필수).
   - **`settlementDraftApi` → `/api/v1/settlement-drafts/*`** (인증 필수, upsert PUT, 서버가 userId+placeId 로 매칭).
   - **`busApi` → `Routes.Bus.{stationSearch, stationsNearby, stationArrivals, busPositions, routeDetail}`** (공개, 토큰 불필요 — [friendly](friendly.md) 가 서울시 API 프록시). **`busFavoriteApi` → `Routes.Bus.{favorites, favoriteStation, favoriteRoute, favoritesSync}`** (Bearer 인증 필수). 폴링 훅(도착 30s/위치 15s)이 실시간 조회를 반복하지만 서버 셀 캐시로 업스트림 부하는 낮음.
+  - **`airQualityApi` → `Routes.AirQuality.{sidoRealtime(sido), stationHistory(name), badStations, forecast, weeklyForecast, stations, stationsNearby, stationSearch}`** (공개 — [friendly](friendly.md) 가 에어코리아 프록시 + 측정 10분·예보 20~60분 캐시, stale 폴백). **`airLocationApi` → `Routes.AirQuality.location`** (Bearer, GET/PUT/DELETE).
+  - **`weatherApi` → `Routes.Weather.{nowcast, forecast, versions, mid, midSea, aws}`** (공개 — 서버가 발표 시각 단위 캐시; aws 는 API허브 키 없으면 `enabled=false` + 빈 items 200).
+  - **`lifeMapApi` → `Routes.LifeMap.{status, points, nearby, detail(layer,id), search}`** (공개 — 로컬 DB 조회; search 는 서버 키 없으면 `enabled=false` 빈 목록).
+  - **`foodApi` → `Routes.Food.{search, restaurants(id), adminItems, adminItem(id), adminStats, adminMergeConflicts, adminMergeConflict(id), adminRecognitionQuality, importConfig, importRun, importRuns, importPreview}` + `Routes.Food.importRunEvents` EventSource** (token query, `buildFoodImportRunEventsUrl`).
+  - **`mealApi` → `Routes.Meal.*`(entries/entry/calendar/stats/photos/photo/photoThumb/photoCopy/timePresets/recentItem/recognize/recommendations/recommendationContext/recommendationFeedback/recommendationEvents/preference/dataExport/dataBackup/dataRestore/photoRetention/data)** — 전부 Bearer. `photoBlob` 만 `apiFetch` 우회 직접 `fetch` + Authorization.
+  - `useMyLocationGlance` 는 네트워크를 직접 열지 않는다 — `useAirLocation`·`useWeatherNowcast`·`useAirNearbyStations` 세 훅을 합성.
 - UI 측 사용처는 [web](web.md)/[mobile](mobile.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행은 [schedule](schedule.md), 리뷰 RAG/군집은 [review-search](review-search.md)/[review-clustering](review-clustering.md), 버스는 [bus](bus.md)(마커/형상은 [utils](utils.md)). 토스트 watcher 컴포넌트(`ReviewAskToaster`/`ResummarizeToaster`)는 [web](web.md)/[mobile](mobile.md) 루트에 마운트.
 
-## 4. API Surface [coverage: high — 37 sources]
+## API Surface [coverage: high — 60 sources]
 
 **API 클라이언트 (`api/`)**
-- `configureApi(cfg)`, `getApiConfig()`, `apiFetch<T>(path, init)`, `ApiError`. `FormData` body 면 Content-Type 자동 스킵.
+- `configureApi(cfg)`, `getApiConfig()`, `apiFetch<T>(path, init)`, `ApiError`. `FormData` body 면 Content-Type 자동 스킵. **`ApiClientConfig.onUnauthorized?: (requestToken: string | null) => void | Promise<void>`** (24차 — 401 을 받은 요청이 실제 쓴 토큰을 넘긴다, `await` 됨) + **`handleUnauthorizedForCurrentSession({ requestToken, getCurrentToken, onCurrentSessionUnauthorized }): boolean`** (요청 토큰이 현재 토큰과 같을 때만 콜백 실행 후 true). `apiFetch` 는 요청 시작 시 `config` 를 스냅샷(`requestConfig`)해 baseUrl/토큰/콜백을 그 요청에 귀속.
 - `authApi`: `register`, `login`, `me`, `logout`
 - `picksApi`: `list`, `getById`, `create`, `update`, `remove`, `random`
 - `adminApi`: `listUsers`, `setRole`
@@ -530,6 +578,13 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - **`settlementDraftApi` (신규)**: `list(): Promise<ListSettlementDraftsResultType>`, `upsert(input: UpsertSettlementDraftInputType): Promise<SettlementDraftType>` (PUT — 서버가 userId+placeId 로 매칭 후 upsert, id 모르고도 호출 가능), `remove(id): Promise<void>`.
 - **`busApi` (신규, 공개 — 토큰 불필요)**: `searchStations(q, { force? })` (force=true 만 `?force=true` 부착), `nearbyStations(lat, lng, { radius? })` (radius m 지정 시만 쿼리 부착), `stationArrivals(arsId)`, `busPositions(busRouteId, { startOrd, endOrd }?)` (opts 생략 시 노선 전체 차량, 지정 시 구간 — 서버 제약 endOrd ≥ startOrd·구간 ≤ 50), `routeDetail(busRouteId)`. 전부 `Routes.Bus.*`.
 - **`busFavoriteApi` (신규, Bearer 인증)**: `list()`, `upsertStation(stId, body: BusFavoriteStationUpsertBodyType)` (PUT), `removeStation(stId)` (DELETE), `upsertRoute(stId, busRouteId, body: BusFavoriteRouteUpsertBodyType)` (PUT), `removeRoute(stId, busRouteId)` (DELETE), `sync(body: BusFavoritesSyncBodyType)` (POST — 게스트 저장분 union 병합, 멱등). **변경 함수는 전부 변경 후 전체 `BusFavoritesResultType` 반환** (클라가 diff 없이 캐시 교체), 상한 초과 PUT 은 400.
+- `subwayApi` / `subwayFavoriteApi` / `restaurantFavoriteApi` / `voteApi` — 2026-07-07·08-17 흡수 문단 참조(버스 동형 + 투표 방장/공개 라우트).
+- **`airQualityApi` (신규 24차, 공개)**: `sidoRealtime(sidoName)`, `stationHistory(stationName, term = 'DAILY')` (DAILY 시간별 24h / MONTH·3MONTH 일평균 + `latest`), `badStations()`, `forecast(date?)` (생략 시 오늘→서버 전일 폴백), `stations()` (측정소정보 API — 활용신청 전 503), `nearbyStations(lat, lng, { radius?, limit? })` (기본 10km·5개, 거리순 + 현재 측정값 조인), `searchStations(q)` (1~30자, 서버 로컬 검색), `weeklyForecast(date?)`.
+- **`airLocationApi` (신규 24차, Bearer)**: `get()`, `upsert(body: AirLocationUpsertBodyType)` (PUT), `remove()` (DELETE) — 세 함수 모두 `AirLocationResultType`(변경 후 상태) 반환.
+- **`weatherApi` (신규 24차, 공개)**: `nowcast(nx, ny)` (초단기실황 + 초단기예보 6시간), `forecast(nx, ny)` (단기 +3일 시각별 + 일별 요약), `versions()`, `mid(land, ta, stn?)` (중기육상 + 중기기온 + 전망), `midSea(regId)`, `aws(lat, lng, { radius?, limit? })` (API허브 AWS 매분 관측 최근접). 위·경도 → 격자는 호출자가 `@repo/utils` `latLngToKmaGrid`.
+- **`lifeMapApi` (신규 24차, 공개)**: `status()`, `points(layer, bbox, zoom, filters?)` (bbox = `formatBbox` 문자열, zoom `Math.floor`), `nearby(layer, lat, lng, { radius?, limit?, filters? })`, `detail(layer, id)`, `search(q, limit?)` (2자 이상). `LifeMapFilterParams { purpose?, category?, open24?, disabled?, kids?, diaper?, bell? }` — 배열은 콤마 join, 불리언은 `'1'` 만 부착; `LIFE_MAP_BOOLEAN_FILTERS` 상수.
+- **`foodApi` (신규 23차)**: 사용자 `search(q, limit?)` (인증, q 비면 훅이 막음)·`restaurants(foodId, { lat?, lng?, radiusM?, limit? })` (수집 근거 식당 — 응답 notice/evidence 노출 필수); 어드민 `adminList(input)`·`adminCreate(input)` (POST, nameNorm 중복 409)·`adminUpdate(id, input)` (PATCH, null 로 분류 비움)·`adminStats()`·`adminMergeConflicts(input)`·`resolveMergeConflict(id, { action })` (PATCH)·`adminRecognitionQuality(input)`; 적재 `getImportConfig()`·`updateImportConfig(input)` (PUT)·`runImportNow(input?)` (POST — body 없으면 저장 설정, 진행 중이면 `skipped` run)·`listImportRuns()`·`previewImport({ cronExpr, timezone })` + `buildFoodImportRunEventsUrl(): Promise<string>` (token query SSE). 쿼리 빌더 `buildFoodAdminListQuery`(q trim·빈 q 생략, boolean `'1'/'0'`, 고정 키 순서 q→dishType→mainIngredient→cuisine→source→allergenStatus→active→unclassified→sort→offset→limit)·`buildFoodMergeConflictListQuery`·`buildFoodRestaurantsQuery`·`buildFoodRecognitionQualityQuery` — 순수 함수라 테스트가 문자열을 고정.
+- **`mealApi` (신규 23차, 전부 Bearer)**: 데이터 관리 `exportData()`·`backupData()`·`restoreData(archive)` (POST)·`previewPhotoRetention(before?)`·`deleteRetainedPhotos(input)` (DELETE + JSON body)·`deleteAllData({ confirmation })` (DELETE + JSON body, `MEAL_DATA_DELETE_CONFIRMATION` 정확 문자열); 기록 `list(input)`·`get(id)`·`create(input)`·`update(id, input)` (PATCH)·`remove(id)`·`calendar(month)`·`stats(from, to)`; 사진 `uploadPhoto(file: MealPhotoUploadFile)` (FormData 필드 `'file'`, 요청당 1장·5MB)·`removePhoto(token)`·`copyPhoto(token)` (POST — 지난 기록 사진 복제, 참조 공유 아님)·`timePresets()`·`recentItem(name)`·**`photoBlob(token, variant = 'thumb'): Promise<Blob>`** (JWT 필요라 `<img src>` 불가 — 직접 `fetch` + Authorization); 인식 `recognize(input)`; 추천 `recommend(input)` (같은 날·끼니·프로필이면 서버 캐시)·`listRecommendations(limit?)`·`recommendationContext()`·`recommendationFeedback(id, input)`·`recommendationEvent(id, input)`; 선호 `getPreference()`·`updatePreference(input)` (PUT). `buildMealEntriesQuery`(from/to/slot/mealType/source/q/cursor/limit/withPhotos `'1'/'0'`, 고정 순서). `MealPhotoUploadFile = Blob | { uri: string; name: string; type: string }`.
 
 **React Query 훅 (`hooks/`)**
 - 인증: `useCurrentUser`, `useLogin`, `useRegister`, `useLogout`
@@ -586,10 +641,19 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - **폴링 3훅(도착/위치)은 `refetchIntervalInBackground` 기본 false 에 의존** — 탭 비활성 시 폴링 자동 중단으로 일 1,000건(개발계정) 한도 절약.
 - **버스 즐겨찾기 (신규)**:
   - `useBusFavorites(): BusFavoritesApi` — 게스트 로컬 + 로그인 서버 하이브리드 단일 훅. `{ stations, routes, isStationFavorite(stId), isRouteFavorite(stId, busRouteId), toggleStation(item), toggleRoute(item) }`. 서버 목록 키 `['bus', 'favorites']`(`enabled: loggedIn`, staleTime 60s). 토글은 서버 목록 포함 여부로 upsert/remove 분기 → 응답(전체 목록)으로 `setQueryData` 교체. pending 중 같은 항목 연타는 in-flight ref Set 무시. 로그인 직후 게스트 저장분 있으면 `sync` 1회(useEffect, `syncedRef` StrictMode 가드) → 성공 시 게스트 `clearAll` + 캐시 교체.
+- 전철/맛집 즐겨찾기/투표/지도 재검색: `useSubway*` 8훅, `useSubwayFavorites`, `useRestaurantFavorites`, `useVote*`, `useMapResearch`, `useBulkJob` — 2026-07-07·08-17 흡수 문단 참조.
+- **대기정보 (신규 24차)** — `useAirSidoRealtime(sidoName | null)` (`['air','sido',sido]`, staleTime 5분 + `refetchInterval` 10분, placeholder 유지) / `useAirStationHistory(stationName | null, term)` (`['air','station',name,term]`, 5분/10분) / `useAirBadStations()` (`['air','bad-stations']`, 5분/10분) / `useAirForecast(date?)` (`['air','forecast',date ?? 'auto']`, 15분) / `useAirStations()` (`['air','stations']`, staleTime·gcTime 24h, `retry:false` — 활용신청 전 503 은 재시도해도 같다) / **`useAirNearbyStations(lat | null, lng | null, { radius?, limit?, refetchOnWindowFocus? })`** (`['air','stations','nearby',lat.toFixed(4),lng.toFixed(4),radius ?? null,limit ?? null]`, 5분/10분 — 옵션으로 `refetchOnWindowFocus` 만 켜서 상주 표시가 오래 떠난 탭에서 즉시 최신화) / `useAirStationSearch(q)` (1~30자 `enabled`, 24h) / `useAirWeeklyForecast(date?)` (`['air','forecast','weekly',date ?? 'auto']`, 30분). 폴링 훅은 전부 `refetchIntervalInBackground` 기본 false 에 의존(탭 비활성 시 정지) — 버스·지하철과 같은 규율.
+- **내 대기 위치 (신규 24차)** — **`useAirLocation(): { location, isLoading, isSaving, save(body), clear() }`** — 게스트(`!token`)면 `useAirLocationStore`, 로그인이면 `['air','location']`(staleTime 60s) + `upsert`/`remove` mutation 응답으로 `setQueryData`. 로그인 && 조회 성공 && 서버 비어 있음 && 게스트 값 있음 → PUT 1회(`mergedRef`, useEffect — 외부 시스템 동기화) → 성공 시 게스트 `clear`, 실패 시 `mergedRef` 리셋(재시도). 로그아웃(token null) 시 `mergedRef` 리셋.
+- **날씨 (신규 24차)** — `useWeatherNowcast(nx | null, ny | null, { refetchOnWindowFocus? })` (`['weather','nowcast',nx,ny]`, 5분/10분) / `useWeatherForecast(nx, ny)` (`['weather','forecast',nx,ny]`, 10분/30분) / `useWeatherVersions()` (5분/10분) / `useWeatherMid(land | null, ta | null, stn?)` (`['weather','mid',land,ta,stn ?? null]`, 30분/60분) / `useWeatherAws(lat | null, lng | null, { radius?, limit? })` (`['weather','aws',lat4,lng4,radius ?? null,limit ?? null]`, 2분/5분 — 매분 관측이라 실황보다 촘촘) / `useWeatherMidSea(regId | null)` (30분/60분). 전부 `enabled` 가드 + placeholder 유지(지점 전환 시 디밍).
+- **내 위치 한눈에 (신규 24차)** — **`useMyLocationGlance({ refetchOnWindowFocus? }): { location, label, weather, air }`** — `weather: { loading, ok, tempC, condition, conditionLabel, ncstHour, ncstBase, popMax, wet }`, `air: { loading, ok, grade, gradeSource('khai'|'pm25'|'pm10'), pm10, pm25, station }`. 상수 `GLANCE_RAIN_POP_THRESHOLD = 60`, `GLANCE_AIR_RADIUS_M = 50_000`, `GLANCE_AIR_GRADE_SOURCE_LABEL`. `location` 이 null 이면 두 쿼리는 `enabled=false`(칩·카드는 아무것도 그리지 않음).
+- **일상지도 (신규 24차)** — `useLifeMapStatus()` (`['life-map','status']`, 24h) / **`useLifeMapPoints(params: { layer, bbox, zoom, filters? } | null)`** (`['life-map','points',layer,bbox,Math.floor(zoom),lifeMapFiltersKey(filters)]`, 24h, placeholder 유지 — bbox 가 바뀌어도 마커가 깜빡이지 않음) / `useLifeMapNearby(layer, lat | null, lng | null, { radius?, limit?, filters?, enabled? })` (`['life-map','nearby',layer,lat4,lng4,radius,limit,filtersKey]`, 24h) / `useLifeMapSearch(q, limit?)` (공백 정규화 후 2~60자 `enabled`, `['life-map','search',q,limit ?? null]`, 10분, `retry:false`) / `useLifeMapDetail(layer | null, id | null)` (`['life-map','detail',layer,id]`, 24h) + `lifeMapFiltersKey(f)` (`purpose.join(',')|category.join(',')|불리언 5자리`).
+- **음식 카탈로그 (신규 23차)** — 사용자 `useFoodSearch(q, { limit?, enabled? })` (`['food','search',q,limit ?? null]`, q 비면 비활성, 60s, `keepPreviousData`) / `useFoodRestaurants(foodId, input, { enabled? })` (`['food','restaurants',foodId,input]`, foodId 비면 비활성, 5분); 어드민 `useFoodAdminList(query)` (`['food','admin','list',query]`, `keepPreviousData`) / `useFoodAdminStats()` (`['food','stats']`) / `useFoodMergeConflicts(input)` / `useResolveFoodMergeConflict()` (mutation → merge-conflicts+list+stats invalidate) / `useFoodRecognitionQuality(input)` (5분) / `useCreateFoodItem()`·`useUpdateFoodItem()` (→ `['food','admin']`+`['food','stats']` invalidate); 적재 `useFoodImportConfig()` / `useUpdateFoodImportConfig()` (`setQueryData`) / `useRunFoodImportNow()` (runs+config invalidate) / `useFoodImportRuns()` / `useFoodImportPreview(cronExpr, timezone, enabled)` (schedule 동형) / **`useFoodImportRunEvents(enabled): { progress }`** (잡 SSE — snapshot running 이면 progress 정규화(phase/processed/total), `'progress'` 그대로, `'done'` → runs+config+`['food','admin']`+stats invalidate, 1s→30s 백오프, enabled 끄면 닫고 progress null).
+- **식단 (신규 23차, 루트 키 `['meal']`)** — 기록 `useMealEntries(query, enabled)` (`['meal','list',query]`, `keepPreviousData`) / `useInfiniteMealEntries(query, enabled)` (`['meal','list','infinite',query]`, cursor 는 opaque, `nextCursor` 그대로 전달) / `useMealEntry(id)` (`['meal','one',id]`) / `useMealCalendar(month)` (`YYYY-MM` 검증) / `useMealStats(from, to)` / **`useCreateMealEntry()`·`useUpdateMealEntry()`** (변수 `{ input, expectedPrincipalId? }` — `shouldApplyMealMutationCache` 가 `isMealDraftPrincipalCurrent` 로 계정 경계 뒤 늦은 응답의 캐시 반영을 막음; 통과 시 `['meal','one',id]` setQueryData + list/calendar/stats/recommendation/time-presets invalidate) / `useDeleteMealEntry()` (`removeQueries(['meal','one',id])` + 같은 invalidate); 사진 `useUploadMealPhoto()` / `useDeleteMealPhoto()` / `useCopyMealPhoto()` / **`useMealPhotoUrl(token, { variant?, enabled? }): { url, error }`** (blob → 웹 `URL.createObjectURL`(cleanup 에서 revoke) / RN `FileReader.readAsDataURL`); 입력 보조 `useMealTimePresets()` (`['meal','time-presets']`, 30분) / `useRecentMealItem(name)` (`['meal','recent-item',name]`, 5분); 인식 `useRecognizeMeal()`; 선호 `useMealPreference()` (60s) / `useUpdateMealPreference()` (setQueryData + recommendation invalidate); 추천 `useMealRecommendationContext()` / `useMealRecommendations(limit = 10)` / `useCreateMealRecommendation()` / `useMealRecommendationFeedback()` / `useMealRecommendationEvent()` (전부 `['meal','recommendation']` invalidate); 데이터 관리 `useExportMealData()`·`useBackupMealData()` (mutation — 큰 JSON 은 사용자 동작 때만) / `useRestoreMealData()` (→ `['meal']` invalidate) / `usePreviewMealPhotoRetention()` / `useDeleteRetainedMealPhotos()` / **`useDeleteAllMealData()`** (→ `removeQueries(['meal'])` — 삭제 전 개인정보가 캐시에 남지 않게).
+- **내 위치 (변경 24차)** — `useUserLocation({ auto?, timeoutMs? })` 상태 enum 에 **`'timeout'`** 추가(`idle|pending|granted|denied|timeout|unavailable`). export `acquirePosition(opts): Promise<AcquirePositionResult | null>`, `POSITION_MAX_AGE_MS = 300_000`.
 
 **SSE 매니저 (`hooks/summarySseManager.ts`)** — 변경 없음. `subscribe(key, { onSnapshot(snap, prev), onReview, onLog? })`, place/canonical 키 union, heartbeat 5s, idle 15s, backoff 1.5s→60s.
 
-**잡 단위 SSE 훅** — **`useScheduleRunEvents` 추가로 다섯 훅.** `useGroupingJob` / `useGlobalMergeJob` / `useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` / **`useScheduleRunEvents`** 모두 매니저를 거치지 않고 훅 안에서 직접 `EventSource` 라이프사이클(closed/cancelled + 백오프 + cleanup)을 든다. 백오프 `1s → 30s cap` 공통. `useScheduleRunEvents` 는 jobId 가 없고 `enabled` 플래그로만 연결 토글(서버가 "현재 진행 중 run" 하나를 스트림) — 진행값은 캐시가 아닌 로컬 `{ progress }` state, done 에서만 schedule+analytics 캐시 invalidate.
+**잡 단위 SSE 훅** — `useScheduleRunEvents`·`useRandomCrawlRunEvents`·**`useFoodImportRunEvents`(23차)** 까지 같은 꼴(그룹핑/전역 머지/DC 일괄 저장 3벌은 22차에 `useBulkJob` 제네릭으로 통합). `useGroupingJob` / `useGlobalMergeJob` / `useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` / **`useScheduleRunEvents`** 모두 매니저를 거치지 않고 훅 안에서 직접 `EventSource` 라이프사이클(closed/cancelled + 백오프 + cleanup)을 든다. 백오프 `1s → 30s cap` 공통. `useScheduleRunEvents` 는 jobId 가 없고 `enabled` 플래그로만 연결 토글(서버가 "현재 진행 중 run" 하나를 스트림) — 진행값은 캐시가 아닌 로컬 `{ progress }` state, done 에서만 schedule+analytics 캐시 invalidate.
 
 **Zustand 스토어 (`stores/`)**
 - `useAuthStore`: `user`, `token`, `isGuest` + `setSession`, `setUser`, `enterGuest`, `clearSession`
@@ -609,6 +673,9 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - persist key `settlement-draft-v1`, **version `6`** (v1→…→v4→**v5(round 에 groupSplits 추가)→v6(잔여 수령자 단일 id → `leftoverParticipantClientIds` 배열 — `migrateCategoryAdjustments`)** 마이그레이션 체인). storage 는 **`setSettlementDraftStorage(adapter)` 주입형** — 미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` (SSR/test 안전).
   - 노출 타입: `SettlementDraft` / `DraftParticipant` / `DraftItem` / `DraftRound` / `DraftAttendance` / `DraftCategoryAdjustment` (이제 `leftoverParticipantClientIds: string[]`) / `DraftCategoryAdjustments` / **`DraftItemGroup` / `DraftGroupMember`** / `ExcludeKey`.
 - **`useBusFavoriteStore` (신규)**: 게스트 버스 즐겨찾기 — `{ stations: BusFavoriteStationItemType[]; routes: BusFavoriteRouteItemType[] }`(등록순 배열) + `toggleStation`/`toggleRoute`(일치 있으면 제거, 없으면 push; 상한 `BUS_FAVORITES_MAX` 도달 상태 추가 시도면 무동작+`false`, 그 외 `true`)/`removeStation`/`removeRoute`/`clearAll`(sync 성공 후 비움). persist key `bus-favorites-v1` v1, `partialize` 로 `{stations, routes}` 만 영속. storage 는 **`setBusFavoriteStorage(adapter)` lazy resolver** — 웹 `window.localStorage` 자동 / 앱 AsyncStorage 주입 / 둘 다 없으면 `NO_OP_STORAGE`. `reviewAskStore` 와 같은 패턴.
+- `useSubwayFavoriteStore` / `useRestaurantFavoriteStore` / `useVoteGuestStore` / `createInjectableStorage` — 2026-07-07·08-17 흡수 문단 참조.
+- **`useAirLocationStore` (신규 24차)**: 게스트 내 대기 위치 — `{ location: AirLocationItemType | null }` + `setLocation(body)`(`updatedAt` 을 여기서 찍어 서버 저장분과 같은 모양)/`clear()`. persist `air-location-v1` v1, `partialize: { location }`, `createInjectableStorage()`(웹 localStorage 자동) + **`setAirLocationStorage(adapter)`** + `bindRehydrate`. 로그인 사용자는 이 store 가 아니라 서버(`airLocationApi`) + `['air','location']` 캐시 — `useAirLocation` 이 token 유무로 고른다.
+- **`useMealDraftStore` (신규 23차)**: 식단 입력 draft(한 번에 한 건) — state `draftSessionId`(세대 id)/`entryId`/`originRecommendationId`/`eatenAt`/`eatenDate`/`slot`/`mealType`/`placeId`/`placeName`/`memo`/`photos[]`(`{token, localUri, managedLocalFile?}`)/`pendingPhotos[]`(`{clientId, localUri, name, mimeType, managedLocalFile, status 'pending'|'missing', lastError}`)/`items[]`(`MealDraftItem` — clientId·name·foodId·분류 3축·portion/servings/portionSource·isMain·confidence·인식 계보(recognitionDishId/selectedCandidateRank/catalogMatchedBy/catalogMatchScore)·source·candidates·userEdited)/`recognition`/`updatedAt`. 액션 `start(init)`·`setField`·`addPhoto`/`removePhoto`·`addPendingPhoto`/`updatePendingPhoto`/`removePendingPhoto`/`promotePendingPhoto`(사진+대기 합산 `MEAL_DRAFT_MAX_PHOTOS=5` 상한, 토큰 중복 차단)·`addItem`/`updateItem`(`userEdited=true`)/`removeItem`·`applyRecognition(dishes, meta, { mode: 'append' | 'replace-recognized' })`(교체 모드는 손대지 않은 인식 항목만 교체, 보존 항목과 같은 foodId/이름은 재추가 안 함)·`clear(expectedSessionId?)`(세대 불일치면 false). persist `name` `lp:meal-draft-v1` 고정 + `principalScopedDraftStorage` 가 물리 키를 `lp:meal-draft-v1:principal:<encodeURIComponent(userId)>` 로 바꿈(principal 없으면 read/write NO_OP), `partialize` 액션 제외 전부. 모듈 export: `setMealDraftStorage`, `setMealDraftLocalFileAdapter`, **`setMealDraftPrincipal(id | null): Promise<void>`**, `getMealDraftIdentity()`, `isMealDraftIdentityCurrent(identity)`, `isMealDraftPrincipalCurrent(principalId)`, `beginMealDraftPhotoPreparation(identity)` (lease — 저장 의도 등록 후엔 null), `runMealDraftPhotoFlushSingleFlight(identity, work)`, `runMealDraftSaveSingleFlight(identity, work)` (열린 lease 를 기다린 뒤 실행, 같은 세션 중복 저장 합류), `getMealDraftSaveFlight(identity)`, `draftItemToInput(item)` (candidates·clientId 제외).
 
 **UI / 디자인 / 상수** — UI 8 컴포넌트·상수 불변. **`design/tokens.ts` 다크 모드 토큰 가독성 개선** —
 `palette.zinc400(#a1a1aa)` 추가, `darkColors.textMuted` `zinc500→zinc400`(AA 4.5:1 회복), `darkColors.border`
@@ -616,7 +683,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 선택의 영속화는 플랫폼별(웹 localStorage / 앱 AsyncStorage) — Key Decisions 참고. (`palette/lightColors/
 darkColors/space/radius/typography/duration`, `APP_NAME` / `QUERY_STALE_TIME` / `QUERY_GC_TIME` 노출 모양 불변.)
 
-## 5. Data [coverage: high — 18 sources]
+## Data [coverage: high — 24 sources]
 
 **Auth 상태 모양** (`stores/authStore.ts`)
 ```ts
@@ -685,8 +752,9 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
 - **Storage adapter 주입** — `setSettlementDraftStorage(storage: StateStorage)` 로 RN 등에서
   AsyncStorage 어댑터 주입. 미주입 시 `window.sessionStorage` 자동 선택, 둘 다 없으면(SSR/test)
   `NO_OP_STORAGE`(get/set/remove 모두 noop) 로 fallback — persist 가 메모리만 쓰는 효과.
-  resolver 는 첫 read/write 시점에 평가되므로 앱 entry 가 zustand 첫 hydrate 이전에 한 번만
-  호출하면 됨.
+  22차(`7520859`)부터 `createInjectableStorage` 의 **지연 위임 어댑터**라 주입 시점이 스토어 평가
+  이후여도 되고, 주입 즉시 `persist.rehydrate()` 가 다시 돌아 저장분을 복원한다(앱 entry 가 모듈
+  로드 시 한 번 호출하면 됨).
 - 키 `settlement-draft-v1`. **persist version `6`** — v1 → v2(rounds 도입) → v3(차수 할인) →
   v4(카테고리 잔여 보정) → **v5(round.groupSplits 추가) → v6(잔여 수령자 단일 id → `leftoverParticipantClientIds`
   배열, `migrateCategoryAdjustments`)**. `migrate(fromVersion)`:
@@ -767,14 +835,42 @@ interface BusFavoriteState {
 - storage 는 `setBusFavoriteStorage(storage)` lazy resolver — 웹 `window.localStorage` 자동 / 앱 AsyncStorage 주입 / SSR·test `NO_OP_STORAGE`. `settlementDraftStore`·`reviewAskStore` 와 동일 주입 패턴.
 - 로그인 사용자의 즐겨찾기는 이 store 가 아니라 서버(`busFavoriteApi`) + React Query 캐시(`['bus','favorites']`). `useBusFavorites` 가 token 유무로 둘 중 하나를 반환.
 
+**대기·날씨·일상지도·음식·식단 캐시 키 (신규 23~24차)**
+- 대기: `['air','sido',sidoName]` / `['air','station',stationName,term]` / `['air','bad-stations']`(셋 다 staleTime 5분 + 10분 폴링) / `['air','forecast',date ?? 'auto']`(15분) / `['air','forecast','weekly',date ?? 'auto']`(30분) / `['air','stations']`(24h, `retry:false`) / `['air','stations','nearby',lat4,lng4,radius ?? null,limit ?? null]`(5분/10분) / `['air','stations','search',q]`(24h) / `['air','location']`(로그인만 `enabled`, 60s — `upsert`/`remove` 응답을 `setQueryData` 로 통째 교체).
+- 날씨: `['weather','nowcast',nx,ny]`(5분/10분) / `['weather','forecast',nx,ny]`(10분/30분) / `['weather','versions']`(5분/10분) / `['weather','mid',land,ta,stn ?? null]`(30분/60분) / `['weather','mid-sea',regId]`(30분/60분) / `['weather','aws',lat4,lng4,radius ?? null,limit ?? null]`(2분/5분). 폴링은 전부 탭 활성 시만(`refetchIntervalInBackground` 기본 false).
+- 일상지도: `['life-map','status']` / `['life-map','points',layer,bbox,floor(zoom),filtersKey]` / `['life-map','nearby',layer,lat4,lng4,radius ?? null,limit ?? null,filtersKey]` / `['life-map','detail',layer,id]`(전부 24h, 무효화 없음 — 데이터는 재적재로만 바뀜) / `['life-map','search',q,limit ?? null]`(10분).
+- 음식: `['food','search',q,limit ?? null]`(60s) / `['food','restaurants',foodId,input]`(5분) / `['food','admin','list',query]` / `['food','admin','merge-conflicts',input]` / `['food','admin','recognition-quality',input]`(5분) / `['food','stats']` / `['food','import','config']` / `['food','import','runs']` / `['food','import','preview',cronExpr,timezone]`. 편집·충돌 해결·적재 done → `['food','admin']` + `['food','stats']` prefix invalidate(+ runs/config).
+- 식단: `['meal','list',query]` / `['meal','list','infinite',query]` / `['meal','one',id]` / `['meal','calendar',month]` / `['meal','stats',from,to]` / `['meal','time-presets']`(30분) / `['meal','recent-item',name]`(5분) / `['meal','preference']`(60s) / `['meal','recommendation','context']` / `['meal','recommendation','list',limit]`. 기록 생성/수정/삭제 → list·calendar·stats·recommendation·time-presets invalidate(단건은 `setQueryData`/`removeQueries`); 복원 → `['meal']` invalidate; 전체 삭제 → `removeQueries(['meal'])`; **로그인/가입 → `qc.removeQueries()` 전체**(사용자 id 가 키에 없는 비공개 캐시 보호), 로그아웃/현재 세션 401 → `qc.clear()`.
+
+**Air location 게스트 상태** (`stores/airLocationStore.ts`)
+```ts
+interface AirLocationState {
+  location: AirLocationItemType | null;  // { lat, lng, label: string | null, source, updatedAt(ISO) }
+}
+```
+- 키 `air-location-v1`, version 1, `partialize` 로 `{ location }` 만. `createInjectableStorage()`(웹 localStorage 자동 / 앱 `setAirLocationStorage(AsyncStorage)` / NO_OP).
+- 로그인 사용자의 값은 서버(`airLocationApi`) + `['air','location']` 캐시. `useAirLocation` 이 token 유무로 고르고, 로그인 직후 서버가 비어 있을 때만 이 값을 올린 뒤 `clear`.
+
+**Meal draft 상태** (`stores/mealDraftStore.ts`) — API Surface 의 `useMealDraftStore` 항목 참조. 물리 키 `lp:meal-draft-v1:principal:<userId>`(principal 스코프), `partialize` 는 액션 제외 전부(`draftSessionId` 포함 — 재시작 후 같은 세대로 복원). 모듈 변수 `activeDraftPrincipal`/`desiredDraftPrincipal`/`principalTransition`(직렬 큐) + 세션 단위 Map 3개(`photoPreparations`/`photoFlushFlights`/`saveFlights`, 키 = `JSON.stringify([principalId, sessionId])`)는 React 밖 모듈 수명.
+
 **ReviewSummary 분석 필드 머지** — 기존 동일.
 
 **SSE last-snapshot 캐시** — 매니저가 `lastSnapshotByCanonical` + `lastSnapshotByPlace` 두 Map 유지.
 
 **SSE 스트림 상태** (`useCrawlJobStream`) — 기존 동일.
 
-## 6. Key Decisions [coverage: high — 35 sources]
+## Key Decisions [coverage: high — 45 sources]
 
+- **2026-08-23 401 은 "그 요청이 쓴 토큰 == 현재 토큰" 일 때만 세션을 끊는다(`9f39d53`)** — 계정 A 로 보낸 요청이 A 가 로그아웃하고 B 가 로그인한 뒤에 401 로 돌아오면, 옛 `onUnauthorized()` 는 B 세션을 통째로 끊었다. `apiFetch` 가 요청 시작 시 config 를 스냅샷하고 콜백에 그 요청의 토큰을 넘기며, `handleUnauthorizedForCurrentSession` 이 현재 토큰과 비교해 같을 때만 `cancelQueries → clear → setMealDraftPrincipal(null) → clearSession` 을 **한 동기 콜백**에서 실행한다(사이에 다른 계정 로그인이 끼지 않게). 가드를 shared 에 두어 웹 `main.tsx`·앱 `api-setup.ts` 가 같은 규칙을 쓴다.
+- **2026-08-23 로그인·가입 성공 시 `cancelQueries` + `removeQueries()` 전체 후 principal 전환 후 `setSession`(`fd371d9`)** — 비공개 캐시 대부분이 query key 에 사용자 id 를 안 넣는다(`['meal','list',…]`, `['settlement',…]`). invalidate 만 하면 새 계정 화면에 이전 계정 데이터가 refetch 전까지 순간 노출되므로 제거한다. `useCurrentUser` 도 /me 응답으로 principal 을 세운 뒤 **현재 token 을 재확인**하고 `setUser` — 전환 중 로그아웃됐다면 지연된 /me 가 user/draft 를 되살리지 않는다.
+- **2026-08-23 식단 draft 는 principal 스코프 물리 키 + 동기 경계 + 세대 id(`88751cd`→`fd371d9`·`9f39d53`)** — 사진 URI·장소·메모·인식 결과가 같은 기기의 다음 계정에 넘어가면 안 된다. persist `name` 은 고정하고 스토리지 어댑터가 키를 `…:principal:<id>` 로 바꾸며, principal 이 없으면 read/write 모두 NO_OP(부팅 중 예전 draft 가 한 프레임도 안 보이게). `setMealDraftPrincipal` 은 await 전에 메모리를 비우고(동기 경계) 직렬 큐에서 이전 키 삭제 → **v1 고정 키 폐기(누구 소유인지 증명 불가라 마이그레이션 안 함)** → 앱 파일 namespace 전환 → rehydrate. `draftSessionId` 세대 id 로 비동기 업로드·인식·저장이 다른 draft 를 덮지 않게 하고, 사진 준비 lease/저장 single-flight 는 컴포넌트 수명이 아니라 모듈 수명이다. 정산 draft(placeId 정체성 + v1→v6 마이그레이션)와 같은 `createInjectableStorage({ web: 'session' })` 위에 얹었지만 정체성 축이 다르다.
+- **2026-08-22 "저장한 내 위치 하나"의 날씨·대기 파생값은 shared 훅 하나가 만든다(`9e197d3`·`e348032`)** — 웹 상단바 칩과 앱 홈 카드가 같은 규칙(우산 = 앞 6시간 PTY>0 또는 POP≥60, 등급 = 통합지수→PM2.5→PM10 폴백, 측정소는 50km 내 1곳)을 각자 구현하면 두 화면이 다른 판정을 낸다. `useMyLocationGlance` 가 `useAirLocation` → `latLngToKmaGrid` → `useWeatherNowcast` + `useAirNearbyStations` 를 합성해 파생값만 돌려주고, 문구·링크·색·폭 예산은 화면이 정한다. 갱신 리듬은 두 훅의 10분 조용한 폴링이며 `refetchOnWindowFocus` 는 상주 표시(칩·카드)만 켠다 — 페이지 본문은 기본 false.
+- **2026-08-22 `weather/` 는 shared 의 "도메인 순수 로직" 디렉터리(`e348032`)** — `mergeDailyRows`·`weatherUpstreamMessage` 는 React 훅이 아니지만 `@repo/api-contract` 결과 타입과 `ApiError` 에 의존해 utils(leaf)에 둘 수 없다. `settlement/groupSuggestion.ts` 와 같은 위치 규칙: "api-contract 에 기대는 순수 함수는 shared 의 도메인 디렉터리". 웹 원본은 재수출 facade 로 남겨 import 경로를 안 깨뜨렸다.
+- **2026-08-22 food 쿼리 빌더는 고정 키 순서 + boolean `'1'/'0'` + 빈 q 생략(`d53fbe3`)** — 같은 조건이면 항상 같은 문자열이 나와야 react-query 캐시 키와 테스트가 안정된다. `URLSearchParams` 에 입력 순서대로 넣지 않고 빌더가 순서를 정한다. 서버 `boolParam` 이 `'1'/'0'/'true'/'false'` 를 받지만 클라는 `'1'/'0'` 만 낸다.
+- **2026-08-21 내 대기 위치는 "값 1개 서버 우선" 하이브리드(`a4284aa`)** — 즐겨찾기(집합)는 로그인 직후 union `sync` 였지만 내 위치는 값이 하나라 병합이 정의되지 않는다. 로그인 && 서버 비어 있음 && 게스트 값 있음일 때만 PUT 1회 후 게스트 clear, 서버에 값이 있으면 서버 우선이고 게스트 값은 버리지 않는다(로그아웃 시 그대로 복귀). `useBusFavorites` 의 `syncedRef` 처럼 `mergedRef` 로 StrictMode 이중 실행을 막고 실패 시 리셋해 재시도.
+- **2026-08-21 생활 정보 훅은 서버 캐시 리듬을 따르는 "10분 조용한 갱신"(`7340743`·`37e0db0`·`26947ba`)** — 측정값은 매시 정각(+10~20분 반영), 실황은 매시 :10 이라 분 단위 폴링은 낭비다. staleTime 5분 + `refetchInterval` 10분(예보/중기는 더 길게, AWS 매분 관측만 2분/5분)으로 탭이 열려 있는 동안 시간당 6번만 묻고, 서버 캐시 뒤라 업스트림 추가 호출은 없다. `placeholderData: (prev) => prev` 로 시도/측정소/지점 전환 시 이전 화면을 디밍 유지("refetch keeps the frame"). 좌표 키는 버스·지하철과 같은 `toFixed(4)` 스냅.
+- **2026-08-21 측위는 자동/명시 요청을 나누고 TIMEOUT 만 재시도한다(`67f14cf`)** — 마운트 자동 요청은 5초에 끊어 진입 직후 화면이 늦게 튀지 않게, 버튼(명시) 요청은 10초 + 1회 재시도(첫 시도가 측위 캐시를 데워 두 번째는 대개 성공). 거부(1)·측위 불가(2)는 재시도해도 같으니 즉시 확정. `maximumAge` 를 60초 → 5분으로 올려 같은 origin 다른 화면이 막 받은 위치를 재사용(캐시 히트 0ms 실측). 시간 초과는 `'unavailable'` 이 아니라 새 상태 `'timeout'` — 화면이 "다시 시도" 를 안내할 수 있게 원인을 구분.
+- **2026-08-21 일상지도는 24h staleTime + 필터를 문자열 키로(`1d92acb`)** — 데이터는 CSV/API 재적재 때만 바뀌는 정적 마스터라 지하철 마스터와 같은 사다리(24h). 필터 객체를 키에 그대로 넣으면 배열 identity 로 흔들리므로 `lifeMapFiltersKey` 가 `purpose|category|불리언 5자리` 문자열로 접는다. bbox 는 `formatBbox`(5자리) 문자열이라 미세 패닝마다 새 키가 되지만 `placeholderData` 로 마커가 깜빡이지 않고, 재검색 자체는 `useMapResearch` 의 트레일링 스로틀이 완충.
 - **버스 실시간 폴링은 `refetchIntervalInBackground` 기본 false 에 의존해 쿼터를 지킨다** — 도착(30s)/위치(15s) 폴링이 개발계정 일 1,000건 한도를 빨리 소진할 수 있어, 별도 visibilityState 리스너를 붙이는 대신 React Query 가 탭 비활성/비포커스 시 interval 을 자동 멈추는 기본 동작(`refetchIntervalInBackground: false`)을 그대로 활용한다. + `enabled` 로 정류장/노선 선택 시에만 구독, arsId `'0'`(가상정류장) 은 서버 400 이라 훅에서 `enabled` 차단. 정적 데이터(검색/노선상세)는 폴링 없이 staleTime 24h 로 재호출 억제.
 - **버스 좌표 쿼리 키는 `toFixed(4)`(≈11m) 스냅** — `useBusNearbyStations` 가 원좌표를 그대로 키에 쓰면 GPS 미세 흔들림마다 키가 갈라져 서버(셀 캐시)를 계속 때린다. 소수 4자리로 스냅해 같은 자리 재조회를 클라에서도 차단(서버 격자 캐시 staleTime 60s 와 짝).
 - **버스 즐겨찾기는 게스트 로컬 + 로그인 서버 하이브리드, 변경 함수가 전체 목록을 반환** — `useBusFavorites` 단일 훅이 token 유무로 게스트 store / 서버 캐시를 고른다. 서버 변경(upsert/remove/sync) 응답이 **변경 후 전체 `BusFavoritesResult`** 라 클라가 diff·낙관적 업데이트 없이 `setQueryData` 로 통째 교체 — 정합성 단순화. 로그인 직후 게스트 저장분을 `sync` 로 union 병합(멱등) 후 게스트 `clearAll`, 실패 시 로컬 유지(다음 마운트 재시도). 병합만 외부 시스템 동기화라 useEffect 허용(`syncedRef` StrictMode 이중 실행 가드), 나머지 파생 판정(`isStationFavorite` 등)은 렌더 중 계산.
@@ -856,13 +952,14 @@ interface BusFavoriteState {
 - **`useCanonicalCandidates` 는 모달 open 시만 fetch** — 기존.
 - **활성 잡 persist 패턴** — `lp:` 네임스페이스 localStorage. 단일 슬롯 4종 + 멀티 슬롯
   크롤 1종.
-- **`settlementDraftStore` storage adapter 주입 패턴** — store 자체는 플랫폼 무관(zustand persist
-  + StateStorage 인터페이스), 모듈 로드 시점엔 어느 플랫폼인지 모르므로 lazy resolver 로 우회.
+- **`settlementDraftStore` storage adapter 주입 패턴(→ 22차 `injectableStorage` 로 정정)** — store 자체는 플랫폼 무관(zustand persist
+  + StateStorage 인터페이스), 모듈 로드 시점엔 어느 플랫폼인지 모르므로 주입형으로 우회.
   앱(RN) entry 가 `setSettlementDraftStorage(asyncStorageAdapter)` 를 import 후 한 번만 호출, 웹은
-  미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` fallback. resolver 는
-  `createJSONStorage(() => resolveStorage())` 가 zustand 의 첫 read/write 시 평가하므로, 앱이
-  zustand 첫 사용 전에 inject 하면 됨. 같은 패턴(라이브러리 모듈은 abstract storage, 플랫폼 entry
-  가 inject)이 향후 다른 cross-platform persist store 에도 그대로 재사용 가능.
+  미주입 시 `window.sessionStorage` 자동, 둘 다 없으면 `NO_OP_STORAGE` fallback. **주의: 초기 구현의
+  `createJSONStorage(() => resolveStorage())` 는 팩토리가 스토어 정의 시점에 1회만 평가돼 앱 주입이
+  무효였다(`7520859` 에서 발견)** — 지금은 `createInjectableStorage` 의 지연 위임 어댑터 + 주입 시
+  `rehydrate` 로 언제 주입해도 된다. 같은 패턴(라이브러리 모듈은 abstract storage, 플랫폼 entry
+  가 inject)을 8개 persist 스토어(정산·AskTab·버스·지하철·맛집 즐겨찾기·투표·내 대기 위치·식단 draft)가 공유.
 - **앱은 AsyncStorage / 웹은 sessionStorage — 각자 다른 영속성** — RN 은 탭 개념이 없어 sessionStorage
   대응이 불가하고 AsyncStorage 가 자연스러운 영구 저장. 웹은 정산 입력이 본질적으로 일시적이라
   탭 닫기가 "포기" 의 자연 UX 시그널 — sessionStorage 가 맞는 의미. **양쪽 정책이 다른 게 정상** —
@@ -954,8 +1051,20 @@ interface BusFavoriteState {
   Content-Type 안 붙임, AI path 하드코드, 로직/UI 플랫폼 분리, 빌드 없는 소스 노출, 유연한
   React peer, SSE 토큰은 쿼리스트링, 중복 이벤트 방어** — 모두 기존 결정 유지.
 
-## 7. Gotchas [coverage: high — 32 sources]
+## Gotchas [coverage: high — 42 sources]
 
+- **`onUnauthorized` 시그니처가 `(requestToken) => void | Promise<void>` 로 바뀌었다 — 옛 `() => void` 콜백은 타입은 통과하지만 세션 경계 없이 항상 로그아웃한다** — 인자를 무시하면 이전 계정의 지연 401 이 새 세션을 끊는 옛 버그가 그대로다. 새 `configureApi` 호출은 반드시 `handleUnauthorizedForCurrentSession` 으로 감싸고, `onCurrentSessionUnauthorized` 안의 `cancelQueries`·`clear`·`clearSession` 은 같은 JS turn 에서 동기로 시작한다(사이에 await 를 넣으면 다른 계정 로그인이 끼어들 수 있다).
+- **`useLogin`/`useRegister` 가 `removeQueries()` 전체를 지운다** — 공개 캐시(맛집 목록·버스 정류장 등)도 함께 날아가 로그인 직후 한 번 cold. 의도된 비용(비공개 캐시에 사용자 id 가 없어서). 로그인 화면이 떠 있는 동안 진행 중이던 쿼리는 `cancelQueries` 로 취소되므로 mutation 이 아닌 쿼리 결과를 기다리는 코드는 로그인 후 다시 요청해야 한다.
+- **`setMealDraftPrincipal` 이 세워지기 전엔 식단 draft persist 가 NO_OP** — 앱은 `bootstrapApi` 가 JWT payload 의 `userId` 로 화면보다 먼저 세우고, 웹은 `useCurrentUser`(/me 성공)·`useLogin` 이 세운다. 게스트/비로그인 상태에선 draft 가 메모리에만 있다(로그인 필수 도메인이라 의도). 원래 있던 v1 고정 키(`lp:meal-draft-v1`)는 principal 전환 때 폐기되므로 업데이트 직후 진행 중이던 draft 는 1회 사라진다(의도 — 소유 증명 불가).
+- **`useCreateMealEntry`/`useUpdateMealEntry` 의 `expectedPrincipalId` 는 옵션** — 안 넘기면 종전처럼 무조건 캐시에 반영한다(기존 호출자 호환). 계정 전환 경계를 지키려는 화면(앱 편집기)은 `getMealDraftIdentity().principalId` 를 넘긴다.
+- **`MealPhotoUploadFile` — RN 은 `{ uri, name, type }` 을 넣어야 한다** — Blob 을 넣으면 서버에 빈 파일이 도착("Input Buffer is empty"). 웹은 File/Blob 그대로. `useMealPhotoUrl` 의 objectURL 은 cleanup 에서 revoke 되지만 RN data URL 은 사진 크기만큼 메모리를 쓴다(thumb variant 기본).
+- **`useAirLocation` 병합은 서버가 비어 있을 때만** — 서버에 이미 값이 있으면 게스트 값은 로컬에 남아 로그아웃 시 되살아난다(의도). "로그인했는데 저장 위치가 게스트 때와 다르다" 는 서버 값이 우선이라서다. 병합 PUT 실패 시 `mergedRef` 를 되돌려 다음 렌더에 재시도(무한 재시도 UI 없음).
+- **`useMyLocationGlance` 는 두 쿼리를 무조건 구독한다** — 저장 위치가 없으면 둘 다 `enabled=false` 라 비용 0 이지만, 있으면 칩이 떠 있는 동안 10분마다 nowcast + nearby 두 요청이 나간다(서버 캐시 뒤라 업스트림 0). `refetchOnWindowFocus` 는 호출자가 켤 때만 — 페이지 본문 훅과 칩이 같은 키(`['weather','nowcast',nx,ny]`)를 공유하므로 칩의 focus refetch 가 페이지 데이터도 갱신한다.
+- **`useUserLocation` 에 상태 `'timeout'` 이 추가됐다** — `denied|unavailable` 만 분기하던 소비자는 timeout 을 처리하지 않으면 `pending` 이 끝난 뒤 아무 안내도 안 보인다. 자동(마운트) 요청은 여전히 5초 단발이라 timeout 이 날 수 있고, 명시 `refetch` 만 재시도한다(의도).
+- **`acquirePosition` 은 `navigator.geolocation` 존재를 전제** — 훅이 앞에서 `unavailable` 로 걸러 주지만 코어를 직접 부르면 가드가 없다. `isCancelled` 가 true 를 돌려주면 결과를 null 로 버린다(언마운트·새 요청).
+- **`useLifeMapPoints` 키의 bbox 는 5자리 문자열 그대로** — 미세 패닝마다 새 캐시 인스턴스(24h gc 기본이라 메모리에 쌓임). 재검색 빈도는 `useMapResearch` 스로틀(1.2s)이 정하고, 필터·줌은 `lifeMapFiltersKey`/`Math.floor` 로 접혀 있다. 검색(`useLifeMapSearch`)은 `retry:false` — 서버에 지오코딩 키가 없으면 빈 목록이 정상.
+- **`foodApi.runImportNow()` 는 body 없이 POST** — `apiFetch` 가 body 없을 때 Content-Type 을 안 붙이는 규칙에 기대므로(fastify 가 빈 JSON 거절) `runImportNow(undefined)` 와 `runImportNow({})` 는 다르게 동작한다(후자는 빈 오버라이드).
+- **`weatherUpstreamMessage` 의 503 문구는 "키 없음"과 "일일 한도" 두 뜻** — 서버가 둘을 같은 코드로 내려 문구도 합쳐져 있다. 운영에서 구분하려면 `e.message` 를 본다.
 - **버스 실시간 폴링은 탭이 활성이면 계속 돈다 — 화면에서 선택 해제 책임은 호출자** — `useBusStationArrivals`/`useBusPositions` 는 `enabled`(arsId/busRouteId 존재) + 탭 활성 조건에서만 폴링을 멈춘다. 탭을 켜둔 채 정류장/노선을 선택 상태로 오래 방치하면 30s/15s 폴링이 한도(개발계정 1,000건/일)를 소진하므로, 페이지가 상세 패널을 닫을 때 arsId/busRouteId 를 null 로 내려 `enabled` 를 꺼야 한다. `refetchIntervalInBackground` false 는 "다른 탭/최소화" 만 커버하지, 같은 탭에서 보고만 있는 상태는 못 막는다.
 - **arsId `'0'` 은 가상정류장 — 도착정보 호출 전 반드시 차단** — 서버가 arsId `'0'` 을 400 으로 거절한다. `useBusStationArrivals` 가 `enabled: !!arsId && arsId !== '0'` 로 막고 있으니, 직접 `busApi.stationArrivals('0')` 를 부르거나 다른 경로로 호출하면 400. 마주보는 동일 이름 정류장에 `'0'` 이 섞일 수 있어 리스트 렌더에서도 도착 조회 비활성 처리 필요.
 - **버스 강제 새로고침에 `invalidateQueries` 를 쓰면 한도가 깎인다** — `useBusStationsRefresh` 는 의도적으로 `cancelQueries` + `setQueryData` 만 한다. 여기서 `invalidateQueries` 로 바꾸면 force 응답을 받은 뒤 일반(캐시) 쿼리가 한 번 더 재호출돼 서울시 API 를 이중으로 때린다. 캐시 교체 방식을 유지할 것.
@@ -1004,14 +1113,13 @@ interface BusFavoriteState {
   의 회귀 수정). 영수증 교체 시 이전 warning/totalAmount 잔존 버그 — caller 가 명시적으로
   `warning: undefined` 를 보내도 store 는 `null` 로 적는다. caller 가 부분 patch 의도로 `undefined`
   를 보내면 의도와 다르게 동작하니, 영수증 교체는 항상 명시적인 새 값 (또는 null) 을 보내는 계약 유지.
-- **`setSettlementDraftStorage` 는 첫 read/write 이전에 호출** — store import 자체는 storage 를
-  바로 평가하지 않지만(resolver 가 lazy), zustand persist 는 hydrate 시점에 한 번 storage 를 읽는다.
-  RN entry 가 `setSettlementDraftStorage(asyncStorageAdapter)` 호출 전에 `useSettlementDraftStore`
-  가 mount 되면 첫 hydrate 가 `NO_OP_STORAGE` 로 굳어버려 그 세션에서 영구 저장이 안 된다(메모리만).
-  앱 entry 의 `api-setup.ts` 같은 zustand 모듈 import 보다 먼저 실행되는 곳에서 inject 하는 게
-  안전. 미주입 + 비브라우저 환경(SSR/test)이 의도된 케이스라면 NO_OP fallback 가 정답이라 경고도
-  내지 않음 — 그래서 누락 시 silent 하게 메모리만 쓰는 효과로 보임. 디버깅 시 "내가 입력한 값이
-  앱 재시작 후 사라진다" 면 inject 누락 의심.
+- **persist 스토리지 주입은 `createInjectableStorage` 로만(22차 정정)** — 직접 `createJSONStorage(() => resolveStorage())`
+  를 쓰면 팩토리가 스토어 정의 시점에 1회만 평가돼 앱 주입이 영영 무효(RN 이면 NO_OP 로 굳음)가 된다 —
+  실제로 6개 스토어가 그 상태였다(`7520859`). 지금은 지연 위임 어댑터라 `setXxxStorage` 를 언제 불러도
+  되고 주입 즉시 `rehydrate` 가 돈다(주입 전 rehydrate 는 빈 스토리지를 읽고 끝났으므로). 미주입 +
+  비브라우저 환경(SSR/test)은 의도된 NO_OP 라 경고가 없다 — "앱 재시작 후 값이 사라진다" 면 `api-setup.ts`
+  의 주입 누락(8개 스토어 목록 확인)이나 `bindRehydrate` 누락 의심. 새 persist 스토어는 반드시
+  `createInjectableStorage()` + `bindRehydrate(() => store.persist.rehydrate())` 짝으로.
 - **persist v1 → v4 마이그레이션 경로** — `version: 4` 로 올라가 있으므로 옛 v1 평면 draft 가 남아
   있는 사용자는 진입 시 한 번 마이그레이션 실행. **v1 의 `placeId` 가 없으면 `emptyDraft()` 로
   폐기** — 1차 식당 모르면 의미 없는 입력이라 살릴 가치 없다고 결정. v2/v3 사용자는 누락 필드만
@@ -1082,12 +1190,14 @@ interface BusFavoriteState {
   HTMLElement 필요**, **`invalidateQueries` prefix 매칭 주의**, **`testProvider`/`deleteProvider`
   빈 body** — 모두 기존 항목 유지.
 
-## 8. Sources [coverage: high — 71 sources]
+## Sources [coverage: high — 120 sources]
 
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
-- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: review-search/review-clustering/randomCrawl/logs/telegram-settings api + useReviewSearch/useReviewClusters/useRandomCrawl/useLogs/useLlmTelemetry/useTelegramSettings hook + reviewAskStore/resummarizeStore/activeTablingBulkSaveJobStore + settlement/groupSuggestion + **bus.api/bus-favorite.api + useBus/useBusFavorites + busFavoriteStore** re-export 추가*
-- [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts)
+- [packages/shared/vitest.config.ts](../../packages/shared/vitest.config.ts) — vitest 2.x, `deps.inline: [/^@repo\//]`
+- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified: 24차 air-quality/air-location/weather/life-map/food/meal api + airLocationStore/mealDraftStore + useAirQuality/useAirLocation/useWeather/useLifeMap/useFood/useMeal/useMyLocationGlance + weather/weatherDaily·weatherMessages re-export 추가(이전: review-search/review-clustering/randomCrawl/logs/telegram-settings/bus/subway/vote 등)*
+- [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts) — *modified 24차: 요청 단위 config 스냅샷 + `onUnauthorized(requestToken)` + `handleUnauthorizedForCurrentSession`*
+- [packages/shared/src/api/client.test.ts](../../packages/shared/src/api/client.test.ts) (NEW 24차) — 401 콜백 토큰 전달·지연 401 귀속·세션 경계 가드 3건
 - [packages/shared/src/api/auth.api.ts](../../packages/shared/src/api/auth.api.ts)
 - [packages/shared/src/api/picks.api.ts](../../packages/shared/src/api/picks.api.ts)
 - [packages/shared/src/api/admin.api.ts](../../packages/shared/src/api/admin.api.ts)
@@ -1105,6 +1215,10 @@ interface BusFavoriteState {
 - [packages/shared/src/api/telegram-settings.api.ts](../../packages/shared/src/api/telegram-settings.api.ts) (NEW)
 - [packages/shared/src/api/ai.api.ts](../../packages/shared/src/api/ai.api.ts) — *modified: telemetry GET + buildAiTelemetryStreamUrl SSE 추가*
 - [packages/shared/src/settlement/groupSuggestion.ts](../../packages/shared/src/settlement/groupSuggestion.ts) (NEW)
+- [packages/shared/src/weather/weatherDaily.ts](../../packages/shared/src/weather/weatherDaily.ts) (NEW 24차) — mergeDailyRows 열흘 병합(웹 원본 승격, 앱 공용)
+- [packages/shared/src/weather/weatherMessages.ts](../../packages/shared/src/weather/weatherMessages.ts) (NEW 24차) — weatherUpstreamMessage(503/502/429)
+- [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) — 앱 주입 지점(스토리지 7종·파일 어댑터·principal 부팅·401 가드)
+- [apps/web/src/main.tsx](../../apps/web/src/main.tsx) — 웹 `configureApi` + 401 가드
 - [packages/shared/src/api/settings-map.api.ts](../../packages/shared/src/api/settings-map.api.ts)
 - [packages/shared/src/api/settlement.api.ts](../../packages/shared/src/api/settlement.api.ts) — *modified: createShare ogImage/ogImageUrl 트라이스테이트 + SettlementShare ogImageCandidates*
 - [packages/shared/src/api/settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts)
@@ -1112,7 +1226,20 @@ interface BusFavoriteState {
 - [packages/shared/src/api/settlement-draft.api.ts](../../packages/shared/src/api/settlement-draft.api.ts) (NEW)
 - [packages/shared/src/api/bus.api.ts](../../packages/shared/src/api/bus.api.ts) (NEW) — 서울시 버스 공개 조회(검색/주변/도착/위치/노선상세)
 - [packages/shared/src/api/bus-favorite.api.ts](../../packages/shared/src/api/bus-favorite.api.ts) (NEW) — 버스 즐겨찾기 서버 저장분(Bearer, 변경 시 전체 목록 반환)
-- [packages/shared/src/hooks/useAuth.ts](../../packages/shared/src/hooks/useAuth.ts)
+- [packages/shared/src/api/subway.api.ts](../../packages/shared/src/api/subway.api.ts) — 수도권 전철 공개 조회 8함수
+- [packages/shared/src/api/subway-favorite.api.ts](../../packages/shared/src/api/subway-favorite.api.ts) — 전철 즐겨찾기 서버 저장분
+- [packages/shared/src/api/restaurant-favorite.api.ts](../../packages/shared/src/api/restaurant-favorite.api.ts) — 맛집 즐겨찾기 서버 저장분
+- [packages/shared/src/api/vote.api.ts](../../packages/shared/src/api/vote.api.ts) — 그룹 투표 픽
+- [packages/shared/src/api/air-quality.api.ts](../../packages/shared/src/api/air-quality.api.ts) (NEW 24차) — 에어코리아 공개 8함수
+- [packages/shared/src/api/air-location.api.ts](../../packages/shared/src/api/air-location.api.ts) (NEW 24차) — 내 대기 위치 서버 저장분(Bearer)
+- [packages/shared/src/api/weather.api.ts](../../packages/shared/src/api/weather.api.ts) (NEW 24차) — 기상청 공개 6함수
+- [packages/shared/src/api/life-map.api.ts](../../packages/shared/src/api/life-map.api.ts) (NEW 24차) — 일상지도 공개 5함수 + 필터 파라미터
+- [packages/shared/src/api/food.api.ts](../../packages/shared/src/api/food.api.ts) (NEW 23차) — 음식 카탈로그 14함수 + 쿼리 빌더 4 + 적재 SSE URL
+- [packages/shared/src/api/food.api.test.ts](../../packages/shared/src/api/food.api.test.ts) (NEW 23차) — 쿼리 조립·boolean 직렬화·고정 순서·SSE token 9건
+- [packages/shared/src/api/food-conflict.api.test.ts](../../packages/shared/src/api/food-conflict.api.test.ts) (NEW 23차) — 병합 충돌 목록/해결 PATCH 2건
+- [packages/shared/src/api/meal.api.ts](../../packages/shared/src/api/meal.api.ts) (NEW 23차) — 식단 27함수(로그인 필수) + `MealPhotoUploadFile`
+- [packages/shared/src/api/meal.api.test.ts](../../packages/shared/src/api/meal.api.test.ts) (NEW 23차) — 내보내기 GET·전체 삭제 DELETE body 2건
+- [packages/shared/src/hooks/useAuth.ts](../../packages/shared/src/hooks/useAuth.ts) — *modified 24차: 로그인/가입 시 cancelQueries+removeQueries → setMealDraftPrincipal → setSession, /me 후 token 재확인*
 - [packages/shared/src/hooks/usePicks.ts](../../packages/shared/src/hooks/usePicks.ts)
 - [packages/shared/src/hooks/useAdmin.ts](../../packages/shared/src/hooks/useAdmin.ts)
 - [packages/shared/src/hooks/useCrawl.ts](../../packages/shared/src/hooks/useCrawl.ts)
@@ -1131,7 +1258,8 @@ interface BusFavoriteState {
 - [packages/shared/src/hooks/useTelegramSettings.ts](../../packages/shared/src/hooks/useTelegramSettings.ts) (NEW)
 - [packages/shared/src/hooks/useAi.ts](../../packages/shared/src/hooks/useAi.ts)
 - [packages/shared/src/hooks/useSettingsMap.ts](../../packages/shared/src/hooks/useSettingsMap.ts)
-- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *modified: { auto?: boolean } 옵션 (auto=false 면 마운트 자동요청 스킵) — 기존 insecure-context 단정 + Permissions 'change' 구독 유지*
+- [packages/shared/src/hooks/useUserLocation.ts](../../packages/shared/src/hooks/useUserLocation.ts) — *modified 24차(`67f14cf`): acquirePosition 코어 분리, 자동 5s/명시 10s + TIMEOUT 1회 재시도, maximumAge 5분, 'timeout' 상태, timeoutMs 옵션 — 기존 { auto } 옵션·insecure-context 단정·Permissions 'change' 구독 유지*
+- [packages/shared/src/hooks/useUserLocation.test.ts](../../packages/shared/src/hooks/useUserLocation.test.ts) (NEW 24차) — 가짜 navigator 로 재시도·상태 매핑·취소 계약 5건
 - [packages/shared/src/hooks/useSettlement.ts](../../packages/shared/src/hooks/useSettlement.ts) — *modified: useCreateSettlementShare { id, ttl, ogImage, ogImageUrl } 인자 확장*
 - [packages/shared/src/hooks/useSettlementExtraction.ts](../../packages/shared/src/hooks/useSettlementExtraction.ts)
 - [packages/shared/src/hooks/useSettlementContact.ts](../../packages/shared/src/hooks/useSettlementContact.ts)
@@ -1139,6 +1267,18 @@ interface BusFavoriteState {
 - [packages/shared/src/hooks/useBus.ts](../../packages/shared/src/hooks/useBus.ts) (NEW) — 검색/주변/도착/위치/노선상세 훅(폴링 + refetchIntervalInBackground=false 가드)
 - [packages/shared/src/hooks/useBusFavorites.ts](../../packages/shared/src/hooks/useBusFavorites.ts) (NEW) — 게스트 로컬 + 로그인 서버 하이브리드 즐겨찾기 훅
 - [packages/shared/src/hooks/useMapResearch.ts](../../packages/shared/src/hooks/useMapResearch.ts) (NEW 22차) — 지도 재검색 파이프라인 단일 정의(웹 2곳 인라인 + 앱 transit 훅 승격, `df9fcbd`) — 순수 {lat,lng,zoom} 입력, 타이밍 테스트는 web 에
+- [packages/shared/src/hooks/useSubway.ts](../../packages/shared/src/hooks/useSubway.ts) — 전철 8훅(버스 동형 폴링 가드)
+- [packages/shared/src/hooks/useSubwayFavorites.ts](../../packages/shared/src/hooks/useSubwayFavorites.ts) — 전철 즐겨찾기 하이브리드
+- [packages/shared/src/hooks/useRestaurantFavorites.ts](../../packages/shared/src/hooks/useRestaurantFavorites.ts) — 맛집 즐겨찾기 하이브리드
+- [packages/shared/src/hooks/useVote.ts](../../packages/shared/src/hooks/useVote.ts) — 투표 훅(진행 중 15초 폴링)
+- [packages/shared/src/hooks/useBulkJob.ts](../../packages/shared/src/hooks/useBulkJob.ts) — 잡 SSE 구독 제네릭(`267b7aa`)
+- [packages/shared/src/hooks/useAirQuality.ts](../../packages/shared/src/hooks/useAirQuality.ts) (NEW 24차) — 대기 8훅(5분 stale·10분 폴링, nearby 좌표 스냅 + refetchOnWindowFocus 옵션)
+- [packages/shared/src/hooks/useAirLocation.ts](../../packages/shared/src/hooks/useAirLocation.ts) (NEW 24차) — 내 대기 위치 게스트/서버 하이브리드(서버 우선 1값 병합)
+- [packages/shared/src/hooks/useWeather.ts](../../packages/shared/src/hooks/useWeather.ts) (NEW 24차) — 날씨 6훅(발표 주기별 stale/refetch)
+- [packages/shared/src/hooks/useMyLocationGlance.ts](../../packages/shared/src/hooks/useMyLocationGlance.ts) (NEW 24차) — 저장한 내 위치 1곳의 날씨·대기 파생값(칩·홈 카드 공용)
+- [packages/shared/src/hooks/useLifeMap.ts](../../packages/shared/src/hooks/useLifeMap.ts) (NEW 24차) — 일상지도 5훅 + lifeMapFiltersKey
+- [packages/shared/src/hooks/useFood.ts](../../packages/shared/src/hooks/useFood.ts) (NEW 23차) — 음식 카탈로그 15훅(useFoodImportRunEvents 잡 SSE 포함)
+- [packages/shared/src/hooks/useMeal.ts](../../packages/shared/src/hooks/useMeal.ts) (NEW 23차) — 식단 28훅(루트 키 ['meal'], expectedPrincipalId 가드, useMealPhotoUrl)
 - [packages/shared/src/stores/authStore.ts](../../packages/shared/src/stores/authStore.ts)
 - [packages/shared/src/stores/activeCrawlJobStore.ts](../../packages/shared/src/stores/activeCrawlJobStore.ts)
 - [packages/shared/src/stores/activeGroupingJobStore.ts](../../packages/shared/src/stores/activeGroupingJobStore.ts)
@@ -1149,7 +1289,18 @@ interface BusFavoriteState {
 - [packages/shared/src/stores/reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts) (NEW)
 - [packages/shared/src/stores/resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts) (NEW)
 - [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — *modified: groupSplits(세부 분배 그룹) + DraftItemGroup/DraftGroupMember + 잔여 수령자 배열(v5→v6), persist version 4→6*
-- [packages/shared/src/stores/busFavoriteStore.ts](../../packages/shared/src/stores/busFavoriteStore.ts) (NEW) — 게스트 버스 즐겨찾기 zustand persist(bus-favorites-v1, setBusFavoriteStorage lazy resolver)
+- [packages/shared/src/stores/busFavoriteStore.ts](../../packages/shared/src/stores/busFavoriteStore.ts) (NEW) — 게스트 버스 즐겨찾기 zustand persist(bus-favorites-v1, setBusFavoriteStorage)
+- [packages/shared/src/stores/subwayFavoriteStore.ts](../../packages/shared/src/stores/subwayFavoriteStore.ts) — 게스트 전철 즐겨찾기(subway-favorites-v1)
+- [packages/shared/src/stores/restaurantFavoriteStore.ts](../../packages/shared/src/stores/restaurantFavoriteStore.ts) — 게스트 맛집 즐겨찾기(상한 100)
+- [packages/shared/src/stores/restaurantFavoriteStore.test.ts](../../packages/shared/src/stores/restaurantFavoriteStore.test.ts) — 토글 반환값·상한 경계 3건
+- [packages/shared/src/stores/voteGuestStore.ts](../../packages/shared/src/stores/voteGuestStore.ts) — 투표 게스트 voterKey + 찬성 기록
+- [packages/shared/src/stores/voteGuestStore.test.ts](../../packages/shared/src/stores/voteGuestStore.test.ts) — 6건(비동기 스토리지 주입 후 복원 포함)
+- [packages/shared/src/stores/injectableStorage.ts](../../packages/shared/src/stores/injectableStorage.ts) — persist 스토리지 주입 공용 구현(지연 위임 + 주입 시 rehydrate, `web: 'local' | 'session'`)
+- [packages/shared/src/stores/injectableStorage.test.ts](../../packages/shared/src/stores/injectableStorage.test.ts) — 캡처된 어댑터로도 나중 주입 위임 4건
+- [packages/shared/src/stores/settlementDraftStore.test.ts](../../packages/shared/src/stores/settlementDraftStore.test.ts) — 참여자↔attendance 동기화·그룹 prune·순수 함수 13건
+- [packages/shared/src/stores/airLocationStore.ts](../../packages/shared/src/stores/airLocationStore.ts) (NEW 24차) — 게스트 내 대기 위치 persist(air-location-v1, setAirLocationStorage)
+- [packages/shared/src/stores/mealDraftStore.ts](../../packages/shared/src/stores/mealDraftStore.ts) (NEW 23차) — 식단 입력 draft(principal 스코프 키·setMealDraftPrincipal·세대 id·파일 어댑터·single-flight)
+- [packages/shared/src/stores/mealDraftStore.test.ts](../../packages/shared/src/stores/mealDraftStore.test.ts) (NEW 23차) — draft 액션·재인식 보존·사진 상한·single-flight·principal 전환·앱 재시작 복원 15건 + buildMealEntriesQuery 3건
 - [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
 - [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts) — *modified: zinc400 추가 + 다크 textMuted/border 대비비 상향 + lightColors.bg=white*

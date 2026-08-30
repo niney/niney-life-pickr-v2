@@ -1,7 +1,7 @@
 ---
 concept: operation-log-instrumentation
-last_compiled: 2026-06-25
-topics_connected: [logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai]
+last_compiled: 2026-08-30
+topics_connected: [logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai, food, meal]
 status: active
 ---
 
@@ -31,6 +31,7 @@ status: active
 - **실패 run LLM 분석** in [[../topics/logs]] / [[../topics/ai]] (`log-analysis.service.ts`): `LogAnalysisService` 가 실패 run 1건의 스텝 로그를 'log-analysis' 용도 LLM(`ollama-cloud`)에 보내 보고서 생성. **자동**(`finishRun` fire-and-forget) 경로는 전역 세마포어(동시 1) + 대기열 상한 5 를 거쳐 실패 폭주 시 LLM 비용 폭증을 막는다(초과분 드롭, 수동 복구). **수동**(`requestAnalysis`, POST /analyze)은 running 보고서 upsert 후 즉시 running 스냅샷 반환, LLM 호출은 백그라운드 fire → 웹이 폴링으로 완료 확인. 자동 분석 게이트: `AUTO_ANALYSIS_EXCLUDED_ERROR_CODES`(cancelled/interrupted/server_restart/no_provider/no_inputs/no_analysis_llm + 사용자 입력 검증 실패 계열 invalid_token/image_not_found/invalid_image) **+ `trigger='user'`**(일반 사용자 트리거 실패는 LLM 비용 유발 금지). `runId` 별 `inflight` Set 가 자동/수동 중복 방지. `MAX_ATTEMPTS=3`, timeout/upstream_failed/parse_failed 만 재시도. 프롬프트 인젝션 방어로 로그 본문을 `<logs>…</logs>` 로 감싸고 닫는 태그를 이스케이프 ([[versioned-llm-prompts]] 계열).
 - **finishRun barrier** in [[../topics/logs]] (`operation-log.service.ts` `pendingWrites` / `finishRun`): 부차적이지만 패턴의 정합성을 떠받치는 인스턴스. `log` 의 DB INSERT 가 fire-and-forget 이라, 마지막 error 로그가 커밋되기 전에 자동 분석이 로그를 수집하면 핵심 단서가 프롬프트에서 빠진다. `finishRun` 이 자동 분석을 띄우기 전 `pendingWrites` Set 의 미결 INSERT 를 `Promise.allSettled` 로 barrier — fire-and-forget 의 속도와 분석 정합성을 동시에 챙긴다.
 - **레거시 백필** in [[../topics/logs]] / [[../topics/crawl]] (`20260612164108_add_operation_logs/migration.sql`): 패턴 도입 마이그레이션이 레거시 `crawl_job_logs` 를 jobId 별 합성 run(`legacy-<jobId>`, meta `{"legacy":true}`)으로 묶고 로그를 복사해 어드민 과거 이력을 보존. stage 가 `summary%` 면 feature `summary`, 아니면 `crawl` — 옛 로그도 새 스키마의 run 모양으로 흡수.
+- **2026-08-22~23**(food·meal) in [[../topics/food]] / [[../topics/meal]] / [[../topics/logs]] (`food-import.service.ts` · `meal-recognition.service.ts` · `meal-recommendation.service.ts`): `OperationFeature` enum 에 `food-import`·`meal-recognition`·`meal-recommendation` 3종 추가(`schemas/logs.ts`, `102ccdb`/`c5b5fe2` 2026-08-22, 이제 12 feature) — 셋 다 `channel` 미지정(= `'none'`, DB+pino)이고 `operationLog` 는 optional dep(`this.deps.operationLog ?? null`)이라 테스트·미주입 환경에서는 계측만 조용히 빠진다. (1) **food-import(cron/manual run)** — `startRun({ feature: 'food-import', jobId: runId, trigger })` 가 `FoodImportRun` DB 행 생성 **뒤**에 오고, startRun 자체가 실패해도 warn 만 남기고 import 를 계속한다("부가 운영 로그 장애로 본 가져오기가 running 상태에 멈추지 않게"). 단계 `normalize`(source 별 원본→시드 수)·`source`(source 실패, error)·`classify`(LLM 분류 시작/결과, `noProvider` 면 warn)를 `step()` 클로저로 찍고, 종료는 **registry.finish → DB terminal update(조건부 updateMany 보상) → config touch → `finishRun`** 순서 — 운영 로그가 맨 뒤라 로그 실패가 다음 회차를 막지 않는다. status 매핑: `done` → done(meta: sources·source 별 fetched/inserted/updated/skipped/error·classifiedCount), abort(`interrupted`) → **`cancelled` + errorCode `interrupted`**(둘 다 `AUTO_ANALYSIS_EXCLUDED_ERROR_CODES`/failed 아님이라 자동 분석 안 탐), 그 외 → failed + `import_failed`(trigger 가 cron/manual 이라 자동 LLM 분석 대상). (2) **meal-recognition(사용자 동기 요청)** — `startRun({ feature: 'meal-recognition', trigger: 'user', meta: { photoCount } })`, 단계 `vision`(LLM 호출 실패)·`parse`(JSON 파싱 실패 → 수리 재시도 1회)·`done`(음식 N개). finishRun 은 성공 시 `{ model, dishCount, durationMs }`, 실패 시 errorCode `no_provider|quota|llm_failed|parse_failed|unknown` + `errorMessage.slice(0, OPLOG_ERROR_CAP=300)`. (3) **meal-recommendation** — run 은 **cache hit·quota 초과·후보 0건을 지난 뒤에만** 시작(`startRun` 앞에 `consumeQuota`), 단계 `llm`(성공 info / 유효 후보 없음 warn / 호출 실패 error), 그리고 **LLM 이 실패해도 run 은 `done`** — 점수 폴백이 결과를 만들므로 실패는 stage 로그 + `meta.status: 'done'|'fallback'` 으로만 구분(run status = 도메인 결과의 성패, LLM 결과는 meta). 두 meal feature 는 `trigger: 'user'` 라 실패해도 자동 LLM 분석 게이트(`(ctx?.trigger) !== 'user'`)에 걸려 비용을 만들지 않고, meta 에 사용자·사진 토큰·메모를 넣지 않아(photoCount/dishCount/candidateCount/model/durationMs 만) 어드민 `/admin/logs` 가 개인 데이터 표면이 되지 않는다 — [[../topics/food]] 의 인식 품질 aggregate 가 user/memo/photo id 를 응답하지 않는 것과 같은 privacy 경계.
 
 ## What This Means
 
@@ -40,6 +41,7 @@ status: active
 2. **단일 seq 발급기가 멀티 채널 dedup 의 전제** — 크롤의 진행 이벤트와 로그 이벤트가 한 SSE 스트림에 섞이는 한, seq 는 반드시 한 카운터에서 나와야 한다. `OperationLogService` 가 프로세스당 1개여야 하는 이유가 바로 이것이고, 이는 [[stream-driven-cache-merge]] 의 "(jobId,seq) 단일 발급" 과 [[in-memory-singleton-gates]] 가 logs 모듈에서 만나는 지점이다.
 3. **실패를 데이터로 남기면 진단을 자동화할 수 있다** — run/스텝 로그가 이미 구조화돼 있으니 LLM 분석기는 run id 하나만 받으면 된다. 다만 LLM 비용이 실패 횟수에 비례해 폭발할 수 있어, 자동 경로는 세마포어 + 대기열 + 제외 코드 + `trigger='user'` 게이트로 둘러싸였다([[in-memory-singleton-gates]] 비용 게이트, [[versioned-llm-prompts]] 인젝션 방어). 수동 '다시 분석' 은 이 게이트와 무관한 복구 경로.
 4. **중첩과 분리는 둘 다 정당하다** — 스케줄러처럼 한 run 이 자식 작업을 직접 지휘하면 `parentRunId` 중첩이 맞고, random-crawl 처럼 발굴과 크롤이 책임 경계가 다른 독립 작업이면 두 run 으로 갈리는 게 맞다. 같은 테이블 체계가 두 관계를 다 표현한다.
+5. **run 의 status 는 도메인 결과, LLM 의 성패는 stage** (2026-08, meal-recommendation) — 폴백이 있는 feature 에서 LLM 실패를 `failed` 로 닫으면 실제로는 응답이 나갔는데 실패 run 이 쌓여 대시보드가 거짓 실패를 센다. 폴백이 결과를 만든 run 은 `done` + `meta.status='fallback'` 이 맞다. 같은 이유로 food-import 의 abort 는 `failed` 가 아니라 `cancelled`/`interrupted` 로 닫아 자동 분석 제외 코드에 태운다. 그리고 계측이 optional dep 인 이상 `startRun` 실패는 본 작업을 멈추지 않아야 한다(food-import 가 warn 만 남기고 진행) — 관측성은 부가 채널이지 트랜잭션의 일부가 아니다.
 
 이 패턴이 깨질 수 있는 시점:
 - **fire-and-forget 경합** — `log` 의 DB 쓰기가 비동기라 `finishRun`/자동분석과 경합한다. `pendingWrites` barrier 가 마지막 단서를 지키지만, barrier 를 우회하는 새 경로가 생기면 분석 프롬프트가 핵심 로그를 놓친다.
@@ -58,6 +60,8 @@ status: active
 - [[../topics/random-crawl]]
 - [[../topics/auto-discover]]
 - [[../topics/ai]]
+- [[../topics/food]]
+- [[../topics/meal]]
 - [[stream-driven-cache-merge]]
 - [[in-memory-singleton-gates]]
 - [[versioned-llm-prompts]]

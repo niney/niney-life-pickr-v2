@@ -1,15 +1,17 @@
 ---
 topic: subway
 type: codebase
-last_compiled: 2026-08-17
-source_count: 68
+last_compiled: 2026-08-30
+sources_count: 74
 status: active
-aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArrival, realtimePosition, subwayStationMaster, SearchSTNTimeTableByIDService, SearchSTNBySubwayLineInfo, subway-station-search, subway-arrivals, subway-positions, subway-line-detail, subway-timetable, subway-congestion, subway-path, subway-favorites, station-name-grouping, groupStations, subway-line-order, fr-code, branch-section, loop-section, subway-verify, verify-subway-lines, subwayId, statnId-mismatch, realtimeName-override, dongmyeong-station, train-interpolation, locateTrain, subwayPosition, vehiclePill, transit-tabs, transit-cross, transit-map-pool, subway-dijkstra, SUBWAY_API_KEY, SEOUL_OPEN_API_KEY, INFO-200, ERROR-337, plan-b-station-id]
+aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArrival, realtimePosition, subwayStationMaster, SearchSTNTimeTableByIDService, SearchSTNBySubwayLineInfo, subway-station-search, subway-arrivals, subway-positions, subway-line-detail, subway-timetable, subway-congestion, subway-path, subway-favorites, station-name-grouping, groupStations, subway-line-order, fr-code, branch-section, loop-section, subway-verify, verify-subway-lines, subwayId, statnId-mismatch, realtimeName-override, dongmyeong-station, train-interpolation, locateTrain, subwayPosition, vehiclePill, transit-tabs, transit-cross, transit-map-pool, subway-dijkstra, SUBWAY_API_KEY, SEOUL_OPEN_API_KEY, INFO-200, ERROR-337, plan-b-station-id, subway-list-sheet, subway-detail-sheet, BottomSheet, useMapSheets, sheet-pattern, 시트-골격, subBar, map-bottom-inset, 일부만-표시, subway-line-shape, load-subway-shapes]
 ---
 
-# subway
+# subway — 수도권 전철 두 포털 프록시 + 로컬 역사마스터 기반 웹 역·도착·노선·시간표·경로 화면
 
 서울시 수도권 전철 공공 API 두 포털(실시간 `swopenAPI.seoul.go.kr` + 정적 `openapi.seoul.go.kr:8088`)을 friendly 가 프록시하고, **웹**(`apps/web`)이 역 검색·실시간 도착·주변 역·호선 보기·실시간 열차 추적·시간표·혼잡도·경로 탐색을 그리는 도메인. 자매 토픽 [bus](bus.md)의 검증된 설계(어댑터 규율·쿼터 게이트·즐겨찾기 하이브리드·지도 어댑터·URL-as-truth)를 이식하되, 지하철 고유의 구조적 차이(로컬 DB 검색·GPS 없는 열차 위치·노선 형상 API 부재)에 맞게 재설계했다. **버스와 하나의 '대중교통' 통합 페이지**(`/bus` + `/subway` 탭)로 묶여 있다. ~~앱에는 지하철 화면이 없다~~ → 2026-07 이후 **앱(`apps/mobile`)에도 대중교통 화면**(버스·지하철 통합, 탑승 모드·하차 알림 포함)이 있다 — [transit](transit.md)/[mobile](mobile.md) 참조.
+
+**2026-08-22 변경 흡수 — 웹 모바일(=웹 작은 화면) 레이아웃을 공통 시트 골격으로 이전(`e84e4b9`)**: [SubwayPage](../../apps/web/src/routes/SubwayPage.tsx)의 모바일 블록이 "검색바 / 지도 / 리스트 38dvh 세로 적층"에서 맛집 v2·버스·일상지도와 같은 **상단바 subBar + fixed 지도 + 바텀시트 2장** 골격으로 바뀌었다 — `TransitTabs`+`SubwayStationSearchBar` 는 상단바 subBar 로(역 선택 중엔 검색행을 접어 헤더 215→98px), 지도는 `fixed` 배경(`poolKey="transit-mobile"`·이중 마운트 유지, 호선·경로·열차 prop 그대로), `SubwayStationListBody` 는 목록 [BottomSheet](../../apps/web/src/components/sheet/BottomSheet.tsx)(`data-testid="subway-list-sheet"`, `zIndex 20`), `stn` 이 잡히면 배타 패널(`panelContent` = 시간표 > 길찾기 > 도착)이 상세 시트(`key=stn`, `data-testid="subway-detail-sheet"`, `zIndex 25`)로 얹힌다. 스냅 조율은 [useMapSheets](../../apps/web/src/components/sheet/useMapSheets.ts) — 검색어 ≥1자(라이브 검색이라 버스의 2자와 다름)·주변 모드로 진입하면 목록 `half` 시작, 검색어 입력(비어 있지 않을 때)·내 주변·재검색 뒤 `peek` 이면 `half` 로 승격. [SubwayStationList](../../apps/web/src/components/subway/SubwayStationList.tsx)의 "결과가 많아 일부만 표시합니다" 별도 줄은 메타 행 인라인 `· 일부만 표시`(title "서버가 100건으로 절단했습니다")로, [SubwayStationsMap](../../apps/web/src/components/subway/SubwayStationsMap.tsx)의 따라가기/다시 따라가기 pill 은 `bottom-[calc(0.75rem+var(--map-bottom-inset,0px))]` 로 peek 시트(120px) 위에 뜬다. 데스크톱 블록·URL 계약(`q`/`near`/`stn`/`line`/`to`)·BE 는 무변경. 골격 규약(subBar·스냅 규칙·React Compiler 훅 순서·이중 마운트 함정)은 [transit](transit.md), 시트 컴포넌트 자체는 [web](web.md).
 
 **2026-07-25~08-17 변경 흡수 — 노선 실형상(OSM) + 데이터 픽스 + UWP export + 시간표 캐시/스모크 견고화**:
 - **실형상 적재·서빙(`c9c5235`, 마이그레이션 `20260724140939_add_subway_line_shape`)** — 역 좌표 직선 연결이던 폴리라인을 실제 선로 기하로. `SubwayLineShape`(lineId+branchKey → path/stationS anchor) 모델 + [load-subway-shapes](../../apps/friendly/scripts/load-subway-shapes.ts)(Overpass route relation → way 체인 조립 → 역 투영 anchor, 키 불필요). 단일 운행계통이 전 구간을 못 덮는 노선(4호선·경의선)은 역 커버리지 set-cover union 폴백 — 26개 section 중 25개 성공, GTX-A 만 직선 폴백. 조립 순수 로직은 [subway-shape.service.ts](../../apps/friendly/src/modules/subway/subway-shape.service.ts)(6호선 응암 루프 재방문 처리 포함). 계약은 `SubwayLineSection`/`SubwayPathLeg` 에 **optional** path/stationS — 미시드 환경은 기존 직선 폴백(하위호환). 경로 legs 는 탑승~하차 실형상 슬라이스(순환 시임 랩 포함). 산출물은 ODbL — 지도 attribution 에 © OpenStreetMap 표기. 시드 순서: load:subway-stations → line-orders → shapes.
@@ -111,7 +113,7 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 
 **9차(환승·출구)는 미구현** — TAGO 출구별 정보 게이트웨이 반영 대기(계획만 존재).
 
-## Talks To [coverage: high — 10 sources]
+## Talks To [coverage: high — 11 sources]
 
 - **서울시 실시간 swopenAPI (`http://swopenAPI.seoul.go.kr/api/subway/...`)** — 평문 HTTP, GET, 키가 path 세그먼트. JSON 응답. friendly 만 호출(브라우저 직접 접근 없음). 도착(`realtimeStationArrival`)·위치(`realtimePosition`)만 여기.
 - **서울시 정적 openapi (`http://openapi.seoul.go.kr:8088/...`)** — 역사마스터·시간표·노선순서. 같은 키 path 규율·에러 모델(`RESULT.CODE`)이 swopen 과 미묘하게 달라 어댑터가 두 파서(`readSwopenStatus`/`readSeoulResult`)로 분리.
@@ -123,6 +125,7 @@ aliases: [seoul-subway, subway-api, swopen-api, swopenAPI, realtimeStationArriva
 - **`@repo/shared` / `@repo/utils`** — `subwayApi`/`subwayFavoriteApi`, `useSubway`/`useSubwayFavorites`, `subwayFavoriteStore`; `subwayLine`·`subwayMarker`·`subwayPosition`·`vehiclePill`·(공용)`routePath`·`markerFrame`.
 - **auth (`authStore` / `app.authenticate`)** — 즐겨찾기 라우트만 Bearer 인증. 401 로 세션이 끊기면 훅이 게스트 모드로 폴백. 공개/소유자 분리는 [public-admin-route-split](../concepts/public-admin-route-split.md) 결과 같은 결.
 - **프로브·적재 스크립트(6종)** — [probe-subway-api.ts](../../apps/friendly/scripts/probe-subway-api.ts)(1차 0단계 미지수 확정 ①~⑩), [load-subway-stations.ts](../../apps/friendly/scripts/load-subway-stations.ts)(마스터 적재), [verify-subway-lines.ts](../../apps/friendly/scripts/verify-subway-lines.ts)(호선 매핑 보정), [load-subway-line-orders.ts](../../apps/friendly/scripts/load-subway-line-orders.ts)(5차 순서), [probe-subway-positions.ts](../../apps/friendly/scripts/probe-subway-positions.ts)(6차 semantics 게이트), [probe-subway-timetable.ts](../../apps/friendly/scripts/probe-subway-timetable.ts)(8차 소스 판정). 코드에 박힌 추정을 실응답으로 확정하는 프로브 우선 개발 플로우([external-api-proxy-fixture](../concepts/external-api-proxy-fixture.md)).
+- **일상지도 옴니박스 소비처(2026-08-21)** — [LifeGoToBox](../../apps/web/src/components/life-map/LifeGoToBox.tsx)(웹)·[LifeGoToModal](../../apps/mobile/src/components/lifeMap/LifeGoToModal.tsx)(앱)이 `useSubwayStationSearch` 를 타이핑 250ms 디바운스(`REMOTE_DEBOUNCE_MS`)로 `useBusStationSearch`·`useLifeMapSearch` 와 나란히 부른다. 지하철 검색은 로컬 DB(쿼터 0)라 디바운스 발화가 비용 문제가 아니다 — 같은 옴니박스에서 버스 쪽만 쿼터를 쓴다([bus](bus.md)·[life-map](life-map.md)).
 
 ## API Surface [coverage: high — 9 sources]
 
@@ -244,8 +247,9 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - **개발 함정(버스 계승).** 브랜치 전환/rebase 후 `prisma generate` 필수(client 불일치면 `prisma.subwayStation` undefined), dev DB 에 vworld 키 미등록이면 지도는 placeholder(설계된 폴백, 리스트는 동작), 포트 3000 이중 바인딩. 1차 마이그레이션은 기존 무관 drift 때문에 `migrate diff` 수기 작성 + `migrate deploy` 로 비파괴 우회했다.
 - **미구현·미확정.** 9차(환승·출구)는 TAGO 게이트웨이 대기로 미구현. `SUBWAY_LINES` 의 신림선(1094)은 문헌 추정(프로브 미검증), 일부 `positionParam` 은 관례 표기 추정(주석의 `verified` 만 실검증). 실시간 미제공 역의 도착 실패는 `INFO-200` 이라 '표기 불일치로 조용히 실패'와 구분 불가 — 필요 시 전 역 1회 검증 스크립트(쿼터 ~800콜, 별도 날).
 - ~~앱 미구현~~ → **앱 대중교통 화면 존재(2026-07~)** — 검색·도착·따라가기에 더해 탑승 모드·하차 지점/알림·실형상 렌더까지 앱이 앞서 있다([transit](transit.md)). 게스트 즐겨찾기 storage 주입(setSubwayFavoriteStorage)도 앱 entry 에 배선됨.
+- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 데스크톱 폭에서도 모바일 시트가 마운트돼 있어 `transit-desktop`/`transit-mobile` 풀 키 분리는 그대로 필요, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 역 지점을 가릴 수 있다. 상세는 [transit Gotchas](transit.md#gotchas-coverage-high--9-sources).
 
-## Sources [coverage: high — 64 sources]
+## Sources [coverage: high — 74 sources]
 
 **백엔드 (friendly)**
 - [apps/friendly/src/modules/subway/subway-api.adapter.ts](../../apps/friendly/src/modules/subway/subway-api.adapter.ts)
@@ -256,6 +260,7 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [apps/friendly/src/modules/subway/subway-line-order.service.ts](../../apps/friendly/src/modules/subway/subway-line-order.service.ts)
 - [apps/friendly/src/modules/subway/subway-congestion.service.ts](../../apps/friendly/src/modules/subway/subway-congestion.service.ts)
 - [apps/friendly/src/modules/subway/subway-verify.service.ts](../../apps/friendly/src/modules/subway/subway-verify.service.ts)
+- [apps/friendly/src/modules/subway/subway-shape.service.ts](../../apps/friendly/src/modules/subway/subway-shape.service.ts) — *실형상 조립 순수 로직(c9c5235)*
 - [apps/friendly/src/modules/subway/subway-favorite.service.ts](../../apps/friendly/src/modules/subway/subway-favorite.service.ts)
 - [apps/friendly/src/modules/subway/subway-favorite.route.ts](../../apps/friendly/src/modules/subway/subway-favorite.route.ts)
 - [apps/friendly/src/modules/subway/subway.test.ts](../../apps/friendly/src/modules/subway/subway.test.ts)
@@ -278,6 +283,8 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [apps/friendly/scripts/verify-subway-lines.ts](../../apps/friendly/scripts/verify-subway-lines.ts)
 - [apps/friendly/scripts/probe-subway-positions.ts](../../apps/friendly/scripts/probe-subway-positions.ts)
 - [apps/friendly/scripts/probe-subway-timetable.ts](../../apps/friendly/scripts/probe-subway-timetable.ts)
+- [apps/friendly/scripts/load-subway-shapes.ts](../../apps/friendly/scripts/load-subway-shapes.ts) — *OSM Overpass 실형상 적재(c9c5235)*
+- [apps/friendly/scripts/export-subway-master-for-uwp.ts](../../apps/friendly/scripts/export-subway-master-for-uwp.ts) — *UWP(NineyWeather) JSON 덤프(afb3bd0)*
 
 **마이그레이션 (friendly)**
 - [20260706160000_add_subway_stations](../../apps/friendly/prisma/migrations/20260706160000_add_subway_stations/migration.sql)
@@ -285,6 +292,7 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [20260706180000_add_subway_line_stations](../../apps/friendly/prisma/migrations/20260706180000_add_subway_line_stations/migration.sql)
 - [20260706190000_add_subway_timetable_caches](../../apps/friendly/prisma/migrations/20260706190000_add_subway_timetable_caches/migration.sql)
 - [20260707120000_add_subway_congestions](../../apps/friendly/prisma/migrations/20260707120000_add_subway_congestions/migration.sql)
+- [20260724140939_add_subway_line_shape](../../apps/friendly/prisma/migrations/20260724140939_add_subway_line_shape/migration.sql) — *SubwayLineShape(실형상)*
 
 **계약 (api-contract)**
 - [packages/api-contract/src/schemas/subway.ts](../../packages/api-contract/src/schemas/subway.ts)
@@ -304,17 +312,21 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [packages/utils/src/subwayPosition.ts](../../packages/utils/src/subwayPosition.ts)
 - [packages/utils/src/subwayPosition.test.ts](../../packages/utils/src/subwayPosition.test.ts)
 - [packages/utils/src/vehiclePill.ts](../../packages/utils/src/vehiclePill.ts)
+- [packages/utils/src/subwayCongestion.ts](../../packages/utils/src/subwayCongestion.ts) — *혼잡도 임계·슬롯 단일 정의(9206346), 웹·앱 congestionUtils 는 facade*
 
 **웹 (web)**
 - [apps/web/src/routes/SubwayPage.tsx](../../apps/web/src/routes/SubwayPage.tsx)
 - [apps/web/src/components/subway/SubwayArrivalPanel.tsx](../../apps/web/src/components/subway/SubwayArrivalPanel.tsx)
 - [apps/web/src/components/subway/SubwayLineBadge.tsx](../../apps/web/src/components/subway/SubwayLineBadge.tsx)
-- [apps/web/src/components/subway/SubwayStationList.tsx](../../apps/web/src/components/subway/SubwayStationList.tsx)
+- [apps/web/src/components/subway/SubwayStationList.tsx](../../apps/web/src/components/subway/SubwayStationList.tsx) — *"일부만 표시" 메타 행 인라인(2026-08-22)*
+- [apps/web/src/components/sheet/BottomSheet.tsx](../../apps/web/src/components/sheet/BottomSheet.tsx) — *모바일 목록/상세 시트(2026-08-22, 맛집 v2 와 공용)*
+- [apps/web/src/components/sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts) — *목록↔상세 스냅 조율, SHEET_PEEK_HEIGHT*
+- [apps/web/src/components/PublicLayout.tsx](../../apps/web/src/components/PublicLayout.tsx) — *setSubBar/headerHeight — 모바일 탭·검색행을 상단바로*
 - [apps/web/src/components/subway/SubwayStationsMap.tsx](../../apps/web/src/components/subway/SubwayStationsMap.tsx)
 - [apps/web/src/components/subway/SubwayTimetable.tsx](../../apps/web/src/components/subway/SubwayTimetable.tsx)
 - [apps/web/src/components/subway/SubwayPathPanel.tsx](../../apps/web/src/components/subway/SubwayPathPanel.tsx)
 - [apps/web/src/components/subway/SubwayNearbyBusSection.tsx](../../apps/web/src/components/subway/SubwayNearbyBusSection.tsx)
-- [apps/web/src/components/subway/timetableUtils.ts](../../apps/web/src/components/subway/timetableUtils.ts)
+- [packages/utils/src/subwayTimetable.ts](../../packages/utils/src/subwayTimetable.ts) — *시간표 파생 로직(웹 timetableUtils.ts 는 2507cdc 로 @repo/utils 승격·삭제)*
 - [apps/web/src/components/subway/congestionUtils.ts](../../apps/web/src/components/subway/congestionUtils.ts)
 - [apps/web/src/components/transit/TransitTabs.tsx](../../apps/web/src/components/transit/TransitTabs.tsx)
 - [apps/web/src/components/transit/CrossSearchSection.tsx](../../apps/web/src/components/transit/CrossSearchSection.tsx)
@@ -323,6 +335,10 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - [apps/web/src/components/transit/transitMapViewport.ts](../../apps/web/src/components/transit/transitMapViewport.ts)
 - [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx)
 - [apps/web/src/App.tsx](../../apps/web/src/App.tsx)
+
+**교차 소비처 (2026-08)**
+- [apps/web/src/components/life-map/LifeGoToBox.tsx](../../apps/web/src/components/life-map/LifeGoToBox.tsx) — *일상지도 옴니박스: useSubwayStationSearch 250ms 디바운스 호출*
+- [apps/mobile/src/components/lifeMap/LifeGoToModal.tsx](../../apps/mobile/src/components/lifeMap/LifeGoToModal.tsx) — *앱 옴니박스, 동일*
 
 **배경 문서**
 - [docs/PLAN-subway.md](../../docs/PLAN-subway.md)

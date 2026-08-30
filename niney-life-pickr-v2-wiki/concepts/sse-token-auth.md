@@ -1,7 +1,7 @@
 ---
 concept: SSE의 ?token= 쿼리 인증 + 로거 리덕션
-last_compiled: 2026-06-25
-topics_connected: [friendly, crawl, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai]
+last_compiled: 2026-08-30
+topics_connected: [friendly, crawl, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, food, meal]
 status: active
 ---
 
@@ -30,6 +30,8 @@ status: active
 
 - **2026-05-17** in [[../topics/friendly]] (`restaurant.route.ts` summary-events heartbeat + idle timeout): 같은 SSE 인프라에 **liveness 보강** 추가 — 서버 측 5 초 주기 heartbeat (named event `heartbeat`) + 클라이언트 측 idle timeout 감지로 서버 다운 시 자동 reconnect 트리거. 토큰 인증·redact 와 별개 layer 지만 같은 multiplexed `summaryEvents` 엔드포인트에 박힘. 향후 다른 SSE 잡 훅 (auto-discover, bulk-save, grouping) 으로 번질 후보.
 
+- **2026-08-22**(food) in [[../topics/food]] / [[../topics/shared]] / [[../topics/web]] / [[../topics/friendly]] (`food.route.ts` `Routes.Food.importRunEvents` = `GET /api/v1/admin/food/import/run-events`): 음식 카탈로그 적재 run 진행 SSE — **13 번째 SSE 엔드포인트**(이 문서 계수 기준; 18차 이후 bus·subway·vote·air·weather·life-map 은 SSE 없음). random-crawl run-events 골격 복제: `: connected` 코멘트 → `snapshot`(`foodImportRegistry.snapshot()`) → 진행 중 run 없으면 `reply.raw.end()` 즉시 종료 → 있으면 `progress`/`done` named event + 15s `: hb` heartbeat(`unref`) + `req.raw.on('close')` cleanup. 차이점은 **인증을 라우트 안에서 손으로 쓰지 않고 `app.resolveSseAdmin(req)`(`plugins/jwt.ts`) 공용 데코레이터를 쓴다** — `req.jwtVerify()` 우선 → 실패 시 `query.token` 을 `app.jwt.verify` 까지는 기존 인라인 패턴과 같지만, 헬퍼는 추가로 `User.tokenVersion`(`tv`)과 role 을 DB 에서 재확인해 강제 로그아웃된 토큰·강등된 계정을 거른다. 이 헬퍼는 2026-07-13 보안 하드닝(`bc2db00`)에서 analytics/crawl 용으로 추출된 것이고, food 가 **처음부터 헬퍼 위에서 태어난 첫 신규 SSE**(`69dc0e2`); menu-grouping·auto-discover·schedule·review-search·random-crawl·ai telemetry·restaurant 7곳은 아직 인라인 jwtVerify→`query.token` 을 유지. 클라: shared `buildFoodImportRunEventsUrl()`(`food.api.ts`, schedule 처럼 인자 0개 — 시스템 전역 단일 run)이 `getToken()` 을 `?token=` 에 싣고, `useFoodImportRunEvents(enabled)`(`useFood.ts`)가 `EventSource` 를 열어 snapshot 이 running 이면 초기 progress 를 합성, `done` 에서 `['food','import','runs'|'config']`/`['food','admin']`/`['food','stats']` 4 키 invalidate, 끊기면 지수 백오프(최대 30s) 재접속. 웹 `AdminFoodPage` 는 `useFoodImportRunEvents(!!inflightRunId)` — 진행 중 run 이 있을 때만 연결. Pino redact 정규식(`app.ts`)이 `?token=` 그대로 마스킹. `food.route.test.ts` 가 토큰 없음 401 / `?token=` 200 `text/event-stream` / run 없으면 snapshot 후 종료를 고정. **[[../topics/meal]] 은 SSE 가 없다** — 인식(`POST /meals/recognize`)·추천은 동기 응답이고 사진은 Bearer fetch 뒤 object URL(웹)/파일 cache(앱)라 `?token=` 양보가 필요한 표면이 없다; 같은 라운드의 두 도메인 중 한쪽만 이 패턴에 들어온 것이 "SSE 는 오래 걸리는 잡에만" 원칙의 반증 없는 확인.
+
 ## What This Means
 
 이 패턴이 알려주는 것:
@@ -38,6 +40,7 @@ status: active
 2. **로그가 보안 표면이라는 인지** — 토큰이 URL에 들어가는 순간 로그도 보안 자산이 된다. 리덕션을 빼먹으면 운영자/Pino 출력/Datadog 등 모든 곳에 JWT가 남음. 코드 리뷰 시 항상 `?token=` 패턴 등장 → 리덕션 적용 여부 동시 점검.
 3. **양보의 범위를 좁힘** — `?token=`은 **SSE에만** 적용. 일반 REST는 `Authorization` 헤더 유지. 양보를 토큰 인증 전반으로 확대하지 않음.
 4. **SSE 가 도메인의 일급 통신 수단으로 굳어짐** — 5번째(`groupingJobEvents`)·6번째(`globalMergeJobEvents`) 엔드포인트가 추가되며, "오래 걸리는 잡 = SSE 진행 스트림"이 이 모노레포의 기본 패턴이 됐다. 매번 새 SSE 가 같은 토큰 패턴 + 같은 ADMIN 게이트 + 같은 Pino redact 룰을 자연스럽게 흡수 — 새 룰이나 새 우회를 발명할 필요가 없다는 것이 패턴 정착의 신호.
+5. **인증 분기가 헬퍼로 승격되며 검증이 두꺼워졌다** (2026-07 하드닝 → 2026-08 food) — `resolveSseAdmin` 은 헤더→쿼리 fallback 위에 `tokenVersion`·role DB 재확인을 얹는다. 인라인 복사본 7곳은 이 강화가 자동으로 따라가지 않으므로, 새 SSE 는 헬퍼를 쓰고(food 가 첫 사례) 기존 인라인은 이관 후보다 — `?token=` 양보의 위험을 줄이는 두 번째 보강이 리덕션 옆에 생긴 셈.
 
 이 패턴이 깨질 수 있는 위험:
 - 새 SSE 엔드포인트 추가 시 리덕션 정규식 패턴이 바뀌면 누락 가능 (현재는 `?token=` / `&token=` 모두 커버하지만 다른 키 이름이면 새로 패턴 추가 필요)
@@ -57,3 +60,5 @@ status: active
 - [[../topics/review-search]]
 - [[../topics/random-crawl]]
 - [[../topics/ai]]
+- [[../topics/food]]
+- [[../topics/meal]]

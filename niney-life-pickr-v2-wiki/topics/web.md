@@ -1,12 +1,20 @@
 ---
 topic: web
-last_compiled: 2026-08-17
-sources_count: 148
+last_compiled: 2026-08-30
+sources_count: 191
 status: active
-aliases: [vite, react, web-app, frontend-web, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http, code-splitting, route-lazy, AdminRoutes, manualChunks, codeSplitting-groups, vite8, rolldown, react-memo, interaction-hot-path, setQueryData-batch-merge, lightbox-promoted, eslint-web, react-compiler-lint, s-token-route, og-proxy, dark-mode-web, theme-store, lp-theme, MapLayerControl, midnight-layer, satellite-layer, vworld-dark, MyLocationButton, soft-tonal-variant, tonal-button, tonal-badge, detail-CategoryTree, insight-tip-filter, menu-filter, lightbox-thumbnail, card-borderless-tab, review-photo-fullwidth, card-click-flyto, card-doubleclick-zoom, flyToZoomIn, SubwayPage, subway-web, subway-station-search, subway-arrival-panel, subway-path-panel, subway-timetable, subway-congestion, SubwayLineBadge, SubwayStationsMap, SubwayNearbyBusSection, TransitTabs, transit-unified, TransitFavoritesSection, CrossSearchSection, TransitCrossToggleChip, transitFavExpandStore, transitCrossShowStore, transitMapViewport, ol-map-pooling, poolKey, overlayMarkers, tsconfig-noEmit, stale-js-emit, admin-scheduler-ui, ScheduleSection, cron-preset, schedule-sse, admin-category-tree-collapsed, AskTab, review-qa, review-ask, ReviewAskToaster, ResummarizeToaster, global-toaster, sonner, ClusterTopics, review-clusters, aspect-summary, InsightsTab, ModelPickerPopup, model-picker, AdminReviewSearchPage, review-search, rag-ops, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage, operation-runs, joblog, log-retention, AdminTablingPage, AdminTablingTestPage, tabling, AdminTelegramPage, telegram-config, AdminAiUsagePage, LlmUsagePanel, llm-telemetry, ai-usage, RegionStatsPanel, RegionStatsMap, choropleth, sigungu-geo, region-stats, RandomCrawlSection, random-crawl, share-url-r, seo-preview, ask-tab, admin-test-accordion, BusPage, bus-web, bus-station-search, bus-nearby-mode, near-param, bus-favorites, bus-arrival-panel, bus-route-tracking, bus-vehicle-marker, map-marker-icon, VehicleMarker, follow-vehicle, MenuTab-groups, menuGroups, representative-menu-preview, review-noise-aspect, cluster-noise-fallback]
+aliases: [vite, react, web-app, frontend-web, AirQualityPage, air-quality-page, WeatherPage, weather-page, LifeMapPage, life-map-page, MealPage, meal-page, MealRecommendTab, MealPreferenceTab, MealPhotoImg, AccountMenu, account-menu, MyLocationChip, my-location-chip, top-bar-width-budget, 폭예산, nav-order, sidebar-account, useMapSheets, map-sheets, sheet-pattern, map-sheet-shell, useMediaQuery, useIsDesktopXl, map-bottom-inset, flyTo-bottomInset, fixedScale, marker-style-cache, AdminFoodPage, admin-food, admin-restaurant-search, ai-purpose-5, meal-photo, meal-recommend, compareReviewRecencyDesc, visitedAt-desc, handleUnauthorizedForCurrentSession, 401-current-session, lifeMapPrefsStore, lifeMapRecentStore, LifeGoToBox, LifeLayerBar, LifeNearbyList, LifeDetailCard, LifeMapView, AirNearbySection, AirStationsMap, AirHourStrip, AirHistoryChart, AirPrimitives, WeatherMeteogram, WeatherDailyStrip, WeatherNowHero, air-series-token, weather-temp-token, web-tests-77, matchMedia-mock, MapCanvas-mock, admin-discover, admin-auto-discover, admin-diningcode, admin-catchtable, panel-side-toggle, batch-crawl, naver-search-results, panelPrefsStore, usePanelSide, mobile-ux, route-split, korean-ime, lightbox-snap, body-scroll-mobile, ios-zoom-fix, canonical-merge, merge-proposal-queue, sticky-action-bar, fused-detail, show-on-map-button, restaurants-v2, bottom-sheet, joblog-tab, restaurant-crawl-logs-section, summary-cancel-button, summary-resume-button, public-restaurant-list-split, location-based-first-entry, public-reviews-pagination, settlement, settlement-stepper, settlement-share, settlement-history, ContactsPage, ai-purpose, card-padding-fix, lightbox-dvh, map-zoom-label-toggle, settlement-rounds, N차, Step2Rounds, RoundDiscountEditor, RoundCategoryAdjuster, RoundExceptionsEditor, SettlementBreakdownTable, MultiReceiptSplitDialog, RestaurantSearchDialog, confirm-dialog, settlementPrefsStore, tailwind-dark-v4, single-field-participant, alias-toggle, multi-select-bulk-delete, ai-models-preview, z-30-sticky, breakdown-matrix, copy-attendances, 1차와동일, exclude-default-toggle, home-ranking-link, lightbox-portal, createPortal, sticky-stacking-context-trap, lightbox-backdrop-close, my-location-guide, geolocation-permission-change, insecure-context-http, code-splitting, route-lazy, AdminRoutes, manualChunks, codeSplitting-groups, vite8, rolldown, react-memo, interaction-hot-path, setQueryData-batch-merge, lightbox-promoted, eslint-web, react-compiler-lint, s-token-route, og-proxy, dark-mode-web, theme-store, lp-theme, MapLayerControl, midnight-layer, satellite-layer, vworld-dark, MyLocationButton, soft-tonal-variant, tonal-button, tonal-badge, detail-CategoryTree, insight-tip-filter, menu-filter, lightbox-thumbnail, card-borderless-tab, review-photo-fullwidth, card-click-flyto, card-doubleclick-zoom, flyToZoomIn, SubwayPage, subway-web, subway-station-search, subway-arrival-panel, subway-path-panel, subway-timetable, subway-congestion, SubwayLineBadge, SubwayStationsMap, SubwayNearbyBusSection, TransitTabs, transit-unified, TransitFavoritesSection, CrossSearchSection, TransitCrossToggleChip, transitFavExpandStore, transitCrossShowStore, transitMapViewport, ol-map-pooling, poolKey, overlayMarkers, tsconfig-noEmit, stale-js-emit, admin-scheduler-ui, ScheduleSection, cron-preset, schedule-sse, admin-category-tree-collapsed, AskTab, review-qa, review-ask, ReviewAskToaster, ResummarizeToaster, global-toaster, sonner, ClusterTopics, review-clusters, aspect-summary, InsightsTab, ModelPickerPopup, model-picker, AdminReviewSearchPage, review-search, rag-ops, AdminLogsPage, AdminLogRunDetailPage, AdminLogSettingsPage, operation-runs, joblog, log-retention, AdminTablingPage, AdminTablingTestPage, tabling, AdminTelegramPage, telegram-config, AdminAiUsagePage, LlmUsagePanel, llm-telemetry, ai-usage, RegionStatsPanel, RegionStatsMap, choropleth, sigungu-geo, region-stats, RandomCrawlSection, random-crawl, share-url-r, seo-preview, ask-tab, admin-test-accordion, BusPage, bus-web, bus-station-search, bus-nearby-mode, near-param, bus-favorites, bus-arrival-panel, bus-route-tracking, bus-vehicle-marker, map-marker-icon, VehicleMarker, follow-vehicle, MenuTab-groups, menuGroups, representative-menu-preview, review-noise-aspect, cluster-noise-fallback]
 ---
 
 # web — Vite + React 웹 앱
+
+**2026-08-17~08-30 변경 흡수 — 공개 라우트 4종(`/air` 대기정보 · `/weather` 날씨 · `/life-map` 일상지도 · `/me/meals` 내 식단) + 상단바 폭 예산·계정 메뉴·날씨/대기 통합 "내 위치" 칩 + 모바일 시트 패턴 통일(맛집 v2 → 버스·지하철·일상지도, `components/sheet/`) + 어드민(맛집 통합 검색 `q`·음식 카탈로그 `/admin/food`·AI 용도 5종·리뷰 최신순) + 테스트 13파일/77건**(apps/web 변경 75파일, `5e25cc0`·`0d72380`·`7340743`…`4fd6e22`):
+- **공개 라우트 4종** — [App.tsx](../../apps/web/src/App.tsx) 에 `AirQualityPage`(`7340743`·`c6ac640`·`a4284aa`)·`WeatherPage`(`37e0db0`·`7704f8c`·`17f281a`)·`LifeMapPage`(`1d92acb`·`a21de10`·`4fd6e22`)·`MealPage`(`233c5a9`+`2e41e63`…`fd371d9`, `RequireUser`) 모두 `React.lazy`. 대기·날씨는 한 페이지에 공공 API 오퍼레이션별 섹션을 펼치는 "예시 페이지" 골격(`AirSection` eyebrow = 원천 오퍼레이션명, 날씨가 대기 프리미티브를 그대로 재사용), 일상지도는 OL 지도 한 장 + 패널/시트, 식단은 조회 전용 5탭(기록·달력·통계·추천·설정 — 입력은 앱). 컴포넌트 디렉터리 `components/{air(15)·weather(12)·life-map(8)}/` + `routes/meal/(5)`, 스토어 `lifeMapPrefsStore`(`lp:life-map-prefs` v2)·`lifeMapRecentStore`(`lp:life-map-recent`). 도메인은 [air-quality](air-quality.md)/[weather](weather.md)/[life-map](life-map.md)/[meal](meal.md) — 여기선 페이지 골격·URL state·스토어·테스트만. **넷 다 앱에도 대응 화면이 있다**(`e348032`·`88751cd`, [mobile](mobile.md)) — 아래 19차 서술의 "버스·지하철 웹 전용"도 2026-07 이후 앱 대중교통 화면이 생겨 더는 사실이 아니다(본문 정정).
+- **상단바·사이드바 재설계(`9e197d3`·`4d35a57`·`69ed65f`·`a062e7d`)** — 공개 NAV 순서 홈·맛집·대중교통·일상지도·**날씨→대기질**(`69ed65f`)·식단(로그인만). [PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx) 에 **폭 예산** 주석·구현: `<md` 는 [≡][로고]···[칩]만(테마·로그인/계정은 [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx) 하단 `md:hidden` 블록으로), `md~lg` + 테마·계정 메뉴, `lg+` NAV 가로 펼침 + 칩 확장, `xl+` 계정 트리거에 이메일. 넘치면 버튼 대신 칩이 줄어들도록 왼쪽 묶음 `shrink-0`/오른쪽·칩 `min-w-0`. 신규 [AccountMenu](../../apps/web/src/components/AccountMenu.tsx)(이메일·내 정산·관리자·로그아웃 디스클로저 — 바깥 클릭·ESC·선택으로 닫힘, 헤드리스 라이브러리 없음). [MyLocationChip](../../apps/web/src/components/weather/MyLocationChip.tsx) 은 저장한 내 위치(로그인 서버/게스트 로컬 — [air-quality](air-quality.md))의 날씨·대기를 **알약 하나, 링크 둘**(`/weather?ll=` · `/air?sido=&station=`)로, 자료 없는 세그먼트는 조용히 빠짐(통합지수 결측 시 PM 등급 폴백은 shared 훅 `useMyLocationGlance` — `4d35a57`). 테스트 3+3+4건.
+- **시트 패턴 통일(`e84e4b9`)** — `restaurant-v2/BottomSheet.tsx` → [sheet/BottomSheet.tsx](../../apps/web/src/components/sheet/BottomSheet.tsx)(R100) + 신규 [sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts)(목록/상세 두 시트 스냅 조율 — 상세 열리면 목록 스냅 기억→peek·숨김, 상세 half, 닫히면 복원; 렌더 중 파생이라 첫 프레임부터 half) + [lib/useMediaQuery.ts](../../apps/web/src/lib/useMediaQuery.ts)(`useIsDesktopXl`). `RestaurantsV2Page`·`BusPage`·`SubwayPage`·`LifeMapPage` 네 지도 페이지의 모바일이 같은 골격 — 상단바 subBar(탭·검색행)/헤더 아래 fixed 지도(`--map-bottom-inset`)/목록 시트(peek 120)/상세 시트(half, z 25). `MapCanvas.flyTo(..., { bottomInset })`·`fixedScale`·마커 Style 캐시(6000) 확장, `MapLayerControl`·따라가기 배지는 `--map-bottom-inset` 만큼 위로. [docs/mobile-public-restaurant-ux-v2.md](../../docs/mobile-public-restaurant-ux-v2.md) 표 갱신.
+- **어드민** — [AdminRestaurantsPage](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx) 통합 검색(`5e25cc0` — `?q=` URL, `useRestaurantList({ q })` → `GET /api/v1/admin/restaurants?q=`, 가게명·카테고리·Place ID, 서버 응답 단축은 `9ccbe52` [friendly](friendly.md)). 신규 [AdminFoodPage](../../apps/web/src/routes/admin/AdminFoodPage.tsx)(`/admin/food`, `d53fbe3`·`31c56f7` — 어드민 청크 안 2차 lazy, 적재 잡 cron·통계·병합 충돌·인식 품질·카탈로그 표/인라인 편집/수기 등록, 테스트 7건; 도메인 [food](food.md)). [AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) 용도 5종(`cc8399a` — `meal-photo`·`meal-recommend` 추가), [AdminLogsPage](../../apps/web/src/routes/admin/AdminLogsPage.tsx) `FEATURE_LABEL` +3. `0d72380` 리뷰 최신순 — 크롤 배치 `setQueryData` 머지 뒤 `compareReviewRecencyDesc`(@repo/utils) 정렬, 어드민 상세 정렬 기본 `visitedAt-desc`(`fetchedAt-asc` 제거).
+- **곁다리** — [main.tsx](../../apps/web/src/main.tsx) 401 처리가 `handleUnauthorizedForCurrentSession`(요청 시점 토큰 = 현재 토큰일 때만 `cancelQueries`+`queryClient.clear()`+`setMealDraftPrincipal(null)`+`clearSession` 같은 JS turn — `9f39d53`·`fd371d9`), [LoginPage](../../apps/web/src/routes/LoginPage.tsx) 게스트 진입 전 식단 draft principal 비움, [MyLocationButton](../../apps/web/src/components/restaurant/MyLocationButton.tsx) `timeout` 상태 분기(`67f14cf`), [tailwind.css](../../apps/web/src/styles/tailwind.css) `--air-series-1/2`·`--weather-temp/precip` 차트 계열색 토큰(라이트/다크 쌍).
+- **테스트 13파일/77건** — 22차 29건 → 신규 PublicTopBar 3·PublicSidebar 3·MyLocationChip 4·AirNearbySection 6·WeatherPage 6·LifeMapPage 8(데스크톱 5 + `matchMedia` 목으로 모바일 시트 3)·MealPage 11·AdminFoodPage 7. 공통 기법: `MapCanvas` 를 `vi.mock`(forwardRef + no-op 핸들), `ResizeObserver` 스텁, sonner 목, 가짜 `EventSource`, MSW `onUnhandledRequest:'error'` 유지.
 
 **2026-08-16~17 변경 흡수 — 웹 테스트 인프라 신설(vitest 4 + RTL + MSW, 24건) + vote 3화면 + 홈 확장(슬롯 픽·내 주변·즐겨찾기 스트립·가는 법 탭)**:
 - **테스트 인프라(`716f4d8`·`bad1b9b`)** — apps/web 에 러너가 처음 생겼다. 별도 vitest.config 없이 **[vite.config.ts](../../apps/web/vite.config.ts) 에 test 필드 병합**(react 단일 인스턴스 강제 alias 를 테스트도 물려받아야 Invalid hook call 이 안 난다), web 은 Vite 8 이라 vitest **4.x**(다른 워크스페이스는 2.x). [src/test/setup.ts](../../apps/web/src/test/setup.ts) 함정: `@testing-library/jest-dom/vitest` 서브패스는 자기 위치에서 vitest 를 해석해 **엉뚱한 인스턴스의 expect 를 확장**한다(Invalid Chai property) — `expect.extend(matchers)` 직접 호출로 회피. MSW 는 [src/test/msw.ts](../../apps/web/src/test/msw.ts) 공용 server + **기본 핸들러 없음** + `onUnhandledRequest:'error'` — 각 테스트가 기대 요청을 명시하게 하는 정책(마운트 요청 회귀 감지를 겸함). 현재 29건: vote 3화면 20 + SmartPickSection 내 주변 게이트 4(geolocation/permissions 를 defineProperty 스텁, findBy 존재가 아니라 **waitFor(enabled 전이)** 로 대기) + [useMapResearch 타이밍 계약 5](../../apps/web/src/test/useMapResearch.test.ts)(`df9fcbd` — 지도 재검색 파이프라인의 shared 승격과 함께 처음 붙은 안전망: 첫 이탈 즉시 발사·간격 내 연속 이동 마지막 좌표 트레일링 1회·줌 부족 수동 강등·임계 이내 무발동·기준점 없음 비활성. 훅 정의는 [shared](shared.md)지만 shared 는 node 환경이라 훅 렌더 테스트는 소비처 web 에 둔다).
@@ -65,13 +73,18 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
   - `/restaurants-v2/:placeId?` — 모바일 시트 v2
   - **`/r/:placeId`** — 공유/SEO 대표 URL (리스트 숨기고 지도+상세부터)
   - 공개 맛집 상세 7탭: 홈/분석/메뉴/리뷰/**질문(Ask·RAG)**/사진/정보
-  - **`/bus`** — 서울시 버스 정류장 검색·실시간 도착·노선 추적 (19차 신규, **웹 전용**)
-  - **`/subway`** — 수도권 전철 역 검색·실시간 도착·노선 추적·시간표·혼잡도·길찾기 (`/bus`와 "대중교통" 서브탭으로 묶임, **웹 전용**)
+  - **`/bus`** — 서울시 버스 정류장 검색·실시간 도착·노선 추적 (19차 신규. 처음엔 웹 전용이었으나 앱 대중교통 화면이 2026-07 에 생겨 지금은 양쪽 — [bus](bus.md))
+  - **`/subway`** — 수도권 전철 역 검색·실시간 도착·노선 추적·시간표·혼잡도·길찾기 (`/bus`와 "대중교통" 서브탭으로 묶임, 앱도 있음 — [subway](subway.md))
+  - **`/life-map`** — 일상지도: 전국 CCTV·공중화장실·병의원을 OL 지도 한 장에(뷰포트 점/셀 + 주변 목록 + 상세, 지역 이동 옴니박스). 24차 신규, 앱 화면도 있음 — [life-map](life-map.md)
+  - **`/weather`** — 기상청 단기·중기예보 예시 페이지(실황·6시간·3일 메테오그램·열흘·중기전망·해상·발표 정보). 24차 신규 — [weather](weather.md)
+  - **`/air`** — 에어코리아 대기정보 예시 페이지(측정소 지금·지도/내 주변·추이·시도 현황·전국 비교·나쁨 이상·예보·주간예보). 24차 신규 — [air-quality](air-quality.md)
+  - 공개 NAV 순서(상단바 lg+ 가로 / 그 아래 드로어): 홈 · 맛집 · 대중교통 · 일상지도 · **날씨 · 대기질**(`69ed65f` 로 날씨가 앞) · 식단(로그인만)
   - `/login` LoginPage — 이메일 로그인 + 회원가입 + 게스트 진입
 - **로그인 사용자 도구** — `RequireUser` 가드 (역할 무관).
   - `/restaurants/:placeId/settle/new|/:id|/:id/edit` — 정산 입력/결과/편집 (N차)
   - `/me/settlements`, `/me/settlements/new` — 정산 이력 + 식당 없이 독립 진입
   - `/me/contacts` — 단골 관리
+  - **`/me/meals`** — 내 식단 조회 전용(기록·달력·통계·추천·설정 5탭). 기록(사진 인식)은 앱에서만 — [meal](meal.md)
   - `/s/:token` — 공유 토큰 read-only (인증 X, PublicLayout 밖)
 - **어드민 콘솔** — `/admin/*`. 역할이 `ADMIN`인 계정만 접근. 운영 도구가 18차에
   대폭 확장됨:
@@ -80,16 +93,19 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
   - 테스트(아코디언 그룹): 네이버 / 캐치테이블 / 다이닝코드 / 테이블링 / AI
   - 맛집 발견(네이버 PC 지도) + 맛집 자동 발견(AI 키워드 → 직렬 크롤)
   - AI 분석 관리(정규화→머지 스케줄러 + **자동 발굴 스케줄러**)
-  - **리뷰 문맥검색**(enrich + 군집 + RAG 운영), **작업 로그**(feature별 run + 스텝 로그),
+  - **음식 카탈로그**(`/admin/food`, 24차 — 공공 데이터 적재 잡·통계·병합 충돌·인식 품질·카탈로그 편집, [food](food.md))
+  - **리뷰 문맥검색**(enrich + 군집 + RAG 운영), **작업 로그**(feature별 run + 스텝 로그 —
+    24차에 `food-import`·`meal-recognition`·`meal-recommendation` 라벨 추가),
     **AI 사용량**(LLM 텔레메트리 — 전역 floating 패널 + 상세 페이지)
-  - 설정: AI 키(`usePreviewModels` 모델 미리보기) / 지도 키 / **텔레그램** / **로그 보존**
+  - 설정: AI 키(`usePreviewModels` 모델 미리보기, 용도 5종 chat/image/log-analysis/**meal-photo**/**meal-recommend**) / 지도 키 / **텔레그램** / **로그 보존**
+  - 등록 맛집 목록에 **통합 검색**(`?q=` — 가게명·카테고리·Place ID, 24차 `5e25cc0`)
 
 `apps/mobile`(React Native)와 동일한 백엔드(`apps/friendly`)를 바라보며,
 공통 도메인 로직은 `@repo/shared`에서 끌어 쓴다. 공개 페이지는 사용자
 대상 — 디자인은 Pretendard + 네이버 지도 톤. 어드민은 운영 도구 — shadcn
 디폴트 + system-ui.
 
-## Architecture [coverage: high — 65 sources]
+## Architecture [coverage: high — 125 sources]
 
 ### 빌드 / 런타임
 
@@ -127,7 +143,12 @@ mount instant + dvh + slide w-full + `MapCanvas` declutter 해제 + 줌 14 라�
   끌어오는 무거운 식당 페이지.
 - 정산 5개 — `SettlementHistoryPage` / `ContactsPage` / `SettlementNewPage` /
   `SettlementResultPage` / `SharedSettlementPage`.
-- 어드민 전체 — `lazy(() => import('./routes/admin/AdminRoutes'))` 단일 청크.
+- 공개 공공데이터 페이지 — `BusPage` / `SubwayPage` / **`AirQualityPage`** / **`WeatherPage`** /
+  **`LifeMapPage`**(OL 지도) + 로그인 전용 **`MealPage`**(24차 — 모두 `lazy(() => import(...).then((m) => ({ default: m.X })))` 명명 export 형태).
+- 어드민 전체 — `lazy(() => import('./routes/admin/AdminRoutes'))` 단일 청크. 그 안에서
+  **`AdminFoodPage` 만 한 번 더 `lazy`**(24차 `d53fbe3`) — 적재 잡·카탈로그 표·통계는 이
+  페이지 전용이라 다른 어드민 페이지 진입 비용에 얹지 않는다. 폴백은 어드민 레이아웃
+  안쪽 본문만 도는 `SectionFallback`(스피너).
 
 최상위 `<Suspense fallback={<PageFallback/>}>`(중앙 스피너 — 페이지 자체 로딩
 상태와 같은 모양이라 청크 로드→데이터 로드 전환 시 화면이 안 튄다)로 감싼다.
@@ -141,7 +162,7 @@ nested 상세(`/restaurants/:placeId`)는 부모 페이지가 `<Outlet>` 을 *�
 `path="/admin/*"` 로 마운트되므로 내부 라우트는 모두 `/admin` 기준 상대 경로
 (`index === /admin`, `discover`/`auto-discover`/`restaurants`/`restaurants/:placeId`/
 `crawl-test`/`catchtable-test`/`diningcode-test`/`tabling-test`/`diningcode`/`tabling`/
-`analytics`/`ai-usage`/`logs`/`logs/:runId`/`ai-test`/`review-search`).
+`analytics`/**`food`**(24차)/`ai-usage`/`logs`/`logs/:runId`/`ai-test`/`review-search`).
 `settings` 는 자식 라우트를 갖는 중첩 레이아웃(`ai-keys`/`map`/`telegram`/`logs` 탭 +
 `index` → `ai-keys` redirect). `Navigate` target 만 절대 경로 유지(옛 북마크 호환 —
 `/admin/ai-keys` → `/admin/settings/ai-keys`). 18차에 `ai-usage`/`logs`/`review-search`/
@@ -165,8 +186,12 @@ vendor 만 추가로 묶어, 앱 코드만 바뀌어도 벤더 캐시가 유지�
 | `/restaurants/:placeId` | `RestaurantDetailRoute` → `PublicRestaurantDetail` (lazy) | ↑ (nested, 자체 Suspense) |
 | `/restaurants-v2/:placeId?` | `RestaurantsV2Page` (Outlet, BottomSheet, lazy) | `PublicLayout` |
 | **`/r/:placeId?`** | `RestaurantsV2Page` (공유/SEO — 리스트 숨김, 지도+상세, lazy) | `PublicLayout` |
-| **`/bus`** | `BusPage` (버스 정류장 검색·도착·노선 추적 — lazy, **웹 전용**) | `PublicLayout` |
-| **`/subway`** | `SubwayPage` (전철 역 검색·도착·노선 추적·시간표·혼잡·길찾기 — lazy, **웹 전용**) | `PublicLayout` |
+| **`/bus`** | `BusPage` (버스 정류장 검색·도착·노선 추적 — lazy; 모바일은 시트 패턴) | `PublicLayout` |
+| **`/subway`** | `SubwayPage` (전철 역 검색·도착·노선 추적·시간표·혼잡·길찾기 — lazy; 모바일은 시트 패턴) | `PublicLayout` |
+| **`/air`** | `AirQualityPage` (에어코리아 대기정보 — `?sido=&station=&term=&code=`, lazy) | `PublicLayout` |
+| **`/weather`** | `WeatherPage` (기상청 단기·중기예보 — `?p=지점id` 또는 `?ll=lat,lng`, `?sea=`, lazy) | `PublicLayout` |
+| **`/life-map`** | `LifeMapPage` (전국 CCTV·화장실·병의원 지도 — `?ll=&z=&sel=layer:id`, lazy, OL) | `PublicLayout` |
+| **`/me/meals`** | `MealPage` (내 식단 조회 — 기록/달력/통계/추천/설정, lazy) | `PublicLayout` + `RequireUser` |
 | `/me/settlements` | `SettlementHistoryPage` (lazy) | `PublicLayout` + `RequireUser` |
 | `/me/contacts` | `ContactsPage` (단골 관리, lazy) | `PublicLayout` + `RequireUser` |
 | `/restaurants/:placeId/settle/new` | `SettlementNewPage` (4-step, N차, lazy) | `RequireUser` (단독) |
@@ -631,7 +656,7 @@ busy ping 애니메이션. `/admin/ai-usage` 상세로 가는 링크. 도메인�
 ### 버스 정류장 페이지 — 웹 라우트/네비/지도 캔버스 [신규 — 19차]
 
 서울시 버스 정류장 검색·실시간 도착·노선 추적 페이지가 공개(비로그인)로
-추가됐다. **현재 웹 전용 — 앱(apps/mobile)은 대응 화면이 없다.** 도메인(서울시 API
+추가됐다. **19차 당시엔 웹 전용이었지만 2026-07 에 앱 대중교통 화면(`apps/mobile/app/(tabs)/transit.tsx`)이 생겨 지금은 양쪽에 있다**([mobile](mobile.md)). 도메인(서울시 API
 프록시·캐시·계약·훅)은 [bus](bus.md), 여기선 웹 관점(라우트·네비·URL state·지도
 캔버스)만 다룬다.
 
@@ -658,7 +683,8 @@ busy ping 애니메이션. `/admin/ai-usage` 상세로 가는 링크. 도메인�
   로그인 직후 게스트 저장분 서버 병합도 이 훅이 담당). 정류장·노선 별 토글
   ([BusFavoriteStar](../../apps/web/src/components/bus/BusFavoriteStar.tsx) — 행
   버튼의 형제로 배치해 버튼 중첩 회피), 초기 화면(q/near/선택 없음)에서만
-  [BusFavoriteSection](../../apps/web/src/components/bus/BusFavoriteSection.tsx) 노출.
+  `BusFavoriteSection` 노출(2026-07-07 13차에 통합 즐겨찾기
+  [TransitFavoritesSection](../../apps/web/src/components/transit/TransitFavoritesSection.tsx) 으로 대체·삭제 — [transit](transit.md)).
 
 지도 캔버스 확장 — 식당용 공용 [MapCanvas](../../apps/web/src/components/restaurant/MapCanvas.tsx)
 를 포크 없이 확장해 버스가 얹는다:
@@ -716,6 +742,318 @@ busy ping 애니메이션. `/admin/ai-usage` 상세로 가는 링크. 도메인�
 설정은 자식 탭 레이아웃([`AdminSettingsPage`](../../apps/web/src/routes/admin/AdminSettingsPage.tsx))
 — AI 키/지도/텔레그램/로그 4탭.
 
+### 공개 셸 재설계 — 상단바 폭 예산 · 계정 메뉴 · 통합 "내 위치" 칩 [신규 — 24차]
+
+공개 페이지가 4개 늘고 상단바에 날씨·대기 칩이 들어오면서 한 줄짜리 상단바가 넘치기
+시작했다 — 넘치면 오른쪽 끝(테마·계정)이 화면 밖으로 밀리고 **문서가 가로 스크롤**되며,
+그러면 `fixed inset-x-0` 레이어(맛집 지도·시트)까지 문서 폭을 따라 커진다. `a062e7d` 가
+[PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx) 상단에 **폭 예산(실측)** 을
+주석으로 박고 브레이크포인트별로 담는 것을 나눴다:
+
+| 폭 | 상단바에 남는 것 | 내려가는 것 |
+| --- | --- | --- |
+| `<md` | [≡ 햄버거][로고] ··· [내 위치 칩(~170px)] | 테마·로그인/계정 → [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx) 하단(`md:hidden` 블록, `data-testid="sidebar-account"`) |
+| `md~lg` | + `ThemeToggle` + `AccountMenu`/로그인 버튼(`hidden md:flex`) | NAV 는 아직 드로어 |
+| `lg+` | + NAV 가로(`hidden lg:flex`; 768px 에선 NAV 와 칩이 같이 못 들어간다) + 칩이 하늘 상태·PM2.5 까지 펼침(~340px) | 햄버거 `lg:hidden` |
+| `xl+` | 계정 메뉴 트리거에 이메일(`hidden xl:inline`, `max-w-[12rem]` 말줄임) | — |
+
+그래도 넘치는 경우(아주 좁은 폭·긴 라벨)엔 버튼이 밀려나는 대신 **칩이 줄어들게** —
+왼쪽 묶음은 `shrink-0`, 오른쪽 묶음·칩은 `min-w-0`(칩 자체도 `max-w-[22rem]`·`overflow-hidden`).
+NAV 는 `NavItem[]` 상수 하나를 상단바·드로어가 공유하는 모양 그대로: 홈(`end`)·맛집·대중교통
+(`match: ['/bus','/subway']`)·일상지도·날씨·대기질·식단(`requiresAuth` — 비로그인·게스트는 숨김).
+드로어는 NAV 만 `overflow-y-auto` 로 스크롤해 가로 모드 등 낮은 화면에서도 하단 계정 블록이
+밀려나지 않게 했다. 맛집 상세(`/restaurants/:placeId`·`/r/:placeId`)에서 모바일 상단바를 숨기는
+`hideOnMobile`, subBar 슬롯 + `ResizeObserver` 헤더 높이 측정은 v2 때 그대로.
+
+- **[AccountMenu](../../apps/web/src/components/AccountMenu.tsx)** [신규] — 이메일 + 버튼
+  2~3개를 가로로 늘어놓던 것을 버튼 하나로 접는다(lg 1024px 에서 NAV·칩과 겹쳐 넘쳤다).
+  `CircleUserRound` + 이메일(xl+) + chevron 트리거(`aria-haspopup`/`aria-expanded`/`aria-controls`
+  + `useId`), 패널(`w-60`, `data-testid="account-menu"`)에 이메일 머리·내 정산(`/me/settlements`)·
+  관리자(`/admin`, ADMIN 만)·구분선·로그아웃. 바깥 `mousedown`·ESC·항목 선택으로 닫힘 —
+  `ConfirmDialog` 와 같은 결로 헤드리스 라이브러리 없이. 드로어 하단 블록은 같은 항목을
+  세로 리스트로(항목 클릭 시 `onClose`).
+- **[MyLocationChip](../../apps/web/src/components/weather/MyLocationChip.tsx)** [신규,
+  `9e197d3`] — 저장한 내 위치(대기·날씨 페이지에서 저장, 로그인 서버/게스트 로컬 —
+  [air-quality](air-quality.md))가 없으면 `null`(강요 없음). 있으면 **알약 하나에 링크 둘**:
+  왼쪽 `[📍라벨 ☁기온 상태 ☂]` → `/weather?ll=lat,lng`(`data-testid="weather-location-chip"`),
+  오른쪽 `[●등급 PM2.5]` → `/air?sido=&station=`(`air-location-chip`; 가장 가까운 측정소의
+  시도를 `AIR_SIDO_OPTIONS`/`airSidoMatches` 로 역매핑). 경계선 없이 가운뎃점(`before:content-['·']`)
+  으로만 나눠 한 알약으로 읽히게, 위치 이름은 앞에 한 번만. 폭별 단계 노출: `<sm` 라벨·소수점
+  없이 `[📍 ☁26° · ●좋음]`(360px 에서 '매우나쁨'까지 ~190px), `sm+` 라벨(`max-w-[6.5rem]`)·기온
+  소수 1자리, `lg+` 하늘 상태 글자·PM2.5 수치. 파생값(기온·상태·우산·등급·가장 가까운 측정소)은
+  앱 홈 카드와 공용 훅 `useMyLocationGlance({ refetchOnWindowFocus: true })`([shared](shared.md))
+  — 통합지수 결측 시 PM2.5·PM10 등급 폴백(`4d35a57`)과 10분 조용한 갱신(`26947ba`)도 훅 쪽.
+  한쪽 자료를 못 받으면 **그 세그먼트만 조용히 빠지고** 알약은 남는다 — 대기는 측정소가 없을
+  때뿐 아니라 측정소는 있어도 등급이 없을 때도 빠진다(업스트림 장애 때 "● -" 를 남기지 않음,
+  사정은 `title` 툴팁에만). `WeatherConditionIcon`(weatherIcons) + `airGradeStyle`(airGrade) 재사용.
+- **테스트** — [PublicTopBar.test](../../apps/web/src/components/PublicTopBar.test.tsx) 3건(로그아웃
+  구조·ADMIN 계정 메뉴 열기/ESC/바깥 클릭·USER 관리자 항목 없음), [PublicSidebar.test](../../apps/web/src/components/PublicSidebar.test.tsx)
+  3건(하단 계정 블록·항목 클릭 시 `onClose`·USER), [MyLocationChip.test](../../apps/web/src/components/weather/MyLocationChip.test.tsx)
+  4건(없으면 null · 두 링크 href/격자 nx,ny/limit=1 · 우산 없음/실황 없음/측정소 없음 · 측정값
+  없음이면 "-" 미표시). 폭별 숨김은 CSS 라 jsdom 에선 안 보고 구조·링크·역할만 본다.
+
+### 공개 라우트 4종 — 대기정보 · 날씨 · 일상지도 · 내 식단 [신규 — 24차]
+
+네 페이지 모두 `PublicLayout` 아래 `React.lazy`. 도메인 로직(서버 프록시·캐시·계약·훅)은
+각 토픽에 두고 여기선 **페이지 골격 · URL state · 컴포넌트 디렉터리 · 스토어 · 테스트**만.
+
+**대기정보 [`AirQualityPage`](../../apps/web/src/routes/AirQualityPage.tsx)** (`/air`,
+`7340743`→`c6ac640`→`a4284aa`) — 에어코리아 대기오염정보 API 5개 오퍼레이션 + 측정소정보
+API 로 "보여줄 수 있는 것"을 섹션 ①~⑧로 한 화면에 펼친 **예시 페이지** 골격. 상단 컨트롤
+(시도 셀렉트·측정소 셀렉트·갱신 라벨·새로고침 = `invalidateQueries(['air'])`)이 아래 모든
+섹션의 범위. URL 이 유일한 진실(`sido`·`station`·`term`·`code`; 기본값 DAILY/PM10 은 URL 에서
+제거, 유효하지 않은 값은 기본값으로 읽되 URL 은 안 건드림; 차트 항목·전국 비교 항목은 공유
+가치가 낮아 로컬 state). URL 에 시도·측정소가 없고 **저장한 내 위치**가 있으면
+`useAirNearbyStations(lat, lng, { limit: 1, radius: 50_000 })` 로 가장 가까운 측정소를 기본 선택
+(상단바 칩과 같은 해석). 측정소 전환 중엔 `isPlaceholderData` 면 디밍, 그 상태에서 실패하면
+이전 측정소 값을 계속 보여주는 대신 에러 블록. 업스트림 에러 문구는 `ApiError.statusCode`
+503(키 없음/일일 한도)·502·429 분기(`upstreamMessage`). [components/air/](../../apps/web/src/components/air/):
+
+| 파일 | 역할 |
+| --- | --- |
+| `AirPrimitives.tsx` | 섹션 카드(`AirSection` — 제목 + **원천 오퍼레이션명 eyebrow**, `aside` 슬롯) · 상태 블록(`AirStateBlock` loading/error/empty) · `AirStaleNote`. 날씨 페이지도 그대로 재사용 |
+| `AirStationHero.tsx` | 선택 측정소 지금 — 통합지수 히어로(≥48px) + 6항목 타일(농도·단위·등급·Flag 경고) |
+| `AirHourStrip.tsx` | 24시간 등급 띠(서명 요소) — 시간별 등급색 칸, 날짜 경계선, 값은 title |
+| `AirHistoryChart.tsx` | 인라인 SVG 선 차트(라이브러리 없음, 단일 축 — PM10·PM2.5 2계열/나머지 단일), 호버 크로스헤어 + ←/→ 키보드 + 표로 보기 |
+| `AirSidoTable.tsx` | 시도 측정소 현황 — 요약 타일·측정망 필터·정렬 표, 행 클릭 = 측정소 선택 |
+| `AirSidoCompare.tsx` | 전국 응답(673개소)을 시도 평균 가로 막대로, 막대 클릭 = 시도 전환 |
+| `AirBadStations.tsx` | 통합지수 나쁨 이상 측정소 — 시도(주소 앞머리)로 묶은 칩 |
+| `AirForecastSection.tsx` | 예보통보 — 항목 탭 → 발표 시각 → 대상일별 19권역 등급 그리드 + 원문 + 예측모델 이미지 |
+| `AirWeeklySection.tsx` | 초미세먼지 주간예보 D+3~D+6 권역 × 4일 그리드 |
+| `AirStationsMap.tsx` | 전국 측정소 지도(`MapCanvas`) — 좌표 + 현재 등급색 마커(등급 0~4 × 선택 10종 모듈 레벨 data URL), 내 위치·저장 위치는 `overlayMarkers`(fit 제외) |
+| `AirNearbySection.tsx` (+test 6) | 측정소 지도·내 주변·검색·**내 위치 저장**(선택 측정소 저장 `station` / GPS 저장 `geolocation`) — `useUserLocation({ auto: false })`(버튼 눌렀을 때만 권한), 검색은 서버 캐시 로컬 검색이라 250ms 디바운스 즉시. `AirStationsErrorBlock` 이 인증 30(활용신청 전) 503 을 키 설정이 아닌 활용신청 안내로 분기 |
+| `AirLegend.tsx` | CAI 등급 구간표 + 공공누리 출처표시 + 오퍼레이션 목록 |
+| `airGrade.ts` / `airOptions.ts` | 등급 색(에어코리아 파랑/초록/노랑/빨강 관행, 항상 글자와 함께) · `todayKst` 등 재수출(`@repo/utils` 로 승격) / 차트·예보 탭 상수(react-refresh 경계 유지용으로 컴포넌트 파일 밖) |
+
+**날씨 [`WeatherPage`](../../apps/web/src/routes/WeatherPage.tsx)** (`/weather`, `37e0db0`→
+`7704f8c`→`17f281a`) — 기상청 단기예보 4 + 중기예보 4 오퍼레이션을 섹션 ①~⑦(지금·3일
+시간별·열흘·중기전망·해상·발표 정보·코드표)로. **대기 프리미티브(`AirSection`/`AirStateBlock`)
+를 그대로 쓰고** 기상청 고유 문구(stale/폴백 띠)·`Segmented` 만 [WeatherPrimitives](../../apps/web/src/components/weather/WeatherPrimitives.tsx).
+지점 해석 `resolveLocation(p, ll, saved)`: `?ll=` 좌표(GPS/저장 위치) → 격자는 좌표로 정확히,
+중기예보·표시명은 가장 가까운 지점(거리 표기); `?p=` 지점 id(시·군 + 광역시 구·군) → 청사
+좌표 → 격자 + 소속 중기 구역; 둘 다 없고 저장 위치가 있으면 그 좌표(`fromSaved`); 최후
+`WEATHER_DEFAULT_PLACE_ID`(서울). 시도→지점 2단 셀렉트, "내 위치"(`acquirePosition({ timeout:
+10_000, maxTries: 2 })` — 실패 상태 denied/timeout/unavailable 안내), **"이 지점을 내 위치로
+저장"/저장됨·해제**(`useAirLocation.save({ label, source: 'place' | 'geolocation' })` — 대기·상단바
+칩과 같은 저장소, `savedHere` 는 좌표 ≈50m 근사), 다른 지점 보는 중엔 "저장한 내 위치(라벨)"
+바로가기. 해역 기본값은 육상 권역 → `DEFAULT_SEA_BY_LAND` 표, 사용자가 바꾸면 `?sea=`. 전국
+전망(`stnId 108`)은 토글했을 때만 조회(업스트림 2콜 추가). AWS 매분 관측(`useWeatherAws(lat,
+lng, { limit: 2, radius: 15_000 })`)은 서버 키가 없으면 `enabled=false` 로 조용히 생략.
+[components/weather/](../../apps/web/src/components/weather/):
+
+| 파일 | 역할 |
+| --- | --- |
+| `WeatherNowHero.tsx` | 초단기실황 히어로(기온 ≥48px) + 초단기예보 6시간 띠 + AWS "근처 관측소" 줄. 풍향 도 → 16방위 + 화살표 |
+| `WeatherMeteogram.tsx` | 3일 시간별 메테오그램(서명 요소) — [아이콘 행]→[기온 선]→[강수확률 막대 + 강수량 글자] x 공유 소형 다중(이중 축 아님), 호버·←/→·표 쌍둥이 |
+| `WeatherDailyStrip.tsx` | 열흘 — 단기 일별 요약(오늘~D+3) + 중기(D+4~D+10) 병합 한 줄, 공통 기온 축 막대, 중기 오차 ± |
+| `WeatherSeaSection.tsx` | 해역 선택 + 날짜별 날씨·파고 표 |
+| `WeatherVersions.tsx` | 이 화면이 쓰는 발표분(base) + `getFcstVersion` 파일 생성 시각, 폴백/저장본 여부 |
+| `WeatherLegend.tsx` | SKY/PTY 코드표 · category 표 · 공공누리 제1유형 출처 |
+| `weatherIcons.tsx` | 하늘+강수형태 → lucide 아이콘 표(낮/밤 06~19시 근사, 렌더 중 컴포넌트 생성 금지 — 모듈 상수) |
+| `weatherFormat.ts` / `weatherDaily.ts` | 발표 시각 포맷·업스트림 문구·열흘 병합은 `@repo/utils`/`@repo/shared` 로 승격(앱 날씨 화면 공용) — 웹 경로 호환 재수출 + 컨테이너 폭 측정 훅만 잔존 |
+| `MyLocationChip.tsx` (+test 4) | 상단바 통합 칩(위 공개 셸 절) |
+
+**일상지도 [`LifeMapPage`](../../apps/web/src/routes/LifeMapPage.tsx)** (`/life-map`,
+`1d92acb`→`a21de10` 지역 이동→`e84e4b9` 시트→`4fd6e22` 병의원) — 전국 CCTV·공중화장실·병의원을
+OL 지도 **한 장(인스턴스 1개)** + 패널. URL 이 진실: `?ll=lat,lng&z=줌`(뷰포트 — 사용자 이동
+`onViewportChangeEnd` 만 URL 반영, 모든 변경 `onViewportSync` 는 250ms 디바운스 후 조회 키)
++ `?sel=layer:id`(선택 — 상세는 별도 조회, 점 응답엔 최소 필드뿐). 레이어 on/off·CCTV 설치목적·
+화장실 편의(AND)·병의원 종별 필터는 [lifeMapPrefsStore](../../apps/web/src/stores/lifeMapPrefsStore.ts)
+(persist `lp:life-map-prefs`, v1→v2 migrate 로 병의원 레이어 기본 켬). 진입 중심은 마운트 1회
+결정 URL → 저장한 내 위치(`useAirLocation` — 날씨·대기와 공유; 로그인 서버 조회가 늦게
+오면 사용자가 안 움직였을 때만 1회 flyTo) → 서울시청, 기본 줌 15. 켜진 레이어별
+`useLifeMapPoints({ layer, bbox, zoom, filters })` 3개(셀 모드면 "N 이상 확대" 힌트,
+`truncated` 면 "일부만 표시"), 주변 목록 `useLifeMapNearby(activeTab, center, { radius: 화장실
+1000/CCTV 500/병의원 1000m, limit: 15 })` 는 지도 중심 기준, 꺼진 레이어 탭이면 켜진 쪽으로
+보이되 사용자 탭 선택은 보존. 내 위치는 버튼으로만(`useUserLocation({ auto: false })`,
+`isInKorea` 가드). **레이아웃 분기는 CSS 이중 마운트가 아니라 `useIsDesktopXl()`(JS)** —
+지도·패널을 한 벌만 두고 시트는 모바일에서만 마운트한다(데스크톱에 시트가 숨어 있으면
+html overflow 락이 따라온다). 지도 `<section>` 은 두 분기에서 같은 자리(첫 자식)라 폭이 바뀌어도
+OL 인스턴스를 다시 만들지 않는다. 데스크톱(xl+) = 좌 패널 400px(지역 이동 · 레이어/필터 ·
+주변 목록 또는 상세 · 푸터) / 우 지도, `calc(100dvh - headerHeight)`. 모바일 = 아래 시트 패턴 절.
+[components/life-map/](../../apps/web/src/components/life-map/):
+
+| 파일 | 역할 |
+| --- | --- |
+| `LifeMapView.tsx` | `MapCanvas` 한 장에 CCTV 점/셀 + 화장실·병의원 원/핀을 한 소스로(화장실·병의원을 뒤에 넣어 위에), 내 위치(파란)·저장 위치(보라) 오버레이, `MyLocationButton`, 키 게이트 3분기(대기·버스 지도와 같은 정책), 로딩·힌트 |
+| `lifeMapMarkers.ts` | 서버 점/셀 → `MapMarker`. 아이콘 data URL 모듈 레벨 1회, 셀 버블은 건수 키 메모이즈, `fixedScale` 사용 |
+| `LifeGoToBox.tsx` | "지역 이동" 옴니박스 — 입력 없음: 저장 위치·최근 본 위치·시도 칩→시·군·구 칩(로컬 245지점); 입력 중: 행정구역(로컬 즉시)·지하철역(`useSubwayStationSearch`)·버스정류장(`useBusStationSearch`)·주소/장소(`useLifeMapSearch` VWorld 프록시, 250ms, 서버 키 없으면 섹션 숨김). 종류별 줌(시도 11·시 13·구 14·역/정류장 16·주소 17), ↑↓/Enter/Esc. `variant: 'panel'`(데스크톱 — 열리면 패널 본문 자리) / `'bar'`(모바일 subBar — 한 줄 + 드롭다운) |
+| `LifeLayerBar.tsx` | 레이어 토글 + 필터 칩(맛집 카테고리 칩과 동일 모양). `section: 'all' \| 'layers' \| 'filters'` 로 일부만 — 모바일은 토글을 subBar 에, 필터 행을 시트 안에 |
+| `LifeNearbyList.tsx` | 주변 목록 탭(화장실/CCTV/병의원) + 행 클릭 = 선택 + flyTo. `filters` 슬롯이 머리 행 바로 아래 — peek 엔 머리 행만, half 부터 필터 칩 |
+| `LifeDetailCard.tsx` | 선택 상세(화장실 개방시간·변기·편의·관리기관 / CCTV 목적·대수·화소·방면·보관일수 / 병의원 종별·연락처·개설일·의사수) + '← 목록' |
+| `LifeMapFooter.tsx` | 범례 + 적재 상태(`useLifeMapStatus` — 건수·지오코딩·기준일) + 출처(localdata.go.kr·심평원, VWorld 지오코더) |
+| `lifeMapFormat.ts` | 개방시간 라벨 `@repo/utils` 승격 재수출 |
+
+[lifeMapRecentStore](../../apps/web/src/stores/lifeMapRecentStore.ts)(persist `lp:life-map-recent`)
+는 옴니박스에서 고른 곳을 최대 8개(같은 라벨·≈50m 좌표는 앞으로 끌어올림). 테스트
+[LifeMapPage.test](../../apps/web/src/routes/LifeMapPage.test.tsx) 8건 — 데스크톱 5(레이어·필터·
+푸터 + 서울시청 기준 주변 / 행 클릭 → 상세 / CCTV 탭·설치목적이 요청 파라미터에 / 지역 이동
+섹션·URL ll/z·최근 기록 / 저장 위치가 진입 중심) + **모바일 시트 3**(`window.matchMedia` 를
+`matches:false` 목으로 바꿔 `useIsDesktopXl` 을 false 로: subBar 에 지역 이동 + 레이어 토글·
+목록 시트에 목록/필터/푸터 / 행 클릭 → 상세 시트 별도·← 목록 / 드롭다운 열려도 목록 시트
+유지). `MapCanvas` 목은 뷰포트를 올리지 않으므로 points 요청은 나가지 않는다(뷰포트 없음 =
+비활성).
+
+**내 식단 [`MealPage`](../../apps/web/src/routes/meal/MealPage.tsx)** (`/me/meals`, `RequireUser`,
+`233c5a9` 기록·달력·통계 → `2e41e63` 추천·중요도 → `29fac09`·`1837f25`·`9f39d53`·`fd371d9`) —
+"기록은 앱에서 사진으로 남기고, 여기서는 모아 보고 분석" 안내가 머리에 있는 **조회 전용**
+5탭(로컬 state, URL 없음). 기록 탭 `useInfiniteMealEntries({ limit: 30, q, from, to, slot, mealType,
+source })` + 날짜 머리글 + "더 보기"(opaque `nextCursor`), 달력 탭 `useMealCalendar(month)` +
+날짜 선택 시 `useMealEntries({ from, to, limit: 20 })`, 통계 탭 `useMealStats(from, to)`(1주/1달/
+3달, 타일·주간 인사이트·추천 반응·분류별 막대·날짜별 끼니 — 막대는 div 폭, 차트 라이브러리
+없음 관례; 주식 영양 근거가 부족하면 하루 평균 숨김). [MealRecommendTab](../../apps/web/src/routes/meal/MealRecommendTab.tsx)
+— `useMealRecommendationContext`/`useMealRecommendations(5)`/`useCreateMealRecommendation`(추천받기
+`force:false`, 다시 추천 `force:true`)/`useMealRecommendationFeedback`(👍👎)/
+`useMealRecommendationEvent`(`shown` 이벤트를 `platform:'web'` 으로 1회 — `shownEventIds` ref)/
+`useFoodRestaurants`(파는 곳 찾기 → `/restaurants-v2/:placeId`)/`useAirLocation`(날씨 연동 —
+[weather](weather.md) 교차). [MealPreferenceTab](../../apps/web/src/routes/meal/MealPreferenceTab.tsx)
+— 가중치 7축 슬라이더(0~5) + `MEAL_WEIGHT_PRESETS` + 절대 제외/알레르기/덜 선호/선호 + 끼니·
+식사 유형, `useMealPreference`/`useUpdateMealPreference` + 내보내기 `useExportMealData`/전체 삭제
+`useDeleteAllMealData`(확인 문구 `MEAL_DATA_DELETE_CONFIRMATION`). [MealPhotoImg](../../apps/web/src/routes/meal/MealPhotoImg.tsx)
+— 사진은 JWT 가 필요해 `<img src>` 직접 불가, `useMealPhotoUrl(token, { variant })` 가 blob →
+objectURL(언마운트 해제)(정산 영수증 미리보기와 같은 함정). 테스트 [MealPage.test](../../apps/web/src/routes/meal/MealPage.test.tsx)
+11건(탭별 요청 계약 + cursor 유지 + 썸네일 인증 fetch + 추천 force/피드백/즉시 반영 + 설정 PUT/
+프리셋). 도메인은 [meal](meal.md).
+
+### 지도 + 바텀시트 화면 골격 공유 — `sheet/` · `useMapSheets` · `useMediaQuery` [신규 — 24차]
+
+`e84e4b9` 가 맛집 v2 에서만 쓰던 모바일 시트 패턴을 **네 지도 페이지의 공통 골격**으로
+끌어올렸다. 이전 대중교통 모바일은 "검색바 고정 / 지도(`min-h-[40dvh]`) / 리스트(`h-[38dvh]`)
+세로 적층"이라 지도도 목록도 작았고, 정류장 선택 시 리스트 영역이 도착 패널로 통째 교체됐다.
+
+- **[sheet/BottomSheet.tsx](../../apps/web/src/components/sheet/BottomSheet.tsx)** —
+  `restaurant-v2/` 에서 R100 이동(내용 동일: dual-mode fixed/scroll, 3-snap peek/half/full,
+  `TRANSITION_MS` 220, 기본 `peekHeight` 140/`halfRatio` 0.55, `disableScrollLock`·`hidden`·
+  `zIndex` props). 옛 경로 import 는 빌드 실패.
+- **[sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts)** [신규] —
+  목록 + 상세 두 시트의 스냅 조율을 훅으로: `useMapSheets(detailOpen, { initialListSnap = 'peek',
+  detailEnterSnap = 'half' })` → `{ listSnap, setListSnap, detailSnap, setDetailSnap, listHidden }`.
+  상세가 열리면(false→true) 목록 스냅을 기억해 두고 peek(숨김 대기), 상세는 half; 닫히면 기억한
+  스냅으로 복원. 전이는 **렌더 중 파생(setState-during-render, `prevOpen` 비교)** — effect 로
+  미루면 상세 시트가 직전 스냅(full 등)으로 한 프레임 튄다. 페이지는 목록 시트에
+  `hidden`/`disableScrollLock = listHidden`(상세 시트가 스크롤 락을 갖는다)을 준다. 상수
+  `SHEET_PEEK_HEIGHT = 120`·`SHEET_HALF_RATIO = 0.55`, `sheetHalfInset(headerHeight) =
+  round(max(0, innerHeight − headerHeight) × 0.55)` — 상세 시트가 half 로 덮는 아래 높이를
+  `flyTo` 의 `bottomInset` 으로 넘겨 지점이 시트 아래로 숨지 않게. RestaurantsV2Page 의 로컬
+  `snapBeforeDetailRef` + `prevPlaceIdRef` effect 를 이 훅으로 대체.
+- **[lib/useMediaQuery.ts](../../apps/web/src/lib/useMediaQuery.ts)** [신규] —
+  `useSyncExternalStore` 로 `matchMedia` 를 React 상태로. `useIsDesktopXl()` = `(min-width: 80rem)`
+  (Tailwind `xl` 1280px, 공개 지도 페이지가 데스크톱 3-column 과 모바일 시트를 가르는 기준),
+  `matchMedia` 없는 환경(jsdom·SSR)은 `fallback = true`(데스크톱). 지도 인스턴스·패널을 한 벌만
+  두고 싶은 페이지(일상지도)가 CSS 이중 마운트 대신 쓴다.
+- **공통 골격(모바일 `xl` 미만)** — ① 탭·검색행은 `usePublicLayout().setSubBar` 로 상단바
+  subBar(통합 sticky 헤더)에 등록(`useLayoutEffect`, 언마운트 시 null; `xl:hidden` 래퍼라 데스크톱
+  헤더 높이엔 영향 없음. 정류장/역 선택 중엔 검색행을 접어 공간 회수) ② 지도는 헤더 아래
+  `fixed inset-x-0 bottom-0` 배경(`top: headerHeight`) + CSS 변수 `--map-bottom-inset:
+  SHEET_PEEK_HEIGHT` ③ 목록 `BottomSheet`(z 20, `topOffset = headerHeight`, `peekHeight 120`)
+  ④ 선택되면 상세 `BottomSheet`(z 25, `key = stId|stn|selectedMarkerId` 로 항목 바뀌면 재마운트)
+  ⑤ 루트는 데스크톱만 `xl:h-[calc(100dvh-var(--header-h))]` 로 고정 — 모바일은 auto 라야 시트가
+  full 일 때 body 스크롤(주소창 minify)이 동작한다. 검색 제출·주변·재검색 핸들러가
+  `setListSnap(s => s === 'peek' ? 'half' : s)` 로 결과를 바로 보이게, 검색어/주변 모드 딥링크
+  진입은 `initialListSnap: 'half'`(버스 `q.length >= 2`, 지하철 `>= 1`). `useMapSheets` 는 **`useState`
+  선언들보다 앞에** 둔다(React Compiler 메모 검증이 뒤에 두면 setter 들을 반응값으로 본다).
+- **적용** — [RestaurantsV2Page](../../apps/web/src/routes/RestaurantsV2Page.tsx)(훅 교체 +
+  `--map-bottom-inset`), [BusPage](../../apps/web/src/routes/BusPage.tsx)/[SubwayPage](../../apps/web/src/routes/SubwayPage.tsx)
+  (subBar = `TransitTabs` + `Bus/SubwayStationSearchBar`; 데스크톱 탭은 `hidden xl:block`; 상세
+  시트 = `BusArrivalPanel`/`panelContent`, 없으면 `selectedMissing` 안내 + ← 목록; 데스크톱/모바일
+  지도는 여전히 CSS 동시 마운트라 `poolKey` `transit-desktop`/`transit-mobile` 분리 유지),
+  [LifeMapPage](../../apps/web/src/routes/LifeMapPage.tsx)(JS 분기 — 시트는 모바일에서만 마운트,
+  subBar = `LifeGoToBox variant="bar"` + `LifeLayerBar section="layers"`).
+- **[MapCanvas](../../apps/web/src/components/restaurant/MapCanvas.tsx) 확장** —
+  `flyTo/flyToZoomIn(lat, lng, zoom, { bottomInset })` → `centerWithBottomInset` 이
+  `inset/2 × resolution` 만큼 중심을 남쪽으로 밀어 지점이 "보이는 영역"의 세로 가운데에;
+  `MapMarker.fixedScale`(`1d92acb` — 줌 축소 `SMALL_ICON_SCALE`·라벨 숨김 건너뜀, 크기 자체가
+  의미인 12px 점·숫자 새긴 집계 버블용); **마커 Style 캐시** `markerStyleCache`(입력 키 =
+  icon src/selectedSrc·categoryKey·variant·selected·compact·label·darkBg, 상한 6000 넘으면 통째
+  비움) — OL 은 매 프레임 style function 을 부르므로 CCTV 수천 feature 면 프레임마다
+  Style/Icon 을 수천 개 새로 만들어 메인 스레드가 수 초 멈추던 것을 막는다.
+- **지도 위 컨트롤 inset** — [MapLayerControl](../../apps/web/src/components/restaurant/MapLayerControl.tsx)
+  과 버스·지하철 "따라가는 중"/"다시 따라가기" 배지([BusStationsMap](../../apps/web/src/components/bus/BusStationsMap.tsx)/
+  [SubwayStationsMap](../../apps/web/src/components/subway/SubwayStationsMap.tsx))가
+  `bottom-[calc(0.75rem+var(--map-bottom-inset,0px))]` — 지도 래퍼가 변수를 주면 peek 시트 위로
+  올라오고, 안 주면(데스크톱·어드민) 0. 검색바의 "결과가 많아 일부만 표시" 별도 문단은
+  건수 행 인라인 `· 일부만 표시`(title "서버가 100건으로 절단")로 접어 subBar 높이를 아꼈다
+  ([BusStationList](../../apps/web/src/components/bus/BusStationList.tsx)/[SubwayStationList](../../apps/web/src/components/subway/SubwayStationList.tsx)).
+- 설계 문서 [docs/mobile-public-restaurant-ux-v2.md](../../docs/mobile-public-restaurant-ux-v2.md)
+  의 파일 표가 `sheet/` 승격을 반영. 앱의 대응물(플로팅 헤더 + 시트, `enableDynamicSizing=false`)은
+  [mobile](mobile.md).
+
+### 어드민 갱신 — 맛집 통합 검색 · 음식 카탈로그 · AI 용도 5종 · 리뷰 최신순 [24차]
+
+- **[AdminRestaurantsPage](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx) 통합
+  검색(`5e25cc0`, 2026-08-17)** — 등록 맛집 카드 헤더에 `role="search"` 폼(가게명·카테고리·
+  Place ID, `maxLength 120`, ✕ 초기화). 제출 시 `?q=` URL + `page` 리셋(`updateParams({ q, page:
+  null })`), `useRestaurantList({ q, limit, offset, sort })` → `GET /api/v1/admin/restaurants?q=`
+  (`RestaurantListQuery.q` `trim().min(1).max(120)`; 통합 가게 + 출처를 함께 매칭 — 서버 응답
+  단축 `9ccbe52` 은 [friendly](friendly.md)). 입력 draft 는 `{ urlQuery, value }` 한 state —
+  뒤로/앞으로·공유 URL 로 `q` 가 바뀌면 effect 로 재설정하지 않고 `urlQuery !== searchQuery` 면
+  URL 값을 즉시 표시(렌더 중 파생). 제목 "검색 결과 N개"·빈 결과 "검색 초기화" 분기.
+- **[AdminFoodPage](../../apps/web/src/routes/admin/AdminFoodPage.tsx)** [신규, `/admin/food`,
+  `d53fbe3`→`31c56f7`] — 1,795줄 단일 파일에 섹션 5개: `ImportJobSection`(cron 프리셋 매월 1일
+  04:00 = 기본 `0 4 1 * *`/매주 월/매일 + 커스텀, `useFoodImportPreview` 다음 실행, 소스
+  체크(`FoodImportSource.options`; 외부 API 소스 `mfds-nutrition`/`mfds-recipe`/`mafra-recipe` 는
+  `apiConfigured` 배지), 지금 실행 `useRunFoodImportNow`(기본 body 없음, 오버라이드 켜면 현재
+  선택 소스·분류), 이력 `useFoodImportRuns`, 진행 중 run 은 `useFoodImportRunEvents` SSE 로
+  단계·소스·진행률) · `StatsSection`(`useFoodAdminStats` 타일 + 막대) · `MergeConflictSection`
+  (`useFoodMergeConflicts({ status: 'open', limit: 20 })` + `useResolveFoodMergeConflict`
+  keep/accept/dismiss) · `RecognitionQualitySection`(`useFoodRecognitionQuality`, 모델 필터
+  300ms 디바운스) · `CatalogSection`(`useFoodAdminList` — 검색 300ms 디바운스·필터·정렬,
+  페이지 크기 25/50/100 기본 50, 9열 표, `EditRow` 인라인 편집은 바뀐 필드만 PATCH·분류 비우기
+  `null`, `CreateDialog`(Radix Dialog) 수기 등록 409 → "이미 있는 음식명" 토스트). 사이드바
+  "음식 카탈로그"(`Soup`)는 AI 분석 관리 다음. 테스트 [AdminFoodPage.test](../../apps/web/src/routes/admin/AdminFoodPage.test.tsx)
+  7건 — 마운트만으로 7요청이 나가 기본 핸들러를 다 깔고, sonner 목·가짜 `EventSource`. 도메인
+  ([food](food.md)) 재서술 없음.
+- **[AdminAiKeysPage](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) 용도 5종(`cc8399a`)**
+  — `PURPOSE_ORDER = ['chat','image','log-analysis','meal-photo','meal-recommend']`(`PURPOSE_META`
+  가 `Record<LlmProviderPurposeType>` 이라 계약 enum 에 용도가 늘면 typecheck 가 잡는다). 키는 여전히
+  chat row 에만, 나머지 용도는 상속. `meal-photo` = 식단 사진 인식 비전 모델(placeholder
+  `gemma4:31b`), `meal-recommend` = 식단 추천 텍스트 모델(`gpt-oss:120b`). [ai](ai.md).
+- **[AdminLogsPage](../../apps/web/src/routes/admin/AdminLogsPage.tsx)** — `FEATURE_LABEL` 에
+  `food-import`(음식 카탈로그 적재)·`meal-recognition`·`meal-recommendation` 추가(상세 페이지가
+  같은 export 를 쓰므로 한 곳). [logs](logs.md).
+- **리뷰 업데이트 누락·최신순(`0d72380`, 2026-08-17)** — 크롤 배치 `setQueryData` 머지가 신규
+  리뷰를 prepend 만 하던 것을 `[...fresh, ...prev.reviews].sort(compareReviewRecencyDesc)`
+  (@repo/utils — 상세 API 와 같은 방문일 비교자)로 정렬([AdminCrawlTestPage](../../apps/web/src/routes/admin/AdminCrawlTestPage.tsx)·
+  [ActiveJobPanel](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)).
+  [AdminRestaurantDetailPage](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx)
+  정렬 모드가 `visitedAt-desc`(기본, 같은 비교자)/`fetchedAt-desc`/별점 — 로컬 `visitedSortKey`
+  ("YY.M.D" 정규화)와 `fetchedAt-asc`(수집 순서 = 최신순이라는 옛 가정) 제거. [HomeTab](../../apps/web/src/components/restaurant/detail/HomeTab.tsx)
+  주석: `reviewsFirstPage` 는 방문일 최신순 첫 페이지. 서버 쪽은 [crawl](crawl.md).
+
+### 세션 정리 · 게스트 진입 · 차트 토큰 · 내 위치 timeout [24차]
+
+- **[main.tsx](../../apps/web/src/main.tsx) 401 = "현재 세션의 401 일 때만" 정리** (`9f39d53`·
+  `fd371d9`) — `QueryClient` 생성을 `configureApi` 앞으로 옮기고 `onUnauthorized(requestToken)` 이
+  `handleUnauthorizedForCurrentSession({ requestToken, getCurrentToken, onCurrentSessionUnauthorized })`
+  ([shared](shared.md))를 거친다: 요청 시점 토큰이 지금 토큰과 같을 때만 `cancelQueries()` →
+  `queryClient.clear()` → `setMealDraftPrincipal(null)` → `clearSession()` 을 **같은 JS turn** 에서
+  — 계정 전환 직후 도착한 이전 계정의 늦은 401 이 새 세션을 지우지 못하게, 그리고 비우는 사이
+  다른 계정 상태가 끼어들지 않게. [LoginPage](../../apps/web/src/routes/LoginPage.tsx) 게스트
+  진입도 `setMealDraftPrincipal(null)` 을 기다린 뒤 `enterGuest()`(식단 draft namespace 는
+  [meal](meal.md)).
+- **[MyLocationButton](../../apps/web/src/components/restaurant/MyLocationButton.tsx)
+  `timeout`(`67f14cf`)** — `UserLocationStatus` 에 `timeout`(권한은 있는데 측위가 늦음, 훅이 1회
+  재시도한 뒤) 이 생겨 버튼은 살려 두고 문구만 "위치 측정이 오래 걸렸어요 — 다시 시도".
+  17차의 denied/insecure/unavailable/pending 분기는 그대로.
+- **[tailwind.css](../../apps/web/src/styles/tailwind.css) 차트 계열색 토큰** — `--air-series-1
+  #2a78d6`/`--air-series-2 #eb6834`(다크 `#3f86dc`/`#de6f3f`; dataviz 검증기로 라이트 `#fcfcfb`·
+  다크 `#353535` 표면에서 CVD ΔE·명도·대비 통과), 날씨는 의미 별칭 `--weather-temp: var(--air-series-2)`
+  (난색)·`--weather-precip: var(--air-series-1)`(한색). 17차 `--tonal-*` 과 같은 `:root`+`.dark` 쌍.
+
+### 웹 테스트 인프라 현황 — 13파일 77건 [갱신 — 24차]
+
+22차의 5파일 29건(vote 3화면 20 + SmartPickSection 4 + useMapResearch 5)에서 **13파일 77건**으로. 러너·
+setup·MSW 정책(`onUnhandledRequest: 'error'`, 기본 핸들러 없음)은 22차 그대로. 파일별:
+AirNearbySection 6 · PublicSidebar 3 · PublicTopBar 3 · SmartPickSection 4 · MyLocationChip 4 ·
+AdminFoodPage 7 · LifeMapPage 8 · MealPage 11 · VoteNewPage 7 · VotePage 9 · VoteResultView 4 ·
+WeatherPage 6 · useMapResearch 5. 이번 라운드에 굳어진 기법: OL 은 jsdom 에서 돌지 않으니
+`vi.mock('~/components/restaurant/MapCanvas')` 로 `forwardRef` + `useImperativeHandle` no-op 핸들
+(`flyTo`/`flyToZoomIn`/`fitToMarkers`/`fitToCoords`)만 채운 자리표시자; `ResizeObserver` 스텁
+(메테오그램·subBar 폭 측정); `window.matchMedia` 목으로 `useIsDesktopXl` 분기 강제; sonner 는
+`vi.mock` 으로 호출만 검증(`<Toaster>` 애니메이션 타이밍에 안 묶임); SSE 는 가짜 `EventSource`
+로 snapshot/progress/done 을 직접 흘림; 게스트 저장 위치는 `useAirLocationStore.setState` 로 심고
+`useAuthStore.setState` 로 로그인/역할 전환.
+
 ### 모바일 UX 규율 / 공개 셸 / 어드민 셸
 
 [이전 라운드 컴파일 동일 — `PublicLayout`, `AdminLayout`, 모바일
@@ -725,7 +1063,7 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 [이전 컴파일 본 참고]. (어드민 라우트 등록만 `AdminRoutes.tsx` 로 이전 — 위 코드
 스플리팅 참조.)
 
-## Talks To [coverage: high — 25 sources]
+## Talks To [coverage: high — 42 sources]
 
 - **`@repo/api-contract`** — N차 모델 zod 스키마:
   - `SettlementSessionType` / `SettlementRoundType` (rounds[] 추가) / `DraftRound` /
@@ -764,6 +1102,30 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
     `useBusPositions(routeId)`(실시간 차량 위치)/`useBusFavorites`(게스트/로그인
     하이브리드 — BusPage 에서 단 1회 호출, 로그인 직후 게스트 저장분 서버 병합 포함).
     도메인은 [bus](bus.md).
+  - **대기·날씨·내 위치** [신규 — 24차] — `useAirLocation()`(저장한 내 위치 — 로그인 서버/
+    게스트 로컬 하이브리드, `location`/`save`/`clear`/`isSaving`; 상단바 칩·`/air`·`/weather`·
+    `/life-map`·식단 추천이 같은 훅), `useMyLocationGlance({ refetchOnWindowFocus })`(칩 파생값 —
+    앱 홈 카드 공용), `useAirSidoRealtime(sido)`/`useAirStationHistory(station, term)`/
+    `useAirBadStations`/`useAirForecast`/`useAirWeeklyForecast`/`useAirStations`/
+    `useAirNearbyStations(lat, lng, { limit, radius })`/`useAirStationSearch(q)`;
+    `useWeatherNowcast(nx, ny)`/`useWeatherAws(lat, lng, { limit, radius })`/`useWeatherForecast(nx, ny)`/
+    `useWeatherMid(landRegId, taRegId, stnId)`/`useWeatherMidSea(regId)`/`useWeatherVersions()`,
+    `acquirePosition({ timeout, maxTries })`. 도메인 [air-quality](air-quality.md)/[weather](weather.md).
+  - **일상지도** [신규 — 24차] — `useLifeMapPoints({ layer, bbox, zoom, filters } | null)`/
+    `useLifeMapNearby(layer, lat, lng, { radius, limit, filters, enabled })`/`useLifeMapDetail(layer, id)`/
+    `useLifeMapStatus()`/`useLifeMapSearch(q, limit)`(VWorld 검색 프록시) + 옴니박스가 재사용하는
+    `useSubwayStationSearch`/`useBusStationSearch`, 지도 키 게이트 `useMapPublicConfig`. [life-map](life-map.md).
+  - **식단·음식** [신규 — 24차] — `useInfiniteMealEntries`/`useMealEntries`/`useMealCalendar`/
+    `useMealStats`/`useMealPhotoUrl(token, { variant })`/`useMealPreference`·`useUpdateMealPreference`/
+    `useExportMealData`/`useDeleteAllMealData`/`useMealRecommendationContext`·`useMealRecommendations(n)`·
+    `useCreateMealRecommendation`·`useMealRecommendationFeedback`·`useMealRecommendationEvent`/
+    `useFoodRestaurants`, `setMealDraftPrincipal`(main·LoginPage). 어드민: `useFoodImportConfig`·
+    `useUpdateFoodImportConfig`·`useRunFoodImportNow`·`useFoodImportRuns`·`useFoodImportPreview`·
+    `useFoodImportRunEvents`(SSE)/`useFoodAdminStats`/`useFoodMergeConflicts`·`useResolveFoodMergeConflict`/
+    `useFoodRecognitionQuality`/`useFoodAdminList`·`useUpdateFoodItem`·`useCreateFoodItem`.
+    [meal](meal.md)/[food](food.md).
+  - **세션·검색** [24차] — `handleUnauthorizedForCurrentSession`(401 이 현재 세션 것일 때만
+    콜백 — main.tsx), `useRestaurantList({ q, limit, offset, sort })`(어드민 통합 검색).
   - **어드민 운영** [신규 — 18차] — 리뷰검색: `useReviewSearchRestaurants`/
     `useEnrichReviews`/`useReviewEnrichBg`·`useReviewEnrichEvents`·`useReviewEnrichStatus`·
     `useReviewEnrichPending`/`useRunClustering`·`useClusterStatus`·`useClusterBg`·
@@ -787,13 +1149,23 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
   (`buildBusStopMarkerDataUrl`/`buildBusVehiclePillDataUrl`/`buildBusVehicleDirDataUrl`/
   `buildBusRouteStopDotDataUrl`/`buildMyLocationMarkerDataUrl`), 노선 형상 유틸
   (`createRoutePathIndex`/`projectOnRoutePath`/`sliceRoutePath`/`bearingAtRoutePathS`) —
-  BusStationsMap 이 차량 보간·화살표에 사용. 상세는 [utils](utils.md).
+  BusStationsMap 이 차량 보간·화살표에 사용. [24차] 리뷰 정렬 `compareReviewRecencyDesc`(웹
+  머지·어드민 정렬이 서버와 같은 비교자), 좌표/URL `parseLatLngParam`/`formatBbox`/`isInKorea`/
+  `approxDistanceM`/`formatDistanceM`, 대기 `AIR_SIDO_OPTIONS`/`airSidoMatches`/`formatAirValue`/
+  `todayKst`/`relativeDayLabel`, 날씨 지점표 `WEATHER_SIDOS`/`weatherPlaceById`/`nearestWeatherPlace`/
+  `latLngToKmaGrid`/`weatherMidRegionForPlace`/`formatKmaTemp`/`formatKmaBaseLabel`, 일상지도
+  `LIFE_MAP_POINT_MIN_ZOOM`/`isLifeMapLayer`/`lifeToiletOpenLabel`, 마커 `buildAirStationMarkerDataUrl`/
+  `buildAirSavedLocationMarkerDataUrl`/`buildLifeToiletMarkerDataUrl`/`buildLifeHospitalMarkerDataUrl`,
+  식단 라벨 `MEAL_SLOT_LABEL`/`FOOD_*_LABEL`/`summarizeMealNutrition`/`guessMealSlot`. 상세는 [utils](utils.md).
 - **Zustand 스토어** — `useAuthStore`, `useActiveCrawlJobStore`, `panelPrefsStore`,
   `useActiveDiningcodeBulkSaveJobStore`, **`useActiveTablingBulkSaveJobStore`** [18차],
   `useActiveAutoDiscoverJobStore`, `useSettlementDraftStore` (sessionStorage),
   `useSettlementPrefsStore` (localStorage), `useThemeStore` (`lp:theme`),
   **`useReviewAskStore`** [18차 — 공개 질문 진행/결과 영속 + `completion` watcher 신호,
-  `ReviewAskToaster`/`AskTab` 공유]. draft vs prefs vs theme 수명·스코프가 달라 각각 분리.
+  `ReviewAskToaster`/`AskTab` 공유], **`useLifeMapPrefsStore`**(`lp:life-map-prefs` v2 — 레이어·필터
+  취향)·**`useLifeMapRecentStore`**(`lp:life-map-recent` — 최근 본 위치 8) [24차, 웹 로컬], shared 의
+  **`useAirLocationStore`**(게스트 저장 위치 `air-location-v1` — `useAirLocation` 하이브리드의 로컬
+  절반, 테스트에서 `setState` 로 심는다) [24차]. draft vs prefs vs theme 수명·스코프가 달라 각각 분리.
 - **TanStack Query 키** —
   - `['settlements', 'list', query]`, `['settlements', 'detail', id]`,
     `['settlements', 'shared', token]`, `['settlement-drafts', 'list', activeOnly]`.
@@ -802,7 +1174,8 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 - **localStorage / sessionStorage** —
   - localStorage: `lp:token`, `lp:guest`, `lp:theme`, `lp:panelPrefs`,
     `lp:adminSidebarCollapsed`, `lp:settlementPrefs`, **`lp:llmUsagePanel:collapsed`·
-    `lp:llmUsagePanel:corner`** [18차 — floating 패널 접힘/코너], 다이닝코드/테이블링/
+    `lp:llmUsagePanel:corner`** [18차 — floating 패널 접힘/코너], **`lp:life-map-prefs`(v2)·
+    `lp:life-map-recent`** [24차], shared 게스트 저장 위치 `air-location-v1` [24차], 다이닝코드/테이블링/
     자동발견 잡 id.
   - sessionStorage: 정산 draft (`settlementDraftStore` 의 persist key).
 - **lucide-react** — `SplitSquareHorizontal` (다중 영수증 분할), `CopyCheck`
@@ -814,7 +1187,7 @@ RestaurantsV2 BottomSheet 등 — 모두 그대로]. 자세한 내용은
 도메인 의미 / 분배 알고리즘은 [settlement.md](settlement.md), 크롤/SSE/분석은
 [shared.md](shared.md), [crawl.md](crawl.md), [analytics.md](analytics.md) 참조.
 
-## API Surface [coverage: high — 21 sources]
+## API Surface [coverage: high — 36 sources]
 
 웹 앱은 HTTP 엔드포인트가 아닌 **브라우저 URL** + 재사용 컴포넌트 노출.
 
@@ -824,7 +1197,11 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
 - `/restaurants` / `/restaurants/:placeId` — 풀 뷰포트 검색 + 상세 (7탭 — `?tab=ask` 질문)
 - `/restaurants-v2[/:placeId]` — 모바일 시트 v2
 - **`/r[/:placeId]`** — 공유/SEO 대표 URL (리스트 숨김, 지도+상세)
-- **`/bus`** — 서울시 버스 정류장 검색·실시간 도착·노선 추적 (공개, **웹 전용**)
+- **`/bus`** / **`/subway`** — 대중교통(공개; 24차부터 모바일은 시트 패턴)
+- **`/air`** — 에어코리아 대기정보 (공개, `?sido=&station=&term=DAILY|MONTH|3MONTH&code=PM10|PM25|O3` — 기본값은 URL 에서 생략)
+- **`/weather`** — 기상청 날씨 (공개, `?p=지점id` 또는 `?ll=lat,lng`(GPS/저장 위치), `?sea=해역 regId`)
+- **`/life-map`** — 일상지도 (공개, `?ll=lat,lng&z=줌&sel=layer:id`)
+- **`/me/meals`** — 내 식단 조회 (`RequireUser`; 탭은 로컬 state, URL 없음)
 - `/restaurants/:placeId/settle/new` — **정산 입력 4-step (N차)** (`RequireUser`)
 - **`/me/settlements/new`** — 식당 없이 진입 (Step2 에서 1차 식당 검색)
 - `/restaurants/:placeId/settle/:id` — 저장된 정산 결과 보기 (2-column sticky 정산표)
@@ -842,6 +1219,23 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
 
 내부 재사용 컴포넌트 (신규/변경):
 
+- [24차 신규] — 공개 셸 `AccountMenu`(계정 디스클로저), `weather/MyLocationChip`(날씨·대기 통합
+  알약). 페이지 `routes/AirQualityPage`·`routes/WeatherPage`·`routes/LifeMapPage`·`routes/meal/
+  {MealPage,MealRecommendTab,MealPreferenceTab,MealPhotoImg}`. 디렉터리 `components/air/`(15 —
+  `AirPrimitives` 의 `AirSection`/`AirStateBlock`/`AirStaleNote` 는 날씨도 재사용)·`components/weather/`
+  (12)·`components/life-map/`(8 — `LifeGoToBox` 옴니박스는 `variant: 'panel' | 'bar'`, `LifeLayerBar`
+  는 `section: 'all' | 'layers' | 'filters'`). 시트 공용 `sheet/BottomSheet`(이동)·`sheet/useMapSheets`
+  (+`SHEET_PEEK_HEIGHT`/`SHEET_HALF_RATIO`/`sheetHalfInset`)·`lib/useMediaQuery`(`useIsDesktopXl`).
+  스토어 `stores/lifeMapPrefsStore`·`stores/lifeMapRecentStore`. 어드민 `routes/admin/AdminFoodPage`.
+- [24차 변경] — `PublicTopBar`(폭 예산·NAV 7·subBar 유지)/`PublicSidebar`(`lg:hidden` 드로어 + 하단
+  계정·테마 `md:hidden`), `MapCanvas`(`flyTo/flyToZoomIn(..., { bottomInset })`·`MapMarker.fixedScale`·
+  Style 캐시), `MapLayerControl`(`--map-bottom-inset`), `RestaurantsV2Page`/`BusPage`/`SubwayPage`
+  (시트 골격), `Bus/SubwayStationsMap`(따라가기 배지 inset)·`Bus/SubwayStationList`(일부만 표시
+  인라인), `MyLocationButton`(`timeout`), `AdminRestaurantsPage`(`?q=` 검색), `AdminAiKeysPage`
+  (용도 5종), `AdminLogsPage`(`FEATURE_LABEL` +3), `AdminRoutes`(`food` 2차 lazy)/`AdminLayout`
+  (음식 카탈로그 leaf), `AdminCrawlTestPage`/`ActiveJobPanel`/`AdminRestaurantDetailPage`(리뷰
+  최신순 비교자), `main.tsx`(401 현재 세션 가드)/`LoginPage`(게스트 principal), `tailwind.css`
+  (차트 계열색 토큰).
 - [19차 신규] — 버스 `routes/BusPage` + `components/bus/`(BusStationList[+SearchBar/
   ListBody]·BusStationsMap·BusArrivalPanel·BusFavoriteSection·BusFavoriteStar). `MapCanvas`
   에 `MapMarker.icon`(data URL) + `VehicleMarker` 전용 레이어 확장. `MenuTab`/`HomeTab`
@@ -878,7 +1272,7 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   `MapCanvas.flyToZoomIn` imperative, `PublicRestaurantCard.onZoom`(더블클릭 확대).
 - 그 외 모든 컴포넌트는 직전 라운드와 동일.
 
-## Data [coverage: high — 9 sources]
+## Data [coverage: high — 17 sources]
 
 - 로컬 DB 없음. 상태 갈래:
   - **서버 상태** — TanStack Query 캐시.
@@ -894,7 +1288,23 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
     AdminDiscoverPage, AdminRestaurantsPage (sort/page/pageSize) 가 useSearchParams.
     **BusPage** [19차] 도 q/stId/routeId/near 를 `useSearchParams`(모두 `replace`)로 —
     검색·선택·주변 좌표까지 URL 이 유일 진실(딥링크/공유 복원). 정산 페이지는 URL
-    state 미사용 — step 은 page-local useState, draft 는 sessionStorage.
+    state 미사용 — step 은 page-local useState, draft 는 sessionStorage. [24차] 같은 규율
+    (함수형 `setSearchParams` 1회 + `replace`, 기본값·빈 값은 키 삭제)로 **AirQualityPage**
+    (`sido`/`station`/`term`/`code`), **WeatherPage**(`p`/`ll`/`sea`), **LifeMapPage**(`ll`/`z`/
+    `sel=layer:id` — 뷰포트는 사용자 이동만 URL 반영, programmatic flyTo 는 호출자가 URL 을
+    직접 맞춤), **AdminRestaurantsPage** `q`(+ `page` 리셋). 공유 가치가 낮은 선택(차트 항목·
+    전국 비교 항목·중기전망 범위·식단 탭·목록 탭)은 로컬 state.
+  - **일상지도 취향** [신규 — 24차] — `useLifeMapPrefsStore`(zustand persist `lp:life-map-prefs`,
+    version 2 + migrate: 레이어 on/off `{cctv,toilet,hospital}` 기본 전부 켬 · CCTV 설치목적
+    다중(빈 = 전체) · 화장실 편의 5키 AND · 병의원 종별 다중; `partialize` 로 액션 제외),
+    `useLifeMapRecentStore`(`lp:life-map-recent`, 최근 본 위치 최대 8, 같은 라벨·≈50m 좌표 dedupe).
+    위치·선택은 URL, 취향은 스토어 — `transitCrossShowStore` 관례.
+  - **저장한 내 위치** [24차] — 웹 자체 스토어가 아니라 `@repo/shared` `useAirLocation`
+    (로그인 = 서버 `/api/v1/air/location` 조회·저장·삭제, 게스트 = `useAirLocationStore` persist
+    `air-location-v1`) —
+    상단바 칩·대기·날씨·일상지도·식단 추천이 한 값을 본다([air-quality](air-quality.md)).
+  - **세션 무효화** [24차] — 401 이 현재 세션의 것일 때만 `queryClient.cancelQueries()` →
+    `clear()` → 식단 draft principal null → `clearSession()`; 이전 계정의 늦은 401 은 무시.
 - **TanStack Query 키 신규** —
   - `['settlements', 'list', query]`, `['settlements', 'detail', id]`,
     `['settlements', 'shared', token]`.
@@ -903,12 +1313,13 @@ URL (정산 라우트가 차수 모델로 바뀌었지만 URL 자체는 동일 �
   - `['ai-providers-preview-models', providerId]` (저장 전 미리보기).
 - **localStorage** —
   - `lp:token`, `lp:guest`, `lp:theme`, `lp:panelPrefs`, `lp:adminSidebarCollapsed`,
-    `lp:settlementPrefs` [신규], 다이닝코드/자동 발견 잡 id (기존).
+    `lp:settlementPrefs` [신규], `lp:transit-cross-show`, **`lp:life-map-prefs`(version 2)·
+    `lp:life-map-recent`** [24차], shared `air-location-v1`(게스트 저장 위치) [24차], 다이닝코드/자동 발견 잡 id (기존).
 - **sessionStorage** — 정산 draft store (식당당 1개).
 - **API 클라이언트 토큰 주입** — `configureApi({ getToken })`, 401 →
   `onUnauthorized: clearSession`.
 
-## Key Decisions [coverage: high — 58 sources]
+## Key Decisions [coverage: high — 78 sources]
 
 이전 라운드 결정(모바일 UX, 라우트 분리, AdminLayout 드로어, 풀 뷰포트
 3-column, 5탭 1회 fetch, 라이트박스 단일 시퀀스, OL+WMTS, AdminDiningcode
@@ -1149,10 +1560,10 @@ SettlementShareDialog 자동 POST 멱등)는 그대로 유지. 이번 라운드 
   정류장/경유지 점/내 위치를 같은 마커 파이프라인에, 실시간 차량은 폴링 보간(형상 via)·
   진행 화살표·따라가기가 붙는 별도 애니메이션 레이어로. 지도 한 벌을 맛집·버스가 공유해
   vworld 키·테마·레이어 로직이 한 곳에 유지된다.
-- **(2026-07-06, 19차) 버스는 웹 전용(앱 미구현)** — `/bus` 라우트·컴포넌트·네비 모두
-  apps/web 에만. 앱(apps/mobile)에는 대응 화면이 없다 — RN 공통 코드 분기가 아니라 아직
-  미착수. 단 도메인 훅(@repo/shared)·계약(@repo/api-contract)·유틸(@repo/utils)은 공유
-  준비가 돼 있어 앱 추가 시 재사용 가능. 도메인은 [bus](bus.md).
+- **(2026-07-06, 19차) 버스는 처음엔 웹 전용 — 도메인은 공유 준비** — `/bus` 라우트·컴포넌트·
+  네비는 apps/web 에만 두고 도메인 훅(@repo/shared)·계약(@repo/api-contract)·유틸(@repo/utils)은
+  공유해 두는 순서로 만들었다. *(24차 정정: 2026-07 에 앱 대중교통 화면이 붙어 지금은
+  양쪽 — 위 결정의 "공유 준비"가 실제로 재사용됐다.)* 도메인은 [bus](bus.md).
 - **(2026-07-06, 19차) 메뉴 그룹 렌더 = 그룹 있으면 섹션, 없으면 평면 폴백** — MenuTab 이
   `menuGroups`(빈 그룹 제외)가 있으면 그룹 섹션별로, 없으면 기존 평면 `menus` 로 폴백.
   HomeTab 미리보기는 '대표메뉴' 그룹을 우선(그 그룹이 없으면 전체 앞 N개). 그룹 스키마·
@@ -1162,6 +1573,80 @@ SettlementShareDialog 자동 POST 멱등)는 그대로 유지. 이번 라운드 
   분석 탭이 이 경우 AspectSummary 로 폴백하므로 정상이다. 계산 오류·리뷰 부족만 실제 조치
   대상으로 빨강 유지. → [review-clustering](review-clustering.md).
 
+- **(2026-08-30, 24차) 일상지도 병의원 레이어 = prefs 스토어 version 2 + migrate** — 레이어를
+  하나 더하면서 persist 된 `layers` 에 키가 없는 기존 사용자가 새 레이어를 못 보는 문제를
+  `version: 2` + `migrate`(기본 켬, 종별 필터 전체)로 흡수. 스토어 shape 이 바뀌면 버전을
+  올리는 것을 규칙으로 — 그냥 기본값만 바꾸면 이미 저장된 사용자는 영원히 옛 shape.
+- **(2026-08-23, 24차) 401 은 "현재 세션의 401" 일 때만, 그리고 같은 JS turn 에서 정리** —
+  계정 전환 직후 이전 계정 토큰으로 나갔던 요청의 늦은 401 이 새 세션을 지우면 안 되므로
+  `handleUnauthorizedForCurrentSession` 이 요청 시점 토큰과 현재 토큰을 비교한다. 정리 순서는
+  `cancelQueries` → `queryClient.clear()`(진행 query 파기) → 식단 draft principal null →
+  `clearSession()` 을 한 turn 에 — 사이에 다른 계정의 로그인 상태가 끼어들지 못하게.
+  private-cache 경계의 웹 측 구현([meal](meal.md) 의 principal namespace 와 짝).
+- **(2026-08-22, 24차) 모바일 지도 페이지는 한 골격 — 시트 조율은 훅, 전이는 렌더 중 파생** —
+  맛집 v2 의 목록/상세 두 시트 규칙(상세 열리면 목록 peek·숨김 + 상세 half, 닫히면 복원)을
+  `useMapSheets` 로 빼서 대중교통·일상지도가 같은 훅을 쓴다. 전이를 effect 가 아니라
+  setState-during-render 로 하는 이유는 상세 시트가 첫 프레임부터 half 여야 해서(effect 면
+  직전 스냅으로 한 프레임 튐). 이전 대중교통 모바일(검색바/지도 40dvh/리스트 38dvh 세로
+  적층)은 지도도 목록도 작고 선택 시 리스트가 패널로 통째 교체되던 것을, 시트로 지도를
+  전면에 두고 패널을 얹는 구조로 바꿨다. 루트 높이 고정은 데스크톱만 — 모바일은 시트 full
+  에서 body 스크롤(주소창 minify)이 살아야 한다. 앱의 플로팅 헤더 + 시트와 대응([mobile](mobile.md)).
+- **(2026-08-22, 24차) 일상지도는 CSS 이중 마운트가 아니라 JS 분기(`useIsDesktopXl`)** —
+  대중교통은 데스크톱/모바일을 `hidden xl:flex`/`xl:hidden` 으로 동시 마운트하고 지도 풀 키를
+  둘로 나누지만([dual-mount-shared-state](../concepts/dual-mount-shared-state.md)), 일상지도는
+  (a) OL 인스턴스를 한 개만 두고 싶고 (b) 시트가 데스크톱에 숨어 마운트되면 `BottomSheet` 의
+  html overflow 락이 따라오므로 `matchMedia` 로 갈라 시트는 모바일에서만 마운트한다. 지도
+  `<section>` 을 두 분기에서 같은 자리(첫 자식)에 둬 폭이 바뀌어도 리마운트가 없다. 즉
+  "무거운 단일 자원 + 부수효과 있는 자식"이면 이중 마운트 결정 트리의 예외.
+- **(2026-08-22, 24차) 상단바는 폭 예산으로 설계 — 넘치면 버튼이 아니라 칩이 준다** —
+  공개 페이지 7개 + 내 위치 칩이 한 줄에 들어오지 않아, 브레이크포인트별로 담는 것을
+  나눴다(`<md` 테마·계정은 드로어 하단으로, `lg` 부터 NAV 가로, `xl` 부터 이메일). 넘침의
+  해는 "가로 스크롤 허용"이 아니라 칩 축소(`min-w-0`) — 문서가 가로로 스크롤되면 `fixed
+  inset-x-0` 지도·시트 레이어까지 문서 폭을 따라 커지는 2차 피해가 있어서다. 계정은
+  이메일+버튼 나열 대신 `AccountMenu` 디스클로저 하나(헤드리스 라이브러리 없이 — `ConfirmDialog`
+  와 같은 결).
+- **(2026-08-22, 24차) 음식 카탈로그는 어드민 청크 안에서 한 번 더 lazy** — 어드민 전체가
+  이미 단일 lazy 청크지만 1,795줄짜리 적재/카탈로그 페이지는 그 페이지에서만 쓰이므로
+  `AdminRoutes` 안에서 2차 `lazy` + 본문만 도는 `SectionFallback`. 다른 어드민 페이지 진입
+  비용에 얹지 않는다 — 어드민 청크가 커질수록 이 패턴을 확장할 자리.
+- **(2026-08-22, 24차) 식단 웹은 조회 전용, 입력은 앱** — `/me/meals` 는 기록·달력·통계·
+  추천·설정만 하고 머리에 "기록은 앱에서 사진으로" 안내. 사진 촬영·오프라인 큐가 앱 소유라
+  웹은 즉시 업로드/조회만 — [platform-ui-split](../concepts/platform-ui-split.md) 의 meal
+  인스턴스를 라우트 수준에서 그대로 따른다. 추천 노출 이벤트는 `platform: 'web'` 으로 구분.
+- **(2026-08-22, 24차) AI 용도는 `Record<enum>` 로 강제** — `AdminAiKeysPage` 의 `PURPOSE_META`
+  가 `Record<LlmProviderPurposeType, …>` 이라 계약 enum 에 `meal-photo`/`meal-recommend` 가 늘자
+  typecheck 가 페이지 갱신을 강제했다. `PURPOSE_ORDER` 도 전부 적는다 — 빠지면 그 용도의 모델을
+  고를 UI 가 없어진다([zod-ssot-buildless](../concepts/zod-ssot-buildless.md)).
+- **(2026-08-21, 24차) 대기·날씨는 "오퍼레이션 = 섹션" 예시 페이지 골격, 날씨가 대기
+  프리미티브를 재사용** — 섹션 카드의 eyebrow 가 원천 API 오퍼레이션명(장식이 아니라 사실),
+  선택은 URL(기본값은 키 삭제), 저장한 내 위치가 있으면 그 지점(가장 가까운 측정소/좌표)으로
+  기본 진입. 날씨는 `AirSection`/`AirStateBlock` 을 그대로 쓰고 기상청 고유 띠만 추가 — 두
+  공공 API 페이지가 같은 모양으로 읽힌다. 차트는 라이브러리 없이 인라인 SVG·단일 축·표 쌍둥이
+  (툴팁이 유일한 경로가 아니게).
+- **(2026-08-21, 24차) 저장한 내 위치 하나를 칩·대기·날씨·일상지도·식단 추천이 공유** —
+  각 페이지가 자기 위치를 따로 갖지 않고 `useAirLocation`(로그인 서버/게스트 로컬 하이브리드)
+  한 값을 본다. 대기는 측정소 저장·GPS 저장, 날씨는 지점 저장(`place`)으로 넣고, 칩은 그
+  좌표의 날씨 + 가장 가까운 측정소 등급을 한 알약에 — 저장 위치가 없으면 칩은 아무것도 그리지
+  않는다(강요 없음). [guest-server-hybrid](../concepts/guest-server-hybrid.md) 의 새 인스턴스
+  (도메인은 [air-quality](air-quality.md)).
+- **(2026-08-21, 24차) 칩 세그먼트는 경고 대신 탈락** — 날씨/대기 한쪽 자료가 없으면 그
+  세그먼트만 조용히 빠지고 알약은 남는다. 측정소가 있어도 등급이 없으면(업스트림 장애)
+  대기 세그먼트를 빼서 "● -" 를 남기지 않는다 — 칩은 경고하는 자리가 아니다, 사정은 툴팁.
+- **(2026-08-21, 24차) 마커 Style 은 캐시, 작은 점은 `fixedScale`** — OL 이 매 프레임 style
+  function 을 부르므로 일상지도 CCTV 수천 feature 에서 프레임마다 Style/Icon 생성 → 수 초
+  멈춤. 입력 키가 같으면 같은 Style 인스턴스(OL 권장 — feature 간 공유 안전), 라벨까지 키에
+  넣어 항목 수만큼만 불고 상한 6000 에서 통째 비움. 12px 점·숫자 버블은 줌 축소·라벨 숨김을
+  건너뛰는 `fixedScale` — 크기 자체가 의미라서.
+- **(2026-08-17, 24차) 어드민 맛집 검색 = URL `q`, draft 는 `{ urlQuery, value }` 한 state** —
+  검색어도 정렬·페이지처럼 URL 이 진실(공유·뒤로가기). 입력 draft 를 URL 과 동기화하는
+  useEffect 대신 "URL 이 바뀌었으면 URL 값을 보여주고, 다음 입력부터 그 URL 기준으로 잇는다"
+  는 렌더 중 파생 — 뒤로/앞으로 가기에서 입력이 한 박자 늦게 따라오는 문제가 없다.
+- **(2026-08-17, 24차) 리뷰 정렬은 서버와 같은 비교자, "수집 순서 = 최신순" 가정 폐기** —
+  크롤 배치 `setQueryData` 머지가 prepend 만 하면 배치 경계에서 순서가 어긋나므로 머지 뒤
+  `compareReviewRecencyDesc` 로 정렬(서버 상세 API 와 동일 비교자 — [stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md)
+  의 "머지 결과도 서버 정렬 계약을 지킨다"). 어드민 상세의 `fetchedAt-asc`(수집 순 = Naver
+  최신순이라는 가정)와 로컬 `visitedSortKey` 를 지우고 `visitedAt-desc` 기본. 서버 쪽 원인은 [crawl](crawl.md).
+
 ### 기존 결정 유지
 
 React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cache merge,
@@ -1170,7 +1655,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 정산 Stepper 점프 게이팅 = "산출물 존재" 기준 (이번 라운드도 `participantsCount>0`/
 `rounds.every(source!=null)`/`itemsCount>0` 으로 유지).
 
-## Gotchas [coverage: high — 43 sources]
+## Gotchas [coverage: high — 64 sources]
 
 - **`Step2Source` 삭제 후 typecheck 가 잡힘** — 이전 라운드에 있던 `import { Step2Source }`
   / `'source'` step key 가 어떤 곳에 남아 있으면 tsc 가 에러 — 모든 호출처를 일괄
@@ -1352,6 +1837,82 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   행 자체가 `<button>`(선택/추적)이라 `BusFavoriteStar` 를 그 안에 넣으면 무효 HTML. 형제로
   배치하고 별 `onClick` 은 `stopPropagation` 방어. `MapMarker.icon` 이미지는 식당 마커와
   동일 규격(26×26/32×48)이어야 라벨 offset·축소 스케일이 어긋나지 않는다.
+- **(2026-08-22, 24차) `BottomSheet` 는 `~/components/sheet/`** — `restaurant-v2/BottomSheet`
+  경로는 사라졌다(R100 이동). 옛 경로 import 는 빌드 실패. 목록/상세 스냅 규칙을 페이지에서
+  손으로 다시 짜지 말고 `useMapSheets` — 페이지마다 다른 규칙이 생기면 통일한 의미가 없다.
+- **(2026-08-22, 24차) `useMapSheets` 는 `useState` 선언들보다 앞에** — React Compiler 메모
+  검증이 훅을 뒤에 두면 앞의 setter 들을 반응값으로 봐 경고. BusPage/SubwayPage 주석의 근거.
+  `initialListSnap` 은 마운트 1회만 읽힌다(딥링크 진입용) — 이후 검색 제출은
+  `setListSnap(s => s === 'peek' ? 'half' : s)` 로 올려야 결과가 보인다.
+- **(2026-08-22, 24차) 모바일 루트 높이를 고정하면 시트 full 이 깨진다** — `xl:h-[calc(100dvh-…)]`
+  처럼 데스크톱에만 고정. 모바일까지 `h-[calc(100dvh-…)]` 로 묶으면 시트가 scroll 모드로
+  전환돼도 body 가 스크롤되지 않아 주소창 minify 가 안 되고 시트 하단이 잘린다.
+- **(2026-08-22, 24차) 숨은 시트도 html overflow 를 잠근다** — `BottomSheet` 의 락 effect 는
+  `hidden` 과 무관하게 `mode === 'fixed' && !disableScrollLock` 이면 돈다. 버스·지하철은
+  데스크톱에서도 `xl:hidden` 안에 목록 시트가 마운트돼 `html.overflow = hidden` 이 걸리지만
+  데스크톱 루트가 고정 높이·내부 스크롤이라 티가 나지 않을 뿐이다. **body 스크롤이 필요한
+  페이지에 이 골격을 복사하면 안 된다** — 일상지도처럼 `useIsDesktopXl` 로 시트 마운트 자체를
+  가르거나, 시트에 `disableScrollLock` 을 줘야 한다.
+- **(2026-08-22, 24차) `--map-bottom-inset` 은 지도 래퍼에** — `MapLayerControl`·따라가기 배지는
+  `var(--map-bottom-inset, 0px)` 를 읽을 뿐 스스로 시트 높이를 모른다. 모바일 fixed 지도
+  래퍼(`style={{ '--map-bottom-inset': SHEET_PEEK_HEIGHT }}`)에 변수를 안 주면 컨트롤이 peek
+  시트 밑에 깔린다. 데스크톱·어드민은 변수 없음 = 0 이 정상. `flyTo` 의 `bottomInset` 도 같은
+  이유로 호출자가 `sheetHalfInset(headerHeight)` 를 계산해 넘긴다(데스크톱은 `undefined`).
+- **(2026-08-22, 24차) 상세 시트 `key` 는 항목 id** — `key={stId|stn|selectedMarkerId}` 라 항목이
+  바뀌면 시트가 재마운트돼 스크롤·스냅이 초기화된다(의도 — 이전 항목 스크롤 위치가 남지
+  않게). key 를 빼면 `useMapSheets` 의 detailSnap 만 남아 스크롤이 이어진다.
+- **(2026-08-22, 24차) `useIsDesktopXl` 기본은 데스크톱** — `matchMedia` 가 없으면(jsdom) `true`.
+  모바일 분기를 테스트하려면 `window.matchMedia` 를 `matches: false` 로 목(LifeMapPage.test)
+  — 안 하면 시트 관련 단언이 조용히 데스크톱 패널을 본다. `addEventListener`/`removeEventListener`
+  까지 채워야 `useSyncExternalStore` subscribe 가 안 터진다.
+- **(2026-08-22, 24차) 상단바 폭 예산은 실측 상수** — 칩 `<md` ~170px / `lg+` ~340px, NAV 는
+  768px 에서 칩과 공존 불가 같은 숫자에 기대 브레이크포인트를 골랐다. NAV 항목·라벨을
+  늘리거나 칩 내용을 더 펼치면 `PublicTopBar` 상단 주석의 표를 다시 실측해야 한다.
+  `md+` 에서 사이드바 하단 계정 블록(`md:hidden`)과 상단바 계정 메뉴가 동시에 보이면 폭 예산
+  분기가 깨진 것.
+- **(2026-08-22, 24차) NAV `requiresAuth` 는 게스트도 숨긴다** — 필터가 `!!user` 라 게스트
+  (`isGuest`, `user: null`)에겐 "식단" 메뉴가 없다(`/me/meals` 는 `RequireUser` 라 직접 진입도
+  로그인으로). 게스트 전용 화면이 필요하면 별도 플래그.
+- **(2026-08-21, 24차) 칩의 대기 세그먼트 없음 ≠ 오류** — 측정소가 없거나(`items: []`) 등급이
+  없으면(`measure: null`) 세그먼트가 빠진다. "칩에 공기질이 안 보인다"는 우선 `title` 툴팁
+  ("대기 자료 없음 — 가장 가까운 측정소 …")을 보라. 날씨 세그먼트는 실황이 없으면 수치만
+  빠지고 라벨은 남는다.
+- **(2026-08-21, 24차) 대기·날씨 placeholder 전환 중 실패는 에러로** — `isPlaceholderData` 상태에서
+  refetch 가 실패했는데 이전 측정소/지점 값을 계속 보여주면 오정보라 `AirStateBlock kind="error"`
+  로 떨어뜨린다. 정상 전환 중엔 `dim` 만. 이 분기를 지우면 측정소를 바꿨는데 이전 측정소
+  수치가 그대로 남는다.
+- **(2026-08-21, 24차) 날씨 `savedHere` 는 좌표 ≈50m 근사** — 저장 위치와 지금 지점의 위·경도
+  차 `< 0.0005` 로 판정해 "저장됨/해제" vs "이 지점을 내 위치로 저장" 버튼을 가른다. 지점
+  좌표가 청사 기준이라 같은 구라도 GPS 저장분과는 다른 지점으로 본다(의도).
+- **(2026-08-21, 24차) 일상지도 programmatic 이동은 URL 을 직접 맞춘다** — `onViewportChangeEnd`
+  는 사용자 이동만 URL 에 쓰므로 옴니박스 `handleGo`/내 위치 flyTo 는 `setParams({ ll, z })` 를
+  같이 호출해야 새로고침 시 같은 곳. 저장 위치로의 1회 flyTo 는 `userMovedRef` 가 false 일 때만
+  — 사용자가 먼저 움직였으면 서버 응답이 늦게 와도 끌고 가지 않는다.
+- **(2026-08-21, 24차) `MapCanvas` 목은 뷰포트를 올리지 않는다** — LifeMapPage.test 의 목은
+  `onViewportSync` 를 부르지 않아 `bbox` 가 null → `useLifeMapPoints(null)` 비활성 → points
+  요청이 없다. points 핸들러를 안 깔아도 `onUnhandledRequest: 'error'` 가 안 터지는 이유이자,
+  points 관련 단언을 이 테스트에 넣을 수 없는 이유.
+- **(2026-08-21, 24차) `lifeMapPrefsStore` shape 변경 = version 올리기** — `partialize` 로 저장된
+  객체에 새 키가 없으면 `migrate` 없인 영원히 옛 shape(병의원 레이어가 안 보임). 레이어/필터를
+  더할 때 `version` 과 `migrate` 를 같이.
+- **(2026-08-22, 24차) `AdminFoodPage` 는 마운트만으로 7요청** — 적재 설정/이력, 통계, 인식 품질,
+  목록, cron 미리보기 등. 테스트는 기본 핸들러를 전부 깔아야 하고(`onUnhandledRequest:
+  'error'`), 새 섹션이 요청을 더하면 테스트 기본 핸들러도 같이. SSE 는 가짜 `EventSource` 로.
+- **(2026-08-22, 24차) `AdminRoutes` 안 2차 lazy 는 자체 `<Suspense>` 필수** — `food` 라우트만
+  `SectionFallback` 으로 감싼다. 감싸지 않으면 App 최상위 Suspense 까지 올라가 어드민 셸
+  전체가 스피너로 바뀐다.
+- **(2026-08-17, 24차) 어드민 맛집 검색은 `page` 를 같이 리셋** — `updateParams({ q, page: null })`.
+  q 만 바꾸면 3페이지에서 검색해 빈 결과가 나온다. 정렬 키는 유지.
+- **(2026-08-17, 24차) 배치 머지 정렬은 서버 비교자 그대로** — 머지 뒤 `.sort(compareReviewRecencyDesc)`
+  를 빼면 배치 경계에서 최신 리뷰가 아래로 간다. 어댑터 "수집 순 = 최신순" 가정은 더 이상
+  유효하지 않다(`0d72380` 이 고친 누락의 원인 — [crawl](crawl.md)).
+- **(2026-08-23, 24차) 401 콜백은 `requestToken` 을 받는다** — `configureApi.onUnauthorized` 시그니처가
+  `(requestToken) => void`. 인자를 무시하고 무조건 `clearSession` 하면 계정 전환 직후 이전
+  계정의 늦은 401 이 새 세션을 지운다(수정 전 동작). 반드시 `handleUnauthorizedForCurrentSession`
+  경유.
+- **(2026-08-21, 24차) `MyLocationButton` `timeout` 은 `unavailable` 과 다르다** — 훅이 1회 재시도까지
+  한 뒤의 상태라 버튼은 살려 두고 문구만 "다시 시도". 두 상태를 합치면 17차의 "unavailable 통째
+  비활성" 회귀가 되살아난다.
 - **이전 라운드 함정들 유지** — sticky containing block trap, `overflow-y:auto`
   안 sticky 동작, 모바일 body 스크롤 + `100dvh`, 한글 IME 미완성 조합, Pretendard
   CDN 의존, ImgWithFallback src 변경 reset, OL apiKey 변경만 재생성, Lightbox
@@ -1361,13 +1922,79 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
   groupIndex<0 분기, 영수증 미리보기 = JWT 필요 → `<img src>` 직접 X, 그 외
   이전 라운드 다수.
 
-## Sources [coverage: high — 122 sources]
+## Sources [coverage: high — 191 sources]
 
-- [apps/web/src/routes/BusPage.tsx](../../apps/web/src/routes/BusPage.tsx) — *new 19차: 서울시 버스 정류장 페이지 (검색/주변/도착/노선추적/즐겨찾기 — URL state, 웹 전용, lazy)*
-- [apps/web/src/components/bus/BusStationList.tsx](../../apps/web/src/components/bus/BusStationList.tsx) — *new 19차: 제출형 검색바(SearchBar) + 상태 분기 본체(ListBody) + 정류장 행(거리/arsId 배지, 즐겨찾기 별)*
-- [apps/web/src/components/bus/BusStationsMap.tsx](../../apps/web/src/components/bus/BusStationsMap.tsx) — *new 19차: 정류장/경유지/내위치 마커 + 실시간 차량 레이어(형상 via 보간·화살표·따라가기) + 자동 재조회 (MapCanvas 위); modified 22차: 인라인 재검색 파이프라인(~50줄)을 `@repo/shared` useMapResearch 호출로 교체(`df9fcbd`)*
+- [apps/web/src/components/PublicTopBar.test.tsx](../../apps/web/src/components/PublicTopBar.test.tsx) — *new 24차(`a062e7d`): 상단바 3건 — 로그아웃 구조·ADMIN 계정 메뉴 열기/ESC/바깥 클릭·USER 관리자 항목 없음*
+- [apps/web/src/components/PublicSidebar.test.tsx](../../apps/web/src/components/PublicSidebar.test.tsx) — *new 24차(`a062e7d`): 드로어 3건 — 하단 계정 블록(로그인 링크/이메일·내 정산·관리자·로그아웃·테마)·항목 클릭 시 onClose*
+- [apps/web/src/components/AccountMenu.tsx](../../apps/web/src/components/AccountMenu.tsx) — *new 24차(`a062e7d`): 상단바 계정 디스클로저(md+) — 이메일(xl+)·내 정산·관리자·로그아웃, 바깥 클릭/ESC 닫힘, 헤드리스 라이브러리 없음*
+- [apps/web/src/components/weather/MyLocationChip.tsx](../../apps/web/src/components/weather/MyLocationChip.tsx) — *new 24차(`9e197d3`·`a062e7d`): 저장한 내 위치의 날씨·대기 통합 알약(링크 둘 → /weather·/air), 폭별 단계 노출, 자료 없는 세그먼트 탈락; 파생값은 shared useMyLocationGlance*
+- [apps/web/src/components/weather/MyLocationChip.test.tsx](../../apps/web/src/components/weather/MyLocationChip.test.tsx) — *new 24차: 4건 — 저장 없음 null·두 링크 href/격자/limit=1·우산/실황 없음/측정소 없음·측정값 없음 "-" 미표시*
+- [apps/web/src/components/sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts) — *new 24차(`e84e4b9`): 목록/상세 시트 스냅 조율 훅(렌더 중 파생) + SHEET_PEEK_HEIGHT 120/SHEET_HALF_RATIO 0.55/sheetHalfInset*
+- [apps/web/src/lib/useMediaQuery.ts](../../apps/web/src/lib/useMediaQuery.ts) — *new 24차(`e84e4b9`): useSyncExternalStore 미디어쿼리 + useIsDesktopXl(80rem, jsdom 폴백 데스크톱)*
+- [apps/web/src/routes/AirQualityPage.tsx](../../apps/web/src/routes/AirQualityPage.tsx) — *new 24차(`7340743`·`c6ac640`·`a4284aa`): /air 예시 페이지 — 섹션 ①~⑧, URL sido/station/term/code, 저장 위치 → 가장 가까운 측정소 기본*
+- [apps/web/src/routes/WeatherPage.tsx](../../apps/web/src/routes/WeatherPage.tsx) — *new 24차(`37e0db0`·`7704f8c`·`17f281a`): /weather 예시 페이지 — 섹션 ①~⑦, 지점 해석(p/ll/저장 위치/서울), 내 위치 저장/해제, AWS 보강, 대기 프리미티브 재사용*
+- [apps/web/src/routes/WeatherPage.test.tsx](../../apps/web/src/routes/WeatherPage.test.tsx) — *new 24차: 6건 — 기본 지점 한 화면·시도→지점 2단·?ll= 가장 가까운 지점·저장 위치 기본 진입·저장/바로가기·503 안내 (ResizeObserver 스텁)*
+- [apps/web/src/routes/LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx) — *new 24차(`1d92acb`·`a21de10`·`e84e4b9`·`4fd6e22`): /life-map — OL 한 장 + 패널/시트, URL ll/z/sel, useIsDesktopXl JS 분기, 뷰포트 250ms 디바운스, 주변 반경 화장실1000/CCTV500/병의원1000·15건*
+- [apps/web/src/routes/LifeMapPage.test.tsx](../../apps/web/src/routes/LifeMapPage.test.tsx) — *new 24차: 8건 — 데스크톱 5 + matchMedia 목 모바일 시트 3 (MapCanvas vi.mock, 뷰포트 안 올려 points 요청 없음)*
+- [apps/web/src/routes/meal/MealPage.tsx](../../apps/web/src/routes/meal/MealPage.tsx) — *new 24차(`233c5a9`→`fd371d9`): /me/meals 조회 전용 5탭(기록 무한목록·달력·통계 div 막대·추천·설정)*
+- [apps/web/src/routes/meal/MealPage.test.tsx](../../apps/web/src/routes/meal/MealPage.test.tsx) — *new 24차: 11건 — 탭별 요청 계약·opaque cursor·썸네일 인증 fetch·추천 force/피드백·설정 PUT/프리셋*
+- [apps/web/src/routes/meal/MealRecommendTab.tsx](../../apps/web/src/routes/meal/MealRecommendTab.tsx) — *new 24차(`2e41e63`·`acb3206`·`1837f25`): 다음 끼니 추천 — 추천받기/다시 추천(force), 👍👎, shown 이벤트 platform web, 파는 곳 찾기, 날씨 연동*
+- [apps/web/src/routes/meal/MealPreferenceTab.tsx](../../apps/web/src/routes/meal/MealPreferenceTab.tsx) — *new 24차: 가중치 7축 슬라이더·프리셋·제외/알레르기/선호·끼니·식사 유형 + 내보내기·전체 삭제*
+- [apps/web/src/routes/meal/MealPhotoImg.tsx](../../apps/web/src/routes/meal/MealPhotoImg.tsx) — *new 24차: JWT 사진 → useMealPhotoUrl blob objectURL(<img src> 직접 불가)*
+- [apps/web/src/stores/lifeMapPrefsStore.ts](../../apps/web/src/stores/lifeMapPrefsStore.ts) — *new 24차(`1d92acb`·`4fd6e22`): 레이어·CCTV 목적·화장실 편의·병의원 종별 취향 persist `lp:life-map-prefs` v2(migrate)*
+- [apps/web/src/stores/lifeMapRecentStore.ts](../../apps/web/src/stores/lifeMapRecentStore.ts) — *new 24차(`a21de10`): 최근 본 위치 8개 persist `lp:life-map-recent`*
+- [apps/web/src/components/air/AirPrimitives.tsx](../../apps/web/src/components/air/AirPrimitives.tsx) — *new 24차: AirSection(오퍼레이션 eyebrow)·AirStateBlock·AirStaleNote — 날씨 페이지도 재사용*
+- [apps/web/src/components/air/AirStationHero.tsx](../../apps/web/src/components/air/AirStationHero.tsx) — *new 24차: 선택 측정소 통합지수 히어로 + 6항목 타일*
+- [apps/web/src/components/air/AirHourStrip.tsx](../../apps/web/src/components/air/AirHourStrip.tsx) — *new 24차: 24시간 등급 띠*
+- [apps/web/src/components/air/AirHistoryChart.tsx](../../apps/web/src/components/air/AirHistoryChart.tsx) — *new 24차: 인라인 SVG 시계열(단일 축, 호버/키보드/표)*
+- [apps/web/src/components/air/AirSidoTable.tsx](../../apps/web/src/components/air/AirSidoTable.tsx) — *new 24차: 시도 측정소 현황 타일·필터·정렬 표*
+- [apps/web/src/components/air/AirSidoCompare.tsx](../../apps/web/src/components/air/AirSidoCompare.tsx) — *new 24차: 전국 시도 평균 가로 막대*
+- [apps/web/src/components/air/AirBadStations.tsx](../../apps/web/src/components/air/AirBadStations.tsx) — *new 24차: 나쁨 이상 측정소 시도별 칩*
+- [apps/web/src/components/air/AirForecastSection.tsx](../../apps/web/src/components/air/AirForecastSection.tsx) — *new 24차: 예보통보 19권역 그리드 + 원문 + 모델 이미지*
+- [apps/web/src/components/air/AirWeeklySection.tsx](../../apps/web/src/components/air/AirWeeklySection.tsx) — *new 24차: 주간예보 D+3~D+6 그리드*
+- [apps/web/src/components/air/AirStationsMap.tsx](../../apps/web/src/components/air/AirStationsMap.tsx) — *new 24차(`c6ac640`): 전국 측정소 MapCanvas 지도 — 등급색 마커 10종 모듈 레벨, 내 위치/저장 위치 overlayMarkers*
+- [apps/web/src/components/air/AirNearbySection.tsx](../../apps/web/src/components/air/AirNearbySection.tsx) — *new 24차(`c6ac640`·`a4284aa`·`aa3a09e`): 측정소 지도·내 주변·검색(250ms)·내 위치 저장(station/geolocation), 인증 30 안내 분기*
+- [apps/web/src/components/air/AirNearbySection.test.tsx](../../apps/web/src/components/air/AirNearbySection.test.tsx) — *new 24차(`638a572`): 6건 — 검색 선택 콜백·내 주변 목록·선택 측정소 저장·위치 미지원 안내·503(인증 30)/502 분기*
+- [apps/web/src/components/air/AirLegend.tsx](../../apps/web/src/components/air/AirLegend.tsx) — *new 24차: CAI 등급표 + 공공누리 출처*
+- [apps/web/src/components/air/airGrade.ts](../../apps/web/src/components/air/airGrade.ts) — *new 24차: 등급 색 스타일 + todayKst 등 @repo/utils 재수출*
+- [apps/web/src/components/air/airOptions.ts](../../apps/web/src/components/air/airOptions.ts) — *new 24차: 차트 항목·예보 탭 상수(react-refresh 경계)*
+- [apps/web/src/components/weather/WeatherNowHero.tsx](../../apps/web/src/components/weather/WeatherNowHero.tsx) — *new 24차(`17f281a` AWS 줄): 실황 히어로 + 6시간 띠*
+- [apps/web/src/components/weather/WeatherMeteogram.tsx](../../apps/web/src/components/weather/WeatherMeteogram.tsx) — *new 24차: 3일 메테오그램(아이콘/기온 선/강수 막대 소형 다중)*
+- [apps/web/src/components/weather/WeatherDailyStrip.tsx](../../apps/web/src/components/weather/WeatherDailyStrip.tsx) — *new 24차: 열흘(단기 일별 + 중기 병합) 공통 기온 축*
+- [apps/web/src/components/weather/WeatherSeaSection.tsx](../../apps/web/src/components/weather/WeatherSeaSection.tsx) — *new 24차: 해역 선택 + 날씨·파고 표*
+- [apps/web/src/components/weather/WeatherVersions.tsx](../../apps/web/src/components/weather/WeatherVersions.tsx) — *new 24차: 발표분 base + getFcstVersion 생성 시각*
+- [apps/web/src/components/weather/WeatherLegend.tsx](../../apps/web/src/components/weather/WeatherLegend.tsx) — *new 24차: SKY/PTY 코드표·category·출처*
+- [apps/web/src/components/weather/WeatherPrimitives.tsx](../../apps/web/src/components/weather/WeatherPrimitives.tsx) — *new 24차: 기상청 stale/폴백 띠 + Segmented(섹션·상태 블록은 air 프리미티브)*
+- [apps/web/src/components/weather/weatherIcons.tsx](../../apps/web/src/components/weather/weatherIcons.tsx) — *new 24차: 하늘+강수 → lucide 아이콘 표(낮/밤)*
+- [apps/web/src/components/weather/weatherFormat.ts](../../apps/web/src/components/weather/weatherFormat.ts) — *new 24차: 발표 시각 포맷·업스트림 문구 재수출(utils/shared 승격) + 폭 측정 훅*
+- [apps/web/src/components/weather/weatherDaily.ts](../../apps/web/src/components/weather/weatherDaily.ts) — *new 24차: 열흘 병합 @repo/shared 승격 재수출*
+- [apps/web/src/components/life-map/LifeMapView.tsx](../../apps/web/src/components/life-map/LifeMapView.tsx) — *new 24차: MapCanvas 한 장에 점/셀/핀 + 오버레이 + MyLocationButton + 키 게이트·힌트*
+- [apps/web/src/components/life-map/lifeMapMarkers.ts](../../apps/web/src/components/life-map/lifeMapMarkers.ts) — *new 24차: 점/셀 → MapMarker(fixedScale), 아이콘 모듈 레벨·셀 버블 건수 메모*
+- [apps/web/src/components/life-map/LifeGoToBox.tsx](../../apps/web/src/components/life-map/LifeGoToBox.tsx) — *new 24차(`a21de10`): 지역 이동 옴니박스 — 저장/최근/시도·시군구 로컬, 행정구역·지하철역·버스정류장·VWorld 주소 검색, variant panel/bar*
+- [apps/web/src/components/life-map/LifeLayerBar.tsx](../../apps/web/src/components/life-map/LifeLayerBar.tsx) — *new 24차: 레이어 토글 + 필터 칩, section all/layers/filters*
+- [apps/web/src/components/life-map/LifeNearbyList.tsx](../../apps/web/src/components/life-map/LifeNearbyList.tsx) — *new 24차: 주변 목록 탭 + filters 슬롯(peek 머리 행/half 필터 행)*
+- [apps/web/src/components/life-map/LifeDetailCard.tsx](../../apps/web/src/components/life-map/LifeDetailCard.tsx) — *new 24차: 화장실/CCTV/병의원 상세 + ← 목록*
+- [apps/web/src/components/life-map/LifeMapFooter.tsx](../../apps/web/src/components/life-map/LifeMapFooter.tsx) — *new 24차: 범례·적재 상태·출처(localdata·심평원·VWorld 지오코더)*
+- [apps/web/src/components/life-map/lifeMapFormat.ts](../../apps/web/src/components/life-map/lifeMapFormat.ts) — *new 24차: 개방시간 라벨 @repo/utils 재수출*
+- [apps/web/src/routes/admin/AdminFoodPage.tsx](../../apps/web/src/routes/admin/AdminFoodPage.tsx) — *new 24차(`d53fbe3`·`31c56f7`): /admin/food — 적재 잡(cron 프리셋·소스·지금 실행·SSE 진행)·통계·병합 충돌·인식 품질·카탈로그 표/인라인 편집/수기 등록(1,795줄, 어드민 청크 안 2차 lazy)*
+- [apps/web/src/routes/admin/AdminFoodPage.test.tsx](../../apps/web/src/routes/admin/AdminFoodPage.test.tsx) — *new 24차: 7건 — 한 화면 렌더·충돌 해결 PATCH·검색/필터/정렬 쿼리·지금 실행 오버라이드·SSE 진행·인라인 편집 diff·수기 등록 409 (sonner 목, 가짜 EventSource)*
+- [apps/web/src/routes/SubwayPage.tsx](../../apps/web/src/routes/SubwayPage.tsx) — *new 2026-07-07: 수도권 전철 페이지(URL q/stn/lineId/near); modified 24차(`e84e4b9`): 모바일을 시트 패턴으로(subBar 탭+검색행, fixed 지도, 목록/상세 시트, useMapSheets)*
+- [apps/web/src/components/subway/SubwayStationList.tsx](../../apps/web/src/components/subway/SubwayStationList.tsx) — *modified 24차(`e84e4b9`): '일부만 표시' 를 건수 행 인라인으로*
+- [apps/web/src/components/subway/SubwayStationsMap.tsx](../../apps/web/src/components/subway/SubwayStationsMap.tsx) — *modified 24차(`e84e4b9`): 열차 따라가기 배지 bottom 에 `--map-bottom-inset`*
+- [apps/web/src/test/setup.ts](../../apps/web/src/test/setup.ts) — *22차: jest-dom matchers 를 expect.extend 로 직접 확장(서브패스 인스턴스 함정 회피)*
+- [apps/web/src/test/msw.ts](../../apps/web/src/test/msw.ts) — *22차: 공용 MSW server — 기본 핸들러 없음 + onUnhandledRequest 'error'*
+- [apps/web/src/test/useMapResearch.test.ts](../../apps/web/src/test/useMapResearch.test.ts) — *22차: 지도 재검색 타이밍 계약 5건*
+- [apps/web/src/routes/vote/VoteNewPage.test.tsx](../../apps/web/src/routes/vote/VoteNewPage.test.tsx) — *22차: 7건*
+- [apps/web/src/routes/vote/VotePage.test.tsx](../../apps/web/src/routes/vote/VotePage.test.tsx) — *22차: 9건*
+- [apps/web/src/routes/vote/VoteResultView.test.tsx](../../apps/web/src/routes/vote/VoteResultView.test.tsx) — *22차: 4건*
+- [apps/web/src/components/restaurant/SmartPickSection.test.tsx](../../apps/web/src/components/restaurant/SmartPickSection.test.tsx) — *22차: 내 주변 게이트 4건*
+- [docs/mobile-public-restaurant-ux-v2.md](../../docs/mobile-public-restaurant-ux-v2.md) — *맛집 v2 시트 UX 설계 문서; modified 24차: 파일 표에 `sheet/` 승격·useMapSheets 반영*
+- [apps/web/src/routes/BusPage.tsx](../../apps/web/src/routes/BusPage.tsx) — *new 19차: 서울시 버스 정류장 페이지 (검색/주변/도착/노선추적/즐겨찾기 — URL state, lazy); modified 24차(`e84e4b9`): 모바일을 시트 패턴으로(subBar 탭+검색행, fixed 지도 `--map-bottom-inset`, 목록/상세 시트, useMapSheets initialListSnap half)*
+- [apps/web/src/components/bus/BusStationList.tsx](../../apps/web/src/components/bus/BusStationList.tsx) — *new 19차: 제출형 검색바(SearchBar) + 상태 분기 본체(ListBody) + 정류장 행(거리/arsId 배지, 즐겨찾기 별); modified 24차(`e84e4b9`): '일부만 표시' 를 건수 행 인라인으로(subBar 높이 절약)*
+- [apps/web/src/components/bus/BusStationsMap.tsx](../../apps/web/src/components/bus/BusStationsMap.tsx) — *new 19차: 정류장/경유지/내위치 마커 + 실시간 차량 레이어(형상 via 보간·화살표·따라가기) + 자동 재조회 (MapCanvas 위); modified 22차: 인라인 재검색 파이프라인(~50줄)을 `@repo/shared` useMapResearch 호출로 교체(`df9fcbd`); modified 24차(`e84e4b9`): 따라가기 배지 bottom 에 `--map-bottom-inset`*
 - [apps/web/src/components/bus/BusArrivalPanel.tsx](../../apps/web/src/components/bus/BusArrivalPanel.tsx) — *new 19차: 선택 정류장 실시간 도착정보 + 노선정보 카드 + 노선 추적/즐겨찾기 토글*
-- [apps/web/src/components/bus/BusFavoriteSection.tsx](../../apps/web/src/components/bus/BusFavoriteSection.tsx) — *new 19차: 초기 화면 즐겨찾는 정류장/버스 섹션*
+- ~~apps/web/src/components/bus/BusFavoriteSection.tsx~~ — *new 19차: 초기 화면 즐겨찾는 정류장/버스 섹션 → 2026-07-07 13차(`6a3e337`) 통합 즐겨찾기로 대체·삭제*
+- [apps/web/src/components/transit/TransitFavoritesSection.tsx](../../apps/web/src/components/transit/TransitFavoritesSection.tsx) — *new 2026-07-07(13차): 버스·지하철 통합 즐겨찾기 홈(양 탭 공용, 펼침 시 도착 미리보기) — 도메인은 [transit](transit.md)*
 - [apps/web/src/components/bus/BusFavoriteStar.tsx](../../apps/web/src/components/bus/BusFavoriteStar.tsx) — *new 19차: 즐겨찾기 토글 별(행 버튼의 형제, stopPropagation)*
 - [apps/web/src/components/restaurant/detail/AskTab.tsx](../../apps/web/src/components/restaurant/detail/AskTab.tsx) — *new 18차: 공개 리뷰 RAG 질문 탭 (useReviewQaReady + useReviewAskStore + 추천 칩 + 확신도·인용)*
 - [apps/web/src/components/restaurant/detail/ClusterTopics.tsx](../../apps/web/src/components/restaurant/detail/ClusterTopics.tsx) — *new 18차: 리뷰 군집 토픽 + 관점별 폴백 (tone 색 라벨·크기 막대)*
@@ -1375,7 +2002,7 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/src/components/ResummarizeToaster.tsx](../../apps/web/src/components/ResummarizeToaster.tsx) — *new 18차: App 상주 단건 재요약 완료 토스트 watcher (sentiment 델타)*
 - [apps/web/src/components/ReviewAskToaster.tsx](../../apps/web/src/components/ReviewAskToaster.tsx) — *new 18차: App 상주 질문 답변 완료 토스트 + '더보기'=Ask 탭 복귀 (seq 중복 차단)*
 - [apps/web/src/routes/admin/AdminReviewSearchPage.tsx](../../apps/web/src/routes/admin/AdminReviewSearchPage.tsx) — *new 18차: 리뷰 문맥검색/RAG 운영 (enrich+군집+질문) / 19차: 전부-노이즈=관점집계(sky) 표기 수정*
-- [apps/web/src/routes/admin/AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx) — *new 18차: 작업 로그 통합 (feature·status 필터 + Pager, useOperationRuns)*
+- [apps/web/src/routes/admin/AdminLogsPage.tsx](../../apps/web/src/routes/admin/AdminLogsPage.tsx) — *new 18차: 작업 로그 통합 (feature·status 필터 + Pager, useOperationRuns); modified 24차: FEATURE_LABEL 에 food-import·meal-recognition·meal-recommendation*
 - [apps/web/src/routes/admin/AdminLogRunDetailPage.tsx](../../apps/web/src/routes/admin/AdminLogRunDetailPage.tsx) — *new 18차: run 상세 + 무한 스텝 로그 + useAnalyzeRun*
 - [apps/web/src/routes/admin/AdminLogSettingsPage.tsx](../../apps/web/src/routes/admin/AdminLogSettingsPage.tsx) — *new 18차: 로그 보존기간(1~365) 설정*
 - [apps/web/src/routes/admin/AdminTablingPage.tsx](../../apps/web/src/routes/admin/AdminTablingPage.tsx) — *new 18차: 테이블링 정식 크롤 (다이닝코드 동형 — 검색+일괄저장+등록+단건)*
@@ -1389,11 +2016,11 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/scripts/build-sigungu-geo.mjs](../../apps/web/scripts/build-sigungu-geo.mjs) — *new 18차: KOSTAT 2018 경계 → mapshaper 단순화 → sigungu-geo.json 생성*
 - [apps/web/src/routes/admin/RandomCrawlSection.tsx](../../apps/web/src/routes/admin/RandomCrawlSection.tsx) — *new 18차: 자동 발굴 스케줄러 (AdminAnalyticsPage 내, cron+지역 cascade+텔레그램)*
 - [apps/web/src/components/restaurant/detail/tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts) — *modified 18차: ask(질문) 탭 추가 — 7탭*
-- [apps/web/src/components/restaurant/detail/InsightsTab.tsx](../../apps/web/src/components/restaurant/detail/InsightsTab.tsx) — *modified 18차: ClusterTopics 임베드 (useRestaurantClusters) + 17차 CategoryTree*
+- [apps/web/src/components/restaurant/detail/InsightsTab.tsx](../../apps/web/src/components/restaurant/detail/InsightsTab.tsx) — *modified 18차: ClusterTopics 임베드 (useRestaurantClusters) / 17차: CategoryTree + 메뉴/팁 클릭 버튼 필터 + 카드 테두리 제거*
 - [apps/web/src/routes/RestaurantDetailRoute.tsx](../../apps/web/src/routes/RestaurantDetailRoute.tsx) — *modified 18차: /r/:placeId 공유 라우트 분기 (useMatch, 닫기 경로)*
 - [apps/web/src/stores/theme.ts](../../apps/web/src/stores/theme.ts) — *17차: lp:theme localStorage 테마 스토어 (MapCanvas 가 구독)*
-- [apps/web/src/components/restaurant/MapLayerControl.tsx](../../apps/web/src/components/restaurant/MapLayerControl.tsx) — *new 17차: 좌하단 일반/다크(midnight)/위성 레이어 토글*
-- [apps/web/src/components/restaurant/MyLocationButton.tsx](../../apps/web/src/components/restaurant/MyLocationButton.tsx) — *new 17차: "내 위치" 공용 버튼 (공개+어드민 발견), denied/insecure callout*
+- [apps/web/src/components/restaurant/MapLayerControl.tsx](../../apps/web/src/components/restaurant/MapLayerControl.tsx) — *new 17차: 좌하단 일반/다크(midnight)/위성 레이어 토글; modified 24차(`e84e4b9`): bottom 에 `var(--map-bottom-inset, 0px)` — peek 시트 위로*
+- [apps/web/src/components/restaurant/MyLocationButton.tsx](../../apps/web/src/components/restaurant/MyLocationButton.tsx) — *new 17차: "내 위치" 공용 버튼 (공개+어드민 발견), denied/insecure callout; modified 24차(`67f14cf`): timeout 상태 "다시 시도" 문구 — 일상지도 LifeMapView 도 사용*
 - [apps/web/src/components/restaurant/detail/CategoryTree.tsx](../../apps/web/src/components/restaurant/detail/CategoryTree.tsx) — *new 17차: 식당별 메뉴 카테고리 트리*
 - [apps/web/package.json](../../apps/web/package.json) — *modified: lint 스크립트 + eslint ^10 + vite ^8 + ol ^10.9*
 - [apps/web/index.html](../../apps/web/index.html)
@@ -1401,24 +2028,22 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/tsconfig.json](../../apps/web/tsconfig.json)
 - [apps/web/.env.example](../../apps/web/.env.example)
 - [apps/web/eslint.config.mjs](../../apps/web/eslint.config.mjs) — *new: @repo/config/eslint/react flat config + React Compiler 룰 warn*
-- [apps/web/src/main.tsx](../../apps/web/src/main.tsx)
-- [apps/web/src/App.tsx](../../apps/web/src/App.tsx) — *modified 19차: /bus 라우트(웹 전용, BusPage React.lazy) / 18차: 토스터 3개(sonner+Resummarize+ReviewAsk) App 상주 + /r/:placeId 라우트 + 라우트 React.lazy + /s/:token*
-- [apps/web/src/routes/admin/AdminRoutes.tsx](../../apps/web/src/routes/admin/AdminRoutes.tsx) — *modified 18차: ai-usage/logs/review-search/tabling 라우트 + settings 텔레그램·로그 탭 추가 (단일 lazy 청크)*
+- [apps/web/src/main.tsx](../../apps/web/src/main.tsx) — *modified 24차(`9f39d53`·`fd371d9`): onUnauthorized(requestToken) → handleUnauthorizedForCurrentSession — 현재 세션 401 만 cancelQueries+clear+식단 principal null+clearSession*
+- [apps/web/src/App.tsx](../../apps/web/src/App.tsx) — *modified 24차: /air·/weather·/life-map 공개 + /me/meals(RequireUser) lazy 라우트(`7340743`·`37e0db0`·`1d92acb`·`233c5a9`) / 19차: /bus 라우트(BusPage React.lazy) / 18차: 토스터 3개(sonner+Resummarize+ReviewAsk) App 상주 + /r/:placeId 라우트 + 라우트 React.lazy + /s/:token*
+- [apps/web/src/routes/admin/AdminRoutes.tsx](../../apps/web/src/routes/admin/AdminRoutes.tsx) — *modified 24차(`d53fbe3`): `food` 라우트 — 어드민 청크 안 2차 lazy + SectionFallback / 18차: ai-usage/logs/review-search/tabling 라우트 + settings 텔레그램·로그 탭 추가 (단일 lazy 청크)*
 - [apps/web/src/components/Lightbox.tsx](../../apps/web/src/components/Lightbox.tsx) — *new (승격): detail/Lightbox.tsx 에서 정산·상세 공용으로 이동 — createPortal(body) + backdrop 닫기*
 - [apps/web/src/routes/HomePage.tsx](../../apps/web/src/routes/HomePage.tsx) — *modified: 랭킹 행 → Link /restaurants-v2/:placeId*
-- [apps/web/src/routes/LoginPage.tsx](../../apps/web/src/routes/LoginPage.tsx)
+- [apps/web/src/routes/LoginPage.tsx](../../apps/web/src/routes/LoginPage.tsx) — *modified 24차(`fd371d9`): 게스트 진입 전 setMealDraftPrincipal(null) 대기*
 - [apps/web/src/routes/RestaurantsPage.tsx](../../apps/web/src/routes/RestaurantsPage.tsx) — *modified 17차: 카드 더블클릭=확대(flyToZoomIn) + Outlet Suspense + useCallback perf*
-- [apps/web/src/routes/RestaurantDetailRoute.tsx](../../apps/web/src/routes/RestaurantDetailRoute.tsx)
-- [apps/web/src/routes/RestaurantsV2Page.tsx](../../apps/web/src/routes/RestaurantsV2Page.tsx) — *modified 18차: /r 공유 라우트 부모 겸용(isShareRoute — 리스트 숨김, 지도+상세) / 17차: 카드 더블클릭=확대 + Outlet Suspense*
+- [apps/web/src/routes/RestaurantsV2Page.tsx](../../apps/web/src/routes/RestaurantsV2Page.tsx) — *modified 24차(`e84e4b9`): 시트 스냅 조율을 useMapSheets 로 교체(로컬 ref/effect 제거) + `--map-bottom-inset`·SHEET_PEEK_HEIGHT / 18차: /r 공유 라우트 부모 겸용(isShareRoute — 리스트 숨김, 지도+상세) / 17차: 카드 더블클릭=확대 + Outlet Suspense*
 - [docs/mobile-public-restaurant-ux.md](../../docs/mobile-public-restaurant-ux.md)
 - [apps/web/src/routes/admin/AdminHomePage.tsx](../../apps/web/src/routes/admin/AdminHomePage.tsx) — *modified 18차: RegionStatsPanel 위젯 추가*
-- [apps/web/src/routes/admin/AdminCrawlTestPage.tsx](../../apps/web/src/routes/admin/AdminCrawlTestPage.tsx) — *modified: visitor_batch setQueryData 머지(상세 re-GET 제거)*
-- [apps/web/src/routes/admin/AdminRestaurantsPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx) — *modified 17차: soft tonal variant 적용*
-- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) — *modified 17차: soft tonal variant 적용*
+- [apps/web/src/routes/admin/AdminCrawlTestPage.tsx](../../apps/web/src/routes/admin/AdminCrawlTestPage.tsx) — *modified: visitor_batch setQueryData 머지(상세 re-GET 제거); 24차(`0d72380`): 머지 뒤 compareReviewRecencyDesc 정렬*
+- [apps/web/src/routes/admin/AdminRestaurantsPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantsPage.tsx) — *modified 24차(`5e25cc0`): 통합 검색 `?q=`(role=search 폼, draft {urlQuery,value} 렌더 중 파생, page 리셋) / 17차: soft tonal variant 적용*
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) — *modified 24차(`0d72380`): 리뷰 정렬 visitedAt-desc 기본(compareReviewRecencyDesc)·fetchedAt-desc, fetchedAt-asc·로컬 visitedSortKey 제거 / 17차: soft tonal variant 적용*
 - [apps/web/src/routes/admin/AdminAnalyticsPage.tsx](../../apps/web/src/routes/admin/AdminAnalyticsPage.tsx) — *modified 18차: RandomCrawlSection(자동 발굴 스케줄러) 추가 / 17차: ScheduleSection + tonal variant + 카테고리 트리 기본 접힘*
-- [apps/web/src/routes/admin/AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx)
+- [apps/web/src/routes/admin/AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) — *modified 24차(`cc8399a`): 용도 5종 — meal-photo(gemma4:31b)·meal-recommend(gpt-oss:120b) 행 추가, PURPOSE_META Record 강제*
 - [apps/web/src/routes/admin/AdminAiTestPage.tsx](../../apps/web/src/routes/admin/AdminAiTestPage.tsx)
-- [apps/web/src/routes/admin/AdminSettingsPage.tsx](../../apps/web/src/routes/admin/AdminSettingsPage.tsx)
 - [apps/web/src/routes/admin/AdminMapKeysPage.tsx](../../apps/web/src/routes/admin/AdminMapKeysPage.tsx)
 - [apps/web/src/routes/admin/AdminDiscoverPage.tsx](../../apps/web/src/routes/admin/AdminDiscoverPage.tsx) — *modified 17차: 카드 클릭=이동/더블클릭=확대 + MyLocationButton*
 - [apps/web/src/routes/admin/AdminAutoDiscoverPage.tsx](../../apps/web/src/routes/admin/AdminAutoDiscoverPage.tsx)
@@ -1434,17 +2059,16 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/src/stores/panelPrefsStore.ts](../../apps/web/src/stores/panelPrefsStore.ts)
 - [apps/web/src/stores/settlementPrefsStore.ts](../../apps/web/src/stores/settlementPrefsStore.ts)
 - [apps/web/src/components/PublicLayout.tsx](../../apps/web/src/components/PublicLayout.tsx) — *modified: perf 소폭*
-- [apps/web/src/components/PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx) — *modified 19차: 버스 네비 항목 추가(/bus)*
-- [apps/web/src/components/PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx) — *modified 19차: 버스 네비 항목 추가(Bus 아이콘, /bus)*
+- [apps/web/src/components/PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx) — *modified 24차(`7340743`→`a062e7d`): 폭 예산 주석·NAV 7(일상지도·날씨·대기질·식단 requiresAuth)·날씨→대기질 순서(`69ed65f`)·MyLocationChip·AccountMenu, 테마·계정 md+ 만 / 19차: 버스 네비 항목 추가(/bus)*
+- [apps/web/src/components/PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx) — *modified 24차(`a062e7d`): lg:hidden 드로어 + 하단 계정·테마 블록(md:hidden), NAV 스크롤 분리, NAV 7 / 19차: 버스 네비 항목 추가(Bus 아이콘, /bus)*
 - [apps/web/src/components/ImgWithFallback.tsx](../../apps/web/src/components/ImgWithFallback.tsx)
-- [apps/web/src/components/ThemeToggle.tsx](../../apps/web/src/components/ThemeToggle.tsx)
-- [apps/web/src/components/admin/AdminLayout.tsx](../../apps/web/src/components/admin/AdminLayout.tsx) — *modified 18차: 테스트 아코디언 그룹 + 신규 leaf(AI 사용량/리뷰 문맥검색/테이블링/로그) + LlmUsagePanel 상주*
+- [apps/web/src/components/admin/AdminLayout.tsx](../../apps/web/src/components/admin/AdminLayout.tsx) — *modified 24차(`d53fbe3`): '음식 카탈로그'(Soup) leaf / 18차: 테스트 아코디언 그룹 + 신규 leaf(AI 사용량/리뷰 문맥검색/테이블링/로그) + LlmUsagePanel 상주*
 - [apps/web/src/components/admin/AdminTopBar.tsx](../../apps/web/src/components/admin/AdminTopBar.tsx) — *modified: ai-usage 타이틀 룰*
 - [apps/web/src/routes/admin/AdminSettingsPage.tsx](../../apps/web/src/routes/admin/AdminSettingsPage.tsx) — *modified 18차: 텔레그램·로그 탭 추가 (AI키/지도/텔레그램/로그 4탭)*
-- [apps/web/src/components/restaurant/ActiveJobPanel.tsx](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)
+- [apps/web/src/components/restaurant/ActiveJobPanel.tsx](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx) — *modified 24차(`0d72380`): 배치 머지 뒤 compareReviewRecencyDesc 정렬*
 - [apps/web/src/components/restaurant/sections.tsx](../../apps/web/src/components/restaurant/sections.tsx) — *modified: perf 소폭*
 - [apps/web/src/components/restaurant/MenuRankingSection.tsx](../../apps/web/src/components/restaurant/MenuRankingSection.tsx)
-- [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) — *modified 19차: MapMarker.icon(data URL 직접) + VehicleMarker 전용 레이어(버스 차량 형상 via 보간·방향 화살표·따라가기) / 17차: 테마 구독 레이어 전환(Base/midnight/satellite) + setUrl 교체 + flyToZoomIn + 라벨 반전*
+- [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) — *modified 24차: flyTo/flyToZoomIn `{ bottomInset }`(`e84e4b9`) + MapMarker.fixedScale·마커 Style 캐시 6000(`1d92acb`) / 19차: MapMarker.icon(data URL 직접) + VehicleMarker 전용 레이어(버스 차량 형상 via 보간·방향 화살표·따라가기) / 17차: 테마 구독 레이어 전환(Base/midnight/satellite) + setUrl 교체 + flyToZoomIn + 라벨 반전*
 - [apps/web/src/components/restaurant/VWorldMap.tsx](../../apps/web/src/components/restaurant/VWorldMap.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantList.tsx](../../apps/web/src/components/restaurant/PublicRestaurantList.tsx) — *modified 17차: onZoomItem 전달(더블클릭 확대) + 안정 콜백(카드 memo 용)*
 - [apps/web/src/components/restaurant/PublicRestaurantCard.tsx](../../apps/web/src/components/restaurant/PublicRestaurantCard.tsx) — *modified 17차: onZoom 더블클릭 확대 + memo(호버 시 80카드 리렌더 차단)*
@@ -1453,16 +2077,14 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/src/components/restaurant/MergeProposalQueue.tsx](../../apps/web/src/components/restaurant/MergeProposalQueue.tsx) — *modified 17차: soft tonal variant*
 - [apps/web/src/components/restaurant/ReanalyzeFailedBadge.tsx](../../apps/web/src/components/restaurant/ReanalyzeFailedBadge.tsx)
 - [apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx) — *modified 18차: ask 탭 → AskTab(restaurantName 전달) / 17차: tipFilter/menuFilter state*
-- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) — *modified 19차: 미리보기 '대표메뉴' 그룹 우선(menuGroups) / 17차: onSelectTip/onSelectMenu + 카드 테두리 제거(divide-y)*
+- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) — *modified 24차(`0d72380`): reviewsFirstPage 가 방문일 최신순이라는 주석 정정 / 19차: 미리보기 '대표메뉴' 그룹 우선(menuGroups) / 17차: onSelectTip/onSelectMenu + 카드 테두리 제거(divide-y)*
 - [apps/web/src/components/restaurant/detail/MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) — *modified 19차: menuGroups 그룹 섹션별 렌더(그룹수·개수 헤더, 없으면 평면 폴백) / 17차: onSelectMenu 클릭 필터*
 - [apps/web/src/components/restaurant/detail/ReviewsTab.tsx](../../apps/web/src/components/restaurant/detail/ReviewsTab.tsx) — *modified 18차: 단건 재요약 ModelPickerPopup + useResummarizeReview(admin, ResummarizeToaster 가 watch) / 17차: tip/menu 필터*
-- [apps/web/src/components/restaurant/detail/InsightsTab.tsx](../../apps/web/src/components/restaurant/detail/InsightsTab.tsx) — *modified 17차: CategoryTree + 메뉴/팁 클릭 버튼 필터 + 카드 테두리 제거*
 - [apps/web/src/components/restaurant/detail/PhotosTab.tsx](../../apps/web/src/components/restaurant/detail/PhotosTab.tsx) — *modified: import ~/components/Lightbox*
 - ~~apps/web/src/components/restaurant/detail/Lightbox.tsx~~ — *삭제 (→ apps/web/src/components/Lightbox.tsx 로 승격)*
 - [apps/web/src/components/restaurant/detail/InfoTab.tsx](../../apps/web/src/components/restaurant/detail/InfoTab.tsx) — *modified 17차: 블로그 리뷰 카드 테두리 제거(divide-y)*
 - [apps/web/src/components/restaurant/detail/shared.tsx](../../apps/web/src/components/restaurant/detail/shared.tsx) — *modified 17차: AiSummary 팁 클릭 + 메뉴 썸네일 라이트박스 + import ~/components/Lightbox*
-- [apps/web/src/components/restaurant/detail/tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts)
-- [apps/web/src/components/restaurant-v2/BottomSheet.tsx](../../apps/web/src/components/restaurant-v2/BottomSheet.tsx)
+- [apps/web/src/components/sheet/BottomSheet.tsx](../../apps/web/src/components/sheet/BottomSheet.tsx) — *moved 24차(`e84e4b9`, R100): `restaurant-v2/BottomSheet.tsx` → `sheet/` — dual-mode 3-snap 시트, 맛집 v2·버스·지하철·일상지도 공용*
 - [apps/web/src/components/ui/button.tsx](../../apps/web/src/components/ui/button.tsx) — *modified 17차: soft tonal 6색 variant*
 - [apps/web/src/components/ui/card.tsx](../../apps/web/src/components/ui/card.tsx)
 - [apps/web/src/components/ui/input.tsx](../../apps/web/src/components/ui/input.tsx)
@@ -1471,9 +2093,9 @@ React 19, Tailwind v4 + shadcn 토큰, `@repo/shared` 경유, stream-driven cach
 - [apps/web/src/components/ui/pager.tsx](../../apps/web/src/components/ui/pager.tsx)
 - [apps/web/src/components/ui/confirm-dialog.tsx](../../apps/web/src/components/ui/confirm-dialog.tsx)
 - [apps/web/src/lib/utils.ts](../../apps/web/src/lib/utils.ts)
-- [apps/web/src/lib/vworld.ts](../../apps/web/src/lib/vworld.ts)
+- ~~apps/web/src/lib/vworld.ts~~ — *2026-05-14(`3e3e545`) [packages/utils/src/vworld.ts](../../packages/utils/src/vworld.ts) 로 이동(`buildVworldTileUrl` 등 — [utils](utils.md)/[map](map.md))*
 - [apps/web/src/styles/global.css](../../apps/web/src/styles/global.css)
-- [apps/web/src/styles/tailwind.css](../../apps/web/src/styles/tailwind.css) — *modified 17차: --tonal-* 토큰(라이트/다크 한 쌍) + @custom-variant dark*
+- [apps/web/src/styles/tailwind.css](../../apps/web/src/styles/tailwind.css) — *modified 24차(`7340743`·`37e0db0`): --air-series-1/2·--weather-temp/precip 차트 계열색(라이트/다크 쌍) / 17차: --tonal-* 토큰(라이트/다크 한 쌍) + @custom-variant dark*
 - [apps/web/src/components/ThemeToggle.tsx](../../apps/web/src/components/ThemeToggle.tsx) — *useThemeStore 소비(html.dark 토글) — 이번 라운드 다크 모드 진입점*
 - [apps/web/src/routes/settlement/SettlementNewPage.tsx](../../apps/web/src/routes/settlement/SettlementNewPage.tsx)
 - [apps/web/src/routes/settlement/Step1Participants.tsx](../../apps/web/src/routes/settlement/Step1Participants.tsx)

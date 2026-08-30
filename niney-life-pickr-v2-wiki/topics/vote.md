@@ -1,7 +1,7 @@
 ---
 topic: vote
 last_compiled: 2026-08-17
-sources_count: 14
+sources_count: 18
 status: active
 aliases: [그룹투표, 투표, group-vote, vote-session, approval-voting, 복수찬성, 티브레이크, tie-break, voterKey, 투표방, VoteSession, VoteOption, VoteBallot, useVote, voteGuestStore, vote-preview, 우리뭐먹을까, 링크투표, 슬롯머신결과]
 ---

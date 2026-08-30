@@ -1,12 +1,14 @@
 ---
 topic: review-search
-type: codebase
-last_compiled: 2026-07-06
-source_count: 18
+last_compiled: 2026-08-30
+sources_count: 24
 status: active
+aliases: [리뷰 문맥검색, 리뷰 RAG, review-search, ReviewSearchService, enrich, ENRICH_VERSION, embeddingJson, aspectsJson, contextLine, bge-m3, OLLAMA_EMBED_BASE_URL, OLLAMA_EMBED_MODEL, hybrid, BM25, RRF, rerank, RERANK_POOL, ASK_EVIDENCE, verifier, span-grounding, HyDE, reviewAskStore, AskTab, ReviewAskToaster, ReviewAskBanner, qa/ready, probe:review-search, probe:embed-health, buildLlmProviderEnv]
 ---
 
-# review-search
+# review-search — 리뷰 문맥검색·RAG(enrich → 하이브리드 회수 → 리랭크 → 근거 생성 → 검증)
+
+**2026-08-22 변경 흡수 — provider env 조립 `buildLlmProviderEnv()`(`cc8399a`)**: 이 도메인은 라우트가 아니라 [plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts) 가 `ReviewSearchService` 싱글턴을 조립하는데, 그 `AiConfigService` 의 `.env` 블록이 자체 리터럴에서 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 바뀌었다(자동 발견 라우트·random-crawl 플러그인이 만드는 보조 인스턴스도 동일). 연구 자산 `research/review-search/probe-*.ts` **10종**(ask-clean·completeness·e2e·embed-health·eval·hyde·latency·rerank-value·stage-clean·verify-rate)도 각자 들고 있던 `buildEnvBlock` 을 지우고 같은 함수를 import — `probe-model-tier.ts` 만 원래 env 블록이 없어 제외. chat purpose 해석·임베딩 경로(`OLLAMA_EMBED_*` 직접 fetch)는 변경 없음. 배경(purpose 5종, `defaultModels` 5키)은 [ai](ai.md).
 
 리뷰 문맥검색 / RAG 도메인 — 크롤된 식당 리뷰에 대해 "리뷰 목록"이 아니라
 **질문에 근거 있는 답(RAG)** 을 준다. 어드민 운영 도구가 1차이고, 공개 식당 상세의
@@ -75,7 +77,7 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
 **canonical 정합** — 검색·enrich·상태집계 모두 단일 행이 아니라 **그 가게(canonical)의
 공개 멤버 행 전체**를 대상으로 한다. `loadCorpus`/`ensureEnriched` 는
 `resolveCanonicalMembersByRestaurantId`, 공개 QA 는 `resolveCanonicalMembersByPlaceId`,
-상태집계는 `listPublicPlaces` 를 쓴다([canonical-members.js](../../apps/friendly/src/modules/restaurant/canonical-members.js)).
+상태집계는 `listPublicPlaces` 를 쓴다([canonical-members.ts](../../apps/friendly/src/modules/restaurant/canonical-members.ts)).
 캐시·진행상태·SSE 키는 모두 대표 `primaryId`(placeId 보유 네이버 행)로 통일 — 부수 행
 (다이닝코드/테이블링)으로 트리거돼도 같은 가게로 합쳐 추적된다. 공개 리뷰 탭이 보여주는
 통합 코퍼스와 동일.
@@ -102,7 +104,8 @@ rerank 는 그 top-`RERANK_POOL`(기본 30, `RS_RERANK_POOL` env)을 listwise LL
   `http://localhost:11434`), model `bge-m3`. enrich 의 문서 임베딩 + **매 질문의 질의
   임베딩** 양쪽에 쓰여 회피 불가.
 - **ollama-cloud chat** — `${baseUrl}/api/chat`(`aiConfig.getResolved('ollama-cloud','chat')`
-  로 baseUrl/apiKey/defaultModel 해석). 관점/문맥 추출, listwise 리랭크, RAG 생성, 검증,
+  로 baseUrl/apiKey/defaultModel 해석 — `AiConfigService` 는 plugins/summaries 가
+  `buildLlmProviderEnv()` 로 조립). 관점/문맥 추출, listwise 리랭크, RAG 생성, 검증,
   HyDE(평가 하니스용)에 사용. `chatJson` 이 코드펜스 제거 + 첫 `[{...}]` 매칭으로 견고 파싱,
   실패 시 null.
 - **Prisma / SQLite** — `ReviewSummary` 행(`embeddingJson`/`aspectsJson`/`contextLine`/
@@ -239,8 +242,9 @@ self-bias 회피를 위해 **독립 Claude(`EVAL_JUDGE=claude`, 헤드리스 `cl
   `createRequire(import.meta.url)` 로 require 해 default/named export 양쪽을 흡수한다(commit
   808c447). 번들·모듈 해석 차이로 named import 가 깨지는 걸 회피하는 ESM/CJS 상호운용 처리.
 
-## Sources [coverage: high — 18 sources]
+## Sources [coverage: high — 19 sources]
 
+- [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 플러그인·research probe 10종의 env 조립, 2026-08-22)
 - [apps/friendly/src/modules/review-search/retrieval.ts](../../apps/friendly/src/modules/review-search/retrieval.ts)
 - [apps/friendly/src/modules/review-search/review-search.service.ts](../../apps/friendly/src/modules/review-search/review-search.service.ts)
 - [apps/friendly/src/modules/review-search/review-search.route.ts](../../apps/friendly/src/modules/review-search/review-search.route.ts)

@@ -1,6 +1,6 @@
 ---
 concept: db-config-env-fallback
-last_compiled: 2026-06-25
+last_compiled: 2026-08-30
 topics_connected: [ai, map, telegram, friendly]
 status: active
 ---
@@ -30,6 +30,8 @@ status: active
 2. **동형 골격은 유지하되 변형을 허용하는 게 이 코드베이스의 선택** — 네 공통 축(단일행 DB 우선 / env 폴백 / source 출처 / 마스킹 + PUT 보존)은 셋이 똑같이 따른다. `maskApiKey` 한 함수만 실제로 공유(ai → telegram·map import)하고, 나머지는 "같은 모양의 별도 구현". 추상화 대신 동형성을 코드 리뷰·주석 레벨에서 명시(map·telegram 서비스 상단 주석이 서로를 "같은 패턴" 이라 지목)한다.
 3. **`source`/`keySource` 출처 노출이 운영 가시성의 핵심** — env-only 운영(DB 행 없음)과 DB-등록 운영을 같은 코드로 굴리면서, 응답에 출처를 박아 "지금 이 키가 어디서 왔는가"(db/env/inherited/none)를 어드민 UI 가 배지로 보여준다. 폴백이 조용히 일어나는 대신 항상 추적 가능.
 4. **ai 의 다축 확장이 한계선을 보여준다** — 폴백 축이 1개(map)→2개(telegram)→다축+상속(ai)으로 늘수록 분기가 급격히 복잡해진다. ai 가 더 확장되면(예: provider 종류 추가) 이 패턴 자체를 다시 쪼갤 후보 — 하지만 지금은 한 모듈 안에 담는 게 정답.
+
+5. **반대 극이 생겼다 — DB 행 없는 env→env 체인** (2026-08). 대기(`AIRKOREA_API_KEY`)·기상청(`KMA_API_KEY`)·심평원(`HIRA_API_KEY`)·음식(`FOOD_API_KEY`) 키는 어드민 설정 화면도 DB 행도 없이 `config/env.ts` 에서 비어 있으면 `BUS_API_KEY` 로 떨어지는 순수 env 폴백이다. "data.go.kr 는 계정당 키 1개" 라는 외부 사실이 만든 체인이라 이 컨셉의 4축(DB 우선·source 노출·마스킹·PUT 보존) 중 마스킹만 공유한다. 함정은 데이터셋별 활용신청이 따로라 폴백된 키가 `30 등록되지 않은 서비스키` 를 낼 수 있다는 것 — 어드민 UI 가 없으니 출처(`source`)도 노출되지 않아 진단이 `.env.example` 주석과 probe 스크립트에 의존한다. 이 키들이 어드민에서 바뀌어야 할 때가 이 컨셉으로 승격할 시점이다(→ [[../topics/friendly]] env 표, [[external-api-proxy-fixture]]).
 
 관련: [[in-memory-singleton-gates]] — ai 의 `maxConcurrent` 설정이 그 모듈 싱글턴 cap 게이트의 슬롯 수를 정한다(설정 → 게이트 cap 동기화). [[public-admin-route-split]] — map 의 `publicConfig` 공개 라우트가 어드민 secret 경로와 분리되는 사례.
 

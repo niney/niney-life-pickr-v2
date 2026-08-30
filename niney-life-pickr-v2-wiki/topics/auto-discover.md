@@ -1,20 +1,22 @@
 ---
-topic: Auto-Discover
-slug: auto-discover
-last_compiled: 2026-05-17
-sources_count: 12
+topic: auto-discover
+last_compiled: 2026-08-30
+sources_count: 13
 status: active
+aliases: [자동 발견, auto-discover, AutoDiscoverService, AutoDiscoverRegistry, auto-discover-jobs, generating_keywords, buildFallbackKeywords, AUTO_DISCOVER_KEYWORD_COUNT, GROUP_SIZE, group-of-5, waitForCrawlTerminal, already_registered, target_reached, activeAutoDiscoverJobStore, useAutoDiscoverJob, useStartAutoDiscover, AdminAutoDiscoverPage, AutoDiscoverJobCard, AutoDiscoverForm, buildLlmProviderEnv]
 ---
 
-# auto-discover
+# auto-discover — 영역명 한 줄로 AI 검색어 생성 → 다중 검색 → 그룹 5개씩 자동 크롤·등록
 
-## Purpose [coverage: high -- 5 sources]
+**2026-08-22 변경 흡수 — 라우트 env 조립 `buildLlmProviderEnv()`(`cc8399a`)**: [auto-discover.route.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.route.ts) 가 자체 `LlmProviderEnv` 리터럴(`env.OLLAMA_*` 5필드 + `defaultModels` 3키) 대신 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 `AiConfigService` 를 조립한다 — purpose 가 5종으로 늘면서(`meal-photo`·`meal-recommend`) 리터럴 복제 26곳을 한 곳으로 모은 [ai](ai.md) 변경의 소비처. 키워드 생성 호출 자체(`getResolved('ollama-cloud', 'chat')` + fallback 정책)는 그대로.
+
+## Purpose [coverage: high — 5 sources]
 
 운영자가 영역명 한 줄("강남역") + 카테고리 칩 + 목표 등록 수만 던지면, AI 가 검색 키워드 8 개를 만들고 → 네이버 지도를 키워드별로 병렬 검색하고 → 결과를 dedupe 한 뒤 → 그룹 5 개씩 직렬로 Naver Place 크롤·등록까지 한 번에 처리하는 백그라운드 잡. 기존 `/admin/discover` 의 수동 흐름(키워드 직접 입력 → 결과 보고 한 건씩 등록)은 그대로 두고 별도 메뉴로 추가됐다. 어드민이 한 영역의 신규 가게 N 개를 "그냥 채워라" 할 수 있는 게 의도.
 
 잡은 actor 당 정확히 1 개로 제한된다. AI 호출 + 키워드 8 개 검색 + 그룹별 크롤이 동시에 두 개 돌면 부하 예측이 어려워, 다이닝코드 bulk-save 가 다중 동시 진행을 허용하는 것과 의도적으로 다른 결정. 검토 큐는 dedupe 후 사람 손이 결정하므로 동시성이 의미 있지만 자동 발견은 무거운 파이프라인 한 줄을 끝까지 도는 잡이라 1 개로 묶었다.
 
-## Architecture [coverage: high -- 5 sources]
+## Architecture [coverage: high — 5 sources]
 
 코어는 `AutoDiscoverService` + `AutoDiscoverRegistry` 두 클래스. 라우트가 잡 생성 직후 `runAutoDiscover` 를 fire-and-forget 으로 호출하고 즉시 초기 snapshot 응답. 진행은 SSE 로 흐른다.
 
@@ -58,15 +60,15 @@ Key files:
 - [apps/friendly/src/modules/auto-discover/auto-discover.route.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.route.ts) -- POST/GET/DELETE + SSE. SSE 는 token query 인증.
 - [packages/api-contract/src/schemas/auto-discover.ts](../../packages/api-contract/src/schemas/auto-discover.ts) -- zod 계약 + phase/state/skipReason enum.
 
-## Talks To [coverage: high -- 5 sources]
+## Talks To [coverage: high — 5 sources]
 
-- **ai** (in-process: `AiConfigService.getResolved('ollama-cloud')` + `adapterCache`) -- LLM provider/model 해석. 미설정이면 fallback 키워드로 진행(잡은 안 죽음).
+- **ai** (in-process: `AiConfigService.getResolved('ollama-cloud', 'chat')` + `adapterCache`) -- LLM provider/model 해석. 미설정이면 fallback 키워드로 진행(잡은 안 죽음). 라우트의 `AiConfigService` 는 `buildLlmProviderEnv()`(2026-08-22)로 조립 — `.env` 폴백 규칙은 [ai](ai.md).
 - **crawl** (in-process: `CrawlService.startCrawl` + `JobRegistry.subscribe`) -- 후보 한 건 등록은 Naver Place 파이프라인 그대로 호출. 자기 잡 안에서 `waitForCrawlTerminal` 로 done/error 이벤트 await.
 - **crawl/naver-search** (HTTP: `searchPlacesViaMapNaver`) -- 키워드별 `pageSize=50` 으로 nx-api 검색. `AbortSignal` 전파.
 - **restaurant** (in-process: `findRegisteredByPlaceIds`, `findByPlaceId`) -- 이미 등록 placeId 사전 분리 + 크롤 종료 후 restaurant row 조회로 outcome 확인.
 - **summary** (in-process: `extractFirstJsonObject`) -- LLM 응답에서 JSON 객체 추출 유틸 재사용.
 
-## API Surface [coverage: high -- 4 sources]
+## API Surface [coverage: high — 4 sources]
 
 라우트 (`auto-discover.route.ts`, prefix `/api/v1`):
 
@@ -86,7 +88,7 @@ FE 훅 (`@repo/shared`):
 
 API: [packages/shared/src/api/autoDiscover.api.ts](../../packages/shared/src/api/autoDiscover.api.ts), 훅: [packages/shared/src/hooks/useAutoDiscover.ts](../../packages/shared/src/hooks/useAutoDiscover.ts).
 
-## Data [coverage: high -- 3 sources]
+## Data [coverage: high — 3 sources]
 
 DB 테이블 없음 — 잡 상태는 전부 in-memory. 결과는 `Restaurant` 행을 새로 만드는 것 (crawl 도메인의 기존 파이프라인이 채움).
 
@@ -109,7 +111,7 @@ abort: AbortController
 
 FE 활성 잡 ID: [activeAutoDiscoverJobStore](../../packages/shared/src/stores/activeAutoDiscoverJobStore.ts) — zustand persist `lp:activeAutoDiscoverJob`. 페이지 새로고침/이동 후에도 진행 카드 이어보기. 404 응답 시 자동 clear.
 
-## Key Decisions [coverage: high -- 6 sources]
+## Key Decisions [coverage: high — 6 sources]
 
 - **per-actor 1잡** -- `findInFlightByActor` 가 in-flight 잡 있으면 409. 다이닝코드 bulk-save 가 다중 허용하는 것과 다른 결정 — auto-discover 는 AI + 8 키워드 검색 + 그룹별 크롤 모두 무거워 동시 두 개의 부하 예측이 어렵다고 봄.
 - **키워드 정확히 8 개 + fallback 보충** -- `AUTO_DISCOVER_KEYWORD_COUNT=8` 을 Ollama JSON schema (`minItems=maxItems=8`) 로 강제. AI 가 모자라게 줘도 `buildFallbackKeywords` 가 결정론적 변형(영역명 + 카테고리 + 접미어 8 개)으로 보충. AI 미설정 / 호출 실패면 fallback 전체 — 잡은 절대 키워드 없이 끝나지 않는다 ([service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts) line 448-508).
@@ -121,7 +123,7 @@ FE 활성 잡 ID: [activeAutoDiscoverJobStore](../../packages/shared/src/stores/
 - **AI fallback 정책** -- LLM 미설정/호출 실패/응답 파싱 실패/0 개/부족 — 모든 케이스가 fallback 으로 보충되어 잡은 계속 진행. AI 가 그저 "검색어 다양성 향상기" 역할이고 critical path 가 아니라는 정책.
 - **in-memory only** -- 잡 상태는 DB 안 박는다. 결과(=Restaurant 신규 행)는 영구화. 잡 자체는 재실행 가능한 idempotent 작업이라 영속화 비용 < 단순성.
 
-## Gotchas [coverage: high -- 5 sources]
+## Gotchas [coverage: high — 5 sources]
 
 - **AI 가 8 개 부족 시 fallback 으로 보충** -- AI 가 5 개만 줘도 잡이 안 죽고 fallback 3 개로 채워 항상 정확히 8 개. dedup 도 `arr.indexOf(k) === i` 로 한 번 더 ([service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts) line 487-500).
 - **cache hit / 이미 종료된 crawl 잡** -- `CrawlService.startCrawl` 이 cache hit / `deduped: true` 로 즉시 종료되는 케이스. `waitForCrawlTerminal` 이 `job.status !== 'running'` 체크로 already-terminal 잡도 즉시 resolve ([service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts) line 417-435).
@@ -133,8 +135,9 @@ FE 활성 잡 ID: [activeAutoDiscoverJobStore](../../packages/shared/src/stores/
 - **groupIndex = -1 은 already_registered 전용** -- UI 가 이 후보를 별도 섹션("이미 등록된 후보") 으로 분리. 그룹 그리드에 섞이지 않는다.
 - **테스트의 cancel 흐름** -- `autoFinish=false` fake crawl 로 그룹이 await 상태로 멈춘 다음 외부에서 error 이벤트 흘려야 잡이 진행됨. 실 서비스에서는 abort 가 crawl 잡 자체로는 안 가고, auto-discover service 가 그룹 끝난 뒤 cancel 호출로 전파.
 
-## Sources
+## Sources [coverage: high — 13 sources]
 
+- [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 라우트 env 조립, 2026-08-22)
 - [apps/friendly/src/modules/auto-discover/auto-discover.prompts.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.prompts.ts)
 - [apps/friendly/src/modules/auto-discover/auto-discover-registry.ts](../../apps/friendly/src/modules/auto-discover/auto-discover-registry.ts)
 - [apps/friendly/src/modules/auto-discover/auto-discover.service.ts](../../apps/friendly/src/modules/auto-discover/auto-discover.service.ts)

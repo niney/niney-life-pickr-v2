@@ -1,12 +1,14 @@
 ---
 topic: review-clustering
-type: codebase
-last_compiled: 2026-08-17
-source_count: 26
+last_compiled: 2026-08-30
+sources_count: 27
 status: active
+aliases: [리뷰 군집화, 리뷰 주제, review-clustering, ReviewCluster, review_clusters, clusterVersion, CLUSTERING_VERSION, corpusSize, cluster_compute.py, UMAP, HDBSCAN, c-TF-IDF, medoid, aspect 극성 주입, NEG_INJECT_MIN, shouldRecluster, CLUSTER_AUTO_ENABLED, CLUSTER_RECONCILE_DELAY_MS, scheduleStartupReconcile, cluster-bg, cluster-pending, ClusterTopics, useRestaurantClusters, useClusterStatus, probe:cluster-health, buildLlmProviderEnv]
 ---
 
-# review-clustering
+# review-clustering — 비슷한 문맥 리뷰 군집화(bge-m3 → UMAP → HDBSCAN → c-TF-IDF → LLM 라벨)
+
+**2026-08-22 변경 흡수 — provider env 조립 `buildLlmProviderEnv()`(`cc8399a`)**: `ReviewClusteringService` 는 [plugins/summaries.ts](../../apps/friendly/src/plugins/summaries.ts) 가 만든 `AiConfigService` 를 주입받는데, 그 `.env` 블록이 자체 리터럴에서 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 바뀌었다. 이 모듈 자체 diff 는 [review-clustering.test.ts](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) 의 가짜 `LlmProviderEnv.defaultModels` 가 5키(`meal-photo`·`meal-recommend`)로 늘어난 것뿐 — 테스트는 `.env` 를 읽지 않고 리터럴을 직접 적으므로 purpose 가 늘 때마다 함께 손본다. LLM 라벨링 호출(`getResolved('ollama-cloud','chat')`, format 미강제 견고 파싱)은 변경 없음. 배경은 [ai](ai.md).
 
 **2026-07-13 변경 흡수 — 군집 '대기' 잔존 수복(`1f5ed30`): 원샷 체인 → enrich 완료 이벤트 체이닝 + 기동 리컨실**: 자동 군집화가 요약 종료 훅의 원샷 체인(enrich await→군집)뿐이라 두 경로로 영영 '대기'에 남았다 — ① enrich 가 이미 진행 중이면(다소스 요약 경합·어드민 enrich) ensureEnriched 가 no-op 즉시 반환 → 군집화가 **미완 코퍼스** 위에서 돌아 스킵된 뒤 재시도 주체가 없음, ② 재시작/배포가 긴 enrich 도중 체인을 끊으면 이후 임베딩이 채워져도 아무도 다시 걸어주지 않음. Python 120s 타임아웃 가설은 합성 벤치로 **기각**(978건 16.7s, 2000건 19s — 콜드 스폰 포함). 수복: (1) 군집화를 **enrich 완료 이벤트**에 배선(plugins/summaries) — 요약 훅뿐 아니라 어드민 단건/일괄 enrich 완료에도 이어지고 항상 최종 코퍼스 위에서 돈다. 요약 훅의 직접 군집 호출은 제거(경합 진원지, 단일 경로화). (2) **기동 리컨실**(scheduleStartupReconcile) — 기동 60s 후 미군집 백로그 일괄 군집화로 끊긴 체인·버전 범프 자체 회복(lastReason 인메모리 재충전 포함). `CLUSTER_RECONCILE_DELAY_MS` / `CLUSTER_AUTO_ENABLED` 로 제어. 회귀 테스트: no-op enrich 에서도 완료 이벤트 → 군집 시도 → 스킵 사유 노출.
 
@@ -48,7 +50,7 @@ status: active
 
 - **[review-search](review-search.md)** (`retrieval.ts`) — `isJunk` 본문 필터를 재사용하고, 같은 `ReviewSummary.embeddingJson`(bge-m3)·`aspectsJson`·**canonical 통합 코퍼스**를 공유한다. ASPECTS 9축("맛/양/가격/주차/웨이팅/서비스/분위기/위생/재방문")도 retrieval.ts 와 동일하게 유지(극성 주입용).
 - **[canonical](canonical.md)** (`canonical-members.ts`) — `resolveCanonicalMembersByRestaurantId`/`...ByPlaceId`/`listPublicPlaces` 로 가게(canonical)의 공개 멤버 행 전체를 해석. 군집은 **대표 키(primary)** 로 영속하고 같은 키로 읽는다(다소스 행이 합쳐진 통합 코퍼스).
-- **[ai](ai.md)** (`AiConfigService.getResolved('ollama-cloud','chat')`) — LLM 라벨링용 운영 Ollama 해석. baseUrl/apiKey/defaultModel.
+- **[ai](ai.md)** (`AiConfigService.getResolved('ollama-cloud','chat')`) — LLM 라벨링용 운영 Ollama 해석. baseUrl/apiKey/defaultModel. `AiConfigService` 인스턴스는 plugins/summaries 가 `buildLlmProviderEnv()`(2026-08-22)로 조립해 주입.
 - **[summary](friendly.md)** (`summary.service.ts`) — 요약 종료 훅이 enrich 완료에 군집화를 체이닝(임베딩이 있어야 군집화 가능).
 - **[api-contract](api-contract.md)** (`schemas/review-clustering.ts` + `Routes.ReviewClustering`) — 모든 입출력 zod 스키마의 SSOT → [zod-ssot-buildless](../concepts/zod-ssot-buildless.md).
 - **[shared](shared.md)** (`review-clustering.api.ts` + `useReviewClusters.ts`) — 웹/앱 공통 API 함수 + React Query 훅.
@@ -126,11 +128,13 @@ status: active
 - **medoid vs 군집화 공간 분리** — 극성 주입 시 군집화는 증강 공간(9D concat)에서 하지만 대표 리뷰(medoid)는 **원본 임베딩 공간**에서 뽑는다(증강 좌표가 대표성을 왜곡하지 않게). 품질 지표(silhouette 등)도 원본 공간 기준.
 - **소량 코퍼스 조기 반환** — `cluster_compute` 는 `n < max(2*min, 10)` 이면 UMAP 도 안 돌리고 전부 노이즈로 반환. c-TF-IDF 는 빈 군집(`np.vstack([])`)·어휘 부족(`CountVectorizer` ValueError) 모두 우아하게 빈 결과/키워드 생략으로 처리.
 
-## Sources [coverage: high — 25 sources]
+## Sources [coverage: high — 27 sources]
 
 운영 (Node):
 - [`apps/friendly/src/modules/review-clustering/review-clustering.route.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.route.ts)
 - [`apps/friendly/src/modules/review-clustering/review-clustering.service.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.service.ts)
+- [`apps/friendly/src/modules/review-clustering/review-clustering.test.ts`](../../apps/friendly/src/modules/review-clustering/review-clustering.test.ts) (2026-08-22 — `defaultModels` 5키 픽스처)
+- [`apps/friendly/src/modules/ai/llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 플러그인 env 조립)
 - [`apps/friendly/src/plugins/summaries.ts`](../../apps/friendly/src/plugins/summaries.ts) (app singleton 등록)
 - [`apps/friendly/src/modules/summary/summary.service.ts`](../../apps/friendly/src/modules/summary/summary.service.ts) (요약 종료 → enrich → 군집 체이닝)
 

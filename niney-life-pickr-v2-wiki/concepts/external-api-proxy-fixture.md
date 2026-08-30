@@ -1,7 +1,7 @@
 ---
 concept: 외부 API 어댑터 — friendly 프록시 + 정규화 + probe→fixture
-last_compiled: 2026-07-06
-topics_connected: [bus, crawl, map, telegram]
+last_compiled: 2026-08-30
+topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map]
 status: active
 ---
 
@@ -21,6 +21,9 @@ status: active
 - **2026-05** in [[../topics/crawl]] (`diningcode-search|shop.http.adapter.ts`): CORS 열림 + CF 없음이라 HTTP 직접 프록시가 가장 얇은 형태. `POST /API/isearch/`(검색)·`POST /API/profile/`(상세+리뷰, 한 endpoint 로 16섹션). 응답 `result_code==='100'` 이 정상, `poi_section.total_cnt` 10000 캡을 불신하고 `params.rcount` 를 실제 매칭 수로 씀 — **응답 필드를 액면 그대로 안 믿는** 같은 결.
 - **2026-05** in [[../topics/map]] (`map.service.ts` + `vworld.ts` `probeVworldKey`): **프록시 다리를 의도적으로 뺀 발산 사례**. vworld 타일 바이트는 브라우저가 `api.vworld.kr/req/wmts/...` 를 **직접** 친다(friendly 프록시 없음) — WMTS 키는 어차피 브라우저 Network 탭에 노출되는 클라이언트 자원이라 서버로 감싸도 보안 등급 차이가 없다는 판단. friendly 는 두 다리만 맡는다: (1) **시크릿 보관** — `MapProviderConfig` DB 행에 평문 키를 두고 공개 `publicConfig` 라우트로 내줌(→ [[db-config-env-fallback]]), (2) **서버측 키 검증 probe** — `probeVworldKey` 가 `Base/7/44/109.png` 한 장을 fetch 해 `200 + content-type:image/*` 로 OK/거부 판정(어드민 "연결 테스트"). bus 의 probe→fixture 가 여기선 런타임 헬스체크로 변형됐다.
 - **2026-06** in [[../topics/telegram]] (`telegram.service.ts` + `telegram-config.service.ts`): 프록시 대신 **단일 서버 클라이언트**. friendly 단일 인스턴스가 `api.telegram.org` 에 long-polling `getUpdates` 하나만 돌리고(webhook=공개 HTTPS URL 노출 회피), `sendMessage`/`editMessageText`/`answerCallbackQuery` 로 송신. 정규화: 콜백/텍스트 메시지를 기능 중립적 payload 로 다듬어 핸들러에 넘김(순수함수 `region-stats-telegram.ts` 가 CJK 2칸 폭 `visualWidth` 로 렌더). 마스킹: 봇 토큰을 `maskApiKey`(ai 모듈 재사용)로 가려 응답에 평문 노출 0. probe 대응물: `verifyBot`(getMe)→`verifyChat`(getChat)→`sendTestMessage` 서버측 검증 3단계 + `resolveChatId`(폴러 멈추고 롱폴로 chat 후보 추출). 토큰은 DB 우선 + env fallback(→ [[db-config-env-fallback]]).
+- **2026-08-21~30** in [[../topics/life-map]] (`hira-hospital.adapter.ts` + `vworld-search.adapter.ts`/`life-map-geocode.service.ts` + `probe-hira-api.ts`): **라우트 없는 적재 전용 어댑터** 변형 — HIRA 병원정보서비스(data.go.kr 15001698)는 사용자 요청 경로가 없고 `load:life-hospitals` 만 호출한다(1,000행×~79콜 순차 페이징, `toServiceKeyPart` 재사용, 게이트웨이 봉투의 `items` 가 배열/객체/빈 문자열로 오는 세 형태를 모두 흡수, 40초 타임아웃은 probe 실측). VWorld 검색/지오코딩은 `status=ERROR` 코드를 503/502 로 분류하고 좌표를 한국 범위로 판정(`toPoint`), 키는 `key=***` 마스킹. (d) 다리는 `__fixtures__` 파일 대신 **테스트 안 인라인 가짜 fetch 응답**으로 대체 — 정적 픽스처가 필요할 만큼 응답 모양이 복잡하지 않다는 판단.
+- **2026-08-21** in [[../topics/weather]] (`kma-api.adapter.ts` + `kma-apihub.adapter.ts` + `probe-kma-api.ts`/`probe-kma-apihub.ts`): 두 변형이 한 모듈에 공존. (a) 기상청 단기·중기예보는 에어코리아와 같은 data.go.kr JSON 봉투 규율(키 마스킹, `cmmMsgHeader` 20~33 → 503, 04/05·5xx 1회 재시도, `toServiceKeyPart` 재사용) + `probe:kma` 실응답(2026-08-21 16:05 KST) 11개를 `__fixtures__` 로 박음. (b) API허브 AWS 는 **텍스트 표 변형** — EUC-KR `typ01` 표를 헤더 줄에서 열 이름을 읽어 위치 매핑하고(중복 `STN` 열, 센티널 `-99.9` 결측), 픽스처는 `aws.test.ts` 인라인. bus 가 "필드명 불신(좌표 값 범위)"이라면 weather 는 **"열 순서 불신(헤더 기반 매핑)"** — 같은 원칙의 다른 축.
+- **2026-08-21** in [[../topics/air-quality]] (`airkorea-api.adapter.ts` + `probe-airkorea-api.ts` + `airkorea-api.live.test.ts`): 네 다리를 다 갖춘 **두 번째 정본**이되 두 가지에서 bus 와 갈린다. ① 대기오염정보(15073861)와 측정소정보(15073877) 두 서비스를 base URL 인자 하나로 **어댑터 공유**. ② 게이트웨이 04/05·5xx 에 **1회 재시도 허용** — bus 정본의 "재시도 없음" 규율에서 명시적으로 이탈(콜드 첫 호출의 약 절반이 504 라는 실측). 필드명 불신은 측정소정보 `dmX/dmY` 축을 값 범위(33~39/124~132)로 판정·뒤집힘 교정·결측 null 로 이어졌고(실측: 문서대로 dmX=위도, `stationCode` 전부 null), 실응답 픽스처 8개 옆에 **합성 픽스처 1개**(축 뒤집힘·결측 — 실데이터가 못 밟는 분기용)를 두는 것이 새 다리다. bus 의 `toServiceKeyPart`(Encoding 키 raw 직결) 를 cross-module import — 2026-08-30 기준 이 헬퍼는 air-quality·weather·food(`food-api.adapter.ts`)·life-map(hira) 4개 어댑터가 공유하는 data.go.kr 공통 다리가 됐다(bus 가 정본이라는 말의 물리적 근거).
 
 ## What This Means
 
@@ -30,6 +33,8 @@ status: active
 2. **필드명은 계약이 아니라 힌트다** — 외부 API 는 이름이 틀리거나(버스 `tmX` 에 WGS84, 서울시 원문 오타 `getStaionByRoute`·`congetion`), 타입이 흔들리거나(테이블링 좌표 string, 이미지 string/object), 이름이 거짓말을 한다(테이블링 `cursorId` 가 토큰 아님). 어댑터는 **필드명 대신 값의 성질**로 판정한다 — 버스 좌표는 값 범위로 WGS84 를 고르고, 다이닝코드는 `total_cnt` 캡을 무시하고 `rcount` 를 믿는다. 이게 정규화 계층이 단순 rename 매핑이 아니라 **방어적 파서**여야 하는 이유다.
 3. **probe→fixture 가 "외부 계약을 코드로 굳히는" 방법** — 외부 API 는 문서가 부정확하거나(data.go.kr 키 인코딩), 실측해야만 알 수 있는 함정(좌표계 혼재, `headerCd` 인증실패 두 형태)이 많다. 1회성 probe 로 실응답을 확정하고 그 실응답을 fixture 로 박으면, 추정이 **재현 가능한 회귀 테스트**가 된다. bus 가 이 다리를 완전히 갖췄고(`readFixture` 로 12 XML), crawl 은 파서 미러 라이브 검증으로, map/telegram 은 런타임 검증으로 형태만 달리했다.
 4. **recipe 는 규격이 아니라 위험 프로파일에 맞춘 도구 상자** — map 이 프록시 다리를 뺀 건 결함이 아니라 **판단**이다(공개 키는 감쌀 가치 없음). telegram 이 fixture 대신 서버측 라이브 검증을 쓴 것도 소스 특성(양방향 대화형) 때문이다. 새 외부 소스를 붙일 때 물어야 할 것은 "네 다리를 다 세우나"가 아니라 "이 소스는 어느 다리가 필요한가" — 시크릿이 진짜 비밀인가(마스킹 on/off), 프로토콜이 브라우저를 막는가(프록시 on/off), 응답이 실측으로만 확정되는가(fixture on/off).
+
+5. **다리별 규율은 실측으로 뒤집을 수 있다** (2026-08 추가). bus 가 세운 "재시도 없음" 은 서울시 API 의 특성이었지 컨셉의 조항이 아니었다 — 에어코리아·기상청은 콜드 호출 504 실측으로 1회 재시도를 켰고, API허브는 JSON 이 아니라 텍스트 표라 (b) 정규화 다리가 "헤더 기반 열 매핑" 으로 변했으며, HIRA 는 라우트 없는 적재 전용이라 (a) 프록시 다리가 CLI 스크립트로 옮겨갔다. 세 도메인이 한 주 안에 붙으면서 확인된 것은 recipe 의 **불변량은 "friendly 만 부른다 + 응답을 믿지 않는다 + 실응답을 굳힌다" 세 문장**이고 나머지(재시도 횟수·픽스처 형태·프록시 위치)는 소스마다 실측으로 정한다는 점이다. data.go.kr 계정당 키 1개라는 외부 사실이 `AIRKOREA/KMA/HIRA/FOOD_API_KEY → BUS_API_KEY` env 폴백 체인을 만든 것도 같은 결 — 단, 데이터셋별 활용신청이 따로라 폴백된 키가 `30 등록되지 않은 서비스키` 를 낼 수 있다(키가 틀린 게 아니라 신청이 없는 것).
 
 이 패턴이 깨지거나 흔들리는 지점:
 - **map 처럼 프록시를 뺀 소스가 늘면 "단일 신뢰 경계" 주장이 약해진다** — 키가 공개 자원이라 브라우저 직결이 정당한 경우가 많아지면, friendly 는 "프록시"가 아니라 "시크릿 금고 + 검증기"로 역할이 축소된다. 지금은 map 하나뿐이라 예외로 관리되지만, 카카오/네이버 지도가 같은 방식으로 붙으면 컨셉의 (a) 다리를 재정의해야 한다.
@@ -44,6 +49,9 @@ status: active
 - [[../topics/crawl]]
 - [[../topics/map]]
 - [[../topics/telegram]]
+- [[../topics/air-quality]]
+- [[../topics/weather]]
+- [[../topics/life-map]]
 - [[in-memory-singleton-gates]]
 - [[db-config-env-fallback]]
 - [[zod-ssot-buildless]]
