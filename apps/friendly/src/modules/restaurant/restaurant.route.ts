@@ -14,6 +14,7 @@ import {
   RestaurantDeleteResult,
   RestaurantDetail,
   RestaurantInsights,
+  RestaurantMenuNutrition,
   RestaurantListQuery,
   RestaurantListResult,
   RestaurantPublicDetail,
@@ -36,6 +37,7 @@ import {
   type CrawlLogLevelType,
 } from '@repo/api-contract';
 import { RestaurantService } from './restaurant.service.js';
+import { MenuNutritionService } from '../food/menu-nutrition.service.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { jobRegistry } from '../crawl/job-registry.js';
 import { summaryEventsBus, type SummarySignal } from '../summary/summary-events-bus.js';
@@ -56,6 +58,10 @@ const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
 
 const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const service = new RestaurantService(app.prisma);
+  const menuNutrition = new MenuNutritionService({
+    prisma: app.prisma,
+    loadMenuNames: (placeId) => service.getPublicMenuNames(placeId),
+  });
   // summaries / aiConfig 는 plugins/summaries.ts 의 app 전역 singleton.
   const summaries = app.summaries;
   const aiConfig = app.aiConfig;
@@ -127,6 +133,20 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const insights = await service.getInsights(req.params.placeId);
       if (!insights) throw app.httpErrors.notFound('Restaurant not found');
       return insights;
+    },
+  });
+
+  // 공개 식당 메뉴 칼로리 — 메뉴 탭 지연 조회. 카탈로그 판정 결과만(애매하면 항목이 빠짐), placeId 단위 LRU.
+  typed.get(Routes.Restaurant.publicMenuNutrition(':placeId'), {
+    schema: {
+      tags: ['public'],
+      params: z.object({ placeId: z.string() }),
+      response: { 200: RestaurantMenuNutrition },
+    },
+    handler: async (req) => {
+      const result = await menuNutrition.forPlace(req.params.placeId);
+      if (!result) throw app.httpErrors.notFound('Restaurant not found');
+      return result;
     },
   });
 

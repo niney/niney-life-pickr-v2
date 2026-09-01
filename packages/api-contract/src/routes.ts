@@ -111,6 +111,9 @@ export const Restaurant = {
   publicList: `${API_PREFIX}/restaurants/public`,
   publicByPlaceId: (placeId: string) => `${API_PREFIX}/restaurants/public/${placeId}`,
   publicInsights: (placeId: string) => `${API_PREFIX}/restaurants/public/${placeId}/insights`,
+  // 메뉴 탭 칼로리 — 카탈로그 판정 결과만(애매하면 빠짐). 메뉴 탭에서 지연 조회.
+  publicMenuNutrition: (placeId: string) =>
+    `${API_PREFIX}/restaurants/public/${placeId}/menu-nutrition`,
   // 이 식당의 언급 메뉴를 카테고리 계층 트리로. 멘션 횟수 + 긍/부 누적.
   publicCategoryTree: (placeId: string) =>
     `${API_PREFIX}/restaurants/public/${placeId}/category-tree`,

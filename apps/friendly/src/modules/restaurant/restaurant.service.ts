@@ -1572,6 +1572,44 @@ export class RestaurantService {
   //
   // reviews 페이로드는 reviewsFirstPage (10개) 만 동봉. 나머지는
   // getPublicReviews 로 페이지네이션.
+  // 공개 메뉴명만 — 메뉴 칼로리 판정(food/menu-nutrition.service)용. getPublicDetail 과 같은
+  // 소스 융합 규칙(mergeMenus/mergeMenuGroups)을 쓰되 리뷰·요약은 싣지 않는다.
+  async getPublicMenuNames(placeId: string): Promise<string[] | null> {
+    const naverRow = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { canonicalId: true, snapshotJson: true },
+    });
+    if (!naverRow) return null;
+    const [dcRow, tbRow] = await Promise.all([
+      this.prisma.restaurant.findFirst({
+        where: { canonicalId: naverRow.canonicalId, source: 'diningcode' },
+        select: { snapshotJson: true },
+      }),
+      this.prisma.restaurant.findFirst({
+        where: {
+          canonicalId: naverRow.canonicalId,
+          source: 'tabling',
+          NOT: { sourceId: { startsWith: 'place:' } },
+        },
+        select: { snapshotJson: true },
+      }),
+    ]);
+    const naverSnap = JSON.parse(naverRow.snapshotJson) as Omit<
+      NaverPlaceDataType,
+      'visitorReviews'
+    >;
+    const dcSnap = dcRow
+      ? (JSON.parse(dcRow.snapshotJson) as Omit<DiningcodeShopDataType, 'reviewsFirstPage'>)
+      : null;
+    const tbSnap = tbRow ? (JSON.parse(tbRow.snapshotJson) as TablingSnapshot) : null;
+    const names = new Set<string>();
+    for (const m of mergeMenus(naverSnap, dcSnap, tbSnap)) names.add(m.name);
+    for (const g of mergeMenuGroups(naverSnap, dcSnap, tbSnap)) {
+      for (const m of g.menus) names.add(m.name);
+    }
+    return [...names];
+  }
+
   async getPublicDetail(placeId: string): Promise<RestaurantPublicDetailType | null> {
     const assembled = await this.assemblePublicReviews(placeId);
     if (!assembled) return null;

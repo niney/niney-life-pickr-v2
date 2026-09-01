@@ -4,6 +4,7 @@ import type {
   PublicTablingAddonType,
   PublicVisitorReviewType,
   RestaurantInsightsType,
+  RestaurantMenuKcalItemType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { formatWonPrice } from '@repo/utils';
@@ -190,15 +191,40 @@ const Stat = ({ label, value, hint }: { label: string; value: string; hint?: str
   </div>
 );
 
+// 메뉴 칼로리 칩 문구 — 1인분이면 "1인분 약 244kcal", 아니면 "100g당 약 467kcal".
+const KCAL_BASIS_LABEL: Record<RestaurantMenuKcalItemType['basis'], string> = {
+  per_serving: '1인분',
+  per_100g: '100g당',
+  per_100ml: '100ml당',
+};
+
+const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
+  const basis = KCAL_BASIS_LABEL[item.basis];
+  const reference = item.nutritionFrom
+    ? `${item.foodName} (${item.nutritionFrom} 기준 추정)`
+    : item.foodName;
+  return (
+    <span
+      className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-400"
+      title={`${reference} 기준 · 식약처 식품영양성분 DB 추정치`}
+    >
+      {basis} 약 {item.kcal.toLocaleString('ko-KR')}kcal
+    </span>
+  );
+};
+
 export const MenuGrid = ({
   menus,
   insights,
+  // 메뉴명 → 칼로리 판정. 없는 이름은 칩을 그리지 않는다(애매한 메뉴는 서버가 이미 뺐다).
+  kcalByName,
   // 주어지면 멘션 통계가 있는 메뉴를 클릭 가능하게 렌더해 리뷰 필터로 연결.
   // 멘션 없는(stats 없는) 메뉴는 클릭해도 결과가 비므로 정적 카드로 둔다.
   onSelectMenu,
 }: {
   menus: RestaurantPublicDetailType['menus'];
   insights: RestaurantInsightsType | undefined;
+  kcalByName?: ReadonlyMap<string, RestaurantMenuKcalItemType>;
   onSelectMenu?(name: string): void;
 }) => {
   const mentionByName = new Map<string, { positive: number; negative: number; count: number }>();
@@ -211,6 +237,7 @@ export const MenuGrid = ({
       <ul className="divide-y divide-border">
         {menus.map((m, idx) => {
           const stats = mentionByName.get(m.name);
+          const kcal = kcalByName?.get(m.name);
           const clickable = !!onSelectMenu && !!stats;
           const text = (
             <>
@@ -222,9 +249,10 @@ export const MenuGrid = ({
                   </Badge>
                 )}
               </div>
-              {m.price && (
-                <div className="text-xs tabular-nums text-muted-foreground">
-                  {formatWonPrice(m.price)}
+              {(m.price || kcal) && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
+                  {m.price && <span>{formatWonPrice(m.price)}</span>}
+                  {kcal && <MenuKcalChip item={kcal} />}
                 </div>
               )}
               {m.description && (

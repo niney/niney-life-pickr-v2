@@ -301,6 +301,20 @@ export const useRestaurantPublicInsights = (placeId: string | null) =>
     staleTime: 60_000,
   });
 
+// 메뉴 탭 칼로리 — 탭이 열릴 때만(enabled) 조회. 서버가 placeId 단위로 10분 캐시하므로
+// 클라이언트도 길게 잡는다. 실패해도 메뉴 탭은 그대로 그려야 하니 소비처는 data 만 본다.
+export const useRestaurantPublicMenuNutrition = (placeId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: ['restaurant', 'public', 'menu-nutrition', placeId],
+    queryFn: () => {
+      if (!placeId) throw new Error('placeId required');
+      return restaurantApi.publicMenuNutrition(placeId);
+    },
+    enabled: enabled && !!placeId,
+    staleTime: 10 * 60_000,
+    retry: 1,
+  });
+
 // 분석 탭의 메뉴 카테고리 트리. 전역 머지가 닿은 식당만 roots 가 채워진다.
 export const useRestaurantPublicCategoryTree = (placeId: string | null) =>
   useQuery({

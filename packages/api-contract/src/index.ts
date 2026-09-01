@@ -29,6 +29,7 @@ export * from './schemas/life-map.js';
 export * from './schemas/housing.js';
 export * from './schemas/allergen.js';
 export * from './schemas/food.js';
+export * from './schemas/menu-nutrition.js';
 export * from './schemas/meal.js';
 export * from './schemas/settlement-extraction.js';
 export * from './schemas/settlement.js';

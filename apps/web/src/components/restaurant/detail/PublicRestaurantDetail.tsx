@@ -283,7 +283,14 @@ const ActiveTab = ({
         />
       );
     case 'menu':
-      return <MenuTab detail={detail} insights={insights} onSelectMenu={onSelectMenu} />;
+      return (
+        <MenuTab
+          placeId={placeId}
+          detail={detail}
+          insights={insights}
+          onSelectMenu={onSelectMenu}
+        />
+      );
     case 'reviews':
       return (
         <ReviewsTab
