@@ -65,39 +65,27 @@ const EnvSchema = z.object({
   ANDROID_APP_PACKAGE: z.string().default('com.niney.lifepickr'),
   ANDROID_SHA256_FINGERPRINTS: z.string().default(''),
 
-  // 서울시 버스 API (ws.bus.go.kr) 인증키 — data.go.kr 발급. 빈 값이면 버스
-  // 기능 비활성(검색 라우트가 503). Encoding/Decoding 키 어느 쪽이든 어댑터가
-  // 처리하며, 확신이 없으면 probe:bus 스크립트가 판별해 알려준다.
-  BUS_API_KEY: z.string().default(''),
+  // 공공데이터포털(data.go.kr) 인증키 — 계정당 1개. 포털의 "일반 인증키(Encoding)" 를 그대로 붙여넣으면
+  // 되고(Decoding 키도 어댑터가 자동 처리), 데이터셋마다 **활용신청만 추가**하면 같은 키로 전부 부른다.
+  // 신청 안 된 데이터셋을 부르면 `30 등록되지 않은 서비스키`(키가 틀린 게 아니다), 경로 버전이 틀리면 `12`.
+  // 이 키를 쓰는 곳(빈 값이면 해당 라우트 503 / 스크립트는 종료):
+  //  - 버스(ws.bus.go.kr 15000303·15000332) — bus 라우트. 승인 후 서울시 인증모듈 동기화 반나절(에러 20).
+  //  - 에어코리아 대기오염정보(B552584, 15073861) — air 라우트. 일 500건(측정 10분·예보 20~60분 캐시).
+  //  - 기상청 단기예보(15084084)·중기예보(15059468) — weather 라우트. 일 10,000건(발표 시각 단위 캐시).
+  //  - 심평원 병원정보서비스(B551182, 15001698) — load:life-hospitals·probe:hira 만.
+  //  - 국토교통부 실거래가(1613000, 15126468·15126474) — load:housing-trades·월 스케줄러·probe:rtms 만. 일 10,000건.
+  //  - K-apt 단지 목록(15057332)·기본정보(15058453) — load:housing-kapt --source=api 만. 일 5,000건.
+  //  - 건축HUB 건축물대장정보(15134735) — load:housing-buildings 만. 일 10,000건.
+  //  - 전국통합식품영양성분정보(15100070) — load:food-catalog 의 파일 없을 때 대안.
+  DATA_GO_KR_API_KEY: z.string().default(''),
 
-  // 에어코리아 대기오염정보 API(apis.data.go.kr/B552584, 15073861) 인증키 — data.go.kr
-  // 는 계정당 키 1개라 BUS_API_KEY 와 같은 값일 수 있다(해당 API 활용신청만 추가).
-  // 비우면 BUS_API_KEY 로 폴백(라우트), 둘 다 비면 대기정보 라우트 503.
-  AIRKOREA_API_KEY: z.string().default(''),
-  // 기상청 단기예보(15084084)·중기예보(15059468) — 같은 data.go.kr 계정 키라 비우면
-  // BUS_API_KEY 로 폴백(라우트). 둘 다 비면 날씨 라우트 503.
-  KMA_API_KEY: z.string().default(''),
   // 기상청 API허브(apihub.kma.go.kr) 인증키 — AWS 매분 관측으로 현재 날씨 보강(선택). data.go.kr
   // 키와 별개. 비우면 /weather/aws 가 enabled=false 로 응답하고 페이지는 보강을 생략한다.
   KMA_APIHUB_KEY: z.string().default(''),
-  // 심평원 병원정보서비스(apis.data.go.kr/B551182, 15001698) 인증키 — 일상지도 병의원 적재
-  // (load:life-hospitals·probe:hira)만 쓴다(요청 경로 없음). 같은 data.go.kr 계정 키라 비우면
-  // BUS_API_KEY 로 폴백(해당 API 활용신청만 추가).
-  HIRA_API_KEY: z.string().default(''),
-  // 국토교통부 실거래가(apis.data.go.kr/1613000 — 아파트 매매 상세 15126468·전월세 15126474) 인증키 —
-  // 집값 거래 적재(load:housing-trades·월 스케줄러·probe:rtms)만 쓴다(요청 경로 없음). 같은 data.go.kr
-  // 계정 키라 비우면 BUS_API_KEY 로 폴백(두 데이터셋 활용신청만 추가). 개발계정 일 10,000건.
-  RTMS_API_KEY: z.string().default(''),
   // 집값 거래 자동 갱신 cron(Asia/Seoul) — 최근 HOUSING_REFRESH_MONTHS 개월 파티션을 다시 받고 통계를
   // 재계산한다(신고 지연 30일·해제 반영). 빈 값이면 끔(스크립트로만 갱신). 예: '0 4 2,17 * *'.
   HOUSING_REFRESH_CRON: z.string().default(''),
   HOUSING_REFRESH_MONTHS: z.coerce.number().int().min(1).max(12).default(3),
-  // 집값 단지 속성 보강(선택) — 둘 다 적재 스크립트만 쓴다(요청 경로 없음). 같은 data.go.kr 계정 키라
-  // 비우면 BUS_API_KEY 로 폴백(해당 데이터셋 활용신청만 추가).
-  //  - KAPT_API_KEY: K-apt 공동주택 단지 목록(15057332)·기본 정보(15058453) — load:housing-kapt --source=api. 일 5,000건.
-  //  - BLDG_API_KEY: 건축HUB 건축물대장정보(15134735, 총괄표제부·표제부) — load:housing-buildings. 일 10,000건.
-  KAPT_API_KEY: z.string().default(''),
-  BLDG_API_KEY: z.string().default(''),
 
   // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
   // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,
@@ -109,12 +97,10 @@ const EnvSchema = z.object({
   SEOUL_OPEN_API_KEY: z.string().default(''),
 
   // 음식 카탈로그(food) 적재 소스 키 — 식단 관리. 요청 경로가 아니라 어드민 적재 잡/CLI 만 쓴다.
-  //  - FOOD_API_KEY:        data.go.kr 전국통합식품영양성분정보(음식) 표준데이터(15100070). 같은
-  //                         data.go.kr 계정 키라 비우면 BUS_API_KEY 로 폴백(해당 데이터셋 활용신청만 추가).
+  // (영양성분 표준데이터 15100070 은 위 DATA_GO_KR_API_KEY.)
   //  - FOOD_RECIPE_API_KEY: 식품안전나라(foodsafetykorea.go.kr) OpenAPI 키 — 조리식품 레시피 DB COOKRCP01.
   //  - MAFRA_API_KEY:       data.mafra.go.kr 키 — 레시피 기본/재료(선택).
   // 비어 있는 소스는 적재 회차에서 오류로 기록하고 건너뛴다(다른 소스는 진행).
-  FOOD_API_KEY: z.string().default(''),
   FOOD_RECIPE_API_KEY: z.string().default(''),
   MAFRA_API_KEY: z.string().default(''),
 

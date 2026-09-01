@@ -7,13 +7,13 @@ import {
   type RawBusStation,
 } from './bus-api.adapter.js';
 
-// 실 서울시 API 스모크 — BUS_API_KEY 가 설정된 환경에서만 1회 호출한다.
+// 실 서울시 API 스모크 — DATA_GO_KR_API_KEY 가 설정된 환경에서만 1회 호출한다.
 // 'test-bus-key' 는 bus.test.ts 가 심는 플레이스홀더 — 격리(isolate) 미사용
 // 환경에서 새어 들어와도 실호출하지 않게 방어.
-const KEY = process.env.BUS_API_KEY ?? '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 const runnable = KEY.length > 0 && KEY !== 'test-bus-key';
 
-describe.skipIf(!runnable)('bus-api live smoke (BUS_API_KEY 필요)', () => {
+describe.skipIf(!runnable)('bus-api live smoke (DATA_GO_KR_API_KEY 필요)', () => {
   it(
     "getStationByName('강남') — 필드 존재 + 좌표 WGS84 범위",
     { timeout: 15_000 },

@@ -27,7 +27,7 @@ import { BusService } from './bus.service.js';
 // 응답+진단 로깅은 replyUpstreamError(lib) 단일 구현.
 
 const busRoutes: FastifyPluginAsync = async (app) => {
-  const service = new BusService(app.prisma, { serviceKey: env.BUS_API_KEY });
+  const service = new BusService(app.prisma, { serviceKey: env.DATA_GO_KR_API_KEY });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   // 공개 라우트 — 맛집 공개 지도와 동일 정책(비로그인 허용). onRequest 없음.

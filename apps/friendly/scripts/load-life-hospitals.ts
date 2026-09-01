@@ -10,7 +10,7 @@
 //   --concurrency=N    지오코더 동시 호출 수(기본 2).
 //   --pause=N          지오코더 호출 간격 ms(기본 80).
 //   --retry-notfound   캐시에 notfound 로 남은 주소도 다시 시도.
-// 키: HIRA_API_KEY(비면 BUS_API_KEY 폴백 — data.go.kr 계정당 키 1개) / 지오코더는 설정>지도 의
+// 키: DATA_GO_KR_API_KEY(data.go.kr 계정 공용 — 15001698 활용신청 필요) / 지오코더는 설정>지도 의
 // vworld 키(DB 우선, 없으면 .env VWORLD_API_KEY).
 
 import { PrismaClient } from '@prisma/client';
@@ -38,13 +38,13 @@ const MAX_CALLS = numOpt('max-calls');
 const CONCURRENCY = numOpt('concurrency');
 const PAUSE_MS = numOpt('pause');
 
-const HIRA_KEY = process.env.HIRA_API_KEY || process.env.BUS_API_KEY || '';
+const HIRA_KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 
 const prisma = new PrismaClient();
 
 const main = async (): Promise<void> => {
   if (!HIRA_KEY) {
-    console.error('HIRA_API_KEY(또는 BUS_API_KEY)가 없습니다 — .env 확인.');
+    console.error('DATA_GO_KR_API_KEY가 없습니다 — .env 확인.');
     process.exitCode = 1;
     return;
   }

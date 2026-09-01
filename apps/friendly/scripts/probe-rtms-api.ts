@@ -10,11 +10,11 @@ const strOpt = (name: string): string | undefined => args.find((a) => a.startsWi
 const LAWD = strOpt('lawd') ?? '11110';
 const YM = strOpt('ym') ?? housingYmAdd(housingCurrentYm(), -1);
 const ROWS = Number(strOpt('rows') ?? 2000);
-const KEY = process.env.RTMS_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 
 const main = async (): Promise<void> => {
   if (!KEY) {
-    console.error('RTMS_API_KEY(또는 BUS_API_KEY)가 없습니다 — .env 확인.');
+    console.error('DATA_GO_KR_API_KEY가 없습니다 — .env 확인.');
     process.exitCode = 1;
     return;
   }

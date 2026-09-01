@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 // env.ts 는 모듈 로드 시점에 process.env 를 파싱한다 — buildApp import 전에 키를 주입해야
 // 라우트의 WeatherService 가 503 으로 죽지 않는다(어댑터는 mock 이라 실호출 없음).
 vi.hoisted(() => {
-  process.env.KMA_API_KEY = process.env.KMA_API_KEY || 'test-kma-key';
+  process.env.DATA_GO_KR_API_KEY = process.env.DATA_GO_KR_API_KEY || 'test-kma-key';
 });
 
 const mocks = vi.hoisted(() => ({

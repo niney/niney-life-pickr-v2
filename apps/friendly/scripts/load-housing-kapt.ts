@@ -3,7 +3,7 @@
 //   파일  국토교통부 '공동주택 관리비 공개 의무단지 정보'(data.go.kr 15098979, 주 1회 xlsx/csv, ≈1.9만 단지)
 //         또는 K-apt 에서 받은 엑셀 — 열 이름이 배포본마다 달라 키워드로 찾는다(--dry-run 이 인식 결과를 찍는다).
 //   API   --source=api — 단지 목록(15057332) 전량 + 매칭된 단지의 기본정보(15058453)·상세 각 1콜.
-//         키 KAPT_API_KEY(비면 BUS_API_KEY), 개발계정 일 5,000건 → --max-calls 로 나눠 며칠에 걸쳐 채운다.
+//         키 DATA_GO_KR_API_KEY, 개발계정 일 5,000건 → --max-calls 로 나눠 며칠에 걸쳐 채운다.
 //
 // 실행: pnpm --filter friendly load:housing-kapt [xlsx|csv] [옵션]
 //   파일 기본       <리포>/data/open/housing/ 의 '*단지_기본정보*.xlsx'(포털 다운로드 이름, 여러 개면 최신) → 없으면 kapt-mandatory.xlsx
@@ -64,7 +64,7 @@ const FORCE = flag('force');
 const PROBE = flag('probe');
 const MAX_CALLS = numOpt('max-calls') ?? Number.POSITIVE_INFINITY;
 const PAUSE_MS = numOpt('pause') ?? 120;
-const KEY = process.env.KAPT_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 
 const prisma = new PrismaClient();
 const fmt = (n: number): string => n.toLocaleString('ko-KR');
@@ -138,7 +138,7 @@ const runProbe = async (): Promise<void> => {
 };
 
 const runApi = async (): Promise<void> => {
-  if (!KEY) throw new Error('KAPT_API_KEY(또는 BUS_API_KEY)가 없습니다 — .env 확인.');
+  if (!KEY) throw new Error('DATA_GO_KR_API_KEY가 없습니다 — .env 확인.');
   if (PROBE) return runProbe();
   console.log(`\n=== 집값 K-apt 속성 적재(API) ${DRY_RUN ? '(--dry-run)' : ''}${FORCE ? ' (--force)' : ''} ===`);
   let calls = 0;

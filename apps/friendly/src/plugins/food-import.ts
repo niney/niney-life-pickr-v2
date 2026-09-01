@@ -11,7 +11,7 @@ import { FoodImportService } from '../modules/food/food-import.service.js';
 // 키만 다르게 공존한다. LLM 2축 분류는 chat purpose(AiConfigService 를 여기서 직접 조립 —
 // autoload 순서상 summaries 플러그인의 app.aiConfig 보다 먼저 로드되므로).
 //
-// 외부 키: data.go.kr 표준데이터는 FOOD_API_KEY || BUS_API_KEY(계정당 1키), 식품안전나라는
+// 외부 키: data.go.kr 표준데이터는 DATA_GO_KR_API_KEY(계정당 1키), 식품안전나라는
 // FOOD_RECIPE_API_KEY, MAFRA 는 MAFRA_API_KEY. 비어 있으면 그 소스는 회차에서 오류로 기록·건너뜀.
 export default fp(
   async (app) => {
@@ -19,7 +19,7 @@ export default fp(
     const classify = new FoodClassifyService(app.prisma, aiConfig, { logger: app.log });
     const foodImport = new FoodImportService(app.prisma, {
       keys: {
-        nutrition: env.FOOD_API_KEY || env.BUS_API_KEY,
+        nutrition: env.DATA_GO_KR_API_KEY,
         recipe: env.FOOD_RECIPE_API_KEY,
         mafra: env.MAFRA_API_KEY,
       },

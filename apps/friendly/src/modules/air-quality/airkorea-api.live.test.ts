@@ -8,12 +8,12 @@ import {
   getStationList,
 } from './airkorea-api.adapter.js';
 
-// 실 에어코리아 API 스모크 — 키가 있을 때만(AIRKOREA_API_KEY, 없으면 BUS_API_KEY:
-// data.go.kr 계정 공용 키). 외부 상태(키 미승인·게이트웨이 504 연타·업스트림 지연)는
+// 실 에어코리아 API 스모크 — 키가 있을 때만(DATA_GO_KR_API_KEY: data.go.kr 계정 공용 키).
+// 외부 상태(키 미승인·게이트웨이 504 연타·업스트림 지연)는
 // 코드 결함이 아니므로 skip 으로 처리하고, 응답 형식 자체만 확인한다. 쿼터(일 500건)
 // 를 아끼기 위해 3콜만 쓴다. 실측상 첫 호출이 10초를 넘기는 일이 잦아 타임아웃은
 // caller 시그널로 25초를 준다.
-const KEY = process.env.AIRKOREA_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 const runnable = KEY.length > 0 && KEY !== 'test-air-key' && KEY !== 'test-bus-key';
 
 const opts = () => ({ serviceKey: KEY, signal: AbortSignal.timeout(25_000) });
@@ -45,7 +45,7 @@ const skipIfExternal = (e: unknown, ctx: { skip: () => void }): boolean => {
   return false;
 };
 
-describe.skipIf(!runnable)('airkorea live smoke (AIRKOREA_API_KEY 또는 BUS_API_KEY 필요)', () => {
+describe.skipIf(!runnable)('airkorea live smoke (DATA_GO_KR_API_KEY 필요)', () => {
   it('getBadStations — 배열, 각 행에 stationName/addr', { timeout: 30_000 }, async (ctx) => {
     let rows;
     try {

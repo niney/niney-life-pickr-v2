@@ -280,7 +280,7 @@ export class BusService {
   async searchStations(q: string, force: boolean): Promise<BusStationSearchResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
-        'BUS_API_KEY 가 설정되지 않아 버스 정류장 검색을 사용할 수 없습니다.',
+        'DATA_GO_KR_API_KEY 가 설정되지 않아 버스 정류장 검색을 사용할 수 없습니다.',
         503,
       );
     }
@@ -527,7 +527,7 @@ export class BusService {
   async getArrivals(arsId: string): Promise<BusArrivalsResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
-        'BUS_API_KEY 가 설정되지 않아 버스 도착정보 조회를 사용할 수 없습니다.',
+        'DATA_GO_KR_API_KEY 가 설정되지 않아 버스 도착정보 조회를 사용할 수 없습니다.',
         503,
       );
     }
@@ -564,7 +564,7 @@ export class BusService {
   ): Promise<BusPositionsResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
-        'BUS_API_KEY 가 설정되지 않아 버스 위치 조회를 사용할 수 없습니다.',
+        'DATA_GO_KR_API_KEY 가 설정되지 않아 버스 위치 조회를 사용할 수 없습니다.',
         503,
       );
     }
@@ -608,7 +608,7 @@ export class BusService {
   async getRouteDetail(busRouteId: string): Promise<BusRouteDetailResultType> {
     if (!this.deps.serviceKey) {
       throw new BusServiceError(
-        'BUS_API_KEY 가 설정되지 않아 노선 조회를 사용할 수 없습니다.',
+        'DATA_GO_KR_API_KEY 가 설정되지 않아 노선 조회를 사용할 수 없습니다.',
         503,
       );
     }

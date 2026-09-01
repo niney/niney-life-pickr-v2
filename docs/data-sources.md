@@ -32,7 +32,7 @@
 집값 실거래도 **API** — 국토교통부 아파트 매매 실거래가 상세(data.go.kr **15126468**, `RTMSDataSvcAptTradeDev`)·
 아파트 전월세 실거래가(**15126474**, `RTMSDataSvcAptRent`). 시군구(법정동 5자리) × 계약년월 단위로
 받으므로 원본 파일이 없고 `HousingTradeSync` 장부가 "어느 달을 받았나" 를 기억한다. 키는 `.env` 의
-`RTMS_API_KEY`(비우면 `BUS_API_KEY` 폴백 — 두 데이터셋 활용신청 필요, 개발계정 일 10,000콜).
+`DATA_GO_KR_API_KEY`(data.go.kr 계정 공용 키 — 두 데이터셋 활용신청 필요, 개발계정 일 10,000콜).
 `pnpm --filter friendly load:housing-trades --months=24` 로 백필(≈12,000콜 → 이틀에 나눠 실행해도 장부가
 이어 받는다), 이후 `--recent=3` 으로 최근 3개월 재수집(신고 지연·해제 반영) — 서버의 `HOUSING_REFRESH_CRON`
 이 같은 일을 자동으로 한다. 단지 좌표는 지번 주소를 VWorld 로 지오코딩하며 일상지도와 **같은 캐시 압축본**
@@ -45,8 +45,8 @@
 | 단계 | 명령 | 원천·쿼터 |
 |---|---|---|
 | 공시가격 | `load:housing-prices` | 위 zip, 쿼터 없음(연 1회 파일 교체) |
-| K-apt 속성 | `load:housing-kapt [xlsx]` / `--source=api --max-calls=4900` | 파일(주 1회) 또는 API [15057332](https://www.data.go.kr/data/15057332/openapi.do)·[15058453](https://www.data.go.kr/data/15058453/openapi.do)(`KAPT_API_KEY`, 일 5,000 — 경로는 `AptListService4/getTotalAptList4`·`AptBasisInfoServiceV5/getAphusBassInfoV5`·`getAphusDtlInfoV5`, 2026-09-02 확인. 게이트웨이 `12` 는 미신청이 아니라 경로 버전 불일치) |
-| 건축물대장 | `load:housing-buildings --max-calls=9800` | 건축HUB 15134735(`BLDG_API_KEY`, 일 10,000 — 단지당 2콜, ≈5일) |
+| K-apt 속성 | `load:housing-kapt [xlsx]` / `--source=api --max-calls=4900` | 파일(주 1회) 또는 API [15057332](https://www.data.go.kr/data/15057332/openapi.do)·[15058453](https://www.data.go.kr/data/15058453/openapi.do)(`DATA_GO_KR_API_KEY`, 일 5,000 — 경로는 `AptListService4/getTotalAptList4`·`AptBasisInfoServiceV5/getAphusBassInfoV5`·`getAphusDtlInfoV5`, 2026-09-02 확인. 게이트웨이 `12` 는 미신청이 아니라 경로 버전 불일치) |
+| 건축물대장 | `load:housing-buildings --max-calls=9800` | 건축HUB 15134735(`DATA_GO_KR_API_KEY`, 일 10,000 — 단지당 2콜, ≈5일) |
 | 좌표 보완 | `geocode:housing-missing [--offline]` | 도로명(공시가격·K-apt·건축물대장) → 지번 변형, VWorld 캐시 공유 |
 | 실거래 백필 | `load:housing-trades --months=60 --recent=0 --max-calls=9800` (매일) | 매매 2006-01~·전월세 2011-01~ 조회 가능 |
 

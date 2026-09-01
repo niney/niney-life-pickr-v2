@@ -2,7 +2,7 @@
 // 첫 페이지 일부를 __fixtures__ 후보로 찍는다(콘솔 출력만, 파일은 안 쓴다).
 //
 // 실행: pnpm --filter friendly probe:food-api [--source=nutrition|recipe|mafra|all] [--rows=5]
-//   nutrition: FOOD_API_KEY || BUS_API_KEY   recipe: FOOD_RECIPE_API_KEY   mafra: MAFRA_API_KEY
+//   nutrition: DATA_GO_KR_API_KEY   recipe: FOOD_RECIPE_API_KEY   mafra: MAFRA_API_KEY
 //   --rows: 출력할 샘플 행 수(기본 3). 키가 없는 소스는 건너뛴다.
 
 import { env } from '../src/config/env.js';
@@ -34,9 +34,9 @@ const show = (label: string, rows: Record<string, unknown>[]): void => {
 };
 
 const probeNutrition = async (): Promise<void> => {
-  const key = env.FOOD_API_KEY || env.BUS_API_KEY;
+  const key = env.DATA_GO_KR_API_KEY;
   if (!key) {
-    console.log('\n[nutrition] 키 없음(FOOD_API_KEY/BUS_API_KEY) — 건너뜀');
+    console.log('\n[nutrition] 키 없음(DATA_GO_KR_API_KEY) — 건너뜀');
     return;
   }
   const t0 = Date.now();

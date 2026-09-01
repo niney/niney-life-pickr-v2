@@ -31,9 +31,9 @@ import {
   getVilageFcst,
 } from '../src/modules/weather/kma-api.adapter.js';
 
-const KEY = process.env.KMA_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 if (!KEY) {
-  console.error('KMA_API_KEY(또는 BUS_API_KEY) 가 비어 있습니다 — .env 를 확인하세요.');
+  console.error('DATA_GO_KR_API_KEY 가 비어 있습니다 — .env 를 확인하세요.');
   process.exit(1);
 }
 const opts = { serviceKey: KEY };

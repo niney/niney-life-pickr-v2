@@ -32,7 +32,7 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   // 날씨는 선택 보강 — 키가 없거나 업스트림이 죽어도 추천은 계절 추정으로 나온다.
-  const weather = new WeatherService({ serviceKey: env.KMA_API_KEY || env.BUS_API_KEY });
+  const weather = new WeatherService({ serviceKey: env.DATA_GO_KR_API_KEY });
   const dailyQuota = new MealDailyQuotaService(app.prisma);
   const service = new MealRecommendationService(app.prisma, aiConfig, {
     logger: app.log,

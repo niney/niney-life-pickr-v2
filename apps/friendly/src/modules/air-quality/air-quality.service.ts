@@ -322,7 +322,7 @@ export class AirQualityService {
   private requireKey(): AirKoreaApiRequestOptions {
     if (!this.deps.serviceKey) {
       throw new AirQualityServiceError(
-        'AIRKOREA_API_KEY(또는 BUS_API_KEY) 가 설정되지 않아 대기정보를 조회할 수 없습니다.',
+        'DATA_GO_KR_API_KEY 가 설정되지 않아 대기정보를 조회할 수 없습니다.',
         503,
       );
     }

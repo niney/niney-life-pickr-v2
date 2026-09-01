@@ -12,7 +12,7 @@ import { PrismaClient } from '@prisma/client';
 import { toServiceKeyPart } from '../src/modules/bus/bus-api.adapter.js';
 
 const SEOUL_KEY = process.env.SEOUL_OPEN_API_KEY ?? '';
-const TAGO_KEY = process.env.BUS_API_KEY ?? '';
+const TAGO_KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 const prisma = new PrismaClient();
 
 const scrub = (s: string): string =>
@@ -81,7 +81,7 @@ const readSeoul = (json: unknown, service: string) => {
 
 const main = async (): Promise<void> => {
   if (!SEOUL_KEY) console.warn('주의: SEOUL_OPEN_API_KEY 없음 — 후보 A 스킵');
-  if (!TAGO_KEY) console.warn('주의: BUS_API_KEY 없음 — 후보 B 스킵');
+  if (!TAGO_KEY) console.warn('주의: DATA_GO_KR_API_KEY 없음 — 후보 B 스킵');
 
   // 표본 stationCd(BLDN_ID) — 커버리지 판정용(비서울교통공사 노선 포함).
   const pick = async (lineId: string, name: string): Promise<{ label: string; cd: string | null }> => {
@@ -140,7 +140,7 @@ const main = async (): Promise<void> => {
   }
 
   // ── 후보 B: TAGO SubwayInfoService ───────────────────────────────────────
-  console.log('\n=== 후보 B: TAGO 국토부 SubwayInfoService (serviceKey=BUS_API_KEY) ===');
+  console.log('\n=== 후보 B: TAGO 국토부 SubwayInfoService (serviceKey=DATA_GO_KR_API_KEY) ===');
   if (TAGO_KEY) {
     console.log('① getKwrdFndSubwaySttnList(강남) — 역ID + 인증 상태');
     const b1 = await callTago('getKwrdFndSubwaySttnList', { subwayStationName: '강남', _type: 'json', numOfRows: '20' });
@@ -188,7 +188,7 @@ const main = async (): Promise<void> => {
     }
     findings['B'] = { kwrdResultCode: resultCode, kwrdResultMsg: scrub(resultMsg), stationId, schedule: bSchedule, authed: resultCode === '00' };
   } else {
-    findings['B'] = { skipped: 'no BUS_API_KEY' };
+    findings['B'] = { skipped: 'no DATA_GO_KR_API_KEY' };
   }
 
   await dump('summary', findings);

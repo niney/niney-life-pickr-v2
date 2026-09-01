@@ -24,12 +24,12 @@ import { WeatherService } from './weather.service.js';
 // 읽기 엔드포인트로. 502(업스트림 실패)/503(키 미설정·인증·쿼터)은 라우트가 직접
 // 응답(error-handler 가 5xx 를 500 으로 뭉개므로 — 대기정보와 동일). 400 은 zod.
 //
-// 키: KMA_API_KEY 가 비면 BUS_API_KEY 폴백(data.go.kr 계정당 키 1개). 둘 다 비면 503.
+// 키: DATA_GO_KR_API_KEY(data.go.kr 계정 공용 — 15084084·15059468 활용신청만 추가). 비면 503.
 // 캐시 미스 키(격자·구역)를 바꿔 가며 쿼터를 태우는 남용을 막기 위해 실시간 대중교통과
 // 같은 분당 60 프리셋.
 
 const weatherRoutes: FastifyPluginAsync = async (app) => {
-  const service = new WeatherService({ serviceKey: env.KMA_API_KEY || env.BUS_API_KEY });
+  const service = new WeatherService({ serviceKey: env.DATA_GO_KR_API_KEY });
   // AWS 보강(기상청 API허브) — 키가 비어 있으면 enabled=false 로 응답(503 아님, 선택 기능).
   const aws = new AwsService({ authKey: env.KMA_APIHUB_KEY });
   const typed = app.withTypeProvider<ZodTypeProvider>();

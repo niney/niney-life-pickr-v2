@@ -22,7 +22,7 @@
 # 집값(아파트 실거래가) 데이터도 API 케이스마다 점검한다:
 #   - 단지 마스터가 비어 있으면 첫 적재(data/open/housing/reb-complexes.csv + 저장소 지오코딩 캐시,
 #     --offline 이라 호출 0건), 거래가 비어 있으면 최근 HOUSING_MONTHS(기본 3)개월만 첫 수집
-#     (전국 252 시군구 × 개월 × 매매/전월세 ≈ 개월당 ~500콜, 키 RTMS_API_KEY).
+#     (전국 252 시군구 × 개월 × 매매/전월세 ≈ 개월당 ~500콜, 키 DATA_GO_KR_API_KEY).
 #   - 백필·재수집은 8번: `HOUSING_MONTHS=24 ./deploy.sh 8` (개발계정 일 10,000콜 — 이틀에 나눠도 된다,
 #     장부가 있어 다시 실행하면 이어서 받는다). 월 자동 갱신은 .env HOUSING_REFRESH_CRON.
 #
@@ -50,7 +50,7 @@ LIFE_CCTV_CSV="${LIFE_CCTV_CSV:-$(first_existing "$LIFE_DATA_DIR/life/cctv.csv" 
 LIFE_TOILET_CSV="${LIFE_TOILET_CSV:-$(first_existing "$LIFE_DATA_DIR/life/toilet.csv" "$LIFE_DATA_DIR/공중화장실정보.csv")}"
 LIFE_GEOCODE_GZ="apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz"
 # 음식 카탈로그 배포본 — 적재기(load:food-catalog)가 이 경로를 기본으로 찾는다. 출처는
-# docs/data-sources.md. 영양성분 API(FOOD_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
+# docs/data-sources.md. 영양성분 API(DATA_GO_KR_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
 FOOD_DATA_DIR="$ROOT/data/open/food"
 FOOD_NUTRITION_CSV="$FOOD_DATA_DIR/mfds-nutrition.csv"
 FOOD_HANSIK_XLSX="$FOOD_DATA_DIR/hansik-800.xlsx"
@@ -121,7 +121,7 @@ life_map_data() {
   # 병의원 — CSV 가 아니라 심평원 API 전량 페이징(~80콜). 지오코더는 배포 예측성을 위해
   # --offline(좌표 결측 소수는 지도 미표시 — 수동으로 옵션 없이 재실행하면 채워진다).
   if [[ "$force" == 1 || "${hospital:-0}" == 0 ]]; then
-    step "일상지도 병의원 적재(HIRA API, 지오코더 --offline)"; pnpm --filter friendly load:life-hospitals --offline || echo "  (병의원 적재 실패 — HIRA_API_KEY/활용신청 확인 뒤 재실행)"
+    step "일상지도 병의원 적재(HIRA API, 지오코더 --offline)"; pnpm --filter friendly load:life-hospitals --offline || echo "  (병의원 적재 실패 — DATA_GO_KR_API_KEY/활용신청 확인 뒤 재실행)"
   fi
 }
 
@@ -160,7 +160,7 @@ housing_data() {
   if [[ "$force" == 1 || ( "${trades:-0}" == 0 && "${rents:-0}" == 0 ) ]]; then
     step "집값 실거래 수집(최근 ${HOUSING_MONTHS}개월, RTMS API, 지오코더 --offline)"
     pnpm --filter friendly load:housing-trades --months="$HOUSING_MONTHS" --recent="$HOUSING_MONTHS" --offline \
-      || echo "  (실거래 수집 실패 — RTMS_API_KEY/활용신청·일 한도 확인 뒤 ./deploy.sh 8 — 장부가 있어 이어서 받는다)"
+      || echo "  (실거래 수집 실패 — DATA_GO_KR_API_KEY/활용신청·일 한도 확인 뒤 ./deploy.sh 8 — 장부가 있어 이어서 받는다)"
   fi
   # 보강(파일이 있을 때만) — 공시가격 zip(연 1회, 호별 1,558만 행 스트리밍 ≈ 수 분), K-apt 의무단지 xlsx(주 1회).
   # 건축물대장(load:housing-buildings, 일 1만 콜 분할)은 쿼터 소모가 커서 수동으로만 돌린다.

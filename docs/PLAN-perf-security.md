@@ -410,7 +410,7 @@ AiService 싱글턴화는 상태 공유 안전성 확인 필요.
 ## 최종 상태 (2026-07-13)
 
 - **9개 차수 전부 구현·검증 완료 (전부 미커밋)** — 각 차수 typecheck + friendly test 678 통과
-  (실패 1 = 무관한 외부 라이브 스모크 `bus-api.live`, BUS_API_KEY/업스트림 상태 의존) + 실구동
+  (실패 1 = 무관한 외부 라이브 스모크 `bus-api.live`, DATA_GO_KR_API_KEY/업스트림 상태 의존) + 실구동
   verify. 커밋은 사용자 지시 대기.
 - **DEFERRED(전용 후속 필요)**: restaurant getPublicList/reviews 비정규화(5차, 스키마+백필+
   write-path), heic/satori worker 오프로드·bcrypt 네이티브·publicAsk 게이트 통일(6차), seoul

@@ -311,7 +311,7 @@ describe('WeatherPage', () => {
 
   it('업스트림 503(키 없음)은 섹션 안내 문구로 떨어진다', async () => {
     server.use(
-      http.get('/api/v1/weather/nowcast', () => HttpResponse.json({ message: 'KMA_API_KEY 가 설정되지 않아', error: 'Service Unavailable', statusCode: 503 }, { status: 503 })),
+      http.get('/api/v1/weather/nowcast', () => HttpResponse.json({ message: 'DATA_GO_KR_API_KEY 가 설정되지 않아', error: 'Service Unavailable', statusCode: 503 }, { status: 503 })),
       http.get('/api/v1/weather/forecast', () => HttpResponse.json(forecast)),
       http.get('/api/v1/weather/mid', () => HttpResponse.json(mid)),
       http.get('/api/v1/weather/mid/sea', () => HttpResponse.json(sea)),

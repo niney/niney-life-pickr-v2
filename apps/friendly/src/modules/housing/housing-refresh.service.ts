@@ -80,7 +80,7 @@ export class HousingRefreshScheduler {
       return null;
     }
     if (!this.deps.serviceKey) {
-      this.deps.log.warn({ trigger }, '[housing] RTMS_API_KEY(또는 BUS_API_KEY)가 없어 갱신 건너뜀');
+      this.deps.log.warn({ trigger }, '[housing] DATA_GO_KR_API_KEY가 없어 갱신 건너뜀');
       return null;
     }
     this.running = true;

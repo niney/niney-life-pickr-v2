@@ -954,7 +954,7 @@ export const deactivateUnclassifiedNoise = async (prisma: PrismaClient): Promise
 // ── 서비스(설정·실행·이력) ───────────────────────────────────────────────────
 
 export interface FoodImportKeys {
-  // data.go.kr 서비스키(표준데이터) — FOOD_API_KEY || BUS_API_KEY.
+  // data.go.kr 서비스키(표준데이터) — DATA_GO_KR_API_KEY.
   nutrition: string;
   // 식품안전나라 키.
   recipe: string;
@@ -1373,7 +1373,7 @@ export class FoodImportService {
     onPage: (i: { page: number; fetched: number; totalCount: number | null }) => void,
   ): Promise<Record<string, unknown>[]> {
     if (this.deps.fetchOverride?.nutrition) return this.deps.fetchOverride.nutrition();
-    if (!this.deps.keys.nutrition) throw new Error('FOOD_API_KEY/BUS_API_KEY 미설정');
+    if (!this.deps.keys.nutrition) throw new Error('DATA_GO_KR_API_KEY 미설정');
     const res = await fetchAllMfdsNutrition(
       { serviceKey: this.deps.keys.nutrition, signal },
       {},

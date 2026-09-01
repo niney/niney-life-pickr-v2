@@ -32,7 +32,7 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
     log: app.log,
     cron: env.HOUSING_REFRESH_CRON,
     months: env.HOUSING_REFRESH_MONTHS,
-    serviceKey: env.RTMS_API_KEY || env.BUS_API_KEY,
+    serviceKey: env.DATA_GO_KR_API_KEY,
   });
   app.addHook('onReady', async () => {
     scheduler.start();

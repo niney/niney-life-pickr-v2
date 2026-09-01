@@ -73,7 +73,7 @@ scp data/open/food/{mfds-nutrition.csv,hansik-800.xlsx} 서버:/home/samplepcb/n
 pnpm --filter friendly status:food-catalog     # ok items=N classified=C nutrition=U meals=M
 ```
 
-- 영양성분은 **파일이 기본**이고 `FOOD_API_KEY`(data.go.kr 15100070)는 선택이다 — 같은 데이터를
+- 영양성분은 **파일이 기본**이고 `DATA_GO_KR_API_KEY`(data.go.kr 15100070)는 선택이다 — 같은 데이터를
   쿼터 써 가며 받을 뿐이다. 레시피만 `FOOD_RECIPE_API_KEY`(식품안전나라)가 필요하다.
 - `--classify` 단계는 chat 모델이 설정돼 있을 때만 돈다(없으면 조용히 건너뛴다).
 - 외식 어휘는 **그 서버의 식당·리뷰 데이터**에서 나오므로 서버마다 종수가 다르다. 정상이다.

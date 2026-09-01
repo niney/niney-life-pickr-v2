@@ -366,7 +366,7 @@ export class WeatherService {
 
   private requireKey(): KmaApiRequestOptions {
     if (!this.deps.serviceKey) {
-      throw new WeatherServiceError('KMA_API_KEY(또는 BUS_API_KEY) 가 설정되지 않아 날씨를 조회할 수 없습니다.', 503);
+      throw new WeatherServiceError('DATA_GO_KR_API_KEY 가 설정되지 않아 날씨를 조회할 수 없습니다.', 503);
     }
     return { serviceKey: this.deps.serviceKey };
   }

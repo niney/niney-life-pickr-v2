@@ -1,7 +1,7 @@
 // 서울시 버스 API (ws.bus.go.kr) 프로브.
 //
 // 코드에 박힌 추정들을 실응답으로 확정하기 위한 1회성 진단 스크립트:
-//   ① BUS_API_KEY 가 Encoding/Decoding 어느 형태인지 (3-변형 판별)
+//   ① DATA_GO_KR_API_KEY 가 Encoding/Decoding 어느 형태인지 (3-변형 판별)
 //   ② getStationByName 좌표 필드가 WGS84 인지 TM 인지 (값 범위 분석)
 //   ③ resultType=json 지원 여부
 //   ④~⑥ 도착정보/실시간 위치 오퍼레이션 필드 확인
@@ -22,7 +22,7 @@ import {
 } from '../src/modules/bus/bus-api.adapter.js';
 
 // env.ts 전체 검증(DATABASE_URL 등)은 프로브에 불필요 — 키만 직접 읽는다.
-const RAW_KEY = process.env.BUS_API_KEY ?? '';
+const RAW_KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 const KEYWORD = process.argv[2] ?? '강남';
 
 const DUMP_DIR = join(process.cwd(), 'data', 'bus-probe');
@@ -90,9 +90,9 @@ const analyzeNumericFields = (items: Record<string, unknown>[]): FieldStat[] => 
 
 const main = async (): Promise<void> => {
   if (!RAW_KEY) {
-    console.log('BUS_API_KEY 가 비어 있습니다.');
+    console.log('DATA_GO_KR_API_KEY 가 비어 있습니다.');
     console.log('  1) https://www.data.go.kr 에서 정류소정보조회/버스위치정보조회 활용신청');
-    console.log('  2) apps/friendly/.env 에 BUS_API_KEY=<발급키> 추가');
+    console.log('  2) apps/friendly/.env 에 DATA_GO_KR_API_KEY=<발급키> 추가');
     console.log('  3) pnpm --filter friendly probe:bus 재실행');
     process.exitCode = 1;
     return;
@@ -365,7 +365,7 @@ const main = async (): Promise<void> => {
   console.log('   - [ ] bus-api.adapter.ts NO_RESULT_HEADER_CDS — 결과없음 코드가 4가 맞는지 위 표로 확정');
   console.log('   - [ ] toLatLng 후보 쌍/순서 — TM 만 내려오면 proj4 (GRS80 TM → WGS84) 변환 도입');
   console.log('   - [ ] __fixtures__/*.xml 을 data/bus-probe 의 실응답 기반으로 교체');
-  console.log('   - [ ] .env BUS_API_KEY 주석에 확정된 키 형태(Encoding/Decoding) 기록');
+  console.log('   - [ ] .env DATA_GO_KR_API_KEY 주석에 확정된 키 형태(Encoding/Decoding) 기록');
   console.log('');
 };
 

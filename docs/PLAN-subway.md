@@ -186,7 +186,7 @@ UX 산출물: `/bus` 상단에 [버스|지하철] 탭. 지하철 탭 → 라이�
 
 ### 8차 — 시간표·첫차/막차 (부가 1)
 
-프로브로 서울시 시간표 API vs TAGO 택1(커버리지 비교), `stationCd` backfill, `SubwayTimetableCache` blob 30일+stale, `stations/:statnId/timetable`. FE: 방향 그룹 푸터 첫차/막차 + 시간표 뷰(평일/토/휴일, 현재 시각 하이라이트) + **막차 임박 뱃지**(현재 시각 기준 "막차 N분 전" — 도착 패널 연계). env `TAGO_API_KEY`(빈 값이면 `BUS_API_KEY` 폴백 — 같은 data.go.kr 계정).
+프로브로 서울시 시간표 API vs TAGO 택1(커버리지 비교), `stationCd` backfill, `SubwayTimetableCache` blob 30일+stale, `stations/:statnId/timetable`. FE: 방향 그룹 푸터 첫차/막차 + 시간표 뷰(평일/토/휴일, 현재 시각 하이라이트) + **막차 임박 뱃지**(현재 시각 기준 "막차 N분 전" — 도착 패널 연계). env `TAGO_API_KEY`(빈 값이면 `DATA_GO_KR_API_KEY` 폴백 — 같은 data.go.kr 계정).
 
 ### 9차 — 환승·출구 (부가 2)
 

@@ -18,7 +18,7 @@ import { HiraApiAuthError, HiraApiError, fetchHiraHospPage } from '../src/module
 import { normalizeLifeHospitalRows } from '../src/modules/life-map/life-map-hospital-master.service.js';
 
 // env.ts 전체 검증(DATABASE_URL 등)은 프로브에 불필요 — 키만 직접 읽는다.
-const KEY = process.env.HIRA_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 
 const DUMP_DIR = join(process.cwd(), 'data', 'hira-probe');
 const dump = async (step: string, data: unknown): Promise<void> => {
@@ -27,7 +27,7 @@ const dump = async (step: string, data: unknown): Promise<void> => {
 
 const main = async (): Promise<void> => {
   if (!KEY) {
-    console.error('HIRA_API_KEY(또는 BUS_API_KEY)가 없습니다 — .env 확인.');
+    console.error('DATA_GO_KR_API_KEY가 없습니다 — .env 확인.');
     process.exitCode = 1;
     return;
   }

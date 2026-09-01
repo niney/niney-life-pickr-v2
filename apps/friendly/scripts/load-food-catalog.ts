@@ -2,7 +2,7 @@
 //
 // 실행: pnpm --filter friendly load:food-catalog [--source=nutrition|recipe|mafra|menu-canonical|hansik800|all]
 //                                                [--file=<csv 경로>] [--dry-run] [--classify] [--classify-limit=N]
-//   - nutrition: --file 을 주면 **배포 파일(CSV/XLSX)** 을 읽고, 없으면 API(FOOD_API_KEY||BUS_API_KEY).
+//   - nutrition: --file 을 주면 **배포 파일(CSV/XLSX)** 을 읽고, 없으면 API(DATA_GO_KR_API_KEY).
 //               공공데이터포털에서 파일로 내려받았다면 파일 경로를 주는 쪽이 빠르고 쿼터도 안 쓴다.
 //   - recipe/mafra: 외부 API(키: FOOD_RECIPE_API_KEY / MAFRA_API_KEY)
 //   - menu-canonical: 로컬 global_menu_canonicals(식당 ≥2) 합류
@@ -137,9 +137,9 @@ const runNutrition = async (): Promise<void> => {
     await upsert('nutrition', seeds);
     return;
   }
-  const key = env.FOOD_API_KEY || env.BUS_API_KEY;
+  const key = env.DATA_GO_KR_API_KEY;
   if (!key) {
-    console.log('\n[nutrition] 키 없음(FOOD_API_KEY/BUS_API_KEY) — 건너뜀');
+    console.log('\n[nutrition] 키 없음(DATA_GO_KR_API_KEY) — 건너뜀');
     return;
   }
   console.log('\n[nutrition] 수집 중…');

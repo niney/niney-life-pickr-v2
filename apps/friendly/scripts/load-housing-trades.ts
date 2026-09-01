@@ -15,7 +15,7 @@
 //   --dry-run           수집·정규화만(DB 쓰기·파생 없음 — 호출은 나간다)
 //   --skip-derived      파생 재구축 생략
 //   --offline           파생의 지오코더(새 rtms 단지)를 캐시만 쓴다   --max-geocode-calls=N
-// 키: RTMS_API_KEY(비면 BUS_API_KEY 폴백 — data.go.kr 계정당 키 1개, 두 데이터셋 활용신청 필요).
+// 키: DATA_GO_KR_API_KEY(data.go.kr 계정 공용 — 두 데이터셋 활용신청 필요).
 
 import { PrismaClient } from '@prisma/client';
 import { housingCurrentYm, housingYmAdd, housingYmRange } from '@repo/utils';
@@ -51,13 +51,13 @@ const sggCds = strOpt('sgg')
   .map((s) => s.trim())
   .filter((s) => /^\d{5}$/.test(s));
 
-const KEY = process.env.RTMS_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 const prisma = new PrismaClient();
 const fmt = (n: number): string => n.toLocaleString('ko-KR');
 
 const main = async (): Promise<void> => {
   if (!KEY) {
-    console.error('RTMS_API_KEY(또는 BUS_API_KEY)가 없습니다 — .env 확인.');
+    console.error('DATA_GO_KR_API_KEY가 없습니다 — .env 확인.');
     process.exitCode = 1;
     return;
   }

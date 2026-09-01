@@ -29,8 +29,7 @@ import { AirQualityService } from './air-quality.service.js';
 // 502(업스트림 실패)/503(키 미설정·인증·쿼터 소진)은 라우트가 직접 응답한다
 // (버스/지하철과 동일 — replyUpstreamError 단일 구현). 400 은 zod 가 자동 응답.
 //
-// 키: AIRKOREA_API_KEY 가 비어 있으면 BUS_API_KEY 로 폴백 — data.go.kr 는 계정당
-// 키 1개라 같은 키로 활용신청만 추가하면 되기 때문(env.ts 주석). 둘 다 비면 503.
+// 키: DATA_GO_KR_API_KEY(data.go.kr 계정 공용 — 15073861 활용신청만 추가, env.ts 주석). 비면 503.
 //
 // 모두 서버 캐시(측정 10분·예보 20~60분)를 얹은 읽기 전용이지만, 캐시 미스 키
 // (측정소명·날짜)를 바꿔 가며 쿼터를 태우는 남용을 막기 위해 실시간 대중교통과 같은
@@ -38,7 +37,7 @@ import { AirQualityService } from './air-quality.service.js';
 
 const airQualityRoutes: FastifyPluginAsync = async (app) => {
   const service = new AirQualityService({
-    serviceKey: env.AIRKOREA_API_KEY || env.BUS_API_KEY,
+    serviceKey: env.DATA_GO_KR_API_KEY,
   });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 

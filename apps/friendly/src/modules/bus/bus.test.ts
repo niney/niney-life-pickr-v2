@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 // (vi.hoisted) 키를 주입해야 라우트의 BusService 가 503 으로 죽지 않는다.
 // .env 에 실제 키가 있으면 그대로 둔다 (어댑터는 어차피 mock 이라 호출 안 됨).
 vi.hoisted(() => {
-  process.env.BUS_API_KEY = process.env.BUS_API_KEY || 'test-bus-key';
+  process.env.DATA_GO_KR_API_KEY = process.env.DATA_GO_KR_API_KEY || 'test-bus-key';
 });
 
 // 실제 서울시 API 호출 차단 — 업스트림 함수 3개만 mock, 나머지(BusApiError,

@@ -9,7 +9,7 @@
 //   --only-missing    이미 조회했지만 주차·최고층·구조가 전부 비어 있는 단지를 다시(기본은 미조회 단지만)
 //   --pause=N         단지 간 대기 ms(기본 120)
 //   --probe           세대수 최대 단지 1개만 조회해 응답 필드 인벤토리를 찍고 종료(적재 없음, 2콜)
-// 키: BLDG_API_KEY(비면 BUS_API_KEY 폴백 — data.go.kr 계정당 키 1개, 15134735 활용신청 필요).
+// 키: DATA_GO_KR_API_KEY(data.go.kr 계정 공용 — 15134735 활용신청 필요).
 
 import { PrismaClient } from '@prisma/client';
 import { BldgHubApiAuthError, bldgParamsFromPnu, fetchBldgRecords } from '../src/modules/housing/bldg-hub.adapter.js';
@@ -31,7 +31,7 @@ const sggCds = strOpt('sgg')
   ?.split(',')
   .map((s) => s.trim())
   .filter((s) => /^\d{5}$/.test(s));
-const KEY = process.env.BLDG_API_KEY || process.env.BUS_API_KEY || '';
+const KEY = process.env.DATA_GO_KR_API_KEY ?? '';
 
 const prisma = new PrismaClient();
 const fmt = (n: number): string => n.toLocaleString('ko-KR');
@@ -60,7 +60,7 @@ const runProbe = async (): Promise<void> => {
 
 const main = async (): Promise<void> => {
   if (!KEY) {
-    console.error('BLDG_API_KEY(또는 BUS_API_KEY)가 없습니다 — .env 확인.');
+    console.error('DATA_GO_KR_API_KEY가 없습니다 — .env 확인.');
     process.exitCode = 1;
     return;
   }

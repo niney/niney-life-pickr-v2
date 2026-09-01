@@ -4,7 +4,7 @@
 // 실행: pnpm --filter friendly load:subway-congestion [--dry-run]
 //   --dry-run: 조회 + 리포트만(DB 미변경).
 //
-// serviceKey 는 BUS_API_KEY(data.go.kr) — 15071311 활용신청 완료. 버스 어댑터의
+// serviceKey 는 DATA_GO_KR_API_KEY(data.go.kr) — 15071311 활용신청 완료. 버스 어댑터의
 // toServiceKeyPart 규율(Encoding 키 raw 직결) 재사용. 조인: 역번호 4자리
 // zero-pad ↔ 우리 stationCd 1차, 역명(괄호 제거) + lineId 2차.
 
@@ -45,9 +45,9 @@ const fetchAll = async (apiKey: string): Promise<Record<string, unknown>[]> => {
 };
 
 const main = async (): Promise<void> => {
-  const apiKey = process.env.BUS_API_KEY ?? '';
+  const apiKey = process.env.DATA_GO_KR_API_KEY ?? '';
   if (!apiKey) {
-    console.error('BUS_API_KEY(data.go.kr)가 비어 있습니다.');
+    console.error('DATA_GO_KR_API_KEY(data.go.kr)가 비어 있습니다.');
     process.exitCode = 1;
     return;
   }

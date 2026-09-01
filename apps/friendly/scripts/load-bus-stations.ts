@@ -7,7 +7,7 @@
 //   --prune:   이번 적재에 없는 기존 stId 삭제(기본은 목록 출력만, 삭제 안 함).
 //
 // SEOUL_OPEN_API_KEY(일반 인증키) 필요 — 지하철 마스터(load:subway-stations)와
-// 같은 키다. BUS_API_KEY(ws.bus.go.kr)가 아니다.
+// 같은 키다. DATA_GO_KR_API_KEY(ws.bus.go.kr)가 아니다.
 
 import { PrismaClient } from '@prisma/client';
 import {

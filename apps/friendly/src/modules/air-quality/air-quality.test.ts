@@ -8,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 // 주입해야 라우트의 AirQualityService 가 503 으로 죽지 않는다(어댑터는 mock 이라
 // 실제 호출은 없다).
 vi.hoisted(() => {
-  process.env.AIRKOREA_API_KEY = process.env.AIRKOREA_API_KEY || 'test-air-key';
+  process.env.DATA_GO_KR_API_KEY = process.env.DATA_GO_KR_API_KEY || 'test-air-key';
 });
 
 // 실 에어코리아 호출 차단 — 타입드 래퍼만 mock, 에러 클래스 등은 실구현 유지.
