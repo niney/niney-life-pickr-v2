@@ -46,12 +46,11 @@ LLM 매칭·웹 실측은 엔진 **뒤** 계층이고, LLM 표준명은 다시 �
 
 - 결합 기호 세트의 구성요소가 규칙에 안 잡히면 LLM 매칭(menu-llm-match)·웹 실측이 채운다(단독 메뉴명과 같은 경로).
 - 구성이 이름에 없는 세트("돼지모듬"·"모듬회 대")는 `menu-llm-decompose.service.ts` 가 구성 음식명을 추정한다
-  (같은 모델, `menu_llm_decompositions` 어휘 캐시, high|medium·2~8개만 채택). 구성요소 칼로리는 다시 엔진·LLM 매칭으로
-  잡고 숫자는 LLM 이 만들지 않는다. 응답의 `partsEstimated: true`, 칩은 "AI 추정 구성". 식당마다 다른 이름(커플세트·A세트)은
-  LLM 이 low 를 주어 빠진다.
+  (같은 모델, `menu_llm_decompositions` 어휘 캐시, high 만·1~8개·범주어 제외). 구성 1개면 그 음식의 100g당 단독 항목.
+  구성요소 칼로리는 다시 엔진·LLM 매칭으로 잡고 숫자는 LLM 이 만들지 않는다. 응답의 `partsEstimated: true`, 칩은 "AI 추정 구성".
+  식당마다 다른 이름(커플세트·A세트)은 LLM 이 low 를 주어 빠진다.
 - 앱(apps/mobile) 메뉴 탭도 같은 훅으로 칩을 그린다(MenuGrid kcalByName).
-
-- 분해 골든셋  37건(로컬 불투명 세트 32 + 관용 세트 5) + .
+- 분해 골든셋 `apps/friendly/golden/menu-decompose.golden.json` 37건(로컬 불투명 세트 32 + 관용 세트 5) + `measure:menu-decompose [--ask]`.
   2026-09-03(프롬프트 v3, high 만, 범주어 제거): 분해 정밀도 15/16(93.8%), 재현율 15/15. 남은 1건은 "닭꼬치 모듬"을 맛 종류가 아닌 부위 꼬치로 나눈 것.
 
 ## 남은 것
