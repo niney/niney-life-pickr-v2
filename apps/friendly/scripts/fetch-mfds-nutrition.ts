@@ -1,7 +1,7 @@
 // 식약처 전국통합식품영양성분정보(음식) 표준데이터(data.go.kr 15100070) 배포본을 받아
 // `data/open/food/mfds-nutrition.csv` 로 저장한다.
 //
-// 실행: pnpm --filter friendly fetch:mfds-nutrition [--out=<경로>]
+// 실행: pnpm --filter friendly fetch:mfds-nutrition [--pk=15100065|15100066] [--out=<경로>]
 //
 // 왜 필요한가: 포털의 "다운로드" 버튼은 정적 파일 링크가 아니라 브라우저 JS(std-download-manager.js)가
 // JSON API 두 개(`/download/columList.json` → `/download/standard.json` 페이지)를 호출해 CSV 를
@@ -13,7 +13,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PK = '15100070';
+// --pk: 15100070 음식(기본) · 15100065 원재료성식품 · 15100066 가공식품.
+const PK_DEFAULT = '15100070';
 const PER_PAGE = 10000;
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '../../../..');
 const DEFAULT_OUT = resolve(REPO_ROOT, 'data/open/food/mfds-nutrition.csv');
@@ -23,7 +24,8 @@ const opt = (name: string): string | null => {
   const hit = args.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : null;
 };
-const OUT = resolve(opt('out') ?? DEFAULT_OUT);
+const PK = opt('pk') ?? PK_DEFAULT;
+const OUT = resolve(opt('out') ?? (PK === PK_DEFAULT ? DEFAULT_OUT : resolve(REPO_ROOT, `data/open/food/mfds-nutrition-${PK}.csv`)));
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0',

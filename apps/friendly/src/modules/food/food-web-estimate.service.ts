@@ -14,10 +14,12 @@ import {
   buildFatsecretSearchUrl,
   htmlToText,
   parseFatsecretSearch,
+  webQueryStem,
   type WebEstimate,
 } from './food-web-estimate.js';
 
-const FETCH_TIMEOUT_MS = 10_000;
+// 어간 재질의까지 두 번 받을 수 있어 넉넉히.
+const FETCH_TIMEOUT_MS = 20_000;
 const FETCH_INTERVAL_MS = 1_000;
 // 한 번의 estimateMany 에서 새로 조회하는 이름 상한(식당 하나 메뉴판).
 const MAX_FETCH_PER_CALL = 15;
@@ -44,12 +46,14 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 export class FoodWebEstimateService {
   private readonly fetcher: WebFetcher;
   private lastFetchAt = 0;
+  private readonly intervalMs: number;
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly opts: { logger?: FastifyBaseLogger; fetcher?: WebFetcher } = {},
+    private readonly opts: { logger?: FastifyBaseLogger; fetcher?: WebFetcher; intervalMs?: number } = {},
   ) {
     this.fetcher = opts.fetcher ?? defaultFetcher;
+    this.intervalMs = opts.intervalMs ?? FETCH_INTERVAL_MS;
   }
 
   /** 캐시만 읽는다. 값 null = "조회했고 미채택", 키 없음 = 아직 안 조회. */
@@ -106,7 +110,7 @@ export class FoodWebEstimateService {
 
   /** undefined = 조회 실패(저장 안 함), null = 미채택(저장), 객체 = 채택(저장). */
   private async fetchOne(name: string, outerSignal?: AbortSignal): Promise<WebEstimate | null | undefined> {
-    const wait = this.lastFetchAt + FETCH_INTERVAL_MS - Date.now();
+    const wait = this.lastFetchAt + this.intervalMs - Date.now();
     if (wait > 0) await sleep(wait);
     this.lastFetchAt = Date.now();
 
@@ -121,7 +125,22 @@ export class FoodWebEstimateService {
         this.opts.logger?.warn({ name, status: res.status }, '[food-web-estimate] 조회 실패');
         return undefined;
       }
-      const samples = parseFatsecretSearch(htmlToText(res.text), name);
+      let samples = parseFatsecretSearch(htmlToText(res.text), name);
+      let usedUrl = url;
+      if (samples.length === 0) {
+        // 조리법 접미를 뗀 어간으로 한 번 더 — "항정살구이" 는 없어도 "항정살" 은 있다.
+        const stem = webQueryStem(name);
+        if (stem) {
+          await sleep(this.intervalMs);
+          this.lastFetchAt = Date.now();
+          const stemUrl = buildFatsecretSearchUrl(stem);
+          const res2 = await this.fetcher(stemUrl, ac.signal);
+          if (res2.status === 200) {
+            samples = parseFatsecretSearch(htmlToText(res2.text), stem);
+            usedUrl = stemUrl;
+          }
+        }
+      }
       const est = aggregateWebSamples(samples);
       const norm = normalizeTerm(name);
       const data = {
@@ -131,7 +150,7 @@ export class FoodWebEstimateService {
         basis: est?.basis ?? null,
         samplesJson: JSON.stringify(est?.samples ?? samples),
         source: FOOD_WEB_ESTIMATE_SOURCE,
-        sourceUrl: url,
+        sourceUrl: usedUrl,
         version: FOOD_WEB_ESTIMATE_VERSION,
         fetchedAt: new Date(),
       };

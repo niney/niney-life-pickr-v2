@@ -11,6 +11,9 @@ import { FoodAllergenStatus, MealAllergen } from './allergen.js';
 //   mfds-recipe     식품안전나라 조리식품의 레시피 DB COOKRCP01 (1,156건, 재료 문자열)
 //   mafra-recipe    농림수산식품교육문화정보원 레시피 기본/재료 (537건, 주재료 구조화)
 //   hansik-800      한식진흥원 한식메뉴 외국어표기 800선 (XLSX→CSV 수동, 별칭·카테고리)
+//   mfds-raw        식약처 전국통합식품영양성분정보(원재료성식품) 표준데이터 — data.go.kr 15100065
+//                   (생고기 부위·수산물·채소 100g 기준, 메뉴 칼로리 '100g당' 등급용, CLI 전용)
+//   curated         코드 내장 큐레이션 표(주류·음료·공기밥 — 제조사 표기 기준 근사값, CLI 전용)
 //   menu-canonical  기존 global_menu_canonicals(리뷰 언급 어휘) 필터분
 //   manual          어드민 수기 등록
 //
@@ -75,6 +78,8 @@ export const FoodSource = z.enum([
   'mfds-recipe',
   'mafra-recipe',
   'hansik-800',
+  'mfds-raw',
+  'curated',
   'menu-canonical',
   'manual',
 ]);

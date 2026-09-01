@@ -1,12 +1,15 @@
 // 음식 카탈로그 CLI 적재 — 어드민 적재 잡과 같은 서비스(FoodImportService/upsertFoodSeeds)를 쓴다.
 //
-// 실행: pnpm --filter friendly load:food-catalog [--source=nutrition|recipe|mafra|menu-canonical|hansik800|all]
+// 실행: pnpm --filter friendly load:food-catalog [--source=nutrition|raw|curated|recipe|mafra|menu-canonical|hansik800|all]
 //                                                [--file=<csv 경로>] [--dry-run] [--classify] [--classify-limit=N]
 //   - nutrition: --file 을 주면 **배포 파일(CSV/XLSX)** 을 읽고, 없으면 API(DATA_GO_KR_API_KEY).
 //               공공데이터포털에서 파일로 내려받았다면 파일 경로를 주는 쪽이 빠르고 쿼터도 안 쓴다.
 //   - recipe/mafra: 외부 API(키: FOOD_RECIPE_API_KEY / MAFRA_API_KEY)
 //   - menu-canonical: 로컬 global_menu_canonicals(식당 ≥2) 합류
 //   - hansik800: 한식진흥원 800선 파일(--file 필수). XLSX 원본 그대로 또는 CSV 저장본 모두 가능.
+//   - raw: 원재료성식품 표준데이터(15100065) 파일 — 생고기 부위·수산물·채소 100g당(메뉴 칼로리 '100g당' 등급).
+//     `fetch:mfds-nutrition --pk=15100065` 로 받는다. 파일 없으면 건너뜀.
+//   - curated: 코드 내장 표(food-curated-seeds.ts — 주류·음료·공기밥). 파일·키 불필요.
 //   - all: nutrition → recipe → mafra → menu-canonical → hansik800
 //   - --file 을 안 주면 배포 파일은 표준 위치(data/open/food/)에서 찾는다 → 인자 없이 `load:food-catalog`
 //     만 돌려도 로컬 파일 기반 전체 재적재가 된다(공공 API 쿼터 소모 없음). 파일 출처는 docs/data-sources.md.
@@ -34,6 +37,8 @@ import {
   fetchAllMfdsRecipes,
 } from '../src/modules/food/food-api.adapter.js';
 import { FoodClassifyService } from '../src/modules/food/food-classify.service.js';
+import { curatedSeeds } from '../src/modules/food/food-curated-seeds.js';
+import { normalizeMfdsRawRows, rawFileRowsToRecords } from '../src/modules/food/food-raw-import.js';
 import { backfillNutrition } from '../src/modules/food/food-nutrition.service.js';
 import {
   FoodImportService,
@@ -63,6 +68,7 @@ const FILE = opt('file');
 // 배포 파일 표준 위치(리포에 안 들어간다 — .gitignore). 받는 곳·갱신 방법은 docs/data-sources.md.
 const DEFAULT_FILES = {
   nutrition: 'data/open/food/mfds-nutrition.csv',
+  raw: 'data/open/food/mfds-nutrition-15100065.csv',
   hansik800: 'data/open/food/hansik-800.xlsx',
 } as const;
 
@@ -151,6 +157,26 @@ const runNutrition = async (): Promise<void> => {
   await upsert('nutrition', seeds);
 };
 
+const runRaw = async (): Promise<void> => {
+  const file = fileFor('raw');
+  if (!file) {
+    console.log(`\n[raw] 파일이 없어 건너뜀(fetch:mfds-nutrition --pk=15100065 → ${DEFAULT_FILES.raw})`);
+    return;
+  }
+  const path = resolve(file);
+  const { header, rows } = readTable(path);
+  console.log(`\n[raw] 파일 ${header.length}열 × ${rows.length}행 (${path})`);
+  const { seeds, report } = normalizeMfdsRawRows(rawFileRowsToRecords(header, rows));
+  printReport('raw', report);
+  await upsert('raw', seeds);
+};
+
+const runCurated = async (): Promise<void> => {
+  const seeds = curatedSeeds();
+  console.log(`\n[curated] 내장 표 ${seeds.length}건`);
+  await upsert('curated', seeds);
+};
+
 const runRecipe = async (): Promise<void> => {
   const key = env.FOOD_RECIPE_API_KEY;
   if (!key) {
@@ -233,6 +259,8 @@ const main = async (): Promise<void> => {
   try {
     // --source=all 에서 --file 은 800선 파일로 해석한다(그때 nutrition 은 표준 위치 파일 → 없으면 API).
     if (SOURCE === 'nutrition' || SOURCE === 'all') await runNutrition();
+    if (SOURCE === 'raw' || SOURCE === 'all') await runRaw();
+    if (SOURCE === 'curated' || SOURCE === 'all') await runCurated();
     if (SOURCE === 'all' || SOURCE === 'recipe') await runRecipe();
     if (SOURCE === 'all' || SOURCE === 'mafra') await runMafra();
     if (SOURCE === 'all' || SOURCE === 'menu-canonical') await runMenuCanonical();

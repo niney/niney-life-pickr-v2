@@ -111,6 +111,8 @@ export const FOOD_SOURCES = [
   'mfds-recipe',
   'mafra-recipe',
   'hansik-800',
+  'mfds-raw',
+  'curated',
   'menu-canonical',
   'manual',
 ] as const;
@@ -121,6 +123,8 @@ export const FOOD_SOURCE_LABEL: Record<FoodSource, string> = {
   'mfds-recipe': '식약처 레시피',
   'mafra-recipe': '농식품 레시피',
   'hansik-800': '한식 800선',
+  'mfds-raw': '식약처 원재료',
+  curated: '내장 표',
   'menu-canonical': '외식 메뉴',
   manual: '수기',
 };

@@ -9,7 +9,8 @@
 
 import { normalizeTerm } from '../../lib/text.js';
 
-export const FOOD_WEB_ESTIMATE_VERSION = 1;
+// 2: 브랜드만 붙은 단독 항목 채택 + 조리법 접미 어간 재질의(항정살구이 → 항정살). 3: 1인분 환산 항목도 단독 채택 대상.
+export const FOOD_WEB_ESTIMATE_VERSION = 3;
 export const FOOD_WEB_ESTIMATE_SOURCE = 'fatsecret.kr';
 // 채택 조건 — 중앙값 ±AGREE_TOLERANCE 안에 드는 항목이 MIN_AGREEING 개 이상.
 export const MIN_AGREEING = 2;
@@ -18,6 +19,20 @@ export const AGREE_TOLERANCE = 0.25;
 const MIN_QUERY_LEN = 2;
 // 100g당 상한 — 이보다 크면 단위 오류(기름·설탕도 900 이하).
 const MAX_PER100 = 950;
+// 브랜드 괄호를 뺀 항목명에서 질의를 지운 뒤 남는 글자 수 상한 — 이 이하면 "같은 음식"으로 본다.
+const NEAR_GENERIC_LEFTOVER = 3;
+// 검색 결과가 없을 때 떼어 보는 조리법 접미 — 재료 자체의 100g 값이 근사가 된다(항정살구이 → 항정살).
+// 탕·국·튀김은 물·기름으로 조성이 크게 바뀌어 넣지 않는다.
+const STEM_SUFFIXES = ['구이', '볶음', '찜', '회', '사시미', '숙회'];
+
+/** 검색 결과가 없을 때 재질의할 어간. 뗄 접미가 없거나 어간이 2자 미만이면 null. */
+export const webQueryStem = (name: string): string | null => {
+  const t = name.trim();
+  for (const suf of STEM_SUFFIXES) {
+    if (t.endsWith(suf) && t.length - suf.length >= 2) return t.slice(0, -suf.length).trim();
+  }
+  return null;
+};
 
 export interface WebEstimateSample {
   /** 항목명(브랜드 포함) — 감사용. */
@@ -92,7 +107,10 @@ export const parseFatsecretSearch = (text: string, name: string): WebEstimateSam
     const key = `${label}|${sizeLabel}|${kcal}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const generic = labelNorm === want;
+    // 일반 항목: 이름이 질의와 같거나, 브랜드 괄호를 뺀 나머지가 3자 이하("자연산 골뱅이탕 (동원)").
+    // "콩담백면 동치미국수"·"돼지목살구이주먹밥" 처럼 다른 음식으로 바뀐 항목은 남는 글자가 많아 걸러진다.
+    const labelCore = normalizeTerm(label.replace(/\([^)]*\)/g, ' '));
+    const generic = labelNorm === want || labelCore.replace(want, '').length <= NEAR_GENERIC_LEFTOVER;
 
     // 1) "다른 크기"에 100g 값이 명시돼 있으면 그것을 쓴다(일반 항목).
     const per100Explicit = toNum(OTHER_SIZE_100_RE.exec(tail)?.[1]);
@@ -107,7 +125,7 @@ export const parseFatsecretSearch = (text: string, name: string): WebEstimateSam
     }
     // 3) 중량(g/ml)이 붙은 1인분/1개 → 환산. 중량 없는 "1 컵"·"1 그릇"은 못 쓴다.
     if (grams !== null && (unit === 'g' || unit === 'ml') && grams >= 30) {
-      out.push({ label, grams, kcal, per100: Math.round((kcal * 100) / grams), generic: false });
+      out.push({ label, grams, kcal, per100: Math.round((kcal * 100) / grams), generic });
     }
   }
   return out;

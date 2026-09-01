@@ -83,3 +83,26 @@ describe('aggregateWebSamples', () => {
     ).toMatchObject({ kcalPer100g: 140, basis: 'single' });
   });
 });
+
+describe('브랜드만 붙은 단독 항목(near-generic)', () => {
+  const TEXT =
+    '8중 1에서 8 동치미 국수 (CU) 1인분 (605g)당 - 칼로리: 395kcal | 지방: 3.00g 영양 정보 - 비슷한 ' +
+    '콩담백면 동치미국수 (청정원) 1인분 (454g)당 - 칼로리: 105kcal | 지방: 1.00g 영양 정보 - 비슷한';
+
+  it('브랜드 괄호를 뺀 이름이 질의와 같으면 1인분 환산 항목도 일반 항목으로 보고, 불일치 시 그것만 채택한다', () => {
+    const samples = parseFatsecretSearch(TEXT, '동치미국수');
+    expect(samples.map((s) => [s.label, s.per100, s.generic])).toEqual([
+      ['동치미 국수 (CU)', 65, true],
+      ['콩담백면 동치미국수 (청정원)', 23, false],
+    ]);
+    expect(aggregateWebSamples(samples)).toMatchObject({ kcalPer100g: 65, agreeing: 1, basis: 'single' });
+  });
+
+  it('다른 음식으로 바뀐 항목(주먹밥·샐러드)은 남는 글자가 많아 일반 항목이 아니다', () => {
+    const text = '1중 1에서 1 더큰금돼지목살구이주먹밥 (GS25) 1개 (151g)당 - 칼로리: 220kcal | 지방: 5.00g 영양 정보 - 비슷한';
+    const samples = parseFatsecretSearch(text, '돼지목살구이');
+    expect(samples).toHaveLength(1);
+    expect(samples[0]!.generic).toBe(false);
+    expect(aggregateWebSamples(samples)).toBeNull();
+  });
+});
