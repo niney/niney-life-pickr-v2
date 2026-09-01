@@ -110,6 +110,8 @@ export const FoodItem = z.object({
   allergenStatus: FoodAllergenStatus,
   // 1인분 중량(g 또는 ml). 없으면 null.
   servingG: z.number().nullable(),
+  // 100g(100ml)당 열량 — 원본 단위. servingG 가 없어 1인분 영양이 비어도 있을 수 있다.
+  kcalPer100g: z.number().nullable(),
   nutrition: FoodNutrition.nullable(),
   source: FoodSource,
   sourceId: z.string().nullable(),

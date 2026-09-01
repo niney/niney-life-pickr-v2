@@ -3,10 +3,11 @@
 // (1) 식약처 전국통합식품영양성분정보(음식) 표준데이터 — data.go.kr 15100070
 //     GET https://api.data.go.kr/openapi/tn_pubr_public_nutri_food_info_api
 //         ?serviceKey=…&pageNo=1&numOfRows=1000&type=json[&foodLv3Nm=밥류…]
-//     응답(표준데이터 공통 봉투, 0차 프로브로 실측 확정 예정):
-//       { response: { header:{resultCode:'00',resultMsg:'NORMAL_SERVICE'},
-//                     body:{ items:[{ foodCd, foodNm, foodLv3Nm, foodLv4Nm, foodOriginNm, enerc, …, foodSize }],
-//                            totalCount, numOfRows, pageNo } } }
+//     응답(실측 2026-09-02 — 문서의 `response` 래퍼 없이 최상위, items 는 { item:[…] }):
+//       { header:{resultCode:'00',resultMsg:'NORMAL SERVICE.'},
+//         body:{ items:{ item:[{ foodCd, foodNm, foodLv3Nm, foodLv4Nm, foodOriginNm, enerc, …, foodSize }] },
+//                totalCount, numOfRows, pageNo } }
+//       (문서 형태 { response:{header,body} } 도 함께 받는다.)
 //       게이트웨이 오류: { OpenAPI_ServiceResponse: { cmmMsgHeader:{ errMsg, returnAuthMsg, returnReasonCode } } }
 //       — 에어코리아와 같은 모델(30 키 미등록 / 22 일일한도 → 503, 04/05 → 1회 재시도).
 //     numOfRows 최대 1000, 개발계정 10,000/일(음식 19,495행 = 20콜).
@@ -221,8 +222,14 @@ const readStandardResponse = (
   json: unknown,
 ): { resultCode: string | null; resultMsg: string | null; items: Record<string, unknown>[]; totalCount: number | null } | null => {
   if (!isObject(json)) return null;
-  const response = json['response'];
-  if (!isObject(response)) return null;
+  // 문서상 봉투는 { response:{header,body} } 인데 실측(2026-09-02, 활용신청 승인 뒤)은 `response` 래퍼 없이
+  // 최상위 { header, body } 로 온다. 둘 다 받는다.
+  const response = isObject(json['response'])
+    ? json['response']
+    : isObject(json['body']) || isObject(json['header'])
+      ? json
+      : null;
+  if (!response) return null;
   const header = isObject(response['header']) ? response['header'] : {};
   const body = isObject(response['body']) ? response['body'] : {};
   let rawItems: unknown = body['items'];

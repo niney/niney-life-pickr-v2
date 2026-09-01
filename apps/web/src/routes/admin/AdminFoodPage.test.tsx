@@ -163,6 +163,7 @@ const item = (over: Partial<FoodItemType> = {}): FoodItemType => ({
   allergenEvidence: [],
   allergenStatus: 'unknown',
   servingG: null,
+  kcalPer100g: null,
   nutrition: null,
   source: 'mfds-nutrition',
   sourceId: null,

@@ -13,6 +13,7 @@ const donor = (name: string, kcal: number | null, dishType: string | null = null
   fatG: 5,
   sodiumMg: 800,
   sugarG: 3,
+  kcalPer100g: kcal === null ? null : kcal / 2,
 });
 
 const target = (name: string, dishType: string | null = null) => ({

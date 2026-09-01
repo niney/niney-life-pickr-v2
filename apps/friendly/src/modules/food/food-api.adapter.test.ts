@@ -48,6 +48,18 @@ describe('food-api.adapter — 표준데이터(영양성분) 봉투', () => {
     }
   });
 
+  it('실제 API 처럼 response 래퍼 없이 최상위 header/body 여도 푼다(2026-09-02 실측)', () => {
+    const out = interpretMfdsNutrition(
+      http({
+        header: { resultCode: '00', resultMsg: 'NORMAL SERVICE.' },
+        body: { items: { item: [{ foodNm: '피자_칠리불갈비 피자 치즈링 (R)', enerc: '271' }] }, totalCount: 19495, numOfRows: 1000, pageNo: 1 },
+      }),
+      'u',
+    );
+    expect('result' in out && out.result.items.length).toBe(1);
+    expect('result' in out && out.result.totalCount).toBe(19495);
+  });
+
   it('items 가 {item:[…]} 또는 단건 객체여도 배열로 정규화한다', () => {
     const wrapped = interpretMfdsNutrition(
       http({ response: { header: { resultCode: '00' }, body: { items: { item: [{ foodNm: 'a' }, { foodNm: 'b' }] }, totalCount: 2 } } }),

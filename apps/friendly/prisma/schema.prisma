@@ -1527,6 +1527,10 @@ model FoodItem {
   fatG                 Float?
   sodiumMg             Float?
   sugarG               Float?
+  // 100g(또는 100ml)당 열량 — 표준데이터 원본 단위. 1인분 중량(servingG)이 없어 kcal 을
+  // 환산하지 못한 행도 이 값은 가질 수 있다. 메뉴명에 중량이 있는 외식 메뉴("항정살 150g")의
+  // "100g당" 표시 근거.
+  kcalPer100g          Float?
   // 영양을 같은 계열 행에서 빌려왔으면 그 행의 이름(예: 불고기 ← '소불고기'). 직접 값이면 null.
   // UI 는 이 값이 있으면 "○○ 기준 추정"이라고 밝힌다.
   nutritionFrom        String?

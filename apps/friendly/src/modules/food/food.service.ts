@@ -129,6 +129,7 @@ export const toFoodItem = (r: PrismaFoodItem): FoodItemType => ({
   allergenStatus:
     enumOrNull<FoodAllergenStatusType>(FoodAllergenStatus, r.allergenStatus) ?? 'unknown',
   servingG: r.servingG,
+  kcalPer100g: r.kcalPer100g,
   nutrition: hasNutrition(r)
     ? {
         kcal: r.kcal,
@@ -207,6 +208,9 @@ export interface FoodMatch {
   kcal: number | null;
   proteinG: number | null;
   sodiumMg: number | null;
+  // 1인분 중량과 100g당 열량 — 메뉴 칼로리 표시(1인분/100g당 등급 판정)용.
+  servingG: number | null;
+  kcalPer100g: number | null;
   // 같은 계열에서 빌려온 값이면 그 출처 문구.
   nutritionFrom: string | null;
 }
@@ -579,6 +583,8 @@ export class FoodService {
       kcal: r.kcal,
       proteinG: r.proteinG,
       sodiumMg: r.sodiumMg,
+      servingG: r.servingG,
+      kcalPer100g: r.kcalPer100g,
       nutritionFrom: r.nutritionFrom,
     };
   }

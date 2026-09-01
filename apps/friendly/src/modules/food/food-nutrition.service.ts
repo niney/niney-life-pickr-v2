@@ -18,7 +18,7 @@ const MAX_DONORS = 40;
 // 조리형태를 가리키는 낱말은 그 자체로 음식이 아니라 범주다. '볶음'의 후보는 제육볶음·채소볶음처럼
 // 서로 다른 음식이라 대표를 고를 수 없다. 반면 김치·만두·떡·회 같은 재료·형태 낱말은 대표를
 // 골라도 말이 되므로(김치 ← 배추김치) 막지 않는다.
-const CATEGORY_WORDS = new Set([
+export const CATEGORY_WORDS = new Set([
   '국', '탕', '찌개', '전골', '구이', '볶음', '조림', '찜', '전', '부침', '튀김',
   '무침', '나물', '숙채', '생채', '샐러드', '절임', '젓갈',
   '정식', '세트', '요리', '음식', '메뉴', '반찬', '안주', '사이드', '기타',
@@ -36,6 +36,7 @@ export interface NutritionDonor {
   fatG: number | null;
   sodiumMg: number | null;
   sugarG: number | null;
+  kcalPer100g: number | null;
 }
 
 export interface NutritionTarget {
@@ -106,6 +107,7 @@ export const backfillNutrition = async (
     fatG: true,
     sodiumMg: true,
     sugarG: true,
+    kcalPer100g: true,
   } as const;
 
   const candidates = (await prisma.foodItem.findMany({
@@ -136,6 +138,7 @@ export const backfillNutrition = async (
           fatG: d.fatG,
           sodiumMg: d.sodiumMg,
           sugarG: d.sugarG,
+          kcalPer100g: d.kcalPer100g,
           // 여럿에서 고른 것이면 그 사실을 남긴다 — UI 가 "○○ 외 N종 중앙값 기준 추정"이라 밝힌다.
           nutritionFrom: pick.donorCount > 1 ? `${d.name} 외 ${pick.donorCount - 1}종 중앙값` : d.name,
         },

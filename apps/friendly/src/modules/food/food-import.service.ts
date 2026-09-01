@@ -127,6 +127,8 @@ export interface FoodSeed {
     sodiumMg: number | null;
     sugarG: number | null;
   } | null;
+  // 100g(100ml)당 열량. nutrition(1인분)이 servingG 부재로 비어도 원본이 100g 기준이면 채운다.
+  kcalPer100g?: number | null;
   source: FoodSourceType;
   sourceId?: string | null;
   sourceCategory?: string | null;
@@ -347,6 +349,8 @@ export const normalizeMfdsNutritionRows = (
       ingredients: null,
       servingG: g.best?.servingG ?? null,
       nutrition,
+      // 원본이 100g 기준이라 1인분 중량이 없어도 이 값은 남긴다.
+      kcalPer100g: n?.kcal == null ? null : round1(n.kcal),
       source: 'mfds-nutrition',
       sourceId: g.firstCode,
       sourceCategory: g.category,
@@ -446,6 +450,8 @@ export const normalizeMfdsRecipeRows = (
       ingredients: ingredients.length > 0 ? ingredients : null,
       servingG,
       nutrition: hasNut ? { kcal, carbG, proteinG, fatG, sodiumMg, sugarG: null } : null,
+      // 레시피 DB 는 1인분 값이라 중량이 있을 때만 역산.
+      kcalPer100g: kcal !== null && servingG ? round1((kcal * 100) / servingG) : null,
       source: 'mfds-recipe',
       sourceId: coerceStrOrNull(row['RCP_SEQ']),
       sourceCategory: [pat, way].filter((v): v is string => !!v).join('/') || null,
@@ -794,6 +800,7 @@ export const upsertFoodSeeds = async (
             fatG: seedWithRules.nutrition?.fatG ?? null,
             sodiumMg: seedWithRules.nutrition?.sodiumMg ?? null,
             sugarG: seedWithRules.nutrition?.sugarG ?? null,
+            kcalPer100g: seedWithRules.kcalPer100g ?? null,
             source: seedWithRules.source,
             sourceId: seedWithRules.sourceId ?? null,
             sourceCategory: seedWithRules.sourceCategory ?? null,
@@ -842,6 +849,13 @@ export const upsertFoodSeeds = async (
         }
         // 직접 값으로 덮었으니 "빌려온 값" 표식은 지운다.
         if (opts.refreshNutrition && existing.nutritionFrom) data.nutritionFrom = null;
+      }
+      // 100g당 열량은 1인분 영양과 독립적으로 채운다(servingG 가 없어 1인분 환산이 안 된 행도 가진다).
+      if (
+        seedWithRules.kcalPer100g != null &&
+        (opts.refreshNutrition || existing.kcalPer100g === null)
+      ) {
+        data.kcalPer100g = seedWithRules.kcalPer100g;
       }
       if (!existing.sourceCategory && seedWithRules.sourceCategory) {
         data.sourceCategory = seedWithRules.sourceCategory;
