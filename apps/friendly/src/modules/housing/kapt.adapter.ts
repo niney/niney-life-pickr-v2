@@ -1,25 +1,26 @@
 // K-apt(공동주택관리정보시스템) 단지 정보 어댑터 — 국토교통부, data.go.kr 1613000. HTTPS GET, serviceKey +
 // 쿼리스트링, _type=json. 집값 단지 속성 보강(load:housing-kapt --source=api)만 쓴다 — 라우트 없음.
 // 오퍼레이션:
-//   list   단지 목록제공 서비스(15057332)  AptListService3/getTotalAptList3   pageNo/numOfRows → kaptCode·kaptName·
-//          as1(시도)·as2(시군구)·as3(읍면)·as4(동리)·bjdCode(법정동 10자리)
-//   basic  기본 정보제공 서비스(15058453)  AptBasisInfoServiceV3/getAphusBassInfo  kaptCode → kaptAddr(법정동주소)·
+//   list   단지 목록제공 서비스(15057332)  AptListService4/getTotalAptList4   pageNo/numOfRows → kaptCode·kaptName·
+//          as1(시도)·as2(시군구)·as3(읍면동)·as4(리, 대개 null)·bjdCode(법정동 10자리)
+//   basic  기본 정보제공 서비스(15058453)  AptBasisInfoServiceV5/getAphusBassInfoV5  kaptCode → kaptAddr(법정동주소)·
 //          doroJuso·codeSaleNm(분양형태)·codeHeatNm(난방)·codeAptNm(단지분류)·kaptdaCnt(세대수)·kaptDongCnt(동수)·
 //          kaptUsedate(사용승인일)·kaptTopFloor·bjdCode
-//   detail 상세 정보제공(같은 서비스)      AptBasisInfoServiceV3/getAphusDtlInfo   kaptCode → kaptdEcnt(승강기 대수)·
+//   detail 상세 정보제공(같은 서비스)      AptBasisInfoServiceV5/getAphusDtlInfoV5   kaptCode → kaptdEcnt(승강기 대수)·
 //          kaptdPcnt(지상 주차)·kaptdPcntu(지하 주차)·codeMgr·welfareFacility …
-// 기본/상세 경로는 포털 페이지의 End Point(`http://apis.data.go.kr/1613000/AptBasisInfoServiceV3`, 2026-08-30 확인)
-// 그대로이고, 목록 경로는 페이지에 안 보여 현행 명명 규칙으로 적었다 — 실응답은 아직 못 봤다(현재 키로 프로브하면
-// 셋 다 `12 해당 오픈API 서비스가 없거나 폐기됨`: 이 제공기관은 활용신청이 없는 키에 30 대신 12 를 준다고 추정).
-// 활용신청(15057332·15058453) 뒤 `load:housing-kapt --source=api --probe` 로 1콜씩 확인하고, 목록 경로가 틀리면
-// KAPT_LIST_URL 만 고친다. 개발계정 일 5,000건이라 전량(단지 ≈1.9만 × 기본+상세 2콜)은 --max-calls 로 며칠에 나눈다.
+// 경로는 2026-09-02 활용신청 뒤 실응답으로 확인한 것 — 포털 End Point 가 V3→V5, AptListService3→4 로 바뀌어 있었고
+// 오퍼레이션 이름에도 버전 접미(…V5, …List4)가 붙는다. `12 해당 오픈API 서비스가 없거나 폐기됨` 은 미신청이 아니라
+// **경로가 틀렸을 때** 나는 코드다(승인된 RTMS 에 없는 오퍼레이션을 불러도 똑같이 12). 다음에 또 12 가 나면 포털
+// 페이지에서 `apis.data.go.kr/1613000/…` 문자열을 긁어 버전만 맞추면 된다. 기본·상세는 items 배열이 아니라 `item`
+// 단일 객체로 온다(datago-json.adapter 가 둘 다 받는다). 개발계정 일 5,000건이라 전량(≈2.2만 단지 × 기본+상세 2콜)은
+// --max-calls 로 며칠에 나눈다.
 
 import { coerceStrOrNull, intOrNull } from '../../lib/narrow.js';
 import { DataGoApiError, DataGoAuthError, fetchDataGoJson, type DataGoCallOptions } from './datago-json.adapter.js';
 
-export const KAPT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getTotalAptList3';
-export const KAPT_BASIC_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfo';
-export const KAPT_DETAIL_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusDtlInfo';
+export const KAPT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService4/getTotalAptList4';
+export const KAPT_BASIC_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5';
+export const KAPT_DETAIL_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusDtlInfoV5';
 
 export { DataGoApiError as KaptApiError, DataGoAuthError as KaptApiAuthError };
 

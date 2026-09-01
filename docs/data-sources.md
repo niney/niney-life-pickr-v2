@@ -24,7 +24,7 @@
 | `housing/reb-complexes.csv` | 한국부동산원 공동주택 단지 식별정보_기본정보 — data.go.kr **15106861** (UTF-8 BOM, 2025-09-18 기준) | 44MB | `pnpm --filter friendly load:housing-complexes data/open/housing/reb-complexes.csv` | 307,408행 중 **아파트 45,920단지**(연립 24,033·다세대 237,454 은 1차 미적재) |
 | `housing/reb-complex-names.csv` | 한국부동산원 공동주택 단지 식별정보_단지명 이력정보 — data.go.kr **15106867** | 0.6MB | 위 명령의 `--names=` (기본 경로면 자동) | 8,905행 → 아파트 1,552단지 별칭 |
 | `housing/gongsi-2025.zip` | 국토교통부 주택 공시가격 정보(2025) — data.go.kr **3073746** (호별 공시가격, 2025-01-01 기준, 연 1회 · 다운로드 버튼이 JS 라 `selectFileDataDownload.do` → `fileDownload.do?atchFileId=` 순으로 받는다) | 144MB(zip) / CSV 3.4GB | `pnpm --filter friendly load:housing-prices` (zip 그대로 스트리밍) | 15,580,435행 → 아파트 단지 × 면적 구간 공시가격 중위·범위 + 도로명주소 |
-| `housing/kapt-mandatory.xlsx` | 국토교통부 공동주택 관리비 공개 의무단지 정보 — data.go.kr **15098979** (K-apt, 주 1회 · 포털에서 로그인 후 수동 다운로드) | ~2MB | `pnpm --filter friendly load:housing-kapt data/open/housing/kapt-mandatory.xlsx` | 단지코드·분양형태(임대 판별)·난방·승강기 |
+| `housing/20260828_단지_기본정보.xlsx` | 국토교통부 공동주택 관리비 공개 의무단지 정보 — [data.go.kr **15098979**](https://www.data.go.kr/data/15098979/fileData.do) (K-apt 단지 기본정보, 주 1회 · 그 페이지에서 로그인 후 "다운로드" 로 수동 다운로드, 파일명 그대로 두면 로더가 최신 날짜 파일을 고른다. 1행은 안내문이고 헤더는 2행 — 로더가 건너뛴다) | 11MB | `pnpm --filter friendly load:housing-kapt` | 21,701행 → **20,273단지** 매칭(지번 17,484 · 이름 924 · 도로명 1,865; 모호 393 · 미매칭 920) — 단지코드·분양형태(임대 판별)·난방·승강기(유형별 열 합산)·도로명주소 |
 
 파일이 아닌 **API** 로 받는 것: 식품안전나라 레시피 `COOKRCP01`(1,156건 → 1,101종). 키는
 `.env` 의 `FOOD_RECIPE_API_KEY`. `pnpm --filter friendly load:food-catalog --source=recipe`.
@@ -45,7 +45,7 @@
 | 단계 | 명령 | 원천·쿼터 |
 |---|---|---|
 | 공시가격 | `load:housing-prices` | 위 zip, 쿼터 없음(연 1회 파일 교체) |
-| K-apt 속성 | `load:housing-kapt [xlsx]` / `--source=api` | 파일(주 1회) 또는 API 15057332·15058453(`KAPT_API_KEY`, 일 5,000) |
+| K-apt 속성 | `load:housing-kapt [xlsx]` / `--source=api --max-calls=4900` | 파일(주 1회) 또는 API [15057332](https://www.data.go.kr/data/15057332/openapi.do)·[15058453](https://www.data.go.kr/data/15058453/openapi.do)(`KAPT_API_KEY`, 일 5,000 — 경로는 `AptListService4/getTotalAptList4`·`AptBasisInfoServiceV5/getAphusBassInfoV5`·`getAphusDtlInfoV5`, 2026-09-02 확인. 게이트웨이 `12` 는 미신청이 아니라 경로 버전 불일치) |
 | 건축물대장 | `load:housing-buildings --max-calls=9800` | 건축HUB 15134735(`BLDG_API_KEY`, 일 10,000 — 단지당 2콜, ≈5일) |
 | 좌표 보완 | `geocode:housing-missing [--offline]` | 도로명(공시가격·K-apt·건축물대장) → 지번 변형, VWorld 캐시 공유 |
 | 실거래 백필 | `load:housing-trades --months=60 --recent=0 --max-calls=9800` (매일) | 매매 2006-01~·전월세 2011-01~ 조회 가능 |

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import {
   applyKaptMatches,
+  cleanKaptJibunAddr,
   kaptRoadKey,
   kaptRowFromApi,
   kaptSidoKey,
@@ -11,6 +12,7 @@ import {
   normalizeKaptRows,
   normalizeKaptSaleType,
   resolveKaptColumns,
+  resolveKaptElevatorParts,
   type KaptMatchComplex,
   type KaptRow,
 } from './housing-kapt-master.service.js';
@@ -60,6 +62,21 @@ describe('housing kapt master — 열 인식·정규화', () => {
     expect(c.approvedDate).toBe(12);
     expect(c.bjdCode).toBeNull();
     expect(c.unrecognized).toEqual(['세대수(분양)', '비고']);
+  });
+
+  it('포털 xlsx 형식 — 지번 뒤 단지명·끝의 "-" 제거, 분할 승강기 열 합산', () => {
+    expect(cleanKaptJibunAddr('서울특별시 종로구 내수동 72 경희궁의아침3단지')).toBe('서울특별시 종로구 내수동 72');
+    expect(cleanKaptJibunAddr('서울특별시 종로구 내수동 73- 경희궁의아침4단지')).toBe('서울특별시 종로구 내수동 73');
+    expect(cleanKaptJibunAddr('경기도 성남시 분당구 정자동 산 12-3')).toBe('경기도 성남시 분당구 정자동 산 12-3');
+    expect(cleanKaptJibunAddr('세종특별자치시 한솔동')).toBe('세종특별자치시 한솔동');
+    const header = ['단지코드', '단지명', '법정동주소', '승강기관리-관리방식', '승강기(승객용)', '승강기(화물용)', '승강기(기타)'];
+    expect(resolveKaptElevatorParts(header)).toEqual([4, 5, 6]);
+    const r = normalizeKaptRows(header, [
+      ['A1', '가', '서울특별시 종로구 내수동 72 가', '자치', '4', '', '1'],
+      ['A2', '나', '서울특별시 종로구 내수동 73- 나', '', '', '', ''],
+    ]);
+    expect(r.rows[0]).toMatchObject({ jibunAddr: '서울특별시 종로구 내수동 72', elevatorCount: 5 });
+    expect(r.rows[1]).toMatchObject({ jibunAddr: '서울특별시 종로구 내수동 73', elevatorCount: null });
   });
 
   it('normalizeKaptSaleType·normalizeKaptDate', () => {

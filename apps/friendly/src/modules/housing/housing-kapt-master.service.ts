@@ -97,6 +97,22 @@ export const resolveKaptColumns = (header: string[]): KaptColumnMap => {
   return map;
 };
 
+// K-apt 포털 xlsx 는 승강기 대수 합계 열이 없고 '승강기(승객용)·(화물용)·(승객+화물)·(장애인)·(비상용)·(기타)' 로
+// 나뉘어 있다 — 그 열들의 인덱스(합산용). '승강기관리-관리방식' 같은 텍스트 열은 제외.
+export const resolveKaptElevatorParts = (header: string[]): number[] =>
+  header.map(compact).flatMap((k, i) => (/^승강기\([^)]+\)$/.test(k) ? [i] : []));
+
+// 법정동주소 정리 — 포털 xlsx 는 '서울특별시 종로구 내수동 72 경희궁의아침3단지' 처럼 지번 뒤에 단지명이 붙고,
+// 부번이 없으면 '73-' 로 끝난다. 첫 지번 토큰까지만 남기고 끝의 '-' 를 뗀다(지번 토큰이 없으면 원문 그대로).
+export const cleanKaptJibunAddr = (addr: string | null): string | null => {
+  if (!addr) return null;
+  const tokens = addr.split(' ').filter(Boolean);
+  const at = tokens.findIndex((t, i) => i >= 2 && /^산?\d+(-\d*)?$/.test(t));
+  if (at < 0) return addr;
+  const jibun = tokens[at]!.replace(/-$/, '');
+  return [...tokens.slice(0, at), jibun].join(' ');
+};
+
 // ── 값 정규화 ───────────────────────────────────────────────────────────────────
 const strOrNull = (v: string | undefined): string | null => {
   const s = (v ?? '').replace(/\s+/g, ' ').trim();
@@ -129,6 +145,11 @@ export const normalizeKaptSaleType = (v: string | null | undefined): string | nu
   if (sale) return '분양';
   return s;
 };
+// 분할 열 합계 — 전부 비었으면 null(모른다), 하나라도 숫자면 합.
+const sumOrNull = (parts: (number | null)[]): number | null => {
+  const nums = parts.filter((n): n is number => n !== null);
+  return nums.length === 0 ? null : nums.reduce((a, b) => a + b, 0);
+};
 const bjdCodeOrNull = (v: string | undefined): string | null => {
   const digits = (v ?? '').replace(/\D/g, '');
   return digits.length >= 5 ? digits.slice(0, 10) : null;
@@ -146,6 +167,7 @@ export interface KaptNormalizeReport {
 // 파일(xlsx/csv) 행 → KaptRow. 단지코드·단지명 열이 없으면 하드 fail(다른 파일을 넣은 것).
 export const normalizeKaptRows = (header: string[], rows: string[][]): KaptNormalizeReport => {
   const columns = resolveKaptColumns(header);
+  const elevatorParts = columns.elevatorCount === null ? resolveKaptElevatorParts(header) : [];
   if (columns.kaptCode === null || columns.name === null) {
     throw new Error(`K-apt 파일에 단지코드/단지명 열이 없습니다 (헤더: ${header.slice(0, 10).join(', ')}…)`);
   }
@@ -172,7 +194,7 @@ export const normalizeKaptRows = (header: string[], rows: string[][]): KaptNorma
     report.rows.push({
       kaptCode,
       name,
-      jibunAddr: strOrNull(cell(row, columns.jibunAddr)),
+      jibunAddr: cleanKaptJibunAddr(strOrNull(cell(row, columns.jibunAddr))),
       roadAddr: strOrNull(cell(row, columns.roadAddr)),
       bjdCode: bjdCodeOrNull(cell(row, columns.bjdCode)),
       dongCount: intOrNull(cell(row, columns.dongCount)),
@@ -180,6 +202,7 @@ export const normalizeKaptRows = (header: string[], rows: string[][]): KaptNorma
       // 유무 열만 있으면 대수를 모른다(null). 'N'/'무' 면 0.
       elevatorCount:
         intOrNull(cell(row, columns.elevatorCount)) ??
+        sumOrNull(elevatorParts.map((i) => intOrNull(row[i]))) ??
         (/^(n|무|없음|x)$/i.test((cell(row, columns.elevatorYn) ?? '').trim()) ? 0 : null),
       heating: strOrNull(cell(row, columns.heating)),
       saleType,
@@ -197,7 +220,7 @@ export const kaptRowFromApi = (list: KaptListItem, basic: KaptBasicInfo | null, 
   return {
     kaptCode: list.kaptCode,
     name: basic?.kaptName ?? list.kaptName,
-    jibunAddr: basic?.kaptAddr ?? (listAddr || null),
+    jibunAddr: cleanKaptJibunAddr(basic?.kaptAddr ?? (listAddr || null)),
     roadAddr: basic?.doroJuso ?? null,
     bjdCode: bjdCodeOrNull(basic?.bjdCode ?? list.bjdCode ?? undefined),
     dongCount: basic?.kaptDongCnt ?? null,

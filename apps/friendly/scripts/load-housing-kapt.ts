@@ -6,7 +6,7 @@
 //         키 KAPT_API_KEY(비면 BUS_API_KEY), 개발계정 일 5,000건 → --max-calls 로 나눠 며칠에 걸쳐 채운다.
 //
 // 실행: pnpm --filter friendly load:housing-kapt [xlsx|csv] [옵션]
-//   파일 기본       <리포>/data/open/housing/kapt-mandatory.xlsx
+//   파일 기본       <리포>/data/open/housing/ 의 '*단지_기본정보*.xlsx'(포털 다운로드 이름, 여러 개면 최신) → 없으면 kapt-mandatory.xlsx
 //   --sheet=<이름>  xlsx 시트(기본 첫 시트)
 //   --dry-run       열 인식·정규화·매칭 리포트만(DB 쓰기 없음 — API 면 목록 호출은 나간다)
 //   --source=api    파일 대신 API
@@ -14,7 +14,7 @@
 //   --force         이미 kaptCode·난방이 채워진 단지도 다시 조회(API)
 //   --probe         API 1콜씩(목록 1페이지 → 첫 단지 기본정보·상세)만 찍고 종료 — 활용신청·필드 확인용
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
@@ -27,6 +27,7 @@ import {
   loadKaptMatchComplexes,
   matchKaptRows,
   normalizeKaptRows,
+  resolveKaptColumns,
   type KaptRow,
 } from '../src/modules/housing/housing-kapt-master.service.js';
 import {
@@ -50,7 +51,13 @@ const numOpt = (name: string): number | undefined => {
   const n = raw === undefined ? NaN : Number(raw);
   return Number.isFinite(n) ? n : undefined;
 };
-const filePath = args.find((a) => !a.startsWith('--')) ?? resolve(DATA_DIR, 'kapt-mandatory.xlsx');
+// 포털이 주는 파일명은 '20260828_단지_기본정보.xlsx' 처럼 날짜가 앞에 붙는다 — 이름을 바꾸지 않아도 찾도록
+// 표준 폴더에서 그 패턴의 최신(사전순 마지막) 파일을 고른다.
+const defaultKaptFile = (): string => {
+  const dated = existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter((f) => /단지_기본정보.*\.xlsx$/i.test(f)).sort() : [];
+  return resolve(DATA_DIR, dated.at(-1) ?? 'kapt-mandatory.xlsx');
+};
+const filePath = args.find((a) => !a.startsWith('--')) ?? defaultKaptFile();
 const SOURCE = strOpt('source') === 'api' ? 'api' : 'file';
 const DRY_RUN = flag('dry-run');
 const FORCE = flag('force');
@@ -66,8 +73,22 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 const readTable = (): { header: string[]; rows: string[][] } => {
   if (!existsSync(filePath)) throw new Error(`파일이 없습니다: ${filePath} — data.go.kr 15098979 에서 받아 data/open/housing/ 에 두세요.`);
   const buf = readFileSync(filePath);
-  if (extname(filePath).toLowerCase() === '.xlsx') return parseXlsx(buf, strOpt('sheet'));
-  return parseCsv(decodeHousingCsv(buf));
+  const table = extname(filePath).toLowerCase() === '.xlsx' ? parseXlsx(buf, strOpt('sheet')) : parseCsv(decodeHousingCsv(buf));
+  return skipNoticeRows(table);
+};
+
+// K-apt 포털 xlsx 는 1행이 안내문("해당 자료는 … 매주 금요일에 추출한 자료이며 …")이고 실제 헤더는 그 아래다 —
+// 단지코드·단지명 열이 보이는 첫 행을 헤더로 삼는다(최대 5행 탐색).
+const skipNoticeRows = (table: { header: string[]; rows: string[][] }): { header: string[]; rows: string[][] } => {
+  const isHeader = (h: string[]): boolean => {
+    const c = resolveKaptColumns(h);
+    return c.kaptCode !== null && c.name !== null;
+  };
+  if (isHeader(table.header)) return table;
+  for (let i = 0; i < Math.min(5, table.rows.length); i += 1) {
+    if (isHeader(table.rows[i]!)) return { header: table.rows[i]!, rows: table.rows.slice(i + 1) };
+  }
+  return table;
 };
 
 const printMatchReport = (r: ReturnType<typeof matchKaptRows>['report']): void => {
