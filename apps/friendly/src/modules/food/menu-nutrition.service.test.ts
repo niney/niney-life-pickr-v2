@@ -80,6 +80,42 @@ describe('MenuNutritionService', () => {
     expect(loads).toBe(2);
   });
 
+  it('규칙 밖 이름은 LLM 캐시에서 읽고, 없는 이름은 백그라운드로 묻는 동안 llmPending', async () => {
+    const asked: string[][] = [];
+    let cachedNames = new Map<string, { foodId: string; foodName: string; kcalPer100g: number | null; nutritionFrom: string | null } | null>([
+      ['소주', null],
+    ]);
+    const svc = new MenuNutritionService({
+      prisma: fakePrisma,
+      foodService: { matchFood: async (name) => catalog.get(name.replace(/\s+/g, '')) ?? null },
+      loadMenuNames: async () => ['김치찌개', '부타동', '소주'],
+      llm: {
+        lookupCached: async (names) => new Map(names.filter((n) => cachedNames.has(n)).map((n) => [n, cachedNames.get(n)!])),
+        matchMany: async (names) => {
+          asked.push(names);
+          cachedNames = new Map([...cachedNames, ['부타동', { foodId: 'f2', foodName: '돼지고기덮밥', kcalPer100g: 130, nutritionFrom: null }]]);
+          return new Map();
+        },
+      },
+    });
+
+    const first = await svc.forPlace('p2');
+    expect(first!.llmPending).toBe(true);
+    expect(first!.items.map((i) => i.name)).toEqual(['김치찌개']);
+    expect(asked).toEqual([['부타동']]);
+    await svc.waitForLlm('p2');
+
+    const second = await svc.forPlace('p2');
+    expect(second!.llmPending).toBe(false);
+    expect(second!.items.map((i) => [i.name, i.matchedBy, i.basis, i.kcal])).toEqual([
+      ['김치찌개', 'exact', 'per_serving', 244],
+      ['부타동', 'llm', 'per_100g', 130],
+    ]);
+    // 완료된 결과는 캐시된다 — 세 번째 조회는 LLM 캐시를 다시 읽지 않는다.
+    expect(await svc.forPlace('p2')).toBe(second);
+    expect(asked).toHaveLength(1);
+  });
+
   it('식당이 없으면 null', async () => {
     const svc = new MenuNutritionService({
       prisma: fakePrisma,

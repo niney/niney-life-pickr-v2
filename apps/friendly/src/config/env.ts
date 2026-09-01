@@ -31,6 +31,10 @@ const EnvSchema = z.object({
   OLLAMA_LOG_ANALYSIS_MODEL: z.string().default(''),
   OLLAMA_MEAL_PHOTO_MODEL: z.string().default(''),
   OLLAMA_MEAL_RECOMMEND_MODEL: z.string().default(''),
+  // 메뉴 칼로리 LLM 매칭(chat 용도 키 상속, 모델만 지정). 골든셋 84건 실측(2026-09-02):
+  // gemma4:31b 88%(high 신뢰도만 29/30, p50 1.2s) / qwen3.5:397b 77% / gpt-oss:120b 68%.
+  // 비우면 chat 기본 모델. 재측정: pnpm --filter friendly probe:menu-decompose.
+  OLLAMA_MENU_MATCH_MODEL: z.string().default('gemma4:31b'),
 
   // 텔레그램 봇 — 맛집 자동 발굴(random-crawl)이 후보를 보내고 사용자가
   // 인라인 버튼으로 고르면 그 응답을 long-polling 으로 받는다. 둘 다 비어 있으면

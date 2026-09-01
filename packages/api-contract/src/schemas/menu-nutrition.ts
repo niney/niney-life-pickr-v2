@@ -19,6 +19,8 @@ export const MenuKcalMatchedBy = z.enum([
   'variant',
   'hint',
   'suffix',
+  // 규칙이 못 잡은 이름을 LLM 이 카탈로그 음식에 연결(high 신뢰도만, 100g당만). 어휘 단위 영구 캐시.
+  'llm',
 ]);
 export type MenuKcalMatchedByType = z.infer<typeof MenuKcalMatchedBy>;
 
@@ -43,5 +45,8 @@ export const RestaurantMenuNutrition = z.object({
   // 판정된 항목만. 표시할 게 없으면 빈 배열(404 아님).
   items: z.array(RestaurantMenuKcalItem),
   notice: z.string(),
+  // 규칙이 못 잡은 메뉴명을 LLM 이 백그라운드에서 판정 중 — 클라이언트는 잠시 뒤 다시 조회하면
+  // 'llm' 항목이 더해진다. 판정이 끝났거나 LLM 이 꺼져 있으면 false.
+  llmPending: z.boolean(),
 });
 export type RestaurantMenuNutritionType = z.infer<typeof RestaurantMenuNutrition>;

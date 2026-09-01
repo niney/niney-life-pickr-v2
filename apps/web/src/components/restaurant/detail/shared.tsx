@@ -203,10 +203,11 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
   const reference = item.nutritionFrom
     ? `${item.foodName} (${item.nutritionFrom} 기준 추정)`
     : item.foodName;
+  const how = item.matchedBy === 'llm' ? 'AI 가 연결한 음식' : '기준';
   return (
     <span
       className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-400"
-      title={`${reference} 기준 · 식약처 식품영양성분 DB 추정치`}
+      title={`${reference} ${how} · 식약처 식품영양성분 DB 추정치`}
     >
       {basis} 약 {item.kcal.toLocaleString('ko-KR')}kcal
     </span>

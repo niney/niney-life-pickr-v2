@@ -38,6 +38,8 @@ import {
 } from '@repo/api-contract';
 import { RestaurantService } from './restaurant.service.js';
 import { MenuNutritionService } from '../food/menu-nutrition.service.js';
+import { MenuLlmMatchService } from '../food/menu-llm-match.service.js';
+import { env } from '../../config/env.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { jobRegistry } from '../crawl/job-registry.js';
 import { summaryEventsBus, type SummarySignal } from '../summary/summary-events-bus.js';
@@ -61,6 +63,12 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   const menuNutrition = new MenuNutritionService({
     prisma: app.prisma,
     loadMenuNames: (placeId) => service.getPublicMenuNames(placeId),
+    // 규칙이 못 잡은 메뉴명은 LLM(OLLAMA_MENU_MATCH_MODEL)이 백그라운드로 카탈로그에 연결한다.
+    llm: new MenuLlmMatchService(app.prisma, app.aiConfig, {
+      model: env.OLLAMA_MENU_MATCH_MODEL,
+      logger: app.log,
+    }),
+    logger: app.log,
   });
   // summaries / aiConfig 는 plugins/summaries.ts 의 app 전역 singleton.
   const summaries = app.summaries;

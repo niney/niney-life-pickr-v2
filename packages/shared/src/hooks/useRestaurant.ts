@@ -313,6 +313,10 @@ export const useRestaurantPublicMenuNutrition = (placeId: string | null, enabled
     enabled: enabled && !!placeId,
     staleTime: 10 * 60_000,
     retry: 1,
+    // 서버가 규칙 밖 메뉴명을 LLM 으로 판정 중이면(llmPending) 3초마다 다시 읽어 'llm' 항목을 채운다.
+    // 판정이 끝나면 서버가 false 를 주므로 폴링은 스스로 멈춘다(상한 10회 ≈ 30초).
+    refetchInterval: (query) =>
+      query.state.data?.llmPending && query.state.dataUpdateCount < 10 ? 3_000 : false,
   });
 
 // 분석 탭의 메뉴 카테고리 트리. 전역 머지가 닿은 식당만 roots 가 채워진다.
