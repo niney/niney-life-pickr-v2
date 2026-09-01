@@ -26,12 +26,18 @@ import {
   FoodSearchQuery,
   FoodSearchResult,
   Routes,
+  MenuLexiconCreateInput,
+  MenuLexiconEntry,
+  MenuLexiconIdParams,
+  MenuLexiconListQuery,
+  MenuLexiconListResult,
 } from '@repo/api-contract';
 import { RATE } from '../../plugins/rate-limit.js';
 import { foodImportRegistry, type FoodImportEvent } from './food-import-registry.js';
 import { FoodMergeConflictError, FoodMergeConflictService } from './food-merge-conflict.service.js';
 import { FoodRecognitionQualityService } from './food-recognition-quality.service.js';
 import { FoodService, FoodServiceError } from './food.service.js';
+import { MenuLexiconService, MenuLexiconValidationError } from './menu-lexicon.service.js';
 
 // 음식 카탈로그(food) — 사용자 자동완성 1개 + 어드민(카탈로그 편집·적재 잡). 적재 서비스는
 // plugins/food-import.ts 가 decorate 한 전역 인스턴스(app.foodImport) — 부팅 cron tick 과 공유.
@@ -140,6 +146,55 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
       } catch (e) {
         return throwAsHttp(app, e);
       }
+    },
+  });
+
+  // ── 메뉴 칼로리 판정 엔진 어휘(어드민 편집) — 엔진은 10분 안에 다시 읽는다 ──
+  const lexicon = new MenuLexiconService(app.prisma);
+  const lexiconError = (e: unknown): never => {
+    if (e instanceof MenuLexiconValidationError) throw Object.assign(new Error(e.message), { statusCode: 400 });
+    throw e;
+  };
+
+  typed.get(Routes.Food.adminMenuLexicon, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: MenuLexiconListQuery,
+      response: { 200: MenuLexiconListResult },
+    },
+    handler: async (req) => lexicon.list(req.query.kind),
+  });
+
+  typed.post(Routes.Food.adminMenuLexicon, {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      body: MenuLexiconCreateInput,
+      response: { 201: MenuLexiconEntry },
+    },
+    handler: async (req, reply) => {
+      try {
+        return reply.code(201).send(await lexicon.create(req.body));
+      } catch (e) {
+        return lexiconError(e);
+      }
+    },
+  });
+
+  typed.delete(Routes.Food.adminMenuLexiconEntry(':id'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: MenuLexiconIdParams,
+      response: { 204: z.null() },
+    },
+    handler: async (req, reply) => {
+      if (!(await lexicon.remove(req.params.id))) throw Object.assign(new Error('없는 항목'), { statusCode: 404 });
+      return reply.code(204).send(null);
     },
   });
 

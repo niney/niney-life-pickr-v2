@@ -295,6 +295,9 @@ export const Food = {
   adminMergeConflict: (id: string) => `${API_PREFIX}/admin/food/merge-conflicts/${id}`,
   // 사진 인식 원본 → 최종 식단 교정 품질 집계(?days=1..365). ADMIN 전용.
   adminRecognitionQuality: `${API_PREFIX}/admin/food/recognition-quality`,
+  // 메뉴 칼로리 판정 엔진 어휘(어드민 편집).
+  adminMenuLexicon: `${API_PREFIX}/admin/food/menu-lexicon`,
+  adminMenuLexiconEntry: (id: string) => `${API_PREFIX}/admin/food/menu-lexicon/${id}`,
   // 적재 잡 설정 조회/변경 — GET/PUT.
   importConfig: `${API_PREFIX}/admin/food/import`,
   // 지금 실행(manual) — body 로 이번 회차 소스/분류 여부 오버라이드 가능.

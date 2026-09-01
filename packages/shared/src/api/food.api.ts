@@ -1,3 +1,9 @@
+import type {
+  MenuLexiconCreateInputType,
+  MenuLexiconEntryType,
+  MenuLexiconKindType,
+  MenuLexiconListResultType,
+} from '@repo/api-contract';
 import {
   Routes,
   type FoodAdminCreateInputType,
@@ -121,6 +127,19 @@ export const foodApi = {
     }),
 
   adminStats: () => apiFetch<FoodAdminStatsType>(Routes.Food.adminStats),
+
+  // ── 메뉴 칼로리 판정 엔진 어휘 ──
+  menuLexiconList: (kind?: MenuLexiconKindType) =>
+    apiFetch<MenuLexiconListResultType>(
+      `${Routes.Food.adminMenuLexicon}${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`,
+    ),
+  menuLexiconCreate: (input: MenuLexiconCreateInputType) =>
+    apiFetch<MenuLexiconEntryType>(Routes.Food.adminMenuLexicon, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  menuLexiconDelete: (id: string) =>
+    apiFetch<null>(Routes.Food.adminMenuLexiconEntry(id), { method: 'DELETE' }),
 
   adminMergeConflicts: (input: FoodMergeConflictListInput = {}) => {
     const qs = buildFoodMergeConflictListQuery(input);

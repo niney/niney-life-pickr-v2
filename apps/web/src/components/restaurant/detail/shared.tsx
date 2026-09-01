@@ -196,10 +196,29 @@ const KCAL_BASIS_LABEL: Record<RestaurantMenuKcalItemType['basis'], string> = {
   per_serving: '1인분',
   per_100g: '100g당',
   per_100ml: '100ml당',
+  components: '구성',
 };
 
 const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
   const basis = KCAL_BASIS_LABEL[item.basis];
+  if (item.basis === 'components') {
+    // "문어+소라+새우장" 세트 — 구성요소별로. 분량을 모르니 합계는 전부 1인분일 때만.
+    const parts = item.parts ?? [];
+    const lines = parts.map((p) => `${p.name}: ${KCAL_BASIS_LABEL[p.basis]} 약 ${p.kcal.toLocaleString('ko-KR')}kcal (${p.foodName})`);
+    const missing = (item.partsTotal ?? parts.length) - parts.length;
+    const title = [...lines, missing > 0 ? `그 외 ${missing}개 구성은 판정하지 못했습니다` : null, '식약처 식품영양성분 DB 추정치'].filter(Boolean).join('\n');
+    return (
+      <span
+        className="inline-flex items-center rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-violet-700 dark:text-violet-400"
+        title={title}
+      >
+        {item.kcal !== null
+          ? `세트 약 ${item.kcal.toLocaleString('ko-KR')}kcal`
+          : `구성 ${parts.length}${missing > 0 ? `/${item.partsTotal}` : ''}개 칼로리`}
+      </span>
+    );
+  }
+  const kcalText = (item.kcal ?? 0).toLocaleString('ko-KR');
   const reference = item.nutritionFrom
     ? `${item.foodName} (${item.nutritionFrom} 기준 추정)`
     : item.foodName;
@@ -210,7 +229,7 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
         className="inline-flex items-center rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-400"
         title={`${item.foodName} · ${item.nutritionFrom ?? '웹 실측'} 기준 추정치`}
       >
-        웹 추정 {basis} 약 {item.kcal.toLocaleString('ko-KR')}kcal
+        웹 추정 {basis} 약 {kcalText}kcal
       </span>
     );
   }
@@ -220,7 +239,7 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
       className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-400"
       title={`${reference} ${how} · 식약처 식품영양성분 DB 추정치`}
     >
-      {basis} 약 {item.kcal.toLocaleString('ko-KR')}kcal
+      {basis} 약 {kcalText}kcal
     </span>
   );
 };

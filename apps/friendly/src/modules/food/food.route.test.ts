@@ -590,3 +590,52 @@ describe('food restaurants reverse lookup (격리 DB)', () => {
     });
   });
 });
+
+describe('menu-lexicon admin routes (격리 DB)', () => {
+  let app: FastifyInstance;
+  let isolated: IsolatedDatabase;
+  let adminAuth: { authorization: string };
+  const URL = '/api/v1/admin/food/menu-lexicon';
+
+  beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
+    app = await buildApp({ logger: false });
+    await app.ready();
+    await seedAuthUsers(app, [{ id: 'lex-admin', role: 'ADMIN' }]);
+    adminAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'lex-admin', email: 'l@x.com', role: 'ADMIN' })}`,
+    };
+    await upsertFoodSeeds(app.prisma, [{ name: '족발', source: 'mfds-nutrition', sourceId: 'D9', popularity: 1 }]);
+  });
+  afterAll(async () => {
+    await app.close();
+    isolated.restore();
+  });
+
+  it('별칭은 카탈로그에 있는 음식만, 종류별 target 규칙을 검증하고, 목록·삭제가 된다', async () => {
+    expect((await app.inject({ method: 'GET', url: URL })).statusCode).toBe(401);
+
+    const bad = await app.inject({ method: 'POST', url: URL, headers: adminAuth, payload: { kind: 'alias', term: '불족', target: '없는음식' } });
+    expect(bad.statusCode).toBe(400);
+    const noTarget = await app.inject({ method: 'POST', url: URL, headers: adminAuth, payload: { kind: 'alias', term: '불족' } });
+    expect(noTarget.statusCode).toBe(400);
+    const extra = await app.inject({ method: 'POST', url: URL, headers: adminAuth, payload: { kind: 'set', term: '한상', target: 'x' } });
+    expect(extra.statusCode).toBe(400);
+
+    const ok = await app.inject({ method: 'POST', url: URL, headers: adminAuth, payload: { kind: 'alias', term: '불족', target: '족발', note: '테스트' } });
+    expect(ok.statusCode).toBe(201);
+    const created = ok.json() as { id: string; kind: string; term: string; target: string | null };
+    expect(created).toMatchObject({ kind: 'alias', term: '불족', target: '족발' });
+    const dup = await app.inject({ method: 'POST', url: URL, headers: adminAuth, payload: { kind: 'alias', term: '불족', target: '족발' } });
+    expect(dup.statusCode).toBe(400);
+
+    const list = await app.inject({ method: 'GET', url: `${URL}?kind=alias`, headers: adminAuth });
+    expect(list.statusCode).toBe(200);
+    const body = list.json() as { items: { id: string }[]; defaults: Record<string, number> };
+    expect(body.items.map((i) => i.id)).toEqual([created.id]);
+    expect(body.defaults.modifier).toBeGreaterThan(10);
+
+    expect((await app.inject({ method: 'DELETE', url: `${URL}/${created.id}`, headers: adminAuth })).statusCode).toBe(204);
+    expect((await app.inject({ method: 'DELETE', url: `${URL}/${created.id}`, headers: adminAuth })).statusCode).toBe(404);
+  });
+});

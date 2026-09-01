@@ -1,26 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { FoodMatch } from './food.service.js';
 import {
-  MenuNutritionResolver,
+  DEFAULT_LEXICON,
+  MenuNutritionEngine,
+  buildCatalogIndex,
+  catalogRow,
   decideMenuKcal,
   parseMenuName,
   stripLeadingModifiers,
   synonymVariants,
-  type MenuFoodLookup,
+  type MatchInput,
 } from './menu-nutrition.js';
 
-const match = (name: string, over: Partial<FoodMatch> = {}): FoodMatch => ({
+const match = (name: string, over: Partial<MatchInput> = {}): MatchInput => ({
   foodId: `id-${name}`,
   name,
-  nameNorm: name,
-  dishType: null,
-  mainIngredient: null,
-  cuisine: null,
-  score: 1,
   matchedBy: 'exact',
   kcal: 400,
-  proteinG: null,
-  sodiumMg: null,
   servingG: 300,
   kcalPer100g: 133.3,
   nutritionFrom: null,
@@ -47,7 +42,12 @@ describe('parseMenuName', () => {
     expect(parseMenuName('와규꽃살 3~4인 세트').isSet).toBe(true);
     expect(parseMenuName('돼지모듬 중 600g').isSet).toBe(true);
     expect(parseMenuName('치킨+콜라').isSet).toBe(true);
-    expect(parseMenuName('통갈비살 900g-기본/양념').isSet).toBe(true);
+    // 맛 선택("기본/양념")은 세트가 아니다 — 떼고 본다. 음식이 둘인 결합은 여전히 세트.
+    const option = parseMenuName('통갈비살 900g-기본/양념');
+    expect(option.isSet).toBe(false);
+    expect(option.cleaned).toBe('통갈비살');
+    expect(parseMenuName('통새우/가리비관자/소세지').isSet).toBe(true);
+    expect(parseMenuName('버터갈릭/달콤베이컨 감자튀김').isSet).toBe(true);
     expect(parseMenuName('김치찌개').isSet).toBe(false);
     // 채소 '가지'는 세트가 아니다.
     expect(parseMenuName('가지볶음').isSet).toBe(false);
@@ -150,87 +150,136 @@ describe('decideMenuKcal', () => {
   });
 });
 
-describe('MenuNutritionResolver', () => {
-  const catalog = new Map<string, FoodMatch>([
-    ['순두부찌개', match('순두부찌개')],
-    ['해장국', match('해장국')],
-    ['항정살', match('항정살')],
-    ['달걀찜', match('달걀찜')],
-    ['삼겹살구이', match('삼겹살구이', { kcalPer100g: 467 })],
-    ['된장찌개', match('된장찌개')],
-    ['쟁반짜장', match('쟁반짜장')],
-    ['국수', match('국수')],
-  ]);
-  const norm = (s: string) => s.replace(/\s+/g, '');
-  let calls = 0;
-  const lookup: MenuFoodLookup = {
-    matchFood: async (name) => {
-      calls += 1;
-      const hit = catalog.get(norm(name));
-      if (hit) return hit;
-      // 퍼지 흉내 — 라면 후보만.
-      return norm(name) === '토마토라면' ? match('라면', { matchedBy: 'fuzzy', score: 0.4 }) : null;
-    },
-    matchBySuffix: async (n) => {
-      const keys = [...catalog.keys()].filter((k) => n.endsWith(k) && k !== n && k !== '국수');
-      keys.sort((a, b) => b.length - a.length);
-      return keys[0] ? catalog.get(keys[0])! : null;
-    },
-  };
-  const resolver = new MenuNutritionResolver(lookup);
+describe('MenuNutritionEngine', () => {
+  const engine = new MenuNutritionEngine(
+    buildCatalogIndex([
+      catalogRow('순두부찌개', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('해장국', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('항정살', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('달걀찜', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('삼겹살구이', { kcal: 400, servingG: 300, kcalPer100g: 467 }),
+      catalogRow('된장찌개', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('쟁반짜장', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('국수', { kcal: 400, servingG: 300, kcalPer100g: 133 }),
+      catalogRow('족발', { kcal: 583, servingG: 250, kcalPer100g: 233 }),
+      catalogRow('짬뽕', { kcal: 500, servingG: 900, kcalPer100g: 58 }),
+      catalogRow('소앞다리', { kcalPer100g: 188, source: 'mfds-raw' }),
+      catalogRow('소차돌박이', { kcalPer100g: 375, source: 'mfds-raw', aliases: ['차돌박이', '차돌', '우삼겹'] }),
+      catalogRow('돼지삼겹살', { kcalPer100g: 325, source: 'mfds-raw', aliases: ['삼겹살', '냉삼'] }),
+      catalogRow('돼지목심', { kcalPer100g: 227, source: 'mfds-raw', aliases: ['목살'] }),
+      catalogRow('닭모래주머니', { kcalPer100g: 84, source: 'mfds-raw', aliases: ['닭똥집'] }),
+      catalogRow('스테이크', { kcalPer100g: 194 }),
+      catalogRow('사케', { kcal: 315, servingG: 300, kcalPer100g: 105, aliases: ['도쿠리'] }),
+      catalogRow('하이볼', { kcal: 165, servingG: 300, kcalPer100g: 55 }),
+      catalogRow('닭꼬치구이', { kcalPer100g: 181 }),
+      catalogRow('아메리카노', { kcal: 7, servingG: 350, kcalPer100g: 2 }),
+      catalogRow('물회', { kcal: 532, servingG: 500, kcalPer100g: 106 }),
+      catalogRow('토닉워터', { kcalPer100g: 34, aliases: ['토닉'] }),
+      catalogRow('대하', { kcalPer100g: 82, source: 'mfds-raw', sourceCategory: '어패류 및 기타 수산물', aliases: ['새우'] }),
+      catalogRow('깐쇼새우', { kcalPer100g: 150 }),
+    ], DEFAULT_LEXICON.extraAliases),
+  );
 
-  it('수식어를 떼서 맞으면 modifier 매칭으로 1인분', async () => {
-    const r = await resolver.resolve('얼큰한 순두부찌개');
+  it('수식어를 떼서 맞으면 modifier 매칭으로 1인분', () => {
+    const r = engine.resolve('얼큰한 순두부찌개');
     expect(r.matchedBy).toBe('modifier');
     expect(r.basis).toBe('per_serving');
     expect(r.foodName).toBe('순두부찌개');
   });
 
-  it('여러 수식어도 뗀다 — 명품한우해장국 → 해장국', async () => {
-    expect((await resolver.resolve('명품한우해장국')).foodName).toBe('해장국');
+  it('여러 수식어도 뗀다 — 명품한우해장국 → 해장국', () => {
+    expect(engine.resolve('명품한우해장국').foodName).toBe('해장국');
   });
 
-  it('동의어 — 계란찜 → 달걀찜 1인분', async () => {
-    const r = await resolver.resolve('계란찜');
+  it('동의어 — 계란찜 → 달걀찜 1인분', () => {
+    const r = engine.resolve('계란찜');
     expect(r.matchedBy).toBe('synonym');
     expect(r.basis).toBe('per_serving');
   });
 
-  it('부위 + 구이 — 생삼겹살 150g → 삼겹살구이 100g당', async () => {
-    const r = await resolver.resolve('생삼겹살 150g');
-    expect(r.matchedBy).toBe('variant');
-    expect(r.foodName).toBe('삼겹살구이');
-    expect(r.basis).toBe('per_100g');
-    expect(r.kcal).toBe(467);
+  it('부위 + 구이 — 생삼겹살 150g 은 별칭이 없으면 삼겹살구이 100g당', () => {
+    const r = engine.resolve('생목살구이 150g');
+    expect(r.foodName).toBe('돼지목심');
+    const v = engine.resolve('생삼겹 150g');
+    expect(v.reason).toBe('no_match');
   });
 
-  it('괄호 힌트 — 부자찌개(된장찌개) → 된장찌개 100g당', async () => {
-    const r = await resolver.resolve('부자찌개(된장찌개)');
+  it('조리 접미 제거 → 원재료 — 닭똥집 소금구이 → 닭모래주머니', () => {
+    const r = engine.resolve('닭똥집 소금구이');
+    expect(r.matchedBy).toBe('variant');
+    expect(r.foodName).toBe('닭모래주머니');
+    expect(r.basis).toBe('per_100g');
+  });
+
+  it('괄호 힌트 — 부자찌개(된장찌개) → 된장찌개 100g당. 생재료 힌트는 쓰지 않고 본체 접미가 이긴다', () => {
+    const r = engine.resolve('부자찌개(된장찌개)');
     expect(r.matchedBy).toBe('hint');
     expect(r.basis).toBe('per_100g');
+    expect(engine.resolve('화덕통구이족발(앞다리)').foodName).toBe('족발');
+    expect(engine.resolve('차돌해물짬뽕(우삼겹)').foodName).toBe('짬뽕');
   });
 
-  it('핵심어 접미 — 해물쟁반짜장 → 쟁반짜장 100g당', async () => {
-    const r = await resolver.resolve('해물쟁반짜장');
+  it('핵심어 접미 — 해물쟁반짜장 → 쟁반짜장 100g당. 범주어(국수)·2자 별칭(토닉)에는 붙지 않는다', () => {
+    const r = engine.resolve('해물쟁반짜장');
     expect(r.matchedBy).toBe('suffix');
     expect(r.foodName).toBe('쟁반짜장');
     expect(r.basis).toBe('per_100g');
+    expect(engine.resolve('동치미국수').reason).toBe('no_match');
+    expect(engine.resolve('진토닉').reason).toBe('no_match');
   });
 
-  it('퍼지는 표시하지 않고 후보만, 미매칭은 no_match, 세트는 조회 없이 set', async () => {
-    const fuzzy = await resolver.resolve('토마토라면');
-    expect(fuzzy.reason).toBe('fuzzy_rejected');
-    expect(fuzzy.candidate).toBe('라면');
-    expect((await resolver.resolve('트러플 갈비 솥밥')).reason).toBe('no_match');
-    const before = calls;
-    expect((await resolver.resolve('항정살 세트')).reason).toBe('set');
-    expect(calls).toBe(before);
+  it('생재료 접미는 고기 부위만 — 망고목살은 목살이지만 칠리새우는 새우(생것)가 아니다', () => {
+    expect(engine.resolve('망고 목살').foodName).toBe('돼지목심');
+    const r = engine.resolve('칠리새우');
+    expect(r.reason).toBe('no_match');
+    expect(r.trace).toContain('suffix:칠리새우 ✗raw(대하)');
   });
 
-  it('resolveMany 는 같은 이름을 한 번만 조회한다', async () => {
-    const before = calls;
-    const out = await resolver.resolveMany(['해장국', '해장국', '항정살']);
+  it('크기 수식어(미니·점보)는 떼되 1인분 표시를 막는다', () => {
+    const r = engine.resolve('미니족');
+    expect(r.foodName).toBe('족발');
+    expect(r.basis).toBe('per_100g');
+  });
+
+  it('한판·반판은 부위를 찾으면 100g당, 못 찾으면 세트', () => {
+    const r = engine.resolve('냉삼한판(600g)');
+    expect(r.foodName).toBe('돼지삼겹살');
+    expect(r.basis).toBe('per_100g');
+    expect(engine.resolve('차돌한판(450g)').foodName).toBe('소차돌박이');
+    expect(engine.resolve('돼지한판(600g)').reason).toBe('set');
+  });
+
+  it('세트어는 토큰 앞뒤에서만 — 쿄코코스테이크는 세트가 아니고, 맛 선택·온도 선택도 세트가 아니다', () => {
+    expect(engine.resolve('쿄코코스테이크 (400g)').foodName).toBe('스테이크');
+    expect(engine.resolve('도쿠리 (냉/온)').foodName).toBe('사케');
+    expect(engine.resolve('Y,G,R 티나 하이볼').foodName).toBe('하이볼');
+    expect(engine.resolve('100% 수제닭꼬치 10개 (3가지맛선택)').foodName).toBe('닭꼬치구이');
+    expect(engine.resolve('반반 2가지선택(대)').reason).toBe('set');
+    expect(engine.resolve('커플세트').reason).toBe('set');
+  });
+
+  it('ICE 태그는 HOT 처럼 떼고, "2인이상"은 1인분 표시를 막는다', () => {
+    expect(engine.resolve('ICE 아메리카노').basis).toBe('per_serving');
+    expect(engine.resolve('물회(2인이상)').basis).toBe('per_100g');
+  });
+
+  it('결합 기호 세트는 구성요소를 따로 판정해 둔다', () => {
+    const r = engine.resolve('족발+냉삼');
+    expect(r.reason).toBe('set');
+    expect(r.components.map((c) => [c.name, c.foodName])).toEqual([
+      ['족발', '족발'],
+      ['냉삼', '돼지삼겹살'],
+    ]);
+  });
+
+  it('트레이스에 시도한 단계가 남는다', () => {
+    const r = engine.resolve('해물쟁반짜장');
+    expect(r.trace[0]).toMatch(/^direct:해물쟁반짜장 ✗/);
+    expect(r.trace.at(-1)).toBe('suffix:해물쟁반짜장 ✓쟁반짜장');
+  });
+
+  it('resolveMany 는 같은 이름을 한 번만 담는다', () => {
+    const out = engine.resolveMany(['해장국', '해장국', '항정살']);
     expect(out.size).toBe(2);
-    expect(calls - before).toBe(2);
   });
 });

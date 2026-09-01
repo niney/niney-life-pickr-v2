@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { MenuLexiconCreateInputType, MenuLexiconKindType } from '@repo/api-contract';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   FoodAdminCreateInputType,
@@ -51,6 +52,28 @@ export const useFoodRestaurants = (
   });
 
 // ── 어드민 카탈로그 ──────────────────────────────────────────────────────────
+export const useMenuLexicon = (kind?: MenuLexiconKindType) =>
+  useQuery({
+    queryKey: ['food', 'admin', 'menu-lexicon', kind ?? null],
+    queryFn: () => foodApi.menuLexiconList(kind),
+  });
+
+export const useMenuLexiconCreate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MenuLexiconCreateInputType) => foodApi.menuLexiconCreate(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['food', 'admin', 'menu-lexicon'] }),
+  });
+};
+
+export const useMenuLexiconDelete = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => foodApi.menuLexiconDelete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['food', 'admin', 'menu-lexicon'] }),
+  });
+};
+
 export const useFoodAdminList = (query: FoodAdminListInput = {}) =>
   useQuery({
     queryKey: ['food', 'admin', 'list', query],

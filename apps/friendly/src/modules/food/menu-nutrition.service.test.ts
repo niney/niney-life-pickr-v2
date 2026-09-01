@@ -1,33 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { MENU_NUTRITION_NOTICE } from '@repo/api-contract';
-import type { FoodMatch } from './food.service.js';
+import { MenuNutritionEngine, buildCatalogIndex, catalogRow } from './engine/index.js';
 import { MenuNutritionService } from './menu-nutrition.service.js';
 
-const match = (name: string, over: Partial<FoodMatch> = {}): FoodMatch => ({
-  foodId: `id-${name}`,
-  name,
-  nameNorm: name,
-  dishType: null,
-  mainIngredient: null,
-  cuisine: null,
-  score: 1,
-  matchedBy: 'exact',
-  kcal: 244,
-  proteinG: null,
-  sodiumMg: null,
-  servingG: 300,
-  kcalPer100g: 81,
-  nutritionFrom: null,
-  ...over,
-});
-
-// DB 없이 — 접미 조회($queryRaw)는 빈 결과, 카탈로그는 매핑으로 흉내.
-const fakePrisma = { $queryRaw: async () => [] } as unknown as PrismaClient;
-const catalog = new Map([
-  ['김치찌개', match('김치찌개')],
-  ['삼겹살구이', match('삼겹살구이', { kcalPer100g: 467 })],
-]);
+// DB 없이 — 인메모리 카탈로그 인덱스로 엔진을 만든다.
+const fakePrisma = {} as unknown as PrismaClient;
+const engine = new MenuNutritionEngine(
+  buildCatalogIndex([
+    catalogRow('김치찌개', { kcal: 244, servingG: 300, kcalPer100g: 81 }),
+    catalogRow('삼겹살구이', { kcal: 244, servingG: 300, kcalPer100g: 467 }),
+  ]),
+);
 
 describe('MenuNutritionService', () => {
   it('판정된 항목만 담고, 같은 placeId 는 캐시에서 준다', async () => {
@@ -35,12 +19,12 @@ describe('MenuNutritionService', () => {
     let matches = 0;
     const svc = new MenuNutritionService({
       prisma: fakePrisma,
-      foodService: {
-        matchFood: async (name) => {
-          matches += 1;
-          return catalog.get(name.replace(/\s+/g, '')) ?? null;
+      engine: {
+        resolveMany: (names: string[]) => {
+          matches += names.length;
+          return engine.resolveMany(names);
         },
-      },
+      } as unknown as MenuNutritionEngine,
       loadMenuNames: async (placeId) => {
         loads += 1;
         return placeId === 'p1' ? ['김치찌개', '생삼겹살 150g', '와규 세트', '음료수', '김치찌개'] : null;
@@ -86,7 +70,7 @@ describe('MenuNutritionService', () => {
     let cachedNames = new Map<string, Lookup>([['소주', { hit: null, canonical: null }]]);
     const svc = new MenuNutritionService({
       prisma: fakePrisma,
-      foodService: { matchFood: async (name) => catalog.get(name.replace(/\s+/g, '')) ?? null },
+      engine,
       loadMenuNames: async () => ['김치찌개', '부타동', '소주'],
       llm: {
         lookupCached: async (names) => new Map(names.filter((n) => cachedNames.has(n)).map((n) => [n, cachedNames.get(n)!])),
@@ -120,7 +104,7 @@ describe('MenuNutritionService', () => {
     let webCache = new Map<string, { kcalPer100g: number; agreeing: number; basis: 'multi' | 'single'; source: string } | null>();
     const svc = new MenuNutritionService({
       prisma: fakePrisma,
-      foodService: { matchFood: async (name) => catalog.get(name.replace(/\s+/g, '')) ?? null },
+      engine,
       loadMenuNames: async () => ['김치찌개', '화덕치즈불족', '소주 세트'],
       llm: {
         // 이미 물어본 이름: 카탈로그 매칭은 없지만 표준명은 있다.
@@ -156,10 +140,23 @@ describe('MenuNutritionService', () => {
     });
   });
 
+  it('결합 기호 세트는 구성요소별 판정을 parts 로 내려주고, 전부 1인분일 때만 합계를 낸다', async () => {
+    const svc = new MenuNutritionService({
+      prisma: fakePrisma,
+      engine,
+      loadMenuNames: async () => ['김치찌개+삼겹살구이', '김치찌개 + 삼겹살 150g', '소라+문어'],
+    });
+    const r = await svc.forPlace('p4');
+    expect(r!.items.map((i) => [i.name, i.basis, i.kcal, i.partsTotal, i.parts?.map((p) => [p.name, p.basis, p.kcal])])).toEqual([
+      ['김치찌개+삼겹살구이', 'components', 488, 2, [['김치찌개', 'per_serving', 244], ['삼겹살구이', 'per_serving', 244]]],
+      ['김치찌개 + 삼겹살 150g', 'components', null, 2, [['김치찌개', 'per_serving', 244], ['삼겹살', 'per_100g', 467]]],
+    ]);
+  });
+
   it('식당이 없으면 null', async () => {
     const svc = new MenuNutritionService({
       prisma: fakePrisma,
-      foodService: { matchFood: async () => null },
+      engine,
       loadMenuNames: async () => null,
     });
     expect(await svc.forPlace('missing')).toBeNull();

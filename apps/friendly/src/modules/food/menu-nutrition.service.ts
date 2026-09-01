@@ -19,10 +19,10 @@ import {
   type RestaurantMenuKcalItemType,
   type RestaurantMenuNutritionType,
 } from '@repo/api-contract';
-import { FoodService } from './food.service.js';
 import type { FoodWebEstimateService } from './food-web-estimate.service.js';
 import type { MenuLlmMatchService } from './menu-llm-match.service.js';
-import { MenuNutritionResolver, createMenuFoodLookup, parseMenuName } from './menu-nutrition.js';
+import { DEFAULT_LEXICON, MenuNutritionResolver, parseMenuName, type MenuNutritionEngine } from './menu-nutrition.js';
+import { normalizeTerm } from '../../lib/text.js';
 
 // 식당 하나의 메뉴명은 수십 개 → 카탈로그 조회 수백 번. 재크롤은 드물어 10분 캐시면 충분.
 const CACHE_MAX = 500;
@@ -32,7 +32,8 @@ const MAX_MENU_NAMES = 200;
 
 export interface MenuNutritionServiceDeps {
   prisma: PrismaClient;
-  foodService?: Pick<FoodService, 'matchFood'>;
+  /** 테스트용 — 주면 Prisma 인덱스 대신 이 엔진으로 판정한다. */
+  engine?: MenuNutritionEngine;
   /** placeId 의 공개 메뉴명(상세 응답과 같은 문자열). 식당이 없으면 null. */
   loadMenuNames: (placeId: string) => Promise<string[] | null>;
   /** 없으면 규칙 매칭만. */
@@ -44,7 +45,11 @@ export interface MenuNutritionServiceDeps {
 
 /** 웹 추정 질의어 — LLM 표준명이 있으면 그것, 없으면 전처리한 메뉴명(세트·빈 이름은 null). */
 export const webQueryFor = (menuName: string, canonical: string | null): string | null => {
-  if (canonical?.trim()) return canonical.trim();
+  if (canonical?.trim()) {
+    // 범주어(음료·고기·술)는 검색해도 특정 음식이 아니다 — 애매하면 미표시.
+    if (DEFAULT_LEXICON.suffixBlock.has(normalizeTerm(canonical))) return null;
+    return canonical.trim();
+  }
   const parsed = parseMenuName(menuName);
   return parsed.isSet || !parsed.cleaned ? null : parsed.cleaned;
 };
@@ -54,13 +59,14 @@ export class MenuNutritionService {
     max: CACHE_MAX,
     ttl: CACHE_TTL_MS,
   });
-  private readonly resolver: MenuNutritionResolver;
+  private readonly resolver: Pick<MenuNutritionResolver, 'resolveMany' | 'resolve'>;
   // placeId → 진행 중인 백그라운드 판정(중복 기동 방지).
   private readonly inflight = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: MenuNutritionServiceDeps) {
-    const food = deps.foodService ?? new FoodService(deps.prisma);
-    this.resolver = new MenuNutritionResolver(createMenuFoodLookup(deps.prisma, food));
+    this.resolver = deps.engine
+      ? { resolveMany: async (names) => deps.engine!.resolveMany(names), resolve: async (name) => deps.engine!.resolve(name) }
+      : new MenuNutritionResolver(deps.prisma);
   }
 
   async forPlace(placeId: string): Promise<RestaurantMenuNutritionType | null> {
@@ -89,6 +95,22 @@ export class MenuNutritionService {
           matchedBy: r.matchedBy,
           nutritionFrom: r.nutritionFrom,
         });
+      } else if (r.reason === 'set' && r.components.some((c) => c.basis)) {
+        // 결합 기호 세트 — 구성요소별로. 합계는 전부 1인분일 때만(분량을 모르면 합산하지 않는다).
+        const parts = r.components
+          .filter((c) => c.basis && c.kcal !== null && c.foodName)
+          .map((c) => ({ name: c.name, basis: c.basis!, kcal: c.kcal!, foodName: c.foodName! }));
+        const allServing = parts.length === r.components.length && parts.every((p) => p.basis === 'per_serving');
+        items.push({
+          name,
+          basis: 'components',
+          kcal: allServing ? parts.reduce((a, p) => a + p.kcal, 0) : null,
+          foodName: name,
+          matchedBy: 'set',
+          nutritionFrom: null,
+          parts,
+          partsTotal: r.components.length,
+        });
       } else if (r.reason === 'no_match' || r.reason === 'fuzzy_rejected') {
         unresolved.push(name);
       }
@@ -110,6 +132,22 @@ export class MenuNutritionService {
             matchedBy: 'llm',
             nutritionFrom: m.hit.nutritionFrom,
           });
+        } else if (!m.hit && m.canonical) {
+          // LLM 이 카탈로그 exact 로 못 붙인 표준명을 엔진(수식어·접미 규칙)에 다시 넣어 본다.
+          const again = await this.resolver.resolve(m.canonical);
+          if (again.kcalPer100g !== null && again.foodName) {
+            items.push({
+              name,
+              basis: 'per_100g',
+              kcal: Math.round(again.kcalPer100g),
+              foodName: again.foodName,
+              matchedBy: 'llm',
+              nutritionFrom: again.nutritionFrom,
+            });
+          } else if (this.deps.web) {
+            const q = webQueryFor(name, m.canonical);
+            if (q) webQueries.set(name, q);
+          }
         } else if (!m.hit && this.deps.web) {
           const q = webQueryFor(name, m.canonical);
           if (q) webQueries.set(name, q);

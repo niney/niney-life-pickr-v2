@@ -8,7 +8,9 @@ import { z } from 'zod';
 //   per_100g / per_100ml: 메뉴명에 중량·인분·크기 표식이 있거나, 낮은 정밀 매칭(부위+구이·괄호 힌트·
 //                        핵심어 접미)일 때 — 양과 무관한 비율이라 안전하다.
 
-export const MenuKcalBasis = z.enum(['per_serving', 'per_100g', 'per_100ml']);
+//   components: "문어+소라+새우장" 처럼 결합 기호로 나열된 세트 — 구성요소별 판정을 parts 에 담는다.
+//               kcal 은 구성 전부가 1인분 판정일 때만 합계, 아니면 null(분량을 모르니 합산하지 않는다).
+export const MenuKcalBasis = z.enum(['per_serving', 'per_100g', 'per_100ml', 'components']);
 export type MenuKcalBasisType = z.infer<typeof MenuKcalBasis>;
 
 export const MenuKcalMatchedBy = z.enum([
@@ -23,19 +25,34 @@ export const MenuKcalMatchedBy = z.enum([
   'llm',
   // 카탈로그에 없는 음식 — 웹 실측(fatsecret.kr 검색 결과 복수 항목 중앙값) 추정. 100g당만.
   'web',
+  // 결합 기호 세트 — 구성요소(parts)를 각각 판정.
+  'set',
 ]);
 export type MenuKcalMatchedByType = z.infer<typeof MenuKcalMatchedBy>;
+
+// 세트 구성요소 하나의 판정 — 규칙 계층으로 잡힌 것만.
+export const RestaurantMenuKcalPart = z.object({
+  name: z.string(),
+  basis: z.enum(['per_serving', 'per_100g', 'per_100ml']),
+  kcal: z.number().int().nonnegative(),
+  foodName: z.string(),
+});
+export type RestaurantMenuKcalPartType = z.infer<typeof RestaurantMenuKcalPart>;
 
 export const RestaurantMenuKcalItem = z.object({
   // 상세 응답의 메뉴명과 문자 그대로 같다 — 클라이언트가 이름으로 join 한다.
   name: z.string(),
   basis: MenuKcalBasis,
-  kcal: z.number().int().nonnegative(),
-  // 대어 본 카탈로그 음식명(예: "삼겹살구이") — 툴팁에 근거로 보여 준다.
+  // components 이고 구성 전부가 1인분이 아니면 null.
+  kcal: z.number().int().nonnegative().nullable(),
+  // 대어 본 카탈로그 음식명(예: "삼겹살구이") — 툴팁에 근거로 보여 준다. components 면 메뉴명 자체.
   foodName: z.string(),
   matchedBy: MenuKcalMatchedBy,
   // 카탈로그가 같은 계열에서 빌려온 값이면 그 출처 문구("소불고기 외 2종 중앙값").
   nutritionFrom: z.string().nullable(),
+  // basis 가 components 일 때 구성요소 판정. 판정 안 된 구성은 빠진다 — partsTotal 로 전체 수를 안다.
+  parts: z.array(RestaurantMenuKcalPart).optional(),
+  partsTotal: z.number().int().nonnegative().optional(),
 });
 export type RestaurantMenuKcalItemType = z.infer<typeof RestaurantMenuKcalItem>;
 

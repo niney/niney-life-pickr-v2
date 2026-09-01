@@ -19,6 +19,9 @@ import {
   ApiError,
   useCreateFoodItem,
   useFoodAdminList,
+  useMenuLexicon,
+  useMenuLexiconCreate,
+  useMenuLexiconDelete,
   useFoodAdminStats,
   useFoodMergeConflicts,
   useFoodRecognitionQuality,
@@ -35,6 +38,9 @@ import {
 import {
   FoodAllergenStatus,
   FoodImportSource,
+  MENU_LEXICON_KINDS_WITH_TARGET,
+  MenuLexiconKind,
+  type MenuLexiconKindType,
   MealAllergen,
   MEAL_ALLERGEN_LABEL,
   type FoodAdminCreateInputType,
@@ -198,9 +204,119 @@ export const AdminFoodPage = () => (
     <StatsSection />
     <MergeConflictSection />
     <RecognitionQualitySection />
+    <MenuLexiconSection />
     <CatalogSection />
   </div>
 );
+
+// ── 메뉴 칼로리 판정 엔진 어휘 ───────────────────────────────────────────────
+
+const LEXICON_KIND_LABEL: Record<MenuLexiconKindType, { label: string; hint: string }> = {
+  alias: { label: '별칭', hint: '메뉴판 표기 → 카탈로그 음식명 (예: 불족 → 족발)' },
+  modifier: { label: '수식어', hint: '떼어도 같은 음식인 앞말 (예: 숙성, 통영)' },
+  size: { label: '양 수식어', hint: '양이 달라지는 앞말 — 1인분 표시를 막는다 (예: 미니, 점보)' },
+  synonym: { label: '동의어', hint: '표기 동의어, 양방향 (예: 계란 ↔ 달걀)' },
+  set: { label: '세트어', hint: '여러 음식이 섞였다는 표식 (예: 한상)' },
+  option: { label: '선택어', hint: '슬래시 양쪽에 오면 세트가 아닌 맛·온도 선택 (예: 냉, 온)' },
+  suffix_block: { label: '접미 제외', hint: '접미 매칭에서 뺄 범주어 (예: 면, 탕)' },
+  raw_suffix: { label: '조리 접미', hint: '떼어서 원재료를 찾는 접미 (예: 타다끼)' },
+  quantifier: { label: '수량어', hint: '한판·반판 류 — 부위를 찾으면 100g당' },
+};
+
+const MenuLexiconSection = () => {
+  const [kind, setKind] = useState<MenuLexiconKindType>('alias');
+  const [term, setTerm] = useState('');
+  const [target, setTarget] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const list = useMenuLexicon();
+  const create = useMenuLexiconCreate();
+  const remove = useMenuLexiconDelete();
+  const needsTarget = MENU_LEXICON_KINDS_WITH_TARGET.includes(kind);
+  const items = list.data?.items ?? [];
+
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await create.mutateAsync({
+        kind,
+        term: term.trim(),
+        target: needsTarget ? target.trim() : undefined,
+        note: note.trim() || undefined,
+      });
+      setTerm('');
+      setTarget('');
+      setNote('');
+    } catch (err) {
+      setError(errorMessage(err, '추가하지 못했습니다'));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">메뉴 칼로리 판정 어휘</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          맛집 메뉴명을 카탈로그 음식에 맞추는 말. 값(칼로리)은 카탈로그에만 있고 여기엔 이름 규칙만 있다.
+          저장하면 10분 안에 판정에 반영된다. 코드 기본 어휘
+          {list.data ? ` ${Object.values(list.data.defaults).reduce((a, b) => a + b, 0)}건` : ''} 위에 얹는다.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <form onSubmit={submit} className="grid gap-2 sm:grid-cols-[10rem_1fr_1fr_1fr_auto]">
+          <select className={SELECT_CLS} value={kind} onChange={(e) => setKind(e.target.value as MenuLexiconKindType)}>
+            {MenuLexiconKind.options.map((k) => (
+              <option key={k} value={k}>
+                {LEXICON_KIND_LABEL[k].label}
+              </option>
+            ))}
+          </select>
+          <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="말 (예: 불족)" required />
+          <Input
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder={needsTarget ? (kind === 'alias' ? '카탈로그 음식명 (예: 족발)' : '짝 (예: 달걀)') : '—'}
+            disabled={!needsTarget}
+            required={needsTarget}
+          />
+          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="메모(선택)" />
+          <Button type="submit" size="sm" disabled={create.isPending}>
+            추가
+          </Button>
+        </form>
+        <p className="text-[11px] text-muted-foreground">{LEXICON_KIND_LABEL[kind].hint}</p>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        {list.isLoading ? (
+          <p className="text-xs text-muted-foreground">불러오는 중…</p>
+        ) : items.length === 0 ? (
+          <p className="text-xs text-muted-foreground">추가한 어휘가 없습니다.</p>
+        ) : (
+          <ul className="divide-y text-sm">
+            {items.map((it) => (
+              <li key={it.id} className="flex items-center gap-2 py-1.5">
+                <span className="w-20 shrink-0 text-xs text-muted-foreground">{LEXICON_KIND_LABEL[it.kind].label}</span>
+                <span className="font-medium">{it.term}</span>
+                {it.target && <span className="text-muted-foreground">→ {it.target}</span>}
+                {it.note && <span className="truncate text-xs text-muted-foreground">· {it.note}</span>}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-7 px-2 text-xs"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate(it.id)}
+                >
+                  삭제
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 // ── 적재 잡 ──────────────────────────────────────────────────────────────────
 

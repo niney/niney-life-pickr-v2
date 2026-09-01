@@ -33,8 +33,8 @@ export const MenuTab = ({ placeId, detail, insights, onSelectMenu }: Props) => {
   const notice =
     kcalByName.size > 0 && nutrition.data ? (
       <p className="text-[11px] leading-snug text-muted-foreground">
-        칼로리는 {nutrition.data.notice} 1인분 값이 없는 메뉴는 100g당으로 표시하며, 세트·애매한
-        메뉴는 표시하지 않습니다.
+        칼로리는 {nutrition.data.notice} 1인분 값이 없는 메뉴는 100g당으로, 나열형 세트는 구성별로
+        표시하며 애매한 메뉴는 표시하지 않습니다.
       </p>
     ) : null;
 

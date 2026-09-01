@@ -17,6 +17,8 @@
 | 경로 | 출처 | 크기 | 적재 명령 | 결과 |
 |---|---|---|---|---|
 | `food/mfds-nutrition.csv` | 식약처 전국통합식품영양성분정보(음식) — data.go.kr **15100070** (CSV 배포본) | 6.9MB | `pnpm --filter friendly load:food-catalog --source=nutrition` | 19,495행 → **1,236종** |
+| `food/mfds-nutrition-15100065.csv` | 식약처 전국통합식품영양성분정보(**원재료성식품**) — data.go.kr **15100065** (CSV 배포본) | 2.1MB | `pnpm --filter friendly load:food-catalog --source=raw` | 3,704행 → **855종**(생고기 부위·수산물·채소, 100g당만) |
+| (파일 없음) | 코드 내장 큐레이션 표 `food-curated-seeds.ts` — 주류·음료·공기밥 30종(제조사 표기 기준 근사값) | — | `pnpm --filter friendly load:food-catalog --source=curated` | **30종**(브랜드 별칭 포함) |
 | `food/hansik-800.xlsx` | 한식진흥원 한식메뉴 외국어표기 800선 — data.go.kr **15129784** | 0.5MB | `pnpm --filter friendly load:food-catalog --source=hansik800` | 800행 → **452종**(+348종 별칭 보강) |
 | `life/cctv.csv` | 지방행정인허가데이터개방 전국 CCTV 설치현황 (CP949) | 79MB | `pnpm --filter friendly load:life-cctv data/open/life/cctv.csv` | **377,243행** |
 | `life/toilet.csv` | 지방행정인허가데이터개방 전국 공중화장실 (CP949) | 16MB | `pnpm --filter friendly load:life-toilets data/open/life/toilet.csv` | **53,559행** |
@@ -60,7 +62,16 @@ API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 
 
 영양성분 CSV 는 포털의 "다운로드" 버튼이 정적 파일이 아니라 브라우저 JS 가 JSON API 두 개로 조립하는
 방식이라 `pnpm --filter friendly fetch:mfds-nutrition` 이 같은 호출을 재현해 `data/open/food/mfds-nutrition.csv`
-로 저장한다(서비스키·활용신청 불필요, 2026-09-02 기준 19,495행).
+로 저장한다(서비스키·활용신청 불필요, 2026-09-02 기준 19,495행). 같은 스크립트에 `--pk=15100065` 를 주면
+원재료성식품 배포본을 `mfds-nutrition-15100065.csv` 로 받는다. 가공식품(15100066)은 포털 배포본이 5만 행에서
+잘려 주류가 1행뿐이라 쓰지 않는다 — 주류·음료는 큐레이션 표로 채운다.
+
+판정 규칙·골든셋·어휘 편집은 [menu-calorie-engine.md](menu-calorie-engine.md).
+
+메뉴 칼로리 관점의 역할 분담: 음식 DB(15100070)가 "김치찌개·삼겹살구이" 같은 조리음식(1인분·100g당),
+원재료 DB(15100065)가 고기집·횟집의 "항정살·안창살·곱창·광어·굴" 같은 생것 부위(100g당만, 먹태·마른오징어는
+말린것 행), 큐레이션 표가 "소주·맥주·콜라·공기밥"(병·잔 기준 1인분)을 맡는다. 전체 파이프라인 표시율은
+`pnpm --filter friendly probe:menu-coverage --ask=N --web=N` 으로 잰다(규칙 → LLM 매칭 → 웹 실측, 캐시 테이블에 저장).
 
 ### 메뉴 칼로리의 웹 실측 보조 (fatsecret.kr, 파일 없음)
 
@@ -69,6 +80,10 @@ API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 
 (Ollama web_search)은 한국어 음식명을 매칭하지 못해 쓰지 않고, LLM 도 숫자 추출에는 쓰지 않는다.
 어휘당 1회 조회(1초 간격) 뒤 `food_web_estimates` 에 영구 캐시(미채택도 저장)라 트래픽은 미미하다.
 robots.txt 는 검색 경로를 막지 않지만 제3자 사이트라 약관 변경 시 이 계층만 끄면 된다(`web` 의존성 제거).
+채택 규칙(파서 버전 3): 중앙값 ±25% 안에 2건 이상, 아니면 **이름이 질의와 같거나 브랜드 괄호를 뺀 나머지가
+3자 이하인 단독 항목**("자연산 골뱅이탕 (동원)", "동치미 국수 (CU)")만. "돼지목살구이주먹밥" 처럼 다른 음식으로
+바뀐 항목은 남는 글자가 많아 걸러진다. 검색 결과가 없으면 조리법 접미(구이·볶음·찜·회·사시미·숙회)를 뗀 어간으로
+한 번 더 조회한다(항정살구이 → 항정살). 탕·국·튀김은 조성이 크게 바뀌어 떼지 않는다.
 파서 재검증: `pnpm --filter friendly probe:food-web-estimate --names=까르보나라,불족발`.
 
 ## 평가셋 (`eval/meal-photos/`)

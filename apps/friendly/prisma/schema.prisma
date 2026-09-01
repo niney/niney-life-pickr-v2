@@ -1623,6 +1623,24 @@ model FoodImportConfig {
 // 메뉴명 → 카탈로그 LLM 매칭 캐시(어휘 단위). 규칙 매칭(menu-nutrition.ts)이 못 잡은 메뉴명을
 // 한 번만 묻고 결과를 영구 보관한다 — 부정 결과(foodId null)도 저장해 다시 묻지 않는다.
 // foodId 는 FK 없음(카탈로그 재적재에 안전). version < MENU_LLM_MATCH_VERSION 이면 stale.
+// 메뉴 칼로리 판정 엔진 어휘 — 코드 기본 어휘(engine/lexicon.ts) 위에 어드민이 얹는 항목.
+// kind: modifier|size|synonym|set|option|suffix_block|raw_suffix|quantifier|alias. 값(칼로리)은 없다.
+model MenuLexicon {
+  id        String   @id @default(cuid())
+  kind      String
+  term      String
+  // synonym 의 짝, alias 의 카탈로그 음식명. 그 외 null.
+  target    String?
+  note      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, term, target])
+  @@index([active])
+  @@map("menu_lexicon")
+}
+
 model MenuLlmMatch {
   id         String   @id @default(cuid())
   // normalizeTerm(menuName) — 같은 표기는 식당이 달라도 답이 같다.

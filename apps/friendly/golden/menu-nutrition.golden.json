@@ -1,0 +1,3914 @@
+[
+ {
+  "name": "생삼겹살 150g",
+  "expect": [
+   "돼지삼겹살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "생목등심 150g",
+  "expect": [
+   "돼지목심"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "와규꽃살 2인 세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "[대표] 통갈비살 450g-기본/양념",
+  "expect": [
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "[대표] 통갈비살 600g-기본/양념",
+  "expect": [
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "[대표] 통갈비살 900g-기본/양념",
+  "expect": [
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "항정살 150g",
+  "expect": [
+   "돼지항정살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소갈비살 150g",
+  "expect": [
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "양념갈비살 150g",
+  "expect": [
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "와규꽃살 150g",
+  "expect": [
+   "소꽃등심살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "프라임안창살 150g",
+  "expect": [
+   "소안창살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돼지모듬 소 400g",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돼지모듬 중 600g",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돼지모듬 대 900g",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "와규꽃살 3~4인 세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고기와 와인 세트1",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고기와 와인 세트2",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고기와 와인 세트3",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고기와 와인 세트4",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고기와 와인 세트5",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "모듬야채꼬치",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "숯불구이덴마크치즈",
+  "expect": [
+   "치즈"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "동치미국수",
+  "expect": [
+   "동치미국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매콤한 비빔국수",
+  "expect": [
+   "비빔국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 3,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매콤 동치미국수",
+  "expect": [
+   "동치미국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "누룽지탕과 볶음김치",
+  "expect": [
+   "누룽지탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "부자찌개(된장찌개)",
+  "expect": [
+   "된장찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "계란찜",
+  "expect": [
+   "달걀찜"
+  ],
+  "basis": "per_serving",
+  "restaurants": 3,
+  "reviewed": "approved"
+ },
+ {
+  "name": "김치찌개",
+  "expect": [
+   "김치찌개"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "공기밥",
+  "expect": [
+   "공기밥"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소주",
+  "expect": [
+   "소주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 3,
+  "reviewed": "approved"
+ },
+ {
+  "name": "맥주",
+  "expect": [
+   "맥주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매화수, 청하",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "막걸리",
+  "expect": [
+   "막걸리"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "백세주, 산사춘",
+  "expect": null,
+  "basis": null,
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "설중매",
+  "expect": [
+   "매실주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "복분자주",
+  "expect": [
+   "복분자주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "일품진로",
+  "expect": [
+   "증류식소주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "음료수",
+  "expect": null,
+  "basis": null,
+  "restaurants": 3,
+  "note": "어떤 음료인지 불명 — 사용자 결정: 애매하면 미표시",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "탄산수",
+  "expect": [
+   "탄산수"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "토닉 워터",
+  "expect": [
+   "토닉워터"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "(초강력추천)부타동",
+  "expect": [
+   "돼지고기덮밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "시오토리 라멘",
+  "expect": [
+   "라멘"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "푸와푸와 라이스",
+  "expect": [
+   "오므라이스"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쿄코코스테이크 (400g)",
+  "expect": [
+   "스테이크"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "\"코스\" 부분일치로 세트 오판",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "(현지보다 맛있는)아부라소바",
+  "expect": [
+   "아부라소바"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명란마제소바",
+  "expect": [
+   "마제소바"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "푸와푸와 - 오야꼬동",
+  "expect": [
+   "닭고기 덮밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "시오토리 국밥",
+  "expect": [
+   "국밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "(이가 시리는)단새우 냉소바",
+  "expect": [
+   "메밀소바"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "점보 부타동",
+  "expect": [
+   "돼지고기덮밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "(숯향 가득)야키토리동",
+  "expect": [
+   "닭고기 덮밥"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "(나는 대식가!!)대왕야키토리동",
+  "expect": [
+   "닭고기 덮밥"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "명란 계란말이",
+  "expect": [
+   "달걀말이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장버터 계란밥",
+  "expect": [
+   "계란 덮밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쿠키프라페",
+  "expect": [
+   "쿠키프라페"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "메가리카노(ONLY ICE)",
+  "expect": [
+   "아메리카노"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "흑당버블라떼",
+  "expect": [
+   "라떼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "허니자몽블랙티",
+  "expect": [
+   "자몽홍차"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "메가에이드",
+  "expect": [
+   "에이드"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "큐브라떼",
+  "expect": [
+   "라떼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "ICE 아메리카노",
+  "expect": [
+   "아메리카노"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "note": "HOT 과 같아야 한다 — ICE 태그 미제거",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "HOT 아메리카노",
+  "expect": [
+   "아메리카노"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "안창갈비(250g)",
+  "expect": [
+   "소갈비 구이",
+   "소안창살",
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "1++ 한우 육회",
+  "expect": [
+   "육회"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돼지갈비 (200g)",
+  "expect": [
+   "돼지갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "\"한우\"양념대창 200g",
+  "expect": [
+   "대창구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "양념대창 → 대창구이(카탈로그 조리음식). 돼지대장으로 붙으면 오류",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "치즈폭탄본갈비볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "본갈비 250g",
+  "expect": [
+   "소본갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "한우 물냉면",
+  "expect": [
+   "물냉면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "한우 비빔냉면",
+  "expect": [
+   "비빔냉면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "계절나물 막국수(추가)",
+  "expect": [
+   "막국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "대게내장 볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "꽃게 된장찌개",
+  "expect": [
+   "된장찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "맨초밥",
+  "expect": [
+   "초밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "테라 생맥주",
+  "expect": [
+   "맥주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "생삼겹살",
+  "expect": [
+   "돼지삼겹살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돼지모둠",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소갈비살",
+  "expect": [
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마초삼겹스테이크",
+  "expect": [
+   "스테이크"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "스텔라피자",
+  "expect": [
+   "피자"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "커플세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "투게더 세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "패밀리세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "꽃게살로제리조또",
+  "expect": [
+   "리조또"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "리코타치즈샐러드",
+  "expect": [
+   "샐러드"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "스파이시페퍼로니피자",
+  "expect": [
+   "피자"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마초토마토파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쉬림프로제파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매운치킨크림파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기큐브스테이크",
+  "expect": [
+   "스테이크"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매콤키조개관자리조또(디너)",
+  "expect": [
+   "리소토/리조또"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "트러플버섯크림리조또(디너)",
+  "expect": [
+   "리소토/리조또"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "까르보나라",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "트러플버섯 크림 파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "허브갈릭 오일 파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "올리브 봉골레파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "커리 오일파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "또보겠지떡볶이",
+  "expect": [
+   "떡볶이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "버터갈릭/달콤베이컨 감자튀김",
+  "expect": [
+   "감자튀김"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "맛 선택 슬래시",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "하이라이트 볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아몬드 4단식감 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쪽파 프레첼",
+  "expect": [
+   "프레즐"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "페페로니 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "바질토마토 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "감자치즈 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "블루베리치즈 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "무화과치즈 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "헤이즐넛 초코 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "딸기 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "피스타치오 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아몬드치즈 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고구마 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마늘 크림 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명란 치즈 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "대파 베이컨 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "두바이 초코 베이글",
+  "expect": [
+   "베이글"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "연어쪽파크림치즈 샌드위치",
+  "expect": [
+   "샌드위치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "잠봉뵈르 샌드위치",
+  "expect": [
+   "샌드위치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "토마토치즈 샌드위치",
+  "expect": [
+   "샌드위치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "치킨치폴레 샌드위치",
+  "expect": [
+   "샌드위치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "에그포테이토 샌드위치",
+  "expect": [
+   "샌드위치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "단호박치즈 샌드위치",
+  "expect": [
+   "샌드위치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "타코와사비",
+  "expect": [
+   "타코와사비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오뎅탕",
+  "expect": [
+   "어묵탕"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "닭똥집 소금구이",
+  "expect": [
+   "닭모래주머니"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "즉석떡볶이",
+  "expect": [
+   "떡볶이"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "숯불불닭",
+  "expect": [
+   "닭불고기"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "통삼겹 두부김치",
+  "expect": [
+   "두부김치"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "스키야끼나베",
+  "expect": [
+   "나베"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물짬뽕탕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "나가사키짬뽕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "토마토 치즈 오믈렛",
+  "expect": [
+   "오믈렛"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "모듬소시지",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오징어 감자 튀김",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "note": "오징어+감자 두 가지 튀김 — 감자튀김으로 단정 못 함",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "먹태",
+  "expect": [
+   "북어"
+  ],
+  "basis": "per_100g",
+  "restaurants": 3,
+  "reviewed": "approved"
+ },
+ {
+  "name": "순살 치킨",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "어니언 순살 치킨",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마늘 순살 치킨",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "뿌링클 순살 치킨",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "화이트라구파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "토마토라구파스타",
+  "expect": [
+   "미트 스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "감바스",
+  "expect": [
+   "감바스"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "항정수육",
+  "expect": [
+   "수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쭈꾸미 부추볶음",
+  "expect": [
+   "주꾸미볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "골뱅이무침",
+  "expect": [
+   "골뱅이무침"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "과일",
+  "expect": [
+   "과일"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "누룽지 해물 계란탕",
+  "expect": [
+   "달걀탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "찹스테이크",
+  "expect": [
+   "스테이크"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아보카도 명란구이",
+  "expect": [
+   "명란구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "눈꽃 아보카도 육회(한우++)",
+  "expect": [
+   "육회"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "카시스 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "Y,G,R 티나 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "쉼표는 맛 선택",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "바카디 모히토 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "피치트리 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짐빔 화이트 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "미도리 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "봄베이 사파이어 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "산토리 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "얼그레이 산토리 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "잭다이엘 애플 하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "시그니처 순메밀 특양 곰탕",
+  "expect": [
+   "곰탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "6년근 산양삼 순메밀 왕갈비탕(한정)",
+  "expect": [
+   "갈비탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "0.1% A5 고베혈통 순종 꽃갈비살",
+  "expect": [
+   "소갈비 구이",
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "시그니처 2인 흑 set(700g)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "시그니처 3인 우 set(1.1kg)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "시그니처 4인 정 set(1.4kg)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "0.1% A5고베혈통 꽃등심 600g",
+  "expect": [
+   "소등심구이",
+   "소꽃등심살",
+   "소등심"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "안동식 마늘 양념 소갈빗살 런치 정식",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "수원식 소금 양념 왕갈비 런치 정식",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "1% 명품 수제 특 생왕갈비 정식",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "0.1% 순종와규 꽃갈빗살 런치 정식",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "한우 1++ 유자 육회 비빔밥",
+  "expect": [
+   "육회비빔밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "제철 얼갈이 달래 비빔밥",
+  "expect": [
+   "비빔밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "100% 유기농 메밀 순면(평양냉면)",
+  "expect": [
+   "물냉면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "강남1등 시그니처 김치말이 냉면",
+  "expect": [
+   "냉면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "100% 소고기 들기름 메밀 순면",
+  "expect": [
+   "메밀국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오리지날 순메밀 양지 곰탕",
+  "expect": [
+   "곰탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "국보급 소고기 제철 된장찌개(술밥)",
+  "expect": [
+   "된장찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "정통 특 대왕 소갈비찜",
+  "expect": [
+   "소갈비찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "1% 명품 수제 특 생왕갈비",
+  "expect": [
+   "소갈비 구이",
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "프리미엄 수원식 소금양념 왕갈비 반판",
+  "expect": [
+   "소갈비 구이",
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "프리미엄 수원식 소금양념 왕갈비 한판",
+  "expect": [
+   "소갈비",
+   "소갈비 구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "프리미엄 흑우 소갈빗살",
+  "expect": [
+   "소갈비 구이",
+   "소갈비"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "프리미엄 안동식 마늘 양념 소갈빗살",
+  "expect": [
+   "소갈비",
+   "소갈비 구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "72시간 숙성양념 특양 구이",
+  "expect": [
+   "소양"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "청도 미나리 한우1++ 육회",
+  "expect": [
+   "육회"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "100% 유기농 메밀 순면(비빔냉면)",
+  "expect": [
+   "비빔냉면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명품 한우1++ 뚝배기 불고기",
+  "expect": [
+   "소불고기"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돼지한판(600g)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "냉삼한판(600g)",
+  "expect": [
+   "돼지삼겹살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "단일 부위 한판은 세트가 아니다",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "차돌한판(450g)",
+  "expect": [
+   "소차돌박이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "단일 부위 한판",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "돼지한판플러스(800g)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "숙성 삼겹살(200g)",
+  "expect": [
+   "돼지삼겹살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "숙성 통목살(200g)",
+  "expect": [
+   "돼지목심"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "숙성 항정살(200g)",
+  "expect": [
+   "돼지항정살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "차돌박이(150g)",
+  "expect": [
+   "소차돌박이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "냉삼(200g)",
+  "expect": [
+   "돼지삼겹살",
+   "돼지고기구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "냉삼=냉동삼겹살",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "차돌된장찌개",
+  "expect": [
+   "된장찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "순두부찌개",
+  "expect": [
+   "순두부찌개"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "물냉면",
+  "expect": [
+   "물냉면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "비빔냉면",
+  "expect": [
+   "비빔냉면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쫄면",
+  "expect": [
+   "쫄면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "통새우/가리비관자/소세지",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "화덕통구이족발(앞다리)",
+  "expect": [
+   "족발"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "괄호 힌트(앞다리)가 소앞다리로 새어 나갔다",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "(점심) 묵은지 돼지 김치찌개",
+  "expect": [
+   "김치찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "(점심) 가브리 보쌈 정식",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "(점심) 고기많이 가브리보쌈 정식",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "화덕족발",
+  "expect": [
+   "족발"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "족발",
+  "expect": [
+   "족발"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "백골뱅이탕",
+  "expect": [
+   "골뱅이탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매운불족발",
+  "expect": [
+   "족발"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected",
+  "note": "매운은 수식어 — 1인분 유지"
+ },
+ {
+  "name": "화덕치즈불족",
+  "expect": [
+   "불족발",
+   "족발"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "마늘족발",
+  "expect": [
+   "족발"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "냉채족발",
+  "expect": [
+   "족발"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "보쌈 [가브리살]",
+  "expect": [
+   "수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "화덕보쌈 [가브리살]",
+  "expect": [
+   "수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마늘보쌈 [가브리살]",
+  "expect": [
+   "수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "통뱅이탕세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "족뱅이탕세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "반반 2가지선택(중)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "반반 2가지선택(대)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "반반 3가지선택",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "반반 4가지선택",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "미니족",
+  "expect": [
+   "족발"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected",
+  "note": "미니는 양 표식 — 1인분 금지"
+ },
+ {
+  "name": "미니불족",
+  "expect": [
+   "족발",
+   "불족발"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "화덕미니족",
+  "expect": [
+   "족발"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쟁반국수(중)",
+  "expect": [
+   "쟁반국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쟁반국수(대)",
+  "expect": [
+   "쟁반국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "물막국수",
+  "expect": [
+   "막국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고르곤졸라피자",
+  "expect": [
+   "피자"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짬뽕순두부",
+  "expect": [
+   "순두부찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "얼큰무뼈국물닭발",
+  "expect": [
+   "닭발"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명품어묵탕",
+  "expect": [
+   "어묵탕"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "족발볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "알초밥(8pcs)",
+  "expect": [
+   "초밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "날치알주먹밥",
+  "expect": [
+   "주먹밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "갈비만두(10개)",
+  "expect": [
+   "만두"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "파인샤베트",
+  "expect": [
+   "샤베트"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "통영생굴(200g)",
+  "expect": [
+   "굴"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명물야끼교자",
+  "expect": [
+   "군만두"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "야끼소바",
+  "expect": [
+   "볶음면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "흑후추테바사키",
+  "expect": [
+   "닭날개"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "치킨난반",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "카라이야끼소바",
+  "expect": [
+   "야끼소바"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "어향가지",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "note": "가지 원재료(19)로 붙었지만 튀김 요리 — 미표시가 맞다",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "치킨가라아게",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "교자계란스프",
+  "expect": [
+   "달걀국"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "추카소바(라멘)",
+  "expect": [
+   "라멘"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "토마토라면",
+  "expect": [
+   "라면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "포테토사라다",
+  "expect": [
+   "감자샐러드"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "매운새우완탕",
+  "expect": [
+   "새우완탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "교자탕수",
+  "expect": [
+   "만두탕수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "돈목살수비드냉채",
+  "expect": [
+   "냉채"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마라양볶음",
+  "expect": [
+   "소양"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "마파두부",
+  "expect": [
+   "마파두부"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "사천바지락볶음",
+  "expect": [
+   "바지락볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "스부타",
+  "expect": [
+   "탕수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "레몬크림새우",
+  "expect": [
+   "크림새우"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "칠리새우",
+  "expect": [
+   "깐쇼새우"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "사천갈릭새우",
+  "expect": [
+   "새우볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "항정살미소볶음",
+  "expect": [
+   "항정살볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "차항",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "사천식오이목이냉채",
+  "expect": [
+   "냉채"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "갈비튀김교자",
+  "expect": [
+   "튀김만두"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "히야시토마토",
+  "expect": [
+   "토마토"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "[1위]기린생맥주",
+  "expect": [
+   "맥주"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "미스타하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "산토리가쿠하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "메이커스마크하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "히비키하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짐빔하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "유자하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "히비스커스하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "얼그레이하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "레몬사와",
+  "expect": [
+   "레몬사와"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "도쿠리 (냉/온)",
+  "expect": [
+   "사케"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "냉/온은 온도 선택",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "키쿠스이 무칸테이",
+  "expect": [
+   "사케"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "준마이슈 겐테이",
+  "expect": [
+   "사케"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "일본 청주 브랜드",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "라쿠엔유즈슈",
+  "expect": [
+   "유자주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물쟁반짜장",
+  "expect": [
+   "쟁반짜장"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "북경짜장면",
+  "expect": [
+   "짜장면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "북경간짜장",
+  "expect": [
+   "간자장"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물볶음짜장",
+  "expect": [
+   "짜장면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선간짜장",
+  "expect": [
+   "간자장"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물홍짜장",
+  "expect": [
+   "짜장면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "전가복",
+  "expect": [
+   "전가복"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "양지쌀국수",
+  "expect": [
+   "쌀국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "프리미엄 도가니쌀국수",
+  "expect": [
+   "쌀국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "반쎄오",
+  "expect": [
+   "반쎄오"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "호치민식 짬뽕쌀국수",
+  "expect": [
+   "쌀국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "분짜하노이",
+  "expect": [
+   "분짜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "월남쌈스프링롤",
+  "expect": [
+   "월남쌈"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "스페셜모듬쌀국수",
+  "expect": [
+   "쌀국수"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "모듬은 고명 — 단일 메뉴",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "우삼겹쌀국수",
+  "expect": [
+   "쌀국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "분보싸오",
+  "expect": [
+   "분보싸오"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "껌찐능주 해산물 볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "껌땀 돼지갈비덮밥",
+  "expect": [
+   "돼지고기덮밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짜조군만두3P",
+  "expect": [
+   "군만두"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "닭봉어깨튀김3P",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "칠리 탕수육",
+  "expect": [
+   "탕수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짜장면",
+  "expect": [
+   "짜장면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물짬뽕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물 팔보채",
+  "expect": [
+   "팔보채"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 당멵잡채",
+  "expect": [
+   "잡채"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 고추잡채",
+  "expect": [
+   "고추잡채"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 유산슬",
+  "expect": [
+   "유산슬"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "난자완스",
+  "expect": [
+   "난자완스"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "양장피",
+  "expect": [
+   "양장피"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물누룽지탕",
+  "expect": [
+   "해물누룽지탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "어린이짜장",
+  "expect": [
+   "짜장면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "라조기",
+  "expect": [
+   "라조기"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "야끼만두",
+  "expect": [
+   "만두"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "물만두",
+  "expect": [
+   "물만두"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "꽃빵",
+  "expect": [
+   "꽃빵"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "추가 공기밥",
+  "expect": [
+   "공기밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물우동",
+  "expect": [
+   "우동"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "울면",
+  "expect": [
+   "울면"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선우동",
+  "expect": [
+   "우동"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해삼전복",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "note": "두 재료 나열 — 세트 취급",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "깐풍 중새우",
+  "expect": [
+   "깐풍새우"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "깐풍기",
+  "expect": [
+   "깐풍기"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "새우 볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선짬뽕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물고추짬뽕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "차돌해물짬뽕(우삼겹)",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "any",
+  "restaurants": 1,
+  "note": "괄호 힌트(우삼겹)가 재료 — 본체는 짬뽕",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "해물볶음짬뽕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짬뽕밥",
+  "expect": [
+   "짬뽕밥"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "짜장밥",
+  "expect": [
+   "짜장밥"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선 볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간짜장",
+  "expect": [
+   "간자장"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "게살 볶음밥",
+  "expect": [
+   "볶음밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "칠리 중새우",
+  "expect": [
+   "깐쇼새우"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선해물 짬뽕밥",
+  "expect": [
+   "짬뽕밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 잡채밥",
+  "expect": [
+   "잡채밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 고추잡채밥",
+  "expect": [
+   "잡채밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 송이덮밥",
+  "expect": [
+   "소고기 덮밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선해물잡탕밥",
+  "expect": [
+   "잡탕밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마파두부밥",
+  "expect": [
+   "마파두부"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "레몬 탕수육",
+  "expect": [
+   "탕수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "쟁반짜장",
+  "expect": [
+   "쟁반짜장"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "사천 탕수육",
+  "expect": [
+   "탕수육"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "삼선울면",
+  "expect": [
+   "울면"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마늘치킨",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "후라이드치킨",
+  "expect": [
+   "닭튀김"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "생감자튀김",
+  "expect": [
+   "감자튀김"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "통골뱅이소면",
+  "expect": [
+   "골뱅이무침"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "말랑국물떡볶이",
+  "expect": [
+   "떡볶이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "새우감바스",
+  "expect": [
+   "감바스"
+  ],
+  "basis": "per_100g",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명품한우해장국",
+  "expect": [
+   "해장국"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "500cc카스",
+  "expect": [
+   "맥주"
+  ],
+  "basis": "per_100ml",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "참이슬후레쉬•처음처럼",
+  "expect": [
+   "소주"
+  ],
+  "basis": "per_serving",
+  "restaurants": 2,
+  "reviewed": "approved"
+ },
+ {
+  "name": "生生生연어사시미",
+  "expect": [
+   "연어"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "한가득 바지락술찜",
+  "expect": [
+   "바지락찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "한우모츠나베",
+  "expect": [
+   "나베"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "무카츠(튀김)",
+  "expect": [
+   "돈가스"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "멘치카츠",
+  "expect": [
+   "멘치카츠"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오이와보리된장",
+  "expect": [
+   "오이무침"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오이진토닉",
+  "expect": [
+   "진토닉"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "깻잎진토닉",
+  "expect": [
+   "진토닉"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "트러플육회",
+  "expect": [
+   "육회"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "감자채전",
+  "expect": [
+   "감자전"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "파스타사리추가",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "메로구이",
+  "expect": [
+   "메로구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "편백찜",
+  "expect": [
+   "편백찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "명란구이",
+  "expect": [
+   "명란구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "항정살구이",
+  "expect": [
+   "돼지항정살"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "마라짬뽕탕",
+  "expect": [
+   "짬뽕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "닭목살후추볶음",
+  "expect": [
+   "닭볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "새우로제파스타",
+  "expect": [
+   "스파게티"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "닭고기덮밥",
+  "expect": [
+   "닭고기 덮밥"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "먹태구이",
+  "expect": [
+   "북어"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "감자고로케",
+  "expect": [
+   "크로켓(고로케)"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "산토리하이볼",
+  "expect": [
+   "하이볼"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "망고 목살",
+  "expect": [
+   "돼지목심"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "육즙 특목살",
+  "expect": [
+   "돼지목심"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "꼬들 오목살",
+  "expect": [
+   "돼지목심"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "벌집 껍데기",
+  "expect": [
+   "돼지껍데기구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "고기듬뿍 된장술밥",
+  "expect": [
+   "된장찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "시원한 냉국수",
+  "expect": [
+   "국수"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "얼큰한 순두부찌개",
+  "expect": [
+   "순두부찌개"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "구수한 된장찌개",
+  "expect": [
+   "된장찌개"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "계란후라이(반숙)",
+  "expect": [
+   "달걀후라이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "계란후라이(완숙)",
+  "expect": [
+   "달걀후라이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "버섯 추가(3개)",
+  "expect": [
+   "버섯"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "문어+소라+새우장+회무침+물회",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장게장정식(새우장+양념게장+간장게장+공기밥)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아구찜탕",
+  "expect": [
+   "아구찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물찜",
+  "expect": [
+   "해물찜"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "물회(2인이상)",
+  "expect": [
+   "물회"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "\"2인이상\"은 인분 모호 — 1인분 표시 금지",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "셋트메뉴(소)문어 +소라 게장1마리 +새우장2마리(소)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장게장 1인세트  (게장1+새우장3마리) 공기밥1포함(1인)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장게장 1kg(4마리)(1kg)",
+  "expect": [
+   "게장"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물찜(중)",
+  "expect": [
+   "해물찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물찜(소)",
+  "expect": [
+   "해물찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아구찜(대)",
+  "expect": [
+   "아구찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아구찜(중)",
+  "expect": [
+   "아구찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "아구찜(소)",
+  "expect": [
+   "아구찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소라+문어(대)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "사이다",
+  "expect": [
+   "사이다"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "환타",
+  "expect": [
+   "환타"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "콜라",
+  "expect": [
+   "콜라"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소라+문어(소)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장게장 1인세트  (게장1+새우장3마리) 공기밥1포함(2인분)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장게장2마리(소)",
+  "expect": [
+   "게장"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "셋트메뉴(소)문어 +소라 게장1마리 +새우장2마리(셋트2대)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "셋트메뉴(소)문어 +소라 게장1마리 +새우장2마리(셋트2소)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "셋트메뉴(소)문어 +소라 게장1마리 +새우장2마리(대 게장1마리추가)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "간장비빔밥",
+  "expect": [
+   "비빔밥"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오징어볶음(중)",
+  "expect": [
+   "오징어볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "오징어볶음(2인분(기준))",
+  "expect": [
+   "오징어볶음"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "문어",
+  "expect": [
+   "문어"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "해물찜(대)",
+  "expect": [
+   "해물찜"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "100% 수제닭꼬치 5개 (2가지맛선택)",
+  "expect": [
+   "닭꼬치구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "100% 수제닭꼬치 8개 (3가지맛선택)",
+  "expect": [
+   "닭꼬치구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "corrected"
+ },
+ {
+  "name": "100% 수제닭꼬치 10개 (3가지맛선택)",
+  "expect": [
+   "닭꼬치구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "note": "맛 선택은 세트가 아니다",
+  "reviewed": "corrected"
+ },
+ {
+  "name": "100% 수제닭꼬치 5개 (소금구이 찍먹 세트)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "수제 파닭꼬치",
+  "expect": [
+   "닭꼬치구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "100% 수제닭꼬치 (130g) 1개",
+  "expect": [
+   "닭꼬치구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 버섯 샤브 (2~3인)",
+  "expect": [
+   "소고기샤브샤브"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "프리미엄 어묵탕 (2~3인)",
+  "expect": [
+   "어묵탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "바싹 먹태",
+  "expect": [
+   "북어"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "A 세트 (2~3인)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "B 세트(3~4인)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "C 세트(4~5인)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "D 세트(5인 이상)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "소고기 버섯 샤브 + 닭꼬치 세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "바싹 먹태 + 닭꼬치 세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "프리미엄 어묵탕 + 닭꼬치 세트",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "혼술 세트 (1.5인분)",
+  "expect": null,
+  "basis": null,
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "꼬치어묵탕",
+  "expect": [
+   "어묵탕"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "은행구이 (30알 이상)",
+  "expect": [
+   "은행"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "의성 통마늘구이 (20알 이상)",
+  "expect": [
+   "마늘구이"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "양배추 샐러드",
+  "expect": [
+   "양배추 샐러드"
+  ],
+  "basis": "per_serving",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "날치알밥",
+  "expect": [
+   "알밥"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "황도와 트리플베리(냉동)",
+  "expect": [
+   "과일"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "펩시콜라 500ml(500ml)",
+  "expect": [
+   "콜라"
+  ],
+  "basis": "per_100ml",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "펩시콜라 1.25L",
+  "expect": [
+   "콜라"
+  ],
+  "basis": "per_100ml",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "칠성사이다 500ml(500ml)",
+  "expect": [
+   "사이다"
+  ],
+  "basis": "per_100ml",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "칠성사이다 1.25L",
+  "expect": [
+   "사이다"
+  ],
+  "basis": "per_100ml",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "치킨무",
+  "expect": [
+   "무초절임(치킨무)"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "스위트칠리소스",
+  "expect": [
+   "칠리소스"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ },
+ {
+  "name": "치즈소스",
+  "expect": [
+   "치즈소스"
+  ],
+  "basis": "per_100g",
+  "restaurants": 1,
+  "reviewed": "approved"
+ }
+]

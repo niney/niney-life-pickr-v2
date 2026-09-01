@@ -8,10 +8,8 @@
 
 import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
-import { FoodService } from '../src/modules/food/food.service.js';
 import {
   MenuNutritionResolver,
-  createMenuFoodLookup,
   type MenuKcalReason,
   type MenuKcalResult,
 } from '../src/modules/food/menu-nutrition.js';
@@ -82,7 +80,7 @@ const main = async () => {
   const totalOcc = [...names.values()].reduce((a, b) => a + b, 0);
   console.log(`menu names distinct=${names.size} occurrences(식당 가중)=${totalOcc}`);
 
-  const resolver = new MenuNutritionResolver(createMenuFoodLookup(prisma, new FoodService(prisma)));
+  const resolver = new MenuNutritionResolver(prisma);
   const started = Date.now();
   const results = await resolver.resolveMany([...names.keys()]);
   console.log(`resolved in ${((Date.now() - started) / 1000).toFixed(1)}s`);
