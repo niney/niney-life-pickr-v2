@@ -54,14 +54,14 @@ const makeFakes = () => {
     { id: 'f1', name: '짜장면', nameNorm: '짜장면', aliasNormsJson: '["자장면"]', kcalPer100g: 150, nutritionFrom: null, active: true },
     { id: 'f2', name: '돼지고기덮밥', nameNorm: '돼지고기덮밥', aliasNormsJson: '[]', kcalPer100g: 130, nutritionFrom: null, active: true },
   ];
-  const store = new Map<string, { nameNorm: string; foodId: string | null; version: number }>();
+  const store = new Map<string, { nameNorm: string; foodId: string | null; canonical: string | null; version: number }>();
   const calls: string[] = [];
   const prisma = {
     menuLlmMatch: {
       findMany: async ({ where }: { where: { nameNorm: { in: string[] }; version: { gte: number } } }) =>
         [...store.values()].filter((r) => where.nameNorm.in.includes(r.nameNorm) && r.version >= where.version.gte),
-      upsert: async ({ where, create }: { where: { nameNorm: string }; create: { foodId: string | null; version: number } }) => {
-        store.set(where.nameNorm, { nameNorm: where.nameNorm, foodId: create.foodId, version: create.version });
+      upsert: async ({ where, create }: { where: { nameNorm: string }; create: { foodId: string | null; canonical: string | null; version: number } }) => {
+        store.set(where.nameNorm, { nameNorm: where.nameNorm, foodId: create.foodId, canonical: create.canonical, version: create.version });
         return {};
       },
     },
@@ -95,16 +95,19 @@ describe('MenuLlmMatchService', () => {
     const svc = new MenuLlmMatchService(f.prisma, f.aiConfig, { model: 'gemma4:31b', cache: f.cache });
 
     const first = await svc.matchMany(['북경간짜장', '부타동', '소주', '북경간짜장']);
-    expect(first.get('북경간짜장')).toEqual({ foodId: 'f1', foodName: '짜장면', kcalPer100g: 150, nutritionFrom: null });
-    expect(first.get('부타동')?.foodId).toBe('f2');
-    expect(first.get('소주')).toBeNull();
+    expect(first.get('북경간짜장')).toEqual({
+      hit: { foodId: 'f1', foodName: '짜장면', kcalPer100g: 150, nutritionFrom: null },
+      canonical: '짜장면',
+    });
+    expect(first.get('부타동')?.hit?.foodId).toBe('f2');
+    expect(first.get('소주')).toEqual({ hit: null, canonical: null });
     expect(f.calls).toHaveLength(3);
-    expect(f.store.get('소주')).toEqual({ nameNorm: '소주', foodId: null, version: MENU_LLM_MATCH_VERSION });
+    expect(f.store.get('소주')).toEqual({ nameNorm: '소주', foodId: null, canonical: null, version: MENU_LLM_MATCH_VERSION });
 
     const cached = await svc.lookupCached(['북경간짜장', '소주', '새이름']);
-    expect(cached.get('북경간짜장')?.foodName).toBe('짜장면');
+    expect(cached.get('북경간짜장')?.hit?.foodName).toBe('짜장면');
     expect(cached.has('소주')).toBe(true);
-    expect(cached.get('소주')).toBeNull();
+    expect(cached.get('소주')).toEqual({ hit: null, canonical: null });
     expect(cached.has('새이름')).toBe(false);
 
     const second = await svc.matchMany(['북경간짜장', '소주']);

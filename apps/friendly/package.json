@@ -50,6 +50,7 @@
     "measure:menu-nutrition": "tsx --env-file=.env scripts/measure-menu-nutrition.ts",
     "fetch:mfds-nutrition": "tsx scripts/fetch-mfds-nutrition.ts",
     "probe:menu-decompose": "tsx --env-file=.env scripts/probe-menu-decompose.ts",
+    "probe:food-web-estimate": "tsx scripts/probe-food-web-estimate.ts",
     "export:subway-uwp": "tsx --env-file=.env scripts/export-subway-master-for-uwp.ts",
     "eval:extraction": "tsx scripts/eval-extraction.ts",
     "probe:bus": "tsx --env-file=.env scripts/probe-bus-api.ts",

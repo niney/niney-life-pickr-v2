@@ -58,6 +58,19 @@ API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 
 인자 없이 `pnpm --filter friendly load:food-catalog` 를 돌리면 위 파일 2개 + 레시피 API +
 로컬 외식 어휘까지 **전체 재적재**가 된다(`--classify` 를 붙이면 미분류 행 LLM 분류까지).
 
+영양성분 CSV 는 포털의 "다운로드" 버튼이 정적 파일이 아니라 브라우저 JS 가 JSON API 두 개로 조립하는
+방식이라 `pnpm --filter friendly fetch:mfds-nutrition` 이 같은 호출을 재현해 `data/open/food/mfds-nutrition.csv`
+로 저장한다(서비스키·활용신청 불필요, 2026-09-02 기준 19,495행).
+
+### 메뉴 칼로리의 웹 실측 보조 (fatsecret.kr, 파일 없음)
+
+맛집 메뉴 칼로리(메뉴 탭)는 위 카탈로그를 쓰고, 카탈로그에 없는 음식(까르보나라·불족발·부타동)만
+**fatsecret.kr 검색 페이지**를 직접 받아 항목별 100g당을 집계한다(`food-web-estimate.ts`). 검색엔진
+(Ollama web_search)은 한국어 음식명을 매칭하지 못해 쓰지 않고, LLM 도 숫자 추출에는 쓰지 않는다.
+어휘당 1회 조회(1초 간격) 뒤 `food_web_estimates` 에 영구 캐시(미채택도 저장)라 트래픽은 미미하다.
+robots.txt 는 검색 경로를 막지 않지만 제3자 사이트라 약관 변경 시 이 계층만 끄면 된다(`web` 의존성 제거).
+파서 재검증: `pnpm --filter friendly probe:food-web-estimate --names=까르보나라,불족발`.
+
 ## 평가셋 (`eval/meal-photos/`)
 
 파일명이 곧 정답 라벨이다(`곱창전골_0.jpg` → 정답 `곱창전골`). 그래서 인식 모델 비교가 한 줄이다.

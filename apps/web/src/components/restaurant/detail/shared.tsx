@@ -203,6 +203,17 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
   const reference = item.nutritionFrom
     ? `${item.foodName} (${item.nutritionFrom} 기준 추정)`
     : item.foodName;
+  if (item.matchedBy === 'web') {
+    // 카탈로그 밖 음식 — 웹 실측 집계. 출처가 다르니 문구·색을 구분한다.
+    return (
+      <span
+        className="inline-flex items-center rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-400"
+        title={`${item.foodName} · ${item.nutritionFrom ?? '웹 실측'} 기준 추정치`}
+      >
+        웹 추정 {basis} 약 {item.kcal.toLocaleString('ko-KR')}kcal
+      </span>
+    );
+  }
   const how = item.matchedBy === 'llm' ? 'AI 가 연결한 음식' : '기준';
   return (
     <span

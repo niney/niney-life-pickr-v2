@@ -1645,6 +1645,27 @@ model MenuLlmMatch {
   @@map("menu_llm_matches")
 }
 
+// 카탈로그에 없는 음식의 웹 실측 추정(fatsecret.kr 검색 결과 집계) — 어휘 단위 캐시.
+// kcalPer100g null = 조회했지만 채택 조건 미달(다시 묻지 않음, version 올리면 재조회).
+model FoodWebEstimate {
+  id          String   @id @default(cuid())
+  nameNorm    String   @unique
+  name        String
+  kcalPer100g Float?
+  // 채택 근거 항목 수와 방식('multi' 중앙값 | 'single' 일반 항목). 미채택이면 0 / null.
+  agreeing    Int      @default(0)
+  basis       String?
+  // 항목 원문 JSON 배열(WebEstimateSample[]) — 감사·재집계용.
+  samplesJson String   @default("[]")
+  source      String
+  sourceUrl   String
+  version     Int
+  fetchedAt   DateTime @default(now())
+
+  @@index([version])
+  @@map("food_web_estimates")
+}
+
 model FoodImportRun {
   id              String    @id @default(cuid())
   // 'cron' | 'manual'

@@ -21,6 +21,8 @@ export const MenuKcalMatchedBy = z.enum([
   'suffix',
   // 규칙이 못 잡은 이름을 LLM 이 카탈로그 음식에 연결(high 신뢰도만, 100g당만). 어휘 단위 영구 캐시.
   'llm',
+  // 카탈로그에 없는 음식 — 웹 실측(fatsecret.kr 검색 결과 복수 항목 중앙값) 추정. 100g당만.
+  'web',
 ]);
 export type MenuKcalMatchedByType = z.infer<typeof MenuKcalMatchedBy>;
 

@@ -39,6 +39,12 @@ export interface MenuLlmMatchServiceOptions {
   cache?: AdapterCache;
 }
 
+/** 캐시/판정 조회 결과 — hit 이 null 이면 "물어봤고 매칭 없음". canonical 은 웹 추정(food-web-estimate)의 질의어. */
+export interface MenuLlmMatchLookup {
+  hit: MenuLlmMatchHit | null;
+  canonical: string | null;
+}
+
 export interface MenuLlmMatchHit {
   foodId: string;
   foodName: string;
@@ -117,8 +123,8 @@ export class MenuLlmMatchService {
   ) {}
 
   /** 캐시된 판정만 읽는다(LLM 호출 없음). 값 null = "물어봤고 매칭 없음", 키 없음 = 아직 안 물어봄. */
-  async lookupCached(names: string[]): Promise<Map<string, MenuLlmMatchHit | null>> {
-    const out = new Map<string, MenuLlmMatchHit | null>();
+  async lookupCached(names: string[]): Promise<Map<string, MenuLlmMatchLookup>> {
+    const out = new Map<string, MenuLlmMatchLookup>();
     if (names.length === 0) return out;
     const normToNames = new Map<string, string[]>();
     for (const n of names) {
@@ -128,7 +134,7 @@ export class MenuLlmMatchService {
     }
     const rows = await this.prisma.menuLlmMatch.findMany({
       where: { nameNorm: { in: [...normToNames.keys()] }, version: { gte: MENU_LLM_MATCH_VERSION } },
-      select: { nameNorm: true, foodId: true },
+      select: { nameNorm: true, foodId: true, canonical: true },
     });
     const foodIds = [...new Set(rows.map((r) => r.foodId).filter((v): v is string => !!v))];
     const foods = foodIds.length
@@ -143,7 +149,7 @@ export class MenuLlmMatchService {
       const hit: MenuLlmMatchHit | null = food
         ? { foodId: food.id, foodName: food.name, kcalPer100g: food.kcalPer100g, nutritionFrom: food.nutritionFrom }
         : null;
-      for (const n of normToNames.get(r.nameNorm) ?? []) out.set(n, hit);
+      for (const n of normToNames.get(r.nameNorm) ?? []) out.set(n, { hit, canonical: r.canonical });
     }
     return out;
   }
@@ -155,8 +161,8 @@ export class MenuLlmMatchService {
   async matchMany(
     names: string[],
     opts: { signal?: AbortSignal } = {},
-  ): Promise<Map<string, MenuLlmMatchHit | null>> {
-    const out = new Map<string, MenuLlmMatchHit | null>();
+  ): Promise<Map<string, MenuLlmMatchLookup>> {
+    const out = new Map<string, MenuLlmMatchLookup>();
     const cached = await this.lookupCached(names);
     const pending = [...new Set(names.filter((n) => normalizeTerm(n) && !cached.has(n)))].slice(
       0,
@@ -185,23 +191,23 @@ export class MenuLlmMatchService {
       while (next < queue.length) {
         if (opts.signal?.aborted) return;
         const [norm, name] = queue[next++]!;
-        const hit = await this.askOne(provider, model, catalog, name, opts.signal);
-        if (hit === undefined) continue; // 오류 — 저장하지 않고 다음 요청에서 다시 묻는다.
-        for (const n of pending) if (normalizeTerm(n) === norm) out.set(n, hit);
+        const verdict = await this.askOne(provider, model, catalog, name, opts.signal);
+        if (verdict === undefined) continue; // 오류 — 저장하지 않고 다음 요청에서 다시 묻는다.
+        for (const n of pending) if (normalizeTerm(n) === norm) out.set(n, verdict);
       }
     };
     await Promise.all(Array.from({ length: Math.min(LLM_CONCURRENCY, queue.length) }, worker));
     return out;
   }
 
-  /** undefined = 호출 실패(저장 안 함), null = 매칭 없음(저장), 객체 = 매칭(저장). */
+  /** undefined = 호출 실패(저장 안 함). 그 외는 저장된 판정(hit null = 매칭 없음). */
   private async askOne(
     provider: LLMProvider,
     model: string,
     catalog: { rows: CatalogRow[]; byNorm: Map<string, CatalogRow> },
     name: string,
     outerSignal?: AbortSignal,
-  ): Promise<MenuLlmMatchHit | null | undefined> {
+  ): Promise<MenuLlmMatchLookup | undefined> {
     const candidates = pickMenuCandidates(name, catalog.rows);
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), LLM_TIMEOUT_MS);
@@ -257,9 +263,12 @@ export class MenuLlmMatchService {
           version: MENU_LLM_MATCH_VERSION,
         },
       });
-      return row
-        ? { foodId: row.id, foodName: row.name, kcalPer100g: row.kcalPer100g, nutritionFrom: row.nutritionFrom }
-        : null;
+      return {
+        hit: row
+          ? { foodId: row.id, foodName: row.name, kcalPer100g: row.kcalPer100g, nutritionFrom: row.nutritionFrom }
+          : null,
+        canonical: parsed.canonical,
+      };
     } catch (e) {
       this.opts.logger?.warn({ err: e instanceof Error ? e.message : String(e), name }, '[menu-llm-match] 호출 실패');
       return undefined;
