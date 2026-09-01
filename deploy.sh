@@ -60,7 +60,13 @@ HOUSING_COMPLEX_CSV="${HOUSING_COMPLEX_CSV:-$LIFE_DATA_DIR/housing/reb-complexes
 HOUSING_NAMES_CSV="${HOUSING_NAMES_CSV:-$LIFE_DATA_DIR/housing/reb-complex-names.csv}"
 HOUSING_PRICES_ZIP="${HOUSING_PRICES_ZIP:-$LIFE_DATA_DIR/housing/gongsi-2025.zip}"
 # K-apt 파일은 포털 이름('YYYYMMDD_단지_기본정보.xlsx')이 날짜로 바뀌므로 패턴의 최신 파일을 고른다(없으면 kapt-mandatory.xlsx).
-HOUSING_KAPT_XLSX="${HOUSING_KAPT_XLSX:-$(ls -1 "$LIFE_DATA_DIR"/housing/*단지_기본정보*.xlsx 2>/dev/null | sort | tail -n1)}"
+# 주의: set -e 아래서 실패하는 명령 치환을 대입에 쓰면 스크립트가 조용히 죽는다 — 파일이 없어도 0 으로 끝나게 한다.
+kapt_latest_xlsx() {
+  local f latest=""
+  for f in "$LIFE_DATA_DIR"/housing/*단지_기본정보*.xlsx; do [[ -f "$f" ]] && latest="$f"; done   # glob 은 사전순 → 마지막이 최신
+  printf '%s' "$latest"
+}
+HOUSING_KAPT_XLSX="${HOUSING_KAPT_XLSX:-$(kapt_latest_xlsx)}"
 HOUSING_KAPT_XLSX="${HOUSING_KAPT_XLSX:-$LIFE_DATA_DIR/housing/kapt-mandatory.xlsx}"
 HOUSING_MONTHS="${HOUSING_MONTHS:-3}"
 GZ_CHANGED=0   # 이번 pull 로 지오코딩 캐시 압축본이 바뀌었는지 — pull 이 채운다
