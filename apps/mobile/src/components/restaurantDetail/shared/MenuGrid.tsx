@@ -5,6 +5,7 @@ import { useTheme } from '@repo/shared';
 import { formatWonPrice } from '@repo/utils';
 import type {
   RestaurantInsightsType,
+  RestaurantMenuKcalItemType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { Lightbox } from '~/components/Lightbox';
@@ -13,13 +14,60 @@ import { SENTIMENT_COLORS } from '../colors';
 interface Props {
   menus: RestaurantPublicDetailType['menus'];
   insights: RestaurantInsightsType | undefined;
+  // 메뉴명 → 칼로리 판정. 없는 이름은 칩을 그리지 않는다(애매한 메뉴는 서버가 이미 뺐다).
+  kcalByName?: ReadonlyMap<string, RestaurantMenuKcalItemType>;
   // 주어지면 멘션 통계가 있는 메뉴를 탭 가능하게 렌더해 리뷰 필터로 연결.
   // 멘션 없는(stats 없는) 메뉴는 결과가 비므로 정적 카드로 둔다.
   onSelectMenu?: (name: string) => void;
 }
 
+const KCAL_BASIS_LABEL: Record<RestaurantMenuKcalItemType['basis'], string> = {
+  per_serving: '1인분',
+  per_100g: '100g당',
+  per_100ml: '100ml당',
+  components: '구성',
+};
+// 칩 색 — 웹(shared.tsx MenuKcalChip)과 같은 구분: 카탈로그=호박색, 웹 실측=하늘색, 세트 구성=보라색.
+const KCAL_CHIP_COLORS = {
+  catalog: { bg: 'rgba(245,158,11,0.12)', fg: '#b45309' },
+  web: { bg: 'rgba(14,165,233,0.12)', fg: '#0369a1' },
+  set: { bg: 'rgba(139,92,246,0.12)', fg: '#6d28d9' },
+} as const;
+
+// 메뉴 칼로리 칩 — "1인분 약 583kcal" / "100g당 약 233kcal" / 세트는 "구성 3개 칼로리"(구성 목록은 아래 줄).
+const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
+  if (item.basis === 'components') {
+    const parts = item.parts ?? [];
+    const missing = (item.partsTotal ?? parts.length) - parts.length;
+    const prefix = item.partsEstimated ? 'AI 추정 ' : '';
+    const label =
+      item.kcal !== null
+        ? `${prefix}세트 약 ${item.kcal.toLocaleString('ko-KR')}kcal`
+        : `${prefix}구성 ${parts.length}${missing > 0 ? `/${item.partsTotal}` : ''}개 칼로리`;
+    return (
+      <View style={styles.kcalWrap}>
+        <View style={[styles.kcalChip, { backgroundColor: KCAL_CHIP_COLORS.set.bg }]}>
+          <Text style={[styles.kcalText, { color: KCAL_CHIP_COLORS.set.fg }]}>{label}</Text>
+        </View>
+        <Text style={[styles.kcalParts, { color: KCAL_CHIP_COLORS.set.fg }]} numberOfLines={2}>
+          {parts.map((p) => `${p.name} ${KCAL_BASIS_LABEL[p.basis]} ${p.kcal}kcal`).join(' · ')}
+        </Text>
+      </View>
+    );
+  }
+  const colors = item.matchedBy === 'web' ? KCAL_CHIP_COLORS.web : KCAL_CHIP_COLORS.catalog;
+  const text = `${item.matchedBy === 'web' ? '웹 추정 ' : ''}${KCAL_BASIS_LABEL[item.basis]} 약 ${(item.kcal ?? 0).toLocaleString('ko-KR')}kcal`;
+  return (
+    <View style={styles.kcalWrap}>
+      <View style={[styles.kcalChip, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.kcalText, { color: colors.fg }]}>{text}</Text>
+      </View>
+    </View>
+  );
+};
+
 // 메뉴 리스트 — 이름·가격·설명·이미지 + (있으면) insights 의 긍/부 멘션 통계.
-export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
+export const MenuGrid = ({ menus, insights, kcalByName, onSelectMenu }: Props) => {
   const theme = useTheme();
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(
     null,
@@ -33,6 +81,7 @@ export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
     <View>
       {menus.map((m, idx) => {
         const stats = mentionByName.get(m.name);
+        const kcal = kcalByName?.get(m.name);
         const clickable = !!onSelectMenu && !!stats;
         const hasImage = !!m.imageUrls[0];
         const body = (
@@ -59,6 +108,7 @@ export const MenuGrid = ({ menus, insights, onSelectMenu }: Props) => {
                 {formatWonPrice(m.price)}
               </Text>
             )}
+            {kcal && <MenuKcalChip item={kcal} />}
             {m.description && (
               <Text
                 style={[styles.desc, { color: theme.colors.textMuted }]}
@@ -166,6 +216,10 @@ const styles = StyleSheet.create({
   recBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
   recBadgeText: { fontSize: 10, fontWeight: '500' },
   price: { fontSize: 12, fontVariant: ['tabular-nums'] },
+  kcalWrap: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 1 },
+  kcalChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  kcalText: { fontSize: 10, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  kcalParts: { fontSize: 10, flexShrink: 1, fontVariant: ['tabular-nums'] },
   desc: { fontSize: 12 },
   statsRow: { flexDirection: 'row', gap: 4, marginTop: 2 },
   statText: { fontSize: 11, fontVariant: ['tabular-nums'] },

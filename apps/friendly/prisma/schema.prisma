@@ -1641,6 +1641,23 @@ model MenuLexicon {
   @@map("menu_lexicon")
 }
 
+// 구성이 이름에 없는 세트를 LLM 이 분해한 결과(어휘 단위 캐시). componentsJson 이 [] 이면 "물어봤고 분해 안 됨".
+model MenuLlmDecomposition {
+  id             String   @id @default(cuid())
+  nameNorm       String   @unique
+  menuName       String
+  componentsJson String   @default("[]")
+  confidence     String?
+  reason         String?
+  model          String
+  version        Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([version])
+  @@map("menu_llm_decompositions")
+}
+
 model MenuLlmMatch {
   id         String   @id @default(cuid())
   // normalizeTerm(menuName) — 같은 표기는 식당이 달라도 답이 같다.

@@ -162,3 +162,83 @@ describe('MenuNutritionService', () => {
     expect(await svc.forPlace('missing')).toBeNull();
   });
 });
+
+describe('MenuNutritionService — 세트 구성요소 LLM 연결·LLM 분해', () => {
+  const llmHit = (foodName: string, kcalPer100g: number) => ({
+    hit: { foodId: `f-${foodName}`, foodName, kcalPer100g, nutritionFrom: null },
+    canonical: foodName,
+  });
+
+  it('결합 기호 세트의 규칙 밖 구성요소는 LLM 캐시로 채우고, 없으면 백그라운드로 묻는다', async () => {
+    const asked: string[][] = [];
+    let cache = new Map<string, ReturnType<typeof llmHit>>();
+    const svc = new MenuNutritionService({
+      prisma: fakePrisma,
+      engine,
+      loadMenuNames: async () => ['김치찌개+부타동'],
+      llm: {
+        lookupCached: async (names) => new Map(names.filter((n) => cache.has(n)).map((n) => [n, cache.get(n)!])),
+        matchMany: async (names) => {
+          asked.push(names);
+          cache = new Map([['부타동', llmHit('돼지고기덮밥', 130)]]);
+          return new Map();
+        },
+      },
+    });
+    const first = await svc.forPlace('s1');
+    expect(first!.llmPending).toBe(true);
+    expect(first!.items[0]).toMatchObject({ basis: 'components', partsTotal: 2, parts: [{ name: '김치찌개', kcal: 244 }] });
+    expect(asked).toEqual([['부타동']]);
+    await svc.waitForLlm('s1');
+    const second = await svc.forPlace('s1');
+    expect(second!.llmPending).toBe(false);
+    expect(second!.items[0].parts).toEqual([
+      { name: '김치찌개', basis: 'per_serving', kcal: 244, foodName: '김치찌개' },
+      { name: '부타동', basis: 'per_100g', kcal: 130, foodName: '돼지고기덮밥' },
+    ]);
+    expect(second!.items[0].kcal).toBeNull();
+    // 구성요소 이름은 단독 항목으로 새지 않는다.
+    expect(second!.items).toHaveLength(1);
+  });
+
+  it('구성이 이름에 없는 세트는 LLM 분해 캐시로 구성요소를 만들고 partsEstimated 로 표시한다', async () => {
+    const decomposed: string[][] = [];
+    let cache = new Map<string, string[] | null>([['커플세트', null]]);
+    const svc = new MenuNutritionService({
+      prisma: fakePrisma,
+      engine,
+      loadMenuNames: async () => ['돼지모듬', '커플세트'],
+      decompose: {
+        lookupCached: async (names) => new Map(names.filter((n) => cache.has(n)).map((n) => [n, cache.get(n)!])),
+        decomposeMany: async (names) => {
+          decomposed.push(names);
+          cache = new Map([...cache, ['돼지모듬', ['김치찌개', '삼겹살구이']]]);
+          return new Map();
+        },
+      },
+    });
+    const first = await svc.forPlace('s2');
+    expect(first!.llmPending).toBe(true);
+    expect(first!.items).toEqual([]);
+    expect(decomposed).toEqual([['돼지모듬']]);
+    await svc.waitForLlm('s2');
+    const second = await svc.forPlace('s2');
+    expect(second!.llmPending).toBe(false);
+    expect(second!.items).toEqual([
+      {
+        name: '돼지모듬',
+        basis: 'components',
+        kcal: 488,
+        foodName: '돼지모듬',
+        matchedBy: 'set',
+        nutritionFrom: null,
+        parts: [
+          { name: '김치찌개', basis: 'per_serving', kcal: 244, foodName: '김치찌개' },
+          { name: '삼겹살구이', basis: 'per_serving', kcal: 244, foodName: '삼겹살구이' },
+        ],
+        partsTotal: 2,
+        partsEstimated: true,
+      },
+    ]);
+  });
+});

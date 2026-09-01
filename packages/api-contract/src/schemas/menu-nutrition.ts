@@ -53,6 +53,8 @@ export const RestaurantMenuKcalItem = z.object({
   // basis 가 components 일 때 구성요소 판정. 판정 안 된 구성은 빠진다 — partsTotal 로 전체 수를 안다.
   parts: z.array(RestaurantMenuKcalPart).optional(),
   partsTotal: z.number().int().nonnegative().optional(),
+  // 구성이 이름에 없어 LLM 이 추정한 구성이면 true("모듬회" → 광어·우럭·연어). 칩에 "AI 추정" 표시.
+  partsEstimated: z.boolean().optional(),
 });
 export type RestaurantMenuKcalItemType = z.infer<typeof RestaurantMenuKcalItem>;
 

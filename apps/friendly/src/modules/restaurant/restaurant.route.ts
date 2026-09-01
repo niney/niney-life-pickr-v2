@@ -40,6 +40,7 @@ import { RestaurantService } from './restaurant.service.js';
 import { MenuNutritionService } from '../food/menu-nutrition.service.js';
 import { MenuLlmMatchService } from '../food/menu-llm-match.service.js';
 import { FoodWebEstimateService } from '../food/food-web-estimate.service.js';
+import { MenuLlmDecomposeService } from '../food/menu-llm-decompose.service.js';
 import { env } from '../../config/env.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { jobRegistry } from '../crawl/job-registry.js';
@@ -71,6 +72,8 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     }),
     // LLM 도 카탈로그에서 못 찾은 음식(까르보나라·불족발)은 웹 실측(fatsecret.kr) 집계로.
     web: new FoodWebEstimateService(app.prisma, { logger: app.log }),
+    // 구성이 이름에 없는 세트("모듬회")는 같은 모델이 구성을 추정한다 — 추정임을 표시(partsEstimated).
+    decompose: new MenuLlmDecomposeService(app.prisma, app.aiConfig, { model: env.OLLAMA_MENU_MATCH_MODEL, logger: app.log }),
     logger: app.log,
   });
   // summaries / aiConfig 는 plugins/summaries.ts 의 app 전역 singleton.

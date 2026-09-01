@@ -206,15 +206,23 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
     const parts = item.parts ?? [];
     const lines = parts.map((p) => `${p.name}: ${KCAL_BASIS_LABEL[p.basis]} 약 ${p.kcal.toLocaleString('ko-KR')}kcal (${p.foodName})`);
     const missing = (item.partsTotal ?? parts.length) - parts.length;
-    const title = [...lines, missing > 0 ? `그 외 ${missing}개 구성은 판정하지 못했습니다` : null, '식약처 식품영양성분 DB 추정치'].filter(Boolean).join('\n');
+    const title = [
+      item.partsEstimated ? '구성은 메뉴명으로 AI 가 추정했습니다 — 실제 구성과 다를 수 있습니다' : null,
+      ...lines,
+      missing > 0 ? `그 외 ${missing}개 구성은 판정하지 못했습니다` : null,
+      '식약처 식품영양성분 DB 추정치',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const prefix = item.partsEstimated ? 'AI 추정 구성' : '구성';
     return (
       <span
         className="inline-flex items-center rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-violet-700 dark:text-violet-400"
         title={title}
       >
         {item.kcal !== null
-          ? `세트 약 ${item.kcal.toLocaleString('ko-KR')}kcal`
-          : `구성 ${parts.length}${missing > 0 ? `/${item.partsTotal}` : ''}개 칼로리`}
+          ? `${item.partsEstimated ? 'AI 추정 ' : ''}세트 약 ${item.kcal.toLocaleString('ko-KR')}kcal`
+          : `${prefix} ${parts.length}${missing > 0 ? `/${item.partsTotal}` : ''}개 칼로리`}
       </span>
     );
   }
