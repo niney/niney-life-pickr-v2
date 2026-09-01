@@ -19,10 +19,13 @@
  },
  {
   "name": "와규꽃살 2인 세트",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "소꽃등심살"
+  ],
+  "basis": "per_100g",
   "restaurants": 2,
-  "reviewed": "approved"
+  "reviewed": "corrected",
+  "note": "주메뉴 하나짜리 세트 — 주메뉴 100g당"
  },
  {
   "name": "[대표] 통갈비살 450g-기본/양념",
@@ -119,10 +122,12 @@
  },
  {
   "name": "와규꽃살 3~4인 세트",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "소꽃등심살"
+  ],
+  "basis": "per_100g",
   "restaurants": 2,
-  "reviewed": "approved"
+  "reviewed": "corrected"
  },
  {
   "name": "고기와 와인 세트1",
@@ -1479,31 +1484,44 @@
  },
  {
   "name": "안동식 마늘 양념 소갈빗살 런치 정식",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "소갈비",
+   "소갈비 구이"
+  ],
+  "basis": "per_100g",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected",
+  "note": "정식은 찬을 모르니 주메뉴 100g당"
  },
  {
   "name": "수원식 소금 양념 왕갈비 런치 정식",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "소갈비",
+   "소갈비 구이"
+  ],
+  "basis": "per_100g",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected"
  },
  {
   "name": "1% 명품 수제 특 생왕갈비 정식",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "소갈비",
+   "소갈비 구이"
+  ],
+  "basis": "per_100g",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected"
  },
  {
   "name": "0.1% 순종와규 꽃갈빗살 런치 정식",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "소갈비",
+   "소갈비 구이"
+  ],
+  "basis": "per_100g",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected"
  },
  {
   "name": "한우 1++ 유자 육회 비빔밥",
@@ -1826,17 +1844,23 @@
  },
  {
   "name": "(점심) 가브리 보쌈 정식",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "수육",
+   "보쌈"
+  ],
+  "basis": "any",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected"
  },
  {
   "name": "(점심) 고기많이 가브리보쌈 정식",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "수육",
+   "보쌈"
+  ],
+  "basis": "any",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected"
  },
  {
   "name": "화덕족발",
@@ -3688,10 +3712,13 @@
  },
  {
   "name": "100% 수제닭꼬치 5개 (소금구이 찍먹 세트)",
-  "expect": null,
-  "basis": null,
+  "expect": [
+   "닭꼬치구이"
+  ],
+  "basis": "per_100g",
   "restaurants": 1,
-  "reviewed": "approved"
+  "reviewed": "corrected",
+  "note": "괄호 안 세트어는 옵션 설명"
  },
  {
   "name": "수제 파닭꼬치",

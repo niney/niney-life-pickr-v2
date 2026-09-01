@@ -41,7 +41,8 @@ const COUNT_RE = /(\d+)\s*(개|pcs|pc|조각|p|알|장|마리|병|잔|캔|쪽|�
 const SIZE_PAREN_RE = /[（(]\s*(대|중|소|특대|L|M|S|XL)\s*[)）]/i;
 const SIZE_WORD_RE = /(?:^|\s)(대|중|소|특대|라지|미디움|미디엄|스몰|점보)(?=\s|$)/;
 // 등급·비율 표식 — "1++", "1+", "100%".
-const GRADE_RE = /\d\+{1,2}|\d+\s*%/g;
+// "1+"·"1++" 등급은 뒤에 글자가 없을 때만 — "족발1+냉삼" 의 1+ 는 결합 기호다.
+const GRADE_RE = /\d\+{1,2}(?![\p{L}])|\d+\s*%/gu;
 // "(3가지맛선택)"·"(2가지 맛 선택)" — 한 메뉴의 맛 고르기. 세트가 아니라 옵션.
 const FLAVOR_CHOICE_RE = /[（(]\s*\d\s*가지\s*맛\s*선택\s*[)）]/g;
 // "2가지 선택" 류 — 숫자 + 가지만 세트 표식(가지볶음의 '가지'는 채소).
@@ -49,7 +50,7 @@ const N_GAJI_RE = /\d\s*가지/;
 // "기본/양념", "냉/온" — 슬래시 양쪽이 옵션어면 맛·온도 선택.
 const OPTION_SLASH_RE = /(\p{L}+)\s*\/\s*(\p{L}+)/gu;
 // 결합 기호 — 양쪽에 글자가 있어야 결합이다("치킨+콜라", "짜장&짬뽕", "매화수, 청하").
-const JOIN_RE = /\p{L}\s*[+&/,]\s*\p{L}/u;
+const JOIN_RE = /[\p{L}\p{N}]\s*[+&/,]\s*\p{L}/u;
 const JOIN_SPLIT_RE = /\s*[+&/,]\s*/;
 
 const hasSetWord = (s: string, lex: Lexicon): string | null => {
@@ -122,32 +123,52 @@ export const parseMenuName = (raw: string, lex: Lexicon = DEFAULT_LEXICON): Pars
     }
   }
 
-  let setSignal: string | null = null;
-  if (N_GAJI_RE.test(s)) setSignal = 'N가지';
-  else {
-    const word = hasSetWord(s, lex);
-    if (word) setSignal = word;
-    else if (JOIN_RE.test(s)) setSignal = '결합기호';
-  }
-
-  // 남은 괄호는 부연("완숙"·"한우++")이라 통째로 떼되, 한글 2자 이상이면 음식명 힌트로 남긴다.
-  const hints: string[] = [];
-  s = s.replace(/[（(]([^)）]*)[)）]/g, (_m, inner: string) => {
-    const h = inner.replace(GRADE_RE, ' ').trim();
-    if (/^[\p{Script=Hangul}\s]{2,}$/u.test(h)) hints.push(h.replace(/\s+/g, ' '));
-    return ' ';
-  });
-  s = s.replace(GRADE_RE, ' ');
-
   const clean = (x: string): string =>
     x
       .replace(/[-–—·.:;!?~*'"`]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-  const parts =
-    setSignal === '결합기호'
-      ? s.split(JOIN_SPLIT_RE).map(clean).filter((x) => x.length > 0)
-      : [];
+  // 구성요소에서 세트어·수량 표식을 뗀다("닭꼬치 세트" → 닭꼬치, "새우장3마리" → 새우장).
+  const stripSetWords = (part: string): string =>
+    clean(
+      part
+        .replace(COUNT_RE, ' ')
+        .replace(/\d+/g, ' ')
+        .split(/\s+/)
+        .filter((t) => !lex.setWords.includes(t.toLowerCase()))
+        .join(' '),
+    );
+
+  // 괄호 안 나열("정식(새우장+양념게장+간장게장+공기밥)", "(게장1+새우장3마리)")은 구성요소다.
+  let parenParts: string[] = [];
+  const hints: string[] = [];
+  s = s.replace(/[（(]([^)）]*)[)）]/g, (_m, inner: string) => {
+    const h = inner.replace(GRADE_RE, ' ').trim();
+    if (JOIN_RE.test(h) && parenParts.length === 0) {
+      parenParts = h.split(JOIN_SPLIT_RE).map(stripSetWords).filter((x) => x.length > 0);
+      return ' ';
+    }
+    // 남은 괄호는 부연("완숙"·"한우++")이라 통째로 떼되, 한글 2자 이상이면 음식명 힌트로 남긴다.
+    // 괄호 안 세트어("(소금구이 찍먹 세트)")는 옵션 설명이라 세트 판정에 넣지 않는다.
+    if (/^[\p{Script=Hangul}\s]{2,}$/u.test(h) && !hasSetWord(h, lex)) hints.push(h.replace(/\s+/g, ' '));
+    return ' ';
+  });
+  s = s.replace(GRADE_RE, ' ');
+
+  // 세트 판정 — 결합 기호가 세트어보다 먼저다("소고기 샤브 + 닭꼬치 세트"는 나열 세트).
+  let setSignal: string | null = null;
+  let parts: string[] = [];
+  if (N_GAJI_RE.test(s)) setSignal = 'N가지';
+  else if (JOIN_RE.test(s)) {
+    setSignal = '결합기호';
+    parts = s.split(JOIN_SPLIT_RE).map(stripSetWords).filter((x) => x.length > 0);
+  } else if (parenParts.length >= 2) {
+    setSignal = '결합기호';
+    parts = parenParts;
+  } else {
+    const word = hasSetWord(s, lex);
+    if (word) setSignal = word;
+  }
   const cleaned = clean(s.replace(/[+&/,]/g, ' '));
   // "미니족"·"점보 부타동" — 양이 다른 같은 음식. 이름은 떼어 찾되 1인분 값은 못 쓴다.
   const cleanedNorm = normalizeTerm(cleaned);

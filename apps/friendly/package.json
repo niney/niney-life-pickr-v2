@@ -86,7 +86,8 @@
     "probe:cluster-health": "${CLUSTER_PYTHON_BIN:-python3} -c \"import numpy,sklearn,umap,hdbscan; print('cluster engine OK — numpy/sklearn/umap/hdbscan')\"",
     "probe:menu-coverage": "tsx --env-file=.env scripts/probe-menu-coverage.ts",
     "probe:menu-resolve": "tsx --env-file=.env scripts/probe-menu-resolve.ts",
-    "measure:menu-golden": "tsx --env-file=.env scripts/measure-menu-golden.ts"
+    "measure:menu-golden": "tsx --env-file=.env scripts/measure-menu-golden.ts",
+    "measure:menu-decompose": "tsx --env-file=.env scripts/measure-menu-decompose.ts"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",

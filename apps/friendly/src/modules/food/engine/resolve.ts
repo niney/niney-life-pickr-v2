@@ -27,6 +27,8 @@ const PER_SERVING_MATCHES: ReadonlySet<MenuKcalMatchedBy> = new Set(['exact', 'a
 const BASE_SERVING_G = 100;
 const RAW_SOURCE = 'mfds-raw';
 const RAW_MEAT_CATEGORY = '육류';
+// "와규꽃살 2인 세트"·"가브리 보쌈 정식" — 세트어가 이것뿐이고 나머지가 한 음식이면 그 음식의 100g당(찬·양은 모른다).
+const GENERIC_SET_WORDS = new Set(['세트', 'set', '정식', '런치', '런치정식', '디너']);
 
 export interface MenuKcalResult {
   name: string;
@@ -211,11 +213,28 @@ export const resolveMenuName = (name: string, index: CatalogIndex, lex: Lexicon 
   if (parsed.isSet) {
     trace.push(`set:${parsed.setSignal}`);
     // 결합 기호 세트는 구성요소를 따로 판정해 둔다(표시 계약은 호출자 몫).
-    const components =
-      parsed.setSignal === '결합기호' && parsed.parts.length >= 2
-        ? parsed.parts.map((p) => resolveMenuName(p, index, lex))
-        : [];
-    return { ...decideMenuKcal(parsed, null, null, trace), components };
+    if (parsed.setSignal === '결합기호' && parsed.parts.length >= 2) {
+      const components = parsed.parts.map((p) => resolveMenuName(p, index, lex));
+      return { ...decideMenuKcal(parsed, null, null, trace), components };
+    }
+    // 주메뉴 하나짜리 세트 — 세트어를 뗀 나머지가 카탈로그에 있으면 그 음식의 100g당.
+    if (parsed.setSignal && GENERIC_SET_WORDS.has(parsed.setSignal)) {
+      const main = normalizeTerm(
+        parsed.cleaned
+          .split(/\s+/)
+          .filter((t) => !GENERIC_SET_WORDS.has(t.toLowerCase()))
+          .join(' ')
+          .replace(/(런치|디너)?(정식|세트|set)$/iu, ''),
+      );
+      if (main.length >= 2) {
+        const match = matchNorm(main, parsed.hints, index, lex, trace);
+        if (match) {
+          trace.push(`set-main:${main} ✓${match.name}`);
+          return decideMenuKcal({ ...parsed, isSet: false, portionAmbiguous: true }, match, null, trace);
+        }
+      }
+    }
+    return decideMenuKcal(parsed, null, null, trace);
   }
 
   const norm = normalizeTerm(parsed.cleaned);

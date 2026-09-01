@@ -107,6 +107,8 @@ export class MenuNutritionService {
     const sets: SetDraft[] = [];
     // 구성이 이름에 없는 세트 — LLM 분해 후보.
     const opaqueSets: string[] = [];
+    // 분해 결과가 한 개인 세트 — 세트명 → 주메뉴명(LLM·웹으로 채운다).
+    const singleMains = new Map<string, string>();
 
     for (const name of unique) {
       const r = resolved.get(name);
@@ -143,6 +145,17 @@ export class MenuNutritionService {
         const parts = cached.get(name);
         if (!parts) continue;
         const components = parts.map((p) => partResults.get(p)!).filter(Boolean);
+        if (components.length === 1) {
+          // 주메뉴 하나짜리 세트 — 그 음식의 100g당(찬·양은 모른다). LLM 이 고른 이름이라 'llm' 로 표시.
+          const c = components[0]!;
+          if (c.kcalPer100g !== null && c.foodName) {
+            items.push({ name, basis: 'per_100g', kcal: Math.round(c.kcalPer100g), foodName: c.foodName, matchedBy: 'llm', nutritionFrom: c.nutritionFrom });
+          } else {
+            unresolved.add(c.name);
+            singleMains.set(name, c.name);
+          }
+          continue;
+        }
         sets.push({ name, components, estimated: true });
         for (const c of components) if (!c.basis) unresolved.add(c.name);
       }
@@ -201,7 +214,7 @@ export class MenuNutritionService {
 
     // 단일 메뉴명의 LLM·웹 항목.
     for (const name of unresolved) {
-      if (sets.some((s) => s.components.some((c) => c.name === name)) && !unique.includes(name)) continue;
+      if (!unique.includes(name)) continue; // 구성요소·주메뉴 이름은 단독 항목으로 새지 않는다.
       const l = llmResolved.get(name);
       if (l) {
         items.push({ name, basis: 'per_100g', kcal: Math.round(l.kcalPer100g), foodName: l.foodName, matchedBy: 'llm', nutritionFrom: l.nutritionFrom });
@@ -209,6 +222,11 @@ export class MenuNutritionService {
       }
       const w = webResolved.get(name);
       if (w) items.push({ name, basis: 'per_100g', kcal: Math.round(w.kcalPer100g), foodName: w.foodName, matchedBy: 'web', nutritionFrom: w.nutritionFrom });
+    }
+
+    for (const [setName, mainName] of singleMains) {
+      const fill = llmResolved.get(mainName) ?? webResolved.get(mainName);
+      if (fill) items.push({ name: setName, basis: 'per_100g', kcal: Math.round(fill.kcalPer100g), foodName: fill.foodName, matchedBy: 'llm', nutritionFrom: fill.nutritionFrom });
     }
 
     // 세트 항목 — 구성요소는 규칙 → LLM → 웹 순으로 채운다.

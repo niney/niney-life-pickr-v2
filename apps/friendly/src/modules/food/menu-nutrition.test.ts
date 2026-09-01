@@ -263,6 +263,30 @@ describe('MenuNutritionEngine', () => {
     expect(engine.resolve('물회(2인이상)').basis).toBe('per_100g');
   });
 
+  it('결합 기호는 세트어보다 먼저고 구성에서 세트어·수량을 뗀다, 괄호 나열도 구성, 괄호 안 세트어는 무시', () => {
+    const joined = engine.resolve('족발 + 냉삼 세트');
+    expect(joined.reason).toBe('set');
+    expect(joined.components.map((c) => c.name)).toEqual(['족발', '냉삼']);
+    const paren = engine.resolve('갈비정식(족발+냉삼3마리+공기밥)');
+    expect(paren.components.map((c) => [c.name, c.foodName])).toEqual([
+      ['족발', '족발'],
+      ['냉삼', '돼지삼겹살'],
+      ['공기밥', null],
+    ]);
+    expect(engine.resolve('수제닭꼬치 5개 (소금구이 찍먹 세트)').foodName).toBe('닭꼬치구이');
+    // 숫자 뒤 결합 기호("게장1+새우장3마리")도 나열이다.
+    expect(engine.resolve('족발 1인세트 (족발1+냉삼3마리) 공기밥1포함').components.map((c) => c.name)).toEqual(['족발', '냉삼']);
+  });
+
+  it('주메뉴 하나짜리 세트("X 2인 세트", "X 정식")는 그 음식의 100g당', () => {
+    const r = engine.resolve('스테이크 2인 세트');
+    expect(r.foodName).toBe('스테이크');
+    expect(r.basis).toBe('per_100g');
+    expect(engine.resolve('가브리 족발 정식').foodName).toBe('족발');
+    expect(engine.resolve('가브리 족발 정식').basis).toBe('per_100g');
+    expect(engine.resolve('커플세트').reason).toBe('set');
+  });
+
   it('결합 기호 세트는 구성요소를 따로 판정해 둔다', () => {
     const r = engine.resolve('족발+냉삼');
     expect(r.reason).toBe('set');
