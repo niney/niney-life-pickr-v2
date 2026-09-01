@@ -84,6 +84,20 @@ const EnvSchema = z.object({
   // (load:life-hospitals·probe:hira)만 쓴다(요청 경로 없음). 같은 data.go.kr 계정 키라 비우면
   // BUS_API_KEY 로 폴백(해당 API 활용신청만 추가).
   HIRA_API_KEY: z.string().default(''),
+  // 국토교통부 실거래가(apis.data.go.kr/1613000 — 아파트 매매 상세 15126468·전월세 15126474) 인증키 —
+  // 집값 거래 적재(load:housing-trades·월 스케줄러·probe:rtms)만 쓴다(요청 경로 없음). 같은 data.go.kr
+  // 계정 키라 비우면 BUS_API_KEY 로 폴백(두 데이터셋 활용신청만 추가). 개발계정 일 10,000건.
+  RTMS_API_KEY: z.string().default(''),
+  // 집값 거래 자동 갱신 cron(Asia/Seoul) — 최근 HOUSING_REFRESH_MONTHS 개월 파티션을 다시 받고 통계를
+  // 재계산한다(신고 지연 30일·해제 반영). 빈 값이면 끔(스크립트로만 갱신). 예: '0 4 2,17 * *'.
+  HOUSING_REFRESH_CRON: z.string().default(''),
+  HOUSING_REFRESH_MONTHS: z.coerce.number().int().min(1).max(12).default(3),
+  // 집값 단지 속성 보강(선택) — 둘 다 적재 스크립트만 쓴다(요청 경로 없음). 같은 data.go.kr 계정 키라
+  // 비우면 BUS_API_KEY 로 폴백(해당 데이터셋 활용신청만 추가).
+  //  - KAPT_API_KEY: K-apt 공동주택 단지 목록(15057332)·기본 정보(15058453) — load:housing-kapt --source=api. 일 5,000건.
+  //  - BLDG_API_KEY: 건축HUB 건축물대장정보(15134735, 총괄표제부·표제부) — load:housing-buildings. 일 10,000건.
+  KAPT_API_KEY: z.string().default(''),
+  BLDG_API_KEY: z.string().default(''),
 
   // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
   // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,

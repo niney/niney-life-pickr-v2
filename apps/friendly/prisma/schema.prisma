@@ -1865,3 +1865,168 @@ model MealPhotoDeletion {
   @@index([attempts, createdAt])
   @@map("meal_photo_deletions")
 }
+
+// ── 집값(/housing) — 아파트 실거래가 + 단지 마스터 ─────────────────────────────
+// 단지 마스터: 한국부동산원 공동주택 단지 식별정보 CSV(source='reb', id=단지고유번호) + 실거래 주소로만
+// 확인된 단지(source='rtms', id='rt:<sggCd>:<umd>:<jibun>:<정규화명>'). 좌표는 지번 주소를 VWorld 로
+// 지오코딩(LifeGeocodeCache 공유). 1차는 kind='apt' 만 적재.
+model HousingComplex {
+  id           String  @id
+  // 'reb' | 'rtms'
+  source       String
+  // 필지고유번호 19자리(reb 만).
+  pnu          String?
+  name         String
+  // 다른 이름들('|' 구분 — 공시가격명·건축물대장명·도로명주소명·변경 이력) 검색·매칭용.
+  altNames     String?
+  // 'apt' | 'row' | 'multi'
+  kind         String
+  // 지번 주소 원문.
+  addr         String
+  sido         String
+  sgg          String
+  umd          String
+  // 지번('56-45', '산1-8').
+  jibun        String?
+  // 법정동 시군구 5자리(실거래 LAWD_CD) / 법정동 10자리.
+  sggCd        String
+  bjdCd        String?
+  dongCount    Int?
+  households   Int?
+  // 사용승인일 'YYYY-MM-DD'.
+  approvedDate String?
+  lat          Float?
+  lng          Float?
+  // 'road' | 'parcel' | null.
+  geoSource    String?
+  // 단지 마스터 CSV 기준일(rtms 단지는 생성일).
+  baseDate     String
+  // ── 보강(선택) ── K-apt 관리비 공개 의무단지(load:housing-kapt): 단지코드·분양형태(분양|임대|혼합)·난방·승강기.
+  kaptCode     String?
+  saleType     String?
+  heating      String?
+  elevatorCount Int?
+  // 건축HUB 건축물대장 총괄표제부/표제부(load:housing-buildings): 주차·최고층·구조·도로명주소 + 조회 시각(장부).
+  roadAddr     String?
+  parkingCount Int?
+  floorsMax    Int?
+  structure    String?
+  buildingFetchedAt DateTime?
+
+  @@index([lat, lng])
+  @@index([sggCd, umd, jibun])
+  @@index([kind, households])
+  @@map("housing_complexes")
+}
+
+// 실거래 한 건 — (sggCd, dealYm, dealType) 파티션 단위로 전량 교체(신고 지연·해제 반영). id 는 자연키
+// 해시(같은 파티션 안 완전 중복은 '#n' 접미). complexId 는 매칭된 단지(없으면 rtms 단지를 만들어 채움).
+model HousingTrade {
+  id           String  @id
+  complexId    String?
+  sggCd        String
+  // 계약년월 'YYYYMM' / 계약일 'YYYY-MM-DD'.
+  dealYm       String
+  dealDate     String
+  // 'trade' | 'jeonse' | 'monthly'
+  dealType     String
+  umdNm        String
+  jibun        String?
+  aptNm        String
+  // 실거래 단지일련번호('11110-31') — 매매 상세만.
+  aptSeq       String?
+  roadNm       String?
+  // 전용면적(㎡).
+  area         Float
+  floor        Int?
+  buildYear    Int?
+  // 매매가 / 전세·월세 보증금(만원). rent 는 월세(만원, 그 외 0).
+  price        Int
+  rent         Int     @default(0)
+  dealingGbn   String?
+  canceled     Boolean @default(false)
+  canceledDate String?
+  rgstDate     String?
+  aptDong      String?
+  buyerGbn     String?
+  slerGbn      String?
+  contractType String?
+  useRRRight   String?
+  contractTerm String?
+  preDeposit   Int?
+  preRent      Int?
+  landLease    Boolean @default(false)
+
+  @@index([complexId, dealType, dealDate])
+  @@index([sggCd, dealYm, dealType])
+  @@map("housing_trades")
+}
+
+// 단지 × 거래 유형 × 면적 구간('all' 포함) 통계 — 적재 뒤 rebuild 로 전량 재계산. 지도 배지·주변 목록·
+// 상세 통계가 이 표만 읽는다(요청 경로에서 거래 표를 집계하지 않는다).
+model HousingComplexStat {
+  complexId   String
+  dealType    String
+  band        String
+  latestPrice Int
+  latestRent  Int
+  latestArea  Float
+  latestFloor Int?
+  latestDate  String
+  count12     Int
+  count       Int
+  // 최근 12개월 평균 단위가(만원/㎡).
+  unitPrice12 Float?
+  // dealType='any'·band='all' 폴백 행에서만 — 그 최근 거래가 어느 유형인지(trade|jeonse|monthly).
+  latestDealType String?
+
+  @@id([complexId, dealType, band])
+  @@map("housing_complex_stats")
+}
+
+// 파티션 적재 장부 — 어느 (시군구, 계약년월, 유형)을 언제 몇 건 받았는지. 증분 적재·재수집 판단 기준.
+model HousingTradeSync {
+  sggCd     String
+  dealYm    String
+  dealType  String
+  count     Int
+  fetchedAt DateTime @default(now())
+
+  @@id([sggCd, dealYm, dealType])
+  @@index([dealType, dealYm])
+  @@map("housing_trade_syncs")
+}
+
+// 실행 이력 — 'complex'(단지 마스터 교체) | 'trade'·'rent'(실거래 적재 실행) | 'stats'(통계 재계산).
+model HousingSync {
+  id         Int      @id @default(autoincrement())
+  kind       String
+  count      Int
+  geocoded   Int?
+  baseDate   String?
+  sourceFile String?
+  loadedAt   DateTime @default(now())
+
+  @@index([kind, loadedAt])
+  @@map("housing_syncs")
+}
+
+// 공동주택 공시가격(국토교통부 주택 공시가격 정보 파일, 호별 1,558만 행)을 단지 × 면적 구간으로 접은 표 —
+// load:housing-prices 가 PNU 로 단지에 직결해 전량 교체. 거래가 없는 단지에도 가격 앵커를 준다.
+model HousingComplexPrice {
+  complexId String
+  // 'all' | 'b1' … 'b4'
+  band      String
+  // 공시 기준 연도(예: 2025 = 2025-01-01 기준).
+  year      Int
+  count     Int
+  // 만원.
+  median    Int
+  min       Int
+  max       Int
+  // 구간 안 호별 전용면적 평균(㎡).
+  avgArea   Float
+
+  @@id([complexId, band])
+  @@map("housing_complex_prices")
+}

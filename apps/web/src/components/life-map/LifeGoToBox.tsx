@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Bus, Clock, Loader2, MapPin, Navigation, Search, TrainFront, X } from 'lucide-react';
+import { Building2, Bus, Clock, Loader2, MapPin, Navigation, Search, TrainFront, X } from 'lucide-react';
 import { useBusStationSearch, useLifeMapSearch, useSubwayStationSearch } from '@repo/shared';
 import {
   WEATHER_SIDOS,
@@ -22,8 +22,11 @@ import { useLifeMapRecentStore } from '~/stores/lifeMapRecentStore';
 // ↑↓ 로 결과 이동, Enter 선택(없으면 첫 결과), Esc 는 입력 지우기→닫기.
 // variant: 'panel'(데스크톱 좌패널 — 열리면 패널 본문 자리를 차지) / 'bar'(모바일 상단바 subBar —
 // 입력 한 줄만 차지하고 결과는 아래로 떨어지는 드롭다운, 바깥 탭으로 닫힘).
+// 집값(/housing)도 같은 박스를 쓴다 — 페이지가 extraSections(예: 단지명 검색 결과)를 넘기면 입력 중
+// 섹션 목록 맨 앞에 끼우고, onQueryChange 로 디바운스된 검색어를 받아 자기 검색 훅을 돌린다(훅을
+// 여기로 넘기지 않아 rules-of-hooks 를 지킨다). 최근 본 위치 스토어는 두 페이지가 공유한다.
 
-export type LifeGoToKind = 'saved' | 'recent' | 'sido' | 'region' | 'subway' | 'bus' | 'place' | 'road' | 'parcel';
+export type LifeGoToKind = 'saved' | 'recent' | 'sido' | 'region' | 'subway' | 'bus' | 'place' | 'road' | 'parcel' | 'complex';
 export interface LifeGoToTarget {
   kind: LifeGoToKind;
   label: string;
@@ -31,6 +34,8 @@ export interface LifeGoToTarget {
   lat: number;
   lng: number;
   zoom: number;
+  // 이동 대상이 항목(예: 아파트 단지)이면 그 id — 페이지가 이동과 함께 선택(sel)까지 한다.
+  id?: string;
 }
 
 const ZOOM = { sido: 11, city: 13, district: 14, station: 16, address: 17 } as const;
@@ -45,7 +50,7 @@ const regionTarget = (p: WeatherPlace): LifeGoToTarget => ({
 const REMOTE_DEBOUNCE_MS = 250;
 const SECTION_LIMIT = 5;
 
-interface Section {
+export interface LifeGoToSection {
   key: string;
   title: string;
   items: LifeGoToTarget[];
@@ -61,9 +66,24 @@ interface Props {
   onGo: (target: LifeGoToTarget) => void;
   className?: string;
   variant?: 'panel' | 'bar';
+  // 페이지 고유 검색 섹션(입력 중일 때 맨 앞에). 비어 있고 로딩·오류도 아니면 그리지 않는다.
+  extraSections?: LifeGoToSection[];
+  // 디바운스된 검색어 통지(입력 없음/닫힘이면 ''). 페이지가 자기 검색 훅에 넣는다 — 안정된 참조로.
+  onQueryChange?: (debouncedQ: string) => void;
+  placeholder?: string;
 }
 
-export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className, variant = 'panel' }: Props) => {
+export const LifeGoToBox = ({
+  open,
+  onOpenChange,
+  savedLocation,
+  onGo,
+  className,
+  variant = 'panel',
+  extraSections,
+  onQueryChange,
+  placeholder = '지역·역·정류장·주소로 이동',
+}: Props) => {
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const isBar = variant === 'bar';
@@ -91,10 +111,14 @@ export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className
   const subwayQ = useSubwayStationSearch(debouncedQ);
   const busQ = useBusStationSearch(debouncedQ);
   const remoteQ = useLifeMapSearch(debouncedQ, 8);
+  // 페이지 검색 훅과의 동기화 — 디바운스된 값이 바뀔 때만 알린다(부모 setState 가 곧 외부 시스템).
+  useEffect(() => {
+    onQueryChange?.(debouncedQ);
+  }, [debouncedQ, onQueryChange]);
 
-  const sections = useMemo<Section[]>(() => {
+  const sections = useMemo<LifeGoToSection[]>(() => {
     if (!typing) return [];
-    const out: Section[] = [];
+    const out: LifeGoToSection[] = (extraSections ?? []).filter((s) => s.items.length > 0 || s.loading || s.error);
     const regions = searchWeatherPlaces(trimmed, SECTION_LIMIT).map(regionTarget);
     if (regions.length > 0) out.push({ key: 'region', title: '행정구역', items: regions });
     const subway = (subwayQ.data?.items ?? []).slice(0, SECTION_LIMIT).map<LifeGoToTarget>((s) => ({
@@ -130,7 +154,7 @@ export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className
       }
     }
     return out;
-  }, [typing, trimmed, subwayQ.data, subwayQ.isFetching, busQ.data, busQ.isFetching, remoteQ.data, remoteQ.isFetching, remoteQ.isError, debouncedQ]);
+  }, [typing, trimmed, extraSections, subwayQ.data, subwayQ.isFetching, busQ.data, busQ.isFetching, remoteQ.data, remoteQ.isFetching, remoteQ.isError, debouncedQ]);
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
   const activeIndex = flat.length > 0 ? Math.min(active, flat.length - 1) : -1;
   const anyLoading = sections.some((s) => s.loading);
@@ -184,7 +208,7 @@ export const LifeGoToBox = ({ open, onOpenChange, savedLocation, onGo, className
           }}
           onFocus={() => onOpenChange(true)}
           onKeyDown={onKeyDown}
-          placeholder="지역·역·정류장·주소로 이동"
+          placeholder={placeholder}
           aria-label="지역 이동 검색"
           aria-expanded={open}
           data-testid="life-goto-input"
@@ -343,6 +367,7 @@ const KIND_ICON: Record<LifeGoToKind, typeof MapPin> = {
   place: MapPin,
   road: MapPin,
   parcel: MapPin,
+  complex: Building2,
 };
 
 const ResultRow = ({ target, active, onSelect }: { target: LifeGoToTarget; active: boolean; onSelect: (t: LifeGoToTarget) => void }) => {

@@ -21,9 +21,34 @@
 | `life/cctv.csv` | 지방행정인허가데이터개방 전국 CCTV 설치현황 (CP949) | 79MB | `pnpm --filter friendly load:life-cctv data/open/life/cctv.csv` | **377,243행** |
 | `life/toilet.csv` | 지방행정인허가데이터개방 전국 공중화장실 (CP949) | 16MB | `pnpm --filter friendly load:life-toilets data/open/life/toilet.csv` | **53,559행** |
 | `eval/meal-photos/` | AI Hub 「한국 이미지(음식)」에서 **추출**한 평가셋 | 91MB | (적재 안 함 — 모델 평가 전용) | **150클래스 × 5장 = 750장** |
+| `housing/reb-complexes.csv` | 한국부동산원 공동주택 단지 식별정보_기본정보 — data.go.kr **15106861** (UTF-8 BOM, 2025-09-18 기준) | 44MB | `pnpm --filter friendly load:housing-complexes data/open/housing/reb-complexes.csv` | 307,408행 중 **아파트 45,920단지**(연립 24,033·다세대 237,454 은 1차 미적재) |
+| `housing/reb-complex-names.csv` | 한국부동산원 공동주택 단지 식별정보_단지명 이력정보 — data.go.kr **15106867** | 0.6MB | 위 명령의 `--names=` (기본 경로면 자동) | 8,905행 → 아파트 1,552단지 별칭 |
+| `housing/gongsi-2025.zip` | 국토교통부 주택 공시가격 정보(2025) — data.go.kr **3073746** (호별 공시가격, 2025-01-01 기준, 연 1회 · 다운로드 버튼이 JS 라 `selectFileDataDownload.do` → `fileDownload.do?atchFileId=` 순으로 받는다) | 144MB(zip) / CSV 3.4GB | `pnpm --filter friendly load:housing-prices` (zip 그대로 스트리밍) | 15,580,435행 → 아파트 단지 × 면적 구간 공시가격 중위·범위 + 도로명주소 |
+| `housing/kapt-mandatory.xlsx` | 국토교통부 공동주택 관리비 공개 의무단지 정보 — data.go.kr **15098979** (K-apt, 주 1회 · 포털에서 로그인 후 수동 다운로드) | ~2MB | `pnpm --filter friendly load:housing-kapt data/open/housing/kapt-mandatory.xlsx` | 단지코드·분양형태(임대 판별)·난방·승강기 |
 
 파일이 아닌 **API** 로 받는 것: 식품안전나라 레시피 `COOKRCP01`(1,156건 → 1,101종). 키는
 `.env` 의 `FOOD_RECIPE_API_KEY`. `pnpm --filter friendly load:food-catalog --source=recipe`.
+
+집값 실거래도 **API** — 국토교통부 아파트 매매 실거래가 상세(data.go.kr **15126468**, `RTMSDataSvcAptTradeDev`)·
+아파트 전월세 실거래가(**15126474**, `RTMSDataSvcAptRent`). 시군구(법정동 5자리) × 계약년월 단위로
+받으므로 원본 파일이 없고 `HousingTradeSync` 장부가 "어느 달을 받았나" 를 기억한다. 키는 `.env` 의
+`RTMS_API_KEY`(비우면 `BUS_API_KEY` 폴백 — 두 데이터셋 활용신청 필요, 개발계정 일 10,000콜).
+`pnpm --filter friendly load:housing-trades --months=24` 로 백필(≈12,000콜 → 이틀에 나눠 실행해도 장부가
+이어 받는다), 이후 `--recent=3` 으로 최근 3개월 재수집(신고 지연·해제 반영) — 서버의 `HOUSING_REFRESH_CRON`
+이 같은 일을 자동으로 한다. 단지 좌표는 지번 주소를 VWorld 로 지오코딩하며 일상지도와 **같은 캐시 압축본**
+(`apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz`)에 실린다 — 로컬에서 온라인 적재 후
+`export:life-geocode` 로 갱신해 커밋하면 운영은 `--offline` 으로 호출 0건.
+
+집값 보강 적재 순서(단지 마스터 → 실거래 → 공시가격 → K-apt → 건축물대장 → 좌표 보완). 단지 마스터를 재적재해도
+보강 컬럼·좌표는 같은 id 에서 이어받는다(`replaceHousingComplexes`).
+
+| 단계 | 명령 | 원천·쿼터 |
+|---|---|---|
+| 공시가격 | `load:housing-prices` | 위 zip, 쿼터 없음(연 1회 파일 교체) |
+| K-apt 속성 | `load:housing-kapt [xlsx]` / `--source=api` | 파일(주 1회) 또는 API 15057332·15058453(`KAPT_API_KEY`, 일 5,000) |
+| 건축물대장 | `load:housing-buildings --max-calls=9800` | 건축HUB 15134735(`BLDG_API_KEY`, 일 10,000 — 단지당 2콜, ≈5일) |
+| 좌표 보완 | `geocode:housing-missing [--offline]` | 도로명(공시가격·K-apt·건축물대장) → 지번 변형, VWorld 캐시 공유 |
+| 실거래 백필 | `load:housing-trades --months=60 --recent=0 --max-calls=9800` (매일) | 매매 2006-01~·전월세 2011-01~ 조회 가능 |
 
 영양성분은 [data.go.kr 15100070](https://www.data.go.kr/data/15100070/standard.do) 에 같은 내용의
 API(`tn_pubr_public_nutri_food_info_api`)도 있지만 **쓰지 않는다** — 배포본 CSV 가 같은 데이터이고

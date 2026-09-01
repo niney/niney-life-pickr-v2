@@ -45,6 +45,10 @@ export const RATE = {
   lifeMapRead: { max: 240, timeWindow: '1 minute' },
   // 일상지도 지역 이동 검색(VWorld 검색 프록시) — 타이핑 디바운스 뒤 호출이라 분당 60 이면 넉넉.
   lifeMapSearch: { max: 60, timeWindow: '1 minute' },
+  // 집값 뷰포트/주변/거래 목록 조회 — 일상지도와 같은 로컬 DB 조회·지도 이동마다 1콜. 분당 240.
+  housingRead: { max: 240, timeWindow: '1 minute' },
+  // 집값 단지명 검색 — 로컬 LIKE 조회, 타이핑 디바운스 뒤 호출. 분당 120.
+  housingSearch: { max: 120, timeWindow: '1 minute' },
   // 음식 카탈로그 자동완성(식단 입력) — 로컬 DB 조회라 싸지만 인증 사용자 타이핑 디바운스 호출.
   // 음식 여러 개를 연달아 입력하는 흐름을 고려해 분당 120.
   foodSearch: { max: 120, timeWindow: '1 minute' },

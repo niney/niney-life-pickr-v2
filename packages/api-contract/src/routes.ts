@@ -592,6 +592,25 @@ export const LifeMap = {
     `${API_PREFIX}/life-map/${encodeURIComponent(layer)}/${encodeURIComponent(id)}`,
 } as const;
 
+// ── 집값(아파트 실거래가 + 한국부동산원 단지 마스터) ─────────────────────────────
+// 공개(비로그인). 로컬 SQLite 조회뿐(적재는 스크립트·월 스케줄러). 지도 뷰포트(bbox)+줌이 조회 단위 —
+// 줌이 임계 이상이면 단지별 가격 배지, 아니면 서버 집계 셀(평당가). 축은
+// ?dealType=trade|jeonse|monthly&band=all|b1|b2|b3|b4(전용면적 구간)이며 모든 조회에 공통.
+export const Housing = {
+  // 적재 상태(단지 수·좌표 확보·거래 적재 범위·통계 시각).
+  status: `${API_PREFIX}/housing/status`,
+  // 뷰포트 조회 — ?bbox=minLng,minLat,maxLng,maxLat&zoom=[&dealType][&band].
+  points: `${API_PREFIX}/housing/points`,
+  // 좌표 기준 거리순 단지 — ?lat&lng[&radius≤3000][&limit≤30][&dealType][&band].
+  nearby: `${API_PREFIX}/housing/nearby`,
+  // 단지명 검색 — ?q=(1~40자)[&limit≤20]. 세대수 큰 순.
+  search: `${API_PREFIX}/housing/search`,
+  // 단지 상세(속성 + 유형×구간 통계) / 거래 목록(?dealType&band&limit&offset&includeCanceled).
+  // 인자는 빌더가 인코딩한다(라우트 등록은 decodeURIComponent 로 되돌린 패턴 사용).
+  complex: (id: string) => `${API_PREFIX}/housing/complexes/${encodeURIComponent(id)}`,
+  trades: (id: string) => `${API_PREFIX}/housing/complexes/${encodeURIComponent(id)}/trades`,
+} as const;
+
 export const Health = `${API_PREFIX}/health` as const;
 
 // review-search — 리뷰 문맥검색 / RAG (어드민 우선). 검색 단위는 식당(restaurantId).

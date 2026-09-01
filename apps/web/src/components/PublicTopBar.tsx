@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { to: '/restaurants-v2', label: '맛집' },
   { to: '/bus', label: '대중교통', match: ['/bus', '/subway'] },
   { to: '/life-map', label: '일상지도' },
+  { to: '/housing', label: '집값' },
   { to: '/weather', label: '날씨' },
   { to: '/air', label: '대기질' },
   { to: '/me/meals', label: '식단', requiresAuth: true },
@@ -46,8 +47,9 @@ interface Props {
 // 내 위치 칩(모바일 ~170px, lg+ ~340px)이 들어오면서 폭 구간마다 담는 것을 나눴다:
 //   <md   : [≡][로고] ··· [칩] 만. 테마·로그인/계정은 PublicSidebar 하단으로.
 //   md~lg : + 테마 · 로그인/계정 메뉴. NAV 는 아직 드로어(햄버거).
-//   lg+   : NAV 6개 가로 표시(768 에선 NAV 와 칩이 같이 못 들어간다). 칩도 lg 부터
-//           하늘 상태·PM2.5 까지 펼친다.
+//   lg+   : NAV 7개 가로 표시(768 에선 NAV 와 칩이 같이 못 들어간다). 칩도 lg 부터
+//           하늘 상태·PM2.5 까지 펼친다. 7번째 '집값' 은 라벨 2자(≈44px)라 1024 에서도
+//           칩(~340px)·테마·계정과 같은 줄에 든다 — 라벨을 늘리면 lg 구간을 재실측할 것.
 //   xl+   : 계정 메뉴 트리거에 이메일.
 // 그래도 넘치는 경우(아주 좁은 폭·긴 라벨)엔 버튼이 밀려나는 대신 칩이 줄어들게 —
 // 왼쪽 묶음은 shrink-0, 오른쪽 묶음·칩은 min-w-0.

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
+  Building2,
   Bus,
   CloudSun,
   Home,
@@ -36,6 +37,7 @@ const NAV: NavItem[] = [
   { to: '/restaurants-v2', label: '맛집', icon: UtensilsCrossed },
   { to: '/bus', label: '대중교통', icon: Bus, match: ['/bus', '/subway'] },
   { to: '/life-map', label: '일상지도', icon: MapPinned },
+  { to: '/housing', label: '집값', icon: Building2 },
   { to: '/weather', label: '날씨', icon: CloudSun },
   { to: '/air', label: '대기질', icon: Wind },
   { to: '/me/meals', label: '식단', icon: Salad, requiresAuth: true },

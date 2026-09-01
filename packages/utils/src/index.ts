@@ -23,6 +23,8 @@ export * from './dateLabel.js';
 export * from './weatherRegions.js';
 export * from './lifeMap.js';
 export * from './lifeMapMarker.js';
+export * from './housing.js';
+export * from './housingMarker.js';
 export * from './foodTaxonomy.js';
 export * from './mealNutrition.js';
 export * from './mealSlot.js';
