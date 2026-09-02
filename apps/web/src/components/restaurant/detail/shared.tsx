@@ -227,43 +227,51 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
     );
   }
   const kcalText = (item.kcal ?? 0).toLocaleString('ko-KR');
-  // 100g당 항목: 메뉴명에 중량이 있으면 그 양의 kcal 을 앞세우고(가정 없음), 없으면 "1인분(150g 기준)"을 부가 문구로.
+  // 100g당 항목은 숫자 하나만 보여 준다: 메뉴명 중량이 있으면 그 양("150g 약 461kcal", 가정 없음), 없으면 기준
+  // 중량 환산("1인분 약 1,095kcal (500g)"). 100g당 값과 기준 중량은 툴팁으로. 기준 환산은 추정이라 테두리 칩.
   const portion = item.basis !== 'per_serving' ? item.portion : undefined;
   const stated = portion?.basis === 'stated' ? portion : undefined;
   const typical = portion?.basis === 'typical' ? portion : undefined;
-  const typicalNote = typical ? (
-    <span className="ml-1 text-[10px] text-muted-foreground">
-      1인분({typical.grams}{typical.unit ?? 'g'} 기준) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
-    </span>
-  ) : null;
+  const fmt = (n: number): string => n.toLocaleString('ko-KR');
+  const label = stated
+    ? `${stated.grams}${stated.unit ?? 'g'} 약 ${fmt(stated.kcal)}kcal`
+    : typical
+      ? `1인분 약 ${fmt(typical.kcal)}kcal (${typical.grams}${typical.unit ?? 'g'})`
+      : `${basis} 약 ${kcalText}kcal`;
+  const portionNote = stated
+    ? ` · 100g당 ${kcalText}kcal`
+    : typical
+      ? ` · 1인분 기준 중량 ${typical.grams}${typical.unit ?? 'g'} 으로 환산 · 100g당 ${kcalText}kcal`
+      : '';
   const reference = item.nutritionFrom
     ? `${item.foodName} (${item.nutritionFrom} 기준 추정)`
     : item.foodName;
+  const shape = typical
+    ? 'border border-current/40 bg-transparent'
+    : item.matchedBy === 'web'
+      ? 'bg-sky-500/10'
+      : 'bg-amber-500/10';
+  const tone =
+    item.matchedBy === 'web' ? 'text-sky-700 dark:text-sky-400' : 'text-amber-700 dark:text-amber-400';
   if (item.matchedBy === 'web') {
     // 카탈로그 밖 음식 — 웹 실측 집계. 출처가 다르니 문구·색을 구분한다.
     return (
-      <>
       <span
-        className="inline-flex items-center rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-400"
-        title={`${item.foodName} · ${item.nutritionFrom ?? '웹 실측'} 기준 추정치${stated ? ` · 100g당 ${kcalText}kcal` : ''}`}
+        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${shape} ${tone}`}
+        title={`${item.foodName} · ${item.nutritionFrom ?? '웹 실측'} 기준 추정치${portionNote}`}
       >
-        웹 추정 {stated ? `${stated.grams}${stated.unit ?? 'g'} 약 ${stated.kcal.toLocaleString('ko-KR')}kcal` : `${basis} 약 ${kcalText}kcal`}
+        웹 추정 {label}
       </span>
-      {typicalNote}
-      </>
     );
   }
   const how = item.matchedBy === 'llm' ? 'AI 가 연결한 음식' : '기준';
   return (
-    <>
     <span
-      className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-400"
-      title={`${reference} ${how} · 식약처 식품영양성분 DB 추정치${stated ? ` · 100g당 ${kcalText}kcal` : ''}`}
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${shape} ${tone}`}
+      title={`${reference} ${how} · 식약처 식품영양성분 DB 추정치${portionNote}`}
     >
-      {stated ? `${stated.grams}${stated.unit ?? 'g'} 약 ${stated.kcal.toLocaleString('ko-KR')}kcal` : `${basis} 약 ${kcalText}kcal`}
+      {label}
     </span>
-    {typicalNote}
-    </>
   );
 };
 
