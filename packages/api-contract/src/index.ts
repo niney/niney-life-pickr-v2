@@ -37,6 +37,8 @@ export * from './schemas/settlement.js';
 export * from './schemas/settlement-contact.js';
 export * from './schemas/settlement-draft.js';
 export * from './schemas/vote.js';
+export * from './schemas/tarot.js';
+export * from './schemas/usage-quota.js';
 export * from './settlement.calculator.js';
 export * from './settlement.drink-kinds.js';
 export * as Routes from './routes.js';

@@ -18,6 +18,10 @@ declare module 'fastify' {
     resolveSseAdmin: (
       request: import('fastify').FastifyRequest,
     ) => Promise<{ userId: string; role: Role } | null>;
+    // 공개 라우트의 옵셔널 인증 — 유효한 토큰이면 사용자, 아니면 null(401 아님).
+    resolveOptionalUser: (
+      request: import('fastify').FastifyRequest,
+    ) => Promise<{ userId: string; role: Role } | null>;
   }
 
   interface FastifyRequest {

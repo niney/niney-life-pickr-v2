@@ -80,3 +80,7 @@ apps/web/vite.config.js
 #   /data/open/life/       지방행정인허가 CSV(CCTV·공중화장실)
 #   /data/open/eval/       모델 평가용 사진(AI Hub 추출본)
 /data/
+
+# 타로 카드 원본(제미나이 생성 PNG) — 리포에 넣지 않는다. 변환 산출물(webp)만
+# apps/web/public/tarot/cards 에 커밋. 프롬프트·빌드: docs/tarot-deck-prompts.md
+/assets-src/tarot/raw/

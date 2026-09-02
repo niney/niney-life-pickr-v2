@@ -646,3 +646,20 @@ export const ReviewClustering = {
   pending: `${API_PREFIX}/admin/review-clustering/cluster-pending`,
   publicClusters: (placeId: string) => `${API_PREFIX}/restaurants/${placeId}/clusters`,
 } as const;
+
+// 타로 — 공개 리딩(무인증, 옵셔널 인증이면 회원 자동 저장) + 회원 기록. 공유 링크는 3차.
+export const Tarot = {
+  // POST — 카드·스프레드·주제·질문 → 해석. X-Guest-Key 헤더로 게스트 일일 한도.
+  readings: `${API_PREFIX}/tarot/readings`,
+  // 회원 기록 목록(?cursor&limit) / 단건 조회·삭제.
+  myReadings: `${API_PREFIX}/tarot/me/readings`,
+  myReading: (id: string) => `${API_PREFIX}/tarot/me/readings/${id}`,
+} as const;
+
+// 공용 사용량 한도 — 어드민 "설정 > 사용량 한도". 기능별 게스트·IP·전역 일일 한도 + 그날 사용량.
+export const UsageQuota = {
+  // GET(?date=) — 모든 기능의 설정 + 사용량.
+  overview: `${API_PREFIX}/admin/quotas`,
+  // PUT — 기능 하나의 설정 부분 갱신.
+  setting: (feature: string) => `${API_PREFIX}/admin/quotas/${feature}`,
+} as const;

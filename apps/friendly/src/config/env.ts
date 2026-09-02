@@ -26,11 +26,14 @@ const EnvSchema = z.object({
   //  - OLLAMA_LOG_ANALYSIS_MODEL:   로그 분석(log-analysis) 기본 모델.
   //  - OLLAMA_MEAL_PHOTO_MODEL:     식단 사진 인식(meal-photo, vision) 기본 모델 — 식단 관리.
   //  - OLLAMA_MEAL_RECOMMEND_MODEL: 식단 추천(meal-recommend, 텍스트) 기본 모델 — 식단 관리.
+  //  - OLLAMA_TAROT_MODEL:          타로 해석(tarot, 텍스트) 기본 모델. 무인증 공개 기능이라
+  //                                 어드민에서 전용 키를 두는 것을 권장. 재측정: probe:tarot-reading.
   OLLAMA_DEFAULT_MODEL: z.string().default(''),
   OLLAMA_IMAGE_MODEL: z.string().default(''),
   OLLAMA_LOG_ANALYSIS_MODEL: z.string().default(''),
   OLLAMA_MEAL_PHOTO_MODEL: z.string().default(''),
   OLLAMA_MEAL_RECOMMEND_MODEL: z.string().default(''),
+  OLLAMA_TAROT_MODEL: z.string().default('gpt-oss:120b'),
   // 메뉴 칼로리 LLM 매칭(chat 용도 키 상속, 모델만 지정). 골든셋 84건 실측(2026-09-02):
   // gemma4:31b 88%(high 신뢰도만 29/30, p50 1.2s) / qwen3.5:397b 77% / gpt-oss:120b 68%.
   // 비우면 chat 기본 모델. 재측정: pnpm --filter friendly probe:menu-decompose.

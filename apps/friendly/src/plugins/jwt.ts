@@ -28,6 +28,23 @@ export default fp(async (app) => {
     request.user.role = fresh.role;
   });
 
+  // 공개 라우트의 옵셔널 인증 — Authorization 이 있고 유효(tokenVersion 무효화 반영)하면
+  // 사용자, 아니면 null. 회원 혜택(익명 한도 면제·자동 저장) 판정용이지 접근 제어가 아니다
+  // — 접근 제어는 authenticate. 무효 토큰도 401 이 아니라 "게스트" 로 취급한다.
+  app.decorate('resolveOptionalUser', async (request) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return null;
+    }
+    const fresh = await app.prisma.user.findUnique({
+      where: { id: request.user.userId },
+      select: { tokenVersion: true, role: true },
+    });
+    if (!fresh || fresh.tokenVersion !== (request.user.tv ?? 0)) return null;
+    return { userId: request.user.userId, role: fresh.role };
+  });
+
   app.decorate('requireAdmin', async (request, reply) => {
     if (request.user?.role !== 'ADMIN') {
       return reply.forbidden('Admin role required');

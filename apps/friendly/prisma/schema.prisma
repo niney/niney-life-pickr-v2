@@ -41,6 +41,7 @@ model User {
   mealRecommendationEvents MealRecommendationEvent[]
   mealDailyQuotas          MealDailyQuota[]
   mealDataImports          MealDataImport[]
+  tarotReadings            TarotReading[]
 
   @@map("users")
 }
@@ -2114,4 +2115,69 @@ model HousingComplexPrice {
 
   @@id([complexId, band])
   @@map("housing_complex_prices")
+}
+
+// ── 타로 ─────────────────────────────────────────────────────────────────────
+
+// 타로 리딩 — 회원은 자동 저장(userId), 게스트는 공유를 누를 때만 저장(guestKey, 3차).
+// 질문은 개인적일 수 있어 로그·텔레메트리에 남기지 않는다. cardsJson/resultJson 은 계약
+// (TarotDrawnCard[] / TarotReadingResult 의 해석 부분)의 JSON 스냅샷 — 카드 데이터가 바뀌어도
+// 당시 해석을 그대로 보여 준다. dailyLockKey 는 "userId:yyyy-mm-dd"(KST), 오늘의 카드(daily)
+// 회원 하루 1장 잠금 — 다른 스프레드는 null(SQLite unique 는 NULL 다중 허용).
+model TarotReading {
+  id            String   @id @default(cuid())
+  userId        String?
+  guestKey      String?
+  shareToken    String?  @unique
+  spreadId      String
+  topic         String
+  question      String   @default("")
+  choicesJson   String?
+  cardsJson     String
+  resultJson    String
+  source        String
+  model         String?
+  promptVersion Int      @default(1)
+  dayKey        String
+  dailyLockKey  String?  @unique
+  createdAt     DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("tarot_readings")
+}
+
+// ── 공용 사용량 한도 ────────────────────────────────────────────────────────
+
+// 기능별 한도 설정 — feature 당 1행. 행이 없으면 코드 기본값(usage-quota.service.ts).
+// 어드민 "설정 > 사용량 한도" 에서 편집. 0 은 제한 없음(ipPerMinute 제외).
+model UsageQuotaSetting {
+  feature        String   @id
+  enabled        Boolean  @default(true)
+  guestPerDay    Int
+  ipPerDay       Int
+  ipPerMinute    Int
+  globalPerDay   Int
+  guestCutoffPct Int
+  updatedAt      DateTime @updatedAt
+  updatedById    String?
+
+  @@map("usage_quota_settings")
+}
+
+// 사용량 카운터 — (feature, scope, key, date). scope: global('*') / ip / guest(게스트 키) / user.
+// meal_daily_quotas 와 같은 INSERT ... ON CONFLICT 조건부 UPDATE 로 확인+증가를 원자화한다.
+// 30일 지난 행은 스케줄에서 정리.
+model UsageQuotaCounter {
+  feature   String
+  scope     String
+  key       String
+  date      String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([feature, scope, key, date])
+  @@index([feature, date, scope])
+  @@map("usage_quota_counters")
 }

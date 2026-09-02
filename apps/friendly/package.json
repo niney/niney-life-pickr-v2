@@ -27,6 +27,8 @@
     "load:life-toilets": "tsx --env-file=.env scripts/load-life-toilets.ts",
     "load:life-hospitals": "tsx --env-file=.env scripts/load-life-hospitals.ts",
     "load:food-catalog": "tsx --env-file=.env scripts/load-food-catalog.ts",
+    "build:tarot-deck": "tsx scripts/build-tarot-deck.ts",
+    "probe:tarot-reading": "tsx --env-file=.env scripts/probe-tarot-reading.ts",
     "backfill:food-allergens": "tsx --env-file=.env scripts/backfill-food-allergens.ts",
     "probe:food-api": "tsx --env-file=.env scripts/probe-food-api.ts",
     "probe:meal-vision": "tsx --env-file=.env scripts/probe-meal-vision.ts",

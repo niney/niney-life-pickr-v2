@@ -82,7 +82,7 @@ const modelSizeB = (modelId: string): number => {
 
 // LLM 용도 — @repo/api-contract 의 LlmProviderPurpose 와 같은 값. utils 는
 // api-contract 에 의존할 수 없어(순환 금지) 리터럴 유니온으로 다시 적는다.
-type ModelPurpose = 'chat' | 'image' | 'log-analysis' | 'meal-photo' | 'meal-recommend';
+type ModelPurpose = 'chat' | 'image' | 'log-analysis' | 'meal-photo' | 'meal-recommend' | 'tarot';
 
 // 용도별로 카탈로그에서 합리적인 기본 모델을 한 개 고른다. UI 가 키 입력 후
 // "추천값"을 폼에 프리필하는 용도 — 강제가 아니라 시작점이다. 적합한 후보가
@@ -107,7 +107,7 @@ export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]
   if (purpose === 'log-analysis') {
     return bySize[bySize.length - 1] ?? null; // 가장 큰 모델
   }
-  // chat·meal-recommend — 규모 오름차순의 중앙값(작은 쪽으로 치우침).
+  // chat·meal-recommend·tarot — 규모 오름차순의 중앙값(작은 쪽으로 치우침).
   return bySize[Math.floor((bySize.length - 1) / 2)] ?? null;
 };
 

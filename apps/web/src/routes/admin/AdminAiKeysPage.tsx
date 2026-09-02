@@ -52,6 +52,7 @@ const PURPOSE_ORDER: LlmProviderPurposeType[] = [
   'log-analysis',
   'meal-photo',
   'meal-recommend',
+  'tarot',
 ];
 
 interface PurposeMeta {
@@ -90,6 +91,12 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
     icon: UtensilsCrossed,
     label: '식단 추천',
     desc: '식단 관리 — 내 식사 패턴으로 다음 끼니를 추천하는 텍스트 모델',
+    placeholder: 'gpt-oss:120b',
+  },
+  tarot: {
+    icon: Sparkles,
+    label: '타로 해석',
+    desc: '타로 — 뽑은 카드를 질문에 맞게 풀어 주는 텍스트 모델. 무인증 공개 기능이라 전용 키를 두면 계정 한도가 분리됩니다',
     placeholder: 'gpt-oss:120b',
   },
 };

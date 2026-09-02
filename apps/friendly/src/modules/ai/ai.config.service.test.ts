@@ -115,7 +115,7 @@ describe('AiConfigService', () => {
   });
 
   describe('list', () => {
-    it('synthesizes all five purposes when DB empty — chat env-backed, others inherit', async () => {
+    it('synthesizes all six purposes when DB empty — chat env-backed, others inherit', async () => {
       const out = await service.list();
       expect(out.map((p) => p.purpose).sort()).toEqual([
         'chat',
@@ -123,6 +123,7 @@ describe('AiConfigService', () => {
         'log-analysis',
         'meal-photo',
         'meal-recommend',
+        'tarot',
       ]);
       const chat = out.find((p) => p.purpose === 'chat')!;
       expect(chat).toMatchObject({
@@ -139,7 +140,7 @@ describe('AiConfigService', () => {
       });
       expect(chat.apiKeyMasked).toBe(maskApiKey(ENV.apiKey));
       // chat 외 용도는 계정(env) 키를 상속해 활성으로 보인다.
-      for (const purpose of ['image', 'log-analysis', 'meal-photo', 'meal-recommend'] as const) {
+      for (const purpose of ['image', 'log-analysis', 'meal-photo', 'meal-recommend', 'tarot'] as const) {
         const v = out.find((p) => p.purpose === purpose)!;
         expect(v).toMatchObject({ hasApiKey: true, keySource: 'inherited' });
       }
@@ -211,14 +212,15 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      // 나머지 용도(log-analysis·meal-photo·meal-recommend) 가상 row 까지 항상 다섯 장.
-      expect(out).toHaveLength(5);
+      // 나머지 용도(log-analysis·meal-photo·meal-recommend·tarot) 가상 row 까지 항상 여섯 장.
+      expect(out).toHaveLength(6);
       expect(out.map((p) => p.purpose).sort()).toEqual([
         'chat',
         'image',
         'log-analysis',
         'meal-photo',
         'meal-recommend',
+        'tarot',
       ]);
     });
 
@@ -239,7 +241,7 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      expect(out).toHaveLength(5);
+      expect(out).toHaveLength(6);
       const chat = out.find((p) => p.purpose === 'chat')!;
       const image = out.find((p) => p.purpose === 'image')!;
       expect(chat.updatedAt).toBeNull();

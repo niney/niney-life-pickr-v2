@@ -14,7 +14,7 @@ import { isTest } from '../config/env.js';
 //
 // ⚠️ 스푸핑 주의: :3000 을 nginx 우회로 직접 노출하면 XFF·CF-Connecting-IP 를
 //    위조할 수 있으니 방화벽으로 :3000 을 loopback/nginx 로만 제한해야 한다.
-const clientKey = (req: { headers: Record<string, unknown>; ip: string }): string => {
+export const clientKey = (req: { headers: Record<string, unknown>; ip: string }): string => {
   const cf = req.headers['cf-connecting-ip'];
   if (typeof cf === 'string' && cf.length > 0) return cf;
   return req.ip;
