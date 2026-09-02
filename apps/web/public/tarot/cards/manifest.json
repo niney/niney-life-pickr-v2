@@ -1,0 +1,405 @@
+{
+  "generatedAt": "2026-09-02T12:01:05.695Z",
+  "sizes": [
+    512,
+    1024
+  ],
+  "cards": {
+    "major-00": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-00.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-01": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-01.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-02": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-02.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-03": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-03.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-04": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-04.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-05": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-05.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-06": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-06.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-07": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-07.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-08": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-08.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-09": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-09.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-10": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-10.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-11": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-11.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-12": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-12.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-13": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-13.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-14": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-14.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-15": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-15.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-16": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-16.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-17": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-17.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-18": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-18.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-19": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-19.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-20": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-20.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "major-21": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\major-21.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-01": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-01.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-02": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-02.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-03": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-03.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-04": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-04.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-05": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-05.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-06": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-06.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-07": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-07.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-08": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-08.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-09": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-09.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-10": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-10.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-page": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-page.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-knight": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-knight.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-queen": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-queen.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "wands-king": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\wands-king.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-01": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-01.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-02": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-02.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-03": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-03.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-04": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-04.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-05": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-05.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-06": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-06.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-07": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-07.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-08": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-08.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-09": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-09.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-10": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-10.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-page": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-page.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-knight": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-knight.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-queen": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-queen.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-01": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-01.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-01": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-01.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "back": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\back.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "cups-king": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\cups-king.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-02": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-02.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-03": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-03.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-04": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-04.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-05": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-05.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-06": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-06.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-07": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-07.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-08": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-08.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-09": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-09.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-10": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-10.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-page": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-page.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-knight": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-knight.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-queen": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-queen.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "swords-king": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\swords-king.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-02": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-02.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-03": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-03.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-04": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-04.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-05": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-05.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-06": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-06.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-07": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-07.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-08": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-08.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-09": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-09.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-10": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-10.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-page": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-page.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-knight": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-knight.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-queen": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-queen.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    },
+    "pentacles-king": {
+      "placeholder": false,
+      "source": "assets-src\\tarot\\raw\\pentacles-king.jpg",
+      "builtAt": "2026-09-02T12:01:05.695Z"
+    }
+  },
+  "missing": []
+}
