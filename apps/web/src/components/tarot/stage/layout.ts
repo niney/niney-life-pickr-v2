@@ -68,6 +68,17 @@ export const stackPose = (i: number, worldZ = 1.0): Pose =>
 // 뽑기가 끝난 뒤 덱이 물러나 쉬는 자리(슬롯 뒤).
 export const restPose = (i: number): Pose => stackPose(i, -2.4);
 
+// 겹침 순서 고정 — 정점 근처 이웃 카드는 카메라 거리가 거의 같아 어느 쪽이 앞인지가 프레임마다
+// 뒤바뀌며 가운데 카드 문양이 반쪽씩 번갈아 가려졌다. 중앙에서 멀어질수록 뒤로 물려 "가운데가
+// 맨 앞, 바깥으로 갈수록 뒤" 로 결정한다. 순위는 **엄격 단조**여야 한다 — 78장(짝수)의 정중앙
+// 두 장을 |i - 중앙| 로만 재면 같은 값이라 동점이 되고, 호버했다 돌아올 때 마지막 순간 동점
+// 판정(먼저 그린 인스턴스 승)으로 튀어 반쪽이 다시 가려졌다. 오른쪽에 반 걸음을 더해 가른다.
+const FAN_Z_STEP = 0.008;
+const fanDepthRank = (i: number, n: number): number => {
+  const c = (n - 1) / 2;
+  return i <= c ? c - i : i - c + 0.5;
+};
+
 // 부채꼴 — i 번째 카드의 호 위 위치. lift 는 호버 들림(위로 + 카메라 쪽으로 튀어나옴).
 export const fanPose = (i: number, n: number, lift = 0): Pose => {
   const t = n <= 1 ? 0.5 : i / (n - 1);
@@ -75,7 +86,7 @@ export const fanPose = (i: number, n: number, lift = 0): Pose => {
   return makePose(
     FAN_R * Math.sin(th),
     FAN_Y + lift - Math.abs(th) * 0.25,
-    FAN_R * Math.cos(th) + lift * 0.6,
+    FAN_R * Math.cos(th) - fanDepthRank(i, n) * FAN_Z_STEP + lift * 0.6,
     FAN_TILT,
     Math.PI + th * 0.3,
     -th * 0.35,

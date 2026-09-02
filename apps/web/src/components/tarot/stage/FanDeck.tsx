@@ -163,8 +163,9 @@ export const FanDeck = ({ deckOrder, picked, phase, revealed, canPick }: Props) 
       tmp.p.copy(target.p);
       tmp.color.copy(COLOR_IDLE);
       if (phase === 'picking' && !isPicked) {
-        // 잔잔한 물결.
-        tmp.p.y += Math.sin(t * 1.4 + i * 0.21) * 0.025;
+        // 부채꼴 전체가 한 덩어리로 숨 쉬듯 — 카드마다 위상을 달리하면 위로 간 카드가 카메라에
+        // 미세하게 가까워져 이웃과 앞뒤가 뒤바뀌고(정점에서 특히) 문양이 번갈아 가려진다.
+        tmp.p.y += Math.sin(t * 1.1) * 0.02;
         if (hov === i) {
           tmp.p.y += HOVER_LIFT;
           tmp.p.z += HOVER_FORWARD;
