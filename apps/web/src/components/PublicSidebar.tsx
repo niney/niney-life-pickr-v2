@@ -11,6 +11,7 @@ import {
   Receipt,
   Salad,
   ShieldCheck,
+  Sparkles,
   UtensilsCrossed,
   Wind,
   X,
@@ -40,6 +41,7 @@ const NAV: NavItem[] = [
   { to: '/housing', label: '집값', icon: Building2 },
   { to: '/weather', label: '날씨', icon: CloudSun },
   { to: '/air', label: '대기질', icon: Wind },
+  { to: '/tarot', label: '타로', icon: Sparkles },
   { to: '/me/meals', label: '식단', icon: Salad, requiresAuth: true },
 ];
 

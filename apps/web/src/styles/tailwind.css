@@ -121,6 +121,8 @@
   --font-pretendard:
     'Pretendard Variable', Pretendard, system-ui, -apple-system, 'Segoe UI',
     Roboto, sans-serif;
+  /* 타로 타이틀 세리프(index.html 의 Noto Serif KR). 클래스 font-serif-kr. */
+  --font-serif-kr: 'Noto Serif KR', 'Nanum Myeongjo', Batang, Georgia, serif;
   /* 폰트 크기 한 단계(+1px) 시프트. spacing/icon 은 건드리지 않아 레이아웃이
      비례 비대해지지 않으면서 본문 가독성만 살짝 ↑. Tailwind v4 의 text-*
      유틸이 이 변수들을 직접 소비. */

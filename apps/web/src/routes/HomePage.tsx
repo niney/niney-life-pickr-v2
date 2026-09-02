@@ -59,6 +59,27 @@ export const HomePage = () => {
         </Link>
       </div>
 
+      {/* 타로 진입 — 맛집 밖의 "선택" 갈래. 로그인 없이 무료. */}
+      <Link
+        to="/tarot"
+        className="mb-10 block rounded-2xl border border-[#d9b65b]/30 bg-[radial-gradient(ellipse_at_15%_20%,#22306a,#05071a_70%)] p-5 text-[#ece6d6] shadow-lg transition hover:border-[#d9b65b]/70"
+      >
+        <div className="flex items-center gap-4">
+          <span className="text-3xl" aria-hidden>
+            🔮
+          </span>
+          <div className="min-w-0">
+            <div className="font-serif-kr text-lg font-bold text-[#f3e9c6]">타로로 골라 보기</div>
+            <div className="text-sm text-[#ece6d6]/70">
+              오늘의 카드, 세 장 리딩, A 냐 B 냐 선택 타로. 로그인 없이 무료.
+            </div>
+          </div>
+          <span className="ml-auto shrink-0 text-[#d9b65b]" aria-hidden>
+            →
+          </span>
+        </div>
+      </Link>
+
       <RestaurantFavoritesStrip items={favorites.items} onToggle={favorites.toggle} />
 
       <header className="mb-6 flex flex-col gap-2">

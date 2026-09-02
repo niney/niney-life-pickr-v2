@@ -41,6 +41,7 @@ const LifeMapPage = lazy(() =>
 const HousingPage = lazy(() =>
   import('./routes/HousingPage').then((m) => ({ default: m.HousingPage })),
 );
+const TarotPage = lazy(() => import('./routes/TarotPage').then((m) => ({ default: m.TarotPage })));
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -151,6 +152,8 @@ export const App = () => {
             <Route path="/life-map" element={<LifeMapPage />} />
             {/* 집값(아파트 실거래가·단지) — 공개 페이지, 일상지도와 같은 지도·시트 골격이라 lazy. */}
             <Route path="/housing" element={<HousingPage />} />
+            {/* 타로 — 로그인 없이 공개. 3D(three) 가 무거워 lazy, ?embed=1 이면 레이아웃 크롬 없이(앱 WebView). */}
+            <Route path="/tarot" element={<TarotPage />} />
             {/* 내 식단 — 기록은 앱에서 사진으로 남기고 웹은 조회·통계·추천. 로그인 필수. */}
             <Route
               path="/me/meals"

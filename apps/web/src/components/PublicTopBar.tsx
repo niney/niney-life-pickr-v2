@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/housing', label: '집값' },
   { to: '/weather', label: '날씨' },
   { to: '/air', label: '대기질' },
+  { to: '/tarot', label: '타로' },
   { to: '/me/meals', label: '식단', requiresAuth: true },
 ];
 

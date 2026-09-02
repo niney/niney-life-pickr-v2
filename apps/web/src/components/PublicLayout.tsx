@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useMemo, useState } from 'react';
-import { Outlet, useOutletContext } from 'react-router-dom';
+import { Outlet, useOutletContext, useSearchParams } from 'react-router-dom';
 import { PublicSidebar } from './PublicSidebar';
 import { PublicTopBar } from './PublicTopBar';
 
@@ -34,6 +34,20 @@ export const PublicLayout = () => {
     () => ({ setSubBar, headerHeight }),
     [setSubBar, headerHeight],
   );
+
+  // ?embed=1 — 앱 WebView 임베드(타로 등). 상단바·사이드바 없이 본문만, 헤더 높이 0.
+  const [params] = useSearchParams();
+  const embed = params.get('embed') === '1';
+  const embedCtx = useMemo<PublicLayoutContext>(() => ({ setSubBar, headerHeight: 0 }), [setSubBar]);
+  if (embed) {
+    return (
+      <div className="min-h-screen bg-background text-foreground font-pretendard">
+        <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+          <Outlet context={embedCtx} />
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground font-pretendard">

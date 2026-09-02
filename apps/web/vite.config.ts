@@ -40,6 +40,11 @@ export default defineConfig({
             },
             { name: 'query', test: /[\\/]node_modules[\\/]@tanstack[\\/]/ },
             { name: 'radix', test: /[\\/]node_modules[\\/]@radix-ui[\\/]/ },
+            // 타로 3D(three + R3F + drei + postprocessing) — /tarot lazy 청크만 참조하는 큰 벤더.
+            {
+              name: 'three',
+              test: /[\\/]node_modules[\\/](three|@react-three|postprocessing|maath|its-fine|@monogrid|three-stdlib|three-mesh-bvh|meshline|camera-controls|detect-gpu|troika-.*|stats-gl|stats\.js|zustand|suspend-react|react-use-measure|use-sync-external-store|@use-gesture|glsl-noise|hls\.js|@mediapipe|tunnel-rat|utility-types|webgl-sdf-generator|bidi-js)[\\/]/,
+            },
           ],
         },
       },
