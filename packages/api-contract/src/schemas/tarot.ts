@@ -122,3 +122,38 @@ export const ListTarotReadingsResult = z.object({
   nextCursor: z.string().nullable(),
 });
 export type ListTarotReadingsResultType = z.infer<typeof ListTarotReadingsResult>;
+
+// ── 공유 ────────────────────────────────────────────────────────────────────
+//
+// 공유 페이지의 텍스트는 언제나 서버가 만든 해석이다 — 게스트가 임의 문장을 보내 우리 도메인
+// 아래 게시하는 통로가 되지 않게, 게스트 공유는 리딩 **입력**(스프레드·카드·질문)만 받아 서버가
+// 캐시/LLM/정적으로 본문을 다시 확보해 저장한다. 회원은 저장된 readingId 로 토큰만 발급.
+// 질문은 사적일 수 있어 기본 숨김(includeQuestion).
+
+export const CreateTarotShareInput = z
+  .object({
+    readingId: z.string().min(1).max(64).optional(),
+    reading: CreateTarotReadingInput.optional(),
+    includeQuestion: z.boolean().default(false),
+  })
+  .refine((v) => !!v.readingId || !!v.reading, 'readingId 또는 reading 이 필요합니다.');
+export type CreateTarotShareInputType = z.infer<typeof CreateTarotShareInput>;
+
+export const TarotShareResult = z.object({
+  token: z.string(),
+  // 웹 공유 페이지 경로(origin 없음) — 클라이언트가 자기 origin 을 붙인다.
+  path: z.string(),
+  includeQuestion: z.boolean(),
+});
+export type TarotShareResultType = z.infer<typeof TarotShareResult>;
+
+// 공개 조회 — readingId·quota 없음. 질문은 includeQuestion 일 때만 채워진다(아니면 '').
+export const SharedTarotReading = TarotReadingResult.omit({ readingId: true, quota: true }).extend({
+  token: z.string(),
+  includeQuestion: z.boolean(),
+});
+export type SharedTarotReadingType = z.infer<typeof SharedTarotReading>;
+
+// 공유 이미지 형식 — og(1200×630, 링크 미리보기) / story(1080×1920, 카톡·인스타 세로).
+export const TarotShareImageFormat = z.enum(['og', 'story']);
+export type TarotShareImageFormatType = z.infer<typeof TarotShareImageFormat>;

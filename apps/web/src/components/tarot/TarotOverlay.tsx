@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Loader2, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { Loader2, RotateCcw, Share2, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import type {
   TarotChoicesType,
   TarotDrawnCardType,
@@ -29,6 +29,7 @@ import {
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { TarotCardImage } from './TarotCardImage';
+import { TarotShareSheet, type TarotShareBase } from './TarotShareSheet';
 import type { TarotRenderMode } from './tarotQuality';
 import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
 import { useTypewriter } from './useTypewriter';
@@ -258,6 +259,8 @@ interface ReadingPanelProps {
   resultStatus: TarotResultStatus;
   animate: boolean;
   side: 'right' | 'bottom';
+  // 공유 근거 — 회원은 readingId, 게스트는 리딩 입력. null 이면 공유 버튼 없음(결과 미도착 등).
+  shareBase: TarotShareBase | null;
   onRetry: () => void;
   onReset: () => void;
   onClose?: () => void;
@@ -274,6 +277,7 @@ const ReadingPanel = ({
   resultStatus,
   animate,
   side,
+  shareBase,
   onRetry,
   onReset,
   onClose,
@@ -283,6 +287,7 @@ const ReadingPanel = ({
   const allRevealed = revealed >= drawn.length && drawn.length > 0;
   const ready = resultStatus === 'ready' && !!result;
   const [collapsed, setCollapsed] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   return (
     <section
       aria-label="해석"
@@ -439,10 +444,42 @@ const ReadingPanel = ({
         <Button type="button" size="sm" onClick={onReset} className="bg-[#d9b65b] text-[#1a1408] hover:bg-[#e6c86f]">
           <RotateCcw className="size-3.5" /> 다시 뽑기
         </Button>
-        <span className="ml-auto text-[10px] text-[#ece6d6]/35">{TAROT_DISCLAIMER}</span>
+        {ready && shareBase && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setShareOpen(true)}
+            className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10"
+          >
+            <Share2 className="size-3.5" /> 공유
+          </Button>
+        )}
+        <span className="ml-auto hidden text-[10px] text-[#ece6d6]/35 sm:inline">{TAROT_DISCLAIMER}</span>
       </footer>
+      {shareBase && (
+        <TarotShareSheet open={shareOpen} onClose={() => setShareOpen(false)} base={shareBase} hasQuestion={!!question} />
+      )}
     </section>
   );
+};
+
+// 지금 상태에서 공유 근거 — 회원 저장분은 readingId, 게스트는 입력 그대로.
+const shareBaseOf = (
+  state: TarotFlowState<TarotReadingResultType>,
+  drawn: readonly TarotDrawnCardType[],
+): TarotShareBase | null => {
+  if (state.resultStatus !== 'ready' || !state.result) return null;
+  if (state.result.readingId) return { readingId: state.result.readingId };
+  return {
+    reading: {
+      spreadId: state.spreadId,
+      topic: state.topic,
+      question: state.question,
+      choices: state.spreadId === 'choice' ? { a: state.choiceA.trim(), b: state.choiceB.trim() } : null,
+      cards: drawn.map((d) => ({ cardId: d.cardId, position: d.position, reversed: d.reversed })),
+    },
+  };
 };
 
 export const TarotOverlay = ({
@@ -539,6 +576,7 @@ export const TarotOverlay = ({
           resultStatus={state.resultStatus}
           animate={animate}
           side={panelSide}
+          shareBase={shareBaseOf(state, state.drawn)}
           onRetry={onRetry}
           onReset={onReset}
         />
@@ -556,6 +594,15 @@ export const TarotOverlay = ({
           resultStatus="ready"
           animate={false}
           side={panelSide}
+          shareBase={{
+            reading: {
+              spreadId: review.result.spreadId,
+              topic: review.result.topic,
+              question: review.result.question,
+              choices: review.result.choices,
+              cards: review.cards.map((d) => ({ cardId: d.cardId, position: d.position, reversed: d.reversed })),
+            },
+          }}
           onRetry={() => {}}
           onReset={() => onReview(null)}
           onClose={() => onReview(null)}

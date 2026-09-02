@@ -11,6 +11,7 @@ import { env, isDev } from './config/env.js';
 import { registerRestaurantPreview } from './modules/restaurant/restaurant-preview.js';
 import { registerSharePreview } from './modules/settlement/share-preview.js';
 import { registerVotePreview } from './modules/vote/vote-preview.js';
+import { registerTarotPreview } from './modules/tarot/tarot-preview.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -73,6 +74,9 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
   // 그룹 투표 공유 링크 OG — /vote/:token (nginx `^~ /vote/` 프록시 필요, 없으면
   // SPA 는 동작하고 OG 만 부재).
   await registerVotePreview(app);
+
+  // 타로 공유 링크 OG + 공유 이미지 — /tarot/s/:token(/image.png). nginx `^~ /tarot/s/` 프록시 필요.
+  await registerTarotPreview(app);
 
   return app;
 }

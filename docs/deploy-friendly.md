@@ -171,6 +171,24 @@ location ^~ /s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
+# 타로 공유 링크(/tarot/s/<token>) OG + 공유 이미지(/tarot/s/<token>/image.png?format=og|story).
+# 이미지가 .png 라 정산과 같은 이유로 ^~ 필수. 없으면 SPA 는 동작하고 OG·이미지만 404.
+location ^~ /tarot/s/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
+# 타로 카드 이미지(apps/web/dist/tarot/cards/*.webp) — 아래 1년 immutable 규칙엔 webp 가 없다.
+# 카드를 같은 파일명으로 다시 생성해 교체할 수 있어 7일 캐시. 없는 카드는 index.html 폴백 대신
+# 진짜 404 로 떨어져야 웹이 대체 카드(이름 박스)를 그린다.
+location ^~ /tarot/cards/ {
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800";
+    try_files $uri =404;
+}
 # 그룹 투표 공유 링크(/vote/<token>) OG — friendly 가 head 메타를 주입한다.
 # 이 규칙이 없어도 nginx 가 정적 index.html 을 서빙해 SPA(투표)는 정상 동작하고
 # 카카오톡 등 미리보기(OG)만 빠진다. PNG 라우트는 없어 정규식 충돌 걱정은 없지만

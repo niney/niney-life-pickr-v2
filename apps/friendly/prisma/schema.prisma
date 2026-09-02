@@ -2140,6 +2140,8 @@ model TarotReading {
   promptVersion Int      @default(1)
   dayKey        String
   dailyLockKey  String?  @unique
+  // 공유 페이지에 질문을 노출할지(공유 시 선택, 기본 숨김).
+  shareQuestion Boolean  @default(false)
   createdAt     DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)

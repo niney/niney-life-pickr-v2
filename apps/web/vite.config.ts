@@ -60,6 +60,12 @@ export default defineConfig({
       },
       // 정산 카드 이미지(+OG 미리보기)는 Fastify 루트 경로에서 나온다. dev 에서도
       // 백엔드에 닿도록 프록시. prod 는 nginx 가 동일 prefix 를 Fastify 로 보낸다.
+      // 타로 공유 이미지(satori) — HTML(/tarot/s/<token>)은 dev 에선 Vite 가 SPA 로 서빙하고
+      // 이미지만 friendly 로. prod 는 nginx `^~ /tarot/s/` 가 둘 다 friendly 로 보낸다.
+      '^/tarot/s/[^/]+/image\\.png': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
       '/share/settlements': {
         target: 'http://localhost:3000',
         changeOrigin: true,

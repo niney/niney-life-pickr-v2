@@ -1,17 +1,21 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { PrismaClient, TarotReading as TarotReadingRow } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 import {
+  Routes,
   TarotReadingResult,
   type CreateTarotReadingInputType,
+  type CreateTarotShareInputType,
   type ListTarotReadingsQueryType,
   type ListTarotReadingsResultType,
+  type SharedTarotReadingType,
   type TarotChoicesType,
   type TarotDrawnCardType,
   type TarotReadingResultType,
   type TarotReadingSummaryType,
+  type TarotShareResultType,
   type TarotSpreadIdType,
   type TarotTopicType,
 } from '@repo/api-contract';
@@ -45,7 +49,9 @@ import {
 // - 질문 텍스트는 로그에 남기지 않는다(개인적일 수 있음). 텔레메트리는 토큰 수만 집계한다.
 // - 캐시 키는 (프롬프트 버전, 스프레드, 주제, 정규화 질문, 선택지, 카드) — 같은 조합은 LLM 을 다시
 //   부르지 않고 한도도 소비하지 않는다. 오늘의 카드(1장)는 156 조합뿐이라 사실상 전부 히트.
-// - 게스트는 저장하지 않는다(공유 시 저장은 3차). 회원은 자동 저장 + 오늘의 카드 하루 1장.
+// - 게스트는 저장하지 않는다. 회원은 자동 저장 + 오늘의 카드 하루 1장.
+// - 공유: 게스트는 리딩 입력을 다시 보내고 서버가 본문을 (캐시/LLM/정적으로) 확보해 행을 만든다 —
+//   클라이언트 텍스트를 게시하지 않기 위해. 회원은 저장된 행에 토큰만 단다.
 
 export type TarotErrorCode =
   | 'spread_unavailable'
@@ -204,6 +210,13 @@ export const toLlmBody = (
   };
 };
 
+// 검증을 통과한 리딩 입력.
+interface PreparedReading {
+  spread: TarotSpread;
+  choices: TarotChoicesType | null;
+  cards: TarotPromptCard[];
+}
+
 // ── 서비스 ──────────────────────────────────────────────────────────────────
 
 export class TarotService {
@@ -220,25 +233,8 @@ export class TarotService {
   }
 
   async createReading(input: CreateTarotReadingInputType, actor: TarotActor): Promise<TarotReadingResultType> {
-    const spread = getTarotSpread(input.spreadId);
-    if (!spread || !spread.available) {
-      throw new TarotError('spread_unavailable', '지금은 제공하지 않는 스프레드입니다.');
-    }
-    if (spread.memberOnly && !actor.userId) {
-      throw new TarotError('member_only', '로그인한 회원만 쓸 수 있는 스프레드입니다.');
-    }
-    const drawError = validateDrawnCards(spread, input.cards);
-    if (drawError) throw new TarotError('invalid_cards', DRAW_ERROR_MESSAGE[drawError]);
-    const choices = spread.id === 'choice' ? input.choices : null;
-    if (spread.id === 'choice' && !choices) {
-      throw new TarotError('choices_required', '선택 타로는 A·B 두 선택지가 필요합니다.');
-    }
-    const cards: TarotPromptCard[] = input.cards.map((drawn, i) => ({
-      drawn,
-      card: getTarotCard(drawn.cardId)!,
-      positionLabel: spread.positions[i]!.label,
-      positionHint: spread.positions[i]!.hint,
-    }));
+    const prepared = this.prepare(input, actor);
+    const { spread, choices } = prepared;
     const dayKey = this.deps.quota.today();
 
     // 오늘의 카드 계정 잠금 — 회원은 하루 1장. 이미 뽑았으면 그걸 돌려준다(한도 소비 없음).
@@ -249,28 +245,10 @@ export class TarotService {
       if (existing) return rowToResult(existing, null);
     }
 
-    const cacheKey = readingCacheKey(spread.id, input.topic, input.question, choices, input.cards);
-    let body = this.cache.get(cacheKey) ?? null;
-    let remaining: number | null = null;
-    if (body) {
-      remaining = await this.deps.quota.remainingForGuest(TAROT_QUOTA_FEATURE, actor);
-    } else {
-      const decision = await this.deps.quota.consume(TAROT_QUOTA_FEATURE, actor);
-      remaining = decision.remainingToday;
-      if (decision.allowed) {
-        body = await this.readWithLlm(spread, input.topic, input.question, choices, cards);
-        if (body) this.cache.set(cacheKey, body);
-      } else {
-        this.deps.logger?.debug({ reason: decision.reason, guest: !actor.userId }, '[tarot] 한도로 정적 해석');
-      }
-    }
-    if (!body) {
-      body = { source: 'static', model: null, ...buildStaticReading(spread, input.topic, cards, choices) };
-    }
-
+    const { body, remaining } = await this.resolveBody(input, prepared, actor);
     const createdAt = this.deps.now?.() ?? new Date();
     if (actor.userId) {
-      const row = await this.persist(actor.userId, spread, input, choices, body, dayKey, createdAt);
+      const row = await this.persist({ userId: actor.userId, guestKey: null, spread, input, choices, body, dayKey, createdAt });
       return rowToResult(row, null);
     }
     return {
@@ -283,6 +261,87 @@ export class TarotService {
       createdAt: createdAt.toISOString(),
       quota: { remainingToday: remaining },
     };
+  }
+
+  // 공유 토큰 발급. 회원은 저장된 행에 토큰을 달고, 게스트는 입력으로 본문을 다시 확보해 행을 만든다.
+  async createShare(input: CreateTarotShareInputType, actor: TarotActor): Promise<TarotShareResultType> {
+    let row: TarotReadingRow | null = null;
+    if (input.readingId) {
+      if (!actor.userId) throw new TarotError('not_found', '리딩을 찾을 수 없습니다.');
+      row = await this.prisma.tarotReading.findFirst({ where: { id: input.readingId, userId: actor.userId } });
+      if (!row) throw new TarotError('not_found', '리딩을 찾을 수 없습니다.');
+      if (!row.shareToken) {
+        row = await this.prisma.tarotReading.update({
+          where: { id: row.id },
+          data: { shareToken: await this.uniqueShareToken(), shareQuestion: input.includeQuestion },
+        });
+      } else if (row.shareQuestion !== input.includeQuestion) {
+        row = await this.prisma.tarotReading.update({
+          where: { id: row.id },
+          data: { shareQuestion: input.includeQuestion },
+        });
+      }
+    } else if (input.reading) {
+      const prepared = this.prepare(input.reading, actor);
+      const { body } = await this.resolveBody(input.reading, prepared, actor);
+      row = await this.persist({
+        userId: actor.userId,
+        guestKey: actor.userId ? null : actor.guestKey,
+        spread: prepared.spread,
+        input: input.reading,
+        choices: prepared.choices,
+        body,
+        dayKey: this.deps.quota.today(),
+        createdAt: this.deps.now?.() ?? new Date(),
+        shareToken: await this.uniqueShareToken(),
+        shareQuestion: input.includeQuestion,
+        // 공유용 행은 오늘의 카드 잠금에 끼지 않는다(회원의 오늘 카드는 createReading 이 이미 잠갔다).
+        skipDailyLock: true,
+      });
+    }
+    if (!row?.shareToken) throw new TarotError('not_found', '공유할 리딩이 없습니다.');
+    return { token: row.shareToken, path: Routes.Tarot.sharePage(row.shareToken), includeQuestion: row.shareQuestion };
+  }
+
+  async getShared(token: string): Promise<SharedTarotReadingType> {
+    const row = await this.prisma.tarotReading.findUnique({ where: { shareToken: token } });
+    if (!row) throw new TarotError('not_found', '공유 링크를 찾을 수 없습니다.');
+    const result = rowToResult(row, null);
+    return {
+      spreadId: result.spreadId,
+      topic: result.topic,
+      question: row.shareQuestion ? result.question : '',
+      choices: result.choices,
+      source: result.source,
+      model: result.model,
+      cards: result.cards,
+      summary: result.summary,
+      advice: result.advice,
+      keyword: result.keyword,
+      choice: result.choice,
+      createdAt: result.createdAt,
+      token,
+      includeQuestion: row.shareQuestion,
+    };
+  }
+
+  // OG 미리보기용 요약 — 없는 토큰이면 null(프리렌더가 일반 OG 로 폴백).
+  async getSharePreviewMeta(
+    token: string,
+  ): Promise<{ spreadName: string; keyword: string; cardNames: string[]; summary: string; updatedAt: string } | null> {
+    try {
+      const shared = await this.getShared(token);
+      return {
+        spreadName: getTarotSpread(shared.spreadId)?.nameKo ?? '타로',
+        keyword: shared.keyword,
+        cardNames: shared.cards.map((c) => `${c.nameKo}${c.reversed ? '(역)' : ''}`),
+        summary: shared.summary,
+        updatedAt: shared.createdAt,
+      };
+    } catch (e) {
+      if (e instanceof TarotError) return null;
+      throw e;
+    }
   }
 
   // 회원 기록 — 최신순 커서(id) 페이지네이션.
@@ -312,6 +371,55 @@ export class TarotService {
   }
 
   // ── 내부 ────────────────────────────────────────────────────────────────
+
+  private prepare(input: CreateTarotReadingInputType, actor: TarotActor): PreparedReading {
+    const spread = getTarotSpread(input.spreadId);
+    if (!spread || !spread.available) {
+      throw new TarotError('spread_unavailable', '지금은 제공하지 않는 스프레드입니다.');
+    }
+    if (spread.memberOnly && !actor.userId) {
+      throw new TarotError('member_only', '로그인한 회원만 쓸 수 있는 스프레드입니다.');
+    }
+    const drawError = validateDrawnCards(spread, input.cards);
+    if (drawError) throw new TarotError('invalid_cards', DRAW_ERROR_MESSAGE[drawError]);
+    const choices = spread.id === 'choice' ? input.choices : null;
+    if (spread.id === 'choice' && !choices) {
+      throw new TarotError('choices_required', '선택 타로는 A·B 두 선택지가 필요합니다.');
+    }
+    const cards: TarotPromptCard[] = input.cards.map((drawn, i) => ({
+      drawn,
+      card: getTarotCard(drawn.cardId)!,
+      positionLabel: spread.positions[i]!.label,
+      positionHint: spread.positions[i]!.hint,
+    }));
+    return { spread, choices, cards };
+  }
+
+  // 본문 확보 — 캐시 → 한도 → LLM → 정적. remaining 은 게스트 기기 잔여 횟수.
+  private async resolveBody(
+    input: CreateTarotReadingInputType,
+    prepared: PreparedReading,
+    actor: TarotActor,
+  ): Promise<{ body: TarotReadingBody; remaining: number | null }> {
+    const { spread, choices, cards } = prepared;
+    const cacheKey = readingCacheKey(spread.id, input.topic, input.question, choices, input.cards);
+    let body = this.cache.get(cacheKey) ?? null;
+    let remaining: number | null = null;
+    if (body) {
+      remaining = await this.deps.quota.remainingForGuest(TAROT_QUOTA_FEATURE, actor);
+    } else {
+      const decision = await this.deps.quota.consume(TAROT_QUOTA_FEATURE, actor);
+      remaining = decision.remainingToday;
+      if (decision.allowed) {
+        body = await this.readWithLlm(spread, input.topic, input.question, choices, cards);
+        if (body) this.cache.set(cacheKey, body);
+      } else {
+        this.deps.logger?.debug({ reason: decision.reason, guest: !actor.userId }, '[tarot] 한도로 정적 해석');
+      }
+    }
+    if (!body) body = { source: 'static', model: null, ...buildStaticReading(spread, input.topic, cards, choices) };
+    return { body, remaining };
+  }
 
   private async readWithLlm(
     spread: TarotSpread,
@@ -351,20 +459,28 @@ export class TarotService {
     }
   }
 
-  private async persist(
-    userId: string,
-    spread: TarotSpread,
-    input: CreateTarotReadingInputType,
-    choices: TarotChoicesType | null,
-    body: TarotReadingBody,
-    dayKey: string,
-    createdAt: Date,
-  ): Promise<TarotReadingRow> {
-    const dailyLockKey = spread.id === 'daily' ? dailyLockKeyOf(userId, dayKey) : null;
+  private async persist(args: {
+    userId: string | null;
+    guestKey: string | null;
+    spread: TarotSpread;
+    input: CreateTarotReadingInputType;
+    choices: TarotChoicesType | null;
+    body: TarotReadingBody;
+    dayKey: string;
+    createdAt: Date;
+    shareToken?: string;
+    shareQuestion?: boolean;
+    skipDailyLock?: boolean;
+  }): Promise<TarotReadingRow> {
+    const { userId, spread, input, choices, body, dayKey, createdAt } = args;
+    const dailyLockKey = spread.id === 'daily' && userId && !args.skipDailyLock ? dailyLockKeyOf(userId, dayKey) : null;
     try {
       return await this.prisma.tarotReading.create({
         data: {
           userId,
+          guestKey: args.guestKey,
+          shareToken: args.shareToken ?? null,
+          shareQuestion: args.shareQuestion ?? false,
           spreadId: spread.id,
           topic: input.topic,
           question: input.question,
@@ -387,6 +503,16 @@ export class TarotService {
       }
       throw e;
     }
+  }
+
+  // 추측 불가능한 7바이트 base64url 토큰 = 10자(정산 공유와 동일). 충돌 시 재생성.
+  private async uniqueShareToken(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const candidate = randomBytes(7).toString('base64url');
+      const clash = await this.prisma.tarotReading.findUnique({ where: { shareToken: candidate }, select: { id: true } });
+      if (!clash) return candidate;
+    }
+    throw new TarotError('not_found', '공유 토큰 생성에 실패했습니다. 다시 시도해 주세요.');
   }
 }
 

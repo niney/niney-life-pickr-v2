@@ -654,6 +654,14 @@ export const Tarot = {
   // 회원 기록 목록(?cursor&limit) / 단건 조회·삭제.
   myReadings: `${API_PREFIX}/tarot/me/readings`,
   myReading: (id: string) => `${API_PREFIX}/tarot/me/readings/${id}`,
+  // 공유 — POST(토큰 발급, 게스트는 리딩 입력·회원은 readingId) / GET 공개 조회.
+  shares: `${API_PREFIX}/tarot/shares`,
+  shared: (token: string) => `${API_PREFIX}/tarot/shares/${token}`,
+  // 웹 공유 페이지(origin 루트, API 아님) — friendly 가 같은 경로에서 OG 를 주입한다
+  // (nginx `^~ /tarot/s/` 프록시). 이미지는 satori 렌더(?format=og|story).
+  sharePage: (token: string) => `/tarot/s/${token}`,
+  shareImage: (token: string, format: 'og' | 'story' = 'og') =>
+    `/tarot/s/${token}/image.png${format === 'story' ? '?format=story' : ''}`,
 } as const;
 
 // 공용 사용량 한도 — 어드민 "설정 > 사용량 한도". 기능별 게스트·IP·전역 일일 한도 + 그날 사용량.
