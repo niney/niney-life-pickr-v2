@@ -21,6 +21,10 @@ export const ALLOWED_HOSTS = new Set([
   'ldb-phinf.pstatic.net',
   'search.pstatic.net',
   'video-phinf.pstatic.net',
+  // 배민 메뉴 사진(크롤로 들어오는 메뉴 imageUrls). 원본이 1280×960 급이라 56px 썸네일에
+  // 그대로 쓰면 스크롤이 버벅여 프록시로 리사이즈한다.
+  'imagefarm.baemin.com',
+  'file.smartbaedal.com',
 ]);
 
 const FETCH_TIMEOUT_MS = 5_000;

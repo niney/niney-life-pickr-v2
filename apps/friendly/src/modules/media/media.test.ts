@@ -32,6 +32,15 @@ describe('media thumbnail proxy', () => {
     expect(res.json()).toMatchObject({ error: 'host_not_allowed' });
   });
 
+  it('배민 메뉴 사진 호스트는 허용 목록에 있다(호스트 거부가 아니어야 한다)', async () => {
+    for (const host of ['imagefarm.baemin.com', 'file.smartbaedal.com']) {
+      const url = encodeURIComponent(`https://${host}/x/y.jpg`);
+      const res = await app.inject({ method: 'GET', url: `/api/v1/media/thumbnail?url=${url}` });
+      // 업스트림엔 없는 경로라 502 일 수 있지만, 400 host_not_allowed 면 안 된다.
+      expect(res.statusCode).not.toBe(400);
+    }
+  }, 15_000);
+
   // 회귀 테스트: 네이버 리뷰의 동영상 썸네일이 video-phinf.pstatic.net 으로
   // 서빙되는 케이스. 허용 목록에 포함돼 있어야 하고, 실제 업스트림에서 받아
   // 리사이즈해 200 JPEG 으로 돌려줘야 한다.

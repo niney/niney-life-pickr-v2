@@ -12,6 +12,9 @@ interface Props {
   alt?: string;
   className?: string;
   loading?: 'lazy' | 'eager';
+  // 고정 크기 썸네일이면 넘겨서 로드 전 자리(레이아웃 시프트 방지)를 잡는다.
+  width?: number;
+  height?: number;
 }
 
 export const ImgWithFallback = ({
@@ -19,6 +22,8 @@ export const ImgWithFallback = ({
   alt,
   className,
   loading = 'lazy',
+  width,
+  height,
 }: Props) => {
   const [failed, setFailed] = useState(false);
   // src 가 바뀌면 실패 상태를 렌더 중 리셋(useEffect 대신 파생) — 이중 렌더/1프레임
@@ -47,6 +52,10 @@ export const ImgWithFallback = ({
       src={src}
       alt={alt ?? ''}
       loading={loading}
+      // 디코딩을 메인 스레드 밖으로 — 큰 원본이 뷰포트에 들어올 때 스크롤 프레임을 잡아먹지 않게.
+      decoding="async"
+      width={width}
+      height={height}
       referrerPolicy={IMG_REFERRER_POLICY}
       onError={() => setFailed(true)}
       className={className}

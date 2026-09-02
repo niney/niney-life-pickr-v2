@@ -26,6 +26,14 @@ describe('reviewThumbnailUrl', () => {
     expect(reviewThumbnailUrl(url, 160)).toBe(url);
   });
 
+  it('배민 메뉴 사진 호스트는 프록시 URL 로 감싼다', () => {
+    const url = 'https://imagefarm.baemin.com/smartmenuimage/upload/image/2024/1/24/abc.jpg';
+    expect(reviewThumbnailUrl(url, 112)).toBe(
+      `/api/v1/media/thumbnail?${new URLSearchParams({ url, w: '112' }).toString()}`,
+    );
+    expect(reviewThumbnailUrl('https://file.smartbaedal.com/a.jpg', 112)).toContain('/media/thumbnail?');
+  });
+
   it('pstatic 을 흉내낸 다른 도메인은 통과시키지 않고 원본 반환', () => {
     const url = 'https://evilpstatic.net/a.jpg';
     expect(reviewThumbnailUrl(url, 160)).toBe(url);

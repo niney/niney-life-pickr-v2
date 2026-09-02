@@ -9,6 +9,7 @@ import type {
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
 import { Lightbox } from '~/components/Lightbox';
+import { thumbUrl } from '~/lib/thumbUrl';
 import { SENTIMENT_COLORS } from '../colors';
 
 interface Props {
@@ -170,7 +171,7 @@ export const MenuGrid = ({ menus, insights, kcalByName, onSelectMenu }: Props) =
                 style={({ pressed }) => [styles.thumbWrap, pressed && { opacity: 0.7 }]}
               >
                 <Image
-                  source={m.imageUrls[0]}
+                  source={thumbUrl(m.imageUrls[0], 112)}
                   style={[styles.thumb, { backgroundColor: theme.colors.surfaceAlt }]}
                   recyclingKey={m.imageUrls[0]}
                   contentFit="cover"

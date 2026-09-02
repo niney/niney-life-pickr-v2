@@ -7,7 +7,7 @@ import type {
   RestaurantMenuKcalItemType,
   RestaurantPublicDetailType,
 } from '@repo/api-contract';
-import { formatWonPrice } from '@repo/utils';
+import { formatWonPrice, reviewThumbnailUrl } from '@repo/utils';
 import {
   ExternalLink,
   Lightbulb,
@@ -341,8 +341,12 @@ export const MenuGrid = ({
                   className="relative size-14 shrink-0 overflow-hidden rounded"
                   aria-label={`"${m.name}" 메뉴 사진 크게 보기`}
                 >
+                  {/* 원본(1,000~3,000px, 최대 2MB 급)을 56px 칸에 그대로 그리면 스크롤마다
+                      디코딩이 터져 버벅인다 — 프록시로 112px(2x)까지 줄여 받는다. */}
                   <ImgWithFallback
-                    src={m.imageUrls[0]}
+                    src={reviewThumbnailUrl(m.imageUrls[0], 112)}
+                    width={56}
+                    height={56}
                     className="size-14 rounded object-cover transition-opacity hover:opacity-90"
                   />
                   {m.imageUrls.length > 1 && (
@@ -673,7 +677,7 @@ export const ReviewCard = ({
               className="shrink-0 snap-start overflow-hidden rounded bg-muted"
             >
               <ImgWithFallback
-                src={u}
+                src={reviewThumbnailUrl(u, 480)}
                 className="h-56 w-auto object-cover transition-transform active:scale-95 sm:h-64"
               />
             </button>
