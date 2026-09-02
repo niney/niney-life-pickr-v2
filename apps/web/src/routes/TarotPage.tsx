@@ -2,7 +2,13 @@ import { lazy, Suspense, useCallback, useMemo, useReducer, useState } from 'reac
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import type { TarotReadingResultType } from '@repo/api-contract';
-import { useAuthStore, useCreateTarotReading, useTarotHistoryStore, type TarotHistoryEntry } from '@repo/shared';
+import {
+  useAuthStore,
+  useCreateTarotReading,
+  useMyTarotReadings,
+  useTarotHistoryStore,
+  type TarotHistoryEntry,
+} from '@repo/shared';
 import {
   createTarotFlowState,
   newTarotSeed,
@@ -52,6 +58,13 @@ export const TarotPage = () => {
   const removeHistory = useTarotHistoryStore((s) => s.remove);
   const isMember = useAuthStore((s) => !!s.token);
   const [review, setReview] = useState<TarotHistoryEntry | null>(null);
+  // 회원의 오늘 오늘의 카드(서버 하루 1장 잠금) — 있으면 daily 재뽑기 대신 기록으로 안내.
+  const mine = useMyTarotReadings(20);
+  const todayKst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+  const todayDailyId =
+    mine.data?.items.find(
+      (i) => i.spreadId === 'daily' && new Date(i.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }) === todayKst,
+    )?.id ?? null;
 
   const requestReading = useCallback(
     (s: State) => {
@@ -158,6 +171,7 @@ export const TarotPage = () => {
         onReview={setReview}
         onRemoveHistory={removeHistory}
         isMember={isMember}
+        todayDailyId={todayDailyId}
         panelSide={panelSide}
       />
     </div>

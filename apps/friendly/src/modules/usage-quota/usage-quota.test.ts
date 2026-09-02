@@ -158,7 +158,12 @@ describe('UsageQuotaService (격리 DB)', () => {
       payload: { guestPerDay: 9, guestCutoffPct: 70 },
     });
     expect(put.statusCode).toBe(200);
-    expect(put.json()).toMatchObject({ feature: F, guestPerDay: 9, guestCutoffPct: 70, ipPerDay: 60 });
+    expect(put.json()).toMatchObject({
+      feature: F,
+      guestPerDay: 9,
+      guestCutoffPct: 70,
+      ipPerDay: USAGE_QUOTA_DEFAULTS[F].ipPerDay,
+    });
     expect(put.json().updatedAt).toBeTypeOf('string');
 
     const get = await app.inject({

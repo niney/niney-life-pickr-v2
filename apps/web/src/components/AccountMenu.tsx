@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, CircleUserRound, LogOut, Receipt, ShieldCheck } from 'lucide-react';
+import { ChevronDown, CircleUserRound, LogOut, Receipt, ShieldCheck, Sparkles } from 'lucide-react';
 import { buttonVariants } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 
@@ -71,6 +71,10 @@ export const AccountMenu = ({ email, isAdmin, onLogout }: Props) => {
           <Link to="/me/settlements" onClick={close} className={ITEM}>
             <Receipt className="size-4 text-muted-foreground" />
             내 정산
+          </Link>
+          <Link to="/me/tarot" onClick={close} className={ITEM}>
+            <Sparkles className="size-4 text-muted-foreground" />
+            내 타로 기록
           </Link>
           {isAdmin && (
             <Link to="/admin" onClick={close} className={ITEM}>

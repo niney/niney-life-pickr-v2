@@ -235,10 +235,12 @@ model UsageQuotaCounter {
 
 | 층 | 대상 | 기본값 | 비고 |
 |---|---|---|---|
-| IP 분당 | 전원 | 6 | `@fastify/rate-limit`, `max` 를 설정 캐시에서 읽는 함수. 폭주 클라이언트 방어라 회원도 적용 |
-| 게스트 키 일일 | 게스트 | 5 | 키 재생성으로 우회 가능함을 수용, 아래 두 층이 보완 |
-| IP 일일 | 게스트 | 60 | CGNAT 고려 넉넉히 |
-| 전역 일일 | 전원 | 300 | LLM 예산. 80% 넘으면 게스트는 정적 해석, 회원은 100% 까지 |
+| IP 분당 | 전원 | 20 | `@fastify/rate-limit`, `max` 를 설정 캐시에서 읽는 함수. 폭주 클라이언트 방어라 회원도 적용 |
+| 게스트 키 일일 | 게스트 | 50 | 키 재생성으로 우회 가능함을 수용, 아래 두 층이 보완 |
+| IP 일일 | 게스트 | 500 | CGNAT 고려 게스트 기기의 10배 |
+| 전역 일일 | 전원 | 5000 | LLM 예산. 90% 넘으면 게스트는 정적 해석, 회원은 100% 까지 |
+
+기본값은 넉넉하게 둔다(사용자 결정 2026-09-02 — "정상 사용자가 걸리지 않게, 비용이 문제 되면 어드민에서 내린다"). 값의 단일 출처는 `usage-quota.service.ts` 의 `USAGE_QUOTA_DEFAULTS`, 운영 조정은 `/admin/settings/quotas`.
 | 회원 | 회원 | 없음 | 기기·IP 일일 한도 면제 |
 
 - 본문 zod 바운드(카드 ≤ 10, 질문 ≤ 200자), 카드 id 는 `@repo/utils` 목록으로 검증, 질문은 프롬프트에 데이터 블록으로만.
@@ -252,7 +254,7 @@ model UsageQuotaCounter {
 | **1차** ✅ | api-contract 스키마·Routes / friendly `tarot` 모듈(purpose·프롬프트·정적 폴백·캐시) / `usage-quota` 공용 서비스 + `resolveOptionalUser` + `X-Guest-Key` + shared 게스트 키 스토어·API·훅 / `probe:tarot-reading` | 마이그레이션 1건(`20260903120000_add_tarot_reading_and_usage_quota`: TarotReading + UsageQuotaSetting/Counter), 테스트 34건 |
 | **2차** ✅ | 웹 `/tarot` 3D 전 흐름 + Lite 폴백 + 임베드 모드 + 사이드바·홈 카드 + 로컬 기록 | `apps/web/src/components/tarot/**`(stage: layout·textures·StageContext·FanDeck·DrawnCard·Scene / TarotStage·TarotOverlay·TarotLite·TarotCardImage·tarotQuality·useTypewriter), `routes/TarotPage.tsx`(+test 4건), shared `tarotHistoryStore`, PublicLayout `?embed=1` |
 | **3차** ✅ | 공유(토큰·페이지·OG·세로 이미지·nginx 문서) | friendly `tarot-share-card.ts`·`tarot-preview.ts`, `lib/web-index.ts`·`lib/share-fonts.ts`, 마이그레이션 `add_tarot_share_question`; 웹 `TarotShareSheet`·`TarotSharedPage`·`TarotReadingView`(`/tarot/s/:token`); 테스트 friendly 6·웹 2 |
-| **4차** | 어드민 사용량 한도 탭 + 회원 자동 저장·`/me/tarot`·오늘의 카드 계정 잠금·삭제 | `AdminQuotasPage` |
+| **4차** ✅ | 어드민 사용량 한도 탭 + 회원 자동 저장·`/me/tarot`·오늘의 카드 계정 잠금·삭제 | `routes/admin/AdminQuotasPage.tsx`(설정 탭 "사용량 한도"), `routes/tarot/MyTarotPage.tsx`·`MyTarotReadingPage.tsx`(`/me/tarot`, `/me/tarot/:id`), 계정 메뉴 "내 타로 기록", shared `useMyTarotReadingsInfinite`; 테스트 4건 |
 | **v2** | 켈틱크로스 10장 / 앱 WebView 임베드 / SSE 스트리밍 / 효과음 | |
 | **v3 후보** | 메뉴 타로(수트·원소 → 음식 분류 → 맛집 DB 추천) | |
 
@@ -269,6 +271,7 @@ model UsageQuotaCounter {
 ## 진행 기록
 
 - 2026-09-02: 계획 작성. 결정 1~16 확정.
+- 2026-09-02: **4차 완료.** 어드민 설정 > "사용량 한도" 탭(`/admin/settings/quotas`): 기능별 enabled·게스트 기기/IP 일일·IP 분당·전역 예산·게스트 컷 % 편집(noValidate + 한국어 검증), 날짜별 사용량(전역 진행률·컷 표시·scope 합계·상위 게스트 키/IP). 회원 기록 `/me/tarot`(커서 더 보기·행 내 2단계 삭제) + `/me/tarot/:id`(TarotReadingView·공유(readingId)·삭제 후 목록 복귀), 계정 메뉴 "내 타로 기록", 타로 설정 패널에 회원용 "내 타로 기록" 링크와 오늘의 카드 잠금 안내(오늘 daily 가 있으면 섞기 비활성 + "오늘 카드 보기"). 해석 패널은 결과가 오면 결과의 카드 메타를 진실로 쓴다(서버 잠금으로 다른 카드가 올 수 있음). 미커밋.
 - 2026-09-02: **가운데 카드 호버 복귀 튐 수정.** 78장(짝수) 정중앙 두 장은 |i − 중앙| 이 같아 z 동점 → 호버했다 돌아올 때 마지막 순간 동점 판정(먼저 그린 인스턴스 승)으로 반쪽이 다시 가려졌다. 깊이 순위를 엄격 단조(`fanDepthRank`: 왼쪽 c−i, 오른쪽 i−c+0.5)로, 걸음 0.008.
 - 2026-09-02: **가운데 카드 떨림 수정.** 사용자 관찰("가운데 카드를 가만히 보면 이상"). 정점 이웃 카드는 카메라 거리가 거의 같고(정중앙 두 장은 대칭이라 동일) 카드별 위상이 다른 상하 물결이 위로 간 카드를 미세하게 카메라 쪽으로 보내, 이웃이 가운데 카드 문양을 반쪽씩 번갈아 덮었다. `fanPose` 에 중앙 거리 × 0.006(카드 두께 0.0045 보다 큼) z 후퇴를 넣어 "가운데가 맨 앞" 으로 순서를 고정하고, 물결은 부채꼴 전체 동일 위상으로.
 - 2026-09-02: **부채꼴 호버 개선.** 사용자 피드백("마우스오버가 어색"). 원인은 레이캐스트 기반 호버 — 들려 올라간 카드의 현재 위치를 맞히므로 포인터 밑에서 카드가 빠지면 이웃으로 바뀌고 다시 내려오는 떨림(팝콘)과, 14px 씩 겹친 부채꼴에서 어느 카드가 잡히는지 예측 불가. 정지 포즈의 화면 투영 x 최근접 판정(+히스테리시스 0.004 NDC, 세로 띠 ±0.42)으로 바꾸고, 호버 카드는 들림 0.42·전진 0.5·1.05 배·instanceColor 로 밝게, 이웃 7장은 거리 반비례로 좌우로 밀어 자리를 내준다. 클릭은 호버 중인 카드를 우선(터치는 레이캐스트 폴백).

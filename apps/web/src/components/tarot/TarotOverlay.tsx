@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Loader2, RotateCcw, Share2, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import type {
   TarotChoicesType,
@@ -50,6 +51,9 @@ export interface TarotOverlayProps {
   onReview: (entry: TarotHistoryEntry | null) => void;
   onRemoveHistory: (id: string) => void;
   isMember: boolean;
+  // 회원이 오늘 이미 뽑은 오늘의 카드 id — 있으면 daily 스프레드는 다시 뽑지 않고 기록으로 안내
+  // (서버가 하루 1장으로 잠가 새로 뽑아도 저장된 카드가 돌아온다).
+  todayDailyId: string | null;
   panelSide: 'right' | 'bottom';
 }
 
@@ -79,9 +83,14 @@ const SetupPanel = ({
   onReview,
   onRemoveHistory,
   isMember,
-}: Pick<TarotOverlayProps, 'state' | 'send' | 'onStart' | 'history' | 'onReview' | 'onRemoveHistory' | 'isMember'>) => {
+  todayDailyId,
+}: Pick<
+  TarotOverlayProps,
+  'state' | 'send' | 'onStart' | 'history' | 'onReview' | 'onRemoveHistory' | 'isMember' | 'todayDailyId'
+>) => {
   const error = getTarotSetupError(state);
   const spread = getTarotSpread(state.spreadId);
+  const dailyLocked = isMember && state.spreadId === 'daily' && !!todayDailyId;
   return (
     <section
       className={cn(
@@ -176,7 +185,7 @@ const SetupPanel = ({
       <Button
         type="button"
         onClick={onStart}
-        disabled={!!error}
+        disabled={!!error || dailyLocked}
         className="mt-4 h-11 w-full bg-[#d9b65b] text-[#1a1408] hover:bg-[#e6c86f] disabled:opacity-40"
       >
         <Wand2 className="size-4" /> 카드 섞기
@@ -184,7 +193,23 @@ const SetupPanel = ({
       {error === 'choice_required' && (
         <p className="mt-1 text-center text-[11px] text-[#ffb4a2]">A 와 B 선택지를 모두 적어 주세요.</p>
       )}
+      {dailyLocked && (
+        <p className="mt-1 text-center text-[11px] text-[#ece6d6]/70">
+          오늘의 카드는 이미 뽑았어요.{' '}
+          <Link to={`/me/tarot/${todayDailyId}`} className="text-[#d9b65b] underline-offset-2 hover:underline">
+            오늘 카드 보기
+          </Link>
+        </p>
+      )}
       <p className="mt-3 text-center text-[11px] text-[#ece6d6]/45">{TAROT_DISCLAIMER}</p>
+      {isMember && (
+        <p className="mt-2 text-center text-[11px] text-[#ece6d6]/55">
+          리딩은 자동 저장돼요 ·{' '}
+          <Link to="/me/tarot" className="text-[#d9b65b] underline-offset-2 hover:underline">
+            내 타로 기록
+          </Link>
+        </p>
+      )}
 
       {!isMember && history.length > 0 && (
         <div className="mt-4 border-t border-white/10 pt-3">
@@ -341,10 +366,12 @@ const ReadingPanel = ({
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <ol className="flex flex-col gap-4">
-          {shown.map((d, i) => {
+          {shown.map((drawnCard, i) => {
+            const r = ready ? result.cards[i] : undefined;
+            // 서버가 다른 카드를 돌려줄 수 있다(회원 오늘의 카드 잠금) — 결과가 오면 결과의 카드가 진실.
+            const d = r ? { cardId: r.cardId, position: r.position, reversed: r.reversed } : drawnCard;
             const card = getTarotCard(d.cardId);
             if (!card) return null;
-            const r = ready ? result.cards[i] : undefined;
             const text = r?.text ?? tarotCardMeaning(card, d.reversed);
             const keywords = r?.keywords ?? tarotCardKeywords(card, d.reversed);
             const isLast = i === shown.length - 1;
@@ -495,6 +522,7 @@ export const TarotOverlay = ({
   onReview,
   onRemoveHistory,
   isMember,
+  todayDailyId,
   panelSide,
 }: TarotOverlayProps) => {
   const total = tarotRequiredPicks(state);
@@ -520,6 +548,7 @@ export const TarotOverlay = ({
           onReview={onReview}
           onRemoveHistory={onRemoveHistory}
           isMember={isMember}
+          todayDailyId={todayDailyId}
         />
       )}
 

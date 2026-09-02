@@ -17,6 +17,7 @@ import { AdminDiscoverPage } from './AdminDiscoverPage';
 import { AdminHomePage } from './AdminHomePage';
 import { AdminLogRunDetailPage } from './AdminLogRunDetailPage';
 import { AdminLogSettingsPage } from './AdminLogSettingsPage';
+import { AdminQuotasPage } from './AdminQuotasPage';
 import { AdminLogsPage } from './AdminLogsPage';
 import { AdminMapKeysPage } from './AdminMapKeysPage';
 import { AdminRestaurantDetailPage } from './AdminRestaurantDetailPage';
@@ -87,6 +88,7 @@ const AdminRoutes = () => (
         <Route path="map" element={<AdminMapKeysPage />} />
         <Route path="telegram" element={<AdminTelegramPage />} />
         <Route path="logs" element={<AdminLogSettingsPage />} />
+        <Route path="quotas" element={<AdminQuotasPage />} />
       </Route>
     </Route>
   </Routes>

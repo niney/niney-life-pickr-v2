@@ -8,7 +8,7 @@ import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/tem
 import { AiConfigService, type LlmProviderEnv } from '../ai/ai.config.service.js';
 import type { AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/adapters/llm-provider.js';
-import { UsageQuotaService } from '../usage-quota/usage-quota.service.js';
+import { USAGE_QUOTA_DEFAULTS, UsageQuotaService } from '../usage-quota/usage-quota.service.js';
 import { buildStaticReading } from './tarot-static.js';
 import type { TarotPromptCard } from './tarot.prompts.js';
 import {
@@ -18,6 +18,9 @@ import {
   readingCacheKey,
   type TarotServiceDeps,
 } from './tarot.service.js';
+
+// 기본 게스트 일일 한도 — 기대값이 기본값을 따라가게(값을 바꿔도 테스트가 안 깨지게).
+const GUEST_PER_DAY = USAGE_QUOTA_DEFAULTS['tarot-reading'].guestPerDay;
 
 // 타로 — 계약↔utils 동기화, 정적 해석, LLM 출력 파싱은 순수 함수로, 서비스(캐시·한도·수리·저장·
 // 오늘의 카드 잠금)는 FakeProvider + 격리 DB 로, 라우트는 provider 비활성 행으로 정적 경로만 친다.
@@ -196,7 +199,7 @@ describe('TarotService (격리 DB)', () => {
     expect(res).toMatchObject({ readingId: null, source: 'llm', model: 'gpt-oss:120b', keyword: '희망', choice: null });
     expect(res.cards[0]).toMatchObject({ nameKo: '별', nameEn: 'The Star', positionLabel: '상황', text: 'situation 자리 해석입니다.' });
     expect(res.cards[1]).toMatchObject({ reversed: true, keywords: getTarotCard('wands-08')!.keywordsReversed });
-    expect(res.quota.remainingToday).toBe(4);
+    expect(res.quota.remainingToday).toBe(GUEST_PER_DAY - 1);
     expect(provider.calls).toHaveLength(1);
     expect(provider.calls[0]!.prompt).toContain('이직할까요?');
     expect(provider.calls[0]!.prompt).toContain('별 (The Star), 정방향');
@@ -210,7 +213,7 @@ describe('TarotService (격리 DB)', () => {
     await svc.createReading(input(), guest);
     const again = await svc.createReading(input({ question: ' 이직할까요?  ' }), guest);
     expect(again.source).toBe('llm');
-    expect(again.quota.remainingToday).toBe(4);
+    expect(again.quota.remainingToday).toBe(GUEST_PER_DAY - 1);
     expect(provider.calls).toHaveLength(1);
     expect(svc.cacheSize).toBe(1);
   });
@@ -365,7 +368,7 @@ describe('tarot routes (격리 DB)', () => {
     expect(body).toMatchObject({ readingId: null, source: 'static', spreadId: 'three-ppf', question: '연락이 올까요?' });
     expect(body.cards).toHaveLength(3);
     expect(body.cards[2]).toMatchObject({ cardId: 'major-17', nameKo: '별', positionLabel: '미래' });
-    expect(body.quota.remainingToday).toBe(4);
+    expect(body.quota.remainingToday).toBe(GUEST_PER_DAY - 1);
     expect(await app.prisma.tarotReading.count()).toBe(0);
   });
 

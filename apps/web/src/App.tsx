@@ -45,6 +45,10 @@ const TarotPage = lazy(() => import('./routes/TarotPage').then((m) => ({ default
 const TarotSharedPage = lazy(() =>
   import('./routes/TarotSharedPage').then((m) => ({ default: m.TarotSharedPage })),
 );
+const MyTarotPage = lazy(() => import('./routes/tarot/MyTarotPage').then((m) => ({ default: m.MyTarotPage })));
+const MyTarotReadingPage = lazy(() =>
+  import('./routes/tarot/MyTarotReadingPage').then((m) => ({ default: m.MyTarotReadingPage })),
+);
 const SettlementHistoryPage = lazy(() =>
   import('./routes/settlement/SettlementHistoryPage').then((m) => ({
     default: m.SettlementHistoryPage,
@@ -159,6 +163,23 @@ export const App = () => {
             <Route path="/tarot" element={<TarotPage />} />
             {/* 타로 공유 결과 — 3D 없이 2D 로. OG 는 friendly 가 같은 경로에서 주입. */}
             <Route path="/tarot/s/:token" element={<TarotSharedPage />} />
+            {/* 내 타로 기록 — 회원 자동 저장분 목록·상세. 로그인 필수. */}
+            <Route
+              path="/me/tarot"
+              element={
+                <RequireUser>
+                  <MyTarotPage />
+                </RequireUser>
+              }
+            />
+            <Route
+              path="/me/tarot/:id"
+              element={
+                <RequireUser>
+                  <MyTarotReadingPage />
+                </RequireUser>
+              }
+            />
             {/* 내 식단 — 기록은 앱에서 사진으로 남기고 웹은 조회·통계·추천. 로그인 필수. */}
             <Route
               path="/me/meals"

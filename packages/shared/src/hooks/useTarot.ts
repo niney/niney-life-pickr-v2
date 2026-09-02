@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateTarotReadingInputType, CreateTarotShareInputType } from '@repo/api-contract';
 import { tarotApi } from '../api/tarot.api.js';
 import { useAuthStore } from '../stores/authStore.js';
@@ -45,6 +45,19 @@ export const useMyTarotReadings = (limit = 20) => {
   return useQuery({
     queryKey: [...mineKey, { limit }],
     queryFn: () => tarotApi.listMine({ limit }),
+    enabled: loggedIn,
+    staleTime: 30_000,
+  });
+};
+
+// 회원 기록 페이지 — 커서 페이지네이션(더 보기).
+export const useMyTarotReadingsInfinite = (limit = 20) => {
+  const loggedIn = useAuthStore((s) => !!s.token);
+  return useInfiniteQuery({
+    queryKey: [...mineKey, 'infinite', { limit }],
+    queryFn: ({ pageParam }) => tarotApi.listMine({ limit, cursor: pageParam ?? undefined }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled: loggedIn,
     staleTime: 30_000,
   });
