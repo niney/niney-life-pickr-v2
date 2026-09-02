@@ -227,13 +227,13 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
     );
   }
   const kcalText = (item.kcal ?? 0).toLocaleString('ko-KR');
-  // 100g당 항목: 메뉴명에 중량이 있으면 그 양의 kcal 을 앞세우고(가정 없음), 없으면 통상 1인분을 부가 문구로.
+  // 100g당 항목: 메뉴명에 중량이 있으면 그 양의 kcal 을 앞세우고(가정 없음), 없으면 "1인분(150g 기준)"을 부가 문구로.
   const portion = item.basis !== 'per_serving' ? item.portion : undefined;
   const stated = portion?.basis === 'stated' ? portion : undefined;
   const typical = portion?.basis === 'typical' ? portion : undefined;
   const typicalNote = typical ? (
     <span className="ml-1 text-[10px] text-muted-foreground">
-      통상 1인분({typical.grams}{typical.unit ?? 'g'}) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
+      1인분({typical.grams}{typical.unit ?? 'g'} 기준) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
     </span>
   ) : null;
   const reference = item.nutritionFrom

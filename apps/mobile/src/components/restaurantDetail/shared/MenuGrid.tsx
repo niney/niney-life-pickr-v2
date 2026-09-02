@@ -56,7 +56,7 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
     );
   }
   const colors = item.matchedBy === 'web' ? KCAL_CHIP_COLORS.web : KCAL_CHIP_COLORS.catalog;
-  // 메뉴명 중량이 있으면 그 양의 kcal(가정 없음), 없으면 통상 1인분을 부가 문구로.
+  // 메뉴명 중량이 있으면 그 양의 kcal(가정 없음), 없으면 "1인분(150g 기준)"을 부가 문구로.
   const stated = item.portion?.basis === 'stated' ? item.portion : undefined;
   const typical = item.portion?.basis === 'typical' ? item.portion : undefined;
   const main = stated
@@ -70,7 +70,7 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
       </View>
       {typical && (
         <Text style={[styles.kcalParts, { color: colors.fg }]}>
-          통상 1인분({typical.grams}{typical.unit ?? 'g'}) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
+          1인분({typical.grams}{typical.unit ?? 'g'} 기준) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
         </Text>
       )}
     </View>
