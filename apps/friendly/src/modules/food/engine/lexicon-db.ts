@@ -10,6 +10,7 @@
 //   raw_suffix 떼어서 원재료를 찾는 조리 접미           term=접미
 //   quantifier 한판·반판 류 수량 표식                  term=수량어
 //   alias      카탈로그 행에 덧붙이는 별칭              term=별칭, target=카탈로그 음식명
+//   portion    종류별 통상 1인분 중량                   term=dishType|raw_meat|raw_seafood, target=그램
 // 배포 없이 어휘를 고칠 수 있다 — 엔진은 INDEX_TTL 마다 다시 읽는다.
 
 import type { PrismaClient } from '@prisma/client';
@@ -25,6 +26,7 @@ export const MENU_LEXICON_KINDS = [
   'raw_suffix',
   'quantifier',
   'alias',
+  'portion',
 ] as const;
 export type MenuLexiconKind = (typeof MENU_LEXICON_KINDS)[number];
 
@@ -47,6 +49,7 @@ export const mergeLexiconRows = (rows: MenuLexiconRow[], base: LexiconSource = D
     quantifierWords: [...base.quantifierWords],
     extraAliases: Object.fromEntries(Object.entries(base.extraAliases).map(([k, v]) => [k, [...v]])),
     sizeModifiers: [...base.sizeModifiers],
+    portionGrams: { ...base.portionGrams },
   };
   for (const r of rows) {
     const term = r.term.trim();
@@ -83,6 +86,11 @@ export const mergeLexiconRows = (rows: MenuLexiconRow[], base: LexiconSource = D
           out.extraAliases[key] = [...(out.extraAliases[key] ?? []), term];
         }
         break;
+      case 'portion': {
+        const g = Number(r.target);
+        if (Number.isFinite(g) && g > 0) out.portionGrams[term] = Math.round(g);
+        break;
+      }
       default:
         break;
     }

@@ -25,9 +25,11 @@ import {
 import type { FoodWebEstimateService } from './food-web-estimate.service.js';
 import type { MenuLlmDecomposeService } from './menu-llm-decompose.service.js';
 import type { MenuLlmMatchLookup, MenuLlmMatchService } from './menu-llm-match.service.js';
+import { guessDishTypeFromName } from '@repo/utils';
 import {
   DEFAULT_LEXICON,
   MenuNutritionResolver,
+  computePortion,
   parseMenuName,
   type MenuKcalResult,
   type MenuNutritionEngine,
@@ -114,7 +116,15 @@ export class MenuNutritionService {
       const r = resolved.get(name);
       if (!r) continue;
       if (r.basis && r.kcal !== null && r.foodName && r.matchedBy) {
-        items.push({ name, basis: r.basis, kcal: r.kcal, foodName: r.foodName, matchedBy: r.matchedBy, nutritionFrom: r.nutritionFrom });
+        items.push({
+          name,
+          basis: r.basis,
+          kcal: r.kcal,
+          foodName: r.foodName,
+          matchedBy: r.matchedBy,
+          nutritionFrom: r.nutritionFrom,
+          ...(r.portion ? { portion: r.portion } : {}),
+        });
       } else if (r.reason === 'set') {
         if (r.components.length >= 2) {
           sets.push({ name, components: r.components, estimated: false });
@@ -164,7 +174,7 @@ export class MenuNutritionService {
     // (2) LLM 매칭 캐시 — 메뉴명과 구성요소를 한 번에.
     let pending = false;
     const llmByName = new Map<string, MenuLlmMatchLookup>();
-    const llmResolved = new Map<string, { foodName: string; kcalPer100g: number; nutritionFrom: string | null }>();
+    const llmResolved = new Map<string, { foodName: string; kcalPer100g: number; nutritionFrom: string | null; portionKey: string | null }>();
     const webQueries = new Map<string, string>(); // 이름 → 웹 질의어
     let unknownLlm: string[] = [];
     if (this.deps.llm && unresolved.size > 0) {
@@ -176,14 +186,14 @@ export class MenuNutritionService {
         const m = cached.get(name);
         if (!m) continue;
         if (m.hit && m.hit.kcalPer100g !== null) {
-          llmResolved.set(name, { foodName: m.hit.foodName, kcalPer100g: m.hit.kcalPer100g, nutritionFrom: m.hit.nutritionFrom });
+          llmResolved.set(name, { foodName: m.hit.foodName, kcalPer100g: m.hit.kcalPer100g, nutritionFrom: m.hit.nutritionFrom, portionKey: m.hit.dishType });
           continue;
         }
         if (m.canonical) {
           // LLM 이 카탈로그 exact 로 못 붙인 표준명을 엔진(수식어·접미 규칙)에 다시 넣어 본다.
           const again = await this.resolver.resolve(m.canonical);
           if (again.kcalPer100g !== null && again.foodName) {
-            llmResolved.set(name, { foodName: again.foodName, kcalPer100g: again.kcalPer100g, nutritionFrom: again.nutritionFrom });
+            llmResolved.set(name, { foodName: again.foodName, kcalPer100g: again.kcalPer100g, nutritionFrom: again.nutritionFrom, portionKey: again.portionKey });
             continue;
           }
         }
@@ -195,7 +205,7 @@ export class MenuNutritionService {
     }
 
     // (3) 웹 실측 캐시.
-    const webResolved = new Map<string, { foodName: string; kcalPer100g: number; nutritionFrom: string }>();
+    const webResolved = new Map<string, { foodName: string; kcalPer100g: number; nutritionFrom: string; portionKey: string | null }>();
     let unknownWeb: string[] = [];
     if (this.deps.web && webQueries.size > 0) {
       const webCached = await this.deps.web.lookupCached([...new Set(webQueries.values())]);
@@ -206,6 +216,8 @@ export class MenuNutritionService {
             foodName: q,
             kcalPer100g: w.kcalPer100g,
             nutritionFrom: w.basis === 'single' ? `${w.source} 일반 항목` : `${w.source} ${w.agreeing}건 중앙값`,
+            // 웹 항목은 카탈로그 행이 없어 이름으로 종류를 짐작한다.
+            portionKey: guessDishTypeFromName(q),
           });
         }
       }
@@ -215,13 +227,18 @@ export class MenuNutritionService {
     // 단일 메뉴명의 LLM·웹 항목.
     for (const name of unresolved) {
       if (!unique.includes(name)) continue; // 구성요소·주메뉴 이름은 단독 항목으로 새지 않는다.
+      const weight = parseMenuName(name).weight;
       const l = llmResolved.get(name);
       if (l) {
-        items.push({ name, basis: 'per_100g', kcal: Math.round(l.kcalPer100g), foodName: l.foodName, matchedBy: 'llm', nutritionFrom: l.nutritionFrom });
+        const portion = computePortion(l.kcalPer100g, weight, l.portionKey, DEFAULT_LEXICON);
+        items.push({ name, basis: 'per_100g', kcal: Math.round(l.kcalPer100g), foodName: l.foodName, matchedBy: 'llm', nutritionFrom: l.nutritionFrom, ...(portion ? { portion } : {}) });
         continue;
       }
       const w = webResolved.get(name);
-      if (w) items.push({ name, basis: 'per_100g', kcal: Math.round(w.kcalPer100g), foodName: w.foodName, matchedBy: 'web', nutritionFrom: w.nutritionFrom });
+      if (w) {
+        const portion = computePortion(w.kcalPer100g, weight, w.portionKey, DEFAULT_LEXICON);
+        items.push({ name, basis: 'per_100g', kcal: Math.round(w.kcalPer100g), foodName: w.foodName, matchedBy: 'web', nutritionFrom: w.nutritionFrom, ...(portion ? { portion } : {}) });
+      }
     }
 
     for (const [setName, mainName] of singleMains) {

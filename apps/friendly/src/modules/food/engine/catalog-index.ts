@@ -20,6 +20,8 @@ export interface CatalogRow {
   source: string;
   /** 출처 분류(원재료는 '육류'·'어패류 및 기타 수산물' 등). 접미 규칙: 생재료 중 육류 부위만 접미로 붙는다. */
   sourceCategory: string | null;
+  /** 조리형태 분류 — 통상 1인분 중량표의 키. */
+  dishType: string | null;
 }
 
 export interface IndexHit {
@@ -103,6 +105,7 @@ export const loadCatalogIndex = async (prisma: PrismaClient, extraAliases: Recor
       nutritionFrom: true,
       source: true,
       sourceCategory: true,
+      dishType: true,
     },
   });
   return buildCatalogIndex(
@@ -117,6 +120,7 @@ export const loadCatalogIndex = async (prisma: PrismaClient, extraAliases: Recor
       nutritionFrom: r.nutritionFrom,
       source: r.source,
       sourceCategory: r.sourceCategory,
+      dishType: r.dishType,
     })),
     extraAliases,
   );
@@ -137,4 +141,5 @@ export const catalogRow = (
   nutritionFrom: over.nutritionFrom ?? null,
   source: over.source ?? 'mfds-nutrition',
   sourceCategory: over.sourceCategory ?? (over.source === 'mfds-raw' ? '육류' : null),
+  dishType: over.dishType ?? null,
 });

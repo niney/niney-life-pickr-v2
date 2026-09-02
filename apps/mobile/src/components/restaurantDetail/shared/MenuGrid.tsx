@@ -56,12 +56,23 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
     );
   }
   const colors = item.matchedBy === 'web' ? KCAL_CHIP_COLORS.web : KCAL_CHIP_COLORS.catalog;
-  const text = `${item.matchedBy === 'web' ? '웹 추정 ' : ''}${KCAL_BASIS_LABEL[item.basis]} 약 ${(item.kcal ?? 0).toLocaleString('ko-KR')}kcal`;
+  // 메뉴명 중량이 있으면 그 양의 kcal(가정 없음), 없으면 통상 1인분을 부가 문구로.
+  const stated = item.portion?.basis === 'stated' ? item.portion : undefined;
+  const typical = item.portion?.basis === 'typical' ? item.portion : undefined;
+  const main = stated
+    ? `${stated.grams}${stated.unit ?? 'g'} 약 ${stated.kcal.toLocaleString('ko-KR')}kcal`
+    : `${KCAL_BASIS_LABEL[item.basis]} 약 ${(item.kcal ?? 0).toLocaleString('ko-KR')}kcal`;
+  const text = `${item.matchedBy === 'web' ? '웹 추정 ' : ''}${main}`;
   return (
     <View style={styles.kcalWrap}>
       <View style={[styles.kcalChip, { backgroundColor: colors.bg }]}>
         <Text style={[styles.kcalText, { color: colors.fg }]}>{text}</Text>
       </View>
+      {typical && (
+        <Text style={[styles.kcalParts, { color: colors.fg }]}>
+          통상 1인분({typical.grams}{typical.unit ?? 'g'}) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
+        </Text>
+      )}
     </View>
   );
 };

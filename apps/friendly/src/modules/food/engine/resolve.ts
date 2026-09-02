@@ -42,6 +42,10 @@ export interface MenuKcalResult {
   nutritionFrom: string | null;
   /** 매칭된 행의 100g당 값(등급과 무관) — LLM 표준명 재투입처럼 100g당만 쓰는 호출자용. */
   kcalPer100g: number | null;
+  /** 100g당 등급일 때 그 양(메뉴명 중량)·통상 1인분 환산. */
+  portion: MenuKcalPortion | null;
+  /** 통상 1인분 중량표의 키(호출자가 LLM 항목에 다시 쓸 수 있게). */
+  portionKey: string | null;
   reason: MenuKcalReason;
   /** 표시하지 않은 퍼지 후보(측정 리포트용). 엔진은 퍼지를 쓰지 않으므로 항상 null. */
   candidate: string | null;
@@ -59,7 +63,53 @@ export interface MatchInput {
   servingG: number | null;
   nutritionFrom: string | null;
   matchedBy: MenuKcalMatchedBy;
+  /** 통상 1인분 중량표 키(dishType 또는 raw_meat·raw_seafood). 없으면 통상 환산 없음. */
+  portionKey?: string | null;
 }
+
+export interface MenuKcalPortion {
+  grams: number;
+  kcal: number;
+  /** stated = 메뉴명에 적힌 중량(가정 없음), typical = 카탈로그 1인분 중량 또는 종류별 통상 중량표. */
+  basis: 'stated' | 'typical';
+  unit?: 'g' | 'ml';
+}
+
+/** 카탈로그 행의 통상 1인분 중량표 키. 조리음식은 dishType, 생재료는 육류/수산물. */
+export const portionKeyFor = (row: Pick<CatalogRow, 'source' | 'sourceCategory' | 'dishType'>): string | null => {
+  if (row.source === RAW_SOURCE) {
+    if (row.sourceCategory === RAW_MEAT_CATEGORY) return 'raw_meat';
+    if (row.sourceCategory === '어패류 및 기타 수산물') return 'raw_seafood';
+    return null;
+  }
+  return row.dishType ?? null;
+};
+
+/** 100g당 값 + 메뉴명 중량(있으면 stated) 또는 통상 중량표(typical) → 그 양의 kcal. */
+export const computePortion = (
+  kcalPer100g: number,
+  weight: { value: number; unit: 'g' | 'ml' } | null,
+  portionKey: string | null,
+  lex: Lexicon,
+  /** 카탈로그가 아는 1인분(중량·kcal) — 있으면 통상표보다 우선한다(해물찜(대) → 카탈로그 500g 400kcal). */
+  catalogServing: { servingG: number | null; kcal: number | null } | null = null,
+): MenuKcalPortion | null => {
+  if (weight && weight.value >= 30) {
+    return {
+      grams: Math.round(weight.value),
+      kcal: Math.round((kcalPer100g * weight.value) / 100),
+      basis: 'stated',
+      ...(weight.unit === 'ml' ? { unit: 'ml' as const } : {}),
+    };
+  }
+  if (catalogServing?.servingG && catalogServing.servingG > BASE_SERVING_G && catalogServing.kcal !== null) {
+    return { grams: Math.round(catalogServing.servingG), kcal: Math.round(catalogServing.kcal), basis: 'typical' };
+  }
+  const grams = portionKey ? lex.portionGrams[portionKey] : undefined;
+  if (!grams) return null;
+  const ml = portionKey === 'beverage' || portionKey === 'alcohol';
+  return { grams, kcal: Math.round((kcalPer100g * grams) / 100), basis: 'typical', ...(ml ? { unit: 'ml' as const } : {}) };
+};
 
 const round0 = (v: number): number => Math.round(v);
 
@@ -72,6 +122,8 @@ const none = (name: string, reason: MenuKcalReason, trace: string[] = [], candid
   matchedBy: null,
   nutritionFrom: null,
   kcalPer100g: null,
+  portion: null,
+  portionKey: null,
   reason,
   candidate,
   trace,
@@ -84,6 +136,7 @@ export const decideMenuKcal = (
   match: MatchInput | null,
   candidate: string | null = null,
   trace: string[] = [],
+  lex: Lexicon = DEFAULT_LEXICON,
 ): MenuKcalResult => {
   if (!parsed.cleaned) return none(parsed.raw, 'empty', trace);
   if (parsed.isSet) return none(parsed.raw, 'set', trace);
@@ -95,6 +148,8 @@ export const decideMenuKcal = (
     matchedBy: match.matchedBy,
     nutritionFrom: match.nutritionFrom,
     kcalPer100g: match.kcalPer100g,
+    portion: null as MenuKcalPortion | null,
+    portionKey: match.portionKey ?? null,
     candidate: null,
     trace,
     components: [],
@@ -114,6 +169,7 @@ export const decideMenuKcal = (
       ...base,
       basis: parsed.weight?.unit === 'ml' ? 'per_100ml' : 'per_100g',
       kcal: round0(match.kcalPer100g),
+      portion: computePortion(match.kcalPer100g, parsed.weight, match.portionKey ?? null, lex, { servingG: match.servingG, kcal: match.kcal }),
       reason: 'per_100g',
     };
   }
@@ -128,6 +184,7 @@ const toInput = (hit: IndexHit, matchedBy: MenuKcalMatchedBy): MatchInput => ({
   servingG: hit.row.servingG,
   nutritionFrom: hit.row.nutritionFrom,
   matchedBy,
+  portionKey: portionKeyFor(hit.row),
 });
 
 const isRaw = (row: CatalogRow): boolean => row.source === RAW_SOURCE;
@@ -215,7 +272,7 @@ export const resolveMenuName = (name: string, index: CatalogIndex, lex: Lexicon 
     // 결합 기호 세트는 구성요소를 따로 판정해 둔다(표시 계약은 호출자 몫).
     if (parsed.setSignal === '결합기호' && parsed.parts.length >= 2) {
       const components = parsed.parts.map((p) => resolveMenuName(p, index, lex));
-      return { ...decideMenuKcal(parsed, null, null, trace), components };
+      return { ...decideMenuKcal(parsed, null, null, trace, lex), components };
     }
     // 주메뉴 하나짜리 세트 — 세트어를 뗀 나머지가 카탈로그에 있으면 그 음식의 100g당.
     if (parsed.setSignal && GENERIC_SET_WORDS.has(parsed.setSignal)) {
@@ -230,11 +287,11 @@ export const resolveMenuName = (name: string, index: CatalogIndex, lex: Lexicon 
         const match = matchNorm(main, parsed.hints, index, lex, trace);
         if (match) {
           trace.push(`set-main:${main} ✓${match.name}`);
-          return decideMenuKcal({ ...parsed, isSet: false, portionAmbiguous: true }, match, null, trace);
+          return decideMenuKcal({ ...parsed, isSet: false, portionAmbiguous: true }, match, null, trace, lex);
         }
       }
     }
-    return decideMenuKcal(parsed, null, null, trace);
+    return decideMenuKcal(parsed, null, null, trace, lex);
   }
 
   const norm = normalizeTerm(parsed.cleaned);
@@ -242,5 +299,5 @@ export const resolveMenuName = (name: string, index: CatalogIndex, lex: Lexicon 
   if (parsed.quantifier) trace.push(`quantifier:${parsed.quantifier}${match ? '' : ' → set'}`);
   // 한판·반판은 부위를 못 찾으면 모듬(세트)이다.
   if (!match && parsed.quantifier) return { ...none(parsed.raw, 'set', trace), components: [] };
-  return decideMenuKcal(parsed, match, null, trace);
+  return decideMenuKcal(parsed, match, null, trace, lex);
 };

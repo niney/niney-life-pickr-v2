@@ -9,10 +9,13 @@ export {
   type IndexHit,
 } from './catalog-index.js';
 export {
+  computePortion,
   decideMenuKcal,
   matchNorm,
+  portionKeyFor,
   resolveMenuName,
   type MatchInput,
+  type MenuKcalPortion,
   type MenuKcalBasis,
   type MenuKcalMatchedBy,
   type MenuKcalReason,

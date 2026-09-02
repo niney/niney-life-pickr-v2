@@ -227,28 +227,43 @@ const MenuKcalChip = ({ item }: { item: RestaurantMenuKcalItemType }) => {
     );
   }
   const kcalText = (item.kcal ?? 0).toLocaleString('ko-KR');
+  // 100g당 항목: 메뉴명에 중량이 있으면 그 양의 kcal 을 앞세우고(가정 없음), 없으면 통상 1인분을 부가 문구로.
+  const portion = item.basis !== 'per_serving' ? item.portion : undefined;
+  const stated = portion?.basis === 'stated' ? portion : undefined;
+  const typical = portion?.basis === 'typical' ? portion : undefined;
+  const typicalNote = typical ? (
+    <span className="ml-1 text-[10px] text-muted-foreground">
+      통상 1인분({typical.grams}{typical.unit ?? 'g'}) 약 {typical.kcal.toLocaleString('ko-KR')}kcal
+    </span>
+  ) : null;
   const reference = item.nutritionFrom
     ? `${item.foodName} (${item.nutritionFrom} 기준 추정)`
     : item.foodName;
   if (item.matchedBy === 'web') {
     // 카탈로그 밖 음식 — 웹 실측 집계. 출처가 다르니 문구·색을 구분한다.
     return (
+      <>
       <span
         className="inline-flex items-center rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-400"
-        title={`${item.foodName} · ${item.nutritionFrom ?? '웹 실측'} 기준 추정치`}
+        title={`${item.foodName} · ${item.nutritionFrom ?? '웹 실측'} 기준 추정치${stated ? ` · 100g당 ${kcalText}kcal` : ''}`}
       >
-        웹 추정 {basis} 약 {kcalText}kcal
+        웹 추정 {stated ? `${stated.grams}${stated.unit ?? 'g'} 약 ${stated.kcal.toLocaleString('ko-KR')}kcal` : `${basis} 약 ${kcalText}kcal`}
       </span>
+      {typicalNote}
+      </>
     );
   }
   const how = item.matchedBy === 'llm' ? 'AI 가 연결한 음식' : '기준';
   return (
+    <>
     <span
       className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-400"
-      title={`${reference} ${how} · 식약처 식품영양성분 DB 추정치`}
+      title={`${reference} ${how} · 식약처 식품영양성분 DB 추정치${stated ? ` · 100g당 ${kcalText}kcal` : ''}`}
     >
-      {basis} 약 {kcalText}kcal
+      {stated ? `${stated.grams}${stated.unit ?? 'g'} 약 ${stated.kcal.toLocaleString('ko-KR')}kcal` : `${basis} 약 ${kcalText}kcal`}
     </span>
+    {typicalNote}
+    </>
   );
 };
 

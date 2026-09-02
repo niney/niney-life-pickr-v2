@@ -296,6 +296,23 @@ describe('MenuNutritionEngine', () => {
     ]);
   });
 
+  it('100g당 항목은 메뉴명 중량이 있으면 그 양(stated), 없으면 종류별 통상 1인분(typical)을 함께 준다', () => {
+    const stated = engine.resolve('냉삼 200g');
+    expect(stated.basis).toBe('per_100g');
+    expect(stated.portion).toEqual({ grams: 200, kcal: 650, basis: 'stated' });
+    const typical = engine.resolve('냉삼');
+    expect(typical.portion).toEqual({ grams: 150, kcal: 488, basis: 'typical' });
+    expect(typical.portionKey).toBe('raw_meat');
+    // 1인분 등급이면 환산이 없다.
+    expect(engine.resolve('순두부찌개').portion).toBeNull();
+    // 종류를 모르는 행(dishType 없음·생재료 아님)은 통상 환산 없음.
+    expect(engine.resolve('스테이크').portion).toBeNull();
+    // 카탈로그가 1인분을 알면(크기 표식 때문에 100g당으로 내려간 경우) 통상표보다 그것을 쓴다.
+    expect(engine.resolve('물회(2인이상)').portion).toEqual({ grams: 500, kcal: 532, basis: 'typical' });
+    // ml 중량은 ml 로.
+    expect(engine.resolve('사케 300ml').portion).toEqual({ grams: 300, kcal: 315, basis: 'stated', unit: 'ml' });
+  });
+
   it('트레이스에 시도한 단계가 남는다', () => {
     const r = engine.resolve('해물쟁반짜장');
     expect(r.trace[0]).toMatch(/^direct:해물쟁반짜장 ✗/);

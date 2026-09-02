@@ -51,6 +51,8 @@ export interface MenuLlmMatchHit {
   /** 카탈로그의 현재 값. null 이면 표시할 수 없다(매칭은 남는다). */
   kcalPer100g: number | null;
   nutritionFrom: string | null;
+  /** 통상 1인분 중량표 키(dishType). */
+  dishType: string | null;
 }
 
 interface CatalogRow {
@@ -58,6 +60,7 @@ interface CatalogRow {
   name: string;
   nameNorm: string;
   aliasNormsJson: string;
+  dishType: string | null;
   kcalPer100g: number | null;
   nutritionFrom: string | null;
 }
@@ -140,14 +143,14 @@ export class MenuLlmMatchService {
     const foods = foodIds.length
       ? await this.prisma.foodItem.findMany({
           where: { id: { in: foodIds }, active: true },
-          select: { id: true, name: true, kcalPer100g: true, nutritionFrom: true },
+          select: { id: true, name: true, kcalPer100g: true, nutritionFrom: true, dishType: true },
         })
       : [];
     const foodById = new Map(foods.map((f) => [f.id, f]));
     for (const r of rows) {
       const food = r.foodId ? foodById.get(r.foodId) : undefined;
       const hit: MenuLlmMatchHit | null = food
-        ? { foodId: food.id, foodName: food.name, kcalPer100g: food.kcalPer100g, nutritionFrom: food.nutritionFrom }
+        ? { foodId: food.id, foodName: food.name, kcalPer100g: food.kcalPer100g, nutritionFrom: food.nutritionFrom, dishType: food.dishType }
         : null;
       for (const n of normToNames.get(r.nameNorm) ?? []) out.set(n, { hit, canonical: r.canonical });
     }
@@ -265,7 +268,7 @@ export class MenuLlmMatchService {
       });
       return {
         hit: row
-          ? { foodId: row.id, foodName: row.name, kcalPer100g: row.kcalPer100g, nutritionFrom: row.nutritionFrom }
+          ? { foodId: row.id, foodName: row.name, kcalPer100g: row.kcalPer100g, nutritionFrom: row.nutritionFrom, dishType: row.dishType }
           : null,
         canonical: parsed.canonical,
       };
@@ -283,7 +286,7 @@ export class MenuLlmMatchService {
     if (this.catalogCache && Date.now() - this.catalogCache.loadedAt < 5 * 60_000) return this.catalogCache;
     const rows = await this.prisma.foodItem.findMany({
       where: { active: true },
-      select: { id: true, name: true, nameNorm: true, aliasNormsJson: true, kcalPer100g: true, nutritionFrom: true },
+      select: { id: true, name: true, nameNorm: true, aliasNormsJson: true, kcalPer100g: true, nutritionFrom: true, dishType: true },
     });
     const byNorm = new Map<string, CatalogRow>();
     for (const row of rows) {

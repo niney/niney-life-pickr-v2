@@ -51,6 +51,7 @@ const defaultCounts = (): MenuLexiconListResultType['defaults'] => {
     raw_suffix: d.rawSuffixes.length,
     quantifier: d.quantifierWords.length,
     alias: Object.values(d.extraAliases).reduce((a, v) => a + v.length, 0),
+    portion: Object.keys(d.portionGrams).length,
   };
 };
 
@@ -72,6 +73,7 @@ export class MenuLexiconService {
     if (!needsTarget && target) throw new MenuLexiconValidationError(`${input.kind} 은 target 을 받지 않습니다`);
     const term = input.term.trim();
     if (!normalizeTerm(term)) throw new MenuLexiconValidationError('term 이 비어 있습니다');
+    if (input.kind === 'portion' && !(Number(target) > 0)) throw new MenuLexiconValidationError('portion 의 target 은 그램(양수)입니다');
     if (input.kind === 'alias') {
       const food = await this.prisma.foodItem.findFirst({
         where: { OR: [{ nameNorm: normalizeTerm(target!) }, { name: target! }], active: true },

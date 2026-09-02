@@ -28,6 +28,8 @@ export interface LexiconSource {
   extraAliases: Record<string, string[]>;
   /** 양이 달라지는 앞말(미니·점보·대왕) — 떼고 찾되 1인분 표시는 막는다. leadingModifiers 에도 있어야 한다. */
   sizeModifiers: string[];
+  /** 종류별 통상 1인분 중량(g). 키는 dishType 또는 raw_meat·raw_seafood. 100g당만 아는 항목의 "통상 1인분" 환산용. */
+  portionGrams: Record<string, number>;
 }
 
 export interface Lexicon {
@@ -41,6 +43,7 @@ export interface Lexicon {
   quantifierWords: string[];
   extraAliases: Record<string, string[]>;
   sizeModifiers: ReadonlySet<string>;
+  portionGrams: Record<string, number>;
 }
 
 export const DEFAULT_LEXICON_SOURCE: LexiconSource = {
@@ -96,6 +99,29 @@ export const DEFAULT_LEXICON_SOURCE: LexiconSource = {
     소양: ['양볶음', '특양볶음'],
   },
   sizeModifiers: ['미니', '점보', '대왕', '빅', '라지', '하프'],
+  // 식약처 음식 DB 의 대표 1인분 중량 분포와 고기집 관행(1인분 150~200g)을 둥글린 값. ±30% 근사라 부가 문구로만 쓴다.
+  portionGrams: {
+    raw_meat: 150,
+    raw_seafood: 150,
+    rice: 350,
+    noodle: 500,
+    soup: 500,
+    stew: 400,
+    grill: 150,
+    stir_fry: 250,
+    braise: 150,
+    steam: 300,
+    pancake: 150,
+    fried: 200,
+    namul: 80,
+    salad: 150,
+    kimchi: 50,
+    raw_fish: 150,
+    bakery: 100,
+    dairy: 150,
+    beverage: 250,
+    alcohol: 360,
+  },
 };
 
 export const compileLexicon = (src: LexiconSource): Lexicon => ({
@@ -113,6 +139,7 @@ export const compileLexicon = (src: LexiconSource): Lexicon => ({
   quantifierWords: src.quantifierWords.map(normalizeTerm),
   extraAliases: src.extraAliases,
   sizeModifiers: new Set(src.sizeModifiers.map(normalizeTerm)),
+  portionGrams: { ...src.portionGrams },
 });
 
 export const DEFAULT_LEXICON: Lexicon = compileLexicon(DEFAULT_LEXICON_SOURCE);

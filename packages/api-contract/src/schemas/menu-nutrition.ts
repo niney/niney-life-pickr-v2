@@ -39,6 +39,17 @@ export const RestaurantMenuKcalPart = z.object({
 });
 export type RestaurantMenuKcalPartType = z.infer<typeof RestaurantMenuKcalPart>;
 
+// 100g당 항목에 붙는 "그 양의 칼로리". stated = 메뉴명에 적힌 중량(항정살 150g → 461kcal, 가정 없음),
+// typical = 종류별 통상 1인분 중량표로 환산(생삼겹살 → 150g 기준). typical 은 부가 문구로만 보여 준다.
+export const RestaurantMenuKcalPortion = z.object({
+  grams: z.number().int().positive(),
+  kcal: z.number().int().nonnegative(),
+  basis: z.enum(['stated', 'typical']),
+  // 음료는 ml. 없으면 g.
+  unit: z.enum(['g', 'ml']).optional(),
+});
+export type RestaurantMenuKcalPortionType = z.infer<typeof RestaurantMenuKcalPortion>;
+
 export const RestaurantMenuKcalItem = z.object({
   // 상세 응답의 메뉴명과 문자 그대로 같다 — 클라이언트가 이름으로 join 한다.
   name: z.string(),
@@ -55,6 +66,8 @@ export const RestaurantMenuKcalItem = z.object({
   partsTotal: z.number().int().nonnegative().optional(),
   // 구성이 이름에 없어 LLM 이 추정한 구성이면 true("모듬회" → 광어·우럭·연어). 칩에 "AI 추정" 표시.
   partsEstimated: z.boolean().optional(),
+  // per_100g/per_100ml 일 때 그 양·통상 1인분 환산. 없으면 100g당만.
+  portion: RestaurantMenuKcalPortion.optional(),
 });
 export type RestaurantMenuKcalItemType = z.infer<typeof RestaurantMenuKcalItem>;
 

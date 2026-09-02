@@ -10,6 +10,7 @@ const resolver = new MenuNutritionResolver(prisma);
 const res = await resolver.resolveMany(names);
 for (const n of names) {
   const r = res.get(n)!;
-  console.log(`${n} → ${r.basis ? `${r.foodName} [${r.matchedBy}] ${r.kcal} ${r.basis}` : `(${r.reason}${r.candidate ? ` cand=${r.candidate}` : ''})`}`);
+  const portion = r.portion ? ` · ${r.portion.basis === 'stated' ? '' : '통상 1인분 '}${r.portion.grams}${r.portion.unit ?? 'g'} ${r.portion.kcal}kcal` : '';
+  console.log(`${n} → ${r.basis ? `${r.foodName} [${r.matchedBy}] ${r.kcal} ${r.basis}${portion}` : `(${r.reason}${r.candidate ? ` cand=${r.candidate}` : ''})`}`);
 }
 await prisma.$disconnect();

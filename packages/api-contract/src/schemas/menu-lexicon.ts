@@ -11,6 +11,7 @@ import { z } from 'zod';
 //   raw_suffix   떼어서 원재료를 찾는 조리 접미("타다끼")   term
 //   quantifier   한판·반판 류 수량 표식                   term
 //   alias        카탈로그 행에 덧붙이는 별칭              term → target(카탈로그 음식명)
+//   portion      종류별 통상 1인분 중량(g)                term=dishType|raw_meat|raw_seafood → target=그램
 
 export const MenuLexiconKind = z.enum([
   'modifier',
@@ -22,11 +23,12 @@ export const MenuLexiconKind = z.enum([
   'raw_suffix',
   'quantifier',
   'alias',
+  'portion',
 ]);
 export type MenuLexiconKindType = z.infer<typeof MenuLexiconKind>;
 
 // target 이 필요한 종류.
-export const MENU_LEXICON_KINDS_WITH_TARGET: readonly MenuLexiconKindType[] = ['synonym', 'alias'];
+export const MENU_LEXICON_KINDS_WITH_TARGET: readonly MenuLexiconKindType[] = ['synonym', 'alias', 'portion'];
 
 export const MenuLexiconEntry = z.object({
   id: z.string(),

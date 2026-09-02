@@ -50,6 +50,7 @@ describe('MenuNutritionService', () => {
         foodName: '삼겹살구이',
         matchedBy: 'variant',
         nutritionFrom: null,
+        portion: { grams: 150, kcal: 701, basis: 'stated' },
       },
     ]);
 
@@ -130,7 +131,7 @@ describe('MenuNutritionService', () => {
 
     const second = await svc.forPlace('p3');
     expect(second!.llmPending).toBe(false);
-    expect(second!.items[1]).toEqual({
+    expect(second!.items[1]).toMatchObject({
       name: '화덕치즈불족',
       basis: 'per_100g',
       kcal: 219,
