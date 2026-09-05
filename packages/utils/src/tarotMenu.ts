@@ -85,6 +85,14 @@ export const TAROT_MENU_ELEMENT_TASTE: Record<TarotElement, string> = {
   earth: '든든한 밥과 고기',
 };
 
+// 같은 원소가 추천·피할 것에 겹칠 때 "과한 쪽" 서술.
+export const TAROT_MENU_ELEMENT_EXCESS: Record<TarotElement, string> = {
+  fire: '지나치게 맵고 자극적인 것',
+  water: '국물만 많고 허전한 것',
+  air: '너무 차갑고 가벼운 것',
+  earth: '너무 무겁고 기름진 것',
+};
+
 const m = (
   id: string,
   name: string,
@@ -341,6 +349,11 @@ export const selectTarotMenus = (cards: readonly TarotDrawnCard[]): TarotMenuSel
       ? `${TAROT_MENU_ELEMENT_TASTE[pickA.element]}${pickA.mood ? ` · ${TAROT_MENU_MOOD_LABEL[pickA.mood]}` : ''}`
       : `${TAROT_MENU_ELEMENT_TASTE[pickA.element]}, 곁들이면 ${TAROT_MENU_ELEMENT_TASTE[moodA.element]}${pickA.mood ? ` · ${TAROT_MENU_MOOD_LABEL[pickA.mood]}` : ''}`;
   // 피할 것은 원소 서술만 — 무드까지 붙이면 "든든한 밥과 고기 · 가볍게" 처럼 모순으로 읽힌다(점수에는 반영).
-  const avoid = TAROT_MENU_ELEMENT_TASTE[appetites.avoid.element];
+  // 추천과 같은 원소가 겹치면(완드 셋 등) "피할 것 = 추천" 으로 읽히므로 "과한 쪽만" 으로 푼다.
+  const avoidA = appetites.avoid;
+  const avoid =
+    avoidA.element === pickA.element
+      ? `같은 ${TAROT_ELEMENT_LABEL[avoidA.element]}의 기운이 겹쳐요 — ${TAROT_MENU_ELEMENT_EXCESS[avoidA.element]}만 피하세요`
+      : TAROT_MENU_ELEMENT_TASTE[avoidA.element];
   return { picks, appetites, profile, avoid };
 };

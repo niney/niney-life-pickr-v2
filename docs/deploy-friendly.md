@@ -189,6 +189,27 @@ location ^~ /tarot/cards/ {
     add_header Cache-Control "public, max-age=604800";
     try_files $uri =404;
 }
+```
+
+### SPA 폴백과 `/tarot` 디렉터리 충돌 (필수)
+
+웹 dist 에 `tarot/cards/` 가 생기면서 `/tarot` 가 **실제 디렉터리**가 됐다. SPA 폴백이
+`try_files $uri $uri/ /index.html;` 이면 `/tarot` 요청이 `$uri/`(디렉터리)에 먼저 걸려
+`301 → /tarot/` 로 보내고, 거기엔 index 가 없어 **403** 이 난다(2026-09-05 운영 실측 —
+직접 진입·새로고침만 깨지고 SPA 내부 이동은 멀쩡해서 눈에 늦게 띈다). SPA 는 디렉터리
+인덱스가 필요 없으니 `$uri/` 를 뺀다.
+
+```nginx
+location / {
+    try_files $uri /index.html;
+}
+```
+
+덧붙여 nginx 가 만드는 301 이 `http://ninelife.kr/...` 절대 주소로 나가고 있다(TLS 종료
+뒤라 스킴이 http 로 보임 → 다시 https 로 한 번 더 튐). server 블록에 `absolute_redirect off;`
+를 두면 상대 경로로 나간다.
+
+```nginx
 # 그룹 투표 공유 링크(/vote/<token>) OG — friendly 가 head 메타를 주입한다.
 # 이 규칙이 없어도 nginx 가 정적 index.html 을 서빙해 SPA(투표)는 정상 동작하고
 # 카카오톡 등 미리보기(OG)만 빠진다. PNG 라우트는 없어 정규식 충돌 걱정은 없지만

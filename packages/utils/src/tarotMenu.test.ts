@@ -88,6 +88,12 @@ describe('selectTarotMenus', () => {
     expect(reversed.picks[0]!.id).not.toBe(upright.picks[0]!.id);
   });
 
+  it('피할 것이 추천과 같은 원소면 "과한 쪽만" 으로 푼다', () => {
+    const same = selectTarotMenus(draw('wands-king', 'wands-05', 'wands-06'));
+    expect(same.avoid).toContain('같은 불의 기운이 겹쳐요');
+    expect(same.avoid).toContain('맵고 자극적인 것');
+  });
+
   it('자리가 빠지면 throw', () => {
     expect(() => selectTarotMenus(draw('cups-02', 'swords-03', 'wands-king').slice(0, 2))).toThrow(/pick/);
   });
