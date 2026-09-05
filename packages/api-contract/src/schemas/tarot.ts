@@ -13,10 +13,10 @@ export const TAROT_QUESTION_MAX_LENGTH = 200;
 export const TAROT_CHOICE_MAX_LENGTH = 40;
 export const TAROT_GUEST_KEY_HEADER = 'x-guest-key';
 
-export const TarotSpreadId = z.enum(['daily', 'three-ppf', 'three-sar', 'choice', 'celtic']);
+export const TarotSpreadId = z.enum(['daily', 'three-ppf', 'three-sar', 'choice', 'menu', 'celtic']);
 export type TarotSpreadIdType = z.infer<typeof TarotSpreadId>;
 
-export const TarotTopic = z.enum(['general', 'love', 'work', 'money', 'relationship', 'choice']);
+export const TarotTopic = z.enum(['general', 'love', 'work', 'money', 'relationship', 'choice', 'food']);
 export type TarotTopicType = z.infer<typeof TarotTopic>;
 
 // major-00~21 / <suit>-01~10 / <suit>-page|knight|queen|king — utils 의 id 규칙과 동일.
@@ -75,6 +75,27 @@ export const TarotChoiceVerdict = z.object({
 });
 export type TarotChoiceVerdictType = z.infer<typeof TarotChoiceVerdict>;
 
+// 메뉴 타로(menu 스프레드) — 서버가 utils(tarotMenu.ts)로 결정적으로 고른 후보 3개. 첫 번째가 추천.
+// menuId·name·cuisine 은 서버 데이터, reason 만 LLM(없으면 정적 문장). kcal 은 음식 카탈로그에
+// 같은 이름이 있을 때만(1인분 근사).
+export const TarotMenuPick = z.object({
+  menuId: z.string(),
+  name: z.string(),
+  cuisine: z.string(),
+  dishType: z.string(),
+  kcal: z.number().nullable(),
+  reason: z.string(),
+});
+export type TarotMenuPickType = z.infer<typeof TarotMenuPick>;
+
+export const TarotMenuVerdict = z.object({
+  picks: z.array(TarotMenuPick).min(1),
+  // 오늘의 입맛 한 줄 / 피할 것 한 줄(원소·무드 서술).
+  profile: z.string(),
+  avoid: z.string(),
+});
+export type TarotMenuVerdictType = z.infer<typeof TarotMenuVerdict>;
+
 // 게스트만 숫자(기기 일일 한도 잔여). 회원은 null(한도 없음).
 export const TarotQuota = z.object({ remainingToday: z.number().int().nullable() });
 export type TarotQuotaType = z.infer<typeof TarotQuota>;
@@ -93,6 +114,8 @@ export const TarotReadingResult = z.object({
   advice: z.string(),
   keyword: z.string(),
   choice: TarotChoiceVerdict.nullable(),
+  // menu 스프레드에서만. 구버전 저장 행은 없을 수 있어 기본 null.
+  menu: TarotMenuVerdict.nullable().default(null),
   createdAt: z.string(),
   quota: TarotQuota,
 });

@@ -61,7 +61,7 @@ describe('spreads', () => {
   });
 
   it('v1 은 daily·3장×2·choice, 켈틱은 회원 전용·미제공', () => {
-    expect(TAROT_AVAILABLE_SPREADS.map((s) => s.id)).toEqual(['daily', 'three-ppf', 'three-sar', 'choice']);
+    expect(TAROT_AVAILABLE_SPREADS.map((s) => s.id)).toEqual(['daily', 'three-ppf', 'three-sar', 'choice', 'menu']);
     expect(TAROT_SPREADS.daily.positions).toHaveLength(1);
     expect(TAROT_SPREADS.choice.positions.map((p) => p.id)).toEqual(['optionA', 'optionB', 'advice']);
     expect(TAROT_SPREADS.celtic.positions).toHaveLength(10);

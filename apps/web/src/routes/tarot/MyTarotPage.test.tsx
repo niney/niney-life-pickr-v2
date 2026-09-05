@@ -79,6 +79,7 @@ const detail: TarotReadingResultType = {
   advice: '조언 문장.',
   keyword: '새 출발',
   choice: null,
+  menu: null,
   createdAt: '2026-09-02T09:00:00.000Z',
   quota: { remainingToday: null },
 };

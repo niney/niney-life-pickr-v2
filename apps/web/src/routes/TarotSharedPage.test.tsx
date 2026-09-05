@@ -42,6 +42,7 @@ const shared: SharedTarotReadingType = {
   advice: '조언 문장입니다.',
   keyword: '새 출발',
   choice: null,
+  menu: null,
   createdAt: new Date().toISOString(),
 };
 

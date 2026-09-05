@@ -5,7 +5,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type { CreateTarotReadingInputType, TarotReadingResultType } from '@repo/api-contract';
 import { useAuthStore, useTarotHistoryStore } from '@repo/shared';
-import { getTarotCard, getTarotSpread, TAROT_CARDS, tarotCardKeywords, tarotCardMeaning } from '@repo/utils';
+import {
+  getTarotCard,
+  getTarotSpread,
+  selectTarotMenus,
+  TAROT_CARDS,
+  TAROT_MENU_CUISINE_LABEL,
+  TAROT_MENU_DISH_LABEL,
+  tarotCardKeywords,
+  tarotCardMeaning,
+} from '@repo/utils';
 import { detectTarotRender } from '~/components/tarot/tarotQuality';
 import { server } from '~/test/msw';
 import { TarotPage } from './TarotPage';
@@ -13,11 +22,11 @@ import { TarotPage } from './TarotPage';
 // 타로 페이지 — jsdom 에는 WebGL2 가 없어 Lite 모드로 뜬다. 3D 무대는 여기서 검증하지 않고(결정 14)
 // 흐름(설정 → 섞기 → 뽑기 → 요청 → 뒤집기 → 해석·로컬 기록)과 실패 폴백만 본다.
 
-const renderPage = () => {
+const renderPage = (entry = '/tarot') => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/tarot']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route element={<Outlet context={{ setSubBar: () => {}, headerHeight: 56 }} />}>
             <Route path="/tarot" element={<TarotPage />} />
@@ -55,6 +64,7 @@ const fakeResult = (input: CreateTarotReadingInputType): TarotReadingResultType 
     advice: '조언 문장입니다.',
     keyword: '희망',
     choice: null,
+    menu: null,
     createdAt: new Date().toISOString(),
     quota: { remainingToday: 4 },
   };
@@ -115,6 +125,55 @@ describe('TarotPage (Lite)', () => {
     expect(screen.getByText(/오늘 AI 해석 4회 남음/)).toBeInTheDocument();
     expect(useTarotHistoryStore.getState().entries).toHaveLength(1);
     expect(useTarotHistoryStore.getState().entries[0]!.result.keyword).toBe('희망');
+  });
+
+  it('메뉴 타로: 주제 칩이 숨고 topic=food 로 요청, 결과 전에도 후보가 보이고 결과가 오면 이유가 채워진다', async () => {
+    let received: CreateTarotReadingInputType | null = null;
+    server.use(
+      http.post('/api/v1/tarot/readings', async ({ request }) => {
+        received = (await request.json()) as CreateTarotReadingInputType;
+        const base = fakeResult(received);
+        const picks = selectTarotMenus(received.cards).picks;
+        return HttpResponse.json({
+          ...base,
+          keyword: picks[0]!.name,
+          menu: {
+            picks: picks.map((p, i) => ({
+              menuId: p.id,
+              name: p.name,
+              cuisine: TAROT_MENU_CUISINE_LABEL[p.cuisine],
+              dishType: TAROT_MENU_DISH_LABEL[p.dishType],
+              kcal: i === 0 ? 480 : null,
+              reason: `${p.name} 이유 문장입니다.`,
+            })),
+            profile: '입맛 한 줄',
+            avoid: '피할 것 한 줄',
+          },
+        } satisfies TarotReadingResultType);
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('radio', { name: /메뉴 타로/ }));
+    expect(screen.queryByRole('button', { name: '일·공부' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /카드 섞기/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '자동으로 뽑기' }));
+    await waitFor(() => expect(received).not.toBeNull());
+    expect(received!).toMatchObject({ spreadId: 'menu', topic: 'food', choices: null });
+
+    fireEvent.click(await screen.findByRole('button', { name: '모두 뒤집기' }));
+    const picks = selectTarotMenus(received!.cards).picks;
+    const box = await screen.findByTestId('tarot-menu-box');
+    expect(within(box).getByText(picks[0]!.name)).toBeInTheDocument();
+    expect(await within(box).findByText(`${picks[0]!.name} 이유 문장입니다.`)).toBeInTheDocument();
+    expect(within(box).getByText('약 480 kcal')).toBeInTheDocument();
+    expect(within(box).getByText(picks[1]!.name)).toBeInTheDocument();
+    expect(within(box).getByText('입맛 한 줄')).toBeInTheDocument();
+  });
+
+  it('?spread=menu 딥링크는 메뉴 타로로 시작한다', () => {
+    renderPage('/tarot?spread=menu');
+    expect(screen.getByRole('radio', { name: /메뉴 타로/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('button', { name: '연애' })).not.toBeInTheDocument();
   });
 
   it('선택 타로는 A·B 를 채워야 섞을 수 있다', () => {

@@ -11,10 +11,12 @@ import {
 } from '@repo/shared';
 import {
   createTarotFlowState,
+  getTarotSpread,
   newTarotSeed,
   tarotFlowReducer,
   type TarotFlowEvent,
   type TarotFlowState,
+  type TarotSpreadId,
 } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TarotLite } from '~/components/tarot/TarotLite';
@@ -37,6 +39,16 @@ type Event = TarotFlowEvent<TarotReadingResultType>;
 
 const reducer = (s: State, e: Event): State => tarotFlowReducer(s, e);
 
+// ?spread=menu 같은 딥링크(홈 카드·앱 임베드) — 제공 중인 스프레드만 받는다. 메뉴 타로는 주제가 food 로 잠긴다.
+const initialState = (spreadParam: string | null): State => {
+  const spread = spreadParam ? getTarotSpread(spreadParam) : undefined;
+  const spreadId: TarotSpreadId | undefined = spread?.available && !spread.memberOnly ? spread.id : undefined;
+  return createTarotFlowState<TarotReadingResultType>({
+    ...(spreadId ? { spreadId } : {}),
+    ...(spreadId === 'menu' ? { topic: 'food' } : {}),
+  });
+};
+
 const StageFallback = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-[#05071a] text-[#ece6d6]/60">
     <Loader2 className="mr-2 size-5 animate-spin text-[#d9b65b]" /> 무대를 준비하는 중…
@@ -50,7 +62,7 @@ export const TarotPage = () => {
   const [render] = useState(() => detectTarotRender());
   const isDesktop = useMediaQuery('(min-width: 64rem)', true);
 
-  const [state, dispatch] = useReducer(reducer, undefined, () => createTarotFlowState<TarotReadingResultType>());
+  const [state, dispatch] = useReducer(reducer, params.get('spread'), initialState);
 
   const { mutate } = useCreateTarotReading();
   const history = useTarotHistoryStore((s) => s.entries);

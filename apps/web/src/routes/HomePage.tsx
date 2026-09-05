@@ -71,7 +71,7 @@ export const HomePage = () => {
           <div className="min-w-0">
             <div className="font-serif-kr text-lg font-bold text-[#f3e9c6]">타로로 골라 보기</div>
             <div className="text-sm text-[#ece6d6]/70">
-              오늘의 카드, 세 장 리딩, A 냐 B 냐 선택 타로. 로그인 없이 무료.
+              오늘의 카드, 세 장 리딩, 선택 타로, 오늘 뭐 먹지 메뉴 타로. 로그인 없이 무료.
             </div>
           </div>
           <span className="ml-auto shrink-0 text-[#d9b65b]" aria-hidden>

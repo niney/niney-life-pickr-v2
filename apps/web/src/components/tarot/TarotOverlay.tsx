@@ -4,6 +4,7 @@ import { Loader2, RotateCcw, Share2, Sparkles, Trash2, Wand2, X } from 'lucide-r
 import type {
   TarotChoicesType,
   TarotDrawnCardType,
+  TarotMenuVerdictType,
   TarotReadingResultType,
   TarotSpreadIdType,
   TarotTopicType,
@@ -13,6 +14,7 @@ import {
   getTarotCard,
   getTarotSetupError,
   getTarotSpread,
+  selectTarotMenus,
   tarotCardKeywords,
   tarotCardMeaning,
   tarotOrientationLabel,
@@ -20,6 +22,8 @@ import {
   tarotRequiredPicks,
   TAROT_AVAILABLE_SPREADS,
   TAROT_CHOICE_MAX_LENGTH,
+  TAROT_MENU_CUISINE_LABEL,
+  TAROT_MENU_DISH_LABEL,
   TAROT_QUESTION_MAX_LENGTH,
   TAROT_TOPIC_LABEL,
   TAROT_TOPICS,
@@ -30,6 +34,7 @@ import {
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { TarotCardImage } from './TarotCardImage';
+import { TarotMenuBox } from './TarotMenuBox';
 import { TarotShareSheet, type TarotShareBase } from './TarotShareSheet';
 import type { TarotRenderMode } from './tarotQuality';
 import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
@@ -125,13 +130,19 @@ const SetupPanel = ({
         ))}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-1.5" aria-label="주제">
-        {TAROT_TOPICS.map((t) => (
-          <Chip key={t} active={state.topic === t} onClick={() => send({ type: 'set_topic', topic: t })}>
-            {TAROT_TOPIC_LABEL[t]}
-          </Chip>
-        ))}
-      </div>
+      {state.spreadId === 'menu' ? (
+        <p className="mt-4 text-xs text-[#ece6d6]/60">
+          카드의 원소(불·물·바람·땅)를 입맛으로 읽어 메뉴 세 가지를 골라 드려요. 첫 번째가 오늘의 추천.
+        </p>
+      ) : (
+        <div className="mt-4 flex flex-wrap gap-1.5" aria-label="주제">
+          {TAROT_TOPICS.filter((t) => t !== 'food').map((t) => (
+            <Chip key={t} active={state.topic === t} onClick={() => send({ type: 'set_topic', topic: t })}>
+              {TAROT_TOPIC_LABEL[t]}
+            </Chip>
+          ))}
+        </div>
+      )}
 
       {state.spreadId === 'choice' && (
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -163,7 +174,13 @@ const SetupPanel = ({
           value={state.question}
           maxLength={TAROT_QUESTION_MAX_LENGTH}
           rows={2}
-          placeholder={spread?.id === 'daily' ? '오늘의 카드는 질문 없이도 괜찮아요' : '적지 않아도 돼요. 적으면 해석이 질문에 맞춰져요.'}
+          placeholder={
+            spread?.id === 'daily'
+              ? '오늘의 카드는 질문 없이도 괜찮아요'
+              : spread?.id === 'menu'
+                ? '예: 회식 메뉴, 혼밥 야식, 비 오는 날 점심'
+                : '적지 않아도 돼요. 적으면 해석이 질문에 맞춰져요.'
+          }
           onChange={(e) => send({ type: 'set_question', question: e.target.value })}
           className="resize-none rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-[#f3e9c6] placeholder:text-[#ece6d6]/30 focus:border-[#d9b65b] focus:outline-none"
         />
@@ -313,6 +330,13 @@ const ReadingPanel = ({
   const ready = resultStatus === 'ready' && !!result;
   const [collapsed, setCollapsed] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  // 메뉴 타로: 결과가 오면 서버의 후보(이유·칼로리 포함), 그 전엔 같은 규칙으로 뽑은 후보(이유 없음).
+  const menu: TarotMenuVerdictType | null =
+    spreadId !== 'menu' || drawn.length < 3
+      ? null
+      : ready
+        ? result.menu
+        : previewMenu(drawn);
   return (
     <section
       aria-label="해석"
@@ -420,6 +444,7 @@ const ReadingPanel = ({
                 <Loader2 className="size-4 animate-spin text-[#d9b65b]" /> 카드를 읽는 중…
               </div>
             )}
+            {!ready && menu && <TarotMenuBox menu={menu} pending className="mt-3" />}
             {resultStatus === 'failed' && (
               <div className="flex flex-col gap-2 text-sm">
                 <p className="text-[#ffb4a2]">AI 해석을 불러오지 못했어요. 위 카드 기본 의미를 참고하거나 다시 시도해 주세요.</p>
@@ -438,6 +463,7 @@ const ReadingPanel = ({
                   <div className="text-[11px] text-[#d9b65b]">조언</div>
                   <p className="mt-1 text-sm leading-relaxed text-[#ece6d6]/90">{result.advice}</p>
                 </div>
+                {menu && <TarotMenuBox menu={menu} />}
                 {result.choice && choices && (
                   <div className="rounded-xl border border-[#d9b65b]/40 bg-[#d9b65b]/10 p-3 text-sm">
                     <div className="text-[11px] text-[#d9b65b]">카드의 선택</div>
@@ -489,6 +515,27 @@ const ReadingPanel = ({
       )}
     </section>
   );
+};
+
+// 결과 전 메뉴 후보 — 서버와 같은 utils 규칙(카드로 결정적)이라 결과의 후보와 일치한다. 이유·칼로리는 비움.
+const previewMenu = (drawn: readonly TarotDrawnCardType[]): TarotMenuVerdictType | null => {
+  try {
+    const s = selectTarotMenus(drawn);
+    return {
+      picks: s.picks.map((p) => ({
+        menuId: p.id,
+        name: p.name,
+        cuisine: TAROT_MENU_CUISINE_LABEL[p.cuisine],
+        dishType: TAROT_MENU_DISH_LABEL[p.dishType],
+        kcal: null,
+        reason: '',
+      })),
+      profile: s.profile,
+      avoid: s.avoid,
+    };
+  } catch {
+    return null;
+  }
 };
 
 // 지금 상태에서 공유 근거 — 회원 저장분은 readingId, 게스트는 입력 그대로.

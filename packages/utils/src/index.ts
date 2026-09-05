@@ -31,3 +31,4 @@ export * from './mealSlot.js';
 export * from './tarotCards.js';
 export * from './tarot.js';
 export * from './tarotFlow.js';
+export * from './tarotMenu.js';

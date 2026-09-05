@@ -133,6 +133,12 @@ const SIZE: Record<TarotShareImageFormatType, { w: number; h: number }> = {
 async function buildTree(reading: SharedTarotReadingType, format: TarotShareImageFormatType): Promise<Node> {
   const spread = getTarotSpread(reading.spreadId);
   const title = `${spread?.nameKo ?? '타로'} · ${TAROT_TOPIC_LABEL[reading.topic]}`;
+  // 메뉴 타로: 키워드가 곧 추천 메뉴 — 대안 두 개를 한 줄로 덧붙인다.
+  const alternatives = reading.menu?.picks
+    .slice(1)
+    .map((p) => p.name)
+    .join(' · ');
+  const menuLine = alternatives ? `이것도 괜찮아요 · ${alternatives}` : null;
   const srcs = await Promise.all(reading.cards.map((c) => cardImageDataUri(c.cardId)));
   const n = reading.cards.length;
   const { w, h: hh } = SIZE[format];
@@ -171,11 +177,12 @@ async function buildTree(reading: SharedTarotReadingType, format: TarotShareImag
           [
             text(title, { fontSize: 24, color: C.gold, letterSpacing: 1, width: textW }),
             text(reading.keyword, { fontSize: 60, fontWeight: 700, color: '#f3e9c6', marginTop: 10, lineClamp: 1, width: textW }),
+            menuLine ? text(menuLine, { fontSize: 22, color: C.gold, marginTop: 6, lineClamp: 1, width: textW }) : null,
             text(reading.summary, { fontSize: 25, lineHeight: 1.5, color: C.ink, marginTop: 18, lineClamp: 4, width: textW }),
             reading.question
               ? text(`“${reading.question}”`, { fontSize: 20, color: C.sub, marginTop: 18, lineClamp: 1, width: textW })
               : text('Life Pickr · 타로', { fontSize: 20, color: C.sub, marginTop: 18, width: textW }),
-          ],
+          ].filter((x): x is Node => x !== null),
         ),
       ],
       { flexDirection: 'row', alignItems: 'center', padding: 56 },
@@ -201,6 +208,7 @@ async function buildTree(reading: SharedTarotReadingType, format: TarotShareImag
         reading.cards.map((c, i) => cardNode(c, srcs[i] ?? null, cardW, n > 3 ? 22 : 30)),
       ),
       para(reading.keyword, { fontSize: 78, fontWeight: 700, color: '#f3e9c6', marginTop: 54, lineClamp: 1, textAlign: 'center' }),
+      menuLine ? para(menuLine, { fontSize: 30, color: C.gold, marginTop: 14, lineClamp: 1, textAlign: 'center' }) : null,
       h('div', { display: 'flex', width: 120, height: 3, backgroundColor: C.gold, marginTop: 26, marginBottom: 26 }),
       para(reading.summary, { fontSize: 34, lineHeight: 1.55, color: C.ink, lineClamp: 6, textAlign: 'center' }),
       para(reading.advice, { fontSize: 30, lineHeight: 1.5, color: C.sub, marginTop: 30, lineClamp: 4, textAlign: 'center' }),

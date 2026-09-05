@@ -131,11 +131,16 @@ export const tarotFlowReducer = <R = unknown>(
   event: TarotFlowEvent<R>,
 ): TarotFlowState<R> => {
   switch (event.type) {
-    case 'set_spread':
+    case 'set_spread': {
       if (state.phase !== 'setup' || !getTarotSpread(event.spreadId)) return state;
-      return { ...state, spreadId: event.spreadId };
+      // 메뉴 타로는 주제가 음식으로 고정. 다른 스프레드로 돌아가면 음식 주제는 전체 운으로.
+      const topic: TarotTopic =
+        event.spreadId === 'menu' ? 'food' : state.topic === 'food' ? 'general' : state.topic;
+      return { ...state, spreadId: event.spreadId, topic };
+    }
     case 'set_topic':
-      return state.phase === 'setup' ? { ...state, topic: event.topic } : state;
+      if (state.phase !== 'setup' || state.spreadId === 'menu') return state;
+      return event.topic === 'food' ? state : { ...state, topic: event.topic };
     case 'set_question':
       return state.phase === 'setup' ? { ...state, question: clip(event.question, TAROT_QUESTION_MAX_LENGTH) } : state;
     case 'set_choices':

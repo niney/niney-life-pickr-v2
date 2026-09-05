@@ -3,6 +3,7 @@ import type { SharedTarotReadingType } from '@repo/api-contract';
 import { getTarotSpread, tarotOrientationLabel, TAROT_TOPIC_LABEL } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { TarotCardImage } from './TarotCardImage';
+import { TarotMenuBox } from './TarotMenuBox';
 import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
 
 // 완성된 리딩의 2D 표시 — 공유 페이지(3D 없음)용. 카드 줄 + 카드별 해석 + 종합·조언·선택 판정·키워드.
@@ -10,14 +11,14 @@ import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
 interface Props {
   reading: Pick<
     SharedTarotReadingType,
-    'spreadId' | 'topic' | 'question' | 'choices' | 'source' | 'cards' | 'summary' | 'advice' | 'keyword' | 'choice'
+    'spreadId' | 'topic' | 'question' | 'choices' | 'source' | 'cards' | 'summary' | 'advice' | 'keyword' | 'choice' | 'menu'
   >;
   className?: string;
 }
 
 export const TarotReadingView = ({ reading, className }: Props) => {
   const spread = getTarotSpread(reading.spreadId);
-  const { choices, choice } = reading;
+  const { choices, choice, menu } = reading;
   return (
     <article className={cn('text-[#ece6d6]', className)}>
       <header className="flex flex-wrap items-center gap-2 text-xs text-[#ece6d6]/60">
@@ -90,6 +91,7 @@ export const TarotReadingView = ({ reading, className }: Props) => {
           <div className="text-[11px] text-[#d9b65b]">조언</div>
           <p className="mt-1 text-sm leading-relaxed text-[#ece6d6]/90">{reading.advice}</p>
         </div>
+        {menu && <TarotMenuBox menu={menu} />}
         {choice && choices && (
           <div className="rounded-xl border border-[#d9b65b]/40 bg-[#d9b65b]/10 p-3 text-sm">
             <div className="text-[11px] text-[#d9b65b]">카드의 선택</div>

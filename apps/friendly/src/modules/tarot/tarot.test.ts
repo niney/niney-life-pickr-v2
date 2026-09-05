@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TarotCardId, TarotSpreadId, TarotTopic, type TarotDrawnCardType } from '@repo/api-contract';
-import { TAROT_CARDS, TAROT_SPREADS, TAROT_SPREAD_IDS, TAROT_TOPICS, getTarotCard } from '@repo/utils';
+import { TAROT_CARDS, TAROT_SPREADS, TAROT_SPREAD_IDS, TAROT_TOPICS, getTarotCard, selectTarotMenus } from '@repo/utils';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
@@ -9,7 +9,7 @@ import { AiConfigService, type LlmProviderEnv } from '../ai/ai.config.service.js
 import type { AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/adapters/llm-provider.js';
 import { USAGE_QUOTA_DEFAULTS, UsageQuotaService } from '../usage-quota/usage-quota.service.js';
-import { buildStaticReading } from './tarot-static.js';
+import { buildStaticMenuVerdict, buildStaticReading } from './tarot-static.js';
 import type { TarotPromptCard } from './tarot.prompts.js';
 import {
   TarotError,
@@ -37,6 +37,11 @@ const THREE: TarotDrawnCardType[] = [
   { cardId: 'major-17', position: 'situation', reversed: false },
   { cardId: 'wands-08', position: 'advice', reversed: true },
   { cardId: 'cups-10', position: 'outcome', reversed: false },
+];
+const MENU: TarotDrawnCardType[] = [
+  { cardId: 'cups-02', position: 'mood', reversed: false },
+  { cardId: 'swords-03', position: 'avoid', reversed: false },
+  { cardId: 'wands-king', position: 'pick', reversed: false },
 ];
 const CHOICE: TarotDrawnCardType[] = [
   { cardId: 'major-19', position: 'optionA', reversed: false },
@@ -91,6 +96,23 @@ describe('buildStaticReading', () => {
       { a: '치킨', b: '피자' },
     );
     expect(same.choice).toMatchObject({ recommended: 'either', confidence: 'low' });
+  });
+});
+
+describe('buildStaticMenuVerdict', () => {
+  it('후보 3개에 정적 이유·칼로리를 붙이고, 정적 리딩의 키워드는 추천 메뉴 이름', () => {
+    const selection = selectTarotMenus(MENU);
+    const kcal = new Map([[selection.picks[0]!.id, 512]]);
+    const menu = buildStaticMenuVerdict(selection, promptCards(MENU, 'menu'), kcal);
+    expect(menu.picks).toHaveLength(3);
+    expect(menu.picks[0]).toMatchObject({ menuId: selection.picks[0]!.id, name: selection.picks[0]!.name, kcal: 512 });
+    expect(menu.picks[1]!.kcal).toBeNull();
+    expect(menu.picks[0]!.reason).toContain('완드 킹 카드가 불의 기운');
+    expect(menu.profile).toBe(selection.profile);
+    const r = buildStaticReading(TAROT_SPREADS.menu, 'food', promptCards(MENU, 'menu'), null, menu);
+    expect(r.keyword).toBe(selection.picks[0]!.name);
+    expect(r.menu).toBe(menu);
+    expect(r.summary).toContain(selection.picks[0]!.name);
   });
 });
 
@@ -315,6 +337,44 @@ describe('TarotService (격리 DB)', () => {
     expect(provider.calls[0]!.prompt).toContain('A: 치킨 / B: 피자');
   });
 
+  it('메뉴 타로: 주제는 food 로 고정, 후보는 서버가 정하고 LLM 은 이유만 — 모르는 menuId 는 무시', async () => {
+    const selection = selectTarotMenus(MENU);
+    const [first, second] = selection.picks;
+    provider.responses = [
+      llmJson(['mood', 'avoid', 'pick'], {
+        keyword: '엉뚱한 키워드',
+        menu: {
+          picks: [
+            { menuId: first!.id, reason: '첫 후보 이유입니다.' },
+            { menuId: 'not-a-menu', reason: '지어낸 메뉴' },
+          ],
+        },
+      }),
+    ];
+    const res = await build().createReading(input({ spreadId: 'menu', topic: 'love', question: '', cards: MENU }), guest);
+    expect(res).toMatchObject({ source: 'llm', topic: 'food', spreadId: 'menu', choices: null });
+    expect(res.menu).not.toBeNull();
+    expect(res.menu!.picks.map((p) => p.menuId)).toEqual(selection.picks.map((p) => p.id));
+    expect(res.menu!.picks[0]!.reason).toBe('첫 후보 이유입니다.');
+    // LLM 이 빠뜨린 후보는 정적 이유.
+    expect(res.menu!.picks[1]!.reason).toContain('대안');
+    expect(res.menu!.picks.some((p) => p.menuId === 'not-a-menu')).toBe(false);
+    expect(res.keyword).toBe(first!.name);
+    const prompt = provider.calls[0]!.prompt;
+    expect(prompt).toContain('[메뉴 후보');
+    expect(prompt).toContain(`menuId="${first!.id}"`);
+    expect(prompt).toContain(second!.name);
+    expect(prompt).toContain('[자리별 입맛 기운]');
+  });
+
+  it('메뉴 타로: LLM 이 없으면 정적 후보·이유로 채워진다', async () => {
+    const res = await build('gpt-oss:120b', '').createReading(input({ spreadId: 'menu', cards: MENU }), guest);
+    expect(res.source).toBe('static');
+    expect(res.menu!.picks).toHaveLength(3);
+    expect(res.menu!.picks[0]!.reason).toContain('추천 자리');
+    expect(res.keyword).toBe(res.menu!.picks[0]!.name);
+  });
+
   it('검증 오류는 TarotError 코드로', async () => {
     const svc = build();
     await expect(svc.createReading(input({ spreadId: 'celtic', cards: [] }), guest)).rejects.toMatchObject({ code: 'spread_unavailable' });
@@ -370,6 +430,19 @@ describe('tarot routes (격리 DB)', () => {
     expect(body.cards[2]).toMatchObject({ cardId: 'major-17', nameKo: '별', positionLabel: '미래' });
     expect(body.quota.remainingToday).toBe(GUEST_PER_DAY - 1);
     expect(await app.prisma.tarotReading.count()).toBe(0);
+  });
+
+  it('메뉴 타로 게스트 리딩 — 200, menu 후보 3개, 주제 food', async () => {
+    const res = await post(
+      { spreadId: 'menu', topic: 'general', cards: MENU },
+      { 'x-guest-key': 'guest-key-00000002' },
+    );
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ spreadId: 'menu', topic: 'food', source: 'static' });
+    expect(body.menu.picks).toHaveLength(3);
+    expect(body.menu.picks[0]).toMatchObject({ name: body.keyword });
+    expect(typeof body.menu.profile).toBe('string');
   });
 
   it('잘못된 요청은 400 — 카드 부족, 미제공 스프레드, 모르는 카드', async () => {

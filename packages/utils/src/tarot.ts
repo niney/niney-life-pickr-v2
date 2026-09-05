@@ -18,7 +18,7 @@ export const tarotCardMeaning = (card: TarotCard, reversed: boolean): string =>
 
 // --- 주제 -------------------------------------------------------------------
 
-export const TAROT_TOPICS = ['general', 'love', 'work', 'money', 'relationship', 'choice'] as const;
+export const TAROT_TOPICS = ['general', 'love', 'work', 'money', 'relationship', 'choice', 'food'] as const;
 export type TarotTopic = (typeof TAROT_TOPICS)[number];
 
 export const TAROT_TOPIC_LABEL: Record<TarotTopic, string> = {
@@ -28,6 +28,7 @@ export const TAROT_TOPIC_LABEL: Record<TarotTopic, string> = {
   money: '돈',
   relationship: '인간관계',
   choice: '선택',
+  food: '음식',
 };
 
 export const TAROT_QUESTION_MAX_LENGTH = 200;
@@ -54,7 +55,7 @@ export interface TarotSpread {
   available: boolean;
 }
 
-export const TAROT_SPREAD_IDS = ['daily', 'three-ppf', 'three-sar', 'choice', 'celtic'] as const;
+export const TAROT_SPREAD_IDS = ['daily', 'three-ppf', 'three-sar', 'choice', 'menu', 'celtic'] as const;
 export type TarotSpreadId = (typeof TAROT_SPREAD_IDS)[number];
 
 export const TAROT_SPREADS: Record<TarotSpreadId, TarotSpread> = {
@@ -98,6 +99,19 @@ export const TAROT_SPREADS: Record<TarotSpreadId, TarotSpread> = {
       { id: 'optionA', label: 'A 를 고르면', hint: 'A 선택지를 골랐을 때의 흐름과 결과' },
       { id: 'optionB', label: 'B 를 고르면', hint: 'B 선택지를 골랐을 때의 흐름과 결과' },
       { id: 'advice', label: '조언', hint: '결정을 내리기 위해 질문자가 봐야 할 핵심' },
+    ],
+    memberOnly: false,
+    available: true,
+  },
+  // 메뉴 타로(v3) — 주제는 food 고정. 카드 기운 → 메뉴 후보 선택은 tarotMenu.ts.
+  menu: {
+    id: 'menu',
+    nameKo: '메뉴 타로',
+    description: '오늘 뭐 먹지? 세 장으로 입맛의 기운을 읽고 메뉴를 골라 드립니다.',
+    positions: [
+      { id: 'mood', label: '오늘의 입맛', hint: '지금 몸과 마음이 끌리는 맛의 기운' },
+      { id: 'avoid', label: '피할 것', hint: '오늘은 피하는 편이 좋은 맛이나 먹는 방식' },
+      { id: 'pick', label: '추천', hint: '오늘의 한 끼로 카드가 미는 맛의 방향' },
     ],
     memberOnly: false,
     available: true,
