@@ -80,6 +80,27 @@ export const HomePage = () => {
         </div>
       </Link>
 
+      {/* 사주 진입 — 타로와 나란한 "선택" 갈래. 생년월일로 사주팔자·오늘의 운세·택일·궁합·오행 음식. */}
+      <Link
+        to="/saju"
+        className="-mt-6 mb-10 block rounded-2xl border border-[#b8322a]/30 bg-[radial-gradient(ellipse_at_85%_20%,#2a1a1c,#0b0b0f_70%)] p-5 text-[#e9e2d2] shadow-lg transition hover:border-[#d9b65b]/70"
+      >
+        <div className="flex items-center gap-4">
+          <span className="text-3xl" aria-hidden>
+            🧧
+          </span>
+          <div className="min-w-0">
+            <div className="font-serif-kr text-lg font-bold text-[#f3e9c6]">사주로 나를 읽기</div>
+            <div className="text-sm text-[#e9e2d2]/70">
+              생년월일로 세우는 사주팔자, 오늘의 운세, 좋은 날 고르기, 궁합, 오행 음식. 로그인 없이 무료.
+            </div>
+          </div>
+          <span className="ml-auto shrink-0 text-[#d9b65b]" aria-hidden>
+            →
+          </span>
+        </div>
+      </Link>
+
       <RestaurantFavoritesStrip items={favorites.items} onToggle={favorites.toggle} />
 
       <header className="mb-6 flex flex-col gap-2">

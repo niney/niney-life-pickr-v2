@@ -15,6 +15,10 @@ const FEATURE_META: Record<UsageQuotaFeatureType, { label: string; desc: string 
     label: '타로 해석',
     desc: '타로 리딩의 Ollama Cloud 호출. 같은 카드·질문 조합은 캐시라 한도를 소비하지 않는다.',
   },
+  'saju-reading': {
+    label: '사주 풀이',
+    desc: '사주 전체 풀이(섹션 4개 병렬 = 1건)·오늘의 운세·궁합·택일·오행 음식의 Ollama Cloud 호출. 같은 사주는 캐시라 한도를 소비하지 않는다.',
+  },
 };
 
 const FIELDS: Array<{ key: keyof FormState; label: string; hint: string; min: number; max?: number }> = [

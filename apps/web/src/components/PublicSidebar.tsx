@@ -9,6 +9,7 @@ import {
   LogOut,
   MapPinned,
   Receipt,
+  Compass,
   Salad,
   ShieldCheck,
   Sparkles,
@@ -42,6 +43,7 @@ const NAV: NavItem[] = [
   { to: '/weather', label: '날씨', icon: CloudSun },
   { to: '/air', label: '대기질', icon: Wind },
   { to: '/tarot', label: '타로', icon: Sparkles },
+  { to: '/saju', label: '사주', icon: Compass },
   { to: '/me/meals', label: '식단', icon: Salad, requiresAuth: true },
 ];
 

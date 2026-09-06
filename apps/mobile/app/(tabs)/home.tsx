@@ -15,6 +15,7 @@ import type { RestaurantRankingItemType } from '@repo/api-contract';
 import { NotchFade } from '~/components/NotchFade';
 import { MyLocationCard } from '~/components/home/MyLocationCard';
 import { TarotEntryCard } from '~/components/home/TarotEntryCard';
+import { SajuEntryCard } from '~/components/home/SajuEntryCard';
 import { TodayMealCard } from '~/components/home/TodayMealCard';
 import { RankingHeader } from '~/components/RankingHeader';
 import { RankingRow } from '~/components/RankingRow';
@@ -136,6 +137,7 @@ export default function HomeScreen() {
         <MyLocationCard />
         <TodayMealCard />
         <TarotEntryCard />
+        <SajuEntryCard />
         <RankingHeader
           sort={sort}
           excludeNeutral={excludeNeutral}

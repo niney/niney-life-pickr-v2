@@ -11,6 +11,7 @@ import {
   setMealDraftPrincipal,
   setMealDraftStorage,
   setReviewAskStorage,
+  setSajuProfileStorage,
   setSettlementDraftStorage,
   setSubwayFavoriteStorage,
   useAuthStore,
@@ -46,6 +47,9 @@ setMealDraftStorage(AsyncStorage);
 // 공용 게스트 키(타로 등 로그인 없는 기능의 기기 식별) — 앱이 보관하고 WebView 임베드에 주입해
 // 앱과 WebView 가 같은 기기로 잡히게(기기 일일 한도·오늘의 카드 잠금).
 setGuestKeyStorage(AsyncStorage);
+// 사주 게스트 프로필(생년월일 로컬 보관) — WebView 안 웹이 쓰는 localStorage 와는 별개지만, 앱 홈 카드 딥링크·
+// 향후 앱 네이티브 화면이 같은 값을 쓰도록 앱도 보관한다.
+setSajuProfileStorage(AsyncStorage);
 setMealDraftLocalFileAdapter({
   deleteFiles: deleteMealDraftPhotoFiles,
   clearAll: clearMealDraftPhotoFiles,

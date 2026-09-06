@@ -1,0 +1,210 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronDown, Sparkles, Trash2 } from 'lucide-react';
+import type { SajuBirthInputType } from '@repo/api-contract';
+import { useSajuProfileStore, type SajuLocalProfile } from '@repo/shared';
+import { SAJU_SUPPORTED_YEARS, daysInMonth, lunarMonthLength } from '@repo/utils';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
+import { SAJU_DISCLAIMER } from './sajuTheme';
+
+// 입력 폼 — 생년월일(양/음력·윤달)·시각(모름 허용)·성별·고급 옵션(진태양시·야자시). 게스트 로컬 프로필 칩으로
+// 다시 채우고, 제출 시 "이 기기에 저장" 이면 프로필로 남긴다. 검증 메시지는 리듀서(submit)가 준다.
+
+export interface SajuFormProps {
+  input: SajuBirthInputType;
+  error: string | null;
+  isMember: boolean;
+  onChange: (patch: Partial<SajuBirthInputType>) => void;
+  onSubmit: (save: { enabled: boolean; label: string }) => void;
+}
+
+export const glass = 'rounded-2xl border border-[#d9b65b]/15 bg-[#121218]/90 text-[#e9e2d2] shadow-2xl backdrop-blur-md';
+const field =
+  'rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-[#f3e9c6] placeholder:text-[#e9e2d2]/30 focus:border-[#d9b65b] focus:outline-none';
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFormProps) => {
+  const profiles = useSajuProfileStore((s) => s.profiles);
+  const primaryId = useSajuProfileStore((s) => s.primaryId);
+  const removeProfile = useSajuProfileStore((s) => s.remove);
+  const [advanced, setAdvanced] = useState(false);
+  const [save, setSave] = useState(profiles.length === 0);
+  const [label, setLabel] = useState('나');
+  const [activeProfile, setActiveProfile] = useState<string | null>(null);
+
+  const monthDays = input.calendar === 'lunar' ? (lunarMonthLength(input.year, input.month, input.leapMonth) ?? 30) : daysInMonth(input.year, input.month);
+  const days = Array.from({ length: monthDays }, (_, i) => i + 1);
+  const hasLeap = input.calendar === 'lunar' && lunarMonthLength(input.year, input.month, true) !== null;
+
+  const applyProfile = (p: SajuLocalProfile) => {
+    setActiveProfile(p.id);
+    setLabel(p.label);
+    onChange({ ...p.birth });
+  };
+
+  return (
+    <section className={cn(glass, 'pointer-events-auto absolute inset-x-3 bottom-3 top-16 flex max-h-[calc(100%-4.5rem)] flex-col overflow-y-auto p-4 sm:inset-x-auto sm:left-1/2 sm:top-20 sm:w-[27rem] sm:-translate-x-1/2 lg:left-auto lg:right-8 lg:translate-x-0')} aria-label="사주 입력">
+      <h2 className="font-serif-kr text-lg font-bold text-[#f3e9c6]">언제 태어나셨나요?</h2>
+      <p className="mt-1 text-xs text-[#e9e2d2]/60">생년월일과 시각으로 사주팔자를 세워요. 시간을 모르면 세 기둥으로 봐요.</p>
+
+      {profiles.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5" aria-label="저장된 사주">
+          {profiles.map((p) => (
+            <span key={p.id} className="inline-flex items-center">
+              <button
+                type="button"
+                onClick={() => applyProfile(p)}
+                className={cn(
+                  'rounded-l-full border px-3 py-1 text-xs transition',
+                  activeProfile === p.id ? 'border-[#d9b65b] bg-[#d9b65b]/15 text-[#f3e9c6]' : 'border-white/15 text-[#e9e2d2]/70 hover:border-white/40',
+                )}
+              >
+                {p.label}
+                {p.id === primaryId && <span className="ml-1 text-[#d9b65b]">★</span>}
+              </button>
+              <button type="button" aria-label={`${p.label} 삭제`} onClick={() => removeProfile(p.id)} className="rounded-r-full border border-l-0 border-white/15 px-1.5 py-1 text-[#e9e2d2]/40 hover:text-[#ffb4a2]">
+                <Trash2 className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex gap-1" role="radiogroup" aria-label="달력">
+        {(['solar', 'lunar'] as const).map((c) => (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={input.calendar === c}
+            onClick={() => onChange({ calendar: c, leapMonth: false })}
+            className={cn('flex-1 rounded-lg border py-1.5 text-sm transition', input.calendar === c ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/60 hover:border-white/30')}
+          >
+            {c === 'solar' ? '양력' : '음력'}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <label className="flex flex-col gap-1 text-xs text-[#e9e2d2]/70">
+          년
+          <input
+            type="number"
+            inputMode="numeric"
+            aria-label="년"
+            min={SAJU_SUPPORTED_YEARS.from}
+            max={SAJU_SUPPORTED_YEARS.to}
+            value={input.year}
+            onChange={(e) => onChange({ year: Number(e.target.value) })}
+            className={field}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-[#e9e2d2]/70">
+          월
+          <select aria-label="월" value={input.month} onChange={(e) => onChange({ month: Number(e.target.value), leapMonth: false })} className={field}>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>{m}월</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-[#e9e2d2]/70">
+          일
+          <select aria-label="일" value={Math.min(input.day, monthDays)} onChange={(e) => onChange({ day: Number(e.target.value) })} className={field}>
+            {days.map((d) => (
+              <option key={d} value={d}>{d}일</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {input.calendar === 'lunar' && (
+        <label className={cn('mt-2 flex items-center gap-2 text-xs', hasLeap ? 'text-[#e9e2d2]/70' : 'text-[#e9e2d2]/35')}>
+          <input type="checkbox" checked={input.leapMonth} disabled={!hasLeap} onChange={(e) => onChange({ leapMonth: e.target.checked })} className="accent-[#d9b65b]" />
+          윤달{hasLeap ? '' : ' (이 해엔 윤달이 없어요)'}
+        </label>
+      )}
+
+      <div className="mt-3 grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+        <label className="flex flex-col gap-1 text-xs text-[#e9e2d2]/70">
+          시
+          <select
+            aria-label="시"
+            value={input.hour === null ? '' : input.hour}
+            onChange={(e) => onChange({ hour: e.target.value === '' ? null : Number(e.target.value), minute: e.target.value === '' ? null : (input.minute ?? 0) })}
+            className={field}
+          >
+            <option value="">모름</option>
+            {HOURS.map((h) => (
+              <option key={h} value={h}>{String(h).padStart(2, '0')}시</option>
+            ))}
+          </select>
+        </label>
+        <label className={cn('flex flex-col gap-1 text-xs', input.hour === null ? 'text-[#e9e2d2]/35' : 'text-[#e9e2d2]/70')}>
+          분
+          <select aria-label="분" disabled={input.hour === null} value={input.minute ?? 0} onChange={(e) => onChange({ minute: Number(e.target.value) })} className={field}>
+            {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+              <option key={m} value={m}>{String(m).padStart(2, '0')}분</option>
+            ))}
+          </select>
+        </label>
+        <div className="flex gap-1" role="radiogroup" aria-label="성별">
+          {(['M', 'F'] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              role="radio"
+              aria-checked={input.gender === g}
+              onClick={() => onChange({ gender: g })}
+              className={cn('rounded-lg border px-3 py-2 text-sm', input.gender === g ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/60 hover:border-white/30')}
+            >
+              {g === 'M' ? '남' : '여'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button type="button" onClick={() => setAdvanced((a) => !a)} className="mt-3 flex items-center gap-1 self-start text-[11px] text-[#e9e2d2]/50 hover:text-[#e9e2d2]">
+        <ChevronDown className={cn('size-3 transition', advanced && 'rotate-180')} /> 고급 설정
+      </button>
+      {advanced && (
+        <div className="mt-2 flex flex-col gap-2 rounded-lg border border-white/10 p-3 text-xs text-[#e9e2d2]/70">
+          <label className="flex items-start gap-2">
+            <input type="checkbox" checked={input.options.solarTimeCorrection} onChange={(e) => onChange({ options: { ...input.options, solarTimeCorrection: e.target.checked } })} className="mt-0.5 accent-[#d9b65b]" />
+            <span>
+              진태양시 보정 <span className="text-[#e9e2d2]/45">— 서울 기준 30분(서머타임 땐 90분)을 되돌려요. 국내 만세력 기본값</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" checked={input.options.lateRatHour} onChange={(e) => onChange({ options: { ...input.options, lateRatHour: e.target.checked } })} className="mt-0.5 accent-[#d9b65b]" />
+            <span>
+              야자시 <span className="text-[#e9e2d2]/45">— 밤 11시 이후를 당일 일주로 봐요(기본은 다음날)</span>
+            </span>
+          </label>
+        </div>
+      )}
+
+      {!isMember && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-[#e9e2d2]/70">
+          <input id="saju-save" type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} className="accent-[#d9b65b]" />
+          <label htmlFor="saju-save">이 기기에 저장</label>
+          {save && <input aria-label="이름" value={label} maxLength={20} onChange={(e) => setLabel(e.target.value)} className={cn(field, 'w-24 py-1')} />}
+        </div>
+      )}
+
+      <Button type="button" onClick={() => onSubmit({ enabled: !isMember && save, label: label.trim() || '나' })} className="mt-4 h-11 w-full bg-[#b8322a] text-[#f7eddc] hover:bg-[#cc3d33]">
+        <Sparkles className="size-4" /> 사주 세우기
+      </Button>
+      {error && <p className="mt-1 text-center text-[11px] text-[#ffb4a2]">{error}</p>}
+      <p className="mt-3 text-center text-[11px] text-[#e9e2d2]/45">{SAJU_DISCLAIMER}</p>
+      {isMember && (
+        <p className="mt-2 text-center text-[11px] text-[#e9e2d2]/55">
+          풀이는 자동 저장돼요 ·{' '}
+          <Link to="/me/saju" className="text-[#d9b65b] underline-offset-2 hover:underline">
+            내 사주 기록
+          </Link>
+        </p>
+      )}
+    </section>
+  );
+};
