@@ -96,6 +96,7 @@ export type LlmProviderIdType = z.infer<typeof LlmProviderId>;
 //  - meal-photo     비전 — 식단 사진 음식 인식(식단 관리). image 와 모델·게이트를 분리해 독립 튜닝
 //  - meal-recommend 텍스트 — 다음 끼니 추천(식단 관리)
 //  - tarot          텍스트 — 타로 해석. 무인증 공개 기능이라 전용 키(own)를 두면 계정 한도가 분리된다
+//  - saju           텍스트 — 사주 풀이(섹션 병렬·오늘·궁합·택일·음식). 타로와 같은 공개 기능
 export const LlmProviderPurpose = z.enum([
   'chat',
   'image',
@@ -103,6 +104,7 @@ export const LlmProviderPurpose = z.enum([
   'meal-photo',
   'meal-recommend',
   'tarot',
+  'saju',
 ]);
 export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
 

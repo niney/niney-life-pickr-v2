@@ -37,6 +37,15 @@ export const USAGE_QUOTA_DEFAULTS: Record<UsageQuotaFeatureType, UsageQuotaDefau
     globalPerDay: 5000,
     guestCutoffPct: 90,
   },
+  // 사주 — 전체 풀이 1건 = LLM 4호출(섹션 병렬)이라 전역 예산은 타로보다 낮게 시작. 오늘·궁합·택일·음식도 1건씩.
+  'saju-reading': {
+    enabled: true,
+    guestPerDay: 30,
+    ipPerDay: 300,
+    ipPerMinute: 20,
+    globalPerDay: 3000,
+    guestCutoffPct: 90,
+  },
 };
 
 export type UsageQuotaScope = 'global' | 'ip' | 'guest' | 'user';

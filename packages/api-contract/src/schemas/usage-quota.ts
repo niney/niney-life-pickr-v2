@@ -8,7 +8,7 @@ import { z } from 'zod';
 // 안전망으로 전원에게 적용하되, 게스트는 예산의 guestCutoffPct % 에서 먼저 끊긴다.
 // 분당 IP 버스트(ipPerMinute)는 폭주 클라이언트 방어라 회원에게도 적용.
 
-export const UsageQuotaFeature = z.enum(['tarot-reading']);
+export const UsageQuotaFeature = z.enum(['tarot-reading', 'saju-reading']);
 export type UsageQuotaFeatureType = z.infer<typeof UsageQuotaFeature>;
 
 // 0 은 "제한 없음"(ipPerMinute 제외).

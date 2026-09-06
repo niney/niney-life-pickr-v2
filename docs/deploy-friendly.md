@@ -181,6 +181,21 @@ location ^~ /tarot/s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
+# 사주 공유 링크(/saju/s/<token>) OG + 공유 이미지(/saju/s/<token>/image.png?format=og|story) — 타로와 동일.
+location ^~ /saju/s/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
+# 사주 이미지(apps/web/dist/saju/images/*.webp) — 타로 카드와 같은 7일 캐시·진짜 404.
+location ^~ /saju/images/ {
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800";
+    try_files $uri =404;
+}
 # 타로 카드 이미지(apps/web/dist/tarot/cards/*.webp) — 아래 1년 immutable 규칙엔 webp 가 없다.
 # 카드를 같은 파일명으로 다시 생성해 교체할 수 있어 7일 캐시. 없는 카드는 index.html 폴백 대신
 # 진짜 404 로 떨어져야 웹이 대체 카드(이름 박스)를 그린다.
@@ -242,6 +257,8 @@ location ^~ /vote/ {
   커버하므로 추가 설정 불필요.
   - 한글 렌더용 폰트 `apps/friendly/assets/fonts/IBMPlexSansKR-{Regular,Bold}.ttf`
     가 레포에 포함(커밋됨) — git pull 만으로 배포된다. 별도 설치 불필요.
+  - 사주 공유 이미지의 한자(천간·지지·오행 27자)는 Plex 에 없어 `apps/friendly/assets/saju-glyphs/*.png`
+    (개발 머신에서 `pnpm --filter friendly build:saju-glyphs` 로 생성, 커밋됨)를 그린다. 운영엔 CJK 폰트 불필요.
   - 카드에는 참가자 이름이 들어간다. 공유 페이지를 열면 어차피 같은 명단이
     보이고 링크는 ≤30일 만료라 노출 범위는 동일. 더 보수적으로 가려면
     share-preview 의 og.image 를 `OG_IMAGE_PATH` 기본 이미지로 되돌리면 된다.

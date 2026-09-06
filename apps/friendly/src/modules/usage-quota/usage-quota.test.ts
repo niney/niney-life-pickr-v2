@@ -42,7 +42,7 @@ describe('UsageQuotaService (격리 DB)', () => {
   it('행이 없으면 코드 기본값으로 동작한다', async () => {
     const s = await svc.getSetting(F);
     expect(s).toEqual({ feature: F, ...USAGE_QUOTA_DEFAULTS[F], updatedAt: null });
-    expect(await svc.listSettings()).toHaveLength(1);
+    expect(await svc.listSettings()).toHaveLength(Object.keys(USAGE_QUOTA_DEFAULTS).length);
   });
 
   it('게스트: guestPerDay 만큼 허용 후 guest_daily 로 거부, 잔여가 줄어든다', async () => {

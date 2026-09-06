@@ -664,6 +664,29 @@ export const Tarot = {
     `/tarot/s/${token}/image.png${format === 'story' ? '?format=story' : ''}`,
 } as const;
 
+// 사주 — 공개 풀이(무인증, 옵셔널 인증이면 회원 자동 저장) + 섹션 병렬 job + 오늘·궁합·택일·음식 + 회원 프로필·기록·공유.
+export const Saju = {
+  // POST — 생년월일시·성별 → 원국 + 섹션 4개(정적 본문 즉시, LLM 섹션은 job). X-Guest-Key 로 게스트 일일 한도.
+  readings: `${API_PREFIX}/saju/readings`,
+  // GET(?after&wait) — 섹션 도착 long-poll. 서버 재시작으로 job 이 없으면 410.
+  job: (jobId: string) => `${API_PREFIX}/saju/readings/jobs/${jobId}`,
+  daily: `${API_PREFIX}/saju/daily`,
+  match: `${API_PREFIX}/saju/match`,
+  datePick: `${API_PREFIX}/saju/date-pick`,
+  food: `${API_PREFIX}/saju/food`,
+  // 회원 프로필(나·가족 여러 명) / 기록.
+  profiles: `${API_PREFIX}/saju/me/profiles`,
+  profile: (id: string) => `${API_PREFIX}/saju/me/profiles/${id}`,
+  myReadings: `${API_PREFIX}/saju/me/readings`,
+  myReading: (id: string) => `${API_PREFIX}/saju/me/readings/${id}`,
+  // 공유 — POST(토큰 발급) / GET 공개 조회. 웹 페이지·이미지는 타로와 같은 패턴(nginx `^~ /saju/s/`).
+  shares: `${API_PREFIX}/saju/shares`,
+  shared: (token: string) => `${API_PREFIX}/saju/shares/${token}`,
+  sharePage: (token: string) => `/saju/s/${token}`,
+  shareImage: (token: string, format: 'og' | 'story' = 'og') =>
+    `/saju/s/${token}/image.png${format === 'story' ? '?format=story' : ''}`,
+} as const;
+
 // 공용 사용량 한도 — 어드민 "설정 > 사용량 한도". 기능별 게스트·IP·전역 일일 한도 + 그날 사용량.
 export const UsageQuota = {
   // GET(?date=) — 모든 기능의 설정 + 사용량.

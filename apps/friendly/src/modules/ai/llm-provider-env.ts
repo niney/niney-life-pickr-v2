@@ -19,5 +19,6 @@ export const buildLlmProviderEnv = (): LlmProviderEnv => ({
     'meal-photo': env.OLLAMA_MEAL_PHOTO_MODEL,
     'meal-recommend': env.OLLAMA_MEAL_RECOMMEND_MODEL,
     tarot: env.OLLAMA_TAROT_MODEL,
+    saju: env.OLLAMA_SAJU_MODEL,
   },
 });

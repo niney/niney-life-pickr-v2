@@ -42,6 +42,8 @@ model User {
   mealDailyQuotas          MealDailyQuota[]
   mealDataImports          MealDataImport[]
   tarotReadings            TarotReading[]
+  sajuProfiles             SajuProfile[]
+  sajuReadings             SajuReading[]
 
   @@map("users")
 }
@@ -2148,6 +2150,60 @@ model TarotReading {
 
   @@index([userId, createdAt])
   @@map("tarot_readings")
+}
+
+// ── 사주 ─────────────────────────────────────────────────────────────────────
+
+// 회원 사주 프로필 — 나·가족·친구 여러 명(최대 10). 오늘의 운세·궁합 상대 선택에 쓴다. 생년월일시는
+// 개인정보라 로그에 남기지 않는다. isPrimary 는 "내 사주" 한 명(서비스가 보장, DB 제약 없음).
+model SajuProfile {
+  id           String   @id @default(cuid())
+  userId       String
+  label        String
+  calendar     String
+  birthYear    Int
+  birthMonth   Int
+  birthDay     Int
+  leapMonth    Boolean  @default(false)
+  birthHour    Int?
+  birthMinute  Int?
+  gender       String
+  optionsJson  String   @default("{}")
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isPrimary])
+  @@map("saju_profiles")
+}
+
+// 사주 결과 — 회원은 자동 저장(userId), 게스트는 공유를 누를 때만 저장(guestKey). kind 는
+// full / daily / match / date-pick / food. inputJson 은 입력(궁합은 두 사람), chartJson 은 계산 스냅샷,
+// resultJson 은 풀이(섹션·점수·후보) — 당시 계약의 JSON 그대로. dailyLockKey 는 "userId:profileId:yyyy-mm-dd"
+// (오늘의 운세 하루 1회, 4차). shareBirth 는 공유 페이지에 생년월일 노출 여부(기본 숨김 — 띠·연도만).
+model SajuReading {
+  id            String   @id @default(cuid())
+  userId        String?
+  guestKey      String?
+  shareToken    String?  @unique
+  kind          String
+  inputJson     String
+  chartJson     String
+  resultJson    String
+  source        String
+  model         String?
+  promptVersion Int      @default(1)
+  dayKey        String
+  dailyLockKey  String?  @unique
+  shareBirth    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("saju_readings")
 }
 
 // ── 공용 사용량 한도 ────────────────────────────────────────────────────────

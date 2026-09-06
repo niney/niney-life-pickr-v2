@@ -34,6 +34,9 @@ const EnvSchema = z.object({
   OLLAMA_MEAL_PHOTO_MODEL: z.string().default(''),
   OLLAMA_MEAL_RECOMMEND_MODEL: z.string().default(''),
   OLLAMA_TAROT_MODEL: z.string().default('gpt-oss:120b'),
+  //  - OLLAMA_SAJU_MODEL:           사주 풀이(saju, 텍스트). 섹션 4개 병렬이라 지연보다 한국어·명리 용어 품질을
+  //                                 우선 — 기본 deepseek-v4-pro. 재측정: probe:saju-reading(kimi·qwen 후보 포함).
+  OLLAMA_SAJU_MODEL: z.string().default('deepseek-v4-pro'),
   // 메뉴 칼로리 LLM 매칭(chat 용도 키 상속, 모델만 지정). 골든셋 84건 실측(2026-09-02):
   // gemma4:31b 88%(high 신뢰도만 29/30, p50 1.2s) / qwen3.5:397b 77% / gpt-oss:120b 68%.
   // 비우면 chat 기본 모델. 재측정: pnpm --filter friendly probe:menu-decompose.
