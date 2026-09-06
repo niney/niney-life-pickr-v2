@@ -1,89 +1,89 @@
 {
-  "generatedAt": "2026-09-06T10:50:14.448Z",
+  "generatedAt": "2026-09-06T12:45:18.009Z",
   "sizes": [
     512,
     1024
   ],
   "images": {
     "stem-gap": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-gap.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-eul": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-eul.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-byeong": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-byeong.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-jeong": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-jeong.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-mu": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-mu.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-gi": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-gi.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-gyeong": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-gyeong.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-sin": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-sin.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-im": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-im.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "stem-gye": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\stem-gye.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-rat": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\branch-rat.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-ox": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\branch-ox.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-tiger": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\branch-tiger.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-rabbit": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\branch-rabbit.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-dragon": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\branch-dragon.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-snake": {
-      "placeholder": true,
-      "source": null,
-      "builtAt": "2026-09-06T10:50:14.448Z"
+      "placeholder": false,
+      "source": "assets-src\\saju\\raw\\branch-snake.jpg",
+      "builtAt": "2026-09-06T12:45:18.009Z"
     },
     "branch-horse": {
       "placeholder": true,
@@ -116,5 +116,12 @@
       "builtAt": "2026-09-06T10:50:14.448Z"
     }
   },
-  "missing": []
+  "missing": [
+    "branch-horse",
+    "branch-goat",
+    "branch-monkey",
+    "branch-rooster",
+    "branch-dog",
+    "branch-pig"
+  ]
 }
