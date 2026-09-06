@@ -666,6 +666,10 @@ export const Tarot = {
 
 // 사주 — 명식 계산·해석·명시적 보관·공개 상징 공유.
 export const Saju = {
+  profiles: `${API_PREFIX}/saju/me/profiles`,
+  profile: (id: string) => `${API_PREFIX}/saju/me/profiles/${id}`,
+  pairChart: `${API_PREFIX}/saju/pair/chart`,
+  pairReading: `${API_PREFIX}/saju/pair/readings`,
   chart: `${API_PREFIX}/saju/chart`,
   readings: `${API_PREFIX}/saju/readings`,
   myReadings: `${API_PREFIX}/saju/me/readings`,

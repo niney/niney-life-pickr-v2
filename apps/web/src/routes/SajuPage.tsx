@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, BookOpen, Download, History, Share2 } from 'lucide-react';
-import { sajuApi, storeDeviceSaju, useAuthStore, useSajuReading } from '@repo/shared';
+import {
+  sajuApi,
+  storeDeviceSaju,
+  useAuthStore,
+  useSajuReading,
+  useSajuProfiles,
+} from '@repo/shared';
 import type { CreateSajuReadingInputType, SajuKindType } from '@repo/api-contract';
 import { SAJU_KIND_LABEL, type SajuElementId } from '@repo/utils';
 import { SajuBirthForm } from '~/components/saju/SajuBirthForm';
 import { SajuVisual } from '~/components/saju/SajuVisual';
 import { SajuReportView } from '~/components/saju/SajuReportView';
 import { SajuShareDialog } from '~/components/saju/SajuShareDialog';
+import { SajuSaveProfileDialog } from '~/components/saju/SajuSaveProfileDialog';
 import '~/components/saju/saju.css';
+import '~/components/saju/saju-next.css';
 
 export function SajuPage() {
   const principal = useAuthStore((s) => s.user?.id ?? 'guest');
@@ -17,6 +25,14 @@ export function SajuPage() {
 }
 function SajuExperience({ principal }: { principal: string }) {
   const reading = useSajuReading();
+  const startReading = reading.start;
+  const profiles = useSajuProfiles();
+  const [params] = useSearchParams();
+  const profileId = params.get('profile');
+  const requestedKind = params.get('kind');
+  const openedProfile = useRef('');
+  const [profileSave, setProfileSave] = useState(false);
+  const [formKey, setFormKey] = useState('manual');
   const queryClient = useQueryClient();
   const [input, setInput] = useState<CreateSajuReadingInputType | undefined>();
   const [selected, setSelected] = useState<SajuElementId | null>(null);
@@ -49,6 +65,32 @@ function SajuExperience({ principal }: { principal: string }) {
   const kind = (value: SajuKindType) => {
     if (input) start({ ...input, kind: value });
   };
+  useEffect(() => {
+    if (!profileId) {
+      openedProfile.current = '';
+      return;
+    }
+    const profile = profiles.profiles.find((p) => p.id === profileId);
+    const request = `${profileId}:${requestedKind}`;
+    if (!profile || openedProfile.current === request) return;
+    // 캐시된 프로필로 진입해도 StrictMode의 첫 cleanup이 실제 요청을 취소하지 않도록 한다.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      openedProfile.current = request;
+      setFormKey(profile.id);
+      const value: CreateSajuReadingInputType = {
+        birth: profile.birth,
+        kind: requestedKind === 'daily' || requestedKind === 'annual' ? requestedKind : 'natal',
+        note: '',
+      };
+      setInput(value);
+      void startReading(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId, requestedKind, profiles.profiles, startReading]);
   const save = async () => {
     if (!reading.result) return;
     setSaving(true);
@@ -77,10 +119,14 @@ function SajuExperience({ principal }: { principal: string }) {
           <Link to="/saju" onClick={() => reading.reset()} className="saju-brand">
             <span>命</span>사주 <small>나의 오행 지도</small>
           </Link>
-          <Link to="/me/saju" className="saju-history-link">
-            <History size={15} />
-            보관함
-          </Link>
+          <div className="saju-next-nav">
+            <Link to="/saju/pair">우리의 궁합</Link>
+            <Link to="/me/saju/profiles">프로필</Link>
+            <Link to="/me/saju" className="saju-history-link">
+              <History size={15} />
+              보관함
+            </Link>
+          </div>
         </header>
         {!active ? (
           <>
@@ -113,7 +159,35 @@ function SajuExperience({ principal }: { principal: string }) {
                     {reading.error}
                   </p>
                 )}
-                <SajuBirthForm initial={input} onSubmit={start} />
+                {profiles.profiles.length > 0 && (
+                  <label className="saju-profile-picker">
+                    기억해 둔 사람
+                    <select
+                      aria-label="출생 프로필 선택"
+                      value={formKey}
+                      onChange={(e) => {
+                        const p = profiles.profiles.find((v) => v.id === e.target.value);
+                        setFormKey(e.target.value);
+                        setInput(p ? { birth: p.birth, kind: 'natal', note: '' } : undefined);
+                      }}
+                    >
+                      <option value="manual">직접 입력하기</option>
+                      {profiles.profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {profileId &&
+                  !profiles.isLoading &&
+                  !profiles.profiles.some((p) => p.id === profileId) && (
+                    <p className="saju-error" role="alert">
+                      프로필을 찾을 수 없어요. 로그인 상태를 확인하거나 직접 입력해 주세요.
+                    </p>
+                  )}
+                <SajuBirthForm key={formKey} initial={input} onSubmit={start} />
               </div>
             </div>
             <div className="saju-features">
@@ -214,6 +288,9 @@ function SajuExperience({ principal }: { principal: string }) {
                   </div>
                 )}
                 <div className="saju-result-actions">
+                  <button className="saju-secondary" onClick={() => setProfileSave(true)}>
+                    출생 프로필로 저장
+                  </button>
                   <button className="saju-primary" onClick={() => setShare(true)}>
                     <Share2 size={17} />
                     나의 오행 지도 공유
@@ -244,6 +321,12 @@ function SajuExperience({ principal }: { principal: string }) {
                 )}
                 {share && (
                   <SajuShareDialog result={reading.result} onClose={() => setShare(false)} />
+                )}
+                {profileSave && (
+                  <SajuSaveProfileDialog
+                    birth={reading.result.birth}
+                    onClose={() => setProfileSave(false)}
+                  />
                 )}
               </>
             )}

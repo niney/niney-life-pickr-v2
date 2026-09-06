@@ -9,11 +9,11 @@ Total topics: 32 | Total concepts: 21 | Mode: codebase
 
 ## Topics
 
-사주 기능은 [saju](topics/saju.md)에서 시작한다. Kimi 모델·명식 계산·저장·공유와 검증 기준을 함께 정리했다.
+사주 기능은 [saju](topics/saju.md)에서 시작한다. Kimi 모델·명식 계산·출생 프로필·궁합·저장·공유와 검증 기준을 함께 정리했다.
 
 | Topic | Also Known As | Sources | Last Updated | Status |
 |-------|--------------|---------|-------------|--------|
-| [saju](topics/saju.md) | 사주, 명식, 오행, 절기, 윤달, kimi-k3, saju-reading, SajuPage | 19 | 2026-09-06 | active |
+| [saju](topics/saju.md) | 사주, 명식, 오행, 절기, 윤달, 궁합, 출생 프로필, kimi-k3, saju-reading, SajuPage, SajuPairPage | 31 | 2026-09-06 | active |
 | [project-overview](topics/project-overview.md) | monorepo, life-pickr, niney, root, turbo, pnpm-workspace, 공개-어드민-분리, settlement, 정산, share-token, ssr-lite, review-search, rag, review-clustering, random-crawl, telegram-bot, operation-log, tabling, db-config-env-fallback, llm-telemetry, region-stats, dark-mode, schedule, taxonomy-v3, deploy-sh, ninelife-kr, public-transit, seoul-bus-api, bus-favorite, bus-positions, bus-route, bus-arrivals, bus-stations, 버스, bus, ollama-grammar-array, categoryPath-recovery, category-tree-shared | 119 | 2026-08-30 | active |
 | [friendly](topics/friendly.md) | fastify-api, backend, prisma-server, jwt-auth, restaurant-module, media-module, panorama-cache, restaurant-preview, sitemap, region-derive, smart-pick, canonical-members, settlement-modules, well-known, schedule-module, review-search-module, review-clustering-module, random-crawl-module, telegram-module, logs-module, operation-log, plugins-singleton, cors-reflect, tabling-fusion, ERROR-337, dijkstra-path, temp-db, useIsolatedDatabase, db-drift-realign, realign-drifted-tables, SEOUL_OPEN_API_KEY, SUBWAY_API_KEY, subway-line-order, subway-master, subway-favorite, subway-path | 272 | 2026-08-30 | active |
 | [settlement](topics/settlement.md) | 정산, 정산하기, settlement, receipt-split, 영수증 추출, 단골, contact, share token, rounds, N차, settlement-draft, multi-receipt, group-split, 세부분배, 그룹카드, drink-kinds, 술종류, 소주, 맥주, 잔수, glasses, GLASSES, EQUAL, RoundGroupSplitEditor, RoundGroupSplitNote, suggestItemGroups, matchDrinkKind, EXTRACTION_VERSION, leftover-multi, share-preview, og-ssr-lite, settlement-card, leftover-multi-receiver, groupBreakdown, toGroupCalcInputs, GROUPABLE_CATEGORIES, isGroupableCategory, DRINK_BRAND_PROMPT_HINT, DRINK_KINDS, 술 종류, 그룹 카드, 세부 분배, sharePreviewCache, receipt-lightbox | 113 | 2026-08-30 | active |

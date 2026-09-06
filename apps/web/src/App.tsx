@@ -47,6 +47,12 @@ const TarotSharedPage = lazy(() =>
 );
 const MyTarotPage = lazy(() => import('./routes/tarot/MyTarotPage').then((m) => ({ default: m.MyTarotPage })));
 const SajuPage = lazy(() => import('./routes/SajuPage').then((m) => ({ default: m.SajuPage })));
+const SajuProfilesPage = lazy(() =>
+  import('./routes/SajuProfilesPage').then((m) => ({ default: m.SajuProfilesPage })),
+);
+const SajuPairPage = lazy(() =>
+  import('./routes/SajuPairPage').then((m) => ({ default: m.SajuPairPage })),
+);
 const SajuSharedPage = lazy(() =>
   import('./routes/SajuSharedPage').then((m) => ({ default: m.SajuSharedPage })),
 );
@@ -169,6 +175,8 @@ export const App = () => {
             {/* 타로 — 로그인 없이 공개. 3D(three) 가 무거워 lazy, ?embed=1 이면 레이아웃 크롬 없이(앱 WebView). */}
             <Route path="/tarot" element={<TarotPage />} />
             <Route path="/saju" element={<SajuPage />} />
+            <Route path="/saju/pair" element={<SajuPairPage />} />
+            <Route path="/me/saju/profiles" element={<SajuProfilesPage />} />
             <Route path="/saju/s/:token" element={<SajuSharedPage />} />
             <Route path="/me/saju" element={<SajuHistoryPage />} />
             <Route path="/me/saju/:id" element={<SajuHistoryPage />} />

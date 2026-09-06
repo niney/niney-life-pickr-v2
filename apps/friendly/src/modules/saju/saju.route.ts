@@ -3,6 +3,13 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { LRUCache } from 'lru-cache';
 import {
+  CreateSajuPairInput,
+  SajuPairChart,
+  SajuPairResult,
+  SajuProfileInput,
+  UpdateSajuProfileInput,
+  SajuProfile,
+  SajuProfileList,
   CreateSajuReadingInput,
   CreateSajuShareInput,
   ListSajuReadingsQuery,
@@ -22,6 +29,9 @@ import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { calculateSaju, SajuInputError } from './saju.engine.js';
 import { SajuNotFound, SajuService } from './saju.service.js';
 import { renderSajuSharePng } from './saju-share-card.js';
+import { calculateSajuPair } from './saju-pair.engine.js';
+import { SajuPairService } from './saju-pair.service.js';
+import { SajuProfileService, SajuProfileConflict } from './saju-profile.service.js';
 
 const sajuRoutes: FastifyPluginAsync = async (app) => {
   const api = app.withTypeProvider<ZodTypeProvider>();
@@ -31,6 +41,10 @@ const sajuRoutes: FastifyPluginAsync = async (app) => {
     { quota: app.usageQuota },
   );
   const images = new LRUCache<string, Buffer>({ max: 50 });
+  const profiles = new SajuProfileService(app.prisma);
+  const pairs = new SajuPairService(new AiConfigService(app.prisma, buildLlmProviderEnv()), {
+    quota: app.usageQuota,
+  });
   const actorOf = async (req: FastifyRequest) => {
     const user = await app.resolveOptionalUser(req);
     const key = req.headers[SAJU_GUEST_KEY_HEADER];
@@ -46,12 +60,72 @@ const sajuRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       if (error instanceof SajuInputError) throw app.httpErrors.badRequest(error.message);
       if (error instanceof SajuNotFound) throw app.httpErrors.notFound(error.message);
+      if (error instanceof SajuProfileConflict) throw app.httpErrors.conflict(error.message);
       throw error;
     }
   };
   const T = Routes.Saju;
   const ids = z.object({ id: z.string().min(1).max(64) });
   const tokens = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{32}$/) });
+  api.get(T.profiles, {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], response: { 200: SajuProfileList } },
+    handler: (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      return profiles.list(req.user.userId);
+    },
+  });
+  api.post(T.profiles, {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], body: SajuProfileInput, response: { 200: SajuProfile } },
+    handler: (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      return run(() => profiles.save(req.user.userId, req.body));
+    },
+  });
+  api.put(T.profile(':id'), {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['saju'],
+      params: ids,
+      body: UpdateSajuProfileInput,
+      response: { 200: SajuProfile },
+    },
+    handler: (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      return run(() => profiles.save(req.user.userId, req.body, req.params.id, req.body.revision));
+    },
+  });
+  api.delete(T.profile(':id'), {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], params: ids },
+    handler: async (req, reply) => {
+      await run(() => profiles.remove(req.user.userId, req.params.id));
+      return reply.code(204).send();
+    },
+  });
+  api.post(T.pairChart, {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: { tags: ['saju'], body: CreateSajuPairInput, response: { 200: SajuPairChart } },
+    handler: (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      return run(() => calculateSajuPair(req.body));
+    },
+  });
+  api.post(T.pairReading, {
+    config: {
+      rateLimit: {
+        max: async () => (await app.usageQuota.getSetting('saju-reading')).ipPerMinute,
+        timeWindow: '1 minute',
+      },
+    },
+    schema: { tags: ['saju'], body: CreateSajuPairInput, response: { 200: SajuPairResult } },
+    handler: async (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      const actor = await actorOf(req);
+      return run(() => pairs.create(req.body, actor));
+    },
+  });
   api.post(T.chart, {
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: { tags: ['saju'], body: CreateSajuReadingInput, response: { 200: SajuChart } },

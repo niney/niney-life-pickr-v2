@@ -160,6 +160,66 @@ export const ListSajuReadingsResult = z.object({
   nextCursor: z.string().nullable(),
 });
 export type ListSajuReadingsResultType = z.infer<typeof ListSajuReadingsResult>;
+export const SAJU_PROFILES_MAX = 20;
+export const SajuProfileInput = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, '별명을 입력해 주세요.')
+    .max(24)
+    .regex(/^[^\p{Cc}]+$/u, '별명에는 줄바꿈이나 제어 문자를 사용할 수 없어요.'),
+  birth: SajuBirth,
+});
+export const SajuProfile = SajuProfileInput.extend({
+  id: z.string().min(1).max(64),
+  revision: z.number().int().positive(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export const UpdateSajuProfileInput = SajuProfileInput.extend({
+  revision: z.number().int().positive(),
+});
+export const SajuProfileList = z.object({ items: z.array(SajuProfile).max(SAJU_PROFILES_MAX) });
+export type SajuProfileInputType = z.infer<typeof SajuProfileInput>;
+export type SajuProfileType = z.infer<typeof SajuProfile>;
+export const SajuRelationship = z.enum(['partner', 'friend', 'family', 'colleague']);
+export type SajuRelationshipType = z.infer<typeof SajuRelationship>;
+export const SajuPairBirths = z.object({ first: SajuBirth, second: SajuBirth });
+export const CreateSajuPairInput = SajuPairBirths.extend({
+  relationship: SajuRelationship.default('partner'),
+  note: z.string().trim().max(200).default(''),
+});
+export type CreateSajuPairInputType = z.infer<typeof CreateSajuPairInput>;
+export const SajuConnection = z.enum([
+  'same',
+  'first-nurtures',
+  'second-nurtures',
+  'first-regulates',
+  'second-regulates',
+  'unknown',
+]);
+export const SajuPairChart = z.object({
+  calculationVersion: z.number().int(),
+  first: SajuChart,
+  second: SajuChart,
+  connection: SajuConnection,
+  title: z.string(),
+  description: z.string(),
+  firstToSecond: z.string().nullable(),
+  secondToFirst: z.string().nullable(),
+  facts: z.array(Fact),
+  notices: z.array(z.string()),
+});
+export type SajuPairChartType = z.infer<typeof SajuPairChart>;
+export const SajuPairResult = SajuReadingResult.pick({
+  source: true,
+  model: true,
+  promptVersion: true,
+  fallbackReason: true,
+  remainingToday: true,
+  createdAt: true,
+}).extend({ chart: SajuPairChart, report: SajuReport });
+export type SajuPairResultType = z.infer<typeof SajuPairResult>;
 export const ListSajuReadingsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().max(64).optional(),
@@ -169,9 +229,10 @@ export const CreateSajuShareInput = z
     receipt: z.string().min(20).max(64).optional(),
     readingId: z.string().max(64).optional(),
     birth: SajuBirth.optional(),
+    pair: SajuPairBirths.optional(),
   })
   .refine(
-    (v) => [v.receipt, v.readingId, v.birth].filter(Boolean).length === 1,
+    (v) => [v.receipt, v.readingId, v.birth, v.pair].filter(Boolean).length === 1,
     '결과를 하나 선택해 주세요.',
   );
 export type CreateSajuShareInputType = z.infer<typeof CreateSajuShareInput>;
@@ -183,6 +244,15 @@ export const PublicSajuShare = z.object({
   element: SajuElement.nullable(),
   elements: z.array(SajuElementCount),
   unknownCharacters: z.number().int(),
+  pair: z
+    .object({
+      element: SajuElement.nullable(),
+      symbol: z.string(),
+      elements: z.array(SajuElementCount).length(5),
+      unknownCharacters: z.number().int().min(0).max(8),
+      connection: SajuConnection,
+    })
+    .optional(),
 });
 export type PublicSajuShareType = z.infer<typeof PublicSajuShare>;
 export const SajuShareResult = z.object({

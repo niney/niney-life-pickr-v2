@@ -19,7 +19,9 @@ export async function registerSajuPreview(app: FastifyInstance): Promise<void> {
       const shared = row ? PublicSajuShare.parse(JSON.parse(row.publicJson)) : null;
       const origin = getPublicOrigin(req);
       const html = injectOg(loaded.html, {
-        title: shared ? `${shared.title} · 나의 오행 지도` : 'Life Pickr 사주',
+        title: shared
+          ? `${shared.title} · ${shared.pair ? '우리의' : '나의'} 오행 지도`
+          : 'Life Pickr 사주',
         description: shared?.description ?? '공유가 취소되었거나 존재하지 않는 지도예요.',
         url: `${origin}${Routes.Saju.sharePage(token)}`,
         image: shared ? `${origin}${Routes.Saju.shareImage(token)}` : defaultOgImage(origin),

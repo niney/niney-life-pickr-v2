@@ -167,3 +167,19 @@ export const SAJU_PILLAR_LABEL = {
   day: '일주',
   hour: '시주',
 } as const;
+
+export const SAJU_RELATIONSHIP_LABEL = {
+  partner: '연인·파트너',
+  friend: '친구',
+  family: '가족',
+  colleague: '함께 일하는 사이',
+} as const;
+
+// 목→화→토→금→수의 상생, 두 칸 건너의 상극. 방향을 보존하며 점수화하지 않는다.
+export function sajuElementConnection(first: SajuElementId | null, second: SajuElementId | null) {
+  if (!first || !second) return 'unknown' as const;
+  const offset = (SAJU_ELEMENTS.indexOf(second) - SAJU_ELEMENTS.indexOf(first) + 5) % 5;
+  return (
+    ['same', 'first-nurtures', 'first-regulates', 'second-regulates', 'second-nurtures'] as const
+  )[offset]!;
+}

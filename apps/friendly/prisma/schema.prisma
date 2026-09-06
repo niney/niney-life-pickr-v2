@@ -43,6 +43,7 @@ model User {
   mealDataImports          MealDataImport[]
   tarotReadings            TarotReading[]
   sajuReadings             SajuReading[]
+  sajuProfiles             SajuProfile[]
 
   @@map("users")
 }
@@ -2119,6 +2120,19 @@ model HousingComplexPrice {
 }
 
 // ── 사주 — 명시적으로 보관한 결과와 공개 상징 공유 ─────────────────────────
+
+model SajuProfile {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  birthJson String
+  revision  Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt])
+  @@map("saju_profiles")
+}
 
 model SajuReading {
   id           String @id @default(cuid())

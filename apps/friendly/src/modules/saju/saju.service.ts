@@ -14,6 +14,7 @@ import type { AiConfigService } from '../ai/ai.config.service.js';
 import { adapterCache, type AdapterCache } from '../ai/adapter-cache.js';
 import type { UsageQuotaActor, UsageQuotaService } from '../usage-quota/usage-quota.service.js';
 import { calculateSaju } from './saju.engine.js';
+import { calculateSajuPair } from './saju-pair.engine.js';
 import { basicSajuReport, requestSajuLlm, SAJU_PROMPT_VERSION } from './saju.prompts.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -245,14 +246,18 @@ export class SajuService {
   async createShare(input: CreateSajuShareInputType, actor: UsageQuotaActor) {
     // 기기에 보관한 결과는 서버 재시작 후에도 원본 출생정보로 공유 명식을 다시 계산한다.
     // 클라이언트가 만든 명식·문구·오행 개수는 받지 않는다.
-    const result = input.birth
-      ? null
-      : input.readingId && actor.userId
-        ? await this.getMine(actor.userId, input.readingId)
-        : this.receiptFor(input.receipt ?? '', actor).result;
-    const chart = input.birth
-      ? calculateSaju({ birth: input.birth, kind: 'natal', note: '' }, this.deps.now?.())
-      : result!.chart;
+    const pair = input.pair ? calculateSajuPair(input.pair, this.deps.now?.()) : null;
+    const result =
+      input.birth || pair
+        ? null
+        : input.readingId && actor.userId
+          ? await this.getMine(actor.userId, input.readingId)
+          : this.receiptFor(input.receipt ?? '', actor).result;
+    const chart =
+      pair?.first ??
+      (input.birth
+        ? calculateSaju({ birth: input.birth, kind: 'natal', note: '' }, this.deps.now?.())
+        : result!.chart);
     const master = chart.dayMaster;
     const publicResult: PublicSajuShareType = {
       title: master?.title ?? '아직 열려 있는 나의 지도',
@@ -262,6 +267,18 @@ export class SajuService {
       elements: chart.elements,
       unknownCharacters: chart.unknownCharacters,
     };
+    if (pair) {
+      publicResult.title = pair.title;
+      publicResult.description =
+        '서로의 상징을 알아가며 함께 만들어 가는 이야기. 다른 속도와 같은 마음을 천천히 나누어 보세요.';
+      publicResult.pair = {
+        element: pair.second.dayMaster?.element ?? null,
+        symbol: pair.second.dayMaster?.symbol ?? '가능성',
+        elements: pair.second.elements,
+        unknownCharacters: pair.second.unknownCharacters,
+        connection: pair.connection,
+      };
+    }
     const token = randomToken();
     const revokeToken = randomToken();
     await this.prisma.sajuShare.create({

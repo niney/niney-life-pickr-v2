@@ -1,15 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Download, Link2Off, X } from 'lucide-react';
 import { getGuestKey, sajuApi, sajuShareCredential } from '@repo/shared';
-import type { SajuReadingResultType, SajuShareResultType } from '@repo/api-contract';
+import type {
+  CreateSajuShareInputType,
+  SajuReadingResultType,
+  SajuShareResultType,
+} from '@repo/api-contract';
 
 export function SajuShareDialog({
   result,
+  pair,
   onClose,
 }: {
-  result: SajuReadingResultType;
   onClose: () => void;
-}) {
+} & (
+  | { result: SajuReadingResultType; pair?: never }
+  | { result?: never; pair: NonNullable<CreateSajuShareInputType['pair']> }
+)) {
   const ref = useRef<HTMLDialogElement>(null);
   const [share, setShare] = useState<SajuShareResultType | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,7 +29,11 @@ export function SajuShareDialog({
     setMessage('');
     try {
       const value = await sajuApi.share(
-        result.readingId ? { readingId: result.readingId } : { birth: result.birth },
+        pair
+          ? { pair }
+          : result?.readingId
+            ? { readingId: result.readingId }
+            : { birth: result.birth },
         getGuestKey(),
       );
       setShare(value);
@@ -68,7 +79,7 @@ export function SajuShareDialog({
       const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = '나의-오행-지도.png';
+      anchor.download = pair ? '우리의-오행-지도.png' : '나의-오행-지도.png';
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
@@ -92,9 +103,9 @@ export function SajuShareDialog({
           <X size={20} />
         </button>
         <span className="saju-eyebrow">A LITTLE PIECE OF YOU</span>
-        <h2 id="saju-share-title">나의 오행 지도 나누기</h2>
+        <h2 id="saju-share-title">{pair ? '우리의' : '나의'} 오행 지도 나누기</h2>
         <p>
-          나의 상징과 오행 구성만 담아요.
+          {pair ? '두 사람의' : '나의'} 상징과 오행 구성만 담아요.
           <br />
           생년월일·시간·질문·개인 해석은 포함하지 않아요.
         </p>
@@ -103,7 +114,7 @@ export function SajuShareDialog({
             <img
               className="saju-share-preview"
               src={sajuApi.imageUrl(share.token)}
-              alt="공유할 나의 오행 지도"
+              alt={pair ? '공유할 우리의 오행 지도' : '공유할 나의 오행 지도'}
             />
             <input
               aria-label="공유 링크"

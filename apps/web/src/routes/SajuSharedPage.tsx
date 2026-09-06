@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { sajuApi, sajuShareCredential } from '@repo/shared';
 import { SAJU_ELEMENT_META } from '@repo/utils';
 import { SajuSymbol } from '~/components/saju/SajuVisual';
+import { SajuPairVisual } from '~/components/saju/SajuPairVisual';
 import '~/components/saju/saju.css';
+import '~/components/saju/saju-next.css';
 
 export function SajuSharedPage() {
   const { token = '' } = useParams();
@@ -61,25 +63,35 @@ function SajuSharedContent({ token }: { token: string }) {
         )}
         {shared && !data.isError && !revoked && (
           <article className="saju-shared-card">
-            <span className="saju-eyebrow">A LITTLE PIECE OF ME</span>
-            <SajuSymbol element={shared.element} className={shared.element ?? ''} />
+            <span className="saju-eyebrow">
+              {shared.pair ? 'A LITTLE PIECE OF US' : 'A LITTLE PIECE OF ME'}
+            </span>
+            {shared.pair ? (
+              <SajuPairVisual first={shared} second={shared.pair} compact />
+            ) : (
+              <SajuSymbol element={shared.element} className={shared.element ?? ''} />
+            )}
             <h1>{shared.title}</h1>
             <p>{shared.description}</p>
-            <div className="saju-shared-elements">
-              {shared.elements.map((e) => (
-                <div key={e.element} style={{ color: SAJU_ELEMENT_META[e.element].color }}>
-                  <strong>{SAJU_ELEMENT_META[e.element].hanja}</strong>
-                  <span>
-                    {SAJU_ELEMENT_META[e.element].name} {e.count}개
-                  </span>
+            {!shared.pair && (
+              <>
+                <div className="saju-shared-elements">
+                  {shared.elements.map((e) => (
+                    <div key={e.element} style={{ color: SAJU_ELEMENT_META[e.element].color }}>
+                      <strong>{SAJU_ELEMENT_META[e.element].hanja}</strong>
+                      <span>
+                        {SAJU_ELEMENT_META[e.element].name} {e.count}개
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <p className="saju-field-hint">
-              확인된 {8 - shared.unknownCharacters}글자의 오행 구성이에요.
-            </p>
-            <Link className="saju-primary" to="/saju">
-              나의 오행 지도도 만나보기
+                <p className="saju-field-hint">
+                  확인된 {8 - shared.unknownCharacters}글자의 오행 구성이에요.
+                </p>
+              </>
+            )}
+            <Link className="saju-primary" to={shared.pair ? '/saju/pair' : '/saju'}>
+              {shared.pair ? '우리의 궁합도 만나보기' : '나의 오행 지도도 만나보기'}
             </Link>
             {revokeToken && (
               <button className="saju-text-button" onClick={revoke}>

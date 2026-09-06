@@ -13,7 +13,9 @@ import type { SajuReadingResultType } from '@repo/api-contract';
 import { SAJU_KIND_LABEL } from '@repo/utils';
 import { SajuReportView } from '~/components/saju/SajuReportView';
 import { SajuShareDialog } from '~/components/saju/SajuShareDialog';
+import { SajuSaveProfileDialog } from '~/components/saju/SajuSaveProfileDialog';
 import '~/components/saju/saju.css';
+import '~/components/saju/saju-next.css';
 
 export function SajuHistoryPage() {
   const principal = useAuthStore((s) => s.user?.id ?? 'guest');
@@ -26,6 +28,7 @@ function History({ principal }: { principal: string }) {
   const [device, setDevice] = useState(() => readDeviceSaju(principal));
   const [localResult, setLocalResult] = useState<SajuReadingResultType | null>(null);
   const [share, setShare] = useState(false);
+  const [profileSave, setProfileSave] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -73,9 +76,12 @@ function History({ principal }: { principal: string }) {
           <Link to="/saju" className="saju-brand">
             <span>命</span>사주
           </Link>
-          <Link to="/saju" className="saju-history-link">
-            새 사주 보기
-          </Link>
+          <div className="saju-next-nav">
+            <Link to="/me/saju/profiles">프로필 관리</Link>
+            <Link to="/saju" className="saju-history-link">
+              새 사주 보기
+            </Link>
+          </div>
         </header>
         <main className="saju-history">
           {result ? (
@@ -87,12 +93,18 @@ function History({ principal }: { principal: string }) {
               <h1>{result.chart.period.label}</h1>
               <SajuReportView chart={result.chart} result={result} />
               <div className="saju-result-actions">
+                <button className="saju-secondary" onClick={() => setProfileSave(true)}>
+                  출생 프로필로 저장
+                </button>
                 <button className="saju-primary" onClick={() => setShare(true)}>
                   <Share2 size={16} />
                   오행 지도 공유
                 </button>
               </div>
               {share && <SajuShareDialog result={result} onClose={() => setShare(false)} />}
+              {profileSave && (
+                <SajuSaveProfileDialog birth={result.birth} onClose={() => setProfileSave(false)} />
+              )}
             </>
           ) : (
             <>

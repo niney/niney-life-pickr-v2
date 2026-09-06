@@ -30,6 +30,7 @@
     "build:tarot-deck": "tsx scripts/build-tarot-deck.ts",
     "probe:tarot-reading": "tsx --env-file=.env scripts/probe-tarot-reading.ts",
     "probe:saju-reading": "tsx --env-file=.env scripts/probe-saju-reading.ts",
+    "probe:saju-pair": "tsx --env-file=.env scripts/probe-saju-pair.ts",
     "backfill:food-allergens": "tsx --env-file=.env scripts/backfill-food-allergens.ts",
     "probe:food-api": "tsx --env-file=.env scripts/probe-food-api.ts",
     "probe:meal-vision": "tsx --env-file=.env scripts/probe-meal-vision.ts",

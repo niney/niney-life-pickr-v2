@@ -1,85 +1,63 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
-import type { SajuBirthInputType } from '@repo/api-contract';
+import {
+  SAJU_PROFILES_MAX,
+  SajuProfile,
+  SajuProfileInput,
+  type SajuProfileInputType,
+  type SajuProfileType,
+} from '@repo/api-contract';
 import { createInjectableStorage } from './injectableStorage.js';
 
-// 게스트 사주 프로필 — 기기 로컬(나 + 가족·상대 최대 10명). 생년월일시는 개인정보라 서버에 두지 않고
-// (회원은 4차의 서버 프로필을 쓴다) 오늘의 운세·궁합 상대 선택·재방문 자동 입력에 쓴다.
-//
-// storage 주입 패턴은 다른 persist 스토어와 동일 — 앱은 entry 에서 setSajuProfileStorage 주입.
-
-const profileStorage = createInjectableStorage();
-
-export const setSajuProfileStorage = (storage: StateStorage): void => {
-  profileStorage.setStorage(storage);
+const storage = createInjectableStorage();
+export const setSajuProfileStorage = storage.setStorage;
+export const SAJU_PROFILE_STORAGE_KEY = 'lp:saju-profiles:v1:guest';
+// 계정 데이터는 이 저장소에 쓰지 않는다. 로그인 시 게스트 출생정보도 자동 업로드하지 않는다.
+export const readSajuProfiles = async (): Promise<SajuProfileType[]> => {
+  const raw = await storage.storage.getItem(SAJU_PROFILE_STORAGE_KEY);
+  if (!raw) return [];
+  const parsed = SajuProfile.array().max(SAJU_PROFILES_MAX).safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error('기기에 보관된 프로필을 읽을 수 없어요.');
+  return parsed.data;
 };
-
-export const SAJU_LOCAL_PROFILE_MAX = 10;
-
-export interface SajuLocalProfile {
-  id: string;
-  label: string;
-  birth: SajuBirthInputType;
-  createdAt: number;
-}
-
-interface SajuProfileState {
-  profiles: SajuLocalProfile[];
-  /** "내 사주" 로 쓰는 프로필 id. */
-  primaryId: string | null;
-  upsert: (profile: Omit<SajuLocalProfile, 'id' | 'createdAt'> & { id?: string }) => SajuLocalProfile;
-  remove: (id: string) => void;
-  setPrimary: (id: string | null) => void;
-}
-
-const newId = (): string =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-/** 같은 사람인지 — 프로필 중복 판정. options(진태양시·야자시)는 해석 옵션이라 제외. */
-export const sameSajuBirth = (a: SajuBirthInputType, b: SajuBirthInputType): boolean =>
-  a.calendar === b.calendar && a.year === b.year && a.month === b.month && a.day === b.day && a.leapMonth === b.leapMonth && a.hour === b.hour && (a.minute ?? 0) === (b.minute ?? 0) && a.gender === b.gender;
-
-export const useSajuProfileStore = create<SajuProfileState>()(
-  persist(
-    (set, get) => ({
-      profiles: [],
-      primaryId: null,
-      upsert: (input) => {
-        // id 가 없어도 같은 사주(생년월일시·성별·달력·윤달)가 이미 있으면 그 프로필을 갱신 — 같은 입력을 다시 세울 때마다 중복 생성되지 않게.
-        const existing = input.id ? get().profiles.find((p) => p.id === input.id) : get().profiles.find((p) => sameSajuBirth(p.birth, input.birth));
-        const profile: SajuLocalProfile = existing
-          ? { ...existing, label: input.label, birth: input.birth }
-          : { id: newId(), label: input.label, birth: input.birth, createdAt: Date.now() };
-        set((s) => {
-          const rest = s.profiles.filter((p) => p.id !== profile.id);
-          const profiles = [profile, ...rest].slice(0, SAJU_LOCAL_PROFILE_MAX);
-          return { profiles, primaryId: s.primaryId ?? profile.id };
-        });
-        return profile;
-      },
-      remove: (id) =>
-        set((s) => {
-          const profiles = s.profiles.filter((p) => p.id !== id);
-          return { profiles, primaryId: s.primaryId === id ? (profiles[0]?.id ?? null) : s.primaryId };
-        }),
-      setPrimary: (id) => set({ primaryId: id }),
-    }),
-    {
-      name: 'saju-profiles-v1',
-      version: 1,
-      storage: createJSONStorage(() => profileStorage.storage),
-      partialize: (s) => ({ profiles: s.profiles, primaryId: s.primaryId }),
-    },
-  ),
-);
-
-profileStorage.bindRehydrate(() => {
-  void useSajuProfileStore.persist.rehydrate();
-});
-
-export const getPrimarySajuProfile = (): SajuLocalProfile | null => {
-  const s = useSajuProfileStore.getState();
-  return s.profiles.find((p) => p.id === s.primaryId) ?? s.profiles[0] ?? null;
+let queue: Promise<unknown> = Promise.resolve();
+const write = <T>(action: () => Promise<T>): Promise<T> => {
+  const task = queue
+    .catch(() => {})
+    .then(async () =>
+      typeof navigator !== 'undefined' && navigator.locks
+        ? await navigator.locks.request(SAJU_PROFILE_STORAGE_KEY, action)
+        : await action(),
+    );
+  queue = task;
+  return task;
 };
+export const saveSajuProfile = (input: SajuProfileInputType, previous?: SajuProfileType) =>
+  write(async () => {
+    const data = SajuProfileInput.parse(input);
+    const items = await readSajuProfiles();
+    const existing = previous ? items.find((v) => v.id === previous.id) : null;
+    if (previous && (!existing || existing.revision !== previous.revision))
+      throw new Error('다른 창에서 변경한 프로필이에요. 새로고침해 주세요.');
+    if (!previous && items.length >= SAJU_PROFILES_MAX)
+      throw new Error(`프로필은 ${SAJU_PROFILES_MAX}명까지 보관할 수 있어요.`);
+    const now = new Date().toISOString();
+    const profile: SajuProfileType = {
+      ...data,
+      id: existing?.id ?? crypto.randomUUID(),
+      revision: (existing?.revision ?? 0) + 1,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const updated = existing
+      ? items.map((v) => (v.id === existing.id ? profile : v))
+      : [...items, profile];
+    await storage.storage.setItem(SAJU_PROFILE_STORAGE_KEY, JSON.stringify(updated));
+    return profile;
+  });
+export const removeSajuProfile = (id: string) =>
+  write(async () => {
+    const items = await readSajuProfiles();
+    await storage.storage.setItem(
+      SAJU_PROFILE_STORAGE_KEY,
+      JSON.stringify(items.filter((v) => v.id !== id)),
+    );
+  });
