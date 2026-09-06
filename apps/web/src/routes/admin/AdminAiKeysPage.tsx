@@ -102,7 +102,7 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
   },
   saju: {
     icon: Sparkles,
-    label: '사주 풀이',
+    label: '사주(C) 풀이',
     desc: '사주 — 계산된 원국을 문장으로 풀어 주는 텍스트 모델(섹션 4개 병렬·오늘·궁합·택일·음식). 속도보다 한국어·명리 용어 품질 우선',
     placeholder: 'kimi-k3',
   },

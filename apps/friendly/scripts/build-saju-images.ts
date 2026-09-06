@@ -1,5 +1,5 @@
 // 사주 이미지 빌드 — 제미나이 원본(assets-src/saju/raw/<id>.png|jpg|webp) → 1:1 중앙 크롭 → webp 1024/512
-// → apps/web/public/saju/images/. 일간 10장(stem-*) + 띠 12장(branch-*). id 의 단일 출처는 @repo/utils sajuImages.ts.
+// → apps/web/public/saju-c/images/. 일간 10장(stem-*) + 띠 12장(branch-*). id 의 단일 출처는 @repo/utils sajuImages.ts.
 //
 // 실행: pnpm --filter friendly build:saju-images [--src=<dir>] [--out=<dir>] [--only=stem-gap,branch-rat]
 //        [--quality=82] [--placeholders]
@@ -20,7 +20,7 @@ const opt = (name: string, def: string): string => {
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const SRC = path.resolve(REPO_ROOT, opt('src', 'assets-src/saju/raw'));
-const OUT = path.resolve(REPO_ROOT, opt('out', 'apps/web/public/saju/images'));
+const OUT = path.resolve(REPO_ROOT, opt('out', 'apps/web/public/saju-c/images'));
 const QUALITY = Number(opt('quality', '82'));
 const ONLY = new Set(opt('only', '').split(',').map((s) => s.trim()).filter(Boolean));
 const PLACEHOLDERS = args.includes('--placeholders');

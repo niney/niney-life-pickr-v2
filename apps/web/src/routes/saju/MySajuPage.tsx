@@ -20,11 +20,11 @@ export const MySajuPage = () => {
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <header className="mb-6 flex flex-wrap items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">내 사주</h1>
+          <h1 className="text-2xl font-bold tracking-tight">내 사주(C)</h1>
           <p className="text-sm text-muted-foreground">프로필과 로그인 상태로 본 풀이가 저장돼요.</p>
         </div>
         <Button asChild size="sm" className="ml-auto">
-          <Link to="/saju">
+          <Link to="/saju-c">
             <Sparkles className="size-4" /> 사주 보기
           </Link>
         </Button>
@@ -118,7 +118,7 @@ const ReadingRow = ({ item }: { item: SajuReadingSummaryType }) => {
   const [confirming, setConfirming] = useState(false);
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-card p-3 transition hover:bg-muted/40">
-      <Link to={`/me/saju/${item.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+      <Link to={`/me/saju-c/${item.id}`} className="flex min-w-0 flex-1 items-center gap-3">
         <span className="font-serif-kr text-2xl">{item.dayMaster.slice(-1)}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">

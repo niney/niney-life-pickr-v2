@@ -9,9 +9,9 @@ import { SajuRecordsService } from './saju-records.service.js';
 import { renderSajuShareCardPng } from './saju-share-card.js';
 import { SajuError, SajuService } from './saju.service.js';
 
-// 사주 공유 링크(/saju/s/:token)의 SNS 미리보기(OG) + 공유 이미지(/saju/s/:token/image.png).
+// 사주 공유 링크(/saju-c/s/:token)의 SNS 미리보기(OG) + 공유 이미지(/saju-c/s/:token/image.png).
 // 타로(tarot-preview)와 같은 방식. `.route.ts` 가 아니라 app.ts 에서 명시 등록(/api/v1 밖 루트 경로).
-// 운영(nginx): `location ^~ /saju/s/` 를 friendly 로 프록시해야 OG·이미지가 산다(docs/deploy-friendly.md).
+// 운영(nginx): `location ^~ /saju-c/s/` 를 friendly 로 프록시해야 OG·이미지가 산다(docs/deploy-friendly.md).
 
 const pngCache = new LRUCache<string, Buffer>({ max: 100 });
 
@@ -28,11 +28,11 @@ export async function registerSajuPreview(app: FastifyInstance): Promise<void> {
     }
     const origin = getPublicOrigin(req);
     const token = req.params.token;
-    const pageUrl = `${origin}/saju/s/${encodeURIComponent(token)}`;
+    const pageUrl = `${origin}/saju-c/s/${encodeURIComponent(token)}`;
     const meta = await records.getSharePreviewMeta(token);
     const og: OgMeta = meta
-      ? { title: meta.title, description: meta.description, url: pageUrl, image: `${origin}/saju/s/${encodeURIComponent(token)}/image.png` }
-      : { title: 'Life Pickr 사주', description: '생년월일로 세운 사주팔자와 풀이를 확인해 보세요', url: pageUrl, image: defaultOgImage(origin) };
+      ? { title: meta.title, description: meta.description, url: pageUrl, image: `${origin}/saju-c/s/${encodeURIComponent(token)}/image.png` }
+      : { title: 'Life Pickr 사주(C)', description: '생년월일로 세운 사주팔자와 풀이를 확인해 보세요', url: pageUrl, image: defaultOgImage(origin) };
     return reply.code(200).type('text/html; charset=utf-8').header('cache-control', 'public, max-age=60').send(injectOg(loaded.html, og));
   };
 
@@ -61,6 +61,6 @@ export async function registerSajuPreview(app: FastifyInstance): Promise<void> {
     }
   };
 
-  app.get('/saju/s/:token', { config: { rateLimit: RATE.publicShare } }, htmlHandler);
-  app.get('/saju/s/:token/image.png', { config: { rateLimit: RATE.publicShare } }, imageHandler);
+  app.get('/saju-c/s/:token', { config: { rateLimit: RATE.publicShare } }, htmlHandler);
+  app.get('/saju-c/s/:token/image.png', { config: { rateLimit: RATE.publicShare } }, imageHandler);
 }

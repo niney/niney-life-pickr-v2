@@ -181,8 +181,8 @@ location ^~ /tarot/s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
-# 사주 공유 링크(/saju/s/<token>) OG + 공유 이미지(/saju/s/<token>/image.png?format=og|story) — 타로와 동일.
-location ^~ /saju/s/ {
+# 사주(C) 공유 링크(/saju-c/s/<token>) OG + 공유 이미지(/saju-c/s/<token>/image.png?format=og|story) — 타로와 동일.
+location ^~ /saju-c/s/ {
     proxy_pass http://127.0.0.1:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -190,8 +190,8 @@ location ^~ /saju/s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
-# 사주 이미지(apps/web/dist/saju/images/*.webp) — 타로 카드와 같은 7일 캐시·진짜 404.
-location ^~ /saju/images/ {
+# 사주(C) 이미지(apps/web/dist/saju-c/images/*.webp) — 타로 카드와 같은 7일 캐시·진짜 404.
+location ^~ /saju-c/images/ {
     expires 7d;
     add_header Cache-Control "public, max-age=604800";
     try_files $uri =404;

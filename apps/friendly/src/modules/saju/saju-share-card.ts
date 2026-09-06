@@ -12,7 +12,7 @@ import { candidateWebAssetRoots } from '../../lib/web-index.js';
 // 사주 공유 이미지 — satori + resvg 2D 합성(타로와 같은 파이프라인). 팔레트는 먹·한지·주사·금.
 //   og    1200×630  일간 이미지 + 8글자 인장 + 한 줄 별칭 + 성격 요약.
 //   story 1080×1920 세로.
-// 일간 이미지는 웹 정적 자산(apps/web/{dist|public}/saju/images/stem-*-512.webp)을 JPEG data URI 로.
+// 일간 이미지는 웹 정적 자산(apps/web/{dist|public}/saju-c/images/stem-*-512.webp)을 JPEG data URI 로.
 
 type Style = Record<string, unknown>;
 interface Node {

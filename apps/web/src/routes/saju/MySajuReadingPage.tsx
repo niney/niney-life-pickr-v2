@@ -6,7 +6,7 @@ import { SajuReadingView } from '~/components/saju/SajuReadingView';
 import { SajuShareSheet } from '~/components/saju/SajuShareSheet';
 import { Button } from '~/components/ui/button';
 
-// 내 사주 기록 상세 — /me/saju/:id. 2D 보기 + 공유(readingId) + 삭제(확인 후 목록으로).
+// 내 사주 기록 상세 — /me/saju-c/:id. 2D 보기 + 공유(readingId) + 삭제(확인 후 목록으로).
 
 export const MySajuReadingPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,7 +21,7 @@ export const MySajuReadingPage = () => {
       <div className="container mx-auto max-w-2xl px-4 py-8">
         <div className="mb-4 flex items-center gap-2">
           <Button asChild variant="ghost" size="sm" className="text-[#e9e2d2]/80 hover:bg-white/10">
-            <Link to="/me/saju">
+            <Link to="/me/saju-c">
               <ArrowLeft className="size-4" /> 목록
             </Link>
           </Button>

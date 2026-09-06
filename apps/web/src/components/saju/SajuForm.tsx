@@ -224,7 +224,7 @@ export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFor
       {isMember && (
         <p className="mt-2 text-center text-[11px] text-[#e9e2d2]/55">
           풀이는 자동 저장돼요 ·{' '}
-          <Link to="/me/saju" className="text-[#d9b65b] underline-offset-2 hover:underline">
+          <Link to="/me/saju-c" className="text-[#d9b65b] underline-offset-2 hover:underline">
             내 사주 기록
           </Link>
         </p>

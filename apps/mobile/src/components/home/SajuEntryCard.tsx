@@ -19,13 +19,13 @@ export const SajuEntryCard = () => {
           🔮
         </Text>
         <View style={styles.headerText}>
-          <Text style={styles.title}>사주로 나를 읽기</Text>
+          <Text style={styles.title}>사주(C)로 나를 읽기</Text>
           <Text style={styles.subtitle}>생년월일로 세우는 사주팔자, 오늘의 운세, 택일, 궁합, 오행 음식. 로그인 없이 무료.</Text>
         </View>
       </View>
       <View style={styles.actions}>
         <Pressable
-          onPress={() => router.push('/saju' as never)}
+          onPress={() => router.push('/saju-c' as never)}
           android_ripple={{ color: `${GOLD}33` }}
           style={({ pressed }) => [styles.action, styles.actionPrimary, pressed && styles.pressed]}
           accessibilityRole="button"
@@ -34,7 +34,7 @@ export const SajuEntryCard = () => {
           <Text style={styles.actionPrimaryText}>사주 보기</Text>
         </Pressable>
         <Pressable
-          onPress={() => router.push('/saju?tool=daily' as never)}
+          onPress={() => router.push('/saju-c?tool=daily' as never)}
           android_ripple={{ color: `${GOLD}33` }}
           style={({ pressed }) => [styles.action, styles.actionGhost, pressed && styles.pressed]}
           accessibilityRole="button"

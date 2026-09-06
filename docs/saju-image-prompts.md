@@ -2,7 +2,7 @@
 
 > 2026-09-06 작성. `docs/PLAN-saju.md` 0차 산출물. 생성한 원본은 `assets-src/saju/raw/<id>.png`(gitignore) 로 저장하고
 > `pnpm --filter friendly build:saju-images` 로 1:1 크롭·webp 변환한다(`apps/friendly/scripts/build-saju-images.ts`).
-> 일부만 다시 만들 땐 `--only=stem-gap,branch-rat`. 결과와 누락 목록은 `apps/web/public/saju/images/manifest.json`.
+> 일부만 다시 만들 땐 `--only=stem-gap,branch-rat`. 결과와 누락 목록은 `apps/web/public/saju-c/images/manifest.json`.
 
 ## 1. 작업 순서
 

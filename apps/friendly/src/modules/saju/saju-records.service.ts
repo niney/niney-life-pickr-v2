@@ -97,7 +97,7 @@ export class SajuRecordsService {
       const c = shared.chart;
       const sig = [c.pillars.year, c.pillars.month, c.pillars.day, c.pillars.hour].map((p) => (p ? p.hanja : '--')).join(' ');
       return {
-        title: `[사주] ${shared.sections.personality.headline} · ${c.dayMaster.ko}${c.dayMaster.hanja} 일간`,
+        title: `[사주(C)] ${shared.sections.personality.headline} · ${c.dayMaster.ko}${c.dayMaster.hanja} 일간`,
         description: `${sig} — ${shared.sections.personality.body}`.slice(0, 160),
         dayMasterStem: c.dayMaster.index,
       };

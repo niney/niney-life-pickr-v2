@@ -14,9 +14,9 @@ const renderPage = (token: string) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/saju/s/${token}`]}>
+      <MemoryRouter initialEntries={[`/saju-c/s/${token}`]}>
         <Routes>
-          <Route path="/saju/s/:token" element={<SajuSharedPage />} />
+          <Route path="/saju-c/s/:token" element={<SajuSharedPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -44,16 +44,16 @@ const shared = (): SharedSajuReadingType => {
 
 describe('SajuSharedPage', () => {
   it('공유 풀이를 2D 로 보여 주고 생년월일 숨김을 알린다', async () => {
-    server.use(http.get('/api/v1/saju/shares/abcdefghij', () => HttpResponse.json(shared())));
+    server.use(http.get('/api/v1/saju-c/shares/abcdefghij', () => HttpResponse.json(shared())));
     renderPage('abcdefghij');
     await waitFor(() => expect(screen.getByTestId('saju-reading-view')).toBeInTheDocument());
     expect(screen.getAllByText(/곧게 선 무쇠/).length).toBeGreaterThan(0);
     expect(screen.getByText('성격 본문.')).toBeInTheDocument();
     expect(screen.getByText(/생년월일은 공유에서 숨겨졌어요/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /나도 사주 보기/ })).toHaveAttribute('href', '/saju');
+    expect(screen.getByRole('link', { name: /나도 사주 보기/ })).toHaveAttribute('href', '/saju-c');
   });
   it('없는 토큰은 안내', async () => {
-    server.use(http.get('/api/v1/saju/shares/nope', () => HttpResponse.json({ statusCode: 404, error: 'Not Found', message: 'x' }, { status: 404 })));
+    server.use(http.get('/api/v1/saju-c/shares/nope', () => HttpResponse.json({ statusCode: 404, error: 'Not Found', message: 'x' }, { status: 404 })));
     renderPage('nope');
     await waitFor(() => expect(screen.getByText('공유 링크를 찾을 수 없어요')).toBeInTheDocument());
   });

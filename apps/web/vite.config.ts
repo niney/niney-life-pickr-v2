@@ -66,8 +66,8 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
-      // 사주 공유 이미지 — 타로와 동일 패턴(prod 는 nginx `^~ /saju/s/`).
-      '^/saju/s/[^/]+/image\\.png': {
+      // 사주 공유 이미지 — 타로와 동일 패턴(prod 는 nginx `^~ /saju-c/s/`).
+      '^/saju-c/s/[^/]+/image\\.png': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },

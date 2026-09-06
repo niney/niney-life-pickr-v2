@@ -316,7 +316,7 @@ describe('라우트 (provider 비활성 → 정적 경로)', () => {
   });
 
   it('POST /saju/readings → 200 정적 풀이 + 원국', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/v1/saju/readings', headers: { 'x-guest-key': 'guest-key-abcdef' }, payload: { birth: { year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M' } } });
+    const res = await app.inject({ method: 'POST', url: '/api/v1/saju-c/readings', headers: { 'x-guest-key': 'guest-key-abcdef' }, payload: { birth: { year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M' } } });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.chart.pillars.day.ko).toBe('경진');
@@ -325,18 +325,18 @@ describe('라우트 (provider 비활성 → 정적 경로)', () => {
     expect(body.quota.remainingToday).toBe(GUEST_PER_DAY - 1);
   });
   it('잘못된 날짜 400, 없는 job 410', async () => {
-    const bad = await app.inject({ method: 'POST', url: '/api/v1/saju/readings', payload: { birth: { year: 1990, month: 2, day: 30, hour: null, gender: 'M' } } });
+    const bad = await app.inject({ method: 'POST', url: '/api/v1/saju-c/readings', payload: { birth: { year: 1990, month: 2, day: 30, hour: null, gender: 'M' } } });
     expect(bad.statusCode).toBe(400);
-    const gone = await app.inject({ method: 'GET', url: '/api/v1/saju/readings/jobs/abcdefghijk?after=0&wait=0' });
+    const gone = await app.inject({ method: 'GET', url: '/api/v1/saju-c/readings/jobs/abcdefghijk?after=0&wait=0' });
     expect(gone.statusCode).toBe(410);
   });
   it('오늘·궁합·택일·음식 200', async () => {
     const birth = { year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M' };
     for (const [url, payload] of [
-      ['/api/v1/saju/daily', { birth }],
-      ['/api/v1/saju/match', { a: birth, b: { ...birth, year: 1992, gender: 'F' } }],
-      ['/api/v1/saju/date-pick', { birth, purpose: 'trip', days: 10 }],
-      ['/api/v1/saju/food', { birth }],
+      ['/api/v1/saju-c/daily', { birth }],
+      ['/api/v1/saju-c/match', { a: birth, b: { ...birth, year: 1992, gender: 'F' } }],
+      ['/api/v1/saju-c/date-pick', { birth, purpose: 'trip', days: 10 }],
+      ['/api/v1/saju-c/food', { birth }],
     ] as const) {
       const res = await app.inject({ method: 'POST', url, payload });
       expect(res.statusCode, url).toBe(200);
@@ -374,7 +374,7 @@ describe('SajuRecordsService (격리 DB) — 공유·프로필·기록', () => {
 
   it('게스트 공유: 입력만으로 행을 만들고(LLM 호출 없음) 생년월일은 기본 숨김', async () => {
     const share = await records.createShare({ birth: BIRTH, includeBirth: false }, guest);
-    expect(share.path).toBe(`/saju/s/${share.token}`);
+    expect(share.path).toBe(`/saju-c/s/${share.token}`);
     const shared = await records.getShared(share.token);
     expect(shared.includeBirth).toBe(false);
     expect(shared.chart.pillars.day.ko).toBe('경진');

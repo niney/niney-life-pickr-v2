@@ -165,10 +165,10 @@ export const App = () => {
             <Route path="/housing" element={<HousingPage />} />
             {/* 타로 — 로그인 없이 공개. 3D(three) 가 무거워 lazy, ?embed=1 이면 레이아웃 크롬 없이(앱 WebView). */}
             <Route path="/tarot" element={<TarotPage />} />
-            <Route path="/saju" element={<SajuPage />} />
-            <Route path="/saju/s/:token" element={<SajuSharedPage />} />
+            <Route path="/saju-c" element={<SajuPage />} />
+            <Route path="/saju-c/s/:token" element={<SajuSharedPage />} />
             <Route
-              path="/me/saju"
+              path="/me/saju-c"
               element={
                 <RequireUser>
                   <MySajuPage />
@@ -176,7 +176,7 @@ export const App = () => {
               }
             />
             <Route
-              path="/me/saju/:id"
+              path="/me/saju-c/:id"
               element={
                 <RequireUser>
                   <MySajuReadingPage />

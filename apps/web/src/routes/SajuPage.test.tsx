@@ -17,10 +17,10 @@ const renderPage = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/saju']}>
+      <MemoryRouter initialEntries={['/saju-c']}>
         <Routes>
           <Route element={<Outlet context={{ setSubBar: () => {}, headerHeight: 56 }} />}>
-            <Route path="/saju" element={<SajuPage />} />
+            <Route path="/saju-c" element={<SajuPage />} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -64,7 +64,7 @@ describe('SajuPage (Lite)', () => {
     let received: CreateSajuReadingInputType | null = null;
     let guestKey: string | null = null;
     server.use(
-      http.post('/api/v1/saju/readings', async ({ request }) => {
+      http.post('/api/v1/saju-c/readings', async ({ request }) => {
         received = (await request.json()) as CreateSajuReadingInputType;
         guestKey = request.headers.get('x-guest-key');
         return HttpResponse.json(fakeResult(received));
@@ -108,7 +108,7 @@ describe('SajuPage (Lite)', () => {
   });
 
   it('요청 실패면 원국은 보이고 다시 시도 안내', async () => {
-    server.use(http.post('/api/v1/saju/readings', () => HttpResponse.json({ statusCode: 500, error: 'x', message: 'boom' }, { status: 500 })));
+    server.use(http.post('/api/v1/saju-c/readings', () => HttpResponse.json({ statusCode: 500, error: 'x', message: 'boom' }, { status: 500 })));
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /사주 세우기/ }));
     await waitFor(() => expect(screen.getAllByTestId('saju-chart').length).toBeGreaterThan(0));
@@ -119,8 +119,8 @@ describe('SajuPage (Lite)', () => {
     const birth = { year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M', calendar: 'solar', leapMonth: false, options: { solarTimeCorrection: true, lateRatHour: false } } as const;
     const calls: string[] = [];
     server.use(
-      http.post('/api/v1/saju/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
-      http.post('/api/v1/saju/daily', () => {
+      http.post('/api/v1/saju-c/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
+      http.post('/api/v1/saju-c/daily', () => {
         calls.push('daily');
         return HttpResponse.json({
           dayKey: '2026-09-06',
@@ -135,7 +135,7 @@ describe('SajuPage (Lite)', () => {
           quota: { remainingToday: 8 },
         });
       }),
-      http.post('/api/v1/saju/food', () => {
+      http.post('/api/v1/saju-c/food', () => {
         calls.push('food');
         return HttpResponse.json({
           picks: [
@@ -146,14 +146,14 @@ describe('SajuPage (Lite)', () => {
           primary: 'wood', secondary: 'water', avoid: ['metal'], dayElement: 'water', profile: '목 기운을 채우는 신맛 쪽', avoidText: '금 기운은 조금만', source: 'static', model: null, quota: { remainingToday: 8 },
         });
       }),
-      http.post('/api/v1/saju/date-pick', async ({ request }) => {
+      http.post('/api/v1/saju-c/date-pick', async ({ request }) => {
         const body = (await request.json()) as { purpose: string; days: number };
         calls.push('date:' + body.purpose + ':' + body.days);
         const day = (i: number) => ({ date: '2026-09-' + String(6 + i).padStart(2, '0'), lunar: null, weekday: i % 7, ko: '계미', hanja: '癸未', element: 'water', stemTenGod: 'jeongjae', twelveStage: '묘', score: 60, stars: 3, tags: [], purposeScore: 60 + i, purposeStars: i > 5 ? 5 : 3 });
         const days = Array.from({ length: body.days }, (_, i) => day(i));
         return HttpResponse.json({ purpose: body.purpose, from: '2026-09-06', days, top: [{ ...day(9), reason: '손 없는 날이에요.' }, { ...day(8), reason: '두 번째.' }, { ...day(7), reason: '세 번째.' }], source: 'static', model: null, quota: { remainingToday: 8 } });
       }),
-      http.post('/api/v1/saju/match', async ({ request }) => {
+      http.post('/api/v1/saju-c/match', async ({ request }) => {
         const body = (await request.json()) as { labels: { b: string } };
         calls.push('match:' + body.labels.b);
         return HttpResponse.json({
@@ -197,14 +197,14 @@ describe('SajuPage (Lite)', () => {
     useAuthStore.setState({ token: 'tok', user: { id: 'u1', email: 'u@x.com', role: 'USER' } as never, isGuest: false });
     let created: unknown = null;
     server.use(
-      http.get('/api/v1/saju/me/profiles', () =>
+      http.get('/api/v1/saju-c/me/profiles', () =>
         HttpResponse.json({ items: [{ id: 'p1', label: '엄마', isPrimary: true, birth: { calendar: 'solar', year: 1965, month: 3, day: 3, leapMonth: false, hour: null, minute: null, gender: 'F', options: { solarTimeCorrection: true, lateRatHour: false } }, createdAt: '2026-09-06T00:00:00.000Z', updatedAt: '2026-09-06T00:00:00.000Z' }] }),
       ),
-      http.post('/api/v1/saju/me/profiles', async ({ request }) => {
+      http.post('/api/v1/saju-c/me/profiles', async ({ request }) => {
         created = await request.json();
         return HttpResponse.json({ id: 'p2', ...(created as object), createdAt: '', updatedAt: '' });
       }),
-      http.post('/api/v1/saju/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
+      http.post('/api/v1/saju-c/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
     );
     renderPage();
     await waitFor(() => expect(screen.getByRole('button', { name: /엄마/ })).toBeInTheDocument());
@@ -219,7 +219,7 @@ describe('SajuPage (Lite)', () => {
   it('회원: 프로필 칩을 고르면 입력이 채워지고 저장 체크가 숨는다', async () => {
     useAuthStore.setState({ token: 'tok', user: { id: 'u1', email: 'u@x.com', role: 'USER' } as never, isGuest: false });
     server.use(
-      http.get('/api/v1/saju/me/profiles', () =>
+      http.get('/api/v1/saju-c/me/profiles', () =>
         HttpResponse.json({ items: [{ id: 'p1', label: '엄마', isPrimary: true, birth: { calendar: 'solar', year: 1965, month: 3, day: 3, leapMonth: false, hour: null, minute: null, gender: 'F', options: { solarTimeCorrection: true, lateRatHour: false } }, createdAt: '', updatedAt: '' }] }),
       ),
     );

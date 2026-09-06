@@ -78,7 +78,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
 
   // 타로 공유 링크 OG + 공유 이미지 — /tarot/s/:token(/image.png). nginx `^~ /tarot/s/` 프록시 필요.
   await registerTarotPreview(app);
-  // 사주 공유 링크 OG + 공유 이미지 — /saju/s/:token(/image.png). nginx `^~ /saju/s/` 프록시 필요.
+  // 사주 공유 링크 OG + 공유 이미지 — /saju-c/s/:token(/image.png). nginx `^~ /saju-c/s/` 프록시 필요.
   await registerSajuPreview(app);
 
   return app;

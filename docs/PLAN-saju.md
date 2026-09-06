@@ -34,7 +34,7 @@ LLM 이 없거나 한도를 넘어도 정적 풀이로 항상 동작한다. 사�
 | 나이 표기 | 만 나이. 대운 시작은 "N세 M개월" | |
 | 출생지 | 한국(서울) 고정. 해외 출생은 v2 후보(경도·시간대 입력) | |
 | 톤 | 타로와 동일 — 존댓말·따뜻·담백·조언형. "재미로 보는" 고지 한 줄 | 건강·수명·재물 단정 금지 |
-| 위치 | 라우트 `/saju`, 사이드바 타로 다음, 홈 진입 카드 타로 카드 옆 | |
+| 위치 | 라우트 `/saju-c`(명칭 "사주(C)" — 다른 사주 구현과 구분), 사이드바 타로 다음, 홈 진입 카드 타로 카드 옆 | |
 
 ## 용어
 
@@ -62,9 +62,9 @@ LLM 이 없거나 한도를 넘어도 정적 풀이로 항상 동작한다. 사�
 ## 사전 준비 (사용자 액션)
 
 1. **data.go.kr 신청 2건** (기존 `DATA_GO_KR_API_KEY` 사용, 보통 자동 승인): 한국천문연구원 **"음양력 정보"**(`LrsrCldInfoService`) · **"천문우주정보 > 24절기 정보"**(`SpcdeInfoService`). 표 생성 스크립트(`pnpm --filter friendly build:saju-tables`)가 1회 받아 `@repo/utils` 에 내장한다. 신청 전에는 astronomy-engine 계산 표로 동작(절기 ±1분, 음력 골든셋 일치 — 실사용 충분). 공식값 교체는 선택.
-2. **이미지 22장 생성** — 프롬프트북(`docs/saju-image-prompts.md`)으로 일간 10장 + 띠 12장. `assets-src/saju/raw/<id>.png`(gitignore) → `pnpm --filter friendly build:saju-images` 가 webp 로 변환해 `apps/web/public/saju/`.
+2. **이미지 22장 생성** — 프롬프트북(`docs/saju-image-prompts.md`)으로 일간 10장 + 띠 12장. `assets-src/saju/raw/<id>.png`(gitignore) → `pnpm --filter friendly build:saju-images` 가 webp 로 변환해 `apps/web/public/saju-c/`.
 3. Ollama Cloud — `saju` purpose 가 어드민 AI 키 화면에 자동 노출. 익명 트래픽 격리가 필요하면 purpose 전용 키(own).
-4. 배포 시 nginx `location ^~ /saju/s/` 프리렌더 프록시(타로 `/tarot/s/` 와 동일 패턴, `docs/deploy-friendly.md`).
+4. 배포 시 nginx `location ^~ /saju-c/s/` 프리렌더 프록시(타로 `/tarot/s/` 와 동일 패턴, `docs/deploy-friendly.md`).
 
 ## 아키텍처 개요
 
@@ -96,9 +96,9 @@ apps/friendly/src/modules/saju/
   saju-share-card.ts    satori 공유 이미지(OG 1200×630, 세로 1080×1920)
 apps/friendly/scripts/
   build-saju-tables.ts  KASI 음양력·24절기 → utils 표 파일 생성
-  build-saju-images.ts  raw PNG → webp(512/1024) → apps/web/public/saju/
+  build-saju-images.ts  raw PNG → webp(512/1024) → apps/web/public/saju-c/
   probe-saju-reading.ts 모델 비교(한국어 품질·JSON 준수·지연)
-apps/web/src/routes/SajuPage.tsx               /saju (lazy), /saju/s/:token, /me/saju
+apps/web/src/routes/SajuPage.tsx               /saju-c (lazy), /saju-c/s/:token, /me/saju-c
 apps/web/src/components/saju/
   SajuStage.tsx         R3F Canvas + 품질 등급 + Lite 판정(타로 tarotQuality 재사용)
   stage/ Disc.tsx(천문도 원판 3겹) · Seal.tsx(인장 8개) · InkRipple.tsx · ElementOrbs.tsx(오행 구슬) · LuckRiver.tsx(대운 강물) · MatchDiscs.tsx(궁합 두 원판)
@@ -172,15 +172,15 @@ model SajuReading {
 
 | 메서드 | 경로 | 인증 | 설명 |
 |---|---|---|---|
-| POST | `/saju/readings` | optional | 입력 → 원국 + 섹션 4개. 캐시 히트면 전부 `ready`, 아니면 정적 본문 + `jobId` 를 즉시 반환하고 섹션은 백그라운드 병렬 LLM. 회원은 저장 후 id |
-| GET | `/saju/readings/jobs/:jobId?after=<n>&wait=20000` | 없음 | 도착한 섹션 long-poll. 서버 재시작으로 job 이 없으면 `410` → 클라이언트는 정적 본문 유지 + "AI 풀이 다시 시도" |
-| POST | `/saju/daily` | optional | 입력 → 오늘의 운세(별점·한 줄·행운 색/방향/음식). 회원+프로필은 하루 1회 잠금 |
-| POST | `/saju/match` | optional | 두 입력 → 궁합 점수·근거·풀이 |
-| POST | `/saju/date-pick` | optional | 입력 + 용도 + 기간(≤ 60일) → 일별 점수 + 상위 3 이유 |
-| POST | `/saju/food` | optional | 입력 (+ 오늘 기준 여부) → 오행 음식 후보 3 + 이유 |
-| POST | `/saju/shares` · GET `/saju/shares/:token` · `/saju/s/:token/image.png` | | 타로와 동일 패턴(게스트는 입력 재전송, 서버가 본문 확보) |
-| GET/POST/PUT/DELETE | `/saju/me/profiles[/:id]` | 회원 | 프로필 CRUD(최대 10명, primary 1) |
-| GET/DELETE | `/saju/me/readings[/:id]` | 회원 | 기록 목록(커서)·상세·삭제 |
+| POST | `/saju-c/readings` | optional | 입력 → 원국 + 섹션 4개. 캐시 히트면 전부 `ready`, 아니면 정적 본문 + `jobId` 를 즉시 반환하고 섹션은 백그라운드 병렬 LLM. 회원은 저장 후 id |
+| GET | `/saju-c/readings/jobs/:jobId?after=<n>&wait=20000` | 없음 | 도착한 섹션 long-poll. 서버 재시작으로 job 이 없으면 `410` → 클라이언트는 정적 본문 유지 + "AI 풀이 다시 시도" |
+| POST | `/saju-c/daily` | optional | 입력 → 오늘의 운세(별점·한 줄·행운 색/방향/음식). 회원+프로필은 하루 1회 잠금 |
+| POST | `/saju-c/match` | optional | 두 입력 → 궁합 점수·근거·풀이 |
+| POST | `/saju-c/date-pick` | optional | 입력 + 용도 + 기간(≤ 60일) → 일별 점수 + 상위 3 이유 |
+| POST | `/saju-c/food` | optional | 입력 (+ 오늘 기준 여부) → 오행 음식 후보 3 + 이유 |
+| POST | `/saju-c/shares` · GET `/saju-c/shares/:token` · `/saju-c/s/:token/image.png` | | 타로와 동일 패턴(게스트는 입력 재전송, 서버가 본문 확보) |
+| GET/POST/PUT/DELETE | `/saju-c/me/profiles[/:id]` | 회원 | 프로필 CRUD(최대 10명, primary 1) |
+| GET/DELETE | `/saju-c/me/readings[/:id]` | 회원 | 기록 목록(커서)·상세·삭제 |
 
 응답 `SajuReadingResult`(full):
 
@@ -254,7 +254,7 @@ model SajuReading {
 ### 섹션 병렬 + 도착 순 리빌
 
 - 전체 풀이는 **섹션 4개를 동시에 호출**한다(성격 ≈ 500·올해 ≈ 400·흐름 ≈ 400·조언 ≈ 300 토큰). 어댑터는 `stream:false` 그대로.
-- `saju-jobs.ts`: `POST /saju/readings` 가 job 을 만들고 4개 Promise 를 띄운 뒤 즉시 응답(정적 본문 + `jobId`). 클라이언트는 `GET …/jobs/:jobId?after=n&wait=20000` 을 반복해 새로 도착한 섹션을 받는다(서버는 새 섹션 또는 타임아웃까지 대기). job 은 메모리 Map, 완료 후 5분 뒤 정리, 최대 200개. 회원 저장은 4개가 모두 끝난 뒤 한 번(중간에 서버가 죽으면 정적 본문으로 저장하지 않음 — 다음 요청은 캐시 미스로 재시도).
+- `saju-jobs.ts`: `POST /saju-c/readings` 가 job 을 만들고 4개 Promise 를 띄운 뒤 즉시 응답(정적 본문 + `jobId`). 클라이언트는 `GET …/jobs/:jobId?after=n&wait=20000` 을 반복해 새로 도착한 섹션을 받는다(서버는 새 섹션 또는 타임아웃까지 대기). job 은 메모리 Map, 완료 후 5분 뒤 정리, 최대 200개. 회원 저장은 4개가 모두 끝난 뒤 한 번(중간에 서버가 죽으면 정적 본문으로 저장하지 않음 — 다음 요청은 캐시 미스로 재시도).
 - 무대 연출(원판 회전 ≈ 3초 + 인장 8개 ≈ 6초 + 일간 캐릭터 등장 ≈ 2초)이 첫 섹션 도착(≈ 8~15초)을 대부분 덮는다. 아직이면 탭에 "읽는 중" 오브, 도착하면 타자 효과.
 - 캐시: lru-cache key = hash(promptVersion, 섹션, 8글자(시주 없으면 6), 성별, 대운 방향·시작, 연도) — 같은 사람은 연도가 바뀔 때까지 히트. 오늘의 운세 key = (일간, 일지, 일진, dayKey) ≈ 하루 최대 720 조합.
 
@@ -275,11 +275,11 @@ model SajuReading {
 - **일간 10**: 갑목(큰 소나무) · 을목(등나무·난초) · 병화(태양) · 정화(등불·촛불) · 무토(큰 산) · 기토(논밭) · 경금(바위·무쇠 검) · 신금(보석·비녀) · 임수(바다·큰 강) · 계수(이슬비·샘물). 캐릭터가 아니라 **풍경·사물 상징**으로 그려 성별·나이 중립.
 - **띠 12**: 쥐~돼지. 년지 표시·공유 이미지·프로필 아바타.
 - 스타일: 타로 덱과 같은 **민화 계열**이되 팔레트를 **먹·한지·주사(朱砂)·금박 + 오행 포인트색** 으로 좁혀 타로(오방색 전체)와 구분. 정사각(1:1) — 원판·아바타·카드에 공통으로 쓰기 위해. 세부는 `docs/saju-image-prompts.md`.
-- 빌드: `build-saju-images.ts` 가 1:1 중앙 크롭 → webp 512/1024 → `apps/web/public/saju/{stems,branches}/`. 미생성은 글자 placeholder(한자 1자 + 오행색).
+- 빌드: `build-saju-images.ts` 가 1:1 중앙 크롭 → webp 512/1024 → `apps/web/public/saju-c/{stems,branches}/`. 미생성은 글자 placeholder(한자 1자 + 오행색).
 
 ## 웹 3D 설계 — 타로와 다른 무대
 
-- 스택은 타로와 같다(three + R3F + drei + postprocessing, `/saju` lazy 청크, `three` 벤더 청크 공유). **컴포넌트는 재사용하지 않고** 품질 등급·Lite 판정·타자 효과·공유 시트 패턴만 재사용.
+- 스택은 타로와 같다(three + R3F + drei + postprocessing, `/saju-c` lazy 청크, `three` 벤더 청크 공유). **컴포넌트는 재사용하지 않고** 품질 등급·Lite 판정·타자 효과·공유 시트 패턴만 재사용.
 - **컨셉: 천상열차분야지도(天象列次分野之圖)** — 흑요석 돌판에 금·주사로 선각한 천문도. 카메라는 위에서 45° 내려다봄(타로는 테이블 정면). 팔레트 먹빛 `#0b0b0f` · 한지 `#efe6d3` · 주사 `#b8322a` · 금 `#d9b65b` · 오행색(목 청록 `#3f9b7a`, 화 주홍 `#d9482b`, 토 황토 `#c9973a`, 금 백은 `#dcdcd2`, 수 흑청 `#2f4d7a`). 타이틀은 Noto Serif KR(한자 서브셋 추가: 천간 10·지지 12·오행 5·사주팔자 등).
 - **장면**
   - 입장: 원판 3겹(바깥 지지 12자·중간 천간 10자·안쪽 오행 5구슬)이 느리게 자전, 별 선각이 은은히 깜빡임, 먹 안개 대신 **별가루 파티클**, 마우스 시차.
@@ -288,12 +288,12 @@ model SajuReading {
   - reading: DOM 패널(데스크톱 오른쪽 / 세로 폰 바닥 시트). "오행" 탭이면 원판 안쪽 5구슬이 분포만큼 커지고 상생 빛줄·상극 점선이 그어진다. "흐름" 탭이면 원판이 기울며 **대운 강물**이 흘러 현재 구간이 밝다.
   - 궁합: 원판 두 개가 겹쳐지며 일간·일지·년지 사이에 합(금선)·충(주사 점선)이 그어진다. 택일: DOM 달력 히트맵(별 밝기). 음식: 오행 구슬에서 메뉴 카드 3장이 튀어나온다.
 - **품질 등급**: 타로 `tarotQuality` 를 공용으로 옮겨(`components/stage-quality.ts`) 재사용. 모바일 단말은 bloom 끄고 파티클 1/3. WebGL2 없음·reduced-motion·`?lite=1` 은 `SajuLite`(2D 원국 표 + 순차 페이드).
-- **임베드 모드** `?embed=1`: 타로와 같은 `embed.ts`·브리지. 앱은 `app/saju/index.tsx` WebView.
+- **임베드 모드** `?embed=1`: 타로와 같은 `embed.ts`·브리지. 앱은 `app/saju-c/index.tsx` WebView.
 - 효과음: 인장 찍힘·다이얼 정지 2종, 기본 꺼짐(타로 v2 후보와 함께).
 
 ## 공유
 
-- 타로와 동일 패턴 — 게스트는 입력 재전송(서버가 캐시/LLM/정적으로 본문 확보), 회원은 readingId 로 토큰. `/saju/s/:token` 은 2D 원국 표 + 일간 캐릭터 + 키워드 + 성격 요약 + "나도 사주 보기". 궁합 공유는 점수·등급·근거.
+- 타로와 동일 패턴 — 게스트는 입력 재전송(서버가 캐시/LLM/정적으로 본문 확보), 회원은 readingId 로 토큰. `/saju-c/s/:token` 은 2D 원국 표 + 일간 캐릭터 + 키워드 + 성격 요약 + "나도 사주 보기". 궁합 공유는 점수·등급·근거.
 - OG 1200×630: 인장 8개 + 일간 이미지 + 키워드. 세로 1080×1920 스토리. 생년월일은 `shareBirth` 일 때만.
 
 ## 어드민
@@ -307,9 +307,9 @@ model SajuReading {
 |---|---|---|
 | **0차** ✅ | utils 엔진 — 달력(절기·표준시·서머타임·진태양시·음력 표)·사주 산출·파생 항목·대운·세운·일진·오늘의 운세 점수·궁합·택일·오행 음식·흐름 리듀서 + 정적 텍스트 + 테스트(KASI 대조 골든셋) / 프롬프트북 / 표·이미지 빌드 스크립트 | `packages/utils/src/saju*.ts`, `docs/saju-image-prompts.md`, `apps/friendly/scripts/build-saju-*.ts` |
 | **1차** ✅ | api-contract 스키마·Routes·`saju-reading` 한도·`saju` purpose / friendly `saju` 모듈(service·jobs·prompts·static·route) + Prisma(SajuProfile·SajuReading) / shared 스토어·API·훅 / `probe:saju-reading` | 마이그레이션 1건, 테스트 |
-| **2차** ✅ | 웹 `/saju` — 입력 폼·천문도 무대(원판·인장·먹 번짐·일간 캐릭터·오행 구슬·대운 강물)·풀이 패널(섹션 도착 순)·Lite·임베드·사이드바·홈 카드·로컬 기록 | `apps/web/src/components/saju/**`, `routes/SajuPage.tsx` |
+| **2차** ✅ | 웹 `/saju-c` — 입력 폼·천문도 무대(원판·인장·먹 번짐·일간 캐릭터·오행 구슬·대운 강물)·풀이 패널(섹션 도착 순)·Lite·임베드·사이드바·홈 카드·로컬 기록 | `apps/web/src/components/saju/**`, `routes/SajuPage.tsx` |
 | **3차** ✅ | 오늘의 운세(홈 카드·하루 1회) + 오행 음식 + 택일(달력 히트맵) + 궁합(두 원판 연출) | 라우트 4 + 웹 화면 4 |
-| **4차** ✅ | 공유(토큰·페이지·OG·세로) + 회원 프로필(여러 명)·기록 `/me/saju` + 앱 WebView 임베드 + nginx 문서 | |
+| **4차** ✅ | 공유(토큰·페이지·OG·세로) + 회원 프로필(여러 명)·기록 `/me/saju-c` + 앱 WebView 임베드 + nginx 문서 | |
 | **v2 후보** | SSE 스트리밍(타로와 함께) / 상단바 오늘의 운세 칩 / 해외 출생(경도·시간대) / 월운 12개월 캘린더 / 신살 확장 / 근처 맛집(타로 v3b 와 공유) / 효과음 | |
 
 0차와 사용자 이미지 생성·KASI 신청은 병렬. 2차는 이미지 없이 글자 placeholder 로 진행 가능.
@@ -324,6 +324,7 @@ model SajuReading {
 
 ## 진행 기록
 
+- 2026-09-06: **경로 saju → saju-c, 명칭 "사주(C)".** 다른 사주 구현과 나란히 두기 위해 "saju" 가 들어간 URL 전부를 saju-c 로: 웹 /saju-c·/saju-c/s/:token·/me/saju-c(·/:id), friendly API /api/v1/saju-c/*, 공유 OG·이미지 /saju-c/s/:token(/image.png), 정적 이미지 /saju-c/images/(public 디렉터리 git mv, `SAJU_IMAGE_BASE_PATH`·`build:saju-images` 출력), Vite 프록시, nginx 블록 2개(deploy-friendly.md), 앱 화면 app/saju-c + WebView URL. 명칭은 메뉴·홈 카드·앱 헤더·내 사주 제목·공유 제목·OG 제목만 "사주(C)"(본문 문구·모듈·파일·DB·한도 feature 이름은 그대로). ⚠️ 운영 nginx 블록 이름 변경 필요.
 - 2026-09-06: **풀이 패널 폭 확대(데스크톱 탭 가로 스크롤 제거).** 3235daa 에서 궁합 탭 본문 넘침은 잡았지만 탭 nav 10개가 27rem(430px)에 안 들어가 `overflow-x-auto` 로 가로 스크롤이 남았음. 패널을 lg 32rem·xl 34rem 으로 넓히고 nav 를 `flex-wrap`(스크롤 대신 줄바꿈, 탭 px 2.5), 무대 시선 focusX 1.4→1.7. Playwright 실측 nav scrollWidth=clientWidth: 1024/1100 → 510(한 줄), 1400 → 542(한 줄), 390 바닥 시트 388(줄바꿈 2줄). 1024 에서 왼쪽 원국 카드(34~478)와 패널(496~) 안 겹침. 웹 테스트 7 green. 미커밋.
 - 2026-09-06: **이미지 22/22 완성.** 남은 띠 6장(말·양·원숭이·닭·개·돼지) 반영 — placeholder 없음(manifest.missing 빈 배열). 산출 5.3MB.
 - 2026-09-06: **이미지 16/22 반영.** 제미나이 원본(일간 10 + 띠 6: 쥐·소·호랑이·토끼·용·뱀)을 `build:saju-images` 로 webp 512/1024 변환·커밋. 민화 + 흑요석 천문도 + 금선 톤이 계획대로 나옴(한지색 여백 프레임 포함). 남은 띠 6장(말·양·원숭이·닭·개·돼지)은 placeholder 유지 — 도착하면 같은 명령으로 덮어쓴다.

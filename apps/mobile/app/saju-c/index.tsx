@@ -11,7 +11,7 @@ import {
 } from '@repo/shared';
 import { webUrl } from '~/lib/api-setup';
 
-// 사주 — 웹 `/saju?embed=1` 을 WebView 로 임베드한다(docs/PLAN-saju.md 4차 — 타로 WebView 임베드와 같은 패턴).
+// 사주(C) — 웹 `/saju-c?embed=1` 을 WebView 로 임베드한다(docs/PLAN-saju.md 4차 — 타로 WebView 임베드와 같은 패턴).
 // 3D 무대(three/R3F)를 RN 으로 다시 만들지 않고, 웹이 앱 안에서 그대로 돈다.
 //  - 로드 전에 세션 토큰·게스트 키·화면 모드를 주입(브리지 계약: @repo/shared embedBridge) —
 //    앱 회원은 WebView 에서도 회원(자동 저장·한도 면제), 게스트 키는 앱이 보관한 값이라 기기 한도가
@@ -34,14 +34,14 @@ export default function SajuScreen() {
   const webRef = useRef<WebView | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState<string | null>(null);
-  const [title, setTitle] = useState('사주');
+  const [title, setTitle] = useState('사주(C)');
   const canGoBackRef = useRef(false);
 
   const origin = useMemo(() => webUrl.replace(/\/$/, ''), []);
   const uri = useMemo(() => {
     const q = new URLSearchParams({ embed: '1' });
     if (tool) q.set('tool', tool);
-    return `${origin}/saju?${q.toString()}`;
+    return `${origin}/saju-c?${q.toString()}`;
   }, [origin, tool]);
 
   // 주입 스크립트는 첫 마운트 값으로 고정된다(WebView 가 prop 변경을 다시 주입하지 않음). 로그인
@@ -62,7 +62,7 @@ export default function SajuScreen() {
     } else if (msg.type === 'open') {
       void Linking.openURL(msg.url).catch(() => {});
     } else if (msg.type === 'title') {
-      setTitle(msg.title || '사주');
+      setTitle(msg.title || '사주(C)');
     }
   }, []);
 

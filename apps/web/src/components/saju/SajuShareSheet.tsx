@@ -53,9 +53,9 @@ export const SajuShareSheet = ({ open, onClose, base }: Props) => {
   };
   const osShare = async () => {
     if (!url) return;
-    if (postLpEmbedMessage({ type: 'share', url, title: '사주 풀이' })) return;
+    if (postLpEmbedMessage({ type: 'share', url, title: '사주(C) 풀이' })) return;
     try {
-      await navigator.share({ title: '사주 풀이', url });
+      await navigator.share({ title: '사주(C) 풀이', url });
     } catch {
       // 사용자가 시트를 닫은 경우 — 조용히.
     }
