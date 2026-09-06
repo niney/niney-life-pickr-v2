@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { ChevronDown, Sparkles } from 'lucide-react';
 import type { SajuGChartType, SajuGReadingResultType } from '@repo/api-contract';
 import { SAJU_G_ELEMENT_META, SAJU_GOD_MEANING, type SajuGElementId } from '@repo/utils';
+import { SajuGDayStoryCard, SajuGGodStoryCards, SajuGLifeManual } from './SajuGDiscoveries';
 
 export function SajuGReportView({
   chart,
@@ -136,6 +137,14 @@ export function SajuGReportView({
           표면에 나타난 글자의 개수예요. 성격의 점수나 좋고 나쁨을 뜻하지 않아요.
         </p>
       </section>
+      {chart.period.kind === 'natal' && (
+        <SajuGDayStoryCard
+          chart={chart}
+          onHighlight={(element) => {
+            if (selected !== element) select(element);
+          }}
+        />
+      )}
       <section className="saju-g-interpretation" aria-live="polite" aria-busy={pending}>
         {result ? (
           <>
@@ -193,6 +202,17 @@ export function SajuGReportView({
           </div>
         ) : null}
       </section>
+      {chart.period.kind === 'natal' && (
+        <>
+          <SajuGLifeManual
+            key={`${chart.solarDate}:${chart.timeLabel}:${chart.dayBoundary}`}
+            chart={chart}
+            result={result}
+            pending={pending}
+          />
+          <SajuGGodStoryCards key={JSON.stringify(chart.pillars)} chart={chart} />
+        </>
+      )}
       {chart.period.months.length > 0 && (
         <section className="saju-g-months">
           <div className="saju-g-section-heading">

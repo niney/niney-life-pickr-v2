@@ -1,6 +1,7 @@
 // 합성 사례만 사용한다. 사용자 데이터와 설정·키를 출력하거나 변경하지 않는다.
 /* eslint-disable no-console -- 모델 비교 CLI의 진행 결과 */
 import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { CreateSajuGReadingInput } from '@repo/api-contract';
 import { AiConfigService } from '../src/modules/ai/ai.config.service.js';
@@ -19,6 +20,7 @@ try {
   );
   if (!config) throw new Error('Ollama 모델 설정이 필요합니다.');
   const models = opt('models', 'kimi-k3,kimi-k2.6,deepseek-v4-pro:0813').split(',');
+  const output = opt('output', 'research/saju-g/model-evaluation.json');
   const cases = [
     { birth: { date: '1990-05-21', timeAccuracy: 'exact', time: '14:30' }, kind: 'natal' },
     {
@@ -49,9 +51,13 @@ try {
     { birth: { date: '1988-10-09' }, kind: 'daily' },
   ];
   const records: unknown[] = [];
+  const selectedCase = Number(opt('case', '0'));
+  if (!Number.isInteger(selectedCase) || selectedCase < 0 || selectedCase > cases.length)
+    throw new Error(`--case는 1~${cases.length} 사이의 합성 사례 번호입니다.`);
   for (const model of models) {
     for (let i = 0; i < Math.min(30, Number(opt('samples', String(cases.length)))); i++) {
-      const input = CreateSajuGReadingInput.parse(cases[i % cases.length]);
+      const caseIndex = selectedCase ? selectedCase - 1 : i % cases.length;
+      const input = CreateSajuGReadingInput.parse(cases[caseIndex]);
       const chart = calculateSajuG(input, new Date('2026-09-06T03:00:00Z'));
       const start = Date.now();
       try {
@@ -65,6 +71,7 @@ try {
         const record = {
           model,
           sample: i + 1,
+          case: caseIndex + 1,
           kind: input.kind,
           facts: chart.facts,
           accepted: !!result,
@@ -75,14 +82,20 @@ try {
         records.push(record);
         console.log(JSON.stringify({ ...record, report: undefined, facts: undefined }));
       } catch {
-        records.push({ model, sample: i + 1, accepted: false, ms: Date.now() - start });
+        records.push({
+          model,
+          sample: i + 1,
+          case: caseIndex + 1,
+          accepted: false,
+          ms: Date.now() - start,
+        });
         console.log(
           JSON.stringify({ model, sample: i + 1, accepted: false, ms: Date.now() - start }),
         );
       }
-      await mkdir('research/saju-g', { recursive: true });
+      await mkdir(dirname(output), { recursive: true });
       await writeFile(
-        'research/saju-g/model-evaluation.json',
+        output,
         JSON.stringify(
           {
             evaluatedAt: new Date().toISOString(),

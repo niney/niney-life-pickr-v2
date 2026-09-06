@@ -32,6 +32,46 @@ const input = CreateSajuGReadingInput.parse({
 });
 const chart = calculateSajuG(input);
 describe('해석 출력의 근거 검사', () => {
+  it('생활 장면의 누락·순서·근거·복제와 잘못된 일간을 거절한다', () => {
+    const valid = basicSajuGReport(chart);
+    expect(valid.lifeScenes).toHaveLength(3);
+    expect(parseSajuGReport(JSON.stringify({ ...valid, lifeScenes: undefined }), chart)).toBeNull();
+    expect(
+      parseSajuGReport(
+        JSON.stringify({ ...valid, lifeScenes: [...valid.lifeScenes!].reverse() }),
+        chart,
+      ),
+    ).toBeNull();
+    for (const patch of [
+      { evidenceIds: ['invented'] },
+      { text: valid.summary },
+      { action: '일간은 갑목으로 큰 나무예요.' },
+      { question: '성공 확률 99%인 선택을 할까요?' },
+      { text: '편재의 흐름으로 새로운 인연을 만나기 좋은 시기이니 나가 보세요.' },
+    ]) {
+      expect(
+        parseSajuGReport(
+          JSON.stringify({
+            ...valid,
+            lifeScenes: valid.lifeScenes!.map((s, i) => (i === 0 ? { ...s, ...patch } : s)),
+          }),
+          chart,
+        ),
+      ).toBeNull();
+    }
+    expect(
+      parseSajuGReport(
+        JSON.stringify({
+          ...valid,
+          lifeScenes: valid.lifeScenes!.map((s) => ({
+            ...s,
+            text: `${s.id}의 장면이에요. 주변을 돌보는 정성을 자신의 생활과 휴식에도 꾸준히 나누어 보세요.`,
+          })),
+        }),
+        chart,
+      ),
+    ).toBeNull();
+  });
   it('존재하지 않는 근거와 간지, 점수 출력을 거절한다', () => {
     const valid = basicSajuGReport(chart);
     expect(
@@ -73,6 +113,20 @@ describe('해석 출력의 근거 검사', () => {
       CreateSajuGReadingInput.parse({ birth: { date: '1990-05-21', dayBoundary: 'zi' } }),
     );
     expect(uncertain.dayMaster).toBeNull();
+    const uncertainReport = basicSajuGReport(uncertain);
+    expect(parseSajuGReport(JSON.stringify(uncertainReport), uncertain)).not.toBeNull();
+    expect(
+      parseSajuGReport(
+        JSON.stringify({
+          ...uncertainReport,
+          lifeScenes: uncertainReport.lifeScenes!.map((scene) => ({
+            ...scene,
+            evidenceIds: ['pillar-year'],
+          })),
+        }),
+        uncertain,
+      ),
+    ).toBeNull();
     expect(
       parseSajuGReport(
         JSON.stringify({

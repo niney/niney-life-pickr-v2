@@ -44,3 +44,4 @@ export * from './sajuFood.js';
 export * from './sajuFlow.js';
 export * from './sajuImages.js';
 export * from './saju-g.js';
+export * from './saju-g-stories.js';

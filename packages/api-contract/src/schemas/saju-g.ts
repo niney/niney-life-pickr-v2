@@ -113,6 +113,14 @@ export const SajuGChart = z.object({
   }),
 });
 export type SajuGChartType = z.infer<typeof SajuGChart>;
+export const SajuGLifeScene = z.object({
+  id: z.enum(['meeting', 'busy', 'conflict']),
+  text: z.string().min(1).max(700),
+  action: z.string().min(1).max(200),
+  question: z.string().min(1).max(200),
+  evidenceIds: z.array(z.string().max(64)).min(1).max(6),
+});
+export type SajuGLifeSceneType = z.infer<typeof SajuGLifeScene>;
 export const SajuGReport = z.object({
   headline: z.string().min(1).max(100),
   summary: z.string().min(1).max(1500),
@@ -129,6 +137,8 @@ export const SajuGReport = z.object({
     .max(5),
   practice: z.string().min(1).max(400),
   reflection: z.string().min(1).max(300),
+  // v4 개인 원국 풀이. 구버전 보관함·기간 풀이·궁합과 호환한다.
+  lifeScenes: z.array(SajuGLifeScene).length(3).optional(),
 });
 export type SajuGReportType = z.infer<typeof SajuGReport>;
 export const SajuGReadingResult = z.object({

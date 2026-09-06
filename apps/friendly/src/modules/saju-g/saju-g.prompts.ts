@@ -4,6 +4,8 @@ import {
   SAJU_GOD_MEANING,
   SAJU_G_KIND_LABEL,
   SAJU_G_STEMS,
+  SAJU_G_SCENES,
+  basicSajuGLifeScenes,
   sajuGPronunciation,
   thinkOptionForModel,
   type SajuGElementId,
@@ -11,8 +13,8 @@ import {
 import { extractFirstJsonObject } from '../../lib/json.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
 
-// v3: 모델에는 오행 개수 대신 상징만 전달. 요약 반복·기간 근거 누락·한글 간지 오류 검사.
-export const SAJU_G_PROMPT_VERSION = 3;
+// v4: 원국 풀이에 생활 장면 3개 추가. 구버전 저장 결과는 optional 필드로 호환.
+export const SAJU_G_PROMPT_VERSION = 4;
 export const sajuGSectionIds = (kind: SajuGChartType['period']['kind']) =>
   kind === 'natal'
     ? ['nature', 'work', 'relationships', 'balance']
@@ -60,6 +62,7 @@ export function basicSajuGReport(chart: SajuGChartType): SajuGReportType {
     })),
     practice: '오늘 마음에 남은 단어 하나를 적고, 그 단어와 연결되는 작은 행동을 해 보세요.',
     reflection: '요즘 나답다고 느꼈던 순간에는 무엇을 하고 있었나요?',
+    ...(isNatal ? { lifeScenes: basicSajuGLifeScenes(chart) } : {}),
   };
 }
 
@@ -77,18 +80,53 @@ export function parseSajuGReport(
       return null;
     const facts = new Set(chart.facts.map((f) => f.id));
     if (report.sections.some((s) => s.evidenceIds.some((id) => !facts.has(id)))) return null;
+    if (chart.period.kind === 'natal') {
+      if (!report.lifeScenes || report.lifeScenes.some((s, i) => s.id !== SAJU_G_SCENES[i]?.id))
+        return null;
+    } else if (report.lifeScenes) return null;
+    if (report.lifeScenes?.some((s) => s.evidenceIds.some((id) => !facts.has(id)))) return null;
+    // 일간 미확정 때 다른 기둥을 개인 성향의 대용으로 삼지 않는다.
+    if (
+      !chart.dayMaster &&
+      report.lifeScenes?.some((s) => s.evidenceIds.some((id) => id !== 'scope'))
+    )
+      return null;
     if (chart.period.kind !== 'natal' && !report.sections[0]!.evidenceIds.includes('period'))
       return null;
-    const paragraphs = [report.summary, ...report.sections.map((s) => s.text)].map((s) =>
-      s.replace(/\s+/g, ''),
-    );
+    const paragraphs = [
+      report.summary,
+      ...report.sections.map((s) => s.text),
+      ...(report.lifeScenes ?? []).map((s) => s.text),
+    ].map((s) => s.replace(/\s+/g, ''));
     if (new Set(paragraphs).size !== paragraphs.length) return null;
+    // 장면 이름만 바꿔 같은 설명을 반복하는 출력도 재시도한다.
+    const sceneSentences = new Set<string>();
+    for (const scene of report.lifeScenes ?? []) {
+      // 원국의 생활 장면은 현재 운세나 유리한 시기를 계산한 결과가 아니다.
+      if (
+        /(?:시기(?:예요|에요|입니다|이니|이므로)|(?:좋은|유리한)\s*(?:시기|날|때))/.test(
+          `${scene.text} ${scene.action} ${scene.question}`,
+        )
+      )
+        return null;
+      const sentences = new Set(
+        scene.text
+          .split(/[.!?。]/)
+          .map((s) => s.replace(/\s+/g, ''))
+          .filter((s) => s.length >= 25),
+      );
+      for (const sentence of sentences) {
+        if (sceneSentences.has(sentence)) return null;
+        sceneSentences.add(sentence);
+      }
+    }
     const prose = [
       report.headline,
       report.summary,
       ...report.sections.flatMap((s) => [s.title, s.text]),
       report.practice,
       report.reflection,
+      ...(report.lifeScenes ?? []).flatMap((s) => [s.text, s.action, s.question]),
     ].join('\n');
     if (note.trim().length >= 12 && prose.includes(note.trim())) return null;
     const allowed = new Set([
@@ -135,7 +173,9 @@ const SYSTEM = `당신은 사주의 전통 상징을 쉽고 따뜻한 한국어 
 ‘십성’ 등 전문 용어는 처음 등장할 때 쉬운 뜻을 함께 쓰세요. 연주·월주를 나열하기보다 뜻과 생활 장면을 먼저 설명하세요.
 올해·오늘 풀이의 theme은 반드시 period 근거와 그 십성을 중심으로 쓰세요. 타고난 기둥의 십성을 올해·오늘의 십성으로 바꾸어 말하지 마세요. 일간이 미확정이면 일간의 이름과 십성을 추정하지 마세요.
 JSON 객체 하나만 출력하세요. sections의 순서와 id를 지키고 각 문단에 관련 있는 evidenceIds를 근거 ID에서 선택하세요.
-형식: {"headline":"짧은 소개","summary":"전체 해석 3~4문장","sections":[{"id":"지정된 id","title":"쉬운 제목","text":"근거와 생활 장면을 연결한 3~4문장","evidenceIds":["근거 id"]}],"practice":"실천 하나","reflection":"돌아볼 질문 하나"}`;
+형식: {"headline":"짧은 소개","summary":"전체 해석 3~4문장","sections":[{"id":"지정된 id","title":"쉬운 제목","text":"근거와 생활 장면을 연결한 3~4문장","evidenceIds":["근거 id"]}],"practice":"실천 하나","reflection":"돌아볼 질문 하나"}
+lifeSceneTopics가 있으면 lifeScenes 배열도 반드시 추가하세요. 주어진 순서의 id마다 {"id":"장면 id","text":"이 장면에서 근거의 상징을 돌아보는 구체적인 2~3문장","action":"바로 시도할 작은 행동 한 가지","question":"스스로 확인할 질문 한 가지","evidenceIds":["관련 근거 id"]}를 쓰세요.
+lifeScenes는 본문을 복사하지 말고 첫 만남·일이 몰릴 때·갈등 대화라는 서로 다른 장면에 집중하세요. 성격을 확정하거나 일주만으로 배우자·속마음을 단정하지 마세요. 일간이 미확정이면 scope를 근거로 일반적인 자기성찰 질문을 쓰세요. lifeSceneTopics가 없으면 lifeScenes를 출력하지 마세요.`;
 
 export async function requestSajuGLlm(
   provider: LLMProvider,
@@ -148,6 +188,14 @@ export async function requestSajuGLlm(
   const prompt = JSON.stringify({
     service: SAJU_G_KIND_LABEL[chart.period.kind],
     sectionIds: sajuGSectionIds(chart.period.kind),
+    ...(chart.period.kind === 'natal'
+      ? {
+          lifeSceneTopics: SAJU_G_SCENES.map(({ id, title }) => ({ id, title })),
+          lifeSceneGuide: chart.dayMaster
+            ? '확정된 상징을 장면별 관점으로 설명하세요. 행동에는 말해볼 문장이나 적어볼 내용처럼 바로 할 수 있는 예시를 넣으세요. 원국은 타고난 상징만 다루며 현재 운세·기간 계산이 없습니다. 좋은 시기·유리한 날·도전이 많은 시기라고 말하거나 연주·월주를 현재 시기의 운으로 바꾸어 설명하지 마세요.'
+            : '일간 미확정: lifeScenes 세 항목의 evidenceIds는 반드시 ["scope"]만 사용하세요. 연주·월주·오행을 개인의 성향이나 행동 방식의 근거로 대신 사용하지 마세요. text/action/question 모두 오행·간지·십성·특정 상징을 언급하지 말고 누구나 돌아볼 일반적인 생활 질문과 작은 행동으로 작성하세요.',
+        }
+      : {}),
     facts: chart.facts.map((fact) => {
       if (!fact.id.startsWith('element-')) return fact;
       const element = SAJU_G_ELEMENT_META[fact.id.slice('element-'.length) as SajuGElementId];
@@ -163,9 +211,9 @@ export async function requestSajuGLlm(
     const response = await provider.complete({
       model,
       systemPrompt: SYSTEM,
-      prompt: `${prompt}${attempt ? '\n이전 출력 검증에 실패했습니다. 섹션 ID·해당 기간 근거·일간·간지·JSON 형식을 확인하고, 요약과 본문을 다르게 작성하세요.' : ''}`,
+      prompt: `${prompt}${attempt ? '\n이전 출력 검증에 실패했습니다. 섹션 ID·기간 근거·일간·간지·JSON 형식을 확인하고, 요약과 본문을 다르게 작성하세요. lifeScenes의 장면 순서와 lifeSceneGuide를 지키고, 같은 설명 문장을 여러 장면에 반복하지 마세요. 원국 장면에서 좋은 시기나 유리한 날을 예측하지 마세요. 일간 미확정이면 생활 장면의 근거는 scope만 가능합니다.' : ''}`,
       temperature: 0.45,
-      maxTokens: 3500,
+      maxTokens: chart.period.kind === 'natal' ? 5000 : 3500,
       numCtx: 16384,
       think: thinkOptionForModel(model),
       signal,

@@ -1,7 +1,7 @@
 ---
 topic: saju-g
 last_compiled: 2026-09-07
-sources_count: 35
+sources_count: 40
 status: active
 aliases: [사주, 사주(G), saju-g, 명식, 만세력, 오행, 일간, 십성, 절기, 음력, 윤달, 궁합, 출생 프로필, kimi-k3, saju-g-reading, SajuGPage, SajuGPairPage]
 ---
@@ -26,6 +26,8 @@ KASI 2023·2026년 월력요항의 음력 월초/일진 25건·절입 24건과 I
 
 ## AI·한도 [coverage: high — 5 sources]
 
+2026-09-07 v4: 원국에 `lifeScenes`(첫 만남·바쁜 날·갈등 대화)를 추가했다. 출력 한도는 원국 5,000/기간 3,500토큰, 60초·최대 두 호출이다. 장면 ID·순서·근거·문단/긴 문장 중복·시기 예측 문구·일간/간지/점수를 검사하며, 일간 미확정 장면은 `scope` 근거만 허용한다. 이전 보관·기간·궁합과 호환하도록 계약은 optional이고 새 원국 AI 생성만 필수다. 12개 평가와 보강 후 문제 사례 2회 검증은 [모델 평가](../../apps/friendly/research/saju-g/README.md)에 구분해 기록했다. 아래 v3 측정은 이전 버전 기록이다.
+
 `OLLAMA_SAJU_G_MODEL=kimi-k3`, purpose `saju-g`, quota feature `saju-g-reading`. 기존 키 상속·AdapterCache·공통 SQLite 한도를 사용한다. API에는 구조화 명식이 먼저 있고 LLM은 그 근거 ID·기간 관계와 질문으로 해석한다. 원본 생년월일·정확한 시각·계정은 모델에 보내지 않는다. 원본 질문은 지시가 아닌 데이터로 취급한다.
 
 프롬프트 v3는 모델에 오행 개수 대신 상징 의미를 전달하고 개수→성격 강약·능력 결핍 연결을 금지한다. Zod 형식, 섹션 순서, 근거 ID, 허용 한글/한자 간지·일간, 점수·확률, 긴 질문 원문 재인용, 문단 통째 중복, 올해/오늘 주제의 기간 근거를 검사한다. 같은 모델에서 최대 1회 재시도, 전체 60초 후 기본 풀이를 제공한다. 같은 소유자의 동시 요청은 합류하며 캐시는 입력·기간·계산/프롬프트 버전·모델을 포함한다. 성공한 AI만 캐시하므로 기본 풀이 뒤 즉시 재시도할 수 있다.
@@ -43,6 +45,12 @@ KASI 2023·2026년 월력요항의 음력 월초/일진 25건·절입 24건과 I
 새 공유 ID는 타로와 같은 7바이트 CSPRNG/base64url 10자다. `SajuGShareToken`이 새 10자·기존 32자를 API와 OG에서 동일하게 검증한다. 취소 키·영수증은 32자를 유지한다. DB 저장의 P2002 충돌에 대해 총 5회까지 저장을 시도해 조회 후 저장 사이의 경쟁도 처리한다. 소진 시 공유 생성 라우트가 명시적인 503을 반환한다(공통 오류 처리기는 5xx를 500으로 정규화하므로 제어된 응답을 직접 보낸다). 기존 링크나 DB 행을 갱신하는 migration은 없다.
 
 PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. 이미지 캐시를 읽기 전에 DB 행 존재를 확인한다. OG는 공통 web-index helper를 사용하고 취소 후 404·일반 문구를 반환한다. nginx `/saju-g/s/` 프록시가 필요하다.
+
+## 이야기 카드 [coverage: high — 5 sources]
+
+원국 결과와 보관함의 `SajuGReportView`에 내 일주 이야기, 생활 사용설명서, 십성 이야기 카드를 표시한다. `packages/utils/src/saju-g-stories.ts`는 확정된 명식만 소비하는 공용 콘텐츠이고, `SajuGDiscoveries.tsx`가 웹 UI다. SVG·궤도·인장·두 오행의 색으로 카드를 꾸미고 펼칠 때 오행을 강조한다. 풍경은 제품의 상징 창작으로 명시한다.
+
+생활 장면은 명식 도착 즉시 기본 안내, AI 도착 후 같은 선택을 유지하며 교체한다. 장면 전환은 추가 호출이 없다. 이전 보관 결과에 새 필드가 없으면 기본 안내로 표시한다. 십성은 확정된 천간·지장간 위치를 묶으며 일간 자신을 비견으로 추가하지 않는다. 일주/일간 미확정 시 대표 카드와 십성은 보류한다. DB/공개 공유/C 기능 변경은 없다. [구현·검증](../../docs/REVIEW-saju-g-stories.md).
 
 ## 검증·운영 [coverage: medium — 4 sources]
 
@@ -84,7 +92,13 @@ PNG는 1080×1440, 공개 이미지의 CORP는 cross-origin이며 no-store다. �
 
 통합 타입 검사 6개 작업, API 202개·웹 116개·shared 81개·utils 307개가 통과했다. 전체 migration을 빈 DB에 적용해 현재 Prisma 스키마와 일치함을 확인했다. 아래 소스 목록은 G 기능 기준이며 전체 위키 재컴파일은 아니다.
 
-## Sources [coverage: high — 35 sources]
+## Sources [coverage: high — 40 sources]
+
+- [이야기 공용 콘텐츠](../../packages/utils/src/saju-g-stories.ts)
+- [이야기 카드 UI](../../apps/web/src/components/saju-g/SajuGDiscoveries.tsx)
+- [이야기 카드 스타일](../../apps/web/src/components/saju-g/saju-g-discoveries.css)
+- [이야기 콘텐츠 검증](../../packages/utils/src/saju-g-stories.test.ts)
+- [이야기 카드 UI 검증](../../apps/web/src/components/saju-g/SajuGDiscoveries.test.tsx)
 
 - [입력·응답 계약](../../packages/api-contract/src/schemas/saju-g.ts)
 - [경로 계약](../../packages/api-contract/src/routes.ts)
