@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Loader2, Share2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Routes, type CreateTarotReadingInputType, type TarotShareResultType } from '@repo/api-contract';
-import { useCreateTarotShare } from '@repo/shared';
+import { isLpEmbedded, postLpEmbedMessage, useCreateTarotShare } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 
 // 리딩 공유 시트 — 링크(토큰) 발급 → 복사/OS 공유, 세로 이미지 저장, 미리보기 이미지.
@@ -27,6 +27,12 @@ export const TarotShareSheet = ({ open, onClose, base, hasQuestion }: Props) => 
 
   const url = share ? `${window.location.origin}${share.path}` : null;
   const stale = share !== null && share.includeQuestion !== includeQuestion;
+  // 앱 WebView 안 — navigator.share 가 없거나 제한적이고 <a download> 는 동작하지 않는다. 브리지로
+  // 앱의 공유 시트·외부 브라우저에 맡긴다.
+  const embedded = isLpEmbedded();
+  const canOsShare = embedded || (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  const imageUrl = (format: 'og' | 'story') =>
+    share ? `${window.location.origin}${Routes.Tarot.shareImage(share.token, format)}` : '';
 
   const create = () => {
     mutation.mutate(
@@ -54,6 +60,7 @@ export const TarotShareSheet = ({ open, onClose, base, hasQuestion }: Props) => 
 
   const osShare = async () => {
     if (!url) return;
+    if (postLpEmbedMessage({ type: 'share', url, title: '타로 리딩' })) return;
     try {
       await navigator.share({ title: '타로 리딩', url });
     } catch {
@@ -117,21 +124,46 @@ export const TarotShareSheet = ({ open, onClose, base, hasQuestion }: Props) => 
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+              {canOsShare && (
                 <Button type="button" size="sm" onClick={osShare} className="bg-[#d9b65b] text-[#1a1408] hover:bg-[#e6c86f]">
                   <Share2 className="size-4" /> 공유하기
                 </Button>
               )}
-              <Button asChild size="sm" variant="outline" className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10">
-                <a href={Routes.Tarot.shareImage(share.token, 'story')} download={`tarot-${share.token}.png`}>
-                  <Download className="size-4" /> 세로 이미지 저장
-                </a>
-              </Button>
-              <Button asChild size="sm" variant="outline" className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10">
-                <a href={Routes.Tarot.shareImage(share.token, 'og')} target="_blank" rel="noreferrer">
-                  <ExternalLink className="size-4" /> 미리보기 이미지
-                </a>
-              </Button>
+              {embedded ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => postLpEmbedMessage({ type: 'share', url: imageUrl('story'), title: '타로 리딩 이미지' })}
+                    className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10"
+                  >
+                    <Download className="size-4" /> 세로 이미지 공유
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => postLpEmbedMessage({ type: 'open', url: imageUrl('og') })}
+                    className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10"
+                  >
+                    <ExternalLink className="size-4" /> 미리보기 이미지
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button asChild size="sm" variant="outline" className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10">
+                    <a href={Routes.Tarot.shareImage(share.token, 'story')} download={`tarot-${share.token}.png`}>
+                      <Download className="size-4" /> 세로 이미지 저장
+                    </a>
+                  </Button>
+                  <Button asChild size="sm" variant="outline" className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10">
+                    <a href={Routes.Tarot.shareImage(share.token, 'og')} target="_blank" rel="noreferrer">
+                      <ExternalLink className="size-4" /> 미리보기 이미지
+                    </a>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

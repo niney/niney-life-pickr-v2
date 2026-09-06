@@ -10,9 +10,11 @@ import {
   lightTheme,
   QUERY_GC_TIME,
   QUERY_STALE_TIME,
+  readLpEmbedInit,
   setMealDraftPrincipal,
   ThemeProvider,
   useAuthStore,
+  useGuestKeyStore,
 } from '@repo/shared';
 import { App } from './App';
 import { useThemeStore } from './stores/theme';
@@ -28,6 +30,16 @@ if (storedToken) {
   useAuthStore.setState({ token: storedToken });
 } else if (storedGuest) {
   useAuthStore.setState({ isGuest: true });
+}
+
+// 앱 WebView 임베드 — 앱이 로드 전에 주입한 세션 토큰·게스트 키가 WebView 의 localStorage 보다
+// 우선한다(앱에서 로그아웃/재로그인해도 WebView 가 옛 세션을 들고 있지 않게). 아래 subscribe 가
+// 같은 키로 다시 저장하므로 이후 부팅도 일관된다.
+const embedInit = readLpEmbedInit();
+if (embedInit) {
+  if (embedInit.token) useAuthStore.setState({ token: embedInit.token, isGuest: false });
+  else if (storedToken) useAuthStore.setState({ token: null });
+  if (embedInit.guestKey) useGuestKeyStore.setState({ guestKey: embedInit.guestKey });
 }
 
 useAuthStore.subscribe((state) => {
@@ -71,6 +83,7 @@ const applyMode = (mode: 'light' | 'dark') => {
   document.documentElement.classList.toggle('dark', mode === 'dark');
   applyCssVars(mode === 'dark' ? darkTheme : lightTheme, document.documentElement);
 };
+if (embedInit?.theme) useThemeStore.getState().setMode(embedInit.theme);
 applyMode(useThemeStore.getState().mode);
 useThemeStore.subscribe((state) => applyMode(state.mode));
 

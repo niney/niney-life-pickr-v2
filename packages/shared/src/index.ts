@@ -36,6 +36,7 @@ export * from './api/meal.api.js';
 export * from './api/tarot.api.js';
 export * from './api/usage-quota.api.js';
 export * from './stores/authStore.js';
+export * from './embedBridge.js';
 export * from './stores/activeCrawlJobStore.js';
 export * from './stores/activeGroupingJobStore.js';
 export * from './stores/activeGlobalMergeJobStore.js';

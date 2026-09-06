@@ -255,7 +255,8 @@ model UsageQuotaCounter {
 | **2차** ✅ | 웹 `/tarot` 3D 전 흐름 + Lite 폴백 + 임베드 모드 + 사이드바·홈 카드 + 로컬 기록 | `apps/web/src/components/tarot/**`(stage: layout·textures·StageContext·FanDeck·DrawnCard·Scene / TarotStage·TarotOverlay·TarotLite·TarotCardImage·tarotQuality·useTypewriter), `routes/TarotPage.tsx`(+test 4건), shared `tarotHistoryStore`, PublicLayout `?embed=1` |
 | **3차** ✅ | 공유(토큰·페이지·OG·세로 이미지·nginx 문서) | friendly `tarot-share-card.ts`·`tarot-preview.ts`, `lib/web-index.ts`·`lib/share-fonts.ts`, 마이그레이션 `add_tarot_share_question`; 웹 `TarotShareSheet`·`TarotSharedPage`·`TarotReadingView`(`/tarot/s/:token`); 테스트 friendly 6·웹 2 |
 | **4차** ✅ | 어드민 사용량 한도 탭 + 회원 자동 저장·`/me/tarot`·오늘의 카드 계정 잠금·삭제 | `routes/admin/AdminQuotasPage.tsx`(설정 탭 "사용량 한도"), `routes/tarot/MyTarotPage.tsx`·`MyTarotReadingPage.tsx`(`/me/tarot`, `/me/tarot/:id`), 계정 메뉴 "내 타로 기록", shared `useMyTarotReadingsInfinite`; 테스트 4건 |
-| **v2** | 켈틱크로스 10장 / 앱 WebView 임베드 / SSE 스트리밍 / 효과음 | |
+| **v2-앱** ✅ | 앱 WebView 임베드 — `app/tarot` + 홈 진입 카드, 브리지(토큰·게스트 키 주입, share/open) | shared `embedBridge.ts`(+테스트 3), 웹 `lib/embed.ts`·main 부팅·PublicLayout·공유 시트/페이지, 앱 `app/tarot/index.tsx`·`TarotEntryCard`·api-setup(`webUrl`, 게스트 키 persist) |
+| **v2 후보** | 켈틱크로스 10장 / SSE 스트리밍 / 효과음 | |
 | **v3a** ✅ | 메뉴 타로 — 카드 원소·무드 → 메뉴 후보 3개(결정적) + LLM 이유 | utils `tarotMenu.ts`(메뉴 100종·기운 매핑·선택), 스프레드 `menu`·주제 `food`, 계약 `TarotMenuVerdict`, friendly 프롬프트 v2·`buildStaticMenuVerdict`·카탈로그 kcal, 웹 `TarotMenuBox`·`?spread=menu`; 테스트 utils 9·friendly 4·웹 2 |
 | **v3b 후보** | 근처 맛집 덧붙이기(식당별 분류 프로필 집계 → 내주변 후보) — 운영 식당 커버리지 확인 뒤 | |
 
@@ -290,9 +291,27 @@ model UsageQuotaCounter {
 - v3b(근처 맛집): 식당 카테고리가 네이버 자유 문자열이라 메뉴 분류에서 식당 프로필을 집계해야 하고, 위치 근처에 크롤된
   식당이 없으면 빈 결과 — 위치 허용 + 반경 내 후보가 있을 때만 결과 하단에 덧붙이는 부가 기능으로 둔다.
 
+## 앱 WebView 임베드 (v2)
+
+3D 무대를 RN 으로 다시 만들지 않는다 — 앱 `app/tarot/index.tsx` 가 웹 `/tarot?embed=1` 을 WebView 로 연다.
+
+- 브리지 계약은 `@repo/shared` `embedBridge.ts` 한 곳. 앱 → 웹은 로드 전 `window.__LP_EMBED__ = {token, guestKey, theme}`
+  주입(`injectedJavaScriptBeforeContentLoaded`, JSON 직렬화라 인젝션 없음). 웹 `main.tsx` 가 부팅 때 읽어 세션 토큰·게스트
+  키를 스토어에 넣는다 — 앱 회원은 WebView 에서도 회원(자동 저장·한도 면제), 게스트 키는 앱이 AsyncStorage 에 보관한 값이라
+  기기 한도·오늘의 카드 잠금이 앱과 WebView 사이에 일치. **토큰은 URL 에 싣지 않는다.**
+- 웹 → 앱은 `postMessage(JSON)`: `share`(OS 공유 시트 — WebView 는 navigator.share 가 없거나 제한적) / `open`(외부 브라우저 —
+  `<a download>` 가 WebView 에서 동작하지 않아 이미지는 공유·열기로) / `title`. 앱은 모르는 type 무시.
+- 임베드 판정(`apps/web/src/lib/embed.ts`): `?embed=1` 을 한 번 보면 sessionStorage 에 기억해 WebView 안에서 링크로 이동한
+  공유 페이지·내 타로 기록도 크롬 없이 이어진다. 브리지가 주입돼 있으면 쿼리 없이도 임베드.
+- 앱: 같은 origin 은 WebView 안, 밖은 외부 브라우저. Android 뒤로가기는 WebView 히스토리 먼저. 웹 origin 은 `webUrl`
+  (운영 = API 와 같은 도메인, 개발 = `:3000` → `:5173`, 다르면 `EXPO_PUBLIC_WEB_URL`).
+- 주입값은 첫 마운트에 고정 — 로그인 상태가 바뀌면 화면을 다시 열어야 반영(타로 화면 안에서 로그인은 없음).
+
 ## 진행 기록
 
 - 2026-09-02: 계획 작성. 결정 1~16 확정.
+- 2026-09-05: **v2 앱 WebView 임베드 완료.** 위 "앱 WebView 임베드" 절. 홈 `TarotEntryCard`(타로 보기 / 메뉴 타로 → `/tarot?spread=menu`). shared 테스트 3, 앱·웹 typecheck green. 실기기 확인은 아직(iOS Safari WKWebView 의 WebGL·성능). 미커밋.
+- 2026-09-05: **운영 배포(5d0c4c7·13b87e8).** `/tarot` 직접 진입이 dist 의 `tarot/cards/` 디렉터리 때문에 nginx `$uri/` 에 걸려 301→403 — `try_files $uri /index.html` 로 수정(deploy-friendly.md). 운영 모델은 gemma4:31b. 크롬 실측으로 메뉴 타로 전 흐름·공유·OG 확인.
 - 2026-09-02: **v3a 메뉴 타로 완료.** 위 "메뉴 타로" 절. utils `tarotMenu.ts` + 테스트 9건, 스프레드 `menu`·주제 `food`(리듀서 잠금), 계약 `TarotMenuPick/Verdict`·결과 `menu`(기본 null — 구행 호환), friendly 프롬프트 v2(캐시 키 갱신)·`buildStaticMenuVerdict`(조사는 '카드'·'쪽' 뒤에만)·`toLlmBody` 병합·`normalizeTarotInput`·kcal 조회, 공유 이미지 대안 줄, 웹 `TarotMenuBox`(패널·공유 페이지·기록 상세 공용)·설정 패널·미리보기·`?spread=menu`·홈 문구. friendly 165·utils 244·웹 타로 10 green. 미커밋.
 - 2026-09-02: **4차 완료.** 어드민 설정 > "사용량 한도" 탭(`/admin/settings/quotas`): 기능별 enabled·게스트 기기/IP 일일·IP 분당·전역 예산·게스트 컷 % 편집(noValidate + 한국어 검증), 날짜별 사용량(전역 진행률·컷 표시·scope 합계·상위 게스트 키/IP). 회원 기록 `/me/tarot`(커서 더 보기·행 내 2단계 삭제) + `/me/tarot/:id`(TarotReadingView·공유(readingId)·삭제 후 목록 복귀), 계정 메뉴 "내 타로 기록", 타로 설정 패널에 회원용 "내 타로 기록" 링크와 오늘의 카드 잠금 안내(오늘 daily 가 있으면 섞기 비활성 + "오늘 카드 보기"). 해석 패널은 결과가 오면 결과의 카드 메타를 진실로 쓴다(서버 잠금으로 다른 카드가 올 수 있음). 미커밋.
 - 2026-09-02: **가운데 카드 호버 복귀 튐 수정.** 78장(짝수) 정중앙 두 장은 |i − 중앙| 이 같아 z 동점 → 호버했다 돌아올 때 마지막 순간 동점 판정(먼저 그린 인스턴스 승)으로 반쪽이 다시 가려졌다. 깊이 순위를 엄격 단조(`fanDepthRank`: 왼쪽 c−i, 오른쪽 i−c+0.5)로, 걸음 0.008.

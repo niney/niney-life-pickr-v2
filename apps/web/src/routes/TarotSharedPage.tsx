@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AlertTriangle, Download, Link2, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Routes } from '@repo/api-contract';
-import { ApiError, useSharedTarotReading } from '@repo/shared';
+import { ApiError, isLpEmbedded, postLpEmbedMessage, useSharedTarotReading } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { TarotReadingView } from '~/components/tarot/TarotReadingView';
 
@@ -13,8 +13,12 @@ export const TarotSharedPage = () => {
   const { token } = useParams<{ token: string }>();
   const query = useSharedTarotReading(token ?? null);
 
+  // 앱 WebView 안이면 공유·이미지는 앱에 맡긴다(브리지). 밖은 navigator.share → 클립보드.
+  const embedded = isLpEmbedded();
+
   const copyLink = async () => {
     const url = window.location.href;
+    if (postLpEmbedMessage({ type: 'share', url, title: '타로 리딩' })) return;
     try {
       if (navigator.share) {
         await navigator.share({ title: '타로 리딩', url });
@@ -72,16 +76,34 @@ export const TarotSharedPage = () => {
               >
                 <Link2 className="size-4" /> 링크 복사
               </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10"
-              >
-                <a href={Routes.Tarot.shareImage(query.data.token, 'story')} download={`tarot-${query.data.token}.png`}>
-                  <Download className="size-4" /> 세로 이미지 저장
-                </a>
-              </Button>
+              {embedded ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10"
+                  onClick={() =>
+                    postLpEmbedMessage({
+                      type: 'share',
+                      url: `${window.location.origin}${Routes.Tarot.shareImage(query.data!.token, 'story')}`,
+                      title: '타로 리딩 이미지',
+                    })
+                  }
+                >
+                  <Download className="size-4" /> 세로 이미지 공유
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="border-white/20 bg-transparent text-[#ece6d6] hover:bg-white/10"
+                >
+                  <a href={Routes.Tarot.shareImage(query.data.token, 'story')} download={`tarot-${query.data.token}.png`}>
+                    <Download className="size-4" /> 세로 이미지 저장
+                  </a>
+                </Button>
+              )}
               <Button asChild size="sm" className="ml-auto bg-[#d9b65b] text-[#1a1408] hover:bg-[#e6c86f]">
                 <Link to="/tarot">
                   <Sparkles className="size-4" /> 나도 타로 보기

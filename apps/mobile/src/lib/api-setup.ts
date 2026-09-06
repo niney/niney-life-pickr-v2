@@ -6,6 +6,7 @@ import {
   handleUnauthorizedForCurrentSession,
   setAirLocationStorage,
   setBusFavoriteStorage,
+  setGuestKeyStorage,
   setMealDraftLocalFileAdapter,
   setMealDraftPrincipal,
   setMealDraftStorage,
@@ -42,6 +43,9 @@ setAirLocationStorage(AsyncStorage);
 // 식단 입력 draft(사진 인식 → 편집 → 저장 사이) persist 어댑터 — 미주입이면 앱이
 // 백그라운드에서 종료될 때 입력 중이던 기록이 사라진다.
 setMealDraftStorage(AsyncStorage);
+// 공용 게스트 키(타로 등 로그인 없는 기능의 기기 식별) — 앱이 보관하고 WebView 임베드에 주입해
+// 앱과 WebView 가 같은 기기로 잡히게(기기 일일 한도·오늘의 카드 잠금).
+setGuestKeyStorage(AsyncStorage);
 setMealDraftLocalFileAdapter({
   deleteFiles: deleteMealDraftPhotoFiles,
   clearAll: clearMealDraftPhotoFiles,
@@ -125,9 +129,20 @@ const resolveApiUrl = (): string => {
 
 const apiUrl = resolveApiUrl();
 
+// 웹(SPA) origin — WebView 임베드(타로)가 연다. 운영은 API 와 같은 도메인(ninelife.kr)이라 apiUrl
+// 그대로, 개발은 friendly :3000 ↔ vite :5173 이 같은 호스트라 포트만 바꾼다. 다르면
+// EXPO_PUBLIC_WEB_URL 로 명시.
+const resolveWebUrl = (): string => {
+  const explicit = process.env.EXPO_PUBLIC_WEB_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, '');
+  return apiUrl.replace(/\/$/, '').replace(/:3000$/, ':5173');
+};
+
+export const webUrl = resolveWebUrl();
+
 if (__DEV__) {
   // eslint-disable-next-line no-console
-  console.log('[api-setup] apiUrl =', apiUrl);
+  console.log('[api-setup] apiUrl =', apiUrl, 'webUrl =', webUrl);
 }
 
 let cachedToken: string | null = null;
