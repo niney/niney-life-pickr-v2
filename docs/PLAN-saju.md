@@ -324,6 +324,7 @@ model SajuReading {
 
 ## 진행 기록
 
+- 2026-09-06: **이미지 22/22 완성.** 남은 띠 6장(말·양·원숭이·닭·개·돼지) 반영 — placeholder 없음(manifest.missing 빈 배열). 산출 5.3MB.
 - 2026-09-06: **이미지 16/22 반영.** 제미나이 원본(일간 10 + 띠 6: 쥐·소·호랑이·토끼·용·뱀)을 `build:saju-images` 로 webp 512/1024 변환·커밋. 민화 + 흑요석 천문도 + 금선 톤이 계획대로 나옴(한지색 여백 프레임 포함). 남은 띠 6장(말·양·원숭이·닭·개·돼지)은 placeholder 유지 — 도착하면 같은 명령으로 덮어쓴다.
 - 2026-09-06: **회원 프로필 저장 UI + 오늘의 운세 하루 1회 잠금.** 입력 폼이 회원이면 서버 프로필 칩(★ primary, "계정" 배지)·"이 계정에 저장"(POST /saju/me/profiles), 게스트면 기기 로컬 칩·"이 기기에 저장". 저장된 칩을 골라 입력이 그대로면 저장 체크를 숨겨 중복 생성 방지(입력을 바꾸면 새 사람). 오늘의 운세는 회원이면 `dailyLockKey = userId:<8글자+성별 해시>:날짜` 로 SajuReading(kind daily) 행에 저장해 캐시·재시작과 무관하게 하루 1회만 LLM(다른 날짜 조회는 잠그지 않음). 기록 목록·상세는 kind full 만. 테스트 friendly 21·웹 7.
 - 2026-09-06: **커밋·프로브.** 커밋 4건 — 624ead4(타로 앱 임베드, 이전 작업 분리) · db1415f(0차 utils) · f8e5dd0(1·4차 API) · 0a7f637(웹/앱 UI) · d31843b(기본 모델 kimi-k3). `probe:saju-reading` 3사주×4섹션: 4모델 모두 JSON 12/12·수리 0, p50 gpt-oss:120b 2.0s / deepseek-v4-pro 3.5s / qwen3.5:397b 5.5s / kimi-k3 5.6s. 문장은 kimi-k3 가 계절·오행 맥락을 가장 자연스럽게 엮고, deepseek 는 간결·빠름, gpt-oss 는 나열식. **기본 모델 kimi-k3**(env·.env.example·어드민 placeholder), 빠른 대안 deepseek-v4-pro. 사실 오염 근사치(5/12)는 프롬프트의 "없는 십신" 줄을 인용하는 것까지 세는 거친 지표라 판단 기준에서 제외. 계정 노출 모델 id: kimi-k3·kimi-k2.6·deepseek-v4-pro:0813·qwen3.5:397b·glm-5.x·gemma4:31b·gpt-oss:120b.

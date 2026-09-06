@@ -98,5 +98,5 @@ No text, no letters, no numbers, no watermark, no border frame, no signature. No
 
 | id | 상태 | 비고 |
 |---|---|---|
-| stem-gap … stem-gye (10) | ☐ | |
-| branch-rat … branch-pig (12) | ☐ | |
+| stem-gap … stem-gye (10) | ☑ | 10장 전수 생성 및 1:1 WebP 변환 완료 |
+| branch-rat … branch-pig (12) | ☑ | 12장 전수 생성 및 1:1 WebP 변환 완료 |
