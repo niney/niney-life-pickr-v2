@@ -10,7 +10,8 @@ import { SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme'
 // "선택" 도구 4종 — 오늘의 운세 · 오행 음식 · 택일 · 궁합. 풀이 패널 탭에서 열리며, 열리는 순간 query 로 부른다
 // (같은 입력은 캐시). 계산값(점수·후보·별점)은 서버가 utils 로 결정적으로 만들고 문장만 LLM/정적.
 
-const field = 'rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-sm text-[#f3e9c6] focus:border-[#d9b65b] focus:outline-none';
+// 패널 폭(27rem) 안에서 줄이 넘치지 않게 — 그리드 자식은 min-w-0, 입력은 w-full.
+const field = 'w-full min-w-0 rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-sm text-[#f3e9c6] focus:border-[#d9b65b] focus:outline-none';
 
 const Stars = ({ n }: { n: number }) => (
   <span className="inline-flex gap-0.5" aria-label={`별 ${n}개`}>
@@ -274,7 +275,7 @@ export const SajuMatchBox = ({ birth }: { birth: SajuBirthInputType }) => {
           ))}
         </div>
       )}
-      <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <input aria-label="상대 년" type="number" inputMode="numeric" value={other.year} onChange={(e) => setOther({ ...other, year: Number(e.target.value) })} className={field} />
         <select aria-label="상대 월" value={other.month} onChange={(e) => setOther({ ...other, month: Number(e.target.value), leapMonth: false })} className={field}>
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
@@ -283,18 +284,20 @@ export const SajuMatchBox = ({ birth }: { birth: SajuBirthInputType }) => {
           {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}일</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-[1fr_auto_auto_1fr] items-center gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
         <select aria-label="상대 시" value={other.hour === null ? '' : other.hour} onChange={(e) => setOther({ ...other, hour: e.target.value === '' ? null : Number(e.target.value), minute: e.target.value === '' ? null : 0 })} className={field}>
           <option value="">시 모름</option>
           {Array.from({ length: 24 }, (_, i) => i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}시</option>)}
         </select>
-        <div className="flex gap-1" role="radiogroup" aria-label="상대 성별">
+        <div className="flex shrink-0 gap-1" role="radiogroup" aria-label="상대 성별">
           {(['M', 'F'] as const).map((g) => (
             <button key={g} type="button" role="radio" aria-checked={other.gender === g} onClick={() => setOther({ ...other, gender: g })} className={cn('rounded-lg border px-2.5 py-1.5 text-xs', other.gender === g ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/60')}>
               {g === 'M' ? '남' : '여'}
             </button>
           ))}
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <select aria-label="상대 달력" value={other.calendar} onChange={(e) => setOther({ ...other, calendar: e.target.value as 'solar' | 'lunar', leapMonth: false })} className={field}>
           <option value="solar">양력</option>
           <option value="lunar">음력</option>

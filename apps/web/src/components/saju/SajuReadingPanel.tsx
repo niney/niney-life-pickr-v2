@@ -256,7 +256,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
           </button>
         ))}
       </nav>
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3">
         {body()}
         {status === 'gone' && (
           <div className="mt-3 rounded-lg border border-[#ffb4a2]/40 p-2 text-xs text-[#ffb4a2]">
