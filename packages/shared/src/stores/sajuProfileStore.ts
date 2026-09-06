@@ -37,13 +37,18 @@ const newId = (): string =>
     ? crypto.randomUUID()
     : `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+/** 같은 사람인지 — 프로필 중복 판정. options(진태양시·야자시)는 해석 옵션이라 제외. */
+export const sameSajuBirth = (a: SajuBirthInputType, b: SajuBirthInputType): boolean =>
+  a.calendar === b.calendar && a.year === b.year && a.month === b.month && a.day === b.day && a.leapMonth === b.leapMonth && a.hour === b.hour && (a.minute ?? 0) === (b.minute ?? 0) && a.gender === b.gender;
+
 export const useSajuProfileStore = create<SajuProfileState>()(
   persist(
     (set, get) => ({
       profiles: [],
       primaryId: null,
       upsert: (input) => {
-        const existing = input.id ? get().profiles.find((p) => p.id === input.id) : undefined;
+        // id 가 없어도 같은 사주(생년월일시·성별·달력·윤달)가 이미 있으면 그 프로필을 갱신 — 같은 입력을 다시 세울 때마다 중복 생성되지 않게.
+        const existing = input.id ? get().profiles.find((p) => p.id === input.id) : get().profiles.find((p) => sameSajuBirth(p.birth, input.birth));
         const profile: SajuLocalProfile = existing
           ? { ...existing, label: input.label, birth: input.birth }
           : { id: newId(), label: input.label, birth: input.birth, createdAt: Date.now() };

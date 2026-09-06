@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, Sparkles, Trash2 } from 'lucide-react';
 import type { SajuBirthInputType } from '@repo/api-contract';
-import { useSajuProfileStore, useSajuProfiles } from '@repo/shared';
+import { useSajuProfileStore, useSajuProfiles, sameSajuBirth } from '@repo/shared';
 import type { SajuProfileType } from '@repo/api-contract';
 import { SAJU_SUPPORTED_YEARS, daysInMonth, lunarMonthLength } from '@repo/utils';
 import { Button } from '~/components/ui/button';
@@ -31,10 +31,8 @@ const field =
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 // 키 순서·옵션 기본값에 흔들리지 않는 생년월일 비교.
-const sameBirth = (a: SajuBirthInputType, b: SajuBirthInputType): boolean =>
-  a.calendar === b.calendar && a.year === b.year && a.month === b.month && a.day === b.day && !!a.leapMonth === !!b.leapMonth &&
-  a.hour === b.hour && (a.hour === null || (a.minute ?? 0) === (b.minute ?? 0)) && a.gender === b.gender &&
-  a.options.solarTimeCorrection === b.options.solarTimeCorrection && a.options.lateRatHour === b.options.lateRatHour;
+// 같은 사주 판정은 shared 스토어와 같은 규칙(중복 저장 방지도 같은 함수).
+const sameBirth = sameSajuBirth;
 
 export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFormProps) => {
   const localProfiles = useSajuProfileStore((s) => s.profiles);

@@ -32,6 +32,7 @@ import {
   type Branch,
   type SajuChart,
   type SajuRelation,
+  type Stem,
   type TenGod,
   type TwelveStage,
   type Wuxing,
@@ -105,10 +106,12 @@ const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.m
 export const starsOfScore = (score: number): 1 | 2 | 3 | 4 | 5 => (score >= 80 ? 5 : score >= 65 ? 4 : score >= 50 ? 3 : score >= 35 ? 2 : 1);
 
 /** 하루 점수. */
-export const scoreDayForChart = (chart: SajuChart, dayNumber: number): SajuDayScore => {
-  const g = dayGanzhiOfDayNumber(dayNumber);
-  const stem = stemOfGanzhi(g);
-  const branch = branchOfGanzhi(g);
+/** 간지 하나를 원국에 대 본 점수(50 기준, 미클램프)·표식 — 일진·월운·세운·시진이 같은 규칙을 쓴다. 관계는 luck 기둥으로 넣어 계산. */
+export const scoreGanzhiForChart = (
+  chart: SajuChart,
+  stem: Stem,
+  branch: Branch,
+): { score: number; tags: SajuDayTag[]; stemTenGod: TenGod; branchTenGod: TenGod; stage: TwelveStage; element: Wuxing; relations: SajuRelation[] } => {
   const dm = chart.dayMaster.index;
   const stemTenGod = tenGodOf(dm, stem);
   const branchTenGod = tenGodOf(dm, mainHiddenStem(branch));
@@ -159,6 +162,16 @@ export const scoreDayForChart = (chart: SajuChart, dayNumber: number): SajuDaySc
   if (el === chart.favorable.primary) { score += 6; tags.push('favorable'); }
   else if (el === chart.favorable.secondary) score += 3;
   if (chart.excess.includes(el)) { score -= 3; tags.push('excess'); }
+  return { score, tags, stemTenGod, branchTenGod, stage, element: el, relations: rels };
+};
+
+export const scoreDayForChart = (chart: SajuChart, dayNumber: number): SajuDayScore => {
+  const g = dayGanzhiOfDayNumber(dayNumber);
+  const stem = stemOfGanzhi(g);
+  const branch = branchOfGanzhi(g);
+  const core = scoreGanzhiForChart(chart, stem, branch);
+  const { stemTenGod, branchTenGod, stage, element: el, relations: rels, tags } = core;
+  let score = core.score;
 
   const date = sajuDateFromDayNumber(dayNumber);
   const lunar = solarToLunar(date.year, date.month, date.day);

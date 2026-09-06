@@ -8,8 +8,15 @@ import {
   dayMasterText,
   sajuBirthSummary,
   sajuBranchImageId,
+  sajuFiveGodsOf,
+  sajuHealthHintsOf,
   sajuImagePath,
+  sajuMonthLucksOf,
+  sajuPatternOf,
+  sajuSamjaeOf,
   sajuStemImageId,
+  sajuYearOutlooksOf,
+  SAJU_SAMJAE_STAGE_KO,
   zodiacTraitLine,
   type SajuChart,
   type TenGod,
@@ -22,7 +29,7 @@ import { SajuChartTable } from './SajuChartTable';
 import { SajuDailyBox, SajuDatePickBox, SajuFoodBox, SajuMatchBox } from './SajuTools';
 import { SajuShareSheet, type SajuShareBase } from './SajuShareSheet';
 import { glass } from './SajuForm';
-import { SAJU_DISCLAIMER, SAJU_SOURCE_LABEL, WUXING_TEXT_COLOR } from './sajuTheme';
+import { SAJU_DISCLAIMER, SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
 // 풀이 패널 — 탭: 원국 / 성격 / 오행 / 흐름 / 올해 / 조언. 섹션은 도착 순으로 채워지고(pending 이면 정적 본문 +
 // "AI 가 읽는 중"), LLM 문장은 타자 효과. 데스크톱은 오른쪽, 세로 폰은 바닥 시트(접기).
@@ -189,6 +196,142 @@ export const LuckyTable = ({ lucky }: { lucky: { element: Wuxing; colors: string
   );
 };
 
+const ymd = (d: { year: number; month: number; day: number }): number => d.year * 10000 + d.month * 100 + d.day;
+const todayYmd = (): number => {
+  const t = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return t.getUTCFullYear() * 10000 + (t.getUTCMonth() + 1) * 100 + t.getUTCDate();
+};
+const Stars5 = ({ n }: { n: number }) => (
+  <span className="text-[#d9b65b]" aria-label={`별 ${n}개`}>
+    {'★'.repeat(n)}
+    <span className="text-[#e9e2d2]/20">{'★'.repeat(5 - n)}</span>
+  </span>
+);
+const ElChip = ({ label, e }: { label: string; e: Wuxing }) => (
+  <span className="rounded-full border px-2 py-px text-[10px]" style={{ borderColor: `${WUXING_COLOR[e]}88`, color: WUXING_TEXT_COLOR[e] }}>
+    {label} {SAJU_WUXING_META[e].ko}
+  </span>
+);
+
+/** 명식 한눈에 — 격국·오신(용신…한신)·삼재. 원국 탭·2D 뷰 공용. 유파별 차이가 있어 "재미로" 톤. */
+export const ChartInsightCard = ({ chart }: { chart: SajuChart }) => {
+  const pat = sajuPatternOf(chart);
+  const gods = sajuFiveGodsOf(chart);
+  const sam = sajuSamjaeOf(chart);
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-[#d9b65b]/30 p-2 text-xs" aria-label="명식 한눈에">
+      <div>
+        <div className="text-[10px] text-[#d9b65b]">격국</div>
+        <div className="font-serif-kr text-sm font-bold text-[#f3e9c6]">
+          {pat.ko} <span className="text-xs font-normal text-[#e9e2d2]/50">{pat.hanja}</span>
+          <span className="ml-1.5 text-xs font-normal text-[#e9e2d2]/80">— {pat.summary}</span>
+        </div>
+        <p className="mt-0.5 leading-relaxed text-[#e9e2d2]/70">{pat.detail}</p>
+      </div>
+      <div>
+        <div className="mb-1 text-[10px] text-[#d9b65b]">오신 — 나에게 필요한 기운과 조심할 기운</div>
+        <div className="flex flex-wrap gap-1">
+          <ElChip label="용신" e={gods.yong} />
+          <ElChip label="희신" e={gods.hee} />
+          <ElChip label="기신" e={gods.gi} />
+          <ElChip label="구신" e={gods.gu} />
+          <ElChip label="한신" e={gods.han} />
+        </div>
+        <p className="mt-1 text-[#e9e2d2]/60">{gods.reason}</p>
+      </div>
+      <div>
+        <div className="text-[10px] text-[#d9b65b]">삼재{sam.stage ? ` · ${SAJU_SAMJAE_STAGE_KO[sam.stage]}` : ''}</div>
+        <p className="text-[#e9e2d2]/70">
+          {sam.stage ? `${chart.zodiac.animal}띠의 삼재는 ${sam.branchesKo}년. ` : `${chart.zodiac.animal}띠 · `}
+          {sam.note}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/** 오행 건강 힌트 — 부족·과다 오행 기준 생활 습관 제안(진단 아님). */
+export const HealthHints = ({ chart }: { chart: SajuChart }) => {
+  const hints = sajuHealthHintsOf(chart);
+  if (hints.length === 0) return <p className="text-[11px] text-[#e9e2d2]/50">오행이 고르게 있어 특별히 치우친 기운이 없어요.</p>;
+  return (
+    <div className="flex flex-col gap-1.5" aria-label="오행 건강 힌트">
+      <div className="text-[10px] text-[#d9b65b]">몸으로 보면 — 부족·넘치는 기운의 생활 힌트</div>
+      <ul className="flex flex-col gap-1 text-[11px] leading-relaxed text-[#e9e2d2]/75">
+        {hints.map((h) => (
+          <li key={`${h.kind}-${h.element}`} className="flex gap-1.5">
+            <span className="shrink-0 font-serif-kr" style={{ color: WUXING_TEXT_COLOR[h.element] }}>
+              {SAJU_WUXING_META[h.element].hanja}
+            </span>
+            <span>{h.text}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[10px] text-[#e9e2d2]/40">재미로 보는 오행 관념이에요. 몸이 불편하면 병원이 먼저예요.</p>
+    </div>
+  );
+};
+
+/** 향후 5년 세운 표 — 올해 강조, 별점·십신·테마·변동/인연 표식. */
+export const YearOutlookTable = ({ chart }: { chart: SajuChart }) => {
+  const years = sajuYearOutlooksOf(chart);
+  return (
+    <div className="flex flex-col gap-1" aria-label="향후 5년">
+      <div className="text-[10px] text-[#d9b65b]">앞으로 5년 — 해마다 들어오는 기운</div>
+      <ul className="flex flex-col gap-1">
+        {years.map((y) => (
+          <li key={y.year} className={cn('grid grid-cols-[auto_auto_1fr] items-center gap-x-2 rounded-lg border px-2 py-1 text-[11px]', y.isCurrent ? 'border-[#d9b65b]/60 bg-[#d9b65b]/10' : 'border-white/10')}>
+            <span className="font-serif-kr text-[#f3e9c6]">
+              {y.year} {y.ko}
+            </span>
+            <Stars5 n={y.stars} />
+            <span className="min-w-0 truncate text-[#e9e2d2]/65">
+              {godKo(y.stemTenGod)}·{godKo(y.branchTenGod)} · {y.theme}
+              {y.flags.map((f) => (
+                <span key={f} className={cn('ml-1 rounded-full border px-1.5 text-[9px]', f === '변동' || f === '공망' ? 'border-[#ffb4a2]/40 text-[#ffb4a2]' : 'border-[#d9b65b]/40 text-[#d9b65b]')}>
+                  {f}
+                </span>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+/** 월운 12개월 — 절기 기준(입춘~다음 입춘). 이번 달 강조, 점수는 별점 색으로. */
+export const MonthLuckGrid = ({ chart }: { chart: SajuChart }) => {
+  const months = sajuMonthLucksOf(chart);
+  if (months.length === 0) return null;
+  const today = todayYmd();
+  const best = [...months].sort((a, b) => b.score - a.score).slice(0, 3).map((m) => m.index);
+  return (
+    <div className="flex flex-col gap-1.5" aria-label="월운">
+      <div className="text-[10px] text-[#d9b65b]">{chart.yearLuck.year}년 월운 — 절기 기준 12개월(입춘부터)</div>
+      <ol className="grid grid-cols-4 gap-1 sm:grid-cols-6">
+        {months.map((m) => {
+          const current = today >= ymd(m.from) && today <= ymd(m.to);
+          const tone = m.stars >= 4 ? 'text-[#d9b65b]' : m.stars <= 2 ? 'text-[#ffb4a2]' : 'text-[#e9e2d2]/70';
+          return (
+            <li key={m.index} className={cn('rounded-lg border px-1 py-1 text-center', current ? 'border-[#d9b65b] bg-[#d9b65b]/10' : 'border-white/10')} title={`${m.termName} ${m.from.month}/${m.from.day}~${m.to.month}/${m.to.day} · ${godKo(m.stemTenGod)}·${godKo(m.branchTenGod)} · ${m.twelveStage}`}>
+              <div className="text-[9px] text-[#e9e2d2]/50">
+                {m.from.month}/{m.from.day}~
+              </div>
+              <div className="font-serif-kr text-sm text-[#f3e9c6]">{m.hanja}</div>
+              <div className={cn('text-[10px]', tone)}>{'●'.repeat(m.stars)}</div>
+              <div className="text-[9px] text-[#e9e2d2]/50">{godKo(m.stemTenGod)}</div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="text-[10px] text-[#e9e2d2]/50">
+        좋은 달 {best.map((i) => months[i]).filter(Boolean).map((m) => `${m!.from.month}월(${m!.ko})`).join(' · ')}. 점은 그달의 기운을 내 사주에 대 본 점수(5점 만점).
+      </p>
+    </div>
+  );
+};
+
 const SectionShell = ({ pending, children }: { pending: boolean; children: ReactNode }) => (
   <div className="flex flex-col gap-3">
     {pending && (
@@ -217,6 +360,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
         return (
           <div className="flex flex-col gap-3">
             <SajuChartHeader chart={chart} />
+            <ChartInsightCard chart={chart} />
             <SajuChartTable chart={chart} />
           </div>
         );
@@ -250,6 +394,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
               <span style={{ color: WUXING_TEXT_COLOR[chart.favorable.primary] }}>{SAJU_WUXING_META[chart.favorable.primary].ko}</span>
               이에요. 무대의 구슬 크기가 각 기운의 비율, 금선이 상생(서로 돕는 흐름), 붉은 점선이 상극이에요.
             </p>
+            <HealthHints chart={chart} />
           </div>
         );
       case 'cycle': {
@@ -265,6 +410,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
             <p className="text-[11px] text-[#e9e2d2]/50">
               {chart.luck.forward ? '순행' : '역행'} · {chart.luck.startAgeYears}세 {chart.luck.startAgeMonths}개월부터 10년마다 바뀌어요. 칸의 작은 글씨는 그 시기에 들어오는 기운(십신)과 힘의 단계(십이운성).
             </p>
+            <YearOutlookTable chart={chart} />
             <TypedText text={s?.body ?? ''} animate={animateFor('cycle')} className="text-sm leading-relaxed text-[#e9e2d2]/85" />
             <div className="rounded-lg border border-[#d9b65b]/30 p-2 text-xs">
               <div className="mb-1 text-[10px] text-[#d9b65b]">
@@ -299,11 +445,12 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
                 ))}
               </ul>
             )}
+            <MonthLuckGrid chart={chart} />
           </SectionShell>
         );
       }
       case 'daily':
-        return <SajuDailyBox birth={birth} />;
+        return <SajuDailyBox birth={birth} chart={chart} />;
       case 'food':
         return <SajuFoodBox birth={birth} />;
       case 'date':

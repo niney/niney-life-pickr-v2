@@ -2,7 +2,7 @@ import type { SajuChartType, SajuSectionsType } from '@repo/api-contract';
 import { type SajuChart } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { SajuChartTable } from './SajuChartTable';
-import { DayMasterStyleCards, LuckPillarChip, LuckyTable, SajuChartHeader, YearLuckFacts } from './SajuReadingPanel';
+import { ChartInsightCard, DayMasterStyleCards, HealthHints, LuckPillarChip, LuckyTable, MonthLuckGrid, SajuChartHeader, YearLuckFacts, YearOutlookTable } from './SajuReadingPanel';
 import { SAJU_SOURCE_LABEL } from './sajuTheme';
 
 // 2D 풀이 보기 — 공유 페이지·회원 기록 상세 공용(3D 없음). 원국 표 + 일간 + 섹션 4개를 한 페이지에.
@@ -20,8 +20,14 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
           </span>
         </SajuChartHeader>
         {birthHidden && <p className="mt-2 text-[11px] text-[#e9e2d2]/45">생년월일은 공유에서 숨겨졌어요.</p>}
+        <div className="mt-3">
+          <ChartInsightCard chart={c} />
+        </div>
         <div className="mt-4">
           <SajuChartTable chart={chart} />
+        </div>
+        <div className="mt-3">
+          <HealthHints chart={c} />
         </div>
       </section>
 
@@ -61,6 +67,9 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
             ))}
           </ul>
         )}
+        <div className="mt-3">
+          <MonthLuckGrid chart={c} />
+        </div>
       </section>
 
       <section className={card}>
@@ -73,6 +82,9 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
         <p className="mt-2 text-sm leading-relaxed text-[#e9e2d2]/85">{sections.cycle.body}</p>
         <p className="mt-2 text-xs text-[#e9e2d2]/80">{sections.cycle.current}</p>
         <p className="mt-1 text-xs text-[#e9e2d2]/60">{sections.cycle.next}</p>
+        <div className="mt-3">
+          <YearOutlookTable chart={c} />
+        </div>
       </section>
 
       <section className={card}>

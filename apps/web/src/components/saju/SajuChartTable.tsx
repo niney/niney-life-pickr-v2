@@ -5,6 +5,7 @@ import {
   SAJU_TEN_GOD_META,
   SAJU_WUXING_META,
   branchMeta,
+  sajuHiddenGodsOf,
   sajuTenGodSummary,
   stemMeta,
   type SajuChart,
@@ -81,6 +82,14 @@ const TenGodSummary = ({ chart }: { chart: Chart }) => {
           ))}
         </ul>
       )}
+      <div className="text-[11px] text-[#e9e2d2]/55" aria-label="지장간 숨은 십신">
+        <span className="text-[#d9b65b]/80">숨은 십신(지장간)</span>{' '}
+        {sajuHiddenGodsOf(chart as SajuChart).map((p) => (
+          <span key={p.pillar} className="mr-2 inline-block">
+            {SAJU_PILLAR_LABEL[p.pillar]} {p.items.map((i) => `${i.ko}(${i.tenGodKo})`).join('·')}
+          </span>
+        ))}
+      </div>
     </div>
   );
 };

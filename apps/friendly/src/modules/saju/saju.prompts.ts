@@ -8,6 +8,9 @@ import {
   SAJU_WUXING_META,
   dayMasterText,
   sajuFactLines,
+  sajuFiveGodsOf,
+  sajuPatternOf,
+  sajuSamjaeOf,
   tenGodKo,
   type SajuChart,
   type SajuDailyFortune,
@@ -15,6 +18,7 @@ import {
   type SajuFoodSelection,
   type SajuMatchResult,
   type TenGod,
+  type Wuxing,
 } from '@repo/utils';
 
 // 사주 풀이 프롬프트(purpose saju, 텍스트).
@@ -27,7 +31,7 @@ import {
 //    블록 밖의 십신·오행·신살을 새로 말하지 않는다(명리 사실 오염 금지).
 //  - 생년월일시는 데이터 블록에만. 건강·수명·사고·재물 액수 단정 금지, 공포 조장 금지.
 //  - Ollama Cloud 는 JSON 스키마 강제가 보장되지 않아 형식을 프롬프트에 박고 서버가 zod 로 검증 + 수리 1회.
-export const SAJU_PROMPT_VERSION = 1;
+export const SAJU_PROMPT_VERSION = 2;
 
 export const SAJU_SYSTEM_PROMPT = `너는 따뜻하고 담백한 명리(사주) 상담가다. 주어진 [사주 사실]을 사람이 이해하기 쉬운 한국어 존댓말로 풀어 준다.
 
@@ -51,7 +55,20 @@ export const SAJU_REPAIR_SUFFIX =
 
 // ── 공통 블록 ────────────────────────────────────────────────────────────────
 
-const factsBlock = (chart: SajuChart): string => `[사주 사실 — 이 안의 내용만 근거로 쓴다]\n${sajuFactLines(chart).map((l) => `- ${l}`).join('\n')}`;
+// 6차: 격국·오신·삼재도 사실 블록에 — LLM 이 이름을 인용할 수 있게(계산은 utils sajuInsights).
+const insightLines = (chart: SajuChart): string[] => {
+  const pat = sajuPatternOf(chart);
+  const g = sajuFiveGodsOf(chart);
+  const sam = sajuSamjaeOf(chart);
+  const ko = (e: Wuxing): string => SAJU_WUXING_META[e].ko;
+  return [
+    `격국: ${pat.ko}(${pat.hanja}) — ${pat.summary}`,
+    `오신: 용신 ${ko(g.yong)} / 희신 ${ko(g.hee)} / 기신 ${ko(g.gi)} / 구신 ${ko(g.gu)} / 한신 ${ko(g.han)} — ${g.reason}`,
+    `삼재(민속): ${chart.zodiac.animal}띠는 ${sam.branchesKo}년이 삼재. ${sam.note}`,
+  ];
+};
+const factsBlock = (chart: SajuChart): string =>
+  `[사주 사실 — 이 안의 내용만 근거로 쓴다]\n${[...sajuFactLines(chart), ...insightLines(chart)].map((l) => `- ${l}`).join('\n')}`;
 
 const dayMasterBlock = (chart: SajuChart): string => {
   const t = dayMasterText(chart.dayMaster.index);

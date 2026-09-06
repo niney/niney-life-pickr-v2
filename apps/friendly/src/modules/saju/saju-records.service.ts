@@ -150,6 +150,21 @@ export class SajuRecordsService {
 
   async createProfile(userId: string, input: SajuProfileInputType): Promise<SajuProfileType> {
     this.saju.chartOf(input.birth); // 입력 검증(없는 날짜 등)
+    // 같은 사주(생년월일시·성별·달력·윤달)가 이미 있으면 새로 만들지 않고 라벨·primary 만 갱신 — 같은 입력을 다시 세울 때 중복 방지.
+    const dup = await this.prisma.sajuProfile.findFirst({
+      where: {
+        userId,
+        calendar: input.birth.calendar,
+        birthYear: input.birth.year,
+        birthMonth: input.birth.month,
+        birthDay: input.birth.day,
+        leapMonth: input.birth.leapMonth,
+        birthHour: input.birth.hour,
+        birthMinute: input.birth.minute,
+        gender: input.birth.gender,
+      },
+    });
+    if (dup) return this.updateProfile(userId, dup.id, { ...input, isPrimary: input.isPrimary || dup.isPrimary });
     const count = await this.prisma.sajuProfile.count({ where: { userId } });
     if (count >= SAJU_PROFILE_MAX) throw new SajuError('invalid_input', `프로필은 ${SAJU_PROFILE_MAX}명까지 저장할 수 있어요.`);
     const isPrimary = input.isPrimary || count === 0;

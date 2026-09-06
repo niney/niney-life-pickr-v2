@@ -418,8 +418,13 @@ describe('SajuRecordsService (격리 DB) — 공유·프로필·기록', () => {
     expect(list[1]?.birth).toMatchObject({ year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M' });
     await records.deleteProfile('r-user', b.id);
     expect((await records.listProfiles('r-user'))[0]).toMatchObject({ id: a.id, isPrimary: true });
-    for (let i = 0; i < 9; i++) await records.createProfile('r-user', { label: `p${i}`, birth: BIRTH, isPrimary: false });
-    await expect(records.createProfile('r-user', { label: 'over', birth: BIRTH, isPrimary: false })).rejects.toThrow(/10명/);
+    // 같은 사주를 다시 저장하면 새 행이 아니라 라벨만 갱신(중복 방지).
+    const dup = await records.createProfile('r-user', { label: '나(다시)', birth: BIRTH, isPrimary: false });
+    expect(dup.id).toBe(a.id);
+    expect(dup.label).toBe('나(다시)');
+    expect((await records.listProfiles('r-user')).length).toBe(1);
+    for (let i = 0; i < 9; i++) await records.createProfile('r-user', { label: `p${i}`, birth: { ...BIRTH, day: 1 + i }, isPrimary: false });
+    await expect(records.createProfile('r-user', { label: 'over', birth: { ...BIRTH, day: 20 }, isPrimary: false })).rejects.toThrow(/10명/);
     await expect(records.createProfile('r-user', { label: 'bad', birth: { ...BIRTH, month: 2, day: 30 }, isPrimary: false })).rejects.toMatchObject({ code: 'invalid_input' });
   });
 });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2, Star } from 'lucide-react';
 import type { SajuBirthInputType, SajuDatePurposeType, SajuMatchResultType } from '@repo/api-contract';
 import { useSajuDailyQuery, useSajuDatePickQuery, useSajuFoodQuery, useSajuMatchQuery, useSajuProfileStore } from '@repo/shared';
-import { SAJU_DATE_PURPOSE_LABEL, SAJU_DATE_PURPOSES, SAJU_DAY_TAG_LABEL, SAJU_TEN_GOD_META, SAJU_WUXING_META, sajuBranchImageId, sajuImagePath, TAROT_MENU_CUISINE_LABEL, TAROT_MENU_DISH_LABEL, type TarotMenuCuisine, type TarotMenuDishType } from '@repo/utils';
+import { SAJU_DATE_PURPOSE_LABEL, SAJU_DATE_PURPOSES, SAJU_DAY_TAG_LABEL, SAJU_TEN_GOD_META, SAJU_WUXING_META, sajuBestHours, sajuBranchImageId, sajuDayNumber, sajuHourLucksOf, sajuImagePath, type SajuChart, TAROT_MENU_CUISINE_LABEL, TAROT_MENU_DISH_LABEL, type TarotMenuCuisine, type TarotMenuDishType } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
@@ -46,7 +46,43 @@ const Failed = ({ onRetry }: { onRetry: () => void }) => (
 
 // ── 오늘의 운세 ─────────────────────────────────────────────────────────────
 
-export const SajuDailyBox = ({ birth }: { birth: SajuBirthInputType }) => {
+/** 하루 12시진 — 그날 일간으로 시간(時干)을 세워 내 사주에 대 본 점수. 좋은 시간 2·조심할 시간 1. */
+const GoodHours = ({ chart, dayKey }: { chart: SajuChart; dayKey: string }) => {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const hours = sajuHourLucksOf(chart, sajuDayNumber(y, m, d));
+  const { best, worst } = sajuBestHours(hours);
+  const max = Math.max(...hours.map((h) => h.score));
+  return (
+    <div className="flex flex-col gap-1.5" aria-label="좋은 시간대">
+      <div className="text-[10px] text-[#d9b65b]">오늘의 시간대 — 내 사주에 대 본 12시진</div>
+      <ol className="grid grid-cols-12 gap-0.5" aria-hidden>
+        {hours.map((h) => {
+          const isBest = best.some((b) => b.branch === h.branch);
+          const isWorst = worst?.branch === h.branch;
+          return (
+            <li key={h.branch} className="flex flex-col items-center gap-0.5" title={`${h.range} ${h.ko} · ${SAJU_TEN_GOD_META[h.stemTenGod].ko} · ${h.twelveStage} · ${h.score}점`}>
+              <div className="flex h-7 w-full items-end rounded-sm bg-white/5">
+                <div className="w-full rounded-sm" style={{ height: `${Math.max(12, (h.score / max) * 100)}%`, background: isBest ? '#d9b65b' : isWorst ? '#ffb4a2' : 'rgba(233,226,210,0.35)' }} />
+              </div>
+              <span className={cn('font-serif-kr text-[10px]', isBest ? 'text-[#d9b65b]' : isWorst ? 'text-[#ffb4a2]' : 'text-[#e9e2d2]/55')}>{h.ko.charAt(1)}</span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="text-[11px] text-[#e9e2d2]/75">
+        좋은 시간 <span className="text-[#d9b65b]">{best.map((b) => `${b.range}(${b.ko}·${SAJU_TEN_GOD_META[b.stemTenGod].ko})`).join(' · ')}</span>
+        {worst && (
+          <>
+            {' '}· 조심할 시간 <span className="text-[#ffb4a2]">{worst.range}({worst.ko})</span>
+          </>
+        )}
+      </p>
+    </div>
+  );
+};
+
+export const SajuDailyBox = ({ birth, chart }: { birth: SajuBirthInputType; chart?: SajuChart }) => {
   const q = useSajuDailyQuery({ birth });
   if (q.isPending) return <Loading text="오늘의 일진을 읽는 중…" />;
   if (q.isError || !q.data) return <Failed onRetry={() => void q.refetch()} />;
@@ -73,6 +109,7 @@ export const SajuDailyBox = ({ birth }: { birth: SajuBirthInputType }) => {
       </div>
       <p className="text-sm leading-relaxed text-[#e9e2d2]/85">{d.body}</p>
       <p className="rounded-lg border border-[#d9b65b]/30 p-2 text-xs text-[#e9e2d2]/85">{d.advice}</p>
+      {chart && <GoodHours chart={chart} dayKey={d.dayKey} />}
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#e9e2d2]/70">
         <span>
           기운 <span style={{ color: WUXING_TEXT_COLOR[d.lucky.element] }}>{SAJU_WUXING_META[d.lucky.element].ko}</span>
