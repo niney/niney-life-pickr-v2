@@ -193,4 +193,40 @@ describe('SajuPage (Lite)', () => {
     expect(calls).toContain('match:그 사람');
     expect(calls.filter((c) => c === 'daily')).toHaveLength(1);
   });
+  it('회원: 서버 프로필 칩이 뜨고 "이 계정에 저장" 이면 프로필 생성 API 를 부른다', async () => {
+    useAuthStore.setState({ token: 'tok', user: { id: 'u1', email: 'u@x.com', role: 'USER' } as never, isGuest: false });
+    let created: unknown = null;
+    server.use(
+      http.get('/api/v1/saju/me/profiles', () =>
+        HttpResponse.json({ items: [{ id: 'p1', label: '엄마', isPrimary: true, birth: { calendar: 'solar', year: 1965, month: 3, day: 3, leapMonth: false, hour: null, minute: null, gender: 'F', options: { solarTimeCorrection: true, lateRatHour: false } }, createdAt: '2026-09-06T00:00:00.000Z', updatedAt: '2026-09-06T00:00:00.000Z' }] }),
+      ),
+      http.post('/api/v1/saju/me/profiles', async ({ request }) => {
+        created = await request.json();
+        return HttpResponse.json({ id: 'p2', ...(created as object), createdAt: '', updatedAt: '' });
+      }),
+      http.post('/api/v1/saju/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /엄마/ })).toBeInTheDocument());
+    expect(screen.getByLabelText('이 계정에 저장')).toBeChecked();
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '나' } });
+    fireEvent.click(screen.getByRole('button', { name: /사주 세우기/ }));
+    await waitFor(() => expect(created).not.toBeNull());
+    expect(created).toMatchObject({ label: '나', isPrimary: false, birth: { year: 1990, month: 1, day: 1 } });
+    // 저장된 프로필을 고르면 저장 체크가 사라진다(중복 생성 방지).
+  });
+
+  it('회원: 프로필 칩을 고르면 입력이 채워지고 저장 체크가 숨는다', async () => {
+    useAuthStore.setState({ token: 'tok', user: { id: 'u1', email: 'u@x.com', role: 'USER' } as never, isGuest: false });
+    server.use(
+      http.get('/api/v1/saju/me/profiles', () =>
+        HttpResponse.json({ items: [{ id: 'p1', label: '엄마', isPrimary: true, birth: { calendar: 'solar', year: 1965, month: 3, day: 3, leapMonth: false, hour: null, minute: null, gender: 'F', options: { solarTimeCorrection: true, lateRatHour: false } }, createdAt: '', updatedAt: '' }] }),
+      ),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /엄마/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /엄마/ }));
+    expect(screen.getByLabelText('년')).toHaveValue(1965);
+    expect(screen.queryByLabelText('이 계정에 저장')).toBeNull();
+  });
 });

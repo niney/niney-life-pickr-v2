@@ -7,6 +7,7 @@ import {
   SAJU_SECTION_IDS,
   SajuAdviceSection,
   SajuCycleSection,
+  SajuDailyResult,
   SajuPersonalitySection,
   SajuYearSection,
   type SajuBirthInputType,
@@ -399,6 +400,16 @@ export class SajuService {
     }
     const fortune = dailyFortune(chart, date);
     const dayKey = `${fortune.day.date.year}-${String(fortune.day.date.month).padStart(2, '0')}-${String(fortune.day.date.day).padStart(2, '0')}`;
+    // 회원 하루 1회 잠금 — 같은 사주(8글자·성별)의 오늘 운세는 저장된 행을 돌려준다(서버 재시작·캐시 만료와 무관, LLM 재호출 없음).
+    // 오늘이 아닌 날짜(앞뒤 7일 조회)는 잠그지 않는다.
+    const lockKey = actor.userId && dayKey === this.deps.quota.today() ? dailyLockKeyOf(actor.userId, chart, dayKey) : null;
+    if (lockKey) {
+      const row = await this.prisma.sajuReading.findUnique({ where: { dailyLockKey: lockKey } });
+      if (row) {
+        const parsed = SajuDailyResult.safeParse(JSON.parse(row.resultJson));
+        if (parsed.success) return { ...parsed.data, quota: { remainingToday: null } };
+      }
+    }
     const key = dailyCacheKey(chart, dayKey);
     const cached = this.cache.get(key) as { body: string; advice: string; model: string } | undefined;
     let text: { body: string; advice: string; model: string | null; source: SajuSourceType } | null = cached ? { ...cached, source: 'llm' } : null;
@@ -417,7 +428,7 @@ export class SajuService {
       }
     }
     if (!text) text = { ...buildStaticDaily(chart, fortune), model: null, source: 'static' };
-    return {
+    const result: SajuDailyResultType = {
       dayKey,
       day: dayToContract(fortune.day),
       dayMaster: chart.dayMaster,
@@ -429,6 +440,29 @@ export class SajuService {
       model: text.model,
       quota: { remainingToday: remaining },
     };
+    if (lockKey && actor.userId) {
+      try {
+        await this.prisma.sajuReading.create({
+          data: {
+            userId: actor.userId,
+            kind: 'daily',
+            inputJson: JSON.stringify(input.birth),
+            chartJson: JSON.stringify(chart),
+            resultJson: JSON.stringify(result),
+            source: result.source,
+            model: result.model,
+            promptVersion: SAJU_PROMPT_VERSION,
+            dayKey,
+            dailyLockKey: lockKey,
+            createdAt: now,
+          },
+        });
+      } catch (e) {
+        // 동시 요청 — 먼저 저장된 행이 이긴다. 그 외 오류는 응답에 영향 없이 기록만.
+        if (!isUniqueViolation(e)) this.deps.logger?.warn({ err: e instanceof Error ? e.message : String(e) }, '[saju] 오늘의 운세 저장 실패');
+      }
+    }
+    return result;
   }
 
   // ── 궁합 ──────────────────────────────────────────────────────────────
@@ -668,6 +702,12 @@ export class SajuService {
 
 // utils 원국(readonly 배열) → 계약 DTO. 구조는 같고 readonly 만 다르다(friendly saju.test 가 zod 로 검증).
 export const toChartDto = (chart: SajuChart): SajuChartType => chart as unknown as SajuChartType;
+
+// 오늘의 운세 잠금 키 — "userId:<8글자+성별 해시>:yyyy-mm-dd". 프로필 id 대신 사주 자체로 잠가 게스트 입력·프로필 어느 경로든 같다.
+export const dailyLockKeyOf = (userId: string, chart: SajuChart, dayKey: string): string =>
+  `${userId}:${sha(`${chartSignature(chart)}|${chart.input.gender}`).slice(0, 16)}:${dayKey}`;
+
+const isUniqueViolation = (e: unknown): boolean => typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
 
 const dateKeyOf = (d: SajuDayScore): string =>
   `${d.date.year}-${String(d.date.month).padStart(2, '0')}-${String(d.date.day).padStart(2, '0')}`;

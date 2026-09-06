@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, Sparkles, Trash2 } from 'lucide-react';
 import type { SajuBirthInputType } from '@repo/api-contract';
-import { useSajuProfileStore, type SajuLocalProfile } from '@repo/shared';
+import { useSajuProfileStore, useSajuProfiles } from '@repo/shared';
+import type { SajuProfileType } from '@repo/api-contract';
 import { SAJU_SUPPORTED_YEARS, daysInMonth, lunarMonthLength } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
@@ -16,7 +17,8 @@ export interface SajuFormProps {
   error: string | null;
   isMember: boolean;
   onChange: (patch: Partial<SajuBirthInputType>) => void;
-  onSubmit: (save: { enabled: boolean; label: string }) => void;
+  /** 저장 요청 — 게스트는 기기 로컬, 회원은 계정(서버). profileId 가 있으면 이미 저장된 프로필을 골라 쓴 것이라 새로 만들지 않는다. */
+  onSubmit: (save: { enabled: boolean; label: string; profileId: string | null }) => void;
 }
 
 export const glass = 'rounded-2xl border border-[#d9b65b]/15 bg-[#121218]/90 text-[#e9e2d2] shadow-2xl backdrop-blur-md';
@@ -25,12 +27,23 @@ const field =
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+// 키 순서·옵션 기본값에 흔들리지 않는 생년월일 비교.
+const sameBirth = (a: SajuBirthInputType, b: SajuBirthInputType): boolean =>
+  a.calendar === b.calendar && a.year === b.year && a.month === b.month && a.day === b.day && !!a.leapMonth === !!b.leapMonth &&
+  a.hour === b.hour && (a.hour === null || (a.minute ?? 0) === (b.minute ?? 0)) && a.gender === b.gender &&
+  a.options.solarTimeCorrection === b.options.solarTimeCorrection && a.options.lateRatHour === b.options.lateRatHour;
+
 export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFormProps) => {
-  const profiles = useSajuProfileStore((s) => s.profiles);
-  const primaryId = useSajuProfileStore((s) => s.primaryId);
-  const removeProfile = useSajuProfileStore((s) => s.remove);
+  const localProfiles = useSajuProfileStore((s) => s.profiles);
+  const localPrimaryId = useSajuProfileStore((s) => s.primaryId);
+  const removeLocalProfile = useSajuProfileStore((s) => s.remove);
+  // 회원은 서버 프로필(나·가족), 게스트는 기기 로컬 프로필을 칩으로.
+  const serverProfiles = useSajuProfiles();
+  const profiles: Array<{ id: string; label: string; birth: SajuBirthInputType; primary: boolean; local: boolean }> = isMember
+    ? (serverProfiles.data?.items ?? []).map((p: SajuProfileType) => ({ id: p.id, label: p.label, birth: p.birth, primary: p.isPrimary, local: false }))
+    : localProfiles.map((p) => ({ id: p.id, label: p.label, birth: p.birth, primary: p.id === localPrimaryId, local: true }));
   const [advanced, setAdvanced] = useState(false);
-  const [save, setSave] = useState(profiles.length === 0);
+  const [save, setSave] = useState(true);
   const [label, setLabel] = useState('나');
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
 
@@ -38,11 +51,15 @@ export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFor
   const days = Array.from({ length: monthDays }, (_, i) => i + 1);
   const hasLeap = input.calendar === 'lunar' && lunarMonthLength(input.year, input.month, true) !== null;
 
-  const applyProfile = (p: SajuLocalProfile) => {
+  const applyProfile = (p: { id: string; label: string; birth: SajuBirthInputType }) => {
     setActiveProfile(p.id);
     setLabel(p.label);
     onChange({ ...p.birth });
   };
+  // 프로필을 고른 뒤 입력을 바꾸면 "새 사람" 으로 본다(렌더 중 파생).
+  const active = profiles.find((p) => p.id === activeProfile) ?? null;
+  const activeStillMatches = !!active && sameBirth(active.birth, input);
+  const pickedProfileId = activeStillMatches ? active.id : null;
 
   return (
     <section className={cn(glass, 'pointer-events-auto absolute inset-x-3 bottom-3 top-16 flex max-h-[calc(100%-4.5rem)] flex-col overflow-y-auto p-4 sm:inset-x-auto sm:left-1/2 sm:top-20 sm:w-[27rem] sm:-translate-x-1/2 lg:left-auto lg:right-8 lg:translate-x-0')} aria-label="사주 입력">
@@ -62,11 +79,15 @@ export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFor
                 )}
               >
                 {p.label}
-                {p.id === primaryId && <span className="ml-1 text-[#d9b65b]">★</span>}
+                {p.primary && <span className="ml-1 text-[#d9b65b]">★</span>}
               </button>
-              <button type="button" aria-label={`${p.label} 삭제`} onClick={() => removeProfile(p.id)} className="rounded-r-full border border-l-0 border-white/15 px-1.5 py-1 text-[#e9e2d2]/40 hover:text-[#ffb4a2]">
-                <Trash2 className="size-3" />
-              </button>
+              {p.local ? (
+                <button type="button" aria-label={`${p.label} 삭제`} onClick={() => removeLocalProfile(p.id)} className="rounded-r-full border border-l-0 border-white/15 px-1.5 py-1 text-[#e9e2d2]/40 hover:text-[#ffb4a2]">
+                  <Trash2 className="size-3" />
+                </button>
+              ) : (
+                <span className="rounded-r-full border border-l-0 border-white/15 px-1.5 py-1 text-[10px] text-[#e9e2d2]/40">계정</span>
+              )}
             </span>
           ))}
         </div>
@@ -184,15 +205,15 @@ export const SajuForm = ({ input, error, isMember, onChange, onSubmit }: SajuFor
         </div>
       )}
 
-      {!isMember && (
+      {!pickedProfileId && (
         <div className="mt-3 flex items-center gap-2 text-xs text-[#e9e2d2]/70">
           <input id="saju-save" type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} className="accent-[#d9b65b]" />
-          <label htmlFor="saju-save">이 기기에 저장</label>
+          <label htmlFor="saju-save">{isMember ? '이 계정에 저장' : '이 기기에 저장'}</label>
           {save && <input aria-label="이름" value={label} maxLength={20} onChange={(e) => setLabel(e.target.value)} className={cn(field, 'w-24 py-1')} />}
         </div>
       )}
 
-      <Button type="button" onClick={() => onSubmit({ enabled: !isMember && save, label: label.trim() || '나' })} className="mt-4 h-11 w-full bg-[#b8322a] text-[#f7eddc] hover:bg-[#cc3d33]">
+      <Button type="button" onClick={() => onSubmit({ enabled: !pickedProfileId && save, label: label.trim() || '나', profileId: pickedProfileId })} className="mt-4 h-11 w-full bg-[#b8322a] text-[#f7eddc] hover:bg-[#cc3d33]">
         <Sparkles className="size-4" /> 사주 세우기
       </Button>
       {error && <p className="mt-1 text-center text-[11px] text-[#ffb4a2]">{error}</p>}

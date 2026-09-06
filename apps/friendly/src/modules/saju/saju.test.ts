@@ -423,3 +423,43 @@ describe('SajuRecordsService (격리 DB) — 공유·프로필·기록', () => {
     await expect(records.createProfile('r-user', { label: 'bad', birth: { ...BIRTH, month: 2, day: 30 }, isPrimary: false })).rejects.toMatchObject({ code: 'invalid_input' });
   });
 });
+
+describe('오늘의 운세 회원 하루 1회 잠금', () => {
+  let isolated: IsolatedDatabase;
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
+    app = await buildApp({ logger: false });
+    await app.ready();
+    await seedAuthUsers(app, [{ id: 'd-user', role: 'USER' }]);
+  }, 120_000);
+  afterAll(async () => {
+    await app.close();
+    isolated.restore();
+  });
+
+  it('회원은 같은 사주의 오늘 운세를 저장된 행으로 돌려주고(LLM 1회), 게스트는 잠그지 않는다', async () => {
+    const provider = new FakeProvider();
+    provider.handler = () => JSON.stringify({ body: '오늘 본문', advice: '오늘 조언' });
+    const quota = new UsageQuotaService(app.prisma, { now: () => ASOF, settingsTtlMs: 0 });
+    const make = () => new SajuService(app.prisma, new AiConfigService(app.prisma, ENV), { quota, cache: fakeCache(provider), now: () => ASOF, jobs: new SajuJobRegistry() });
+    const member = { userId: 'd-user', guestKey: null, ip: '127.0.0.1' };
+    const first = await make().daily({ birth: BIRTH }, member);
+    expect(first.source).toBe('llm');
+    expect(provider.calls).toHaveLength(1);
+    // 새 서비스 인스턴스(캐시 없음)여도 저장된 행이 돌아온다.
+    const second = await make().daily({ birth: BIRTH }, member);
+    expect(second.body).toBe('오늘 본문');
+    expect(second.quota.remainingToday).toBeNull();
+    expect(provider.calls).toHaveLength(1);
+    const rows = await app.prisma.sajuReading.findMany({ where: { userId: 'd-user', kind: 'daily' } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.dailyLockKey).toMatch(/^d-user:[0-9a-f]{16}:2026-09-06$/);
+    // 다른 날짜 조회는 잠그지 않는다.
+    await make().daily({ birth: BIRTH, date: '2026-09-07' }, member);
+    expect(await app.prisma.sajuReading.count({ where: { userId: 'd-user', kind: 'daily' } })).toBe(1);
+    // 기록 목록엔 daily 행이 나오지 않는다.
+    const records = new SajuRecordsService(app.prisma, make());
+    expect((await records.listMine('d-user', { limit: 10 })).items).toHaveLength(0);
+  });
+});

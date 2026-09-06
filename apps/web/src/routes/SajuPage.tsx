@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useCallback, useMemo, useReducer, useState, 
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import type { SajuReadingResultType } from '@repo/api-contract';
-import { getPrimarySajuProfile, useAuthStore, useCreateSajuReading, useSajuJob, useSajuProfileStore } from '@repo/shared';
+import { getPrimarySajuProfile, useAuthStore, useCreateSajuReading, useSajuJob, useSajuProfileStore, useUpsertSajuProfile } from '@repo/shared';
 import { createSajuFlowState, SAJU_DEFAULT_OPTIONS, sajuFlowReducer, sajuStampTotal, type SajuBirthInput, type SajuFlowEvent, type SajuFlowState } from '@repo/utils';
 import type { SajuBirthInputType } from '@repo/api-contract';
 import { usePublicLayout } from '~/components/PublicLayout';
@@ -70,7 +70,8 @@ export const SajuPage = () => {
 
   const [state, dispatch] = useReducer(reducer, undefined, () => createSajuFlowState<SajuReadingResultType>(getPrimarySajuProfile()?.birth ?? {}));
   const isMember = useAuthStore((s) => !!s.token);
-  const upsertProfile = useSajuProfileStore((s) => s.upsert);
+  const upsertLocalProfile = useSajuProfileStore((s) => s.upsert);
+  const upsertServerProfile = useUpsertSajuProfile();
   const { mutate, data: initial, error: mutationError, isPending, reset: resetMutation } = useCreateSajuReading();
   const [jobId, setJobId] = useState<string | null>(null);
   const job = useSajuJob(jobId);
@@ -104,12 +105,16 @@ export const SajuPage = () => {
     [mutate, resetMutation],
   );
 
-  const onSubmit = (save: { enabled: boolean; label: string }) => {
+  const onSubmit = (save: { enabled: boolean; label: string; profileId: string | null }) => {
     const next = reducer(state, { type: 'submit' });
     dispatch({ type: 'submit' });
     if (next.phase !== 'casting' || !next.chart) return;
     setTab(initialTab);
-    if (save.enabled) upsertProfile({ label: save.label, birth: toBirthInput(next.input) });
+    // 저장 — 회원은 계정(서버) 프로필, 게스트는 기기 로컬. 이미 저장된 프로필을 골라 썼으면 건너뛴다.
+    if (save.enabled && !save.profileId) {
+      if (isMember) upsertServerProfile.mutate({ input: { label: save.label, birth: toBirthInput(next.input), isPrimary: false } });
+      else upsertLocalProfile({ label: save.label, birth: toBirthInput(next.input) });
+    }
     request(next.input);
     // Lite 는 연출이 없다 — 바로 풀이로.
     if (render.mode === 'lite') dispatch({ type: 'skip_animation' });

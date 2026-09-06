@@ -110,8 +110,9 @@ export class SajuRecordsService {
   // ── 회원 기록 ─────────────────────────────────────────────────────────
 
   async listMine(userId: string, query: ListSajuReadingsQueryType): Promise<ListSajuReadingsResultType> {
+    // 목록·상세는 전체 풀이(full)만 — 오늘의 운세 잠금 행(daily)은 내부용.
     const rows = await this.prisma.sajuReading.findMany({
-      where: { userId },
+      where: { userId, kind: 'full' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: query.limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
