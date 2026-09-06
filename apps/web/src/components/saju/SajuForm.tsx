@@ -23,7 +23,10 @@ export interface SajuFormProps {
 
 export const glass = 'rounded-2xl border border-[#d9b65b]/15 bg-[#121218]/90 text-[#e9e2d2] shadow-2xl backdrop-blur-md';
 const field =
-  'rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-[#f3e9c6] placeholder:text-[#e9e2d2]/30 focus:border-[#d9b65b] focus:outline-none';
+  // scheme-dark + option 색: 크롬은 네이티브 <select> 팝업에 select 의 background/color 를 그대로 쓰므로
+  // bg-black/30 이 흰 바탕과 섞여 회색 상자 + 크림 글자(저대비)가 됐다. 팝업 색을 명시해 무대 톤에 맞춘다.
+  'rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-[#f3e9c6] placeholder:text-[#e9e2d2]/30 focus:border-[#d9b65b] focus:outline-none' +
+  ' scheme-dark [&>option]:bg-[#16130f] [&>option]:text-[#f3e9c6] [&>option:checked]:bg-[#3a2f14] [&>option:checked]:text-[#f0d27a]';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 

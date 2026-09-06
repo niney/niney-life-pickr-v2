@@ -11,7 +11,10 @@ import { SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme'
 // (같은 입력은 캐시). 계산값(점수·후보·별점)은 서버가 utils 로 결정적으로 만들고 문장만 LLM/정적.
 
 // 패널 폭(27rem) 안에서 줄이 넘치지 않게 — 그리드 자식은 min-w-0, 입력은 w-full.
-const field = 'w-full min-w-0 rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-sm text-[#f3e9c6] focus:border-[#d9b65b] focus:outline-none';
+// select 팝업 색은 SajuForm 의 field 와 같은 이유로 명시.
+const field =
+  'w-full min-w-0 rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-sm text-[#f3e9c6] focus:border-[#d9b65b] focus:outline-none' +
+  ' scheme-dark [&>option]:bg-[#16130f] [&>option]:text-[#f3e9c6] [&>option:checked]:bg-[#3a2f14] [&>option:checked]:text-[#f0d27a]';
 
 const Stars = ({ n }: { n: number }) => (
   <span className="inline-flex gap-0.5" aria-label={`별 ${n}개`}>
