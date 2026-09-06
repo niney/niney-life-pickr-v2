@@ -1,7 +1,20 @@
 import { useState, type ReactNode } from 'react';
 import { Loader2, RotateCcw, Share2, X } from 'lucide-react';
 import type { SajuBirthInputType, SajuReadingResultType, SajuSectionIdType, SajuSectionsType } from '@repo/api-contract';
-import { SAJU_WUXING_META, dayMasterText, sajuImagePath, sajuStemImageId, type SajuChart } from '@repo/utils';
+import {
+  SAJU_TEN_GOD_META,
+  SAJU_WUXING_LUCKY,
+  SAJU_WUXING_META,
+  dayMasterText,
+  sajuBirthSummary,
+  sajuBranchImageId,
+  sajuImagePath,
+  sajuStemImageId,
+  zodiacTraitLine,
+  type SajuChart,
+  type TenGod,
+  type Wuxing,
+} from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { useTypewriter } from '../tarot/useTypewriter';
@@ -55,6 +68,127 @@ const TypedText = ({ text, animate, className }: { text: string; animate: boolea
   );
 };
 
+const godKo = (g: TenGod): string => SAJU_TEN_GOD_META[g].ko;
+
+/** 원국 헤더 — 일간 캐릭터 + 띠 동물 + 출생 요약(음력·태양시 보정·계절). 2D 뷰(SajuReadingView)와 같은 구성. */
+/** hideBirth: 공유 페이지에서 생년월일이 마스킹된 경우(양력·음력·태양시는 숨기고 계절·나이만). */
+export const SajuChartHeader = ({ chart, headline, size = 'sm', hideBirth = false, children }: { chart: SajuChart; headline?: string; size?: 'sm' | 'lg'; hideBirth?: boolean; children?: ReactNode }) => {
+  const dm = dayMasterText(chart.dayMaster.index);
+  const birth = sajuBirthSummary(chart);
+  const img = size === 'lg' ? 'size-20 border-2' : 'size-16';
+  const zimg = size === 'lg' ? 'size-12' : 'size-10';
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0">
+          <img src={sajuImagePath(sajuStemImageId(chart.dayMaster.index), 512)} alt="" className={cn(img, 'rounded-full border border-[#d9b65b]/60 object-cover')} />
+          <img
+            src={sajuImagePath(sajuBranchImageId(chart.zodiac.index), 512)}
+            alt={`${chart.zodiac.animal}띠`}
+            title={zodiacTraitLine(chart)}
+            className={cn(zimg, 'absolute -bottom-1 -right-2 rounded-full border border-[#d9b65b]/60 bg-[#121218] object-cover shadow')}
+          />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[11px] text-[#d9b65b]">일간(나)</div>
+          <div className={cn('font-serif-kr font-bold text-[#f3e9c6]', size === 'lg' ? 'text-xl' : 'text-lg')}>
+            {dm.title} <span className="text-sm text-[#e9e2d2]/60">{dm.hanja}</span>
+          </div>
+          <div className="text-xs text-[#e9e2d2]/70">
+            {dm.symbol} · {zodiacTraitLine(chart)} · {headline || dm.tagline}
+          </div>
+          {children}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[#e9e2d2]/55">
+        {!hideBirth && <span>양력 {birth.solar}</span>}
+        {!hideBirth && birth.lunar && <span>음력 {birth.lunar}</span>}
+        {!hideBirth && birth.corrected && <span title="일주·시주는 서울 기준 진태양시로 봤어요">태양시 {birth.corrected}</span>}
+        <span>{birth.season}</span>
+        <span>만 {birth.age}세</span>
+      </div>
+    </div>
+  );
+};
+
+/** 일간별 연애·일 스타일 — LLM 섹션과 별개인 정적 카드(성격 탭·2D 뷰 공용). */
+export const DayMasterStyleCards = ({ chart }: { chart: SajuChart }) => {
+  const dm = dayMasterText(chart.dayMaster.index);
+  return (
+    <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+      <div className="rounded-lg border border-white/10 p-2">
+        <div className="mb-1 text-[10px] text-[#d9b65b]">연애 스타일</div>
+        <p className="leading-relaxed text-[#e9e2d2]/80">{dm.love}</p>
+      </div>
+      <div className="rounded-lg border border-white/10 p-2">
+        <div className="mb-1 text-[10px] text-[#d9b65b]">일하는 방식</div>
+        <p className="leading-relaxed text-[#e9e2d2]/80">{dm.work}</p>
+      </div>
+    </div>
+  );
+};
+
+/** 대운 한 칸 — 간지·시작 나이 + 십신·십이운성. */
+export const LuckPillarChip = ({ p, current }: { p: SajuChart['luck']['pillars'][number]; current: boolean }) => (
+  <li className={cn('min-w-[3.6rem] rounded-lg border px-1 py-1', current ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/60')}>
+    <div className="font-serif-kr text-sm">{p.hanja}</div>
+    <div>{Math.floor(p.fromAge)}세</div>
+    <div className="mt-0.5 text-[9px] leading-tight text-[#e9e2d2]/50">
+      {godKo(p.stemTenGod)}·{godKo(p.branchTenGod)}
+      <br />
+      {p.twelveStage}
+    </div>
+  </li>
+);
+
+/** 세운 한 줄 + 원국과의 관계 칩. */
+export const YearLuckFacts = ({ chart }: { chart: SajuChart }) => {
+  const y = chart.yearLuck;
+  return (
+    <div className="flex flex-col gap-1 text-[11px] text-[#e9e2d2]/65">
+      <div>
+        천간 {godKo(y.stemTenGod)} · 지지 {godKo(y.branchTenGod)} · 십이운성 {y.twelveStage}
+      </div>
+      {y.relations.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {y.relations.map((r, i) => (
+            <span key={`${r.type}-${i}`} className="rounded-full border border-white/15 px-2 py-px text-[10px] text-[#e9e2d2]/70">
+              올해 {r.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** 행운 요소 표 — LLM 이 준 색·방향·숫자·음식 + 정적 표의 키워드·활동·맛·계절. */
+export const LuckyTable = ({ lucky }: { lucky: { element: Wuxing; colors: string[]; directions: string[]; numbers: number[]; foods: string[] } }) => {
+  const extra = SAJU_WUXING_LUCKY[lucky.element];
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-[#d9b65b]/30 p-2 text-xs">
+      <dt className="text-[#d9b65b]">기운</dt>
+      <dd style={{ color: WUXING_TEXT_COLOR[lucky.element] }}>
+        {SAJU_WUXING_META[lucky.element].ko} <span className="text-[#e9e2d2]/50">— {extra.keywords.join(' · ')}</span>
+      </dd>
+      <dt className="text-[#d9b65b]">색</dt>
+      <dd className="text-[#e9e2d2]/80">{lucky.colors.join(' · ')}</dd>
+      <dt className="text-[#d9b65b]">방향</dt>
+      <dd className="text-[#e9e2d2]/80">{lucky.directions.join(' · ')}</dd>
+      <dt className="text-[#d9b65b]">숫자</dt>
+      <dd className="text-[#e9e2d2]/80">{lucky.numbers.join(' · ')}</dd>
+      <dt className="text-[#d9b65b]">음식</dt>
+      <dd className="text-[#e9e2d2]/80">
+        {lucky.foods.join(' · ')} <span className="text-[#e9e2d2]/50">({extra.taste})</span>
+      </dd>
+      <dt className="text-[#d9b65b]">활동</dt>
+      <dd className="text-[#e9e2d2]/80">{extra.activities.join(' · ')}</dd>
+      <dt className="text-[#d9b65b]">계절</dt>
+      <dd className="text-[#e9e2d2]/80">{extra.season}</dd>
+    </dl>
+  );
+};
+
 const SectionShell = ({ pending, children }: { pending: boolean; children: ReactNode }) => (
   <div className="flex flex-col gap-3">
     {pending && (
@@ -82,16 +216,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
       case 'chart':
         return (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <img src={sajuImagePath(sajuStemImageId(chart.dayMaster.index), 512)} alt="" className="size-16 rounded-full border border-[#d9b65b]/60 object-cover" />
-              <div>
-                <div className="text-[11px] text-[#d9b65b]">일간(나)</div>
-                <div className="font-serif-kr text-lg font-bold text-[#f3e9c6]">
-                  {dm.title} <span className="text-sm text-[#e9e2d2]/60">{dm.hanja}</span>
-                </div>
-                <div className="text-xs text-[#e9e2d2]/70">{dm.symbol} · {chart.zodiac.animal}띠 · {dm.tagline}</div>
-              </div>
-            </div>
+            <SajuChartHeader chart={chart} />
             <SajuChartTable chart={chart} />
           </div>
         );
@@ -111,6 +236,8 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
                 <ul className="flex flex-col gap-0.5 text-[#e9e2d2]/80">{(s?.cautions ?? dm.cautions).map((x) => <li key={x}>· {x}</li>)}</ul>
               </div>
             </div>
+            <DayMasterStyleCards chart={chart} />
+            <p className="text-[11px] text-[#e9e2d2]/55">띠로 보면 {zodiacTraitLine(chart)}. 일간이 타고난 성격이라면 띠는 겉으로 드러나는 분위기예요.</p>
           </SectionShell>
         );
       }
@@ -132,15 +259,17 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
           <SectionShell pending={isPending('cycle')}>
             <ol className="flex gap-1 overflow-x-auto pb-1 text-center text-[10px]" aria-label="대운">
               {chart.luck.pillars.map((p, i) => (
-                <li key={p.index} className={cn('min-w-[3.2rem] rounded-lg border px-1 py-1', i === chart.luck.currentIndex ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/55')}>
-                  <div className="font-serif-kr text-sm">{p.hanja}</div>
-                  <div>{Math.floor(p.fromAge)}세</div>
-                </li>
+                <LuckPillarChip key={p.index} p={p} current={i === chart.luck.currentIndex} />
               ))}
             </ol>
+            <p className="text-[11px] text-[#e9e2d2]/50">
+              {chart.luck.forward ? '순행' : '역행'} · {chart.luck.startAgeYears}세 {chart.luck.startAgeMonths}개월부터 10년마다 바뀌어요. 칸의 작은 글씨는 그 시기에 들어오는 기운(십신)과 힘의 단계(십이운성).
+            </p>
             <TypedText text={s?.body ?? ''} animate={animateFor('cycle')} className="text-sm leading-relaxed text-[#e9e2d2]/85" />
             <div className="rounded-lg border border-[#d9b65b]/30 p-2 text-xs">
-              <div className="mb-1 text-[10px] text-[#d9b65b]">현재 {cur ? `${cur.ko} 대운` : '첫 대운 전'}</div>
+              <div className="mb-1 text-[10px] text-[#d9b65b]">
+                현재 {cur ? `${cur.ko} 대운 (${Math.floor(cur.fromAge)}~${Math.floor(cur.toAge)}세) · ${godKo(cur.stemTenGod)}·${godKo(cur.branchTenGod)} · ${cur.twelveStage}` : '첫 대운 전'}
+              </div>
               <p className="text-[#e9e2d2]/80">{s?.current ?? ''}</p>
             </div>
             <div className="rounded-lg border border-white/10 p-2 text-xs">
@@ -158,6 +287,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
               {chart.yearLuck.year}년 {chart.yearLuck.ko}
               <span className="ml-1 text-sm text-[#e9e2d2]/60">{chart.yearLuck.hanja}</span>
             </div>
+            <YearLuckFacts chart={chart} />
             <TypedText text={s?.body ?? ''} animate={animateFor('year')} className="text-sm leading-relaxed text-[#e9e2d2]/85" />
             {s && s.months.length > 0 && (
               <ul className="flex flex-col gap-1 text-xs text-[#e9e2d2]/80">
@@ -187,20 +317,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
           <SectionShell pending={isPending('advice')}>
             {s?.keyword && <div className="font-serif-kr text-base font-bold text-[#f3e9c6]">“{s.keyword}”</div>}
             <TypedText text={s?.body ?? ''} animate={animateFor('advice')} className="text-sm leading-relaxed text-[#e9e2d2]/85" />
-            {lucky && (
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-[#d9b65b]/30 p-2 text-xs">
-                <dt className="text-[#d9b65b]">기운</dt>
-                <dd style={{ color: WUXING_TEXT_COLOR[lucky.element] }}>{SAJU_WUXING_META[lucky.element].ko}</dd>
-                <dt className="text-[#d9b65b]">색</dt>
-                <dd className="text-[#e9e2d2]/80">{lucky.colors.join(' · ')}</dd>
-                <dt className="text-[#d9b65b]">방향</dt>
-                <dd className="text-[#e9e2d2]/80">{lucky.directions.join(' · ')}</dd>
-                <dt className="text-[#d9b65b]">숫자</dt>
-                <dd className="text-[#e9e2d2]/80">{lucky.numbers.join(' · ')}</dd>
-                <dt className="text-[#d9b65b]">음식</dt>
-                <dd className="text-[#e9e2d2]/80">{lucky.foods.join(' · ')}</dd>
-              </dl>
-            )}
+            {lucky && <LuckyTable lucky={lucky} />}
           </SectionShell>
         );
       }

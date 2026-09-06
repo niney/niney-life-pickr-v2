@@ -1,32 +1,24 @@
 import type { SajuChartType, SajuSectionsType } from '@repo/api-contract';
-import { SAJU_WUXING_META, dayMasterText, sajuImagePath, sajuStemImageId } from '@repo/utils';
+import { type SajuChart } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { SajuChartTable } from './SajuChartTable';
-import { SAJU_SOURCE_LABEL, WUXING_TEXT_COLOR } from './sajuTheme';
+import { DayMasterStyleCards, LuckPillarChip, LuckyTable, SajuChartHeader, YearLuckFacts } from './SajuReadingPanel';
+import { SAJU_SOURCE_LABEL } from './sajuTheme';
 
 // 2D 풀이 보기 — 공유 페이지·회원 기록 상세 공용(3D 없음). 원국 표 + 일간 + 섹션 4개를 한 페이지에.
 
 export const SajuReadingView = ({ chart, sections, source, birthHidden }: { chart: SajuChartType; sections: SajuSectionsType; source: 'llm' | 'static' | 'mixed'; birthHidden?: boolean }) => {
-  const dm = dayMasterText(chart.dayMaster.index);
+  // 계약형 DTO 는 엔진 SajuChart 와 같은 모양(toChartDto 가 그대로 보냄) — 헤더·칩 컴포넌트는 엔진 타입을 받는다.
+  const c = chart as unknown as SajuChart;
   const card = 'rounded-2xl border border-[#d9b65b]/15 bg-[#121218]/85 p-4';
   return (
     <div className="flex flex-col gap-4" data-testid="saju-reading-view">
       <section className={card}>
-        <div className="flex items-center gap-3">
-          <img src={sajuImagePath(sajuStemImageId(chart.dayMaster.index), 512)} alt="" className="size-20 rounded-full border-2 border-[#d9b65b]/60 object-cover" />
-          <div className="min-w-0">
-            <div className="text-[11px] text-[#d9b65b]">일간(나)</div>
-            <div className="font-serif-kr text-xl font-bold text-[#f3e9c6]">
-              {dm.title} <span className="text-sm text-[#e9e2d2]/60">{dm.hanja}</span>
-            </div>
-            <div className="text-xs text-[#e9e2d2]/70">
-              {dm.symbol} · {chart.zodiac.animal}띠 · {sections.personality.headline || dm.tagline}
-            </div>
-            <span className={cn('mt-1 inline-block rounded-full border px-1.5 py-px text-[10px]', source === 'llm' ? 'border-[#d9b65b]/60 text-[#d9b65b]' : 'border-white/20 text-[#e9e2d2]/60')}>
-              {SAJU_SOURCE_LABEL[source]}
-            </span>
-          </div>
-        </div>
+        <SajuChartHeader chart={c} headline={sections.personality.headline} size="lg" hideBirth={birthHidden}>
+          <span className={cn('mt-1 inline-block rounded-full border px-1.5 py-px text-[10px]', source === 'llm' ? 'border-[#d9b65b]/60 text-[#d9b65b]' : 'border-white/20 text-[#e9e2d2]/60')}>
+            {SAJU_SOURCE_LABEL[source]}
+          </span>
+        </SajuChartHeader>
         {birthHidden && <p className="mt-2 text-[11px] text-[#e9e2d2]/45">생년월일은 공유에서 숨겨졌어요.</p>}
         <div className="mt-4">
           <SajuChartTable chart={chart} />
@@ -46,12 +38,18 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
             <ul className="flex flex-col gap-0.5 text-[#e9e2d2]/80">{sections.personality.cautions.map((x) => <li key={x}>· {x}</li>)}</ul>
           </div>
         </div>
+        <div className="mt-3">
+          <DayMasterStyleCards chart={c} />
+        </div>
       </section>
 
       <section className={card}>
         <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">
           {chart.yearLuck.year}년 {chart.yearLuck.ko} <span className="text-sm text-[#e9e2d2]/60">{chart.yearLuck.hanja}</span>
         </h2>
+        <div className="mt-2">
+          <YearLuckFacts chart={c} />
+        </div>
         <p className="mt-2 text-sm leading-relaxed text-[#e9e2d2]/85">{sections.year.body}</p>
         {sections.year.months.length > 0 && (
           <ul className="mt-2 flex flex-col gap-1 text-xs text-[#e9e2d2]/80">
@@ -68,11 +66,8 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
       <section className={card}>
         <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">인생의 큰 흐름</h2>
         <ol className="mt-2 flex gap-1 overflow-x-auto pb-1 text-center text-[10px]" aria-label="대운">
-          {chart.luck.pillars.map((p, i) => (
-            <li key={p.index} className={cn('min-w-[3.2rem] rounded-lg border px-1 py-1', i === chart.luck.currentIndex ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/55')}>
-              <div className="font-serif-kr text-sm">{p.hanja}</div>
-              <div>{Math.floor(p.fromAge)}세</div>
-            </li>
+          {c.luck.pillars.map((p, i) => (
+            <LuckPillarChip key={p.index} p={p} current={i === c.luck.currentIndex} />
           ))}
         </ol>
         <p className="mt-2 text-sm leading-relaxed text-[#e9e2d2]/85">{sections.cycle.body}</p>
@@ -83,16 +78,9 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
       <section className={card}>
         <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">조언 {sections.advice.keyword && <span className="text-[#d9b65b]">“{sections.advice.keyword}”</span>}</h2>
         <p className="mt-2 text-sm leading-relaxed text-[#e9e2d2]/85">{sections.advice.body}</p>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-[#d9b65b]/30 p-2 text-xs">
-          <dt className="text-[#d9b65b]">기운</dt>
-          <dd style={{ color: WUXING_TEXT_COLOR[sections.advice.lucky.element] }}>{SAJU_WUXING_META[sections.advice.lucky.element].ko}</dd>
-          <dt className="text-[#d9b65b]">색</dt>
-          <dd className="text-[#e9e2d2]/80">{sections.advice.lucky.colors.join(' · ')}</dd>
-          <dt className="text-[#d9b65b]">방향</dt>
-          <dd className="text-[#e9e2d2]/80">{sections.advice.lucky.directions.join(' · ')}</dd>
-          <dt className="text-[#d9b65b]">음식</dt>
-          <dd className="text-[#e9e2d2]/80">{sections.advice.lucky.foods.join(' · ')}</dd>
-        </dl>
+        <div className="mt-3">
+          <LuckyTable lucky={sections.advice.lucky} />
+        </div>
       </section>
     </div>
   );

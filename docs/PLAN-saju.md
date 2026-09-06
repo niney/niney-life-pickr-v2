@@ -310,6 +310,9 @@ model SajuReading {
 | **2차** ✅ | 웹 `/saju-c` — 입력 폼·천문도 무대(원판·인장·먹 번짐·일간 캐릭터·오행 구슬·대운 강물)·풀이 패널(섹션 도착 순)·Lite·임베드·사이드바·홈 카드·로컬 기록 | `apps/web/src/components/saju/**`, `routes/SajuPage.tsx` |
 | **3차** ✅ | 오늘의 운세(홈 카드·하루 1회) + 오행 음식 + 택일(달력 히트맵) + 궁합(두 원판 연출) | 라우트 4 + 웹 화면 4 |
 | **4차** ✅ | 공유(토큰·페이지·OG·세로) + 회원 프로필(여러 명)·기록 `/me/saju-c` + 앱 WebView 임베드 + nginx 문서 | |
+| **5차** | 화면 콘텐츠 1순위(엔진 변경 없음) — 띠 이미지 12장 활용(원국 헤더·3D 띠 카드·공유 카드 오버레이·궁합 두 사람), 성격 탭 연애·일 스타일 + 띠 성향, 원국 표 십신 구성 5그룹·과다/부족·많음/없음 노트, 대운 칩 십신·십이운성 + 순행/역행, 올해 세운 십신·운성·관계 칩, 조언 행운 키워드·활동·맛·계절, 출생 요약(음력·태양시 보정·계절·만 나이). 2D 뷰도 동일 | `sajuText.ts`(`sajuBirthSummary`·`sajuTenGodSummary`·`zodiacTraitLine`), `SajuReadingPanel.tsx`(공용 `SajuChartHeader`·`DayMasterStyleCards`·`LuckPillarChip`·`YearLuckFacts`·`LuckyTable`), `SajuChartTable.tsx`, `SajuReadingView.tsx`, `SajuTools.tsx`, `stage/SajuScene.tsx`(`ZodiacCard`), `saju-share-card.ts` |
+| **6차** | 순수 계산 2순위 — 삼재 / 격국(8격) + 용신·희신·기신 명칭 / 월운 12개월 캘린더 / 향후 5년 세운 표 / 오늘의 좋은 시간대(12시진) / 오행 건강 힌트 / 지장간 숨은 십신 | utils 계산 + 계약 + 패널 |
+| **7차** | 콘텐츠·연출 3순위 — 60갑자 일주론(정적 표 60) / 신살 확장(홍염·귀문관·천라지망·금여·천덕·월덕) / 대운 타임라인 시각화 / 효과음 | |
 | **v2 후보** | SSE 스트리밍(타로와 함께) / 상단바 오늘의 운세 칩 / 해외 출생(경도·시간대) / 월운 12개월 캘린더 / 신살 확장 / 근처 맛집(타로 v3b 와 공유) / 효과음 | |
 
 0차와 사용자 이미지 생성·KASI 신청은 병렬. 2차는 이미지 없이 글자 placeholder 로 진행 가능.
@@ -324,6 +327,7 @@ model SajuReading {
 
 ## 진행 기록
 
+- 2026-09-06: **5차(화면 콘텐츠 1순위) 완료.** 검토에서 "계산은 해 놓고 화면에 없던 것"을 전부 붙임 — 띠 이미지 12장(미사용이었음)을 원국 헤더 배지·3D 띠 카드(일간 카드 왼쪽 아래, 0.35s 늦게 등장)·공유 카드 초상 오버레이·궁합 두 사람 배지에, 성격 탭에 일간 연애·일 스타일 카드 + 띠 성향 줄, 원국 표에 십신 5그룹 칸·칩·넘침/부족·많음/없음 노트, 흐름 탭 대운 칩에 십신·십이운성 + 순행/역행 줄 + 현재 대운 나이 범위, 올해 탭에 세운 십신·운성·원국과의 관계 칩, 조언 탭 행운 표에 키워드·활동·맛·계절(정적 표), 헤더에 양력·음력·태양시 보정·계절·만 나이. 공용 컴포넌트는 패널 파일에서 export 해 2D 뷰(공유·기록)도 동일. utils 요약 헬퍼 3종 + 테스트 2건(총 13). 미커밋.
 - 2026-09-06: **경로 saju → saju-c, 명칭 "사주(C)".** 다른 사주 구현과 나란히 두기 위해 "saju" 가 들어간 URL 전부를 saju-c 로: 웹 /saju-c·/saju-c/s/:token·/me/saju-c(·/:id), friendly API /api/v1/saju-c/*, 공유 OG·이미지 /saju-c/s/:token(/image.png), 정적 이미지 /saju-c/images/(public 디렉터리 git mv, `SAJU_IMAGE_BASE_PATH`·`build:saju-images` 출력), Vite 프록시, nginx 블록 2개(deploy-friendly.md), 앱 화면 app/saju-c + WebView URL. 명칭은 메뉴·홈 카드·앱 헤더·내 사주 제목·공유 제목·OG 제목만 "사주(C)"(본문 문구·모듈·파일·DB·한도 feature 이름은 그대로). ⚠️ 운영 nginx 블록 이름 변경 필요.
 - 2026-09-06: **풀이 패널 폭 확대(데스크톱 탭 가로 스크롤 제거).** 3235daa 에서 궁합 탭 본문 넘침은 잡았지만 탭 nav 10개가 27rem(430px)에 안 들어가 `overflow-x-auto` 로 가로 스크롤이 남았음. 패널을 lg 32rem·xl 34rem 으로 넓히고 nav 를 `flex-wrap`(스크롤 대신 줄바꿈, 탭 px 2.5), 무대 시선 focusX 1.4→1.7. Playwright 실측 nav scrollWidth=clientWidth: 1024/1100 → 510(한 줄), 1400 → 542(한 줄), 390 바닥 시트 388(줄바꿈 2줄). 1024 에서 왼쪽 원국 카드(34~478)와 패널(496~) 안 겹침. 웹 테스트 7 green. 미커밋.
 - 2026-09-06: **이미지 22/22 완성.** 남은 띠 6장(말·양·원숭이·닭·개·돼지) 반영 — placeholder 없음(manifest.missing 빈 배열). 산출 5.3MB.

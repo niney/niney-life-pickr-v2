@@ -5,6 +5,7 @@ import {
   SAJU_TEN_GOD_META,
   SAJU_WUXING_META,
   branchMeta,
+  sajuTenGodSummary,
   stemMeta,
   type SajuChart,
   type Wuxing,
@@ -34,6 +35,55 @@ const Glyph = ({ hanja, ko, element, big, accent }: { hanja: string; ko: string;
     </span>
   </div>
 );
+
+// 십신 구성 — 어떤 기운이 많고 없는지. 그룹 5칸(비겁·식상·재성·관성·인성)은 0 이면 흐리게, 아래에 많음·없음 한 줄.
+const TenGodSummary = ({ chart }: { chart: Chart }) => {
+  const s = sajuTenGodSummary(chart as SajuChart);
+  const elKo = (e: Wuxing) => SAJU_WUXING_META[e].ko;
+  return (
+    <div className="flex flex-col gap-1.5" aria-label="십신 구성">
+      <div className="grid grid-cols-5 gap-1 text-center">
+        {s.groups.map((g) => (
+          <div key={g.group} className={cn('rounded-md border px-1 py-1', g.count === 0 ? 'border-white/5 text-[#e9e2d2]/30' : 'border-[#d9b65b]/25 text-[#e9e2d2]/80')}>
+            <div className="text-[10px]">{g.ko}</div>
+            <div className="font-serif-kr text-sm">{g.count}</div>
+          </div>
+        ))}
+      </div>
+      {s.chips.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {s.chips.map((c) => (
+            <span key={c.god} className="rounded-full border border-white/15 px-2 py-px text-[10px] text-[#e9e2d2]/70">
+              {c.ko} {c.count}
+            </span>
+          ))}
+        </div>
+      )}
+      {(chart.excess.length > 0 || chart.lacking.length > 0) && (
+        <div className="text-[11px] text-[#e9e2d2]/60">
+          {chart.excess.length > 0 && (
+            <span>
+              넘치는 기운 <span className="text-[#ffb4a2]">{chart.excess.map(elKo).join('·')}</span>
+            </span>
+          )}
+          {chart.excess.length > 0 && chart.lacking.length > 0 && ' · '}
+          {chart.lacking.length > 0 && (
+            <span>
+              부족한 기운 <span className="text-[#d9b65b]">{chart.lacking.map(elKo).join('·')}</span>
+            </span>
+          )}
+        </div>
+      )}
+      {s.notes.length > 0 && (
+        <ul className="flex flex-col gap-0.5 text-[11px] text-[#e9e2d2]/65">
+          {s.notes.map((n) => (
+            <li key={n}>· {n}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 export const SajuChartTable = ({ chart, compact = false }: { chart: Chart; compact?: boolean }) => {
   const pillars: Pillar[] = [chart.pillars.year, chart.pillars.month, chart.pillars.day, ...(chart.pillars.hour ? [chart.pillars.hour] : [])];
@@ -98,6 +148,8 @@ export const SajuChartTable = ({ chart, compact = false }: { chart: Chart; compa
           {chart.favorable.secondary && <span className="text-[#e9e2d2]/45">, 보조 {SAJU_WUXING_META[chart.favorable.secondary].ko}</span>}
         </div>
       </div>
+
+      {!compact && <TenGodSummary chart={chart} />}
 
       {!compact && (chart.stars.length > 0 || chart.relations.length > 0) && (
         <div className="flex flex-wrap gap-1">

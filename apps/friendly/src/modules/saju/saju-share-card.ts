@@ -5,7 +5,7 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import type { SharedSajuReadingType } from '@repo/api-contract';
-import { SAJU_WUXING_META, sajuImagePath, sajuStemImageId } from '@repo/utils';
+import { SAJU_WUXING_META, sajuBranchImageId, sajuImagePath, sajuStemImageId } from '@repo/utils';
 import { loadPlexFonts } from '../../lib/share-fonts.js';
 import { candidateWebAssetRoots } from '../../lib/web-index.js';
 
@@ -65,12 +65,13 @@ const glyphDataUri = (ch: string, variant: '' | '-hanji' | '-gold' = ''): Promis
   return hit;
 };
 
-const imageCache = new Map<number, Promise<string | null>>();
-const dayMasterDataUri = (stem: number): Promise<string | null> => {
-  let hit = imageCache.get(stem);
+const imageCache = new Map<string, Promise<string | null>>();
+// 일간·띠 이미지(웹 정적 자산) → JPEG data URI. id 별 1회 로드.
+const imageDataUri = (id: string): Promise<string | null> => {
+  let hit = imageCache.get(id);
   if (!hit) {
     hit = (async () => {
-      const rel = sajuImagePath(sajuStemImageId(stem), 512).replace(/^\//, '');
+      const rel = sajuImagePath(id, 512).replace(/^\//, '');
       for (const root of candidateWebAssetRoots()) {
         try {
           const buf = await sharp(resolve(root, rel)).resize(420).jpeg({ quality: 82 }).toBuffer();
@@ -81,10 +82,12 @@ const dayMasterDataUri = (stem: number): Promise<string | null> => {
       }
       return null;
     })().catch(() => null);
-    imageCache.set(stem, hit);
+    imageCache.set(id, hit);
   }
   return hit;
 };
+const dayMasterDataUri = (stem: number): Promise<string | null> => imageDataUri(sajuStemImageId(stem));
+const zodiacDataUri = (branch: number): Promise<string | null> => imageDataUri(sajuBranchImageId(branch));
 
 // 인장 하나 — 주사 바탕 + 금 테두리 + 한자(글리프 이미지, 없으면 글자 그대로).
 const seal = (hanja: string, glyph: string | null, size: number, accent: boolean): Node =>
@@ -130,6 +133,7 @@ const SIZE = { og: { w: 1200, h: 630 }, story: { w: 1080, h: 1920 } } as const;
 async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story'): Promise<{ node: Node; graphemeImages: Record<string, string> }> {
   const c = reading.chart;
   const src = await dayMasterDataUri(c.dayMaster.index);
+  const zodiacSrc = await zodiacDataUri(c.zodiac.index);
   const chars = [...new Set([c.pillars.year, c.pillars.month, c.pillars.day, c.pillars.hour].flatMap((p) => (p ? [...p.hanja] : [])).concat([...c.dayMaster.hanja]))];
   const glyphs = new Map<string, string | null>(await Promise.all(chars.map(async (ch) => [ch, await glyphDataUri(ch)] as const)));
   // 본문 텍스트 속 한자(제목의 일간 한자)는 satori graphemeImages 로 — 한지색 판.
@@ -143,10 +147,21 @@ async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story')
   const headline = reading.sections.personality.headline || reading.sections.advice.keyword;
   const frame = (children: unknown, style: Style = {}): Node =>
     h('div', { display: 'flex', width: w, height: hh, backgroundColor: C.bg, backgroundImage: `radial-gradient(circle at 20% 15%, ${C.bg2} 0%, ${C.bg} 60%)`, color: C.ink, fontFamily: 'Plex', ...style }, children);
-  const portrait = (size: number): Node =>
+  const portraitBase = (size: number): Node =>
     src
       ? h('img', { width: size, height: size, borderRadius: size / 2, borderWidth: 4, borderStyle: 'solid', borderColor: C.gold }, undefined, { src, width: size, height: size })
       : h('div', { display: 'flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, borderRadius: size / 2, borderWidth: 4, borderStyle: 'solid', borderColor: C.gold, backgroundColor: C.bg2, color: WUXING_HEX[c.dayMaster.element] ?? C.ink, fontSize: Math.round(size * 0.5), fontWeight: 700 }, c.dayMaster.hanja);
+
+  // 일간 초상 + 오른쪽 아래 띠 동물(초상의 38%). 띠 이미지가 없으면 초상만.
+  const portrait = (size: number): Node => {
+    const z = Math.round(size * 0.38);
+    return h('div', { display: 'flex', position: 'relative', width: size, height: size }, [
+      portraitBase(size),
+      ...(zodiacSrc
+        ? [h('img', { position: 'absolute', right: -Math.round(z * 0.12), bottom: -Math.round(z * 0.08), width: z, height: z, borderRadius: z / 2, borderWidth: 3, borderStyle: 'solid', borderColor: C.gold }, undefined, { src: zodiacSrc, width: z, height: z })]
+        : []),
+    ]);
+  };
 
   if (format === 'og') {
     const textW = w - 56 * 2 - 260 - 40;

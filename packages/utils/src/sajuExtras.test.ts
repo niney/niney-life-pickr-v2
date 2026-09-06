@@ -149,3 +149,29 @@ describe('sajuFlow', () => {
     expect(s.error).toBeNull();
   });
 });
+
+describe('화면 요약(5차)', () => {
+  it('출생 요약 — 양력·음력·태양시 보정·계절', async () => {
+    const { sajuBirthSummary } = await import('./sajuText');
+    const s = sajuBirthSummary(A);
+    expect(s.solar).toBe('1990년 5월 15일 14:30');
+    expect(s.lunar).toBe('1990년 4월 21일');
+    // 1990-05-15 는 서머타임 아님 → 표준시 −30분.
+    expect(s.corrected).toBe('14:00 (표준시 −30분)');
+    expect(s.season).toBe('여름(사월) 태생');
+    expect(s.age).toBe(36);
+    const noHour = computeSajuChart({ calendar: 'solar', year: 1990, month: 5, day: 15, hour: null, minute: null, gender: 'M' }, { asOf: ASOF });
+    expect(sajuBirthSummary(noHour).corrected).toBeNull();
+    expect(sajuBirthSummary(noHour).solar).toBe('1990년 5월 15일');
+  });
+  it('십신 요약 — 칩은 개수 내림차순, 그룹 5개, 없는 그룹은 노트로', async () => {
+    const { sajuTenGodSummary, zodiacTraitLine } = await import('./sajuText');
+    const s = sajuTenGodSummary(A);
+    expect(s.groups.map((g) => g.ko)).toEqual(['비겁', '식상', '재성', '관성', '인성']);
+    expect(s.chips.every((c, i, arr) => i === 0 || arr[i - 1]!.count >= c.count)).toBe(true);
+    expect(s.chips.reduce((n, c) => n + c.count, 0)).toBe(s.groups.reduce((n, g) => n + g.count, 0));
+    for (const g of s.groups) if (g.count === 0) expect(s.notes.some((n) => n.startsWith(`${g.ko}이 없어요`))).toBe(true);
+    expect(s.notes.length).toBeLessThanOrEqual(3);
+    expect(zodiacTraitLine(A)).toMatch(/띠$/);
+  });
+});

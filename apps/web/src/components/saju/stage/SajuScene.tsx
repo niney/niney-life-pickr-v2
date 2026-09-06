@@ -37,7 +37,7 @@ import {
   sealOrder,
   sealRestPosition,
 } from './sajuLayout';
-import { discGlowTexture, loadDayMasterTexture, ringGlyphTexture, rippleTexture, sealFaceTexture } from './sajuTextures';
+import { discGlowTexture, loadDayMasterTexture, loadZodiacTexture, ringGlyphTexture, rippleTexture, sealFaceTexture } from './sajuTextures';
 
 // 천문도 무대 — 흑요석 원판(고리 3겹: 지지 12·천간 10·오행 5) 위에 인장 8개가 내려찍히고, 일간 캐릭터가 떠오른다.
 // 흐름 상태(phase·stamped)를 받아 그리기만 하고, 애니메이션이 끝나면 콜백으로 상태 머신을 진행시킨다.
@@ -377,6 +377,47 @@ const DayMasterCard = ({ chart, visible, elapsed }: { chart: SajuChart; visible:
   );
 };
 
+// 띠 동물 카드 — 일간 카드 왼쪽 아래에 작게, 일간 카드보다 0.35s 늦게 등장. 이미지 없으면 지지 한자.
+const ZodiacCard = ({ chart, visible, elapsed }: { chart: SajuChart; visible: boolean; elapsed: number }) => {
+  const [loaded, setLoaded] = useState<{ branch: number; tex: THREE.Texture } | null>(null);
+  const branch = chart.zodiac.index;
+  const tex = loaded && loaded.branch === branch ? loaded.tex : null;
+  useEffect(() => {
+    let alive = true;
+    loadZodiacTexture(branch)
+      .then((t) => {
+        if (alive) setLoaded({ branch, tex: t });
+      })
+      .catch(() => {
+        // 이미지 없음 — 글자 카드로.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [branch]);
+  const fallback = useMemo(() => sealFaceTexture(chart.zodiac.hanja, SAJU_GOLD, true), [chart.zodiac.hanja]);
+  const ref = useRef<THREE.Group>(null);
+  useFrame((st) => {
+    if (!ref.current) return;
+    const t = visible ? easeOutCubic(clamp((elapsed - 0.35) / TIMING.cardS, 0, 1)) : 0;
+    ref.current.position.y = 0.75 + t * 0.35 + Math.sin(st.clock.elapsedTime * 1.3 + 1) * 0.04;
+    ref.current.scale.setScalar(0.001 + t);
+  });
+  if (!visible) return null;
+  return (
+    <group ref={ref} position={[-1.85, 0.8, -0.9]} rotation={[-0.35, 0.18, 0]}>
+      <mesh>
+        <planeGeometry args={[1.15, 1.15]} />
+        <meshBasicMaterial map={tex ?? fallback} transparent toneMapped={false} />
+      </mesh>
+      <mesh position-z={-0.01}>
+        <planeGeometry args={[1.23, 1.23]} />
+        <meshBasicMaterial color={SAJU_GOLD} transparent opacity={0.9} />
+      </mesh>
+    </group>
+  );
+};
+
 // 오행 구슬 5개 — 분포만큼 크기, 상생(이웃) 빛줄, 상극(별) 점선. focus 가 elements 일 때 커진다.
 const ElementOrbs = ({ chart, active }: { chart: SajuChart; active: boolean }) => {
   const group = useRef<THREE.Group>(null);
@@ -481,6 +522,7 @@ export const SajuScene = ({ phase, chart, stamped, quality, focusX, focusYOffset
         <Seals chart={chart} phase={phase} stamped={stamped} elapsed={tick.elapsed} now={tick.now} onStamp={callbacks.onStamp} />
       )}
       {chart && <DayMasterCard chart={chart} visible={dayCardVisible} elapsed={tick.elapsed} />}
+      {chart && <ZodiacCard chart={chart} visible={dayCardVisible} elapsed={tick.elapsed} />}
       {chart && phase === 'reading' && <ElementOrbs chart={chart} active={focus === 'elements'} />}
 
       {quality.bloom && <Effects />}

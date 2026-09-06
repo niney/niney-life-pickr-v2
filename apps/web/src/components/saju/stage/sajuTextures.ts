@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { sajuImagePath, sajuStemImageId, type Stem } from '@repo/utils';
+import { sajuBranchImageId, sajuImagePath, sajuStemImageId, type Branch, type Stem } from '@repo/utils';
 import { SAJU_GOLD, SAJU_HANJI, SAJU_JUSA } from '../sajuTheme';
 
 // 캔버스 텍스처 — 한자·한글 글리프는 WebGL 로 폰트를 싣지 않고 2D 캔버스로 그려 텍스처로 쓴다
@@ -121,6 +121,21 @@ export const loadDayMasterTexture = (stem: Stem): Promise<THREE.Texture> =>
   new Promise((resolve, reject) => {
     new THREE.TextureLoader().load(
       sajuImagePath(sajuStemImageId(stem), 512),
+      (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 4;
+        resolve(t);
+      },
+      undefined,
+      (e) => reject(e),
+    );
+  });
+
+/** 띠 동물 이미지(512 webp) — 일간 카드 옆 작은 카드. 로드 실패 시 reject(글자 카드로). */
+export const loadZodiacTexture = (branch: Branch): Promise<THREE.Texture> =>
+  new Promise((resolve, reject) => {
+    new THREE.TextureLoader().load(
+      sajuImagePath(sajuBranchImageId(branch), 512),
       (t) => {
         t.colorSpace = THREE.SRGBColorSpace;
         t.anisotropy = 4;

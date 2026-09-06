@@ -19,6 +19,7 @@ import {
   type StarId,
   type Stem,
   type TenGod,
+  type TenGodGroup,
   type TwelveStage,
   type Wuxing,
 } from './saju.js';
@@ -271,3 +272,73 @@ export const sajuFactLines = (chart: SajuChart): string[] => {
 export const branchKo = (b: Branch): string => branchMeta(b).ko;
 export const starText = (id: StarId): string => `${SAJU_STAR_META[id].ko}: ${SAJU_STAR_TEXT[id]}`;
 export const relationText = (type: RelationType): string => `${SAJU_RELATION_META[type].ko}: ${SAJU_RELATION_TEXT[type]}`;
+
+// ── 화면 요약(5차) — 원국 헤더·성격 탭이 쓰는 구조화 요약. 계산은 전부 chart 에 있고 여기선 문장만 만든다 ──
+
+export interface SajuBirthSummary {
+  /** '1990년 5월 15일 14:30' (시간 모르면 날짜만). */
+  solar: string;
+  /** '1990년 4월 21일' — 음력 표 범위 밖이면 null. */
+  lunar: string | null;
+  /** 진태양시 보정 후 시각 — '14:00 (표준시 −30분)' / 서머타임이면 '(서머타임 −90분)'. 시간 모름·보정 0 이면 null. */
+  corrected: string | null;
+  /** '여름(사월) 태생'. */
+  season: string;
+  age: number;
+}
+
+const two = (n: number): string => String(n).padStart(2, '0');
+
+export const sajuBirthSummary = (chart: SajuChart): SajuBirthSummary => {
+  const { solar, lunar, instant, input } = chart;
+  const time = input.hour !== null ? ` ${two(input.hour)}:${two(input.minute ?? 0)}` : '';
+  const corr = instant.correctionMinutes;
+  const corrected =
+    instant.hourKnown && corr !== 0
+      ? `${two(instant.corrected.hour)}:${two(instant.corrected.minute)} (${instant.dst ? '서머타임 ' : '표준시 '}${corr < 0 ? '−' : '+'}${Math.abs(corr)}분)`
+      : null;
+  return {
+    solar: `${solar.year}년 ${solar.month}월 ${solar.day}일${time}`,
+    lunar: lunar ? formatLunarDate(lunar) : null,
+    corrected,
+    season: `${SAJU_SEASON_KO[chart.season]}(${branchMeta(chart.pillars.month.branch).ko}월) 태생`,
+    age: chart.asOf.age,
+  };
+};
+
+export interface SajuTenGodSummary {
+  /** 개수 있는 십신, 많은 순. */
+  chips: ReadonlyArray<{ god: TenGod; ko: string; count: number }>;
+  /** 5그룹(비겁·식상·재성·관성·인성) 합계 — 0 인 그룹이 "없는 기운". */
+  groups: ReadonlyArray<{ group: TenGodGroup; ko: string; count: number }>;
+  /** 많음(3개 이상)·없음 한 줄씩, 최대 3줄. */
+  notes: readonly string[];
+}
+
+const GROUP_ORDER: readonly TenGodGroup[] = ['self', 'output', 'wealth', 'power', 'resource'];
+/** 그룹의 "없음" 문장은 정(正) 쪽 십신 텍스트를 빌린다. */
+const GROUP_MAIN_GOD: Record<TenGodGroup, TenGod> = { self: 'bigyeon', output: 'siksin', wealth: 'jeongjae', power: 'jeonggwan', resource: 'jeongin' };
+
+export const sajuTenGodSummary = (chart: SajuChart): SajuTenGodSummary => {
+  const gods = Object.keys(SAJU_TEN_GOD_META) as TenGod[];
+  const chips = gods
+    .map((god) => ({ god, ko: SAJU_TEN_GOD_META[god].ko, count: chart.tenGodCounts[god] ?? 0 }))
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const groups = GROUP_ORDER.map((group) => ({
+    group,
+    ko: SAJU_TEN_GOD_META[GROUP_MAIN_GOD[group]].groupKo,
+    count: gods.filter((g) => SAJU_TEN_GOD_META[g].group === group).reduce((s, g) => s + (chart.tenGodCounts[g] ?? 0), 0),
+  }));
+  const notes: string[] = [];
+  for (const c of chips) {
+    if (c.count >= 3 && notes.length < 2) notes.push(`${c.ko} ${c.count}개 — ${SAJU_TEN_GOD_TEXT[c.god].many}`);
+  }
+  for (const g of groups) {
+    if (g.count === 0 && notes.length < 3) notes.push(`${g.ko}이 없어요 — ${SAJU_TEN_GOD_TEXT[GROUP_MAIN_GOD[g.group]].none}`);
+  }
+  return { chips, groups, notes };
+};
+
+/** 띠 한 줄 — '당당하고 용감한 호랑이띠'. */
+export const zodiacTraitLine = (chart: SajuChart): string => `${SAJU_ZODIAC_TRAIT[chart.zodiac.index] ?? ''} ${chart.zodiac.animal}띠`.trim();
