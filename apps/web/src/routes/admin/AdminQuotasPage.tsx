@@ -11,6 +11,10 @@ import { Input } from '~/components/ui/input';
 // 회원은 기기·IP 일일 한도를 건너뛰고 전역 예산만 소비한다(게스트는 예산의 cutoff % 에서 컷).
 
 const FEATURE_META: Record<UsageQuotaFeatureType, { label: string; desc: string }> = {
+  'saju-reading': {
+    label: '사주 해석',
+    desc: '명식 계산은 항상 제공하고 AI 해석의 새 요청에 한도를 적용합니다. 같은 결과를 다시 읽을 때는 재사용합니다.',
+  },
   'tarot-reading': {
     label: '타로 해석',
     desc: '타로 리딩의 Ollama Cloud 호출. 같은 카드·질문 조합은 캐시라 한도를 소비하지 않는다.',

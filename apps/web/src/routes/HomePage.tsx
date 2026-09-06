@@ -102,6 +102,23 @@ export const HomePage = () => {
       </Link>
 
       <RestaurantFavoritesStrip items={favorites.items} onToggle={favorites.toggle} />
+      <Link
+        to="/saju"
+        className="mb-10 flex items-center gap-4 rounded-xl border border-[#819b88]/40 bg-[#102c30] p-5 text-[#eee8da] transition hover:border-[#b7cdb2]"
+      >
+        <span className="text-3xl text-[#d1b680]" aria-hidden>
+          命
+        </span>
+        <div>
+          <div className="font-serif-kr text-lg">나를 알아가는 사주</div>
+          <p className="text-sm text-[#b5c9c2]">
+            나의 오행 지도, 올해와 오늘의 흐름. 태어난 순간을 펼쳐 보세요.
+          </p>
+        </div>
+        <span className="ml-auto text-[#d1b680]" aria-hidden>
+          →
+        </span>
+      </Link>
 
       <header className="mb-6 flex flex-col gap-2">
         <h2 className="text-2xl font-bold tracking-tight">맛집 랭킹</h2>

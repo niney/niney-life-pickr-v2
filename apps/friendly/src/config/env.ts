@@ -34,10 +34,6 @@ const EnvSchema = z.object({
   OLLAMA_MEAL_PHOTO_MODEL: z.string().default(''),
   OLLAMA_MEAL_RECOMMEND_MODEL: z.string().default(''),
   OLLAMA_TAROT_MODEL: z.string().default('gpt-oss:120b'),
-  //  - OLLAMA_SAJU_MODEL:           사주 풀이(saju, 텍스트). 섹션 4개 병렬이라 지연보다 한국어·명리 용어 품질을
-  //                                 우선. 프로브(2026-09-06, 3사주×4섹션): kimi-k3 가 문맥(계절·오행)을 가장 자연스럽게
-  //                                 엮어 기본. JSON 준수는 4모델 모두 12/12, p50 kimi 5.6s / qwen3.5 5.5s /
-  //                                 deepseek-v4-pro 3.5s / gpt-oss:120b 2.0s. 재측정: probe:saju-reading.
   OLLAMA_SAJU_MODEL: z.string().default('kimi-k3'),
   // 메뉴 칼로리 LLM 매칭(chat 용도 키 상속, 모델만 지정). 골든셋 84건 실측(2026-09-02):
   // gemma4:31b 88%(high 신뢰도만 29/30, p50 1.2s) / qwen3.5:397b 77% / gpt-oss:120b 68%.

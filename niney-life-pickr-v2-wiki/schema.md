@@ -38,6 +38,7 @@ last_updated: 2026-08-30
 
 | Slug | 범위 | 핵심 위치 |
 |---|---|---|
+| `saju` | 개인 사주·올해·오늘, 결정적 명식·Kimi 해석·공개 공유·보관 | `apps/friendly/src/modules/saju/`, `apps/web/src/components/saju/`, `packages/api-contract/src/schemas/saju.ts` |
 | `project-overview` | 모노레포 전체 — 디렉터리, 워크플로, 공통 결정 | `README.md`, `CLAUDE.md`, `TECH_STACK.md`, 루트 설정 파일 |
 | `friendly` | Fastify 백엔드 공통 — 플러그인·인증·rate-limit·env 키 폴백 체인·Prisma·테스트 격리(`useIsolatedDatabase`)·마스터 적재 스크립트 (crawl·ai 및 도메인 토픽 air-quality·weather·life-map·food·meal·bus·subway 등은 별도 토픽) | `apps/friendly/` |
 | `crawl` | Naver Place / 캐치테이블 / 다이닝코드 크롤러 모듈 | `apps/friendly/src/modules/crawl/` |

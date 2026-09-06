@@ -14,6 +14,8 @@ const ENV: LlmProviderEnv = {
     'log-analysis': '',
     'meal-photo': '',
     'meal-recommend': '',
+    tarot: '',
+    saju: '',
   },
 };
 
@@ -115,7 +117,7 @@ describe('AiConfigService', () => {
   });
 
   describe('list', () => {
-    it('synthesizes all six purposes when DB empty — chat env-backed, others inherit', async () => {
+    it('synthesizes all seven purposes when DB empty — chat env-backed, others inherit', async () => {
       const out = await service.list();
       expect(out.map((p) => p.purpose).sort()).toEqual([
         'chat',
@@ -123,6 +125,7 @@ describe('AiConfigService', () => {
         'log-analysis',
         'meal-photo',
         'meal-recommend',
+        'saju',
         'tarot',
       ]);
       const chat = out.find((p) => p.purpose === 'chat')!;
@@ -140,7 +143,14 @@ describe('AiConfigService', () => {
       });
       expect(chat.apiKeyMasked).toBe(maskApiKey(ENV.apiKey));
       // chat 외 용도는 계정(env) 키를 상속해 활성으로 보인다.
-      for (const purpose of ['image', 'log-analysis', 'meal-photo', 'meal-recommend', 'tarot'] as const) {
+      for (const purpose of [
+        'image',
+        'log-analysis',
+        'meal-photo',
+        'meal-recommend',
+        'tarot',
+        'saju',
+      ] as const) {
         const v = out.find((p) => p.purpose === purpose)!;
         expect(v).toMatchObject({ hasApiKey: true, keySource: 'inherited' });
       }
@@ -212,14 +222,15 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      // 나머지 용도(log-analysis·meal-photo·meal-recommend·tarot) 가상 row 까지 항상 여섯 장.
-      expect(out).toHaveLength(6);
+      // 나머지 용도(log-analysis·meal-photo·meal-recommend·tarot·saju) 가상 row 까지 항상 일곱 장.
+      expect(out).toHaveLength(7);
       expect(out.map((p) => p.purpose).sort()).toEqual([
         'chat',
         'image',
         'log-analysis',
         'meal-photo',
         'meal-recommend',
+        'saju',
         'tarot',
       ]);
     });
@@ -241,7 +252,7 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      expect(out).toHaveLength(6);
+      expect(out).toHaveLength(7);
       const chat = out.find((p) => p.purpose === 'chat')!;
       const image = out.find((p) => p.purpose === 'image')!;
       expect(chat.updatedAt).toBeNull();

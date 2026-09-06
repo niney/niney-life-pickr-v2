@@ -42,14 +42,17 @@ const HousingPage = lazy(() =>
   import('./routes/HousingPage').then((m) => ({ default: m.HousingPage })),
 );
 const TarotPage = lazy(() => import('./routes/TarotPage').then((m) => ({ default: m.TarotPage })));
-const SajuPage = lazy(() => import('./routes/SajuPage').then((m) => ({ default: m.SajuPage })));
-const SajuSharedPage = lazy(() => import('./routes/SajuSharedPage').then((m) => ({ default: m.SajuSharedPage })));
-const MySajuPage = lazy(() => import('./routes/saju/MySajuPage').then((m) => ({ default: m.MySajuPage })));
-const MySajuReadingPage = lazy(() => import('./routes/saju/MySajuReadingPage').then((m) => ({ default: m.MySajuReadingPage })));
 const TarotSharedPage = lazy(() =>
   import('./routes/TarotSharedPage').then((m) => ({ default: m.TarotSharedPage })),
 );
 const MyTarotPage = lazy(() => import('./routes/tarot/MyTarotPage').then((m) => ({ default: m.MyTarotPage })));
+const SajuPage = lazy(() => import('./routes/SajuPage').then((m) => ({ default: m.SajuPage })));
+const SajuSharedPage = lazy(() =>
+  import('./routes/SajuSharedPage').then((m) => ({ default: m.SajuSharedPage })),
+);
+const SajuHistoryPage = lazy(() =>
+  import('./routes/SajuHistoryPage').then((m) => ({ default: m.SajuHistoryPage })),
+);
 const MyTarotReadingPage = lazy(() =>
   import('./routes/tarot/MyTarotReadingPage').then((m) => ({ default: m.MyTarotReadingPage })),
 );
@@ -165,24 +168,10 @@ export const App = () => {
             <Route path="/housing" element={<HousingPage />} />
             {/* 타로 — 로그인 없이 공개. 3D(three) 가 무거워 lazy, ?embed=1 이면 레이아웃 크롬 없이(앱 WebView). */}
             <Route path="/tarot" element={<TarotPage />} />
-            <Route path="/saju-c" element={<SajuPage />} />
-            <Route path="/saju-c/s/:token" element={<SajuSharedPage />} />
-            <Route
-              path="/me/saju-c"
-              element={
-                <RequireUser>
-                  <MySajuPage />
-                </RequireUser>
-              }
-            />
-            <Route
-              path="/me/saju-c/:id"
-              element={
-                <RequireUser>
-                  <MySajuReadingPage />
-                </RequireUser>
-              }
-            />
+            <Route path="/saju" element={<SajuPage />} />
+            <Route path="/saju/s/:token" element={<SajuSharedPage />} />
+            <Route path="/me/saju" element={<SajuHistoryPage />} />
+            <Route path="/me/saju/:id" element={<SajuHistoryPage />} />
             {/* 타로 공유 결과 — 3D 없이 2D 로. OG 는 friendly 가 같은 경로에서 주입. */}
             <Route path="/tarot/s/:token" element={<TarotSharedPage />} />
             {/* 내 타로 기록 — 회원 자동 저장분 목록·상세. 로그인 필수. */}

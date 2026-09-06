@@ -5,7 +5,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { env } from '../../config/env.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
-import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import type { IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { useSchemaDatabase } from '../../test-utils/schema-db.js';
 
 // 타로 공유 — 토큰 발급(게스트 입력 / 회원 readingId), 공개 조회(질문 숨김·포함), OG 프리렌더,
 // satori 공유 이미지. LLM 은 provider 비활성 행으로 막아 정적 경로만 친다.
@@ -30,7 +31,7 @@ describe('tarot share (격리 DB)', () => {
   beforeAll(async () => {
     prevIndex = env.WEB_INDEX_PATH;
     env.WEB_INDEX_PATH = WEB_INDEX;
-    isolated = await useIsolatedDatabase();
+    isolated = useSchemaDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
     await seedAuthUsers(app, [{ id: 's-user', role: 'USER' }]);

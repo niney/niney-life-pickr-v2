@@ -1,0 +1,268 @@
+{
+  "readingId": null,
+  "receipt": "synthetic-receipt-for-component-test",
+  "kind": "natal",
+  "chart": {
+    "calculationVersion": 1,
+    "solarDate": "1990-05-21",
+    "lunarDate": "1990.04.27",
+    "timeLabel": "태어난 시간 모름",
+    "standardTime": null,
+    "dayBoundary": "midnight",
+    "pillars": [
+      {
+        "key": "year",
+        "label": "연주",
+        "ganZhi": "庚午",
+        "pronunciation": "경오",
+        "stemElement": "metal",
+        "branchElement": "fire",
+        "tenGod": "편재",
+        "candidates": ["庚午"],
+        "hiddenStems": [
+          {
+            "hanja": "丁",
+            "ko": "정",
+            "element": "fire",
+            "tenGod": "겁재"
+          },
+          {
+            "hanja": "己",
+            "ko": "기",
+            "element": "earth",
+            "tenGod": "상관"
+          }
+        ]
+      },
+      {
+        "key": "month",
+        "label": "월주",
+        "ganZhi": "辛巳",
+        "pronunciation": "신사",
+        "stemElement": "metal",
+        "branchElement": "fire",
+        "tenGod": "정재",
+        "candidates": ["辛巳"],
+        "hiddenStems": [
+          {
+            "hanja": "丙",
+            "ko": "병",
+            "element": "fire",
+            "tenGod": "비견"
+          },
+          {
+            "hanja": "戊",
+            "ko": "무",
+            "element": "earth",
+            "tenGod": "식신"
+          },
+          {
+            "hanja": "庚",
+            "ko": "경",
+            "element": "metal",
+            "tenGod": "편재"
+          }
+        ]
+      },
+      {
+        "key": "day",
+        "label": "일주",
+        "ganZhi": "丙戌",
+        "pronunciation": "병술",
+        "stemElement": "fire",
+        "branchElement": "earth",
+        "tenGod": null,
+        "candidates": ["丙戌"],
+        "hiddenStems": [
+          {
+            "hanja": "戊",
+            "ko": "무",
+            "element": "earth",
+            "tenGod": "식신"
+          },
+          {
+            "hanja": "辛",
+            "ko": "신",
+            "element": "metal",
+            "tenGod": "정재"
+          },
+          {
+            "hanja": "丁",
+            "ko": "정",
+            "element": "fire",
+            "tenGod": "겁재"
+          }
+        ]
+      },
+      {
+        "key": "hour",
+        "label": "시주",
+        "ganZhi": null,
+        "pronunciation": null,
+        "stemElement": null,
+        "branchElement": null,
+        "tenGod": null,
+        "candidates": [
+          "戊子",
+          "己丑",
+          "庚寅",
+          "辛卯",
+          "壬辰",
+          "癸巳",
+          "甲午",
+          "乙未",
+          "丙申",
+          "丁酉",
+          "戊戌",
+          "己亥"
+        ],
+        "hiddenStems": []
+      }
+    ],
+    "elements": [
+      {
+        "element": "wood",
+        "count": 0
+      },
+      {
+        "element": "fire",
+        "count": 3
+      },
+      {
+        "element": "earth",
+        "count": 1
+      },
+      {
+        "element": "metal",
+        "count": 2
+      },
+      {
+        "element": "water",
+        "count": 0
+      }
+    ],
+    "unknownCharacters": 2,
+    "dayMaster": {
+      "hanja": "丙",
+      "ko": "병",
+      "element": "fire",
+      "symbol": "태양",
+      "title": "세상에 온기를 건네는 사람",
+      "description": "태양처럼 밝게 드러내고 나누는 상징이에요. 표현하는 즐거움과 조용히 에너지를 채우는 시간을 함께 가져 보세요."
+    },
+    "notices": [
+      "대한민국 출생 · 당시 표준시(서머타임 제외) · 지역 태양시 보정 없음",
+      "일주는 자정에 바뀌며, 23시의 시주도 해당 날짜의 일간으로 계산해요.",
+      "입력한 시간 범위에서 달라지는 기둥은 비워 두었어요. 오행도 확인된 글자만 셌어요."
+    ],
+    "facts": [
+      {
+        "id": "scope",
+        "label": "해석의 범위",
+        "description": "시간 정보가 충분하지 않아 확정된 기둥만 설명합니다. 빈 기둥과 확정되지 않은 일간을 추정하지 않습니다."
+      },
+      {
+        "id": "pillar-year",
+        "label": "연주 경오",
+        "description": "庚午, 천간 금, 지지 화, 일간과의 십성 편재(넓은 경험과 자원의 활용)"
+      },
+      {
+        "id": "pillar-month",
+        "label": "월주 신사",
+        "description": "辛巳, 천간 금, 지지 화, 일간과의 십성 정재(꾸준한 관리와 현실적인 계획)"
+      },
+      {
+        "id": "pillar-day",
+        "label": "일주 병술",
+        "description": "丙戌, 천간 화, 지지 토"
+      },
+      {
+        "id": "element-wood",
+        "label": "목의 구성",
+        "description": "확정된 글자 중 0개. 전통 상징은 성장과 시작. 개수가 많거나 적다는 사실만으로 좋고 나쁨·용신을 판단하지 않습니다."
+      },
+      {
+        "id": "element-fire",
+        "label": "화의 구성",
+        "description": "확정된 글자 중 3개. 전통 상징은 표현과 온기. 개수가 많거나 적다는 사실만으로 좋고 나쁨·용신을 판단하지 않습니다."
+      },
+      {
+        "id": "element-earth",
+        "label": "토의 구성",
+        "description": "확정된 글자 중 1개. 전통 상징은 중심과 돌봄. 개수가 많거나 적다는 사실만으로 좋고 나쁨·용신을 판단하지 않습니다."
+      },
+      {
+        "id": "element-metal",
+        "label": "금의 구성",
+        "description": "확정된 글자 중 2개. 전통 상징은 기준과 정리. 개수가 많거나 적다는 사실만으로 좋고 나쁨·용신을 판단하지 않습니다."
+      },
+      {
+        "id": "element-water",
+        "label": "수의 구성",
+        "description": "확정된 글자 중 0개. 전통 상징은 사유와 유연함. 개수가 많거나 적다는 사실만으로 좋고 나쁨·용신을 판단하지 않습니다."
+      },
+      {
+        "id": "day-master",
+        "label": "병화 · 태양",
+        "description": "태양처럼 밝게 드러내고 나누는 상징이에요. 표현하는 즐거움과 조용히 에너지를 채우는 시간을 함께 가져 보세요."
+      }
+    ],
+    "period": {
+      "kind": "natal",
+      "label": "타고난 나의 지도",
+      "key": "natal",
+      "ganZhi": null,
+      "relation": null,
+      "months": []
+    }
+  },
+  "report": {
+    "headline": "세상에 온기를 건네는 사람",
+    "summary": "태양의 상징으로 나를 읽어 보세요. 시간 정보가 부족한 부분은 열어 두고, 확인된 구성만 풀이했어요.",
+    "sections": [
+      {
+        "id": "nature",
+        "title": "나를 읽는 상징",
+        "text": "태양처럼 밝게 드러내고 나누는 상징이에요. 표현하는 즐거움과 조용히 에너지를 채우는 시간을 함께 가져 보세요.",
+        "evidenceIds": ["day-master"]
+      },
+      {
+        "id": "work",
+        "title": "일과 나의 속도",
+        "text": "태양의 상징을 일하는 방식에 비추어 보세요. 잘하는 일 하나와 에너지가 많이 드는 일 하나를 적고, 다음 주에 조정할 작은 습관을 골라 보세요.",
+        "evidenceIds": ["day-master"]
+      },
+      {
+        "id": "relationships",
+        "title": "함께하는 방식",
+        "text": "성향은 관계를 돌아보는 출발점이에요. 상대의 마음을 예측하기보다 서로 편한 대화 방식과 필요한 거리를 직접 이야기해 보세요.",
+        "evidenceIds": ["day-master"]
+      },
+      {
+        "id": "balance",
+        "title": "오행과 일상의 균형",
+        "text": "확인된 글자의 구성은 목 0개 · 화 3개 · 토 1개 · 금 2개 · 수 0개예요. 적게 나타난 원소가 곧 결함은 아니에요. 충분히 하고 있는 일과 잠시 쉬어 갈 일을 나누어 보세요.",
+        "evidenceIds": ["element-wood"]
+      }
+    ],
+    "practice": "오늘 마음에 남은 단어 하나를 적고, 그 단어와 연결되는 작은 행동을 해 보세요.",
+    "reflection": "요즘 나답다고 느꼈던 순간에는 무엇을 하고 있었나요?"
+  },
+  "source": "basic",
+  "model": null,
+  "promptVersion": 1,
+  "fallbackReason": "not_configured",
+  "remainingToday": null,
+  "createdAt": "2026-09-06T10:00:00.000Z",
+  "birth": {
+    "date": "1990-05-21",
+    "calendar": "solar",
+    "leapMonth": false,
+    "timeAccuracy": "unknown",
+    "time": null,
+    "timeRange": null,
+    "timeZone": "Asia/Seoul",
+    "dayBoundary": "midnight",
+    "disambiguation": "reject"
+  }
+}

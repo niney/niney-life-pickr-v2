@@ -1,5 +1,13 @@
 # Wiki Compile Log
 
+## 2026-09-06 (사주 범위 갱신)
+
+후속 품질·코드 검토: KASI·IANA 53개 대조 테스트와 고정 자료를 추가해 사주 토픽 소스를 19개로 갱신했다. 프롬프트 v3의 K3 12/12 실측, 기본 풀이 즉시 재시도, 저장·삭제 시 캐시/영수증 일관성, 탭 복귀 시 삭제된 공유/상세 숨김을 반영했다. 타로 테스트의 오래된 DB 복사 fixture도 교체했다. 이 범위의 직접 검토이며 전체 위키 재컴파일은 아니다.
+
+사주 토픽 17개 소스, INDEX·schema·CONTEXT를 갱신했다. 현재 환경에서 `/wiki-compile` 명령 정의를 찾을 수 없어 이번 작업 범위를 직접 읽어 정리했다. 전체 재컴파일로 기록하지 않으며 다른 도메인의 마지막 컴파일 상태는 유지한다. 명식 계산 관례, Kimi K3 실측, 공개 필드 제한, 명시적 저장, 임시 DB 검증을 반영했다.
+
+후속 실행 검증: 기본 DB의 사주·한도 마이그레이션 누락을 확인해 개발용 복사본에 적용했다. 실제 서버/브라우저 Kimi K3 응답 8건과 게스트·회원 보관/공유/취소 통과 기록을 saju 토픽·구현 명세에 추가했다. 원본 DB·환경 파일·운영 배포는 변경하지 않았다.
+
 ## 2026-08-30 (24th compile)
 
 **Topics updated:** ai(1057줄·49 sources), analytics(167줄·19 sources), api-contract(1636줄·46 sources), auto-discover(153줄·13 sources), bus(320줄·56 sources), crawl(408줄·42 sources), food(176줄·46 sources), friendly(1092줄·272 sources), logs(152줄·28 sources), map(485줄·44 sources), meal(213줄·82 sources), menu-grouping(211줄·21 sources), mobile(664줄·160 sources), project-overview(842줄·119 sources), random-crawl(164줄·21 sources), review-clustering(173줄·27 sources), review-search(272줄·24 sources), schedule(136줄·16 sources), settlement(433줄·113 sources), shared(1315줄·120 sources), subway(345줄·74 sources), transit(259줄·33 sources), utils(295줄·46 sources), web(2121줄·191 sources)

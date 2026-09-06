@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
-import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import type { IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { useSchemaDatabase } from '../../test-utils/schema-db.js';
 import { USAGE_QUOTA_DEFAULTS, UsageQuotaService, kstToday } from './usage-quota.service.js';
 
 // 공용 사용량 한도 — 소비 순서(전역 → IP → 게스트)·되돌리기·회원 면제·컷오프·어드민 라우트.
@@ -17,7 +18,7 @@ describe('UsageQuotaService (격리 DB)', () => {
   let svc: UsageQuotaService;
 
   beforeAll(async () => {
-    isolated = await useIsolatedDatabase();
+    isolated = useSchemaDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
     await seedAuthUsers(app, [
@@ -42,7 +43,7 @@ describe('UsageQuotaService (격리 DB)', () => {
   it('행이 없으면 코드 기본값으로 동작한다', async () => {
     const s = await svc.getSetting(F);
     expect(s).toEqual({ feature: F, ...USAGE_QUOTA_DEFAULTS[F], updatedAt: null });
-    expect(await svc.listSettings()).toHaveLength(Object.keys(USAGE_QUOTA_DEFAULTS).length);
+    expect(await svc.listSettings()).toHaveLength(2);
   });
 
   it('게스트: guestPerDay 만큼 허용 후 guest_daily 로 거부, 잔여가 줄어든다', async () => {

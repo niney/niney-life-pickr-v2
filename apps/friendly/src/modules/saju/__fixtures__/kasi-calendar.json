@@ -1,0 +1,282 @@
+{
+  "sources": [
+    "https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2023&bbs_uniq_id=calendarData",
+    "https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2026&bbs_uniq_id=calendarData"
+  ],
+  "retrievedAt": "2026-09-06",
+  "precision": "Solar term times are published to minutes; compare within 60 seconds. Lunar month names are not saju solar-term month pillars.",
+  "lunarDates": [
+    {
+      "lunarDate": "2023-01-01",
+      "leapMonth": false,
+      "solarDate": "2023-01-22",
+      "dayGanZhiKo": "경진"
+    },
+    {
+      "lunarDate": "2023-02-01",
+      "leapMonth": false,
+      "solarDate": "2023-02-20",
+      "dayGanZhiKo": "기유"
+    },
+    {
+      "lunarDate": "2023-02-01",
+      "leapMonth": true,
+      "solarDate": "2023-03-22",
+      "dayGanZhiKo": "기묘"
+    },
+    {
+      "lunarDate": "2023-03-01",
+      "leapMonth": false,
+      "solarDate": "2023-04-20",
+      "dayGanZhiKo": "무신"
+    },
+    {
+      "lunarDate": "2023-04-01",
+      "leapMonth": false,
+      "solarDate": "2023-05-20",
+      "dayGanZhiKo": "무인"
+    },
+    {
+      "lunarDate": "2023-05-01",
+      "leapMonth": false,
+      "solarDate": "2023-06-18",
+      "dayGanZhiKo": "정미"
+    },
+    {
+      "lunarDate": "2023-06-01",
+      "leapMonth": false,
+      "solarDate": "2023-07-18",
+      "dayGanZhiKo": "정축"
+    },
+    {
+      "lunarDate": "2023-07-01",
+      "leapMonth": false,
+      "solarDate": "2023-08-16",
+      "dayGanZhiKo": "병오"
+    },
+    {
+      "lunarDate": "2023-08-01",
+      "leapMonth": false,
+      "solarDate": "2023-09-15",
+      "dayGanZhiKo": "병자"
+    },
+    {
+      "lunarDate": "2023-09-01",
+      "leapMonth": false,
+      "solarDate": "2023-10-15",
+      "dayGanZhiKo": "병오"
+    },
+    {
+      "lunarDate": "2023-10-01",
+      "leapMonth": false,
+      "solarDate": "2023-11-13",
+      "dayGanZhiKo": "을해"
+    },
+    {
+      "lunarDate": "2023-11-01",
+      "leapMonth": false,
+      "solarDate": "2023-12-13",
+      "dayGanZhiKo": "을사"
+    },
+    {
+      "lunarDate": "2023-12-01",
+      "leapMonth": false,
+      "solarDate": "2024-01-11",
+      "dayGanZhiKo": "갑술"
+    },
+    {
+      "lunarDate": "2026-01-01",
+      "leapMonth": false,
+      "solarDate": "2026-02-17",
+      "dayGanZhiKo": "임술"
+    },
+    {
+      "lunarDate": "2026-02-01",
+      "leapMonth": false,
+      "solarDate": "2026-03-19",
+      "dayGanZhiKo": "임진"
+    },
+    {
+      "lunarDate": "2026-03-01",
+      "leapMonth": false,
+      "solarDate": "2026-04-17",
+      "dayGanZhiKo": "신유"
+    },
+    {
+      "lunarDate": "2026-04-01",
+      "leapMonth": false,
+      "solarDate": "2026-05-17",
+      "dayGanZhiKo": "신묘"
+    },
+    {
+      "lunarDate": "2026-05-01",
+      "leapMonth": false,
+      "solarDate": "2026-06-15",
+      "dayGanZhiKo": "경신"
+    },
+    {
+      "lunarDate": "2026-06-01",
+      "leapMonth": false,
+      "solarDate": "2026-07-14",
+      "dayGanZhiKo": "기축"
+    },
+    {
+      "lunarDate": "2026-07-01",
+      "leapMonth": false,
+      "solarDate": "2026-08-13",
+      "dayGanZhiKo": "기미"
+    },
+    {
+      "lunarDate": "2026-08-01",
+      "leapMonth": false,
+      "solarDate": "2026-09-11",
+      "dayGanZhiKo": "무자"
+    },
+    {
+      "lunarDate": "2026-09-01",
+      "leapMonth": false,
+      "solarDate": "2026-10-11",
+      "dayGanZhiKo": "무오"
+    },
+    {
+      "lunarDate": "2026-10-01",
+      "leapMonth": false,
+      "solarDate": "2026-11-09",
+      "dayGanZhiKo": "정해"
+    },
+    {
+      "lunarDate": "2026-11-01",
+      "leapMonth": false,
+      "solarDate": "2026-12-09",
+      "dayGanZhiKo": "정사"
+    },
+    {
+      "lunarDate": "2026-12-01",
+      "leapMonth": false,
+      "solarDate": "2027-01-08",
+      "dayGanZhiKo": "정해"
+    }
+  ],
+  "terms": [
+    {
+      "year": 2023,
+      "term": "소한",
+      "kst": "2023-01-06T00:05:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "입춘",
+      "kst": "2023-02-04T11:43:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "경칩",
+      "kst": "2023-03-06T05:36:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "청명",
+      "kst": "2023-04-05T10:13:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "입하",
+      "kst": "2023-05-06T03:19:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "망종",
+      "kst": "2023-06-06T07:18:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "소서",
+      "kst": "2023-07-07T17:31:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "입추",
+      "kst": "2023-08-08T03:23:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "백로",
+      "kst": "2023-09-08T06:27:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "한로",
+      "kst": "2023-10-08T22:16:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "입동",
+      "kst": "2023-11-08T01:36:00+09:00"
+    },
+    {
+      "year": 2023,
+      "term": "대설",
+      "kst": "2023-12-07T18:33:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "소한",
+      "kst": "2026-01-05T17:23:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "입춘",
+      "kst": "2026-02-04T05:02:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "경칩",
+      "kst": "2026-03-05T22:59:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "청명",
+      "kst": "2026-04-05T03:40:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "입하",
+      "kst": "2026-05-05T20:49:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "망종",
+      "kst": "2026-06-06T00:48:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "소서",
+      "kst": "2026-07-07T10:57:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "입추",
+      "kst": "2026-08-07T20:43:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "백로",
+      "kst": "2026-09-07T23:41:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "한로",
+      "kst": "2026-10-08T15:29:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "입동",
+      "kst": "2026-11-07T18:52:00+09:00"
+    },
+    {
+      "year": 2026,
+      "term": "대설",
+      "kst": "2026-12-07T11:53:00+09:00"
+    }
+  ]
+}

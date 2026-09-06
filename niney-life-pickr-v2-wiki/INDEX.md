@@ -1,7 +1,7 @@
 # niney-life-pickr-v2 Knowledge Base
 
-Last compiled: 2026-08-30
-Total topics: 31 | Total concepts: 21 | Mode: codebase
+Last full compile: 2026-08-30 · 사주 범위 갱신: 2026-09-06
+Total topics: 32 | Total concepts: 21 | Mode: codebase
 
 선택을 대신 골라주는 서비스 — pnpm + Turborepo 모노레포(Fastify API + Vite 웹 + Expo 앱)의 컴파일된 위키. 처음 본다면 [project-overview](topics/project-overview.md) → 관심 토픽 순서로 읽는 것을 권장. 공개 페이지(`/`, `/restaurants`, `/r/:placeId` 공유)·정산하기·어드민 운영 도구가 한 SPA 안에 분리되어 있고, 18차 라운드에 **리뷰 RAG 문맥검색·군집화·텔레그램 봇 자동 발굴·범용 작업 로그**가 신규로 들어왔다. 이어 19차에 **서울시 버스 조회**가, 20차에 **수도권 전철 조회**와 **버스↔지하철 통합 레이어**(탭·지도 연속성·통합 즐겨찾기·겸표시·크로스 검색)가 공개 기능으로 합류했다(대중교통은 현재 웹 전용). 23차에는 **음식 카탈로그·적재/식당 역검색**과 **개인 식단 기록·사진 인식·추천·통계·데이터 관리**가, 24차에는 **에어코리아 대기정보·기상청 날씨·일상지도(CCTV·화장실·병의원)**와 **앱의 날씨·대기·일상지도·식단 화면**, 지도 페이지 공통 **바텀시트 골격**이 합류했다(대중교통은 2026-07 부터 앱에도 있다).
 
@@ -9,8 +9,11 @@ Total topics: 31 | Total concepts: 21 | Mode: codebase
 
 ## Topics
 
+사주 기능은 [saju](topics/saju.md)에서 시작한다. Kimi 모델·명식 계산·저장·공유와 검증 기준을 함께 정리했다.
+
 | Topic | Also Known As | Sources | Last Updated | Status |
 |-------|--------------|---------|-------------|--------|
+| [saju](topics/saju.md) | 사주, 명식, 오행, 절기, 윤달, kimi-k3, saju-reading, SajuPage | 19 | 2026-09-06 | active |
 | [project-overview](topics/project-overview.md) | monorepo, life-pickr, niney, root, turbo, pnpm-workspace, 공개-어드민-분리, settlement, 정산, share-token, ssr-lite, review-search, rag, review-clustering, random-crawl, telegram-bot, operation-log, tabling, db-config-env-fallback, llm-telemetry, region-stats, dark-mode, schedule, taxonomy-v3, deploy-sh, ninelife-kr, public-transit, seoul-bus-api, bus-favorite, bus-positions, bus-route, bus-arrivals, bus-stations, 버스, bus, ollama-grammar-array, categoryPath-recovery, category-tree-shared | 119 | 2026-08-30 | active |
 | [friendly](topics/friendly.md) | fastify-api, backend, prisma-server, jwt-auth, restaurant-module, media-module, panorama-cache, restaurant-preview, sitemap, region-derive, smart-pick, canonical-members, settlement-modules, well-known, schedule-module, review-search-module, review-clustering-module, random-crawl-module, telegram-module, logs-module, operation-log, plugins-singleton, cors-reflect, tabling-fusion, ERROR-337, dijkstra-path, temp-db, useIsolatedDatabase, db-drift-realign, realign-drifted-tables, SEOUL_OPEN_API_KEY, SUBWAY_API_KEY, subway-line-order, subway-master, subway-favorite, subway-path | 272 | 2026-08-30 | active |
 | [settlement](topics/settlement.md) | 정산, 정산하기, settlement, receipt-split, 영수증 추출, 단골, contact, share token, rounds, N차, settlement-draft, multi-receipt, group-split, 세부분배, 그룹카드, drink-kinds, 술종류, 소주, 맥주, 잔수, glasses, GLASSES, EQUAL, RoundGroupSplitEditor, RoundGroupSplitNote, suggestItemGroups, matchDrinkKind, EXTRACTION_VERSION, leftover-multi, share-preview, og-ssr-lite, settlement-card, leftover-multi-receiver, groupBreakdown, toGroupCalcInputs, GROUPABLE_CATEGORIES, isGroupableCategory, DRINK_BRAND_PROMPT_HINT, DRINK_KINDS, 술 종류, 그룹 카드, 세부 분배, sharePreviewCache, receipt-lightbox | 113 | 2026-08-30 | active |

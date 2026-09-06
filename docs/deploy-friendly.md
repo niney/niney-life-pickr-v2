@@ -171,6 +171,16 @@ location ^~ /s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
+# 사주 공유 링크 OG. PNG는 기존 /api 프록시를 사용한다.
+location ^~ /saju/s/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_cf_connecting_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
+
 # 타로 공유 링크(/tarot/s/<token>) OG + 공유 이미지(/tarot/s/<token>/image.png?format=og|story).
 # 이미지가 .png 라 정산과 같은 이유로 ^~ 필수. 없으면 SPA 는 동작하고 OG·이미지만 404.
 location ^~ /tarot/s/ {

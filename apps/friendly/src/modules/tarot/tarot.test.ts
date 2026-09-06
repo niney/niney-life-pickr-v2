@@ -4,7 +4,8 @@ import { TarotCardId, TarotSpreadId, TarotTopic, type TarotDrawnCardType } from 
 import { TAROT_CARDS, TAROT_SPREADS, TAROT_SPREAD_IDS, TAROT_TOPICS, getTarotCard, selectTarotMenus } from '@repo/utils';
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
-import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import type { IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { useSchemaDatabase } from '../../test-utils/schema-db.js';
 import { AiConfigService, type LlmProviderEnv } from '../ai/ai.config.service.js';
 import type { AdapterCache } from '../ai/adapter-cache.js';
 import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/adapters/llm-provider.js';
@@ -185,7 +186,7 @@ describe('TarotService (격리 DB)', () => {
     });
 
   beforeAll(async () => {
-    isolated = await useIsolatedDatabase();
+    isolated = useSchemaDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
     await seedAuthUsers(app, [{ id: 't-user', role: 'USER' }]);
@@ -395,7 +396,7 @@ describe('tarot routes (격리 DB)', () => {
   let token: string;
 
   beforeAll(async () => {
-    isolated = await useIsolatedDatabase();
+    isolated = useSchemaDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
     await seedAuthUsers(app, [{ id: 'r-user', role: 'USER' }]);

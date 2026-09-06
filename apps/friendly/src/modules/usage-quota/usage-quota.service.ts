@@ -26,6 +26,14 @@ export const USAGE_QUOTA_FEATURES: readonly UsageQuotaFeatureType[] = UsageQuota
 export type UsageQuotaDefaults = Omit<UsageQuotaSettingType, 'feature' | 'updatedAt'>;
 
 export const USAGE_QUOTA_DEFAULTS: Record<UsageQuotaFeatureType, UsageQuotaDefaults> = {
+  'saju-reading': {
+    enabled: true,
+    guestPerDay: 20,
+    ipPerDay: 200,
+    ipPerMinute: 10,
+    globalPerDay: 1000,
+    guestCutoffPct: 90,
+  },
   // 타로 해석 LLM 호출. 기본은 넉넉하게(사용자 결정 2026-09-02) — 정상 사용자가 한도에 걸리지
   // 않게 두고, 비용이 문제 되면 어드민 "설정 > 사용량 한도" 에서 내린다. IP 일일은 CGNAT(한 IP 뒤
   // 다수 사용자)를 고려해 게스트 기기의 10배, 전역은 Ollama Cloud 예산 안전망.
