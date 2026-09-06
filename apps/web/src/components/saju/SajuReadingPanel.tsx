@@ -213,7 +213,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
       className={cn(
         glass,
         'pointer-events-auto absolute flex flex-col overflow-hidden',
-        side === 'right' ? 'bottom-4 right-4 top-16 w-[27rem] max-w-[calc(100%-2rem)]' : cn('inset-x-0 bottom-0 rounded-b-none', collapsed ? 'max-h-14' : 'max-h-[60dvh]'),
+        side === 'right' ? 'bottom-4 right-4 top-16 w-[32rem] max-w-[calc(100%-2rem)] xl:w-[34rem]' : cn('inset-x-0 bottom-0 rounded-b-none', collapsed ? 'max-h-14' : 'max-h-[60dvh]'),
       )}
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
@@ -240,7 +240,8 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
           </button>
         )}
       </header>
-      <nav className="flex gap-1 overflow-x-auto border-b border-white/10 px-2 py-1.5" aria-label="풀이 탭">
+      {/* 탭 10개 — 가로 스크롤 대신 줄바꿈(xl 폭에선 한 줄). */}
+      <nav className="flex flex-wrap gap-1 border-b border-white/10 px-2 py-1.5" aria-label="풀이 탭">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -248,7 +249,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
             aria-pressed={tab === t.id}
             onClick={() => onTab(t.id)}
             className={cn(
-              'shrink-0 rounded-full border px-3 py-1 text-xs transition',
+              'shrink-0 rounded-full border px-2.5 py-1 text-xs transition',
               tab === t.id ? 'border-[#d9b65b] bg-[#d9b65b]/15 text-[#f3e9c6]' : t.tool ? 'border-[#b8322a]/50 text-[#e9e2d2]/75 hover:border-[#b8322a]' : 'border-white/15 text-[#e9e2d2]/65 hover:border-white/40',
             )}
           >

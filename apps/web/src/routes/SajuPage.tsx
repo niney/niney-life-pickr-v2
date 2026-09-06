@@ -133,7 +133,8 @@ export const SajuPage = () => {
 
   const panelSide = isDesktop ? 'right' : 'bottom';
   const readingOpen = state.phase === 'reading' && !!state.chart;
-  const focusX = readingOpen && panelSide === 'right' ? 1.4 : 0;
+  // 패널이 오른쪽 30~34rem 을 차지하므로 시선을 조금 더 오른쪽으로.
+  const focusX = readingOpen && panelSide === 'right' ? 1.7 : 0;
   const focusYOffset = readingOpen && panelSide === 'bottom' ? 1.6 : 0;
   const animating = state.phase === 'casting' || state.phase === 'stamping';
 
