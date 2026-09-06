@@ -1,200 +1,214 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
-import type { PublicSajuShareType } from '@repo/api-contract';
-import { SAJU_ELEMENT_META } from '@repo/utils';
+import sharp from 'sharp';
+import type { SharedSajuReadingType } from '@repo/api-contract';
+import { SAJU_WUXING_META, sajuBranchImageId, sajuImagePath, sajuStemImageId } from '@repo/utils';
 import { loadPlexFonts } from '../../lib/share-fonts.js';
+import { candidateWebAssetRoots } from '../../lib/web-index.js';
 
-export async function renderSajuSharePng(data: PublicSajuShareType): Promise<Buffer> {
-  const fonts = await loadPlexFonts();
-  const h = (style: Record<string, unknown>, children: unknown) => ({
-    type: 'div',
-    props: { style: { display: 'flex', ...style }, children },
-  });
-  const ink = '#eee8da';
-  const gold = '#ceb17a';
-  const color = data.element ? SAJU_ELEMENT_META[data.element].color : ink;
-  // 한자 글리프를 포함하지 않는 공유용 폰트에서도 깨지지 않는 벡터 상징.
-  const symbolMark = (element: PublicSajuShareType['element']) => {
-    const stroke = element ? SAJU_ELEMENT_META[element].color : ink;
-    const markPath = element
-      ? {
-          wood: 'M100 154V39M100 70C69 74 54 53 52 35c27 0 49 8 48 35ZM100 92c34 3 53-16 53-40-32 0-53 14-53 40ZM100 119c-30 0-48-16-52-36 28-3 49 11 52 36ZM72 155h56',
-          fire: 'M100 42a35 35 0 1 0 0 70a35 35 0 1 0 0-70ZM100 23V12m0 119v12M46 77H34m132 0h-12M62 39l-9-9m94 94-9-9m0-76 9-9m-94 94 9-9M57 158h86',
-          earth:
-            'm18 148 57-99 27 49 24-77 61 127H18ZM47 98l28-49 20 37-21-13-11 22-16 3ZM110 69l16-48 27 62-26-27-17 13ZM67 148l35-50 25 50M48 161h110',
-          metal:
-            'm100 18 60 54-60 84-60-84 60-54Zm-60 54h120M100 18 75 72l25 84 25-84-25-54ZM59 164h82',
-          water:
-            'M100 16c-12 29-42 52-42 80a42 42 0 0 0 84 0c0-28-30-51-42-80ZM73 98c0 14 11 25 25 25M28 144c17-13 28 13 45 0s28 13 45 0 28 13 45 0',
-        }[element]
-      : 'M100 20l70 52-27 83H57L30 72l70-52ZM100 20v135M30 72l113 83M170 72 57 155';
-    return {
-      type: 'svg',
-      props: {
-        width: 172,
-        height: 172,
-        viewBox: '0 0 200 180',
-        children: [
-          {
-            type: 'path',
-            props: {
-              d: markPath,
-              fill: 'none',
-              stroke,
-              strokeWidth: 1.6,
-              strokeLinecap: 'round',
-              strokeLinejoin: 'round',
-            },
-          },
-        ],
-      },
-    };
-  };
-  const mark = symbolMark(data.element);
-  const pairedContent = data.pair
-    ? [
-        h({ fontSize: 22, letterSpacing: 7, color: gold }, 'LIFE PICKR · OUR ELEMENTS'),
-        h({ marginTop: 70, fontSize: 28, color: gold }, '서로를 알아가는 또 하나의 지도'),
-        h(
-          { width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 66 },
-          [data, data.pair].flatMap((person, i) => [
-            ...(i ? [h({ fontSize: 44, color: gold, margin: '0 30px' }, '×')] : []),
-            h({ flexDirection: 'column', alignItems: 'center' }, [
-              h(
-                {
-                  width: 270,
-                  height: 270,
-                  borderRadius: 135,
-                  border: `1px solid ${person.element ? SAJU_ELEMENT_META[person.element].color : gold}`,
-                  backgroundColor: '#122a32',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                },
-                symbolMark(person.element),
-              ),
-              h(
-                {
-                  marginTop: 24,
-                  fontSize: 29,
-                  color: person.element ? SAJU_ELEMENT_META[person.element].color : ink,
-                },
-                person.symbol,
-              ),
-            ]),
-          ]),
-        ),
-        h(
-          { marginTop: 65, fontSize: 47, fontWeight: 700, textAlign: 'center', lineHeight: 1.5 },
-          data.title,
-        ),
-        h(
-          { marginTop: 30, fontSize: 27, lineHeight: 1.8, textAlign: 'center', color: '#b8c8ca' },
-          data.description,
-        ),
-        h(
-          { width: '100%', marginTop: 60, justifyContent: 'space-between' },
-          data.elements.map((e) =>
-            h(
-              {
-                flexDirection: 'column',
-                alignItems: 'center',
-                color: SAJU_ELEMENT_META[e.element].color,
-              },
-              [
-                h({ fontSize: 33 }, SAJU_ELEMENT_META[e.element].name),
-                h(
-                  { marginTop: 15, fontSize: 24 },
-                  `${e.count} · ${data.pair!.elements.find((v) => v.element === e.element)?.count ?? 0}`,
-                ),
-              ],
-            ),
-          ),
-        ),
-        h(
-          { marginTop: 27, fontSize: 21, color: '#b8c8ca' },
-          `첫 번째 ${8 - data.unknownCharacters}글자 · 두 번째 ${8 - data.pair.unknownCharacters}글자 기준`,
-        ),
-        h({ marginTop: 'auto', fontSize: 23, color: gold }, '우리의 이야기는 함께 만들어 가요'),
-        h(
-          { marginTop: 20, fontSize: 19, color: '#b8c8ca' },
-          '전통의 상징으로 읽는 궁합 · LIFE PICKR',
-        ),
-      ]
-    : null;
-  const svg = await satori(
-    h(
-      {
-        width: 1080,
-        height: 1440,
-        padding: '100px 90px',
-        backgroundColor: '#0b1b26',
-        color: ink,
-        fontFamily: 'Plex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        border: `2px solid ${gold}`,
-      },
-      pairedContent ?? [
-        h({ fontSize: 22, letterSpacing: 8, color: gold }, 'LIFE PICKR · SAJU'),
-        h(
-          {
-            marginTop: 68,
-            width: 250,
-            height: 250,
-            borderRadius: 125,
-            border: `1px solid ${gold}`,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#122a32',
-            fontSize: 104,
-            color,
-          },
-          mark,
-        ),
-        h({ marginTop: 24, fontSize: 32, color, letterSpacing: 6 }, data.symbol),
-        h(
-          { marginTop: 42, fontSize: 48, fontWeight: 700, textAlign: 'center', lineHeight: 1.5 },
-          data.title,
-        ),
-        h(
-          { marginTop: 36, fontSize: 28, lineHeight: 1.9, textAlign: 'center', color: '#b8c8ca' },
-          data.description,
-        ),
-        h(
-          { width: '100%', justifyContent: 'space-between', marginTop: 66 },
-          data.elements.map((e) =>
-            h(
-              {
-                flexDirection: 'column',
-                alignItems: 'center',
-                color: SAJU_ELEMENT_META[e.element].color,
-              },
-              [
-                h({ fontSize: 42 }, SAJU_ELEMENT_META[e.element].name),
-                h({ fontSize: 25, marginTop: 20 }, `${e.count}개`),
-              ],
-            ),
-          ),
-        ),
-        h(
-          { fontSize: 22, color: '#b8c8ca', marginTop: 36 },
-          `확인된 ${8 - data.unknownCharacters}글자의 오행 구성`,
-        ),
-        h({ marginTop: 'auto', fontSize: 23, color: gold }, '나를 알아가는 또 하나의 지도'),
-        h(
-          { marginTop: 24, fontSize: 19, color: '#b8c8ca' },
-          '전통의 상징으로 읽는 사주 · LIFE PICKR',
-        ),
-      ],
-    ) as unknown as Parameters<typeof satori>[0],
+// 사주 공유 이미지 — satori + resvg 2D 합성(타로와 같은 파이프라인). 팔레트는 먹·한지·주사·금.
+//   og    1200×630  일간 이미지 + 8글자 인장 + 한 줄 별칭 + 성격 요약.
+//   story 1080×1920 세로.
+// 일간 이미지는 웹 정적 자산(apps/web/{dist|public}/saju-c/images/stem-*-512.webp)을 JPEG data URI 로.
+
+type Style = Record<string, unknown>;
+interface Node {
+  type: string;
+  props: { style?: Style; children?: unknown; src?: string; width?: number; height?: number };
+}
+const h = (type: string, style: Style, children?: unknown, extra: Partial<Node['props']> = {}): Node => ({
+  type,
+  props: { style, ...(children === undefined ? {} : { children }), ...extra },
+});
+const text = (content: string, style: Style): Node => h('div', { display: 'flex', ...style }, content);
+
+const C = { bg: '#0b0b0f', bg2: '#1c1a22', gold: '#d9b65b', jusa: '#b8322a', ink: '#e9e2d2', sub: 'rgba(233,226,210,0.62)' } as const;
+const WUXING_HEX: Record<string, string> = { wood: '#5fc39b', fire: '#ff6b4a', earth: '#e0b45a', metal: '#f0efe6', water: '#6f95d6' };
+
+// 한자 글리프 PNG(assets/saju-glyphs, build:saju-glyphs) — Plex 에 한자가 없어 이미지로 그린다.
+const glyphDir = (): string[] => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const out: string[] = [];
+  for (const base of [here, process.cwd()]) {
+    let cur = base;
+    for (let i = 0; i < 7; i += 1) {
+      out.push(resolve(cur, 'apps/friendly/assets/saju-glyphs'), resolve(cur, 'assets/saju-glyphs'));
+      const up = dirname(cur);
+      if (up === cur) break;
+      cur = up;
+    }
+  }
+  return out;
+};
+const glyphCache = new Map<string, Promise<string | null>>();
+const glyphDataUri = (ch: string, variant: '' | '-hanji' | '-gold' = ''): Promise<string | null> => {
+  const key = ch + variant;
+  let hit = glyphCache.get(key);
+  if (!hit) {
+    hit = (async () => {
+      const file = 'u' + ch.codePointAt(0)!.toString(16) + variant + '.png';
+      for (const dir of glyphDir()) {
+        try {
+          const buf = await readFile(resolve(dir, file));
+          return 'data:image/png;base64,' + buf.toString('base64');
+        } catch {
+          // 다음 후보
+        }
+      }
+      return null;
+    })().catch(() => null);
+    glyphCache.set(key, hit);
+  }
+  return hit;
+};
+
+const imageCache = new Map<string, Promise<string | null>>();
+// 일간·띠 이미지(웹 정적 자산) → JPEG data URI. id 별 1회 로드.
+const imageDataUri = (id: string): Promise<string | null> => {
+  let hit = imageCache.get(id);
+  if (!hit) {
+    hit = (async () => {
+      const rel = sajuImagePath(id, 512).replace(/^\//, '');
+      for (const root of candidateWebAssetRoots()) {
+        try {
+          const buf = await sharp(resolve(root, rel)).resize(420).jpeg({ quality: 82 }).toBuffer();
+          return `data:image/jpeg;base64,${buf.toString('base64')}`;
+        } catch {
+          // 다음 후보
+        }
+      }
+      return null;
+    })().catch(() => null);
+    imageCache.set(id, hit);
+  }
+  return hit;
+};
+const dayMasterDataUri = (stem: number): Promise<string | null> => imageDataUri(sajuStemImageId(stem));
+const zodiacDataUri = (branch: number): Promise<string | null> => imageDataUri(sajuBranchImageId(branch));
+
+// 인장 하나 — 주사 바탕 + 금 테두리 + 한자(글리프 이미지, 없으면 글자 그대로).
+const seal = (hanja: string, glyph: string | null, size: number, accent: boolean): Node =>
+  h(
+    'div',
     {
-      width: 1080,
-      height: 1440,
-      fonts: [
-        { name: 'Plex', data: fonts.regular, weight: 400, style: 'normal' },
-        { name: 'Plex', data: fonts.bold, weight: 700, style: 'normal' },
-      ],
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: size,
+      height: size,
+      borderRadius: Math.round(size * 0.12),
+      backgroundColor: accent ? '#c93a2f' : C.jusa,
+      borderWidth: accent ? 4 : 3,
+      borderStyle: 'solid',
+      borderColor: C.gold,
+      color: '#f7eddc',
+      fontSize: Math.round(size * 0.58),
+      fontWeight: 700,
     },
+    glyph ? h('img', { width: Math.round(size * 0.8), height: Math.round(size * 0.8) }, undefined, { src: glyph, width: Math.round(size * 0.8), height: Math.round(size * 0.8) }) : hanja,
   );
-  return new Resvg(svg).render().asPng();
+
+const pillarsNode = (reading: SharedSajuReadingType, glyphs: Map<string, string | null>, size: number, gap: number): Node => {
+  const p = reading.chart.pillars;
+  const cols = [p.year, p.month, p.day, ...(p.hour ? [p.hour] : [])];
+  const labels = ['년', '월', '일', '시'];
+  return h(
+    'div',
+    { display: 'flex', flexDirection: 'row', gap },
+    cols.map((c, i) =>
+      h('div', { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: Math.round(gap * 0.6) }, [
+        text(labels[i] ?? '', { fontSize: Math.round(size * 0.22), color: C.gold }),
+        seal(c.hanja.charAt(0), glyphs.get(c.hanja.charAt(0)) ?? null, size, c.key === 'day'),
+        seal(c.hanja.charAt(1), glyphs.get(c.hanja.charAt(1)) ?? null, size, false),
+      ]),
+    ),
+  );
+};
+
+const SIZE = { og: { w: 1200, h: 630 }, story: { w: 1080, h: 1920 } } as const;
+
+async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story'): Promise<{ node: Node; graphemeImages: Record<string, string> }> {
+  const c = reading.chart;
+  const src = await dayMasterDataUri(c.dayMaster.index);
+  const zodiacSrc = await zodiacDataUri(c.zodiac.index);
+  const chars = [...new Set([c.pillars.year, c.pillars.month, c.pillars.day, c.pillars.hour].flatMap((p) => (p ? [...p.hanja] : [])).concat([...c.dayMaster.hanja]))];
+  const glyphs = new Map<string, string | null>(await Promise.all(chars.map(async (ch) => [ch, await glyphDataUri(ch)] as const)));
+  // 본문 텍스트 속 한자(제목의 일간 한자)는 satori graphemeImages 로 — 한지색 판.
+  const graphemeImages: Record<string, string> = {};
+  for (const ch of [...c.dayMaster.hanja]) {
+    const g = await glyphDataUri(ch, '-gold');
+    if (g) graphemeImages[ch] = g;
+  }
+  const { w, h: hh } = SIZE[format];
+  const title = `${c.dayMaster.ko}${c.dayMaster.hanja} 일간 · ${c.zodiac.animal}띠 · ${SAJU_WUXING_META[c.dayMaster.element].ko}의 기운`;
+  const headline = reading.sections.personality.headline || reading.sections.advice.keyword;
+  const frame = (children: unknown, style: Style = {}): Node =>
+    h('div', { display: 'flex', width: w, height: hh, backgroundColor: C.bg, backgroundImage: `radial-gradient(circle at 20% 15%, ${C.bg2} 0%, ${C.bg} 60%)`, color: C.ink, fontFamily: 'Plex', ...style }, children);
+  const portraitBase = (size: number): Node =>
+    src
+      ? h('img', { width: size, height: size, borderRadius: size / 2, borderWidth: 4, borderStyle: 'solid', borderColor: C.gold }, undefined, { src, width: size, height: size })
+      : h('div', { display: 'flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, borderRadius: size / 2, borderWidth: 4, borderStyle: 'solid', borderColor: C.gold, backgroundColor: C.bg2, color: WUXING_HEX[c.dayMaster.element] ?? C.ink, fontSize: Math.round(size * 0.5), fontWeight: 700 }, c.dayMaster.hanja);
+
+  // 일간 초상 + 오른쪽 아래 띠 동물(초상의 38%). 띠 이미지가 없으면 초상만.
+  const portrait = (size: number): Node => {
+    const z = Math.round(size * 0.38);
+    return h('div', { display: 'flex', position: 'relative', width: size, height: size }, [
+      portraitBase(size),
+      ...(zodiacSrc
+        ? [h('img', { position: 'absolute', right: -Math.round(z * 0.12), bottom: -Math.round(z * 0.08), width: z, height: z, borderRadius: z / 2, borderWidth: 3, borderStyle: 'solid', borderColor: C.gold }, undefined, { src: zodiacSrc, width: z, height: z })]
+        : []),
+    ]);
+  };
+
+  if (format === 'og') {
+    const textW = w - 56 * 2 - 260 - 40;
+    return { graphemeImages, node: frame(
+      [
+        h('div', { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, width: 260, flexShrink: 0 }, [portrait(220), pillarsNode(reading, glyphs, 46, 8)]),
+        h('div', { display: 'flex', flexDirection: 'column', justifyContent: 'center', width: textW, marginLeft: 40 }, [
+          text(title, { fontSize: 24, color: C.gold, letterSpacing: 1, width: textW }),
+          text(headline, { fontSize: 54, fontWeight: 700, color: '#f3e9c6', marginTop: 10, lineClamp: 1, width: textW }),
+          text(reading.sections.personality.body, { fontSize: 24, lineHeight: 1.5, color: C.ink, marginTop: 18, lineClamp: 4, width: textW }),
+          text('Life Pickr · 사주', { fontSize: 20, color: C.sub, marginTop: 18, width: textW }),
+        ]),
+      ],
+      { flexDirection: 'row', alignItems: 'center', padding: 56 },
+    ) };
+  }
+  const PAD = 72;
+  const inner = w - PAD * 2;
+  const para = (content: string, style: Style): Node => h('div', { display: 'flex', width: inner, justifyContent: 'center', ...style }, content);
+  return { graphemeImages, node: frame(
+    [
+      text('Life Pickr · 사주', { fontSize: 30, color: C.sub, letterSpacing: 2 }),
+      text(title, { fontSize: 36, color: C.gold, marginTop: 10 }),
+      h('div', { display: 'flex', marginTop: 40 }, portrait(420)),
+      h('div', { display: 'flex', marginTop: 40 }, pillarsNode(reading, glyphs, 96, 16)),
+      para(headline, { fontSize: 74, fontWeight: 700, color: '#f3e9c6', marginTop: 54, lineClamp: 1, textAlign: 'center' }),
+      h('div', { display: 'flex', width: 120, height: 3, backgroundColor: C.gold, marginTop: 26, marginBottom: 26 }),
+      para(reading.sections.personality.body, { fontSize: 33, lineHeight: 1.55, color: C.ink, lineClamp: 6, textAlign: 'center' }),
+      para(reading.sections.advice.body, { fontSize: 29, lineHeight: 1.5, color: C.sub, marginTop: 30, lineClamp: 4, textAlign: 'center' }),
+    ],
+    { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: PAD },
+  ) };
+}
+
+export async function renderSajuShareCardPng(reading: SharedSajuReadingType, format: 'og' | 'story'): Promise<Buffer> {
+  const { regular, bold } = await loadPlexFonts();
+  const { node, graphemeImages } = await buildTree(reading, format);
+  const { w, h: hh } = SIZE[format];
+  const svg = await satori(node as never, {
+    width: w,
+    height: hh,
+    graphemeImages,
+    fonts: [
+      { name: 'Plex', data: regular, weight: 400, style: 'normal' },
+      { name: 'Plex', data: bold, weight: 700, style: 'normal' },
+    ],
+  });
+  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
+  return Buffer.from(resvg.render().asPng());
 }

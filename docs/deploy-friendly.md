@@ -171,8 +171,8 @@ location ^~ /s/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 }
-# 사주 공유 링크 OG. PNG는 기존 /api 프록시를 사용한다.
-location ^~ /saju/s/ {
+# 사주(G) 공유 링크 OG. PNG는 기존 /api 프록시를 사용한다.
+location ^~ /saju-g/s/ {
     proxy_pass http://127.0.0.1:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;

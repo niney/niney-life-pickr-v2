@@ -16,6 +16,7 @@ const ENV: LlmProviderEnv = {
     'meal-recommend': '',
     tarot: '',
     saju: '',
+    'saju-g': '',
   },
 };
 
@@ -117,7 +118,7 @@ describe('AiConfigService', () => {
   });
 
   describe('list', () => {
-    it('synthesizes all seven purposes when DB empty — chat env-backed, others inherit', async () => {
+    it('synthesizes all eight purposes when DB empty — chat env-backed, others inherit', async () => {
       const out = await service.list();
       expect(out.map((p) => p.purpose).sort()).toEqual([
         'chat',
@@ -126,6 +127,7 @@ describe('AiConfigService', () => {
         'meal-photo',
         'meal-recommend',
         'saju',
+        'saju-g',
         'tarot',
       ]);
       const chat = out.find((p) => p.purpose === 'chat')!;
@@ -150,6 +152,7 @@ describe('AiConfigService', () => {
         'meal-recommend',
         'tarot',
         'saju',
+        'saju-g',
       ] as const) {
         const v = out.find((p) => p.purpose === purpose)!;
         expect(v).toMatchObject({ hasApiKey: true, keySource: 'inherited' });
@@ -222,8 +225,8 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      // 나머지 용도(log-analysis·meal-photo·meal-recommend·tarot·saju) 가상 row 까지 항상 일곱 장.
-      expect(out).toHaveLength(7);
+      // 나머지 용도(log-analysis·meal-photo·meal-recommend·tarot·saju-g) 가상 row 까지 항상 여덟 장.
+      expect(out).toHaveLength(8);
       expect(out.map((p) => p.purpose).sort()).toEqual([
         'chat',
         'image',
@@ -231,6 +234,7 @@ describe('AiConfigService', () => {
         'meal-photo',
         'meal-recommend',
         'saju',
+        'saju-g',
         'tarot',
       ]);
     });
@@ -252,7 +256,7 @@ describe('AiConfigService', () => {
       ]);
       service = new AiConfigService(prisma as never, ENV);
       const out = await service.list();
-      expect(out).toHaveLength(7);
+      expect(out).toHaveLength(8);
       const chat = out.find((p) => p.purpose === 'chat')!;
       const image = out.find((p) => p.purpose === 'image')!;
       expect(chat.updatedAt).toBeNull();

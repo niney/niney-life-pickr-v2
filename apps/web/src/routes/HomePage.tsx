@@ -103,14 +103,14 @@ export const HomePage = () => {
 
       <RestaurantFavoritesStrip items={favorites.items} onToggle={favorites.toggle} />
       <Link
-        to="/saju"
+        to="/saju-g"
         className="mb-10 flex items-center gap-4 rounded-xl border border-[#819b88]/40 bg-[#102c30] p-5 text-[#eee8da] transition hover:border-[#b7cdb2]"
       >
         <span className="text-3xl text-[#d1b680]" aria-hidden>
           命
         </span>
         <div>
-          <div className="font-serif-kr text-lg">나를 알아가는 사주</div>
+          <div className="font-serif-kr text-lg">나를 알아가는 사주(G)</div>
           <p className="text-sm text-[#b5c9c2]">
             나의 오행 지도, 올해와 오늘의 흐름. 태어난 순간을 펼쳐 보세요.
           </p>

@@ -54,6 +54,7 @@ const PURPOSE_ORDER: LlmProviderPurposeType[] = [
   'meal-recommend',
   'tarot',
   'saju',
+  'saju-g',
 ];
 
 interface PurposeMeta {
@@ -64,9 +65,9 @@ interface PurposeMeta {
 }
 
 const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
-  saju: {
+  'saju-g': {
     icon: Sparkles,
-    label: '사주 해석',
+    label: '사주(G) 해석',
     desc: '계산된 명식을 한국어로 풀어 주는 모델. Kimi K3 · Kimi K2.6 등 상위 모델을 선택할 수 있습니다.',
     placeholder: 'kimi-k3',
   },

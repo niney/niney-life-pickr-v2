@@ -664,20 +664,43 @@ export const Tarot = {
     `/tarot/s/${token}/image.png${format === 'story' ? '?format=story' : ''}`,
 } as const;
 
-// 사주 — 명식 계산·해석·명시적 보관·공개 상징 공유.
+// 사주(C) — 경로는 /saju-c(다른 사주 구현과 구분). 공개 풀이(무인증, 옵셔널 인증이면 회원 자동 저장) + 섹션 병렬 job + 오늘·궁합·택일·음식 + 회원 프로필·기록·공유.
 export const Saju = {
-  profiles: `${API_PREFIX}/saju/me/profiles`,
-  profile: (id: string) => `${API_PREFIX}/saju/me/profiles/${id}`,
-  pairChart: `${API_PREFIX}/saju/pair/chart`,
-  pairReading: `${API_PREFIX}/saju/pair/readings`,
-  chart: `${API_PREFIX}/saju/chart`,
-  readings: `${API_PREFIX}/saju/readings`,
-  myReadings: `${API_PREFIX}/saju/me/readings`,
-  myReading: (id: string) => `${API_PREFIX}/saju/me/readings/${id}`,
-  shares: `${API_PREFIX}/saju/shares`,
-  shared: (token: string) => `${API_PREFIX}/saju/shares/${token}`,
-  shareImage: (token: string) => `${API_PREFIX}/saju/shares/${token}/image.png`,
-  sharePage: (token: string) => `/saju/s/${token}`,
+  // POST — 생년월일시·성별 → 원국 + 섹션 4개(정적 본문 즉시, LLM 섹션은 job). X-Guest-Key 로 게스트 일일 한도.
+  readings: `${API_PREFIX}/saju-c/readings`,
+  // GET(?after&wait) — 섹션 도착 long-poll. 서버 재시작으로 job 이 없으면 410.
+  job: (jobId: string) => `${API_PREFIX}/saju-c/readings/jobs/${jobId}`,
+  daily: `${API_PREFIX}/saju-c/daily`,
+  match: `${API_PREFIX}/saju-c/match`,
+  datePick: `${API_PREFIX}/saju-c/date-pick`,
+  food: `${API_PREFIX}/saju-c/food`,
+  // 회원 프로필(나·가족 여러 명) / 기록.
+  profiles: `${API_PREFIX}/saju-c/me/profiles`,
+  profile: (id: string) => `${API_PREFIX}/saju-c/me/profiles/${id}`,
+  myReadings: `${API_PREFIX}/saju-c/me/readings`,
+  myReading: (id: string) => `${API_PREFIX}/saju-c/me/readings/${id}`,
+  // 공유 — POST(토큰 발급) / GET 공개 조회. 웹 페이지·이미지는 타로와 같은 패턴(nginx `^~ /saju-c/s/`).
+  shares: `${API_PREFIX}/saju-c/shares`,
+  shared: (token: string) => `${API_PREFIX}/saju-c/shares/${token}`,
+  sharePage: (token: string) => `/saju-c/s/${token}`,
+  shareImage: (token: string, format: 'og' | 'story' = 'og') =>
+    `/saju-c/s/${token}/image.png${format === 'story' ? '?format=story' : ''}`,
+};
+
+// 사주 — 명식 계산·해석·명시적 보관·공개 상징 공유.
+export const SajuG = {
+  profiles: `${API_PREFIX}/saju-g/me/profiles`,
+  profile: (id: string) => `${API_PREFIX}/saju-g/me/profiles/${id}`,
+  pairChart: `${API_PREFIX}/saju-g/pair/chart`,
+  pairReading: `${API_PREFIX}/saju-g/pair/readings`,
+  chart: `${API_PREFIX}/saju-g/chart`,
+  readings: `${API_PREFIX}/saju-g/readings`,
+  myReadings: `${API_PREFIX}/saju-g/me/readings`,
+  myReading: (id: string) => `${API_PREFIX}/saju-g/me/readings/${id}`,
+  shares: `${API_PREFIX}/saju-g/shares`,
+  shared: (token: string) => `${API_PREFIX}/saju-g/shares/${token}`,
+  shareImage: (token: string) => `${API_PREFIX}/saju-g/shares/${token}/image.png`,
+  sharePage: (token: string) => `/saju-g/s/${token}`,
 } as const;
 
 // 공용 사용량 한도 — 어드민 "설정 > 사용량 한도". 기능별 게스트·IP·전역 일일 한도 + 그날 사용량.

@@ -1,231 +1,180 @@
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { LRUCache } from 'lru-cache';
 import {
-  CreateSajuPairInput,
-  SajuPairChart,
-  SajuPairResult,
-  SajuProfileInput,
-  UpdateSajuProfileInput,
-  SajuProfile,
-  SajuProfileList,
   CreateSajuReadingInput,
   CreateSajuShareInput,
   ListSajuReadingsQuery,
   ListSajuReadingsResult,
-  PublicSajuShare,
-  RevokeSajuShareInput,
   Routes,
   SAJU_GUEST_KEY_HEADER,
-  SajuChart,
+  SajuDailyInput,
+  SajuDailyResult,
+  SajuDatePickInput,
+  SajuDatePickResult,
+  SajuFoodInput,
+  SajuFoodResult,
+  SajuJobPollQuery,
+  SajuJobPollResult,
+  SajuMatchInput,
+  SajuMatchResult,
+  SajuProfile,
+  SajuProfileInput,
+  SajuProfileList,
   SajuReadingResult,
-  SajuReceiptInput,
   SajuShareResult,
+  SharedSajuReading,
 } from '@repo/api-contract';
 import { RATE, clientKey } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
-import { calculateSaju, SajuInputError } from './saju.engine.js';
-import { SajuNotFound, SajuService } from './saju.service.js';
-import { renderSajuSharePng } from './saju-share-card.js';
-import { calculateSajuPair } from './saju-pair.engine.js';
-import { SajuPairService } from './saju-pair.service.js';
-import { SajuProfileService, SajuProfileConflict } from './saju-profile.service.js';
+import { SajuRecordsService } from './saju-records.service.js';
+import { SAJU_QUOTA_FEATURE, SajuError, SajuService, type SajuActor } from './saju.service.js';
+
+// 사주 — 풀이·오늘·궁합·택일·음식은 무인증 공개(옵셔널 인증이면 회원: 한도 면제 + 자동 저장).
+// 분당 IP 버스트는 어드민 설정(ipPerMinute)을 읽는 함수 max 로, 일일 한도는 서비스가 usageQuota 로.
+// 회원 프로필·기록·공유 라우트는 4차.
+
+const S = Routes.Saju;
+
+const JobParams = z.object({ jobId: z.string().min(8).max(64) });
+const IdParams = z.object({ id: z.string().min(1).max(64) });
+const TokenParams = z.object({ token: z.string().min(8).max(64) });
+const GUEST_KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+const throwAsHttp = (app: FastifyInstance, e: SajuError): never => {
+  switch (e.code) {
+    case 'not_found':
+      throw app.httpErrors.notFound(e.message);
+    case 'job_gone':
+      throw app.httpErrors.gone(e.message);
+    case 'invalid_input':
+    default:
+      throw app.httpErrors.badRequest(e.message);
+  }
+};
 
 const sajuRoutes: FastifyPluginAsync = async (app) => {
-  const api = app.withTypeProvider<ZodTypeProvider>();
-  const service = new SajuService(
-    app.prisma,
-    new AiConfigService(app.prisma, buildLlmProviderEnv()),
-    { quota: app.usageQuota },
-  );
-  const images = new LRUCache<string, Buffer>({ max: 50 });
-  const profiles = new SajuProfileService(app.prisma);
-  const pairs = new SajuPairService(new AiConfigService(app.prisma, buildLlmProviderEnv()), {
-    quota: app.usageQuota,
-  });
-  const actorOf = async (req: FastifyRequest) => {
+  const typed = app.withTypeProvider<ZodTypeProvider>();
+  const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
+  const service = new SajuService(app.prisma, aiConfig, { quota: app.usageQuota, logger: app.log });
+  const records = new SajuRecordsService(app.prisma, service);
+  app.addHook('onClose', async () => service.jobs.clear());
+
+  const actorOf = async (req: FastifyRequest): Promise<SajuActor> => {
     const user = await app.resolveOptionalUser(req);
-    const key = req.headers[SAJU_GUEST_KEY_HEADER];
-    return {
-      userId: user?.userId ?? null,
-      guestKey: typeof key === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(key) ? key : null,
-      ip: clientKey(req),
-    };
+    const raw = req.headers[SAJU_GUEST_KEY_HEADER];
+    const guestKey = typeof raw === 'string' && GUEST_KEY_RE.test(raw) ? raw : null;
+    return { userId: user?.userId ?? null, guestKey, ip: clientKey(req) };
   };
-  const run = async <T>(action: () => Promise<T> | T): Promise<T> => {
+  const quotaRate = {
+    rateLimit: {
+      max: async () => (await app.usageQuota.getSetting(SAJU_QUOTA_FEATURE)).ipPerMinute,
+      timeWindow: '1 minute',
+    },
+  };
+  const run = async <T>(fn: () => Promise<T>): Promise<T> => {
     try {
-      return await action();
-    } catch (error) {
-      if (error instanceof SajuInputError) throw app.httpErrors.badRequest(error.message);
-      if (error instanceof SajuNotFound) throw app.httpErrors.notFound(error.message);
-      if (error instanceof SajuProfileConflict) throw app.httpErrors.conflict(error.message);
-      throw error;
+      return await fn();
+    } catch (e) {
+      if (e instanceof SajuError) return throwAsHttp(app, e);
+      throw e;
     }
   };
-  const T = Routes.Saju;
-  const ids = z.object({ id: z.string().min(1).max(64) });
-  const tokens = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{32}$/) });
-  api.get(T.profiles, {
-    onRequest: [app.authenticate],
-    schema: { tags: ['saju'], response: { 200: SajuProfileList } },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return profiles.list(req.user.userId);
-    },
-  });
-  api.post(T.profiles, {
-    onRequest: [app.authenticate],
-    schema: { tags: ['saju'], body: SajuProfileInput, response: { 200: SajuProfile } },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => profiles.save(req.user.userId, req.body));
-    },
-  });
-  api.put(T.profile(':id'), {
-    onRequest: [app.authenticate],
-    schema: {
-      tags: ['saju'],
-      params: ids,
-      body: UpdateSajuProfileInput,
-      response: { 200: SajuProfile },
-    },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => profiles.save(req.user.userId, req.body, req.params.id, req.body.revision));
-    },
-  });
-  api.delete(T.profile(':id'), {
-    onRequest: [app.authenticate],
-    schema: { tags: ['saju'], params: ids },
-    handler: async (req, reply) => {
-      await run(() => profiles.remove(req.user.userId, req.params.id));
-      return reply.code(204).send();
-    },
-  });
-  api.post(T.pairChart, {
-    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-    schema: { tags: ['saju'], body: CreateSajuPairInput, response: { 200: SajuPairChart } },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => calculateSajuPair(req.body));
-    },
-  });
-  api.post(T.pairReading, {
-    config: {
-      rateLimit: {
-        max: async () => (await app.usageQuota.getSetting('saju-reading')).ipPerMinute,
-        timeWindow: '1 minute',
-      },
-    },
-    schema: { tags: ['saju'], body: CreateSajuPairInput, response: { 200: SajuPairResult } },
-    handler: async (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      const actor = await actorOf(req);
-      return run(() => pairs.create(req.body, actor));
-    },
-  });
-  api.post(T.chart, {
-    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-    schema: { tags: ['saju'], body: CreateSajuReadingInput, response: { 200: SajuChart } },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => calculateSaju(req.body));
-    },
-  });
-  api.post(T.readings, {
-    config: {
-      rateLimit: {
-        max: async () => (await app.usageQuota.getSetting('saju-reading')).ipPerMinute,
-        timeWindow: '1 minute',
-      },
-    },
+
+  typed.post(S.readings, {
+    config: quotaRate,
     schema: { tags: ['saju'], body: CreateSajuReadingInput, response: { 200: SajuReadingResult } },
-    handler: async (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      const actor = await actorOf(req);
-      return run(() => service.createReading(req.body, actor));
-    },
+    handler: async (req) => run(async () => service.createReading(req.body, await actorOf(req))),
   });
-  api.post(T.myReadings, {
-    onRequest: [app.authenticate],
-    schema: { tags: ['saju'], body: SajuReceiptInput, response: { 200: SajuReadingResult } },
-    handler: async (req) => {
-      const actor = await actorOf(req);
-      return run(() => service.save(req.body.receipt, actor));
-    },
+
+  // 섹션 long-poll — 서버가 최대 wait ms 대기. 폭주 방지로 공개 조회 한도.
+  typed.get(S.job(':jobId'), {
+    config: { rateLimit: RATE.publicShare },
+    schema: { tags: ['saju'], params: JobParams, querystring: SajuJobPollQuery, response: { 200: SajuJobPollResult } },
+    handler: async (req) => run(() => service.pollJob(req.params.jobId, req.query.after, req.query.wait)),
   });
-  api.get(T.myReadings, {
-    onRequest: [app.authenticate],
-    schema: {
-      tags: ['saju'],
-      querystring: ListSajuReadingsQuery,
-      response: { 200: ListSajuReadingsResult },
-    },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => service.listMine(req.user.userId, req.query.limit, req.query.cursor));
-    },
+
+  typed.post(S.daily, {
+    config: quotaRate,
+    schema: { tags: ['saju'], body: SajuDailyInput, response: { 200: SajuDailyResult } },
+    handler: async (req) => run(async () => service.daily(req.body, await actorOf(req))),
   });
-  api.get(T.myReading(':id'), {
-    onRequest: [app.authenticate],
-    schema: { tags: ['saju'], params: ids, response: { 200: SajuReadingResult } },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => service.getMine(req.user.userId, req.params.id));
-    },
+
+  typed.post(S.match, {
+    config: quotaRate,
+    schema: { tags: ['saju'], body: SajuMatchInput, response: { 200: SajuMatchResult } },
+    handler: async (req) => run(async () => service.match(req.body, await actorOf(req))),
   });
-  api.delete(T.myReading(':id'), {
-    onRequest: [app.authenticate],
-    schema: { tags: ['saju'], params: ids },
-    handler: async (req, reply) => {
-      await run(() => service.deleteMine(req.user.userId, req.params.id));
-      return reply.code(204).send();
-    },
+
+  typed.post(S.datePick, {
+    config: quotaRate,
+    schema: { tags: ['saju'], body: SajuDatePickInput, response: { 200: SajuDatePickResult } },
+    handler: async (req) => run(async () => service.datePick(req.body, await actorOf(req))),
   });
-  api.post(T.shares, {
+
+  typed.post(S.food, {
+    config: quotaRate,
+    schema: { tags: ['saju'], body: SajuFoodInput, response: { 200: SajuFoodResult } },
+    handler: async (req) => run(async () => service.food(req.body, await actorOf(req))),
+  });
+
+  // ── 공유 ─────────────────────────────────────────────────────────────
+  typed.post(S.shares, {
     config: { rateLimit: RATE.tarotShare },
     schema: { tags: ['saju'], body: CreateSajuShareInput, response: { 200: SajuShareResult } },
-    handler: async (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      const actor = await actorOf(req);
-      return run(() => service.createShare(req.body, actor));
-    },
+    handler: async (req) => run(async () => records.createShare(req.body, await actorOf(req))),
   });
-  api.get(T.shared(':token'), {
+  typed.get(S.shared(':token'), {
     config: { rateLimit: RATE.publicShare },
-    schema: { tags: ['saju'], params: tokens, response: { 200: PublicSajuShare } },
-    handler: (req, reply) => {
-      reply.header('cache-control', 'no-store');
-      return run(() => service.getShared(req.params.token));
-    },
+    schema: { tags: ['saju'], params: TokenParams, response: { 200: SharedSajuReading } },
+    handler: async (req) => run(() => records.getShared(req.params.token)),
   });
-  api.delete(T.shared(':token'), {
-    config: { rateLimit: RATE.tarotShare },
-    schema: { tags: ['saju'], params: tokens, body: RevokeSajuShareInput },
+
+  // ── 회원 프로필 ──────────────────────────────────────────────────────
+  typed.get(S.profiles, {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], response: { 200: SajuProfileList } },
+    handler: async (req) => ({ items: await records.listProfiles(req.user.userId) }),
+  });
+  typed.post(S.profiles, {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], body: SajuProfileInput, response: { 200: SajuProfile } },
+    handler: async (req) => run(() => records.createProfile(req.user.userId, req.body)),
+  });
+  typed.put(S.profile(':id'), {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], params: IdParams, body: SajuProfileInput, response: { 200: SajuProfile } },
+    handler: async (req) => run(() => records.updateProfile(req.user.userId, req.params.id, req.body)),
+  });
+  typed.delete(S.profile(':id'), {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], params: IdParams },
     handler: async (req, reply) => {
-      await run(() => service.revokeShare(req.params.token, req.body.revokeToken));
-      images.delete(req.params.token);
+      await run(() => records.deleteProfile(req.user.userId, req.params.id));
       return reply.code(204).send();
     },
   });
-  api.get(T.shareImage(':token'), {
-    config: { rateLimit: RATE.publicShare },
-    schema: { tags: ['saju'], params: tokens },
+
+  // ── 회원 기록 ────────────────────────────────────────────────────────
+  typed.get(S.myReadings, {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], querystring: ListSajuReadingsQuery, response: { 200: ListSajuReadingsResult } },
+    handler: async (req) => records.listMine(req.user.userId, req.query),
+  });
+  typed.get(S.myReading(':id'), {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], params: IdParams, response: { 200: SajuReadingResult } },
+    handler: async (req) => run(() => records.getMine(req.user.userId, req.params.id)),
+  });
+  typed.delete(S.myReading(':id'), {
+    onRequest: [app.authenticate],
+    schema: { tags: ['saju'], security: [{ bearerAuth: [] }], params: IdParams },
     handler: async (req, reply) => {
-      const shared = await run(() => service.getShared(req.params.token)); // 캐시보다 먼저 삭제 여부 확인
-      let png = images.get(req.params.token);
-      if (!png) {
-        png = await renderSajuSharePng(shared);
-        images.set(req.params.token, png);
-      }
-      return reply
-        .type('image/png')
-        .header('cache-control', 'no-store')
-        .header('cross-origin-resource-policy', 'cross-origin')
-        .send(png);
+      await run(() => records.deleteMine(req.user.userId, req.params.id));
+      return reply.code(204).send();
     },
   });
 };
+
 export default sajuRoutes;

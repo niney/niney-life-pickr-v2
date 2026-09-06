@@ -13,6 +13,7 @@ import { registerSharePreview } from './modules/settlement/share-preview.js';
 import { registerVotePreview } from './modules/vote/vote-preview.js';
 import { registerTarotPreview } from './modules/tarot/tarot-preview.js';
 import { registerSajuPreview } from './modules/saju/saju-preview.js';
+import { registerSajuGPreview } from './modules/saju-g/saju-g-preview.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -78,7 +79,9 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
 
   // 타로 공유 링크 OG + 공유 이미지 — /tarot/s/:token(/image.png). nginx `^~ /tarot/s/` 프록시 필요.
   await registerTarotPreview(app);
+  // 사주 공유 링크 OG + 공유 이미지 — /saju-c/s/:token(/image.png). nginx `^~ /saju-c/s/` 프록시 필요.
   await registerSajuPreview(app);
+  await registerSajuGPreview(app);
 
   return app;
 }

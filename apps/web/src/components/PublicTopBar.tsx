@@ -28,7 +28,8 @@ const NAV: NavItem[] = [
   { to: '/weather', label: '날씨' },
   { to: '/air', label: '대기질' },
   { to: '/tarot', label: '타로' },
-  { to: '/saju', label: '사주' },
+  { to: '/saju-c', label: '사주(C)' },
+  { to: '/saju-g', label: '사주(G)' },
   { to: '/me/meals', label: '식단', requiresAuth: true },
 ];
 

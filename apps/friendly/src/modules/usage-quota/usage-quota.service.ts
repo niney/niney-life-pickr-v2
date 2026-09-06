@@ -26,7 +26,7 @@ export const USAGE_QUOTA_FEATURES: readonly UsageQuotaFeatureType[] = UsageQuota
 export type UsageQuotaDefaults = Omit<UsageQuotaSettingType, 'feature' | 'updatedAt'>;
 
 export const USAGE_QUOTA_DEFAULTS: Record<UsageQuotaFeatureType, UsageQuotaDefaults> = {
-  'saju-reading': {
+  'saju-g-reading': {
     enabled: true,
     guestPerDay: 20,
     ipPerDay: 200,

@@ -110,14 +110,14 @@ describe('isVisionModel', () => {
 describe('recommendModelForPurpose', () => {
   it('사주는 멀티모달 분류와 무관하게 실측한 Kimi K3를 먼저 추천한다', () => {
     expect(
-      recommendModelForPurpose('saju', [
+      recommendModelForPurpose('saju-g', [
         'gpt-oss:120b',
         'deepseek-v4-pro:0813',
         'kimi-k2.6',
         'kimi-k3',
       ]),
     ).toBe('kimi-k3');
-    expect(recommendModelForPurpose('saju', ['kimi-k2.6', 'deepseek-v4-pro:0813'])).toBe(
+    expect(recommendModelForPurpose('saju-g', ['kimi-k2.6', 'deepseek-v4-pro:0813'])).toBe(
       'deepseek-v4-pro:0813',
     );
   });

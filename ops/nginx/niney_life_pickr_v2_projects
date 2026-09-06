@@ -164,6 +164,16 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
+    # 사주(G) 공개 오행 카드 OG. PNG는 /api/ 프록시를 사용한다.
+    location ^~ /saju-g/s/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
     # 사주(C) 일간·띠 이미지(apps/web/dist/saju-c/images/*.webp) — 정적 파일. 타로 카드와 같은 7일 캐시.
     # 없는 이미지는 index.html 폴백 대신 진짜 404 로 떨어져야 웹이 대체(한자 placeholder)를 그린다.
     location ^~ /saju-c/images/ {

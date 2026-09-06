@@ -1,264 +1,485 @@
 import { z } from 'zod';
+import { TAROT_GUEST_KEY_HEADER } from './tarot.js';
 
-export const SAJU_GUEST_KEY_HEADER = 'x-guest-key';
-export const SajuElement = z.enum(['wood', 'fire', 'earth', 'metal', 'water']);
-export const SajuKind = z.enum(['natal', 'annual', 'daily']);
-export type SajuKindType = z.infer<typeof SajuKind>;
-export const SajuBirth = z
-  .object({
-    date: z
-      .string()
-      .regex(
-        /^(1899|19\d{2}|20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
-        '생년월일을 확인해 주세요.',
-      ),
-    calendar: z.enum(['solar', 'lunar']).default('solar'),
-    leapMonth: z.boolean().default(false),
-    timeAccuracy: z.enum(['exact', 'range', 'unknown']).default('unknown'),
-    time: z
-      .string()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-      .nullable()
-      .default(null),
-    timeRange: z.enum(['night', 'morning', 'afternoon', 'evening']).nullable().default(null),
-    timeZone: z.literal('Asia/Seoul').default('Asia/Seoul'),
-    dayBoundary: z.enum(['midnight', 'zi']).default('midnight'),
-    disambiguation: z.enum(['reject', 'earlier', 'later']).default('reject'),
-  })
-  .superRefine((v, ctx) => {
-    if (v.calendar === 'solar' && v.leapMonth)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['leapMonth'],
-        message: '윤달은 음력에서만 선택해 주세요.',
-      });
-    if (v.timeAccuracy === 'exact' && !v.time)
-      ctx.addIssue({ code: 'custom', path: ['time'], message: '태어난 시간을 입력해 주세요.' });
-    if (v.timeAccuracy === 'range' && !v.timeRange)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['timeRange'],
-        message: '대략의 시간대를 골라 주세요.',
-      });
-  });
-export type SajuBirthType = z.infer<typeof SajuBirth>;
-export const CreateSajuReadingInput = z.object({
-  birth: SajuBirth,
-  kind: SajuKind.default('natal'),
-  note: z.string().trim().max(200).default(''),
+// 사주 — 로그인 없이 쓰는 공개 풀이 + 회원 프로필·기록. 계산 규칙·데이터의 단일 출처는 @repo/utils
+// (saju.ts / sajuCalendar.ts …)이고, 여기 enum 은 그와 **같은 값**이어야 한다(api-contract 는 utils 에
+// 의존하지 않는다 — friendly saju.test 가 동일성을 검증).
+//
+// 원국(chart)은 클라이언트와 서버가 같은 utils 코드로 계산한다. 서버는 입력만 받아 다시 계산하고
+// 그 결과를 프롬프트·저장에 쓴다(클라이언트가 보낸 원국은 믿지 않는다). 생년월일시는 개인정보 —
+// 로그·텔레메트리에 남기지 않고, 게스트 결과는 공유 전엔 저장하지 않는다.
+//
+// 긴 풀이(full)는 섹션 4개(personality·year·cycle·advice)를 서버가 병렬로 LLM 에 보내고, 응답은
+// 즉시(정적 본문 + jobId) 돌려준 뒤 클라이언트가 job 을 long-poll 해 도착한 섹션을 받는다.
+
+export const SAJU_GUEST_KEY_HEADER = TAROT_GUEST_KEY_HEADER;
+export const SAJU_SUPPORTED_YEAR_RANGE = { from: 1900, to: 2050 } as const;
+export const SAJU_PROFILE_LABEL_MAX_LENGTH = 20;
+export const SAJU_PROFILE_MAX = 10;
+export const SAJU_DATE_PICK_MAX_DAYS = 60;
+
+// ── 입력 ────────────────────────────────────────────────────────────────────
+
+export const SajuCalendarKind = z.enum(['solar', 'lunar']);
+export type SajuCalendarKindType = z.infer<typeof SajuCalendarKind>;
+export const SajuGender = z.enum(['M', 'F']);
+export type SajuGenderType = z.infer<typeof SajuGender>;
+
+// 학파 차이 옵션 — 기본값은 docs/PLAN-saju.md 기본값 표.
+export const SajuOptionsInput = z.object({
+  solarTimeCorrection: z.boolean().default(true),
+  lateRatHour: z.boolean().default(false),
 });
-export type CreateSajuReadingInputType = z.infer<typeof CreateSajuReadingInput>;
-const Pillar = z.object({
-  key: z.enum(['year', 'month', 'day', 'hour']),
+export type SajuOptionsInputType = z.infer<typeof SajuOptionsInput>;
+
+export const SajuBirthInput = z.object({
+  calendar: SajuCalendarKind.default('solar'),
+  year: z.number().int().min(SAJU_SUPPORTED_YEAR_RANGE.from).max(SAJU_SUPPORTED_YEAR_RANGE.to),
+  month: z.number().int().min(1).max(12),
+  day: z.number().int().min(1).max(31),
+  leapMonth: z.boolean().default(false),
+  // null = 시간 모름(시주 없이 3기둥).
+  hour: z.number().int().min(0).max(23).nullable().default(null),
+  minute: z.number().int().min(0).max(59).nullable().default(null),
+  gender: SajuGender,
+  options: SajuOptionsInput.default({ solarTimeCorrection: true, lateRatHour: false }),
+});
+export type SajuBirthInputType = z.infer<typeof SajuBirthInput>;
+
+// ── 원국 스냅샷 (utils SajuChart 와 같은 모양) ──────────────────────────────
+
+export const SajuWuxing = z.enum(['wood', 'fire', 'earth', 'metal', 'water']);
+export type SajuWuxingType = z.infer<typeof SajuWuxing>;
+export const SajuTenGod = z.enum([
+  'bigyeon', 'geopjae', 'siksin', 'sanggwan', 'pyeonjae', 'jeongjae', 'pyeongwan', 'jeonggwan', 'pyeonin', 'jeongin',
+]);
+export type SajuTenGodType = z.infer<typeof SajuTenGod>;
+export const SajuTwelveStage = z.enum(['장생', '목욕', '관대', '건록', '제왕', '쇠', '병', '사', '묘', '절', '태', '양']);
+export const SajuPillarKey = z.enum(['year', 'month', 'day', 'hour']);
+export type SajuPillarKeyType = z.infer<typeof SajuPillarKey>;
+export const SajuRelationType = z.enum([
+  'stem-combine', 'stem-clash', 'six-combine', 'three-combine', 'half-combine', 'directional',
+  'clash', 'punish', 'self-punish', 'break', 'harm', 'wonjin',
+]);
+export const SajuStarId = z.enum([
+  'cheoneul', 'munchang', 'yangin', 'dohwa', 'yeokma', 'hwagae', 'goegang', 'baekho',
+  'hongyeom', 'gwimun', 'cheonra', 'geumyeo', 'cheondeok', 'woldeok',
+]);
+export const SajuSeason = z.enum(['spring', 'summer', 'autumn', 'winter']);
+export const SajuStrengthLevel = z.enum(['strong', 'balanced', 'weak']);
+
+const Int = z.number().int();
+
+export const SajuCivilDate = z.object({ year: Int, month: Int, day: Int });
+export const SajuLunarDate = z.object({ year: Int, month: Int, day: Int, leap: z.boolean() });
+
+export const SajuStemMeta = z.object({
+  index: Int, ko: z.string(), hanja: z.string(), element: SajuWuxing, yang: z.boolean(), symbol: z.string(),
+});
+export const SajuBranchMeta = z.object({
+  index: Int, ko: z.string(), hanja: z.string(), element: SajuWuxing, yang: z.boolean(), animal: z.string(),
+  hidden: z.array(Int), hourStart: Int, season: SajuSeason,
+});
+
+export const SajuPillar = z.object({
+  key: SajuPillarKey,
+  stem: Int,
+  branch: Int,
+  ganzhi: Int,
+  ko: z.string(),
+  hanja: z.string(),
+  stemElement: SajuWuxing,
+  branchElement: SajuWuxing,
+  stemTenGod: SajuTenGod.nullable(),
+  branchTenGod: SajuTenGod,
+  hidden: z.array(Int),
+  twelveStage: SajuTwelveStage,
+  isVoid: z.boolean(),
+});
+export type SajuPillarType = z.infer<typeof SajuPillar>;
+
+export const SajuRelation = z.object({
+  type: SajuRelationType,
+  pillars: z.array(z.enum(['year', 'month', 'day', 'hour', 'luck'])),
+  chars: z.array(z.string()),
+  element: SajuWuxing.optional(),
   label: z.string(),
-  ganZhi: z.string().nullable(),
-  pronunciation: z.string().nullable(),
-  stemElement: SajuElement.nullable(),
-  branchElement: SajuElement.nullable(),
-  tenGod: z.string().nullable(),
-  candidates: z.array(z.string()),
-  hiddenStems: z.array(
-    z.object({
-      hanja: z.string(),
-      ko: z.string(),
-      element: SajuElement,
-      tenGod: z.string().nullable(),
-    }),
-  ),
 });
-export const SajuElementCount = z.object({
-  element: SajuElement,
-  count: z.number().int().min(0).max(8),
+export type SajuRelationType_ = z.infer<typeof SajuRelation>;
+
+export const SajuStar = z.object({
+  id: SajuStarId, ko: z.string(), hanja: z.string(), positive: z.boolean(), pillars: z.array(SajuPillarKey),
 });
-const Fact = z.object({ id: z.string(), label: z.string(), description: z.string() });
+
+export const SajuElementScore = z.object({ element: SajuWuxing, score: z.number(), percent: z.number() });
+
+export const SajuLuckPillar = z.object({
+  index: Int, ganzhi: Int, stem: Int, branch: Int, ko: z.string(), hanja: z.string(),
+  fromAge: z.number(), toAge: z.number(), fromYear: Int,
+  stemTenGod: SajuTenGod, branchTenGod: SajuTenGod, twelveStage: SajuTwelveStage,
+});
+
+export const SajuYearLuck = z.object({
+  year: Int, ganzhi: Int, ko: z.string(), hanja: z.string(),
+  stemTenGod: SajuTenGod, branchTenGod: SajuTenGod, twelveStage: SajuTwelveStage,
+  relations: z.array(SajuRelation),
+});
+
 export const SajuChart = z.object({
-  calculationVersion: z.number().int(),
-  solarDate: z.string(),
-  lunarDate: z.string(),
-  timeLabel: z.string(),
-  standardTime: z.string().nullable(),
-  dayBoundary: z.enum(['midnight', 'zi']),
-  pillars: z.array(Pillar).length(4),
-  elements: z.array(SajuElementCount).length(5),
-  unknownCharacters: z.number().int().min(0).max(8),
-  dayMaster: z
-    .object({
-      hanja: z.string(),
-      ko: z.string(),
-      element: SajuElement,
-      symbol: z.string(),
-      title: z.string(),
-      description: z.string(),
-    })
-    .nullable(),
-  notices: z.array(z.string()),
-  facts: z.array(Fact),
-  period: z.object({
-    kind: SajuKind,
-    label: z.string(),
-    key: z.string(),
-    ganZhi: z.string().nullable(),
-    relation: z.string().nullable(),
-    months: z.array(
-      z.object({
-        month: z.number().int(),
-        term: z.string(),
-        start: z.string(),
-        end: z.string(),
-        ganZhi: z.string(),
-        relation: z.string().nullable(),
-        description: z.string(),
-      }),
-    ),
+  input: z.object({
+    calendar: SajuCalendarKind, year: Int, month: Int, day: Int, leapMonth: z.boolean(),
+    hour: Int.nullable(), minute: Int.nullable(), gender: SajuGender,
+    options: z.object({ solarTimeCorrection: z.boolean(), lateRatHour: z.boolean() }),
   }),
+  solar: SajuCivilDate,
+  lunar: SajuLunarDate.nullable(),
+  instant: z.object({
+    utcMinutes: Int, hourKnown: z.boolean(), offsetMinutes: Int, dst: z.boolean(),
+    corrected: z.object({ year: Int, month: Int, day: Int, hour: Int, minute: Int }),
+    correctionMinutes: Int,
+  }),
+  pillars: z.object({ year: SajuPillar, month: SajuPillar, day: SajuPillar, hour: SajuPillar.nullable() }),
+  dayMaster: SajuStemMeta,
+  zodiac: SajuBranchMeta,
+  season: SajuSeason,
+  tenGodCounts: z.record(z.string(), Int),
+  elements: z.array(SajuElementScore),
+  excess: z.array(SajuWuxing),
+  lacking: z.array(SajuWuxing),
+  strength: z.object({
+    level: SajuStrengthLevel, score: z.number(), gotSeason: z.boolean(), gotPlace: z.boolean(), supportCount: Int,
+  }),
+  favorable: z.object({
+    primary: SajuWuxing, secondary: SajuWuxing.nullable(), reason: z.enum(['weak', 'strong', 'balanced', 'season']),
+  }),
+  relations: z.array(SajuRelation),
+  stars: z.array(SajuStar),
+  voidBranches: z.tuple([Int, Int]),
+  luck: z.object({
+    forward: z.boolean(), startAgeYears: Int, startAgeMonths: Int, pillars: z.array(SajuLuckPillar), currentIndex: Int,
+  }),
+  yearLuck: SajuYearLuck,
+  asOf: z.object({ utcMinutes: Int, age: Int, year: Int }),
+  warnings: z.array(z.string()),
 });
 export type SajuChartType = z.infer<typeof SajuChart>;
-export const SajuReport = z.object({
-  headline: z.string().min(1).max(100),
-  summary: z.string().min(1).max(1500),
-  sections: z
-    .array(
-      z.object({
-        id: z.string().max(32),
-        title: z.string().min(1).max(60),
-        text: z.string().min(1).max(1800),
-        evidenceIds: z.array(z.string().max(64)).min(1).max(6),
-      }),
-    )
-    .min(3)
-    .max(5),
-  practice: z.string().min(1).max(400),
-  reflection: z.string().min(1).max(300),
-});
-export type SajuReportType = z.infer<typeof SajuReport>;
-export const SajuReadingResult = z.object({
-  readingId: z.string().nullable(),
-  receipt: z.string().nullable(),
-  birth: SajuBirth,
-  kind: SajuKind,
-  chart: SajuChart,
-  report: SajuReport,
-  source: z.enum(['ai', 'basic']),
+
+// ── 풀이 섹션 ───────────────────────────────────────────────────────────────
+
+// llm: Ollama Cloud / static: LLM 부재·실패·한도 초과 시 정적 조립.
+export const SajuSource = z.enum(['llm', 'static']);
+export type SajuSourceType = z.infer<typeof SajuSource>;
+// mixed: 섹션 일부만 LLM.
+export const SajuReadingSource = z.enum(['llm', 'static', 'mixed']);
+export type SajuReadingSourceType = z.infer<typeof SajuReadingSource>;
+
+export const SajuSectionId = z.enum(['personality', 'year', 'cycle', 'advice']);
+export type SajuSectionIdType = z.infer<typeof SajuSectionId>;
+export const SAJU_SECTION_IDS = SajuSectionId.options;
+// pending: LLM 응답 대기 중(본문은 정적) / ready: LLM / static: 최종 정적.
+export const SajuSectionStatus = z.enum(['pending', 'ready', 'static']);
+export type SajuSectionStatusType = z.infer<typeof SajuSectionStatus>;
+
+const SectionBase = z.object({
+  status: SajuSectionStatus,
+  source: SajuSource,
   model: z.string().nullable(),
-  promptVersion: z.number().int(),
-  fallbackReason: z.enum(['not_configured', 'quota', 'unavailable']).nullable(),
-  remainingToday: z.number().int().nullable(),
+});
+
+export const SajuPersonalitySection = SectionBase.extend({
+  headline: z.string(),
+  body: z.string(),
+  strengths: z.array(z.string()),
+  cautions: z.array(z.string()),
+});
+export type SajuPersonalitySectionType = z.infer<typeof SajuPersonalitySection>;
+
+export const SajuYearSection = SectionBase.extend({
+  body: z.string(),
+  // 눈여겨볼 달(1~12) 몇 개.
+  months: z.array(z.object({ month: Int.min(1).max(12), note: z.string() })),
+});
+export type SajuYearSectionType = z.infer<typeof SajuYearSection>;
+
+export const SajuCycleSection = SectionBase.extend({
+  body: z.string(),
+  current: z.string(),
+  next: z.string(),
+});
+export type SajuCycleSectionType = z.infer<typeof SajuCycleSection>;
+
+export const SajuLucky = z.object({
+  element: SajuWuxing,
+  colors: z.array(z.string()),
+  directions: z.array(z.string()),
+  numbers: z.array(Int),
+  foods: z.array(z.string()),
+});
+export type SajuLuckyType = z.infer<typeof SajuLucky>;
+
+export const SajuAdviceSection = SectionBase.extend({
+  body: z.string(),
+  keyword: z.string(),
+  lucky: SajuLucky,
+});
+export type SajuAdviceSectionType = z.infer<typeof SajuAdviceSection>;
+
+export const SajuSections = z.object({
+  personality: SajuPersonalitySection,
+  year: SajuYearSection,
+  cycle: SajuCycleSection,
+  advice: SajuAdviceSection,
+});
+export type SajuSectionsType = z.infer<typeof SajuSections>;
+
+// 게스트만 숫자(기기 일일 한도 잔여). 회원은 null.
+export const SajuQuota = z.object({ remainingToday: Int.nullable() });
+
+export const CreateSajuReadingInput = z.object({ birth: SajuBirthInput });
+export type CreateSajuReadingInputType = z.infer<typeof CreateSajuReadingInput>;
+
+export const SajuReadingResult = z.object({
+  // 회원 자동 저장 id(섹션이 전부 끝난 뒤 저장되므로 job 진행 중엔 null, poll 결과에 실린다).
+  readingId: z.string().nullable(),
+  // 섹션 병렬 작업 id. 캐시 히트·정적 경로면 null.
+  jobId: z.string().nullable(),
+  chart: SajuChart,
+  sections: SajuSections,
+  source: SajuReadingSource,
+  model: z.string().nullable(),
   createdAt: z.string(),
+  quota: SajuQuota,
 });
 export type SajuReadingResultType = z.infer<typeof SajuReadingResult>;
-export const SajuReceiptInput = z.object({ receipt: z.string().min(20).max(64) });
+
+export const SajuJobPollQuery = z.object({
+  // 이미 받은 버전. 이보다 큰 버전이 생기거나 wait 이 지나면 응답.
+  after: z.coerce.number().int().min(0).default(0),
+  wait: z.coerce.number().int().min(0).max(25_000).default(20_000),
+});
+export type SajuJobPollQueryType = z.infer<typeof SajuJobPollQuery>;
+
+export const SajuJobPollResult = z.object({
+  jobId: z.string(),
+  version: Int,
+  sections: SajuSections,
+  done: z.boolean(),
+  readingId: z.string().nullable(),
+  source: SajuReadingSource,
+});
+export type SajuJobPollResultType = z.infer<typeof SajuJobPollResult>;
+
+// ── 오늘의 운세 ─────────────────────────────────────────────────────────────
+
+export const SajuDayTag = z.enum([
+  'cheoneul', 'munchang', 'dohwa', 'yeokma', 'void', 'favorable', 'excess', 'son-eomneun',
+  'six-combine', 'three-combine', 'directional', 'clash', 'punish', 'harm', 'break', 'wonjin',
+  'stage-good', 'stage-bad', 'god-good', 'god-bad',
+]);
+export type SajuDayTagType = z.infer<typeof SajuDayTag>;
+
+export const SajuDay = z.object({
+  date: z.string(), // yyyy-mm-dd
+  lunar: SajuLunarDate.nullable(),
+  weekday: Int,
+  ko: z.string(),
+  hanja: z.string(),
+  element: SajuWuxing,
+  stemTenGod: SajuTenGod,
+  twelveStage: SajuTwelveStage,
+  score: Int,
+  stars: Int.min(1).max(5),
+  tags: z.array(SajuDayTag),
+});
+export type SajuDayType = z.infer<typeof SajuDay>;
+
+export const SajuDailyInput = z.object({
+  birth: SajuBirthInput,
+  // yyyy-mm-dd(KST). 없으면 오늘. 오늘 ±7일까지.
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+export type SajuDailyInputType = z.infer<typeof SajuDailyInput>;
+
+export const SajuDailyResult = z.object({
+  dayKey: z.string(),
+  day: SajuDay,
+  dayMaster: SajuStemMeta,
+  headline: z.string(),
+  body: z.string(),
+  advice: z.string(),
+  lucky: SajuLucky,
+  source: SajuSource,
+  model: z.string().nullable(),
+  quota: SajuQuota,
+});
+export type SajuDailyResultType = z.infer<typeof SajuDailyResult>;
+
+// ── 궁합 ────────────────────────────────────────────────────────────────────
+
+export const SajuMatchInput = z.object({
+  a: SajuBirthInput,
+  b: SajuBirthInput,
+  // 표시용 호칭('나'·'그 사람'). 프롬프트에 데이터로만.
+  labels: z.object({ a: z.string().trim().max(20).default('나'), b: z.string().trim().max(20).default('상대') }).default({ a: '나', b: '상대' }),
+});
+export type SajuMatchInputType = z.infer<typeof SajuMatchInput>;
+
+export const SajuMatchGrade = z.enum(['excellent', 'good', 'fair', 'effort', 'caution']);
+export const SajuMatchBreakdown = z.object({
+  key: z.enum(['dayMaster', 'dayBranch', 'zodiac', 'elements', 'tenGod']),
+  label: z.string(),
+  score: z.number(),
+  max: z.number(),
+  note: z.string(),
+});
+
+export const SajuMatchResult = z.object({
+  score: Int,
+  grade: SajuMatchGrade,
+  gradeKo: z.string(),
+  breakdown: z.array(SajuMatchBreakdown),
+  relations: z.array(SajuRelation),
+  mutual: z.object({ aToB: SajuTenGod, bToA: SajuTenGod }),
+  a: z.object({ label: z.string(), dayMaster: SajuStemMeta, zodiac: SajuBranchMeta, signature: z.string() }),
+  b: z.object({ label: z.string(), dayMaster: SajuStemMeta, zodiac: SajuBranchMeta, signature: z.string() }),
+  summary: z.string(),
+  strengths: z.array(z.string()),
+  cautions: z.array(z.string()),
+  advice: z.string(),
+  source: SajuSource,
+  model: z.string().nullable(),
+  quota: SajuQuota,
+});
+export type SajuMatchResultType = z.infer<typeof SajuMatchResult>;
+
+// ── 택일 ────────────────────────────────────────────────────────────────────
+
+export const SajuDatePurpose = z.enum(['general', 'move', 'contract', 'interview', 'trip', 'date']);
+export type SajuDatePurposeType = z.infer<typeof SajuDatePurpose>;
+
+export const SajuDatePickInput = z.object({
+  birth: SajuBirthInput,
+  purpose: SajuDatePurpose.default('general'),
+  // 시작일 yyyy-mm-dd(KST). 없으면 오늘. 오늘 이전은 오늘로.
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  days: z.number().int().min(1).max(SAJU_DATE_PICK_MAX_DAYS).default(30),
+});
+export type SajuDatePickInputType = z.infer<typeof SajuDatePickInput>;
+
+export const SajuDatePickDay = SajuDay.extend({ purposeScore: Int, purposeStars: Int.min(1).max(5) });
+export const SajuDatePickTop = SajuDatePickDay.extend({ reason: z.string() });
+
+export const SajuDatePickResult = z.object({
+  purpose: SajuDatePurpose,
+  from: z.string(),
+  days: z.array(SajuDatePickDay),
+  top: z.array(SajuDatePickTop),
+  source: SajuSource,
+  model: z.string().nullable(),
+  quota: SajuQuota,
+});
+export type SajuDatePickResultType = z.infer<typeof SajuDatePickResult>;
+
+// ── 오행 음식 ───────────────────────────────────────────────────────────────
+
+export const SajuFoodInput = z.object({
+  birth: SajuBirthInput,
+  // 오늘 일진 오행을 가점(기본). 끄면 내 사주만.
+  today: z.boolean().default(true),
+});
+export type SajuFoodInputType = z.infer<typeof SajuFoodInput>;
+
+export const SajuFoodPick = z.object({
+  menuId: z.string(),
+  name: z.string(),
+  cuisine: z.string(),
+  dishType: z.string(),
+  kcal: z.number().nullable(),
+  elements: z.array(SajuWuxing),
+  reason: z.string(),
+});
+export type SajuFoodPickType = z.infer<typeof SajuFoodPick>;
+
+export const SajuFoodResult = z.object({
+  picks: z.array(SajuFoodPick).min(1),
+  primary: SajuWuxing,
+  secondary: SajuWuxing.nullable(),
+  avoid: z.array(SajuWuxing),
+  dayElement: SajuWuxing.nullable(),
+  profile: z.string(),
+  avoidText: z.string(),
+  source: SajuSource,
+  model: z.string().nullable(),
+  quota: SajuQuota,
+});
+export type SajuFoodResultType = z.infer<typeof SajuFoodResult>;
+
+// ── 회원 프로필·기록·공유 (4차에서 라우트 구현) ────────────────────────────
+
+export const SajuProfileInput = z.object({
+  label: z.string().trim().min(1).max(SAJU_PROFILE_LABEL_MAX_LENGTH),
+  birth: SajuBirthInput,
+  isPrimary: z.boolean().default(false),
+});
+export type SajuProfileInputType = z.infer<typeof SajuProfileInput>;
+
+export const SajuProfile = SajuProfileInput.extend({
+  id: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type SajuProfileType = z.infer<typeof SajuProfile>;
+
+export const SajuProfileList = z.object({ items: z.array(SajuProfile) });
+export type SajuProfileListType = z.infer<typeof SajuProfileList>;
+
+export const SajuReadingKind = z.enum(['full', 'daily', 'match', 'date-pick', 'food']);
+export type SajuReadingKindType = z.infer<typeof SajuReadingKind>;
+
 export const SajuReadingSummary = z.object({
   id: z.string(),
-  kind: SajuKind,
-  title: z.string(),
-  period: z.string(),
-  source: z.enum(['ai', 'basic']),
+  kind: SajuReadingKind,
+  signature: z.string(),
+  dayMaster: z.string(),
+  keyword: z.string(),
+  source: SajuReadingSource,
   createdAt: z.string(),
 });
+export type SajuReadingSummaryType = z.infer<typeof SajuReadingSummary>;
+
+export const ListSajuReadingsQuery = z.object({
+  cursor: z.string().max(64).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ListSajuReadingsQueryType = z.infer<typeof ListSajuReadingsQuery>;
+
 export const ListSajuReadingsResult = z.object({
   items: z.array(SajuReadingSummary),
   nextCursor: z.string().nullable(),
 });
 export type ListSajuReadingsResultType = z.infer<typeof ListSajuReadingsResult>;
-export const SAJU_PROFILES_MAX = 20;
-export const SajuProfileInput = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, '별명을 입력해 주세요.')
-    .max(24)
-    .regex(/^[^\p{Cc}]+$/u, '별명에는 줄바꿈이나 제어 문자를 사용할 수 없어요.'),
-  birth: SajuBirth,
-});
-export const SajuProfile = SajuProfileInput.extend({
-  id: z.string().min(1).max(64),
-  revision: z.number().int().positive(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-export const UpdateSajuProfileInput = SajuProfileInput.extend({
-  revision: z.number().int().positive(),
-});
-export const SajuProfileList = z.object({ items: z.array(SajuProfile).max(SAJU_PROFILES_MAX) });
-export type SajuProfileInputType = z.infer<typeof SajuProfileInput>;
-export type SajuProfileType = z.infer<typeof SajuProfile>;
-export const SajuRelationship = z.enum(['partner', 'friend', 'family', 'colleague']);
-export type SajuRelationshipType = z.infer<typeof SajuRelationship>;
-export const SajuPairBirths = z.object({ first: SajuBirth, second: SajuBirth });
-export const CreateSajuPairInput = SajuPairBirths.extend({
-  relationship: SajuRelationship.default('partner'),
-  note: z.string().trim().max(200).default(''),
-});
-export type CreateSajuPairInputType = z.infer<typeof CreateSajuPairInput>;
-export const SajuConnection = z.enum([
-  'same',
-  'first-nurtures',
-  'second-nurtures',
-  'first-regulates',
-  'second-regulates',
-  'unknown',
-]);
-export const SajuPairChart = z.object({
-  calculationVersion: z.number().int(),
-  first: SajuChart,
-  second: SajuChart,
-  connection: SajuConnection,
-  title: z.string(),
-  description: z.string(),
-  firstToSecond: z.string().nullable(),
-  secondToFirst: z.string().nullable(),
-  facts: z.array(Fact),
-  notices: z.array(z.string()),
-});
-export type SajuPairChartType = z.infer<typeof SajuPairChart>;
-export const SajuPairResult = SajuReadingResult.pick({
-  source: true,
-  model: true,
-  promptVersion: true,
-  fallbackReason: true,
-  remainingToday: true,
-  createdAt: true,
-}).extend({ chart: SajuPairChart, report: SajuReport });
-export type SajuPairResultType = z.infer<typeof SajuPairResult>;
-export const ListSajuReadingsQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(50).default(20),
-  cursor: z.string().max(64).optional(),
-});
+
 export const CreateSajuShareInput = z
   .object({
-    receipt: z.string().min(20).max(64).optional(),
-    readingId: z.string().max(64).optional(),
-    birth: SajuBirth.optional(),
-    pair: SajuPairBirths.optional(),
+    readingId: z.string().min(1).max(64).optional(),
+    birth: SajuBirthInput.optional(),
+    includeBirth: z.boolean().default(false),
   })
-  .refine(
-    (v) => [v.receipt, v.readingId, v.birth, v.pair].filter(Boolean).length === 1,
-    '결과를 하나 선택해 주세요.',
-  );
+  .refine((v) => !!v.readingId || !!v.birth, 'readingId 또는 birth 가 필요합니다.');
 export type CreateSajuShareInputType = z.infer<typeof CreateSajuShareInput>;
-// 공유에는 원본 날짜·명식·질문·AI 자유문장을 포함하지 않는다.
-export const PublicSajuShare = z.object({
-  title: z.string(),
-  description: z.string(),
-  symbol: z.string(),
-  element: SajuElement.nullable(),
-  elements: z.array(SajuElementCount),
-  unknownCharacters: z.number().int(),
-  pair: z
-    .object({
-      element: SajuElement.nullable(),
-      symbol: z.string(),
-      elements: z.array(SajuElementCount).length(5),
-      unknownCharacters: z.number().int().min(0).max(8),
-      connection: SajuConnection,
-    })
-    .optional(),
-});
-export type PublicSajuShareType = z.infer<typeof PublicSajuShare>;
-export const SajuShareResult = z.object({
-  token: z.string(),
-  path: z.string(),
-  revokeToken: z.string(),
-});
+
+export const SajuShareResult = z.object({ token: z.string(), path: z.string(), includeBirth: z.boolean() });
 export type SajuShareResultType = z.infer<typeof SajuShareResult>;
-export const RevokeSajuShareInput = z.object({ revokeToken: z.string().min(20).max(64) });
+
+export const SharedSajuReading = z.object({
+  token: z.string(),
+  includeBirth: z.boolean(),
+  chart: SajuChart,
+  sections: SajuSections,
+  source: SajuReadingSource,
+  model: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type SharedSajuReadingType = z.infer<typeof SharedSajuReading>;
+
+export const SajuShareImageFormat = z.enum(['og', 'story']);

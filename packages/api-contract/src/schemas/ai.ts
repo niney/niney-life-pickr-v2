@@ -105,6 +105,7 @@ export const LlmProviderPurpose = z.enum([
   'meal-recommend',
   'tarot',
   'saju',
+  'saju-g',
 ]);
 export type LlmProviderPurposeType = z.infer<typeof LlmProviderPurpose>;
 
