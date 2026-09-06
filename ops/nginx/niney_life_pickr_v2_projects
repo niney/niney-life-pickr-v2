@@ -1,0 +1,203 @@
+# HTTP → HTTPS 리다이렉트
+server {
+    listen 80;
+    listen [::]:80;
+    server_name nlpp.easypcb.co.kr;
+
+    if ($host = nlpp.easypcb.co.kr) {
+        return 301 https://$host$request_uri;
+    }
+    return 404;
+}
+
+# HTTPS
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name nlpp.easypcb.co.kr;
+
+    ssl_certificate     /etc/letsencrypt/live/nlpp.easypcb.co.kr/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/nlpp.easypcb.co.kr/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    root /home/samplepcb/niney-life-pickr-v2/apps/web/dist;
+    index index.html;
+
+    client_max_body_size 20m;
+
+    # API: Fastify(port 3000) — SSE/WebSocket 헤더
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+    }
+
+    # SPA 라우팅
+    # [수정] $uri/ 제거 — dist 에 tarot/cards/, saju-c/images/ 가 생겨 /tarot·/saju-c 가 실제 디렉터리가 됐고,
+    # $uri/ 가 먼저 걸리면 301 /saju-c/ → index 없음 403 으로 떨어진다(ninelife.kr 블록과 동일 수정).
+    location / {
+        try_files $uri /index.html;
+    }
+
+    # index.html은 캐시 금지
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    # 정적 자산 장기 캐싱 (Vite 해시 파일명이라 안전)
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+
+# ==========================================
+# 새 도메인: ninelife.kr (Cloudflare Flexible SSL 전용)
+# nlpp.easypcb.co.kr 과 동일한 백엔드/루트 공유
+# ==========================================
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ninelife.kr www.ninelife.kr;
+
+    root /home/samplepcb/niney-life-pickr-v2/apps/web/dist;
+    index index.html;
+
+    client_max_body_size 20m;
+
+    # [추가] nginx 가 만드는 301 을 상대 경로로. Flexible SSL 이라 원본 구간이 http 여서
+    # 절대 주소로 만들면 http://ninelife.kr/... 로 나가 https 로 한 번 더 튄다.
+    absolute_redirect off;
+
+    # API: Fastify(port 3000)
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+
+        proxy_set_header Host $host;
+        # Cloudflare가 전달하는 실제 방문자 IP
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Flexible SSL: 원본 구간은 http지만 공개 접속은 항상 https
+        proxy_set_header X-Forwarded-Proto https;   # ← $scheme 에서 변경
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+    }
+
+    location ^~ /share/settlements/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location ^~ /s/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location ^~ /r/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # 타로 공유 링크 — friendly 가 OG 메타를 주입한 index.html 과
+    # 공유 이미지(/tarot/s/<token>/image.png?format=og|story, satori 렌더)를 내려준다.
+    # ^~ 필수: 아래 .png 정규식 location 이 이미지 요청을 가로채 404 되지 않도록.
+    location ^~ /tarot/s/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # 타로 카드 이미지(apps/web/dist/tarot/cards/*.webp) — 정적 파일.
+    # 아래 1년 immutable 규칙엔 webp 가 없어 캐시 헤더 없이 나가던 것을 7일 캐시로.
+    # 1년으로 두지 않는 이유: 카드를 같은 파일명으로 다시 생성해 교체할 수 있어서.
+    # 없는 카드는 index.html 폴백 대신 진짜 404 로 떨어져야 웹이 대체 카드를 그린다.
+    location ^~ /tarot/cards/ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        try_files $uri =404;
+    }
+
+    # 사주(C) 공유 링크 — 타로와 동일 패턴. friendly 가 OG 메타를 주입한 index.html 과
+    # 공유 이미지(/saju-c/s/<token>/image.png?format=og|story, satori 렌더)를 내려준다.
+    # ^~ 필수: 아래 .png 정규식 location 이 이미지 요청을 가로채 404 되지 않도록.
+    location ^~ /saju-c/s/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # 사주(C) 일간·띠 이미지(apps/web/dist/saju-c/images/*.webp) — 정적 파일. 타로 카드와 같은 7일 캐시.
+    # 없는 이미지는 index.html 폴백 대신 진짜 404 로 떨어져야 웹이 대체(한자 placeholder)를 그린다.
+    location ^~ /saju-c/images/ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        try_files $uri =404;
+    }
+
+    # 그룹 투표 공유 링크 OG(/vote/<token>). 없어도 투표 자체는 SPA 로 동작하고 카톡 미리보기만 안 뜬다.
+    location ^~ /vote/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # SPA 라우팅
+    # [수정] $uri/ 제거. dist 에 tarot/cards/ 가 생겨 /tarot 가 실제 디렉터리가 됐고,
+    # $uri/ 가 먼저 걸리면 301 /tarot/ → index 없음 403 으로 떨어진다. SPA 는 디렉터리 인덱스가 필요 없다.
+    location / {
+        try_files $uri /index.html;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

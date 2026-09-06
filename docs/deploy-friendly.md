@@ -206,9 +206,9 @@ location ^~ /tarot/cards/ {
 }
 ```
 
-### SPA 폴백과 `/tarot` 디렉터리 충돌 (필수)
+### SPA 폴백과 `/tarot`·`/saju-c` 디렉터리 충돌 (필수)
 
-웹 dist 에 `tarot/cards/` 가 생기면서 `/tarot` 가 **실제 디렉터리**가 됐다. SPA 폴백이
+웹 dist 에 `tarot/cards/`·`saju-c/images/` 가 생기면서 `/tarot`·`/saju-c` 가 **실제 디렉터리**가 됐다. SPA 폴백이
 `try_files $uri $uri/ /index.html;` 이면 `/tarot` 요청이 `$uri/`(디렉터리)에 먼저 걸려
 `301 → /tarot/` 로 보내고, 거기엔 index 가 없어 **403** 이 난다(2026-09-05 운영 실측 —
 직접 진입·새로고침만 깨지고 SPA 내부 이동은 멀쩡해서 눈에 늦게 띈다). SPA 는 디렉터리
