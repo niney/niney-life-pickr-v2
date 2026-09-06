@@ -84,3 +84,5 @@ apps/web/vite.config.js
 # 타로 카드 원본(제미나이 생성 PNG) — 리포에 넣지 않는다. 변환 산출물(webp)만
 # apps/web/public/tarot/cards 에 커밋. 프롬프트·빌드: docs/tarot-deck-prompts.md
 /assets-src/tarot/raw/
+# 사주 이미지 원본(제미나이) — apps/web/public/saju/images 에 커밋. 프롬프트·빌드: docs/saju-image-prompts.md
+/assets-src/saju/raw/

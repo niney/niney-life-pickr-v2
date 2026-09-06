@@ -82,13 +82,13 @@ const modelSizeB = (modelId: string): number => {
 
 // LLM 용도 — @repo/api-contract 의 LlmProviderPurpose 와 같은 값. utils 는
 // api-contract 에 의존할 수 없어(순환 금지) 리터럴 유니온으로 다시 적는다.
-type ModelPurpose = 'chat' | 'image' | 'log-analysis' | 'meal-photo' | 'meal-recommend' | 'tarot';
+type ModelPurpose = 'chat' | 'image' | 'log-analysis' | 'meal-photo' | 'meal-recommend' | 'tarot' | 'saju';
 
 // 용도별로 카탈로그에서 합리적인 기본 모델을 한 개 고른다. UI 가 키 입력 후
 // "추천값"을 폼에 프리필하는 용도 — 강제가 아니라 시작점이다. 적합한 후보가
 // 없으면 null (그땐 프리필하지 않는다).
 //   image·meal-photo    vision 계열 중 가장 작은 모델 (대개 충분 + 저렴). 없으면 null.
-//   log-analysis        텍스트 계열 중 가장 큰 모델 (원인 추론은 추론력 우선).
+//   log-analysis·saju   텍스트 계열 중 가장 큰 모델 (원인 추론·명리 풀이는 추론력·한국어 품질 우선).
 //   chat·meal-recommend 텍스트 계열 중 중간 규모 (속도·품질 균형).
 export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]): string | null => {
   const list = models.map((m) => m.trim()).filter((m) => m.length > 0);
@@ -104,7 +104,7 @@ export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]
   const pool = textOnly.length > 0 ? textOnly : list;
   const bySize = [...pool].sort((a, b) => modelSizeB(a) - modelSizeB(b));
 
-  if (purpose === 'log-analysis') {
+  if (purpose === 'log-analysis' || purpose === 'saju') {
     return bySize[bySize.length - 1] ?? null; // 가장 큰 모델
   }
   // chat·meal-recommend·tarot — 규모 오름차순의 중앙값(작은 쪽으로 치우침).

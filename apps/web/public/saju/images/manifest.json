@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-09-06T10:50:14.448Z",
+  "sizes": [
+    512,
+    1024
+  ],
+  "images": {
+    "stem-gap": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-eul": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-byeong": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-jeong": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-mu": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-gi": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-gyeong": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-sin": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-im": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "stem-gye": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-rat": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-ox": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-tiger": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-rabbit": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-dragon": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-snake": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-horse": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-goat": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-monkey": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-rooster": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-dog": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    },
+    "branch-pig": {
+      "placeholder": true,
+      "source": null,
+      "builtAt": "2026-09-06T10:50:14.448Z"
+    }
+  },
+  "missing": []
+}

@@ -89,7 +89,11 @@
     "probe:menu-coverage": "tsx --env-file=.env scripts/probe-menu-coverage.ts",
     "probe:menu-resolve": "tsx --env-file=.env scripts/probe-menu-resolve.ts",
     "measure:menu-golden": "tsx --env-file=.env scripts/measure-menu-golden.ts",
-    "measure:menu-decompose": "tsx --env-file=.env scripts/measure-menu-decompose.ts"
+    "measure:menu-decompose": "tsx --env-file=.env scripts/measure-menu-decompose.ts",
+    "build:saju-tables": "tsx --env-file=.env scripts/build-saju-tables.ts",
+    "build:saju-images": "tsx scripts/build-saju-images.ts",
+    "probe:saju-reading": "tsx --env-file=.env scripts/probe-saju-reading.ts",
+    "build:saju-glyphs": "tsx scripts/build-saju-glyphs.ts"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",
@@ -125,6 +129,7 @@
     "@repo/config": "workspace:*",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.2",
+    "astronomy-engine": "2.1.19",
     "eslint": "^10.4.1",
     "prisma": "^6.0.1",
     "rimraf": "^6.0.1",
