@@ -19,7 +19,7 @@ describe('신살 확장(7차)', () => {
     // 경금 일간 금여·홍염 = 술 — 원국에 술 없음. 진(일지)+사(월지)가 있어 지망(진사) → 천라지망.
     expect(ids(A)).not.toContain('geumyeo');
     expect(ids(A)).not.toContain('hongyeom');
-    expect(A.stars.find((s) => s.id === 'cheonra')?.pillars.sort()).toEqual(['day', 'month']);
+    expect([...(A.stars.find((s) => s.id === 'cheonra')?.pillars ?? [])].sort()).toEqual(['day', 'month']);
   });
   it('임술 일주에 해가 있으면 천라(술해), 무진 일주에 사가 있으면 지망(진사)', () => {
     // 1982-11-13 = 임술년 신해월 … 을 찾기보다 직접 기둥을 확인: 술·해가 함께 있는 날을 고른다.
