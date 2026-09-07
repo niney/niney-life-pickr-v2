@@ -32,7 +32,7 @@ export const MySajuReadingPage = () => {
               </Button>
               {confirming ? (
                 <>
-                  <Button type="button" size="sm" variant="destructive" disabled={del.isPending} onClick={() => del.mutate(query.data!.readingId as string, { onSuccess: () => navigate('/me/saju') })}>
+                  <Button type="button" size="sm" variant="destructive" disabled={del.isPending} onClick={() => del.mutate(query.data!.readingId as string, { onSuccess: () => navigate('/me/saju-c') })}>
                     삭제
                   </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)} className="text-[#e9e2d2]/80">
