@@ -37,6 +37,7 @@ export * from './saju.js';
 export * from './sajuText.js';
 export * from './sajuDaily.js';
 export * from './sajuInsights.js';
+export * from './sajuDayPillar.js';
 export * from './sajuMatch.js';
 export * from './sajuDatePick.js';
 export * from './sajuFood.js';

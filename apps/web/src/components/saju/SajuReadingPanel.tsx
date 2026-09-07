@@ -8,6 +8,7 @@ import {
   dayMasterText,
   sajuBirthSummary,
   sajuBranchImageId,
+  sajuDayPillarReadingOf,
   sajuFiveGodsOf,
   sajuHealthHintsOf,
   sajuImagePath,
@@ -17,6 +18,7 @@ import {
   sajuStemImageId,
   sajuYearOutlooksOf,
   SAJU_SAMJAE_STAGE_KO,
+  stemMeta,
   zodiacTraitLine,
   type SajuChart,
   type TenGod,
@@ -332,6 +334,83 @@ export const MonthLuckGrid = ({ chart }: { chart: SajuChart }) => {
   );
 };
 
+/** 대운 타임라인 — 0~100세를 강물처럼. 구간 색은 대운 천간 오행, 지금 나이에 표식. 흐름 탭·2D 뷰 공용. */
+export const LuckTimeline = ({ chart }: { chart: SajuChart }) => {
+  const W = 600;
+  const H = 96;
+  const left = 8;
+  const right = W - 8;
+  const x = (age: number) => left + (Math.max(0, Math.min(100, age)) / 100) * (right - left);
+  const pillars = chart.luck.pillars.filter((p) => p.fromAge < 100);
+  const age = chart.asOf.age;
+  // 강물: 위아래로 살짝 굽이치는 띠(두 곡선 사이).
+  const wave = (yBase: number, amp: number, phase: number) => {
+    let d = `M ${left} ${yBase}`;
+    for (let i = 1; i <= 10; i++) {
+      const px = left + ((right - left) * i) / 10;
+      const cx = px - (right - left) / 20;
+      const cy = yBase + Math.sin(i * 1.3 + phase) * amp;
+      d += ` Q ${cx} ${cy} ${px} ${yBase + Math.sin(i * 1.9 + phase) * amp * 0.4}`;
+    }
+    return d;
+  };
+  const top = 34;
+  const bottom = 66;
+  return (
+    <figure className="flex flex-col gap-1" aria-label="대운 타임라인">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`대운 타임라인, 지금 만 ${age}세`}>
+        {/* 구간 */}
+        {pillars.map((p) => {
+          const x0 = x(p.fromAge);
+          const x1 = x(Math.min(100, p.toAge));
+          const el = stemMeta(p.stem).element;
+          const cur = p.index === chart.luck.currentIndex;
+          const w = Math.max(0, x1 - x0);
+          return (
+            <g key={p.index}>
+              <rect x={x0} y={top - 6} width={w} height={bottom - top + 12} rx={6} fill={WUXING_COLOR[el]} opacity={cur ? 0.55 : 0.28} />
+              {w >= 24 && (
+                <text x={(x0 + x1) / 2} y={top - 12} textAnchor="middle" fontSize={11} fill="#f3e9c6" fontFamily="serif">
+                  {p.hanja}
+                </text>
+              )}
+              {w >= 44 && (
+                <text x={(x0 + x1) / 2} y={bottom + 20} textAnchor="middle" fontSize={8} fill="rgba(233,226,210,0.6)">
+                  {Math.floor(p.fromAge)}세 · {godKo(p.stemTenGod)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {/* 강물 하이라이트 */}
+        <path d={wave(50, 6, 1)} fill="none" stroke="rgba(217,182,91,0.55)" strokeWidth={1.5} />
+        <path d={wave(58, 4, 3)} fill="none" stroke="rgba(233,226,210,0.25)" strokeWidth={1} />
+        {/* 지금 */}
+        <g>
+          <line x1={x(age)} x2={x(age)} y1={top - 8} y2={bottom + 8} stroke="#ffb4a2" strokeWidth={1.5} strokeDasharray="3 2" />
+          <circle cx={x(age)} cy={50} r={4} fill="#ffb4a2" />
+          <text x={x(age)} y={H - 2} textAnchor="middle" fontSize={9} fill="#ffb4a2">
+            지금 {age}세
+          </text>
+        </g>
+      </svg>
+      <figcaption className="text-[10px] text-[#e9e2d2]/45">구간 색은 그 대운 천간의 오행, 밝은 구간이 지금 대운. 강물은 나이 순으로 흘러가요.</figcaption>
+    </figure>
+  );
+};
+
+/** 60갑자 일주론 카드 — 별칭 + 배우자 자리 문장. 성격 탭·2D 뷰 공용. */
+export const DayPillarCard = ({ chart }: { chart: SajuChart }) => {
+  const r = sajuDayPillarReadingOf(chart);
+  return (
+    <div className="rounded-lg border border-[#d9b65b]/30 p-2 text-xs" aria-label="일주로 보면">
+      <div className="text-[10px] text-[#d9b65b]">일주로 보면 — {r.ko} {r.hanja}</div>
+      <div className="font-serif-kr text-sm font-bold text-[#f3e9c6]">“{r.title}”</div>
+      <p className="mt-1 leading-relaxed text-[#e9e2d2]/75">{r.body}</p>
+    </div>
+  );
+};
+
 const SectionShell = ({ pending, children }: { pending: boolean; children: ReactNode }) => (
   <div className="flex flex-col gap-3">
     {pending && (
@@ -380,6 +459,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
                 <ul className="flex flex-col gap-0.5 text-[#e9e2d2]/80">{(s?.cautions ?? dm.cautions).map((x) => <li key={x}>· {x}</li>)}</ul>
               </div>
             </div>
+            <DayPillarCard chart={chart} />
             <DayMasterStyleCards chart={chart} />
             <p className="text-[11px] text-[#e9e2d2]/55">띠로 보면 {zodiacTraitLine(chart)}. 일간이 타고난 성격이라면 띠는 겉으로 드러나는 분위기예요.</p>
           </SectionShell>
@@ -402,6 +482,7 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
         const cur = chart.luck.currentIndex >= 0 ? chart.luck.pillars[chart.luck.currentIndex] : null;
         return (
           <SectionShell pending={isPending('cycle')}>
+            <LuckTimeline chart={chart} />
             <ol className="flex gap-1 overflow-x-auto pb-1 text-center text-[10px]" aria-label="대운">
               {chart.luck.pillars.map((p, i) => (
                 <LuckPillarChip key={p.index} p={p} current={i === chart.luck.currentIndex} />

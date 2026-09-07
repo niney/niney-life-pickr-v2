@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Volume2, VolumeX } from 'lucide-react';
 import type { SajuReadingResultType } from '@repo/api-contract';
 import { getPrimarySajuProfile, useAuthStore, useCreateSajuReading, useSajuJob, useSajuProfileStore, useUpsertSajuProfile } from '@repo/shared';
 import { createSajuFlowState, SAJU_DEFAULT_OPTIONS, sajuFlowReducer, sajuStampTotal, type SajuBirthInput, type SajuFlowEvent, type SajuFlowState } from '@repo/utils';
@@ -8,6 +8,7 @@ import type { SajuBirthInputType } from '@repo/api-contract';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { SajuForm } from '~/components/saju/SajuForm';
 import { SajuLite } from '~/components/saju/SajuLite';
+import { playSajuChime, playSajuStamp, primeSajuSound, sajuSoundEnabled, setSajuSoundEnabled } from '~/components/saju/sajuSound';
 import { SajuReadingPanel, type SajuPanelTab } from '~/components/saju/SajuReadingPanel';
 import type { SajuStageCallbacks } from '~/components/saju/stage/SajuScene';
 import { glass } from '~/components/saju/SajuForm';
@@ -116,14 +117,31 @@ export const SajuPage = () => {
       else upsertLocalProfile({ label: save.label, birth: toBirthInput(next.input) });
     }
     request(next.input);
+    primeSajuSound();
     // Lite 는 연출이 없다 — 바로 풀이로.
     if (render.mode === 'lite') dispatch({ type: 'skip_animation' });
   };
 
   const callbacks = useMemo<SajuStageCallbacks>(
-    () => ({ onCastingDone: () => dispatch({ type: 'casting_done' }), onStamp: () => dispatch({ type: 'stamp' }) }),
+    () => ({
+      onCastingDone: () => {
+        playSajuChime();
+        dispatch({ type: 'casting_done' });
+      },
+      onStamp: () => {
+        playSajuStamp();
+        dispatch({ type: 'stamp' });
+      },
+    }),
     [],
   );
+  // 효과음 — 기본 꺼짐, 기기에 기억. 토글 클릭(제스처)에서 오디오 컨텍스트를 만든다.
+  const [sound, setSound] = useState(sajuSoundEnabled);
+  const toggleSound = () => {
+    const next = !sound;
+    setSajuSoundEnabled(next);
+    setSound(next);
+  };
   const onEdit = () => {
     dispatch({ type: 'edit' });
     resetMutation();
@@ -160,6 +178,18 @@ export const SajuPage = () => {
       )}
 
       <div className="pointer-events-none absolute inset-0">
+        {render.mode === '3d' && (
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-pressed={sound}
+            aria-label={sound ? '효과음 끄기' : '효과음 켜기'}
+            title={sound ? '효과음 켜짐 — 인장·다이얼 소리' : '효과음 꺼짐'}
+            className={cn(glass, 'pointer-events-auto absolute left-3 top-3 flex size-9 items-center justify-center rounded-full', sound ? 'text-[#d9b65b]' : 'text-[#e9e2d2]/50')}
+          >
+            {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+          </button>
+        )}
         {state.phase === 'setup' && (
           <SajuForm input={toBirthInput(state.input)} error={state.error} isMember={isMember} onChange={(patch) => dispatch({ type: 'set_input', patch })} onSubmit={onSubmit} />
         )}

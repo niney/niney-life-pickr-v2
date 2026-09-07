@@ -2,7 +2,7 @@ import type { SajuChartType, SajuSectionsType } from '@repo/api-contract';
 import { type SajuChart } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { SajuChartTable } from './SajuChartTable';
-import { ChartInsightCard, DayMasterStyleCards, HealthHints, LuckPillarChip, LuckyTable, MonthLuckGrid, SajuChartHeader, YearLuckFacts, YearOutlookTable } from './SajuReadingPanel';
+import { ChartInsightCard, DayMasterStyleCards, DayPillarCard, HealthHints, LuckPillarChip, LuckTimeline, LuckyTable, MonthLuckGrid, SajuChartHeader, YearLuckFacts, YearOutlookTable } from './SajuReadingPanel';
 import { SAJU_SOURCE_LABEL } from './sajuTheme';
 
 // 2D 풀이 보기 — 공유 페이지·회원 기록 상세 공용(3D 없음). 원국 표 + 일간 + 섹션 4개를 한 페이지에.
@@ -44,7 +44,8 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
             <ul className="flex flex-col gap-0.5 text-[#e9e2d2]/80">{sections.personality.cautions.map((x) => <li key={x}>· {x}</li>)}</ul>
           </div>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-col gap-2">
+          <DayPillarCard chart={c} />
           <DayMasterStyleCards chart={c} />
         </div>
       </section>
@@ -74,6 +75,9 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
 
       <section className={card}>
         <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">인생의 큰 흐름</h2>
+        <div className="mt-2">
+          <LuckTimeline chart={c} />
+        </div>
         <ol className="mt-2 flex gap-1 overflow-x-auto pb-1 text-center text-[10px]" aria-label="대운">
           {c.luck.pillars.map((p, i) => (
             <LuckPillarChip key={p.index} p={p} current={i === c.luck.currentIndex} />

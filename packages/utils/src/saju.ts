@@ -353,7 +353,10 @@ export const findRelations = (chars: readonly CharAt[]): SajuRelation[] => {
 
 // ── 신살 ─────────────────────────────────────────────────────────────────────
 
-export type StarId = 'cheoneul' | 'munchang' | 'yangin' | 'dohwa' | 'yeokma' | 'hwagae' | 'goegang' | 'baekho';
+export type StarId =
+  | 'cheoneul' | 'munchang' | 'yangin' | 'dohwa' | 'yeokma' | 'hwagae' | 'goegang' | 'baekho'
+  // 7차 확장 — 홍염·귀문관·천라지망·금여·천덕귀인·월덕귀인
+  | 'hongyeom' | 'gwimun' | 'cheonra' | 'geumyeo' | 'cheondeok' | 'woldeok';
 export const SAJU_STAR_META: Record<StarId, { ko: string; hanja: string; positive: boolean }> = {
   cheoneul: { ko: '천을귀인', hanja: '天乙貴人', positive: true },
   munchang: { ko: '문창귀인', hanja: '文昌貴人', positive: true },
@@ -363,6 +366,12 @@ export const SAJU_STAR_META: Record<StarId, { ko: string; hanja: string; positiv
   hwagae: { ko: '화개', hanja: '華蓋', positive: true },
   goegang: { ko: '괴강', hanja: '魁罡', positive: false },
   baekho: { ko: '백호', hanja: '白虎', positive: false },
+  hongyeom: { ko: '홍염', hanja: '紅艶', positive: true },
+  gwimun: { ko: '귀문관', hanja: '鬼門關', positive: false },
+  cheonra: { ko: '천라지망', hanja: '天羅地網', positive: false },
+  geumyeo: { ko: '금여', hanja: '金輿', positive: true },
+  cheondeok: { ko: '천덕귀인', hanja: '天德貴人', positive: true },
+  woldeok: { ko: '월덕귀인', hanja: '月德貴人', positive: true },
 };
 // 일간 → 천을귀인 지지.
 const CHEONEUL: readonly (readonly Branch[])[] = [[1, 7], [0, 8], [11, 9], [11, 9], [1, 7], [0, 8], [1, 7], [2, 6], [5, 3], [5, 3]];
@@ -374,6 +383,18 @@ const BAEKHO_GANZHI = [40, 31, 22, 13, 4, 58, 49]; // 갑진·을미·병술·�
 const DOHWA: readonly Branch[] = [3, 9, 6, 0];
 const YEOKMA: readonly Branch[] = [8, 2, 11, 5];
 const HWAGAE: readonly Branch[] = [10, 4, 1, 7];
+// 일간 → 홍염 지지(갑오·을신·병인·정미·무진·기진·경술·신유·임자·계신), 금여 지지(갑진·을사·병미·정신·무미·기신·경술·신해·임축·계인).
+const HONGYEOM: readonly Branch[] = [6, 8, 2, 7, 4, 4, 10, 9, 0, 8];
+const GEUMYEO: readonly Branch[] = [4, 5, 7, 8, 7, 8, 10, 11, 1, 2];
+// 귀문관 지지 쌍(자유·축오·인미·묘신·진해·사술) — 일지와 다른 기둥.
+const GWIMUN_PAIRS: ReadonlyArray<readonly [Branch, Branch]> = [[0, 9], [1, 6], [2, 7], [3, 8], [4, 11], [5, 10]];
+// 천덕귀인 — 월지 → 천간(s) 또는 지지(b). 자:사(b) 축:경 인:정 묘:신(b) 진:임 사:신 오:해(b) 미:갑 신:계 유:인(b) 술:병 해:을.
+const CHEONDEOK: ReadonlyArray<{ kind: 'stem' | 'branch'; v: number }> = [
+  { kind: 'branch', v: 5 }, { kind: 'stem', v: 6 }, { kind: 'stem', v: 3 }, { kind: 'branch', v: 8 }, { kind: 'stem', v: 8 }, { kind: 'stem', v: 7 },
+  { kind: 'branch', v: 11 }, { kind: 'stem', v: 0 }, { kind: 'stem', v: 9 }, { kind: 'branch', v: 2 }, { kind: 'stem', v: 2 }, { kind: 'stem', v: 1 },
+];
+// 월덕귀인 — 월지 삼합(인오술 병·신자진 임·사유축 경·해묘미 갑) → 천간. SAJU_THREE_COMBINES 순서(화·수·금·목).
+const WOLDEOK_BY_GROUP: readonly Stem[] = [2, 8, 6, 0];
 const combineGroupOf = (b: Branch): number => SAJU_THREE_COMBINES.findIndex((tc) => tc.branches.includes(b));
 
 export interface SajuStar {
@@ -728,6 +749,19 @@ const findStars = (pillars: { year: SajuPillar; month: SajuPillar; day: SajuPill
   add('hwagae', byBase(HWAGAE));
   if (GOEGANG_GANZHI.includes(pillars.day.ganzhi)) add('goegang', ['day']);
   add('baekho', list.filter((p) => BAEKHO_GANZHI.includes(p.ganzhi)).map((p) => p.key));
+  // 7차 확장.
+  add('hongyeom', list.filter((p) => p.key !== 'day' && HONGYEOM[dm] === p.branch).map((p) => p.key));
+  add('geumyeo', list.filter((p) => GEUMYEO[dm] === p.branch).map((p) => p.key));
+  const dayB = pillars.day.branch;
+  add('gwimun', list.filter((p) => p.key !== 'day' && GWIMUN_PAIRS.some(([a, b]) => (a === dayB && b === p.branch) || (b === dayB && a === p.branch))).map((p) => p.key));
+  const has = (b: Branch): PillarKey[] => list.filter((p) => p.branch === b).map((p) => p.key);
+  const cheonra = has(10).length && has(11).length ? [...has(10), ...has(11)] : [];
+  const jimang = has(4).length && has(5).length ? [...has(4), ...has(5)] : [];
+  add('cheonra', [...new Set([...cheonra, ...jimang])]);
+  const cd = CHEONDEOK[pillars.month.branch];
+  if (cd) add('cheondeok', list.filter((p) => (cd.kind === 'stem' ? p.stem === cd.v : p.branch === cd.v)).map((p) => p.key));
+  const wg = combineGroupOf(pillars.month.branch);
+  if (wg >= 0) add('woldeok', list.filter((p) => p.stem === WOLDEOK_BY_GROUP[wg]).map((p) => p.key));
   return out;
 };
 

@@ -173,6 +173,12 @@ export const SAJU_STAR_TEXT: Record<StarId, string> = {
   hwagae: '예술·종교·연구처럼 혼자 깊어지는 재능이 있어요.',
   goegang: '카리스마가 강하고 극과 극을 오가는 리더의 기운이에요.',
   baekho: '기운이 세서 급하게 움직일 때 다치기 쉬우니 여유를 두세요.',
+  hongyeom: '이성에게 끌리는 매력과 낭만이 있어요. 관계에선 선을 지키는 편이 좋아요.',
+  gwimun: '감이 예리하고 영적인 감수성이 있어요. 생각이 많아질 땐 몸을 움직여 주세요.',
+  cheonra: '일이 얽혀 더디게 풀리는 자리예요. 서두르지 말고 매듭을 하나씩 푸는 게 좋아요.',
+  geumyeo: '품위와 편안함, 좋은 배필과 탈것의 복이 있는 자리예요.',
+  cheondeok: '하늘이 돕는 자리 — 위기에서 뜻밖의 도움이 와요.',
+  woldeok: '달이 돕는 자리 — 인덕이 있고 어려움이 부드럽게 넘어가요.',
 };
 
 export const SAJU_RELATION_TEXT: Record<RelationType, string> = {

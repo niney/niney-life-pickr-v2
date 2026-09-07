@@ -61,7 +61,10 @@ export const SajuRelationType = z.enum([
   'stem-combine', 'stem-clash', 'six-combine', 'three-combine', 'half-combine', 'directional',
   'clash', 'punish', 'self-punish', 'break', 'harm', 'wonjin',
 ]);
-export const SajuStarId = z.enum(['cheoneul', 'munchang', 'yangin', 'dohwa', 'yeokma', 'hwagae', 'goegang', 'baekho']);
+export const SajuStarId = z.enum([
+  'cheoneul', 'munchang', 'yangin', 'dohwa', 'yeokma', 'hwagae', 'goegang', 'baekho',
+  'hongyeom', 'gwimun', 'cheonra', 'geumyeo', 'cheondeok', 'woldeok',
+]);
 export const SajuSeason = z.enum(['spring', 'summer', 'autumn', 'winter']);
 export const SajuStrengthLevel = z.enum(['strong', 'balanced', 'weak']);
 
