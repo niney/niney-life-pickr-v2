@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-08-30
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality]
+last_compiled: 2026-09-07
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality, tarot, saju-c, usage-quota]
 status: active
 ---
 
@@ -13,6 +13,8 @@ status: active
 
 ## Instances
 
+- **2026-09-06** in [saju-c](../topics/saju-c.md) (`saju-jobs.ts`): `SajuJobRegistry` — 풀이 1건이 섹션 4개 병렬 LLM 호출, 클라이언트는 `GET …/jobs/:id?after&wait` long-poll 로 도착 순 수신. 메모리 Map(단일 인스턴스), 완료 후 TTL 5분, 최대 200(넘치면 오래된 것부터), 서버 재시작이면 410 → 클라이언트는 정적 본문 유지 + 재시도. 회원 저장은 4개가 모두 끝난 뒤 한 번(`persistPending`).
+- **2026-09-03** in [tarot](../topics/tarot.md) / [usage-quota](../topics/usage-quota.md): LLM 호출은 기존 `ConcurrencyGate`/계정 게이트를 타고, 일일 한도는 DB 카운터([anonymous-usage-quota](anonymous-usage-quota.md)) — 메모리 게이트(동시성)와 DB 한도(예산)의 역할 분리가 명시됐다.
 - **2026-05-07** in [[../topics/ai]] (`adapter-cache.ts`): `maxConcurrent` (기본 15) FIFO 게이트. AI provider 호출이 cap을 넘으면 큐에 대기, 한 콜이 끝나면 다음을 깨운다. ai 라우트 + summary 서비스가 같은 인스턴스를 import해 진짜 cap이 됨 (둘이 따로 만들면 2× cap이 되어버림).
 - **2026-05-07** in [[../topics/crawl]] (`job-registry.ts` + `crawl.service.ts`): 두 층의 게이트가 결합. (1) `JobRegistry`가 actor당 active 잡을 3개로 제한하고 `phase: 'queued' | 'active' | 'finished'` 모델로 회계. (2) `CrawlService.pending: PendingStart[]`가 over-cap 요청을 FIFO로 받아두고, `runJob.finally(() => flushQueue(actorId))`가 슬롯이 비는 즉시 다음 잡을 깨움. 외부 큐 없이 "추가 버튼을 빨리 4번 눌러도 4번째가 자동으로 대기→시작"이 성립.
 - **2026-05-07** in [[../topics/crawl]] (`crawl.service.ts` `runJob`): 같은 잡 내부에서도 같은 패턴 — `persistTail: Promise<void>` 체인. 어댑터의 `onVisitorBatch` 콜백이 `persistTail = persistTail.then(...)`로 다음 batch persist를 직렬 큐에 추가만 하고 await하지 않아 다음 페이지 클릭이 막히지 않음. 잡 끝에서 `await persistTail`로 모든 batch가 정착했음을 보장.

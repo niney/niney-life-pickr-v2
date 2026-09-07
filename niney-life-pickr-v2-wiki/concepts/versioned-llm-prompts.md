@@ -1,7 +1,7 @@
 ---
 concept: 도메인별 LLM 프롬프트/스키마 버전 상수
-last_compiled: 2026-08-30
-topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal]
+last_compiled: 2026-09-07
+topics_connected: [ai, friendly, menu-grouping, analytics, auto-discover, settlement, review-search, review-clustering, logs, food, meal, tarot, saju-c, saju-g]
 status: active
 ---
 
@@ -20,6 +20,9 @@ LLM 호출이 있는 모든 도메인이 **같은 모양의 versioning 규약**�
 
 ## Instances
 
+- **tarot** in [tarot](../topics/tarot.md) (`apps/friendly/src/modules/tarot/tarot.prompts.ts`): `TAROT_PROMPT_VERSION = 2`. 캐시 키·저장 행(`promptVersion`)에 들어가고 메뉴 타로(v3a)는 카드 원소·무드로 후보를 고르고 LLM 은 이유만 쓴다.
+- **saju-c** in [saju-c](../topics/saju-c.md) (`apps/friendly/src/modules/saju/saju.prompts.ts`): `SAJU_PROMPT_VERSION = 2`(6차: 사실 블록에 격국·오신·삼재 줄 추가 → 기존 캐시 무효). 시스템 프롬프트가 "[사주 사실] 블록에 없는 십신·오행·신살을 말하지 않는다"고 못 박아 LLM 은 계산 결과를 문장으로 엮는 역할만.
+- **saju-g** in [saju-g](../topics/saju-g.md): `SAJU_G_PROMPT_VERSION = 4`, `SAJU_G_PAIR_PROMPT_VERSION = 2` — 같은 규약을 다른 세션이 독립적으로 채택.
 - **summary** in [[../topics/friendly]] (`apps/friendly/src/modules/summary/summary.service.ts`): `ANALYSIS_VERSION = 4` (v3: structured output 도입, v4: traits + `menus[].sentiment` 필수 필드 추가). 저장 컬럼은 `ReviewSummary.analysisVersion`. 재실행 진입점: `POST /admin/restaurants/place/:placeId/reanalyze` — 실패한 행 + `analysisVersion < current` 인 행을 자동으로 큐잉해 다시 돌린다. 리뷰 단위 자동 재시도(총 3회)와 결합되어 stale 흡수 비용을 낮춤.
 - **menu-grouping** in [[../topics/menu-grouping]] (`apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts`): `MENU_GROUPING_VERSION = 2` (18차 bump). 저장 컬럼은 `MenuCanonical.version`. 재실행: 단건 `POST /admin/restaurants/place/:placeId/menus/group`, batch `POST /admin/analytics/grouping-jobs`. UI 노출은 두 군데 — ranking 응답이 `modelVersion` vs `currentVersion` 을 같이 내려서 클라이언트가 "재실행 권장" 배지를 띄우고, 식당 상태 테이블의 `storedVersion` 컬럼(`storedVersion < MENU_GROUPING_VERSION` 이면 attention)이 일괄 모니터링 뷰가 됨. **v1→v2(18차) 는 출력 계약 변경 bump** — v1 의 "전 항목 에코"(O(N) 출력)가 reasoning 토큰·maxTokens 와 다퉈 큰 식당에서 잘리던 `parse_failed` 운영 장애를, 출력을 "병합 그룹만, 인덱스 배열"(`{"groups":[[0,1,2]]}`)로 축소해 구조적으로 제거. canonical 이름은 이제 LLM 이 아니라 코드(`pickCanonicalName`: 최단→빈도→사전순)가 결정 — 프롬프트는 membership 판정만. 4 요소 풀세트(상수·DB 컬럼·stale 비교·재실행) 유지.
 - **analytics (global merge)** in [[../topics/analytics]] (`apps/friendly/src/modules/analytics/global-merge.prompts.ts`): `GLOBAL_MERGE_VERSION = 3` (v1: string→string 매핑, v2: `{canonical, categoryPath}` 객체로 schema 변경, v3: 택소노미 축 전환). 저장 컬럼은 `GlobalMenuCanonical.version`. 재실행: `POST /admin/analytics/global-merge-jobs` 에 `full=true` 를 붙여 이전 버전 잔여 행을 다시 돌림. v1→v2 가 단순 prompt tweak 이 아니라 schema 단위 변경이었다는 점에서, 이 패턴이 schema 변형까지 흡수함을 보여줌.

@@ -1,10 +1,10 @@
 ---
 topic: map
 type: codebase
-last_compiled: 2026-08-30
-sources_count: 44
+last_compiled: 2026-09-07
+sources_count: 47
 status: active
-aliases: [muted-marker, gray-pin, map-resize-observer, discover-map, registered-vs-search-marker, webview-vworld, fly-to-zoom, marker-fly, selected-marker-pin, label-always-visible, location-fly-bbox, public-restaurants-webview-map, line-icon, category-icon, restaurant-category-icon, declutter, zoom-label, compact-marker, generic-fork-knife-icon, my-location-button, geolocation-guide, insecure-context, native-location-permission-ux, open-settings-alert, map-layer-control, dark-tile, midnight-layer, satellite-layer, theme-linked-map, fly-to-zoom-in, double-click-zoom, set-mode-webview, choropleth, sigungu-geo, region-stats-map, point-in-polygon, vworld-tile-probe, tile-error-probe, selected-marker-zindex, map-instance-pool, pooled-map, poolKey, take-semantics, tab-switch-flash, transit-desktop-mobile, overlay-markers, fit-excluded-layer, transit-map-viewport, AirStationsMap, 측정소-지도, air-marker, airMarker, LifeMapView, 일상지도-지도, lifeMapMarker, lifeMapMarkers, cell-bubble, 셀-버블, cctv-dot, fixedScale, fixed-scale-marker, marker-style-cache, markerStyleCache, MapMarker.icon, icon-injection, markerFrame, buildCircleMarkerSvg, buildPinMarkerSvg, bottomInset, centerWithBottomInset, map-bottom-inset, sheetHalfInset, TransitMapView, transitMapHtml, transitMapBridge, marker-icons-dictionary, 아이콘-사전, AirStationsMapCard, lifeMapBridgeMarkers, poolKey-air, poolKey-life, timeout-status]
+aliases: [HousingMapView, 집값-지도, housingMarker, housing-badge-marker, poolKey-housing, muted-marker, gray-pin, map-resize-observer, discover-map, registered-vs-search-marker, webview-vworld, fly-to-zoom, marker-fly, selected-marker-pin, label-always-visible, location-fly-bbox, public-restaurants-webview-map, line-icon, category-icon, restaurant-category-icon, declutter, zoom-label, compact-marker, generic-fork-knife-icon, my-location-button, geolocation-guide, insecure-context, native-location-permission-ux, open-settings-alert, map-layer-control, dark-tile, midnight-layer, satellite-layer, theme-linked-map, fly-to-zoom-in, double-click-zoom, set-mode-webview, choropleth, sigungu-geo, region-stats-map, point-in-polygon, vworld-tile-probe, tile-error-probe, selected-marker-zindex, map-instance-pool, pooled-map, poolKey, take-semantics, tab-switch-flash, transit-desktop-mobile, overlay-markers, fit-excluded-layer, transit-map-viewport, AirStationsMap, 측정소-지도, air-marker, airMarker, LifeMapView, 일상지도-지도, lifeMapMarker, lifeMapMarkers, cell-bubble, 셀-버블, cctv-dot, fixedScale, fixed-scale-marker, marker-style-cache, markerStyleCache, MapMarker.icon, icon-injection, markerFrame, buildCircleMarkerSvg, buildPinMarkerSvg, bottomInset, centerWithBottomInset, map-bottom-inset, sheetHalfInset, TransitMapView, transitMapHtml, transitMapBridge, marker-icons-dictionary, 아이콘-사전, AirStationsMapCard, lifeMapBridgeMarkers, poolKey-air, poolKey-life, timeout-status]
 ---
 
 # map — vworld 타일 + OpenLayers 지도 인프라(웹 MapCanvas·앱 WebView 코어·키 설정)
@@ -38,6 +38,7 @@ vworld 지도 타일을 OpenLayers 위에 직접 그려, 여러 화면에 같은
 | `DiscoverMap` | 어드민 `/admin/discover` | N개 (검색 + 등록 합성) | primary (검색) / muted (등록) | (옵션) | 노출 | 사용(버튼 클릭만) |
 | `AirStationsMap` (2026-08) | 공개 `/air` (AirNearbySection) | 측정소 ~650개(좌표 있는 것) | 미사용 — `icon`: 통합지수 등급색 원/핀 10종 | 미사용 | 노출 | 오버레이 점만(버튼은 페이지, `poolKey='air'`) |
 | `LifeMapView` (2026-08) | 공개 `/life-map` | CCTV 점/셀 버블 + 화장실·병의원 원/핀 (한 소스) | 미사용 — `icon` + `fixedScale`(점·버블) | 미사용 | 노출 | 사용(우하단 MyLocationButton, `poolKey='life'`) |
+| `HousingMapView` (2026-08-30, `254fb76`) | 공개 `/housing` ([HousingMapView](../../apps/web/src/components/housing/HousingMapView.tsx)) | 단지 가격 알약 배지(거래 없는 단지는 회색 점) / 저줌은 평당가 셀 (한 소스) | 미사용 — `icon` + **전부 `fixedScale`**(글자를 SVG 에 새겨 라벨 미사용, [housingMarker.ts](../../packages/utils/src/housingMarker.ts)·`markerFrame.buildPinMarkerSvg`) | 미사용 | 노출 | 사용(우하단 MyLocationButton, `--map-bottom-inset`, `poolKey='housing'` 단일 마운트; 내 위치·저장 위치는 `overlayMarkers`; 목록 선택 `flyTo` 에 `sheetHalfInset` 적용 — 일상지도 외 두 번째 사용처). 렌더 코어 무변경, 도메인은 [housing](housing.md) |
 
 ## Architecture [coverage: high — 15 sources]
 
@@ -405,9 +406,9 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 
 - **(2026-08) 스타일 캐시 키에 라벨 문자열이 들어간다.** 라벨 붙은 마커 수만큼 엔트리가 늘고 6,000 을 넘으면 통째로 비워 잠깐 전부 재생성한다. 라벨을 매 프레임 바꾸는 식(카운트다운을 라벨로 등)으로 쓰면 캐시가 무력해지고 예전 멈춤이 돌아온다 — 동적 텍스트는 라벨이 아니라 별도 채널로.
 - **(2026-08) `fixedScale` 은 축소·라벨만 건너뛴다 — 선택 시 핀 전환은 그대로.** CCTV 12px 점은 선택하면 `selectedSrc`(32×48 핀)로 바뀐다. 셀 버블은 `selectedSrc = src` 라 변화 없음. 점을 "항상 점" 으로 두고 싶으면 `selectedSrc` 에 같은 URL 을 넣는다.
-- **(2026-08) `poolKey` `'air'`/`'life'` 는 단일 마운트 전제.** 대중교통과 달리 이 페이지들은 지도를 한 장만 마운트한다(`AirNearbySection` 1회, `LifeMapPage` 는 `useIsDesktopXl` JS 분기). CSS 이중 마운트를 도입하면 대중교통처럼 키를 레이아웃별로 나눠야 한다(take 시맨틱).
+- **(2026-08) `poolKey` `'air'`/`'life'`/`'housing'` 은 단일 마운트 전제.** 대중교통과 달리 이 페이지들은 지도를 한 장만 마운트한다(`AirNearbySection` 1회, `LifeMapPage`·`HousingPage` 는 `useIsDesktopXl` JS 분기). CSS 이중 마운트를 도입하면 대중교통처럼 키를 레이아웃별로 나눠야 한다(take 시맨틱).
 - **(2026-08-22) `--map-bottom-inset` 은 지도 fixed 래퍼에 둬야 컨트롤이 반응한다.** 컨트롤은 `var(--map-bottom-inset,0px)` 만 읽는다 — 조상에 없으면 0(데스크톱과 동일). 시트 peek 높이를 바꾸면 `SHEET_PEEK_HEIGHT` 와 래퍼 변수가 같이 움직인다(둘 다 `useMapSheets` 상수에서 오지만 래퍼는 inline style 로 직접 지정).
-- **(2026-08-22) `bottomInset` 은 flyTo 호출자의 몫 — MapCanvas 는 시트를 모른다.** 목록에서 항목을 골라 날아갈 때 상세 시트(half = 가용 높이 55%)에 지점이 가리면 `sheetHalfInset(headerHeight)` 를 넘겨야 한다. 지금은 일상지도만 넘기고 맛집 v2·버스·지하철 래퍼는 미적용(지점이 시트 밑으로 갈 수 있음).
+- **(2026-08-22) `bottomInset` 은 flyTo 호출자의 몫 — MapCanvas 는 시트를 모른다.** 목록에서 항목을 골라 날아갈 때 상세 시트(half = 가용 높이 55%)에 지점이 가리면 `sheetHalfInset(headerHeight)` 를 넘겨야 한다. 지금은 일상지도와 집값(2026-08-30, `HousingPage.flyInset`)만 넘기고 맛집 v2·버스·지하철 래퍼는 미적용(지점이 시트 밑으로 갈 수 있음).
 - **(2026-08) 앱 `TransitMapView` 는 ready 뒤 명령을 큐잉하지 않는다.** `AirStationsMapCard` 가 첫 `flyToZoomIn` 을 600ms 지연시키는 이유 — 마운트 직후 바로 쏘면 WebView 가 아직 핸들러를 안 붙였을 수 있다. 새 소비자도 초기 카메라 명령은 `ready` 이후로 미룰 것.
 - **(2026-08) 앱 지도 코어가 두 벌.** 맛집(`publicRestaurantsMapHtml`)과 범용(`transitMapHtml`) HTML 이 별개라 타일 URL·다크 모드·declutter·라벨 정책을 바꾸면 양쪽을 손봐야 한다(`RegionStatsMap` 이 `MapCanvas` 와 분리된 것과 같은 결의 분산). 신규 앱 화면은 범용 코어를 쓴다.
 - **(2026-07) 같은 `poolKey` 를 두 `MapCanvas` 가 동시에 쓰면 안 된다.** take(get+delete) 시맨틱이라 첫 마운트가 풀을 비우면 둘째는 재사용 실패로 플래시한다. Bus/SubwayPage 는 데스크톱·모바일 지도를 CSS 숨김으로 동시 마운트하므로 키를 `transit-desktop`/`transit-mobile` 로 나눴다 — 새 대중교통 지도를 붙일 때 레이아웃마다 고유 키를 줄 것. 반납 시 이미 같은 키 엔트리가 있으면 지금 map 을 `dispose` 하는 방어가 있지만, 정상 흐름은 한 시점에 한 레이아웃만 실제 표시되는 것을 전제한다.
@@ -436,7 +437,7 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 - **(18차) `RegionStatsMap` 은 `MapCanvas` 와 별개 — 코어 변경 시 양쪽 다 손봐야** -- 타일/테마 헬퍼만 공유할 뿐 OL 구성·레이어 교체·테마 effect 가 `RegionStatsMap` 안에 독립 복제돼 있다. `buildVworldTileUrl`/`layerForTheme` 시그니처를 바꾸거나 새 레이어를 추가하면 `MapCanvas` 와 `RegionStatsMap` 두 곳을 같이 고쳐야 한다(공유 빌더는 같지만 effect 는 미공유).
 - **단일 슬라이드오버는 별도 인스턴스** -- 어드민 식당 상세 280px 카드와 풀 슬라이드오버는 각각 별도 `VWorldMap`(=별도 OL Map). `setTarget` 이동 트릭은 view/layer 상태가 어색해져 안 쓴다.
 
-## Sources [coverage: high — 44 sources]
+## Sources [coverage: high — 47 sources]
 
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma)
 - [apps/friendly/prisma/migrations/20260508173216_add_map_provider_configs/migration.sql](../../apps/friendly/prisma/migrations/20260508173216_add_map_provider_configs/migration.sql)
@@ -451,6 +452,7 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 - [packages/utils/src/markerFrame.ts](../../packages/utils/src/markerFrame.ts) — *26×26 원 / 32×48 핀 공용 프레임 — 도메인 마커 빌더 전부가 사용*
 - [packages/utils/src/airMarker.ts](../../packages/utils/src/airMarker.ts) — *new (2026-08-21): 측정소 등급색 마커 + 저장 위치 보라 점*
 - [packages/utils/src/lifeMapMarker.ts](../../packages/utils/src/lifeMapMarker.ts) — *new (2026-08-21): CCTV 점/핀·화장실·병의원·집계 버블(fixedScale)*
+- [packages/utils/src/housingMarker.ts](../../packages/utils/src/housingMarker.ts) — *new (2026-08-30): 집값 가격 알약 배지(선택은 꼬리 있는 배지, 앵커 [0.5,1] 규약)·회색 점/핀(`buildPinMarkerSvg`)·평당가 셀 — 전부 fixedScale*
 - [packages/utils/src/vworld.ts](../../packages/utils/src/vworld.ts) — *VworldLayer / buildVworldTileUrl / probeVworldKey (lib 에서 utils 로 공용화)*
 - [apps/web/src/stores/theme.ts](../../apps/web/src/stores/theme.ts) — *17차: MapCanvas 초기 레이어 결정 + 테마 추종*
 - [apps/web/src/components/restaurant/MapCanvas.tsx](../../apps/web/src/components/restaurant/MapCanvas.tsx) — *modified (2026-08): MapMarker.fixedScale + markerStyleCache(상한 6,000) + flyTo/flyToZoomIn opts.bottomInset(centerWithBottomInset) / (2026-07 대중교통 통합): poolKey 인스턴스 풀링(D안, mapPool·take·unByKey·레이어 승계) + overlayMarkers fit 제외 겸표시 레이어 / (18차): tileloaderror 연속 임계+키 probe 판정, 선택 마커 zIndex / (17차): 레이어 토글 + flyToZoomIn + 다크 라벨 반전 + 컨테이너 wrapper 분리*
@@ -464,7 +466,9 @@ updatedById String?               -- 마지막 수정 admin user id (감사 로�
 - [apps/web/src/components/air/AirNearbySection.tsx](../../apps/web/src/components/air/AirNearbySection.tsx) — *AirStationsMap 의 유일한 마운트 지점(단일 마운트 전제)*
 - [apps/web/src/components/life-map/LifeMapView.tsx](../../apps/web/src/components/life-map/LifeMapView.tsx) — *new (2026-08-21): 일상지도 wrapper(poolKey 'life', 한 소스 3레이어, 상단 힌트 슬롯, 우하단 내 위치)*
 - [apps/web/src/components/life-map/lifeMapMarkers.ts](../../apps/web/src/components/life-map/lifeMapMarkers.ts) — *new: 응답(점/셀) → MapMarker 변환, id 규약 `${layer}:${id}` / `cell:${layer}:${index}`*
-- [apps/web/src/routes/LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx) — *useIsDesktopXl JS 분기(지도 한 장), flyTo bottomInset = sheetHalfInset 의 유일한 사용처*
+- [apps/web/src/routes/LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx) — *useIsDesktopXl JS 분기(지도 한 장), flyTo bottomInset = sheetHalfInset 의 첫 사용처*
+- [apps/web/src/components/housing/HousingMapView.tsx](../../apps/web/src/components/housing/HousingMapView.tsx) — *new (2026-08-30 `254fb76`): 집값 wrapper(poolKey 'housing', icon 주입, overlayMarkers 내 위치/저장 위치, 우하단 MyLocationButton + --map-bottom-inset, 상단 로딩/확대 힌트 슬롯) — MapCanvas 코어 무변경*
+- [apps/web/src/components/housing/housingMarkers.ts](../../apps/web/src/components/housing/housingMarkers.ts) — *new: 응답(단지 배지/셀) → MapMarker 변환, id `c:${id}` / `cell:${index}`, 배지 data URL 을 `종류|글자|유형|선택` 키로 메모*
 - [apps/web/src/components/sheet/useMapSheets.ts](../../apps/web/src/components/sheet/useMapSheets.ts) — *SHEET_PEEK_HEIGHT(→ --map-bottom-inset)·sheetHalfInset(→ bottomInset)*
 - [apps/web/src/components/restaurant/VWorldMap.tsx](../../apps/web/src/components/restaurant/VWorldMap.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantsMap.tsx](../../apps/web/src/components/restaurant/PublicRestaurantsMap.tsx) — *modified (17차): MyLocationButton 추출, hoveredPlaceId 제거, zoomFocus 더블클릭 확대*

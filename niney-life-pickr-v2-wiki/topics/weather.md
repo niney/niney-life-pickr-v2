@@ -1,14 +1,14 @@
 ---
 topic: weather
-last_compiled: 2026-08-30
+last_compiled: 2026-09-07
 sources_count: 74
 status: active
-aliases: [날씨, weather, 기상청, KMA, kma-api, 단기예보, 중기예보, VilageFcstInfoService, MidFcstInfoService, 15084084, 15059468, getUltraSrtNcst, getUltraSrtFcst, getVilageFcst, getFcstVersion, getMidFcst, getMidLandFcst, getMidTa, getMidSeaFcst, 초단기실황, 초단기예보, 중기전망, 중기해상예보, 기상청 API허브, apihub, AWS, 방재기상관측, nph-aws2_min, stn_inf, KmaApiError, KmaApiHubError, WeatherService, AwsService, kma-api.adapter, kma-apihub.adapter, latLngToKmaGrid, LCC 격자, nx-ny, base_time, 발표 슬롯 캐시, NO_DATA 폴백, KMA_API_KEY, KMA_APIHUB_KEY, weatherRegions, WEATHER_PLACES, 구·군 지점, regId, tmFc, WeatherPage, WeatherNowHero, WeatherMeteogram, WeatherDailyStrip, WeatherSeaSection, MyLocationChip, MyLocationCard, useWeather, useWeatherNowcast, useWeatherAws, useMyLocationGlance, mergeDailyRows, weatherUpstreamMessage, weatherGlyph, 내 위치, 상단바 알약, 홈 내 위치 카드]
+aliases: [날씨, weather, 기상청, KMA, kma-api, 단기예보, 중기예보, VilageFcstInfoService, MidFcstInfoService, 15084084, 15059468, getUltraSrtNcst, getUltraSrtFcst, getVilageFcst, getFcstVersion, getMidFcst, getMidLandFcst, getMidTa, getMidSeaFcst, 초단기실황, 초단기예보, 중기전망, 중기해상예보, 기상청 API허브, apihub, AWS, 방재기상관측, nph-aws2_min, stn_inf, KmaApiError, KmaApiHubError, WeatherService, AwsService, kma-api.adapter, kma-apihub.adapter, latLngToKmaGrid, LCC 격자, nx-ny, base_time, 발표 슬롯 캐시, NO_DATA 폴백, DATA_GO_KR_API_KEY, KMA_API_KEY, KMA_APIHUB_KEY, weatherRegions, WEATHER_PLACES, 구·군 지점, regId, tmFc, WeatherPage, WeatherNowHero, WeatherMeteogram, WeatherDailyStrip, WeatherSeaSection, MyLocationChip, MyLocationCard, useWeather, useWeatherNowcast, useWeatherAws, useMyLocationGlance, mergeDailyRows, weatherUpstreamMessage, weatherGlyph, 내 위치, 상단바 알약, 홈 내 위치 카드]
 ---
 
 # weather — 기상청 단기·중기예보 + API허브 AWS 관측 보강 날씨 (웹 `/weather` · 앱 `/weather` · 저장한 내 위치 글랜스)
 
-**2026-08-21~08-30 신설 — 기상청 두 포털을 friendly 가 프록시하고 웹·앱·상단바/홈 카드·식단 추천이 소비하는 날씨 도메인**: 공공데이터포털 단기예보(`VilageFcstInfoService_2.0`, 15084084) 4개 + 중기예보(`MidFcstInfoService`, 15059468) 4개 오퍼레이션을 5개 읽기 엔드포인트로 묶은 웹 `/weather` 페이지가 `37e0db0` 로 들어왔고(발표 슬롯 단위 캐시·NO_DATA 1회 폴백·stale·일일 쿼터, `@repo/utils` 격자 LCC 변환·지점표 172개), 같은 날 광역시 구·군 74 지점 추가 + 대기질과 "내 위치" 저장소 동기화(`7704f8c`), 상단바 내 위치 칩을 날씨·대기 통합 알약으로 교체(`9e197d3`), 공개 메뉴에서 날씨를 대기질 앞으로(`69ed65f`), 기상청 API허브(apihub.kma.go.kr) AWS 방재기상관측 **매분** 자료로 "지금" 보강(`17f281a`)이 이어졌다. 08-22 에는 앱에 날씨 화면 + 홈 "내 위치" 카드가 합류하며 파생값·열흘 병합·에러 문구가 `@repo/shared` 로 승격됐고(`e348032`), 앱 3일 시간별 칸에 기온 막대(`563890a`), 상단바 폭 예산 정리로 칩의 폭별 단계 노출·측정값 없음 시 대기 세그먼트 생략(`a062e7d`), 앱 지점 모달 iOS 이중 상단 여백 수정(`5f5f0e3`)이 붙었다. 식단 추천은 `acb3206` 부터 이 모듈의 `WeatherService.getNowcast` 를 서버 안에서 직접 호출해 실측 기온·강수를 가중치에 쓴다([meal](meal.md)). DB 테이블은 없다 — 전부 메모리 캐시.
+**2026-08-21~08-30 신설 — 기상청 두 포털을 friendly 가 프록시하고 웹·앱·상단바/홈 카드·식단 추천이 소비하는 날씨 도메인**: 공공데이터포털 단기예보(`VilageFcstInfoService_2.0`, 15084084) 4개 + 중기예보(`MidFcstInfoService`, 15059468) 4개 오퍼레이션을 5개 읽기 엔드포인트로 묶은 웹 `/weather` 페이지가 `37e0db0` 로 들어왔고(발표 슬롯 단위 캐시·NO_DATA 1회 폴백·stale·일일 쿼터, `@repo/utils` 격자 LCC 변환·지점표 172개), 같은 날 광역시 구·군 74 지점 추가 + 대기질과 "내 위치" 저장소 동기화(`7704f8c`), 상단바 내 위치 칩을 날씨·대기 통합 알약으로 교체(`9e197d3`), 공개 메뉴에서 날씨를 대기질 앞으로(`69ed65f`), 기상청 API허브(apihub.kma.go.kr) AWS 방재기상관측 **매분** 자료로 "지금" 보강(`17f281a`)이 이어졌다. 08-22 에는 앱에 날씨 화면 + 홈 "내 위치" 카드가 합류하며 파생값·열흘 병합·에러 문구가 `@repo/shared` 로 승격됐고(`e348032`), 앱 3일 시간별 칸에 기온 막대(`563890a`), 상단바 폭 예산 정리로 칩의 폭별 단계 노출·측정값 없음 시 대기 세그먼트 생략(`a062e7d`), 앱 지점 모달 iOS 이중 상단 여백 수정(`5f5f0e3`)이 붙었다. 식단 추천은 `acb3206` 부터 이 모듈의 `WeatherService.getNowcast` 를 서버 안에서 직접 호출해 실측 기온·강수를 가중치에 쓴다([meal](meal.md)). DB 테이블은 없다 — 전부 메모리 캐시. **2026-09-02 `3d9dfed`** 로 data.go.kr 키가 `KMA_API_KEY`(→`BUS_API_KEY` 폴백)에서 계정 공용 **`DATA_GO_KR_API_KEY`** 하나로 통일됐다 — 날씨 라우트·식단 추천의 `WeatherService` 생성·503 문구·`probe:kma`·테스트 주입·웹 MSW 픽스처 문구가 이름만 바뀌었고 로직은 그대로다(이 라운드의 날씨 변경은 이것뿐). API허브 키(`KMA_APIHUB_KEY`)는 별개 포털이라 그대로.
 
 ## Purpose [coverage: high — 7 sources]
 
@@ -16,7 +16,7 @@ aliases: [날씨, weather, 기상청, KMA, kma-api, 단기예보, 중기예보, 
 
 설계를 관통하는 제약은 두 가지다. 첫째, **data.go.kr 개발계정 일 10,000건(서비스별)** — 서버가 발표 시각(base) 단위로 캐시해 같은 격자를 몇 명이 보든 **발표 슬롯당 업스트림 1콜**로 만들고([weather.service.ts](../../apps/friendly/src/modules/weather/weather.service.ts) `DEFAULT_DAILY_UPSTREAM_LIMIT = 9000`, 두 서비스 합산 in-memory 카운터), 클라이언트는 10~60분 조용한 폴링을 해도 된다. 둘째, 업스트림 응답이 전부 **문자열 세로 행**(category/fcstDate/fcstTime/fcstValue, 강수량은 `"1mm 미만"` 같은 범주 문자열)이라 서버가 시각별 가로 행으로 접고 숫자를 정규화한 형태만 계약한다([schemas/weather.ts](../../packages/api-contract/src/schemas/weather.ts)).
 
-키는 `KMA_API_KEY` 가 비면 **`BUS_API_KEY` 폴백**(같은 data.go.kr 계정 키 1개 — 서비스별 활용신청만 추가) — 둘 다 비면 날씨 라우트 전부 503. API허브 키(`KMA_APIHUB_KEY`)는 별개 포털 발급이며 비어 있으면 AWS 보강만 `enabled=false`(200)로 조용히 꺼진다([env.ts](../../apps/friendly/src/config/env.ts), [.env.example](../../apps/friendly/.env.example)).
+키는 data.go.kr 계정 공용 **`DATA_GO_KR_API_KEY`** 하나(2026-09-02 `3d9dfed` 부터 — 그 전엔 `KMA_API_KEY` 가 비면 `BUS_API_KEY` 폴백). 버스·에어코리아·심평원·집값과 같은 값이고 단기예보 15084084·중기예보 15059468 은 **활용신청만 따로** — 비면 날씨 라우트 전부 503(`DATA_GO_KR_API_KEY 가 설정되지 않아…`). API허브 키(`KMA_APIHUB_KEY`)는 별개 포털 발급이며 비어 있으면 AWS 보강만 `enabled=false`(200)로 조용히 꺼진다([env.ts](../../apps/friendly/src/config/env.ts), [.env.example](../../apps/friendly/.env.example)).
 
 ## Architecture [coverage: high — 14 sources]
 
@@ -95,10 +95,10 @@ aliases: [날씨, weather, 기상청, KMA, kma-api, 단기예보, 중기예보, 
 
 - **기상청(data.go.kr) 2 서비스** — `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/*`, `…/MidFcstInfoService/*`, HTTPS GET + `dataType=JSON`. 서버 전용(키 노출 금지) — 브라우저·앱은 friendly 만 본다.
 - **기상청 API허브** — `https://apihub.kma.go.kr/api/typ01/url/stn_inf.php`, `…/typ01/cgi-bin/url/nph-aws2_min`, `authKey` 쿼리. API 별로 API허브에서 따로 활용신청해야 하며 미신청은 403 → 503. 프로브 주석에 `url/awsh.php`(AWS 시간자료)·`url/kma_sfctm2.php`(ASOS 시간자료)가 실존 경로로 기록돼 있고 `url/kma_aws2.php` 는 404(없음).
-- **[bus](bus.md) 어댑터** — `toServiceKeyPart` 재사용(data.go.kr serviceKey 이중 인코딩 함정). `BUS_API_KEY` 폴백은 같은 계정 키라서.
+- **[bus](bus.md) 어댑터** — `toServiceKeyPart` 재사용(data.go.kr serviceKey 이중 인코딩 함정). 키 값도 같은 `DATA_GO_KR_API_KEY`(2026-09-02 이전엔 `BUS_API_KEY` 폴백으로 빌려 썼다).
 - **[friendly](friendly.md) 공통** — `replyUpstreamError`(5xx 를 warn 로깅 + 502/503 직접 응답, 전역 error-handler 가 5xx 를 500 으로 뭉개는 문제 우회), `RATE.transitRealtime`(분당 60 — 캐시 미스 키를 바꿔 가며 쿼터를 태우는 남용 방어), `lib/narrow`(`coerceStrOrNull/intOrNull/numOrNull/isObject`). 라우트는 `*.route.ts` autoload.
 - **[air-quality](air-quality.md) 와 "내 위치" 공유** — 저장소는 하나: [airLocationStore](../../packages/shared/src/stores/airLocationStore.ts)(게스트 zustand persist `air-location-v1`, 주입형 storage) + [useAirLocation](../../packages/shared/src/hooks/useAirLocation.ts)(로그인 서버 값 우선, 로그인 직후 서버가 비어 있으면 게스트분 PUT 1회). 날씨가 저장하는 출처 `place` 는 `7704f8c` 에서 계약(`air-quality.ts`)과 서버 매핑([air-location.service.ts](../../apps/friendly/src/modules/air-quality/air-location.service.ts))에 추가됐다. 웹 날씨 페이지는 대기의 `AirSection`/`AirStateBlock`/`airGrade` 재수출·차트 색 토큰을 그대로 쓴다. 글랜스 훅은 대기 `useAirNearbyStations` 도 함께 부른다.
-- **[meal](meal.md) 식단 추천** — [meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)가 `new WeatherService({serviceKey: KMA_API_KEY || BUS_API_KEY})` 를 **자기 인스턴스로** 만들고 `latLngToKmaGrid` → `getNowcast(nx, ny)` → `{tempC: t1h, rain: pty > 0}` 를 추천 deps 로 넘긴다(실패·키 없음 → null, 추천은 계절 추정으로 진행; 기온은 5℃ 단위로 뭉개 캐시 키). 세부는 meal 토픽.
+- **[meal](meal.md) 식단 추천** — [meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)가 `new WeatherService({ serviceKey: env.DATA_GO_KR_API_KEY })` 를 **자기 인스턴스로** 만들고 `latLngToKmaGrid` → `getNowcast(nx, ny)` → `{tempC: t1h, rain: pty > 0}` 를 추천 deps 로 넘긴다(실패·키 없음 → null, 추천은 계절 추정으로 진행; 기온은 5℃ 단위로 뭉개 캐시 키). 세부는 meal 토픽.
 - **utils 공통** — `haversineM`(geo), `formatDistanceM`, `formatRelativeMin`, `parseLatLngParam`, `isInKorea`(앱 GPS 검사).
 - **웹/앱 셸** — 웹 `PublicTopBar` 가 `MyLocationChip` 을 상주시키고(모바일 폭에서는 칩만 남김 — `a062e7d`), 앱 `(tabs)/home.tsx` 가 `MyLocationCard` 를 홈 상단에 둔다. 앱 GPS 는 `useUserLocationNative`, 웹은 shared `acquirePosition`.
 
@@ -144,14 +144,15 @@ shared 훅(React Query, `placeholderData` 로 지점 전환 시 이전 화면 �
 
 픽스처 [`__fixtures__/`](../../apps/friendly/src/modules/weather/__fixtures__/)(11개)는 2026-08-21 16:05 KST `probe:kma` 실응답 원문(서울 60,127, 중기 11B00000/11B10101/108/12A20000) + `no-data.json`(`resultCode "03"` body 없음). AWS 픽스처는 [aws.test.ts](../../apps/friendly/src/modules/weather/aws.test.ts) 안에 인라인 — 실응답을 EUC-KR 디코드해 축약한 stn_inf 3지점(400 양천구 · 401 종로 · 887 관악, `STN` 두 번) + nph-aws2_min 정상/자리표시 두 형태.
 
-## Key Decisions [coverage: high — 10 sources]
+## Key Decisions [coverage: high — 11 sources]
 
+- **2026-09-02 키 항목을 `DATA_GO_KR_API_KEY` 하나로(`3d9dfed`)** — `KMA_API_KEY` → `BUS_API_KEY` 폴백은 data.go.kr 계정당 키가 1개라는 사실을 env 항목 여러 개로 흉내 낸 것이었고, 집값이 데이터셋 3개를 더 붙이자 "전부 같은 값 아니면 빈 값" 항목이 다섯이 됐다. 이름 하나로 접고 데이터셋 번호·쿼터·프로브 명령은 `env.ts`·`.env.example` 주석에 목록화. 날씨 쪽 코드는 라우트·식단 추천 생성자·`requireKey` 문구·프로브·테스트의 이름 치환뿐. 운영 `.env` 이름 변경이 필수([bus](bus.md) Gotchas).
 - **2026-08-22 앱 화면은 새 탭 대신 홈 카드 + 스택 화면, 로직은 shared 로 승격(`e348032`, `563890a`)** — 웹 칩과 앱 카드가 같은 파생값을 쓰도록 `useMyLocationGlance` 를, 열흘 병합 `mergeDailyRows` 와 에러 문구 `weatherUpstreamMessage` 를 shared 로, 발표 시각 라벨·날짜 라벨을 utils 로 올리고 웹은 기존 경로에서 재수출(호환). 앱 3일 시간별은 SVG 메테오그램 이식 대신 가로 칸 + 기온 막대(전 기간 축) — 차트 라이브러리 없이 오르내림을 읽게. 해상은 접힘, 버전·코드표는 생략. 아이콘은 이미 번들에 있는 MaterialCommunityIcons 로 lucide 표를 미러.
 - **2026-08-22 상단바 칩은 폭별 단계 노출, 자료 없으면 세그먼트 생략(`a062e7d`)** — 모바일(웹 <sm)은 `[📍 ☁26° ☂ · ●좋음]`(라벨·소수점은 aria/title 로), sm+ 라벨·소수 1자리, lg+ 상태 글자·PM2.5. 측정소는 있어도 등급이 없으면(업스트림 장애) 대기 세그먼트를 빼 "● -" 를 남기지 않는다 — 칩은 경고하는 자리가 아니다.
 - **2026-08-21 AWS 는 실황을 덮지 않고 나란히, 어긋날 때만 배지(`17f281a`)** — 격자 실황(5km·정시·+10분 지연)과 관측소 1분 값은 성격이 달라 대체가 아니라 보강. ① 관측소가 최근 15분 강수(`rn15m>0` 또는 `re=1`)를 잡았는데 실황 강수형태가 없음 → "실황 반영 전 강수 감지", ② 기온 차 ≥2℃ → 고도·위치 국지 차이 표기. 키·활용신청이 없으면 **503 이 아니라 `enabled=false` 200** — 선택 기능이라 페이지가 조용히 생략. 열 이름은 헤더 줄에서 읽는다(활용신청 승인 전에 짠 어댑터라 실응답을 못 본 채 열 순서를 박을 수 없었고, 결과적으로 열 추가에도 버팀).
 - **2026-08-21 통합 알약 — 저장한 내 위치 하나로 날씨·대기 동시 구동(`9e197d3`)** — `AirLocationChip` 을 흡수해 알약 하나에 두 링크(왼쪽 `/weather?ll=`, 오른쪽 `/air?sido&station`), 라벨은 앞에 한 번, 경계선 대신 가운뎃점. 우산 = 앞 6시간 강수형태 있거나 확률 ≥60%. 10분 조용한 갱신 + 탭 복귀 재조회(`refetchOnWindowFocus` 옵션은 상주 표시에서만 켠다).
 - **2026-08-21 광역시 구·군 74 지점 + 내 위치 저장소 통일(`7704f8c`)** — 좌표→지점 매칭이 구 단위가 되어 초기 "광역시 반경 규칙"을 제거(양천구 좌표가 광명시청으로 새던 문제). 날씨는 대기와 같은 저장소에 `place` 출처로 저장하고 라벨을 항상 채운다(상단바 툴팁·대기 카드가 같은 라벨). 대기의 "지도에서 직접 지정"은 제거(`manual` 은 호환용). 용어 "내 위치(날씨·대기 공통)" 통일. `/weather` 는 URL 이 없으면 저장 위치로 열린다 — 대기 페이지가 저장 위치의 최근접 측정소로 열리는 것과 같은 규율.
-- **2026-08-21 발표 슬롯이 캐시 단위(`37e0db0`)** — 기상청 자료는 발표 시각이 곧 버전이므로 TTL 을 고정값이 아니라 "다음 슬롯 제공 시각까지" 로 계산(에어코리아 골격 재사용, TTL 만 동적). 새 슬롯이 아직 없으면(NO_DATA) 한 슬롯 이전으로 **1회만** 폴백하고 짧게(5분) 캐시해 곧 갈아탄다. 응답 `base` 는 요청값이 아니라 데이터가 밝힌 값(진단·테스트가 자료 시각을 본다). 격자 변환은 **클라이언트**(utils)가 하고 서버는 `nx,ny` 만 받는다 — 격자가 캐시 키라 같은 격자 사용자가 캐시를 공유한다. 서울시 버스 키 폴백은 data.go.kr 계정당 키가 하나라서.
+- **2026-08-21 발표 슬롯이 캐시 단위(`37e0db0`)** — 기상청 자료는 발표 시각이 곧 버전이므로 TTL 을 고정값이 아니라 "다음 슬롯 제공 시각까지" 로 계산(에어코리아 골격 재사용, TTL 만 동적). 새 슬롯이 아직 없으면(NO_DATA) 한 슬롯 이전으로 **1회만** 폴백하고 짧게(5분) 캐시해 곧 갈아탄다. 응답 `base` 는 요청값이 아니라 데이터가 밝힌 값(진단·테스트가 자료 시각을 본다). 격자 변환은 **클라이언트**(utils)가 하고 서버는 `nx,ny` 만 받는다 — 격자가 캐시 키라 같은 격자 사용자가 캐시를 공유한다. 서울시 버스 키 폴백은 data.go.kr 계정당 키가 하나라서(→ 2026-09-02 폴백 대신 공용 항목 하나로 정리).
 - **2026-08-21 지점표는 실호출로 응답을 확인한 코드만(`37e0db0`)** — 군위 11H10603(2023 대구 편입, NO_DATA) 제외, 순천시 11F20405 는 순천 11F20603 과 중복 제외, 강화 11B20101 은 인천 구·군 행으로 편입, 옹진군(군청이 미추홀구)은 백령도가 대표. 좌표는 VWorld 검색 + 수동 보정 ±1km — 5km 격자가 흡수한다.
 - **2026-08-21 강수량 범주 문자열은 원문 표시 + 보수적 수치(`37e0db0`)** — "1mm 미만" 0.5, 범위는 하한, "이상"은 그 값 — 차트·정렬용 대표값이지 관측값이 아님을 `WeatherPrecip{text,value,none}` 로 계약에 남긴다.
 - **2026-08-21 중기예보는 D+4~D+10 만, D+3 은 단기가 담당** — 업스트림이 D+3 필드를 더 이상 주지 않는다(픽스처 `rnSt4Am…`). 열흘 병합은 날짜 키로 이어 붙이되 같은 날짜는 단기 우선. 서비스·계약(`day` min 3)은 D+3 이 다시 와도 받도록 키 존재로 판정.
@@ -165,13 +166,13 @@ shared 훅(React Query, `placeholderData` 로 지점 전환 시 이전 화면 �
 - **오늘의 TMN/TMX 는 없다** — 단기예보 일 최저/최고는 06시/15시 행에만 실려, 발표 뒤 시각만 남은 오늘은 TMP min/max 로 근사(`tmnFromHours` → "남은 시각 기준"). 마지막 날 00시 한 칸은 일별에서 제거된다.
 - **AWS 매분 자료의 "현재 분"은 자리표시 행** — 전 지점 `-99.9` 가 와서 값이 있는 것처럼 파싱되면 안 된다. 서비스가 −2/−5/−8분으로 물러나므로 캐시 미스 한 번에 업스트림 최대 3콜. 관측이 20분 넘게 오래되면 값이 null 로 내려가고 화면은 "최근 관측값이 없습니다". 본문은 EUC-KR — `res.text()` 로 읽으면 지점명이 깨진다. stn_inf 는 공백 구분(끝 주소에 공백), nph-aws2_min 은 콤마 구분 + 끝 `,=`.
 - **API허브는 API 마다 활용신청** — 미신청이면 403 "활용신청이 필요한 API 입니다" → 503(`KmaApiHubAuthError`). 키가 아예 없으면 503 이 아니라 `enabled=false` — 두 상태를 혼동하지 말 것. 라우트 테스트는 앱의 `AwsService` 가 전국 자료를 2분 캐시하므로 **실패 분기를 성공 호출보다 먼저** 돌린다([aws.test.ts](../../apps/friendly/src/modules/weather/aws.test.ts) 주석).
-- **`env.ts` 는 모듈 로드 시점에 파싱** — 라우트 테스트는 `vi.hoisted` 로 `KMA_API_KEY`/`KMA_APIHUB_KEY` 를 `buildApp` import 전에 넣어야 503 으로 죽지 않는다([weather.test.ts](../../apps/friendly/src/modules/weather/weather.test.ts)). 어댑터는 `vi.mock` 부분 모킹(파서·에러 클래스는 실구현).
+- **`env.ts` 는 모듈 로드 시점에 파싱** — 라우트 테스트는 `vi.hoisted` 로 `DATA_GO_KR_API_KEY`(`'test-kma-key'`, 2026-09-02 부터 — 버스·대기 테스트와 같은 변수에 `||` 로 심어 먼저 있던 값은 덮지 않는다)/`KMA_APIHUB_KEY` 를 `buildApp` import 전에 넣어야 503 으로 죽지 않는다([weather.test.ts](../../apps/friendly/src/modules/weather/weather.test.ts)). 어댑터는 `vi.mock` 부분 모킹(파서·에러 클래스는 실구현). 운영에선 반대로 `.env` 에 옛 이름 `KMA_API_KEY` 만 남아 있으면 zod 가 조용히 버려 503 이 난다.
 - **웹은 한국 밖 좌표를 거르지 않는다** — 앱은 `isInKorea` 로 Alert, 웹 `?ll=` 은 그대로 격자 변환 → 격자가 1~149/1~253 밖이면 400, AWS 도 lat 33~39/lng 124~132 밖이면 400 → 섹션 에러 문구로 떨어진다.
 - **저장 위치 판정은 좌표 근사** — `savedHere` 는 0.0005°(≈50m). 칩 링크 `?ll=` 은 소수 5자리라 왕복해도 같은 판정이지만, 지점 저장(`place`) 뒤 같은 지점을 `?p=` 로 열어도 좌표가 같아 "저장됨" 으로 뜬다(의도).
 - **`placeholderData` 분기** — 지점 전환 중 이전 자료가 남아 있으므로 에러 표시는 `isError && (!data || isPlaceholderData)` 로 가른다(웹·앱 동일). jsdom 엔 `ResizeObserver` 가 없어 메테오그램 테스트는 스텁을 심는다.
 - **낮/밤 아이콘은 06~19시 근사** — 일출·일몰 API 미연동([weatherIcons.tsx](../../apps/web/src/components/weather/weatherIcons.tsx)·[weatherGlyph.ts](../../apps/mobile/src/lib/weatherGlyph.ts) 주석). 프로브 주석에 남은 미사용 후보: API허브 `awsh.php`(AWS 시간자료)·`kma_sfctm2.php`(ASOS 시간자료).
 - **앱은 URL 동기화가 없다** — 딥링크 `p`/`ll` 은 초기값뿐, 이후 선택은 화면 상태. 홈 카드 탭은 파라미터 없이 `/weather` 로 가고 화면이 `auto` 로 저장 위치를 해석한다(저장 위치가 서버에서 늦게 오면 잠깐 서울로 보였다가 바뀔 수 있다).
-- **테스트 규모** — friendly `weather.test.ts` 15건(라우트 8 + 서비스 슬롯 폴백·TTL·stale·in-flight·쿼터 6 + `foldForecastDays` 1) + `aws.test.ts` 9건(파서 2 + 라우트 3 + 서비스 4), utils `weather.test.ts` 37건(격자 12 + 발표 시각 7 + 강수 문자열 9 + 바람·상태 4 + 지점표 5), 웹 `WeatherPage.test.tsx` 6건(MSW) + `MyLocationChip.test.tsx` 4건. 앱 화면 테스트는 없다.
+- **테스트 규모** — friendly `weather.test.ts` 15건(라우트 8 + 서비스 슬롯 폴백·TTL·stale·in-flight·쿼터 6 + `foldForecastDays` 1) + `aws.test.ts` 9건(파서 2 + 라우트 3 + 서비스 4), utils `weather.test.ts` 37건(격자 12 + 발표 시각 7 + 강수 문자열 9 + 바람·상태 4 + 지점표 5), 웹 `WeatherPage.test.tsx` 6건(MSW — 503 케이스의 픽스처 메시지가 `DATA_GO_KR_API_KEY 가 설정되지 않아` 로 바뀌었다, `3d9dfed`) + `MyLocationChip.test.tsx` 4건. 앱 화면 테스트는 없다.
 
 ## Sources [coverage: high — 74 sources]
 
@@ -186,8 +187,8 @@ shared 훅(React Query, `placeholderData` 로 지점 전환 시 이전 화면 �
 - [apps/friendly/scripts/probe-kma-api.ts](../../apps/friendly/scripts/probe-kma-api.ts)
 - [apps/friendly/scripts/probe-kma-apihub.ts](../../apps/friendly/scripts/probe-kma-apihub.ts)
 - [apps/friendly/package.json](../../apps/friendly/package.json) — `probe:kma`, `probe:kma-apihub`
-- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — `KMA_API_KEY`, `KMA_APIHUB_KEY`
-- [apps/friendly/.env.example](../../apps/friendly/.env.example)
+- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — `DATA_GO_KR_API_KEY`(2026-09-02, 구 `KMA_API_KEY`·`BUS_API_KEY` 폴백), `KMA_APIHUB_KEY`
+- [apps/friendly/.env.example](../../apps/friendly/.env.example) — 공용 키 항목 아래 "기상청 단기 15084084·중기 15059468 — /weather, 일 10,000건" 한 줄
 - [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — `RATE.transitRealtime`
 - [apps/friendly/src/lib/reply-upstream-error.ts](../../apps/friendly/src/lib/reply-upstream-error.ts)
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts) — 별도 `WeatherService` 인스턴스
@@ -209,7 +210,7 @@ shared 훅(React Query, `placeholderData` 로 지점 전환 시 이전 화면 �
 - [packages/utils/src/dateLabel.ts](../../packages/utils/src/dateLabel.ts)
 - [packages/utils/src/index.ts](../../packages/utils/src/index.ts)
 - [apps/web/src/routes/WeatherPage.tsx](../../apps/web/src/routes/WeatherPage.tsx)
-- [apps/web/src/routes/WeatherPage.test.tsx](../../apps/web/src/routes/WeatherPage.test.tsx) — 6건
+- [apps/web/src/routes/WeatherPage.test.tsx](../../apps/web/src/routes/WeatherPage.test.tsx) — 6건(503 픽스처 문구 새 키 이름, `3d9dfed`)
 - [apps/web/src/components/weather/MyLocationChip.tsx](../../apps/web/src/components/weather/MyLocationChip.tsx)
 - [apps/web/src/components/weather/MyLocationChip.test.tsx](../../apps/web/src/components/weather/MyLocationChip.test.tsx) — 4건
 - [apps/web/src/components/weather/WeatherNowHero.tsx](../../apps/web/src/components/weather/WeatherNowHero.tsx)

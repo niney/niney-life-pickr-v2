@@ -1,18 +1,20 @@
 ---
 topic: life-map
-last_compiled: 2026-08-30
-sources_count: 74
+last_compiled: 2026-09-07
+sources_count: 78
 status: active
-aliases: [일상지도, life-map, lifeMap, CCTV, 공중화장실, 병의원, LifeCctv, LifeToilet, LifeHospital, LifeGeocodeCache, LifeMasterSync, life-geocode-cache, VWorld 지오코딩, vworld-geocoder, vworld-search, 지역 이동 검색, LifeGoToBox, LifeGoToModal, HIRA, 심평원 병원정보서비스, hira-hospital, localdata.go.kr, 지방행정인허가, points-cells, 집계 셀, lifeCellSizeDeg, useLifeMapPoints, lifeMapPrefsStore, lifeMapRecentStore, load:life-cctv, load:life-toilets, load:life-hospitals, import:life-geocode, status:life-map, LifeMapPage, LifeMapHeader, deploy.sh 6]
+aliases: [일상지도, life-map, lifeMap, CCTV, 공중화장실, 병의원, LifeCctv, LifeToilet, LifeHospital, LifeGeocodeCache, LifeMasterSync, life-geocode-cache, VWorld 지오코딩, vworld-geocoder, vworld-search, geocodeLifeRows, 지역 이동 검색, LifeGoToBox, LifeGoToSection, extraSections, onQueryChange, LifeGoToModal, HIRA, 심평원 병원정보서비스, hira-hospital, DATA_GO_KR_API_KEY, localdata.go.kr, 지방행정인허가, points-cells, 집계 셀, lifeCellSizeDeg, useLifeMapPoints, lifeMapPrefsStore, lifeMapRecentStore, load:life-cctv, load:life-toilets, load:life-hospitals, import:life-geocode, status:life-map, LifeMapPage, LifeMapHeader, deploy.sh 6, 집값 옴니박스]
 ---
 
 # life-map — 일상지도(전국 CCTV·공중화장실·병의원 레이어 지도)
 
 **2026-08-21~08-30 신설 — 공공데이터 3레이어 지도 + 적재 파이프라인 + 지역 이동 검색 + 웹 모바일 시트 + 앱 화면 + 병의원**: 지방행정인허가데이터개방(localdata.go.kr)의 전국 CCTV(377,243행)·공중화장실(53,559행) CSV 를 friendly 로컬 SQLite 에 전량 적재하고, 화장실은 원본에 좌표가 없어 VWorld 지오코더로 주소를 변환(영구 캐시 + gzip 압축본을 리포에 커밋)해 **지도 한 장에 점/집계 셀**로 그리는 공개 페이지 `/life-map` 이 `1d92acb`(08-21) 로 시작됐다. 같은 날 `a21de10` 이 **지역 이동 옴니박스**(행정구역 로컬 245지점 · 지하철역 · 버스정류장 · VWorld 주소/POI 프록시)와 지오코딩 1일차(79%) 캐시를 더했고, `e84e4b9`(08-22) 가 웹 모바일을 맛집 v2 바텀시트 패턴(`sheet/` 승격 + `useMapSheets`)으로 통일했다. 앱은 `e348032`(08-22) 로 대중교통 골격(WebView 지도 + 플로팅 헤더 + List/Detail 시트)을 재사용해 화면을 얻었고 `563890a`(최근 위치)·`4e414aa`(헤더 sticky 보간)·`fdb6ab9`(`enableDynamicSizing=false`)·`342b3b7`(활성 시트 추종)으로 다듬어졌다. 원본 데이터 정리(`809b7e0`·`5a84b63`, `data/open/` 규약 + deploy.sh 경로 폴백)를 거쳐, `4fd6e22`(08-30) 가 **세 번째 레이어 병의원**을 심평원 병원정보서비스 API(data.go.kr 15001698) 전량 페이징(~80콜) 적재로 얹었다 — CSV 가 아니라 API 가 원천이고 좌표는 업스트림(99.99%)이 원칙이라는 점만 다르고, 정규화·전량 교체·상태 API·UI 골격은 앞 두 레이어와 같다.
 
-## Purpose [coverage: high — 9 sources]
+**2026-08-30~09-02 변경 흡수 — 집값(`/housing`)이 일상지도 인프라를 재사용 + 인증키 통일**: 이 라운드에 일상지도 자체 기능은 늘지 않았고, 새 도메인 [housing](housing.md)이 세 조각을 빌려 갔다(`254fb76`·`168b363`). (1) **옴니박스** [LifeGoToBox](../../apps/web/src/components/life-map/LifeGoToBox.tsx)가 페이지 고유 섹션을 받는 `extraSections`(입력 중 섹션 목록 맨 앞에 끼움)·디바운스된 검색어를 부모에 알리는 `onQueryChange`·`placeholder` prop 과 `LifeGoToKind` `'complex'`·`LifeGoToTarget.id` 를 얻었다 — 집값 페이지가 훅을 넘기지 않고 자기 `useHousingSearch` 를 돌려 '아파트 단지' 섹션을 끼운다(rules-of-hooks 유지). 최근 본 위치 스토어([lifeMapRecentStore](../../apps/web/src/stores/lifeMapRecentStore.ts))는 두 페이지가 공유. (2) **지오코더·캐시** — 집값 단지 좌표(지번 → VWorld)가 [life-map-geocode.service.ts](../../apps/friendly/src/modules/life-map/life-map-geocode.service.ts)의 `geocodeLifeRows` 와 `LifeGeocodeCache` 를 그대로 쓰고, 결과가 **같은 압축본** [life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz)에 실린다 → 39,181건(1.1MB, 08-21) 에서 **104,871건(2.3MB, exportedAt 2026-09-01)** 으로 늘었다(증가분은 전부 단지 주소 — 화장실 좌표 수는 그대로). deploy.sh 의 `housing_data` 도 `GZ_CHANGED` 면 `import:life-geocode` 를 부른다(import 는 "없는 키만 추가" 라 `life_map_data` 와 두 번 돌아도 무해). (3) 웹 레이아웃 골격(지도 한 장 + 패널, `useIsDesktopXl` JS 분기, subBar + `useMapSheets` 시트 2장)과 `life-map-master.service` 의 "정규화 순수 함수 + 사유별 리포트 + 전량 교체" 골격을 집값 마스터 로더가 복제했다. 별도로 `3d9dfed`(09-02) 가 병의원 적재 키 `HIRA_API_KEY`(→`BUS_API_KEY` 폴백)를 계정 공용 **`DATA_GO_KR_API_KEY`** 로 통일했고([bus](bus.md)), 같은 커밋이 지오코딩 캐시엔 손대지 않았다. deploy.sh 메뉴는 8번(집값)이 추가되며 잘못된 선택 메시지 `(1-6)` 불일치도 `(1-8)` 로 정리됐다.
 
-"지금 내 주변에 공중화장실·CCTV·병의원이 어디 있나" 를 **비로그인 공개**로 답하는 도메인. 세 레이어 모두 **로컬 DB 조회만** 하므로 사용자 요청 경로에는 외부 API 호출·쿼터가 없다(지역 이동 검색의 주소/POI 섹션만 VWorld 검색 프록시). 의존자는 웹 `/life-map`([LifeMapPage](../../apps/web/src/routes/LifeMapPage.tsx))·앱 `/life-map`([index.tsx](../../apps/mobile/app/life-map/index.tsx), 홈 [MyLocationCard](../../apps/mobile/src/components/home/MyLocationCard.tsx) 의 "일상지도" 진입 행)과 운영 스크립트 [deploy.sh](../../deploy.sh)(API 배포마다 자동 적재 점검) 뿐이다.
+## Purpose [coverage: high — 10 sources]
+
+"지금 내 주변에 공중화장실·CCTV·병의원이 어디 있나" 를 **비로그인 공개**로 답하는 도메인. 세 레이어 모두 **로컬 DB 조회만** 하므로 사용자 요청 경로에는 외부 API 호출·쿼터가 없다(지역 이동 검색의 주소/POI 섹션만 VWorld 검색 프록시). 의존자는 웹 `/life-map`([LifeMapPage](../../apps/web/src/routes/LifeMapPage.tsx))·앱 `/life-map`([index.tsx](../../apps/mobile/app/life-map/index.tsx), 홈 [MyLocationCard](../../apps/mobile/src/components/home/MyLocationCard.tsx) 의 "일상지도" 진입 행)과 운영 스크립트 [deploy.sh](../../deploy.sh)(API 배포마다 자동 적재 점검), 그리고 2026-08-30 부터 **집값**([housing](housing.md) — 웹 `/housing` 이 `LifeGoToBox`·레이아웃 골격을, 적재 스크립트가 `geocodeLifeRows`·`LifeGeocodeCache`·압축본을 공유)이다.
 
 설계를 관통하는 제약은 두 가지다. (1) **377k 점을 브라우저에 다 보낼 수 없다** → 뷰포트(bbox)+줌이 조회 단위이고, 줌이 레이어별 임계 미만이면 서버가 도(°) 격자로 GROUP BY 집계한 셀(숫자 버블)을 내려준다([계약 주석](../../packages/api-contract/src/schemas/life-map.ts)). (2) **화장실 원본엔 좌표가 없다**(표준데이터도 2025-02 부터 좌표 제외) → 주소 지오코딩이 유일한 길이고, VWorld 지오코더는 일 한도(4만 건 수준)가 있어 결과를 영구 캐시하고 압축본을 저장소에 실어 운영 서버는 호출 0건으로 적재한다([life-map-geocode.service.ts](../../apps/friendly/src/modules/life-map/life-map-geocode.service.ts) 헤더).
 
@@ -66,9 +68,9 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 
 일괄(`geocodeLifeRows`): 캐시 전량을 Map 으로 적재 → ① 캐시 패스(후보 순서대로 ok 면 채움, 전부 notfound 면 unresolved, 미캐시 후보가 남으면 pending) → ② 업스트림 패스: 워커 **동시 2**(4 이상이면 업스트림이 연결을 끊음)·호출 간격 **80ms**(초당 ~45콜 버스트에서 502), `--max-calls` 상한(일 한도 분할), `--offline`(캐시만), `--retry-notfound`. 결과는 ok/notfound 모두 캐시 버퍼에 쌓아 200콜마다 `$transaction(upsert×200)` 으로 flush(중단돼도 보존). 일시 장애는 그 행만 건너뛰고(캐시 안 함 → 다음 실행 재시도) 20회 연속이면 중단. 리포트: `resolved/cacheHits/apiCalls/apiOk/apiNotFound/transientErrors/noCandidate/unresolved/skipped/stoppedBy`.
 
-캐시 이동([life-map-geocode-cache.service.ts](../../apps/friendly/src/modules/life-map/life-map-geocode-cache.service.ts)): `export:life-geocode` 가 `LifeGeocodeCache` 전량을 `{version:1, exportedAt, count, entries[{type,address,status,lat,lng,refined,checkedAt}]}` JSON 으로 만들어 `.gz` 면 gzip level 9 로 **추적 경로** [src/modules/life-map/data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz) 에 쓴다(`apps/friendly/data/*` 는 gitignore 지만 이 경로는 커밋 대상). `import:life-geocode` 는 확장자 또는 gzip 매직(`1f 8b`)으로 풀고 형식을 엄격 검증(이상 항목 하나라도 있으면 **전체 거절** — 조용한 부분 적재보다 낫다) 한 뒤 400건 청크로 기존 키를 조회해 없는 키만 `createMany`(기본, 서버가 따로 쌓은 결과 보존) / `--overwrite` 면 갱신. **서버 기동 시 import 는 없다** — deploy.sh 가 pull 전후 `git diff --name-only` 로 gz 변경(`GZ_CHANGED`)을 감지해 `import:life-geocode` → `load:life-toilets <csv> --offline` 을 돌린다.
+캐시 이동([life-map-geocode-cache.service.ts](../../apps/friendly/src/modules/life-map/life-map-geocode-cache.service.ts)): `export:life-geocode` 가 `LifeGeocodeCache` 전량을 `{version:1, exportedAt, count, entries[{type,address,status,lat,lng,refined,checkedAt}]}` JSON 으로 만들어 `.gz` 면 gzip level 9 로 **추적 경로** [src/modules/life-map/data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz) 에 쓴다(`apps/friendly/data/*` 는 gitignore 지만 이 경로는 커밋 대상). `import:life-geocode` 는 확장자 또는 gzip 매직(`1f 8b`)으로 풀고 형식을 엄격 검증(이상 항목 하나라도 있으면 **전체 거절** — 조용한 부분 적재보다 낫다) 한 뒤 400건 청크로 기존 키를 조회해 없는 키만 `createMany`(기본, 서버가 따로 쌓은 결과 보존) / `--overwrite` 면 갱신. **서버 기동 시 import 는 없다** — deploy.sh 가 pull 전후 `git diff --name-only` 로 gz 변경(`GZ_CHANGED`)을 감지해 `import:life-geocode` → `load:life-toilets <csv> --offline` 을 돌린다(2026-08-30 부터 `housing_data` 도 같은 플래그로 import 한 뒤 단지 마스터를 `--offline` 적재·`geocode:housing-missing --offline` 으로 좌표를 보완한다).
 
-커밋본 현재(컴파일 시점 gz 해독): `exportedAt 2026-08-21T13:16:43Z`, **39,181건**(ok 34,993 · notfound 4,188 / road 32,113 · parcel 7,068), 1,168,713바이트. 첫 커밋 `1d92acb` 는 27k건 809,445바이트 부분본이었고 `a21de10` 이 1일차 결과로 갱신했다.
+커밋본 현재(컴파일 시점 gz 해독, 2026-09-07): `exportedAt 2026-09-01T18:32:54Z`, **104,871건**(road ok 36,183 · road notfound 10,991 · parcel ok 37,571 · parcel notfound 20,126), 2,374,882바이트. 이력: 첫 커밋 `1d92acb` 27k건(809,445B) → `a21de10` 1일차 39,181건(1,168,713B, 08-21) → `254fb76`·`168b363`(집값 단지 주소 지오코딩, 08-30~09-02) 로 65,690건 증가. 캐시 행엔 어느 도메인의 주소인지 표식이 없다 — `type`(road/parcel)·`address` 키뿐이라 화장실/단지 비율은 gz 만으로 못 가른다.
 
 ### 조회 — 점/셀 이중 모드, 로컬 인덱스 범위 조회
 
@@ -89,6 +91,8 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 
 원격 셋은 입력 **250ms 디바운스** 뒤 호출, 섹션당 5건. 검색 서비스는 검색어(공백 정규화) 단위 LRU **500개·10분** 캐시, `…로/길 + 번호` 꼴이면 주소를 앞에·아니면 장소를 앞에, 같은 제목+좌표(소수 5자리)는 접는다. 서버에 vworld 키가 없으면 `enabled=false` 빈 목록(200) 으로 답하고 클라이언트는 섹션을 숨긴다 — 보조 기능이라 페이지를 막지 않는다. [vworld-search.adapter.ts](../../apps/friendly/src/modules/life-map/vworld-search.adapter.ts): 타임아웃 8초, 간헐 502 는 300ms 뒤 1회 재시도, `status=ERROR` 코드가 `KEY|AUTH|LIMIT|DOMAIN|INCORRECT_KEY|UNAUTHENTICATED` 면 503(설정 문제)·그 외 502, 좌표는 한국 범위 값으로 판정, 요청 URL 은 `key=***` 마스킹본만 에러에 싣는다. `type=district` 는 category 필수라 쓰지 않는다(행정구역은 로컬). 선택 시 `onGo`(flyTo + 웹은 URL `ll/z` 갱신) + 최근 본 위치 8개 persist(같은 라벨·0.0005° 이내는 앞으로 끌어올림).
 
+**페이지 고유 섹션 주입(2026-08-30, `254fb76`)** — 웹 `LifeGoToBox` 는 다른 지도 페이지가 자기 검색을 앞에 끼울 수 있다. 훅을 prop 으로 넘기면 rules-of-hooks 가 깨지므로 반대 방향으로 설계했다: 박스가 디바운스된 검색어를 `onQueryChange(debouncedQ)`(입력 없음/닫힘이면 `''`, `useEffect` 로 값이 바뀔 때만 통지 — 부모 `setState` 가 외부 시스템)로 올리고, 페이지는 자기 훅(집값은 `useHousingSearch(q, 6)`)을 돌려 `extraSections: LifeGoToSection[]`(`{key, title, items, loading?, error?}`) 로 돌려준다. 박스는 입력 중일 때 `items` 가 비었고 로딩·오류도 아닌 섹션은 버리고, 남은 것을 행정구역 앞에 둔다. `LifeGoToKind` 에 `'complex'`(아이콘 `Building2`), `LifeGoToTarget.id?` 가 더해져 "이동 + 선택(`sel`)" 을 한 번에 한다. `placeholder` 도 prop(기본 "지역·역·정류장·주소로 이동", 집값은 "단지명·지역·역·주소로 이동"). `onQueryChange` 는 안정된 참조(`useState` setter)여야 effect 가 매 렌더 재발화하지 않는다. 앱 `LifeGoToModal` 엔 이 확장이 없다(집값 앱 화면 없음).
+
 ### 웹 UI 골격
 
 [LifeMapPage](../../apps/web/src/routes/LifeMapPage.tsx): URL 이 진실(`?ll=lat,lng&z=줌&sel=layer:id` — 사용자 이동(`onViewportChangeEnd`)만 URL 에 반영, 모든 뷰포트 변경(`onViewportSync`)은 250ms 디바운스 뒤 조회 키), 레이어·필터는 persist 스토어. 진입 중심은 URL → 저장한 내 위치(`useAirLocation`, 날씨·대기와 공유; 늦게 오면 사용자가 안 움직였을 때 1회 flyTo) → 서울시청(37.5665, 126.978) 줌 15. 켜진 레이어마다 `useLifeMapPoints` 1개(최대 3콜/이동), 주변 목록은 **지도 중심** 기준 탭(화장실 1km · CCTV 500m · 병의원 1km, 15건; 꺼진 레이어 탭이면 켜진 쪽으로 보이되 선택은 보존). 안내 칩: 켜진 레이어가 셀이면 "CCTV 15 · 화장실 13 이상 확대하면 개별 지점이 보입니다(지금 N)", 잘렸으면 "지점이 많아 일부만 표시 중". 셀 버블 클릭은 `flyToZoomIn(현재 줌+2)`.
@@ -108,7 +112,7 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 ## Talks To [coverage: high — 12 sources]
 
 - **localdata.go.kr(지방행정인허가데이터개방) CSV** — 서버가 아니라 사람이 내려받아 `data/open/` 에 두고 스크립트가 읽는다. 원본은 리포 밖(`/data/` gitignore), 출처·적재 명령·보관 기준은 [docs/data-sources.md](../../docs/data-sources.md).
-- **심평원 병원정보서비스 `apis.data.go.kr/B551182/hospInfoServicev2`** — 적재 스크립트·프로브만 호출(요청 경로 없음). 키 `HIRA_API_KEY`, 비면 `BUS_API_KEY` 폴백(같은 data.go.kr 계정 키 — 15001698 활용신청만 추가). 개발계정 일 10,000건, 전량 ~80콜. [probe:hira](../../apps/friendly/scripts/probe-hira-api.ts) 가 키 등록·`_type=json`·`numOfRows=1000` 허용·필드 인벤토리·좌표 결측률·ykiho 길이(계약 상한 200)·종별 분포를 실응답으로 확정(덤프 `apps/friendly/data/hira-probe/*.json`, ~4콜).
+- **심평원 병원정보서비스 `apis.data.go.kr/B551182/hospInfoServicev2`** — 적재 스크립트·프로브만 호출(요청 경로 없음). 키는 data.go.kr 계정 공용 `DATA_GO_KR_API_KEY`(2026-09-02 `3d9dfed` 부터 — 그 전엔 `HIRA_API_KEY` 비면 `BUS_API_KEY` 폴백; 15001698 활용신청만 추가). [load-life-hospitals.ts](../../apps/friendly/scripts/load-life-hospitals.ts)·[probe-hira-api.ts](../../apps/friendly/scripts/probe-hira-api.ts)는 `env.ts` 를 거치지 않고 `process.env` 를 직접 읽으며 비면 `DATA_GO_KR_API_KEY가 없습니다` 로 종료. 개발계정 일 10,000건, 전량 ~80콜. [probe:hira](../../apps/friendly/scripts/probe-hira-api.ts) 가 키 등록·`_type=json`·`numOfRows=1000` 허용·필드 인벤토리·좌표 결측률·ykiho 길이(계약 상한 200)·종별 분포를 실응답으로 확정(덤프 `apps/friendly/data/hira-probe/*.json`, ~4콜).
 - **VWorld 지오코더(`api.vworld.kr/req/address`)** 와 **VWorld 검색(`/req/search`)** — 둘 다 WMTS 와 같은 인증키를 `MapSettingsService.getSecret('vworld')`(DB `MapProviderConfig` 우선 + `.env VWORLD_API_KEY` 폴백, 검색 라우트는 요청마다 읽어 키 교체 즉시 반영)로 얻는다 — [map](map.md) 토픽의 [db-config-env-fallback](../concepts/db-config-env-fallback.md) 소비처.
 - **friendly DB(Prisma/SQLite)** — `life_cctvs`·`life_toilets`·`life_hospitals`·`life_geocode_caches`·`life_master_syncs`. 조회 라우트는 이 테이블만 본다.
 - **rate-limit 플러그인** — `RATE.lifeMapRead`(points·nearby, **240/분** — 지도 이동마다 레이어당 1콜 + CGNAT), `RATE.lifeMapSearch`(**60/분** — 디바운스 뒤 호출). status·detail 은 전역 기본.
@@ -117,7 +121,8 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - **weather/air** — 행정구역 인덱스는 [weatherRegions](../../packages/utils/src/weatherRegions.ts) 의 245지점(`WEATHER_SIDOS`·`weatherPlacesBySido`·`searchWeatherPlaces`)을 그대로 쓰고, 진입 중심·보라 점 오버레이는 `useAirLocation` 의 저장한 내 위치 — [weather](weather.md)·[air-quality](air-quality.md).
 - **bus/subway** — 옴니박스의 역·정류장 섹션은 `useSubwayStationSearch`·`useBusStationSearch` 를 그대로 호출([bus](bus.md)·[subway](subway.md)). 병의원 어댑터는 bus 의 `toServiceKeyPart` 를 import.
 - **map(MapCanvas)** — `fixedScale` 마커·`markerStyleCache`·`flyTo/flyToZoomIn` 의 `bottomInset` 옵션은 이 기능이 도입한 확장([map](map.md)). 앱은 transit 의 `TransitMapView`/브리지.
-- **deploy.sh** — API 케이스(1·2·4)마다 `life_map_data` 자동 점검, 6번 메뉴는 강제 재적재. 상태는 `status:life-map` 한 줄을 bash 정규식 `stat_val` 로 파싱(BSD sed `\b` 함정 회피).
+- **deploy.sh** — API 케이스(1·2·4)마다 `life_map_data` 자동 점검, 6번 메뉴는 강제 재적재. 상태는 `status:life-map` 한 줄을 bash 정규식 `stat_val` 로 파싱(BSD sed `\b` 함정 회피). 2026-08-30 부터 같은 케이스에서 `housing_data` 가 뒤이어 돌며 `GZ_CHANGED`·`import:life-geocode` 를 공유한다(메뉴 8번 = 집값 강제).
+- **housing(집값, 2026-08-30~)** — 적재 쪽: [housing-geocode.service.ts](../../apps/friendly/src/modules/housing/housing-geocode.service.ts)·[housing-derived.service.ts](../../apps/friendly/src/modules/housing/housing-derived.service.ts)·[load-housing-complexes.ts](../../apps/friendly/scripts/load-housing-complexes.ts)·[geocode-housing-missing.ts](../../apps/friendly/scripts/geocode-housing-missing.ts)가 `geocodeLifeRows`/`GeocodeBatchOptions` 를 import 해 단지 지번(도로명 → 지번 원문 → 지번 변형 순)을 같은 캐시로 지오코딩한다(`lifeAddressCandidates` 후보 규칙 그대로). 웹 쪽: [HousingPage](../../apps/web/src/routes/HousingPage.tsx)가 `LifeGoToBox`(+`extraSections`)·`useIsDesktopXl`·`useMapSheets`·`BottomSheet` 골격을 그대로 쓰고, 최근 본 위치(`lifeMapRecentStore`)는 박스 안에서 읽고 쓰므로 두 페이지가 한 목록을 공유한다. 도메인 세부는 [housing](housing.md).
 
 ## API Surface [coverage: high — 8 sources]
 
@@ -166,16 +171,18 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 
 인메모리 캐시: `LifeMapService.cellCache`(LRU 300 · 10분, 키에 `syncId` 포함 → 재적재 즉시 무효) · `LifeMapSearchService.cache`(LRU 500 · 10분, 검색어 키). 클라이언트: React Query 24h/10분.
 
-저장소 커밋 산출물: [data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz)(1.1MB, 39,181건). 원본 CSV·프로브 덤프는 gitignore(`/data/`, `apps/friendly/data/*`).
+저장소 커밋 산출물: [data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz)(2.3MB, **104,871건** — 2026-09-01 export; 화장실 주소 + 집값 단지 주소가 한 캐시에 섞여 있다). 원본 CSV·프로브 덤프는 gitignore(`/data/`, `apps/friendly/data/*`). 로컬 dev.db 컴파일 시점 `status:life-map`: `ok cctv=377243 toilet=53559 geocoded=42248 hospital=0 cache=104871`.
 
 클라이언트 스토어(웹 localStorage / 앱 AsyncStorage `createJSONStorage`, 이름·버전 동일):
 - `lp:life-map-prefs` **v2** — `layers{cctv,toilet,hospital}`(기본 전부 켬)·`purposes[]`·`toiletFilters{open24,disabled,kids,diaper,bell}`·`hospitalCategories[]`. `migrate` v1→v2 가 병의원 레이어를 기존 사용자에게도 기본 켬 + 종별 전체. 위치(`ll,z`)·선택(`sel`)은 URL 이 진실이고 이 설정은 취향이라 persist(`transitCrossShowStore` 관례). 웹은 `setPurposes/setHospitalCategories/resetFilters`, 앱은 `clearPurposes/clearHospitalCategories` 로 액션명이 조금 다르다.
 - `lp:life-map-recent` v1 — 최근 본 위치 `{label, sub, lat, lng, zoom, at}` 최대 8개.
 - 앱 스토어는 `AsyncStorage` 를 직접 `createJSONStorage` 에 넘기는 방식(대중교통 `transitRecentStore` 관례)이지 [shared](shared.md) 의 주입형(injectable storage)은 아니다 — 서버 동기화 대상이 아니라 문제는 없다.
 
-## Key Decisions [coverage: high — 14 sources]
+## Key Decisions [coverage: high — 16 sources]
 
-- **2026-08-30 병의원은 CSV 가 아니라 API 전량 적재, 좌표는 업스트림 우선**(`4fd6e22`) — 심평원이 `XPos/YPos` 를 99.99% 주므로 지오코딩은 결측 소수만. deploy.sh 는 예측성을 위해 `--offline` 으로 돌리고(결측 소수는 지도 미표시 — 수동으로 옵션 없이 재실행하면 채워진다) 병의원 0건이면 자동 실행. 키는 `HIRA_API_KEY` → `BUS_API_KEY` 폴백(계정당 키 1개). 마커는 종별과 무관한 **단색 청록** — CCTV 처럼 그룹색을 더 얹으면 한 화면 색이 8개를 넘어 전 쌍 분리가 깨진다(분홍 원과는 색상, 초록 점과는 형태로 갈림). 종별 `category` 7종은 필터·서버 열, 원문 `kindName` 은 상세. 어댑터 타임아웃 40초 + 일시 오류 2회 재시도, `'상급종합'` 매핑, 레이어 칩 `nowrap` + 가로 스크롤(xl 은 줄바꿈 — 400px 패널에서 한글이 글자 단위로 꺾여 '병/의/원' 이 되던 것).
+- **2026-09-02 병의원 적재 키도 계정 공용 `DATA_GO_KR_API_KEY` 로**(`3d9dfed`) — `HIRA_API_KEY` → `BUS_API_KEY` 폴백은 "같은 계정이면 같은 키" 를 env 항목 둘로 흉내 낸 것. 도메인별 항목을 전부 없애고 한 이름 + 데이터셋별 활용신청 주석으로 정리(배경·운영 주의는 [bus](bus.md)). 일상지도 쪽 변경은 로더·프로브의 env 읽기 한 줄과 deploy.sh 실패 안내 문구뿐.
+- **2026-08-30 옴니박스·지오코딩 캐시·레이아웃 골격을 집값이 재사용 — 복제 대신 prop 확장**(`254fb76`) — 새 지도 페이지가 지역 이동을 또 만들지 않게 `LifeGoToBox` 에 `extraSections`/`onQueryChange` 를 열었다. 훅 주입이 아니라 "검색어 올리고 섹션 내려받기" 인 이유는 rules-of-hooks(박스 안에서 임의 훅을 호출할 수 없다)와 박스가 도메인 훅을 몰라야 한다는 것. 지오코딩은 VWorld 일 한도가 계정 단위라 캐시를 나누면 손해고, 압축본 한 파일이면 deploy.sh 의 `GZ_CHANGED` 경로 하나로 두 도메인이 같이 갱신된다 — 대신 캐시 행에 도메인 표식이 없어 도메인별 통계는 각자 DB(`geocoded` 컬럼)에서 본다.
+- **2026-08-30 병의원은 CSV 가 아니라 API 전량 적재, 좌표는 업스트림 우선**(`4fd6e22`) — 심평원이 `XPos/YPos` 를 99.99% 주므로 지오코딩은 결측 소수만. deploy.sh 는 예측성을 위해 `--offline` 으로 돌리고(결측 소수는 지도 미표시 — 수동으로 옵션 없이 재실행하면 채워진다) 병의원 0건이면 자동 실행. 키는 `HIRA_API_KEY` → `BUS_API_KEY` 폴백(계정당 키 1개 — 2026-09-02 부터 `DATA_GO_KR_API_KEY` 하나). 마커는 종별과 무관한 **단색 청록** — CCTV 처럼 그룹색을 더 얹으면 한 화면 색이 8개를 넘어 전 쌍 분리가 깨진다(분홍 원과는 색상, 초록 점과는 형태로 갈림). 종별 `category` 7종은 필터·서버 열, 원문 `kindName` 은 상세. 어댑터 타임아웃 40초 + 일시 오류 2회 재시도, `'상급종합'` 매핑, 레이어 칩 `nowrap` + 가로 스크롤(xl 은 줄바꿈 — 400px 패널에서 한글이 글자 단위로 꺾여 '병/의/원' 이 되던 것).
 - **2026-08-22 앱 플로팅 헤더는 활성 시트를 따라가고 sticky 로 펴진다**(`4e414aa`·`342b3b7`), **지도 시트 6개 `enableDynamicSizing=false`**(`fdb6ab9`) — 맛집·대중교통과 같은 "상단에 가까울수록" 동작(프레임 캡처로 시트 상단 ≈316pt→128pt 구간 확인). 최근 본 위치 8개 AsyncStorage(`563890a`).
 - **2026-08-22 앱 화면은 대중교통 골격 재사용 + 브리지 아이콘 사전**(`e348032`) — 새 지도 컴포넌트를 만들지 않고 `TransitMapView` 에 `setMarkers.icons`·`BridgeMarker.fixedScale` 만 확장. `lifeToiletOpenLabel` 등 표시 문자열을 utils 로 승격해 웹·앱이 같은 문구.
 - **2026-08-22 웹 모바일 = 맛집 v2 시트 패턴, 분기는 CSS 이중 마운트 대신 JS**(`e84e4b9`) — 지도 한 장·패널 한 벌, 데스크톱엔 시트 없음(숨은 시트의 html overflow 락 회피). `BottomSheet` 를 `restaurant-v2/` → `sheet/` 로 승격하고 목록/상세 스냅 조율을 `useMapSheets` 로 공용화(맛집 v2 도 교체). `MapCanvas.flyTo/flyToZoomIn` 에 `bottomInset` — 시트가 덮는 높이만큼 중심을 밀어 지점이 보이는 영역 가운데로. `useMapSheets` 호출은 React Compiler 메모 검증 때문에 각 페이지 `useState` 선언 앞에 둔다(뒤에 두면 setter 를 반응값으로 본다). 375px 에서 목록 영역 5px → half ~250px.
@@ -188,13 +195,15 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - **2026-08-21 5색 팔레트 검증**(`1d92acb`) — dataviz 범주 팔레트에서 CCTV 4그룹 전 쌍 + 화장실 1색이 라이트 표면에서 CVD·정상시 분리 기준을 모두 통과한 조합(`scripts/validate_palette.js`). 점은 흰 외곽선이 있어 야간 타일에서도 같은 색.
 - **2026-08-21 상태 API 와 미적재 503 안내**(`1d92acb`) — 지하철 마스터 규약과 동일: 적재 이력이 없으면 503 본문에 실행할 명령을 적는다. `status:life-map` 한 줄은 deploy.sh 가 키 단위로 뽑아 항목 추가가 안전.
 
-## Gotchas [coverage: high — 12 sources]
+## Gotchas [coverage: high — 14 sources]
 
-- **화장실 지오코딩 2일차 재실행 미완** — `a21de10` 은 일일 한도로 79% 지점에서 중단("다음날 재실행 예정")했는데, 컴파일 시점(08-30) 로컬 `status:life-map` 이 `geocoded=42248/53559(78.9%) · cache=39181` 이고 커밋 gz 도 `a21de10` 이후 변경이 없다(exportedAt 08-21). 남은 ~11k 행은 지도·주변·셀 집계에 안 나온다(상세는 됨). 절차: `load:life-toilets <csv>`(온라인, 필요 시 `--max-calls`) → `export:life-geocode` → gz 커밋 → 배포 시 `GZ_CHANGED` 가 import + `--offline` 재적재를 자동 실행. `--retry-notfound` 는 notfound 캐시(4,188건)까지 다시 시도.
+- **화장실 지오코딩 2일차 재실행 여전히 미완(2026-09-07 재확인)** — `a21de10` 은 일일 한도로 79% 지점에서 중단("다음날 재실행 예정")했고, 이번 라운드 로컬 `status:life-map` 도 `geocoded=42248/53559(78.9%)` 그대로다. 커밋 gz 는 09-01 에 104,871건으로 갱신됐지만 **증가분은 전부 집값 단지 주소**라 화장실 좌표는 늘지 않았다(`cache=104871` 만 커졌다). 남은 ~11k 행은 지도·주변·셀 집계에 안 나온다(상세는 됨). 절차: `load:life-toilets <csv>`(온라인, 필요 시 `--max-calls` — 집값 지오코딩과 VWorld 일 한도를 나눠 쓴다) → `export:life-geocode` → gz 커밋 → 배포 시 `GZ_CHANGED` 가 import + `--offline` 재적재를 자동 실행. `--retry-notfound` 는 **처리 중인 행의 후보**가 notfound 캐시에 있을 때만 다시 시도한다(`geocodeLifeRows` 의 캐시 패스가 행 단위) — 캐시 전체 notfound 가 31,117건(화장실 4,188 + 집값 지번 변형 실패분)으로 불었어도 화장실 재적재가 단지 주소를 건드리진 않는다.
+- **`LifeGoToBox.onQueryChange` 는 안정된 참조로** — 박스 안 `useEffect([debouncedQ, onQueryChange])` 가 통지 채널이라 인라인 화살표를 넘기면 매 렌더 재발화한다(`useState` setter 나 `useCallback`). `extraSections` 는 `items` 가 비고 `loading`/`error` 도 아니면 그려지지 않으므로 "섹션이 안 보인다" 는 대개 훅이 `enabled` 되지 않은 것.
+- **지오코딩 캐시엔 도메인 표식이 없다** — `LifeGeocodeCache` PK 는 `(type, address)` 뿐. 집값이 같은 캐시를 쓰면서 `import:life-geocode --overwrite` 나 캐시 정리를 한 도메인 기준으로 하면 다른 도메인 좌표가 같이 움직인다. `export:life-geocode` 는 항상 전량이다.
 - **로컬 dev.db 는 병의원 미적재(hospital=0)** — 병의원 적재 실측은 08-28 이후 다른 상태에서 이뤄졌고 이 머신 DB 엔 없다. 로컬 확인은 `load:life-hospitals`(HIRA 키 필요, ~80콜) 를 직접 돌려야 하고, 운영은 deploy.sh 가 0건이면 자동 적재한다.
 - **`data/open` 파일명 규약과 로컬 실제가 다르다** — [docs/data-sources.md](../../docs/data-sources.md) 는 `data/open/life/{cctv,toilet}.csv` 이지만 이 머신엔 `data/open/CCTV정보.csv`·`공중화장실정보.csv`(원래 이름)만 있다. deploy.sh 폴백이 흡수하지만 로컬 명령은 실제 경로를 직접 줘야 한다.
 - **서버 기동은 캐시를 import 하지 않는다** — import 는 deploy.sh(또는 수동 `import:life-geocode`) 몫. deploy.sh 를 거치지 않는 수동 배포에서 gz 만 갱신하면 화장실 좌표가 늘지 않는다.
-- **HIRA 활용신청 승인 직후 `30 등록되지 않은 서비스키`** — 게이트웨이 반영까지 수십 분(`probe:hira` 로 재확인). data.go.kr 는 데이터셋마다 활용신청이 따로라 다른 데이터셋 키를 그대로 쓰면 같은 30 이 난다. `BUS_API_KEY` 폴백은 같은 계정일 때만 의미.
+- **HIRA 활용신청 승인 직후 `30 등록되지 않은 서비스키`** — 게이트웨이 반영까지 수십 분(`probe:hira` 로 재확인). data.go.kr 는 데이터셋마다 활용신청이 따로라 키가 하나(`DATA_GO_KR_API_KEY`)여도 15001698 을 신청하지 않으면 같은 30 이 난다(키가 틀린 게 아니다). `.env` 에 옛 이름 `HIRA_API_KEY`/`BUS_API_KEY` 만 남아 있으면 로더가 "`DATA_GO_KR_API_KEY`가 없습니다" 로 종료(2026-09-02 부터).
 - **`load:life-hospitals --dry-run` 도 업스트림 ~80콜을 소비**, `--max-pages` 로 적재하면 전량 교체라 나머지 기관이 빠진다(확인용으로만).
 - **ykiho 는 재적재 후 영속 보장이 없다** — 전량 교체라 URL `sel=hospital:…` 이 404 가 될 수 있다(UI 문구 "데이터가 갱신돼 빠졌을 수 있음"). CCTV 관리번호·화장실도 원본이 바뀌면 같다.
 - **VWorld 지오코더 한도·동시성** — 동시 4 이상이면 연결이 끊기고 초당 ~45콜 버스트에서 502(기본 2·80ms). `status=ERROR` 는 즉시 중단이지만 캐시는 flush 되므로 같은 명령 재실행이 이어간다. 일시 장애 행은 캐시에 남지 않는다(다음 실행 재시도).
@@ -203,11 +212,11 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - **`useIsDesktopXl` 은 matchMedia 가 없으면 데스크톱** — jsdom 테스트는 기본 데스크톱으로 렌더되고 모바일 시트 분기는 `window.matchMedia` 를 목으로 바꿔야 한다([LifeMapPage.test.tsx](../../apps/web/src/routes/LifeMapPage.test.tsx) 뒤 3건). 같은 테스트는 `MapCanvas` 를 목으로 바꿔 viewport 를 올리지 않으므로 points 요청은 나가지 않는다(주변·상세·검색 계약만).
 - **웹 bar 드롭다운 바깥 닫기는 document `pointerdown`** — 헤더가 `backdrop-filter` 라 fixed 백드롭이 헤더 안에 갇혀 못 쓴다.
 - **앱 홈 진입 행 문구가 낡았다** — [MyLocationCard](../../apps/mobile/src/components/home/MyLocationCard.tsx) `LifeMapLink` 는 "일상지도 — 내 주변 공중화장실·CCTV" 로 병의원을 언급하지 않는다. 앱은 선택·줌을 URL 로 되돌리지 않고 앱 전용 테스트도 없다.
-- **deploy.sh 잘못된 선택 메시지가 `(1-6)`** — 메뉴는 1~7 이다(사소한 불일치).
+- ~~deploy.sh 잘못된 선택 메시지가 `(1-6)`(메뉴는 1~7)~~ — `254fb76`(2026-08-30) 에서 집값 8번 메뉴가 추가되며 `(1-8)` 로 정리돼 해소. 대신 새 함정: `set -e` 아래서 실패하는 명령 치환을 대입에 쓰면 스크립트가 조용히 죽는다(K-apt 파일 탐지, `b8c08ed` 수정) — 일상지도 `first_existing` 폴백도 같은 규율(파일이 없어도 0 으로 끝나야 한다).
 - **CSV 파서는 비스트리밍** — 79MB 문자열 + 행 배열을 메모리에 든다. 적재 스크립트 전용 설계라 서버 요청 경로엔 영향 없다.
 - **`status.geocoded` 는 병의원에선 "좌표 확보 건수"** — API 좌표(`geoSource='api'`)도 포함하므로 이름과 달리 지오코딩 건수가 아니다. 푸터의 "좌표 N%" 는 화장실에만 표시.
 
-## Sources [coverage: high — 74 sources]
+## Sources [coverage: high — 78 sources]
 
 ### friendly (백엔드·스크립트·운영)
 - [apps/friendly/src/modules/life-map/life-map.route.ts](../../apps/friendly/src/modules/life-map/life-map.route.ts)
@@ -221,7 +230,7 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - [apps/friendly/src/modules/life-map/life-map-search.service.ts](../../apps/friendly/src/modules/life-map/life-map-search.service.ts) (+[test](../../apps/friendly/src/modules/life-map/life-map-search.service.test.ts) 4건)
 - [apps/friendly/src/modules/life-map/life-map-search.test.ts](../../apps/friendly/src/modules/life-map/life-map-search.test.ts) — 2건(라우트 계약·400/503/502 매핑, 어댑터 목)
 - [apps/friendly/src/modules/life-map/vworld-search.adapter.ts](../../apps/friendly/src/modules/life-map/vworld-search.adapter.ts)
-- [apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz) — 39,181건 1.1MB(커밋 `1d92acb`→`a21de10`)
+- [apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz) — 104,871건 2.3MB(커밋 `1d92acb`→`a21de10` 39,181건→`254fb76`·`168b363` 집값 단지 주소 합류, export 2026-09-01)
 - [apps/friendly/src/lib/csv.ts](../../apps/friendly/src/lib/csv.ts) (+[test](../../apps/friendly/src/lib/csv.test.ts) 5건) — RFC 4180 파서(이 기능으로 신설)
 - [apps/friendly/src/lib/narrow.ts](../../apps/friendly/src/lib/narrow.ts) — `coerceStrOrNull/numOrNull/intOrNull/isObject`
 - [apps/friendly/scripts/load-life-cctv.ts](../../apps/friendly/scripts/load-life-cctv.ts)
@@ -235,14 +244,20 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - [apps/friendly/prisma/migrations/20260821130000_add_life_map/migration.sql](../../apps/friendly/prisma/migrations/20260821130000_add_life_map/migration.sql)
 - [apps/friendly/prisma/migrations/20260827222827_add_life_hospital/migration.sql](../../apps/friendly/prisma/migrations/20260827222827_add_life_hospital/migration.sql)
 - [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — `LifeCctv`·`LifeToilet`·`LifeHospital`·`LifeGeocodeCache`·`LifeMasterSync`
-- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — `HIRA_API_KEY`(BUS 폴백)·`VWORLD_API_KEY`
-- [apps/friendly/.env.example](../../apps/friendly/.env.example) — 심평원 항목
+- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — `DATA_GO_KR_API_KEY`(2026-09-02 `3d9dfed`, 구 `HIRA_API_KEY`·BUS 폴백)·`VWORLD_API_KEY`
+- [apps/friendly/.env.example](../../apps/friendly/.env.example) — 공용 키 항목의 "심평원 15001698 — load:life-hospitals·probe:hira 만" 줄
 - [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — `lifeMapRead`·`lifeMapSearch`
 - [apps/friendly/src/modules/settings/map.service.ts](../../apps/friendly/src/modules/settings/map.service.ts) — `getSecret('vworld')` 키 공급
 - [apps/friendly/src/modules/bus/bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts) — `toServiceKeyPart` 재사용
-- [deploy.sh](../../deploy.sh) — `life_map_data`·케이스 6·CSV 경로 폴백·`GZ_CHANGED`
-- [docs/data-sources.md](../../docs/data-sources.md) — `data/open/life/*.csv` 규약·행수
+- [deploy.sh](../../deploy.sh) — `life_map_data`·케이스 6·CSV 경로 폴백·`GZ_CHANGED`(집값 `housing_data`·케이스 8 도 공유, 2026-08-30)
+- [docs/data-sources.md](../../docs/data-sources.md) — `data/open/life/*.csv` 규약·행수, 집값 단지 좌표가 같은 캐시 압축본에 실린다는 절
 - [.gitignore](../../.gitignore) — `/data/`·`apps/friendly/data/*`
+
+### 교차 소비처 — 집값(2026-08-30~, 세부는 [housing](housing.md))
+- [apps/friendly/src/modules/housing/housing-geocode.service.ts](../../apps/friendly/src/modules/housing/housing-geocode.service.ts) — *`geocodeLifeRows` 재사용: 도로명 → 지번 원문 → 지번 변형 순 단지 좌표 보완, `LifeGeocodeCache` 공유*
+- [apps/friendly/scripts/load-housing-complexes.ts](../../apps/friendly/scripts/load-housing-complexes.ts) — *단지 마스터 적재 시 `geocodeLifeRows` 호출(`--offline` 지원)*
+- [apps/friendly/scripts/geocode-housing-missing.ts](../../apps/friendly/scripts/geocode-housing-missing.ts) — *결과를 `export:life-geocode` 로 같은 압축본에 싣는다*
+- [apps/web/src/routes/HousingPage.tsx](../../apps/web/src/routes/HousingPage.tsx) — *`LifeGoToBox` `extraSections`/`onQueryChange`/`placeholder` 소비자, 레이아웃·시트 골격 복제*
 
 ### 계약·공통
 - [packages/api-contract/src/schemas/life-map.ts](../../packages/api-contract/src/schemas/life-map.ts)
@@ -259,7 +274,7 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - [apps/web/src/components/life-map/LifeMapView.tsx](../../apps/web/src/components/life-map/LifeMapView.tsx)
 - [apps/web/src/components/life-map/lifeMapMarkers.ts](../../apps/web/src/components/life-map/lifeMapMarkers.ts)
 - [apps/web/src/components/life-map/LifeLayerBar.tsx](../../apps/web/src/components/life-map/LifeLayerBar.tsx)
-- [apps/web/src/components/life-map/LifeGoToBox.tsx](../../apps/web/src/components/life-map/LifeGoToBox.tsx)
+- [apps/web/src/components/life-map/LifeGoToBox.tsx](../../apps/web/src/components/life-map/LifeGoToBox.tsx) — *modified (2026-08-30 `254fb76`): `extraSections`·`onQueryChange`·`placeholder` prop, `LifeGoToSection` export, kind `'complex'`, target `id`*
 - [apps/web/src/components/life-map/LifeNearbyList.tsx](../../apps/web/src/components/life-map/LifeNearbyList.tsx)
 - [apps/web/src/components/life-map/LifeDetailCard.tsx](../../apps/web/src/components/life-map/LifeDetailCard.tsx)
 - [apps/web/src/components/life-map/LifeMapFooter.tsx](../../apps/web/src/components/life-map/LifeMapFooter.tsx)

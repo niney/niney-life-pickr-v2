@@ -1,14 +1,16 @@
 ---
 topic: air-quality
-last_compiled: 2026-08-30
+last_compiled: 2026-09-07
 sources_count: 87
 status: active
-aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqireSvc, MsrstnInfoInqireSvc, 15073861, 15073877, 통합대기환경지수, CAI, khaiGrade, 미세먼지, PM2.5, 측정소정보, 대기질예보, AirQualityService, AirKoreaApiAuthError, useAirNearbyStations, useAirLocation, airLocationStore, AirUserLocation, air_user_locations, 내-위치, MyLocationChip, MyLocationCard, useMyLocationGlance, probe:airkorea, AIRKOREA_API_KEY, dmX-dmY, 전남광주]
+aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqireSvc, MsrstnInfoInqireSvc, 15073861, 15073877, 통합대기환경지수, CAI, khaiGrade, 미세먼지, PM2.5, 측정소정보, 대기질예보, AirQualityService, AirKoreaApiAuthError, useAirNearbyStations, useAirLocation, airLocationStore, AirUserLocation, air_user_locations, 내-위치, MyLocationChip, MyLocationCard, useMyLocationGlance, probe:airkorea, DATA_GO_KR_API_KEY, AIRKOREA_API_KEY, dmX-dmY, 전남광주]
 ---
 
 # air-quality — 에어코리아 대기정보(측정·예보·측정소 지도) + 내 위치 저장·상단바/홈 칩
 
 **2026-08-21~08-30 신설 — 에어코리아 5+1 오퍼레이션 프록시 → 웹 `/air` → 내 위치 저장·통합 칩 → 앱 합류**: 한국환경공단 에어코리아 대기오염정보 API(data.go.kr 15073861, `ArpltnInforInqireSvc`) 5개 오퍼레이션을 friendly 가 프록시하고 웹 `/air` 가 한 화면에 전부 펼치는 "예시 페이지"로 시작했다(`7340743`, 전 계층 44파일). 이 API 엔 측정소 좌표가 없어 별도의 측정소정보 API(15073877, `MsrstnInfoInqireSvc`)를 붙여 지도·검색·내 주변을 서버 24시간 캐시 위에서 로컬 계산한다(`c6ac640` — 신청 전엔 합성 픽스처, 승인 뒤 실응답 673개소 발췌 픽스처 `638a572`). 좌표 1곳을 **내 대기 위치**로 저장(게스트 로컬 persist / 로그인 서버 1행 하이브리드, `a4284aa`)해 모든 공개 페이지 상단바에 가장 가까운 측정소의 등급 칩을 띄우고, 통합지수 결측 시 PM2.5→PM10 폴백(`4d35a57`)·공용 측위 훅의 간헐 TIMEOUT 수정(`67f14cf`)·'선택 측정소 저장'(`aa3a09e`)·10분 조용한 갱신(`26947ba`)을 거쳐 날씨와 합쳐진 통합 알약 [MyLocationChip](../../apps/web/src/components/weather/MyLocationChip.tsx)이 됐다(`9e197d3`, `AirLocationChip` 삭제). 저장 단위는 날씨 페이지와 통일돼 source `place` 가 추가되고 '지도에서 직접 지정'(`manual`) UI 는 제거됐으며(`7704f8c`), 상단바 폭 예산 정리로 `<sm` 축약 표기·측정값 없음 시 대기 세그먼트 생략이 들어갔다(`a062e7d`). 2026-08-22 **앱**에 `/air` 화면·홈 `MyLocationCard`(`e348032`, 공용 파생 훅 `useMyLocationGlance` 승격), 측정소 지도·30/90일 등급 막대(`563890a`), 24시간 띠 축 라벨 수정(`5f5f0e3`)이 더해져 2026-08-17 경의 "앱 연동은 제외" 결정이 뒤집혔다. 날씨 절반(기상청)은 [weather](weather.md), 일상지도는 [life-map](life-map.md).
+
+**2026-09-02 변경 흡수 — 인증키가 `DATA_GO_KR_API_KEY` 로 통일(`3d9dfed`)**: `AIRKOREA_API_KEY`(비우면 `BUS_API_KEY` 폴백) 항목이 사라지고 [air-quality.route.ts](../../apps/friendly/src/modules/air-quality/air-quality.route.ts)가 `new AirQualityService({ serviceKey: env.DATA_GO_KR_API_KEY })` 로 계정 공용 키 하나를 읽는다. 서비스 503 문구·[probe-airkorea-api.ts](../../apps/friendly/scripts/probe-airkorea-api.ts)·라우트 테스트의 `vi.hoisted` 주입(`'test-air-key'` 유지)·라이브 스모크 `runnable` 판정이 전부 새 이름. 어댑터·캐시·쿼터·정규화 로직은 무변경 — 이 라운드의 대기 변경은 이 이름 치환뿐이다(웹·앱·계약·shared 파일 변경 0). 배경은 [bus](bus.md)(키를 처음 도입한 곳).
 
 ## Purpose [coverage: high — 9 sources]
 
@@ -86,7 +88,7 @@ aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqire
 ## Talks To [coverage: high — 14 sources]
 
 - **에어코리아 대기오염정보 API** (`https://apis.data.go.kr/B552584/ArpltnInforInqireSvc`, HTTPS GET, `returnType=json`) — friendly 만 호출. **측정소정보 API** (`…/MsrstnInfoInqireSvc/getMsrstnList`) — 같은 계정 키지만 **활용신청이 따로** 필요(미신청이면 게이트웨이 30 → 503). 둘 다 [probe-airkorea-api.ts](../../apps/friendly/scripts/probe-airkorea-api.ts)(`pnpm --filter friendly probe:airkorea [측정소명]`, 7~8콜, 원문을 `data/airkorea-probe/*.json` 에 덤프 — gitignore)로 실측했고 `__fixtures__` 는 그 축약본이다.
-- **키 체인** — [env.ts](../../apps/friendly/src/config/env.ts) `AIRKOREA_API_KEY`(기본 `''`), 비면 라우트가 `BUS_API_KEY` 로 폴백(data.go.kr 는 계정당 키 1개 — 활용신청만 추가하면 같은 키). 둘 다 비면 `AirQualityService.requireKey()` 가 503. 라이브 테스트·프로브도 같은 폴백 순서. [.env.example](../../apps/friendly/.env.example) 에 항목·쿼터·프로브 명령 기재. 컨셉 [db-config-env-fallback](../concepts/db-config-env-fallback.md)과 달리 DB 행 없이 env 전용.
+- **키** — [env.ts](../../apps/friendly/src/config/env.ts) `DATA_GO_KR_API_KEY`(기본 `''`, 2026-09-02 `3d9dfed` 부터 — 그 전엔 `AIRKOREA_API_KEY` → `BUS_API_KEY` 폴백 체인). data.go.kr 는 계정당 키 1개라 버스·기상청·심평원·집값과 **같은 값**이고 대기오염정보 15073861·측정소정보 15073877 은 활용신청만 따로. 비면 `AirQualityService.requireKey()` 가 503(`DATA_GO_KR_API_KEY 가 설정되지 않아…`). 라이브 테스트·프로브도 같은 env 를 직접 읽는다. [.env.example](../../apps/friendly/.env.example) 의 공용 키 항목 아래 "에어코리아 15073861 — /air, 일 500건" 한 줄로 기재. 컨셉 [db-config-env-fallback](../concepts/db-config-env-fallback.md)과 달리 DB 행 없이 env 전용.
 - **friendly 공용 인프라** — `*.route.ts` autoload([app.ts](../../apps/friendly/src/app.ts), `dirNameRoutePrefix:false`), [RATE.transitRealtime](../../apps/friendly/src/plugins/rate-limit.ts)(분당 60 — 캐시 미스 키를 바꿔 가며 쿼터를 태우는 남용 방지), [replyUpstreamError](../../apps/friendly/src/lib/reply-upstream-error.ts)(502/503 을 라우트가 직접 응답 + 키 마스킹 URL·업스트림 코드 warn 로깅 — 전역 error-handler 가 5xx 를 500 으로 뭉개기 때문), `app.authenticate`(내 위치 3라우트), Prisma(`airUserLocation`).
 - **`@repo/api-contract`** — [schemas/air-quality.ts](../../packages/api-contract/src/schemas/air-quality.ts)·`Routes.AirQuality`. 한글 경로 세그먼트(`/air/sido/:sidoName`)는 빌더가 `encodeURIComponent` 하므로 라우트 등록 시 `decodeURIComponent` 로 되돌린다(지하철 관례). 컨셉 [zod-ssot-buildless](../concepts/zod-ssot-buildless.md).
 - **`@repo/shared`** — `airQualityApi`·`airLocationApi`·훅 8종·`useAirLocation`·`useMyLocationGlance`·`airLocationStore`·`useUserLocation`. 글랜스는 [useWeatherNowcast](../../packages/shared/src/hooks/useWeather.ts)(`refetchOnWindowFocus` 옵션은 `9e197d3` 가 칩 때문에 추가)와 [weather](weather.md) 의 `latLngToKmaGrid` 를 호출한다.
@@ -125,8 +127,9 @@ aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqire
 
 **화면 상태** — 웹: URL `sido/station/term/code`(term 기본 DAILY·code 기본 PM10 은 URL 에서 제거), 로컬 `metric`(차트)·`compareMetric`. 앱: `sel: {kind:'auto'} | {kind:'station', sido, station}`, `term`, `dailyMetric`, `gps`, `code`, `compareMetric`, `pickerOpen`.
 
-## Key Decisions [coverage: high — 16 sources]
+## Key Decisions [coverage: high — 17 sources]
 
+- **2026-09-02 키 항목 폐지 — 계정 공용 `DATA_GO_KR_API_KEY` 하나**(`3d9dfed`): 초기 설계 ⑤의 "`AIRKOREA_API_KEY` 비우면 `BUS_API_KEY` 폴백" 은 실제 운영에서 두 값이 항상 같거나 한쪽이 비어 있었고, 집값이 data.go.kr 데이터셋 3개를 더 붙이자 도메인별 항목 방식이 한계. 이름 하나로 접고 데이터셋별 활용신청·쿼터는 env 주석에 목록화. 코드는 이름 치환뿐(로직 무변경). 상세·운영 주의는 [bus](bus.md).
 - **2026-08-22 앱 화면 합류 — "앱 연동 제외" 결정 번복**(`e348032`·`563890a`·`5f5f0e3`): 2026-08-17 경엔 대기 기능을 웹 전용으로 두기로 했으나, 훅·계약·유틸이 이미 플랫폼 중립이라 화면만 세로 카드로 이식하는 비용이 낮았고 날씨·일상지도와 함께 "홈 내 위치 카드 → 상세 화면" 허브가 필요했다. 탭은 늘리지 않고 Stack 화면으로. 30/90일은 SVG 선 차트 대신 등급색 View 막대(라이브러리 없이 "어느 날이 나빴나"), 측정소 지도는 대중교통 WebView 지도를 카드 높이로 재사용. 파생값은 `useMyLocationGlance` 로 승격해 웹 칩도 같은 훅을 쓴다.
 - **2026-08-22 칩 폭 예산·측정값 없음 처리**(`a062e7d`): `<sm` 은 `[📍 ☁26° ☂ · ●좋음]`(라벨·소수점 숨김, 360px 에서 '매우나쁨'까지 ~190px), `sm+` 라벨(6.5rem 말줄임)·소수 1자리, `lg+` 하늘 상태·PM2.5 수치. 측정소는 있어도 등급을 낼 수 없으면 대기 세그먼트를 통째로 생략 — 칩은 경고하는 자리가 아니다.
 - **2026-08-21 날씨·대기 통합 알약**(`9e197d3`): 저장 위치 하나에 칩 둘(AirLocationChip + 날씨)을 두면 라벨이 두 번 반복되고 두 반쪽이 따로 논다 → 알약 하나에 왼쪽(라벨+날씨 → `/weather?ll=`)·오른쪽(등급 → `/air?sido&station`) 두 링크, 경계선 대신 가운뎃점. 앞 6시간 강수형태 또는 확률 ≥60% 면 우산.
@@ -137,15 +140,15 @@ aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqire
 - **2026-08-21 공용 측위 훅 수정 — 명시 요청 10초 + TIMEOUT 1회 재시도, 캐시 5분**(`67f14cf`): 실측(Windows/Chrome WiFi) 콜드 측위 5,062ms·직후 두 번째 fresh 요청 10초 초과·캐시 히트 0ms. 5초 단발이던 `useUserLocation` 이 간헐 TIMEOUT(code 3)을 'unavailable' 로 뭉개 재시도 유도도 못 했다. 마운트 자동 요청은 5초 단발 유지(진입 직후 화면 튐 방지), `maximumAge` 60s→5분, 새 상태 `'timeout'`, 코어 `acquirePosition` 분리로 가짜 geolocation 계약 테스트. 버스/지하철은 직접 호출 10초라 영향 없었다.
 - **2026-08-21 내 위치 = 좌표 저장, 해석은 조회 시**(`a4284aa`): 측정소명을 저장하면 신설·폐지·개명에 깨진다. 좌표만 저장하고 `nearby?limit=1` 로 매번 해석. 하이브리드는 버스 즐겨찾기 미러지만 값이 1개라 union 대신 서버 우선·게스트 1회 업로드.
 - **2026-08-21 측정소정보 API 별도 도입 — TM 근접측정소 오퍼레이션 안 씀**(`c6ac640`): 대기오염정보엔 좌표가 없다. 전량(≈650) 24시간 캐시 + 로컬 haversine 이 근접측정소 API(TM 좌표 입력, 호출당 쿼터) + proj4 보다 단순하고 쿼터 0. dmX/dmY 는 값 범위로 판정(문서 불신). 신청 전엔 화면이 '활용신청 안내'를 띄우게 503 메시지의 코드 30 을 FE 가 해석.
-- **2026-08-21 초기 설계**(`7340743`): ① 시도별은 '전국' 1콜 캐시 후 `airSidoMatches` 포함 매칭 — 쿼터 17→1 + 2026-07 통합 라벨 '전남광주'·개별 '광주' 타임아웃 우회, 선택지도 통합 라벨(`AIR_SIDO_OPTIONS` 17종, 라벨 '광주·전남'). ② 게이트웨이 05/04·5xx **1회 재시도** — 버스/지하철 어댑터의 "재시도 없음" 규율에서 의도적으로 벗어난 지점(첫 호출 ~절반이 504 라 재시도 없이는 콜드 캐시 첫 화면이 자주 깨진다), 타임아웃 20초. ③ `InformCode` 미전송(업스트림이 무시하고 3종을 다 준다 — FE 가 코드 탭으로 나눈다). ④ 예보·주간예보 자동 모드 전일 폴백(명시 date 는 폴백 없음). ⑤ 키는 `AIRKOREA_API_KEY` → `BUS_API_KEY` 폴백. ⑥ 일일 한도 기본 450(500 에서 여유), 3MONTH 는 3콜로 계산. ⑦ 차트는 라이브러리 없이 인라인 SVG + 표 쌍둥이(툴팁이 유일 경로가 되지 않게), 등급색은 에어코리아 관행(파랑/초록/노랑/빨강)을 빌리되 항상 글자와 함께.
+- **2026-08-21 초기 설계**(`7340743`): ① 시도별은 '전국' 1콜 캐시 후 `airSidoMatches` 포함 매칭 — 쿼터 17→1 + 2026-07 통합 라벨 '전남광주'·개별 '광주' 타임아웃 우회, 선택지도 통합 라벨(`AIR_SIDO_OPTIONS` 17종, 라벨 '광주·전남'). ② 게이트웨이 05/04·5xx **1회 재시도** — 버스/지하철 어댑터의 "재시도 없음" 규율에서 의도적으로 벗어난 지점(첫 호출 ~절반이 504 라 재시도 없이는 콜드 캐시 첫 화면이 자주 깨진다), 타임아웃 20초. ③ `InformCode` 미전송(업스트림이 무시하고 3종을 다 준다 — FE 가 코드 탭으로 나눈다). ④ 예보·주간예보 자동 모드 전일 폴백(명시 date 는 폴백 없음). ⑤ 키는 `AIRKOREA_API_KEY` → `BUS_API_KEY` 폴백(→ 2026-09-02 `DATA_GO_KR_API_KEY` 하나로 대체). ⑥ 일일 한도 기본 450(500 에서 여유), 3MONTH 는 3콜로 계산. ⑦ 차트는 라이브러리 없이 인라인 SVG + 표 쌍둥이(툴팁이 유일 경로가 되지 않게), 등급색은 에어코리아 관행(파랑/초록/노랑/빨강)을 빌리되 항상 글자와 함께.
 
 ## Gotchas [coverage: high — 12 sources]
 
 - **측정소정보 API(15073877) 는 활용신청이 따로** — 같은 계정 키라도 신청 전엔 게이트웨이 30 → 503. 웹은 "키 설정"이 아니라 "활용신청" 안내로 분기하지만 앱은 일반 오류 문구만 낸다(`AirStationsMapCard` 503 → `StateBlock` error). 승인 반영까지 수십 분~반나절.
 - **출처 표기 유형이 웹·앱에서 다르다** — 웹 [AirLegend](../../apps/web/src/components/air/AirLegend.tsx)는 "공공누리 제3유형(출처표시·변경금지)", 앱 [air/index.tsx](../../apps/mobile/app/air/index.tsx) 푸터는 "공공누리 제1유형". 어느 쪽이 데이터셋의 실제 이용허락 유형인지 포털에서 확인해 맞춰야 한다.
 - **`schema.prisma` 의 `AirUserLocation.source` 주석이 낡았다** — `'geolocation' | 'manual'` 이라 적혀 있지만 계약은 `station`·`place` 까지 4종(`aa3a09e`·`7704f8c`). DB 는 문자열이라 동작엔 영향 없고 서비스 `toItem` 이 4종을 접는다.
-- **서비스 인스턴스가 라우트당 1개라 테스트가 캐시 순서에 묶인다** — [air-quality.test.ts](../../apps/friendly/src/modules/air-quality/air-quality.test.ts)는 인증 실패(503)를 캐시 전 첫 테스트에서 검증해야 stale 폴백이 끼어들지 않고, 502 검증은 앞 describe 에서 성공본이 캐시된 `bad-stations` 대신 별도 키(예보 명시 날짜 `2000-01-01`)를 쓴다. TTL/stale/쿼터 경계는 서비스를 직접 만들어 `now`·`dailyLimit` 주입으로 제어(가짜 타이머 없음). `env.ts` 가 모듈 로드 시 파싱하므로 `vi.hoisted` 로 `AIRKOREA_API_KEY` 를 먼저 심는다.
-- **라이브 스모크 skip 조건** — [airkorea-api.live.test.ts](../../apps/friendly/src/modules/air-quality/airkorea-api.live.test.ts)는 `AIRKOREA_API_KEY || BUS_API_KEY` 가 비었거나 `'test-air-key'`/`'test-bus-key'` 면 `describe.skipIf`, 실행 중에도 `AirKoreaApiAuthError`(미승인)·코드 04/05·5xx·fetch 실패·aborted·파싱 실패는 코드 결함이 아니라 `ctx.skip()`. 쿼터를 아끼려 3~4콜만 쓰고 caller 시그널 25초.
+- **서비스 인스턴스가 라우트당 1개라 테스트가 캐시 순서에 묶인다** — [air-quality.test.ts](../../apps/friendly/src/modules/air-quality/air-quality.test.ts)는 인증 실패(503)를 캐시 전 첫 테스트에서 검증해야 stale 폴백이 끼어들지 않고, 502 검증은 앞 describe 에서 성공본이 캐시된 `bad-stations` 대신 별도 키(예보 명시 날짜 `2000-01-01`)를 쓴다. TTL/stale/쿼터 경계는 서비스를 직접 만들어 `now`·`dailyLimit` 주입으로 제어(가짜 타이머 없음). `env.ts` 가 모듈 로드 시 파싱하므로 `vi.hoisted` 로 `DATA_GO_KR_API_KEY`(`'test-air-key'`)를 먼저 심는다 — 버스(`'test-bus-key'`)·날씨(`'test-kma-key'`) 테스트도 2026-09-02 부터 **같은 변수**에 각자 플레이스홀더를 `||` 로 심으므로, 격리 없이 돌 때 다른 파일 값이 남아 있어도 덮어쓰지 않는다(어댑터는 mock 이라 값 자체는 무관 — 라이브 스모크가 두 플레이스홀더를 모두 거르는 이유).
+- **라이브 스모크 skip 조건** — [airkorea-api.live.test.ts](../../apps/friendly/src/modules/air-quality/airkorea-api.live.test.ts)는 `DATA_GO_KR_API_KEY` 가 비었거나 `'test-air-key'`/`'test-bus-key'` 면 `describe.skipIf`, 실행 중에도 `AirKoreaApiAuthError`(미승인)·코드 04/05·5xx·fetch 실패·aborted·파싱 실패는 코드 결함이 아니라 `ctx.skip()`. 쿼터를 아끼려 3~4콜만 쓰고 caller 시그널 25초.
 - **`stationCode` 는 측정소정보에선 항상 null, 시도별(ver 1.5)에선 채워진다** — 지도 마커·조인은 `stationName` 키. 동명 측정소는 주소 시도 ↔ 측정 `sidoName` 매칭으로 고르고 없으면 첫 후보.
 - **'전국' 응답은 673행·≈340KB·수 초** — 첫 화면이 느린 이유. 콜드 캐시 첫 호출 ~절반이 504 라 재시도 1회가 필수이며 20초 타임아웃과 짝이다. 쿼터 카운터는 실패해도 호출 직전에 증가한다(시도 자체가 한도를 소모).
 - **`"24:00"` 은 익일 00:00 이지만 일평균 묶음은 전일** — `airDataTimeToIso` 는 날짜를 넘기고, `foldDaily` 는 `dataTime` 원문 날짜로 묶는다(에어코리아 01~24시 관행). 띠 축 라벨은 "24시" 를 그대로 둬 하루 경계를 드러낸다.
@@ -158,8 +161,8 @@ aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqire
 ## Sources [coverage: high — 87 sources]
 
 **friendly**
-- [apps/friendly/src/modules/air-quality/air-quality.route.ts](../../apps/friendly/src/modules/air-quality/air-quality.route.ts) — 공개 GET 8
-- [apps/friendly/src/modules/air-quality/air-quality.service.ts](../../apps/friendly/src/modules/air-quality/air-quality.service.ts) — 캐시·쿼터·정규화·좌표 축 판정
+- [apps/friendly/src/modules/air-quality/air-quality.route.ts](../../apps/friendly/src/modules/air-quality/air-quality.route.ts) — 공개 GET 8, `serviceKey: env.DATA_GO_KR_API_KEY`(2026-09-02)
+- [apps/friendly/src/modules/air-quality/air-quality.service.ts](../../apps/friendly/src/modules/air-quality/air-quality.service.ts) — 캐시·쿼터·정규화·좌표 축 판정, 503 문구 새 키 이름
 - [apps/friendly/src/modules/air-quality/air-quality.test.ts](../../apps/friendly/src/modules/air-quality/air-quality.test.ts) — 22건(라우트 15 + 서비스 캐시·stale·쿼터·폴백·in-flight 7)
 - [apps/friendly/src/modules/air-quality/airkorea-api.adapter.ts](../../apps/friendly/src/modules/air-quality/airkorea-api.adapter.ts)
 - [apps/friendly/src/modules/air-quality/airkorea-api.adapter.test.ts](../../apps/friendly/src/modules/air-quality/airkorea-api.adapter.test.ts) — 15건(URL/키 3·게이트웨이 분류/재시도 4·래퍼 8)
@@ -168,7 +171,7 @@ aliases: [대기정보, 대기질, 공기질, 에어코리아, ArpltnInforInqire
 - [apps/friendly/src/modules/air-quality/__fixtures__/](../../apps/friendly/src/modules/air-quality/__fixtures__/) — 10파일: `sido-all.json`(전국 실응답 8행 발췌, 통신장애 행 포함) · `station-daily.json`(강남구 DAILY 7행, "24:00" 포함) · `bad-stations.json`(3행) · `forecast.json`(4행, imageUrl1~9) · `weekly.json`(1행, 신뢰도) · `empty.json`(주간예보 당일 미발표 실응답) · `gateway-auth-error.json`(30) · `gateway-timeout.json`(05) · `msrstn-list.json`(측정소정보 실응답 673개소 중 5행) · `msrstn-list.synthetic.json`(문서 샘플 기반 합성 — 축 뒤집힘·결측 분기)
 - [apps/friendly/scripts/probe-airkorea-api.ts](../../apps/friendly/scripts/probe-airkorea-api.ts) · [apps/friendly/package.json](../../apps/friendly/package.json) — `probe:airkorea`
 - [apps/friendly/prisma/migrations/20260821060230_add_air_user_location/migration.sql](../../apps/friendly/prisma/migrations/20260821060230_add_air_user_location/migration.sql) · [apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma) — `AirUserLocation`
-- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) · [apps/friendly/.env.example](../../apps/friendly/.env.example) — `AIRKOREA_API_KEY`, `BUS_API_KEY` 폴백
+- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) · [apps/friendly/.env.example](../../apps/friendly/.env.example) — `DATA_GO_KR_API_KEY`(2026-09-02 `3d9dfed`; 구 `AIRKOREA_API_KEY`·`BUS_API_KEY` 폴백 항목 삭제)
 - [apps/friendly/src/app.ts](../../apps/friendly/src/app.ts)(autoload) · [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts)(`RATE.transitRealtime`) · [apps/friendly/src/lib/reply-upstream-error.ts](../../apps/friendly/src/lib/reply-upstream-error.ts) · [apps/friendly/src/modules/bus/bus-api.adapter.ts](../../apps/friendly/src/modules/bus/bus-api.adapter.ts)(`toServiceKeyPart`)
 
 **api-contract**

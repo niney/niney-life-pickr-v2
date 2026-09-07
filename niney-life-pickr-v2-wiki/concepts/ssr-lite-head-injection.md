@@ -1,7 +1,7 @@
 ---
 concept: ssr-lite-head-injection
-last_compiled: 2026-06-25
-topics_connected: [friendly, settlement, web]
+last_compiled: 2026-09-07
+topics_connected: [friendly, settlement, web, tarot, saju-c, saju-g, vote]
 status: active
 ---
 
@@ -17,11 +17,16 @@ SPA 라우트를 백엔드가 가로채, 빌드된 `index.html` 의 `<head>` 에
 
 ## Instances
 
+- **2026-09-06~07 (25차)** in [saju-c](../topics/saju-c.md) / [saju-g](../topics/saju-g.md): 사주 두 구현이 각각 `saju-preview.ts`(`/saju-c/s/:token` + `/image.png?format=og|story`)·`saju-g-preview.ts`(`/saju-g/s/:token`)로 같은 골격. 사주(C) 공유 이미지는 satori 폰트(Plex)에 한자가 없어 `build:saju-glyphs` 로 만든 PNG 글리프를 인장 `<img>`·`graphemeImages` 로 넣는다 — SSR-lite 이미지 렌더의 첫 CJK 우회. 생년월일은 `shareBirth` 일 때만 노출, 아니면 마스킹.
+- **2026-09-05 (25차)** in [tarot](../topics/tarot.md) (`98df15a`): `tarot-preview.ts` — 토큰 공개 페이지 OG + satori/resvg 공유 이미지(OG 1200×630·세로 1080×1920). 게스트는 입력 재전송으로 행을 만들고 회원은 readingId 로 토큰. nginx `^~ /tarot/s/` 블록이 `.png` 정규식 캐시 location 보다 먼저 잡혀야 한다(운영 실측 `13b87e8`).
+- **2026-08-16 (21차)** in [vote](../topics/vote.md): `vote-preview.ts` — `/vote/<token>` 카톡 미리보기. 없어도 SPA 는 동작(메타만 빠짐).
 - **2026-06-01 (16차 도입)** in [../topics/settlement](../topics/settlement.md) / [../topics/friendly](../topics/friendly.md): **정산 공유 OG**. [share-preview.ts](../../apps/friendly/src/modules/settlement/share-preview.ts) 의 `registerSharePreview(app)` 가 `/share/settlements/:token` 과 단축 별칭 `/s/:token` 을 가로채, 빌드된 `index.html` 의 `<head>` 에 정산 요약 OG 메타(`og:title`=식당명+"정산", `og:description`=`총 N원 · M명`)를 주입한다. **프라이버시 — 참가자 '이름'은 넣지 않는다**(식당명·총액·인원수까지만, 크롤러 캐시 박제 회피). `og:image` 는 owner 가 공유 시 고른 모드에 따라 동적: `restaurant`(식당 사진 — 갤러리 특정 1장 고정 또는 `seedFromToken` 토큰 시드 결정적 랜덤) 또는 정산표 PNG. PNG 는 [settlement-card.ts](../../apps/friendly/src/modules/settlement/settlement-card.ts) 가 satori(레이아웃→SVG) + resvg(SVG→PNG) 로 즉석 렌더(폰트 IBMPlexSansKR 번들), `/share/settlements/:token/image.png` 라우트로 노출. 만료/없는 토큰 → 일반 OG 폴백(`OG_IMAGE_PATH` 기본 이미지), PNG 라우트는 404. 사람은 같은 URL 의 [SharedSettlementPage](../../apps/web/src/routes/settlement/SharedSettlementPage.tsx) SPA 로 본다.
 - **2026-06-25 (18차 신규)** in [../topics/friendly](../topics/friendly.md) / [../topics/web](../topics/web.md): **맛집 공유/SEO**. [restaurant-preview.ts](../../apps/friendly/src/modules/restaurant/restaurant-preview.ts) 의 `registerRestaurantPreview(app)` 가 `/r/:placeId`(상세 대표 URL) + `/sitemap.xml` + `/robots.txt` 를 등록한다. `/r/:placeId` 는 같은 SSR-lite head 주입(`getPublicSeoMeta(placeId)` 로 canonical 병합한 식당명·카테고리·주소·평점·리뷰수)에 더해 **두 가지가 정산보다 풍부**하다: ① **JSON-LD** — `<script type="application/ld+json">` 에 schema.org `Restaurant`(+ `AggregateRating`/`GeoCoordinates`/`PostalAddress`/`servesCuisine`/`telephone`) 를 박아 검색엔진 리치 결과를 노린다. ② **`<noscript>` SEO 본문** — `injectOg` 가 `<body>` 직후에 `<h1 itemprop="name">`·대표 메뉴 `<ul>`·대표 사진 `<img>` 를 가진 microdata 본문을 추가(정산 OG 는 head 메타만, 여기는 head + noscript body). 없는 placeId → 404 + `<meta name="robots" content="noindex">`. 봇=서버 HTML, 사람=`/r` SPA([RestaurantsV2Page](../../apps/web/src/routes/RestaurantsV2Page.tsx) 가 `useMatch('/r/:placeId')` → `isShareRoute` 로 리스트를 숨기고 지도+상세 레이아웃 재사용 — 공개 페이지 코드 0 추가).
 - **공통 메커니즘 (두 파일이 사실상 같은 골격을 복제)** — `candidateIndexPaths()` 가 `__dirname` 과 `process.cwd()` 에서 위로 **7단계** 올라가며 `apps/web/dist/index.html`·`web/dist/index.html` 후보를 만들어 처음 읽히는 것을 쓴다(dev=tsx src 실행 vs prod=tsup 번들 dist 라 `__dirname` 이 달라 고정 상대경로 불가). `WEB_INDEX_PATH` env 가 있으면 그것만. 읽은 HTML 은 `cachedIndex` 로 **프로세스 수명 1회 캐시 — 재배포 후 `pm2 reload` 필수**(해시 자산명이 바뀐 새 index.html 을 다시 읽으려면 프로세스 재기동). `getPublicOrigin(req)` 는 `PUBLIC_ORIGIN` env → `X-Forwarded-Proto` + `host` → `ninelife.kr` 폴백 순으로 origin 을 도메인 하드코딩 없이 파생. `injectOg()` 는 `<title>` 정규식 교체 + `</head>` 앞 메타 삽입(맛집은 추가로 `<body>` 직후 noscript 삽입). 둘 다 [app.ts](../../apps/friendly/src/app.ts) 가 autoload 밖에서 `registerSharePreview(app)` / `registerRestaurantPreview(app)` 로 명시 호출 — `/api/v1` prefix 가 붙으면 안 되는 origin 루트 경로라서.
 
 ## What This Means
+
+**2026-09 추가**: 등록 순서가 `app.ts` 한 곳(`registerSharePreview → restaurant → vote → tarot → saju → saju-g`)에 모이면서 "SPA 라우트를 백엔드가 가로챈다"는 결정이 여섯 도메인의 표준이 됐다. 새 공유 기능 체크리스트: preview 모듈 + nginx `^~` 블록(`ops/nginx/`) + Vite dev 프록시 정규식 + (이미지가 있으면) satori 폰트 커버리지 확인.
 
 이 패턴은 **풀 SSR 프레임워크(Next 등)를 도입하지 않고도 SPA 를 유지하면서 SNS/검색 미리보기만 해결하는 최소 침습 기법**이다. CLAUDE.md 의 "Docker 추가 금지 / 단일 인스턴스" 전제, 그리고 SSR 런타임을 새로 들이지 않는다는 결과 일관성과 맞물린다 — 백엔드가 이미 떠 있는 Fastify 인스턴스에 라우트 셋 개만 더 등록하고, 빌드된 SPA 산출물을 그대로 재사용한다. 서버가 React 를 렌더하지 않으므로 hydration mismatch·SSR 데이터 패칭·런타임 추가 의존이 전부 없다.
 

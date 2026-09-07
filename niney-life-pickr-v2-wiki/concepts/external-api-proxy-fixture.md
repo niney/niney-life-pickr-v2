@@ -1,7 +1,7 @@
 ---
 concept: 외부 API 어댑터 — friendly 프록시 + 정규화 + probe→fixture
-last_compiled: 2026-08-30
-topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map]
+last_compiled: 2026-09-07
+topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing]
 status: active
 ---
 
@@ -15,6 +15,7 @@ status: active
 
 ## Instances
 
+- **2026-09** in [housing](../topics/housing.md) (`probe-rtms-api.ts` + `housing-ingest.service.ts`): RTMS 는 HTTPS **XML**(`LAWD_CD`×`DEAL_YMD`) — probe 로 응답 형식·에러 코드(활용신청 없음 = 503 인증 30)를 먼저 고정하고 어댑터가 정규화. 다른 도메인과 달리 **요청 시점 프록시가 없다**(적재 전용) — 어댑터 recipe 중 "probe→fixture→정규화" 세 다리만 쓰고 "프록시" 다리는 생략한 변형. `DATA_GO_KR_API_KEY` 통일(`3d9dfed`)로 8종 키 이름·`|| BUS_API_KEY` 폴백이 사라진 계기가 된 도메인.
 - **2026-07** in [[../topics/bus]] (`bus-api.adapter.ts` + `probe-bus-api.ts`): recipe 를 네 다리 다 갖춘 **정본**. `callBusApi` 가 `ws.bus.go.kr` 평문 HTTP(CORS 없음)를 friendly 에서만 호출하고, XML 을 `fast-xml-parser` 로 파싱해 타입드 래퍼 9종으로 정규화. **필드명 불신의 교과서** — 서울시 응답은 `tmX/tmY` 필드에 WGS84 든 GRS80 TM 이든 섞여 오므로 `toLatLng` 가 후보 쌍 `[tmX,tmY]→[gpsX,gpsY]→[posX,posY]` 를 순회하며 **한국 WGS84 값 범위(lat 33~39, lng 124~132)에 드는 첫 쌍**을 채택(proj4 불필요). 마스킹: `buildUrls` 가 `requestUrl` 에 `serviceKey=***` 만 남기고 평문 키 URL 은 보관 안 함(`bus-api.adapter.ts` line 34·146). probe→fixture: `probe-bus-api.ts` 가 실응답을 `data/bus-probe/` 에 떨구고, 그 발췌를 `__fixtures__/*.xml` 12개(`stations-multi`·`arrivals`·`route-path`·`auth-error-headercd7`·`no-result` 등)로 박아 `bus-api.adapter.test.ts` 의 `readFixture` 가 소비 — 2026-07-02/04 실측으로 좌표계·`headerCd` 인증실패 두 형태를 확정.
 - **2026-05** in [[../topics/crawl]] (`naver-place.playwright.adapter.ts` + `naver-*.http.adapter.ts` + `dev-capture-visitor.ts`): 네이버 소스는 어댑터 비용이 갈린다 — 홈/방문자 리뷰는 `playwright-extra` + stealth 풀세션(anti-bot 우회), 검색·방문자 리뷰 수는 HTTP GraphQL 직접(`naver-search.http.adapter.ts`·`naver-review-stats.http.adapter.ts`). 어느 쪽이든 friendly 가 유일 호출자이고 결과를 `api-contract` 의 `NaverPlaceData` zod 모양으로 정규화. **probe→fixture 의 변형** — 정적 fixture 대신 `dev-capture-visitor.ts` 가 헤디드 캡처를 `__debug__/after.json` 에 떨구되 **내부에 어댑터의 `parseVisitorReviewsFromCaptured` 와 동일한 파서를 미러**해 `dev:api` 없이 파이프라인을 E2E 검증(라이브 미러형). `x-wtm-graphql` 헤더처럼 봇 차단용 시크릿성 헤더도 `buildWtmHeader` 가 서버측에서만 만든다.
 - **2026-06** in [[../topics/crawl]] (`tabling-search|shop|place|sitemap.http.adapter.ts` + `probe-tabling.ts`): 무인증 REST 소스의 4어댑터 분포. **필드명 불신이 극단으로** — 테이블링 좌표는 string("37.54…")으로 와서 `numOrNull` 이 number 변환하고, 리뷰 `imageUrls`/`menuOrders` 는 string 또는 `{imageUrl|url|origin}` object 양쪽을 방어 추출하며, `cursorId` 필드는 이름과 달리 페이지네이션 토큰이 **아니다**(`lastIdx` 가 진짜 토큰). 미입점 place 는 JSON-LD 가 `<script>` 태그가 아니라 **Next.js RSC flight(`self.__next_f.push`) 안에 이중 인코딩**돼 있어 flight 디코드 후 한 번 더 파싱. friendly 가 `Referer`/`Origin` 헤더를 정합성용으로 동봉해 브라우저 CORS 를 우회. probe: `probe-tabling.ts`/`probe-tabling-bulk.ts`/`probe-tabling-promote.ts` 가 실응답을 확정.

@@ -1,7 +1,7 @@
 ---
 concept: quota-proportional-loading
-last_compiled: 2026-08-30
-topics_connected: [bus, subway, transit, friendly, air-quality, weather, life-map]
+last_compiled: 2026-09-07
+topics_connected: [bus, subway, transit, friendly, air-quality, weather, life-map, housing]
 status: active
 ---
 
@@ -17,6 +17,7 @@ status: active
 
 ## Instances
 
+- **2026-09-02** in [housing](../topics/housing.md): 요청 경로 6개는 전부 **로컬 DB 파생 표만**(쿼터 0), 쿼터는 적재에만 — RTMS 실거래는 `planHousingPartitions` 가 연월을 **최신부터** 계획해 일일 한도(1만 콜)에 걸려도 최근 달이 먼저 채워지고, 건축물대장(활용신청·일 1만 콜 분할)은 큰 단지부터 + deploy 자동 실행에서 제외(수동만). VWorld 지오코딩은 [life-map](../topics/life-map.md) 캐시 공유로 운영 호출 0. `HousingRefreshScheduler`(croner, `HOUSING_REFRESH_CRON`)가 최근 N개월만 주기 갱신.
 - **2026-08-21~30** in [[../topics/life-map]]: 사용자 요청 경로는 전부 로컬 DB(쿼터 0). 쿼터는 적재 시점에만 — 화장실 5.3만 행의 VWorld 지오코딩을 `--max-calls`·영구 `LifeGeocodeCache`·notfound 캐시·`--offline` 로 나눠 소비하고 결과 gz 를 커밋(1일차 78.9%, 2일차 재실행 잔여), HIRA 전량 ~79콜/일 10,000. 지역 이동 검색의 VWorld search 프록시만 런타임 소비 — 250ms 디바운스 + 서버 LRU 500·10분 + 클라 staleTime 10분 + 60/분. "정적=로컬 적재" 다리를 **배포 시점 지오코딩 예산 → 산출물 커밋** 으로 확장한 인스턴스(→ [[open-data-master-load]]).
 - **2026-08-21** in [[../topics/weather]]: 정적 = 245 지점표·LCC 격자 변환이 클라이언트 utils(쿼터 0, 서버는 `nx,ny` 만 받아 격자가 캐시 키) / 반복 = **발표 슬롯 캐시**(실황 매시 :10, 초단기 :45, 단기 02·05·…·23시+10분, 중기 06·18시 — 새 슬롯 NO_DATA 면 한 슬롯 이전으로 1회 폴백 5분 TTL, stale 3h/6h/24h) + AWS 전국 1콜 2분 / 트리거 = 지점 선택·전국 전망 토글 시에만 / 최후 = 일일 9,000(개발계정 10,000) + 60/분. 식단 추천 라우트가 **별도 `WeatherService` 인스턴스**를 세워 같은 키를 두 카운터가 나눠 쓰는 회계 분리가 함정.
 - **2026-08-21** in [[../topics/air-quality]]: 일 500 → 서비스 한도 450(Asia/Seoul 리셋). 시도별 조회는 '전국' 1콜(673개소 ≈340KB)을 캐시해 17시도 팬아웃을 1콜로 접고, TTL 측정 10분/예보 20분/주간 60분/측정소 목록 24h + stale 폴백(3h/24h/7d) + in-flight 합류, 3MONTH 는 3콜 가중, 예보 전일 폴백 2콜 예산. 클라는 10분 refetch(비활성 탭 중단) + 상주 칩만 focus refetch. 정적 데이터(측정소 673개소)는 로컬 적재 대신 **24h 캐시**로 대체한 점이 지하철·일상지도와 다른 선택.

@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-09-07 (25th compile)
+
+**Topics updated:** ai(1300줄·71 sources), api-contract(2038줄·58), friendly(1347줄·219), shared(1502줄·149), web(2486줄·218), mobile(760줄·183), utils(429줄·83), project-overview(1067줄·128), food(321줄·89) + 소폭 bus(325줄·58)·air-quality(201줄·87)·weather(242줄·74)·life-map(307줄·78)·meal(212줄·82)·map(488줄·47)
+**New topics:** tarot(191줄·66 sources), saju-c(249줄·73), housing(285줄·70), usage-quota(165줄·36) — `saju-g`(137줄·40)는 2026-09-06~07 다른 세션이 이미 작성해 이번엔 참조만
+**Untouched topics:** analytics, auto-discover, canonical, config, crawl, logs, menu-grouping, random-crawl, review-clustering, review-search, schedule, settlement, subway, telegram, transit, vote(이번 범위 변경 없음)
+**New concepts:** embedded-webview-bridge, anonymous-usage-quota, webgl-stage-lite-fallback, golden-set-precision-gate, static-first-llm-enrichment
+**Concepts updated:** ssr-lite-head-injection(타로·사주 C/G·투표 인스턴스 + 등록 순서 체크리스트), guest-server-hybrid(사주 프로필·타로 기록), versioned-llm-prompts(타로 2·사주 C 2·G 4/2), platform-ui-split(임베드 예외 규칙), in-memory-singleton-gates(사주 job 레지스트리·게이트/한도 역할 분리), open-data-master-load·quota-proportional-loading·external-api-proxy-fixture·map-sheet-shell(집값 인스턴스)
+**Sources scanned:** ~2412 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1314 — 24차 1064 → +250)
+**Sources changed:** 24차 위키 커밋 3960643(2026-08-30) 이후 ~45 커밋 — 집값 2, 메뉴 칼로리 엔진 12, 키 통일·배포 2, 타로 9(+앱 임베드 1), 사주(C) 16(엔진·API·UI·이미지·개명·5~7차), 사주(G) 4(다른 세션), nginx 원본 1
+**Notes:** 부모가 브리핑(`COMPILE_BRIEF.md`) + 병렬 서브에이전트 14개로 토픽, 부모가 컨셉·schema·INDEX·log·state·CONTEXT. 1차 병렬 실행이 사용자 세션 한도(15:20 리셋)로 중간에 끊겨 friendly(Data 이후)·project-overview(API Surface 이후)·utils(전체)를 2차 에이전트 3개로 마무리 — 나머지 11개는 끊기기 전 완료 확인(섹션별 2026-09 언급·Sources 링크로 점검). 컴파일 중 에이전트가 찾은 실제 코드 버그: `MySajuReadingPage` 삭제 후 `navigate('/me/saju')`(개명 누락) → 위키 밖에서 `/me/saju-c` 로 수정(별도 커밋 대상). PLAN↔코드 어긋남은 각 토픽 Gotchas 에 기록(타로 한도 80→90%·메뉴 97종·효과음 미구현, 사주 한도 기본값·섹션 토큰·미구현 v2 항목, usage-quota scope 4종, food 어휘 kind 10종·`invalidate()` 미호출 등). 위키 파일 줄바꿈은 혼재(일부 CRLF) — 생성 스크립트는 파일별 줄바꿈을 보존.
+
 ## 2026-09-07 (사주(C)·사주(G) 리베이스 통합)
 
 원격 C 구현과 G의 최종 스냅샷을 결합했다. C 소스와 공개 migration을 보존하고, 미배포 G migration은 C 데이터·설정을 건드리지 않는 독립 생성으로 정리했다. 두 이름의 메뉴·API·공유 OG·AI·한도를 함께 노출한다. 기존 C 테스트도 현재 스키마의 빈 임시 DB를 사용한다. 타입 검사와 706개 테스트, 빈 DB 전체 migration replay가 통과했다. 범위 한정 직접 갱신이며 전체 위키 재컴파일은 아니다.

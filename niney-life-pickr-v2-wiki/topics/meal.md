@@ -1,6 +1,6 @@
 ---
 topic: meal
-last_compiled: 2026-08-30
+last_compiled: 2026-09-07
 sources_count: 82
 status: active
 aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recognition, 식단인식, meal-recommendation, 식단추천, meal-preference, 알레르기, 식단통계, meal-reminder, 식단알림, meal-backup, 식단백업, photo-retention, 사진보존, MealMutationBarrier, FoodRestaurantMatches, 파는곳찾기, 판매처-탐색, 판매처-바텀시트, restaurant_opened, MealRecommendView, seed-meal-samples, 검증용-씨딩, prod-db-guard, 운영DB-안전장치, expo-document-picker, lazy-native-module, MealDataManagementCard, PLAN-meal]
@@ -125,7 +125,7 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 ## Gotchas [coverage: high — 28 sources]
 
 - **판매처 결과는 판매 보장이 아니다.** 반경 5km·최대 5곳, 정렬은 근거 등급 우선이라 "가장 가까운 식당" 이 1등이 아닐 수 있다. 0건은 "수집 근거 없음"이지 "근처에 없음"이 아니며, 이름 검색 폴백은 exact 근거 없이 전체 식당 검색이다.
-- **추천의 날씨 조회는 `/weather` 라우트와 별도 `WeatherService` 인스턴스다.** [meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)가 `new WeatherService({ serviceKey: KMA_API_KEY || BUS_API_KEY })` 를 자체 생성하므로 발표 슬롯 캐시와 일일 업스트림 쿼터(`DEFAULT_DAILY_UPSTREAM_LIMIT` 9,000 — 인스턴스 필드 `quota`)가 날씨 페이지 쪽 인스턴스와 분리된다. 같은 data.go.kr 키를 두 카운터가 나눠 쓰고 캐시도 공유하지 않는다 — 합산 소비는 어느 쪽 카운터에도 안 보인다([weather](weather.md)).
+- **추천의 날씨 조회는 `/weather` 라우트와 별도 `WeatherService` 인스턴스다.** [meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)가 `new WeatherService({ serviceKey: env.DATA_GO_KR_API_KEY })`(2026-09-02 `3d9dfed` 부터 — 그 전엔 `KMA_API_KEY || BUS_API_KEY`; 이 라운드 식단 모듈의 유일한 변경) 를 자체 생성하므로 발표 슬롯 캐시와 일일 업스트림 쿼터(`DEFAULT_DAILY_UPSTREAM_LIMIT` 9,000 — 인스턴스 필드 `quota`)가 날씨 페이지 쪽 인스턴스와 분리된다. 같은 data.go.kr 계정 공용 키를 두 카운터가 나눠 쓰고 캐시도 공유하지 않는다 — 합산 소비는 어느 쪽 카운터에도 안 보인다([weather](weather.md)). 운영 `.env` 에 옛 이름만 남아 있으면 키 없음으로 취급돼 추천은 계절 추정으로만 돈다(에러는 아님).
 - **`seed:meal-samples` 는 `.env` 의 `DATABASE_URL` 을 그대로 쓴다.** 막는 건 `prod.db` 패턴뿐이라 다른 이름의 운영 DB 는 못 막는다 — 사본 절차가 기본. 표식은 memo 하나라 memo 를 편집한 기록은 `--undo` 대상에서 빠진다.
 - **`expo-document-picker` 는 지연 로드 — 모듈 없는 빌드에선 백업 불러오기만 꺼진다.** 다른 새 네이티브 모듈을 더할 때도 최상위 import 를 피해야 같은 사고가 안 난다(prebuilt RN Release 링크 문제는 [mobile](mobile.md)).
 - **검색은 페이지를 받은 뒤 하는 client filter가 아니다.** `q`, 날짜·slot·mealType·source를 server cursor 전에 적용한다. cursor는 `(eatenAt,id)`라 같은 시각 기록도 건너뛰지 않는다.

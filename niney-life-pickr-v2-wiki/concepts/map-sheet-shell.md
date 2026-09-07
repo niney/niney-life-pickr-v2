@@ -1,7 +1,7 @@
 ---
 concept: 지도 + 바텀시트 화면 골격 — 시트 위치에서 헤더·지도 인셋이 파생되는 단일 상태
-last_compiled: 2026-08-30
-topics_connected: [web, mobile, map, bus, subway, transit, life-map]
+last_compiled: 2026-09-07
+topics_connected: [web, mobile, map, bus, subway, transit, life-map, housing]
 status: active
 ---
 
@@ -17,6 +17,7 @@ status: active
 
 ## Instances
 
+- **2026-09-02** in [housing](../topics/housing.md) (`254fb76`): [LifeMapPage](../topics/life-map.md) 와 같은 뼈대 — URL 이 진실(`?ll&z&sel…`), 데스크톱 좌 패널 400px(`LifeGoToBox` + `HousingFilterBar`) / 모바일 subBar + 지도 fixed + 목록 시트(면적 구간 칩) + 상세 시트(`useMapSheets(sel)`), 마커 풀 `poolKey 'housing'`. 지역 이동은 새 박스를 만들지 않고 `LifeGoToBox` 에 `extraSections`(아파트 단지)·`onQueryChange` 만 더해 페이지가 자기 검색 훅을 돌린다(훅을 박스로 넘기지 않아 rules-of-hooks 유지). 셀 격자는 일상지도의 두 배(평당가 알약이 넓어서).
 - **2026-08-22** in [web](../topics/web.md) / [bus](../topics/bus.md) / [subway](../topics/subway.md) / [life-map](../topics/life-map.md) (`e84e4b9`): `restaurant-v2/BottomSheet` → `sheet/BottomSheet`(R100 이동) + 신규 `sheet/useMapSheets.ts` + `lib/useMediaQuery.ts`. 맛집 v2·버스·지하철·일상지도 4페이지가 같은 5단 골격으로 통일 — 대중교통 모바일의 "검색바 고정 / 지도 40dvh / 리스트 38dvh 세로 적층" 이 폐기되고 "결과 많음" 문단은 건수 행 인라인으로. `MapCanvas` 에 `flyTo bottomInset`·`MapMarker.fixedScale`·마커 Style 캐시(상한 6,000 — CCTV 수천 feature 프리즈 해소)가 함께 들어감.
 - **2026-08-22** in [mobile](../topics/mobile.md) / [life-map](../topics/life-map.md) (`4e414aa`·`fdb6ab9`·`342b3b7`): 일상지도 플로팅 헤더를 시트 full 에서 sticky 바로 보간(`4e414aa`), 시트 6개(맛집·대중교통·일상지도 각 List/Detail) `enableDynamicSizing=false`(`fdb6ab9`), 헤더가 활성 시트를 따라가도록 `detailOpenSV`/`headerSheetIndex`(`342b3b7`). 공용 훅은 추출하지 않고 세 화면에 **동일 복제** — 웹과 갈린 선택.
 - **2026-08-21** in [life-map](../topics/life-map.md) / [mobile](../topics/mobile.md) (`1d92acb`·`e348032`): 일상지도가 앱에서 대중교통 `TransitMapView`(`window.__cmd` 단일 진입 브리지) + 플로팅 헤더 + 시트 골격을 세 번째로 복제. 브리지 확장은 `setMarkers.icons` 아이콘 사전 + `BridgeMarker.fixedScale` 두 필드뿐(마커당 ~60B).

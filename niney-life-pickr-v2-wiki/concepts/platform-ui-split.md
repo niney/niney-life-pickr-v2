@@ -1,7 +1,7 @@
 ---
 concept: 로직 공유 / UI 플랫폼 분기
-last_compiled: 2026-08-30
-topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus, subway, meal, food, air-quality, weather, life-map]
+last_compiled: 2026-09-07
+topics_connected: [shared, web, mobile, project-overview, utils, map, settlement, review-search, review-clustering, bus, subway, meal, food, air-quality, weather, life-map, tarot, saju-c]
 status: active
 ---
 
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-09-05~06** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [mobile](../topics/mobile.md): **예외 규칙** — 3D 무대·satori 공유 이미지처럼 RN 이식 비용이 큰 기능은 앱이 웹을 WebView 로 임베드한다(`?embed=1` + 브리지). 로직 공유는 그대로(`@repo/utils` 엔진·`@repo/shared` 훅/스토어를 앱이 저장소만 바꿔 주입) 하되 UI 분기 자체를 건너뛴 첫 사례. 상세는 [embedded-webview-bridge](embedded-webview-bridge.md).
 - **2026-05-07** in [[../topics/shared]]: 8개 UI 프리미티브(Button, Divider, ErrorBanner, Input, Screen, SegmentedControl, Stack, Text) 모두 동일한 4-file quad 패턴. 디자인 토큰(`design/tokens.ts`)은 공통, 적용은 각 플랫폼 파일에서 다르게 (web → CSS 변수, native → StyleSheet).
 - **2026-05-07** in [[../topics/web]]: shared UI 프리미티브 + 별도로 `~/components/ui/`에 shadcn-style 로컬 UI(button.tsx, card.tsx, table.tsx 등). 어드민 콘솔처럼 web-only인 화면은 shared를 거치지 않고 로컬 컴포넌트로 직조.
 - **2026-05-07** in [[../topics/mobile]]: shared UI 프리미티브 + expo-router로 RN-native 네비게이션 트리. 어드민 UI는 의도적으로 빠져 있음.

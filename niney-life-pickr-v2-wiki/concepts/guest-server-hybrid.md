@@ -1,7 +1,7 @@
 ---
 concept: 게스트 로컬 + 로그인 서버 하이브리드
-last_compiled: 2026-08-30
-topics_connected: [bus, subway, web, shared, vote, settlement, air-quality, weather, mobile]
+last_compiled: 2026-09-07
+topics_connected: [bus, subway, web, shared, vote, settlement, air-quality, weather, mobile, tarot, saju-c, saju-g]
 status: active
 ---
 
@@ -15,6 +15,8 @@ status: active
 
 ## Instances
 
+- **2026-09-06~07** in [saju-c](../topics/saju-c.md) / [shared](../topics/shared.md): **출생 프로필** — 게스트는 `sajuProfileStore`(persist, 최대 10, primary 1) / 회원은 서버 `SajuProfile`(최대 10). 폼이 회원이면 서버 칩("이 계정에 저장"), 게스트면 로컬 칩("이 기기에 저장"). 같은 사주(생년월일시·성별·달력·윤달)를 다시 저장하면 새 행 대신 라벨만 갱신(`sameSajuBirth` 를 shared 로 올려 폼·스토어·서버가 같은 규칙, `f47e963`). 앱은 AsyncStorage 주입. 사주(G)도 같은 형태의 프로필 스토어(`sajuGProfileStore` + 저장소 마이그레이션).
+- **2026-09-04** in [tarot](../topics/tarot.md) (`fae8190`): **리딩 기록** — 게스트는 `tarotHistoryStore`(persist) 로컬, 회원은 서버 `TarotReading` 행 + `/me/tarot` 페이지. 로그인 직후 union 병합은 하지 않고(기록은 개인적이라) 로컬은 기기, 서버는 계정으로 분리 유지 — 하이브리드의 "병합 안 함" 변형.
 - **2026-07-04** in [bus](../topics/bus.md): 원형 확립 — busFavoriteStore(게스트) + useBusFavorites(하이브리드) + sync union 병합. StrictMode 이중 실행 가드(syncedRef)와 pending 연타 방어(ref Set)도 여기서 정립.
 - **2026-07-06** in [subway](../topics/subway.md): 1:1 이식(역/역×호선 2종). 패턴이 "복사 가능한 템플릿"임이 증명됨.
 - **2026-07-13** in [web](../topics/web.md)/[shared](../topics/shared.md): 맛집 즐겨찾기(`56b1c22`) — 대상 1종(placeId)이라 절반 규모로 미러. 좌표 nullable(식당 마스터가 nullable)이라는 도메인 차이만 계약에 반영.

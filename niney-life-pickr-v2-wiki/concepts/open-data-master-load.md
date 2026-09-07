@@ -1,7 +1,7 @@
 ---
 concept: 공공데이터 마스터 적재 수명주기 — 원본은 리포 밖, 로더 전량 교체, 가공 캐시만 커밋
-last_compiled: 2026-08-30
-topics_connected: [life-map, bus, subway, food, friendly, project-overview]
+last_compiled: 2026-09-07
+topics_connected: [life-map, bus, subway, food, friendly, project-overview, housing, tarot, saju-c]
 status: active
 ---
 
@@ -21,6 +21,8 @@ status: active
 
 ## Instances
 
+- **2026-09-03~06 (변형)** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [project-overview](../topics/project-overview.md): 같은 수명주기를 **이미지 자산**에 적용 — 제미나이 원본은 `assets-src/{tarot,saju}/raw`(gitignore, 재취득 = 프롬프트북 `docs/*-prompts.md`), `build:tarot-deck`·`build:saju-images` 가 1:1 크롭·webp 512/1024 로 가공해 `apps/web/public/{tarot/cards,saju-c/images}`(158·44장) + manifest 를 커밋, 운영은 dist 에서 nginx 7일 캐시·진짜 404. 한자 글리프(`build:saju-glyphs`, 81장)는 개발 머신 폰트로 만들어 커밋해 운영에 CJK 폰트가 필요 없다. "원본은 리포 밖, 로더/빌더로 재현, 가공물만 커밋" 규칙이 데이터 밖 자산에도 같은 형태.
+- **2026-08-30~09-02** in [housing](../topics/housing.md) (`254fb76`, `168b363`): 수명주기의 가장 큰 사례 — 원천 5종(단지 마스터 CSV 30.7만 행 / 실거래 매매·전월세 API 709만 행 / 공시가격 3.4GB zip 스트리밍 / K-apt xlsx·V5 API / 건축HUB). 원본은 `data/open/housing`(리포 밖), 로더는 `load:housing-*` 6종, 실거래는 upsert 가 아니라 **(시군구, 계약년월, 유형) 파티션 교체 + `HousingSync` 장부**(신고 지연·해제 때문), 단지 마스터 재적재는 **같은 id 에서 보강 컬럼·좌표를 이어받는다**(며칠치 쿼터로 채운 K-apt·건축물대장이 CSV 갱신에 사라지지 않게). 지오코딩 캐시는 일상지도와 같은 압축본에 실어 커밋 → 운영은 `--offline` 호출 0건. `deploy.sh` 케이스 8 + API 배포마다 `status:housing` 한 줄을 파싱해 자동 점검(`b8c08ed` 가 파일 없을 때 메뉴가 죽던 glob 을 고침).
 - **2026-08-30** in [life-map](../topics/life-map.md) (`4fd6e22`): 병의원 레이어 — `load:life-hospitals`(HIRA API 순차 페이징, 지오코더 `--offline`), `LifeHospital` + `LifeMasterSync` 확장, deploy.sh 케이스 6 에 합류. 원본 파일이 없는 첫 API 전량형.
 - **2026-08-23** in [food](../topics/food.md) / [project-overview](../topics/project-overview.md) (`dae1cc9`·`edb7f44`): 음식 카탈로그 적재를 deploy.sh 케이스 7 로 — `status:food-catalog` 한 줄 + `load:food-catalog --classify --backfill-nutrition`. "영양성분 API 는 선택, 배포본 CSV 가 기본" 을 문서로 못박음(data.go.kr 데이터셋별 활용신청 함정: 다른 데이터셋 키를 쓰면 `30 등록되지 않은 서비스키`).
 - **2026-08-22** in [project-overview](../topics/project-overview.md) / [life-map](../topics/life-map.md) / [food](../topics/food.md) (`809b7e0`·`5a84b63`): 원본을 `data/open/{food,life,eval}` 로 정리하고 로더 기본 경로를 붙임, `docs/data-sources.md` 신설(보관 기준·평가셋 추출 스크립트·백업 대상), deploy.sh CSV 경로 폴백.
