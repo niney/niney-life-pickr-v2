@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
-import type { CreateSajuReadingInputType, SajuReadingResultType, SajuSectionsType } from '@repo/api-contract';
+import type { CreateSajuReadingInputType, SajuReadingResultType, SajuSectionsType, SajuThemesType } from '@repo/api-contract';
 import { useAuthStore, useSajuProfileStore } from '@repo/shared';
 import { computeSajuChart } from '@repo/utils';
 import { detectTarotRender } from '~/components/tarot/tarotQuality';
@@ -11,7 +11,7 @@ import { server } from '~/test/msw';
 import { SajuPage } from './SajuPage';
 
 // 사주 페이지 — jsdom 은 WebGL2 가 없어 Lite 모드(연출 건너뜀). 입력 → 원국(클라이언트 계산) → 풀이 요청(게스트 키)
-// → 패널 탭·섹션 표시, 검증 오류, 요청 실패 폴백만 본다. 3D 무대는 검증하지 않는다.
+// → 패널 그룹·서브 탭·섹션 표시, 검증 오류, 요청 실패 폴백, 테마 job, 입구 궁합 모드를 본다. 3D 무대는 검증하지 않는다.
 
 const renderPage = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -42,11 +42,22 @@ const fakeResult = (input: CreateSajuReadingInputType): SajuReadingResultType =>
     jobId: null,
     chart: chart as unknown as SajuReadingResultType['chart'],
     sections,
+    themes: null,
     source: 'llm',
     model: 'fake',
     createdAt: new Date().toISOString(),
     quota: { remainingToday: 9 },
   };
+};
+
+const fakeThemes = (_input: CreateSajuReadingInputType, status: 'pending' | 'static' | 'ready') => {
+  const base = status === 'ready' ? { status: 'ready' as const, source: 'llm' as const, model: 'fake' } : { status, source: 'static' as const, model: null };
+  const themes: SajuThemesType = {
+    love: { ...base, headline: status === 'ready' ? '천천히 깊어지는 인연' : '인연 정적', body: status === 'ready' ? '인연 본문입니다.' : '인연 정적 본문.', style: '연애 스타일.', timing: '인연의 해.', tips: ['a', 'b', 'c'] },
+    wealth: { ...base, headline: status === 'ready' ? '쌓이는 곳간' : '재물 정적', body: '재물 본문입니다.', style: '돈 스타일.', timing: '재물의 해.', tips: ['a', 'b', 'c'] },
+    career: { ...base, headline: status === 'ready' ? '판을 여는 사람' : '직업 정적', body: '직업 본문입니다.', jobs: ['회계·재무', '금융·은행'], timing: '직업의 해.', tips: ['a', 'b', 'c'] },
+  };
+  return { readingId: null, jobId: null, themes, source: status === 'ready' ? 'llm' : 'static', model: status === 'ready' ? 'fake' : null, createdAt: new Date().toISOString(), quota: { remainingToday: 8 } };
 };
 
 beforeEach(() => {
@@ -91,8 +102,10 @@ describe('SajuPage (Lite)', () => {
     fireEvent.click(screen.getByRole('button', { name: '성격' }));
     await waitFor(() => expect(screen.getByText('곧게 선 무쇠')).toBeInTheDocument());
     expect(screen.getByText('성격 본문입니다.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '조언' }));
+    // 조언은 오행 서브로 흡수 — 키워드·행운 표가 오행 탭에.
+    fireEvent.click(screen.getByRole('button', { name: '오행' }));
     expect(screen.getByText('“결단”')).toBeInTheDocument();
+    expect(screen.getByText('조언 본문입니다.')).toBeInTheDocument();
     expect(screen.getByText('AI 풀이')).toBeInTheDocument();
 
     // 기기 프로필 저장(기본 체크).
@@ -115,7 +128,7 @@ describe('SajuPage (Lite)', () => {
     await waitFor(() => expect(screen.getByText(/풀이 요청이 실패했어요/)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /다시 시도/ })).toBeInTheDocument();
   });
-  it('도구 탭 — 오늘·음식·택일·궁합을 열면 각 API 를 부르고 결과를 그린다', async () => {
+  it('도구 탭(흐름·테마 그룹) — 오늘·택일·음식을 열면 각 API 를 부르고, 궁합은 입구 모드로 본다', async () => {
     const birth = { year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M', calendar: 'solar', leapMonth: false, options: { solarTimeCorrection: true, lateRatHour: false } } as const;
     const calls: string[] = [];
     server.use(
@@ -134,6 +147,10 @@ describe('SajuPage (Lite)', () => {
           model: 'fake',
           quota: { remainingToday: 8 },
         });
+      }),
+      http.post('/api/v1/saju-c/themes', async ({ request }) => {
+        calls.push('themes');
+        return HttpResponse.json(fakeThemes((await request.json()) as CreateSajuReadingInputType, 'static'));
       }),
       http.post('/api/v1/saju-c/food', () => {
         calls.push('food');
@@ -171,27 +188,82 @@ describe('SajuPage (Lite)', () => {
     fireEvent.click(screen.getByRole('button', { name: /사주 세우기/ }));
     await waitFor(() => expect(screen.getAllByTestId('saju-chart').length).toBeGreaterThan(0));
 
+    // 흐름 그룹 → 오늘·택일.
+    fireEvent.click(screen.getByRole('tab', { name: '흐름' }));
     fireEvent.click(screen.getByRole('button', { name: '오늘' }));
     await waitFor(() => expect(screen.getByText('오늘의 한 줄 요약')).toBeInTheDocument());
     expect(screen.getByText('오늘 본문입니다.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '음식' }));
-    await waitFor(() => expect(screen.getByText('비빔밥')).toBeInTheDocument());
-    expect(screen.getByText(/약 550kcal/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '택일' }));
     await waitFor(() => expect(screen.getByText('손 없는 날이에요.')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('radio', { name: '이사' }));
     await waitFor(() => expect(calls).toContain('date:move:30'));
 
-    fireEvent.click(screen.getByRole('button', { name: '궁합' }));
+    // 테마 그룹 → 첫 서브(인연)가 열리며 테마 job 요청, 음식은 같은 그룹.
+    fireEvent.click(screen.getByRole('tab', { name: '테마' }));
+    await waitFor(() => expect(calls).toContain('themes'));
+    fireEvent.click(screen.getByRole('button', { name: '음식' }));
+    await waitFor(() => expect(screen.getByText('비빔밥')).toBeInTheDocument());
+    expect(screen.getByText(/약 550kcal/)).toBeInTheDocument();
+    expect(calls.filter((c) => c === 'daily')).toHaveLength(1);
+    expect(calls.filter((c) => c === 'themes')).toHaveLength(1);
+
+    // 궁합은 입구 모드 — 다시 입력 → "우리 궁합" → 상대 입력 → 결과 패널.
+    fireEvent.click(screen.getByRole('button', { name: '다시 입력' }));
+    fireEvent.click(screen.getByRole('radio', { name: '우리 궁합' }));
     fireEvent.change(screen.getByLabelText('상대 호칭'), { target: { value: '그 사람' } });
+    fireEvent.change(screen.getByLabelText('상대 년'), { target: { value: '1992' } });
     fireEvent.click(screen.getByRole('button', { name: '궁합 보기' }));
+    await waitFor(() => expect(screen.getByTestId('saju-pair-panel')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByTestId('saju-match-result')).toBeInTheDocument());
     expect(screen.getByText('잘 맞는 사이')).toBeInTheDocument();
     expect(screen.getByText('궁합 요약입니다.')).toBeInTheDocument();
     expect(calls).toContain('match:그 사람');
-    expect(calls.filter((c) => c === 'daily')).toHaveLength(1);
+  });
+
+  it('테마 탭 — 인연·재물·직업은 계산 카드가 즉시 보이고 LLM 문장은 job 으로 도착한다', async () => {
+    let themesBody: { readingId?: string } | null = null;
+    server.use(
+      http.post('/api/v1/saju-c/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
+      http.post('/api/v1/saju-c/themes', async ({ request }) => {
+        const input = (await request.json()) as CreateSajuReadingInputType & { readingId?: string };
+        themesBody = input;
+        const t = fakeThemes(input, 'pending');
+        return HttpResponse.json({ ...t, jobId: 'tjob1234567' });
+      }),
+      http.get('/api/v1/saju-c/themes/jobs/tjob1234567', ({ request }) => {
+        const url = new URL(request.url);
+        const after = Number(url.searchParams.get('after') ?? '0');
+        const t = fakeThemes({ birth: { year: 1990, month: 1, day: 1, hour: null, minute: null, gender: 'M', calendar: 'solar', leapMonth: false, options: { solarTimeCorrection: true, lateRatHour: false } } }, 'ready');
+        return HttpResponse.json({ jobId: 'tjob1234567', version: after + 1, themes: t.themes, done: true, readingId: null, source: 'llm' });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /사주 세우기/ }));
+    await waitFor(() => expect(screen.getAllByTestId('saju-chart').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('tab', { name: '테마' }));
+    // 계산 카드(배우자성·배우자 자리)는 즉시.
+    expect(screen.getByTestId('saju-theme-love')).toBeInTheDocument();
+    expect(screen.getByLabelText('배우자성')).toBeInTheDocument();
+    expect(screen.getByLabelText('배우자 자리')).toBeInTheDocument();
+    await waitFor(() => expect(themesBody).not.toBeNull());
+    // job 도착 → LLM 헤드라인.
+    await waitFor(() => expect(screen.getByText('천천히 깊어지는 인연')).toBeInTheDocument());
+    expect(screen.getByText('인연 본문입니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /이 사람과 궁합 보기/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '재물' }));
+    expect(screen.getByTestId('saju-theme-wealth')).toBeInTheDocument();
+    expect(screen.getByLabelText('재물 스타일')).toBeInTheDocument();
+    expect(screen.getByText('쌓이는 곳간')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '직업' }));
+    expect(screen.getByTestId('saju-theme-career')).toBeInTheDocument();
+    expect(screen.getByText('회계·재무')).toBeInTheDocument();
+    expect(screen.getByText('판을 여는 사람')).toBeInTheDocument();
+    // "이 사람과 궁합 보기" → 입구 궁합 모드.
+    fireEvent.click(screen.getByRole('button', { name: '인연' }));
+    fireEvent.click(screen.getByRole('button', { name: /이 사람과 궁합 보기/ }));
+    expect(screen.getByRole('radio', { name: '우리 궁합' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('상대 년')).toBeInTheDocument();
   });
   it('회원: 서버 프로필 칩이 뜨고 "이 계정에 저장" 이면 프로필 생성 API 를 부른다', async () => {
     useAuthStore.setState({ token: 'tok', user: { id: 'u1', email: 'u@x.com', role: 'USER' } as never, isGuest: false });

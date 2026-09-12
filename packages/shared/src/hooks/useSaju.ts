@@ -2,12 +2,14 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import type {
   CreateSajuReadingInputType,
   CreateSajuShareInputType,
+  CreateSajuThemesInputType,
   SajuDailyInputType,
   SajuDatePickInputType,
   SajuFoodInputType,
   SajuJobPollResultType,
   SajuMatchInputType,
   SajuProfileInputType,
+  SajuThemesJobPollResultType,
 } from '@repo/api-contract';
 import { ApiError } from '../api/client.js';
 import { sajuApi } from '../api/saju.api.js';
@@ -42,6 +44,39 @@ export const useSajuJob = (jobId: string | null): SajuJobState => {
       if (!jobId) throw new Error('jobId required');
       const prev = queryClient.getQueryData<SajuJobPollResultType>(jobKey(jobId));
       return sajuApi.pollJob(jobId, prev?.version ?? 0);
+    },
+    enabled: !!jobId,
+    refetchInterval: (query) => (query.state.data?.done || query.state.error ? false : 200),
+    refetchOnWindowFocus: false,
+    retry: (count, err) => !(err instanceof ApiError && err.statusCode === 410) && count < 2,
+    staleTime: Infinity,
+  });
+  const gone = q.error instanceof ApiError && q.error.statusCode === 410;
+  return { data: q.data ?? null, gone, polling: !!jobId && !gone && !(q.data?.done ?? false) };
+};
+
+// ── 테마(8차) — 인연·재물·직업. 테마 그룹을 처음 열 때 mutation 1회, job 은 섹션과 같은 long-poll.
+const themeJobKey = (jobId: string) => ['saju', 'theme-job', jobId] as const;
+
+export const useCreateSajuThemes = () =>
+  useMutation({
+    mutationFn: (input: CreateSajuThemesInputType) => sajuApi.createThemes(input, getGuestKey()),
+  });
+
+export interface SajuThemeJobState {
+  data: SajuThemesJobPollResultType | null;
+  gone: boolean;
+  polling: boolean;
+}
+
+export const useSajuThemeJob = (jobId: string | null): SajuThemeJobState => {
+  const queryClient = useQueryClient();
+  const q = useQuery({
+    queryKey: themeJobKey(jobId ?? ''),
+    queryFn: async () => {
+      if (!jobId) throw new Error('jobId required');
+      const prev = queryClient.getQueryData<SajuThemesJobPollResultType>(themeJobKey(jobId));
+      return sajuApi.pollThemeJob(jobId, prev?.version ?? 0);
     },
     enabled: !!jobId,
     refetchInterval: (query) => (query.state.data?.done || query.state.error ? false : 200),

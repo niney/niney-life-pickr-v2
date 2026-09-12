@@ -235,6 +235,9 @@ export type SajuSectionsType = z.infer<typeof SajuSections>;
 // 게스트만 숫자(기기 일일 한도 잔여). 회원은 null.
 export const SajuQuota = z.object({ remainingToday: Int.nullable() });
 
+// SajuThemes 는 아래(테마 블록)에서 정의 — 선언 순서 때문에 lazy 참조.
+const SajuThemesRef = z.lazy(() => SajuThemes);
+
 export const CreateSajuReadingInput = z.object({ birth: SajuBirthInput });
 export type CreateSajuReadingInputType = z.infer<typeof CreateSajuReadingInput>;
 
@@ -245,6 +248,8 @@ export const SajuReadingResult = z.object({
   jobId: z.string().nullable(),
   chart: SajuChart,
   sections: SajuSections,
+  // 테마(인연·재물·직업) — 별도 job(POST /saju-c/themes)으로 받는다. 기록·캐시에 있으면 함께 실린다(8차).
+  themes: SajuThemesRef.nullable().optional(),
   source: SajuReadingSource,
   model: z.string().nullable(),
   createdAt: z.string(),
@@ -268,6 +273,82 @@ export const SajuJobPollResult = z.object({
   source: SajuReadingSource,
 });
 export type SajuJobPollResultType = z.infer<typeof SajuJobPollResult>;
+
+// ── 테마(8차) — 인연·재물·직업 ─────────────────────────────────────────────
+// 테마 탭을 처음 열 때 job 하나로 3개를 병렬 호출한다(한도 1건). 계산값(배우자성·재물 스타일·격국·시기)은
+// 웹이 utils 로 직접 만들고, 서버는 그 위에 얹는 문장만 준다. 회원이면 readingId 행의 resultJson 에 병합 저장.
+
+export const SajuThemeId = z.enum(['love', 'wealth', 'career']);
+export type SajuThemeIdType = z.infer<typeof SajuThemeId>;
+export const SAJU_THEME_IDS = SajuThemeId.options;
+
+export const SajuLoveSection = SectionBase.extend({
+  headline: z.string(),
+  body: z.string(),
+  // 연애 스타일 2~3문장.
+  style: z.string(),
+  // 인연이 가까워지는 시기 2~3문장(결혼 단정 금지).
+  timing: z.string(),
+  tips: z.array(z.string()),
+});
+export type SajuLoveSectionType = z.infer<typeof SajuLoveSection>;
+
+export const SajuWealthSection = SectionBase.extend({
+  headline: z.string(),
+  body: z.string(),
+  // 돈을 다루는 방식 2~3문장.
+  style: z.string(),
+  // 재물 흐름이 활발한 시기 2~3문장(액수 단정 금지).
+  timing: z.string(),
+  tips: z.array(z.string()),
+});
+export type SajuWealthSectionType = z.infer<typeof SajuWealthSection>;
+
+export const SajuCareerSection = SectionBase.extend({
+  headline: z.string(),
+  body: z.string(),
+  // 어울리는 직업군 키워드 3~5개.
+  jobs: z.array(z.string()),
+  // 승진·이직·시험에 힘이 실리는 시기 2~3문장.
+  timing: z.string(),
+  tips: z.array(z.string()),
+});
+export type SajuCareerSectionType = z.infer<typeof SajuCareerSection>;
+
+export const SajuThemes = z.object({
+  love: SajuLoveSection,
+  wealth: SajuWealthSection,
+  career: SajuCareerSection,
+});
+export type SajuThemesType = z.infer<typeof SajuThemes>;
+
+export const CreateSajuThemesInput = z.object({
+  birth: SajuBirthInput,
+  // 회원 저장 행(전체 풀이) — 있으면 테마를 그 행에 병합한다.
+  readingId: z.string().min(1).max(64).optional(),
+});
+export type CreateSajuThemesInputType = z.infer<typeof CreateSajuThemesInput>;
+
+export const SajuThemesResult = z.object({
+  readingId: z.string().nullable(),
+  jobId: z.string().nullable(),
+  themes: SajuThemes,
+  source: SajuReadingSource,
+  model: z.string().nullable(),
+  createdAt: z.string(),
+  quota: SajuQuota,
+});
+export type SajuThemesResultType = z.infer<typeof SajuThemesResult>;
+
+export const SajuThemesJobPollResult = z.object({
+  jobId: z.string(),
+  version: Int,
+  themes: SajuThemes,
+  done: z.boolean(),
+  readingId: z.string().nullable(),
+  source: SajuReadingSource,
+});
+export type SajuThemesJobPollResultType = z.infer<typeof SajuThemesJobPollResult>;
 
 // ── 오늘의 운세 ─────────────────────────────────────────────────────────────
 
@@ -476,6 +557,7 @@ export const SharedSajuReading = z.object({
   includeBirth: z.boolean(),
   chart: SajuChart,
   sections: SajuSections,
+  themes: SajuThemes.nullable().optional(),
   source: SajuReadingSource,
   model: z.string().nullable(),
   createdAt: z.string(),

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   CreateSajuReadingInput,
   CreateSajuShareInput,
+  CreateSajuThemesInput,
   ListSajuReadingsQuery,
   ListSajuReadingsResult,
   Routes,
@@ -23,6 +24,8 @@ import {
   SajuProfileList,
   SajuReadingResult,
   SajuShareResult,
+  SajuThemesJobPollResult,
+  SajuThemesResult,
   SharedSajuReading,
 } from '@repo/api-contract';
 import { RATE, clientKey } from '../../plugins/rate-limit.js';
@@ -59,7 +62,10 @@ const sajuRoutes: FastifyPluginAsync = async (app) => {
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
   const service = new SajuService(app.prisma, aiConfig, { quota: app.usageQuota, logger: app.log });
   const records = new SajuRecordsService(app.prisma, service);
-  app.addHook('onClose', async () => service.jobs.clear());
+  app.addHook('onClose', async () => {
+    service.jobs.clear();
+    service.themeJobs.clear();
+  });
 
   const actorOf = async (req: FastifyRequest): Promise<SajuActor> => {
     const user = await app.resolveOptionalUser(req);
@@ -93,6 +99,18 @@ const sajuRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicShare },
     schema: { tags: ['saju'], params: JobParams, querystring: SajuJobPollQuery, response: { 200: SajuJobPollResult } },
     handler: async (req) => run(() => service.pollJob(req.params.jobId, req.query.after, req.query.wait)),
+  });
+
+  // 테마(인연·재물·직업, 8차) — 3개 병렬 job. 한도 1건.
+  typed.post(S.themes, {
+    config: quotaRate,
+    schema: { tags: ['saju'], body: CreateSajuThemesInput, response: { 200: SajuThemesResult } },
+    handler: async (req) => run(async () => service.createThemes(req.body, await actorOf(req))),
+  });
+  typed.get(S.themeJob(':jobId'), {
+    config: { rateLimit: RATE.publicShare },
+    schema: { tags: ['saju'], params: JobParams, querystring: SajuJobPollQuery, response: { 200: SajuThemesJobPollResult } },
+    handler: async (req) => run(() => service.pollThemeJob(req.params.jobId, req.query.after, req.query.wait)),
   });
 
   typed.post(S.daily, {

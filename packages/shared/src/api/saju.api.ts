@@ -3,6 +3,7 @@ import {
   SAJU_GUEST_KEY_HEADER,
   type CreateSajuReadingInputType,
   type CreateSajuShareInputType,
+  type CreateSajuThemesInputType,
   type ListSajuReadingsQueryType,
   type ListSajuReadingsResultType,
   type SajuProfileInputType,
@@ -20,6 +21,8 @@ import {
   type SajuMatchInputType,
   type SajuMatchResultType,
   type SajuReadingResultType,
+  type SajuThemesJobPollResultType,
+  type SajuThemesResultType,
 } from '@repo/api-contract';
 import { apiFetch } from './client.js';
 
@@ -40,6 +43,12 @@ export const sajuApi = {
   // long-poll — 서버가 after 보다 큰 버전이 생길 때까지(최대 wait ms) 기다린다.
   pollJob: (jobId: string, after: number, wait = 20_000) =>
     apiFetch<SajuJobPollResultType>(`${Routes.Saju.job(jobId)}?after=${after}&wait=${wait}`),
+
+  // 테마(인연·재물·직업, 8차) — 즉시 응답(정적 + jobId) 뒤 pollThemeJob 으로 도착 순.
+  createThemes: (input: CreateSajuThemesInputType, guestKey: string | null) =>
+    apiFetch<SajuThemesResultType>(Routes.Saju.themes, { method: 'POST', body: JSON.stringify(input), headers: guestHeaders(guestKey) }),
+  pollThemeJob: (jobId: string, after: number, wait = 20_000) =>
+    apiFetch<SajuThemesJobPollResultType>(`${Routes.Saju.themeJob(jobId)}?after=${after}&wait=${wait}`),
 
   daily: (input: SajuDailyInputType, guestKey: string | null) =>
     apiFetch<SajuDailyResultType>(Routes.Saju.daily, { method: 'POST', body: JSON.stringify(input), headers: guestHeaders(guestKey) }),

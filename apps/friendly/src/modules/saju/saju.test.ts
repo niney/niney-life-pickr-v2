@@ -7,6 +7,7 @@ import {
   SajuSections as SajuSectionsSchema,
   SajuStarId,
   SajuTenGod,
+  SajuThemes as SajuThemesSchema,
   SajuTwelveStage,
   type SajuBirthInputType,
 } from '@repo/api-contract';
@@ -30,8 +31,8 @@ import type { LLMCompleteOptions, LLMCompleteResult, LLMProvider } from '../ai/a
 import { USAGE_QUOTA_DEFAULTS, UsageQuotaService } from '../usage-quota/usage-quota.service.js';
 import { SajuJobRegistry } from './saju-jobs.js';
 import { SajuRecordsService } from './saju-records.service.js';
-import { buildStaticDaily, buildStaticMatch, buildStaticSections } from './saju-static.js';
-import { buildSajuSectionPrompt } from './saju.prompts.js';
+import { buildStaticDaily, buildStaticMatch, buildStaticSections, buildStaticThemes } from './saju-static.js';
+import { buildSajuSectionPrompt, buildSajuThemePrompt } from './saju.prompts.js';
 import { SajuError, SajuService, parseSajuJson, sectionCacheKey, type SajuServiceDeps } from './saju.service.js';
 import { z } from 'zod';
 
@@ -116,6 +117,22 @@ describe('정적 풀이·프롬프트', () => {
     expect(p).toContain('[일간 캐릭터');
     expect(p).toContain('"headline"');
     expect(buildSajuSectionPrompt(chart, 'advice')).toContain('[보완 오행의 행운 요소');
+  });
+  it('테마 3개(인연·재물·직업) 정적 문장이 계약을 통과하고 프롬프트에 테마 사실 블록이 들어간다', () => {
+    const t = buildStaticThemes(chart);
+    expect(SajuThemesSchema.safeParse(t).success).toBe(true);
+    expect(t.love.body).toContain('전통 해석으로는');
+    expect(t.love.timing.length).toBeGreaterThan(10);
+    expect(t.wealth.style.length).toBeGreaterThan(10);
+    expect(t.career.jobs.length).toBeGreaterThanOrEqual(3);
+    expect(t.career.tips).toHaveLength(3);
+    const p = buildSajuThemePrompt(chart, 'love');
+    expect(p).toContain('[사주 사실');
+    expect(p).toContain('[테마 사실 — 인연');
+    expect(p).toContain('배우자성');
+    expect(p).toContain('"timing"');
+    expect(buildSajuThemePrompt(chart, 'wealth')).toContain('재물 스타일');
+    expect(buildSajuThemePrompt(chart, 'career')).toContain('"jobs"');
   });
 });
 
@@ -286,6 +303,48 @@ describe('SajuService (격리 DB)', () => {
     expect(f.source).toBe('llm');
   });
 
+  it('테마: job 3개 병렬 도착, 테마별 캐시, 회원은 readingId 행에 병합 저장되어 기록 상세에 실린다', async () => {
+    const member = { userId: 's-user', guestKey: null, ip: '127.0.0.1' };
+    provider.handler = (o) => {
+      if (o.prompt.includes('[테마 사실 — 인연')) return JSON.stringify({ headline: '천천히 깊어지는 인연', body: '인연 본문.', style: '연애 스타일.', timing: '인연의 해.', tips: ['a', 'b', 'c'] });
+      if (o.prompt.includes('[테마 사실 — 재물')) return JSON.stringify({ headline: '쌓이는 곳간', body: '재물 본문.', style: '돈 스타일.', timing: '재물의 해.', tips: ['a', 'b', 'c'] });
+      if (o.prompt.includes('[테마 사실 — 직업')) return JSON.stringify({ headline: '판을 여는 사람', body: '직업 본문.', jobs: ['회계·재무', '금융·은행', '부동산'], timing: '직업의 해.', tips: ['a', 'b', 'c'] });
+      return sectionJson(sectionOfPrompt(o.prompt));
+    };
+    // 전체 풀이 먼저(회원 행 생성).
+    const r = await service.createReading({ birth: BIRTH }, member);
+    let snap = await service.pollJob(r.jobId as string, 0, 3000);
+    for (let i = 0; i < 8 && !(snap.done && snap.readingId); i++) snap = await service.pollJob(r.jobId as string, snap.version, 3000);
+    const readingId = snap.readingId as string;
+    expect(r.themes ?? null).toBeNull(); // 아직 테마 캐시 없음
+
+    const t = await service.createThemes({ birth: BIRTH, readingId }, member);
+    expect(t.jobId).not.toBeNull();
+    expect(t.themes.love.status).toBe('pending');
+    expect(t.themes.love.body.length).toBeGreaterThan(0); // 정적 본문
+    let ts = await service.pollThemeJob(t.jobId as string, 0, 3000);
+    for (let i = 0; i < 8 && !(ts.done && ts.readingId); i++) ts = await service.pollThemeJob(t.jobId as string, ts.version, 3000);
+    expect(ts.done).toBe(true);
+    expect(ts.source).toBe('llm');
+    expect(ts.readingId).toBe(readingId);
+    expect(ts.themes.love).toMatchObject({ status: 'ready', headline: '천천히 깊어지는 인연', model: 'saju-model' });
+    expect(ts.themes.career.jobs).toEqual(['회계·재무', '금융·은행', '부동산']);
+    expect(provider.calls.filter((c) => c.prompt.includes('[테마 사실'))).toHaveLength(3);
+    // 행에 병합 저장 → 기록 상세.
+    const records = new SajuRecordsService(app.prisma, service);
+    const mine = await records.getMine('s-user', readingId);
+    expect(mine.sections.personality.headline).toBe('곧은 무쇠');
+    expect(mine.themes?.wealth.headline).toBe('쌓이는 곳간');
+    // 테마 캐시 히트 — job 없이 즉시, 한도 소비 없음. 전체 풀이 재요청 응답에도 themes 가 얹힌다.
+    const again = await service.createThemes({ birth: BIRTH }, guest);
+    expect(again.jobId).toBeNull();
+    expect(again.source).toBe('llm');
+    expect(again.quota.remainingToday).toBe(GUEST_PER_DAY);
+    const full = await service.createReading({ birth: BIRTH }, guest);
+    expect(full.themes?.career.headline).toBe('판을 여는 사람');
+    expect(provider.calls.filter((c) => c.prompt.includes('[테마 사실'))).toHaveLength(3);
+  });
+
   it('입력 오류는 SajuError(invalid_input)', async () => {
     await expect(service.createReading({ birth: { ...BIRTH, month: 2, day: 30 } }, guest)).rejects.toThrowError(SajuError);
     await expect(service.daily({ birth: BIRTH, date: '2027-01-01' }, guest)).rejects.toThrow(/7일/);
@@ -329,6 +388,17 @@ describe('라우트 (provider 비활성 → 정적 경로)', () => {
     const bad = await app.inject({ method: 'POST', url: '/api/v1/saju-c/readings', payload: { birth: { year: 1990, month: 2, day: 30, hour: null, gender: 'M' } } });
     expect(bad.statusCode).toBe(400);
     const gone = await app.inject({ method: 'GET', url: '/api/v1/saju-c/readings/jobs/abcdefghijk?after=0&wait=0' });
+    expect(gone.statusCode).toBe(410);
+  });
+  it('POST /saju-c/themes → 200 정적 테마 3개, 없는 테마 job 410', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/v1/saju-c/themes', headers: { 'x-guest-key': 'guest-key-abcdef' }, payload: { birth: { year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M' } } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.jobId).toBeNull();
+    expect(body.source).toBe('static');
+    expect(body.themes.love.body.length).toBeGreaterThan(0);
+    expect(body.themes.career.jobs.length).toBeGreaterThan(0);
+    const gone = await app.inject({ method: 'GET', url: '/api/v1/saju-c/themes/jobs/abcdefghijk?after=0&wait=0' });
     expect(gone.statusCode).toBe(410);
   });
   it('오늘·궁합·택일·음식 200', async () => {

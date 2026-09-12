@@ -59,7 +59,7 @@ export const SajuSharedPage = () => {
           </div>
         ) : (
           <>
-            <SajuReadingView chart={query.data.chart} sections={query.data.sections} source={query.data.source} birthHidden={!query.data.includeBirth} />
+            <SajuReadingView themes={query.data.themes ?? null} chart={query.data.chart} sections={query.data.sections} source={query.data.source} birthHidden={!query.data.includeBirth} />
             <div className="mt-6 text-center">
               <Button asChild className="bg-[#b8322a] text-[#f7eddc] hover:bg-[#cc3d33]">
                 <Link to="/saju-c">

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Loader2, RotateCcw, Share2, X } from 'lucide-react';
-import type { SajuBirthInputType, SajuReadingResultType, SajuSectionIdType, SajuSectionsType } from '@repo/api-contract';
+import type { SajuBirthInputType, SajuReadingResultType, SajuSectionIdType, SajuSectionsType, SajuThemesType } from '@repo/api-contract';
 import {
   SAJU_TEN_GOD_META,
   SAJU_WUXING_LUCKY,
@@ -26,56 +26,43 @@ import {
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import { useTypewriter } from '../tarot/useTypewriter';
 import { SajuChartTable } from './SajuChartTable';
-import { SajuDailyBox, SajuDatePickBox, SajuFoodBox, SajuMatchBox } from './SajuTools';
+import { SajuDailyBox, SajuDatePickBox, SajuFoodBox } from './SajuTools';
+import { SajuCareerBox, SajuLoveBox, SajuWealthBox, TypedText, type SajuThemeStatus } from './SajuThemes';
 import { SajuShareSheet, type SajuShareBase } from './SajuShareSheet';
 import { glass } from './SajuForm';
+import { SAJU_PANEL_GROUPS, isSajuThemeTab, sajuPanelGroupOf, type SajuPanelGroup, type SajuPanelTab } from './sajuPanelTabs';
 import { SAJU_DISCLAIMER, SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
-// 풀이 패널 — 탭: 원국 / 성격 / 오행 / 흐름 / 올해 / 조언. 섹션은 도착 순으로 채워지고(pending 이면 정적 본문 +
-// "AI 가 읽는 중"), LLM 문장은 타자 효과. 데스크톱은 오른쪽, 세로 폰은 바닥 시트(접기).
-
-export type SajuPanelTab = 'chart' | 'personality' | 'elements' | 'cycle' | 'year' | 'advice' | 'daily' | 'food' | 'date' | 'match';
-const TABS: Array<{ id: SajuPanelTab; label: string; tool?: boolean }> = [
-  { id: 'chart', label: '원국' },
-  { id: 'personality', label: '성격' },
-  { id: 'elements', label: '오행' },
-  { id: 'cycle', label: '흐름' },
-  { id: 'year', label: '올해' },
-  { id: 'advice', label: '조언' },
-  { id: 'daily', label: '오늘', tool: true },
-  { id: 'food', label: '음식', tool: true },
-  { id: 'date', label: '택일', tool: true },
-  { id: 'match', label: '궁합', tool: true },
-];
+// 풀이 패널 — 8차 재편: 그룹 3개 × 서브 탭.
+//   원국(명식·성격·오행) / 흐름(대운·올해·오늘·택일) / 테마(인연·재물·직업·음식)
+// 조언 탭은 오행 서브로 흡수(둘 다 보완 오행 근거), 궁합은 입구(폼)의 모드로 옮겼다. 성격 탭의 일간 연애·일 카드와
+// 일주론의 배우자 자리는 인연·직업 테마로. 섹션은 도착 순으로 채워지고(pending 이면 정적 본문 + "AI 가 읽는 중"),
+// LLM 문장은 타자 효과. 데스크톱은 오른쪽, 세로 폰은 바닥 시트(접기).
 
 export interface SajuReadingPanelProps {
   chart: SajuChart;
-  /** 도구(오늘·음식·택일·궁합)가 쓰는 계약형 입력. */
+  /** 도구(오늘·음식·택일)가 쓰는 계약형 입력. */
   birth: SajuBirthInputType;
   result: SajuReadingResultType | null;
   /** pending: 요청 중 / partial: 섹션 도착 중 / ready / failed / gone(job 소멸) */
   status: 'pending' | 'partial' | 'ready' | 'failed' | 'gone';
+  /** 테마(인연·재물·직업) — 테마 그룹을 처음 열 때 요청된다. */
+  themes: SajuThemesType | null;
+  themeStatus: SajuThemeStatus;
   animate: boolean;
   side: 'right' | 'bottom';
   tab: SajuPanelTab;
   onTab: (tab: SajuPanelTab) => void;
+  /** 테마 탭이 열릴 때(요청이 아직이면 부모가 시작). */
+  onOpenThemes: () => void;
+  onRetryThemes: () => void;
   onRetry: () => void;
   onEdit: () => void;
+  /** 인연 탭 "이 사람과 궁합 보기" — 폼을 궁합 모드로. */
+  onPair?: () => void;
   onClose?: () => void;
 }
-
-const TypedText = ({ text, animate, className }: { text: string; animate: boolean; className?: string }) => {
-  const shown = useTypewriter(text, animate);
-  const done = shown.length >= text.length;
-  return (
-    <p className={className}>
-      {shown}
-      {!done && <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-[#d9b65b]">&nbsp;</span>}
-    </p>
-  );
-};
 
 const godKo = (g: TenGod): string => SAJU_TEN_GOD_META[g].ko;
 
@@ -115,23 +102,6 @@ export const SajuChartHeader = ({ chart, headline, size = 'sm', hideBirth = fals
         {!hideBirth && birth.corrected && <span title="일주·시주는 서울 기준 진태양시로 봤어요">태양시 {birth.corrected}</span>}
         <span>{birth.season}</span>
         <span>만 {birth.age}세</span>
-      </div>
-    </div>
-  );
-};
-
-/** 일간별 연애·일 스타일 — LLM 섹션과 별개인 정적 카드(성격 탭·2D 뷰 공용). */
-export const DayMasterStyleCards = ({ chart }: { chart: SajuChart }) => {
-  const dm = dayMasterText(chart.dayMaster.index);
-  return (
-    <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-      <div className="rounded-lg border border-white/10 p-2">
-        <div className="mb-1 text-[10px] text-[#d9b65b]">연애 스타일</div>
-        <p className="leading-relaxed text-[#e9e2d2]/80">{dm.love}</p>
-      </div>
-      <div className="rounded-lg border border-white/10 p-2">
-        <div className="mb-1 text-[10px] text-[#d9b65b]">일하는 방식</div>
-        <p className="leading-relaxed text-[#e9e2d2]/80">{dm.work}</p>
       </div>
     </div>
   );
@@ -359,7 +329,6 @@ export const LuckTimeline = ({ chart }: { chart: SajuChart }) => {
   return (
     <figure className="flex flex-col gap-1" aria-label="대운 타임라인">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`대운 타임라인, 지금 만 ${age}세`}>
-        {/* 구간 */}
         {pillars.map((p) => {
           const x0 = x(p.fromAge);
           const x1 = x(Math.min(100, p.toAge));
@@ -382,10 +351,8 @@ export const LuckTimeline = ({ chart }: { chart: SajuChart }) => {
             </g>
           );
         })}
-        {/* 강물 하이라이트 */}
         <path d={wave(50, 6, 1)} fill="none" stroke="rgba(217,182,91,0.55)" strokeWidth={1.5} />
         <path d={wave(58, 4, 3)} fill="none" stroke="rgba(233,226,210,0.25)" strokeWidth={1} />
-        {/* 지금 */}
         <g>
           <line x1={x(age)} x2={x(age)} y1={top - 8} y2={bottom + 8} stroke="#ffb4a2" strokeWidth={1.5} strokeDasharray="3 2" />
           <circle cx={x(age)} cy={50} r={4} fill="#ffb4a2" />
@@ -399,14 +366,14 @@ export const LuckTimeline = ({ chart }: { chart: SajuChart }) => {
   );
 };
 
-/** 60갑자 일주론 카드 — 별칭 + 배우자 자리 문장. 성격 탭·2D 뷰 공용. */
+/** 60갑자 일주론 카드 — 별칭 + 성향(배우자 자리는 인연 테마로). 성격 탭·2D 뷰 공용. */
 export const DayPillarCard = ({ chart }: { chart: SajuChart }) => {
   const r = sajuDayPillarReadingOf(chart);
   return (
     <div className="rounded-lg border border-[#d9b65b]/30 p-2 text-xs" aria-label="일주로 보면">
       <div className="text-[10px] text-[#d9b65b]">일주로 보면 — {r.ko} {r.hanja}</div>
       <div className="font-serif-kr text-sm font-bold text-[#f3e9c6]">“{r.title}”</div>
-      <p className="mt-1 leading-relaxed text-[#e9e2d2]/75">{r.body}</p>
+      <p className="mt-1 leading-relaxed text-[#e9e2d2]/75">{r.traitBody}</p>
     </div>
   );
 };
@@ -422,7 +389,22 @@ const SectionShell = ({ pending, children }: { pending: boolean; children: React
   </div>
 );
 
-export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, tab, onTab, onRetry, onEdit, onClose }: SajuReadingPanelProps) => {
+/** 오행 서브 — 분포·건강 힌트 + (조언 탭 흡수) 조언 본문·행운 표. 2D 뷰 공용. */
+export const ElementsAdvice = ({ chart, advice, pending, animate }: { chart: SajuChart; advice: SajuSectionsType['advice'] | null; pending: boolean; animate: boolean }) => (
+  <SectionShell pending={pending}>
+    <SajuChartTable chart={chart} compact />
+    <p className="text-xs leading-relaxed text-[#e9e2d2]/70">
+      보완하면 좋은 기운은 <span style={{ color: WUXING_TEXT_COLOR[chart.favorable.primary] }}>{SAJU_WUXING_META[chart.favorable.primary].ko}</span>
+      이에요. 무대의 구슬 크기가 각 기운의 비율, 금선이 상생(서로 돕는 흐름), 붉은 점선이 상극이에요.
+    </p>
+    <HealthHints chart={chart} />
+    {advice?.keyword && <div className="font-serif-kr text-base font-bold text-[#f3e9c6]">“{advice.keyword}”</div>}
+    {advice?.body && <TypedText text={advice.body} animate={animate} className="text-sm leading-relaxed text-[#e9e2d2]/85" />}
+    {advice?.lucky && <LuckyTable lucky={advice.lucky} />}
+  </SectionShell>
+);
+
+export const SajuReadingPanel = ({ chart, birth, result, status, themes, themeStatus, animate, side, tab, onTab, onOpenThemes, onRetryThemes, onRetry, onEdit, onPair, onClose }: SajuReadingPanelProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const sections = result?.sections ?? null;
@@ -432,6 +414,15 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
   const sectionOf = <K extends SajuSectionIdType>(id: K): SajuSectionsType[K] | null => sections?.[id] ?? null;
   const isPending = (id: SajuSectionIdType): boolean => status === 'pending' || sectionOf(id)?.status === 'pending';
   const animateFor = (id: SajuSectionIdType): boolean => animate && sectionOf(id)?.status === 'ready';
+  const group = sajuPanelGroupOf(tab);
+  const select = (next: SajuPanelTab) => {
+    onTab(next);
+    if (isSajuThemeTab(next)) onOpenThemes();
+  };
+  const selectGroup = (g: SajuPanelGroup) => {
+    const first = SAJU_PANEL_GROUPS.find((x) => x.id === g)?.tabs[0]?.id ?? 'chart';
+    select(first);
+  };
 
   const body = (): ReactNode => {
     switch (tab) {
@@ -460,23 +451,12 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
               </div>
             </div>
             <DayPillarCard chart={chart} />
-            <DayMasterStyleCards chart={chart} />
-            <p className="text-[11px] text-[#e9e2d2]/55">띠로 보면 {zodiacTraitLine(chart)}. 일간이 타고난 성격이라면 띠는 겉으로 드러나는 분위기예요.</p>
+            <p className="text-[11px] text-[#e9e2d2]/55">띠로 보면 {zodiacTraitLine(chart)}. 일간이 타고난 성격이라면 띠는 겉으로 드러나는 분위기예요. 연애·일 스타일은 테마 탭(인연·직업)에서 자세히.</p>
           </SectionShell>
         );
       }
       case 'elements':
-        return (
-          <div className="flex flex-col gap-3">
-            <SajuChartTable chart={chart} compact />
-            <p className="text-xs leading-relaxed text-[#e9e2d2]/70">
-              보완하면 좋은 기운은{' '}
-              <span style={{ color: WUXING_TEXT_COLOR[chart.favorable.primary] }}>{SAJU_WUXING_META[chart.favorable.primary].ko}</span>
-              이에요. 무대의 구슬 크기가 각 기운의 비율, 금선이 상생(서로 돕는 흐름), 붉은 점선이 상극이에요.
-            </p>
-            <HealthHints chart={chart} />
-          </div>
-        );
+        return <ElementsAdvice chart={chart} advice={sectionOf('advice')} pending={isPending('advice')} animate={animateFor('advice')} />;
       case 'cycle': {
         const s = sectionOf('cycle');
         const cur = chart.luck.currentIndex >= 0 ? chart.luck.pillars[chart.luck.currentIndex] : null;
@@ -532,25 +512,20 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
       }
       case 'daily':
         return <SajuDailyBox birth={birth} chart={chart} />;
-      case 'food':
-        return <SajuFoodBox birth={birth} />;
       case 'date':
         return <SajuDatePickBox birth={birth} />;
-      case 'match':
-        return <SajuMatchBox birth={birth} />;
-      case 'advice': {
-        const s = sectionOf('advice');
-        const lucky = s?.lucky;
-        return (
-          <SectionShell pending={isPending('advice')}>
-            {s?.keyword && <div className="font-serif-kr text-base font-bold text-[#f3e9c6]">“{s.keyword}”</div>}
-            <TypedText text={s?.body ?? ''} animate={animateFor('advice')} className="text-sm leading-relaxed text-[#e9e2d2]/85" />
-            {lucky && <LuckyTable lucky={lucky} />}
-          </SectionShell>
-        );
-      }
+      case 'food':
+        return <SajuFoodBox birth={birth} />;
+      case 'love':
+        return <SajuLoveBox chart={chart} section={themes?.love ?? null} status={themeStatus} animate={animate} onRetry={onRetryThemes} onPair={onPair} />;
+      case 'wealth':
+        return <SajuWealthBox chart={chart} section={themes?.wealth ?? null} status={themeStatus} animate={animate} onRetry={onRetryThemes} />;
+      case 'career':
+        return <SajuCareerBox chart={chart} section={themes?.career ?? null} status={themeStatus} animate={animate} onRetry={onRetryThemes} />;
     }
   };
+
+  const subTabs = SAJU_PANEL_GROUPS.find((g) => g.id === group)?.tabs ?? [];
 
   return (
     <section
@@ -585,22 +560,38 @@ export const SajuReadingPanel = ({ chart, birth, result, status, animate, side, 
           </button>
         )}
       </header>
-      {/* 탭 10개 — 가로 스크롤 대신 줄바꿈(xl 폭에선 한 줄). */}
-      <nav className="flex flex-wrap gap-1 border-b border-white/10 px-2 py-1.5" aria-label="풀이 탭">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            aria-pressed={tab === t.id}
-            onClick={() => onTab(t.id)}
-            className={cn(
-              'shrink-0 rounded-full border px-2.5 py-1 text-xs transition',
-              tab === t.id ? 'border-[#d9b65b] bg-[#d9b65b]/15 text-[#f3e9c6]' : t.tool ? 'border-[#b8322a]/50 text-[#e9e2d2]/75 hover:border-[#b8322a]' : 'border-white/15 text-[#e9e2d2]/65 hover:border-white/40',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* 그룹 3 + 서브 최대 4 — 390px 에서도 각 한 줄. */}
+      <nav className="flex flex-col gap-1 border-b border-white/10 px-2 py-1.5" aria-label="풀이 탭">
+        <div className="flex gap-1" role="tablist" aria-label="풀이 그룹">
+          {SAJU_PANEL_GROUPS.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              role="tab"
+              aria-selected={group === g.id}
+              onClick={() => selectGroup(g.id)}
+              className={cn('flex-1 rounded-lg border py-1 text-xs font-semibold transition', group === g.id ? 'border-[#d9b65b] bg-[#d9b65b]/15 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/60 hover:border-white/30')}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {subTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={tab === t.id}
+              onClick={() => select(t.id)}
+              className={cn(
+                'shrink-0 rounded-full border px-2.5 py-1 text-xs transition',
+                tab === t.id ? 'border-[#d9b65b] bg-[#d9b65b]/15 text-[#f3e9c6]' : t.tool ? 'border-[#b8322a]/50 text-[#e9e2d2]/75 hover:border-[#b8322a]' : 'border-white/15 text-[#e9e2d2]/65 hover:border-white/40',
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </nav>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3">
         {body()}

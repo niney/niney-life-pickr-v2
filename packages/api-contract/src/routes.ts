@@ -672,6 +672,9 @@ export const Saju = {
   readings: `${API_PREFIX}/saju-c/readings`,
   // GET(?after&wait) — 섹션 도착 long-poll. 서버 재시작으로 job 이 없으면 410.
   job: (jobId: string) => `${API_PREFIX}/saju-c/readings/jobs/${jobId}`,
+  // POST — 테마(인연·재물·직업) 3개 병렬 job(8차). GET jobs/:id 는 readings job 과 같은 long-poll.
+  themes: `${API_PREFIX}/saju-c/themes`,
+  themeJob: (jobId: string) => `${API_PREFIX}/saju-c/themes/jobs/${jobId}`,
   daily: `${API_PREFIX}/saju-c/daily`,
   match: `${API_PREFIX}/saju-c/match`,
   datePick: `${API_PREFIX}/saju-c/date-pick`,

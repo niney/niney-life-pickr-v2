@@ -5,11 +5,16 @@ import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 import {
   SAJU_SECTION_IDS,
+  SAJU_THEME_IDS,
   SajuAdviceSection,
+  SajuCareerSection,
   SajuCycleSection,
   SajuDailyResult,
+  SajuLoveSection,
   SajuPersonalitySection,
+  SajuWealthSection,
   SajuYearSection,
+  type CreateSajuThemesInputType,
   type SajuBirthInputType,
   type SajuChartType,
   type SajuDailyInputType,
@@ -26,6 +31,10 @@ import {
   type SajuSectionIdType,
   type SajuSectionsType,
   type SajuSourceType,
+  type SajuThemeIdType,
+  type SajuThemesJobPollResultType,
+  type SajuThemesResultType,
+  type SajuThemesType,
 } from '@repo/api-contract';
 import {
   chartSignature,
@@ -57,6 +66,7 @@ import {
   buildStaticFoodReasons,
   buildStaticMatch,
   buildStaticSections,
+  buildStaticThemes,
   luckyOf,
 } from './saju-static.js';
 import {
@@ -69,11 +79,14 @@ import {
   SAJU_SECTION_JSON_SCHEMA,
   SAJU_SECTION_MAX_TOKENS,
   SAJU_SYSTEM_PROMPT,
+  SAJU_THEME_JSON_SCHEMA,
+  SAJU_THEME_MAX_TOKENS,
   buildSajuDailyPrompt,
   buildSajuDatePickPrompt,
   buildSajuFoodPrompt,
   buildSajuMatchPrompt,
   buildSajuSectionPrompt,
+  buildSajuThemePrompt,
 } from './saju.prompts.js';
 
 // 사주 서비스 — 입력 → 원국(utils 재계산) → 캐시 → 한도 → LLM → 정적 폴백 → (회원 저장).
@@ -83,6 +96,8 @@ import {
 // - 캐시 키는 (프롬프트 버전, 8글자, 성별, 대운 방향·시작, 기준 연도) — 같은 사람은 연도가 바뀔 때까지 히트.
 //   섹션별로 따로 캐시해 일부만 실패해도 나머지는 재사용한다.
 // - 오늘·궁합·택일·음식은 단일 호출. 한도는 전부 feature 'saju-reading' 1건씩.
+// - 테마(인연·재물·직업, 8차)는 전체 풀이와 별도 job(3개 병렬, 한도 1건). 테마별 캐시. 회원이면 readingId 행의
+//   resultJson 에 themes 를 병합해 기록 상세에서도 보인다.
 // - 생년월일시는 로그에 남기지 않는다.
 
 export type SajuErrorCode = 'invalid_input' | 'not_found' | 'job_gone';
@@ -108,6 +123,7 @@ export interface SajuServiceDeps {
   logger?: FastifyBaseLogger;
   cache?: AdapterCache;
   jobs?: SajuJobRegistry;
+  themeJobs?: SajuJobRegistry<SajuThemesType>;
   now?: () => Date;
   llmTimeoutMs?: number;
 }
@@ -132,6 +148,14 @@ const SectionOutput: Record<SajuSectionIdType, z.ZodTypeAny> = {
   }),
   cycle: SajuCycleSection.omit({ status: true, source: true, model: true }),
   advice: SajuAdviceSection.omit({ status: true, source: true, model: true }),
+};
+const ThemeOutput: Record<SajuThemeIdType, z.ZodTypeAny> = {
+  love: SajuLoveSection.omit({ status: true, source: true, model: true }).extend({ tips: z.array(z.string().trim().min(1)).min(1).max(5) }),
+  wealth: SajuWealthSection.omit({ status: true, source: true, model: true }).extend({ tips: z.array(z.string().trim().min(1)).min(1).max(5) }),
+  career: SajuCareerSection.omit({ status: true, source: true, model: true }).extend({
+    jobs: z.array(z.string().trim().min(1)).min(1).max(6),
+    tips: z.array(z.string().trim().min(1)).min(1).max(5),
+  }),
 };
 const DailyOutput = z.object({ body: z.string().trim().min(1), advice: z.string().trim().min(1) });
 const MatchOutput = z.object({
@@ -166,6 +190,8 @@ export interface SajuLlmRequest<T> {
   jsonSchema: Record<string, unknown>;
   maxTokens: number;
   signal?: AbortSignal;
+  /** 추론(thinking) 강제 — 없으면 모델 규칙(thinkOptionForModel). 프로브가 비교용으로 쓴다. */
+  think?: boolean | 'low' | 'medium' | 'high';
 }
 
 // LLM 호출 + JSON 수리 재시도 1회. 프로브 스크립트(probe:saju-reading)와 공유.
@@ -173,8 +199,10 @@ export const requestSajuLlm = async <T>(
   provider: LLMProvider,
   model: string,
   req: SajuLlmRequest<T>,
-): Promise<{ output: T | null; calls: number; lastText: string }> => {
+): Promise<{ output: T | null; calls: number; lastText: string; doneReason: string | null; completionTokens: number | null }> => {
   let lastText = '';
+  let doneReason: string | null = null;
+  let completionTokens: number | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await provider.complete({
       prompt: attempt === 0 ? req.prompt : `${req.prompt}\n\n${SAJU_REPAIR_SUFFIX}`,
@@ -184,14 +212,16 @@ export const requestSajuLlm = async <T>(
       maxTokens: req.maxTokens,
       numCtx: LLM_NUM_CTX,
       format: req.jsonSchema,
-      think: thinkOptionForModel(model),
+      think: req.think ?? thinkOptionForModel(model),
       signal: req.signal,
     });
     lastText = res.text;
+    doneReason = res.doneReason ?? null;
+    completionTokens = res.completionTokens;
     const output = parseSajuJson(res.text, req.schema);
-    if (output) return { output, calls: attempt + 1, lastText };
+    if (output) return { output, calls: attempt + 1, lastText, doneReason, completionTokens };
   }
-  return { output: null, calls: 2, lastText };
+  return { output: null, calls: 2, lastText, doneReason, completionTokens };
 };
 
 // ── 캐시 키 ─────────────────────────────────────────────────────────────────
@@ -208,6 +238,7 @@ const chartCacheBase = (chart: SajuChart): string =>
   ]);
 const sha = (s: string): string => createHash('sha1').update(s).digest('hex');
 export const sectionCacheKey = (chart: SajuChart, section: SajuSectionIdType): string => sha(`section:${section}:${chartCacheBase(chart)}`);
+export const themeCacheKey = (chart: SajuChart, theme: SajuThemeIdType): string => sha(`theme:${theme}:${chartCacheBase(chart)}`);
 export const dailyCacheKey = (chart: SajuChart, dayKey: string): string =>
   sha(`daily:${SAJU_PROMPT_VERSION}:${chart.pillars.day.ko}:${chart.favorable.primary}:${dayKey}`);
 const matchCacheKey = (a: SajuChart, b: SajuChart, labels: { a: string; b: string }): string =>
@@ -218,12 +249,14 @@ const foodCacheKey = (chart: SajuChart, dayKey: string | null): string =>
   sha(`food:${SAJU_PROMPT_VERSION}:${chartSignature(chart)}:${chart.favorable.primary}:${dayKey ?? '-'}`);
 
 type SectionValue = SajuSectionsType[SajuSectionIdType];
+type ThemeValue = SajuThemesType[SajuThemeIdType];
 
 // ── 서비스 ──────────────────────────────────────────────────────────────────
 
 export class SajuService {
   private readonly cache = new LRUCache<string, object>({ max: CACHE_MAX, ttl: CACHE_TTL_MS });
   readonly jobs: SajuJobRegistry;
+  readonly themeJobs: SajuJobRegistry<SajuThemesType>;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -231,6 +264,7 @@ export class SajuService {
     private readonly deps: SajuServiceDeps,
   ) {
     this.jobs = deps.jobs ?? new SajuJobRegistry();
+    this.themeJobs = deps.themeJobs ?? new SajuJobRegistry<SajuThemesType>();
   }
 
   get cacheSize(): number {
@@ -364,7 +398,7 @@ export class SajuService {
   ): SajuReadingResultType {
     const source = sourceOf(sections);
     const model = Object.values(sections).find((s) => s.model)?.model ?? null;
-    return { readingId, jobId, chart: toChartDto(chart), sections, source, model, createdAt: createdAt.toISOString(), quota: { remainingToday: remaining } };
+    return { readingId, jobId, chart: toChartDto(chart), sections, themes: this.themesCached(chart), source, model, createdAt: createdAt.toISOString(), quota: { remainingToday: remaining } };
   }
 
   private async persistFull(userId: string, birth: SajuBirthInputType, chart: SajuChart, sections: SajuSectionsType, createdAt: Date) {
@@ -383,6 +417,142 @@ export class SajuService {
         createdAt,
       },
     });
+  }
+
+  // ── 테마(8차) — 인연·재물·직업 ────────────────────────────────────────
+
+  async createThemes(input: CreateSajuThemesInputType, actor: SajuActor): Promise<SajuThemesResultType> {
+    const chart = this.chartOf(input.birth);
+    const createdAt = this.now();
+    const statics = buildStaticThemes(chart);
+    const cached: Partial<Record<SajuThemeIdType, ThemeValue>> = {};
+    for (const t of SAJU_THEME_IDS) {
+      const hit = this.cache.get(themeCacheKey(chart, t)) as ThemeValue | undefined;
+      if (hit) cached[t] = hit;
+    }
+    const missing = SAJU_THEME_IDS.filter((t) => !cached[t]);
+    const persist = actor.userId && input.readingId ? { userId: actor.userId, readingId: input.readingId } : null;
+
+    if (missing.length === 0) {
+      const themes = { ...statics, ...cached } as SajuThemesType;
+      const saved = persist ? await this.persistThemes(persist.userId, persist.readingId, chart, themes) : null;
+      return this.themesResult(saved, null, themes, createdAt, await this.deps.quota.remainingForGuest(SAJU_QUOTA_FEATURE, actor));
+    }
+
+    const decision = await this.deps.quota.consume(SAJU_QUOTA_FEATURE, actor);
+    const provider = decision.allowed ? await this.resolveProvider() : null;
+    if (!provider) {
+      if (!decision.allowed) this.deps.logger?.debug({ reason: decision.reason, guest: !actor.userId }, '[saju] 한도로 정적 테마');
+      const themes = { ...statics, ...cached } as SajuThemesType;
+      const saved = persist ? await this.persistThemes(persist.userId, persist.readingId, chart, themes) : null;
+      return this.themesResult(saved, null, themes, createdAt, decision.remainingToday);
+    }
+
+    const jobId = randomBytes(9).toString('base64url');
+    const initial = { ...statics, ...cached } as SajuThemesType;
+    for (const t of missing) initial[t] = { ...initial[t], status: 'pending' } as never;
+    this.themeJobs.create(jobId, initial, missing, { expectReading: !!persist });
+    void this.runThemes(jobId, chart, missing, provider, persist);
+    return this.themesResult(null, jobId, initial, createdAt, decision.remainingToday);
+  }
+
+  async pollThemeJob(jobId: string, after: number, waitMs: number): Promise<SajuThemesJobPollResultType> {
+    const snap = await this.themeJobs.wait(jobId, after, waitMs);
+    if (!snap) throw new SajuError('job_gone', '테마 풀이 작업을 찾을 수 없어요. 다시 시도해 주세요.');
+    return { jobId: snap.jobId, version: snap.version, themes: snap.sections, done: snap.done, readingId: snap.readingId, source: snap.source };
+  }
+
+  private async runThemes(
+    jobId: string,
+    chart: SajuChart,
+    themes: readonly SajuThemeIdType[],
+    provider: { provider: LLMProvider; model: string },
+    persist: { userId: string; readingId: string } | null,
+  ): Promise<void> {
+    await Promise.all(
+      themes.map(async (theme) => {
+        const value = await this.readTheme(chart, theme, provider);
+        if (value) this.cache.set(themeCacheKey(chart, theme), value);
+        const job = this.themeJobs.get(jobId);
+        const fallback = job ? ({ ...job.sections[theme], status: 'static', source: 'static', model: null } as ThemeValue) : null;
+        this.themeJobs.settle(jobId, theme, (value ?? fallback ?? buildStaticThemes(chart)[theme]) as never);
+      }),
+    );
+    if (persist) {
+      const job = this.themeJobs.get(jobId);
+      if (!job) return;
+      const saved = await this.persistThemes(persist.userId, persist.readingId, chart, job.sections);
+      if (saved) this.themeJobs.attachReading(jobId, saved);
+      else this.themeJobs.abandonReading(jobId);
+    }
+  }
+
+  private async readTheme(chart: SajuChart, theme: SajuThemeIdType, p: { provider: LLMProvider; model: string }): Promise<ThemeValue | null> {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), this.deps.llmTimeoutMs ?? LLM_TIMEOUT_MS);
+    try {
+      const { output, calls } = await requestSajuLlm(p.provider, p.model, {
+        prompt: buildSajuThemePrompt(chart, theme),
+        schema: ThemeOutput[theme] as JsonSchemaLike<Record<string, unknown>>,
+        jsonSchema: SAJU_THEME_JSON_SCHEMA[theme],
+        maxTokens: SAJU_THEME_MAX_TOKENS[theme],
+        signal: ac.signal,
+      });
+      if (!output) {
+        this.deps.logger?.warn({ model: p.model, theme, calls }, '[saju] 테마 LLM 응답 파싱 실패 — 정적');
+        return null;
+      }
+      return { status: 'ready' as const, source: 'llm' as const, model: p.model, ...(output as object) } as ThemeValue;
+    } catch (e) {
+      this.deps.logger?.warn({ err: e instanceof Error ? e.message : String(e), model: p.model, theme }, '[saju] 테마 LLM 호출 실패 — 정적');
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private themesResult(readingId: string | null, jobId: string | null, themes: SajuThemesType, createdAt: Date, remaining: number | null): SajuThemesResultType {
+    const source = sourceOf(themes);
+    const model = Object.values(themes).find((s) => s.model)?.model ?? null;
+    return { readingId, jobId, themes, source, model, createdAt: createdAt.toISOString(), quota: { remainingToday: remaining } };
+  }
+
+  /** 회원 전체 풀이 행(readingId)에 themes 를 병합 — 같은 사주의 행일 때만. 성공하면 행 id, 아니면 null. */
+  private async persistThemes(userId: string, readingId: string, chart: SajuChart, themes: SajuThemesType): Promise<string | null> {
+    try {
+      const row = await this.prisma.sajuReading.findFirst({ where: { id: readingId, userId, kind: 'full' } });
+      if (!row) return null;
+      const stored = JSON.parse(row.chartJson) as SajuChart;
+      if (chartSignature(stored) !== chartSignature(chart) || stored.input.gender !== chart.input.gender) return null;
+      const result = JSON.parse(row.resultJson) as Record<string, unknown>;
+      await this.prisma.sajuReading.update({ where: { id: row.id }, data: { resultJson: JSON.stringify({ ...result, themes }) } });
+      return row.id;
+    } catch (e) {
+      this.deps.logger?.warn({ err: e instanceof Error ? e.message : String(e) }, '[saju] 테마 저장 실패');
+      return null;
+    }
+  }
+
+  /** 테마 3개가 전부 캐시에 있을 때만(전체 풀이 응답에 얹는다 — 재방문 시 탭이 즉시 찬다). */
+  themesCached(chart: SajuChart): SajuThemesType | null {
+    const out: Partial<Record<SajuThemeIdType, ThemeValue>> = {};
+    for (const t of SAJU_THEME_IDS) {
+      const hit = this.cache.get(themeCacheKey(chart, t)) as ThemeValue | undefined;
+      if (!hit) return null;
+      out[t] = hit;
+    }
+    return out as SajuThemesType;
+  }
+
+  /** 공유·기록용 — 캐시된 테마, 아니면 정적. LLM 을 새로 부르지 않는다. */
+  themesForShare(chart: SajuChart): SajuThemesType {
+    const statics = buildStaticThemes(chart);
+    const out = { ...statics } as SajuThemesType;
+    for (const t of SAJU_THEME_IDS) {
+      const hit = this.cache.get(themeCacheKey(chart, t)) as ThemeValue | undefined;
+      if (hit) out[t] = hit as never;
+    }
+    return out;
   }
 
   // ── 오늘의 운세 ───────────────────────────────────────────────────────

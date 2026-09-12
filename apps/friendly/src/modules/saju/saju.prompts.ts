@@ -1,4 +1,4 @@
-import type { SajuDatePurposeType, SajuSectionIdType } from '@repo/api-contract';
+import type { SajuDatePurposeType, SajuSectionIdType, SajuThemeIdType } from '@repo/api-contract';
 import {
   SAJU_DATE_PURPOSE_LABEL,
   SAJU_DAY_TAG_LABEL,
@@ -11,6 +11,7 @@ import {
   sajuFiveGodsOf,
   sajuPatternOf,
   sajuSamjaeOf,
+  sajuThemeFactLines,
   tenGodKo,
   type SajuChart,
   type SajuDailyFortune,
@@ -25,19 +26,22 @@ import {
 //
 // SAJU_PROMPT_VERSION 은 캐시 키·저장 행(promptVersion)에 들어간다. 프롬프트를 바꾸면 올린다.
 // v1: 최초 — 섹션 4개(personality·year·cycle·advice) + 오늘·궁합·택일·음식.
+// v2: 6차 — 사실 블록에 격국·오신·삼재.
+// v3: 8차 — 테마 3개(love·wealth·career) + 시스템 프롬프트에 결혼·이혼 단정 금지.
 //
 // 설계(docs/PLAN-saju.md LLM 설계):
 //  - 원국은 utils 가 계산한 사실 목록([사주 사실])을 그대로 넣는다. LLM 은 "사실을 사람 말로 엮는" 역할이고
 //    블록 밖의 십신·오행·신살을 새로 말하지 않는다(명리 사실 오염 금지).
 //  - 생년월일시는 데이터 블록에만. 건강·수명·사고·재물 액수 단정 금지, 공포 조장 금지.
 //  - Ollama Cloud 는 JSON 스키마 강제가 보장되지 않아 형식을 프롬프트에 박고 서버가 zod 로 검증 + 수리 1회.
-export const SAJU_PROMPT_VERSION = 2;
+export const SAJU_PROMPT_VERSION = 3;
 
 export const SAJU_SYSTEM_PROMPT = `너는 따뜻하고 담백한 명리(사주) 상담가다. 주어진 [사주 사실]을 사람이 이해하기 쉬운 한국어 존댓말로 풀어 준다.
 
 [태도]
 - 예언이 아니라 성향과 흐름에 대한 조언이다. "~할 것이다" 같은 단정 대신 "~한 편이에요", "~해 보세요", "~일 수 있어요" 로 쓴다.
 - 건강·수명·사고·질병·재물 액수·합격/불합격을 단정하지 않는다. 그런 주제는 태도와 마음가짐, 준비 방법으로만 다룬다.
+- 결혼 여부·결혼 시기·이혼·재혼·임신을 단정하거나 언급하지 않는다. 인연은 "가까워지는 해", "관계가 활발해지는 시기" 처럼 흐름으로만 말한다. 배우자성(남=재성·여=관성)은 전통 해석임을 한 번 밝힌다.
 - 공포를 조장하지 않는다. 충·형·백호·괴강 같은 거친 글자도 변화·정리·에너지 관리의 관점으로 푼다.
 - [사주 사실] 블록에 없는 십신·오행·신살·관계를 새로 말하지 않는다. 사실 블록의 수치·이름과 어긋나는 말을 하지 않는다.
 - 전문 용어는 써도 되지만 처음 나올 때 한 줄로 쉽게 풀어 준다(예: "정재 — 착실하게 모으는 돈의 기운").
@@ -180,6 +184,69 @@ export const SAJU_SECTION_MAX_TOKENS: Record<SajuSectionIdType, number> = {
   year: 700,
   cycle: 700,
   advice: 700,
+};
+
+// ── 테마 프롬프트(8차) — 인연·재물·직업 ─────────────────────────────────────
+// 계산값(배우자성·배우자궁·재물 스타일·격국·직업군·시기)은 utils sajuThemes 가 만들고 [테마 사실] 블록으로 넣는다.
+// LLM 은 그 위에 문장만 쓴다 — 시기는 계산된 해·대운만 인용하고, 결혼·이혼·액수는 단정하지 않는다(시스템 프롬프트).
+
+export const SAJU_THEME_LABEL: Record<SajuThemeIdType, string> = {
+  love: '인연 — 연애와 결혼',
+  wealth: '재물',
+  career: '직업',
+};
+
+const themeFactsBlock = (chart: SajuChart, theme: SajuThemeIdType): string =>
+  `[테마 사실 — ${SAJU_THEME_LABEL[theme]} · 이 안의 계산값만 인용한다]\n${sajuThemeFactLines(chart, theme).map((l) => `- ${l}`).join('\n')}`;
+
+export const buildSajuThemePrompt = (chart: SajuChart, theme: SajuThemeIdType): string => {
+  const lines: string[] = [factsBlock(chart), themeFactsBlock(chart, theme)];
+  switch (theme) {
+    case 'love':
+      lines.push(
+        '[요청] 이 사람의 인연(연애·결혼)을 써라. headline 은 인연의 결을 한 줄로(12자 이내, 예: "천천히 깊어지는 인연"). body 는 4~5문장(배우자성의 개수·위치와 배우자궁이 이 사람의 관계 방식에 뜻하는 것 — 전통 해석임을 한 번 밝힌다). style 은 연애 스타일 2~3문장(끌리는 상대·표현 방식·주의점). timing 은 "인연이 가까워지는 해" 와 배우자성 대운을 근거로 2~3문장 — 계산된 해만 인용하고 결혼 여부·시기를 단정하지 않는다. tips 는 관계를 위한 구체적 행동 3개(각 25자 이내).',
+        '형식: {"headline":"...","body":"...","style":"...","timing":"...","tips":["...","...","..."]}',
+      );
+      break;
+    case 'wealth':
+      lines.push(
+        '[요청] 이 사람의 재물을 써라. headline 은 돈의 결을 한 줄로(12자 이내, 예: "천천히 쌓이는 곳간"). body 는 4~5문장(재성의 개수·위치, 재물 스타일, 재를 감당하는 힘, 흐름 노트를 사람 말로 — 액수·부자/가난 단정 금지). style 은 돈을 다루는 방식 2~3문장(잘 맞는 벌이 방식·조심할 지출·관계). timing 은 재성·식상 대운과 향후 5년 세운을 근거로 2~3문장 — 계산된 해·나이만 인용한다. tips 는 구체적 행동 3개(각 25자 이내).',
+        '형식: {"headline":"...","body":"...","style":"...","timing":"...","tips":["...","...","..."]}',
+      );
+      break;
+    case 'career':
+      lines.push(
+        '[요청] 이 사람의 직업·일을 써라. headline 은 일의 결을 한 줄로(12자 이내, 예: "판을 여는 개척자"). body 는 4~5문장(격국과 십신 구성이 말하는 적성, 일 스타일, 신살 힌트를 사람 말로). jobs 는 어울리는 직업군 키워드 3~5개 — [테마 사실]의 직업군 후보·업종 색 안에서만 고른다(각 12자 이내). timing 은 관성·식상·인성 대운과 향후 5년 세운을 근거로 승진·이직·시험·창업에 힘이 실리는 시기 2~3문장 — 계산된 해·나이만 인용한다. tips 는 구체적 행동 3개(각 25자 이내).',
+        '형식: {"headline":"...","body":"...","jobs":["...","...","..."],"timing":"...","tips":["...","...","..."]}',
+      );
+      break;
+  }
+  lines.push('JSON 으로만 답하라.');
+  return lines.join('\n\n');
+};
+
+const themeTextSchema = (extra: Record<string, unknown>, extraRequired: string[]): Record<string, unknown> => ({
+  type: 'object',
+  properties: {
+    headline: { type: 'string' },
+    body: { type: 'string' },
+    timing: { type: 'string' },
+    tips: { type: 'array', items: { type: 'string' } },
+    ...extra,
+  },
+  required: ['headline', 'body', 'timing', 'tips', ...extraRequired],
+});
+
+export const SAJU_THEME_JSON_SCHEMA: Record<SajuThemeIdType, Record<string, unknown>> = {
+  love: themeTextSchema({ style: { type: 'string' } }, ['style']),
+  wealth: themeTextSchema({ style: { type: 'string' } }, ['style']),
+  career: themeTextSchema({ jobs: { type: 'array', items: { type: 'string' } } }, ['jobs']),
+};
+
+export const SAJU_THEME_MAX_TOKENS: Record<SajuThemeIdType, number> = {
+  love: 900,
+  wealth: 800,
+  career: 800,
 };
 
 // ── 오늘의 운세 ─────────────────────────────────────────────────────────────

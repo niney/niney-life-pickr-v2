@@ -87,8 +87,12 @@ export const SAJU_DAY_PILLAR_TEXT: readonly SajuDayPillarText[] = T.map(([title,
 }));
 
 export interface SajuDayPillarReading extends SajuDayPillarText {
-  /** 일지(배우자 자리) 십신·십이운성으로 조립한 본문. */
+  /** 별칭·성향 + 배우자 자리를 합친 본문(하위 호환). */
   body: string;
+  /** 별칭·성향만 — 성격 탭(8차: 배우자 자리는 인연 탭으로). */
+  traitBody: string;
+  /** 일지(배우자 자리) 십신·십이운성·공망 문장 — 인연 탭. */
+  spouseBody: string;
   spouseTenGod: TenGod;
   spouseStage: TwelveStage;
   isVoid: boolean;
@@ -101,13 +105,14 @@ export const sajuDayPillarReadingOf = (chart: SajuChart): SajuDayPillarReading =
   const god = d.branchTenGod;
   const stage = d.twelveStage;
   const godKo = SAJU_TEN_GOD_META[god].ko;
-  const parts = [
-    `${base.ko} 일주는 '${base.title}'이에요. ${base.tagline}`,
+  const traitBody = `${base.ko} 일주는 '${base.title}'이에요. ${base.tagline}`;
+  const spouseParts = [
     `일지 ${branchMeta(d.branch).ko}(${godKo})는 배우자·가장 가까운 사람의 자리 — ${SAJU_TEN_GOD_TEXT[god].short}의 기운이라 ${SAJU_TEN_GOD_TEXT[god].personality}`,
     `십이운성은 ${stage}(${SAJU_TWELVE_STAGE_TEXT[stage]})이라 그 자리의 힘이 ${stageStrengthKo(stage)}.`,
     d.isVoid ? '일지가 공망이라 가까운 관계에서 허전함을 느끼기 쉬워요. 그만큼 정신적인 교감을 더 챙기면 좋아요.' : '',
   ];
-  return { ...base, body: parts.filter(Boolean).join(' '), spouseTenGod: god, spouseStage: stage, isVoid: d.isVoid };
+  const spouseBody = spouseParts.filter(Boolean).join(' ');
+  return { ...base, body: `${traitBody} ${spouseBody}`, traitBody, spouseBody, spouseTenGod: god, spouseStage: stage, isVoid: d.isVoid };
 };
 
 const stageStrengthKo = (s: TwelveStage): string => {

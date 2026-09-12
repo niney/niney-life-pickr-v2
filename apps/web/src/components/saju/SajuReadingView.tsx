@@ -1,16 +1,20 @@
-import type { SajuChartType, SajuSectionsType } from '@repo/api-contract';
+import type { SajuChartType, SajuSectionsType, SajuThemesType } from '@repo/api-contract';
 import { type SajuChart } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { SajuChartTable } from './SajuChartTable';
-import { ChartInsightCard, DayMasterStyleCards, DayPillarCard, HealthHints, LuckPillarChip, LuckTimeline, LuckyTable, MonthLuckGrid, SajuChartHeader, YearLuckFacts, YearOutlookTable } from './SajuReadingPanel';
+import { ChartInsightCard, DayPillarCard, ElementsAdvice, LuckPillarChip, LuckTimeline, MonthLuckGrid, SajuChartHeader, YearLuckFacts, YearOutlookTable } from './SajuReadingPanel';
+import { SajuCareerBox, SajuLoveBox, SajuWealthBox } from './SajuThemes';
 import { SAJU_SOURCE_LABEL } from './sajuTheme';
 
-// 2D 풀이 보기 — 공유 페이지·회원 기록 상세 공용(3D 없음). 원국 표 + 일간 + 섹션 4개를 한 페이지에.
+// 2D 풀이 보기 — 공유 페이지·회원 기록 상세 공용(3D 없음). 패널과 같은 그룹 순서로 한 페이지에:
+// 원국(명식·성격·오행+조언) → 흐름(올해·대운) → 테마(인연·재물·직업 — 계산 카드는 항상, LLM 문장은 저장된 경우).
 
-export const SajuReadingView = ({ chart, sections, source, birthHidden }: { chart: SajuChartType; sections: SajuSectionsType; source: 'llm' | 'static' | 'mixed'; birthHidden?: boolean }) => {
+export const SajuReadingView = ({ chart, sections, themes, source, birthHidden }: { chart: SajuChartType; sections: SajuSectionsType; themes?: SajuThemesType | null; source: 'llm' | 'static' | 'mixed'; birthHidden?: boolean }) => {
   // 계약형 DTO 는 엔진 SajuChart 와 같은 모양(toChartDto 가 그대로 보냄) — 헤더·칩 컴포넌트는 엔진 타입을 받는다.
   const c = chart as unknown as SajuChart;
   const card = 'rounded-2xl border border-[#d9b65b]/15 bg-[#121218]/85 p-4';
+  const h2 = 'font-serif-kr text-base font-bold text-[#f3e9c6]';
+  const themeStatus = themes ? 'ready' : 'idle';
   return (
     <div className="flex flex-col gap-4" data-testid="saju-reading-view">
       <section className={card}>
@@ -26,13 +30,10 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
         <div className="mt-4">
           <SajuChartTable chart={chart} />
         </div>
-        <div className="mt-3">
-          <HealthHints chart={c} />
-        </div>
       </section>
 
       <section className={card}>
-        <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">성격과 기질</h2>
+        <h2 className={h2}>성격과 기질</h2>
         <p className="mt-2 text-sm leading-relaxed text-[#e9e2d2]/85">{sections.personality.body}</p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-lg border border-[#d9b65b]/30 p-2">
@@ -44,14 +45,20 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
             <ul className="flex flex-col gap-0.5 text-[#e9e2d2]/80">{sections.personality.cautions.map((x) => <li key={x}>· {x}</li>)}</ul>
           </div>
         </div>
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3">
           <DayPillarCard chart={c} />
-          <DayMasterStyleCards chart={c} />
         </div>
       </section>
 
       <section className={card}>
-        <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">
+        <h2 className={h2}>오행과 조언 {sections.advice.keyword && <span className="text-[#d9b65b]">“{sections.advice.keyword}”</span>}</h2>
+        <div className="mt-2">
+          <ElementsAdvice chart={c} advice={{ ...sections.advice, keyword: '' }} pending={false} animate={false} />
+        </div>
+      </section>
+
+      <section className={card}>
+        <h2 className={h2}>
           {chart.yearLuck.year}년 {chart.yearLuck.ko} <span className="text-sm text-[#e9e2d2]/60">{chart.yearLuck.hanja}</span>
         </h2>
         <div className="mt-2">
@@ -74,7 +81,7 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
       </section>
 
       <section className={card}>
-        <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">인생의 큰 흐름</h2>
+        <h2 className={h2}>인생의 큰 흐름</h2>
         <div className="mt-2">
           <LuckTimeline chart={c} />
         </div>
@@ -92,10 +99,21 @@ export const SajuReadingView = ({ chart, sections, source, birthHidden }: { char
       </section>
 
       <section className={card}>
-        <h2 className="font-serif-kr text-base font-bold text-[#f3e9c6]">조언 {sections.advice.keyword && <span className="text-[#d9b65b]">“{sections.advice.keyword}”</span>}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-[#e9e2d2]/85">{sections.advice.body}</p>
-        <div className="mt-3">
-          <LuckyTable lucky={sections.advice.lucky} />
+        <h2 className={h2}>인연</h2>
+        <div className="mt-2">
+          <SajuLoveBox chart={c} section={themes?.love ?? null} status={themeStatus} animate={false} />
+        </div>
+      </section>
+      <section className={card}>
+        <h2 className={h2}>재물</h2>
+        <div className="mt-2">
+          <SajuWealthBox chart={c} section={themes?.wealth ?? null} status={themeStatus} animate={false} />
+        </div>
+      </section>
+      <section className={card}>
+        <h2 className={h2}>직업</h2>
+        <div className="mt-2">
+          <SajuCareerBox chart={c} section={themes?.career ?? null} status={themeStatus} animate={false} />
         </div>
       </section>
     </div>

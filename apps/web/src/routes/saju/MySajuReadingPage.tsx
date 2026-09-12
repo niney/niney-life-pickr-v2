@@ -55,7 +55,7 @@ export const MySajuReadingPage = () => {
           <p className="py-16 text-center text-sm text-[#ffb4a2]">풀이를 찾을 수 없어요.</p>
         ) : (
           <>
-            <SajuReadingView chart={query.data.chart} sections={query.data.sections} source={query.data.source} />
+            <SajuReadingView chart={query.data.chart} sections={query.data.sections} themes={query.data.themes ?? null} source={query.data.source} />
             {query.data.readingId && <SajuShareSheet open={shareOpen} onClose={() => setShareOpen(false)} base={{ readingId: query.data.readingId }} />}
           </>
         )}

@@ -1,13 +1,17 @@
-import type { SajuReadingSourceType, SajuSectionIdType, SajuSectionsType } from '@repo/api-contract';
+import type { SajuReadingSourceType, SajuSectionsType, SajuSourceType } from '@repo/api-contract';
 
 // 섹션 병렬 작업 레지스트리 — POST /saju/readings 가 섹션 4개를 동시에 LLM 에 보내고 즉시 응답한 뒤,
 // 클라이언트가 GET /saju/readings/jobs/:id?after=n&wait=ms 로 도착한 섹션을 long-poll 한다.
 // 메모리 Map(단일 인스턴스). 완료 후 TTL 이 지나면 지우고, 서버 재시작으로 job 이 없으면 라우트가 410 —
 // 클라이언트는 이미 받은 정적 본문을 유지하고 "AI 풀이 다시 시도" 를 보인다(docs/PLAN-saju.md).
+//
+// 8차: 테마(인연·재물·직업) job 도 같은 레지스트리를 쓴다 — 섹션 맵의 모양만 다르므로 제네릭(S).
 
-export interface SajuJob {
+type SectionMap = Record<string, { source: SajuSourceType }>;
+
+export interface SajuJob<S extends SectionMap = SajuSectionsType> {
   id: string;
-  sections: SajuSectionsType;
+  sections: S;
   /** 섹션이 확정될 때마다 +1. after 와 비교한다. */
   version: number;
   done: boolean;
@@ -17,18 +21,18 @@ export interface SajuJob {
   finishedAt: number | null;
 }
 
-export interface SajuJobPollSnapshot {
+export interface SajuJobPollSnapshot<S extends SectionMap = SajuSectionsType> {
   jobId: string;
   version: number;
-  sections: SajuSectionsType;
+  sections: S;
   done: boolean;
   readingId: string | null;
   source: SajuReadingSourceType;
 }
 
-interface JobEntry extends SajuJob {
+interface JobEntry<S extends SectionMap> extends SajuJob<S> {
   waiters: Set<() => void>;
-  pending: Set<SajuSectionIdType>;
+  pending: Set<keyof S & string>;
   /** 회원 저장이 남아 있으면 true — done 이어도 readingId 가 붙을 때까지 poll 이 기다린다. */
   persistPending: boolean;
 }
@@ -41,8 +45,8 @@ export interface SajuJobRegistryOptions {
   now?: () => number;
 }
 
-export class SajuJobRegistry {
-  private readonly jobs = new Map<string, JobEntry>();
+export class SajuJobRegistry<S extends SectionMap = SajuSectionsType> {
+  private readonly jobs = new Map<string, JobEntry<S>>();
   private readonly ttlMs: number;
   private readonly max: number;
   private readonly now: () => number;
@@ -59,9 +63,9 @@ export class SajuJobRegistry {
 
   /** 정적 본문(status pending)으로 job 을 만든다. pending 섹션이 하나도 없으면 바로 done.
    *  expectReading 이면 섹션 완료 뒤 저장(attachReading/abandonReading)까지 poll 이 기다린다. */
-  create(id: string, sections: SajuSectionsType, pending: readonly SajuSectionIdType[], opts: { expectReading?: boolean } = {}): SajuJob {
+  create(id: string, sections: S, pending: ReadonlyArray<keyof S & string>, opts: { expectReading?: boolean } = {}): SajuJob<S> {
     this.evict();
-    const entry: JobEntry = {
+    const entry: JobEntry<S> = {
       id,
       sections,
       version: 0,
@@ -78,13 +82,13 @@ export class SajuJobRegistry {
     return entry;
   }
 
-  get(id: string): SajuJob | null {
+  get(id: string): SajuJob<S> | null {
     const e = this.jobs.get(id);
     return e ?? null;
   }
 
   /** 섹션 확정(LLM 성공 → ready, 실패 → static). 마지막 섹션이면 done. */
-  settle<K extends SajuSectionIdType>(id: string, section: K, value: SajuSectionsType[K]): void {
+  settle<K extends keyof S & string>(id: string, section: K, value: S[K]): void {
     const e = this.jobs.get(id);
     if (!e) return;
     e.sections = { ...e.sections, [section]: value };
@@ -119,7 +123,7 @@ export class SajuJobRegistry {
 
   /** after 보다 큰 버전이 생기거나 waitMs 가 지나면 스냅샷. 없는 job 이면 null.
    *  섹션·저장이 전부 끝난(finalized) job 은 기다리지 않는다. */
-  async wait(id: string, after: number, waitMs: number): Promise<SajuJobPollSnapshot | null> {
+  async wait(id: string, after: number, waitMs: number): Promise<SajuJobPollSnapshot<S> | null> {
     const e = this.jobs.get(id);
     if (!e) return null;
     const finalized = e.done && !e.persistPending;
@@ -144,7 +148,7 @@ export class SajuJobRegistry {
     this.jobs.clear();
   }
 
-  private notify(e: JobEntry): void {
+  private notify(e: JobEntry<S>): void {
     for (const w of [...e.waiters]) w();
   }
 
@@ -163,14 +167,14 @@ export class SajuJobRegistry {
   }
 }
 
-export const sourceOf = (sections: SajuSectionsType): SajuReadingSourceType => {
+export const sourceOf = (sections: SectionMap): SajuReadingSourceType => {
   const list = Object.values(sections).map((s) => s.source);
   if (list.every((s) => s === 'llm')) return 'llm';
   if (list.every((s) => s === 'static')) return 'static';
   return 'mixed';
 };
 
-const snapshot = (e: JobEntry): SajuJobPollSnapshot => ({
+const snapshot = <S extends SectionMap>(e: JobEntry<S>): SajuJobPollSnapshot<S> => ({
   jobId: e.id,
   version: e.version,
   sections: e.sections,

@@ -5,6 +5,7 @@ import {
   SAJU_PROFILE_MAX,
   SajuBirthInput,
   SajuSections,
+  SajuThemes,
   type CreateSajuShareInputType,
   type ListSajuReadingsQueryType,
   type ListSajuReadingsResultType,
@@ -17,6 +18,7 @@ import {
   type SajuReadingSummaryType,
   type SajuSectionsType,
   type SajuShareResultType,
+  type SajuThemesType,
   type SharedSajuReadingType,
 } from '@repo/api-contract';
 import { chartSignature, type SajuChart } from '@repo/utils';
@@ -54,6 +56,8 @@ export class SajuRecordsService {
     } else if (input.birth) {
       const chart = this.saju.chartOf(input.birth);
       const sections = this.saju.sectionsForShare(chart);
+      // 테마는 캐시된 것(게스트가 방금 본 것)만 LLM 문장, 아니면 정적 — 공유 페이지의 테마 카드가 비지 않게.
+      const themes = this.saju.themesForShare(chart);
       row = await this.prisma.sajuReading.create({
         data: {
           userId: actor.userId,
@@ -63,7 +67,7 @@ export class SajuRecordsService {
           kind: 'full',
           inputJson: JSON.stringify(input.birth),
           chartJson: JSON.stringify(chart),
-          resultJson: JSON.stringify(sections),
+          resultJson: JSON.stringify({ ...sections, themes }),
           source: sourceOf(sections),
           model: Object.values(sections).find((s) => s.model)?.model ?? null,
           promptVersion: SAJU_PROMPT_VERSION,
@@ -84,6 +88,7 @@ export class SajuRecordsService {
       includeBirth: row.shareBirth,
       chart: row.shareBirth ? chart : maskBirth(chart),
       sections: parseSections(row),
+      themes: parseThemes(row),
       source: row.source as SharedSajuReadingType['source'],
       model: row.model,
       createdAt: row.createdAt.toISOString(),
@@ -129,6 +134,7 @@ export class SajuRecordsService {
       jobId: null,
       chart: parseChart(row),
       sections: parseSections(row),
+      themes: parseThemes(row),
       source: row.source as SajuReadingResultType['source'],
       model: row.model,
       createdAt: row.createdAt.toISOString(),
@@ -260,6 +266,17 @@ const parseSections = (row: SajuReadingRow): SajuSectionsType => {
     cycle: { ...base, body: '', current: '', next: '', ...(raw.cycle ?? {}) },
     advice: { ...base, body: '', keyword: '', lucky: { element: chart.favorable.primary, colors: [], directions: [], numbers: [], foods: [] }, ...(raw.advice ?? {}) },
   };
+};
+
+// 테마(8차)는 resultJson.themes 에 병합 저장 — 없거나(8차 이전 행) 계약과 어긋나면 null(화면은 정적 카드만).
+const parseThemes = (row: SajuReadingRow): SajuThemesType | null => {
+  try {
+    const raw = JSON.parse(row.resultJson) as { themes?: unknown };
+    const parsed = SajuThemes.safeParse(raw.themes);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 };
 
 // 생년월일 숨김 — 공유 응답에서 입력·양력·음력·순간을 지운다(원국·띠·연도는 남는다).

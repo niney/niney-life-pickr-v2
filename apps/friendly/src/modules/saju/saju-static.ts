@@ -1,9 +1,13 @@
 import type {
   SajuAdviceSectionType,
+  SajuCareerSectionType,
   SajuCycleSectionType,
+  SajuLoveSectionType,
   SajuLuckyType,
   SajuPersonalitySectionType,
   SajuSectionsType,
+  SajuThemesType,
+  SajuWealthSectionType,
   SajuYearSectionType,
 } from '@repo/api-contract';
 import {
@@ -17,6 +21,9 @@ import {
   SAJU_WUXING_LUCKY,
   SAJU_WUXING_META,
   dayMasterText,
+  sajuCareerThemeOf,
+  sajuLoveThemeOf,
+  sajuWealthThemeOf,
   tenGodKo,
   type SajuChart,
   type SajuDailyFortune,
@@ -122,9 +129,61 @@ export const buildStaticSections = (chart: SajuChart): SajuSectionsType => {
   };
 };
 
+// ── 테마(8차) — 인연·재물·직업 정적 문장 ───────────────────────────────────
+// utils sajuThemes 의 계산값을 그대로 문장으로. LLM 이 없어도 테마 탭이 비지 않는다.
+
+export const buildStaticLove = (chart: SajuChart): Omit<SajuLoveSectionType, 'status' | 'source' | 'model'> => {
+  const t = sajuLoveThemeOf(chart);
+  const timing = t.chanceYears.length
+    ? `${t.chanceNote}${t.luckPeriods[0] ? ` 대운으로는 ${t.luckPeriods[0].ko}(${t.luckPeriods[0].fromAge}~${t.luckPeriods[0].toAge}세)에 ${t.luckPeriods[0].note.replace(/^.*— /, '')}.` : ''}`
+    : `${t.chanceNote}${t.luckPeriods[0] ? ` 대운으로는 ${t.luckPeriods[0].ko}(${t.luckPeriods[0].fromAge}~${t.luckPeriods[0].toAge}세)이 인연이 활발해지는 10년이에요.` : ''}`;
+  return {
+    headline: t.spouseCount === 0 ? '운에서 오는 인연' : t.spouseCount >= 3 ? '기회가 많은 인연' : '깊이 두는 인연',
+    body: `${t.spouseGod.note} ${t.spouseNote} ${t.palace.text}`,
+    style: `${t.style}${t.marks.length ? ` ${t.marks.map((m) => `${m.ko} — ${m.text}`).join(' ')}` : ''}`,
+    timing,
+    tips: ['마음은 말로 확인하기', '상대의 속도를 존중하기', '인연의 해엔 모임에 나가 보기'],
+  };
+};
+
+export const buildStaticWealth = (chart: SajuChart): Omit<SajuWealthSectionType, 'status' | 'source' | 'model'> => {
+  const t = sajuWealthThemeOf(chart);
+  const good = t.years.filter((y) => y.score >= 2).map((y) => `${y.year}년(${y.ko})`);
+  const period = t.luckPeriods.find((p) => p.current) ?? t.luckPeriods[0] ?? null;
+  return {
+    headline: t.style.summary,
+    body: `${t.style.ko}이에요 — ${t.style.detail} ${t.capacity.text}`,
+    style: `${t.notes.length ? t.notes.join(' ') : `${ko(t.element)} 기운이 재성이라 ${ko(t.element)}의 색·활동과 인연이 닿는 곳에서 돈이 흘러요.`}`,
+    timing: `${period ? `${period.ko} 대운(${period.fromAge}~${period.toAge}세${period.current ? ', 현재' : ''})은 ${period.note.replace(/^.*— /, '')}. ` : ''}${good.length ? `앞으로 5년 중 ${good.join(' · ')}에 재물의 기운이 드러나요.` : '앞으로 5년은 재물의 큰 변동보다 관리와 준비가 어울리는 흐름이에요.'}`,
+    tips: ['수입원을 내 이름으로 분명히', '지출 상한선을 정하기', `${ko(t.element)} 기운의 색을 곁에 두기`],
+  };
+};
+
+export const buildStaticCareer = (chart: SajuChart): Omit<SajuCareerSectionType, 'status' | 'source' | 'model'> => {
+  const t = sajuCareerThemeOf(chart);
+  const good = t.years.filter((y) => y.score >= 2).map((y) => `${y.year}년(${y.ko})`);
+  const period = t.luckPeriods.find((p) => p.current) ?? t.luckPeriods[0] ?? null;
+  return {
+    headline: t.aptitude.summary,
+    body: `${t.pattern.ko}(${t.pattern.hanja}) — ${t.pattern.detail} 십신으로는 ${t.aptitude.ko}이라 ${t.aptitude.detail} ${t.workStyle}${t.stars.length ? ` ${t.stars.map((s) => `${s.ko}: ${s.hint}`).join(' ')}` : ''}`,
+    jobs: [...t.jobs.slice(0, 3), t.industries[0] ?? ''].filter(Boolean),
+    timing: `${period ? `${period.ko} 대운(${period.fromAge}~${period.toAge}세${period.current ? ', 현재' : ''})은 ${period.note.replace(/^.*— /, '')}. ` : ''}${good.length ? `앞으로 5년 중 ${good.join(' · ')}에 일의 기운이 힘을 받아요.` : '앞으로 5년은 큰 변화보다 실력을 다지는 흐름이에요.'}`,
+    tips: ['실력이 곧 자리라는 마음으로', '귀인은 사람을 통해 오니 관계 챙기기', '변동의 해엔 이직·시험 준비를 미리'],
+  };
+};
+
+export const buildStaticThemes = (chart: SajuChart): SajuThemesType => {
+  const base = { status: 'static' as const, source: 'static' as const, model: null };
+  return {
+    love: { ...base, ...buildStaticLove(chart) },
+    wealth: { ...base, ...buildStaticWealth(chart) },
+    career: { ...base, ...buildStaticCareer(chart) },
+  };
+};
+
 // ── 오늘의 운세 ─────────────────────────────────────────────────────────────
 
-export const buildStaticDaily = (chart: SajuChart, fortune: SajuDailyFortune): { body: string; advice: string } => {
+export const buildStaticDaily =(chart: SajuChart, fortune: SajuDailyFortune): { body: string; advice: string } => {
   const d = fortune.day;
   const g = SAJU_TEN_GOD_TEXT[d.stemTenGod];
   const tags = d.tags.slice(0, 2).map((t) => SAJU_DAY_TAG_LABEL[t]).join(', ');

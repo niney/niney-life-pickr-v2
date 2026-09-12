@@ -1,20 +1,15 @@
 import { useState } from 'react';
 import { Loader2, Star } from 'lucide-react';
 import type { SajuBirthInputType, SajuDatePurposeType, SajuMatchResultType } from '@repo/api-contract';
-import { useSajuDailyQuery, useSajuDatePickQuery, useSajuFoodQuery, useSajuMatchQuery, useSajuProfileStore } from '@repo/shared';
+import { useSajuDailyQuery, useSajuDatePickQuery, useSajuFoodQuery } from '@repo/shared';
 import { SAJU_DATE_PURPOSE_LABEL, SAJU_DATE_PURPOSES, SAJU_DAY_TAG_LABEL, SAJU_TEN_GOD_META, SAJU_WUXING_META, sajuBestHours, sajuBranchImageId, sajuDayNumber, sajuHourLucksOf, sajuImagePath, type SajuChart, TAROT_MENU_CUISINE_LABEL, TAROT_MENU_DISH_LABEL, type TarotMenuCuisine, type TarotMenuDishType } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
-// "선택" 도구 4종 — 오늘의 운세 · 오행 음식 · 택일 · 궁합. 풀이 패널 탭에서 열리며, 열리는 순간 query 로 부른다
+// "선택" 도구 — 오늘의 운세 · 오행 음식 · 택일 + 궁합 결과 뷰. 풀이 패널 탭에서 열리며, 열리는 순간 query 로 부른다
 // (같은 입력은 캐시). 계산값(점수·후보·별점)은 서버가 utils 로 결정적으로 만들고 문장만 LLM/정적.
-
-// 패널 폭(27rem) 안에서 줄이 넘치지 않게 — 그리드 자식은 min-w-0, 입력은 w-full.
-// select 팝업 색은 SajuForm 의 field 와 같은 이유로 명시.
-const field =
-  'w-full min-w-0 rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-sm text-[#f3e9c6] focus:border-[#d9b65b] focus:outline-none' +
-  ' scheme-dark [&>option]:bg-[#16130f] [&>option]:text-[#f3e9c6] [&>option:checked]:bg-[#3a2f14] [&>option:checked]:text-[#f0d27a]';
+// 궁합 입력은 8차부터 입구(폼)의 "우리 궁합" 모드 — 여기엔 결과 뷰(SajuMatchResultView)만 남는다.
 
 const Stars = ({ n }: { n: number }) => (
   <span className="inline-flex gap-0.5" aria-label={`별 ${n}개`}>
@@ -254,7 +249,8 @@ const ScoreRing = ({ score }: { score: number }) => {
   );
 };
 
-const MatchResult = ({ m }: { m: SajuMatchResultType }) => (
+/** 궁합 결과 — 점수 링·항목 막대·요약·강점·주의·조언. 입구 "우리 궁합" 모드의 SajuPairPanel 이 그린다. */
+export const SajuMatchResultView = ({ m }: { m: SajuMatchResultType }) => (
   <div className="flex flex-col gap-3" data-testid="saju-match-result">
     <div className="flex items-center gap-3">
       <ScoreRing score={m.score} />
@@ -300,61 +296,3 @@ const MatchResult = ({ m }: { m: SajuMatchResultType }) => (
     <p className="rounded-lg border border-white/10 p-2 text-xs text-[#e9e2d2]/85">{m.advice}</p>
   </div>
 );
-
-export const SajuMatchBox = ({ birth }: { birth: SajuBirthInputType }) => {
-  const profiles = useSajuProfileStore((s) => s.profiles);
-  // 기본값은 내 사주와 겹치지 않게(같은 해 1월 1일, 반대 성별, 시간 모름).
-  const [other, setOther] = useState<SajuBirthInputType>({ ...birth, month: 1, day: 1, leapMonth: false, gender: birth.gender === 'M' ? 'F' : 'M', hour: null, minute: null });
-  const [label, setLabel] = useState('상대');
-  const [submitted, setSubmitted] = useState<{ b: SajuBirthInputType; label: string } | null>(null);
-  const q = useSajuMatchQuery(submitted ? { a: birth, b: submitted.b, labels: { a: '나', b: submitted.label } } : null);
-  return (
-    <div className="flex flex-col gap-3" data-testid="saju-match">
-      {profiles.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {profiles.map((p) => (
-            <button key={p.id} type="button" onClick={() => { setOther(p.birth); setLabel(p.label); }} className="rounded-full border border-white/15 px-3 py-1 text-xs text-[#e9e2d2]/70 hover:border-white/40">
-              {p.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="grid grid-cols-3 gap-2">
-        <input aria-label="상대 년" type="number" inputMode="numeric" value={other.year} onChange={(e) => setOther({ ...other, year: Number(e.target.value) })} className={field} />
-        <select aria-label="상대 월" value={other.month} onChange={(e) => setOther({ ...other, month: Number(e.target.value), leapMonth: false })} className={field}>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
-        </select>
-        <select aria-label="상대 일" value={other.day} onChange={(e) => setOther({ ...other, day: Number(e.target.value) })} className={field}>
-          {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}일</option>)}
-        </select>
-      </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-        <select aria-label="상대 시" value={other.hour === null ? '' : other.hour} onChange={(e) => setOther({ ...other, hour: e.target.value === '' ? null : Number(e.target.value), minute: e.target.value === '' ? null : 0 })} className={field}>
-          <option value="">시 모름</option>
-          {Array.from({ length: 24 }, (_, i) => i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}시</option>)}
-        </select>
-        <div className="flex shrink-0 gap-1" role="radiogroup" aria-label="상대 성별">
-          {(['M', 'F'] as const).map((g) => (
-            <button key={g} type="button" role="radio" aria-checked={other.gender === g} onClick={() => setOther({ ...other, gender: g })} className={cn('rounded-lg border px-2.5 py-1.5 text-xs', other.gender === g ? 'border-[#d9b65b] bg-[#d9b65b]/10 text-[#f3e9c6]' : 'border-white/10 text-[#e9e2d2]/60')}>
-              {g === 'M' ? '남' : '여'}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <select aria-label="상대 달력" value={other.calendar} onChange={(e) => setOther({ ...other, calendar: e.target.value as 'solar' | 'lunar', leapMonth: false })} className={field}>
-          <option value="solar">양력</option>
-          <option value="lunar">음력</option>
-        </select>
-        <input aria-label="상대 호칭" value={label} maxLength={20} onChange={(e) => setLabel(e.target.value)} className={field} placeholder="호칭" />
-      </div>
-      <Button type="button" onClick={() => setSubmitted({ b: other, label: label.trim() || '상대' })} className="h-10 bg-[#b8322a] text-[#f7eddc] hover:bg-[#cc3d33]">
-        궁합 보기
-      </Button>
-      {submitted && q.isPending && <Loading text="두 사주를 맞춰 보는 중…" />}
-      {submitted && q.isError && <Failed onRetry={() => void q.refetch()} />}
-      {q.data && <MatchResult m={q.data} />}
-      <p className="text-[10px] text-[#e9e2d2]/45">상대의 생년월일은 서버에 저장하지 않아요.</p>
-    </div>
-  );
-};

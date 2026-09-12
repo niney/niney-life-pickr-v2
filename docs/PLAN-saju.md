@@ -313,7 +313,24 @@ model SajuReading {
 | **5차** ✅ | 화면 콘텐츠 1순위(엔진 변경 없음) — 띠 이미지 12장 활용(원국 헤더·3D 띠 카드·공유 카드 오버레이·궁합 두 사람), 성격 탭 연애·일 스타일 + 띠 성향, 원국 표 십신 구성 5그룹·과다/부족·많음/없음 노트, 대운 칩 십신·십이운성 + 순행/역행, 올해 세운 십신·운성·관계 칩, 조언 행운 키워드·활동·맛·계절, 출생 요약(음력·태양시 보정·계절·만 나이). 2D 뷰도 동일 | `sajuText.ts`(`sajuBirthSummary`·`sajuTenGodSummary`·`zodiacTraitLine`), `SajuReadingPanel.tsx`(공용 `SajuChartHeader`·`DayMasterStyleCards`·`LuckPillarChip`·`YearLuckFacts`·`LuckyTable`), `SajuChartTable.tsx`, `SajuReadingView.tsx`, `SajuTools.tsx`, `stage/SajuScene.tsx`(`ZodiacCard`), `saju-share-card.ts` |
 | **6차** ✅ | 순수 계산 2순위 — 삼재 / 격국(8격) + 용신·희신·기신 명칭 / 월운 12개월 캘린더 / 향후 5년 세운 표 / 오늘의 좋은 시간대(12시진) / 오행 건강 힌트 / 지장간 숨은 십신 | utils 계산 + 계약 + 패널 |
 | **7차** ✅ | 콘텐츠·연출 3순위 — 60갑자 일주론(정적 표 60) / 신살 확장(홍염·귀문관·천라지망·금여·천덕·월덕) / 대운 타임라인 SVG / 효과음(WebAudio 합성, 기본 꺼짐) | `sajuDayPillar.ts`, `saju.ts`(findStars), `SajuReadingPanel.tsx`(`LuckTimeline`·`DayPillarCard`), `sajuSound.ts`, `SajuPage.tsx` |
-| **v2 후보** | SSE 스트리밍(타로와 함께) / 상단바 오늘의 운세 칩 / 해외 출생(경도·시간대) / 월운 12개월 캘린더 / 신살 확장 / 근처 맛집(타로 v3b 와 공유) / 효과음 | |
+| **8차** ✅ | 테마 3종(인연=연애+결혼 / 재물 / 직업) + 탭 재편(그룹 3 × 서브: 원국 명식·성격·오행 / 흐름 대운·올해·오늘·택일 / 테마 인연·재물·직업·음식) + 궁합을 입구 모드("내 사주 / 우리 궁합")로 — 상세는 §8차 | `sajuThemes.ts`, 계약 `SajuThemes`·`Routes.Saju.themes`, friendly `createThemes`·`themeJobs`, 웹 `SajuThemes.tsx`·`SajuPairPanel.tsx`·`sajuPanelTabs.ts` |
+| **v2 후보** | SSE 스트리밍(타로와 함께) / 상단바 오늘의 운세 칩 / 해외 출생(경도·시간대) / 근처 맛집(타로 v3b 와 공유) / 궁합 결과 공유·기록(입구 모드 승격으로 기대 커짐) / 궁합 두 원판 연출 / 테마에만 추론(thinking) 켜기 옵션 | |
+
+### 8차 설계 — 테마·탭 재편·궁합 입구 모드 (2026-09-12 사용자 결정)
+
+**사용자 결정**: ① 연애·결혼처럼 근거가 겹치면 한 곳(인연) ② 테마는 전체 풀이 병렬 4호출에 얹지 않고 **테마 탭을 처음 열 때 job 하나로 3개 병렬·도착 순**(한도 1건) ③ 탭은 그룹으로 재편하고 비슷한 건 합침 ④ 궁합은 탭이 아니라 **입구에서 모드로 선택**.
+
+| 테마 | 계산 근거(utils `sajuThemes.ts`, 전부 SajuChart 만으로) | LLM 출력 |
+|---|---|---|
+| 인연 | 배우자성(전통: 남=재성·여=관성) 개수·위치, 배우자궁(일지 십신·운성·공망·관계), 도화·홍염·원진, 일간 연애 스타일, **인연이 가까워지는 해**(향후 8년 세운 — 배우자성 천간 +3/지지 +2, 일지 합 +3, 충·형 −3, 도화 +1 → 점수 ≥3 상위 3), 배우자성 대운 | headline·body·style·timing·tips |
+| 재물 | 정재·편재 개수·위치, 재성 오행, **스타일 4분류+무재**(정재형·편재형·식상생재형·비겁쟁재형·무재형), 재를 감당하는 힘(신강약 × 재 개수 — 재다신약), 흐름 노트, 재성·식상 대운, 향후 5년 세운 | headline·body·style·timing·tips |
+| 직업 | 격국(6차) → 직업군 표 10, 십신 5그룹 최다 → 적성 5형(동률이면 격국 그룹), 일간 오행 → 업종 색, 신살 힌트(역마·문창·천을·양인·괴강·화개·금여·천덕·월덕), 일간 일 스타일, 관·식·인 대운, 향후 5년 세운 | headline·body·**jobs**(후보 안에서만)·timing·tips |
+
+- **시스템 프롬프트 v3**: 결혼 여부·시기·이혼·재혼·임신 단정 금지, 인연은 "가까워지는 해" 로만, 배우자성이 전통 해석임을 밝힌다. `SAJU_PROMPT_VERSION` 2→3(기존 섹션 캐시 무효).
+- **서버**: `POST /saju-c/themes`(birth + 회원이면 readingId) → 정적 테마 즉시 + jobId, `GET /saju-c/themes/jobs/:id` long-poll(`SajuJobRegistry` 제네릭화). 테마별 캐시(`theme:<id>:<chartCacheBase>`). 회원은 readingId 행(같은 사주일 때만)의 `resultJson.themes` 에 병합 — 마이그레이션 없음. 전체 풀이 응답·공유·기록 상세에 `themes`(캐시된 것 또는 정적) 동봉. Prisma 변경 없음.
+- **웹 탭**: 그룹 3(원국·흐름·테마) × 서브 ≤4 — 390px 에서 각 한 줄. 조언 탭 → 오행 서브 하단(키워드·본문·행운 표). 성격 탭의 일간 연애·일 카드 → 인연·직업, 일주론 카드는 성향만(`traitBody`), 배우자 자리(`spouseBody`) → 인연. 테마 서브를 열면 `onOpenThemes` → 페이지가 1회 요청. 2D 뷰(공유·기록)도 같은 순서 + 테마 카드(LLM 문장은 저장된 경우만).
+- **입구 모드**: 폼 상단 "내 사주 / 우리 궁합". 궁합은 나 + 상대(프로필 칩·호칭) → 클라이언트 검증 → `SajuPairPanel`(연출 없음, 탭 없음) — "내 사주 자세히 보기" 로 나를 프리필해 단독 풀이, 인연 탭 "이 사람과 궁합 보기" 로 반대 방향. `?tool=match` 딥링크 → 궁합 모드, `?tool=love|wealth|career`·`?tab=` → 해당 탭(테마면 풀이 요청과 함께 테마도 요청). 앱은 tool 파라미터 통과라 변경 없음.
+- **추론(thinking) 프로브**(kimi-k3, 3사주×4섹션): 켜면 문장이 더 구체적·정확(관계·운성 인용, 용어 풀이)이지만 p50 12→29s(단독), 출력 토큰 400→1900, maxTokens×3 에선 2/12 잘림(×5 에서 0/12). → **기본 끔 유지**. `--think=`·`--max-tokens-mult=`·`--out=` 옵션과 잘림·원국 십신 활용 지표를 프로브에 추가.
 
 0차와 사용자 이미지 생성·KASI 신청은 병렬. 2차는 이미지 없이 글자 placeholder 로 진행 가능.
 
@@ -326,6 +343,9 @@ model SajuReading {
 - 열린 질문: 회원 프로필 최대 인원(10 가정), 택일 최대 기간(60일 가정), 궁합에서 상대 성별 필요 여부(대운 방향에만 쓰므로 필수로 가정).
 
 ## 진행 기록
+
+- 2026-09-12: **8차(테마 3종 + 탭 재편 + 궁합 입구 모드) 완료.** utils `sajuThemes.ts`(인연·재물·직업 계산 + LLM 사실 블록 7줄씩, 테스트 8) · `sajuDayPillar.ts` 본문을 `traitBody`/`spouseBody` 로 분리. 계약 `SajuThemes`(love·wealth·career 섹션)·`CreateSajuThemesInput`·`SajuThemesResult`·`SajuThemesJobPollResult`, `SajuReadingResult`/`SharedSajuReading` 에 `themes`, `Routes.Saju.themes`/`themeJob`. friendly 프롬프트 v3(테마 3 + 결혼 단정 금지)·정적 테마·`SajuJobRegistry<S>` 제네릭·`createThemes`/`pollThemeJob`/`persistThemes`(readingId 행 병합)/`themesForShare`·라우트 2·기록 `parseThemes`, 테스트 24(테마 job·캐시·병합 저장·라우트 정적 추가). shared `createThemes`/`pollThemeJob`·`useCreateSajuThemes`/`useSajuThemeJob`. 웹 `sajuPanelTabs.ts`(그룹 3×서브)·`SajuThemes.tsx`(테마 박스 3 + TypedText)·`SajuPairPanel.tsx`·`SajuForm.tsx`(모드 토글·상대 입력·`BirthFields` 공용)·`SajuPage.tsx`(테마 job 병합·궁합 모드·딥링크 매핑)·`SajuReadingView.tsx`(재편 + 테마)·`SajuTools.tsx`(궁합 박스 제거, 결과 뷰만). 테스트 utils 348·shared 81·web 126·friendly saju 24 green, 5 워크스페이스 typecheck·lint(0 error) green. 실브라우저(3D 무대·탭 줄바꿈 실측)는 미확인. 미커밋.
+- 2026-09-12: **kimi-k3 추론(thinking) 프로브.** `probe:saju-reading` 에 `--think=`(false/true/low/medium/high 콤마 목록)·`--max-tokens-mult=`·`--out=jsonl` 과 잘림(done_reason=length)·원국 십신 활용 종수 지표 추가, `requestSajuLlm` 에 think 오버라이드·doneReason·completionTokens 반환. 결과(3사주×4섹션): think=false 12/12·p50 12.0s(동시 실행)·400tok / think=true ×3 10/12(잘림 2)·p50 34.4s·1607tok / think=true ×5 단독 12/12·잘림 0·p50 28.6s·max 58s·1894tok / think=low 도 오류 없이 수용(1건, 5.5s·322tok — 사실상 끔과 유사). 문장은 켠 쪽이 관계(자오충·축오 원진·오술 반합)·운성 의미를 정확히 인용하고 용어를 풀어 써 품질 우위, 끈 쪽은 간혹 대운 십신을 뭉뚱그리거나 문체가 흔들림("-습니다"). **기본값은 끔 유지** — 첫 섹션 도착이 무대 연출(≈11s)을 넘겨 체감 대기 30초. 후보: 테마 3개만 켜기(사용자가 명시적으로 기다리는 지연 탭) 또는 어드민 토글.
 
 - 2026-09-07: **7차(콘텐츠·연출 3순위) 완료.** ① 60갑자 일주론 `sajuDayPillar.ts` — 60종 손글 별칭·성향("호랑이 등에 탄 태양" 등) + 일지(배우자 자리) 십신·십이운성·공망을 규칙으로 엮은 본문, 성격 탭 "일주로 보면" 카드·2D 뷰. ② 신살 6종 확장(홍염·귀문관·천라지망·금여·천덕귀인·월덕귀인; 표는 `saju.ts` 주석, 계약 `SajuStarId` 확장) — 원국 표 칩에 자동 표시, LLM 사실 목록에도 포함. ③ 대운 타임라인 SVG(0~100세 강물, 구간 색 = 대운 천간 오행, 지금 나이 표식) 흐름 탭·2D 뷰. ④ 효과음 — 파일 없이 WebAudio 합성(인장 '쿵' 140→45Hz + 노이즈, 다이얼 정지 종소리 880/1320Hz), 3D 모드 왼쪽 위 토글, 기본 꺼짐·기기에 기억(`saju-sound-v1`), 제출 클릭에서 컨텍스트 프라임. 테스트 utils 7건 추가(신살 5·일주론 2). 미커밋.
 - 2026-09-07: **실브라우저 검증(원격 크롬, 공인 IP:5173) + 프로필 중복 저장 수정.** 6차 탭 5개의 새 섹션(명식 한눈에·십신 구성·숨은 십신·건강 힌트·향후 5년·월운·좋은 시간대)이 실제 크롬 DOM 에 전부 있고 가로 넘침 없음(숨긴 탭이라 스크린샷은 간헐 타임아웃 → DOM 텍스트로 확인). 검증 중 발견: 같은 입력을 다시 세우면 기기 프로필이 매번 새로 생김("나" 3개) → 로컬 스토어 `upsert` 와 서버 `createProfile` 모두 같은 사주(생년월일시·성별·달력·윤달)가 있으면 라벨만 갱신하도록(`sameSajuBirth` 를 shared 로 올려 폼·스토어 공용). friendly 테스트 갱신(중복 저장 → 같은 id). 미커밋.
