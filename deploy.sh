@@ -50,7 +50,14 @@ LIFE_CCTV_CSV="${LIFE_CCTV_CSV:-$(first_existing "$LIFE_DATA_DIR/life/cctv.csv" 
 LIFE_TOILET_CSV="${LIFE_TOILET_CSV:-$(first_existing "$LIFE_DATA_DIR/life/toilet.csv" "$LIFE_DATA_DIR/공중화장실정보.csv")}"
 LIFE_GEOCODE_GZ="apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz"
 # 상가(상권)정보 분기 zip(data.go.kr 15083033) — data/open/store/store-YYYYMM.zip 중 최신(없으면 빈 문자열).
-LIFE_STORE_ZIP="${LIFE_STORE_ZIP:-$(ls -1 "$LIFE_DATA_DIR"/store/store-*.zip 2>/dev/null | sort | tail -n1)}"
+# 주의: `ls … | tail` 은 파일이 없으면 pipefail 로 2 를 돌려 set -e 가 메뉴 전에 스크립트를 조용히 죽인다(2026-09-12 운영 재현).
+# K-apt 탐지(kapt_latest_xlsx)와 같이 항상 0 으로 끝나는 글롭 루프로 고른다.
+store_latest_zip() {
+  local f latest=""
+  for f in "$LIFE_DATA_DIR"/store/store-*.zip; do [[ -f "$f" ]] && latest="$f"; done   # 사전순 → YYYYMM 최신
+  printf '%s' "$latest"
+}
+LIFE_STORE_ZIP="${LIFE_STORE_ZIP:-$(store_latest_zip)}"
 # 음식 카탈로그 배포본 — 적재기(load:food-catalog)가 이 경로를 기본으로 찾는다. 출처는
 # docs/data-sources.md. 영양성분 API(DATA_GO_KR_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
 FOOD_DATA_DIR="$ROOT/data/open/food"
