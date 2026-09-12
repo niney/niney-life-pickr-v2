@@ -29,6 +29,7 @@ interface Row {
   defaultModel: string | null;
   enabled: boolean;
   maxConcurrent: number;
+  thinking?: string | null;
   updatedAt: Date;
   updatedById: string | null;
 }
@@ -83,6 +84,7 @@ const buildPrismaStub = (initial: Row[] = []) => {
             defaultModel: create.defaultModel ?? null,
             enabled: create.enabled ?? true,
             maxConcurrent: create.maxConcurrent ?? 15,
+            thinking: create.thinking ?? null,
             updatedAt: new Date(),
             updatedById: create.updatedById ?? null,
           };
@@ -522,6 +524,21 @@ describe('AiConfigService', () => {
   });
 
   describe('update', () => {
+    it('thinking: 레벨(low~max)은 row 에 저장, off 는 null 로 비우고 view·resolved 에 실린다', async () => {
+      const max = await service.update('ollama-cloud', 'saju', { thinking: 'max' }, 'admin-1');
+      expect(max.thinking).toBe('max');
+      expect(prisma.rows()[0]!.thinking).toBe('max');
+      expect((await service.getResolved('ollama-cloud', 'saju'))?.thinking).toBe('max');
+      const high = await service.update('ollama-cloud', 'saju', { thinking: 'high' }, 'admin-1');
+      expect(high.thinking).toBe('high');
+      const off = await service.update('ollama-cloud', 'saju', { thinking: 'off' }, 'admin-1');
+      expect(off.thinking).toBe('off');
+      expect(prisma.rows()[0]!.thinking).toBeNull();
+      expect((await service.getResolved('ollama-cloud', 'saju'))?.thinking).toBe('off');
+      // row 없는 용도는 off.
+      expect((await service.list()).find((p) => p.purpose === 'tarot')?.thinking).toBe('off');
+    });
+
     it('creates a new chat row with defaults when none exists', async () => {
       const out = await service.update('ollama-cloud', 'chat', { apiKey: 'new-key' }, 'admin-1');
       expect(out.hasApiKey).toBe(true);

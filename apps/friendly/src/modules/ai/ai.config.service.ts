@@ -1,11 +1,13 @@
 import type { PrismaClient } from '@prisma/client';
 import {
   LlmProviderPurpose,
+  LlmThinking,
   type LlmKeySourceType,
   type LlmModelSourceType,
   type LlmProviderConfigType,
   type LlmProviderIdType,
   type LlmProviderPurposeType,
+  type LlmThinkingType,
   type UpdateLlmProviderInputType,
 } from '@repo/api-contract';
 
@@ -36,7 +38,15 @@ export interface ResolvedProviderConfig {
   maxConcurrent: number;
   defaultModel: string;
   enabled: boolean;
+  // 어드민 추론 설정(row 없으면 off). 호출부가 utils thinkOptionFor(model, thinking) 로 think 를 만든다(kimi 계열만 반영).
+  thinking: LlmThinkingType;
 }
+
+// row 의 thinking 문자열 → 계약 enum(모르는 값·null 은 off).
+const thinkingOf = (raw: string | null | undefined): LlmThinkingType => {
+  const parsed = LlmThinking.safeParse(raw ?? 'off');
+  return parsed.success ? parsed.data : 'off';
+};
 
 export const maskApiKey = (key: string): string | null => {
   if (!key) return null;
@@ -130,6 +140,7 @@ export class AiConfigService {
       // 보충한다(DB row 값이 비어 있을 때만).
       defaultModel: row?.defaultModel?.trim() || this.envModelFor(purpose),
       enabled,
+      thinking: thinkingOf(row?.thinking),
     };
   }
 
@@ -176,6 +187,8 @@ export class AiConfigService {
     if (input.defaultModel !== undefined) updateData.defaultModel = input.defaultModel;
     if (input.enabled !== undefined) updateData.enabled = input.enabled;
     if (input.maxConcurrent !== undefined) updateData.maxConcurrent = input.maxConcurrent;
+    // off(기본)는 저장하지 않는다(null).
+    if (input.thinking !== undefined) updateData.thinking = input.thinking === 'off' ? null : input.thinking;
 
     // 신규 row 생성 시엔 키가 필요한데, chat purpose 만 env fallback 으로
     // 가능하다. image 등은 입력 키가 없으면 빈 문자열로 들어가 hasApiKey=false
@@ -193,6 +206,7 @@ export class AiConfigService {
         defaultModel: input.defaultModel ?? null,
         enabled: input.enabled ?? true,
         maxConcurrent: input.maxConcurrent ?? this.env.maxConcurrent,
+        thinking: input.thinking && input.thinking !== 'off' ? input.thinking : null,
         updatedById: actorId,
       },
       update: updateData,
@@ -215,6 +229,7 @@ export class AiConfigService {
       defaultModel: string | null;
       enabled: boolean;
       maxConcurrent: number;
+      thinking?: string | null;
       updatedAt: Date;
     } | null,
     accountKey: string,
@@ -258,6 +273,7 @@ export class AiConfigService {
       defaultModelSource,
       enabled: row?.enabled ?? true,
       maxConcurrent: row?.maxConcurrent ?? this.env.maxConcurrent,
+      thinking: thinkingOf(row?.thinking),
       updatedAt: row ? row.updatedAt.toISOString() : null,
     };
   }

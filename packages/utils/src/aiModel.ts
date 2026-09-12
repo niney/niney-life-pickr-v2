@@ -94,8 +94,8 @@ export const recommendModelForPurpose = (purpose: ModelPurpose, models: string[]
   const list = models.map((m) => m.trim()).filter((m) => m.length > 0);
   if (list.length === 0) return null;
 
-  if (purpose === 'saju-g') {
-    // 사주 v3 실측(2026-09-06): K3 12/12 통과. K2.6은 지연이 커서 보조 후보로 둔다.
+  if (purpose === 'saju-g' || purpose === 'saju') {
+    // 사주 실측(2026-09-06): K3 12/12 통과·문맥을 가장 자연스럽게 엮음 → 기본 kimi-k3. K2.6은 지연이 커서 보조 후보.
     for (const family of ['kimi-k3', 'deepseek-v4-pro', 'kimi-k2.6']) {
       const candidate = list.find((id) => id.toLowerCase().split(':')[0] === family);
       if (candidate) return candidate;
@@ -134,4 +134,33 @@ export const thinkOptionForModel = (modelId: string): false | 'low' => {
   // gpt-oss 는 사고를 끌 수 없다 — 최저 레벨로 낮춰 출력 토큰을 확보한다.
   if (family.startsWith('gpt-oss')) return 'low';
   return false;
+};
+
+// 어드민 추론 설정(계약 LlmThinking 과 같은 값) → Ollama think 옵션.
+// Ollama 가 받는 think 는 true/false/'low'/'medium'/'high'/'max'(2026-09-12 실측). kimi-k3 는 레벨을 전부 받아
+// 사고량이 단계적으로 는다(off 0자 / low 12자 / medium 22자 / high 288자 / max 2.8천자 ≈ true).
+// 설정은 **kimi 계열에만** 적용한다 — 다른 모델은 thinkOptionForModel 규칙(gpt-oss low, 그 외 off).
+export type LlmThinkingSetting = 'off' | 'low' | 'medium' | 'high' | 'max';
+export const LLM_THINKING_SETTINGS: readonly LlmThinkingSetting[] = ['off', 'low', 'medium', 'high', 'max'];
+export type ThinkOption = boolean | 'low' | 'medium' | 'high' | 'max';
+export const isKimiModel = (modelId: string): boolean => (modelId.trim().toLowerCase().split(':')[0] ?? '').startsWith('kimi');
+export const thinkOptionFor = (modelId: string, setting: LlmThinkingSetting | null | undefined): ThinkOption => {
+  if (!isKimiModel(modelId) || !setting || setting === 'off') return thinkOptionForModel(modelId);
+  return setting;
+};
+/** 사고 토큰이 num_predict 를 먹는 만큼 maxTokens 를 키우는 배수(사주 kimi-k3 실측: max 는 ×3 에서 2/12 잘림, ×5 에서 0). */
+export const thinkTokenMult = (think: ThinkOption): number => {
+  switch (think) {
+    case 'low':
+      return 1.5;
+    case 'medium':
+      return 2;
+    case 'high':
+      return 3;
+    case 'max':
+    case true:
+      return 5;
+    default:
+      return 1;
+  }
 };

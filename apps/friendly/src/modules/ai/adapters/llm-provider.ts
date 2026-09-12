@@ -30,7 +30,7 @@ export interface LLMCompleteOptions {
   // 'low'|'medium'|'high'(끄기 불가, 기본 medium), 그 외 thinking 모델은
   // boolean. thinking 미지원 모델에 보내면 Ollama 가 에러를 내므로
   // 호출자가 모델을 보고 설정 여부를 결정한다.
-  think?: boolean | 'low' | 'medium' | 'high';
+  think?: boolean | 'low' | 'medium' | 'high' | 'max';
   signal?: AbortSignal;
 }
 

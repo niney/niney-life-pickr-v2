@@ -28,10 +28,11 @@ import {
 import type {
   LlmProviderConfigType,
   LlmProviderPurposeType,
+  LlmThinkingType,
   TestLlmProviderResultType,
   UpdateLlmProviderInputType,
 } from '@repo/api-contract';
-import { recommendModelForPurpose } from '@repo/utils';
+import { isKimiModel, recommendModelForPurpose } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -62,7 +63,20 @@ interface PurposeMeta {
   label: string;
   desc: string;
   placeholder: string;
+  /** 추론(thinking) 선택을 노출하는 용도 — 서비스가 이 설정을 읽는 곳만(지금은 사주(C)). kimi 계열 모델일 때만 보인다. */
+  thinking?: boolean;
 }
+
+// 추론 선택지 — 계약 LlmThinking 순서(Ollama 가 받는 값). kimi-k3 실측(3문장 답 기준 사고량·소요):
+// 끔 0자·4.8s / 낮음 12자·2.7s / 보통 22자·5.9s / 높음 288자·3.1s / 최대 2.8천자·11.4s.
+// 사주 섹션(≈400자 답)은 최대에서 p50 12→29s, 출력 토큰 5배.
+const THINKING_OPTIONS: Array<{ value: LlmThinkingType; label: string }> = [
+  { value: 'off', label: '끔 — 빠름(기본)' },
+  { value: 'low', label: '낮음 — 짧은 점검, 속도 거의 그대로' },
+  { value: 'medium', label: '보통 — 출력 예산 2배' },
+  { value: 'high', label: '높음 — 문장이 더 구체적, 출력 예산 3배' },
+  { value: 'max', label: '최대 — 가장 정확, 응답 2~3배 느림(예산 5배)' },
+];
 
 const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
   'saju-g': {
@@ -110,8 +124,9 @@ const PURPOSE_META: Record<LlmProviderPurposeType, PurposeMeta> = {
   saju: {
     icon: Sparkles,
     label: '사주(C) 풀이',
-    desc: '사주 — 계산된 원국을 문장으로 풀어 주는 텍스트 모델(섹션 4개 병렬·오늘·궁합·택일·음식). 속도보다 한국어·명리 용어 품질 우선',
+    desc: '사주 — 계산된 원국을 문장으로 풀어 주는 텍스트 모델(섹션 4개 병렬·테마 3개·오늘·궁합·택일·음식). 기본 kimi-k3. 추론을 켜면 더 정확하지만 p50 12→29초',
     placeholder: 'kimi-k3',
+    thinking: true,
   },
 };
 
@@ -211,7 +226,7 @@ export const AdminAiKeysPage = () => {
           <div className="space-y-3">
             {purposeRows.map((p) => (
               <PurposeModelRow
-                key={`${p.purpose}:${p.defaultModel ?? ''}:${p.enabled ? 1 : 0}:${p.updatedAt ?? ''}`}
+                key={`${p.purpose}:${p.defaultModel ?? ''}:${p.enabled ? 1 : 0}:${p.thinking}:${p.updatedAt ?? ''}`}
                 provider={p}
                 catalog={catalog}
                 onSave={(input) =>
@@ -548,18 +563,21 @@ const PurposeModelRow = ({ provider, catalog, onSave, isSaving }: PurposeModelRo
   // 늦게 와도 렌더 중 다시 계산되므로 useEffect 없이 자동 반영된다.
   const [draft, setDraft] = useState<string | null>(null);
   const [enabledDraft, setEnabledDraft] = useState<boolean | null>(null);
+  const [thinkingDraft, setThinkingDraft] = useState<LlmThinkingType | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const shownModel = draft ?? (savedModel || recommended || '');
   const shownEnabled = enabledDraft ?? provider.enabled;
+  const shownThinking = thinkingDraft ?? provider.thinking;
   // 저장값이 없는데 추천으로 채워진 상태 — 사용자가 저장해야 확정된다.
   const isRecommendation = draft === null && !savedModel && Boolean(recommended);
 
   const modelDirty = shownModel !== savedModel;
   const enabledDirty = shownEnabled !== provider.enabled;
-  const dirty = modelDirty || enabledDirty;
+  const thinkingDirty = shownThinking !== provider.thinking;
+  const dirty = modelDirty || enabledDirty || thinkingDirty;
 
   const datalistId = `models-${purpose}`;
 
@@ -570,6 +588,7 @@ const PurposeModelRow = ({ provider, catalog, onSave, isSaving }: PurposeModelRo
     const input: UpdateLlmProviderInputType = {};
     if (modelDirty) input.defaultModel = shownModel.trim() ? shownModel.trim() : null;
     if (enabledDirty) input.enabled = shownEnabled;
+    if (thinkingDirty) input.thinking = shownThinking;
     if (Object.keys(input).length === 0) return;
     try {
       await onSave(input);
@@ -635,6 +654,29 @@ const PurposeModelRow = ({ provider, catalog, onSave, isSaving }: PurposeModelRo
               <p className="mt-1 text-[11px] text-amber-600">
                 위 AI 계정에 키를 먼저 입력해야 이 용도가 동작합니다.
               </p>
+            )}
+            {meta.thinking && isKimiModel(shownModel) && (
+              <label className="mt-2 flex flex-col gap-1 text-[11px] text-muted-foreground">
+                <span>추론(thinking) — kimi 모델 전용</span>
+                <select
+                  aria-label={`${meta.label} 추론`}
+                  value={shownThinking}
+                  onChange={(e) => setThinkingDraft(e.target.value as LlmThinkingType)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                >
+                  {THINKING_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {(shownThinking === 'high' || shownThinking === 'max') && (
+                  <span className="text-amber-600">사고 토큰만큼 출력 예산과 타임아웃을 늘립니다(최대 5배·120초) — 무대 연출보다 첫 문장이 늦게 옵니다.</span>
+                )}
+              </label>
+            )}
+            {meta.thinking && !isKimiModel(shownModel) && provider.thinking !== 'off' && (
+              <p className="mt-1 text-[11px] text-muted-foreground">추론 설정({provider.thinking})은 kimi 모델에서만 적용됩니다 — 현재 모델은 규칙대로 동작해요.</p>
             )}
           </div>
 

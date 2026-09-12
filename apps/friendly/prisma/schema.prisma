@@ -341,6 +341,9 @@ model LlmProviderConfig {
   defaultModel  String?
   enabled       Boolean  @default(true)
   maxConcurrent Int      @default(15)
+  // 추론(thinking) 설정 — null=auto(모델 규칙 thinkOptionForModel) / off / on / low / medium / high.
+  // 지금은 saju 용도만 읽는다(어드민 "추론" 선택). Ollama /api/chat 의 think 로 전달.
+  thinking      String?
   updatedAt     DateTime @updatedAt
   updatedById   String?
 

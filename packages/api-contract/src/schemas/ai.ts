@@ -124,6 +124,15 @@ export type LlmKeySourceType = z.infer<typeof LlmKeySource>;
 export const LlmModelSource = z.enum(['own', 'env', 'none']);
 export type LlmModelSourceType = z.infer<typeof LlmModelSource>;
 
+// 추론(thinking) 설정 — Ollama /api/chat 의 think. utils 의 LlmThinkingSetting 과 같은 값.
+// Ollama 가 받는 값은 true/false/"low"/"medium"/"high"/"max"(2026-09-12 실측 — 다른 문자열은 400).
+// kimi-k3 실측(3문장 답): off 사고 0자 / low 12자 / medium 22자 / high 288자 / max 2.8천자(≈ true).
+//  off     사고 없음(기본 — 빠름).
+//  low~max 사고 깊이. 높을수록 문장이 구체적이지만 지연·토큰이 는다(max ≈ p50 12→29s, 출력 토큰 5배).
+// kimi 계열 모델일 때만 어드민이 고를 수 있고(그 외 모델은 utils thinkOptionForModel 규칙), 지금은 saju 용도만 읽는다.
+export const LlmThinking = z.enum(['off', 'low', 'medium', 'high', 'max']);
+export type LlmThinkingType = z.infer<typeof LlmThinking>;
+
 export const LlmProviderConfig = z.object({
   provider: LlmProviderId,
   purpose: LlmProviderPurpose,
@@ -137,6 +146,8 @@ export const LlmProviderConfig = z.object({
   defaultModelSource: LlmModelSource,
   enabled: z.boolean(),
   maxConcurrent: z.number().int().positive(),
+  // 추론 설정(row 없거나 비어 있으면 off).
+  thinking: LlmThinking,
   updatedAt: z.string().nullable(),
 });
 export type LlmProviderConfigType = z.infer<typeof LlmProviderConfig>;
@@ -154,6 +165,8 @@ export const UpdateLlmProviderInput = z.object({
   defaultModel: z.string().min(1).nullable().optional(),
   enabled: z.boolean().optional(),
   maxConcurrent: z.number().int().min(1).max(100).optional(),
+  // off 를 보내면 row 의 thinking 을 비운다(null = off).
+  thinking: LlmThinking.optional(),
 });
 export type UpdateLlmProviderInputType = z.infer<typeof UpdateLlmProviderInput>;
 

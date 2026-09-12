@@ -345,6 +345,29 @@ describe('SajuService (격리 DB)', () => {
     expect(provider.calls.filter((c) => c.prompt.includes('[테마 사실'))).toHaveLength(3);
   });
 
+  it('어드민 추론 설정 max 면 think:max + maxTokens×5, 설정 없으면 모델 규칙(kimi 계열 false)', async () => {
+    await app.prisma.llmProviderConfig.create({ data: { provider: 'ollama-cloud', purpose: 'saju', apiKey: 'k', defaultModel: 'kimi-k3', thinking: 'max' } });
+    try {
+      const r = await service.createReading({ birth: BIRTH }, guest);
+      let snap = await service.pollJob(r.jobId as string, 0, 3000);
+      for (let i = 0; i < 6 && !snap.done; i++) snap = await service.pollJob(r.jobId as string, snap.version, 3000);
+      expect(snap.done).toBe(true);
+      const call = provider.calls.find((c) => c.prompt.includes('성격과 기질을 써라'));
+      expect(call?.think).toBe('max');
+      expect(call?.maxTokens).toBe(900 * 5);
+      expect(call?.model).toBe('kimi-k3');
+    } finally {
+      await app.prisma.llmProviderConfig.deleteMany({ where: { purpose: 'saju' } });
+    }
+    // 설정 없음(off) → 캐시를 피하려 다른 사주로 — kimi 계열은 false, 토큰 그대로.
+    const r2 = await service.createReading({ birth: BIRTH_B }, guest);
+    let snap2 = await service.pollJob(r2.jobId as string, 0, 3000);
+    for (let i = 0; i < 6 && !snap2.done; i++) snap2 = await service.pollJob(r2.jobId as string, snap2.version, 3000);
+    const call2 = provider.calls.filter((c) => c.prompt.includes('성격과 기질을 써라')).at(-1);
+    expect(call2?.think).toBe(false);
+    expect(call2?.maxTokens).toBe(900);
+  });
+
   it('입력 오류는 SajuError(invalid_input)', async () => {
     await expect(service.createReading({ birth: { ...BIRTH, month: 2, day: 30 } }, guest)).rejects.toThrowError(SajuError);
     await expect(service.daily({ birth: BIRTH, date: '2027-01-01' }, guest)).rejects.toThrow(/7일/);

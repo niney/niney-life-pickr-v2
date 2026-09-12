@@ -34,8 +34,8 @@ const SHOW = Number(opt('show', '1'));
 const SECTIONS = opt('sections', SAJU_SECTION_IDS.join(',')).split(',').map((s) => s.trim()).filter(Boolean) as SajuSectionIdType[];
 const MAX_TOKENS_MULT = Number(opt('max-tokens-mult', '1'));
 const OUT = opt('out', '');
-type ThinkOpt = boolean | 'low' | 'medium' | 'high' | undefined;
-const parseThink = (v: string): ThinkOpt => (v === 'true' ? true : v === 'false' ? false : v === 'low' || v === 'medium' || v === 'high' ? v : undefined);
+type ThinkOpt = boolean | 'low' | 'medium' | 'high' | 'max' | undefined;
+const parseThink = (v: string): ThinkOpt => (v === 'true' ? true : v === 'false' ? false : v === 'low' || v === 'medium' || v === 'high' || v === 'max' ? v : undefined);
 const THINKS: Array<{ label: string; value: ThinkOpt }> = opt('think', '')
   ? opt('think', '').split(',').map((s) => s.trim()).filter(Boolean).map((s) => ({ label: s, value: parseThink(s) }))
   : [{ label: 'default', value: undefined }];

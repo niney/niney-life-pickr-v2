@@ -47,8 +47,11 @@ import {
   sajuDayNumber,
   SajuInputError,
   selectSajuFood,
+  thinkOptionFor,
   thinkOptionForModel,
+  thinkTokenMult,
   type SajuChart,
+  type ThinkOption,
   type SajuDayScore,
   type SajuDatePickResult,
   type SajuFoodSelection,
@@ -133,6 +136,9 @@ export const SAJU_QUOTA_FEATURE = 'saju-reading' as const;
 const LLM_TEMPERATURE = 0.8;
 const LLM_NUM_CTX = 8192;
 const LLM_TIMEOUT_MS = 25_000;
+// 어드민이 추론(thinking)을 켜면 사고 토큰이 num_predict 를 먹는다 — 레벨별 배수는 utils thinkTokenMult(kimi-k3 실측:
+// max 는 ×3 에서 2/12 잘림, ×5 에서 0/12). 지연도 같이 늘므로(max p50 12→29s, max 58s) 타임아웃을 배수만큼 키운다(상한 120s).
+const THINK_TIMEOUT_MAX_MS = 120_000;
 const CACHE_MAX = 4000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -191,7 +197,7 @@ export interface SajuLlmRequest<T> {
   maxTokens: number;
   signal?: AbortSignal;
   /** 추론(thinking) 강제 — 없으면 모델 규칙(thinkOptionForModel). 프로브가 비교용으로 쓴다. */
-  think?: boolean | 'low' | 'medium' | 'high';
+  think?: boolean | 'low' | 'medium' | 'high' | 'max';
 }
 
 // LLM 호출 + JSON 수리 재시도 1회. 프로브 스크립트(probe:saju-reading)와 공유.
@@ -250,6 +256,13 @@ const foodCacheKey = (chart: SajuChart, dayKey: string | null): string =>
 
 type SectionValue = SajuSectionsType[SajuSectionIdType];
 type ThemeValue = SajuThemesType[SajuThemeIdType];
+/** 해석된 LLM — 어댑터·모델·추론 옵션(tokenMult>1 이면 토큰·타임아웃을 키운다). */
+interface ResolvedLlm {
+  provider: LLMProvider;
+  model: string;
+  think: ThinkOption;
+  tokenMult: number;
+}
 
 // ── 서비스 ──────────────────────────────────────────────────────────────────
 
@@ -330,7 +343,7 @@ export class SajuService {
     jobId: string,
     chart: SajuChart,
     sections: readonly SajuSectionIdType[],
-    provider: { provider: LLMProvider; model: string },
+    provider: ResolvedLlm,
     userId: string | null,
     birth: SajuBirthInputType,
     createdAt: Date,
@@ -360,16 +373,17 @@ export class SajuService {
   private async readSection(
     chart: SajuChart,
     section: SajuSectionIdType,
-    p: { provider: LLMProvider; model: string },
+    p: ResolvedLlm,
   ): Promise<SectionValue | null> {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.deps.llmTimeoutMs ?? LLM_TIMEOUT_MS);
+    const timer = setTimeout(() => ac.abort(), this.timeoutFor(p));
     try {
       const { output, calls } = await requestSajuLlm(p.provider, p.model, {
         prompt: buildSajuSectionPrompt(chart, section),
         schema: SectionOutput[section] as JsonSchemaLike<Record<string, unknown>>,
         jsonSchema: SAJU_SECTION_JSON_SCHEMA[section],
-        maxTokens: SAJU_SECTION_MAX_TOKENS[section],
+        maxTokens: this.maxTokensFor(p, SAJU_SECTION_MAX_TOKENS[section]),
+        think: p.think,
         signal: ac.signal,
       });
       if (!output) {
@@ -466,7 +480,7 @@ export class SajuService {
     jobId: string,
     chart: SajuChart,
     themes: readonly SajuThemeIdType[],
-    provider: { provider: LLMProvider; model: string },
+    provider: ResolvedLlm,
     persist: { userId: string; readingId: string } | null,
   ): Promise<void> {
     await Promise.all(
@@ -487,15 +501,16 @@ export class SajuService {
     }
   }
 
-  private async readTheme(chart: SajuChart, theme: SajuThemeIdType, p: { provider: LLMProvider; model: string }): Promise<ThemeValue | null> {
+  private async readTheme(chart: SajuChart, theme: SajuThemeIdType, p: ResolvedLlm): Promise<ThemeValue | null> {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.deps.llmTimeoutMs ?? LLM_TIMEOUT_MS);
+    const timer = setTimeout(() => ac.abort(), this.timeoutFor(p));
     try {
       const { output, calls } = await requestSajuLlm(p.provider, p.model, {
         prompt: buildSajuThemePrompt(chart, theme),
         schema: ThemeOutput[theme] as JsonSchemaLike<Record<string, unknown>>,
         jsonSchema: SAJU_THEME_JSON_SCHEMA[theme],
-        maxTokens: SAJU_THEME_MAX_TOKENS[theme],
+        maxTokens: this.maxTokensFor(p, SAJU_THEME_MAX_TOKENS[theme]),
+        think: p.think,
         signal: ac.signal,
       });
       if (!output) {
@@ -815,18 +830,27 @@ export class SajuService {
     return this.deps.now?.() ?? new Date();
   }
 
-  private async resolveProvider(): Promise<{ provider: LLMProvider; model: string } | null> {
+  private async resolveProvider(): Promise<ResolvedLlm | null> {
     const resolved = await this.aiConfig.getResolved('ollama-cloud', 'saju');
     const model = resolved?.defaultModel.trim() ?? '';
     if (!resolved || !model) {
       this.deps.logger?.warn('[saju] provider/모델 미설정 — 정적 풀이');
       return null;
     }
-    return { provider: (this.deps.cache ?? adapterCache).get(resolved), model };
+    // 어드민 "추론" 설정 — kimi 계열에만 반영, 그 외 모델은 규칙(thinkOptionForModel).
+    const think = thinkOptionFor(model, resolved.thinking);
+    return { provider: (this.deps.cache ?? adapterCache).get(resolved), model, think, tokenMult: thinkTokenMult(think) };
+  }
+
+  private timeoutFor(p: ResolvedLlm): number {
+    return this.deps.llmTimeoutMs ?? Math.min(THINK_TIMEOUT_MAX_MS, Math.round(LLM_TIMEOUT_MS * p.tokenMult));
+  }
+  private maxTokensFor(p: ResolvedLlm, base: number): number {
+    return Math.round(base * p.tokenMult);
   }
 
   private async callJson<T>(
-    p: { provider: LLMProvider; model: string },
+    p: ResolvedLlm,
     prompt: string,
     schema: JsonSchemaLike<T>,
     jsonSchema: Record<string, unknown>,
@@ -834,9 +858,9 @@ export class SajuService {
     tag: string,
   ): Promise<T | null> {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.deps.llmTimeoutMs ?? LLM_TIMEOUT_MS);
+    const timer = setTimeout(() => ac.abort(), this.timeoutFor(p));
     try {
-      const { output, calls } = await requestSajuLlm(p.provider, p.model, { prompt, schema, jsonSchema, maxTokens, signal: ac.signal });
+      const { output, calls } = await requestSajuLlm(p.provider, p.model, { prompt, schema, jsonSchema, maxTokens: this.maxTokensFor(p, maxTokens), think: p.think, signal: ac.signal });
       if (!output) this.deps.logger?.warn({ model: p.model, tag, calls }, '[saju] LLM 응답 파싱 실패 — 정적');
       return output;
     } catch (e) {
