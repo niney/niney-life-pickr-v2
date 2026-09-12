@@ -45,7 +45,7 @@ import { useLifeMapPrefsStore } from '~/lib/lifeMapPrefsStore';
 
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 const DEFAULT_ZOOM = 15;
-const NEARBY_RADIUS_M: Record<LifeMapLayer, number> = { toilet: 1000, cctv: 500, hospital: 1000 };
+const NEARBY_RADIUS_M: Record<LifeMapLayer, number> = { toilet: 1000, cctv: 500, hospital: 1000, store: 1000 };
 const NEARBY_LIMIT = 15;
 const VIEWPORT_DEBOUNCE_MS = 250;
 const SNAP_POINTS = ['20%', '50%', '100%'];

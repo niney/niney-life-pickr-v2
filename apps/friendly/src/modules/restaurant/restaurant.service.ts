@@ -25,6 +25,7 @@ import {
 import { Routes } from '@repo/api-contract';
 import { compareReviewRecencyDesc } from '@repo/utils';
 import { deriveRegion } from './region-derive.js';
+import { getRestaurantStoreInfo } from './restaurant-store-match.service.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import type {
   CategoryTreeNodeType,
@@ -1629,6 +1630,7 @@ export class RestaurantService {
 
     const merged = mergeAddress(naverRow, naverSnap, dcSnap, tbSnap);
     const coords = mergeCoordinates(naverSnap, dcSnap, tbSnap);
+    const store = await getRestaurantStoreInfo(this.prisma, naverRow.canonicalId);
 
     return {
       // placeId 로 findUnique 했으니 일치 행은 반드시 placeId 가 채워져 있다.
@@ -1675,6 +1677,7 @@ export class RestaurantService {
       storedReviewCount: computeStoredReviewCount(naverReviewCount, dcReviewCount, tbReviewCount),
       diningcode: dcSnap ? composeDiningcodeAddon(dcSnap) : null,
       tabling: tbSnap ? composeTablingAddon(tbSnap) : null,
+      store,
     };
   }
 
@@ -2464,6 +2467,7 @@ export class RestaurantService {
       lastCrawledAt: r.lastCrawledAt.toISOString(),
       snapshot: { ...snapshot, visitorReviews: reviews.map(stripIdsFromReview) },
       reviews,
+      store: await getRestaurantStoreInfo(this.prisma, r.canonicalId),
     };
   }
 

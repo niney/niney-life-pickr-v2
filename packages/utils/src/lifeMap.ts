@@ -3,21 +3,24 @@
 // 화장실 53,559행)와 심평원 병원정보서비스 API(data.go.kr 15001698, 병의원 ~8만 기관).
 // 서버(적재·조회)와 웹(범례·필터·마커)이 같은 코드표를 쓰도록 한 곳에 둔다.
 
-export const LIFE_MAP_LAYERS = ['cctv', 'toilet', 'hospital'] as const;
+// store = 생활편의(상가정보 중 편의점·마트·약국·세탁·동물병원·미용실 — lifeStore.ts LIFE_STORE_LAYER_KINDS).
+export const LIFE_MAP_LAYERS = ['cctv', 'toilet', 'hospital', 'store'] as const;
 export type LifeMapLayer = (typeof LIFE_MAP_LAYERS)[number];
 export const LIFE_MAP_LAYER_LABEL: Record<LifeMapLayer, string> = {
   cctv: 'CCTV',
   toilet: '공중화장실',
   hospital: '병의원',
+  store: '생활편의',
 };
 export const isLifeMapLayer = (v: unknown): v is LifeMapLayer =>
-  v === 'cctv' || v === 'toilet' || v === 'hospital';
+  v === 'cctv' || v === 'toilet' || v === 'hospital' || v === 'store';
 
 // 개별 지점을 그리기 시작하는 줌 — 미만은 서버 집계 셀(버블 카운트). CCTV 는 서울 도심
 // 밀도(≈100개/km²) 기준 z15 뷰포트(≈16km²)에서 ~1,500점, 화장실(≈9개/km²)은 z13(≈260km²)
 // 에서 ~2,400점 — 요청당 점 상한 안에 들어온다. 병의원은 서울 평균 ≈33개/km²(강남 의료몰은
 // 국지적으로 그 몇 배)라 z14(≈65km²)에서 보통 ~2천 점, 최밀집 뷰포트만 truncated 안내.
-export const LIFE_MAP_POINT_MIN_ZOOM: Record<LifeMapLayer, number> = { cctv: 15, toilet: 13, hospital: 14 };
+// 생활편의는 6종 합쳐 병의원과 비슷한 밀도(전국 ~15만)라 같은 z14.
+export const LIFE_MAP_POINT_MIN_ZOOM: Record<LifeMapLayer, number> = { cctv: 15, toilet: 13, hospital: 14, store: 14 };
 export const LIFE_MAP_POINTS_MAX = 4000;
 
 // ── CCTV 설치목적 ─────────────────────────────────────────────────────────────

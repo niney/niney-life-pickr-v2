@@ -3,6 +3,7 @@ import type {
   HousingAreaBandType,
   HousingBandStatType,
   HousingComplexDetailType,
+  HousingInfraType,
   HousingComplexSummaryType,
   HousingDealTypeType,
   HousingFallbackDealType,
@@ -25,7 +26,9 @@ import {
   HOUSING_POINTS_MAX,
   HOUSING_POINT_MIN_ZOOM,
   LIFE_CELL_ORIGIN,
+  computeBboxAround,
   haversineM,
+  LIFE_STORE_INFRA_RADIUS_M,
   isHousingAreaBand,
   isHousingComplexKind,
   isHousingDealType,
@@ -61,6 +64,11 @@ export class HousingServiceError extends Error {
 const POINTS_MAX_SPAN_DEG = 1.5;
 const CELL_CACHE_TTL_MS = 10 * 60_000;
 const CELL_CACHE_MAX = 300;
+// 단지 생활 인프라(반경 개수) 캐시 — 상가·병의원 표는 분기/월 단위로만 바뀐다. 키는 단지 id.
+const INFRA_CACHE_TTL_MS = 10 * 60_000;
+const INFRA_CACHE_MAX = 2000;
+// LifeStore 에서 세는 인프라 항목(병원은 LifeHospital).
+const INFRA_STORE_KINDS = ['convenience', 'mart', 'cafe', 'food', 'academy', 'pharmacy'] as const;
 const LOAD_HINT = 'pnpm --filter friendly load:housing-complexes 실행 필요';
 // 폴백 통계 행의 키 — rebuildHousingStats 가 만드는 dealType/band.
 const ANY_DEAL_TYPE = 'any';
@@ -149,6 +157,7 @@ export interface HousingServiceDeps {
 
 export class HousingService {
   private readonly cellCache = new LRUCache<string, HousingPointsResultType>({ max: CELL_CACHE_MAX, ttl: CELL_CACHE_TTL_MS });
+  private readonly infraCache = new LRUCache<string, HousingInfraType>({ max: INFRA_CACHE_MAX, ttl: INFRA_CACHE_TTL_MS });
 
   constructor(private readonly deps: HousingServiceDeps) {}
 
@@ -477,12 +486,44 @@ export class HousingService {
     };
   }
 
+  // 생활 인프라 — 단지 좌표 반경 500m 안 상가(LifeStore, kind 별)·병의원(LifeHospital) 개수. bbox(위도 ±500m,
+  // 경도 cos 보정 — computeBboxAround)로 인덱스 범위를 좁힌 뒤 haversine 으로 원 안만 센다. 상가 미적재면
+  // 0 + baseDate null(상세가 깨지지 않게). 좌표 없는 단지는 호출자가 null 로 둔다.
+  private async getInfra(id: string, lat: number, lng: number): Promise<HousingInfraType> {
+    const cached = this.infraCache.get(id);
+    if (cached) return cached;
+    const center = { lat, lng };
+    const b = computeBboxAround(center, LIFE_STORE_INFRA_RADIUS_M / 1000);
+    const range = { lat: { gte: b.minLat, lte: b.maxLat }, lng: { gte: b.minLng, lte: b.maxLng } };
+    const [stores, hospitals, sync] = await Promise.all([
+      this.deps.prisma.lifeStore.findMany({
+        where: { ...range, kind: { in: [...INFRA_STORE_KINDS] } },
+        select: { kind: true, lat: true, lng: true },
+      }),
+      this.deps.prisma.lifeHospital.findMany({ where: range, select: { lat: true, lng: true } }),
+      this.deps.prisma.lifeMasterSync.findFirst({ where: { layer: 'store' }, orderBy: { loadedAt: 'desc' } }),
+    ]);
+    const within = (p: { lat: number | null; lng: number | null }): boolean =>
+      p.lat !== null && p.lng !== null && haversineM(center, { lat: p.lat, lng: p.lng }) <= LIFE_STORE_INFRA_RADIUS_M;
+    const counts: HousingInfraType['counts'] = { convenience: 0, mart: 0, cafe: 0, food: 0, academy: 0, hospital: 0, pharmacy: 0 };
+    for (const s of stores) {
+      if (!within(s)) continue;
+      const k = s.kind as (typeof INFRA_STORE_KINDS)[number];
+      if (k in counts) counts[k] += 1;
+    }
+    for (const h of hospitals) if (within(h)) counts.hospital += 1;
+    const infra: HousingInfraType = { radiusM: LIFE_STORE_INFRA_RADIUS_M, baseDate: sync?.baseDate ?? null, counts };
+    this.infraCache.set(id, infra);
+    return infra;
+  }
+
   async getComplex(id: string): Promise<HousingComplexDetailType> {
     const c = await this.deps.prisma.housingComplex.findUnique({ where: { id } });
     if (!c) throw new HousingServiceError('해당 단지를 찾을 수 없습니다.', 404);
-    const [stats, prices] = await Promise.all([
+    const [stats, prices, infra] = await Promise.all([
       this.deps.prisma.housingComplexStat.findMany({ where: { complexId: id } }),
       this.deps.prisma.housingComplexPrice.findMany({ where: { complexId: id } }),
+      c.lat !== null && c.lng !== null ? this.getInfra(id, c.lat, c.lng) : Promise.resolve(null),
     ]);
     // 폴백 행('any')은 유형별 표에 들지 않는다 — dealType 정확 일치로 자연히 빠진다.
     const byType = (dealType: HousingDealTypeType): HousingBandStatType[] =>
@@ -518,6 +559,7 @@ export class HousingService {
       floorsMax: c.floorsMax,
       structure: c.structure,
       baseDate: c.baseDate,
+      infra,
     };
   }
 

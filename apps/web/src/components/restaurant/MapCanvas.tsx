@@ -135,6 +135,17 @@ const projectPathS = (pts: XY[], cum: number[], p: XY): { s: number; dist: numbe
   return { s: bestS, dist: bestD };
 };
 
+// 면(폴리곤) 오버레이 — 시군구 경계 choropleth 처럼 "배경" 으로 까는 면들. 호출자가 GeoJSON 을
+// EPSG:3857 로 읽어 캐시한 OL Feature 를 넘기고, 여기서는 clone 해 전용 소스(맨 아래 레이어)에 붙인다
+// (원본 feature 에 style 을 박지 않고, 같은 feature 가 두 소스에 동시에 들어가는 사고도 막는다).
+// styleOf 가 null 이면 그 면은 그리지 않는다(데이터 없는 곳). 클릭은 마커·차량이 안 맞았을 때만
+// onAreaSelect(keyOf(feature)) — 마커가 항상 우선.
+export interface MapAreas {
+  features: readonly Feature[];
+  keyOf(feature: Feature): string;
+  styleOf(feature: Feature): Style | null;
+}
+
 export interface MapViewport {
   // longitude/latitude (EPSG:4326). bbox 도 같이 — 호출자가 뷰포트 검색에
   // 그대로 박아 쓰기 좋게.
@@ -188,6 +199,11 @@ interface Props {
     | { points: { lat: number; lng: number }[]; color: string }
     | { points: { lat: number; lng: number }[]; color: string }[]
     | null;
+  // 면 오버레이(MapAreas) — 모든 벡터 레이어 아래 전용 VectorLayer. areas 가 바뀔 때만 다시 그린다.
+  // null/미지정이면 빈 레이어. fit 대상에서 제외.
+  areas?: MapAreas | null;
+  // 면 클릭 — 마커·차량 히트가 없을 때만. 넘겨지는 key 는 areas.keyOf 결과.
+  onAreaSelect?(key: string): void;
   // 겸표시(보조) 마커 — 자기 도메인 마커(markers) 아래 전용 VectorLayer 에 그린다.
   // markers 와 달리 fitToMarkers/fit extent 에서 제외(별도 소스)돼 겸표시가 화면을
   // 넓히지 않는다. 클릭은 markerId 로 잡혀 onMarkerSelect 로 전달(호출자가 id prefix
@@ -311,6 +327,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     onTileError,
     layerControl = true,
     routeLine,
+    areas,
+    onAreaSelect,
     overlayMarkers,
     vehicles,
     vehicleTweenMs = 14_000,
@@ -328,6 +346,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // 노선 형상 전용 소스 — 마커 소스와 분리해 fitToMarkers 가 54km 노선까지
   // 끌어안아 줌아웃되는 것을 막는다.
   const routeLineSourceRef = useRef<VectorSource | null>(null);
+  // 면 오버레이 전용 소스 — 맨 아래 레이어, fit extent 제외.
+  const areaSourceRef = useRef<VectorSource | null>(null);
   // 겸표시(보조) 마커 전용 소스 — 마커 소스와 분리해 fit extent 에서 제외한다.
   const overlayMarkerSourceRef = useRef<VectorSource | null>(null);
   // 차량 전용 소스/보간 상태 — 정류장 마커 파이프라인(선언적 재생성)과 분리해
@@ -396,7 +416,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const onTileErrorRef = useRef(onTileError);
   const onVehicleSelectRef = useRef(onVehicleSelect);
   const onFollowInterruptedRef = useRef(onFollowInterrupted);
+  const onAreaSelectRef = useRef(onAreaSelect);
   useEffect(() => {
+    onAreaSelectRef.current = onAreaSelect;
     onMarkerSelectRef.current = onMarkerSelect;
     onViewportChangeEndRef.current = onViewportChangeEnd;
     onViewportSyncRef.current = onViewportSync;
@@ -547,6 +569,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     // baseLayer 가 index 0 이라 append 순서만 맞으면 된다.
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
+    const areaSource = new VectorSource();
+    areaSourceRef.current = areaSource;
     const routeLineSource = new VectorSource();
     routeLineSourceRef.current = routeLineSource;
     const overlayMarkerSource = new VectorSource();
@@ -557,10 +581,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     vehicleAnimRef.current.clear();
     vehicleArrowsRef.current.clear();
 
+    const areaLayer = new VectorLayer({ source: areaSource });
     const routeLineLayer = new VectorLayer({ source: routeLineSource });
     const overlayMarkerLayer = new VectorLayer({ source: overlayMarkerSource });
     const markerLayer = new VectorLayer({ source: vectorSource });
     const vehicleLayer = new VectorLayer({ source: vehicleSource });
+    map.addLayer(areaLayer);
     map.addLayer(routeLineLayer);
     map.addLayer(overlayMarkerLayer);
     map.addLayer(markerLayer);
@@ -638,7 +664,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           (feat) => (feat.get('markerId') || feat.get('vehicleId') ? feat : undefined),
           { hitTolerance: 4 },
         );
-        if (!f) return;
+        if (!f) {
+          // 마커·차량이 없을 때만 면(배경) 히트 — 면은 어디나 덮고 있어 먼저 보면 마커를 못 누른다.
+          const area = map.forEachFeatureAtPixel(evt.pixel, (feat) => (feat.get('areaKey') ? feat : undefined));
+          const key = area?.get('areaKey') as string | undefined;
+          if (key) onAreaSelectRef.current?.(key);
+          return;
+        }
         const markerId = f.get('markerId') as string | undefined;
         if (markerId) {
           onMarkerSelectRef.current?.(markerId);
@@ -676,6 +708,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       for (const k of eventKeys) unByKey(k);
       // 벡터 레이어 4종 제거 — 다음 마운트가 새 소스로 다시 addLayer 한다.
       // baseLayer(index 0)만 남겨 재사용 시 타일 캐시를 그대로 잇는다.
+      map.removeLayer(areaLayer);
       map.removeLayer(routeLineLayer);
       map.removeLayer(overlayMarkerLayer);
       map.removeLayer(markerLayer);
@@ -704,6 +737,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       mapRef.current = null;
       vectorSourceRef.current = null;
       routeLineSourceRef.current = null;
+      areaSourceRef.current = null;
       overlayMarkerSourceRef.current = null;
       vehicleSourceRef.current = null;
       tileSourceRef.current = null;
@@ -796,6 +830,24 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       src.addFeature(f);
     }
   }, [overlayMarkers]);
+
+  // 면 오버레이 갱신 — areas 가 바뀔 때만(배경 토글·메트릭 전환·선택 변경) 전용 소스를 다시 칠한다.
+  // 250개 clone + 스타일은 수 ms. 소스가 아직 없으면(map 생성 전) 다음 map-create 가 아니라 이 effect 가
+  // areas 변경으로 다시 돌 때 그린다 — 그래서 map-create 직후에도 areas 를 한 번 더 반영한다(아래 deps).
+  useEffect(() => {
+    const src = areaSourceRef.current;
+    if (!src) return;
+    src.clear();
+    if (!areas) return;
+    for (const f of areas.features) {
+      const style = areas.styleOf(f);
+      if (!style) continue;
+      const c = f.clone();
+      c.set('areaKey', areas.keyOf(f));
+      c.setStyle(style);
+      src.addFeature(c);
+    }
+  }, [areas, apiKey]);
 
   // 노선 형상 갱신 — routeLine 이 바뀔 때만 전용 소스를 다시 칠한다. 점이 2개
   // 미만이면(형상 없음/해제) 소스를 비운다. 이전 피처는 clear 로 확실히 제거해

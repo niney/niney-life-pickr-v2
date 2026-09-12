@@ -593,6 +593,8 @@ export const LifeMap = {
   nearby: `${API_PREFIX}/life-map/nearby`,
   // 지역 이동 검색(주소·장소, VWorld 검색 프록시) — ?q=(2~60자)[&limit≤20]. 키 없으면 enabled=false.
   search: `${API_PREFIX}/life-map/search`,
+  // 범죄 통계 배경 레이어 — 시군구별 인구 10만 명당 발생률·5등급 경계(정적, 한 번에 전부).
+  crime: `${API_PREFIX}/life-map/crime`,
   // 단건 상세 — 인자는 빌더가 인코딩한다(라우트 등록은 decodeURIComponent 로 되돌린 패턴 사용).
   detail: (layer: string, id: string) =>
     `${API_PREFIX}/life-map/${encodeURIComponent(layer)}/${encodeURIComponent(id)}`,

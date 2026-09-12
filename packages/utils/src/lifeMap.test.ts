@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   LIFE_CCTV_PURPOSES,
+  LIFE_MAP_LAYERS,
+  LIFE_MAP_LAYER_LABEL,
+  LIFE_MAP_POINT_MIN_ZOOM,
   formatLifeCount,
   formatLifeYm,
+  isLifeMapLayer,
   lifeCctvPurposeGroup,
   lifeCctvPurposesOfGroup,
   lifeCellSizeDeg,
@@ -14,6 +18,16 @@ import {
   parseLifeCctvPurposes,
   summarizeLifeToiletFixtures,
 } from './lifeMap.js';
+
+describe('lifeMap — 레이어', () => {
+  it('점 레이어 4종(CCTV·화장실·병의원·생활편의) — 라벨·점 표시 줌·판정', () => {
+    expect(LIFE_MAP_LAYERS).toEqual(['cctv', 'toilet', 'hospital', 'store']);
+    expect(LIFE_MAP_LAYER_LABEL.store).toBe('생활편의');
+    expect(LIFE_MAP_POINT_MIN_ZOOM.store).toBe(14);
+    expect(isLifeMapLayer('store')).toBe(true);
+    expect(isLifeMapLayer('crime')).toBe(false);
+  });
+});
 
 describe('lifeMap — CCTV 설치목적', () => {
   it('원본 10종은 그대로, 공백·미지 값은 기타', () => {

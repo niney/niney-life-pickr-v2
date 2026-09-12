@@ -161,6 +161,7 @@ const detail: HousingComplexDetailType = {
   floorsMax: 15,
   structure: '철근콘크리트구조',
   baseDate: '2025-09-18',
+  infra: { radiusM: 500, baseDate: '2026-06-30', counts: { convenience: 3, mart: 1, cafe: 12, food: 40, academy: 6, hospital: 5, pharmacy: 2 } },
 };
 const trade = (id: string, dealDate: string, price: number, over: Partial<HousingTradeType> = {}): HousingTradeType => ({
   id,
@@ -344,6 +345,12 @@ describe('HousingPage', () => {
     );
     expect(within(detailEl).getByText('서울특별시 종로구 자하문로36길 16-14')).toBeInTheDocument();
     expect(within(detailEl).queryByText('임대단지')).toBeNull();
+    // 생활 인프라 — 반경·상가 기준일 + 7칩(순서 고정), 병의원 출처 안내.
+    const infra = within(detailEl).getByTestId('housing-infra');
+    expect(infra).toHaveTextContent('생활 인프라 · 반경 500m · 상가 2026-06-30 기준');
+    const chips = within(infra).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
+    expect(chips).toEqual(['편의점 3', '마트·슈퍼 1', '카페 12', '음식점 40', '학원 6', '병의원 5', '약국 2']);
+    expect(within(detailEl).getByText(/심평원 병원정보 기준 개수/)).toBeInTheDocument();
 
     const prices = within(detailEl).getByTestId('housing-official-prices');
     expect(prices).toHaveTextContent('2025 공시가격');

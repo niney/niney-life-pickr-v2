@@ -3,18 +3,23 @@ import type { LifeMapItemType } from '@repo/api-contract';
 import {
   LIFE_CCTV_GROUP_COLOR,
   LIFE_HOSPITAL_COLOR,
+  LIFE_STORE_COLOR,
+  LIFE_STORE_KIND_LABEL,
   LIFE_TOILET_COLOR,
   LIFE_TOILET_FEATURES,
   formatDistanceM,
   formatLifeYm,
+  isLifeStoreKind,
   lifeCctvPurposeGroup,
+  lifeStoreDisplayName,
   summarizeLifeToiletFixtures,
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { openLabel } from './lifeMapFormat';
 
 // 선택 항목 상세 — 화장실(개방시간·변기수·편의·관리기관·주소)·CCTV(목적·대수·화소·방면·보관일수)·
-// 병의원(종별·주소·연락처·홈페이지·개설일·의사수). 패널의 주변 목록 자리를 대신 차지하고
+// 병의원(종별·주소·연락처·홈페이지·개설일·의사수)·생활편의(상호·지점·업종·소분류·표준산업분류·주소·건물·층).
+// 패널의 주변 목록 자리를 대신 차지하고
 // '← 목록' 으로 돌아간다.
 
 interface Props {
@@ -44,6 +49,8 @@ export const LifeDetailCard = ({ item, distM, onBack, onFlyTo }: Props) => {
           <ToiletDetail item={item} distM={distM} />
         ) : item.layer === 'hospital' ? (
           <HospitalDetail item={item} distM={distM} />
+        ) : item.layer === 'store' ? (
+          <StoreDetail item={item} distM={distM} />
         ) : (
           <CctvDetail item={item} distM={distM} />
         )}
@@ -186,6 +193,49 @@ const HospitalDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { laye
         : item.geoSource === null
           ? ' 좌표가 없어 지도에는 표시되지 않습니다.'
           : ''}
+    </p>
+  </>
+);
+
+const StoreDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer: 'store' }>; distM: number | null }) => (
+  <>
+    <div className="flex items-start gap-2">
+      <span aria-hidden className="mt-1.5 size-3 shrink-0 rounded-full" style={{ backgroundColor: LIFE_STORE_COLOR }} />
+      <div className="min-w-0">
+        <h2 className="text-base font-semibold leading-tight">{lifeStoreDisplayName(item.name, item.branch)}</h2>
+        <p className="text-xs text-muted-foreground">
+          {isLifeStoreKind(item.kind) ? LIFE_STORE_KIND_LABEL[item.kind] : item.kind}
+          {item.sclsName !== (isLifeStoreKind(item.kind) ? LIFE_STORE_KIND_LABEL[item.kind] : '') ? ` · ${item.sclsName}` : ''}
+          {distM !== null ? ` · 내 위치에서 ${formatDistanceM(distM)}` : ''}
+        </p>
+      </div>
+    </div>
+    <dl className="mt-3 divide-y">
+      <Row label="업종">
+        {item.sclsName}
+        {item.ksicName && <span className="block text-xs text-muted-foreground">표준산업분류 {item.ksicName}</span>}
+      </Row>
+      {item.branch && <Row label="지점">{item.branch}</Row>}
+      <Row label="주소">
+        {item.roadAddr ?? item.lotAddr ?? '-'}
+        {item.roadAddr && item.lotAddr && <span className="block text-xs text-muted-foreground">{item.lotAddr}</span>}
+      </Row>
+      {(item.bldName || item.floor) && (
+        <Row label="건물·층">
+          {item.bldName ?? ''}
+          {item.floor ? `${item.bldName ? ' ' : ''}${item.floor}층` : ''}
+        </Row>
+      )}
+      <Row label="지역">
+        {item.sggName}
+        {item.umdName ? ` ${item.umdName}` : ''}
+      </Row>
+      <Row label="업소번호">
+        <span className="font-mono text-xs">{item.id}</span>
+      </Row>
+    </dl>
+    <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+      출처: 소상공인시장진흥공단 상가(상권)정보(분기 갱신, 사업자 등록 기준 — 상호가 간판과 다르거나 폐업 반영이 늦을 수 있습니다).
     </p>
   </>
 );

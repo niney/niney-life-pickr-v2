@@ -11,6 +11,7 @@ import {
   TablingScoreBars,
   TablingServiceBadges,
 } from './shared';
+import { StoreInfoBadges } from './StoreInfoBadges';
 import type { TabKey } from './tabs';
 
 interface Props {
@@ -77,6 +78,7 @@ export const HomeTab = ({
           <h2 className="text-lg font-semibold">{detail.name}</h2>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             {detail.category && <span>{detail.category}</span>}
+            <StoreInfoBadges store={detail.store} />
           </div>
           <SourceRatingLine detail={detail} />
           <ReviewCountLine detail={detail} />

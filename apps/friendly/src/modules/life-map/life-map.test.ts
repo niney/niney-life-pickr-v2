@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type {
+  LifeCrimeStatsResultType,
   LifeMapItemType,
   LifeMapNearbyResultType,
   LifeMapPointsResultType,
@@ -9,7 +10,7 @@ import type {
 import { buildApp } from '../../app.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 
-// 일상지도 라우트 — 격리 DB(빈 테이블)에 소수 시드를 넣고 ① 미적재 503 ② 상태 ③ 뷰포트 점/셀
+// 일상지도 라우트 — 격리 DB(빈 테이블)에 소수 시드를 넣고 ① 미적재 503 ② 상태 ③ 뷰포트 점/셀(생활편의는 6종 밖 kind 제외)
 // 모드 분기·필터·절단 ④ 주변 거리순 ⑤ 상세 404 ⑥ 계약 400 을 확인한다. 전국 집계(GROUP BY)는
 // 실데이터가 있으면 합계가 흔들리므로 격리 DB 가 필수.
 
@@ -37,6 +38,13 @@ const HOSPITAL_SEED = [
   { id: 'LMT-H2', name: '광화문치과의원', kindName: '치과의원', category: '치과', lat: 37.5681, lng: 126.9771, geoSource: 'road' },
   { id: 'LMT-H3', name: '좌표 없는 의원', kindName: '의원', category: '의원', lat: null, lng: null, geoSource: null },
   { id: 'LMT-H4', name: '부산종합병원', kindName: '종합병원', category: '종합병원', lat: 35.181, lng: 129.077, geoSource: 'api' },
+];
+// 생활편의 — 시청 근방 편의점·약국 + 레이어 밖 kind(음식점) + 부산 편의점.
+const STORE_SEED = [
+  { id: 'LMT-S1', name: 'GS25', branch: '시청점', kind: 'convenience', mclsCd: 'G204', sclsCd: 'G20405', sclsName: '편의점', lat: 37.5666, lng: 126.9781 },
+  { id: 'LMT-S2', name: '시청약국', branch: null, kind: 'pharmacy', mclsCd: 'G215', sclsCd: 'G21501', sclsName: '약국', lat: 37.5682, lng: 126.9772 },
+  { id: 'LMT-S3', name: '시청김밥', branch: null, kind: 'food', mclsCd: 'I210', sclsCd: 'I21007', sclsName: '김밥/만두/분식', lat: 37.5667, lng: 126.9783 },
+  { id: 'LMT-S4', name: 'CU', branch: '부산점', kind: 'convenience', mclsCd: 'G204', sclsCd: 'G20405', sclsName: '편의점', lat: 35.18, lng: 129.0761 },
 ];
 const SEOUL_BBOX = '126.970,37.560,126.990,37.575';
 const KOREA_BBOX = '124,33,132,39';
@@ -124,6 +132,27 @@ describe('life-map routes (격리 DB)', () => {
         geoSource: h.geoSource,
       })),
     });
+    await app.prisma.lifeStore.createMany({
+      data: STORE_SEED.map((s) => ({
+        id: s.id,
+        name: s.name,
+        branch: s.branch,
+        kind: s.kind,
+        mclsCd: s.mclsCd,
+        sclsCd: s.sclsCd,
+        sclsName: s.sclsName,
+        ksicName: null,
+        sggCd: '11140',
+        sggName: '중구',
+        umdName: '태평로1가',
+        roadAddr: '서울특별시 중구 세종대로 110',
+        lotAddr: null,
+        bldName: '서울시청',
+        floor: '1',
+        lat: s.lat,
+        lng: s.lng,
+      })),
+    });
   });
 
   afterAll(async () => {
@@ -139,6 +168,7 @@ describe('life-map routes (격리 DB)', () => {
       ['cctv', false],
       ['toilet', false],
       ['hospital', false],
+      ['store', false],
     ]);
 
     const points = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: SEOUL_BBOX, zoom: '16' }) });
@@ -152,12 +182,17 @@ describe('life-map routes (격리 DB)', () => {
     const hospital = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'hospital', bbox: SEOUL_BBOX, zoom: '16' }) });
     expect(hospital.statusCode).toBe(503);
     expect(hospital.json().message).toContain('load:life-hospitals');
+
+    const store = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'store', bbox: SEOUL_BBOX, zoom: '16' }) });
+    expect(store.statusCode).toBe(503);
+    expect(store.json().message).toContain('load:life-stores');
   });
 
   it('적재 이력 기록 후 status — 건수·기준일·화장실/병의원 좌표 확보 건수', async () => {
     await app.prisma.lifeMasterSync.create({ data: { layer: 'cctv', count: 4, geocoded: null, baseDate: '2026-07-30', sourceFile: 'cctv.csv' } });
     await app.prisma.lifeMasterSync.create({ data: { layer: 'toilet', count: 4, geocoded: 3, baseDate: '2026-08-18', sourceFile: 'toilet.csv' } });
     await app.prisma.lifeMasterSync.create({ data: { layer: 'hospital', count: 4, geocoded: 3, baseDate: '2026-08-28', sourceFile: 'hira:getHospBasisList' } });
+    await app.prisma.lifeMasterSync.create({ data: { layer: 'store', count: 4, geocoded: null, baseDate: '2026-06-30', sourceFile: 'store-202606.zip' } });
     const res = await app.inject({ method: 'GET', url: STATUS_URL });
     const body = res.json<LifeMapStatusResultType>();
     const cctv = body.layers.find((l) => l.layer === 'cctv')!;
@@ -166,6 +201,7 @@ describe('life-map routes (격리 DB)', () => {
     expect(cctv).toMatchObject({ loaded: true, count: 4, geocoded: null, baseDate: '2026-07-30' });
     expect(toilet).toMatchObject({ loaded: true, count: 4, geocoded: 3, baseDate: '2026-08-18' });
     expect(hospital).toMatchObject({ loaded: true, count: 4, geocoded: 3, baseDate: '2026-08-28' });
+    expect(body.layers.find((l) => l.layer === 'store')).toMatchObject({ loaded: true, count: 4, geocoded: null, baseDate: '2026-06-30' });
     expect(cctv.loadedAt).not.toBeNull();
   });
 
@@ -260,6 +296,40 @@ describe('life-map routes (격리 DB)', () => {
     expect(filteredCells.json<LifeMapPointsResultType>().total).toBe(1);
   });
 
+  it('points·nearby·detail — 생활편의: 레이어 6종만(음식점 제외)·kind 필터·표시명(상호+지점)·셀·404', async () => {
+    const all = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'store', bbox: SEOUL_BBOX, zoom: '15' }) });
+    const allBody = all.json<LifeMapPointsResultType>();
+    expect(allBody.mode).toBe('points');
+    expect(allBody.items.map((i) => i.id).sort()).toEqual(['LMT-S1', 'LMT-S2']);
+    expect(allBody.items.find((i) => i.id === 'LMT-S1')).toMatchObject({ name: 'GS25 시청점', kind: 'convenience' });
+    expect(allBody.minPointZoom).toBe(14);
+
+    // kind — 6종 밖(food)은 무시되고 약국만. 6종 밖 값만 있으면 전체.
+    const pharmacy = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'store', bbox: SEOUL_BBOX, zoom: '15', kind: 'pharmacy,food' }) });
+    expect(pharmacy.json<LifeMapPointsResultType>().items.map((i) => i.id)).toEqual(['LMT-S2']);
+    const foodOnly = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'store', bbox: SEOUL_BBOX, zoom: '15', kind: 'food' }) });
+    expect(foodOnly.json<LifeMapPointsResultType>().items.map((i) => i.id).sort()).toEqual(['LMT-S1', 'LMT-S2']);
+
+    // 셀 — 서울 2 + 부산 1(음식점 S3 제외).
+    const cells = await app.inject({ method: 'GET', url: pointsUrl({ layer: 'store', bbox: KOREA_BBOX, zoom: '7' }) });
+    const cellsBody = cells.json<LifeMapPointsResultType>();
+    expect(cellsBody.mode).toBe('cells');
+    expect(cellsBody.total).toBe(3);
+
+    const near = await app.inject({ method: 'GET', url: nearbyUrl({ layer: 'store', lat: '37.5665', lng: '126.978', radius: '1000' }) });
+    const nearBody = near.json<LifeMapNearbyResultType>();
+    expect(nearBody.items.map((i) => i.id)).toEqual(['LMT-S1', 'LMT-S2']);
+    expect(nearBody.items[0]).toMatchObject({ layer: 'store', name: 'GS25', branch: '시청점', kind: 'convenience', sclsName: '편의점', roadAddr: '서울특별시 중구 세종대로 110' });
+    expect(nearBody.total).toBe(2);
+
+    const detail = await app.inject({ method: 'GET', url: detailUrl('store', 'LMT-S1') });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json<LifeMapItemType>()).toMatchObject({ layer: 'store', id: 'LMT-S1', bldName: '서울시청', floor: '1', sggName: '중구' });
+    // 레이어 밖 kind 는 상세도 404(적재는 돼 있지만 이 레이어의 것이 아니다).
+    expect((await app.inject({ method: 'GET', url: detailUrl('store', 'LMT-S3') })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: detailUrl('store', 'NOPE') })).statusCode).toBe(404);
+  });
+
   it('nearby·detail — 병의원 거리순·상세 필드·404', async () => {
     const res = await app.inject({ method: 'GET', url: nearbyUrl({ layer: 'hospital', lat: '37.5665', lng: '126.978', radius: '1000' }) });
     expect(res.statusCode).toBe(200);
@@ -326,5 +396,30 @@ describe('life-map routes (격리 DB)', () => {
     expect((await app.inject({ method: 'GET', url: pointsUrl({ layer: 'cctv', bbox: SEOUL_BBOX, zoom: '30' }) })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: nearbyUrl({ layer: 'cctv', lat: '50', lng: '126.978' }) })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: nearbyUrl({ layer: 'cctv', lat: '37.5', lng: '126.978', radius: '5000' }) })).statusCode).toBe(400);
+  });
+  it('crime — 범죄 통계(빌드 JSON) 전량: 시군구 229곳·메트릭별 분위 경계 4개·시 단위는 구 코드 여러 개', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/life-map/crime' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<LifeCrimeStatsResultType>();
+    expect(body.year).toBe(2024);
+    expect(body.populationBase).toBe('2024-12');
+    expect(body.regionCount).toBe(body.regions.length);
+    expect(body.regions.length).toBeGreaterThanOrEqual(225);
+    for (const metric of ['total', 'violent', 'theft', 'assault'] as const) {
+      expect(body.breaks[metric]).toHaveLength(4);
+      expect([...body.breaks[metric]].sort((a, b) => a - b)).toEqual(body.breaks[metric]);
+    }
+    const jongno = body.regions.find((r) => r.label === '서울 종로구')!;
+    expect(jongno.codes).toEqual(['11010']);
+    expect(jongno.population).toBeGreaterThan(100_000);
+    expect(jongno.counts.total).toBe(jongno.counts.violent + jongno.counts.theft + jongno.counts.assault);
+    expect(jongno.rank.total).toBeGreaterThanOrEqual(1);
+    const suwon = body.regions.find((r) => r.label === '경기도 수원시')!;
+    expect(suwon.codes.length).toBe(4);
+    // 보정표 — 인천 미추홀구는 경계 파일의 옛 '남구'(23030)에, 군위군은 대구 소속 열만.
+    expect(body.regions.find((r) => r.label === '인천 미추홀구')!.codes).toEqual(['23030']);
+    expect(body.regions.some((r) => r.label === '경북 군위군')).toBe(false);
+    expect(body.regions.find((r) => r.label === '대구 군위군')!.codes).toEqual(['37310']);
+    expect(typeof body.fetchedAt).toBe('string');
   });
 });

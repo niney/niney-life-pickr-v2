@@ -1,7 +1,19 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@repo/shared';
 import type { LifeMapNearbyItemType } from '@repo/api-contract';
-import { LIFE_CCTV_GROUP_COLOR, LIFE_HOSPITAL_COLOR, LIFE_MAP_LAYER_LABEL, LIFE_TOILET_COLOR, LIFE_TOILET_FEATURES, formatDistanceM, lifeCctvPurposeGroup, lifeToiletOpenLabel, type LifeMapLayer } from '@repo/utils';
+import {
+  LIFE_CCTV_GROUP_COLOR,
+  LIFE_HOSPITAL_COLOR,
+  LIFE_MAP_LAYER_LABEL,
+  LIFE_STORE_COLOR,
+  LIFE_TOILET_COLOR,
+  LIFE_TOILET_FEATURES,
+  formatDistanceM,
+  lifeCctvPurposeGroup,
+  lifeStoreDisplayName,
+  lifeToiletOpenLabel,
+  type LifeMapLayer,
+} from '@repo/utils';
 
 // 주변 목록 조각 — 탭 머리(화장실/CCTV/병의원 + 반경·건수)와 행(화장실: 이름·구분·개방시간·편의 배지 /
 // CCTV: 목적·관리기관·대수·방면 / 병의원: 이름·종별·주소). BottomSheetFlatList 의 header/row 로 쓴다.
@@ -50,7 +62,9 @@ export const LifeNearbyRow = ({ item, selected, onPress }: { item: LifeMapNearby
       ? LIFE_TOILET_COLOR
       : item.layer === 'hospital'
         ? LIFE_HOSPITAL_COLOR
-        : LIFE_CCTV_GROUP_COLOR[lifeCctvPurposeGroup(item.purpose)];
+        : item.layer === 'store'
+          ? LIFE_STORE_COLOR
+          : LIFE_CCTV_GROUP_COLOR[lifeCctvPurposeGroup(item.purpose)];
   return (
     <Pressable
       accessibilityRole="button"
@@ -86,6 +100,16 @@ export const LifeNearbyRow = ({ item, selected, onPress }: { item: LifeMapNearby
             <Text style={[styles.sub, { color: theme.colors.textMuted }]} numberOfLines={1}>
               {item.kindName}
               {item.addr ? ` · ${item.addr}` : ''}
+            </Text>
+          </>
+        ) : item.layer === 'store' ? (
+          <>
+            <Text style={[styles.name, { color: theme.colors.text }]} numberOfLines={1}>
+              {lifeStoreDisplayName(item.name, item.branch)}
+            </Text>
+            <Text style={[styles.sub, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              {item.sclsName}
+              {item.roadAddr ?? item.lotAddr ? ` · ${item.roadAddr ?? item.lotAddr}` : ''}
             </Text>
           </>
         ) : (

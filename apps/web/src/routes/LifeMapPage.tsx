@@ -2,38 +2,43 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from 'react-router-dom';
 import {
   useAirLocation,
+  useLifeMapCrime,
   useLifeMapDetail,
   useLifeMapNearby,
   useLifeMapPoints,
   useLifeMapStatus,
   useUserLocation,
 } from '@repo/shared';
-import type { LifeMapCellType, LifeMapNearbyItemType } from '@repo/api-contract';
+import type { LifeCrimeRegionType, LifeMapCellType, LifeMapNearbyItemType } from '@repo/api-contract';
 import {
   LIFE_MAP_POINT_MIN_ZOOM,
   approxDistanceM,
   formatBbox,
   isInKorea,
   isLifeMapLayer,
+  lifeCrimeGrade,
   parseLatLngParam,
   type LifeMapLayer,
 } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
-import type { MapCanvasHandle, MapViewport } from '~/components/restaurant/MapCanvas';
+import type { MapAreas, MapCanvasHandle, MapViewport } from '~/components/restaurant/MapCanvas';
+import { LifeCrimeCard } from '~/components/life-map/LifeCrimeCard';
 import { LifeDetailCard } from '~/components/life-map/LifeDetailCard';
 import { LifeGoToBox, type LifeGoToTarget } from '~/components/life-map/LifeGoToBox';
 import { LifeLayerBar } from '~/components/life-map/LifeLayerBar';
 import { LifeMapFooter } from '~/components/life-map/LifeMapFooter';
 import { LifeMapView } from '~/components/life-map/LifeMapView';
 import { LifeNearbyList } from '~/components/life-map/LifeNearbyList';
+import { lifeCrimeAreaStyle } from '~/components/life-map/lifeMapAreas';
 import { BottomSheet } from '~/components/sheet/BottomSheet';
 import { SHEET_PEEK_HEIGHT, sheetHalfInset, useMapSheets } from '~/components/sheet/useMapSheets';
 import { useDebounced } from '~/lib/useDebounced';
 import { useIsDesktopXl } from '~/lib/useMediaQuery';
+import { sigunguCodeAt, sigunguCodeOf, sigunguNameOf, useSigunguGeo } from '~/lib/useSigunguGeo';
 import { cn } from '~/lib/utils';
 import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
 
-// 일상지도 — 전국 CCTV·공중화장실·병의원을 한 지도에. URL 이 진실: ?ll=lat,lng&z=줌(뷰포트), ?sel=layer:id
+// 일상지도 — 전국 CCTV·공중화장실·병의원·생활편의(상가 6종)를 한 지도에. URL 이 진실: ?ll=lat,lng&z=줌(뷰포트), ?sel=layer:id
 // (선택). 레이어·필터는 persist 스토어. 진입 중심은 URL → 저장한 내 위치(날씨·대기와 공유) →
 // 서울시청. 지도를 움직이면 뷰포트(bbox·줌)로 점/셀을 다시 받고, 주변 목록은 지도 중심 기준.
 //
@@ -45,10 +50,15 @@ import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
 // 분기는 CSS 이중 마운트(hidden xl:flex / xl:hidden)가 아니라 useIsDesktopXl(JS) — 지도·패널을 한 벌만
 // 두고 시트는 모바일에서만 마운트한다(데스크톱에 시트가 숨어 있으면 html overflow 락이 따라온다).
 // 지도 <section> 은 두 분기에서 같은 자리라 폭이 바뀌어도 OL 인스턴스를 다시 만들지 않는다.
+//
+// 배경(면) 레이어 — 범죄 통계(시군구 choropleth). 점 레이어와 유형이 달라 따로 다룬다: 켜면 시군구
+// 경계(public/sigungu-geo.json)와 통계(/life-map/crime)를 받아 등급색으로 면을 깔고, 패널에는 내주변
+// 목록과 섞이지 않는 요약 카드 하나(지도 중심 시군구 — 면을 누르면 그곳으로 고정, 지도를 움직이면
+// 다시 중심 추적)를 목록 머리 아래에 둔다. 메트릭(전체·강력·절도·폭력)은 색칠과 카드 숫자를 함께 바꾼다.
 
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 const DEFAULT_ZOOM = 15;
-const NEARBY_RADIUS_M: Record<LifeMapLayer, number> = { toilet: 1000, cctv: 500, hospital: 1000 };
+const NEARBY_RADIUS_M: Record<LifeMapLayer, number> = { toilet: 1000, cctv: 500, hospital: 1000, store: 1000 };
 const NEARBY_LIMIT = 15;
 // 뷰포트 → 조회 디바운스. 패닝 중 중간 프레임 bbox 로 요청이 연달아 나가지 않게.
 const VIEWPORT_DEBOUNCE_MS = 250;
@@ -105,8 +115,16 @@ export const LifeMapPage = () => {
   const toggleToiletFilter = useLifeMapPrefsStore((s) => s.toggleToiletFilter);
   const toggleHospitalCategory = useLifeMapPrefsStore((s) => s.toggleHospitalCategory);
   const setHospitalCategories = useLifeMapPrefsStore((s) => s.setHospitalCategories);
+  const storeKinds = useLifeMapPrefsStore((s) => s.storeKinds);
+  const toggleStoreKind = useLifeMapPrefsStore((s) => s.toggleStoreKind);
+  const setStoreKinds = useLifeMapPrefsStore((s) => s.setStoreKinds);
+  const overlay = useLifeMapPrefsStore((s) => s.overlay);
+  const crimeMetric = useLifeMapPrefsStore((s) => s.crimeMetric);
+  const toggleOverlay = useLifeMapPrefsStore((s) => s.toggleOverlay);
+  const setCrimeMetric = useLifeMapPrefsStore((s) => s.setCrimeMetric);
   const clearPurposes = useCallback(() => setPurposes([]), [setPurposes]);
   const clearHospitalCategories = useCallback(() => setHospitalCategories([]), [setHospitalCategories]);
+  const clearStoreKinds = useCallback(() => setStoreKinds([]), [setStoreKinds]);
 
   // 저장한 내 위치(날씨·대기정보와 공유).
   const airLocation = useAirLocation();
@@ -129,6 +147,9 @@ export const LifeMapPage = () => {
     mapRef.current?.flyTo(saved.lat, saved.lng, DEFAULT_ZOOM);
   }, [saved]);
 
+  // 배경 레이어에서 면을 눌러 고정한 시군구 코드 — 지도를 움직이면(사용자 이동) 풀려 중심 추적으로.
+  const [pickedCode, setPickedCode] = useState<string | null>(null);
+
   // 뷰포트 — 모든 변경(onViewportSync)을 받아 디바운스 후 조회 키로. 사용자 이동(onViewportChangeEnd)
   // 만 URL 에 반영한다.
   const [viewport, setViewport] = useState<MapViewport | null>(null);
@@ -141,6 +162,7 @@ export const LifeMapPage = () => {
   const handleViewportChangeEnd = useCallback(
     (vp: MapViewport) => {
       userMovedRef.current = true;
+      setPickedCode(null);
       setParams({ ll: `${vp.centerLat.toFixed(5)},${vp.centerLng.toFixed(5)}`, z: vp.zoom.toFixed(1) });
     },
     [setParams],
@@ -151,6 +173,7 @@ export const LifeMapPage = () => {
   const cctvFilters = useMemo(() => ({ purpose: purposes }), [purposes]);
   const toiletFilterParams = useMemo(() => ({ ...toiletFilters }), [toiletFilters]);
   const hospitalFilters = useMemo(() => ({ category: hospitalCategories }), [hospitalCategories]);
+  const storeFilters = useMemo(() => ({ kind: storeKinds }), [storeKinds]);
   const cctvQ = useLifeMapPoints(
     layers.cctv && bbox && zoom !== null ? { layer: 'cctv', bbox, zoom, filters: cctvFilters } : null,
   );
@@ -160,9 +183,23 @@ export const LifeMapPage = () => {
   const hospitalQ = useLifeMapPoints(
     layers.hospital && bbox && zoom !== null ? { layer: 'hospital', bbox, zoom, filters: hospitalFilters } : null,
   );
+  const storeQ = useLifeMapPoints(
+    layers.store && bbox && zoom !== null ? { layer: 'store', bbox, zoom, filters: storeFilters } : null,
+  );
   const statusQ = useLifeMapStatus();
 
-  // 주변 목록 — 탭(화장실/CCTV/병의원), 지도 중심 기준(뷰포트 동기 전엔 진입 중심). 꺼진 레이어
+  // ── 배경(면) 레이어: 범죄 통계 — 켠 동안만 통계·경계를 받는다(둘 다 정적, 세션 캐시). ──
+  const crimeOn = overlay === 'crime';
+  const crimeQ = useLifeMapCrime(crimeOn);
+  const geoQ = useSigunguGeo(crimeOn);
+  // 경계 코드 → 통계(시 단위는 하위 구 코드 전부가 같은 항목을 가리킨다).
+  const regionByCode = useMemo(() => {
+    const m = new Map<string, LifeCrimeRegionType>();
+    for (const r of crimeQ.data?.regions ?? []) for (const c of r.codes) m.set(c, r);
+    return m;
+  }, [crimeQ.data]);
+
+  // 주변 목록 — 탭(화장실/CCTV/병의원/생활편의), 지도 중심 기준(뷰포트 동기 전엔 진입 중심). 꺼진 레이어
   // 탭이면 켜진 쪽으로 보이되 사용자의 탭 선택은 보존.
   const [listTab, setListTab] = useState<LifeMapLayer>('toilet');
   const activeTab: LifeMapLayer = layers[listTab]
@@ -173,14 +210,17 @@ export const LifeMapPage = () => {
         ? 'cctv'
         : layers.hospital
           ? 'hospital'
-          : listTab;
+          : layers.store
+            ? 'store'
+            : listTab;
   const center = debouncedViewport
     ? { lat: debouncedViewport.centerLat, lng: debouncedViewport.centerLng }
     : { lat: initial.lat, lng: initial.lng };
   const nearbyQ = useLifeMapNearby(activeTab, center.lat, center.lng, {
     radius: NEARBY_RADIUS_M[activeTab],
     limit: NEARBY_LIMIT,
-    filters: activeTab === 'cctv' ? cctvFilters : activeTab === 'hospital' ? hospitalFilters : toiletFilterParams,
+    filters:
+      activeTab === 'cctv' ? cctvFilters : activeTab === 'hospital' ? hospitalFilters : activeTab === 'store' ? storeFilters : toiletFilterParams,
     enabled: layers[activeTab],
   });
 
@@ -251,6 +291,55 @@ export const LifeMapPage = () => {
     if (sel?.layer === 'hospital') ids.add(sel.id);
     return ids;
   }, [activeTab, nearbyQ.data, sel]);
+  const labeledStoreIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (activeTab === 'store') for (const it of nearbyQ.data?.items ?? []) ids.add(it.id);
+    if (sel?.layer === 'store') ids.add(sel.id);
+    return ids;
+  }, [activeTab, nearbyQ.data, sel]);
+
+  // 카드가 보여 줄 시군구 — 고정한 곳이 있으면 그곳, 아니면 지도 중심(디바운스된 뷰포트, 그전엔 진입 중심).
+  const features = geoQ.data?.features;
+  const centerCode = useMemo(
+    () => (crimeOn && features ? sigunguCodeAt(features, center.lat, center.lng) : null),
+    [crimeOn, features, center.lat, center.lng],
+  );
+  const cardCode = pickedCode ?? centerCode;
+  const cardRegion = cardCode ? (regionByCode.get(cardCode) ?? null) : null;
+  // 면 스타일 — 메트릭·선택이 바뀔 때만 새 객체(MapCanvas 가 areas identity 로 다시 그린다).
+  const areas = useMemo<MapAreas | null>(() => {
+    const stats = crimeQ.data;
+    if (!crimeOn || !features || !stats) return null;
+    const breaks = stats.breaks[crimeMetric];
+    // 선택 강조는 카드가 가리키는 항목(codes 전부) — 수원시를 누르면 4개 구가 함께 진해진다.
+    const selectedCodes = new Set(cardRegion?.codes ?? []);
+    return {
+      features,
+      keyOf: sigunguCodeOf,
+      styleOf: (f) => {
+        const code = sigunguCodeOf(f);
+        const r = regionByCode.get(code);
+        if (!r) return null;
+        const selected = selectedCodes.has(code);
+        return lifeCrimeAreaStyle(lifeCrimeGrade(r.per100k[crimeMetric], breaks), selected, selected ? sigunguNameOf(f) : null);
+      },
+    };
+  }, [crimeOn, features, crimeQ.data, crimeMetric, regionByCode, cardRegion]);
+  const handleAreaSelect = useCallback((code: string) => setPickedCode(code), []);
+  const unpinArea = useCallback(() => setPickedCode(null), []);
+  const crimeCard = crimeOn ? (
+    <LifeCrimeCard
+      stats={crimeQ.data}
+      loading={crimeQ.isLoading || geoQ.isLoading}
+      error={crimeQ.isError || geoQ.isError}
+      region={cardRegion}
+      pinned={pickedCode !== null}
+      onUnpin={unpinArea}
+      metric={crimeMetric}
+      onMetric={setCrimeMetric}
+    />
+  ) : null;
+  const crimeFooter = crimeOn && crimeQ.data ? { year: crimeQ.data.year, populationBase: crimeQ.data.populationBase } : null;
 
   // 안내 — 켜진 레이어가 셀 모드면 "몇 이상 확대", 점이 잘렸으면 "일부만 표시".
   const hint = (() => {
@@ -259,17 +348,20 @@ export const LifeMapPage = () => {
     if (layers.cctv && cctvQ.data?.mode === 'cells') parts.push(`CCTV ${LIFE_MAP_POINT_MIN_ZOOM.cctv}`);
     if (layers.toilet && toiletQ.data?.mode === 'cells') parts.push(`화장실 ${LIFE_MAP_POINT_MIN_ZOOM.toilet}`);
     if (layers.hospital && hospitalQ.data?.mode === 'cells') parts.push(`병의원 ${LIFE_MAP_POINT_MIN_ZOOM.hospital}`);
+    if (layers.store && storeQ.data?.mode === 'cells') parts.push(`생활편의 ${LIFE_MAP_POINT_MIN_ZOOM.store}`);
     if (parts.length > 0) return `${parts.join(' · ')} 이상 확대하면 개별 지점이 보입니다${zoomLabel}`;
     if (
       (layers.cctv && cctvQ.data?.truncated) ||
       (layers.toilet && toiletQ.data?.truncated) ||
-      (layers.hospital && hospitalQ.data?.truncated)
+      (layers.hospital && hospitalQ.data?.truncated) ||
+      (layers.store && storeQ.data?.truncated)
     ) {
       return '지점이 많아 일부만 표시 중 — 더 확대해 주세요';
     }
     return null;
   })();
-  const mapLoading = cctvQ.isFetching || toiletQ.isFetching || hospitalQ.isFetching;
+  const mapLoading =
+    cctvQ.isFetching || toiletQ.isFetching || hospitalQ.isFetching || storeQ.isFetching || (crimeOn && (crimeQ.isLoading || geoQ.isLoading));
 
   const detailDist =
     detailQ.data && myLocation && detailQ.data.lat !== null && detailQ.data.lng !== null
@@ -290,6 +382,8 @@ export const LifeMapPage = () => {
             purposes={purposes}
             toiletFilters={toiletFilters}
             hospitalCategories={hospitalCategories}
+            storeKinds={storeKinds}
+            overlay={overlay}
             status={statusQ.data}
             onToggleLayer={toggleLayer}
             onTogglePurpose={togglePurpose}
@@ -297,11 +391,14 @@ export const LifeMapPage = () => {
             onToggleToiletFilter={toggleToiletFilter}
             onToggleHospitalCategory={toggleHospitalCategory}
             onClearHospitalCategories={clearHospitalCategories}
+            onToggleStoreKind={toggleStoreKind}
+            onClearStoreKinds={clearStoreKinds}
+            onToggleOverlay={toggleOverlay}
           />
         </div>
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- savedForGoTo 는 saved 에서만 파생
-    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, hospitalCategories, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter, toggleHospitalCategory, clearHospitalCategories],
+    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, hospitalCategories, storeKinds, overlay, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter, toggleHospitalCategory, clearHospitalCategories, toggleStoreKind, clearStoreKinds, toggleOverlay],
   );
   useLayoutEffect(() => {
     setSubBar(subBarContent);
@@ -314,6 +411,8 @@ export const LifeMapPage = () => {
     purposes,
     toiletFilters,
     hospitalCategories,
+    storeKinds,
+    overlay,
     status: statusQ.data,
     onToggleLayer: toggleLayer,
     onTogglePurpose: togglePurpose,
@@ -321,6 +420,9 @@ export const LifeMapPage = () => {
     onToggleToiletFilter: toggleToiletFilter,
     onToggleHospitalCategory: toggleHospitalCategory,
     onClearHospitalCategories: clearHospitalCategories,
+    onToggleStoreKind: toggleStoreKind,
+    onClearStoreKinds: clearStoreKinds,
+    onToggleOverlay: toggleOverlay,
   };
   const nearbyList = (filters?: React.ReactNode) => (
     <LifeNearbyList
@@ -375,8 +477,10 @@ export const LifeMapPage = () => {
           cctv={layers.cctv ? cctvQ.data : undefined}
           toilet={layers.toilet ? toiletQ.data : undefined}
           hospital={layers.hospital ? hospitalQ.data : undefined}
+          store={layers.store ? storeQ.data : undefined}
           labeledToiletIds={labeledToiletIds}
           labeledHospitalIds={labeledHospitalIds}
+          labeledStoreIds={labeledStoreIds}
           selectedMarkerId={selectedMarkerId}
           initialCenter={{ lat: initial.lat, lng: initial.lng, zoom: initial.zoom }}
           myLocation={myLocation}
@@ -387,6 +491,8 @@ export const LifeMapPage = () => {
           hint={hint}
           onSelectPoint={select}
           onSelectCell={handleSelectCell}
+          areas={areas}
+          onAreaSelect={handleAreaSelect}
           onViewportSync={handleViewportSync}
           onViewportChangeEnd={handleViewportChangeEnd}
         />
@@ -399,10 +505,10 @@ export const LifeMapPage = () => {
           {goToOpen ? null : (
             <>
               <LifeLayerBar {...layerBarProps} />
-              {detailContent ?? nearbyList()}
+              {detailContent ?? nearbyList(crimeCard)}
             </>
           )}
-          <LifeMapFooter status={statusQ.data} />
+          <LifeMapFooter status={statusQ.data} crime={crimeFooter} />
         </aside>
       ) : (
         /* ━━━ 모바일 — 목록 시트 + (선택 시) 상세 시트. topOffset 은 통합 헤더 실측 높이. ━━━ */
@@ -417,8 +523,13 @@ export const LifeMapPage = () => {
             zIndex={20}
           >
             <div className="pb-4" data-testid="life-list-sheet">
-              {nearbyList(<LifeLayerBar section="filters" className="border-b-0 py-1" {...layerBarProps} />)}
-              <LifeMapFooter status={statusQ.data} />
+              {nearbyList(
+                <>
+                  <LifeLayerBar section="filters" className="border-b-0 py-1" {...layerBarProps} />
+                  {crimeCard}
+                </>,
+              )}
+              <LifeMapFooter status={statusQ.data} crime={crimeFooter} />
             </div>
           </BottomSheet>
           {sel && (

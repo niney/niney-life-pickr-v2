@@ -373,6 +373,7 @@ model CanonicalRestaurant {
   updatedAt             DateTime  @updatedAt
 
   restaurants Restaurant[]
+  storeMatch  RestaurantStoreMatch?
   proposalsA  CanonicalMergeProposal[] @relation("ProposalCanonicalA")
   proposalsB  CanonicalMergeProposal[] @relation("ProposalCanonicalB")
 
@@ -1484,6 +1485,66 @@ model LifeGeocodeCache {
 
 // 적재 이력 — 레이어별 최신 행이 "적재됨" 판정·fetchedAt·상태 API 의 원천(버스/지하철
 // MasterSync 와 같은 패턴). geocoded 는 화장실의 좌표 확보 건수.
+// 일상지도 생활 업종 상가 — 소상공인시장진흥공단 상가(상권)정보 분기 CSV(data.go.kr 15083033)에서 관심 업종
+// (@repo/utils LIFE_STORE_KINDS 9종: 편의점·마트·약국·세탁·동물병원·미용실·카페·음식점·학원)만 적재(~120만 행).
+// 생활편의 레이어(6종)·맛집 ↔ 상가업소 매칭(음식·카페)·집값 단지 생활 인프라(반경 개수)가 공유한다.
+// 전량 교체(load:life-stores), 적재 이력은 LifeMasterSync layer='store'.
+model LifeStore {
+  // 상가업소번호(전국 유일).
+  id       String  @id
+  name     String
+  branch   String?
+  // LIFE_STORE_KINDS.
+  kind     String
+  // 상권업종 중분류·소분류 코드/소분류명, 표준산업분류명.
+  mclsCd   String
+  sclsCd   String
+  sclsName String
+  ksicName String?
+  // 시군구코드 5자리·이름, 법정동명.
+  sggCd    String
+  sggName  String
+  umdName  String?
+  roadAddr String?
+  lotAddr  String?
+  bldName  String?
+  floor    String?
+  lat      Float
+  lng      Float
+
+  @@index([lat, lng])
+  @@index([kind, lat, lng])
+  @@map("life_stores")
+}
+
+// 맛집(canonical) ↔ 상가업소 매칭 — 좌표 근접 + 상호 유사도(match:restaurant-stores). status:
+//   matched — 최근 적재본에 업소가 있음. missing — 재적재본에서 사라짐 = 폐업 의심(플래그만, 공개 목록은
+//   유지 — 매칭 실패와 진짜 폐업을 구분 못 하므로 어드민이 확인). 다시 나타나면 matched 로 복귀.
+// bizesId 는 LifeStore 로의 FK 가 아니다 — 분기 재적재가 LifeStore 를 전량 삭제·재삽입하므로 FK 가 있으면
+// 삭제가 막히고(NO ACTION) Cascade 면 매칭이 통째로 사라져 "사라짐" 감지가 무의미해진다. 문자열 + 인덱스만.
+model RestaurantStoreMatch {
+  canonicalId  String    @id
+  bizesId      String
+  storeName    String
+  branch       String?
+  kind         String
+  sclsName     String
+  ksicName     String?
+  // 맛집 좌표 ↔ 업소 좌표 거리(m), 상호 유사도(0~1).
+  distM        Int
+  nameScore    Float
+  status       String
+  matchedAt    DateTime
+  lastSeenAt   DateTime
+  missingSince DateTime?
+
+  canonical CanonicalRestaurant @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+
+  @@index([bizesId])
+  @@index([status])
+  @@map("restaurant_store_matches")
+}
+
 model LifeMasterSync {
   id         Int      @id @default(autoincrement())
   // 'cctv' | 'toilet' | 'hospital'

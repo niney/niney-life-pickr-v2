@@ -22,11 +22,21 @@
 | `food/hansik-800.xlsx` | 한식진흥원 한식메뉴 외국어표기 800선 — data.go.kr **15129784** | 0.5MB | `pnpm --filter friendly load:food-catalog --source=hansik800` | 800행 → **452종**(+348종 별칭 보강) |
 | `life/cctv.csv` | 지방행정인허가데이터개방 전국 CCTV 설치현황 (CP949) | 79MB | `pnpm --filter friendly load:life-cctv data/open/life/cctv.csv` | **377,243행** |
 | `life/toilet.csv` | 지방행정인허가데이터개방 전국 공중화장실 (CP949) | 16MB | `pnpm --filter friendly load:life-toilets data/open/life/toilet.csv` | **53,559행** |
+| `crime/경찰청_범죄 발생 지역별 통계_20241231.csv` | 경찰청 범죄 발생 지역별 통계 — [data.go.kr **3074462**](https://www.data.go.kr/data/3074462/fileData.do) (CP949, 연 1회, 범죄대분류·중분류 38행 × 시군구 230열 + 외국 17열, 파일명 그대로 두면 빌드가 최신 날짜를 고른다) | 29KB | `pnpm --filter friendly build:life-crime` | 시군구 **229곳**(합계 0 인 옛 소속 열 `경북 군위군`·외국 열 제외) → `apps/friendly/src/modules/life-map/data/life-crime-stats.json`(66KB, **커밋**) |
+| `crime/population-202412.csv` | 행정안전부 주민등록 인구통계 월간현황 「전체시군구현황」 — [jumin.mois.go.kr](https://jumin.mois.go.kr/statMonth.do) (CP949, 로그인·키 불필요) | 30KB | 위 빌드가 없으면 통계 연도 12월분을 **자동 다운로드**(`downloadCsv.do` 폼 재현) | 시군구 인구(10만 명당 환산·분위 경계) |
+| `store/store-202606.zip` | 소상공인시장진흥공단 상가(상권)정보 — [data.go.kr **15083033**](https://www.data.go.kr/data/15083033/fileData.do) (분기, 시도별 CSV 16개 UTF-8 BOM 39열 ~250만 행, zip 항목명은 CP949. 포털 "다운로드" 는 `selectFileDataDownload.do` → `fileDownload.do?atchFileId=` 로 로그인 없이 받아진다) | 353MB(zip) / CSV 1.5GB | `pnpm --filter friendly load:life-stores` (zip 그대로 스트리밍, 관심 업종 9종만) → `match:restaurant-stores` | 채택 ≈ 절반(편의점·마트·약국·세탁·동물병원·미용실·카페·음식점·학원) → `LifeStore`. 생활편의 레이어·맛집 매칭·집값 생활 인프라 공유 |
+| `crime/경찰청_범죄 발생 장소별 통계_20251231.csv` | 경찰청 범죄 발생 장소별 통계 — [data.go.kr **3074463**](https://www.data.go.kr/data/3074463/fileData.do) (전국 합계, 지리 정보 없음) | 8KB | (적재 안 함 — 지도에 올릴 수 없어 참고용) | — |
 | `eval/meal-photos/` | AI Hub 「한국 이미지(음식)」에서 **추출**한 평가셋 | 91MB | (적재 안 함 — 모델 평가 전용) | **150클래스 × 5장 = 750장** |
 | `housing/reb-complexes.csv` | 한국부동산원 공동주택 단지 식별정보_기본정보 — data.go.kr **15106861** (UTF-8 BOM, 2025-09-18 기준) | 44MB | `pnpm --filter friendly load:housing-complexes data/open/housing/reb-complexes.csv` | 307,408행 중 **아파트 45,920단지**(연립 24,033·다세대 237,454 은 1차 미적재) |
 | `housing/reb-complex-names.csv` | 한국부동산원 공동주택 단지 식별정보_단지명 이력정보 — data.go.kr **15106867** | 0.6MB | 위 명령의 `--names=` (기본 경로면 자동) | 8,905행 → 아파트 1,552단지 별칭 |
 | `housing/gongsi-2025.zip` | 국토교통부 주택 공시가격 정보(2025) — data.go.kr **3073746** (호별 공시가격, 2025-01-01 기준, 연 1회 · 다운로드 버튼이 JS 라 `selectFileDataDownload.do` → `fileDownload.do?atchFileId=` 순으로 받는다) | 144MB(zip) / CSV 3.4GB | `pnpm --filter friendly load:housing-prices` (zip 그대로 스트리밍) | 15,580,435행 → 아파트 단지 × 면적 구간 공시가격 중위·범위 + 도로명주소 |
 | `housing/20260828_단지_기본정보.xlsx` | 국토교통부 공동주택 관리비 공개 의무단지 정보 — [data.go.kr **15098979**](https://www.data.go.kr/data/15098979/fileData.do) (K-apt 단지 기본정보, 주 1회 · 그 페이지에서 로그인 후 "다운로드" 로 수동 다운로드, 파일명 그대로 두면 로더가 최신 날짜 파일을 고른다. 1행은 안내문이고 헤더는 2행 — 로더가 건너뛴다) | 11MB | `pnpm --filter friendly load:housing-kapt` | 21,701행 → **20,273단지** 매칭(지번 17,484 · 이름 924 · 도로명 1,865; 모호 393 · 미매칭 920) — 단지코드·분양형태(임대 판별)·난방·승강기(유형별 열 합산)·도로명주소 |
+
+범죄 통계는 DB 가 아니라 **커밋되는 정적 JSON** 이다 — `build:life-crime` 이 경찰청 CSV × 인구 CSV × 시군구 경계
+(`apps/web/public/sigungu-geo.json`, KOSIS 코드) 를 이름으로 잇는다(시도 축약표 + 보정 2건: 인천 미추홀구 ↔ 경계 옛
+`남구` 23030, 군위군은 대구 소속 열만). 시 단위 통계(수원시 등 11곳)는 하위 구 경계 전부에 같은 값이 간다. 새 연도
+CSV 를 `data/open/crime/` 에 두고 다시 빌드해 JSON 을 커밋하면 끝(운영 배포 단계 없음). 서버는 기동 시 그 JSON 을
+계약(`LifeCrimeStatsResult`)으로 검증한다.
 
 파일이 아닌 **API** 로 받는 것: 식품안전나라 레시피 `COOKRCP01`(1,156건 → 1,101종). 키는
 `.env` 의 `FOOD_RECIPE_API_KEY`. `pnpm --filter friendly load:food-catalog --source=recipe`.

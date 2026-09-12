@@ -24,11 +24,15 @@ export const LIFE_TOILET_COLOR = '#c2185b';
 // 깨진다). 기존 5색과 색상환에서 떨어진 청록 — 분홍(화장실 원)과는 색상, 초록(CCTV 점)과는
 // 마커 형태(26px 원 + 십자 아이콘 vs 12px 점)로 갈린다.
 export const LIFE_HOSPITAL_COLOR = '#00897b';
+// 생활편의(상가) — 보라. 기존 파랑·주황·초록·인디고·분홍·청록과 색상환에서 떨어지고, 범죄 통계 배경(호박색
+// 반투명)과도 구분된다. 병의원처럼 업종과 무관한 단색(칩 6종 색을 더 얹으면 전 쌍 분리가 깨진다).
+export const LIFE_STORE_COLOR = '#8e24aa';
 // 집계 버블·레이어 대표색.
 export const LIFE_LAYER_COLOR: Record<LifeMapLayer, string> = {
   cctv: '#2a78d6',
   toilet: LIFE_TOILET_COLOR,
   hospital: LIFE_HOSPITAL_COLOR,
+  store: LIFE_STORE_COLOR,
 };
 
 // 24×24 흰 라인 아이콘 조각(markerFrame 규약) — CCTV(기울어진 본체+렌즈+거치대), 화장실(물탱크+변기),
@@ -37,6 +41,9 @@ const CCTV_ICON =
   '<path d="M3 9.5 14 5l1.8 5-11 4.5z"/><path d="M8 14.5V19"/><path d="M5 19h6"/><circle cx="14.3" cy="7.6" r="1"/>';
 const TOILET_ICON = '<path d="M7 4h10v5H7z"/><path d="M5 11h14v2a7 7 0 0 1-14 0z"/><path d="M9 20h6"/>';
 const HOSPITAL_ICON = '<path d="M9.5 4.5h5v5h5v5h-5v5h-5v-5h-5v-5h5z"/>';
+// 가게 — 차양(물결) + 본체 + 문.
+const STORE_ICON =
+  '<path d="M4 9.5 5.3 5h13.4L20 9.5"/><path d="M4 9.5a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0"/><path d="M5.5 12v7h13v-7"/><path d="M10 19v-4h4v4"/>';
 
 const toDataUrl = (svg: string): string => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 
@@ -71,6 +78,15 @@ export function buildLifeHospitalMarkerDataUrl(selected: boolean): string {
     selected
       ? buildPinMarkerSvg({ fill: LIFE_HOSPITAL_COLOR, innerSvg: HOSPITAL_ICON })
       : buildCircleMarkerSvg({ fill: LIFE_HOSPITAL_COLOR, innerSvg: HOSPITAL_ICON }),
+  );
+}
+
+// 생활편의(상가) — 화장실·병의원과 같은 원/핀 프레임.
+export function buildLifeStoreMarkerDataUrl(selected: boolean): string {
+  return toDataUrl(
+    selected
+      ? buildPinMarkerSvg({ fill: LIFE_STORE_COLOR, innerSvg: STORE_ICON })
+      : buildCircleMarkerSvg({ fill: LIFE_STORE_COLOR, innerSvg: STORE_ICON }),
   );
 }
 

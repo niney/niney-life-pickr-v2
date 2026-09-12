@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
-import type { LifeMapItemType, LifeMapNearbyResultType, LifeMapStatusResultType } from '@repo/api-contract';
+import type { LifeCrimeStatsResultType, LifeMapItemType, LifeMapNearbyResultType, LifeMapStatusResultType } from '@repo/api-contract';
 import { useAirLocationStore, useAuthStore } from '@repo/shared';
 import { server } from '~/test/msw';
 import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
@@ -13,7 +13,8 @@ import { LifeMapPage } from './LifeMapPage';
 
 // 일상지도 페이지 스모크 — 지도(OL)는 목으로 바꾸고 패널 쪽 계약을 본다: ① 레이어/필터 칩 + 상태
 // 푸터 ② 지도 중심(진입 중심) 기준 주변 목록 ③ 행 클릭 → URL sel + 상세 카드 ④ CCTV 탭·설치목적
-// 칩이 주변 요청 파라미터에 반영 ⑤ 저장한 내 위치가 진입 중심.
+// 칩이 주변 요청 파라미터에 반영 ⑤ 저장한 내 위치가 진입 중심 ⑥ 배경 레이어(범죄 통계) 토글 → 지도 중심
+// 시군구 요약 카드·메트릭 전환·푸터 출처.
 // MapCanvas 목은 viewport 를 올리지 않으므로 points 요청은 나가지 않는다(뷰포트 없음 = 비활성).
 
 vi.mock('~/components/restaurant/MapCanvas', () => ({
@@ -33,9 +34,39 @@ const status: LifeMapStatusResultType = {
     { layer: 'cctv', loaded: true, count: 377243, geocoded: null, baseDate: '2026-07-30', loadedAt: '2026-08-21T10:00:00.000Z' },
     { layer: 'toilet', loaded: true, count: 53559, geocoded: 50881, baseDate: '2026-08-18', loadedAt: '2026-08-21T11:00:00.000Z' },
     { layer: 'hospital', loaded: true, count: 78000, geocoded: 77500, baseDate: '2026-08-28', loadedAt: '2026-08-28T10:00:00.000Z' },
+    { layer: 'store', loaded: true, count: 150000, geocoded: null, baseDate: '2026-06-30', loadedAt: '2026-09-12T10:00:00.000Z' },
   ],
   fetchedAt: '2026-08-21T12:00:00.000Z',
 };
+
+// 범죄 통계 — 서울 중구(진입 중심 서울시청이 든 곳)·종로구 두 곳. 경계는 시청 주변 사각형 두 장.
+const crimeRegion = (label: string, code: string, total: number, rank: number) => ({
+  codes: [code],
+  label,
+  sido: '서울',
+  name: label.slice('서울 '.length),
+  population: 120_544,
+  counts: { violent: 100, theft: 1000, assault: 800, total: 1900 },
+  per100k: { violent: total / 10, theft: total / 2, assault: total / 3, total },
+  rank: { violent: rank, theft: rank, assault: rank, total: rank },
+});
+const crimeStats: LifeCrimeStatsResultType = {
+  year: 2024,
+  populationBase: '2024-12',
+  regionCount: 2,
+  breaks: { total: [10, 20, 30, 40], violent: [1, 2, 3, 4], theft: [5, 10, 15, 20], assault: [3, 6, 9, 12] },
+  regions: [crimeRegion('서울 중구', '11020', 2477.1, 1), crimeRegion('서울 종로구', '11010', 15, 2)],
+  fetchedAt: status.fetchedAt,
+};
+const square = (code: string, name: string, minLat: number, maxLat: number) => ({
+  type: 'Feature',
+  properties: { code, name },
+  geometry: {
+    type: 'Polygon',
+    coordinates: [[[126.96, minLat], [126.99, minLat], [126.99, maxLat], [126.96, maxLat], [126.96, minLat]]],
+  },
+});
+const sigunguGeo = { type: 'FeatureCollection', features: [square('11020', '중구', 37.55, 37.58), square('11010', '종로구', 37.58, 37.61)] };
 
 const toiletItem = (id: string, name: string, dist: number, over: Partial<Extract<LifeMapItemType, { layer: 'toilet' }>> = {}) => ({
   layer: 'toilet' as const,
@@ -99,6 +130,25 @@ const cctvItem = (id: string, purpose: string, dist: number) => ({
   dist,
 });
 
+const storeItem = (id: string, name: string, branch: string | null, kind: string, sclsName: string, dist: number) => ({
+  layer: 'store' as const,
+  id,
+  lat: 37.5666,
+  lng: 126.9781,
+  name,
+  branch,
+  kind,
+  sclsName,
+  ksicName: null,
+  sggName: '중구',
+  umdName: '태평로1가',
+  roadAddr: '서울특별시 중구 세종대로 110',
+  lotAddr: null,
+  bldName: null,
+  floor: '1',
+  dist,
+});
+
 const seen = { nearby: [] as URL[], detail: [] as string[], search: [] as string[] };
 const useHandlers = () =>
   server.use(
@@ -121,12 +171,22 @@ const useHandlers = () =>
       return HttpResponse.json({ q: '', items: [], enabled: false, fetchedAt: status.fetchedAt });
     }),
     http.get('/api/v1/life-map/status', () => HttpResponse.json(status)),
+    http.get('/api/v1/life-map/crime', () => HttpResponse.json(crimeStats)),
+    http.get('/sigungu-geo.json', () => HttpResponse.json(sigunguGeo)),
     http.get('/api/v1/life-map/nearby', ({ request }) => {
       const url = new URL(request.url);
       seen.nearby.push(url);
       const layer = url.searchParams.get('layer');
       const body: LifeMapNearbyResultType =
-        layer === 'cctv'
+        layer === 'store'
+          ? {
+              layer: 'store',
+              center: { lat: 37.5665, lng: 126.978 },
+              items: [storeItem('S1', 'GS25', '시청점', 'convenience', '편의점', 20), storeItem('S2', '시청약국', null, 'pharmacy', '약국', 150)],
+              total: 2,
+              fetchedAt: status.fetchedAt,
+            }
+          : layer === 'cctv'
           ? {
               layer: 'cctv',
               center: { lat: 37.5665, lng: 126.978 },
@@ -178,10 +238,13 @@ beforeEach(() => {
   useAuthStore.setState({ token: null, user: null, isGuest: false });
   useAirLocationStore.setState({ location: null });
   useLifeMapPrefsStore.setState({
-    layers: { cctv: true, toilet: true, hospital: true },
+    layers: { cctv: true, toilet: true, hospital: true, store: true },
     purposes: [],
     toiletFilters: { open24: false, disabled: false, kids: false, diaper: false, bell: false },
     hospitalCategories: [],
+    storeKinds: [],
+    overlay: null,
+    crimeMetric: 'total',
   });
   useLifeMapRecentStore.setState({ items: [] });
   seen.nearby = [];
@@ -253,6 +316,26 @@ describe('LifeMapPage', () => {
     expect(useLifeMapPrefsStore.getState().purposes).toEqual(['어린이보호']);
   });
 
+  it('생활편의 탭 + 업종 칩 → 주변 요청이 layer=store·kind 로 바뀌고 행은 상호+지점·소분류', async () => {
+    renderPage();
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^생활편의/ })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: '생활편의' }));
+    const list = screen.getByTestId('life-nearby-list');
+    await waitFor(() => expect(within(list).getByText('GS25 시청점')).toBeInTheDocument());
+    expect(within(list).getByText(/약국 · 서울특별시 중구/)).toBeInTheDocument();
+    const storeReq = seen.nearby.find((u) => u.searchParams.get('layer') === 'store')!;
+    expect(storeReq.searchParams.get('radius')).toBe('1000');
+    expect(storeReq.searchParams.get('kind')).toBeNull();
+
+    fireEvent.click(within(screen.getByTestId('life-store-filters')).getByRole('button', { name: '약국' }));
+    await waitFor(() =>
+      expect(seen.nearby.some((u) => u.searchParams.get('layer') === 'store' && u.searchParams.get('kind') === 'pharmacy')).toBe(true),
+    );
+    expect(useLifeMapPrefsStore.getState().storeKinds).toEqual(['pharmacy']);
+    expect(screen.getByTestId('life-map-footer')).toHaveTextContent('생활편의 150,000곳');
+  });
+
   it('지역 이동 — 입력 없으면 시도 칩, "강남" 입력 시 행정구역(로컬)·지하철역 섹션, 선택하면 URL ll/z 갱신 + 최근 기록', async () => {
     renderPage();
     const input = screen.getByTestId('life-goto-input');
@@ -288,6 +371,43 @@ describe('LifeMapPage', () => {
     await waitFor(() => expect(seen.nearby.length).toBeGreaterThan(0));
     expect(seen.nearby[0]!.searchParams.get('lat')).toBe('35.1796');
     expect(seen.nearby[0]!.searchParams.get('lng')).toBe('129.0756');
+  });
+
+  it('배경 레이어(범죄 통계) 토글 → 지도 중심(서울시청=중구) 요약 카드·5등급·순위, 메트릭 칩, 푸터 출처, 끄면 사라짐', async () => {
+    renderPage();
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    // 기본은 꺼짐 — 카드 없음, 통계 요청도 없음.
+    const chip = screen.getByTestId('life-overlay-crime');
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('life-crime-card')).toBeNull();
+
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(useLifeMapPrefsStore.getState().overlay).toBe('crime');
+    const card = await screen.findByTestId('life-crime-card');
+    // 진입 중심(서울시청 37.5665,126.978)은 중구 사각형 안 → 카드는 서울 중구, 전체 2477.1 은 5등급·전국 1위.
+    await waitFor(() => expect(within(card).getByTestId('life-crime-region')).toHaveTextContent('서울 중구'));
+    expect(within(card).getByTestId('life-crime-grade')).toHaveTextContent('5등급 · 매우 높음');
+    expect(within(card).getByTestId('life-crime-rate')).toHaveTextContent('2,477.1');
+    expect(within(card).getByText(/전국 1위 \/ 2/)).toBeInTheDocument();
+    expect(within(card).getByText('지도 중심')).toBeInTheDocument();
+    expect(within(card).getByText(/인구 120,544명\(2024-12 주민등록\)/)).toBeInTheDocument();
+    expect(screen.getByTestId('life-map-footer-crime')).toHaveTextContent('범죄 통계 2024년');
+
+    // 메트릭 전환 — 강력 247.7 은 강력 경계(1·2·3·4) 기준 5등급 그대로, 숫자만 바뀐다.
+    const metrics = within(card).getByTestId('life-crime-metrics');
+    fireEvent.click(within(metrics).getByRole('button', { name: '강력' }));
+    expect(within(metrics).getByRole('button', { name: '강력' })).toHaveAttribute('aria-pressed', 'true');
+    expect(useLifeMapPrefsStore.getState().crimeMetric).toBe('violent');
+    expect(within(card).getByTestId('life-crime-rate')).toHaveTextContent('247.7');
+
+    // 점 레이어 목록은 그대로(섞이지 않는다).
+    expect(screen.getByTestId('life-nearby-list')).toBeInTheDocument();
+
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('life-crime-card')).toBeNull();
+    expect(screen.queryByTestId('life-map-footer-crime')).toBeNull();
   });
 });
 

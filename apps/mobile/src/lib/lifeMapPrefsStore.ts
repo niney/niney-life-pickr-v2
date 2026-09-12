@@ -26,7 +26,8 @@ const DEFAULT_TOILET_FILTERS: LifeToiletFilterState = { open24: false, disabled:
 export const useLifeMapPrefsStore = create<LifeMapPrefsState>()(
   persist(
     (set) => ({
-      layers: { cctv: true, toilet: true, hospital: true },
+      // store(생활편의)는 웹과 같은 모양으로만 들고 있다 — 앱 화면은 아직 이 레이어를 조회·표시하지 않는다.
+      layers: { cctv: true, toilet: true, hospital: true, store: true },
       purposes: [],
       toiletFilters: DEFAULT_TOILET_FILTERS,
       hospitalCategories: [],
@@ -45,14 +46,14 @@ export const useLifeMapPrefsStore = create<LifeMapPrefsState>()(
     }),
     {
       name: 'lp:life-map-prefs',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
-      // v1 → v2: 병의원 레이어 추가 — 기존 사용자도 기본 켬, 종별 필터는 전체.
+      // v1 → v2: 병의원 레이어 추가 — 기존 사용자도 기본 켬, 종별 필터는 전체. v2 → v3: 생활편의(store) 키 추가.
       migrate: (persisted) => {
         const s = persisted as Partial<LifeMapPrefsState>;
         return {
           ...s,
-          layers: { cctv: true, toilet: true, hospital: true, ...(s.layers ?? {}) },
+          layers: { cctv: true, toilet: true, hospital: true, store: true, ...(s.layers ?? {}) },
           hospitalCategories: s.hospitalCategories ?? [],
         } as LifeMapPrefsState;
       },

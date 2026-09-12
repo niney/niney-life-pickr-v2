@@ -14,7 +14,7 @@ import { rebuildHousingStats } from './housing-derived.service.js';
 
 // 집값 라우트 — 격리 DB(빈 테이블)에 단지 4·거래 9 를 시드하고 ① 미적재 503 ② 상태 ③ 뷰포트 점(배지값·
 // 거래 없는 단지·구간/유형 축)·셀 ④ 주변 거리순 ⑤ 단지명 검색 ⑥ 상세(altNames·구간 순서) ⑦ 거래 목록
-// (구간·offset·해제 포함) ⑧ 404·계약 400 을 확인한다. 전국 집계(GROUP BY)는 실데이터가 있으면 합계가
+// (구간·offset·해제 포함) ⑧ 404·계약 400 ⑨ 생활 인프라(반경 500m 상가·병의원 개수, 미적재/좌표 없음) 를 확인한다. 전국 집계(GROUP BY)는 실데이터가 있으면 합계가
 // 흔들리므로 격리 DB 가 필수.
 
 const qs = (p: Record<string, string>): string => new URLSearchParams(p).toString();
@@ -61,6 +61,27 @@ describe('housing routes (격리 DB)', () => {
         { ...TRADE_BASE, id: 'T9', complexId: null, dealYm: '202607', jibun: '77', aptNm: '미연결', area: 84, floor: 1, price: 1, dealDate: '2026-07-07' },
       ],
     });
+    // 생활 인프라 시드 — H1(37.5666,126.9782) 반경 500m 안: 편의점 2·카페 1·약국 1·병의원 1, 밖(≈1.1km 북쪽): 편의점 1·병의원 1.
+    // 학원은 bbox 안이지만 원 밖(모서리, ≈630m)이라 빠져야 한다. 세탁(레이어 전용 kind)은 인프라에 안 센다.
+    const STORE_BASE = { mclsCd: 'G204', sclsCd: 'G20405', sclsName: '편의점', ksicName: null, sggCd: '11140', sggName: '중구', umdName: '태평로1가', roadAddr: null, lotAddr: null, bldName: null, floor: null };
+    await app.prisma.lifeStore.createMany({
+      data: [
+        { ...STORE_BASE, id: 'S1', name: 'GS25 시청점', branch: null, kind: 'convenience', lat: 37.5668, lng: 126.9785 },
+        { ...STORE_BASE, id: 'S2', name: 'CU 광장점', branch: null, kind: 'convenience', lat: 37.5690, lng: 126.9760 },
+        { ...STORE_BASE, id: 'S3', name: '시청커피', branch: null, kind: 'cafe', mclsCd: 'I212', sclsCd: 'I21201', sclsName: '카페', lat: 37.5660, lng: 126.9790 },
+        { ...STORE_BASE, id: 'S4', name: '시청약국', branch: null, kind: 'pharmacy', mclsCd: 'G215', sclsCd: 'G21501', sclsName: '약국', lat: 37.5670, lng: 126.9770 },
+        { ...STORE_BASE, id: 'S5', name: '모서리학원', branch: null, kind: 'academy', mclsCd: 'P105', sclsCd: 'P10501', sclsName: '입시·교과학원', lat: 37.5706, lng: 126.9832 },
+        { ...STORE_BASE, id: 'S6', name: '먼편의점', branch: null, kind: 'convenience', lat: 37.5765, lng: 126.9782 },
+        { ...STORE_BASE, id: 'S7', name: '시청세탁', branch: null, kind: 'laundry', mclsCd: 'S209', sclsCd: 'S20901', sclsName: '세탁소', lat: 37.5667, lng: 126.9781 },
+      ],
+    });
+    await app.prisma.lifeHospital.createMany({
+      data: [
+        { id: 'HP1', name: '시청내과의원', kindName: '의원', category: '의원', lat: 37.5664, lng: 126.9779, geoSource: 'api' },
+        { id: 'HP2', name: '먼병원', kindName: '병원', category: '병원', lat: 37.5765, lng: 126.9790, geoSource: 'api' },
+      ],
+    });
+    await app.prisma.lifeMasterSync.create({ data: { layer: 'store', count: 7, geocoded: null, baseDate: '2026-06-30', sourceFile: 'store-202606.zip' } });
   });
 
   afterAll(async () => {
@@ -298,8 +319,18 @@ describe('housing routes (격리 DB)', () => {
       structure: '철근콘크리트구조',
     });
 
+    // 생활 인프라 — 반경 500m 원 안만(bbox 모서리 학원·1.1km 편의점/병원 제외), 세탁은 항목 아님, 기준일은 store 적재 이력.
+    expect(body.infra).toEqual({
+      radiusM: 500,
+      baseDate: '2026-06-30',
+      counts: { convenience: 2, mart: 0, cafe: 1, food: 0, academy: 0, hospital: 1, pharmacy: 1 },
+    });
+    // 부산 단지 — 반경 안에 아무것도 없어도 0 으로 채워진다.
+    const busan = (await app.inject({ method: 'GET', url: complexUrl('H4') })).json<HousingComplexDetailType>();
+    expect(busan.infra).toMatchObject({ radiusM: 500, counts: { convenience: 0, hospital: 0 } });
+
     const noCoord = (await app.inject({ method: 'GET', url: complexUrl('H3') })).json<HousingComplexDetailType>();
-    expect(noCoord).toMatchObject({ lat: null, lng: null, geoSource: null, altNames: [] });
+    expect(noCoord).toMatchObject({ lat: null, lng: null, geoSource: null, altNames: [], infra: null });
     expect(noCoord.stats.trade).toEqual([]);
     expect((await app.inject({ method: 'GET', url: complexUrl('NOPE') })).statusCode).toBe(404);
   });

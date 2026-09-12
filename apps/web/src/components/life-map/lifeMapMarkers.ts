@@ -5,6 +5,7 @@ import {
   buildLifeCctvPinDataUrl,
   buildLifeCellMarkerDataUrl,
   buildLifeHospitalMarkerDataUrl,
+  buildLifeStoreMarkerDataUrl,
   buildLifeToiletMarkerDataUrl,
   isLifeMapLayer,
   lifeCctvPurposeGroup,
@@ -22,6 +23,7 @@ const CCTV_ICONS = Object.fromEntries(
 ) as Record<LifeCctvPurposeGroup, { src: string; selectedSrc: string }>;
 const TOILET_ICON = { src: buildLifeToiletMarkerDataUrl(false), selectedSrc: buildLifeToiletMarkerDataUrl(true) };
 const HOSPITAL_ICON = { src: buildLifeHospitalMarkerDataUrl(false), selectedSrc: buildLifeHospitalMarkerDataUrl(true) };
+const STORE_ICON = { src: buildLifeStoreMarkerDataUrl(false), selectedSrc: buildLifeStoreMarkerDataUrl(true) };
 const cellIconCache = new Map<string, string>();
 const cellIcon = (layer: LifeMapLayer, count: number): string => {
   const key = `${layer}:${count}`;
@@ -53,7 +55,7 @@ export const parseLifeMarkerId = (markerId: string): ParsedLifeMarkerId | null =
   return isLifeMapLayer(head) && rest.length > 0 ? { kind: 'point', layer: head, id: rest } : null;
 };
 
-// 응답 → 마커. 셀은 버블(원본 크기 고정), CCTV 점은 12px 점(고정), 화장실·병의원은 26px 원/선택 핀
+// 응답 → 마커. 셀은 버블(원본 크기 고정), CCTV 점은 12px 점(고정), 화장실·병의원·생활편의는 26px 원/선택 핀
 // + 라벨(labeledIds 에 든 것만 — 수백 개 전부 라벨은 과밀).
 export const buildLifeMarkers = (
   layer: LifeMapLayer,
@@ -76,7 +78,7 @@ export const buildLifeMarkers = (
       fixedScale: true,
     }));
   }
-  const icon = layer === 'hospital' ? HOSPITAL_ICON : TOILET_ICON;
+  const icon = layer === 'hospital' ? HOSPITAL_ICON : layer === 'store' ? STORE_ICON : TOILET_ICON;
   return result.items.map((p) => ({
     id: lifeMarkerId(layer, p.id),
     lat: p.lat,

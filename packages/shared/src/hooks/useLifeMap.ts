@@ -9,12 +9,21 @@ const STATIC_STALE_MS = 24 * 60 * 60_000;
 
 // 필터 → 쿼리 키 조각(배열·객체 identity 에 흔들리지 않게 문자열로).
 export const lifeMapFiltersKey = (f: LifeMapFilterParams | undefined): string =>
-  `${(f?.purpose ?? []).join(',')}|${(f?.category ?? []).join(',')}|${LIFE_MAP_BOOLEAN_FILTERS.map((k) => (f?.[k] ? '1' : '0')).join('')}`;
+  `${(f?.purpose ?? []).join(',')}|${(f?.category ?? []).join(',')}|${(f?.kind ?? []).join(',')}|${LIFE_MAP_BOOLEAN_FILTERS.map((k) => (f?.[k] ? '1' : '0')).join('')}`;
 
 export const useLifeMapStatus = () =>
   useQuery({
     queryKey: ['life-map', 'status'],
     queryFn: () => lifeMapApi.status(),
+    staleTime: STATIC_STALE_MS,
+  });
+
+// 범죄 통계(배경 레이어) — 연 1회 빌드되는 정적 JSON 이라 24h staleTime. 배경을 켠 동안만(enabled) 받는다.
+export const useLifeMapCrime = (enabled = true) =>
+  useQuery({
+    queryKey: ['life-map', 'crime'],
+    queryFn: () => lifeMapApi.crime(),
+    enabled,
     staleTime: STATIC_STALE_MS,
   });
 

@@ -169,6 +169,9 @@ export const listZipEntries = async (path: string): Promise<ZipEntry[]> => {
     const entries: ZipEntry[] = [];
     let p = 0;
     while (p + 46 <= cd.length && cd.readUInt32LE(p) === SIG_CENTRAL) {
+      // 범용 플래그 bit 11(0x0800) = 이름이 UTF-8. 꺼져 있으면 시스템 코드페이지 — 국내 공공데이터 zip(상가정보 등)은
+      // CP949 라 euc-kr 로 푼다(공시가격 zip 은 ASCII 이름이라 영향 없음).
+      const flags = cd.readUInt16LE(p + 8);
       const method = cd.readUInt16LE(p + 10);
       let compressedSize: number = cd.readUInt32LE(p + 20);
       let uncompressedSize: number = cd.readUInt32LE(p + 24);
@@ -176,7 +179,8 @@ export const listZipEntries = async (path: string): Promise<ZipEntry[]> => {
       const extraLen = cd.readUInt16LE(p + 30);
       const commentLen = cd.readUInt16LE(p + 32);
       let localHeaderOffset: number = cd.readUInt32LE(p + 42);
-      const name = cd.subarray(p + 46, p + 46 + nameLen).toString('utf8');
+      const nameBytes = cd.subarray(p + 46, p + 46 + nameLen);
+      const name = (flags & 0x0800) !== 0 ? nameBytes.toString('utf8') : new TextDecoder('euc-kr').decode(nameBytes);
       // zip64 확장(0x0001): 0xFFFFFFFF 였던 필드만 순서대로(uncompressed, compressed, offset) 8바이트.
       const extra = cd.subarray(p + 46 + nameLen, p + 46 + nameLen + extraLen);
       let e = 0;

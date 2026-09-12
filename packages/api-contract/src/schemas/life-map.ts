@@ -6,7 +6,8 @@ import { z } from 'zod';
 // 필터는 CCTV 설치목적·병의원 종별(쉼표 목록)과 화장실 편의 조건(AND)뿐이며 양쪽 모드에 똑같이
 // 걸린다.
 
-export const LifeMapLayer = z.enum(['cctv', 'toilet', 'hospital']);
+// store = 생활편의(상가정보 6종 — 편의점·마트·약국·세탁·동물병원·미용실).
+export const LifeMapLayer = z.enum(['cctv', 'toilet', 'hospital', 'store']);
 export type LifeMapLayerType = z.infer<typeof LifeMapLayer>;
 
 // "minLng,minLat,maxLng,maxLat" — 맛집 공개 목록의 bbox 와 같은 문자열 규약(@repo/utils formatBbox).
@@ -20,12 +21,14 @@ const LifeMapFlagParam = z
   .optional()
   .transform((v) => v === '1' || v === 'true');
 
-// 공통 필터 — purpose 는 CCTV, category 는 병의원, 불리언은 화장실에만 의미(다른 레이어에선 무시).
+// 공통 필터 — purpose 는 CCTV, category 는 병의원, kind 는 생활편의, 불리언은 화장실에만 의미(다른 레이어에선 무시).
 const lifeMapFilterFields = {
   // 쉼표 구분 설치목적 목록(@repo/utils LIFE_CCTV_PURPOSES). 미지정/빈값=전체.
   purpose: z.string().max(200).optional(),
   // 쉼표 구분 병의원 종별 목록(@repo/utils LIFE_HOSPITAL_CATEGORIES). 미지정/빈값=전체.
   category: z.string().max(200).optional(),
+  // 쉼표 구분 생활편의 업종 목록(@repo/utils LIFE_STORE_LAYER_KINDS — 6종 밖 값은 무시). 미지정/빈값=전체.
+  kind: z.string().max(200).optional(),
   open24: LifeMapFlagParam,
   disabled: LifeMapFlagParam,
   kids: LifeMapFlagParam,
@@ -43,7 +46,7 @@ export const LifeMapPointsQuery = z.object({
 export type LifeMapPointsQueryType = z.infer<typeof LifeMapPointsQuery>;
 
 // 지도 점 — 최소 필드만(한 번에 수천 점). 상세는 detail 라우트로. purpose 는 CCTV,
-// name 은 화장실·병의원, open24 는 화장실.
+// name 은 화장실·병의원·생활편의(상호+지점), open24 는 화장실, kind 는 생활편의 업종.
 export const LifeMapPoint = z.object({
   id: z.string(),
   lat: z.number(),
@@ -51,6 +54,7 @@ export const LifeMapPoint = z.object({
   purpose: z.string().optional(),
   name: z.string().optional(),
   open24: z.boolean().optional(),
+  kind: z.string().optional(),
 });
 export type LifeMapPointType = z.infer<typeof LifeMapPoint>;
 
@@ -185,7 +189,30 @@ export const LifeHospitalItem = z.object({
 });
 export type LifeHospitalItemType = z.infer<typeof LifeHospitalItem>;
 
-export const LifeMapItem = z.discriminatedUnion('layer', [LifeCctvItem, LifeToiletItem, LifeHospitalItem]);
+// 생활편의(상가) — 소상공인시장진흥공단 상가(상권)정보(data.go.kr 15083033, 분기 CSV) 적재분. 좌표는 원본 제공.
+export const LifeStoreItem = z.object({
+  layer: z.literal('store'),
+  // 상가업소번호.
+  id: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  name: z.string(),
+  branch: z.string().nullable(),
+  // @repo/utils LIFE_STORE_KINDS(이 레이어는 LIFE_STORE_LAYER_KINDS 6종만).
+  kind: z.string(),
+  // 상권업종 소분류명·표준산업분류명 원문.
+  sclsName: z.string(),
+  ksicName: z.string().nullable(),
+  sggName: z.string(),
+  umdName: z.string().nullable(),
+  roadAddr: z.string().nullable(),
+  lotAddr: z.string().nullable(),
+  bldName: z.string().nullable(),
+  floor: z.string().nullable(),
+});
+export type LifeStoreItemType = z.infer<typeof LifeStoreItem>;
+
+export const LifeMapItem = z.discriminatedUnion('layer', [LifeCctvItem, LifeToiletItem, LifeHospitalItem, LifeStoreItem]);
 export type LifeMapItemType = z.infer<typeof LifeMapItem>;
 
 export const LifeMapDetailParams = z.object({
@@ -213,6 +240,7 @@ export const LifeMapNearbyItem = z.discriminatedUnion('layer', [
   LifeCctvItem.extend(distField),
   LifeToiletItem.extend(distField),
   LifeHospitalItem.extend(distField),
+  LifeStoreItem.extend(distField),
 ]);
 export type LifeMapNearbyItemType = z.infer<typeof LifeMapNearbyItem>;
 
@@ -266,7 +294,7 @@ export const LifeMapLayerStatus = z.object({
   layer: LifeMapLayer,
   loaded: z.boolean(),
   count: z.number().int().min(0),
-  // 화장실·병의원만 — 좌표를 확보한 건수. CCTV 는 null.
+  // 화장실·병의원만 — 좌표를 확보한 건수. CCTV·생활편의는 null(원본 좌표).
   geocoded: z.number().int().min(0).nullable(),
   // 적재 파일의 데이터기준일자 최댓값 'YYYY-MM-DD'(병의원은 적재일).
   baseDate: z.string().nullable(),
@@ -279,3 +307,64 @@ export const LifeMapStatusResult = z.object({
   fetchedAt: z.string(),
 });
 export type LifeMapStatusResultType = z.infer<typeof LifeMapStatusResult>;
+
+// ── 범죄 통계(배경 레이어) ────────────────────────────────────────────────────
+// 경찰청 「범죄 발생 지역별 통계」(연 1회, 시군구 230열) × 행안부 주민등록 인구 → 시군구별 인구
+// 10만 명당 발생률 + 5등급 분위 경계. 점 레이어와 달리 면(시군구 경계)에 칠하는 정적 데이터라
+// 적재 빌드(build:life-crime)가 만든 JSON 을 그대로 내려준다 — bbox·필터 없음, 한 번에 전부.
+export const LifeCrimeMetric = z.enum(['total', 'violent', 'theft', 'assault']);
+export type LifeCrimeMetricType = z.infer<typeof LifeCrimeMetric>;
+
+const LifeCrimeCounts = z.object({
+  violent: z.number().int().min(0),
+  theft: z.number().int().min(0),
+  assault: z.number().int().min(0),
+  total: z.number().int().min(0),
+});
+const LifeCrimeRates = z.object({
+  violent: z.number().min(0),
+  theft: z.number().min(0),
+  assault: z.number().min(0),
+  total: z.number().min(0),
+});
+const LifeCrimeRanks = z.object({
+  violent: z.number().int().min(1),
+  theft: z.number().int().min(1),
+  assault: z.number().int().min(1),
+  total: z.number().int().min(1),
+});
+
+export const LifeCrimeRegion = z.object({
+  // 시군구 경계 코드(웹 sigungu-geo.json 의 code) — 통계가 시 단위(수원시)면 하위 구 코드 전부.
+  codes: z.array(z.string()).min(1),
+  // 경찰청 표기 그대로 — "서울 종로구"·"경기도 수원시"·"세종시".
+  label: z.string(),
+  sido: z.string(),
+  name: z.string(),
+  population: z.number().int().min(0),
+  // 연간 발생 건수(강력·절도·폭력 + 합).
+  counts: LifeCrimeCounts,
+  // 인구 10만 명당(소수 1자리).
+  per100k: LifeCrimeRates,
+  // 발생률 내림차순 순위(1 = 전국 최고).
+  rank: LifeCrimeRanks,
+});
+export type LifeCrimeRegionType = z.infer<typeof LifeCrimeRegion>;
+
+export const LifeCrimeStatsResult = z.object({
+  // 통계 연도(발생 기준).
+  year: z.number().int(),
+  // 인구 기준 'YYYY-MM'(주민등록 월말).
+  populationBase: z.string(),
+  regionCount: z.number().int().min(0),
+  // 메트릭별 5등급 분위 경계(4개, 오름차순, 인구 10만 명당).
+  breaks: z.object({
+    total: z.array(z.number()).length(4),
+    violent: z.array(z.number()).length(4),
+    theft: z.array(z.number()).length(4),
+    assault: z.array(z.number()).length(4),
+  }),
+  regions: z.array(LifeCrimeRegion),
+  fetchedAt: z.string(),
+});
+export type LifeCrimeStatsResultType = z.infer<typeof LifeCrimeStatsResult>;

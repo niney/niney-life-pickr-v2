@@ -49,6 +49,8 @@ first_existing() { local p; for p in "$@"; do [[ -f "$p" ]] && { printf '%s' "$p
 LIFE_CCTV_CSV="${LIFE_CCTV_CSV:-$(first_existing "$LIFE_DATA_DIR/life/cctv.csv" "$LIFE_DATA_DIR/CCTV정보.csv")}"
 LIFE_TOILET_CSV="${LIFE_TOILET_CSV:-$(first_existing "$LIFE_DATA_DIR/life/toilet.csv" "$LIFE_DATA_DIR/공중화장실정보.csv")}"
 LIFE_GEOCODE_GZ="apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz"
+# 상가(상권)정보 분기 zip(data.go.kr 15083033) — data/open/store/store-YYYYMM.zip 중 최신(없으면 빈 문자열).
+LIFE_STORE_ZIP="${LIFE_STORE_ZIP:-$(ls -1 "$LIFE_DATA_DIR"/store/store-*.zip 2>/dev/null | sort | tail -n1)}"
 # 음식 카탈로그 배포본 — 적재기(load:food-catalog)가 이 경로를 기본으로 찾는다. 출처는
 # docs/data-sources.md. 영양성분 API(DATA_GO_KR_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
 FOOD_DATA_DIR="$ROOT/data/open/food"
@@ -91,7 +93,7 @@ pm_start()   { step "서버 기동";            pm2 start friendly --update-env;
 pm_reload()  { step "서버 reload";          pm2 reload friendly --update-env; pm2 save; }
 
 # ── 일상지도 데이터 ────────────────────────────────────────
-# status:life-map 은 "ok cctv=N toilet=M geocoded=G hospital=H cache=C" 한 줄(테이블이 없으면 "missing").
+# status:life-map 은 "ok cctv=N toilet=M geocoded=G hospital=H store=S cache=C" 한 줄(테이블이 없으면 "missing").
 life_status() { pnpm --filter friendly status:life-map 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 # "ok a=1 b=2" 한 줄에서 값 하나 뽑기 — 일상지도·음식 카탈로그 상태가 같은 형식이다.
 # sed 의 \b 는 GNU 확장이라 BSD sed(macOS)에서 조용히 빈 값이 된다 — 값이 비면 "0 건"으로
@@ -110,9 +112,9 @@ life_map_data() {
   if [[ "$st" != ok* ]]; then
     echo "  (일상지도 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
   fi
-  local cctv toilet geocoded hospital
-  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"
-  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 캐시 압축본 변경=$GZ_CHANGED"
+  local cctv toilet geocoded hospital store
+  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"; store="$(stat_val store "$st")"
+  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 상가 ${store:-0}건 · 캐시 압축본 변경=$GZ_CHANGED"
   if [[ "$force" == 1 || "$GZ_CHANGED" == 1 || "${toilet:-0}" == 0 ]]; then
     step "일상지도 지오코딩 캐시 가져오기(압축본)"; pnpm --filter friendly import:life-geocode
   fi
@@ -128,6 +130,13 @@ life_map_data() {
   # --offline(좌표 결측 소수는 지도 미표시 — 수동으로 옵션 없이 재실행하면 채워진다).
   if [[ "$force" == 1 || "${hospital:-0}" == 0 ]]; then
     step "일상지도 병의원 적재(HIRA API, 지오코더 --offline)"; pnpm --filter friendly load:life-hospitals --offline || echo "  (병의원 적재 실패 — DATA_GO_KR_API_KEY/활용신청 확인 뒤 재실행)"
+  fi
+  # 상가(생활 업종) — 분기 zip 을 풀지 않고 스트리밍 적재(~120만 행, 수 분). 적재 뒤 맛집 ↔ 상가업소 매칭 갱신.
+  if [[ "$force" == 1 || "${store:-0}" == 0 ]]; then
+    if [[ -n "$LIFE_STORE_ZIP" && -f "$LIFE_STORE_ZIP" ]]; then
+      step "일상지도 상가 적재"; pnpm --filter friendly load:life-stores "$LIFE_STORE_ZIP"
+      step "맛집 ↔ 상가업소 매칭"; pnpm --filter friendly match:restaurant-stores || echo "  (매칭 실패 — 수동 재실행)"
+    else echo "  (상가 zip 없음: data/open/store/store-YYYYMM.zip — 올린 뒤 ./deploy.sh 6)"; fi
   fi
 }
 

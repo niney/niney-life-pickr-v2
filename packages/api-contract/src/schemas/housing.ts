@@ -196,6 +196,24 @@ export type HousingSearchResultType = z.infer<typeof HousingSearchResult>;
 export const HousingComplexParams = z.object({ id: z.string().min(1).max(200) });
 export type HousingComplexParamsType = z.infer<typeof HousingComplexParams>;
 
+// 생활 인프라 — 단지 좌표 반경 radiusM 안 업소 수(상가정보 LifeStore 6종 + 심평원 병의원). 상가 미적재면
+// counts 전부 0 + baseDate null, 단지 좌표가 없으면 infra 자체가 null.
+export const HousingInfra = z.object({
+  radiusM: z.number().int().min(1),
+  // 상가정보 분기 기준일 'YYYY-MM-DD'(LifeMasterSync layer=store). 미적재면 null.
+  baseDate: z.string().nullable(),
+  counts: z.object({
+    convenience: z.number().int().min(0),
+    mart: z.number().int().min(0),
+    cafe: z.number().int().min(0),
+    food: z.number().int().min(0),
+    academy: z.number().int().min(0),
+    hospital: z.number().int().min(0),
+    pharmacy: z.number().int().min(0),
+  }),
+});
+export type HousingInfraType = z.infer<typeof HousingInfra>;
+
 export const HousingComplexDetail = z.object({
   id: z.string(),
   name: z.string(),
@@ -236,6 +254,8 @@ export const HousingComplexDetail = z.object({
   structure: z.string().nullable(),
   // 단지 마스터 기준일.
   baseDate: z.string(),
+  // 생활 인프라(반경 500m) — 좌표 없는 단지는 null.
+  infra: HousingInfra.nullable(),
 });
 export type HousingComplexDetailType = z.infer<typeof HousingComplexDetail>;
 

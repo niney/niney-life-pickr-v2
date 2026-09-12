@@ -1,5 +1,6 @@
 import {
   Routes,
+  type LifeCrimeStatsResultType,
   type LifeMapItemType,
   type LifeMapLayerType,
   type LifeMapNearbyResultType,
@@ -12,11 +13,12 @@ import { apiFetch } from './client.js';
 // 일상지도(전국 CCTV·공중화장실·병의원) — friendly 공개 프록시(토큰 불필요). 로컬 DB 조회라 싸지만
 // 지도를 움직일 때마다 레이어당 1콜이 나가므로 훅 쪽에서 bbox 디바운스·24h staleTime 으로 누른다.
 
-// 필터 — purpose 는 CCTV 설치목적(@repo/utils LIFE_CCTV_PURPOSES), category 는 병의원 종별
+// 필터 — purpose 는 CCTV 설치목적(@repo/utils LIFE_CCTV_PURPOSES), category 는 병의원 종별, kind 는 생활편의 업종
 // (LIFE_HOSPITAL_CATEGORIES), 불리언은 화장실 편의 조건(AND).
 export interface LifeMapFilterParams {
   purpose?: readonly string[];
   category?: readonly string[];
+  kind?: readonly string[];
   open24?: boolean;
   disabled?: boolean;
   kids?: boolean;
@@ -29,11 +31,14 @@ const applyFilters = (params: URLSearchParams, f: LifeMapFilterParams | undefine
   if (!f) return;
   if (f.purpose && f.purpose.length > 0) params.set('purpose', f.purpose.join(','));
   if (f.category && f.category.length > 0) params.set('category', f.category.join(','));
+  if (f.kind && f.kind.length > 0) params.set('kind', f.kind.join(','));
   for (const k of LIFE_MAP_BOOLEAN_FILTERS) if (f[k]) params.set(k, '1');
 };
 
 export const lifeMapApi = {
   status: () => apiFetch<LifeMapStatusResultType>(Routes.LifeMap.status),
+  // 범죄 통계 배경 레이어 — 시군구 전부(66KB)를 한 번에. 연 1회 갱신되는 정적 데이터.
+  crime: () => apiFetch<LifeCrimeStatsResultType>(Routes.LifeMap.crime),
   // 뷰포트 조회 — bbox 는 @repo/utils formatBbox 문자열, zoom 은 정수로 보낸다(서버도 내림).
   points: (layer: LifeMapLayerType, bbox: string, zoom: number, filters?: LifeMapFilterParams) => {
     const params = new URLSearchParams({ layer, bbox, zoom: String(Math.floor(zoom)) });

@@ -3,13 +3,14 @@ import { Loader2, ZoomIn } from 'lucide-react';
 import { ApiError, useMapPublicConfig, type UserLocationStatus } from '@repo/shared';
 import type { LifeMapCellType, LifeMapPointsResultType } from '@repo/api-contract';
 import { buildAirSavedLocationMarkerDataUrl, buildMyLocationMarkerDataUrl, type LifeMapLayer } from '@repo/utils';
-import { MapCanvas, type MapCanvasHandle, type MapMarker, type MapViewport } from '~/components/restaurant/MapCanvas';
+import { MapCanvas, type MapAreas, type MapCanvasHandle, type MapMarker, type MapViewport } from '~/components/restaurant/MapCanvas';
 import { MyLocationButton } from '~/components/restaurant/MyLocationButton';
 import { buildLifeMarkers, lifeCellAt, parseLifeMarkerId } from './lifeMapMarkers';
 
-// 일상지도 지도 뷰 — MapCanvas 한 장에 CCTV 점/셀 + 화장실·병의원 원/핀을 한 소스로 그린다
+// 일상지도 지도 뷰 — MapCanvas 한 장에 CCTV 점/셀 + 화장실·병의원·생활편의 원/핀을 한 소스로 그린다
 // (화장실·병의원을 뒤에 넣어 점 위에 오게). 내 위치(파란 점)·저장 위치(보라 점)는 fit 에서
-// 빠지는 오버레이. 키 게이트(로딩/미등록/오류) 3분기는 대기·버스 지도와 같은 정책.
+// 빠지는 오버레이. 배경(면) 레이어(범죄 통계 choropleth)는 areas 로 그대로 넘겨 맨 아래에 깐다.
+// 키 게이트(로딩/미등록/오류) 3분기는 대기·버스 지도와 같은 정책.
 
 const MY_LOCATION_URL = buildMyLocationMarkerDataUrl();
 const SAVED_LOCATION_URL = buildAirSavedLocationMarkerDataUrl();
@@ -21,9 +22,11 @@ interface Props {
   cctv: LifeMapPointsResultType | undefined;
   toilet: LifeMapPointsResultType | undefined;
   hospital: LifeMapPointsResultType | undefined;
-  // 라벨을 붙일 화장실/병의원 id(주변 목록 + 선택).
+  store: LifeMapPointsResultType | undefined;
+  // 라벨을 붙일 화장실/병의원/생활편의 id(주변 목록 + 선택).
   labeledToiletIds?: ReadonlySet<string>;
   labeledHospitalIds?: ReadonlySet<string>;
+  labeledStoreIds?: ReadonlySet<string>;
   selectedMarkerId: string | null;
   initialCenter: { lat: number; lng: number; zoom: number };
   myLocation: { lat: number; lng: number } | null;
@@ -35,6 +38,9 @@ interface Props {
   hint: string | null;
   onSelectPoint: (layer: LifeMapLayer, id: string) => void;
   onSelectCell: (layer: LifeMapLayer, cell: LifeMapCellType) => void;
+  // 배경(면) 레이어 — null 이면 없음. 면 클릭은 마커가 안 맞았을 때만 온다.
+  areas?: MapAreas | null;
+  onAreaSelect?: (key: string) => void;
   onViewportSync: (vp: MapViewport) => void;
   onViewportChangeEnd: (vp: MapViewport) => void;
   poolKey?: string;
@@ -45,8 +51,10 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
     cctv,
     toilet,
     hospital,
+    store,
     labeledToiletIds = EMPTY_IDS,
     labeledHospitalIds = EMPTY_IDS,
+    labeledStoreIds = EMPTY_IDS,
     selectedMarkerId,
     initialCenter,
     myLocation,
@@ -57,6 +65,8 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
     hint,
     onSelectPoint,
     onSelectCell,
+    areas = null,
+    onAreaSelect,
     onViewportSync,
     onViewportChangeEnd,
     poolKey = 'life',
@@ -72,8 +82,9 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
       ...buildLifeMarkers('cctv', cctv, EMPTY_IDS),
       ...buildLifeMarkers('toilet', toilet, labeledToiletIds),
       ...buildLifeMarkers('hospital', hospital, labeledHospitalIds),
+      ...buildLifeMarkers('store', store, labeledStoreIds),
     ],
-    [cctv, toilet, hospital, labeledToiletIds, labeledHospitalIds],
+    [cctv, toilet, hospital, store, labeledToiletIds, labeledHospitalIds, labeledStoreIds],
   );
   const overlayMarkers = useMemo<MapMarker[]>(() => {
     const out: MapMarker[] = [];
@@ -100,11 +111,11 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
         onSelectPoint(parsed.layer, parsed.id);
         return;
       }
-      const source = parsed.layer === 'cctv' ? cctv : parsed.layer === 'toilet' ? toilet : hospital;
+      const source = parsed.layer === 'cctv' ? cctv : parsed.layer === 'toilet' ? toilet : parsed.layer === 'hospital' ? hospital : store;
       const cell = lifeCellAt(source, parsed.index);
       if (cell) onSelectCell(parsed.layer, cell);
     },
-    [cctv, toilet, hospital, onSelectPoint, onSelectCell],
+    [cctv, toilet, hospital, store, onSelectPoint, onSelectCell],
   );
 
   if (config.isLoading) {
@@ -137,6 +148,8 @@ export const LifeMapView = forwardRef<MapCanvasHandle, Props>(function LifeMapVi
         selectedMarkerId={selectedMarkerId}
         initialCenter={initialCenter}
         onMarkerSelect={handleMarkerSelect}
+        areas={areas}
+        onAreaSelect={onAreaSelect}
         onViewportSync={onViewportSync}
         onViewportChangeEnd={onViewportChangeEnd}
       />

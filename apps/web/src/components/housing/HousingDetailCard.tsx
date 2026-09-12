@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Crosshair, Loader2 } from 'lucide-react';
+import { ArrowLeft, Coffee, Crosshair, Cross, GraduationCap, Loader2, Pill, ShoppingBasket, Store, Utensils } from 'lucide-react';
 import { useHousingTrades, type HousingAxis } from '@repo/shared';
 import type { HousingBandStatType, HousingComplexDetailType, HousingOfficialPriceType, HousingTradeType } from '@repo/api-contract';
 import {
@@ -9,6 +9,8 @@ import {
   HOUSING_DEAL_COLOR,
   HOUSING_DEAL_TYPES,
   HOUSING_DEAL_TYPE_LABEL,
+  LIFE_STORE_INFRA_ITEMS,
+  LIFE_STORE_INFRA_LABEL,
   formatDistanceM,
   formatHousingArea,
   formatHousingDateShort,
@@ -17,13 +19,14 @@ import {
   formatHousingUnitPrice,
   housingPyeong,
   type HousingDealType,
+  type LifeStoreInfraItem,
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { isHousingRental } from './housingMarkers';
 
 // 선택 단지 상세 — 헤더(단지명·종류·세대·동수·사용승인·보강 속성(분양형태·난방·승강기·주차·최고층·구조)·
-// 지번/도로명 주소·다른 이름) → 거래 유형 탭(로컬, 초기값은 전역 축) → 면적 구간별 통계 표(최근 거래·
+// 지번/도로명 주소·다른 이름) → 생활 인프라(반경 500m 상가·병의원 개수 7칩) → 거래 유형 탭(로컬, 초기값은 전역 축) → 면적 구간별 통계 표(최근 거래·
 // 12개월 건수·평당가) → 공시가격 표(구간별 중위·범위·호수, 있을 때만) → 거래 목록(전역 면적 구간, '더 보기'
 // offset 페이징). 패널의 주변 목록 자리를 대신 차지하고 '← 목록' 으로 돌아간다.
 
@@ -56,6 +59,17 @@ const complexFacts = (item: HousingComplexDetailType): string[] => {
   if (item.floorsMax !== null) out.push(`최고 ${item.floorsMax}층`);
   if (item.structure) out.push(item.structure);
   return out;
+};
+
+// 생활 인프라 칩 아이콘 — 항목 순서는 LIFE_STORE_INFRA_ITEMS.
+const INFRA_ICON: Record<LifeStoreInfraItem, typeof Store> = {
+  convenience: Store,
+  mart: ShoppingBasket,
+  cafe: Coffee,
+  food: Utensils,
+  academy: GraduationCap,
+  hospital: Cross,
+  pharmacy: Pill,
 };
 
 // 거래 행 배지 — 매매: 직거래·해제, 전월세: 신규·갱신(+갱신요구권 사용).
@@ -124,6 +138,38 @@ export const HousingDetailCard = ({ item, axis, distM, onBack, onFlyTo }: Props)
             </p>
           )}
         </div>
+
+        {/* 생활 인프라 — 단지 좌표 반경 500m 안 업소 수. 상가 미적재(baseDate null)면 0 이 정상값이 아니므로 안내만. */}
+        {item.infra && (
+          <div className="mt-3" data-testid="housing-infra">
+            <div className="text-[11px] text-muted-foreground">
+              생활 인프라 · 반경 {item.infra.radiusM}m
+              {item.infra.baseDate ? ` · 상가 ${item.infra.baseDate} 기준` : ''}
+            </div>
+            {item.infra.baseDate === null ? (
+              <p className="mt-1 text-xs text-muted-foreground">상가 데이터가 아직 적재되지 않았습니다.</p>
+            ) : (
+              <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="생활 인프라">
+                {LIFE_STORE_INFRA_ITEMS.map((k) => {
+                  const Icon = INFRA_ICON[k];
+                  const n = item.infra!.counts[k];
+                  return (
+                    <li
+                      key={k}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums',
+                        n === 0 && 'text-muted-foreground',
+                      )}
+                    >
+                      <Icon className="size-3" aria-hidden />
+                      {LIFE_STORE_INFRA_LABEL[k]} <span className="font-semibold">{n.toLocaleString('ko-KR')}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* 거래 유형 탭 — 상세 안에서만 바꾸는 로컬 축(지도·목록 축은 그대로). */}
         <div className="mt-3 inline-flex rounded-md border p-0.5" role="tablist" aria-label="상세 거래 유형" data-testid="housing-detail-tabs">
@@ -280,6 +326,7 @@ export const HousingDetailCard = ({ item, axis, distM, onBack, onFlyTo }: Props)
           {prices.length > 0 ? ' 공시가격은 매년 1월 1일 기준 국토교통부 공시로, 시세보다 낮게 형성되는 것이 보통입니다.' : ''}
           {rental ? ' 임대단지는 분양 거래가 없어 실거래가가 잡히지 않는 것이 정상입니다.' : ''}
           {item.geoSource ? ' 위치는 주소를 VWorld 지오코더로 변환한 값이라 단지 입구와 차이 날 수 있습니다.' : item.lat === null ? ' 주소를 좌표로 변환하지 못해 지도에는 표시되지 않습니다.' : ''}
+          {item.infra?.baseDate ? ' 생활 인프라는 소상공인시장진흥공단 상가정보(분기)·심평원 병원정보 기준 개수입니다.' : ''}
         </p>
       </div>
     </div>

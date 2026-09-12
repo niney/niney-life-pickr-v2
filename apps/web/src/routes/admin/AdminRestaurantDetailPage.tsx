@@ -44,6 +44,7 @@ import { Card, CardContent } from '~/components/ui/card';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import { MenuRankingSection } from '~/components/restaurant/MenuRankingSection';
 import { RestaurantCrawlLogsSection } from '~/components/restaurant/RestaurantCrawlLogsSection';
+import { StoreInfoBadges } from '~/components/restaurant/detail/StoreInfoBadges';
 import { VWorldMap } from '~/components/restaurant/VWorldMap';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import {
@@ -566,6 +567,7 @@ export const AdminRestaurantDetailPage = () => {
               {detail.category && (
                 <span className="text-sm text-muted-foreground">{detail.category}</span>
               )}
+              <StoreInfoBadges store={detail.store} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
               {detail.rating !== null && (

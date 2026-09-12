@@ -95,6 +95,26 @@ export const VisitorReviewWithSummary = VisitorReview.extend({
 });
 export type VisitorReviewWithSummaryType = z.infer<typeof VisitorReviewWithSummary>;
 
+// 상가업소 매칭 정보 — 소상공인시장진흥공단 상가(상권)정보(LifeStore)에서 좌표 80m + 상호 유사도로 붙인
+// 업소(RestaurantStoreMatch). closedSuspect = 최근 분기 적재본에서 업소가 사라짐(폐업 의심 — 매칭 실패일
+// 수도 있어 목록·지도에서는 숨기지 않고 배지만). baseDate 는 그 적재본 기준일(YYYY-MM-DD, 없으면 null).
+export const RestaurantStoreInfo = z.object({
+  bizesId: z.string(),
+  name: z.string(),
+  branch: z.string().nullable(),
+  // @repo/utils LIFE_STORE_KINDS (food | cafe).
+  kind: z.string(),
+  // 상권업종 소분류명(백반/한정식 · 카페 …) / 표준산업분류명.
+  industry: z.string(),
+  ksicName: z.string().nullable(),
+  distM: z.number().int().min(0),
+  nameScore: z.number().min(0).max(1),
+  closedSuspect: z.boolean(),
+  missingSince: z.string().nullable(),
+  baseDate: z.string().nullable(),
+});
+export type RestaurantStoreInfoType = z.infer<typeof RestaurantStoreInfo>;
+
 // Restaurant detail returned by GET /admin/restaurants/place/:placeId.
 // `snapshot` is the last NaverPlaceData captured (visitorReviews stripped —
 // the live list comes from `reviews` instead).
@@ -112,6 +132,8 @@ export const RestaurantDetail = z.object({
   lastCrawledAt: z.string(),
   snapshot: NaverPlaceData,
   reviews: z.array(VisitorReviewWithSummary),
+  // 상가업소 매칭 — 없으면 null.
+  store: RestaurantStoreInfo.nullable(),
 });
 export type RestaurantDetailType = z.infer<typeof RestaurantDetail>;
 
@@ -681,6 +703,8 @@ export const RestaurantPublicDetail = z.object({
   diningcode: PublicDiningcodeAddon.nullable(),
   // 테이블링 보조 정보 — canonical 에 테이블링 partner 행이 없으면 null.
   tabling: PublicTablingAddon.nullable(),
+  // 상가업소 매칭(업종·폐업 의심) — 매칭 없으면 null.
+  store: RestaurantStoreInfo.nullable(),
 });
 export type RestaurantPublicDetailType = z.infer<typeof RestaurantPublicDetail>;
 

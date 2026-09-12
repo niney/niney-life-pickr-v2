@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   ErrorResponseSchema,
+  LifeCrimeStatsResult,
   LifeMapDetailParams,
   LifeMapItem,
   LifeMapNearbyQuery,
@@ -17,6 +18,7 @@ import { env } from '../../config/env.js';
 import { replyUpstreamError } from '../../lib/reply-upstream-error.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { MapSettingsService } from '../settings/map.service.js';
+import { LifeCrimeService } from './life-crime.service.js';
 import { LifeMapSearchService } from './life-map-search.service.js';
 import { LifeMapService } from './life-map.service.js';
 
@@ -31,6 +33,8 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
   const searchService = new LifeMapSearchService({
     getKey: async () => (await mapSettings.getSecret('vworld')).apiKey,
   });
+  // 범죄 통계 배경 레이어 — 빌드 산출물 JSON(기동 시 검증)을 그대로 내려준다.
+  const crimeService = new LifeCrimeService();
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.LifeMap.search, {
@@ -57,6 +61,15 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: LifeMapStatusResult },
     },
     handler: async () => service.getStatus(),
+  });
+
+  // 범죄 통계 — 시군구 229곳 전부(66KB)를 한 번에. 정적이라 클라이언트가 24h 캐시한다.
+  typed.get(Routes.LifeMap.crime, {
+    schema: {
+      tags: ['life-map'],
+      response: { 200: LifeCrimeStatsResult },
+    },
+    handler: async () => crimeService.getStats(),
   });
 
   // 뷰포트 조회 — 지도를 움직일 때마다(레이어당 1콜) 오므로 전용 프리셋으로 완만히 제한.

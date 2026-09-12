@@ -7,11 +7,13 @@ import type { LifeMapItemType } from '@repo/api-contract';
 import {
   LIFE_CCTV_GROUP_COLOR,
   LIFE_HOSPITAL_COLOR,
+  LIFE_STORE_COLOR,
   LIFE_TOILET_COLOR,
   LIFE_TOILET_FEATURES,
   formatDistanceM,
   formatLifeYm,
   lifeCctvPurposeGroup,
+  lifeStoreDisplayName,
   lifeToiletOpenLabel,
   summarizeLifeToiletFixtures,
 } from '@repo/utils';
@@ -60,6 +62,8 @@ export const LifeDetailPanel = ({ item, loading, error, distM, onBack, onFlyTo, 
           <ToiletDetail item={item} distM={distM} />
         ) : item.layer === 'hospital' ? (
           <HospitalDetail item={item} distM={distM} />
+        ) : item.layer === 'store' ? (
+          <StoreDetail item={item} distM={distM} />
         ) : (
           <CctvDetail item={item} distM={distM} />
         )}
@@ -197,6 +201,34 @@ const HospitalDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { laye
             ? ' 좌표가 없어 지도에는 표시되지 않습니다.'
             : ''}
       </Text>
+    </>
+  );
+};
+
+// 생활편의(상가) — 최소 구성(상호·업종·주소). 앱 레이어 UI 는 아직 없지만 sel 로 진입할 수 있어 채운다.
+const StoreDetail = ({ item, distM }: { item: Extract<LifeMapItemType, { layer: 'store' }>; distM: number | null }) => {
+  const theme = useTheme();
+  return (
+    <>
+      <View style={styles.titleRow}>
+        <View style={[styles.titleDot, { backgroundColor: LIFE_STORE_COLOR }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{lifeStoreDisplayName(item.name, item.branch)}</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
+            {item.sclsName}
+            {distM !== null ? ` · 내 위치에서 ${formatDistanceM(distM)}` : ''}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.rows}>
+        <Row label="업종">{`${item.sclsName}${item.ksicName ? ` · ${item.ksicName}` : ''}`}</Row>
+        <Row label="주소">
+          <Text style={[styles.rowText, { color: theme.colors.text }]}>{item.roadAddr ?? item.lotAddr ?? '-'}</Text>
+          {item.roadAddr && item.lotAddr ? <Text style={[styles.rowSub, { color: theme.colors.textMuted }]}>{item.lotAddr}</Text> : null}
+        </Row>
+        {(item.bldName || item.floor) && <Row label="건물·층">{`${item.bldName ?? ''}${item.floor ? ` ${item.floor}층` : ''}`.trim()}</Row>}
+      </View>
+      <Text style={[styles.note, { color: theme.colors.textMuted }]}>출처: 소상공인시장진흥공단 상가(상권)정보(분기 갱신 — 사업자 등록 기준이라 실제 영업·간판명과 다를 수 있습니다).</Text>
     </>
   );
 };
