@@ -66,7 +66,7 @@ const toBirthInput = (b: SajuBirthInput): SajuBirthInputType => ({
 });
 
 // ?tool= 딥링크(앱 홈 카드·이전 링크) → 8차 탭/모드. match 는 입구 궁합 모드.
-const TOOL_TAB: Record<string, SajuPanelTab> = { daily: 'daily', food: 'food', date: 'date', love: 'love', wealth: 'wealth', career: 'career' };
+const TOOL_TAB: Record<string, SajuPanelTab> = { daily: 'daily', food: 'food', date: 'date', love: 'love', wealth: 'wealth', career: 'career', ask: 'ask' };
 
 export const SajuPage = () => {
   const { headerHeight } = usePublicLayout();

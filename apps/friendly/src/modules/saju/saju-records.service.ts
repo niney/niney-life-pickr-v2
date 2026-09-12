@@ -115,9 +115,9 @@ export class SajuRecordsService {
   // ── 회원 기록 ─────────────────────────────────────────────────────────
 
   async listMine(userId: string, query: ListSajuReadingsQueryType): Promise<ListSajuReadingsResultType> {
-    // 목록·상세는 전체 풀이(full)만 — 오늘의 운세 잠금 행(daily)은 내부용.
+    // 목록은 전체 풀이(full, 기본) 또는 사주에 묻기(question) — 오늘의 운세 잠금 행(daily)은 내부용.
     const rows = await this.prisma.sajuReading.findMany({
-      where: { userId, kind: 'full' },
+      where: { userId, kind: query.kind ?? 'full' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: query.limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
@@ -291,11 +291,19 @@ const maskBirth = (chart: SajuChartType): SajuChartType => ({
 const rowToSummary = (row: SajuReadingRow): SajuReadingSummaryType => {
   const chart = JSON.parse(row.chartJson) as SajuChart;
   let keyword = '';
-  try {
-    const sections = parseSections(row);
-    keyword = sections.advice.keyword || sections.personality.headline;
-  } catch {
-    keyword = '';
+  let ask: SajuReadingSummaryType['ask'] = null;
+  if (row.kind === 'question') {
+    // 사주에 묻기 — 답까지 목록에 싣는다(상세 페이지 없음).
+    const r = safeJson(row.resultJson) as { topic?: string; topicKo?: string; whenKo?: string; question?: string; verdictKo?: string; answer?: string } | null;
+    keyword = r?.topicKo ?? '질문';
+    ask = { topic: r?.topic ?? '', topicKo: r?.topicKo ?? '', whenKo: r?.whenKo ?? '', question: r?.question ?? '', verdictKo: r?.verdictKo ?? '', answer: r?.answer ?? '' };
+  } else {
+    try {
+      const sections = parseSections(row);
+      keyword = sections.advice.keyword || sections.personality.headline;
+    } catch {
+      keyword = '';
+    }
   }
   const birth = safeJson(row.inputJson) as SajuBirthInputType | null;
   void birth;
@@ -307,5 +315,6 @@ const rowToSummary = (row: SajuReadingRow): SajuReadingSummaryType => {
     keyword,
     source: row.source as SajuReadingSummaryType['source'],
     createdAt: row.createdAt.toISOString(),
+    ask,
   };
 };

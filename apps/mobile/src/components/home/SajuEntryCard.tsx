@@ -20,7 +20,7 @@ export const SajuEntryCard = () => {
         </Text>
         <View style={styles.headerText}>
           <Text style={styles.title}>사주(C)로 나를 읽기</Text>
-          <Text style={styles.subtitle}>생년월일로 세우는 사주팔자, 오늘의 운세, 택일, 궁합, 오행 음식. 로그인 없이 무료.</Text>
+          <Text style={styles.subtitle}>생년월일로 세우는 사주팔자, 인연·재물·직업 테마, "만약에" 묻기, 궁합, 오늘의 운세. 로그인 없이 무료.</Text>
         </View>
       </View>
       <View style={styles.actions}>
@@ -41,6 +41,15 @@ export const SajuEntryCard = () => {
         >
           <MaterialCommunityIcons name="weather-sunny" size={16} color={GOLD} />
           <Text style={[styles.actionGhostText, { color: theme.mode === 'dark' ? INK : INK }]}>오늘의 운세</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/saju-c?tool=ask' as never)}
+          android_ripple={{ color: `${GOLD}33` }}
+          style={({ pressed }) => [styles.action, styles.actionGhost, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <MaterialCommunityIcons name="comment-question-outline" size={16} color={GOLD} />
+          <Text style={[styles.actionGhostText, { color: INK }]}>사주에 묻기</Text>
         </Pressable>
       </View>
     </View>

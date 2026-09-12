@@ -495,6 +495,67 @@ export const SajuFoodResult = z.object({
 });
 export type SajuFoodResultType = z.infer<typeof SajuFoodResult>;
 
+// ── 사주에 묻기(9차) — "만약에 이랬다면" ────────────────────────────────────
+// 주제 칩(9) + 시점 + 자유 텍스트(≤200자, 계산엔 안 쓰고 프롬프트 데이터 블록으로만). 계산(시점 점수·판정·대안·근거)은
+// utils sajuAsk 가 하고 웹도 같은 함수로 근거 카드를 즉시 그린다. 결혼·고백은 상대(궁합)를 선택적으로 붙인다.
+// 답하지 않는 주제(건강·법률·사행성)는 서버가 blocked 로 돌려주고 LLM·한도를 쓰지 않는다.
+
+export const SajuAskTopic = z.enum(['job-change', 'startup', 'move', 'marriage', 'exam', 'invest', 'trip', 'contract', 'confess']);
+export type SajuAskTopicType = z.infer<typeof SajuAskTopic>;
+export const SAJU_ASK_QUESTION_MAX_LENGTH = 200;
+
+export const SajuAskWhen = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('this-month') }),
+  z.object({ kind: z.literal('this-year') }),
+  z.object({ kind: z.literal('year'), year: Int.min(SAJU_SUPPORTED_YEAR_RANGE.from).max(SAJU_SUPPORTED_YEAR_RANGE.to) }),
+  z.object({ kind: z.literal('date'), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+]);
+export type SajuAskWhenType = z.infer<typeof SajuAskWhen>;
+
+export const SajuAskInput = z.object({
+  birth: SajuBirthInput,
+  topic: SajuAskTopic,
+  when: SajuAskWhen.default({ kind: 'this-year' }),
+  question: z.string().trim().max(SAJU_ASK_QUESTION_MAX_LENGTH).default(''),
+  // 결혼·고백처럼 상대가 있는 질문 — 있으면 궁합 점수를 근거에 더한다. 서버에 저장하지 않는다.
+  partner: SajuBirthInput.optional(),
+  partnerLabel: z.string().trim().max(20).optional(),
+});
+export type SajuAskInputType = z.infer<typeof SajuAskInput>;
+
+export const SajuAskVerdict = z.enum(['good', 'ok', 'careful']);
+export const SajuAskWindow = z.object({ label: z.string(), ganzhiKo: z.string(), score: Int, stars: Int.min(1).max(5), reasons: z.array(z.string()) });
+export const SajuAskTarotTopic = z.enum(['general', 'love', 'work', 'money', 'relationship', 'choice']);
+
+export const SajuAskResult = z.object({
+  topic: SajuAskTopic,
+  topicKo: z.string(),
+  when: SajuAskWhen,
+  whenKo: z.string(),
+  question: z.string(),
+  // 답하지 않는 주제면 그 이름(건강·생명 등) — answer 는 정적 안내.
+  blocked: z.string().nullable(),
+  verdict: SajuAskVerdict,
+  verdictKo: z.string(),
+  window: SajuAskWindow,
+  alternatives: z.array(SajuAskWindow),
+  basis: z.array(z.string()),
+  themeSummary: z.array(z.string()),
+  luckNote: z.string(),
+  // 상대가 있으면 궁합 요약.
+  match: z.object({ score: Int, gradeKo: z.string(), label: z.string() }).nullable(),
+  answer: z.string(),
+  conditions: z.array(z.string()),
+  timingNote: z.string(),
+  // "타로로도 보기" 링크용 타로 주제.
+  tarotTopic: SajuAskTarotTopic,
+  source: SajuSource,
+  model: z.string().nullable(),
+  readingId: z.string().nullable(),
+  quota: SajuQuota,
+});
+export type SajuAskResultType = z.infer<typeof SajuAskResult>;
+
 // ── 회원 프로필·기록·공유 (4차에서 라우트 구현) ────────────────────────────
 
 export const SajuProfileInput = z.object({
@@ -514,7 +575,7 @@ export type SajuProfileType = z.infer<typeof SajuProfile>;
 export const SajuProfileList = z.object({ items: z.array(SajuProfile) });
 export type SajuProfileListType = z.infer<typeof SajuProfileList>;
 
-export const SajuReadingKind = z.enum(['full', 'daily', 'match', 'date-pick', 'food']);
+export const SajuReadingKind = z.enum(['full', 'daily', 'match', 'date-pick', 'food', 'question']);
 export type SajuReadingKindType = z.infer<typeof SajuReadingKind>;
 
 export const SajuReadingSummary = z.object({
@@ -525,12 +586,19 @@ export const SajuReadingSummary = z.object({
   keyword: z.string(),
   source: SajuReadingSource,
   createdAt: z.string(),
+  // kind 'question'(사주에 묻기, 9차) 행의 요약 — 목록에서 답까지 바로 보인다(상세 페이지 없음).
+  ask: z
+    .object({ topic: z.string(), topicKo: z.string(), whenKo: z.string(), question: z.string(), verdictKo: z.string(), answer: z.string() })
+    .nullable()
+    .optional(),
 });
 export type SajuReadingSummaryType = z.infer<typeof SajuReadingSummary>;
 
 export const ListSajuReadingsQuery = z.object({
   cursor: z.string().max(64).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+  // full(전체 풀이, 기본) / question(사주에 묻기).
+  kind: z.enum(['full', 'question']).default('full'),
 });
 export type ListSajuReadingsQueryType = z.infer<typeof ListSajuReadingsQuery>;
 

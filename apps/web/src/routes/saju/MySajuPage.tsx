@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Sparkles, Star, Trash2 } from 'lucide-react';
+import { Loader2, MessageCircleQuestion, Sparkles, Star, Trash2 } from 'lucide-react';
 import type { SajuProfileType, SajuReadingSummaryType } from '@repo/api-contract';
 import { useDeleteSajuProfile, useDeleteSajuReading, useMySajuReadingsInfinite, useSajuProfiles, useUpsertSajuProfile } from '@repo/shared';
 import { Button } from '~/components/ui/button';
@@ -16,6 +16,9 @@ export const MySajuPage = () => {
   const profiles = useSajuProfiles();
   const query = useMySajuReadingsInfinite(20);
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  // 사주에 묻기(9차) — 답까지 목록에서 바로 본다.
+  const asked = useMySajuReadingsInfinite(20, 'question');
+  const askedItems = asked.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <header className="mb-6 flex flex-wrap items-center gap-3">
@@ -46,6 +49,26 @@ export const MySajuPage = () => {
           </ul>
         )}
       </section>
+
+      {askedItems.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+            <MessageCircleQuestion className="size-4" /> 물어본 것
+          </h2>
+          <ul className="flex flex-col gap-2" data-testid="saju-asked-list">
+            {askedItems.map((item) => (
+              <li key={item.id}>
+                <AskedRow item={item} />
+              </li>
+            ))}
+          </ul>
+          {asked.hasNextPage && (
+            <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => void asked.fetchNextPage()} disabled={asked.isFetchingNextPage}>
+              더 보기
+            </Button>
+          )}
+        </section>
+      )}
 
       <h2 className="mb-2 text-sm font-semibold text-muted-foreground">풀이 기록</h2>
       {query.isLoading ? (
@@ -108,6 +131,35 @@ const ProfileRow = ({ profile }: { profile: SajuProfileType }) => {
         <button type="button" aria-label="프로필 삭제" onClick={() => setConfirming(true)} className="rounded p-1 text-muted-foreground hover:text-destructive">
           <Trash2 className="size-4" />
         </button>
+      )}
+    </div>
+  );
+};
+
+const AskedRow = ({ item }: { item: SajuReadingSummaryType }) => {
+  const del = useDeleteSajuReading();
+  const [open, setOpen] = useState(false);
+  const a = item.ask;
+  if (!a) return null;
+  return (
+    <div className="rounded-xl border bg-card p-3">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-3 text-left">
+        <span className="rounded-full border px-2 py-px text-[11px] text-muted-foreground">{a.topicKo}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-sm font-medium">{a.question || `${a.topicKo} — ${a.whenKo}`}</span>
+            <span className="text-xs text-muted-foreground">{a.whenKo} · {a.verdictKo}</span>
+          </div>
+          <div className={open ? 'mt-1 text-sm leading-relaxed' : 'mt-1 truncate text-xs text-muted-foreground'}>{a.answer}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{fmtDate(item.createdAt)}</div>
+        </div>
+      </button>
+      {open && (
+        <div className="mt-2 flex justify-end">
+          <Button type="button" size="sm" variant="ghost" onClick={() => del.mutate(item.id)} disabled={del.isPending} className="text-muted-foreground hover:text-destructive">
+            <Trash2 className="size-4" /> 삭제
+          </Button>
+        </div>
       )}
     </div>
   );

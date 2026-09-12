@@ -20,6 +20,8 @@ import {
   type SajuJobPollResultType,
   type SajuMatchInputType,
   type SajuMatchResultType,
+  type SajuAskInputType,
+  type SajuAskResultType,
   type SajuReadingResultType,
   type SajuThemesJobPollResultType,
   type SajuThemesResultType,
@@ -50,6 +52,10 @@ export const sajuApi = {
   pollThemeJob: (jobId: string, after: number, wait = 20_000) =>
     apiFetch<SajuThemesJobPollResultType>(`${Routes.Saju.themeJob(jobId)}?after=${after}&wait=${wait}`),
 
+  // 사주에 묻기(9차) — 단일 호출.
+  ask: (input: SajuAskInputType, guestKey: string | null) =>
+    apiFetch<SajuAskResultType>(Routes.Saju.ask, { method: 'POST', body: JSON.stringify(input), headers: guestHeaders(guestKey) }),
+
   daily: (input: SajuDailyInputType, guestKey: string | null) =>
     apiFetch<SajuDailyResultType>(Routes.Saju.daily, { method: 'POST', body: JSON.stringify(input), headers: guestHeaders(guestKey) }),
 
@@ -76,6 +82,7 @@ export const sajuApi = {
     const qs = new URLSearchParams();
     if (query.cursor) qs.set('cursor', query.cursor);
     if (query.limit) qs.set('limit', String(query.limit));
+    if (query.kind) qs.set('kind', query.kind);
     const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
     return apiFetch<ListSajuReadingsResultType>(`${Routes.Saju.myReadings}${suffix}`);
   },

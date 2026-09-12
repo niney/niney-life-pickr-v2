@@ -675,6 +675,8 @@ export const Saju = {
   // POST — 테마(인연·재물·직업) 3개 병렬 job(8차). GET jobs/:id 는 readings job 과 같은 long-poll.
   themes: `${API_PREFIX}/saju-c/themes`,
   themeJob: (jobId: string) => `${API_PREFIX}/saju-c/themes/jobs/${jobId}`,
+  // POST — 사주에 묻기(9차): 주제·시점·자유 텍스트 → 시점 점수·근거 + LLM 답. 한도 1건.
+  ask: `${API_PREFIX}/saju-c/ask`,
   daily: `${API_PREFIX}/saju-c/daily`,
   match: `${API_PREFIX}/saju-c/match`,
   datePick: `${API_PREFIX}/saju-c/date-pick`,

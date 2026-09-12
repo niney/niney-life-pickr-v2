@@ -3,6 +3,7 @@ import type {
   CreateSajuReadingInputType,
   CreateSajuShareInputType,
   CreateSajuThemesInputType,
+  SajuAskInputType,
   SajuDailyInputType,
   SajuDatePickInputType,
   SajuFoodInputType,
@@ -87,6 +88,10 @@ export const useSajuThemeJob = (jobId: string | null): SajuThemeJobState => {
   const gone = q.error instanceof ApiError && q.error.statusCode === 410;
   return { data: q.data ?? null, gone, polling: !!jobId && !gone && !(q.data?.done ?? false) };
 };
+
+// 사주에 묻기(9차) — 사용자가 폼을 제출할 때 1회(mutation). 같은 입력은 서버 캐시.
+export const useSajuAsk = () =>
+  useMutation({ mutationFn: (input: SajuAskInputType) => sajuApi.ask(input, getGuestKey()) });
 
 export const useSajuDaily = () =>
   useMutation({ mutationFn: (input: SajuDailyInputType) => sajuApi.daily(input, getGuestKey()) });
@@ -185,11 +190,11 @@ export const useDeleteSajuProfile = () => {
   });
 };
 
-export const useMySajuReadingsInfinite = (limit = 20) => {
+export const useMySajuReadingsInfinite = (limit = 20, kind: 'full' | 'question' = 'full') => {
   const loggedIn = useAuthStore((s) => !!s.token);
   return useInfiniteQuery({
-    queryKey: [...mineKey, 'infinite', { limit }],
-    queryFn: ({ pageParam }) => sajuApi.listMine({ limit, cursor: pageParam ?? undefined }),
+    queryKey: [...mineKey, 'infinite', { limit, kind }],
+    queryFn: ({ pageParam }) => sajuApi.listMine({ limit, kind, cursor: pageParam ?? undefined }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: loggedIn,

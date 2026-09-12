@@ -45,17 +45,22 @@ export interface SajuDatePickResult {
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
 const stars = (s: number): 1 | 2 | 3 | 4 | 5 => (s >= 80 ? 5 : s >= 65 ? 4 : s >= 50 ? 3 : s >= 35 ? 2 : 1);
 
+/** 기본 점수에 용도 가중치(표식·천간 십신)를 얹어 5~99 로 — 택일과 "사주에 묻기"(월운·세운·일진 시점 채점)가 같은 규칙. */
+export const applyDatePurposeRule = (score: number, tags: readonly SajuDayTag[], stemTenGod: SajuDayScore['stemTenGod'], purpose: SajuDatePurpose): number => {
+  const rule = RULES[purpose];
+  let s = score;
+  for (const t of tags) s += rule.tags[t] ?? 0;
+  s += rule.gods[stemTenGod] ?? 0;
+  return Math.round(clamp(s, 5, 99));
+};
+
 /** 시작 일수부터 days 일(≤ 60)을 채점. */
 export const pickDates = (chart: SajuChart, fromDayNumber: number, days: number, purpose: SajuDatePurpose): SajuDatePickResult => {
   const n = clamp(Math.floor(days), 1, SAJU_DATE_PICK_MAX_DAYS);
-  const rule = RULES[purpose];
   const list: SajuDatePickDay[] = [];
   for (let i = 0; i < n; i++) {
     const base = scoreDayForChart(chart, fromDayNumber + i);
-    let s = base.score;
-    for (const t of base.tags) s += rule.tags[t] ?? 0;
-    s += rule.gods[base.stemTenGod] ?? 0;
-    const purposeScore = Math.round(clamp(s, 5, 99));
+    const purposeScore = applyDatePurposeRule(base.score, base.tags, base.stemTenGod, purpose);
     list.push({ ...base, purposeScore, purposeStars: stars(purposeScore) });
   }
   const top = [...list].sort((a, b) => b.purposeScore - a.purposeScore || a.dayNumber - b.dayNumber).slice(0, SAJU_DATE_PICK_TOP);

@@ -20,11 +20,13 @@ import {
   SAJU_TWELVE_STAGE_TEXT,
   SAJU_WUXING_LUCKY,
   SAJU_WUXING_META,
+  SAJU_ASK_TOPIC_META,
   dayMasterText,
   sajuCareerThemeOf,
   sajuLoveThemeOf,
   sajuWealthThemeOf,
   tenGodKo,
+  type SajuAskFacts,
   type SajuChart,
   type SajuDailyFortune,
   type SajuDatePickResult,
@@ -181,9 +183,29 @@ export const buildStaticThemes = (chart: SajuChart): SajuThemesType => {
   };
 };
 
+// ── 사주에 묻기(9차) ────────────────────────────────────────────────────────
+
+export const buildStaticAsk = (facts: SajuAskFacts, match: { score: number; gradeKo: string; label: string } | null): { answer: string; conditions: string[]; timingNote: string } => {
+  const w = facts.window;
+  const meta = SAJU_ASK_TOPIC_META[facts.topic];
+  const lead =
+    facts.verdict === 'good'
+      ? `${facts.whenKo}에 ${facts.topicKo}은(는) 해 볼 만한 흐름이에요.`
+      : facts.verdict === 'ok'
+        ? `${facts.whenKo}에 ${facts.topicKo}은(는) 무난한 흐름이에요 — 준비한 만큼 갑니다.`
+        : `${facts.whenKo}에 ${facts.topicKo}은(는) 조심스러운 흐름이에요 — 서두르기보다 다듬는 시기예요.`;
+  return {
+    answer: `${lead} ${w.label}은 내 사주에 대 보면 ${w.score}점 — ${w.reasons.join(', ')}. ${facts.basis[0] ?? ''} ${facts.luckNote}${match ? ` ${match.label}와의 궁합은 ${match.score}점(${match.gradeKo})이에요.` : ''}`,
+    conditions: [`${meta.hint} — 계산된 시점을 기준으로 정하기`, facts.verdict === 'careful' ? '큰 결정은 문서와 사람의 확인을 거치기' : '준비를 마친 뒤 움직이기'],
+    timingNote: facts.alternatives.length
+      ? `더 좋은 시점은 ${facts.alternatives.map((a) => `${a.label}(${a.score}점)`).join(' · ')}이에요.`
+      : '요청한 시점이 이미 상위권이라 지금 흐름을 살리면 돼요.',
+  };
+};
+
 // ── 오늘의 운세 ─────────────────────────────────────────────────────────────
 
-export const buildStaticDaily =(chart: SajuChart, fortune: SajuDailyFortune): { body: string; advice: string } => {
+export const buildStaticDaily = (chart: SajuChart, fortune: SajuDailyFortune): { body: string; advice: string } => {
   const d = fortune.day;
   const g = SAJU_TEN_GOD_TEXT[d.stemTenGod];
   const tags = d.tags.slice(0, 2).map((t) => SAJU_DAY_TAG_LABEL[t]).join(', ');

@@ -15,6 +15,8 @@ import {
   SajuWealthSection,
   SajuYearSection,
   type CreateSajuThemesInputType,
+  type SajuAskInputType,
+  type SajuAskResultType,
   type SajuBirthInputType,
   type SajuChartType,
   type SajuDailyInputType,
@@ -43,6 +45,9 @@ import {
   kstDayNumberOfDate,
   matchCharts,
   pickDates,
+  SAJU_ASK_TOPIC_META,
+  sajuAskBlockedReason,
+  sajuAskOf,
   sajuDateFromDayNumber,
   sajuDayNumber,
   SajuInputError,
@@ -67,12 +72,14 @@ import {
   buildStaticDaily,
   buildStaticDateReasons,
   buildStaticFoodReasons,
+  buildStaticAsk,
   buildStaticMatch,
   buildStaticSections,
   buildStaticThemes,
   luckyOf,
 } from './saju-static.js';
 import {
+  SAJU_ASK_JSON_SCHEMA,
   SAJU_DAILY_JSON_SCHEMA,
   SAJU_DATE_PICK_JSON_SCHEMA,
   SAJU_FOOD_JSON_SCHEMA,
@@ -84,6 +91,7 @@ import {
   SAJU_SYSTEM_PROMPT,
   SAJU_THEME_JSON_SCHEMA,
   SAJU_THEME_MAX_TOKENS,
+  buildSajuAskPrompt,
   buildSajuDailyPrompt,
   buildSajuDatePickPrompt,
   buildSajuFoodPrompt,
@@ -164,6 +172,11 @@ const ThemeOutput: Record<SajuThemeIdType, z.ZodTypeAny> = {
   }),
 };
 const DailyOutput = z.object({ body: z.string().trim().min(1), advice: z.string().trim().min(1) });
+const AskOutput = z.object({
+  answer: z.string().trim().min(1),
+  conditions: z.array(z.string().trim().min(1)).min(1).max(4),
+  timingNote: z.string().trim().min(1),
+});
 const MatchOutput = z.object({
   summary: z.string().trim().min(1),
   strengths: z.array(z.string().trim().min(1)).min(1).max(5),
@@ -251,6 +264,8 @@ const matchCacheKey = (a: SajuChart, b: SajuChart, labels: { a: string; b: strin
   sha(`match:${chartCacheBase(a)}|${chartCacheBase(b)}|${labels.a}|${labels.b}`);
 const datePickCacheKey = (chart: SajuChart, purpose: string, from: number, days: number): string =>
   sha(`date:${SAJU_PROMPT_VERSION}:${chartSignature(chart)}:${chart.favorable.primary}:${purpose}:${from}:${days}`);
+const askCacheKey = (chart: SajuChart, input: SajuAskInputType, partnerSig: string | null): string =>
+  sha(`ask:${SAJU_PROMPT_VERSION}:${chartCacheBase(chart)}:${input.topic}:${JSON.stringify(input.when)}:${input.question.trim().replace(/\s+/g, ' ').toLowerCase()}:${partnerSig ?? '-'}`);
 const foodCacheKey = (chart: SajuChart, dayKey: string | null): string =>
   sha(`food:${SAJU_PROMPT_VERSION}:${chartSignature(chart)}:${chart.favorable.primary}:${dayKey ?? '-'}`);
 
@@ -568,6 +583,99 @@ export class SajuService {
       if (hit) out[t] = hit as never;
     }
     return out;
+  }
+
+  // ── 사주에 묻기(9차) ──────────────────────────────────────────────────
+
+  async ask(input: SajuAskInputType, actor: SajuActor): Promise<SajuAskResultType> {
+    const chart = this.chartOf(input.birth);
+    const facts = sajuAskOf(chart, { topic: input.topic, when: input.when });
+    const meta = SAJU_ASK_TOPIC_META[input.topic];
+    // 상대(결혼·고백) — 궁합 점수만 근거에 더한다. 서버에 남기지 않는다.
+    let match: SajuAskResultType['match'] = null;
+    let partnerSig: string | null = null;
+    if (input.partner) {
+      const b = this.chartOf(input.partner);
+      const m = matchCharts(chart, b);
+      match = { score: m.score, gradeKo: m.gradeKo, label: input.partnerLabel?.trim() || '상대' };
+      partnerSig = `${chartSignature(b)}|${b.input.gender}`;
+    }
+    const base = {
+      topic: input.topic,
+      topicKo: facts.topicKo,
+      when: input.when,
+      whenKo: facts.whenKo,
+      question: input.question.trim(),
+      verdict: facts.verdict,
+      verdictKo: facts.verdictKo,
+      window: facts.window,
+      alternatives: facts.alternatives,
+      basis: facts.basis,
+      themeSummary: facts.themeSummary,
+      luckNote: facts.luckNote,
+      match,
+      tarotTopic: meta.tarotTopic,
+    };
+    // 답하지 않는 주제 — LLM·한도·저장 없이 정적 안내.
+    const blocked = sajuAskBlockedReason(input.question);
+    if (blocked) {
+      return {
+        ...base,
+        blocked,
+        answer: `${blocked} 주제는 사주로 답하지 않아요. 몸·법·돈의 확률은 전문가와 상의하는 게 맞아요. 대신 "${facts.topicKo}"의 시기와 태도는 아래 근거로 볼 수 있어요.`,
+        conditions: ['전문가 상담이 먼저', '사주는 시기와 마음가짐만 참고'],
+        timingNote: facts.alternatives.length ? `시기만 보면 ${facts.alternatives.map((a) => a.label).join(' · ')}이 더 좋아요.` : '',
+        source: 'static',
+        model: null,
+        readingId: null,
+        quota: { remainingToday: await this.deps.quota.remainingForGuest(SAJU_QUOTA_FEATURE, actor) },
+      };
+    }
+    const key = askCacheKey(chart, input, partnerSig);
+    type Text = { answer: string; conditions: string[]; timingNote: string; model: string | null };
+    const cached = this.cache.get(key) as Text | undefined;
+    let text: (Text & { source: SajuSourceType }) | null = cached ? { ...cached, source: 'llm' } : null;
+    let remaining: number | null;
+    if (text) remaining = await this.deps.quota.remainingForGuest(SAJU_QUOTA_FEATURE, actor);
+    else {
+      const decision = await this.deps.quota.consume(SAJU_QUOTA_FEATURE, actor);
+      remaining = decision.remainingToday;
+      const p = decision.allowed ? await this.resolveProvider() : null;
+      if (p) {
+        const out = await this.callJson(p, buildSajuAskPrompt(chart, facts, input.question, match), AskOutput, SAJU_ASK_JSON_SCHEMA, 700, 'ask');
+        if (out) {
+          text = { ...out, model: p.model, source: 'llm' };
+          this.cache.set(key, { ...out, model: p.model });
+        }
+      }
+    }
+    if (!text) text = { ...buildStaticAsk(facts, match), model: null, source: 'static' };
+    const result: SajuAskResultType = { ...base, blocked: null, answer: text.answer, conditions: text.conditions, timingNote: text.timingNote, source: text.source, model: text.model, readingId: null, quota: { remainingToday: remaining } };
+    if (actor.userId) {
+      try {
+        const { quota: _q, readingId: _r, ...stored } = result;
+        void _q;
+        void _r;
+        const row = await this.prisma.sajuReading.create({
+          data: {
+            userId: actor.userId,
+            kind: 'question',
+            inputJson: JSON.stringify({ birth: input.birth, topic: input.topic, when: input.when, question: input.question }),
+            chartJson: JSON.stringify(chart),
+            resultJson: JSON.stringify(stored),
+            source: result.source,
+            model: result.model,
+            promptVersion: SAJU_PROMPT_VERSION,
+            dayKey: this.deps.quota.today(),
+            createdAt: this.now(),
+          },
+        });
+        result.readingId = row.id;
+      } catch (e) {
+        this.deps.logger?.warn({ err: e instanceof Error ? e.message : String(e) }, '[saju] 질문 저장 실패');
+      }
+    }
+    return result;
   }
 
   // ── 오늘의 운세 ───────────────────────────────────────────────────────

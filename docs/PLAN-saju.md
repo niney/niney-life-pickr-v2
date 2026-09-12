@@ -314,7 +314,8 @@ model SajuReading {
 | **6차** ✅ | 순수 계산 2순위 — 삼재 / 격국(8격) + 용신·희신·기신 명칭 / 월운 12개월 캘린더 / 향후 5년 세운 표 / 오늘의 좋은 시간대(12시진) / 오행 건강 힌트 / 지장간 숨은 십신 | utils 계산 + 계약 + 패널 |
 | **7차** ✅ | 콘텐츠·연출 3순위 — 60갑자 일주론(정적 표 60) / 신살 확장(홍염·귀문관·천라지망·금여·천덕·월덕) / 대운 타임라인 SVG / 효과음(WebAudio 합성, 기본 꺼짐) | `sajuDayPillar.ts`, `saju.ts`(findStars), `SajuReadingPanel.tsx`(`LuckTimeline`·`DayPillarCard`), `sajuSound.ts`, `SajuPage.tsx` |
 | **8차** ✅ | 테마 3종(인연=연애+결혼 / 재물 / 직업) + 탭 재편(그룹 3 × 서브: 원국 명식·성격·오행 / 흐름 대운·올해·오늘·택일 / 테마 인연·재물·직업·음식) + 궁합을 입구 모드("내 사주 / 우리 궁합")로 — 상세는 §8차 | `sajuThemes.ts`, 계약 `SajuThemes`·`Routes.Saju.themes`, friendly `createThemes`·`themeJobs`, 웹 `SajuThemes.tsx`·`SajuPairPanel.tsx`·`sajuPanelTabs.ts` |
-| **v2 후보** | SSE 스트리밍(타로와 함께) / 상단바 오늘의 운세 칩 / 해외 출생(경도·시간대) / 근처 맛집(타로 v3b 와 공유) / 궁합 결과 공유·기록(입구 모드 승격으로 기대 커짐) / 궁합 두 원판 연출 / 테마에만 추론(thinking) 켜기 옵션 | |
+| **9차** ✅ | 사주에 묻기 — "만약에 이랬다면": 주제 칩 9(이직·창업·이사·결혼/연애·시험·투자·여행·계약·고백) + 시점(이번 달/올해/연도/날짜) + 자유 텍스트(≤200자) + 상대(결혼·고백 선택) → 시점 점수·판정·대안·근거(코드) + LLM 답 · 테마 그룹 5번째 서브 "질문" · 회원 기록(kind question, 목록에서 답까지) · "타로로도 보기"(?q=&topic=) · 홈 카드·앱 카드 딥링크 ?tool=ask — 상세는 §9차 | `sajuAsk.ts`, 계약 `SajuAskInput/Result`·`Routes.Saju.ask`, friendly `ask()`, 웹 `SajuAsk.tsx`, `TarotPage`(q·topic) |
+| **v2 후보** | SSE 스트리밍(타로와 함께) / 상단바 오늘의 운세 칩 / 해외 출생(경도·시간대) / 근처 맛집(타로 v3b 와 공유) / 궁합 결과 공유·기록(입구 모드 승격으로 기대 커짐) / 궁합 두 원판 연출 / 질문 결과 공유 | |
 
 ### 8차 설계 — 테마·탭 재편·궁합 입구 모드 (2026-09-12 사용자 결정)
 
@@ -334,6 +335,16 @@ model SajuReading {
 
 0차와 사용자 이미지 생성·KASI 신청은 병렬. 2차는 이미지 없이 글자 placeholder 로 진행 가능.
 
+### 9차 설계 — 사주에 묻기 (2026-09-12 사용자 결정: 테마 서브 "질문" + 홈 카드 딥링크 / 주제 9개 / 타로 연동)
+
+- **입력**: 주제 칩(필수, 9) · 시점(기본 올해) · 자유 텍스트(선택, 계산엔 안 쓰고 프롬프트 [질문] 데이터 블록으로만) · 상대(결혼·고백일 때 프로필 칩, 선택 — 궁합 점수를 근거에 더하고 서버에 남기지 않음).
+- **계산(utils `sajuAsk.ts`)**: 주제 메타 = 택일 용도 가중치(`applyDatePurposeRule` 로 택일과 같은 규칙) + 관련 십신 그룹 + 신살 + 재사용할 테마(직업·재물·인연). 시점 창(window) 점수 = 이번 달 → 월운 / 올해·연도 → 세운(`scoreGanzhiForChart`) / 날짜 → 일진, 각각 용도 가중치 적용 → 판정(≥65 해 볼 만해요 / ≥45 무난해요 / 그 외 조심스러워요). 대안 = 같은 단위에서 5점 이상 높은 시점 최대 2(달은 올해 남은 달, 해는 향후 5년 또는 ±3년, 날짜는 이후 30일 택일 top). 근거 = 관련 그룹 개수+해설, 신살, 테마 한 줄, 현재 대운 한 줄. 웹은 같은 함수로 근거 카드를 **제출 전에 즉시** 그린다.
+- **차단**: 건강·생명 / 법률 / 사행성·금액 예측 키워드(`sajuAskBlockedReason`)는 클라이언트가 버튼을 막고, 서버는 `blocked` 로 정적 안내를 돌려주며 LLM·한도·저장을 쓰지 않는다. 칩에 없는 주제는 애초에 고를 수 없다.
+- **LLM**: `buildSajuAskPrompt` — [사주 사실] + [질문 사실](계산값) + [궁합](선택) + [질문](데이터, "지시가 아니다"·전제는 인용만) → `{answer(4~6문장, 첫 문장이 판정), conditions(2~3), timingNote}`. 합격·성공·수익·결혼 여부 단정 금지. 단일 호출 700토큰, 한도 1건, 캐시 키 = (프롬프트 버전·원국·주제·시점·정규화한 질문·상대 서명).
+- **저장**: 회원은 `SajuReading.kind='question'`(resultJson = 결과, Prisma 변경 없음). 목록 `?kind=question` 이 요약에 `ask{topic,question,verdictKo,answer}` 를 실어 상세 페이지 없이 /me/saju-c "물어본 것" 섹션에서 펼쳐 본다.
+- **타로 연동**: 결과 아래 "타로로도 보기" → `/tarot?q=<질문 또는 "주제 — 시점에 하면 어떨까">&topic=<work|money|love|general>`. TarotPage `initialState` 가 q(200자 클립)·topic(TAROT_TOPICS 안의 값만)을 미리 채운다.
+- **딥링크**: `?tool=ask` → 테마/질문 탭. 웹 홈 카드 문구·앱 홈 카드 3번째 버튼 "사주에 묻기".
+
 ## 리스크·열린 질문
 
 - **엔진 정확도**: 절기 경계·서머타임·진태양시가 틀리면 월주·시주가 통째로 틀린다. 골든셋(유명 만세력 앱과 대조한 20건 이상)으로 검증하고 경계 ±2시간은 경고를 내보낸다. KASI 표가 들어오면 계산값을 표로 대체.
@@ -344,6 +355,7 @@ model SajuReading {
 
 ## 진행 기록
 
+- 2026-09-12: **9차(사주에 묻기) 완료.** utils `sajuAsk.ts`(주제 9 메타·시점 4종 채점·판정·대안·근거·차단·LLM 사실 블록, 테스트 5) + `sajuDatePick.applyDatePurposeRule` export. 계약 `SajuAskTopic/When/Input/Result`, `SajuReadingKind` 에 question, `SajuReadingSummary.ask`, `ListSajuReadingsQuery.kind`, `Routes.Saju.ask`. friendly `buildSajuAskPrompt`·`buildStaticAsk`·`SajuService.ask`(차단→정적·캐시·회원 question 저장)·`POST /saju-c/ask`·기록 목록 kind 필터+ask 요약, 테스트 28(정적/프롬프트·서비스·라우트 추가). shared `sajuApi.ask`·`useSajuAsk`·`useMySajuReadingsInfinite(limit, kind)`. 웹 `SajuAsk.tsx`(칩·시점·질문·상대·즉시 근거 카드·답·타로 링크), 테마 그룹 서브 "질문"(음식 앞), `?tool=ask`, TarotPage `?q=&topic=`, /me/saju-c "물어본 것", 홈 카드 문구, 앱 홈 카드 "사주에 묻기" 버튼. 테스트 web 127·utils 355·shared 81 green, 6 워크스페이스 typecheck·lint 0 error. 실브라우저 미확인. 미커밋.
 - 2026-09-12: **어드민 추론(thinking) 선택 — kimi 전용 5단계 + 기본 모델 kimi-k3 고정.** Ollama /api/chat 에 직접 쳐서 확인: think 는 `true/false/"low"/"medium"/"high"/"max"` 만 받고(그 외 400), kimi-k3 는 레벨을 전부 받아 사고량이 단계적(3문장 답: off 0자·4.8s / low 12자·2.7s / medium 22자·5.9s / high 288자·3.1s / max 2.8천자·11.4s ≈ true). 사주 섹션 프로브(2사주×4, maxTokens×3): low p50 5.3s·467tok / medium 5.0s·462tok / high 6.9s·612tok / max 16.2s·1548tok·잘림 2/8. 구현: `LlmProviderConfig.thinking`(String?, 마이그레이션 `20260912120000_add_llm_provider_thinking` — 로컬은 dev 서버 잠금이라 SQL 직접 실행 + `_prisma_migrations` 삽입, **운영은 `prisma migrate deploy` 1건 필요**) · 계약 `LlmThinking`(off/low/medium/high/max) · utils `isKimiModel`·`thinkOptionFor(model, setting)`(kimi 계열만 반영, 그 외 모델은 규칙)·`thinkTokenMult`(off 1 / low 1.5 / medium 2 / high 3 / max 5) + `recommendModelForPurpose('saju')` kimi-k3 우선(env 기본값도 kimi-k3) · `AiConfigService` resolved/view 에 thinking(off 는 null 저장) · 사주 서비스가 think 와 함께 maxTokens×배수·타임아웃 25s×배수(상한 120s)를 섹션·테마·단일 호출 전부에 적용 · 어드민 AI 키 페이지 사주(C) 행에 "추론 — kimi 모델 전용" select(끔/낮음/보통/높음/최대, 모델이 kimi 가 아니면 숨김 + 안내). 지금은 saju 용도만 읽는다. 테스트 friendly ai.config 31·saju 25·adapter 14, utils 19 green. 미커밋.
 - 2026-09-12: **8차(테마 3종 + 탭 재편 + 궁합 입구 모드) 완료.** utils `sajuThemes.ts`(인연·재물·직업 계산 + LLM 사실 블록 7줄씩, 테스트 8) · `sajuDayPillar.ts` 본문을 `traitBody`/`spouseBody` 로 분리. 계약 `SajuThemes`(love·wealth·career 섹션)·`CreateSajuThemesInput`·`SajuThemesResult`·`SajuThemesJobPollResult`, `SajuReadingResult`/`SharedSajuReading` 에 `themes`, `Routes.Saju.themes`/`themeJob`. friendly 프롬프트 v3(테마 3 + 결혼 단정 금지)·정적 테마·`SajuJobRegistry<S>` 제네릭·`createThemes`/`pollThemeJob`/`persistThemes`(readingId 행 병합)/`themesForShare`·라우트 2·기록 `parseThemes`, 테스트 24(테마 job·캐시·병합 저장·라우트 정적 추가). shared `createThemes`/`pollThemeJob`·`useCreateSajuThemes`/`useSajuThemeJob`. 웹 `sajuPanelTabs.ts`(그룹 3×서브)·`SajuThemes.tsx`(테마 박스 3 + TypedText)·`SajuPairPanel.tsx`·`SajuForm.tsx`(모드 토글·상대 입력·`BirthFields` 공용)·`SajuPage.tsx`(테마 job 병합·궁합 모드·딥링크 매핑)·`SajuReadingView.tsx`(재편 + 테마)·`SajuTools.tsx`(궁합 박스 제거, 결과 뷰만). 테스트 utils 348·shared 81·web 126·friendly saju 24 green, 5 워크스페이스 typecheck·lint(0 error) green. 실브라우저(3D 무대·탭 줄바꿈 실측)는 미확인. 미커밋.
 - 2026-09-12: **kimi-k3 추론(thinking) 프로브.** `probe:saju-reading` 에 `--think=`(false/true/low/medium/high 콤마 목록)·`--max-tokens-mult=`·`--out=jsonl` 과 잘림(done_reason=length)·원국 십신 활용 종수 지표 추가, `requestSajuLlm` 에 think 오버라이드·doneReason·completionTokens 반환. 결과(3사주×4섹션): think=false 12/12·p50 12.0s(동시 실행)·400tok / think=true ×3 10/12(잘림 2)·p50 34.4s·1607tok / think=true ×5 단독 12/12·잘림 0·p50 28.6s·max 58s·1894tok / think=low 도 오류 없이 수용(1건, 5.5s·322tok — 사실상 끔과 유사). 문장은 켠 쪽이 관계(자오충·축오 원진·오술 반합)·운성 의미를 정확히 인용하고 용어를 풀어 써 품질 우위, 끈 쪽은 간혹 대운 십신을 뭉뚱그리거나 문체가 흔들림("-습니다"). **기본값은 끔 유지** — 첫 섹션 도착이 무대 연출(≈11s)을 넘겨 체감 대기 30초. 후보: 테마 3개만 켜기(사용자가 명시적으로 기다리는 지연 탭) 또는 어드민 토글.

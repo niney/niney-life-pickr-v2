@@ -92,7 +92,7 @@ export const HomePage = () => {
           <div className="min-w-0">
             <div className="font-serif-kr text-lg font-bold text-[#f3e9c6]">사주(C)로 나를 읽기</div>
             <div className="text-sm text-[#e9e2d2]/70">
-              생년월일로 세우는 사주팔자, 오늘의 운세, 좋은 날 고르기, 궁합, 오행 음식. 로그인 없이 무료.
+              생년월일로 세우는 사주팔자, 인연·재물·직업 테마, "만약에 이랬다면" 묻기, 궁합, 오늘의 운세. 로그인 없이 무료.
             </div>
           </div>
           <span className="ml-auto shrink-0 text-[#d9b65b]" aria-hidden>

@@ -26,6 +26,7 @@ import {
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { SajuAskBox } from './SajuAsk';
 import { SajuChartTable } from './SajuChartTable';
 import { SajuDailyBox, SajuDatePickBox, SajuFoodBox } from './SajuTools';
 import { SajuCareerBox, SajuLoveBox, SajuWealthBox, TypedText, type SajuThemeStatus } from './SajuThemes';
@@ -35,7 +36,7 @@ import { SAJU_PANEL_GROUPS, isSajuThemeTab, sajuPanelGroupOf, type SajuPanelGrou
 import { SAJU_DISCLAIMER, SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
 // 풀이 패널 — 8차 재편: 그룹 3개 × 서브 탭.
-//   원국(명식·성격·오행) / 흐름(대운·올해·오늘·택일) / 테마(인연·재물·직업·음식)
+//   원국(명식·성격·오행) / 흐름(대운·올해·오늘·택일) / 테마(인연·재물·직업·질문·음식)
 // 조언 탭은 오행 서브로 흡수(둘 다 보완 오행 근거), 궁합은 입구(폼)의 모드로 옮겼다. 성격 탭의 일간 연애·일 카드와
 // 일주론의 배우자 자리는 인연·직업 테마로. 섹션은 도착 순으로 채워지고(pending 이면 정적 본문 + "AI 가 읽는 중"),
 // LLM 문장은 타자 효과. 데스크톱은 오른쪽, 세로 폰은 바닥 시트(접기).
@@ -516,6 +517,8 @@ export const SajuReadingPanel = ({ chart, birth, result, status, themes, themeSt
         return <SajuDatePickBox birth={birth} />;
       case 'food':
         return <SajuFoodBox birth={birth} />;
+      case 'ask':
+        return <SajuAskBox birth={birth} chart={chart} />;
       case 'love':
         return <SajuLoveBox chart={chart} section={themes?.love ?? null} status={themeStatus} animate={animate} onRetry={onRetryThemes} onPair={onPair} />;
       case 'wealth':

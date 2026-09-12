@@ -16,8 +16,7 @@ import {
   tarotFlowReducer,
   type TarotFlowEvent,
   type TarotFlowState,
-  type TarotSpreadId,
-} from '@repo/utils';
+  type TarotSpreadId, TAROT_TOPICS, TAROT_QUESTION_MAX_LENGTH, type TarotTopic } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TarotLite } from '~/components/tarot/TarotLite';
 import { TarotOverlay } from '~/components/tarot/TarotOverlay';
@@ -40,12 +39,16 @@ type Event = TarotFlowEvent<TarotReadingResultType>;
 const reducer = (s: State, e: Event): State => tarotFlowReducer(s, e);
 
 // ?spread=menu 같은 딥링크(홈 카드·앱 임베드) — 제공 중인 스프레드만 받는다. 메뉴 타로는 주제가 food 로 잠긴다.
-const initialState = (spreadParam: string | null): State => {
-  const spread = spreadParam ? getTarotSpread(spreadParam) : undefined;
+// ?q=&topic= 는 사주(C) "타로로도 보기"(9차) — 질문·주제를 미리 채운다(주제는 TAROT_TOPICS 안의 값만).
+const initialState = (init: { spread: string | null; q: string | null; topic: string | null }): State => {
+  const spread = init.spread ? getTarotSpread(init.spread) : undefined;
   const spreadId: TarotSpreadId | undefined = spread?.available && !spread.memberOnly ? spread.id : undefined;
+  const topic = init.topic && (TAROT_TOPICS as readonly string[]).includes(init.topic) ? (init.topic as TarotTopic) : undefined;
+  const question = init.q?.trim().slice(0, TAROT_QUESTION_MAX_LENGTH) || undefined;
   return createTarotFlowState<TarotReadingResultType>({
     ...(spreadId ? { spreadId } : {}),
-    ...(spreadId === 'menu' ? { topic: 'food' } : {}),
+    ...(spreadId === 'menu' ? { topic: 'food' } : topic ? { topic } : {}),
+    ...(question ? { question } : {}),
   });
 };
 
@@ -62,7 +65,7 @@ export const TarotPage = () => {
   const [render] = useState(() => detectTarotRender());
   const isDesktop = useMediaQuery('(min-width: 64rem)', true);
 
-  const [state, dispatch] = useReducer(reducer, params.get('spread'), initialState);
+  const [state, dispatch] = useReducer(reducer, { spread: params.get('spread'), q: params.get('q'), topic: params.get('topic') }, initialState);
 
   const { mutate } = useCreateTarotReading();
   const history = useTarotHistoryStore((s) => s.entries);

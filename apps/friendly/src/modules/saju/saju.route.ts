@@ -9,6 +9,8 @@ import {
   ListSajuReadingsResult,
   Routes,
   SAJU_GUEST_KEY_HEADER,
+  SajuAskInput,
+  SajuAskResult,
   SajuDailyInput,
   SajuDailyResult,
   SajuDatePickInput,
@@ -111,6 +113,13 @@ const sajuRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicShare },
     schema: { tags: ['saju'], params: JobParams, querystring: SajuJobPollQuery, response: { 200: SajuThemesJobPollResult } },
     handler: async (req) => run(() => service.pollThemeJob(req.params.jobId, req.query.after, req.query.wait)),
+  });
+
+  // 사주에 묻기(9차) — 단일 호출, 한도 1건(답하지 않는 주제는 소비 없음).
+  typed.post(S.ask, {
+    config: quotaRate,
+    schema: { tags: ['saju'], body: SajuAskInput, response: { 200: SajuAskResult } },
+    handler: async (req) => run(async () => service.ask(req.body, await actorOf(req))),
   });
 
   typed.post(S.daily, {

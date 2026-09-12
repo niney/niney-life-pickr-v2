@@ -265,6 +265,45 @@ describe('SajuPage (Lite)', () => {
     expect(screen.getByRole('radio', { name: '우리 궁합' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('상대 년')).toBeInTheDocument();
   });
+  it('질문 탭 — 주제·시점·질문으로 물어보면 API 를 부르고 답·타로 링크를 보인다', async () => {
+    let askBody: { topic?: string; question?: string; when?: { kind: string } } | null = null;
+    server.use(
+      http.post('/api/v1/saju-c/readings', async ({ request }) => HttpResponse.json(fakeResult((await request.json()) as CreateSajuReadingInputType))),
+      http.post('/api/v1/saju-c/themes', async ({ request }) => HttpResponse.json(fakeThemes((await request.json()) as CreateSajuReadingInputType, 'static'))),
+      http.post('/api/v1/saju-c/ask', async ({ request }) => {
+        askBody = (await request.json()) as typeof askBody;
+        return HttpResponse.json({
+          topic: 'startup', topicKo: '창업', when: { kind: 'this-year' }, whenKo: '올해(2026년)', question: '카페 차리면?', blocked: null,
+          verdict: 'good', verdictKo: '해 볼 만해요', window: { label: '2026년 병오', ganzhiKo: '병오', score: 70, stars: 4, reasons: ['편관 — 도전'] },
+          alternatives: [], basis: ['재성 0개 — 없음'], themeSummary: [], luckNote: '현재 갑신 대운.', match: null,
+          answer: '카페는 해 볼 만한 흐름이에요.', conditions: ['준비를 마친 뒤 움직이기'], timingNote: '지금 흐름을 살리면 돼요.', tarotTopic: 'work',
+          source: 'llm', model: 'fake', readingId: null, quota: { remainingToday: 7 },
+        });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /사주 세우기/ }));
+    await waitFor(() => expect(screen.getAllByTestId('saju-chart').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('tab', { name: '테마' }));
+    fireEvent.click(screen.getByRole('button', { name: '질문' }));
+    expect(screen.getByTestId('saju-ask')).toBeInTheDocument();
+    // 계산 근거는 즉시(주제·시점 기본값).
+    expect(screen.getByLabelText('계산 근거')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: '창업' }));
+    fireEvent.change(screen.getByLabelText('질문'), { target: { value: '카페 차리면?' } });
+    // 차단 주제는 버튼이 막힌다.
+    fireEvent.change(screen.getByLabelText('질문'), { target: { value: '수술 받아도 될까' } });
+    expect(screen.getByRole('button', { name: /물어보기/ })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('질문'), { target: { value: '카페 차리면?' } });
+    fireEvent.click(screen.getByRole('button', { name: /물어보기/ }));
+    await waitFor(() => expect(screen.getByTestId('saju-ask-result')).toBeInTheDocument());
+    expect(askBody).toMatchObject({ topic: 'startup', question: '카페 차리면?', when: { kind: 'this-year' } });
+    expect(screen.getByText('카페는 해 볼 만한 흐름이에요.')).toBeInTheDocument();
+    const tarot = screen.getByRole('link', { name: /타로로도 보기/ });
+    expect(tarot.getAttribute('href')).toContain('/tarot?q=');
+    expect(tarot.getAttribute('href')).toContain('topic=work');
+  });
+
   it('회원: 서버 프로필 칩이 뜨고 "이 계정에 저장" 이면 프로필 생성 API 를 부른다', async () => {
     useAuthStore.setState({ token: 'tok', user: { id: 'u1', email: 'u@x.com', role: 'USER' } as never, isGuest: false });
     let created: unknown = null;
