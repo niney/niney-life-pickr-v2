@@ -106,7 +106,8 @@ export const AdminTourPage = () => {
               <Stat
                 label="맛집 매칭"
                 value={`${st.match.matched.toLocaleString('ko-KR')} / ${st.match.candidates.toLocaleString('ko-KR')}`}
-                sub={`매칭 / 대상(좌표·식당 행 있는 canonical) · 보류 ${st.match.missing}`}
+                sub={`보류 ${st.match.missing} · 대상 = 좌표 있는 등록 맛집`}
+                title="매칭 수 / 대상 수. 대상 = 좌표와 식당 행이 있는 canonical 맛집. 보류 = 재적재로 장소가 사라진 매칭"
                 tone={st.match.matched > 0 ? 'ok' : 'muted'}
               />
               <Stat
@@ -164,8 +165,9 @@ export const AdminTourPage = () => {
 
       <Card>
         <CardHeader className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-md border p-0.5 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-[11px] text-muted-foreground">지역</span>
+            <div className="-ml-2 flex rounded-md border p-0.5 text-xs">
               {(['jeju', 'all'] as const).map((r) => (
                 <button
                   key={r}
@@ -180,7 +182,8 @@ export const AdminTourPage = () => {
                 </button>
               ))}
             </div>
-            <div className="flex rounded-md border p-0.5 text-xs">
+            <span className="text-[11px] text-muted-foreground">상태</span>
+            <div className="-ml-2 flex rounded-md border p-0.5 text-xs">
               {STATUS_OPTIONS.map((o) => (
                 <button
                   key={o.value}
@@ -226,14 +229,14 @@ export const AdminTourPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
-                  <TableHead>가게</TableHead>
-                  <TableHead>주소</TableHead>
-                  <TableHead className="text-right">여행자</TableHead>
-                  <TableHead className="text-right">방문</TableHead>
-                  <TableHead className="text-right">만족</TableHead>
-                  <TableHead className="text-right">1인 지출</TableHead>
-                  <TableHead>상태</TableHead>
+                  <TableHead className="w-10 whitespace-nowrap">#</TableHead>
+                  <TableHead className="min-w-[180px] whitespace-nowrap">가게</TableHead>
+                  <TableHead className="whitespace-nowrap">주소</TableHead>
+                  <TableHead className="w-16 whitespace-nowrap text-right" title="서로 다른 여행(여행자) 수">여행자</TableHead>
+                  <TableHead className="w-16 whitespace-nowrap text-right">방문</TableHead>
+                  <TableHead className="w-16 whitespace-nowrap text-right" title="보정 만족도(베이즈, 평가 3건 미만은 –)">만족</TableHead>
+                  <TableHead className="w-24 whitespace-nowrap text-right" title="1인당 지출 중앙값">1인 지출</TableHead>
+                  <TableHead className="whitespace-nowrap">상태</TableHead>
                   <TableHead className="w-36" />
                 </TableRow>
               </TableHeader>
@@ -280,13 +283,11 @@ export const AdminTourPage = () => {
   );
 };
 
-const Stat = ({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: 'ok' | 'warn' | 'muted' }) => (
-  <div className="rounded-md border p-3">
+const Stat = ({ label, value, sub, title, tone }: { label: string; value: string; sub: string; title?: string; tone: 'ok' | 'warn' | 'muted' }) => (
+  <div className="min-w-0 rounded-md border p-3" title={title ?? sub}>
     <div className="text-xs text-muted-foreground">{label}</div>
-    <div className={cn('mt-0.5 text-lg font-semibold tabular-nums', tone === 'warn' && 'text-amber-600 dark:text-amber-400', tone === 'ok' && 'text-foreground')}>{value}</div>
-    <div className="mt-0.5 truncate text-[11px] text-muted-foreground" title={sub}>
-      {sub}
-    </div>
+    <div className={cn('mt-0.5 truncate text-lg font-semibold tabular-nums', tone === 'warn' && 'text-amber-600 dark:text-amber-400', tone === 'ok' && 'text-foreground')}>{value}</div>
+    <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{sub}</div>
   </div>
 );
 
@@ -333,11 +334,11 @@ const SeedRows = ({
         <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground" title={item.roadAddr ?? ''}>
           {item.roadAddr?.replace('제주특별자치도 ', '') ?? '–'}
         </TableCell>
-        <TableCell className="text-right tabular-nums">{item.nTravelers}</TableCell>
-        <TableCell className="text-right tabular-nums">{item.nVisits}</TableCell>
-        <TableCell className="text-right tabular-nums">{item.bayesScore !== null ? item.bayesScore.toFixed(2) : '–'}</TableCell>
-        <TableCell className="text-right tabular-nums">{won(item.spendPpMedian)}</TableCell>
-        <TableCell>
+        <TableCell className="whitespace-nowrap text-right tabular-nums">{item.nTravelers}</TableCell>
+        <TableCell className="whitespace-nowrap text-right tabular-nums">{item.nVisits}</TableCell>
+        <TableCell className="whitespace-nowrap text-right tabular-nums">{item.bayesScore !== null ? item.bayesScore.toFixed(2) : '–'}</TableCell>
+        <TableCell className="whitespace-nowrap text-right tabular-nums">{won(item.spendPpMedian)}</TableCell>
+        <TableCell className="whitespace-nowrap">
           <div className="flex flex-wrap gap-1">
             {item.match ? (
               item.match.naverPlaceId ? (

@@ -81,15 +81,15 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>날짜</TableHead>
-                <TableHead>여행자</TableHead>
-                <TableHead className="text-right">체류</TableHead>
-                <TableHead className="text-right">만족</TableHead>
-                <TableHead className="text-right">재방문</TableHead>
-                <TableHead>이유</TableHead>
-                <TableHead>동반</TableHead>
-                <TableHead className="text-right">1인</TableHead>
-                <TableHead>이전 → 다음</TableHead>
+                <TableHead className="whitespace-nowrap">날짜</TableHead>
+                <TableHead className="whitespace-nowrap">여행자</TableHead>
+                <TableHead className="whitespace-nowrap text-right">체류</TableHead>
+                <TableHead className="whitespace-nowrap text-right">만족</TableHead>
+                <TableHead className="whitespace-nowrap text-right">재방문</TableHead>
+                <TableHead className="whitespace-nowrap">이유</TableHead>
+                <TableHead className="whitespace-nowrap">동반</TableHead>
+                <TableHead className="whitespace-nowrap text-right">1인 지출</TableHead>
+                <TableHead className="whitespace-nowrap">이전 → 다음</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -100,20 +100,20 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
                     {v.arrivalTs ? ` ${v.arrivalTs.slice(11, 16)}` : ''}
                     {v.dayIndex !== null ? ` · ${v.dayIndex}일차` : ''}
                   </TableCell>
-                  <TableCell className="text-xs">
+                  <TableCell className="whitespace-nowrap text-xs">
                     {v.travelerLabel ?? v.travelId}
                     <div className="text-[11px] text-muted-foreground">
-                      {[v.gender, v.ageGrp ? `${v.ageGrp}대` : null, v.residenceSido].filter(Boolean).join(' · ')}
+                      {[v.gender, v.ageGrp ? `${v.ageGrp}대` : null, v.residenceSido?.replace('특별자치도', '').replace('특별시', '').replace('광역시', '')].filter(Boolean).join(' · ')}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{v.stayMin !== null ? `${v.stayMin}분` : '–'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{v.dgstfn ?? '–'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{v.revisitYn === 'Y' ? '재' : v.revisitYn === 'N' ? '첫' : '–'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{v.stayMin !== null ? `${v.stayMin}분` : '–'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{v.dgstfn ?? '–'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{v.revisitYn === 'Y' ? '재' : v.revisitYn === 'N' ? '첫' : '–'}</TableCell>
                   <TableCell className="max-w-[180px] truncate text-xs" title={v.reasonNm ?? ''}>
                     {v.reasonNm ?? '–'}
                   </TableCell>
-                  <TableCell className="text-xs">{v.accompany?.replace('(가족 외)', '').replace('(친척 포함)', '') ?? '–'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{won(v.spendPp)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">{v.accompany?.replace('(가족 외)', '').replace('(친척 포함)', '') ?? '–'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{won(v.spendPp)}</TableCell>
                   <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground" title={`${v.prevPlaceName ?? ''} → ${v.nextPlaceName ?? ''}`}>
                     {v.prevPlaceName ?? '·'} → {v.nextPlaceName ?? '·'}
                   </TableCell>
@@ -128,11 +128,11 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>날짜</TableHead>
-                <TableHead>유형</TableHead>
-                <TableHead>기록</TableHead>
-                <TableHead>예약</TableHead>
-                <TableHead>동반</TableHead>
+                <TableHead className="whitespace-nowrap">날짜</TableHead>
+                <TableHead className="whitespace-nowrap">유형</TableHead>
+                <TableHead className="whitespace-nowrap">기록</TableHead>
+                <TableHead className="whitespace-nowrap">예약</TableHead>
+                <TableHead className="whitespace-nowrap">동반</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -154,14 +154,14 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>결제 시각</TableHead>
-                <TableHead>상호</TableHead>
-                <TableHead>사업자번호</TableHead>
-                <TableHead>내역</TableHead>
-                <TableHead className="text-right">금액</TableHead>
-                <TableHead className="text-right">인원</TableHead>
-                <TableHead className="text-right">1인</TableHead>
-                <TableHead>수단</TableHead>
+                <TableHead className="whitespace-nowrap">결제 시각</TableHead>
+                <TableHead className="whitespace-nowrap">상호</TableHead>
+                <TableHead className="whitespace-nowrap">사업자번호</TableHead>
+                <TableHead className="whitespace-nowrap">내역</TableHead>
+                <TableHead className="whitespace-nowrap text-right">금액</TableHead>
+                <TableHead className="whitespace-nowrap text-right">인원</TableHead>
+                <TableHead className="whitespace-nowrap text-right">1인</TableHead>
+                <TableHead className="whitespace-nowrap">수단</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -173,9 +173,9 @@ export const TourEvidencePanel = ({ tourPlaceId }: { tourPlaceId: string }) => {
                   <TableCell className="max-w-[220px] truncate text-xs" title={s.item ?? ''}>
                     {s.item ?? '–'}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{won(s.amount)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{s.payNum ?? '–'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{won(s.perPerson)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{won(s.amount)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{s.payNum ?? '–'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{won(s.perPerson)}</TableCell>
                   <TableCell className="text-xs">{s.methodNm ?? '–'}</TableCell>
                 </TableRow>
               ))}
