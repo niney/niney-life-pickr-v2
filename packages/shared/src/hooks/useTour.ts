@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TourBizCheckBodyType, TourPlanBodyType } from '@repo/api-contract';
+import type { TourBizCheckBodyType, TourDensityKindType, TourPlanBodyType } from '@repo/api-contract';
 import { getTourPhotoBase, tourApi, type TourInsightsParams, type TourRawPageParams, type TourSeedParams } from '../api/tour.api.js';
 
 // ── 공개 — 인사이트는 필터 키로 캐시(재적재 때만 바뀌는 값, 10분), 코스 추천은 제출형이라 뮤테이션.
@@ -18,6 +18,35 @@ export const useTourInsights = (params: TourInsightsParams, enabled = true) =>
 export const useTourPlan = () =>
   useMutation({
     mutationFn: (body: Partial<TourPlanBodyType>) => tourApi.publicPlan(body),
+  });
+
+// 6차 — 밀도 격자는 정적(재적재 때만)이라 24h, 배경 레이어를 켠 동안만(enabled). 숙소·지역 비교는 인사이트와 같은 필터 키.
+const DENSITY_STALE_MS = 24 * 60 * 60_000;
+export const useTourDensity = (kind: TourDensityKindType, enabled = true) =>
+  useQuery({
+    queryKey: ['tour', 'public', 'density', kind],
+    queryFn: () => tourApi.publicDensity(kind),
+    enabled,
+    staleTime: DENSITY_STALE_MS,
+    placeholderData: enabled ? (prev) => prev : undefined,
+  });
+
+export const useTourLodging = (params: TourInsightsParams, enabled = true) =>
+  useQuery({
+    queryKey: ['tour', 'public', 'lodging', tourInsightsKey(params)],
+    queryFn: () => tourApi.publicLodging(params),
+    enabled,
+    placeholderData: (prev) => prev,
+    staleTime: 10 * 60_000,
+  });
+
+export const useTourRegions = (params: TourInsightsParams, enabled = true) =>
+  useQuery({
+    queryKey: ['tour', 'public', 'regions', tourInsightsKey(params)],
+    queryFn: () => tourApi.publicRegions(params),
+    enabled,
+    placeholderData: (prev) => prev,
+    staleTime: 10 * 60_000,
   });
 
 // 여행로그 관리자 훅 — 상태·시드 목록은 쿼리, 후보 찾기·등록·매칭·폐업 조회는 뮤테이션. 매칭/폐업 조회가 끝나면

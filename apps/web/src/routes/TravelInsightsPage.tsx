@@ -1,16 +1,18 @@
 import { useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, Route as RouteIcon } from 'lucide-react';
-import { useTourInsights, type TourInsightsParams } from '@repo/shared';
+import { useTourInsights, useTourLodging, useTourRegions, type TourInsightsParams } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { TourFilterBar } from '~/components/tour/TourFilterBar';
+import { TourLodgingSection } from '~/components/tour/TourLodgingSection';
+import { TourRegionSection } from '~/components/tour/TourRegionSection';
 import { TourSourceNote } from '~/components/tour/TourSourceNote';
 import { BarList, HeatGrid, HourLines, KindDot, Section, SeqChips, StackBar, Stat } from '~/components/tour/charts';
 import { shortAccompany, won } from '~/components/tour/tourFormat';
 
 // 제주 여행 인사이트 — AI 허브 여행로그(2023 제주 패널)를 필터(연령·성별·동반·월·박수)로 잘라 집계만 보여주는 공개 페이지.
 // 필터는 URL 쿼리에 실어 링크로 공유된다(tour-c 의 "URL 이 상태" 원칙). 표본 20건 미만이면 서버가 insufficient 를 주고
-// 5명 미만 셀은 서버가 이미 뺐다. docs/PLAN-tour-log.md 5차.
+// 5명 미만 셀은 서버가 이미 뺐다. 지역 비교·숙소(6차)는 같은 필터로 따로 받는다. docs/PLAN-tour-log.md 5~6차.
 
 const HEAT_TYPES = ['식당', '숙소', '자연', '상업', '교통', '상점'];
 const SPEND_CLASS: Record<string, string> = { 활동: 'bg-teal-600', 이동: 'bg-zinc-400', 숙박: 'bg-violet-500', 사전: 'bg-amber-500' };
@@ -33,6 +35,8 @@ export const TravelInsightsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
   const q = useTourInsights(params);
+  const regions = useTourRegions(params);
+  const lodging = useTourLodging(params);
   const onChange = useCallback(
     (next: TourInsightsParams) => {
       const sp = new URLSearchParams();
@@ -170,9 +174,15 @@ export const TravelInsightsPage = () => {
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <Section title="읍면동 방문 상위" hint="방문 · 만족도">
-                {d.emd.length ? (
-                  <BarList items={d.emd.slice(0, 10).map((e) => ({ label: `${e.sigungu === '서귀포시' ? '서귀포 ' : ''}${e.emd}`, n: e.n, text: `${e.n.toLocaleString('ko-KR')} · ${e.mean !== null ? e.mean.toFixed(2) : '–'}` }))} />
+              <Section title="누가 여행했나" hint="연령 × 성별 · 여행 수">
+                {d.ageGender.length ? (
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {d.ageGender.map((x) => (
+                      <span key={`${x.ageGrp}-${x.gender}`} className="rounded-md bg-muted px-2 py-1 tabular-nums">
+                        {x.ageGrp}대 {x.gender} <b>{x.n.toLocaleString('ko-KR')}</b>
+                      </span>
+                    ))}
+                  </div>
                 ) : (
                   <Empty />
                 )}
@@ -230,19 +240,8 @@ export const TravelInsightsPage = () => {
               </Section>
             </div>
 
-            <Section title="누가 여행했나" hint="연령 × 성별 · 여행 수" className="mt-4">
-              {d.ageGender.length ? (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {d.ageGender.map((x) => (
-                    <span key={`${x.ageGrp}-${x.gender}`} className="rounded-md bg-muted px-2 py-1 tabular-nums">
-                      {x.ageGrp}대 {x.gender} <b>{x.n.toLocaleString('ko-KR')}</b>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <Empty />
-              )}
-            </Section>
+            <TourRegionSection data={regions.data} loading={regions.isPending} className="mt-4" />
+            <TourLodgingSection data={lodging.data} loading={lodging.isPending} className="mt-4" />
 
             <TourSourceNote note={d.sourceNote} className="mt-6 border-t pt-3" />
           </div>

@@ -542,3 +542,99 @@ export const TourPlanResult = z.object({
   sourceNote: z.string(),
 });
 export type TourPlanResultType = z.infer<typeof TourPlanResult>;
+
+// ── 6차 공개 — 지도 밀도 격자·숙소 통계·지역 비교 ─────────────────────────────────────
+// 밀도: 공개 방문(좌표 있음)을 0.02° 격자로 센 칸 — 여행자 5명 미만 칸은 없다. bbox 는 선택(없으면 전국 칸 전부, 수백 개).
+export const TourDensityKind = z.enum(['all', 'restaurant']);
+export type TourDensityKindType = z.infer<typeof TourDensityKind>;
+export const TourDensityQuery = z.object({
+  kind: TourDensityKind.default('all'),
+  bbox: z
+    .string()
+    .regex(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$/, 'bbox must be "minLng,minLat,maxLng,maxLat"')
+    .optional(),
+});
+export type TourDensityQueryType = z.infer<typeof TourDensityQuery>;
+// x = floor(lng/cellDeg), y = floor(lat/cellDeg). n = 방문 수, travelers = 서로 다른 여행 수(≥ 5).
+export const TourDensityCell = z.object({ x: z.number().int(), y: z.number().int(), n: z.number().int(), travelers: z.number().int() });
+export type TourDensityCellType = z.infer<typeof TourDensityCell>;
+export const TourDensityResult = z.object({
+  kind: TourDensityKind,
+  cellDeg: z.number(),
+  cells: z.array(TourDensityCell),
+  // 칸 방문 수의 20/40/60/80 분위 — 5등급 색칠 경계.
+  breaks: z.array(z.number()).length(4),
+  total: z.object({ cells: z.number().int(), visits: z.number().int() }),
+  sampleLabel: z.string(),
+  sourceNote: z.string(),
+});
+export type TourDensityResultType = z.infer<typeof TourDensityResult>;
+
+// 숙소 — 숙박 결제(소비 표) × 숙소 방문 평가. 유형은 원본 숙박 유형명(호텔·펜션·콘도미니엄/리조트·게스트하우스…).
+export const TourLodgingTypeStat = z.object({
+  label: z.string(),
+  // 결제 건수(금액 > 0) · 이용 여행 수(≥ 5).
+  n: z.number().int(),
+  trips: z.number().int(),
+  // 결제 1건 중앙 · 1박 추정 중앙(결제액 × 그 여행의 숙박 건수 ÷ 박수) · 1인 중앙 — 금액 3건 미만이면 null.
+  amountMedian: z.number().nullable(),
+  nightlyMedian: z.number().nullable(),
+  perPersonMedian: z.number().nullable(),
+  // 예약 비율(0~1) — 예약 여부가 기록된 결제 기준.
+  rsvtRate: z.number().nullable(),
+  // 숙소 방문 평가 건수·평균 만족도(3건 미만이면 null).
+  visits: z.number().int(),
+  mean: z.number().nullable(),
+});
+export type TourLodgingTypeStatType = z.infer<typeof TourLodgingTypeStat>;
+export const TourLodgingResult = z.object({
+  filters: TourInsightsFilters,
+  insufficient: z.boolean(),
+  total: z.object({ trips: z.number().int(), withLodging: z.number().int(), rsvtRate: z.number().nullable() }),
+  types: z.array(TourLodgingTypeStat),
+  sampleLabel: z.string(),
+  sourceNote: z.string(),
+});
+export type TourLodgingResultType = z.infer<typeof TourLodgingResult>;
+
+// 지역 비교 — 제주 본섬 두 시 + 부속섬(우도·마라도 …). 필터는 인사이트와 같은 축(region 은 무시 — 제주 고정).
+export const TourRegionKey = z.enum(['jeju-si', 'seogwipo', 'island']);
+export type TourRegionKeyType = z.infer<typeof TourRegionKey>;
+export const TourRegionGroup = z.object({
+  key: TourRegionKey,
+  label: z.string(),
+  trips: z.number().int(),
+  visits: z.number().int(),
+  // 제주 공개 방문 중 비중(0~1).
+  share: z.number(),
+  mean: z.number().nullable(),
+  // 식당 방문 수·식당 만족도.
+  restaurants: z.number().int(),
+  restaurantMean: z.number().nullable(),
+  stayMedian: z.number().nullable(),
+  spendPpMedian: z.number().nullable(),
+  topTypes: z.array(TourCount),
+  topEmd: z.array(TourCount),
+});
+export type TourRegionGroupType = z.infer<typeof TourRegionGroup>;
+export const TourRegionEmd = z.object({
+  sigungu: z.string().nullable(),
+  emd: z.string(),
+  island: z.boolean(),
+  n: z.number().int(),
+  mean: z.number().nullable(),
+  restaurants: z.number().int(),
+  stayMedian: z.number().nullable(),
+  spendPpMedian: z.number().nullable(),
+});
+export type TourRegionEmdType = z.infer<typeof TourRegionEmd>;
+export const TourRegionsResult = z.object({
+  filters: TourInsightsFilters,
+  insufficient: z.boolean(),
+  groups: z.array(TourRegionGroup),
+  // 읍면동 상위(방문 5건 이상, 방문 수 내림차순, 최대 20).
+  emd: z.array(TourRegionEmd),
+  sampleLabel: z.string(),
+  sourceNote: z.string(),
+});
+export type TourRegionsResultType = z.infer<typeof TourRegionsResult>;

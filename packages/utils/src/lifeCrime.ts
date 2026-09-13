@@ -4,11 +4,12 @@
 // 칠하는 "배경(overlay)" 유형이라 내주변·상세와 섞지 않는다. 서버(적재 빌드)와 웹(등급·범례)이
 // 같은 규칙을 쓰도록 순수 로직을 한 곳에 둔다.
 
-// 배경 레이어 — 한 번에 하나만 켜진다(면 색칠이 겹치면 읽을 수 없다). 지금은 범죄 통계뿐.
-export const LIFE_MAP_OVERLAYS = ['crime'] as const;
+// 배경 레이어 — 한 번에 하나만 켜진다(면 색칠이 겹치면 읽을 수 없다). 범죄 통계(시군구 면) + 여행자 밀도(격자).
+export const LIFE_MAP_OVERLAYS = ['crime', 'tour'] as const;
 export type LifeMapOverlay = (typeof LIFE_MAP_OVERLAYS)[number];
-export const LIFE_MAP_OVERLAY_LABEL: Record<LifeMapOverlay, string> = { crime: '범죄 통계' };
-export const isLifeMapOverlay = (v: unknown): v is LifeMapOverlay => v === 'crime';
+// tour = 여행로그(AI 허브 71780) 방문 밀도 격자 — 상수·등급은 tourLog.ts.
+export const LIFE_MAP_OVERLAY_LABEL: Record<LifeMapOverlay, string> = { crime: '범죄 통계', tour: '여행자 밀도' };
+export const isLifeMapOverlay = (v: unknown): v is LifeMapOverlay => (LIFE_MAP_OVERLAYS as readonly unknown[]).includes(v);
 
 // 색칠 대상 범죄군 — 경찰청 대분류 중 생활 안전과 직결되는 3종만(사기·교통·기타는 합계를
 // 지배하지만 "안전" 과 무관해 뺀다). total 은 3종 합.

@@ -20,13 +20,13 @@ const HOUR_TYPES = ['식당', '자연', '숙소', '상업'] as const;
 const PLAN_EXCLUDED_TYPES = new Set(['교통', '숙소', '집', '친지', '사무실']);
 const PLAN_BASELINE = 3.3;
 
-const median = (xs: number[]): number | null => {
+export const median = (xs: number[]): number | null => {
   if (xs.length === 0) return null;
   const s = [...xs].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 === 1 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 };
-const quantile = (xs: number[], q: number): number | null => {
+export const quantile = (xs: number[], q: number): number | null => {
   if (xs.length === 0) return null;
   const s = [...xs].sort((a, b) => a - b);
   const pos = (s.length - 1) * q;
@@ -34,14 +34,14 @@ const quantile = (xs: number[], q: number): number | null => {
   const hi = Math.ceil(pos);
   return s[lo]! + (s[hi]! - s[lo]!) * (pos - lo);
 };
-const round1 = (v: number | null): number | null => (v === null ? null : Math.round(v * 10) / 10);
-const round2 = (v: number | null): number | null => (v === null ? null : Math.round(v * 100) / 100);
-const countMap = <K>(m: Map<K, number>, k: K, by = 1): void => {
+export const round1 = (v: number | null): number | null => (v === null ? null : Math.round(v * 10) / 10);
+export const round2 = (v: number | null): number | null => (v === null ? null : Math.round(v * 100) / 100);
+export const countMap = <K>(m: Map<K, number>, k: K, by = 1): void => {
   m.set(k, (m.get(k) ?? 0) + by);
 };
 
 // 여행 속성 필터 → Prisma where 조각(비정규화 열 이름이 표마다 같다).
-const attrWhere = (q: TourInsightsQueryType): Record<string, unknown> => ({
+export const attrWhere = (q: TourInsightsQueryType): Record<string, unknown> => ({
   ...(q.ageGrp ? { ageGrp: q.ageGrp } : {}),
   ...(q.gender ? { gender: q.gender } : {}),
   ...(q.accompany ? { accompany: q.accompany } : {}),

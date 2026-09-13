@@ -149,7 +149,7 @@ const storeItem = (id: string, name: string, branch: string | null, kind: string
   dist,
 });
 
-const seen = { nearby: [] as URL[], detail: [] as string[], search: [] as string[] };
+const seen = { nearby: [] as URL[], detail: [] as string[], search: [] as string[], density: [] as string[] };
 const useHandlers = () =>
   server.use(
     http.get('/api/v1/settings/map/public', () => HttpResponse.json({ provider: 'vworld', apiKey: 'test-key' })),
@@ -172,6 +172,20 @@ const useHandlers = () =>
     }),
     http.get('/api/v1/life-map/status', () => HttpResponse.json(status)),
     http.get('/api/v1/life-map/crime', () => HttpResponse.json(crimeStats)),
+    // 여행자 밀도 배경 — 제주시청 근처 칸 하나(방문 20). kind 를 기록해 칩 전환이 요청에 반영되는지 본다.
+    http.get('/api/v1/tour/public/density', ({ request }) => {
+      const kind = new URL(request.url).searchParams.get('kind') ?? 'all';
+      seen.density.push(kind);
+      return HttpResponse.json({
+        kind,
+        cellDeg: 0.02,
+        cells: kind === 'restaurant' ? [{ x: 6325, y: 1675, n: 8, travelers: 6 }] : [{ x: 6325, y: 1675, n: 20, travelers: 12 }],
+        breaks: [5, 10, 15, 20],
+        total: kind === 'restaurant' ? { cells: 1, visits: 8 } : { cells: 1, visits: 20 },
+        sampleLabel: '2023년 4~9월 여행자 표본',
+        sourceNote: '출처 문구',
+      });
+    }),
     http.get('/sigungu-geo.json', () => HttpResponse.json(sigunguGeo)),
     http.get('/api/v1/life-map/nearby', ({ request }) => {
       const url = new URL(request.url);
@@ -250,6 +264,7 @@ beforeEach(() => {
   seen.nearby = [];
   seen.detail = [];
   seen.search = [];
+  seen.density = [];
   useHandlers();
 });
 
@@ -408,6 +423,38 @@ describe('LifeMapPage', () => {
     expect(chip).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTestId('life-crime-card')).toBeNull();
     expect(screen.queryByTestId('life-map-footer-crime')).toBeNull();
+  });
+
+  it('배경 레이어(여행자 밀도) 토글 → 격자 요약 카드·범례·푸터 출처, 종류 칩(식당만)이 요청에 반영, 범죄 통계와 배타', async () => {
+    renderPage();
+    expect(await screen.findByTestId('map-canvas')).toBeInTheDocument();
+    const chip = screen.getByTestId('life-overlay-tour');
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('life-tour-card')).toBeNull();
+    expect(seen.density).toEqual([]);
+
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(useLifeMapPrefsStore.getState().overlay).toBe('tour');
+    const card = await screen.findByTestId('life-tour-card');
+    // 칸을 고르기 전 — 안내 + 전체 규모. 범례는 5등급 라벨 + 경계값.
+    await waitFor(() => expect(within(card).getByTestId('life-tour-summary')).toHaveTextContent('칸 1 · 방문 20건'));
+    expect(within(card).getByText(/5 매우 많음/)).toBeInTheDocument();
+    expect(screen.getByTestId('life-map-footer-tour')).toHaveTextContent('국내 여행로그 데이터(제주도 및 도서지역)');
+    expect(seen.density).toEqual(['all']);
+
+    // 종류 칩 — 식당만: 새 요청(kind=restaurant) + 규모 갱신, 설정 저장.
+    const kinds = within(card).getByTestId('life-tour-kinds');
+    fireEvent.click(within(kinds).getByRole('button', { name: '식당만' }));
+    expect(useLifeMapPrefsStore.getState().tourDensityKind).toBe('restaurant');
+    await waitFor(() => expect(within(card).getByTestId('life-tour-summary')).toHaveTextContent('칸 1 · 방문 8건'));
+    expect(seen.density).toEqual(['all', 'restaurant']);
+
+    // 범죄 통계를 켜면 밀도는 꺼진다(배경은 하나).
+    fireEvent.click(screen.getByTestId('life-overlay-crime'));
+    expect(useLifeMapPrefsStore.getState().overlay).toBe('crime');
+    expect(screen.queryByTestId('life-tour-card')).toBeNull();
+    expect(await screen.findByTestId('life-crime-card')).toBeInTheDocument();
   });
 });
 

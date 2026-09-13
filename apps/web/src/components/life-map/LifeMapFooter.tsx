@@ -7,6 +7,7 @@ import {
   LIFE_HOSPITAL_COLOR,
   LIFE_STORE_COLOR,
   LIFE_TOILET_COLOR,
+  TOUR_DATASET_NAME,
 } from '@repo/utils';
 
 // 범례 + 적재 상태 + 출처 표시 — 패널 하단. 색은 항상 글자와 함께(색만으로 뜻을 전하지 않는다).
@@ -19,9 +20,11 @@ interface Props {
   status: LifeMapStatusResultType | undefined;
   // 범죄 통계 배경이 켜져 있고 응답이 왔을 때만 — 출처 줄 추가.
   crime?: { year: number; populationBase: string } | null;
+  // 여행자 밀도 배경(AI 허브 71780) — 이용정책상 출처 표기(NIA 사업결과·데이터명·aihub.or.kr) 필수.
+  tour?: { sampleLabel: string } | null;
 }
 
-export const LifeMapFooter = ({ status, crime = null }: Props) => {
+export const LifeMapFooter = ({ status, crime = null, tour = null }: Props) => {
   const cctv = status?.layers.find((l) => l.layer === 'cctv');
   const toilet = status?.layers.find((l) => l.layer === 'toilet');
   const hospital = status?.layers.find((l) => l.layer === 'hospital');
@@ -117,6 +120,20 @@ export const LifeMapFooter = ({ status, crime = null }: Props) => {
             행정안전부 주민등록 인구통계 <ExternalLink className="size-3" />
           </a>{' '}
           · 시 단위 통계는 하위 구에 같은 값
+        </div>
+      )}
+      {tour && (
+        <div className="mt-0.5" data-testid="life-map-footer-tour">
+          여행자 밀도 {tour.sampleLabel} · 과학기술정보통신부·한국지능정보사회진흥원(NIA) 인공지능 학습용 데이터 구축사업 결과물{' '}
+          <a
+            href="https://aihub.or.kr"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline"
+          >
+            「{TOUR_DATASET_NAME}」(AI 허브) <ExternalLink className="size-3" />
+          </a>{' '}
+          가공 2차 저작물 · 여행자 5명 미만 칸은 표시하지 않음
         </div>
       )}
     </div>

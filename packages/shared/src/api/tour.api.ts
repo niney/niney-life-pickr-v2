@@ -3,11 +3,15 @@ import {
   type TourAdminStatusType,
   type TourBizCheckBodyType,
   type TourBizCheckResultType,
+  type TourDensityKindType,
+  type TourDensityResultType,
   type TourInsightsQueryType,
   type TourInsightsResultType,
+  type TourLodgingResultType,
   type TourMatchRunResultType,
   type TourPlanBodyType,
   type TourPlanResultType,
+  type TourRegionsResultType,
   type TourPhotoSizeType,
   type TourRawActivitiesResultType,
   type TourRawPageQueryType,
@@ -85,6 +89,11 @@ export const tourApi = {
   // ── 공개(인증 없음) — 인사이트·코스 추천. 응답은 집계뿐.
   publicInsights: (p: TourInsightsParams = {}) => apiFetch<TourInsightsResultType>(`${Routes.Tour.publicInsights}${insightsQuery(p)}`),
   publicPlan: (body: Partial<TourPlanBodyType>) => apiFetch<TourPlanResultType>(Routes.Tour.publicPlan, { method: 'POST', body: JSON.stringify(body) }),
+  // 6차 — 밀도 격자(전국 칸 전부, 수백 개 — bbox 는 선택) / 숙소 / 지역 비교(필터 축 동일).
+  publicDensity: (kind: TourDensityKindType = 'all', bbox?: string) =>
+    apiFetch<TourDensityResultType>(`${Routes.Tour.publicDensity}?kind=${kind}${bbox ? `&bbox=${encodeURIComponent(bbox)}` : ''}`),
+  publicLodging: (p: TourInsightsParams = {}) => apiFetch<TourLodgingResultType>(`${Routes.Tour.publicLodging}${insightsQuery(p)}`),
+  publicRegions: (p: TourInsightsParams = {}) => apiFetch<TourRegionsResultType>(`${Routes.Tour.publicRegions}${insightsQuery(p)}`),
 
   adminStatus: () => apiFetch<TourAdminStatusType>(Routes.Tour.adminStatus),
   adminSeeds: (p: TourSeedParams = {}) => apiFetch<TourSeedListType>(`${Routes.Tour.adminSeeds}${seedsQuery(p)}`),

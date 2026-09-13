@@ -1,4 +1,4 @@
-import { Cctv, Cross, ShieldAlert, Store, Toilet } from 'lucide-react';
+import { Cctv, Cross, Footprints, ShieldAlert, Store, Toilet } from 'lucide-react';
 import type { LifeMapStatusResultType } from '@repo/api-contract';
 import {
   LIFE_CCTV_GROUP_COLOR,
@@ -15,6 +15,7 @@ import {
   LIFE_TOILET_COLOR,
   LIFE_TOILET_FEATURES,
   LIFE_TOILET_FILTER_KEYS,
+  TOUR_DENSITY_GRADE_COLOR,
   lifeCctvPurposeGroup,
   type LifeCctvPurpose,
   type LifeHospitalCategory,
@@ -73,6 +74,9 @@ const LAYER_DOT: Record<LifeMapLayer, string> = {
   store: LIFE_STORE_COLOR,
 };
 const LAYER_ICON: Record<LifeMapLayer, typeof Cctv> = { cctv: Cctv, toilet: Toilet, hospital: Cross, store: Store };
+// 배경(면) 레이어 — 범죄 통계(호박색 4등급)·여행자 밀도(청록 4등급). 칩 색은 그 램프의 진한 쪽.
+const OVERLAY_ICON: Record<LifeMapOverlay, typeof Cctv> = { crime: ShieldAlert, tour: Footprints };
+const OVERLAY_DOT: Record<LifeMapOverlay, string> = { crime: LIFE_CRIME_GRADE_COLOR[4], tour: TOUR_DENSITY_GRADE_COLOR[4] };
 
 export const LifeLayerBar = ({
   layers,
@@ -140,6 +144,7 @@ export const LifeLayerBar = ({
         <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
         {LIFE_MAP_OVERLAYS.map((o) => {
           const on = overlay === o;
+          const OverlayIcon = OVERLAY_ICON[o];
           return (
             <button
               key={o}
@@ -155,9 +160,9 @@ export const LifeLayerBar = ({
               <span
                 aria-hidden
                 className="size-2.5 rounded-sm"
-                style={{ backgroundColor: LIFE_CRIME_GRADE_COLOR[4], opacity: on ? 1 : 0.35 }}
+                style={{ backgroundColor: OVERLAY_DOT[o], opacity: on ? 1 : 0.35 }}
               />
-              <ShieldAlert className="size-3.5" />
+              <OverlayIcon className="size-3.5" />
               {LIFE_MAP_OVERLAY_LABEL[o]}
             </button>
           );

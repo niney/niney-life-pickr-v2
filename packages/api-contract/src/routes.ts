@@ -745,4 +745,8 @@ export const Tour = {
   // 5차 — 인사이트(?region&ageGrp&gender&accompany&month&nights) / 코스 추천(POST, 같은 축). 표본 20건 미만이면 insufficient.
   publicInsights: `${API_PREFIX}/tour/public/insights`,
   publicPlan: `${API_PREFIX}/tour/public/plan`,
+  // 6차 — 방문 밀도 격자(?kind=all|restaurant[&bbox]) / 숙소 유형 통계 / 지역 비교(제주시·서귀포시·부속섬·읍면동). 뒤 둘의 필터는 insights 와 같은 축.
+  publicDensity: `${API_PREFIX}/tour/public/density`,
+  publicLodging: `${API_PREFIX}/tour/public/lodging`,
+  publicRegions: `${API_PREFIX}/tour/public/regions`,
 } as const;

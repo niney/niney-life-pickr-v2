@@ -7,18 +7,24 @@ import {
   useLifeMapNearby,
   useLifeMapPoints,
   useLifeMapStatus,
+  useTourDensity,
   useUserLocation,
 } from '@repo/shared';
-import type { LifeCrimeRegionType, LifeMapCellType, LifeMapNearbyItemType } from '@repo/api-contract';
+import type { LifeCrimeRegionType, LifeMapCellType, LifeMapNearbyItemType, TourDensityCellType } from '@repo/api-contract';
 import {
+  JEJU_CENTER,
   LIFE_MAP_POINT_MIN_ZOOM,
   approxDistanceM,
   formatBbox,
   isInKorea,
   isLifeMapLayer,
+  isNearJeju,
   lifeCrimeGrade,
   parseLatLngParam,
+  tourDensityCellKey,
+  tourDensityGrade,
   type LifeMapLayer,
+  type LifeMapOverlay,
 } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import type { MapAreas, MapCanvasHandle, MapViewport } from '~/components/restaurant/MapCanvas';
@@ -29,9 +35,11 @@ import { LifeLayerBar } from '~/components/life-map/LifeLayerBar';
 import { LifeMapFooter } from '~/components/life-map/LifeMapFooter';
 import { LifeMapView } from '~/components/life-map/LifeMapView';
 import { LifeNearbyList } from '~/components/life-map/LifeNearbyList';
-import { lifeCrimeAreaStyle } from '~/components/life-map/lifeMapAreas';
+import { LifeTourCard } from '~/components/life-map/LifeTourCard';
+import { lifeCrimeAreaStyle, tourDensityAreaStyle } from '~/components/life-map/lifeMapAreas';
 import { BottomSheet } from '~/components/sheet/BottomSheet';
 import { SHEET_PEEK_HEIGHT, sheetHalfInset, useMapSheets } from '~/components/sheet/useMapSheets';
+import { buildTourDensityFeatures, tourCellKeyOf, tourCellVisitsOf } from '~/lib/tourDensityGeo';
 import { useDebounced } from '~/lib/useDebounced';
 import { useIsDesktopXl } from '~/lib/useMediaQuery';
 import { sigunguCodeAt, sigunguCodeOf, sigunguNameOf, useSigunguGeo } from '~/lib/useSigunguGeo';
@@ -55,6 +63,9 @@ import { useLifeMapPrefsStore } from '~/stores/lifeMapPrefsStore';
 // 경계(public/sigungu-geo.json)와 통계(/life-map/crime)를 받아 등급색으로 면을 깔고, 패널에는 내주변
 // 목록과 섞이지 않는 요약 카드 하나(지도 중심 시군구 — 면을 누르면 그곳으로 고정, 지도를 움직이면
 // 다시 중심 추적)를 목록 머리 아래에 둔다. 메트릭(전체·강력·절도·폭력)은 색칠과 카드 숫자를 함께 바꾼다.
+// 두 번째 배경 — 여행자 밀도(AI 허브 71780 여행로그, 0.02° 격자 choropleth). 같은 areas 경로로 칸을 깔고, 칸을 누르면
+// 카드가 그 칸의 방문·여행자 수와 그 안의 등록 맛집을 보여 준다(지도를 움직여도 선택은 유지 — 면 데이터가 아니라
+// 칸 선택이라 중심 추적 개념이 없다). 켤 때 지도가 제주 밖이면 제주로 이동한다(표본이 제주·도서 지역뿐).
 
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 const DEFAULT_ZOOM = 15;
@@ -122,6 +133,8 @@ export const LifeMapPage = () => {
   const crimeMetric = useLifeMapPrefsStore((s) => s.crimeMetric);
   const toggleOverlay = useLifeMapPrefsStore((s) => s.toggleOverlay);
   const setCrimeMetric = useLifeMapPrefsStore((s) => s.setCrimeMetric);
+  const tourDensityKind = useLifeMapPrefsStore((s) => s.tourDensityKind);
+  const setTourDensityKind = useLifeMapPrefsStore((s) => s.setTourDensityKind);
   const clearPurposes = useCallback(() => setPurposes([]), [setPurposes]);
   const clearHospitalCategories = useCallback(() => setHospitalCategories([]), [setHospitalCategories]);
   const clearStoreKinds = useCallback(() => setStoreKinds([]), [setStoreKinds]);
@@ -147,7 +160,7 @@ export const LifeMapPage = () => {
     mapRef.current?.flyTo(saved.lat, saved.lng, DEFAULT_ZOOM);
   }, [saved]);
 
-  // 배경 레이어에서 면을 눌러 고정한 시군구 코드 — 지도를 움직이면(사용자 이동) 풀려 중심 추적으로.
+  // 배경 레이어에서 면을 눌러 고른 키 — 범죄 통계는 시군구 코드(지도를 움직이면 풀려 중심 추적으로), 여행자 밀도는 칸 키(x:y).
   const [pickedCode, setPickedCode] = useState<string | null>(null);
 
   // 뷰포트 — 모든 변경(onViewportSync)을 받아 디바운스 후 조회 키로. 사용자 이동(onViewportChangeEnd)
@@ -162,10 +175,11 @@ export const LifeMapPage = () => {
   const handleViewportChangeEnd = useCallback(
     (vp: MapViewport) => {
       userMovedRef.current = true;
-      setPickedCode(null);
+      // 범죄 통계만 중심 추적으로 되돌린다 — 밀도 칸 선택은 둘러보는 동안 유지.
+      if (overlay === 'crime') setPickedCode(null);
       setParams({ ll: `${vp.centerLat.toFixed(5)},${vp.centerLng.toFixed(5)}`, z: vp.zoom.toFixed(1) });
     },
-    [setParams],
+    [setParams, overlay],
   );
 
   const bbox = debouncedViewport ? formatBbox(debouncedViewport.bbox) : null;
@@ -198,6 +212,33 @@ export const LifeMapPage = () => {
     for (const r of crimeQ.data?.regions ?? []) for (const c of r.codes) m.set(c, r);
     return m;
   }, [crimeQ.data]);
+
+  // ── 배경(면) 레이어: 여행자 밀도 — 켠 동안만 격자를 받는다(정적, 종류별 캐시). 칸 → OL 면은 응답 identity 로 메모. ──
+  const tourOn = overlay === 'tour';
+  const densityQ = useTourDensity(tourDensityKind, tourOn);
+  const densityFeatures = useMemo(
+    () => (densityQ.data ? buildTourDensityFeatures(densityQ.data.cells, densityQ.data.cellDeg) : null),
+    [densityQ.data],
+  );
+  const pickedCell = useMemo<TourDensityCellType | null>(() => {
+    if (!tourOn || !pickedCode || !densityQ.data) return null;
+    return densityQ.data.cells.find((c) => tourDensityCellKey(c.x, c.y) === pickedCode) ?? null;
+  }, [tourOn, pickedCode, densityQ.data]);
+  // 배경 토글 — 선택(시군구·칸)은 배경마다 뜻이 달라 항상 비운다. 여행자 밀도를 켰는데 지도가 제주 밖이면 제주로.
+  const handleToggleOverlay = useCallback(
+    (o: LifeMapOverlay) => {
+      toggleOverlay(o);
+      setPickedCode(null);
+      if (o !== 'tour' || overlay === 'tour') return;
+      const vp = viewportRef.current;
+      const c = vp ? { lat: vp.centerLat, lng: vp.centerLng } : { lat: initial.lat, lng: initial.lng };
+      if (isNearJeju(c.lat, c.lng)) return;
+      userMovedRef.current = true;
+      mapRef.current?.flyTo(JEJU_CENTER.lat, JEJU_CENTER.lng, JEJU_CENTER.zoom);
+      setParams({ ll: `${JEJU_CENTER.lat.toFixed(5)},${JEJU_CENTER.lng.toFixed(5)}`, z: String(JEJU_CENTER.zoom) });
+    },
+    [toggleOverlay, overlay, initial.lat, initial.lng, setParams],
+  );
 
   // 주변 목록 — 탭(화장실/CCTV/병의원/생활편의), 지도 중심 기준(뷰포트 동기 전엔 진입 중심). 꺼진 레이어
   // 탭이면 켜진 쪽으로 보이되 사용자의 탭 선택은 보존.
@@ -308,6 +349,20 @@ export const LifeMapPage = () => {
   const cardRegion = cardCode ? (regionByCode.get(cardCode) ?? null) : null;
   // 면 스타일 — 메트릭·선택이 바뀔 때만 새 객체(MapCanvas 가 areas identity 로 다시 그린다).
   const areas = useMemo<MapAreas | null>(() => {
+    if (tourOn) {
+      const density = densityQ.data;
+      if (!density || !densityFeatures) return null;
+      return {
+        features: densityFeatures,
+        keyOf: tourCellKeyOf,
+        styleOf: (f) => {
+          const key = tourCellKeyOf(f);
+          const n = tourCellVisitsOf(f);
+          const selected = key === pickedCode;
+          return tourDensityAreaStyle(tourDensityGrade(n, density.breaks), selected, selected ? `${n.toLocaleString('ko-KR')}건` : null);
+        },
+      };
+    }
     const stats = crimeQ.data;
     if (!crimeOn || !features || !stats) return null;
     const breaks = stats.breaks[crimeMetric];
@@ -324,10 +379,22 @@ export const LifeMapPage = () => {
         return lifeCrimeAreaStyle(lifeCrimeGrade(r.per100k[crimeMetric], breaks), selected, selected ? sigunguNameOf(f) : null);
       },
     };
-  }, [crimeOn, features, crimeQ.data, crimeMetric, regionByCode, cardRegion]);
+  }, [tourOn, densityQ.data, densityFeatures, pickedCode, crimeOn, features, crimeQ.data, crimeMetric, regionByCode, cardRegion]);
   const handleAreaSelect = useCallback((code: string) => setPickedCode(code), []);
   const unpinArea = useCallback(() => setPickedCode(null), []);
-  const crimeCard = crimeOn ? (
+  const flyToPlace = useCallback((lat: number, lng: number) => mapRef.current?.flyTo(lat, lng, undefined, flyInset()), [flyInset]);
+  const overlayCard = tourOn ? (
+    <LifeTourCard
+      data={densityQ.data}
+      loading={densityQ.isLoading}
+      error={densityQ.isError}
+      kind={tourDensityKind}
+      onKind={setTourDensityKind}
+      cell={pickedCell}
+      onClearCell={unpinArea}
+      onFlyTo={flyToPlace}
+    />
+  ) : crimeOn ? (
     <LifeCrimeCard
       stats={crimeQ.data}
       loading={crimeQ.isLoading || geoQ.isLoading}
@@ -340,6 +407,7 @@ export const LifeMapPage = () => {
     />
   ) : null;
   const crimeFooter = crimeOn && crimeQ.data ? { year: crimeQ.data.year, populationBase: crimeQ.data.populationBase } : null;
+  const tourFooter = tourOn && densityQ.data ? { sampleLabel: densityQ.data.sampleLabel } : null;
 
   // 안내 — 켜진 레이어가 셀 모드면 "몇 이상 확대", 점이 잘렸으면 "일부만 표시".
   const hint = (() => {
@@ -361,7 +429,12 @@ export const LifeMapPage = () => {
     return null;
   })();
   const mapLoading =
-    cctvQ.isFetching || toiletQ.isFetching || hospitalQ.isFetching || storeQ.isFetching || (crimeOn && (crimeQ.isLoading || geoQ.isLoading));
+    cctvQ.isFetching ||
+    toiletQ.isFetching ||
+    hospitalQ.isFetching ||
+    storeQ.isFetching ||
+    (crimeOn && (crimeQ.isLoading || geoQ.isLoading)) ||
+    (tourOn && densityQ.isLoading);
 
   const detailDist =
     detailQ.data && myLocation && detailQ.data.lat !== null && detailQ.data.lng !== null
@@ -393,12 +466,12 @@ export const LifeMapPage = () => {
             onClearHospitalCategories={clearHospitalCategories}
             onToggleStoreKind={toggleStoreKind}
             onClearStoreKinds={clearStoreKinds}
-            onToggleOverlay={toggleOverlay}
+            onToggleOverlay={handleToggleOverlay}
           />
         </div>
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- savedForGoTo 는 saved 에서만 파생
-    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, hospitalCategories, storeKinds, overlay, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter, toggleHospitalCategory, clearHospitalCategories, toggleStoreKind, clearStoreKinds, toggleOverlay],
+    [isDesktop, goToOpen, saved, handleGo, layers, purposes, toiletFilters, hospitalCategories, storeKinds, overlay, statusQ.data, toggleLayer, togglePurpose, clearPurposes, toggleToiletFilter, toggleHospitalCategory, clearHospitalCategories, toggleStoreKind, clearStoreKinds, handleToggleOverlay],
   );
   useLayoutEffect(() => {
     setSubBar(subBarContent);
@@ -422,7 +495,7 @@ export const LifeMapPage = () => {
     onClearHospitalCategories: clearHospitalCategories,
     onToggleStoreKind: toggleStoreKind,
     onClearStoreKinds: clearStoreKinds,
-    onToggleOverlay: toggleOverlay,
+    onToggleOverlay: handleToggleOverlay,
   };
   const nearbyList = (filters?: React.ReactNode) => (
     <LifeNearbyList
@@ -505,10 +578,10 @@ export const LifeMapPage = () => {
           {goToOpen ? null : (
             <>
               <LifeLayerBar {...layerBarProps} />
-              {detailContent ?? nearbyList(crimeCard)}
+              {detailContent ?? nearbyList(overlayCard)}
             </>
           )}
-          <LifeMapFooter status={statusQ.data} crime={crimeFooter} />
+          <LifeMapFooter status={statusQ.data} crime={crimeFooter} tour={tourFooter} />
         </aside>
       ) : (
         /* ━━━ 모바일 — 목록 시트 + (선택 시) 상세 시트. topOffset 은 통합 헤더 실측 높이. ━━━ */
@@ -526,10 +599,10 @@ export const LifeMapPage = () => {
               {nearbyList(
                 <>
                   <LifeLayerBar section="filters" className="border-b-0 py-1" {...layerBarProps} />
-                  {crimeCard}
+                  {overlayCard}
                 </>,
               )}
-              <LifeMapFooter status={statusQ.data} crime={crimeFooter} />
+              <LifeMapFooter status={statusQ.data} crime={crimeFooter} tour={tourFooter} />
             </div>
           </BottomSheet>
           {sel && (

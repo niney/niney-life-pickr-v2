@@ -156,8 +156,9 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | `POST /restaurants/public/smart-pick` (기존) | `strategy: 'traveler'` 추가. `balanced` 는 세 점수 평균(없는 것은 제외) | 여행자 점수 = `(bayes−1)/4`, nRated≥3 |
 | `GET /tour/public/insights?region&ageGrp&gender&accompany&month&nights` | 규모·박수·월·동반·시간대×유형·유형별 만족/체류/지출·전이 행렬·코스 템플릿·읍면동·이유·지출 구성·이동수단·공항 다음·거주지 | 필터 후 여행 <20건이면 `insufficient: true`, 셀 n<5 null |
 | `POST /tour/public/plan` `{ageGrp, accompany, nights, month?, gender?}` | `{matchedTrips, places[{name,kind,sigungu,n,mean,score}], templates[{typeSeq,n}]}` | 장소 n≥5, matchedTrips<20 이면 조건 완화 안내 |
-| `GET /tour/public/density?bbox&kind=all\|restaurant` | 0.02° 격자 `[{x,y,n}]` | n≥5 |
-| `GET /tour/public/lodging?region` (6차) | 숙소 유형별 1박 요금 중앙·만족도·예약 비율 | n≥5 |
+| `GET /tour/public/density?kind=all\|restaurant[&bbox]` (6차) | 0.02° 격자 `[{x,y,n,travelers}]` + 분위 경계 4개(5등급 색칠) + 규모 — bbox 없으면 전국 칸 전부(수백 개) | 여행자 ≥5 칸만 |
+| `GET /tour/public/lodging?region&ageGrp&gender&accompany&month&nights` (6차) | 숙박 결제 유형별 이용 여행·결제 중앙·1박 추정(결제액 × 숙박 건수 ÷ 박수)·1인 중앙·예약률 + 숙소 방문 만족도 | 여행 ≥5 유형만, 금액·평가 3건 미만 null |
+| `GET /tour/public/regions?ageGrp&gender&accompany&month&nights` (6차) | 제주시·서귀포시·부속섬 3집단(여행·방문·비중·만족·식당·체류·1인 지출·유형·읍면동 상위) + 읍면동 표(최대 20) | 집단 여행 ≥5, 읍면동 방문 ≥5 |
 
 응답 스키마(`@repo/api-contract` `tour.ts`)에는 여행·방문·여행자 식별자 필드가 없다. 테스트 `tour-public.test.ts` 가 (1) 스키마 키 집합에
 `travelId|visitAreaId|travelerLabel|photoId` 가 없음, (2) n<5 셀이 null 로 나옴, (3) 매칭 없는 식당은 `tour: null` 을 고정한다.
@@ -184,7 +185,7 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | 홈 골라줘 | `SmartPickSection` | 전략 칩 "여행자 만족", 결과 카드에 근거 3줄 |
 | `/travel/jeju` | `routes/TravelInsightsPage.tsx` | 프로토타입 화면 3 + 필터 바(연령·성별·동반·월·박수·지역). 표본 부족 셀은 "표본 부족" |
 | `/travel/plan` | `routes/TravelPlanPage.tsx` | 프로토타입 화면 4. 결과 → 그룹투표 만들기(`/vote/new` 에 옵션 프리필)·즐겨찾기·가는 법 |
-| 일상지도 레이어 | `LifeLayerBar`·`LifeMapPage` | "여행자 방문 밀도"(전체/식당만) — 격자 반투명 레이어, 셀 클릭 시 그 안의 등록 맛집 목록 |
+| 일상지도 레이어 | `LifeLayerBar`·`LifeMapPage`·`LifeTourCard`·`lib/tourDensityGeo.ts` | 배경(면) 레이어 "여행자 밀도"(범죄 통계와 배타, 켜면 제주 밖일 때 제주로 이동) — 0.02° 격자 청록 5등급, 카드에 종류 칩(전체/식당만)·범례, 칸 클릭 시 방문·여행자 수 + 그 칸 bbox 의 등록 맛집(공개 목록, 여행자 순)·상세 링크·지도 이동. 푸터에 AI 허브 출처 줄 |
 | 어드민 `/admin/tour` | `routes/admin/AdminTourPage.tsx` | 상태·파이프라인·시드 표(발굴·등록 버튼)·폐업 상태 |
 | 어드민 식당 상세 | `AdminRestaurantDetailPage` | "여행자 근거" 섹션 — 방문 행·주문 원문·영수증·참고 사진·코스 샘플(원본 allowlist 만 렌더) |
 | 사이드바·홈 카드 | `PublicLayout`·홈 | "여행" 메뉴(인사이트·코스) |
@@ -213,7 +214,7 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | **3차 관리자 근거·사진·코스 샘플** ✅ 2026-09-13 | `tour-raw.service.ts`·`tour-raw.route.ts`(`/admin/tour/places/:id/{visits,activities,spend,photos,trips}`·`/trips/:travelId`·`/photos/:photoId/:size`, `TOUR_RAW_USER_IDS` allowlist → 밖이면 404, 플러그인 onSend 로 `private, no-store`·`noindex`, 사진은 `?token=` 도 인증) · 계약 `TourRaw*` · shared `tourApi.adminPlace*`·`useTourRaw*`·`tourPhotoUrl` · 웹 `TourEvidencePanel`(방문·주문 원문·영수증·사진·여행 타임라인 — 어드민 식당 상세 "여행자 근거" 카드 + 시드 표 "근거" 버튼) · env `TOUR_RAW_USER_IDS`·`TOUR_THUMBS_DIR` · `docs/deploy-friendly.md` rsync·allowlist·Cloudflare 우회 절차 · 테스트 `tour-raw.route.test.ts` 6건 | allowlist 밖 admin 404·비로그인 401·회원 403, 헤더 확인, 비공개 방문은 역할만, 사진 파일 헤더/토큰 인증·경로 조작 400. 사용자 몫: `.env` 에 본인 user id·운영 rsync |
 | **4차 공개 — 상세·목록·골라줘** ✅ 2026-09-13 (배포는 AI 허브 회신 뒤) | `tour-public.service.ts`(`toTourSummary`·`aggregateTourStats` 순수 집계 — 평가 3건·표본 5명 하한, 동반·연령 n≥5, 전후 3회·동행 5명·어절 2건) + `tour-public.route.ts`(`GET /restaurants/public/:placeId/tour-stats`, `RATE.tourRead`) · 계약 `RestaurantTourSummary`·`RestaurantPublicListTour`·`RestaurantTourStats`(식별자 없음), `RestaurantPublicDetail.tour`·`RestaurantPublicListItem.tour`·`sort=tourTravelers\|tourScore`·smartPick `traveler`+`avgTravelerScore` · `getPublicList/Detail/smartPick` 확장 · shared `publicTourStats`·`useRestaurantPublicTourStats` · 웹 `TourTab`(여행자 탭, 매칭 있을 때만)·`TourSummaryBadge/Line`(헤더 배지·홈 요약)·`TourSourceNote`·카드 메타·정렬 칩 2개·골라줘 "여행자 만족 기준" 칩 · 테스트 `tour-public.test.ts` 6건(응답 키 스캔으로 식별자 0 고정) | balanced 는 리뷰 AI 두 점수와 여행자 점수 중 있는 것의 평균 — 분석 없는 매칭 가게도 후보. 앱(mobile)은 타입만 통과(화면 미구현) |
 | **5차 공개 — 인사이트·코스** ✅ 2026-09-13 (배포는 AI 허브 회신 뒤) | `tour-insights.service.ts`(`TourInsightsService.insights/plan`, LRU 10분·필터 키, 20건 미만 `insufficient`, 완화 사다리 month→gender→nights→ageGrp, 점수 n×(mean−3.3), 교통·숙소 제외) · `GET /tour/public/insights?region·ageGrp·gender·accompany·month·nights` · `POST /tour/public/plan` · 계약 `TourInsightsQuery/Result`·`TourPlanBody/Result` · shared `tourApi.publicInsights/publicPlan`·`useTourInsights`(필터 키 캐시)·`useTourPlan` · 웹 `routes/TravelInsightsPage.tsx`(`/travel/jeju`, 필터 = URL 쿼리, KPI 5 + 섹션 13)·`routes/TravelPlanPage.tsx`(`/travel/plan`, 체크 → `/vote/new` state 프리필 `presetTitle/presetOptions`)·`components/tour/{charts,TourFilterBar,tourFormat}` · 사이드바·상단바 "여행" · 테스트 `tour-insights.service.test.ts` 5건(집계·k 억제·insufficient·사다리·라우트 400, 응답 키 스캔) | 필터를 바꾸면 셀이 갱신되고 20건 미만은 안내. 코스 → 그룹투표 생성까지 이어짐 |
-| **6차 공개 — 지도·숙소·지역** | `/tour/public/density`·`/lodging` · 일상지도 레이어 · 숙소 통계 섹션 · 지역 비교(제주시/서귀포시/읍면동/부속섬) | 레이어 토글·셀 클릭 목록. 숙소 유형별 요금·만족도 |
+| **6차 공개 — 지도·숙소·지역** ✅ 2026-09-13 (배포는 AI 허브 회신 뒤) | `tour-region.service.ts`(`TourRegionService.density/lodging/regions`, SQL 격자 group by — SQLite 엔 FLOOR 가 없어 CAST 절삭, 키별 LRU 10분) · `GET /tour/public/density`·`/lodging`·`/regions` · 계약 `TourDensity*`·`TourLodging*`·`TourRegion*` · shared `tourApi.publicDensity/publicLodging/publicRegions`·`useTourDensity`(24h, 켠 동안만)·`useTourLodging`·`useTourRegions` · utils `tourLog.ts` 격자 상수·분위·등급·칸 bbox·`JEJU_CENTER`, `LIFE_MAP_OVERLAYS` 에 `tour` · 웹 일상지도 배경 레이어(위 표) + `lifeMapPrefsStore` v5 `tourDensityKind` · 인사이트 페이지 `TourRegionSection`(3집단 카드 + 읍면동 표)·`TourLodgingSection`(유형 표) — 같은 필터 바 · 테스트 `tour-region.service.test.ts` 4건 + `LifeMapPage.test.tsx` 배경 토글 1건 + utils 3건 |
 | 후속 후보 | 앱 연동(WebView 또는 네이티브 탭) · 국내 다른 권역 데이터셋(수도권·동부·서부, 같은 스키마) · 여행자 점수의 랭킹 페이지 반영 | — |
 
 ## 테스트

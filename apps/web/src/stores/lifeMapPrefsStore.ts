@@ -8,6 +8,7 @@ import type {
   LifeMapOverlay,
   LifeStoreLayerKind,
   LifeToiletFilterKey,
+  TourDensityKind,
 } from '@repo/utils';
 
 // 일상지도 표시 설정 — 레이어 on/off·CCTV 설치목적 필터·화장실 편의 필터·병의원 종별 필터·생활편의 업종 필터 + 배경(면)
@@ -26,6 +27,8 @@ interface LifeMapPrefsState {
   storeKinds: LifeStoreLayerKind[];
   overlay: LifeMapOverlay | null;
   crimeMetric: LifeCrimeMetric;
+  // 여행자 밀도 배경의 방문 종류(전체/식당만).
+  tourDensityKind: TourDensityKind;
   toggleLayer: (layer: LifeMapLayer) => void;
   setLayer: (layer: LifeMapLayer, on: boolean) => void;
   togglePurpose: (purpose: LifeCctvPurpose) => void;
@@ -38,6 +41,7 @@ interface LifeMapPrefsState {
   toggleOverlay: (overlay: LifeMapOverlay) => void;
   setOverlay: (overlay: LifeMapOverlay | null) => void;
   setCrimeMetric: (metric: LifeCrimeMetric) => void;
+  setTourDensityKind: (kind: TourDensityKind) => void;
   resetFilters: () => void;
 }
 
@@ -59,6 +63,7 @@ export const useLifeMapPrefsStore = create<LifeMapPrefsState>()(
       storeKinds: [],
       overlay: null,
       crimeMetric: 'total',
+      tourDensityKind: 'all',
       toggleLayer: (layer) => set((s) => ({ layers: { ...s.layers, [layer]: !s.layers[layer] } })),
       setLayer: (layer, on) => set((s) => ({ layers: { ...s.layers, [layer]: on } })),
       togglePurpose: (purpose) =>
@@ -81,13 +86,15 @@ export const useLifeMapPrefsStore = create<LifeMapPrefsState>()(
       toggleOverlay: (overlay) => set((s) => ({ overlay: s.overlay === overlay ? null : overlay })),
       setOverlay: (overlay) => set({ overlay }),
       setCrimeMetric: (metric) => set({ crimeMetric: metric }),
+      setTourDensityKind: (kind) => set({ tourDensityKind: kind }),
       resetFilters: () => set({ purposes: [], toiletFilters: DEFAULT_TOILET_FILTERS, hospitalCategories: [], storeKinds: [] }),
     }),
     {
       name: 'lp:life-map-prefs',
-      version: 4,
+      version: 5,
       // v1 → v2: 병의원 레이어 추가 — 기존 사용자도 기본 켬, 종별 필터는 전체.
       // v2 → v3: 배경 레이어(범죄 통계)·메트릭 — 기본 꺼짐·전체. v3 → v4: 생활편의(store) 레이어 — 기본 켬, 업종 전체.
+      // v4 → v5: 여행자 밀도 배경의 방문 종류 — 전체.
       migrate: (persisted) => {
         const s = persisted as Partial<LifeMapPrefsState>;
         return {
@@ -97,6 +104,7 @@ export const useLifeMapPrefsStore = create<LifeMapPrefsState>()(
           storeKinds: s.storeKinds ?? [],
           overlay: s.overlay ?? null,
           crimeMetric: s.crimeMetric ?? 'total',
+          tourDensityKind: s.tourDensityKind ?? 'all',
         } as LifeMapPrefsState;
       },
       partialize: (s) => ({
@@ -107,6 +115,7 @@ export const useLifeMapPrefsStore = create<LifeMapPrefsState>()(
         storeKinds: s.storeKinds,
         overlay: s.overlay,
         crimeMetric: s.crimeMetric,
+        tourDensityKind: s.tourDensityKind,
       }),
     },
   ),
