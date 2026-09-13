@@ -35,6 +35,7 @@
     "probe:food-api": "tsx --env-file=.env scripts/probe-food-api.ts",
     "probe:meal-vision": "tsx --env-file=.env scripts/probe-meal-vision.ts",
     "probe:meal-e2e": "tsx --env-file=.env scripts/probe-meal-e2e.ts",
+    "e2e:tour": "tsx scripts/e2e-tour.ts",
     "backfill:meal-nutrition": "tsx --env-file=.env scripts/backfill-meal-nutrition.ts",
     "seed:meal-samples": "tsx --env-file=.env scripts/seed-meal-samples.ts",
     "eval:meal-recognition": "tsx scripts/eval-meal-recognition.ts",
