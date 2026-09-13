@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, Plus, Search, Vote, X } from 'lucide-react';
 import type { RestaurantPublicListItemType, VoteOptionInputType } from '@repo/api-contract';
 import { VOTE_OPTIONS_MAX, VOTE_OPTIONS_MIN } from '@repo/api-contract';
@@ -20,12 +20,19 @@ import { cn } from '~/lib/utils';
 // 투표방 생성 — 방장(로그인) 전용. 제목 + 등록 맛집에서 후보 2~8곳 선택(검색 +
 // 즐겨찾기) → 생성 즉시 /vote/:token 으로 이동해 링크를 공유한다. 하단에 내가
 // 만든 투표(최근 20)로 링크 복구.
+// 코스 추천(/travel/plan)이 후보를 미리 채워 넘길 때의 라우터 state — 첫 렌더에만 읽는다.
+interface VotePresetState {
+  presetTitle?: string;
+  presetOptions?: VoteOptionInputType[];
+}
+
 export const VoteNewPage = () => {
   const navigate = useNavigate();
-  const [title, setTitle] = useState('');
+  const preset = (useLocation().state as VotePresetState | null) ?? null;
+  const [title, setTitle] = useState(preset?.presetTitle ?? '');
   const [q, setQ] = useState('');
   const debouncedQ = useDebounced(q, 300);
-  const [selected, setSelected] = useState<VoteOptionInputType[]>([]);
+  const [selected, setSelected] = useState<VoteOptionInputType[]>(() => (preset?.presetOptions ?? []).slice(0, VOTE_OPTIONS_MAX));
 
   const search = useRestaurantsPublic({ q: debouncedQ || undefined, limit: 20 });
   // 즐겨찾기 — 페이지당 1회 호출 원칙(이 페이지의 유일한 호출).

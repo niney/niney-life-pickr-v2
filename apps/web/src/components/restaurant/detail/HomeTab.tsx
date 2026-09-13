@@ -12,6 +12,7 @@ import {
   TablingServiceBadges,
 } from './shared';
 import { StoreInfoBadges } from './StoreInfoBadges';
+import { TourSummaryBadge, TourSummaryLine } from './TourSummaryBadge';
 import type { TabKey } from './tabs';
 
 interface Props {
@@ -79,6 +80,7 @@ export const HomeTab = ({
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             {detail.category && <span>{detail.category}</span>}
             <StoreInfoBadges store={detail.store} />
+            <TourSummaryBadge tour={detail.tour} />
           </div>
           <SourceRatingLine detail={detail} />
           <ReviewCountLine detail={detail} />
@@ -131,6 +133,17 @@ export const HomeTab = ({
       ) : (
         <section className="border-t px-4 pt-4 text-xs text-muted-foreground">
           아직 분석된 리뷰가 없습니다.
+        </section>
+      )}
+
+      {detail.tour && (
+        <section className="space-y-2 border-t px-4 pt-4">
+          <SectionHead
+            title="여행자 방문 통계"
+            actionLabel="여행자 탭 보기"
+            onAction={() => onChangeTab('tour')}
+          />
+          <TourSummaryLine tour={detail.tour} />
         </section>
       )}
 

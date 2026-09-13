@@ -147,6 +147,15 @@ export const RestaurantsV2Page = () => {
       positiveCount: 0,
       negativeCount: 0,
       neutralCount: 0,
+      // 공유 진입의 지도 핀은 상세 응답으로 조립 — 여행로그 요약도 상세의 tour 에서.
+      tour: detail.tour
+        ? {
+            nTravelers: detail.tour.nTravelers,
+            bayesScore: detail.tour.bayesScore,
+            spendPpMedian: detail.tour.spendPpMedian,
+            revisitRate: detail.tour.revisitRate,
+          }
+        : null,
     };
   }, [isShareRoute, shareDetail.data]);
   const mapItems = useMemo(() => {

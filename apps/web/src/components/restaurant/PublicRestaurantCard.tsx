@@ -102,6 +102,14 @@ export const PublicRestaurantCard = memo(function PublicRestaurantCard({
             {hasAi && item.avgSatisfactionScore !== null && (
               <span>😊 {item.avgSatisfactionScore.toFixed(1)}/5</span>
             )}
+            {item.tour && (
+              <span
+                className="text-teal-700 dark:text-teal-300"
+                title={`2023년 여행자 표본 — 방문자 ${item.tour.nTravelers}명${item.tour.bayesScore !== null ? ` · 보정 만족도 ${item.tour.bayesScore.toFixed(2)}` : ''}${item.tour.spendPpMedian !== null ? ` · 1인 ${Math.round(item.tour.spendPpMedian).toLocaleString('ko-KR')}원` : ''}`}
+              >
+                🧭 여행자 {item.tour.nTravelers}명{item.tour.bayesScore !== null ? ` · ${item.tour.bayesScore.toFixed(1)}` : ''}
+              </span>
+            )}
             {item.latitude === null && (
               <span className="text-amber-600 dark:text-amber-400">좌표 없음</span>
             )}

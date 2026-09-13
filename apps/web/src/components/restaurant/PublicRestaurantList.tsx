@@ -16,6 +16,9 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: 'satisfaction', label: '만족도순' },
   { value: 'positive', label: '긍정 점수순' },
   { value: 'rating', label: '별점순' },
+  // 여행로그(2023 제주 여행자 표본) — 매칭된 가게만 앞에, 나머지는 뒤로.
+  { value: 'tourTravelers', label: '여행자 방문순' },
+  { value: 'tourScore', label: '여행자 만족순' },
 ];
 
 // 정적 카테고리 칩. 백엔드는 category contains 매칭이라 정확한 일치까진 강요

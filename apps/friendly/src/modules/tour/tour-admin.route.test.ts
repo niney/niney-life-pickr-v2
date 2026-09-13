@@ -89,11 +89,14 @@ describe('tour admin routes', () => {
     isolated.restore();
   });
 
-  it('비로그인 401, 일반 회원 403', async () => {
+  it('비로그인 401, 일반 회원 403 — :placeId 라우트(발굴·등록)도 등록돼 있다', async () => {
     expect((await app.inject({ method: 'GET', url: STATUS_URL })).statusCode).toBe(401);
     expect((await app.inject({ method: 'GET', url: STATUS_URL, headers: userAuth })).statusCode).toBe(403);
     expect((await app.inject({ method: 'GET', url: SEEDS_URL, headers: userAuth })).statusCode).toBe(403);
     expect((await app.inject({ method: 'POST', url: MATCH_URL, headers: userAuth })).statusCode).toBe(403);
+    // 빌더가 인코딩한 ':placeId' 를 등록부에서 되돌리지 않으면 404 가 난다 — 권한 단계(403)까지 닿는지로 고정.
+    expect((await app.inject({ method: 'POST', url: `${SEEDS_URL}/P-ujin/discover`, headers: userAuth })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: `${SEEDS_URL}/P-ujin/register`, headers: userAuth, payload: { rawSourceUrl: 'https://m.place.naver.com/restaurant/1' } })).statusCode).toBe(403);
   });
 
   it('상태 — 적재 이력이 없으면 loaded=false 이지만 표 건수·시드 수는 보인다', async () => {

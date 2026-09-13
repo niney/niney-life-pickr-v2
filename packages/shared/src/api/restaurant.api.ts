@@ -18,6 +18,7 @@ import {
   type RestaurantPublicReviewsQueryType,
   type RestaurantPublicReviewsResultType,
   type RestaurantPublicSmartPickInputType,
+  type RestaurantTourStatsType,
   type RestaurantSmartPickResultType,
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
@@ -126,6 +127,9 @@ export const restaurantApi = {
   // 메뉴 탭 칼로리 — 판정된 항목만 온다(애매하면 빠짐). 메뉴 탭이 열릴 때만 조회.
   publicMenuNutrition: (placeId: string) =>
     apiFetch<RestaurantMenuNutritionType>(Routes.Restaurant.publicMenuNutrition(placeId)),
+
+  // "여행자" 탭 — 여행로그(AI 허브 71780) 집계. 매칭 없는 식당은 404. 탭이 열릴 때만 조회.
+  publicTourStats: (placeId: string) => apiFetch<RestaurantTourStatsType>(Routes.Tour.publicRestaurantStats(placeId)),
 
   // 공개 가중 랜덤 픽 — 홈 "오늘 뭐 먹지?" 슬롯머신. 무인증 POST.
   // strategy 는 서버 zod default(balanced)가 채우므로 Partial (publicList 관례).

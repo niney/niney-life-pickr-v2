@@ -27,6 +27,7 @@ import { compareReviewRecencyDesc } from '@repo/utils';
 import { deriveRegion } from './region-derive.js';
 import { getRestaurantStoreInfo } from './restaurant-store-match.service.js';
 import { getRestaurantTourMatchInfo } from '../tour/restaurant-tour-match.service.js';
+import { getPublicListTourMap, getRestaurantTourSummary, travelerWeight } from '../tour/tour-public.service.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import type {
   CategoryTreeNodeType,
@@ -1519,6 +1520,9 @@ export class RestaurantService {
       }
     }
 
+    // 여행로그 매칭 요약(카드 메타·정렬) — canonical 단위, 매칭 없는 행은 null.
+    const tourMap = await getPublicListTourMap(this.prisma, canonicalIds);
+
     const items: RestaurantPublicListItemType[] = filtered.map((r) => {
       const naverBucket = byId.get(r.id)!;
       const dc = dcByCanonical.get(r.canonicalId) ?? null;
@@ -1553,6 +1557,7 @@ export class RestaurantService {
         positiveCount: naverBucket.pos + (dcBucket?.pos ?? 0) + (tbBucket?.pos ?? 0),
         negativeCount: naverBucket.neg + (dcBucket?.neg ?? 0) + (tbBucket?.neg ?? 0),
         neutralCount: naverBucket.neu + (dcBucket?.neu ?? 0) + (tbBucket?.neu ?? 0),
+        tour: tourMap.get(r.canonicalId) ?? null,
       };
     });
 
@@ -1632,6 +1637,7 @@ export class RestaurantService {
     const merged = mergeAddress(naverRow, naverSnap, dcSnap, tbSnap);
     const coords = mergeCoordinates(naverSnap, dcSnap, tbSnap);
     const store = await getRestaurantStoreInfo(this.prisma, naverRow.canonicalId);
+    const tour = await getRestaurantTourSummary(this.prisma, naverRow.canonicalId);
 
     return {
       // placeId 로 findUnique 했으니 일치 행은 반드시 placeId 가 채워져 있다.
@@ -1679,6 +1685,7 @@ export class RestaurantService {
       diningcode: dcSnap ? composeDiningcodeAddon(dcSnap) : null,
       tabling: tbSnap ? composeTablingAddon(tbSnap) : null,
       store,
+      tour,
     };
   }
 
@@ -2490,6 +2497,7 @@ export class RestaurantService {
       where,
       select: {
         id: true,
+        canonicalId: true,
         placeId: true,
         name: true,
       },
@@ -2498,6 +2506,12 @@ export class RestaurantService {
     if (restaurants.length === 0) {
       return { picked: null, candidates: 0, strategy };
     }
+
+    // 여행로그 보정 만족도(매칭된 가게만) — 리뷰 분석이 없는 가게도 이 항으로 후보에 든다.
+    const tourMap = await getPublicListTourMap(
+      this.prisma,
+      restaurants.map((r) => r.canonicalId),
+    );
 
     // list()와 같은 집계를 그대로 재사용하기엔 인터페이스가 안 맞으므로
     // 후보 식당들의 done 행만 따로 집계한다.
@@ -2536,20 +2550,22 @@ export class RestaurantService {
         const a = byId.get(r.id)!;
         const sentAvg = a.sentN > 0 ? a.sentSum / a.sentN : null;
         const satAvg = a.satN > 0 ? a.satSum / a.satN : null;
-        // 정규화: sentiment -1~1 → 0~1, satisfaction 1~5 → 0~1.
+        // 정규화: sentiment -1~1 → 0~1, satisfaction 1~5 → 0~1, 여행자 보정 만족도 1~5 → 0~1.
         const sentNorm = sentAvg === null ? null : (sentAvg + 1) / 2;
         const satNorm = satAvg === null ? null : (satAvg - 1) / 4;
+        const tourScore = tourMap.get(r.canonicalId)?.bayesScore ?? null;
+        const tourNorm = travelerWeight(tourScore);
         let weight: number;
         if (strategy === 'satisfaction') {
           weight = satNorm ?? 0;
         } else if (strategy === 'positive') {
           weight = sentNorm ?? 0;
+        } else if (strategy === 'traveler') {
+          weight = tourNorm ?? 0;
         } else {
-          // balanced: 둘 다 있으면 평균, 하나만 있으면 그것만, 둘 다 없으면 0.
-          if (sentNorm === null && satNorm === null) weight = 0;
-          else if (sentNorm === null) weight = satNorm!;
-          else if (satNorm === null) weight = sentNorm;
-          else weight = (sentNorm + satNorm) / 2;
+          // balanced: 있는 점수들의 평균, 하나도 없으면 0.
+          const parts = [sentNorm, satNorm, tourNorm].filter((v): v is number => v !== null);
+          weight = parts.length === 0 ? 0 : parts.reduce((a, b) => a + b, 0) / parts.length;
         }
         return {
           // source='naver' 필터로 placeId non-null.
@@ -2558,6 +2574,7 @@ export class RestaurantService {
           weight,
           avgSentimentScore: sentAvg,
           avgSatisfactionScore: satAvg,
+          avgTravelerScore: tourScore,
         };
       })
       .filter((w) => w.weight > 0);
@@ -2759,6 +2776,19 @@ const pickPublicSort = (
     return nullsLast(
       (a, b) => (b.avgSentimentScore ?? 0) - (a.avgSentimentScore ?? 0),
       (it) => it.avgSentimentScore,
+    );
+  }
+  // 여행로그 — 매칭 없는 행(tour=null)은 뒤로. 동률은 방문자 수.
+  if (sort === 'tourTravelers') {
+    return nullsLast(
+      (a, b) => (b.tour?.nTravelers ?? 0) - (a.tour?.nTravelers ?? 0),
+      (it) => it.tour?.nTravelers ?? null,
+    );
+  }
+  if (sort === 'tourScore') {
+    return nullsLast(
+      (a, b) => (b.tour?.bayesScore ?? 0) - (a.tour?.bayesScore ?? 0) || (b.tour?.nTravelers ?? 0) - (a.tour?.nTravelers ?? 0),
+      (it) => it.tour?.bayesScore ?? null,
     );
   }
   // rating

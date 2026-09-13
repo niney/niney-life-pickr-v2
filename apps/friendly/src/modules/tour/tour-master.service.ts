@@ -702,9 +702,18 @@ export const getTourLoadStatus = async (prisma: PrismaClient): Promise<TourLoadS
   };
 };
 
-// 썸네일 폴더 — TOUR_THUMBS_DIR 이 없으면 export 폴더의 thumbs/. 관리자 사진 라우트(3차)와 적재 리포트가 같이 쓴다.
+// 기본 export 폴더 — 리포 밖 data/open/tour/lp-2023. 서버는 apps/friendly 에서 뜨고(pm2·dev) 스크립트도 그 cwd 라
+// cwd 기준 두 후보를 본다(번들된 dist 에서는 import.meta.url 이 리포 구조를 잃어 못 쓴다). 운영에서 다른 곳에 두면
+// TOUR_THUMBS_DIR 로 사진 폴더만 따로 지정한다.
+export const tourDefaultExportDir = (): string => {
+  const candidates = [resolve(process.cwd(), 'data/open/tour/lp-2023'), resolve(process.cwd(), '../../data/open/tour/lp-2023')];
+  return candidates.find((c) => existsSync(c)) ?? candidates[1]!;
+};
+
+// 썸네일 폴더 — TOUR_THUMBS_DIR > (주어진 export 폴더 | 기본 export 폴더)/thumbs. 관리자 사진 라우트(3차)와 적재 리포트가
+// 같이 쓴다. 폴더가 없어도 경로는 돌려주고(존재 여부는 호출부가 existsSync), env 도 export 도 없을 때만 null.
 export const resolveTourThumbsDir = (exportDir: string | null): string | null => {
   const env = process.env.TOUR_THUMBS_DIR?.trim();
   if (env) return resolve(env);
-  return exportDir ? resolve(exportDir, 'thumbs') : null;
+  return resolve(exportDir ?? tourDefaultExportDir(), 'thumbs');
 };

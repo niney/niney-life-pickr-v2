@@ -46,6 +46,7 @@ import { MenuRankingSection } from '~/components/restaurant/MenuRankingSection';
 import { RestaurantCrawlLogsSection } from '~/components/restaurant/RestaurantCrawlLogsSection';
 import { StoreInfoBadges } from '~/components/restaurant/detail/StoreInfoBadges';
 import { TourMatchBadge } from '~/components/restaurant/detail/TourMatchBadge';
+import { TourEvidenceSection } from '~/components/admin/tour/TourEvidencePanel';
 import { VWorldMap } from '~/components/restaurant/VWorldMap';
 import { ImgWithFallback } from '~/components/ImgWithFallback';
 import {
@@ -678,6 +679,14 @@ export const AdminRestaurantDetailPage = () => {
           <MenuRankingSection placeId={detail.placeId} />
         </CardContent>
       </Card>
+
+      {detail.tour && (
+        <Card>
+          <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
+            <TourEvidenceSection tour={detail.tour} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>

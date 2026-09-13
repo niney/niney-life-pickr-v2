@@ -13,8 +13,6 @@ import {
   TourSeedRegisterBody,
   TourSeedRegisterResult,
 } from '@repo/api-contract';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { env } from '../../config/env.js';
 import { CanonicalService } from '../canonical/canonical.service.js';
 import { ProposalService } from '../canonical/proposal.service.js';
@@ -22,12 +20,10 @@ import { CrawlService } from '../crawl/crawl.service.js';
 import { jobRegistry } from '../crawl/job-registry.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { TourAdminService, TourPlaceNotFoundError } from './tour-admin.service.js';
+import { tourDefaultExportDir } from './tour-master.service.js';
 
 // 여행로그 관리자 라우트(2차) — 전부 admin. 상태·시드 목록은 로컬 DB 만, 후보 찾기·등록은 크롤 서비스(지연 생성 —
-// 테스트 앱이 summaries/operationLog 플러그인 없이 상태·목록만 검증할 수 있게). 원본 행을 내는 라우트는 없다.
-
-const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../..');
-const DEFAULT_EXPORT_DIR = resolve(REPO_ROOT, 'data/open/tour/lp-2023');
+// 테스트 앱이 summaries/operationLog 플러그인 없이 상태·목록만 검증할 수 있게). 원본 행을 내는 라우트는 tour-raw.route.ts(3차).
 
 const PlaceParams = z.object({ placeId: z.string().min(1).max(40) });
 const SECURITY = [{ bearerAuth: [] }];
@@ -47,7 +43,7 @@ const tourAdminRoutes: FastifyPluginAsync = async (app) => {
     },
     jobRegistry,
     serviceKey: () => env.DATA_GO_KR_API_KEY,
-    exportDir: () => DEFAULT_EXPORT_DIR,
+    exportDir: () => tourDefaultExportDir(),
   });
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const adminOnly = [app.authenticate, app.requireAdmin];
@@ -64,7 +60,8 @@ const tourAdminRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => service.listSeeds(req.query),
   });
 
-  typed.post(Routes.Tour.adminSeedDiscover(':placeId'), {
+  // 빌더가 인자를 인코딩하므로(LifeMap.detail 규약) 등록부에서 :placeId 를 되돌린다.
+  typed.post(decodeURIComponent(Routes.Tour.adminSeedDiscover(':placeId')), {
     onRequest: adminOnly,
     schema: { tags: ['admin'], security: SECURITY, params: PlaceParams, response: { 200: TourSeedDiscoverResult } },
     handler: async (req) => {
@@ -77,7 +74,7 @@ const tourAdminRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  typed.post(Routes.Tour.adminSeedRegister(':placeId'), {
+  typed.post(decodeURIComponent(Routes.Tour.adminSeedRegister(':placeId')), {
     onRequest: adminOnly,
     schema: { tags: ['admin'], security: SECURITY, params: PlaceParams, body: TourSeedRegisterBody, response: { 200: TourSeedRegisterResult } },
     handler: async (req) => {

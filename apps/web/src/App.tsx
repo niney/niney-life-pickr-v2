@@ -41,6 +41,13 @@ const LifeMapPage = lazy(() =>
 const HousingPage = lazy(() =>
   import('./routes/HousingPage').then((m) => ({ default: m.HousingPage })),
 );
+// 여행로그(AI 허브 71780) 공개 인사이트·코스 추천 — 집계만, 필터는 URL 쿼리.
+const TravelInsightsPage = lazy(() =>
+  import('./routes/TravelInsightsPage').then((m) => ({ default: m.TravelInsightsPage })),
+);
+const TravelPlanPage = lazy(() =>
+  import('./routes/TravelPlanPage').then((m) => ({ default: m.TravelPlanPage })),
+);
 const TarotPage = lazy(() => import('./routes/TarotPage').then((m) => ({ default: m.TarotPage })));
 const SajuPage = lazy(() => import('./routes/SajuPage').then((m) => ({ default: m.SajuPage })));
 const SajuSharedPage = lazy(() => import('./routes/SajuSharedPage').then((m) => ({ default: m.SajuSharedPage })));
@@ -176,6 +183,9 @@ export const App = () => {
             <Route path="/life-map" element={<LifeMapPage />} />
             {/* 집값(아파트 실거래가·단지) — 공개 페이지, 일상지도와 같은 지도·시트 골격이라 lazy. */}
             <Route path="/housing" element={<HousingPage />} />
+            {/* 여행로그 인사이트·코스 추천 — 공개 페이지, 집계만(docs/PLAN-tour-log.md). */}
+            <Route path="/travel/jeju" element={<TravelInsightsPage />} />
+            <Route path="/travel/plan" element={<TravelPlanPage />} />
             {/* 타로 — 로그인 없이 공개. 3D(three) 가 무거워 lazy, ?embed=1 이면 레이아웃 크롬 없이(앱 WebView). */}
             <Route path="/tarot" element={<TarotPage />} />
             <Route path="/saju-c" element={<SajuPage />} />

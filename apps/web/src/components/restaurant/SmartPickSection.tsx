@@ -66,6 +66,8 @@ export const SmartPickSection = ({
   const [category, setCategory] = useState<string | null>(null);
   const [fromFavorites, setFromFavorites] = useState(false);
   const [nearMe, setNearMe] = useState(false);
+  // 여행자 만족 기준 — 여행로그(AI 허브 71780) 보정 만족도만 가중치로. 기본은 balanced(리뷰 AI + 여행자 점수 평균).
+  const [travelerMode, setTravelerMode] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [reel, setReel] = useState<ReelState>(IDLE_REEL);
   const [outcome, setOutcome] = useState<PickOutcome | null>(null);
@@ -105,7 +107,7 @@ export const SmartPickSection = ({
     const candidates = pool.map((p) => ({ placeId: p.placeId, name: p.name }));
     setOutcome(null);
     pickMutation.mutate(
-      { candidatePlaceIds: candidates.map((c) => c.placeId) },
+      { candidatePlaceIds: candidates.map((c) => c.placeId), strategy: travelerMode ? 'traveler' : 'balanced' },
       {
         onSuccess: (result) => {
           const picked: PickOutcome = result.picked
@@ -161,6 +163,12 @@ export const SmartPickSection = ({
     resetResult();
   };
 
+  const onToggleTraveler = () => {
+    if (busy) return;
+    setTravelerMode((v) => !v);
+    resetResult();
+  };
+
   const onToggleNearMe = () => {
     if (busy) return;
     const next = !nearMe;
@@ -198,7 +206,9 @@ export const SmartPickSection = ({
       <header className="mb-4 flex flex-col gap-2">
         <h1 className="text-2xl font-bold tracking-tight">오늘 뭐 먹지? 🎰</h1>
         <p className="text-sm text-muted-foreground">
-          등록된 맛집 중에서 AI 분석 점수(만족도·긍정 비율)를 가중치로 하나를 골라 드립니다.
+          {travelerMode
+            ? '2023년 제주 여행자들이 직접 매긴 만족도(여행로그)를 가중치로 하나를 골라 드립니다.'
+            : '등록된 맛집 중에서 AI 분석 점수(만족도·긍정 비율)와 여행자 만족도를 가중치로 하나를 골라 드립니다.'}
         </p>
       </header>
 
@@ -223,6 +233,12 @@ export const SmartPickSection = ({
           active={!useFavPool && nearMe}
           disabled={busy || useFavPool}
           onClick={onToggleNearMe}
+        />
+        <CategoryChip
+          label="🧭 여행자 만족 기준"
+          active={travelerMode}
+          disabled={busy}
+          onClick={onToggleTraveler}
         />
         {favoritesAvailable && (
           <>
@@ -317,6 +333,12 @@ export const SmartPickSection = ({
                     )}
                     {enriched && enriched.avgSatisfactionScore !== null && (
                       <span>😊 {enriched.avgSatisfactionScore.toFixed(1)}/5</span>
+                    )}
+                    {enriched?.tour && (
+                      <span className="text-teal-700 dark:text-teal-300">
+                        🧭 여행자 {enriched.tour.nTravelers}명
+                        {enriched.tour.bayesScore !== null ? ` · ${enriched.tour.bayesScore.toFixed(1)}/5` : ''}
+                      </span>
                     )}
                     {resultDist !== null && <span>📍 {formatDistanceM(resultDist)}</span>}
                     {outcome.uniform && (

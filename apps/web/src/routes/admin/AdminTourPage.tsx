@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, FileSearch, Loader2, RefreshCw, Search } from 'lucide-react';
 import {
   useTourAdminStatus,
   useTourBizCheck,
@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { Input } from '~/components/ui/input';
 import { Pager } from '~/components/ui/pager';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
+import { TourEvidencePanel } from '~/components/admin/tour/TourEvidencePanel';
 import { cn } from '~/lib/utils';
 
 // 어드민 "여행로그 시드" — AI 허브 71780 여행로그(2023 제주 패널)에서 여행자가 실제로 많이 간 식당 중 아직 맛집 DB 에
@@ -40,8 +41,9 @@ export const AdminTourPage = () => {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [maxCalls, setMaxCalls] = useState(10);
-  // 후보 패널을 연 장소와 등록 결과(잡 ID) — 이벤트 핸들러에서만 바뀐다.
-  const [openPlaceId, setOpenPlaceId] = useState<string | null>(null);
+  // 펼친 행(후보 찾기 또는 원본 근거)과 등록 결과(잡 ID) — 이벤트 핸들러에서만 바뀐다.
+  const [open, setOpen] = useState<{ placeId: string; mode: 'discover' | 'evidence' } | null>(null);
+  const openPlaceId = open?.placeId ?? null;
   const [registered, setRegistered] = useState<Record<string, { jobId: string; name: string }>>({});
 
   const statusQ = useTourAdminStatus();
@@ -61,9 +63,10 @@ export const AdminTourPage = () => {
   };
 
   const onDiscover = (placeId: string) => {
-    setOpenPlaceId(placeId);
+    setOpen({ placeId, mode: 'discover' });
     discover.mutate(placeId);
   };
+  const onEvidence = (placeId: string) => setOpen({ placeId, mode: 'evidence' });
 
   const onRegister = (item: TourSeedItemType, cand: TourSeedCandidateType) => {
     register.mutate(
@@ -245,12 +248,14 @@ export const AdminTourPage = () => {
                       item={it}
                       rank={rank}
                       isOpen={isOpen}
-                      discover={isOpen ? discover : null}
+                      mode={isOpen ? open!.mode : null}
+                      discover={isOpen && open!.mode === 'discover' ? discover : null}
                       registerPending={register.isPending && register.variables?.placeId === it.placeId}
                       registerError={register.isError && register.variables?.placeId === it.placeId ? (register.error as Error).message : null}
                       registeredJob={reg ?? null}
                       onDiscover={() => onDiscover(it.placeId)}
-                      onClose={() => setOpenPlaceId(null)}
+                      onEvidence={() => onEvidence(it.placeId)}
+                      onClose={() => setOpen(null)}
                       onRegister={(cand) => onRegister(it, cand)}
                     />
                   );
@@ -289,22 +294,26 @@ const SeedRows = ({
   item,
   rank,
   isOpen,
+  mode,
   discover,
   registerPending,
   registerError,
   registeredJob,
   onDiscover,
+  onEvidence,
   onClose,
   onRegister,
 }: {
   item: TourSeedItemType;
   rank: number;
   isOpen: boolean;
+  mode: 'discover' | 'evidence' | null;
   discover: ReturnType<typeof useTourSeedDiscover> | null;
   registerPending: boolean;
   registerError: string | null;
   registeredJob: { jobId: string; name: string } | null;
   onDiscover: () => void;
+  onEvidence: () => void;
   onClose: () => void;
   onRegister: (cand: TourSeedCandidateType) => void;
 }) => {
@@ -365,14 +374,27 @@ const SeedRows = ({
               닫기
             </Button>
           ) : (
-            <Button type="button" size="sm" variant="outline" disabled={item.match !== null} onClick={onDiscover}>
-              <Search className="size-3.5" />
-              네이버 검색
-            </Button>
+            <div className="flex gap-1">
+              <Button type="button" size="sm" variant="outline" disabled={item.match !== null} onClick={onDiscover} title="네이버 검색으로 등록 후보 찾기">
+                <Search className="size-3.5" />
+                검색
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={onEvidence} title="원본 근거(방문·주문·영수증·사진·여행) — allowlist 계정만">
+                <FileSearch className="size-3.5" />
+                근거
+              </Button>
+            </div>
           )}
         </TableCell>
       </TableRow>
-      {isOpen && (
+      {isOpen && mode === 'evidence' && (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={9} className="p-3">
+            <TourEvidencePanel tourPlaceId={item.placeId} />
+          </TableCell>
+        </TableRow>
+      )}
+      {isOpen && mode === 'discover' && (
         <TableRow className="bg-muted/30">
           <TableCell colSpan={9} className="p-3">
             {discover?.isPending && (

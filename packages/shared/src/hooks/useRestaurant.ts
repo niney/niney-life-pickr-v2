@@ -301,6 +301,19 @@ export const useRestaurantPublicInsights = (placeId: string | null) =>
     staleTime: 60_000,
   });
 
+// "여행자" 탭 — 여행로그 집계. placeId null 이면 비활성(탭이 닫혀 있거나 매칭 없음). 재적재 때만 바뀌는 값이라 5분.
+export const useRestaurantPublicTourStats = (placeId: string | null) =>
+  useQuery({
+    queryKey: ['restaurant', 'public', 'tour-stats', placeId],
+    queryFn: () => {
+      if (!placeId) throw new Error('placeId required');
+      return restaurantApi.publicTourStats(placeId);
+    },
+    enabled: !!placeId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
 // 메뉴 탭 칼로리 — 탭이 열릴 때만(enabled) 조회. 서버가 placeId 단위로 10분 캐시하므로
 // 클라이언트도 길게 잡는다. 실패해도 메뉴 탭은 그대로 그려야 하니 소비처는 data 만 본다.
 export const useRestaurantPublicMenuNutrition = (placeId: string | null, enabled = true) =>

@@ -731,4 +731,18 @@ export const Tour = {
   // 맛집 ↔ 여행로그 매칭 전체 재실행 / 국세청 사업자 상태 조회(폐업 확인).
   adminMatchRun: `${API_PREFIX}/admin/tour/match/run`,
   adminBizStatusRun: `${API_PREFIX}/admin/tour/biz-status/run`,
+  // ── 3차 원본 열람(admin + TOUR_RAW_USER_IDS allowlist, no-store·noindex) — 장소별 개별 방문·주문 원문·영수증·사진 메타·
+  // 포함 여행(일차 순서), 여행 타임라인, 썸네일 파일(?token= 허용 — <img> 는 헤더를 못 싣는다).
+  adminPlaceVisits: (placeId: string) => `${API_PREFIX}/admin/tour/places/${encodeURIComponent(placeId)}/visits`,
+  adminPlaceActivities: (placeId: string) => `${API_PREFIX}/admin/tour/places/${encodeURIComponent(placeId)}/activities`,
+  adminPlaceSpend: (placeId: string) => `${API_PREFIX}/admin/tour/places/${encodeURIComponent(placeId)}/spend`,
+  adminPlacePhotos: (placeId: string) => `${API_PREFIX}/admin/tour/places/${encodeURIComponent(placeId)}/photos`,
+  adminPlaceTrips: (placeId: string) => `${API_PREFIX}/admin/tour/places/${encodeURIComponent(placeId)}/trips`,
+  adminTrip: (travelId: string) => `${API_PREFIX}/admin/tour/trips/${encodeURIComponent(travelId)}`,
+  adminPhoto: (photoId: string, size: string) => `${API_PREFIX}/admin/tour/photos/${encodeURIComponent(photoId)}/${encodeURIComponent(size)}`,
+  // ── 4차 공개 집계(인증 없음, 식별자 없는 스키마·소셀 억제) — 맛집 상세 "여행자" 탭. 매칭 없는 식당은 404.
+  publicRestaurantStats: (placeId: string) => `${API_PREFIX}/restaurants/public/${encodeURIComponent(placeId)}/tour-stats`,
+  // 5차 — 인사이트(?region&ageGrp&gender&accompany&month&nights) / 코스 추천(POST, 같은 축). 표본 20건 미만이면 insufficient.
+  publicInsights: `${API_PREFIX}/tour/public/insights`,
+  publicPlan: `${API_PREFIX}/tour/public/plan`,
 } as const;

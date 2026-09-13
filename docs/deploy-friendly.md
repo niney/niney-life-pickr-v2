@@ -316,6 +316,26 @@ pm2 save
 du -sh apps/friendly/data/*                 # 디스크 사용량 점검
 ```
 
+## 여행로그 원본·사진 (AI 허브 71780 — 관리자 allowlist)
+
+여행로그 파생표(`data/open/tour/lp-2023/*.jsonl.gz`)와 썸네일(`thumbs/s`)은 git 밖이라 **rsync 로 올린다**. 원본은 AI 허브
+이용조건상 재배포·국외 반출 금지 — 서버는 국내에 있어야 하고 공개 API 는 집계만 낸다(`docs/PLAN-tour-log.md`).
+
+```bash
+# 로컬(tour-c 에서 npm run data:export -- --thumbs s 로 만든 폴더) → 운영
+rsync -av --delete data/open/tour/lp-2023/ samplepcb@<host>:/home/samplepcb/niney-life-pickr-v2/data/open/tour/lp-2023/
+./deploy.sh 6            # tour=0 이면 load:tour → match:restaurant-tour (약 1~2분)
+pnpm --filter friendly status:life-map   # ... tour=15679 tour_matched=N ...
+```
+
+| 항목 | 설정 |
+|---|---|
+| 원본 열람 허용 계정 | `.env` `TOUR_RAW_USER_IDS=<본인 user id>` — AI 허브에서 데이터를 승인받은 본인만. 비우면 `/admin/tour/places/*`·`trips/*`·`photos/*` 전부 404 |
+| 썸네일 폴더 | `TOUR_THUMBS_DIR`(비우면 `data/open/tour/lp-2023/thumbs`, cwd 기준 `apps/friendly` 또는 리포 루트) |
+| 폐업 조회 | `DATA_GO_KR_API_KEY` 에 **15081808** 활용신청 후 어드민 `/admin/tour` "폐업 조회 실행"(100건/콜) 또는 `check:tour-biz` |
+| 접근 경로 | 원본 응답은 `private, no-store`·`noindex`. 관리자 원본 화면은 Cloudflare 프록시를 **거치지 않는** 경로(DNS 전용 서브도메인 또는 `ssh -L 3000:127.0.0.1:3000`)로 여는 것을 권장 — 원문이 해외 프록시 장비를 지나지 않게 |
+| 환수·폐기 | `pnpm --filter friendly unload:tour --yes` + `rm -rf data/open/tour` |
+
 ## 점검 명령
 
 ```bash

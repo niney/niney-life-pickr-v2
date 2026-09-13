@@ -18,6 +18,7 @@ import { InsightsTab } from './InsightsTab';
 import { MenuTab } from './MenuTab';
 import { PhotosTab } from './PhotosTab';
 import { ReviewsTab } from './ReviewsTab';
+import { TourTab } from './TourTab';
 import { TransitTab } from './TransitTab';
 import { TAB_ORDER, type TabKey } from './tabs';
 
@@ -173,7 +174,7 @@ export const PublicRestaurantDetail = ({
             aria-label="식당 정보 탭"
             className="flex overflow-x-auto border-b bg-background"
           >
-            {TAB_ORDER.map((t) => {
+            {TAB_ORDER.filter((t) => t.key !== 'tour' || detail.data.tour !== null).map((t) => {
               const active = tab === t.key;
               return (
                 <button
@@ -314,6 +315,8 @@ const ActiveTab = ({
       );
     case 'ask':
       return <AskTab placeId={placeId} restaurantName={detail.name} />;
+    case 'tour':
+      return <TourTab placeId={placeId} detail={detail} />;
     case 'photos':
       return <PhotosTab detail={detail} />;
     case 'info':
