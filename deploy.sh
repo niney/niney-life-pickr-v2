@@ -58,6 +58,9 @@ store_latest_zip() {
   printf '%s' "$latest"
 }
 LIFE_STORE_ZIP="${LIFE_STORE_ZIP:-$(store_latest_zip)}"
+# 여행로그(AI 허브 71780) — tour-c 가 내보낸 폴더(manifest.json + *.jsonl.gz + thumbs/). 원본은 이 서버 밖으로
+# 내보내지 않고 공개 API 는 집계만 낸다(docs/PLAN-tour-log.md). 폴더는 rsync 로 올린다(git 밖).
+TOUR_EXPORT_DIR="${TOUR_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-2023}"
 # 음식 카탈로그 배포본 — 적재기(load:food-catalog)가 이 경로를 기본으로 찾는다. 출처는
 # docs/data-sources.md. 영양성분 API(DATA_GO_KR_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
 FOOD_DATA_DIR="$ROOT/data/open/food"
@@ -100,7 +103,7 @@ pm_start()   { step "서버 기동";            pm2 start friendly --update-env;
 pm_reload()  { step "서버 reload";          pm2 reload friendly --update-env; pm2 save; }
 
 # ── 일상지도 데이터 ────────────────────────────────────────
-# status:life-map 은 "ok cctv=N toilet=M geocoded=G hospital=H store=S cache=C" 한 줄(테이블이 없으면 "missing").
+# status:life-map 은 "ok cctv=N toilet=M geocoded=G hospital=H store=S tour=T tour_matched=X cache=C" 한 줄(테이블이 없으면 "missing").
 life_status() { pnpm --filter friendly status:life-map 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
 # "ok a=1 b=2" 한 줄에서 값 하나 뽑기 — 일상지도·음식 카탈로그 상태가 같은 형식이다.
 # sed 의 \b 는 GNU 확장이라 BSD sed(macOS)에서 조용히 빈 값이 된다 — 값이 비면 "0 건"으로
@@ -119,9 +122,9 @@ life_map_data() {
   if [[ "$st" != ok* ]]; then
     echo "  (일상지도 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
   fi
-  local cctv toilet geocoded hospital store
-  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"; store="$(stat_val store "$st")"
-  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 상가 ${store:-0}건 · 캐시 압축본 변경=$GZ_CHANGED"
+  local cctv toilet geocoded hospital store tour
+  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"; store="$(stat_val store "$st")"; tour="$(stat_val tour "$st")"
+  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 상가 ${store:-0}건 · 여행로그 ${tour:-0}곳 · 캐시 압축본 변경=$GZ_CHANGED"
   if [[ "$force" == 1 || "$GZ_CHANGED" == 1 || "${toilet:-0}" == 0 ]]; then
     step "일상지도 지오코딩 캐시 가져오기(압축본)"; pnpm --filter friendly import:life-geocode
   fi
@@ -144,6 +147,14 @@ life_map_data() {
       step "일상지도 상가 적재"; pnpm --filter friendly load:life-stores "$LIFE_STORE_ZIP"
       step "맛집 ↔ 상가업소 매칭"; pnpm --filter friendly match:restaurant-stores || echo "  (매칭 실패 — 수동 재실행)"
     else echo "  (상가 zip 없음: data/open/store/store-YYYYMM.zip — 올린 뒤 ./deploy.sh 6)"; fi
+  fi
+  # 여행로그 — tour-c export 폴더 전량 교체(25만 행, 1~2분). tour=0 이면 첫 적재. 적재 뒤 맛집 ↔ 여행로그 장소 매칭 갱신.
+  # 폐업 조회(check:tour-biz)는 국세청 API 쿼터를 쓰므로 자동 실행하지 않는다 — 어드민 /admin/tour 에서 수동.
+  if [[ "$force" == 1 || "${tour:-0}" == 0 ]]; then
+    if [[ -f "$TOUR_EXPORT_DIR/manifest.json" ]]; then
+      step "여행로그 적재"; pnpm --filter friendly load:tour "$TOUR_EXPORT_DIR"
+      step "맛집 ↔ 여행로그 매칭"; pnpm --filter friendly match:restaurant-tour || echo "  (매칭 실패 — 수동 재실행)"
+    else echo "  (여행로그 export 없음: $TOUR_EXPORT_DIR/manifest.json — rsync 로 올린 뒤 ./deploy.sh 6)"; fi
   fi
 }
 

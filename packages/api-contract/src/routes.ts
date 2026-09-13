@@ -717,3 +717,18 @@ export const UsageQuota = {
   // PUT — 기능 하나의 설정 부분 갱신.
   setting: (feature: string) => `${API_PREFIX}/admin/quotas/${feature}`,
 } as const;
+
+// 여행로그(AI 허브 71780) — 2차 관리자 시드 콘솔. 공개 집계 라우트는 4차에서 같은 블록에 합류한다.
+// 원본 행을 내는 라우트는 없다(3차 관리자 allowlist 층에서 별도 prefix 로). docs/PLAN-tour-log.md
+export const Tour = {
+  // 적재·매칭·폐업 조회 상태 한 번에.
+  adminStatus: `${API_PREFIX}/admin/tour/status`,
+  // 시드 목록 — ?region=jeju|all&minTravelers=5&status=all|unmatched|matched|closed[&q][&limit≤100][&offset].
+  adminSeeds: `${API_PREFIX}/admin/tour/seeds`,
+  // 네이버 검색 후보(거리·상호 점수·등록 여부) / 후보 등록(크롤 잡 시작 → 종료 후 매칭).
+  adminSeedDiscover: (placeId: string) => `${API_PREFIX}/admin/tour/seeds/${encodeURIComponent(placeId)}/discover`,
+  adminSeedRegister: (placeId: string) => `${API_PREFIX}/admin/tour/seeds/${encodeURIComponent(placeId)}/register`,
+  // 맛집 ↔ 여행로그 매칭 전체 재실행 / 국세청 사업자 상태 조회(폐업 확인).
+  adminMatchRun: `${API_PREFIX}/admin/tour/match/run`,
+  adminBizStatusRun: `${API_PREFIX}/admin/tour/biz-status/run`,
+} as const;

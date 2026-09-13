@@ -1,6 +1,7 @@
 // 일상지도 적재 상태 한 줄 — deploy.sh 가 파싱한다(stat_val 이 키 단위로 뽑아 항목 추가는 안전):
-//   "ok cctv=N toilet=M geocoded=G hospital=H store=S cache=C"
-//   (N/M/H/S = 최근 적재 건수, G = 화장실 좌표 확보, C = 지오코딩 캐시 행)
+//   "ok cctv=N toilet=M geocoded=G hospital=H store=S tour=T tour_matched=X cache=C"
+//   (N/M/H/S = 최근 적재 건수, G = 화장실 좌표 확보, T = 여행로그 장소 수(unload 뒤 0), X = 여행로그 매칭된 맛집 수,
+//    C = 지오코딩 캐시 행)
 //   "missing"                                   (테이블 없음 — 마이그레이션 전)
 // 실행: pnpm --filter friendly status:life-map
 
@@ -10,15 +11,17 @@ const prisma = new PrismaClient();
 
 const main = async (): Promise<void> => {
   try {
-    const [cctv, toilet, hospital, store, cache] = await Promise.all([
+    const [cctv, toilet, hospital, store, tour, tourMatched, cache] = await Promise.all([
       prisma.lifeMasterSync.findFirst({ where: { layer: 'cctv' }, orderBy: { loadedAt: 'desc' } }),
       prisma.lifeMasterSync.findFirst({ where: { layer: 'toilet' }, orderBy: { loadedAt: 'desc' } }),
       prisma.lifeMasterSync.findFirst({ where: { layer: 'hospital' }, orderBy: { loadedAt: 'desc' } }),
       prisma.lifeMasterSync.findFirst({ where: { layer: 'store' }, orderBy: { loadedAt: 'desc' } }),
+      prisma.lifeMasterSync.findFirst({ where: { layer: 'tour' }, orderBy: { loadedAt: 'desc' } }),
+      prisma.restaurantTourMatch.count({ where: { status: 'matched' } }),
       prisma.lifeGeocodeCache.count(),
     ]);
     console.log(
-      `ok cctv=${cctv?.count ?? 0} toilet=${toilet?.count ?? 0} geocoded=${toilet?.geocoded ?? 0} hospital=${hospital?.count ?? 0} store=${store?.count ?? 0} cache=${cache}`,
+      `ok cctv=${cctv?.count ?? 0} toilet=${toilet?.count ?? 0} geocoded=${toilet?.geocoded ?? 0} hospital=${hospital?.count ?? 0} store=${store?.count ?? 0} tour=${tour?.count ?? 0} tour_matched=${tourMatched} cache=${cache}`,
     );
   } catch (e) {
     // 테이블 없음(P2021) 등 — 배포 스크립트가 "missing" 으로 분기한다.

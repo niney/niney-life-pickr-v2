@@ -109,3 +109,5 @@ export * from './weather/weatherMessages.js';
 export * from './constants/index.js';
 export * from './design/index.js';
 export * from './ui/index.js';
+export * from './api/tour.api.js';
+export * from './hooks/useTour.js';

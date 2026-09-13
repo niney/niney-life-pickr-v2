@@ -377,6 +377,7 @@ model CanonicalRestaurant {
 
   restaurants Restaurant[]
   storeMatch  RestaurantStoreMatch?
+  tourMatch   RestaurantTourMatch?
   proposalsA  CanonicalMergeProposal[] @relation("ProposalCanonicalA")
   proposalsB  CanonicalMergeProposal[] @relation("ProposalCanonicalB")
 
@@ -1550,7 +1551,7 @@ model RestaurantStoreMatch {
 
 model LifeMasterSync {
   id         Int      @id @default(autoincrement())
-  // 'cctv' | 'toilet' | 'hospital'
+  // 'cctv' | 'toilet' | 'hospital' | 'store' | 'tour'(여행로그 — count 는 장소 수, docs/PLAN-tour-log.md)
   layer      String
   count      Int
   geocoded   Int?
@@ -2345,4 +2346,415 @@ model UsageQuotaCounter {
   @@id([feature, scope, key, date])
   @@index([feature, date, scope])
   @@map("usage_quota_counters")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 여행로그(AI 허브 71780 「국내 여행로그 데이터(제주도 및 도서지역)」) — tour-c export 적재.
+// 공개 API 는 집계만 내고(식별자 없는 스키마 + 소셀 억제), 개별 행은 관리자 allowlist 만 본다.
+// FK 를 두지 않는다 — 전량 교체(deleteMany)와 비공개 방문(placeId NULL)이 FK 와 맞지 않는다.
+// 날짜·시각은 tour-c 의 지역 시각 문자열("YYYY-MM-DD", "YYYY-MM-DD HH:MM:SS") 그대로. docs/PLAN-tour-log.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 장소 마스터 + 집계(방문·여행자·평가 수, 보정 평점, 체류·지출 중앙값). 공개 장소 통계의 주 테이블.
+model TourPlace {
+  id             String  @id
+  name           String
+  aliases        String?
+  typeCd         String
+  typeNm         String?
+  typeShort      String
+  poiId          String?
+  roadAddr       String?
+  lotAddr        String?
+  lat            Float?
+  lng            Float?
+  sido           String?
+  sigungu        String?
+  emd            String?
+  region         String?
+  isJeju         Boolean
+  isIsland       Boolean
+  nVisits        Int
+  nTravelers     Int
+  nRated         Int
+  meanDgstfn     Float?
+  bayesScore     Float?
+  meanRevisitInt Float?
+  meanRcmdInt    Float?
+  revisitRate    Float?
+  stayMedian     Float?
+  nPhotos        Int
+  spendPpMedian  Float?
+  spendN         Int
+  nActivities    Int
+  topReasonNm    String?
+  nLodging       Int
+  lodgingTypeNm  String?
+  firstSeen      String?
+  lastSeen       String?
+  firstDayShare  Float?
+  searchText     String?
+
+  @@index([lat, lng])
+  @@index([typeShort, nTravelers])
+  @@index([isJeju, typeShort])
+  @@map("tour_places")
+}
+
+// 여행 1건 — 세그먼트 축(연령·성별·동반·박수·월·거주지·스타일 8축)과 합계. 설문 원문(학력·직업·소득)은 없다.
+model TourTrip {
+  id             String  @id
+  travelerLabel  String
+  startDate      String
+  endDate        String
+  nights         Int
+  month          Int
+  startWeekday   Int?
+  personaMission String?
+  missionCodes   String?
+  missionNames   String?
+  mvmnNm         String?
+  gender         String?
+  ageGrp         String?
+  residenceSido  String?
+  accompany      String?
+  companionsNum  Int?
+  destination    String?
+  style1         Int?
+  style2         Int?
+  style3         Int?
+  style4         Int?
+  style5         Int?
+  style6         Int?
+  style7         Int?
+  style8         Int?
+  motive1Nm      String?
+  motive2Nm      String?
+  motive3Nm      String?
+  nVisits        Int
+  nPublic        Int
+  nJeju          Int
+  nIsland        Int
+  nPhotos        Int
+  nActivities    Int
+  spendActivity  Float?
+  spendLodge     Float?
+  spendMove      Float?
+  spendAdv       Float?
+  spendTotal     Float?
+  gpsKm          Float?
+  gpsHours       Float?
+  hasGps         Boolean
+  mainRegion     String?
+  firstPlaceId   String?
+  firstPlaceName String?
+  lastPlaceId    String?
+  lastPlaceName  String?
+  lodgingTypes   String?
+  meanDgstfn     Float?
+  regions        String?
+  coverPhotoId   String?
+
+  @@index([ageGrp, accompany, nights])
+  @@index([nJeju])
+  @@index([month])
+  @@map("tour_trips")
+}
+
+// 방문 1회(travel_id:visit_area_id). 비공개 방문은 이름·주소·좌표·placeId 가 NULL 인 채로 보관(순서·전이 계산에 필요).
+model TourVisit {
+  id                String  @id
+  travelId          String
+  visitAreaId       String
+  visitOrder        Int
+  dayIndex          Int?
+  visitDate         String
+  arrivalTs         String?
+  departTs          String?
+  stayMin           Int?
+  travelMinFromPrev Int?
+  travelMinRaw      Int?
+  typeCd            String
+  typeNm            String?
+  typeShort         String
+  isPrivate         Boolean
+  privateRole       String?
+  placeId           String?
+  name              String?
+  poiId             String?
+  poiNm             String?
+  roadAddr          String?
+  lotAddr           String?
+  lat               Float?
+  lng               Float?
+  sido              String?
+  sigungu           String?
+  emd               String?
+  region            String?
+  isJeju            Boolean
+  isIsland          Boolean
+  revisitYn         String?
+  reasonCd          String?
+  reasonNm          String?
+  lodgingTypeCd     String?
+  lodgingTypeNm     String?
+  dgstfn            Int?
+  revisitInt        Int?
+  rcmdInt           Int?
+  mvmnCd            String?
+  mvmnNm            String?
+  mvmnCd2           String?
+  mvmnNm2           String?
+  nPhotos           Int
+  nActivities       Int
+  spendSum          Float?
+  spendPp           Float?
+  prevPlaceId       String?
+  nextPlaceId       String?
+  arrivalHour       Int?
+  arrivalWeekday    Int?
+  gender            String?
+  ageGrp            String?
+  accompany         String?
+  residenceSido     String?
+  nights            Int?
+  month             Int?
+  personaMission    String?
+  travelerLabel     String?
+
+  @@index([placeId])
+  @@index([travelId, visitOrder])
+  @@index([isJeju, typeShort, isPrivate])
+  @@index([emd])
+  @@map("tour_visits")
+}
+
+// 방문지에서 한 활동(취식·쇼핑·체험·구경·휴식) + 자유기술(detail — "흑돼지한마리;공기밥;된장찌개").
+model TourActivity {
+  id          Int     @id @default(autoincrement())
+  travelId    String
+  visitAreaId String
+  placeId     String?
+  isPrivate   Boolean
+  typeCd      String
+  typeNm      String?
+  seq         Int
+  detail      String?
+  rsvtYn      String?
+  expndSe     String?
+  expndNm     String?
+  admissionNm String?
+  visitDate   String?
+  dayIndex    Int?
+  visitTypeCd String?
+  visitTypeNm String?
+  region      String?
+  isJeju      Boolean
+  gender      String?
+  ageGrp      String?
+  accompany   String?
+  month       Int?
+
+  @@index([placeId])
+  @@index([travelId, visitAreaId])
+  @@map("tour_activities")
+}
+
+// 소비 4표(활동·숙박·이동·사전) 통합. 활동 소비만 방문·장소가 붙는다. brno = 영수증 사업자번호(폐업 조회 키).
+model TourSpend {
+  id            Int     @id
+  travelId      String
+  category      String
+  categoryCd    String
+  visitAreaId   String?
+  placeId       String?
+  subtypeCd     String?
+  subtypeNm     String?
+  item          String?
+  storeNm       String?
+  brno          String?
+  amount        Float?
+  payNum        Int?
+  perPerson     Float?
+  methodCd      String?
+  methodNm      String?
+  paidTs        String?
+  paidHour      Int?
+  rsvtYn        String?
+  etcText       String?
+  roadAddr      String?
+  sggCd         String?
+  dayIndex      Int?
+  gender        String?
+  ageGrp        String?
+  accompany     String?
+  residenceSido String?
+  nights        Int?
+  month         Int?
+
+  @@index([placeId])
+  @@index([brno])
+  @@index([travelId])
+  @@map("tour_spend")
+}
+
+// 연속 공개 방문 쌍(장소·유형·수단·이동시간). "다음에 간 곳"·전이 행렬.
+model TourTransition {
+  id            Int     @id @default(autoincrement())
+  travelId      String
+  dayIndex      Int?
+  fromVisitId   String
+  toVisitId     String
+  fromPlaceId   String?
+  toPlaceId     String?
+  fromName      String?
+  toName        String?
+  fromTypeCd    String?
+  toTypeCd      String?
+  fromType      String?
+  toType        String?
+  mvmnCd        String?
+  mvmnNm        String?
+  travelMin     Int?
+  sameDay       Boolean
+  viaPrivate    Boolean
+  bothJeju      Boolean
+  fromRegion    String?
+  toRegion      String?
+  gender        String?
+  ageGrp        String?
+  accompany     String?
+  residenceSido String?
+  nights        Int?
+  month         Int?
+
+  @@index([fromPlaceId])
+  @@index([toPlaceId])
+  @@index([fromType, toType])
+  @@index([travelId])
+  @@map("tour_transitions")
+}
+
+// 여행·일차별 유형·장소 순서(코스 템플릿).
+model TourDaySequence {
+  id            String  @id
+  travelId      String
+  dayIndex      Int
+  visitDate     String?
+  nStops        Int
+  typeSeq       String
+  placeSeq      String?
+  placeIds      String?
+  isJejuDay     Boolean
+  isLastDay     Boolean
+  gender        String?
+  ageGrp        String?
+  accompany     String?
+  residenceSido String?
+  nights        Int?
+  month         Int?
+
+  @@index([isJejuDay])
+  @@index([travelId])
+  @@map("tour_day_sequences")
+}
+
+// 동반자(관계·성별·연령대·동반 상황). 관리자 코스 샘플에서만.
+model TourCompanion {
+  id          Int     @id @default(autoincrement())
+  travelId    String
+  seq         Int
+  relCd       String?
+  relNm       String?
+  genderNm    String?
+  ageNm       String?
+  situationNm String?
+
+  @@index([travelId])
+  @@map("tour_companions")
+}
+
+// 사진 메타(촬영 좌표 없음). 파일은 TOUR_THUMBS_DIR 아래 {s,m}/{id}.webp — 관리자 인증 라우트로만 서빙.
+model TourPhoto {
+  id            String  @id
+  travelId      String?
+  visitAreaId   String?
+  placeId       String?
+  placeName     String?
+  takenTs       String?
+  takenHour     Int?
+  takenDate     String?
+  width         Int?
+  height        Int?
+  hasThumb      Boolean
+  caption       String?
+  captionTokens Int?
+  landmark      String?
+  hasCaption    Boolean
+  visitTypeCd   String?
+  visitTypeNm   String?
+  region        String?
+  isJeju        Boolean
+  dayIndex      Int?
+  source        String
+  seq           Int?
+  gender        String?
+  ageGrp        String?
+  accompany     String?
+  month         Int?
+  nights        Int?
+
+  @@index([placeId])
+  @@index([travelId])
+  @@map("tour_photos")
+}
+
+// 코드 사전(tc_codeb) — 유형·이유·수단 라벨.
+model TourCode {
+  id       Int     @id @default(autoincrement())
+  cdA      String
+  groupNm  String?
+  cdB      String
+  cdNm     String?
+  orderNum Int?
+  delFlag  String?
+
+  @@index([cdA])
+  @@map("tour_codes")
+}
+
+// 맛집(canonical) ↔ 여행로그 장소 매칭 — RestaurantStoreMatch 와 같은 골격(canonical 당 1행). 장소도 1:1(tourPlaceId unique).
+// 좌표 100m + 상호 유사도 ≥ 0.5, 정규화 이름 완전일치면 300m. 재적재로 장소가 후보에서 사라지면 status=missing.
+model RestaurantTourMatch {
+  canonicalId String   @id
+  tourPlaceId String   @unique
+  placeName   String
+  typeShort   String
+  distM       Int
+  nameScore   Float
+  status      String
+  matchedAt   DateTime
+  lastSeenAt  DateTime
+
+  canonical CanonicalRestaurant @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("restaurant_tour_matches")
+}
+
+// 여행로그 장소의 국세청 사업자 상태 — 영수증 사업자번호(TourSpend.brno 최빈값)로 조회(data.go.kr 15081808).
+// bStt: 계속사업자 | 휴업자 | 폐업자 | unknown(국세청 미등록). 3년 전 표본이라 폐업 가게를 크롤 전에 거르는 용도.
+model TourPlaceBizStatus {
+  placeId   String   @id
+  brno      String
+  storeNm   String?
+  bStt      String
+  bSttCd    String?
+  endDt     String?
+  taxType   String?
+  checkedAt DateTime
+
+  @@index([bStt])
+  @@index([brno])
+  @@map("tour_place_biz_statuses")
 }

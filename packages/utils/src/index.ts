@@ -49,3 +49,4 @@ export * from './sajuFlow.js';
 export * from './sajuImages.js';
 export * from './saju-g.js';
 export * from './saju-g-stories.js';
+export * from './tourLog.js';

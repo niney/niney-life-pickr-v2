@@ -26,6 +26,7 @@ import { Routes } from '@repo/api-contract';
 import { compareReviewRecencyDesc } from '@repo/utils';
 import { deriveRegion } from './region-derive.js';
 import { getRestaurantStoreInfo } from './restaurant-store-match.service.js';
+import { getRestaurantTourMatchInfo } from '../tour/restaurant-tour-match.service.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import type {
   CategoryTreeNodeType,
@@ -2468,6 +2469,7 @@ export class RestaurantService {
       snapshot: { ...snapshot, visitorReviews: reviews.map(stripIdsFromReview) },
       reviews,
       store: await getRestaurantStoreInfo(this.prisma, r.canonicalId),
+      tour: await getRestaurantTourMatchInfo(this.prisma, r.canonicalId),
     };
   }
 

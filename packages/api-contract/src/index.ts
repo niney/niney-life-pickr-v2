@@ -41,6 +41,7 @@ export * from './schemas/tarot.js';
 export * from './schemas/saju.js';
 export * from './schemas/saju-g.js';
 export * from './schemas/usage-quota.js';
+export * from './schemas/tour.js';
 export * from './settlement.calculator.js';
 export * from './settlement.drink-kinds.js';
 export * as Routes from './routes.js';

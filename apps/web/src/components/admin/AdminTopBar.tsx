@@ -14,6 +14,7 @@ interface TitleRule {
 const TITLE_RULES: TitleRule[] = [
   { match: (p) => p.startsWith('/admin/restaurants'), label: '맛집' },
   { match: (p) => p.startsWith('/admin/auto-discover'), label: '맛집 자동 발견' },
+  { match: (p) => p.startsWith('/admin/tour'), label: '여행로그 시드' },
   { match: (p) => p.startsWith('/admin/discover'), label: '맛집 발견' },
   { match: (p) => p.startsWith('/admin/analytics'), label: 'AI 분석 관리' },
   { match: (p) => p.startsWith('/admin/ai-usage'), label: 'AI 사용량' },

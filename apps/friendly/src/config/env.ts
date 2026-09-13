@@ -91,6 +91,7 @@ const EnvSchema = z.object({
   //  - K-apt 단지 목록(15057332)·기본정보(15058453) — load:housing-kapt --source=api 만. 일 5,000건.
   //  - 건축HUB 건축물대장정보(15134735) — load:housing-buildings 만. 일 10,000건.
   //  - 전국통합식품영양성분정보(15100070) — load:food-catalog 의 파일 없을 때 대안.
+  //  - 국세청 사업자등록정보 진위확인·상태조회(15081808, odcloud) — check:tour-biz·어드민 /admin/tour 만. 100건/콜.
   DATA_GO_KR_API_KEY: z.string().default(''),
 
   // 기상청 API허브(apihub.kma.go.kr) 인증키 — AWS 매분 관측으로 현재 날씨 보강(선택). data.go.kr

@@ -27,6 +27,7 @@ import { AdminSettingsPage } from './AdminSettingsPage';
 import { AdminTablingPage } from './AdminTablingPage';
 import { AdminTablingTestPage } from './AdminTablingTestPage';
 import { AdminTelegramPage } from './AdminTelegramPage';
+import { AdminTourPage } from './AdminTourPage';
 
 // 음식 카탈로그 — 어드민 청크 안에서 한 번 더 lazy. 적재 잡·카탈로그 표·통계는 이
 // 페이지에서만 쓰는 코드라 다른 어드민 페이지 진입 비용에 얹히지 않게 분리한다.
@@ -53,6 +54,7 @@ const AdminRoutes = () => (
       <Route index element={<AdminHomePage />} />
       <Route path="discover" element={<AdminDiscoverPage />} />
       <Route path="auto-discover" element={<AdminAutoDiscoverPage />} />
+      <Route path="tour" element={<AdminTourPage />} />
       <Route path="restaurants" element={<AdminRestaurantsPage />} />
       <Route path="restaurants/:placeId" element={<AdminRestaurantDetailPage />} />
       <Route path="crawl-test" element={<AdminCrawlTestPage />} />
