@@ -324,13 +324,18 @@ du -sh apps/friendly/data/*                 # 디스크 사용량 점검
 ```bash
 # 로컬(tour-c 에서 npm run data:export -- --thumbs s 로 만든 폴더) → 운영
 rsync -av --delete data/open/tour/lp-2023/ samplepcb@<host>:/home/samplepcb/niney-life-pickr-v2/data/open/tour/lp-2023/
-./deploy.sh 6            # tour=0 이면 load:tour → match:restaurant-tour (약 1~2분)
+pnpm --filter friendly load:tour --dry-run   # manifest sha256 대조·정규화 리포트만(DB 쓰기 없음) — FTP 로 올렸으면 여기서 깨짐을 잡는다
+pnpm --filter friendly load:tour             # 전량 교체, 약 1~2분(서버 중단 불필요). 경로 인자는 절대경로로(--filter 는 apps/friendly 기준)
+pnpm --filter friendly match:restaurant-tour
 pnpm --filter friendly status:life-map   # ... tour=15679 tour_matched=N ...
 ```
 
+API 배포(케이스 1·2·4)는 `tour=0` 이고 폴더에 `manifest.json` 이 있으면 위 두 명령을 자동으로 돌린다 — 폴더를 배포 뒤에 올렸다면
+직접 실행한다. `./deploy.sh 6` 은 force 모드라 CCTV·화장실·병의원·상가까지 전부 다시 적재하므로 여행로그만 넣을 땐 쓰지 않는다.
+
 | 항목 | 설정 |
 |---|---|
-| 원본 열람 허용 계정 | `.env` `TOUR_RAW_USER_IDS=<본인 user id>` — AI 허브에서 데이터를 승인받은 본인만. 비우면 `/admin/tour/places/*`·`trips/*`·`photos/*` 전부 404 |
+| 원본 열람 허용 계정 | `.env` `TOUR_RAW_USER_IDS=<본인 이메일 또는 user id>`(쉼표 구분) — AI 허브에서 데이터를 승인받은 본인만. 비우면 `/admin/tour/places/*`·`trips/*`·`photos/*` 전부 404. 바꾼 뒤 `pm2 restart friendly`(env 는 기동 시 읽음) |
 | 썸네일 폴더 | `TOUR_THUMBS_DIR`(비우면 `data/open/tour/lp-2023/thumbs`, cwd 기준 `apps/friendly` 또는 리포 루트) |
 | 폐업 조회 | `DATA_GO_KR_API_KEY` 에 **15081808** 활용신청 후 어드민 `/admin/tour` "폐업 조회 실행"(100건/콜) 또는 `check:tour-biz` |
 | 접근 경로 | 원본 응답은 `private, no-store`·`noindex`. 관리자 원본 화면은 Cloudflare 프록시를 **거치지 않는** 경로(DNS 전용 서브도메인 또는 `ssh -L 3000:127.0.0.1:3000`)로 여는 것을 권장 — 원문이 해외 프록시 장비를 지나지 않게 |

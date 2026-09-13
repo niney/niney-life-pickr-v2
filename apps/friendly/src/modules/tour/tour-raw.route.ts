@@ -15,7 +15,8 @@ import {
 import { env } from '../../config/env.js';
 import { TOUR_PHOTO_SIZES, TourRawService, parseTourRawAllowlist } from './tour-raw.service.js';
 
-// 여행로그 원본 열람 라우트(3차) — admin 이면서 TOUR_RAW_USER_IDS allowlist 에 든 사용자만. 밖이면 존재를 알리지 않게 404.
+// 여행로그 원본 열람 라우트(3차) — admin 이면서 TOUR_RAW_USER_IDS allowlist(user id 또는 이메일, 쉼표)에 든 사용자만. 밖이면
+// 존재를 알리지 않게 404. 운영자가 이메일을 적는 게 자연스러워 둘 다 받는다(이메일은 대소문자 무시).
 // 응답은 전부 private·no-store·noindex(플러그인 스코프 onSend 훅 — 이 파일의 라우트에만 걸린다). 사진은 <img> 가 헤더를 못
 // 싣는 문제로 SSE 와 같은 ?token= 도 받는다(resolveSseAdmin). 원본 재배포·국외 반출 금지 — docs/PLAN-tour-log.md.
 
@@ -35,8 +36,10 @@ const tourRawRoutes: FastifyPluginAsync<TourRawRouteOptions> = async (app, opts)
   const service = new TourRawService(app.prisma);
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
+  const isAllowed = (userId: string, email: string | null | undefined): boolean =>
+    allowlist.has(userId) || (!!email && (allowlist.has(email) || allowlist.has(email.toLowerCase())));
   const requireTourRaw = async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!allowlist.has(req.user.userId)) return reply.notFound('Not found');
+    if (!isAllowed(req.user.userId, req.user.email)) return reply.notFound('Not found');
   };
   const guarded = [app.authenticate, app.requireAdmin, requireTourRaw];
 
@@ -111,7 +114,10 @@ const tourRawRoutes: FastifyPluginAsync<TourRawRouteOptions> = async (app, opts)
     schema: { tags: ['admin'], security: SECURITY, params: PhotoParams, querystring: PhotoQuery },
     handler: async (req, reply) => {
       const admin = await app.resolveSseAdmin(req);
-      if (!admin || !allowlist.has(admin.userId)) return reply.notFound('Not found');
+      if (!admin) return reply.notFound('Not found');
+      // resolveSseAdmin 은 id·role 만 준다 — 이메일 allowlist 는 DB 에서 한 번 더 본다(allowlist 라우트뿐이라 부담 없음).
+      const email = allowlist.has(admin.userId) ? null : (await app.prisma.user.findUnique({ where: { id: admin.userId }, select: { email: true } }))?.email;
+      if (!isAllowed(admin.userId, email)) return reply.notFound('Not found');
       const path = service.photoPath(req.params.photoId, req.params.size);
       if (!path) return reply.notFound('Not found');
       return reply.type('image/webp').send(createReadStream(path));

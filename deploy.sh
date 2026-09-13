@@ -154,7 +154,7 @@ life_map_data() {
     if [[ -f "$TOUR_EXPORT_DIR/manifest.json" ]]; then
       step "여행로그 적재"; pnpm --filter friendly load:tour "$TOUR_EXPORT_DIR"
       step "맛집 ↔ 여행로그 매칭"; pnpm --filter friendly match:restaurant-tour || echo "  (매칭 실패 — 수동 재실행)"
-    else echo "  (여행로그 export 없음: $TOUR_EXPORT_DIR/manifest.json — rsync 로 올린 뒤 ./deploy.sh 6)"; fi
+    else echo "  (여행로그 export 없음: $TOUR_EXPORT_DIR/manifest.json — rsync 로 올린 뒤 'pnpm --filter friendly load:tour $TOUR_EXPORT_DIR && pnpm --filter friendly match:restaurant-tour')"; fi
   fi
 }
 

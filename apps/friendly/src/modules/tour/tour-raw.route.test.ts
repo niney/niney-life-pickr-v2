@@ -28,10 +28,12 @@ const buildApp = async (): Promise<FastifyInstance> => {
   await app.register(errorHandlerPlugin);
   await app.register(jwtPlugin);
   await app.register(prismaPlugin);
-  await app.register(tourRawRoutes, { allowlist: ['admin-raw'] });
+  // allowlist 는 user id 또는 이메일 — admin-mail 은 id 가 아니라 이메일(seedAuthUsers 가 `${id}@seed.local` 로 만든다)로 든다.
+  await app.register(tourRawRoutes, { allowlist: ['admin-raw', 'admin-mail@seed.local'] });
   await app.ready();
   await seedAuthUsers(app, [
     { id: 'admin-raw', role: 'ADMIN' },
+    { id: 'admin-mail', role: 'ADMIN' },
     { id: 'admin-other', role: 'ADMIN' },
     { id: 'user-test', role: 'USER' },
   ]);
@@ -155,6 +157,14 @@ describe('tour raw routes', () => {
     expect((await app.inject({ method: 'GET', url: `${BASE}/trips/T1`, headers: otherAuth })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: `${BASE}/photos/ph1/s`, headers: otherAuth })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: `${BASE}/photos/ph1/s` })).statusCode).toBe(404);
+  });
+
+  it('이메일 allowlist — 토큰의 이메일(대소문자 무시)로 방문 200, 사진은 DB 이메일 조회로 ?token= 200', async () => {
+    const mailToken = app.jwt.sign({ userId: 'admin-mail', email: 'Admin-Mail@seed.local', role: 'ADMIN' });
+    const mailAuth = { authorization: `Bearer ${mailToken}` };
+    expect((await app.inject({ method: 'GET', url: `${BASE}/places/P1/visits`, headers: mailAuth })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `${BASE}/trips/T1`, headers: mailAuth })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `${BASE}/photos/ph1/s?token=${encodeURIComponent(mailToken)}` })).statusCode).toBe(200);
   });
 
   it('방문 목록 — no-store·noindex 헤더, 최신순, 이전·다음 장소 이름', async () => {

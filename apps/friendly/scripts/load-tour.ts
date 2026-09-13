@@ -74,7 +74,7 @@ const main = async (): Promise<void> => {
   const status = await getTourLoadStatus(prisma);
   console.log(`\nTour* 전량 교체 완료: ${TOUR_TABLES.map((t) => `${t} ${n(inserted[t])}`).join(' · ')}`);
   console.log(`LifeMasterSync layer=tour · 장소 ${n(status.places)} · 기준 ${status.baseDate} · ${status.sourceFile}`);
-  console.log('다음: pnpm --filter friendly match:restaurant-tour (2차 구현 후) · 상태: pnpm --filter friendly status:life-map');
+  console.log('다음: pnpm --filter friendly match:restaurant-tour · 상태: pnpm --filter friendly status:life-map');
 };
 
 main()
