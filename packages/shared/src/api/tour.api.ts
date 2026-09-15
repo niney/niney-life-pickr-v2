@@ -70,8 +70,8 @@ const seedsQuery = (p: TourSeedParams): string => {
   return qs ? `?${qs}` : '';
 };
 
-// 인사이트 필터 — 서버 zod 가 기본값(region=jeju)을 채우므로 Partial. 빈 값은 보내지 않는다.
-export type TourInsightsParams = Partial<Omit<TourInsightsQueryType, 'region'>> & { region?: 'jeju' | 'all' };
+// 인사이트 필터 — 서버 zod 가 기본값(region=jeju)을 채우므로 Partial. 빈 값은 보내지 않는다. region 은 utils TOUR_REGION_KEYS.
+export type TourInsightsParams = Partial<TourInsightsQueryType>;
 
 const insightsQuery = (p: TourInsightsParams): string => {
   const sp = new URLSearchParams();

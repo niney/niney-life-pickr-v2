@@ -105,7 +105,8 @@ describe('tour admin routes', () => {
     const body = res.json() as TourAdminStatusType;
     expect(body.loaded).toBe(false);
     expect(body.counts.places).toBe(5);
-    expect(body.seeds).toMatchObject({ restaurantsJeju: 3, t5: 2, t3: 2, unmatchedT5: 2 });
+    // 시드는 데이터셋 무관 전체 식당류 — 서울식당(30명, 비제주)이 포함돼 3곳 → 4곳, 5명↑ 3곳.
+    expect(body.seeds).toMatchObject({ restaurants: 4, t5: 3, t3: 3, unmatchedT5: 3 });
     expect(body.match).toMatchObject({ matched: 0, missing: 0, candidates: 1 });
     expect(body.biz).toMatchObject({ checked: 1, closed: 1 });
   });

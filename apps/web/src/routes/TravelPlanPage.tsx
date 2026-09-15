@@ -7,7 +7,7 @@ import { Button } from '~/components/ui/button';
 import { TourFilterBar } from '~/components/tour/TourFilterBar';
 import { TourSourceNote } from '~/components/tour/TourSourceNote';
 import { KindDot, Section, SeqChips } from '~/components/tour/charts';
-import { nightsLabel, shortAccompany } from '~/components/tour/tourFormat';
+import { nightsLabel, shortAccompany, tourRegionLabel } from '~/components/tour/tourFormat';
 import { cn } from '~/lib/utils';
 
 // 코스 추천 — "나와 비슷한 여행자(연령·성별·동반·박수·월)가 만족한 곳" 을 여행로그에서 고른다. 서버가 비슷한 여행을 세그먼트
@@ -51,7 +51,7 @@ export const TravelPlanPage = () => {
   };
   const toVote = () => {
     const options: VoteOptionInputType[] = pickedList.map((p) => ({ placeId: p.placeId!, name: p.name, category: p.kind, thumbnailUrl: null }));
-    navigate('/vote/new', { state: { presetTitle: '제주에서 뭐 먹지?', presetOptions: options } });
+    navigate('/vote/new', { state: { presetTitle: `${tourRegionLabel(filters.region)}에서 뭐 먹지?`, presetOptions: options } });
   };
 
   return (
@@ -61,7 +61,7 @@ export const TravelPlanPage = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">코스 추천</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              2023년 제주 여행자 표본에서 나와 비슷한 사람들이 만족한 곳을 골라 드립니다. 개별 여행자는 보이지 않고 5명 미만 장소는 빠집니다.
+              2023년 {tourRegionLabel(filters.region)} 여행자 표본에서 나와 비슷한 사람들이 만족한 곳을 골라 드립니다. 개별 여행자는 보이지 않고 5명 미만 장소는 빠집니다.
             </p>
           </div>
           <Button asChild variant="outline" size="sm">
@@ -72,7 +72,7 @@ export const TravelPlanPage = () => {
         </header>
 
         <form onSubmit={onSubmit} className="space-y-3">
-          <TourFilterBar value={filters} onChange={setFilters} showRegion={false} />
+          <TourFilterBar value={filters} onChange={setFilters} />
           <div className="flex items-center gap-2">
             <Button type="submit" disabled={plan.isPending} className="bg-teal-600 text-white hover:bg-teal-700">
               {plan.isPending ? <Loader2 className="size-4 animate-spin" /> : null}

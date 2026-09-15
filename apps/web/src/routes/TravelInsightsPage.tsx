@@ -2,17 +2,18 @@ import { useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, Route as RouteIcon } from 'lucide-react';
 import { useTourInsights, useTourLodging, useTourRegions, type TourInsightsParams } from '@repo/shared';
+import { isTourRegionKey } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { TourFilterBar } from '~/components/tour/TourFilterBar';
 import { TourLodgingSection } from '~/components/tour/TourLodgingSection';
 import { TourRegionSection } from '~/components/tour/TourRegionSection';
 import { TourSourceNote } from '~/components/tour/TourSourceNote';
 import { BarList, HeatGrid, HourLines, KindDot, Section, SeqChips, StackBar, Stat } from '~/components/tour/charts';
-import { shortAccompany, won } from '~/components/tour/tourFormat';
+import { shortAccompany, tourRegionLabel, won } from '~/components/tour/tourFormat';
 
-// 제주 여행 인사이트 — AI 허브 여행로그(2023 제주 패널)를 필터(연령·성별·동반·월·박수)로 잘라 집계만 보여주는 공개 페이지.
+// 여행 인사이트 — AI 허브 여행로그(2023 제주·서부권 패널)를 지역·필터(연령·성별·동반·월·박수)로 잘라 집계만 보여주는 공개 페이지.
 // 필터는 URL 쿼리에 실어 링크로 공유된다(tour-c 의 "URL 이 상태" 원칙). 표본 20건 미만이면 서버가 insufficient 를 주고
-// 5명 미만 셀은 서버가 이미 뺐다. 지역 비교·숙소(6차)는 같은 필터로 따로 받는다. docs/PLAN-tour-log.md 5~6차.
+// 5명 미만 셀은 서버가 이미 뺐다. 지역 비교·숙소(6차)는 같은 필터로 따로 받는다. docs/PLAN-tour-log.md 5~7차.
 
 const HEAT_TYPES = ['식당', '숙소', '자연', '상업', '교통', '상점'];
 const SPEND_CLASS: Record<string, string> = { 활동: 'bg-teal-600', 이동: 'bg-zinc-400', 숙박: 'bg-violet-500', 사전: 'bg-amber-500' };
@@ -21,8 +22,9 @@ const readParams = (sp: URLSearchParams): TourInsightsParams => {
   const num = (k: string) => (sp.get(k) !== null && sp.get(k) !== '' ? Number(sp.get(k)) : undefined);
   const ageGrp = sp.get('ageGrp');
   const gender = sp.get('gender');
+  const region = sp.get('region');
   return {
-    region: sp.get('region') === 'all' ? 'all' : 'jeju',
+    region: isTourRegionKey(region) ? region : 'jeju',
     ageGrp: ageGrp === '20' || ageGrp === '30' || ageGrp === '40' || ageGrp === '50' || ageGrp === '60' ? ageGrp : undefined,
     gender: gender === '남' || gender === '여' ? gender : undefined,
     accompany: sp.get('accompany') ?? undefined,
@@ -41,6 +43,7 @@ export const TravelInsightsPage = () => {
     (next: TourInsightsParams) => {
       const sp = new URLSearchParams();
       if (next.region && next.region !== 'jeju') sp.set('region', next.region);
+      // region 만 바뀌면 아래 필터는 유지된다(TourFilterBar 가 넘겨준 next 에 이미 담김).
       if (next.ageGrp) sp.set('ageGrp', next.ageGrp);
       if (next.gender) sp.set('gender', next.gender);
       if (next.accompany) sp.set('accompany', next.accompany);
@@ -58,9 +61,9 @@ export const TravelInsightsPage = () => {
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">제주 여행 인사이트 2023</h1>
+              <h1 className="text-2xl font-bold tracking-tight">{tourRegionLabel(params.region)} 여행 인사이트 2023</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                2023년 4~9월 제주를 다녀간 여행자 표본이 언제·어디서·무엇을 하며 얼마를 썼는지 — 전부 집계값이고 5명 미만 구간은 숨깁니다.
+                2023년 4~9월 {tourRegionLabel(params.region)}을(를) 다녀간 여행자 표본이 언제·어디서·무엇을 하며 얼마를 썼는지 — 전부 집계값이고 5명 미만 구간은 숨깁니다.
               </p>
             </div>
             <Button asChild variant="outline" size="sm">
@@ -214,7 +217,7 @@ export const TravelInsightsPage = () => {
                   <Empty />
                 )}
               </Section>
-              <Section title="공항 다음 첫 목적지" hint="5건 이상">
+              <Section title={d.hubLabel} hint="5건 이상">
                 {d.airportNext.length ? (
                   <BarList
                     items={d.airportNext.map((p) => ({ label: p.name, n: p.n }))}

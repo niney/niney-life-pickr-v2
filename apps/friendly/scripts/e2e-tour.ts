@@ -133,6 +133,15 @@ const apiChecks = async (): Promise<void> => {
     if (body.emd.some((e) => e.n < 5)) throw new Error('emd n<5');
     return body.groups.map((g) => `${g.key} ${g.visits}방문(${Math.round(g.share * 100)}%) 만족 ${g.mean}`).join(' · ') + ` · 읍면동 ${body.emd.length}`;
   });
+  await step('API insights 서부권 지역(7차) — region=daejeon 200·hubLabel·지역비교 시군구 집단', async () => {
+    const ins = await getJson<Insights & { hubLabel: string }>('/api/v1/tour/public/insights?region=daejeon');
+    if (ins.status !== 200) throw new Error(`insights status ${ins.status}`);
+    // 서부권 세트가 적재돼 있으면 대전 표본이 있고, 없으면 insufficient — 둘 다 200 이어야 한다.
+    const reg = await getJson<{ groups: Array<{ key: string; visits: number }> }>('/api/v1/tour/public/regions?region=daejeon');
+    if (reg.status !== 200) throw new Error(`regions status ${reg.status}`);
+    if ((await getJson('/api/v1/tour/public/insights?region=daejeon-xyz')).status !== 400) throw new Error('잘못된 region 400 아님');
+    return `daejeon 여행 ${ins.body.scale?.trips ?? 0} · "${ins.body.hubLabel}" · 집단 ${reg.body.groups.map((g) => g.key).join('/') || '없음(미적재)'}`;
+  });
   await step('API 관리자 라우트 무인증 — status·원본 열람 401, 사진은 존재를 숨기는 404', async () => {
     const a = await getJson('/api/v1/admin/tour/status');
     const b = await getJson('/api/v1/admin/tour/places/x/visits');

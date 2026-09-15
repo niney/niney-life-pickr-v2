@@ -61,6 +61,8 @@ LIFE_STORE_ZIP="${LIFE_STORE_ZIP:-$(store_latest_zip)}"
 # 여행로그(AI 허브 71780) — tour-c 가 내보낸 폴더(manifest.json + *.jsonl.gz + thumbs/). 원본은 이 서버 밖으로
 # 내보내지 않고 공개 API 는 집계만 낸다(docs/PLAN-tour-log.md). 폴더는 rsync 로 올린다(git 밖).
 TOUR_EXPORT_DIR="${TOUR_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-2023}"
+# 서부권(AI 허브 71779) export 폴더 — 있으면 --dataset west 로 함께 적재한다(없으면 제주만).
+TOUR_WEST_EXPORT_DIR="${TOUR_WEST_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-west-2023}"
 # 음식 카탈로그 배포본 — 적재기(load:food-catalog)가 이 경로를 기본으로 찾는다. 출처는
 # docs/data-sources.md. 영양성분 API(DATA_GO_KR_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
 FOOD_DATA_DIR="$ROOT/data/open/food"
@@ -148,13 +150,23 @@ life_map_data() {
       step "맛집 ↔ 상가업소 매칭"; pnpm --filter friendly match:restaurant-stores || echo "  (매칭 실패 — 수동 재실행)"
     else echo "  (상가 zip 없음: data/open/store/store-YYYYMM.zip — 올린 뒤 ./deploy.sh 6)"; fi
   fi
-  # 여행로그 — tour-c export 폴더 전량 교체(25만 행, 1~2분). tour=0 이면 첫 적재. 적재 뒤 맛집 ↔ 여행로그 장소 매칭 갱신.
-  # 폐업 조회(check:tour-biz)는 국세청 API 쿼터를 쓰므로 자동 실행하지 않는다 — 어드민 /admin/tour 에서 수동.
-  if [[ "$force" == 1 || "${tour:-0}" == 0 ]]; then
+  # 여행로그 — tour-c export 폴더를 데이터셋 단위로 갈아끼운다(제주 25만 행 1~2분, 서부권 12만 행). tour_<세트>=0 이면 첫 적재.
+  # 두 세트 다 끝난 뒤 맛집 ↔ 여행로그 장소 매칭을 한 번 돌린다. 폐업 조회(check:tour-biz)는 국세청 쿼터라 자동 실행 안 함
+  # (어드민 /admin/tour 에서 수동). 세트별 건수는 status:life-map 의 tour_jeju·tour_west.
+  local tour_jeju tour_west did_tour=0
+  tour_jeju="$(stat_val tour_jeju "$st")"; tour_west="$(stat_val tour_west "$st")"
+  if [[ "$force" == 1 || "${tour_jeju:-0}" == 0 ]]; then
     if [[ -f "$TOUR_EXPORT_DIR/manifest.json" ]]; then
-      step "여행로그 적재"; pnpm --filter friendly load:tour "$TOUR_EXPORT_DIR"
-      step "맛집 ↔ 여행로그 매칭"; pnpm --filter friendly match:restaurant-tour || echo "  (매칭 실패 — 수동 재실행)"
-    else echo "  (여행로그 export 없음: $TOUR_EXPORT_DIR/manifest.json — rsync 로 올린 뒤 'pnpm --filter friendly load:tour $TOUR_EXPORT_DIR && pnpm --filter friendly match:restaurant-tour')"; fi
+      step "여행로그 적재(제주·도서)"; pnpm --filter friendly load:tour "$TOUR_EXPORT_DIR" --dataset jeju; did_tour=1
+    else echo "  (여행로그 제주 export 없음: $TOUR_EXPORT_DIR/manifest.json — rsync 로 올린 뒤 'pnpm --filter friendly load:tour $TOUR_EXPORT_DIR --dataset jeju')"; fi
+  fi
+  if [[ "$force" == 1 || "${tour_west:-0}" == 0 ]]; then
+    if [[ -f "$TOUR_WEST_EXPORT_DIR/manifest.json" ]]; then
+      step "여행로그 적재(서부권)"; pnpm --filter friendly load:tour "$TOUR_WEST_EXPORT_DIR" --dataset west; did_tour=1
+    else echo "  (여행로그 서부권 export 없음: $TOUR_WEST_EXPORT_DIR/manifest.json — 있으면 rsync 로 올린 뒤 'pnpm --filter friendly load:tour $TOUR_WEST_EXPORT_DIR --dataset west')"; fi
+  fi
+  if [[ "$did_tour" == 1 ]]; then
+    step "맛집 ↔ 여행로그 매칭"; pnpm --filter friendly match:restaurant-tour || echo "  (매칭 실패 — 수동 재실행)"
   fi
 }
 

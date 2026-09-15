@@ -19,11 +19,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import { TourEvidencePanel } from '~/components/admin/tour/TourEvidencePanel';
 import { cn } from '~/lib/utils';
 
-// 어드민 "여행로그 시드" — AI 허브 71780 여행로그(2023 제주 패널)에서 여행자가 실제로 많이 간 식당 중 아직 맛집 DB 에
-// 없는 곳을 네이버 검색으로 등록하는 콘솔. 상단은 적재·매칭·폐업 조회 상태와 실행 버튼, 아래는 장소 단위 집계 표
-// (개별 방문 행은 없다 — docs/PLAN-tour-log.md). 등록은 기존 크롤 잡이라 진행은 크롤 테스트 페이지 링크로 본다.
+// 어드민 "여행로그 시드" — AI 허브 여행로그(71780 제주·도서 + 71779 서부권, 2023)에서 여행자가 실제로 많이 간 식당 중 아직
+// 맛집 DB 에 없는 곳을 네이버 검색으로 등록하는 콘솔. 상단은 데이터셋별 적재·매칭·폐업 조회 상태와 실행 버튼, 아래는 장소
+// 단위 집계 표(개별 방문 행은 없다 — docs/PLAN-tour-log.md). 등록은 기존 크롤 잡이라 진행은 크롤 테스트 페이지 링크로 본다.
 
 const PAGE_SIZE = 50;
+// 시드 콘솔 지역 필터 — 적재된 데이터셋 단위(전체/제주/서부권). 세밀한 시도 필터는 공개 화면(/travel)에서.
+const REGION_OPTIONS: Array<{ value: 'all' | 'jeju' | 'west'; label: string }> = [
+  { value: 'all', label: '전체' },
+  { value: 'jeju', label: '제주·도서' },
+  { value: 'west', label: '서부권' },
+];
 const STATUS_OPTIONS: Array<{ value: TourSeedStatusFilterType; label: string }> = [
   { value: 'all', label: '전체' },
   { value: 'unmatched', label: '미매칭' },
@@ -34,7 +40,7 @@ const STATUS_OPTIONS: Array<{ value: TourSeedStatusFilterType; label: string }> 
 const won = (v: number | null): string => (v === null ? '–' : `${Math.round(v).toLocaleString('ko-KR')}원`);
 
 export const AdminTourPage = () => {
-  const [region, setRegion] = useState<'jeju' | 'all'>('jeju');
+  const [region, setRegion] = useState<'all' | 'jeju' | 'west'>('all');
   const [minTravelers, setMinTravelers] = useState(5);
   const [status, setStatus] = useState<TourSeedStatusFilterType>('unmatched');
   const [qInput, setQInput] = useState('');
@@ -88,7 +94,7 @@ export const AdminTourPage = () => {
         <CardHeader>
           <CardTitle>여행로그 시드</CardTitle>
           <CardDescription>
-            AI 허브 「국내 여행로그 데이터(제주도 및 도서지역)」(2023) 에서 여행자가 실제로 많이 간 식당을 골라 등록합니다. 표는 장소
+            AI 허브 「국내 여행로그 데이터」(제주·도서 71780 + 서부권 71779, 2023) 에서 여행자가 실제로 많이 간 식당을 골라 등록합니다. 표는 장소
             단위 집계뿐이고 개별 여행·방문 기록은 없습니다. 3년 전 표본이라 폐업 확인(국세청) 후 크롤하세요.
           </CardDescription>
         </CardHeader>
@@ -100,7 +106,8 @@ export const AdminTourPage = () => {
               <Stat
                 label="적재"
                 value={st.loaded ? `${st.places.toLocaleString('ko-KR')}곳` : '없음'}
-                sub={st.loaded ? `${st.sourceFile ?? ''} · 기준 ${st.baseDate ?? '-'}` : 'pnpm --filter friendly load:tour'}
+                sub={st.loaded ? st.datasets.map((d) => `${d.label} ${d.loaded ? `${d.places.toLocaleString('ko-KR')}` : '없음'}`).join(' · ') : 'pnpm --filter friendly load:tour'}
+                title={st.loaded ? st.datasets.map((d) => `${d.label}: ${d.sourceFile ?? '-'} · 기준 ${d.baseDate ?? '-'}`).join('\n') : undefined}
                 tone={st.loaded ? 'ok' : 'warn'}
               />
               <Stat
@@ -117,9 +124,10 @@ export const AdminTourPage = () => {
                 tone={st.biz.keyConfigured ? (st.biz.checked > 0 ? 'ok' : 'muted') : 'warn'}
               />
               <Stat
-                label="제주 식당류 시드"
+                label="식당류 시드"
                 value={`${st.seeds.unmatchedT5.toLocaleString('ko-KR')}곳 미매칭`}
-                sub={`5명↑ ${st.seeds.t5.toLocaleString('ko-KR')} · 3명↑ ${st.seeds.t3.toLocaleString('ko-KR')} · 전체 ${st.seeds.restaurantsJeju.toLocaleString('ko-KR')}`}
+                sub={`5명↑ ${st.seeds.t5.toLocaleString('ko-KR')} · 3명↑ ${st.seeds.t3.toLocaleString('ko-KR')} · 전체 ${st.seeds.restaurants.toLocaleString('ko-KR')}`}
+                title="적재된 전체 데이터셋의 식당류(식당·상업·상점) 장소 기준"
                 tone="muted"
               />
             </div>
@@ -168,17 +176,17 @@ export const AdminTourPage = () => {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-[11px] text-muted-foreground">지역</span>
             <div className="-ml-2 flex rounded-md border p-0.5 text-xs">
-              {(['jeju', 'all'] as const).map((r) => (
+              {REGION_OPTIONS.map((r) => (
                 <button
-                  key={r}
+                  key={r.value}
                   type="button"
-                  className={cn('rounded px-2 py-1', region === r ? 'bg-muted font-semibold' : 'text-muted-foreground')}
+                  className={cn('rounded px-2 py-1', region === r.value ? 'bg-muted font-semibold' : 'text-muted-foreground')}
                   onClick={() => {
-                    setRegion(r);
+                    setRegion(r.value);
                     setPage(1);
                   }}
                 >
-                  {r === 'jeju' ? '제주' : '전체'}
+                  {r.label}
                 </button>
               ))}
             </div>

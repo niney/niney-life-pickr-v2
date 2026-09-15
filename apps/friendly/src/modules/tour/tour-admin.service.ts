@@ -24,6 +24,7 @@ import type { JobRegistry } from '../crawl/job-registry.js';
 import type { RestaurantService } from '../restaurant/restaurant.service.js';
 import { checkTourBizStatus } from './tour-biz-status.service.js';
 import { getTourLoadStatus, resolveTourThumbsDir } from './tour-master.service.js';
+import { tourRegionPlaceSql, tourRegionPlaceWhere } from './tour-region-filter.js';
 import { TOUR_MATCH_CANONICAL_WHERE, isTourMatchAccepted, matchRestaurantTour, tourPlaceNameScore } from './restaurant-tour-match.service.js';
 
 export interface TourAdminDeps {
@@ -80,8 +81,9 @@ export class TourAdminService {
   async status(): Promise<TourAdminStatusType> {
     const { prisma } = this.deps;
     const load = await getTourLoadStatus(prisma);
-    const restaurantWhere: Prisma.TourPlaceWhereInput = { typeShort: { in: [...TOUR_RESTAURANT_TYPE_SHORTS] }, isJeju: true };
-    const [matched, missing, candidates, bizRows, lastBiz, restaurantsJeju, t5, t3, unmatchedT5] = await Promise.all([
+    // 시드는 적재된 전체(데이터셋 무관) 식당류 장소 기준.
+    const restaurantWhere: Prisma.TourPlaceWhereInput = { typeShort: { in: [...TOUR_RESTAURANT_TYPE_SHORTS] } };
+    const [matched, missing, candidates, bizRows, lastBiz, restaurants, t5, t3, unmatchedT5] = await Promise.all([
       prisma.restaurantTourMatch.count({ where: { status: 'matched' } }),
       prisma.restaurantTourMatch.count({ where: { status: 'missing' } }),
       prisma.canonicalRestaurant.count({ where: TOUR_MATCH_CANONICAL_WHERE }),
@@ -93,7 +95,7 @@ export class TourAdminService {
       prisma.$queryRaw<Array<{ n: number | bigint }>>`
         SELECT count(*) AS n FROM tour_places p
         LEFT JOIN restaurant_tour_matches m ON m.tourPlaceId = p.id
-        WHERE p.isJeju = 1 AND p.nTravelers >= 5 AND p.typeShort IN (${Prisma.join([...TOUR_RESTAURANT_TYPE_SHORTS])}) AND m.canonicalId IS NULL`,
+        WHERE p.nTravelers >= 5 AND p.typeShort IN (${Prisma.join([...TOUR_RESTAURANT_TYPE_SHORTS])}) AND m.canonicalId IS NULL`,
     ]);
     const biz = { checked: 0, open: 0, suspended: 0, closed: 0, unknown: 0 };
     for (const r of bizRows) {
@@ -112,9 +114,21 @@ export class TourAdminService {
       sourceFile: load.sourceFile,
       loadedAt: load.loadedAt?.toISOString() ?? null,
       counts: load.counts,
+      datasets: load.datasets.map((d) => ({
+        key: d.key,
+        label: d.label,
+        loaded: d.loaded,
+        places: d.places,
+        trips: d.trips,
+        visits: d.visits,
+        photos: d.photos,
+        baseDate: d.baseDate,
+        sourceFile: d.sourceFile,
+        loadedAt: d.loadedAt?.toISOString() ?? null,
+      })),
       match: { matched, missing, candidates },
       biz: { ...biz, lastCheckedAt: lastBiz?.checkedAt.toISOString() ?? null, keyConfigured: this.deps.serviceKey().length > 0 },
-      seeds: { restaurantsJeju, t5, t3, unmatchedT5: Number(unmatchedT5[0]?.n ?? 0) },
+      seeds: { restaurants, t5, t3, unmatchedT5: Number(unmatchedT5[0]?.n ?? 0) },
       thumbsDir,
       thumbsExists: thumbsDir !== null && existsSync(thumbsDir),
     };
@@ -126,7 +140,8 @@ export class TourAdminService {
       Prisma.sql`p.typeShort IN (${Prisma.join([...TOUR_RESTAURANT_TYPE_SHORTS])})`,
       Prisma.sql`p.nTravelers >= ${q.minTravelers}`,
     ];
-    if (q.region === 'jeju') conds.push(Prisma.sql`p.isJeju = 1`);
+    const regionSql = tourRegionPlaceSql(q.region, 'p');
+    if (regionSql) conds.push(regionSql);
     if (q.status === 'unmatched') conds.push(Prisma.sql`m.canonicalId IS NULL`);
     else if (q.status === 'matched') conds.push(Prisma.sql`m.canonicalId IS NOT NULL`);
     else if (q.status === 'closed') conds.push(Prisma.sql`b.bStt IN ('폐업자', '휴업자')`);

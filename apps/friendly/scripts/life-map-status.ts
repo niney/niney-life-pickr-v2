@@ -11,17 +11,20 @@ const prisma = new PrismaClient();
 
 const main = async (): Promise<void> => {
   try {
-    const [cctv, toilet, hospital, store, tour, tourMatched, cache] = await Promise.all([
+    // tour 는 데이터셋이 여러 개라 layer 이력 대신 실제 장소 수를 세고, 세트별(tour_jeju·tour_west …)로도 낸다.
+    const [cctv, toilet, hospital, store, tour, tourByDataset, tourMatched, cache] = await Promise.all([
       prisma.lifeMasterSync.findFirst({ where: { layer: 'cctv' }, orderBy: { loadedAt: 'desc' } }),
       prisma.lifeMasterSync.findFirst({ where: { layer: 'toilet' }, orderBy: { loadedAt: 'desc' } }),
       prisma.lifeMasterSync.findFirst({ where: { layer: 'hospital' }, orderBy: { loadedAt: 'desc' } }),
       prisma.lifeMasterSync.findFirst({ where: { layer: 'store' }, orderBy: { loadedAt: 'desc' } }),
-      prisma.lifeMasterSync.findFirst({ where: { layer: 'tour' }, orderBy: { loadedAt: 'desc' } }),
+      prisma.tourPlace.count(),
+      prisma.tourPlace.groupBy({ by: ['dataset'], _count: { _all: true } }),
       prisma.restaurantTourMatch.count({ where: { status: 'matched' } }),
       prisma.lifeGeocodeCache.count(),
     ]);
+    const byDs = (k: string): number => tourByDataset.find((r) => r.dataset === k)?._count._all ?? 0;
     console.log(
-      `ok cctv=${cctv?.count ?? 0} toilet=${toilet?.count ?? 0} geocoded=${toilet?.geocoded ?? 0} hospital=${hospital?.count ?? 0} store=${store?.count ?? 0} tour=${tour?.count ?? 0} tour_matched=${tourMatched} cache=${cache}`,
+      `ok cctv=${cctv?.count ?? 0} toilet=${toilet?.count ?? 0} geocoded=${toilet?.geocoded ?? 0} hospital=${hospital?.count ?? 0} store=${store?.count ?? 0} tour=${tour} tour_jeju=${byDs('jeju')} tour_west=${byDs('west')} tour_matched=${tourMatched} cache=${cache}`,
     );
   } catch (e) {
     // 테이블 없음(P2021) 등 — 배포 스크립트가 "missing" 으로 분기한다.

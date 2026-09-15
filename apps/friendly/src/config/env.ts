@@ -93,10 +93,13 @@ const EnvSchema = z.object({
   //  - 전국통합식품영양성분정보(15100070) — load:food-catalog 의 파일 없을 때 대안.
   //  - 국세청 사업자등록정보 진위확인·상태조회(15081808, odcloud) — check:tour-biz·어드민 /admin/tour 만. 100건/콜.
   DATA_GO_KR_API_KEY: z.string().default(''),
-  // 여행로그(AI 허브 71780) 원본 열람 허용 사용자 id(쉼표) — 다운로드 승인을 받은 본인만. 비우면 원본 라우트 전부 404.
+  // 여행로그(AI 허브 71780 제주·도서, 71779 서부권) 원본 열람 허용 사용자 id·이메일(쉼표) — 다운로드 승인을 받은 본인만.
+  // 비우면 원본 라우트 전부 404.
   TOUR_RAW_USER_IDS: z.string().default(''),
-  // 여행로그 썸네일 폴더 — 비우면 data/open/tour/lp-2023/thumbs(로더 export 폴더). 관리자 인증 라우트로만 서빙.
+  // 여행로그 썸네일 폴더 — 비우면 data/open/tour/<export>/thumbs(로더 export 폴더). 제주=TOUR_THUMBS_DIR, 서부권=TOUR_THUMBS_DIR_WEST.
+  // 관리자 인증 라우트로만 서빙.
   TOUR_THUMBS_DIR: z.string().default(''),
+  TOUR_THUMBS_DIR_WEST: z.string().default(''),
 
   // 기상청 API허브(apihub.kma.go.kr) 인증키 — AWS 매분 관측으로 현재 날씨 보강(선택). data.go.kr
   // 키와 별개. 비우면 /weather/aws 가 enabled=false 로 응답하고 페이지는 보강을 생략한다.

@@ -118,7 +118,7 @@ const tourRawRoutes: FastifyPluginAsync<TourRawRouteOptions> = async (app, opts)
       // resolveSseAdmin 은 id·role 만 준다 — 이메일 allowlist 는 DB 에서 한 번 더 본다(allowlist 라우트뿐이라 부담 없음).
       const email = allowlist.has(admin.userId) ? null : (await app.prisma.user.findUnique({ where: { id: admin.userId }, select: { email: true } }))?.email;
       if (!isAllowed(admin.userId, email)) return reply.notFound('Not found');
-      const path = service.photoPath(req.params.photoId, req.params.size);
+      const path = await service.photoPath(req.params.photoId, req.params.size);
       if (!path) return reply.notFound('Not found');
       return reply.type('image/webp').send(createReadStream(path));
     },

@@ -18,6 +18,7 @@ import type {
   TourRawTripsResultType,
   TourRawVisitsResultType,
 } from '@repo/api-contract';
+import { TOUR_DATASET_KEYS, isTourDatasetKey } from '@repo/utils';
 import { resolveTourThumbsDir } from './tour-master.service.js';
 
 export const TOUR_PHOTO_SIZES = ['s', 'm'] as const;
@@ -139,10 +140,10 @@ export class TourRawService {
     };
   }
 
+  // 데이터셋마다 export 폴더가 달라 사진 크기도 세트별로 볼 수 있다 — 어느 세트든 있으면 제공 크기로 친다.
   thumbsSizes(): TourPhotoSize[] {
-    const dir = resolveTourThumbsDir(null);
-    if (!dir) return [];
-    return TOUR_PHOTO_SIZES.filter((s) => existsSync(resolve(dir, s)));
+    const dirs = TOUR_DATASET_KEYS.map((k) => resolveTourThumbsDir(null, k)).filter((d): d is string => d !== null);
+    return TOUR_PHOTO_SIZES.filter((s) => dirs.some((d) => existsSync(resolve(d, s))));
   }
 
   async listPhotos(placeId: string, page: TourRawPageQueryType): Promise<TourRawPhotosResultType> {
@@ -234,10 +235,13 @@ export class TourRawService {
     };
   }
 
-  // 썸네일 파일 경로 — id 화이트리스트 + 폴더 밖 탈출 차단. 없으면 null.
-  photoPath(photoId: string, size: TourPhotoSize): string | null {
+  // 썸네일 파일 경로 — id 화이트리스트 + 폴더 밖 탈출 차단. 사진은 세트별 export 폴더에 있어 사진 행의 dataset 으로 폴더를
+    // 고른다(모르면 첫 세트). 없으면 null.
+  async photoPath(photoId: string, size: TourPhotoSize): Promise<string | null> {
     if (!TOUR_PHOTO_ID_RE.test(photoId)) return null;
-    const dir = resolveTourThumbsDir(null);
+    const row = await this.prisma.tourPhoto.findUnique({ where: { id: photoId }, select: { dataset: true } });
+    const dataset = isTourDatasetKey(row?.dataset) ? row.dataset : 'jeju';
+    const dir = resolveTourThumbsDir(null, dataset);
     if (!dir) return null;
     const base = resolve(dir, size);
     const path = resolve(base, `${photoId}.webp`);

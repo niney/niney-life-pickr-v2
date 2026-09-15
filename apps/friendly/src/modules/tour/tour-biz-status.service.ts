@@ -7,12 +7,13 @@
 //   b_stt_cd:'01'|'02'|'03'|'', tax_type, tax_type_cd, end_dt:'YYYYMMDD'|'', … }] }. 미등록 번호는 b_stt '' + tax_type 안내문.
 // 실행: scripts/check-tour-biz.ts · 어드민 /admin/tour/biz-status/run. 순수 함수(정규화·파싱)는 export 해 테스트한다.
 
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { TourBizCheckResultType, TourRegionType } from '@repo/api-contract';
 import { TOUR_RESTAURANT_TYPE_SHORTS } from '@repo/utils';
 import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
 import { isObject } from '../../lib/narrow.js';
 import { toServiceKeyPart } from '../bus/bus-api.adapter.js';
+import { tourRegionPlaceWhere } from './tour-region-filter.js';
 
 export const NTS_STATUS_URL = 'https://api.odcloud.kr/api/nts-businessman/v1/status';
 export const NTS_BATCH = 100;
@@ -127,7 +128,7 @@ export const collectTourPlaceBrnos = async (
     where: {
       typeShort: { in: [...TOUR_RESTAURANT_TYPE_SHORTS] },
       nTravelers: { gte: opts.minTravelers },
-      ...(opts.region === 'jeju' ? { isJeju: true } : {}),
+      ...(tourRegionPlaceWhere(opts.region) as Prisma.TourPlaceWhereInput),
     },
     select: { id: true },
   });

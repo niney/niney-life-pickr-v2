@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { TourDataset, TourRegion } from '@repo/api-contract';
+import { TOUR_DATASET_KEYS, TOUR_REGION_KEYS } from '@repo/utils';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import {
   TOUR_TABLES,
@@ -16,6 +18,7 @@ import {
   readTourManifest,
   replaceTourTables,
   tourChunkSize,
+  tourNormalizeCtx,
   unloadTourTables,
   type RawRow,
   type TourManifest,
@@ -211,6 +214,20 @@ const photoRow = (over: RawRow = {}): RawRow => ({
   month: 5,
   nights: 2,
   ...over,
+});
+
+describe('tour-master 데이터셋·지역 키', () => {
+  it('utils 의 키 목록이 api-contract zod enum 과 같다(순환 금지 → 리터럴 이중 정의를 여기서 검증)', () => {
+    expect(TourDataset.options).toEqual([...TOUR_DATASET_KEYS]);
+    expect(TourRegion.options).toEqual([...TOUR_REGION_KEYS]);
+  });
+
+  it('장소 id 접두 — 첫 세트(jeju)는 그대로, 그 밖은 "<key>:" 접두', () => {
+    expect(normalizeTourPlace(placeRow(), emptyTourReport().places, tourNormalizeCtx('jeju'))).toMatchObject({ id: 'pd804155188', dataset: 'jeju' });
+    expect(normalizeTourPlace(placeRow(), emptyTourReport().places, tourNormalizeCtx('west'))).toMatchObject({ id: 'west:pd804155188', dataset: 'west' });
+    // 방문의 placeId 도 접두가 붙는다.
+    expect(normalizeTourVisit(visitRow(), emptyTourReport().visits, tourNormalizeCtx('west'))).toMatchObject({ dataset: 'west', placeId: 'west:pd804155188' });
+  });
 });
 
 describe('tour-master normalize', () => {

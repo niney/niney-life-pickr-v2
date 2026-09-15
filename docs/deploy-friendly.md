@@ -316,30 +316,35 @@ pm2 save
 du -sh apps/friendly/data/*                 # 디스크 사용량 점검
 ```
 
-## 여행로그 원본·사진 (AI 허브 71780 — 관리자 allowlist)
+## 여행로그 원본·사진 (AI 허브 71780 제주·도서 + 71779 서부권 — 관리자 allowlist)
 
-여행로그 파생표(`data/open/tour/lp-2023/*.jsonl.gz`)와 썸네일(`thumbs/s`)은 git 밖이라 **rsync 로 올린다**. 원본은 AI 허브
-이용조건상 재배포·국외 반출 금지 — 서버는 국내에 있어야 하고 공개 API 는 집계만 낸다(`docs/PLAN-tour-log.md`).
+여행로그 파생표(`data/open/tour/<export>/*.jsonl.gz`)와 썸네일(`thumbs/s`)은 git 밖이라 **rsync 로 올린다**. 원본은 AI 허브
+이용조건상 재배포·국외 반출 금지 — 서버는 국내에 있어야 하고 공개 API 는 집계만 낸다(`docs/PLAN-tour-log.md`). 데이터셋이 둘이라
+`--dataset` 으로 각각 적재한다(그 세트 행만 교체, 다른 세트는 그대로). 제주 export 는 `lp-2023`, 서부권은 `lp-west-2023`.
 
 ```bash
-# 로컬(tour-c 에서 npm run data:export -- --thumbs s 로 만든 폴더) → 운영
-rsync -av --delete data/open/tour/lp-2023/ samplepcb@<host>:/home/samplepcb/niney-life-pickr-v2/data/open/tour/lp-2023/
-pnpm --filter friendly load:tour --dry-run   # manifest sha256 대조·정규화 리포트만(DB 쓰기 없음) — FTP 로 올렸으면 여기서 깨짐을 잡는다
-pnpm --filter friendly load:tour             # 전량 교체, 약 1~2분(서버 중단 불필요). 경로 인자는 절대경로로(--filter 는 apps/friendly 기준)
-pnpm --filter friendly match:restaurant-tour
-pnpm --filter friendly status:life-map   # ... tour=15679 tour_matched=N ...
+# 로컬(tour-c 에서 npm run data:export -- --thumbs s 로 만든 폴더) → 운영. 서부권은 tour-c 를 TOUR_DATA_ROOT 로 147 폴더에 맞춰 실행.
+rsync -av --delete data/open/tour/lp-2023/      samplepcb@<host>:/home/samplepcb/niney-life-pickr-v2/data/open/tour/lp-2023/
+rsync -av --delete data/open/tour/lp-west-2023/ samplepcb@<host>:/home/samplepcb/niney-life-pickr-v2/data/open/tour/lp-west-2023/
+pnpm --filter friendly load:tour --dataset jeju --dry-run   # manifest sha256 대조·정규화 리포트만 — FTP 로 올렸으면 여기서 깨짐을 잡는다
+pnpm --filter friendly load:tour --dataset jeju             # 제주 세트 행만 교체(약 1~2분, 서버 중단 불필요)
+pnpm --filter friendly load:tour --dataset west             # 서부권 세트 행만 교체(약 1분). 경로 인자는 절대경로로(--filter 는 apps/friendly 기준)
+pnpm --filter friendly match:restaurant-tour                # 두 세트 다 적재한 뒤 한 번
+pnpm --filter friendly status:life-map   # ... tour=27195 tour_jeju=15679 tour_west=11516 tour_matched=N ...
 ```
 
-API 배포(케이스 1·2·4)는 `tour=0` 이고 폴더에 `manifest.json` 이 있으면 위 두 명령을 자동으로 돌린다 — 폴더를 배포 뒤에 올렸다면
-직접 실행한다. `./deploy.sh 6` 은 force 모드라 CCTV·화장실·병의원·상가까지 전부 다시 적재하므로 여행로그만 넣을 땐 쓰지 않는다.
+`--dataset` 이 맞는지 적재기가 여행 표의 제주 방문 비율로 검사한다(제주는 절반 이상, 서부권은 1할 미만 — 틀리면 중단). API 배포
+(케이스 1·2·4)는 `tour_jeju`/`tour_west` 가 0 이고 그 폴더에 `manifest.json` 이 있으면 자동으로 세트별 적재 후 매칭을 한 번 돌린다 —
+폴더를 배포 뒤에 올렸다면 직접 실행한다(`TOUR_WEST_EXPORT_DIR` 로 서부권 폴더 위치를 바꿀 수 있다). `./deploy.sh 6` 은 force 모드라
+CCTV·화장실·병의원·상가까지 전부 다시 적재하므로 여행로그만 넣을 땐 쓰지 않는다. 한 세트만 폐기하려면 `unload:tour --yes --dataset west`.
 
 | 항목 | 설정 |
 |---|---|
 | 원본 열람 허용 계정 | `.env` `TOUR_RAW_USER_IDS=<본인 이메일 또는 user id>`(쉼표 구분) — AI 허브에서 데이터를 승인받은 본인만. 비우면 `/admin/tour/places/*`·`trips/*`·`photos/*` 전부 404. 바꾼 뒤 `pm2 restart friendly`(env 는 기동 시 읽음) |
-| 썸네일 폴더 | `TOUR_THUMBS_DIR`(비우면 `data/open/tour/lp-2023/thumbs`, cwd 기준 `apps/friendly` 또는 리포 루트) |
+| 썸네일 폴더 | `TOUR_THUMBS_DIR`(제주, 비우면 `data/open/tour/lp-2023/thumbs`) · `TOUR_THUMBS_DIR_WEST`(서부권, 비우면 `lp-west-2023/thumbs`). cwd 기준 `apps/friendly` 또는 리포 루트 |
 | 폐업 조회 | `DATA_GO_KR_API_KEY` 에 **15081808** 활용신청 후 어드민 `/admin/tour` "폐업 조회 실행"(100건/콜) 또는 `check:tour-biz` |
 | 접근 경로 | 원본 응답은 `private, no-store`·`noindex`. 관리자 원본 화면은 Cloudflare 프록시를 **거치지 않는** 경로(DNS 전용 서브도메인 또는 `ssh -L 3000:127.0.0.1:3000`)로 여는 것을 권장 — 원문이 해외 프록시 장비를 지나지 않게 |
-| 환수·폐기 | `pnpm --filter friendly unload:tour --yes` + `rm -rf data/open/tour` |
+| 환수·폐기 | `pnpm --filter friendly unload:tour --yes`(전부) 또는 `--yes --dataset west`(한 세트) + `rm -rf data/open/tour/<export>` |
 
 ## 점검 명령
 

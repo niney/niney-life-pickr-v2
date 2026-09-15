@@ -12,17 +12,18 @@ import {
 } from '@repo/shared';
 import type { LifeCrimeRegionType, LifeMapCellType, LifeMapNearbyItemType, TourDensityCellType } from '@repo/api-contract';
 import {
-  JEJU_CENTER,
   LIFE_MAP_POINT_MIN_ZOOM,
+  TOUR_REGIONS,
   approxDistanceM,
   formatBbox,
   isInKorea,
   isLifeMapLayer,
-  isNearJeju,
   lifeCrimeGrade,
+  nearestTourSampleRegion,
   parseLatLngParam,
   tourDensityCellKey,
   tourDensityGrade,
+  tourSampleRegionAt,
   type LifeMapLayer,
   type LifeMapOverlay,
 } from '@repo/utils';
@@ -224,7 +225,7 @@ export const LifeMapPage = () => {
     if (!tourOn || !pickedCode || !densityQ.data) return null;
     return densityQ.data.cells.find((c) => tourDensityCellKey(c.x, c.y) === pickedCode) ?? null;
   }, [tourOn, pickedCode, densityQ.data]);
-  // 배경 토글 — 선택(시군구·칸)은 배경마다 뜻이 달라 항상 비운다. 여행자 밀도를 켰는데 지도가 제주 밖이면 제주로.
+  // 배경 토글 — 선택(시군구·칸)은 배경마다 뜻이 달라 항상 비운다. 여행자 밀도를 켰는데 지도가 표본(제주·서부권) 밖이면 가까운 표본으로.
   const handleToggleOverlay = useCallback(
     (o: LifeMapOverlay) => {
       toggleOverlay(o);
@@ -232,10 +233,11 @@ export const LifeMapPage = () => {
       if (o !== 'tour' || overlay === 'tour') return;
       const vp = viewportRef.current;
       const c = vp ? { lat: vp.centerLat, lng: vp.centerLng } : { lat: initial.lat, lng: initial.lng };
-      if (isNearJeju(c.lat, c.lng)) return;
+      if (tourSampleRegionAt(c.lat, c.lng)) return;
+      const center = TOUR_REGIONS[nearestTourSampleRegion(c.lat, c.lng)].center;
       userMovedRef.current = true;
-      mapRef.current?.flyTo(JEJU_CENTER.lat, JEJU_CENTER.lng, JEJU_CENTER.zoom);
-      setParams({ ll: `${JEJU_CENTER.lat.toFixed(5)},${JEJU_CENTER.lng.toFixed(5)}`, z: String(JEJU_CENTER.zoom) });
+      mapRef.current?.flyTo(center.lat, center.lng, center.zoom);
+      setParams({ ll: `${center.lat.toFixed(5)},${center.lng.toFixed(5)}`, z: String(center.zoom) });
     },
     [toggleOverlay, overlay, initial.lat, initial.lng, setParams],
   );

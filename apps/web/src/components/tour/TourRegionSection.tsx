@@ -2,14 +2,12 @@ import { Loader2 } from 'lucide-react';
 import type { TourRegionGroupType, TourRegionsResultType } from '@repo/api-contract';
 import { cn } from '~/lib/utils';
 import { KindDot, Section } from './charts';
-import { won } from './tourFormat';
+import { TOUR_GROUP_BAR_COLORS, won } from './tourFormat';
 
-// 지역 비교(6차) — 제주시·서귀포시·부속섬 3집단 카드(방문 비중·만족도·식당·체류·1인 지출·유형·읍면동) + 읍면동 표(방문
-// 5건 이상). 필터는 인사이트 바와 같은 축(서버가 region 은 제주로 고정).
+// 지역 비교(6차·7차) — 집단 카드(방문 비중·만족도·식당·체류·1인 지출·유형·읍면동) + 읍면동 표(방문 5건 이상). 집단은 region 에 따라
+// 제주시·서귀포시·부속섬(제주) 또는 시군구(시도·서부권). 필터는 인사이트 바와 같은 축.
 
-const GROUP_BAR: Record<TourRegionGroupType['key'], string> = { 'jeju-si': 'bg-teal-600', seogwipo: 'bg-sky-500', island: 'bg-amber-500' };
-
-const GroupCard = ({ g }: { g: TourRegionGroupType }) => (
+const GroupCard = ({ g, color }: { g: TourRegionGroupType; color: string }) => (
   <div className="rounded-md border p-3" data-testid={`tour-region-${g.key}`}>
     <div className="flex items-baseline justify-between gap-2">
       <h3 className="text-sm font-semibold">{g.label}</h3>
@@ -18,7 +16,7 @@ const GroupCard = ({ g }: { g: TourRegionGroupType }) => (
       </span>
     </div>
     <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-      <i className={cn('block h-full', GROUP_BAR[g.key])} style={{ width: `${Math.round(g.share * 100)}%` }} />
+      <i className={cn('block h-full', color)} style={{ width: `${Math.round(g.share * 100)}%` }} />
     </div>
     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
       <Row k="방문 비중" v={`${Math.round(g.share * 100)}%`} />
@@ -49,7 +47,7 @@ const Row = ({ k, v }: { k: string; v: string }) => (
 );
 
 export const TourRegionSection = ({ data, loading, className }: { data: TourRegionsResultType | undefined; loading: boolean; className?: string }) => (
-  <Section title="지역 비교" hint="제주시 · 서귀포시 · 부속섬(우도·마라도 등) · 읍면동" className={className}>
+  <Section title="지역 비교" hint="시·군·구별 방문 비중·만족도·식당·체류·1인 지출 · 읍면동" className={className}>
     {loading && !data ? (
       <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" /> 지역 비교 불러오는 중…
@@ -59,8 +57,8 @@ export const TourRegionSection = ({ data, loading, className }: { data: TourRegi
     ) : (
       <>
         <div className="grid gap-3 md:grid-cols-3">
-          {data.groups.map((g) => (
-            <GroupCard key={g.key} g={g} />
+          {data.groups.map((g, i) => (
+            <GroupCard key={g.key} g={g} color={TOUR_GROUP_BAR_COLORS[i % TOUR_GROUP_BAR_COLORS.length]!} />
           ))}
         </div>
         {data.emd.length > 0 && (
@@ -80,7 +78,7 @@ export const TourRegionSection = ({ data, loading, className }: { data: TourRegi
                 {data.emd.map((e) => (
                   <tr key={`${e.sigungu}-${e.emd}-${e.island}`} className="border-t">
                     <td className="py-1">
-                      {e.island ? '부속섬 ' : e.sigungu === '서귀포시' ? '서귀포 ' : ''}
+                      {e.island ? '부속섬 ' : e.sigungu ? `${e.sigungu} ` : ''}
                       {e.emd}
                     </td>
                     <td className="py-1 text-right tabular-nums">{e.n.toLocaleString('ko-KR')}</td>

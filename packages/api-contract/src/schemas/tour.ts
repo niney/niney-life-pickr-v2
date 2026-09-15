@@ -1,12 +1,19 @@
 import { z } from 'zod';
 import { StartCrawlResult } from './crawl.js';
 
-// 여행로그(AI 허브 71780) — 2차: 관리자 시드 콘솔 계약. 공개 집계 계약은 4차에서 이 파일에 합류한다.
+// 여행로그(AI 허브 71780 제주·도서 + 71779 서부권) — 2차: 관리자 시드 콘솔 계약. 공개 집계 계약은 4차에서 이 파일에 합류한다.
 // 원본 행(개별 여행·방문)은 어디에도 없다 — 시드 목록은 장소(TourPlace) 단위 집계와 매칭·폐업 상태뿐.
 // 계획·이용조건: docs/PLAN-tour-log.md
 
-export const TourRegion = z.enum(['jeju', 'all']);
-export type TourRegionType = z.infer<typeof TourRegion>;
+// 적재 단위(데이터셋) 키 — 여기가 원본이고 utils(TOUR_DATASETS)·서버가 이 목록을 쓴다(패키지 순환 금지: utils → api-contract 방향).
+export const TOUR_DATASET_KEYS = ['jeju', 'west'] as const;
+export type TourDatasetType = (typeof TOUR_DATASET_KEYS)[number];
+export const TourDataset = z.enum(TOUR_DATASET_KEYS);
+
+// 지역 축(7차) 키 — jeju 는 isJeju(본섬+부속섬), 시도 키는 방문 sido, west 는 서부권 7개 시도, all 은 전체. 라벨·bbox·거점은 utils TOUR_REGIONS.
+export const TOUR_REGION_KEYS = ['jeju', 'west', 'jeonbuk', 'jeonnam', 'chungnam', 'daejeon', 'chungbuk', 'gwangju', 'sejong', 'all'] as const;
+export const TourRegion = z.enum(TOUR_REGION_KEYS);
+export type TourRegionType = (typeof TOUR_REGION_KEYS)[number];
 
 // 국세청 사업자 상태 — '' 로 오는 미등록 번호는 unknown.
 export const TourBizStatusKind = z.enum(['계속사업자', '휴업자', '폐업자', 'unknown']);
@@ -152,13 +159,30 @@ export const TourBizCheckResult = z.object({
 });
 export type TourBizCheckResultType = z.infer<typeof TourBizCheckResult>;
 
+// 데이터셋별 적재 상태(7차) — places 0 이면 미적재.
+export const TourAdminDatasetStatus = z.object({
+  key: TourDataset,
+  label: z.string(),
+  loaded: z.boolean(),
+  places: z.number().int(),
+  trips: z.number().int(),
+  visits: z.number().int(),
+  photos: z.number().int(),
+  baseDate: z.string().nullable(),
+  sourceFile: z.string().nullable(),
+  loadedAt: z.string().nullable(),
+});
+export type TourAdminDatasetStatusType = z.infer<typeof TourAdminDatasetStatus>;
+
 export const TourAdminStatus = z.object({
+  // 전체(모든 데이터셋 합) — loaded 는 하나라도 적재됐으면 true.
   loaded: z.boolean(),
   places: z.number().int(),
   baseDate: z.string().nullable(),
   sourceFile: z.string().nullable(),
   loadedAt: z.string().nullable(),
   counts: z.record(z.string(), z.number().int()),
+  datasets: z.array(TourAdminDatasetStatus),
   match: z.object({
     matched: z.number().int(),
     missing: z.number().int(),
@@ -175,8 +199,8 @@ export const TourAdminStatus = z.object({
     keyConfigured: z.boolean(),
   }),
   seeds: z.object({
-    // 제주 식당류(식당·상업·상점) 장소 수와 방문자 5/3명 이상, 그중 미매칭(5명 이상).
-    restaurantsJeju: z.number().int(),
+    // 식당류(식당·상업·상점) 장소 수(적재된 전체 데이터셋)와 방문자 5/3명 이상, 그중 미매칭(5명 이상).
+    restaurants: z.number().int(),
     t5: z.number().int(),
     t3: z.number().int(),
     unmatchedT5: z.number().int(),
@@ -499,7 +523,9 @@ export const TourInsightsResult = z.object({
   spendComposition: z.array(TourSpendCategoryStat),
   tripSpend: z.object({ p10: z.number(), median: z.number(), p90: z.number() }).nullable(),
   mvmn: z.array(TourMvmnStat),
+  // 거점(공항·역·터미널 — 지역별 utils TOUR_REGIONS.hubs) 다음 첫 목적지. hubLabel 은 화면 제목.
   airportNext: z.array(TourPlaceRef),
+  hubLabel: z.string(),
   residence: z.array(TourCount),
   ageGender: z.array(TourAgeGenderStat),
   sampleLabel: z.string(),
@@ -597,8 +623,9 @@ export const TourLodgingResult = z.object({
 });
 export type TourLodgingResultType = z.infer<typeof TourLodgingResult>;
 
-// 지역 비교 — 제주 본섬 두 시 + 부속섬(우도·마라도 …). 필터는 인사이트와 같은 축(region 은 무시 — 제주 고정).
-export const TourRegionKey = z.enum(['jeju-si', 'seogwipo', 'island']);
+// 지역 비교 — region=jeju 는 제주시·서귀포시·부속섬(우도·마라도 …) 3집단, 시도·서부권은 시군구 집단(방문 수 상위, 여행 5건 이상).
+// 필터는 인사이트와 같은 축. key 는 집단 식별자(jeju-si | seogwipo | island | 시군구 이름).
+export const TourRegionKey = z.string().min(1).max(40);
 export type TourRegionKeyType = z.infer<typeof TourRegionKey>;
 export const TourRegionGroup = z.object({
   key: TourRegionKey,

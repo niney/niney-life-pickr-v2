@@ -11,6 +11,7 @@ import type { TourInsightsQueryType, TourInsightsResultType, TourPlanBodyType, T
 import { TOUR_K_MIN, TOUR_RATING_MIN_N, TOUR_SAMPLE_LABEL, TOUR_SOURCE_NOTE } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
 import { registeredNaverIds } from './tour-public.service.js';
+import { tourRegionDayWhere, tourRegionHubLabel, tourRegionHubs, tourRegionTransitionWhere, tourRegionTripWhere, tourRegionVisitWhere } from './tour-region-filter.js';
 
 export const TOUR_INSIGHTS_MIN_TRIPS = 20;
 const CACHE_TTL_MS = 10 * 60_000;
@@ -70,23 +71,22 @@ export class TourInsightsService {
   }
 
   private async computeInsights(q: TourInsightsQueryType): Promise<TourInsightsResultType> {
-    const jeju = q.region === 'jeju';
     const attrs = attrWhere(q);
     const [trips, visits, transitions, daySeqs, spendRows] = await Promise.all([
       this.prisma.tourTrip.findMany({
-        where: { ...attrs, ...(jeju ? { nJeju: { gt: 0 } } : {}) } as Prisma.TourTripWhereInput,
+        where: { ...attrs, ...tourRegionTripWhere(q.region) } as Prisma.TourTripWhereInput,
         select: { id: true, nights: true, month: true, accompany: true, spendTotal: true, residenceSido: true, ageGrp: true, gender: true },
       }),
       this.prisma.tourVisit.findMany({
-        where: { ...attrs, isPrivate: false, ...(jeju ? { isJeju: true } : {}) } as Prisma.TourVisitWhereInput,
+        where: { ...attrs, isPrivate: false, ...tourRegionVisitWhere(q.region) } as Prisma.TourVisitWhereInput,
         select: { travelId: true, placeId: true, typeShort: true, dgstfn: true, stayMin: true, spendPp: true, arrivalHour: true, reasonNm: true, sigungu: true, emd: true, accompany: true },
       }),
       this.prisma.tourTransition.findMany({
-        where: { ...attrs, ...(jeju ? { bothJeju: true } : {}) } as Prisma.TourTransitionWhereInput,
+        where: { ...attrs, ...tourRegionTransitionWhere(q.region) } as Prisma.TourTransitionWhereInput,
         select: { fromType: true, toType: true, mvmnNm: true, travelMin: true, fromName: true, toPlaceId: true, toName: true },
       }),
       this.prisma.tourDaySequence.findMany({
-        where: { ...attrs, ...(jeju ? { isJejuDay: true } : {}), nStops: { gte: 3, lte: 7 } } as Prisma.TourDaySequenceWhereInput,
+        where: { ...attrs, ...tourRegionDayWhere(q.region), nStops: { gte: 3, lte: 7 } } as Prisma.TourDaySequenceWhereInput,
         select: { typeSeq: true },
       }),
       this.prisma.tourSpend.findMany({
@@ -164,10 +164,12 @@ export class TourInsightsService {
       if (v.reasonNm) countMap(reasons, v.reasonNm);
     }
 
-    // 전이·이동수단·공항 다음.
+    // 전이·이동수단·거점(공항·역·터미널 — 지역별 utils TOUR_REGIONS.hubs) 다음.
     const transMap = new Map<string, number>();
     const mvmnAgg = new Map<string, { n: number; mins: number[] }>();
     const airportNextRows: Array<{ placeId: string | null; name: string | null }> = [];
+    const hubs = tourRegionHubs(q.region);
+    const isHub = (name: string | null): boolean => name !== null && hubs.some((h) => name.includes(h));
     for (const t of transitions) {
       if (t.fromType && t.toType) countMap(transMap, `${t.fromType}>${t.toType}`);
       if (t.mvmnNm) {
@@ -176,7 +178,7 @@ export class TourInsightsService {
         if (t.travelMin !== null) m.mins.push(t.travelMin);
         mvmnAgg.set(t.mvmnNm, m);
       }
-      if (t.fromName && t.fromName.includes('제주국제공항') && t.toName && !t.toName.includes('제주국제공항')) airportNextRows.push({ placeId: t.toPlaceId, name: t.toName });
+      if (isHub(t.fromName) && t.toName && !isHub(t.toName)) airportNextRows.push({ placeId: t.toPlaceId, name: t.toName });
     }
     const airportCounts = new Map<string, { name: string; placeId: string | null; n: number }>();
     for (const r of airportNextRows) {
@@ -234,6 +236,7 @@ export class TourInsightsService {
       tripSpend: spendTotals.length >= k ? { p10: Math.round(quantile(spendTotals, 0.1)!), median: Math.round(median(spendTotals)!), p90: Math.round(quantile(spendTotals, 0.9)!) } : null,
       mvmn: sortDesc([...mvmnAgg.entries()].map(([label, m]) => ({ label, n: m.n, medianMin: round1(median(m.mins)) })).filter((x) => x.n >= k)).slice(0, 8),
       airportNext,
+      hubLabel: tourRegionHubLabel(q.region),
       residence: sortDesc([...residenceMap.entries()].map(([label, n]) => ({ label, n })).filter((x) => x.n >= k)).slice(0, 10),
       ageGender: [...ageGenderMap.entries()]
         .map(([key, n]) => ({ ageGrp: key.split('|')[0]!, gender: key.split('|')[1]!, n }))
@@ -246,14 +249,15 @@ export class TourInsightsService {
 
   // ── 코스 추천 ───────────────────────────────────────────────────────────────
   async plan(body: TourPlanBodyType): Promise<TourPlanResultType> {
-    const jeju = body.region === 'jeju';
+    const visitWhere = tourRegionVisitWhere(body.region);
+    const dayWhere = tourRegionDayWhere(body.region);
     // 완화 사다리 — 표본이 20건에 못 미치면 덜 중요한 조건부터 뺀다.
     const ladder: Array<keyof TourPlanBodyType> = ['month', 'gender', 'nights', 'ageGrp'];
     let current: TourInsightsQueryType = { region: body.region, ageGrp: body.ageGrp, gender: body.gender, accompany: body.accompany, month: body.month, nights: body.nights };
     const relaxed: string[] = [];
     const findTripIds = async (): Promise<string[]> => {
       const rows = await this.prisma.tourTrip.findMany({
-        where: { ...attrWhere(current), ...(jeju ? { nJeju: { gt: 0 } } : {}) } as Prisma.TourTripWhereInput,
+        where: { ...attrWhere(current), ...tourRegionTripWhere(body.region) } as Prisma.TourTripWhereInput,
         select: { id: true },
       });
       return rows.map((r) => r.id);
@@ -273,10 +277,10 @@ export class TourInsightsService {
       const chunk = tripIds.slice(i, i + IN_CHUNK);
       const [visits, days] = await Promise.all([
         this.prisma.tourVisit.findMany({
-          where: { travelId: { in: chunk }, isPrivate: false, placeId: { not: null }, ...(jeju ? { isJeju: true } : {}) },
+          where: { travelId: { in: chunk }, isPrivate: false, placeId: { not: null }, ...visitWhere } as Prisma.TourVisitWhereInput,
           select: { travelId: true, placeId: true, name: true, typeShort: true, sigungu: true, emd: true, dgstfn: true },
         }),
-        this.prisma.tourDaySequence.findMany({ where: { travelId: { in: chunk }, ...(jeju ? { isJejuDay: true } : {}), nStops: { gte: 3, lte: 7 } }, select: { typeSeq: true } }),
+        this.prisma.tourDaySequence.findMany({ where: { travelId: { in: chunk }, ...dayWhere, nStops: { gte: 3, lte: 7 } } as Prisma.TourDaySequenceWhereInput, select: { typeSeq: true } }),
       ]);
       for (const v of visits) {
         if (PLAN_EXCLUDED_TYPES.has(v.typeShort)) continue;

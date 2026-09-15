@@ -2356,8 +2356,10 @@ model UsageQuotaCounter {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // 장소 마스터 + 집계(방문·여행자·평가 수, 보정 평점, 체류·지출 중앙값). 공개 장소 통계의 주 테이블.
+// dataset(7차) = 적재 단위(jeju | west …, utils TOUR_DATASETS). 첫 세트 jeju 만 id 접두 없음, 나머지는 "<key>:" 접두.
 model TourPlace {
   id             String  @id
+  dataset        String  @default("jeju")
   name           String
   aliases        String?
   typeCd         String
@@ -2398,12 +2400,17 @@ model TourPlace {
   @@index([lat, lng])
   @@index([typeShort, nTravelers])
   @@index([isJeju, typeShort])
+  @@index([dataset])
+  @@index([sido, typeShort])
   @@map("tour_places")
 }
 
 // 여행 1건 — 세그먼트 축(연령·성별·동반·박수·월·거주지·스타일 8축)과 합계. 설문 원문(학력·직업·소득)은 없다.
+// visitSidos(7차) = 공개 방문의 시도 목록 ",서울,전북," (로더가 방문 표에서 채움) — 시도 지역 필터의 여행 조건.
 model TourTrip {
   id             String  @id
+  dataset        String  @default("jeju")
+  visitSidos     String?
   travelerLabel  String
   startDate      String
   endDate        String
@@ -2458,12 +2465,14 @@ model TourTrip {
   @@index([ageGrp, accompany, nights])
   @@index([nJeju])
   @@index([month])
+  @@index([dataset])
   @@map("tour_trips")
 }
 
 // 방문 1회(travel_id:visit_area_id). 비공개 방문은 이름·주소·좌표·placeId 가 NULL 인 채로 보관(순서·전이 계산에 필요).
 model TourVisit {
   id                String  @id
+  dataset           String  @default("jeju")
   travelId          String
   visitAreaId       String
   visitOrder        Int
@@ -2526,12 +2535,15 @@ model TourVisit {
   @@index([travelId, visitOrder])
   @@index([isJeju, typeShort, isPrivate])
   @@index([emd])
+  @@index([dataset])
+  @@index([sido, typeShort, isPrivate])
   @@map("tour_visits")
 }
 
 // 방문지에서 한 활동(취식·쇼핑·체험·구경·휴식) + 자유기술(detail — "흑돼지한마리;공기밥;된장찌개").
 model TourActivity {
   id          Int     @id @default(autoincrement())
+  dataset     String  @default("jeju")
   travelId    String
   visitAreaId String
   placeId     String?
@@ -2557,12 +2569,15 @@ model TourActivity {
 
   @@index([placeId])
   @@index([travelId, visitAreaId])
+  @@index([dataset])
   @@map("tour_activities")
 }
 
 // 소비 4표(활동·숙박·이동·사전) 통합. 활동 소비만 방문·장소가 붙는다. brno = 영수증 사업자번호(폐업 조회 키).
+// id 는 자체 증가(7차) — export 의 spend_id 는 세트마다 1부터라 두 세트를 같이 두면 겹친다.
 model TourSpend {
-  id            Int     @id
+  id            Int     @id @default(autoincrement())
+  dataset       String  @default("jeju")
   travelId      String
   category      String
   categoryCd    String
@@ -2595,12 +2610,16 @@ model TourSpend {
   @@index([placeId])
   @@index([brno])
   @@index([travelId])
+  @@index([dataset])
   @@map("tour_spend")
 }
 
-// 연속 공개 방문 쌍(장소·유형·수단·이동시간). "다음에 간 곳"·전이 행렬.
+// 연속 공개 방문 쌍(장소·유형·수단·이동시간). "다음에 간 곳"·전이 행렬. fromSido/toSido(7차)는 로더가 방문 표에서 채운다.
 model TourTransition {
   id            Int     @id @default(autoincrement())
+  dataset       String  @default("jeju")
+  fromSido      String?
+  toSido        String?
   travelId      String
   dayIndex      Int?
   fromVisitId   String
@@ -2632,12 +2651,16 @@ model TourTransition {
   @@index([toPlaceId])
   @@index([fromType, toType])
   @@index([travelId])
+  @@index([dataset])
+  @@index([fromSido, toSido])
   @@map("tour_transitions")
 }
 
-// 여행·일차별 유형·장소 순서(코스 템플릿).
+// 여행·일차별 유형·장소 순서(코스 템플릿). sidos(7차) = 그날 공개 방문의 시도 목록 ",전북," (로더가 채움).
 model TourDaySequence {
   id            String  @id
+  dataset       String  @default("jeju")
+  sidos         String?
   travelId      String
   dayIndex      Int
   visitDate     String?
@@ -2656,12 +2679,14 @@ model TourDaySequence {
 
   @@index([isJejuDay])
   @@index([travelId])
+  @@index([dataset])
   @@map("tour_day_sequences")
 }
 
 // 동반자(관계·성별·연령대·동반 상황). 관리자 코스 샘플에서만.
 model TourCompanion {
   id          Int     @id @default(autoincrement())
+  dataset     String  @default("jeju")
   travelId    String
   seq         Int
   relCd       String?
@@ -2671,12 +2696,14 @@ model TourCompanion {
   situationNm String?
 
   @@index([travelId])
+  @@index([dataset])
   @@map("tour_companions")
 }
 
-// 사진 메타(촬영 좌표 없음). 파일은 TOUR_THUMBS_DIR 아래 {s,m}/{id}.webp — 관리자 인증 라우트로만 서빙.
+// 사진 메타(촬영 좌표 없음). 파일은 썸네일 폴더 아래 {s,m}/{id}.webp — 관리자 인증 라우트로만 서빙(세트별 export 폴더).
 model TourPhoto {
   id            String  @id
+  dataset       String  @default("jeju")
   travelId      String?
   visitAreaId   String?
   placeId       String?
@@ -2706,6 +2733,7 @@ model TourPhoto {
 
   @@index([placeId])
   @@index([travelId])
+  @@index([dataset])
   @@map("tour_photos")
 }
 
