@@ -11,7 +11,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type ConsoleMessage, type Page } from 'playwright';
-import { TOUR_DATASET_KEYS, TOUR_REGIONS } from '@repo/utils';
+import { TOUR_DATASET_KEYS, TOUR_REGIONS, tourSampleRegionAt } from '@repo/utils';
 
 const arg = (name: string, def: string): string => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -152,6 +152,15 @@ const apiChecks = async (): Promise<void> => {
     const reg = await getJson<{ groups: Array<{ key: string; visits: number }> }>('/api/v1/tour/public/regions?region=gangwon');
     if (reg.status !== 200) throw new Error(`regions status ${reg.status}`);
     return `gangwon 여행 ${ins.body.scale?.trips ?? 0} · east 여행 ${east.body.scale?.trips ?? 0} · "${ins.body.hubLabel}" · 집단 ${reg.body.groups.map((g) => g.key).join('/') || '없음(미적재)'}`;
+  });
+  await step('API insights 수도권 지역(9차) — region=seoul·capital 200·지역비교 구 집단', async () => {
+    const ins = await getJson<Insights & { hubLabel: string }>('/api/v1/tour/public/insights?region=seoul');
+    if (ins.status !== 200) throw new Error(`insights status ${ins.status}`);
+    const cap = await getJson<Insights>('/api/v1/tour/public/insights?region=capital');
+    if (cap.status !== 200) throw new Error(`capital status ${cap.status}`);
+    const reg = await getJson<{ groups: Array<{ key: string; visits: number }> }>('/api/v1/tour/public/regions?region=seoul');
+    if (reg.status !== 200) throw new Error(`regions status ${reg.status}`);
+    return `seoul 여행 ${ins.body.scale?.trips ?? 0} · capital 여행 ${cap.body.scale?.trips ?? 0} · "${ins.body.hubLabel}" · 집단 ${reg.body.groups.map((g) => g.key).join('/') || '없음(미적재)'}`;
   });
   await step('API 관리자 라우트 무인증 — status·원본 열람 401, 사진은 존재를 숨기는 404', async () => {
     const a = await getJson('/api/v1/admin/tour/status');
@@ -300,22 +309,29 @@ const planPage = async (page: Page): Promise<void> => {
 
 // ── ④ /life-map ─────────────────────────────────────────────────────────────────
 const lifeMapPage = async (page: Page): Promise<void> => {
-  await step('/life-map 배경 "여행자 밀도" 토글 → 가까운 표본(제주·서부권·동부권)으로 이동·요약 카드·푸터 출처', async () => {
+  await step('/life-map 배경 "여행자 밀도" 토글 → 표본 밖이면 가까운 표본으로 이동(안이면 그대로)·요약 카드·푸터 출처', async () => {
     await page.goto(`${WEB}/life-map`, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('life-map-view').waitFor({ timeout: 30_000 });
     await page.getByTestId('life-overlay-tour').click();
     await page.getByTestId('life-tour-card').waitFor({ timeout: 10_000 });
     await page.getByTestId('life-tour-summary').waitFor({ timeout: 30_000 });
-    // 표본 밖(기본 서울)에서 켜면 가까운 표본 세트의 중심으로 간다(7차부터 제주 고정이 아님). URLSearchParams 는 쉼표를 %2C 로 싣는다 — 디코드해서 본다.
-    const centers = TOUR_DATASET_KEYS.map((k) => ({ ll: `ll=${TOUR_REGIONS[k].center.lat.toFixed(5)},${TOUR_REGIONS[k].center.lng.toFixed(5)}`, z: `z=${TOUR_REGIONS[k].center.zoom}` }));
-    await page.waitForFunction(
-      (cs) => cs.some((c) => decodeURIComponent(location.search).includes(c.ll) && location.search.includes(c.z)),
-      centers,
-      { timeout: 10_000 },
-    );
+    // 기본 진입 중심(서울시청)이 표본 세트 bbox 안이면(9차 수도권부터) 이동하지 않고, 밖이면 가까운 세트 중심으로 간다(7차부터 제주 고정이
+    // 아님). URLSearchParams 는 쉼표를 %2C 로 싣는다 — 디코드해서 본다.
+    const inside = tourSampleRegionAt(37.5665, 126.978);
+    if (inside) {
+      await page.waitForTimeout(1000);
+      if (/ll=/.test(new URL(page.url()).search)) throw new Error(`표본(${inside}) 안인데 지도가 이동함: ${decodeURIComponent(new URL(page.url()).search)}`);
+    } else {
+      const centers = TOUR_DATASET_KEYS.map((k) => ({ ll: `ll=${TOUR_REGIONS[k].center.lat.toFixed(5)},${TOUR_REGIONS[k].center.lng.toFixed(5)}`, z: `z=${TOUR_REGIONS[k].center.zoom}` }));
+      await page.waitForFunction(
+        (cs) => cs.some((c) => decodeURIComponent(location.search).includes(c.ll) && location.search.includes(c.z)),
+        centers,
+        { timeout: 10_000 },
+      );
+    }
     await page.getByTestId('life-map-footer-tour').waitFor({ timeout: 5000 });
     const summary = (await page.getByTestId('life-tour-summary').textContent())?.replace(/\s+/g, ' ').trim();
-    return `${summary} · URL ${decodeURIComponent(new URL(page.url()).search)}`;
+    return `${summary} · ${inside ? `표본 ${inside} 안이라 이동 없음` : '이동'} · URL ${decodeURIComponent(new URL(page.url()).search) || '(없음)'}`;
   });
   await page.waitForTimeout(1500);
   await shot(page, '04-life-map-tour-overlay');

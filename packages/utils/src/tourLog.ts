@@ -1,5 +1,5 @@
-// 여행로그(AI 허브 「국내 여행로그 데이터」 2023 — 71780 제주·도서, 71779 서부권, 71778 동부권) 공통 상수 — 적재기·집계·화면이
-// 같은 값을 쓴다. 계획·이용조건은 docs/PLAN-tour-log.md. 7차(서부권)부터 데이터셋이 여럿이라 "데이터셋(적재 단위)" 과
+// 여행로그(AI 허브 「국내 여행로그 데이터」 2023 — 71780 제주·도서, 71779 서부권, 71778 동부권, 71581 수도권) 공통 상수 — 적재기·집계·
+// 화면이 같은 값을 쓴다. 계획·이용조건은 docs/PLAN-tour-log.md. 7차(서부권)부터 데이터셋이 여럿이라 "데이터셋(적재 단위)" 과
 // "지역(공개 화면 축)" 을 여기서 한 번만 정의한다. 권역을 더 붙일 때는 TOUR_DATASETS 한 줄 + TOUR_REGIONS(권역·시도) + 계약 두 배열.
 
 // ── 데이터셋(적재 단위) ────────────────────────────────────────────────────────
@@ -7,7 +7,7 @@
 // 유일(POI/이름+좌표 해시)이라 서울역·휴게소 같은 공용 장소가 세트마다 같은 id 로 나온다 → 기본 세트(jeju, 첫 적재본)만 접두 없음.
 // 키 목록은 @repo/api-contract 의 TourDataset·TourRegion zod enum 과 같아야 한다(utils 는 api-contract 를 import 할 수 없어 —
 // 순환 금지 — 리터럴을 다시 적고, friendly 의 tour 테스트가 두 목록의 동일성을 검증한다. foodTaxonomy 와 같은 규약).
-export const TOUR_DATASET_KEYS = ['jeju', 'west', 'east'] as const;
+export const TOUR_DATASET_KEYS = ['jeju', 'west', 'east', 'capital'] as const;
 export type TourDatasetKey = (typeof TOUR_DATASET_KEYS)[number];
 export interface TourDatasetDef {
   key: TourDatasetKey;
@@ -27,6 +27,8 @@ export const TOUR_DATASETS: Record<TourDatasetKey, TourDatasetDef> = {
   jeju: { key: 'jeju', aihub: '71780', name: '국내 여행로그 데이터(제주도 및 도서지역)', label: '제주·도서', exportName: 'lp-2023', idPrefix: '', sidos: ['제주'] },
   west: { key: 'west', aihub: '71779', name: '국내 여행로그 데이터(서부권)', label: '서부권', exportName: 'lp-west-2023', idPrefix: 'west:', sidos: ['전북', '전남', '충남', '대전', '충북', '광주', '세종'] },
   east: { key: 'east', aihub: '71778', name: '국내 여행로그 데이터(동부권)', label: '동부권', exportName: 'lp-east-2023', idPrefix: 'east:', sidos: ['강원', '경북', '경남', '부산', '대구', '울산'] },
+  // 수도권(9차)은 거주자의 근교 나들이 표본(당일 67%, 85% 수도권 거주) — 장소당 표본이 얇아 시드보다 매칭·밀도·코스 용도.
+  capital: { key: 'capital', aihub: '71581', name: '국내 여행로그 데이터(수도권)', label: '수도권', exportName: 'lp-capital-2023', idPrefix: 'capital:', sidos: ['서울', '경기', '인천'] },
 };
 export const isTourDatasetKey = (s: unknown): s is TourDatasetKey => typeof s === 'string' && (TOUR_DATASET_KEYS as readonly string[]).includes(s);
 export const tourPlaceIdOf = (dataset: TourDatasetKey, rawId: string): string => `${TOUR_DATASETS[dataset].idPrefix}${rawId}`;
@@ -35,8 +37,8 @@ export const tourSyncLayer = (dataset: TourDatasetKey): string => (dataset === '
 
 // ── 지역(공개 화면 축) ──────────────────────────────────────────────────────────
 // 인사이트·코스·숙소·지역비교·시드 콘솔의 region 값. 'jeju' 는 isJeju(본섬+부속섬, bbox 판정 포함) 그대로, 시도 지역은 방문 sido,
-// 'west'/'east' 는 그 권역 시도의 합, 'all' 은 필터 없음(적재된 전체). 순서는 화면 칩 순서(권역 → 그 권역의 시도). 데이터셋 키는
-// 항상 지역 키이기도 하다(표본 단위 지역). api-contract TourRegion 과 동일해야 한다.
+// 'west'/'east'/'capital' 은 그 권역 시도의 합, 'all' 은 필터 없음(적재된 전체). 순서는 화면 칩 순서(권역 → 그 권역의 시도). 데이터셋
+// 키는 항상 지역 키이기도 하다(표본 단위 지역). api-contract TourRegion 과 동일해야 한다.
 export const TOUR_REGION_KEYS = [
   'jeju',
   'west',
@@ -54,6 +56,10 @@ export const TOUR_REGION_KEYS = [
   'busan',
   'daegu',
   'ulsan',
+  'capital',
+  'seoul',
+  'gyeonggi',
+  'incheon',
   'all',
 ] as const;
 export type TourRegionKey = (typeof TOUR_REGION_KEYS)[number];
@@ -91,6 +97,12 @@ const BUSAN_HUBS = ['부산역', '김해국제공항', '부산종합버스터미
 const DAEGU_HUBS = ['동대구역', '동대구터미널', '대구역', '대구국제공항', '서대구역'] as const;
 const ULSAN_HUBS = ['울산역', '태화강역', '울산시외버스터미널', '울산고속버스터미널', '울산공항'] as const;
 const EAST_HUBS = [...GANGWON_HUBS, ...GYEONGBUK_HUBS, ...GYEONGNAM_HUBS, ...BUSAN_HUBS, ...DAEGU_HUBS, ...ULSAN_HUBS] as const;
+// 수도권(9차) 거점 — 표본이 집에서 출발하는 나들이라 "거점 다음" 은 타지 거주자(15%)와 역·터미널 이용자에게만 의미가 있다. 역·터미널·공항만.
+const CAPITAL_SIDOS = TOUR_DATASETS.capital.sidos;
+const SEOUL_HUBS = ['서울역', '용산역', '수서역', '청량리역', '서울고속버스터미널', '센트럴시티터미널', '동서울종합터미널', '김포국제공항', '김포공항'] as const;
+const GYEONGGI_HUBS = ['수원역', '가평역', '광명역', '동탄역', '평택역', '의정부역', '용문역'] as const;
+const INCHEON_HUBS = ['인천국제공항', '인천공항', '인천종합버스터미널', '인천역', '송도역', '강화여객자동차터미널'] as const;
+const CAPITAL_HUBS = [...SEOUL_HUBS, ...GYEONGGI_HUBS, ...INCHEON_HUBS] as const;
 export const TOUR_REGIONS: Record<TourRegionKey, TourRegionDef> = {
   jeju: { key: 'jeju', label: '제주', parent: null, sidos: ['제주'], center: { lat: 33.38, lng: 126.55, zoom: 10 }, bbox: [33.0, 125.9, 34.2, 127.2], hubs: JEJU_HUBS, hubLabel: '공항 다음 첫 목적지' },
   west: { key: 'west', label: '서부권', parent: null, sidos: WEST_SIDOS, center: { lat: 36.0, lng: 127.1, zoom: 8 }, bbox: [33.9, 125.9, 37.25, 128.6], hubs: WEST_HUBS, hubLabel: '역·터미널·공항 다음 첫 목적지' },
@@ -108,7 +120,11 @@ export const TOUR_REGIONS: Record<TourRegionKey, TourRegionDef> = {
   busan: { key: 'busan', label: '부산', parent: 'east', sidos: ['부산'], center: { lat: 35.17, lng: 129.07, zoom: 11 }, bbox: [34.95, 128.75, 35.4, 129.35], hubs: BUSAN_HUBS, hubLabel: '역·공항·터미널 다음 첫 목적지' },
   daegu: { key: 'daegu', label: '대구', parent: 'east', sidos: ['대구'], center: { lat: 35.85, lng: 128.6, zoom: 11 }, bbox: [35.6, 128.35, 36.05, 128.8], hubs: DAEGU_HUBS, hubLabel: '역·터미널·공항 다음 첫 목적지' },
   ulsan: { key: 'ulsan', label: '울산', parent: 'east', sidos: ['울산'], center: { lat: 35.55, lng: 129.25, zoom: 11 }, bbox: [35.3, 128.95, 35.75, 129.5], hubs: ULSAN_HUBS, hubLabel: '역·터미널 다음 첫 목적지' },
-  all: { key: 'all', label: '전체', parent: null, sidos: null, center: { lat: 36.0, lng: 127.9, zoom: 7 }, bbox: [33.0, 124.0, 39.0, 132.0], hubs: [...JEJU_HUBS, ...WEST_HUBS, ...EAST_HUBS], hubLabel: '공항·역·터미널 다음 첫 목적지' },
+  capital: { key: 'capital', label: '수도권', parent: null, sidos: CAPITAL_SIDOS, center: { lat: 37.5, lng: 127.0, zoom: 9 }, bbox: [36.9, 124.6, 38.3, 127.9], hubs: CAPITAL_HUBS, hubLabel: '역·터미널·공항 다음 첫 목적지' },
+  seoul: { key: 'seoul', label: '서울', parent: 'capital', sidos: ['서울'], center: { lat: 37.5665, lng: 126.978, zoom: 11 }, bbox: [37.42, 126.76, 37.71, 127.19], hubs: SEOUL_HUBS, hubLabel: '역·터미널·공항 다음 첫 목적지' },
+  gyeonggi: { key: 'gyeonggi', label: '경기', parent: 'capital', sidos: ['경기'], center: { lat: 37.4, lng: 127.2, zoom: 9 }, bbox: [36.9, 126.3, 38.3, 127.9], hubs: GYEONGGI_HUBS, hubLabel: '역 다음 첫 목적지' },
+  incheon: { key: 'incheon', label: '인천', parent: 'capital', sidos: ['인천'], center: { lat: 37.45, lng: 126.7, zoom: 11 }, bbox: [37.1, 124.6, 37.85, 126.85], hubs: INCHEON_HUBS, hubLabel: '공항·역·터미널 다음 첫 목적지' },
+  all: { key: 'all', label: '전체', parent: null, sidos: null, center: { lat: 36.0, lng: 127.9, zoom: 7 }, bbox: [33.0, 124.0, 39.0, 132.0], hubs: [...JEJU_HUBS, ...WEST_HUBS, ...EAST_HUBS, ...CAPITAL_HUBS], hubLabel: '공항·역·터미널 다음 첫 목적지' },
 };
 export const isTourRegionKey = (s: unknown): s is TourRegionKey => typeof s === 'string' && (TOUR_REGION_KEYS as readonly string[]).includes(s);
 export const tourRegionLabel = (key: TourRegionKey): string => TOUR_REGIONS[key].label;

@@ -225,7 +225,7 @@ export const LifeMapPage = () => {
     if (!tourOn || !pickedCode || !densityQ.data) return null;
     return densityQ.data.cells.find((c) => tourDensityCellKey(c.x, c.y) === pickedCode) ?? null;
   }, [tourOn, pickedCode, densityQ.data]);
-  // 배경 토글 — 선택(시군구·칸)은 배경마다 뜻이 달라 항상 비운다. 여행자 밀도를 켰는데 지도가 표본(제주·서부권·동부권) 밖이면 가까운 표본으로.
+  // 배경 토글 — 선택(시군구·칸)은 배경마다 뜻이 달라 항상 비운다. 여행자 밀도를 켰는데 지도가 표본(utils TOUR_DATASET_KEYS 세트 bbox) 밖이면 가까운 표본으로.
   const handleToggleOverlay = useCallback(
     (o: LifeMapOverlay) => {
       toggleOverlay(o);

@@ -61,9 +61,10 @@ LIFE_STORE_ZIP="${LIFE_STORE_ZIP:-$(store_latest_zip)}"
 # 여행로그(AI 허브 71780) — tour-c 가 내보낸 폴더(manifest.json + *.jsonl.gz + thumbs/). 원본은 이 서버 밖으로
 # 내보내지 않고 공개 API 는 집계만 낸다(docs/PLAN-tour-log.md). 폴더는 rsync 로 올린다(git 밖).
 TOUR_EXPORT_DIR="${TOUR_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-2023}"
-# 서부권(AI 허브 71779)·동부권(71778) export 폴더 — 있으면 --dataset west/east 로 함께 적재한다(없으면 그 세트는 건너뜀).
+# 서부권(AI 허브 71779)·동부권(71778)·수도권(71581) export 폴더 — 있으면 --dataset west/east/capital 로 함께 적재한다(없으면 그 세트는 건너뜀).
 TOUR_WEST_EXPORT_DIR="${TOUR_WEST_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-west-2023}"
 TOUR_EAST_EXPORT_DIR="${TOUR_EAST_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-east-2023}"
+TOUR_CAPITAL_EXPORT_DIR="${TOUR_CAPITAL_EXPORT_DIR:-$LIFE_DATA_DIR/tour/lp-capital-2023}"
 # 음식 카탈로그 배포본 — 적재기(load:food-catalog)가 이 경로를 기본으로 찾는다. 출처는
 # docs/data-sources.md. 영양성분 API(DATA_GO_KR_API_KEY)는 선택이고, 파일이 있으면 파일이 우선이다.
 FOOD_DATA_DIR="$ROOT/data/open/food"
@@ -155,7 +156,7 @@ life_map_data() {
   # 첫 적재. 세트가 다 끝난 뒤 맛집 ↔ 여행로그 장소 매칭을 한 번 돌린다. 폐업 조회(check:tour-biz)는 국세청 쿼터라 자동 실행 안 함
   # (어드민 /admin/tour 에서 수동). 세트별 건수는 status:life-map 의 tour_<세트>. 세트 추가는 아래 목록에 "키|폴더|이름" 한 항목.
   local did_tour=0 spec key dir label cnt
-  for spec in "jeju|$TOUR_EXPORT_DIR|제주·도서" "west|$TOUR_WEST_EXPORT_DIR|서부권" "east|$TOUR_EAST_EXPORT_DIR|동부권"; do
+  for spec in "jeju|$TOUR_EXPORT_DIR|제주·도서" "west|$TOUR_WEST_EXPORT_DIR|서부권" "east|$TOUR_EAST_EXPORT_DIR|동부권" "capital|$TOUR_CAPITAL_EXPORT_DIR|수도권"; do
     IFS='|' read -r key dir label <<< "$spec"
     cnt="$(stat_val "tour_$key" "$st")"
     if [[ "$force" == 1 || "${cnt:-0}" == 0 ]]; then

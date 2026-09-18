@@ -1,9 +1,9 @@
-// 여행로그(AI 허브 71780 제주·도서, 71779 서부권, 71778 동부권) 적재 — tour-c export(manifest.json + <table>.jsonl.gz 10개)를
+// 여행로그(AI 허브 71780 제주·도서, 71779 서부권, 71778 동부권, 71581 수도권) 적재 — tour-c export(manifest.json + <table>.jsonl.gz 10개)를
 // Tour* 테이블의 해당 데이터셋 행과 갈아끼운다(다른 데이터셋은 그대로). 원본은 리포 밖 data/open/tour/<name>/ 에 두고
 // (docs/data-sources.md), 이용조건·구조는 docs/PLAN-tour-log.md.
 //
-// 실행: pnpm --filter friendly load:tour [dir] [--dataset jeju|west|east] [--dry-run]
-//   dir        기본 <리포>/data/open/tour/<exportName>(jeju: lp-2023, west: lp-west-2023, east: lp-east-2023) — manifest.json 이 있는 폴더
+// 실행: pnpm --filter friendly load:tour [dir] [--dataset jeju|west|east|capital] [--dry-run]
+//   dir        기본 <리포>/data/open/tour/<exportName>(utils TOUR_DATASETS — lp-2023, lp-west-2023, lp-east-2023, lp-capital-2023) — manifest.json 이 있는 폴더
 //   --dataset  어느 세트인지(기본 jeju). export 의 manifest 는 어느 권역이든 71780 이라 적혀 오므로 적재기가 여행 표의 제주
 //              방문 비율로 맞는지 검사한다(틀리면 중단).
 //   --dry-run  정규화 + 리포트만(DB 쓰기 없음)

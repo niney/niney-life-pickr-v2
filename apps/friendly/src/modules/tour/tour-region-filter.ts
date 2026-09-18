@@ -2,7 +2,7 @@
 // 전부 이 파일을 거쳐야 "같은 지역이 표마다 다르게 잘리는" 일이 없다.
 //   jeju  : tour-c 의 isJeju(본섬+부속섬, bbox 보정) 그대로 — 여행은 nJeju>0, 방문 isJeju, 전이 bothJeju, 일차 isJejuDay.
 //   시도   : 방문 sido(짧은 이름). 여행·일차는 로더가 채운 ",전북,대전," 꼴의 sidos 목록에 포함 여부, 전이는 from/to sido 둘 다.
-//   west/east : 서부권 7개·동부권 6개 시도 합(위와 같은 규칙, utils TOUR_REGIONS.sidos). all: 조건 없음.
+//   west/east/capital : 서부권 7개·동부권 6개·수도권 3개 시도 합(위와 같은 규칙, utils TOUR_REGIONS.sidos). all: 조건 없음.
 
 import { Prisma } from '@prisma/client';
 import { TOUR_REGIONS, type TourRegionKey } from '@repo/utils';
