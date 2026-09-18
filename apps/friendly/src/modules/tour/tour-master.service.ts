@@ -859,7 +859,7 @@ export const getTourLoadStatus = async (prisma: PrismaClient): Promise<TourLoadS
   };
 };
 
-// 기본 export 폴더 — 리포 밖 data/open/tour/<exportName>(jeju: lp-2023, west: lp-west-2023). 서버는 apps/friendly 에서 뜨고
+// 기본 export 폴더 — 리포 밖 data/open/tour/<exportName>(jeju: lp-2023, west: lp-west-2023, east: lp-east-2023). 서버는 apps/friendly 에서 뜨고
 // (pm2·dev) 스크립트도 그 cwd 라 cwd 기준 두 후보를 본다(번들된 dist 에서는 import.meta.url 이 리포 구조를 잃어 못 쓴다).
 // 운영에서 다른 곳에 두면 TOUR_THUMBS_DIR(jeju) / TOUR_THUMBS_DIR_<KEY>(그 외) 로 사진 폴더만 따로 지정한다.
 export const tourDefaultExportDir = (dataset: TourDatasetKey = 'jeju'): string => {

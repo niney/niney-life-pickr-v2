@@ -1,8 +1,10 @@
 import type { TourInsightsParams } from '@repo/shared';
+import { TOUR_REGIONS, TOUR_REGION_GROUPS, isTourRegionKey, tourRegionGroupOf, type TourRegionKey } from '@repo/utils';
 import { cn } from '~/lib/utils';
-import { TOUR_ACCOMPANY_OPTIONS, TOUR_AGE_OPTIONS, TOUR_MONTH_OPTIONS, TOUR_NIGHTS_OPTIONS, TOUR_REGION_OPTIONS, shortAccompany } from './tourFormat';
+import { TOUR_ACCOMPANY_OPTIONS, TOUR_AGE_OPTIONS, TOUR_MONTH_OPTIONS, TOUR_NIGHTS_OPTIONS, shortAccompany } from './tourFormat';
 
 // 인사이트·코스 추천 공통 필터 — 지역·연령·성별·동반·월·박수. 값은 URL 쿼리(인사이트) 또는 폼 상태(코스)가 쥔다.
+// 지역은 두 줄(8차): 1행 권역(제주·서부권·동부권·전체), 2행은 고른 권역의 시도 — 값은 여전히 region 키 하나.
 
 const Chip = ({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) => (
   <button
@@ -26,15 +28,30 @@ const Group = ({ label, children }: { label: string; children: React.ReactNode }
 
 export const TourFilterBar = ({ value, onChange, showRegion = true }: { value: TourInsightsParams; onChange: (next: TourInsightsParams) => void; showRegion?: boolean }) => {
   const set = <K extends keyof TourInsightsParams>(k: K, v: TourInsightsParams[K]) => onChange({ ...value, [k]: value[k] === v ? undefined : v });
-  const region = value.region ?? 'jeju';
+  const region: TourRegionKey = isTourRegionKey(value.region) ? value.region : 'jeju';
+  const group = tourRegionGroupOf(region);
+  const sidos = TOUR_REGION_GROUPS.find((g) => g.key === group)?.children ?? [];
+  const pickRegion = (r: TourRegionKey) => onChange({ ...value, region: r });
   const dirty = Boolean(value.ageGrp || value.gender || value.accompany || value.month !== undefined || value.nights !== undefined);
   return (
     <div className="space-y-2 rounded-lg border bg-card p-3">
       {showRegion && (
         <Group label="지역">
-          {TOUR_REGION_OPTIONS.map((r) => (
-            <Chip key={r.value} active={region === r.value} onClick={() => onChange({ ...value, region: r.value })}>
-              {r.label}
+          {TOUR_REGION_GROUPS.map((g) => (
+            <Chip key={g.key} active={group === g.key} onClick={() => pickRegion(g.key)}>
+              {TOUR_REGIONS[g.key].label}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      {showRegion && sidos.length > 0 && (
+        <Group label="시도">
+          <Chip active={region === group} onClick={() => pickRegion(group)}>
+            {TOUR_REGIONS[group].label} 전체
+          </Chip>
+          {sidos.map((s) => (
+            <Chip key={s} active={region === s} onClick={() => pickRegion(s)}>
+              {TOUR_REGIONS[s].label}
             </Chip>
           ))}
         </Group>

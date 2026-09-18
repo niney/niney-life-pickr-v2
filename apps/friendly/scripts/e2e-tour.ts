@@ -11,6 +11,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type ConsoleMessage, type Page } from 'playwright';
+import { TOUR_DATASET_KEYS, TOUR_REGIONS } from '@repo/utils';
 
 const arg = (name: string, def: string): string => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -141,6 +142,16 @@ const apiChecks = async (): Promise<void> => {
     if (reg.status !== 200) throw new Error(`regions status ${reg.status}`);
     if ((await getJson('/api/v1/tour/public/insights?region=daejeon-xyz')).status !== 400) throw new Error('잘못된 region 400 아님');
     return `daejeon 여행 ${ins.body.scale?.trips ?? 0} · "${ins.body.hubLabel}" · 집단 ${reg.body.groups.map((g) => g.key).join('/') || '없음(미적재)'}`;
+  });
+  await step('API insights 동부권 지역(8차) — region=gangwon·east 200·hubLabel·지역비교 시군구 집단', async () => {
+    const ins = await getJson<Insights & { hubLabel: string }>('/api/v1/tour/public/insights?region=gangwon');
+    if (ins.status !== 200) throw new Error(`insights status ${ins.status}`);
+    // 권역 키(east)는 6개 시도 합 — 동부권 세트가 없으면 insufficient 지만 200 이어야 한다.
+    const east = await getJson<Insights>('/api/v1/tour/public/insights?region=east');
+    if (east.status !== 200) throw new Error(`east status ${east.status}`);
+    const reg = await getJson<{ groups: Array<{ key: string; visits: number }> }>('/api/v1/tour/public/regions?region=gangwon');
+    if (reg.status !== 200) throw new Error(`regions status ${reg.status}`);
+    return `gangwon 여행 ${ins.body.scale?.trips ?? 0} · east 여행 ${east.body.scale?.trips ?? 0} · "${ins.body.hubLabel}" · 집단 ${reg.body.groups.map((g) => g.key).join('/') || '없음(미적재)'}`;
   });
   await step('API 관리자 라우트 무인증 — status·원본 열람 401, 사진은 존재를 숨기는 404', async () => {
     const a = await getJson('/api/v1/admin/tour/status');
@@ -275,7 +286,8 @@ const planPage = async (page: Page): Promise<void> => {
     if (!disabled) throw new Error('활성');
   });
   await step('/travel/plan 조건 변경(나홀로·60대) → 완화 안내 또는 결과', async () => {
-    await page.getByRole('button', { name: '전체', exact: true }).click();
+    // "전체" 버튼은 둘 — 지역 칩(7차, 필터 바)과 결과 토글(식당만 ↔ 전체). 앞 단계의 "식당만" 을 되돌리는 건 뒤쪽 결과 토글.
+    await page.getByRole('button', { name: '전체', exact: true }).last().click();
     await page.getByRole('button', { name: '60대' }).click();
     await page.getByRole('button', { name: '나홀로 여행' }).click();
     await page.getByRole('button', { name: '비슷한 여행 찾기' }).click();
@@ -288,14 +300,19 @@ const planPage = async (page: Page): Promise<void> => {
 
 // ── ④ /life-map ─────────────────────────────────────────────────────────────────
 const lifeMapPage = async (page: Page): Promise<void> => {
-  await step('/life-map 배경 "여행자 밀도" 토글 → 제주 이동·요약 카드·푸터 출처', async () => {
+  await step('/life-map 배경 "여행자 밀도" 토글 → 가까운 표본(제주·서부권·동부권)으로 이동·요약 카드·푸터 출처', async () => {
     await page.goto(`${WEB}/life-map`, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('life-map-view').waitFor({ timeout: 30_000 });
     await page.getByTestId('life-overlay-tour').click();
     await page.getByTestId('life-tour-card').waitFor({ timeout: 10_000 });
     await page.getByTestId('life-tour-summary').waitFor({ timeout: 30_000 });
-    // URLSearchParams 는 쉼표를 %2C 로 싣는다 — 디코드해서 본다.
-    await page.waitForFunction(() => decodeURIComponent(location.search).includes('ll=33.38000,126.55000') && location.search.includes('z=10'), null, { timeout: 10_000 });
+    // 표본 밖(기본 서울)에서 켜면 가까운 표본 세트의 중심으로 간다(7차부터 제주 고정이 아님). URLSearchParams 는 쉼표를 %2C 로 싣는다 — 디코드해서 본다.
+    const centers = TOUR_DATASET_KEYS.map((k) => ({ ll: `ll=${TOUR_REGIONS[k].center.lat.toFixed(5)},${TOUR_REGIONS[k].center.lng.toFixed(5)}`, z: `z=${TOUR_REGIONS[k].center.zoom}` }));
+    await page.waitForFunction(
+      (cs) => cs.some((c) => decodeURIComponent(location.search).includes(c.ll) && location.search.includes(c.z)),
+      centers,
+      { timeout: 10_000 },
+    );
     await page.getByTestId('life-map-footer-tour').waitFor({ timeout: 5000 });
     const summary = (await page.getByTestId('life-tour-summary').textContent())?.replace(/\s+/g, ' ').trim();
     return `${summary} · URL ${decodeURIComponent(new URL(page.url()).search)}`;

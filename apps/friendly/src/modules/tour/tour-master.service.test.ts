@@ -225,8 +225,10 @@ describe('tour-master 데이터셋·지역 키', () => {
   it('장소 id 접두 — 첫 세트(jeju)는 그대로, 그 밖은 "<key>:" 접두', () => {
     expect(normalizeTourPlace(placeRow(), emptyTourReport().places, tourNormalizeCtx('jeju'))).toMatchObject({ id: 'pd804155188', dataset: 'jeju' });
     expect(normalizeTourPlace(placeRow(), emptyTourReport().places, tourNormalizeCtx('west'))).toMatchObject({ id: 'west:pd804155188', dataset: 'west' });
+    expect(normalizeTourPlace(placeRow(), emptyTourReport().places, tourNormalizeCtx('east'))).toMatchObject({ id: 'east:pd804155188', dataset: 'east' });
     // 방문의 placeId 도 접두가 붙는다.
     expect(normalizeTourVisit(visitRow(), emptyTourReport().visits, tourNormalizeCtx('west'))).toMatchObject({ dataset: 'west', placeId: 'west:pd804155188' });
+    expect(normalizeTourVisit(visitRow(), emptyTourReport().visits, tourNormalizeCtx('east'))).toMatchObject({ dataset: 'east', placeId: 'east:pd804155188' });
   });
 });
 

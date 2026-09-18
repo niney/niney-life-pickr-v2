@@ -159,7 +159,7 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | `GET /tour/public/density?kind=all\|restaurant[&bbox]` (6차) | 0.02° 격자 `[{x,y,n,travelers}]` + 분위 경계 4개(5등급 색칠) + 규모 — bbox 없으면 전국 칸 전부(수백 개) | 여행자 ≥5 칸만 |
 | `GET /tour/public/lodging?region&ageGrp&gender&accompany&month&nights` (6차) | 숙박 결제 유형별 이용 여행·결제 중앙·1박 추정(결제액 × 숙박 건수 ÷ 박수)·1인 중앙·예약률 + 숙소 방문 만족도 | 여행 ≥5 유형만, 금액·평가 3건 미만 null |
 | `GET /tour/public/regions?region&ageGrp&gender&accompany&month&nights` (6차·7차) | 집단(region=jeju 는 제주시·서귀포시·부속섬 3집단, 시도·서부권은 시군구 상위 8집단: 여행·방문·비중·만족·식당·체류·1인 지출·유형·읍면동) + 읍면동 표(최대 20) | 집단 여행 ≥5, 읍면동 방문 ≥5 |
-| 공통: `region` (7차) | `jeju`(제주 본섬+부속섬) · 시도 키 `jeonbuk/jeonnam/chungnam/daejeon/chungbuk/gwangju/sejong` · `west`(서부권 7개 시도 합) · `all`(적재 전체). 라벨·bbox·거점은 utils `TOUR_REGIONS` | — |
+| 공통: `region` (7차·8차) | `jeju`(제주 본섬+부속섬) · `west`(서부권 7개 시도 합) + 시도 키 `jeonbuk/jeonnam/chungnam/daejeon/chungbuk/gwangju/sejong` · `east`(동부권 6개 시도 합) + `gangwon/gyeongbuk/gyeongnam/busan/daegu/ulsan` · `all`(적재 전체). 라벨·bbox·거점·권역 묶음(`parent`, `TOUR_REGION_GROUPS`)은 utils `TOUR_REGIONS` — 화면 칩은 1행 권역, 2행 시도 | — |
 
 응답 스키마(`@repo/api-contract` `tour.ts`)에는 여행·방문·여행자 식별자 필드가 없다. 테스트 `tour-public.test.ts` 가 (1) 스키마 키 집합에
 `travelId|visitAreaId|travelerLabel|photoId` 가 없음, (2) n<5 셀이 null 로 나옴, (3) 매칭 없는 식당은 `tour: null` 을 고정한다.
@@ -217,7 +217,8 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 | **5차 공개 — 인사이트·코스** ✅ 2026-09-13 (배포는 AI 허브 회신 뒤) | `tour-insights.service.ts`(`TourInsightsService.insights/plan`, LRU 10분·필터 키, 20건 미만 `insufficient`, 완화 사다리 month→gender→nights→ageGrp, 점수 n×(mean−3.3), 교통·숙소 제외) · `GET /tour/public/insights?region·ageGrp·gender·accompany·month·nights` · `POST /tour/public/plan` · 계약 `TourInsightsQuery/Result`·`TourPlanBody/Result` · shared `tourApi.publicInsights/publicPlan`·`useTourInsights`(필터 키 캐시)·`useTourPlan` · 웹 `routes/TravelInsightsPage.tsx`(`/travel/jeju`, 필터 = URL 쿼리, KPI 5 + 섹션 13)·`routes/TravelPlanPage.tsx`(`/travel/plan`, 체크 → `/vote/new` state 프리필 `presetTitle/presetOptions`)·`components/tour/{charts,TourFilterBar,tourFormat}` · 사이드바·상단바 "여행" · 테스트 `tour-insights.service.test.ts` 5건(집계·k 억제·insufficient·사다리·라우트 400, 응답 키 스캔) | 필터를 바꾸면 셀이 갱신되고 20건 미만은 안내. 코스 → 그룹투표 생성까지 이어짐 |
 | **6차 공개 — 지도·숙소·지역** ✅ 2026-09-13 (배포는 AI 허브 회신 뒤) | `tour-region.service.ts`(`TourRegionService.density/lodging/regions`, SQL 격자 group by — SQLite 엔 FLOOR 가 없어 CAST 절삭, 키별 LRU 10분) · `GET /tour/public/density`·`/lodging`·`/regions` · 계약 `TourDensity*`·`TourLodging*`·`TourRegion*` · shared `tourApi.publicDensity/publicLodging/publicRegions`·`useTourDensity`(24h, 켠 동안만)·`useTourLodging`·`useTourRegions` · utils `tourLog.ts` 격자 상수·분위·등급·칸 bbox·`JEJU_CENTER`, `LIFE_MAP_OVERLAYS` 에 `tour` · 웹 일상지도 배경 레이어(위 표) + `lifeMapPrefsStore` v5 `tourDensityKind` · 인사이트 페이지 `TourRegionSection`(3집단 카드 + 읍면동 표)·`TourLodgingSection`(유형 표) — 같은 필터 바 · 테스트 `tour-region.service.test.ts` 4건 + `LifeMapPage.test.tsx` 배경 토글 1건 + utils 3건 |
 | **7차 서부권(71779) 다중 데이터셋** ✅ 2026-09-16 | tour-c 를 `TOUR_DATA_ROOT`=147 로 실행해 서부권 export(`lp-west-2023`) 생성(코드 수정 없음) · Prisma `Tour*` 10표에 `dataset`(기본 jeju) + `trips.visitSidos`·`day_sequences.sidos`·`transitions.fromSido/toSido` + 인덱스(마이그레이션 `20260915185047`, 기존 제주 행 백필 포함) · `tour-master.service.ts` 데이터셋 단위 교체(`--dataset`, 장소 id `<key>:` 접두, spend id 자체증가, manifest 71779 허용 + 제주 방문비율 plausibility 검사, 적재 뒤 sido 파생열 SQL 채움, `getTourLoadStatus.datasets`) · `tour-region-filter.ts`(region → 표별 where: jeju=isJeju, 시도=sido, west=7개 시도, all=전체) 를 인사이트·코스·숙소·지역비교·시드·폐업조회가 공용 · utils `TOUR_DATASETS`·`TOUR_REGIONS`(라벨·bbox·거점 hubs)·`tourSampleRegionAt`/`nearestTourSampleRegion`(밀도 레이어 이동) · 계약 `TourRegion` 10키·`TourDataset`·`TourAdminStatus.datasets`·`airportNext` → `hubLabel`(거점=역·터미널·공항)·지역비교 집단 키 문자열(시군구) · 웹 지역 칩(TourFilterBar/인사이트/코스, 제목 동적)·어드민 데이터셋별 적재·지역 필터(제주·도서/서부권/전체)·지역비교 집단 색 인덱스 · deploy.sh 세트별 적재 · 테스트 friendly 45건(키 동일성·id 접두 포함) 통과 |
-| 후속 후보 | 앱 연동(WebView 또는 네이티브 탭) · 남은 권역(수도권 71581·동부 71778, 같은 스키마 — `TOUR_DATASETS` 에 키 추가) · 여행자 점수의 랭킹 페이지 반영 | — |
+| **8차 동부권(71778) 세 번째 데이터셋** ✅ 2026-09-18 | 원본 146 폴더(93GB, 147 과 배치 동일)를 `niney-tour-pickr/tour-c-east`(tour-c 스크립트 사본 + `source-view` junction 으로 TS_photo·VS_photo·SbL 을 제주식 배치로) 에서 `TOUR_DATA_ROOT` 로 실행 → `lp-east-2023`(파생표 10 + thumbs/s 16,581장, 코드 수정 없음) · utils `TOUR_DATASETS.east`(접두 `east:`, 강원·경북·경남·부산·대구·울산) + `TOUR_REGIONS` 7키(`east` + 시도 6, 거점은 동부권 전이 표 실측 — 강릉역·신경주역·동대구역·부산역·태화강역 등) + `parent`/`TOUR_REGION_GROUPS`/`tourRegionGroupOf`(권역 묶음) + `tourSampleRegionAt`/`nearestTourSampleRegion` 을 데이터셋 전체로 일반화 + `TOUR_SOURCE_NOTE` 데이터명 자동(세트 전부) · 계약 `TourDataset`·`TourRegion` 17키 · env `TOUR_THUMBS_DIR_EAST` · `deploy.sh` 세트 목록 루프(`TOUR_EAST_EXPORT_DIR`) · `status:life-map` `tour_<세트>` 자동 · 웹 TourFilterBar 지역 칩 2행(권역 → 시도)·어드민 시드 필터 데이터셋 목록 자동 · 로더·마이그레이션·region-filter 수정 없음(`--dataset east`, 제주 방문 4/2,880 이라 plausibility 통과) · 테스트 utils 4건 추가(권역 묶음·표본 판정·출처 표기)·friendly east 접두 · e2e step region=gangwon/east |
+| 후속 후보 | 앱 연동(WebView 또는 네이티브 탭) · 남은 권역(수도권 71581, 같은 스키마 — `TOUR_DATASETS`·`TOUR_REGIONS`(권역+시도, `parent`) 에 키 추가 + 계약 두 배열) · 여행자 점수의 랭킹 페이지 반영 | — |
 
 ## 테스트
 
@@ -239,9 +240,9 @@ tour-c 의 `scripts/export_life_pickr.py`(`npm run data:export -- [--out data/ex
 
 ## 부록 B — AI 허브 문의문 초안 (사용자 발송)
 
-> 제목: 「국내 여행로그 데이터(제주도 및 도서지역)」 집계 통계의 웹 서비스 게시 가능 여부 문의
+> 제목: 「국내 여행로그 데이터」(제주도 및 도서지역·서부권·동부권) 집계 통계의 웹 서비스 게시 가능 여부 문의
 >
-> 데이터셋 71780 을 다운로드 승인받아 이용 중인 개인입니다. 원본 데이터(개별 여행·방문 기록, 사진, GPS)는 외부에 제공하거나
+> 데이터셋 71780(제주도 및 도서지역)·71779(서부권)·71778(동부권)을 다운로드 승인받아 이용 중인 개인입니다. 원본 데이터(개별 여행·방문 기록, 사진, GPS)는 외부에 제공하거나
 > 열람시키지 않고, 장소 단위로 **집계한 통계(방문자 수, 평균 만족도, 체류 시간 중앙값, 방문 시간대 분포, 1인당 지출 중앙값 등,
 > 표본 5명 미만 구간은 비공개)** 를 제가 운영하는 국내 웹 서비스(맛집 추천)에 출처(데이터명·AI 허브·NIA 사업결과)를 표기해
 > 게시하려 합니다. 이용정책의 "인공지능 학습모델의 학습용으로만" 조항과 FAQ 의 "2차 저작물(서비스 등) 영리·비영리 자유 활용"

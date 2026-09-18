@@ -1,17 +1,36 @@
 import { z } from 'zod';
 import { StartCrawlResult } from './crawl.js';
 
-// 여행로그(AI 허브 71780 제주·도서 + 71779 서부권) — 2차: 관리자 시드 콘솔 계약. 공개 집계 계약은 4차에서 이 파일에 합류한다.
+// 여행로그(AI 허브 71780 제주·도서 + 71779 서부권 + 71778 동부권) — 2차: 관리자 시드 콘솔 계약. 공개 집계 계약은 4차에서 이 파일에 합류한다.
 // 원본 행(개별 여행·방문)은 어디에도 없다 — 시드 목록은 장소(TourPlace) 단위 집계와 매칭·폐업 상태뿐.
 // 계획·이용조건: docs/PLAN-tour-log.md
 
 // 적재 단위(데이터셋) 키 — 여기가 원본이고 utils(TOUR_DATASETS)·서버가 이 목록을 쓴다(패키지 순환 금지: utils → api-contract 방향).
-export const TOUR_DATASET_KEYS = ['jeju', 'west'] as const;
+export const TOUR_DATASET_KEYS = ['jeju', 'west', 'east'] as const;
 export type TourDatasetType = (typeof TOUR_DATASET_KEYS)[number];
 export const TourDataset = z.enum(TOUR_DATASET_KEYS);
 
-// 지역 축(7차) 키 — jeju 는 isJeju(본섬+부속섬), 시도 키는 방문 sido, west 는 서부권 7개 시도, all 은 전체. 라벨·bbox·거점은 utils TOUR_REGIONS.
-export const TOUR_REGION_KEYS = ['jeju', 'west', 'jeonbuk', 'jeonnam', 'chungnam', 'daejeon', 'chungbuk', 'gwangju', 'sejong', 'all'] as const;
+// 지역 축(7차·8차) 키 — jeju 는 isJeju(본섬+부속섬), 시도 키는 방문 sido, west/east 는 권역 시도 합, all 은 전체. 순서는 utils 와 같다
+// (권역 → 그 권역의 시도). 라벨·bbox·거점·권역 묶음은 utils TOUR_REGIONS.
+export const TOUR_REGION_KEYS = [
+  'jeju',
+  'west',
+  'jeonbuk',
+  'jeonnam',
+  'chungnam',
+  'daejeon',
+  'chungbuk',
+  'gwangju',
+  'sejong',
+  'east',
+  'gangwon',
+  'gyeongbuk',
+  'gyeongnam',
+  'busan',
+  'daegu',
+  'ulsan',
+  'all',
+] as const;
 export const TourRegion = z.enum(TOUR_REGION_KEYS);
 export type TourRegionType = (typeof TOUR_REGION_KEYS)[number];
 

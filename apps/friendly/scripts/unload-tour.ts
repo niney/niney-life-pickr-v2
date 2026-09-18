@@ -1,8 +1,8 @@
-// 여행로그(AI 허브 71780·71779) 폐기 — Tour* 테이블 10개 + 맛집 매칭(RestaurantTourMatch)·사업자 상태(TourPlaceBizStatus)를
+// 여행로그(AI 허브 71780·71779·71778) 폐기 — Tour* 테이블 10개 + 맛집 매칭(RestaurantTourMatch)·사업자 상태(TourPlaceBizStatus)를
 // 데이터셋 단위(또는 전부) 비우고 count 0 인 적재 이력을 남긴다. AI 허브 이용정책의 "이용 중지·환수·폐기 요구" 에 한 명령으로
 // 응하기 위한 스크립트(docs/PLAN-tour-log.md §이용조건). 썸네일 파일(export 폴더의 thumbs/)은 DB 밖이라 직접 지운다.
 //
-// 실행: pnpm --filter friendly unload:tour --yes [--dataset jeju|west]   (--dataset 없으면 전부)
+// 실행: pnpm --filter friendly unload:tour --yes [--dataset jeju|west|east]   (--dataset 없으면 전부)
 
 import { PrismaClient } from '@prisma/client';
 import { TOUR_DATASET_KEYS, isTourDatasetKey } from '@repo/utils';

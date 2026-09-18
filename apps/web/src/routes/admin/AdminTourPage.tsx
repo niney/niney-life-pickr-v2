@@ -10,6 +10,7 @@ import {
   useTourSeeds,
 } from '@repo/shared';
 import type { TourSeedCandidateType, TourSeedItemType, TourSeedStatusFilterType } from '@repo/api-contract';
+import { TOUR_DATASETS, TOUR_DATASET_KEYS, type TourDatasetKey } from '@repo/utils';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -19,16 +20,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import { TourEvidencePanel } from '~/components/admin/tour/TourEvidencePanel';
 import { cn } from '~/lib/utils';
 
-// 어드민 "여행로그 시드" — AI 허브 여행로그(71780 제주·도서 + 71779 서부권, 2023)에서 여행자가 실제로 많이 간 식당 중 아직
-// 맛집 DB 에 없는 곳을 네이버 검색으로 등록하는 콘솔. 상단은 데이터셋별 적재·매칭·폐업 조회 상태와 실행 버튼, 아래는 장소
+// 어드민 "여행로그 시드" — AI 허브 여행로그(71780 제주·도서 + 71779 서부권 + 71778 동부권, 2023)에서 여행자가 실제로 많이 간 식당 중
+// 아직 맛집 DB 에 없는 곳을 네이버 검색으로 등록하는 콘솔. 상단은 데이터셋별 적재·매칭·폐업 조회 상태와 실행 버튼, 아래는 장소
 // 단위 집계 표(개별 방문 행은 없다 — docs/PLAN-tour-log.md). 등록은 기존 크롤 잡이라 진행은 크롤 테스트 페이지 링크로 본다.
 
 const PAGE_SIZE = 50;
-// 시드 콘솔 지역 필터 — 적재된 데이터셋 단위(전체/제주/서부권). 세밀한 시도 필터는 공개 화면(/travel)에서.
-const REGION_OPTIONS: Array<{ value: 'all' | 'jeju' | 'west'; label: string }> = [
+// 시드 콘솔 지역 필터 — 적재된 데이터셋 단위(전체/제주·도서/서부권/동부권, utils TOUR_DATASETS 순서). 세밀한 시도 필터는 공개 화면(/travel)에서.
+type SeedRegion = 'all' | TourDatasetKey;
+const REGION_OPTIONS: Array<{ value: SeedRegion; label: string }> = [
   { value: 'all', label: '전체' },
-  { value: 'jeju', label: '제주·도서' },
-  { value: 'west', label: '서부권' },
+  ...TOUR_DATASET_KEYS.map((k) => ({ value: k, label: TOUR_DATASETS[k].label })),
 ];
 const STATUS_OPTIONS: Array<{ value: TourSeedStatusFilterType; label: string }> = [
   { value: 'all', label: '전체' },
@@ -40,7 +41,7 @@ const STATUS_OPTIONS: Array<{ value: TourSeedStatusFilterType; label: string }> 
 const won = (v: number | null): string => (v === null ? '–' : `${Math.round(v).toLocaleString('ko-KR')}원`);
 
 export const AdminTourPage = () => {
-  const [region, setRegion] = useState<'all' | 'jeju' | 'west'>('all');
+  const [region, setRegion] = useState<SeedRegion>('all');
   const [minTravelers, setMinTravelers] = useState(5);
   const [status, setStatus] = useState<TourSeedStatusFilterType>('unmatched');
   const [qInput, setQInput] = useState('');
