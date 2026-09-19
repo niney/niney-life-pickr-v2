@@ -1,12 +1,14 @@
 ---
 topic: api-contract
-last_compiled: 2026-09-07
-sources_count: 58
+last_compiled: 2026-09-19
+sources_count: 66
 status: active
-aliases: [zod, schemas, ssot, contracts, "@repo/api-contract", tarot, saju, saju-c, saju-g, housing, usage-quota, menu-lexicon, menu-nutrition, TarotSpreadId, TarotTopic, TarotCardId, TarotDrawnCard, TarotChoices, CreateTarotReadingInput, TarotReadingSource, TarotCardReading, TarotChoiceVerdict, TarotMenuPick, TarotMenuVerdict, TarotQuota, TarotReadingResult, TarotReadingSummary, ListTarotReadingsQuery, CreateTarotShareInput, TarotShareResult, SharedTarotReading, TarotShareImageFormat, TAROT_GUEST_KEY_HEADER, X-Guest-Key, guest-key, remainingToday, UsageQuotaFeature, UsageQuotaSetting, UpdateUsageQuotaSettingInput, UsageQuotaUsage, UsageQuotaOverview, UsageQuotaOverviewQuery, guestCutoffPct, ipPerMinute, tarot-reading, saju-reading, saju-g-reading, SajuBirthInput, SajuOptionsInput, SajuCalendarKind, SajuGender, SajuWuxing, SajuTenGod, SajuTwelveStage, SajuPillarKey, SajuRelationType, SajuStarId, SajuPillar, SajuChart, SajuRelation, SajuStar, SajuLuckPillar, SajuYearLuck, SajuSectionId, SajuSectionStatus, SajuSections, SajuSource, SajuReadingSource, SajuReadingResult, SajuJobPollQuery, SajuJobPollResult, long-poll, 410-gone, SajuDay, SajuDayTag, SajuDailyInput, SajuDailyResult, SajuMatchInput, SajuMatchResult, SajuMatchGrade, SajuDatePurpose, SajuDatePickInput, SajuDatePickResult, SajuFoodInput, SajuFoodPick, SajuFoodResult, SajuLucky, SajuProfileInput, SajuProfile, SajuReadingKind, SajuReadingSummary, CreateSajuShareInput, SajuShareResult, SharedSajuReading, SAJU_GUEST_KEY_HEADER, SAJU_PROFILE_MAX, SajuGBirth, SajuGKind, SajuGElement, SajuGChart, SajuGReport, SajuGLifeScene, SajuGReadingResult, SajuGReceiptInput, SajuGProfile, SajuGProfileInput, UpdateSajuGProfileInput, SajuGRelationship, SajuGPairBirths, CreateSajuGPairInput, SajuGConnection, SajuGPairChart, SajuGPairResult, CreateSajuGShareInput, PublicSajuGShare, SajuGShareToken, SajuGShareResult, SajuGShareError, RevokeSajuGShareInput, SAJU_G_GUEST_KEY_HEADER, SAJU_G_PROFILES_MAX, HousingDealType, HousingAreaBand, HousingComplexKind, HousingLatestDeal, HousingFallbackDeal, HousingOfficialPrice, HousingOfficialGlance, HousingBandStat, HousingPointsQuery, HousingPoint, HousingCell, HousingPointsResult, HousingComplexSummary, HousingNearbyQuery, HousingNearbyItem, HousingNearbyResult, HousingSearchQuery, HousingSearchResult, HousingComplexParams, HousingComplexDetail, HousingTradesQuery, HousingTrade, HousingTradesResult, HousingStatusResult, housingAxisFields, dealType-band, MenuLexiconKind, MenuLexiconEntry, MenuLexiconCreateInput, MenuLexiconListQuery, MenuLexiconListResult, MENU_LEXICON_KINDS_WITH_TARGET, MenuKcalBasis, MenuKcalMatchedBy, RestaurantMenuKcalItem, RestaurantMenuKcalPart, RestaurantMenuKcalPortion, RestaurantMenuNutrition, MENU_NUTRITION_NOTICE, llmPending, kcalPer100g, mfds-raw, curated, purpose-8, Routes-Tarot, Routes-Saju, Routes-SajuG, Routes-Housing, Routes-UsageQuota, publicMenuNutrition, adminMenuLexicon, sharePage, shareImage, 43-schemas, 35-namespaces, air-quality, weather, life-map, food, meal, allergen, AirMeasureItem, AirGradeSchema, AirSidoRealtimeResult, AirStationHistoryResult, AirForecastResult, AirWeeklyForecastResult, AirStationInfoItem, AirNearbyQuery, AirNearbyStationItem, AirStationSearchQuery, AirLocationSource, AirLocationUpsertBody, AirLocationResult, fetchedAt-stale, stale-contract, WeatherGridQuery, WeatherBase, WeatherPrecip, WeatherNowcastResult, WeatherForecastResult, WeatherForecastDay, WeatherVersionsResult, WeatherMidQuery, WeatherMidResult, WeatherMidSeaResult, WeatherAwsQuery, WeatherAwsResult, REG_ID, nx-ny, LifeMapLayer, LifeMapPointsQuery, LifeMapPointsResult, LifeMapCell, LifeMapItem, LifeMapNearbyQuery, LifeMapSearchQuery, LifeMapSearchResult, LifeMapStatusResult, LifeMapFlagParam, bbox-param, discriminatedUnion-layer, MealAllergen, MEAL_ALLERGEN_LABEL, FoodAllergenStatus, FoodDishType, FoodMainIngredient, FoodCuisine, FoodSource, FoodNutrition, FoodItem, FoodSearchQuery, FoodRestaurantsQuery, FoodRestaurantEvidence, FOOD_RESTAURANT_DATA_NOTICE, FoodAdminListQuery, FoodAdminCreateInput, FoodMergeConflictItem, FoodMergeConflictAction, FoodRecognitionQualityResult, FoodImportSource, FoodImportConfig, FoodImportRun, FoodImportProgressEvent, MealSlot, MealType, MealPortion, MealPhotoToken, MEAL_MAX_PHOTOS_PER_ENTRY, MEAL_MAX_ITEMS_PER_ENTRY, RecognizedDish, MealRecognitionSnapshot, MealEntry, MealItem, MealItemInput, CreateMealEntryInput, UpdateMealEntryInput, ListMealEntriesQuery, opaque-cursor, MealCalendarResult, MealTimePreset, RecentMealItemResult, RecognizeMealInput, RecognizeMealResult, MealStatsResult, MealWeights, MEAL_DEFAULT_WEIGHTS, MEAL_WEIGHT_PRESETS, MealPreference, CreateMealRecommendationInput, MealRecommendation, MealRecommendationEventKind, MealRecommendationEventInput, MealRecommendationContext, MEAL_DATA_DELETE_CONFIRMATION, MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION, MealDataExport, MealDataBackup, MEAL_DATA_BACKUP_MAX_JSON_BYTES, RestoreMealDataResult, DeleteMealDataResult, strict-snapshot, meal-photo, meal-recommend, purpose-5, OperationFeature-12, food-import, meal-recognition, meal-recommendation, RestaurantListQuery-q, admin-search-q, visit-date-desc, Routes-Food, Routes-Meal, Routes-AirQuality, Routes-Weather, Routes-LifeMap, encodeURIComponent-builder, 36-schemas, canonical, canonical-merge, canonical-split, canonical-proposal, canonical-suggestion, catchtable, catchtable-search, catchtable-shop, diningcode, diningcode-search, diningcode-shop, diningcode-bulk-save, tabling, tabling-search, tabling-shop, tabling-discover, tabling-bulk-save, naver-search-result, crawl-search-query, crawl-search-result, search-bbox, auto-discover, auto-discover-job, auto-discover-phase, auto-discover-snapshot, auto-discover-confirm, awaiting-confirmation, fused-detail, public-sources, public-source-tabling, public-tabling-addon, public-stored-review-count, public-diningcode-addon, crawl-log, crawl-log-level, crawl-job-log-entry, review-summary-queued, review-summary-cancelled, restaurant-cancel-summary, restaurant-resume-summary, summary-log-event, public-reviews-pagination, public-review-sentiment, public-review-sort, settlement, settlement-session, settlement-participant, settlement-item, settlement-share, settlement-shared, settlement-contact, settlement-extraction, receipt-item, receipt-item-category, settlement-calculator, calculate-shares, llm-provider-purpose, ai-purpose, log-analysis-purpose, settlement-draft, settlement-draft-schema, SettlementDraft, UpsertSettlementDraftInput, settlement-rounds, SettlementRound, SettlementRoundAttendee, calculateMultiRoundShares, effectiveExcludes, perCategoryShares, ExtractReceiptSplit, roundIndex, roundTotal, fromDraftId, update-PUT, full-replace, leftoverParticipantClientId, leftoverParticipantClientIds, leftover-nanueo-batgi, roundUnit-100-1000, categoryAdjustments, SharedSettlementRound, omit-extend, attendees-100, items-200, models-preview, share-og-image, ShareOgImage, og-image, og-image-url, og-image-candidates, ogImageUrl, ogImageCandidates, share-ttl, ShareTtl, expiresAt, receiptImageToken, eslint-config, schedule, schedule-config, schedule-run, schedule-runs, schedule-preview, schedule-progress, schedule-done, ScheduleJobType, ScheduleTrigger, ScheduleRunStatus, SchedulePhase, ScheduleConfig, ScheduleConfigInput, ScheduleRun, ScheduleRunList, ScheduleProgressEvent, ScheduleDoneEvent, SchedulePreviewInput, SchedulePreviewResult, normalize-merge, cron, croner, normalize-merge-pipeline, restaurant-category-tree, RestaurantCategoryTreeResult, public-category-tree, review-tip-filter, review-menu-filter, review-search, ReviewAskInput, ReviewAskResult, ReviewPublicAskBody, ReviewQaReadyResult, ReviewSearchEnrichInput, ReviewEnrichStatusList, ReviewEnrichProgressEvent, rag, hyde, qa, review-clustering, ReviewClustersResult, ReviewClusterItem, ReviewClusterAspectSummary, ReviewClusterRunResult, ReviewClusterStatusList, ClusterTone, hdbscan, c-tf-idf, random-crawl, RandomCrawlConfig, RandomCrawlConfigInput, RandomCrawlRun, RandomCrawlRunList, RandomCrawlCandidate, RandomCrawlRegion, RandomCrawlTrigger, RandomCrawlTimeoutAction, RegionTree, RegionDongList, telegram-discover, logs, operation-log, OperationFeature, OperationRunSchema, OperationLogEntrySchema, OperationReportSchema, OperationRunList, OperationRunDetail, AnalyzeRunResult, LogConfigSchema, log-analysis, telegram-settings, TelegramConfig, UpdateTelegramConfigInput, TelegramTestResult, TelegramChatIdResult, resolve-chat-id, llm-telemetry, LlmTelemetrySnapshot, LlmGateSnapshot, LlmTelemetryCall, LlmKeySource, LlmModelSource, group-split, SettlementItemGroup, SettlementGroupMember, SettlementGroupSplitMode, GLASSES, glasses, groupSplits, drink-kinds, DRINK_KINDS, matchDrinkKind, isGroupableCategory, GROUPABLE_CATEGORIES, region-stats, RegionStatsResult, RegionStatsSido, RegionStatsSigungu, smart-pick, RestaurantSmartPickInput, bus, bus-station, bus-station-search, BusStationSearchQuery, BusStationItem, BusStationSearchResult, BusArrivalsParams, BusArrivalEntry, BusArrivalItem, BusArrivalsResult, BusNearbyQuery, BusNearbyItem, BusNearbyResult, BusPositionsParams, BusPositionsQuery, BusPositionItem, BusPositionsResult, BusRouteDetailParams, BusRoutePathPoint, BusRouteStationItem, BusRouteInfo, BusRouteDetailResult, bus-favorite, bus-favorites, BusFavoriteStationItem, BusFavoriteRouteItem, BusFavoriteStationParams, BusFavoriteRouteParams, BusFavoriteStationUpsertBody, BusFavoriteRouteUpsertBody, BusFavoritesResult, BusFavoritesSyncBody, BUS_FAVORITES_MAX, arsId, stId, staOrd, wgs84, wgs84-range, menuGroups, MenuGroup, MenuGroupItem, subway, subway-station, SubwayStationSearchQuery, SubwayStationGroupItem, SubwayStationSearchResult, SubwayNearbyQuery, SubwayNearbyResult, SubwayLineDetailResult, SubwayLineSection, SubwayLineStationItem, SubwayTimetableResult, SubwayCongestionResult, SubwayPathQuery, SubwayPathResult, SubwayPositionsResult, SubwayTrainPositionItem, SubwayArrivalsParams, SubwayArrivalItem, subway-favorite, SubwayFavoriteStationItem, SubwayFavoriteLineItem, SubwayFavoritesResult, SubwayFavoritesSyncBody, SUBWAY_FAVORITES_MAX, subwayId, lineId, Routes-Subway]
+aliases: [zod, schemas, ssot, contracts, "@repo/api-contract", tour, 여행로그, tour-log, TourDataset, TourRegion, TOUR_DATASET_KEYS, TOUR_REGION_KEYS, TourDatasetType, TourRegionType, literal-dual-definition, 리터럴-이중-정의, TourBizStatusKind, TourSeedBiz, TourSeedMatch, TourSeedItem, TourSeedStatusFilter, TourSeedQuery, TourSeedList, TourSeedCandidate, TourSeedDiscoverResult, TourSeedRegisterBody, TourSeedRegisterResult, TourMatchRunResult, TourBizCheckBody, TourBizCheckResult, TourAdminDatasetStatus, TourAdminStatus, TourRawPageQuery, TourRawVisit, TourRawVisitsResult, TourRawActivity, TourRawActivitiesResult, TourRawSpend, TourRawSpendResult, TourPhotoSize, TourRawPhoto, TourRawPhotosResult, TourRawTripDay, TourRawTripSummary, TourRawTripsResult, TourRawTripVisit, TourRawTripDetail, RestaurantTourSummary, RestaurantPublicListTour, TourCount, TourGroupStat, TourPlaceRef, RestaurantTourStats, TourAgeGrp, TourGender, TourInsightsQuery, TourInsightsFilters, TourTypeStat, TourTransitionStat, TourEmdStat, TourSpendCategoryStat, TourMvmnStat, TourAgeGenderStat, TourInsightsResult, TourPlanBody, TourPlanPlace, TourPlanResult, TourDensityKind, TourDensityQuery, TourDensityCell, TourDensityResult, TourLodgingTypeStat, TourLodgingResult, TourRegionKey, TourRegionGroup, TourRegionEmd, TourRegionsResult, Routes-Tour, tour-stats, publicRestaurantStats, publicInsights, publicPlan, publicDensity, publicLodging, publicRegions, adminSeeds, adminSeedDiscover, adminSeedRegister, adminMatchRun, adminBizStatusRun, adminPlaceVisits, adminTrip, adminPhoto, TOUR_RAW_USER_IDS, allowlist, no-store, noindex, sampleLabel, sourceNote, insufficient, k-anonymity, 소셀-억제, FORBIDDEN_KEYS, identifier-free, 식별자-없음, RestaurantStoreInfo, RestaurantTourMatchInfo, RestaurantSmartPickStrategy, traveler, tourTravelers, tourScore, avgTravelerScore, closedSuspect, LifeStoreItem, store-layer, LifeCrimeMetric, LifeCrimeRegion, LifeCrimeStatsResult, crime, 범죄-통계, 생활편의, HousingInfra, infra, 생활-인프라, LlmThinking, thinking, 추론, kimi, SajuThemeId, SAJU_THEME_IDS, SajuThemes, SajuLoveSection, SajuWealthSection, SajuCareerSection, CreateSajuThemesInput, SajuThemesResult, SajuThemesJobPollResult, SajuAskTopic, SAJU_ASK_QUESTION_MAX_LENGTH, SajuAskWhen, SajuAskInput, SajuAskVerdict, SajuAskWindow, SajuAskTarotTopic, SajuAskResult, 사주에-묻기, question, z-lazy-forward-ref, 44-schemas, 36-namespaces, tarot, saju, saju-c, saju-g, housing, usage-quota, menu-lexicon, menu-nutrition, TarotSpreadId, TarotTopic, TarotCardId, TarotDrawnCard, TarotChoices, CreateTarotReadingInput, TarotReadingSource, TarotCardReading, TarotChoiceVerdict, TarotMenuPick, TarotMenuVerdict, TarotQuota, TarotReadingResult, TarotReadingSummary, ListTarotReadingsQuery, CreateTarotShareInput, TarotShareResult, SharedTarotReading, TarotShareImageFormat, TAROT_GUEST_KEY_HEADER, X-Guest-Key, guest-key, remainingToday, UsageQuotaFeature, UsageQuotaSetting, UpdateUsageQuotaSettingInput, UsageQuotaUsage, UsageQuotaOverview, UsageQuotaOverviewQuery, guestCutoffPct, ipPerMinute, tarot-reading, saju-reading, saju-g-reading, SajuBirthInput, SajuOptionsInput, SajuCalendarKind, SajuGender, SajuWuxing, SajuTenGod, SajuTwelveStage, SajuPillarKey, SajuRelationType, SajuStarId, SajuPillar, SajuChart, SajuRelation, SajuStar, SajuLuckPillar, SajuYearLuck, SajuSectionId, SajuSectionStatus, SajuSections, SajuSource, SajuReadingSource, SajuReadingResult, SajuJobPollQuery, SajuJobPollResult, long-poll, 410-gone, SajuDay, SajuDayTag, SajuDailyInput, SajuDailyResult, SajuMatchInput, SajuMatchResult, SajuMatchGrade, SajuDatePurpose, SajuDatePickInput, SajuDatePickResult, SajuFoodInput, SajuFoodPick, SajuFoodResult, SajuLucky, SajuProfileInput, SajuProfile, SajuReadingKind, SajuReadingSummary, CreateSajuShareInput, SajuShareResult, SharedSajuReading, SAJU_GUEST_KEY_HEADER, SAJU_PROFILE_MAX, SajuGBirth, SajuGKind, SajuGElement, SajuGChart, SajuGReport, SajuGLifeScene, SajuGReadingResult, SajuGReceiptInput, SajuGProfile, SajuGProfileInput, UpdateSajuGProfileInput, SajuGRelationship, SajuGPairBirths, CreateSajuGPairInput, SajuGConnection, SajuGPairChart, SajuGPairResult, CreateSajuGShareInput, PublicSajuGShare, SajuGShareToken, SajuGShareResult, SajuGShareError, RevokeSajuGShareInput, SAJU_G_GUEST_KEY_HEADER, SAJU_G_PROFILES_MAX, HousingDealType, HousingAreaBand, HousingComplexKind, HousingLatestDeal, HousingFallbackDeal, HousingOfficialPrice, HousingOfficialGlance, HousingBandStat, HousingPointsQuery, HousingPoint, HousingCell, HousingPointsResult, HousingComplexSummary, HousingNearbyQuery, HousingNearbyItem, HousingNearbyResult, HousingSearchQuery, HousingSearchResult, HousingComplexParams, HousingComplexDetail, HousingTradesQuery, HousingTrade, HousingTradesResult, HousingStatusResult, housingAxisFields, dealType-band, MenuLexiconKind, MenuLexiconEntry, MenuLexiconCreateInput, MenuLexiconListQuery, MenuLexiconListResult, MENU_LEXICON_KINDS_WITH_TARGET, MenuKcalBasis, MenuKcalMatchedBy, RestaurantMenuKcalItem, RestaurantMenuKcalPart, RestaurantMenuKcalPortion, RestaurantMenuNutrition, MENU_NUTRITION_NOTICE, llmPending, kcalPer100g, mfds-raw, curated, purpose-8, Routes-Tarot, Routes-Saju, Routes-SajuG, Routes-Housing, Routes-UsageQuota, publicMenuNutrition, adminMenuLexicon, sharePage, shareImage, 43-schemas, 35-namespaces, air-quality, weather, life-map, food, meal, allergen, AirMeasureItem, AirGradeSchema, AirSidoRealtimeResult, AirStationHistoryResult, AirForecastResult, AirWeeklyForecastResult, AirStationInfoItem, AirNearbyQuery, AirNearbyStationItem, AirStationSearchQuery, AirLocationSource, AirLocationUpsertBody, AirLocationResult, fetchedAt-stale, stale-contract, WeatherGridQuery, WeatherBase, WeatherPrecip, WeatherNowcastResult, WeatherForecastResult, WeatherForecastDay, WeatherVersionsResult, WeatherMidQuery, WeatherMidResult, WeatherMidSeaResult, WeatherAwsQuery, WeatherAwsResult, REG_ID, nx-ny, LifeMapLayer, LifeMapPointsQuery, LifeMapPointsResult, LifeMapCell, LifeMapItem, LifeMapNearbyQuery, LifeMapSearchQuery, LifeMapSearchResult, LifeMapStatusResult, LifeMapFlagParam, bbox-param, discriminatedUnion-layer, MealAllergen, MEAL_ALLERGEN_LABEL, FoodAllergenStatus, FoodDishType, FoodMainIngredient, FoodCuisine, FoodSource, FoodNutrition, FoodItem, FoodSearchQuery, FoodRestaurantsQuery, FoodRestaurantEvidence, FOOD_RESTAURANT_DATA_NOTICE, FoodAdminListQuery, FoodAdminCreateInput, FoodMergeConflictItem, FoodMergeConflictAction, FoodRecognitionQualityResult, FoodImportSource, FoodImportConfig, FoodImportRun, FoodImportProgressEvent, MealSlot, MealType, MealPortion, MealPhotoToken, MEAL_MAX_PHOTOS_PER_ENTRY, MEAL_MAX_ITEMS_PER_ENTRY, RecognizedDish, MealRecognitionSnapshot, MealEntry, MealItem, MealItemInput, CreateMealEntryInput, UpdateMealEntryInput, ListMealEntriesQuery, opaque-cursor, MealCalendarResult, MealTimePreset, RecentMealItemResult, RecognizeMealInput, RecognizeMealResult, MealStatsResult, MealWeights, MEAL_DEFAULT_WEIGHTS, MEAL_WEIGHT_PRESETS, MealPreference, CreateMealRecommendationInput, MealRecommendation, MealRecommendationEventKind, MealRecommendationEventInput, MealRecommendationContext, MEAL_DATA_DELETE_CONFIRMATION, MEAL_PHOTO_RETENTION_DELETE_CONFIRMATION, MealDataExport, MealDataBackup, MEAL_DATA_BACKUP_MAX_JSON_BYTES, RestoreMealDataResult, DeleteMealDataResult, strict-snapshot, meal-photo, meal-recommend, purpose-5, OperationFeature-12, food-import, meal-recognition, meal-recommendation, RestaurantListQuery-q, admin-search-q, visit-date-desc, Routes-Food, Routes-Meal, Routes-AirQuality, Routes-Weather, Routes-LifeMap, encodeURIComponent-builder, 36-schemas, canonical, canonical-merge, canonical-split, canonical-proposal, canonical-suggestion, catchtable, catchtable-search, catchtable-shop, diningcode, diningcode-search, diningcode-shop, diningcode-bulk-save, tabling, tabling-search, tabling-shop, tabling-discover, tabling-bulk-save, naver-search-result, crawl-search-query, crawl-search-result, search-bbox, auto-discover, auto-discover-job, auto-discover-phase, auto-discover-snapshot, auto-discover-confirm, awaiting-confirmation, fused-detail, public-sources, public-source-tabling, public-tabling-addon, public-stored-review-count, public-diningcode-addon, crawl-log, crawl-log-level, crawl-job-log-entry, review-summary-queued, review-summary-cancelled, restaurant-cancel-summary, restaurant-resume-summary, summary-log-event, public-reviews-pagination, public-review-sentiment, public-review-sort, settlement, settlement-session, settlement-participant, settlement-item, settlement-share, settlement-shared, settlement-contact, settlement-extraction, receipt-item, receipt-item-category, settlement-calculator, calculate-shares, llm-provider-purpose, ai-purpose, log-analysis-purpose, settlement-draft, settlement-draft-schema, SettlementDraft, UpsertSettlementDraftInput, settlement-rounds, SettlementRound, SettlementRoundAttendee, calculateMultiRoundShares, effectiveExcludes, perCategoryShares, ExtractReceiptSplit, roundIndex, roundTotal, fromDraftId, update-PUT, full-replace, leftoverParticipantClientId, leftoverParticipantClientIds, leftover-nanueo-batgi, roundUnit-100-1000, categoryAdjustments, SharedSettlementRound, omit-extend, attendees-100, items-200, models-preview, share-og-image, ShareOgImage, og-image, og-image-url, og-image-candidates, ogImageUrl, ogImageCandidates, share-ttl, ShareTtl, expiresAt, receiptImageToken, eslint-config, schedule, schedule-config, schedule-run, schedule-runs, schedule-preview, schedule-progress, schedule-done, ScheduleJobType, ScheduleTrigger, ScheduleRunStatus, SchedulePhase, ScheduleConfig, ScheduleConfigInput, ScheduleRun, ScheduleRunList, ScheduleProgressEvent, ScheduleDoneEvent, SchedulePreviewInput, SchedulePreviewResult, normalize-merge, cron, croner, normalize-merge-pipeline, restaurant-category-tree, RestaurantCategoryTreeResult, public-category-tree, review-tip-filter, review-menu-filter, review-search, ReviewAskInput, ReviewAskResult, ReviewPublicAskBody, ReviewQaReadyResult, ReviewSearchEnrichInput, ReviewEnrichStatusList, ReviewEnrichProgressEvent, rag, hyde, qa, review-clustering, ReviewClustersResult, ReviewClusterItem, ReviewClusterAspectSummary, ReviewClusterRunResult, ReviewClusterStatusList, ClusterTone, hdbscan, c-tf-idf, random-crawl, RandomCrawlConfig, RandomCrawlConfigInput, RandomCrawlRun, RandomCrawlRunList, RandomCrawlCandidate, RandomCrawlRegion, RandomCrawlTrigger, RandomCrawlTimeoutAction, RegionTree, RegionDongList, telegram-discover, logs, operation-log, OperationFeature, OperationRunSchema, OperationLogEntrySchema, OperationReportSchema, OperationRunList, OperationRunDetail, AnalyzeRunResult, LogConfigSchema, log-analysis, telegram-settings, TelegramConfig, UpdateTelegramConfigInput, TelegramTestResult, TelegramChatIdResult, resolve-chat-id, llm-telemetry, LlmTelemetrySnapshot, LlmGateSnapshot, LlmTelemetryCall, LlmKeySource, LlmModelSource, group-split, SettlementItemGroup, SettlementGroupMember, SettlementGroupSplitMode, GLASSES, glasses, groupSplits, drink-kinds, DRINK_KINDS, matchDrinkKind, isGroupableCategory, GROUPABLE_CATEGORIES, region-stats, RegionStatsResult, RegionStatsSido, RegionStatsSigungu, smart-pick, RestaurantSmartPickInput, bus, bus-station, bus-station-search, BusStationSearchQuery, BusStationItem, BusStationSearchResult, BusArrivalsParams, BusArrivalEntry, BusArrivalItem, BusArrivalsResult, BusNearbyQuery, BusNearbyItem, BusNearbyResult, BusPositionsParams, BusPositionsQuery, BusPositionItem, BusPositionsResult, BusRouteDetailParams, BusRoutePathPoint, BusRouteStationItem, BusRouteInfo, BusRouteDetailResult, bus-favorite, bus-favorites, BusFavoriteStationItem, BusFavoriteRouteItem, BusFavoriteStationParams, BusFavoriteRouteParams, BusFavoriteStationUpsertBody, BusFavoriteRouteUpsertBody, BusFavoritesResult, BusFavoritesSyncBody, BUS_FAVORITES_MAX, arsId, stId, staOrd, wgs84, wgs84-range, menuGroups, MenuGroup, MenuGroupItem, subway, subway-station, SubwayStationSearchQuery, SubwayStationGroupItem, SubwayStationSearchResult, SubwayNearbyQuery, SubwayNearbyResult, SubwayLineDetailResult, SubwayLineSection, SubwayLineStationItem, SubwayTimetableResult, SubwayCongestionResult, SubwayPathQuery, SubwayPathResult, SubwayPositionsResult, SubwayTrainPositionItem, SubwayArrivalsParams, SubwayArrivalItem, subway-favorite, SubwayFavoriteStationItem, SubwayFavoriteLineItem, SubwayFavoritesResult, SubwayFavoritesSyncBody, SUBWAY_FAVORITES_MAX, subwayId, lineId, Routes-Subway]
 ---
 
 # api-contract — Zod 공유 스키마 (SSOT)
+
+**2026-09-12~09-19 변경 흡수 (26차) — 여행로그 `tour.ts` 신규(690줄, 43 → 44 파일) + `Routes.Tour`(19키, 35 → 36 namespace) + 기존 5파일 확장(life-map·restaurant·saju·ai·housing), 8파일 +1,084/−11줄**: (1) **신규 [tour.ts](../../packages/api-contract/src/schemas/tour.ts)** — 6커밋에 걸쳐 쌓였다: `c777380`(2026-09-13, 1~2차 — 데이터셋 enum·관리자 시드 콘솔·매칭·폐업 조회·`TourAdminStatus`) → `99991da`(09-13, 3~5차 — 원본 열람 `TourRaw*`·공개 집계 `RestaurantTourSummary`/`RestaurantPublicListTour`/`RestaurantTourStats`·인사이트 `TourInsights*`·코스 `TourPlan*`) → `9196495`(09-13, 6차 — 밀도 `TourDensity*`·숙소 `TourLodging*`·지역 비교 `TourRegion*`) → `d18ac24`(09-16, 7차 — `TOUR_DATASET_KEYS` 다중·`TOUR_REGION_KEYS` 10키·`TourAdminDatasetStatus`) → `93ae031`(09-19, 8차 — 동부권, 17키) → `6cae6b2`(09-19, 9차 — 수도권, **21키**). `export const` 65 · `export type` 54 · `z.enum` 11. `tour.ts → crawl.ts`(`StartCrawlResult` — 시드 등록이 기존 크롤 잡 시작 결과를 그대로 돌려줌) 와 **`restaurant.ts → tour.ts`**(`RestaurantPublicListTour`·`RestaurantTourSummary`) 가 새 cross-import — restaurant 의 import 대상이 crawl/canonical/analytics 에 **tour** 가 더해져 `restaurant → tour → crawl` 체인. `index.ts` 는 `tour` 를 `usage-quota` 뒤·calculator 앞 맨 끝에 붙였다(`c777380`). (2) **`routes.ts` `Routes.Tour` 19키 — 한 namespace 에 3층**: 관리자 6(`adminStatus`/`adminSeeds`/`adminSeedDiscover(placeId)`/`adminSeedRegister(placeId)`/`adminMatchRun`/`adminBizStatusRun` — `/admin/tour/*`) + 원본 열람 7(`adminPlaceVisits|Activities|Spend|Photos|Trips(placeId)`/`adminTrip(travelId)`/`adminPhoto(photoId, size)` — 같은 `/admin/tour/*` 지만 `TOUR_RAW_USER_IDS` allowlist 층) + 공개 6(`publicRestaurantStats(placeId)` = **`/restaurants/public/:placeId/tour-stats`**(경로는 맛집, namespace 는 Tour), `publicInsights`/`publicPlan`/`publicDensity`/`publicLodging`/`publicRegions` = `/tour/public/*`). 인자 있는 빌더 8개 전부 `encodeURIComponent`(friendly 는 `decodeURIComponent(Routes.Tour.x(':placeId'))` 로 등록 — housing/air/life-map 계약 승계). 기존 namespace 확장: `Routes.LifeMap.crime`(`bc39a79`, 6키), `Routes.Saju.themes`/`themeJob(jobId)`/`ask`(`739705e`·`baecb9b`, 14 → 17키 — `as const` 는 여전히 없음). (3) **기존 5파일** — [life-map.ts](../../packages/api-contract/src/schemas/life-map.ts)(281 → 370줄, `bc39a79` 2026-09-12): `LifeMapLayer` 에 4번째 점 레이어 **`store`**(생활편의 — 상가정보 6종) + `LifeStoreItem`(discriminatedUnion 4번째 멤버) + 필터 `kind` + `LifeMapPoint.kind`, 그리고 첫 **면(배경) 레이어 계약** `LifeCrimeMetric`/`LifeCrimeRegion`/`LifeCrimeStatsResult`(시군구 인구 10만 명당·5등급 경계 — bbox·필터 없이 정적 JSON 통째). [restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts)(912줄): `RestaurantStoreInfo`(`bc39a79` — 상가 매칭·`closedSuspect` 플래그) + `RestaurantTourMatchInfo`(`c777380` — 어드민 상세 배지, 식별자 없음) 가 `RestaurantDetail.store/tour`, `RestaurantPublicDetail.store/tour(RestaurantTourSummary)`·`RestaurantPublicListItem.tour(RestaurantPublicListTour)`·`sort` 6종(`tourTravelers`/`tourScore`)·**`RestaurantSmartPickStrategy`** enum 추출 + `traveler` 4번째 전략·`pick.avgTravelerScore`(`99991da`). [saju.ts](../../packages/api-contract/src/schemas/saju.ts)(485 → 635줄): 8차 테마(`SajuThemeId` 3·`SajuLove/Wealth/CareerSection`·`SajuThemes`·`CreateSajuThemesInput`·`SajuThemesResult`·`SajuThemesJobPollResult`, `SajuReadingResult.themes` 는 **`z.lazy` 전방 참조**, `739705e`) + 9차 사주에 묻기(`SajuAskTopic` 9·`SajuAskWhen` discriminatedUnion 4·`SajuAskInput/Result`·`SajuAskVerdict`·`SajuAskWindow`·`SajuAskTarotTopic`, `SajuReadingKind` 에 `question`, `SajuReadingSummary.ask`, `ListSajuReadingsQuery.kind`, `baecb9b`). [ai.ts](../../packages/api-contract/src/schemas/ai.ts)(308줄): `LlmThinking`(`off|low|medium|high|max`) + `LlmProviderConfig.thinking`/`UpdateLlmProviderInput.thinking?`(`a823af1` — Ollama `think` 실측값, kimi 전용 규칙은 utils). [housing.ts](../../packages/api-contract/src/schemas/housing.ts)(331 → 351줄): `HousingInfra`(반경 500m 상가 6종 + 병의원 카운트) + `HousingComplexDetail.infra: nullable`(`bc39a79`). (4) **설계 특징** — ① **공개 응답에 식별자 없음을 파일 구조로**: `tour.ts` 안에서 3차 원본 블록(`TourRaw*` — `travelId`/`travelerLabel`/`visitAreaId`/`photoId` 를 담음, allowlist 라우트 전용)과 4~6차 공개 블록(`RestaurantTourSummary`·`Tour*Result` — 여행·방문·여행자 식별자 필드 자체가 없음)을 주석 경계로 가르고, friendly `tour-public.test`/`tour-insights.service.test`/`tour-region.service.test` 가 응답 객체를 재귀 스캔(`FORBIDDEN_KEYS` 정규식)해 계약을 테스트로 못박는다. ② **계약 ↔ utils 리터럴 이중 정의 규약**: `TOUR_DATASET_KEYS`(4)·`TOUR_REGION_KEYS`(21) 가 api-contract(`z.enum` 원천) 와 `@repo/utils tourLog.ts`(`TOUR_DATASETS`/`TOUR_REGIONS` 사전의 키) 양쪽에 `as const` 배열로 **똑같이 적혀 있고**, utils 는 api-contract 를 import 할 수 없어(순환 금지 — utils 는 워크스페이스 의존 0) friendly `tour-master.service.test.ts` 가 `TourDataset.options`/`TourRegion.options` ↔ utils 배열 동일성을 검증한다 — food(`foodTaxonomy`)·tarot·saju 에 이은 4번째 인스턴스이자 **같은 리터럴 배열을 양쪽에 통째로 복제한 첫 사례**(앞선 셋은 utils 쪽이 라벨 사전, 계약이 enum). 권역 추가 절차가 "utils `TOUR_DATASETS` 한 줄 + `TOUR_REGIONS` + 계약 두 배열" 로 문서화돼 있다. ③ 소셀 억제(집단 n ≥ 5)·평가 하한(3건 미만 null)·표본 20건 미만 `insufficient`·`nights` 4 = 4박 이상 같은 **통계 규칙은 스키마가 강제하지 않고 주석 + 서버 상수(utils `TOUR_K_MIN=5`/`TOUR_RATING_MIN_N=3`) + 응답 플래그**로 — `enabled=false` 처럼 "데이터 부족" 이 에러가 아니라 계약 필드. ④ 모든 공개 여행로그 응답에 `sampleLabel`("2023년 4~9월 여행자 표본")·`sourceNote`(AI 허브 데이터명 4개 자동 나열 — 2차 저작물 출처 표기 의무) 문자열 필드가 붙는다 — 이용조건(출처 표기)을 응답 계약에 실은 첫 사례(food 의 `notice` 리터럴과 달리 `z.string()`). 공개 화면의 운영 노출은 AI 허브 서면 회신 뒤지만 계약·라우트는 이미 존재한다([tour](tour.md) 의 이용조건 절). 도메인 상세는 [tour](tour.md) / [life-map](life-map.md) / [canonical](canonical.md)(상가·여행로그 매칭 사이드 테이블) / [saju-c](saju-c.md) / [ai](ai.md) / [housing](housing.md) — 여기선 SSOT 패키지 관점(인벤토리·zod 패턴·라우트 3층·이중 정의 규약)만.
 
 **2026-08-30~09-07 변경 흡수 (25차) — 타로·사주(C)·사주(G)·집값·사용량 한도 신규 5도메인 + 메뉴 칼로리 계약 2파일 = 신규 7파일(36 → 43), `Routes` namespace 5개(30 → 35), purpose 8종, `Routes.Saju` 경로 `/saju-c` 이관**: (1) **신규 스키마 7파일** — [housing.ts](../../packages/api-contract/src/schemas/housing.ts)(331줄, `254fb76`), [menu-nutrition.ts](../../packages/api-contract/src/schemas/menu-nutrition.ts)(86줄, `ac0e191`→`d12b47d`→`9d3253a`→`fb12027`→`4479b18`→`9e09950`), [menu-lexicon.ts](../../packages/api-contract/src/schemas/menu-lexicon.ts)(64줄, `fb12027`·`9e09950`), [tarot.ts](../../packages/api-contract/src/schemas/tarot.ts)(182줄, `cd5a29b`·`98df15a`·`5d0c4c7`), [usage-quota.ts](../../packages/api-contract/src/schemas/usage-quota.ts)(68줄, `cd5a29b`·`f8e5dd0`·`e40b4c0`), [saju.ts](../../packages/api-contract/src/schemas/saju.ts)(485줄, `f8e5dd0`·`7358c86`·`1c60ad8`·`8ffedb9`·`e40b4c0`), [saju-g.ts](../../packages/api-contract/src/schemas/saju-g.ts)(281줄, `e40b4c0`·`82ab04a`). `index.ts` 가 `housing` 을 `life-map` 뒤에, `menu-nutrition`/`menu-lexicon` 을 `food` 뒤·`meal` 앞에, `tarot`/`saju`/`saju-g`/`usage-quota` 를 `vote` 뒤·calculator 앞에 추가. (2) **`routes.ts` namespace 5개 신설** — `Routes.Housing`(6키, 전부 공개), `Routes.Tarot`(7키: API 5 + 웹 경로 빌더 `sharePage`/`shareImage` 2), `Routes.Saju`(14키 — 경로는 **`${API_PREFIX}/saju-c/*`**: `5f49026`(2026-09-06)에서 `/saju/*` → `/saju-c/*` 로 이관, 식별자 `Saju` 는 그대로), `Routes.SajuG`(12키, `/saju-g/*`), `Routes.UsageQuota`(2키, 어드민). 기존 namespace 확장: `Routes.Restaurant.publicMenuNutrition(placeId)`(`ac0e191`), `Routes.Food.adminMenuLexicon`/`adminMenuLexiconEntry(id)`(`fb12027`). (3) **기존 파일 변경** — `ai.ts` 의 `LlmProviderPurpose` 가 `tarot`/`saju`/`saju-g` 로 **8종**(`cd5a29b`·`f8e5dd0`·`e40b4c0`), `food.ts` 의 `FoodSource` 가 `mfds-raw`/`curated` 로 **8종**(`bcfc72b` — `FoodImportSource` 는 4종 그대로, CLI 전용) + `FoodItem.kcalPer100g: number | null`(`0d2584a`). `logs.ts` 의 `OperationFeature` 는 12종 그대로. (4) **설계 특징** — 무인증 공개 LLM 기능 3종(타로·사주(C)·사주(G))이 **`x-guest-key` 헤더 상수 + 게스트만 숫자인 잔여 한도(`quota.remainingToday` / `remainingToday`) + 정적 폴백 source(`llm|static`, 사주(G)는 `ai|basic`) + 공유 토큰(게스트는 입력 재전송, 서버가 본문 확보; `sharePage` 는 `API_PREFIX` 없는 origin 루트 경로 — OG 프리렌더는 friendly)** 을 같은 모양으로 반복하고, 한도 자체는 `usage-quota.ts` 의 `UsageQuotaFeature`(`tarot-reading`/`saju-reading`/`saju-g-reading`) 하나로 모은다. `tarot.ts`/`saju.ts` 의 enum 은 `@repo/utils` 데이터와 같은 값·순서여야 하지만 api-contract 는 utils 를 import 하지 않고 friendly 테스트(`tarot.test`/`saju.test`)가 `.options` 동일성을 검증(food 분류 enum ↔ `foodTaxonomy` 와 같은 계약). 사주(C)는 긴 풀이를 **섹션 4개 병렬 LLM job + long-poll**(`SajuJobPollQuery.after/wait`, 410 = job 소멸) 로 — 이 패키지 첫 long-poll 계약(SSE 아님). `saju.ts → tarot.ts`(게스트 키 헤더 상수 1개) 가 유일한 신규 cross-import이고 나머지 6파일은 자기완결. 집값은 life-map 의 `bbox+zoom → points|cells` 골격에 축(`dealType × band`) 스프레드 `housingAxisFields` 를 더한 재현. 메뉴 칼로리는 상세 응답에 넣지 않고 지연 엔드포인트(`RestaurantMenuNutrition` — 메뉴명 문자열 join, 애매하면 항목 생략, `llmPending` 재조회). 도메인 상세는 [tarot](tarot.md) / [saju-c](saju-c.md) / [saju-g](saju-g.md) / [housing](housing.md) / [usage-quota](usage-quota.md) / [food](food.md) — 여기선 SSOT 패키지 관점(인벤토리·zod 패턴·라우트 분리)만.
 
@@ -49,7 +51,7 @@ API 의 입력/출력을 한 곳에서 정의하기 위한 Zod 스키마 패키�
 CLAUDE.md 에 명시된 핵심 규칙 그대로다 — _"FE/BE 모두 사용하는 타입/검증 로직은 반드시
 `packages/api-contract/src/schemas/` 에 zod 스키마로 정의한다"_ ([CLAUDE.md](../../CLAUDE.md)).
 
-## Architecture [coverage: high — 43 sources]
+## Architecture [coverage: high — 48 sources]
 
 ### 디렉터리 구조
 
@@ -60,7 +62,7 @@ packages/api-contract/
 ├── eslint.config.mjs     # **신규** @repo/config/eslint/base flat config + dist/·node_modules/ ignore
 └── src/
     ├── index.ts          # 모든 스키마 + Routes namespace + calculator + drink-kinds 재내보내기
-    ├── routes.ts         # API_PREFIX + 도메인별 경로 상수 (Auth/Users/Picks/Admin/Media/Crawl(+tabling)/Restaurant/Canonical/Analytics/Schedule/AutoDiscover/RandomCrawl/Food/Meal/Ai/Logs/SettingsMap/SettingsTelegram/SettlementExtraction/SettlementContact/Settlement/Vote/SettlementDraft/Bus/Subway/AirQuality/Weather/LifeMap/Housing/ReviewSearch/ReviewClustering/Tarot/Saju(경로 /saju-c)/SajuG/UsageQuota + Health 상수 — 35 namespace) — **이번 라운드(2026-09-07)**: Housing/Tarot/Saju/SajuG/UsageQuota 5 namespace 신설 + Restaurant.publicMenuNutrition + Food.adminMenuLexicon* (직전: Food/Meal/AirQuality/Weather/LifeMap(2026-08-30) · Vote(07-13) · Subway(07-07) · Bus(07-06))
+    ├── routes.ts         # API_PREFIX + 도메인별 경로 상수 (Auth/Users/Picks/Admin/Media/Crawl(+tabling)/Restaurant/Canonical/Analytics/Schedule/AutoDiscover/RandomCrawl/Food/Meal/Ai/Logs/SettingsMap/SettingsTelegram/SettlementExtraction/SettlementContact/Settlement/Vote/SettlementDraft/Bus/Subway/AirQuality/Weather/LifeMap/Housing/ReviewSearch/ReviewClustering/Tarot/Saju(경로 /saju-c)/SajuG/UsageQuota/Tour + Health 상수 — **36 namespace**, 752줄) — **이번 라운드(2026-09-12~19)**: `Tour` 19키 신설(관리자 6 + 원본 열람 7 + 공개 6, `c777380`·`99991da`·`9196495`) + `LifeMap.crime`(`bc39a79`) + `Saju.themes`/`themeJob`/`ask`(`739705e`·`baecb9b`) (직전 2026-09-07: Housing/Tarot/Saju/SajuG/UsageQuota 5 namespace + Restaurant.publicMenuNutrition + Food.adminMenuLexicon* · Food/Meal/AirQuality/Weather/LifeMap(2026-08-30) · Vote(07-13) · Subway(07-07) · Bus(07-06))
     ├── settlement.calculator.ts # FE/BE 공통 분배 알고리즘 — 카테고리별 풀 + 제외 플래그 → shareAmounts[]. 멀티라운드(calculateMultiRoundShares + effectiveExcludes + perCategoryShares 매트릭스). **이번 라운드(18차)**: 세부 분배 그룹(GroupCalcInput/GroupShareBreakdown/toGroupCalcInputs) — EQUAL/GLASSES(잔수 가중) 흡수
     ├── settlement.drink-kinds.ts # **신규(18차)** 술·음료 종류 사전 — FE 그룹제안·BE 추출보정·프롬프트 힌트 단일 소스. DRINK_KINDS + matchDrinkKind + isGroupableCategory + DRINK_BRAND_PROMPT_HINT. zod 아님(순수 데이터·함수, settlement-extraction 의 ReceiptItemCategoryType type-only import)
     └── schemas/
@@ -70,14 +72,14 @@ packages/api-contract/
         ├── picks.ts                 # Pick, PickCategory, Create/Update/Result
         ├── admin.ts                 # AdminUsersResponse, SetRole
         ├── crawl.ts                 # NaverPlace 크롤러 + Job/SSE Event + VisitorReview + 네이버 검색 + 캐치테이블 + 다이닝코드 + 테이블링(18차). **이번 라운드(19차)**: MenuGroup/MenuGroupItem(네이버 /menu/list 그룹) + NaverPlaceData.menuGroups optional
-        ├── restaurant.ts            # 어드민/공개 식당 + 리뷰 분석 + summary SSE + insights/smart-pick + analytics backfill + canonical 단위 list (sources[]) + RestaurantCategoryTreeResult + PublicReviewsQuery.tip/menu + RegionStats*/PublicSourceTabling/PublicStoredReviewCount(18차) + menuGroups optional(19차). **이번 라운드(2026-08-17)**: RestaurantListQuery.q(어드민 통합 검색) + reviewsFirstPage 정렬 계약 = 실제 방문일 desc(폴백 fetchedAt desc)
+        ├── restaurant.ts            # 어드민/공개 식당 + 리뷰 분석 + summary SSE + insights/smart-pick + analytics backfill + canonical 단위 list (sources[]) + RestaurantCategoryTreeResult + PublicReviewsQuery.tip/menu + RegionStats*/PublicSourceTabling/PublicStoredReviewCount(18차) + menuGroups optional(19차). 2026-08-17: RestaurantListQuery.q(어드민 통합 검색) + reviewsFirstPage 정렬 계약 = 실제 방문일 desc(폴백 fetchedAt desc). **이번 라운드(2026-09-12~13)**: RestaurantStoreInfo(상가 매칭·closedSuspect) + RestaurantTourMatchInfo(어드민 여행로그 배지) → RestaurantDetail.store/tour, 공개 상세·목록 tour(tour.ts 의 RestaurantTourSummary/RestaurantPublicListTour import), sort 6종(tourTravelers/tourScore), RestaurantSmartPickStrategy 4종(traveler) + pick.avgTravelerScore. 912줄
         ├── canonical.ts             # 가게 정체(canonical) 통합 — candidates/merge/split/dismissSuggestion + proposal 큐 + canonical 삭제
         ├── menu-grouping.ts         # 식당 단위 메뉴 정규화 + ranking + grouping job (다건/SSE)
         ├── auto-discover.ts         # 맛집 자동 발견 잡 — AI 키워드 8개 → 다중 검색 → 그룹 직렬 크롤. state + phase 두 enum 분리 + awaiting_confirmation(후보 확인 대기)
         ├── analytics.ts             # 글로벌 메뉴 통계 + 머지 잡 + category tree (z.lazy 재귀)
         ├── schedule.ts              # 주기 자동 실행 — cron 으로 "정규화 → 글로벌 머지" 예약. 5 enum + config/run/SSE/preview (12 export). cron 검증은 croner(서버) — 패키지는 croner 미의존
         ├── random-crawl.ts          # **신규(18차)** 맛집 자동 발굴 — cron 으로 지역(랜덤/고정) 선정 → 검색 → 텔레그램 후보 전송 → 사용자가 고른 가게만 크롤. schedule 과 같은 인프로세스 croner, jobType='random-crawl'. 비동기 상태머신(awaiting_selection). RegionTree/RegionDongList(지역 드롭다운)
-        ├── ai.ts                    # AI 호출 + 배치 + LLM Provider 관리. **이번 라운드(2026-08-22)**: LlmProviderPurpose 5종(chat/image/log-analysis/meal-photo/meal-recommend). 18차: 'log-analysis' + LlmKeySource/LlmModelSource + 텔레메트리
+        ├── ai.ts                    # AI 호출 + 배치 + LLM Provider 관리. **이번 라운드(2026-09-12, a823af1)**: LlmThinking 5단계(off/low/medium/high/max — Ollama think 실측값) + LlmProviderConfig.thinking / UpdateLlmProviderInput.thinking?(off = DB null). 2026-09-02~06: LlmProviderPurpose 8종. 2026-08-22: 5종(chat/image/log-analysis/meal-photo/meal-recommend). 18차: 'log-analysis' + LlmKeySource/LlmModelSource + 텔레메트리. 308줄
         ├── review-search.ts         # **신규(18차)** 리뷰 RAG/문맥검색 — enrich(임베딩 생성) + ask(HyDE+검증 가드레일) + 공개 QA(placeId) + enrich 상태/진행 SSE
         ├── review-clustering.ts     # **신규(18차)** 임베딩 군집화(배치) — UMAP→HDBSCAN→c-TF-IDF + LLM 라벨. 공개는 placeId 읽기 전용(질의 비용 0). 전부 노이즈 시 관점집계 폴백(aspectSummary)
         ├── logs.ts                  # **신규(18차)** 범용 작업 로그 — run/스텝로그/실패 LLM 분석 보고서. OperationFeature **12종(2026-08-22: food-import/meal-recognition/meal-recommendation 추가)** + AiErrorCode 합성 enum + cursor pagination
@@ -92,17 +94,18 @@ packages/api-contract/
         ├── bulk-job.ts              # (2026-08) makeBulkJobSchemas(itemSchema) 팩토리 — MenuGrouping/DiningcodeBulkSave/TablingBulkSave 3패밀리 공통 state/snapshot/이벤트
         ├── air-quality.ts           # **신규(2026-08-21)** 에어코리아 대기정보 — 시도별/측정소 이력/나쁨/예보/주간예보 + 측정소정보(목록·주변·검색) + 내 대기 위치. 값 정규화("-"→null, 등급 1~4 union), fetchedAt+stale 공통
         ├── weather.ts               # **신규(2026-08-21)** 기상청 단기·중기예보 + API허브 AWS — 세로 행(category) 을 시각별 가로 접기, WeatherPrecip 범주 정규화, base/fallback/stale
-        ├── life-map.ts              # **신규(2026-08-21)** 일상지도 — bbox+zoom 로 points|cells 분기, 레이어 discriminatedUnion(cctv/toilet/hospital), 주변·VWorld 검색·적재 상태. 업스트림 없음(로컬 SQLite)
-        ├── housing.ts               # **신규(2026-08-30, 254fb76)** 집값 — 아파트 실거래가(매매/전월세)+단지 마스터+공시가격·K-apt·건축물대장 공개 조회. life-map 골격(bbox+zoom → points|cells) + 축 dealType×band 스프레드(housingAxisFields), 만원 정수, latest→fallback→official 배지 폴백. 로컬 SQLite(stale 없음)
+        ├── life-map.ts              # 일상지도(2026-08-21 신규) — bbox+zoom 로 points|cells 분기, 레이어 discriminatedUnion, 주변·VWorld 검색·적재 상태. 업스트림 없음(로컬 SQLite). **이번 라운드(2026-09-12, bc39a79)**: 4번째 점 레이어 store(생활편의 — LifeStoreItem, kind 필터·LifeMapPoint.kind) + 첫 면(배경) 레이어 계약 LifeCrime{Metric,Region,StatsResult}(시군구 인구 10만 명당·5등급 breaks, 정적 JSON 통째 — bbox·필터 없음). 370줄
+        ├── housing.ts               # **신규(2026-08-30, 254fb76)** 집값 — 아파트 실거래가(매매/전월세)+단지 마스터+공시가격·K-apt·건축물대장 공개 조회. life-map 골격(bbox+zoom → points|cells) + 축 dealType×band 스프레드(housingAxisFields), 만원 정수, latest→fallback→official 배지 폴백. 로컬 SQLite(stale 없음). **이번 라운드(2026-09-12, bc39a79)**: HousingInfra(반경 500m 상가 6종 + 병의원 카운트, 미적재 = counts 0 + baseDate null) + HousingComplexDetail.infra nullable(좌표 없는 단지). 351줄
         ├── allergen.ts              # **신규(2026-08-24)** 알레르기 유발물질 19종 enum + 한글 라벨 + FoodAllergenStatus(unknown/inferred/verified) — food·meal 이 같은 enum 공유
         ├── food.ts                  # **신규(2026-08-22)** 음식 카탈로그 — 2축 분류+cuisine enum(utils foodTaxonomy 와 동일 순서), FoodItem, 자동완성/식당 역검색, 어드민 CRUD/통계/충돌 큐/인식 품질, 적재 잡(random-crawl 5-키 골격 + SSE). **이번 라운드(2026-09-02)**: FoodSource 8종(mfds-raw/curated 추가, CLI 전용) + FoodItem.kcalPer100g
         ├── menu-nutrition.ts        # **신규(2026-09-02~03, ac0e191→9e09950)** 공개 식당 메뉴 칼로리 — 메뉴 탭 지연 조회(상세 응답에 안 넣음). MenuKcalBasis 4종·MenuKcalMatchedBy 10종·세트 parts·100g당 portion·llmPending. 메뉴명 문자열 join
         ├── menu-lexicon.ts          # **신규(2026-09-03, fb12027)** 칼로리 판정 엔진 어휘(어드민 편집) — MenuLexiconKind 10종(modifier/size/synonym/set/option/suffix_block/raw_suffix/quantifier/alias/portion), target 필수 종류 상수
         ├── meal.ts                  # **신규(2026-08-22~23)** 식단 관리 — 기록/사진/인식 스냅샷(.strict)/통계/선호(가중치 7축)/추천+불변 이벤트/내보내기/보존/백업(JSON+base64, 상한 9상수)/전체 삭제(확인 리터럴). 1,041줄 최대 파일
         ├── tarot.ts                 # **신규(2026-09-03, cd5a29b·98df15a·5d0c4c7)** 타로 — 공개 리딩(무인증, X-Guest-Key)·회원 기록·공유(게스트는 입력 재전송)·메뉴 타로(v3a). enum 은 utils tarotCards/tarot 과 같은 값·순서(friendly 테스트 검증), 뽑기는 클라이언트·서버는 검증만
-        ├── saju.ts                  # **신규(2026-09-06, f8e5dd0~e40b4c0)** 사주(C) — 입력·원국 스냅샷(utils SajuChart 동형)·섹션 4 병렬 job + long-poll(after/wait, 410)·오늘·궁합·택일·오행 음식·프로필·기록·공유. 경로는 /saju-c(5f49026). tarot.ts 의 게스트 키 헤더 상수만 import
+        ├── saju.ts                  # **신규(2026-09-06, f8e5dd0~e40b4c0)** 사주(C) — 입력·원국 스냅샷(utils SajuChart 동형)·섹션 4 병렬 job + long-poll(after/wait, 410)·오늘·궁합·택일·오행 음식·프로필·기록·공유. 경로는 /saju-c(5f49026). tarot.ts 의 게스트 키 헤더 상수만 import. **이번 라운드(2026-09-12)**: 8차 테마(739705e — SajuThemeId 3·SajuLove/Wealth/CareerSection·SajuThemes·CreateSajuThemesInput·SajuThemesResult·SajuThemesJobPollResult, SajuReadingResult/SharedSajuReading.themes 는 z.lazy 전방 참조) + 9차 사주에 묻기(baecb9b — SajuAskTopic 9·SajuAskWhen 4종 discriminatedUnion·SajuAskInput/Result·SajuAskVerdict·SajuAskWindow·SajuAskTarotTopic, SajuReadingKind 'question'·SajuReadingSummary.ask·ListSajuReadingsQuery.kind). 485 → 635줄
         ├── saju-g.ts                # **신규(2026-09-06~07, e40b4c0·82ab04a)** 사주(G) — 다른 세션의 별도 구현(/saju-g). 문자열 날짜 입력 + superRefine 3종, LLM 보고서 길이 상한, receipt 보관, revision 낙관 잠금 프로필, 두 사람 궁합, 공개 상징만 공유(토큰 10|32자 + revokeToken)
         ├── usage-quota.ts           # **신규(2026-09-03, cd5a29b)** 공용 사용량 한도 — UsageQuotaFeature(tarot-reading/saju-reading/saju-g-reading) × 게스트·IP·전역 일일 + IP 분당 + guestCutoffPct. 회원은 게스트·IP 일일 한도 면제. 어드민 설정·그날 사용량
+        ├── tour.ts                  # **신규(2026-09-13~19, c777380→99991da→9196495→d18ac24→93ae031→6cae6b2)** 여행로그(AI 허브 71780·71779·71778·71581) 690줄 — TOUR_DATASET_KEYS 4·TOUR_REGION_KEYS 21(as const → z.enum, utils 와 이중 정의·friendly 테스트 동일성) + 2차 시드 콘솔(TourSeed*·TourMatchRunResult·TourBizCheck*·TourAdminStatus) + 3차 원본 열람 TourRaw*(식별자 포함 — allowlist 라우트 전용) + 4차 공개 집계(RestaurantTourSummary·RestaurantPublicListTour·RestaurantTourStats — 식별자 없음) + 5차 TourInsights*/TourPlan* + 6차 TourDensity*/TourLodging*/TourRegion*. crawl.ts 의 StartCrawlResult import, restaurant.ts 가 이 파일을 import
         ├── settlement-extraction.ts # 영수증 업로드(token)/추출(vision LLM) + ReceiptItemCategory enum + ExtractReceiptSplit (count/index) + roundIndex/roundTotal
         ├── settlement.ts            # N차(rounds) 정산 — SettlementRound/RoundAttendee + 마스터 participants + categoryAdjustments + 할인 + ShareTtl/ShareOgImage. UpdateSettlementInput=CreateSettlementInput(전체 replace) + fromDraftId. **이번 라운드(18차)**: 세부 분배 그룹(SettlementItemGroup/GroupMember/GroupSplitMode=EQUAL/GLASSES) + categoryAdjustments leftover 단일→배열(leftoverParticipantIds[])
         ├── settlement-contact.ts    # 사용자별 단골 참여자 CRUD — list/update + lastExclude* 기억
@@ -134,7 +137,10 @@ packages/api-contract/
 
 [src/index.ts](../../packages/api-contract/src/index.ts) 는 단순한 배럴 — 도메인별
 파일을 그대로 `export *` 하고, `routes.ts` 는 `Routes` 네임스페이스로 재노출한다.
-**이번 라운드(2026-09-07)에 신규 7개 re-export** — `housing` 은 `life-map` 뒤, `menu-nutrition`/
+**이번 라운드(2026-09-19)엔 `tour` 1개 re-export**(`c777380`) — `usage-quota` 뒤·`settlement.calculator` 앞,
+즉 배럴의 schemas 맨 끝. `restaurant.ts`(8번째 줄)가 `tour.ts` 를 import 하므로 앞선 라운드들의 "피import
+파일을 먼저" 배치 관례(tarot→saju, allergen→food→meal)와는 어긋나지만 ESM `export *` 는 순서 무관이라 동작
+영향은 없다. **직전(2026-09-07) 신규 7개 re-export** — `housing` 은 `life-map` 뒤, `menu-nutrition`/
 `menu-lexicon` 은 `food` 뒤·`meal` 앞, `tarot`/`saju`/`saju-g`/`usage-quota` 는 `vote` 뒤·
 `settlement.calculator` 앞. `tarot` 이 `saju` 앞에 오는 것은 `saju.ts → tarot.ts`(게스트 키 헤더 상수)
 import 의 역순 배치. (2026-08-30 라운드엔 6개 — `air-quality`/`weather`/`life-map`/`allergen`/`food`/
@@ -142,7 +148,7 @@ import 의 역순 배치. (2026-08-30 라운드엔 6개 — `air-quality`/`weath
 앞에 오는 것은 `meal → food → allergen` 체인의 역순. 2026-07-13 라운드엔 `restaurant-favorite`/`vote`/
 `bulk-job`, 2026-07-07 에는 `subway`/`subway-favorite` 2개, 19차에는 `bus`/`bus-favorite` 2개, 18차에는
 5개 — `random-crawl`/`review-search`/`review-clustering`/`logs`/`telegram-settings` — 와
-`settlement.drink-kinds.js` 한 줄.) schemas/ 파일은 **43개**.
+`settlement.drink-kinds.js` 한 줄.) schemas/ 파일은 **44개**(2026-09-19, `tour` 추가 — 패키지 `src/` 합계 12,598줄).
 
 ```ts
 export * from './schemas/common.js';
@@ -186,6 +192,7 @@ export * from './schemas/tarot.js';               // 신규 (2026-09-03) — saj
 export * from './schemas/saju.js';                // 신규 (2026-09-06) — 사주(C)
 export * from './schemas/saju-g.js';              // 신규 (2026-09-06) — 사주(G)
 export * from './schemas/usage-quota.js';         // 신규 (2026-09-03)
+export * from './schemas/tour.js';                // 신규 (2026-09-13, c777380) — restaurant 가 import(배치는 맨 끝)
 export * from './settlement.calculator.js';
 export * from './settlement.drink-kinds.js';      // 신규 (18차) — 순수 데이터/함수
 export * as Routes from './routes.js';
@@ -253,6 +260,28 @@ menu-nutrition 이 `RestaurantPublicDetail.menus[].name` 과 문자열로 join �
 같은 enum 값이어야 하지만 utils 를 import 하지 않고 friendly 테스트가 `.options` 동일성을 검증(food ↔
 foodTaxonomy 와 같은 방식).
 
+**2026-09-12~19 변경분의 의존 방향**: 신규 [tour.ts](../../packages/api-contract/src/schemas/tour.ts) 는
+**`tour.ts → crawl.ts`** 한 줄 — `TourSeedRegisterResult.start: StartCrawlResult`(시드 등록 = 기존 네이버 크롤
+잡 시작이라 그 결과 shape 를 그대로 돌려줌). 그리고 **`restaurant.ts → tour.ts`** 가 새로 생겼다 —
+`RestaurantPublicDetail.tour: RestaurantTourSummary`, `RestaurantPublicListItem.tour: RestaurantPublicListTour`
+(`99991da`). restaurant 의 import 대상은 이제 crawl/canonical/analytics/**tour** 4개, 체인은 `restaurant → tour →
+crawl`. 역방향은 없다 — tour.ts 의 `TourSeedMatch.naverPlaceId`·`TourPlaceRef.placeId`·`TourPlanPlace.placeId` 는
+네이버 placeId **문자열**이고, 어드민 배지용 `RestaurantTourMatchInfo` 는 tour.ts 가 아니라 restaurant.ts 에
+선언돼 tour → restaurant import 를 만들지 않는다(`c777380`). `life-map.ts`·`housing.ts`·`saju.ts`·`ai.ts` 는 의존
+변화 없음 — `HousingInfra.counts` 7키(convenience/mart/cafe/food/academy/hospital/pharmacy)는 life-map 의
+`LifeStoreItem.kind`(utils `LIFE_STORE_KINDS`)와 이름이 겹치지만 housing.ts 는 life-map.ts 를 import 하지 않고
+고정 키 object 로 자체 선언, `RestaurantStoreInfo` 도 `LifeStoreItem` 재사용이 아니라 매칭 관점의 별도 object
+(`kind: z.string()` + 주석 "food | cafe"). **계약 ↔ utils 리터럴 이중 정의**: `TOUR_DATASET_KEYS`(4)·
+`TOUR_REGION_KEYS`(21) 는 tour.ts 와 [utils tourLog.ts](../../packages/utils/src/tourLog.ts) 에 **같은 `as const`
+배열로 두 번** 적혀 있다. utils([package.json](../../packages/utils/package.json) 워크스페이스 의존 0 — devDep
+`@repo/config` 뿐)는 api-contract 를 import 하지 않고 api-contract 도 zod 외 의존이 없어 어느 쪽도 상대를 참조할
+수 없으므로, friendly [tour-master.service.test.ts](../../apps/friendly/src/modules/tour/tour-master.service.test.ts)
+의 "utils 의 키 목록이 api-contract zod enum 과 같다(순환 금지 → 리터럴 이중 정의를 여기서 검증)" 케이스가
+`TourDataset.options`/`TourRegion.options` 를 `[...TOUR_DATASET_KEYS]`/`[...TOUR_REGION_KEYS]` 와 비교한다. 앞선
+food/tarot/saju 는 utils 쪽이 라벨·데이터 사전이고 계약이 enum 이었지만, tour 는 **배열 자체를 양쪽에 복제**한
+첫 사례 — 두 파일 주석이 서로 자기가 원본이라 적는다(tour.ts "여기가 원본이고 utils·서버가 이 목록을 쓴다",
+tourLog.ts "여기서 한 번만 정의… 계약 두 배열")는 점은 Gotchas.
+
 `schedule.ts` 는 다른 schemas/ 파일을 전혀 import 하지 않는다 — 자체 enum/object 만
 정의한다. 특히 cron 식의 형식 검증을 `croner` 같은 외부 런타임 라이브러리에 의존하지
 않고, 단순 `z.string().min(1).max(120)` 길이 검사만 둔다. **신규 `random-crawl.ts` 도
@@ -290,7 +319,7 @@ foodTaxonomy 와 같은 방식).
   (calculator 와 같은 위상). FE 그룹 제안·BE 추출 보정·추출 프롬프트 힌트 세 곳을 단일
   소스로 먹인다.
 
-## Talks To [coverage: medium — 4 sources]
+## Talks To [coverage: high — 16 sources]
 
 - **friendly (apps/friendly)** — 각 `*.route.ts` 가 `RegisterInput`, `CrawlEvent`,
   `RestaurantListResult`, `RestaurantPublicDetail`, `RestaurantPublicReviewsQuery/Result`,
@@ -415,11 +444,56 @@ foodTaxonomy 와 같은 방식).
   `hooks/use{AirQuality,AirLocation,Weather,LifeMap,Food,Meal,Housing,Tarot,Saju,SajuG,UsageQuota}.ts`
   — 상세는 [shared](shared.md)). `sharePage`/`shareImage`(웹 경로 빌더)는 shared 가 fetch 에 쓰지 않고
   friendly 가 OG 라우트 등록·응답 `path` 생성에 쓴다(`Routes.Tarot.sharePage(row.shareToken)` 등).
+- **friendly — 2026-09-12~19 추가 소비처** — 여행로그 라우트 3파일이 `Routes.Tour.*` 를 **직접 참조**(우회
+  상수 없음, housing.route 와 같은 방식)하며 `schema: { querystring/body/params, response }` 로 등록:
+  [tour-admin.route.ts](../../apps/friendly/src/modules/tour/tour-admin.route.ts)(`TourAdminStatus`, `TourSeedQuery`/
+  `TourSeedList`, `TourSeedDiscoverResult`, `TourSeedRegisterBody`/`TourSeedRegisterResult`, `TourMatchRunResult`,
+  `TourBizCheckBody`/`TourBizCheckResult` — `adminSeedDiscover`/`adminSeedRegister` 는
+  `decodeURIComponent(Routes.Tour.x(':placeId'))`), [tour-raw.route.ts](../../apps/friendly/src/modules/tour/tour-raw.route.ts)
+  (`TourRawPageQuery`, `TourRawVisitsResult`/`TourRawActivitiesResult`/`TourRawSpendResult`/`TourRawPhotosResult`/
+  `TourRawTripsResult`/`TourRawTripDetail` — 7키 전부 decode 등록, 사진 params 는 `z.enum(TOUR_PHOTO_SIZES)` 로 서비스
+  상수(`['s','m']`)를 쓰고 계약 `TourPhotoSize` 는 응답 `sizes[]` 에만; allowlist 밖·없는 파일은 404, `?token=` 허용),
+  [tour-public.route.ts](../../apps/friendly/src/modules/tour/tour-public.route.ts)(`RestaurantTourStats`(decode 등록,
+  매칭 없으면 404), `TourInsightsQuery`/`TourInsightsResult`, `TourPlanBody`/`TourPlanResult`, `TourDensityQuery`/
+  `TourDensityResult`, `TourLodgingResult`, `TourRegionsResult` — 6키 전부 `config: { rateLimit: RATE.tourRead }`
+  ([rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) 120/분)). 공개 응답의 식별자 부재는
+  [tour-public.test.ts](../../apps/friendly/src/modules/tour/tour-public.test.ts) 의 `scanKeys`(`FORBIDDEN_KEYS =
+  /^(travelId|visitAreaId|travelerLabel|photoId|travel_id|visit_area_id|traveler_label|tourPlaceId)$/`)가 `tour-stats`·
+  공개 상세 `tour`·목록 행을 재귀 스캔해 지킨다(insights/region 테스트도 같은 정규식 — region 쪽은 `placeId` 까지 금지).
+  `TourDataset.options`/`TourRegion.options` ↔ utils 배열 동일성은
+  [tour-master.service.test.ts](../../apps/friendly/src/modules/tour/tour-master.service.test.ts). 맛집 쪽은
+  [restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) 가 어드민 상세에
+  `getRestaurantStoreInfo`/`getRestaurantTourMatchInfo`, 공개 상세에 `getRestaurantTourSummary`, smartPick 에
+  `strategy === 'traveler'` 분기 + `avgTravelerScore` 를 채워 `RestaurantDetail.store/tour`·`RestaurantPublicDetail.
+  store/tour`·`RestaurantSmartPickResult` 를 만족시킨다. [life-map.route.ts](../../apps/friendly/src/modules/life-map/life-map.route.ts)
+  가 `Routes.LifeMap.crime` 에 `response: { 200: LifeCrimeStatsResult }`, [saju.route.ts](../../apps/friendly/src/modules/saju/saju.route.ts)
+  가 `S.themes`(`CreateSajuThemesInput` → `SajuThemesResult`)·`S.themeJob(':jobId')`(`SajuJobPollQuery` 재사용 →
+  `SajuThemesJobPollResult`)·`S.ask`(`SajuAskInput` → `SajuAskResult`), [ai.config.service.ts](../../apps/friendly/src/modules/ai/ai.config.service.ts)
+  가 DB 문자열을 `LlmThinking.safeParse(raw ?? 'off')` 로 계약 enum 에 맞추고(모르는 값·null → `off`) utils
+  [aiModel.ts](../../packages/utils/src/aiModel.ts) `thinkOptionFor(model, thinking)` 가 kimi 계열에만 Ollama `think`
+  로 변환, [housing.service.ts](../../apps/friendly/src/modules/housing/housing.service.ts) 가 `HousingInfraType` 을
+  LRU(10분)로 캐시해 `HousingComplexDetail.infra` 에 싣는다.
+- **@repo/shared — 2026-09-12~19 추가** — [api/tour.api.ts](../../packages/shared/src/api/tour.api.ts) 가
+  `Routes.Tour` 19키 전부를 감싸고(`publicInsights/publicPlan/publicDensity/publicLodging/publicRegions`,
+  `adminStatus/adminSeeds/adminDiscover/adminRegister/adminMatchRun/adminBizCheck`, `adminPlace*`/`adminTrip`, 썸네일은
+  `tourPhotoUrl` 이 `Routes.Tour.adminPhoto(photoId, size)` + `?token=` 문자열을 만들어 `<img>` 에 넘김),
+  [hooks/useTour.ts](../../packages/shared/src/hooks/useTour.ts) 가 훅 18개(`useTourInsights`/`useTourPlan`/
+  `useTourDensity`/`useTourLodging`/`useTourRegions`/`useTourAdminStatus`/`useTourSeeds`/`useTourSeedDiscover`/
+  `useTourSeedRegister`/`useTourMatchRun`/`useTourBizCheck`/`useTourRawVisits|Activities|Spend|Photos|Trips`/
+  `useTourRawTrip`/`useTourPhotoBase`). 맛집 상세 "여행자" 탭은 [restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts)
+  의 `publicTourStats(placeId)` — 이름은 restaurant 쪽인데 경로는 `Routes.Tour.publicRestaurantStats(placeId)`.
+  [life-map.api.ts](../../packages/shared/src/api/life-map.api.ts) `crime()` + `useLifeMapCrime(enabled)`,
+  [saju.api.ts](../../packages/shared/src/api/saju.api.ts) `createThemes`/`pollThemeJob`/`ask`(게스트 키 헤더 동봉).
+  웹 소비 예: [AdminTourPage.tsx](../../apps/web/src/routes/admin/AdminTourPage.tsx)(시드 필터 `SeedRegion = 'all' |
+  TourDatasetKey` — 계약 `TourRegion` 21키 중 데이터셋 키만 노출, 기본 `'all'`), [SmartPickSection.tsx](../../apps/web/src/components/restaurant/SmartPickSection.tsx)
+  (`strategy: travelerMode ? 'traveler' : 'balanced'`), [AdminAiKeysPage.tsx](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx)
+  (추론 select — 계약 `LlmThinking` 순서), [HousingDetailCard.tsx](../../apps/web/src/components/housing/HousingDetailCard.tsx)
+  (`item.infra` null 가드 + `baseDate === null` 이면 "상가 미적재" 분기).
 - **web / mobile** — `@repo/shared` 를 통해 간접 의존.
 
 순환 의존 규칙: shared → api-contract 만 허용, 반대 방향은 금지 ([CLAUDE.md](../../CLAUDE.md)).
 
-## API Surface [coverage: high — 40 sources]
+## API Surface [coverage: high — 47 sources]
 
 ### `schemas/common.ts` — [common.ts](../../packages/api-contract/src/schemas/common.ts)
 
@@ -476,6 +550,23 @@ canonical 단위 list + `RestaurantCategoryTreeResult` + `RestaurantPublicReview
 | `RestaurantSmartPickInput/Result` | (이전 라운드부터) 가중 랜덤 픽 — `strategy: balanced\|satisfaction\|positive`. `Routes.Restaurant.smartPick` 으로 노출 (이번 라운드 routes 표에 명시) |
 | **`RestaurantListQuery.q` (신규 2026-08-17, `5e25cc0`)** | 어드민 목록 통합 검색 — `z.string().trim().min(1).max(120).optional()`. 주석이 계약: canonical 조립이 끝난 **통합 행**에서 가게명·카테고리·출처별 식별자(id/sourceId/placeId)를 **공백 토큰 AND** 로 찾는다(한 source 가 걸리면 형제 source 도 응답에 남음). 응답 `RestaurantListResult` 는 불변 |
 | **`RestaurantPublicDetail.reviewsFirstPage` 정렬 계약 정정 (2026-08-17, `0d72380`)** | 주석만 변경 — "fetchedAt desc" → **"실제 방문일 desc(해석 불가 시 fetchedAt desc)"**. 정렬 구현은 `@repo/utils compareReviewRecencyDesc`(네이버 `M.D.요일` 연도를 수집 시각 KST 연도로 복원). 스키마 shape 변경 없음 — 계약 문서로서의 주석이 바뀐 케이스 |
+
+**2026-09-12~13 신규/확장(`bc39a79`·`c777380`·`99991da`) — 외부 출처 사이드 테이블 2종(상가·여행로그)의 결합 + 여행자
+전략**. `import { RestaurantPublicListTour, RestaurantTourSummary } from './tour.js'` 가 새 cross-import:
+
+| Export | 용도 |
+| --- | --- |
+| **`RestaurantStoreInfo` (신규 `bc39a79`)** | 상가(상권)정보 `LifeStore` 에서 좌표 80m + 상호 유사도로 붙인 업소(`RestaurantStoreMatch`) — `{ bizesId, name, branch(nullable), kind(`z.string()` — utils `LIFE_STORE_KINDS` 의 food \| cafe), industry(상권업종 소분류명), ksicName, distM(int≥0), nameScore(0~1), closedSuspect, missingSince, baseDate }`. **`closedSuspect` 는 "최근 분기 적재본에서 사라짐" 플래그일 뿐** — 매칭 실패일 수 있어 목록·지도에서 숨기지 않고 배지만(주석 계약). `RestaurantDetail.store`(어드민)·`RestaurantPublicDetail.store`(공개) 양쪽에 같은 object, 없으면 null |
+| **`RestaurantTourMatchInfo` (신규 `c777380`)** | 어드민 상세 헤더 배지용 여행로그 매칭 — `{ tourPlaceId, placeName, typeShort, distM, nameScore, status: enum(matched \| missing), matchedAt, nTravelers/nVisits/nRated(int), bayesScore/meanDgstfn/revisitRate/stayMedian/spendPpMedian(nullable), topReasonNm, sampleLabel(utils `TOUR_SAMPLE_LABEL`), bizStatus{ bStt, endDt, checkedAt } \| null }`. **`tourPlaceId` 를 담으므로 공개 응답엔 쓰지 않는다**(공개 테스트의 `FORBIDDEN_KEYS` 에 `tourPlaceId` 포함) — 공개 상세는 tour.ts 의 `RestaurantTourSummary`. restaurant.ts 에 선언한 것은 tour → restaurant import 를 만들지 않기 위해 |
+| `RestaurantDetail.store` / `.tour` (확장) | 어드민 상세 — 둘 다 `.nullable()`, 매칭 없으면 null |
+| **`RestaurantSmartPickStrategy` (신규 enum `99991da`)** | `balanced \| satisfaction \| positive \| traveler` — 이전엔 `RestaurantSmartPickInput`/`RestaurantPublicSmartPickInput`/`RestaurantSmartPickResult` 세 곳에 인라인 `z.enum` 3종이던 것을 추출. **`traveler`** = 여행로그 보정 만족도만(리뷰 분석 없어도 여행자 통계가 있는 가게가 후보에 든다), **`balanced` 의미 변경** = 만족도·긍정·여행자 점수 중 **있는 것의 평균**(이전 "만족도+긍정 합") |
+| `RestaurantSmartPickResult.pick.avgTravelerScore` (확장) | `number \| null` — 매칭 없거나 평가 3건 미만이면 null. `avgSentimentScore`/`avgSatisfactionScore` 와 나란히 |
+| `RestaurantPublicListQuery.sort` (확장) | 4 → **6종** `recent \| satisfaction \| positive \| rating \| tourTravelers \| tourScore` — 여행로그 정렬은 매칭 없는 행이 뒤로(주석 계약) |
+| `RestaurantPublicListItem.tour` (확장) | `RestaurantPublicListTour.nullable()`(tour.ts — `nTravelers/bayesScore/spendPpMedian/revisitRate` 4필드) — 카드 메타·정렬용 최소 요약 |
+| `RestaurantPublicDetail.store` / `.tour` (확장) | `RestaurantStoreInfo.nullable()` / **`RestaurantTourSummary.nullable()`**(tour.ts — 식별자 없는 요약 + `sampleLabel`/`sourceNote`). 상세 통계는 `Routes.Tour.publicRestaurantStats(placeId)`(`/restaurants/public/:placeId/tour-stats`) 로 지연 조회 — 메뉴 칼로리와 같은 "상세 응답을 무겁게 하지 않는" 분리지만 **부재 표현이 다르다**(칼로리 = 빈 배열 200, tour-stats = 매칭 없으면 404) |
+
+주석에 남은 "AI 허브 71780" 표기(`RestaurantTourMatchInfo`·`sort`·`RestaurantPublicDetail.tour`)는 7~9차(`d18ac24`~`6cae6b2`)
+로 4개 데이터셋이 된 뒤에도 갱신되지 않았다(Gotchas).
 
 ### `schemas/schedule.ts` — [schedule.ts](../../packages/api-contract/src/schemas/schedule.ts) **(주기 자동 실행, 17차)**
 
@@ -680,19 +771,20 @@ fcstTime, fcstValue)` 세로 행이고 값이 전부 문자열(강수량은 "1mm
 | `WeatherMidSeaQuery`/`WeatherMidSeaHalf`/`WeatherMidSeaDay`/`WeatherMidSeaResult` | 해상 — 파고 `whMin`/`whMax` |
 | `WeatherAwsQuery` · `WeatherAwsItem` · `WeatherAwsResult` | API허브 AWS — `lat/lng` WGS84, `radius` 1,000~50,000(def 15,000), `limit` ≤10(def 3). 결과 `enabled`(키·활용신청 없으면 **false + 빈 items 200** — 선택 보강이라 페이지가 조용히 생략), 거리 오름차순 `ta/hm/wd10/ws10/re/rn15m/rn60m/rn12h/rnDay/td/pa` + `tm`/`observedAt`(관측 없으면 null) |
 
-### `schemas/life-map.ts` — [life-map.ts](../../packages/api-contract/src/schemas/life-map.ts) **(신규 2026-08-21, 병의원 08-30 — 일상지도)**
+### `schemas/life-map.ts` — [life-map.ts](../../packages/api-contract/src/schemas/life-map.ts) **(신규 2026-08-21, 병의원 08-30, 생활편의·범죄 통계 09-12 `bc39a79` — 일상지도, 370줄)**
 
-전국 CCTV·공중화장실(CSV 적재)·병의원(심평원 API 적재) 공개 조회. **업스트림 없음(로컬 SQLite)** —
-그래서 `stale` 이 없고 `fetchedAt` 은 적재 시각. 지도 뷰포트(bbox)+줌이 조회 단위: 레이어별 임계 이상이면
-개별 지점(`points`), 아니면 서버 집계 셀(`cells`) — 377k 점을 브라우저에 다 보내지 않기 위한 유일한 분기.
-도메인은 [life-map](life-map.md).
+전국 CCTV·공중화장실(CSV 적재)·병의원(심평원 API 적재)·**생활편의(소상공인시장진흥공단 상가정보 분기 CSV, 2026-09-12)**
+공개 조회 + **범죄 통계 배경(면) 레이어**(경찰청 연 통계 × 주민등록 인구, 빌드 산출 JSON). **업스트림 없음(로컬 SQLite·
+정적 JSON)** — 그래서 `stale` 이 없고 `fetchedAt` 은 적재 시각. 지도 뷰포트(bbox)+줌이 조회 단위: 레이어별 임계 이상이면
+개별 지점(`points`), 아니면 서버 집계 셀(`cells`) — 377k 점을 브라우저에 다 보내지 않기 위한 유일한 분기. 범죄 통계만
+예외로 bbox·줌·필터 없이 **한 번에 전부**(시군구 면에 칠하는 정적 데이터). 도메인은 [life-map](life-map.md).
 
 | Export | 용도 |
 | --- | --- |
-| `LifeMapLayer` | `'cctv' \| 'toilet' \| 'hospital'` |
-| (내부) `LifeMapBboxParam` / `LifeMapFlagParam` / `lifeMapFilterFields` | bbox 는 `"minLng,minLat,maxLng,maxLat"` regex(맛집 공개 목록과 같은 `@repo/utils formatBbox` 규약); 불리언은 `enum(['1','0','true','false']).optional().transform` — **`z.coerce.boolean` 회피**(bus 교훈); 필터 필드(purpose 쉼표 목록=CCTV, category=병의원, open24/disabled/kids/diaper/bell=화장실)를 points/nearby 쿼리가 스프레드로 공유 |
-| `LifeMapPointsQuery` · `LifeMapPoint` · `LifeMapCell` · `LifeMapPointsResult` | `zoom` 0~22 coerce(소수 허용, 서버 내림). 결과 `mode: 'points'\|'cells'` 에 따라 `items`(최소 필드 — id/lat/lng + purpose/name/open24 optional) 또는 `cells`(무게중심 + count) **하나만** 채움, `truncated`(상한 절단), `minPointZoom`(안내 문구용), `total`(필터 적용·절단 전) |
-| `LifeCctvItem` / `LifeToiletFixtures` / `LifeToiletItem` / `LifeHospitalItem` · `LifeMapItem = z.discriminatedUnion('layer', […])` · `LifeMapDetailParams` | 레이어별 상세가 다른 shape 라 `layer` 판별자 union — 한 라우트(`/life-map/:layer/:id`)로 내려간다. 화장실 변기 수 9필드 int≥0, `id` ≤200(병의원 ykiho 는 base64 ~100자) |
+| `LifeMapLayer` | **(2026-09-12) 4종** `'cctv' \| 'toilet' \| 'hospital' \| 'store'` — `store` = 생활편의(상가정보 6종 — 편의점·마트·약국·세탁·동물병원·미용실; 카페·음식점·학원은 적재만 하고 이 레이어엔 안 나옴). enum 확장이라 `Record<layer, …>` 완전성을 요구하는 friendly/web/앱 코드가 같이 움직인다(purpose 와 같은 함정) |
+| (내부) `LifeMapBboxParam` / `LifeMapFlagParam` / `lifeMapFilterFields` | bbox 는 `"minLng,minLat,maxLng,maxLat"` regex(맛집 공개 목록과 같은 `@repo/utils formatBbox` 규약); 불리언은 `enum(['1','0','true','false']).optional().transform` — **`z.coerce.boolean` 회피**(bus 교훈); 필터 필드(purpose 쉼표 목록=CCTV, category=병의원, **`kind` 쉼표 목록=생활편의(utils `LIFE_STORE_LAYER_KINDS` — 6종 밖 값은 무시, 2026-09-12)**, open24/disabled/kids/diaper/bell=화장실)를 points/nearby 쿼리가 스프레드로 공유 |
+| `LifeMapPointsQuery` · `LifeMapPoint` · `LifeMapCell` · `LifeMapPointsResult` | `zoom` 0~22 coerce(소수 허용, 서버 내림). 결과 `mode: 'points'\|'cells'` 에 따라 `items`(최소 필드 — id/lat/lng + purpose/name/open24/**kind**(생활편의 업종, 2026-09-12) optional — `name` 은 화장실·병의원·생활편의(상호+지점)) 또는 `cells`(무게중심 + count) **하나만** 채움, `truncated`(상한 절단), `minPointZoom`(안내 문구용), `total`(필터 적용·절단 전) |
+| `LifeCctvItem` / `LifeToiletFixtures` / `LifeToiletItem` / `LifeHospitalItem` / **`LifeStoreItem`(2026-09-12)** · `LifeMapItem = z.discriminatedUnion('layer', […4])` · `LifeMapDetailParams` | 레이어별 상세가 다른 shape 라 `layer` 판별자 union — 한 라우트(`/life-map/:layer/:id`)로 내려간다. 화장실 변기 수 9필드 int≥0, `id` ≤200(병의원 ykiho 는 base64 ~100자). `LifeStoreItem` = `{ layer: literal('store'), id(상가업소번호), lat/lng(원본 제공 좌표 — geocoded 아님), name, branch, kind(utils `LIFE_STORE_KINDS`), sclsName(상권업종 소분류명), ksicName, sggName, umdName, roadAddr, lotAddr, bldName, floor }` — nullable 8필드. `LifeMapNearbyItem` 도 `LifeStoreItem.extend(distField)` 로 4멤버 |
 | `LifeMapNearbyQuery` · `LifeMapNearbyItem`(각 Item `.extend({ dist })` 후 union) · `LifeMapNearbyResult` | `radius` 100~3,000(def 1,000 — "걸어갈 거리"), `limit` ≤30(def 10), 거리 오름차순 |
 | `LifeMapSearchQuery` · `LifeMapSearchItem` · `LifeMapSearchResult` | VWorld 검색 프록시(주소·POI 만 — 행정구역 245지점·지하철역·정류장은 클라이언트가 섞음). `q` **transform(NFC + 공백 접기) → refine(2~60)**, `limit` ≤20(def 8). `kind` place/road/parcel. **`enabled=false` = 서버에 vworld 키 없음(200, 섹션 숨김)** |
 | `LifeMapLayerStatus` · `LifeMapStatusResult` | 레이어별 `loaded/count/geocoded(화장실·병의원만, CCTV null)/baseDate/loadedAt` |
@@ -1188,10 +1280,34 @@ zod 스키마가 아니라 **순수 데이터 + 매칭 함수**다. 한 사전�
   `Routes.SettlementContact.*`, `Routes.Ai.provider/testProvider/providerModels` 시그니처를
   `(id, purpose)` 두 인자로 변경.
 
-## Data [coverage: high — 28 sources]
+## Data [coverage: high — 33 sources]
 
 순수 contract 패키지로, 자체 데이터(persistence/cache) 는 없다 — 모든 모양은
 스키마 정의로만 존재한다. Prisma 모델 매핑은 friendly 토픽 참조.
+
+2026-09-12~09-19 compose 관계 (신규):
+
+- **여행로그 3층이 스키마로 갈라져 있다**(`schemas/tour.ts`, 690줄 — 단일 파일로는 이 패키지 최대급) —
+  공개 집계(`RestaurantTourSummary`·`RestaurantPublicListTour`·`RestaurantTourStats`·`TourInsightsResult`·
+  `TourPlanResult`·`TourDensityResult`·`TourLodgingResult`·`TourRegionsResult`) / 어드민 운영(`TourSeedItem`·
+  `TourSeedList`·`TourAdminStatus`·`TourMatchRunResult`·`TourBizCheckResult`) / **원본**(`TourRawVisit`·
+  `TourRawActivity`·`TourRawSpend`·`TourRawPhoto`·`TourRawTripDetail` …). 공개 층 스키마에는
+  **여행·방문·사진 식별자 필드가 존재하지 않고**(`travelId`/`visitAreaId`/`travelerLabel`/`photoId`),
+  원본 층에만 있다 — friendly `tour-public.test.ts` 가 응답 키를 재귀 스캔해 이 경계를 고정한다.
+  같은 도메인을 "가드만 다르게" 가 아니라 스키마째 갈라 두는 이 패키지의 규약이 라이선스 때문에
+  한 층 더 깊어진 사례([public-admin-route-split](../concepts/public-admin-route-split.md)).
+- **`TourAdminStatus.datasets[] = TourAdminDatasetStatus`** — 세트(제주·서부권·동부권·수도권)별 적재 상태를
+  배열로 담아 어드민 카드가 "세트 4개 중 무엇이 적재됐나"를 한 응답으로 본다. 세트가 늘어도 응답 shape 은 그대로.
+- **`TourInsightsQuery` 를 5개 라우트가 공유** — insights·plan·lodging·regions 가 같은 필터 축
+  (`region`·`ageGrp`·`gender`·`accompany`·`month`·`nights`)을 쓰고, shared 는 이를 `Partial<…>` 로 받아
+  `tourInsightsKey` 한 함수로 캐시 키를 만든다. 필터 축을 늘리면 네 화면이 동시에 따라온다.
+- **`RestaurantDetail.store` / `.tour`** — 맛집 상세가 두 외부 출처 사이드 테이블을 **nullable 필드**로 얹는다
+  (`RestaurantStoreInfo{bizesId,name,kind,industry,distM,nameScore,closedSuspect,missingSince,baseDate}` ·
+  `RestaurantTourSummary`). 매칭이 없으면 `null` 이고 화면은 배지·탭을 아예 그리지 않는다 — 스키마가
+  "있을 수도 없을 수도" 를 강제해 소비처가 분기를 빠뜨릴 수 없다([canonical-side-table-match](../concepts/canonical-side-table-match.md)).
+- **`LifeCrimeStatsResult`** — 배경 레이어 통계를 **빌드 산출물 검증에도 쓴다**: friendly `LifeCrimeService` 가
+  기동 시 커밋된 JSON 을 이 스키마로 파싱해 어긋나면 서버가 뜨지 않는다(조용한 500 대신). 계약이 API 응답
+  모양이자 빌드 산출물 계약인 첫 사례.
 
 2026-08-30~09-07 compose 관계 (신규):
 
@@ -1369,8 +1485,21 @@ zod 스키마가 아니라 **순수 데이터 + 매칭 함수**다. 한 사전�
 GlobalMenuStat / CategoryTreeNode / LlmProviderConfig / SettlementSession(N차) / SettlementShare 등의
 compose 관계는 그대로 유효.)
 
-## Key Decisions [coverage: high — 30 sources]
+## Key Decisions [coverage: high — 34 sources]
 
+- **2026-09-16 여행로그 키 배열은 utils 와 "두 벌"로 두고 테스트가 동일성을 지킨다(`d18ac24`)** — `TOUR_DATASET_KEYS`
+  (jeju·west·east·capital)·`TOUR_REGION_KEYS`(21키)는 여기서 zod enum(`TourDataset`·`TourRegion`)이 되어야 하고,
+  utils 쪽에서는 라벨·bbox·거점을 붙인 레코드(`TOUR_DATASETS`·`TOUR_REGIONS`)의 키가 되어야 한다. utils 는
+  이 패키지를 import 할 수 없으므로(순환 금지 — Purpose 절의 leaf 규칙) **리터럴을 양쪽에 적고** friendly
+  `tour-master.service.test.ts` 가 `TourDataset.options`/`TourRegion.options` 와 utils 배열이 **순서까지** 같은지
+  검증한다. `foodTaxonomy` 가 먼저 쓴 규약을 그대로 따른 두 번째 사례.
+- **2026-09-13 공개 응답 스키마에서 식별자를 "빼는" 게 아니라 "넣지 않는다"(`c777380`·`99991da`)** — 여행로그
+  이용조건상 원본 행을 제3자에게 보일 수 없어, 공개 집계 스키마를 원본 스키마에서 `omit` 으로 파생하지 않고
+  **처음부터 집계 필드만 선언**했다(omit 은 원본이 늘 때 새 필드가 따라 들어올 위험이 있다). 대신 테스트가
+  응답 키를 스캔해 금지 목록(`travelId|visitAreaId|travelerLabel|photoId|tourPlaceId`)이 없음을 고정한다.
+- **2026-09-12 배경 레이어 축(`overlay`)을 계약에 넣되 값은 utils 가 정한다** — `LifeMapOverlay` 는 utils
+  `LIFE_MAP_OVERLAYS`(crime·tour)와 같은 값을 쓰고, 계약은 그 값을 받는 자리(설정·쿼리)만 연다. 새 배경이
+  붙을 때 계약 변경 없이 utils 배열만 늘리면 되도록.
 - **Zod 채택** — 런타임 검증 + 정적 타입 추론을 한 스키마로 처리하고, fastify-type-provider-zod
   와 한 번에 결합돼 OpenAPI 까지 자동 생성. **TS interface 직접 사용 금지** — 모든
   공유 타입은 zod 스키마에서 추론.
@@ -1691,8 +1820,18 @@ compose 관계는 그대로 유효.)
   turbo lint 가 4/4 green 이 됐다.)
 - **CLAUDE.md 규칙** — _"공유 스키마는 `@repo/api-contract` 에 추가"_ ([CLAUDE.md](../../CLAUDE.md)).
 
-## Gotchas [coverage: high — 27 sources]
+## Gotchas [coverage: high — 31 sources]
 
+- **`TOUR_DATASET_KEYS`·`TOUR_REGION_KEYS` 를 이 파일에서만 고치면 조용히 어긋난다** — utils `tourLog.ts` 의
+  같은 이름 배열과 **순서까지** 같아야 하고, 어긋나면 런타임이 아니라 friendly tour 테스트가 잡는다. 지역 키를
+  더할 때는 계약 배열 + utils 배열 + utils `TOUR_REGIONS` 레코드(라벨·parent·sidos·center·bbox·hubs·hubLabel)를
+  한 커밋에서 같이 고친다.
+- **`TourRegionKey` 라는 이름이 두 가지를 가리킨다** — `schemas/tour.ts` 안에서 `TourRegionKey` 는 지역 **비교
+  집단의 키**(`z.string().min(1).max(40)` — 제주는 `'jeju-si'` 같은 고정 3집단, 시도 지역은 `'경북 경주시'` 처럼
+  시군구 문자열)이고, 지역 **축**은 `TourRegion`(enum)이다. 7차에 집단 키가 enum 에서 자유 문자열로 바뀌면서
+  이름만 남았다 — 코드 리딩 시 혼동 주의.
+- **`RestaurantDetail.store`/`.tour` 는 nullable 이고 계약상 "없을 수 있음"이 기본** — 매칭은 배치(`match:*`)로
+  만들어지므로 새로 등록한 맛집은 한동안 `null` 이다. 소비처가 `!` 로 단언하면 방금 등록한 가게에서 깨진다.
 - **변경의 파급력** — 스키마 한 줄 수정이 friendly + web + mobile 모두에 컴파일 타임 영향.
   필드 제거나 타입 좁히기는 모든 소비자 코드를 깨뜨린다.
 - **`Routes.Saju` 는 이름과 경로가 다르다 (2026-09-06, `5f49026`)** — namespace 는 `Saju` 인데 경로는
@@ -1981,7 +2120,17 @@ compose 관계는 그대로 유효.)
   [review-clustering](review-clustering.md) / [random-crawl](random-crawl.md) / [logs](logs.md)
   토픽 참조. 텔레그램 봇 설정의 운영(폴러·재구성)은 friendly 토픽.
 
-## Sources [coverage: high — 58 sources]
+## Sources [coverage: high — 66 sources]
+
+26차 신규/변경:
+- [packages/api-contract/src/schemas/tour.ts](../../packages/api-contract/src/schemas/tour.ts) (NEW, 690줄) — 데이터셋·지역 enum + 공개 집계/어드민 운영/원본 3층 스키마 60여 개
+- [packages/api-contract/src/schemas/life-map.ts](../../packages/api-contract/src/schemas/life-map.ts) — *modified: `store` 레이어(`LifeStoreItem`)·필터 `kind`·`LifeCrimeStatsResult`(배경 통계, 빌드 산출물 검증 겸용)*
+- [packages/api-contract/src/schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts) — *modified: `RestaurantStoreInfo` + `RestaurantDetail.store/.tour` · 정렬 `tourTravelers|tourScore` · `RestaurantSmartPickStrategy`(traveler 포함)*
+- [packages/api-contract/src/schemas/saju.ts](../../packages/api-contract/src/schemas/saju.ts) — *modified: 테마 3종(`CreateSajuThemesInput`·`SajuThemesResult`·`SajuThemesJobPollResult`)·묻기(`SajuAskInput`·`SajuAskResult`)·궁합 입구 모드 — [saju-c](saju-c.md)*
+- [packages/api-contract/src/schemas/ai.ts](../../packages/api-contract/src/schemas/ai.ts) — *modified: `LlmThinking`(off·low·medium·high·max) — [ai](ai.md)*
+- [packages/api-contract/src/schemas/housing.ts](../../packages/api-contract/src/schemas/housing.ts) — *modified: 단지 생활 인프라 필드 — [housing](housing.md)*
+- [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — *modified 26차: `Routes.Tour`(public·admin·raw 3층 + 사진 `:size`) · `Routes.LifeMap.crime`*
+- [packages/api-contract/src/index.ts](../../packages/api-contract/src/index.ts) — *modified 26차: `schemas/tour` re-export*
 
 - [packages/api-contract/package.json](../../packages/api-contract/package.json)
 - [packages/api-contract/eslint.config.mjs](../../packages/api-contract/eslint.config.mjs) — @repo/config/eslint/base flat config

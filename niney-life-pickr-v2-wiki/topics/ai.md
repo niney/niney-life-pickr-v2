@@ -1,12 +1,14 @@
 ---
 topic: ai
-last_compiled: 2026-09-07
-sources_count: 71
+last_compiled: 2026-09-19
+sources_count: 74
 status: active
-aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think]
+aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, image, chat, log-analysis, meal-photo, meal-recommend, tarot, saju, saju-g, OLLAMA_TAROT_MODEL, OLLAMA_SAJU_MODEL, OLLAMA_SAJU_G_MODEL, OLLAMA_MENU_MATCH_MODEL, kimi-k3, gpt-oss, deepseek-v4-pro, 모델 프로브, probe:tarot-reading, probe:saju-reading, probe:saju-g-reading, probe:menu-decompose, requestTarotLlm, requestSajuLlm, requestSajuGLlm, llm-provider-env, buildLlmProviderEnv, LlmProviderEnv, ALL_PURPOSES, OLLAMA_MEAL_PHOTO_MODEL, OLLAMA_MEAL_RECOMMEND_MODEL, gemma4, multimodal, MULTIMODAL_FAMILY_RE, thinkOptionForModel, probe:meal-vision, 평가셋, providerModelsPreview, models-preview, ai-key-preview, AdminAiKeysPage-preview, useProviderModelsPreview, mobile-ai-keys-card-layout, telemetry, llm-telemetry, telemetryStream, LlmUsagePanel, AdminAiUsagePage, useLlmTelemetry, concurrency-gate, account-gate, AccountGateRegistry, ConcurrencyGate, keySource, defaultModelSource, aiModel, recommendModelForPurpose, isVisionModel, groupModelsByFamily, think, thinking, 추론, 추론 선택, 추론 5단계, LlmThinking, LlmThinkingType, LlmThinkingSetting, LLM_THINKING_SETTINGS, ThinkOption, thinkOptionFor, thinkTokenMult, isKimiModel, kimi 전용, kimi-only-thinking, llm_provider_configs.thinking, LlmProviderConfig.thinking, 20260912120000_add_llm_provider_thinking, add_llm_provider_thinking, aiModelThink, aiModelThink.test, THINKING_OPTIONS, THINK_TIMEOUT_MAX_MS, think-max, done_reason=length]
 ---
 
 # ai — LLM 통합(Ollama Cloud): 용도별 provider 설정·어댑터·2단 게이트·텔레메트리
+
+> **2026-09-12~09-19 변경 흡수 — 어드민에서 사주(C) 추론(thinking)을 5단계로 고르는 옵션, kimi 계열 모델 전용(`a823af1`, 2026-09-12). 이번 라운드 14커밋 중 ai 모듈·계약 `ai.ts`·utils `aiModel.ts`·어드민 AI 키 화면을 건드린 건 이 한 건뿐이다 — 여행로그 4권역(`c777380`~`6cae6b2`)은 LLM 을 쓰지 않고, 일상지도 레이어(`bc39a79`)·사주 8·9차(`739705e`·`baecb9b`)는 새 purpose·새 컨슈머 없이 기존 `saju` 경로에 호출 종류(테마 3 병렬·"묻기" 단일)만 더했다.** (1) **저장 — `LlmProviderConfig.thinking String?`** 열(마이그레이션 [`20260912120000_add_llm_provider_thinking`](../../apps/friendly/prisma/migrations/20260912120000_add_llm_provider_thinking/migration.sql) — `ALTER TABLE "llm_provider_configs" ADD COLUMN "thinking" TEXT` 한 줄. **운영은 `prisma migrate deploy` 1건 필요**, 로컬은 dev 서버가 DB 를 잠가 SQL 직접 실행 + `_prisma_migrations` 삽입으로 적용했다고 [PLAN-saju](../../docs/PLAN-saju.md) 09-12 기록). 계약 `LlmThinking = off|low|medium|high|max` 가 `LlmProviderConfig.thinking`(필수 — row 없거나 모르는 값이면 `off`)·`UpdateLlmProviderInput.thinking`(선택 — `off` 를 보내면 row 열을 `null` 로 비운다)에 실리고, `ResolvedProviderConfig.thinking` 으로 서비스에 내려간다(`thinkingOf` 가 `LlmThinking.safeParse` 로 정규화, `getResolved`·`toView` 둘 다). (2) **규칙 — kimi 계열에만 적용.** utils [`aiModel.ts`](../../packages/utils/src/aiModel.ts) 신규 `isKimiModel(id)`(family(`:` 앞)가 `kimi` 로 시작) · `thinkOptionFor(model, setting)`(kimi 이고 setting 이 off 가 아닐 때만 setting 을 그대로 `think` 로, 그 외는 기존 `thinkOptionForModel` 규칙 — gpt-oss `'low'`, 나머지 `false`) · `thinkTokenMult(think)`(off 1 / low 1.5 / medium 2 / high 3 / max·`true` 5) · `LLM_THINKING_SETTINGS`·`LlmThinkingSetting`·`ThinkOption`. 근거는 2026-09-12 Ollama `/api/chat` 직접 실측 — `think` 는 `true/false/"low"/"medium"/"high"/"max"` 만 받고 다른 문자열은 400, **kimi-k3 는 레벨을 전부 받아 사고량이 단계적**(3문장 답 기준 off 0자·4.8s / low 12자·2.7s / medium 22자·5.9s / high 288자·3.1s / max 2.8천자·11.4s ≈ `true`). [`LLMCompleteOptions.think`](../../apps/friendly/src/modules/ai/adapters/llm-provider.ts) 타입에 `'max'` 가 더해졌고 어댑터는 값을 그대로 body 최상위 `think` 로 보낸다. (3) **예산 — 사고 토큰이 `num_predict` 를 먹는다.** 사주 섹션 프로브(kimi-k3, maxTokens ×3)에서 max 는 12건 중 2건이 `done_reason=length` 로 잘리고 ×5 에서 0 — 그래서 사주(C) 서비스는 `thinkOptionFor` 결과와 함께 `maxTokens × thinkTokenMult` · 타임아웃 `25s × 배수`(상한 `THINK_TIMEOUT_MAX_MS` 120s)를 섹션 4·테마 3·단일 호출(오늘·궁합·택일·음식·묻기) 전부에 적용한다(`ResolvedLlm { provider, model, think, tokenMult }`, 사용 쪽 상세는 [saju-c](saju-c.md)). 레벨별 섹션 실측(2사주×4, ×3): low p50 5.3s·467tok / medium 5.0s·462tok / high 6.9s·612tok / max 16.2s·1548tok, 단독 실행 max p50 29s·최대 58s. (4) **읽는 곳은 사주(C) 하나.** 계약·DB·`AiConfigService` 는 용도를 가리지 않지만 `resolved.thinking` 을 소비하는 서비스는 [`saju.service.ts`](../../apps/friendly/src/modules/saju/saju.service.ts) 뿐이고(`grep thinkOptionFor(` 1곳), 어드민 [`AdminAiKeysPage`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) 도 `PURPOSE_META.saju.thinking = true` 인 행에서만, 그리고 **입력 중인 모델(`shownModel`)이 kimi 일 때만** "추론(thinking) — kimi 모델 전용" `<select>`(끔 — 빠름(기본) / 낮음 / 보통 — 출력 예산 2배 / 높음 — 3배 / 최대 — 응답 2~3배 느림, 예산 5배)를 보인다. high·max 를 고르면 "사고 토큰만큼 출력 예산과 타임아웃을 늘립니다(최대 5배·120초) — 무대 연출보다 첫 문장이 늦게 옵니다" 안내, kimi 가 아닌 모델에 저장된 설정이 남아 있으면 "규칙대로 동작" 안내. 행 key 에 `thinking` 이 들어가 저장 뒤 재마운트된다. shared 훅은 변경 없이 계약 타입을 그대로 흘린다. (5) **추천 헬퍼** — `recommendModelForPurpose('saju')` 가 `saju-g` 와 같은 계열 우선순위(`kimi-k3 → deepseek-v4-pro → kimi-k2.6`)를 먼저 본다(이전 "텍스트 중 최대" 규칙은 계열이 하나도 없을 때의 폴백으로 남음). (6) **기본은 끔** — PLAN-saju 09-12 프로브: 켜면 관계(자오충·원진·반합)·운성을 정확히 인용해 품질이 앞서지만 첫 섹션 도착이 무대 연출(≈11s)을 넘겨 체감 대기 30초라 서비스 기본(`thinkOptionForModel` → kimi `false`)은 유지하고 어드민 토글로만 열어 뒀다. 테스트 friendly [`ai.config.service.test`](../../apps/friendly/src/modules/ai/ai.config.service.test.ts) 31(thinking 저장·off→null·view/resolved 노출)·adapter 14·saju 25(당시, 9차 뒤 28), utils `aiModel.test` 17 + 신규 [`aiModelThink.test.ts`](../../packages/utils/src/aiModelThink.test.ts) 2. `probe:saju-reading --think` 목록에 `max` 추가, `.env.example` 사주 절에 어드민 경로·레벨별 p50 주석 3줄. (7) **문서 어긋남 2곳** — [`schema.prisma`](../../apps/friendly/prisma/schema.prisma) 의 `thinking` 주석은 "null=auto / off / on / low / medium / high" 라 적혀 있지만 계약은 `off|low|medium|high|max` 이고 `on` 은 `thinkingOf` 가 `off` 로 흡수한다; `llm-provider.ts` 의 `think` 주석은 kimi 레벨·`max` 를 언급하지 않는다(Gotchas).
 
 > **2026-09-02~07 변경 흡수 — 공개 기능용 purpose 3종(`tarot`·`saju`·`saju-g`)으로 8종, 모델 프로브로 기본 모델 확정(타로 gpt-oss:120b `cd5a29b`, 사주(C) kimi-k3 `d31843b`, 사주(G) kimi-k3 `1c60ad8`·`e40b4c0`), purpose 없이 모델만 바꿔 끼우는 세 번째 패턴 `OLLAMA_MENU_MATCH_MODEL`(`d12b47d`).** (1) **용도 8종** — `LlmProviderPurpose` enum 에 `tarot`(타로 해석, 텍스트)·`saju`(사주(C) 풀이 — 섹션 4개 병렬·오늘·궁합·택일·음식)·`saju-g`(사주(G) 해석, 별도 구현) 가 더해졌다. 셋 다 **무인증 공개 기능**이라 계약 주석·env 주석·어드민 카드 설명이 "전용 키(own)를 두면 계정 한도가 분리된다" 고 권한다 — 키 상속 규칙은 그대로라 기본은 chat 계정 키를 빌려 쓰고, 그 경우 공개 트래픽이 어드민·백그라운드 호출과 **같은 계정 게이트**를 나눈다(`AccountGateRegistry` 가 `apiKey|baseUrl` 단위라 own 키를 넣는 순간 게이트가 갈라진다). `ALL_PURPOSES`·`PURPOSE_ORDER`·`buildLlmProviderEnv().defaultModels`·`ModelPurpose`(utils) 네 곳에 값을 더했고 `list()` 는 이제 **여덟 장** 카드를 합성한다. (2) **env 기본값이 비어 있지 않은 첫 용도** — 기존 5용도의 `env.ts` 기본은 전부 `''`(`.env.example` 에만 값)인데 `OLLAMA_TAROT_MODEL` 은 `gpt-oss:120b`, `OLLAMA_SAJU_MODEL`/`OLLAMA_SAJU_G_MODEL` 은 `kimi-k3` 가 **코드 기본값**이다 — `.env` 에 키만 있으면 세 기능이 그대로 켜진다(다른 용도는 모델 변수도 적어야 활성). (3) **모델 프로브 3종** — [`probe-tarot-reading.ts`](../../apps/friendly/scripts/probe-tarot-reading.ts)(2026-09-02, 샘플 4: gpt-oss:120b JSON 4/4·p50 2.1s·424자 / gemma4:31b 4/4·3.1s·383자 → 속도로 gpt-oss), [`probe-saju-reading.ts`](../../apps/friendly/scripts/probe-saju-reading.ts)(2026-09-06, 3사주×4섹션: 4모델 모두 JSON 12/12·수리 0, p50 gpt-oss 2.0s / deepseek-v4-pro 3.5s / qwen3.5:397b 5.5s / kimi-k3 5.6s → **문장이 계절·오행 맥락을 가장 자연스럽게 엮는 kimi-k3**, 빠른 대안 deepseek-v4-pro), [`probe-saju-g-reading.ts`](../../apps/friendly/scripts/probe-saju-g-reading.ts)(합성 사례 12건, 프롬프트 v3 kimi-k3 12/12·중앙 12.6s, v1 비교에서 kimi-k2.6 8/10·중앙 43s·타임아웃 2건, deepseek-v4-pro:0813 10/10·6.7s → kimi-k3 기본, 결과 JSON 은 `apps/friendly/research/saju-g/`). 세 프로브 모두 서비스와 **같은 `request*Llm` 함수**(프롬프트 + JSON 수리 재시도 1회)를 부르므로 실제 경로와 동일하다. (4) **`recommendModelForPurpose` 확장** — `saju-g` 는 카탈로그에서 계열 우선순위 `kimi-k3 → deepseek-v4-pro → kimi-k2.6` 를 정확 일치(`:` 앞)로 먼저 찾고, `saju` 는 log-analysis 와 같이 텍스트 중 가장 큰 모델, `tarot` 는 chat 과 같이 중간 규모. 어드민 [`AdminAiKeysPage`](../../apps/web/src/routes/admin/AdminAiKeysPage.tsx) 카드 3장 추가(아이콘 모두 Sparkles, placeholder gpt-oss:120b / kimi-k3 / kimi-k3). (5) **`OLLAMA_MENU_MATCH_MODEL`(기본 gemma4:31b)** — 메뉴 칼로리 LLM 매칭·세트 분해([food](food.md))는 새 purpose 를 만들지 않고 **`chat` purpose 로 resolve 한 뒤 모델만 서비스 옵션으로 덮어쓴다**(`restaurant.route.ts` 가 `env.OLLAMA_MENU_MATCH_MODEL` 을 `MenuLlmMatchService`/`MenuLlmDecomposeService` 에 주입). 골든셋 84건 실측 gemma4:31b 88% / qwen3.5:397b 77% / gpt-oss:120b 68%. 즉 이제 모델 지정 경로가 셋이다 — DB row `defaultModel` > 용도별 `OLLAMA_*_MODEL` > (chat 한정) 호출자 모델 override. 텔레메트리·게이트 라벨은 여전히 `chat`. (6) **호출 프로필** — 타로 temperature 0.8·numCtx 8192·maxTokens `600 + 300×카드수`·20s, 사주(C) 0.8·8192·섹션별 900/700/700/700·25s·4섹션 `Promise.all`, 사주(G) 0.45·numCtx 16384·5000(원국)/3500·60s, 궁합 3000. 전부 `format` JSON schema + `thinkOptionForModel`, 실패는 정적 폴백(타로·사주(C))·재시도 후 실패(사주(G)). 한도(게스트 키·IP·전역)는 [usage-quota](usage-quota.md) 가 LLM 호출 **앞단**에서 소비 — meal 일일 quota 와 같은 "다른 층". (7) **고쳐야 할 이전 서술** — "`defaultModels` 누락은 typecheck 가 잡는다" 는 friendly 에선 틀렸다: `apps/friendly/tsconfig.json` 이 `**/*.test.ts` 를 제외해 픽스처 12개 파일 중 2개(`ai.config.service.test`·`saju.test`)만 새 키를 넣었고 나머지는 키가 빠진 채 vitest 가 그냥 돈다(Gotchas).
 
@@ -20,7 +22,7 @@ aliases: [llm, ollama, ollama-cloud, provider, purpose, purpose-8종, vision, im
 >
 > **2026-05-25 변경 흡수 — provider purpose 분리 (chat/image) + 영수증 추출 vision LLM 컨슈머 신규.** `LlmProviderConfig` 의 unique 키가 `(provider, purpose)` 로 확장되어 같은 `ollama-cloud` 에서도 텍스트 추론 (`chat`) 과 비전 (`image`) 모델을 별도 row 로 운영한다. AI 라우트의 모든 `:id` 엔드포인트가 `:purpose` 파라미터를 추가로 받고, `AiConfigService.getResolved(provider, purpose)` 가 purpose 별로 다른 ResolvedProviderConfig 를 반환한다. `adapterCache` 키에도 purpose 가 포함돼 chat/image 어댑터·FIFO 게이트가 분리된다. env fallback 은 `chat` purpose 에만 적용 — `image` 는 DB row 가 있어야 활성화된다. 신규 컨슈머 [`settlement-extraction`](settlement.md) 모듈이 `getResolved('ollama-cloud', 'image')` 로 vision provider 를 얻어 영수증 → 구조화 항목 추출에 사용. 어드민 UI(`AdminAiKeysPage`)는 (provider × purpose) 조합별로 카드를 그리고 "다른 용도 추가" 버튼으로 신규 조합을 등록할 수 있다. `AdminAiTestPage` 는 현재 chat 만 다룬다.
 
-## Purpose [coverage: high — 11 sources]
+## Purpose [coverage: high — 12 sources]
 
 `apps/friendly`의 LLM 통합 모듈. Ollama Cloud(`https://ollama.com`)를 기본 백엔드로
 두고, 어드민 전용으로 노출되는 텍스트 컴플리션·배치 컴플리션·프로바이더 설정
@@ -95,9 +97,12 @@ purpose 별로 분리되지만, 같은 키를 쓰는 어댑터들은 그 위에�
   호출 실패면 **정적 해석**으로 폴백(요청은 실패하지 않는다). 한도는 [usage-quota](usage-quota.md)
   `tarot-reading` 이 LLM 앞단에서 소비.
 - [`saju`](saju-c.md) 모듈(사주(C)) — 원국 → 섹션 4개(`personality/year/cycle/advice`)를
-  **동시에** 호출하고 도착 순으로 job 에 채운다(`SAJU_PROMPT_VERSION = 2`); 오늘·궁합·택일·
-  음식은 단일 호출. **`saju` purpose — 2026-09-06 신규**. 섹션 단위 정적 폴백. 한도
-  `saju-reading`.
+  **동시에** 호출하고 도착 순으로 job 에 채운다(`SAJU_PROMPT_VERSION = 2` → 8차 `739705e` 로 **3**);
+  8차(2026-09-12)부터 테마 3개(`love/wealth/career`)도 같은 방식으로 병렬, 오늘·궁합·택일·
+  음식·9차 "묻기"(`baecb9b`)는 `callJson` 단일 호출. **`saju` purpose — 2026-09-06 신규**. 섹션 단위
+  정적 폴백. 한도 `saju-reading`. **2026-09-12 `a823af1` 부터 `resolved.thinking`(어드민 추론 설정,
+  kimi 전용)을 읽는 유일한 컨슈머** — `thinkOptionFor(model, thinking)` 로 `think` 를 만들고
+  `thinkTokenMult` 배수로 maxTokens·타임아웃(25s×배수, 상한 120s)을 키운다.
 - [`saju-g`](saju-g.md) 모듈(사주(G)) — 별도 구현. 개인 사주 1회 호출(`SAJU_G_PROMPT_VERSION = 4`)
   + 궁합(`SAJU_G_PAIR_PROMPT_VERSION = 2`). **`saju-g` purpose — 2026-09-06 신규**. 검증 실패 시
   재시도 1회 후 null(정적 본문은 `basicSajuGReport`). 한도 `saju-g-reading`.
@@ -129,7 +134,9 @@ LLM 게이트 도메인들은 모두 같은 `adapterCache` import + `AiConfigSer
   `AiErrorCodeType`으로 변환.
 - Ollama 고유 옵션(`num_ctx`, `num_predict`, `format`, **`images`**, **`think`**)을
   1차 시민으로 노출 — reasoning/structured-output/vision 워크로드에서 컨텍스트
-  잘림·파싱 실패·thinking 제어를 위한 의도적 누출.
+  잘림·파싱 실패·thinking 제어를 위한 의도적 누출. `think` 는 2026-09-12(`a823af1`)부터 코드 규칙
+  (`thinkOptionForModel`: gpt-oss `'low'`, 그 외 `false`) 위에 **어드민 DB 설정**(`thinking`
+  off/low/medium/high/max, kimi 계열에만 반영)이 한 겹 더 얹힌다 — 지금은 사주(C)만 읽는다.
 - **용도별 모델 분리 + 계정 키 공유** — purpose 별 모델/동시성은 따로, 키는
   하나. 한 키로 여덟 용도를 돌리되 무거운 vision 호출이 chat 슬롯을 묶지 않게
   purpose 게이트로 분리하고(식단 사진 `meal-photo` 는 영수증 `image` 와도 분리),
@@ -141,13 +148,13 @@ LLM 게이트 도메인들은 모두 같은 `adapterCache` import + `AiConfigSer
   쓰는지"를 실시간으로 본다. 모든 호출이 한 어댑터 경로로 수렴하는 구조를 이용해
   호출부 수정 없이 계측.
 
-## Architecture [coverage: high — 19 sources]
+## Architecture [coverage: high — 22 sources]
 
 ```
 apps/friendly/src/modules/ai/
 ├── adapters/
 │   ├── llm-provider.ts              # LLMProvider 인터페이스 + 4종 도메인 에러
-│   │                                # + numCtx/format/images/think 옵션
+│   │                                # + numCtx/format/images/think('max' 포함, 09-12) 옵션
 │   ├── ollama-cloud.adapter.ts      # /api/chat + /api/tags 어댑터
 │   │                                # + 2단 게이트(purpose→account) 통과
 │   │                                # + 429 지수 백오프 재시도(슬롯 보유)
@@ -168,7 +175,8 @@ apps/friendly/src/modules/ai/
 ├── adapter-cache.test.ts
 ├── ai.config.service.ts             # LlmProviderConfig CRUD + 계정 키 상속 +
 │                                    #   용도별 모델 env fallback + 마스킹 + 출처
-├── ai.config.service.test.ts
+│                                    #   + thinking(off/low/medium/high/max — off 는 null 저장, 09-12)
+├── ai.config.service.test.ts        #   (31건 — thinking 저장·off→null·view/resolved)
 ├── llm-provider-env.ts              # buildLlmProviderEnv(): .env → LlmProviderEnv 단일 조립점
 │                                    #   (라우트·플러그인·스크립트·research 33파일이 소비)
 ├── ai.service.ts                    # complete / completeBatch / classifyError
@@ -184,22 +192,32 @@ apps/friendly/src/modules/ai/
 `parseModelFamily` / `groupModelsByFamily`(모델 팝업 그룹핑) / `isVisionModel`
 (이름 휴리스틱 `VISION_NAME_RE` + 멀티모달 계열 접두 `MULTIMODAL_FAMILY_RE`, 2026-08-22) /
 `recommendModelForPurpose(purpose, models)`(키 입력 후 폼 프리필, **8용도**) /
-**`thinkOptionForModel(modelId)`**(JSON 호출용 `think` 값 — gpt-oss `'low'`, 그 외 `false`).
-순수 함수라 웹·friendly 어디서든 import. 테스트
-[`aiModel.test.ts`](../../packages/utils/src/aiModel.test.ts)(17건).
+**`thinkOptionForModel(modelId)`**(JSON 호출용 `think` 값 — gpt-oss `'low'`, 그 외 `false`) /
+**2026-09-12 `a823af1` 신규** `isKimiModel(modelId)`(family(`:` 앞)가 `kimi` 로 시작 — `kimi-k3`·`kimi-k2.6:cloud`) ·
+`thinkOptionFor(modelId, setting)`(어드민 `LlmThinkingSetting` → Ollama `ThinkOption`; kimi 가 아니거나 setting 이
+없음/`off` 면 `thinkOptionForModel` 규칙으로 폴백 — `thinkOptionFor('gpt-oss:120b','max')` 는 `'low'`,
+`thinkOptionFor('deepseek-v4-pro','high')` 는 `false`) · `thinkTokenMult(think)`(off 1 / low 1.5 / medium 2 /
+high 3 / max·`true` 5) · `LLM_THINKING_SETTINGS`(계약 `LlmThinking` 과 같은 순서 — utils 는 api-contract 를
+import 못 해 `LlmThinkingSetting` 리터럴을 재선언).
+순수 함수라 웹·friendly 어디서든 import — 웹은 `isKimiModel` 로 select 노출 조건, friendly 는 `thinkOptionFor` 로
+호출 값을 만들어 **같은 판단을 공유**한다. 테스트
+[`aiModel.test.ts`](../../packages/utils/src/aiModel.test.ts)(17건) +
+[`aiModelThink.test.ts`](../../packages/utils/src/aiModelThink.test.ts)(2건 — kimi 설정 반영·비kimi 무시·배수 표·설정 순서).
 
 `recommendModelForPurpose` 의 용도별 규칙(2026-09-06 확장분 포함):
 
 | purpose | 규칙 |
 | --- | --- |
 | `image`·`meal-photo` | `isVisionModel` 통과 중 파라미터 규모 최소. 없으면 null |
-| `log-analysis`·**`saju`** | 텍스트(비 vision) 중 규모 최대 — 원인 추론·명리 풀이는 추론력·한국어 품질 우선 |
+| `log-analysis`·**`saju`**(계열 후보가 없을 때) | 텍스트(비 vision) 중 규모 최대 — 원인 추론·명리 풀이는 추론력·한국어 품질 우선 |
 | `chat`·`meal-recommend`·**`tarot`** | 텍스트 중 규모 오름차순 중앙값(작은 쪽으로 치우침) |
-| **`saju-g`** | 다른 규칙보다 먼저 **계열 우선순위 `kimi-k3` → `deepseek-v4-pro` → `kimi-k2.6`** 를 `id.split(':')[0]` 정확 일치로 찾는다(`deepseek-v4-pro:0813` 매칭됨). 하나도 없으면 아래 텍스트 규칙으로 흘러 chat 과 같은 중앙값 |
+| **`saju-g`·`saju`**(saju 는 2026-09-12 `a823af1` 부터) | 다른 규칙보다 먼저 **계열 우선순위 `kimi-k3` → `deepseek-v4-pro` → `kimi-k2.6`** 를 `id.split(':')[0]` 정확 일치로 찾는다(`deepseek-v4-pro:0813` 매칭됨). 하나도 없으면 아래 텍스트 규칙으로 흘러 `saju-g` 는 chat 과 같은 중앙값, `saju` 는 최대 |
 
-`saju-g` 만 계열 목록을 박은 이유는 사주(G) 프롬프트 v3 실측(kimi-k3 12/12)을 그대로 추천에
+`saju-g` 에 계열 목록을 박은 이유는 사주(G) 프롬프트 v3 실측(kimi-k3 12/12)을 그대로 추천에
 반영하려는 것 — 규모 휴리스틱으로는 kimi 계열(id 에 파라미터 수 없음 → `modelSizeB = 0`)이
-맨 앞으로 정렬돼 "가장 큰 모델" 규칙에서 오히려 밀린다.
+맨 앞으로 정렬돼 "가장 큰 모델" 규칙에서 오히려 밀린다. (~2026-09-07 기준 `saju-g` 만이었고,
+2026-09-12 `a823af1` 부터 `saju` 도 같은 목록을 탄다 — 사주(C) 실측 기본값 kimi-k3·`OLLAMA_SAJU_MODEL`
+과 어드민 추천을 일치시키고, 추론 select 가 kimi 에서만 열리므로 추천만 따라도 옵션이 보이게.)
 
 모델 프로브 스크립트(서비스와 같은 `request*Llm` 을 부르므로 실제 경로와 동일):
 
@@ -229,7 +247,12 @@ export 하는 `aiRoutes` fastify 플러그인. fastify의 `@fastify/autoload`가
   chat 이 아닌 용도가 자기 키 없이 호출되면 `resolveAccountCredentials` 가 chat row(없으면
   env) 키를 한 번 더 읽어 상속시킨다. `LlmProviderEnv.defaultModels` 는
   `Record<purpose, string>` 으로 용도별 모델 폴백을 들고 있다(8키 전부 필수 — 단 friendly
-  테스트는 typecheck 대상이 아니라 픽스처 누락이 잡히지 않는다, Gotchas).
+  테스트는 typecheck 대상이 아니라 픽스처 누락이 잡히지 않는다, Gotchas). 2026-09-12 `a823af1` 부터
+  `ResolvedProviderConfig` 에 **`thinking: LlmThinkingType`** 이 실린다 — row 의 `thinking` 문자열을
+  `thinkingOf`(`LlmThinking.safeParse`, 실패·`null`·`undefined` 는 `'off'`)로 정규화. `update()` 는
+  `thinking: 'off'` 를 `null` 로 저장하고(create 도 동일), `toView()` 가 같은 값을 와이어
+  `LlmProviderConfig.thinking` 에 싣는다. 서비스 자신은 `think` 값을 만들지 않는다 — 호출자가
+  `thinkOptionFor(model, resolved.thinking)`(지금은 사주(C) 하나).
 - **`AdapterCache`** — `(provider, purpose, apiKey, baseUrl, maxConcurrent, timeoutMs)`
   6-tuple 키로 `OllamaCloudAdapter` 를 캐시하는 모듈 레벨 싱글톤
   ([`adapter-cache.ts`](../../apps/friendly/src/modules/ai/adapter-cache.ts)). **이번
@@ -357,13 +380,20 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
    chat 계정 상속(`keySource: inherited`)이라 계정 게이트를 어드민·백그라운드와 나눈다.
 3. `adapterCache.get(resolved)` — purpose 별 어댑터(게이트·텔레메트리 라벨 분리). 호출은 각
    모듈이 export 한 `requestTarotLlm` / `requestSajuLlm` / `requestSajuGLlm`(프로브 스크립트와
-   공유) — `format` JSON schema + `think: thinkOptionForModel(model)` + 파싱 실패 시 **수리 접미
+   공유) — `format` JSON schema + `think: thinkOptionForModel(model)`(사주(C)는 2026-09-12 부터
+   `thinkOptionFor(model, resolved.thinking)` 결과를 `SajuLlmRequest.think` 로 넘김) + 파싱 실패 시 **수리 접미
    프롬프트로 1회 재시도**(`calls` 1|2).
    - 타로: temperature 0.8, numCtx 8192, maxTokens `600 + 300 × 카드수`(3장 1500·켈틱 10장 3600),
      `AbortController` 20s. 메뉴 타로(`spread=menu`)는 정적 후보 위에 LLM 이유만 덮는다.
    - 사주(C): temperature 0.8, numCtx 8192, 섹션별 maxTokens `personality 900 / year·cycle·advice 700`,
      섹션마다 25s. **섹션 4개를 `Promise.all` 로 동시 호출**하고 도착 순으로 job 에 `settle`
-     (long-poll 은 [saju-c](saju-c.md)). 오늘·궁합·택일·음식은 `callJson` 단일 호출.
+     (long-poll 은 [saju-c](saju-c.md)). 8차(`739705e`)부터 테마 3개(`love 900 / wealth·career 800`)도
+     `runThemes` 병렬, 오늘(400)·궁합(900)·택일(600)·음식(500)·9차 묻기(700)는 `callJson` 단일 호출.
+     **2026-09-12 `a823af1` — `resolveProvider()` 가 `ResolvedLlm { provider, model, think, tokenMult }` 를
+     만든다**: `think = thinkOptionFor(model, resolved.thinking)`(kimi 이고 어드민 설정이 off 가 아닐 때만
+     레벨, 그 외 `thinkOptionForModel` 규칙), `tokenMult = thinkTokenMult(think)`. 모든 호출이
+     `maxTokens = round(base × tokenMult)`, 타임아웃 `min(120s, 25s × tokenMult)`(`deps.llmTimeoutMs` 가 있으면
+     그 값 고정 — 테스트 seam)로 나간다. 기본(off)이면 kimi-k3 는 `think: false`·배수 1 — 이전과 동일.
    - 사주(G): temperature 0.45, numCtx 16384, maxTokens 원국 5000 / 기간 3500(궁합 3000),
      `AbortSignal.timeout(60s)`. 출력 검증(섹션 id·기간 근거·일간·간지·중복 문단)이 파서 안에 있어
      실패 시 재시도, 두 번 다 실패면 null.
@@ -420,7 +450,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
    (jwtVerify 우선, 실패 시 query token 검증). role !== ADMIN 이면 401. analytics/
    auto-discover SSE 와 동일 패턴 ([sse-token-auth](../concepts/sse-token-auth.md)).
 
-## Talks To [coverage: high — 20 sources]
+## Talks To [coverage: high — 21 sources]
 
 **상류(upstream — 모듈을 호출하는 측):**
 
@@ -432,8 +462,11 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   카드는 모델만 편집하며 키는 계정에서 상속(`KeySourceBadge` 로 own/inherited/env/none 표시). 키 입력 후
   `recommendModelForPurpose(purpose, catalog)`(`@repo/utils`)로 용도에 맞는 모델을
   추천 프리필. 빈 카드 흐름은 "키 + base URL → '모델 미리보기' → `usePreviewModels`
-  → 드롭다운 선택 → 저장". `AdminAiTestPage` 는 `useCompleteAi` / `useCompleteBatchAi`
-  로 단건/배치 + 모델 비교 + 샘플 N개 모드 — 현재 chat purpose 만.
+  → 드롭다운 선택 → 저장". **2026-09-12 `a823af1` 부터 사주(C) 행에 "추론(thinking) — kimi 모델 전용"
+  `<select>`**(`PURPOSE_META.saju.thinking = true` + `isKimiModel(shownModel)` 일 때만 렌더, `THINKING_OPTIONS`
+  5개, `thinkingDraft`/`thinkingDirty` 로 `UpdateLlmProviderInput.thinking` 을 PUT — shared `useUpdateProvider`
+  는 변경 없이 계약 타입을 그대로 흘린다). `AdminAiTestPage` 는 `useCompleteAi` / `useCompleteBatchAi`
+  로 단건/배치 + 모델 비교 + 샘플 N개 모드 — 현재 chat purpose 만(thinking 레벨 시험 통로 없음).
 - **어드민 텔레메트리 UI** — [`LlmUsagePanel`](../../apps/web/src/components/admin/LlmUsagePanel.tsx)
   (어드민 전 페이지 상시 플로팅 패널, 접힘/코너 localStorage 영속) +
   [`AdminAiUsagePage`](../../apps/web/src/routes/admin/AdminAiUsagePage.tsx)(상세 표).
@@ -486,10 +519,12 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   `getResolved` → `adapterCache` → `requestTarotLlm`(export, 프로브 공유). 20s `AbortController`,
   실패는 정적 해석. 테스트 seam `deps.cache`/`deps.llmTimeoutMs`. 환경 `OLLAMA_TAROT_MODEL`
   기본 `gpt-oss:120b`(코드 기본값).
-- [`saju`](saju-c.md)(2026-09-06 `f8e5dd0`·`d31843b`) — `saju` purpose. `resolveProvider()` 가
-  `{ provider, model }` 를 만들고 `runSections` 가 4섹션 `Promise.all`, 각 섹션 `readSection` 25s.
-  `requestSajuLlm<T>` 는 zod 스키마(`SectionOutput[section]`)로 파싱하고 `SAJU_SECTION_JSON_SCHEMA`
-  를 `format` 으로 보낸다. 환경 `OLLAMA_SAJU_MODEL` 기본 `kimi-k3`.
+- [`saju`](saju-c.md)(2026-09-06 `f8e5dd0`·`d31843b`, 2026-09-12 `739705e`·`a823af1`·`baecb9b`) — `saju` purpose.
+  `resolveProvider()` 가 `ResolvedLlm { provider, model, think, tokenMult }` 를 만들고(~09-07 은 `{ provider, model }`)
+  `runSections` 가 4섹션 `Promise.all`, 각 섹션 `readSection` 25s×배수(상한 120s); 8차부터 `runThemes` 3테마 병렬,
+  9차 "묻기" 는 `callJson` 700 토큰. `requestSajuLlm<T>` 는 zod 스키마(`SectionOutput[section]`)로 파싱하고
+  `SAJU_SECTION_JSON_SCHEMA` 를 `format` 으로, `SajuLlmRequest.think`(`'max'` 포함)를 그대로 어댑터에 보낸다.
+  **`resolved.thinking` 을 읽는 유일한 컨슈머**(`grep thinkOptionFor(` 1곳). 환경 `OLLAMA_SAJU_MODEL` 기본 `kimi-k3`.
 - [`saju-g`](saju-g.md)(2026-09-06 `1c60ad8`·`e40b4c0`, 다른 세션) — `saju-g` purpose.
   `SajuGService.createReading` 이 요청 키에 `model` 을 포함(모델을 바꾸면 캐시 미스),
   `requestSajuGLlm`(`saju-g.prompts.ts`) 은 원본 생년월일·계정·좌표를 모델에 보내지 않고 서버가
@@ -527,12 +562,16 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - `@repo/api-contract` — 모든 와이어 타입. `LlmProviderPurpose` 8종(`'log-analysis'`
   2026-06, `'meal-photo'`·`'meal-recommend'` 2026-08-22, `'tarot'`·`'saju'`·`'saju-g'`
   2026-09-02~06), `LlmKeySource`/`LlmModelSource`
-  enum + `keySource`/`defaultModelSource` 필드, 텔레메트리 타입 일습(`LlmTelemetrySnapshot` /
-  `LlmTelemetryCall` / `LlmGateSnapshot` / `LlmTelemetryWindow` / `LlmCallStatus`).
-- `@repo/utils` — `aiModel.ts` 헬퍼 (모델 식별/추천 + `thinkOptionForModel`). 순수 함수.
+  enum + `keySource`/`defaultModelSource` 필드, **`LlmThinking`(off/low/medium/high/max, 2026-09-12 `a823af1`) +
+  `LlmProviderConfig.thinking`(필수)·`UpdateLlmProviderInput.thinking`(선택, purpose 제한 없음)**, 텔레메트리 타입
+  일습(`LlmTelemetrySnapshot` / `LlmTelemetryCall` / `LlmGateSnapshot` / `LlmTelemetryWindow` / `LlmCallStatus`).
+- `@repo/utils` — `aiModel.ts` 헬퍼 (모델 식별/추천 + `thinkOptionForModel` + 2026-09-12 `isKimiModel` /
+  `thinkOptionFor` / `thinkTokenMult` / `LLM_THINKING_SETTINGS`). 순수 함수.
   utils 는 api-contract 를 import 못 하므로(순환 금지) purpose 리터럴을 `ModelPurpose`
-  유니온으로 재선언 — enum 이 늘면 둘을 같이 고친다(2026-09 8종으로 동기화됨).
-  `thinkOptionForModel` 은 이제 tarot/saju/saju-g/menu-llm-match 까지 JSON 호출 전부가 쓴다.
+  유니온으로, thinking 값을 `LlmThinkingSetting` 유니온으로 재선언 — enum 이 늘면 둘을 같이 고친다
+  (2026-09 8종·5단계로 동기화됨).
+  `thinkOptionForModel` 은 이제 tarot/saju/saju-g/menu-llm-match 까지 JSON 호출 전부가 쓰고, 사주(C)만
+  그 위에 `thinkOptionFor(model, resolved.thinking)` 를 얹는다.
 - `usage-quota`([usage-quota](usage-quota.md)) — ai 모듈의 의존은 아니지만 공개 기능 3종의
   LLM 호출 앞단에서 한도를 소비하는 층. 게이트·텔레메트리와 무관(초과 요청은 어댑터에 안 닿음).
 - `plugins/empty-body-parser.ts` — fastify 기본 JSON 파서를 교체. 빈 바디를
@@ -556,7 +595,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
 - 게이트 acquire 순서는 모든 호출자에서 동일(purpose → account)이라 두 게이트가
   교착하지 않는다. release 는 역순.
 
-## API Surface [coverage: high — 12 sources]
+## API Surface [coverage: high — 14 sources]
 
 모든 라우트 prefix는 `Routes.Ai`(=`/api/v1/admin/ai/*`)이며, 항상
 `onRequest: [authenticate, requireAdmin]` 가드가 걸려 있다. provider 식별은
@@ -597,10 +636,11 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   구현하면 슬롯 인.
 - `LLMCompleteOptions` — `prompt` / `model` 필수. `systemPrompt`, `temperature`,
   `maxTokens`, **`numCtx`**, **`format` ('json' | JSON Schema 객체)**, **`images`
-  (base64 문자열 배열, vision 입력)**, **`think` (boolean | 'low'|'medium'|'high',
-  추론 제어)**, `signal` 선택. `numCtx` / `format` / `images` / `think` 는 Ollama 가
+  (base64 문자열 배열, vision 입력)**, **`think` (boolean | 'low'|'medium'|'high'|'max',
+  추론 제어 — `'max'` 는 2026-09-12 `a823af1` 추가)**, `signal` 선택. `numCtx` / `format` / `images` / `think` 는 Ollama 가
   1차 시민으로 받지만, 다른 어댑터는 자유롭게 무시 가능. `think` 는 thinking
-  미지원 모델에 보내면 Ollama 가 에러를 내므로 모델 판단은 호출자 몫.
+  미지원 모델에 보내면 Ollama 가 에러를 내므로 모델 판단은 호출자 몫(utils `thinkOptionForModel` /
+  `thinkOptionFor`). 어댑터는 `opts.think !== undefined` 일 때만 body 최상위 `think` 에 그대로 싣는다.
 - 도메인 에러 4종(같은 파일):
   - `LLMTimeoutError` — 자체 timeoutMs 만료.
   - `LLMUpstreamError(status, message)` — non-2xx + fetch 자체 실패(`status: 0`).
@@ -628,9 +668,11 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   계측 이벤트 타입. 어댑터 `onEvent` 콜백 시그니처.
 - [`aiModel` 헬퍼 (`@repo/utils`)](../../packages/utils/src/aiModel.ts) —
   `parseModelFamily` / `groupModelsByFamily` / `isVisionModel` /
-  `recommendModelForPurpose(purpose, models)`(8용도 — `saju-g` 는 계열 우선순위, `saju` 는
-  최대, `tarot` 는 중앙값) / `thinkOptionForModel(modelId)`. 모델
-  식별·그룹핑·용도별 추천·JSON 호출용 `think` 값(`false | 'low'`).
+  `recommendModelForPurpose(purpose, models)`(8용도 — `saju-g`·`saju`(09-12~) 는 계열 우선순위, `saju` 의
+  폴백은 최대, `tarot` 는 중앙값) / `thinkOptionForModel(modelId)` / **`isKimiModel(modelId)` /
+  `thinkOptionFor(modelId, setting)` / `thinkTokenMult(think)` / `LLM_THINKING_SETTINGS`**(+ 타입
+  `LlmThinkingSetting`·`ThinkOption`, 2026-09-12 `a823af1`). 모델
+  식별·그룹핑·용도별 추천·JSON 호출용 `think` 값(`false | 'low'`)·어드민 추론 설정 → `think`/토큰 배수.
 - 도메인이 export 한 LLM 호출 함수(프로브와 공유, 어댑터 인터페이스만 의존):
   [`requestTarotLlm(provider, model, args)`](../../apps/friendly/src/modules/tarot/tarot.service.ts) →
   `{ output, calls, lastText }` /
@@ -663,14 +705,17 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   결과 매핑.
 - `LlmProviderConfig` 와이어 타입 — `purpose: 'chat'|'image'|'log-analysis'|'meal-photo'|'meal-recommend'|'tarot'|'saju'|'saju-g'`,
   `keySource: 'own'|'inherited'|'env'|'none'`, `defaultModelSource: 'own'|'env'|'none'`,
-  `defaultModel`(유효 모델, null=둘 다 없음), `apiKeyMasked`/`hasApiKey` 등.
+  `defaultModel`(유효 모델, null=둘 다 없음), `apiKeyMasked`/`hasApiKey` 등 + **`thinking:
+  'off'|'low'|'medium'|'high'|'max'`**(필수 — row 없거나 `null` 이면 `'off'`, 2026-09-12 `a823af1`; 여덟 카드
+  모두에 실리지만 의미가 있는 건 지금은 saju 뿐).
 - 텔레메트리 스키마 — `LlmTelemetrySnapshot` = `startedAt` + `totals`(+ok/cancelled/
   retries) + `byPurpose[]` + `byModel[]` + `windows.{m1,m5,h1}`(avg/maxDurationMs) +
   `active[]` + `recent[]`(`LlmTelemetryCall`: queueWaitMs/durationMs/retries 분리) +
   `gates.{account[], purposes[]}`(`LlmGateSnapshot`: limit/inflight/queued/oldestWaitMs).
 - `UpdateLlmProviderInput`은 모두 optional + write-only `apiKey`. `baseUrl` /
   `defaultModel`은 `null` 명시 시 명시적 clear, undefined는 no-op,
-  `maxConcurrent` 1–100.
+  `maxConcurrent` 1–100, **`thinking`**(`LlmThinking` optional — `'off'` 를 보내면 row 열을 `null` 로 비움,
+  undefined 는 no-op; `null` 은 스키마상 불가, purpose 제한 없음 — 어느 용도에도 저장은 된다).
 - `TestLlmProviderInput.model` optional — 없으면 resolved `defaultModel` 사용.
 
 **Web 어드민 UI:**
@@ -691,6 +736,16 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   용도에 맞는 모델 추천. `defaultModelSource === 'env'` 면 ".env 기본값" 배지.
   모델 datalist 자동완성은 `useProviderModels` 가 purpose 별로 fetch. 좁은 화면
   카드 레이아웃은 여전히 모바일 단말 친화 (alias: `mobile-ai-keys-card-layout`).
+  **2026-09-12 `a823af1` — 사주(C) 행의 추론 select**: `PurposeMeta.thinking?: boolean` 플래그(saju 만 true),
+  `THINKING_OPTIONS` 5개 라벨("끔 — 빠름(기본)" / "낮음 — 짧은 점검, 속도 거의 그대로" / "보통 — 출력 예산 2배" /
+  "높음 — 문장이 더 구체적, 출력 예산 3배" / "최대 — 가장 정확, 응답 2~3배 느림(예산 5배)"), 렌더 조건
+  `meta.thinking && isKimiModel(shownModel)`(저장값이 아니라 **입력 중인 모델** 기준), high/max 선택 시 amber
+  안내("사고 토큰만큼 출력 예산과 타임아웃을 늘립니다(최대 5배·120초) — 무대 연출보다 첫 문장이 늦게 옵니다"),
+  kimi 가 아닌데 `provider.thinking !== 'off'` 면 "추론 설정(X)은 kimi 모델에서만 적용됩니다 — 현재 모델은 규칙대로
+  동작해요" 안내. 저장은 `thinkingDirty` 일 때만 `input.thinking` 을 보내고, 행 `key` 에 `p.thinking` 이 들어가
+  저장 후 재마운트(draft 리셋). 사주(C) 카드 설명도 "…(섹션 4개 병렬·테마 3개·오늘·궁합·택일·음식). 기본 kimi-k3.
+  추론을 켜면 더 정확하지만 p50 12→29초" 로 갱신. 페이지 상단 안내문은 여전히 "텍스트·이미지·로그 분석·식단"
+  까지만 나열(타로·사주 미언급 — 동작 무관).
 - [`LlmUsagePanel.tsx`](../../apps/web/src/components/admin/LlmUsagePanel.tsx) —
   어드민 전 페이지 상시 플로팅 패널. 접힘 칩(계정 inflight/limit + 큐 + tok/1m) ↔
   펼침(계정 게이트 게이지바 + purpose 배지 + active 호출 + 1·5·60분 윈도우 + 누적).
@@ -704,7 +759,7 @@ N 조각으로 자른 뒤 같은 `imageToken` 으로 N번 `complete` 를 호출�
   — 꺼두면 필드를 보내지 않아 provider 기본값 사용. **현재 chat purpose 전용**
   — `useProviderModels` 에 `purpose: 'chat'` 하드코딩.
 
-## Data [coverage: high — 12 sources]
+## Data [coverage: high — 15 sources]
 
 **테이블: `llm_provider_configs`** (Prisma 모델 `LlmProviderConfig`)
 
@@ -718,6 +773,7 @@ model LlmProviderConfig {
   defaultModel  String?
   enabled       Boolean  @default(true)
   maxConcurrent Int      @default(15)
+  thinking      String?                 // 2026-09-12 a823af1 — 'low'|'medium'|'high'|'max', off 는 null (지금은 saju 만 읽음)
   updatedAt     DateTime @updatedAt
   updatedById   String?                 // 마지막으로 수정한 user.id
 
@@ -737,6 +793,11 @@ model LlmProviderConfig {
   → DROP → RENAME). 마이그레이션 이름이 `pnpm_filter_friendly_test_src_modules_ai`
   인 건 prisma CLI 의 `--name` 인자 자리에 명령어가 잘못 들어간 typo —
   실제 내용은 ai purpose 컬럼 추가.
+- [`20260912120000_add_llm_provider_thinking`](../../apps/friendly/prisma/migrations/20260912120000_add_llm_provider_thinking/migration.sql)
+  (2026-09-12 `a823af1`) — `ALTER TABLE "llm_provider_configs" ADD COLUMN "thinking" TEXT;` 한 줄. nullable 추가라
+  RedefineTables 없음. **운영 `prisma migrate deploy` 필요**(로컬은 dev 서버 잠금으로 SQL 직접 실행 +
+  `_prisma_migrations` 삽입 — PLAN-saju 09-12). `null` 이면 `off`. 이 테이블의 세 번째 마이그레이션이자
+  purpose 추가와 달리 **열이 늘어난** 첫 사례 — 배포 순서 함정은 Gotchas.
 - **`log-analysis`(2026-06)·`meal-photo`/`meal-recommend`(2026-08-22)·`tarot`/`saju`/`saju-g`
   (2026-09) purpose 추가에는 새 마이그레이션이 없다** — `purpose` 가 free TEXT 라 새 값 도입에
   스키마 변경이 불필요. enum 검증은 와이어(zod `LlmProviderPurpose`)에서만 한다. (타로·사주의
@@ -788,6 +849,7 @@ maxConcurrent := row.maxConcurrent ?? env.maxConcurrent
 defaultModel  := row.defaultModel?.trim() || env.defaultModels[purpose]  // 모델은 상속 X, 용도별 폴백
 timeoutMs     := env.timeoutMs
 baseUrl       := baseUrl ?? env.baseUrl
+thinking      := LlmThinking.safeParse(row.thinking ?? 'off').success ? 그 값 : 'off'   // 2026-09-12 — null·모르는 값('on' 등)도 off
 ```
 
 `row.enabled === false` 또는 effective `apiKey === ''` 이면 `null`을 돌려주고,
@@ -800,7 +862,8 @@ meal-photo, meal-recommend, tarot, saju, saju-g 가 곧 카드 순서). DB row �
 상속으로 동작할 수 있어 가상 row 로 노출한다. `toView` 가 각 카드의 `keySource`(own/inherited/env/none) +
 `defaultModelSource`(own/env/none) 를 채운다 — chat 은 own/env/none, 그 외 용도는
 own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, 항상 여덟 카드가 보인다
-(`ai.config.service.test` "synthesizes all eight purposes").
+(`ai.config.service.test` "synthesizes all eight purposes"). 2026-09-12 부터 각 카드에 `thinking` 도 실린다 —
+row 없거나 `null` 이면 `'off'`(테스트 "row 없는 용도는 off" — tarot 카드로 검증), `update()` 응답도 같은 `toView`.
 
 **도메인별 prompt + JSON schema + 청크 사이즈 + purpose:**
 
@@ -816,7 +879,7 @@ own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, �
 | food-classify | chat | `FOOD_CLASSIFY_VERSION = 1` | 40 | (food 토픽), `think` 끔 | 카탈로그 적재 회차 단위 |
 | menu-llm-match / decompose | chat(**모델 override** `OLLAMA_MENU_MATCH_MODEL`) | `MENU_LLM_MATCH_VERSION` / `MENU_LLM_DECOMPOSE_VERSION = 3` | 이름 1개/호출, 식당당 ≤60, 동시 4 | `MENU_LLM_MATCH_JSON_SCHEMA`(choice/canonical/confidence/reason), maxTokens 300, numCtx 4096/2048, `think` 끔 | 어휘 단위 영구 캐시 미스 때만 |
 | tarot | **tarot** | `TAROT_PROMPT_VERSION = 2`(캐시 키·저장 행 `promptVersion`) | 1 (스프레드 1건 = 1콜, 수리 재시도 +1) | `TAROT_JSON_SCHEMA`(cards[].text/summary/advice/keyword/choice?/menu?), temp 0.8, numCtx 8192, maxTokens 600+300×N, 20s, `think` 끔 | 사용자 요청 단위 — usage-quota `tarot-reading` 앞단, lru 2000·24h |
-| saju(사주(C)) | **saju** | `SAJU_PROMPT_VERSION = 2` | 섹션 4개 병렬(각 1콜) + 오늘/궁합/택일/음식 단일 | `SAJU_SECTION_JSON_SCHEMA[section]`, temp 0.8, numCtx 8192, maxTokens 900/700/700/700, 25s/섹션, `think` 끔 | 사용자 요청 단위 — `saju-reading` 앞단, lru 4000·24h, 오늘은 회원 하루 1회 잠금 |
+| saju(사주(C)) | **saju** | `SAJU_PROMPT_VERSION = 3`(8차 `739705e`; ~09-07 은 2) | 섹션 4개 병렬(각 1콜) + 테마 3개 병렬(8차) + 오늘/궁합/택일/음식/묻기(9차) 단일 | `SAJU_SECTION_JSON_SCHEMA[section]`·`SAJU_THEME_JSON_SCHEMA[theme]`·`SAJU_ASK_JSON_SCHEMA` 등, temp 0.8, numCtx 8192, maxTokens 섹션 900/700/700/700·테마 900/800/800·오늘 400·궁합 900·택일 600·음식 500·묻기 700, 25s/호출, **`think` = 어드민 `thinking`(kimi 전용, 기본 off → `false`)** — 켜면 maxTokens·타임아웃 ×1.5/2/3/5(상한 120s) | 사용자 요청 단위 — `saju-reading` 앞단, lru 4000·24h, 오늘은 회원 하루 1회 잠금 |
 | saju-g(사주(G)) | **saju-g** | `SAJU_G_PROMPT_VERSION = 4` / 궁합 `SAJU_G_PAIR_PROMPT_VERSION = 2` | 1 (원국/기간 1콜, 궁합 1콜) | 프롬프트 내 JSON 형식 지시(`format` 미사용 — 파서가 검증), temp 0.45, numCtx 16384, maxTokens 5000/3500/3000, 60s, `think` 끔 | 사용자 요청 단위 — `saju-g-reading` 앞단, 요청 키에 model 포함 |
 
 각 도메인이 자기 VERSION 상수를 record 에 함께 저장 → 프롬프트/스키마 변경 시
@@ -850,8 +913,28 @@ own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, �
   `/complete-batch`)에만 적용** — 백그라운드 도메인은 `AiService` 를 거치지
   않으므로 영향 없음. 영속성 없음 (프로세스 재시작 시 리셋).
 
-## Key Decisions [coverage: high — 22 sources]
+## Key Decisions [coverage: high — 24 sources]
 
+- **2026-09-12 (`a823af1`): 추론(thinking)은 "코드 규칙 + 어드민 DB 설정" 두 겹 — 설정은 kimi 계열에만 반영하고,
+  토큰·타임아웃 보정은 호출자(사주(C)) 책임, 기본은 끔.** Ollama `/api/chat` 의 `think` 가 받는 값
+  (`true/false/"low"/"medium"/"high"/"max"`, 그 외 400)과 모델별 반응을 직접 쳐 본 결과 gpt-oss 는 끄기 불가·레벨만
+  (기존 `'low'` 고정), gemma4·deepseek 는 `false` 만 안전이 확인됐고, **kimi-k3 만 레벨을 전부 받아 사고량이
+  단계적**(off 0자 → max 2.8천자 ≈ `true`)이었다. 그래서 (a) 설정은 kimi 계열에만 적용하고 그 외 모델은 기존
+  `thinkOptionForModel` 규칙으로 떨어지는 `thinkOptionFor(model, setting)` 를 utils 에 두어 웹(select 노출 조건
+  `isKimiModel`)과 friendly(호출 시 `think` 값)가 같은 판단을 공유한다 — 모델을 바꾸면 설정이 남아 있어도 자동으로
+  규칙으로 돌아가 "미지원 모델에 think 를 보내 400" 사고가 없다. (b) 값은 `.env` 가 아니라
+  `llm_provider_configs.thinking` 열 — 재시작 없이 어드민이 켜고 끄며, `off` 는 `null` 로 저장해 "설정 안 함" 과
+  구분하지 않는다(row 없는 용도와 같은 `off` 표시, 기본값을 DB 에 남기지 않음). (c) 사고 토큰이 `num_predict` 를
+  먹어 잘리는 문제(×3 에서 2/12 `length`, ×5 에서 0)는 어댑터·계약이 아니라 **호출자가 `thinkTokenMult` 배수로
+  maxTokens·타임아웃(25s×배수, 상한 120s)을 함께 키우는** 방식 — 용도마다 답 길이·무대 연출이 달라 배수를 한 곳에
+  박을 수 없고, versioned-prompt 처럼 호출 프로필은 도메인 층이 안다. (d) **기본은 끔** — 프로브(3사주×4섹션)에서
+  품질은 켠 쪽이 앞섰지만(관계·운성 정확 인용, 문체 안정) 첫 섹션 도착이 무대 연출 ≈11s 를 넘겨 체감 대기 30초라
+  서비스 기본은 유지하고 어드민 토글로만 열었다(PLAN-saju 의 대안 "테마 3개만 켜기" 는 채택 안 함). 같은 커밋에서
+  `recommendModelForPurpose('saju')` 도 saju-g 와 같은 계열 우선순위를 쓰게 해 어드민 추천이 실측 기본값(kimi-k3)과
+  일치하고, 추천만 따라도 select 가 보인다. 트레이드오프: 계약·DB 는 용도 무관인데 읽는 서비스는 사주(C) 하나라
+  다른 용도 row 에 값을 넣어도 조용히 무시된다(UI 는 `PURPOSE_META.thinking` 플래그로 saju 행에만 노출); 어드민
+  `/complete` 와이어엔 여전히 `think` 가 없어 웹에서 레벨을 ad-hoc 시험할 통로는 없고
+  `probe:saju-reading --think=… --max-tokens-mult=…` 뿐; 운영 마이그레이션 1건이 배포 순서에 끼어든다.
 - **2026-09-06 (`d31843b`): 사주(C) 기본 모델은 kimi-k3 — JSON 준수가 동률이면 문장 품질, 속도는
   섹션 병렬이 덮는다.** `probe:saju-reading` 3사주×4섹션에서 kimi-k3·qwen3.5:397b·deepseek-v4-pro·
   gpt-oss:120b 넷 다 JSON 12/12·수리 0 이라 준수율로는 못 가른다. p50 은 gpt-oss 2.0s / deepseek
@@ -1037,8 +1120,42 @@ own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, �
   어댑터가 `listModels`를 구현 안 했거나 호출 실패 시 `{ models: [] }` 반환.
   UI는 `<datalist>`로 자동완성하되 자유 입력도 허용.
 
-## Gotchas [coverage: high — 18 sources]
+## Gotchas [coverage: high — 21 sources]
 
+- **`thinking` 은 어느 용도 row 에도 저장되지만 읽는 곳은 사주(C) 뿐(2026-09-12 `a823af1`).**
+  `UpdateLlmProviderInput.thinking` 은 purpose 를 가리지 않고 `AiConfigService.update` 도 그대로 저장한다(테스트도
+  `saju` 로만 검증). `resolved.thinking` 을 소비하는 서비스는 [`saju.service.ts`](../../apps/friendly/src/modules/saju/saju.service.ts)
+  하나 — 타로·사주(G)·meal·food 등은 여전히 `thinkOptionForModel(model)` 고정이라 API 로 다른 용도에 PUT 해도
+  조용히 무시된다(웹은 `PURPOSE_META[purpose].thinking` 이 true 인 saju 행에서만 select 를 그린다). 다른 용도로
+  넓히려면 그 서비스가 `thinkOptionFor(model, resolved.thinking)` 를 쓰고 자기 토큰·타임아웃 배수를 적용해야 한다.
+- **운영 마이그레이션 1건 — `thinking` 열이 없으면 어드민 화면뿐 아니라 모든 LLM 컨슈머가 죽는다.** Prisma 는
+  모델의 스칼라 열을 전부 SELECT 하므로 `20260912120000_add_llm_provider_thinking` 없이 새 코드를 띄우면
+  `list()`·`getResolved()`(요약·머지·타로·사주… 전부의 진입점)가 `no such column: thinking` 으로 실패한다 —
+  배포 순서는 `prisma migrate deploy` → 서버 재시작. 로컬은 dev 서버가 SQLite 를 잠가 `migrate dev` 가 안 돼
+  SQL 직접 실행 + `_prisma_migrations` 삽입으로 적용했다(PLAN-saju 09-12 기록).
+- **`schema.prisma` 의 `thinking` 주석과 계약이 다르다.** 주석은 "null=auto(모델 규칙 thinkOptionForModel) / off /
+  on / low / medium / high" 인데 계약 `LlmThinking` 은 `off|low|medium|high|max` — `on` 은 `thinkingOf` 의
+  safeParse 실패로 `off`, `max` 는 주석에 없다. 손으로 DB 에 `on`/`true` 를 넣으면 조용히 끔. 또 `null` 과
+  `'off'` 는 동작이 같다(둘 다 `thinkOptionForModel` 규칙 → kimi 는 `false`) — 주석의 "auto" 와 "off" 구분은
+  코드에 없고, `update` 가 `off` 를 `null` 로 저장하므로 DB 에 `'off'` 문자열이 생기지도 않는다.
+- **`llm-provider.ts` 의 `think` 주석은 낡았다.** "gpt-oss 계열은 'low'|'medium'|'high'(끄기 불가, 기본 medium),
+  그 외 thinking 모델은 boolean" — 타입엔 `'max'` 가 추가됐고 kimi 계열은 레벨 문자열을 전부 받는다. 최신 사실은
+  계약 `LlmThinking` 주석과 `aiModel.ts` 의 `thinkOptionFor` 주석에 있다.
+- **추론을 켜면 게이트 슬롯 점유가 길어지고 텔레메트리 completionTokens 가 부푼다.** max 는 호출당 타임아웃
+  120s, 섹션 4 병렬 + 테마 3 병렬이라 `saju` purpose 게이트 슬롯을 30초~2분씩 잡고, 같은 계정 키(`keySource:
+  inherited`)면 계정 게이트도 그만큼 — 공개 트래픽 + max 조합은 chat 백그라운드(요약·머지) 큐를 밀 수 있다
+  (분리하려면 사주(C) 카드에 own 키). 출력 토큰은 사고 포함(섹션 400 → 1,600~1,900)이라 사용량 패널의 토큰이
+  5배로 보인다.
+- **실측 수치가 두 종류(3문장 답 vs 사주 섹션)이고, 레벨이 지연에 단조롭지 않다.** UI `THINKING_OPTIONS` 주석의
+  "낮음 2.7s / 보통 5.9s / 높음 3.1s / 최대 11.4s" 는 3문장 답 기준, `.env.example`·PLAN 의 "low 5.3s /
+  medium 5.0s / high 6.9s / max 16~29s" 는 사주 섹션(≈400자, 2사주×4) 기준. 둘 다 low/medium/high 사이엔
+  유의한 차이가 없고 max 만 확실히 느리다(표본 작음) — 라벨의 "예산 2배·3배" 는 토큰 배수(`thinkTokenMult`)이지
+  지연 배수가 아니다. 재측정 `pnpm --filter friendly probe:saju-reading -- --models=kimi-k3 --think=false,low,medium,high,max --max-tokens-mult=5`.
+- **웹 select 는 저장된 모델이 아니라 입력 중인 모델(`shownModel`)로 판단한다.** kimi 가 아닌 모델이 저장돼
+  있어도 입력칸에 `kimi-…` 를 치면(또는 추천값이 kimi 면) select 가 나타나고, 반대로 kimi 에서 gpt-oss 로
+  바꾸면 select 가 사라지지만 저장된 `thinking` 은 그대로 남는다(안내 문구만). 저장 시 `thinkingDirty` 가 아니면
+  `thinking` 을 보내지 않으므로 남은 값은 다음에 kimi 로 돌아오는 순간 `thinkOptionFor` 로 되살아난다 — 끄려면
+  kimi 상태에서 "끔" 으로 저장.
 - **friendly 테스트 픽스처의 `defaultModels` 누락은 typecheck 가 잡지 않는다 — 12개 파일 중 2개만
   8키.** 이전 서술("빠지면 typecheck 가 잡는다")은 틀렸다: [`apps/friendly/tsconfig.json`](../../apps/friendly/tsconfig.json)
   이 `**/*.test.ts` 를 `exclude` 하고 vitest 는 esbuild 로 타입을 벗겨 돌리므로,
@@ -1188,10 +1305,12 @@ own/inherited/none. "다른 용도 추가" 빈 카드 흐름은 사라지고, �
   자기 한도(chat=15, image=2 등)를 갖고, 그 위에서 같은 키의 계정 게이트가
   cap=max(한도들) 로 한 번 더 묶는다. 실효 동시성은 `min(purpose 한도, 계정 cap)`.
 - **`think` 를 thinking 미지원 모델에 보내면 Ollama 가 에러.** `LLMCompleteOptions.think`
-  는 gpt-oss 계열('low'|'medium'|'high', 끄기 불가)·일부 thinking 모델(boolean)만
-  받는다. 모델을 보고 설정 여부를 정하는 책임은 호출자에게 있다. 또 thinking
+  는 gpt-oss 계열('low'|'medium'|'high', 끄기 불가)·일부 thinking 모델(boolean)·kimi 계열(boolean + 'low'~'max'
+  전부, 2026-09-12 실측)만 받는다 — Ollama 가 받는 값 자체는 `true/false/"low"/"medium"/"high"/"max"` 뿐이고
+  다른 문자열은 400. 모델을 보고 설정 여부를 정하는 책임은 호출자에게 있다(`thinkOptionForModel` /
+  `thinkOptionFor`). 또 thinking
   토큰은 `completionTokens`(Ollama eval_count)에 합산되므로 텔레메트리 출력 토큰이
-  부풀 수 있다.
+  부풀 수 있다(사주 max 실측 400 → 1,600~1,900).
 - **텔레메트리 SSE 는 구독 컴포넌트 수만큼 커넥션이 생긴다.** `useLlmTelemetry(true)`
   를 패널과 페이지가 둘 다 호출하면 EventSource 가 2개 — React Query 캐시는
   공유하지만 커넥션은 별개. 어드민 1명 기준 허용 범위지만, 다른 화면에서 무심코

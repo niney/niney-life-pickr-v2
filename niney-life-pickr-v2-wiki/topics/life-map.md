@@ -1,12 +1,14 @@
 ---
 topic: life-map
-last_compiled: 2026-09-07
-sources_count: 78
+last_compiled: 2026-09-19
+sources_count: 92
 status: active
-aliases: [일상지도, life-map, lifeMap, CCTV, 공중화장실, 병의원, LifeCctv, LifeToilet, LifeHospital, LifeGeocodeCache, LifeMasterSync, life-geocode-cache, VWorld 지오코딩, vworld-geocoder, vworld-search, geocodeLifeRows, 지역 이동 검색, LifeGoToBox, LifeGoToSection, extraSections, onQueryChange, LifeGoToModal, HIRA, 심평원 병원정보서비스, hira-hospital, DATA_GO_KR_API_KEY, localdata.go.kr, 지방행정인허가, points-cells, 집계 셀, lifeCellSizeDeg, useLifeMapPoints, lifeMapPrefsStore, lifeMapRecentStore, load:life-cctv, load:life-toilets, load:life-hospitals, import:life-geocode, status:life-map, LifeMapPage, LifeMapHeader, deploy.sh 6, 집값 옴니박스]
+aliases: [일상지도, life-map, lifeMap, CCTV, 공중화장실, 병의원, LifeCctv, LifeToilet, LifeHospital, LifeGeocodeCache, LifeMasterSync, life-geocode-cache, VWorld 지오코딩, vworld-geocoder, vworld-search, geocodeLifeRows, 지역 이동 검색, LifeGoToBox, LifeGoToSection, extraSections, onQueryChange, LifeGoToModal, HIRA, 심평원 병원정보서비스, hira-hospital, DATA_GO_KR_API_KEY, localdata.go.kr, 지방행정인허가, points-cells, 집계 셀, lifeCellSizeDeg, useLifeMapPoints, lifeMapPrefsStore, lifeMapRecentStore, load:life-cctv, load:life-toilets, load:life-hospitals, import:life-geocode, status:life-map, LifeMapPage, LifeMapHeader, deploy.sh 6, 집값 옴니박스, 생활편의, LifeStore, 상가정보, 상권정보, 소상공인시장진흥공단, 15083033, load:life-stores, probe:store-csv, match:restaurant-stores, lifeStore, 범죄 통계, LifeCrime, life-crime-stats, build:life-crime, 3074462, 경찰청, 인구10만명당, 배경 레이어, overlay, LIFE_MAP_OVERLAYS, LifeCrimeCard, LifeTourCard, 여행자 밀도, sigungu-geo, useSigunguGeo, lifeMapAreas]
 ---
 
-# life-map — 일상지도(전국 CCTV·공중화장실·병의원 레이어 지도)
+# life-map — 일상지도(전국 CCTV·공중화장실·병의원·생활편의 레이어 + 배경 통계 지도)
+
+**2026-09-12~09-19 변경 흡수 — 네 번째 점 레이어(생활편의 = 상가정보 ~130만 행)와 "배경(overlay) 레이어" 축 신설(범죄 통계 + 여행자 밀도)**: 지금까지 일상지도는 "점을 찍는 레이어 3종"이었는데 이번 라운드에 축이 하나 더 생겼다. (1) `bc39a79`(09-12)가 소상공인시장진흥공단 **상가(상권)정보**(data.go.kr 15083033, 분기 zip·시도별 CSV 16개·39열 ~250만 행)를 스트리밍 적재해 관심 업종만 남긴 `LifeStore` 를 네 번째 레이어 `store`(생활편의 — 편의점·마트·약국·세탁·동물병원·미용실)로 붙였고, 같은 커밋이 그 데이터를 **맛집 폐업 의심 판정**([canonical](canonical.md))과 **집값 단지 생활 인프라**([housing](housing.md))에도 배당했다. (2) 같은 커밋이 경찰청 「범죄 발생 지역별 통계」 × 행안부 주민등록 인구로 만든 **시군구 인구 10만 명당 5등급**을 시군구 경계에 칠하는 첫 **배경 레이어**를 얹었다 — 점이 아니라 면이고, `build:life-crime` 이 만든 JSON(63KB)을 **리포에 커밋**해 런타임 외부 호출·DB 가 0이다. (3) 이어 `9196495`(09-13, [tour](tour.md))가 여행로그 방문 밀도를 두 번째 배경으로 붙이며 "배경은 한 번에 하나"(`LIFE_MAP_OVERLAYS = ['crime','tour']`) 규칙이 자리 잡았고, 7~9차(`d18ac24`·`93ae031`·`6cae6b2`)로 표본이 4권역이 되면서 밀도를 켤 때의 이동이 "제주로"에서 "가까운 표본 세트로"가 됐다(9차에 서울이 표본 안에 들어와 기본 진입에선 이동이 사라졌다). 두 배경의 공통 규칙은 [quantile-graded-overlay](../concepts/quantile-graded-overlay.md) 컨셉. 부수적으로 `127e746` 이 상가 zip 이 없을 때 배포 스크립트가 조용히 죽던 것을 고쳤다.
 
 **2026-08-21~08-30 신설 — 공공데이터 3레이어 지도 + 적재 파이프라인 + 지역 이동 검색 + 웹 모바일 시트 + 앱 화면 + 병의원**: 지방행정인허가데이터개방(localdata.go.kr)의 전국 CCTV(377,243행)·공중화장실(53,559행) CSV 를 friendly 로컬 SQLite 에 전량 적재하고, 화장실은 원본에 좌표가 없어 VWorld 지오코더로 주소를 변환(영구 캐시 + gzip 압축본을 리포에 커밋)해 **지도 한 장에 점/집계 셀**로 그리는 공개 페이지 `/life-map` 이 `1d92acb`(08-21) 로 시작됐다. 같은 날 `a21de10` 이 **지역 이동 옴니박스**(행정구역 로컬 245지점 · 지하철역 · 버스정류장 · VWorld 주소/POI 프록시)와 지오코딩 1일차(79%) 캐시를 더했고, `e84e4b9`(08-22) 가 웹 모바일을 맛집 v2 바텀시트 패턴(`sheet/` 승격 + `useMapSheets`)으로 통일했다. 앱은 `e348032`(08-22) 로 대중교통 골격(WebView 지도 + 플로팅 헤더 + List/Detail 시트)을 재사용해 화면을 얻었고 `563890a`(최근 위치)·`4e414aa`(헤더 sticky 보간)·`fdb6ab9`(`enableDynamicSizing=false`)·`342b3b7`(활성 시트 추종)으로 다듬어졌다. 원본 데이터 정리(`809b7e0`·`5a84b63`, `data/open/` 규약 + deploy.sh 경로 폴백)를 거쳐, `4fd6e22`(08-30) 가 **세 번째 레이어 병의원**을 심평원 병원정보서비스 API(data.go.kr 15001698) 전량 페이징(~80콜) 적재로 얹었다 — CSV 가 아니라 API 가 원천이고 좌표는 업스트림(99.99%)이 원칙이라는 점만 다르고, 정규화·전량 교체·상태 API·UI 골격은 앞 두 레이어와 같다.
 
@@ -36,10 +38,14 @@ aliases: [일상지도, life-map, lifeMap, CCTV, 공중화장실, 병의원, Lif
         ▼            @repo/api-contract schemas/life-map.ts · Routes.LifeMap
 friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/getDetail — 로컬 SQLite, 셀 LRU 10분)
                           └─ LifeMapSearchService(VWorld search 프록시, LRU 10분) ── vworld-search.adapter
+                          └─ LifeCrimeService(getStats — 커밋된 JSON 을 기동 시 계약 검증 후 그대로, bbox·DB 없음)
 적재(스크립트, 서버 밖) ─ load:life-cctv / load:life-toilets ── life-map-master.service (CSV 정규화 + 전량 교체)
                        ─ load:life-hospitals ── life-map-hospital-master.service ── hira-hospital.adapter (data.go.kr 15001698)
+                       ─ load:life-stores ── life-store-master.service (zip 스트리밍 → 청크 교체) · probe:store-csv
+                       ─ match:restaurant-stores ── restaurant-store-match.service (맛집 ↔ 상가, canonical) ─ [canonical]
+                       ─ build:life-crime ── life-crime-build.ts (경찰청 CSV × 인구 CSV × 경계 → data/life-crime-stats.json 커밋)
                        ─ life-map-geocode.service (VWorld getcoord + LifeGeocodeCache) ─ export/import:life-geocode (json.gz)
-                       ─ status:life-map ("ok cctv=N toilet=M geocoded=G hospital=H cache=C" — deploy.sh 가 파싱)
+                       ─ status:life-map ("ok cctv=N toilet=M geocoded=G hospital=H store=S tour=… cache=C" — deploy.sh 가 파싱)
 ```
 
 ### 레이어 3종 — 원천과 좌표
@@ -49,6 +55,18 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 | `cctv` | localdata.go.kr 전국 CCTV 설치 현황 CSV(CP949) | 원본 `WGS84위도/경도`(100%), 한국 범위(lat 33~39·lng 124~132) 밖 35행 drop | `load:life-cctv <csv>` | 설치목적 10종(쉼표 다중) |
 | `toilet` | localdata.go.kr 전국 공중화장실 CSV | 없음 → 도로명/지번 주소를 VWorld 지오코더로(실패 행은 `lat/lng null` = 지도 미표시, 상세는 가능) | `load:life-toilets <csv> [--offline]` | 편의 5종 AND(open24·disabled·kids·diaper·bell) |
 | `hospital` | 심평원 병원정보서비스 `getHospBasisList`(HTTPS JSON, 전량 페이징) | 업스트림 `XPos/YPos`(프로브 실측 99.99%) 우선, 결측·범위 밖만 `addr` 지오코딩 | `load:life-hospitals [--offline]` | 종별 7종(정규화 category, 쉼표 다중) |
+| `store` (NEW 26차) | 소상공인시장진흥공단 상가(상권)정보 zip(data.go.kr 15083033, 분기, 시도별 CSV 16개·UTF-8 BOM·39열·~250만 행) | 원본 경위도(실측 결측 0), 한국 범위 밖 drop | `load:life-stores [zip]` | 업종 6종(`LIFE_STORE_LAYER_KINDS` — 편의점·마트·약국·세탁·동물병원·미용실, 쉼표 다중) |
+
+`store` 는 `LIFE_MAP_LAYERS` 에 합류한 **정식 4번째 레이어**(points·nearby·detail 전부 지원)지만, 적재는 레이어보다 넓다 — [`lifeStoreKindOf`](../../packages/utils/src/lifeStore.ts) 가 상권 표준 분류를 내부 kind **9종**으로 접어 넣고 그중 6종만 지도 레이어로 보여 준다(나머지는 맛집 매칭·집값 인프라 전용). 적재는 행을 전부 메모리에 올리지 않고 **청크 스트리밍**(1,000행 × 17열 = 17,000 바인드, SQLite 상한 32,766 아래)으로 흘려 넣는다 — 경기 CSV 하나가 350MB 라 기존 레이어의 "전부 읽고 한 번에 교체" 방식을 쓸 수 없었다.
+
+### 배경(overlay) 레이어 2종 — 점이 아니라 면·격자
+
+| 배경 | 원천 | 집계 단위 | 계산 위치 | 등급 |
+|---|---|---|---|---|
+| `crime`(범죄 통계) | 경찰청 「범죄 발생 지역별 통계」 CSV(data.go.kr **3074462**, 연 1회, CP949) × 행안부 주민등록 인구 CSV(자동 다운로드) × 웹 `sigungu-geo.json` 경계 | 시군구 **229개** | **빌드 시점** — `build:life-crime` 이 [life-crime-stats.json](../../apps/friendly/src/modules/life-map/data/life-crime-stats.json)(63KB, 2024년 기준·인구 2024-12)을 만들어 **커밋**, 런타임은 기동 시 계약 검증만 | 인구 10만 명당 값의 20/40/60/80 분위 5등급, 지표 4종(전체·강력·절도·폭력) |
+| `tour`(여행자 밀도) | 여행로그 공개 방문(적재된 4권역) | 0.02° 격자 | **요청 시점** — `GET /tour/public/density` 가 SQLite `GROUP BY` 로 집계(LRU 10분) | 칸 방문 수 분위 5등급, 여행자 5명 미만 칸은 응답에서 제외 |
+
+배경은 `overlay` 상태 하나로 **한 번에 하나만** 켜진다(면 색칠이 겹치면 읽을 수 없다) — 점 레이어 토글(`layers`, 다중)과 축이 다르고, 배경을 바꾸면 선택(시군구·칸)은 뜻이 달라져 항상 비운다. 축·등급 규칙은 [`packages/utils/src/lifeCrime.ts`](../../packages/utils/src/lifeCrime.ts)(`LIFE_MAP_OVERLAYS`·`lifeCrimeQuantileBreaks`·`lifeCrimeGrade`)와 [`tourLog.ts`](../../packages/utils/src/tourLog.ts)(`tourDensityQuantileBreaks`·`tourDensityGrade`)에 한 벌씩 있어 **서버(빌드·SQL)와 웹(범례·색칠)이 같은 함수**를 부른다.
 
 코드표는 [packages/utils/src/lifeMap.ts](../../packages/utils/src/lifeMap.ts) 한 곳 — 서버 적재·조회와 웹·앱 UI 가 같은 상수를 쓴다. CCTV 설치목적 10종(`생활방범 62%·다목적 13%·어린이보호 8%·교통단속 5%…`)은 필터에선 그대로 두고 색·범례만 4그룹(`safety/child/traffic/etc`)으로 묶는다(범주색은 4개까지만 전 쌍이 읽힌다). 병의원 종별은 심평원 `clCdNm` 15종 안팎을 `종합병원·병원·의원·치과·한방·보건기관·기타` 7종으로 접되 원문 `kindName` 은 상세에 보존한다 — 실응답이 `'상급종합병원'` 이 아니라 **`'상급종합'`** 으로 와서 매핑을 따로 둔다(없으면 상급종합 47곳이 '기타'로 빠진다).
 
@@ -109,8 +127,12 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 
 [lifeMapBridgeMarkers.ts](../../apps/mobile/src/components/lifeMap/lifeMapBridgeMarkers.ts): 웹과 같은 id·아이콘 규칙이되 아이콘은 **사전(`icons`)** 으로 한 번만 보내고 마커는 키만 든다(`@cctv:{group}` · `@cctv-sel:{group}` · `@toilet(-sel)` · `@hospital(-sel)` · `@cell:{layer}:{count}`) — 수천 CCTV 점이 같은 data URL 을 반복하지 않게. 이를 위해 대중교통 브리지에 `setMarkers.icons` 사전 치환과 `BridgeMarker.fixedScale`(셀 버블 축소 금지) 이 추가됐다(`e348032`, 기존 대중교통 동작 무변경 — [transit](transit.md)/[mobile](mobile.md)).
 
-## Talks To [coverage: high — 12 sources]
+## Talks To [coverage: high — 17 sources]
 
+- **소상공인시장진흥공단 상가(상권)정보 zip(data.go.kr 15083033)** (NEW 26차) — 분기 수동 다운로드 → `data/open/store/store-YYYYMM.zip`. 서버·런타임 호출 없음(파일만). 항목명이 CP949 라 압축 해제 시 인코딩 지정 필요.
+- **경찰청 「범죄 발생 지역별 통계」(data.go.kr 3074462) + 행안부 주민등록 인구(jumin.mois.go.kr)** (NEW 26차) — 둘 다 **빌드 스크립트만** 호출한다(인구 CSV 는 연도 지정으로 자동 다운로드, 로그인·키 불필요). 런타임은 커밋된 JSON 만 읽으므로 외부 의존이 0.
+- **canonical(맛집)** (NEW 26차) — `match:restaurant-stores` 가 `LifeStore` 를 맛집 canonical 에 1:1 사이드 테이블로 붙인다(반경 80m·상호 점수). 일상지도는 데이터를 제공할 뿐 매칭 로직은 [canonical](canonical.md)·[canonical-side-table-match](../concepts/canonical-side-table-match.md).
+- **tour(여행로그)** (NEW 26차) — 배경 레이어 "여행자 밀도"의 데이터는 `GET /tour/public/density`([tour](tour.md))가 내고 일상지도는 화면·설정만 갖는다. 표본 bbox 판정·이동은 utils `tourSampleRegionAt`/`nearestTourSampleRegion`.
 - **localdata.go.kr(지방행정인허가데이터개방) CSV** — 서버가 아니라 사람이 내려받아 `data/open/` 에 두고 스크립트가 읽는다. 원본은 리포 밖(`/data/` gitignore), 출처·적재 명령·보관 기준은 [docs/data-sources.md](../../docs/data-sources.md).
 - **심평원 병원정보서비스 `apis.data.go.kr/B551182/hospInfoServicev2`** — 적재 스크립트·프로브만 호출(요청 경로 없음). 키는 data.go.kr 계정 공용 `DATA_GO_KR_API_KEY`(2026-09-02 `3d9dfed` 부터 — 그 전엔 `HIRA_API_KEY` 비면 `BUS_API_KEY` 폴백; 15001698 활용신청만 추가). [load-life-hospitals.ts](../../apps/friendly/scripts/load-life-hospitals.ts)·[probe-hira-api.ts](../../apps/friendly/scripts/probe-hira-api.ts)는 `env.ts` 를 거치지 않고 `process.env` 를 직접 읽으며 비면 `DATA_GO_KR_API_KEY가 없습니다` 로 종료. 개발계정 일 10,000건, 전량 ~80콜. [probe:hira](../../apps/friendly/scripts/probe-hira-api.ts) 가 키 등록·`_type=json`·`numOfRows=1000` 허용·필드 인벤토리·좌표 결측률·ykiho 길이(계약 상한 200)·종별 분포를 실응답으로 확정(덤프 `apps/friendly/data/hira-probe/*.json`, ~4콜).
 - **VWorld 지오코더(`api.vworld.kr/req/address`)** 와 **VWorld 검색(`/req/search`)** — 둘 다 WMTS 와 같은 인증키를 `MapSettingsService.getSecret('vworld')`(DB `MapProviderConfig` 우선 + `.env VWORLD_API_KEY` 폴백, 검색 라우트는 요청마다 읽어 키 교체 즉시 반영)로 얻는다 — [map](map.md) 토픽의 [db-config-env-fallback](../concepts/db-config-env-fallback.md) 소비처.
@@ -134,7 +156,10 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 | GET | `/api/v1/life-map/points` | `layer`·`bbox="minLng,minLat,maxLng,maxLat"`·`zoom(0~22, 소수 허용·서버 내림)` + 필터(`purpose`·`category` 쉼표 목록, `open24/disabled/kids/diaper/bell` = `'1'|'0'|'true'|'false'`) | `mode 'points'|'cells'`, `items`(최소 필드, 상한 4,000·`truncated`)·`cells[{lat,lng,count}]`·`total`·`minPointZoom`·`fetchedAt(=loadedAt)`. 미적재 503. rate 240/분 |
 | GET | `/api/v1/life-map/nearby` | `layer`·`lat(33~39)`·`lng(124~132)`·`radius(100~3000, 기본 1000)`·`limit(1~30, 기본 10)` + 필터 | 거리 오름차순 상세 항목(`dist` m)·`total`(반경 내 전체). 503. rate 240/분 |
 | GET | `/api/v1/life-map/search` | `q(2~60자, NFC·공백 정규화)`·`limit(≤20, 기본 8)` | `{q, items[{kind 'place'|'road'|'parcel', id, title, subtitle, lat, lng}], enabled, fetchedAt}`. 키 없음 `enabled=false`(200) · 인증/한도 503 · 업스트림 502. rate 60/분 |
-| GET | `/api/v1/life-map/:layer/:id` | `id` 1~200자(병의원 ykiho 는 base64 ~100자) | `LifeMapItem` = `layer` discriminated union(`LifeCctvItem`·`LifeToiletItem`·`LifeHospitalItem`). 404. 라우트 등록은 `decodeURIComponent(Routes.LifeMap.detail(':layer', ':id'))`(지하철 도착 라우트 패턴) |
+| GET | `/api/v1/life-map/:layer/:id` | `id` 1~200자(병의원 ykiho 는 base64 ~100자, 상가는 상가업소번호) | `LifeMapItem` = `layer` discriminated union(`LifeCctvItem`·`LifeToiletItem`·`LifeHospitalItem`·`LifeStoreItem`). 404. 라우트 등록은 `decodeURIComponent(Routes.LifeMap.detail(':layer', ':id'))`(지하철 도착 라우트 패턴) |
+| GET | `/api/v1/life-map/crime` (NEW 26차) | — | 커밋된 통계 JSON 그대로 — `{year 2024, populationBase '2024-12', regionCount 229, breaks{total,violent,theft,assault}[4], regions[{codes[], label, sido, name, population, counts, per100k, rank}]}`. **bbox·필터·페이징 없음**(한 번에 전부, 63KB) — 정적이라 DB·업스트림이 없고 미적재 503 도 없다 |
+
+`points`·`nearby` 의 `layer` 에 `store` 가 더해졌고(필터 `kind=` 쉼표 다중), 여행자 밀도 배경은 이 모듈이 아니라 [tour](tour.md) 의 `GET /tour/public/density` 가 낸다 — 일상지도는 화면에서만 두 배경을 같은 자리에 놓는다.
 
 불리언 쿼리는 `LifeMapFlagParam`(enum → transform) — `z.coerce.boolean` 은 `'0'/'false'` 도 true 라 쓰지 않는다. `bbox` 문자열 규약은 맛집 공개 목록과 같은 `@repo/utils formatBbox`.
 
@@ -147,7 +172,11 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 | `load:life-hospitals` | HIRA 전량 페이징 → 정규화 → 결측만 지오코딩 → `LifeHospital` 전량 교체 | `--dry-run`(업스트림 ~80콜은 나간다) · `--max-pages=N`(확인용, 부분 적재 비권장) · 지오코더 옵션 동일 |
 | `export:life-geocode [경로]` | 캐시 → json(.gz) — 기본 추적 경로 | — |
 | `import:life-geocode [경로] [--overwrite]` | json(.gz) → 캐시(없는 키만 / 덮어쓰기) | — |
-| `status:life-map` | `ok cctv=N toilet=M geocoded=G hospital=H cache=C` / `missing`(테이블 없음) | — |
+| `load:life-stores [zip]` (NEW 26차) | 분기 zip(시도별 CSV 16개) 스트리밍 → 관심 업종 9종만 정규화 → `LifeStore` 전량 교체(청크 1,000행) | `--dry-run`. 기본 경로 `data/open/store/store-YYYYMM.zip` |
+| `match:restaurant-stores` (NEW 26차) | 맛집(canonical) ↔ 상가업소 매칭 — 반경 80m·상호 점수 ≥0.5, 사라진 업소는 `missing`(폐업 의심) | `--dry-run`. 세부는 [canonical](canonical.md) |
+| `probe:store-csv` (NEW 26차) | 상가 CSV 열·인코딩·업종 분포 실측 | — |
+| `build:life-crime` (NEW 26차) | 경찰청 CSV × 행안부 인구 CSV(없으면 자동 다운로드) × 시군구 경계 → `data/life-crime-stats.json` **생성·커밋**(DB 적재 아님) | `--crime=` · `--pop=` · `--geo=` · `--out=` · `--dry-run` |
+| `status:life-map` | `ok cctv=N toilet=M geocoded=G hospital=H store=S tour=T tour_<세트>=… tour_matched=X cache=C` / `missing`(테이블 없음) | — |
 | `probe:hira` | 심평원 API 실응답 프로브 | — |
 
 ### FE 공통 export
@@ -157,29 +186,37 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - [utils lifeMap.ts](../../packages/utils/src/lifeMap.ts): `LIFE_MAP_LAYERS/LABEL`·`isLifeMapLayer`·`LIFE_MAP_POINT_MIN_ZOOM`·`LIFE_MAP_POINTS_MAX`·`LIFE_CCTV_PURPOSES`(10)·`normalizeLifeCctvPurpose`·`parseLifeCctvPurposes`·`LIFE_CCTV_PURPOSE_GROUPS`(4)·`lifeCctvPurposeGroup`·`LIFE_TOILET_KINDS`(5)·`LIFE_TOILET_OPEN_TYPES`(5)·`lifeToiletOpen24`·`lifeToiletOpenLabel`(웹 `lifeMapFormat.openLabel` 에서 승격, 앱 공용)·`LIFE_TOILET_FEATURES`(6, 입구 CCTV 는 표시만)·`LIFE_TOILET_FILTER_KEYS`(5)·`summarizeLifeToiletFixtures`·`LIFE_HOSPITAL_CATEGORIES`(7)·`normalizeLifeHospitalCategory`·`parseLifeHospitalCategories`·`formatLifeYm`·`formatLifeCount`(1,234→'1.2천', 12,345→'1.2만')·`lifeCountBucket`·`LIFE_CELL_ORIGIN`·`lifeCellSizeDeg`.
 - [utils lifeMapMarker.ts](../../packages/utils/src/lifeMapMarker.ts): 색 `LIFE_CCTV_GROUP_COLOR{safety #2a78d6, child #eb6834, traffic #1baf7a, etc #4a3aa7}`·`LIFE_TOILET_COLOR #c2185b`·`LIFE_HOSPITAL_COLOR #00897b`·`LIFE_LAYER_COLOR`; `buildLifeCctvDot(12px)/Pin(32×48)`, `buildLifeToiletMarker`/`buildLifeHospitalMarker(26px 원 | 선택 핀)`, `buildLifeCellMarker`(건수 버킷별 지름 26/34/40/46, 숫자를 SVG 안에 새김 — MapCanvas 라벨은 줌 14 미만에서 꺼지므로).
 
-## Data [coverage: high — 8 sources]
+## Data [coverage: high — 12 sources]
 
-마이그레이션 [20260821130000_add_life_map](../../apps/friendly/prisma/migrations/20260821130000_add_life_map/migration.sql) + [20260827222827_add_life_hospital](../../apps/friendly/prisma/migrations/20260827222827_add_life_hospital/migration.sql):
+마이그레이션 [20260821130000_add_life_map](../../apps/friendly/prisma/migrations/20260821130000_add_life_map/migration.sql) + [20260827222827_add_life_hospital](../../apps/friendly/prisma/migrations/20260827222827_add_life_hospital/migration.sql) + [20260912101013_add_life_store_and_restaurant_store_match](../../apps/friendly/prisma/migrations/20260912101013_add_life_store_and_restaurant_store_match/migration.sql) + [20260912102150_drop_restaurant_store_match_store_fk](../../apps/friendly/prisma/migrations/20260912102150_drop_restaurant_store_match_store_fk/migration.sql):
 
 | 테이블(모델) | 키·주요 컬럼 | 인덱스 |
 |---|---|---|
 | `life_cctvs`(`LifeCctv`) | `id`=관리번호(전국 유일, 실측 중복 0) · `orgCode`(개방자치단체코드 7자리)·`orgName`·`roadAddr`·`lotAddr`·`purpose`(10종)·`cameraCount`·`pixels`(만 화소)·`direction`·`keepDays`·`installedYm('YYYYMM')`·`phone`·`lat/lng NOT NULL`·`baseDate('YYYY-MM-DD')` | `(lat, lng)` |
 | `life_toilets`(`LifeToilet`) | `id`·`orgCode`·`name`·`kind`(5종)·주소 2종·`orgName`·`phone`·`openType`(5종)·`openDetail`·`open24`(적재 시 판정)·변기수 9열(`maleToilet…femaleKidsToilet`, 기본 0)·파생 `disabled`·`kids`·`ownerType`·`disposal`·`safetyTarget?`·`bell`·`bellPlace`·`entranceCctv`·`diaper`·`diaperPlace`·`installedYm`·`remodeledYm`·`baseDate`·`lat/lng?`·`geoSource 'road'|'parcel'|null` | `(lat, lng)` |
 | `life_hospitals`(`LifeHospital`) | `id`=ykiho(암호화 요양기호)·`name`·`kindName`(원문)·`category`(7종)·`sidoName`·`sgguName`·`emdongName`·`postNo`·`addr`·`phone`·`url`·`openedDate`·`doctorCount?`·`lat/lng?`·`geoSource 'api'|'road'|'parcel'|null` | `(lat, lng)` |
+| `life_stores`(`LifeStore`) (NEW 26차) | `id`=**상가업소번호**(전국 유일) · `name`·`branch?`·`kind`(내부 9종) · 원문 분류 `mclsCd`·`sclsCd`·`sclsName`·`ksicName?` · `sggCd`(5자리)·`sggName`·`umdName?` · `roadAddr?`·`lotAddr?`·`bldName?`·`floor?` · `lat/lng NOT NULL` | `(kind, lat, lng)` 등 — 레이어 bbox 조회와 맛집 매칭 후보 탐색이 같은 인덱스를 쓴다 |
 | `life_geocode_caches`(`LifeGeocodeCache`) | PK `(type, address)` · `status 'ok'|'notfound'`·`lat/lng?`·`refined`(지오코더 정제 주소)·`checkedAt` | — |
 | `life_master_syncs`(`LifeMasterSync`) | `id`·`layer`·`count`·`geocoded?`·`baseDate?`·`sourceFile?`·`loadedAt` — 레이어별 최신 행이 "적재됨" 판정·`fetchedAt`·상태 API 의 원천(버스/지하철 MasterSync 패턴) | `(layer, loadedAt)` |
 
 인메모리 캐시: `LifeMapService.cellCache`(LRU 300 · 10분, 키에 `syncId` 포함 → 재적재 즉시 무효) · `LifeMapSearchService.cache`(LRU 500 · 10분, 검색어 키). 클라이언트: React Query 24h/10분.
 
-저장소 커밋 산출물: [data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz)(2.3MB, **104,871건** — 2026-09-01 export; 화장실 주소 + 집값 단지 주소가 한 캐시에 섞여 있다). 원본 CSV·프로브 덤프는 gitignore(`/data/`, `apps/friendly/data/*`). 로컬 dev.db 컴파일 시점 `status:life-map`: `ok cctv=377243 toilet=53559 geocoded=42248 hospital=0 cache=104871`.
+상가 매칭 결과 `restaurant_store_matches`(`RestaurantStoreMatch`, canonical 당 1행 · 상가업소번호 unique · `status matched|missing` + `missingSince`)는 **FK 없이** 산다 — `20260912101013` 이 FK 를 걸었다가 다음 마이그레이션(`20260912102150`)이 바로 뺐다. 분기 재적재가 `LifeStore` 를 통째로 갈아끼우기 때문에 FK 가 있으면 적재가 막히거나 매칭이 함께 지워진다(자세히는 [canonical](canonical.md)·[canonical-side-table-match](../concepts/canonical-side-table-match.md)).
+
+저장소 커밋 산출물 2종: [data/life-geocode-cache.json.gz](../../apps/friendly/src/modules/life-map/data/life-geocode-cache.json.gz)(2.3MB, **104,871건** — 2026-09-01 export; 화장실 주소 + 집값 단지 주소가 한 캐시에 섞여 있다)와 [data/life-crime-stats.json](../../apps/friendly/src/modules/life-map/data/life-crime-stats.json)(63KB — `year 2024`·`populationBase '2024-12'`·`regionCount 229`·지표 4종 분위 경계·시군구 229행 `{codes,label,sido,name,population,counts,per100k,rank}`). 범죄 JSON 은 DB 를 거치지 않으므로 **운영 배포 단계가 없다**(코드 배포 = 갱신). 원본 CSV·프로브 덤프는 gitignore(`/data/`, `apps/friendly/data/*`). 로컬 dev.db 컴파일 시점 `status:life-map`: `ok cctv=377243 toilet=53559 geocoded=42248 hospital=0 store=1307626 tour=50271 … cache=104871`.
 
 클라이언트 스토어(웹 localStorage / 앱 AsyncStorage `createJSONStorage`, 이름·버전 동일):
-- `lp:life-map-prefs` **v2** — `layers{cctv,toilet,hospital}`(기본 전부 켬)·`purposes[]`·`toiletFilters{open24,disabled,kids,diaper,bell}`·`hospitalCategories[]`. `migrate` v1→v2 가 병의원 레이어를 기존 사용자에게도 기본 켬 + 종별 전체. 위치(`ll,z`)·선택(`sel`)은 URL 이 진실이고 이 설정은 취향이라 persist(`transitCrossShowStore` 관례). 웹은 `setPurposes/setHospitalCategories/resetFilters`, 앱은 `clearPurposes/clearHospitalCategories` 로 액션명이 조금 다르다.
+- `lp:life-map-prefs` — **웹 v5 / 앱 v3 로 갈라졌다**(이름은 같고 버전 체인이 독립). 웹 v5 = `layers{cctv,toilet,hospital,store}`·`purposes[]`·`toiletFilters{…}`·`hospitalCategories[]`·`storeKinds[]`·**`overlay 'crime'|'tour'|null`**·`crimeMetric`·`tourDensityKind`; 앱 v3 = 여기에 `layers.store` 만 더해진 상태(배경 레이어 개념 없음 — [mobile](mobile.md)). 웹 `migrate` v1→v2 가 병의원을 기본 켬, 이후 v3~v5 가 상가·배경 축을 더했다. 위치(`ll,z`)·선택(`sel`)은 URL 이 진실이고 이 설정은 취향이라 persist(`transitCrossShowStore` 관례). 웹은 `setPurposes/setHospitalCategories/resetFilters`, 앱은 `clearPurposes/clearHospitalCategories` 로 액션명이 조금 다르다.
 - `lp:life-map-recent` v1 — 최근 본 위치 `{label, sub, lat, lng, zoom, at}` 최대 8개.
 - 앱 스토어는 `AsyncStorage` 를 직접 `createJSONStorage` 에 넘기는 방식(대중교통 `transitRecentStore` 관례)이지 [shared](shared.md) 의 주입형(injectable storage)은 아니다 — 서버 동기화 대상이 아니라 문제는 없다.
 
-## Key Decisions [coverage: high — 16 sources]
+## Key Decisions [coverage: high — 21 sources]
 
+- **2026-09-12~13 "배경(overlay)"을 점 레이어와 다른 축으로 만들고 한 번에 하나만(`bc39a79`·`9196495`)** — 면 색칠은 겹치면 읽을 수 없어서 다중 토글인 `layers` 와 달리 `overlay` 는 단일 값(`null` 포함)이다. 축 정의를 utils(`LIFE_MAP_OVERLAYS`)에 둔 덕에 두 번째 배경(여행자 밀도)이 합류할 때 배열에 키 하나만 늘리면 계약·웹·설정 마이그레이션이 따라왔다. 배경을 바꾸면 선택은 뜻이 달라지므로 항상 비운다.
+- **2026-09-12 범죄 통계는 적재가 아니라 빌드 — 산출물을 커밋(`bc39a79`)** — 연 1회 갱신되는 229행짜리 통계에 테이블·적재 명령·상태 판정을 붙이는 건 과하다. `build:life-crime` 이 개발 머신에서 CSV 두 개(인구는 자동 다운로드)와 경계를 합쳐 63KB JSON 을 만들고, 서버는 기동 시 `LifeCrimeStatsResult` 로 **검증만** 한다(빌드 산출물이 계약과 어긋나면 조용한 500 대신 기동 실패). 덕분에 운영 배포 절차가 0이고 런타임 외부 호출도 0.
+- **2026-09-12 등급은 절대 기준이 아니라 분위(20/40/60/80) + 인구 보정(`bc39a79`)** — 범죄 "건수"를 그대로 칠하면 인구 많은 구가 늘 붉게 나온다. 10만 명당으로 나누고 전국 시군구 분포의 분위로 5등급을 매겨 범례가 "적음↔많음(표본 내 상대)"이 되게 했다. 색칠 대상도 생활 안전과 직결되는 강력·절도·폭력 3종만(사기·교통은 합계를 지배하지만 "안전"과 무관) — 절대 판정을 하지 않는 이 태도는 여행자 밀도와 공유한다([quantile-graded-overlay](../concepts/quantile-graded-overlay.md)).
+- **2026-09-12 상가 적재는 "전부 읽고 한 번에 교체"를 포기하고 청크 스트리밍(`bc39a79`)** — 경기 CSV 하나가 350MB 라 기존 레이어 골격(정규화된 배열 전체를 메모리에)이 안 통한다. 정규화 순수 함수·사유별 drop 리포트·전량 교체 트랜잭션은 유지하되 1,000행씩 흘려 넣는다(17열 × 1,000 = 17,000 바인드). 지도에 보여 주는 업종은 6종이지만 **적재는 9종** — 맛집 매칭·집값 인프라가 지도에 없는 업종도 쓰기 때문.
+- **2026-09-12 상가 zip 이 없을 때 배포가 죽지 않게(`127e746`)** — `store_latest_zip` 이 파일을 못 찾으면 `set -e` 와 맞물려 배포 스크립트가 조용히 종료되던 것을 고쳤다. 원본이 리포 밖(분기 수동 업로드)인 레이어를 추가할 때마다 반복되는 함정이라 "없으면 안내하고 넘어간다"를 기본형으로.
 - **2026-09-02 병의원 적재 키도 계정 공용 `DATA_GO_KR_API_KEY` 로**(`3d9dfed`) — `HIRA_API_KEY` → `BUS_API_KEY` 폴백은 "같은 계정이면 같은 키" 를 env 항목 둘로 흉내 낸 것. 도메인별 항목을 전부 없애고 한 이름 + 데이터셋별 활용신청 주석으로 정리(배경·운영 주의는 [bus](bus.md)). 일상지도 쪽 변경은 로더·프로브의 env 읽기 한 줄과 deploy.sh 실패 안내 문구뿐.
 - **2026-08-30 옴니박스·지오코딩 캐시·레이아웃 골격을 집값이 재사용 — 복제 대신 prop 확장**(`254fb76`) — 새 지도 페이지가 지역 이동을 또 만들지 않게 `LifeGoToBox` 에 `extraSections`/`onQueryChange` 를 열었다. 훅 주입이 아니라 "검색어 올리고 섹션 내려받기" 인 이유는 rules-of-hooks(박스 안에서 임의 훅을 호출할 수 없다)와 박스가 도메인 훅을 몰라야 한다는 것. 지오코딩은 VWorld 일 한도가 계정 단위라 캐시를 나누면 손해고, 압축본 한 파일이면 deploy.sh 의 `GZ_CHANGED` 경로 하나로 두 도메인이 같이 갱신된다 — 대신 캐시 행에 도메인 표식이 없어 도메인별 통계는 각자 DB(`geocoded` 컬럼)에서 본다.
 - **2026-08-30 병의원은 CSV 가 아니라 API 전량 적재, 좌표는 업스트림 우선**(`4fd6e22`) — 심평원이 `XPos/YPos` 를 99.99% 주므로 지오코딩은 결측 소수만. deploy.sh 는 예측성을 위해 `--offline` 으로 돌리고(결측 소수는 지도 미표시 — 수동으로 옵션 없이 재실행하면 채워진다) 병의원 0건이면 자동 실행. 키는 `HIRA_API_KEY` → `BUS_API_KEY` 폴백(계정당 키 1개 — 2026-09-02 부터 `DATA_GO_KR_API_KEY` 하나). 마커는 종별과 무관한 **단색 청록** — CCTV 처럼 그룹색을 더 얹으면 한 화면 색이 8개를 넘어 전 쌍 분리가 깨진다(분홍 원과는 색상, 초록 점과는 형태로 갈림). 종별 `category` 7종은 필터·서버 열, 원문 `kindName` 은 상세. 어댑터 타임아웃 40초 + 일시 오류 2회 재시도, `'상급종합'` 매핑, 레이어 칩 `nowrap` + 가로 스크롤(xl 은 줄바꿈 — 400px 패널에서 한글이 글자 단위로 꺾여 '병/의/원' 이 되던 것).
@@ -195,8 +232,13 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - **2026-08-21 5색 팔레트 검증**(`1d92acb`) — dataviz 범주 팔레트에서 CCTV 4그룹 전 쌍 + 화장실 1색이 라이트 표면에서 CVD·정상시 분리 기준을 모두 통과한 조합(`scripts/validate_palette.js`). 점은 흰 외곽선이 있어 야간 타일에서도 같은 색.
 - **2026-08-21 상태 API 와 미적재 503 안내**(`1d92acb`) — 지하철 마스터 규약과 동일: 적재 이력이 없으면 503 본문에 실행할 명령을 적는다. `status:life-map` 한 줄은 deploy.sh 가 키 단위로 뽑아 항목 추가가 안전.
 
-## Gotchas [coverage: high — 14 sources]
+## Gotchas [coverage: high — 19 sources]
 
+- **범죄 통계는 코드 배포로만 갱신된다** — 다른 레이어는 "서버에서 적재 명령"이지만 범죄 JSON 은 커밋 산출물이라 로컬에서 `build:life-crime` → 커밋 → 배포다. 원본 CSV(경찰청 연 1회, 인구 월간)가 리포 밖이므로 다음 해 통계를 넣으려면 파일을 다시 받아야 하고, 시군구 경계 이름 별칭(합쳐진 군·행정구 표기)을 빌드 스크립트가 표로 보정한다 — 경계 JSON(`apps/web/public/sigungu-geo.json`)이 바뀌면 매칭 실패 행이 조용히 빠질 수 있으니 `--dry-run` 리포트의 매칭 수(229)를 확인한다.
+- **상가 지도 레이어(6종) ≠ 적재 업종(9종)** — `LIFE_STORE_LAYER_KINDS` 밖의 kind 는 `points`·`nearby` 응답에 안 나오지만 DB 엔 있다(맛집 매칭·집값 인프라용). "적재했는데 지도에 안 보인다"는 대개 이 차이다.
+- **상가 zip 은 분기 수동 업로드** — `data/open/store/store-YYYYMM.zip`(항목명이 CP949) 이 없으면 deploy.sh 는 안내만 하고 넘어간다(`127e746` 이후). 재적재 뒤에는 **반드시 `match:restaurant-stores`** 를 이어 돌려야 폐업 의심 판정이 새 데이터 기준이 된다 — deploy.sh 는 이어서 돌리지만 실패해도 echo 로 삼키므로 로그를 본다.
+- **배경 레이어는 `layers` 가 아니라 `overlay`** — 웹 prefs v5 에서 상태가 갈라져 있고 앱은 배경 자체가 없다(prefs v3). 웹에서 공유한 `?ll=…` 링크를 앱에서 열면 배경은 사라진 채 점 레이어만 보인다.
+- **여행자 밀도는 표본이 있는 권역에서만 의미가 있다** — 적재된 세트(제주·서부권·동부권·수도권) bbox 밖에서 켜면 가까운 세트 중심으로 지도가 이동한다. 9차(수도권) 이후 서울은 표본 **안**이라 기본 진입에서는 이동하지 않는다 — "켜면 제주로 간다"는 옛 동작을 가정한 테스트·문서는 틀린다([tour](tour.md)).
 - **화장실 지오코딩 2일차 재실행 여전히 미완(2026-09-07 재확인)** — `a21de10` 은 일일 한도로 79% 지점에서 중단("다음날 재실행 예정")했고, 이번 라운드 로컬 `status:life-map` 도 `geocoded=42248/53559(78.9%)` 그대로다. 커밋 gz 는 09-01 에 104,871건으로 갱신됐지만 **증가분은 전부 집값 단지 주소**라 화장실 좌표는 늘지 않았다(`cache=104871` 만 커졌다). 남은 ~11k 행은 지도·주변·셀 집계에 안 나온다(상세는 됨). 절차: `load:life-toilets <csv>`(온라인, 필요 시 `--max-calls` — 집값 지오코딩과 VWorld 일 한도를 나눠 쓴다) → `export:life-geocode` → gz 커밋 → 배포 시 `GZ_CHANGED` 가 import + `--offline` 재적재를 자동 실행. `--retry-notfound` 는 **처리 중인 행의 후보**가 notfound 캐시에 있을 때만 다시 시도한다(`geocodeLifeRows` 의 캐시 패스가 행 단위) — 캐시 전체 notfound 가 31,117건(화장실 4,188 + 집값 지번 변형 실패분)으로 불었어도 화장실 재적재가 단지 주소를 건드리진 않는다.
 - **`LifeGoToBox.onQueryChange` 는 안정된 참조로** — 박스 안 `useEffect([debouncedQ, onQueryChange])` 가 통지 채널이라 인라인 화살표를 넘기면 매 렌더 재발화한다(`useState` setter 나 `useCallback`). `extraSections` 는 `items` 가 비고 `loading`/`error` 도 아니면 그려지지 않으므로 "섹션이 안 보인다" 는 대개 훅이 `enabled` 되지 않은 것.
 - **지오코딩 캐시엔 도메인 표식이 없다** — `LifeGeocodeCache` PK 는 `(type, address)` 뿐. 집값이 같은 캐시를 쓰면서 `import:life-geocode --overwrite` 나 캐시 정리를 한 도메인 기준으로 하면 다른 도메인 좌표가 같이 움직인다. `export:life-geocode` 는 항상 전량이다.
@@ -216,7 +258,18 @@ friendly life-map.route.ts ── LifeMapService(getStatus/getPoints/getNearby/g
 - **CSV 파서는 비스트리밍** — 79MB 문자열 + 행 배열을 메모리에 든다. 적재 스크립트 전용 설계라 서버 요청 경로엔 영향 없다.
 - **`status.geocoded` 는 병의원에선 "좌표 확보 건수"** — API 좌표(`geoSource='api'`)도 포함하므로 이름과 달리 지오코딩 건수가 아니다. 푸터의 "좌표 N%" 는 화장실에만 표시.
 
-## Sources [coverage: high — 78 sources]
+## Sources [coverage: high — 92 sources]
+
+### 26차 신규 — 생활편의(상가)·범죄 통계·배경 레이어
+- [apps/friendly/src/modules/life-map/life-store-master.service.ts](../../apps/friendly/src/modules/life-map/life-store-master.service.ts) (+[test](../../apps/friendly/src/modules/life-map/life-store-master.service.test.ts)) — zip 스트리밍 정규화 + 청크 전량 교체
+- [apps/friendly/src/modules/life-map/life-crime.service.ts](../../apps/friendly/src/modules/life-map/life-crime.service.ts) — 커밋 JSON 을 기동 시 계약 검증 후 제공(bbox·DB 없음)
+- [apps/friendly/src/modules/life-map/life-crime-build.ts](../../apps/friendly/src/modules/life-map/life-crime-build.ts) (+[test](../../apps/friendly/src/modules/life-map/life-crime-build.test.ts)) — CSV × 인구 × 경계 → 10만 명당 분위 5등급
+- [apps/friendly/src/modules/life-map/data/life-crime-stats.json](../../apps/friendly/src/modules/life-map/data/life-crime-stats.json) — 빌드 산출물(63KB, 2024년·229 시군구)
+- [apps/friendly/scripts/build-life-crime.ts](../../apps/friendly/scripts/build-life-crime.ts) · [load-life-stores.ts](../../apps/friendly/scripts/load-life-stores.ts) · [probe-store-csv.ts](../../apps/friendly/scripts/probe-store-csv.ts)
+- [apps/friendly/src/modules/restaurant/restaurant-store-match.service.ts](../../apps/friendly/src/modules/restaurant/restaurant-store-match.service.ts) (+[test](../../apps/friendly/src/modules/restaurant/restaurant-store-match.test.ts)) · [scripts/match-restaurant-stores.ts](../../apps/friendly/scripts/match-restaurant-stores.ts) — 세부는 [canonical](canonical.md)
+- [apps/friendly/prisma/migrations/20260912101013_add_life_store_and_restaurant_store_match/migration.sql](../../apps/friendly/prisma/migrations/20260912101013_add_life_store_and_restaurant_store_match/migration.sql) · [20260912102150_drop_restaurant_store_match_store_fk](../../apps/friendly/prisma/migrations/20260912102150_drop_restaurant_store_match_store_fk/migration.sql)
+- [packages/utils/src/lifeStore.ts](../../packages/utils/src/lifeStore.ts) (+[test](../../packages/utils/src/lifeStore.test.ts)) · [lifeCrime.ts](../../packages/utils/src/lifeCrime.ts) (+[test](../../packages/utils/src/lifeCrime.test.ts))
+- [apps/web/src/components/life-map/LifeCrimeCard.tsx](../../apps/web/src/components/life-map/LifeCrimeCard.tsx) · [LifeTourCard.tsx](../../apps/web/src/components/life-map/LifeTourCard.tsx) · [lifeMapAreas.ts](../../apps/web/src/components/life-map/lifeMapAreas.ts) · [lib/useSigunguGeo.ts](../../apps/web/src/lib/useSigunguGeo.ts) · [lib/tourDensityGeo.ts](../../apps/web/src/lib/tourDensityGeo.ts)
 
 ### friendly (백엔드·스크립트·운영)
 - [apps/friendly/src/modules/life-map/life-map.route.ts](../../apps/friendly/src/modules/life-map/life-map.route.ts)

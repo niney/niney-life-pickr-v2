@@ -1,7 +1,7 @@
 ---
 concept: 공공데이터 마스터 적재 수명주기 — 원본은 리포 밖, 로더 전량 교체, 가공 캐시만 커밋
-last_compiled: 2026-09-07
-topics_connected: [life-map, bus, subway, food, friendly, project-overview, housing, tarot, saju-c]
+last_compiled: 2026-09-19
+topics_connected: [life-map, bus, subway, food, friendly, project-overview, housing, tarot, saju-c, tour, canonical]
 status: active
 ---
 
@@ -21,6 +21,9 @@ status: active
 
 ## Instances
 
+- **2026-09-13~19 (변형 — 데이터셋 단위 교체 + 원본은 다른 작업공간)** in [tour](../topics/tour.md) / [project-overview](../topics/project-overview.md) (`c777380`·`d18ac24`·`93ae031`·`6cae6b2`): 여행로그 4권역 — 원본(AI 허브 71780·71779·71778·71581, 세트당 93~178GB)은 리포 밖 `niney-tour-pickr` 작업공간에 있고 **변환기(tour-c, Python/DuckDB)가 export(JSONL.gz 10표 + manifest sha256 + thumbs/s)** 를 만들어 `data/open/tour/<export>/`(세트당 ~190MB, gitignore) 에 둔다. 로더 `load:tour --dataset <키>` 는 전량 교체가 아니라 **그 데이터셋 행만 교체**(장소 id 접두 `west:`·`east:`·`capital:`, 코드표만 공용 통째 교체)하고, manifest 가 늘 71780 이라 여행의 제주 방문 비율로 `--dataset` 오지정을 막는다(plausibility). `--dry-run` 이 sha256 대조·정규화 리포트만 내고, `status:life-map` 이 `tour_<세트>=N` 을 찍어 `deploy.sh` 가 "키|폴더|이름" 루프로 세트별 자동 적재 → `match:restaurant-tour`. 재취득 난이도가 최고(로그인·승인·수백 GB)라 export 4폴더가 **백업 대상**이고, 2026-09-19 원본 사진 449GB 를 지운 뒤엔 작업 폴더 썸네일이 유일한 사진 보관본이다(재export 시 thumbs 스텝 금지). 환수·폐기 요구엔 `unload:tour --yes [--dataset]` 한 명령.
+- **2026-09-12 (분기 재적재 + 사이드 테이블)** in [life-map](../topics/life-map.md) / [canonical](../topics/canonical.md) (`bc39a79`·`127e746`): 상가(상권)정보 — 분기 zip(시도별 CSV 16개, 항목명 CP949) 약 130만 행을 `LifeStore` 에 전량 교체(`load:life-stores`, `probe:store-csv` 로 형식 고정), deploy.sh 케이스 6 이 `store=N` 으로 첫 적재를 판단하고 뒤이어 `match:restaurant-stores` 를 돌린다([canonical-side-table-match](canonical-side-table-match.md)). zip 을 못 찾으면 배포 스크립트가 조용히 죽던 함정(`127e746`, `set -e` + 파이프)이 이 케이스에서 나왔다.
+- **2026-09-12 (가공 산출물만 커밋 — 빌드형)** in [life-map](../topics/life-map.md) (`bc39a79`, `build:life-crime`): 범죄 통계는 적재가 아니라 **빌드** — 경찰청 CSV × 행안부 인구(자동 다운로드)를 시군구 10만 명당 5등급으로 계산한 JSON(`data/life-crime-stats.json`)을 커밋하고 서버는 기동 시 계약 검증만. 화장실 지오코딩 gz 와 같은 "쿼터·가공은 개발 머신, 산출물만 커밋" 다리의 순수 정적 변형([quantile-graded-overlay](quantile-graded-overlay.md)).
 - **2026-09-03~06 (변형)** in [tarot](../topics/tarot.md) / [saju-c](../topics/saju-c.md) / [project-overview](../topics/project-overview.md): 같은 수명주기를 **이미지 자산**에 적용 — 제미나이 원본은 `assets-src/{tarot,saju}/raw`(gitignore, 재취득 = 프롬프트북 `docs/*-prompts.md`), `build:tarot-deck`·`build:saju-images` 가 1:1 크롭·webp 512/1024 로 가공해 `apps/web/public/{tarot/cards,saju-c/images}`(158·44장) + manifest 를 커밋, 운영은 dist 에서 nginx 7일 캐시·진짜 404. 한자 글리프(`build:saju-glyphs`, 81장)는 개발 머신 폰트로 만들어 커밋해 운영에 CJK 폰트가 필요 없다. "원본은 리포 밖, 로더/빌더로 재현, 가공물만 커밋" 규칙이 데이터 밖 자산에도 같은 형태.
 - **2026-08-30~09-02** in [housing](../topics/housing.md) (`254fb76`, `168b363`): 수명주기의 가장 큰 사례 — 원천 5종(단지 마스터 CSV 30.7만 행 / 실거래 매매·전월세 API 709만 행 / 공시가격 3.4GB zip 스트리밍 / K-apt xlsx·V5 API / 건축HUB). 원본은 `data/open/housing`(리포 밖), 로더는 `load:housing-*` 6종, 실거래는 upsert 가 아니라 **(시군구, 계약년월, 유형) 파티션 교체 + `HousingSync` 장부**(신고 지연·해제 때문), 단지 마스터 재적재는 **같은 id 에서 보강 컬럼·좌표를 이어받는다**(며칠치 쿼터로 채운 K-apt·건축물대장이 CSV 갱신에 사라지지 않게). 지오코딩 캐시는 일상지도와 같은 압축본에 실어 커밋 → 운영은 `--offline` 호출 0건. `deploy.sh` 케이스 8 + API 배포마다 `status:housing` 한 줄을 파싱해 자동 점검(`b8c08ed` 가 파일 없을 때 메뉴가 죽던 glob 을 고침).
 - **2026-08-30** in [life-map](../topics/life-map.md) (`4fd6e22`): 병의원 레이어 — `load:life-hospitals`(HIRA API 순차 페이징, 지오코더 `--offline`), `LifeHospital` + `LifeMasterSync` 확장, deploy.sh 케이스 6 에 합류. 원본 파일이 없는 첫 API 전량형.
@@ -48,6 +51,10 @@ status: active
 - [food](../topics/food.md)
 - [friendly](../topics/friendly.md)
 - [project-overview](../topics/project-overview.md)
+- [tour](../topics/tour.md)
+- [canonical](../topics/canonical.md)
+- [canonical-side-table-match](canonical-side-table-match.md)
+- [quantile-graded-overlay](quantile-graded-overlay.md)
 - [quota-proportional-loading](quota-proportional-loading.md)
 - [external-api-proxy-fixture](external-api-proxy-fixture.md)
 - [in-memory-singleton-gates](in-memory-singleton-gates.md)

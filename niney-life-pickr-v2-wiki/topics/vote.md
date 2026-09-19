@@ -1,12 +1,14 @@
 ---
 topic: vote
-last_compiled: 2026-08-17
-sources_count: 18
+last_compiled: 2026-09-19
+sources_count: 15
 status: active
-aliases: [그룹투표, 투표, group-vote, vote-session, approval-voting, 복수찬성, 티브레이크, tie-break, voterKey, 투표방, VoteSession, VoteOption, VoteBallot, useVote, voteGuestStore, vote-preview, 우리뭐먹을까, 링크투표, 슬롯머신결과]
+aliases: [그룹투표, 투표, group-vote, vote-session, approval-voting, 복수찬성, 티브레이크, tie-break, voterKey, 투표방, VoteSession, VoteOption, VoteBallot, useVote, voteGuestStore, vote-preview, 우리뭐먹을까, 링크투표, 슬롯머신결과, 코스 추천 프리필, presetTitle, presetOptions, VotePresetState, /travel/plan → /vote/new]
 ---
 
 # vote — 그룹 투표 픽 (링크 공유 approval 투표)
+
+**2026-09-13 변경 흡수 — 여행로그 코스 추천이 투표방을 미리 채워 넘김**: 여행로그 5차(`99991da`, [tour](tour.md))의 `/travel/plan`(비슷한 여행자가 만족한 곳)에서 **등록된 맛집만** 2~8곳 체크해 "그룹투표 만들기"를 누르면 `navigate('/vote/new', { state: { presetTitle, presetOptions } })` 로 넘어오고, [VoteNewPage](../../apps/web/src/routes/vote/VoteNewPage.tsx)가 `useLocation().state`(`VotePresetState`)를 **첫 렌더에만** 읽어 제목·선택 후보(`VOTE_OPTIONS_MAX` 로 잘라)를 초기값으로 쓴다. 서버 계약·투표 로직은 그대로(후보는 여전히 등록 맛집의 `VoteOptionInputType` 스냅샷) — 새로 생긴 건 투표방 **진입 경로 하나**뿐이며, 로그인 필요(`RequireUser`)·후보 2~8 검증도 그대로 적용된다.
 
 **2026-08-16~17 신설 — 전체 기능 + 잔여 갭 정리**: "우리 뭐 먹을까?" 를 링크 하나로 정하는 그룹 투표(커밋 `8951b31`). 방장(로그인)이 등록 맛집에서 후보 2~8곳을 골라 투표방을 만들고, 링크를 받은 참가자는 **비로그인**으로 이름만 입력해 복수 찬성(approval) 투표한다. 방장이 수동 마감하면 결과가 확정되고, 동점이면 동점 후보만 대상으로 기존 smartPick(분석 가중 랜덤)이 최종 결정한다. 후속(`6a3a022`)으로 마감 크래시 복구 배너·`/vote/new` 홈 복귀 링크·토큰 생성 실패 500 을 정리했고, 웹 테스트(3화면 20건)가 이 기능을 계기로 신설된 웹 테스트 인프라([web](web.md)) 위에 있다.
 
@@ -29,6 +31,7 @@ aliases: [그룹투표, 투표, group-vote, vote-session, approval-voting, 복�
 - **rate-limit 플러그인** — 공개 조회 `RATE.publicShare`(120/분), 무인증 쓰기(투표 제출) `RATE.publicVote`(30/분 — 재투표 연타 + CGNAT 고려).
 - **vote-preview → 웹 dist index.html** — `/vote/:token`(origin 루트, autoload 밖 — app.ts 명시 등록)이 SPA index 에 OG 메타를 주입. 운영은 nginx `^~ /vote/` 프록시 필요 — 없어도 SPA 는 동작하고 OG 만 빠짐([docs/deploy-friendly.md](../../docs/deploy-friendly.md)).
 - 웹 생성 페이지는 공개 목록 검색(`useRestaurantsPublic`)·서버 즐겨찾기(`useRestaurantFavorites` 로그인 분기)에서 후보를 고른다.
+- **여행로그 코스 추천 → 프리필**(2026-09-13, [TravelPlanPage](../../apps/web/src/routes/TravelPlanPage.tsx)) — 라우터 `location.state` 로 `presetTitle`·`presetOptions`(등록 맛집 = canonical 이 있는 추천 장소만, 미등록은 체크 불가)를 넘기고 VoteNewPage 가 초기 state 로 삼는다. URL 이 아니라 history state 라 링크 공유·새로고침 뒤엔 프리필이 없다(빈 폼으로 시작 — 정상).
 
 ## API Surface [coverage: high — 4 sources]
 
@@ -51,8 +54,9 @@ aliases: [그룹투표, 투표, group-vote, vote-session, approval-voting, 복�
 
 게스트 로컬: `voteGuestStore`(zustand persist `vote-guest-v1`) — 기기 영속 guestId(=voterKey), 마지막 표시 이름, 토큰별 내 찬성 기록(최근 20개 캡). 서버에 "내 찬성 목록" 조회 API 가 없어 **재방문 체크 복원은 전적으로 이 스토어 몫**.
 
-## Key Decisions [coverage: high — 6 sources]
+## Key Decisions [coverage: high — 7 sources]
 
+- **2026-09-13: 프리필은 URL 이 아니라 라우터 state** — 코스 추천의 후보 목록(최대 8곳 스냅샷)을 쿼리스트링에 싣지 않고 `navigate(state)` 로 넘긴다. 투표방 생성은 어차피 로그인·서버 POST 로 확정되므로 링크로 재현 가능한 상태일 필요가 없고, 후보 스냅샷(name/category/thumbnailUrl)이 URL 길이 제한에 걸리는 것도 피한다.
 - **마감 = 2단계 원자 클레임** — ① `updateMany(closedAt: null → now)` 로 선점해 이후 표를 전부 409 로 차단 → ② 표가 더 못 들어오는 상태에서 집계·티브레이크 → winner 확정도 `updateMany(winnerOptionId: null)` 조건부. 이중 호출·크래시 복구 모두 멱등이고 확정된 winner 는 절대 덮어쓰지 않는다.
 - **단독 최다 → `votes`, 동점 → 동점 후보만 smartPick(`smart-pick`), 분석 전무 → 균등(`random`)** — 0표 마감도 전원 동점으로 처리돼 winner 가 항상 존재.
 - **투표 제출은 풀 리플레이스** — 재투표=수정, 빈 배열=철회. 트랜잭션 deleteMany+createMany 라 동시 재투표는 나중 것이 이긴다.
@@ -68,8 +72,9 @@ aliases: [그룹투표, 투표, group-vote, vote-session, approval-voting, 복�
 - **OG 는 nginx 규칙 의존** — `location ^~ /vote/` 프록시가 없으면 nginx 가 정적 index.html 을 서빙해 SPA 는 정상, 카톡 미리보기만 빠진다. index.html 은 프로세스 수명 1회 캐시라 재배포 후 pm2 reload 필수.
 - **`/vote/new` 와 `/vote/:token` 은 PublicLayout 밖 단독 라우트** — TopBar 없음. 생성 페이지에만 "← 홈으로" 링크를 명시(참가자 화면은 의도적으로 투표만 하게 둔다). v6 라우터는 정적 세그먼트(new)가 :token 보다 우선 매칭이라 순서 무관.
 
-## Sources [coverage: high — 14 sources]
+## Sources [coverage: high — 15 sources]
 
+- [apps/web/src/routes/TravelPlanPage.tsx](../../apps/web/src/routes/TravelPlanPage.tsx) — 코스 추천 → `/vote/new` 프리필 진입(2026-09-13, [tour](tour.md))
 - [apps/friendly/src/modules/vote/vote.route.ts](../../apps/friendly/src/modules/vote/vote.route.ts)
 - [apps/friendly/src/modules/vote/vote.service.ts](../../apps/friendly/src/modules/vote/vote.service.ts)
 - [apps/friendly/src/modules/vote/vote-preview.ts](../../apps/friendly/src/modules/vote/vote-preview.ts)

@@ -1,7 +1,7 @@
 ---
 concept: 공개/어드민 라우트 페어 분리
-last_compiled: 2026-06-25
-topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement, review-search, review-clustering, logs]
+last_compiled: 2026-09-19
+topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement, review-search, review-clustering, logs, tour]
 status: active
 ---
 
@@ -15,6 +15,7 @@ status: active
 
 ## Instances
 
+- **2026-09-13**(여행로그 1~5차, `c777380`·`99991da`·`cfa276b`) in [../topics/tour](../topics/tour.md) / [../topics/api-contract](../topics/api-contract.md) / [../topics/web](../topics/web.md): **페어가 아니라 3층** — 같은 `Tour*` 표를 (1) 공개 집계 `GET /tour/public/*`·`/restaurants/public/:placeId/tour-stats`(집계값만, 여행자 5명·평가 3건 하한, 응답 스키마에 여행·방문·사진 식별자가 아예 없음 — 테스트가 키 스캔), (2) 어드민 운영 `/admin/tour/status·seeds·match/run·biz-status/run`(장소 단위 집계 + 매칭·폐업 상태, 관리자 가드), (3) **원본 열람** `/admin/tour/places/:id/{visits,spend,photos…}`·`/trips/:travelId`·`/photos/:photoId/:size` 로 갈랐다. 3층은 어드민 안에서 한 번 더 갈라진 **개인 승인 티어** — AI 허브 다운로드 승인을 받은 본인(`TOUR_RAW_USER_IDS`, user id 또는 이메일)만 통과하고 밖이면 403 이 아니라 **404**(존재를 숨김), onSend 로 `private, no-store`·`noindex`, 사진은 `?token=` 도 인증. 라이선스(원본 제3자 열람 불가·국외 반출 금지)가 권한 축을 하나 더 만든 첫 사례이며, 공개 층은 서면 회신 전 운영 노출 금지라는 **배포 게이트**까지 층마다 다르다. 계약도 층별 스키마(`Tour*Public*` 에는 식별자 없음 / `TourRaw*` 는 원문)로 분리.
 - **2026-05-09** in [../topics/friendly](../topics/friendly.md): `Routes.Restaurant.publicList` / `publicByPlaceId` / `publicInsights` 3개 공개 라우트가 `Routes.Restaurant.list` / `byPlaceId` / `insights` 의 어드민 페어 옆에 신설됨. 핸들러는 다르지만 service 레이어의 `getPublicList` / `getPublicDetail` / `getInsights` 가 어드민 메소드와 분리되어 있어 응답 셋의 차이가 service 안에서 끝남. publicList 는 `snapshotJson` 메모리 파싱 후 bbox 필터 → 그 이후의 ids 만 분석 집계 (검색 범위 밖 식당 통계 호출 회피). publicDetail 은 `ReviewSummary` 의 운영 메타 (`status` / `errorCode` / `model` / `startedAt` 등) 를 service 단에서 제거하고 done 행만 평탄화한 `PublicReviewAnalysis` 로 변환.
 - **2026-05-09** in [../topics/api-contract](../topics/api-contract.md): 새 zod 스키마 5종이 어드민 페어 옆에 신설 — `RestaurantPublicListQuery` / `RestaurantPublicListItem` / `RestaurantPublicListResult` (어드민 `RestaurantListItem`/`RestaurantListResult` 와 페어), `PublicReviewAnalysis` / `PublicVisitorReview` / `RestaurantPublicDetail` (어드민 `ReviewSummary` / `VisitorReviewWithSummary` / `RestaurantDetail` 와 페어). `MapProviderPublicConfig` 가 `MapProviderSecret` 와 페어 (둘 다 평문 키를 노출하지만 다른 라우트로). `Routes.Restaurant.publicList`/`SettingsMap.publicConfig` 같은 라우트 상수도 같은 namespace 안에서 페어로 분리.
 - **2026-05-09** in [../topics/shared](../topics/shared.md): `restaurantApi.publicList`/`publicByPlaceId`/`publicInsights` 가 어드민 `restaurantApi.list`/`getByPlaceId` 옆에 추가. 훅도 페어 — `useRestaurantsPublic` / `useRestaurantPublic` / `useRestaurantPublicInsights` (어드민 `useRestaurantList`/`useRestaurantByPlaceId` 페어). queryKey 도 분리 (`['restaurant','public','list',...]` vs `['restaurant','list']`) 라 캐시 정책이 독립. `useMapPublicConfig` (404 OK + retry: false + staleTime Infinity) 가 어드민 `useMapProviderSecret` 와 페어.
@@ -60,3 +61,4 @@ status: active
 - [../topics/review-search](../topics/review-search.md)
 - [../topics/review-clustering](../topics/review-clustering.md)
 - [../topics/logs](../topics/logs.md)
+- [../topics/tour](../topics/tour.md)

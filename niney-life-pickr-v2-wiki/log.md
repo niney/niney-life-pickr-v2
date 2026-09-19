@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-09-19 (26th compile)
+
+**New topics:** tour(424줄·93 sources) — AI 허브 「국내 여행로그 데이터」 4권역(71780 제주·도서 / 71779 서부권 / 71778 동부권 / 71581 수도권)
+**Topics updated:** friendly(1377줄·240 sources), web(2528·240), api-contract(2187·66), shared(1530·157), utils(471·93), mobile(788·190), project-overview(1121·156), life-map(360·92), canonical(322·64), saju-c(296·96), ai(1419·74), housing(349·79), vote(91·15)
+**Untouched topics:** analytics, auto-discover, air-quality, bus, config, crawl, food, logs, map, meal, menu-grouping, random-crawl, review-clustering, review-search, saju-g, schedule, settlement, subway, tarot, telegram, transit, usage-quota, weather(이번 범위 변경 없음)
+**New concepts:** canonical-side-table-match, quantile-graded-overlay, model-family-call-options
+**Concepts updated:** open-data-master-load(여행로그 데이터셋 단위 교체·상가 분기 재적재·범죄 빌드형 3인스턴스), public-admin-route-split(여행로그 3층 — 라이선스가 만든 개인 승인 티어), external-api-proxy-fixture(국세청 폐업 조회·빌드 시점 어댑터), versioned-llm-prompts(사주 프롬프트 v3)
+**Sources scanned:** ~2,695 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1,452 — 25차 1,314 → +138)
+**Sources changed:** 25차 위키 커밋 `e25d293`(2026-09-07) 이후 **14커밋** — 일상지도 범죄 통계·상가정보 2(`bc39a79`·`127e746`), 사주(C) 8·9차·추론 3(`739705e`·`a823af1`·`baecb9b`), 여행로그 0~9차 9(`c777380`·`99991da`·`9196495`·`8c27f5c`·`cfa276b`·`b9da676`·`d18ac24`·`93ae031`·`6cae6b2`)
+**Notes:** 부모가 브리핑(`COMPILE_BRIEF.md`) + 병렬 서브에이전트 13개로 시작했으나 **모델 한도(Fable) → 세션 한도**가 연달아 걸려 6개만 완주(tour·mobile·canonical·saju-c·ai·housing·project-overview 일부 포함), 나머지 6개(life-map·friendly·web·shared·utils·api-contract 후반)는 **부모가 직접 Edit 으로 마무리**했다. 큰 파일(web 2.5k·api-contract 2.1k·shared 1.5k·friendly 1.3k)은 Write 통짜 대신 섹션별 Edit 이 안전하다는 것을 재확인(잘림 위험·재작성 비용). 완성 판정은 scratchpad `check-wiki-topics.sh`(프론트매터 last_compiled·섹션 8개 순서·coverage 태그 8/8·Sources 링크 수)로 했다. 컴파일 중 확인한 코드↔문서 어긋남은 각 토픽 Gotchas 에 기록 — 여행로그 PLAN 초안 표의 `sort=tour_travelers`(코드는 `tourTravelers`), `sajuAsk` 차단 정규식의 `\b`(한글에서 무력), 앱 `lifeMapPrefsStore` 주석("웹과 같은 모양" — 실제로는 웹 v5/앱 v3), `canonical.merge/split` 이 두 매칭 테이블을 모름, `RestaurantTourMatch` 에 `missingSince` 없음, `status:life-map` 에 상가 매칭 건수 없음. 실측 함정 2건도 기록: 격리 DB 테스트가 병렬 부하에서 `beforeAll` hook timeout(단독 재실행하면 통과), `/travel/plan` 에 "전체" 버튼이 둘(지역 칩·결과 토글).
+
 ## 2026-09-07 (25th compile)
 
 **Topics updated:** ai(1300줄·71 sources), api-contract(2038줄·58), friendly(1347줄·219), shared(1502줄·149), web(2486줄·218), mobile(760줄·183), utils(429줄·83), project-overview(1067줄·128), food(321줄·89) + 소폭 bus(325줄·58)·air-quality(201줄·87)·weather(242줄·74)·life-map(307줄·78)·meal(212줄·82)·map(488줄·47)

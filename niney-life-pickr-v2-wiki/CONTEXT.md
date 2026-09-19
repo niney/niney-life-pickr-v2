@@ -10,7 +10,7 @@
    - `[coverage: high]` — 이 섹션 신뢰, 원시 파일 안 봐도 됨
    - `[coverage: medium]` — 좋은 개요지만 코드 디테일은 원시 소스 확인
    - `[coverage: low]` — Sources에 적힌 원시 파일을 직접 읽기
-4. **`concepts/` 확인** — 횡단 패턴(Zod SSOT, 공개/어드민 라우트 페어 분리, SSE 인증, UI 플랫폼 분기, workspace 패키지 해결, 스트림 캐시 머지, 인메모리 동시성 게이트, LLM 프롬프트 버전, 외부 API 어댑터·픽스처, 쿼터 비례 로딩, 게스트/서버 하이브리드, 저장 위치 글랜스, 공공데이터 마스터 적재, 지도+시트 골격). 여러 토픽에 걸친 결정의 "왜"가 여기 있음
+4. **`concepts/` 확인** — 횡단 패턴(Zod SSOT, 공개/어드민 라우트 페어 분리, SSE 인증, UI 플랫폼 분기, workspace 패키지 해결, 스트림 캐시 머지, 인메모리 동시성 게이트, LLM 프롬프트 버전, 외부 API 어댑터·픽스처, 쿼터 비례 로딩, 게스트/서버 하이브리드, 저장 위치 글랜스, 공공데이터 마스터 적재, 지도+시트 골격, **외부 출처 사이드 테이블 매칭**, **지도 배경 분위 등급**, **모델 계열별 호출 옵션**). 여러 토픽에 걸친 결정의 "왜"가 여기 있음
 5. **마지막에 원시 소스** — 코드 레벨 디테일이 필요할 때만
 
 ## When NOT to use the wiki
@@ -27,7 +27,7 @@
 
 2026-09-06 사주 범위 갱신: [saju-g](topics/saju-g.md) 추가, 현재 토픽 32개. 아래 수치는 마지막 전체 컴파일 당시 기록이다.
 
-Compiled: 2026-09-07 (25th) | Topics: 36 | Concepts: 26 | Sources: ~2,412 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1314) | Auto-updates on session start
+Compiled: 2026-09-19 (26th) | Topics: 37 | Concepts: 29 | Sources: ~2,695 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1452) | Auto-updates on session start
 
 ## Topic map at a glance
 
@@ -47,7 +47,8 @@ project-overview  (모노레포 전체 — 공개/어드민/소유자/토큰 권
 │   ├── subway / transit (수도권 전철 + 버스↔지하철 통합 레이어 — 별도 토픽)
 │   ├── air-quality  (에어코리아 대기정보 프록시 + 내 위치 저장(날씨·일상지도·식단 공유) + 상단바/홈 글랜스 — 별도 토픽)
 │   ├── weather      (기상청 단기·중기예보 + API허브 AWS, 발표 슬롯 캐시, 245지점 — 별도 토픽)
-│   ├── life-map     (일상지도 — CCTV·화장실·병의원 로컬 마스터 적재 + 지오코딩 gz 커밋 + 점/셀 조회 + 옴니박스 — 별도 토픽)
+│   ├── life-map     (일상지도 — CCTV·화장실·병의원·생활편의(상가 130만) 로컬 마스터 + 배경 레이어 2종(범죄 통계·여행자 밀도) + 점/셀 조회 + 옴니박스 — 별도 토픽)
+│   ├── tour         (여행로그 — AI 허브 4권역 데이터셋 단위 적재 + 맛집 매칭·시드 콘솔 + 공개 집계(/travel/*)·원본 allowlist — 별도 토픽)
 │   └── vote         (그룹 투표 픽 — 별도 토픽)
 ├── map              (vworld OpenLayers + WMTS, 카테고리 라인 아이콘 8종, 모바일 WebView)
 ├── web              (Vite + React 19, 공개 홈·맛집·대중교통·일상지도·날씨·대기질·식단 + 어드민 + 정산 N차 wizard + 상단바 폭 예산·MyLocationChip + 지도 페이지 공통 시트 골격 sheet/useMapSheets + Tailwind v4 dark)

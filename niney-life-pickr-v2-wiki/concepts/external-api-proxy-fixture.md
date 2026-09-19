@@ -1,7 +1,7 @@
 ---
 concept: 외부 API 어댑터 — friendly 프록시 + 정규화 + probe→fixture
-last_compiled: 2026-09-07
-topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing]
+last_compiled: 2026-09-19
+topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing, tour]
 status: active
 ---
 
@@ -15,6 +15,8 @@ status: active
 
 ## Instances
 
+- **2026-09-13** in [tour](../topics/tour.md) (`tour-biz-status.service.ts` + `scripts/check-tour-biz.ts`): 국세청 사업자등록 상태 조회(data.go.kr **15081808**, POST 100건/콜)를 여행로그 시드의 **폐업 확인**에 쓰는 "적재 뒤 보강" 변형 — 장소별 최빈 사업자번호를 모아 배치로 묻고 결과를 `TourPlaceBizStatus`(계속사업자/휴업자/폐업자/unknown + 폐업일)에 저장한다. 프록시 다리 없음(요청 시점 호출 없음), **쿼터가 있어 자동 실행에서 뺐다** — deploy.sh 가 부르지 않고 어드민 `/admin/tour` "폐업 조회 실행" 또는 CLI 로 `maxCalls`·`minTravelers` 를 정해 돌린다. 활용신청 전엔 어댑터가 503 을 그대로 드러낸다([quota-proportional-loading](quota-proportional-loading.md)).
+- **2026-09-12** in [life-map](../topics/life-map.md) (`scripts/build-life-crime.ts` + `life-crime-build.ts`): **빌드 시점 어댑터** — 경찰청 범죄 통계 CSV(3074462)와 행안부 주민등록 인구 CSV 를 개발 머신에서 내려받아(자동 다운로드) 시군구 10만 명당 5등급 JSON 으로 가공·커밋하고, 런타임 서버는 외부 호출이 0 이다. 시군구 경계 이름 별칭(합쳐진 군·행정구 표기)을 빌드 스크립트가 표로 보정한다 — probe→fixture 다리가 "산출물 커밋"으로 대체된 형태.
 - **2026-09** in [housing](../topics/housing.md) (`probe-rtms-api.ts` + `housing-ingest.service.ts`): RTMS 는 HTTPS **XML**(`LAWD_CD`×`DEAL_YMD`) — probe 로 응답 형식·에러 코드(활용신청 없음 = 503 인증 30)를 먼저 고정하고 어댑터가 정규화. 다른 도메인과 달리 **요청 시점 프록시가 없다**(적재 전용) — 어댑터 recipe 중 "probe→fixture→정규화" 세 다리만 쓰고 "프록시" 다리는 생략한 변형. `DATA_GO_KR_API_KEY` 통일(`3d9dfed`)로 8종 키 이름·`|| BUS_API_KEY` 폴백이 사라진 계기가 된 도메인.
 - **2026-07** in [[../topics/bus]] (`bus-api.adapter.ts` + `probe-bus-api.ts`): recipe 를 네 다리 다 갖춘 **정본**. `callBusApi` 가 `ws.bus.go.kr` 평문 HTTP(CORS 없음)를 friendly 에서만 호출하고, XML 을 `fast-xml-parser` 로 파싱해 타입드 래퍼 9종으로 정규화. **필드명 불신의 교과서** — 서울시 응답은 `tmX/tmY` 필드에 WGS84 든 GRS80 TM 이든 섞여 오므로 `toLatLng` 가 후보 쌍 `[tmX,tmY]→[gpsX,gpsY]→[posX,posY]` 를 순회하며 **한국 WGS84 값 범위(lat 33~39, lng 124~132)에 드는 첫 쌍**을 채택(proj4 불필요). 마스킹: `buildUrls` 가 `requestUrl` 에 `serviceKey=***` 만 남기고 평문 키 URL 은 보관 안 함(`bus-api.adapter.ts` line 34·146). probe→fixture: `probe-bus-api.ts` 가 실응답을 `data/bus-probe/` 에 떨구고, 그 발췌를 `__fixtures__/*.xml` 12개(`stations-multi`·`arrivals`·`route-path`·`auth-error-headercd7`·`no-result` 등)로 박아 `bus-api.adapter.test.ts` 의 `readFixture` 가 소비 — 2026-07-02/04 실측으로 좌표계·`headerCd` 인증실패 두 형태를 확정.
 - **2026-05** in [[../topics/crawl]] (`naver-place.playwright.adapter.ts` + `naver-*.http.adapter.ts` + `dev-capture-visitor.ts`): 네이버 소스는 어댑터 비용이 갈린다 — 홈/방문자 리뷰는 `playwright-extra` + stealth 풀세션(anti-bot 우회), 검색·방문자 리뷰 수는 HTTP GraphQL 직접(`naver-search.http.adapter.ts`·`naver-review-stats.http.adapter.ts`). 어느 쪽이든 friendly 가 유일 호출자이고 결과를 `api-contract` 의 `NaverPlaceData` zod 모양으로 정규화. **probe→fixture 의 변형** — 정적 fixture 대신 `dev-capture-visitor.ts` 가 헤디드 캡처를 `__debug__/after.json` 에 떨구되 **내부에 어댑터의 `parseVisitorReviewsFromCaptured` 와 동일한 파서를 미러**해 `dev:api` 없이 파이프라인을 E2E 검증(라이브 미러형). `x-wtm-graphql` 헤더처럼 봇 차단용 시크릿성 헤더도 `buildWtmHeader` 가 서버측에서만 만든다.
@@ -53,6 +55,7 @@ status: active
 - [[../topics/air-quality]]
 - [[../topics/weather]]
 - [[../topics/life-map]]
+- [[../topics/tour]]
 - [[in-memory-singleton-gates]]
 - [[db-config-env-fallback]]
 - [[zod-ssot-buildless]]
