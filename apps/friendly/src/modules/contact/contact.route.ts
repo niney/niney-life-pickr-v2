@@ -36,6 +36,7 @@ const contactRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement-contact'],
+      summary: '내 정산 단골 참여자 목록 — 이름·닉네임 부분일치 검색, 최근 사용순',
       security: [{ bearerAuth: [] }],
       querystring: ListContactsQuery,
       response: { 200: ListContactsResult },
@@ -47,6 +48,7 @@ const contactRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement-contact'],
+      summary: '단골 이름·닉네임 수정 — 같은 이름·닉네임 단골이 있으면 409',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       body: UpdateContactInput,
@@ -66,6 +68,7 @@ const contactRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement-contact'],
+      summary: '단골 삭제 — 과거 정산의 참여자 기록은 유지',
       security: [{ bearerAuth: [] }],
       params: IdParams,
     },

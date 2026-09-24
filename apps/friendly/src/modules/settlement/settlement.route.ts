@@ -49,6 +49,10 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '정산 생성 — 차수·참여자·항목으로 1인당 분담액 계산 후 저장',
+      description:
+        '참여자는 이름·닉네임 기준으로 내 단골(/api/v1/me/contacts)에 자동 upsert 된다. ' +
+        'fromDraftId 를 주면 그 임시저장을 같은 트랜잭션에서 삭제한다(본인 것이 아니면 무시).',
       security: [{ bearerAuth: [] }],
       body: CreateSettlementInput,
       response: { 200: SettlementSession },
@@ -67,6 +71,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '내 정산 목록 — 1차 식당 placeId 필터, offset 페이지네이션, 최신순',
       security: [{ bearerAuth: [] }],
       querystring: ListSettlementsQuery,
       response: { 200: ListSettlementsResult },
@@ -78,6 +83,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '내 정산 상세 — 차수·항목·참여자별 분담액, 영수증 미리보기 URL 포함',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       response: { 200: SettlementSession },
@@ -101,6 +107,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '정산 전체 교체 수정 — 차수·참여자·항목을 통째로 다시 저장하고 분담액 재계산',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       body: UpdateSettlementInput,
@@ -120,6 +127,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '정산 삭제',
       security: [{ bearerAuth: [] }],
       params: IdParams,
     },
@@ -140,6 +148,10 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '정산 공유 링크 발급·연장 — 같은 토큰 유지, 만료 1d·7d(기본)·30d',
+      description:
+        '이미 토큰이 있으면 그대로 두고 만료만 ttl 기준으로 다시 잡는다. 본문은 생략 가능하며 ' +
+        'ogImage(restaurant·table)·ogImageUrl 로 SNS 링크 미리보기 이미지를 고른다.',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       body: CreateSettlementShareInput,
@@ -167,6 +179,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '정산 공유 링크 회수 — 멱등, 다시 발급하면 새 토큰',
       security: [{ bearerAuth: [] }],
       params: IdParams,
     },
@@ -188,6 +201,7 @@ const settlementRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicShare },
     schema: {
       tags: ['settlement'],
+      summary: '공유 링크로 정산 조회(인증 불필요) — 소유자·영수증 사진 제외, 만료 410',
       params: TokenParams,
       response: { 200: SharedSettlementSession },
     },

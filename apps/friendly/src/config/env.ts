@@ -7,6 +7,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('7d'),
+  // 어드민 외 API 의 허용 origin(prod 만 적용). '*' = 전부 허용, 좁힐 땐 콤마 구분 목록 — plugins/cors.ts.
   CORS_ORIGIN: z.string().default('*'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 

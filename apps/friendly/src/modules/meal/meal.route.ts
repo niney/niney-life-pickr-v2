@@ -80,6 +80,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '내 식단 기록 목록 — 기간·끼니·유형·검색어 필터, 최신순 커서 페이지네이션',
       security: [{ bearerAuth: [] }],
       querystring: ListMealEntriesQuery,
       response: { 200: ListMealEntriesResult },
@@ -91,6 +92,10 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '식단 기록 생성 — 음식 항목 1~20개·사진 토큰 최대 5장, 영양값은 서버가 채움',
+      description:
+        '사진은 먼저 POST /api/v1/meals/photos 로 올려 받은 token 을 photoTokens 에 순서대로 넣는다. ' +
+        '항목의 칼로리·단백질·나트륨은 클라이언트가 보내지 않고 서버가 음식 카탈로그 매칭으로 스냅샷한다.',
       security: [{ bearerAuth: [] }],
       body: CreateMealEntryInput,
       response: { 201: MealEntry },
@@ -110,6 +115,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '월별 식단 달력 요약 — 날짜별 끼니 수·끼니 종류·사진 유무',
       security: [{ bearerAuth: [] }],
       querystring: MealCalendarQuery,
       response: { 200: MealCalendarResult },
@@ -128,6 +134,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '끼니별 평소 식사 시각 프리셋 — 최근 90일 기록 중앙값, 3건 미만이면 기본값',
       security: [{ bearerAuth: [] }],
       response: { 200: MealTimePresetsResult },
     },
@@ -139,6 +146,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '음식명으로 지난번 섭취 조회 — 마지막 날짜·양·분류·그때 사진 토큰',
       security: [{ bearerAuth: [] }],
       querystring: RecentMealItemQuery,
       response: { 200: RecentMealItemResult },
@@ -150,6 +158,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '기간 식단 통계 — 분류별 분포·자주 먹은 음식·연속 기록·영양 평균·인사이트',
       security: [{ bearerAuth: [] }],
       querystring: MealStatsQuery,
       response: { 200: MealStatsResult },
@@ -170,6 +179,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '내 식단 데이터 JSON 내보내기 — 기록·선호·추천 이력, 사진 바이너리 제외',
       security: [{ bearerAuth: [] }],
       response: { 200: MealDataExport },
     },
@@ -181,6 +191,10 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.mealDataArchive },
     schema: {
       tags: ['meal'],
+      summary: '사진 포함 식단 백업 아카이브 생성 — JSON+base64, IP당 시간당 10회',
+      description:
+        '기록에 연결된 사진만 base64 로 담고 연결 안 된 업로드는 건너뛴다. ' +
+        '기록 5,000건·추천 1,000건·사진 100장(합계 50MB)을 넘으면 413.',
       security: [{ bearerAuth: [] }],
       response: { 200: MealDataBackup },
     },
@@ -200,6 +214,10 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     bodyLimit: MEAL_DATA_BACKUP_MAX_JSON_BYTES,
     schema: {
       tags: ['meal'],
+      summary: '식단 백업 아카이브 복원 — 기존 기록에 추가, 같은 archiveId 재요청은 멱등',
+      description:
+        '본문은 GET /api/v1/meals/data/backup 응답 그대로(JSON 최대 75MB, IP당 시간당 10회). ' +
+        '선호 설정은 기존 값이 있으면 유지하고 없을 때만 아카이브 값으로 만든다.',
       security: [{ bearerAuth: [] }],
       body: MealDataBackup,
       response: { 200: RestoreMealDataResult },
@@ -217,6 +235,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '사진 정리 대상 미리보기 — before 이전 기록 사진·미연결 업로드 수와 용량',
       security: [{ bearerAuth: [] }],
       querystring: MealPhotoRetentionQuery,
       response: { 200: MealPhotoRetentionPreview },
@@ -228,6 +247,9 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '오래된 식단 사진 일괄 삭제 — 텍스트 기록은 유지, 확인 문구 필수',
+      description:
+        '본문 confirmation 이 정확히 "DELETE_OLD_MEAL_PHOTOS" 여야 한다. before 를 생략하면 본인 식단 사진 전체가 대상이다.',
       security: [{ bearerAuth: [] }],
       body: DeleteMealPhotosInput,
       response: { 200: DeleteMealPhotosResult },
@@ -245,6 +267,9 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '내 식단 데이터 전체 삭제 — 기록·사진·추천·선호 설정, 확인 문구 필수',
+      description:
+        '본문 confirmation 이 정확히 "DELETE_ALL_MY_MEAL_DATA" 여야 한다. 되돌릴 수 없다.',
       security: [{ bearerAuth: [] }],
       body: DeleteMealDataInput,
       response: { 200: DeleteMealDataResult },
@@ -262,6 +287,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '식단 기록 단건 조회 — 사진 인식 원본 스냅샷 포함',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       response: { 200: MealEntry },
@@ -279,6 +305,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '식단 기록 수정 — items·photoTokens 는 보내면 전량 교체',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       body: UpdateMealEntryInput,
@@ -297,6 +324,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '식단 기록 삭제 — 연결된 사진 파일도 함께 삭제',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       response: { 204: z.null() },
@@ -316,7 +344,14 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
   app.post(Routes.Meal.photos, {
     onRequest: [app.authenticate],
     config: { rateLimit: RATE.mealPhotoUpload },
-    schema: { tags: ['meal'], security: [{ bearerAuth: [] }] },
+    schema: {
+      tags: ['meal'],
+      summary: '식단 사진 업로드 — multipart 파일 1개(최대 5MB), 사진 토큰 발급',
+      description:
+        'multipart/form-data 파일 1개(필드명 무관, 공식 클라이언트는 file). HEIC 도 받으며 긴 변 최대 1600px JPEG 로 ' +
+        '재인코딩하고 EXIF 는 버린다. 24시간 안에 기록에 연결되지 않으면 자동 정리되고, 사용자당 3,000장 초과 시 409.',
+      security: [{ bearerAuth: [] }],
+    },
     handler: async (req) => {
       const file = await req.file();
       if (!file) throw app.httpErrors.badRequest('파일이 필요합니다.');
@@ -350,13 +385,23 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(Routes.Meal.photo(':token'), {
     onRequest: [app.authenticate],
-    schema: { tags: ['meal'], security: [{ bearerAuth: [] }], params: TokenParams },
+    schema: {
+      tags: ['meal'],
+      summary: '식단 사진 원본(image/jpeg) — 본인 사진만, JWT 필요',
+      security: [{ bearerAuth: [] }],
+      params: TokenParams,
+    },
     handler: servePhoto('full') as never,
   });
 
   app.get(Routes.Meal.photoThumb(':token'), {
     onRequest: [app.authenticate],
-    schema: { tags: ['meal'], security: [{ bearerAuth: [] }], params: TokenParams },
+    schema: {
+      tags: ['meal'],
+      summary: '식단 사진 썸네일(image/jpeg, 긴 변 최대 320px) — 본인 사진만, JWT 필요',
+      security: [{ bearerAuth: [] }],
+      params: TokenParams,
+    },
     handler: servePhoto('thumb') as never,
   });
 
@@ -366,6 +411,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.mealPhotoUpload },
     schema: {
       tags: ['meal'],
+      summary: '지난 식단 사진을 새 사진 토큰으로 복제 — 원본과 독립된 파일',
       security: [{ bearerAuth: [] }],
       params: TokenParams,
       response: { 201: UploadMealPhotoResult },
@@ -383,6 +429,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '기록에 연결되지 않은 업로드 사진 삭제 — 연결된 사진은 409',
       security: [{ bearerAuth: [] }],
       params: TokenParams,
       response: { 204: z.null() },
@@ -402,6 +449,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '식단 선호 설정 조회 — 추천 가중치·제외·알레르기·선호 음식, 미저장 시 기본값',
       security: [{ bearerAuth: [] }],
       response: { 200: MealPreference },
     },
@@ -412,6 +460,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '식단 선호 설정 저장 — 보낸 필드만 갱신',
       security: [{ bearerAuth: [] }],
       body: UpdateMealPreferenceInput,
       response: { 200: MealPreference },

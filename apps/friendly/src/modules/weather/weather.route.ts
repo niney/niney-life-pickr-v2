@@ -39,6 +39,9 @@ const weatherRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['weather'],
+      summary: '좌표 기준 가까운 AWS 관측소의 매분 관측값 — 기상청 API허브, 2분 캐시',
+      description:
+        'lat·lng(WGS84) 필수, radius 기본 15km(최대 50km)·limit 기본 3(최대 10). KMA_APIHUB_KEY 가 없으면 503 이 아니라 enabled:false 빈 결과로 200.',
       querystring: WeatherAwsQuery,
       response: { 200: WeatherAwsResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -58,6 +61,9 @@ const weatherRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['weather'],
+      summary: '초단기실황 + 초단기예보(격자) — 기상청 단기예보 API 프록시, 다음 발표까지 캐시',
+      description:
+        'nx·ny 는 기상청 동네예보 격자 좌표(위경도 아님). 새 발표분이 아직 없으면 직전 발표분으로 1회 폴백하고 fallback 플래그를 세운다.',
       querystring: WeatherGridQuery,
       response: { 200: WeatherNowcastResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -77,6 +83,8 @@ const weatherRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['weather'],
+      summary: '단기예보(격자, 시간별·일별) — 기상청 단기예보 API 프록시, 다음 발표까지 캐시',
+      description: 'nx·ny 는 기상청 동네예보 격자 좌표(위경도 아님). 새 발표분이 없으면 직전 발표분으로 1회 폴백한다.',
       querystring: WeatherGridQuery,
       response: { 200: WeatherForecastResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -96,6 +104,7 @@ const weatherRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['weather'],
+      summary: '현재 발표 슬롯의 예보 버전(초단기실황·초단기예보·단기예보) — 기상청 API 프록시',
       response: { 200: WeatherVersionsResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
     handler: async (req, reply) => {
@@ -114,6 +123,9 @@ const weatherRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['weather'],
+      summary: '중기예보(육상 날씨·기온·전망 문구) — 기상청 중기예보 API 프록시, 다음 발표까지 캐시',
+      description:
+        'land 는 중기육상예보 구역 코드, ta 는 중기기온 지점 코드(예: 11B00000·11B10101), stn 은 중기전망 지점번호(생략 시 전망 제외). 발표분이 비면 직전 발표분으로 폴백한다.',
       querystring: WeatherMidQuery,
       response: { 200: WeatherMidResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -133,6 +145,7 @@ const weatherRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['weather'],
+      summary: '중기해상예보(해역별 날씨·파고) — 기상청 중기예보 API 프록시, 다음 발표까지 캐시',
       querystring: WeatherMidSeaQuery,
       response: { 200: WeatherMidSeaResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },

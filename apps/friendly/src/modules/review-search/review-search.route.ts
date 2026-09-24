@@ -127,7 +127,12 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
   // ── 공개 QA (placeId 기반, 인증 없음) ──────────────────────────────────────
   // 준비 여부 — enrich 된 리뷰가 있는지. LLM 호출 없음 → 레이트리밋 불필요.
   typed.get(Routes.ReviewSearch.publicQaReady(':placeId'), {
-    schema: { tags: ['public'], params: placeIdParams, response: { 200: ReviewQaReadyResult } },
+    schema: {
+      tags: ['public'],
+      summary: '맛집 리뷰 Q&A 준비 여부 — 검색 가능(임베딩 완료) 리뷰 수, LLM 호출 없음',
+      params: placeIdParams,
+      response: { 200: ReviewQaReadyResult },
+    },
     handler: async (req) => {
       const r = await service.qaReady(req.params.placeId);
       if (!r) throw app.httpErrors.notFound('식당을 찾을 수 없습니다.');
@@ -138,7 +143,16 @@ const reviewSearchRoutes: FastifyPluginAsync = async (app) => {
   // 공개 질문 — 비싼 LLM 파이프라인 → IP 레이트리밋. enrich 안 된 식당은 graceful none.
   typed.post(Routes.ReviewSearch.publicAsk(':placeId'), {
     config: { rateLimit: RATE.publicAsk },
-    schema: { tags: ['public'], params: placeIdParams, body: ReviewPublicAskBody, response: { 200: ReviewAskResult } },
+    schema: {
+      tags: ['public'],
+      summary: '맛집 리뷰 기반 질문 답변(RAG) — 근거 리뷰 인용, 매 요청 LLM 최대 3콜, 분당 15회',
+      description:
+        '질의 임베딩 + BM25 하이브리드 검색 → LLM 리랭크 → 답변 생성 → 근거 대조 검증 순으로 처리하며 답변을 캐시하지 않는다. ' +
+        '리뷰 분석이 준비되지 않았거나 일시 장애면 오류 대신 confidence "none" 안내문을 200 으로 돌려준다.',
+      params: placeIdParams,
+      body: ReviewPublicAskBody,
+      response: { 200: ReviewAskResult },
+    },
     handler: async (req) => {
       // 임베딩/LLM 일시 장애(예: 임베딩 엔드포인트 미도달)는 공개 사용자에게 500 대신 graceful 안내.
       let r;

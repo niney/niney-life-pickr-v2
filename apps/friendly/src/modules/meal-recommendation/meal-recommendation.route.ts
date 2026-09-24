@@ -53,6 +53,7 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '추천 화면 초기 데이터 — 기록 수·최근 먹은 음식·선호 설정·직전 추천',
       security: [{ bearerAuth: [] }],
       response: { 200: MealRecommendationContext },
     },
@@ -63,6 +64,7 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '내 다음 끼니 추천 이력 — 최신순, limit 기본 20·최대 50',
       security: [{ bearerAuth: [] }],
       querystring: ListMealRecommendationsQuery,
       response: { 200: ListMealRecommendationsResult },
@@ -75,6 +77,11 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.mealRecommend },
     schema: {
       tags: ['meal'],
+      summary: '다음 끼니 추천 생성 — 텍스트 LLM 1콜, 캐시 히트는 일일 한도 미차감',
+      description:
+        '같은 날짜·끼니·프로필이면 저장된 추천을 그대로 주고 force=true 면 새로 만든다. 캐시 미스마다 ' +
+        '일일 한도(MEAL_RECOMMEND_DAILY_LIMIT, 기본 20회)를 1회 차감하며 초과 시 429. ' +
+        'lat·lng 를 주면 날씨를 반영하고, LLM 이 없거나 실패하면 점수 기반 폴백(status=fallback)을 돌려준다.',
       security: [{ bearerAuth: [] }],
       body: CreateMealRecommendationInput,
       response: { 200: MealRecommendation },
@@ -102,6 +109,7 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '추천 피드백 반영 — 고른 음식·세트 평가(±1)·이 추천으로 만든 식단 기록 연결',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       body: MealRecommendationFeedbackInput,
@@ -124,6 +132,7 @@ const mealRecommendationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['meal'],
+      summary: '추천 반응 이벤트 기록 — 노출·후보 선택·평가·식당 열기·닫기(logged 는 거부)',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       body: MealRecommendationEventInput,

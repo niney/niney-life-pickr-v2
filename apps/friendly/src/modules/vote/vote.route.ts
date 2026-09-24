@@ -11,6 +11,7 @@ import {
 } from '@repo/api-contract';
 import { VoteError, VoteService } from './vote.service.js';
 import { RATE } from '../../plugins/rate-limit.js';
+import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
 
 const V = Routes.Vote;
 
@@ -57,6 +58,7 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['vote'],
+      summary: '그룹 투표 생성 — 식당 후보 2~8곳, 7일 유효 공유 토큰 즉시 발급',
       security: [{ bearerAuth: [] }],
       body: CreateVoteInput,
       response: { 200: VoteSession },
@@ -75,6 +77,7 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['vote'],
+      summary: '내가 만든 투표 목록 — 최근 20개, 공유 토큰 포함(링크 복구용)',
       security: [{ bearerAuth: [] }],
       response: { 200: MyVotesResult },
     },
@@ -86,6 +89,7 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['vote'],
+      summary: '투표 마감·승자 확정(방장만) — 동점이면 smart-pick 가중 랜덤, 멱등',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       response: { 200: VoteSession },
@@ -106,6 +110,10 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicShare },
     schema: {
       tags: ['vote'],
+      summary: '공유 링크로 투표 조회(인증 불필요) — 후보별 득표·투표자 이름, 만료 410',
+      description:
+        'Authorization 헤더는 선택이다. 유효한 JWT 가 방장 본인이면 isOwner=true(마감 버튼 표시용)이며 접근 제어는 아니다.',
+      security: OPTIONAL_BEARER,
       params: TokenParams,
       response: { 200: SharedVoteSession },
     },
@@ -126,6 +134,11 @@ const voteRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicVote },
     schema: {
       tags: ['vote'],
+      summary: '공유 링크로 투표 제출(인증 불필요) — voterKey 의 찬성 후보 목록 전체 교체',
+      description:
+        '같은 voterKey(클라이언트가 만든 기기별 UUID)로 다시 보내면 수정, optionIds 빈 배열이면 철회다. ' +
+        '마감 후 409, IP 당 분당 30회. 응답은 갱신된 투표 전체.',
+      security: OPTIONAL_BEARER,
       params: TokenParams,
       body: SubmitBallotInput,
       response: { 200: SharedVoteSession },

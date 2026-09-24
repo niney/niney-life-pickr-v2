@@ -53,7 +53,12 @@ const reviewClusteringRoutes: FastifyPluginAsync = async (app) => {
 
   // 공개 — 저장된 군집 조회(계산 없음, 인증 없음). 군집 없으면 ready=false.
   typed.get(Routes.ReviewClustering.publicClusters(':placeId'), {
-    schema: { tags: ['public'], params: placeIdParams, response: { 200: ReviewClustersResult } },
+    schema: {
+      tags: ['public'],
+      summary: '맛집 리뷰 주제별 군집 조회 — 사전 계산된 결과만, 없으면 ready=false',
+      params: placeIdParams,
+      response: { 200: ReviewClustersResult },
+    },
     handler: async (req) => service.getPublicClusters(req.params.placeId),
   });
 };

@@ -68,6 +68,9 @@ const mediaRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Media.thumbnail, {
     schema: {
       tags: ['media'],
+      summary: '외부 이미지 썸네일 JPEG 리사이즈 프록시 — 허용 호스트만, 디스크 캐시',
+      description:
+        'url 은 네이버(pstatic.net 계열)·배민 이미지 호스트만 허용(그 외 400). w 40~1200(기본 300)·q 40~95(기본 78), 결과는 30일 immutable 캐시 헤더와 ETag 를 붙인다.',
       querystring: Query,
     },
     handler: async (req, reply) => {
@@ -129,6 +132,7 @@ const mediaRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Media.panorama(':placeId'), {
     schema: {
       tags: ['media'],
+      summary: '네이버 플레이스 파노라마 썸네일(JPEG) — 크롤 시 저장한 사본, 없으면 404',
       params: z.object({ placeId: z.string().regex(/^\d+$/).max(40) }),
     },
     handler: async (req, reply) => {

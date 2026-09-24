@@ -3,7 +3,7 @@ import { Routes } from '@repo/api-contract';
 
 const healthRoutes: FastifyPluginAsync = async (app) => {
   app.get(Routes.Health, {
-    schema: { tags: ['health'] },
+    schema: { tags: ['health'], summary: '서버 상태 확인 — status·uptime·timestamp' },
     handler: async () => ({
       status: 'ok',
       uptime: process.uptime(),

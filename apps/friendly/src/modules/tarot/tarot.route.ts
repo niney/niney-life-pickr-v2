@@ -16,6 +16,7 @@ import { RATE, clientKey } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { TAROT_QUOTA_FEATURE, TarotError, TarotService, type TarotActor } from './tarot.service.js';
+import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
 
 // 타로 — 리딩은 무인증 공개(옵셔널 인증이면 회원: 한도 면제 + 자동 저장), 기록은 회원 전용.
 // 분당 IP 버스트는 어드민 설정(ipPerMinute)을 읽는 함수 max 로, 일일 한도는 서비스가 usageQuota 로.
@@ -63,6 +64,11 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
     },
     schema: {
       tags: ['tarot'],
+      summary: '타로 리딩 생성 — LLM 해석, 선택 인증(회원 자동 저장), 한도 초과 시 정적 해석',
+      description:
+        'Authorization Bearer 가 유효하면 회원(개인 일일 한도 없음·자동 저장·오늘의 카드 하루 1장 고정), 없거나 무효면 게스트다. ' +
+        '게스트는 x-guest-key(영숫자·_·- 8~64자) 기기 키로 일일 한도를 세고(없으면 IP), 한도 초과·LLM 실패여도 200 에 source "static" 해석을 돌려준다.',
+      security: OPTIONAL_BEARER,
       body: CreateTarotReadingInput,
       response: { 200: TarotReadingResult },
     },
@@ -83,6 +89,8 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.tarotShare },
     schema: {
       tags: ['tarot'],
+      summary: '타로 공유 링크 발급 — 회원은 readingId, 게스트는 리딩 입력 재전송(서버가 본문 확보)',
+      security: OPTIONAL_BEARER,
       body: CreateTarotShareInput,
       response: { 200: TarotShareResult },
     },
@@ -101,6 +109,7 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicShare },
     schema: {
       tags: ['tarot'],
+      summary: '공유된 타로 리딩 조회 — 질문은 공유 시 포함을 고른 경우만',
       params: TokenParams,
       response: { 200: SharedTarotReading },
     },
@@ -118,6 +127,7 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['tarot'],
+      summary: '내 타로 기록 목록 — 최신순 커서 페이지네이션',
       security: [{ bearerAuth: [] }],
       querystring: ListTarotReadingsQuery,
       response: { 200: ListTarotReadingsResult },
@@ -129,6 +139,7 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['tarot'],
+      summary: '내 타로 기록 상세 조회',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       response: { 200: TarotReadingResult },
@@ -147,6 +158,7 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['tarot'],
+      summary: '내 타로 기록 삭제 — 성공 시 204',
       security: [{ bearerAuth: [] }],
       params: IdParams,
     },

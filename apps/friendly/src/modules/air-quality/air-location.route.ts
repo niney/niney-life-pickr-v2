@@ -16,6 +16,7 @@ const airLocationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['air-location'],
+      summary: '내 대기 위치 조회 — 사용자당 1개, 없으면 location null',
       security: [{ bearerAuth: [] }],
       response: { 200: AirLocationResult },
     },
@@ -26,6 +27,7 @@ const airLocationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['air-location'],
+      summary: '내 대기 위치 저장 — 덮어쓰기, 저장 후 상태 반환',
       security: [{ bearerAuth: [] }],
       body: AirLocationUpsertBody,
       response: { 200: AirLocationResult },
@@ -37,6 +39,7 @@ const airLocationRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['air-location'],
+      summary: '내 대기 위치 삭제 — 멱등',
       security: [{ bearerAuth: [] }],
       response: { 200: AirLocationResult },
     },

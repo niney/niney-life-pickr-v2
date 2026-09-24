@@ -47,6 +47,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '시도별 실시간 대기오염 측정값 — 에어코리아 프록시, 10분 캐시',
+      description:
+        'sidoName 은 시도 약칭(서울·경기·전남광주 등)이며 "전국" 이면 전체. 업스트림 전국 조회 1콜을 캐시해 두고 요청 시도로 걸러 돌려준다(포함 매칭).',
       params: AirSidoParams,
       response: {
         200: AirSidoRealtimeResult,
@@ -70,6 +73,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '측정소별 대기오염 시계열(24시간·1개월·3개월) — 에어코리아 프록시, 10분 캐시',
+      description:
+        'term=DAILY(기본)는 최근 24시간 시간별 원본, MONTH·3MONTH 는 서버가 일평균으로 접는다. latest 에 가장 최근 시간 행(등급 포함)을 싣는다.',
       params: AirStationHistoryParams,
       querystring: AirStationHistoryQuery,
       response: {
@@ -94,6 +100,7 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '통합대기환경지수 나쁨 이상 측정소 목록 — 에어코리아 프록시, 10분 캐시',
       response: {
         200: AirBadStationsResult,
         502: ErrorResponseSchema,
@@ -116,6 +123,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '대기질 예보통보(PM10·PM2.5·O3) — 에어코리아 프록시, 20분 캐시',
+      description:
+        'date(YYYY-MM-DD) 생략 시 KST 오늘이며, 당일 발표분이 아직 없으면 전일 발표분으로 1회 폴백한다. 명시한 date 는 폴백하지 않는다.',
       querystring: AirForecastQuery,
       response: {
         200: AirForecastResult,
@@ -141,6 +151,7 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '전국 대기 측정소 목록(좌표·주소·측정항목) — 에어코리아 측정소정보, 24시간 캐시',
       response: {
         200: AirStationsResult,
         502: ErrorResponseSchema,
@@ -164,6 +175,9 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '좌표 기준 가까운 대기 측정소와 현재 측정값 — 거리순',
+      description:
+        'lat·lng(WGS84) 필수, radius 기본 10km(최대 50km)·limit 기본 5(최대 20). 캐시된 측정소 목록으로 거리를 계산하고 전국 실시간 측정값을 측정소명으로 붙인다(실시간 실패 시 measure null).',
       querystring: AirNearbyQuery,
       response: {
         200: AirNearbyResult,
@@ -192,6 +206,7 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '대기 측정소 이름·주소 검색 — 캐시 목록 로컬 검색, 상위 30건',
       querystring: AirStationSearchQuery,
       response: {
         200: AirStationSearchResult,
@@ -215,6 +230,8 @@ const airQualityRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['air-quality'],
+      summary: '초미세먼지 주간예보(권역별 등급) — 에어코리아 프록시, 60분 캐시',
+      description: 'date(발표일) 생략 시 KST 오늘이며, 오후 발표 전이면 전일 발표분으로 폴백한다.',
       querystring: AirWeeklyForecastQuery,
       response: {
         200: AirWeeklyForecastResult,

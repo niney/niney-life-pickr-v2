@@ -42,6 +42,10 @@ const mealRecognitionRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.mealRecognize },
     schema: {
       tags: ['meal'],
+      summary: '식단 사진 음식 인식 — 비전 LLM 1콜, 사용자별 일일 한도, 식단 기록은 만들지 않음',
+      description:
+        '먼저 POST /api/v1/meals/photos 로 올린 본인 사진 토큰 1~5장을 보낸다. placeId 를 주면 그 식당 메뉴를 힌트로 쓴다. ' +
+        '일일 한도(MEAL_RECOGNIZE_DAILY_LIMIT, 기본 30회·KST 자정 기준) 초과 시 429, 인식 모델 미설정 시 503.',
       security: [{ bearerAuth: [] }],
       body: RecognizeMealInput,
       response: { 200: RecognizeMealResult },

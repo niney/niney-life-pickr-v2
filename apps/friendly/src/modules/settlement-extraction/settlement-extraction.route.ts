@@ -59,6 +59,10 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '영수증 사진 업로드 — multipart 파일 1개(최대 5MB), imageToken 발급',
+      description:
+        'multipart/form-data 파일 1개(필드명 무관, 공식 클라이언트는 file). HEIC 도 받으며 JPEG 로 정규화해 저장한다. ' +
+        '받은 imageToken 으로 항목 추출(extract)과 정산 저장(rounds[].receiptImageToken)을 호출한다.',
       security: [{ bearerAuth: [] }],
     },
     handler: async (req) => {
@@ -86,6 +90,10 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '영수증 항목 추출 — 비전 LLM 1콜, 식당 메뉴를 힌트로 품목·금액·분류 반환',
+      description:
+        'placeId 필수(그 식당 등록 메뉴명을 프롬프트 힌트로 쓴다). 한 사진에 영수증이 여러 장이면 ' +
+        'split(count·index)로 가로 N등분한 영역만 추출한다. 모델 미설정 503, LLM 실패 502.',
       security: [{ bearerAuth: [] }],
       body: ExtractReceiptInput,
       response: { 200: ExtractReceiptResult },
@@ -131,6 +139,7 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement'],
+      summary: '업로드한 영수증 사진 미리보기(image/jpeg) — JWT 필요',
       security: [{ bearerAuth: [] }],
       params: PreviewParams,
     },

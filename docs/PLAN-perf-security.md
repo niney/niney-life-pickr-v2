@@ -128,6 +128,12 @@
 - Swagger: `isDev`일 때만 등록하거나 `/docs`에 `requireAdmin` 가드.
 - CORS: prod에서 `CORS_ORIGIN` 미설정(=`*`) 시 **기동 실패 또는 credentials 비활성**(fail-closed).
   env 스키마에서 prod일 때 `*` 금지 검증 추가 고려.
+  - **2026-09-24 번복(사용자 결정)** — 다른 프로젝트가 브라우저에서 직접 쓰도록 어드민 외 전부
+    `origin:'*'` + **`credentials:false`** 로 개방, 어드민(`/api/v1/admin/**`)만 `PUBLIC_ORIGIN` 유지.
+    인증이 Bearer 헤더뿐(쿠키 없음)이라 #42 의 "사용자 세션 도용" 위험은 credentials 를 끄는 것으로
+    해소된다. 남는 위험은 비용(LLM·업스트림 쿼터 소진 — IP 분산으로 IP당 한도가 약해짐)으로,
+    트래픽을 보고 `CORS_ORIGIN` 목록으로 좁힌다. 외부 사용 가이드: [api/README.md](api/README.md).
+    Swagger 는 스펙 생성기만 전 환경 등록(HTTP 미노출), `/docs` UI 는 계속 dev 전용.
 - helmet: SSR-lite 페이지에 맞는 최소 CSP 활성(자기 origin + 필요한 CDN 화이트리스트). 이스케이프
   경로(`restaurant-preview`/`share-preview`)도 재점검.
 - index.html: CDN CSS self-host 또는 `integrity`(SRI) 추가.

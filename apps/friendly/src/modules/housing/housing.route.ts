@@ -43,7 +43,11 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Housing.status, {
-    schema: { tags: ['housing'], response: { 200: HousingStatusResult } },
+    schema: {
+      tags: ['housing'],
+      summary: '집값 데이터 적재 현황(단지·유형별 거래 건수·기간·적재 시각) — 로컬 DB',
+      response: { 200: HousingStatusResult },
+    },
     handler: async () => service.getStatus(),
   });
 
@@ -52,6 +56,9 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.housingRead },
     schema: {
       tags: ['housing'],
+      summary: '지도 영역 안 아파트 단지 가격 배지 또는 집계 셀 — 로컬 실거래가 DB',
+      description:
+        'bbox 는 "minLng,minLat,maxLng,maxLat"(WGS84). zoom 13 이상이고 영역이 좁으면 단지별 점(최대 4,000개, 넘으면 truncated), 아니면 격자 집계 셀. dealType(trade·jeonse·monthly, 기본 trade)·band(all·b1~b4 전용면적 구간) 축으로 거른다. 가격 단위는 만원.',
       querystring: HousingPointsQuery,
       response: { 200: HousingPointsResult, 503: ErrorResponseSchema },
     },
@@ -70,6 +77,9 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.housingRead },
     schema: {
       tags: ['housing'],
+      summary: '좌표 기준 주변 아파트 단지와 최근 거래가 — 로컬 실거래가 DB, 거리순',
+      description:
+        'lat·lng(WGS84) 필수, radius 기본 1km(최대 3km)·limit 기본 15(최대 30). dealType·band 축은 지도 조회와 같다.',
       querystring: HousingNearbyQuery,
       response: { 200: HousingNearbyResult, 503: ErrorResponseSchema },
     },
@@ -88,6 +98,7 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.housingSearch },
     schema: {
       tags: ['housing'],
+      summary: '아파트 단지명 검색(이전·별칭 이름 포함) — 로컬 DB, 세대수 큰 순',
       querystring: HousingSearchQuery,
       response: { 200: HousingSearchResult, 503: ErrorResponseSchema },
     },
@@ -106,6 +117,7 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
   typed.get(decodeURIComponent(Routes.Housing.complex(':id')), {
     schema: {
       tags: ['housing'],
+      summary: '단지 상세(유형·면적별 거래 통계·공시가격·생활 인프라·침수 흔적) — 로컬 DB',
       params: HousingComplexParams,
       response: { 200: HousingComplexDetail, 404: ErrorResponseSchema },
     },
@@ -124,6 +136,9 @@ const housingRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.housingRead },
     schema: {
       tags: ['housing'],
+      summary: '단지 실거래 목록(최신 계약일 순, 페이지네이션) — 로컬 DB',
+      description:
+        'dealType·band 로 거르고 limit 기본 50(최대 100)·offset 으로 넘긴다. 해제된 거래는 기본 제외, includeCanceled=true 면 포함.',
       params: HousingComplexParams,
       querystring: HousingTradesQuery,
       response: { 200: HousingTradesResult, 404: ErrorResponseSchema },

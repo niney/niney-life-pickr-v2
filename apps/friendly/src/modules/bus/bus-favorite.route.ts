@@ -31,6 +31,7 @@ const busFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['bus-favorite'],
+      summary: '버스 즐겨찾기 전체 목록(정류장·정류장×노선) — 등록순',
       security: [{ bearerAuth: [] }],
       response: { 200: BusFavoritesResult },
     },
@@ -41,6 +42,7 @@ const busFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['bus-favorite'],
+      summary: '즐겨찾기 정류장 추가·갱신 — 종류별 최대 100개, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: BusFavoriteStationParams,
       body: BusFavoriteStationUpsertBody,
@@ -60,6 +62,7 @@ const busFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['bus-favorite'],
+      summary: '즐겨찾기 정류장 삭제 — 멱등, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: BusFavoriteStationParams,
       response: { 200: BusFavoritesResult },
@@ -71,6 +74,7 @@ const busFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['bus-favorite'],
+      summary: '즐겨찾기 노선(정류장×노선) 추가·갱신 — 종류별 최대 100개, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: BusFavoriteRouteParams,
       body: BusFavoriteRouteUpsertBody,
@@ -95,6 +99,7 @@ const busFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['bus-favorite'],
+      summary: '즐겨찾기 노선(정류장×노선) 삭제 — 멱등, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: BusFavoriteRouteParams,
       response: { 200: BusFavoritesResult },
@@ -107,6 +112,9 @@ const busFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['bus-favorite'],
+      summary: '게스트 즐겨찾기 병합(sync) — 서버에 없는 항목만 추가, 전체 목록 반환',
+      description:
+        '로그인 직후 로컬 저장분을 올리는 용도. 이미 있는 항목은 서버 값을 유지하고, 상한(종류별 100개)을 넘는 항목은 에러 없이 건너뛴다. 같은 body 재호출은 멱등.',
       security: [{ bearerAuth: [] }],
       body: BusFavoritesSyncBody,
       response: { 200: BusFavoritesResult },

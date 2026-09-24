@@ -73,6 +73,7 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.foodSearch },
     schema: {
       tags: ['food'],
+      summary: '음식 카탈로그 자동완성 — 이름·별칭 검색, 일치도·인기순, 최대 20건',
       security: [{ bearerAuth: [] }],
       querystring: FoodSearchQuery,
       response: { 200: FoodSearchResult },
@@ -88,6 +89,11 @@ const foodRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.foodRestaurants },
     schema: {
       tags: ['food'],
+      summary: '이 음식을 파는 식당 역검색 — 수집 메뉴·리뷰 언급 근거, 좌표 주면 반경 내만',
+      description:
+        'lat·lng 는 함께 보내야 한다(radiusM 기본 5km, 최대 50km). 좌표가 있으면 근거 신뢰도→거리순, ' +
+        '없으면 근거·평점순이다. ' +
+        '수집 데이터 기반 연결이라 현재 판매 여부는 보장하지 않는다(응답 notice).',
       security: [{ bearerAuth: [] }],
       params: IdParams,
       querystring: FoodRestaurantsQuery,

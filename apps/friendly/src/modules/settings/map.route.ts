@@ -91,6 +91,7 @@ const settingsMapRoutes: FastifyPluginAsync = async (app) => {
   typed.get(MapRoutes.publicConfig, {
     schema: {
       tags: ['public'],
+      summary: '지도 타일(VWorld WMTS) 공개 설정·API 키 조회 — 키 미등록이면 404',
       response: { 200: MapProviderPublicConfig },
     },
     handler: async () => {

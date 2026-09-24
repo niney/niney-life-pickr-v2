@@ -33,6 +33,7 @@ const restaurantFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['restaurant-favorite'],
+      summary: '내 맛집 즐겨찾기 전체 목록 — 등록순',
       security: [{ bearerAuth: [] }],
       response: { 200: RestaurantFavoritesResult },
     },
@@ -43,6 +44,7 @@ const restaurantFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['restaurant-favorite'],
+      summary: '맛집 즐겨찾기 추가·스냅샷 갱신 — 최대 100개(초과 400), 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: RestaurantFavoriteParams,
       body: RestaurantFavoriteUpsertBody,
@@ -62,6 +64,7 @@ const restaurantFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['restaurant-favorite'],
+      summary: '맛집 즐겨찾기 삭제 — 멱등, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: RestaurantFavoriteParams,
       response: { 200: RestaurantFavoritesResult },
@@ -73,6 +76,7 @@ const restaurantFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['restaurant-favorite'],
+      summary: '게스트 맛집 즐겨찾기 병합(sync) — 서버에 없는 항목만 추가, 상한 초과분 무시',
       security: [{ bearerAuth: [] }],
       body: RestaurantFavoritesSyncBody,
       response: { 200: RestaurantFavoritesResult },

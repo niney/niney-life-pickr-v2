@@ -89,6 +89,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.ranking, {
     schema: {
       tags: ['public'],
+      summary: '공개 맛집 랭킹 — AI 분석 리뷰의 긍정·부정 비율순, 최소 언급 수 컷오프',
       querystring: RestaurantRankingQuery,
       response: { 200: RestaurantRankingResult },
     },
@@ -99,6 +100,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.publicList, {
     schema: {
       tags: ['public'],
+      summary: '공개 맛집 목록 — 검색어·카테고리·지도 bbox 필터, 좌표·대표 사진·AI 통계 포함',
       querystring: RestaurantPublicListQuery,
       response: { 200: RestaurantPublicListResult },
     },
@@ -110,6 +112,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.publicByPlaceId(':placeId'), {
     schema: {
       tags: ['public'],
+      summary: '공개 맛집 상세 — 네이버·다이닝코드·테이블링 병합 정보 + 리뷰 첫 10건',
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantPublicDetail },
     },
@@ -125,6 +128,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.publicReviews(':placeId'), {
     schema: {
       tags: ['public'],
+      summary: '공개 맛집 방문자 리뷰 페이지 — 감성·팁·메뉴 필터, 최신/평점 정렬',
       params: z.object({ placeId: z.string() }),
       querystring: RestaurantPublicReviewsQuery,
       response: { 200: RestaurantPublicReviewsResult },
@@ -140,6 +144,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.publicInsights(':placeId'), {
     schema: {
       tags: ['public'],
+      summary: '맛집 AI 리뷰 분석 집계 — 감성 분포·만족도·많이 언급된 메뉴·팁·키워드',
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantInsights },
     },
@@ -154,6 +159,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.publicMenuNutrition(':placeId'), {
     schema: {
       tags: ['public'],
+      summary: '맛집 메뉴 칼로리 추정 — 식약처 식품영양성분 DB 매칭, 애매한 메뉴는 제외',
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantMenuNutrition },
     },
@@ -168,6 +174,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Restaurant.publicCategoryTree(':placeId'), {
     schema: {
       tags: ['public'],
+      summary: '맛집 언급 메뉴의 카테고리 트리 — 전역 메뉴 분류 전이면 빈 배열',
       params: z.object({ placeId: z.string() }),
       response: { 200: RestaurantCategoryTreeResult },
     },
@@ -185,6 +192,7 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.publicPick },
     schema: {
       tags: ['public'],
+      summary: '맛집 가중 랜덤 픽("오늘 뭐 먹지?") — AI 분석·여행자 점수 가중, 후보 없으면 picked null',
       body: RestaurantPublicSmartPickInput,
       response: { 200: RestaurantSmartPickResult },
     },

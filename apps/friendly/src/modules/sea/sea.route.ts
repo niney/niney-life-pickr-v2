@@ -20,6 +20,9 @@ const seaRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['sea'],
+      summary: '활동별 생활해양예보지수(지점 × 7일) — 국립해양조사원 API 프록시, 1시간 캐시',
+      description:
+        'activity: beach 해수욕·surf 서핑·fishing 바다낚시(갯바위)·mudflat 갯벌체험·seaSplit 바닷길·seaTrip 바다여행. beach 는 6~9월에 해수욕장 이안류 최신 관측을 덧붙인다.',
       querystring: SeaForecastQuery,
       response: { 200: SeaForecastResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -39,6 +42,8 @@ const seaRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['sea'],
+      summary: '좌표에서 가장 가까운 조석 예보지점의 하루 만조·간조(물때) — 국립해양조사원, 12시간 캐시',
+      description: 'lat·lng(WGS84)·date(YYYY-MM-DD) 모두 필수. 전국 조석 예보지점 166곳 중 최근접 지점을 서버가 고른다.',
       querystring: SeaTideQuery,
       response: { 200: SeaTideResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },

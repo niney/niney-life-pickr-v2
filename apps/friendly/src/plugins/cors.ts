@@ -1,55 +1,66 @@
 import fp from 'fastify-plugin';
-import cors from '@fastify/cors';
+import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import { env, isDev } from '../config/env.js';
 
-// RFC1918 사설 IP origin (Expo Web 을 폰/태블릿에서 LAN IP 로 볼 때 등). dev 에선
-// 모든 origin 을 허용하되, 이 패턴에 걸리는 "예상된" LAN origin 은 경고 로그를
-// 생략하기 위한 분류용. localhost/127.0.0.1 포함.
-const PRIVATE_LAN_ORIGIN =
-  /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)(?::\d+)?$/;
+// CORS 정책 (2026-09-24 개방 — 사용자의 다른 프로젝트가 브라우저에서 이 API 를 직접 쓴다.
+// 외부 사용 가이드: docs/api/README.md):
+//  - 어드민(/api/v1/admin/**) 외 전부: CORS_ORIGIN='*'(기본)면 모든 origin 허용.
+//    나중에 트래픽을 보고 좁히려면 CORS_ORIGIN 에 콤마 구분 목록을 넣는다(prod 에서만 적용).
+//  - 어드민: prod 는 PUBLIC_ORIGIN 만. 웹은 API 와 같은 origin 이라 CORS 가 원래 불필요하고,
+//    외부 origin 에 열 이유가 없다(방어심층). 어드민 라우트는 SSE 포함 전부 이 prefix 아래다.
+//  - dev: 개발 머신 IP 가 LAN/VPN/WSL 로 수시로 바뀌어 목록이 무의미 — 전부 허용(어드민은 반사).
+//
+// credentials 는 끈다 — 인증은 Authorization: Bearer 헤더뿐이고(쿠키 세션 없음) 이 헤더는
+// CORS credentials 대상이 아니다. '*' + credentials 조합은 브라우저가 거부하기도 하고,
+// 나중에 쿠키가 생겨도 타 사이트가 그 쿠키로 호출하지 못하게 막아 둔다.
+// Authorization·x-guest-key 등 요청 헤더는 allowedHeaders 미지정 → preflight 요청 헤더를 반사한다.
+
+const ADMIN_PATH = /^\/api\/v1\/admin(?:\/|$)/;
+
+// 쿼리 제거 + 퍼센트 디코딩 후 판정 — 라우터는 /api/v1/%61dmin 도 /api/v1/admin 으로 매칭하므로
+// 원문 그대로 비교하면 어드민 판정이 빠질 수 있다.
+export const isAdminPath = (url: string): boolean => {
+  const raw = url.split('?', 1)[0] ?? '';
+  let path = raw;
+  try {
+    path = decodeURIComponent(raw);
+  } catch {
+    // 잘못된 인코딩 — 원문으로 판정.
+  }
+  return ADMIN_PATH.test(path);
+};
+
+// 브라우저 JS 가 읽을 수 있게 노출할 응답 헤더 — 레이트리밋 잔량·재시도 시각.
+const EXPOSED_HEADERS = ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after'];
+
+// preflight 캐시(초) — 정책을 좁혔을 때 10분 안에 반영되도록 짧게.
+const PREFLIGHT_MAX_AGE = 600;
+
+export const buildCorsPolicy = (opts: {
+  dev: boolean;
+  corsOrigin: string;
+  publicOrigin: string;
+}): { open: FastifyCorsOptions; admin: FastifyCorsOptions } => {
+  const base = { credentials: false, exposedHeaders: EXPOSED_HEADERS, maxAge: PREFLIGHT_MAX_AGE };
+  const list = opts.corsOrigin
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  return {
+    open: { ...base, origin: opts.dev || list.length === 0 || list.includes('*') ? '*' : list },
+    admin: { ...base, origin: opts.dev ? true : [opts.publicOrigin.replace(/\/+$/, '')] },
+  };
+};
 
 export default fp(async (app) => {
-  const allowList =
-    env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  const policy = buildCorsPolicy({ dev: isDev, corsOrigin: env.CORS_ORIGIN, publicOrigin: env.PUBLIC_ORIGIN });
 
-  if (isDev) {
-    // dev — origin 을 제한하지 않는다. 개발 머신 IP 가 공인/사설/VPN/WSL 대역으로
-    // 수시로 바뀌어 화이트리스트가 무의미하고, prod 는 아래 env list 로 엄격히
-    // 막으므로 보안 영향도 없다. 예상 밖(비-LAN) origin 만 origin 당 1회 경고로
-    // 가시화 — 오설정/오접속을 눈치챌 수 있게. (이전엔 비-LAN origin 을
-    // cb(Error)로 거부 → 로그인 같은 preflight 요청이 통째로 깨졌다.)
-    const warned = new Set<string>();
-    await app.register(cors, {
-      origin: (origin, cb) => {
-        const known =
-          !origin ||
-          allowList === true ||
-          allowList.includes(origin) ||
-          PRIVATE_LAN_ORIGIN.test(origin);
-        if (!known && origin && !warned.has(origin)) {
-          warned.add(origin);
-          app.log.warn(`CORS(dev): 비-LAN origin 반사 허용 — ${origin}`);
-        }
-        return cb(null, true);
-      },
-      credentials: true,
-    });
-    return;
+  if (!isDev) {
+    const open = policy.open.origin === '*' ? '모든 origin' : (policy.open.origin as string[]).join(', ');
+    app.log.info(`CORS: 어드민 외 ${open} 허용, 어드민은 ${(policy.admin.origin as string[]).join(', ')} 만`);
   }
 
-  // prod — CORS_ORIGIN='*'(기본/미설정)는 origin 반사 + credentials:true 라
-  // 모든 사이트가 사용자 세션으로 API 를 호출할 수 있어 위험하다. 명시하지
-  // 않으면 공개 origin(PUBLIC_ORIGIN)으로 폐쇄(fail-closed). 웹은 API 와 동일
-  // origin 이라 CORS 자체가 불필요하고, 크로스 origin 허용이 필요하면 CORS_ORIGIN
-  // 에 콤마 구분으로 명시해야 한다.
-  const prodOrigin: string[] =
-    env.CORS_ORIGIN === '*'
-      ? [env.PUBLIC_ORIGIN.replace(/\/+$/, '')]
-      : env.CORS_ORIGIN.split(',').map((o) => o.trim());
-  if (env.CORS_ORIGIN === '*') {
-    app.log.warn(
-      `CORS: CORS_ORIGIN 미설정 — 반사 허용 대신 ${prodOrigin[0]} 로 폐쇄. 크로스 origin 이 필요하면 CORS_ORIGIN 을 명시하라.`,
-    );
-  }
-  await app.register(cors, { origin: prodOrigin, credentials: true });
+  await app.register(cors, {
+    delegator: (req, cb) => cb(null, isAdminPath(req.url) ? policy.admin : policy.open),
+  });
 });

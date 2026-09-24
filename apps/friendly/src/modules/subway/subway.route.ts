@@ -50,6 +50,9 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Subway.stationSearch, {
     schema: {
       tags: ['subway'],
+      summary: '수도권 전철역 이름 검색 — 로컬 역사마스터, 역명 그룹 최대 30개',
+      description:
+        'q 는 1~50자(NFC 정규화) 부분일치. 같은 물리 역의 호선들을 한 그룹으로 묶어 돌려주며, 각 호선의 stationId(lineId:역명)가 도착·시간표 등 다른 라우트의 입력이다.',
       querystring: SubwayStationSearchQuery,
       response: {
         200: SubwayStationSearchResult,
@@ -74,6 +77,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Subway.stationsNearby, {
     schema: {
       tags: ['subway'],
+      summary: '좌표 기준 주변 전철역 — 로컬 역사마스터, 거리순 최대 30그룹',
+      description: 'lat·lng(WGS84) 필수, radius 100~3000m(기본 1500). 업스트림을 호출하지 않는다.',
       querystring: SubwayNearbyQuery,
       response: {
         200: SubwayNearbyResult,
@@ -98,6 +103,8 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['subway'],
+      summary: '노선 실시간 열차 위치 — 서울시 실시간 지하철 API 프록시, 15초 캐시',
+      description: 'lineId 는 4자리 subwayId(예: 1002 = 2호선). 미등재 노선은 404.',
       params: SubwayPositionsParams,
       response: {
         200: SubwayPositionsResult,
@@ -122,6 +129,7 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Subway.lineDetail(':lineId'), {
     schema: {
       tags: ['subway'],
+      summary: '노선 상세(구간별 정차역 순서·노선 형상) — 로컬 DB',
       params: SubwayLineDetailParams,
       response: {
         200: SubwayLineDetailResult,
@@ -151,6 +159,9 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['subway'],
+      summary: '역 실시간 열차 도착정보 — 서울시 실시간 지하철 API 프록시, 15초 캐시',
+      description:
+        'stationId 는 lineId:역명 형식이라 URL 인코딩해 넣는다. 같은 역명 그룹의 호선을 함께 조회하며, 실시간이라 업스트림 실패 시 stale 폴백 없이 502.',
       params: SubwayArrivalsParams,
       response: {
         200: SubwayArrivalsResult,
@@ -176,6 +187,9 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   typed.get(decodeURIComponent(Routes.Subway.stationCongestion(':stationId')), {
     schema: {
       tags: ['subway'],
+      summary: '역 시간대별 혼잡도(1~8호선 30분 단위 통계) — 로컬 적재',
+      description:
+        'dayType 1 평일(기본)·2 토요일·3 휴일. 데이터가 없는 노선(9호선·광역·경전철)은 404 가 아니라 coverage:false 로 200.',
       params: SubwayCongestionParams,
       querystring: SubwayCongestionQuery,
       response: {
@@ -201,6 +215,9 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Subway.path, {
     schema: {
       tags: ['subway'],
+      summary: '두 역 간 지하철 경로 탐색 — 로컬 노선 그래프 최단경로',
+      description:
+        'from·to 는 stationId(lineId:역명). 연결 경로가 없으면 found:false 로 200, 없는 역은 404, 출발=도착은 400.',
       querystring: SubwayPathQuery,
       response: {
         200: SubwayPathResult,
@@ -226,6 +243,9 @@ const subwayRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['subway'],
+      summary: '역 열차 시간표(1~9호선, 상·하행) — 서울 열린데이터광장, DB 30일 캐시',
+      description:
+        'dayType 1 평일(기본)·2 토요일·3 휴일. 1~9호선 외 노선은 coverage:false 로 200. 업스트림 실패 시 만료된 캐시가 있으면 stale 로 돌려준다.',
       params: SubwayTimetableParams,
       querystring: SubwayTimetableQuery,
       response: {

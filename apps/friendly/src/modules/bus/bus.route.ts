@@ -34,6 +34,9 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Bus.stationSearch, {
     schema: {
       tags: ['bus'],
+      summary: '서울 버스 정류장 이름 검색 — 서울시 버스 API, 키워드별 DB 30일 캐시',
+      description:
+        'q 는 2~50자(NFC 정규화). force=true 는 캐시를 무시하고 재조회하지만 60초 내 재요청은 캐시로 응답한다. 결과는 최대 100건(total 은 절단 전 건수).',
       querystring: BusStationSearchQuery,
       response: {
         200: BusStationSearchResult,
@@ -57,6 +60,9 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Bus.stationsNearby, {
     schema: {
       tags: ['bus'],
+      summary: '좌표 기준 주변 버스 정류장 — 로컬 정류소 마스터, 거리순',
+      description:
+        'lat·lng(WGS84) 필수, radius 50~1000m(기본 500). 업스트림을 호출하지 않으며, 정류소 마스터가 적재되지 않았으면 503.',
       querystring: BusNearbyQuery,
       response: {
         200: BusNearbyResult,
@@ -82,6 +88,9 @@ const busRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['bus'],
+      summary: '정류소 실시간 버스 도착정보 — 서울시 버스 API 프록시, 15초 캐시',
+      description:
+        'arsId 는 5자리 정류소번호(가상정류장 0 은 400). 업스트림 실패 시 10분 이내 마지막 성공 응답을 stale:true 로 돌려준다.',
       params: BusArrivalsParams,
       response: {
         200: BusArrivalsResult,
@@ -106,6 +115,9 @@ const busRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.transitRealtime },
     schema: {
       tags: ['bus'],
+      summary: '노선 실시간 버스 위치 — 서울시 버스 API 프록시, 15초 캐시',
+      description:
+        'startOrd·endOrd 를 함께 주면 그 정류소 순번 구간의 차량만, 둘 다 생략하면 노선 전체 차량을 돌려준다.',
       params: BusPositionsParams,
       querystring: BusPositionsQuery,
       response: {
@@ -134,6 +146,7 @@ const busRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.Bus.routeDetail(':busRouteId'), {
     schema: {
       tags: ['bus'],
+      summary: '버스 노선 상세(경로 형상·경유 정류소·기본정보) — 서울시 버스 API, DB 30일 캐시',
       params: BusRouteDetailParams,
       response: {
         200: BusRouteDetailResult,

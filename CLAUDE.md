@@ -63,6 +63,14 @@ FE/BE 모두 사용하는 타입/검증 로직은 반드시 `packages/api-contra
 - Prisma ORM
 - 스키마 변경: `pnpm --filter friendly db:migrate`
 
+### 6. 외부 API 문서 (`docs/api/`)
+
+다른 프로젝트가 참고하는 공개·로그인 API 문서(어드민 제외). 비-어드민 라우트를 추가·변경하면:
+- 라우트 `schema` 에 한국어 `summary`(필요하면 `description`)를 단다. 선택 인증(`resolveOptionalUser`)이면
+  `security: OPTIONAL_BEARER`(`plugins/swagger.ts`).
+- `pnpm --filter friendly export:openapi` 로 `docs/api/openapi.json`·`endpoints.md` 재생성. 공통 규칙은 `docs/api/README.md`(수기).
+- `src/plugins/` 에 `*.test.ts` 두지 말 것 — autoload·tsup 이 플러그인으로 로드한다(앱 연결 테스트는 `src/app.*.test.ts`).
+
 ## 안 되는 것
 
 - **Docker 추가하지 말 것** (SQLite라 불필요)

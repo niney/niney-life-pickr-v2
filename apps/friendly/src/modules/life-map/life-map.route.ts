@@ -41,6 +41,9 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.lifeMapSearch },
     schema: {
       tags: ['life-map'],
+      summary: '지역 이동용 주소·장소 검색 — VWorld 검색 API 프록시, 10분 캐시',
+      description:
+        'q 2~60자, limit 기본 8(최대 20). 장소(POI)와 도로명 주소 결과를 합쳐 돌려주며, 서버에 VWorld 키가 없으면 503 이 아니라 enabled:false 빈 결과로 200.',
       querystring: LifeMapSearchQuery,
       response: { 200: LifeMapSearchResult, 502: ErrorResponseSchema, 503: ErrorResponseSchema },
     },
@@ -58,6 +61,7 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.LifeMap.status, {
     schema: {
       tags: ['life-map'],
+      summary: '일상지도 레이어별 적재 현황(건수·기준일·적재 시각) — 로컬 DB',
       response: { 200: LifeMapStatusResult },
     },
     handler: async () => service.getStatus(),
@@ -67,6 +71,7 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
   typed.get(Routes.LifeMap.crime, {
     schema: {
       tags: ['life-map'],
+      summary: '시군구별 범죄 발생률(인구 10만 명당)과 5등급 경계 — 경찰청 통계 기반 정적 데이터',
       response: { 200: LifeCrimeStatsResult },
     },
     handler: async () => crimeService.getStats(),
@@ -77,6 +82,9 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.lifeMapRead },
     schema: {
       tags: ['life-map'],
+      summary: '지도 영역 안 CCTV·화장실·병의원·생활편의 지점 또는 집계 셀 — 로컬 DB',
+      description:
+        'bbox 는 "minLng,minLat,maxLng,maxLat"(WGS84). zoom 이 레이어 임계(cctv 15·toilet 13·hospital 14·store 14) 이상이고 영역이 좁으면 개별 점(최대 4,000개, 넘으면 truncated), 아니면 격자 집계 셀을 돌려준다.',
       querystring: LifeMapPointsQuery,
       response: { 200: LifeMapPointsResult, 503: ErrorResponseSchema },
     },
@@ -95,6 +103,9 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
     config: { rateLimit: RATE.lifeMapRead },
     schema: {
       tags: ['life-map'],
+      summary: '좌표 기준 주변 CCTV·화장실·병의원·생활편의 — 로컬 DB, 거리순',
+      description:
+        'layer·lat·lng(WGS84) 필수, radius 기본 1km(최대 3km)·limit 기본 10(최대 30). purpose(CCTV)·category(병의원)·kind(생활편의)·화장실 편의시설 플래그 필터는 해당 레이어에만 적용된다.',
       querystring: LifeMapNearbyQuery,
       response: { 200: LifeMapNearbyResult, 503: ErrorResponseSchema },
     },
@@ -114,6 +125,7 @@ const lifeMapRoutes: FastifyPluginAsync = async (app) => {
   typed.get(decodeURIComponent(Routes.LifeMap.detail(':layer', ':id')), {
     schema: {
       tags: ['life-map'],
+      summary: '일상지도 항목 상세(레이어·id) — 로컬 DB, 없으면 404',
       params: LifeMapDetailParams,
       response: { 200: LifeMapItem, 404: ErrorResponseSchema },
     },

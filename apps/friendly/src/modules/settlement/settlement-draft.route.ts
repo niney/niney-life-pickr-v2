@@ -37,6 +37,7 @@ const settlementDraftRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement-draft'],
+      summary: '내 정산 임시저장 목록 — 최근 수정순',
       security: [{ bearerAuth: [] }],
       response: { 200: ListSettlementDraftsResult },
     },
@@ -48,6 +49,10 @@ const settlementDraftRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement-draft'],
+      summary: '정산 임시저장 upsert — 사용자·placeId 당 1개, 사용자당 최대 50개',
+      description:
+        'payload 는 서버가 형태 검증 없이 보관만 하는 자유 JSON 이다(직렬화 200KB 이하). ' +
+        'placeId 가 null 이면 식당 미지정 슬롯이며, 새로 만들 때 50개를 넘으면 409.',
       security: [{ bearerAuth: [] }],
       body: UpsertSettlementDraftInput,
       response: { 200: SettlementDraft },
@@ -66,6 +71,7 @@ const settlementDraftRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['settlement-draft'],
+      summary: '정산 임시저장 삭제',
       security: [{ bearerAuth: [] }],
       params: IdParams,
     },

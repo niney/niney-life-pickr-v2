@@ -37,6 +37,7 @@ const subwayFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['subway-favorite'],
+      summary: '지하철 즐겨찾기 전체 목록(역·역×호선) — 등록순',
       security: [{ bearerAuth: [] }],
       response: { 200: SubwayFavoritesResult },
     },
@@ -47,6 +48,7 @@ const subwayFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['subway-favorite'],
+      summary: '즐겨찾기 역 추가·갱신 — 종류별 최대 100개, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: SubwayFavoriteStationParams,
       body: SubwayFavoriteStationUpsertBody,
@@ -66,6 +68,7 @@ const subwayFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['subway-favorite'],
+      summary: '즐겨찾기 역 삭제 — 멱등, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: SubwayFavoriteStationParams,
       response: { 200: SubwayFavoritesResult },
@@ -77,6 +80,7 @@ const subwayFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['subway-favorite'],
+      summary: '즐겨찾기 호선(역×호선) 추가·갱신 — 종류별 최대 100개, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: SubwayFavoriteLineParams,
       body: SubwayFavoriteLineUpsertBody,
@@ -101,6 +105,7 @@ const subwayFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['subway-favorite'],
+      summary: '즐겨찾기 호선(역×호선) 삭제 — 멱등, 변경 후 전체 목록 반환',
       security: [{ bearerAuth: [] }],
       params: SubwayFavoriteLineParams,
       response: { 200: SubwayFavoritesResult },
@@ -113,6 +118,9 @@ const subwayFavoriteRoutes: FastifyPluginAsync = async (app) => {
     onRequest: [app.authenticate],
     schema: {
       tags: ['subway-favorite'],
+      summary: '게스트 즐겨찾기 병합(sync) — 서버에 없는 항목만 추가, 전체 목록 반환',
+      description:
+        '로그인 직후 로컬 저장분을 올리는 용도. 이미 있는 항목은 서버 값을 유지하고, 상한(종류별 100개)을 넘는 항목은 에러 없이 건너뛴다. 같은 body 재호출은 멱등.',
       security: [{ bearerAuth: [] }],
       body: SubwayFavoritesSyncBody,
       response: { 200: SubwayFavoritesResult },
