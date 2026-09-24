@@ -23,9 +23,12 @@ export default fp(async (app) => {
     }
 
     if (error.statusCode && error.statusCode < 500) {
+      // 레이트리밋(errorResponseBuilder)은 Error 가 아닌 { statusCode, error, message } 평객체를 던져
+      // name 이 없다 — 그 경우 객체의 error 문자열을 쓴다(없으면 429 본문에서 error 가 빠졌다).
+      const label = (error as { error?: unknown }).error;
       return reply.status(error.statusCode).send({
         statusCode: error.statusCode,
-        error: error.name,
+        error: error.name ?? (typeof label === 'string' ? label : 'Error'),
         message: error.message,
       });
     }
