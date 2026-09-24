@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/housing', label: '집값' },
   { to: '/travel/jeju', label: '여행', match: ['/travel'] },
   { to: '/weather', label: '날씨' },
+  { to: '/sea', label: '바다' },
   { to: '/air', label: '대기질' },
   { to: '/tarot', label: '타로' },
   { to: '/saju-c', label: '사주(C)' },

@@ -25,6 +25,7 @@ export * from './schemas/subway.js';
 export * from './schemas/subway-favorite.js';
 export * from './schemas/air-quality.js';
 export * from './schemas/weather.js';
+export * from './schemas/sea.js';
 export * from './schemas/life-map.js';
 export * from './schemas/housing.js';
 export * from './schemas/allergen.js';

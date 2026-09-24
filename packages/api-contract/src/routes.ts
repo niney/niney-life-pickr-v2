@@ -580,6 +580,16 @@ export const Weather = {
   aws: `${API_PREFIX}/weather/aws`,
 } as const;
 
+// ── 바다(국립해양조사원 생활해양예보지수 6종 · 조석예보 15156018 · 이안류 15156028) ──────────
+// 공개 프록시(비로그인). 활동별 7일 예보를 서버가 전량 받아 캐시(1시간)하고, 물때는 좌표 기준 가장
+// 가까운 예보지점의 하루치를 지점·날짜 단위로 캐시한다.
+export const Sea = {
+  // 활동별 지점 × 7일 오전/오후 지수 — ?activity=beach|surf|fishing|mudflat|seaSplit|seaTrip.
+  forecast: `${API_PREFIX}/sea/forecast`,
+  // 가장 가까운 조석 예보지점의 만조·간조 — ?lat&lng&date=YYYY-MM-DD.
+  tide: `${API_PREFIX}/sea/tide`,
+} as const;
+
 // ── 일상지도(전국 CCTV·공중화장실 CSV + 병의원 심평원 API 적재) ─────────────────
 // 공개(비로그인). 로컬 SQLite 조회뿐이라 업스트림 쿼터 없음. 지도 뷰포트(bbox)+줌이 조회 단위 —
 // 줌이 임계 이상이면 개별 지점, 아니면 서버 집계 셀을 내려준다.

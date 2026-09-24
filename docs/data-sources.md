@@ -43,6 +43,8 @@
 CSV 를 `data/open/crime/` 에 두고 다시 빌드해 JSON 을 커밋하면 끝(운영 배포 단계 없음). 서버는 기동 시 그 JSON 을
 계약(`LifeCrimeStatsResult`)으로 검증한다.
 
+바다(/sea)도 **API** 만 쓴다 — 국립해양조사원 생활해양예보지수 6종(data.go.kr 15142484 해수욕·15142490 서핑·15142486 바다낚시·15142489 갯벌체험·15142485 바다갈라짐·15142491 바다여행) + 조석예보 15156018 + 이안류 15156028(6~9월), 키는 `DATA_GO_KR_API_KEY`. 원본 파일·적재 없이 서버가 활동별 1시간·물때 지점×날짜 12시간 메모리 캐시. 물때 예보지점 166곳·이안류 해수욕장 10곳 좌표표는 가이드 코드표에 좌표가 없어 2026-09-24 지점별 1회 호출로 모아 `packages/utils/src/seaStations.ts` 에 커밋(지점이 추가되면 다시 모은다).
+
 파일이 아닌 **API** 로 받는 것: 식품안전나라 레시피 `COOKRCP01`(1,156건 → 1,101종). 키는
 `.env` 의 `FOOD_RECIPE_API_KEY`. `pnpm --filter friendly load:food-catalog --source=recipe`.
 
