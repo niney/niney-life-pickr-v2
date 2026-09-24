@@ -6,14 +6,29 @@ import {
   HOUSING_DEAL_TYPE_LABEL,
   HOUSING_EMPTY_COLOR,
   HOUSING_FALLBACK_COLOR,
+  HOUSING_FLOOD_COLOR,
+  HOUSING_FLOOD_MANY_MIN,
+  HOUSING_FLOOD_RADIUS_M,
   formatHousingYm,
 } from '@repo/utils';
 
 // 범례 + 적재 상태 + 출처 표시 — 패널 하단. 색은 항상 글자와 함께(색만으로 뜻을 전하지 않는다).
 // 출처: 국토교통부 실거래가 공개시스템(아파트 매매 상세 15126468·전월세 15126474) + 한국부동산원
 // 공동주택 단지 식별정보(15106861) + 국토교통부 주택 공시가격 정보(3073746) + K-apt 공동주택관리정보
-// 시스템(관리비 공개 의무단지) + 건축HUB 건축물대장(15134735) — 공공저작물 출처표시. 단지 좌표는 주소를
-// VWorld 지오코더로 변환한 값.
+// 시스템(관리비 공개 의무단지) + 건축HUB 건축물대장(15134735) + 서울시 침수흔적도(서울 열린데이터 OA-15636,
+// 공공누리 1유형) — 공공저작물 출처표시. 단지 좌표는 주소를 VWorld 지오코더로 변환한 값.
+
+// 배지 물방울 범례 — 지도 배지(utils housingMarker floodGlyph)와 같은 원 + 물방울 모양·색.
+const FloodGlyph = ({ many }: { many: boolean }) => (
+  <svg aria-hidden width="12" height="12" viewBox="-6 -6 12 12">
+    <circle r="5.5" fill={many ? HOUSING_FLOOD_COLOR : '#fff'} stroke={many ? '#fff' : HOUSING_FLOOD_COLOR} strokeWidth="1" />
+    <path
+      d="M0 -4.6C1.4 -2.6 3.2 -0.9 3.2 1.2A3.2 3.2 0 0 1 -3.2 1.2C-3.2 -0.9 -1.4 -2.6 0 -4.6Z"
+      transform="translate(0 0.45) scale(0.733)"
+      fill={many ? '#fff' : HOUSING_FLOOD_COLOR}
+    />
+  </svg>
+);
 
 interface Props {
   status: HousingStatusResultType | undefined;
@@ -61,6 +76,11 @@ export const HousingFooter = ({ status }: Props) => {
         <span className="inline-flex items-center gap-1">
           <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: HOUSING_EMPTY_COLOR }} />
           거래 없음
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <FloodGlyph many={false} />
+          <FloodGlyph many />
+          반경 {HOUSING_FLOOD_RADIUS_M}m 침수 흔적(서울 · 진한 색 {HOUSING_FLOOD_MANY_MIN}건 이상)
         </span>
         <span>임대 = K-apt 분양형태 임대(실거래 없음이 정상)</span>
         <span>알약 = 그 칸 단지들의 평균 평당가(확대하면 단지별)</span>
@@ -128,6 +148,15 @@ export const HousingFooter = ({ status }: Props) => {
           className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline"
         >
           건축HUB 건축물대장 <ExternalLink className="size-3" />
+        </a>{' '}
+        ·{' '}
+        <a
+          href="https://data.seoul.go.kr/dataList/OA-15636/S/1/datasetView.do"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline"
+        >
+          서울시 침수흔적도 <ExternalLink className="size-3" />
         </a>{' '}
         · 단지 좌표는 VWorld 지오코더로 주소를 변환한 값
       </div>

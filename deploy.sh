@@ -126,9 +126,9 @@ life_map_data() {
   if [[ "$st" != ok* ]]; then
     echo "  (일상지도 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
   fi
-  local cctv toilet geocoded hospital store tour
-  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"; store="$(stat_val store "$st")"; tour="$(stat_val tour "$st")"
-  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 상가 ${store:-0}건 · 여행로그 ${tour:-0}곳 · 캐시 압축본 변경=$GZ_CHANGED"
+  local cctv toilet geocoded hospital store flood tour
+  cctv="$(stat_val cctv "$st")"; toilet="$(stat_val toilet "$st")"; geocoded="$(stat_val geocoded "$st")"; hospital="$(stat_val hospital "$st")"; store="$(stat_val store "$st")"; flood="$(stat_val flood "$st")"; tour="$(stat_val tour "$st")"
+  echo "  일상지도 현재: CCTV ${cctv:-0}건 · 화장실 ${toilet:-0}건(좌표 ${geocoded:-0}) · 병의원 ${hospital:-0}건 · 상가 ${store:-0}건 · 침수 흔적 ${flood:-0}건 · 여행로그 ${tour:-0}곳 · 캐시 압축본 변경=$GZ_CHANGED"
   if [[ "$force" == 1 || "$GZ_CHANGED" == 1 || "${toilet:-0}" == 0 ]]; then
     step "일상지도 지오코딩 캐시 가져오기(압축본)"; pnpm --filter friendly import:life-geocode
   fi
@@ -151,6 +151,12 @@ life_map_data() {
       step "일상지도 상가 적재"; pnpm --filter friendly load:life-stores "$LIFE_STORE_ZIP"
       step "맛집 ↔ 상가업소 매칭"; pnpm --filter friendly match:restaurant-stores || echo "  (매칭 실패 — 수동 재실행)"
     else echo "  (상가 zip 없음: data/open/store/store-YYYYMM.zip — 올린 뒤 ./deploy.sh 6)"; fi
+  fi
+  # 침수 흔적(서울시 침수흔적도 OA-15636) — 연도별 SHP zip 14개(~6MB)를 data/open/flood/ 에 없으면 서울 열린데이터에서
+  # 직접 받아(로그인 불필요) 4.3만 점으로 교체(수 초). 강제 모드는 새 연도가 올라왔는지 목록을 다시 본다(--download).
+  if [[ "$force" == 1 || "${flood:-0}" == 0 ]]; then
+    step "침수 흔적 적재(서울시 침수흔적도)"
+    pnpm --filter friendly load:life-flood $([[ "$force" == 1 ]] && echo --download) || echo "  (침수 흔적 적재 실패 — 서울 열린데이터 접속 확인 뒤 'pnpm --filter friendly load:life-flood --download')"
   fi
   # 여행로그 — tour-c export 폴더를 데이터셋 단위로 갈아끼운다(제주 25만 행 1~2분, 서부권·동부권 12만 행). tour_<세트>=0 이면
   # 첫 적재. 세트가 다 끝난 뒤 맛집 ↔ 여행로그 장소 매칭을 한 번 돌린다. 폐업 조회(check:tour-biz)는 국세청 쿼터라 자동 실행 안 함

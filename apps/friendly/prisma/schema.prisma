@@ -1521,6 +1521,31 @@ model LifeStore {
   @@map("life_stores")
 }
 
+// 침수 흔적 — 서울시 침수흔적도(서울 열린데이터 OA-15636, 연도별 SHP, UTM-K)의 필지 폴리곤 하나를 무게중심
+// 점 하나로(load:life-flood 전량 교체). 집값 단지 상세·지도 배지가 반경(utils HOUSING_FLOOD_RADIUS_M)으로 센다.
+// 주소·필지번호는 싣지 않는다(개인 재산 피해 기록 — 개수·연월·침수심만 쓴다).
+model LifeFloodTrace {
+  id         Int     @id @default(autoincrement())
+  lat        Float
+  lng        Float
+  // 피해 시작일(원본 F_SAT_YMD·피해일시)의 연·월 — 일자가 없거나 깨진 행은 파일 연도(F_YR)만, month null.
+  eventYear  Int
+  eventMonth Int?
+  // 침수심(m, F_SHIM). 없거나 0 이하면 null.
+  depthM     Float?
+  // 재해명(F_DISA_NM)·피해 원인(F_RSN_DTL)·대상 유형(TYPE — 2022년 파일부터) 원문(공백 정리만).
+  disaster   String?
+  cause      String?
+  kind       String?
+  // 법정동코드 앞 5자리(시군구) — 커버리지(시도) 판정용.
+  sggCd      String?
+  // 원본 파일 연도(서울시 배포 단위).
+  sourceYear Int
+
+  @@index([lat, lng])
+  @@map("life_flood_traces")
+}
+
 // 맛집(canonical) ↔ 상가업소 매칭 — 좌표 근접 + 상호 유사도(match:restaurant-stores). status:
 //   matched — 최근 적재본에 업소가 있음. missing — 재적재본에서 사라짐 = 폐업 의심(플래그만, 공개 목록은
 //   유지 — 매칭 실패와 진짜 폐업을 구분 못 하므로 어드민이 확인). 다시 나타나면 matched 로 복귀.
@@ -1551,7 +1576,7 @@ model RestaurantStoreMatch {
 
 model LifeMasterSync {
   id         Int      @id @default(autoincrement())
-  // 'cctv' | 'toilet' | 'hospital' | 'store' | 'tour'(여행로그 — count 는 장소 수, docs/PLAN-tour-log.md)
+  // 'cctv' | 'toilet' | 'hospital' | 'store' | 'tour'(여행로그 — count 는 장소 수, docs/PLAN-tour-log.md) | 'flood'(침수 흔적)
   layer      String
   count      Int
   geocoded   Int?

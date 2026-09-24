@@ -14,7 +14,8 @@ import { rebuildHousingStats } from './housing-derived.service.js';
 
 // 집값 라우트 — 격리 DB(빈 테이블)에 단지 4·거래 9 를 시드하고 ① 미적재 503 ② 상태 ③ 뷰포트 점(배지값·
 // 거래 없는 단지·구간/유형 축)·셀 ④ 주변 거리순 ⑤ 단지명 검색 ⑥ 상세(altNames·구간 순서) ⑦ 거래 목록
-// (구간·offset·해제 포함) ⑧ 404·계약 400 ⑨ 생활 인프라(반경 500m 상가·병의원 개수, 미적재/좌표 없음) 를 확인한다. 전국 집계(GROUP BY)는 실데이터가 있으면 합계가
+// (구간·offset·해제 포함) ⑧ 404·계약 400 ⑨ 생활 인프라(반경 500m 상가·병의원 개수, 미적재/좌표 없음) ⑩ 침수 흔적
+// (반경 100m 개수·사건 연월 묶음·최대 침수심, 범위 밖 시도·좌표 없음은 null) 를 확인한다. 전국 집계(GROUP BY)는 실데이터가 있으면 합계가
 // 흔들리므로 격리 DB 가 필수.
 
 const qs = (p: Record<string, string>): string => new URLSearchParams(p).toString();
@@ -82,6 +83,21 @@ describe('housing routes (격리 DB)', () => {
       ],
     });
     await app.prisma.lifeMasterSync.create({ data: { layer: 'store', count: 7, geocoded: null, baseDate: '2026-06-30', sourceFile: 'store-202606.zip' } });
+    // 침수 흔적 시드(서울 중구 11140) — H1(37.5666,126.9782) 반경 100m 안: F1 ≈14m·F2 ≈67m(2022년 8월), F3 ≈83m(2010년 9월),
+    // F4 ≈70m(피해일자 없는 2025년 — month null, 침수심 없음). F5 ≈155m 는 밖. F6 은 H2(37.568,126.977) 옆 ≈14m(2011년 7월).
+    // 부산(26)엔 흔적이 없어 범위 밖 시도 → null.
+    const FLOOD_BASE = { disaster: null, cause: '침수', kind: null, sggCd: '11140', sourceYear: 2022 };
+    await app.prisma.lifeFloodTrace.createMany({
+      data: [
+        { ...FLOOD_BASE, lat: 37.5667, lng: 126.9783, eventYear: 2022, eventMonth: 8, depthM: 0.3 },
+        { ...FLOOD_BASE, lat: 37.566, lng: 126.9782, eventYear: 2022, eventMonth: 8, depthM: 0.5 },
+        { ...FLOOD_BASE, lat: 37.567, lng: 126.979, eventYear: 2010, eventMonth: 9, depthM: 0.2, sourceYear: 2010 },
+        { ...FLOOD_BASE, lat: 37.5663, lng: 126.9775, eventYear: 2025, eventMonth: null, depthM: null, sourceYear: 2025 },
+        { ...FLOOD_BASE, lat: 37.568, lng: 126.9782, eventYear: 2022, eventMonth: 8, depthM: 1.2 },
+        { ...FLOOD_BASE, lat: 37.5681, lng: 126.9771, eventYear: 2011, eventMonth: 7, depthM: 0.1, sourceYear: 2011 },
+      ],
+    });
+    await app.prisma.lifeMasterSync.create({ data: { layer: 'flood', count: 6, geocoded: null, baseDate: '2025', sourceFile: 'OA-15636 test' } });
   });
 
   afterAll(async () => {
@@ -159,6 +175,12 @@ describe('housing routes (격리 DB)', () => {
     expect(body.total).toBe(2);
     expect(body.truncated).toBe(false);
     expect(body.minPointZoom).toBe(13);
+    // 침수 흔적 — 반경 100m 개수(H1 4건 · H2 1건).
+    expect(h1.flood).toBe(4);
+    expect(body.items.find((i) => i.id === 'H2')!.flood).toBe(1);
+    // 범위 밖 시도(부산) — 0 이 아니라 null.
+    const busanPts = (await app.inject({ method: 'GET', url: pointsUrl({ bbox: '129.07,35.175,129.08,35.185', zoom: '15' }) })).json<HousingPointsResultType>();
+    expect(busanPts.items.map((i) => [i.id, i.flood])).toEqual([['H4', null]]);
 
     // 60㎡ 이하 — H1 은 59.9 거래, H2 는 없음(회색 점).
     const b1 = (await app.inject({ method: 'GET', url: pointsUrl({ bbox: SEOUL_BBOX, zoom: '15', band: 'b1' }) })).json<HousingPointsResultType>();
@@ -329,8 +351,25 @@ describe('housing routes (격리 DB)', () => {
     const busan = (await app.inject({ method: 'GET', url: complexUrl('H4') })).json<HousingComplexDetailType>();
     expect(busan.infra).toMatchObject({ radiusM: 500, counts: { convenience: 0, hospital: 0 } });
 
+    // 침수 흔적 — 반경 100m 4건, 사건 연월 최신 순(월 없는 2025 → 2022.8 → 2010.9), 묶음별·전체 최대 침수심. 155m 밖 1.2m 는 제외.
+    expect(body.flood).toEqual({
+      radiusM: 100,
+      total: 4,
+      maxDepthM: 0.5,
+      events: [
+        { year: 2025, month: null, count: 1, maxDepthM: null },
+        { year: 2022, month: 8, count: 2, maxDepthM: 0.5 },
+        { year: 2010, month: 9, count: 1, maxDepthM: 0.2 },
+      ],
+      fromYear: 2010,
+      toYear: 2025,
+    });
+    expect(h2.flood).toMatchObject({ total: 1, events: [{ year: 2011, month: 7, count: 1, maxDepthM: 0.1 }] });
+    // 범위 밖 시도(부산)는 null(모름) — 0건과 구분.
+    expect(busan.flood).toBeNull();
+
     const noCoord = (await app.inject({ method: 'GET', url: complexUrl('H3') })).json<HousingComplexDetailType>();
-    expect(noCoord).toMatchObject({ lat: null, lng: null, geoSource: null, altNames: [], infra: null });
+    expect(noCoord).toMatchObject({ lat: null, lng: null, geoSource: null, altNames: [], infra: null, flood: null });
     expect(noCoord.stats.trade).toEqual([]);
     expect((await app.inject({ method: 'GET', url: complexUrl('NOPE') })).statusCode).toBe(404);
   });

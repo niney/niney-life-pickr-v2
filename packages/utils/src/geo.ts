@@ -1,4 +1,4 @@
-// 위경도 좌표를 다루는 순수 유틸 — bbox·거리·좌표 반올림.
+// 위경도 좌표를 다루는 순수 유틸 — bbox·거리·좌표 반올림·UTM-K(EPSG:5179) 변환.
 
 export interface LatLng {
   lat: number;
@@ -70,6 +70,89 @@ export const haversineM = (a: LatLng, b: LatLng): number => {
     Math.sin(dLat / 2) ** 2 +
     Math.sin(dLng / 2) ** 2 * Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat));
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+
+// ── UTM-K(EPSG:5179) ↔ WGS84 ─────────────────────────────────────────────
+// 국토지리정보원 통합좌표계(Korea 2000 / Unified CS): GRS80 타원체, 원점 38°N·127.5°E, 축척 0.9996,
+// 가산 (1,000,000, 2,000,000). 서울시 침수흔적도 SHP 등이 이 좌표계다. KGD2002 는 ITRF 기반이라 WGS84 와
+// 서브미터 차이뿐 → 데이텀 변환 없이 횡메르카토르(Snyder 급수) 순·역변환만 한다(한반도 범위 mm 급).
+const UTMK = { a: 6_378_137, f: 1 / 298.257222101, k0: 0.9996, lat0: 38, lng0: 127.5, fe: 1_000_000, fn: 2_000_000 };
+const UTMK_E2 = UTMK.f * (2 - UTMK.f);
+const UTMK_EP2 = UTMK_E2 / (1 - UTMK_E2);
+const toRadian = (d: number): number => (d * Math.PI) / 180;
+const toDegree = (r: number): number => (r * 180) / Math.PI;
+// 적도에서 위도 phi 까지 자오선 호 길이.
+const meridianArc = (phi: number): number => {
+  const e2 = UTMK_E2;
+  const e4 = e2 * e2;
+  const e6 = e4 * e2;
+  return (
+    UTMK.a *
+    ((1 - e2 / 4 - (3 * e4) / 64 - (5 * e6) / 256) * phi -
+      ((3 * e2) / 8 + (3 * e4) / 32 + (45 * e6) / 1024) * Math.sin(2 * phi) +
+      ((15 * e4) / 256 + (45 * e6) / 1024) * Math.sin(4 * phi) -
+      ((35 * e6) / 3072) * Math.sin(6 * phi))
+  );
+};
+const UTMK_M0 = meridianArc(toRadian(UTMK.lat0));
+
+export interface ProjectedXY {
+  x: number;
+  y: number;
+}
+
+export const wgs84ToUtmk = (p: LatLng): ProjectedXY => {
+  const phi = toRadian(p.lat);
+  const n = UTMK.a / Math.sqrt(1 - UTMK_E2 * Math.sin(phi) ** 2);
+  const t = Math.tan(phi) ** 2;
+  const c = UTMK_EP2 * Math.cos(phi) ** 2;
+  const a = (toRadian(p.lng) - toRadian(UTMK.lng0)) * Math.cos(phi);
+  const m = meridianArc(phi);
+  const x =
+    UTMK.fe +
+    UTMK.k0 * n * (a + ((1 - t + c) * a ** 3) / 6 + ((5 - 18 * t + t * t + 72 * c - 58 * UTMK_EP2) * a ** 5) / 120);
+  const y =
+    UTMK.fn +
+    UTMK.k0 *
+      (m -
+        UTMK_M0 +
+        n *
+          Math.tan(phi) *
+          ((a * a) / 2 + ((5 - t + 9 * c + 4 * c * c) * a ** 4) / 24 + ((61 - 58 * t + t * t + 600 * c - 330 * UTMK_EP2) * a ** 6) / 720));
+  return { x, y };
+};
+
+export const utmkToWgs84 = (xy: ProjectedXY): LatLng => {
+  const e2 = UTMK_E2;
+  const e4 = e2 * e2;
+  const e6 = e4 * e2;
+  const m = UTMK_M0 + (xy.y - UTMK.fn) / UTMK.k0;
+  const mu = m / (UTMK.a * (1 - e2 / 4 - (3 * e4) / 64 - (5 * e6) / 256));
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const phi1 =
+    mu +
+    ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) +
+    ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) +
+    ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) +
+    ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu);
+  const sin1 = Math.sin(phi1);
+  const cos1 = Math.cos(phi1);
+  const c1 = UTMK_EP2 * cos1 ** 2;
+  const t1 = Math.tan(phi1) ** 2;
+  const n1 = UTMK.a / Math.sqrt(1 - e2 * sin1 ** 2);
+  const r1 = (UTMK.a * (1 - e2)) / (1 - e2 * sin1 ** 2) ** 1.5;
+  const d = (xy.x - UTMK.fe) / (n1 * UTMK.k0);
+  const lat =
+    phi1 -
+    ((n1 * Math.tan(phi1)) / r1) *
+      ((d * d) / 2 -
+        ((5 + 3 * t1 + 10 * c1 - 4 * c1 * c1 - 9 * UTMK_EP2) * d ** 4) / 24 +
+        ((61 + 90 * t1 + 298 * c1 + 45 * t1 * t1 - 252 * UTMK_EP2 - 3 * c1 * c1) * d ** 6) / 720);
+  const lng =
+    toRadian(UTMK.lng0) +
+    (d - ((1 + 2 * t1 + c1) * d ** 3) / 6 + ((5 - 2 * c1 + 28 * t1 - 3 * c1 * c1 + 8 * UTMK_EP2 + 24 * t1 * t1) * d ** 5) / 120) /
+      cos1;
+  return { lat: toDegree(lat), lng: toDegree(lng) };
 };
 
 // 좌표 소수 5자리(≈1m) 반올림 — URL·브리지 직렬화 키 안정용.

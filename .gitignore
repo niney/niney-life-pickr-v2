@@ -78,6 +78,7 @@ apps/web/vite.config.js
 # 공공데이터 원본 — 리포에 넣지 않는다. 출처·적재 명령·보관 기준은 docs/data-sources.md.
 #   /data/open/food/       식약처 영양성분 CSV·한식 800선 XLSX (로더 기본 경로)
 #   /data/open/life/       지방행정인허가 CSV(CCTV·공중화장실)
+#   /data/open/flood/      서울시 침수흔적도 연도별 SHP zip(load:life-flood 가 없으면 자동 다운로드)
 #   /data/open/eval/       모델 평가용 사진(AI Hub 추출본)
 /data/
 

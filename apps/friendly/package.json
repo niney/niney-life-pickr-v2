@@ -26,6 +26,7 @@
     "load:life-cctv": "tsx --env-file=.env scripts/load-life-cctv.ts",
     "load:life-toilets": "tsx --env-file=.env scripts/load-life-toilets.ts",
     "load:life-hospitals": "tsx --env-file=.env scripts/load-life-hospitals.ts",
+    "load:life-flood": "tsx --env-file=.env scripts/load-life-flood.ts",
     "load:food-catalog": "tsx --env-file=.env scripts/load-food-catalog.ts",
     "build:tarot-deck": "tsx scripts/build-tarot-deck.ts",
     "probe:tarot-reading": "tsx --env-file=.env scripts/probe-tarot-reading.ts",

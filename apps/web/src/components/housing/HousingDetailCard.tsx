@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Coffee, Crosshair, Cross, GraduationCap, Loader2, Pill, ShoppingBasket, Store, Utensils } from 'lucide-react';
+import { ArrowLeft, Coffee, Crosshair, Cross, Droplet, GraduationCap, Loader2, Pill, ShoppingBasket, Store, Utensils } from 'lucide-react';
 import { useHousingTrades, type HousingAxis } from '@repo/shared';
 import type { HousingBandStatType, HousingComplexDetailType, HousingOfficialPriceType, HousingTradeType } from '@repo/api-contract';
 import {
@@ -9,9 +9,12 @@ import {
   HOUSING_DEAL_COLOR,
   HOUSING_DEAL_TYPES,
   HOUSING_DEAL_TYPE_LABEL,
+  HOUSING_FLOOD_COLOR,
   LIFE_STORE_INFRA_ITEMS,
   LIFE_STORE_INFRA_LABEL,
   formatDistanceM,
+  formatFloodDepth,
+  formatFloodEventLabel,
   formatHousingArea,
   formatHousingDateShort,
   formatHousingDealPrice,
@@ -26,7 +29,8 @@ import { cn } from '~/lib/utils';
 import { isHousingRental } from './housingMarkers';
 
 // 선택 단지 상세 — 헤더(단지명·종류·세대·동수·사용승인·보강 속성(분양형태·난방·승강기·주차·최고층·구조)·
-// 지번/도로명 주소·다른 이름) → 생활 인프라(반경 500m 상가·병의원 개수 7칩) → 거래 유형 탭(로컬, 초기값은 전역 축) → 면적 구간별 통계 표(최근 거래·
+// 지번/도로명 주소·다른 이름) → 생활 인프라(반경 500m 상가·병의원 개수 7칩) → 침수 흔적(반경 100m 건수·사건 연월 칩,
+// 서울만) → 거래 유형 탭(로컬, 초기값은 전역 축) → 면적 구간별 통계 표(최근 거래·
 // 12개월 건수·평당가) → 공시가격 표(구간별 중위·범위·호수, 있을 때만) → 거래 목록(전역 면적 구간, '더 보기'
 // offset 페이징). 패널의 주변 목록 자리를 대신 차지하고 '← 목록' 으로 돌아간다.
 
@@ -167,6 +171,34 @@ export const HousingDetailCard = ({ item, axis, distM, onBack, onFlyTo }: Props)
                   );
                 })}
               </ul>
+            )}
+          </div>
+        )}
+
+        {/* 침수 흔적 — 서울시 침수흔적도의 반경 100m 점 개수·사건 연월 묶음. 범위 밖(서울 외)·좌표 없음은 flood null 이라 섹션 없음. */}
+        {item.flood && (
+          <div className="mt-3" data-testid="housing-flood">
+            <div className="text-[11px] text-muted-foreground">
+              침수 흔적 · 반경 {item.flood.radiusM}m · 서울시 침수흔적도 {item.flood.fromYear}~{item.flood.toYear}
+            </div>
+            {item.flood.total === 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">기록된 침수 흔적이 없습니다.</p>
+            ) : (
+              <>
+                <p className="mt-1 flex items-center gap-1 text-xs">
+                  <Droplet className="size-3.5" style={{ color: HOUSING_FLOOD_COLOR }} fill={HOUSING_FLOOD_COLOR} aria-hidden />
+                  <span className="font-semibold tabular-nums">{item.flood.total.toLocaleString('ko-KR')}건</span>
+                  {item.flood.maxDepthM !== null && <span className="text-muted-foreground">{` · 최대 침수심 ${formatFloodDepth(item.flood.maxDepthM)}`}</span>}
+                </p>
+                <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="침수 흔적 사건">
+                  {item.flood.events.map((e) => (
+                    <li key={`${e.year}-${e.month ?? 0}`} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums">
+                      {formatFloodEventLabel(e.year, e.month)} <span className="font-semibold">{e.count.toLocaleString('ko-KR')}건</span>
+                      {e.maxDepthM !== null && <span className="text-muted-foreground">{` · ${formatFloodDepth(e.maxDepthM)}`}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         )}
@@ -327,6 +359,9 @@ export const HousingDetailCard = ({ item, axis, distM, onBack, onFlyTo }: Props)
           {rental ? ' 임대단지는 분양 거래가 없어 실거래가가 잡히지 않는 것이 정상입니다.' : ''}
           {item.geoSource ? ' 위치는 주소를 VWorld 지오코더로 변환한 값이라 단지 입구와 차이 날 수 있습니다.' : item.lat === null ? ' 주소를 좌표로 변환하지 못해 지도에는 표시되지 않습니다.' : ''}
           {item.infra?.baseDate ? ' 생활 인프라는 소상공인시장진흥공단 상가정보(분기)·심평원 병원정보 기준 개수입니다.' : ''}
+          {item.flood
+            ? ' 침수 흔적은 서울시 침수흔적도(호우 피해 조사, 2023년부터는 풍수해보험금·재난지원금 신청 기준)의 피해 필지를 점으로 센 값으로, 기록이 없다고 침수 위험이 없다는 뜻은 아닙니다.'
+            : ''}
         </p>
       </div>
     </div>

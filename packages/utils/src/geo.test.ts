@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approxDistanceM, formatBbox, haversineM, roundCoord } from './geo.js';
+import { approxDistanceM, formatBbox, haversineM, roundCoord, utmkToWgs84, wgs84ToUtmk } from './geo.js';
 
 // 서울 시청 ↔ 강남역 — 실측 약 8.2km. 도시 스케일 판정용 근사가 이 범위에서
 // 하버사인과 1% 내로 일치하는지까지 함께 본다.
@@ -57,5 +57,31 @@ describe('formatBbox', () => {
     expect(
       formatBbox({ minLng: 126.123456, minLat: 37, maxLng: 127.999999, maxLat: 38 }),
     ).toBe('126.12346,37.00000,128.00000,38.00000');
+  });
+});
+
+describe('UTM-K(EPSG:5179) 변환', () => {
+  it('원점(38°N, 127.5°E) ↔ (1,000,000, 2,000,000)', () => {
+    const o = utmkToWgs84({ x: 1_000_000, y: 2_000_000 });
+    expect(o.lat).toBeCloseTo(38, 9);
+    expect(o.lng).toBeCloseTo(127.5, 9);
+    const xy = wgs84ToUtmk({ lat: 38, lng: 127.5 });
+    expect(xy.x).toBeCloseTo(1_000_000, 3);
+    expect(xy.y).toBeCloseTo(2_000_000, 3);
+  });
+
+  it('서울 범위 순·역변환 왕복 오차 1mm 미만', () => {
+    for (const p of [CITY_HALL, GANGNAM, { lat: 37.69, lng: 126.77 }, { lat: 37.43, lng: 127.18 }]) {
+      const back = utmkToWgs84(wgs84ToUtmk(p));
+      expect(haversineM(p, back)).toBeLessThan(0.001);
+    }
+  });
+
+  it('서울 시청은 원점 남서쪽(x<1e6, y<2e6) 수십 km — 침수흔적도 bbox(93.5만~97.2만, 193.7만~196.6만) 안', () => {
+    const xy = wgs84ToUtmk(CITY_HALL);
+    expect(xy.x).toBeGreaterThan(935_000);
+    expect(xy.x).toBeLessThan(972_000);
+    expect(xy.y).toBeGreaterThan(1_937_000);
+    expect(xy.y).toBeLessThan(1_966_000);
   });
 });

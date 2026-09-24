@@ -1,5 +1,6 @@
 import { buildPinMarkerSvg } from './markerFrame.js';
 import type { HousingDealType } from './housing.js';
+import type { HousingFloodLevel } from './lifeFlood.js';
 
 // 집값 지도 마커 — 단지는 가격을 새긴 알약 배지(줌과 무관하게 원본 크기 = MapCanvas fixedScale),
 // 저줌 집계 셀은 평당가를 새긴 반투명 알약, 선택 단지는 꼬리가 달린 큰 배지(anchor 아래 꼭지점 —
@@ -35,39 +36,76 @@ const estimateTextWidth = (text: string, fontSize: number): number => {
 
 const FONT = 'system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 
-// 비선택 배지 — 높이 22, 글자폭 + 좌우 8px. 중앙 앵커.
-export function buildHousingBadgeSvg(text: string, color: string): string {
+// ── 침수 흔적 물방울 — 알약 안 왼쪽 원(반경 100m 침수 흔적 단계, lifeFlood.ts) ─────────────────────
+// some(1~4건) = 흰 원 + 하늘색 물방울, many(5건 이상) = 하늘색 원 + 흰 물방울. 알약 색(유형·회색·공시)과
+// 무관하게 같은 모양이라 범례 하나로 읽힌다. 물방울이 있으면 글자가 원 오른쪽으로 밀리고 알약이 넓어진다.
+export const HOUSING_FLOOD_COLOR = '#0284c7';
+const DROP_PATH = 'M0 -4.6C1.4 -2.6 3.2 -0.9 3.2 1.2A3.2 3.2 0 0 1 -3.2 1.2C-3.2 -0.9 -1.4 -2.6 0 -4.6Z';
+const floodGlyph = (cx: number, cy: number, r: number, level: HousingFloodLevel): string => {
+  if (level === 'none') return '';
+  const many = level === 'many';
+  const scale = (r / 7.5).toFixed(3);
+  return (
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${many ? HOUSING_FLOOD_COLOR : '#fff'}" stroke="${many ? '#fff' : HOUSING_FLOOD_COLOR}" stroke-width="1"/>` +
+    `<path d="${DROP_PATH}" transform="translate(${cx} ${cy + 0.6}) scale(${scale})" fill="${many ? '#fff' : HOUSING_FLOOD_COLOR}"/>`
+  );
+};
+
+// 알약 치수 — 글자폭 tw + 좌우 여백 pad. 물방울이 있으면 왼쪽에 원(반지름 (h-7)/2)+간격 3 을 더하고 글자
+// 중심을 원 오른쪽 구간 가운데로 옮긴다.
+interface PillLayout {
+  w: number;
+  textX: number;
+  glyph: string;
+}
+const pillLayout = (tw: number, pad: number, h: number, flood: HousingFloodLevel): PillLayout => {
+  if (flood === 'none') return { w: tw + pad * 2, textX: (tw + pad * 2) / 2, glyph: '' };
+  const r = (h - 7) / 2;
+  const cx = 3.5 + r;
+  const textStart = cx + r + 3;
+  return { w: Math.ceil(textStart + tw + pad), textX: textStart + tw / 2, glyph: floodGlyph(cx, h / 2, r, flood) };
+};
+
+// 비선택 배지 — 높이 22, 글자폭 + 좌우 8px(물방울이 있으면 왼쪽에 원). 중앙 앵커.
+export function buildHousingBadgeSvg(text: string, color: string, flood: HousingFloodLevel = 'none'): string {
   const font = 11;
   const h = 22;
-  const w = estimateTextWidth(text, font) + 16;
+  const { w, textX, glyph } = pillLayout(estimateTextWidth(text, font), 8, h, flood);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
     `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${(h - 2) / 2}" fill="${color}" stroke="#fff" stroke-width="1.5"/>` +
-    `<text x="${w / 2}" y="${h / 2}" fill="#fff" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
+    glyph +
+    `<text x="${textX}" y="${h / 2}" fill="#fff" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
     '</svg>'
   );
 }
 
-// 선택 배지 — 높이 26 알약 + 아래 꼬리 7 = 33. 앵커는 꼬리 끝(아래 중앙).
-export function buildHousingSelectedBadgeSvg(text: string, color: string): string {
+// 선택 배지 — 높이 26 알약 + 아래 꼬리 7 = 33. 앵커는 꼬리 끝(아래 중앙) — 물방울로 글자가 밀려도 꼬리는 가운데.
+export function buildHousingSelectedBadgeSvg(text: string, color: string, flood: HousingFloodLevel = 'none'): string {
   const font = 12;
   const pill = 26;
   const tail = 7;
   const h = pill + tail;
-  const w = estimateTextWidth(text, font) + 20;
+  const { w, textX, glyph } = pillLayout(estimateTextWidth(text, font), 10, pill, flood);
   const cx = w / 2;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
     `<path d="M${cx - 6} ${pill - 1} L${cx} ${h - 1} L${cx + 6} ${pill - 1} Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>` +
     `<rect x="1" y="1" width="${w - 2}" height="${pill - 2}" rx="${(pill - 2) / 2}" fill="${color}" stroke="#fff" stroke-width="2"/>` +
-    `<text x="${cx}" y="${pill / 2}" fill="#fff" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
+    glyph +
+    `<text x="${textX}" y="${pill / 2}" fill="#fff" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
     '</svg>'
   );
 }
 
-export function buildHousingBadgeDataUrl(text: string, dealType: HousingDealType, selected: boolean): string {
+export function buildHousingBadgeDataUrl(
+  text: string,
+  dealType: HousingDealType,
+  selected: boolean,
+  flood: HousingFloodLevel = 'none',
+): string {
   const color = HOUSING_DEAL_COLOR[dealType];
-  return toDataUrl(selected ? buildHousingSelectedBadgeSvg(text, color) : buildHousingBadgeSvg(text, color));
+  return toDataUrl(selected ? buildHousingSelectedBadgeSvg(text, color, flood) : buildHousingBadgeSvg(text, color, flood));
 }
 
 // 거래 없는 단지 — 10px 회색 점 / 선택 시 회색 핀(건물 아이콘).
@@ -112,6 +150,8 @@ const OFFICIAL_TEXT = '#374151';
 export interface HousingMutedBadgeOptions {
   // true = 공시가격(점선 외곽선·연한 채움·진한 글자).
   dashed?: boolean;
+  // 침수 흔적 물방울 단계(기본 none).
+  flood?: HousingFloodLevel;
 }
 
 const mutedStyle = (dashed: boolean, strokeWidth: number) =>
@@ -127,12 +167,13 @@ const mutedStyle = (dashed: boolean, strokeWidth: number) =>
 export function buildHousingMutedBadgeSvg(text: string, opts: HousingMutedBadgeOptions = {}): string {
   const font = 11;
   const h = 22;
-  const w = estimateTextWidth(text, font) + 16;
+  const { w, textX, glyph } = pillLayout(estimateTextWidth(text, font), 8, h, opts.flood ?? 'none');
   const s = mutedStyle(opts.dashed === true, 1.5);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
     `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${(h - 2) / 2}" fill="${s.fill}" ${s.stroke}/>` +
-    `<text x="${w / 2}" y="${h / 2}" fill="${s.text}" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
+    glyph +
+    `<text x="${textX}" y="${h / 2}" fill="${s.text}" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
     '</svg>'
   );
 }
@@ -143,14 +184,15 @@ export function buildHousingMutedSelectedBadgeSvg(text: string, opts: HousingMut
   const pill = 26;
   const tail = 7;
   const h = pill + tail;
-  const w = estimateTextWidth(text, font) + 20;
+  const { w, textX, glyph } = pillLayout(estimateTextWidth(text, font), 10, pill, opts.flood ?? 'none');
   const cx = w / 2;
   const s = mutedStyle(opts.dashed === true, 2);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
     `<path d="M${cx - 6} ${pill - 1} L${cx} ${h - 1} L${cx + 6} ${pill - 1} Z" fill="${s.fill}" ${s.stroke} stroke-linejoin="round"/>` +
     `<rect x="1" y="1" width="${w - 2}" height="${pill - 2}" rx="${(pill - 2) / 2}" fill="${s.fill}" ${s.stroke}/>` +
-    `<text x="${cx}" y="${pill / 2}" fill="${s.text}" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
+    glyph +
+    `<text x="${textX}" y="${pill / 2}" fill="${s.text}" font-family='${FONT}' font-size="${font}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeXml(text)}</text>` +
     '</svg>'
   );
 }

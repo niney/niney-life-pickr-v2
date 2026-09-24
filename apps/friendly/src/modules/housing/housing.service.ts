@@ -36,11 +36,13 @@ import {
   type HousingAreaBandStrict,
 } from '@repo/utils';
 import { LRUCache } from 'lru-cache';
+import { HousingFloodIndex } from './housing-flood.service.js';
 
 // 집값 조회 — 로컬 SQLite(HousingComplex ≈4.6만 / HousingComplexStat / HousingComplexPrice / HousingTrade
 // 수백만)만 읽는다. 업스트림 없음. 지도 배지·주변·상세 통계는 파생 표(HousingComplexStat: 단지 × 유형 ×
 // 구간 + 단지당 폴백 행 'any/all')와 공시가격 표(HousingComplexPrice: 단지 × 구간)만 조인하고, 거래 표는
-// 단지 상세의 거래 목록에서만 읽는다.
+// 단지 상세의 거래 목록에서만 읽는다. 침수 흔적(상세 flood·점 flood 개수)은 LifeFloodTrace 메모리 격자 색인
+// (HousingFloodIndex — 요청 시점 단지 좌표 반경 100m, 적재가 바뀌면 다시 올림).
 //
 // 뷰포트 조회는 일상지도와 같은 두 모드: 줌이 임계(HOUSING_POINT_MIN_ZOOM) 이상이고 bbox 가 좁으면
 // 단지별 점(배지값 = 축의 최근 거래, 상한 HOUSING_POINTS_MAX + truncated), 아니면 전국 고정 원점 도(°)
@@ -158,8 +160,12 @@ export interface HousingServiceDeps {
 export class HousingService {
   private readonly cellCache = new LRUCache<string, HousingPointsResultType>({ max: CELL_CACHE_MAX, ttl: CELL_CACHE_TTL_MS });
   private readonly infraCache = new LRUCache<string, HousingInfraType>({ max: INFRA_CACHE_MAX, ttl: INFRA_CACHE_TTL_MS });
+  // 침수 흔적 색인(서울시 침수흔적도) — 상세 flood·지도 점 flood 개수.
+  private readonly flood: HousingFloodIndex;
 
-  constructor(private readonly deps: HousingServiceDeps) {}
+  constructor(private readonly deps: HousingServiceDeps) {
+    this.flood = new HousingFloodIndex(deps.prisma, () => this.now().getTime());
+  }
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
@@ -261,6 +267,7 @@ export class HousingService {
         lat: number;
         lng: number;
         name: string;
+        sggCd: string;
         households: unknown;
         saleType: string | null;
         latestPrice: unknown;
@@ -278,7 +285,7 @@ export class HousingService {
         prMedian: unknown;
         prCount: unknown;
       }[]
-    >(Prisma.sql`SELECT c."id", c."lat", c."lng", c."name", c."households", c."saleType",
+    >(Prisma.sql`SELECT c."id", c."lat", c."lng", c."name", c."sggCd", c."households", c."saleType",
                         s."latestPrice", s."latestRent", s."latestArea", s."latestFloor", s."latestDate",
                         f."latestPrice" AS "anyPrice", f."latestRent" AS "anyRent", f."latestArea" AS "anyArea",
                         f."latestFloor" AS "anyFloor", f."latestDate" AS "anyDate", f."latestDealType" AS "anyType",
@@ -291,6 +298,7 @@ export class HousingService {
                    AND c."lng" >= ${bbox.minLng} AND c."lng" <= ${bbox.maxLng}
                  LIMIT ${HOUSING_POINTS_MAX + 1}`);
     const truncated = rows.length > HOUSING_POINTS_MAX;
+    const flood = await this.flood.ensure();
     const items = (truncated ? rows.slice(0, HOUSING_POINTS_MAX) : rows).map((r) => {
       const latest =
         r.latestPrice === null || r.latestPrice === undefined || r.latestDate === null
@@ -327,6 +335,10 @@ export class HousingService {
         fallback,
         official,
         saleType: r.saleType ?? null,
+        flood:
+          flood && HousingFloodIndex.covers(flood, r.sggCd)
+            ? HousingFloodIndex.near(flood, Number(r.lat), Number(r.lng)).length
+            : null,
       };
     });
     const total = truncated
@@ -520,10 +532,11 @@ export class HousingService {
   async getComplex(id: string): Promise<HousingComplexDetailType> {
     const c = await this.deps.prisma.housingComplex.findUnique({ where: { id } });
     if (!c) throw new HousingServiceError('해당 단지를 찾을 수 없습니다.', 404);
-    const [stats, prices, infra] = await Promise.all([
+    const [stats, prices, infra, flood] = await Promise.all([
       this.deps.prisma.housingComplexStat.findMany({ where: { complexId: id } }),
       this.deps.prisma.housingComplexPrice.findMany({ where: { complexId: id } }),
       c.lat !== null && c.lng !== null ? this.getInfra(id, c.lat, c.lng) : Promise.resolve(null),
+      c.lat !== null && c.lng !== null ? this.flood.detailFor(c.lat, c.lng, c.sggCd) : Promise.resolve(null),
     ]);
     // 폴백 행('any')은 유형별 표에 들지 않는다 — dealType 정확 일치로 자연히 빠진다.
     const byType = (dealType: HousingDealTypeType): HousingBandStatType[] =>
@@ -560,6 +573,7 @@ export class HousingService {
       structure: c.structure,
       baseDate: c.baseDate,
       infra,
+      flood,
     };
   }
 

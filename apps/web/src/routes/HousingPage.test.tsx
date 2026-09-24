@@ -162,6 +162,18 @@ const detail: HousingComplexDetailType = {
   structure: '철근콘크리트구조',
   baseDate: '2025-09-18',
   infra: { radiusM: 500, baseDate: '2026-06-30', counts: { convenience: 3, mart: 1, cafe: 12, food: 40, academy: 6, hospital: 5, pharmacy: 2 } },
+  flood: {
+    radiusM: 100,
+    total: 12,
+    maxDepthM: 0.5,
+    events: [
+      { year: 2025, month: null, count: 1, maxDepthM: null },
+      { year: 2022, month: 8, count: 9, maxDepthM: 0.5 },
+      { year: 2010, month: 9, count: 2, maxDepthM: 0.3 },
+    ],
+    fromYear: 2010,
+    toYear: 2025,
+  },
 };
 const trade = (id: string, dealDate: string, price: number, over: Partial<HousingTradeType> = {}): HousingTradeType => ({
   id,
@@ -351,6 +363,13 @@ describe('HousingPage', () => {
     const chips = within(infra).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
     expect(chips).toEqual(['편의점 3', '마트·슈퍼 1', '카페 12', '음식점 40', '학원 6', '병의원 5', '약국 2']);
     expect(within(detailEl).getByText(/심평원 병원정보 기준 개수/)).toBeInTheDocument();
+    // 침수 흔적 — 반경·출처 연도 + 총 건수·최대 침수심(cm) + 사건 연월 칩(최신 순, 월 없는 연도는 연도만).
+    const flood = within(detailEl).getByTestId('housing-flood');
+    expect(flood).toHaveTextContent('침수 흔적 · 반경 100m · 서울시 침수흔적도 2010~2025');
+    expect(flood).toHaveTextContent('12건 · 최대 침수심 50cm');
+    const floodChips = within(flood).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
+    expect(floodChips).toEqual(['2025년 1건', '2022년 8월 9건 · 50cm', '2010년 9월 2건 · 30cm']);
+    expect(within(detailEl).getByText(/기록이 없다고 침수 위험이 없다는 뜻은 아닙니다/)).toBeInTheDocument();
 
     const prices = within(detailEl).getByTestId('housing-official-prices');
     expect(prices).toHaveTextContent('2025 공시가격');

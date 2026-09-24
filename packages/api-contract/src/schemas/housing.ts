@@ -88,6 +88,8 @@ export const HousingPoint = z.object({
   official: HousingOfficialGlance.nullable(),
   // K-apt 분양형태('분양' | '임대' | '혼합') — 임대단지는 실거래가 없는 게 정상.
   saleType: z.string().nullable(),
+  // 반경 HOUSING_FLOOD_RADIUS_M 안 침수 흔적 수(배지 물방울). 침수흔적도 범위 밖(현재 서울 외)·미적재면 null.
+  flood: z.number().int().min(0).nullable(),
 });
 export type HousingPointType = z.infer<typeof HousingPoint>;
 
@@ -214,6 +216,30 @@ export const HousingInfra = z.object({
 });
 export type HousingInfraType = z.infer<typeof HousingInfra>;
 
+// 침수 흔적 — 서울시 침수흔적도(LifeFloodTrace) 중 단지 좌표 반경 radiusM 안 점. 사건 연월별 묶음(최신 순)과
+// 최대 침수심. 주소·필지는 싣지 않는다. 데이터 범위 밖 단지·좌표 없음·미적재면 detail.flood 자체가 null
+// (0건 = 범위 안인데 기록 없음).
+export const HousingFloodEvent = z.object({
+  year: z.number().int(),
+  // 피해일자가 없는 행(원본 2023·2025 일부)은 null — 연도 단위로 묶는다.
+  month: z.number().int().min(1).max(12).nullable(),
+  count: z.number().int().min(1),
+  // 이 사건 묶음의 최대 침수심(m). 침수심이 적히지 않은 행뿐이면 null.
+  maxDepthM: z.number().nullable(),
+});
+export type HousingFloodEventType = z.infer<typeof HousingFloodEvent>;
+
+export const HousingFlood = z.object({
+  radiusM: z.number().int().min(1),
+  total: z.number().int().min(0),
+  maxDepthM: z.number().nullable(),
+  events: z.array(HousingFloodEvent),
+  // 적재된 침수흔적도의 사건 연도 범위(출처 표기용).
+  fromYear: z.number().int(),
+  toYear: z.number().int(),
+});
+export type HousingFloodType = z.infer<typeof HousingFlood>;
+
 export const HousingComplexDetail = z.object({
   id: z.string(),
   name: z.string(),
@@ -256,6 +282,8 @@ export const HousingComplexDetail = z.object({
   baseDate: z.string(),
   // 생활 인프라(반경 500m) — 좌표 없는 단지는 null.
   infra: HousingInfra.nullable(),
+  // 침수 흔적(반경 100m) — 침수흔적도 범위 밖(현재 서울 외)·좌표 없음·미적재면 null.
+  flood: HousingFlood.nullable(),
 });
 export type HousingComplexDetailType = z.infer<typeof HousingComplexDetail>;
 

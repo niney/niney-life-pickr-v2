@@ -18,6 +18,7 @@ import {
 } from './housing.js';
 import {
   HOUSING_FALLBACK_COLOR,
+  HOUSING_FLOOD_COLOR,
   buildHousingBadgeSvg,
   buildHousingCellSvg,
   buildHousingMutedBadgeSvg,
@@ -117,5 +118,21 @@ describe('housing 마커 SVG', () => {
     expect(of).toContain('stroke-dasharray');
     expect(of).toContain('fill="#e5e7eb"');
     expect(buildHousingMutedSelectedBadgeSvg('임대', { dashed: false })).toContain('height="33"');
+  });
+  it('침수 흔적 물방울 — none 은 그대로, some/many 는 왼쪽 원 + 넓어진 폭, 두 단계 색 반전', () => {
+    const width = (svg: string): number => Number(/width="(\d+)"/.exec(svg)![1]);
+    const plain = buildHousingBadgeSvg('9억', '#c2410c');
+    expect(buildHousingBadgeSvg('9억', '#c2410c', 'none')).toBe(plain);
+    const some = buildHousingBadgeSvg('9억', '#c2410c', 'some');
+    const many = buildHousingBadgeSvg('9억', '#c2410c', 'many');
+    expect(width(some)).toBeGreaterThan(width(plain));
+    expect(some).toContain(`<circle cx="11" cy="11" r="7.5" fill="#fff" stroke="${HOUSING_FLOOD_COLOR}"`);
+    expect(many).toContain(`fill="${HOUSING_FLOOD_COLOR}" stroke="#fff"`);
+    // 선택 배지도 물방울을 싣고 꼬리는 새 폭의 가운데.
+    const sel = buildHousingSelectedBadgeSvg('9억', '#c2410c', 'many');
+    const w = width(sel);
+    expect(sel).toContain(`L${w / 2} 32`);
+    expect(buildHousingMutedBadgeSvg('공시 5.2억', { dashed: true, flood: 'some' })).toContain('<circle');
+    expect(buildHousingMutedSelectedBadgeSvg('임대', { flood: 'many' })).toContain('<circle');
   });
 });

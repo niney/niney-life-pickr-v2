@@ -8,7 +8,9 @@ import {
   formatHousingDealPrice,
   formatHousingPrice,
   formatHousingUnitPriceShort,
+  housingFloodLevel,
   type HousingDealType,
+  type HousingFloodLevel,
 } from '@repo/utils';
 import type { MapMarker } from '~/components/restaurant/MapCanvas';
 
@@ -20,27 +22,29 @@ import type { MapMarker } from '~/components/restaurant/MapCanvas';
 //   latest(축의 최근 거래, 유형색) → fallback(다른 조건의 마지막 거래, 회색 — 유형 라벨을 붙여 "같은 유형
 //   이라도 다른 면적 구간" 임을 드러낸다) → official(공시가격 중위, 점선 회색) → 임대단지 회색 '임대' 배지
 //   → 회색 점(정보 없음). 임대단지(K-apt 분양형태 '임대')는 폴백·공시 배지 글자 앞에 '임대 ' 를 붙인다.
+// 알약 배지는 반경 100m 침수 흔적이 있으면 왼쪽에 물방울(1~4건 연한·5건 이상 진한 — utils housingFloodLevel).
+// 회색 점(정보 없음)에는 물방울 자리가 없어 싣지 않는다 — 상세 카드에서 본다.
 
 const EMPTY_ICON = { src: buildHousingEmptyMarkerDataUrl(false), selectedSrc: buildHousingEmptyMarkerDataUrl(true) };
 const CACHE_MAX = 5000;
 const badgeCache = new Map<string, string>();
 type BadgeKind = 'deal' | 'fallback' | 'official';
-const badgeUrl = (kind: BadgeKind, text: string, dealType: HousingDealType, selected: boolean): string => {
-  const key = `${kind}|${text}|${kind === 'deal' ? dealType : '-'}|${selected ? 1 : 0}`;
+const badgeUrl = (kind: BadgeKind, text: string, dealType: HousingDealType, selected: boolean, flood: HousingFloodLevel): string => {
+  const key = `${kind}|${text}|${kind === 'deal' ? dealType : '-'}|${selected ? 1 : 0}|${flood}`;
   let url = badgeCache.get(key);
   if (!url) {
     url =
       kind === 'deal'
-        ? buildHousingBadgeDataUrl(text, dealType, selected)
-        : buildHousingMutedBadgeDataUrl(text, { dashed: kind === 'official', selected });
+        ? buildHousingBadgeDataUrl(text, dealType, selected, flood)
+        : buildHousingMutedBadgeDataUrl(text, { dashed: kind === 'official', selected, flood });
     if (badgeCache.size >= CACHE_MAX) badgeCache.clear();
     badgeCache.set(key, url);
   }
   return url;
 };
-const badgeIcon = (kind: BadgeKind, text: string, dealType: HousingDealType) => ({
-  src: badgeUrl(kind, text, dealType, false),
-  selectedSrc: badgeUrl(kind, text, dealType, true),
+const badgeIcon = (kind: BadgeKind, text: string, dealType: HousingDealType, flood: HousingFloodLevel) => ({
+  src: badgeUrl(kind, text, dealType, false, flood),
+  selectedSrc: badgeUrl(kind, text, dealType, true, flood),
 });
 // 셀 알약은 단지 수 버킷(1~9/10~49/50+)별로만 크기가 달라 대표값으로 키를 줄인다.
 const cellBucketCount = (count: number): number => (count < 10 ? 1 : count < 50 ? 10 : 50);
@@ -74,17 +78,19 @@ export const isHousingRental = (saleType: string | null | undefined): boolean =>
 // 단지 하나의 아이콘 — 우선순위 규칙(파일 머리 주석)대로.
 const complexIcon = (p: HousingPointType, dealType: HousingDealType): MapMarker['icon'] => {
   const rental = isHousingRental(p.saleType);
-  if (p.latest) return badgeIcon('deal', formatHousingDealPrice(dealType, p.latest.price, p.latest.rent), dealType);
+  const flood = housingFloodLevel(p.flood);
+  if (p.latest) return badgeIcon('deal', formatHousingDealPrice(dealType, p.latest.price, p.latest.rent), dealType, flood);
   if (p.fallback) {
     const f = p.fallback;
     return badgeIcon(
       'fallback',
       `${rental ? '임대 ' : ''}${HOUSING_DEAL_TYPE_LABEL[f.dealType]} ${formatHousingDealPrice(f.dealType, f.price, f.rent)}`,
       dealType,
+      flood,
     );
   }
-  if (p.official) return badgeIcon('official', `${rental ? '임대 ' : ''}공시 ${formatHousingPrice(p.official.median)}`, dealType);
-  if (rental) return badgeIcon('fallback', '임대', dealType);
+  if (p.official) return badgeIcon('official', `${rental ? '임대 ' : ''}공시 ${formatHousingPrice(p.official.median)}`, dealType, flood);
+  if (rental) return badgeIcon('fallback', '임대', dealType, flood);
   return EMPTY_ICON;
 };
 
