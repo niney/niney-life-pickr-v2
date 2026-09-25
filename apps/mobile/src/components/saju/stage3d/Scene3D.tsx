@@ -5,7 +5,8 @@ import { SAJU_GOLD, SAJU_HANJI, SAJU_JUSA, SAJU_STONE, WUXING_COLOR } from '@rep
 import { SAJU_BRANCHES, SAJU_STEMS, SAJU_WUXING, SAJU_WUXING_META, branchMeta, stemMeta, type SajuChart, type SajuPhase, type Wuxing } from '@repo/utils';
 import { SAJU_STAGE_TIMING } from '../stageConfig';
 import { SAJU_GLYPH_ATLAS, glyphGeometry } from './glyphs';
-import { backgroundTexture, discGlowTexture, dotTexture, rippleTexture, sealFaceTexture } from './textures';
+import { dotTexture } from '../../common/stage3d/dataTexture';
+import { backgroundTexture, discGlowTexture, rippleTexture, sealFaceTexture } from './textures';
 
 // 천문도 3D 장면 — 웹 stage/SajuScene 을 앱(expo-gl)으로 옮긴 것. 같은 치수·타이밍·조명.
 //   setup     고리 3겹이 천천히 자전, 별·별가루.

@@ -12,8 +12,9 @@ import { SajuReadingPanel } from '~/components/saju/SajuReadingPanel';
 import { sajuStemImage } from '~/components/saju/sajuImages';
 import { SajuStage2D, SajuStarfield } from '~/components/saju/SajuStage2D';
 import type { SajuStage3D as SajuStage3DView, SajuStageFraming } from '~/components/saju/SajuStage3D';
-import { SAJU_STAGE_3D_ENABLED, SAJU_STAGE_TIMING } from '~/components/saju/stageConfig';
-import { loadSajuStage3DVerdict, peekSajuStage3DVerdict, saveSajuStage3DVerdict } from '~/components/saju/stage3dVerdict';
+import { SAJU_STAGE_TIMING } from '~/components/saju/stageConfig';
+import { STAGE_3D_AVAILABLE } from '~/components/common/stage3d/stage3dAvailable';
+import { useStage3DGate } from '~/components/common/stage3d/useStage3DGate';
 import { Icon, TextButton } from '~/components/saju/sajuUi';
 import { SERIF, SJ, gold, ink } from '~/components/saju/sajuTokens';
 
@@ -24,7 +25,7 @@ import { SERIF, SJ, gold, ink } from '~/components/saju/sajuTokens';
 // 무대: iOS 는 3D 천문도(expo-gl, 화면 뒤 캔버스 한 장 — 입력 땐 위쪽에 작게, 연출 땐 가운데 크게 카메라가 옮겨 간다).
 // Android·"동작 줄이기"·느린 GPU(시뮬레이터 소프트웨어 GL 포함)·GL 오류면 2D 천문도(Reanimated). 입력 화면의 원판은
 // 방문마다 한 번 정해(3D 준비를 잠깐 기다렸다가, 늦으면 2D) 도중에 바뀌지 않고, 기기 판정을 기억해 다음 방문부터는
-// 처음부터 정한다(stage3dVerdict). 연출 무대도 사주를 세우는 순간 정해 끝까지 간다. 흐름 전환(casting_done·stamp)은
+// 처음부터 정한다(공용 useStage3DGate·stage3dVerdict). 연출 무대도 사주를 세우는 순간 정해 끝까지 간다. 흐름 전환(casting_done·stamp)은
 // 이 화면의 JS 타이머가 낸다 — 무대는 그리기만.
 // 딥링크: ?tool=daily|food|date|love|wealth|career|ask|match, ?tab=<패널 탭>(앱 홈 카드·이전 링크 호환).
 // 기기 "동작 줄이기" 가 켜져 있으면 연출을 건너뛴다. 효과음은 두지 않는다.
@@ -32,17 +33,13 @@ import { SERIF, SJ, gold, ink } from '~/components/saju/sajuTokens';
 const first = (v: string | string[] | undefined): string | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
 
 // 3D 무대 모듈은 expo-gl 네이티브 모듈이 있는 빌드에서만 불러온다 — 없는 빌드에서 import 만으로 화면이 죽지 않게.
-const SajuStage3D: typeof SajuStage3DView | null = SAJU_STAGE_3D_ENABLED
+const SajuStage3D: typeof SajuStage3DView | null = STAGE_3D_AVAILABLE
   ? (require('~/components/saju/SajuStage3D') as { SajuStage3D: typeof SajuStage3DView }).SajuStage3D
   : null;
 
 const PHASE_TEXT = { casting: '천문도를 맞추는 중…', stamping: '인장을 찍는 중…', reading: '사주를 세웠어요' } as const;
 /** 인장을 다 찍은 뒤 무대를 붙잡는 시간 — 마지막 인장의 착지·파문과 일간 캐릭터를 보여 주고 풀이로 넘어간다. */
 const REVEAL_HOLD_MS = 1100;
-/** 입력 화면 원판 자리를 비워 두고 3D 준비를 기다리는 시간 — 처음 보는 기기 / 3D 로 기억된 기기. 넘기면 이번 방문은 2D. */
-const HERO_WAIT_MS = { unknown: 900, ok: 2500 } as const;
-/** 2D 로 정한 뒤에도 기기 판정을 마저 재는 한도 — 넘기면 판정 없이 캔버스를 내린다. */
-const PROBE_GIVE_UP_MS = 8000;
 
 export default function SajuScreen() {
   const params = useLocalSearchParams<{ tool?: string | string[]; tab?: string | string[]; stage?: string | string[] }>();
@@ -93,80 +90,26 @@ export default function SajuScreen() {
   const stageSize = Math.round(Math.min(width - 48, height * 0.52, 380));
 
   // ── 3D 무대 ─────────────────────────────────────────────────────────────
-  // 입력 화면의 원판(hero)은 방문마다 한 번 정해 끝까지 간다.
-  //   pending  원판 자리를 비워 두고(별만) 3D 준비를 기다린다 — HERO_WAIT_MS.
-  //   3d       기다리는 사이 준비됐다(첫 프레임 실측 통과) — 캔버스가 나타난다.
-  //   2d       3D 를 안 쓰거나(Android·동작 줄이기·"느림"으로 기억된 기기), 늦었거나, 실패했다.
-  // 늦어서 2D 로 정한 뒤에도 캔버스는 판정이 끝날 때까지 투명하게 그려 기기 판정을 남긴다(다음 방문부터 바로 3D).
+  // 원판 자리(hero)를 3D 로 할지·캔버스를 언제 올리고 내릴지는 공용 문지기(useStage3DGate). 연출 무대는 사주를 세우는
+  // 순간(무대가 열릴 때) 문지기가 정해 끝까지 — 도중에 3D 가 준비돼도 바꾸지 않는다.
   const [rootH, setRootH] = useState(0);
-  const [ready3D, setReady3D] = useState(false);
-  const [verdict, setVerdict] = useState(peekSajuStage3DVerdict); // undefined = 아직 읽는 중
-  const [hero, setHero] = useState<'pending' | '3d' | '2d'>('pending');
-  const [probe, setProbe] = useState<'ok' | 'fail' | null>(null); // 이번 방문의 실측 결과
-  const [probeGaveUp, setProbeGaveUp] = useState(false);
   // 개발 빌드 전용 ?stage=3d|2d — 판정·기억 없이 강제(시뮬레이터는 소프트웨어 GL 이라 평소엔 2D 로 간다).
   const stageParam = __DEV__ ? first(params.stage) : null;
-  const force3D = stageParam === '3d';
-  const want3D = SajuStage3D !== null && stageParam !== '2d' && (force3D || (!reduceMotion && verdict !== 'slow'));
-  const heroMode = !want3D || probe === 'fail' ? '2d' : hero;
-  useEffect(() => {
-    if (verdict !== undefined || SajuStage3D === null) return undefined;
-    let alive = true;
-    void loadSajuStage3DVerdict().then((v) => {
-      if (alive) setVerdict(v);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [verdict]);
-  // 기다림 한도 — 판정을 읽은 뒤부터 잰다. 강제 3D 는 끝까지 기다린다.
-  const heroWaitMs = verdict === 'ok' ? HERO_WAIT_MS.ok : HERO_WAIT_MS.unknown;
-  useEffect(() => {
-    if (heroMode !== 'pending' || verdict === undefined || force3D) return undefined;
-    const id = setTimeout(() => setHero((h) => (h === 'pending' ? '2d' : h)), heroWaitMs);
-    return () => clearTimeout(id);
-  }, [heroMode, verdict, force3D, heroWaitMs]);
-  // 연출 무대는 사주를 세우는 순간(setup → casting) 정해 끝까지 — 도중에 3D 가 준비돼도 바꾸지 않는다.
-  const [stageRenderer, setStageRenderer] = useState<'2d' | '3d'>('2d');
-  const [prevPhase, setPrevPhase] = useState(state.phase);
-  if (prevPhase !== state.phase) {
-    setPrevPhase(state.phase);
-    if (prevPhase === 'setup' && state.phase === 'casting') setStageRenderer(heroMode === '3d' && ready3D ? '3d' : '2d');
-  }
   const inSetup = state.phase === 'setup' && !session.pairOpen;
-  // 캔버스는 입력(2D 로 정했으면 판정이 끝날 때까지)·3D 연출 동안만 — 풀이·궁합 결과로 넘어가면 내려 GPU 를 비운다.
-  const probing = probe === null && !probeGaveUp;
-  const mount3D =
-    want3D && probe !== 'fail' && verdict !== undefined && rootH > 0 && (inSetup ? heroMode !== '2d' || probing : stageOpen && stageRenderer === '3d');
-  const [prevMount, setPrevMount] = useState(mount3D);
-  if (prevMount !== mount3D) {
-    setPrevMount(mount3D);
-    if (!mount3D) setReady3D(false);
-  }
-  useEffect(() => {
-    if (!mount3D || probe !== null) return undefined;
-    const id = setTimeout(() => setProbeGaveUp(true), PROBE_GIVE_UP_MS);
-    return () => clearTimeout(id);
-  }, [mount3D, probe]);
-  const visible3D = inSetup ? heroMode === '3d' && ready3D : stageRenderer === '3d';
+  const gate = useStage3DGate({
+    scope: 'saju',
+    available: SajuStage3D !== null,
+    stageParam,
+    reduceMotion,
+    layoutReady: rootH > 0,
+    inHero: inSetup,
+    performing: stageOpen,
+  });
+  const heroMode = gate.heroMode;
   // 3D 캔버스는 화면 위쪽 70% — 입력 땐 위쪽 원판, 연출 땐 가운데보다 조금 위(상태 알약·일간 캐릭터 자리를 두고).
   const canvasH = Math.round(rootH * 0.7);
   const heroFrame: SajuStageFraming = { centerY: 24 + heroSize / 2, radiusPx: heroSize / 2 };
   const stageFrame: SajuStageFraming = { centerY: Math.round(rootH * 0.47), radiusPx: stageSize / 2 };
-  const onReady3D = useCallback(() => {
-    setReady3D(true);
-    setProbe((p) => p ?? 'ok');
-    setHero((h) => (h === 'pending' ? '3d' : h));
-    if (!force3D) saveSajuStage3DVerdict('ok');
-  }, [force3D]);
-  // GL 오류·느린 GPU — 이번 방문은 2D. 확실하면(오류·소프트웨어 GL·다섯 프레임 중 셋 이상 느림) 기기를 "느림"으로 기억.
-  const onFail3D = useCallback(
-    (definite: boolean) => {
-      setProbe('fail');
-      if (definite && !force3D) saveSajuStage3DVerdict('slow');
-    },
-    [force3D],
-  );
 
   return (
     <View style={styles.root} onLayout={(e) => setRootH(Math.round(e.nativeEvent.layout.height))}>
@@ -189,7 +132,7 @@ export default function SajuScreen() {
       />
       <LinearGradient colors={['#1c1a22', SJ.bg]} locations={[0, 0.65]} style={StyleSheet.absoluteFill} />
       <SajuStarfield />
-      {mount3D && SajuStage3D ? (
+      {gate.mount && SajuStage3D ? (
         <SajuStage3D
           phase={state.phase}
           chart={state.chart}
@@ -197,10 +140,11 @@ export default function SajuScreen() {
           width={width}
           height={canvasH}
           framing={state.phase === 'setup' ? heroFrame : stageFrame}
-          visible={visible3D}
-          onReady={onReady3D}
-          onFail={onFail3D}
-          force={force3D}
+          visible={gate.visible}
+          onReady={gate.onReady}
+          onFail={gate.onFail}
+          onLost={gate.onLost}
+          force={gate.force}
         />
       ) : null}
 
@@ -228,7 +172,7 @@ export default function SajuScreen() {
             </Text>
             {holding ? null : <TextButton label="건너뛰기" color={ink(0.65)} onPress={() => dispatch({ type: 'skip_animation' })} />}
           </View>
-          {stageRenderer === '2d' ? (
+          {!gate.stage3D ? (
             <View style={styles.stageCenter}>
               <View>
                 {holding && state.chart && dm ? (
@@ -245,7 +189,7 @@ export default function SajuScreen() {
           ) : null}
         </Animated.View>
       ) : null}
-      {stageOpen && stageRenderer === '3d' && holding && state.chart && dm ? (
+      {gate.stage3D && holding && state.chart && dm ? (
         // 3D 무대 위 일간 캐릭터 — 원판 위쪽 가장자리(기울어진 원판은 반지름의 약 0.75 높이) 위에 띄운다.
         <Animated.View entering={FadeInDown.duration(500)} pointerEvents="none" style={[styles.reveal, { top: stageFrame.centerY - stageFrame.radiusPx * 0.78 - 104 }]}>
           <Image source={sajuStemImage(state.chart.dayMaster.index)} style={styles.revealImage} contentFit="cover" />
