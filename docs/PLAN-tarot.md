@@ -29,6 +29,7 @@
 | 15 | 켈틱크로스는 v2, 메뉴 타로는 v3 후보 | |
 | 16 | 오늘의 카드는 하루 1장 고정(게스트 기기·회원 계정) | |
 | 17 | (2026-09-26) 앱은 WebView 대신 **네이티브**로 — 사주(C)와 같은 방식(흐름은 shared 훅을 웹과 공유, 공유는 웹 링크). 앱 무대는 2D 부터 | 결정 1 의 앱 부분을 대체. 3D(expo-gl)는 후속 후보 |
+| 18 | (2026-09-26) 앱 3D 무대 진행 — 사주와 같은 expo-gl + R3F, iOS 만. Android·동작 줄이기·느린 GPU·기록 다시 보기는 2D | 결정 17 의 후속. §앱 3D 무대 |
 
 **기본값 (이견 없어 확정)**: 카드 한글명 음차(완드·컵·소드·펜타클 / 페이지·나이트·퀸·킹, 영문 병기) · 해석 톤 존댓말·따뜻·담백·조언형 · 뽑기는 부채꼴 직접 선택 + "자동으로 뽑기" · 공유 링크 만료 없음(게스트 삭제 불가, 회원 삭제 가능) · 타이틀 세리프(Noto Serif KR 서브셋, 타로 라우트만) · 사이드바 위치 대기질 다음·식단 앞 + 홈 진입 카드 · 마우스 시차 효과 켬, 자이로 끔.
 
@@ -149,6 +150,7 @@ model UsageQuotaCounter {
 | POST | `/tarot/shares` | optional | `RATE.publicVote` 수준 | 게스트: 리딩 전체를 본문으로 받아 저장 + 토큰. 회원: readingId 로 토큰 발급 |
 | GET | `/tarot/shares/:token` | 없음 | `RATE.publicShare` | 공유 조회(질문 포함 여부는 공유 시 체크박스, 기본 제외) |
 | GET | `/tarot/shares/:token/image.png` | 없음 | `RATE.publicShare` | OG 1200×630. `?format=story` 로 1080×1920 |
+| GET | `/tarot/cards/:cardId/texture.jpg` | 없음 | | 카드 앞면 JPEG 384px — 앱 3D 무대 텍스처(expo-gl 은 WebP 를 못 읽어 웹 정적 webp 를 바꿔 준다). 그림 없는 카드 404 |
 | GET | `/tarot/me/readings` | 회원 | | 목록(커서) |
 | GET/DELETE | `/tarot/me/readings/:id` | 회원 | | 상세·삭제(공유 토큰도 함께 무효) |
 | GET/PUT | `/admin/quotas` | 관리자 | | 기능별 한도 설정 |
@@ -261,7 +263,8 @@ model UsageQuotaCounter {
 | **v3a** ✅ | 메뉴 타로 — 카드 원소·무드 → 메뉴 후보 3개(결정적) + LLM 이유 | utils `tarotMenu.ts`(메뉴 100종·기운 매핑·선택), 스프레드 `menu`·주제 `food`, 계약 `TarotMenuVerdict`, friendly 프롬프트 v2·`buildStaticMenuVerdict`·카탈로그 kcal, 웹 `TarotMenuBox`·`?spread=menu`; 테스트 utils 9·friendly 4·웹 2 |
 | **v3b 후보** | 근처 맛집 덧붙이기(식당별 분류 프로필 집계 → 내주변 후보) — 운영 식당 커버리지 확인 뒤 | |
 | **v4-앱** ✅ | 앱 네이티브 전환 — WebView 를 걷어내고 RN 화면으로(흐름은 shared `useTarotSession` 을 웹과 공유). 2D 무대(섞기·부채꼴·자리 잡기·뒤집기), 설정·해석 패널, 공유(웹 링크), 게스트 최근 기록·다시 보기, 내 타로 기록, 오늘의 카드 잠금 — 상세는 §앱 네이티브 전환 | shared `hooks/useTarotSession.ts`(+테스트 7)·`tarot/tarotTheme.ts`, 웹 `TarotPage` 가 훅 사용, 앱 `app/tarot/index.tsx`·`app/tarot/me/*`·`src/components/tarot/**`·`assets/tarot/back-256.webp`, 프로필 탭 "내 타로 기록" |
-| **v4 후보** | 앱 3D 무대(사주처럼 expo-gl + R3F, 느린 GPU 는 2D) / Android 기기 확인 | |
+| **v4-3D** ✅ | 앱 3D 무대(사주처럼 expo-gl + R3F, 느린 GPU 는 2D) — 탁자·덱·섞기·부채꼴(드래그 훑기·터치 고르기)·자리 잡기·뒤집기·해석 구도, 3D 공용화(사주와 같은 캔버스·문지기) — 상세는 §앱 3D 무대 | friendly `tarot-card-texture.ts`(+테스트 2)·`Routes.Tarot.cardTexture`, 앱 `components/common/stage3d/*`(Stage3DCanvas·useStage3DGate·stage3dVerdict·stage3dAvailable·dataTexture), `components/tarot/TarotStage3D.tsx`·`tarot/stage3d/*`(layout·textures·TarotScene3D), `assets/tarot/back-384.jpg` |
+| **v4 후보** | 실기기 3D 확인(프레임·판정) / Android 기기 확인 | |
 
 0차와 사용자 이미지 생성은 병렬. 2차는 이미지 없이 라이더 웨이트 대체 덱으로 진행 가능.
 
@@ -320,9 +323,45 @@ model UsageQuotaCounter {
 - **기록**: 회원은 `app/tarot/me`(목록·더 보기·삭제)·`me/[id]`(한 장 보기·공유·삭제), 프로필 탭 "내 타로 기록", 타로 화면
   헤더. 게스트는 기기 로컬 기록(`tarotHistoryStore` — 앱 `api-setup` 에서 AsyncStorage 주입). WebView 시절 웹 localStorage 에
   남은 게스트 기록은 넘어오지 않는다.
-- 남은 것: Android 확인, 앱 3D 무대(v4 후보), 동작 줄이기 경로 실기기 확인.
+- 남은 것: Android 확인, 동작 줄이기 경로 실기기 확인. 앱 3D 무대는 아래 §앱 3D 무대.
 - 개발 검증 메모: Vite(5173)는 `/tarot/s/<token>/image.png` 를 `:3000` 으로 프록시한다 — 검증용 API(`:3100`, DB 사본)에서 만든
   공유 토큰의 미리보기·세로 이미지는 앱에서 안 뜬다(운영은 같은 도메인이라 해당 없음). 이미지 자체는 `:3100` 에 직접 확인.
+
+## 앱 3D 무대 (v4-3D)
+
+2026-09-26(결정 18). iOS 앱 타로 무대를 웹 3D 와 같은 장면으로 — expo-gl + react-three-fiber. 흐름·타이밍·패널은 v4 그대로이고
+무대만 3D·2D 중 하나를 그린다.
+
+- **공용화(사주와 같이 쓴다)** `src/components/common/stage3d/`: `Stage3DCanvas`(캔버스·오류 경계·첫 프레임 실측 판정·매 프레임 GL
+  동기 역압·30fps/rAF 틱·페이드·2/3 해상도), `useStage3DGate`(무대 자리 pending → 3d | 2d, 캔버스 올리고 내리기, 연출 무대 결정),
+  `stage3dVerdict`(기기 판정 기억 — 무대별 키 `lp:tarot-stage3d:v1`, 장면 무게가 달라 사주와 따로), `dataTexture`(절차 텍스처).
+- **장면** `tarot/stage3d/TarotScene3D`: 웹 `stage/layout.ts` 를 옮긴 같은 치수·포즈(`layout.ts`, 타이밍은 앱 `stageTiming`). 탁자
+  (조명 없는 바닥 + 금빛 빛무리 + 금 고리) 위 덱 78장(InstancedMesh 하나) → 네 박자 섞기 → 부채꼴(그룹 회전으로 훑기, 슬롯 윤곽)
+  → 고른 카드가 슬롯으로 날아가 엎어짐 → 덱은 슬롯 뒤로 물러남 → 한 장씩 뒤집기(들렸다 내려앉음·금빛 번쩍·반짝이 가루, 역방향
+  roll π) → 해석. 별·반짝이 두 겹, 수트 원소색 림 조명, 섞기 동안 셰이더 예열. 웹과 다른 점: 후처리(Bloom)·홀로그램 포일 없음,
+  PBR 대신 Phong(앞면은 자체 발광 emissiveMap 으로 밝힘), 카드 이름 글자 없음(해석 패널이 보여 준다).
+- **카메라 구도**: 입력(hero — 덱이 입력 화면 위쪽 자리 가운데, 조금 위에서 멀리) / 연출(stage) / 해석(read — 카드 줄을 해석 시트
+  위 공간 가운데로). `setViewOffset` 으로 월드 점을 원하는 화면 높이에 둔다(사주와 같은 방식). 해석 → 다시 뽑기면 캔버스를
+  그대로 두고 카메라가 입력 구도로 돌아간다.
+- **입력**: 캔버스는 터치를 받지 않는다(R3F 네이티브 Canvas 가 자체 PanResponder 로 모든 터치를 잡아서). 뽑는 동안 화면이 캔버스
+  위에 터치 층을 얹는다 — 누르는 동안 가까운 카드가 들리고(부채꼴 카드 중심을 투영해 세로 띠 안에서 가로로 가장 가까운 카드,
+  웹 호버와 같은 규칙), 좌우로 8pt 넘게 밀면 부채꼴을 돌리고(웹과 같은 감도·한계), 밀지 않고 떼면 고른다. 장면과는
+  `controlRef`(fanOffset·hovered·nearestAt)로 주고받는다(렌더와 무관). 안내 문구 "옆으로 밀어 훑고, 마음이 가는 카드를 누르세요".
+- **텍스처**: 뒷면은 번들 JPEG 384px(`assets/tarot/back-384.jpg`, 89KB). 앞면은 뽑힌 카드만 서버 JPEG(`Routes.Tarot.cardTexture` —
+  friendly 가 웹 정적 `-512.webp` 를 sharp 로 384px JPEG 로, 메모리 LRU 80장, `cache-control` 1주). expo-gl 은 이미지를 stb_image 로
+  풀어 WebP 를 못 읽는다. 못 받으면 대체 앞면(남색 + 금 테두리).
+- **3D·2D 결정**: 사주와 같은 문지기 — 입력 화면 위쪽 덱 자리를 방문마다 한 번 정하고(3D 준비를 처음 보는 기기 0.9초·3D 로 기억된
+  기기 2.5초 기다림), 설정을 떠나는 순간(섞기) 그 자리가 3D 이고 캔버스가 준비됐으면 연출도 3D, 아니면 2D 로 끝까지 간다. 기록
+  다시 보기는 2D(캔버스를 내린다). 개발 빌드 `?stage=3d|2d` 강제. Android·동작 줄이기·expo-gl 없는 빌드·느린 GPU(시뮬레이터
+  소프트웨어 GL 포함)는 2D. 뽑은 카드 앞면(webp)은 두 경우 모두 expo-image 로 미리 받고(2D 무대·해석 패널 그림), 3D 장면은
+  따로 JPEG 텍스처를 받는다.
+- **성능**: 쌓인 덱은 인스턴스 0 이 맨 위 — 위 카드부터 그려 깊이 테스트로 가려진 면을 버린다(반대 순서면 윗면을 78번 덧칠해
+  시뮬레이터 소프트웨어 GL 19초/프레임 → 0.5초. 실기기 Apple GPU 는 HSR 로 걸러 영향 없음). 입력·해석 30fps, 연출은 rAF.
+- **문지기 고침(사주도 해당)**: 처음엔 연출 무대를 화면이 렌더 중 상태 갱신으로 다음 렌더에 정했는데, 그 사이 버려지는 렌더
+  패스에서 문지기가 캔버스를 잠깐 "내림"으로 보고 준비 표시를 지웠다 — 캔버스는 그대로라 준비를 다시 알리지 않아 해석 → 다시
+  뽑기에서 덱이 안 보이고 다음 리딩이 2D 로 갔다. 결정은 문지기가 입력 화면을 떠나는 렌더에서 하고, 준비 표시는 캔버스가 실제로
+  내려갈 때(`onLost`, unmount)만 끈다.
+- 남은 것: 실기기 확인(프레임·판정 ok 저장·터치 감), Android.
 
 ## 앱 WebView 임베드 (v2)
 
@@ -351,6 +390,7 @@ model UsageQuotaCounter {
 ## 진행 기록
 
 - 2026-09-02: 계획 작성. 결정 1~16 확정.
+- 2026-09-26: **v4-3D 앱 3D 무대.** 위 "앱 3D 무대" 절. friendly 카드 텍스처 JPEG 라우트(+테스트 2, API 문서 재생성 193개), 앱 3D 공용화(`common/stage3d/*` — 사주가 먼저 옮겨 씀, 판정 키 무대별), 타로 장면(`tarot/stage3d/*`)·`TarotStage3D`·화면 통합(터치 층·부채꼴 훑기·2D 폴백), 뒷면 384px JPEG 번들. 검증: 전체 typecheck 6/6, friendly 타로 테스트 34, 앱 lint(바꾼 파일) 경고 0. iOS 26.5 시뮬레이터(Hermes CDP, 검증용 API :3100 + 내 Metro 8082) 강제 3D — 입력 화면 덱, 섞기, 부채꼴·슬롯, 드래그 훑기(부채꼴·슬롯 회전), 터치 고르기(훑은 뒤 포함), 자동으로 뽑기, 자리 잡기·뒤집기(서버 텍스처), 해석 구도, 다시 뽑기 → 입력 화면 3D 유지 → 다음 리딩 3D, 기록 다시 보기 왕복(캔버스 내림 → 다시 올려 준비 후 표시). 기본 경로 — 소프트웨어 GL → slow 저장 → 2D 입력·2D 무대, 재방문은 캔버스 없이 바로 2D. 사주 회귀 — 강제 3D 연출·붙잡기·다시 입력 → 재연출 3D, 기본 2D. 실기기·Android 미확인. 미커밋.
 - 2026-09-26: **v4 앱 네이티브 전환.** 위 "앱 네이티브 전환" 절. shared `useTarotSession`(+테스트 7)·`tarot/tarotTheme` → 웹 `TarotPage`·`TarotOverlay`·기록 보기·3D 무대가 사용(웹 tarotTheme 삭제). 앱 `app/tarot` 네이티브(2D 무대·설정·해석 시트·공유)·`app/tarot/me`·`me/[id]`·프로필 탭 진입·게스트 기록 저장소 주입, 뒷면 256px 번들, `common/Para`(사주와 공용). 검증: 전체 typecheck 6/6, shared 95·웹 145 green, 앱·웹 lint 경고 0. iOS 26.5 시뮬레이터에서 Hermes CDP 로 조작(검증용 API :3100 + 내 Metro 8082) — 섞기·부채꼴(호)·고르기·자리 잡기·한 장씩 뒤집기(역방향 회전)·AI 해석 시트·끝까지 스크롤·공유 링크(웹 URL)·iOS 공유 시트·공유 이미지(:3100 직접)·게스트 기록 저장(앱 재실행 뒤 유지)·다시 보기·메뉴 타로(결과 전 미리보기 → 이유·kcal)·자동으로 뽑기·회원 오늘의 카드 자동 저장·잠금 안내 → 기록 상세·기록 목록·딥링크 `?q=&topic=`·API 중단 시 실패 → 다시 시도. Android·동작 줄이기·삭제 확인 창은 미확인. 미커밋.
 - 2026-09-05: **v2 앱 WebView 임베드 완료.** 위 "앱 WebView 임베드" 절. 홈 `TarotEntryCard`(타로 보기 / 메뉴 타로 → `/tarot?spread=menu`). shared 테스트 3, 앱·웹 typecheck green. 실기기 확인은 아직(iOS Safari WKWebView 의 WebGL·성능). 미커밋.
 - 2026-09-05: **운영 배포(5d0c4c7·13b87e8).** `/tarot` 직접 진입이 dist 의 `tarot/cards/` 디렉터리 때문에 nginx `$uri/` 에 걸려 301→403 — `try_files $uri /index.html` 로 수정(deploy-friendly.md). 운영 모델은 gemma4:31b. 크롬 실측으로 메뉴 타로 전 흐름·공유·OG 확인.

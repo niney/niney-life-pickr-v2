@@ -135,28 +135,39 @@ cd apps/mobile && npx expo prebuild --platform ios --no-install
 cd ios && LANG=en_US.UTF-8 pod install   # 그 뒤 위 "prebuilt RN" 확인
 ```
 
-## 사주 3D 무대(expo-gl) — 시뮬레이터는 소프트웨어 GL
+## 사주·타로 3D 무대(expo-gl) — 시뮬레이터는 소프트웨어 GL
 
-사주(C) 화면의 천문도는 iOS 에서 `expo-gl` + react-three-fiber 3D 로 그린다(Android·동작 줄이기·느린 GPU 는 2D).
+사주(C) 천문도와 타로 무대는 iOS 에서 `expo-gl` + react-three-fiber 3D 로 그린다(Android·동작 줄이기·느린 GPU 는 2D).
+GL 배관(준비·성능 판정·역압·틱·페이드)과 문지기(3D 로 할지·캔버스를 언제 올리고 내릴지)는 두 화면 공용
+`src/components/common/stage3d/`(`Stage3DCanvas`·`useStage3DGate`·`stage3dVerdict`).
 
 - **네이티브 모듈이 추가됐다(`expo-gl`).** 이 커밋 이후 JS 만 리로드하면 안 되고 개발 클라이언트를 다시 빌드한다.
-  모듈이 없는 옛 빌드에선 사주 화면이 2D 로 뜬다(3D 모듈을 `requireOptionalNativeModule` 로 확인한 뒤에만 불러온다).
+  모듈이 없는 옛 빌드에선 사주·타로 화면이 2D 로 뜬다(3D 모듈을 `requireOptionalNativeModule` 로 확인한 뒤에만 불러온다).
   `pnpm install` 로 패키지가 늘었으니 **돌고 있던 Metro(`pnpm dev`)도 재시작**해야 새 패키지를 찾는다
   (안 하면 `Unable to resolve module expo-gl` RedBox).
-- **시뮬레이터 GL 은 "Apple Software Renderer"(CPU 래스터)** 라 이 장면이 초당 1~3프레임이다. 무대가 렌더러 이름과
-  첫 프레임들의 실측 시간(매 프레임 GL 동기로 역압을 걸어 잰다)으로 느린 GL 을 걸러 2D 로 돌린다 — 시뮬레이터에선
-  평소 2D 가 보이는 게 정상이다. 3D 를 봐야 하면 개발 빌드에서 `lifepickr://saju-c?stage=3d`(강제 3D, 느림),
-  비교용으로 `?stage=2d`. 실제 속도는 실기기에서 본다.
-- **판정은 기기에 기억된다**(AsyncStorage `lp:saju-stage3d:v1`, `stage3dVerdict.ts`). 한 번 "느림"이 나온 기기·
-  시뮬레이터는 다음 방문부터 캔버스를 아예 만들지 않고 2D 로 연다(7일 뒤나 앱 버전이 바뀌면 다시 잰다). 판정부터
-  다시 보고 싶으면 앱을 지웠다 깔거나 그 키를 지운다. `?stage=3d|2d` 강제는 판정을 읽지도 쓰지도 않는다.
+- **시뮬레이터 GL 은 "Apple Software Renderer"(CPU 래스터)** 라 이 장면들이 초당 1~3프레임이다(타로 부채꼴은 프레임당
+  2~3초). 무대가 렌더러 이름과 첫 프레임들의 실측 시간(매 프레임 GL 동기로 역압을 걸어 잰다)으로 느린 GL 을 걸러 2D 로
+  돌린다 — 시뮬레이터에선 평소 2D 가 보이는 게 정상이다. 3D 를 봐야 하면 개발 빌드에서 `lifepickr://saju-c?stage=3d`·
+  `lifepickr://tarot?stage=3d`(강제 3D, 느림), 비교용으로 `?stage=2d`. 흐름은 확인되지만 카메라 이동 같은 보간은 중간
+  프레임이 찍힌다. 실제 속도는 실기기에서 본다.
+- **판정은 기기에 무대별로 기억된다**(AsyncStorage `lp:saju-stage3d:v1`·`lp:tarot-stage3d:v1` — 장면 무게가 달라 따로
+  잰다). 한 번 "느림"이 나온 기기·시뮬레이터는 다음 방문부터 캔버스를 아예 만들지 않고 2D 로 연다(7일 뒤나 앱 버전이
+  바뀌면 다시 잰다). 판정부터 다시 보고 싶으면 앱을 지웠다 깔거나 그 키를 지운다. `?stage=3d|2d` 강제는 판정을 읽지도
+  쓰지도 않는다.
 - **`three` 는 한 벌만.** react-three-fiber 앱판(CJS)은 `require('three')` 로 `three.cjs` 를, 우리 ESM import 는
   exports 의 "import" 조건으로 `three.module.js` 를 따로 올려 사본이 둘이 된다(텍스처 로더 폴리필이 한쪽에만 걸려
   `document` 오류, 번들 +1MB). `metro.config.js` 가 `three` 를 항상 require 조건으로 푼다.
+- **텍스처는 JPEG·PNG·DataTexture 만.** EXGL 은 이미지를 stb_image 로 풀어 WebP 를 못 읽는다. 한자는
+  `apps/friendly/scripts/build-saju-glyph-atlas.ts` 가 구운 아틀라스, 타로 뒷면은 번들 JPEG(`assets/tarot/back-384.jpg`),
+  앞면은 서버가 웹 webp 를 JPEG 로 바꿔 준다(`GET /api/v1/tarot/cards/:cardId/texture.jpg`, 384px).
+- **캔버스는 터치를 받지 않는다(`pointerEvents="none"`).** R3F 네이티브 Canvas 는 자체 PanResponder 로 모든 터치를
+  잡는다. 타로 고르기는 화면이 캔버스 위에 얹은 터치 층이 받아 카드 위치를 투영해 판정한다(웹 호버와 같은 규칙).
+- **겹친 면은 앞에서부터 그린다.** 78장이 거의 같은 자리에 쌓인 타로 덱을 아래 카드부터 그리면 윗면을 78번 덧칠해
+  소프트웨어 GL 에서 프레임당 19초(앱이 멈춘 듯 보인다). 인스턴스 0 을 맨 위 카드로 두어 깊이 테스트로 버리게 하니 0.5초.
+  실기기 Apple GPU 는 HSR 로 알아서 거르지만 다른 GPU·시뮬레이터는 그대로 칠한다.
 - expo-gl 에서 겪은 것: PBR(`MeshStandardMaterial`) 넓은 면이 첫 프레임에 안 그려지는 경우가 있어 Phong 을 쓴다.
-  부동소수 렌더 타깃(`EXT_color_buffer_float`)이 없어 후처리(Bloom)는 없다. 텍스처는 PNG·DataTexture 만(WebP 는
-  EXGL 디코더가 못 읽을 수 있다) — 한자는 `apps/friendly/scripts/build-saju-glyph-atlas.ts` 가 구운 아틀라스.
-  R3F 루프를 demand ↔ always 로 오가면 다시 안 깨어나 멈춘 적이 있어 demand 하나에 틱(30fps / rAF)만 바꾼다.
+  부동소수 렌더 타깃(`EXT_color_buffer_float`)이 없어 후처리(Bloom)는 없다 — 타로 앞면은 자체 발광(emissiveMap)으로
+  밝힌다. R3F 루프를 demand ↔ always 로 오가면 다시 안 깨어나 멈춘 적이 있어 demand 하나에 틱(30fps / rAF)만 바꾼다.
 
 ## 곁다리로 겪는 것들
 

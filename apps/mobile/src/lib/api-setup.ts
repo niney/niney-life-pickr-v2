@@ -134,7 +134,7 @@ const resolveApiUrl = (): string => {
   return `http://localhost:${FRIENDLY_PORT}`;
 };
 
-const apiUrl = resolveApiUrl();
+export const apiUrl = resolveApiUrl();
 
 // 웹(SPA) origin — WebView 임베드(타로)가 연다. 운영은 API 와 같은 도메인(ninelife.kr)이라 apiUrl
 // 그대로, 개발은 friendly :3000 ↔ vite :5173 이 같은 호스트라 포트만 바꾼다. 다르면
