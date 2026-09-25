@@ -121,6 +121,10 @@ const config: ExpoConfig = {
     './plugins/with-personal-team-entitlements',
     'expo-notifications',
     './plugins/with-swift-concurrency-fix',
+    // UIScene 생명주기 — Xcode 27(iOS 27 SDK)로 빌드한 앱은 이게 없으면 iOS 27 에서 실행 즉시 막힌다.
+    // Info.plist 장면 매니페스트 + SceneDelegate.swift + AppDelegate 창 생성 블록 제거. Expo SDK 58 이상은
+    // 템플릿이 같은 일을 하므로 그때 지운다. 자세한 내용은 docs/mobile-ios-build.md.
+    './plugins/with-uiscene-lifecycle',
     './plugins/with-android-minify',
   ],
   experiments: {

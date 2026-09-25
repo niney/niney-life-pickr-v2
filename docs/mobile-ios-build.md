@@ -55,6 +55,38 @@ nm -gU React-Core-prebuilt/React.xcframework/ios-arm64_x86_64-simulator/React.fr
 
 그 뒤 평소대로 빌드하면 통과한다(실측 2026-08-23: Xcode 26.6 / RN 0.81.5 / New Arch).
 
+## 증상 — Xcode 27 로 빌드하면 iOS 27 에서 실행 즉시 종료
+
+```
+Application failed to launch: UIScene life cycle is required for apps built with this SDK.
+```
+
+iOS 27 SDK(Xcode 27)로 링크된 앱은 **UIScene 생명주기**를 써야 iOS 27 에서 뜬다. 차단은 iOS 27 런타임만
+하고, iOS 26 이하는 경고만 남긴다(같은 빌드가 iOS 26.5 시뮬레이터에서는 뜬다, 실측 2026-09-25). 배포 대상
+버전과는 무관하다. Expo SDK 54 템플릿은 AppDelegate 가 창을 직접 만드는 옛 방식이고, Expo 템플릿은
+SDK 58 에서야 SceneDelegate 로 바뀌었다.
+
+## 해결 — `plugins/with-uiscene-lifecycle.js`
+
+prebuild 때마다 세 가지를 적용한다(멱등).
+
+- Info.plist 에 `UIApplicationSceneManifest`(단일 장면 → `SceneDelegate`).
+- AppDelegate 의 창 생성·`startReactNative` 블록 제거. RN 팩토리 생성은 그대로.
+- `ios/LifePickr/SceneDelegate.swift` 생성·앱 타깃 등록. 장면에서 창을 만들어 RN 을 시작하고, 콜드 스타트
+  URL·유니버설 링크를 launchOptions 로 되살린다(RN `Linking.getInitialURL()` 은 launchOptions 만 읽는다).
+  URL·사용자 활동·생명주기 이벤트는 AppDelegate 로 되넘겨 Expo 구독자(expo-linking·expo-router)가 그대로
+  돌고, AppDelegate 가 이미 RCTLinkingManager 를 불렀으면 다시 알리지 않는다(url 이벤트 중복 방지).
+  Expo SDK 58 의 `ExpoAppSceneDelegate` + `SceneEventForwarder` 를 옮긴 것이다.
+
+기존 `ios/` 에 반영할 때는 pod install 이 필요 없으니 위의 prebuilt RN 문제를 피해 이렇게 돌린다.
+
+```bash
+cd apps/mobile && npx expo prebuild --platform ios --no-install
+```
+
+Expo SDK 58 이상으로 올리면 템플릿이 같은 일을 하므로 이 플러그인을 지운다. 남겨 두면 AppDelegate 패턴을
+못 찾아 prebuild 가 실패한다 — RN 이 두 번 뜨는 것을 막는 의도된 안전장치다.
+
 ## 곁다리로 겪는 것들
 
 - **CocoaPods 가 UTF-8 로케일을 요구한다.** `LANG` 이 비어 있으면 `pod install` 이
