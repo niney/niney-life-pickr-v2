@@ -1,7 +1,7 @@
 ---
 concept: 공용 익명 사용량 한도 — 게스트 키·IP·전역 일일 한도로 공개 LLM 기능을 연다
-last_compiled: 2026-09-07
-topics_connected: [usage-quota, tarot, saju-c, saju-g, ai, friendly, shared, web]
+last_compiled: 2026-09-26
+topics_connected: [usage-quota, tarot, saju-c, saju-g, ai, friendly, shared, web, api-docs]
 status: active
 ---
 
@@ -18,6 +18,7 @@ status: active
 
 ## Instances
 
+- **2026-09-24** in [api-docs](../topics/api-docs.md) / [friendly](../topics/friendly.md) (`1b621c4`): **한도가 외부 계약이 됐다.** 사용자 결정("다른 프로젝트에서 쓸 것 — 어드민 제외, 열 수 있는 건 다 열기(LLM 포함)")으로 CORS 가 어드민 외 `origin: '*'` 로 열리면서, 타로·사주(C)·사주(G) 의 LLM 해석을 어느 사이트의 브라우저든 부를 수 있게 됐다. 그래서 이 컨셉의 네 겹이 처음으로 **외부 문서의 한 절**이 됐다 — `docs/api/README.md` 5절이 기능별 기본 한도 표(게스트 기기/일·IP/일·IP/분·전역/일·게스트 컷 90%), `x-guest-key` 형식과 "기기마다 고정값을 계속 보내라", 소비 순서(전역 → IP 일일 → 기기 일일), 회원은 전역 예산만, **초과해도 에러가 아니라 LLM 없는 해석으로 200** 을 적고, `endpoints.md` 의 한도 열은 이 라우트들을 `설정값`(어드민 설정의 `ipPerMinute`)으로, OpenAPI 에는 `x-rate-limit` 이 `dynamic` 으로 찍힌다. 새로 드러난 약점도 같이 적혔다: 한도의 IP 축은 호출 경로에 민감하다 — 브라우저 직접 호출이면 사용자 IP 별로 세지만 **다른 프로젝트의 서버를 거치면 그 서버 IP 하나로 합산**돼 금방 걸리고, 반대로 IP 가 분산된 대량 호출은 IP 축을 약하게 만든다(`PLAN-perf-security.md` 가 #42 fail-closed 번복을 기록하며 남는 위험을 "비용 — LLM·업스트림 쿼터, IP 분산" 으로 명시). 그 경우 실제 방어선은 **전역 일일 예산과 게스트 컷**이다 — 게스트가 전역의 90% 까지만 쓰므로 외부 트래픽이 몰려도 회원 몫 10% 는 남는다. 트래픽을 보고 `CORS_ORIGIN` 목록으로 다시 좁히는 것이 예정된 후속.
 - **2026-09-06** in [saju-c](../topics/saju-c.md) (`f8e5dd0`): `SAJU_QUOTA_FEATURE = 'saju-reading'`, 오늘·궁합·택일·음식 단일 호출도 각 1건. 회원 오늘의 운세는 별도로 `dailyLockKey` 로 하루 1회 잠금(한도와 다른 축 — 같은 날 같은 사주는 재호출 자체를 막는다).
 - **2026-09-06~07** in [saju-g](../topics/saju-g.md) (`1c60ad8`→`e40b4c0` 키 분리): 같은 플러그인을 사주(G)가 `saju-g-reading`(20/200/10/1000/90)으로 공유. 두 사주 구현이 한도 모듈을 나눠 쓰는 것이 "두 구현 공존" 결정의 실제 접점.
 - **2026-09-03~04** in [tarot](../topics/tarot.md) / [usage-quota](../topics/usage-quota.md) (`cd5a29b`, `fae8190`): 원형. `usage-quota` 플러그인 + `UsageQuotaFeature` enum + 어드민 탭 + 기본 한도 상향(50/500/20/5000/90%). 회원 기록 페이지가 같은 커밋에서 생겼다 — "무료로 열되 기록은 로그인 유도".
@@ -36,3 +37,4 @@ status: active
 - [../topics/friendly](../topics/friendly.md)
 - [../topics/shared](../topics/shared.md)
 - [../topics/web](../topics/web.md)
+- [../topics/api-docs](../topics/api-docs.md)

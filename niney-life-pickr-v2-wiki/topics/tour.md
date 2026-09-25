@@ -1,26 +1,28 @@
 ---
 topic: tour
-last_compiled: 2026-09-19
-sources_count: 93
+last_compiled: 2026-09-26
+sources_count: 101
 status: active
-aliases: [여행로그, tour, tour-log, 국내 여행로그 데이터, AI 허브, aihub, 71780, 71779, 71778, 71581, 제주·도서, 서부권, 동부권, 수도권, tour-c, lp-2023, lp-west-2023, lp-east-2023, lp-capital-2023, TourPlace, TourTrip, TourVisit, TourActivity, TourSpend, TourTransition, TourDaySequence, TourCompanion, TourPhoto, TourCode, tour_places, tour_visits, RestaurantTourMatch, restaurant_tour_matches, TourPlaceBizStatus, tour_place_biz_statuses, TOUR_DATASETS, TOUR_DATASET_KEYS, TOUR_REGIONS, TOUR_REGION_KEYS, TOUR_REGION_GROUPS, tourSampleRegionAt, nearestTourSampleRegion, TOUR_K_MIN, TOUR_RATING_MIN_N, TOUR_SOURCE_NOTE, tourLog.ts, tour-master.service, tour-region-filter, tour-public.service, tour-insights.service, tour-region.service, tour-raw.service, tour-admin.service, restaurant-tour-match.service, tour-biz-status.service, load:tour, unload:tour, match:restaurant-tour, check:tour-biz, e2e:tour, status:life-map, TOUR_RAW_USER_IDS, TOUR_THUMBS_DIR, TOUR_THUMBS_DIR_WEST, TOUR_THUMBS_DIR_EAST, TOUR_THUMBS_DIR_CAPITAL, TOUR_EXPORT_DIR, requireTourRaw, 원본 열람, allowlist, 시드 콘솔, 여행로그 시드, 맛집 매칭, 폐업 조회, 국세청 사업자 상태조회, 15081808, 여행자 밀도, 밀도 격자, 인사이트, 코스 추천, 지역 비교, 숙소 통계, /travel/jeju, /travel/plan, /admin/tour, /tour/public, tour-stats, tourTravelers, tourScore, traveler, TravelInsightsPage, TravelPlanPage, AdminTourPage, TourEvidencePanel, TourTab, TourSummaryBadge, TourMatchBadge, TourFilterBar, LifeTourCard, tourDensityGeo, useTourInsights, useTourPlan, useTourDensity, useTourRaw, tourPhotoUrl, PLAN-tour-log, 소셀 억제, 베이즈 보정 만족도, 완화 사다리, plausibility]
+aliases: [여행로그, tour, tour-log, 국내 여행로그 데이터, AI 허브, aihub, 71780, 71779, 71778, 71581, 제주·도서, 서부권, 동부권, 수도권, tour-c, lp-2023, lp-west-2023, lp-east-2023, lp-capital-2023, TourPlace, TourTrip, TourVisit, TourActivity, TourSpend, TourTransition, TourDaySequence, TourCompanion, TourPhoto, TourCode, tour_places, tour_visits, RestaurantTourMatch, restaurant_tour_matches, TourPlaceBizStatus, tour_place_biz_statuses, TOUR_DATASETS, TOUR_DATASET_KEYS, TOUR_REGIONS, TOUR_REGION_KEYS, TOUR_REGION_GROUPS, tourSampleRegionAt, nearestTourSampleRegion, TOUR_K_MIN, TOUR_RATING_MIN_N, TOUR_SOURCE_NOTE, tourLog.ts, tour-master.service, tour-region-filter, tour-public.service, tour-insights.service, tour-region.service, tour-raw.service, tour-admin.service, restaurant-tour-match.service, tour-biz-status.service, load:tour, unload:tour, match:restaurant-tour, check:tour-biz, e2e:tour, status:life-map, TOUR_RAW_USER_IDS, TOUR_THUMBS_DIR, TOUR_THUMBS_DIR_WEST, TOUR_THUMBS_DIR_EAST, TOUR_THUMBS_DIR_CAPITAL, TOUR_EXPORT_DIR, requireTourRaw, 원본 열람, allowlist, 시드 콘솔, 여행로그 시드, 맛집 매칭, 폐업 조회, 국세청 사업자 상태조회, 15081808, 여행자 밀도, 밀도 격자, 인사이트, 코스 추천, 지역 비교, 숙소 통계, /travel/jeju, /travel/plan, /admin/tour, /tour/public, tour-stats, tourTravelers, tourScore, traveler, TravelInsightsPage, TravelPlanPage, AdminTourPage, TourEvidencePanel, TourTab, TourSummaryBadge, TourMatchBadge, TourFilterBar, LifeTourCard, tourDensityGeo, useTourInsights, useTourPlan, useTourDensity, useTourRaw, tourPhotoUrl, PLAN-tour-log, 소셀 억제, 베이즈 보정 만족도, 완화 사다리, plausibility, TourEvidenceSection, 여행자 근거, 어드민 상세 여행자 탭, 어드민 맛집 상세, AdminRestaurantDetailPage, AdminDetailHeader, ADMIN_DETAIL_TABS, PUBLIC_TABS_IN_ADMIN, availableTabs, 외부 API 문서, docs/api, endpoints.md, openapi.json, export:openapi, 라우트 summary, x-auth public, CORS 개방, hookTimeout]
 ---
 
 # tour — 여행로그(AI 허브 「국내 여행로그 데이터」 4권역 적재·집계·맛집 매칭·시드 콘솔)
 
+**2026-09-24~09-26 변경 흡수 — 어드민 식당 상세 '여행자' 탭과 공개 라우트 외부 문서화. tour 모듈의 로직·데이터·계약은 무변경**: (1) **어드민 식당 상세 '여행자' 탭**(`420a6be`, 2026-09-26) — 어드민 맛집 상세가 공개 상세의 탭 구성(홈·분석·**여행자**·메뉴·리뷰·질문·사진·정보·로그, `?tab=`)으로 바뀌었다. 26차에 적은 "헤더 `TourMatchBadge` + 하단 `TourEvidenceSection` 카드" 는 이렇게 갈렸다 — **배지는 새 `AdminDetailHeader`(자리는 같다), 근거는 '여행자' 탭**. 탭 내용은 사용자 결정대로 "공개 집계 + 근거" 다. 위에 공개 `TourTab`(공개 응답의 `tour` = matched 일 때만, `useRestaurantPublicTourStats`)이, 아래에 `TourEvidenceSection`(원본 5탭, allowlist 밖이면 "권한 없음")이 놓인다. 탭은 어드민 `detail.tour`(missing 포함)가 있을 때만 보이고, `?tab=tour` 인데 매칭이 없으면 홈으로 폴백한다. 그래서 missing 매칭은 근거만 보인다. 어드민 홈 탭이 공개 `HomeTab` 을 그대로 쓰므로 `TourSummaryBadge` 와 "여행자 방문 통계" 섹션(→ '여행자' 탭)도 어드민에 나온다(헤더엔 `TourMatchBadge`). (2) **공개 라우트 외부 문서화**(`1b621c4`, 2026-09-24) — `tour-public.route.ts` 6개 라우트에 한국어 `summary` 가 붙었다(tour-stats 는 소셀 억제 규칙을 적은 `description` 까지). 이 문구가 `docs/api/endpoints.md` `tour` 절 6행(전부 공개·120/분)과 `openapi.json`(`x-auth: public`)에 실렸다. 수기 `docs/api/README.md` 는 도메인 개요와 7절 이용 조건에 "여행로그는 집계만, `sourceNote`·`sampleLabel` 표기, 원본 수준 재구성·재배포 금지" 를 적었다. 같은 커밋의 CORS 개방으로 이 6개는 브라우저 교차 출처에서도 호출된다. 원본 열람·시드 콘솔은 `/api/v1/admin/**` 라 `PUBLIC_ORIGIN` 만 허용한다. PLAN 이 4~6차 공개를 "AI 허브 서면 회신 뒤" 로 걸어 둔 것과 이 문서화의 관계는 어디에도 적혀 있지 않다(Gotchas). (3) **주변 인프라** — `5d7b686`(09-25)이 `vitest.config.ts` 에 `hookTimeout: 60_000` 을 넣어 26차 Gotcha(격리 DB 복사로 인한 hook timeout)를 해소했다. `ad48f96`(09-24)은 `status:life-map` 한 줄의 `tour=` 앞에 `flood=F` 를 끼우고, deploy.sh `life_map_data` 의 여행로그 루프 앞에 침수 흔적 적재를 넣었다(매칭 줄 169→175행, `./deploy.sh 6` force 는 이제 `load:life-flood --download` 까지 돈다). `2ff2c31`·`4a2bff1` 로 상단바·사이드바 NAV 는 14개가 됐다(주차가 여행 앞, 바다가 날씨 뒤). tour 모듈의 서비스·로더·Prisma 모델·계약(`schemas/tour.ts`)·utils(`tourLog.ts`)·공개 웹 화면의 동작은 이번 라운드에 바뀌지 않았다(공개 `HomeTab` 은 어드민 재사용을 위한 선택 prop `availableTabs` 만 늘었다).
+
 **2026-09-12~09-19 변경 흡수 — 신규 토픽, 0~9차 전부(`c777380`→`6cae6b2`)**: AI 허브 「국내 여행로그 데이터」 2023(패널이 여행 직후 입력한 방문지·만족도·체류·지출·활동·동선)을 별도 작업공간 `niney-tour-pickr/tour-c*` 가 파생표 10개(JSONL.gz + manifest) 로 내보내면, 이 리포가 **적재·집계·매칭·표시만** 하는 새 도메인이다. `c777380`(09-13, 1~2차) 이 제주·도서(71780) export 전량 적재 + 맛집(canonical)↔여행로그 장소 1:1 매칭 + 국세청 폐업 조회 + 어드민 시드 콘솔을, `99991da`(09-13, 3~5차) 가 관리자 원본 열람 allowlist 층 + 공개 집계(상세 "여행자" 탭·목록 정렬·골라줘 `traveler`) + `/travel/jeju` 인사이트·`/travel/plan` 코스 추천을, `9196495`(09-13, 6차) 가 일상지도 배경 레이어 "여행자 밀도"(0.02° 격자) + 숙소 통계 + 지역 비교를 붙였다. `8c27f5c` 는 실서버 e2e 스크립트(29→32 step), `cfa276b` 는 allowlist 에 이메일 허용 + 배포 안내 정정, `b9da676` 는 어드민 시드 표 실측 보정. `d18ac24`(09-16, 7차) 가 **다중 데이터셋**(서부권 71779, `west:` id 접두, `dataset` 열, `--dataset` 단위 교체, 제주 방문 비율 plausibility)과 **지역 축 10키**를 열었고, `93ae031`(09-19, 8차 동부권 71778) 이 권역 묶음 칩 2행과 세트 목록 루프를, `6cae6b2`(09-19, 9차 수도권 71581) 가 네 번째 세트를 얹어 **지역 키 21개·장소 50,271곳·여행 11,520건**으로 4권역이 완성됐다. 이용조건상 **공개 화면(/travel/*·상세 여행자 탭·밀도)은 AI 허브 서면 회신 전 운영 노출 금지**이고, 관리자 층(시드·매칭·폐업)만 바로 운영에 쓴다([PLAN-tour-log.md](../../docs/PLAN-tour-log.md)).
 
-## Purpose [coverage: high — 10 sources]
+## Purpose [coverage: high — 13 sources]
 
 "2023년에 실제로 그 지역을 다녀간 여행자 표본이 어디를, 언제, 얼마나 만족하며, 얼마를 쓰고 갔나" 를 (1) **맛집 상세·목록·골라주기의 추가 신호**로, (2) **여행 인사이트·코스 추천 공개 페이지**로, (3) **일상지도 배경 레이어**로, (4) **관리자의 발굴 시드·근거 자료**로 쓰는 도메인이다. 원천은 AI 허브 데이터셋 4개(제주·도서 **71780**, 서부권 **71779**, 동부권 **71778**, 수도권 **71581** — 각 패널 2,880명)이고 원본(203GB·102GB·93GB·97GB)은 리포 밖 `tour-c*` 가 DuckDB 로 정리해 **exportVersion 1** 규격의 파생표만 넘긴다([tourLog.ts](../../packages/utils/src/tourLog.ts) `TOUR_DATASETS`, [data-sources.md](../../docs/data-sources.md)).
 
 설계를 가르는 제약은 이용조건이다([PLAN-tour-log.md](../../docs/PLAN-tour-log.md) §이용조건): 원본(개별 기록·사진·GPS)의 제3자 열람·제공 금지, 집계·서비스 등 2차 저작물은 출처 표기 조건으로 자유, 국외 반출 금지, 환수·폐기 요구 가능. 그래서 구조가 **"한 DB, 두 출구"** 다 — 운영 SQLite 에 파생표를 넣되, 공개 API 는 **식별자 없는 zod 스키마 + 소셀 억제(여행자 5명 미만 셀 null, 평점은 평가 3건 미만 null)** 로 집계만 내고([schemas/tour.ts](../../packages/api-contract/src/schemas/tour.ts)), 개별 행·사진은 admin 이면서 `TOUR_RAW_USER_IDS` allowlist 에 든 계정(AI 허브 승인을 직접 받은 본인)만 본다. 폐기는 `unload:tour --yes` 한 명령.
 
-의존자: 웹 `/travel/jeju`·`/travel/plan`([App.tsx](../../apps/web/src/App.tsx), 상단바·사이드바 "여행" — [PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx)·[PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx)), 맛집 공개 상세·목록·골라줘([restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) 가 `tour` 필드·`sort=tourTravelers|tourScore`·`strategy: 'traveler'` 를 결합), 일상지도 `/life-map` 배경 레이어([LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx)), 어드민 `/admin/tour`·식당 상세 "여행자 근거", 운영 [deploy.sh](../../deploy.sh)(세트별 자동 적재 → 매칭). **앱(`apps/mobile`)에는 여행로그 화면이 없다**(계약만 통과 — PLAN §웹 화면 "앱은 v1 범위 밖", 후속 후보).
+의존자: 웹 `/travel/jeju`·`/travel/plan`([App.tsx](../../apps/web/src/App.tsx), 상단바·사이드바 "여행" — [PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx)·[PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx)), 맛집 공개 상세·목록·골라줘([restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) 가 `tour` 필드·`sort=tourTravelers|tourScore`·`strategy: 'traveler'` 를 결합), 일상지도 `/life-map` 배경 레이어([LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx)), 어드민 `/admin/tour`·식당 상세 "여행자 근거"(**2026-09-26~ 어드민 식당 상세의 '여행자' 탭** — 공개 집계 `TourTab` + 근거 `TourEvidenceSection`, [AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx)), 운영 [deploy.sh](../../deploy.sh)(세트별 자동 적재 → 매칭). **(2026-09-24~)** 외부 API 문서 [docs/api/](../../docs/api/README.md) 도 소비처다. 공개 6개 라우트가 "공개·120/분" 으로 등재되고 CORS `*` 로 열려, 사용자의 다른 프로젝트가 집계를 직접 부를 수 있다([api-docs](api-docs.md)). **앱(`apps/mobile`)에는 여행로그 화면이 없다**(계약만 통과 — PLAN §웹 화면 "앱은 v1 범위 밖", 후속 후보).
 
-규모(2026-09-19 로컬 dev.db 적재 실측, `6cae6b2` 본문): 장소 **50,271**(제주 15,679 · 서부권 11,516 · 동부권 12,531 · 수도권 10,545, id 충돌 0) · 여행 **11,520** · 공개 방문 140,555 · 사진 67,722 · 시드(식당류 5명↑ 미매칭) 194곳(8차 시점). `status:life-map` 한 줄: `tour=50271 tour_jeju=15679 tour_west=11516 tour_east=12531 tour_capital=10545 tour_matched=N`.
+규모(2026-09-19 로컬 dev.db 적재 실측, `6cae6b2` 본문): 장소 **50,271**(제주 15,679 · 서부권 11,516 · 동부권 12,531 · 수도권 10,545, id 충돌 0) · 여행 **11,520** · 공개 방문 140,555 · 사진 67,722 · 시드(식당류 5명↑ 미매칭) 194곳(8차 시점). `status:life-map` 한 줄: `tour=50271 tour_jeju=15679 tour_west=11516 tour_east=12531 tour_capital=10545 tour_matched=N`. (2026-09-24 `ad48f96` 이후 그 앞에 `… store=S flood=F` 가 붙는다. 여행로그 항목은 그대로다 — [life-map-status.ts](../../apps/friendly/scripts/life-map-status.ts).)
 
-## Architecture [coverage: high — 30 sources]
+## Architecture [coverage: high — 34 sources]
 
 ```
 tour-c / tour-c-west / tour-c-east / tour-c-capital (리포 밖, Python/DuckDB — prepare.py → export_life_pickr.py)
@@ -34,6 +36,7 @@ load:tour [dir] --dataset jeju|west|east|capital [--dry-run]   ── scripts/lo
 
 friendly (autoload `*.route.ts`, prefix /api/v1)
    tour-public.route.ts  ── getRestaurantTourStats · TourInsightsService(insights/plan) · TourRegionService(density/lodging/regions)   [인증 없음, RATE.tourRead]
+                            └ (2026-09-24) schema.summary 한국어 → export:openapi → docs/api/{openapi.json, endpoints.md} "tour" 절, CORS '*'
    tour-admin.route.ts   ── TourAdminService(status/listSeeds/discover/register/runMatch/runBizCheck)                                    [authenticate + requireAdmin]
    tour-raw.route.ts     ── TourRawService(visits/activities/spend/photos/trips/getTrip/photoPath)                                       [+ requireTourRaw(allowlist) · onSend no-store/noindex]
    tour-region-filter.ts ── region 키 → 표별 where 한 곳(trip/visit/transition/day/place + raw SQL)
@@ -48,6 +51,7 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
     맛집 상세 TourTab(매칭 있을 때만) · TourSummaryBadge/Line · 카드 메타 · 정렬 칩 2 · SmartPickSection "여행자 만족 기준"
     /life-map 배경 "여행자 밀도" — LifeTourCard · lib/tourDensityGeo(OL 면) · lifeMapAreas.tourDensityAreaStyle · prefs v5 tourDensityKind
     /admin/tour AdminTourPage(데이터셋별 상태·시드 표·discover/register·매칭·폐업) · TourEvidencePanel(원본 5탭) · TourMatchBadge(어드민 상세)
+    /admin/restaurants/:placeId?tab=tour (2026-09-26) — 공개 TourTab(matched) + TourEvidenceSection · 헤더 AdminDetailHeader 의 TourMatchBadge
 ```
 
 ### 데이터셋(적재 단위)과 지역(공개 화면 축) — 한 곳에서 정의
@@ -91,20 +95,27 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - [TourFilterBar.tsx](../../apps/web/src/components/tour/TourFilterBar.tsx): 지역 칩 **2행**(8차) — 1행 `TOUR_REGION_GROUPS`(제주·서부권·동부권·수도권·전체), 2행은 고른 권역의 시도 + "<권역> 전체"; 값은 여전히 region 키 하나. 연령 5·성별 2·동반 8(원본 표기 그대로, `shortAccompany` 로 축약 표시)·월 6·박수 5 + 초기화(region 유지). 선택지 상수는 [tourFormat.ts](../../apps/web/src/components/tour/tourFormat.ts)(서버 zod 와 같은 값).
 - 맛집 상세: [tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts) 의 `'tour'`(여행자) 탭은 [PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx) 가 `detail.tour !== null` 일 때만 노출, [TourTab.tsx](../../apps/web/src/components/restaurant/detail/TourTab.tsx) 는 탭이 열릴 때만 `useRestaurantPublicTourStats` 로 조회(teal 톤 — 리뷰 AI 분석과 다른 신호). [HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) 는 헤더 [TourSummaryBadge](../../apps/web/src/components/restaurant/detail/TourSummaryBadge.tsx)("여행자 N명 · 만족 x.xx · 2023") + 요약 줄 `TourSummaryLine`(4칸 + 출처). [PublicRestaurantCard.tsx](../../apps/web/src/components/restaurant/PublicRestaurantCard.tsx) 메타 "🧭 여행자 N명 · x.x", [PublicRestaurantList.tsx](../../apps/web/src/components/restaurant/PublicRestaurantList.tsx) 정렬 칩 "여행자 방문순"·"여행자 만족순", [SmartPickSection.tsx](../../apps/web/src/components/restaurant/SmartPickSection.tsx) "🧭 여행자 만족 기준" 토글(`strategy: traveler`) + 결과 카드 근거, [RestaurantsV2Page.tsx](../../apps/web/src/routes/RestaurantsV2Page.tsx) 는 공유 진입 핀에 상세의 `tour` 를 조립.
 - 일상지도: [LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx) 의 배경 `overlay === 'tour'` 이면 `useTourDensity(kind, on)` → [tourDensityGeo.ts](../../apps/web/src/lib/tourDensityGeo.ts) 가 칸을 OL 면 피처(EPSG:3857, 속성 key·n·travelers 만)로 → `MapCanvas.areas` 경로(시군구 경계와 같은 클릭·스타일 규약) + [lifeMapAreas.ts](../../apps/web/src/components/life-map/lifeMapAreas.ts) `tourDensityAreaStyle`(등급별 Style 캐시, 선택 칸엔 건수 라벨). 토글 시 지도 중심이 표본 세트 bbox 밖(`tourSampleRegionAt` null)이면 `nearestTourSampleRegion` 중심으로 flyTo + `?ll&z`(9차부터 서울시청 기본 중심이 수도권 bbox 안이라 이동 없음). [LifeTourCard.tsx](../../apps/web/src/components/life-map/LifeTourCard.tsx) 는 종류 칩(전체/식당만 — [lifeMapPrefsStore](../../apps/web/src/stores/lifeMapPrefsStore.ts) v5 `tourDensityKind`)·범례(등급 경계)·선택 칸의 방문·여행자·등급 + **그 칸 bbox 의 등록 맛집**(`useRestaurantsPublic({bbox, sort:'tourTravelers', limit:12})` — 여행로그 장소 자체는 공개하지 않고 "우리 DB 식당" 만 잇는다). [LifeLayerBar](../../apps/web/src/components/life-map/LifeLayerBar.tsx) 배경 칩(범죄 통계와 배타 — `overlay` 하나), [LifeMapFooter](../../apps/web/src/components/life-map/LifeMapFooter.tsx) 출처 줄(`TOUR_DATASET_NAME`). 상세는 [life-map](life-map.md).
-- 어드민: [AdminTourPage.tsx](../../apps/web/src/routes/admin/AdminTourPage.tsx)(`/admin/tour`, 사이드바·상단바 "여행로그 시드" — [AdminLayout](../../apps/web/src/components/admin/AdminLayout.tsx)·[AdminTopBar](../../apps/web/src/components/admin/AdminTopBar.tsx)·[AdminRoutes](../../apps/web/src/routes/admin/AdminRoutes.tsx)) 상단 Stat 4(적재 — 데이터셋별 곳수·툴팁에 sourceFile/기준일, 맛집 매칭 `matched / candidates`·보류, 폐업 조회, 식당류 시드) + "매칭 다시 실행"·호출 상한·"폐업 조회 실행"(키 없으면 비활성), 아래 시드 표(지역 필터 = 전체 + 데이터셋 목록 자동, 상태 4, 여행자 N명 이상 기본 5, 이름 검색, 50/페이지) — 행마다 매칭/폐업 배지, "검색"(discover → 후보 카드, 수락 규칙 통과는 teal, "등록" → 크롤 잡 링크 `/admin/crawl-test/:jobId`)·"근거"(펼침에 [TourEvidencePanel](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx)). `b9da676` 가 헤더·숫자 열 `whitespace-nowrap`·고정 폭·툴팁·상태 카드 문구·필터 라벨을 실측 보정. TourEvidencePanel 은 방문·주문 원문·영수증·사진(`tourPhotoUrl` 로 `?token=` 조립, s 썸네일 → m 링크)·여행(일차 배지 + 타임라인) 5탭, 404 는 "원본 열람 권한이 없습니다" 안내. 어드민 식당 상세([AdminRestaurantDetailPage](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx))는 헤더 [TourMatchBadge](../../apps/web/src/components/restaurant/detail/TourMatchBadge.tsx)(거리·유사도·폐업 경고 배지) + 하단 `TourEvidenceSection`.
+- 어드민: [AdminTourPage.tsx](../../apps/web/src/routes/admin/AdminTourPage.tsx)(`/admin/tour`, 사이드바·상단바 "여행로그 시드" — [AdminLayout](../../apps/web/src/components/admin/AdminLayout.tsx)·[AdminTopBar](../../apps/web/src/components/admin/AdminTopBar.tsx)·[AdminRoutes](../../apps/web/src/routes/admin/AdminRoutes.tsx)) 상단 Stat 4(적재 — 데이터셋별 곳수·툴팁에 sourceFile/기준일, 맛집 매칭 `matched / candidates`·보류, 폐업 조회, 식당류 시드) + "매칭 다시 실행"·호출 상한·"폐업 조회 실행"(키 없으면 비활성), 아래 시드 표(지역 필터 = 전체 + 데이터셋 목록 자동, 상태 4, 여행자 N명 이상 기본 5, 이름 검색, 50/페이지) — 행마다 매칭/폐업 배지, "검색"(discover → 후보 카드, 수락 규칙 통과는 teal, "등록" → 크롤 잡 링크 `/admin/crawl-test/:jobId`)·"근거"(펼침에 [TourEvidencePanel](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx)). `b9da676` 가 헤더·숫자 열 `whitespace-nowrap`·고정 폭·툴팁·상태 카드 문구·필터 라벨을 실측 보정. TourEvidencePanel 은 방문·주문 원문·영수증·사진(`tourPhotoUrl` 로 `?token=` 조립, s 썸네일 → m 링크)·여행(일차 배지 + 타임라인) 5탭, 404 는 "원본 열람 권한이 없습니다" 안내. ~~어드민 식당 상세([AdminRestaurantDetailPage](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx))는 헤더 [TourMatchBadge](../../apps/web/src/components/restaurant/detail/TourMatchBadge.tsx)(거리·유사도·폐업 경고 배지) + 하단 `TourEvidenceSection`.~~ (~2026-09-19 기준)
+- **어드민 식당 상세 — 2026-09-26(`420a6be`) 이후 '여행자' 탭**: 어드민 식당 상세가 공개 상세의 탭 구성으로 바뀌었다(canonical 축 재구성 전반은 [canonical](canonical.md)).
+  - `TourMatchBadge`(거리·유사도·폐업 경고)는 새 헤더 [AdminDetailHeader.tsx:79-80](../../apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx) 의 `StoreInfoBadges` 옆에 있다 — 자리는 예전과 같다.
+  - '여행자' 탭은 [tabs.ts](../../apps/web/src/components/admin/restaurant-detail/tabs.ts) `ADMIN_DETAIL_TABS` 의 3번째(공개 순서 홈·분석·여행자… 를 따름)다. 탭 바에는 `detail.tour != null` 일 때만 나온다 — 어드민의 `RestaurantTourMatchInfo` 라 missing 도 포함된다. `?tab=tour` 인데 매칭이 없으면 홈으로 폴백한다.
+  - 탭 안([AdminRestaurantDetailPage.tsx:254-264](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx))은 두 겹이다. 공개 응답 `publicDetail.data.tour`(matched 만)가 있으면 위에 공개 [TourTab](../../apps/web/src/components/restaurant/detail/TourTab.tsx) 을 그린다(열릴 때 `useRestaurantPublicTourStats` → 공개 `tour-stats` 라우트, `RATE.tourRead`). 그 아래(`border-t`)에 [TourEvidenceSection](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx)이 온다 — 제목 "여행자 근거", 장소명·여행자 수·`sampleLabel`, `/admin/tour` 새 탭 링크, `TourEvidencePanel` 원본 5탭.
+  - missing 매칭이면 위쪽 집계 없이 근거만 보인다. 장소가 재적재로 아예 사라졌으면 `getRestaurantTourMatchInfo` 가 null 을 돌려줘 탭 자체가 없다([restaurant-tour-match.service.ts:179-188](../../apps/friendly/src/modules/tour/restaurant-tour-match.service.ts)). 그러니 탭이 보이는 missing 은 장소는 남았는데 후보 조건(거리·이름·1:1 선점)에서 빠진 경우다.
+  - 홈 탭은 공개 [HomeTab](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) 을 `availableTabs = PUBLIC_TABS_IN_ADMIN`(tour 포함)으로 재사용한다. 그래서 본문 머리의 `TourSummaryBadge` 와 "여행자 방문 통계" 섹션(`TourSummaryLine` + "여행자 탭 보기" → 어드민 '여행자' 탭)도 어드민에 나온다. `availableTabs` 에 없는 탭이면 그 버튼이 `disabled` 가 된다(공개 동작은 그대로).
+  - 요약 완료·재수집 때의 공개 캐시 무효화 목록(`invalidateRestaurantDetailCaches` — detail·insights·reviews·category-tree·menu-nutrition 등)에 `['restaurant','public','tour-stats',placeId]` 는 없다. 여행자 통계는 리뷰와 무관하니 맞는 선택이다.
 
 ### e2e — 실서버 + 헤드리스 크로미움
 
 [scripts/e2e-tour.ts](../../apps/friendly/scripts/e2e-tour.ts)(`pnpm --filter friendly e2e:tour [--web=http://localhost:5173] [--api=http://localhost:3000] [--shots=<dir>] [--headed]`, playwright)는 미리 띄운 friendly·Vite 에 붙어 32 step 을 돈다: ① API — insights 기본(여행 ≥20·집단 셀 n≥5·`FORBIDDEN` 키 스캔·출처 문구)·좁은 필터 insufficient·잘못된 필터 400·plan(n≥5·교통/숙소 없음)·density(travelers≥5·breaks 4·restaurant ⊂ all·bbox 절단·kind 400)·lodging·regions(3집단)·7차 `region=daejeon`·8차 `gangwon/east`·9차 `seoul/capital`·관리자 무인증(401/401/사진 404)·목록 `sort=tourTravelers`; ② `/travel/jeju` 렌더·지역 비교·숙소·출처·칩 → URL → 집계 갱신·표본 부족·초기화·딥링크 복원·코스 링크; ③ `/travel/plan` 제출·식당만·투표 버튼 비활성·조건 변경(결과 토글 "전체" 는 `.last()` — 지역 칩과 겹침); ④ `/life-map` 밀도 토글(표본 안이면 이동 없음 분기)·칸 클릭·종류 칩 저장(localStorage prefs v5)·범죄 통계 배타; ⑤ 390px 가로 넘침 0·콘솔 error 0. 스크린샷은 `data/e2e-shots`. 9차 실측 32/32(2026-09-19).
 
-## Talks To [coverage: high — 14 sources]
+## Talks To [coverage: high — 19 sources]
 
 | 상대 | 방향 | 내용 |
 |---|---|---|
 | tour-c / tour-c-west / tour-c-east / tour-c-capital(리포 밖 `niney-tour-pickr`) | 입력 | `npm run data:export -- --thumbs s` 가 만든 `lp-*-2023/`(manifest exportVersion 1 + 10표 JSONL.gz + thumbs/s). 다른 권역은 tour-c 스크립트 사본 + `source-view` junction(TS_photo·VS_photo·SbL 을 제주식 배치로) 을 `TOUR_DATA_ROOT` 로 실행 — **코드 수정 없음**. 4세트 공용 POI·코드표 md5 동일 |
 | AI 허브(aihub.or.kr) | 정책 | 이용조건(학습용 조항 vs FAQ 2차 저작물 자유 — 문언 충돌)·출처 표기·환수. 부록 B 문의문(4 데이터셋) 발송 후 서면 회신 전 공개 화면 노출 금지 |
 | 국세청 사업자등록정보 진위확인·상태조회(data.go.kr **15081808**, odcloud) | 아웃바운드 | `POST …/nts-businessman/v1/status`, `DATA_GO_KR_API_KEY`(계정 공용 — 이 데이터셋 활용신청 필요), 100건/콜, `fetchWithTimeout` 20초. 수동(어드민 버튼·`check:tour-biz`)만, deploy 자동 실행 없음(쿼터) |
-| [canonical](canonical.md) | 소비·재사용 | `RestaurantTourMatch.canonicalId` FK(cascade), `restaurant-store-match.service.storeNameScore` 재사용, `RestaurantStoreMatch` 와 같은 골격(canonical 당 1행·1:1·거리+이름·matched/missing·재실행 멱등) |
+| [canonical](canonical.md) | 소비·재사용 | `RestaurantTourMatch.canonicalId` FK(cascade), `restaurant-store-match.service.storeNameScore` 재사용, `RestaurantStoreMatch` 와 같은 골격(canonical 당 1행·1:1·거리+이름·matched/missing·재실행 멱등). **(2026-09-26)** 어드민 식당 상세가 canonical 축으로 재구성됐다(리뷰·출처 행·요약 운영을 canonical 의 모든 행으로). `tour` 필드는 그 응답에 그대로 남았고(네이버 행의 `canonicalId` 로 조회), 표시만 '여행자' 탭으로 옮겨졌다. 헤더 삭제(네이버 행만)는 canonical 을 남기므로 `RestaurantTourMatch` 도 남는다 — 네이버 행이 유일했으면 행 없는 canonical 에 매칭만 매달린다(다음 `runMatch` 는 식당 행 없는 canonical 을 후보에서 빼지만, 기존 매칭 행을 지우지는 않는다 — 아래 Gotchas) |
 | 맛집 공개 API([restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) | 결합 | `getPublicList`(canonicalId 500개씩 `getPublicListTourMap` → 행 `tour`, `sort=tourTravelers|tourScore` 는 null 뒤로), `getPublicDetail`(`getRestaurantTourSummary`), `smartPick`(`traveler` = `travelerWeight` 만, `balanced` = 감성·만족·여행자 중 있는 점수 평균 → 리뷰 분석 없는 매칭 가게도 후보, `avgTravelerScore`), 어드민 상세 `tour: getRestaurantTourMatchInfo` |
 | [crawl](crawl.md) · [random-crawl](random-crawl.md) | 재사용 | `CrawlService.searchPlaces(query, bbox)`(네이버 검색, http/playwright)·`startCrawl(rawSourceUrl, actorId, 'create')`·`jobRegistry.subscribe(jobId)`(done → 매칭 재실행). 어드민 시드 표의 "등록 잡" 링크 `/admin/crawl-test/:jobId` |
 | [life-map](life-map.md) | 공유 | `LifeMasterSync`(layer `tour`·`tour-<key>`), `status:life-map` 한 줄(`tour=` + `tour_<세트>=` + `tour_matched=`), deploy.sh `life_map_data` 의 세트 루프, 웹 배경 레이어 `LIFE_MAP_OVERLAYS=['crime','tour']`(utils [lifeCrime.ts](../../packages/utils/src/lifeCrime.ts) 에 정의)·`overlay` 하나만(범죄 통계와 배타)·prefs v5 |
@@ -112,11 +123,12 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 | [vote](vote.md) | 아웃바운드 | `/travel/plan` → `/vote/new` `location.state { presetTitle, presetOptions }`(2~8곳, 로그인 필요) |
 | 인증·플러그인([friendly](friendly.md)) | 가드 | `app.authenticate`·`app.requireAdmin`·`app.resolveSseAdmin`(사진 `?token=`), [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) `RATE.tourRead` 120/분(공개 tour 라우트 6개), autoload `matchFilter /\.route\.(ts|js)$/` + `dirNameRoutePrefix:false`([app.ts](../../apps/friendly/src/app.ts)) |
 | [api-contract](api-contract.md) · [utils](utils.md) · [shared](shared.md) | 계약·상수·훅 | `schemas/tour.ts`(690줄)·`restaurant.ts` tour 필드·`Routes.Tour`(공개 6·어드민 6·원본 7) / `tourLog.ts`(246줄, 키 이중 정의) / `tour.api.ts`·`useTour.ts` + `restaurant.api.publicTourStats`·`useRestaurantPublicTourStats` |
-| [web](web.md) | 화면 | `/travel/jeju`·`/travel/plan`(lazy)·`/admin/tour`·상세 여행자 탭·목록/골라줘·일상지도 배경. 상단바 NAV "여행" 추가로 8개(폭 예산) |
+| [web](web.md) | 화면 | `/travel/jeju`·`/travel/plan`(lazy)·`/admin/tour`·상세 여행자 탭·목록/골라줘·일상지도 배경. ~~상단바 NAV "여행" 추가로 8개(폭 예산)~~ — 실측으로 바로잡음: 5차(`99991da`) 시점에 이미 상단바 NAV 12개 중 6번째였다. 2026-09-25(`2ff2c31` 주차·`4a2bff1` 바다) 이후엔 14개 중 7번째다(`홈·맛집·대중교통·주차·일상지도·집값·여행·날씨·바다·대기질·타로·사주(C)·사주(G)·식단`, [PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx)·[PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx) 같은 순서, 폭 예산은 [web](web.md)). **(2026-09-26)** 어드민 식당 상세 '여행자' 탭(공개 `TourTab` + `TourEvidenceSection`) |
+| [api-docs](api-docs.md) | 외부 공개 | **(2026-09-24 `1b621c4`)** 공개 6개 라우트의 한국어 `summary` 가 `export:openapi` 를 거쳐 [openapi.json](../../docs/api/openapi.json)(`x-auth: public`, `x-rate-limit` 120/1분, tag `tour`)·[endpoints.md](../../docs/api/endpoints.md) `tour` 절에 실린다. 수기 [README.md](../../docs/api/README.md) 는 도메인 개요(4개 권역, 2023년 4~9월 표본, "집계만")와 7절 이용 조건(5명 미만 셀 제외·`null`, `sourceNote`·`sampleLabel` 표기, 원본 수준 재구성·재배포 금지)을 적었다. [cors.ts](../../apps/friendly/src/plugins/cors.ts) 는 어드민 외 `origin: '*'`·`credentials: false` 다 — 공개 tour 라우트는 열리고, `/api/v1/admin/tour/**`(시드·매칭·원본 열람·사진)는 prod 에서 `PUBLIC_ORIGIN` 만 허용한다 |
 | [mobile](mobile.md) | 없음 | 앱에 여행로그 화면·훅 사용 없음(후속 후보: WebView 또는 네이티브 탭) |
 | lru-cache · playwright | 라이브러리 | 인사이트/숙소/지역 LRU(max 200, 10분)·밀도(max 20) / e2e 크로미움 |
 
-## API Surface [coverage: high — 12 sources]
+## API Surface [coverage: high — 15 sources]
 
 ### HTTP — 공개 층 (인증 없음, `tags: ['tour']`, `RATE.tourRead` 120/분, 응답에 여행·방문·여행자 식별자 없음)
 
@@ -132,6 +144,19 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 | (기존 확장) `GET /restaurants/public/:placeId` | — | `tour: RestaurantTourSummary\|null`(nTravelers·nVisits·nRated·bayesScore·meanDgstfn·revisitRate·stayMedian·spendPpMedian·topReasonNm·sampleLabel·sourceNote) | nRated<3 → bayesScore null |
 | (기존 확장) `POST /restaurants/public/smart-pick` | `strategy: 'traveler'` 추가 | `avgTravelerScore` | traveler = `(bayes−1)/4`, balanced 는 있는 점수 평균 |
 
+**(2026-09-24 `1b621c4`) 한국어 `summary` — 외부 문서의 원문.** 위 6개 전용 라우트는 `schema.summary` 를 달고 `export:openapi` 로 [endpoints.md](../../docs/api/endpoints.md) `## tour` 절에 "공개 · 120/분" 으로 실린다([tour-public.route.ts](../../apps/friendly/src/modules/tour/tour-public.route.ts)). 동작 변화는 없다.
+
+| 라우트 | `summary` |
+|---|---|
+| `GET /tour/public/density` | 여행자 방문 밀도 격자(0.02°) — 여행 5건 미만 칸 제외, bbox 선택 |
+| `GET /tour/public/lodging` | 여행 숙소 유형별 통계 — 결제액·1박 추정·예약률·만족도, 지역·연령 등 필터 |
+| `GET /tour/public/regions` | 여행 지역 비교 — 시군구(제주는 제주시·서귀포·부속섬) 집단·읍면동 상위 통계 |
+| `GET /restaurants/public/:placeId/tour-stats` | 맛집 여행자 방문 통계("여행자" 탭) — 집계만, 여행로그 매칭 없는 식당은 404. `description`: 2023년 4~9월 표본 가공 집계, 식별자 없음, 동반·연령 집단 5건 미만 제외, 평점·지출은 표본 3건 미만·재방문율·체류는 방문 5건 미만이면 null |
+| `GET /tour/public/insights` | 여행 인사이트 집계 — 지역·연령·성별·동반·월·박수 필터, 여행 20건 미만이면 insufficient |
+| `POST /tour/public/plan` | 비슷한 여행자 기반 코스 추천 — 조건 부족 시 월→성별→박수→연령 순 완화 |
+
+목록·상세·골라줘(`/restaurants/public*`)의 여행로그 확장 필드·`sort`·`strategy` 는 [endpoints.md](../../docs/api/endpoints.md) `## public` 절(골라줘 설명 "AI 분석·여행자 점수 가중")에 있다. 관리자·원본 열람 층(아래)은 어드민 라우트라 외부 문서 대상이 아니다.
+
 ### HTTP — 관리자 층 (`authenticate` + `requireAdmin`, `tags: ['admin']`)
 
 | 라우트 | 입력 | 응답 |
@@ -142,7 +167,7 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 | `POST /api/v1/admin/tour/seeds/:placeId/register` | `{rawSourceUrl: url}` | `TourSeedRegisterResult` — `start: StartCrawlResult`(ok → jobId, 끝나면 매칭 자동 재실행) |
 | `POST /api/v1/admin/tour/match/run` | — | `TourMatchRunResult` — scanned·created·rematched·kept·newlyMissing·stillMissing·recovered·unmatched·durationMs(동시 호출은 진행 중 프로미스 공유) |
 | `POST /api/v1/admin/tour/biz-status/run` | `{maxCalls=10(1~50), minTravelers=3, region=jeju, force=false}` | `TourBizCheckResult` — candidates·pending·calls·checked·byStatus{open,suspended,closed,unknown}·stopped(done\|maxCalls\|auth\|quota\|error)·error |
-| (기존) `GET /api/v1/admin/restaurants/:placeId` | — | `tour: RestaurantTourMatchInfo\|null`(tourPlaceId·placeName·typeShort·distM·nameScore·status·matchedAt·장소 집계·bizStatus) |
+| (기존) `GET /api/v1/admin/restaurants/place/:placeId`(26차 표기 `/admin/restaurants/:placeId` 는 오기 — `Routes.Restaurant.byPlaceId`) | — | `tour: RestaurantTourMatchInfo\|null`(tourPlaceId·placeName·typeShort·distM·nameScore·status·matchedAt·장소 집계·bizStatus). **(2026-09-26)** 같은 응답이 `canonicalId`·`sources`·출처 통합 `reviews` 를 싣게 됐다([canonical](canonical.md)). `tour` 는 그대로 네이버 행의 canonicalId 로 조회한다 |
 
 ### HTTP — 원본 열람 층 (`authenticate` + `requireAdmin` + `requireTourRaw`, 응답 `Cache-Control: private, no-store`·`X-Robots-Tag: noindex, nofollow`, allowlist 밖·없는 장소 404)
 
@@ -164,7 +189,7 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 | `match:restaurant-tour [--dry-run]` | TourPlace 0 이면 종료. 전 canonical 검토 → 결과·사라짐 리포트(2,000건마다 진행) |
 | `check:tour-biz [--max-calls=10] [--min-travelers=3] [--region=jeju\|all] [--force]` | 국세청 조회. `--region` 은 CLI 에서 `all` 아니면 `jeju`(서비스는 21키 전부 받는다) |
 | `e2e:tour [--web=] [--api=] [--shots=] [--headed]` | 실서버 e2e 32 step(위) |
-| `status:life-map` | `ok … tour=T tour_jeju=… tour_west=… tour_east=… tour_capital=… tour_matched=X …`(세트 키는 `TOUR_DATASET_KEYS` 순서) |
+| `status:life-map` | `ok … tour=T tour_jeju=… tour_west=… tour_east=… tour_capital=… tour_matched=X …`(세트 키는 `TOUR_DATASET_KEYS` 순서). 2026-09-24(`ad48f96`)부터 `store=S` 와 `tour=` 사이에 `flood=F` 가 있다 |
 
 ### FE 공통 export ([tour.api.ts](../../packages/shared/src/api/tour.api.ts)·[useTour.ts](../../packages/shared/src/hooks/useTour.ts))
 
@@ -183,11 +208,13 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 
 1. 로컬 export 4폴더를 `rsync -av --delete data/open/tour/<export>/ samplepcb@<host>:/home/samplepcb/niney-life-pickr-v2/data/open/tour/<export>/` 로 올린다(git 밖 — `.gitignore` 의 `/data/`).
 2. `pnpm --filter friendly load:tour --dataset jeju --dry-run`(manifest sha·정규화 리포트 — FTP 로 올렸으면 여기서 깨짐을 잡는다) → 세트별 `load:tour --dataset <key>`(경로 인자는 **절대경로** — `--filter` 는 `apps/friendly` 기준) → `match:restaurant-tour`(먼저 `--dry-run` 으로 매칭률) → `status:life-map` 확인.
-3. API 배포(케이스 1·2·4)의 `life_map_data` 는 `tour_<세트>=0` 이고 `<dir>/manifest.json` 이 있으면 "키|폴더|이름" 루프로 세트별 자동 적재 후 매칭 한 번(폴더 없으면 안내만). **`./deploy.sh 6` 은 force 라 CCTV·화장실·병의원·상가까지 전부 재적재하므로 여행로그만 넣을 땐 쓰지 않는다.**
+3. API 배포(케이스 1·2·4)의 `life_map_data` 는 `tour_<세트>=0` 이고 `<dir>/manifest.json` 이 있으면 "키|폴더|이름" 루프로 세트별 자동 적재 후 매칭 한 번(폴더 없으면 안내만). **`./deploy.sh 6` 은 force 라 CCTV·화장실·병의원·상가까지 전부 재적재하므로 여행로그만 넣을 땐 쓰지 않는다.** (2026-09-24 이후 force 는 서울 열린데이터에서 침수흔적도 목록을 다시 받는 `load:life-flood --download` 까지 돈다. 2026-09-25 부터 케이스 1·2·4 는 `life_map_data` 뒤에 `parking_data` 도 부른다 — [deploy.sh:164-176](../../deploy.sh) 여행로그 루프 자체는 그대로.)
 4. `.env` 에 `TOUR_RAW_USER_IDS`·(다른 위치면) `TOUR_THUMBS_DIR*` → `pm2 restart`. 관리자 원본 화면은 Cloudflare 프록시를 거치지 않는 경로(DNS 전용 서브도메인 또는 `ssh -L 3000:127.0.0.1:3000`) 권장.
 5. 환수·폐기: `unload:tour --yes`(전부) 또는 `--yes --dataset <key>` + `rm -rf data/open/tour/<export>`.
 
 ## Data [coverage: high — 9 sources]
+
+**(2026-09-24~26) 변화 없음** — Tour* 10표·사이드 2표·마이그레이션·export 규격·적재 규모가 그대로다. `schema.prisma` 에서는 앞쪽에 `LifeFloodTrace`(`ad48f96`)와 `Parking*`·`Ev*` 5모델(`2ff2c31`)이 들어와 줄 번호만 +162 밀렸다(2026-09-26 기준 `TourPlace` :2522 ~ `TourCode` :2903, `RestaurantTourMatch` :2918, `TourPlaceBizStatus` :2937).
 
 ### Prisma 모델 12개 — `Tour*` 10(FK 없음, `dataset` 열 기본 `'jeju'`) + 사이드 테이블 2
 
@@ -263,7 +290,10 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - 리포 밖 원천: `D:\work\workspace_other\niney-tour-pickr\tour-c*`(변환기·썸네일 보관본). 리포 안 export: `data/open/tour/<exportName>/`(`.gitignore` `/data/` — 문서 주석 목록엔 tour 가 빠져 있으나 규칙은 `/data/` 통째).
 - 운영: `/home/samplepcb/niney-life-pickr-v2/data/open/tour/<export>/`(rsync), DB `apps/friendly/data/prod.db`.
 
-## Key Decisions [coverage: high — 18 sources]
+## Key Decisions [coverage: high — 22 sources]
+
+- **2026-09-26 어드민 식당 상세의 여행로그는 '여행자' 탭 한 곳에 — "공개 집계 + 근거"**(`420a6be`, 사용자 결정) — 26차의 "헤더 배지 + 본문 하단 근거 카드" 를 탭으로 옮겼다. 위에는 공개 `TourTab` 을 그대로 재사용해 사용자가 보는 집계를 똑같이 보여 주고, 아래에만 원본 근거(`TourEvidenceSection` — allowlist 층)를 둔다(페이지 주석: 공개 탭 컴포넌트를 그대로 써 "사용자가 보는 화면 = 어드민이 보는 화면"). 탭 노출 기준은 공개 요약(matched)이 아니라 어드민 매칭 정보(missing 포함)다. 그래서 후보에서 빠진 매칭도 근거로 검토할 수 있다. `TourMatchBadge` 는 새 헤더 컴포넌트에서 같은 자리를 지킨다. 탭 순서는 공개 상세(홈·분석·여행자·메뉴…)를 따른다.
+- **2026-09-24 공개 6개 라우트를 외부 문서에 "공개" 로 — 계약·동작 변경 없이 `summary` 만**(`1b621c4`, 사용자 결정 "어드민 제외, 열 수 있는 건 다 열기") — 여행로그 공개 층은 4차부터 식별자 없는 zod + 소셀 억제라, 외부 문서(`openapi.json`·`endpoints.md`)는 그 계약을 그대로 보여 준다. 이용 조건(집계만·출처 문구 표기·원본 수준 재구성/재배포 금지)은 수기 `docs/api/README.md` 7절이 외부 사용자에게 전한다. 원본 열람·시드 콘솔은 `/api/v1/admin/**` 라 CORS 개방에서도 외부 문서에서도 빠진다. PLAN 의 "4~6차 배포는 AI 허브 회신 뒤" 조건과 맞춰 본 기록은 없다(Gotchas).
 
 - **2026-09-19 수도권(71581)은 "표본 성격이 다르다" 를 인정하고 용도를 바꿈**(`6cae6b2`, 9차) — 거주자 나들이 표본(당일 67%)이라 5명↑ 식당이 41곳뿐 → 공개 장소 통계는 대부분 억제되므로 시드 발굴 대신 운영 맛집 매칭(서울 1,810곳)·서울 밀도 레이어·나들이 코스에 두고, 시드 콘솔은 하한 3명으로 본다. 거점은 역·터미널·공항만("거점 다음" 은 타지 거주자 15% 용). 서울이 표본 bbox 안으로 들어와 밀도 토글이 더 이상 이동하지 않는다(utils 테스트는 표본 밖 판정을 독도 동쪽 좌표로, e2e 는 "안이면 이동 없음" 분기). 로더·마이그레이션·region-filter·웹 컴포넌트 수정 없이 상수 + 계약 두 배열 + env + deploy 루프 항목만.
 - **2026-09-19 권역 추가 비용을 "상수 한 줄 + 계약 두 배열 + deploy.sh 루프 한 항목" 으로 고정**(`93ae031`, 8차 동부권) — `TourRegionDef.parent` 로 권역 묶음을 파생(`TOUR_REGION_GROUPS`·`tourRegionGroupOf`)해 웹 지역 칩 2행·어드민 데이터셋 필터·출처 문구 데이터명이 상수에서 자동. `tourSampleRegionAt/nearestTourSampleRegion` 을 제주 특수 케이스에서 데이터셋 전체로 일반화(`isNearJeju`·`JEJU_CENTER` 는 별칭). `status:life-map` 의 `tour_<세트>` 도 키 순회. e2e 는 7차 뒤 낡은 step 2건(코스 화면 "전체" 버튼이 지역 칩과 겹침 → `.last()`, 밀도 토글은 가까운 표본 중심)을 고쳤다.
@@ -278,7 +308,12 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - **2026-09-13 export 는 JSONL.gz 10표 + manifest, 적재기는 계약 위반을 조용히 넘기지 않음**(`c777380`, 1차) — CSV 대신 JSONL(형 보존·열 매핑 없음), 표마다 정규화 함수가 키·형을 명시, 제외 열(설문 원문·촬영 좌표)이 섞이면 적재 거부, 비공개 마스킹은 export 와 로더가 각각 재검증(`privateLeak`). 전량 교체 한 트랜잭션(청크 바인드 예산 30,000, timeout 60분), `unload:tour` 한 명령으로 환수 대비, `codes` 는 테이블로(PLAN 의 "utils 상수" 안과 다름).
 - **2026-09-13 "한 DB, 두 출구" 와 범위 4결정**(PLAN 0차) — 맛집 한정이 아니라 모든 유형을 가져오고(식당 외 유형은 TourPlace 로 인사이트·코스에), 제3자에게 허용되는 것은 전부 구현, 운영에 원본은 관리자 전용·쓸모 있는 것만(시드·폐업·근거·참고 사진·코스 샘플), raw 14표·GPS·설문 원문·캡션은 올리지 않는다(tour-c 로컬이 이미 한다). 미확정 항목(서버 소재 국내 가정·관리자 1명·참고 사진 256px·AI 허브 서면 확인)은 PLAN 표에 남겨 두고 공개 배포를 회신에 걸었다.
 
-## Gotchas [coverage: high — 16 sources]
+## Gotchas [coverage: high — 22 sources]
+
+**2026-09-24~26 새로 드러난 것**
+- **외부 API 문서·CORS 개방과 PLAN 의 "공개는 AI 허브 서면 회신 뒤" 가 맞춰지지 않았다** — [PLAN-tour-log.md](../../docs/PLAN-tour-log.md) 는 서면 확인을 "4차(공개) 전에 받는다" 고 했고, 4~6차 행마다 "(배포는 AI 허브 회신 뒤)" 를 달았다. 그런데 `1b621c4` 이후 공개 6개 라우트가 [endpoints.md](../../docs/api/endpoints.md)·[openapi.json](../../docs/api/openapi.json) 에 "공개" 로 등재되고, [README.md](../../docs/api/README.md) 는 기준 URL `https://ninelife.kr` 로 다른 프로젝트가 쓰도록 안내하며, [cors.ts](../../apps/friendly/src/plugins/cors.ts) 는 브라우저 교차 출처 호출을 연다. 내용은 집계뿐이라 PLAN 이 구분한 "원본 제3자 제공 금지" 에는 걸리지 않는다. 다만 PLAN 이 문제 삼은 "학습용으로만" 조항 대 "2차 저작물 자유" 의 문언 충돌은 **공개 여부** 자체에 걸린 조건이다. 웹 화면만 막으면 되는지, API 문서화도 "공개" 인지 어느 문서에도 적혀 있지 않다(사용자 확인 필요). 라우트 자체는 원래 인증이 없어, 서버에 올라가 있으면 누구나 부를 수 있었다. 문서화와 CORS 개방은 그걸 "권장 사용" 으로 바꾼 것이다.
+- **헤더 삭제·테스트 잔재로 생긴 고아 canonical 이 여행로그 장소를 계속 "선점" 한다** — `matchRestaurantTour` 는 `claimed` 를 **모든** 기존 매칭으로 채우지만, 훑는 대상은 식당 행이 있는 canonical(`TOUR_MATCH_CANONICAL_WHERE`)뿐이다([restaurant-tour-match.service.ts:61-77](../../apps/friendly/src/modules/tour/restaurant-tour-match.service.ts)). 그래서 식당 행이 모두 사라진 canonical 의 매칭 행은 `matched` 그대로 남는다(`missing` 으로도 안 바뀐다). 그 장소는 근처에 새로 등록된 같은 가게(새 canonical)에게 넘어가지 않고, `tour_matched`·어드민 상태의 `match.matched` 에도 계속 잡힌다. 경로는 둘이다. 하나는 어드민 식당 상세의 삭제 — `420a6be` 이후 출처 통합 헤더에 있지만 여전히 네이버 행만 지운다. 다른 하나는 dev.db 를 직접 쓰던 테스트다. 복구는 `unload:tour` 가 아니라 canonical 단위 삭제(`DELETE /admin/canonical/:id` → Cascade)다([canonical](canonical.md) Gotchas).
+- **어드민 '여행자' 탭은 테스트·육안 검증이 없다** — [AdminRestaurantDetailPage.test.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx) 4건의 픽스처는 어드민·공개 응답 모두 `tour: null` 이다. 그래서 탭 노출(missing 포함)·`?tab=tour` 폴백·`TourTab` + `TourEvidenceSection` 2단 구성은 테스트로 고정되지 않았다. 커밋 본문도 "화면 육안 확인은 못 함(브라우저 확장 미연결)" 이라고 적었다. e2e(`e2e:tour`)가 보는 건 공개 화면과 관리자 API 의 무인증 거부까지다 — 어드민 화면은 돌지 않는다.
 
 **PLAN ↔ 코드 어긋남([PLAN-tour-log.md](../../docs/PLAN-tour-log.md) 는 "계획 시점 기록, 커밋 이력이 진실" 이라 명시)**
 - 공개 목록 정렬 파라미터: PLAN §공개 API `sort=tour_travelers | tour_score` ↔ 코드·계약 `tourTravelers | tourScore`([restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts)).
@@ -287,12 +322,12 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - `codes` 는 PLAN 의 "테이블 없이 utils 상수" 가 아니라 `TourCode`(`tour_codes`) 테이블(238행, 세트 공용 통째 교체). PLAN 의 `TourAggregateService` 는 실제로 `tour-public.service`(함수) + `TourInsightsService` + `TourRegionService` 셋.
 - PLAN 테스트 표의 `tour-admin.test.ts`(allowlist·헤더·사진) 는 실제 [tour-raw.route.test.ts](../../apps/friendly/src/modules/tour/tour-raw.route.test.ts), `restaurant-tour-match.test.ts` 는 `.service.test.ts`.
 - PLAN 웹 화면 표 "사이드바·홈 카드 — 홈 '여행' 메뉴" ↔ 홈([HomePage.tsx](../../apps/web/src/routes/HomePage.tsx))엔 여행 진입이 없다(사이드바·상단바만). 체크리스트의 `/about` 출처 표기도 about 페이지가 없어 해당 없음.
-- 출처 문구 하드코딩 잔재: `TOUR_SOURCE_NOTE` 는 4개 데이터명을 자동으로 넣지만 [AdminTourPage.tsx](../../apps/web/src/routes/admin/AdminTourPage.tsx) 푸터(287줄)·[TourEvidencePanel.tsx](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx)(190줄) 는 「…(제주도 및 도서지역)」만, AdminTourPage 설명(98줄)은 "제주·도서 71780 + 서부권 71779"(8·9차 미반영), [SmartPickSection.tsx](../../apps/web/src/components/restaurant/SmartPickSection.tsx) 안내 "2023년 제주 여행자들이…"(210줄), TourTab·PublicRestaurantList 주석 "제주 패널". 어드민·주석이라 이용조건 위반은 아니지만 공개 골라줘 문구는 4권역 반영 필요.
+- 출처 문구 하드코딩 잔재: `TOUR_SOURCE_NOTE` 는 4개 데이터명을 자동으로 넣지만 [AdminTourPage.tsx](../../apps/web/src/routes/admin/AdminTourPage.tsx) 푸터(287줄)·[TourEvidencePanel.tsx](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx)(190줄) 는 「…(제주도 및 도서지역)」만(2026-09-26 재확인 — 두 파일 모두 이번 라운드 무변경. TourEvidencePanel 문구는 이제 어드민 식당 상세 '여행자' 탭에서도 수도권·동부권 장소에 그대로 뜬다), AdminTourPage 설명(98줄)은 "제주·도서 71780 + 서부권 71779"(8·9차 미반영), [SmartPickSection.tsx](../../apps/web/src/components/restaurant/SmartPickSection.tsx) 안내 "2023년 제주 여행자들이…"(210줄), TourTab·PublicRestaurantList 주석 "제주 패널". 어드민·주석이라 이용조건 위반은 아니지만 공개 골라줘 문구는 4권역 반영 필요.
 - PLAN 부록 A 문구(제주 데이터명만)는 `TOUR_SOURCE_NOTE` 가 대체 — 문구 개정은 utils 상수 + 서버 응답 `sourceNote` 로 배포 없이 반영.
 
 **운영 함정**
 - **manifest.dataset 은 늘 `aihub-71780`** — 세트 판정은 `--dataset` + 제주 방문 비율(jeju ≥50%, 그 밖 ≤10%) 뿐. 틀리게 주면 적재 전에 던진다; 여행 0건 export(테스트)는 검사가 없다.
-- **`./deploy.sh 6` 은 force** — CCTV·화장실·병의원·상가까지 전부 재적재. 여행로그만 넣을 땐 `load:tour --dry-run → load:tour --dataset <key> → match:restaurant-tour` 직접(`cfa276b`). deploy 자동 적재는 `tour_<세트>=0` 일 때만(첫 적재) — 재적재는 항상 수동.
+- **`./deploy.sh 6` 은 force** — CCTV·화장실·병의원·상가까지 전부 재적재(2026-09-24~ 침수 흔적 `load:life-flood --download` 도). 여행로그만 넣을 땐 `load:tour --dry-run → load:tour --dataset <key> → match:restaurant-tour` 직접(`cfa276b`). deploy 자동 적재는 `tour_<세트>=0` 일 때만(첫 적재) — 재적재는 항상 수동.
 - **`pnpm --filter friendly load:tour <dir>` 의 dir 은 절대경로** — `--filter` 가 `apps/friendly` 를 cwd 로 쓴다(기본값 생략 시 스크립트가 `import.meta.url` 로 리포 루트를 계산). 서버 쪽 `tourDefaultExportDir` 는 cwd 두 후보(`apps/friendly`·리포 루트)만 본다.
 - `TOUR_RAW_USER_IDS` 는 **기동 시** 읽는다 — 바꾸면 `pm2 restart friendly`. 비우면 원본 라우트 전부 404(존재 은닉이라 "권한 없음" 과 구분이 안 된다 — 웹은 404 를 권한 안내로 바꾼다). 이메일은 대소문자 무시, 사진 라우트는 DB 조회 한 번 더.
 - `check:tour-biz` CLI 의 `--region` 은 `all` 아니면 `jeju` 로 강제(서비스·어드민은 21키/데이터셋 키 가능). `DATA_GO_KR_API_KEY` 에 15081808 활용신청이 없으면 401/403 → `auth` 즉시 중단. 국세청 쿼터라 deploy 에서 자동 실행하지 않는다.
@@ -300,11 +335,11 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - `unload:tour` 는 DB 만 비운다 — 썸네일 폴더(`data/open/tour/<export>/thumbs` 또는 `TOUR_THUMBS_DIR*`)는 직접 `rm -rf`. 환수 대응은 이 둘을 같이.
 - `TourSpend.id` 는 자체 증가라 세트 재적재마다 바뀐다(원본 열람 영수증 표의 `id` 는 키로 저장하지 말 것).
 - 수도권은 5명 하한에 공개 통계가 거의 억제된다 — `region=seoul` 인사이트는 여행 2,532건이지만 장소 단위(상세 여행자 탭·코스 장소)는 얇다. 시드 콘솔은 여행자 3명 이상으로 내려 본다.
-- `deploy.sh` 110줄 주석의 status 형식엔 `tour_<세트>` 가 빠져 있다(코드는 출력, `stat_val` 은 키 단위라 무해).
+- `deploy.sh` 110줄 주석의 status 형식엔 `tour_<세트>` 가 빠져 있다(코드는 출력, `stat_val` 은 키 단위라 무해). 2026-09-26 재확인: 여전히 110줄이고, 이제 `flood=` 도 빠져 있다(`life-map-status.ts` 머리 주석은 `flood=F` 를 반영).
 
 **코드·테스트 함정**
 - **키 이중 정의**: `TOUR_DATASET_KEYS`·`TOUR_REGION_KEYS` 는 [tourLog.ts](../../packages/utils/src/tourLog.ts) 와 [schemas/tour.ts](../../packages/api-contract/src/schemas/tour.ts) 둘 다에 리터럴로 있고 순서까지 같아야 한다(`toEqual`). 권역을 더 붙이면 utils 2곳 + 계약 2곳 + `TOUR_REGIONS`(권역 + 시도, `parent`) + env `TOUR_THUMBS_DIR_<KEY>`([env.ts](../../apps/friendly/src/config/env.ts) — `resolveTourThumbsDir` 는 `process.env` 를 직접 읽지만 스키마에 없으면 `.env.example` 안내가 빠진다) + deploy.sh 루프 "키|폴더|이름" + `TOUR_<KEY>_EXPORT_DIR`.
-- **격리 DB 헬퍼가 dev.db 를 통째로 복사한다**([temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts) — 로컬 dev.db 3.5GB, tour 표 4세트 ~100만 행 포함) 뒤 모든 테이블을 `DELETE` 하므로 tour 테스트 8파일의 `beforeAll` 이 무겁다. [vitest.config.ts](../../apps/friendly/vitest.config.ts) 엔 `hookTimeout` 설정이 없어(기본 10초) 디스크·CPU 부하 시 hook timeout 으로 깨질 수 있다 — 재실행하거나 `--hookTimeout` 을 늘린다. `fileParallelism:false` 라 파일은 직렬.
+- **격리 DB 헬퍼가 dev.db 를 통째로 복사한다**([temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts) — 로컬 dev.db 3.5GB, tour 표 4세트 ~100만 행 포함) 뒤 모든 테이블을 `DELETE` 하므로 tour 테스트 8파일의 `beforeAll` 이 무겁다. ~~[vitest.config.ts](../../apps/friendly/vitest.config.ts) 엔 `hookTimeout` 설정이 없어(기본 10초) 디스크·CPU 부하 시 hook timeout 으로 깨질 수 있다 — 재실행하거나 `--hookTimeout` 을 늘린다.~~ (~2026-09-19 기준) **`5d7b686`(2026-09-25) 이 `hookTimeout: 60_000` 을 전역으로 넣었다.** 커밋 본문: "dev.db(3.6GB)를 통째로 복사해 비우느라 기본 10초를 넘겨, 파일 캐시가 차가운 전체 실행에서 간헐 실패"(parking.test 의 개별 180초 한도는 제거). friendly 전체 143파일·1,522 통과. 60초도 넘기면 다시 깨지므로 dev.db 가 더 커지면 같은 함정이 돌아온다. `fileParallelism:false` 라 파일은 직렬.
 - 공개 응답에 새 필드를 더할 땐 이름을 `FORBIDDEN_KEYS`(`travelId|visitAreaId|travelerLabel|photoId|travel_id|visit_area_id|traveler_label|tourPlaceId`) 밖으로 — `placeId` 는 네이버 id 라 허용, 여행로그 장소 id 는 어떤 이름으로도 공개 응답에 넣지 않는다.
 - 인사이트의 소비 조회는 region 을 SQL 에서 걸지 않고(`tourSpend` 는 sido 열이 없다) `tripIds` 로 JS 필터 — 4세트 116,672행을 매번 읽고 10분 캐시가 완충. 숙소도 같은 방식(여행 nights 맵으로 거른다).
 - "식당" 의 정의가 두 곳에서 다르다 — 인사이트 `scale.restaurants`·지역 비교 `restaurants` 는 `typeShort === '식당'` 만, 밀도 `kind=restaurant`·매칭·시드·폐업은 `TOUR_RESTAURANT_TYPE_SHORTS`(식당·상업·상점).
@@ -315,14 +350,14 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - 라우트 등록에서 `decodeURIComponent(Routes.Tour.x(':placeId'))` 를 빼먹으면 `%3AplaceId` 경로가 등록돼 404 — 새 파라미터 라우트마다 반복.
 - 어드민 `runMatch` 의 `matchInFlight` 는 모듈 전역(프로세스 하나) — 스크립트 `match:restaurant-tour` 와 어드민 버튼을 동시에 돌리면 게이트가 없다(둘 다 같은 규칙이라 결과는 같지만 `claimed` 경합으로 순서가 갈릴 수 있다).
 
-## Sources [coverage: high — 93 sources]
+## Sources [coverage: high — 101 sources]
 
 ### friendly — tour 모듈
 - [apps/friendly/src/modules/tour/tour-master.service.ts](../../apps/friendly/src/modules/tour/tour-master.service.ts) — manifest 검증·JSONL 스트림·정규화 10표·plausibility·데이터셋 단위 교체·unload·적재 상태·경로 규칙
 - [apps/friendly/src/modules/tour/tour-master.service.test.ts](../../apps/friendly/src/modules/tour/tour-master.service.test.ts) — 9건(키 동일성·id 접두·privateLeak·badCoord·badId/badField·제외 열·청크 예산·manifest 위반·교체→이력→재적재→unload)
 - [apps/friendly/src/modules/tour/tour-region-filter.ts](../../apps/friendly/src/modules/tour/tour-region-filter.ts) — region → trip/visit/transition/day/place where + raw SQL + hubs
 - [apps/friendly/src/modules/tour/tour-public.service.ts](../../apps/friendly/src/modules/tour/tour-public.service.ts) — 요약·목록 맵·가중치·`aggregateTourStats`·`registeredNaverIds`
-- [apps/friendly/src/modules/tour/tour-public.route.ts](../../apps/friendly/src/modules/tour/tour-public.route.ts) — 공개 6 라우트, `RATE.tourRead`
+- [apps/friendly/src/modules/tour/tour-public.route.ts](../../apps/friendly/src/modules/tour/tour-public.route.ts) — 공개 6 라우트, `RATE.tourRead`, *(2026-09-24 `1b621c4`) 한국어 `summary` 6개 + tour-stats `description`*
 - [apps/friendly/src/modules/tour/tour-public.test.ts](../../apps/friendly/src/modules/tour/tour-public.test.ts) — 6건(하한 가림·집계·상세/목록/tour-stats/골라주기, `FORBIDDEN_KEYS` 스캔)
 - [apps/friendly/src/modules/tour/tour-insights.service.ts](../../apps/friendly/src/modules/tour/tour-insights.service.ts) — `TourInsightsService.insights/plan`, `attrWhere`, LRU
 - [apps/friendly/src/modules/tour/tour-insights.service.test.ts](../../apps/friendly/src/modules/tour/tour-insights.service.test.ts) — 5건(집계·insufficient/캐시·코스 점수·완화 사다리·라우트 400)
@@ -334,7 +369,7 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - [apps/friendly/src/modules/tour/tour-admin.service.ts](../../apps/friendly/src/modules/tour/tour-admin.service.ts) — status·listSeeds(raw SQL)·discover·register(잡 구독)·runMatch(inflight)·runBizCheck
 - [apps/friendly/src/modules/tour/tour-admin.route.ts](../../apps/friendly/src/modules/tour/tour-admin.route.ts) — 어드민 6 라우트, CrawlService 지연 생성
 - [apps/friendly/src/modules/tour/tour-admin.route.test.ts](../../apps/friendly/src/modules/tour/tour-admin.route.test.ts) — 3건(401/403·상태·매칭 실행→시드 필터)
-- [apps/friendly/src/modules/tour/restaurant-tour-match.service.ts](../../apps/friendly/src/modules/tour/restaurant-tour-match.service.ts) — 점수·수락 규칙·1:1 매칭·리포트·상세 정보
+- [apps/friendly/src/modules/tour/restaurant-tour-match.service.ts](../../apps/friendly/src/modules/tour/restaurant-tour-match.service.ts) — 점수·수락 규칙·1:1 매칭·리포트·상세 정보, *(2026-09-26 확인) `claimed` 는 전체 매칭·훑기는 식당 행 있는 canonical 만 → 고아 canonical 의 선점 잔존*
 - [apps/friendly/src/modules/tour/restaurant-tour-match.service.test.ts](../../apps/friendly/src/modules/tour/restaurant-tour-match.service.test.ts) — 5건(점수·반경·첫 실행·상세·재실행 kept/missing/recovered)
 - [apps/friendly/src/modules/tour/tour-biz-status.service.ts](../../apps/friendly/src/modules/tour/tour-biz-status.service.ts) — 국세청 조회·최빈 brno·upsert·중단 사유
 - [apps/friendly/src/modules/tour/tour-biz-status.service.test.ts](../../apps/friendly/src/modules/tour/tour-biz-status.service.test.ts) — 6건(정규화·파싱·오류 종류·대상 수집·30일/force·maxCalls/auth)
@@ -351,7 +386,8 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - [apps/friendly/prisma/migrations/20260913064102_add_tour_match_biz/migration.sql](../../apps/friendly/prisma/migrations/20260913064102_add_tour_match_biz/migration.sql)
 - [apps/friendly/prisma/migrations/20260915185047_add_tour_dataset_multi/migration.sql](../../apps/friendly/prisma/migrations/20260915185047_add_tour_dataset_multi/migration.sql) — `dataset`·파생 열·백필
 - [apps/friendly/src/test-utils/temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts) — 격리 DB(dev.db 복사 + 전 테이블 DELETE)
-- [apps/friendly/vitest.config.ts](../../apps/friendly/vitest.config.ts) — `fileParallelism:false`, hookTimeout 없음
+- [apps/friendly/vitest.config.ts](../../apps/friendly/vitest.config.ts) — `fileParallelism:false`, ~~hookTimeout 없음~~ *(2026-09-25 `5d7b686`) `hookTimeout: 60_000`*
+- [apps/friendly/src/plugins/cors.ts](../../apps/friendly/src/plugins/cors.ts) — *(2026-09-24) 어드민 외 `origin: '*'`·`credentials: false`, `/api/v1/admin/**`(시드·원본 열람)는 prod `PUBLIC_ORIGIN` 만*
 
 ### friendly — 스크립트
 - [apps/friendly/scripts/load-tour.ts](../../apps/friendly/scripts/load-tour.ts)
@@ -359,7 +395,7 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - [apps/friendly/scripts/match-restaurant-tour.ts](../../apps/friendly/scripts/match-restaurant-tour.ts)
 - [apps/friendly/scripts/check-tour-biz.ts](../../apps/friendly/scripts/check-tour-biz.ts)
 - [apps/friendly/scripts/e2e-tour.ts](../../apps/friendly/scripts/e2e-tour.ts) — 32 step
-- [apps/friendly/scripts/life-map-status.ts](../../apps/friendly/scripts/life-map-status.ts) — `tour_<세트>` 출력
+- [apps/friendly/scripts/life-map-status.ts](../../apps/friendly/scripts/life-map-status.ts) — `tour_<세트>` 출력, *(2026-09-24) 앞에 `flood=` 추가*
 
 ### 계약·공통
 - [packages/api-contract/src/schemas/tour.ts](../../packages/api-contract/src/schemas/tour.ts) — 데이터셋/지역 enum, 시드·매칭·폐업·상태·원본·공개 집계·인사이트·코스·밀도·숙소·지역 스키마
@@ -388,20 +424,20 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - [apps/web/src/components/tour/TourLodgingSection.tsx](../../apps/web/src/components/tour/TourLodgingSection.tsx)
 - [apps/web/src/components/tour/TourSourceNote.tsx](../../apps/web/src/components/tour/TourSourceNote.tsx)
 - [apps/web/src/routes/admin/AdminTourPage.tsx](../../apps/web/src/routes/admin/AdminTourPage.tsx)
-- [apps/web/src/components/admin/tour/TourEvidencePanel.tsx](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx)
-- [apps/web/src/components/restaurant/detail/TourTab.tsx](../../apps/web/src/components/restaurant/detail/TourTab.tsx)
+- [apps/web/src/components/admin/tour/TourEvidencePanel.tsx](../../apps/web/src/components/admin/tour/TourEvidencePanel.tsx) — *`TourEvidenceSection` 은 2026-09-26 부터 어드민 식당 상세 '여행자' 탭 안*
+- [apps/web/src/components/restaurant/detail/TourTab.tsx](../../apps/web/src/components/restaurant/detail/TourTab.tsx) — *(2026-09-26) 어드민 '여행자' 탭도 재사용*
 - [apps/web/src/components/restaurant/detail/TourSummaryBadge.tsx](../../apps/web/src/components/restaurant/detail/TourSummaryBadge.tsx)
 - [apps/web/src/components/restaurant/detail/TourMatchBadge.tsx](../../apps/web/src/components/restaurant/detail/TourMatchBadge.tsx)
 - [apps/web/src/components/restaurant/detail/tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts)
 - [apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx)
-- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx)
+- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) — *(2026-09-26) 선택 prop `availableTabs`("여행자 탭 보기" disabled 판정)*
 - [apps/web/src/components/restaurant/PublicRestaurantCard.tsx](../../apps/web/src/components/restaurant/PublicRestaurantCard.tsx)
 - [apps/web/src/components/restaurant/PublicRestaurantList.tsx](../../apps/web/src/components/restaurant/PublicRestaurantList.tsx)
 - [apps/web/src/components/restaurant/SmartPickSection.tsx](../../apps/web/src/components/restaurant/SmartPickSection.tsx)
 - [apps/web/src/routes/RestaurantsV2Page.tsx](../../apps/web/src/routes/RestaurantsV2Page.tsx)
 - [apps/web/src/routes/vote/VoteNewPage.tsx](../../apps/web/src/routes/vote/VoteNewPage.tsx) — `presetTitle/presetOptions`
-- [apps/web/src/components/PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx)
-- [apps/web/src/components/PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx)
+- [apps/web/src/components/PublicSidebar.tsx](../../apps/web/src/components/PublicSidebar.tsx) — *(2026-09-25) NAV 14개, 여행 7번째*
+- [apps/web/src/components/PublicTopBar.tsx](../../apps/web/src/components/PublicTopBar.tsx) — *(2026-09-25) NAV 14개(같은 순서)*
 - [apps/web/src/routes/LifeMapPage.tsx](../../apps/web/src/routes/LifeMapPage.tsx) — 배경 토글·표본 이동·칸 선택
 - [apps/web/src/routes/LifeMapPage.test.tsx](../../apps/web/src/routes/LifeMapPage.test.tsx) — 배경 토글 1건(MSW density)
 - [apps/web/src/components/life-map/LifeTourCard.tsx](../../apps/web/src/components/life-map/LifeTourCard.tsx)
@@ -413,12 +449,18 @@ friendly (autoload `*.route.ts`, prefix /api/v1)
 - [apps/web/src/routes/admin/AdminRoutes.tsx](../../apps/web/src/routes/admin/AdminRoutes.tsx)
 - [apps/web/src/components/admin/AdminLayout.tsx](../../apps/web/src/components/admin/AdminLayout.tsx)
 - [apps/web/src/components/admin/AdminTopBar.tsx](../../apps/web/src/components/admin/AdminTopBar.tsx)
-- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) — `TourMatchBadge`·`TourEvidenceSection`
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) — ~~`TourMatchBadge`·`TourEvidenceSection`~~ *(2026-09-26) '여행자' 탭 :254-264 — 공개 `TourTab` + `TourEvidenceSection`, 노출 = `detail.tour != null`*
+- [apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx) — *(2026-09-26) 헤더 `TourMatchBadge`(:80, `StoreInfoBadges` 옆)*
+- [apps/web/src/components/admin/restaurant-detail/tabs.ts](../../apps/web/src/components/admin/restaurant-detail/tabs.ts) — *(2026-09-26) `ADMIN_DETAIL_TABS`('여행자' 3번째)·`PUBLIC_TABS_IN_ADMIN`(tour 포함)*
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx) — *(2026-09-26) 4건, `tour: null` 픽스처 — '여행자' 탭 미검증*
 - [apps/web/src/routes/HomePage.tsx](../../apps/web/src/routes/HomePage.tsx) — 여행 진입 없음(PLAN 과 다름)
 
 ### 문서·운영
 - [docs/PLAN-tour-log.md](../../docs/PLAN-tour-log.md) — 이용조건·용어·구조·계약·DB·단계 0~9차·부록 A/B/C
 - [docs/data-sources.md](../../docs/data-sources.md) — tour 행 4개(행 수·용량·백업 대상)
 - [docs/deploy-friendly.md](../../docs/deploy-friendly.md) — §여행로그 원본·사진(rsync·allowlist·썸네일·폐업·접근 경로·환수)
-- [deploy.sh](../../deploy.sh) — `TOUR_*_EXPORT_DIR`·세트 루프·매칭
+- [deploy.sh](../../deploy.sh) — `TOUR_*_EXPORT_DIR`·세트 루프·매칭, *(2026-09-24~25) 루프 앞 침수 흔적 블록(매칭 175행), 케이스 1·2·4 에 `parking_data`*
 - [.gitignore](../../.gitignore) — `/data/`
+- [docs/api/README.md](../../docs/api/README.md) — *(2026-09-24) 도메인 개요 "여행로그 — 집계만", 7절 이용 조건(5명 미만 제외·`sourceNote`/`sampleLabel` 표기·재구성·재배포 금지), 기준 URL*
+- [docs/api/endpoints.md](../../docs/api/endpoints.md) — *(2026-09-24) `## tour` 절 6행(공개·120/분), `## public` 절의 목록·상세·골라줘*
+- [docs/api/openapi.json](../../docs/api/openapi.json) — *(2026-09-24) tour 6 paths — `x-auth: public`, `x-rate-limit` 120/1분, tag `tour`; `/admin/tour/**` 없음*

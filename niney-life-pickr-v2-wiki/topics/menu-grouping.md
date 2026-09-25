@@ -1,18 +1,20 @@
 ---
 topic: menu-grouping
-last_compiled: 2026-08-30
-sources_count: 21
+last_compiled: 2026-09-26
+sources_count: 33
 status: active
-aliases: [메뉴 정규화, 메뉴 그룹핑, menu-grouping, MenuCanonical, menu_canonicals, canonicalName, canonicalNorm, MENU_GROUPING_VERSION, MENU_GROUPING_CHUNK_SIZE, packBySimilarity, jamoBigramDice, toJamo, pickCanonicalName, callChunkWithSplit, callIndexGroups, groupingJobRegistry, grouping-jobs, restaurant_menu_groups, restaurant_menus, replaceRestaurantMenuGroups, mergeMenuGroups, menusGroup, menusRanking, MenuRankingResult, restaurantsStatus, buildLlmProviderEnv]
+aliases: [메뉴 정규화, 메뉴 그룹핑, menu-grouping, MenuCanonical, menu_canonicals, canonicalName, canonicalNorm, MENU_GROUPING_VERSION, MENU_GROUPING_CHUNK_SIZE, packBySimilarity, jamoBigramDice, toJamo, pickCanonicalName, callChunkWithSplit, callIndexGroups, groupingJobRegistry, grouping-jobs, restaurant_menu_groups, restaurant_menus, replaceRestaurantMenuGroups, mergeMenuGroups, menusGroup, menusRanking, MenuRankingResult, restaurantsStatus, buildLlmProviderEnv, naver-place, naver-baemin, placeMenus, PlaceMenuCategory, 대표메뉴, 추천 메뉴, uncategorized, 원본 메뉴 그룹, 메뉴판, 가게 단위 통째 교체, updateNaverMenus, backfill:naver-menus, 메뉴 0건 보호, sourceMenus, menu_catalog, MenuRankingSection, useGroupForRestaurant, 분류하기, filterReviewsByTipMenu, review-match]
 ---
 
 # menu-grouping — 식당 단위 메뉴 표기 LLM 정규화(canonical 그룹) + 원본 메뉴 그룹 영속
 
+**2026-09-24~09-26 변경 흡수 — 원본 메뉴 그룹 출처가 네이버 카테고리(`naver-place`)로 확장·가게 단위 통째 교체(`43d7e69`, 2026-09-25) + 어드민 상세 '메뉴' 탭에 두 계층 병치(`420a6be`, 2026-09-26)**: (1) 네이버가 일반(비배민) 가게 메뉴를 `placeDetail.placeMenus`(PlaceMenuItem·PlaceMenuCategory)로 바꾸자 크롤 어댑터가 카테고리를 원본 그룹으로 만든다 — source **`naver-place`**, recommend→'대표메뉴' / normal→사장님 그룹명 / uncategorized→'메뉴' / 어느 카테고리에도 안 든 잔여→끝 그룹('메뉴', 이미 있으면 '기타', `sourceGroupId: null`). 파서 세부는 [crawl](crawl.md). 그 전까지 이 인입 계층(`restaurant_menu_groups`/`restaurant_menus`)은 **배민 연동 가게만** 채워졌다 — `/menu/list` 추출이 `PlaceDetail_BaeminMenuGroup` 만 읽어 일반 가게는 늘 `menuGroups=[]` 였다. 일반 가게는 재크롤 또는 `backfill:naver-menus` 뒤부터 행이 생긴다. (2) [restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) `replaceRestaurantMenuGroups` 가 **source 단위 → 가게 단위** delete 후 재삽입으로 바뀌었다(같은 가게가 `naver-baemin`↔`naver-place` 로 바뀌어도 이전 출처 행이 안 남게) — 아래 2026-06-27 의 "source 단위" 서술은 낡았다. 호출처는 `upsertRestaurantFromCrawl`(menuGroups ≥1 일 때)와 신규 `updateNaverMenus`(백필) 둘. (3) 크롤 메뉴가 0건이면 스냅샷 `menus`/`menuGroups` 는 직전 값 유지, `replaceRestaurantMenuGroups` 도 호출되지 않아 정규화 행 그대로(0건 보호). (4) 계약 `MenuGroup.source` 는 `z.string()` 이라 새 값이 계약 변경 없이 흐르고, 그룹명을 '대표메뉴' 로 맞춰 웹 HomeTab 의 대표메뉴 미리보기와 `flattenMenuGroups` 의 대표메뉴 제외 규칙이 recommend 카테고리에도 그대로 먹는다. (5) `420a6be` — 어드민 상세 '메뉴' 탭 = 위 공개 `MenuTab`(원본 그룹 섹션 + 칼로리 칩) + 아래 `MenuRankingSection`(MenuCanonical 순위·"분류하기"); 예전엔 네이버 스냅샷 flat `MenuSection` 카드 + 순위 카드. 두 계층이 한 탭에 놓였지만 코드상 조인은 없다. 메뉴 클릭 → 리뷰 탭 메뉴 필터(어드민 `review-match` = 공개 리뷰 목록과 같은 `filterReviewsByTipMenu`)는 **네이버 행의 MenuCanonical** 로 그룹키를 환산해 출처 통합 리뷰에 적용한다 — 인사이트 'N회 언급'(네이버 멘션만)과 결과 수가 어긋나는 후속 과제는 [canonical](canonical.md). canonical 그룹핑 모듈 자체는 무변경(`MENU_GROUPING_VERSION = 2`, `think` 는 여전히 gpt-oss 만). (6) **24차 누락 보정** — `restaurant_menus` 는 2026-08-23(`9f39d53`)부터 음식 → 식당 역검색이 읽는다: [food.service.ts](../../apps/friendly/src/modules/food/food.service.ts) 가 `Restaurant.sourceMenus` 이름을 정규화 키와 대조해 `menu_catalog` 근거로 쓴다([food](food.md)). 따라서 (1)의 "배민 가게만 채워짐"은 곧 `menu_catalog` 근거가 배민 가게에 편중돼 있었다는 뜻이다.
+
 **2026-08-22 변경 흡수 — 라우트 env 조립 `buildLlmProviderEnv()`(`cc8399a`); `MENU_GROUPING_VERSION = 2` 현재값 확인**: [menu-grouping.route.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.route.ts) 가 자체 `LlmProviderEnv` 리터럴 대신 [`llm-provider-env.ts`](../../apps/friendly/src/modules/ai/llm-provider-env.ts) 의 `buildLlmProviderEnv()` 로 `AiConfigService` 를 조립하고(스케줄러 경로의 인스턴스는 [plugins/schedule.ts](../../apps/friendly/src/plugins/schedule.ts) 가 같은 함수로), [menu-grouping.test.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.test.ts) 의 가짜 `defaultModels` 는 5키(`meal-photo`·`meal-recommend`). 현재값 정합: `MENU_GROUPING_VERSION` 은 v2 분할·머지 재설계(`5dd2db8` 2026-06-13) 이후 **2** 그대로 — ai 토픽의 옛 표가 1 로 적혀 있던 것은 24차에서 정정됐다. 같은 날 다른 JSON 호출들이 `@repo/utils` `thinkOptionForModel` 로 사고를 끄도록 바뀌었지만(`5cdbc0f`) 이 모듈은 **미적용** — `callIndexGroups` 의 자체 분기(`model.includes('gpt-oss') ? { think: 'low' } : {}`)만 있어 다른 추론 모델엔 `think` 를 안 보낸다(아래 Gotchas).
 
-**2026-06-27 추가 — 원본(source) 메뉴 그룹 크롤·영속 계층**: 아래 canonical 그룹핑이 *리뷰 멘션*(`MenuMention.nameNorm`)을 LLM 으로 묶는 **분석 계층**이라면, 이번에 추가된 `restaurant_menu_groups`/`restaurant_menus` 는 크롤 시점 **공식 메뉴판**을 원본 그룹/정렬/출처째로 보존하는 **인입 계층**이다(둘은 별개 테이블·별개 목적·서로 GROUP BY 로 안 엮인다). 네이버 `/menu/list` 서브페이지에서 그룹 단위로 긁은 결과([crawl](crawl.md) 의 `extractBaeminMenuGroups`)를 `RestaurantService.replaceRestaurantMenuGroups` 가 source 단위로 재적재하고, 공개 detail 은 `mergeMenuGroups` 로 노출한다. 기존 flat `menus`·`snapshotJson`·`MenuCanonical` 은 불변 — 순수 가산.
+**2026-06-27 추가 — 원본(source) 메뉴 그룹 크롤·영속 계층**: 아래 canonical 그룹핑이 *리뷰 멘션*(`MenuMention.nameNorm`)을 LLM 으로 묶는 **분석 계층**이라면, 이번에 추가된 `restaurant_menu_groups`/`restaurant_menus` 는 크롤 시점 **공식 메뉴판**을 원본 그룹/정렬/출처째로 보존하는 **인입 계층**이다(둘은 별개 테이블·별개 목적·서로 GROUP BY 로 안 엮인다). 네이버 `/menu/list` 서브페이지에서 그룹 단위로 긁은 결과([crawl](crawl.md) 의 `extractBaeminMenuGroups`)를 `RestaurantService.replaceRestaurantMenuGroups` 가 source 단위로 재적재하고, 공개 detail 은 `mergeMenuGroups` 로 노출한다. 기존 flat `menus`·`snapshotJson`·`MenuCanonical` 은 불변 — 순수 가산. *(2026-09-25 `43d7e69` 이후: 그룹은 홈 Apollo 의 배민 그룹 또는 `placeMenus` 카테고리에서 오고 `/menu/list` 는 예외 경로, 재적재는 가게 단위 — 맨 위 리드 참조.)*
 
-## Purpose [coverage: high — 13 sources]
+## Purpose [coverage: high — 16 sources]
 
 식당별로 흩어진 메뉴 표기 변형을 LLM 으로 canonical 그룹에 묶어, 그 위에서 메뉴 단위 순위/긍부정 통계를 낼 수 있게 하는 도메인. 한 식당 안에 `김치찌개`, `김치 찌개`, `묵은지김치찌개` 같은 표기가 섞여 있으면 사람 눈엔 같은 메뉴지만, `MenuMention.nameNorm` 단위로만 집계하면 같은 음식이 셋으로 쪼개져 mention 통계가 망가진다. 이 모듈이 그 갭을 메운다 — `MenuCanonical` 테이블에 `(restaurantId, nameNorm) → canonicalName` 매핑을 보관하고, 순위 응답에서 그 키로 GROUP BY 한다. 매핑이 없는 행은 자기 자신을 그룹키로 쓰는 fallback 으로 자연 처리되므로 그룹핑 미실행 식당도 깨지지 않는다.
 
@@ -20,7 +22,9 @@ aliases: [메뉴 정규화, 메뉴 그룹핑, menu-grouping, MenuCanonical, menu
 
 **v2(2026-06) 분할·머지 재설계**: v1 은 "입력 전 항목을 에코"하는 출력 계약(O(N) 출력)이었는데, 이 출력이 reasoning 모델의 thinking 토큰과 `maxTokens` 예산을 나눠 쓰다가 큰 식당에서 응답이 잘려 `parse_failed` 운영 장애를 냈다. v2 는 출력을 "병합 그룹만, 인덱스 배열로"(`{"groups":[[0,1,2]]}`) 축소해 호출당 출력을 식당 크기와 무관한 수십 토큰으로 고정하고, canonical 이름 결정은 LLM 에서 코드로 옮겼다. 아키텍처 제안서는 [docs/menu-grouping-split-merge.html](../../docs/menu-grouping-split-merge.html)(보존 문서). 관련 컨셉 [versioned-llm-prompts](../concepts/versioned-llm-prompts.md).
 
-## Architecture [coverage: high — 9 sources]
+**원본 메뉴 그룹 계층(인입)의 역할(2026-09-25 기준)**: 가게가 네이버에 올린 메뉴판을 그룹째(대표메뉴·사장님 카테고리·전체 목록) 보존해 공개 상세 메뉴 탭·홈 대표메뉴 미리보기에 그대로 보여 주고, 정규화 행(`restaurant_menus`)은 음식 역검색의 "메뉴판에 있다" 근거와 칼로리 표시율 측정 스크립트가 읽는다. 2026-09-25 전까지는 배민 연동 가게만 이 계층이 채워졌고, 네이버 개편 대응(`43d7e69`) 뒤 일반 가게도 `naver-place` 그룹으로 들어온다. 이 계층은 LLM 을 쓰지 않으며 canonical 그룹핑(리뷰 멘션)과 여전히 조인되지 않는다 — 두 계층은 어드민 상세 '메뉴' 탭에 **나란히 보일 뿐**이다(`420a6be`).
+
+## Architecture [coverage: high — 15 sources]
 
 코어는 `MenuGroupingService` 한 클래스. 두 개의 진입점이 있다.
 
@@ -46,31 +50,38 @@ Key files:
 - [apps/friendly/src/modules/menu-grouping/grouping-job-registry.ts](../../apps/friendly/src/modules/menu-grouping/grouping-job-registry.ts) -- in-memory job registry, item 단위 진행, AbortController 한 개로 cancel, TTL GC.
 - [apps/friendly/src/modules/restaurant/restaurant.route.ts](../../apps/friendly/src/modules/restaurant/restaurant.route.ts) -- `Routes.Restaurant.menusGroup/menusRanking` 단일 식당 라우트.
 
-### 원본 메뉴 그룹 영속 (crawl → DB → 공개 detail) [2026-06-27]
+### 원본 메뉴 그룹 영속 (crawl → DB → 공개 detail) [2026-06-27, 2026-09-25 갱신]
 
 위 canonical 그룹핑과 **독립된 계층**. LLM 을 안 쓰고, 크롤이 뽑은 원본 메뉴 그룹을 그대로 저장·병합·표시한다.
 
-- **적재 — `RestaurantService.replaceRestaurantMenuGroups(restaurantId, groups)`** ([restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) — `upsertRestaurantFromCrawl` 이 `data.menuGroups` 가 있을 때만 호출. `$transaction` 안에서 **source 단위로** `restaurant_menus` → `restaurant_menu_groups` 를 delete 후, 그룹·메뉴를 `$executeRaw` 로 재삽입(그룹 id `rmg_<uuid>`, 메뉴 id `rm_<uuid>`, `rawJson` 에 원본 JSON, `isRepresentative = menu.recommend === true`). Prisma 모델이 아니라 raw SQL 을 쓰는 건 마이그레이션 미적용 로컬 DB 방어 — 호출 전체가 `.catch(console.warn)` 로 감싸여 테이블이 없어도 크롤/upsert 는 계속된다(best-effort, 순수 가산).
+- **출처 2종(2026-09-25~)** — 그룹은 크롤 어댑터 `resolveMenuGroups` 가 홈 Apollo 에서 만든다([crawl](crawl.md)): ① **`naver-baemin`** — 배민 연동 가게의 `PlaceDetail_BaeminMenuGroup:*`(그룹명 = 배민 그룹명, 예: '대표메뉴'·'세트 메뉴'), ② **`naver-place`** — 일반 가게의 `placeDetail.placeMenus.categories` 를 순서대로: `kind:'recommend'`(네이버 표기 "추천 메뉴") → **'대표메뉴'**, `kind:'normal'` → 사장님이 만든 이름(없으면 '기타'), `kind:'uncategorized'`(이름 빈 전체 목록) → **'메뉴'**, 그리고 추천을 뺀 어느 카테고리에도 안 든 항목 → 끝 그룹('메뉴', 이미 있으면 '기타', `sourceGroupId: null`). 메뉴 0개 카테고리는 버린다. 두 출처 모두 없으면 그룹 없이 옛 flat 경로(`menuGroups=[]`). 2026-09-25 전에는 ①만 있었다.
+- **적재 — `RestaurantService.replaceRestaurantMenuGroups(restaurantId, groups)`** ([restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts)) — `upsertRestaurantFromCrawl` 이 `data.menuGroups` 가 있을 때만 호출. `$transaction` 안에서 **source 단위로** `restaurant_menus` → `restaurant_menu_groups` 를 delete 후, 그룹·메뉴를 `$executeRaw` 로 재삽입(그룹 id `rmg_<uuid>`, 메뉴 id `rm_<uuid>`, `rawJson` 에 원본 JSON, `isRepresentative = menu.recommend === true`). Prisma 모델이 아니라 raw SQL 을 쓰는 건 마이그레이션 미적용 로컬 DB 방어 — 호출 전체가 `.catch(console.warn)` 로 감싸여 테이블이 없어도 크롤/upsert 는 계속된다(best-effort, 순수 가산). **2026-09-25(`43d7e69`) 변경**: delete 가 source 조건 없이 `DELETE FROM restaurant_menus WHERE restaurantId = ?` → `DELETE FROM restaurant_menu_groups WHERE restaurantId = ?` 로 **가게 단위 통째 교체**가 됐다(코드 주석: "네이버 행의 메뉴는 크롤 1회분이 전부다. 출처가 naver-baemin ↔ naver-place 로 바뀌어도 이전 출처 행이 남지 않게"). 빈 `groups` 면 즉시 return(아무것도 안 지움). 호출처는 `upsertRestaurantFromCrawl`(크롤)과 `updateNaverMenus`(백필 `backfill:naver-menus` — 스냅샷 메뉴 필드만 바꾸고 그룹이 있으면 이 함수로 정규화 행 교체) 둘.
+- **0건 보호(2026-09-25)** — 크롤 결과 `menus` 가 0건이면 `upsertRestaurantFromCrawl` 이 직전 네이버 스냅샷의 `menus`/`menuGroups` 를 그대로 싣고(`keptMenuCount`), 이번 `menuGroups` 가 비어 있으니 정규화 행도 건드리지 않는다. 즉 네이버 구조 변경으로 파서가 조용히 0건이 돼도 원본 메뉴 계층 전체(스냅샷 + 두 테이블)가 이전 상태로 남는다. 크롤 로그 warn 으로 드러남 — [crawl](crawl.md).
 - **병합 — `mergeMenuGroups(naverSnap, dcSnap, tbSnap)`** ([restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts)) — 공개 detail(`RestaurantPublicDetail`)의 `menuGroups` 필드. naver 스냅샷에 실제 `menuGroups` 가 있으면 그대로, 없으면 `mergeMenus` 로 합친 flat 을 **단일 그룹으로 래핑**(source 는 naver/tabling/diningcode/merged 중 실제 채운 출처, name `'메뉴'`, 각 메뉴에 sortOrder 부여). 즉 그룹 있는 네이버는 원본 그룹, 없으면 1그룹 fallback.
-- **평탄화 — `flattenMenuGroups`** — flat `menus` 자체는 크롤 시점에 [crawl](crawl.md) 어댑터(`naver-place.playwright.adapter.ts`)가 이미 평탄화('대표메뉴' 중복 제거 + `sourceMenuId ?? name|price` dedup)해 `snapshotJson` 에 넣으므로, 이 영속 계층은 그룹 원본만 따로 보존한다(함수는 서비스가 아니라 어댑터 소유).
-- **표시(웹)** — [MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) 는 `menuGroups`(메뉴 있는 그룹만) 가 있으면 그룹 섹션별로 렌더(헤더 `총 N개 · M개 그룹`, 그룹마다 개수), 없으면 기존 flat 그리드. [HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) 미리보기는 `'대표메뉴'` 그룹이 있으면 그 메뉴를 우선 노출. 상세 UI 는 [web](web.md).
+- **평탄화 — `flattenMenuGroups`** — flat `menus` 자체는 크롤 시점에 [crawl](crawl.md) 어댑터(`naver-place.playwright.adapter.ts`)가 이미 평탄화('대표메뉴' 중복 제거 + `sourceMenuId ?? name|price` dedup)해 `snapshotJson` 에 넣으므로, 이 영속 계층은 그룹 원본만 따로 보존한다(함수는 서비스가 아니라 어댑터 소유). `naver-place` 의 recommend 그룹도 이름이 '대표메뉴' 라 같은 규칙으로 flat 에서 빠진다(2026-09-25) — 일반 가게 flat 은 사실상 전체 목록(uncategorized) 또는 사장님 그룹들의 합.
+- **표시(웹)** — [MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) 는 `menuGroups`(메뉴 있는 그룹만) 가 있으면 그룹 섹션별로 렌더(헤더 `총 N개 · M개 그룹`, 그룹마다 개수), 없으면 기존 flat 그리드. [HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) 미리보기는 `'대표메뉴'` 그룹이 있으면 그 메뉴를 우선 노출(앞 4개). 상세 UI 는 [web](web.md). 2026-09-02(`ac0e191` 이후) 메뉴 탭은 메뉴명으로 join 한 **칼로리 칩**도 그린다(`useRestaurantPublicMenuNutrition` — [food](food.md)). **앱**([MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx)·HomeTab)은 `menuGroups` 를 쓰지 않고 flat `menus` 만 — 그룹 섹션·대표메뉴 미리보기 없음(홈은 flat 앞 4개).
+- **어드민 상세 '메뉴' 탭(2026-09-26, `420a6be`)** — [AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) 가 공개 상세 응답으로 공개 `MenuTab`(원본 그룹 + 칼로리 칩)을 그리고, 그 아래 [MenuRankingSection.tsx](../../apps/web/src/components/restaurant/MenuRankingSection.tsx)(아래 canonical 계층의 순위 — `useMenuRanking`, 미분류·버전 낡음이면 "분류하기" = `useGroupForRestaurant` → `POST menusGroup`)를 둔다. 이전 어드민 상세는 네이버 스냅샷 flat `MenuSection` 카드 + 순위 카드였다. 메뉴 항목을 누르면 리뷰 탭 메뉴 필터로 이어진다(아래 Talks To 의 `filterReviewsByTipMenu`).
 
 ### 모델 호출 파라미터 (v2)
 
 `callIndexGroups` 가 `provider.complete` 를 부를 때: `TEMPERATURE=1.0`(v1 의 0.1 은 reasoning 반복 루프로 토큰을 태우는 보조 원인이었다), `MAX_TOKENS=2000`(출력이 수십 토큰뿐이라 나머지는 reasoning 여유분 — thinking 토큰도 `num_predict` 에 합산된다), `NUM_CTX=8192`, `format: MENU_GROUPING_JSON_SCHEMA`, 그리고 모델명에 `gpt-oss` 가 들어가면 `think: 'low'`(thinking 을 못 끄고 기본 medium 이라 low 로 줄여 토큰 예산을 지킨다; 다른 모델은 think 미지원일 수 있어 미전달).
 
-## Talks To [coverage: high — 8 sources]
+## Talks To [coverage: high — 14 sources]
 
 - **ai** (in-process: `AiConfigService.getResolved('ollama-cloud', 'chat')` + `adapterCache`) -- LLM provider/model 해석. 미설정이면 `MenuGroupingError('no_provider')` 던지고 라우트가 422 로 변환. `AiConfigService` 는 라우트·schedule 플러그인 모두 `buildLlmProviderEnv()`(2026-08-22)로 조립.
-- **crawl → 원본 메뉴 그룹** (DB write via RestaurantService) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** [crawl](crawl.md) 어댑터가 `/menu/list` 에서 `extractBaeminMenuGroups` 로 뽑은 `MenuGroup[]` 이 `restaurant_menu_groups`/`restaurant_menus` 적재의 입력. canonical(멘션) 그룹핑과는 무관 — 같은 도메인 이름을 쓰지만 데이터 경로가 다름.
-- **web → `RestaurantPublicDetail.menuGroups`** (HTTP read) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** MenuTab/HomeTab 이 공개 detail 의 `menuGroups` 를 그룹 섹션·대표메뉴 미리보기로 소비. [web](web.md).
+- **crawl → 원본 메뉴 그룹** (DB write via RestaurantService) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** [crawl](crawl.md) 어댑터가 `/menu/list` 에서 `extractBaeminMenuGroups` 로 뽑은 `MenuGroup[]` 이 `restaurant_menu_groups`/`restaurant_menus` 적재의 입력. canonical(멘션) 그룹핑과는 무관 — 같은 도메인 이름을 쓰지만 데이터 경로가 다름. **2026-09-25**: 입력은 홈 Apollo 의 `resolveMenuGroups`(배민 그룹 → `placeMenus` 카테고리, `/menu/list` 는 홈이 모자랄 때만) 결과이고, 크롤 외에 `backfill:naver-menus` 스크립트(`fetchNaverPlaceMenusWithPlaywright` → `updateNaverMenus`)도 같은 적재 함수를 탄다.
+- **web → `RestaurantPublicDetail.menuGroups`** (HTTP read) -- **(신규/2026-06-27, 원본 메뉴 그룹 계층 한정)** MenuTab/HomeTab 이 공개 detail 의 `menuGroups` 를 그룹 섹션·대표메뉴 미리보기로 소비. [web](web.md). 2026-09-26 부터 어드민 상세 '메뉴' 탭도 같은 공개 `MenuTab` 을 재사용(+ 순위 섹션). 앱은 소비하지 않는다(flat 만).
+- **food → `restaurant_menus`** (DB read, 2026-08-23 `9f39d53` — 24차 누락분) -- [food.service.ts](../../apps/friendly/src/modules/food/food.service.ts) 의 음식 → 식당 역검색이 `GlobalMenuCanonicalLink` 로 후보 식당을 찾은 뒤, 같은 canonical 의 식당 행들의 `sourceMenus`(= `restaurant_menus`) 이름을 `normalizeTerm` 해 음식명·별칭·글로벌 키·`nameNorm`·`canonicalNorm` 집합과 정확 일치하면 근거 `menu_catalog`(점수 2 — `review_mentions` 는 1)를 붙인다. 즉 **두 계층을 한 식당 단위로 함께 읽는 유일한 런타임 소비자**(조인이 아니라 근거 병기). 칼로리 표시율 측정 스크립트 [measure-menu-nutrition.ts](../../apps/friendly/scripts/measure-menu-nutrition.ts)·[probe-menu-coverage.ts](../../apps/friendly/scripts/probe-menu-coverage.ts) 도 스냅샷 `menus` + `restaurant_menus` 이름을 식당 수로 가중해 읽는다. [food](food.md).
+- **restaurant 리뷰 필터·인사이트 → `MenuCanonical`** (DB read) -- 공개 리뷰 목록과 어드민 `review-match`(`420a6be` 신설)가 공용 `filterReviewsByTipMenu` 에서 **네이버 행**(`naverRestaurantId`)의 `MenuCanonical` 로 클릭한 표시명 → `canonicalNorm`, 각 리뷰 분석의 메뉴명 → 그룹키를 환산해 비교(매핑 없으면 `nameNorm` 정확 일치). `getInsights` 의 topMenus('N회 언급')도 네이버 행의 `MenuMention` + `MenuCanonical`. [canonical](canonical.md).
 - **summary** (in-process: `normalizeTerm`, `extractFirstJsonObject`) -- canonicalNorm 정규화 규칙을 멘션과 일치시켜야 GROUP BY 키가 맞춰진다.
 - **logs** (in-process: `OperationLogService`) -- **(신규/v2)** 식당별 그룹핑 1회 = OperationRun 1개. `startRun`/`log`(stage: load/resolve_provider/plan/chunk/merge/save)/`finishRun`. 미주입이면 계측 없이 기존 흐름 그대로(테스트 호환). 자세한 계측 모델은 [logs](logs.md) 및 [operation-log-instrumentation](../concepts/operation-log-instrumentation.md).
 - **restaurant** (HTTP: `/menus/group`, `/menus/ranking`) -- 단일 식당 동기 진입점이 restaurant 라우트 안에 있다 (placeId 기반).
 - **analytics → `GlobalMenuCanonicalLink`** (DB read) -- `getRanking` 의 `items[].global` 필드. 글로벌 머지를 돌렸을 때만 채워지고, 안 돌렸으면 null. 이 모듈이 글로벌 링크를 만드는 게 아니라 읽기만 한다. [analytics](analytics.md).
-- **prisma / SQLite** (DB: `menu_canonicals` 테이블 소유 + `menu_mentions` 읽기) -- delete + createMany 트랜잭션으로 idempotent 재실행.
+- **prisma / SQLite** (DB: `menu_canonicals` 테이블 소유 + `menu_mentions` 읽기) -- delete + createMany 트랜잭션으로 idempotent 재실행. 그룹핑·순위는 `restaurant.findUnique({ where: { placeId } })` 로 찾은 **네이버 행 하나**의 멘션만 본다 — `MenuMention.restaurantId` 는 요약 파이프라인이 리뷰의 `restaurantId` 로 채우므로([summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts)) 다이닝코드·테이블링 리뷰의 멘션은 각자 행(placeId null)에 쌓이고 이 모듈의 그룹핑 대상이 아니다.
 
-## API Surface [coverage: high — 4 sources]
+## API Surface [coverage: high — 5 sources]
+
+**2026-09-24~26 라운드: 라우트 변경 없음.** 이 모듈의 라우트는 전부 어드민(`/api/v1/admin/restaurants/place/:placeId/menus/{group,ranking}`, `/api/v1/admin/analytics/…`)이라 `1b621c4` 의 외부 API 문서(`docs/api/` — 어드민 제외)·CORS 개방 대상이 아니다([api-docs](api-docs.md)). 원본 메뉴 그룹은 전용 라우트 없이 공개 상세 응답 `RestaurantPublicDetail.menuGroups`(`mergeMenuGroups`)로만 나가며 계약 `MenuGroup.source` 는 `z.string()` 이라 `naver-place` 추가에 계약 변경이 없었다. 어드민 상세 '메뉴' 탭(`420a6be`)이 아래 `menusRanking`·`menusGroup` 을 `MenuRankingSection` 으로 부르고, 메뉴 클릭은 어드민 `GET Routes.Restaurant.reviewMatch(placeId)`(`…/review-match?menu=`) — 매칭 규칙은 Talks To 의 `filterReviewsByTipMenu`.
 
 단일 식당 (`restaurant.route.ts`):
 
@@ -89,7 +100,7 @@ Batch (`menu-grouping.route.ts`):
 
 Zod 계약 ([packages/api-contract/src/schemas/menu-grouping.ts](../../packages/api-contract/src/schemas/menu-grouping.ts)) 의 핵심 — `MenuRankingItem.global` 은 `{globalKey, displayName, totalMentions, positive, negative, positiveRatio, restaurantCount}` 또는 `null`. `mapped: false` 인 아이템은 정의상 global 도 없다. 스키마 상세는 [api-contract](api-contract.md).
 
-## Data [coverage: high — 5 sources]
+## Data [coverage: high — 7 sources]
 
 `MenuCanonical` ([apps/friendly/prisma/schema.prisma](../../apps/friendly/prisma/schema.prisma), [migration](../../apps/friendly/prisma/migrations/20260508142840_add_menu_canonicals/migration.sql)):
 
@@ -119,9 +130,10 @@ createdAt     DateTime
 
 ```
 restaurantId  String  -- FK, onDelete: Cascade
-source        String  -- 예: 'naver-baemin' (크롤 출처)
-sourceGroupId String? -- 원본 그룹 id 또는 Apollo 키 suffix
-name          String  -- 그룹명 ('대표메뉴' / '세트 메뉴' 등)
+source        String  -- 'naver-baemin' (배민 연동) | 'naver-place' (일반 가게, 2026-09-25~)
+sourceGroupId String? -- 배민: 그룹 id 또는 Apollo 키 suffix / placeMenus: 카테고리 id
+                      --   (실측 'recommend' · 'u.p.<placeId>' · 'g.<해시>'), 미분류 잔여 그룹은 null
+name          String  -- 그룹명 ('대표메뉴' / '세트 메뉴' / 사장님 카테고리명 / '메뉴' / '기타')
 sortOrder     Int     -- 그룹 등장 순서
 rawJson       String? -- 원본 그룹 JSON 통째 보존
 @@unique([restaurantId, source, sourceGroupId])
@@ -147,13 +159,19 @@ rawJson          String?
 @@index([restaurantId, source, sourceMenuId])
 ```
 
-`replaceRestaurantMenuGroups` 가 source 단위 `deleteMany`(raw) + 재삽입으로 idempotent — 재크롤하면 그 source 그룹을 통째로 다시 만들고 다른 source 는 안 건드린다. 기존 `restaurants.snapshotJson` 과 공개 flat `menus` 는 불변.
+`replaceRestaurantMenuGroups` 가 source 단위 `deleteMany`(raw) + 재삽입으로 idempotent — 재크롤하면 그 source 그룹을 통째로 다시 만들고 다른 source 는 안 건드린다. 기존 `restaurants.snapshotJson` 과 공개 flat `menus` 는 불변. *(~2026-09-24 기준 — `43d7e69` 이후 delete 는 **가게 단위**(`WHERE restaurantId = ?`)라 재적재 때 모든 출처 행이 사라지고 이번 그룹만 남는다. 빈 그룹 배열·0건 크롤이면 아무것도 지우지 않는다.)*
 
-## Key Decisions [coverage: high — 14 sources]
+**행 모양 메모(2026-09-25)** — `naver-place` 는 recommend 카테고리가 다른 카테고리와 겹치고, 흔한 "추천 + 전체(uncategorized)" 구조에선 전체 그룹이 모든 메뉴를 담으므로 추천 메뉴가 `restaurant_menus` 에 **두 행**(대표메뉴 그룹·메뉴 그룹)으로 들어간다(`sourceMenuId` 같음 — unique 아님이 이 경우를 위한 것). `isRepresentative` 는 그룹과 무관하게 항목 `badges` 에 `'repr'` 가 있으면 true. 가격은 숫자 문자열("13000") 또는 원문("무료"), `imageUrlsJson` 은 메뉴 이미지(최대 6) 또는 썸네일 1장. 이 테이블을 읽는 쪽(음식 역검색·측정 스크립트)은 식당 id 집합으로 세므로 중복 행이 수치를 부풀리지 않는다.
 
+## Key Decisions [coverage: high — 18 sources]
+
+- **2026-09-26: 어드민 상세 '메뉴' 탭은 두 계층을 나란히 — 합치지 않는다** (`420a6be`) -- 공개 `MenuTab`(원본 메뉴판 그룹 + 칼로리 칩)을 그대로 재사용하고 그 아래 canonical 순위(`MenuRankingSection`)를 둔다. 운영자가 "메뉴판에 뭐가 있나"와 "리뷰에서 뭐가 언급되나"를 한 화면에서 대조하게 하되, 두 데이터를 조인하는 새 로직은 만들지 않았다(공개 탭 컴포넌트 재사용 원칙 — 화면 세부는 [web](web.md)).
+- **2026-09-25: 원본 메뉴 행은 가게 단위로 통째 교체** (`43d7e69`) -- 네이버 행의 메뉴는 "크롤 1회분이 전부" 라서 출처(`naver-baemin`↔`naver-place`)가 바뀌는 가게에서 source 단위 교체는 옛 출처 행을 영구 잔존시킨다. 2026-06-27 의 "source 단위 delete — 다른 source 는 안 건드림"을 버렸다(현재 이 테이블에 쓰는 출처가 네이버 크롤 하나뿐이라 잃는 것이 없다).
+- **2026-09-25: 네이버 카테고리 → 그룹명은 기존 소비자에 맞춘다** -- recommend 를 네이버 표기 "추천 메뉴" 대신 배민과 같은 **'대표메뉴'** 로 부른다: 웹 HomeTab 의 대표메뉴 미리보기(`group.name === '대표메뉴'`)와 어댑터 `flattenMenuGroups` 의 대표메뉴 제외가 이름으로 동작하기 때문. uncategorized(이름 빈 전체 목록)는 '메뉴' — 공개 병합 `mergeMenuGroups` 의 1그룹 폴백 이름과 같다. 새 enum·계약 필드를 추가하지 않고 문자열 이름을 계약으로 삼은 선택(Gotchas).
+- **2026-09-25: 0건은 쓰지 않는다 — 원본 계층 전체 보존** -- 크롤이 0건이면 스냅샷 `menus`/`menuGroups` 를 직전 값으로 유지하고 정규화 행도 건드리지 않는다(백필 `updateNaverMenus` 도 0건이면 no-op). "메뉴를 전부 내린 가게"보다 "파서가 조용히 깨진 경우"가 훨씬 흔하다는 판단 — 이번 개편에서 재크롤마다 스냅샷 메뉴가 `[]` 로 덮인 사고가 근거([crawl](crawl.md)).
 - **2026-06-27: 원본 메뉴 그룹은 `MenuCanonical` 과 별개 가산 테이블** -- `restaurant_menu_groups`/`restaurant_menus` 는 공식 메뉴판 원본(그룹/정렬/출처/rawJson) 보존, `MenuCanonical` 은 리뷰 멘션 정규화 — 목적·입력·GROUP BY 가 다르다. 같은 "메뉴 그룹" 이름을 쓰지만 섞으면 안 됨. 기존 snapshotJson·flat menus·MenuCanonical 불변.
 - **2026-06-27: 영속은 best-effort raw SQL** -- `replaceRestaurantMenuGroups` 가 Prisma 모델 대신 `$executeRaw` + 호출 전체 `.catch(console.warn)`. 마이그레이션 미적용 DB 에서도 크롤/upsert 를 안 막으려는 방어(스냅샷은 여전히 `menuGroups` 를 들고 있어 손실 아님). drift 위험은 Gotchas.
-- **2026-06-27: source 단위 delete 후 재삽입(idempotent)** -- `MenuCanonical` 의 delete+createMany 관용과 동형. 재크롤하면 그 source 그룹을 통째로 다시 만들고 다른 source 는 안 건드림. 그룹→메뉴 순으로 지우고(FK cascade) 그룹→메뉴 순으로 넣는다.
+- **2026-06-27: source 단위 delete 후 재삽입(idempotent)** *(2026-09-25 `43d7e69` 에서 가게 단위 교체로 대체 — 위 항목)* -- `MenuCanonical` 의 delete+createMany 관용과 동형. 재크롤하면 그 source 그룹을 통째로 다시 만들고 다른 source 는 안 건드림. 그룹→메뉴 순으로 지우고(FK cascade) 그룹→메뉴 순으로 넣는다.
 - **2026-06-27: 공개 detail 병합은 naver 그룹 우선, 없으면 flat 1그룹** -- `mergeMenuGroups` 가 네이버 스냅샷의 실제 그룹을 그대로 쓰고, 없으면 merged flat 을 단일 그룹(`name:'메뉴'`)으로 래핑. 그룹 표시 가능한 클라이언트만 `menuGroups` 를 쓰고 나머지는 flat `menus` 로 하위호환.
 - **v2(2026-06): 출력 계약 "전 항목 에코" → "병합 그룹만, 인덱스로"** -- v1 의 O(N) 에코 출력이 reasoning 토큰과 `maxTokens` 를 나눠 쓰다 큰 식당에서 잘려 `parse_failed` 운영 장애를 냈다. v2 응답은 `{"groups":[[0,1,2]]}` — 묶을 게 없으면 빈 배열, 묶을 상대 없는 표기는 출력 안 함. 출력이 식당 크기와 무관하게 수십 토큰으로 고정돼 reasoning 과 다퉈도 잘릴 게 없다. `MENU_GROUPING_VERSION` 1→2. [versioned-llm-prompts](../concepts/versioned-llm-prompts.md) 의 인스턴스.
 - **v2(2026-06): canonical 결정을 LLM → 코드(`pickCanonicalName`)로** -- LLM 은 membership(어느 표기가 같은 음식인가)만 판정하고, 대표 이름은 코드가 결정적으로 고른다: ① 최단 표기 ② 동률 시 멘션 빈도 최다 ③ 그래도 동률이면 사전순. 머지 라운드가 비교하는 "대표"와 저장되는 canonical 이 같은 규칙이라 일관. 입력에 없는 이름이 canonical 로 저장될 수 없다(LLM 환각 표기 차단). 테스트에서 직접 검증할 수 있게 export.
@@ -168,11 +186,16 @@ rawJson          String?
 - **glob 비교는 식당 단위 N+1** -- `getRanking` 이 targetGlobalIds 모은 뒤 sibling 식당별로 한 쿼리씩 (식당당 1쿼리). 한 globalKey 에 1~10 식당이 일반적이라 OK. raw SQL 단일 쿼리화는 더 빨라야 할 때.
 - **batch in-memory only** -- 서버 재시작 시 in-flight 잡 사라짐. LLM 비용은 다시 들지만 결과는 idempotent — 사용자가 재실행 하면 됨. [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md).
 
-## Gotchas [coverage: high — 9 sources]
+## Gotchas [coverage: high — 16 sources]
 
+- **(원본 메뉴 그룹) '대표메뉴'·'메뉴' 는 문자열 계약이다** (2026-09-25) -- 웹 HomeTab 은 `group.name === '대표메뉴'` 로 미리보기 그룹을 찾고, 어댑터 `flattenMenuGroups` 도 같은 이름으로 flat 에서 뺀다. 어댑터 상수 `REPRESENTATIVE_GROUP_NAME`/`UNCATEGORIZED_GROUP_NAME` 과 웹 리터럴이 따로 산다 — 웹만 바꾸면 미리보기가 flat 앞 4개로 조용히 폴백하고, 어댑터만 바꾸면 추천 그룹이 flat 에서 안 빠져 추천 항목이 flat 맨 앞에 오게 된다(dedup 이 `sourceMenuId` 라 중복 행은 없음). 앱은 그룹을 아예 안 쓴다.
+- **(원본 메뉴 그룹) 비배민 가게의 정규화 행은 비어 있을 수 있다** -- 2026-06-27~09-25 동안 일반 가게는 `menuGroups=[]` 라 `restaurant_menus` 에 한 번도 안 들어갔다. `backfill:naver-menus` 기본 대상은 **스냅샷 메뉴 0건 가게뿐**이라, 옛 구조로 메뉴가 채워진 일반 가게는 백필 뒤에도 그룹·정규화 행이 없다 → 공개 상세는 `mergeMenuGroups` 의 flat 1그룹('메뉴') 폴백으로 보이고 음식 역검색의 `menu_catalog` 근거도 없다. 채우려면 재크롤 또는 `backfill:naver-menus --all`.
+- **(원본 메뉴 그룹) 옛 `Menu:` 폴백으로 채워진 크롤은 정규화 행을 안 바꾼다** -- 통째 교체는 `menuGroups` 가 1개 이상일 때만 일어나므로, 그룹 없는 flat 결과(legacy)가 들어온 크롤 뒤에도 이전 크롤(예: 배민 연동 시절)의 `restaurant_menus` 행이 남는다 — 스냅샷(flat, 그룹 `[]`)과 정규화 행이 서로 다른 메뉴판을 가리킬 수 있다.
+- **(원본 메뉴 그룹) 추천 메뉴는 정규화 행이 둘** -- "추천 + 전체" 카테고리 구조에선 같은 `sourceMenuId` 가 대표메뉴 그룹과 메뉴 그룹에 각각 저장된다. 메뉴 수를 셀 땐 `sourceMenuId`(없으면 이름+가격)로 dedup 하거나 식당 id 집합으로 셀 것 — 웹 MenuTab 헤더 "총 N개" 도 그룹 개수 합이 아니라 flat(`detail.menus`, 대표메뉴 제외) 수다.
+- **MenuCanonical 은 네이버 행 하나 기준 — 출처 통합 화면과 수치가 어긋난다** (`420a6be` 이후 두드러짐) -- 그룹핑·순위·인사이트 topMenus 는 `placeId` 로 찾은 네이버 행의 `MenuMention` 만 보고(다이닝코드·테이블링 멘션은 각자 행에 쌓이며 그룹핑 대상 아님), 리뷰 메뉴 필터(`filterReviewsByTipMenu` — 공개 리뷰 목록·어드민 `review-match`)는 그 네이버 행 매핑을 출처 통합 리뷰 전체에 빌려 쓴다. 그래서 어드민 상세의 'N회 언급'(예: 목살 20)과 필터 결과 수(98, 테이블링 포함)가 다르다 — 공개 화면에도 원래 있던 불일치이고, 공개 수치 변경은 사용자 결정 대기(작업 기록, [canonical](canonical.md)). 다른 출처 멘션 중 네이버 매핑에 없는 표기는 `nameNorm` 정확 일치로만 걸린다.
 - **(원본 메뉴 그룹) 마이그레이션 안 되면 조용히 스킵** -- `replaceRestaurantMenuGroups` 가 `.catch(console.warn)` 라 `restaurant_menu_groups`/`restaurant_menus` 테이블이 없으면 영속만 빠지고 크롤은 완료. 그 환경은 두 테이블이 비어 있을 수 있으나 스냅샷의 `menuGroups` 는 여전히 채워져 공개 detail 은 정상. (운영 배포 시 마이그레이션 적용 확인.)
 - **(원본 메뉴 그룹) `sourceMenuId` 는 unique 아님** -- 같은 메뉴가 '대표메뉴'와 실제 카테고리에 동시 노출되므로 `restaurant_menus` 에 unique 제약을 안 뒀다(스키마 주석). dedup 은 크롤 어댑터의 `flattenMenuGroups`(flat 용)와 그룹 내 dedup 이 담당.
-- **(원본 메뉴 그룹) MenuCanonical 통계와 연결 안 됨** -- `restaurant_menus` 는 표시·재가공용이고, 순위/멘션 GROUP BY 는 여전히 `MenuMention`/`MenuCanonical`. 두 계층을 조인하는 코드는 아직 없음 — 섞지 말 것.
+- **(원본 메뉴 그룹) MenuCanonical 통계와 연결 안 됨** -- `restaurant_menus` 는 표시·재가공용이고, 순위/멘션 GROUP BY 는 여전히 `MenuMention`/`MenuCanonical`. 두 계층을 조인하는 코드는 아직 없음 — 섞지 말 것. *(정정 — 2026-08-23 `9f39d53` 부터 음식 역검색([food.service.ts](../../apps/friendly/src/modules/food/food.service.ts))이 두 계층을 한 식당 단위로 **함께 읽는다**: `GlobalMenuCanonicalLink`→`MenuCanonical` 로 후보를 찾고 `sourceMenus` 이름이 정규화 키와 맞으면 `menu_catalog` 근거. GROUP BY 조인은 여전히 없고, 이 모듈의 순위·통계에는 `restaurant_menus` 가 안 들어간다. 2026-09-26 부터는 어드민 상세 '메뉴' 탭에 두 계층이 나란히 보인다.)*
 - **canonical 은 코드가 정한다 — LLM 응답의 이름은 무시** -- v2 부터 LLM 의 `groups` 인덱스만 쓴다. `callIndexGroups` 는 범위 밖/비정수/중복 인덱스를 버리고 유효 인덱스 2개 미만 그룹은 무시 — 형식 이탈이 병합 오류로 번지지 않게 방어적으로 좁힌다. 대표 이름을 바꾸려면 프롬프트가 아니라 `pickCanonicalName` 을 고쳐야 한다.
 - **순위 정렬 시 null positiveRatio 는 마지막** -- 긍/부 둘 다 0 (전부 neutral) 이면 ratio null. `positiveRatio` 정렬에서 뒤로 밀리고 mentionCount 내림차순으로 동률 처리.
 - **traitsJson 파싱 실패는 무시** -- malformed traitsJson 행이 있어도 try/catch 로 그 한 건만 건너뛴다. 통계 수렴이 우선.
@@ -185,8 +208,20 @@ rawJson          String?
 - **dev.db 잔재로 테스트 입력 카운트 변동** -- analytics 와 공유하던 패턴(analytics 는 2026-08-22 부터 `useIsolatedDatabase()` 로 격리 — [analytics](analytics.md)). menu-grouping 테스트는 여전히 `.env` 의 DB 위에서 placeId prefix(`mg-`)로 격리하고 afterEach 청소, 단언은 절대값 대신 부분 매치/하한 비교. 전량 삭제하는 테스트를 새로 쓰면 격리부터.
 - **`think` 는 gpt-oss 에만 보낸다 — `thinkOptionForModel` 미적용** -- `callIndexGroups` 는 모델명에 `gpt-oss` 가 있을 때만 `think: 'low'`, 그 외엔 필드를 아예 안 보낸다. 2026-08-22 실측으로 qwen3.5 계열은 `think` 미지정 시 출력 토큰을 사고에 다 써 content 가 빈 문자열로 온다는 것이 확인됐고 다른 JSON 호출들은 `thinkOptionForModel`(gpt-oss `'low'`/그 외 `false`)로 바뀌었다([ai](ai.md)). chat 기본 모델을 qwen3.5 류로 바꾸면 이 모듈은 `parse_failed` 로 되돌아갈 수 있다 — 그때 같은 헬퍼로 맞출 것.
 
-## Sources [coverage: high — 21 sources]
+## Sources [coverage: high — 33 sources]
 
+- [apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.adapter.test.ts) (2026-09-25 — placeMenus → '대표메뉴'/'메뉴'/사장님 그룹 매핑·완결성 테스트)
+- [apps/friendly/src/modules/restaurant/restaurant.test.ts](../../apps/friendly/src/modules/restaurant/restaurant.test.ts) (2026-09-25 — 0건 재크롤 메뉴 보존·`updateNaverMenus`)
+- [apps/friendly/scripts/backfill-naver-menus.ts](../../apps/friendly/scripts/backfill-naver-menus.ts) (2026-09-25 — 메뉴만 재수집 → `updateNaverMenus` → 정규화 행 교체)
+- [apps/friendly/src/modules/food/food.service.ts](../../apps/friendly/src/modules/food/food.service.ts) (2026-08-23 `9f39d53` — `sourceMenus` → `menu_catalog` 근거, 24차 누락분)
+- [apps/friendly/scripts/measure-menu-nutrition.ts](../../apps/friendly/scripts/measure-menu-nutrition.ts) (`restaurant_menus` 이름 읽기 — 식당 수 가중)
+- [apps/friendly/scripts/probe-menu-coverage.ts](../../apps/friendly/scripts/probe-menu-coverage.ts) (동일 — 칼로리 표시율 점검)
+- [apps/friendly/src/modules/summary/summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts) (`MenuMention.restaurantId` = 리뷰의 식당 행)
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) (2026-09-26 — '메뉴' 탭 = 공개 `MenuTab` + `MenuRankingSection`, 메뉴 클릭 → 리뷰 필터)
+- [apps/web/src/components/restaurant/MenuRankingSection.tsx](../../apps/web/src/components/restaurant/MenuRankingSection.tsx) (`useMenuRanking`·"분류하기" `useGroupForRestaurant`)
+- [apps/mobile/src/components/restaurantDetail/MenuTab.tsx](../../apps/mobile/src/components/restaurantDetail/MenuTab.tsx) (앱 — flat `menus` 만)
+- [apps/mobile/src/components/restaurantDetail/HomeTab.tsx](../../apps/mobile/src/components/restaurantDetail/HomeTab.tsx) (앱 — flat 앞 4개 미리보기)
+- [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) (`menusGroup`·`menusRanking`·`reviewMatch` — 전부 `/admin/…`)
 - [apps/friendly/src/modules/ai/llm-provider-env.ts](../../apps/friendly/src/modules/ai/llm-provider-env.ts) (`buildLlmProviderEnv()` — 라우트·플러그인 env 조립, 2026-08-22)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.prompts.ts)
 - [apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts](../../apps/friendly/src/modules/menu-grouping/menu-grouping.service.ts)
@@ -200,11 +235,11 @@ rawJson          String?
 - [apps/friendly/prisma/migrations/20260508142840_add_menu_canonicals/migration.sql](../../apps/friendly/prisma/migrations/20260508142840_add_menu_canonicals/migration.sql)
 - [packages/api-contract/src/schemas/menu-grouping.ts](../../packages/api-contract/src/schemas/menu-grouping.ts)
 - [docs/menu-grouping-split-merge.html](../../docs/menu-grouping-split-merge.html) (아키텍처 제안서, 보존 문서)
-- [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) (원본 메뉴 그룹 영속 — `replaceRestaurantMenuGroups`)
+- [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) (원본 메뉴 그룹 영속 — `replaceRestaurantMenuGroups`; 2026-09-25 가게 단위 교체·0건 보호·`updateNaverMenus`; `filterReviewsByTipMenu`·`getInsights` 의 네이버 행 `MenuCanonical` 사용)
 - [apps/friendly/src/modules/restaurant/restaurant.merge.ts](../../apps/friendly/src/modules/restaurant/restaurant.merge.ts) (`mergeMenuGroups`)
-- [apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts) (`extractBaeminMenuGroups`/`flattenMenuGroups`)
+- [apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts](../../apps/friendly/src/modules/crawl/adapters/naver-place.playwright.adapter.ts) (`extractBaeminMenuGroups`/`flattenMenuGroups`; 2026-09-25 `resolveMenuGroups`·`extractPlaceMenuGroups`(`naver-place`)·그룹명 상수)
 - [apps/friendly/prisma/migrations/20260627073000_add_restaurant_source_menus/migration.sql](../../apps/friendly/prisma/migrations/20260627073000_add_restaurant_source_menus/migration.sql)
-- [packages/api-contract/src/schemas/crawl.ts](../../packages/api-contract/src/schemas/crawl.ts) (`MenuGroup`/`MenuGroupItem`)
+- [packages/api-contract/src/schemas/crawl.ts](../../packages/api-contract/src/schemas/crawl.ts) (`MenuGroup`/`MenuGroupItem` — `source: z.string()`)
 - [packages/api-contract/src/schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts) (`RestaurantPublicDetail.menuGroups`)
-- [apps/web/src/components/restaurant/detail/MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx)
-- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx)
+- [apps/web/src/components/restaurant/detail/MenuTab.tsx](../../apps/web/src/components/restaurant/detail/MenuTab.tsx) (그룹 섹션 + 칼로리 칩, 헤더 "총 N개" = flat 수)
+- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) (`'대표메뉴'` 그룹 미리보기 — 이름 계약)

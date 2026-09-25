@@ -1,7 +1,7 @@
 ---
 concept: operation-log-instrumentation
-last_compiled: 2026-08-30
-topics_connected: [logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai, food, meal]
+last_compiled: 2026-09-26
+topics_connected: [logs, friendly, crawl, schedule, analytics, menu-grouping, random-crawl, auto-discover, ai, food, meal, api-docs]
 status: active
 ---
 
@@ -47,6 +47,7 @@ status: active
 - **fire-and-forget 경합** — `log` 의 DB 쓰기가 비동기라 `finishRun`/자동분석과 경합한다. `pendingWrites` barrier 가 마지막 단서를 지키지만, barrier 를 우회하는 새 경로가 생기면 분석 프롬프트가 핵심 로그를 놓친다.
 - **debug 가 SSE 로 새는 순간** — `level='debug'` 가 SSE 로 나가면 `CrawlLogLevel` 3종 계약이 깨져 클라이언트 reducer 가 오염된다. debug 의 SSE 차단은 계약 경계이지 단순 노이즈 컷이 아니다.
 - **seq 발급기가 둘로 갈릴 때** — `OperationLogService` singleton 이 깨지거나 `emit` 이 `allocSeq` 공유를 멈추면 78% 멈춤 증상이 재발한다.
+- **부팅 sweep 이 서버가 아닌 프로세스에서 돌 때** (2026-09-26 확인) — `plugins/logs.ts` 는 플러그인 등록 본문에서(`NODE_ENV !== 'test'` 일 때) `sweepStaleOperationRuns` 로 모든 `running` run 을 `failed`/`server_restart`, `pending`·`running` 분석 보고서를 `failed` 로 마감한다. "방금 재시작한 유일한 서버" 전제의 코드인데, `export:openapi`(CLAUDE.md 6번 규칙 — 비-어드민 라우트를 바꿀 때마다 실행)처럼 `.env` 로 `buildApp()` 을 띄우는 스크립트도 이 본문을 통과한다. dev 서버가 크롤·요약을 진행 중일 때 문서를 재생성하면 그 run 이 잠깐 실패로 보인다(`finishRun` 이 id 로 덮어써 최종 상태는 복구). 서버 전용 부팅 단계로 옮길 후보 — [server-only-boot-effects](server-only-boot-effects.md).
 - **자동 분석 게이트가 새는 순간** — 제외 코드/`trigger='user'` 분기가 빠지면 일반 사용자 실패(영수증 업로드 등)마다 LLM 비용이 발생한다.
 
 ## Sources
@@ -65,3 +66,5 @@ status: active
 - [[stream-driven-cache-merge]]
 - [[in-memory-singleton-gates]]
 - [[versioned-llm-prompts]]
+- [api-docs](../topics/api-docs.md)
+- [server-only-boot-effects](server-only-boot-effects.md)

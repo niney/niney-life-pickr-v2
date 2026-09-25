@@ -1,7 +1,7 @@
 ---
 concept: 외부 큐 없는 모듈 싱글턴 동시성 게이트
-last_compiled: 2026-09-07
-topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality, tarot, saju-c, usage-quota]
+last_compiled: 2026-09-26
+topics_connected: [ai, crawl, friendly, shared, menu-grouping, analytics, canonical, auto-discover, settlement, schedule, review-search, review-clustering, random-crawl, logs, telegram, bus, food, meal, weather, air-quality, tarot, saju-c, usage-quota, parking, sea, housing]
 status: active
 ---
 
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-09-24~25** in [parking](../topics/parking.md) / [sea](../topics/sea.md) / [housing](../topics/housing.md) (`2ff2c31`·`4a2bff1`·`ad48f96`): 이번 라운드의 세 도메인이 같은 도구 세 가지를 나눠 썼다. (1) **폴러 overlap skip** — `ParkingLiveService.poll()`·`EvStatusPoller` 가 `if (this.running) return` 으로 이전 tick 이 안 끝났으면 건너뛰고 `finally` 에서 푼다(schedule 레지스트리의 "동시 1개 inflight + overlap skip" 의 단일 서비스판). 실시간 값은 `lots: Map` 한 벌을 tick 마다 **새 Map 으로 통째 교체**하고, 원천별로 실패하면 그 원천만 직전 값 유지 + stale 표시 — 요청 경로는 이 Map 을 읽기만 해서 업스트림 0콜. (2) **캐시 + in-flight 합류** — `SeaService` 가 `cache: Map`(활동별 1시간·물때 12시간, 실패 시 12시간 stale) 옆에 `inflight: Map<key, Promise>` 를 두어 같은 키의 동시 미스가 한 번만 업스트림을 부른다(`load().finally(() => inflight.delete(key))` — 버스·지하철·대기의 in-flight 합류와 같은 형태). (3) **단일 적재 약속** — `HousingFloodIndex` 는 `pending: Promise` 하나로 메모리 격자(0.002°) 적재를 한 번만 돌리고, 최신 `LifeMasterSync(flood).id` 가 바뀔 때만 다시 짓는다(적재 이력 행이 캐시 버전). 셋 다 프로세스 메모리라 인스턴스 하나 전제이고, 폴러의 시작 자체는 `onListen` 에만 걸려 테스트·스크립트 프로세스에는 게이트가 생기지 않는다([server-only-boot-effects](server-only-boot-effects.md)).
 - **2026-09-06** in [saju-c](../topics/saju-c.md) (`saju-jobs.ts`): `SajuJobRegistry` — 풀이 1건이 섹션 4개 병렬 LLM 호출, 클라이언트는 `GET …/jobs/:id?after&wait` long-poll 로 도착 순 수신. 메모리 Map(단일 인스턴스), 완료 후 TTL 5분, 최대 200(넘치면 오래된 것부터), 서버 재시작이면 410 → 클라이언트는 정적 본문 유지 + 재시도. 회원 저장은 4개가 모두 끝난 뒤 한 번(`persistPending`).
 - **2026-09-03** in [tarot](../topics/tarot.md) / [usage-quota](../topics/usage-quota.md): LLM 호출은 기존 `ConcurrencyGate`/계정 게이트를 타고, 일일 한도는 DB 카운터([anonymous-usage-quota](anonymous-usage-quota.md)) — 메모리 게이트(동시성)와 DB 한도(예산)의 역할 분리가 명시됐다.
 - **2026-05-07** in [[../topics/ai]] (`adapter-cache.ts`): `maxConcurrent` (기본 15) FIFO 게이트. AI provider 호출이 cap을 넘으면 큐에 대기, 한 콜이 끝나면 다음을 깨운다. ai 라우트 + summary 서비스가 같은 인스턴스를 import해 진짜 cap이 됨 (둘이 따로 만들면 2× cap이 되어버림).
@@ -92,3 +93,7 @@ status: active
 - [[../topics/meal]]
 - [[../topics/weather]]
 - [[../topics/air-quality]]
+- [parking](../topics/parking.md)
+- [sea](../topics/sea.md)
+- [housing](../topics/housing.md)
+- [server-only-boot-effects](server-only-boot-effects.md)

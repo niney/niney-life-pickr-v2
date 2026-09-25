@@ -1,7 +1,7 @@
 ---
 concept: 저장한 내 위치 1곳 — 원시 좌표 저장 + 조회 시 해석 + 다도메인 글랜스
-last_compiled: 2026-08-30
-topics_connected: [air-quality, weather, life-map, meal, shared, web, mobile]
+last_compiled: 2026-09-26
+topics_connected: [air-quality, weather, life-map, meal, shared, web, mobile, parking]
 status: active
 ---
 
@@ -17,6 +17,7 @@ status: active
 
 ## Instances
 
+- **2026-09-25** in [parking](../topics/parking.md) (`2ff2c31`): 주차 페이지가 같은 저장소(`useAirLocation` — 이름은 대기에서 태어났지만 이제 다섯 번째 소비처)를 **진입 중심**으로 쓴다 — 우선순위는 URL `ll` → 저장한 내 위치 → 서울, 마운트 때 1회 결정하고, 로그인 사용자의 저장 위치가 서버에서 늦게 도착하면 사용자가 지도를 아직 안 움직였을 때만 1회 `flyTo`. 지역 이동 옴니박스(`LifeGoToBox`)에도 "저장한 내 위치" 바로가기로 넘긴다. 주차는 해석 대상이 격자·측정소가 아니라 **지도 뷰포트 자체**(그 안의 주차장·충전소)라, 저장 좌표를 가공 없이 쓰는 가장 단순한 소비 형태다 — 일상지도와 같은 유형. 반면 같은 날 들어온 바다 `/sea` 는 저장 위치를 쓰지 않는다(조석 예보는 사용자가 고른 지점 기준 "가장 가까운 조석 예보지점" 으로 해석).
 - **2026-08-22** in [mobile](../topics/mobile.md) / [shared](../topics/shared.md) (`e348032`): 웹 `MyLocationChip` 안에 있던 파생 로직을 `packages/shared/src/hooks/useMyLocationGlance.ts` 로 승격하고 앱 홈 `MyLocationCard` 가 같은 훅을 소비. 앱은 `api-setup.ts` 에서 `setAirLocationStorage(AsyncStorage)` 로 저장소를 주입(injectableStorage 1회 캡처 함정 준수).
 - **2026-08-22** in [meal](../topics/meal.md) (`acb3206`): 식단 추천이 저장 위치 좌표로 실시간 날씨를 붙임 — 단, `meal-recommendation.route.ts` 가 **별도 `WeatherService` 인스턴스**를 만들어 발표 슬롯 캐시·일일 쿼터 카운터가 `/weather` 라우트와 분리된다(같은 키를 두 카운터가 나눠 씀).
 - **2026-08-21** in [life-map](../topics/life-map.md) (`1d92acb`): 일상지도 초기 중심을 저장 위치로 잡고 보라 점 오버레이로 표시 — 저장소를 쓰기만 하고 갱신하지 않는 순수 소비자.
@@ -45,3 +46,4 @@ status: active
 - [guest-server-hybrid](guest-server-hybrid.md)
 - [platform-ui-split](platform-ui-split.md)
 - [quota-proportional-loading](quota-proportional-loading.md)
+- [parking](../topics/parking.md)

@@ -248,7 +248,7 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - **겸표시 클릭은 `x-` prefix 로 가장 먼저 가로챈다.** `handleMarkerSelect` 가 `id.startsWith('x-')` 를 차량(`veh-`)·내 위치(`my-location`) 무시 로직보다 **앞에서** 처리해 상대 탭 딥링크로 보낸다. 새 특수 마커 id 를 추가할 때 이 순서를 깨면 겸표시 클릭이 정류장 선택으로 샌다.
 - **차량 알약 빌더는 vehiclePill.ts 위임 — 산출은 바이트 동일.** `busMarker.ts` 의 `buildBusVehiclePill*` 은 이제 지하철과 공용인 `vehiclePill.ts` 재수출이다. 알약 기하를 바꾸면 지하철 열차 마커에도 반영된다(공용 코어) — 버스만 바꾸려면 재수출을 끊고 분기해야 한다.
 - ~~앱 미구현~~ → **앱 대중교통 화면 존재(2026-07~).** 버스·지하철 통합 화면(탑승 모드·하차 알림 포함)이 `apps/mobile` 에 있다 — 이 문서의 웹 컴포넌트(BusPage·BusStationsMap·시트)는 공유하지 않고 `@repo/shared` 훅만 공유한다([transit](transit.md)·[mobile](mobile.md)). 게스트 즐겨찾기 storage 주입(`setBusFavoriteStorage`)도 앱 entry 에 배선됨.
-- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 지점을 가릴 수 있다. 상세는 [transit Gotchas](transit.md#gotchas-coverage-high--9-sources).
+- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 지점을 가릴 수 있다. 상세는 [transit](transit.md) 의 Gotchas 절.
 
 ## Sources [coverage: high — 58 sources]
 
@@ -322,4 +322,4 @@ busRouteTypeColor(routeType)                // 1공항/2마을/3간선/4지선/5
 - [apps/friendly/src/modules/housing/datago-json.adapter.ts](../../apps/friendly/src/modules/housing/datago-json.adapter.ts) — *toServiceKeyPart cross-module import(K-apt·건축HUB JSON 게이트웨이)*
 
 **배경 문서**
-- [docs/HANDOFF-bus-station-search.md](../../docs/HANDOFF-bus-station-search.md)
+- `docs/HANDOFF-bus-station-search.md` — 핸드오프 문서(커밋하지 않는 로컬 문서라 리포에 없음, 링크 제거 2026-09-26)

@@ -1,12 +1,14 @@
 ---
 topic: meal
-last_compiled: 2026-09-07
-sources_count: 82
+last_compiled: 2026-09-26
+sources_count: 89
 status: active
-aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recognition, 식단인식, meal-recommendation, 식단추천, meal-preference, 알레르기, 식단통계, meal-reminder, 식단알림, meal-backup, 식단백업, photo-retention, 사진보존, MealMutationBarrier, FoodRestaurantMatches, 파는곳찾기, 판매처-탐색, 판매처-바텀시트, restaurant_opened, MealRecommendView, seed-meal-samples, 검증용-씨딩, prod-db-guard, 운영DB-안전장치, expo-document-picker, lazy-native-module, MealDataManagementCard, PLAN-meal]
+aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recognition, 식단인식, meal-recommendation, 식단추천, meal-preference, 알레르기, 식단통계, meal-reminder, 식단알림, meal-backup, 식단백업, photo-retention, 사진보존, MealMutationBarrier, FoodRestaurantMatches, 파는곳찾기, 판매처-탐색, 판매처-바텀시트, restaurant_opened, MealRecommendView, seed-meal-samples, 검증용-씨딩, prod-db-guard, 운영DB-안전장치, expo-document-picker, lazy-native-module, MealDataManagementCard, PLAN-meal, rec-user, MealPhoto-User-FK, FK-위반-테스트, 격리-DB, useIsolatedDatabase, seedAuthUsers, hookTimeout, 외부-API-문서, route-summary, mealDataArchive, mealRecognize, mealRecommend, mealPhotoUpload]
 ---
 
 # meal — 개인 식단 기록·인식·추천·휴대성
+
+**2026-09-24~09-26 변경 흡수 — 식단 인식 테스트의 FK 실패 수정(`5d7b686`)과 meal 라우트 28개의 외부 문서용 한국어 summary(`1b621c4`), 동작 변경 0**: (1) [meal-recognition.service.test.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.test.ts)는 격리 DB([temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts) `useIsolatedDatabase` — dev.db 를 복사해 `_prisma_migrations` 외 모든 테이블을 `DELETE`)에서 `rec-user` 로 사진을 저장하는데, `MealPhoto.userId → User` FK(마이그레이션 `20260823170000_add_meal_photo_user_fk`)가 생긴 뒤로 그 사용자 행이 없어 FK 위반으로 늘 실패했다(`2ff2c31` 검증 기록의 "전체 실행 실패 2파일" 중 하나). `5d7b686`(2026-09-25)이 `beforeAll` 에서 `app.prisma.user.create({ data: { id: 'rec-user', … } })` 를 먼저 한다. 같은 커밋의 [vitest.config.ts](../../apps/friendly/vitest.config.ts) `hookTimeout: 60_000` 은 격리 DB 준비(dev.db 3.6GB 복사·비우기)가 기본 10초를 넘던 간헐 실패용으로, 격리 DB 를 쓰는 meal 테스트 5파일(meal.route·meal-data.route·meal-daily-quota·meal-recognition.service·meal-recommendation)에도 그대로 적용된다 — 결과 friendly 전체 143파일·1,522 통과. (2) `1b621c4`(2026-09-24): `meal.route.ts`·`meal-recognition.route.ts`·`meal-recommendation.route.ts` 의 모든 라우트 schema 에 한국어 `summary`(필요한 곳은 `description`)가 붙어 [docs/api/endpoints.md](../../docs/api/endpoints.md) meal 절(28개, 전부 인증 '로그인')로 외부에 나간다 — 일일 한도 기본값·사진 규격·백업 한도·확인 문구가 문서에 적혔다(아래 API Surface). 스키마·동작은 그대로(사진 라우트 3개는 한 줄 `schema` 객체를 여러 줄로 펼쳐 summary 를 넣은 것뿐). 같은 라운드의 바다 페이지 신설은 추천의 날씨 연동과 무관하다([weather](weather.md)).
 
 **2026-08-23~24 변경 흡수 — 판매처 탐색 바텀시트(`0906df3`)·검증용 씨딩 운영 DB 안전장치(`037a4f2`)·네이티브 모듈 부재 빌드 가드(`0064ab9`)**: (1) 앱 추천 카드에서 선택·기록·판매처 버튼이 한 줄에 눌려 수십 px 폭으로 찌그러지던 것을 [MealRecommendView](../../apps/mobile/src/components/meal/MealRecommendView.tsx)가 위계를 나눠 고쳤다 — 메뉴 선택·먹은 메뉴 기록은 44pt 이상 버튼으로 분리하고, "파는 곳 찾기" 는 카드 전체 폭 CTA 가 신규 [FoodRestaurantMatches](../../apps/mobile/src/components/meal/FoodRestaurantMatches.tsx)(gorhom `BottomSheetModal`, 스냅 65%/90%, `enableDynamicSizing=false`, 아래로 끌어 닫기)를 연다. 조회 `useFoodRestaurants(foodId, { lat, lng, radiusM: 5_000, limit: 5 })` 는 **시트를 연 뒤에만**(`enabled: opened && !!foodId`) 돌고, 결과보다 먼저 판매 비보장 notice(`FOOD_RESTAURANT_DATA_NOTICE`)를 놓은 뒤 행마다 거리·카테고리·평점·리뷰 수 + '메뉴판 확인'/'리뷰 언급 N' 배지 + 일치 메뉴 2개를 보인다. `foodId` 가 없거나 결과가 비면 `/(tabs)/restaurants?q=음식명` 이름 검색으로 폴백, 행 탭은 `/restaurant/:placeId`. CTA 를 누르면 `restaurant_opened` 이벤트를 남긴다(`onOpened`). 서버 쪽은 [food](food.md) 역검색 정렬이 "근거 등급(메뉴판+리뷰 > 메뉴판 > 리뷰) → 거리" 로 바뀐 것뿐(계약·DB 무변경). (2) [seed-meal-samples.ts](../../apps/friendly/scripts/seed-meal-samples.ts)(`seed:meal-samples <userId> [--yes] [--undo]`) — 추천·통계 화면 검증용 15끼(9일치 `PLAN`)를 `MealService.create` 로 태워 앱과 같은 경로(카탈로그 매칭·분류·영양 스냅샷)를 지나고, memo `[검증용 샘플]` 표식으로 `--undo` 가 정확히 되돌린다. `DATABASE_URL` 이 `prod.db` 로 보이면 `--yes` 없이는 거부하고 사본(`DATABASE_URL="file:/tmp/seed.db"`) 절차를 안내한다 — 실사용 기록과 같은 테이블에 섞이고 구분은 memo 하나뿐이라서(`probe:meal-e2e` 와 같은 결). `--undo` 는 안전한 방향이라 막지 않는다. (3) [MealDataManagementCard](../../apps/mobile/src/components/meal/MealDataManagementCard.tsx)의 `expo-document-picker` 최상위 import 가 네이티브 모듈이 없는 dev client(JS 번들만 갱신)에서 모듈 로드 자체를 터뜨려 설정 탭은 물론 식단 화면 전체가 빈 화면이 됐다(시뮬레이터 실측 — 알레르기·백업·사진 정리 전부 접근 불가) → 파일을 고를 때만 `require` 로 지연 로드(`loadDocumentPicker`)하고 없으면 "이 앱 빌드에는 파일 선택 모듈이 없어요. 앱을 새로 빌드하면 백업 불러오기가 켜집니다." 로 끝낸다(가중치·알레르기·알림·내보내기·사진 정리·전체 삭제는 그대로). [PLAN-meal](../../docs/PLAN-meal.md) 진행 기록 최신: 앱 재빌드(clean prebuild + iOS Release 시뮬레이터) 2026-08-24 완료·운영 DB 마이그레이션 2026-08-23 적용 완료, 남은 것은 실기기 카메라·HEIC·업로드 경로 확인(연결 iPhone offline)과 Android native 빌드(이 환경에 SDK 없음).
 
@@ -59,7 +61,7 @@ aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recogniti
 
 관련 횡단 결정은 [zod-ssot-buildless](../concepts/zod-ssot-buildless.md), [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md), [platform-ui-split](../concepts/platform-ui-split.md), [versioned-llm-prompts](../concepts/versioned-llm-prompts.md)에 연결된다. 단, 영속 일일 quota는 메모리 singleton이 아니라 SQLite가 진실이다.
 
-## API Surface [coverage: high — 15 sources]
+## API Surface [coverage: high — 19 sources]
 
 전부 Bearer 로그인 필수이며 공개·공유 API가 없다.
 
@@ -81,6 +83,8 @@ aliases: [식단, 식사기록, meal-log, meal-entry, meal-photo, meal-recogniti
 | `DELETE` | `/api/v1/meals/data` | `DELETE_ALL_MY_MEAL_DATA` 확인 후 도메인 전체 삭제; 계정 유지 |
 
 사진은 `<img src>`에 Bearer header를 실을 수 없어 인증 fetch 후 웹은 object URL, 앱은 인증 cache의 `file://` URI를 쓴다. 목록 cursor는 opaque이고 구버전 ISO cursor는 읽기 호환만 제공한다.
+
+**외부 문서(2026-09-24 `1b621c4`)** — 위 표의 라우트 28개가 `export:openapi` 로 [docs/api/endpoints.md](../../docs/api/endpoints.md) meal 절에 나간다(인증 열 전부 '로그인'). 한도 열이 채워진 건 6개 — 백업·복원 10/시간(`RATE.mealDataArchive`), 사진 업로드·복제 30/분(`mealPhotoUpload`), 인식·추천 생성 10/분(`mealRecognize`·`mealRecommend`, [rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts)). summary/description 이 적은 값은 코드와 일치한다(2026-09-26 대조): 인식 일일 30회·추천 20회(`MEAL_RECOGNIZE_DAILY_LIMIT`·`MEAL_RECOMMEND_DAILY_LIMIT` 기본값, [env.ts](../../apps/friendly/src/config/env.ts), KST 자정 기준, 초과 429, 추천 캐시 히트 미차감·`force` 는 차감), 사진 multipart 1개 5MB([multipart.ts](../../apps/friendly/src/plugins/multipart.ts))·HEIC 수용·긴 변 1600px JPEG 재인코딩·EXIF 제거·썸네일 320px·24시간 안에 기록에 안 붙은 업로드 자동 정리·사용자당 3,000장 초과 409, 백업은 기록 5,000·추천 1,000·사진 100장(합계 50MB) 초과 413·복원 본문 JSON 최대 75MB, 확인 문구 `DELETE_OLD_MEAL_PHOTOS`/`DELETE_ALL_MY_MEAL_DATA`. 표에 없던 의미도 문서에 드러났다 — `PATCH /meals/:id` 는 `items`·`photoTokens` 를 보내면 전량 교체, `PUT /preference` 는 보낸 필드만 갱신(서비스가 현재 행과 병합 후 upsert), `GET /items/recent?name=` 은 음식명으로 지난번 섭취(마지막 날짜·양·분류·그때 사진 토큰), `POST /recognize` 는 `placeId` 를 주면 그 식당 메뉴를 힌트로 쓰고 모델 미설정이면 503. 파이프라인·규약은 [api-docs](api-docs.md).
 
 ## Data [coverage: high — 18 sources]
 
@@ -122,8 +126,9 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - **전체 삭제의 파일 성공 경계** — DB commit 뒤 사용자 사진 폴더 strict 삭제가 실패하면 200을 막는다. 재호출은 DB가 비어도 파일을 재시도하고, 폴더 성공 뒤 outbox를 비운다.
 - **token guard + principal cache barrier** — A 요청의 늦은 401은 B session을 해제하지 않는다. 현재 session 401과 로그인/가입 전환은 query cancel/clear를 session 변경보다 먼저 수행한다.
 
-## Gotchas [coverage: high — 28 sources]
+## Gotchas [coverage: high — 31 sources]
 
+- **(2026-09-25 `5d7b686`) 격리 DB 테스트는 `User` 까지 비운다 — 사용자 FK 가 걸린 행(`MealPhoto` 등)을 만들기 전에 사용자부터 심을 것.** [temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts)는 FK 를 끈 채 `_prisma_migrations` 외 전 테이블을 `DELETE` 하므로, 앱이 붙은 뒤엔 FK 가 다시 살아 있다. `meal-recognition.service.test.ts` 만 이 준비를 빠뜨려 `MealPhoto.userId → User` FK 위반으로 늘 실패하다가 `beforeAll` 의 `app.prisma.user.create({ data: { id: 'rec-user', email: 'rec-user@example.com', passwordHash: 'unused' } })` 로 고쳐졌다. 다른 meal 격리 DB 테스트는 이미 심고 있었다 — `meal.route`·`meal-data.route`·`meal-recommendation` 은 공용 [seed-users.ts](../../apps/friendly/src/test-utils/seed-users.ts) `seedAuthUsers(app, [{ id, role }])`(id upsert, 멱등), `meal-daily-quota` 는 `prisma.user.create`. 인증 라우트 테스트면 토큰 검증이 DB 의 `tokenVersion`·role 을 보므로 `seedAuthUsers` 쪽이 맞다. 또 격리 DB 준비(dev.db 3.6GB 복사·비우기)는 느려 [vitest.config.ts](../../apps/friendly/vitest.config.ts) `hookTimeout` 60초(같은 커밋)에 기대고 있다 — dev.db 가 더 커지면 이 한도부터 다시 본다.
 - **판매처 결과는 판매 보장이 아니다.** 반경 5km·최대 5곳, 정렬은 근거 등급 우선이라 "가장 가까운 식당" 이 1등이 아닐 수 있다. 0건은 "수집 근거 없음"이지 "근처에 없음"이 아니며, 이름 검색 폴백은 exact 근거 없이 전체 식당 검색이다.
 - **추천의 날씨 조회는 `/weather` 라우트와 별도 `WeatherService` 인스턴스다.** [meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)가 `new WeatherService({ serviceKey: env.DATA_GO_KR_API_KEY })`(2026-09-02 `3d9dfed` 부터 — 그 전엔 `KMA_API_KEY || BUS_API_KEY`; 이 라운드 식단 모듈의 유일한 변경) 를 자체 생성하므로 발표 슬롯 캐시와 일일 업스트림 쿼터(`DEFAULT_DAILY_UPSTREAM_LIMIT` 9,000 — 인스턴스 필드 `quota`)가 날씨 페이지 쪽 인스턴스와 분리된다. 같은 data.go.kr 계정 공용 키를 두 카운터가 나눠 쓰고 캐시도 공유하지 않는다 — 합산 소비는 어느 쪽 카운터에도 안 보인다([weather](weather.md)). 운영 `.env` 에 옛 이름만 남아 있으면 키 없음으로 취급돼 추천은 계절 추정으로만 돈다(에러는 아님).
 - **`seed:meal-samples` 는 `.env` 의 `DATABASE_URL` 을 그대로 쓴다.** 막는 건 `prod.db` 패턴뿐이라 다른 이름의 운영 DB 는 못 막는다 — 사본 절차가 기본. 표식은 memo 하나라 memo 를 편집한 기록은 `--undo` 대상에서 빠진다.
@@ -149,7 +154,7 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - **전체 삭제는 부분 성공 오류를 낼 수 있다.** DB는 이미 commit됐지만 폴더 삭제 실패로 응답은 error다. 같은 요청을 다시 보내는 것이 복구 절차다.
 - **meal query key는 user id namespace가 아니다.** 공식 bootstrap과 auth hook의 cancel/clear 및 request-token guard가 보안 계약의 일부다.
 
-## Sources [coverage: high — 82 sources]
+## Sources [coverage: high — 89 sources]
 
 - [docs/PLAN-meal.md](../../docs/PLAN-meal.md)
 - [packages/api-contract/src/schemas/meal.ts](../../packages/api-contract/src/schemas/meal.ts)
@@ -163,7 +168,7 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - [apps/friendly/prisma/migrations/20260823190000_meal_safety_events_lineage/migration.sql](../../apps/friendly/prisma/migrations/20260823190000_meal_safety_events_lineage/migration.sql)
 - [apps/friendly/prisma/migrations/20260823210000_meal_backup_restore/migration.sql](../../apps/friendly/prisma/migrations/20260823210000_meal_backup_restore/migration.sql)
 - [apps/friendly/prisma/migrations/20260823220000_meal_photo_deletion_outbox/migration.sql](../../apps/friendly/prisma/migrations/20260823220000_meal_photo_deletion_outbox/migration.sql)
-- [apps/friendly/src/modules/meal/meal.route.ts](../../apps/friendly/src/modules/meal/meal.route.ts)
+- [apps/friendly/src/modules/meal/meal.route.ts](../../apps/friendly/src/modules/meal/meal.route.ts) — *전 라우트 한국어 summary(+description) 추가(`1b621c4`, 동작 무변경)*
 - [apps/friendly/src/modules/meal/meal.service.ts](../../apps/friendly/src/modules/meal/meal.service.ts)
 - [apps/friendly/src/modules/meal/meal.service.test.ts](../../apps/friendly/src/modules/meal/meal.service.test.ts)
 - [apps/friendly/src/modules/meal/meal-photo.service.ts](../../apps/friendly/src/modules/meal/meal-photo.service.ts)
@@ -178,16 +183,16 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - [apps/friendly/src/modules/meal/meal-stats.service.ts](../../apps/friendly/src/modules/meal/meal-stats.service.ts)
 - [apps/friendly/src/modules/meal/meal-stats.service.test.ts](../../apps/friendly/src/modules/meal/meal-stats.service.test.ts)
 - [apps/friendly/src/modules/meal/meal-stats.insights.ts](../../apps/friendly/src/modules/meal/meal-stats.insights.ts) (+[test](../../apps/friendly/src/modules/meal/meal-stats.insights.test.ts))
-- [apps/friendly/src/modules/meal-recognition/meal-recognition.route.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.route.ts)
+- [apps/friendly/src/modules/meal-recognition/meal-recognition.route.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.route.ts) — *summary + description(일일 한도·placeId 힌트·503) 추가(`1b621c4`)*
 - [apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.ts)
 - [apps/friendly/src/modules/meal-recognition/meal-recognition-quota.test.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition-quota.test.ts)
-- [apps/friendly/src/modules/meal-recognition/meal-recognition.prompts.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.prompts.ts) · [service test](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.test.ts)
+- [apps/friendly/src/modules/meal-recognition/meal-recognition.prompts.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition.prompts.ts) · [service test](../../apps/friendly/src/modules/meal-recognition/meal-recognition.service.test.ts) — *service test: 2026-09-25 `5d7b686` beforeAll 에서 `rec-user` 선생성(MealPhoto→User FK 실패 수정)*
 - [apps/friendly/src/modules/meal-recognition/meal-recognition-eval.ts](../../apps/friendly/src/modules/meal-recognition/meal-recognition-eval.ts) (+[test](../../apps/friendly/src/modules/meal-recognition/meal-recognition-eval.test.ts))
 - [apps/friendly/scripts/eval-meal-recognition.ts](../../apps/friendly/scripts/eval-meal-recognition.ts)
 - [apps/friendly/scripts/probe-meal-e2e.ts](../../apps/friendly/scripts/probe-meal-e2e.ts)
 - [apps/friendly/scripts/seed-meal-samples.ts](../../apps/friendly/scripts/seed-meal-samples.ts) — *검증용 15끼 씨딩(prod.db 가드, --undo)*
 - [apps/friendly/package.json](../../apps/friendly/package.json) — *seed:meal-samples · probe:meal-* · backfill:meal-nutrition · eval:meal-recognition 스크립트*
-- [apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts)
+- [apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.route.ts) — *라우트 5개 summary(+추천 생성 description) 추가(`1b621c4`)*
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.service.ts)
 - [apps/friendly/src/modules/meal-recommendation/meal-recommendation.test.ts](../../apps/friendly/src/modules/meal-recommendation/meal-recommendation.test.ts)
 - [apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts](../../apps/friendly/src/modules/meal-recommendation/meal-pattern.service.ts)
@@ -210,3 +215,12 @@ portable backup은 `format='niney-life-pickr.meal-backup'`, `version=1` JSON이�
 - [packages/shared/src/api/client.ts](../../packages/shared/src/api/client.ts) (+[test](../../packages/shared/src/api/client.test.ts))
 - [packages/shared/src/hooks/useAuth.ts](../../packages/shared/src/hooks/useAuth.ts) · [apps/web/src/main.tsx](../../apps/web/src/main.tsx)
 - [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) · [queryClient.ts](../../apps/mobile/src/lib/queryClient.ts)
+
+**2026-09-24~09-26 라운드 (테스트 인프라·외부 문서)**
+- [apps/friendly/src/test-utils/temp-db.ts](../../apps/friendly/src/test-utils/temp-db.ts) — *격리 DB: dev.db 복사 후 FK 끄고 전 테이블 DELETE(User 포함)*
+- [apps/friendly/src/test-utils/seed-users.ts](../../apps/friendly/src/test-utils/seed-users.ts) — *`seedAuthUsers` 공용 사용자 upsert(tokenVersion·role 검증 대응)*
+- [apps/friendly/vitest.config.ts](../../apps/friendly/vitest.config.ts) — *`hookTimeout: 60_000`(`5d7b686`), `fileParallelism: false`*
+- [docs/api/endpoints.md](../../docs/api/endpoints.md) — *meal 절 28개(전부 로그인, 한도 6개)*
+- [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — *`mealDataArchive` 10/시간·`mealPhotoUpload` 30/분·`mealRecognize`·`mealRecommend` 10/분*
+- [apps/friendly/src/config/env.ts](../../apps/friendly/src/config/env.ts) — *`MEAL_RECOGNIZE_DAILY_LIMIT` 30·`MEAL_RECOMMEND_DAILY_LIMIT` 20 기본값*
+- [apps/friendly/src/plugins/multipart.ts](../../apps/friendly/src/plugins/multipart.ts) — *파일 1개 5MB*

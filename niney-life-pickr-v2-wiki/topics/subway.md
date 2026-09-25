@@ -247,7 +247,7 @@ sliceForMove(index, sPrev, sCur, {isLoop}) → via[]         // 폴링 간 도�
 - **개발 함정(버스 계승).** 브랜치 전환/rebase 후 `prisma generate` 필수(client 불일치면 `prisma.subwayStation` undefined), dev DB 에 vworld 키 미등록이면 지도는 placeholder(설계된 폴백, 리스트는 동작), 포트 3000 이중 바인딩. 1차 마이그레이션은 기존 무관 drift 때문에 `migrate diff` 수기 작성 + `migrate deploy` 로 비파괴 우회했다.
 - **미구현·미확정.** 9차(환승·출구)는 TAGO 게이트웨이 대기로 미구현. `SUBWAY_LINES` 의 신림선(1094)은 문헌 추정(프로브 미검증), 일부 `positionParam` 은 관례 표기 추정(주석의 `verified` 만 실검증). 실시간 미제공 역의 도착 실패는 `INFO-200` 이라 '표기 불일치로 조용히 실패'와 구분 불가 — 필요 시 전 역 1회 검증 스크립트(쿼터 ~800콜, 별도 날).
 - ~~앱 미구현~~ → **앱 대중교통 화면 존재(2026-07~)** — 검색·도착·따라가기에 더해 탑승 모드·하차 지점/알림·실형상 렌더까지 앱이 앞서 있다([transit](transit.md)). 게스트 즐겨찾기 storage 주입(setSubwayFavoriteStorage)도 앱 entry 에 배선됨.
-- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 데스크톱 폭에서도 모바일 시트가 마운트돼 있어 `transit-desktop`/`transit-mobile` 풀 키 분리는 그대로 필요, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 역 지점을 가릴 수 있다. 상세는 [transit Gotchas](transit.md#gotchas-coverage-high--9-sources).
+- **모바일 시트 골격 함정(2026-08-22)** — `useMapSheets` 는 `useState` 선언들보다 앞에 호출(React Compiler 메모 검증), subBar 는 언마운트 시 `setSubBar(null)` 필수, 데스크톱 폭에서도 모바일 시트가 마운트돼 있어 `transit-desktop`/`transit-mobile` 풀 키 분리는 그대로 필요, 선택 flyTo 는 `bottomInset` 미적용이라 상세 시트(half)가 역 지점을 가릴 수 있다. 상세는 [transit](transit.md) 의 Gotchas 절.
 
 ## Sources [coverage: high — 74 sources]
 

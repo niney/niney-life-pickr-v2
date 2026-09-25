@@ -1,7 +1,7 @@
 ---
 concept: cross-tab-async-job-toast
-last_compiled: 2026-06-25
-topics_connected: [shared, web, mobile, review-search]
+last_compiled: 2026-09-26
+topics_connected: [shared, web, mobile, review-search, canonical]
 status: active
 ---
 
@@ -20,6 +20,7 @@ status: active
 
 ## Instances
 
+- **2026-09-26** in [shared](../topics/shared.md) / [web](../topics/web.md) / [canonical](../topics/canonical.md) (변형 b 의 **구독 키 이동**, `420a6be`): 다이닝코드·테이블링 리뷰의 단건 재요약은 완료가 **영영 오지 않았다** — watcher 가 store 의 placeId 로만 SSE 를 구독했는데, 그 리뷰들의 완료 이벤트는 자기 출처 채널(`dc:<vRid>`·`tb:<idx>`)로 흘러 place 구독에 닿지 않기 때문(버튼 잠금도 안 풀림). 고친 모양이 이 패턴의 일반 교훈이다: **트리거 시점에 구독 키를 모를 수 있다.** 이제 `resummarizeStore` 항목이 `placeId`(캐시 무효화 키)와 `canonicalId`(SSE 구독 키)를 따로 들고, `useResummarizeReview(placeId, canonicalId = null)` 는 canonical 을 아는 화면(어드민 상세)이면 처음부터 canonical 로, 모르는 화면(공개 리뷰 탭)이면 일단 place 로 구독했다가 **POST 응답의 `canonicalId` 로 `setCanonical` → watcher 가 구독을 옮긴다**(구독 id `canonical:<id>` / `place:<placeId>`). 같은 커밋이 완료 시 무효화 키 오류도 고쳤다 — 예전 `['restaurant','public',placeId]` 는 실제 공개 상세 키와 달라 "보이는 화면이면 즉시 갱신" 약속이 조용히 깨져 있었다. 이제 `invalidateRestaurantDetailCaches(qc, placeId)` 한 함수가 공개 상세 계열·`review-match`·`review-clusters`·`review-qa ready`·`parking restaurant-reviews` 와 어드민 상세 `['restaurant', placeId]` 를 함께 무효화한다(`useInvalidateRestaurantDetailCaches` 로 화면에도 노출). 교훈 두 가지: (1) 전역 watcher 의 구독 키는 **이벤트가 실제로 흐르는 채널**과 맞아야 한다(→ [canonical-corpus-fanout](canonical-corpus-fanout.md) 의 `summaryChannelKey` 단일화), (2) 무효화 키를 손으로 적으면 틀린다 — 한 함수로 모은다.
 - **2026-06-25** in [[../topics/shared]] / [[../topics/web]] / [[../topics/mobile]] / [[../topics/review-search]] (변형 a — **공개 리뷰 QA**, store-가-직접-fetch): [reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts) 는 답변이 LLM 3콜로 15초+ 걸리는 공개 질문을 추적한다. 핵심은 스토어 액션 `ask(placeId, query)` 가 컴포넌트 안이 아니라 **스토어 안에서 곧장 `reviewSearchApi.publicAsk` 를 await** 한다는 것 — 트리거한 AskTab 이 언마운트돼도 응답이 도착한다. 상태는 `inFlight`(진행 중, 메모리) / `lastByPlace`(식당별 마지막 Q&A, 영속) / `freshThisSession`(이번 세션에 직접 물어봤는지 — 복원된 '지난 답변'과 방금 받은 답을 구분, 메모리) / `errorByPlace`(메모리) / `completion`(seq 증가하는 완료 이벤트, 메모리) / `visiblePlaceId`(지금 보고 있는 Ask 탭). 같은 식당이 이미 `inFlight` 면 무시(중복 제출 방지). 영속은 식당별 마지막 `{질문, 답변, answeredAt}` 만(`partialize: lastByPlace`, persist `review-ask-v1`, `MAX_KEPT=20` 식당 cap by answeredAt) — 진행 중·완료 이벤트·에러는 메모리(하드 리로드하면 in-flight HTTP 가 어차피 죽으므로 영속화 무의미). storage 어댑터는 `setReviewAskStorage(adapter)` lazy resolver(웹 localStorage 자동 / 앱 AsyncStorage 주입 / NO_OP) — `settlementDraftStore` 의 주입 철학과 동일([[platform-ui-split]] 의 storage-adapter-주입 자매 패턴).
   - **알림 UI 분기**: 웹 [ReviewAskToaster.tsx](../../apps/web/src/components/ReviewAskToaster.tsx) 는 `completion.seq` 를 `useRef` 로 추적해 같은 이벤트를 **정확히 1회**만 sonner 토스트한다(성공 → '더보기', 실패 → '다시 보기'). 앱 [ReviewAskBanner.tsx](../../apps/mobile/src/components/ReviewAskBanner.tsx) 는 같은 `completion` 을 구독하지만 **앱엔 지속형 토스트 인프라가 없어** reanimated 로 하단 슬라이드 배너를 자작한다(`withTiming` + `runOnJS`, 8초 자동 닫힘, AnimatedSplash 와 동일 계열). '더보기' → `?tab=ask` deep link(웹 `/restaurants/:placeId?tab=ask`, 앱 `/restaurant/:placeId?tab=ask` — 라우트 prefix 가 web/app 다름).
   - **suppress 판정도 플랫폼 분기**: "지금 그 식당 Ask 탭을 보고 있으면 생략" 을 웹은 `window.location` 을 **직접 읽어**(pathname endsWith placeId + `?tab=ask`) 판정하고 — `useLocation` 을 구독하면 매 네비게이션마다 effect 재실행 + ref-during-render 가 생기므로 의도적으로 회피 —, 앱은 `useReviewAskStore.getState().visiblePlaceId` 를 직접 읽어 판정한다. 그 `visiblePlaceId` 는 앱 AskTab 이 마운트/언마운트 시 `setAskTabVisible(placeId, true/false)` 로 갱신([apps/mobile/src/components/restaurantDetail/AskTab.tsx](../../apps/mobile/src/components/restaurantDetail/AskTab.tsx)) — RN 은 탭 전환 시 탭이 언마운트되므로 마운트 = visible 로 신뢰 가능.
@@ -48,6 +49,7 @@ status: active
 - **store.ask 와 mutation 훅 혼동** — 답이 캐시에 없고 store 에 있다는 걸 놓치면 "답이 사라졌다" 로 오인.
 - **앱 visiblePlaceId race** — AskTab 언마운트 순서가 꼬여 다른 placeId 가 이미 visible 인데 덮어쓰면 오판정. `setAskTabVisible` 는 "다른 placeId 가 이미 visible 이면 건드리지 않음" 가드로 방어.
 - **앱에 ResummarizeToaster 가 없다는 비대칭** — 어드민이 web-only 라 의도된 것이지만, 앱에 단건 재요약 UI 가 생기면 watcher 마운트를 잊으면 알림이 안 뜬다.
+- **구독 키 ≠ 이벤트 채널** (2026-09-26 실사고) — 변형 (b) 는 watcher 가 SSE 로 완료를 "끌어오는" 구조라, 구독 키가 서버가 이벤트를 흘리는 채널과 어긋나면 완료가 오지 않고 잡이 영원히 진행 중으로 남는다(에러도 없다). 출처가 여럿인 가게에서 네이버 외 리뷰가 정확히 이 상태였다. 키를 트리거 시점에 모르면 서버 응답으로 받아 옮겨 타는 경로(`setCanonical`)를 둔다.
 
 ## Sources
 
@@ -55,6 +57,8 @@ status: active
 - [[../topics/web]]
 - [[../topics/mobile]]
 - [[../topics/review-search]]
+- [canonical](../topics/canonical.md)
+- [canonical-corpus-fanout](canonical-corpus-fanout.md)
 - [reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts)
 - [resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts)
 - [useRestaurant.ts (useResummarizeWatcher / useResummarizeReview)](../../packages/shared/src/hooks/useRestaurant.ts)

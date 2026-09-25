@@ -1,12 +1,19 @@
 ---
 topic: shared
-last_compiled: 2026-09-19
-sources_count: 157
+last_compiled: 2026-09-26
+sources_count: 186
 status: active
-aliases: [react-query, zustand, design-tokens, ui-primitives, tarot, tarotApi, useTarot, useCreateTarotReading, useCreateTarotShare, useSharedTarotReading, useMyTarotReadings, useMyTarotReadingsInfinite, useMyTarotReading, useDeleteTarotReading, tarotHistoryStore, useTarotHistoryStore, setTarotHistoryStorage, TAROT_HISTORY_MAX, tarot-history-v1, guestKeyStore, useGuestKeyStore, getGuestKey, setGuestKeyStorage, guest-key-v1, X-Guest-Key, TAROT_GUEST_KEY_HEADER, 게스트키, 익명한도헤더, sajuApi, useSaju, useCreateSajuReading, useSajuJob, SajuJobState, saju-long-poll, 롱폴훅, useSajuDaily, useSajuMatch, useSajuDatePick, useSajuFood, useSajuDailyQuery, useSajuFoodQuery, useSajuDatePickQuery, useSajuMatchQuery, useCreateSajuShare, useSharedSajuReading, useSajuProfiles, useUpsertSajuProfile, useDeleteSajuProfile, useMySajuReadingsInfinite, useMySajuReading, useDeleteSajuReading, sajuProfileStore, useSajuProfileStore, setSajuProfileStorage, getPrimarySajuProfile, sameSajuBirth, SajuLocalProfile, SAJU_LOCAL_PROFILE_MAX, saju-profiles-v1, 사주C, saju-c, sajuGApi, useSajuG, useSajuGReading, useMySajuGReadings, useSajuGPair, useSajuGPairReading, useSajuGProfiles, sajuGProfileStore, readSajuGProfiles, saveSajuGProfile, removeSajuGProfile, setSajuGProfileStorage, SAJU_G_PROFILE_STORAGE_KEY, sajuGHistoryStore, readDeviceSajuG, storeDeviceSajuG, removeDeviceSajuG, sajuGShareCredential, sajuGStorageMigration, SAJU_G_LEGACY_STORAGE, 사주G, saju-g, usageQuotaApi, useUsageQuota, useUsageQuotaOverview, useUpdateUsageQuota, usage-quota, 사용량한도훅, housingApi, HousingAxis, useHousing, useHousingStatus, useHousingPoints, useHousingNearby, useHousingSearch, useHousingComplex, useHousingTrades, housingAxisKey, HousingViewportParams, 집값훅, embedBridge, LpEmbedInit, LpEmbedMessage, isLpEmbedded, readLpEmbedInit, postLpEmbedMessage, buildLpEmbedInjection, parseLpEmbedMessage, __LP_EMBED__, ReactNativeWebView, webview-embed-bridge, 임베드브리지, 앱WebView임베드, useMenuLexicon, useMenuLexiconCreate, useMenuLexiconDelete, menuLexiconList, useRestaurantPublicMenuNutrition, publicMenuNutrition, llmPending, 칼로리칩훅, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds, busApi, bus-api, useBusStationSearch, useBusNearbyStations, useBusStationsRefresh, useBusStationArrivals, useBusPositions, useBusRouteDetail, busFavoriteApi, useBusFavorites, busFavoriteStore, useBusFavoriteStore, setBusFavoriteStorage, bus-favorites, 버스즐겨찾기, guest-server-hybrid-favorites, bus-favorites-v1, BUS_FAVORITES_MAX, refetchIntervalInBackground, arsId-guard, 버스폴링, subwayApi, subway-api, useSubwayStationSearch, useSubwayNearbyStations, useSubwayStationArrivals, useSubwayLineDetail, useSubwayLinePositions, useSubwayTimetable, useSubwayCongestion, useSubwayPath, subwayFavoriteApi, useSubwayFavorites, subwayFavoriteStore, useSubwayFavoriteStore, setSubwayFavoriteStorage, SUBWAY_FAVORITES_MAX, subway-favorites, 지하철즐겨찾기, subway-favorites-v1, airQualityApi, air-quality-api, useAirQuality, useAirSidoRealtime, useAirStationHistory, useAirNearbyStations, useAirStations, useAirForecast, useAirWeeklyForecast, useAirBadStations, useAirStationSearch, airLocationApi, useAirLocation, airLocationStore, useAirLocationStore, setAirLocationStorage, air-location-v1, 내대기위치, 내위치하이브리드, weatherApi, weather-api, useWeather, useWeatherNowcast, useWeatherForecast, useWeatherMid, useWeatherMidSea, useWeatherAws, useWeatherVersions, weatherDaily, mergeDailyRows, WeatherDailyRow, weatherMessages, weatherUpstreamMessage, 열흘병합, useMyLocationGlance, MyLocationGlance, GLANCE_RAIN_POP_THRESHOLD, GLANCE_AIR_RADIUS_M, 내위치한눈에, 상단바칩, lifeMapApi, life-map-api, useLifeMap, useLifeMapPoints, useLifeMapNearby, useLifeMapSearch, useLifeMapDetail, useLifeMapStatus, lifeMapFiltersKey, LifeMapFilterParams, 일상지도훅, foodApi, food-api, useFood, useFoodSearch, useFoodRestaurants, useFoodAdminList, useFoodImportRunEvents, buildFoodImportRunEventsUrl, buildFoodAdminListQuery, mealApi, meal-api, useMeal, useMealEntries, useInfiniteMealEntries, useMealCalendar, useMealStats, useCreateMealEntry, useMealPhotoUrl, useRecognizeMeal, useMealPreference, useMealRecommendations, useDeleteAllMealData, MealPhotoUploadFile, buildMealEntriesQuery, mealDraftStore, useMealDraftStore, setMealDraftStorage, setMealDraftPrincipal, setMealDraftLocalFileAdapter, MealDraftLocalFileAdapter, draftSessionId, isMealDraftPrincipalCurrent, runMealDraftSaveSingleFlight, beginMealDraftPhotoPreparation, principal-scoped-draft, 식단draft, handleUnauthorizedForCurrentSession, onUnauthorized-requestToken, 401세션경계, request-config-snapshot, acquirePosition, POSITION_MAX_AGE_MS, timeout-status, 측위재시도, injectableStorage, createInjectableStorage, tourApi, tour-api, useTour, useTourInsights, useTourPlan, useTourDensity, useTourLodging, useTourRegions, useTourAdminStatus, useTourSeeds, useTourSeedDiscover, useTourSeedRegister, useTourMatchRun, useTourBizCheck, useTourRawVisits, useTourRawActivities, useTourRawSpend, useTourRawPhotos, useTourRawTrips, useTourRawTrip, useTourPhotoBase, tourPhotoUrl, getTourPhotoBase, tourInsightsKey, TourInsightsParams, TourSeedParams, TourRawPageParams, 여행로그훅, 원본열람훅, useLifeMapCrime, 범죄통계훅, useRestaurantPublicTourStats, 여행자탭훅, useCreateSajuThemes, useSajuThemeJob, 사주테마훅]
+aliases: [react-query, zustand, design-tokens, ui-primitives, tarot, tarotApi, useTarot, useCreateTarotReading, useCreateTarotShare, useSharedTarotReading, useMyTarotReadings, useMyTarotReadingsInfinite, useMyTarotReading, useDeleteTarotReading, tarotHistoryStore, useTarotHistoryStore, setTarotHistoryStorage, TAROT_HISTORY_MAX, tarot-history-v1, guestKeyStore, useGuestKeyStore, getGuestKey, setGuestKeyStorage, guest-key-v1, X-Guest-Key, TAROT_GUEST_KEY_HEADER, 게스트키, 익명한도헤더, sajuApi, useSaju, useCreateSajuReading, useSajuJob, SajuJobState, saju-long-poll, 롱폴훅, useSajuDaily, useSajuMatch, useSajuDatePick, useSajuFood, useSajuDailyQuery, useSajuFoodQuery, useSajuDatePickQuery, useSajuMatchQuery, useCreateSajuShare, useSharedSajuReading, useSajuProfiles, useUpsertSajuProfile, useDeleteSajuProfile, useMySajuReadingsInfinite, useMySajuReading, useDeleteSajuReading, sajuProfileStore, useSajuProfileStore, setSajuProfileStorage, getPrimarySajuProfile, sameSajuBirth, SajuLocalProfile, SAJU_LOCAL_PROFILE_MAX, saju-profiles-v1, 사주C, saju-c, sajuGApi, useSajuG, useSajuGReading, useMySajuGReadings, useSajuGPair, useSajuGPairReading, useSajuGProfiles, sajuGProfileStore, readSajuGProfiles, saveSajuGProfile, removeSajuGProfile, setSajuGProfileStorage, SAJU_G_PROFILE_STORAGE_KEY, sajuGHistoryStore, readDeviceSajuG, storeDeviceSajuG, removeDeviceSajuG, sajuGShareCredential, sajuGStorageMigration, SAJU_G_LEGACY_STORAGE, 사주G, saju-g, usageQuotaApi, useUsageQuota, useUsageQuotaOverview, useUpdateUsageQuota, usage-quota, 사용량한도훅, housingApi, HousingAxis, useHousing, useHousingStatus, useHousingPoints, useHousingNearby, useHousingSearch, useHousingComplex, useHousingTrades, housingAxisKey, HousingViewportParams, 집값훅, embedBridge, LpEmbedInit, LpEmbedMessage, isLpEmbedded, readLpEmbedInit, postLpEmbedMessage, buildLpEmbedInjection, parseLpEmbedMessage, __LP_EMBED__, ReactNativeWebView, webview-embed-bridge, 임베드브리지, 앱WebView임베드, useMenuLexicon, useMenuLexiconCreate, useMenuLexiconDelete, menuLexiconList, useRestaurantPublicMenuNutrition, publicMenuNutrition, llmPending, 칼로리칩훅, "@repo/shared", useNaverSearch, "crawlApi.search", naver-search-hook, useCanonical, canonical-api, diningcode-bulk-save, useDiningcodeBulkSaveJob, autoDiscover, useAutoDiscoverJob, summarySseHeartbeat, useUserLocation, useCancelSummary, useResumeSummary, useRestaurantCrawlLogs, useCrawlJobLogs, summary-log-handler, stream-log-entries, useRestaurantPublicReviews, settlement, settlementApi, useSettlement, useListSettlements, useCreateSettlement, useDeleteSettlement, useUpdateSettlement, useUpdateSettlementParticipants, useCreateSettlementShare, useRevokeSettlementShare, useSharedSettlement, settlementExtractionApi, useUploadReceipt, useExtractReceipt, settlementContactApi, useSettlementContacts, useCreateSettlementContact, useUpdateSettlementContact, useDeleteSettlementContact, settlementDraftStore, useSettlementDraftStore, receipt-preview-blob, ai-provider-purpose, useSettlementDraft, useListSettlementDrafts, useUpsertSettlementDraft, useDeleteSettlementDraft, useSettlementDraftAutoSync, useSettlementDraftHydrate, settlement-draft-api, settlement-draft-v4, setSettlementDraftStorage, storage-adapter-injection, DraftRound, DraftAttendance, DraftCategoryAdjustment, copyRoundAttendancesFrom, setRoundReceipt, syncAttendances, fromDraftId, useProviderModelsPreview, usePreviewModels, ai-models-preview, ShareOgImage, ogImageCandidates, ogImageUrl, share-og-image, settlement-share-gallery, hydratedForRef, draft-hydrate-once, scheduleApi, useSchedule, useScheduleConfig, useScheduleRuns, useUpdateScheduleConfig, useRunScheduleNow, useSchedulePreview, useScheduleRunEvents, buildScheduleRunEventsUrl, schedule-sse, useRestaurantPublicCategoryTree, publicCategoryTree, dark-mode-tokens, soft-tonal-tokens, useUserLocation-auto, reviewSearchApi, useReviewSearch, useReviewSearchRestaurants, useEnrichReviews, useReviewAsk, useReviewEnrichStatus, useReviewEnrichEvents, useReviewQaReady, useReviewAskPublic, review-search-api, buildReviewEnrichEventsUrl, reviewClusteringApi, useReviewClusters, useRestaurantClusters, useRunClustering, useClusterStatus, review-clustering-api, reviewAskStore, useReviewAskStore, setReviewAskStorage, ReviewAskToaster, async-public-ask, resummarizeStore, useResummarizeStore, ResummarizeToaster, async-resummarize, cross-tab-job-toast, randomCrawlApi, useRandomCrawl, useRandomCrawlConfig, useRandomCrawlRuns, useRandomCrawlRunEvents, useRegionTree, useRegionDongs, buildRandomCrawlRunEventsUrl, logsApi, useLogs, useOperationRuns, useOperationRun, useOperationRunLogs, useAnalyzeRun, useLogConfig, useLlmTelemetry, ai-telemetry-sse, buildAiTelemetryStreamUrl, telegramSettingsApi, useTelegramSettings, useTelegramConfig, activeTablingBulkSaveJobStore, useActiveTablingBulkSaveJobStore, groupSuggestion, suggestItemGroups, draftGroupsToCalcInputs, DraftItemGroup, group-split, settlement-draft-v6, leftoverParticipantClientIds, busApi, bus-api, useBusStationSearch, useBusNearbyStations, useBusStationsRefresh, useBusStationArrivals, useBusPositions, useBusRouteDetail, busFavoriteApi, useBusFavorites, busFavoriteStore, useBusFavoriteStore, setBusFavoriteStorage, bus-favorites, 버스즐겨찾기, guest-server-hybrid-favorites, bus-favorites-v1, BUS_FAVORITES_MAX, refetchIntervalInBackground, arsId-guard, 버스폴링, subwayApi, subway-api, useSubwayStationSearch, useSubwayNearbyStations, useSubwayStationArrivals, useSubwayLineDetail, useSubwayLinePositions, useSubwayTimetable, useSubwayCongestion, useSubwayPath, subwayFavoriteApi, useSubwayFavorites, subwayFavoriteStore, useSubwayFavoriteStore, setSubwayFavoriteStorage, SUBWAY_FAVORITES_MAX, subway-favorites, 지하철즐겨찾기, subway-favorites-v1, airQualityApi, air-quality-api, useAirQuality, useAirSidoRealtime, useAirStationHistory, useAirNearbyStations, useAirStations, useAirForecast, useAirWeeklyForecast, useAirBadStations, useAirStationSearch, airLocationApi, useAirLocation, airLocationStore, useAirLocationStore, setAirLocationStorage, air-location-v1, 내대기위치, 내위치하이브리드, weatherApi, weather-api, useWeather, useWeatherNowcast, useWeatherForecast, useWeatherMid, useWeatherMidSea, useWeatherAws, useWeatherVersions, weatherDaily, mergeDailyRows, WeatherDailyRow, weatherMessages, weatherUpstreamMessage, 열흘병합, useMyLocationGlance, MyLocationGlance, GLANCE_RAIN_POP_THRESHOLD, GLANCE_AIR_RADIUS_M, 내위치한눈에, 상단바칩, lifeMapApi, life-map-api, useLifeMap, useLifeMapPoints, useLifeMapNearby, useLifeMapSearch, useLifeMapDetail, useLifeMapStatus, lifeMapFiltersKey, LifeMapFilterParams, 일상지도훅, foodApi, food-api, useFood, useFoodSearch, useFoodRestaurants, useFoodAdminList, useFoodImportRunEvents, buildFoodImportRunEventsUrl, buildFoodAdminListQuery, mealApi, meal-api, useMeal, useMealEntries, useInfiniteMealEntries, useMealCalendar, useMealStats, useCreateMealEntry, useMealPhotoUrl, useRecognizeMeal, useMealPreference, useMealRecommendations, useDeleteAllMealData, MealPhotoUploadFile, buildMealEntriesQuery, mealDraftStore, useMealDraftStore, setMealDraftStorage, setMealDraftPrincipal, setMealDraftLocalFileAdapter, MealDraftLocalFileAdapter, draftSessionId, isMealDraftPrincipalCurrent, runMealDraftSaveSingleFlight, beginMealDraftPhotoPreparation, principal-scoped-draft, 식단draft, handleUnauthorizedForCurrentSession, onUnauthorized-requestToken, 401세션경계, request-config-snapshot, acquirePosition, POSITION_MAX_AGE_MS, timeout-status, 측위재시도, injectableStorage, createInjectableStorage, tourApi, tour-api, useTour, useTourInsights, useTourPlan, useTourDensity, useTourLodging, useTourRegions, useTourAdminStatus, useTourSeeds, useTourSeedDiscover, useTourSeedRegister, useTourMatchRun, useTourBizCheck, useTourRawVisits, useTourRawActivities, useTourRawSpend, useTourRawPhotos, useTourRawTrips, useTourRawTrip, useTourPhotoBase, tourPhotoUrl, getTourPhotoBase, tourInsightsKey, TourInsightsParams, TourSeedParams, TourRawPageParams, 여행로그훅, 원본열람훅, useLifeMapCrime, 범죄통계훅, useRestaurantPublicTourStats, 여행자탭훅, useCreateSajuThemes, useSajuThemeJob, 사주테마훅, seaApi, sea-api, useSea, useSeaForecast, useSeaTide, 바다훅, 물때훅, parkingApi, parking-api, useParking, useParkingStatus, useParkingLotPoints, useParkingLotNearby, useParkingLotDetail, useEvPoints, useEvNearby, useEvDetail, useParkingAirports, useRestaurantParkingReviews, ParkingLotFilters, EvFilters, PARKING_LOT_FILTER_KEYS, EV_FILTER_KEYS, ParkingViewportParams, flagsKey, applyFlags, 주차훅, 충전소훅, restaurantApi.reviewMatch, useRestaurantReviewMatch, review-match, 팁메뉴필터id, useRestaurantCanonicalSummaryEvents, sumSummaryProgress, 출처통합요약진행, useInvalidateRestaurantDetailCaches, invalidateRestaurantDetailCaches, 공개상세캐시무효화, lastSnapshotByRestaurant, isCoveredBySubscribedKey, restaurantId-prev, 출처행단위prev, setCanonical, ResummarizeInFlight, resummarize-canonical, 어드민상세SSE]
 ---
 
 # shared — FE 공통 패키지
+
+**2026-09-24~09-26 변경 흡수 (27차) — 바다·주차 FE 플러밍 신규(api 2 + 훅 2) + 어드민 맛집 상세 출처 통합의 shared 몫(canonical 요약 진행 훅·리뷰 매칭 훅·공개 상세 캐시 일괄 무효화) + SSE 매니저 prev/replay 를 출처 행 단위로 고친 버그 수정**: 이번 범위(`916d116..420a6be`)에서 `packages/shared` 는 9파일 +516/−54 — 신규 4([sea.api.ts](../../packages/shared/src/api/sea.api.ts) 15줄·[useSea.ts](../../packages/shared/src/hooks/useSea.ts) 30줄·[parking.api.ts](../../packages/shared/src/api/parking.api.ts) 70줄·[useParking.ts](../../packages/shared/src/hooks/useParking.ts) 119줄) + 수정 5(`restaurant.api.ts`·`useRestaurant.ts`(863줄)·`summarySseManager.ts`·`resummarizeStore.ts`·`index.ts`). 도메인은 [sea](sea.md)·[parking](parking.md)·[canonical](canonical.md)이 다루고 여기서는 shared 계층의 함수·훅·캐시 키·SSE 배선만.
+(1) **바다(`4a2bff1`, 2026-09-24)** — `seaApi.forecast(activity)`(`?activity=`)·`tide(lat, lng, date)`(좌표 `toFixed(5)`) + `useSeaForecast(activity)`(`['sea','forecast',activity]`, staleTime **30분** + `refetchInterval` **1시간**, **placeholder 없음** — 활동마다 지점 집합이 달라 이전 활동 화면이 섞이면 오해) · `useSeaTide(point | null, date | null)`(`['sea','tide',lat.toFixed(3),lng.toFixed(3),date]` — 소수 3자리(≈100m)로 키를 묶음, 6시간, 좌표·날짜가 없으면 비활성). 서버가 활동별 1시간·물때 12시간 캐시하므로 클라는 가볍게 다시 부른다.
+(2) **주차(`2ff2c31`, 2026-09-25)** — `parkingApi` 9함수(`status`·`lotPoints`·`lotNearby`·`lotDetail`·`evPoints`·`evNearby`·`evDetail`·`airports`·`restaurantReviews`) + 필터 인터페이스 `ParkingLotFilters`(publicOnly·freeOnly·liveOnly)/`EvFilters`(fastOnly·freeParkingOnly·availableOnly·openOnly) — `applyFlags` 가 true 인 플래그만 `'1'` 로 붙인다 — + 9훅: 점·주변·상세·공항은 **2분 stale + 5분 재조회**(마스터는 재적재 때만 바뀌지만 점에 실린 실시간 단계를 서버 폴러가 주차장 5분·충전기 10분마다 채운다), 뷰포트·주변은 `placeholderData` 유지, 필터는 `flagsKey` 비트 문자열(예 `'010'`)로 키에 접고, zoom 은 `Math.floor`, 좌표는 `toFixed(4)`; `useParkingStatus` 5분; `useRestaurantParkingReviews` 30분·`retry:false`. 소비처는 웹 `ParkingPage` + 맛집 상세 `ParkingSection`(가는 법 섹션과 홈 탭 `ParkingSummaryLine` 이 같은 키로 캐시 공유).
+(3) **어드민 맛집 상세 재구성의 shared 몫(`420a6be`, 2026-09-26)** — `restaurantApi.reviewMatch(placeId, {tip?, menu?})` + `useRestaurantReviewMatch(placeId, {tip, menu})`(`['restaurant','review-match',placeId,tip,menu]`, 60s, 둘 다 비면 비활성 — 어드민은 리뷰 전량을 들고 있어 서버는 공개 목록과 같은 매칭으로 "걸린 id" 만 준다) · **`useRestaurantCanonicalSummaryEvents({placeId, canonicalId} | null): { progress }`**(canonical 한 구독으로 출처별 snapshot 을 `restaurantId` 로 모아 합산 progress, 리뷰 완료는 `['restaurant', placeId]` 상세 캐시의 행에 병합, snapshot 은 상세 `sources[]` 카운트 갱신, 진행 중 합이 >0→0 이 되는 순간 공개 캐시를 한 번 무효화) · **`useInvalidateRestaurantDetailCaches()`**(공개 상세 키 5종 + review-match·review-clusters·review-qa ready·parking restaurant-reviews 를 placeId 하나로 무효화 — 웹 `ActiveJobPanel`·`AdminDetailHeader` 가 씀).
+(4) **같이 고친 shared 버그 2건(`420a6be`)** — (a) [summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts) 가 canonical 구독의 `prev` 로 "그 canonical 의 마지막 snapshot"(다른 출처일 수 있음)을 넘겨 출처가 둘 이상인 가게의 공개 목록 합산에 엉뚱한 delta 가 더해졌다 → `lastSnapshotByCanonical`/`lastSnapshotByPlace` 두 Map 을 **`lastSnapshotByRestaurant` 한 Map** 으로, replay 는 키에 걸리는 출처 행 전부, 구독 해지 때는 남은 구독이 덮는 행을 보존(`isCoveredBySubscribedKey`). (b) 다이닝코드·테이블링 리뷰 **단건 재요약이 완료 처리되지 않던** 문제 — watcher 가 placeId 로만 구독했고(그 출처 이벤트는 placeId 가 null), 공개 상세 무효화 키 `['restaurant','public',placeId]` 는 실제 키(`['restaurant','public','detail',placeId]`)와 원소가 달라 아무것도 잡지 못했다 → [resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts) `ResummarizeInFlight.canonicalId` + `setCanonical`(POST 응답의 `canonicalId` 로 채움)로 canonical 구독, 무효화는 헬퍼로.
+(5) **규모·테스트** — [index.ts](../../packages/shared/src/index.ts) re-export 4줄 추가(api 2·hook 2, export 113→117줄). 규모: api 모듈 41(+client), 훅 파일 48(+manager), 스토어 22(+injectableStorage). **shared vitest 는 81건 / 13파일 그대로**(2026-09-26 실행 확인) — 새 shared 코드에 단위 테스트는 없고 웹 테스트가 실제 훅을 거쳐 검증한다(`AdminRestaurantDetailPage.test` 의 FakeEventSource canonical SSE 케이스, `ParkingPage`/`SeaPage`/`ParkingSection` 테스트의 MSW). **앱(apps/mobile)은 이번 shared 변경을 하나도 소비하지 않는다**(바다·주차 앱 미구현, 어드민 상세는 웹 전용). 외부 프로젝트는 `@repo/shared` 가 아니라 `docs/api/openapi.json` 을 기준으로 한다([api-docs](api-docs.md), `1b621c4`).
 
 **2026-09-12~09-19 변경 흡수 (26차) — 여행로그 FE 플러밍 신규(`api/tour.api.ts` + `hooks/useTour.ts`) + 일상지도 배경·상가 필터·맛집 여행자 탭·사주 테마/묻기 훅**: 이번 라운드 shared 의 특징은 **한 도메인이 세 권한 층에 걸친 훅 세트를 한 파일에 담은 것**이다. [useTour.ts](../../packages/shared/src/hooks/useTour.ts) 하나에 (a) 공개 집계 5종(`useTourInsights`·`useTourPlan`·`useTourDensity`·`useTourLodging`·`useTourRegions` — 쿼리 키 `['tour','public',…]`, staleTime 10분 / 밀도는 24시간), (b) 어드민 운영 6종(`useTourAdminStatus`·`useTourSeeds`·`useTourSeedDiscover`·`useTourSeedRegister`·`useTourMatchRun`·`useTourBizCheck` — 키 `['admin','tour',…]`, staleTime 30초, 실행 mutation 은 성공 시 `invalidateQueries({queryKey: KEY})` 로 전체 무효화), (c) **원본 열람 7종**(`useTourRaw{Visits,Activities,Spend,Photos,Trips,Trip}`·`useTourPhotoBase` — 키 `['admin','tour','raw',…]`, staleTime 5분, `placeId === null` 이면 `enabled:false`)이 함께 산다. 사진은 헤더를 실을 수 없는 `<img>` 라 [tour.api.ts](../../packages/shared/src/api/tour.api.ts) 가 `getTourPhotoBase()` 로 baseUrl+token 을 받아 `tourPhotoUrl(base, photoId, size)` 로 `?token=` URL 을 조립한다 — shared 에서 보기 드문 "토큰을 URL 에 싣는" 예외이고, 그래서 허용 대상이 `TOUR_RAW_USER_IDS` allowlist 로 이중 제한된다([tour](tour.md)). 그 밖에 `lifeMapApi.crime()`+`useLifeMapCrime`(연 1회 정적이라 24h staleTime, 배경을 켠 동안만 `enabled`), 일상지도 필터에 `kind`(생활편의 업종) 추가, `restaurantApi.publicTourStats`+`useRestaurantPublicTourStats`(여행자 탭이 열릴 때만·`retry:false` — 매칭 없으면 404), 사주 `createThemes`/`pollThemeJob`(섹션과 같은 long-poll)·`ask`([saju-c](saju-c.md))가 붙었다.
 
@@ -137,26 +144,26 @@ AdminAiKeysPage 가 저장 전 미리보기에 사용. ([ai.api.ts](../../packag
 
 **2026-05-19 변경 흡수**: (1) `useUserLocation` 신규 훅 — 브라우저 geolocation 권한 query → getCurrentPosition (`enableHighAccuracy:false`, 5s timeout, 60s maximumAge), `idle|pending|granted|denied|unavailable` 5상태 + `refetch()`. ref 기반 attempt 카운터로 in-flight 무효화. 공개 맛집 지도 첫 진입에서 사용 — `@repo/utils` 의 `computeBboxAround` 와 짝. (2) `useRestaurant` — `useCancelSummary` / `useResumeSummary` 신규 mutation, `useRestaurantCrawlLogs(placeId)` infiniteQuery (cursor pagination), `useRestaurantSummaryEvents(placeId, { onLog })` 시그니처 확장 — onLog 콜백을 ref 안정화로 받아 SSE log 이벤트 누적 가능. (3) `summarySseManager` — `LogHandler` 타입 + `Subscribers.logs: Set<LogHandler>` 추가, `subscribe({ onLog?: ... })` 옵션 추가, 'log' named event 를 구독자에 라우팅. (4) `useCrawl` — `CrawlStreamState.logs: StreamLogEntry[]` 누적 필드 + `useCrawlJobLogs(jobId)` 신규 + reducer 가 (jobId, seq) Map dedup 으로 SSE 'log' 이벤트 누적. (5) `useRestaurantPublicReviews` 신규 infiniteQuery — detail 의 `reviewsFirstPage` 를 seed (sentiment='all', sort='recent' 일 때만) + 2 페이지부터 fetch. (6) `restaurantApi` — `cancelSummary`/`resumeSummary`/`crawlLogs`/`publicReviews` API 함수, `publicByPlaceId` 가 옛 백엔드 응답 어댑팅 (`reviews` 단일 배열 → `reviewsFirstPage` + `reviewCounts` 평탄화). `crawlApi.jobLogs(jobId)` 추가.
 
-## Purpose [coverage: high — 9 sources]
+## Purpose [coverage: high — 14 sources]
 
 `@repo/shared`는 web과 mobile에서 동시에 사용되는 프론트엔드 공통 코드를 모아둔 워크스페이스
 패키지다. 어드민(인증 필요)과 공개(비로그인 허용) 두 모드에 더해 25차(2026-09)부터 **익명 사용
 모드**(로그인 없이 쓰되 게스트 키·IP·전역 일일 한도가 걸리는 타로·사주(C)·사주(G))까지 한 패키지에서 다루며,
-컨슈머는 `apps/web`(어드민 + 공개 + 로그인 페이지 + 타로·사주·집값)과 `apps/mobile`(어드민 게이트 + 2026-07~08 의 공개 화면 —
-대중교통·날씨·대기·일상지도·식단·홈 내 위치 카드 + 2026-09 의 타로·사주(C) **WebView 임베드 화면**)이다. 책임 영역은 다음과 같다.
+컨슈머는 `apps/web`(어드민 + 공개 + 로그인 페이지 + 타로·사주·집값 + 27차의 **바다 `/sea`·주차 `/parking`·출처 통합 어드민 맛집 상세**)과 `apps/mobile`(어드민 게이트 + 2026-07~08 의 공개 화면 —
+대중교통·날씨·대기·일상지도·식단·홈 내 위치 카드 + 2026-09 의 타로·사주(C) **WebView 임베드 화면**)이다. 27차(2026-09-24~26)의 shared 추가분은 전부 웹만 소비한다(앱은 바다·주차 미구현). 리포 밖의 다른 프로젝트는 `@repo/shared` 를 쓰지 않고 `docs/api/openapi.json` 을 기준으로 한다([api-docs](api-docs.md) — [docs/api/README.md](../../docs/api/README.md) 8절). 책임 영역은 다음과 같다.
 
 - 타입 안전한 fetch 래퍼(요청 단위 config 스냅샷 + 401 세션 경계 가드)와 도메인별 API 함수 (auth, picks, admin, crawl, restaurant,
   canonical, menu-grouping, analytics, ai, settings-map, **settlement / settlement-extraction
   / settlement-contact**, **bus / bus-favorite**, **subway / subway-favorite**, restaurant-favorite, vote,
-  **air-quality / air-location**, **weather**, **life-map**, **food**, **meal**, **tarot / saju(사주(C)) / saju-g / usage-quota / housing**). 어드민/공개/공유(read-only)/익명(게스트 키 헤더) 라우트가 같은 `apiFetch` 위에 얹힌다 — 게스트 키 헤더만은 `apiFetch` 가 아니라 각 api 함수가 인자로 받아 붙인다.
+  **air-quality / air-location**, **weather**, **life-map**, **food**, **meal**, **tarot / saju(사주(C)) / saju-g / usage-quota / housing**, tour(26차), **sea / parking**(27차)). 어드민/공개/공유(read-only)/익명(게스트 키 헤더) 라우트가 같은 `apiFetch` 위에 얹힌다 — 게스트 키 헤더만은 `apiFetch` 가 아니라 각 api 함수가 인자로 받아 붙인다.
 - TanStack Query 훅 (서버 상태) — 메뉴 그룹핑/전역 머지/다이닝코드 일괄 저장 잡 SSE 훅 +
   공개 맛집 리스트/상세/인사이트/지도 설정 훅 + 캐노니컬(병합/분리/제안 큐) 훅 + **정산 세션 CRUD
-  + 영수증 업로드/추출 + 단골 CRUD 훅** + **대기·날씨·일상지도 공개 조회 훅(10분 조용한 폴링)** + **식단 기록/사진/추천/선호 훅** + 음식 카탈로그 어드민 훅(메뉴 어휘 포함) + **타로·사주(C) 리딩 mutation + 회원 기록·공유 query + 사주 섹션 long-poll 훅(`useSajuJob`)** + **집값 지도 훅(6시간 stale)** + **사용량 한도 어드민 훅(30초 폴링)** + **메뉴 칼로리 지연 조회 훅(llmPending 폴링)**
+  + 영수증 업로드/추출 + 단골 CRUD 훅** + **대기·날씨·일상지도 공개 조회 훅(10분 조용한 폴링)** + **식단 기록/사진/추천/선호 훅** + 음식 카탈로그 어드민 훅(메뉴 어휘 포함) + **타로·사주(C) 리딩 mutation + 회원 기록·공유 query + 사주 섹션 long-poll 훅(`useSajuJob`)** + **집값 지도 훅(6시간 stale)** + **사용량 한도 어드민 훅(30초 폴링)** + **메뉴 칼로리 지연 조회 훅(llmPending 폴링)** + **바다 예보·물때 훅(30분 stale·1시간 재조회 / 6시간)** + **주차장·충전소·공항 훅(2분 stale·5분 재조회 — 서버 폴러가 채운 실시간 단계)** + **어드민 맛집 상세 출처 통합 훅(canonical 요약 진행 `useRestaurantCanonicalSummaryEvents`·팁/메뉴 리뷰 매칭 `useRestaurantReviewMatch`·공개 상세 캐시 일괄 무효화 `useInvalidateRestaurantDetailCaches`)**
 - 파생 훅 — `useMyLocationGlance`(저장한 내 위치 하나로 날씨·대기 두 쿼리를 동시 구동해 상단바 칩·홈 카드 공용 파생값)
 - Zustand 스토어 (인증, 활성 크롤 잡, 활성 그룹핑/전역 머지/DC 일괄 저장 잡, **정산 draft**, **식단 draft(principal 스코프)**, **게스트 버스·전철·맛집 즐겨찾기**, **게스트 내 대기 위치**, 투표 게스트, **공용 게스트 키**, **게스트 타로 기록(50건)**, **게스트 사주(C) 프로필(10명)**) + zustand 가 아닌 함수형 기기 저장소(**사주(G) 프로필·기기 보관함·공유 취소 자격** — 다른 세션이 만든 병렬 구현)
 - **앱 WebView 임베드 브리지**(`embedBridge.ts`) — 앱이 웹 화면을 WebView 로 열 때 토큰·게스트 키·테마를 주입하고(앱 → 웹) 공유·외부 열기·제목을 앱에 맡기는(웹 → 앱) 계약. 3D 기능(타로·사주(C))을 RN 으로 포팅하지 않는 근거.
 - 도메인 순수 로직 디렉터리 — `settlement/groupSuggestion.ts`, `weather/{weatherDaily,weatherMessages}.ts`(api-contract 타입·`ApiError` 에 의존해 utils 에 못 두는 순수 함수)
-- 프로세스 전역 SSE 매니저 싱글톤 (요약 진행률 + review 분석 멀티플렉싱 — placeId + canonicalId 두 키 종류 동시)
+- 프로세스 전역 SSE 매니저 싱글톤 (요약 진행률 + review 분석 멀티플렉싱 — placeId + canonicalId 두 키 종류 동시; 27차 `420a6be` 부터 last-snapshot 캐시·delta 용 `prev` 는 출처 행(`restaurantId`) 단위)
 - 잡 단위 SSE 라이프사이클 훅 (그룹핑/전역 머지/DC 일괄 저장 — 매니저를 쓰지 않고 hook 자체가
   EventSource 를 직접 들고 백오프 재연결 관리)
 - 디자인 토큰·테마·`ThemeProvider`·CSS 변수 변환
@@ -166,7 +173,7 @@ AdminAiKeysPage 가 저장 전 미리보기에 사용. ([ai.api.ts](../../packag
 빌드 산출물 없이 `src/index.ts`를 그대로 노출(`"main": "./src/index.ts"`)하므로
 Turborepo 컨슈머는 별도 빌드 단계 없이 TS 소스를 바로 import한다.
 
-## Architecture [coverage: high — 78 sources]
+## Architecture [coverage: high — 96 sources]
 
 ```
 packages/shared/src/
@@ -178,7 +185,7 @@ packages/shared/src/
 │   ├── picks.api.ts
 │   ├── admin.api.ts
 │   ├── crawl.api.ts        # start/list/cancel/search + catchtable*/diningcode* + DC bulk-save 잡 + buildJobEventsUrl + buildDiningcodeBulkSaveEventsUrl
-│   ├── restaurant.api.ts   # 어드민 list({limit,offset,sort})/ranking/getByPlaceId/delete/reanalyze + 공개 publicList/publicByPlaceId/publicInsights + buildSummaryEventsUrl({placeIds, canonicalIds})
+│   ├── restaurant.api.ts   # 어드민 list({limit,offset,sort})/ranking/getByPlaceId/delete/reanalyze + (27차) reviewMatch(placeId,{tip?,menu?}) + 공개 publicList/publicByPlaceId/publicInsights + buildSummaryEventsUrl({placeIds, canonicalIds})
 │   ├── canonical.api.ts    # candidates/merge/split/dismissSuggestion/proposals(list/run/accept/reject)/delete
 │   ├── menu-grouping.api.ts# 식당 단위 그룹핑 + 잡 시작/스냅샷 + buildGroupingJobEventsUrl
 │   ├── autoDiscover.api.ts # 자동 발견 잡 start/get/cancel + buildAutoDiscoverEventsUrl
@@ -211,7 +218,10 @@ packages/shared/src/
 │   ├── saju.api.ts          # (신규 25차) 사주(C) 15함수: createReading(정적 본문+jobId)/pollJob(after,wait) + daily/match/datePick/food + 공유 2 + 프로필 CRUD 4 + 기록 3 — 공개는 guestHeaders()
 │   ├── saju-g.api.ts        # (신규 25차, 다른 세션) 사주(G) 14함수: chart/reading·pairChart/pairReading(AbortSignal) + save(receipt) + saveProfile(revision) + share/getShared/revokeShare(DELETE+body) + imageUrl
 │   ├── usage-quota.api.ts   # (신규 25차) 어드민 사용량 한도: overview(date?) GET + update(feature) PUT
-│   └── housing.api.ts       # (신규 25차) 집값 공개 6함수: status/points(bbox,zoom,axis)/nearby/search/complex/trades — HousingAxis {dealType, band}
+│   ├── housing.api.ts       # (신규 25차) 집값 공개 6함수: status/points(bbox,zoom,axis)/nearby/search/complex/trades — HousingAxis {dealType, band}
+│   ├── tour.api.ts          # (신규 26차 — 트리 누락 보완) 여행로그 tourApi 공개 5 + 어드민 6 + 원본 6 함수 + 모듈 함수 getTourPhotoBase/tourPhotoUrl
+│   ├── sea.api.ts           # (신규 27차) 바다 공개 2함수: forecast(activity)/tide(lat,lng,date) — Routes.Sea
+│   └── parking.api.ts       # (신규 27차) 주차 공개 9함수: status/lotPoints/lotNearby/lotDetail/evPoints/evNearby/evDetail/airports/restaurantReviews + ParkingLotFilters/EvFilters + *_FILTER_KEYS
 ├── settlement/
 │   └── groupSuggestion.ts  # (신규) 세부 분배 그룹 제안 순수 로직 (suggestItemGroups — @repo/api-contract drink-kinds 사전 재사용)
 ├── weather/                # (신규 24차) 날씨 도메인 순수 로직 — 훅 아님, api-contract 타입·ApiError 의존이라 utils 불가
@@ -222,9 +232,9 @@ packages/shared/src/
 │   ├── usePicks.ts         # 쿼리키 팩토리 + CRUD + useRandomPick
 │   ├── useAdmin.ts
 │   ├── useCrawl.ts         # useStartCrawl/useCrawlJobs/useCancelCrawl/useNaverSearch + useCrawlJobStream + useCatchtable*/useDiningcode* + DC bulk-save 잡 훅
-│   ├── useRestaurant.ts    # 어드민 list(query={limit,offset,sort})/ranking/byPlaceId/delete/reanalyze + 공개 useRestaurantsPublic/useRestaurantPublic/useRestaurantPublicInsights/useRestaurantPublicCategoryTree + useRestaurantPublicReviews(tip/menu 필터) + canonical 기반 list summary SSE 구독 (delta-aware 합산 보호)
+│   ├── useRestaurant.ts    # 어드민 list(query={limit,offset,sort})/ranking/byPlaceId/delete/reanalyze + 공개 useRestaurantsPublic/useRestaurantPublic/useRestaurantPublicInsights/useRestaurantPublicCategoryTree + useRestaurantPublicReviews(tip/menu 필터) + canonical 기반 list summary SSE 구독 (delta-aware 합산 보호) + (27차) useRestaurantCanonicalSummaryEvents(어드민 상세 출처 통합 진행·리뷰 행 병합)/useRestaurantReviewMatch/useInvalidateRestaurantDetailCaches + 재요약 watcher canonical 구독
 │   ├── useCanonical.ts     # candidates/merge/split/dismiss + proposals(list/run/accept/reject) + delete
-│   ├── summarySseManager.ts# 프로세스 전역 SSE 싱글톤 (place + canonical 두 키 멀티플렉싱) + heartbeat watchdog + idle timeout (서버 다운 자동 감지) + snapshot delta-aware dispatch
+│   ├── summarySseManager.ts# 프로세스 전역 SSE 싱글톤 (place + canonical 두 키 멀티플렉싱) + heartbeat watchdog + idle timeout (서버 다운 자동 감지) + snapshot delta-aware dispatch — (27차) last-snapshot·prev 를 lastSnapshotByRestaurant 한 Map(출처 행 단위)으로
 │   ├── useMenuGrouping.ts  # ranking/group/status/createJob + useGroupingJob (자체 EventSource + 백오프)
 │   ├── useAutoDiscover.ts  # useStartAutoDiscover / useAutoDiscoverJob / useCancelAutoDiscover (snapshot/keyword/candidate/phase/done SSE 머지)
 │   ├── useAnalytics.ts     # overview/globalMenus/categoryTree + useStartGlobalMerge + useGlobalMergeJob (chunk 진행)
@@ -263,7 +273,10 @@ packages/shared/src/
 │   ├── useSajuGPair.ts     # (신규 25차, 다른 세션) useSajuGPairReading — 위와 동형(pairChart→pairReading)
 │   ├── useSajuGProfiles.ts # (신규 25차, 다른 세션) principal 로 게스트 기기 저장소 / 회원 서버 를 한 query 에서 선택, storage 이벤트 invalidate, 게스트 저장 전 chart 검증
 │   ├── useUsageQuota.ts    # (신규 25차) useUsageQuotaOverview(date?, 15s stale/30s 폴링) + useUpdateUsageQuota(prefix invalidate)
-│   └── useHousing.ts       # (신규 25차) useHousingStatus/Points/Nearby/Search/Complex/Trades(offset infinite) + housingAxisKey — 6h staleTime, placeholder 유지
+│   ├── useHousing.ts       # (신규 25차) useHousingStatus/Points/Nearby/Search/Complex/Trades(offset infinite) + housingAxisKey — 6h staleTime, placeholder 유지
+│   ├── useTour.ts          # (신규 26차 — 트리 누락 보완) 18훅 = 공개 5 / 어드민 6 / 원본 7(useTourPhotoBase 포함), 층별 키 접두 ['tour','public'] / ['admin','tour'] / ['admin','tour','raw']
+│   ├── useSea.ts           # (신규 27차) useSeaForecast(30분 stale·1시간 refetch, placeholder 없음) / useSeaTide(좌표 3자리 키, 6h)
+│   └── useParking.ts       # (신규 27차) useParkingStatus(5분) + 주차장·충전소 points/nearby/detail + useParkingAirports(2분 stale·5분 refetch, 뷰포트·주변 placeholder) + useRestaurantParkingReviews(30분, retry:false) — flagsKey 비트 문자열
 ├── stores/
 │   ├── authStore.ts                       # Zustand: user / token / isGuest
 │   ├── activeCrawlJobStore.ts             # Zustand: jobs by jobId (멀티 슬롯)
@@ -274,7 +287,7 @@ packages/shared/src/
 │   ├── activeAutoDiscoverJobStore.ts      # Zustand + persist: jobId (단일 슬롯, localStorage)
 │   ├── settlementDraftStore.ts            # Zustand + persist (storage adapter 주입형 — 웹 sessionStorage / RN AsyncStorage / SSR·test NO_OP). 마스터 participants + rounds[] N차 모델 + groupSplits(세부 분배). v1→v6 migration.
 │   ├── reviewAskStore.ts                  # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 공개 Ask 비동기 — store 가 직접 publicAsk 호출, 완료를 탭 가로질러 ReviewAskToaster 가 토스트. lastByPlace 만 영속(MAX_KEPT=20).
-│   ├── resummarizeStore.ts                # (신규) Zustand (persist 없음, 메모리만). 진행 중 단건 재요약 추적 — ResummarizeToaster 가 placeId SSE 구독해 완료 토스트.
+│   ├── resummarizeStore.ts                # (신규) Zustand (persist 없음, 메모리만). 진행 중 단건 재요약 추적 — ResummarizeToaster 가 placeId SSE 구독해 완료 토스트. (27차) 항목에 canonicalId(구독 키) + setCanonical — canonicalId 가 있으면 canonical 구독.
 │   ├── busFavoriteStore.ts                # (신규) Zustand + persist (lazy storage resolver — localStorage/AsyncStorage/NO_OP). 게스트 버스 즐겨찾기(stations/routes 등록순 배열, BUS_FAVORITES_MAX 상한). key bus-favorites-v1.
 │   ├── subwayFavoriteStore.ts             # (신규) Zustand + persist (injectableStorage, busFavoriteStore 동형). 게스트 전철 즐겨찾기(stations/lines 등록순 배열, SUBWAY_FAVORITES_MAX 상한). key subway-favorites-v1.
 │   ├── restaurantFavoriteStore.ts         # 게스트 맛집 즐겨찾기(상한 100) (+test 3)
@@ -540,6 +553,7 @@ React Query 훅만. **두 api 모듈 모두 경로를 하드코딩** (`ai.api.ts
 - **`resummarizeStore` (store 는 목록만, watcher 가 SSE 구독)** — `add({reviewId, placeId, prevSentiment,
   model})` 로 진행 중 재요약을 등록만 하고, 전역 watcher `ResummarizeToaster` 가 그 placeId 들을 SSE
   구독해 완료를 처리(+캐시 무효화 + "부정 → 긍정" 델타 토스트) 후 `remove`. persist 없음(메모리만).
+  (~2026-09-19 기준 서술 — `420a6be` 이후 항목에 `canonicalId`(구독 키)가 붙어 canonical 을 알면 canonical 로 구독한다. 아래 "단건 재요약 watcher 의 구독 키 분리" 문단.)
 
 이 패턴은 [in-memory-singleton-gates](../concepts/in-memory-singleton-gates.md) 의 클라이언트 측 거울이다 —
 서버가 in-memory 싱글톤으로 잡을 게이팅하듯, 클라가 React 바깥 store 싱글톤으로 잡 진행을 컴포넌트
@@ -550,7 +564,8 @@ React Query 훅만. **두 api 모듈 모두 경로를 하드코딩** (`ai.api.ts
 를 union `{ kind: 'place'; placeId } | { kind: 'canonical'; canonicalId }` 로 확장. 서버는
 두 종류 키를 한 connection 에서 받아 각 이벤트마다 canonicalId / placeId 양쪽 태그를 흘려보내고,
 매니저는 들어온 이벤트를 양쪽 구독자 set 에 dispatch. `lastSnapshotByCanonical` 과
-`lastSnapshotByPlace` 두 Map 으로 키 종류별 replay 캐시 분리.
+`lastSnapshotByPlace` 두 Map 으로 키 종류별 replay 캐시 분리. (~2026-09-19 기준 — `420a6be` 이후 두 Map 은
+`lastSnapshotByRestaurant` 한 Map 으로 합쳐졌다. 아래 "SSE 매니저 — prev·replay 를 출처 행 단위로" 문단.)
 
 **SSE 매니저 heartbeat + idle timeout (서버 다운 자동 감지)** — 매니저가 두 단계로 죽음을 감지.
 서버 5초 주기 `'heartbeat'` 명명 이벤트 + 클라 3초 주기 watchdog (`Date.now() - lastEventAt >
@@ -560,6 +575,75 @@ React Query 훅만. **두 api 모듈 모두 경로를 하드코딩** (`ai.api.ts
 canonical 의 두 source 가 공유하는 공개 list 캐시 합산 행을 한쪽 source snapshot 으로 통째로
 덮어쓰지 않도록 `(snap - prev)` delta 만 가감 ([useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts)
 의 `patchSummaryInListCaches` 가 로직 담당, 첫 catch-up 은 prev=null → delta 0).
+
+**SSE 매니저 — prev·replay 를 출처 행 단위로(27차, `420a6be`)** — `SnapshotHandler(snap, prev)` 의 `prev` 는 이제
+**같은 출처 행(`restaurantId`)의 직전 snapshot** 이다. 이전에는 canonical 키 구독에 "그 canonical 의 마지막 snapshot" 을
+넘겼는데, canonical 구독에는 네이버·다이닝코드·테이블링 행의 snapshot 이 섞여 오므로 `prev` 가 다른 출처의 것일 수 있었고,
+`patchSummaryInListCaches` 가 그 차이를 공개 목록 합산 행에 delta 로 더해 출처가 둘 이상인 가게의 카운트가 틀어졌다.
+지금은 [summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts) 의 `lastSnapshotByRestaurant: Map<restaurantId, snapshot>`
+하나가 replay 캐시와 `prev` 원천을 겸한다(스냅샷 이벤트는 계약 `RestaurantSummaryEventSource` 로 원래 `restaurantId` 를 싣는다).
+새 구독자에게는 키에 걸리는(`matchesKey` — place 키면 `snap.placeId`, canonical 키면 `snap.canonicalId` 비교) 출처 행 전부를
+`prev=null` 로 replay 하고, 구독 해지로 키 엔트리가 비면 그 키에 걸리던 행 중 **남은 구독(같은 `canonical:` 키 또는 같은
+네이버 `place:` 키)이 덮지 않는 행만** 지운다(`isCoveredBySubscribedKey` — place 키와 canonical 키가 같은 네이버 행을 공유할 수
+있어서). dispatch 는 전과 같이 canonical 구독자 + (placeId 가 있으면) place 구독자 양쪽이고 둘 다 같은 `prev` 를 받는다.
+
+**어드민 맛집 상세의 출처 통합 구독 — `useRestaurantCanonicalSummaryEvents`(27차, `420a6be`)** — 어드민 상세
+([AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx))가 네이버 행 하나가 아니라 같은
+canonical 의 모든 출처 리뷰(`RestaurantDetail.reviews: AdminVisitorReview[]`)와 출처 행(`sources[]`)을 싣게 되면서
+([schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts)), 요약 진행도 canonical 키 한 구독으로 받는다.
+입력 `{ placeId, canonicalId } | null`(상세가 로드되기 전엔 null), 반환 `{ progress }`.
+- `onSnapshot(snap, prev)` — (1) 로컬 state `{ canonicalId, bySource: Map<restaurantId, snap> }` 에 넣고, `progress` 는 렌더 중
+  `sumSummaryProgress` 로 합산(카운트 7종 합, `recentDone` 은 출처 무관 `finishedAt` 내림차순 5건; 첫 snapshot 전엔 null).
+  구독 대상이 바뀌어도 state 를 effect 에서 초기화하지 않고 **태그(`canonicalId`)가 현재 대상과 다르면 렌더 중에 버린다**
+  (파생 상태는 렌더에서 — 페이지도 `key={placeId}` 로 식당 전환 시 통째 리마운트). (2) `patchSummaryInListCaches(qc, snap, prev)`
+  로 목록 캐시도 같이 패치. (3) `['restaurant', placeId]` 상세 캐시의 `sources[]` 중 같은 `restaurantId` 행의 `totalReviews`·
+  `summaryPending`(**= queued + pending** — 서버 출처 집계와 같은 의미)·`summaryRunning`·`summaryDone`·`summaryFailed` 를 갱신
+  (값이 같으면 같은 참조 반환). (4) effect 로컬 `inFlightBySource`(출처별 queued+pending+running)의 합이 **>0 → 0** 으로 바뀌는
+  순간에만 `invalidateRestaurantDetailCaches(qc, placeId)` — 건마다 무효화하면 공개 상세 재조회가 폭주하므로 "요약이 모두 끝난 순간" 한 번.
+- `onReview(ev)` — 상세 캐시의 해당 리뷰 행 `summary` 를 이벤트 값(status·text·model·errorCode·errorMessage·finishedAt·sentiment·
+  sentimentScore·satisfactionScore·menus·tips·keywords, `startedAt` 은 기존 값 유지)으로 교체 — **리뷰 본문 전량을 다시 받지 않는
+  행 단위 병합**. 상세에 아직 없는 리뷰(크롤이 막 적재한 행)는 무시하고 크롤 종료·재수집 쪽 무효화에 맡긴다.
+[stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md) 의 새 인스턴스이자, 서버의 [canonical-corpus-fanout](../concepts/canonical-corpus-fanout.md)
+(분석·요약을 canonical 멤버 전체로 fan-out)에 대응하는 **클라 측 fan-in** — 출처별 스트림을 가게 단위 진행 하나로 합친다.
+검증은 웹 [AdminRestaurantDetailPage.test.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx) 의 FakeEventSource
+케이스(네이버·다이닝코드 snapshot 두 개 → "저장된 리뷰 3개 · 1/3 완료" 진행 카드, 다이닝코드 `review` 이벤트 → 행 병합).
+
+**공개 상세 캐시 일괄 무효화 헬퍼(27차)** — 식당 하나의 리뷰·요약이 바뀌면(크롤 종료·요약 완료·단건 재요약·재수집) 공개 상세
+쪽 캐시가 `['restaurant','public',<종류>,placeId]` 로 흩어져 있어 prefix 한 번으로 잡히지 않는다. 내부 함수
+`invalidateRestaurantDetailCaches(qc, placeId)` 가 5종(`detail`·`insights`·`reviews`·`category-tree`·`menu-nutrition`) +
+`['restaurant','review-match',placeId]` + `['review-clusters',placeId]` + `['review-qa','ready',placeId]` +
+`['parking','restaurant-reviews',placeId]` 를 invalidate 한다(활성 쿼리만 재조회, 나머지는 stale 표시라 넉넉히 넣어도 비용이 작다).
+어드민 상세 `['restaurant', placeId]`(리뷰 전량이라 무겁다)는 목록에 없고 호출자가 판단한다. 외부 노출은
+**`useInvalidateRestaurantDetailCaches(): (placeId) => void`** — `QueryClient` 를 패키지 경계 너머로 넘기지 않으려고(웹과 shared 가
+`@tanstack/query-core` 타입을 각자 해석) shared 쪽 `useQueryClient` 로 묶은 `useCallback` 을 돌려준다. 코드 주석의 "앱 쪽"은
+소비 애플리케이션을 뜻하며 현재 소비처는 웹뿐이다 — [ActiveJobPanel.tsx](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)
+(크롤 종료 시 `['restaurant', placeId]` 무효화와 함께)·[AdminDetailHeader.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx)
+(다이닝코드·테이블링 재수집 뒤 — 상세 `exact` + 목록 + 이 헬퍼).
+
+**단건 재요약 watcher 의 구독 키 분리(27차)** — `ResummarizeInFlight` 가 **무효화 키 `placeId`**(네이버 — 공개 상세 캐시가 이 키)와
+**SSE 구독 키 `canonicalId: string | null`** 을 따로 든다. 다이닝코드·테이블링 리뷰의 완료 이벤트는 `placeId` 가 null 이라 place
+구독으로는 오지 않기 때문이다. `useResummarizeReview(placeId, canonicalId = null)` — canonicalId 를 아는 화면(어드민 상세
+[AdminReviewsTab.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminReviewsTab.tsx))은 처음부터 canonical 로, 모르는 화면
+(공개 상세 [ReviewsTab.tsx](../../apps/web/src/components/restaurant/detail/ReviewsTab.tsx) — `isAdmin` 일 때만 활성)은 POST 응답
+(`ReviewResummarizeResult.canonicalId`)의 `onSuccess` 에서 `setCanonical(reviewId, canonicalId)` 로 옮긴다. `useResummarizeWatcher`
+(웹 [ResummarizeToaster.tsx](../../apps/web/src/components/ResummarizeToaster.tsx))는 in-flight 들을 `canonical:<id>` / `place:<id>` 채널
+문자열 집합으로 모아 집합이 바뀔 때만 재구독하고, `onReview` 는 store 의 최신 `items[ev.reviewId]` 로만 판정한다(옛 `ev.placeId !== placeId`
+필터 제거 — place·canonical 두 구독이 같은 이벤트를 받아도 첫 처리에서 `remove` 되므로 한 번만). 완료 시 `onResult`(토스트) →
+`invalidateRestaurantDetailCaches(qc, inFlight.placeId)` → 어드민 상세 `['restaurant', placeId]` 는 `exact: true, refetchType: 'none'`
+(stale 표시만 — 어드민 상세는 자기 canonical SSE 가 행 병합) → `remove`. [cross-tab-async-job-toast](../concepts/cross-tab-async-job-toast.md)
+변형 (b) 의 구독 키 확장.
+
+**바다·주차 훅 — 지도형 공개 조회 훅의 두 변주(27차)** — 둘 다 공개(토큰 불필요)이고 서버 캐시([sea](sea.md))·서버 폴러([parking](parking.md))
+뒤라 요청 경로에 업스트림 호출이 없다. 주차([useParking.ts](../../packages/shared/src/hooks/useParking.ts))는 일상지도·집값과 같은
+"뷰포트(bbox 문자열 + 내림 zoom) 키 + `placeholderData` 유지" 규율에 **실시간 단계 때문에 짧은 stale(2분) + 5분 `refetchInterval`**
+을 더한 형태다(`enabled` 가 꺼지면 interval 도 false — 탭 전환·지도 미준비 때 폴링 없음). 필터는 불리언 플래그 객체를 `flagsKey`
+(`PARKING_LOT_FILTER_KEYS`/`EV_FILTER_KEYS` 순서의 `'0'/'1'` 비트 문자열)로 접어 키 identity 흔들림을 막고, 요청은
+[parking.api.ts](../../packages/shared/src/api/parking.api.ts) 의 `applyFlags` 가 true 인 것만 `'1'` 로 붙인다. 바다([useSea.ts](../../packages/shared/src/hooks/useSea.ts))는
+반대로 **`placeholderData` 를 일부러 두지 않는다** — 활동(해수욕·서핑·낚시·갯벌·바닷길·바다여행)마다 지점 집합이 달라 이전 활동 목록을
+흐리게 들고 있으면 오해를 부른다. 물때는 천문조 계산값이라 6시간 stale. 소비처는 웹 [SeaPage.tsx](../../apps/web/src/routes/SeaPage.tsx)
+(`useSeaForecast`)·[SeaSpotDetail.tsx](../../apps/web/src/components/sea/SeaSpotDetail.tsx)(`useSeaTide` — 지점 고정 좌표) /
+[ParkingPage.tsx](../../apps/web/src/routes/ParkingPage.tsx)(탭별로 `params`/`enabled` 를 꺼 한 탭 몫만 조회, `useParkingStatus` 만 항상)·
+[ParkingSection.tsx](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx)(가는 법 섹션 + 홈 탭 한 줄 요약이 같은 반경·건수 키로 캐시 공유).
 
 `apiFetch`의 자동 토큰 첨부는 모드를 구분하지 않는다 — 토큰이 있으면 모든 요청에
 `Authorization: Bearer <token>`이 붙고, 없으면 헤더 없이 나간다. 공개 라우트는 토큰이
@@ -584,14 +668,14 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 파일 확장자 해석으로 구현체를 골라간다 (Vite/Webpack은 `.web.tsx`, Metro는
 `.native.tsx`). `tsconfig.json`은 `@repo/config/tsconfig/react.json`을 상속.
 
-## Talks To [coverage: high — 30 sources]
+## Talks To [coverage: high — 47 sources]
 
-- 의존성: `@repo/api-contract` (zod 스키마/타입/`Routes` 상수 + `recomputeCanonicalAggregates` 유틸 + **정산/단골/추출 타입** + 대기/날씨/일상지도/음식/식단 타입 + **타로/사주(C)/사주(G)/사용량 한도/집값 타입 + 게스트 키 헤더 상수 `TAROT_GUEST_KEY_HEADER`·`SAJU_GUEST_KEY_HEADER`·`SAJU_G_GUEST_KEY_HEADER`(셋 다 `'x-guest-key'`) + `SajuGProfile`/`SajuGReadingResult` zod(사주(G) 기기 저장소가 읽을 때 parse) + `SAJU_G_PROFILES_MAX`**), `@repo/utils`(`useMyLocationGlance` 의 `latLngToKmaGrid`·`kmaCondition`, `weather/weatherDaily.ts` 의 `kmaCondition`·`kmaConditionFromText` — shared 가 utils 위에서 파생값을 만든다; 집값 bbox 는 호출자가 `formatBbox`),
+- 의존성: `@repo/api-contract` (zod 스키마/타입/`Routes` 상수 + `recomputeCanonicalAggregates` 유틸 + **정산/단골/추출 타입** + 대기/날씨/일상지도/음식/식단 타입 + **타로/사주(C)/사주(G)/사용량 한도/집값 타입 + 게스트 키 헤더 상수 `TAROT_GUEST_KEY_HEADER`·`SAJU_GUEST_KEY_HEADER`·`SAJU_G_GUEST_KEY_HEADER`(셋 다 `'x-guest-key'`) + `SajuGProfile`/`SajuGReadingResult` zod(사주(G) 기기 저장소가 읽을 때 parse) + `SAJU_G_PROFILES_MAX`** + 27차 **바다 `SeaActivityType`(`beach|surf|fishing|mudflat|seaSplit|seaTrip`)·`SeaForecastResultType`·`SeaTideResultType`([schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts)) / 주차 `ParkingStatusResultType`·`ParkingLotPointsResultType`·`ParkingLotNearbyResultType`·`ParkingLotDetailType`·`EvPointsResultType`·`EvNearbyResultType`·`EvStationDetailType`·`ParkingAirportsResultType`·`RestaurantParkingReviewsType`([schemas/parking.ts](../../packages/api-contract/src/schemas/parking.ts)) / 어드민 상세 `RestaurantDetailType`(`canonicalId`·`sources`·`reviews: AdminVisitorReview[]`)·`RestaurantReviewMatchQueryType`/`ResultType`(`{ reviewIds }`)·`ReviewResummarizeResultType.canonicalId`([schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts))**), `@repo/utils`(`useMyLocationGlance` 의 `latLngToKmaGrid`·`kmaCondition`, `weather/weatherDaily.ts` 의 `kmaCondition`·`kmaConditionFromText` — shared 가 utils 위에서 파생값을 만든다; 집값·주차 bbox 는 호출자가 `formatBbox` — `parking.api.ts`·`sea.api.ts` 는 utils 를 import 하지 않는다),
   `@tanstack/react-query`, `zustand` + `zustand/middleware` (persist).
 - peerDependencies: `react >=18.0.0`, `react-native >=0.76.0` (옵셔널).
 - 컨슈머:
-  - `apps/web` — 어드민 콘솔(맛집/메뉴/분석/AI/지도 설정 + 발견 페이지 + 다이닝코드 검증/정식 페이지 + 캐치테이블 검증 페이지 + **음식 카탈로그(메뉴 어휘 탭 포함)** + **사용량 한도 탭 `/admin/settings/quotas`**), 공개 맛집 페이지(메뉴 탭 칼로리 칩), 로그인, **정산하기 진입/입력/결과/공유/단골 관리 페이지**, **대중교통(`/bus`·`/subway`)**, **대기정보(`/air`)·날씨(`/weather`)·일상지도(`/life-map`)**, **내 식단(`/meal`)**, **타로(`/tarot`·`/tarot/s/:token`·`/me/tarot[/:id]`)**, **사주(C)(`/saju-c`·`/saju-c/s/:token`·`/me/saju-c[/:id]`)**, **사주(G)(`/saju-g`·프로필·궁합·보관함·공유)**, **집값(`/housing`)**, 상단바 내 위치 칩(`MyLocationChip`). 401 가드 + **임베드 부팅(`readLpEmbedInit` → 토큰·게스트 키 우선 세팅)** 은 [main.tsx](../../apps/web/src/main.tsx); 임베드 판정은 [lib/embed.ts](../../apps/web/src/lib/embed.ts); 공유 시트·공유 페이지(`TarotShareSheet`/`SajuShareSheet`/`TarotSharedPage`/`SajuSharedPage`)가 `isLpEmbedded`/`postLpEmbedMessage` 소비.
-  - `apps/mobile` — 어드민 게이트 + 대중교통·날씨·대기·일상지도·식단(입력/사진 인식/목록/달력/통계) 화면 + 홈 내 위치 카드 + **타로·사주(C) WebView 화면([app/tarot/index.tsx](../../apps/mobile/app/tarot/index.tsx)·`app/saju-c/index.tsx` — `buildLpEmbedInjection({ token, guestKey, theme })` 을 `injectedJavaScriptBeforeContentLoaded` 로, `parseLpEmbedMessage` 로 share→`Share.share`/open→`Linking.openURL`/title→헤더)**. 스토리지·파일 어댑터·401 가드 주입은 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 한 곳(`setSettlementDraftStorage`/`setReviewAskStorage`/`setBusFavoriteStorage`/`setSubwayFavoriteStorage`/`setAirLocationStorage`/`setMealDraftStorage`/**`setGuestKeyStorage`/`setSajuProfileStorage`**/`setMealDraftLocalFileAdapter` + `bootstrapApi` 의 `setMealDraftPrincipal`; `webUrl`(운영은 apiUrl 그대로, 개발은 `:3000→:5173`, `EXPO_PUBLIC_WEB_URL` 로 명시)이 WebView origin). 앱은 `useGuestKeyStore.guestKey` 를 읽어 WebView 에 넘길 뿐 자기 화면에서 타로·사주 API 를 직접 부르지 않는다.
+  - `apps/web` — 어드민 콘솔(맛집/메뉴/분석/AI/지도 설정 + 발견 페이지 + 다이닝코드 검증/정식 페이지 + 캐치테이블 검증 페이지 + **음식 카탈로그(메뉴 어휘 탭 포함)** + **사용량 한도 탭 `/admin/settings/quotas`**), 공개 맛집 페이지(메뉴 탭 칼로리 칩), 로그인, **정산하기 진입/입력/결과/공유/단골 관리 페이지**, **대중교통(`/bus`·`/subway`)**, **대기정보(`/air`)·날씨(`/weather`)·일상지도(`/life-map`)**, **내 식단(`/meal`)**, **타로(`/tarot`·`/tarot/s/:token`·`/me/tarot[/:id]`)**, **사주(C)(`/saju-c`·`/saju-c/s/:token`·`/me/saju-c[/:id]`)**, **사주(G)(`/saju-g`·프로필·궁합·보관함·공유)**, **집값(`/housing`)**, 상단바 내 위치 칩(`MyLocationChip`). 401 가드 + **임베드 부팅(`readLpEmbedInit` → 토큰·게스트 키 우선 세팅)** 은 [main.tsx](../../apps/web/src/main.tsx); 임베드 판정은 [lib/embed.ts](../../apps/web/src/lib/embed.ts); 공유 시트·공유 페이지(`TarotShareSheet`/`SajuShareSheet`/`TarotSharedPage`/`SajuSharedPage`)가 `isLpEmbedded`/`postLpEmbedMessage` 소비. **27차 소비처**: 바다 [SeaPage.tsx](../../apps/web/src/routes/SeaPage.tsx)(`useSeaForecast`)·[SeaSpotDetail.tsx](../../apps/web/src/components/sea/SeaSpotDetail.tsx)(`useSeaTide`), 주차 [ParkingPage.tsx](../../apps/web/src/routes/ParkingPage.tsx)(`useParking*`·`useEv*` 8훅 — 탭별 `params`/`enabled` 토글), 맛집 상세 [ParkingSection.tsx](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx)(`useRestaurantParkingReviews` + `useParkingLotNearby` — '가는 법' 섹션과 [HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) 의 `ParkingSummaryLine`), 어드민 맛집 상세 [AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx)(`useRestaurantCanonicalSummaryEvents` + 공개 `useRestaurantPublic`/`useRestaurantPublicInsights` 차용)·[AdminReviewsTab.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminReviewsTab.tsx)(`useRestaurantReviewMatch`·`useResummarizeReview(placeId, canonicalId)`)·[AdminDetailHeader.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx)·[ActiveJobPanel.tsx](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx)(`useInvalidateRestaurantDetailCaches`), 전역 [ResummarizeToaster.tsx](../../apps/web/src/components/ResummarizeToaster.tsx)(`useResummarizeWatcher`).
+  - `apps/mobile` — 어드민 게이트 + 대중교통·날씨·대기·일상지도·식단(입력/사진 인식/목록/달력/통계) 화면 + 홈 내 위치 카드 + **타로·사주(C) WebView 화면([app/tarot/index.tsx](../../apps/mobile/app/tarot/index.tsx)·`app/saju-c/index.tsx` — `buildLpEmbedInjection({ token, guestKey, theme })` 을 `injectedJavaScriptBeforeContentLoaded` 로, `parseLpEmbedMessage` 로 share→`Share.share`/open→`Linking.openURL`/title→헤더)**. 스토리지·파일 어댑터·401 가드 주입은 [api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) 한 곳(`setSettlementDraftStorage`/`setReviewAskStorage`/`setBusFavoriteStorage`/`setSubwayFavoriteStorage`/`setAirLocationStorage`/`setMealDraftStorage`/**`setGuestKeyStorage`/`setSajuProfileStorage`**/`setMealDraftLocalFileAdapter` + `bootstrapApi` 의 `setMealDraftPrincipal`; `webUrl`(운영은 apiUrl 그대로, 개발은 `:3000→:5173`, `EXPO_PUBLIC_WEB_URL` 로 명시)이 WebView origin). 앱은 `useGuestKeyStore.guestKey` 를 읽어 WebView 에 넘길 뿐 자기 화면에서 타로·사주 API 를 직접 부르지 않는다. **27차 shared 추가·변경분(바다·주차 훅, 어드민 상세 출처 통합 훅, 재요약 watcher·SSE 매니저 키 변경)은 앱이 하나도 쓰지 않는다**(2026-09-26 `apps/mobile` grep 0건 — 바다·주차 앱 미구현, 어드민 맛집 상세·재요약 토스트는 웹 전용).
 - 외부:
   - `apiFetch`로 [friendly](friendly.md) API에 HTTP. `FormData` 본문이면 Content-Type 자동 미설정 (영수증 업로드 호환).
   - `useCrawlJobStream` → `Routes.Crawl.jobEvents` EventSource.
@@ -624,9 +708,41 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - **`housingApi` → `Routes.Housing.{status, points, nearby, search, complex(id), trades(id)}`** (공개 — 로컬 DB 조회, [friendly](friendly.md) `housing` 모듈; `complex/trades` 는 라우트 빌더가 id 를 `encodeURIComponent`).
   - **`restaurantApi.publicMenuNutrition` → `Routes.Restaurant.publicMenuNutrition(placeId)`** (공개, 서버 placeId 단위 10분 캐시 + `llmPending`), **`foodApi.menuLexicon*` → `Routes.Food.{adminMenuLexicon, adminMenuLexiconEntry(id)}`** (Bearer).
   - **`embedBridge` 는 네트워크가 아니라 WebView 경계** — 앱 → 웹은 `window.__LP_EMBED__` 전역, 웹 → 앱은 `window.ReactNativeWebView.postMessage`. 앱 [app/tarot/index.tsx](../../apps/mobile/app/tarot/index.tsx) 가 같은 origin 이동은 WebView 안, 밖은 `Linking.openURL` 로 보낸다.
-- UI 측 사용처는 [web](web.md)/[mobile](mobile.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행은 [schedule](schedule.md), 리뷰 RAG/군집은 [review-search](review-search.md)/[review-clustering](review-clustering.md), 버스는 [bus](bus.md)(마커/형상은 [utils](utils.md)), 타로는 [tarot](tarot.md), 사주(C)는 [saju-c](saju-c.md), 사주(G)는 [saju-g](saju-g.md), 한도는 [usage-quota](usage-quota.md), 집값은 [housing](housing.md), 메뉴 칼로리는 [food](food.md). 토스트 watcher 컴포넌트(`ReviewAskToaster`/`ResummarizeToaster`)는 [web](web.md)/[mobile](mobile.md) 루트에 마운트.
+  - **`seaApi` → `Routes.Sea.{forecast, tide}`** (27차 — `/api/v1/sea/forecast?activity=`·`/api/v1/sea/tide?lat&lng&date=YYYY-MM-DD`, 공개; [friendly](friendly.md) `sea` 모듈이 국립해양조사원 API 를 프록시하며 활동별 1시간·물때 지점×날짜 12시간 메모리 캐시 — 적재 없음).
+  - **`parkingApi` → `Routes.Parking.{status, lotPoints, lotNearby, lotDetail(id), evPoints, evNearby, evDetail(id), airports, restaurantReviews(placeId)}`** (27차 — `/api/v1/parking/*` + `/api/v1/restaurants/public/:placeId/parking-reviews`, 공개; 로컬 DB + 서버 폴러가 채운 메모리라 요청 경로 업스트림 0회, `status` 외 8라우트가 `RATE.parkingRead`(240/분) — `status` 는 전용 한도 없이 전역 기본; `lotDetail`/`evDetail`/`restaurantReviews` 는 라우트 빌더가 `encodeURIComponent`).
+  - **`restaurantApi.reviewMatch` → `Routes.Restaurant.reviewMatch(placeId)`** (27차 — `/api/v1/admin/restaurants/place/:placeId/review-match?tip=|menu=`, 관리자 Bearer, 응답 `{ reviewIds }` — 서버 `filterReviewsByTipMenu` 공용 매칭, [canonical](canonical.md)).
+  - **`summarySseManager` canonical 구독(27차 어드민 상세·재요약 watcher)** — `canonical:<id>` 키가 생기면 `buildSummaryEventsUrl` 이 같은 EventSource URL 에 `canonicalId=` 를 반복 파라미터로 싣는다(`placeId=` 와 합집합, `token=` query 인증 — [sse-token-auth](../concepts/sse-token-auth.md)). 서버 채널 키는 `summaryChannelKey`(네이버 = placeId / `dc:<vRid>` / `tb:<idx>`)로 통일돼 canonical 구독이 테이블링 이벤트도 받는다([summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts), `420a6be`).
+  - **CORS 개방과의 관계(`1b621c4`)** — `apiFetch` 는 `credentials` 를 지정하지 않고(브라우저 기본 same-origin) Bearer 헤더로만 인증하며 SSE 는 token query 라, 어드민 외 `origin: '*'` + `credentials: false` 개방과 충돌하지 않는다. 리포 밖 프로젝트는 shared 가 아니라 `docs/api/openapi.json` 을 쓴다([api-docs](api-docs.md)).
+- UI 측 사용처는 [web](web.md)/[mobile](mobile.md), 정산 도메인 자체는 [settlement](settlement.md), 주기 실행은 [schedule](schedule.md), 리뷰 RAG/군집은 [review-search](review-search.md)/[review-clustering](review-clustering.md), 버스는 [bus](bus.md)(마커/형상은 [utils](utils.md)), 타로는 [tarot](tarot.md), 사주(C)는 [saju-c](saju-c.md), 사주(G)는 [saju-g](saju-g.md), 한도는 [usage-quota](usage-quota.md), 집값은 [housing](housing.md), 메뉴 칼로리는 [food](food.md), 바다는 [sea](sea.md)(해상 중기예보 `?sea=` 는 [weather](weather.md) 의 별개 원천), 주차는 [parking](parking.md), 어드민 상세 출처 통합·요약 채널 키는 [canonical](canonical.md), 외부 API 문서·CORS 는 [api-docs](api-docs.md). 토스트 watcher 컴포넌트(`ReviewAskToaster`/`ResummarizeToaster`)는 [web](web.md)/[mobile](mobile.md) 루트에 마운트.
 
-## API Surface [coverage: high — 88 sources]
+## API Surface [coverage: high — 95 sources]
+
+**바다·주차 (27차 신규 — [api/sea.api.ts](../../packages/shared/src/api/sea.api.ts) · [hooks/useSea.ts](../../packages/shared/src/hooks/useSea.ts) · [api/parking.api.ts](../../packages/shared/src/api/parking.api.ts) · [hooks/useParking.ts](../../packages/shared/src/hooks/useParking.ts))** — 전부 공개(토큰 불필요).
+
+| 대상 | API 함수 | 훅 | 쿼리 키 | staleTime / 재조회 | enabled · placeholder |
+|---|---|---|---|---|---|
+| 바다 예보 | `seaApi.forecast(activity: SeaActivityType)` | `useSeaForecast(activity)` | `['sea','forecast',activity]` | 30분 / `refetchInterval` 1시간 | 항상 활성 · **placeholder 없음**(활동 전환 시 이전 목록을 들고 있지 않음) |
+| 물때 | `seaApi.tide(lat, lng, date)` (좌표 `toFixed(5)`) | `useSeaTide(point \| null, date \| null)` | `['sea','tide',lat.toFixed(3),lng.toFixed(3),date]` | 6시간 / 없음 | point·date 둘 다 있어야 |
+| 적재·폴러 상태 | `parkingApi.status()` | `useParkingStatus()` | `['parking','status']` | 5분 / 없음 | 항상 |
+| 주차장 뷰포트 | `lotPoints(bbox, zoom, filters?)` (zoom `Math.floor`) | `useParkingLotPoints(params \| null)` | `['parking','lots','points',bbox,floor(zoom),flagsKey]` | 2분 / 5분 | params null 이면 비활성 · 이전 결과 유지 |
+| 주차장 주변 | `lotNearby(lat, lng, { radius?, limit?, filters? })` | `useParkingLotNearby(lat \| null, lng \| null, { radius?, limit?, filters?, enabled? })` | `['parking','lots','nearby',lat4,lng4,radius ?? null,limit ?? null,flagsKey]` | 2분 / 5분 | 좌표 + `enabled !== false` · 유지 |
+| 주차장 상세 | `lotDetail(id)` | `useParkingLotDetail(id \| null)` | `['parking','lots','detail',id]` | 2분 / 5분 | id · 없음 |
+| 충전소 뷰포트 | `evPoints(bbox, zoom, filters?)` | `useEvPoints(params \| null)` | `['parking','ev','points',bbox,floor(zoom),flagsKey]` | 2분 / 5분 | params · 유지 |
+| 충전소 주변 | `evNearby(lat, lng, { radius?, limit?, filters? })` | `useEvNearby(lat, lng, { …, enabled? })` | `['parking','ev','nearby',lat4,lng4,radius ?? null,limit ?? null,flagsKey]` | 2분 / 5분 | 좌표 + enabled · 유지 |
+| 충전소 상세 | `evDetail(id)` | `useEvDetail(id \| null)` | `['parking','ev','detail',id]` | 2분 / 5분 | id · 없음 |
+| 공항 주차 | `airports()` | `useParkingAirports(enabled = true)` | `['parking','airports']` | 2분 / 5분(enabled 일 때만) | enabled · 없음 |
+| 맛집 주차 평가 | `restaurantReviews(placeId)` | `useRestaurantParkingReviews(placeId \| null)` | `['parking','restaurant-reviews',placeId]` | 30분 / 없음 · `retry:false`(404 = 식당 없음) | placeId |
+
+노출 타입·상수: `ParkingLotFilters { publicOnly?, freeOnly?, liveOnly? }`, `EvFilters { fastOnly?, freeParkingOnly?, availableOnly?, openOnly? }`, `PARKING_LOT_FILTER_KEYS`·`EV_FILTER_KEYS`(요청 직렬화와 키 비트 순서의 단일 원천), `ParkingViewportParams<F> = { bbox, zoom, filters? }`. 내부 전용(비노출): api 의 `applyFlags`(true 만 `'1'`), 훅의 `flagsKey`(`'0'/'1'` 비트 문자열). 좌표 `lat4/lng4` = `toFixed(4)`(≈11m) — 요청에는 원좌표 `String(lat)` 를 보낸다(버스·일상지도와 같은 "키만 스냅").
+
+**어드민 맛집 상세 출처 통합 (27차 — [api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts) · [hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) · [stores/resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts), `420a6be`)**
+- **`restaurantApi.reviewMatch(placeId, query: RestaurantReviewMatchQueryType): Promise<{ reviewIds: string[] }>`** — `tip`·`menu` 는 값이 있을 때만 query string 에 붙이고 둘 다 없으면 `?` 없이 호출(계약상 둘 다 오면 서버가 AND).
+- **`useRestaurantReviewMatch(placeId: string | null, filter: { tip: string | null; menu: string | null })`** — `['restaurant','review-match',placeId,tip,menu]`, staleTime 60s, `enabled: !!placeId && !!(tip || menu)`. 어드민 리뷰 탭이 받은 id 집합으로 이미 들고 있는 리뷰 목록을 거른다.
+- **`useRestaurantCanonicalSummaryEvents(target: { placeId: string; canonicalId: string } | null): { progress: RestaurantSummaryProgressType | null }`** — canonical 한 구독, 출처별 snapshot 합산(`sumSummaryProgress`, 내부), 상세 캐시 `sources[]`·리뷰 행 병합, 진행 중 합 >0→0 에서 공개 캐시 1회 무효화(Architecture 참조).
+- **`useInvalidateRestaurantDetailCaches(): (placeId: string) => void`** — 공개 상세 5종 + review-match + review-clusters + review-qa ready + parking restaurant-reviews 일괄 무효화(내부 `invalidateRestaurantDetailCaches(qc, placeId)` 의 훅 판).
+- **`useResummarizeReview(placeId: string | null, canonicalId: string | null = null)`** — 두 번째 인자 추가(기본 null — 기존 호출자 호환). `resummarize(reviewId, model, prevSentiment)` 가 `add({ reviewId, placeId, canonicalId, prevSentiment, model })` 후 POST; `onSuccess` 에서 응답 `canonicalId` 가 있으면 `setCanonical`, `onError` 는 `remove`. `pending: ReadonlySet<reviewId>` 는 여전히 `placeId` 기준.
+- **`useResummarizeWatcher({ onResult })`** — 시그니처 불변, 구독 키만 `canonical:`/`place:` 채널로(Architecture 참조).
+- `restaurantApi.resummarizeReview(reviewId, model)` 응답 `ReviewResummarizeResultType` 에 **`canonicalId: string | null`** 추가(`placeId` 는 네이버 리뷰일 때만, 리뷰를 못 찾으면 둘 다 null). `restaurantApi.cancelSummary`·`resumeSummary`·`reanalyze(placeId)` 는 **시그니처 불변이지만 서버 의미가 canonical 전체 출처로 넓어졌다**(요약 중지·재개·재분석 — [canonical](canonical.md)).
 
 **여행로그 (26차 신규 — [api/tour.api.ts](../../packages/shared/src/api/tour.api.ts) · [hooks/useTour.ts](../../packages/shared/src/hooks/useTour.ts))**
 
@@ -649,7 +765,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
   - 다이닝코드: `diningcodeSearch`, `diningcodeShop(vRid)`, `diningcodeShopReviews(vRid, page)`, `diningcodeShopSave(vRid)`, `diningcodeRegistered(vRids[])`
   - DC 일괄 저장 잡: `diningcodeBulkSaveStart(input)`, `diningcodeBulkSaveGet(jobId)`, `diningcodeBulkSaveCancel(jobId)` + `buildDiningcodeBulkSaveEventsUrl(jobId)`
 - `restaurantApi`:
-  - 어드민: **`list(query: Partial<RestaurantListQueryType>)` (limit/offset/sort, 시그니처 변경)**, `ranking(query?)`, `getByPlaceId(placeId)`, `getSummaryStatus(placeId)`, `delete(placeId)`, `reanalyze(placeId)`, `cancelSummary(placeId)`, `resumeSummary(placeId)`, `crawlLogs({ placeId, cursor? })`
+  - 어드민: **`list(query: Partial<RestaurantListQueryType>)` (limit/offset/sort, 시그니처 변경)**, `ranking(query?)`, `getByPlaceId(placeId)`(27차부터 응답이 canonical 전체 출처 리뷰 + `sources[]` + `canonicalId`), `getSummaryStatus(placeId)`, `delete(placeId)`, `reanalyze(placeId)`, `cancelSummary(placeId)`, `resumeSummary(placeId)`(세 요약 운영 함수는 27차부터 서버가 canonical 전체 출처로 적용), `crawlLogs({ placeId, cursor? })`, **`reviewMatch(placeId, { tip?, menu? })`(27차 — 걸린 리뷰 id)**
   - 공개: `publicList(query?)`, `publicByPlaceId(placeId)`, `publicInsights(placeId)`, **`publicCategoryTree(placeId)` (신규 — `RestaurantCategoryTreeResultType`, 전역 머지 닿은 식당만 roots 채워짐)**, `publicReviews({ placeId, sentiment, sort, cursor?, **tip?, menu?** })` (tip/menu 필터 추가)
   - SSE URL: `buildSummaryEventsUrl({ placeIds?, canonicalIds? })`
 - `canonicalApi`: `candidates(canonicalId)`, `merge(input)`, `split(canonicalId, input)`, `dismissSuggestion(canonicalId)`, `listProposals()`, `runProposals()`, `acceptProposal(proposalId, input)`, `rejectProposal(proposalId)`, `delete(canonicalId)`.
@@ -693,7 +809,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - 크롤 캐치테이블: `useCatchtableSearch`, `useCatchtableShop`, `useCatchtableShopMenus`, `useCatchtableShopReviewOverview`
 - 크롤 다이닝코드: `useDiningcodeSearch`, `useDiningcodeShop`, `useDiningcodeShopReviews`, `useSaveDiningcodeShop`, `useDiningcodeRegistered`
 - DC 일괄 저장 잡: `useStartDiningcodeBulkSave`, `useCancelDiningcodeBulkSave`, `useDiningcodeBulkSaveJob`
-- 맛집 어드민: **`useRestaurantList(query?: { limit?, offset?, sort? })` (queryKey `['restaurant', 'list', limit, offset, sort]` + `placeholderData: (prev) => prev`)**, `useRestaurantRanking`, `useRestaurantByPlaceId`, `useDeleteRestaurant`, `useReanalyzeRestaurant`, `useCancelSummary`, `useResumeSummary`, `useRestaurantCrawlLogs(placeId)` (infiniteQuery), `useRestaurantSummaryEvents(placeId, { onLog? })`, `useRestaurantListSummaryEvents(canonicalIds[])`, `useRestaurantListSummaryEventsByPlaceIds(placeIds[])`
+- 맛집 어드민: **`useRestaurantList(query?: { limit?, offset?, sort? })` (queryKey `['restaurant', 'list', limit, offset, sort]` + `placeholderData: (prev) => prev`)**, `useRestaurantRanking`, `useRestaurantByPlaceId`, `useDeleteRestaurant`, `useReanalyzeRestaurant`, `useCancelSummary`, `useResumeSummary`, `useRestaurantCrawlLogs(placeId)` (infiniteQuery), `useRestaurantSummaryEvents(placeId, { onLog? })`, `useRestaurantListSummaryEvents(canonicalIds[])`, `useRestaurantListSummaryEventsByPlaceIds(placeIds[])`, **27차: `useRestaurantCanonicalSummaryEvents({ placeId, canonicalId } | null)`·`useRestaurantReviewMatch(placeId, { tip, menu })`·`useInvalidateRestaurantDetailCaches()`·`useResummarizeReview(placeId, canonicalId = null)`** (위 "어드민 맛집 상세 출처 통합" 블록)
 - 맛집 공개: `useRestaurantsPublic`, `useRestaurantPublic`, `useRestaurantPublicInsights`, **`useRestaurantPublicCategoryTree(placeId)` (신규 — `['restaurant','public','category-tree',placeId]`, staleTime 60s)**, `useRestaurantPublicReviews(filters, seed?)` (infiniteQuery, detail seed — **filters 에 `tip?`/`menu?` 추가, queryKey 에 `tip ?? null`/`menu ?? null` 포함, tip/menu 있으면 seed 무효**)
 - 캐노니컬: `useCanonicalCandidates`, `useMergeCanonical`, `useSplitCanonical`, `useDismissCanonicalSuggestion`, `useCanonicalProposals` (refetchInterval 30s), `useRunCanonicalProposals`, `useAcceptCanonicalProposal`, `useRejectCanonicalProposal`, `useDeleteCanonical`
 - 메뉴 그룹핑: `useMenuRanking`, `useGroupForRestaurant`, `useGroupingRestaurantsStatus`, `useCreateGroupingJob`, `useGroupingJob`
@@ -756,7 +872,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - **집값 (신규 25차)** — `useHousingStatus()` (`['housing','status']`, 6h) / **`useHousingPoints(params: { bbox, zoom, axis } | null)`** (`['housing','points',bbox,floor(zoom),axisKey]`, 6h, placeholder 유지, null 이면 비활성) / `useHousingNearby(lat | null, lng | null, axis, { radius?, limit?, enabled? })` (`['housing','nearby',lat4,lng4,radius ?? null,limit ?? null,axisKey]`, 6h) / `useHousingSearch(q, limit?)` (공백 정규화 후 1~40자 `enabled`, `['housing','search',q,limit ?? null]`, 10분, `retry:false`, placeholder) / `useHousingComplex(id | null)` (`['housing','complex',id]`, 6h) / **`useHousingTrades(id | null, axis, { pageSize = 30, includeCanceled? })`** (`useInfiniteQuery` `['housing','trades',id,axisKey,pageSize,canceled 0|1]`, offset 페이징 — 누적 < `total` 이고 마지막 페이지가 비지 않았을 때만 다음) + `housingAxisKey(axis)`, `HousingViewportParams` 타입.
 - **메뉴 칼로리·어휘 (신규 25차)** — **`useRestaurantPublicMenuNutrition(placeId | null, enabled = true)`** (`['restaurant','public','menu-nutrition',placeId]`, 10분, `retry: 1`, `refetchInterval` 은 `data.llmPending && dataUpdateCount < 10` 이면 3s 아니면 false) / 어드민 `useMenuLexicon(kind?)` (`['food','admin','menu-lexicon',kind ?? null]`) / `useMenuLexiconCreate()` / `useMenuLexiconDelete()` (둘 다 `['food','admin','menu-lexicon']` invalidate).
 
-**SSE 매니저 (`hooks/summarySseManager.ts`)** — 변경 없음. `subscribe(key, { onSnapshot(snap, prev), onReview, onLog? })`, place/canonical 키 union, heartbeat 5s, idle 15s, backoff 1.5s→60s.
+**SSE 매니저 (`hooks/summarySseManager.ts`)** — 변경 없음(~2026-09-19 기준). `subscribe(key, { onSnapshot(snap, prev), onReview, onLog? })`, place/canonical 키 union, heartbeat 5s, idle 15s, backoff 1.5s→60s. **27차(`420a6be`)**: 공개 시그니처는 그대로지만 `prev` 의 의미가 "같은 키의 직전 snapshot" → **"같은 출처 행(`restaurantId`)의 직전 snapshot"** 으로 바뀌었고, 새 구독 시 replay 가 키에 걸리는 출처 행 **전부**(canonical 키면 여러 건)를 `prev=null` 로 흘린다 — 핸들러가 첫 호출에서 여러 snapshot 을 받을 수 있다.
 
 **잡 단위 SSE 훅** — `useScheduleRunEvents`·`useRandomCrawlRunEvents`·**`useFoodImportRunEvents`(23차)** 까지 같은 꼴(그룹핑/전역 머지/DC 일괄 저장 3벌은 22차에 `useBulkJob` 제네릭으로 통합). `useGroupingJob` / `useGlobalMergeJob` / `useDiningcodeBulkSaveJob` / `useAutoDiscoverJob` / **`useScheduleRunEvents`** 모두 매니저를 거치지 않고 훅 안에서 직접 `EventSource` 라이프사이클(closed/cancelled + 백오프 + cleanup)을 든다. 백오프 `1s → 30s cap` 공통. `useScheduleRunEvents` 는 jobId 가 없고 `enabled` 플래그로만 연결 토글(서버가 "현재 진행 중 run" 하나를 스트림) — 진행값은 캐시가 아닌 로컬 `{ progress }` state, done 에서만 schedule+analytics 캐시 invalidate.
 
@@ -769,7 +885,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 - **`useActiveTablingBulkSaveJobStore` (신규)**: `lp:activeTablingBulkSaveJob` localStorage persist — DC bulk-save 와 완전 동형(jobId|null + setJobId/clear, 404→clear 는 훅 책임)
 - `useActiveAutoDiscoverJobStore`: `lp:activeAutoDiscoverJob` localStorage persist
 - **`useReviewAskStore` (신규)**: 공개 Ask 비동기 — `inFlight`/`lastByPlace`(영속, MAX_KEPT=20)/`freshThisSession`/`errorByPlace`/`completion`(seq)/`visiblePlaceId` + `ask`/`clearCompletion`/`clearLast`/`setAskTabVisible`. **store 가 직접 `publicAsk` 호출**. persist `review-ask-v1` v1, `partialize: lastByPlace 만`, `setReviewAskStorage(adapter)` lazy resolver(localStorage/AsyncStorage/NO_OP).
-- **`useResummarizeStore` (신규)**: `items: Record<reviewId, {reviewId, placeId, prevSentiment, model}>` + `add`/`remove`. persist 없음(메모리만) — watcher 가 placeId SSE 구독.
+- **`useResummarizeStore` (신규)**: `items: Record<reviewId, {reviewId, placeId, prevSentiment, model}>` + `add`/`remove`. persist 없음(메모리만) — watcher 가 placeId SSE 구독. **27차**: 타입 `ResummarizeInFlight` 에 `canonicalId: string | null`(SSE 구독 키 — null 이면 watcher 가 `placeId` 로 구독) 추가, `placeId` 는 "캐시 무효화 키"로 의미가 좁혀졌고, 액션 **`setCanonical(reviewId, canonicalId)`**(없는 reviewId 거나 값이 같으면 상태 그대로 반환 — 불필요한 리렌더 없음) 추가.
 - `useSettlementDraftStore`: **N차(rounds) 모델 + 세부 분배 그룹** — `{ participants: DraftParticipant[]; rounds: DraftRound[] }` + 액션:
   - lifecycle — `startFor(placeId, placeName)` / `startFromScratch()` / `reset()`
   - 마스터 참여자 — `setParticipants` / `addParticipant` (returns clientId) / `addParticipantsAndCompact` (빈 행 compaction + 다중 append) / `updateParticipant` / `removeParticipant` — 모두 내부에서 `syncAttendances` 호출해 모든 round 의 attendances 자동 정합화
@@ -794,7 +910,7 @@ SSE 도메인에선 list/detail 캐시 inline merge. `summarySseManager`는 Reac
 선택의 영속화는 플랫폼별(웹 localStorage / 앱 AsyncStorage) — Key Decisions 참고. (`palette/lightColors/
 darkColors/space/radius/typography/duration`, `APP_NAME` / `QUERY_STALE_TIME` / `QUERY_GC_TIME` 노출 모양 불변.)
 
-## Data [coverage: high — 36 sources]
+## Data [coverage: high — 42 sources]
 
 **Auth 상태 모양** (`stores/authStore.ts`)
 ```ts
@@ -893,11 +1009,11 @@ type DraftCategoryAdjustments = Partial<Record<ReceiptItemCategoryType, DraftCat
   변경마다 별 캐시 인스턴스. SSE summary patch 는 prefix 매칭 (`setQueriesData
   ({ queryKey: ['restaurant', 'list'] }, ...)`) 으로 모든 페이지 인스턴스를 동시에 갱신.
   `placeholderData: (prev) => prev` 로 페이지 전환 시 깜빡임 방지.
-- 어드민 맛집 detail: `['restaurant', placeId]`. 공개 맛집 키 변경 없음.
+- 어드민 맛집 detail: `['restaurant', placeId]`. 공개 맛집 키 변경 없음. **27차(`420a6be`)부터 값 모양이 바뀜** — `RestaurantDetailType` 에 `canonicalId`·`sources: RestaurantSourceSummary[]`(네이버 먼저, 나머지 최근 수집순), `reviews: AdminVisitorReview[]`(같은 canonical 의 **모든 출처** 리뷰, 각 행에 `source`·`restaurantId`), `snapshot.visitorReviews` 는 빈 배열(복제 제거). 이 캐시에 쓰는 경로: `useRestaurantCanonicalSummaryEvents`(snapshot → `sources[]` 카운트, review → 행 `summary`), `useRestaurantSummaryEvents`(네이버 review 행 병합 — 같은 값이라 겹쳐도 무해), 웹 `ActiveJobPanel` 크롤 배치 병합(새 행에 `source: 'naver'`·`restaurantId: prev.id` 부착), 재요약 watcher 는 `exact: true, refetchType: 'none'` 로 stale 표시만.
 - 캐노니컬: 기존과 동일.
 - 메뉴 그룹핑 / 분석 / 지도 / AI: 기존과 동일.
 - 공개 맛집 카테고리 트리: `['restaurant', 'public', 'category-tree', placeId]` (staleTime 60s).
-- 공개 리뷰: `['restaurant', 'public-reviews', placeId, sentiment, sort, tip ?? null, menu ?? null]` (tip/menu 추가로 튜플 확장 — 필터 조합마다 별 캐시 인스턴스, tip/menu 있으면 seed 안 씀).
+- 공개 리뷰: ~~`['restaurant', 'public-reviews', placeId, sentiment, sort, tip ?? null, menu ?? null]`~~ → **정정(2026-09-26 소스 확인)**: 실제 키는 `['restaurant', 'public', 'reviews', placeId, sentiment, sort, tip ?? null, menu ?? null]` — `'public-reviews'` 문자열은 git 이력(`-S`)에 한 번도 없었던 위키 표기 오류다(`4856b87` 페이지네이션 분리 때부터 `'public','reviews'`). (tip/menu 추가로 튜플 확장 — 필터 조합마다 별 캐시 인스턴스, tip/menu 있으면 seed 안 씀.) 27차 무효화 헬퍼는 prefix `['restaurant','public','reviews',placeId]` 로 모든 필터 조합을 잡는다.
 - **주기 자동 실행 (신규)**:
   - `useScheduleConfig` → `['schedule', 'config']`, `useScheduleRuns` → `['schedule', 'runs']`.
   - `useSchedulePreview` → `['schedule', 'preview', cronExpr, timezone]` (입력별 별 캐시).
@@ -998,16 +1114,42 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - 집값: `['housing','status']` / `['housing','points',bbox,floor(zoom),axisKey]` / `['housing','nearby',lat4,lng4,radius ?? null,limit ?? null,axisKey]` / `['housing','complex',id]` / `['housing','trades',id,axisKey,pageSize,0|1]`(전부 6h, 무효화 없음 — 월 단위 적재) / `['housing','search',q,limit ?? null]`(10분). `axisKey = `${dealType}|${band}``.
 - 메뉴 칼로리·어휘: `['restaurant','public','menu-nutrition',placeId]`(10분, `llmPending` 이면 3s 폴링 ≤ 10회) / `['food','admin','menu-lexicon',kind ?? null]`(생성·삭제 시 prefix invalidate).
 
+**바다·주차·어드민 상세 캐시 키 (신규 27차)**
+- 바다: `['sea','forecast',activity]`(30분 stale + 1시간 `refetchInterval`, placeholder 없음) / `['sea','tide',lat3,lng3,date]`(6시간 — `toFixed(3)` 키, 요청은 `toFixed(5)`). 무효화 없음(서버 캐시·업스트림 발표 주기에 맡김).
+- 주차: `['parking','status']`(5분) / `['parking','lots','points',bbox,floor(zoom),flagsKey]` / `['parking','lots','nearby',lat4,lng4,radius ?? null,limit ?? null,flagsKey]` / `['parking','lots','detail',id]` / `['parking','ev','points',…]`·`['parking','ev','nearby',…]`·`['parking','ev','detail',id]` / `['parking','airports']`(여기까지 2분 stale + enabled 일 때 5분 `refetchInterval`, 뷰포트·주변만 placeholder) / `['parking','restaurant-reviews',placeId]`(30분, `retry:false` — 유일하게 다른 훅이 무효화: 27차 `invalidateRestaurantDetailCaches`). `flagsKey` 예: 주차장 `publicOnly`만 켜면 `'100'`, 충전소 `availableOnly`만 켜면 `'0010'`.
+- 어드민 리뷰 매칭: `['restaurant','review-match',placeId,tip,menu]`(60s) — 무효화 헬퍼가 prefix `['restaurant','review-match',placeId]` 로 함께 지운다.
+- **공개 상세 일괄 무효화 집합(`invalidateRestaurantDetailCaches(qc, placeId)`)**: `['restaurant','public',k,placeId]` for k ∈ {`detail`, `insights`, `reviews`, `category-tree`, `menu-nutrition`} + `['restaurant','review-match',placeId]` + `['review-clusters',placeId]` + `['review-qa','ready',placeId]` + `['parking','restaurant-reviews',placeId]`. 빠진 것: `['restaurant','public','tour-stats',placeId]`(여행로그 매칭 집계 — 리뷰·요약과 무관), 어드민 상세 `['restaurant',placeId]`(호출자 판단).
+- 어드민 상세 요약 진행(`useRestaurantCanonicalSummaryEvents`)은 React Query 캐시가 아니라 훅 로컬 state `{ canonicalId, bySource: Map<restaurantId, snapshot> }` — `progress` 는 렌더 중 합산.
+
+**Resummarize in-flight 상태** (`stores/resummarizeStore.ts`, 27차 모양)
+```ts
+interface ResummarizeInFlight {
+  reviewId: string;
+  placeId: string;               // 캐시 무효화 키(네이버 placeId — 공개 상세 캐시 키)
+  canonicalId: string | null;    // SSE 구독 키 — null 이면 watcher 가 place:<placeId> 로 구독, POST 응답으로 채움
+  prevSentiment: string | null;  // 완료 토스트 "부정 → 긍정" 델타용
+  model: string;
+}
+// items: Record<reviewId, ResummarizeInFlight> — persist 없음(메모리)
+```
+
 **임베드 브리지 전역 (신규 25차)** — `window.__LP_EMBED__: { token, guestKey, theme? }`(앱이 로드 전 주입, 웹은 부팅에서 한 번 읽음) / `window.ReactNativeWebView.postMessage(string)`(react-native-webview 가 제공). 웹 sessionStorage `lp:embed = '1'`(`lib/embed.ts` — `?embed=1` 을 본 뒤 같은 탭의 후속 페이지도 임베드).
 
 **ReviewSummary 분석 필드 머지** — 기존 동일.
 
-**SSE last-snapshot 캐시** — 매니저가 `lastSnapshotByCanonical` + `lastSnapshotByPlace` 두 Map 유지.
+**SSE last-snapshot 캐시** — 매니저가 `lastSnapshotByCanonical` + `lastSnapshotByPlace` 두 Map 유지. (~2026-09-19 기준 — `420a6be` 이후 **`lastSnapshotByRestaurant: Map<restaurantId, RestaurantSummarySnapshotEventType>` 한 Map**. 출처 행당 1개, replay 캐시 겸 delta 용 `prev` 원천. 행은 그 행에 걸리는 구독(`canonical:<canonicalId>` 또는 `place:<placeId>`)이 하나도 남지 않을 때만 지운다.)
 
 **SSE 스트림 상태** (`useCrawlJobStream`) — 기존 동일.
 
-## Key Decisions [coverage: high — 61 sources]
+## Key Decisions [coverage: high — 68 sources]
 
+- **2026-09-26 어드민 상세의 요약 진행은 canonical 한 구독으로 받아 출처별로 합산하고, 리뷰 완료는 행 단위로 병합하며, 공개 캐시는 "모두 끝난 순간" 한 번만 무효화한다(`420a6be`)** — 어드민 상세가 같은 가게의 모든 출처 리뷰를 싣게 되자(로컬 실데이터 특돼지 목동점 38 → 546건, 테이블링 508 포함 — 커밋 본문) 출처마다 구독하는 방식은 성립하지 않았다: 다이닝코드·테이블링 행은 `placeId` 가 null 이라 place 키로는 이벤트가 오지 않는다. canonical 키 하나로 받고 `restaurantId` 로 모아 합산하면 진행 카드·실패 배지가 가게 단위가 된다. 리뷰 완료마다 상세를 다시 받으면 수백 건 본문을 반복 전송하므로 이벤트 값을 해당 행에 직접 병합하고([stream-driven-cache-merge](../concepts/stream-driven-cache-merge.md)), 공개 탭(홈·분석·메뉴)이 새 집계를 읽도록 하는 무효화는 진행 중 합이 >0→0 이 되는 전이에서만 — 건마다 하면 공개 상세 재조회가 폭주한다.
+- **2026-09-26 SSE 의 `prev`·replay 는 키가 아니라 출처 행(`restaurantId`) 단위다(`420a6be`)** — delta(`snap − prev`)는 같은 행의 두 시점 사이에서만 의미가 있다. canonical 구독에는 여러 출처의 snapshot 이 섞여 오므로 "키의 직전 snapshot" 을 prev 로 쓰면 다른 출처와의 차이가 공개 목록 합산 행에 더해진다(출처가 둘 이상인 가게에서 카운트가 틀어진 실제 버그). 캐시를 `restaurantId` 한 Map 으로 바꾸면 prev 원천과 replay 캐시가 하나가 되고, canonical 구독자는 구독 즉시 모든 출처 행을 replay 받아 합산을 시작할 수 있다. 해지 때는 place 키와 canonical 키가 같은 네이버 행을 공유할 수 있어 "남은 구독이 덮는 행" 을 남긴다.
+- **2026-09-26 재요약 in-flight 는 무효화 키(`placeId`)와 구독 키(`canonicalId`)를 분리하고, 구독 키를 모르면 POST 응답으로 채운다(`420a6be`)** — 공개 상세 캐시는 네이버 placeId 로 잡혀 있어 무효화 키는 여전히 placeId 여야 하지만, 다이닝코드·테이블링 리뷰의 완료 이벤트는 canonical 구독으로만 온다. 어드민 상세는 `RestaurantDetail.canonicalId` 를 알아 처음부터 넘기고, 공개 리뷰 탭은 공개 상세 응답(`RestaurantPublicDetail`)에 canonicalId 가 없어 서버가 재요약 응답에 `canonicalId` 를 싣도록 계약을 넓혔다(`ReviewResummarizeResult`). 두 번째 인자 기본값을 null 로 두어 기존 호출자는 그대로 컴파일된다.
+- **2026-09-26 공개 상세 무효화는 한 헬퍼로 모으고, 훅 판으로 내보낸다(`420a6be`)** — 공개 상세 키가 `['restaurant','public',<종류>,placeId]` 로 흩어져 prefix 한 번으로 안 잡히고, 크롤 종료·요약 완료·재요약·재수집 네 곳이 각자 목록을 들면 하나씩 빠진다(실제로 watcher 는 존재하지 않는 `['restaurant','public',placeId]` 를 무효화하고 있었다). 활성 쿼리만 재조회되고 나머지는 stale 표시뿐이라 관련 키(리뷰 매칭·군집·QA 준비·주차 리뷰 평가)까지 넉넉히 넣는다. 웹이 `QueryClient` 를 넘기지 않게 `useInvalidateRestaurantDetailCaches()` 가 shared 의 `useQueryClient` 로 묶은 콜백을 돌려준다(두 패키지가 `@tanstack/query-core` 타입을 각자 해석해 인자로 넘기면 타입이 어긋날 수 있다는 코드 주석의 판단).
+- **2026-09-26 어드민 리뷰 탭의 팁·메뉴 필터는 서버가 "걸린 리뷰 id" 만 준다(`420a6be`)** — 어드민은 출처 통합 리뷰를 이미 전량 들고 있으므로 본문을 다시 받지 않고, 서버가 공개 리뷰 목록과 같은 매칭 함수(`filterReviewsByTipMenu`)로 고른 id 집합만 내려 클라가 거른다. 매칭 규칙(팁은 `normalizeTerm` 정확 일치, 메뉴는 `MenuCanonical` 그룹핑 — 약어·표기 변형을 같은 그룹으로)을 클라에 복제하지 않아 공개 화면과 어드민 화면의 필터 결과가 같은 규칙을 따른다(범위 차이는 Gotchas).
+- **2026-09-25 주차 훅은 2분 stale + 5분 재조회 + 뷰포트 placeholder, 필터는 비트 문자열 키(`2ff2c31`)** — 주차장·충전소 마스터는 재적재 때만 바뀌지만 점·목록에 실린 실시간 단계(서울 시영·공항 여석, 충전기 사용 가능)는 서버 폴러가 5분·10분마다 채우므로 일상지도(24h)나 집값(6h) 사다리를 쓸 수 없다. 서버 폴러 주기에 맞춘 5분 `refetchInterval` 은 `enabled` 일 때만 돌고(탭 전환·지도 미준비 시 정지), bbox 가 바뀌는 동안 `placeholderData` 로 마커 깜빡임을 막는다(일상지도와 같은 규율). 불리언 필터 객체는 `FILTER_KEYS` 순서의 `'0'/'1'` 문자열로 접어 객체 identity 에 흔들리지 않게 했고(`lifeMapFiltersKey`·`housingAxisKey` 와 같은 발상), 같은 상수 배열이 요청 직렬화(`applyFlags`)에도 쓰여 키와 요청이 어긋나지 않는다. 식당 주차 평가(리뷰 '주차' 관점)는 크롤 때만 바뀌어 30분.
+- **2026-09-24 바다 훅은 30분 stale + 1시간 재조회, 활동 전환 때 이전 화면을 들고 있지 않는다(`4a2bff1`)** — 업스트림 지수는 하루 몇 번만 바뀌고 서버가 활동별로 1시간 캐시한다. 다른 지도형 훅과 달리 `placeholderData` 를 두지 않은 것은 활동마다 지점 집합(해수욕장·서핑·낚시터·갯벌·바닷길·여행지)이 달라 이전 활동의 순위를 흐리게 보여 주면 오해를 부르기 때문이다. 물때는 천문조 계산값이라 하루 안에 바뀌지 않아 6시간이고, 서버가 가장 가까운 예보지점으로 모으므로 좌표 키를 소수 3자리(≈100m)로 묶었다.
 - **2026-09-13 여행로그 훅은 권한 층별로 쿼리 키 접두를 나눈다(`c777380`·`99991da`)** — 공개는 `['tour','public',…]`, 어드민·원본은 `['admin','tour',…]`. 덕분에 로그아웃·권한 변경 시 어드민 쪽만 통째로 무효화하면 되고, 공개 화면(`/travel/*`)의 캐시는 그대로 남는다(공개/어드민 페어 분리의 FE 대응 — [public-admin-route-split](../concepts/public-admin-route-split.md)). 한 파일에 세 층을 두되 키로 갈랐다.
 - **2026-09-13 원본 사진만 `?token=` URL — shared 의 의도된 예외(`c777380`)** — `<img src>` 는 Authorization 헤더를 실을 수 없어 `getTourPhotoBase()` 가 baseUrl+현재 토큰을 주고 `tourPhotoUrl()` 이 URL 을 만든다. 토큰이 URL 에 들어가는 위험은 (a) 그 라우트가 `TOUR_RAW_USER_IDS` allowlist 로 한 번 더 좁혀져 있고, (b) 응답이 `no-store`·`noindex` 이며, (c) 관리자 화면 안에서만 쓰인다는 전제로 수용했다. 같은 모양을 공개 화면에 복제하지 않는다.
 - **2026-09-12 정적 배경 데이터는 24시간 + 켠 동안만(`bc39a79`)** — 범죄 통계는 연 1회 갱신되는 66KB 를 한 번에 받으므로 `staleTime` 을 24시간으로 두고 `enabled` 를 배경 토글에 묶었다(끈 상태에서는 아예 받지 않는다). 같은 이유로 여행자 밀도도 24시간 — "재적재 때만 바뀌는 값"은 화면 전환마다 다시 받지 않는다.
@@ -1211,8 +1353,18 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
   Content-Type 안 붙임, AI path 하드코드, 로직/UI 플랫폼 분리, 빌드 없는 소스 노출, 유연한
   React peer, SSE 토큰은 쿼리스트링, 중복 이벤트 방어** — 모두 기존 결정 유지.
 
-## Gotchas [coverage: high — 58 sources]
+## Gotchas [coverage: high — 72 sources]
 
+- **같은 snapshot 을 두 곳에 반영하는데 `summaryPending` 의미가 다르다(코드 추론, 27차에 드러남)** — 서버는 목록·상세 모두 `summaryPending = queued + pending` 으로 집계하고([restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) — "queued 도 진행 중 의미로 pending 에 합산"), 27차 `useRestaurantCanonicalSummaryEvents` 의 상세 `sources[]` 패치도 `snap.queued + snap.pending` 을 쓴다. 그런데 기존 `patchSummaryInListCaches` 는 어드민 목록 행에 `summaryPending: snap.pending` 을 넣고, 공개 목록 delta 도 `snap.pending − prev.pending` 만 본다(`queued` 는 `3925824`, 2026-05-18 에 생겼고 목록 패치는 그 전 코드). 결과: 대량 요약 중 어드민 목록의 대기 수는 첫 snapshot 부터 queued 만큼 적게, 공개 목록(어드민 발견 화면)은 queued→pending 전이마다 +1 이 쌓여 큐가 비어도 처음 queued 수만큼 남는다 — 재조회하면 서버 값으로 돌아온다. 고치지 않았다(보고 대상).
+- **리뷰 매칭 결과 수와 공개 인사이트의 'N회 언급' 은 범위가 다르다** — 계약 주석([schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts) `RestaurantReviewMatchQuery`)과 서버 주석은 "같은 규칙이라 'N회 언급' 과 결과 수가 일치한다" 고 하지만, `getInsights` 는 네이버 행(`findUnique({ placeId })`)의 요약만 집계하고 `getReviewMatchIds` 는 출처 통합 목록(`assemblePublicReviews`)을 거른다. 출처가 여럿인 가게에서는 어긋난다(작업 기록 예: 목살 'N회 언급' 20 vs 리뷰 필터 98). 공개 화면에도 원래 있던 불일치라 공개 수치 변경은 사용자 결정 대기 — [canonical](canonical.md).
+- **`invalidateRestaurantDetailCaches` 의 키 목록은 손으로 관리한다** — 공개 상세 쿼리를 새로 만들면(키 `['restaurant','public',<새 종류>,placeId]`) 이 목록에 넣어야 크롤 종료·요약 완료·재요약·재수집 뒤에 갱신된다. 지금 `tour-stats` 는 빠져 있다(여행로그 매칭 집계라 리뷰·요약과 무관 — 의도로 보임). prefix 규칙 주의: `['restaurant','public',placeId]` 처럼 종류 원소를 건너뛴 키는 아무것도 잡지 못한다 — 27차 이전 재요약 watcher 가 바로 이 키로 공개 상세 무효화에 실패하고 있었다.
+- **요약이 다 끝나도 어드민 상세 자체(`['restaurant', placeId]`)는 다시 받지 않는다** — `useRestaurantCanonicalSummaryEvents` 의 >0→0 무효화는 공개 캐시만이고, 상세는 행 병합이 유일한 갱신 경로다. 요약 중에 새로 적재된 리뷰 행(상세에 없는 id)의 완료 이벤트는 버려지므로, 새 행은 크롤 종료(`ActiveJobPanel` 의 `['restaurant', placeId]` 무효화)·다이닝코드/테이블링 재수집(`AdminDetailHeader` 의 `exact` 무효화)·재진입 때 들어온다. 재요약 watcher 는 상세를 `refetchType: 'none'` 으로 stale 표시만 하므로 웹 기본값(`refetchOnWindowFocus: false`, staleTime 60s)에서는 다음 마운트 때 재조회된다.
+- **place → canonical 구독 전환 사이의 재연결 갭(코드 추론, 실측 없음)** — 공개 리뷰 탭에서 재요약하면 in-flight 가 `place:` 로 구독했다가 POST 응답의 `setCanonical` 로 채널 집합이 바뀌고, 매니저가 EventSource 를 닫고 새 합집합 URL 로 다시 연다(`queueMicrotask` → 토큰 조회 → `new EventSource`). 그 사이에 완료 `review` 이벤트가 오면 놓친다 — 서버는 재연결 때 snapshot 만 다시 보내므로 in-flight 가 남아 버튼 스피너가 새로고침 전까지 돈다. LLM 요약이 보통 수 초라 확률은 낮다. 같은 갭이 다른 구독자(목록 배지·어드민 상세 진행)에도 걸리지만 그쪽은 snapshot replay 로 자가 복구된다.
+- **공개 맛집 상세 홈 탭만 열어도 주차 요청 2건 + 5분 폴링이 돈다(`2ff2c31`)** — [HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) 의 `ParkingSummaryLine` 이 좌표가 있으면 항상 `useRestaurantParkingReviews`(30분) + `useParkingLotNearby`(반경 300m·5건, `refetchInterval` 5분)를 구독한다. 가는 법 탭의 `ParkingNearbySection` 과 같은 키라 탭을 옮겨도 추가 요청은 없고, 어드민 상세 홈 탭(공개 `HomeTab` 재사용)도 같다. 서버는 로컬 DB·폴러 메모리라 업스트림 비용은 없지만 네트워크 탭의 `parking` 요청은 정상이다.
+- **주차 필터 플래그를 늘릴 땐 인터페이스와 `*_FILTER_KEYS` 를 함께 고친다** — `applyFlags`(요청)와 `flagsKey`(쿼리 키)가 모두 상수 배열(`PARKING_LOT_FILTER_KEYS`/`EV_FILTER_KEYS`)을 순회하고 필터를 `object` 로 받아서, 인터페이스에만 필드를 추가하면 타입 오류 없이 요청에도 키에도 실리지 않는다. 또 true 만 `'1'` 로 직렬화하므로 "명시적 false" 는 표현할 수 없다(서버 기본값이 적용).
+- **`useSeaTide` 는 키를 소수 3자리로 묶지만 요청은 5자리 원좌표** — 같은 ≈100m 칸의 다른 좌표는 먼저 요청한 좌표의 결과(서버가 고른 최근접 조석 지점)를 재사용한다. 지점 경계 근처라면 옆 지점의 물때가 보일 수 있다. 현재 소비처(`SeaSpotDetail`)는 활동 예보 지점(해수욕장 등)의 고정 좌표를 넘기므로 ≈100m 안에 서로 다른 지점이 겹칠 일이 드물어 영향이 작지만, GPS 원좌표로 재사용하면 이 점을 감안할 것.
+- **`useSeaForecast` 에는 `enabled` 도 `placeholderData` 도 없다** — 마운트하면 항상 요청하고 탭이 활성인 동안 1시간마다 다시 받는다. 활동을 바꾸면 새 키라 데이터가 잠깐 `undefined` — 소비처가 활동별 로딩 상태를 그려야 한다(의도: 다른 활동의 지점 목록을 보여 주지 않기).
+- **27차 shared 변경에는 shared 단위 테스트가 없다** — shared vitest 는 81건 / 13파일 그대로(2026-09-26 실행)이고, SSE 매니저의 `prev`·replay 의미 변경·`useRestaurantCanonicalSummaryEvents`·재요약 canonical 구독·바다/주차 훅은 웹 테스트가 실제 훅을 거쳐 검증한다([AdminRestaurantDetailPage.test.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx) 의 FakeEventSource, [ParkingPage.test.tsx](../../apps/web/src/routes/ParkingPage.test.tsx)·[SeaPage.test.tsx](../../apps/web/src/routes/SeaPage.test.tsx)·`ParkingSection.test.tsx` 의 MSW). `summarySseManager.ts` 를 고치면 `pnpm --filter @repo/shared test` 만으로는 부족하고 `pnpm --filter web test` 를 같이 돌려야 한다. 재요약 watcher(`useResummarizeWatcher`)의 place → canonical 전환 경로는 FE 테스트가 없다 — 서버 [summary.test.ts](../../apps/friendly/src/modules/summary/summary.test.ts) 가 "테이블링 리뷰는 `tb:` 채널로 큐잉되고 `canonicalId` 를 돌려준다"(응답 `{ placeId: null, canonicalId }`)만 검증한다.
 - **`tourPhotoUrl` 의 base 는 토큰 스냅샷이다** — `useTourPhotoBase`(staleTime 30분)가 들고 있는 `{baseUrl, token}` 로 URL 을 만들기 때문에, 로그아웃·토큰 갱신 뒤에도 30분 동안 옛 토큰이 박힌 URL 이 렌더될 수 있다(서버가 401/404 로 막으므로 유출은 아니고 이미지가 안 뜬다). 사진이 갑자기 깨지면 이 캐시를 먼저 의심한다.
 - **여행로그 어드민 mutation 은 키 전체를 무효화한다** — `useTourMatchRun`·`useTourBizCheck` 의 `onSuccess` 가 `['admin','tour']` 를 통째로 invalidate 하므로 열려 있던 원본 패널 조회까지 다시 나간다(의도 — 매칭이 바뀌면 근거도 바뀐다). 큰 목록을 띄운 채 매칭을 돌리면 재요청이 여러 건 겹친다.
 - **`useTourSeeds` 의 기본 region 은 `'jeju'`** — 쿼리 키가 `params.region ?? 'jeju'` 라 파라미터를 생략하면 제주 세트만 본다. 4권역이 적재된 뒤에는 화면이 명시적으로 `region` 을 넘겨야 한다(어드민 기본값은 `'all'`).
@@ -1367,7 +1519,38 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
   HTMLElement 필요**, **`invalidateQueries` prefix 매칭 주의**, **`testProvider`/`deleteProvider`
   빈 body** — 모두 기존 항목 유지.
 
-## Sources [coverage: high — 157 sources]
+## Sources [coverage: high — 186 sources]
+
+27차 신규/변경(2026-09-24~26 — `4a2bff1`·`2ff2c31`·`420a6be`, shared 테스트 81건/13파일 불변):
+- [packages/shared/src/api/sea.api.ts](../../packages/shared/src/api/sea.api.ts) (NEW 27차) — `seaApi.forecast(activity)`·`tide(lat, lng, date)`(좌표 `toFixed(5)`)
+- [packages/shared/src/hooks/useSea.ts](../../packages/shared/src/hooks/useSea.ts) (NEW 27차) — `useSeaForecast`(30분/1시간, placeholder 없음)·`useSeaTide`(3자리 좌표 키, 6시간)
+- [packages/shared/src/api/parking.api.ts](../../packages/shared/src/api/parking.api.ts) (NEW 27차) — `parkingApi` 9함수 + `ParkingLotFilters`/`EvFilters` + `PARKING_LOT_FILTER_KEYS`/`EV_FILTER_KEYS` + 내부 `applyFlags`
+- [packages/shared/src/hooks/useParking.ts](../../packages/shared/src/hooks/useParking.ts) (NEW 27차) — 9훅(2분 stale·5분 재조회·뷰포트 placeholder, status 5분, 식당 평가 30분) + `ParkingViewportParams` + 내부 `flagsKey`
+- 수정(링크는 아래 기존 항목 꼬리표): `api/restaurant.api.ts`(reviewMatch) · `hooks/useRestaurant.ts`(canonical 요약 진행·리뷰 매칭·일괄 무효화·재요약 canonical 구독) · `hooks/summarySseManager.ts`(`lastSnapshotByRestaurant`) · `stores/resummarizeStore.ts`(`canonicalId`·`setCanonical`) · `index.ts`(re-export 4줄) · `packages/api-contract/src/routes.ts`(`Sea`·`Parking`·`Restaurant.reviewMatch`)
+- [packages/api-contract/src/schemas/sea.ts](../../packages/api-contract/src/schemas/sea.ts) — `SeaActivity` enum 6종·`SeaForecastResult`·`SeaTideResult`(shared 가 쓰는 타입)
+- [packages/api-contract/src/schemas/parking.ts](../../packages/api-contract/src/schemas/parking.ts) — 주차 결과 타입 9종(377줄)
+- [packages/api-contract/src/schemas/restaurant.ts](../../packages/api-contract/src/schemas/restaurant.ts) — `RestaurantDetail`(`canonicalId`·`sources`·`AdminVisitorReview`)·`ReviewResummarizeResult.canonicalId`·`RestaurantReviewMatchQuery/Result`(주석의 'N회 언급 일치' 서술 포함)·요약 SSE 이벤트(`RestaurantSummaryEventSource.restaurantId`)
+- [apps/web/src/routes/SeaPage.tsx](../../apps/web/src/routes/SeaPage.tsx) — `useSeaForecast` 소비
+- [apps/web/src/components/sea/SeaSpotDetail.tsx](../../apps/web/src/components/sea/SeaSpotDetail.tsx) — `useSeaTide`(지점 고정 좌표)
+- [apps/web/src/routes/SeaPage.test.tsx](../../apps/web/src/routes/SeaPage.test.tsx) — MSW 로 `/sea/forecast`·`/sea/tide` 를 실제 훅이 호출
+- [apps/web/src/routes/ParkingPage.tsx](../../apps/web/src/routes/ParkingPage.tsx) — 주차·충전소 8훅, 탭별 `params`/`enabled` 토글
+- [apps/web/src/routes/ParkingPage.test.tsx](../../apps/web/src/routes/ParkingPage.test.tsx) — MSW(`freeOnly=1` 반영 등)
+- [apps/web/src/components/restaurant/detail/ParkingSection.tsx](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx) — 가는 법 섹션 + `ParkingSummaryLine`(같은 키 공유)
+- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) — 홈 탭이 `ParkingSummaryLine` 을 항상 렌더(주차 조회 2건 + 5분 폴링)
+- [apps/web/src/components/restaurant/detail/ReviewsTab.tsx](../../apps/web/src/components/restaurant/detail/ReviewsTab.tsx) — 공개 리뷰 탭 재요약 `useResummarizeReview(isAdmin ? placeId : null)`(canonical 모름)
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.tsx) — `useRestaurantCanonicalSummaryEvents` 소비, `key={placeId}` 리마운트
+- [apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx](../../apps/web/src/routes/admin/AdminRestaurantDetailPage.test.tsx) — FakeEventSource 로 canonical SSE 합산·행 병합 검증
+- [apps/web/src/components/admin/restaurant-detail/AdminReviewsTab.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminReviewsTab.tsx) — `useRestaurantReviewMatch`·`useResummarizeReview(placeId, canonicalId)`
+- [apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx](../../apps/web/src/components/admin/restaurant-detail/AdminDetailHeader.tsx) — 재수집 뒤 상세 `exact` + 목록 + `useInvalidateRestaurantDetailCaches`
+- [apps/web/src/components/restaurant/ActiveJobPanel.tsx](../../apps/web/src/components/restaurant/ActiveJobPanel.tsx) — 크롤 종료 시 일괄 무효화, 배치 병합 행에 `source`·`restaurantId`
+- [apps/web/src/components/ResummarizeToaster.tsx](../../apps/web/src/components/ResummarizeToaster.tsx) — 전역 `useResummarizeWatcher` 마운트
+- [apps/friendly/src/modules/summary/summary.service.ts](../../apps/friendly/src/modules/summary/summary.service.ts) — `summaryChannelKey`·`canonicalRowsForPlace`(중지·재개·재분석 canonical 전체)·재요약 `{ placeId, canonicalId }`
+- [apps/friendly/src/modules/summary/summary.test.ts](../../apps/friendly/src/modules/summary/summary.test.ts) — 테이블링 재요약 `tb:` 채널 + `canonicalId` 응답
+- [apps/friendly/src/modules/restaurant/restaurant.service.ts](../../apps/friendly/src/modules/restaurant/restaurant.service.ts) — `summaryPending = queued + pending` 집계, `getInsights`(네이버 행)·`getReviewMatchIds`/`filterReviewsByTipMenu`(출처 통합)
+- [apps/friendly/src/modules/parking/parking.route.ts](../../apps/friendly/src/modules/parking/parking.route.ts) — `status` 외 8라우트 `RATE.parkingRead`
+- [apps/friendly/src/plugins/rate-limit.ts](../../apps/friendly/src/plugins/rate-limit.ts) — `parkingRead: 240/분`
+- [apps/friendly/src/modules/sea/sea.service.ts](../../apps/friendly/src/modules/sea/sea.service.ts) — `SEA_FORECAST_TTL_MS` 1시간·`SEA_TIDE_TTL_MS` 12시간·stale 12시간
+- [docs/api/README.md](../../docs/api/README.md) — 8절 "이 리포 안의 웹·앱은 `@repo/shared`, 외부는 openapi.json"
 
 26차 신규/변경:
 - [packages/shared/src/api/tour.api.ts](../../packages/shared/src/api/tour.api.ts) (NEW) — 공개 5 + 어드민 6 + 원본 7 함수 · `getTourPhotoBase`/`tourPhotoUrl` · `TourInsightsParams`/`TourSeedParams`/`TourRawPageParams`
@@ -1382,7 +1565,7 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/package.json](../../packages/shared/package.json)
 - [packages/shared/tsconfig.json](../../packages/shared/tsconfig.json)
 - [packages/shared/vitest.config.ts](../../packages/shared/vitest.config.ts) — vitest 2.x, `deps.inline: [/^@repo\//]`
-- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified 25차: tarot/saju/saju-g/usage-quota/housing api + embedBridge + guestKey/tarotHistory/sajuProfile/sajuGProfile/sajuGHistory 스토어 + useTarot/useSaju/useSajuG/useSajuGProfiles/useSajuGPair/useUsageQuota/useHousing re-export 추가(이전 24차: air-quality/weather/life-map/food/meal 등)*
+- [packages/shared/src/index.ts](../../packages/shared/src/index.ts) — *modified 25차: tarot/saju/saju-g/usage-quota/housing api + embedBridge + guestKey/tarotHistory/sajuProfile/sajuGProfile/sajuGHistory 스토어 + useTarot/useSaju/useSajuG/useSajuGProfiles/useSajuGPair/useUsageQuota/useHousing re-export 추가(이전 24차: air-quality/weather/life-map/food/meal 등)*; *modified 27차: `api/sea.api`·`api/parking.api`·`hooks/useSea`·`hooks/useParking` re-export(export 113→117줄)*
 - [packages/shared/src/embedBridge.ts](../../packages/shared/src/embedBridge.ts) (NEW 25차) — 앱 WebView 임베드 계약(주입 init + postMessage 3 type, 웹·앱 헬퍼 5)
 - [packages/shared/src/embedBridge.test.ts](../../packages/shared/src/embedBridge.test.ts) (NEW 25차) — 주입 직렬화 인젝션 안전·메시지 파싱·post 반환값 3건
 - [packages/shared/src/api/tarot.api.ts](../../packages/shared/src/api/tarot.api.ts) (NEW 25차) — 타로 6함수(게스트 키 헤더 인자)
@@ -1405,7 +1588,7 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/src/stores/sajuGHistoryStore.ts](../../packages/shared/src/stores/sajuGHistoryStore.ts) (NEW 25차, 다른 세션) — 계정별 기기 보관함 20건 + 공유 취소 자격(localStorage 직접)
 - [packages/shared/src/stores/sajuGStorageMigration.ts](../../packages/shared/src/stores/sajuGStorageMigration.ts) (NEW 25차, 다른 세션) — 옛 saju 키 3종 상수
 - [packages/shared/src/stores/sajuGStorageMigration.test.ts](../../packages/shared/src/stores/sajuGStorageMigration.test.ts) (NEW 25차) — 프로필·보관함·자격 이전, 쓰기/정리 실패 보존 10건
-- [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Tarot/Saju(saju-c)/SajuG/UsageQuota/Housing` + `Food.adminMenuLexicon*`·`Restaurant.publicMenuNutrition`
+- [packages/api-contract/src/routes.ts](../../packages/api-contract/src/routes.ts) — `Routes.Tarot/Saju(saju-c)/SajuG/UsageQuota/Housing` + `Food.adminMenuLexicon*`·`Restaurant.publicMenuNutrition`; 27차 `Routes.Sea.{forecast,tide}`·`Routes.Parking.*`(9, id·placeId `encodeURIComponent`)·`Restaurant.reviewMatch(placeId)`
 - [packages/api-contract/src/schemas/tarot.ts](../../packages/api-contract/src/schemas/tarot.ts) — `TAROT_GUEST_KEY_HEADER = 'x-guest-key'`(사주(C)는 별칭)
 - [packages/api-contract/src/schemas/saju-g.ts](../../packages/api-contract/src/schemas/saju-g.ts) — `SAJU_G_GUEST_KEY_HEADER`(같은 값, 별도 선언)·`SAJU_G_PROFILES_MAX = 20`
 - [apps/web/src/lib/embed.ts](../../apps/web/src/lib/embed.ts) — 웹 임베드 판정(`?embed=1` → sessionStorage `lp:embed`, `isLpEmbedded` 합성)
@@ -1418,7 +1601,7 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/src/api/picks.api.ts](../../packages/shared/src/api/picks.api.ts)
 - [packages/shared/src/api/admin.api.ts](../../packages/shared/src/api/admin.api.ts)
 - [packages/shared/src/api/crawl.api.ts](../../packages/shared/src/api/crawl.api.ts)
-- [packages/shared/src/api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts) — *modified: publicCategoryTree + publicReviews tip/menu 필터*
+- [packages/shared/src/api/restaurant.api.ts](../../packages/shared/src/api/restaurant.api.ts) — *modified: publicCategoryTree + publicReviews tip/menu 필터*; *modified 27차: `reviewMatch(placeId, {tip?, menu?})`(+13줄 — `buildSummaryEventsUrl` 의 `canonicalId=` 파라미터는 기존 그대로)*
 - [packages/shared/src/api/canonical.api.ts](../../packages/shared/src/api/canonical.api.ts)
 - [packages/shared/src/api/menu-grouping.api.ts](../../packages/shared/src/api/menu-grouping.api.ts)
 - [packages/shared/src/api/autoDiscover.api.ts](../../packages/shared/src/api/autoDiscover.api.ts)
@@ -1434,7 +1617,7 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/src/weather/weatherDaily.ts](../../packages/shared/src/weather/weatherDaily.ts) (NEW 24차) — mergeDailyRows 열흘 병합(웹 원본 승격, 앱 공용)
 - [packages/shared/src/weather/weatherMessages.ts](../../packages/shared/src/weather/weatherMessages.ts) (NEW 24차) — weatherUpstreamMessage(503/502/429)
 - [apps/mobile/src/lib/api-setup.ts](../../apps/mobile/src/lib/api-setup.ts) — 앱 주입 지점(스토리지 7종·파일 어댑터·principal 부팅·401 가드)
-- [apps/web/src/main.tsx](../../apps/web/src/main.tsx) — 웹 `configureApi` + 401 가드
+- [apps/web/src/main.tsx](../../apps/web/src/main.tsx) — 웹 `configureApi` + 401 가드 + QueryClient 기본값(`staleTime` 60s·`retry: 1`·`refetchOnWindowFocus: false` — 27차 stale 표시만 하는 무효화의 재조회 시점)
 - [packages/shared/src/api/settings-map.api.ts](../../packages/shared/src/api/settings-map.api.ts)
 - [packages/shared/src/api/settlement.api.ts](../../packages/shared/src/api/settlement.api.ts) — *modified: createShare ogImage/ogImageUrl 트라이스테이트 + SettlementShare ogImageCandidates*
 - [packages/shared/src/api/settlement-extraction.api.ts](../../packages/shared/src/api/settlement-extraction.api.ts)
@@ -1459,9 +1642,9 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/src/hooks/usePicks.ts](../../packages/shared/src/hooks/usePicks.ts)
 - [packages/shared/src/hooks/useAdmin.ts](../../packages/shared/src/hooks/useAdmin.ts)
 - [packages/shared/src/hooks/useCrawl.ts](../../packages/shared/src/hooks/useCrawl.ts)
-- [packages/shared/src/hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) — *modified: useRestaurantPublicCategoryTree 추가 + useRestaurantPublicReviews tip/menu 필터(seed 무효)*
+- [packages/shared/src/hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) — *modified: useRestaurantPublicCategoryTree 추가 + useRestaurantPublicReviews tip/menu 필터(seed 무효)*; *modified 27차(863줄): `useRestaurantCanonicalSummaryEvents`·`sumSummaryProgress`·`useRestaurantReviewMatch`·`invalidateRestaurantDetailCaches`/`useInvalidateRestaurantDetailCaches`·`useResummarizeReview(placeId, canonicalId)`·watcher 채널 구독*
 - [packages/shared/src/hooks/useCanonical.ts](../../packages/shared/src/hooks/useCanonical.ts)
-- [packages/shared/src/hooks/summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts)
+- [packages/shared/src/hooks/summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts) — *modified 27차(323줄): `lastSnapshotByRestaurant`·`matchesKey`·`isCoveredBySubscribedKey` — prev·replay 출처 행 단위*
 - [packages/shared/src/hooks/useMenuGrouping.ts](../../packages/shared/src/hooks/useMenuGrouping.ts)
 - [packages/shared/src/hooks/useAutoDiscover.ts](../../packages/shared/src/hooks/useAutoDiscover.ts)
 - [packages/shared/src/hooks/useAnalytics.ts](../../packages/shared/src/hooks/useAnalytics.ts)
@@ -1503,7 +1686,7 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/src/stores/activeTablingBulkSaveJobStore.ts](../../packages/shared/src/stores/activeTablingBulkSaveJobStore.ts) (NEW)
 - [packages/shared/src/stores/activeAutoDiscoverJobStore.ts](../../packages/shared/src/stores/activeAutoDiscoverJobStore.ts)
 - [packages/shared/src/stores/reviewAskStore.ts](../../packages/shared/src/stores/reviewAskStore.ts) (NEW)
-- [packages/shared/src/stores/resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts) (NEW)
+- [packages/shared/src/stores/resummarizeStore.ts](../../packages/shared/src/stores/resummarizeStore.ts) (NEW) — *modified 27차: `ResummarizeInFlight.canonicalId` + `setCanonical`*
 - [packages/shared/src/stores/settlementDraftStore.ts](../../packages/shared/src/stores/settlementDraftStore.ts) — *modified: groupSplits(세부 분배 그룹) + DraftItemGroup/DraftGroupMember + 잔여 수령자 배열(v5→v6), persist version 4→6*
 - [packages/shared/src/stores/busFavoriteStore.ts](../../packages/shared/src/stores/busFavoriteStore.ts) (NEW) — 게스트 버스 즐겨찾기 zustand persist(bus-favorites-v1, setBusFavoriteStorage)
 - [packages/shared/src/stores/subwayFavoriteStore.ts](../../packages/shared/src/stores/subwayFavoriteStore.ts) — 게스트 전철 즐겨찾기(subway-favorites-v1)
@@ -1517,7 +1700,7 @@ interface SajuProfileState { profiles: SajuLocalProfile[]; primaryId: string | n
 - [packages/shared/src/stores/airLocationStore.ts](../../packages/shared/src/stores/airLocationStore.ts) (NEW 24차) — 게스트 내 대기 위치 persist(air-location-v1, setAirLocationStorage)
 - [packages/shared/src/stores/mealDraftStore.ts](../../packages/shared/src/stores/mealDraftStore.ts) (NEW 23차) — 식단 입력 draft(principal 스코프 키·setMealDraftPrincipal·세대 id·파일 어댑터·single-flight)
 - [packages/shared/src/stores/mealDraftStore.test.ts](../../packages/shared/src/stores/mealDraftStore.test.ts) (NEW 23차) — draft 액션·재인식 보존·사진 상한·single-flight·principal 전환·앱 재시작 복원 15건 + buildMealEntriesQuery 3건
-- [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts)
+- [packages/shared/src/constants/index.ts](../../packages/shared/src/constants/index.ts) — `QUERY_STALE_TIME` 60s·`QUERY_GC_TIME` 5분
 - [packages/shared/src/design/index.ts](../../packages/shared/src/design/index.ts)
 - [packages/shared/src/design/tokens.ts](../../packages/shared/src/design/tokens.ts) — *modified: zinc400 추가 + 다크 textMuted/border 대비비 상향 + lightColors.bg=white*
 - [packages/shared/src/design/theme.ts](../../packages/shared/src/design/theme.ts)

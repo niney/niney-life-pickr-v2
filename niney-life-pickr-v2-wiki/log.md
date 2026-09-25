@@ -1,5 +1,16 @@
 # Wiki Compile Log
 
+## 2026-09-26 (27th compile)
+
+**New topics:** parking(606줄·72 sources) — 주차장(표준데이터+서울 공영)·충전소(환경공단)·공항(한국공항공사+인천공항) 3탭 + 5분·10분 폴러(`onListen` 에서만) + 요일×시간 혼잡 이력 + 맛집 '가는 법' 주차 / sea(350줄·51) — 국립해양조사원 지수 6종·물때·이안류 프록시(적재 없음, 좌표표 utils 커밋) / api-docs(371줄·63) — `docs/api` 외부 문서·swagger transform·CORS 어드민 외 개방(사용자 결정으로 friendly 에서 분리)
+**Topics updated:** friendly(1548줄·426 sources), web(2948·286), api-contract(2520·96), shared(1713·186), utils(569·124), project-overview(1253·155), housing(422·101), life-map(429·119), crawl(500·57), menu-grouping(245·33), canonical(432·79), tour(466·101) + 소폭 transit(281·46)·map(519·60)·weather(259·81)·meal(226·89) + 링크 정리만 bus·subway
+**Untouched topics:** ai, air-quality, analytics, auto-discover, config, food, logs, mobile, random-crawl, review-clustering, review-search, saju-c, saju-g, schedule, settlement, tarot, telegram, usage-quota, vote(이번 범위의 변경은 라우트 `summary` 추가뿐 — api-docs 가 흡수)
+**New concepts:** server-only-boot-effects, detail-satellite-routes, unknown-vs-zero
+**Concepts updated:** public-admin-route-split(CORS 가 prefix 술어 하나로 + 어드민 상세의 공개 탭 합성), canonical-corpus-fanout(요약 운영·어드민 상세 fan-out, `summaryChannelKey`, 멤버 규칙 2벌, 삭제는 단일 행), cross-tab-async-job-toast(구독 키 이동 `setCanonical`, 무효화 키 오류), stream-driven-cache-merge(delta prev 를 출처 행 단위로), open-data-master-load(주차 API 전량형 + 상태 오버레이, 침수 원본 자동 다운로드, 바다 좌표표, FK 대신 안정 원천 키), external-api-proxy-fixture(네이버 메뉴 드리프트 → 런타임 감지·마지막 정상값, KHOA·주차 봉투, 침수 다운로드 어댑터, 경계가 바깥에서도 보임), quota-proportional-loading(주차 고정 예산 폴링 반례, 바다 시간 비례 캐시 + 게이트 부재), zod-ssot-buildless(OpenAPI 외부 투영·수기 문서 드리프트·이중 정의 테스트 공백·'대표메뉴' 문자열 계약), anonymous-usage-quota(한도가 외부 계약으로), map-sheet-shell(주차 여섯 번째 페이지·바다 예외·골격 복사), saved-location-glance(주차 진입 중심), in-memory-singleton-gates(폴러 overlap skip·in-flight 합류·단일 적재 약속), operation-log-instrumentation(부팅 sweep 과 `export:openapi`)
+**Sources scanned:** ~3,341 (토픽별 sources_count 합, 중복 포함; 고유 source_locations 1,531 — 26차 1,452 → +79)
+**Sources changed:** 26차 위키 커밋 `916d116`(2026-09-19) 이후 **8커밋·156파일** — 집값 침수 흔적 `ad48f96`, 바다 `4a2bff1`, 429 본문 `678ecc0`, CORS 개방 + docs/api `1b621c4`, 네이버 메뉴 개편 `43d7e69`, 주차 `2ff2c31` + 테스트 훅 `5d7b686`, 어드민 맛집 상세 재구성 `420a6be`
+**Notes:** 부모가 브리핑(`COMPILE_BRIEF.md`) + 병렬 서브에이전트 13개(`model: opus`)로 토픽, 부모가 컨셉·schema·INDEX·log·state·CONTEXT. 이번엔 한도로 끊긴 에이전트 없이 13개 전부 완주했다(점검 스크립트로 섹션별 반영·coverage 8/8 확인, 삭제 줄 내용 보존 표본 검사). 부모가 컨셉 단계에서 코드로 직접 확인한 사실: `export:openapi` 가 `buildApp()`+`ready()` 로 logs 부팅 sweep·meal 사진 GC 를 `.env` 의 실 DB·저장소에서 돌린다(`server-only-boot-effects`). 규약 변경: 섹션 앵커 링크 금지(coverage 숫자가 슬러그에 들어감) — bus·subway·transit 3곳 교체, bus 의 리포에 없는 HANDOFF 링크 제거. schema 컨셉 표 연결 토픽 19행을 프론트매터와 동기화. sources_count 기준은 토픽마다 여전히 다르다(고유 링크 수 / 줄 수 / fixtures 확장) — 정규화 미룸. 에이전트가 찾은 코드·문서 어긋남은 각 토픽 Gotchas 에 기록만 했다(소스 수정 없음).
+
 ## 2026-09-19 (26th compile)
 
 **New topics:** tour(424줄·93 sources) — AI 허브 「국내 여행로그 데이터」 4권역(71780 제주·도서 / 71779 서부권 / 71778 동부권 / 71581 수도권)

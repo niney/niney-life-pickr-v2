@@ -1,7 +1,7 @@
 ---
 concept: 공개/어드민 라우트 페어 분리
-last_compiled: 2026-09-19
-topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement, review-search, review-clustering, logs, tour]
+last_compiled: 2026-09-26
+topics_connected: [friendly, api-contract, shared, web, map, project-overview, settlement, review-search, review-clustering, logs, tour, api-docs, canonical]
 status: active
 ---
 
@@ -15,6 +15,8 @@ status: active
 
 ## Instances
 
+- **2026-09-26**(`420a6be`) in [../topics/web](../topics/web.md) / [../topics/canonical](../topics/canonical.md) / [../topics/shared](../topics/shared.md): **페어를 한 화면에서 합성** — 어드민 맛집 상세(`/admin/restaurants/:placeId`)가 공개 상세의 탭 구성(홈·분석·여행자·메뉴·리뷰·질문·사진·정보 + 어드민 전용 로그, `?tab=`)을 그대로 따르면서, 한 페이지가 **두 표면을 동시에 부른다**: 어드민 라우트(`useRestaurantByPlaceId` — 운영 메타·canonical 전체 출처 리뷰 `AdminVisitorReview`·출처 행 `sources`)와 공개 라우트(`useRestaurantPublic`·`useRestaurantPublicInsights` — 사용자 화면 데이터 그대로). 홈·분석·질문·사진·정보·메뉴·여행자 탭은 공개 컴포넌트(`HomeTab`·`InsightsTab`·`AskTab`·`PhotosTab`·`InfoTab`·`MenuTab`·`TourTab`)에 **공개 응답을 그대로** 넣고, 어드민 몫(메뉴 순위·원시 값·출처 표·여행자 근거 `TourEvidenceSection`·출처 통합 리뷰 탭·크롤/요약 카드)만 옆에 덧붙인다. 공개 컴포넌트 쪽 변경은 **선택 prop 두 개뿐**(`HomeTab.availableTabs` — 어드민에 없는 '가는 법' 링크 숨김, `ParkingSummaryLine.onOpen`) — 생략하면 공개 동작 그대로. 서버에서도 경계 안쪽 코어를 공유한다: 어드민 `GET /admin/restaurants/place/:placeId/review-match` 가 공개 리뷰 목록과 **같은 팁·메뉴 매칭 함수**(`filterReviewsByTipMenu` 로 추출)를 쓴다. 즉 라우트·스키마·가드는 여전히 둘이고, 합쳐진 건 UI 조각과 서비스 내부 함수다.
+- **2026-09-24**(`1b621c4`) in [../topics/api-docs](../topics/api-docs.md) / [../topics/friendly](../topics/friendly.md) / [../topics/project-overview](../topics/project-overview.md): **prefix 가 곧 공개 정책의 술어** — "어드민 빼고 전부 연다" 는 사용자 결정(다른 프로젝트가 브라우저에서 직접 호출)이 `plugins/cors.ts` 한 곳의 판정으로 끝났다: `/api/v1/admin/**`(퍼센트 인코딩 경로도 어드민으로 판정) 는 `PUBLIC_ORIGIN` 만, 나머지는 `origin: '*'` + `credentials: false`. 같은 경계가 문서에도 그대로 쓰인다 — `export:openapi` 가 어드민 경로를 빼고 `docs/api/`(192개 = 공개 83·선택 인증 15·로그인 94)를 만들고, swagger transform 이 가드 훅에서 `x-auth`(public·optional·user·admin)를 자동으로 읽어 붙인다. 2026-05 부터 "`/api/v1/admin/*` prefix 가 가드의 유일한 신호" 로 지켜 온 규약이 CORS·외부 문서라는 **두 번째·세 번째 정책 축**을 비용 없이 받아낸 사례.
 - **2026-09-13**(여행로그 1~5차, `c777380`·`99991da`·`cfa276b`) in [../topics/tour](../topics/tour.md) / [../topics/api-contract](../topics/api-contract.md) / [../topics/web](../topics/web.md): **페어가 아니라 3층** — 같은 `Tour*` 표를 (1) 공개 집계 `GET /tour/public/*`·`/restaurants/public/:placeId/tour-stats`(집계값만, 여행자 5명·평가 3건 하한, 응답 스키마에 여행·방문·사진 식별자가 아예 없음 — 테스트가 키 스캔), (2) 어드민 운영 `/admin/tour/status·seeds·match/run·biz-status/run`(장소 단위 집계 + 매칭·폐업 상태, 관리자 가드), (3) **원본 열람** `/admin/tour/places/:id/{visits,spend,photos…}`·`/trips/:travelId`·`/photos/:photoId/:size` 로 갈랐다. 3층은 어드민 안에서 한 번 더 갈라진 **개인 승인 티어** — AI 허브 다운로드 승인을 받은 본인(`TOUR_RAW_USER_IDS`, user id 또는 이메일)만 통과하고 밖이면 403 이 아니라 **404**(존재를 숨김), onSend 로 `private, no-store`·`noindex`, 사진은 `?token=` 도 인증. 라이선스(원본 제3자 열람 불가·국외 반출 금지)가 권한 축을 하나 더 만든 첫 사례이며, 공개 층은 서면 회신 전 운영 노출 금지라는 **배포 게이트**까지 층마다 다르다. 계약도 층별 스키마(`Tour*Public*` 에는 식별자 없음 / `TourRaw*` 는 원문)로 분리.
 - **2026-05-09** in [../topics/friendly](../topics/friendly.md): `Routes.Restaurant.publicList` / `publicByPlaceId` / `publicInsights` 3개 공개 라우트가 `Routes.Restaurant.list` / `byPlaceId` / `insights` 의 어드민 페어 옆에 신설됨. 핸들러는 다르지만 service 레이어의 `getPublicList` / `getPublicDetail` / `getInsights` 가 어드민 메소드와 분리되어 있어 응답 셋의 차이가 service 안에서 끝남. publicList 는 `snapshotJson` 메모리 파싱 후 bbox 필터 → 그 이후의 ids 만 분석 집계 (검색 범위 밖 식당 통계 호출 회피). publicDetail 은 `ReviewSummary` 의 운영 메타 (`status` / `errorCode` / `model` / `startedAt` 등) 를 service 단에서 제거하고 done 행만 평탄화한 `PublicReviewAnalysis` 로 변환.
 - **2026-05-09** in [../topics/api-contract](../topics/api-contract.md): 새 zod 스키마 5종이 어드민 페어 옆에 신설 — `RestaurantPublicListQuery` / `RestaurantPublicListItem` / `RestaurantPublicListResult` (어드민 `RestaurantListItem`/`RestaurantListResult` 와 페어), `PublicReviewAnalysis` / `PublicVisitorReview` / `RestaurantPublicDetail` (어드민 `ReviewSummary` / `VisitorReviewWithSummary` / `RestaurantDetail` 와 페어). `MapProviderPublicConfig` 가 `MapProviderSecret` 와 페어 (둘 다 평문 키를 노출하지만 다른 라우트로). `Routes.Restaurant.publicList`/`SettingsMap.publicConfig` 같은 라우트 상수도 같은 namespace 안에서 페어로 분리.
@@ -49,8 +51,12 @@ status: active
 
 **부수 효과 — 공개 표면이 더 풍부할 때 어드민이 차용 가능** (2026-05-09 follow-up). 어드민 발견 페이지가 공개 hook 을 그대로 호출하는 케이스 — 어드민 응답 셋이 좌표를 노출하지 않아 마커 그리려면 공개 응답이 필요. 또 `PublicRestaurantDetail` 컴포넌트도 어드민 페이지에서 재사용. 페어 분리의 한쪽이 다른 쪽에서 차용되는 첫 사례인데, 분리의 합당성을 흔들지 않는다 — 차용의 이유가 "응답 셋이 어드민에서 부족해서" 라는 의도이고, 운영 메타가 우연히 새는 케이스가 아니다. 페어 분리는 어드민이 공개 응답을 호출하는 것을 금지하지 않는다 — 두 표면의 응답 셋을 명확히 하는 데 의의가 있고, 어드민이 부족한 응답을 공개 응답으로 보강하는 건 분리가 잘 되어 있을 때만 가능한 자연스러운 흐름.
 
+**경계는 가장자리에, 코어는 공유** (2026-09-24~26 추가). 두 사례가 페어 분리의 "무엇을 나누고 무엇을 나누지 않는가" 를 선명하게 했다. (1) CORS 개방(`1b621c4`)은 prefix 경계가 명시적이었기에 "어드민 제외 전부" 라는 정책이 술어 하나로 끝났다 — 경계가 서비스 안의 if 문이었다면 라우트마다 판단해야 했을 것이다. 외부 문서도 같은 prefix 로 어드민을 뺀다. (2) 어드민 상세 재구성(`420a6be`)은 반대 방향 — 어드민 화면이 공개 **표면을 호출**하고 공개 **컴포넌트를 재사용**해, 운영자가 사용자와 똑같은 화면을 보면서 운영 메타를 옆에 얹는다. 이게 가능한 조건이 바로 페어 분리다: 공개 응답이 운영 메타 없이 깨끗하니 어드민이 그대로 가져다 써도 새지 않고, 어드민 응답은 공개 컴포넌트에 억지로 맞출 필요 없이 출처 통합 리뷰·출처 행 같은 운영 모양을 유지한다. 공유는 **선택 prop(생략 시 공개 동작)** 과 **서비스 내부 순수 함수(`filterReviewsByTipMenu`)** 수준에서만 일어나고, 라우트·스키마·queryKey·가드는 여전히 둘이다. 2026-05-09 의 "어드민 발견 페이지가 공개 hook 차용" 이 우연한 첫 사례였다면, 이번엔 **합성이 설계 방침**이 됐다(공개 상세에만 있던 AI 집계·주제 군집·메뉴 그룹·칼로리·질문을 어드민에 따로 만들지 않은 이유). 남은 틈: 공개 인사이트(`getInsights`)는 네이버 행만 집계하고 어드민 리뷰 탭은 canonical 전체라, 같은 화면 안에서 '목살 N회 언급' 과 리뷰 필터 결과 수가 어긋난다(공개 화면에도 원래 있던 불일치 — 후속 결정 대기, [canonical-corpus-fanout](canonical-corpus-fanout.md)).
+
 ## Sources
 
+- [../topics/api-docs](../topics/api-docs.md)
+- [../topics/canonical](../topics/canonical.md)
 - [../topics/friendly](../topics/friendly.md)
 - [../topics/api-contract](../topics/api-contract.md)
 - [../topics/shared](../topics/shared.md)

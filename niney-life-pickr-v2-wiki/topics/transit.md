@@ -1,13 +1,15 @@
 ---
 topic: transit
 type: codebase
-last_compiled: 2026-08-30
-sources_count: 33
+last_compiled: 2026-09-26
+sources_count: 46
 status: active
-aliases: [transit, 대중교통, 버스-지하철-통합, 통합-레이어, TransitTabs, TransitFavoritesSection, CrossSearchSection, SubwayCrossSection, BusCrossSection, TransitCrossToggleChip, transitMapViewport, transitFavExpandStore, transitCrossShowStore, 통합-즐겨찾기, 통합-주변, 통합-검색, 크로스-검색, cross-search, 겸표시, overlay-marker, overlayMarkers, onOverlaySelect, x-subway, x-bus, marker-prefix, poolKey, transit-desktop, transit-mobile, map-instance-pool, 지도-인스턴스-풀, viewport-carryover, 뷰포트-이어보기, A안, D안, dual-mount, 이중-마운트, 데스크톱-모바일-동시마운트, submittedQ, 제출-게이트, quota-proportional, 쿼터-비례, deep-link-symmetry, 딥링크-대칭, SubwayNearbyBusSection, 주변-버스-정류장, 13차, 14차, 15차, 집중-모드, retry-pause, be-무변경, sheet-pattern, 시트-골격, 모바일-시트, 맛집-v2-시트, BottomSheet, useMapSheets, SHEET_PEEK_HEIGHT, listSnap, detailSnap, subBar, setSubBar, usePublicLayout, map-bottom-inset, useIsDesktopXl, useMediaQuery, enableDynamicSizing, SNAP_POINTS, TransitMapView, transitMapBridge, transitMapHtml, markerIcons, fixedScale, useAlightAlert, TransitFloatingHeader, setNotificationHandler]
+aliases: [transit, 대중교통, 버스-지하철-통합, 통합-레이어, TransitTabs, TransitFavoritesSection, CrossSearchSection, SubwayCrossSection, BusCrossSection, TransitCrossToggleChip, transitMapViewport, transitFavExpandStore, transitCrossShowStore, 통합-즐겨찾기, 통합-주변, 통합-검색, 크로스-검색, cross-search, 겸표시, overlay-marker, overlayMarkers, onOverlaySelect, x-subway, x-bus, marker-prefix, poolKey, transit-desktop, transit-mobile, map-instance-pool, 지도-인스턴스-풀, viewport-carryover, 뷰포트-이어보기, A안, D안, dual-mount, 이중-마운트, 데스크톱-모바일-동시마운트, submittedQ, 제출-게이트, quota-proportional, 쿼터-비례, deep-link-symmetry, 딥링크-대칭, SubwayNearbyBusSection, 주변-버스-정류장, 13차, 14차, 15차, 집중-모드, retry-pause, be-무변경, sheet-pattern, 시트-골격, 모바일-시트, 맛집-v2-시트, BottomSheet, useMapSheets, SHEET_PEEK_HEIGHT, listSnap, detailSnap, subBar, setSubBar, usePublicLayout, map-bottom-inset, useIsDesktopXl, useMediaQuery, enableDynamicSizing, SNAP_POINTS, TransitMapView, transitMapBridge, transitMapHtml, markerIcons, fixedScale, useAlightAlert, TransitFloatingHeader, setNotificationHandler, 가는-법, 가는법-탭, TransitTab, 주차, 주차-섹션, parking, /parking, ParkingNearbySection, ParkingSummaryLine, PARKING_RESTAURANT_RADIUS_M, useParkingLotNearby, useRestaurantParkingReviews, parking-reviews, availableTabs, 사이드바-주차]
 ---
 
 # transit — 버스↔지하철 통합 레이어(웹 대중교통 화면 골격 + 앱 대중교통 화면 연결)
+
+**2026-09-24~09-26 변경 흡수 — 식당 '가는 법' 탭에 주차 섹션, 사이드바 '주차' 메뉴가 대중교통 바로 다음에(`2ff2c31`, 2026-09-25)**: 대중교통 레이어 자체(BusPage/SubwayPage·통합 컴포넌트·스토어·지도 풀)는 무변경. (1) 식당 상세 '가는 법' 탭([TransitTab](../../apps/web/src/components/restaurant/detail/TransitTab.tsx))이 버스(500m)·지하철(1.5km) 섹션 아래에 세 번째 섹션 [ParkingNearbySection](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx)을 단다 — 리뷰 요약의 '주차' 관점 긍·부정·중립 건수와 '주차'가 든 팁 상위 5개(canonical 전 출처의 `status='done'` 요약 집계, [parking.service.ts](../../apps/friendly/src/modules/parking/parking.service.ts) `getRestaurantReviews`), 다이닝코드 시설에 '주차'가 있으면 한 줄, 반경 300m(`PARKING_RESTAURANT_RADIUS_M`) 주차장 5곳(실시간 혼잡 단계 색 점·여석·요금 규칙). 행을 누르면 `/parking?ll=&z=17&sel=<id>`, 헤더 '주차 페이지에서 보기'는 `sel` 없이. 홈 탭 '영업 정보' 끝에 한 줄 요약 `ParkingSummaryLine`(같은 조회 키라 RQ 캐시 공유) — 누르면 '가는 법' 탭으로 전환. `420a6be`(2026-09-26)에서 [HomeTab](../../apps/web/src/components/restaurant/detail/HomeTab.tsx)에 선택 prop `availableTabs` 가 생겨, '가는 법' 탭이 없는 어드민 상세에선 이 줄이 누를 수 없는 정보 줄로 그려진다(공개 상세는 그대로). (2) [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx)·[PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx) NAV 에 `{ to: '/parking', label: '주차' }` 가 '대중교통' 바로 다음에 들어갔다 — '대중교통'의 `match: ['/bus', '/subway']` 는 그대로다(주차는 대중교통의 서브탭이 아니라 독립 메뉴, [PLAN-parking](../../docs/PLAN-parking.md) 결정 "일상지도 레이어가 아니라 별도 메뉴"). [ParkingPage](../../apps/web/src/routes/ParkingPage.tsx)는 대중교통의 CSS 이중 마운트가 아니라 일상지도·집값과 같은 `useIsDesktopXl` JS 분기(지도 한 장) + `useMapSheets` 시트 골격을 쓴다. 도메인 세부는 [parking](parking.md). 대중교통 BE·계약 변경 0 — `bus.route.ts`·`subway.route.ts`·두 즐겨찾기 라우트는 한국어 `summary`/`description` 만 붙었다(`1b621c4`, 동작 무변경 → [api-docs](api-docs.md)).
 
 **2026-08-17~08-30 변경 흡수 — 웹 모바일 레이아웃을 맛집 v2 시트 골격으로 통일(`e84e4b9`) + 앱 시트·브리지 소폭 변경(`fdb6ab9`·`e348032`·`563890a`·`9f39d53`)**: (1) **웹(`e84e4b9`, 2026-08-22)** — [BusPage](../../apps/web/src/routes/BusPage.tsx)·[SubwayPage](../../apps/web/src/routes/SubwayPage.tsx)의 모바일(=웹 xl 미만) 블록이 "검색바 고정 / 지도 / 리스트 38dvh 세로 적층"에서 **맛집 v2 와 같은 지도+바텀시트 골격**으로 바뀌었다: 탭+검색행은 상단바 `subBar`(`usePublicLayout().setSubBar`, `useLayoutEffect` 등록/해제, `xl:hidden` 래퍼라 데스크톱 헤더 높이 불변)로 올라가고 정류장/역 선택 중엔 검색행을 접어 헤더를 215→98px 로 회수, 지도는 `fixed inset-x-0 bottom-0`(`top: headerHeight`) 배경, 목록은 3-snap [BottomSheet](../../apps/web/src/components/sheet/BottomSheet.tsx)(`zIndex 20`), 정류장(`stId`)/역(`stn`)이 잡히면 도착·시간표·길찾기 패널이 상세 시트(`zIndex 25`, `key=stId|stn`)로 얹힌다. 두 시트의 스냅 조율은 신규 [useMapSheets](../../apps/web/src/components/sheet/useMapSheets.ts) — `useMapSheets(stId !== null, { initialListSnap })`, 검색어(버스 ≥2자·지하철 ≥1자)나 주변 모드로 진입하면 `half`, 아니면 `peek`; 검색 제출·내 주변·재검색 뒤 `peek` 이면 `half` 로 승격. 지도 하단 컨트롤(따라가기 pill·레이어 토글)은 `--map-bottom-inset`(=`SHEET_PEEK_HEIGHT` 120px) 만큼 올라와 peek 시트에 안 가린다. **데스크톱 블록·CSS 이중 마운트·`poolKey` 분리는 무변경**(루트 높이만 `xl:` 한정 — 모바일은 auto 라 시트 full 에서 body 스크롤로 주소창 minify). `BottomSheet` 자체는 `restaurant-v2/` 에서 `sheet/` 로 승격된 것(내용 무변경)이고 시트 패턴 상세(dual-mode·스크롤 락)는 [web](web.md) 담당. 같은 커밋의 일상지도는 CSS 이중 마운트 대신 JS 분기([useIsDesktopXl](../../apps/web/src/lib/useMediaQuery.ts))를 택해 지도 한 장만 둔다 — 대중교통은 기존 구조를 유지해 두 방식이 공존한다([life-map](life-map.md)). (2) **앱** — [transit.tsx](../../apps/mobile/app/(tabs)/transit.tsx)의 목록·상세 시트에 `enableDynamicSizing={false}`(`fdb6ab9`, 지도 시트 6개 중 대중교통 몫 2개): gorhom v5 가 콘텐츠 높이 스냅 지점을 끼워 넣어 `SNAP_POINTS ['20%','50%','100%']` 가 4지점이 되고 `animatedIndex` 2 가 full 이 아닌 중간에 걸려 플로팅 헤더 보간(1.5→2)이 엉뚱한 위치에서 끝나던 것을 고정. [transitMapBridge](../../apps/mobile/src/components/transit/transitMapBridge.ts)·[transitMapHtml](../../apps/mobile/src/components/transit/transitMapHtml.ts)·[useTransitMapSync](../../apps/mobile/src/components/transit/useTransitMapSync.ts)에 `BridgeMarker.fixedScale`·`setMarkers.icons`(아이콘 사전, `markerIcons` prop)이 붙었지만(`e348032`) 대중교통 자체 동작은 무변경 — 대기·일상지도 앱 화면이 같은 WebView 지도(`TransitMapView`)를 재사용하기 위한 확장이다(지도 관점은 [map](map.md), 브리지 절 자체는 [mobile](mobile.md) — 이 문서는 링크만). `pointerEvents` prop→`style.pointerEvents` 이관(`563890a`, RN 신 API), [useAlightAlert](../../apps/mobile/src/components/transit/useAlightAlert.ts)의 `Notifications.setNotificationHandler` 는 [app/_layout.tsx](../../apps/mobile/app/_layout.tsx) 루트 1회 설정으로 이동(`9f39d53` — 식사 알림과 공용, `shouldPresentMealReminder` 가 `kind !== 'meal-reminder'` 면 true 라 하차 알림 배너는 그대로). BE·계약 변경 0.
 
@@ -24,7 +26,7 @@ aliases: [transit, 대중교통, 버스-지하철-통합, 통합-레이어, Tran
 3. **통합 주변 겸표시(14차)** — 버스 탭 주변 모드에 지하철역을, 지하철 탭 주변 모드에 정류장을 지도에 함께 표시. 우상단 토글 칩으로 on/off.
 4. **통합 검색 크로스(15차)** — 각 탭 검색 결과 하단에 상대 도메인 결과("지하철역 N건"/"정류장 N건") + 상대 탭 딥링크.
 
-이 레이어를 관통하는 **단 하나의 설계 대원칙은 "BE 신규 없음"**이다 — 세 크로스 축 전부가 이미 있는 훅(`useBus*`/`useSubway*`)의 조합이며 서버·계약·DB 를 건드리지 않는다([PLAN "설계 대원칙"](../../docs/PLAN-transit-unified.md)). 두 번째 제약은 상속된 것이다: 버스 도메인의 **서울시 일 1,000건 쿼터**([bus](bus.md))가 통합 UX 에도 그대로 흘러, "쿼터 소비가 사용자 의도·업스트림 비용에 비례"하도록 각 크로스의 발화 시점이 서로 다르게 조율된다(아래 [Key Decisions](#key-decisions-coverage-high--9-sources)).
+이 레이어를 관통하는 **단 하나의 설계 대원칙은 "BE 신규 없음"**이다 — 세 크로스 축 전부가 이미 있는 훅(`useBus*`/`useSubway*`)의 조합이며 서버·계약·DB 를 건드리지 않는다([PLAN "설계 대원칙"](../../docs/PLAN-transit-unified.md)). 두 번째 제약은 상속된 것이다: 버스 도메인의 **서울시 일 1,000건 쿼터**([bus](bus.md))가 통합 UX 에도 그대로 흘러, "쿼터 소비가 사용자 의도·업스트림 비용에 비례"하도록 각 크로스의 발화 시점이 서로 다르게 조율된다(아래 [Key Decisions](#key-decisions-coverage-high--11-sources)).
 
 별도 홈 탭·신규 라우트를 만들지 않은 것도 의도다 — 통합은 **기존 두 페이지 위에 얹는 섹션·오버레이**로만 존재하고, URL 계약(`q`/`stId`/`stn`/`near`/`routeId`/`line`)은 무변경이다. 이 **웹 통합 레이어**(TransitTabs·크로스·통합 즐겨찾기·겸표시·시트 골격)는 `apps/web` 에만 있다 — 앱(`apps/mobile`)은 별도의 대중교통 화면을 갖되(상단 흡수 문단·[mobile](mobile.md)) 이 컴포넌트를 공유하지 않는다.
 
@@ -82,7 +84,7 @@ BusPage/SubwayPage 는 데스크톱(`hidden xl:flex`)과 모바일(`xl:hidden`) 
 
 모바일(xl 미만) 블록은 세 층이다. **① 상단바 subBar** — `TransitTabs` + `BusStationSearchBar`/`SubwayStationSearchBar` 를 `usePublicLayout().setSubBar` 로 통합 sticky 헤더에 등록(`useLayoutEffect`, 언마운트 시 `null`). 정류장/역이 선택되면 검색행을 빼 헤더를 215→98px 로 줄인다. `headerHeight` 는 [PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx)가 ResizeObserver 로 실측해 [PublicLayout](../../apps/web/src/components/PublicLayout.tsx) 컨텍스트로 내려주므로 subBar 내용이 바뀌면 시트 `topOffset`·지도 `top` 이 함께 따라온다. **② fixed 지도** — `fixed inset-x-0 bottom-0 z-0`, `top: headerHeight`, `--map-bottom-inset: 120px`. `poolKey="transit-mobile"` 은 그대로. **③ 시트 2장** — 목록 [BottomSheet](../../apps/web/src/components/sheet/BottomSheet.tsx)(`snap=listSnap`, `hidden`/`disableScrollLock = listHidden`, `zIndex 20`, `data-testid="bus-list-sheet"`/`"subway-list-sheet"`) + 선택 시 상세 시트(`key=stId|stn`, `snap=detailSnap`, `zIndex 25`, `data-testid="*-detail-sheet"`). 상세 시트 안에 버스는 `arrivalPanel`(없으면 "선택한 정류장이 현재 결과에 없습니다"/"불러오는 중" + ← 목록 버튼), 지하철은 기존 배타 패널(`panelContent` = 시간표 > 길찾기 > 도착)이 그대로 들어간다.
 
-스냅 규칙은 [useMapSheets](../../apps/web/src/components/sheet/useMapSheets.ts) 한 곳이다: 상세가 열리면(detailOpen false→true) 목록 스냅을 기억하고 `peek`(숨김)으로, 상세는 `half` 로 진입; 닫히면 목록을 기억한 스냅으로 복원. 전이는 setState-during-render 라 상세 시트가 첫 프레임부터 half 다. 대중교통이 더한 규칙 두 가지 — `initialListSnap`(검색어·주변 모드 딥링크 진입이면 `half`, 아니면 지도 먼저 `peek`)과 **행동 뒤 승격**(검색 제출·내 주변·이 위치에서 재검색 핸들러가 `setListSnap(s => s === 'peek' ? 'half' : s)` — 결과가 바로 보이게, 이미 half/full 이면 유지). 지도 하단 컨트롤은 `bottom-[calc(0.75rem+var(--map-bottom-inset,0px))]` 로 시트 위에 뜬다(따라가기 pill 은 각 지도 래퍼, 레이어 토글은 [MapLayerControl](../../apps/web/src/components/restaurant/MapLayerControl.tsx)). `MapCanvas.flyTo` 의 `bottomInset` 옵션은 일상지도만 쓰고 대중교통 래퍼는 아직 안 넘긴다([Gotchas](#gotchas-coverage-high--9-sources)).
+스냅 규칙은 [useMapSheets](../../apps/web/src/components/sheet/useMapSheets.ts) 한 곳이다: 상세가 열리면(detailOpen false→true) 목록 스냅을 기억하고 `peek`(숨김)으로, 상세는 `half` 로 진입; 닫히면 목록을 기억한 스냅으로 복원. 전이는 setState-during-render 라 상세 시트가 첫 프레임부터 half 다. 대중교통이 더한 규칙 두 가지 — `initialListSnap`(검색어·주변 모드 딥링크 진입이면 `half`, 아니면 지도 먼저 `peek`)과 **행동 뒤 승격**(검색 제출·내 주변·이 위치에서 재검색 핸들러가 `setListSnap(s => s === 'peek' ? 'half' : s)` — 결과가 바로 보이게, 이미 half/full 이면 유지). 지도 하단 컨트롤은 `bottom-[calc(0.75rem+var(--map-bottom-inset,0px))]` 로 시트 위에 뜬다(따라가기 pill 은 각 지도 래퍼, 레이어 토글은 [MapLayerControl](../../apps/web/src/components/restaurant/MapLayerControl.tsx)). `MapCanvas.flyTo` 의 `bottomInset` 옵션은 일상지도만 쓰고 대중교통 래퍼는 아직 안 넘긴다([Gotchas](#gotchas-coverage-high--13-sources)).
 
 ### 세 크로스 축의 발화 대칭
 
@@ -92,17 +94,18 @@ BusPage/SubwayPage 는 데스크톱(`hidden xl:flex`)과 모바일(`xl:hidden`) 
 | 주변(14차) | `overlayMarkers` + [TransitCrossToggleChip](../../apps/web/src/components/transit/TransitCrossToggleChip.tsx) | `useSubway/BusNearbyStations` | 주변 모드 진입 시(토글 off 여도 조회) | 지하철 0 / 버스 셀캐시 |
 | 검색(15차) | [CrossSearchSection](../../apps/web/src/components/transit/CrossSearchSection.tsx) | `useSubway/BusStationSearch` | 버스탭→지하철 자동 / 지하철탭→버스 **제출 시** | 지하철 0 / 버스 캐시 |
 
-## Talks To [coverage: high — 8 sources]
+## Talks To [coverage: high — 12 sources]
 
 - **[bus](bus.md) 도메인** — 정류장 검색/주변/도착 훅(`useBusStationSearch`·`useBusNearbyStations`·`useBusStationArrivals`), 즐겨찾기(`useBusFavorites`), 마커 빌더(`buildBusStopMarkerDataUrl`), 딥링크(`/bus?stId=&routeId=&near=`). 통합의 모든 "버스 쪽"이 여기서 온다.
 - **[subway](subway.md) 도메인** — 역 검색/주변/도착 훅(`useSubwayStationSearch`·`useSubwayNearbyStations`·`useSubwayStationArrivals`), 즐겨찾기(`useSubwayFavorites`), 마커 빌더(`buildSubwayStationMarkerDataUrl`), 딥링크(`/subway?stn=&near=`). 12차 [SubwayNearbyBusSection](../../apps/web/src/components/subway/SubwayNearbyBusSection.tsx)이 지하철→버스 연계의 원형.
 - **[map](map.md) 도메인 (MapCanvas)** — 통합이 MapCanvas 에 **두 확장을 추가**했다: (1) `poolKey` 인스턴스 풀링, (2) `overlayMarkers`/`onOverlaySelect` fit 제외 오버레이 레이어. 두 지도 래퍼([BusStationsMap](../../apps/web/src/components/bus/BusStationsMap.tsx)·[SubwayStationsMap](../../apps/web/src/components/subway/SubwayStationsMap.tsx))가 이 prop 을 페이지에서 받아 넘긴다. 지도 인프라 전반은 [map](map.md).
 - **[shared](shared.md) 훅 (재사용, 신규 0)** — 통합은 새 API 클라이언트·훅을 추가하지 않는다. 양 도메인의 기존 훅을 한 페이지에서 함께 호출할 뿐(각 훅은 "페이지당 1회" 규칙 — 로그인 직후 게스트 병합 부수효과 때문. BusPage 가 `useBusFavorites`+`useSubwayFavorites` 를 각 1회).
-- **네비게이션** — [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx)·[PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx)의 "대중교통" 항목이 `to: '/bus'`, `match: ['/bus', '/subway']` — 한 메뉴가 두 라우트를 대표해 어느 탭에 있어도 활성.
+- **네비게이션** — [PublicSidebar](../../apps/web/src/components/PublicSidebar.tsx)·[PublicTopBar](../../apps/web/src/components/PublicTopBar.tsx)의 "대중교통" 항목이 `to: '/bus'`, `match: ['/bus', '/subway']` — 한 메뉴가 두 라우트를 대표해 어느 탭에 있어도 활성. 2026-09-25(`2ff2c31`)부터 바로 다음 항목이 '주차'(`/parking`, 사이드바 아이콘 `SquareParking`)라 순서가 홈·맛집·대중교통·주차·일상지도·집값·여행·날씨·바다·대기질·타로·사주(C)·사주(G)·식단(14개)이다 — '주차'는 `match` 없이 자기 경로만 활성.
+- **식당 상세 '가는 법' 탭 — 대중교통 페이지 밖의 대중교통 훅 소비처(`fa8f067`)이자 [parking](parking.md) 과의 접점** — [TransitTab](../../apps/web/src/components/restaurant/detail/TransitTab.tsx)은 통합 레이어를 쓰지 않고 `useBusNearbyStations`(500m)·`useSubwayNearbyStations`(1.5km)·도착 훅을 직접 호출하며, 딥링크는 `/bus?near=&stId=`·`/subway?near=&stn=`(아래 표). 2026-09-25 세 번째 섹션 [ParkingNearbySection](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx)이 붙었다 — `useRestaurantParkingReviews(placeId)`(staleTime 30분, `retry: false`) + `useParkingLotNearby(lat, lng, { radius: 300, limit: 5 })`(staleTime 2분·5분 `refetchInterval` — 버스·지하철 nearby 가 staleTime 60초·폴링 없음인 것과 달리 실시간 여석 단계를 싣기 때문). 둘 다 로컬 DB·폴러 메모리 조회라 업스트림 0콜이어서 탭 진입 즉시 로드해도 쿼터 비례 원칙(싼 것은 자동)과 맞는다. 홈 탭 한 줄 요약 [HomeTab](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) `ParkingSummaryLine` 이 같은 키로 조회해 캐시를 공유하므로 **상세를 열기만 해도(홈 탭) 주차 조회 2건이 나간다**. 섹션 구성·주차 페이지 세부는 [parking](parking.md), 결정 표는 [PLAN-parking](../../docs/PLAN-parking.md) "맛집: 가는 법 탭 '주차' 섹션 + 홈 탭 한 줄 요약".
 - **라우트** — [App.tsx](../../apps/web/src/App.tsx)가 `/bus`·`/subway` 를 PublicLayout 아래 공개 라우트로(비로그인, 맛집과 동일 정책), 각각 `React.lazy` 청크로 분할.
 - **zustand 스토어** — [transitFavExpandStore](../../apps/web/src/stores/transitFavExpandStore.ts)(펼침, 비영속)·[transitCrossShowStore](../../apps/web/src/stores/transitCrossShowStore.ts)(겸표시 토글, `localStorage` persist). 이중 마운트 인스턴스 간 상태 공유가 존재 이유.
 
-## API Surface [coverage: high — 8 sources]
+## API Surface [coverage: high — 10 sources]
 
 통합의 "표면"은 HTTP/zod 가 아니라 **① 도메인 간 딥링크 URL 계약, ② 컴포넌트 props, ③ 공유 스토어, ④ MapCanvas 확장 prop**이다.
 
@@ -116,6 +119,8 @@ BusPage/SubwayPage 는 데스크톱(`hidden xl:flex`)과 모바일(`xl:hidden`) 
 | 버스 크로스검색 행 → 지하철 | `/subway?q={q}&stn={id}` / 더보기 `/subway?q={q}` | 15차 |
 | 지하철 크로스검색 행 → 버스 | `/bus?q={q}&stId={stId}` / 더보기 `/bus?q={q}` | 15차 |
 | 통합 즐겨찾기 이동(상대) | `/subway?stn=` · `/bus?stId=[&routeId=]` | 13차 |
+| 식당 '가는 법' 버스·지하철 섹션 → 버스/지하철 | `/bus?near={lat,lng}[&stId=]` · `/subway?near={lat,lng}[&stn=]`(선택 행이 있으면 함께) | `fa8f067`(2026-07) |
+| 식당 '가는 법' 주차 섹션 → 주차 | 행 `/parking?ll={lat,lng}&z=17&sel={lotId}` · 헤더 버튼 `/parking?ll={lat,lng}&z=17` (좌표는 `roundCoord` 5자리) | `2ff2c31`(2026-09-25) — 대중교통 URL 계약이 아니라 [ParkingPage](../../apps/web/src/routes/ParkingPage.tsx) 계약(`t`·`ll`·`z`·`sel`, [parking](parking.md)) |
 
 원칙: **새 URL 시맨틱을 만들지 않는다.** 자기 도메인 이동은 in-page 핸들러(동일 URL 계약) 재사용, 상대 도메인은 `navigate`. `near` 는 현재 기준점을 그대로 넘겨 상대 탭도 주변 모드로 이어진다.
 
@@ -164,11 +169,13 @@ saveTransitViewport(v: {lat,lng,zoom}) / readTransitViewport(): TransitViewport 
 | **모듈 싱글턴/스토어(비영속)** | `transitFavExpandStore`(펼침), `transitMapViewport`(뷰포트), `mapPool`(OL 인스턴스) | 모듈 수명(새로고침 시 소실) | 소멸성 UI/전환 상태 — 새로고침엔 접힘·기본 뷰로 |
 | **페이지 state** | `submittedQ`(확정 검색어), `autoNear`(자동 재조회 좌표), `pendingFollow`, `listSnap`/`detailSnap`(useMapSheets, 2026-08-22) 등 | 페이지 마운트 | 이중 마운트 두 자식에 자연 공유, URL 오염 회피(시트 스냅은 URL 에 안 싣는다) |
 
-**재사용 캐시 (통합이 새로 만들지 않음):** 크로스 조회는 전부 기존 캐시에 얹힌다 — 지하철 검색/주변은 **로컬 DB(쿼터 0)**, 버스 검색은 **30일 DB 캐시**, 버스 주변은 **0.005° 셀 격자 DB 캐시**, 도착은 **무캐싱 실시간**. 상세는 [bus Data](bus.md#data-coverage-high--6-sources)·[subway](subway.md). 동시 마운트 두 인스턴스가 같은 `queryKey` 를 구독하면 React Query 가 **1회로 dedupe** — 이게 통합의 유일한 "데이터 정합" 장치다.
+**재사용 캐시 (통합이 새로 만들지 않음):** 크로스 조회는 전부 기존 캐시에 얹힌다 — 지하철 검색/주변은 **로컬 DB(쿼터 0)**, 버스 검색은 **30일 DB 캐시**, 버스 주변은 **0.005° 셀 격자 DB 캐시**, 도착은 **무캐싱 실시간**. 상세는 [bus](bus.md) 의 Data 절·[subway](subway.md). 동시 마운트 두 인스턴스가 같은 `queryKey` 를 구독하면 React Query 가 **1회로 dedupe** — 이게 통합의 유일한 "데이터 정합" 장치다.
 
-**즐겨찾기 데이터** 도 통합이 아니라 각 도메인 소유다: `useBusFavorites`/`useSubwayFavorites`(게스트 zustand persist + 로그인 서버 하이브리드). TransitFavoritesSection 은 두 훅의 반환을 **읽어 병합만** 한다 — 4종을 도메인 단위 concat(버스 정류장→노선 → 지하철 역→호선). 각 도메인 목록은 서버가 `createdAt` 오름차순으로 내려주지만 **항목별 `createdAt` 이 계약에 노출되지 않아** 도메인 간 진짜 시간순 인터리브는 불가([Gotchas](#gotchas-coverage-high--9-sources)).
+**즐겨찾기 데이터** 도 통합이 아니라 각 도메인 소유다: `useBusFavorites`/`useSubwayFavorites`(게스트 zustand persist + 로그인 서버 하이브리드). TransitFavoritesSection 은 두 훅의 반환을 **읽어 병합만** 한다 — 4종을 도메인 단위 concat(버스 정류장→노선 → 지하철 역→호선). 각 도메인 목록은 서버가 `createdAt` 오름차순으로 내려주지만 **항목별 `createdAt` 이 계약에 노출되지 않아** 도메인 간 진짜 시간순 인터리브는 불가([Gotchas](#gotchas-coverage-high--13-sources)).
 
-## Key Decisions [coverage: high — 9 sources]
+## Key Decisions [coverage: high — 11 sources]
+
+- **2026-09-25: 주차는 대중교통의 서브탭이 아니라 NAV 의 독립 메뉴로, 식당과는 '가는 법' 탭의 섹션으로 잇는다.** 사용자 결정([PLAN-parking](../../docs/PLAN-parking.md) 결정 표 — 위치 "일상지도 레이어가 아니라 별도 메뉴 `/parking`", 맛집 "가는 법 탭 '주차' 섹션 + 홈 탭 한 줄 요약"). 그래서 [TransitTabs](../../apps/web/src/components/transit/TransitTabs.tsx)는 여전히 버스|지하철 두 탭이고, 통합 레이어(탭·스토어·지도 풀·시트)는 한 줄도 바뀌지 않았다(26차 이후 `components/transit/`·BusPage·SubwayPage 커밋 0). NAV 순서만 대중교통 바로 다음(PLAN "사이드바 주차 메뉴(대중교통 다음)") — '이동' 묶음 배치다. '가는 법' 탭은 내용상 "대중교통·차로 가는 법"이 됐지만 탭 키 `transit`·라벨 '가는 법'([tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts) `TAB_ORDER`)은 그대로다.
 
 - **2026-08-22: 모바일 레이아웃은 맛집 v2 시트 골격을 그대로 가져온다 — 이중 마운트 전제는 유지.** 공개 지도 페이지 4곳(맛집 v2·버스·지하철·일상지도)이 같은 "상단바 subBar + fixed 지도 + 목록/상세 바텀시트" 를 쓰도록 `BottomSheet` 를 `sheet/` 로 승격하고 목록↔상세 스냅 규칙을 `useMapSheets` 로 뽑아 맛집 v2 도 이 훅으로 교체했다(`e84e4b9`). 대중교통은 기존 CSS 이중 마운트·스토어 승격·풀 키 분리를 손대지 않고 모바일 블록의 내용물만 시트로 바꿨다 — 그래서 `useMapSheets` 도 스토어가 아니라 **페이지 state**(이중 마운트 두 자식 공유 규칙의 새 인스턴스)다. 진입 스냅은 의도에 비례: 딥링크에 검색어·`near` 가 있으면 결과를 먼저(`half`), 없으면 지도를 먼저(`peek`), 검색 제출·내 주변·재검색 뒤엔 `peek`→`half` 만 승격하고 사용자가 올려둔 full 은 건드리지 않는다. 데스크톱 블록은 무변경(루트 높이만 `xl:` 한정).
 
@@ -188,8 +195,9 @@ saveTransitViewport(v: {lat,lng,zoom}) / readTransitViewport(): TransitViewport 
 
 - **비가시 탭 빈 상태 하드닝 — pending 을 "정보 없음"으로 오표시 않기.** 도착 미리보기의 빈 상태 문구는 **성공 응답에만** 낸다. 비가시 탭(모바일 인스턴스가 데스크톱 폭에서 숨겨진 경우 등)에서 React Query 가 재시도를 pause 하면 status=pending·fetchStatus=paused 로 `data` 가 없는데, 이걸 "정보 없음"으로 표시하면 오탐이다 — `!data` 는 로딩 스피너로 처리.
 
-## Gotchas [coverage: high — 9 sources]
+## Gotchas [coverage: high — 13 sources]
 
+- **좌표 없는 식당에선 홈 한 줄 요약이 가리키는 주차 정보가 '가는 법' 탭에 없다(2026-09-25~, 코드 어긋남).** [TransitTab](../../apps/web/src/components/restaurant/detail/TransitTab.tsx)은 `latitude`/`longitude` 가 null 이면 "좌표 정보가 없어 주변 대중교통을 찾을 수 없어요" 한 화면만 돌려주고 끝나 [ParkingNearbySection](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx)이 렌더되지 않는다. 그런데 `ParkingSummaryLine` 의 리뷰 평가 조회(`useRestaurantParkingReviews(placeId)`)는 좌표와 무관하게 돌아, 리뷰에 '주차' 언급·팁이 있거나 다이닝코드 시설에 주차가 있으면 홈 탭에 누를 수 있는 요약 줄이 뜨고 → 누르면 대중교통 없음 메시지만 보인다(탭 자체는 [PublicRestaurantDetail](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx)이 `tour` 외엔 거르지 않아 늘 보임). 고치려면 좌표 없음 분기에서도 주차 섹션(리뷰 부분)을 그리거나 요약 줄의 `onOpen` 을 좌표 유무로 막으면 된다(미수정).
 - **`useMapSheets` 는 페이지의 `useState` 선언들보다 앞에 호출한다.** React Compiler 의 메모 검증이 뒤에 두면 훅이 돌려주는 setter 들을 반응값으로 봐 메모가 깨진다(`e84e4b9` 커밋 메모, BusPage/SubwayPage 주석). 새 지도 페이지에 이 훅을 붙일 때도 같은 순서.
 - **subBar 는 반드시 `null` 로 cleanup.** `useLayoutEffect(() => { setSubBar(node); return () => setSubBar(null); })` — 해제를 빼면 다른 공개 페이지로 이동해도 대중교통 탭·검색행이 상단바에 남는다. 내용은 `xl:hidden` 으로 감싸 데스크톱 `headerHeight` 에 안 잡히게 한다.
 - **데스크톱 폭에서도 모바일 시트는 마운트돼 있다(이중 마운트).** 목록 `BottomSheet` 는 `xl:hidden` 으로 안 보일 뿐 `mode='fixed'` 라 `html overflow:hidden` 락을 건다. 데스크톱 블록이 viewport 고정 높이·내부 스크롤이라 지금은 무해하지만, 데스크톱에서 body 스크롤이 필요한 콘텐츠를 더하면 여기서 막힌다. `poolKey` 분리(`transit-desktop`/`transit-mobile`)도 그대로 필요하다.
@@ -207,7 +215,7 @@ saveTransitViewport(v: {lat,lng,zoom}) / readTransitViewport(): TransitViewport 
 - ~~앱 미구현 — 버스·지하철·통합 모두 웹 전용~~ → **앱에는 별도의 대중교통 화면이 있다(2026-07~).** 이 문서의 통합 컴포넌트(TransitTabs·크로스·통합 즐겨찾기·겸표시·웹 시트)는 `apps/web` 전용이고, 앱은 `app/(tabs)/transit.tsx` + WebView 지도(`TransitMapView`) + gorhom 시트로 같은 훅을 다른 UI 로 소비한다(탑승 모드·하차 알림은 앱에만 — 상단 흡수 문단). 게스트 즐겨찾기 storage 주입도 앱 entry 에 배선됨.
 - **앱 시트는 `enableDynamicSizing={false}` 고정.** gorhom v5 기본값은 콘텐츠 높이 스냅 지점을 끼워 넣어 목록이 짧을 때 지점이 4개가 된다 — `animatedIndex` 를 보간하는 플로팅 헤더·시트 배경이 full 이 아닌 곳에서 끝난다(`fdb6ab9`). 새 지도 시트를 앱에 추가하면 같은 prop 을 준다(맛집·대중교통·일상지도 6개 전부 적용).
 
-## Sources [coverage: high — 33 sources]
+## Sources [coverage: high — 46 sources]
 
 **통합 컴포넌트 (web/components/transit)**
 - [apps/web/src/components/transit/TransitTabs.tsx](../../apps/web/src/components/transit/TransitTabs.tsx)
@@ -256,3 +264,18 @@ saveTransitViewport(v: {lat,lng,zoom}) / readTransitViewport(): TransitViewport 
 **배경 문서**
 - [docs/PLAN-transit-unified.md](../../docs/PLAN-transit-unified.md)
 - [docs/mobile-public-restaurant-ux-v2.md](../../docs/mobile-public-restaurant-ux-v2.md) — *시트 골격 원 설계 문서(sheet/ 승격 반영)*
+
+**식당 '가는 법' 탭·주차 연결 (2026-09-24~09-26 라운드)**
+- [apps/web/src/components/restaurant/detail/TransitTab.tsx](../../apps/web/src/components/restaurant/detail/TransitTab.tsx) — *버스 500m·지하철 1.5km 섹션 + 세 번째 ParkingNearbySection, 좌표 없음 조기 반환*
+- [apps/web/src/components/restaurant/detail/ParkingSection.tsx](../../apps/web/src/components/restaurant/detail/ParkingSection.tsx) — *ParkingNearbySection·ParkingSummaryLine(onOpen 선택), /parking 딥링크*
+- [apps/web/src/components/restaurant/detail/ParkingSection.test.tsx](../../apps/web/src/components/restaurant/detail/ParkingSection.test.tsx) — *섹션 행 클릭 → 주차 페이지 sel, 요약 → 가는 법*
+- [apps/web/src/components/restaurant/detail/HomeTab.tsx](../../apps/web/src/components/restaurant/detail/HomeTab.tsx) — *영업 정보 끝 한 줄 요약, availableTabs 선택 prop(`420a6be`)*
+- [apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx](../../apps/web/src/components/restaurant/detail/PublicRestaurantDetail.tsx) — *탭 필터는 tour 만 — 가는 법 탭은 늘 보임*
+- [apps/web/src/components/restaurant/detail/tabs.ts](../../apps/web/src/components/restaurant/detail/tabs.ts) — *TAB_ORDER 'transit' = '가는 법'*
+- [apps/web/src/routes/ParkingPage.tsx](../../apps/web/src/routes/ParkingPage.tsx) — *URL 계약 t·ll·z·sel, useIsDesktopXl JS 분기*
+- [packages/shared/src/hooks/useParking.ts](../../packages/shared/src/hooks/useParking.ts) — *useParkingLotNearby(2분 stale·5분 폴링)·useRestaurantParkingReviews(30분)*
+- [packages/utils/src/parking.ts](../../packages/utils/src/parking.ts) — *PARKING_RESTAURANT_RADIUS_M = 300*
+- [apps/friendly/src/modules/parking/parking.service.ts](../../apps/friendly/src/modules/parking/parking.service.ts) — *getRestaurantReviews — canonical 전 출처 '주차' 관점·팁 상위 5*
+- [apps/friendly/src/modules/bus/bus.route.ts](../../apps/friendly/src/modules/bus/bus.route.ts) — *한국어 summary/description 만 추가(`1b621c4`)*
+- [apps/friendly/src/modules/subway/subway.route.ts](../../apps/friendly/src/modules/subway/subway.route.ts) — *한국어 summary/description 만 추가(`1b621c4`)*
+- [docs/PLAN-parking.md](../../docs/PLAN-parking.md) — *결정 표: 별도 메뉴(대중교통 다음)·가는 법 섹션 + 홈 요약*

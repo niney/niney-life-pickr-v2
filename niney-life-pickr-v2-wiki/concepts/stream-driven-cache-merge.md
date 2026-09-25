@@ -1,7 +1,7 @@
 ---
 concept: SSE 페이로드 직접 머지로 follow-up GET 회피
-last_compiled: 2026-06-25
-topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, logs]
+last_compiled: 2026-09-26
+topics_connected: [crawl, friendly, shared, web, menu-grouping, analytics, auto-discover, schedule, review-search, random-crawl, ai, logs, canonical]
 status: active
 ---
 
@@ -13,6 +13,7 @@ status: active
 
 ## Instances
 
+- **2026-09-26** in [shared](../topics/shared.md) / [web](../topics/web.md) / [canonical](../topics/canonical.md) (`420a6be` — `summarySseManager.ts` + `useRestaurantCanonicalSummaryEvents`): 2026-05-17 에 생긴 `(snap, prev) => merged` delta 머지의 **`prev` 를 어디서 꺼내느냐**가 버그였다. 매니저는 마지막 snapshot 을 구독 키 단위(`lastSnapshotByCanonical`·`lastSnapshotByPlace`)로 캐시해 prev 로 넘겼는데, canonical 구독에는 **여러 출처 행의 snapshot 이 번갈아** 오므로 prev 가 다른 출처의 것일 수 있었다 — 출처가 둘 이상인 가게에서 엉뚱한 delta 가 공개 목록 카운트에 더해졌다. 고친 뒤엔 캐시가 **출처 행(`restaurantId`)당 1개**(`lastSnapshotByRestaurant`)이고, prev 는 같은 행의 직전 snapshot, 새 구독자 replay 는 "이 키에 걸리는 출처 행 전부"(`matchesKey`), 구독 해제 시엔 다른 살아 있는 키(place·canonical 이 같은 네이버 행을 공유할 수 있다)가 덮지 않는 snapshot 만 버린다(`isCoveredBySubscribedKey`). 같은 커밋의 어드민 상세 훅 `useRestaurantCanonicalSummaryEvents({placeId, canonicalId})` 는 canonical 하나를 구독해 **출처별 진행을 `bySource` Map 으로 따로 들고 합산**하고(구독 대상이 바뀌면 canonicalId 태그로 이전 가게 것을 버림), 리뷰 완료 행을 어드민 상세 캐시에 병합하며, 진행 합계가 0 이 되는 순간에만 공개 캐시를 무효화한다(`invalidateRestaurantDetailCaches`) — "진행은 머지, 완료는 마지막 invalidate" 골격 그대로. 교훈: **delta 머지의 기준 상태는 이벤트를 만든 단위로 짝지어야 한다** — 구독(소비) 단위로 짝지으면 멀티플렉스 구독에서 깨진다.
 - **2026-05-07** in [[../topics/crawl]] (`crawl.service.ts`): `visitor_batch` SSE 이벤트가 `persistedReviews: PersistedVisitorReview[]`를 동봉. 어댑터→persistTail→`persistReviewBatch({newReviews})`가 server id가 박힌 새 row를 그대로 이벤트에 실어 준다. 같은 잡 안에서 무거운 detail GET이 한 번도 안 뜨고도 새 리뷰가 화면에 등장.
 - **2026-05-07** in [[../topics/friendly]] (`restaurant.route.ts` `summaryEvents`): SSE `review` 이벤트가 done/failed 상태 + 요약 텍스트 + 모델명 + 에러 정보까지 한 페이로드에 담아 푸시. 클라가 `reviews[].summary`를 그 자리에서 머지. `snapshot` 이벤트는 progress 카운트 + recentDone 같이 보내 list/detail 캐시 양쪽을 패치할 수 있게 함. placeId 태그도 페이로드에 — 멀티플렉싱 endpoint에서 demux용.
 - **2026-05-07** in [[../topics/shared]] (`useRestaurantSummaryEvents` / `summarySseManager`): `onSnapshot`에서 `qc.setQueryData(['restaurant', 'list'], ...)`로 행의 카운트 패치 + `onReview`에서 `qc.setQueryData(['restaurant', placeId], ...)`로 detail 안 리뷰의 summary 필드 패치. `useCrawlJobStream`도 `lastPersistedBatch`를 reducer state에 노출해 호출자(`ActiveJobPanel`)가 같은 패턴 적용.
@@ -50,6 +51,7 @@ status: active
 - **페이로드가 너무 무거워질 때** — 한 이벤트가 MB 단위가 되면 SSE가 백프레셔를 못 쳐서 서버 메모리 누적. 리뷰 본문 500자 컷 같은 상한이 이 균형의 일부.
 - **캐시 키 모양이 바뀔 때** — list 행과 detail의 key 모양이 달라지면 `setQueryData` 콜백이 모두 깨짐. 키는 `@repo/shared`의 hooks에서 한 곳에 집중시키는 게 절대적.
 - **머지 dedupe 키가 race에 약할 때** — 같은 row가 두 번 prepend되거나, 네트워크 재연결 직후 lastSeq 불일치로 같은 이벤트를 두 번 적용할 위험. `seq` 기반 dedupe(crawl) + `id` 기반 set 검사(visitor_batch)가 두 단계 안전망.
+- **delta 머지의 prev 를 구독 단위로 잡을 때** (2026-09-26 실사고) — 한 구독이 여러 생산자(출처 행)의 이벤트를 받는 멀티플렉스에서 "이 구독의 직전 snapshot" 을 prev 로 쓰면 다른 생산자의 값과 비교해 delta 가 틀린다. prev·replay 캐시는 생산 단위(`restaurantId`)로 두고, 구독 키는 필터(`matchesKey`)로만 쓴다.
 
 ## Sources
 
@@ -65,3 +67,6 @@ status: active
 - [[../topics/random-crawl]]
 - [[../topics/ai]]
 - [[../topics/logs]]
+- [canonical](../topics/canonical.md)
+- [packages/shared/src/hooks/summarySseManager.ts](../../packages/shared/src/hooks/summarySseManager.ts) — 2026-09-26 `lastSnapshotByRestaurant`·`matchesKey`·`isCoveredBySubscribedKey`
+- [packages/shared/src/hooks/useRestaurant.ts](../../packages/shared/src/hooks/useRestaurant.ts) — `useRestaurantCanonicalSummaryEvents`·`invalidateRestaurantDetailCaches`

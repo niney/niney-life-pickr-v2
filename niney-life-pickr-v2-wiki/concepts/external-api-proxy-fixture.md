@@ -1,7 +1,7 @@
 ---
 concept: 외부 API 어댑터 — friendly 프록시 + 정규화 + probe→fixture
-last_compiled: 2026-09-19
-topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing, tour]
+last_compiled: 2026-09-26
+topics_connected: [bus, crawl, map, telegram, air-quality, weather, life-map, housing, tour, sea, parking, api-docs]
 status: active
 ---
 
@@ -15,6 +15,10 @@ status: active
 
 ## Instances
 
+- **2026-09-25** in [crawl](../topics/crawl.md) (`43d7e69` — `naver-place.playwright.adapter.ts` + `restaurant.service.ts`(0건 보호) + `crawl.service.ts`(경보 로그) + `backfill-naver-menus.ts`): 아래 "깨지는 지점" 이 경고한 **조용한 드리프트가 실제로 일어난 사례**. 2026-09-13~25 사이 네이버가 플레이스 메뉴 Apollo 구조를 바꿔(`Menu:{placeId}_<i>`·`placeDetail.menus` → `placeDetail.placeMenus{items, categories, menuCount}`) 파서가 옛 키만 찾는 동안 비배민 가게 메뉴가 **에러 없이 0건**이 됐고, 재크롤이 기존 스냅샷 메뉴까지 `[]` 로 덮었다(`restaurant_menus` 도 비배민 가게엔 행이 한 번도 없어 복구원이 못 됐다). 대응이 이 레시피에 없던 두 다리를 더했다. (e) **런타임 드리프트 감지** — 매 크롤마다 메뉴 출처(배민 그룹/placeMenus/옛 경로)와 개수를 크롤 로그에 남기고, 메뉴 탭이 있는데 0건이면 "메뉴 0건 — 네이버 메뉴 구조 변경 의심" warn. fixture 는 과거를 굳힐 뿐이니 현재의 변화는 운영 로그가 잡는다. (f) **마지막 정상값 유지** — 크롤 결과 메뉴가 0건이면 직전 스냅샷 메뉴를 유지(`메뉴 0건 — 기존 메뉴 N개 유지`). 파서는 우선순위 사슬(배민 그룹 → placeMenus → 옛 `Menu:`)로 과거 구조도 계속 읽고, 새 구조는 테스트 +202줄로 굳혔으며, 이미 망가진 데이터는 `backfill:naver-menus`(리뷰 없이 메뉴만 재수집, 기본 대상 = 메뉴 0건 네이버 가게)로 복구한다. 부수 효과로 홈 응답의 `menuCount` 와 대조해 `/menu/list` 방문을 생략(가게당 ~9초 → ~4초) — 새 구조가 "전량이 왔는지" 를 스스로 알려 주는 필드를 가져서 가능해진 최적화.
+- **2026-09-25** in [parking](../topics/parking.md) (`2ff2c31` — `parking-api.adapter.ts` + `parking-master.service.ts` + `parking-live.service.ts`): 한 모듈이 **봉투 두 계열**(data.go.kr JSON + 서울 열린데이터 `openapi.seoul.go.kr:8088`)과 원천 5개(표준데이터·서울 공영·서울 시영 실시간·한국공항공사·인천공항 + 환경공단 충전소)를 받는다. 필드명 불신이 **키 표기 불신**으로 번졌다 — 같은 표준데이터가 오픈API 로는 camelCase, 포털 파일로는 UPPER_SNAKE 라 정규화가 둘을 한 모양으로 맞추고(`--std-json` 으로 파일 경로도 유지), 값도 불신한다(서울 노상은 구획마다 한 행이라 면수 1 → 여러 행이면 행 수로 셈, 인천은 현재 대수가 면수를 넘어 이력 점유율을 1.5 에서 자름, 관광버스·거주자 전용은 제외). 04/05·5xx 1회 재시도(800ms)는 에어코리아·기상청 규율 그대로. 폴러는 한 원천이 실패하면 **그 원천만 이전 값 유지 + stale 표시**(`Promise.allSettled` 후 `prevBy`). 픽스처는 `__fixtures__` 없이 테스트 인라인.
+- **2026-09-24** in [sea](../topics/sea.md) (`4a2bff1` — `khoa.adapter.ts`): 국립해양조사원 API 는 data.go.kr 게이트웨이지만 **봉투 모양이 다르다**(`response` 감싸개 없이 header/body 가 최상위) — 봉투도 필드명처럼 불신 대상이다. 문서상 필수인 바다낚시 `gubun` 이 실제로는 값과 무관하게 같은 1,750행을 돌려준다는 실측으로 한 번만 부르고, 어종·서핑 등급 행을 슬롯 하나의 `variants` 로 접어 응답을 440→196KB 로 줄였다(정규화가 크기 최적화까지 맡은 예). 04/05·5xx 1회 재시도(700ms), 업스트림 실패 시 12시간 stale. 픽스처는 테스트 인라인.
+- **2026-09-24** in [life-map](../topics/life-map.md) / [housing](../topics/housing.md) (`ad48f96` — `load-life-flood.ts` + `life-flood-master.service.ts`): API 가 없는 원천의 **다운로드 어댑터** — 서울 열린데이터 데이터셋 페이지를 읽고 파일별로 폼 POST 해 SHP zip 을 받는다(포털 UI 의 다운로드 경로를 스크립트가 흉내). 인코딩도 불신 대상이다: DBF 는 CP949 인데 2022 파일에 UTF-8 값 16개가 섞였고, 연도마다 필드 스키마가 다르다(2025 는 '피해일시'). 좌표계는 UTM-K(EPSG:5179)로 명시돼 있어 값 범위 판정 대신 utils `utmkToWgs84` 로 변환(동일 번지 단지 대비 중앙값 2.2m).
 - **2026-09-13** in [tour](../topics/tour.md) (`tour-biz-status.service.ts` + `scripts/check-tour-biz.ts`): 국세청 사업자등록 상태 조회(data.go.kr **15081808**, POST 100건/콜)를 여행로그 시드의 **폐업 확인**에 쓰는 "적재 뒤 보강" 변형 — 장소별 최빈 사업자번호를 모아 배치로 묻고 결과를 `TourPlaceBizStatus`(계속사업자/휴업자/폐업자/unknown + 폐업일)에 저장한다. 프록시 다리 없음(요청 시점 호출 없음), **쿼터가 있어 자동 실행에서 뺐다** — deploy.sh 가 부르지 않고 어드민 `/admin/tour` "폐업 조회 실행" 또는 CLI 로 `maxCalls`·`minTravelers` 를 정해 돌린다. 활용신청 전엔 어댑터가 503 을 그대로 드러낸다([quota-proportional-loading](quota-proportional-loading.md)).
 - **2026-09-12** in [life-map](../topics/life-map.md) (`scripts/build-life-crime.ts` + `life-crime-build.ts`): **빌드 시점 어댑터** — 경찰청 범죄 통계 CSV(3074462)와 행안부 주민등록 인구 CSV 를 개발 머신에서 내려받아(자동 다운로드) 시군구 10만 명당 5등급 JSON 으로 가공·커밋하고, 런타임 서버는 외부 호출이 0 이다. 시군구 경계 이름 별칭(합쳐진 군·행정구 표기)을 빌드 스크립트가 표로 보정한다 — probe→fixture 다리가 "산출물 커밋"으로 대체된 형태.
 - **2026-09** in [housing](../topics/housing.md) (`probe-rtms-api.ts` + `housing-ingest.service.ts`): RTMS 는 HTTPS **XML**(`LAWD_CD`×`DEAL_YMD`) — probe 로 응답 형식·에러 코드(활용신청 없음 = 503 인증 30)를 먼저 고정하고 어댑터가 정규화. 다른 도메인과 달리 **요청 시점 프록시가 없다**(적재 전용) — 어댑터 recipe 중 "probe→fixture→정규화" 세 다리만 쓰고 "프록시" 다리는 생략한 변형. `DATA_GO_KR_API_KEY` 통일(`3d9dfed`)로 8종 키 이름·`|| BUS_API_KEY` 폴백이 사라진 계기가 된 도메인.
@@ -42,6 +46,8 @@ status: active
 이 패턴이 깨지거나 흔들리는 지점:
 - **map 처럼 프록시를 뺀 소스가 늘면 "단일 신뢰 경계" 주장이 약해진다** — 키가 공개 자원이라 브라우저 직결이 정당한 경우가 많아지면, friendly 는 "프록시"가 아니라 "시크릿 금고 + 검증기"로 역할이 축소된다. 지금은 map 하나뿐이라 예외로 관리되지만, 카카오/네이버 지도가 같은 방식으로 붙으면 컨셉의 (a) 다리를 재정의해야 한다.
 - **fixture 는 실응답 스냅샷이라 외부가 바뀌면 조용히 낡는다** — probe 는 1회성이고 fixture 는 그 시점(bus 2026-07-02/04)의 박제다. 서울시가 응답 모양을 바꾸면 fixture 테스트는 초록인데 라이브만 깨진다 — 그래서 bus 는 `bus-api.live.test.ts` 를 따로 두어 실 API 를 별도로 친다(fixture=회귀 고정, live=드리프트 감지 두 층).
+- **드리프트는 0건으로 온다** (2026-09-25 실사고, 위 crawl 인스턴스). 외부 구조가 바뀌면 파서는 대개 예외가 아니라 **빈 결과**를 낸다 — 그리고 빈 결과는 정상처럼 저장돼 과거 값을 덮는다. 레시피에 두 다리를 더해야 닫힌다: 운영 로그의 "있어야 할 것이 0건" 경보(런타임 드리프트 감지)와, 0건이면 덮지 않는 마지막 정상값 유지. bus 의 `live.test` 가 테스트 시점의 드리프트 감지라면, 이건 운영 시점의 드리프트 감지다.
+- **경계가 바깥에서도 보이게 됐다** (2026-09-24, [api-docs](../topics/api-docs.md)). friendly 는 웹·앱에게 "외부 API 를 대신 부르는 단일 신뢰 경계" 였는데, CORS 를 어드민 외 `*` 로 열고 `docs/api/` 를 내면서 사용자의 다른 프로젝트에게는 **friendly 자체가 외부 API** 가 됐다. 프록시 다리가 공공 API 한도(에어코리아 500·버스 1,000 등)를 흡수하던 구조가 그대로 공개 릴레이가 되므로, 한도 방어(쿼터 게이트·레이트리밋·LLM 사용량 한도)가 이제 외부 호출자까지 막아야 한다 — `PLAN-perf-security.md` 가 #42 번복을 기록하며 남는 위험을 "비용(업스트림 쿼터·LLM, IP 분산)" 으로 적은 이유.
 - **정규화가 계약을 재확인하는 짝** — 어댑터가 정규화한 결과는 [[zod-ssot-buildless]] 의 zod 계약이 직렬화 시점에 한 번 더 검증한다(버스 좌표 값 범위가 코드 상수와 계약 `z.number().min(33).max(39)` 로 이중). 어댑터가 실수로 TM 값을 흘리면 계약이 막는다 — 정규화 다리와 계약이 서로를 검산.
 
 다른 컨셉과의 관계: [[in-memory-singleton-gates]] — bus 의 일일 쿼터 게이트·in-flight 합류가 이 어댑터 **위에 얹혀** 외부 호출 예산을 회계한다(어댑터가 "어떻게 부르나", 게이트가 "얼마나 부르나"). [[db-config-env-fallback]] — telegram/map 의 시크릿 키가 DB 우선 + env fallback 으로 살아 이 컨셉의 (c) 마스킹 다리와 짝을 이룬다(설정 서비스가 어댑터에 유효 키를 주입). [[zod-ssot-buildless]] — 어댑터 정규화 결과를 zod 계약이 재확인(위 참조). [[public-admin-route-split]] — map 의 `publicConfig` 공개 라우트가 어드민 secret 경로와 분리되는 사례.
@@ -56,6 +62,10 @@ status: active
 - [[../topics/weather]]
 - [[../topics/life-map]]
 - [[../topics/tour]]
+- [sea](../topics/sea.md)
+- [parking](../topics/parking.md)
+- [housing](../topics/housing.md)
+- [api-docs](../topics/api-docs.md)
 - [[in-memory-singleton-gates]]
 - [[db-config-env-fallback]]
 - [[zod-ssot-buildless]]
