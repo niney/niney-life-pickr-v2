@@ -95,6 +95,9 @@ const EnvSchema = z.object({
   //  - 건축HUB 건축물대장정보(15134735) — load:housing-buildings 만. 일 10,000건.
   //  - 전국통합식품영양성분정보(15100070) — load:food-catalog 의 파일 없을 때 대안.
   //  - 국세청 사업자등록정보 진위확인·상태조회(15081808, odcloud) — check:tour-biz·어드민 /admin/tour 만. 100건/콜.
+  //  - 주차(/parking): 전국주차장정보표준데이터(15012896) — load:parking-lots 만(1,000행 × 19콜). 한국공항공사 주차 혼잡도
+  //    (15158689)·인천공항 주차 정보(15095047) — 실시간 폴러(PARKING_LIVE_CRON). 환경공단 전기차 충전소(15076352) —
+  //    load:ev-chargers(전량 53콜) + 상태 폴러(EV_STATUS_CRON, 개발계정 일 1,000건). docs/PLAN-parking.md
   DATA_GO_KR_API_KEY: z.string().default(''),
   // 여행로그(AI 허브 71780 제주·도서, 71779 서부권, 71778 동부권, 71581 수도권) 원본 열람 허용 사용자 id·이메일(쉼표) — 다운로드 승인을 받은
   // 본인만. 비우면 원본 라우트 전부 404.
@@ -113,6 +116,11 @@ const EnvSchema = z.object({
   // 재계산한다(신고 지연 30일·해제 반영). 빈 값이면 끔(스크립트로만 갱신). 예: '0 4 2,17 * *'.
   HOUSING_REFRESH_CRON: z.string().default(''),
   HOUSING_REFRESH_MONTHS: z.coerce.number().int().min(1).max(12).default(3),
+  // 주차 실시간 폴러 cron(Asia/Seoul) — 서울 시영 실시간(SEOUL_OPEN_API_KEY)·공항 주차(DATA_GO_KR_API_KEY)를 받아
+  // 메모리에 두고 혼잡 이력(요일×시)에 누적한다. 빈 값이면 끔. 전기차 충전기 상태 폴러(period 10분 변경분 → 충전소
+  // 집계 갱신)는 EV_STATUS_CRON — 개발계정 일 1,000건이라 10분 간격(하루 ~290콜)이 기본. 테스트에선 등록하지 않는다.
+  PARKING_LIVE_CRON: z.string().default("*/5 * * * *"),
+  EV_STATUS_CRON: z.string().default("*/10 * * * *"),
 
   // 서울시 지하철 API — 모두 data.seoul.go.kr(열린데이터광장) 발급. 발급처가
   // 키를 2종으로 쪼개 둔다: '지하철 인증키'는 실시간 swopenAPI(도착/위치) 전용,

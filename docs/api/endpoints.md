@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 183개 — 공개 74 · 선택 인증 15 · 로그인 94. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 192개 — 공개 83 · 선택 인증 15 · 로그인 94. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -134,6 +134,20 @@
 |---|---|---|---|---|---|
 | GET | `/api/v1/media/panorama/:placeId` | 공개 |  |  | 네이버 플레이스 파노라마 썸네일(JPEG) — 크롤 시 저장한 사본, 없으면 404 |
 | GET | `/api/v1/media/thumbnail` | 공개 |  | `url`*, `w`, `q` | 외부 이미지 썸네일 JPEG 리사이즈 프록시 — 허용 호스트만, 디스크 캐시 |
+
+## parking
+
+| 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
+|---|---|---|---|---|---|
+| GET | `/api/v1/parking/airports` | 공개 | 240/분 |  | 공항 주차장 실시간 — 한국공항공사 13개 공항 + 인천공항, 5분 폴링 |
+| GET | `/api/v1/parking/ev/nearby` | 공개 | 240/분 | `lat`*, `lng`*, `radius`, `limit`, `fastOnly`, `freeParkingOnly`, `availableOnly`, `openOnly` | 좌표 기준 주변 전기차 충전소 — 거리순, 사용 가능·충전 중 대수 포함 |
+| GET | `/api/v1/parking/ev/points` | 공개 | 240/분 | `bbox`*, `zoom`*, `fastOnly`, `freeParkingOnly`, `availableOnly`, `openOnly` | 지도 영역 안 전기차 충전소 지점 또는 집계 셀 — 로컬 DB(충전기 상태는 10분 폴러 반영) |
+| GET | `/api/v1/parking/ev/:id` | 공개 | 240/분 |  | 전기차 충전소 상세 — 충전기별 타입·용량·상태, 없으면 404 |
+| GET | `/api/v1/parking/lots/nearby` | 공개 | 240/분 | `lat`*, `lng`*, `radius`, `limit`, `publicOnly`, `freeOnly`, `liveOnly` | 좌표 기준 주변 주차장 — 거리순, 요금·운영시간·실시간 포함 |
+| GET | `/api/v1/parking/lots/points` | 공개 | 240/분 | `bbox`*, `zoom`*, `publicOnly`, `freeOnly`, `liveOnly` | 지도 영역 안 주차장 지점 또는 집계 셀 — 로컬 DB + 실시간 단계 |
+| GET | `/api/v1/parking/lots/:id` | 공개 | 240/분 |  | 주차장 상세 — 요금·운영시간·실시간·오늘 요일의 평소 혼잡도(이력), 없으면 404 |
+| GET | `/api/v1/parking/status` | 공개 |  |  | 주차 적재·실시간 폴링 상태(주차장·충전소 건수, 마지막 폴링 시각) |
+| GET | `/api/v1/restaurants/public/:placeId/parking-reviews` | 공개 | 240/분 |  | 맛집 리뷰의 주차 평가 — 분석된 리뷰의 "주차" 관점 긍·부정·중립 건수와 주차 팁(가는 법 탭) |
 
 ## picks
 

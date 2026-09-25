@@ -230,6 +230,32 @@ housing_data() {
   echo "  적재 후: $(housing_status)"
 }
 
+# ── 주차 데이터 ────────────────────────────────────────────
+# status:parking 은 "ok lots=N std=S seoul=U geocoded=G ev=E chargers=C" 한 줄(테이블 없으면 "missing").
+parking_status() { pnpm --filter friendly status:parking 2>/dev/null | grep -E '^(ok|missing)' | tail -n1 || true; }
+
+# 주차장(표준데이터 API ~19콜 + 서울 공영 2콜 + 서울 구영 주소 지오코딩 ~700콜)·충전소(환경공단 ~53콜, 1분 남짓)가 비어
+# 있으면 첫 적재, force=1(9번)이면 다시(원천 반기·수시 갱신). 실시간·충전기 상태는 서버 폴러가 돌리므로 여기선 적재만.
+parking_data() {
+  local force="${1:-0}"
+  local st; st="$(parking_status)"
+  if [[ "$st" != ok* ]]; then
+    echo "  (주차 테이블 없음 — 마이그레이션(케이스 2/4) 뒤에 적재됩니다)"; return 0
+  fi
+  local lots ev; lots="$(stat_val lots "$st")"; ev="$(stat_val ev "$st")"
+  echo "  주차 현재: 주차장 ${lots:-0}곳(표준 $(stat_val std "$st") · 서울 $(stat_val seoul "$st")) · 충전소 ${ev:-0}곳"
+  if [[ "$force" == 1 || "${lots:-0}" == 0 ]]; then
+    step "주차장 적재(표준데이터 API + 서울 공영주차장)"
+    pnpm --filter friendly load:parking-lots \
+      || echo "  (주차장 적재 실패 — 표준데이터 API(15012896) 활용신청·SEOUL_OPEN_API_KEY 확인. 서울만 먼저: pnpm --filter friendly load:parking-lots --sources=seoul)"
+  fi
+  if [[ "$force" == 1 || "${ev:-0}" == 0 ]]; then
+    step "전기차 충전소 적재(환경공단 API)"
+    pnpm --filter friendly load:ev-chargers || echo "  (충전소 적재 실패 — DATA_GO_KR_API_KEY/활용신청(15076352) 확인 뒤 ./deploy.sh 9)"
+  fi
+  echo "  적재 후: $(parking_status)"
+}
+
 ask_stop() {
   # 마이그레이션 전 서버 중단 여부 (기본 N = 무중단)
   read -rp $'\n파괴적 마이그레이션인가요? 서버를 중단하고 진행할까요? [y/N] ' a
@@ -274,15 +300,15 @@ food_catalog_data() {
 }
 
 case_1() {  # API만, DB 변경 없음
-  pull; build_api; life_map_data; food_catalog_data; housing_data; pm_reload
+  pull; build_api; life_map_data; food_catalog_data; housing_data; parking_data; pm_reload
 }
 
 case_2() {  # API + DB 마이그레이션
   pull
   if ask_stop; then
-    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; build_api; pm_start
+    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; pm_start
   else
-    gen; migrate; life_map_data; food_catalog_data; housing_data; build_api; pm_reload
+    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; pm_reload
   fi
 }
 
@@ -294,9 +320,9 @@ case_3() {  # 웹만
 case_4() {  # 웹 + API + DB (풀)
   pull
   if ask_stop; then
-    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; build_api; build_web; pm_start
+    pm_stop; gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; build_web; pm_start
   else
-    gen; migrate; life_map_data; food_catalog_data; housing_data; build_api; build_web; pm_reload
+    gen; migrate; life_map_data; food_catalog_data; housing_data; parking_data; build_api; build_web; pm_reload
   fi
 }
 
@@ -316,6 +342,10 @@ case_8() {  # 집값 데이터 적재/갱신 — 단지 CSV 를 data/open/housin
   pull; gen; housing_data 1
 }
 
+case_9() {  # 주차 데이터 적재/갱신 — 표준데이터·서울 공영주차장·전기차 충전소 API(코드 배포·재기동 없음)
+  pull; gen; parking_data 1
+}
+
 # ── 메뉴 ────────────────────────────────────────────────
 choice="${1:-}"
 if [[ -z "$choice" ]]; then
@@ -330,8 +360,9 @@ if [[ -z "$choice" ]]; then
   6) 일상지도 데이터 적재/갱신 — data/open/ 의 CSV + 저장소 지오코딩 캐시
   7) 음식 카탈로그 적재/갱신   — data/open/food/ 의 배포본 + 레시피 API
   8) 집값 데이터 적재/갱신     — data/open/housing/ 의 단지 CSV + 실거래 API (HOUSING_MONTHS=N 으로 백필)
+  9) 주차 데이터 적재/갱신     — 전국주차장 표준데이터·서울 공영주차장·전기차 충전소 API
 MENU
-  read -rp "번호 [1-8]: " choice
+  read -rp "번호 [1-9]: " choice
 fi
 
 case "$choice" in
@@ -343,7 +374,8 @@ case "$choice" in
   6) case_6 ;;
   7) case_7 ;;
   8) case_8 ;;
-  *) echo "잘못된 선택: '$choice' (1-8)"; exit 1 ;;
+  9) case_9 ;;
+  *) echo "잘못된 선택: '$choice' (1-9)"; exit 1 ;;
 esac
 
 step "완료"

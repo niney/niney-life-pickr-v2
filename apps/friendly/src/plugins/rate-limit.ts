@@ -51,6 +51,8 @@ export const RATE = {
   lifeMapSearch: { max: 60, timeWindow: '1 minute' },
   // 집값 뷰포트/주변/거래 목록 조회 — 일상지도와 같은 로컬 DB 조회·지도 이동마다 1콜. 분당 240.
   housingRead: { max: 240, timeWindow: '1 minute' },
+  // 주차 뷰포트/주변/상세 조회 — 로컬 DB + 폴러 메모리(업스트림 0콜). 지도 이동마다 탭당 1콜. 분당 240.
+  parkingRead: { max: 240, timeWindow: '1 minute' },
   // 집값 단지명 검색 — 로컬 LIKE 조회, 타이핑 디바운스 뒤 호출. 분당 120.
   housingSearch: { max: 120, timeWindow: '1 minute' },
   // 음식 카탈로그 자동완성(식단 입력) — 로컬 DB 조회라 싸지만 인증 사용자 타이핑 디바운스 호출.

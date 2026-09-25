@@ -1589,6 +1589,143 @@ model LifeMasterSync {
   @@map("life_master_syncs")
 }
 
+// ── 주차(/parking) — docs/PLAN-parking.md ──────────────────────────────────────
+// 주차장 마스터 — 전국주차장정보표준데이터(15012896, id 'std:<관리번호>')·서울 공영주차장 안내(GetParkInfo,
+// 'seoul:<주차장코드>')(+ KOTSA 15099883 승인 후 'kotsa:'). load:parking-lots 가 원천별로 받아 정규화하고, 표준데이터의
+// 서울 행이 서울 원천과 겹치면 서울 행만 남긴 뒤 전량 교체한다(FK 없음 — 재적재 내성). 조회는 지도 bbox 라
+// (lat,lng) 인덱스, liveKey 는 실시간 폴러 메모리의 키('seoul:<주차장코드>').
+model ParkingLot {
+  id           String   @id
+  // 'std' | 'seoul' | 'kotsa'
+  source       String
+  name         String
+  // @repo/utils PARKING_OWNERSHIPS('public'|'private') · PARKING_LOT_TYPES · PARKING_FEE_TYPES — 모르면 null.
+  ownership    String?
+  lotType      String?
+  feeType      String?
+  roadAddr     String?
+  lotAddr      String?
+  phone        String?
+  orgName      String?
+  totalSpaces  Int?
+  // 운영시간 'HH:MM'(24:00 허용) — 평일·토요일·공휴일.
+  wdOpen       String?
+  wdClose      String?
+  satOpen      String?
+  satClose     String?
+  holOpen      String?
+  holClose     String?
+  operDays     String?
+  // 요금(분·원) — null 은 정보 없음.
+  baseMin      Int?
+  baseFee      Int?
+  addMin       Int?
+  addFee       Int?
+  dayMaxFee    Int?
+  dayPassFee   Int?
+  monthlyFee   Int?
+  // 서울 — 토요일·공휴일 무료. 다른 원천은 null.
+  satFree      Boolean?
+  holFree      Boolean?
+  payMethods   String?
+  note         String?
+  disabledZone Boolean?
+  liveKey      String?
+  lat          Float?
+  lng          Float?
+  // 'source' | 'road' | 'parcel' — 좌표 출처. null = 좌표 없음.
+  geoSource    String?
+  baseDate     String?
+
+  @@index([lat, lng])
+  @@index([liveKey])
+  @@map("parking_lots")
+}
+
+// 혼잡 이력 — 실시간 폴러(5분)가 (key, KST 요일, 시) 칸에 점유율을 누적한다. key = 'seoul:<주차장코드>' |
+// 'airport:<IATA>:<주차장명>'. 행 수 상한 = 키 수 × 168 이라 커지지 않는다.
+model ParkingOccupancyStat {
+  key       String
+  dow       Int
+  hour      Int
+  samples   Int
+  occSum    Float
+  // 점유율 97% 이상(만차) 표본 수.
+  fullCount Int
+  updatedAt DateTime @updatedAt
+
+  @@id([key, dow, hour])
+  @@map("parking_occupancy_stats")
+}
+
+// 주차 적재 이력 — kind 'lots' | 'ev'. detail 은 원천별 건수 JSON(상태 API 표시용).
+model ParkingSync {
+  id       Int      @id @default(autoincrement())
+  kind     String
+  count    Int
+  geocoded Int?
+  detail   String?
+  baseDate String?
+  loadedAt DateTime @default(now())
+
+  @@index([kind, loadedAt])
+  @@map("parking_syncs")
+}
+
+// 전기차 충전소 — 환경공단 충전기 정보(15076352)를 충전소(statId) 단위로 접은 점(충전기 행은 EvCharger).
+// load:ev-chargers 가 전량 교체, 상태 폴러(10분)가 EvCharger.stat 과 여기 집계 칸(available/charging)을 갱신한다.
+model EvStation {
+  id             String    @id
+  name           String
+  addr           String?
+  addrDetail     String?
+  location       String?
+  lat            Float
+  lng            Float
+  useTime        String?
+  busiId         String?
+  operator       String?
+  operatorCall   String?
+  // 주차료 무료(Y→true) / 유료(N→false) / 모름(null).
+  parkingFree    Boolean?
+  limited        Boolean?
+  limitDetail    String?
+  note           String?
+  kind           String?
+  kindDetail     String?
+  floorType      String?
+  floorNum       String?
+  zcode          String?
+  chargerCount   Int
+  fastCount      Int
+  // 사용 가능(stat 2)·충전 중(stat 3) 충전기 수 — 상태 폴러가 갱신.
+  availableCount Int
+  chargingCount  Int
+  hasFast        Boolean
+  statusAt       DateTime?
+
+  @@index([lat, lng])
+  @@map("ev_stations")
+}
+
+model EvCharger {
+  statId    String
+  chgerId   String
+  // 충전기 타입 코드(01~11).
+  type      String
+  outputKw  Float?
+  method    String?
+  fast      Boolean
+  stat      Int
+  // 원천 'yyyyMMddHHmmss'(KST) 그대로 — 상태 갱신·마지막 충전 종료·충전 시작.
+  statUpdDt String?
+  lastTedt  String?
+  nowTsdt   String?
+
+  @@id([statId, chgerId])
+  @@map("ev_chargers")
+}
+
 // ── 음식 카탈로그(food) — 식단 관리(meal) 마스터 데이터. docs/PLAN-meal.md ──────────────
 // 행 식별 키는 nameNorm(normalizeTerm) — 출처가 달라도 같은 이름이면 한 행(적재가 병합:
 // 비어 있는 필드 채움 + 별칭·sourceRefs 추가 + popularity 누적). 사용자 식단 기록(MealItem)은

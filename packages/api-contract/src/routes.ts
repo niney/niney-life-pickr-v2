@@ -593,6 +593,25 @@ export const Sea = {
 // ── 일상지도(전국 CCTV·공중화장실 CSV + 병의원 심평원 API 적재) ─────────────────
 // 공개(비로그인). 로컬 SQLite 조회뿐이라 업스트림 쿼터 없음. 지도 뷰포트(bbox)+줌이 조회 단위 —
 // 줌이 임계 이상이면 개별 지점, 아니면 서버 집계 셀을 내려준다.
+// 주차 — 주차장(표준데이터+서울)·전기차 충전소·공항 주차. docs/PLAN-parking.md
+export const Parking = {
+  // 적재·실시간 폴링 상태.
+  status: `${API_PREFIX}/parking/status`,
+  // 주차장 뷰포트 조회 — ?bbox&zoom[&publicOnly=1][&freeOnly=1][&liveOnly=1].
+  lotPoints: `${API_PREFIX}/parking/lots/points`,
+  // 좌표 기준 거리순 — ?lat&lng[&radius≤3000][&limit≤30][필터].
+  lotNearby: `${API_PREFIX}/parking/lots/nearby`,
+  lotDetail: (id: string) => `${API_PREFIX}/parking/lots/${encodeURIComponent(id)}`,
+  // 충전소 뷰포트/주변/상세 — 필터 fastOnly·freeParkingOnly·availableOnly·openOnly.
+  evPoints: `${API_PREFIX}/parking/ev/points`,
+  evNearby: `${API_PREFIX}/parking/ev/nearby`,
+  evDetail: (id: string) => `${API_PREFIX}/parking/ev/${encodeURIComponent(id)}`,
+  // 공항 주차 실시간(한국공항공사 13곳 + 인천) — 서버 폴러 메모리.
+  airports: `${API_PREFIX}/parking/airports`,
+  // 맛집 상세 '가는 법' — 리뷰의 '주차' 관점 집계·팁.
+  restaurantReviews: (placeId: string) => `${API_PREFIX}/restaurants/public/${encodeURIComponent(placeId)}/parking-reviews`,
+} as const;
+
 export const LifeMap = {
   // 레이어별 적재 상태(건수·기준일·적재시각·화장실/병의원 좌표 확보 건수).
   status: `${API_PREFIX}/life-map/status`,

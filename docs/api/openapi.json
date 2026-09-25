@@ -19911,6 +19911,2207 @@
         }
       }
     },
+    "/api/v1/parking/airports": {
+      "get": {
+        "summary": "공항 주차장 실시간 — 한국공항공사 13개 공항 + 인천공항, 5분 폴링",
+        "tags": [
+          "parking"
+        ],
+        "description": "서버 폴러가 받은 최신 값(요청 경로 업스트림 0콜). 아직 못 받았으면 fetchedAt null·lots 빈 배열, 최근 폴링 실패면 stale=true(이전 값).",
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "airports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "total": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "occupied": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "free",
+                              "normal",
+                              "busy",
+                              "full"
+                            ],
+                            "nullable": true
+                          },
+                          "lots": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "total": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "occupied": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "rate": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "nullable": true
+                                },
+                                "level": {
+                                  "type": "string",
+                                  "enum": [
+                                    "free",
+                                    "normal",
+                                    "busy",
+                                    "full"
+                                  ],
+                                  "nullable": true
+                                },
+                                "updatedAt": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "usualOcc": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "total",
+                                "occupied",
+                                "rate",
+                                "level",
+                                "updatedAt",
+                                "usualOcc"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "name",
+                          "lat",
+                          "lng",
+                          "total",
+                          "occupied",
+                          "level",
+                          "lots"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "fetchedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "stale": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "airports",
+                    "fetchedAt",
+                    "stale"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/ev/nearby": {
+      "get": {
+        "summary": "좌표 기준 주변 전기차 충전소 — 거리순, 사용 가능·충전 중 대수 포함",
+        "tags": [
+          "parking"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 33,
+              "maximum": 39
+            },
+            "in": "query",
+            "name": "lat",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 124,
+              "maximum": 132
+            },
+            "in": "query",
+            "name": "lng",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 3000,
+              "default": 1000
+            },
+            "in": "query",
+            "name": "radius",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30,
+              "default": 15
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "fastOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "freeParkingOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "availableOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "openOnly",
+            "required": false
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "center": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "addr": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "addrDetail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "location": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "useTime": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "operator": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "operatorCall": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "parkingFree": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "limited": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "limitDetail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "note": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "kind": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "kindDetail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "kindLabel": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "floorType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "floorNum": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "chargerCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "fastCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "availableCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "chargingCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "available",
+                              "busy",
+                              "offline"
+                            ]
+                          },
+                          "dist": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "addr",
+                          "addrDetail",
+                          "location",
+                          "lat",
+                          "lng",
+                          "useTime",
+                          "operator",
+                          "operatorCall",
+                          "parkingFree",
+                          "limited",
+                          "limitDetail",
+                          "note",
+                          "kind",
+                          "kindDetail",
+                          "kindLabel",
+                          "floorType",
+                          "floorNum",
+                          "chargerCount",
+                          "fastCount",
+                          "availableCount",
+                          "chargingCount",
+                          "level",
+                          "dist"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "fetchedAt": {
+                      "type": "string"
+                    },
+                    "statusAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "center",
+                    "items",
+                    "total",
+                    "fetchedAt",
+                    "statusAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/ev/points": {
+      "get": {
+        "summary": "지도 영역 안 전기차 충전소 지점 또는 집계 셀 — 로컬 DB(충전기 상태는 10분 폴러 반영)",
+        "tags": [
+          "parking"
+        ],
+        "description": "bbox·zoom 규약은 주차장과 같고 개별 점 임계 줌은 15. fastOnly(급속)·freeParkingOnly(주차료 무료)·availableOnly(사용 가능 1기 이상)·openOnly(이용자 제한 없음) 필터.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$"
+            },
+            "in": "query",
+            "name": "bbox",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 22
+            },
+            "in": "query",
+            "name": "zoom",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "fastOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "freeParkingOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "availableOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "openOnly",
+            "required": false
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "points",
+                        "cells"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "available",
+                              "busy",
+                              "offline"
+                            ]
+                          },
+                          "fast": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "lat",
+                          "lng",
+                          "name",
+                          "level",
+                          "fast"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cells": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "count"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "minPointZoom": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 22
+                    },
+                    "fetchedAt": {
+                      "type": "string"
+                    },
+                    "statusAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "items",
+                    "cells",
+                    "total",
+                    "truncated",
+                    "minPointZoom",
+                    "fetchedAt",
+                    "statusAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/ev/{id}": {
+      "get": {
+        "summary": "전기차 충전소 상세 — 충전기별 타입·용량·상태, 없으면 404",
+        "tags": [
+          "parking"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "addr": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "addrDetail": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "location": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lat": {
+                      "type": "number"
+                    },
+                    "lng": {
+                      "type": "number"
+                    },
+                    "useTime": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "operator": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "operatorCall": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "parkingFree": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "limited": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "limitDetail": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "note": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "kind": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "kindDetail": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "kindLabel": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "floorType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "floorNum": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "chargerCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "fastCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "availableCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "chargingCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "level": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "busy",
+                        "offline"
+                      ]
+                    },
+                    "chargers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "outputKw": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "method": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "fast": {
+                            "type": "boolean"
+                          },
+                          "stat": {
+                            "type": "integer"
+                          },
+                          "statUpdatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lastChargeEndAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "chargingSince": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "outputKw",
+                          "method",
+                          "fast",
+                          "stat",
+                          "statUpdatedAt",
+                          "lastChargeEndAt",
+                          "chargingSince"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "statusAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "addr",
+                    "addrDetail",
+                    "location",
+                    "lat",
+                    "lng",
+                    "useTime",
+                    "operator",
+                    "operatorCall",
+                    "parkingFree",
+                    "limited",
+                    "limitDetail",
+                    "note",
+                    "kind",
+                    "kindDetail",
+                    "kindLabel",
+                    "floorType",
+                    "floorNum",
+                    "chargerCount",
+                    "fastCount",
+                    "availableCount",
+                    "chargingCount",
+                    "level",
+                    "chargers",
+                    "statusAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/lots/nearby": {
+      "get": {
+        "summary": "좌표 기준 주변 주차장 — 거리순, 요금·운영시간·실시간 포함",
+        "tags": [
+          "parking"
+        ],
+        "description": "lat·lng(WGS84) 필수, radius 기본 1km(최대 3km)·limit 기본 15(최대 30). 필터는 points 와 같다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 33,
+              "maximum": 39
+            },
+            "in": "query",
+            "name": "lat",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 124,
+              "maximum": 132
+            },
+            "in": "query",
+            "name": "lng",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 3000,
+              "default": 1000
+            },
+            "in": "query",
+            "name": "radius",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30,
+              "default": 15
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "publicOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "freeOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "liveOnly",
+            "required": false
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "center": {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lng"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "std",
+                              "seoul",
+                              "kotsa"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "ownership": {
+                            "type": "string",
+                            "enum": [
+                              "public",
+                              "private"
+                            ],
+                            "nullable": true
+                          },
+                          "lotType": {
+                            "type": "string",
+                            "enum": [
+                              "street",
+                              "offstreet",
+                              "attached"
+                            ],
+                            "nullable": true
+                          },
+                          "feeType": {
+                            "type": "string",
+                            "enum": [
+                              "free",
+                              "paid",
+                              "mixed"
+                            ],
+                            "nullable": true
+                          },
+                          "roadAddr": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lotAddr": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "phone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "orgName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "totalSpaces": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "hours": {
+                            "type": "object",
+                            "properties": {
+                              "wd": {
+                                "type": "object",
+                                "properties": {
+                                  "open": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "close": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "open",
+                                  "close"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "sat": {
+                                "type": "object",
+                                "properties": {
+                                  "open": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "close": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "open",
+                                  "close"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "hol": {
+                                "type": "object",
+                                "properties": {
+                                  "open": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "close": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "open",
+                                  "close"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "wd",
+                              "sat",
+                              "hol"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "operDays": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "fee": {
+                            "type": "object",
+                            "properties": {
+                              "baseMin": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "baseFee": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "addMin": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "addFee": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "dayMaxFee": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "dayPassFee": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "monthlyFee": {
+                                "type": "integer",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "baseMin",
+                              "baseFee",
+                              "addMin",
+                              "addFee",
+                              "dayMaxFee",
+                              "dayPassFee",
+                              "monthlyFee"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "satFree": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "holFree": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "payMethods": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "note": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "disabledZone": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "lat": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "lng": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "geoSource": {
+                            "type": "string",
+                            "enum": [
+                              "source",
+                              "road",
+                              "parcel"
+                            ],
+                            "nullable": true
+                          },
+                          "baseDate": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "live": {
+                            "type": "object",
+                            "properties": {
+                              "total": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "occupied": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "available": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "free",
+                                  "normal",
+                                  "busy",
+                                  "full"
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "fetchedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "total",
+                              "occupied",
+                              "available",
+                              "level",
+                              "updatedAt",
+                              "fetchedAt"
+                            ],
+                            "additionalProperties": false,
+                            "nullable": true
+                          },
+                          "dist": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "source",
+                          "name",
+                          "ownership",
+                          "lotType",
+                          "feeType",
+                          "roadAddr",
+                          "lotAddr",
+                          "phone",
+                          "orgName",
+                          "totalSpaces",
+                          "hours",
+                          "operDays",
+                          "fee",
+                          "satFree",
+                          "holFree",
+                          "payMethods",
+                          "note",
+                          "disabledZone",
+                          "lat",
+                          "lng",
+                          "geoSource",
+                          "baseDate",
+                          "live",
+                          "dist"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "fetchedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "center",
+                    "items",
+                    "total",
+                    "fetchedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/lots/points": {
+      "get": {
+        "summary": "지도 영역 안 주차장 지점 또는 집계 셀 — 로컬 DB + 실시간 단계",
+        "tags": [
+          "parking"
+        ],
+        "description": "bbox 는 \"minLng,minLat,maxLng,maxLat\"(WGS84). zoom 13 이상이고 영역이 좁으면 개별 점(최대 3,000개, 넘으면 truncated), 아니면 격자 집계 셀. publicOnly·freeOnly·liveOnly(=1) 필터. 점의 level 은 실시간 연계(서울 시영) 주차장의 여유·보통·혼잡·만차, 없으면 null.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$"
+            },
+            "in": "query",
+            "name": "bbox",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 22
+            },
+            "in": "query",
+            "name": "zoom",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "publicOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "freeOnly",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "0",
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "liveOnly",
+            "required": false
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "points",
+                        "cells"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "feeType": {
+                            "type": "string",
+                            "enum": [
+                              "free",
+                              "paid",
+                              "mixed"
+                            ],
+                            "nullable": true
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "free",
+                              "normal",
+                              "busy",
+                              "full"
+                            ],
+                            "nullable": true
+                          },
+                          "available": {
+                            "type": "integer",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "lat",
+                          "lng",
+                          "name",
+                          "feeType",
+                          "level",
+                          "available"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cells": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "lat",
+                          "lng",
+                          "count"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "minPointZoom": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 22
+                    },
+                    "fetchedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "items",
+                    "cells",
+                    "total",
+                    "truncated",
+                    "minPointZoom",
+                    "fetchedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/lots/{id}": {
+      "get": {
+        "summary": "주차장 상세 — 요금·운영시간·실시간·오늘 요일의 평소 혼잡도(이력), 없으면 404",
+        "tags": [
+          "parking"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "std",
+                        "seoul",
+                        "kotsa"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "ownership": {
+                      "type": "string",
+                      "enum": [
+                        "public",
+                        "private"
+                      ],
+                      "nullable": true
+                    },
+                    "lotType": {
+                      "type": "string",
+                      "enum": [
+                        "street",
+                        "offstreet",
+                        "attached"
+                      ],
+                      "nullable": true
+                    },
+                    "feeType": {
+                      "type": "string",
+                      "enum": [
+                        "free",
+                        "paid",
+                        "mixed"
+                      ],
+                      "nullable": true
+                    },
+                    "roadAddr": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lotAddr": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "orgName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "totalSpaces": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "hours": {
+                      "type": "object",
+                      "properties": {
+                        "wd": {
+                          "type": "object",
+                          "properties": {
+                            "open": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "close": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "open",
+                            "close"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "sat": {
+                          "type": "object",
+                          "properties": {
+                            "open": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "close": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "open",
+                            "close"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "hol": {
+                          "type": "object",
+                          "properties": {
+                            "open": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "close": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "open",
+                            "close"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "wd",
+                        "sat",
+                        "hol"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "operDays": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fee": {
+                      "type": "object",
+                      "properties": {
+                        "baseMin": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "baseFee": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "addMin": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "addFee": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "dayMaxFee": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "dayPassFee": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "monthlyFee": {
+                          "type": "integer",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "baseMin",
+                        "baseFee",
+                        "addMin",
+                        "addFee",
+                        "dayMaxFee",
+                        "dayPassFee",
+                        "monthlyFee"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "satFree": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "holFree": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "payMethods": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "note": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "disabledZone": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "lat": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "lng": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "geoSource": {
+                      "type": "string",
+                      "enum": [
+                        "source",
+                        "road",
+                        "parcel"
+                      ],
+                      "nullable": true
+                    },
+                    "baseDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "live": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "occupied": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "available": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "level": {
+                          "type": "string",
+                          "enum": [
+                            "free",
+                            "normal",
+                            "busy",
+                            "full"
+                          ],
+                          "nullable": true
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "occupied",
+                        "available",
+                        "level",
+                        "updatedAt",
+                        "fetchedAt"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    },
+                    "pattern": {
+                      "type": "object",
+                      "properties": {
+                        "dow": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        },
+                        "hours": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hour": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 23
+                              },
+                              "occ": {
+                                "type": "number",
+                                "minimum": 0,
+                                "nullable": true
+                              },
+                              "fullRatio": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1,
+                                "nullable": true
+                              },
+                              "samples": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "hour",
+                              "occ",
+                              "fullRatio",
+                              "samples"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "minItems": 24,
+                          "maxItems": 24
+                        },
+                        "minSamples": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "dow",
+                        "hours",
+                        "minSamples"
+                      ],
+                      "additionalProperties": false,
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "source",
+                    "name",
+                    "ownership",
+                    "lotType",
+                    "feeType",
+                    "roadAddr",
+                    "lotAddr",
+                    "phone",
+                    "orgName",
+                    "totalSpaces",
+                    "hours",
+                    "operDays",
+                    "fee",
+                    "satFree",
+                    "holFree",
+                    "payMethods",
+                    "note",
+                    "disabledZone",
+                    "lat",
+                    "lng",
+                    "geoSource",
+                    "baseDate",
+                    "live",
+                    "pattern"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/status": {
+      "get": {
+        "summary": "주차 적재·실시간 폴링 상태(주차장·충전소 건수, 마지막 폴링 시각)",
+        "tags": [
+          "parking"
+        ],
+        "x-auth": "public",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lots": {
+                      "type": "object",
+                      "properties": {
+                        "loaded": {
+                          "type": "boolean"
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "bySource": {
+                          "type": "object",
+                          "properties": {
+                            "std": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "seoul": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "kotsa": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "std",
+                            "seoul",
+                            "kotsa"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "geocoded": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "baseDate": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "loadedAt": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "loaded",
+                        "count",
+                        "bySource",
+                        "geocoded",
+                        "baseDate",
+                        "loadedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "ev": {
+                      "type": "object",
+                      "properties": {
+                        "loaded": {
+                          "type": "boolean"
+                        },
+                        "stations": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "chargers": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "loadedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "statusAt": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "loaded",
+                        "stations",
+                        "chargers",
+                        "loadedAt",
+                        "statusAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "live": {
+                      "type": "object",
+                      "properties": {
+                        "lotCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "lotAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "airportLotCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "airportAt": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "lotCount",
+                        "lotAt",
+                        "airportLotCount",
+                        "airportAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "fetchedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "lots",
+                    "ev",
+                    "live",
+                    "fetchedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/picks": {
       "get": {
         "summary": "내 픽(고민 선택지 묶음) 전체 목록 — 최신순",
@@ -22615,6 +24816,125 @@
                     "items",
                     "notice",
                     "llmPending"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/restaurants/public/{placeId}/parking-reviews": {
+      "get": {
+        "summary": "맛집 리뷰의 주차 평가 — 분석된 리뷰의 \"주차\" 관점 긍·부정·중립 건수와 주차 팁(가는 법 탭)",
+        "tags": [
+          "parking"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "path",
+            "name": "placeId",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "x-rate-limit": {
+          "max": 240,
+          "timeWindow": "1 minute"
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "analyzed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "aspect": {
+                      "type": "object",
+                      "properties": {
+                        "pos": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "neg": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "neu": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "pos",
+                        "neg",
+                        "neu"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "tips": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "term": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "term",
+                          "count"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "analyzed",
+                    "aspect",
+                    "tips"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "error",
+                    "message"
                   ],
                   "additionalProperties": false
                 }

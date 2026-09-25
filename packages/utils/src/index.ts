@@ -27,6 +27,8 @@ export * from './lifeMapMarker.js';
 export * from './lifeStore.js';
 export * from './lifeFlood.js';
 export * from './sea.js';
+export * from './parking.js';
+export * from './parkingMarker.js';
 export * from './housing.js';
 export * from './housingMarker.js';
 export * from './foodTaxonomy.js';

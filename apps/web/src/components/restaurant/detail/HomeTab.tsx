@@ -11,6 +11,7 @@ import {
   TablingScoreBars,
   TablingServiceBadges,
 } from './shared';
+import { ParkingSummaryLine } from './ParkingSection';
 import { StoreInfoBadges } from './StoreInfoBadges';
 import { TourSummaryBadge, TourSummaryLine } from './TourSummaryBadge';
 import type { TabKey } from './tabs';
@@ -190,6 +191,7 @@ export const HomeTab = ({
               <span className="truncate">{detail.roadAddress ?? detail.address}</span>
             </div>
           )}
+          <ParkingSummaryLine detail={detail} onOpen={() => onChangeTab('transit')} />
         </div>
       </section>
     </div>

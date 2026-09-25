@@ -13,9 +13,10 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { SubwayLineBadge } from '~/components/subway/SubwayLineBadge';
 import { cn } from '~/lib/utils';
+import { ParkingNearbySection } from './ParkingSection';
 
 // "가는 법" 탭 — 식당 좌표 주변의 버스 정류장(500m)·지하철역(1.5km)과 실시간
-// 도착정보. 서버·계약 변경 0 — 기존 대중교통 nearby/도착 훅을 그대로 재사용한다.
+// 도착정보(기존 대중교통 nearby/도착 훅을 그대로 재사용) + 주차(리뷰 주차 평가·반경 300m 주차장 — ParkingSection).
 //
 // - nearby 는 로컬 정류소/역사 마스터 조회(업스트림 0콜)라 탭 진입 즉시 로드.
 // - 도착정보만 실시간 프록시(일일 쿼터) — 행을 선택했을 때만 조회하고, 섹션당
@@ -45,6 +46,7 @@ export const TransitTab = ({ detail }: { detail: RestaurantPublicDetailType }) =
     <div className="flex flex-col gap-6 p-4">
       <BusNearbySection lat={lat} lng={lng} />
       <SubwayNearbySection lat={lat} lng={lng} />
+      <ParkingNearbySection detail={detail} lat={lat} lng={lng} />
     </div>
   );
 };

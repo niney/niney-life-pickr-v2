@@ -23,6 +23,7 @@ const NAV: NavItem[] = [
   { to: '/', label: '홈', end: true },
   { to: '/restaurants-v2', label: '맛집' },
   { to: '/bus', label: '대중교통', match: ['/bus', '/subway'] },
+  { to: '/parking', label: '주차' },
   { to: '/life-map', label: '일상지도' },
   { to: '/housing', label: '집값' },
   { to: '/travel/jeju', label: '여행', match: ['/travel'] },
