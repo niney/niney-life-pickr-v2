@@ -87,6 +87,34 @@ cd apps/mobile && npx expo prebuild --platform ios --no-install
 Expo SDK 58 이상으로 올리면 템플릿이 같은 일을 하므로 이 플러그인을 지운다. 남겨 두면 AppDelegate 패턴을
 못 찾아 prebuild 가 실패한다 — RN 이 두 번 뜨는 것을 막는 의도된 안전장치다.
 
+## 증상 — Xcode 27 에서 `pnpm dev:ios`(expo run:ios)가 빌드 전에 멈춘다
+
+```
+CommandError: Can't determine id of Simulator app; the Simulator is most likely not installed on this machine.
+```
+
+Xcode 27 은 Simulator.app 을 **DeviceHub.app**(`com.apple.dt.Devices`)으로 바꾸고 위치도
+`Contents/Developer/Applications` → `Contents/Applications` 로 옮겼다. Expo CLI 54 는 "Simulator" 라는 이름·번들 ID
+만 찾기 때문에 실행 조건 검사에서 실패한다. Xcode 에서 직접 실행하면 이 검사를 거치지 않아 된다.
+Expo 는 `@expo/cli` 57.0.27(2026-09-24)에서 고쳤고 54.x 에는 백포트하지 않았다.
+
+## 해결 — `patches/@expo__cli@54.0.24.patch`
+
+57.0.27 의 수정 세 곳을 설치된 54.0.24 에 옮긴 pnpm 패치다(루트 `package.json` 의 `pnpm.patchedDependencies`).
+
+- 실행 조건 검사: "Simulator" 가 없으면 "DeviceHub" 를 찾고 `com.apple.dt.Devices` 를 허용한다.
+- 시뮬레이터 앱 확인·실행: DeviceHub 프로세스도 세고, `open -a Simulator` 가 실패하면
+  `devices://device/open?id=<UDID>` 로 해당 기기를 연다.
+- 창 앞으로 가져오기: Simulator 가 없으면 DeviceHub 를 활성화한다.
+
+`pnpm install` 이 자동으로 적용한다. `expo` 를 올려 `@expo/cli` 버전이 바뀌면 pnpm 이 패치 대상 버전을 못
+찾았다고 경고하니, 그때 새 버전에 수정이 들어 있는지 보고 패치를 지우거나 다시 만든다(SDK 57 이상은 불필요).
+
+iOS 27 시뮬레이터에서는 CLI 가 앱을 dev-client URL(`…://expo-development-client/?url=…`)로 여는 순간
+"'Life Pickr'에서 열겠습니까?" 확인창이 뜬다. iOS 27 이 외부에서 여는 사용자 지정 스킴마다 묻는 것이라
+Expo 57 CLI 도 같다. **열기**를 누르면 앱이 뜨고, expo-router 는 이 URL 을 첫 화면으로 처리한다.
+iOS 26 이하 시뮬레이터는 확인창 없이 바로 열린다.
+
 ## 곁다리로 겪는 것들
 
 - **CocoaPods 가 UTF-8 로케일을 요구한다.** `LANG` 이 비어 있으면 `pod install` 이
