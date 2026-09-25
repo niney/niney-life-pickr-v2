@@ -12,6 +12,7 @@ import {
   QUERY_STALE_TIME,
   readLpEmbedInit,
   setMealDraftPrincipal,
+  startSajuProfileMirror,
   ThemeProvider,
   useAuthStore,
   useGuestKeyStore,
@@ -41,6 +42,8 @@ if (embedInit) {
   else if (storedToken) useAuthStore.setState({ token: null });
   if (embedInit.guestKey) useGuestKeyStore.setState({ guestKey: embedInit.guestKey });
 }
+// 앱 WebView 안이면 사주(C) 게스트 프로필 스토어를 앱으로 미러한다(홈 오늘의 운세 카드·알림). 앱 밖은 no-op.
+startSajuProfileMirror();
 
 useAuthStore.subscribe((state) => {
   if (state.token) localStorage.setItem(TOKEN_KEY, state.token);

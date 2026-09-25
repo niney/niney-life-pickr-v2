@@ -59,6 +59,7 @@ export * from './stores/mealDraftStore.js';
 export * from './stores/guestKeyStore.js';
 export * from './stores/tarotHistoryStore.js';
 export * from './stores/sajuProfileStore.js';
+export * from './stores/sajuProfileMirror.js';
 export * from './settlement/groupSuggestion.js';
 export * from './hooks/useAuth.js';
 export * from './hooks/usePicks.js';

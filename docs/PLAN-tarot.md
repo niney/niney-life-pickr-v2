@@ -301,6 +301,11 @@ model UsageQuotaCounter {
   기기 한도·오늘의 카드 잠금이 앱과 WebView 사이에 일치. **토큰은 URL 에 싣지 않는다.**
 - 웹 → 앱은 `postMessage(JSON)`: `share`(OS 공유 시트 — WebView 는 navigator.share 가 없거나 제한적) / `open`(외부 브라우저 —
   `<a download>` 가 WebView 에서 동작하지 않아 이미지는 공유·열기로) / `title`. 앱은 모르는 type 무시.
+- `saju-profiles`(2026-09-07, 사주(C)): 웹의 게스트 사주 프로필 스토어를 앱으로 미러(전체 교체). shared
+  `stores/sajuProfileMirror.ts` 의 `startSajuProfileMirror()` 를 웹 `main.tsx` 가 부팅 때 호출해 복원된 현재
+  상태·변경마다 보내고, 앱 `app/saju-c` 가 `useSajuProfileStore.setState` 로 AsyncStorage 사본을 갈아끼운다.
+  파서는 프로필을 계약 `SajuBirthInput` 으로 검증하며 한 명이라도 틀리면 메시지를 통째로 버린다. 홈
+  `SajuEntryCard` 의 "오늘의 운세" 줄이 이 프로필(회원은 서버 프로필)로 utils 엔진을 기기에서 돌린다.
 - 임베드 판정(`apps/web/src/lib/embed.ts`): `?embed=1` 을 한 번 보면 sessionStorage 에 기억해 WebView 안에서 링크로 이동한
   공유 페이지·내 타로 기록도 크롬 없이 이어진다. 브리지가 주입돼 있으면 쿼리 없이도 임베드.
 - 앱: 같은 origin 은 WebView 안, 밖은 외부 브라우저. Android 뒤로가기는 WebView 히스토리 먼저. 웹 origin 은 `webUrl`

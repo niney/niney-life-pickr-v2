@@ -7,6 +7,7 @@ import {
   parseLpEmbedMessage,
   useAuthStore,
   useGuestKeyStore,
+  useSajuProfileStore,
   useTheme,
 } from '@repo/shared';
 import { webUrl } from '~/lib/api-setup';
@@ -16,7 +17,8 @@ import { webUrl } from '~/lib/api-setup';
 //  - 로드 전에 세션 토큰·게스트 키·화면 모드를 주입(브리지 계약: @repo/shared embedBridge) —
 //    앱 회원은 WebView 에서도 회원(자동 저장·한도 면제), 게스트 키는 앱이 보관한 값이라 기기 한도가
 //    앱과 일치한다. 토큰은 URL 에 싣지 않는다.
-//  - 웹 → 앱 메시지: share(OS 공유 시트) / open(외부 브라우저).
+//  - 웹 → 앱 메시지: share(OS 공유 시트) / open(외부 브라우저) / saju-profiles(게스트 프로필 미러 —
+//    웹이 저장한 프로필을 앱 스토어에 통째로 반영해 홈 "오늘의 운세" 카드가 기기에서 계산한다).
 //  - 같은 origin 안의 이동(공유 페이지·내 사주 기록)은 WebView 안에서, 밖은 외부 브라우저로.
 //  - Android 뒤로가기는 WebView 히스토리를 먼저 되감는다.
 
@@ -63,6 +65,9 @@ export default function SajuScreen() {
       void Linking.openURL(msg.url).catch(() => {});
     } else if (msg.type === 'title') {
       setTitle(msg.title || '사주(C)');
+    } else if (msg.type === 'saju-profiles') {
+      // 웹(WebView localStorage)이 진실, 앱(AsyncStorage)은 사본 — 부분 병합 없이 교체한다.
+      useSajuProfileStore.setState({ profiles: msg.profiles, primaryId: msg.primaryId });
     }
   }, []);
 
