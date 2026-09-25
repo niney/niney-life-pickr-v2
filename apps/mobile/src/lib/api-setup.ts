@@ -14,6 +14,7 @@ import {
   setSajuProfileStorage,
   setSettlementDraftStorage,
   setSubwayFavoriteStorage,
+  setTarotHistoryStorage,
   useAuthStore,
 } from '@repo/shared';
 import { useSettlementPrefsStore } from './settlementPrefsStore';
@@ -44,12 +45,14 @@ setAirLocationStorage(AsyncStorage);
 // 식단 입력 draft(사진 인식 → 편집 → 저장 사이) persist 어댑터 — 미주입이면 앱이
 // 백그라운드에서 종료될 때 입력 중이던 기록이 사라진다.
 setMealDraftStorage(AsyncStorage);
-// 공용 게스트 키(타로 등 로그인 없는 기능의 기기 식별) — 앱이 보관하고 WebView 임베드에 주입해
-// 앱과 WebView 가 같은 기기로 잡히게(기기 일일 한도·오늘의 카드 잠금).
+// 공용 게스트 키(타로·사주 등 로그인 없는 기능의 기기 식별) — 네이티브 화면이 X-Guest-Key 헤더로 보낸다
+// (기기 일일 한도·오늘의 카드 잠금).
 setGuestKeyStorage(AsyncStorage);
-// 사주 게스트 프로필(생년월일 로컬 보관) — WebView 안 웹이 쓰는 localStorage 와는 별개지만, 앱 홈 카드 딥링크·
-// 향후 앱 네이티브 화면이 같은 값을 쓰도록 앱도 보관한다.
+// 사주 게스트 프로필(생년월일 로컬 보관) — 사주 네이티브 화면·홈 카드가 쓴다.
 setSajuProfileStorage(AsyncStorage);
+// 타로 게스트 기록(최근 50건 — 게스트 리딩은 서버에 남지 않는다) — 타로 화면의 "최근 리딩". WebView 시절 웹
+// localStorage 에 남은 기록은 넘어오지 않는다.
+setTarotHistoryStorage(AsyncStorage);
 setMealDraftLocalFileAdapter({
   deleteFiles: deleteMealDraftPhotoFiles,
   clearAll: clearMealDraftPhotoFiles,

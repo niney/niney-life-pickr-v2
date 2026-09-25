@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@repo/shared';
 
-// 홈 "타로로 골라 보기" 카드 — 웹 홈 진입 카드의 앱판. 타로는 WebView 임베드(app/tarot)로 열린다.
+// 홈 "타로로 골라 보기" 카드 — 웹 홈 진입 카드의 앱판. 타로는 네이티브 화면(app/tarot)이다.
 // 왼쪽은 일반 타로(설정 화면부터), 오른쪽은 메뉴 타로로 바로.
 
 const GOLD = '#d9b65b';

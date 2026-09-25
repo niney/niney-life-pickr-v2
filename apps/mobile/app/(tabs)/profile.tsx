@@ -104,6 +104,13 @@ export default function ProfileScreen() {
         hint: '저장된 사주 프로필과 풀이·물어본 것',
         onPress: () => router.push('/saju-c/me' as never),
       },
+      {
+        key: 'tarot',
+        icon: '🃏',
+        label: '내 타로 기록',
+        hint: '로그인 상태로 본 리딩',
+        onPress: () => router.push('/tarot/me' as never),
+      },
       { key: 'picks', icon: '⭐', label: '내 즐겨찾기', hint: '아직 비어 있어요' },
       { key: 'recent', icon: '🕓', label: '최근 본 식당' },
       { key: 'noti', icon: '🔔', label: '알림 설정' },

@@ -28,6 +28,7 @@
 | 14 | 3D 레이어는 단위 테스트 없이 수용, 흐름 상태 머신만 테스트 | |
 | 15 | 켈틱크로스는 v2, 메뉴 타로는 v3 후보 | |
 | 16 | 오늘의 카드는 하루 1장 고정(게스트 기기·회원 계정) | |
+| 17 | (2026-09-26) 앱은 WebView 대신 **네이티브**로 — 사주(C)와 같은 방식(흐름은 shared 훅을 웹과 공유, 공유는 웹 링크). 앱 무대는 2D 부터 | 결정 1 의 앱 부분을 대체. 3D(expo-gl)는 후속 후보 |
 
 **기본값 (이견 없어 확정)**: 카드 한글명 음차(완드·컵·소드·펜타클 / 페이지·나이트·퀸·킹, 영문 병기) · 해석 톤 존댓말·따뜻·담백·조언형 · 뽑기는 부채꼴 직접 선택 + "자동으로 뽑기" · 공유 링크 만료 없음(게스트 삭제 불가, 회원 삭제 가능) · 타이틀 세리프(Noto Serif KR 서브셋, 타로 라우트만) · 사이드바 위치 대기질 다음·식단 앞 + 홈 진입 카드 · 마우스 시차 효과 켬, 자이로 끔.
 
@@ -255,10 +256,12 @@ model UsageQuotaCounter {
 | **2차** ✅ | 웹 `/tarot` 3D 전 흐름 + Lite 폴백 + 임베드 모드 + 사이드바·홈 카드 + 로컬 기록 | `apps/web/src/components/tarot/**`(stage: layout·textures·StageContext·FanDeck·DrawnCard·Scene / TarotStage·TarotOverlay·TarotLite·TarotCardImage·tarotQuality·useTypewriter), `routes/TarotPage.tsx`(+test 4건), shared `tarotHistoryStore`, PublicLayout `?embed=1` |
 | **3차** ✅ | 공유(토큰·페이지·OG·세로 이미지·nginx 문서) | friendly `tarot-share-card.ts`·`tarot-preview.ts`, `lib/web-index.ts`·`lib/share-fonts.ts`, 마이그레이션 `add_tarot_share_question`; 웹 `TarotShareSheet`·`TarotSharedPage`·`TarotReadingView`(`/tarot/s/:token`); 테스트 friendly 6·웹 2 |
 | **4차** ✅ | 어드민 사용량 한도 탭 + 회원 자동 저장·`/me/tarot`·오늘의 카드 계정 잠금·삭제 | `routes/admin/AdminQuotasPage.tsx`(설정 탭 "사용량 한도"), `routes/tarot/MyTarotPage.tsx`·`MyTarotReadingPage.tsx`(`/me/tarot`, `/me/tarot/:id`), 계정 메뉴 "내 타로 기록", shared `useMyTarotReadingsInfinite`; 테스트 4건 |
-| **v2-앱** ✅ | 앱 WebView 임베드 — `app/tarot` + 홈 진입 카드, 브리지(토큰·게스트 키 주입, share/open) | shared `embedBridge.ts`(+테스트 3), 웹 `lib/embed.ts`·main 부팅·PublicLayout·공유 시트/페이지, 앱 `app/tarot/index.tsx`·`TarotEntryCard`·api-setup(`webUrl`, 게스트 키 persist) |
+| **v2-앱** ✅(v4 로 대체) | 앱 WebView 임베드 — `app/tarot` + 홈 진입 카드, 브리지(토큰·게스트 키 주입, share/open) | shared `embedBridge.ts`(+테스트 3), 웹 `lib/embed.ts`·main 부팅·PublicLayout·공유 시트/페이지, 앱 `app/tarot/index.tsx`·`TarotEntryCard`·api-setup(`webUrl`, 게스트 키 persist) |
 | **v2 후보** | 켈틱크로스 10장 / SSE 스트리밍 / 효과음 | |
 | **v3a** ✅ | 메뉴 타로 — 카드 원소·무드 → 메뉴 후보 3개(결정적) + LLM 이유 | utils `tarotMenu.ts`(메뉴 100종·기운 매핑·선택), 스프레드 `menu`·주제 `food`, 계약 `TarotMenuVerdict`, friendly 프롬프트 v2·`buildStaticMenuVerdict`·카탈로그 kcal, 웹 `TarotMenuBox`·`?spread=menu`; 테스트 utils 9·friendly 4·웹 2 |
 | **v3b 후보** | 근처 맛집 덧붙이기(식당별 분류 프로필 집계 → 내주변 후보) — 운영 식당 커버리지 확인 뒤 | |
+| **v4-앱** ✅ | 앱 네이티브 전환 — WebView 를 걷어내고 RN 화면으로(흐름은 shared `useTarotSession` 을 웹과 공유). 2D 무대(섞기·부채꼴·자리 잡기·뒤집기), 설정·해석 패널, 공유(웹 링크), 게스트 최근 기록·다시 보기, 내 타로 기록, 오늘의 카드 잠금 — 상세는 §앱 네이티브 전환 | shared `hooks/useTarotSession.ts`(+테스트 7)·`tarot/tarotTheme.ts`, 웹 `TarotPage` 가 훅 사용, 앱 `app/tarot/index.tsx`·`app/tarot/me/*`·`src/components/tarot/**`·`assets/tarot/back-256.webp`, 프로필 탭 "내 타로 기록" |
+| **v4 후보** | 앱 3D 무대(사주처럼 expo-gl + R3F, 느린 GPU 는 2D) / Android 기기 확인 | |
 
 0차와 사용자 이미지 생성은 병렬. 2차는 이미지 없이 라이더 웨이트 대체 덱으로 진행 가능.
 
@@ -291,7 +294,40 @@ model UsageQuotaCounter {
 - v3b(근처 맛집): 식당 카테고리가 네이버 자유 문자열이라 메뉴 분류에서 식당 프로필을 집계해야 하고, 위치 근처에 크롤된
   식당이 없으면 빈 결과 — 위치 허용 + 반경 내 후보가 있을 때만 결과 하단에 덧붙이는 부가 기능으로 둔다.
 
+## 앱 네이티브 전환 (v4)
+
+2026-09-26. 사주(C) 10차와 같은 방식으로 앱 타로를 WebView 에서 RN 화면으로 옮겼다(결정 17). 서버 API·계약은 그대로다.
+
+- **흐름 공유**: 웹 `TarotPage` 의 오케스트레이션(리듀서·placing 진입 시 해석 요청·게스트 로컬 기록·리뷰·회원 오늘의 카드
+  잠금)을 shared `useTarotSession` 으로 뽑아 웹이 먼저 쓰게 했다(웹 테스트 그대로 통과). 순수 조각 `tarotInitialState`(딥링크)·
+  `tarotShareBase`/`tarotHistoryShareBase`·`tarotMenuOf`(결과 전 메뉴 미리보기)·`tarotTodayDailyId`(KST) 는 테스트 7건.
+  팔레트·문구(`TAROT_BG/GOLD/INK`·`TAROT_ELEMENT_COLOR`·`TAROT_SOURCE_LABEL`·`TAROT_DISCLAIMER`)도 shared `tarot/tarotTheme` 로.
+  연출 유무는 플랫폼 몫(`instantShuffle`·`instantPlace` — 웹 Lite·앱 "동작 줄이기").
+- **무대(2D, Reanimated)** `TarotStage2D`: 웹 3D 와 같은 타이밍(`stageTiming` — 섞기 1.9초, 자리 잡기 0.85초, 뒤집기 0.25초 +
+  1.1초). 섞기는 카드 14장이 네 박자로 흩어졌다 모이고, 뽑기는 78장 가로 부채꼴(화면 가운데가 솟는 호, 고른 자리는 빈칸)을
+  훑어 탭한다. 고른 카드는 위쪽 자리로 자라 들어가고, placing 에서 뒤집기용 큰 줄로 옮겨 간 뒤 한 장씩 앞뒤를 바꿔 끼우며
+  뒤집힌다("모두 뒤집기" 는 한꺼번에). 크기가 바뀌는 이동은 레이아웃 애니메이션 대신 이동·확대 변환(자식 그림이 크기 보간을
+  따라오지 않아서). 흐름 전환은 화면의 JS 타이머가 낸다 — 세션의 연출 완료 콜백은 늘 같은 참조라 결과 도착 같은 다시 그리기로
+  타이머가 리셋되지 않는다.
+- **화면**: 설정(스프레드 2열·주제 칩·선택 A/B·질문·역방향·섞기, 게스트 최근 리딩 5건, 회원 자동 저장 안내) → 위쪽 안내
+  알약(섞는 중 / N장을 골라 주세요·자동으로 뽑기·처음으로 / 자리를 찾는 중 / 뒤집는 중·모두 뒤집기) → 해석 시트(아래 56%,
+  접기, 카드는 그 위로 비켜 선다). 해석 시트는 웹 ReadingPanel 과 같은 구성(카드별 → 종합·조언·메뉴·선택 판정·키워드·한도·
+  다시 시도·다시 뽑기·공유).
+- **카드 그림**: 앞면 79장(512px webp 약 9MB)은 번들하지 않고 웹 정적 자산(`webUrl` + `/tarot/cards/<id>-512.webp`)을 expo-image
+  디스크 캐시로 받는다. 뽑은 카드는 placing 동안 `Image.prefetch`. 뒷면은 부채꼴에 78장이 깔리므로 256px(49KB)로 줄여 번들.
+- **공유 = 웹 링크**(사주와 같다): 토큰을 발급해 웹 URL 을 OS 공유 시트로, 세로 이미지는 서버 PNG 를 캐시에 받아 파일로.
+  질문은 기본 숨김 체크. 앱 안 공유 페이지는 두지 않는다.
+- **기록**: 회원은 `app/tarot/me`(목록·더 보기·삭제)·`me/[id]`(한 장 보기·공유·삭제), 프로필 탭 "내 타로 기록", 타로 화면
+  헤더. 게스트는 기기 로컬 기록(`tarotHistoryStore` — 앱 `api-setup` 에서 AsyncStorage 주입). WebView 시절 웹 localStorage 에
+  남은 게스트 기록은 넘어오지 않는다.
+- 남은 것: Android 확인, 앱 3D 무대(v4 후보), 동작 줄이기 경로 실기기 확인.
+- 개발 검증 메모: Vite(5173)는 `/tarot/s/<token>/image.png` 를 `:3000` 으로 프록시한다 — 검증용 API(`:3100`, DB 사본)에서 만든
+  공유 토큰의 미리보기·세로 이미지는 앱에서 안 뜬다(운영은 같은 도메인이라 해당 없음). 이미지 자체는 `:3100` 에 직접 확인.
+
 ## 앱 WebView 임베드 (v2)
+
+> 2026-09-26 v4 로 앱 타로·사주 모두 네이티브가 되어 앱에서 WebView 임베드를 쓰는 화면은 없다. 웹의 임베드 모드·브리지는
+> 호환 경로로 남는다(아래는 당시 설계 기록).
 
 3D 무대를 RN 으로 다시 만들지 않는다 — 앱 `app/tarot/index.tsx` 가 웹 `/tarot?embed=1` 을 WebView 로 연다.
 
@@ -315,6 +351,7 @@ model UsageQuotaCounter {
 ## 진행 기록
 
 - 2026-09-02: 계획 작성. 결정 1~16 확정.
+- 2026-09-26: **v4 앱 네이티브 전환.** 위 "앱 네이티브 전환" 절. shared `useTarotSession`(+테스트 7)·`tarot/tarotTheme` → 웹 `TarotPage`·`TarotOverlay`·기록 보기·3D 무대가 사용(웹 tarotTheme 삭제). 앱 `app/tarot` 네이티브(2D 무대·설정·해석 시트·공유)·`app/tarot/me`·`me/[id]`·프로필 탭 진입·게스트 기록 저장소 주입, 뒷면 256px 번들, `common/Para`(사주와 공용). 검증: 전체 typecheck 6/6, shared 95·웹 145 green, 앱·웹 lint 경고 0. iOS 26.5 시뮬레이터에서 Hermes CDP 로 조작(검증용 API :3100 + 내 Metro 8082) — 섞기·부채꼴(호)·고르기·자리 잡기·한 장씩 뒤집기(역방향 회전)·AI 해석 시트·끝까지 스크롤·공유 링크(웹 URL)·iOS 공유 시트·공유 이미지(:3100 직접)·게스트 기록 저장(앱 재실행 뒤 유지)·다시 보기·메뉴 타로(결과 전 미리보기 → 이유·kcal)·자동으로 뽑기·회원 오늘의 카드 자동 저장·잠금 안내 → 기록 상세·기록 목록·딥링크 `?q=&topic=`·API 중단 시 실패 → 다시 시도. Android·동작 줄이기·삭제 확인 창은 미확인. 미커밋.
 - 2026-09-05: **v2 앱 WebView 임베드 완료.** 위 "앱 WebView 임베드" 절. 홈 `TarotEntryCard`(타로 보기 / 메뉴 타로 → `/tarot?spread=menu`). shared 테스트 3, 앱·웹 typecheck green. 실기기 확인은 아직(iOS Safari WKWebView 의 WebGL·성능). 미커밋.
 - 2026-09-05: **운영 배포(5d0c4c7·13b87e8).** `/tarot` 직접 진입이 dist 의 `tarot/cards/` 디렉터리 때문에 nginx `$uri/` 에 걸려 301→403 — `try_files $uri /index.html` 로 수정(deploy-friendly.md). 운영 모델은 gemma4:31b. 크롬 실측으로 메뉴 타로 전 흐름·공유·OG 확인.
 - 2026-09-02: **v3a 메뉴 타로 완료.** 위 "메뉴 타로" 절. utils `tarotMenu.ts` + 테스트 9건, 스프레드 `menu`·주제 `food`(리듀서 잠금), 계약 `TarotMenuPick/Verdict`·결과 `menu`(기본 null — 구행 호환), friendly 프롬프트 v2(캐시 키 갱신)·`buildStaticMenuVerdict`(조사는 '카드'·'쪽' 뒤에만)·`toLlmBody` 병합·`normalizeTarotInput`·kcal 조회, 공유 이미지 대안 줄, 웹 `TarotMenuBox`(패널·공유 페이지·기록 상세 공용)·설정 패널·미리보기·`?spread=menu`·홈 문구. friendly 165·utils 244·웹 타로 10 green. 미커밋.
