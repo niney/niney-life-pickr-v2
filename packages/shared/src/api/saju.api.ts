@@ -83,7 +83,9 @@ export const sajuApi = {
     if (query.cursor) qs.set('cursor', query.cursor);
     if (query.limit) qs.set('limit', String(query.limit));
     if (query.kind) qs.set('kind', query.kind);
-    const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
+    // URLSearchParams.size 는 RN(Hermes) 폴리필에 없다 — 문자열로 판단해야 앱에서 쿼리가 빠지지 않는다.
+    const search = qs.toString();
+    const suffix = search ? `?${search}` : '';
     return apiFetch<ListSajuReadingsResultType>(`${Routes.Saju.myReadings}${suffix}`);
   },
   getMine: (id: string) => apiFetch<SajuReadingResultType>(Routes.Saju.myReading(id)),
