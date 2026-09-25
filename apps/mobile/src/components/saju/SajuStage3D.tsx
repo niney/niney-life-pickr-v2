@@ -1,13 +1,16 @@
 import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState, View, type ViewStyle } from 'react-native';
+import { AppState, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Canvas, useFrame, useThree, type RootState } from '@react-three/fiber/native';
 import type { SajuChart, SajuPhase } from '@repo/utils';
 import { SajuScene3D, type SajuStageFraming } from './stage3d/Scene3D';
 
 // 천문도 3D 무대(expo-gl + react-three-fiber) — 화면 위쪽(원판이 오가는 영역)에 깔리는 캔버스. 그리기만 하고 흐름
 // 전환은 사주 화면의 JS 타이머가 낸다.
-//  - 준비(아틀라스 로드 뒤 몇 프레임)되면 onReady — 그 전까지 화면은 2D 무대를 보여 준다(빈 화면 없음).
-//  - GL 오류, 또는 첫 프레임들의 실측 시간이 느리면(소프트웨어 GL 등) onFail — 화면이 2D 로 돌아간다.
+//  - visible 이 아니면 투명하게 그리기만 한다(준비·성능 판정은 계속). 보이게 되면 0.4초에 걸쳐 나타난다.
+//  - 준비(아틀라스 로드 뒤 첫 프레임들 실측 통과)되면 onReady. 무대를 3D 로 할지는 화면이 정한다(stage3dVerdict).
+//  - GL 오류, 소프트웨어 GL, 또는 첫 프레임들이 느리면 onFail — definite 는 "이 기기는 느리다"고 기억해도 될 만큼
+//    확실한지(오류·소프트웨어 GL·다섯 프레임 중 셋 이상 느림). 한 프레임만 튄 건 이번 방문만 2D.
 //  - 해상도: expo-gl 은 뷰 크기 × 화면 배율로만 그린다. 캔버스를 2/3 크기로 두고 1.5배 확대해 화소 수를 절반 아래로
 //    줄인다(3배 화면에서 2배 밀도). 느린 GPU·시뮬레이터(소프트웨어 GL)에서 프레임이 GL 큐에 쌓이지 않게.
 //  - 루프는 demand 하나 — 입력 화면(setup)은 30fps, 연출 중엔 requestAnimationFrame 마다 깨운다. 앱이 백그라운드면 멈춘다.
@@ -35,26 +38,32 @@ class GlBoundary extends Component<{ onFail: (e: unknown) => void; children: Rea
 
 /**
  * 준비·성능 판정 — 장면(아틀라스 로드 뒤)의 첫 2프레임(셰이더 컴파일)을 건너뛰고 다음 5프레임의 실제 프레임 시간을
- * 잰다. 역압(매 프레임 GL 동기) 덕에 dt 가 GPU 처리 시간을 반영한다. 한 프레임이라도 SLOW_FRAME_MS 를 넘으면
- * 느린 GL(시뮬레이터의 소프트웨어 렌더러 실측 300~700ms/프레임)로 보고 onSlow — 화면은 2D 로 간다. 통과하면 onReady.
- * 입력 화면은 30fps(33ms) 틱이라 정상 기기의 dt 는 33ms 안팎이다.
+ * 잰다. 역압(매 프레임 GL 동기) 덕에 dt 가 GPU 처리 시간을 반영한다. 다섯 프레임이 모두 SLOW_FRAME_MS 안이면
+ * onReady. 하나라도 넘으면 onSlow — 셋 이상이면 확실히 느린 GL(시뮬레이터의 소프트웨어 렌더러 실측 300~700ms/프레임)
+ * 이라 definite. 입력 화면은 30fps(33ms) 틱이라 정상 기기의 dt 는 33ms 안팎이다.
  */
 const SLOW_FRAME_MS = 120;
-const ReadyProbe = ({ onReady, onSlow }: { onReady: () => void; onSlow: () => void }) => {
+const PROBE_FRAMES = 5;
+const DEFINITE_SLOW_FRAMES = 3;
+const ReadyProbe = ({ onReady, onSlow }: { onReady: () => void; onSlow: (definite: boolean) => void }) => {
   const frames = useRef(0);
+  const slow = useRef(0);
   const done = useRef(false);
   useFrame((_, dt) => {
     if (done.current) return;
     frames.current += 1;
     if (frames.current <= 2) return;
-    if (dt * 1000 > SLOW_FRAME_MS) {
+    if (dt * 1000 > SLOW_FRAME_MS) slow.current += 1;
+    // 셋째 느린 프레임에서 바로 끝낸다(느린 GL 에선 한 프레임이 수백 ms).
+    if (slow.current >= DEFINITE_SLOW_FRAMES) {
       done.current = true;
-      onSlow();
+      onSlow(true);
       return;
     }
-    if (frames.current >= 7) {
+    if (frames.current - 2 >= PROBE_FRAMES) {
       done.current = true;
-      onReady();
+      if (slow.current === 0) onReady();
+      else onSlow(false);
     }
   });
   return null;
@@ -131,17 +140,24 @@ export interface SajuStage3DProps {
   height: number;
   /** 영역 좌표(pt)로 원판 위치·크기. */
   framing: SajuStageFraming;
+  /** false 면 투명하게 그리기만(준비·판정은 계속). true 가 되면 0.4초에 걸쳐 나타난다. */
+  visible: boolean;
   onReady: () => void;
-  /** GL 오류 또는 느린 GPU — 화면이 2D 로 돌아간다. */
-  onFail: (reason: unknown) => void;
+  /** GL 오류 또는 느린 GPU — 화면이 2D 로 간다. definite: 이 기기를 "느림"으로 기억해도 될 만큼 확실한지. */
+  onFail: (definite: boolean, reason: unknown) => void;
 }
 
-export const SajuStage3D = ({ phase, chart, stamped, width, height, framing, onReady, onFail, force = false }: SajuStage3DProps) => {
+export const SajuStage3D = ({ phase, chart, stamped, width, height, framing, visible, onReady, onFail, force = false }: SajuStage3DProps) => {
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => {
     const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));
     return () => sub.remove();
   }, []);
+  const opacity = useSharedValue(visible ? 1 : 0);
+  useEffect(() => {
+    opacity.set(visible ? withTiming(1, { duration: 400 }) : 0);
+  }, [visible, opacity]);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.get() }));
   const s = RENDER_SCALE;
   const canvasStyle: ViewStyle = {
     position: 'absolute',
@@ -153,8 +169,8 @@ export const SajuStage3D = ({ phase, chart, stamped, width, height, framing, onR
   };
   const localFraming: SajuStageFraming = { centerY: framing.centerY * s, radiusPx: framing.radiusPx * s };
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height }}>
-      <GlBoundary onFail={onFail}>
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width, height }, fade]}>
+      <GlBoundary onFail={(e) => onFail(true, e)}>
         <Canvas
           style={canvasStyle}
           pointerEvents="none"
@@ -164,17 +180,17 @@ export const SajuStage3D = ({ phase, chart, stamped, width, height, framing, onR
             setupRenderer(st);
             const name = glRendererName(st.gl.getContext());
             if (__DEV__) console.warn('[saju3d] GL', name);
-            if (!force && /software/i.test(name)) onFail(new Error(`software-gl: ${name}`));
+            if (!force && /software/i.test(name)) onFail(true, new Error(`software-gl: ${name}`));
           }}
         >
           {appActive ? <Ticker fps={phase === 'setup' ? 30 : null} /> : null}
           <Suspense fallback={null}>
             <SajuScene3D phase={phase} chart={chart} stamped={stamped} framing={localFraming} />
-            <ReadyProbe onReady={onReady} onSlow={() => (force ? onReady() : onFail(new Error('slow-gl')))} />
+            <ReadyProbe onReady={onReady} onSlow={(definite) => (force ? onReady() : onFail(definite, new Error('slow-gl')))} />
             {__DEV__ ? <DevStats /> : null}
           </Suspense>
         </Canvas>
       </GlBoundary>
-    </View>
+    </Animated.View>
   );
 };

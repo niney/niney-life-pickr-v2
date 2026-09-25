@@ -147,6 +147,9 @@ cd ios && LANG=en_US.UTF-8 pod install   # 그 뒤 위 "prebuilt RN" 확인
   첫 프레임들의 실측 시간(매 프레임 GL 동기로 역압을 걸어 잰다)으로 느린 GL 을 걸러 2D 로 돌린다 — 시뮬레이터에선
   평소 2D 가 보이는 게 정상이다. 3D 를 봐야 하면 개발 빌드에서 `lifepickr://saju-c?stage=3d`(강제 3D, 느림),
   비교용으로 `?stage=2d`. 실제 속도는 실기기에서 본다.
+- **판정은 기기에 기억된다**(AsyncStorage `lp:saju-stage3d:v1`, `stage3dVerdict.ts`). 한 번 "느림"이 나온 기기·
+  시뮬레이터는 다음 방문부터 캔버스를 아예 만들지 않고 2D 로 연다(7일 뒤나 앱 버전이 바뀌면 다시 잰다). 판정부터
+  다시 보고 싶으면 앱을 지웠다 깔거나 그 키를 지운다. `?stage=3d|2d` 강제는 판정을 읽지도 쓰지도 않는다.
 - **`three` 는 한 벌만.** react-three-fiber 앱판(CJS)은 `require('three')` 로 `three.cjs` 를, 우리 ESM import 는
   exports 의 "import" 조건으로 `three.module.js` 를 따로 올려 사본이 둘이 된다(텍스처 로더 폴리필이 한쪽에만 걸려
   `document` 오류, 번들 +1MB). `metro.config.js` 가 `three` 를 항상 require 조건으로 푼다.
