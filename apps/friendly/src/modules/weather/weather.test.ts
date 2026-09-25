@@ -171,8 +171,9 @@ describe('weather routes', () => {
     expect(d8.am).toBeNull();
     expect(d8.all?.rnSt).toBe(20);
     expect(body.ta?.days[0]).toMatchObject({ day: 4, taMin: 25, taMinLow: 1, taMinHigh: 1, taMax: 32 });
-    // 날짜는 발표일 + n 일.
-    expect(body.ta?.days[0]?.date).toBe(`${body.tmFc.slice(0, 4)}-${body.tmFc.slice(4, 6)}-${String(Number(body.tmFc.slice(6, 8)) + 4).padStart(2, '0')}`);
+    // 날짜는 발표일 + n 일. 월말 넘김이 있어 Date 로 계산.
+    const d4Date = new Date(Date.UTC(Number(body.tmFc.slice(0, 4)), Number(body.tmFc.slice(4, 6)) - 1, Number(body.tmFc.slice(6, 8)) + 4));
+    expect(body.ta?.days[0]?.date).toBe(d4Date.toISOString().slice(0, 10));
     expect(body.outlook?.stnId).toBe('108');
     expect(body.outlook?.text).toContain('하늘상태');
     expect(mocks.getMidFcst).toHaveBeenCalledTimes(1);
