@@ -121,6 +121,9 @@ const config: ExpoConfig = {
     './plugins/with-personal-team-entitlements',
     'expo-notifications',
     './plugins/with-swift-concurrency-fix',
+    // Xcode 27 은 배포 대상이 15.0 미만인 Pod 타깃(SDWebImage·AsyncStorage 리소스 등)을 오류로 막는다 — 앱과 같은
+    // 배포 대상으로 끌어올린다. pod install 이 Pods.xcodeproj 를 다시 만들어도 유지된다.
+    './plugins/with-pod-deployment-target',
     // UIScene 생명주기 — Xcode 27(iOS 27 SDK)로 빌드한 앱은 이게 없으면 iOS 27 에서 실행 즉시 막힌다.
     // Info.plist 장면 매니페스트 + SceneDelegate.swift + AppDelegate 창 생성 블록 제거. Expo SDK 58 이상은
     // 템플릿이 같은 일을 하므로 그때 지운다. 자세한 내용은 docs/mobile-ios-build.md.

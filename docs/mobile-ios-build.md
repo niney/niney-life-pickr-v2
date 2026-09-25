@@ -115,6 +115,26 @@ iOS 27 시뮬레이터에서는 CLI 가 앱을 dev-client URL(`…://expo-develo
 Expo 57 CLI 도 같다. **열기**를 누르면 앱이 뜨고, expo-router 는 이 URL 을 첫 화면으로 처리한다.
 iOS 26 이하 시뮬레이터는 확인창 없이 바로 열린다.
 
+## 증상 — Xcode 27 에서 Pod 배포 대상이 오류로 막힌다
+
+```
+error: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 9.0, but the range of supported
+deployment target versions is 15.0 to 27.0.x. (in target 'SDWebImage-SDWebImage' from project 'Pods')
+```
+
+Xcode 26 까지는 경고였던 것이 Xcode 27 에선 오류다. 오래된 podspec(SDWebImage 9.0, RNCAsyncStorage 리소스 번들 13.4 등)이
+그대로 걸린다. Xcode 에서 손으로 올려도 `pod install` 이 `Pods.xcodeproj` 를 다시 만들면 되돌아간다.
+
+## 해결 — `plugins/with-pod-deployment-target.js`
+
+Podfile `post_install` 에 앱 배포 대상(`platform :ios`, 기본 15.1)보다 낮은 Pod 타깃만 그 값으로 끌어올리는 블록
+(`# @pod-deployment-target-fix`)을 넣는다. prebuild 가 Podfile 을 재생성해도 다시 들어간다. 반영:
+
+```bash
+cd apps/mobile && npx expo prebuild --platform ios --no-install
+cd ios && LANG=en_US.UTF-8 pod install   # 그 뒤 위 "prebuilt RN" 확인
+```
+
 ## 곁다리로 겪는 것들
 
 - **CocoaPods 가 UTF-8 로케일을 요구한다.** `LANG` 이 비어 있으면 `pod install` 이
