@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { sajuBranchImageId, sajuImagePath, sajuStemImageId, type Branch, type Stem } from '@repo/utils';
-import { SAJU_GOLD, SAJU_HANJI, SAJU_JUSA } from '../sajuTheme';
+import { SAJU_GOLD, SAJU_HANJI, SAJU_JUSA } from '@repo/shared';
 
 // 캔버스 텍스처 — 한자·한글 글리프는 WebGL 로 폰트를 싣지 않고 2D 캔버스로 그려 텍스처로 쓴다
 // (troika 는 CJK 폰트 파일이 필요). 인장 면·고리 글자·일간 캐릭터.

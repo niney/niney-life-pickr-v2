@@ -1,10 +1,10 @@
 import type { SajuChartType, SajuSectionsType, SajuThemesType } from '@repo/api-contract';
+import { SAJU_SOURCE_LABEL } from '@repo/shared';
 import { type SajuChart } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { SajuChartTable } from './SajuChartTable';
 import { ChartInsightCard, DayPillarCard, ElementsAdvice, LuckPillarChip, LuckTimeline, MonthLuckGrid, SajuChartHeader, YearLuckFacts, YearOutlookTable } from './SajuReadingPanel';
 import { SajuCareerBox, SajuLoveBox, SajuWealthBox } from './SajuThemes';
-import { SAJU_SOURCE_LABEL } from './sajuTheme';
 
 // 2D 풀이 보기 — 공유 페이지·회원 기록 상세 공용(3D 없음). 패널과 같은 그룹 순서로 한 페이지에:
 // 원국(명식·성격·오행+조언) → 흐름(올해·대운) → 테마(인연·재물·직업 — 계산 카드는 항상, LLM 문장은 저장된 경우).

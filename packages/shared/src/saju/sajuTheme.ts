@@ -1,7 +1,7 @@
 import { SAJU_WUXING_META, type Wuxing } from '@repo/utils';
 
 // 사주 화면 공통 색·문구 — 타로(남색 밤하늘·금)와 구분되는 "천문도" 팔레트: 먹빛·한지·주사(朱砂)·금.
-// 3D 조명·인장 색과 DOM 패널이 같은 값을 쓴다.
+// 웹(3D 조명·인장 색·DOM 패널)과 앱(네이티브 화면)이 같은 값을 쓴다.
 
 export const SAJU_BG = '#0b0b0f';
 export const SAJU_STONE = '#15151c';

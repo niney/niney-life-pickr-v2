@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Loader2, Star } from 'lucide-react';
 import type { SajuBirthInputType, SajuDatePurposeType, SajuMatchResultType } from '@repo/api-contract';
-import { useSajuDailyQuery, useSajuDatePickQuery, useSajuFoodQuery } from '@repo/shared';
+import { SAJU_SOURCE_LABEL, useSajuDailyQuery, useSajuDatePickQuery, useSajuFoodQuery, WUXING_COLOR, WUXING_TEXT_COLOR } from '@repo/shared';
 import { SAJU_DATE_PURPOSE_LABEL, SAJU_DATE_PURPOSES, SAJU_DAY_TAG_LABEL, SAJU_TEN_GOD_META, SAJU_WUXING_META, sajuBestHours, sajuBranchImageId, sajuDayNumber, sajuHourLucksOf, sajuImagePath, type SajuChart, TAROT_MENU_CUISINE_LABEL, TAROT_MENU_DISH_LABEL, type TarotMenuCuisine, type TarotMenuDishType } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import { SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
 // "선택" 도구 — 오늘의 운세 · 오행 음식 · 택일 + 궁합 결과 뷰. 풀이 패널 탭에서 열리며, 열리는 순간 query 로 부른다
 // (같은 입력은 캐시). 계산값(점수·후보·별점)은 서버가 utils 로 결정적으로 만들고 문장만 LLM/정적.

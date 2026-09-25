@@ -3,11 +3,10 @@ import { Link } from 'react-router-dom';
 import { Loader2, MessageCircleQuestion, Sparkles } from 'lucide-react';
 import type { SajuAskResultType, SajuAskTopicType, SajuAskWhenType, SajuBirthInputType, SajuProfileType } from '@repo/api-contract';
 import { SAJU_ASK_QUESTION_MAX_LENGTH } from '@repo/api-contract';
-import { useAuthStore, useSajuAsk, useSajuProfileStore, useSajuProfiles } from '@repo/shared';
+import { SAJU_SOURCE_LABEL, useAuthStore, useSajuAsk, useSajuProfileStore, useSajuProfiles } from '@repo/shared';
 import { SAJU_ASK_TOPIC_META, SAJU_ASK_TOPICS, sajuAskBlockedReason, sajuAskOf, type SajuAskWindow, type SajuChart } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import { SAJU_SOURCE_LABEL } from './sajuTheme';
 
 // 사주에 묻기(9차) — "만약에 이랬다면". 주제 칩(9) + 시점 + 자유 텍스트(선택) + 상대(결혼·고백, 선택).
 // 계산(시점 점수·판정·대안·근거)은 utils 로 즉시 그리고, "물어보기" 를 누르면 서버가 같은 계산 위에 LLM 답을 얹는다.

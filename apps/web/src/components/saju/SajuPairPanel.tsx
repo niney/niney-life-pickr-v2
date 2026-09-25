@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Loader2, RotateCcw, X } from 'lucide-react';
 import type { SajuMatchResultType } from '@repo/api-contract';
+import { SAJU_DISCLAIMER } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { glass } from './SajuForm';
 import { SajuMatchResultView } from './SajuTools';
-import { SAJU_DISCLAIMER } from './sajuTheme';
 
 // "우리 궁합" 결과 패널(8차) — 입구에서 궁합 모드를 고르면 두 사주를 맞춰 이 패널 하나로 보여 준다(탭 없음).
 // 연출은 v1 에선 건너뛴다(두 원판 연출은 v2 후보). "내 사주 자세히 보기" 로 단독 모드에 나를 프리필해 넘어간다.

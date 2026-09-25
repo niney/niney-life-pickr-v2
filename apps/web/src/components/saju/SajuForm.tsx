@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, Heart, Sparkles, Trash2 } from 'lucide-react';
 import type { SajuBirthInputType } from '@repo/api-contract';
-import { useSajuProfileStore, useSajuProfiles, sameSajuBirth } from '@repo/shared';
+import { SAJU_DISCLAIMER, useSajuProfileStore, useSajuProfiles, sameSajuBirth } from '@repo/shared';
 import type { SajuProfileType } from '@repo/api-contract';
 import { SAJU_SUPPORTED_YEARS, daysInMonth, lunarMonthLength } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import { SAJU_DISCLAIMER } from './sajuTheme';
 
 // 입력 폼 — 상단 모드 토글 "내 사주 / 우리 궁합"(8차). 내 사주: 생년월일(양/음력·윤달)·시각(모름 허용)·성별·고급
 // 옵션(진태양시·야자시) + 프로필 칩·저장. 우리 궁합: 나 + 상대 두 사람의 생년월일(상대는 프로필 칩으로도) → 결과 패널.

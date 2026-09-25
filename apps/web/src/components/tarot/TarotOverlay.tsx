@@ -9,7 +9,7 @@ import type {
   TarotSpreadIdType,
   TarotTopicType,
 } from '@repo/api-contract';
-import type { TarotHistoryEntry } from '@repo/shared';
+import { useTypewriter, type TarotHistoryEntry } from '@repo/shared';
 import {
   getTarotCard,
   getTarotSetupError,
@@ -38,7 +38,6 @@ import { TarotMenuBox } from './TarotMenuBox';
 import { TarotShareSheet, type TarotShareBase } from './TarotShareSheet';
 import type { TarotRenderMode } from './tarotQuality';
 import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
-import { useTypewriter } from './useTypewriter';
 
 // DOM 오버레이 — 질문·스프레드 설정, 뽑기 HUD, 리빌 HUD, 해석 패널. 3D 무대(또는 Lite 무대) 위에
 // 겹치며, 컨테이너는 pointer-events-none 이라 카드 클릭이 무대로 간다. 패널만 이벤트를 받는다.

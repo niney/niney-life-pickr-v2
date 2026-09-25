@@ -1,5 +1,6 @@
 import { Heart, Loader2, RotateCcw } from 'lucide-react';
 import type { SajuCareerSectionType, SajuLoveSectionType, SajuWealthSectionType } from '@repo/api-contract';
+import { useTypewriter, WUXING_COLOR, WUXING_TEXT_COLOR, type SajuThemeStatus } from '@repo/shared';
 import {
   SAJU_WUXING_META,
   dayMasterText,
@@ -12,13 +13,9 @@ import {
 } from '@repo/utils';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import { useTypewriter } from '../tarot/useTypewriter';
-import { WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
 // 테마 탭(8차) — 인연 · 재물 · 직업. 계산값(utils sajuThemes)은 정적 카드로 즉시 그리고, LLM 문장(섹션)은
 // 도착 순으로 타자 효과. 풀이 패널·2D 뷰(공유·기록) 공용. 성격 탭에 있던 일간 연애·일 카드는 여기로 옮겼다.
-
-export type SajuThemeStatus = 'idle' | 'pending' | 'partial' | 'ready' | 'failed' | 'gone';
 
 export const TypedText = ({ text, animate, className }: { text: string; animate: boolean; className?: string }) => {
   const shown = useTypewriter(text, animate);

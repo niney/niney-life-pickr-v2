@@ -15,8 +15,8 @@ import {
   type SajuPhase,
   type Wuxing,
 } from '@repo/utils';
+import { SAJU_BG, SAJU_GOLD, SAJU_JUSA, SAJU_STONE, WUXING_COLOR } from '@repo/shared';
 import type { TarotQuality } from '../../tarot/tarotQuality';
-import { SAJU_BG, SAJU_GOLD, SAJU_JUSA, SAJU_STONE, WUXING_COLOR } from '../sajuTheme';
 import {
   CAMERA_FOV,
   CAMERA_POS,

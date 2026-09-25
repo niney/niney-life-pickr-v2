@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Loader2, RotateCcw, Share2, X } from 'lucide-react';
 import type { SajuBirthInputType, SajuReadingResultType, SajuSectionIdType, SajuSectionsType, SajuThemesType } from '@repo/api-contract';
+import { SAJU_DISCLAIMER, SAJU_PANEL_GROUPS, SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR, isSajuThemeTab, sajuPanelGroupOf, type SajuPanelGroup, type SajuPanelTab, type SajuThemeStatus } from '@repo/shared';
 import {
   SAJU_TEN_GOD_META,
   SAJU_WUXING_LUCKY,
@@ -29,11 +30,9 @@ import { cn } from '~/lib/utils';
 import { SajuAskBox } from './SajuAsk';
 import { SajuChartTable } from './SajuChartTable';
 import { SajuDailyBox, SajuDatePickBox, SajuFoodBox } from './SajuTools';
-import { SajuCareerBox, SajuLoveBox, SajuWealthBox, TypedText, type SajuThemeStatus } from './SajuThemes';
+import { SajuCareerBox, SajuLoveBox, SajuWealthBox, TypedText } from './SajuThemes';
 import { SajuShareSheet, type SajuShareBase } from './SajuShareSheet';
 import { glass } from './SajuForm';
-import { SAJU_PANEL_GROUPS, isSajuThemeTab, sajuPanelGroupOf, type SajuPanelGroup, type SajuPanelTab } from './sajuPanelTabs';
-import { SAJU_DISCLAIMER, SAJU_SOURCE_LABEL, WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
 // 풀이 패널 — 8차 재편: 그룹 3개 × 서브 탭.
 //   원국(명식·성격·오행) / 흐름(대운·올해·오늘·택일) / 테마(인연·재물·직업·질문·음식)

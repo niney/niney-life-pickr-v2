@@ -1,4 +1,5 @@
 import type { SajuChartType, SajuPillarType } from '@repo/api-contract';
+import { WUXING_COLOR, WUXING_TEXT_COLOR } from '@repo/shared';
 import {
   SAJU_PILLAR_LABEL,
   SAJU_STRENGTH_TEXT,
@@ -12,7 +13,6 @@ import {
   type Wuxing,
 } from '@repo/utils';
 import { cn } from '~/lib/utils';
-import { WUXING_COLOR, WUXING_TEXT_COLOR } from './sajuTheme';
 
 // 원국 표(2D) — 무대 아래 패널·공유 페이지·기록·Lite 공용. 왼쪽부터 년·월·일·시(무대 인장 순서와 같다).
 // 천간·지지는 오행 색, 일간(나)은 테두리로 강조. 아래에 오행 분포 막대·신살·관계·공망.
