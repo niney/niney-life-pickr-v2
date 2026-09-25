@@ -243,7 +243,8 @@ export const ReviewSummaryItem = ({ r }: { r: VisitorReviewWithSummaryType }) =>
 
 // Lightweight modal — no portal, no focus trap. The video element is the
 // only interactive child; ESC closes. Backdrop click also closes.
-const VideoPlayerModal = ({ url, onClose }: { url: string; onClose: () => void }) => {
+// 어드민 상세의 리뷰 행도 같이 쓴다.
+export const VideoPlayerModal = ({ url, onClose }: { url: string; onClose: () => void }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();

@@ -30,6 +30,7 @@ import { getRestaurantTourMatchInfo } from '../tour/restaurant-tour-match.servic
 import { getPublicListTourMap, getRestaurantTourSummary, travelerWeight } from '../tour/tour-public.service.js';
 import { cachePanoramaThumbnail, isVolatileNaverPhoto } from '../media/panorama-cache.js';
 import type {
+  AdminVisitorReviewType,
   CategoryTreeNodeType,
   DiningcodeShopDataType,
   MenuGroupType,
@@ -53,6 +54,8 @@ import type {
   RestaurantPublicListResultType,
   RestaurantPublicReviewsQueryType,
   RestaurantPublicReviewsResultType,
+  RestaurantReviewMatchQueryType,
+  RestaurantReviewMatchResultType,
   RestaurantRankingQueryType,
   RestaurantRankingResultType,
   RestaurantSmartPickInputType,
@@ -61,6 +64,7 @@ import type {
   RestaurantSummaryProgressType,
   ReviewAnalysisMenuType,
   ReviewSentimentType,
+  ReviewSummaryStatusType,
   VisitorReviewType,
   VisitorReviewVideoType,
   VisitorReviewWithSummaryType,
@@ -1827,9 +1831,49 @@ export class RestaurantService {
     if (query.sentiment !== 'all') {
       filtered = filtered.filter((r) => r.analysis?.sentiment === query.sentiment);
     }
+    filtered = await this.filterReviewsByTipMenu(filtered, assembled.naverRow.id, query);
+
+    if (query.sort === 'rating') {
+      // 별점 desc. 별점 null 은 0 으로 떨어져 뒤로 밀린다. 같은 별점에서는
+      // assemblePublicReviews 의 방문일 최신순이 stable sort 로 유지된다.
+      filtered = [...filtered].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    }
+    // recent 는 assemblePublicReviews 에서 방문일 desc(수집일 desc 폴백) 정렬됨.
+
+    return {
+      items: filtered.slice(query.offset, query.offset + query.limit),
+      total: filtered.length,
+    };
+  }
+
+  // 어드민 상세 리뷰 탭의 팁·메뉴 필터 — 공개 리뷰 목록과 같은 매칭(filterReviewsByTipMenu)
+  // 으로 걸린 리뷰 id 만 돌려준다. 어드민은 출처 통합 리뷰를 전부 들고 있어 id 로 거른다.
+  // 식당이 없으면 null.
+  async getReviewMatchIds(
+    placeId: string,
+    query: RestaurantReviewMatchQueryType,
+  ): Promise<RestaurantReviewMatchResultType | null> {
+    const assembled = await this.assemblePublicReviews(placeId);
+    if (!assembled) return null;
+    const matched = await this.filterReviewsByTipMenu(
+      assembled.reviews,
+      assembled.naverRow.id,
+      query,
+    );
+    return { reviewIds: matched.map((r) => r.id) };
+  }
+
+  // 팁·메뉴 필터 — 공개 리뷰 목록(getPublicReviews)과 어드민 리뷰 매칭(getReviewMatchIds)이
+  // 같은 규칙을 쓰도록 한 곳에 둔다. 분석 없는 리뷰는 둘 다 자동 제외된다.
+  private async filterReviewsByTipMenu(
+    reviews: PublicVisitorReviewType[],
+    naverRestaurantId: string,
+    query: { tip?: string; menu?: string },
+  ): Promise<PublicVisitorReviewType[]> {
+    let filtered = reviews;
 
     // 방문 팁 필터 — topTips 집계와 동일한 termNorm 정확 일치. 클릭한 팁이
-    // 분석에 달린 리뷰만 남긴다(분석 없는 리뷰는 자동 제외).
+    // 분석에 달린 리뷰만 남긴다.
     if (query.tip) {
       const want = normalizeTerm(query.tip);
       filtered = filtered.filter(
@@ -1843,8 +1887,9 @@ export class RestaurantService {
     // 결과 수가 일치한다(약어/표기 변형까지 같은 그룹으로 묶임). canonical 매핑이
     // 없는 메뉴는 nameNorm 정확 일치로 fallback — 이 또한 집계와 동일한 키.
     if (query.menu) {
+      const menu = query.menu;
       const canonicals = await this.prisma.menuCanonical.findMany({
-        where: { restaurantId: assembled.naverRow.id },
+        where: { restaurantId: naverRestaurantId },
         select: { nameNorm: true, canonicalName: true, canonicalNorm: true },
       });
       const canonByNorm = new Map(canonicals.map((c) => [c.nameNorm, c.canonicalNorm]));
@@ -1853,23 +1898,13 @@ export class RestaurantService {
       );
       const groupKey = (name: string) =>
         canonByNorm.get(normalizeTerm(name)) ?? normalizeTerm(name);
-      const want = canonicalNameToNorm.get(query.menu) ?? normalizeTerm(query.menu);
+      const want = canonicalNameToNorm.get(menu) ?? normalizeTerm(menu);
       filtered = filtered.filter(
         (r) => r.analysis?.menus.some((m) => groupKey(m.name) === want) ?? false,
       );
     }
 
-    if (query.sort === 'rating') {
-      // 별점 desc. 별점 null 은 0 으로 떨어져 뒤로 밀린다. 같은 별점에서는
-      // assemblePublicReviews 의 방문일 최신순이 stable sort 로 유지된다.
-      filtered = [...filtered].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-    }
-    // recent 는 assemblePublicReviews 에서 방문일 desc(수집일 desc 폴백) 정렬됨.
-
-    return {
-      items: filtered.slice(query.offset, query.offset + query.limit),
-      total: filtered.length,
-    };
+    return filtered;
   }
 
   // 공유 OG/갤러리용 식당 사진 URL 만 모은다. getPublicDetail 과 달리
@@ -2465,56 +2500,132 @@ export class RestaurantService {
     return buildCategoryTree(leaves);
   }
 
+  // 어드민 상세. 식별·스칼라 필드와 스냅샷은 네이버 행, 리뷰·출처는 같은 canonical 에 묶인
+  // 모든 행(다이닝코드·테이블링 포함)을 합친다 — 공개 상세는 세 출처를 융합해 보여 주는데
+  // 어드민이 네이버 리뷰만 보면 다른 출처 리뷰와 그 요약 실패를 운영자가 볼 방법이 없다.
   async getDetailByPlaceId(placeId: string): Promise<RestaurantDetailType | null> {
-    const r = await this.prisma.restaurant.findUnique({
-      where: { placeId },
+    const r = await this.prisma.restaurant.findUnique({ where: { placeId } });
+    if (!r) return null;
+
+    // 방문일 파싱 불가 리뷰의 폴백 순서도 최신 수집 우선이 되게 DB에서 먼저 desc로
+    // 읽고, 아래 공용 비교 함수로 실제 방문일을 최종 정렬한다. 행은 최근 수집순.
+    const rows = await this.prisma.restaurant.findMany({
+      where: { canonicalId: r.canonicalId },
+      orderBy: { lastCrawledAt: 'desc' },
       include: {
         visitorReviews: {
-          // 방문일 파싱 불가 리뷰의 폴백 순서도 최신 수집 우선이 되게 DB에서
-          // 먼저 desc로 읽고, 아래 공용 비교 함수로 실제 방문일을 최종 정렬한다.
           orderBy: { fetchedAt: 'desc' },
           include: { summary: true },
         },
       },
     });
-    if (!r) return null;
 
     const snapshot = JSON.parse(r.snapshotJson) as Omit<NaverPlaceDataType, 'visitorReviews'>;
 
-    const reviews: VisitorReviewWithSummaryType[] = r.visitorReviews.map((v) => ({
-      authorName: v.authorName,
-      rating: v.rating,
-      body: v.body,
-      visitedAt: v.visitedAt,
-      imageUrls: safeParseStringArray(v.imageUrlsJson),
-      videos: safeParseVideos(v.videosJson),
-      id: v.id,
-      externalId: v.externalId,
-      fetchedAt: v.fetchedAt.toISOString(),
-      summary: v.summary
-        ? {
-            status: v.summary.status as 'pending' | 'running' | 'done' | 'failed',
-            text: v.summary.text,
-            model: v.summary.model,
-            errorCode: v.summary.errorCode,
-            errorMessage: v.summary.errorMessage,
-            startedAt: v.summary.startedAt?.toISOString() ?? null,
-            finishedAt: v.summary.finishedAt?.toISOString() ?? null,
-            sentiment: (v.summary.sentiment as ReviewSentimentType | null) ?? null,
-            sentimentScore: v.summary.sentimentScore,
-            satisfactionScore: v.summary.satisfactionScore,
-            menus: safeParseMenus(v.summary.menusJson),
-            tips: safeParseStringArrayNullable(v.summary.tipsJson),
-            keywords: safeParseStringArrayNullable(v.summary.keywordsJson),
+    const reviews: AdminVisitorReviewType[] = [];
+    const sources: RestaurantSourceSummaryType[] = [];
+    for (const row of rows) {
+      // 출처별 카운트 — 어드민 목록(list)의 집계 SQL 과 같은 의미: queued 는 pending 에
+      // 합산, cancelled 는 어느 버킷에도 안 넣고, 감정·평균은 done 행만.
+      let pending = 0;
+      let running = 0;
+      let done = 0;
+      let failed = 0;
+      const sentiment = { positive: 0, negative: 0, neutral: 0, mixed: 0 };
+      let sentSum = 0;
+      let sentN = 0;
+      let satSum = 0;
+      let satN = 0;
+      for (const v of row.visitorReviews) {
+        const s = v.summary;
+        reviews.push({
+          authorName: v.authorName,
+          rating: v.rating,
+          body: v.body,
+          visitedAt: v.visitedAt,
+          imageUrls: safeParseStringArray(v.imageUrlsJson),
+          videos: safeParseVideos(v.videosJson),
+          id: v.id,
+          externalId: v.externalId,
+          fetchedAt: v.fetchedAt.toISOString(),
+          source: row.source,
+          restaurantId: row.id,
+          summary: s
+            ? {
+                status: s.status as ReviewSummaryStatusType,
+                text: s.text,
+                model: s.model,
+                errorCode: s.errorCode,
+                errorMessage: s.errorMessage,
+                startedAt: s.startedAt?.toISOString() ?? null,
+                finishedAt: s.finishedAt?.toISOString() ?? null,
+                sentiment: (s.sentiment as ReviewSentimentType | null) ?? null,
+                sentimentScore: s.sentimentScore,
+                satisfactionScore: s.satisfactionScore,
+                menus: safeParseMenus(s.menusJson),
+                tips: safeParseStringArrayNullable(s.tipsJson),
+                keywords: safeParseStringArrayNullable(s.keywordsJson),
+              }
+            : null,
+        });
+        if (!s) continue;
+        if (s.status === 'queued' || s.status === 'pending') pending += 1;
+        else if (s.status === 'running') running += 1;
+        else if (s.status === 'failed') failed += 1;
+        else if (s.status === 'done') {
+          done += 1;
+          if (
+            s.sentiment === 'positive' ||
+            s.sentiment === 'negative' ||
+            s.sentiment === 'neutral' ||
+            s.sentiment === 'mixed'
+          ) {
+            sentiment[s.sentiment] += 1;
           }
-        : null,
-    }));
+          if (s.sentimentScore !== null) {
+            sentSum += s.sentimentScore;
+            sentN += 1;
+          }
+          if (s.satisfactionScore !== null) {
+            satSum += s.satisfactionScore;
+            satN += 1;
+          }
+        }
+      }
+      sources.push({
+        restaurantId: row.id,
+        source: row.source,
+        sourceId: row.sourceId,
+        placeId: row.placeId,
+        name: row.name,
+        category: row.category,
+        rating: row.rating,
+        reviewCount: row.reviewCount,
+        rawSourceUrl: row.rawSourceUrl,
+        firstCrawledAt: row.firstCrawledAt.toISOString(),
+        lastCrawledAt: row.lastCrawledAt.toISOString(),
+        totalReviews: row.visitorReviews.length,
+        summaryPending: pending,
+        summaryRunning: running,
+        summaryDone: done,
+        summaryFailed: failed,
+        avgSentimentScore: sentN > 0 ? sentSum / sentN : null,
+        avgSatisfactionScore: satN > 0 ? satSum / satN : null,
+        positiveCount: sentiment.positive,
+        negativeCount: sentiment.negative,
+        neutralCount: sentiment.neutral,
+        mixedCount: sentiment.mixed,
+      });
+    }
     reviews.sort(compareReviewRecencyDesc);
+    // 이 상세의 기준(네이버) 행을 맨 앞에 — 나머지는 최근 수집순 그대로(stable sort).
+    sources.sort((a, b) => Number(b.restaurantId === r.id) - Number(a.restaurantId === r.id));
 
     return {
       id: r.id,
       // placeId 로 findUnique 했으니 non-null.
       placeId: r.placeId!,
+      canonicalId: r.canonicalId,
       name: r.name,
       category: r.category,
       address: r.address,
@@ -2524,8 +2635,10 @@ export class RestaurantService {
       rawSourceUrl: r.rawSourceUrl,
       firstCrawledAt: r.firstCrawledAt.toISOString(),
       lastCrawledAt: r.lastCrawledAt.toISOString(),
-      snapshot: { ...snapshot, visitorReviews: reviews.map(stripIdsFromReview) },
+      // 리뷰는 reviews 한 곳에만 — 스냅샷에 같은 목록을 복제하면 응답만 두 배가 된다.
+      snapshot: { ...snapshot, visitorReviews: [] },
       reviews,
+      sources,
       store: await getRestaurantStoreInfo(this.prisma, r.canonicalId),
       tour: await getRestaurantTourMatchInfo(this.prisma, r.canonicalId),
     };
@@ -2849,11 +2962,3 @@ const pickPublicSort = (
   );
 };
 
-const stripIdsFromReview = (r: VisitorReviewWithSummaryType): VisitorReviewType => ({
-  authorName: r.authorName,
-  rating: r.rating,
-  body: r.body,
-  visitedAt: r.visitedAt,
-  imageUrls: r.imageUrls,
-  videos: r.videos,
-});

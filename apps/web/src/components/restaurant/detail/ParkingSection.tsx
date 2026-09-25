@@ -130,7 +130,8 @@ export const ParkingNearbySection = ({ detail, lat, lng }: { detail: RestaurantP
 
 // ── 홈 탭 한 줄 요약 ────────────────────────────────────────────────────────
 // 리뷰 평가 한 마디 + 가장 가까운 주차장(무료·여석). 둘 다 없으면 그리지 않는다.
-export const ParkingSummaryLine = ({ detail, onOpen }: { detail: RestaurantPublicDetailType; onOpen: () => void }) => {
+// onOpen 이 없으면('가는 법' 탭이 없는 어드민 상세) 누를 수 없는 정보 줄로만 그린다.
+export const ParkingSummaryLine = ({ detail, onOpen }: { detail: RestaurantPublicDetailType; onOpen?: () => void }) => {
   const { reviews, nearby, dcParking } = useParkingData(detail);
   const topTip = reviews.data?.tips[0]?.term ?? null;
   const verdict = verdictOf(reviews.data?.aspect) ?? (topTip ? `리뷰: '${topTip}'` : dcParking ? '주차 가능(다이닝코드)' : null);
@@ -139,10 +140,22 @@ export const ParkingSummaryLine = ({ detail, onOpen }: { detail: RestaurantPubli
     ? `${nearest.name} ${formatDistanceM(nearest.dist)}${nearest.feeType === 'free' ? ' · 무료' : ''}${nearest.live?.available != null ? ` · 여석 ${nearest.live.available}` : ''}`
     : null;
   if (!verdict && !lot) return null;
-  return (
-    <button type="button" onClick={onOpen} className="flex w-full gap-2 text-left hover:text-foreground" data-testid="restaurant-parking-summary">
+  const content = (
+    <>
       <Car className="mt-0.5 size-4 shrink-0" />
       <span className="min-w-0 truncate">{[verdict, lot].filter(Boolean).join(' · ')}</span>
+    </>
+  );
+  if (!onOpen) {
+    return (
+      <div className="flex w-full gap-2" data-testid="restaurant-parking-summary">
+        {content}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={onOpen} className="flex w-full gap-2 text-left hover:text-foreground" data-testid="restaurant-parking-summary">
+      {content}
     </button>
   );
 };

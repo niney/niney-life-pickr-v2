@@ -27,6 +27,8 @@ import {
   RestaurantRankingResult,
   RestaurantReanalyzeResult,
   RestaurantResumeSummaryResult,
+  RestaurantReviewMatchQuery,
+  RestaurantReviewMatchResult,
   ReviewResummarizeInput,
   ReviewResummarizeResult,
   RestaurantSmartPickInput,
@@ -45,6 +47,7 @@ import { env } from '../../config/env.js';
 import { RATE } from '../../plugins/rate-limit.js';
 import { jobRegistry } from '../crawl/job-registry.js';
 import { summaryEventsBus, type SummarySignal } from '../summary/summary-events-bus.js';
+import { summaryChannelKey } from '../summary/summary.service.js';
 import { MenuGroupingError, MenuGroupingService } from '../menu-grouping/menu-grouping.service.js';
 
 // OperationLog.meta 는 JSON 직렬화 문자열. 깨진 행이 있어도 응답을 막지 말고
@@ -308,8 +311,11 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: ReviewResummarizeResult },
     },
     handler: async (req) => {
-      const { placeId } = await summaries.resummarizeReview(req.params.reviewId, req.body.model);
-      return { ok: true as const, placeId };
+      const { placeId, canonicalId } = await summaries.resummarizeReview(
+        req.params.reviewId,
+        req.body.model,
+      );
+      return { ok: true as const, placeId, canonicalId };
     },
   });
 
@@ -325,6 +331,23 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
       const insights = await service.getInsights(req.params.placeId);
       if (!insights) throw app.httpErrors.notFound('Restaurant not crawled yet');
       return insights;
+    },
+  });
+
+  // 어드민 상세 리뷰 탭의 팁·메뉴 필터 — 공개 리뷰 목록과 같은 매칭으로 걸린 리뷰 id 만.
+  typed.get(Routes.Restaurant.reviewMatch(':placeId'), {
+    onRequest: [app.authenticate, app.requireAdmin],
+    schema: {
+      tags: ['admin'],
+      security: [{ bearerAuth: [] }],
+      params: z.object({ placeId: z.string() }),
+      querystring: RestaurantReviewMatchQuery,
+      response: { 200: RestaurantReviewMatchResult },
+    },
+    handler: async (req) => {
+      const result = await service.getReviewMatchIds(req.params.placeId, req.query);
+      if (!result) throw app.httpErrors.notFound('Restaurant not crawled yet');
+      return result;
     },
   });
 
@@ -557,14 +580,13 @@ const restaurantRoutes: FastifyPluginAsync = async (app) => {
           source: string;
           sourceId: string;
           placeId: string | null;
-          // 같은 행이 publish 받을 bus key. Naver=placeId, DC=dc:<vRid>.
+          // 같은 행이 publish 받을 bus key(summaryChannelKey — Naver=placeId,
+          // DC=dc:<vRid>, 테이블링=tb:<idx>).
           busKey: string;
         }
       >();
       for (const r of canonicalRows) {
-        const busKey = r.source === 'naver' ? (r.placeId ?? '') : `dc:${r.sourceId}`;
-        if (!busKey) continue;
-        byRestaurantId.set(r.restaurantId, { ...r, busKey });
+        byRestaurantId.set(r.restaurantId, { ...r, busKey: summaryChannelKey(r) });
       }
       // placeId 파라미터로 들어온 행은 별도 조회 — 이미 canonical 로 풀려 들어와
       // 있으면 skip.

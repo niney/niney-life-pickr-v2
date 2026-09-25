@@ -1,23 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useRef, useState, type ReactNode } from 'react';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Dialog from '@radix-ui/react-dialog';
-import {
-  AlertCircle,
-  ArrowLeft,
-  Clock,
-  ExternalLink,
-  Image as ImageIcon,
-  Info,
-  Loader2,
-  Maximize2,
-  MapPin,
-  RefreshCw,
-  X,
-  Star,
-  Trash2,
-  UtensilsCrossed,
-} from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import {
   ApiError,
   useActiveCrawlJobStore,
@@ -25,378 +9,80 @@ import {
   useCancelSummary,
   useDeleteRestaurant,
   useRestaurantByPlaceId,
-  useRestaurantSummaryEvents,
+  useRestaurantCanonicalSummaryEvents,
+  useRestaurantPublic,
+  useRestaurantPublicInsights,
   useResumeSummary,
   useStartCrawl,
 } from '@repo/shared';
-import { compareReviewRecencyDesc, formatWonPrice } from '@repo/utils';
-import type {
-  BlogReviewType,
-  CrawlModeType,
-  MenuItemType,
-  RestaurantDetailType,
-  ReviewSummaryStatusType,
-  VisitorReviewWithSummaryType,
-} from '@repo/api-contract';
-import { Badge } from '~/components/ui/badge';
-import { Button } from '~/components/ui/button';
+import type { CrawlModeType, RestaurantDetailType } from '@repo/api-contract';
 import { Card, CardContent } from '~/components/ui/card';
 import { ActiveJobPanel } from '~/components/restaurant/ActiveJobPanel';
 import { MenuRankingSection } from '~/components/restaurant/MenuRankingSection';
 import { RestaurantCrawlLogsSection } from '~/components/restaurant/RestaurantCrawlLogsSection';
-import { StoreInfoBadges } from '~/components/restaurant/detail/StoreInfoBadges';
-import { TourMatchBadge } from '~/components/restaurant/detail/TourMatchBadge';
+import { SummaryProgressSection } from '~/components/restaurant/sections';
+import { AskTab } from '~/components/restaurant/detail/AskTab';
+import { HomeTab } from '~/components/restaurant/detail/HomeTab';
+import { InfoTab } from '~/components/restaurant/detail/InfoTab';
+import { InsightsTab } from '~/components/restaurant/detail/InsightsTab';
+import { MenuTab } from '~/components/restaurant/detail/MenuTab';
+import { PhotosTab } from '~/components/restaurant/detail/PhotosTab';
+import { TourTab } from '~/components/restaurant/detail/TourTab';
+import type { TabKey } from '~/components/restaurant/detail/tabs';
 import { TourEvidenceSection } from '~/components/admin/tour/TourEvidencePanel';
-import { VWorldMap } from '~/components/restaurant/VWorldMap';
-import { ImgWithFallback } from '~/components/ImgWithFallback';
+import { AdminDetailHeader } from '~/components/admin/restaurant-detail/AdminDetailHeader';
+import { AdminLocationAside } from '~/components/admin/restaurant-detail/AdminLocationAside';
+import { AdminRawInfo } from '~/components/admin/restaurant-detail/AdminRawInfo';
 import {
-  ReviewSummaryItem,
-  SectionHeader,
-  SummaryProgressSection,
-} from '~/components/restaurant/sections';
+  AdminReviewsTab,
+  type ReviewFilter,
+} from '~/components/admin/restaurant-detail/AdminReviewsTab';
+import {
+  ADMIN_DETAIL_TABS,
+  PUBLIC_TABS_IN_ADMIN,
+  isAdminDetailTab,
+  type AdminDetailTabKey,
+} from '~/components/admin/restaurant-detail/tabs';
+import { cn } from '~/lib/utils';
 
-const PAGE_SIZE = 20;
-
-type RatingFilter = 'all' | 1 | 2 | 3 | 4 | 5;
-type SortMode = 'visitedAt-desc' | 'fetchedAt-desc' | 'rating-desc' | 'rating-asc';
-type SummaryFilter = 'all' | ReviewSummaryStatusType | 'none';
-
-const RATING_OPTIONS: { value: RatingFilter; label: string }[] = [
-  { value: 'all', label: '별점 전체' },
-  { value: 5, label: '★ 5' },
-  { value: 4, label: '★ 4' },
-  { value: 3, label: '★ 3' },
-  { value: 2, label: '★ 2' },
-  { value: 1, label: '★ 1' },
-];
-
-const SUMMARY_OPTIONS: { value: SummaryFilter; label: string }[] = [
-  { value: 'all', label: '요약 전체' },
-  { value: 'done', label: '요약 완료' },
-  { value: 'running', label: '요약 진행' },
-  { value: 'pending', label: '요약 대기' },
-  { value: 'failed', label: '요약 실패' },
-  { value: 'none', label: '요약 없음' },
-];
-
-const SELECT_CLASS =
-  'h-8 rounded-md border border-input bg-background px-2 text-xs ' +
-  'shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1';
-
-const DETAIL_SECTION_CONTENT_CLASS = 'p-4 pt-6 sm:p-6 sm:pt-7';
-
-const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'visitedAt-desc', label: '방문일 최신순' },
-  { value: 'fetchedAt-desc', label: '최근 수집순' },
-  { value: 'rating-desc', label: '별점 높은순' },
-  { value: 'rating-asc', label: '별점 낮은순' },
-];
-
-const matchSummaryFilter = (
-  r: VisitorReviewWithSummaryType,
-  filter: SummaryFilter,
-): boolean => {
-  if (filter === 'all') return true;
-  if (filter === 'none') return !r.summary;
-  return r.summary?.status === filter;
-};
-
-const sortReviews = (
-  list: VisitorReviewWithSummaryType[],
-  mode: SortMode,
-): VisitorReviewWithSummaryType[] => {
-  const arr = [...list];
-  switch (mode) {
-    case 'visitedAt-desc':
-      arr.sort(compareReviewRecencyDesc);
-      break;
-    case 'fetchedAt-desc':
-      arr.sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
-      break;
-    case 'rating-desc':
-      arr.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
-      break;
-    case 'rating-asc':
-      arr.sort((a, b) => (a.rating ?? 99) - (b.rating ?? 99));
-      break;
-  }
-  return arr;
-};
-
-const InfoSection = ({ detail }: { detail: RestaurantDetailType }) => {
-  const s = detail.snapshot;
-  const items: { label: string; value: string }[] = [];
-  if (detail.address) items.push({ label: '주소', value: detail.address });
-  if (s.roadAddress) items.push({ label: '도로명', value: s.roadAddress });
-  if (detail.phone) items.push({ label: '전화', value: detail.phone });
-  if (s.latitude !== null && s.longitude !== null) {
-    items.push({ label: '좌표', value: `${s.latitude}, ${s.longitude}` });
-  }
-  if (items.length === 0) return null;
-  return (
-    <section className="space-y-2">
-      <SectionHeader icon={<Info className="size-4" />} label="정보" />
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-        {items.map((it) => (
-          <div key={it.label} className="contents">
-            <dt className="text-muted-foreground">{it.label}</dt>
-            <dd>{it.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-};
-
-const BusinessHoursSection = ({ hours }: { hours: string | null }) => {
-  if (!hours || hours.trim().length === 0) return null;
-  return (
-    <section className="space-y-2">
-      <SectionHeader icon={<Clock className="size-4" />} label="영업시간" />
-      <pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">
-        {hours}
-      </pre>
-    </section>
-  );
-};
-
-const MenuSection = ({ menus }: { menus: MenuItemType[] }) => {
-  if (menus.length === 0) return null;
-  return (
-    <section className="space-y-3">
-      <SectionHeader
-        icon={<UtensilsCrossed className="size-4" />}
-        label={`메뉴 (${menus.length})`}
-      />
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {menus.map((m, i) => {
-          const thumb = m.imageUrls[0] ?? null;
-          return (
-            <li
-              key={`${m.name}-${i}`}
-              className="flex items-start gap-3 rounded-md border p-3"
-            >
-              {thumb && (
-                <ImgWithFallback
-                  src={thumb}
-                  alt={m.name}
-                  className="size-16 shrink-0 rounded object-cover"
-                />
-              )}
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{m.name}</span>
-                  {m.recommend && (
-                    <Badge variant="secondary" className="shrink-0 text-[10px]">
-                      추천
-                    </Badge>
-                  )}
-                </div>
-                {m.price && (
-                  <div className="text-sm font-medium tabular-nums text-foreground/80">
-                    {formatWonPrice(m.price)}
-                  </div>
-                )}
-                {m.description && (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">
-                    {m.description}
-                  </p>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-};
-
-const ImageGallerySection = ({ urls }: { urls: string[] }) => {
-  if (urls.length === 0) return null;
-  return (
-    <section className="space-y-3">
-      <SectionHeader
-        icon={<ImageIcon className="size-4" />}
-        label={`사진 (${urls.length})`}
-      />
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {urls.map((u) => (
-          <li key={u}>
-            <a href={u} target="_blank" rel="noreferrer" className="block">
-              <ImgWithFallback
-                src={u}
-                className="aspect-square w-full rounded object-cover transition-opacity hover:opacity-80"
-              />
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-};
-
-const BlogReviewsSection = ({ reviews }: { reviews: BlogReviewType[] }) => {
-  const [expanded, setExpanded] = useState(false);
-  if (reviews.length === 0) return null;
-  const visible = expanded ? reviews : reviews.slice(0, 12);
-  return (
-    <section className="space-y-3">
-      <SectionHeader label={`블로그 리뷰 (${reviews.length})`} />
-      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {visible.map((b) => {
-          const thumb = b.thumbnailUrls[0] ?? null;
-          return (
-            <li key={b.url} className="rounded-md border transition-colors hover:bg-muted/40">
-              <a
-                href={b.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block space-y-2 p-3"
-              >
-                {thumb && (
-                  <ImgWithFallback
-                    src={thumb}
-                    className="aspect-video w-full rounded object-cover"
-                  />
-                )}
-                <div className="line-clamp-2 text-sm font-medium">{b.title}</div>
-                {b.excerpt && (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{b.excerpt}</p>
-                )}
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  {b.authorName && <span>{b.authorName}</span>}
-                  {b.date && <span>· {b.date}</span>}
-                  <ExternalLink className="ml-auto size-3" />
-                </div>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-      {reviews.length > 12 && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? '접기' : `${reviews.length - 12}개 더 보기`}
-        </Button>
-      )}
-    </section>
-  );
-};
-
-const VisitorReviewsSection = ({
-  reviews,
-}: {
-  reviews: VisitorReviewWithSummaryType[];
-}) => {
-  const [rating, setRating] = useState<RatingFilter>('all');
-  const [summary, setSummary] = useState<SummaryFilter>('all');
-  const [sort, setSort] = useState<SortMode>('visitedAt-desc');
-  const [page, setPage] = useState(1);
-
-  const filtered = useMemo(() => {
-    let list = reviews;
-    if (rating !== 'all') list = list.filter((r) => r.rating === rating);
-    if (summary !== 'all') list = list.filter((r) => matchSummaryFilter(r, summary));
-    return sortReviews(list, sort);
-  }, [reviews, rating, summary, sort]);
-
-  const visible = filtered.slice(0, page * PAGE_SIZE);
-  const hasMore = filtered.length > visible.length;
-
-  return (
-    <section className="space-y-3">
-      <SectionHeader
-        label={`방문자 리뷰 (${filtered.length}/${reviews.length})`}
-      />
-      <div className="flex flex-wrap gap-2 text-xs">
-        <select
-          value={String(rating)}
-          onChange={(e) => {
-            const v = e.target.value;
-            setRating(v === 'all' ? 'all' : (Number(v) as RatingFilter));
-            setPage(1);
-          }}
-          className={SELECT_CLASS}
-        >
-          {RATING_OPTIONS.map((o) => (
-            <option key={String(o.value)} value={String(o.value)}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={summary}
-          onChange={(e) => {
-            setSummary(e.target.value as SummaryFilter);
-            setPage(1);
-          }}
-          className={SELECT_CLASS}
-        >
-          {SUMMARY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortMode)}
-          className={SELECT_CLASS}
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      {visible.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          조건에 해당하는 리뷰가 없습니다.
-        </p>
-      ) : (
-        <ul className="divide-y">
-          {visible.map((r) => (
-            <ReviewSummaryItem key={r.id} r={r} />
-          ))}
-        </ul>
-      )}
-      {hasMore && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setPage((p) => p + 1)}
-        >
-          {filtered.length - visible.length}개 더 보기
-        </Button>
-      )}
-    </section>
-  );
-};
+// 어드민 맛집 상세. 초기 상세의 운영 골격(진행 중 크롤·요약 카드 → 헤더의 업데이트/재크롤링/
+// 삭제 → 우측 지도)은 그대로 두고, 본문을 공개 상세와 같은 탭 구성으로 바꿨다. 홈·분석·메뉴·
+// 사진·정보·질문·여행자 탭은 공개 상세 탭 컴포넌트를 그대로 쓰고(사용자가 보는 화면 = 어드민이
+// 보는 화면), 리뷰·로그는 어드민 전용이다. 리뷰·요약 진행은 같은 가게(canonical)의 모든 출처
+// (네이버·다이닝코드·테이블링)를 합쳐 보여 준다. 탭은 URL ?tab= 로 유지된다.
 
 export const AdminRestaurantDetailPage = () => {
   const { placeId } = useParams<{ placeId: string }>();
+  if (!placeId) return <Navigate to="/admin/restaurants" replace />;
+  // 식당이 바뀌면 탭 안 상태(팁/메뉴 필터·리뷰 필터·삭제 확인 등)를 통째로 초기화한다.
+  return <AdminRestaurantDetail key={placeId} placeId={placeId} />;
+};
+
+const AdminRestaurantDetail = ({ placeId }: { placeId: string }) => {
   const navigate = useNavigate();
-  const detailQuery = useRestaurantByPlaceId(placeId ?? null);
-  // Subscribe to summary events so the detail cache + summary card stay
-  // live during/after a recrawl initiated elsewhere (or a fresh re-summarize
-  // we kick off from this page).
-  const summaryStatusQuery = useRestaurantSummaryEvents(placeId ?? null);
+  const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const detailQuery = useRestaurantByPlaceId(placeId);
+  const detail = detailQuery.data ?? null;
+  // 공개 탭들이 읽는 데이터 — 어드민 발견 화면처럼 공개 응답을 그대로 차용한다.
+  const publicDetail = useRestaurantPublic(placeId);
+  const insights = useRestaurantPublicInsights(placeId);
+  // 출처 통합 요약 진행 — 리뷰 완료는 상세 캐시에 행 단위로 병합된다.
+  const { progress } = useRestaurantCanonicalSummaryEvents(
+    detail ? { placeId, canonicalId: detail.canonicalId } : null,
+  );
 
   const startMutation = useStartCrawl();
   const cancelMutation = useCancelCrawl();
   const cancelSummaryMutation = useCancelSummary();
   const resumeSummaryMutation = useResumeSummary();
   const deleteMutation = useDeleteRestaurant();
-  const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [mapExpanded, setMapExpanded] = useState(false);
+  // 홈·분석·메뉴 탭에서 팁/메뉴를 누르면 리뷰 탭으로 넘기며 적용하는 필터(동시 1개).
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter | null>(null);
+  // 탭 바로 앞 자리 — 탭을 바꿀 때 이미 그 아래로 내려가 있었으면 탭 바가 맨 위에 오게 되돌린다.
+  const tabsAnchorRef = useRef<HTMLDivElement | null>(null);
   // Pull only the job whose placeId matches this page. Multiple jobs can be
   // running globally (different restaurants), but the detail page only cares
   // about its own. Returning the matched object directly keeps zustand's
@@ -411,7 +97,25 @@ export const AdminRestaurantDetailPage = () => {
   const removeJob = useActiveCrawlJobStore((s) => s.remove);
   const markDoneJob = useActiveCrawlJobStore((s) => s.markDone);
 
-  if (!placeId) return <Navigate to="/admin/restaurants" replace />;
+  const hasTour = detail?.tour != null;
+  const tabRaw = searchParams.get('tab');
+  const requestedTab: AdminDetailTabKey = isAdminDetailTab(tabRaw) ? tabRaw : 'home';
+  const tab: AdminDetailTabKey = requestedTab === 'tour' && !hasTour ? 'home' : requestedTab;
+
+  const changeTab = (next: AdminDetailTabKey) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === 'home') params.delete('tab');
+      else params.set('tab', next);
+      return params;
+    });
+    const anchor = tabsAnchorRef.current;
+    if (anchor) {
+      // 어드민 상단바(h-14 = 56px) 아래에 탭 바가 붙는 위치.
+      const top = anchor.getBoundingClientRect().top + window.scrollY - 56;
+      if (window.scrollY > top) window.scrollTo({ top });
+    }
+  };
 
   if (detailQuery.isLoading) {
     return (
@@ -422,7 +126,7 @@ export const AdminRestaurantDetailPage = () => {
       </div>
     );
   }
-  if (detailQuery.isError || !detailQuery.data) {
+  if (detailQuery.isError || !detail) {
     return (
       <div className="mx-auto max-w-5xl px-6 py-10">
         <Link
@@ -441,21 +145,17 @@ export const AdminRestaurantDetailPage = () => {
     );
   }
 
-  const detail = detailQuery.data;
-  const s = detail.snapshot;
-
-  const handleAction = async (mode: CrawlModeType) => {
+  const handleCrawl = async (mode: CrawlModeType) => {
     setError(null);
     try {
       const result = await startMutation.mutateAsync({ url: detail.rawSourceUrl, mode });
       if (result.ok) {
-        // Recrawl cascade-deletes existing reviews server-side, so the cached
-        // detail's review ids will all become stale. Wipe them now so the
-        // streamed batches don't end up interleaved with about-to-vanish rows.
+        // 재크롤은 네이버 행의 리뷰를 서버에서 cascade 삭제하므로 캐시의 네이버 리뷰 id 가
+        // 전부 stale 해진다. 스트리밍 배치가 곧 사라질 행과 섞이지 않게 지금 비운다 — 같은
+        // 가게의 다이닝코드·테이블링 리뷰는 그대로 둔다.
         if (mode === 'recrawl') {
-          qc.setQueryData<RestaurantDetailType | null>(
-            ['restaurant', detail.placeId],
-            (prev) => (prev ? { ...prev, reviews: [] } : prev),
+          qc.setQueryData<RestaurantDetailType | null>(['restaurant', detail.placeId], (prev) =>
+            prev ? { ...prev, reviews: prev.reviews.filter((r) => r.restaurantId !== prev.id) } : prev,
           );
         }
         addJob({
@@ -492,59 +192,169 @@ export const AdminRestaurantDetailPage = () => {
     }
   };
 
-  const summaryInFlight =
-    (summaryStatusQuery.data?.pending ?? 0) +
-    (summaryStatusQuery.data?.running ?? 0);
+  const selectTip = (term: string) => {
+    setReviewFilter({ kind: 'tip', value: term });
+    changeTab('reviews');
+  };
+  const selectMenu = (name: string) => {
+    setReviewFilter({ kind: 'menu', value: name });
+    changeTab('reviews');
+  };
+  // 공개 홈 탭의 "○○ 전체 보기" — 어드민에 있는 탭이면 이동(가는 법은 홈 탭이 링크를 숨긴다).
+  const openPublicTab = (next: TabKey) => {
+    if (isAdminDetailTab(next)) changeTab(next);
+  };
+
+  const summaryInFlight = progress ? progress.queued + progress.pending + progress.running : 0;
+  const failedCount =
+    progress?.failed ?? detail.sources.reduce((sum, s) => sum + s.summaryFailed, 0);
+  const tabs = ADMIN_DETAIL_TABS.filter((t) => t.key !== 'tour' || hasTour);
+
+  // 공개 탭은 공개 상세 응답이 있어야 그린다 — 로딩·실패를 탭 자리에서 안내.
+  const withPublic = (render: (d: NonNullable<typeof publicDetail.data>) => ReactNode): ReactNode => {
+    if (publicDetail.data) return render(publicDetail.data);
+    if (publicDetail.isError) {
+      return (
+        <div className="px-6 py-10 text-center text-sm text-destructive">
+          공개 상세 정보를 불러오지 못했습니다.
+        </div>
+      );
+    }
+    return (
+      <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
+      </div>
+    );
+  };
+
+  const renderTab = (): ReactNode => {
+    switch (tab) {
+      case 'home':
+        return withPublic((d) => (
+          <HomeTab
+            detail={d}
+            insights={insights.data}
+            insightsLoading={insights.isLoading}
+            onChangeTab={openPublicTab}
+            onSelectTip={selectTip}
+            onSelectMenu={selectMenu}
+            availableTabs={PUBLIC_TABS_IN_ADMIN}
+          />
+        ));
+      case 'insights':
+        return withPublic((d) => (
+          <InsightsTab
+            detail={d}
+            insights={insights.data}
+            insightsLoading={insights.isLoading}
+            onSelectTip={selectTip}
+            onSelectMenu={selectMenu}
+          />
+        ));
+      case 'tour':
+        return (
+          <>
+            {publicDetail.data?.tour && <TourTab placeId={placeId} detail={publicDetail.data} />}
+            {detail.tour && (
+              <div className={cn('p-4', publicDetail.data?.tour && 'border-t')}>
+                <TourEvidenceSection tour={detail.tour} />
+              </div>
+            )}
+          </>
+        );
+      case 'menu':
+        return (
+          <>
+            {withPublic((d) => (
+              <MenuTab placeId={placeId} detail={d} insights={insights.data} onSelectMenu={selectMenu} />
+            ))}
+            <div className="border-t p-4 sm:p-6">
+              <MenuRankingSection placeId={placeId} />
+            </div>
+          </>
+        );
+      case 'reviews':
+        return (
+          <AdminReviewsTab
+            placeId={placeId}
+            canonicalId={detail.canonicalId}
+            reviews={detail.reviews}
+            filter={reviewFilter}
+            onClearFilter={() => setReviewFilter(null)}
+          />
+        );
+      case 'ask':
+        return <AskTab placeId={placeId} restaurantName={detail.name} />;
+      case 'photos':
+        return withPublic((d) => <PhotosTab detail={d} />);
+      case 'info':
+        return (
+          <>
+            {withPublic((d) => (
+              <InfoTab detail={d} />
+            ))}
+            <AdminRawInfo detail={detail} />
+          </>
+        );
+      case 'logs':
+        return (
+          <div className="p-4 sm:p-6">
+            <RestaurantCrawlLogsSection placeId={placeId} />
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6 px-3 py-6 sm:px-6 sm:py-10 xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-6">
-      {/* 진행 중 크롤 / 크롤 후에도 도는 AI 요약은 본문 정보(제목·별점·메타)
-          보다 위로 — 들어오자마자 현재 상태가 가장 먼저 보이게.
-          activeJob 이 있으면 ActiveJobPanel 내부에서 요약 진행도 함께 표시,
-          크롤은 끝났는데 요약이 trailing 으로 도는 동안은 SummaryProgress 가
-          이어받는다 (조건이 상호 배타라 둘이 동시에 뜨지 않음). */}
-      {activeJob && (
-        <ActiveJobPanel
-          // key=jobId — 재크롤로 jobId 가 바뀌면 패널을 새로 마운트 (내부
-          // 완료 발화 ref / 로그 누적 리셋).
-          key={activeJob.jobId}
-          jobId={activeJob.jobId}
-          placeId={detail.placeId}
-          mode={activeJob.mode}
-          onPlaceIdResolved={() => {}}
-          onCancel={handleCancelJob}
-          showInlineReviewList={false}
-          // 종료 시 자동 제거 대신 'done' 표기 — 완료 카드를 유지하고 헤더
-          // 버튼(업데이트/재크롤)을 다시 활성화한다. 상세 페이지라 "상세 보기"
-          // 버튼은 두지 않고, X(onDismiss) 로 닫으면 trailing 요약 카드로 인계.
-          onFinished={(result) => {
-            if (result && !result.ok) {
-              setError(`${result.error}: ${result.message}`);
-            }
-            markDoneJob(activeJob.jobId);
-          }}
-          onDismiss={() => removeJob(activeJob.jobId)}
-          autoDismissOnSuccess
-        />
-      )}
-      {!activeJob &&
-        summaryStatusQuery.data &&
-        (summaryInFlight > 0 || summaryStatusQuery.data.cancelled > 0) && (
+      <div className="min-w-0 space-y-6">
+        {/* 진행 중 크롤 / 크롤 후에도 도는 AI 요약은 본문 정보(제목·별점·메타)
+            보다 위로 — 들어오자마자 현재 상태가 가장 먼저 보이게.
+            activeJob 이 있으면 ActiveJobPanel 내부에서 요약 진행도 함께 표시,
+            크롤은 끝났는데 요약이 trailing 으로 도는 동안은 SummaryProgress 가
+            이어받는다 (조건이 상호 배타라 둘이 동시에 뜨지 않음). 요약 진행은
+            출처 통합(다이닝코드·테이블링 재수집으로 큐잉된 요약 포함). */}
+        {activeJob && (
+          <ActiveJobPanel
+            // key=jobId — 재크롤로 jobId 가 바뀌면 패널을 새로 마운트 (내부
+            // 완료 발화 ref / 로그 누적 리셋).
+            key={activeJob.jobId}
+            jobId={activeJob.jobId}
+            placeId={detail.placeId}
+            mode={activeJob.mode}
+            onPlaceIdResolved={() => {}}
+            onCancel={handleCancelJob}
+            showInlineReviewList={false}
+            // 종료 시 자동 제거 대신 'done' 표기 — 완료 카드를 유지하고 헤더
+            // 버튼(업데이트/재크롤)을 다시 활성화한다. 상세 페이지라 "상세 보기"
+            // 버튼은 두지 않고, X(onDismiss) 로 닫으면 trailing 요약 카드로 인계.
+            onFinished={(result) => {
+              if (result && !result.ok) {
+                setError(`${result.error}: ${result.message}`);
+              }
+              markDoneJob(activeJob.jobId);
+            }}
+            onDismiss={() => removeJob(activeJob.jobId)}
+            autoDismissOnSuccess
+          />
+        )}
+        {!activeJob && progress && (summaryInFlight > 0 || progress.cancelled > 0) && (
           <Card>
             <CardContent className="py-4">
               <SummaryProgressSection
-                status={summaryStatusQuery.data}
+                status={progress}
                 onCancel={() => {
-                  if (!detail.placeId) return;
-                  if (!window.confirm('이 가게의 진행 중인 요약 작업을 중지하시겠습니까? 현재 청크는 끝까지 처리됩니다.')) {
+                  if (
+                    !window.confirm(
+                      '이 가게(모든 출처)의 진행 중인 요약 작업을 중지하시겠습니까? 현재 청크는 끝까지 처리됩니다.',
+                    )
+                  ) {
                     return;
                   }
                   cancelSummaryMutation.mutate(detail.placeId);
                 }}
                 cancelPending={cancelSummaryMutation.isPending}
                 onResume={() => {
-                  if (!detail.placeId) return;
                   if (!window.confirm('직전에 중지된 행만 다시 요약 큐에 올립니다. 진행하시겠습니까?')) {
                     return;
                   }
@@ -555,261 +365,65 @@ export const AdminRestaurantDetailPage = () => {
             </CardContent>
           </Card>
         )}
-      <div>
-        <Link
-          to="/admin/restaurants"
-          className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" /> 목록
-        </Link>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2">
-              <h1 className="truncate text-2xl font-semibold tracking-tight">{detail.name}</h1>
-              {detail.category && (
-                <span className="text-sm text-muted-foreground">{detail.category}</span>
-              )}
-              <StoreInfoBadges store={detail.store} />
-              <TourMatchBadge tour={detail.tour} />
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-              {detail.rating !== null && (
-                <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground">
-                  <Star className="size-3.5 fill-current text-amber-500" />
-                  {detail.rating}
-                </span>
-              )}
-              {detail.reviewCount !== null && (
-                <span className="text-sm text-foreground/80">
-                  리뷰 <span className="font-medium">{detail.reviewCount}</span>
-                </span>
-              )}
-              <span className="text-sm text-foreground/80">
-                DB <span className="font-medium">{detail.reviews.length}</span>
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                마지막 크롤 {new Date(detail.lastCrawledAt).toLocaleString('ko-KR')}
-              </span>
-              <a
-                href={detail.rawSourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-              >
-                <ExternalLink className="size-3" /> 원본
-              </a>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="blue"
-              size="sm"
-              onClick={() => handleAction('update')}
-              disabled={
-                startMutation.isPending ||
-                (!!activeJob && activeJob.status === 'running')
-              }
-            >
-              업데이트
-            </Button>
-            <Button
-              type="button"
-              variant="amber"
-              size="sm"
-              onClick={() => handleAction('recrawl')}
-              disabled={
-                startMutation.isPending ||
-                (!!activeJob && activeJob.status === 'running')
-              }
-            >
-              <RefreshCw />
-              재크롤링
-            </Button>
-            {confirmDelete ? (
-              <>
-                <Button
+
+        <AdminDetailHeader
+          detail={detail}
+          failedCount={failedCount}
+          crawlBusy={startMutation.isPending || (!!activeJob && activeJob.status === 'running')}
+          confirmDelete={confirmDelete}
+          deletePending={deleteMutation.isPending}
+          error={error}
+          onCrawl={(mode) => void handleCrawl(mode)}
+          onDelete={() => void handleDelete()}
+          onCancelDelete={() => setConfirmDelete(false)}
+          onError={setError}
+        />
+
+        <div>
+          <div ref={tabsAnchorRef} />
+          {/* 탭 바 — 어드민 상단바(h-14) 아래에 붙는다. 탭이 많아 좁은 화면에선 가로 스크롤. */}
+          <nav
+            role="tablist"
+            aria-label="맛집 상세 탭"
+            className="sticky top-14 z-[5] flex overflow-x-auto rounded-t-xl border border-b-0 bg-background/95 backdrop-blur"
+          >
+            {tabs.map((t) => {
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
                   type="button"
-                  variant="red"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => changeTab(t.key)}
+                  className={cn(
+                    'relative flex-1 shrink-0 whitespace-nowrap px-3 py-2.5 text-sm font-medium transition-colors',
+                    active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
                 >
-                  {deleteMutation.isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}
-                  정말 삭제
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={deleteMutation.isPending}
-                >
-                  취소
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="red"
-                size="sm"
-                onClick={handleDelete}
-                aria-label="삭제"
-                title="삭제"
-              >
-                <Trash2 />
-              </Button>
-            )}
-          </div>
-        </div>
-        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-      </div>
-
-      <Card>
-        <CardContent className="divide-y [&>*]:py-4">
-          <InfoSection detail={detail} />
-          <BusinessHoursSection hours={s.businessHours} />
-          <MenuSection menus={s.menus} />
-          <ImageGallerySection urls={s.imageUrls} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
-          <MenuRankingSection placeId={detail.placeId} />
-        </CardContent>
-      </Card>
-
-      {detail.tour && (
-        <Card>
-          <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
-            <TourEvidenceSection tour={detail.tour} />
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
-          <VisitorReviewsSection reviews={detail.reviews} />
-        </CardContent>
-      </Card>
-
-      {s.blogReviews.length > 0 && (
-        <Card>
-          <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
-            <BlogReviewsSection reviews={s.blogReviews} />
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className={DETAIL_SECTION_CONTENT_CLASS}>
-          <RestaurantCrawlLogsSection placeId={detail.placeId} />
-        </CardContent>
-      </Card>
-      </div>
-
-      {/*
-        우측 사이드바 — xl 이상에서만 노출. 모바일/태블릿은 좌측 본문에
-        InfoSection 으로 좌표 정보가 이미 들어있어 지도가 없어도 정보 부재
-        문제는 없다.
-      */}
-      <aside className="hidden xl:block">
-        <div className="sticky top-4 space-y-4">
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex items-center justify-between">
-                <SectionHeader icon={<MapPin className="size-4" />} label="위치" />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMapExpanded(true)}
-                  aria-label="지도 크게 보기"
-                  title="지도 크게 보기"
-                  className="h-7 px-2"
-                >
-                  <Maximize2 className="size-4" />
-                </Button>
-              </div>
-              <div className="mt-3">
-                <VWorldMap
-                  lat={s.latitude}
-                  lng={s.longitude}
-                  name={detail.name}
-                />
-              </div>
-              {detail.address && (
-                <p className="mt-3 text-sm text-foreground/80">{detail.address}</p>
-              )}
-              {s.roadAddress && (
-                <p className="text-xs text-muted-foreground">{s.roadAddress}</p>
-              )}
-              {detail.phone && (
-                <p className="mt-1 text-xs text-muted-foreground">전화 {detail.phone}</p>
-              )}
-            </CardContent>
+                  {t.label}
+                  {t.key === 'reviews' && (
+                    <span className="ml-1 text-xs tabular-nums text-muted-foreground">
+                      {detail.reviews.length.toLocaleString()}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      'absolute inset-x-3 bottom-0 h-0.5 rounded-t bg-primary transition-opacity',
+                      active ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                </button>
+              );
+            })}
+          </nav>
+          <Card className="overflow-hidden rounded-t-none" role="tabpanel">
+            {renderTab()}
           </Card>
         </div>
-      </aside>
+      </div>
 
-      {/*
-        풀 높이 우측 슬라이드오버. 사이드바의 컴팩트 카드와 별개의 VWorldMap
-        인스턴스를 렌더링한다 — 같은 ol Map 을 두 컨테이너에 옮겨 다는 건
-        ol API 가 정식 지원하지 않고 (setTarget 으로 가능하긴 하나 view·layer
-        상태가 어색해진다), 두 인스턴스 비용은 무시할 만하다.
-      */}
-      <Dialog.Root open={mapExpanded} onOpenChange={setMapExpanded}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in data-[state=closed]:animate-out data-[state=closed]:fade-out" />
-          <Dialog.Content
-            // 우측에서 슬라이드 인. 모바일은 화면 거의 전체, 데스크톱은
-            // 740px 정도로 제한.
-            className="fixed inset-y-0 right-0 z-50 flex h-screen w-full flex-col border-l bg-background shadow-xl outline-none sm:max-w-[740px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right"
-          >
-            <header className="flex items-center justify-between gap-3 border-b px-5 py-3">
-              <div className="min-w-0">
-                <Dialog.Title className="flex items-center gap-2 text-sm font-semibold">
-                  <MapPin className="size-4" />
-                  <span className="truncate">{detail.name}</span>
-                </Dialog.Title>
-                {detail.address && (
-                  <Dialog.Description className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {detail.address}
-                  </Dialog.Description>
-                )}
-              </div>
-              <Dialog.Close asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="닫기"
-                  className="h-8 w-8 shrink-0 p-0"
-                >
-                  <X className="size-4" />
-                </Button>
-              </Dialog.Close>
-            </header>
-
-            <div className="flex-1 p-4">
-              <VWorldMap
-                lat={s.latitude}
-                lng={s.longitude}
-                name={detail.name}
-                className="h-full w-full"
-              />
-            </div>
-
-            {(s.roadAddress || detail.phone) && (
-              <div className="border-t px-5 py-3 text-xs text-muted-foreground">
-                {s.roadAddress && <div>도로명 · {s.roadAddress}</div>}
-                {detail.phone && <div>전화 · {detail.phone}</div>}
-              </div>
-            )}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <AdminLocationAside detail={detail} />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, Clock, Loader2, X } from 'lucide-react';
 import {
   useCrawlJobStream,
+  useInvalidateRestaurantDetailCaches,
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
 } from '@repo/shared';
@@ -197,6 +198,7 @@ export const ActiveJobPanel = ({
   }, []);
   const summaryStatusQuery = useRestaurantSummaryEvents(placeId, { onLog: handleSummaryLog });
   const qc = useQueryClient();
+  const invalidateDetailCaches = useInvalidateRestaurantDetailCaches();
   // 경과 시간 — 진행 중엔 1초마다 tick, 종료되면 멈춘다. 시작 기준은 첫 연결
   // 시점(startRef). 성공 종료엔 서버가 잰 durationMs 를 우선 사용.
   // 경과 시간 — 마운트 시점을 시작으로 잡고(잡 시작 직후 패널이 뜨는 일반 경로
@@ -234,6 +236,9 @@ export const ActiveJobPanel = ({
               id: r.id,
               externalId: r.externalId,
               fetchedAt: r.fetchedAt,
+              // 크롤 스트림은 네이버 전용 — 이 상세의 기준(네이버) 행 리뷰다.
+              source: 'naver',
+              restaurantId: prev.id,
               summary: null,
             })),
           ...prev.reviews,
@@ -279,12 +284,14 @@ export const ActiveJobPanel = ({
     qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
     if (placeId) {
       qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
+      // 어드민 상세의 공개 탭(홈·분석·메뉴 등)도 새 리뷰·메뉴를 읽게.
+      invalidateDetailCaches(placeId);
     }
     if (!finishedFiredRef.current) {
       finishedFiredRef.current = true;
       onFinished?.(stream.result);
     }
-  }, [isTerminal, stream.result, placeId, qc, onFinished]);
+  }, [isTerminal, stream.result, placeId, qc, onFinished, invalidateDetailCaches]);
 
   // 진행 중에만 1초마다 tick — 종료되면 멈춰 경과 시간이 고정된다.
   useEffect(() => {

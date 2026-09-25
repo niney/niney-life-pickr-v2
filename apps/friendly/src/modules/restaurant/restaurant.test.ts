@@ -1922,3 +1922,274 @@ describe('Public restaurant routes', () => {
     });
   });
 });
+
+describe('Admin restaurant detail — 출처 통합', () => {
+  let app: FastifyInstance;
+  // 새로 만든 canonical 이 dev.db 에 고아로 남지 않게 빈 DB 로 격리한다.
+  let isolated: IsolatedDatabase;
+  const PREFIX = 'tr-adm-';
+  const uid = () => `${PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  beforeAll(async () => {
+    isolated = await useIsolatedDatabase();
+    app = await buildTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    isolated.restore();
+  });
+
+  afterEach(async () => {
+    await app.prisma.restaurant.deleteMany({
+      where: {
+        OR: [{ placeId: { startsWith: PREFIX } }, { sourceId: { startsWith: PREFIX } }],
+      },
+    });
+  });
+
+  // 네이버 행 + 같은 canonical 의 다이닝코드·테이블링 형제 행.
+  const seedCanonical = async () => {
+    const placeId = uid();
+    const naver = await app.prisma.restaurant.create({
+      data: {
+        source: 'naver',
+        sourceId: placeId,
+        placeId,
+        name: '통합 상세집',
+        category: '한식',
+        rawSourceUrl: `https://m.place.naver.com/restaurant/${placeId}`,
+        snapshotJson: JSON.stringify(placeData({ placeId })),
+        lastCrawledAt: new Date('2026-09-01T00:00:00Z'),
+        canonical: { create: { name: '통합 상세집', primaryCategory: '한식' } },
+      },
+      select: { id: true, canonicalId: true },
+    });
+    const sibling = async (source: 'diningcode' | 'tabling', lastCrawledAt: string) =>
+      app.prisma.restaurant.create({
+        data: {
+          source,
+          sourceId: uid(),
+          placeId: null,
+          name: `통합 상세집(${source})`,
+          category: '한식',
+          rating: 4.5,
+          reviewCount: 10,
+          rawSourceUrl: `https://example.com/${source}`,
+          snapshotJson: '{}',
+          lastCrawledAt: new Date(lastCrawledAt),
+          canonicalId: naver.canonicalId,
+        },
+        select: { id: true },
+      });
+    const dc = await sibling('diningcode', '2026-09-03T00:00:00Z');
+    const tb = await sibling('tabling', '2026-09-02T00:00:00Z');
+    return { placeId, naverId: naver.id, canonicalId: naver.canonicalId, dcId: dc.id, tbId: tb.id };
+  };
+
+  const seedReview = async (
+    restaurantId: string,
+    n: string,
+    visitedAt: string | null,
+    summary: Partial<{
+      status: string;
+      sentiment: string;
+      sentimentScore: number;
+      satisfactionScore: number;
+      tips: string[];
+      menus: string[];
+    }> | null,
+  ): Promise<string> => {
+    const v = await app.prisma.visitorReview.create({
+      data: {
+        restaurantId,
+        authorName: `작성자${n}`,
+        rating: 4,
+        body: `리뷰 ${n}`,
+        visitedAt,
+        imageUrlsJson: '[]',
+        videosJson: '[]',
+        contentHash: `${restaurantId}-${n}`,
+      },
+      select: { id: true },
+    });
+    if (summary) {
+      const status = summary.status ?? 'done';
+      await app.prisma.reviewSummary.create({
+        data: {
+          reviewId: v.id,
+          status,
+          text: status === 'done' ? `요약 ${n}` : null,
+          sentiment: summary.sentiment ?? null,
+          sentimentScore: summary.sentimentScore ?? null,
+          satisfactionScore: summary.satisfactionScore ?? null,
+          tipsJson: summary.tips ? JSON.stringify(summary.tips) : null,
+          menusJson: summary.menus
+            ? JSON.stringify(summary.menus.map((name) => ({ name, sentiment: 'positive', traits: [] })))
+            : null,
+          finishedAt: new Date(),
+        },
+      });
+    }
+    return v.id;
+  };
+
+  const getDetail = async (placeId: string) => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/restaurants/place/${placeId}`,
+      headers: { Authorization: `Bearer ${adminToken(app)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json() as {
+      id: string;
+      canonicalId: string;
+      snapshot: { visitorReviews: unknown[] };
+      reviews: Array<{
+        id: string;
+        body: string;
+        source: string;
+        restaurantId: string;
+        summary: { status: string } | null;
+      }>;
+      sources: Array<{
+        restaurantId: string;
+        source: string;
+        totalReviews: number;
+        summaryPending: number;
+        summaryRunning: number;
+        summaryDone: number;
+        summaryFailed: number;
+        positiveCount: number;
+        negativeCount: number;
+        avgSentimentScore: number | null;
+        avgSatisfactionScore: number | null;
+      }>;
+    };
+  };
+
+  it('같은 canonical 의 모든 출처 리뷰를 방문일 최신순으로 싣고, 스냅샷엔 리뷰를 복제하지 않는다', async () => {
+    const c = await seedCanonical();
+    await seedReview(c.naverId, 'n1', '2026-08-01', {
+      status: 'done',
+      sentiment: 'positive',
+      sentimentScore: 0.8,
+      satisfactionScore: 5,
+    });
+    await seedReview(c.naverId, 'n2', '2026-08-05', { status: 'failed' });
+    await seedReview(c.dcId, 'd1', '2026-08-03', {
+      status: 'done',
+      sentiment: 'negative',
+      sentimentScore: -0.4,
+      satisfactionScore: 2,
+    });
+    await seedReview(c.dcId, 'd2', '2026-07-01', { status: 'queued' });
+    await seedReview(c.tbId, 't1', '2026-08-09', { status: 'running' });
+    await seedReview(c.tbId, 't2', '2026-06-01', { status: 'cancelled' });
+    await seedReview(c.tbId, 't3', '2026-05-01', null);
+
+    const body = await getDetail(c.placeId);
+    expect(body.id).toBe(c.naverId);
+    expect(body.canonicalId).toBe(c.canonicalId);
+    expect(body.snapshot.visitorReviews).toEqual([]);
+
+    // 세 출처 7건이 실제 방문일 최신순으로 한 목록에.
+    expect(body.reviews.map((r) => r.body)).toEqual([
+      '리뷰 t1',
+      '리뷰 n2',
+      '리뷰 d1',
+      '리뷰 n1',
+      '리뷰 d2',
+      '리뷰 t2',
+      '리뷰 t3',
+    ]);
+    const byBody = Object.fromEntries(body.reviews.map((r) => [r.body, r]));
+    expect(byBody['리뷰 d1']).toMatchObject({ source: 'diningcode', restaurantId: c.dcId });
+    expect(byBody['리뷰 t1']).toMatchObject({ source: 'tabling', restaurantId: c.tbId });
+    expect(byBody['리뷰 n1']).toMatchObject({ source: 'naver', restaurantId: c.naverId });
+    expect(byBody['리뷰 n2']?.summary?.status).toBe('failed');
+    expect(byBody['리뷰 t2']?.summary?.status).toBe('cancelled');
+    expect(byBody['리뷰 t3']?.summary).toBeNull();
+
+    // 출처 행 — 네이버(기준 행) 먼저, 나머지는 최근 수집순(다이닝코드 9/3 > 테이블링 9/2).
+    expect(body.sources.map((s) => s.source)).toEqual(['naver', 'diningcode', 'tabling']);
+    const [naver, dc, tb] = body.sources;
+    expect(naver).toMatchObject({
+      restaurantId: c.naverId,
+      totalReviews: 2,
+      summaryDone: 1,
+      summaryFailed: 1,
+      positiveCount: 1,
+      avgSatisfactionScore: 5,
+    });
+    // queued 는 목록 집계와 같이 pending 버킷.
+    expect(dc).toMatchObject({
+      totalReviews: 2,
+      summaryDone: 1,
+      summaryPending: 1,
+      negativeCount: 1,
+    });
+    expect(dc!.avgSentimentScore).toBeCloseTo(-0.4, 5);
+    // cancelled·요약 없음은 어느 버킷에도 안 들어간다.
+    expect(tb).toMatchObject({
+      totalReviews: 3,
+      summaryRunning: 1,
+      summaryPending: 0,
+      summaryDone: 0,
+      summaryFailed: 0,
+      avgSentimentScore: null,
+    });
+  });
+
+  it('review-match — 공개 리뷰 필터와 같은 규칙으로 팁·메뉴에 걸린 리뷰 id 를 돌려준다', async () => {
+    const c = await seedCanonical();
+    const done = { status: 'done', sentiment: 'positive', sentimentScore: 0.5, satisfactionScore: 4 };
+    const n1 = await seedReview(c.naverId, 'n1', null, { ...done, tips: ['주차 협소'], menus: ['김치찌개'] });
+    const d1 = await seedReview(c.dcId, 'd1', null, { ...done, tips: ['주차협소'], menus: ['김찌'] });
+    await seedReview(c.tbId, 't1', null, { ...done, tips: ['예약 필수'], menus: ['된장찌개'] });
+    await seedReview(c.naverId, 'n2', null, { status: 'failed' });
+    await app.prisma.menuCanonical.create({
+      data: {
+        restaurantId: c.naverId,
+        nameNorm: '김찌',
+        canonicalName: '김치찌개',
+        canonicalNorm: '김치찌개',
+      },
+    });
+
+    const match = async (query: Record<string, string>) => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/admin/restaurants/place/${c.placeId}/review-match`,
+        query,
+        headers: { Authorization: `Bearer ${adminToken(app)}` },
+      });
+      expect(res.statusCode).toBe(200);
+      return (res.json() as { reviewIds: string[] }).reviewIds.slice().sort();
+    };
+
+    // 팁 — termNorm 정규화(공백 차이 흡수)로 네이버·다이닝코드 리뷰가 함께 걸린다.
+    expect(await match({ tip: '주차 협소' })).toEqual([n1, d1].sort());
+    // 메뉴 — canonical 그룹('김찌' → 김치찌개)까지.
+    expect(await match({ menu: '김치찌개' })).toEqual([n1, d1].sort());
+    expect(await match({ menu: '없는메뉴' })).toEqual([]);
+  });
+
+  it('review-match — 인증 가드와 없는 식당 404', async () => {
+    const url = `/api/v1/admin/restaurants/place/${PREFIX}never/review-match?tip=a`;
+    const noAuth = await app.inject({ method: 'GET', url });
+    expect(noAuth.statusCode).toBe(401);
+    const user = await app.inject({
+      method: 'GET',
+      url,
+      headers: { Authorization: `Bearer ${userToken(app)}` },
+    });
+    expect(user.statusCode).toBe(403);
+    const unknown = await app.inject({
+      method: 'GET',
+      url,
+      headers: { Authorization: `Bearer ${adminToken(app)}` },
+    });
+    expect(unknown.statusCode).toBe(404);
+  });
+});

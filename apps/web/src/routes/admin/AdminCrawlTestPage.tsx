@@ -23,6 +23,7 @@ import {
 } from '@repo/shared';
 import { compareReviewRecencyDesc, formatWonPrice } from '@repo/utils';
 import type {
+  AdminVisitorReviewType,
   BlogReviewType,
   CrawlJobType,
   CrawlModeType,
@@ -591,9 +592,10 @@ export const AdminCrawlTestPage = () => {
     qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (prev) => {
       if (!prev) return prev;
       const existing = new Set(prev.reviews.map((r) => r.id));
-      const fresh: VisitorReviewWithSummaryType[] = batch
+      // 크롤 스트림은 네이버 전용 — 이 상세의 기준(네이버) 행 리뷰다.
+      const fresh: AdminVisitorReviewType[] = batch
         .filter((r) => !existing.has(r.id))
-        .map((r) => ({ ...r, summary: null }));
+        .map((r) => ({ ...r, source: 'naver', restaurantId: prev.id, summary: null }));
       if (fresh.length === 0) return prev;
       return {
         ...prev,

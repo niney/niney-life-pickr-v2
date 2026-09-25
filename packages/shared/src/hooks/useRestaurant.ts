@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useInfiniteQuery,
   useMutation,
@@ -530,22 +530,30 @@ export const useResumeSummary = () =>
     mutationFn: (placeId: string) => restaurantApi.resumeSummary(placeId),
   });
 
-// 공개 상세 페이지(어드민)에서 단건 리뷰를 고른 모델로 다시 요약. 모델은
-// 1회성 — 전역 defaultModel 은 안 바뀐다.
+// 어드민이 단건 리뷰를 고른 모델로 다시 요약(공개 상세 리뷰 탭·어드민 상세 리뷰 탭).
+// 모델은 1회성 — 전역 defaultModel 은 안 바뀐다.
 //
 // 트리거(POST 큐잉)와 완료 처리(SSE 수신 → 토스트/캐시 갱신)를 분리한다:
-//   - 이 훅(ReviewsTab 에 마운트): store 에 in-flight 추가 + POST. 버튼 잠금은
+//   - 이 훅(리뷰 탭에 마운트): store 에 in-flight 추가 + POST. 버튼 잠금은
 //     전역 store 에서 읽어 화면 재마운트에도 유지.
-//   - useResummarizeWatcher(App 에 1개 상주): store 의 placeId 들을 SSE 구독해
-//     완료를 처리. 그래서 사용자가 탭/페이지를 떠나도 토스트가 정상적으로 뜬다.
-export const useResummarizeReview = (placeId: string | null) => {
+//   - useResummarizeWatcher(App 에 1개 상주): store 의 구독 키(canonical 또는
+//     placeId)로 SSE 를 받아 완료를 처리. 그래서 사용자가 탭/페이지를 떠나도
+//     토스트가 정상적으로 뜬다.
+// canonicalId 를 아는 화면(어드민 상세)은 넘겨 주면 처음부터 canonical 로 구독한다.
+// 모르는 화면(공개 리뷰 탭)은 POST 응답의 canonicalId 로 watcher 구독을 옮긴다 —
+// 다이닝코드·테이블링 리뷰의 완료 이벤트는 placeId 구독으로는 오지 않는다.
+export const useResummarizeReview = (placeId: string | null, canonicalId: string | null = null) => {
   const add = useResummarizeStore((s) => s.add);
+  const setCanonical = useResummarizeStore((s) => s.setCanonical);
   const remove = useResummarizeStore((s) => s.remove);
   const items = useResummarizeStore((s) => s.items);
 
   const mutation = useMutation({
     mutationFn: ({ reviewId, model }: { reviewId: string; model: string }) =>
       restaurantApi.resummarizeReview(reviewId, model),
+    onSuccess: (result, { reviewId }) => {
+      if (result.canonicalId) setCanonical(reviewId, result.canonicalId);
+    },
     // POST 가 큐잉 실패하면 in-flight 에서 제거 — 잠금/대기 해제.
     onError: (_e, { reviewId }) => remove(reviewId),
   });
@@ -563,17 +571,18 @@ export const useResummarizeReview = (placeId: string | null) => {
     // prevSentiment: 재요약 직전 sentiment — 완료 토스트의 "부정 → 긍정" 델타용.
     resummarize: (reviewId: string, model: string, prevSentiment: string | null) => {
       if (!placeId) return;
-      add({ reviewId, placeId, prevSentiment, model });
+      add({ reviewId, placeId, canonicalId, prevSentiment, model });
       mutation.mutate({ reviewId, model });
     },
     pending,
   };
 };
 
-// 앱 전역에 1개만 마운트(App). in-flight 재요약의 placeId 들을 SSE 구독해
-// 완료('review' done/failed) 시:
+// 앱 전역에 1개만 마운트(App). in-flight 재요약의 구독 키(canonicalId 를 알면
+// canonical, 아니면 placeId)로 SSE 를 받아 완료('review' done/failed) 시:
 //   1) onResult 콜백 호출 — 호출자가 토스트로 결과 표시
-//   2) 공개 캐시(detail/reviews/insights) invalidate → 보이는 화면이면 갱신
+//   2) 공개 캐시 invalidate(invalidateRestaurantDetailCaches) → 보이는 화면이면 갱신.
+//      어드민 상세는 자기 SSE 가 행 단위로 병합하므로 stale 표시만 한다(전량 재조회 X).
 //   3) store 에서 제거 → 버튼 잠금 해제
 // ReviewsTab 과 독립이라 사용자가 어디로 이동해도 동작한다.
 export const useResummarizeWatcher = (opts: {
@@ -586,31 +595,38 @@ export const useResummarizeWatcher = (opts: {
     onResultRef.current = opts.onResult;
   }, [opts.onResult]);
 
-  // 구독해야 할 distinct placeId 들. 안정 키로 묶어 set 이 바뀔 때만 재구독.
-  const placeIds = Array.from(new Set(Object.values(items).map((it) => it.placeId)));
-  const key = placeIds.slice().sort().join(',');
+  // 구독해야 할 distinct 키들. 안정 문자열로 묶어 집합이 바뀔 때만 재구독.
+  const channelIds = Array.from(
+    new Set(
+      Object.values(items).map((it) =>
+        it.canonicalId ? `canonical:${it.canonicalId}` : `place:${it.placeId}`,
+      ),
+    ),
+  ).sort();
+  const key = channelIds.join(',');
 
   useEffect(() => {
-    if (placeIds.length === 0) return undefined;
-    const unsubs = placeIds.map((placeId) =>
+    if (channelIds.length === 0) return undefined;
+    const unsubs = channelIds.map((id) =>
       summarySseManager.subscribe(
-        { kind: 'place', placeId },
+        id.startsWith('canonical:')
+          ? { kind: 'canonical', canonicalId: id.slice('canonical:'.length) }
+          : { kind: 'place', placeId: id.slice('place:'.length) },
         {
           onSnapshot: () => {
             // 카운트 스냅샷은 무관 — 무시.
           },
           onReview: (ev) => {
-            if (ev.placeId !== placeId) return;
-            // store 의 최신 상태를 직접 읽어 stale 클로저 회피.
+            // store 의 최신 상태를 직접 읽어 stale 클로저 회피. place·canonical 구독이
+            // 같은 이벤트를 두 번 받아도 첫 처리에서 제거되므로 한 번만 처리된다.
             const inFlight = useResummarizeStore.getState().items[ev.reviewId];
             if (!inFlight) return; // 우리가 트리거한 게 아니면 무시.
             onResultRef.current(ev, inFlight);
-            void qc.invalidateQueries({ queryKey: ['restaurant', 'public', placeId] });
+            invalidateRestaurantDetailCaches(qc, inFlight.placeId);
             void qc.invalidateQueries({
-              queryKey: ['restaurant', 'public', 'reviews', placeId],
-            });
-            void qc.invalidateQueries({
-              queryKey: ['restaurant', 'public', 'insights', placeId],
+              queryKey: ['restaurant', inFlight.placeId],
+              exact: true,
+              refetchType: 'none',
             });
             useResummarizeStore.getState().remove(ev.reviewId);
           },
@@ -622,6 +638,180 @@ export const useResummarizeWatcher = (opts: {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, qc]);
+};
+
+// 식당 하나의 리뷰·요약이 바뀌었을 때(크롤 종료·요약 완료·재요약·재수집) 공개
+// 상세 쪽 캐시를 한꺼번에 무효화한다. 공개 키는 ['restaurant','public',<종류>,
+// placeId] 로 흩어져 있어 prefix 한 번으로 안 잡힌다. 활성 쿼리만 다시 받고 나머지는
+// stale 표시만 되므로 넉넉히 넣어도 비용이 작다. 어드민 상세(['restaurant',
+// placeId])는 호출자가 판단한다(리뷰 전량이라 무겁다).
+const invalidateRestaurantDetailCaches = (qc: QueryClient, placeId: string): void => {
+  for (const kind of ['detail', 'insights', 'reviews', 'category-tree', 'menu-nutrition']) {
+    void qc.invalidateQueries({ queryKey: ['restaurant', 'public', kind, placeId] });
+  }
+  void qc.invalidateQueries({ queryKey: ['restaurant', 'review-match', placeId] });
+  void qc.invalidateQueries({ queryKey: ['review-clusters', placeId] });
+  void qc.invalidateQueries({ queryKey: ['review-qa', 'ready', placeId] });
+  void qc.invalidateQueries({ queryKey: ['parking', 'restaurant-reviews', placeId] });
+};
+
+// 앱 쪽에서 쓰는 형태 — QueryClient 를 패키지 경계 너머로 넘기지 않도록(웹과 shared 가
+// @tanstack/query-core 타입을 각자 해석한다) shared 의 useQueryClient 로 묶어 돌려준다.
+export const useInvalidateRestaurantDetailCaches = (): ((placeId: string) => void) => {
+  const qc = useQueryClient();
+  return useCallback((placeId: string) => invalidateRestaurantDetailCaches(qc, placeId), [qc]);
+};
+
+// 어드민 상세 리뷰 탭의 팁·메뉴 필터 — 걸린 리뷰 id 집합(서버가 공개 리뷰 목록과
+// 같은 규칙으로 매칭). 둘 다 비면 비활성.
+export const useRestaurantReviewMatch = (
+  placeId: string | null,
+  filter: { tip: string | null; menu: string | null },
+) =>
+  useQuery({
+    queryKey: ['restaurant', 'review-match', placeId, filter.tip, filter.menu],
+    queryFn: () =>
+      restaurantApi.reviewMatch(placeId!, {
+        tip: filter.tip ?? undefined,
+        menu: filter.menu ?? undefined,
+      }),
+    enabled: !!placeId && !!(filter.tip || filter.menu),
+    staleTime: 60_000,
+  });
+
+// 출처별 snapshot 들을 가게 단위 진행 하나로 합친다 — 최근 완료는 출처 무관 최신순 5건.
+const sumSummaryProgress = (
+  snaps: Iterable<RestaurantSummarySnapshotEventType>,
+): RestaurantSummaryProgressType | null => {
+  let total: RestaurantSummaryProgressType | null = null;
+  for (const s of snaps) {
+    total = total ?? {
+      totalReviews: 0,
+      queued: 0,
+      pending: 0,
+      running: 0,
+      done: 0,
+      failed: 0,
+      cancelled: 0,
+      recentDone: [],
+    };
+    total.totalReviews += s.totalReviews;
+    total.queued += s.queued;
+    total.pending += s.pending;
+    total.running += s.running;
+    total.done += s.done;
+    total.failed += s.failed;
+    total.cancelled += s.cancelled;
+    total.recentDone.push(...s.recentDone);
+  }
+  if (total) {
+    total.recentDone = total.recentDone
+      .sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))
+      .slice(0, 5);
+  }
+  return total;
+};
+
+// 어드민 상세 — 같은 가게(canonical)의 모든 출처 요약 진행을 한 구독으로 받는다.
+//   - progress: 출처별 snapshot 의 합(요약 진행 카드·실패 배지용). 첫 snapshot 전엔 null.
+//   - 리뷰 완료 이벤트는 출처와 무관하게 어드민 상세 캐시에 행 단위로 병합.
+//   - snapshot 카운트는 상세 캐시의 sources[] 도 갱신(헤더 출처 칩).
+//   - 요약이 모두 끝나는 순간(in-flight 합 >0 → 0) 공개 캐시를 한 번 무효화해 공개
+//     탭(홈·분석·메뉴)이 새 집계를 읽게 한다 — 건마다 무효화하면 상세 재조회가 폭주한다.
+export const useRestaurantCanonicalSummaryEvents = (
+  target: { placeId: string; canonicalId: string } | null,
+): { progress: RestaurantSummaryProgressType | null } => {
+  const qc = useQueryClient();
+  // 구독 대상이 바뀌면 이전 가게의 snapshot 이 섞이지 않게 canonicalId 로 태깅하고,
+  // 렌더 중에 대상과 다른 태그는 버린다(effect 안에서 초기화하지 않는다).
+  const [state, setState] = useState<{
+    canonicalId: string;
+    bySource: ReadonlyMap<string, RestaurantSummarySnapshotEventType>;
+  } | null>(null);
+  const placeId = target?.placeId ?? null;
+  const canonicalId = target?.canonicalId ?? null;
+
+  useEffect(() => {
+    if (!placeId || !canonicalId) return undefined;
+    const inFlightBySource = new Map<string, number>();
+    const inFlightSum = () => [...inFlightBySource.values()].reduce((a, b) => a + b, 0);
+    return summarySseManager.subscribe(
+      { kind: 'canonical', canonicalId },
+      {
+        onSnapshot: (snap, prev) => {
+          setState((cur) => {
+            const base = cur && cur.canonicalId === canonicalId ? cur.bySource : new Map();
+            const bySource = new Map(base);
+            bySource.set(snap.restaurantId, snap);
+            return { canonicalId, bySource };
+          });
+          patchSummaryInListCaches(qc, snap, prev);
+          qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (detail) => {
+            if (!detail) return detail;
+            const idx = detail.sources.findIndex((s) => s.restaurantId === snap.restaurantId);
+            if (idx === -1) return detail;
+            const cur = detail.sources[idx]!;
+            const next = {
+              ...cur,
+              totalReviews: snap.totalReviews,
+              // 서버 집계와 같은 의미 — queued 는 pending 버킷.
+              summaryPending: snap.queued + snap.pending,
+              summaryRunning: snap.running,
+              summaryDone: snap.done,
+              summaryFailed: snap.failed,
+            };
+            if (
+              next.totalReviews === cur.totalReviews &&
+              next.summaryPending === cur.summaryPending &&
+              next.summaryRunning === cur.summaryRunning &&
+              next.summaryDone === cur.summaryDone &&
+              next.summaryFailed === cur.summaryFailed
+            ) {
+              return detail;
+            }
+            return { ...detail, sources: detail.sources.map((s, i) => (i === idx ? next : s)) };
+          });
+          const before = inFlightSum();
+          inFlightBySource.set(snap.restaurantId, snap.queued + snap.pending + snap.running);
+          if (before > 0 && inFlightSum() === 0) invalidateRestaurantDetailCaches(qc, placeId);
+        },
+        onReview: (ev) => {
+          // 행 단위 병합 — 리뷰 본문 전량을 다시 받지 않는다. 목록에 없는 리뷰(크롤이
+          // 막 적재해 아직 상세에 안 들어온 행)는 무시하고 종료 시 재조회에 맡긴다.
+          qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (detail) => {
+            if (!detail || !detail.reviews.some((r) => r.id === ev.reviewId)) return detail;
+            const reviews = detail.reviews.map((r) =>
+              r.id === ev.reviewId
+                ? {
+                    ...r,
+                    summary: {
+                      status: ev.status,
+                      text: ev.text,
+                      model: ev.model,
+                      errorCode: ev.errorCode,
+                      errorMessage: ev.errorMessage,
+                      startedAt: r.summary?.startedAt ?? null,
+                      finishedAt: ev.finishedAt,
+                      sentiment: ev.sentiment,
+                      sentimentScore: ev.sentimentScore,
+                      satisfactionScore: ev.satisfactionScore,
+                      menus: ev.menus,
+                      tips: ev.tips,
+                      keywords: ev.keywords,
+                    },
+                  }
+                : r,
+            );
+            return { ...detail, reviews };
+          });
+        },
+      },
+    );
+  }, [placeId, canonicalId, qc]);
+
+  const bySource = state && state.canonicalId === canonicalId ? state.bySource : null;
+  const progress = useMemo(() => (bySource ? sumSummaryProgress(bySource.values()) : null), [bySource]);
+  return { progress };
 };
 
 // placeId 단위 크롤 로그 — 상세 페이지 "크롤 로그" 아코디언 전용. 한 가게의

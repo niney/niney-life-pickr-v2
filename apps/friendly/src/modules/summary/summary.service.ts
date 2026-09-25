@@ -198,6 +198,22 @@ export interface SummaryServiceOptions {
   reviewSearch?: ReviewSearchService;
 }
 
+// 요약 큐 chain·중지 표식·SSE 버스가 공유하는 채널 키 — 출처 행 하나당 하나. 네이버는
+// placeId, 다이닝코드는 'dc:<vRid>', 테이블링은 'tb:<idx>'(뒤 둘은 sourceId). 크롤 적재
+// (crawl.service)·재요약·부팅 재큐잉·SSE 구독이 모두 이 규칙을 따라야 이벤트가 구독자에게
+// 닿는다 — 예전엔 SSE 가 테이블링을 'dc:' 로, 부팅 재큐잉이 'di:'/'ta:' 로 키를 만들어
+// 이벤트가 구독자에게 닿지 않았다.
+export const summaryChannelKey = (row: {
+  source: string;
+  sourceId: string;
+  placeId: string | null;
+}): string => {
+  if (row.source === 'naver' && row.placeId) return row.placeId;
+  if (row.source === 'diningcode') return `dc:${row.sourceId}`;
+  if (row.source === 'tabling') return `tb:${row.sourceId}`;
+  return `${row.source}:${row.sourceId}`;
+};
+
 // Background AI summarization. The crawl pipeline calls
 // queueSummariesForReviews(...) right after persisting a "더보기" batch — we
 // want the LLM round-trip to overlap with the next page's fetch, so this is
@@ -383,49 +399,70 @@ export class SummaryService {
     });
   }
 
-  // 어드민이 "이 가게 요약 중지" 누르면 호출. 동작:
-  //   1) cancelledPlaces 에 placeId 등록 — 다음 청크 진입 직전에 run() 가 자기
+  // placeId(네이버)로 같은 가게(canonical)에 묶인 출처 행 전부. 요약 중지·재개·재분석은
+  // 가게 단위 액션이라 모든 출처 채널에 같이 적용한다 — 어드민 상세의 리뷰·진행 표시가
+  // 출처 통합이고, 목록의 '실패 N' 배지 숫자도 이미 통합 합계다. 네이버 행이 없으면 null.
+  private async canonicalRowsForPlace(
+    placeId: string,
+  ): Promise<Array<{ id: string; source: string; sourceId: string; placeId: string | null }> | null> {
+    const naver = await this.prisma.restaurant.findUnique({
+      where: { placeId },
+      select: { canonicalId: true },
+    });
+    if (!naver) return null;
+    return this.prisma.restaurant.findMany({
+      where: { canonicalId: naver.canonicalId },
+      select: { id: true, source: true, sourceId: true, placeId: true },
+    });
+  }
+
+  // 어드민이 "이 가게 요약 중지" 누르면 호출. 같은 canonical 의 출처 행마다:
+  //   1) cancelledPlaces 에 채널 키 등록 — 다음 청크 진입 직전에 run() 가 자기
   //      자신을 종료한다. 진행 중 청크는 끝까지 흘러간 뒤 자연 종료.
-  //   2) chain map 에서 placeId 키 제거 — 새 enqueue 가 fresh chain 으로.
+  //   2) chain map 에서 채널 키 제거 — 새 enqueue 가 fresh chain 으로.
   //   3) DB 의 'queued'/'pending' 행을 'cancelled' 로 마킹. 'running' 은 손대지
   //      않음 — 청크가 끝나면서 done/failed 로 자연 마감된다.
-  // 반환: 'cancelled' 로 마킹된 행 수.
+  // 반환: 'cancelled' 로 마킹된 행 수(출처 합계).
   async cancelSummaryForPlace(placeId: string): Promise<number> {
+    // 네이버 채널은 조회 전에 먼저 막는다 — 조회하는 사이 다음 청크가 시작되지 않게.
     this.cancelledPlaces.add(placeId);
     this.runChainByPlace.delete(placeId);
 
-    // restaurant 찾아 그 식당의 queued/pending 행만 한정해 cancelled 마킹.
-    const restaurant = await this.prisma.restaurant.findUnique({
-      where: { placeId },
-      select: { id: true },
-    });
-    if (!restaurant) {
+    const rows = await this.canonicalRowsForPlace(placeId);
+    if (!rows) {
       this.log?.warn({ placeId }, '[summary] cancel: restaurant not found');
       return 0;
     }
-    const res = await this.prisma.reviewSummary.updateMany({
-      where: {
-        review: { restaurantId: restaurant.id },
-        status: { in: ['queued', 'pending'] },
-      },
-      data: {
-        status: 'cancelled',
-        errorCode: 'cancelled_by_user',
-        errorMessage: 'Admin cancelled the summary job',
-        finishedAt: new Date(),
-      },
-    });
+    let cancelled = 0;
+    for (const row of rows) {
+      const key = summaryChannelKey(row);
+      this.cancelledPlaces.add(key);
+      this.runChainByPlace.delete(key);
+      const res = await this.prisma.reviewSummary.updateMany({
+        where: {
+          review: { restaurantId: row.id },
+          status: { in: ['queued', 'pending'] },
+        },
+        data: {
+          status: 'cancelled',
+          errorCode: 'cancelled_by_user',
+          errorMessage: 'Admin cancelled the summary job',
+          finishedAt: new Date(),
+        },
+      });
+      cancelled += res.count;
+      this.bus.publish(key);
+    }
     this.log?.warn(
-      { placeId, cancelled: res.count },
+      { placeId, sources: rows.length, cancelled },
       '[summary] cancelled by admin',
     );
-    this.bus.publish(placeId);
-    return res.count;
+    return cancelled;
   }
 
   // 어드민이 "요약 재개" 누름. cancelSummaryForPlace 로 'cancelled' 가 된
-  // 행들만 골라 다시 큐잉한다. 동작:
-  //   1) cancelledPlaces 에서 placeId 풀어줘 새 batch 가 정상 흐름으로.
+  // 행들만 골라 다시 큐잉한다. 같은 canonical 의 출처 행마다:
+  //   1) cancelledPlaces 에서 채널 키를 풀어 새 batch 가 정상 흐름으로.
   //   2) 'cancelled' 행을 'queued' 로 즉시 flip — UI 가 재개를 바로 반영.
   //      (queueSummariesForReviews 의 createMany 는 UNIQUE 충돌로 fallback
   //       upsert 의 update:{} 를 타서 상태를 안 바꾼다. 미리 우리가 풀어둠.)
@@ -434,126 +471,131 @@ export class SummaryService {
   // backfillForRestaurant 와 분리한 이유: reanalyze 는 failed/done(구버전)
   // 까지 한꺼번에 다시 돌리는 광범위 액션이고, resume 은 사용자의 명시 중지
   // 만 되돌리는 좁은 의도라 UI 도 별도 버튼이 더 명확하다.
-  // 반환: 재큐잉된 reviewId 수.
+  // 반환: 재큐잉된 reviewId 수(출처 합계).
   async resumeSummaryForPlace(placeId: string): Promise<number> {
     this.cancelledPlaces.delete(placeId);
 
-    const restaurant = await this.prisma.restaurant.findUnique({
-      where: { placeId },
-      select: { id: true },
-    });
-    if (!restaurant) {
+    const rows = await this.canonicalRowsForPlace(placeId);
+    if (!rows) {
       this.log?.warn({ placeId }, '[summary] resume: restaurant not found');
       return 0;
     }
 
-    const targets = await this.prisma.reviewSummary.findMany({
-      where: {
-        review: { restaurantId: restaurant.id },
-        status: 'cancelled',
-      },
-      select: { reviewId: true },
-    });
-    if (targets.length === 0) {
+    let resumed = 0;
+    for (const row of rows) {
+      const key = summaryChannelKey(row);
+      this.cancelledPlaces.delete(key);
+      const targets = await this.prisma.reviewSummary.findMany({
+        where: {
+          review: { restaurantId: row.id },
+          status: 'cancelled',
+        },
+        select: { reviewId: true },
+      });
+      if (targets.length === 0) continue;
+      const reviewIds = targets.map((t) => t.reviewId);
+
+      await this.prisma.reviewSummary.updateMany({
+        where: {
+          reviewId: { in: reviewIds },
+          status: 'cancelled',
+        },
+        data: {
+          status: 'queued',
+          errorCode: null,
+          errorMessage: null,
+          finishedAt: null,
+        },
+      });
+      this.bus.publish(key);
+      this.queueSummariesForReviews(key, reviewIds);
+      resumed += reviewIds.length;
+    }
+    if (resumed === 0) {
       this.log?.info({ placeId }, '[summary] resume: no cancelled rows');
       return 0;
     }
-    const reviewIds = targets.map((t) => t.reviewId);
-
-    await this.prisma.reviewSummary.updateMany({
-      where: {
-        reviewId: { in: reviewIds },
-        status: 'cancelled',
-      },
-      data: {
-        status: 'queued',
-        errorCode: null,
-        errorMessage: null,
-        finishedAt: null,
-      },
-    });
-    this.bus.publish(placeId);
-
-    this.queueSummariesForReviews(placeId, reviewIds);
     this.log?.warn(
-      { placeId, resumed: reviewIds.length },
+      { placeId, sources: rows.length, resumed },
       '[summary] resumed by admin',
     );
-    return reviewIds.length;
+    return resumed;
   }
 
-  // 백필 — 한 식당의 분석되지 않았거나 구버전(analysisVersion < 현재) 행을
-  // 모두 다시 큐잉. 재크롤은 리뷰를 통째로 날리므로 부담이 크다. 이 경로는
-  // 리뷰 텍스트는 그대로 두고 분석만 다시 채운다.
+  // 백필 — 한 가게(canonical 의 모든 출처 행)의 분석되지 않았거나 구버전
+  // (analysisVersion < 현재) 행을 모두 다시 큐잉. 재크롤은 리뷰를 통째로 날리므로
+  // 부담이 크다. 이 경로는 리뷰 텍스트는 그대로 두고 분석만 다시 채운다.
   // 어드민의 명시적 "다시 시도" 액션이므로 직전 cancel 표식도 함께 해제한다.
-  // 반환: 큐잉된 reviewId 수.
+  // 반환: 큐잉된 reviewId 수(출처 합계).
   async backfillForRestaurant(placeId: string): Promise<number> {
-    const restaurant = await this.prisma.restaurant.findUnique({
-      where: { placeId },
-      select: { id: true },
-    });
-    if (!restaurant) return 0;
+    const rows = await this.canonicalRowsForPlace(placeId);
+    if (!rows) return 0;
 
-    // 어드민이 reanalyze 를 누른 시점 = "이제 다시 진행해" — cancel 표식 해제.
-    // 해제 전에 cancelled 행을 queueSummariesForReviews 로 다시 태우려면 순서
-    // 가 중요: 먼저 풀어줘야 그 다음 호출이 정상 흐름으로 들어간다.
-    this.cancelledPlaces.delete(placeId);
+    let queued = 0;
+    for (const row of rows) {
+      const key = summaryChannelKey(row);
+      // 어드민이 reanalyze 를 누른 시점 = "이제 다시 진행해" — cancel 표식 해제.
+      // 해제 전에 cancelled 행을 queueSummariesForReviews 로 다시 태우려면 순서
+      // 가 중요: 먼저 풀어줘야 그 다음 호출이 정상 흐름으로 들어간다.
+      this.cancelledPlaces.delete(key);
 
-    // failed/cancelled/구버전 done 모두 대상 — 새 프롬프트/모델 또는 사용자
-    // 의도 변경으로 다시 시도할 가치가 있음. 이미 진행 중(queued/pending/
-    // running)인 행은 건드리지 않는다.
-    const targets = await this.prisma.reviewSummary.findMany({
-      where: {
-        review: { restaurantId: restaurant.id },
-        OR: [
-          { status: 'failed' },
-          { status: 'cancelled' },
-          {
-            status: 'done',
-            OR: [
-              { analysisVersion: null },
-              { analysisVersion: { lt: ANALYSIS_VERSION } },
-            ],
-          },
-        ],
-      },
-      select: { reviewId: true },
-    });
-    const reviewIds = targets.map((t) => t.reviewId);
-    this.queueSummariesForReviews(placeId, reviewIds);
-    return reviewIds.length;
+      // failed/cancelled/구버전 done 모두 대상 — 새 프롬프트/모델 또는 사용자
+      // 의도 변경으로 다시 시도할 가치가 있음. 이미 진행 중(queued/pending/
+      // running)인 행은 건드리지 않는다.
+      const targets = await this.prisma.reviewSummary.findMany({
+        where: {
+          review: { restaurantId: row.id },
+          OR: [
+            { status: 'failed' },
+            { status: 'cancelled' },
+            {
+              status: 'done',
+              OR: [
+                { analysisVersion: null },
+                { analysisVersion: { lt: ANALYSIS_VERSION } },
+              ],
+            },
+          ],
+        },
+        select: { reviewId: true },
+      });
+      const reviewIds = targets.map((t) => t.reviewId);
+      this.queueSummariesForReviews(key, reviewIds);
+      queued += reviewIds.length;
+    }
+    return queued;
   }
 
   // 단건 리뷰 재요약 — 어드민이 모델을 골라 그 리뷰 하나만 다시 요약한다.
   // reanalyze(식당 전체) 와 달리 범위가 1건이고, 고른 모델을 1회성으로 적용
   // (전역 defaultModel 은 안 바뀐다). 진행/결과는 기존 summary-events SSE 로
-  // 흘러간다 — bus 채널 키를 reanalyze 와 동일 규칙으로 맞춰 같은 connection
-  // 이 그대로 받는다.
-  // 반환: SSE 구독 키로 쓸 placeId (Naver). placeId 없는 행(DC 등)은 null.
+  // 흘러간다 — 채널 키가 summaryChannelKey 규칙이라 canonical 구독이 그대로 받는다.
+  // 반환: placeId 는 리뷰가 네이버 행일 때만(다른 출처는 null), canonicalId 는
+  // 출처 무관 SSE 구독 키. 리뷰가 없으면 둘 다 null.
   async resummarizeReview(
     reviewId: string,
     model: string,
-  ): Promise<{ placeId: string | null }> {
+  ): Promise<{ placeId: string | null; canonicalId: string | null }> {
     const review = await this.prisma.visitorReview.findUnique({
       where: { id: reviewId },
       select: {
         id: true,
-        restaurant: { select: { placeId: true, source: true, sourceId: true } },
+        restaurant: {
+          select: { placeId: true, source: true, sourceId: true, canonicalId: true },
+        },
       },
     });
-    if (!review) return { placeId: null };
+    if (!review) return { placeId: null, canonicalId: null };
     const rest = review.restaurant;
-    // bus/SSE 채널 키 — summary-events 핸들러와 동일 규칙 (Naver=placeId,
-    // DC=dc:<sourceId>). 그래야 디테일 페이지의 기존 SSE 구독이 그대로 받는다.
-    const channelKey =
-      rest.source === 'naver' && rest.placeId
-        ? rest.placeId
-        : `dc:${rest.sourceId}`;
+    const channelKey = summaryChannelKey(rest);
     // 어드민의 명시적 액션이므로 직전 중지 표식이 있으면 해제 후 큐잉
     // (backfillForRestaurant 와 동일 — 안 풀면 queue 가 cancelled 로 박힌다).
     this.cancelledPlaces.delete(channelKey);
     this.queueSummariesForReviews(channelKey, [review.id], null, model);
-    return { placeId: rest.source === 'naver' ? rest.placeId : null };
+    return {
+      placeId: rest.source === 'naver' ? rest.placeId : null,
+      canonicalId: rest.canonicalId,
+    };
   }
 
   // 기존 done 행의 menusJson/tipsJson/keywordsJson 을 정규화 테이블로 풀어쓰는
@@ -1288,9 +1330,8 @@ export const cleanupStaleReviewSummaries = async (
 // upstream 같은 LLM 에러는 어드민이 의도적으로 분류·재시도해야 할 수 있어
 // 자동 재큐잉에서 빼둔다.
 //
-// placeId 가 null 인 Restaurant (예: source='diningcode') 행은 'dc:<vRid>'
-// 채널키로 큐잉 — saveDiningcodeShop 의 패턴과 동일. summary 큐 chain key 는
-// 자유 문자열이라 placeId 와 충돌 안 함.
+// placeId 가 null 인 Restaurant 행은 summaryChannelKey 규칙('dc:<vRid>'·'tb:<idx>')으로
+// 큐잉 — 크롤 적재 때와 같은 키여야 재큐잉된 행의 SSE·중지가 같은 채널에 걸린다.
 //
 // jobId 는 null — 부팅 시점엔 잡 컨텍스트가 없으므로 crawl_job_logs 로 흐르
 // 지 않고 pino 로그에만 남는다.
@@ -1317,14 +1358,10 @@ export const rescheduleStaleSummaries = async (
   });
   if (rows.length === 0) return { keys: 0, reviews: 0 };
 
-  // 큐 채널 키별로 reviewId 묶기. Naver 는 placeId, DC 는 'dc:<vRid>'.
+  // 큐 채널 키별로 reviewId 묶기.
   const groups = new Map<string, string[]>();
   for (const r of rows) {
-    const rest = r.review.restaurant;
-    const key =
-      rest.source === 'naver' && rest.placeId
-        ? rest.placeId
-        : `${rest.source.slice(0, 2)}:${rest.sourceId}`;
+    const key = summaryChannelKey(r.review.restaurant);
     let list = groups.get(key);
     if (!list) {
       list = [];

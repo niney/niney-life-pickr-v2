@@ -28,10 +28,16 @@ export type SubscriptionKey =
 const keyId = (k: SubscriptionKey): string =>
   k.kind === 'place' ? `place:${k.placeId}` : `canonical:${k.canonicalId}`;
 
-// `prev` 는 같은 키(place 또는 canonical) 직전 snapshot. 첫 catch-up 시 null.
+const matchesKey = (k: SubscriptionKey, snap: RestaurantSummarySnapshotEventType): boolean =>
+  k.kind === 'place' ? snap.placeId === k.placeId : snap.canonicalId === k.canonicalId;
+
+// `prev` 는 같은 출처 행(restaurantId)의 직전 snapshot. 첫 catch-up 시 null.
 // 공개 list 처럼 행 1개가 두 source 의 합산 카운트를 들고 있는 캐시는, 한
 // source 의 새 카운트로 통째 덮어쓰면 다른 source 의 카운트가 0 으로 빠진다.
-// prev 와 비교해 delta 만 합산 행에 반영하기 위해 같이 전달한다.
+// prev 와 비교해 delta 만 합산 행에 반영하기 위해 같이 전달한다. canonical 구독은
+// 여러 출처의 snapshot 이 섞여 오므로 반드시 restaurantId 단위로 짝지어야 한다 —
+// 예전엔 canonical 의 "마지막 snapshot"(다른 출처일 수 있음)을 prev 로 넘겨 출처가
+// 둘 이상인 가게에서 엉뚱한 delta 가 공개 list 에 더해졌다.
 type SnapshotHandler = (
   snap: RestaurantSummarySnapshotEventType,
   prev: RestaurantSummarySnapshotEventType | null,
@@ -62,10 +68,10 @@ const BACKOFF_MAX_MS = 60_000;
 class SummarySseManager {
   private es: EventSource | null = null;
   private connectedKeyIds: string[] = [];
-  // 마지막 snapshot 캐시 — 동일 키로 새로 구독하는 컴포넌트가 다음 tick 까지
-  // 안 기다리고 즉시 렌더 가능. 키는 canonicalId 또는 placeId.
-  private lastSnapshotByCanonical = new Map<string, RestaurantSummarySnapshotEventType>();
-  private lastSnapshotByPlace = new Map<string, RestaurantSummarySnapshotEventType>();
+  // 마지막 snapshot 캐시 — 출처 행(restaurantId)당 1개. 동일 키로 새로 구독하는
+  // 컴포넌트가 다음 tick 까지 안 기다리고 즉시 렌더 가능(canonical 키면 그 가게의
+  // 출처 행 전부를 replay). delta 계산용 prev 도 여기서 같은 행 것을 꺼낸다.
+  private lastSnapshotByRestaurant = new Map<string, RestaurantSummarySnapshotEventType>();
   private subs = new Map<string, Subscribers>();
   private reconnectScheduled = false;
   private connectGen = 0;
@@ -97,14 +103,12 @@ class SummarySseManager {
     entry.reviews.add(handlers.onReview);
     if (handlers.onLog) entry.logs.add(handlers.onLog);
 
-    // Replay 마지막 snapshot — 키 종류에 맞는 캐시에서 꺼낸다. 새 구독자에게
-    // 는 첫 dispatch 라 prev=null. delta-aware patch 는 첫 replay 가 합산 행을
-    // 덮어쓰지 않게 자연스럽게 처리한다.
-    const last =
-      key.kind === 'place'
-        ? this.lastSnapshotByPlace.get(key.placeId)
-        : this.lastSnapshotByCanonical.get(key.canonicalId);
-    if (last) handlers.onSnapshot(last, null);
+    // Replay 마지막 snapshot — 이 키에 걸리는 출처 행 전부(place 키면 그 네이버
+    // 행 하나). 새 구독자에게는 첫 dispatch 라 prev=null. delta-aware patch 는 첫
+    // replay 가 합산 행을 덮어쓰지 않게 자연스럽게 처리한다.
+    for (const snap of this.lastSnapshotByRestaurant.values()) {
+      if (matchesKey(key, snap)) handlers.onSnapshot(snap, null);
+    }
 
     if (needsReconnect) this.scheduleReconnect();
 
@@ -116,11 +120,21 @@ class SummarySseManager {
       if (handlers.onLog) e.logs.delete(handlers.onLog);
       if (e.snapshots.size === 0 && e.reviews.size === 0 && e.logs.size === 0) {
         this.subs.delete(id);
-        if (key.kind === 'place') this.lastSnapshotByPlace.delete(key.placeId);
-        else this.lastSnapshotByCanonical.delete(key.canonicalId);
+        // 남은 키 어디에도 안 걸리는 snapshot 만 버린다 — place 키와 canonical 키가
+        // 같은 네이버 행을 공유할 수 있다.
+        for (const [restaurantId, snap] of this.lastSnapshotByRestaurant) {
+          if (!matchesKey(key, snap)) continue;
+          if (this.isCoveredBySubscribedKey(snap)) continue;
+          this.lastSnapshotByRestaurant.delete(restaurantId);
+        }
         this.scheduleReconnect();
       }
     };
+  }
+
+  private isCoveredBySubscribedKey(snap: RestaurantSummarySnapshotEventType): boolean {
+    if (this.subs.has(`canonical:${snap.canonicalId}`)) return true;
+    return snap.placeId !== null && this.subs.has(`place:${snap.placeId}`);
   }
 
   private scheduleReconnect(): void {
@@ -256,21 +270,16 @@ class SummarySseManager {
           return;
         }
         this.touch();
-        // prev 는 같은 키 직전 snapshot — dispatch 전에 캡처해 핸들러에 함께
-        // 넘긴다 (delta 계산용). 그런 다음에야 캐시를 새 값으로 교체.
-        const prevByCanon = this.lastSnapshotByCanonical.get(parsed.canonicalId) ?? null;
-        const prevByPlace = parsed.placeId
-          ? this.lastSnapshotByPlace.get(parsed.placeId) ?? null
-          : null;
-        // canonicalId 캐시 무조건 갱신. placeId 가 있으면(=Naver) place 캐시도.
-        this.lastSnapshotByCanonical.set(parsed.canonicalId, parsed);
-        if (parsed.placeId) this.lastSnapshotByPlace.set(parsed.placeId, parsed);
+        // prev 는 같은 출처 행의 직전 snapshot — dispatch 전에 캡처해 핸들러에
+        // 함께 넘긴다 (delta 계산용). 그런 다음에야 캐시를 새 값으로 교체.
+        const prev = this.lastSnapshotByRestaurant.get(parsed.restaurantId) ?? null;
+        this.lastSnapshotByRestaurant.set(parsed.restaurantId, parsed);
         // 양쪽 키 구독자 모두에게 dispatch.
         const canonEntry = this.subs.get(`canonical:${parsed.canonicalId}`);
-        if (canonEntry) for (const h of canonEntry.snapshots) h(parsed, prevByCanon);
+        if (canonEntry) for (const h of canonEntry.snapshots) h(parsed, prev);
         if (parsed.placeId) {
           const placeEntry = this.subs.get(`place:${parsed.placeId}`);
-          if (placeEntry) for (const h of placeEntry.snapshots) h(parsed, prevByPlace);
+          if (placeEntry) for (const h of placeEntry.snapshots) h(parsed, prev);
         }
       });
 

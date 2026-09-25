@@ -157,6 +157,9 @@ export const Restaurant = {
     `${API_PREFIX}/admin/restaurants/review/${reviewId}/resummarize`,
   // 식당 단위 인사이트 — 자주 언급되는 메뉴/팁/키워드 + 평균 점수.
   insights: (placeId: string) => `${API_PREFIX}/admin/restaurants/place/${placeId}/insights`,
+  // 어드민 상세 리뷰 탭의 팁·메뉴 필터 — 공개 리뷰 목록과 같은 매칭으로 걸린 리뷰 id 만.
+  reviewMatch: (placeId: string) =>
+    `${API_PREFIX}/admin/restaurants/place/${placeId}/review-match`,
   // 기존 done 행의 menusJson/tipsJson/keywordsJson 을 정규화 분석 테이블
   // (menu_mentions / review_tags) 로 풀어쓰는 일회성 백필. LLM 재호출 없이
   // 이미 저장된 분석을 그대로 사용 — 분석 스키마 변경 없이 통계 인덱스만

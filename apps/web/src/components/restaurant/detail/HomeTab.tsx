@@ -23,6 +23,9 @@ interface Props {
   onChangeTab(tab: TabKey): void;
   onSelectTip(term: string): void;
   onSelectMenu(name: string): void;
+  // 이 홈 탭을 품은 화면에 실제로 있는 탭. 없는 탭으로 가는 링크(예: 어드민 상세의
+  // '가는 법')는 숨기거나 누를 수 없게 그린다. 미지정이면 공개 상세의 전체 탭.
+  availableTabs?: readonly TabKey[];
 }
 
 const HOME_MENU_PREVIEW = 4;
@@ -35,7 +38,9 @@ export const HomeTab = ({
   onChangeTab,
   onSelectTip,
   onSelectMenu,
+  availableTabs,
 }: Props) => {
+  const canOpen = (tab: TabKey): boolean => !availableTabs || availableTabs.includes(tab);
   const hero = detail.imageUrls[0] ?? null;
   const representativeMenus =
     detail.menuGroups?.find((group) => group.name === '대표메뉴')?.menus ?? [];
@@ -53,22 +58,32 @@ export const HomeTab = ({
   const showSourceBadges =
     [src.naver, src.diningcode, src.tabling].filter((c) => c > 0).length >= 2;
 
+  const heroInner = hero ? (
+    <>
+      <ImgWithFallback src={hero} className="size-full object-cover" />
+      {detail.imageUrls.length > 1 && (
+        <span className="absolute bottom-2 right-2 rounded-md bg-background/80 px-2 py-0.5 text-[11px] tabular-nums">
+          사진 {detail.imageUrls.length}장
+        </span>
+      )}
+    </>
+  ) : null;
+
   return (
     <div className="space-y-4">
       {hero ? (
-        <button
-          type="button"
-          onClick={() => onChangeTab('photos')}
-          className="relative block h-56 w-full overflow-hidden bg-muted"
-          aria-label="사진 전체 보기"
-        >
-          <ImgWithFallback src={hero} className="size-full object-cover" />
-          {detail.imageUrls.length > 1 && (
-            <span className="absolute bottom-2 right-2 rounded-md bg-background/80 px-2 py-0.5 text-[11px] tabular-nums">
-              사진 {detail.imageUrls.length}장
-            </span>
-          )}
-        </button>
+        canOpen('photos') ? (
+          <button
+            type="button"
+            onClick={() => onChangeTab('photos')}
+            className="relative block h-56 w-full overflow-hidden bg-muted"
+            aria-label="사진 전체 보기"
+          >
+            {heroInner}
+          </button>
+        ) : (
+          <div className="relative h-56 w-full overflow-hidden bg-muted">{heroInner}</div>
+        )
       ) : (
         <div className="flex h-32 items-center justify-center bg-muted text-xs text-muted-foreground">
           사진이 없습니다.
@@ -124,6 +139,7 @@ export const HomeTab = ({
             title="AI 분석"
             actionLabel="분석 전체 보기"
             onAction={() => onChangeTab('insights')}
+            disabled={!canOpen('insights')}
           />
           <AiSummary insights={insights} onSelectTip={onSelectTip} />
         </section>
@@ -143,6 +159,7 @@ export const HomeTab = ({
             title="여행자 방문 통계"
             actionLabel="여행자 탭 보기"
             onAction={() => onChangeTab('tour')}
+            disabled={!canOpen('tour')}
           />
           <TourSummaryLine tour={detail.tour} />
         </section>
@@ -154,7 +171,7 @@ export const HomeTab = ({
             title="대표 메뉴"
             actionLabel={`메뉴 전체 보기 (${detail.menus.length})`}
             onAction={() => onChangeTab('menu')}
-            disabled={detail.menus.length <= HOME_MENU_PREVIEW}
+            disabled={detail.menus.length <= HOME_MENU_PREVIEW || !canOpen('menu')}
           />
           <MenuGrid menus={previewMenus} insights={insights} onSelectMenu={onSelectMenu} />
         </section>
@@ -166,7 +183,7 @@ export const HomeTab = ({
             title="대표 리뷰"
             actionLabel={`리뷰 전체 보기 (${detail.reviewCounts.all})`}
             onAction={() => onChangeTab('reviews')}
-            disabled={detail.reviewCounts.all <= HOME_REVIEW_PREVIEW}
+            disabled={detail.reviewCounts.all <= HOME_REVIEW_PREVIEW || !canOpen('reviews')}
           />
           <ul className="divide-y divide-border">
             {previewReviews.map((r) => (
@@ -183,6 +200,7 @@ export const HomeTab = ({
           title="영업 정보"
           actionLabel="정보 전체 보기"
           onAction={() => onChangeTab('info')}
+          disabled={!canOpen('info')}
         />
         <div className="space-y-1 text-sm text-muted-foreground">
           {(detail.roadAddress || detail.address) && (
@@ -191,7 +209,10 @@ export const HomeTab = ({
               <span className="truncate">{detail.roadAddress ?? detail.address}</span>
             </div>
           )}
-          <ParkingSummaryLine detail={detail} onOpen={() => onChangeTab('transit')} />
+          <ParkingSummaryLine
+            detail={detail}
+            onOpen={canOpen('transit') ? () => onChangeTab('transit') : undefined}
+          />
         </div>
       </section>
     </div>

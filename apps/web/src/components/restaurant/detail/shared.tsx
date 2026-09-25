@@ -6,6 +6,7 @@ import type {
   RestaurantInsightsType,
   RestaurantMenuKcalItemType,
   RestaurantPublicDetailType,
+  ReviewAnalysisMenuType,
 } from '@repo/api-contract';
 import { formatWonPrice, reviewThumbnailUrl } from '@repo/utils';
 import {
@@ -395,8 +396,8 @@ const SENTIMENT_LABEL: Record<ReviewSentimentKey, string> = {
 
 // 만족도 칩 — sentiment 색 도트(원형 마커) + 환산 점수. 카드 좌측 컬러바를
 // 대체하는 시그널 — 도트만으로 sentiment 즉시 식별, 점수로 정도 확인.
-// aria-label 에 텍스트 라벨까지 실어 스크린리더 친화.
-const SatisfactionChip = ({
+// aria-label 에 텍스트 라벨까지 실어 스크린리더 친화. 어드민 리뷰 행도 같이 쓴다.
+export const SatisfactionChip = ({
   sentiment,
   score,
 }: {
@@ -578,6 +579,70 @@ export const TablingScoreBars = ({ addon }: { addon: PublicTablingAddonType }) =
   );
 };
 
+// 리뷰 분석의 언급 메뉴·팁·키워드 — 공개 ReviewCard 와 어드민 리뷰 행이 같은 모양으로 그린다.
+export const ReviewAnalysisDetails = ({
+  menus,
+  tips,
+  keywords,
+}: {
+  menus: ReviewAnalysisMenuType[];
+  tips: string[];
+  keywords: string[];
+}) => (
+  <>
+    {/* 언급 메뉴 — 각 메뉴별 sentiment 색 좌측 stripe + 메뉴명 + traits.
+        여러 메뉴가 있어도 한 메뉴당 한 줄이라 시각적으로 가장 무거운 시그널
+        (행 자체) 으로 도드라진다. neutral 은 muted, positive/negative 는
+        색 stripe. */}
+    {menus.length > 0 && (
+      <ul className="mt-2 space-y-1">
+        {menus.map((m, i) => (
+          <li
+            key={`${m.name}-${i}`}
+            className={cn(
+              'border-l-2 pl-2 text-xs',
+              m.sentiment === 'positive'
+                ? 'border-emerald-500'
+                : m.sentiment === 'negative'
+                  ? 'border-rose-500'
+                  : 'border-muted-foreground/30',
+            )}
+          >
+            <span className="font-semibold text-foreground">{m.name}</span>
+            {m.traits.length > 0 && (
+              <span className="ml-1.5 text-muted-foreground">{m.traits.join(' · ')}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+    {/* 팁 — 짧은 노하우/조언. 조용한 quote 톤(muted 박스 + 💡). 메뉴와
+        시각 무게가 겹치지 않도록 의도적으로 차분하게. */}
+    {tips.length > 0 && (
+      <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-2">
+        {tips.map((t, i) => (
+          <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Lightbulb className="mt-0.5 size-3 shrink-0 text-amber-500" />
+            <span>{t}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+    {keywords.length > 0 && (
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {keywords.slice(0, 8).map((k) => (
+          <span
+            key={k}
+            className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+          >
+            {k}
+          </span>
+        ))}
+      </div>
+    )}
+  </>
+);
+
 export const ReviewCard = ({
   r,
   showSource = false,
@@ -684,55 +749,12 @@ export const ReviewCard = ({
           ))}
         </div>
       )}
-      {/* 언급 메뉴 — 각 메뉴별 sentiment 색 좌측 stripe + 메뉴명 + traits.
-          여러 메뉴가 있어도 한 메뉴당 한 줄이라 시각적으로 가장 무거운 시그널
-          (행 자체) 으로 도드라진다. neutral 은 muted, positive/negative 는
-          색 stripe. */}
-      {r.analysis && r.analysis.menus.length > 0 && (
-        <ul className="mt-2 space-y-1">
-          {r.analysis.menus.map((m, i) => (
-            <li
-              key={`${m.name}-${i}`}
-              className={cn(
-                'border-l-2 pl-2 text-xs',
-                m.sentiment === 'positive'
-                  ? 'border-emerald-500'
-                  : m.sentiment === 'negative'
-                    ? 'border-rose-500'
-                    : 'border-muted-foreground/30',
-              )}
-            >
-              <span className="font-semibold text-foreground">{m.name}</span>
-              {m.traits.length > 0 && (
-                <span className="ml-1.5 text-muted-foreground">{m.traits.join(' · ')}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* 팁 — 짧은 노하우/조언. 조용한 quote 톤(muted 박스 + 💡). 메뉴와
-          시각 무게가 겹치지 않도록 의도적으로 차분하게. */}
-      {r.analysis && r.analysis.tips.length > 0 && (
-        <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-2">
-          {r.analysis.tips.map((t, i) => (
-            <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-              <Lightbulb className="mt-0.5 size-3 shrink-0 text-amber-500" />
-              <span>{t}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {r.analysis && r.analysis.keywords.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {r.analysis.keywords.slice(0, 8).map((k) => (
-            <span
-              key={k}
-              className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-            >
-              {k}
-            </span>
-          ))}
-        </div>
+      {r.analysis && (
+        <ReviewAnalysisDetails
+          menus={r.analysis.menus}
+          tips={r.analysis.tips}
+          keywords={r.analysis.keywords}
+        />
       )}
       {lightboxIndex !== null && r.imageUrls.length > 0 && (
         <Lightbox

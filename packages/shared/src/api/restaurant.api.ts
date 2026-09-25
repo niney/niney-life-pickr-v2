@@ -23,6 +23,8 @@ import {
   type RestaurantRankingQueryType,
   type RestaurantRankingResultType,
   type RestaurantReanalyzeResultType,
+  type RestaurantReviewMatchQueryType,
+  type RestaurantReviewMatchResultType,
   type ReviewResummarizeResultType,
   type RestaurantResumeSummaryResultType,
   type RestaurantSummaryProgressType,
@@ -144,6 +146,17 @@ export const restaurantApi = {
 
   getByPlaceId: (placeId: string) =>
     apiFetch<RestaurantDetailType>(Routes.Restaurant.byPlaceId(placeId)),
+
+  // 어드민 상세 리뷰 탭의 팁·메뉴 필터 — 공개 리뷰 목록과 같은 매칭으로 걸린 리뷰 id 만.
+  reviewMatch: (placeId: string, query: RestaurantReviewMatchQueryType) => {
+    const params = new URLSearchParams();
+    if (query.tip) params.set('tip', query.tip);
+    if (query.menu) params.set('menu', query.menu);
+    const qs = params.toString();
+    return apiFetch<RestaurantReviewMatchResultType>(
+      `${Routes.Restaurant.reviewMatch(placeId)}${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   // 어드민 홈 대시보드 지역 통계 — 시/도·시군구별 가게 분포 집계.
   regionStats: () => apiFetch<RegionStatsResultType>(Routes.Restaurant.regionStats),

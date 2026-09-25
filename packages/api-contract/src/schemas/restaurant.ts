@@ -148,32 +148,9 @@ export const RestaurantTourMatchInfo = z.object({
 });
 export type RestaurantTourMatchInfoType = z.infer<typeof RestaurantTourMatchInfo>;
 
-// Restaurant detail returned by GET /admin/restaurants/place/:placeId.
-// `snapshot` is the last NaverPlaceData captured (visitorReviews stripped —
-// the live list comes from `reviews` instead).
-export const RestaurantDetail = z.object({
-  id: z.string(),
-  placeId: z.string(),
-  name: z.string(),
-  category: z.string().nullable(),
-  address: z.string().nullable(),
-  phone: z.string().nullable(),
-  rating: z.number().nullable(),
-  reviewCount: z.number().int().nullable(),
-  rawSourceUrl: z.string(),
-  firstCrawledAt: z.string(),
-  lastCrawledAt: z.string(),
-  snapshot: NaverPlaceData,
-  reviews: z.array(VisitorReviewWithSummary),
-  // 상가업소 매칭 — 없으면 null.
-  store: RestaurantStoreInfo.nullable(),
-  // 여행로그 매칭(AI 허브 71780, 2차) — 없으면 null.
-  tour: RestaurantTourMatchInfo.nullable(),
-});
-export type RestaurantDetailType = z.infer<typeof RestaurantDetail>;
-
 // 출처별 행 1줄 — Restaurant 1행 = 1 source. 어드민 list 행이 canonical 로
 // 그룹된 후 sources 배열에 들어간다. placeId 는 source='naver' 일 때만 채워짐.
+// 어드민 상세(RestaurantDetail.sources)도 같은 모양으로 출처 행을 싣는다.
 export const RestaurantSourceSummary = z.object({
   restaurantId: z.string(),
   source: z.string(),
@@ -201,6 +178,45 @@ export const RestaurantSourceSummary = z.object({
   mixedCount: z.number().int(),
 });
 export type RestaurantSourceSummaryType = z.infer<typeof RestaurantSourceSummary>;
+
+// 어드민 상세의 리뷰 한 줄 — 같은 가게(canonical)에 묶인 모든 출처(네이버·다이닝코드·테이블링)의
+// 리뷰를 한 목록으로 보여 주므로 출처와 소속 행(restaurantId)을 붙인다. summary 는 운영 메타(상태·에러·
+// 모델)까지 담은 원본 — 공개 응답(PublicVisitorReview)은 이걸 평탄화한 별도 스키마다.
+export const AdminVisitorReview = VisitorReviewWithSummary.extend({
+  source: z.string(),
+  restaurantId: z.string(),
+});
+export type AdminVisitorReviewType = z.infer<typeof AdminVisitorReview>;
+
+// Restaurant detail returned by GET /admin/restaurants/place/:placeId.
+// 식별·스칼라 필드는 네이버 행 기준이고, 리뷰는 같은 canonical 의 모든 출처 행을 합친 목록이다.
+// `snapshot` 은 마지막 NaverPlaceData — visitorReviews 는 빈 배열(리뷰는 `reviews` 가 유일한 출처라
+// 같은 목록을 두 번 싣지 않는다).
+export const RestaurantDetail = z.object({
+  id: z.string(),
+  placeId: z.string(),
+  // 같은 가게로 묶인 canonical — 요약 SSE 를 출처 전체로 구독하는 키.
+  canonicalId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  address: z.string().nullable(),
+  phone: z.string().nullable(),
+  rating: z.number().nullable(),
+  reviewCount: z.number().int().nullable(),
+  rawSourceUrl: z.string(),
+  firstCrawledAt: z.string(),
+  lastCrawledAt: z.string(),
+  snapshot: NaverPlaceData,
+  // 같은 canonical 의 모든 출처 리뷰 — 실제 방문일 최신순(해석 불가는 수집일 desc 폴백).
+  reviews: z.array(AdminVisitorReview),
+  // 같은 canonical 의 출처 행들 — 네이버가 먼저, 나머지는 최근 수집순. 카운트는 위 reviews 기준.
+  sources: z.array(RestaurantSourceSummary),
+  // 상가업소 매칭 — 없으면 null.
+  store: RestaurantStoreInfo.nullable(),
+  // 여행로그 매칭(AI 허브 71780, 2차) — 없으면 null.
+  tour: RestaurantTourMatchInfo.nullable(),
+});
+export type RestaurantDetailType = z.infer<typeof RestaurantDetail>;
 
 // 어드민 list 의 행 = canonical(같은 가게). sources 의 합으로 통합 카운트도
 // 같이 내려준다 — SSE patch 후 클라이언트가 다시 합산할 때 helper 로 재계산.
@@ -350,10 +366,13 @@ export const ReviewResummarizeInput = z.object({
 export type ReviewResummarizeInputType = z.infer<typeof ReviewResummarizeInput>;
 
 // 단건 재요약 응답. 큐잉만 하고 즉시 반환 — 진행/결과는 기존 summary-events
-// SSE 로 흘러온다. placeId 는 SSE 구독 키 (Naver 가 아니면 null).
+// SSE 로 흘러온다. placeId 는 리뷰가 네이버 행일 때만 채워진다. 다이닝코드·테이블링
+// 리뷰의 완료 이벤트는 placeId 구독으로는 안 오므로 canonicalId 로 구독해야 한다
+// (리뷰를 못 찾으면 둘 다 null).
 export const ReviewResummarizeResult = z.object({
   ok: z.literal(true),
   placeId: z.string().nullable(),
+  canonicalId: z.string().nullable(),
 });
 export type ReviewResummarizeResultType = z.infer<typeof ReviewResummarizeResult>;
 
@@ -783,6 +802,21 @@ export const RestaurantPublicReviewsResult = z.object({
   total: z.number().int(),
 });
 export type RestaurantPublicReviewsResultType = z.infer<typeof RestaurantPublicReviewsResult>;
+
+// 어드민 상세 리뷰 탭의 팁·메뉴 필터 — 어드민은 리뷰를 전부 들고 있어 서버에선 "걸린 리뷰
+// id" 만 받는다. 매칭은 공개 리뷰 목록(tip/menu)과 같은 규칙이라 홈·분석·메뉴 탭의
+// 'N회 언급' 과 결과 수가 일치한다. tip/menu 는 동시 1개만 쓰는 게 UI 규약이지만 둘 다
+// 오면 AND.
+export const RestaurantReviewMatchQuery = z.object({
+  tip: z.string().trim().min(1).optional(),
+  menu: z.string().trim().min(1).optional(),
+});
+export type RestaurantReviewMatchQueryType = z.infer<typeof RestaurantReviewMatchQuery>;
+
+export const RestaurantReviewMatchResult = z.object({
+  reviewIds: z.array(z.string()),
+});
+export type RestaurantReviewMatchResultType = z.infer<typeof RestaurantReviewMatchResult>;
 
 // SSE per-review payload pushed by the summary-events stream when a single
 // row's AI summary finishes (success or failure). The client merges this
