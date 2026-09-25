@@ -696,6 +696,8 @@ export const Tarot = {
   sharePage: (token: string) => `/tarot/s/${token}`,
   shareImage: (token: string, format: 'og' | 'story' = 'og') =>
     `/tarot/s/${token}/image.png${format === 'story' ? '?format=story' : ''}`,
+  // GET — 카드 앞면 텍스처(JPEG 384px). 앱 3D 무대(expo-gl)는 WebP 를 못 읽어 웹 정적 자산(webp)을 서버가 바꿔 준다.
+  cardTexture: (cardId: string) => `${API_PREFIX}/tarot/cards/${cardId}/texture.jpg`,
 } as const;
 
 // 사주(C) — 경로는 /saju-c(다른 사주 구현과 구분). 공개 풀이(무인증, 옵셔널 인증이면 회원 자동 저장) + 섹션 병렬 job + 오늘·궁합·택일·음식 + 회원 프로필·기록·공유.

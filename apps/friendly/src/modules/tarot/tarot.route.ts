@@ -9,12 +9,14 @@ import {
   Routes,
   SharedTarotReading,
   TAROT_GUEST_KEY_HEADER,
+  TarotCardId,
   TarotReadingResult,
   TarotShareResult,
 } from '@repo/api-contract';
 import { RATE, clientKey } from '../../plugins/rate-limit.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
+import { renderTarotCardTexture } from './tarot-card-texture.js';
 import { TAROT_QUOTA_FEATURE, TarotError, TarotService, type TarotActor } from './tarot.service.js';
 import { OPTIONAL_BEARER } from '../../plugins/swagger.js';
 
@@ -120,6 +122,21 @@ const tarotRoutes: FastifyPluginAsync = async (app) => {
         if (e instanceof TarotError) return throwAsHttp(app, e);
         throw e;
       }
+    },
+  });
+
+  // 카드 앞면 텍스처 — 앱 3D 무대(expo-gl 은 WebP 를 못 읽는다)용 JPEG. 그림은 바뀌지 않으니 오래 캐시.
+  typed.get(T.cardTexture(':cardId'), {
+    schema: {
+      tags: ['tarot'],
+      summary: '타로 카드 앞면 텍스처 JPEG(384px) — 앱 3D 무대용',
+      description: '웹 정적 자산의 카드 그림(webp)을 JPEG 로 바꿔 준다. 그림이 아직 없는 카드는 404.',
+      params: z.object({ cardId: TarotCardId }),
+    },
+    handler: async (req, reply) => {
+      const jpg = await renderTarotCardTexture(req.params.cardId);
+      if (!jpg) throw app.httpErrors.notFound('카드 그림이 없습니다.');
+      return reply.type('image/jpeg').header('cache-control', 'public, max-age=604800').send(jpg);
     },
   });
 

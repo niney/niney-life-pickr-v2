@@ -4,7 +4,7 @@
 > 인증·CORS·에러·한도 설명은 [README.md](README.md), 스키마 전체는 [openapi.json](openapi.json).
 
 - 기준 URL: `https://ninelife.kr` (경로에 `/api/v1` 포함)
-- 엔드포인트 192개 — 공개 83 · 선택 인증 15 · 로그인 94. 어드민(`/api/v1/admin/**`)은 제외.
+- 엔드포인트 193개 — 공개 84 · 선택 인증 15 · 로그인 94. 어드민(`/api/v1/admin/**`)은 제외.
 - 인증: `공개` = 토큰 불필요, `선택` = 토큰 없이도 되고 있으면 회원으로 처리(한도·자동 저장 등), `로그인` = `Authorization: Bearer <token>` 필수.
 - 한도: 라우트별 IP당 요청 수. 빈 칸은 전역 백스톱(IP당 분당 1000). `설정값` = 어드민 설정(usage-quota)에서 결정.
 - 입력: 쿼리 파라미터(`*` 필수), `header` = 요청 헤더, `body` = JSON 본문. 경로 파라미터는 경로에 `:name` 형태로 표시.
@@ -297,6 +297,7 @@
 
 | 메서드 | 경로 | 인증 | 한도 | 입력 | 설명 |
 |---|---|---|---|---|---|
+| GET | `/api/v1/tarot/cards/:cardId/texture.jpg` | 공개 |  |  | 타로 카드 앞면 텍스처 JPEG(384px) — 앱 3D 무대용 |
 | GET | `/api/v1/tarot/me/readings` | 로그인 |  | `cursor`, `limit` | 내 타로 기록 목록 — 최신순 커서 페이지네이션 |
 | GET | `/api/v1/tarot/me/readings/:id` | 로그인 |  |  | 내 타로 기록 상세 조회 |
 | DELETE | `/api/v1/tarot/me/readings/:id` | 로그인 |  |  | 내 타로 기록 삭제 — 성공 시 204 |

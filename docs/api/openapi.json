@@ -49015,6 +49015,32 @@
         }
       }
     },
+    "/api/v1/tarot/cards/{cardId}/texture.jpg": {
+      "get": {
+        "summary": "타로 카드 앞면 텍스처 JPEG(384px) — 앱 3D 무대용",
+        "tags": [
+          "tarot"
+        ],
+        "description": "웹 정적 자산의 카드 그림(webp)을 JPEG 로 바꿔 준다. 그림이 아직 없는 카드는 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(major-(0\\d|1\\d|2[01])|(wands|cups|swords|pentacles)-(0[1-9]|10|page|knight|queen|king))$"
+            },
+            "in": "path",
+            "name": "cardId",
+            "required": true
+          }
+        ],
+        "x-auth": "public",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/v1/tarot/me/readings": {
       "get": {
         "summary": "내 타로 기록 목록 — 최신순 커서 페이지네이션",
