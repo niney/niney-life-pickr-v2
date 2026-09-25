@@ -1,10 +1,10 @@
 import { Sparkles } from 'lucide-react';
 import type { SharedTarotReadingType } from '@repo/api-contract';
+import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from '@repo/shared';
 import { getTarotSpread, tarotOrientationLabel, TAROT_TOPIC_LABEL } from '@repo/utils';
 import { cn } from '~/lib/utils';
 import { TarotCardImage } from './TarotCardImage';
 import { TarotMenuBox } from './TarotMenuBox';
-import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
 
 // 완성된 리딩의 2D 표시 — 공유 페이지(3D 없음)용. 카드 줄 + 카드별 해석 + 종합·조언·선택 판정·키워드.
 

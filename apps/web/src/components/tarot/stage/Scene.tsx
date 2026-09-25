@@ -6,7 +6,7 @@ import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import type { TarotReadingResultType } from '@repo/api-contract';
 import { getTarotCard, tarotRequiredPicks, type TarotFlowState } from '@repo/utils';
 import type { TarotQuality } from '../tarotQuality';
-import { ELEMENT_COLOR, TAROT_BG, TAROT_GOLD } from '../tarotTheme';
+import { TAROT_BG, TAROT_ELEMENT_COLOR, TAROT_GOLD } from '@repo/shared';
 import { DrawnCard } from './DrawnCard';
 import { FanDeck } from './FanDeck';
 import {
@@ -148,7 +148,7 @@ export const Scene = ({ state, quality, focusX, focusYOffset, fanOffsetRef, call
   const fanGroup = useRef<THREE.Group>(null);
   const elementLight = useRef<THREE.PointLight>(null);
   const elementColorRef = useRef<THREE.Color | null>(null);
-  if (elementColorRef.current === null) elementColorRef.current = new THREE.Color(ELEMENT_COLOR.water);
+  if (elementColorRef.current === null) elementColorRef.current = new THREE.Color(TAROT_ELEMENT_COLOR.water);
   const targetColorRef = useRef<THREE.Color | null>(null);
   if (targetColorRef.current === null) targetColorRef.current = new THREE.Color();
 
@@ -191,7 +191,7 @@ export const Scene = ({ state, quality, focusX, focusYOffset, fanOffsetRef, call
     const color = elementColorRef.current;
     const target = targetColorRef.current;
     if (light && color && target) {
-      color.lerp(target.set(ELEMENT_COLOR[lastElement]), dampK(dt, 2));
+      color.lerp(target.set(TAROT_ELEMENT_COLOR[lastElement]), dampK(dt, 2));
       light.color.copy(color);
       light.intensity = 12 + Math.sin(t * 1.3) * 2;
     }

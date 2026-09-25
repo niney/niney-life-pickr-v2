@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getTarotCard, tarotCardBackImagePath, tarotCardImagePath } from '@repo/utils';
-import { TAROT_GOLD } from '../tarotTheme';
+import { TAROT_GOLD } from '@repo/shared';
 
 // 카드 텍스처 로딩 — 앞면은 뽑힌 카드만 512 로 지연 로드(78장을 다 올리면 모바일 GPU 메모리가
 // 터진다). URL 별 1회 로드, 실패(아직 생성 안 된 카드)는 이름을 그린 캔버스 텍스처로 대체.

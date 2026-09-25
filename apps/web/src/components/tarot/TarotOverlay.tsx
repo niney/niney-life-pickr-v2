@@ -4,17 +4,24 @@ import { Loader2, RotateCcw, Share2, Sparkles, Trash2, Wand2, X } from 'lucide-r
 import type {
   TarotChoicesType,
   TarotDrawnCardType,
-  TarotMenuVerdictType,
   TarotReadingResultType,
   TarotSpreadIdType,
   TarotTopicType,
 } from '@repo/api-contract';
-import { useTypewriter, type TarotHistoryEntry } from '@repo/shared';
+import {
+  tarotHistoryShareBase,
+  tarotMenuOf,
+  tarotShareBase,
+  useTypewriter,
+  TAROT_DISCLAIMER,
+  TAROT_SOURCE_LABEL,
+  type TarotHistoryEntry,
+  type TarotShareBase,
+} from '@repo/shared';
 import {
   getTarotCard,
   getTarotSetupError,
   getTarotSpread,
-  selectTarotMenus,
   tarotCardKeywords,
   tarotCardMeaning,
   tarotOrientationLabel,
@@ -22,8 +29,6 @@ import {
   tarotRequiredPicks,
   TAROT_AVAILABLE_SPREADS,
   TAROT_CHOICE_MAX_LENGTH,
-  TAROT_MENU_CUISINE_LABEL,
-  TAROT_MENU_DISH_LABEL,
   TAROT_QUESTION_MAX_LENGTH,
   TAROT_TOPIC_LABEL,
   TAROT_TOPICS,
@@ -35,9 +40,8 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 import { TarotCardImage } from './TarotCardImage';
 import { TarotMenuBox } from './TarotMenuBox';
-import { TarotShareSheet, type TarotShareBase } from './TarotShareSheet';
+import { TarotShareSheet } from './TarotShareSheet';
 import type { TarotRenderMode } from './tarotQuality';
-import { TAROT_DISCLAIMER, TAROT_SOURCE_LABEL } from './tarotTheme';
 
 // DOM 오버레이 — 질문·스프레드 설정, 뽑기 HUD, 리빌 HUD, 해석 패널. 3D 무대(또는 Lite 무대) 위에
 // 겹치며, 컨테이너는 pointer-events-none 이라 카드 클릭이 무대로 간다. 패널만 이벤트를 받는다.
@@ -330,12 +334,7 @@ const ReadingPanel = ({
   const [collapsed, setCollapsed] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   // 메뉴 타로: 결과가 오면 서버의 후보(이유·칼로리 포함), 그 전엔 같은 규칙으로 뽑은 후보(이유 없음).
-  const menu: TarotMenuVerdictType | null =
-    spreadId !== 'menu' || drawn.length < 3
-      ? null
-      : ready
-        ? result.menu
-        : previewMenu(drawn);
+  const menu = tarotMenuOf(spreadId, drawn, ready ? result : null);
   return (
     <section
       aria-label="해석"
@@ -516,45 +515,6 @@ const ReadingPanel = ({
   );
 };
 
-// 결과 전 메뉴 후보 — 서버와 같은 utils 규칙(카드로 결정적)이라 결과의 후보와 일치한다. 이유·칼로리는 비움.
-const previewMenu = (drawn: readonly TarotDrawnCardType[]): TarotMenuVerdictType | null => {
-  try {
-    const s = selectTarotMenus(drawn);
-    return {
-      picks: s.picks.map((p) => ({
-        menuId: p.id,
-        name: p.name,
-        cuisine: TAROT_MENU_CUISINE_LABEL[p.cuisine],
-        dishType: TAROT_MENU_DISH_LABEL[p.dishType],
-        kcal: null,
-        reason: '',
-      })),
-      profile: s.profile,
-      avoid: s.avoid,
-    };
-  } catch {
-    return null;
-  }
-};
-
-// 지금 상태에서 공유 근거 — 회원 저장분은 readingId, 게스트는 입력 그대로.
-const shareBaseOf = (
-  state: TarotFlowState<TarotReadingResultType>,
-  drawn: readonly TarotDrawnCardType[],
-): TarotShareBase | null => {
-  if (state.resultStatus !== 'ready' || !state.result) return null;
-  if (state.result.readingId) return { readingId: state.result.readingId };
-  return {
-    reading: {
-      spreadId: state.spreadId,
-      topic: state.topic,
-      question: state.question,
-      choices: state.spreadId === 'choice' ? { a: state.choiceA.trim(), b: state.choiceB.trim() } : null,
-      cards: drawn.map((d) => ({ cardId: d.cardId, position: d.position, reversed: d.reversed })),
-    },
-  };
-};
-
 export const TarotOverlay = ({
   state,
   mode,
@@ -651,7 +611,7 @@ export const TarotOverlay = ({
           resultStatus={state.resultStatus}
           animate={animate}
           side={panelSide}
-          shareBase={shareBaseOf(state, state.drawn)}
+          shareBase={tarotShareBase(state)}
           onRetry={onRetry}
           onReset={onReset}
         />
@@ -669,15 +629,7 @@ export const TarotOverlay = ({
           resultStatus="ready"
           animate={false}
           side={panelSide}
-          shareBase={{
-            reading: {
-              spreadId: review.result.spreadId,
-              topic: review.result.topic,
-              question: review.result.question,
-              choices: review.result.choices,
-              cards: review.cards.map((d) => ({ cardId: d.cardId, position: d.position, reversed: d.reversed })),
-            },
-          }}
+          shareBase={tarotHistoryShareBase(review)}
           onRetry={() => {}}
           onReset={() => onReview(null)}
           onClose={() => onReview(null)}

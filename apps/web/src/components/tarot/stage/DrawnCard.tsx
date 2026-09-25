@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Sparkles } from '@react-three/drei';
 import type { TarotPhase } from '@repo/utils';
-import { TAROT_GOLD } from '../tarotTheme';
+import { TAROT_GOLD } from '@repo/shared';
 import { fireOnce, segmentKey, syncTimeline, useStage } from './StageContext';
 import { CARD_H, CARD_T, CARD_W, TIMING, clamp, clonePose, dampK, easeInOutCubic, slotPose, type Pose } from './layout';
 import { loadCardFront, placeholderFrontTexture } from './textures';

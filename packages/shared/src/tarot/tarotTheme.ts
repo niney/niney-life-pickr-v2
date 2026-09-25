@@ -1,13 +1,13 @@
 import type { TarotElement } from '@repo/utils';
 
-// 타로 화면 공통 색·문구. 3D 조명색과 DOM 오버레이가 같은 팔레트를 쓴다.
+// 타로 화면 공통 색·문구 — 웹(3D 조명·DOM 오버레이)과 앱 네이티브 화면이 같은 팔레트·문구를 쓴다.
 
 export const TAROT_BG = '#05071a';
 export const TAROT_GOLD = '#d9b65b';
 export const TAROT_INK = '#ece6d6';
 
 // 수트 원소별 림 라이트 색 — 마지막으로 뒤집힌 카드의 원소를 따른다.
-export const ELEMENT_COLOR: Record<TarotElement, string> = {
+export const TAROT_ELEMENT_COLOR: Record<TarotElement, string> = {
   fire: '#ff8a4c',
   water: '#5cc8ff',
   air: '#d9def5',

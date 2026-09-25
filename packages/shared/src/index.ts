@@ -91,6 +91,8 @@ export * from './hooks/useSubwayFavorites.js';
 export * from './hooks/useRestaurantFavorites.js';
 export * from './hooks/useVote.js';
 export * from './hooks/useTarot.js';
+export * from './hooks/useTarotSession.js';
+export * from './tarot/tarotTheme.js';
 export * from './hooks/useSaju.js';
 export * from './hooks/useSajuSession.js';
 export * from './hooks/useTypewriter.js';

@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Loader2, Share2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Routes, type CreateTarotReadingInputType, type TarotShareResultType } from '@repo/api-contract';
-import { isLpEmbedded, postLpEmbedMessage, useCreateTarotShare } from '@repo/shared';
+import { Routes, type TarotShareResultType } from '@repo/api-contract';
+import { isLpEmbedded, postLpEmbedMessage, useCreateTarotShare, type TarotShareBase } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 
 // 리딩 공유 시트 — 링크(토큰) 발급 → 복사/OS 공유, 세로 이미지 저장, 미리보기 이미지.
 // 회원은 readingId, 게스트는 리딩 입력을 보낸다(서버가 본문을 다시 확보 — 클라이언트 텍스트를 게시하지
 // 않는다). 질문은 사적일 수 있어 기본 숨김이고 체크로만 포함한다.
-
-export type TarotShareBase = { readingId: string } | { reading: CreateTarotReadingInputType };
 
 interface Props {
   open: boolean;
