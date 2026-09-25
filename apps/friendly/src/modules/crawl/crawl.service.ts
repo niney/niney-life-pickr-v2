@@ -1221,6 +1221,14 @@ export class CrawlService {
             restaurantId = id;
           });
         },
+        onMenuExtracted: (info) =>
+          this.logStep(
+            jobId,
+            'parsing_main',
+            info.suspicious ? 'warn' : 'info',
+            info.suspicious ? '메뉴 0건 — 네이버 메뉴 구조 변경 의심' : `메뉴 ${info.menuCount}개 추출`,
+            { ...info },
+          ),
         onVisitorProgress: (count, page) =>
           this.emit(jobId, { type: 'visitor_progress', count, page }),
         onVisitorBatch: (batch) => persistBatch(batch),
@@ -1249,8 +1257,17 @@ export class CrawlService {
       // onVisitorBatch — the adapter emits the SSR-injected first page from
       // the document response handler — so no review-level final pass needed.
       persistTail = persistTail.then(async () => {
-        const { id } = await this.restaurants.upsertRestaurantFromCrawl(data);
+        const { id, keptMenuCount } = await this.restaurants.upsertRestaurantFromCrawl(data);
         restaurantId = id;
+        if (keptMenuCount > 0) {
+          this.logStepWithRun(
+            runId,
+            'finalizing',
+            'warn',
+            `메뉴 0건 — 기존 메뉴 ${keptMenuCount}개 유지`,
+            { keptMenuCount },
+          );
+        }
       });
 
       // Wait for any outstanding persistence to finish before emitting

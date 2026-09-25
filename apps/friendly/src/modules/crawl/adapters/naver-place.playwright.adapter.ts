@@ -46,6 +46,23 @@ export interface AdapterHooks {
   // initial/new pages are usable but a selector/response/cap prevented us from
   // proving that every page up to the known-review boundary was consumed.
   onVisitorPagination?: (result: VisitorPaginationResult) => void;
+  // Exactly once after menus are parsed (before visitor reviews). Lets the
+  // caller log where menus came from and flag a silent 0-menu parse.
+  onMenuExtracted?: (info: MenuExtractionInfo) => void;
+}
+
+export interface MenuExtractionInfo {
+  // 'legacy' = 옛 `Menu:{placeId}_<i>` 경로 폴백
+  source: 'baemin' | 'place' | 'legacy' | 'none';
+  menuCount: number;
+  groupCount: number;
+  // 네이버가 알려준 전체 메뉴 수(placeMenus.menuCount / baemin.menus 길이). 모르면 null.
+  expectedCount: number | null;
+  hasMenuTab: boolean | null;
+  // 홈 응답이 전부 담았으면 skipped. 부족해서 /menu/list 를 봤으면 그 결과.
+  menuListPage: 'skipped' | 'used' | 'not_better' | 'failed';
+  // 메뉴 탭이 있거나 전체 수가 양수인데 0건 — 네이버 구조 변경 의심.
+  suspicious: boolean;
 }
 
 export interface ExistingReviewKeys {
@@ -543,7 +560,7 @@ const extractMenus = (
   return out.slice(0, 100);
 };
 
-const MENU_GROUP_SOURCE = 'naver-baemin';
+const BAEMIN_MENU_GROUP_SOURCE = 'naver-baemin';
 
 const buildMenuGroupItem = (
   state: Record<string, unknown> | null,
@@ -604,7 +621,7 @@ const extractBaeminMenuGroups = (state: Record<string, unknown> | null): MenuGro
     if (menus.length === 0) return;
 
     groups.push({
-      source: MENU_GROUP_SOURCE,
+      source: BAEMIN_MENU_GROUP_SOURCE,
       sourceGroupId:
         pickString(group, 'id', 'groupId') ?? key.replace(/^PlaceDetail_BaeminMenuGroup:/, ''),
       name,
@@ -640,10 +657,215 @@ const flattenMenuGroups = (groups: MenuGroupType[]): MenuItemType[] => {
   return out.slice(0, 200);
 };
 
+// 2026-09 네이버 개편 뒤의 일반(비배민) 메뉴 구조. 예전 `Menu:{placeId}_<i>` /
+// `placeDetail.menus` 는 사라지고 `placeDetail.placeMenus` 로 바뀌었다.
+//   items[]      → PlaceMenuItem (id 는 해시, price 는 {priceType, displayText},
+//                  대표 여부는 badges 의 'repr')
+//   categories[] → PlaceMenuCategory { kind, name, itemIds }
+//                  kind: recommend(추천 메뉴 — 다른 카테고리와 겹침) / normal(사장님이
+//                  만든 그룹) / uncategorized(이름 없는 전체 목록)
+//   menuCount    → 전체 메뉴 수 (홈 응답이 전부 담았는지 판단에 쓴다)
+// 배민 연동 가게는 placeMenus 가 null 이고 PlaceDetail_BaeminMenuGroup 이 그대로 온다.
+const PLACE_MENU_GROUP_SOURCE = 'naver-place';
+// 웹 HomeTab 이 이 이름의 그룹을 대표 메뉴 미리보기로 쓴다 — 배민 그룹명과 맞춘다.
+const REPRESENTATIVE_GROUP_NAME = '대표메뉴';
+const UNCATEGORIZED_GROUP_NAME = '메뉴';
+
+// "11,000원" → "11000" — 기존 스냅샷·배민 가격과 같은 숫자 문자열. "무료"·범위처럼
+// 숫자 하나로 안 떨어지는 문구는 표시 문구 그대로 둔다(formatWonPrice 가 처리).
+const normalizePlaceMenuPrice = (price: unknown): string | null => {
+  const text = isObject(price)
+    ? pickString(price, 'displayText')
+    : typeof price === 'string'
+      ? price
+      : null;
+  if (!text?.trim()) return null;
+  const digits = text.replace(/[,\s원]/g, '');
+  return /^\d+$/.test(digits) ? digits : text.trim();
+};
+
+const buildPlaceMenuItem = (
+  state: Record<string, unknown> | null,
+  raw: unknown,
+): MenuGroupItemType | null => {
+  const obj = deref(state, raw);
+  if (!isObject(obj)) return null;
+  const name = pickString(obj, 'name');
+  if (!name) return null;
+  const badges = obj['badges'];
+  const images = collectMenuImageUrls(state, obj['images']);
+  const thumbnail = pickString(obj, 'thumbnailUrl');
+  return {
+    name,
+    price: normalizePlaceMenuPrice(obj['price']),
+    description: pickString(obj, 'description'),
+    recommend: Array.isArray(badges) ? badges.includes('repr') : null,
+    imageUrls: images.length > 0 ? images : thumbnail ? [normalizeImageUrl(thumbnail)] : [],
+    sourceMenuId: pickString(obj, 'id'),
+  };
+};
+
+const findPlaceMenus = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): Record<string, unknown> | null => {
+  if (!placeDetail) return null;
+  const resolved = deref(state, findFieldByPrefix(placeDetail, 'placeMenus'));
+  return isObject(resolved) ? resolved : null;
+};
+
+interface PlaceMenuExtraction {
+  groups: MenuGroupType[];
+  itemCount: number;
+  expectedCount: number | null;
+}
+
+const extractPlaceMenuGroups = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): PlaceMenuExtraction => {
+  const placeMenus = findPlaceMenus(state, placeDetail);
+  if (!placeMenus) return { groups: [], itemCount: 0, expectedCount: null };
+
+  const itemsById = new Map<string, MenuGroupItemType>();
+  const rawItems = Array.isArray(placeMenus['items']) ? placeMenus['items'] : [];
+  for (const raw of rawItems) {
+    const item = buildPlaceMenuItem(state, raw);
+    if (!item) continue;
+    const id = item.sourceMenuId ?? `${item.name.replace(/\s+/g, ' ').trim()}|${item.price ?? ''}`;
+    if (!itemsById.has(id)) itemsById.set(id, item);
+  }
+
+  const groups: MenuGroupType[] = [];
+  // 추천 카테고리를 뺀 나머지가 담은 메뉴 — 어디에도 안 든 메뉴를 마지막에 모으는 기준.
+  const covered = new Set<string>();
+  const rawCategories = Array.isArray(placeMenus['categories']) ? placeMenus['categories'] : [];
+  for (const rawCategory of rawCategories) {
+    const category = deref(state, rawCategory);
+    if (!isObject(category)) continue;
+    const kind = pickString(category, 'kind');
+    const itemIds = Array.isArray(category['itemIds'])
+      ? [...new Set(category['itemIds'].filter((v): v is string => typeof v === 'string'))]
+      : [];
+    const menus = itemIds.flatMap((id) => {
+      const item = itemsById.get(id);
+      return item ? [item] : [];
+    });
+    if (menus.length === 0) continue;
+    if (kind !== 'recommend') for (const id of itemIds) covered.add(id);
+    groups.push({
+      source: PLACE_MENU_GROUP_SOURCE,
+      sourceGroupId: pickString(category, 'id'),
+      name:
+        kind === 'recommend'
+          ? REPRESENTATIVE_GROUP_NAME
+          : kind === 'uncategorized'
+            ? UNCATEGORIZED_GROUP_NAME
+            : (pickString(category, 'name') ?? '기타'),
+      sortOrder: groups.length,
+      menus: menus.map((menu, index) => ({ ...menu, sortOrder: index })),
+    });
+  }
+
+  // 카테고리가 없거나(추천만 있는 경우 포함) 일부 메뉴가 어느 카테고리에도 안 들면
+  // 버리지 않고 마지막 그룹으로 모은다.
+  const orphans = [...itemsById.entries()]
+    .filter(([id]) => !covered.has(id))
+    .map(([, menu], index) => ({ ...menu, sortOrder: index }));
+  if (orphans.length > 0) {
+    groups.push({
+      source: PLACE_MENU_GROUP_SOURCE,
+      sourceGroupId: null,
+      name: groups.some((g) => g.name === UNCATEGORIZED_GROUP_NAME)
+        ? '기타'
+        : UNCATEGORIZED_GROUP_NAME,
+      sortOrder: groups.length,
+      menus: orphans,
+    });
+  }
+
+  return {
+    groups,
+    itemCount: itemsById.size,
+    expectedCount: pickNumber(placeMenus, 'menuCount'),
+  };
+};
+
+const countUniqueMenus = (groups: MenuGroupType[]): number => {
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const menu of group.menus) {
+      seen.add(menu.sourceMenuId ?? `${menu.name.replace(/\s+/g, ' ').trim()}|${menu.price ?? ''}`);
+    }
+  }
+  return seen.size;
+};
+
+// 배민 연동 가게의 전체 메뉴 수 — placeDetail.baemin.menus 길이.
+const countBaeminMenus = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): number | null => {
+  if (!placeDetail) return null;
+  const baemin = deref(state, findFieldByPrefix(placeDetail, 'baemin'));
+  if (!isObject(baemin)) return null;
+  return Array.isArray(baemin['menus']) ? baemin['menus'].length : null;
+};
+
+// 탭 목록에 '메뉴'가 있는지. 탭 필드 자체가 없으면 null(모름).
+const detectMenuTab = (placeDetail: Record<string, unknown> | null): boolean | null => {
+  if (!placeDetail) return null;
+  const tabs = findFieldByPrefix(placeDetail, 'tabs');
+  if (!Array.isArray(tabs)) return null;
+  return tabs.some((tab) => isObject(tab) && tab['tabId'] === 'menu');
+};
+
+type MenuGroupSource = 'baemin' | 'place' | 'none';
+
+interface ResolvedMenuGroups {
+  source: MenuGroupSource;
+  groups: MenuGroupType[];
+  expectedCount: number | null;
+  // 이 Apollo 상태만으로 전체 메뉴를 다 받았는지 — false 면 /menu/list 를 더 본다.
+  complete: boolean;
+}
+
+// 우선순위: 배민 그룹 → placeMenus. 둘 다 없으면 호출자가 옛 `Menu:` 경로로 폴백.
+const resolveMenuGroups = (
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+): ResolvedMenuGroups => {
+  const baemin = extractBaeminMenuGroups(state);
+  if (baemin.length > 0) {
+    const expectedCount = countBaeminMenus(state, placeDetail);
+    return {
+      source: 'baemin',
+      groups: baemin,
+      expectedCount,
+      complete: expectedCount !== null && countUniqueMenus(baemin) >= expectedCount,
+    };
+  }
+  const place = extractPlaceMenuGroups(state, placeDetail);
+  if (place.groups.length > 0) {
+    return {
+      source: 'place',
+      groups: place.groups,
+      expectedCount: place.expectedCount,
+      complete: place.expectedCount === null || place.itemCount >= place.expectedCount,
+    };
+  }
+  return { source: 'none', groups: [], expectedCount: place.expectedCount, complete: false };
+};
+
 export const __test_extractBaeminMenuGroups = (state: unknown): MenuGroupType[] =>
   extractBaeminMenuGroups(isObject(state) ? state : null);
 
 export const __test_flattenMenuGroups = flattenMenuGroups;
+
+export const __test_resolveMenuGroups = (state: unknown, placeId: string): ResolvedMenuGroups => {
+  const stateObj = isObject(state) ? state : null;
+  return resolveMenuGroups(stateObj, findPlaceDetailContainer(stateObj, placeId));
+};
 
 const extractReviewStats = (
   state: Record<string, unknown> | null,
@@ -1573,7 +1795,7 @@ const fetchMenuGroupsViaMenuList = async (
   ctx: BrowserContext,
   placeId: string,
   hooks?: AdapterHooks,
-): Promise<MenuGroupType[]> => {
+): Promise<ResolvedMenuGroups> => {
   const url = `https://m.place.naver.com/restaurant/${placeId}/menu/list`;
   const page = await ctx.newPage();
   try {
@@ -1595,7 +1817,10 @@ const fetchMenuGroupsViaMenuList = async (
       )
       .catch(() => null);
     const apolloStateObj = isObject(apolloState) ? apolloState : null;
-    const groups = extractBaeminMenuGroups(apolloStateObj);
+    const resolved = resolveMenuGroups(
+      apolloStateObj,
+      findPlaceDetailContainer(apolloStateObj, placeId),
+    );
 
     if (DEBUG_CAPTURE) {
       await mkdir(DEBUG_DIR, { recursive: true });
@@ -1607,9 +1832,10 @@ const fetchMenuGroupsViaMenuList = async (
           {
             placeId,
             url,
-            groupCount: groups.length,
-            menuCount: flattenMenuGroups(groups).length,
-            groups,
+            source: resolved.source,
+            groupCount: resolved.groups.length,
+            menuCount: flattenMenuGroups(resolved.groups).length,
+            groups: resolved.groups,
             apolloState,
           },
           null,
@@ -1618,13 +1844,70 @@ const fetchMenuGroupsViaMenuList = async (
         'utf-8',
       );
       // eslint-disable-next-line no-console
-      console.log(`[crawl-debug] menu list groups=${groups.length} → ${file}`);
+      console.log(`[crawl-debug] menu list groups=${resolved.groups.length} → ${file}`);
     }
 
-    return groups;
+    return resolved;
   } finally {
     await page.close().catch(() => undefined);
   }
+};
+
+interface ExtractedMenus {
+  menus: MenuItemType[];
+  menuGroups: MenuGroupType[];
+  info: MenuExtractionInfo;
+}
+
+// 홈 Apollo 상태로 메뉴를 뽑고, 홈이 전부 담지 못했을 때만 /menu/list 를 더 연다
+// (2026-09 기준 홈이 배민 그룹·placeMenus 모두 전체를 담는다 — 추가 페이지는 예외 경로).
+// 그룹이 하나도 없으면 옛 `Menu:` 경로로 폴백한다.
+const extractMenusWithFallback = async (
+  ctx: BrowserContext,
+  placeId: string,
+  state: Record<string, unknown> | null,
+  placeDetail: Record<string, unknown> | null,
+  hooks?: AdapterHooks,
+): Promise<ExtractedMenus> => {
+  let resolved = resolveMenuGroups(state, placeDetail);
+  const hasMenuTab = detectMenuTab(placeDetail);
+  let menuListPage: MenuExtractionInfo['menuListPage'] = 'skipped';
+
+  if (!resolved.complete && hasMenuTab !== false) {
+    try {
+      const fromList = await fetchMenuGroupsViaMenuList(ctx, placeId, hooks);
+      if (countUniqueMenus(fromList.groups) > countUniqueMenus(resolved.groups)) {
+        resolved = fromList;
+        menuListPage = 'used';
+      } else {
+        menuListPage = 'not_better';
+      }
+    } catch (e) {
+      if (e instanceof CrawlCancelledError) throw e;
+      // Best-effort: 홈에서 뽑은 결과(또는 아래 옛 경로)로 크롤은 계속 완료한다.
+      console.warn(`[crawl-debug] menu/list extraction failed for placeId=${placeId}`, e);
+      menuListPage = 'failed';
+    }
+  }
+
+  const grouped = flattenMenuGroups(resolved.groups);
+  const menus = grouped.length > 0 ? grouped : extractMenus(placeId, state, placeDetail);
+  const source: MenuExtractionInfo['source'] =
+    grouped.length > 0 ? resolved.source : menus.length > 0 ? 'legacy' : 'none';
+  const info: MenuExtractionInfo = {
+    source,
+    menuCount: menus.length,
+    groupCount: resolved.groups.length,
+    expectedCount: resolved.expectedCount,
+    hasMenuTab,
+    menuListPage,
+    suspicious: menus.length === 0 && (hasMenuTab === true || (resolved.expectedCount ?? 0) > 0),
+  };
+  if (info.suspicious) {
+    console.warn(`[crawl] 메뉴 0건 — 네이버 메뉴 구조 변경 의심 placeId=${placeId}`, info);
+  }
+  hooks?.onMenuExtracted?.(info);
+  return { menus, menuGroups: resolved.groups, info };
 };
 
 const buildPlaceData = (
@@ -1633,11 +1916,10 @@ const buildPlaceData = (
   node: Record<string, unknown>,
   state: Record<string, unknown> | null,
   placeDetail: Record<string, unknown> | null,
-  menuGroups: MenuGroupType[],
+  extracted: Pick<ExtractedMenus, 'menus' | 'menuGroups'>,
   visitorReviews: VisitorReviewType[] | null,
 ): NaverPlaceDataType => {
   const coordinates = isObject(node['coordinate']) ? node['coordinate'] : node;
-  const groupedMenus = flattenMenuGroups(menuGroups);
   return {
     placeId,
     name: pickString(node, 'name') ?? '',
@@ -1651,8 +1933,8 @@ const buildPlaceData = (
     imageUrls: extractImageUrls(node, state, placeDetail),
     rating: pickNumber(node, 'visitorReviewsScore', 'rating', 'reviewScore'),
     reviewCount: pickNumber(node, 'visitorReviewsTotal', 'reviewCount'),
-    menus: groupedMenus.length > 0 ? groupedMenus : extractMenus(placeId, state, placeDetail),
-    menuGroups,
+    menus: extracted.menus,
+    menuGroups: extracted.menuGroups,
     reviewStats: extractReviewStats(state, placeDetail, placeId),
     blogReviews: extractBlogReviews(state, placeDetail),
     visitorReviews: visitorReviews ?? [],
@@ -1702,6 +1984,14 @@ const findPlaceDetailContainer = (
 
 const SHOULD_BLOCK = new Set(['image', 'font', 'media', 'stylesheet']);
 
+const MOBILE_CONTEXT_OPTIONS = {
+  userAgent: MOBILE_UA,
+  viewport: { width: 390, height: 844 },
+  locale: 'ko-KR',
+  isMobile: true,
+  deviceScaleFactor: 2,
+};
+
 export const fetchNaverPlaceWithPlaywright = async (
   placeId: string,
   canonicalUrl: string,
@@ -1712,13 +2002,7 @@ export const fetchNaverPlaceWithPlaywright = async (
   const browser = await getBrowser();
   let ctx: BrowserContext | null = null;
   try {
-    ctx = await browser.newContext({
-      userAgent: MOBILE_UA,
-      viewport: { width: 390, height: 844 },
-      locale: 'ko-KR',
-      isMobile: true,
-      deviceScaleFactor: 2,
-    });
+    ctx = await browser.newContext(MOBILE_CONTEXT_OPTIONS);
     const page = await ctx.newPage();
 
     await page.route('**/*', (route) => {
@@ -1805,17 +2089,13 @@ export const fetchNaverPlaceWithPlaywright = async (
     }
 
     const placeDetailContainer = findPlaceDetailContainer(apolloStateObj, placeId);
-    let menuGroups: MenuGroupType[] = [];
-    try {
-      menuGroups = await fetchMenuGroupsViaMenuList(ctx, placeId, hooks);
-    } catch (e) {
-      if (e instanceof CrawlCancelledError) throw e;
-      // Best-effort: if /menu/list changes or fails, keep the legacy home-menu
-      // extraction path below so the crawl still completes.
-      // eslint-disable-next-line no-console
-      console.warn(`[crawl-debug] menu/list extraction failed for placeId=${placeId}`, e);
-      menuGroups = [];
-    }
+    const extractedMenus = await extractMenusWithFallback(
+      ctx,
+      placeId,
+      apolloStateObj,
+      placeDetailContainer,
+      hooks,
+    );
 
     // Emit a partial snapshot — main page parsed, visitor reviews still
     // pending. Lets the UI render the place card immediately while visitor
@@ -1828,7 +2108,7 @@ export const fetchNaverPlaceWithPlaywright = async (
           placeNode,
           apolloStateObj,
           placeDetailContainer,
-          menuGroups,
+          extractedMenus,
           [],
         ),
       );
@@ -1852,10 +2132,59 @@ export const fetchNaverPlaceWithPlaywright = async (
       placeNode,
       apolloStateObj,
       placeDetailContainer,
-      menuGroups,
+      extractedMenus,
       visitorReviews,
     );
   } finally {
     if (ctx) await ctx.close().catch(() => undefined);
+  }
+};
+
+export interface NaverPlaceMenus extends ExtractedMenus {
+  name: string | null;
+}
+
+// 메뉴만 다시 받는다(리뷰 서브페이지는 열지 않음) — 메뉴 백필 스크립트용.
+// 홈 1장(+부족할 때만 /menu/list)이라 전체 크롤보다 훨씬 가볍다.
+export const fetchNaverPlaceMenusWithPlaywright = async (
+  placeId: string,
+): Promise<NaverPlaceMenus> => {
+  const browser = await getBrowser();
+  const ctx = await browser.newContext(MOBILE_CONTEXT_OPTIONS);
+  try {
+    const page = await ctx.newPage();
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (SHOULD_BLOCK.has(type)) return route.abort();
+      return route.continue();
+    });
+    const url = `https://m.place.naver.com/restaurant/${placeId}/home`;
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+    } catch (e) {
+      throw new PlaywrightFetchError(
+        e instanceof Error ? `Navigation failed: ${e.message}` : 'Navigation failed',
+      );
+    }
+    const apolloState = await page
+      .evaluate<unknown>(
+        () => (globalThis as unknown as { __APOLLO_STATE__?: unknown }).__APOLLO_STATE__ ?? null,
+      )
+      .catch(() => null);
+    const apolloStateObj = isObject(apolloState) ? apolloState : null;
+    const placeNode = apolloStateObj ? findPlaceNodeInApolloState(apolloStateObj, placeId) : null;
+    if (!placeNode) {
+      throw new PlaceParseError('Could not find place data in Apollo cache');
+    }
+    const extracted = await extractMenusWithFallback(
+      ctx,
+      placeId,
+      apolloStateObj,
+      findPlaceDetailContainer(apolloStateObj, placeId),
+    );
+    return { ...extracted, name: pickString(placeNode, 'name') };
+  } finally {
+    await ctx.close().catch(() => undefined);
   }
 };

@@ -128,6 +128,52 @@ describe('RestaurantService', () => {
     expect(snap.visitorReviews).toBeUndefined();
   });
 
+  it('upsert: 0-menu recrawl keeps the previous menus instead of wiping them', async () => {
+    const menu = { name: '김치찌개', price: '8000', description: null, recommend: true, imageUrls: [] };
+    const menuGroups = [
+      { source: 'naver-place', sourceGroupId: 'g1', name: '메뉴', sortOrder: 0, menus: [menu] },
+    ];
+    const base = placeData({ menus: [menu], menuGroups });
+    const first = await service.upsertRestaurantFromCrawl(base);
+    expect(first.keptMenuCount).toBe(0);
+
+    const second = await service.upsertRestaurantFromCrawl({
+      ...base,
+      name: '이름 바뀜',
+      menus: [],
+      menuGroups: [],
+    });
+    expect(second.keptMenuCount).toBe(1);
+    const row = await app.prisma.restaurant.findUnique({ where: { id: second.id } });
+    const snap = JSON.parse(row!.snapshotJson) as Record<string, unknown>;
+    expect(snap.menus).toEqual([menu]);
+    expect(snap.menuGroups).toEqual(menuGroups);
+    // 메뉴 외 필드는 이번 크롤 값으로 갱신된다.
+    expect(row!.name).toBe('이름 바뀜');
+  });
+
+  it('updateNaverMenus: replaces only menus in the snapshot', async () => {
+    const base = placeData({ rating: 4.5 });
+    const { id } = await service.upsertRestaurantFromCrawl(base);
+    const menu = {
+      name: '칼국수',
+      price: '10000',
+      description: null,
+      recommend: false,
+      imageUrls: [],
+    };
+    const menuGroups = [
+      { source: 'naver-place', sourceGroupId: null, name: '메뉴', sortOrder: 0, menus: [menu] },
+    ];
+    expect(await service.updateNaverMenus(base.placeId, [], [])).toBeNull();
+    expect(await service.updateNaverMenus(base.placeId, [menu], menuGroups)).toEqual({ id });
+    const row = await app.prisma.restaurant.findUnique({ where: { id } });
+    const snap = JSON.parse(row!.snapshotJson) as Record<string, unknown>;
+    expect(snap.menus).toEqual([menu]);
+    expect(snap.menuGroups).toEqual(menuGroups);
+    expect(snap.rating).toBe(4.5);
+  });
+
   it('persistReviewBatch: inserts new and dedups by externalId', async () => {
     const { id: rid } = await service.upsertRestaurantFromCrawl(placeData());
     const r1 = await service.persistReviewBatch(rid, [

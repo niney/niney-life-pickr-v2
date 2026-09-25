@@ -196,19 +196,18 @@ export class RestaurantService {
     groups: MenuGroupType[],
   ): Promise<void> {
     if (groups.length === 0) return;
-    const sources = [...new Set(groups.map((group) => group.source))];
 
     await this.prisma.$transaction(async (tx) => {
-      for (const source of sources) {
-        await tx.$executeRaw`
-          DELETE FROM restaurant_menus
-          WHERE restaurantId = ${restaurantId} AND source = ${source}
-        `;
-        await tx.$executeRaw`
-          DELETE FROM restaurant_menu_groups
-          WHERE restaurantId = ${restaurantId} AND source = ${source}
-        `;
-      }
+      // 네이버 행의 메뉴는 크롤 1회분이 전부다. 출처가 naver-baemin ↔ naver-place 로
+      // 바뀌어도 이전 출처 행이 남지 않게 source 구분 없이 통째로 교체한다.
+      await tx.$executeRaw`
+        DELETE FROM restaurant_menus
+        WHERE restaurantId = ${restaurantId}
+      `;
+      await tx.$executeRaw`
+        DELETE FROM restaurant_menu_groups
+        WHERE restaurantId = ${restaurantId}
+      `;
 
       for (const [groupIndex, group] of groups.entries()) {
         const groupId = `rmg_${randomUUID()}`;
@@ -277,10 +276,36 @@ export class RestaurantService {
     });
   }
 
-  async upsertRestaurantFromCrawl(data: NaverPlaceDataType): Promise<{ id: string }> {
+  // 직전 스냅샷의 메뉴. 없거나 0건·파손이면 null.
+  private async findPreviousNaverMenus(
+    placeId: string,
+  ): Promise<Pick<NaverPlaceDataType, 'menus' | 'menuGroups'> | null> {
+    const row = await this.prisma.restaurant.findUnique({
+      where: { source_sourceId: { source: 'naver', sourceId: placeId } },
+      select: { snapshotJson: true },
+    });
+    if (!row) return null;
+    try {
+      const snap = JSON.parse(row.snapshotJson) as Partial<NaverPlaceDataType>;
+      if (!Array.isArray(snap.menus) || snap.menus.length === 0) return null;
+      return { menus: snap.menus, menuGroups: snap.menuGroups };
+    } catch {
+      return null;
+    }
+  }
+
+  // keptMenuCount > 0 이면 이번 크롤 메뉴가 0건이라 직전 메뉴를 그대로 뒀다는 뜻.
+  async upsertRestaurantFromCrawl(
+    data: NaverPlaceDataType,
+  ): Promise<{ id: string; keptMenuCount: number }> {
     const imageUrls = await this.persistVolatilePhotos(data.placeId, data.imageUrls);
     const { visitorReviews: _ignored, ...rest } = data;
-    const snapshotJson = JSON.stringify({ ...rest, imageUrls });
+    // 메뉴 0건으로 기존 메뉴를 덮지 않는다 — 2026-09 네이버 메뉴 구조 개편 때 파싱이
+    // 조용히 0건이 되면서 재크롤마다 메뉴가 지워졌다. 메뉴를 전부 내린 가게는 드물고,
+    // 그 경우 크롤 로그 경고로 드러난다.
+    const keptMenus =
+      rest.menus.length === 0 ? await this.findPreviousNaverMenus(data.placeId) : null;
+    const snapshotJson = JSON.stringify({ ...rest, imageUrls, ...keptMenus });
     // 신규 행은 자기 전용 Canonical 1행을 같이 만든다 (1:1 시작). 어드민이
     // 나중에 merge API 로 같은 가게의 다른 source 행을 같은 canonicalId 로 통합.
     const r = await this.prisma.restaurant.upsert({
@@ -326,7 +351,33 @@ export class RestaurantService {
         console.warn('[restaurant-menu] normalized menu write skipped', err);
       });
     }
-    return r;
+    return { id: r.id, keptMenuCount: keptMenus?.menus.length ?? 0 };
+  }
+
+  // 메뉴 백필(backfill:naver-menus) — 스냅샷의 menus/menuGroups 만 바꾸고 나머지
+  // 필드·리뷰는 건드리지 않는다. 0건은 쓰지 않는다(크롤 upsert 와 같은 보호).
+  async updateNaverMenus(
+    placeId: string,
+    menus: NaverPlaceDataType['menus'],
+    menuGroups: NonNullable<NaverPlaceDataType['menuGroups']>,
+  ): Promise<{ id: string } | null> {
+    if (menus.length === 0) return null;
+    const row = await this.prisma.restaurant.findUnique({
+      where: { source_sourceId: { source: 'naver', sourceId: placeId } },
+      select: { id: true, snapshotJson: true },
+    });
+    if (!row) return null;
+    const snap = JSON.parse(row.snapshotJson) as Record<string, unknown>;
+    await this.prisma.restaurant.update({
+      where: { id: row.id },
+      data: { snapshotJson: JSON.stringify({ ...snap, menus, menuGroups }) },
+    });
+    if (menuGroups.length > 0) {
+      await this.replaceRestaurantMenuGroups(row.id, menuGroups).catch((err) => {
+        console.warn('[restaurant-menu] normalized menu write skipped', err);
+      });
+    }
+    return { id: row.id };
   }
 
   // 다이닝코드 가게 → Restaurant upsert. 키는 (source='diningcode', sourceId=vRid).
