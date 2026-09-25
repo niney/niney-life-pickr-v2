@@ -12,12 +12,12 @@ import {
   type SajuDailyFortune,
 } from '@repo/utils';
 
-// 홈 "사주(C)로 나를 읽기" 카드 — 웹 홈 진입 카드의 앱판. 풀이 화면은 WebView 임베드(app/saju-c)로 열린다.
-// 가운데 "오늘의 운세" 줄은 네이티브다: 저장된 프로필로 앱이 utils 엔진(computeSajuChart·dailyFortune)을
-// 직접 돌려 별점·태그를 기기에서 계산한다 — 네트워크·LLM·한도 소비가 없다. 프로필 출처는
+// 홈 "사주(C)로 나를 읽기" 카드 — 웹 홈 진입 카드의 앱판. 풀이 화면은 네이티브 사주 화면(app/saju-c)이다.
+// 가운데 "오늘의 운세" 줄은 저장된 프로필로 앱이 utils 엔진(computeSajuChart·dailyFortune)을 직접 돌려
+// 별점·태그를 기기에서 계산한다 — 네트워크·LLM·한도 소비가 없다. 프로필 출처는
 //  - 회원: 서버 프로필(★ primary 우선, 없으면 첫 번째)
-//  - 게스트: WebView 안의 웹이 브리지 `saju-profiles` 로 넘겨 앱 스토어(AsyncStorage)에 미러된 로컬 프로필
-// 누르면 WebView 의 오늘 탭(`?tool=daily`)으로 이어져 LLM 본문·조언·좋은 시간대를 본다.
+//  - 게스트: 사주 화면에서 "이 기기에 저장" 한 로컬 프로필(shared 스토어, AsyncStorage)
+// 누르면 사주 화면의 오늘 탭(`?tool=daily`)으로 이어져 LLM 본문·조언·좋은 시간대를 본다.
 
 const GOLD = '#d9b65b';
 const INK = '#ece6d6';

@@ -49,51 +49,6 @@ describe('embedBridge', () => {
     expect(parseLpEmbedMessage('"str"')).toBeNull();
   });
 
-  it('saju-profiles — 프로필은 계약 스키마로 검증·정규화하고, 하나라도 틀리면 전체를 버린다', () => {
-    const birth = { calendar: 'solar', year: 1990, month: 5, day: 15, hour: 14, minute: 30, gender: 'M' };
-    const ok = parseLpEmbedMessage(
-      JSON.stringify({
-        type: 'saju-profiles',
-        profiles: [{ id: 'p1', label: ' 나 ', birth, createdAt: 1700000000000 }],
-        primaryId: 'p1',
-      }),
-    );
-    expect(ok).toEqual({
-      type: 'saju-profiles',
-      primaryId: 'p1',
-      profiles: [
-        {
-          id: 'p1',
-          label: '나',
-          createdAt: 1700000000000,
-          // 계약 기본값(leapMonth·options)이 채워진다.
-          birth: { ...birth, leapMonth: false, options: { solarTimeCorrection: true, lateRatHour: false } },
-        },
-      ],
-    });
-    // primary 가 목록에 없으면 null.
-    const noPrimary = parseLpEmbedMessage(
-      JSON.stringify({ type: 'saju-profiles', profiles: [{ id: 'p1', label: '나', birth, createdAt: 1 }], primaryId: 'zzz' }),
-    );
-    expect(noPrimary && noPrimary.type === 'saju-profiles' ? noPrimary.primaryId : 'x').toBeNull();
-    // 빈 목록도 유효(앱 사본을 비운다).
-    expect(parseLpEmbedMessage(JSON.stringify({ type: 'saju-profiles', profiles: [], primaryId: null }))).toEqual({
-      type: 'saju-profiles',
-      profiles: [],
-      primaryId: null,
-    });
-    // 생년월일 범위 밖·라벨 없음·목록 아님 → null.
-    expect(
-      parseLpEmbedMessage(
-        JSON.stringify({ type: 'saju-profiles', profiles: [{ id: 'p1', label: '나', birth: { ...birth, year: 1800 }, createdAt: 1 }], primaryId: null }),
-      ),
-    ).toBeNull();
-    expect(
-      parseLpEmbedMessage(JSON.stringify({ type: 'saju-profiles', profiles: [{ id: 'p1', label: '  ', birth, createdAt: 1 }], primaryId: null })),
-    ).toBeNull();
-    expect(parseLpEmbedMessage(JSON.stringify({ type: 'saju-profiles', profiles: 'nope', primaryId: null }))).toBeNull();
-  });
-
   it('앱 밖에서는 post 가 false, 브리지가 있으면 문자열로 전달', () => {
     expect(isLpEmbedded()).toBe(false);
     expect(postLpEmbedMessage({ type: 'open', url: 'https://x' })).toBe(false);

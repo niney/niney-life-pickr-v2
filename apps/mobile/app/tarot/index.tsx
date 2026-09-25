@@ -26,8 +26,11 @@ const first = (v: string | string[] | undefined): string | null => (Array.isArra
 
 export default function TarotScreen() {
   const theme = useTheme();
-  const params = useLocalSearchParams<{ spread?: string | string[] }>();
+  // spread·q·topic 은 웹 /tarot 딥링크 그대로 넘긴다(사주 "타로로도 보기" 가 질문·주제를 싣는다).
+  const params = useLocalSearchParams<{ spread?: string | string[]; q?: string | string[]; topic?: string | string[] }>();
   const spread = first(params.spread);
+  const question = first(params.q);
+  const topic = first(params.topic);
   const token = useAuthStore((s) => s.token);
   const guestKey = useGuestKeyStore((s) => s.guestKey);
 
@@ -41,8 +44,10 @@ export default function TarotScreen() {
   const uri = useMemo(() => {
     const q = new URLSearchParams({ embed: '1' });
     if (spread) q.set('spread', spread);
+    if (question) q.set('q', question);
+    if (topic) q.set('topic', topic);
     return `${origin}/tarot?${q.toString()}`;
-  }, [origin, spread]);
+  }, [origin, spread, question, topic]);
 
   // 주입 스크립트는 첫 마운트 값으로 고정된다(WebView 가 prop 변경을 다시 주입하지 않음). 로그인
   // 상태가 바뀌면 화면을 다시 열어야 반영 — 타로 화면 안에서 로그인은 없으므로 실사용에 문제없다.
