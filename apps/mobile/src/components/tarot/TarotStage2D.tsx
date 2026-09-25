@@ -177,18 +177,23 @@ const slotFrames = (n: number, mode: 'pick' | 'reveal' | 'read', W: number, H: n
   return { frames: Array.from({ length: n }, (_, i) => ({ cx: x0 + i * (w + gap) + w / 2, cy, w })), base };
 };
 
-const SlotCard = ({ cardId, reversed, faceUp, flipping, frame, base, moveMs, reduceMotion, label }: { cardId: string; reversed: boolean; faceUp: boolean; flipping: boolean; frame: Frame; base: number; moveMs: number; reduceMotion: boolean; label: string | undefined }) => {
+// 자리 옮기기 — 자리 잡기(작은 줄 → 큰 줄)는 0.85초 ease-in-out, 그 밖(해석 패널이 올라오고 접히고 펴질 때)은 패널과 같은
+// 0.32초 ease-out cubic 이라 카드가 패널에 붙어 움직인다.
+const MOVE_PLACE = { duration: T.placeMs, easing: Easing.inOut(Easing.cubic) };
+const MOVE_PANEL = { duration: T.panelMs, easing: Easing.out(Easing.cubic) };
+
+const SlotCard = ({ cardId, reversed, faceUp, flipping, frame, base, placing, reduceMotion, label }: { cardId: string; reversed: boolean; faceUp: boolean; flipping: boolean; frame: Frame; base: number; placing: boolean; reduceMotion: boolean; label: string | undefined }) => {
   const cx = useSharedValue(frame.cx);
   const cy = useSharedValue(frame.cy);
   // 처음 나타날 때(고른 순간) 0 에서 자란다.
   const scale = useSharedValue(0);
   const p = useSharedValue(faceUp ? 1 : 0);
   useEffect(() => {
-    const e = { duration: reduceMotion ? 0 : moveMs, easing: Easing.inOut(Easing.cubic) };
+    const e = reduceMotion ? { duration: 0 } : placing ? MOVE_PLACE : MOVE_PANEL;
     cx.set(withTiming(frame.cx, e));
     cy.set(withTiming(frame.cy, e));
     scale.set(withTiming(frame.w / base, scale.get() === 0 ? { duration: reduceMotion ? 0 : 260, easing: Easing.out(Easing.back(1.4)) } : e));
-  }, [frame.cx, frame.cy, frame.w, base, moveMs, reduceMotion, cx, cy, scale]);
+  }, [frame.cx, frame.cy, frame.w, base, placing, reduceMotion, cx, cy, scale]);
   useEffect(() => {
     if (flipping && !faceUp) {
       p.set(reduceMotion ? 1 : withDelay(T.flipGapMs, withTiming(1, { duration: T.flipMs, easing: Easing.inOut(Easing.cubic) })));
@@ -251,8 +256,7 @@ export const TarotStage2D = ({ phase, spreadId, deckOrder, picked, drawn, reveal
   const showSlots = phase === 'picking' || phase === 'placing' || phase === 'revealing' || phase === 'reading' || phase === 'review';
   const mode = phase === 'picking' ? 'pick' : panelHeight > 0 ? 'read' : 'reveal';
   const { frames, base } = slotFrames(Math.max(1, n), mode, width, height, top, panelHeight);
-  // 자리 잡기(작은 줄 → 큰 줄)는 0.85초, 해석 패널이 열리고 접힐 때는 조금 빠르게.
-  const moveMs = phase === 'placing' ? T.placeMs : 450;
+  const placing = phase === 'placing';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -264,7 +268,7 @@ export const TarotStage2D = ({ phase, spreadId, deckOrder, picked, drawn, reveal
             if (phase === 'picking') {
               const id = picked[i];
               return id ? (
-                <SlotCard key={id} cardId={id} reversed={false} faceUp={false} flipping={false} frame={frame} base={base} moveMs={moveMs} reduceMotion={reduceMotion} label={label} />
+                <SlotCard key={id} cardId={id} reversed={false} faceUp={false} flipping={false} frame={frame} base={base} placing={placing} reduceMotion={reduceMotion} label={label} />
               ) : (
                 <Placeholder key={`ph-${i}`} frame={frame} label={label} />
               );
@@ -280,7 +284,7 @@ export const TarotStage2D = ({ phase, spreadId, deckOrder, picked, drawn, reveal
                 flipping={phase === 'revealing' && i === revealed}
                 frame={frame}
                 base={base}
-                moveMs={moveMs}
+                placing={placing}
                 reduceMotion={reduceMotion}
                 label={label}
               />

@@ -8,7 +8,7 @@ import { tarotHistoryShareBase, useTarotSession } from '@repo/shared';
 import { tarotRemainingPicks, tarotRequiredPicks } from '@repo/utils';
 import { TarotCardBack } from '~/components/tarot/TarotCardImage';
 import { prefetchTarotFaces } from '~/components/tarot/tarotImages';
-import { TarotReadingPanel } from '~/components/tarot/TarotReadingPanel';
+import { TAROT_PANEL_HEADER_H, TarotReadingPanel } from '~/components/tarot/TarotReadingPanel';
 import { TarotSetupPanel } from '~/components/tarot/TarotSetupPanel';
 import { TarotStage2D, TarotStars } from '~/components/tarot/TarotStage2D';
 import type { TarotStage3D as TarotStage3DView, TarotStage3DControl } from '~/components/tarot/TarotStage3D';
@@ -32,7 +32,6 @@ import { TR, gold, ink } from '~/components/tarot/tarotTokens';
 
 const first = (v: string | string[] | undefined): string | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
 
-const HEADER_COLLAPSED = 58;
 /** 입력 화면 위쪽 덱 자리 높이 — 3D 는 이 가운데에 덱이 오게 카메라를 맞춘다. */
 const HERO_H = 150;
 const SETUP_PAD_TOP = 8;
@@ -61,6 +60,8 @@ export default function TarotScreen() {
   const { onShuffleDone, onPlaced, onRevealed } = callbacks;
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [collapsed, setCollapsed] = useState(false);
+  // 해석 패널 머리줄 높이(패널이 재서 알려 준다) — 접힌 패널이 덮는 높이를 무대가 비켜 선다.
+  const [panelHeaderH, setPanelHeaderH] = useState(TAROT_PANEL_HEADER_H);
 
   // ── 3D 무대 ─────────────────────────────────────────────────────────────
   const inSetup = state.phase === 'setup' && !review;
@@ -155,7 +156,7 @@ export default function TarotScreen() {
   const showReading = !review && (state.phase === 'reading' || (state.phase === 'revealing' && state.revealed > 0));
   const panelOpen = showReading || review !== null;
   const panelExpandedH = Math.round(size.h * 0.56);
-  const panelH = panelOpen ? (collapsed ? HEADER_COLLAPSED + insets.bottom : panelExpandedH) : 0;
+  const panelH = panelOpen ? (collapsed ? panelHeaderH + insets.bottom : panelExpandedH) : 0;
   const hudVisible = !review && (state.phase === 'shuffling' || state.phase === 'picking' || state.phase === 'placing' || state.phase === 'revealing');
   const openRecord = (id: string) => router.push(`/tarot/me/${id}` as never);
 
@@ -297,6 +298,7 @@ export default function TarotScreen() {
           height={panelExpandedH}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((c) => !c)}
+          onHeaderLayout={setPanelHeaderH}
           onRetry={session.retry}
           onReset={session.reset}
         />
@@ -317,6 +319,7 @@ export default function TarotScreen() {
           height={panelExpandedH}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((c) => !c)}
+          onHeaderLayout={setPanelHeaderH}
           onRetry={() => undefined}
           onReset={() => session.setReview(null)}
           onClose={() => session.setReview(null)}

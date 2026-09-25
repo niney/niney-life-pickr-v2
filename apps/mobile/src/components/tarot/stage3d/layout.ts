@@ -31,6 +31,7 @@ export const TIMING = {
   placeS: TAROT_STAGE_TIMING.placeMs / 1000,
   flipGapS: TAROT_STAGE_TIMING.flipGapMs / 1000,
   flipS: TAROT_STAGE_TIMING.flipMs / 1000,
+  panelS: TAROT_STAGE_TIMING.panelMs / 1000,
 } as const;
 
 export interface Pose {
@@ -117,6 +118,9 @@ export const slotPoseInto = (out: Pose, i: number, n: number, yaw: number, roll:
 export const slotSpreadFor = (aspect: number): number => clamp((aspect - 0.4) / 1.1, 0.7, 1);
 
 export const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+/** Reanimated Easing.out(Easing.cubic) 과 같은 곡선 — 해석 패널과 카메라를 맞춘다. */
+export const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 

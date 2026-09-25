@@ -19,6 +19,7 @@ import {
   clonePose,
   dampK,
   easeInOutCubic,
+  easeOutCubic,
   fanPose,
   restPose,
   scatterPose,
@@ -106,8 +107,24 @@ const LOOK_STAGE = new THREE.Vector3(0, LOOK_AT_Y, 0);
 const LOOK_HERO = new THREE.Vector3(0, 0.25, 0.95);
 const LOOK_READ = new THREE.Vector3(0, 1.55, 0.25);
 
+// 해석 패널이 오르내리는 변화(해석 구도로 들어가거나 해석 구도에서 패널 높이만 바뀜)는 패널과 같은 시간·곡선(0.32초
+// ease-out cubic)으로 옮겨 카드가 패널에 붙어 움직인다. 나머지(입력 ↔ 연출)는 부드럽게 따라간다(감쇠).
+const isPanelMove = (a: TarotSceneFraming['mode'], b: TarotSceneFraming['mode']): boolean => (a === 'read' || b === 'read') && a !== 'hero' && b !== 'hero';
+
+interface CamState {
+  look: THREE.Vector3;
+  dir: THREE.Vector3;
+  d: number;
+  oy: number;
+}
+
 const CameraRig = ({ framing }: { framing: TarotSceneFraming }) => {
-  const cur = useRef<{ look: THREE.Vector3; dir: THREE.Vector3; d: number; oy: number } | null>(null);
+  const invalidate = useThree((s) => s.invalidate);
+  const rig = useRef<{ cur: CamState; from: CamState; mode: TarotSceneFraming['mode']; key: string; tweenStart: number } | null>(null);
+  // 구도가 바뀌면 곧바로 한 프레임 — 30fps 틱을 기다리지 않고 패널 애니메이션과 같이 출발한다.
+  useEffect(() => {
+    invalidate();
+  }, [framing.mode, framing.screenY, invalidate]);
   useFrame((st, dt) => {
     const cam = st.camera as THREE.PerspectiveCamera;
     const W = st.size.width;
@@ -119,16 +136,46 @@ const CameraRig = ({ framing }: { framing: TarotSceneFraming }) => {
     const d = framing.mode === 'hero' ? BASE_DIST * 1.6 : BASE_DIST * zoomOut;
     const dir = framing.mode === 'hero' ? CAM_DIR_HERO : CAM_DIR;
     const oy = H / 2 - framing.screenY;
-    if (!cur.current) cur.current = { look: look.clone(), dir: dir.clone(), d, oy };
-    const c = cur.current;
-    const k = dampK(dt, 3);
-    c.look.lerp(look, k);
-    c.dir.lerp(dir, k).normalize();
-    c.d += (d - c.d) * k;
-    c.oy += (oy - c.oy) * k;
+    const now = st.clock.elapsedTime;
+    const key = `${framing.mode}:${Math.round(oy)}`;
+    if (!rig.current) {
+      rig.current = { cur: { look: look.clone(), dir: dir.clone(), d, oy }, from: { look: new THREE.Vector3(), dir: new THREE.Vector3(), d, oy }, mode: framing.mode, key, tweenStart: -1 };
+    }
+    const r = rig.current;
+    const c = r.cur;
+    if (r.key !== key) {
+      if (isPanelMove(r.mode, framing.mode)) {
+        r.from.look.copy(c.look);
+        r.from.dir.copy(c.dir);
+        r.from.d = c.d;
+        r.from.oy = c.oy;
+        r.tweenStart = now;
+      } else {
+        r.tweenStart = -1;
+      }
+      r.key = key;
+      r.mode = framing.mode;
+    }
+    if (r.tweenStart >= 0) {
+      const e = easeOutCubic(clamp((now - r.tweenStart) / TIMING.panelS, 0, 1));
+      c.look.lerpVectors(r.from.look, look, e);
+      c.dir.lerpVectors(r.from.dir, dir, e).normalize();
+      c.d = r.from.d + (d - r.from.d) * e;
+      c.oy = r.from.oy + (oy - r.from.oy) * e;
+      if (e >= 1) r.tweenStart = -1;
+    } else {
+      const k = dampK(dt, 3);
+      c.look.lerp(look, k);
+      c.dir.lerp(dir, k).normalize();
+      c.d += (d - c.d) * k;
+      c.oy += (oy - c.oy) * k;
+    }
     cam.position.copy(c.look).addScaledVector(c.dir, c.d);
     cam.lookAt(c.look);
     cam.setViewOffset(W, H, 0, c.oy, W, H);
+    // 움직이는 동안은 다음 프레임을 바로 청한다 — 입력·해석 무대는 평소 30fps 라 그대로면 전환이 끊겨 보인다.
+    const moving = r.tweenStart >= 0 || Math.abs(c.oy - oy) > 0.5 || Math.abs(c.d - d) > 0.002 || c.look.distanceToSquared(look) > 1e-6 || c.dir.distanceToSquared(dir) > 1e-7;
+    if (moving) st.invalidate();
   });
   return null;
 };
