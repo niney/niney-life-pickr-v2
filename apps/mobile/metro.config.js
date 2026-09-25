@@ -39,6 +39,16 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     ? (name) => upstreamResolveRequest(context, name, platform)
     : (name) => context.resolveRequest(context, name, platform);
 
+  // three 는 한 벌만. react-three-fiber 앱판(CJS)은 require('three') 라 exports 의 "require" 조건으로 three.cjs 를,
+  // 우리 코드의 ESM import 는 "import" 조건으로 three.module.js 를 따로 올려 사본이 둘이 된다 — R3F 가 덧대는 텍스처
+  // 로더 폴리필이 한쪽에만 걸려 `document` 오류가 나고, 번들도 1MB 넘게 늘어난다. 항상 require 조건으로 푼다.
+  if (moduleName === 'three') {
+    const cjsContext = { ...context, isESMImport: false };
+    return upstreamResolveRequest
+      ? upstreamResolveRequest(cjsContext, moduleName, platform)
+      : context.resolveRequest(cjsContext, moduleName, platform);
+  }
+
   if (moduleName.endsWith('.js') && (moduleName.startsWith('./') || moduleName.startsWith('../'))) {
     // Try platform-specific extensions first so `.native.tsx` / `.ios.tsx` /
     // `.android.tsx` variants are picked over the bare `.tsx` (which often

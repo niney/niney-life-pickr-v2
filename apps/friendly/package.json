@@ -110,7 +110,8 @@
     "build:saju-tables": "tsx --env-file=.env scripts/build-saju-tables.ts",
     "build:saju-images": "tsx scripts/build-saju-images.ts",
     "probe:saju-reading": "tsx --env-file=.env scripts/probe-saju-reading.ts",
-    "build:saju-glyphs": "tsx scripts/build-saju-glyphs.ts"
+    "build:saju-glyphs": "tsx scripts/build-saju-glyphs.ts",
+    "build:saju-glyph-atlas": "tsx scripts/build-saju-glyph-atlas.ts"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",

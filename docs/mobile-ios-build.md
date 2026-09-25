@@ -135,6 +135,26 @@ cd apps/mobile && npx expo prebuild --platform ios --no-install
 cd ios && LANG=en_US.UTF-8 pod install   # 그 뒤 위 "prebuilt RN" 확인
 ```
 
+## 사주 3D 무대(expo-gl) — 시뮬레이터는 소프트웨어 GL
+
+사주(C) 화면의 천문도는 iOS 에서 `expo-gl` + react-three-fiber 3D 로 그린다(Android·동작 줄이기·느린 GPU 는 2D).
+
+- **네이티브 모듈이 추가됐다(`expo-gl`).** 이 커밋 이후 JS 만 리로드하면 안 되고 개발 클라이언트를 다시 빌드한다.
+  모듈이 없는 옛 빌드에선 사주 화면이 2D 로 뜬다(3D 모듈을 `requireOptionalNativeModule` 로 확인한 뒤에만 불러온다).
+  `pnpm install` 로 패키지가 늘었으니 **돌고 있던 Metro(`pnpm dev`)도 재시작**해야 새 패키지를 찾는다
+  (안 하면 `Unable to resolve module expo-gl` RedBox).
+- **시뮬레이터 GL 은 "Apple Software Renderer"(CPU 래스터)** 라 이 장면이 초당 1~3프레임이다. 무대가 렌더러 이름과
+  첫 프레임들의 실측 시간(매 프레임 GL 동기로 역압을 걸어 잰다)으로 느린 GL 을 걸러 2D 로 돌린다 — 시뮬레이터에선
+  평소 2D 가 보이는 게 정상이다. 3D 를 봐야 하면 개발 빌드에서 `lifepickr://saju-c?stage=3d`(강제 3D, 느림),
+  비교용으로 `?stage=2d`. 실제 속도는 실기기에서 본다.
+- **`three` 는 한 벌만.** react-three-fiber 앱판(CJS)은 `require('three')` 로 `three.cjs` 를, 우리 ESM import 는
+  exports 의 "import" 조건으로 `three.module.js` 를 따로 올려 사본이 둘이 된다(텍스처 로더 폴리필이 한쪽에만 걸려
+  `document` 오류, 번들 +1MB). `metro.config.js` 가 `three` 를 항상 require 조건으로 푼다.
+- expo-gl 에서 겪은 것: PBR(`MeshStandardMaterial`) 넓은 면이 첫 프레임에 안 그려지는 경우가 있어 Phong 을 쓴다.
+  부동소수 렌더 타깃(`EXT_color_buffer_float`)이 없어 후처리(Bloom)는 없다. 텍스처는 PNG·DataTexture 만(WebP 는
+  EXGL 디코더가 못 읽을 수 있다) — 한자는 `apps/friendly/scripts/build-saju-glyph-atlas.ts` 가 구운 아틀라스.
+  R3F 루프를 demand ↔ always 로 오가면 다시 안 깨어나 멈춘 적이 있어 demand 하나에 틱(30fps / rAF)만 바꾼다.
+
 ## 곁다리로 겪는 것들
 
 - **CocoaPods 가 UTF-8 로케일을 요구한다.** `LANG` 이 비어 있으면 `pod install` 이
