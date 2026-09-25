@@ -48,12 +48,11 @@ describe('parking routes (격리 DB)', () => {
   let app: FastifyInstance;
   let isolated: IsolatedDatabase;
 
-  // 격리 DB 는 dev.db(수 GB)를 통째로 복사해 비우므로 기본 훅 한도(10초)를 넘기기 쉽다.
   beforeAll(async () => {
     isolated = await useIsolatedDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
-  }, 180_000);
+  });
 
   afterAll(async () => {
     await app.close();

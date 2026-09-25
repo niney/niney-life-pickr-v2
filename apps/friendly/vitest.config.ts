@@ -39,6 +39,9 @@ export default defineConfig({
     // 단속적으로 발생한다. 격리된 DB 인스턴스를 따로 안 쓰는 한 직렬화가
     // 가장 단순하고 안정적인 보호선.
     fileParallelism: false,
+    // 격리 DB(test-utils/temp-db)는 dev.db(수 GB)를 통째로 복사해 비우므로 준비 훅이 기본 한도 10초를
+    // 넘기기 쉽다(파일 캐시가 차가운 전체 실행에서 간헐 실패) — 훅 한도만 넉넉히 둔다.
+    hookTimeout: 60_000,
     server: {
       // Inline workspace packages so the extensionAlias above also applies
       // to imports inside @repo/*. Otherwise their `*.js` re-exports stay

@@ -111,6 +111,8 @@ describe('MealRecognitionService (격리 DB + FakeProvider)', () => {
     isolated = await useIsolatedDatabase();
     app = await buildApp({ logger: false });
     await app.ready();
+    // 사진(MealPhoto.userId)이 User 를 FK 로 가리킨다 — 격리 DB 는 비어 있으니 테스트 사용자를 먼저 만든다.
+    await app.prisma.user.create({ data: { id: 'rec-user', email: 'rec-user@example.com', passwordHash: 'unused' } });
     // 리포의 data/ 를 더럽히지 않게 임시 디렉터리에 저장한다.
     photos = new MealPhotoService(app.prisma, {
       storageDir: join(tmpdir(), 'lifepickr-test-meal-photos'),
