@@ -6,7 +6,7 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import type { SharedSajuReadingType } from '@repo/api-contract';
 import { SAJU_WUXING_META, sajuBranchImageId, sajuImagePath, sajuStemImageId } from '@repo/utils';
-import { loadPlexFonts } from '../../lib/share-fonts.js';
+import { loadShareFallbackAsset, loadShareFonts } from '../../lib/share-fonts.js';
 import { candidateWebAssetRoots } from '../../lib/web-index.js';
 
 // 사주 공유 이미지 — satori + resvg 2D 합성(타로와 같은 파이프라인). 팔레트는 먹·한지·주사·금.
@@ -28,7 +28,8 @@ const text = (content: string, style: Style): Node => h('div', { display: 'flex'
 const C = { bg: '#0b0b0f', bg2: '#1c1a22', gold: '#d9b65b', jusa: '#b8322a', ink: '#e9e2d2', sub: 'rgba(233,226,210,0.62)' } as const;
 const WUXING_HEX: Record<string, string> = { wood: '#5fc39b', fire: '#ff6b4a', earth: '#e0b45a', metal: '#f0efe6', water: '#6f95d6' };
 
-// 한자 글리프 PNG(assets/saju-glyphs, build:saju-glyphs) — Plex 에 한자가 없어 이미지로 그린다.
+// 인장 한자 글리프 PNG(assets/saju-glyphs, build:saju-glyphs) — 인장은 명조 이미지로 그린다. 본문 한자는 한자 대체
+// 글꼴(lib/share-fonts)이 맡는다.
 const glyphDir = (): string[] => {
   const here = dirname(fileURLToPath(import.meta.url));
   const out: string[] = [];
@@ -44,12 +45,11 @@ const glyphDir = (): string[] => {
   return out;
 };
 const glyphCache = new Map<string, Promise<string | null>>();
-const glyphDataUri = (ch: string, variant: '' | '-hanji' | '-gold' = ''): Promise<string | null> => {
-  const key = ch + variant;
-  let hit = glyphCache.get(key);
+const glyphDataUri = (ch: string): Promise<string | null> => {
+  let hit = glyphCache.get(ch);
   if (!hit) {
     hit = (async () => {
-      const file = 'u' + ch.codePointAt(0)!.toString(16) + variant + '.png';
+      const file = 'u' + ch.codePointAt(0)!.toString(16) + '.png';
       for (const dir of glyphDir()) {
         try {
           const buf = await readFile(resolve(dir, file));
@@ -60,7 +60,7 @@ const glyphDataUri = (ch: string, variant: '' | '-hanji' | '-gold' = ''): Promis
       }
       return null;
     })().catch(() => null);
-    glyphCache.set(key, hit);
+    glyphCache.set(ch, hit);
   }
   return hit;
 };
@@ -130,18 +130,12 @@ const pillarsNode = (reading: SharedSajuReadingType, glyphs: Map<string, string 
 
 const SIZE = { og: { w: 1200, h: 630 }, story: { w: 1080, h: 1920 } } as const;
 
-async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story'): Promise<{ node: Node; graphemeImages: Record<string, string> }> {
+async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story'): Promise<Node> {
   const c = reading.chart;
   const src = await dayMasterDataUri(c.dayMaster.index);
   const zodiacSrc = await zodiacDataUri(c.zodiac.index);
   const chars = [...new Set([c.pillars.year, c.pillars.month, c.pillars.day, c.pillars.hour].flatMap((p) => (p ? [...p.hanja] : [])).concat([...c.dayMaster.hanja]))];
   const glyphs = new Map<string, string | null>(await Promise.all(chars.map(async (ch) => [ch, await glyphDataUri(ch)] as const)));
-  // 본문 텍스트 속 한자(제목의 일간 한자)는 satori graphemeImages 로 — 한지색 판.
-  const graphemeImages: Record<string, string> = {};
-  for (const ch of [...c.dayMaster.hanja]) {
-    const g = await glyphDataUri(ch, '-gold');
-    if (g) graphemeImages[ch] = g;
-  }
   const { w, h: hh } = SIZE[format];
   const title = `${c.dayMaster.ko}${c.dayMaster.hanja} 일간 · ${c.zodiac.animal}띠 · ${SAJU_WUXING_META[c.dayMaster.element].ko}의 기운`;
   const headline = reading.sections.personality.headline || reading.sections.advice.keyword;
@@ -165,7 +159,7 @@ async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story')
 
   if (format === 'og') {
     const textW = w - 56 * 2 - 260 - 40;
-    return { graphemeImages, node: frame(
+    return frame(
       [
         h('div', { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, width: 260, flexShrink: 0 }, [portrait(220), pillarsNode(reading, glyphs, 46, 8)]),
         h('div', { display: 'flex', flexDirection: 'column', justifyContent: 'center', width: textW, marginLeft: 40 }, [
@@ -176,12 +170,12 @@ async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story')
         ]),
       ],
       { flexDirection: 'row', alignItems: 'center', padding: 56 },
-    ) };
+    );
   }
   const PAD = 72;
   const inner = w - PAD * 2;
   const para = (content: string, style: Style): Node => h('div', { display: 'flex', width: inner, justifyContent: 'center', ...style }, content);
-  return { graphemeImages, node: frame(
+  return frame(
     [
       text('Life Pickr · 사주', { fontSize: 30, color: C.sub, letterSpacing: 2 }),
       text(title, { fontSize: 36, color: C.gold, marginTop: 10 }),
@@ -193,22 +187,15 @@ async function buildTree(reading: SharedSajuReadingType, format: 'og' | 'story')
       para(reading.sections.advice.body, { fontSize: 29, lineHeight: 1.5, color: C.sub, marginTop: 30, lineClamp: 4, textAlign: 'center' }),
     ],
     { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: PAD },
-  ) };
+  );
 }
 
 export async function renderSajuShareCardPng(reading: SharedSajuReadingType, format: 'og' | 'story'): Promise<Buffer> {
-  const { regular, bold } = await loadPlexFonts();
-  const { node, graphemeImages } = await buildTree(reading, format);
+  const fonts = await loadShareFonts();
+  const node = await buildTree(reading, format);
   const { w, h: hh } = SIZE[format];
-  const svg = await satori(node as never, {
-    width: w,
-    height: hh,
-    graphemeImages,
-    fonts: [
-      { name: 'Plex', data: regular, weight: 400, style: 'normal' },
-      { name: 'Plex', data: bold, weight: 700, style: 'normal' },
-    ],
-  });
+  // 제목·본문(LLM·정적 문장) 속 한자는 Plex 에 없어 한자 대체 글꼴로 그린다.
+  const svg = await satori(node as never, { width: w, height: hh, fonts, loadAdditionalAsset: loadShareFallbackAsset });
   const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
   return Buffer.from(resvg.render().asPng());
 }

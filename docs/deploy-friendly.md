@@ -267,8 +267,10 @@ location ^~ /vote/ {
   커버하므로 추가 설정 불필요.
   - 한글 렌더용 폰트 `apps/friendly/assets/fonts/IBMPlexSansKR-{Regular,Bold}.ttf`
     가 레포에 포함(커밋됨) — git pull 만으로 배포된다. 별도 설치 불필요.
-  - 사주 공유 이미지의 한자(천간·지지·오행 27자)는 Plex 에 없어 `apps/friendly/assets/saju-glyphs/*.png`
-    (개발 머신에서 `pnpm --filter friendly build:saju-glyphs` 로 생성, 커밋됨)를 그린다. 운영엔 CJK 폰트 불필요.
+  - 공유 이미지(사주·사주(G)·타로) 글 속 한자는 Plex 에 없어 `apps/friendly/assets/fonts/NotoSansKR-Hanja-Regular.otf`
+    (Noto Sans CJK KR 의 한자 8,651자 서브셋, OFL, 커밋됨)로 그린다 — 한자가 든 카드를 그릴 때만 불러온다.
+    사주 인장 27자는 명조 이미지 `apps/friendly/assets/saju-glyphs/*.png`(개발 머신에서
+    `pnpm --filter friendly build:saju-glyphs` 로 생성, 커밋됨). 운영 서버에 CJK 폰트 설치는 불필요.
   - 카드에는 참가자 이름이 들어간다. 공유 페이지를 열면 어차피 같은 명단이
     보이고 링크는 ≤30일 만료라 노출 범위는 동일. 더 보수적으로 가려면
     share-preview 의 og.image 를 `OG_IMAGE_PATH` 기본 이미지로 되돌리면 된다.

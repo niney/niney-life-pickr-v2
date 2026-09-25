@@ -5,7 +5,7 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import type { SharedTarotReadingType, TarotShareImageFormatType } from '@repo/api-contract';
 import { TAROT_TOPIC_LABEL, getTarotSpread, tarotCardImagePath } from '@repo/utils';
-import { loadPlexFonts } from '../../lib/share-fonts.js';
+import { loadShareFallbackAsset, loadShareFonts } from '../../lib/share-fonts.js';
 import { candidateWebAssetRoots } from '../../lib/web-index.js';
 
 // 타로 공유 이미지 — satori(레이아웃→SVG) + resvg(SVG→PNG). WebGL 캡처가 아니라 2D 합성이라
@@ -221,17 +221,10 @@ export async function renderTarotShareCardPng(
   reading: SharedTarotReadingType,
   format: TarotShareImageFormatType,
 ): Promise<Buffer> {
-  const { regular, bold } = await loadPlexFonts();
+  const fonts = await loadShareFonts();
   const node = await buildTree(reading, format);
   const { w, h: hh } = SIZE[format];
-  const svg = await satori(node as never, {
-    width: w,
-    height: hh,
-    fonts: [
-      { name: 'Plex', data: regular, weight: 400, style: 'normal' },
-      { name: 'Plex', data: bold, weight: 700, style: 'normal' },
-    ],
-  });
+  const svg = await satori(node as never, { width: w, height: hh, fonts, loadAdditionalAsset: loadShareFallbackAsset });
   const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: w }, background: C.bg });
   return Buffer.from(resvg.render().asPng());
 }

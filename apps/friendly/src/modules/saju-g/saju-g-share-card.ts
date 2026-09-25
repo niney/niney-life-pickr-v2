@@ -2,10 +2,10 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import type { PublicSajuGShareType } from '@repo/api-contract';
 import { SAJU_G_ELEMENT_META } from '@repo/utils';
-import { loadPlexFonts } from '../../lib/share-fonts.js';
+import { loadShareFallbackAsset, loadShareFonts } from '../../lib/share-fonts.js';
 
 export async function renderSajuGSharePng(data: PublicSajuGShareType): Promise<Buffer> {
-  const fonts = await loadPlexFonts();
+  const fonts = await loadShareFonts();
   const h = (style: Record<string, unknown>, children: unknown) => ({
     type: 'div',
     props: { style: { display: 'flex', ...style }, children },
@@ -187,10 +187,8 @@ export async function renderSajuGSharePng(data: PublicSajuGShareType): Promise<B
     {
       width: 1080,
       height: 1440,
-      fonts: [
-        { name: 'Plex', data: fonts.regular, weight: 400, style: 'normal' },
-        { name: 'Plex', data: fonts.bold, weight: 700, style: 'normal' },
-      ],
+      fonts,
+      loadAdditionalAsset: loadShareFallbackAsset,
     },
   );
   return new Resvg(svg).render().asPng();
