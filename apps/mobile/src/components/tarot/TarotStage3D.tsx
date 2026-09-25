@@ -54,6 +54,7 @@ export const TarotStage3D = ({ phase, deckOrder, picked, drawn, revealed, total,
       fps={phase === 'setup' || phase === 'reading' ? 30 : null}
       camera={{ fov: CAMERA_FOV, near: 0.1, far: 90, position: [CAMERA_POS[0], CAMERA_POS[1], CAMERA_POS[2]] }}
       force={force}
+      statsKey={phase}
       onReady={onReady}
       onFail={onFail}
       onLost={onLost}

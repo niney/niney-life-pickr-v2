@@ -39,6 +39,7 @@ export const SajuStage3D = ({ phase, chart, stamped, width, height, framing, vis
       fps={phase === 'setup' ? 30 : null}
       camera={{ fov: 34, near: 0.1, far: 300, position: [0, 20, 17] }}
       force={force}
+      statsKey={phase}
       onReady={onReady}
       onFail={onFail}
       onLost={onLost}

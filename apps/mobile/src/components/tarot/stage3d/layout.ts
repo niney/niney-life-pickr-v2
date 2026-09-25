@@ -99,12 +99,18 @@ export const SHUFFLE_BEATS = 4;
 
 // 슬롯 — 뽑힌 카드가 서는 자리. 정면 카메라 쪽으로 살짝 눕힌 이젤 자세. yaw π = 뒷면이 카메라를 향함(엎음), yaw 0 =
 // 앞면. roll π = 역방향. spread(0.7~1)는 세로 화면에서 슬롯 간격·크기를 줄여 카드가 화면 밖으로 안 나가게.
-export const slotPose = (i: number, n: number, yaw: number, roll: number, lift = 0, spread = 1): Pose => {
+export const slotPose = (i: number, n: number, yaw: number, roll: number, lift = 0, spread = 1): Pose =>
+  slotPoseInto(makePose(0, 0, 0, 0, 0, 0), i, n, yaw, roll, lift, spread);
+
+/** slotPose 를 out 에 채운다 — 매 프레임 부르는 곳(뽑힌 카드)이 객체를 새로 만들지 않게. */
+export const slotPoseInto = (out: Pose, i: number, n: number, yaw: number, roll: number, lift = 0, spread = 1): Pose => {
   const base = n === 1 ? 1.35 : n <= 3 ? 1.1 : 0.82;
   const scale = base * (0.85 + 0.15 * spread);
   const gap = (CARD_W * scale + 0.42) * spread;
-  const x = (i - (n - 1) / 2) * gap;
-  return makePose(x, 1.5 + lift, local(0.2), 0.32, yaw, roll, scale);
+  out.p.set((i - (n - 1) / 2) * gap, 1.5 + lift, local(0.2));
+  out.q.setFromEuler(euler.set(0.32, yaw, roll, 'YXZ'));
+  out.s = scale;
+  return out;
 };
 
 // 뷰포트 종횡비 → 슬롯 spread. 가로(≥1.5)는 1, 세로 폰(≈0.55)은 0.7.

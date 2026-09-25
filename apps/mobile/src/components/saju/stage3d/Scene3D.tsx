@@ -395,20 +395,30 @@ const Lights = () => {
   );
 };
 
-// 셰이더 예열 — 인장 윗면(Phong + map)·별가루(Points + map) 프로그램을 입력 화면에서 미리 컴파일한다. 연출 도중
-// 새 프로그램이 컴파일되면 three 가 GL 에 동기 질의를 해 JS 가 GL 큐 뒤에서 기다린다(느린 GPU·시뮬레이터에서 멈칫).
-// 원판 밑(카메라에서 가려짐)에 작게 둬 보이지 않게 그린다.
-const ShaderWarmup = () => (
-  <group position={[0, -0.4, 0]} scale={0.2}>
-    <mesh rotation-x={-Math.PI / 2}>
-      <planeGeometry args={[1, 1]} />
-      <meshPhongMaterial map={sealFaceTexture(true)} shininess={20} specular="#553322" emissive="#ff5a3c" emissiveIntensity={0} />
-    </mesh>
-    <points geometry={burstGeometry()}>
-      <pointsMaterial map={dotTexture()} color={SAJU_GOLD} size={0.1} transparent opacity={0.01} depthWrite={false} blending={THREE.AdditiveBlending} />
-    </points>
-  </group>
-);
+// 셰이더 예열 — 인장 윗면(Phong + map) 프로그램을 캔버스를 올리자마자 몇 프레임 그려 미리 컴파일하고 숨긴다. 연출 도중
+// 새 프로그램이 컴파일되면 three 가 GL 에 동기 질의를 해 JS 가 GL 큐 뒤에서 기다린다(느린 GPU·시뮬레이터에서 멈칫). 재질은
+// 모듈에 하나(버리지 않는다) — JSX 재질이면 예열이 내려갈 때 R3F 가 버려 프로그램이 해제되고, 첫 인장이 떨어지는 프레임에
+// 다시 컴파일하며 멈칫했다(시뮬레이터 실측 0.45초). 별가루(점)는 하늘 별가루가 같은 프로그램을 늘 쓴다. 원판 밑에 작게.
+let warmSealFace: THREE.MeshPhongMaterial | null = null;
+const warmSealFaceMaterial = (): THREE.MeshPhongMaterial =>
+  (warmSealFace ??= new THREE.MeshPhongMaterial({ map: sealFaceTexture(true), shininess: 20, specular: new THREE.Color('#553322'), emissive: new THREE.Color('#ff5a3c'), emissiveIntensity: 0 }));
+const warmPlane = new THREE.PlaneGeometry(1, 1);
+const WARMUP_FRAMES = 3;
+const ShaderWarmup = () => {
+  const ref = useRef<THREE.Group>(null);
+  const frames = useRef(0);
+  useFrame(() => {
+    const g = ref.current;
+    if (!g || !g.visible) return;
+    frames.current += 1;
+    if (frames.current > WARMUP_FRAMES) g.visible = false;
+  });
+  return (
+    <group ref={ref} position={[0, -0.4, 0]} scale={0.2}>
+      <mesh rotation-x={-Math.PI / 2} geometry={warmPlane} material={warmSealFaceMaterial()} />
+    </group>
+  );
+};
 
 export interface SajuScene3DProps {
   phase: SajuPhase;
@@ -428,7 +438,7 @@ export const SajuScene3D = ({ phase, chart, stamped, framing }: SajuScene3DProps
       <Lights />
       <Sky />
       <Disc phase={phase} glyphTex={glyphTex} />
-      {phase === 'setup' || phase === 'casting' ? <ShaderWarmup /> : null}
+      <ShaderWarmup />
       {chart && (phase === 'stamping' || phase === 'reading') ? <Seals chart={chart} phase={phase} stamped={stamped} glyphTex={glyphTex} /> : null}
     </>
   );

@@ -23,6 +23,7 @@ import {
   restPose,
   scatterPose,
   slotPose,
+  slotPoseInto,
   slotSpreadFor,
   stackPose,
   type Pose,
@@ -253,12 +254,10 @@ const FanDeck = ({ deckOrder, picked, phase, revealed }: { deckOrder: readonly s
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const geometry = useMemo(() => new THREE.BoxGeometry(CARD_W, CARD_H, CARD_T), []);
   const material = useMemo(() => new THREE.MeshPhongMaterial({ map: back, shininess: 24, specular: new THREE.Color('#2a2a2a') }), [back]);
-  // 쌓인 덱은 인스턴스 0 이 맨 위 — 위 카드부터 그려 아래 카드의 가려진 면을 깊이 테스트로 버린다(78장이 거의 같은
-  // 자리라 반대 순서면 윗면을 78번 덧칠한다. 실기기 GPU 는 알아서 걸러도 소프트웨어 GL·다른 GPU 는 그대로 칠한다).
   const poses = useMemo(
     () => ({
-      stack: Array.from({ length: DECK_SIZE }, (_, i) => stackPose(DECK_SIZE - 1 - i)),
-      rest: Array.from({ length: DECK_SIZE }, (_, i) => restPose(DECK_SIZE - 1 - i)),
+      stack: Array.from({ length: DECK_SIZE }, (_, i) => stackPose(i)),
+      rest: Array.from({ length: DECK_SIZE }, (_, i) => restPose(i)),
       fan: Array.from({ length: DECK_SIZE }, (_, i) => fanPose(i, DECK_SIZE)),
       scatter: Array.from({ length: SHUFFLE_BEATS }, (_, beat) => Array.from({ length: DECK_SIZE }, (_, i) => scatterPose(i, beat))),
     }),
@@ -266,8 +265,15 @@ const FanDeck = ({ deckOrder, picked, phase, revealed }: { deckOrder: readonly s
   );
   const liveRef = useRef<Pose[] | null>(null);
   if (liveRef.current === null) liveRef.current = poses.stack.map((p) => clonePose(p));
-  const tmpRef = useRef<{ m: THREE.Matrix4; p: THREE.Vector3; s: THREE.Vector3; proj: THREE.Vector3; color: THREE.Color } | null>(null);
-  if (tmpRef.current === null) tmpRef.current = { m: new THREE.Matrix4(), p: new THREE.Vector3(), s: new THREE.Vector3(), proj: new THREE.Vector3(), color: new THREE.Color() };
+  const tmpRef = useRef<{ m: THREE.Matrix4; p: THREE.Vector3; s: THREE.Vector3; eye: THREE.Vector3 } | null>(null);
+  if (tmpRef.current === null) tmpRef.current = { m: new THREE.Matrix4(), p: new THREE.Vector3(), s: new THREE.Vector3(), eye: new THREE.Vector3() };
+  // 그리기 순서 — 인스턴스 칸을 매 프레임 카메라에 가까운 카드부터 채운다(앞 → 뒤). 겹친 카드(쌓인 덱·섞기·부채꼴)의
+  // 가려진 면이 깊이 테스트에서 먼저 버려져 조각 셰이더를 덜 돈다 — 뒤에서부터 칠하면 부채꼴은 같은 화소를 여러 번,
+  // 쌓인 덱은 78번 칠한다(시뮬레이터 소프트웨어 GL·가려진 면을 미리 거르지 않는 GPU. 애플 GPU 는 HSR 로 거른다).
+  // 순서는 프레임마다 조금씩만 바뀌어 지난 순서에서 삽입 정렬하면 거의 공짜다.
+  const sortRef = useRef<{ order: number[]; depth: Float32Array } | null>(null);
+  if (sortRef.current === null) sortRef.current = { order: Array.from({ length: DECK_SIZE }, (_, i) => i), depth: new Float32Array(DECK_SIZE) };
+  const seg = segmentKey(phase, revealed);
   // 화면 터치가 부르는 최근접 판정 — 최신 덱 순서·고른 카드를 본다.
   const latest = useRef({ deckOrder, picked });
   useEffect(() => {
@@ -305,12 +311,16 @@ const FanDeck = ({ deckOrder, picked, phase, revealed }: { deckOrder: readonly s
     const mesh = meshRef.current;
     const live = liveRef.current;
     const tmp = tmpRef.current;
-    if (!mesh || !live || !tmp) return;
+    const sort = sortRef.current;
+    if (!mesh || !live || !tmp || !sort) return;
     const t = st.clock.elapsedTime;
-    const elapsed = syncTimeline(timelineRef, segmentKey(phase, revealed), t);
+    const elapsed = syncTimeline(timelineRef, seg, t);
     const k = dampK(dt, 7);
     const beat = Math.min(SHUFFLE_BEATS, Math.floor(elapsed / TIMING.shuffleBeatS));
     const hov = phase === 'picking' ? controlRef.current.hovered : -1;
+    // 카메라 위치를 덱 로컬 좌표로(부채꼴 그룹 회전 포함 — 한 프레임 전 행렬이면 순서 정하기엔 충분).
+    const eye = mesh.worldToLocal(tmp.eye.copy(st.camera.position));
+    let lit = -1;
     for (let i = 0; i < DECK_SIZE; i++) {
       const id = deckOrder[i];
       const isPicked = id !== undefined && picked.has(id);
@@ -332,7 +342,6 @@ const FanDeck = ({ deckOrder, picked, phase, revealed }: { deckOrder: readonly s
       if (isPicked) targetScale = 0;
       const cur = live[i]!;
       tmp.p.copy(target.p);
-      tmp.color.copy(COLOR_IDLE);
       if (phase === 'picking' && !isPicked) {
         // 부채꼴 전체가 한 덩어리로 숨 쉬듯(카드마다 위상을 달리하면 정점에서 앞뒤가 뒤바뀐다).
         tmp.p.y += Math.sin(t * 1.1) * 0.02;
@@ -340,7 +349,7 @@ const FanDeck = ({ deckOrder, picked, phase, revealed }: { deckOrder: readonly s
           tmp.p.y += HOVER_LIFT;
           tmp.p.z += HOVER_FORWARD;
           targetScale = HOVER_SCALE;
-          tmp.color.copy(COLOR_HOVER);
+          lit = i;
         } else if (hov !== -1) {
           const d = i - hov;
           const ad = Math.abs(d);
@@ -350,9 +359,25 @@ const FanDeck = ({ deckOrder, picked, phase, revealed }: { deckOrder: readonly s
       if (!isPicked) cur.p.lerp(tmp.p, k);
       cur.q.slerp(target.q, k);
       cur.s += (targetScale - cur.s) * dampK(dt, 12);
+      sort.depth[i] = cur.p.distanceToSquared(eye);
+    }
+    const { order, depth } = sort;
+    for (let a = 1; a < DECK_SIZE; a++) {
+      const v = order[a]!;
+      const dv = depth[v]!;
+      let b = a - 1;
+      while (b >= 0 && depth[order[b]!]! > dv) {
+        order[b + 1] = order[b]!;
+        b--;
+      }
+      order[b + 1] = v;
+    }
+    for (let slot = 0; slot < DECK_SIZE; slot++) {
+      const i = order[slot]!;
+      const cur = live[i]!;
       tmp.m.compose(cur.p, cur.q, tmp.s.setScalar(Math.max(cur.s, 0.0001)));
-      mesh.setMatrixAt(i, tmp.m);
-      mesh.setColorAt(i, tmp.color);
+      mesh.setMatrixAt(slot, tmp.m);
+      mesh.setColorAt(slot, i === lit ? COLOR_HOVER : COLOR_IDLE);
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -377,22 +402,18 @@ const FanGroup = ({ phase, children }: { phase: TarotPhase; children: ReactNode 
   );
 };
 
-// 슬롯 윤곽 — 어디로 날아갈지 미리 보여 준다(뽑는 동안만).
+// 슬롯 윤곽 — 어디로 날아갈지 미리 보여 준다(뽑는 동안만). 선 모양·재질은 모듈에 하나를 슬롯 배율로 늘여 쓴다 —
+// 리딩마다 JSX 재질로 만들면 내려갈 때 R3F 가 버려 선 셰이더가 해제되고, 다음 부채꼴이 뜨는 첫 프레임에 다시 컴파일하며
+// 멈칫했다(동기 대기, 시뮬레이터 실측 1.2초).
+const slotLineMaterial = new THREE.LineBasicMaterial({ color: TAROT_GOLD, transparent: true, opacity: 0.35 });
+const slotEdgeGeometry = new THREE.EdgesGeometry(new THREE.PlaneGeometry(CARD_W, CARD_H));
+
 const SlotOutlines = ({ total, spread }: { total: number; spread: number }) => {
-  const items = useMemo(
-    () =>
-      Array.from({ length: total }, (_, i) => {
-        const pose = slotPose(i, total, 0, 0, 0, spread);
-        return { pose, geo: new THREE.EdgesGeometry(new THREE.PlaneGeometry(CARD_W * pose.s, CARD_H * pose.s)) };
-      }),
-    [total, spread],
-  );
+  const poses = useMemo(() => Array.from({ length: total }, (_, i) => slotPose(i, total, 0, 0, 0, spread)), [total, spread]);
   return (
     <group>
-      {items.map(({ pose, geo }, i) => (
-        <lineSegments key={i} geometry={geo} position={pose.p} quaternion={pose.q}>
-          <lineBasicMaterial color={TAROT_GOLD} transparent opacity={0.35} />
-        </lineSegments>
+      {poses.map((pose, i) => (
+        <lineSegments key={i} geometry={slotEdgeGeometry} material={slotLineMaterial} position={pose.p} quaternion={pose.q} scale={pose.s} />
       ))}
     </group>
   );
@@ -401,9 +422,16 @@ const SlotOutlines = ({ total, spread }: { total: number; spread: number }) => {
 // ── 뽑힌 카드 ───────────────────────────────────────────────────────────────
 // 부채꼴에서 이어받은 포즈(fromPose)에서 슬롯으로 날아가 엎어져 있다가 자기 차례(index === revealed, revealing)에
 // 뒤집힌다(yaw π→0, 역방향이면 roll 0→π, 들렸다 내려앉음, 앞면 발광이 금빛으로 피크, 반짝이). 앞면 텍스처는 마운트 직후 서버에서
-// 받는다 — 뒤집힐 때까지 1초 이상 여유가 있다. 실패하면 대체 앞면.
+// 받는다 — 뒤집힐 때까지 1초 이상 여유가 있다. 실패하면 대체 앞면. 리딩이 끝나 내려가면 앞면 재질·GPU 사본·반짝이를 푼다
+// (리딩마다 쌓이지 않게 — 셰이더는 예열 재질이 붙잡고 있어 다시 컴파일하지 않는다).
 const edgeMaterial = new THREE.MeshPhongMaterial({ color: TAROT_GOLD, shininess: 60, specular: new THREE.Color('#fff2c8') });
+// 카드 몸통 — 옆면 넷을 한 그룹으로 묶어 재질 [옆면, 앞면, 뒷면](그리기 3번 — BoxGeometry 그대로면 면마다 6번).
+// BoxGeometry 인덱스는 +x·−x·+y·−y·+z·−z 순서로 면마다 6개라 앞 24개가 옆면 넷, 그다음이 앞면(+z)·뒷면(−z).
 const cardGeometry = new THREE.BoxGeometry(CARD_W, CARD_H, CARD_T);
+cardGeometry.clearGroups();
+cardGeometry.addGroup(0, 24, 0);
+cardGeometry.addGroup(24, 6, 1);
+cardGeometry.addGroup(30, 6, 2);
 // 앞면은 자기 그림으로 은은히 빛나게(emissiveMap) — 푸른 주변광·Phong 만으로는 해석을 볼 때 그림이 어둡다. 뒤집히는 순간엔
 // 발광이 금빛으로 바뀌며 세진다.
 const FACE_GLOW = new THREE.Color('#ffffff');
@@ -411,6 +439,19 @@ const FACE_FLASH = new THREE.Color(TAROT_GOLD);
 const FACE_GLOW_BASE = 0.42;
 const faceMaterial = (map: THREE.Texture): THREE.MeshPhongMaterial =>
   new THREE.MeshPhongMaterial({ map, emissiveMap: map, emissive: FACE_GLOW.clone(), emissiveIntensity: FACE_GLOW_BASE, shininess: 18, specular: new THREE.Color('#333333') });
+// 뒷면 재질 — 뒷면 텍스처마다 하나를 뽑힌 카드·예열이 같이 쓴다.
+const backMaterials = new WeakMap<THREE.Texture, THREE.MeshPhongMaterial>();
+const backMaterialFor = (back: THREE.Texture): THREE.MeshPhongMaterial => {
+  let m = backMaterials.get(back);
+  if (!m) {
+    m = new THREE.MeshPhongMaterial({ map: back, shininess: 24, specular: new THREE.Color('#2a2a2a') });
+    backMaterials.set(back, m);
+  }
+  return m;
+};
+// 예열용 앞면 재질(대체 앞면) — 모듈에 하나. 앞면 셰이더를 붙잡아 둬 카드마다 앞면 재질을 버려도 다시 컴파일하지 않는다.
+let warmFace: THREE.MeshPhongMaterial | null = null;
+const warmFaceMaterial = (): THREE.MeshPhongMaterial => (warmFace ??= faceMaterial(fallbackFrontTexture()));
 const BURST_COUNT = 36;
 
 const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, revealed, spread }: { index: number; total: number; cardId: string; reversed: boolean; fromPose: Pose; phase: TarotPhase; revealed: number; spread: number }) => {
@@ -419,31 +460,29 @@ const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, revealed, 
   const burstRef = useRef<THREE.Points>(null);
   const live = useRef<Pose | null>(null);
   if (live.current === null) live.current = clonePose(fromPose);
+  const aim = useRef<Pose | null>(null);
+  if (aim.current === null) aim.current = clonePose(fromPose);
   const [front, setFront] = useState<THREE.Texture>(() => fallbackFrontTexture());
   useEffect(() => {
     let alive = true;
+    let loaded: THREE.Texture | null = null;
     loadCardFront(cardId)
       .then((tex) => {
-        if (alive) setFront(tex);
+        if (!alive) return;
+        loaded = tex;
+        setFront(tex);
       })
       .catch(() => {
         // 대체 앞면 유지.
       });
     return () => {
       alive = false;
+      // GPU 사본만 푼다 — 텍스처 객체는 캐시에 남아 다시 뽑히면 다시 올린다.
+      loaded?.dispose();
     };
   }, [cardId]);
-  const materials = useMemo(
-    () => [
-      edgeMaterial,
-      edgeMaterial,
-      edgeMaterial,
-      edgeMaterial,
-      faceMaterial(front),
-      new THREE.MeshPhongMaterial({ map: back, shininess: 24, specular: new THREE.Color('#2a2a2a') }),
-    ],
-    [front, back],
-  );
+  const materials = useMemo(() => [edgeMaterial, faceMaterial(front), backMaterialFor(back)], [front, back]);
+  useEffect(() => () => materials[1]?.dispose(), [materials]);
   const burst = useMemo(() => {
     const r = rand(17 + index * 31);
     const base = Array.from({ length: BURST_COUNT }, () => ({ x: (r() - 0.5) * 2.4, y: (r() - 0.5) * 3.2, z: (r() - 0.5) * 1.6, sp: 0.4 + r() * 0.8 }));
@@ -451,23 +490,26 @@ const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, revealed, 
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BURST_COUNT * 3), 3));
     return { base, g };
   }, [index]);
+  useEffect(() => () => burst.g.dispose(), [burst]);
 
   const isUp = index < revealed;
   const isFlipping = phase === 'revealing' && revealed === index;
+  const seg = segmentKey(phase, revealed);
 
   useFrame((st, dt) => {
     const mesh = meshRef.current;
     const cur = live.current;
-    if (!mesh || !cur) return;
+    const target = aim.current;
+    if (!mesh || !cur || !target) return;
     const t = st.clock.elapsedTime;
-    const elapsed = syncTimeline(timelineRef, segmentKey(phase, revealed), t);
+    const elapsed = syncTimeline(timelineRef, seg, t);
     let progress = isUp ? 1 : 0;
     if (isFlipping) progress = clamp((elapsed - TIMING.flipGapS) / TIMING.flipS, 0, 1);
     const e = easeInOutCubic(progress);
     const yaw = Math.PI * (1 - e);
     const roll = reversed ? Math.PI * e : 0;
     const lift = Math.sin(e * Math.PI) * 0.6;
-    const target = slotPose(index, total, yaw, roll, lift, spread);
+    slotPoseInto(target, index, total, yaw, roll, lift, spread);
     cur.p.lerp(target.p, dampK(dt, 8));
     if (isFlipping) cur.q.copy(target.q);
     else cur.q.slerp(target.q, dampK(dt, 8));
@@ -475,8 +517,8 @@ const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, revealed, 
     mesh.position.copy(cur.p);
     mesh.quaternion.copy(cur.q);
     mesh.scale.setScalar(cur.s);
-    // 앞면(+z, 4번 재질) 발광 — 평소엔 흰빛 은은히, 뒤집히는 순간 금빛으로 피크.
-    const faceMat = (mesh.material as THREE.Material[])[4] as THREE.MeshPhongMaterial | undefined;
+    // 앞면(+z, 1번 재질) 발광 — 평소엔 흰빛 은은히, 뒤집히는 순간 금빛으로 피크.
+    const faceMat = (mesh.material as THREE.Material[])[1] as THREE.MeshPhongMaterial | undefined;
     if (faceMat) {
       const flash = Math.sin(e * Math.PI);
       faceMat.emissive.copy(FACE_GLOW).lerp(FACE_FLASH, flash);
@@ -509,29 +551,25 @@ const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, revealed, 
   );
 };
 
-// 셰이더 예열 — 뽑힌 카드(Phong + map, 가장자리 Phong)·반짝이(Points + map)·슬롯 윤곽(선) 프로그램을 입력·섞기 동안 미리
-// 컴파일한다. 연출 도중 새 프로그램이 컴파일되면 three 가 GL 에 동기 질의를 해 JS 가 GL 큐 뒤에서 기다린다(느린 GPU·
-// 시뮬레이터에서 멈칫). 탁자 밑(카메라에서 가려짐)에 작게 둬 보이지 않게 그린다.
+// 셰이더 예열 — 뽑힌 카드(옆면·앞면·뒷면 Phong)·슬롯 윤곽(선) 프로그램을 캔버스를 올리자마자 몇 프레임 그려 미리 컴파일하고
+// 숨긴다. 연출 도중 새 프로그램이 컴파일되면 three 가 GL 에 동기 질의를 해 JS 가 GL 큐 뒤에서 기다린다(느린 GPU·시뮬레이터
+// 에서 멈칫). 재질은 모두 모듈(또는 텍스처)마다 하나라 버려지지 않아 프로그램이 캔버스가 내려갈 때까지 남는다. 반짝이(점)는
+// 별이 같은 프로그램을 늘 쓴다. 탁자 밑(카메라에서 가려짐)에 작게 둔다.
+const WARMUP_FRAMES = 3;
 const ShaderWarmup = ({ back }: { back: THREE.Texture }) => {
-  const materials = useMemo(
-    () => [edgeMaterial, edgeMaterial, edgeMaterial, edgeMaterial, faceMaterial(fallbackFrontTexture()), new THREE.MeshPhongMaterial({ map: back })],
-    [back],
-  );
-  const pts = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0.01, 0, 0]), 3));
-    return g;
-  }, []);
-  const line = useMemo(() => new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.1, 0.1)), []);
+  const ref = useRef<THREE.Group>(null);
+  const frames = useRef(0);
+  const materials = useMemo(() => [edgeMaterial, warmFaceMaterial(), backMaterialFor(back)], [back]);
+  useFrame(() => {
+    const g = ref.current;
+    if (!g || !g.visible) return;
+    frames.current += 1;
+    if (frames.current > WARMUP_FRAMES) g.visible = false;
+  });
   return (
-    <group position={[0, -0.4, 0.5]}>
+    <group ref={ref} position={[0, -0.4, 0.5]}>
       <mesh geometry={cardGeometry} material={materials} scale={0.05} />
-      <points geometry={pts} frustumCulled={false}>
-        <pointsMaterial map={dotTexture()} color={TAROT_GOLD} size={0.14} transparent opacity={0.01} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </points>
-      <lineSegments geometry={line}>
-        <lineBasicMaterial color={TAROT_GOLD} transparent opacity={0.35} />
-      </lineSegments>
+      <lineSegments geometry={slotEdgeGeometry} material={slotLineMaterial} scale={0.1} />
     </group>
   );
 };
@@ -583,7 +621,7 @@ export const TarotScene3D = ({ phase, deckOrder, picked, drawn, revealed, total,
           />
         ))}
       </FanGroup>
-      {phase === 'setup' || phase === 'shuffling' ? <ShaderWarmup back={back} /> : null}
+      <ShaderWarmup back={back} />
     </StageCtx.Provider>
   );
 };
