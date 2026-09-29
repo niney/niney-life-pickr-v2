@@ -4,9 +4,11 @@ import { dirname, resolve } from 'node:path';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import {
+  SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
   effectiveExcludes,
   toGroupCalcInputs,
+  uncategorizedNote,
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
@@ -81,13 +83,6 @@ const participantLabel = (
 };
 
 // ── 매트릭스 계산 (apps/web SettlementBreakdownTable 의 useMatrix 포팅) ────────
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '기타',
-};
 // 영수증에 흔한 순서 — 안주 → 술 → 음료 → 기타.
 const CATEGORY_ORDER: ReceiptItemCategoryType[] = [
   'SIDE',
@@ -285,6 +280,7 @@ const rowBox = (
 function buildTable(session: SharedSettlementSessionType): {
   node: Node;
   width: number;
+  note: string | null;
 } {
   const participants = [...session.participants].sort(
     (a, b) => a.orderIndex - b.orderIndex,
@@ -329,7 +325,7 @@ function buildTable(session: SharedSettlementSessionType): {
       cell('이름', NAME_W, { h: HROW, color: C.sub, fs: 15 }),
       ...m.rounds.flatMap((r) => [
         ...r.categories.map((c, j) =>
-          cell(CATEGORY_LABEL[c], CAT_W, {
+          cell(SETTLEMENT_CATEGORY_LABEL[c], CAT_W, {
             h: HROW,
             align: 'right',
             color: C.sub,
@@ -436,14 +432,22 @@ function buildTable(session: SharedSettlementSessionType): {
     [headA, headB, ...bodyRows, footRow],
   );
 
-  return { node: table, width: tableWidth };
+  // 기타 열 설명 — 웹·앱 정산표와 같은 규칙(열이 숨는 차수는 항목을 비워 넘긴다).
+  // 카톡으로 받는 사람은 이 이미지만 보므로 여기에 가장 필요하다.
+  const note = uncategorizedNote(
+    session.rounds.map((r, i) => ({
+      items: m.rounds[i]?.categories.includes('UNCATEGORIZED') ? r.items : [],
+    })),
+  );
+
+  return { node: table, width: tableWidth, note };
 }
 
 function buildTree(session: SharedSettlementSessionType): {
   node: Node;
   width: number;
 } {
-  const { node: table, width: tableWidth } = buildTable(session);
+  const { node: table, width: tableWidth, note } = buildTable(session);
   const n = session.participants.length;
   const subtitle = `총 ${formatThousands(session.grandTotal)}원 · ${n}명`;
   const contentWidth = Math.max(tableWidth, 320);
@@ -470,6 +474,15 @@ function buildTree(session: SharedSettlementSessionType): {
         subtitle,
       ),
       table,
+      ...(note
+        ? [
+            h(
+              'div',
+              { display: 'flex', marginTop: 10, fontSize: 16, lineHeight: 1.45, color: C.sub },
+              `* ${note}`,
+            ),
+          ]
+        : []),
       h(
         'div',
         {

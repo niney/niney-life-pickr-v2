@@ -46,4 +46,5 @@ export * from './schemas/usage-quota.js';
 export * from './schemas/tour.js';
 export * from './settlement.calculator.js';
 export * from './settlement.drink-kinds.js';
+export * from './settlement.labels.js';
 export * as Routes from './routes.js';

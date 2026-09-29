@@ -14,19 +14,12 @@ import {
   useTheme,
   type Theme,
 } from '@repo/shared';
-import type {
-  ReceiptItemCategoryType,
-  SharedSettlementSessionType,
+import {
+  SETTLEMENT_CATEGORY_LABEL,
+  type SharedSettlementSessionType,
 } from '@repo/api-contract';
 import { RoundGroupSplitNote } from '../../src/components/settlement/RoundGroupSplitNote';
 import { SettlementBreakdownTable } from '../../src/components/settlement/SettlementBreakdownTable';
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '미분류',
-};
 
 const participantName = (
   p: { name: string | null; nickname: string | null },
@@ -297,7 +290,7 @@ const RoundCard = ({
                 {it.name}
               </Text>
               <Text style={[styles.itemMeta, { color: theme.colors.textMuted }]}>
-                {CATEGORY_LABEL[it.category]}
+                {SETTLEMENT_CATEGORY_LABEL[it.category]}
                 {it.unitPrice != null && it.quantity != null
                   ? ` · ${it.unitPrice.toLocaleString('ko-KR')}원 × ${it.quantity}`
                   : ''}
@@ -313,7 +306,7 @@ const RoundCard = ({
             style={[styles.itemRow, { borderTopColor: theme.colors.border }]}
           >
             <Text style={[styles.itemName, { color: theme.colors.textMuted }]}>
-              할인 ({CATEGORY_LABEL[round.discountCategory]})
+              할인 ({SETTLEMENT_CATEGORY_LABEL[round.discountCategory]})
             </Text>
             <Text style={[styles.itemAmount, { color: theme.colors.danger }]}>
               −{round.discountAmount.toLocaleString('ko-KR')}원

@@ -1,5 +1,6 @@
 import { Coins, Pencil } from 'lucide-react';
 import {
+  SETTLEMENT_CATEGORY_LABEL,
   effectiveExcludes,
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
@@ -8,13 +9,6 @@ import { sessionParticipationBadgeAxes } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ParticipationBadges } from './ParticipationChips';
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '미분류',
-};
 
 const participantName = (
   p: { name: string | null; nickname: string | null },
@@ -215,7 +209,7 @@ export const RoundItemsCard = ({
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{it.name}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  {CATEGORY_LABEL[it.category]}
+                  {SETTLEMENT_CATEGORY_LABEL[it.category]}
                   {it.unitPrice != null && it.quantity != null && (
                     <> · {it.unitPrice.toLocaleString('ko-KR')}원 × {it.quantity}</>
                   )}
@@ -229,7 +223,7 @@ export const RoundItemsCard = ({
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">할인</div>
                 <div className="mt-0.5 text-xs opacity-80">
-                  {CATEGORY_LABEL[round.discountCategory]} 풀에서 차감
+                  {SETTLEMENT_CATEGORY_LABEL[round.discountCategory]} 풀에서 차감
                 </div>
               </div>
               <div className="shrink-0 text-sm font-semibold">

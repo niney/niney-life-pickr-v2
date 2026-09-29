@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { ReceiptItemCategoryType } from '@repo/api-contract';
+import { SETTLEMENT_CATEGORY_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
   useSettlementDraftStore,
   useTheme,
@@ -14,13 +14,6 @@ const CATEGORIES: ReceiptItemCategoryType[] = [
   'SIDE',
   'UNCATEGORIZED',
 ];
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '기타',
-};
 
 interface Props {
   round: DraftRound;
@@ -130,7 +123,7 @@ export const RoundDiscountEditor = ({ round }: Props) => {
                   color: sel ? theme.colors.primaryText : theme.colors.text,
                 }}
               >
-                {CATEGORY_LABEL[c]} ({pools[c].toLocaleString('ko-KR')})
+                {SETTLEMENT_CATEGORY_LABEL[c]} ({pools[c].toLocaleString('ko-KR')})
               </Text>
             </Pressable>
           );
@@ -159,7 +152,7 @@ export const RoundDiscountEditor = ({ round }: Props) => {
       </View>
       {exceeded && (
         <Text style={[styles.errText, { color: theme.colors.danger }]}>
-          {CATEGORY_LABEL[category]} 풀({pool.toLocaleString('ko-KR')}원)을 초과합니다.
+          {SETTLEMENT_CATEGORY_LABEL[category]} 풀({pool.toLocaleString('ko-KR')}원)을 초과합니다.
         </Text>
       )}
       {amount === 0 && !exceeded && (

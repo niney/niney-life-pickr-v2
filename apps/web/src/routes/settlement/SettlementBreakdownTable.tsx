@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import {
+  SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
   effectiveExcludes,
   toGroupCalcInputs,
+  uncategorizedNote,
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
@@ -12,13 +14,6 @@ import { cn } from '~/lib/utils';
 interface Props {
   session: SharedSettlementSessionType;
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '기타',
-};
 
 // 표시 순서. 영수증에 흔한 순서대로 — 안주 → 술 → 음료 → 기타.
 const CATEGORY_ORDER: ReceiptItemCategoryType[] = [
@@ -57,6 +52,14 @@ export const SettlementBreakdownTable = ({ session }: Props) => {
   const matrix = useMatrix(session);
 
   if (matrix.rounds.length === 0 || matrix.participants.length === 0) return null;
+
+  // 기타 열 설명 — 받는 사람이 "기타" 가 무엇인지 항목 이름으로 읽게. 열이 숨는
+  // 차수(할인으로 풀 0 등)는 항목을 비워 넘겨 표와 설명이 어긋나지 않게 한다.
+  const note = uncategorizedNote(
+    session.rounds.map((r, i) => ({
+      items: matrix.rounds[i]?.categories.includes('UNCATEGORIZED') ? r.items : [],
+    })),
+  );
 
   return (
     <Card>
@@ -105,7 +108,7 @@ export const SettlementBreakdownTable = ({ session }: Props) => {
                       key={`${r.id}-${c}`}
                       className="border-l px-2 py-1 text-right font-medium"
                     >
-                      {CATEGORY_LABEL[c]}
+                      {SETTLEMENT_CATEGORY_LABEL[c]}
                     </th>
                   )),
                   <th
@@ -194,6 +197,8 @@ export const SettlementBreakdownTable = ({ session }: Props) => {
             </tfoot>
           </table>
         </div>
+        {/* 좌우 여백은 표 셀(px-2)과 같게 — 첫 열 글자와 줄이 맞는다. */}
+        {note && <p className="px-2 pt-3 text-xs text-muted-foreground">* {note}</p>}
       </CardContent>
     </Card>
   );

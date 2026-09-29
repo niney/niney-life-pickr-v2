@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import type { ReceiptItemCategoryType } from '@repo/api-contract';
+import { SETTLEMENT_CATEGORY_OPTION_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
   useRestaurantPublic,
   useSettlementDraftStore,
@@ -20,13 +20,6 @@ interface Props {
   onBack: () => void;
   onNext: () => void;
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '미분류',
-};
 
 const CATEGORIES: ReceiptItemCategoryType[] = [
   'ALCOHOL',
@@ -408,7 +401,7 @@ const ItemRow = memo(function ItemRow({
           >
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {CATEGORY_LABEL[c]}
+                {SETTLEMENT_CATEGORY_OPTION_LABEL[c]}
               </option>
             ))}
           </select>

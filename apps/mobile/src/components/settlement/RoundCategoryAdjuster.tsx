@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
   effectiveExcludes,
   type ReceiptItemCategoryType,
@@ -18,13 +19,6 @@ interface Props {
   round: DraftRound;
   participants: DraftParticipant[];
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '기타',
-};
 
 const CATEGORY_ORDER: ReceiptItemCategoryType[] = [
   'SIDE',
@@ -186,7 +180,7 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
           <View key={row.category} style={styles.rowBlock}>
             <View style={styles.rowHeader}>
               <Text style={[styles.rowCategory, { color: theme.colors.text }]}>
-                {CATEGORY_LABEL[row.category]}
+                {SETTLEMENT_CATEGORY_LABEL[row.category]}
               </Text>
               <Text style={[styles.rowMeta, { color: theme.colors.textMuted }]}>
                 풀 {row.pool.toLocaleString('ko-KR')}원 / {row.n}명 · 인당{' '}

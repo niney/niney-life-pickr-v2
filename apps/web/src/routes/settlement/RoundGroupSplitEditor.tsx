@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, Minus, Plus, Trash2, Wand2 } from 'lucide-react';
-import type { ReceiptItemCategoryType } from '@repo/api-contract';
+import { SETTLEMENT_CATEGORY_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
   isEligibleGroupMember,
   isGroupableCategory,
@@ -33,11 +33,6 @@ interface Props {
   round: DraftRound;
   participants: DraftParticipant[];
 }
-
-const CATEGORY_LABEL: Record<GroupableCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-};
 
 const participantLabel = (p: DraftParticipant, idx: number): string => {
   const nm = (p.name ?? '').trim();
@@ -86,7 +81,7 @@ export const RoundGroupSplitEditor = ({ round, participants }: Props) => {
 };
 
 const labelFallback = (category: ReceiptItemCategoryType): string =>
-  isGroupableCategory(category) ? CATEGORY_LABEL[category] : '그룹';
+  isGroupableCategory(category) ? SETTLEMENT_CATEGORY_LABEL[category] : '그룹';
 
 const EditorBody = ({ round, participants }: Props) => {
   const applyGroupSplits = useSettlementDraftStore((s) => s.applyGroupSplits);
@@ -125,7 +120,7 @@ const EditorBody = ({ round, participants }: Props) => {
 
   const handleAddGroup = (category: GroupableCategoryType) => {
     addGroupSplit(round.clientId, {
-      label: CATEGORY_LABEL[category],
+      label: SETTLEMENT_CATEGORY_LABEL[category],
       category,
       itemClientIds: ungroupedOf(category).map((it) => it.clientId),
       mode: 'EQUAL',
@@ -189,7 +184,7 @@ const EditorBody = ({ round, participants }: Props) => {
                 onClick={() => handleAddGroup(cat)}
               >
                 <Plus className="size-3" />
-                {CATEGORY_LABEL[cat]} 그룹 추가
+                {SETTLEMENT_CATEGORY_LABEL[cat]} 그룹 추가
               </Button>
             ),
         )}

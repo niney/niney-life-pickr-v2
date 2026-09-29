@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { ReceiptItemCategoryType } from '@repo/api-contract';
+import { SETTLEMENT_CATEGORY_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
   isEligibleGroupMember,
   isGroupableCategory,
@@ -31,13 +31,8 @@ interface Props {
   participants: DraftParticipant[];
 }
 
-const CATEGORY_LABEL: Record<GroupableCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-};
-
 const labelFallback = (category: ReceiptItemCategoryType): string =>
-  isGroupableCategory(category) ? CATEGORY_LABEL[category] : '그룹';
+  isGroupableCategory(category) ? SETTLEMENT_CATEGORY_LABEL[category] : '그룹';
 
 const participantLabel = (p: DraftParticipant, idx: number): string => {
   const nm = (p.name ?? '').trim();
@@ -151,7 +146,7 @@ const EditorBody = ({
 
   const handleAddGroup = (category: GroupableCategoryType) => {
     addGroupSplit(round.clientId, {
-      label: CATEGORY_LABEL[category],
+      label: SETTLEMENT_CATEGORY_LABEL[category],
       category,
       itemClientIds: ungroupedOf(category).map((it) => it.clientId),
       mode: 'EQUAL',
@@ -245,7 +240,7 @@ const EditorBody = ({
                 ]}
               >
                 <Text style={[styles.addBtnText, { color: theme.colors.text }]}>
-                  + {CATEGORY_LABEL[cat]} 그룹 추가
+                  + {SETTLEMENT_CATEGORY_LABEL[cat]} 그룹 추가
                 </Text>
               </Pressable>
             ),

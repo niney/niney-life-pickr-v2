@@ -1,5 +1,10 @@
 import { useMemo } from 'react';
-import { calculateMultiRoundShares, effectiveExcludes, type ReceiptItemCategoryType } from '@repo/api-contract';
+import {
+  SETTLEMENT_CATEGORY_LABEL,
+  calculateMultiRoundShares,
+  effectiveExcludes,
+  type ReceiptItemCategoryType,
+} from '@repo/api-contract';
 import {
   draftGroupsToCalcInputs,
   useSettlementDraftStore,
@@ -22,13 +27,6 @@ interface Props {
   // 이 round 의 (할인 적용 후) 카테고리별 풀 amount. UI 가 잔여 여부 판단에 사용.
   // shareAmounts 등 풀 정보는 round 자체에서 다시 계산.
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '기타',
-};
 
 const CATEGORY_ORDER: ReceiptItemCategoryType[] = [
   'SIDE',
@@ -177,7 +175,7 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
         return (
           <div key={row.category} className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{CATEGORY_LABEL[row.category]}</span>
+              <span className="font-medium text-foreground">{SETTLEMENT_CATEGORY_LABEL[row.category]}</span>
               <span>
                 {row.grouped ? '나머지 풀' : '풀'} {row.pool.toLocaleString('ko-KR')}원 / {row.n}명 · 인당{' '}
                 {row.perBase.toLocaleString('ko-KR')}원 + 잔여 {row.remainder.toLocaleString('ko-KR')}원

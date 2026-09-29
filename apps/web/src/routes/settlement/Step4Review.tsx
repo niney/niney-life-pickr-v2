@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Coins, Loader2, Save } from 'lucide-react';
 import {
+  SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
   effectiveExcludes,
   type ReceiptItemCategoryType,
@@ -34,13 +35,6 @@ interface Props {
   // 삭제한다. create 모드에서만 의미 있음.
   fromDraftId?: string | null;
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '미분류',
-};
 
 const participantName = (
   p: { name: string | null; nickname: string | null },
@@ -405,7 +399,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                       return (
                         <li key={c} className="space-y-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span>{CATEGORY_LABEL[c]}</span>
+                            <span>{SETTLEMENT_CATEGORY_LABEL[c]}</span>
                             <span className="text-muted-foreground">
                               {b.poolAmount.toLocaleString('ko-KR')}원
                               {groupRows.length === 0 && (

@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { ReceiptItemCategoryType } from '@repo/api-contract';
+import { SETTLEMENT_CATEGORY_OPTION_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
   useRestaurantPublic,
   useSettlementDraftStore,
@@ -26,13 +26,6 @@ interface Props {
   onBack: () => void;
   onNext: () => void;
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '미분류',
-};
 const CATEGORIES: ReceiptItemCategoryType[] = [
   'ALCOHOL',
   'NON_ALCOHOL',
@@ -566,7 +559,7 @@ const ItemRow = ({
                     color: sel ? theme.colors.primaryText : theme.colors.text,
                   }}
                 >
-                  {CATEGORY_LABEL[c]}
+                  {SETTLEMENT_CATEGORY_OPTION_LABEL[c]}
                 </Text>
               </Pressable>
             );

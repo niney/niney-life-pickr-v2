@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
   effectiveExcludes,
   toGroupCalcInputs,
+  uncategorizedNote,
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
@@ -12,13 +14,6 @@ import { useTheme, type Theme } from '@repo/shared';
 interface Props {
   session: SharedSettlementSessionType;
 }
-
-const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '술',
-  NON_ALCOHOL: '음료',
-  SIDE: '안주',
-  UNCATEGORIZED: '기타',
-};
 
 const CATEGORY_ORDER: ReceiptItemCategoryType[] = [
   'SIDE',
@@ -36,6 +31,13 @@ export const SettlementBreakdownTable = ({ session }: Props) => {
   const matrix = useMatrix(session);
 
   if (matrix.rounds.length === 0 || matrix.participants.length === 0) return null;
+
+  // 기타 열 설명 — 웹 정산표와 같은 규칙(열이 숨는 차수는 항목을 비워 넘긴다).
+  const note = uncategorizedNote(
+    session.rounds.map((r, i) => ({
+      items: matrix.rounds[i]?.categories.includes('UNCATEGORIZED') ? r.items : [],
+    })),
+  );
 
   return (
     <View style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
@@ -105,7 +107,7 @@ export const SettlementBreakdownTable = ({ session }: Props) => {
                   ]}
                 >
                   <Text style={[styles.subHeaderText, { color: theme.colors.textMuted }]}>
-                    {CATEGORY_LABEL[c]}
+                    {SETTLEMENT_CATEGORY_LABEL[c]}
                   </Text>
                 </View>
               )),
@@ -288,6 +290,9 @@ export const SettlementBreakdownTable = ({ session }: Props) => {
           </View>
         </View>
       </ScrollView>
+      {note && (
+        <Text style={[styles.note, { color: theme.colors.textMuted }]}>* {note}</Text>
+      )}
     </View>
   );
 };
@@ -416,6 +421,7 @@ const createStyles = (_theme: Theme) =>
       gap: 8,
     },
     title: { fontSize: 14, fontWeight: '600' },
+    note: { fontSize: 11, lineHeight: 16 },
     row: { flexDirection: 'row' },
     headerCell: { paddingVertical: 6 },
     headerGroup: {
