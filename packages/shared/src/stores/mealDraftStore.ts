@@ -1,12 +1,16 @@
+import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import type {
+  MealEntryType,
   MealItemInputType,
   MealPortionType,
+  MealRecommendationType,
   MealSlotType,
   MealTypeType,
   RecognizedDishType,
 } from '@repo/api-contract';
+import { guessMealSlot, toLocalDateKey } from '@repo/utils';
 import { createInjectableStorage } from './injectableStorage.js';
 
 // 식단 입력 draft — 사진 인식 → 편집 → 저장 사이에서 앱이 백그라운드로 가거나 종료돼도
@@ -46,6 +50,34 @@ const principalScopedDraftStorage: StateStorage = {
 export const setMealDraftStorage = (storage: StateStorage): void => {
   draftStorage.setStorage(storage);
 };
+
+// 현재 계정의 영속 draft 복원까지 끝난 principal. 앱은 부팅에서 전환을 기다린 뒤 화면을 열지만
+// 웹은 /me 응답 뒤에야 전환하므로, 입력 화면이 이 값을 보고 복원 전에 draft 를 쓰지 않게 기다린다
+// (복원 전에 쓴 값은 저장되지 않고, 전환이 메모리를 비우며 함께 사라진다).
+let readyDraftPrincipal: string | null = null;
+const readyPrincipalListeners = new Set<() => void>();
+
+const setReadyDraftPrincipal = (principalId: string | null): void => {
+  if (readyDraftPrincipal === principalId) return;
+  readyDraftPrincipal = principalId;
+  for (const listener of readyPrincipalListeners) listener();
+};
+
+export const getMealDraftReadyPrincipal = (): string | null => readyDraftPrincipal;
+
+export const subscribeMealDraftReadyPrincipal = (listener: () => void): (() => void) => {
+  readyPrincipalListeners.add(listener);
+  return () => {
+    readyPrincipalListeners.delete(listener);
+  };
+};
+
+export const useMealDraftReadyPrincipal = (): string | null =>
+  useSyncExternalStore(
+    subscribeMealDraftReadyPrincipal,
+    getMealDraftReadyPrincipal,
+    getMealDraftReadyPrincipal,
+  );
 
 /**
  * 앱이 소유한 draft 사진 파일의 수명 어댑터.
@@ -547,6 +579,7 @@ export const setMealDraftPrincipal = (principalId: string | null): Promise<void>
   desiredDraftPrincipal = next;
   // await 전 동기 경계: 호출 직후부터 이전 사용자 값을 어떤 화면도 읽을 수 없다.
   activeDraftPrincipal = null;
+  setReadyDraftPrincipal(null);
   // clear()는 비동기 파일 정리를 시작하므로 principal 전환에서는 상태만
   // 즉시 비우고, 아래 transition 큐가 파일 namespace 전환 완료를 기다린다.
   useMealDraftStore.setState({ ...emptyDraft() });
@@ -566,7 +599,9 @@ export const setMealDraftPrincipal = (principalId: string | null): Promise<void>
     if (desiredDraftPrincipal !== next) {
       activeDraftPrincipal = null;
       useMealDraftStore.setState({ ...emptyDraft() });
+      return;
     }
+    setReadyDraftPrincipal(next);
   };
   principalTransition = principalTransition.then(transition, transition);
   return principalTransition;
@@ -590,6 +625,104 @@ export const isMealDraftPrincipalCurrent = (principalId: string | null): boolean
 draftStorage.bindRehydrate(() => {
   void useMealDraftStore.persist.rehydrate();
 });
+
+export type MealDraftInit = Parameters<MealDraftState['start']>[0];
+
+// 저장된 기록 → 수정 draft. 앱·웹 수정 화면이 같은 값으로 시작한다.
+export const mealDraftInitFromEntry = (entry: MealEntryType): MealDraftInit => ({
+  entryId: entry.id,
+  originRecommendationId: entry.originRecommendationId,
+  eatenAt: entry.eatenAt,
+  eatenDate: entry.eatenDate,
+  slot: entry.slot,
+  mealType: entry.mealType,
+  placeId: entry.placeId,
+  placeName: entry.placeName,
+  memo: entry.memo ?? '',
+  photos: entry.photos.map((p) => ({ token: p.token, localUri: null })),
+  items: entry.items.map((it) => ({
+    clientId: it.id,
+    name: it.name,
+    foodId: it.foodId,
+    dishType: it.dishType,
+    mainIngredient: it.mainIngredient,
+    cuisine: it.cuisine,
+    portion: it.portion,
+    servings: it.servings,
+    portionSource: it.portionSource,
+    isMain: it.isMain,
+    confidence: it.confidence,
+    recognitionDishId: it.recognitionDishId,
+    selectedCandidateRank: it.selectedCandidateRank,
+    catalogMatchedBy: it.catalogMatchedBy,
+    catalogMatchScore: it.catalogMatchScore,
+    source: it.source,
+    candidates: [],
+    // 저장된 기록은 이미 한 번 확인한 값이다. 장소 힌트로 재인식해도 자동 교체하지 않는다.
+    userEdited: true,
+  })),
+  recognition: null,
+});
+
+// 지난 기록 → 지금 시각의 새 기록. 음식·양·장소만 복사하고 사진과 메모는 뺀다.
+export const mealDraftInitForRepeat = (entry: MealEntryType, now: Date): MealDraftInit => ({
+  eatenAt: now.toISOString(),
+  eatenDate: toLocalDateKey(now),
+  slot: guessMealSlot(now),
+  mealType: entry.mealType,
+  placeId: entry.placeId,
+  placeName: entry.placeName,
+  memo: '',
+  photos: [],
+  recognition: null,
+  items: entry.items.map((item, index) => ({
+    clientId: `repeat-${now.getTime()}-${index}`,
+    name: item.name,
+    foodId: item.foodId,
+    dishType: item.dishType,
+    mainIngredient: item.mainIngredient,
+    cuisine: item.cuisine,
+    portion: item.portion,
+    servings: item.servings,
+    portionSource: item.portionSource,
+    isMain: item.isMain,
+    confidence: null,
+    source: item.foodId ? 'catalog' : 'manual',
+    candidates: [],
+    userEdited: true,
+  })),
+});
+
+// 추천 후보 → 먹은 기록 draft. 원본 추천 id 를 달아 두면 저장이 성공할 때만 서버가 추천과 기록을
+// 잇는다(`logged` 이벤트). 입력 화면으로의 이동은 호출하는 화면이 한다.
+export const startMealDraftFromRecommendation = (
+  rec: MealRecommendationType,
+  name: string,
+  mealType: MealTypeType | null,
+  now: Date = new Date(),
+): void => {
+  const item = rec.items.find((i) => i.name === name);
+  const draft = useMealDraftStore.getState();
+  draft.start({
+    eatenAt: now.toISOString(),
+    eatenDate: toLocalDateKey(now),
+    slot: rec.targetSlot,
+    mealType,
+    originRecommendationId: rec.id,
+  });
+  draft.addItem({
+    name,
+    foodId: item?.foodId ?? null,
+    dishType: item?.dishType ?? null,
+    mainIngredient: item?.mainIngredient ?? null,
+    cuisine: item?.cuisine ?? null,
+    portion: null,
+    isMain: true,
+    confidence: null,
+    source: 'recommendation',
+    candidates: [],
+  });
+};
 
 // draft 항목 → 서버 입력. candidates·clientId 는 계약에 없다.
 export const draftItemToInput = (item: MealDraftItem): MealItemInputType => ({

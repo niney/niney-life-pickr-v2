@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Loader2, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Loader2, NotebookPen, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import {
   MEAL_ALLERGEN_LABEL,
   type MealRecommendationType,
@@ -8,6 +8,7 @@ import {
   type MealTypeType,
 } from '@repo/api-contract';
 import {
+  startMealDraftFromRecommendation,
   useAirLocation,
   useCreateMealRecommendation,
   useFoodRestaurants,
@@ -29,12 +30,18 @@ import {
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
+import { useMealDraftReady } from './useMealDraftReady';
 
 // 다음 끼니 추천 — 끼니·상황을 고르고 받는다. 서버가 같은 날·끼니·프로필이면 캐시를 주므로
 // 다시 누르는 것 자체는 싸다("다시 추천"만 LLM 을 새로 부른다).
+//
+// "먹은 메뉴 기록"은 앱과 같이 추천을 draft 로 옮겨 입력 화면으로 보낸다. 실제 추천↔기록 연결
+// (`logged`)은 저장이 성공할 때 서버가 만든다.
 
 export const MealRecommendTab = () => {
   const now = new Date();
+  const navigate = useNavigate();
+  const draftReady = useMealDraftReady();
   const [slot, setSlot] = useState<MealSlotType>(() => guessMealSlot(new Date()));
   // undefined = 사용자가 아직 고르지 않음(설정의 첫 식사 유형을 기본값으로 사용),
   // null = 사용자가 명시적으로 "상황 무관"을 고른 상태.
@@ -157,7 +164,7 @@ export const MealRecommendTab = () => {
           ) : null}
           {ctx.data && ctx.data.entryCount === 0 ? (
             <p className="text-xs text-muted-foreground">
-              아직 기록이 없어요. 앱에서 몇 끼만 남기면 추천이 훨씬 정확해져요.
+              아직 기록이 없어요. 몇 끼만 남기면 추천이 훨씬 정확해져요.
             </p>
           ) : null}
         </CardContent>
@@ -175,6 +182,15 @@ export const MealRecommendTab = () => {
             )
           }
           allergyFilteringEnabled={(ctx.data?.preference.allergens?.length ?? 0) > 0}
+          // draft 복원 전(새로고침 직후)에 옮기면 입력 화면에서 사라지므로 그동안은 막는다.
+          onRecord={
+            draftReady
+              ? (name) => {
+                  startMealDraftFromRecommendation(shown, name, effectiveMealType);
+                  navigate('/me/meals/new');
+                }
+              : null
+          }
           onCandidateRating={(name, rank, rating) => {
             const item = shown.items[rank];
             recommendationEvent.mutate(
@@ -255,6 +271,7 @@ const RecommendationCard = ({
   lat,
   lng,
   onFeedback,
+  onRecord,
   onCandidateRating,
   onRestaurantOpened,
   allergyFilteringEnabled,
@@ -263,6 +280,7 @@ const RecommendationCard = ({
   lat: number | null;
   lng: number | null;
   onFeedback: (input: { rating?: -1 | 1 | null; pickedName?: string | null }) => void;
+  onRecord: ((name: string) => void) | null;
   onCandidateRating: (name: string, rank: number, rating: -1 | 1) => void;
   onRestaurantOpened: (name: string, rank: number) => void;
   allergyFilteringEnabled: boolean;
@@ -273,6 +291,15 @@ const RecommendationCard = ({
         {rec.targetDate} {MEAL_SLOT_LABEL[rec.targetSlot]} 추천
       </CardTitle>
       {rec.summary ? <p className="text-sm text-muted-foreground">{rec.summary}</p> : null}
+      {/* 추천 하나는 기록 하나로만 이어진다(서버가 두 번째 연결을 거부) — 이어졌으면 기록으로 보낸다. */}
+      {rec.feedback?.eatenEntryId ? (
+        <p className="text-xs text-muted-foreground">
+          이 추천은 식단 기록으로 이어졌어요 ·{' '}
+          <Link to={`/me/meals/${rec.feedback.eatenEntryId}`} className="text-primary hover:underline">
+            기록 보기
+          </Link>
+        </p>
+      ) : null}
       {rec.notice ? (
         <p className="text-xs text-amber-600 dark:text-amber-500">{rec.notice}</p>
       ) : null}
@@ -344,7 +371,7 @@ const RecommendationCard = ({
                 ))}
               </div>
             ) : null}
-            <div className="mt-2 flex items-center gap-1">
+            <div className="mt-2 flex flex-wrap items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -353,6 +380,18 @@ const RecommendationCard = ({
               >
                 이걸로 할래요
               </Button>
+              {rec.feedback?.eatenEntryId ? null : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${item.name} 먹은 메뉴로 기록`}
+                  disabled={!onRecord}
+                  onClick={() => onRecord?.(item.name)}
+                >
+                  <NotebookPen className="size-3.5" />
+                  먹은 메뉴 기록
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

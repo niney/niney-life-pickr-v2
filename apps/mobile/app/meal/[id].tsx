@@ -4,6 +4,8 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { MealEntryType } from '@repo/api-contract';
 import {
   ApiError,
+  mealDraftInitForRepeat,
+  mealDraftInitFromEntry,
   useAuthStore,
   useDeleteMealEntry,
   useMealDraftStore,
@@ -16,9 +18,7 @@ import {
   FOOD_DISH_TYPE_LABEL,
   FOOD_MAIN_INGREDIENT_LABEL,
   MEAL_PORTION_LABEL,
-  guessMealSlot,
   summarizeMealNutrition,
-  toLocalDateKey,
 } from '@repo/utils';
 import { Card, CardTitle, Note, StateBlock } from '~/components/common/Cards';
 import { MealEntryCard } from '~/components/meal/MealEntryCard';
@@ -42,72 +42,12 @@ export default function MealDetailScreen() {
   const nutrition = useMemo(() => summarizeMealNutrition(data?.items ?? []), [data?.items]);
 
   const startEdit = (entry: MealEntryType) => {
-    draft.start({
-      entryId: entry.id,
-      originRecommendationId: entry.originRecommendationId,
-      eatenAt: entry.eatenAt,
-      eatenDate: entry.eatenDate,
-      slot: entry.slot,
-      mealType: entry.mealType,
-      placeId: entry.placeId,
-      placeName: entry.placeName,
-      memo: entry.memo ?? '',
-      photos: entry.photos.map((p) => ({ token: p.token, localUri: null })),
-      items: entry.items.map((it) => ({
-        clientId: it.id,
-        name: it.name,
-        foodId: it.foodId,
-        dishType: it.dishType,
-        mainIngredient: it.mainIngredient,
-        cuisine: it.cuisine,
-        portion: it.portion,
-        servings: it.servings,
-        portionSource: it.portionSource,
-        isMain: it.isMain,
-        confidence: it.confidence,
-        recognitionDishId: it.recognitionDishId,
-        selectedCandidateRank: it.selectedCandidateRank,
-        catalogMatchedBy: it.catalogMatchedBy,
-        catalogMatchScore: it.catalogMatchScore,
-        source: it.source,
-        candidates: [],
-        // 저장된 기록은 이미 한 번 확인한 값이다. 장소 힌트로 재인식해도 자동 교체하지 않는다.
-        userEdited: true,
-      })),
-      recognition: null,
-    });
+    draft.start(mealDraftInitFromEntry(entry));
     setEditing(true);
   };
 
   const repeatEntry = (entry: MealEntryType) => {
-    const now = new Date();
-    draft.start({
-      eatenAt: now.toISOString(),
-      eatenDate: toLocalDateKey(now),
-      slot: guessMealSlot(now),
-      mealType: entry.mealType,
-      placeId: entry.placeId,
-      placeName: entry.placeName,
-      memo: '',
-      photos: [],
-      recognition: null,
-      items: entry.items.map((item, index) => ({
-        clientId: `repeat-${now.getTime()}-${index}`,
-        name: item.name,
-        foodId: item.foodId,
-        dishType: item.dishType,
-        mainIngredient: item.mainIngredient,
-        cuisine: item.cuisine,
-        portion: item.portion,
-        servings: item.servings,
-        portionSource: item.portionSource,
-        isMain: item.isMain,
-        confidence: null,
-        source: item.foodId ? 'catalog' : 'manual',
-        candidates: [],
-        userEdited: true,
-      })),
-    });
+    draft.start(mealDraftInitForRepeat(entry, new Date()));
     router.push('/meal/new' as never);
   };
 

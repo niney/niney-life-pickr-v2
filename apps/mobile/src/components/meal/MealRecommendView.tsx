@@ -19,8 +19,8 @@ import {
 import {
   ApiError,
   useAirLocation,
+  startMealDraftFromRecommendation,
   useCreateMealRecommendation,
-  useMealDraftStore,
   useMealRecommendationContext,
   useMealRecommendationEvent,
   useMealRecommendations,
@@ -49,7 +49,6 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
-  const draft = useMealDraftStore();
 
   const [slot, setSlot] = useState<MealSlotType>(() => initialSlot ?? guessMealSlot(new Date()));
   const [mealType, setMealType] = useState<MealTypeType | null | undefined>(undefined);
@@ -107,27 +106,7 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
 
   // 추천을 기록으로 — draft 를 그 음식으로 시작하고 입력 화면으로 보낸다.
   const eatThis = (rec: MealRecommendationType, name: string) => {
-    const now = new Date();
-    const item = rec.items.find((i) => i.name === name);
-    draft.start({
-      eatenAt: now.toISOString(),
-      eatenDate: toLocalDateKey(now),
-      slot: rec.targetSlot,
-      mealType: effectiveMealType,
-      originRecommendationId: rec.id,
-    });
-    draft.addItem({
-      name,
-      foodId: item?.foodId ?? null,
-      dishType: item?.dishType ?? null,
-      mainIngredient: item?.mainIngredient ?? null,
-      cuisine: item?.cuisine ?? null,
-      portion: null,
-      isMain: true,
-      confidence: null,
-      source: 'recommendation',
-      candidates: [],
-    });
+    startMealDraftFromRecommendation(rec, name, effectiveMealType);
     router.push('/meal/new' as never);
   };
 

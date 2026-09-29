@@ -1,18 +1,27 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StateStorage } from 'zustand/middleware';
-import type { RecognizedDishType } from '@repo/api-contract';
+import type {
+  MealEntryType,
+  MealRecommendationType,
+  RecognizedDishType,
+} from '@repo/api-contract';
 import {
   beginMealDraftPhotoPreparation,
   draftItemToInput,
   getMealDraftIdentity,
+  getMealDraftReadyPrincipal,
   getMealDraftSaveFlight,
   isMealDraftIdentityCurrent,
   MEAL_DRAFT_MAX_PHOTOS,
+  mealDraftInitForRepeat,
+  mealDraftInitFromEntry,
   setMealDraftLocalFileAdapter,
   setMealDraftPrincipal,
   setMealDraftStorage,
   runMealDraftPhotoFlushSingleFlight,
   runMealDraftSaveSingleFlight,
+  startMealDraftFromRecommendation,
+  subscribeMealDraftReadyPrincipal,
   useMealDraftStore,
 } from './mealDraftStore.js';
 import { buildMealEntriesQuery } from '../api/meal.api.js';
@@ -453,6 +462,176 @@ describe('mealDraftStore', () => {
     expect(values.has('lp:meal-draft-v1:principal:account-a')).toBe(false);
     expect(useMealDraftStore.getState().memo).toBe('');
     expect(switched.at(-1)).toBe('account-b');
+  });
+
+  it('복원 완료 principal 은 전환 시작에 비고 복원이 끝나야 채워진다', async () => {
+    const values = new Map<string, string>();
+    const storage: StateStorage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => {
+        values.set(key, value);
+      },
+      removeItem: (key) => {
+        values.delete(key);
+      },
+    };
+    values.set(
+      'lp:meal-draft-v1:principal:ready-b',
+      JSON.stringify({ state: { eatenDate: '2026-09-28', memo: 'B 초안' }, version: 0 }),
+    );
+    setMealDraftStorage(storage);
+    await setMealDraftPrincipal('ready-a');
+    expect(getMealDraftReadyPrincipal()).toBe('ready-a');
+
+    const notified: Array<string | null> = [];
+    const unsubscribe = subscribeMealDraftReadyPrincipal(() =>
+      notified.push(getMealDraftReadyPrincipal()),
+    );
+    const switching = setMealDraftPrincipal('ready-b');
+    // 복원 전: 화면이 이 값을 보고 기다린다(이때 쓴 draft 는 저장되지 않는다).
+    expect(getMealDraftReadyPrincipal()).toBeNull();
+    await switching;
+    unsubscribe();
+
+    expect(getMealDraftReadyPrincipal()).toBe('ready-b');
+    expect(useMealDraftStore.getState().memo).toBe('B 초안');
+    expect(notified).toEqual([null, 'ready-b']);
+  });
+
+  it('겹친 전환에서는 마지막 principal 만 복원 완료로 알린다', async () => {
+    setMealDraftStorage({ getItem: () => null, setItem: () => undefined, removeItem: () => undefined });
+    const notified: Array<string | null> = [];
+    const unsubscribe = subscribeMealDraftReadyPrincipal(() =>
+      notified.push(getMealDraftReadyPrincipal()),
+    );
+    void setMealDraftPrincipal('stale-a');
+    await setMealDraftPrincipal('latest-b');
+    unsubscribe();
+    expect(getMealDraftReadyPrincipal()).toBe('latest-b');
+    expect(notified).not.toContain('stale-a');
+  });
+});
+
+describe('meal draft 시작 도우미', () => {
+  const savedEntry = (): MealEntryType => ({
+    id: 'entry-1',
+    eatenAt: '2026-09-27T03:30:00.000Z',
+    eatenDate: '2026-09-27',
+    slot: 'lunch',
+    mealType: 'dining_out',
+    placeId: 'place-1',
+    placeName: '숯토리',
+    memo: '팀 점심',
+    source: 'photo',
+    originRecommendationId: null,
+    items: [
+      {
+        id: 'item-1',
+        name: '김치찌개',
+        foodId: 'food-1',
+        dishType: 'stew',
+        mainIngredient: 'pork',
+        cuisine: 'korean',
+        portion: 'large',
+        servings: null,
+        portionSource: 'vision_ordinal',
+        isMain: true,
+        confidence: 0.82,
+        recognitionDishId: 'dish-1',
+        selectedCandidateRank: 0,
+        catalogMatchedBy: 'food_id',
+        catalogMatchScore: 1,
+        source: 'recognized',
+        sortOrder: 0,
+        kcal: 300,
+        proteinG: 20,
+        sodiumMg: 1500,
+        nutritionFrom: null,
+        nutritionBasis: 'direct',
+      },
+    ],
+    photos: [{ token: 'photo-token-1', width: 10, height: 10, byteSize: 100, sortOrder: 0 }],
+    recognition: null,
+    photoPurgedAt: null,
+    createdAt: '2026-09-27T03:40:00.000Z',
+    updatedAt: '2026-09-27T03:40:00.000Z',
+  });
+
+  beforeEach(() => {
+    setMealDraftLocalFileAdapter(null);
+    useMealDraftStore.getState().clear();
+  });
+
+  it('수정 draft 는 기록 id·사진·인식 계보를 그대로 싣고 사용자 확인값으로 표시한다', () => {
+    useMealDraftStore.getState().start(mealDraftInitFromEntry(savedEntry()));
+    const s = useMealDraftStore.getState();
+    expect(s.entryId).toBe('entry-1');
+    expect(s.memo).toBe('팀 점심');
+    expect(s.photos).toEqual([{ token: 'photo-token-1', localUri: null }]);
+    expect(s.items[0]).toMatchObject({
+      clientId: 'item-1',
+      recognitionDishId: 'dish-1',
+      selectedCandidateRank: 0,
+      source: 'recognized',
+      userEdited: true,
+    });
+    // 저장 입력으로 되돌려도 계보가 빠지지 않는다.
+    expect(draftItemToInput(s.items[0]!)).toMatchObject({
+      recognitionDishId: 'dish-1',
+      catalogMatchedBy: 'food_id',
+      confidence: 0.82,
+    });
+  });
+
+  it('다시 기록 draft 는 지금 시각의 새 기록이고 사진·메모·인식 신뢰도를 빼고 출처를 카탈로그로 바꾼다', () => {
+    const now = new Date(2026, 8, 29, 19, 5);
+    useMealDraftStore.getState().start(mealDraftInitForRepeat(savedEntry(), now));
+    const s = useMealDraftStore.getState();
+    expect(s.entryId).toBeNull();
+    expect(s.eatenAt).toBe(now.toISOString());
+    expect(s.eatenDate).toBe('2026-09-29');
+    expect(s.slot).toBe('dinner');
+    expect(s.placeName).toBe('숯토리');
+    expect(s.memo).toBe('');
+    expect(s.photos).toEqual([]);
+    expect(s.items[0]).toMatchObject({
+      name: '김치찌개',
+      portion: 'large',
+      confidence: null,
+      source: 'catalog',
+    });
+    expect(s.items[0]!.recognitionDishId).toBeUndefined();
+  });
+
+  it('추천에서 시작한 draft 는 원본 추천 id 와 추천 끼니·후보 분류를 갖는다', () => {
+    const now = new Date(2026, 8, 29, 11, 0);
+    const rec = {
+      id: 'rec-9',
+      targetDate: '2026-09-29',
+      targetSlot: 'dinner',
+      items: [
+        {
+          name: '연어초밥',
+          foodId: 'food-9',
+          dishType: 'raw_fish',
+          mainIngredient: 'fish',
+          cuisine: 'japanese',
+        },
+      ],
+    } as unknown as MealRecommendationType;
+    startMealDraftFromRecommendation(rec, '연어초밥', 'delivery', now);
+    const s = useMealDraftStore.getState();
+    expect(s.originRecommendationId).toBe('rec-9');
+    expect(s.slot).toBe('dinner');
+    expect(s.mealType).toBe('delivery');
+    expect(s.eatenDate).toBe('2026-09-29');
+    expect(s.items).toHaveLength(1);
+    expect(s.items[0]).toMatchObject({
+      name: '연어초밥',
+      foodId: 'food-9',
+      dishType: 'raw_fish',
+      source: 'recommendation',
+    });
   });
 });
 

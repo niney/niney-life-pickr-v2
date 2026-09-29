@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CalendarDays, ChartNoAxesColumn, Loader2, Settings2, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { CalendarDays, ChartNoAxesColumn, Loader2, Plus, Settings2, Sparkles, UtensilsCrossed } from 'lucide-react';
 import type {
   MealEntrySourceType,
   MealEntryType,
@@ -31,8 +31,9 @@ import { MealPhotoImg } from './MealPhotoImg';
 import { MealPreferenceTab } from './MealPreferenceTab';
 import { MealRecommendTab } from './MealRecommendTab';
 
-// 내 식단 — 기록/달력/통계. 입력(사진)은 앱에서만 하므로 이 페이지는 조회 전용이고,
-// 상단에 그 사실을 안내한다. 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
+// 내 식단 — 기록/달력/통계/추천/설정. 사진 기록(촬영·인식)은 앱에서만 하고, 웹은 손으로 적는
+// 기록(/me/meals/new)과 상세·수정·삭제까지 한다. 탭은 주소(?tab=)에 둬 상세에서 뒤로 오면 보던
+// 탭으로 돌아온다. 차트 라이브러리를 쓰지 않는 리포 관례대로 막대는 div 폭으로 그린다.
 
 type Tab = 'list' | 'calendar' | 'stats' | 'recommend' | 'preference';
 
@@ -49,17 +50,31 @@ const timeText = (iso: string): string => {
   return `${`${d.getHours()}`.padStart(2, '0')}:${`${d.getMinutes()}`.padStart(2, '0')}`;
 };
 
+const isTab = (value: string | null): value is Tab => TABS.some((t) => t.value === value);
+
 export const MealPage = () => {
-  const [tab, setTab] = useState<Tab>('list');
+  const [params, setParams] = useSearchParams();
+  const tabParam = params.get('tab');
+  const tab: Tab = isTab(tabParam) ? tabParam : 'list';
+  // 탭 이동은 뒤로 가기 기록을 쌓지 않는다.
+  const setTab = (next: Tab) => setParams(next === 'list' ? {} : { tab: next }, { replace: true });
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">내 식단</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            기록은 앱에서 사진으로 남기고, 여기서는 모아 보고 분석해요.
-          </p>
+        <div className="flex w-full items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">내 식단</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              여기서는 직접 적어 남기고, 사진 기록은 앱에서 해요.
+            </p>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link to="/me/meals/new">
+              <Plus className="size-4" />
+              기록하기
+            </Link>
+          </Button>
         </div>
         <div className="flex gap-1 rounded-lg bg-muted p-1">
           {TABS.map((t) => (
@@ -173,8 +188,17 @@ const MealList = () => {
       </Card>
       {items.length === 0 ? (
         <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            {filtered ? '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.' : '아직 기록이 없어요. 앱에서 사진으로 첫 끼니를 남겨 보세요.'}
+          <CardContent className="space-y-3 py-10 text-center text-sm text-muted-foreground">
+            {filtered ? (
+              '조건에 맞는 기록이 없어요. 필터를 바꿔 보세요.'
+            ) : (
+              <>
+                <p>아직 기록이 없어요. 첫 끼니를 남겨 보세요.</p>
+                <Button variant="outline" asChild>
+                  <Link to="/me/meals/new">첫 끼니 기록하기</Link>
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -221,14 +245,15 @@ const FilterChip = ({ label, selected, onClick }: { label: string; selected: boo
   </button>
 );
 
+// 한 끼 카드 — 누르면 상세(수정·삭제). 카드 전체가 링크라 식당 링크는 상세에서 연다(링크 중첩 금지).
 const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
   const mains = entry.items.filter((i) => i.isMain);
   const sides = entry.items.filter((i) => !i.isMain);
   // 카탈로그에 영양이 없는 음식이 흔해서(외식 브랜드 메뉴 등) 값이 하나도 없으면 줄을 그리지 않는다.
   const kcalText = mealNutritionLabel(summarizeMealNutrition(entry.items));
   return (
-    <Card>
-      <CardContent className="flex gap-3 py-4">
+    <Card className="transition-colors hover:bg-accent/40">
+      <Link to={`/me/meals/${entry.id}`} className="flex gap-3 px-4 py-4 sm:px-6">
         {entry.photos.length > 0 ? (
           <MealPhotoImg token={entry.photos[0]!.token} className="size-20 shrink-0" />
         ) : null}
@@ -239,18 +264,7 @@ const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
             </span>
             <span>{timeText(entry.eatenAt)}</span>
             {entry.mealType ? <span>{MEAL_TYPE_LABEL[entry.mealType]}</span> : null}
-            {entry.placeName ? (
-              entry.placeId ? (
-                <Link
-                  to={`/restaurants-v2/${entry.placeId}`}
-                  className="truncate text-primary hover:underline"
-                >
-                  · {entry.placeName}
-                </Link>
-              ) : (
-                <span className="truncate">· {entry.placeName}</span>
-              )
-            ) : null}
+            {entry.placeName ? <span className="truncate">· {entry.placeName}</span> : null}
           </div>
           <p className="truncate text-sm font-medium">{mains.map((i) => i.name).join(', ') || '(음식 없음)'}</p>
           {sides.length > 0 ? (
@@ -259,7 +273,7 @@ const MealEntryRow = ({ entry }: { entry: MealEntryType }) => {
           {kcalText ? <p className="text-xs text-muted-foreground">{kcalText}</p> : null}
           {entry.memo ? <p className="truncate text-xs italic text-muted-foreground">{entry.memo}</p> : null}
         </div>
-      </CardContent>
+      </Link>
     </Card>
   );
 };

@@ -3,11 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
-import { useAuthStore } from '@repo/shared';
+import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/shared';
 import { server } from '~/test/msw';
 import { MealPage } from './MealPage';
 
-// 내 식단(웹) — 조회 전용 화면. 탭 전환 시 어떤 요청이 나가는지까지 계약으로 고정한다
+// 내 식단(웹) — 목록·달력·통계·추천·설정 탭. 입력은 별도 화면(MealEntryFormPage)이고 여기서는
+// 그리로 가는 링크와 추천→draft 연결만 본다. 탭 전환 시 어떤 요청이 나가는지까지 계약으로 고정한다
 // (onUnhandledRequest: 'error' 라 핸들러를 안 깔면 즉시 실패한다).
 
 const ENTRIES_URL = '/api/v1/meals';
@@ -139,10 +140,23 @@ describe('MealPage', () => {
     expect(screen.getByText(/2026-08-20/)).toBeInTheDocument();
   });
 
-  it('기록이 없으면 앱에서 남기라고 안내한다', async () => {
+  it('기록이 없으면 웹에서 바로 첫 끼니를 적는 링크를 준다', async () => {
     server.use(http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })));
     renderPage();
-    expect(await screen.findByText(/앱에서 사진으로 첫 끼니/)).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '첫 끼니 기록하기' })).toHaveAttribute(
+      'href',
+      '/me/meals/new',
+    );
+    expect(screen.getByRole('link', { name: /^기록하기$/ })).toHaveAttribute('href', '/me/meals/new');
+  });
+
+  it('기록 카드는 상세로 가는 링크다', async () => {
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [entry()], nextCursor: null })),
+    );
+    renderPage();
+    const food = await screen.findByText('김치찌개');
+    expect(food.closest('a')).toHaveAttribute('href', '/me/meals/e1');
   });
 
   it('더 보기 — opaque nextCursor 를 그대로 넘기고 앞 페이지를 유지한다', async () => {
@@ -408,6 +422,47 @@ describe('MealPage — 추천·설정 탭', () => {
 
     await waitFor(() => expect(pickedNames).toEqual(['연어초밥']));
     await waitFor(() => expect(choice).toHaveClass('text-primary'));
+  });
+
+  it('먹은 메뉴 기록 — 추천을 원본 id 가 달린 draft 로 옮긴다', async () => {
+    await setMealDraftPrincipal('u1');
+    useMealDraftStore.getState().clear();
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: recommendation }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [recommendation] })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' }));
+
+    const s = useMealDraftStore.getState();
+    expect(s.originRecommendationId).toBe('r1');
+    expect(s.slot).toBe('dinner');
+    expect(s.items).toEqual([
+      expect.objectContaining({ name: '연어초밥', foodId: 'f2', source: 'recommendation' }),
+    ]);
+  });
+
+  it('이미 기록으로 이어진 추천은 기록 버튼 대신 그 기록으로 보낸다', async () => {
+    await setMealDraftPrincipal('u1');
+    const linked = {
+      ...recommendation,
+      feedback: { pickedName: '연어초밥', rating: null, eatenEntryId: 'e9' },
+    };
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: linked }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [linked] })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+    expect(await screen.findByRole('link', { name: '기록 보기' })).toHaveAttribute('href', '/me/meals/e9');
+    expect(screen.queryByRole('button', { name: /먹은 메뉴로 기록/ })).not.toBeInTheDocument();
   });
 
   it('설정 탭 — 슬라이더·절대 제외·덜 선호 음식을 나눠 PUT 한다', async () => {

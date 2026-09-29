@@ -84,6 +84,15 @@ const ContactsPage = lazy(() =>
   import('./routes/settlement/ContactsPage').then((m) => ({ default: m.ContactsPage })),
 );
 const MealPage = lazy(() => import('./routes/meal/MealPage').then((m) => ({ default: m.MealPage })));
+const MealNewPage = lazy(() =>
+  import('./routes/meal/MealEntryFormPage').then((m) => ({ default: m.MealNewPage })),
+);
+const MealEditPage = lazy(() =>
+  import('./routes/meal/MealEntryFormPage').then((m) => ({ default: m.MealEditPage })),
+);
+const MealDetailPage = lazy(() =>
+  import('./routes/meal/MealDetailPage').then((m) => ({ default: m.MealDetailPage })),
+);
 const SettlementNewPage = lazy(() =>
   import('./routes/settlement/SettlementNewPage').then((m) => ({ default: m.SettlementNewPage })),
 );
@@ -235,12 +244,36 @@ export const App = () => {
                 </RequireUser>
               }
             />
-            {/* 내 식단 — 기록은 앱에서 사진으로 남기고 웹은 조회·통계·추천. 로그인 필수. */}
+            {/* 내 식단 — 웹은 직접 입력·상세·수정·삭제와 조회·통계·추천, 사진 기록은 앱에서만. 로그인 필수. */}
             <Route
               path="/me/meals"
               element={
                 <RequireUser>
                   <MealPage />
+                </RequireUser>
+              }
+            />
+            <Route
+              path="/me/meals/new"
+              element={
+                <RequireUser>
+                  <MealNewPage />
+                </RequireUser>
+              }
+            />
+            <Route
+              path="/me/meals/:id"
+              element={
+                <RequireUser>
+                  <MealDetailPage />
+                </RequireUser>
+              }
+            />
+            <Route
+              path="/me/meals/:id/edit"
+              element={
+                <RequireUser>
+                  <MealEditPage />
                 </RequireUser>
               }
             />
