@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  PARTICIPATION_AXES,
+  participationAxis,
   useSettlementDraftStore,
   useTheme,
   type DraftAttendance,
@@ -53,7 +55,7 @@ export const RoundExceptionsEditor = ({ round, participants }: Props) => {
               ]}
             >
               <Text style={[styles.chipText, { color: theme.colors.text }]}>
-                {e.participantName}: {categoryLabel(e.key)} {valueLabel(e.key, e.value)}
+                {e.participantName}: {exceptionLabel(e.key, e.value)}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -204,8 +206,8 @@ const AddExceptionForm = ({
         카테고리
       </Text>
       <View style={styles.optionRow}>
-        {(['excludeAlcohol', 'excludeNonAlcohol', 'excludeSide'] as const).map(
-          (k) => {
+        {PARTICIPATION_AXES.map(
+          ({ key: k, label }) => {
             const sel = key === k;
             return (
               <Pressable
@@ -229,7 +231,7 @@ const AddExceptionForm = ({
                     color: sel ? theme.colors.primaryText : theme.colors.text,
                   }}
                 >
-                  {categoryLabel(k)}
+                  {label}
                 </Text>
               </Pressable>
             );
@@ -265,7 +267,7 @@ const AddExceptionForm = ({
                   color: sel ? theme.colors.primaryText : theme.colors.text,
                 }}
               >
-                {verb(key, v)}
+                {v ? participationAxis(key).skipVerb : participationAxis(key).doVerb}
               </Text>
             </Pressable>
           );
@@ -387,18 +389,11 @@ const participantLabel = (
   return nm || nick || `참여자 ${idx + 1}`;
 };
 
-const categoryLabel = (key: ExcludeKey): string => {
-  if (key === 'excludeAlcohol') return '주류';
-  if (key === 'excludeNonAlcohol') return '비주류';
-  return '안주';
+// 칩 문장 — 예외 서술이라 부정형이 자연스럽다 (예: '술 안 마심', '안주 먹음').
+const exceptionLabel = (key: ExcludeKey, exclude: boolean): string => {
+  const axis = participationAxis(key);
+  return `${axis.label} ${exclude ? axis.skipVerb : axis.doVerb}`;
 };
-
-const verb = (key: ExcludeKey, exclude: boolean): string => {
-  if (key === 'excludeSide') return exclude ? '안 먹음' : '먹음';
-  return exclude ? '안 함' : '마심';
-};
-
-const valueLabel = (key: ExcludeKey, exclude: boolean): string => verb(key, exclude);
 
 const createStyles = (_theme: Theme) =>
   StyleSheet.create({

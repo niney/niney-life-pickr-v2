@@ -9,6 +9,8 @@ import {
 import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   ApiError,
+  axesInPlay,
+  joinedAxes,
   useSharedSettlement,
   useTheme,
   type Theme,
@@ -21,8 +23,8 @@ import { RoundGroupSplitNote } from '../../src/components/settlement/RoundGroupS
 import { SettlementBreakdownTable } from '../../src/components/settlement/SettlementBreakdownTable';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '주류',
-  NON_ALCOHOL: '비주류',
+  ALCOHOL: '술',
+  NON_ALCOHOL: '음료',
   SIDE: '안주',
   UNCATEGORIZED: '미분류',
 };
@@ -166,16 +168,15 @@ const ParticipantsCard = ({
   theme: Theme;
 }) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
+  // 참여 배지 — 누군가 빠진 축에서만, 분담하는 사람에게 긍정 라벨(술·음료·안주).
+  const tagAxes = axesInPlay(session.participants);
   return (
     <View style={styles.card}>
       <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
         참여자별 분담
       </Text>
       {session.participants.map((p, idx) => {
-        const tags: string[] = [];
-        if (p.excludeAlcohol) tags.push('주류 X');
-        if (p.excludeNonAlcohol) tags.push('비주류 X');
-        if (p.excludeSide) tags.push('안주 X');
+        const tags = joinedAxes(tagAxes, p).map((a) => a.label);
         const perRoundText =
           session.rounds.length > 1
             ? session.rounds

@@ -14,8 +14,10 @@ import {
 } from '@repo/api-contract';
 import {
   ApiError,
+  axesInPlay,
   draftGroupsToCalcInputs,
   isEligibleGroupMember,
+  joinedAxes,
   useCreateSettlement,
   useSettlementDraftStore,
   useTheme,
@@ -52,7 +54,7 @@ const toGroupSplitsPayload = (r: DraftRound, participants: DraftParticipant[]) =
   const idxByClientId = new Map(r.items.map((it, i) => [it.clientId, i]));
   const out = r.groupSplits
     .map((g) => ({
-      label: g.label.trim() || (g.category === 'NON_ALCOHOL' ? '음료' : '주류'),
+      label: g.label.trim() || (g.category === 'NON_ALCOHOL' ? '음료' : '술'),
       category: g.category,
       itemIndexes: g.itemClientIds
         .map((id) => idxByClientId.get(id) ?? -1)
@@ -84,6 +86,8 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
   const create = useCreateSettlement();
   const update = useUpdateSettlement();
   const [error, setError] = useState<string | null>(null);
+  // 참여 배지 — 누군가 빠진 축에서만, 분담하는 사람에게 긍정 라벨(술·음료·안주).
+  const tagAxes = axesInPlay(draft.participants);
 
   // 차수별 effective 계산. 분담 미리보기.
   const calc = useMemo(
@@ -312,10 +316,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
           </Text>
           <View style={{ gap: 0 }}>
             {draft.participants.map((p, idx) => {
-              const tags: string[] = [];
-              if (p.excludeAlcohol) tags.push('주류 X');
-              if (p.excludeNonAlcohol) tags.push('비주류 X');
-              if (p.excludeSide) tags.push('안주 X');
+              const tags = joinedAxes(tagAxes, p).map((a) => a.label);
               const total = calc.perParticipant[idx] ?? 0;
               return (
                 <View

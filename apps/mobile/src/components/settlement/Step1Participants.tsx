@@ -15,6 +15,7 @@ import {
 } from '@repo/shared';
 import { useSettlementPrefsStore } from '../../lib/settlementPrefsStore';
 import { ContactSuggestions } from './ContactSuggestions';
+import { ParticipationToggles } from './ParticipationChips';
 import {
   ContactPickerSheet,
   normalizeContactKey,
@@ -169,12 +170,13 @@ export const Step1Participants = ({ onNext }: Props) => {
           <Text style={styles.h2}>참여자</Text>
           <Text style={styles.body}>
             누구끼리 나눌까요? 한 사람당 한 줄로 추가하세요. 같은 이름이 두 명이면
-            "+ 별칭" 으로 구분할 수 있고, 술/안주 등 특이사항은 칩으로 표시하면 해당
-            카테고리는 그 사람을 제외하고 나눠 부담합니다.
+            "+ 별칭" 으로 구분할 수 있어요. 술·음료·안주는 기본으로 모두 함께
+            나누고, 안 먹은 사람만 눌러서 빼면 그 항목은 나머지 사람끼리 나눠
+            부담합니다.
           </Text>
         </View>
 
-        {/* 새 행 기본 exclude — 자주 쓰는 옵션을 한 번 체크하면 다음 정산까지
+        {/* 새 행 기본 참여 — 자주 빠지는 항목을 한 번 꺼 두면 다음 정산까지
             유지. 단골에서 추가한 행은 단골값이 우선이라 영향 없음. */}
         <View
           style={[
@@ -189,31 +191,10 @@ export const Step1Participants = ({ onNext }: Props) => {
             새 행 기본
           </Text>
           <View style={styles.prefsChips}>
-            <PrefChip
-              label="주류 안 함"
-              checked={newExcludes.excludeAlcohol}
-              onPress={() =>
-                setNewExclude('excludeAlcohol', !newExcludes.excludeAlcohol)
-              }
-              theme={theme}
-            />
-            <PrefChip
-              label="비주류 안 함"
-              checked={newExcludes.excludeNonAlcohol}
-              onPress={() =>
-                setNewExclude(
-                  'excludeNonAlcohol',
-                  !newExcludes.excludeNonAlcohol,
-                )
-              }
-              theme={theme}
-            />
-            <PrefChip
-              label="안주 안 먹음"
-              checked={newExcludes.excludeSide}
-              onPress={() =>
-                setNewExclude('excludeSide', !newExcludes.excludeSide)
-              }
+            <ParticipationToggles
+              size="sm"
+              value={newExcludes}
+              onChange={setNewExclude}
               theme={theme}
             />
           </View>
@@ -362,27 +343,10 @@ export const Step1Participants = ({ onNext }: Props) => {
               )}
 
               <View style={styles.chipRow}>
-                <ExcludeChip
-                  label="주류 안 함"
-                  checked={p.excludeAlcohol}
-                  onChange={(v) =>
-                    updateParticipant(p.clientId, { excludeAlcohol: v })
-                  }
-                  theme={theme}
-                />
-                <ExcludeChip
-                  label="비주류 안 함"
-                  checked={p.excludeNonAlcohol}
-                  onChange={(v) =>
-                    updateParticipant(p.clientId, { excludeNonAlcohol: v })
-                  }
-                  theme={theme}
-                />
-                <ExcludeChip
-                  label="안주 안 먹음"
-                  checked={p.excludeSide}
-                  onChange={(v) =>
-                    updateParticipant(p.clientId, { excludeSide: v })
+                <ParticipationToggles
+                  value={p}
+                  onChange={(key, exclude) =>
+                    updateParticipant(p.clientId, { [key]: exclude })
                   }
                   theme={theme}
                 />
@@ -489,93 +453,6 @@ export const Step1Participants = ({ onNext }: Props) => {
     </View>
   );
 };
-
-// "새 행 기본" 패널의 미니 칩 — 본 행의 ExcludeChip 보다 작고 회색조.
-const PrefChip = ({
-  label,
-  checked,
-  onPress,
-  theme,
-}: {
-  label: string;
-  checked: boolean;
-  onPress: () => void;
-  theme: Theme;
-}) => (
-  <Pressable
-    accessibilityRole="checkbox"
-    accessibilityState={{ checked }}
-    onPress={onPress}
-    style={({ pressed }) => [
-      {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 999,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: checked ? theme.colors.primary : theme.colors.border,
-        backgroundColor: checked
-          ? theme.colors.primary
-          : pressed
-            ? theme.colors.surface
-            : 'transparent',
-      },
-    ]}
-  >
-    <Text
-      style={{
-        fontSize: 11,
-        fontWeight: '500',
-        color: checked ? theme.colors.primaryText : theme.colors.text,
-      }}
-    >
-      {label}
-    </Text>
-  </Pressable>
-);
-
-// 토글 칩 — 체크되면 채워진 배경, 아니면 외곽선만. RN 에 기본 체크박스가
-// 없어서 chip 형태가 모바일 관용. 한 줄 안에서 wrap 되도록 row + flexWrap.
-const ExcludeChip = ({
-  label,
-  checked,
-  onChange,
-  theme,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  theme: Theme;
-}) => (
-  <Pressable
-    accessibilityRole="checkbox"
-    accessibilityState={{ checked }}
-    onPress={() => onChange(!checked)}
-    style={({ pressed }) => [
-      {
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 999,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: checked ? theme.colors.primary : theme.colors.border,
-        backgroundColor: checked
-          ? theme.colors.primary
-          : pressed
-            ? theme.colors.surfaceAlt
-            : 'transparent',
-      },
-    ]}
-  >
-    <Text
-      style={{
-        fontSize: 12,
-        fontWeight: '500',
-        color: checked ? theme.colors.primaryText : theme.colors.text,
-      }}
-    >
-      {label}
-    </Text>
-  </Pressable>
-);
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({

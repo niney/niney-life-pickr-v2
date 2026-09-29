@@ -185,8 +185,8 @@ export const ContactPickerDialog = ({
                           {displayName(c)}
                         </div>
                         <div className="mt-0.5 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
-                          {c.lastExcludeAlcohol && <Tag>주류 X</Tag>}
-                          {c.lastExcludeNonAlcohol && <Tag>비주류 X</Tag>}
+                          {c.lastExcludeAlcohol && <Tag>술 X</Tag>}
+                          {c.lastExcludeNonAlcohol && <Tag>음료 X</Tag>}
                           {c.lastExcludeSide && <Tag>안주 X</Tag>}
                           <Tag>{c.useCount}회</Tag>
                         </div>

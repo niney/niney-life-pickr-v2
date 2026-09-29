@@ -202,10 +202,10 @@ export const ContactPickerSheet = ({
                   </Text>
                   <View style={styles.tagRow}>
                     {c.lastExcludeAlcohol && (
-                      <Tag theme={theme}>주류 X</Tag>
+                      <Tag theme={theme}>술 X</Tag>
                     )}
                     {c.lastExcludeNonAlcohol && (
-                      <Tag theme={theme}>비주류 X</Tag>
+                      <Tag theme={theme}>음료 X</Tag>
                     )}
                     {c.lastExcludeSide && <Tag theme={theme}>안주 X</Tag>}
                     <Tag theme={theme}>{c.useCount}회</Tag>

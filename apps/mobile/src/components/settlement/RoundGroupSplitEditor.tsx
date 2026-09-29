@@ -32,7 +32,7 @@ interface Props {
 }
 
 const CATEGORY_LABEL: Record<GroupableCategoryType, string> = {
-  ALCOHOL: '주류',
+  ALCOHOL: '술',
   NON_ALCOHOL: '음료',
 };
 

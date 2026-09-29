@@ -70,8 +70,8 @@ export const ContactSuggestions = ({ query, open, onPick }: Props) => {
                 {displayName(c)}
               </Text>
               <View style={styles.tagRow}>
-                {c.lastExcludeAlcohol && <ContactTag theme={theme}>주류 X</ContactTag>}
-                {c.lastExcludeNonAlcohol && <ContactTag theme={theme}>비주류 X</ContactTag>}
+                {c.lastExcludeAlcohol && <ContactTag theme={theme}>술 X</ContactTag>}
+                {c.lastExcludeNonAlcohol && <ContactTag theme={theme}>음료 X</ContactTag>}
                 {c.lastExcludeSide && <ContactTag theme={theme}>안주 X</ContactTag>}
                 {!c.lastExcludeAlcohol &&
                   !c.lastExcludeNonAlcohol &&

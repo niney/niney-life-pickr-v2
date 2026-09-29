@@ -7,6 +7,7 @@ import { Input } from '~/components/ui/input';
 import { useSettlementPrefsStore } from '~/stores/settlementPrefsStore';
 import { ContactPickerDialog } from './ContactPickerDialog';
 import { ContactSuggestions } from './ContactSuggestions';
+import { ParticipationToggles } from './ParticipationChips';
 
 interface Props {
   onNext: () => void;
@@ -184,31 +185,17 @@ export const Step1Participants = ({ onNext }: Props) => {
         <h2 className="text-lg font-semibold">참여자</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           누구끼리 나눌까요? 한 사람당 한 줄로 추가하세요. 같은 이름이 두 명이면 "+ 별칭" 으로
-          구분할 수 있고, 술/안주 등 특이사항은 체크박스로 표시하면 해당 카테고리는 그 사람을
-          제외하고 나눠 부담합니다.
+          구분할 수 있어요. 술·음료·안주는 기본으로 모두 함께 나누고, 안 먹은 사람만 눌러서
+          빼면 그 항목은 나머지 사람끼리 나눠 부담합니다.
         </p>
       </div>
 
-      {/* 새로 추가하는 행의 기본 exclude — 단골에서 픽한 행은 단골값이 우선
-          이라 영향 없음. 자주 쓰는 옵션을 한 번 체크해 두면 매번 반복 안 해도
+      {/* 새로 추가하는 행의 기본 참여 — 단골에서 픽한 행은 단골값이 우선
+          이라 영향 없음. 자주 빠지는 항목을 한 번 꺼 두면 매번 반복 안 해도
           된다. localStorage 라 다음 정산까지 유지. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         <span className="font-medium">새 행 기본:</span>
-        <DefaultExcludeToggle
-          label="주류 안 함"
-          checked={newExcludes.excludeAlcohol}
-          onChange={(v) => setNewExclude('excludeAlcohol', v)}
-        />
-        <DefaultExcludeToggle
-          label="비주류 안 함"
-          checked={newExcludes.excludeNonAlcohol}
-          onChange={(v) => setNewExclude('excludeNonAlcohol', v)}
-        />
-        <DefaultExcludeToggle
-          label="안주 안 먹음"
-          checked={newExcludes.excludeSide}
-          onChange={(v) => setNewExclude('excludeSide', v)}
-        />
+        <ParticipationToggles size="sm" value={newExcludes} onChange={setNewExclude} />
       </div>
 
       <div className="space-y-3">
@@ -344,21 +331,10 @@ export const Step1Participants = ({ onNext }: Props) => {
                 )}
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                <ExcludeToggle
-                  label="주류 안 함"
-                  checked={p.excludeAlcohol}
-                  onChange={(v) => updateParticipant(p.clientId, { excludeAlcohol: v })}
-                />
-                <ExcludeToggle
-                  label="비주류 안 함"
-                  checked={p.excludeNonAlcohol}
-                  onChange={(v) => updateParticipant(p.clientId, { excludeNonAlcohol: v })}
-                />
-                <ExcludeToggle
-                  label="안주 안 먹음"
-                  checked={p.excludeSide}
-                  onChange={(v) => updateParticipant(p.clientId, { excludeSide: v })}
+              <div className="mt-3">
+                <ParticipationToggles
+                  value={p}
+                  onChange={(key, exclude) => updateParticipant(p.clientId, { [key]: exclude })}
                 />
               </div>
 
@@ -435,46 +411,5 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
     <span>{label}</span>
     {children}
-  </label>
-);
-
-const ExcludeToggle = ({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange(v: boolean): void;
-}) => (
-  <label className="flex items-center gap-1.5">
-    <input
-      type="checkbox"
-      className="size-4"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-    />
-    <span>{label}</span>
-  </label>
-);
-
-// 새 행 기본값 row 의 칩 — 메인 ExcludeToggle 보다 작고 회색조.
-const DefaultExcludeToggle = ({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange(v: boolean): void;
-}) => (
-  <label className="flex cursor-pointer items-center gap-1">
-    <input
-      type="checkbox"
-      className="size-3.5"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-    />
-    <span className={checked ? 'text-foreground' : ''}>{label}</span>
   </label>
 );

@@ -35,7 +35,7 @@ interface Props {
 }
 
 const CATEGORY_LABEL: Record<GroupableCategoryType, string> = {
-  ALCOHOL: '주류',
+  ALCOHOL: '술',
   NON_ALCOHOL: '음료',
 };
 
@@ -413,7 +413,7 @@ const MemberMatrix = ({ round, participants }: Props) => {
                       <td
                         key={g.clientId}
                         className="px-2 py-1 text-center text-muted-foreground/40"
-                        title={`${labelFallback(g.category)} 안 함 — '차수 특이사항'에서 바꿀 수 있어요`}
+                        title={`${labelFallback(g.category)} 안 마심 — '차수 특이사항'에서 바꿀 수 있어요`}
                       >
                         —
                       </td>

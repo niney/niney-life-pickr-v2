@@ -22,8 +22,8 @@ interface Props {
 }
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '주류',
-  NON_ALCOHOL: '비주류',
+  ALCOHOL: '술',
+  NON_ALCOHOL: '음료',
   SIDE: '안주',
   UNCATEGORIZED: '미분류',
 };

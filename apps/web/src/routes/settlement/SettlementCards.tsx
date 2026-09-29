@@ -1,4 +1,4 @@
-import { Beer, Coins, CupSoda, Pencil, UtensilsCrossed, type LucideIcon } from 'lucide-react';
+import { Coins, Pencil } from 'lucide-react';
 import {
   effectiveExcludes,
   type ReceiptItemCategoryType,
@@ -6,10 +6,11 @@ import {
 } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { ParticipationBadges } from './ParticipationChips';
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '주류',
-  NON_ALCOHOL: '비주류',
+  ALCOHOL: '술',
+  NON_ALCOHOL: '음료',
   SIDE: '안주',
   UNCATEGORIZED: '미분류',
 };
@@ -96,16 +97,6 @@ export const ParticipantsCard = ({
     }
   }
 
-  // 참여 축이 "쟁점"인 경우(한 명이라도 제외된 축)에만 배지를 띄운다. 전원 포함이면
-  // 구분할 게 없으니 생략. 표시는 제외(X)가 아니라 '참여(양수)' 기준 — 술을 마시는
-  // 사람에 🍺 처럼, 결과만 봐도 누가 무엇을 분담했는지 바로 읽힌다. (예: 한 명만
-  // 술을 안 마시면, 마시는 사람들에 🍺 가 붙고 안 마시는 사람은 빈칸으로 구분된다.)
-  const axisInPlay = {
-    alcohol: session.participants.some((p) => p.excludeAlcohol),
-    nonAlcohol: session.participants.some((p) => p.excludeNonAlcohol),
-    side: session.participants.some((p) => p.excludeSide),
-  };
-
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -128,12 +119,6 @@ export const ParticipantsCard = ({
       <CardContent>
         <ul className="divide-y">
           {session.participants.map((p, idx) => {
-            const tags: Array<{ icon: LucideIcon; label: string }> = [];
-            if (axisInPlay.alcohol && !p.excludeAlcohol) tags.push({ icon: Beer, label: '술' });
-            if (axisInPlay.nonAlcohol && !p.excludeNonAlcohol)
-              tags.push({ icon: CupSoda, label: '음료' });
-            if (axisInPlay.side && !p.excludeSide)
-              tags.push({ icon: UtensilsCrossed, label: '안주' });
             const perRound = sharesByParticipant.get(p.id) ?? [];
             return (
               <li
@@ -144,19 +129,7 @@ export const ParticipantsCard = ({
                   <div className="truncate text-sm font-medium">
                     {participantName(p, idx)}
                   </div>
-                  {tags.length > 0 && (
-                    <div className="mt-0.5 flex flex-wrap gap-1 text-xs text-muted-foreground">
-                      {tags.map((t) => (
-                        <span
-                          key={t.label}
-                          className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"
-                        >
-                          <t.icon className="size-3" />
-                          {t.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <ParticipationBadges participants={session.participants} participant={p} />
                   {multiRound && perRound.length > 0 && (
                     <div className="mt-1 text-xs text-muted-foreground">
                       {perRound

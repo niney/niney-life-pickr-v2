@@ -22,6 +22,7 @@ import { RoundExceptionsEditor } from './RoundExceptionsEditor';
 import { RoundDiscountEditor } from './RoundDiscountEditor';
 import { RoundCategoryAdjuster } from './RoundCategoryAdjuster';
 import { RoundGroupSplitEditor } from './RoundGroupSplitEditor';
+import { ParticipationBadges } from './ParticipationChips';
 import { CopyCheck } from 'lucide-react';
 
 interface Props {
@@ -34,8 +35,8 @@ interface Props {
 }
 
 const CATEGORY_LABEL: Record<ReceiptItemCategoryType, string> = {
-  ALCOHOL: '주류',
-  NON_ALCOHOL: '비주류',
+  ALCOHOL: '술',
+  NON_ALCOHOL: '음료',
   SIDE: '안주',
   UNCATEGORIZED: '미분류',
 };
@@ -58,7 +59,7 @@ const toGroupSplitsPayload = (r: DraftRound, participants: DraftParticipant[]) =
   const idxByClientId = new Map(r.items.map((it, i) => [it.clientId, i]));
   const out = r.groupSplits
     .map((g) => ({
-      label: g.label.trim() || (g.category === 'NON_ALCOHOL' ? '음료' : '주류'),
+      label: g.label.trim() || (g.category === 'NON_ALCOHOL' ? '음료' : '술'),
       category: g.category,
       itemIndexes: g.itemClientIds
         .map((id) => idxByClientId.get(id) ?? -1)
@@ -289,10 +290,6 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
         <CardContent>
           <ul className="divide-y">
             {draft.participants.map((p, idx) => {
-              const tags: string[] = [];
-              if (p.excludeAlcohol) tags.push('주류 X');
-              if (p.excludeNonAlcohol) tags.push('비주류 X');
-              if (p.excludeSide) tags.push('안주 X');
               const total = calc.perParticipant[idx] ?? 0;
               return (
                 <li
@@ -303,15 +300,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                     <div className="truncate text-sm font-medium">
                       {participantName(p, idx)}
                     </div>
-                    {tags.length > 0 && (
-                      <div className="mt-0.5 flex flex-wrap gap-1 text-xs text-muted-foreground">
-                        {tags.map((t) => (
-                          <span key={t} className="rounded bg-muted px-1.5 py-0.5">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <ParticipationBadges participants={draft.participants} participant={p} />
                     {multi && (
                       <div className="mt-1 text-xs text-muted-foreground">
                         {calc.perRound

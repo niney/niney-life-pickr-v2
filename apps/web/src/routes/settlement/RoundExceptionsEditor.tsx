@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import {
+  PARTICIPATION_AXES,
+  participationAxis,
   useSettlementDraftStore,
   type DraftAttendance,
   type DraftParticipant,
@@ -18,7 +20,7 @@ interface Props {
 // 차수별 exclude 옵션 편집기 — '차수 특이사항' UI.
 //
 // 평소엔 칩이 0개로 비어 있고 (= 모두 마스터 default 따름), '+ 추가' 로
-// "<참여자>가 이 차수엔 <카테고리> <마심/안 먹음>" 같은 명시적 override 를
+// "<참여자>가 이 차수엔 <술> <마심/안 마심>" 같은 명시적 override 를
 // 한 줄씩 누적한다. 마스터 default 와 같은 값을 추가하면 의미가 없으므로
 // 표시되는 칩은 master 와 다른 override 만 (silent dedupe).
 //
@@ -48,7 +50,7 @@ export const RoundExceptionsEditor = ({ round, participants }: Props) => {
           {exceptions.map((e) => (
             <li key={`${e.participantClientId}-${e.key}`}>
               <ChipPill
-                label={`${e.participantName}: ${categoryLabel(e.key)} ${valueLabel(e.key, e.value)}`}
+                label={`${e.participantName}: ${exceptionLabel(e.key, e.value)}`}
                 onRemove={() =>
                   setExcludeOverride(round.clientId, e.participantClientId, e.key, null)
                 }
@@ -78,7 +80,7 @@ const AddExceptionForm = ({
   );
   const [pid, setPid] = useState<string>(attendedParticipants[0]?.clientId ?? '');
   const [key, setKey] = useState<ExcludeKey>('excludeAlcohol');
-  // value: true = '안 함/안 먹음' (exclude=true), false = '마심/먹음' (exclude=false)
+  // value: true = '안 마심/안 먹음' (exclude=true), false = '마심/먹음' (exclude=false)
   const [value, setValue] = useState<boolean>(true);
 
   if (!open) {
@@ -136,11 +138,7 @@ const AddExceptionForm = ({
           label="카테고리"
           value={key}
           onChange={(v) => setKey(v as ExcludeKey)}
-          options={[
-            { value: 'excludeAlcohol', label: '주류' },
-            { value: 'excludeNonAlcohol', label: '비주류' },
-            { value: 'excludeSide', label: '안주' },
-          ]}
+          options={PARTICIPATION_AXES.map((a) => ({ value: a.key, label: a.label }))}
         />
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">이 차수엔</span>
@@ -152,7 +150,7 @@ const AddExceptionForm = ({
                 onChange={() => setValue(false)}
                 className="size-3.5"
               />
-              {verb(key, false)}
+              {participationAxis(key).doVerb}
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
               <input
@@ -161,7 +159,7 @@ const AddExceptionForm = ({
                 onChange={() => setValue(true)}
                 className="size-3.5"
               />
-              {verb(key, true)}
+              {participationAxis(key).skipVerb}
             </label>
           </div>
         </div>
@@ -246,7 +244,7 @@ interface MeaningfulException {
   participantClientId: string;
   participantName: string;
   key: ExcludeKey;
-  value: boolean; // exclude 값 (true = 안 먹음/안 함)
+  value: boolean; // exclude 값 (true = 안 마심/안 먹음)
 }
 
 const useMeaningfulExceptions = (
@@ -302,17 +300,8 @@ const participantLabel = (
   return nm || nick || `참여자 ${idx + 1}`;
 };
 
-const categoryLabel = (key: ExcludeKey): string => {
-  if (key === 'excludeAlcohol') return '주류';
-  if (key === 'excludeNonAlcohol') return '비주류';
-  return '안주';
+// 칩 문장 — 예외 서술이라 부정형이 자연스럽다 (예: '술 안 마심', '안주 먹음').
+const exceptionLabel = (key: ExcludeKey, exclude: boolean): string => {
+  const axis = participationAxis(key);
+  return `${axis.label} ${exclude ? axis.skipVerb : axis.doVerb}`;
 };
-
-// 카테고리별 자연어 동사 — 술/비주류는 '마심/안 함', 안주는 '먹음/안 먹음'.
-const verb = (key: ExcludeKey, exclude: boolean): string => {
-  if (key === 'excludeSide') return exclude ? '안 먹음' : '먹음';
-  return exclude ? '안 함' : '마심';
-};
-
-// 칩에서 보이는 값 표현 — verb 와 같음 (예: '주류 안 함').
-const valueLabel = (key: ExcludeKey, exclude: boolean): string => verb(key, exclude);
