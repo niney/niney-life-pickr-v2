@@ -4,6 +4,7 @@ import {
   type ReceiptItemCategoryType,
   type SharedSettlementSessionType,
 } from '@repo/api-contract';
+import { sessionParticipationBadgeAxes } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ParticipationBadges } from './ParticipationChips';
@@ -86,6 +87,7 @@ export const ParticipantsCard = ({
   onEdit?: () => void;
 }) => {
   const multiRound = session.rounds.length > 1;
+  const badgeAxes = sessionParticipationBadgeAxes(session);
   // round 의 attendees 에서 participantId → 차수별 분담 lookup 만들어 둔다.
   // multiRound 일 때 각 참여자 행 아래에 "1차 12,000 + 2차 8,000" 라인 표시.
   const sharesByParticipant = new Map<string, Array<{ orderIndex: number; amount: number; attended: boolean }>>();
@@ -129,7 +131,7 @@ export const ParticipantsCard = ({
                   <div className="truncate text-sm font-medium">
                     {participantName(p, idx)}
                   </div>
-                  <ParticipationBadges participants={session.participants} participant={p} />
+                  <ParticipationBadges axes={badgeAxes[idx] ?? []} />
                   {multiRound && perRound.length > 0 && (
                     <div className="mt-1 text-xs text-muted-foreground">
                       {perRound

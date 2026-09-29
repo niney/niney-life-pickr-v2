@@ -17,8 +17,9 @@ const AXIS_ICON: Record<ExcludeKey, keyof typeof MaterialCommunityIcons.glyphMap
 };
 
 // 참여자 한 명의 술·음료·안주 토글 묶음. 켜짐(기본)=분담, 탭하면 빠짐.
-// 켜짐은 강조색 외곽선만(기본 상태가 요란하지 않게), 빠짐은 점선·취소선으로
-// 흐리게 — "누가 빠졌나" 가 한눈에 튄다.
+// 켜짐은 강조색 외곽선만(기본 상태가 요란하지 않게), 빠짐은 점선·취소선 — "누가
+// 빠졌나" 가 한눈에 튄다. 반투명까지 겹치면 다크 모드에서 칩이 사라져 보여 흐린
+// 글자색만 쓴다.
 export const ParticipationToggles = ({
   value,
   onChange,
@@ -47,10 +48,9 @@ export const ParticipationToggles = ({
               styles.chip,
               sm ? styles.chipSm : styles.chipMd,
               {
-                borderColor: joined ? theme.colors.primary : theme.colors.border,
+                borderColor: joined ? theme.colors.primary : theme.colors.textMuted,
                 borderStyle: joined ? 'solid' : 'dashed',
                 backgroundColor: pressed ? theme.colors.surfaceAlt : 'transparent',
-                opacity: joined ? 1 : 0.7,
               },
             ]}
           >

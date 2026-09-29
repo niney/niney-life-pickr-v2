@@ -9,6 +9,7 @@ import {
 import {
   ApiError,
   draftGroupsToCalcInputs,
+  draftParticipationBadgeAxes,
   isEligibleGroupMember,
   useCreateSettlement,
   useSettlementDraftStore,
@@ -88,6 +89,8 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [breakdownOpen, setBreakdownOpen] = useState<string | null>(null);
+  // 참여 배지 — 차수 특이사항·불참까지 반영해 분담액과 어긋나지 않게.
+  const badgeAxes = draftParticipationBadgeAxes(draft.participants, draft.rounds);
 
   // 차수별 effective 계산 — round override 적용된 exclude 플래그 + 차수 할인.
   // 풀 초과 등 invalid 상태에서도 미리보기는 그려야 하므로 검증은 calculator
@@ -300,7 +303,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
                     <div className="truncate text-sm font-medium">
                       {participantName(p, idx)}
                     </div>
-                    <ParticipationBadges participants={draft.participants} participant={p} />
+                    <ParticipationBadges axes={badgeAxes[idx] ?? []} />
                     {multi && (
                       <div className="mt-1 text-xs text-muted-foreground">
                         {calc.perRound

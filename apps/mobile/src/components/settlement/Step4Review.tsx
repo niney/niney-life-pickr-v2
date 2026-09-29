@@ -14,10 +14,9 @@ import {
 } from '@repo/api-contract';
 import {
   ApiError,
-  axesInPlay,
   draftGroupsToCalcInputs,
+  draftParticipationBadgeAxes,
   isEligibleGroupMember,
-  joinedAxes,
   useCreateSettlement,
   useSettlementDraftStore,
   useTheme,
@@ -86,8 +85,8 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
   const create = useCreateSettlement();
   const update = useUpdateSettlement();
   const [error, setError] = useState<string | null>(null);
-  // 참여 배지 — 누군가 빠진 축에서만, 분담하는 사람에게 긍정 라벨(술·음료·안주).
-  const tagAxes = axesInPlay(draft.participants);
+  // 참여 배지 — 차수 특이사항·불참까지 반영해 분담액과 어긋나지 않게(술·음료·안주).
+  const badgeAxes = draftParticipationBadgeAxes(draft.participants, draft.rounds);
 
   // 차수별 effective 계산. 분담 미리보기.
   const calc = useMemo(
@@ -316,7 +315,7 @@ export const Step4Review = ({ onBack, editingId, fromDraftId }: Props) => {
           </Text>
           <View style={{ gap: 0 }}>
             {draft.participants.map((p, idx) => {
-              const tags = joinedAxes(tagAxes, p).map((a) => a.label);
+              const tags = (badgeAxes[idx] ?? []).map((a) => a.label);
               const total = calc.perParticipant[idx] ?? 0;
               return (
                 <View

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { participationAxis } from '@repo/shared';
 import { ParticipationBadges, ParticipationToggles } from './ParticipationChips';
 
 // 참여 칩 — 저장값(exclude)과 화면(긍정 라벨)의 극성이 반대라 뒤집힘 실수가
@@ -32,14 +33,14 @@ describe('ParticipationToggles', () => {
 });
 
 describe('ParticipationBadges', () => {
-  it('누군가 빠진 축에서만, 분담하는 사람에게 긍정 배지를 붙인다', () => {
-    const sober = { ...none, excludeAlcohol: true };
-    const participants = [none, sober];
+  it('받은 축만 긍정 배지로 그리고, 없으면 아무것도 그리지 않는다', () => {
     const { container, rerender } = render(
-      <ParticipationBadges participants={participants} participant={none} />,
+      <ParticipationBadges
+        axes={[participationAxis('excludeAlcohol'), participationAxis('excludeSide')]}
+      />,
     );
-    expect(container.textContent).toBe('술');
-    rerender(<ParticipationBadges participants={participants} participant={sober} />);
+    expect(container.textContent).toBe('술안주');
+    rerender(<ParticipationBadges axes={[]} />);
     expect(container.textContent).toBe('');
   });
 });
