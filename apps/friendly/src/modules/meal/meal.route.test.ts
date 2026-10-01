@@ -18,6 +18,7 @@ import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
 import { upsertFoodSeeds } from '../food/food-import.service.js';
 import { MealPhotoService } from './meal-photo.service.js';
+import { MealService } from './meal.service.js';
 
 // 식단 기록 라우트 — 격리 DB. ① 인증 ② 생성 시 카탈로그 매칭으로 분류 자동 채움 ③ 목록/커서
 // ④ 달력 ⑤ 통계 ⑥ 사진 업로드·조회·소유 검증 ⑦ 수정(항목 전량 교체)·삭제 ⑧ 선호 설정.
@@ -98,6 +99,17 @@ describe('meal routes (격리 DB)', () => {
           sodiumMg: 800,
           sugarG: 5,
         },
+        source: 'manual',
+      },
+      // 식약처 외식 행처럼 식품중량(1인분)이 기준량 100g 인 주요리 — 한 끼 양이 아니다.
+      {
+        name: '제육볶음',
+        dishType: 'stir_fry',
+        mainIngredient: 'pork',
+        cuisine: 'korean',
+        servingG: 100,
+        kcalPer100g: 151,
+        nutrition: { kcal: 151, carbG: 5.7, proteinG: 12.2, fatG: 8.4, sodiumMg: 220, sugarG: null },
         source: 'manual',
       },
     ]);
@@ -231,6 +243,67 @@ describe('meal routes (격리 DB)', () => {
       });
     } finally {
       await app.prisma.mealEntry.delete({ where: { id: created.id } });
+    }
+  });
+
+  it('카탈로그 1인분이 100g 이하인 주식은 통상 1인분으로, 반찬은 카탈로그 1인분으로 영양을 남긴다', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: ENTRIES,
+      headers: auth,
+      payload: {
+        eatenAt: '2026-10-01T10:00:00.000Z',
+        eatenDate: '2026-10-01',
+        slot: 'dinner',
+        source: 'manual',
+        items: [
+          { name: '제육볶음', isMain: true, source: 'manual' },
+          { name: '제육볶음', isMain: true, portion: 'large', source: 'manual' },
+          { name: '제육볶음', isMain: false, source: 'manual' },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const created = res.json<MealEntryType>();
+    try {
+      expect(created.items[0]).toMatchObject({
+        kcal: 378,
+        proteinG: 30.5,
+        sodiumMg: 550,
+        nutritionBasis: 'typical_portion',
+        nutritionFrom: '볶음 통상 1인분 250g',
+      });
+      // 양 배수는 통상 1인분 위에 곱한다(많이 ×1.5).
+      expect(created.items[1]?.kcal).toBe(566);
+      expect(created.items[2]).toMatchObject({ kcal: 151, nutritionBasis: 'direct', nutritionFrom: null });
+    } finally {
+      await app.prisma.mealEntry.delete({ where: { id: created.id } });
+    }
+  });
+
+  it('어드민 어휘로 음식별 1인분 중량을 정하면 원본을 고치지 않고 그 중량으로 남긴다', async () => {
+    const lexicon = await app.prisma.menuLexicon.create({
+      data: { kind: 'portion', term: '제육볶음', target: '300' },
+    });
+    // 어휘는 10분 캐시라, 방금 넣은 행을 읽도록 새 서비스로 저장한다.
+    const meals = new MealService(app.prisma, { photos: app.mealPhotos });
+    let entryIdToDelete: string | null = null;
+    try {
+      const created = await meals.create('meal-user', {
+        eatenAt: '2026-10-01T10:00:00.000Z',
+        eatenDate: '2026-10-01',
+        slot: 'dinner',
+        source: 'manual',
+        photoTokens: [],
+        items: [{ name: '제육볶음', isMain: true, source: 'manual' }],
+      });
+      entryIdToDelete = created.id;
+      expect(created.items[0]).toMatchObject({ kcal: 453, nutritionBasis: 'direct', nutritionFrom: null });
+      const food = await app.prisma.foodItem.findFirstOrThrow({ where: { name: '제육볶음' } });
+      expect(food).toMatchObject({ servingG: 100, kcal: 151 });
+    } finally {
+      if (entryIdToDelete) await app.prisma.mealEntry.delete({ where: { id: entryIdToDelete } });
+      await app.prisma.menuLexicon.delete({ where: { id: lexicon.id } });
     }
   });
 

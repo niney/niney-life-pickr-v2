@@ -20,6 +20,7 @@ import {
 import { buildApp } from '../../app.js';
 import { seedAuthUsers } from '../../test-utils/seed-users.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { DEFAULT_LEXICON } from '../food/engine/index.js';
 import type { FoodService } from '../food/food.service.js';
 import { MealDataService } from './meal-data.service.js';
 import { MealService } from './meal.service.js';
@@ -733,7 +734,8 @@ describe('meal data export/delete routes (격리 DB)', () => {
     const createEntered = deferred();
     const releaseCreate = deferred();
     const food = {
-      getNutrition: vi.fn().mockResolvedValue(null),
+      getServingRow: vi.fn().mockResolvedValue(null),
+      servingLexicon: vi.fn().mockResolvedValue(DEFAULT_LEXICON),
       matchFood: vi.fn(async () => {
         createEntered.resolve();
         await releaseCreate.promise;

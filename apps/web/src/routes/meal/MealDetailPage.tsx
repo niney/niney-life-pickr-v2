@@ -175,7 +175,7 @@ export const MealDetailPage = () => {
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
-                {item.nutritionBasis === 'donor_estimate' ? (
+                {item.nutritionBasis === 'donor_estimate' || item.nutritionBasis === 'typical_portion' ? (
                   <p className="text-xs italic text-muted-foreground">
                     {item.nutritionFrom ?? '유사 음식'} 기준 추정
                   </p>

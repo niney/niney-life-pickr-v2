@@ -9,8 +9,10 @@ export {
   type IndexHit,
 } from './catalog-index.js';
 export {
+  BASE_SERVING_G,
   computePortion,
   decideMenuKcal,
+  foodPortionGrams,
   matchNorm,
   portionKeyFor,
   resolveMenuName,

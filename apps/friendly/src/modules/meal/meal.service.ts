@@ -44,6 +44,7 @@ import {
 } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
 import { FoodService } from '../food/food.service.js';
+import { mealServingNutrition, type ServingCatalogRow } from '../food/food-serving.js';
 import {
   findMealRecommendationCandidate,
   parseMealRecommendationFeedback,
@@ -338,6 +339,7 @@ export class MealService {
     items: MealItemInputType[],
   ): Promise<Omit<Prisma.MealItemCreateManyEntryInput, 'entryId'>[]> {
     const out: Omit<Prisma.MealItemCreateManyEntryInput, 'entryId'>[] = [];
+    const lexicon = await this.food.servingLexicon();
     for (const [i, item] of items.entries()) {
       const name = item.name.trim();
       const nameNorm = normalizeTerm(name);
@@ -349,16 +351,11 @@ export class MealService {
       let validSuppliedFoodId = false;
       // 영양은 항상 서버가 붙인다(클라이언트가 보내지 않는다). 클라이언트가 foodId 를 이미
       // 골라 왔으면 그 행을 그대로 보고, 아니면 이름으로 매칭한다.
-      let nutrition: {
-        kcal: number | null;
-        proteinG: number | null;
-        sodiumMg: number | null;
-        nutritionFrom: string | null;
-      } | null = null;
+      let catalogRow: ServingCatalogRow | null = null;
       if (foodId) {
-        const row = await this.food.getNutrition(foodId);
+        const row = await this.food.getServingRow(foodId);
         if (row) {
-          nutrition = row;
+          catalogRow = row;
           validSuppliedFoodId = true;
         } else {
           // 삭제·비활성·조작된 id를 이름 매칭 결과의 영양과 결합하지 않는다.
@@ -367,7 +364,7 @@ export class MealService {
         }
       }
       let fallbackMatch: Awaited<ReturnType<FoodService['matchFood']>> = null;
-      if (!foodId || !dishType || !mainIngredient || !cuisine || !nutrition) {
+      if (!foodId || !dishType || !mainIngredient || !cuisine || !catalogRow) {
         const match = await this.food.matchFood(name);
         fallbackMatch = match;
         if (match) {
@@ -375,23 +372,16 @@ export class MealService {
           dishType = dishType ?? match.dishType;
           mainIngredient = mainIngredient ?? match.mainIngredient;
           cuisine = cuisine ?? match.cuisine;
-          nutrition = nutrition ?? {
-            kcal: match.kcal,
-            proteinG: match.proteinG,
-            sodiumMg: match.sodiumMg,
-            nutritionFrom: match.nutritionFrom,
-          };
+          catalogRow = catalogRow ?? match;
         }
       }
+      // 한 끼 1인분 — 카탈로그 1인분이 식약처 시료·급식 중량(≤100g)이면 주식은 통상 1인분으로 환산한다.
+      const nutrition = mealServingNutrition(catalogRow, { isMain: item.isMain }, lexicon);
       // 사용자가 직접 인분 수를 넣었으면 그 값이 우선이다. 없을 때만 서수(small/normal/large)
       // 배수를 쓴다. 사진에서 g/인분을 자동으로 만들어 내지는 않는다.
       const f = item.servings ?? mealPortionFactor(item.portion);
       const scale = (v: number | null, digits: number): number | null =>
         v === null ? null : Number((v * f).toFixed(digits));
-      const hasNutrition =
-        nutrition !== null &&
-        [nutrition.kcal, nutrition.proteinG, nutrition.sodiumMg].some((value) => value !== null);
-      const nutritionFrom = hasNutrition ? (nutrition?.nutritionFrom ?? null) : null;
       const inferredMatchedBy = validSuppliedFoodId
         ? 'food_id'
         : fallbackMatch
@@ -432,11 +422,11 @@ export class MealService {
           : (item.catalogMatchScore ?? inferredMatchScore),
         source: item.source,
         sortOrder: i,
-        kcal: scale(nutrition?.kcal ?? null, 0),
-        proteinG: scale(nutrition?.proteinG ?? null, 1),
-        sodiumMg: scale(nutrition?.sodiumMg ?? null, 0),
-        nutritionFrom,
-        nutritionBasis: hasNutrition ? (nutritionFrom ? 'donor_estimate' : 'direct') : 'missing',
+        kcal: scale(nutrition.kcal, 0),
+        proteinG: scale(nutrition.proteinG, 1),
+        sodiumMg: scale(nutrition.sodiumMg, 0),
+        nutritionFrom: nutrition.nutritionFrom,
+        nutritionBasis: nutrition.basis,
       });
     }
     return out;

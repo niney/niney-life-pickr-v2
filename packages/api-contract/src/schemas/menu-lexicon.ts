@@ -11,7 +11,8 @@ import { z } from 'zod';
 //   raw_suffix   떼어서 원재료를 찾는 조리 접미("타다끼")   term
 //   quantifier   한판·반판 류 수량 표식                   term
 //   alias        카탈로그 행에 덧붙이는 별칭              term → target(카탈로그 음식명)
-//   portion      종류별 통상 1인분 중량(g)                term=dishType|raw_meat|raw_seafood → target=그램
+//   portion      통상 1인분 중량(g)                       term=dishType|raw_meat|raw_seafood 또는 카탈로그 음식명 → target=그램
+//                음식명이면 그 음식만의 1인분(식약처 식품중량이 한 끼 양이 아닐 때). 식단 기록 영양도 같이 쓴다.
 
 export const MenuLexiconKind = z.enum([
   'modifier',

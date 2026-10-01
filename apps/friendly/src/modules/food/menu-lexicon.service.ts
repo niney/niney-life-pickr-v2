@@ -5,6 +5,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import {
+  FoodDishType,
   MENU_LEXICON_KINDS_WITH_TARGET,
   type MenuLexiconCreateInputType,
   type MenuLexiconEntryType,
@@ -38,6 +39,12 @@ const toEntry = (r: {
   active: r.active,
   createdAt: r.createdAt.toISOString(),
 });
+
+// portion 의 종류 키 — 통상 1인분 중량표 키(dishType 전부 + 생재료 육류·수산물). 그 밖의 말은 카탈로그 음식명이다.
+const PORTION_KINDS: ReadonlySet<string> = new Set([
+  ...FoodDishType.options,
+  ...Object.keys(DEFAULT_LEXICON_SOURCE.portionGrams),
+]);
 
 const defaultCounts = (): MenuLexiconListResultType['defaults'] => {
   const d = DEFAULT_LEXICON_SOURCE;
@@ -74,6 +81,18 @@ export class MenuLexiconService {
     const term = input.term.trim();
     if (!normalizeTerm(term)) throw new MenuLexiconValidationError('term 이 비어 있습니다');
     if (input.kind === 'portion' && !(Number(target) > 0)) throw new MenuLexiconValidationError('portion 의 target 은 그램(양수)입니다');
+    // portion 의 말은 종류 키이거나 카탈로그 음식명이다. 음식명 오타는 조용히 아무 데도 안 걸리므로 막는다.
+    if (input.kind === 'portion' && !PORTION_KINDS.has(term)) {
+      const food = await this.prisma.foodItem.findFirst({
+        where: { OR: [{ nameNorm: normalizeTerm(term) }, { name: term }], active: true },
+        select: { name: true },
+      });
+      if (!food) {
+        throw new MenuLexiconValidationError(
+          `"${term}" 은(는) 종류 키도 카탈로그 음식명도 아닙니다 — 종류 키(stir_fry·soup·raw_meat …) 또는 음식명을 적어 주세요`,
+        );
+      }
+    }
     if (input.kind === 'alias') {
       const food = await this.prisma.foodItem.findFirst({
         where: { OR: [{ nameNorm: normalizeTerm(target!) }, { name: target! }], active: true },

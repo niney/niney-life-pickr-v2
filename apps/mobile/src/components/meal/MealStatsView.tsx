@@ -68,7 +68,7 @@ export const MealStatsView = () => {
         ) : null}
         {data.nutrition.avgKcalPerDay !== null && data.nutrition.coverage < 1 ? (
           <Text style={styles.coverageNote}>
-            직접값 {data.nutrition.itemsDirect}개, 유사 음식 추정 {data.nutrition.itemsEstimated}개만 반영한 값이라 실제와 다를 수 있어요.
+            직접값 {data.nutrition.itemsDirect}개, 추정값(유사 음식·통상 1인분) {data.nutrition.itemsEstimated}개만 반영한 값이라 실제와 다를 수 있어요.
           </Text>
         ) : null}
       </Card>

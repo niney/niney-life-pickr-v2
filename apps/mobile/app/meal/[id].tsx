@@ -139,7 +139,7 @@ export default function MealDetailScreen() {
                     .filter(Boolean)
                     .join(' · ')}
                 </Text>
-                {it.nutritionBasis === 'donor_estimate' ? (
+                {it.nutritionBasis === 'donor_estimate' || it.nutritionBasis === 'typical_portion' ? (
                   <Text style={styles.itemEstimate}>{it.nutritionFrom ?? '유사 음식'} 기준 추정</Text>
                 ) : it.nutritionBasis === 'missing' ? (
                   <Text style={styles.itemEstimate}>공개된 영양 근거 없음</Text>

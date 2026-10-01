@@ -149,7 +149,10 @@ export const computeMealStats = (
       if (item.kcal === null || item.kcal === undefined) continue;
       itemsWithNutrition += 1;
       if (item.isMain) mainItemsWithNutrition += 1;
-      if (item.nutritionBasis === 'donor_estimate') itemsEstimated += 1;
+      // 추정 = 같은 계열에서 빌린 값 + 통상 1인분 중량으로 환산한 값.
+      if (item.nutritionBasis === 'donor_estimate' || item.nutritionBasis === 'typical_portion') {
+        itemsEstimated += 1;
+      }
       else itemsDirect += 1;
       sumKcal += item.kcal;
       sumProtein += item.proteinG ?? 0;

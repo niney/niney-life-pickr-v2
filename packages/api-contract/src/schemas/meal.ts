@@ -31,7 +31,10 @@ export type MealPortionType = z.infer<typeof MealPortion>;
 export const MealPortionSource = z.enum(['vision_ordinal', 'user_serving']);
 export type MealPortionSourceType = z.infer<typeof MealPortionSource>;
 
-export const MealNutritionBasis = z.enum(['direct', 'donor_estimate', 'missing']);
+// 영양 근거 — direct: 카탈로그 1인분(또는 운영자가 정한 1인분 중량) / donor_estimate: 같은 계열 음식에서 빌린 값 /
+// typical_portion: 카탈로그 1인분이 한 끼 양이 아니라(식약처 식품중량 ≤100g) 종류별 통상 1인분 중량으로 환산한 추정 /
+// missing: 공개 영양 없음. 추정 두 가지는 nutritionFrom 에 근거 문구가 있다("볶음 통상 1인분 250g").
+export const MealNutritionBasis = z.enum(['direct', 'donor_estimate', 'typical_portion', 'missing']);
 export type MealNutritionBasisType = z.infer<typeof MealNutritionBasis>;
 
 // 'YYYY-MM-DD' — 사용자 로컬 날짜. 달력·통계의 그룹 키(서버는 형식만 검증).

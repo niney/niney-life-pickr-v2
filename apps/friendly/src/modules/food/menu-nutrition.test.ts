@@ -4,7 +4,10 @@ import {
   MenuNutritionEngine,
   buildCatalogIndex,
   catalogRow,
+  compileLexicon,
   decideMenuKcal,
+  foodPortionGrams,
+  mergeLexiconRows,
   parseMenuName,
   stripLeadingModifiers,
   synonymVariants,
@@ -147,6 +150,39 @@ describe('decideMenuKcal', () => {
   it('donor 추정 문구를 그대로 전달한다', () => {
     const r = decideMenuKcal(parseMenuName('불고기'), match('불고기', { nutritionFrom: '소불고기 외 2종 중앙값' }));
     expect(r.nutritionFrom).toBe('소불고기 외 2종 중앙값');
+  });
+
+  // 식약처 식품중량이 한 끼 양이 아닌 음식(제육볶음 100ml)은 원본을 고치지 않고 어휘(portion, 말=음식명)로 바로잡는다.
+  describe('음식별 1인분 중량(어휘 portion, 말=음식명)', () => {
+    const jeyuk = match('제육볶음', { kcal: 151, servingG: 100, kcalPer100g: 151, portionKey: 'stir_fry' });
+    const withOverride = compileLexicon(mergeLexiconRows([{ kind: 'portion', term: '제육볶음', target: '300' }]));
+
+    it('지정이 없으면 기준량 행이라 100g당 + 종류별 통상 1인분', () => {
+      const r = decideMenuKcal(parseMenuName('제육볶음'), jeyuk);
+      expect(r.basis).toBe('per_100g');
+      expect(r.portion).toEqual({ grams: 250, kcal: 378, basis: 'typical' });
+    });
+
+    it('지정하면 그 중량이 1인분이 된다', () => {
+      const r = decideMenuKcal(parseMenuName('제육볶음'), jeyuk, null, [], withOverride);
+      expect(r.basis).toBe('per_serving');
+      expect(r.kcal).toBe(453);
+    });
+
+    it('인분·중량 표식이 있으면 지정이 있어도 100g당이고, 통상 1인분 환산에 지정 중량을 쓴다', () => {
+      const r = decideMenuKcal(parseMenuName('제육볶음 (대)'), jeyuk, null, [], withOverride);
+      expect(r.basis).toBe('per_100g');
+      expect(r.portion).toEqual({ grams: 300, kcal: 453, basis: 'typical' });
+      // 메뉴명에 적힌 중량이 지정보다 앞선다.
+      const stated = decideMenuKcal(parseMenuName('제육볶음 200g'), jeyuk, null, [], withOverride);
+      expect(stated.portion).toMatchObject({ grams: 200, basis: 'stated' });
+    });
+
+    it('어휘의 음식명은 띄어쓰기가 달라도 찾는다', () => {
+      const spaced = compileLexicon(mergeLexiconRows([{ kind: 'portion', term: '제육 볶음', target: '280' }]));
+      expect(foodPortionGrams(spaced, '제육볶음')).toBe(280);
+      expect(foodPortionGrams(DEFAULT_LEXICON, '제육볶음')).toBeNull();
+    });
   });
 });
 

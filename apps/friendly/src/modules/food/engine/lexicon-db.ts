@@ -10,10 +10,13 @@
 //   raw_suffix 떼어서 원재료를 찾는 조리 접미           term=접미
 //   quantifier 한판·반판 류 수량 표식                  term=수량어
 //   alias      카탈로그 행에 덧붙이는 별칭              term=별칭, target=카탈로그 음식명
-//   portion    종류별 통상 1인분 중량                   term=dishType|raw_meat|raw_seafood, target=그램
+//   portion    통상 1인분 중량                         term=dishType|raw_meat|raw_seafood(종류) 또는 카탈로그 음식명, target=그램
+//              음식명이면 그 음식만의 1인분 — 식약처 '식품중량'이 한 끼 양이 아닌 음식(제육볶음 100ml)을 원본을 건드리지
+//              않고 바로잡는다. 메뉴 칼로리와 식단 기록 영양이 같이 쓴다.
 // 배포 없이 어휘를 고칠 수 있다 — 엔진은 INDEX_TTL 마다 다시 읽는다.
 
 import type { PrismaClient } from '@prisma/client';
+import { normalizeTerm } from '../../../lib/text.js';
 import { DEFAULT_LEXICON_SOURCE, compileLexicon, type Lexicon, type LexiconSource } from './lexicon.js';
 
 export const MENU_LEXICON_KINDS = [
@@ -88,7 +91,12 @@ export const mergeLexiconRows = (rows: MenuLexiconRow[], base: LexiconSource = D
         break;
       case 'portion': {
         const g = Number(r.target);
-        if (Number.isFinite(g) && g > 0) out.portionGrams[term] = Math.round(g);
+        if (Number.isFinite(g) && g > 0) {
+          out.portionGrams[term] = Math.round(g);
+          // 음식명 말은 띄어쓰기가 카탈로그와 달라도 찾히게 정규형으로도 둔다("소고기 미역국" ↔ "소고기미역국").
+          const norm = normalizeTerm(term);
+          if (norm && norm !== term) out.portionGrams[norm] = Math.round(g);
+        }
         break;
       }
       default:

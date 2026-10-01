@@ -221,7 +221,7 @@ const LEXICON_KIND_LABEL: Record<MenuLexiconKindType, { label: string; hint: str
   suffix_block: { label: '접미 제외', hint: '접미 매칭에서 뺄 범주어 (예: 면, 탕)' },
   raw_suffix: { label: '조리 접미', hint: '떼어서 원재료를 찾는 접미 (예: 타다끼)' },
   quantifier: { label: '수량어', hint: '한판·반판 류 — 부위를 찾으면 100g당' },
-  portion: { label: '1인분 기준 중량', hint: '종류별 1인분 기준 중량(g) — "1인분(150g 기준)" 문구에 쓴다. 말=dishType(noodle·stew…)·raw_meat·raw_seafood, 짝=그램 (예: raw_meat → 180)' },
+  portion: { label: '1인분 기준 중량', hint: '1인분 기준 중량(g) — 메뉴 칼로리 "1인분(150g 기준)" 문구와 식단 기록 영양에 쓴다. 말=dishType(noodle·stew…)·raw_meat·raw_seafood(종류 전체) 또는 카탈로그 음식명(그 음식만 — 식약처 식품중량이 한 끼 양이 아닐 때, 예: 제육볶음 → 300), 짝=그램' },
 };
 
 const MenuLexiconSection = () => {

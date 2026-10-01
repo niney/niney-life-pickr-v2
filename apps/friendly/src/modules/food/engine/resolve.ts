@@ -24,7 +24,8 @@ export type MenuKcalReason = 'per_serving' | 'per_100g' | 'set' | 'empty' | 'no_
 // 1인분 표시를 허용하는 매칭 방식 — 이름이 같은 음식이라고 볼 수 있는 경우만.
 const PER_SERVING_MATCHES: ReadonlySet<MenuKcalMatchedBy> = new Set(['exact', 'alias', 'synonym', 'modifier']);
 // 표준데이터의 기준량. 1인분 중량이 이 값이면 "1인분"이 아니라 기준량을 그대로 둔 행이다.
-const BASE_SERVING_G = 100;
+// 식약처 '식품중량'은 분석 시료·급식 1회 제공량이라(제육볶음 100ml 등) 이 이하는 한 끼 양으로 보지 않는다.
+export const BASE_SERVING_G = 100;
 const RAW_SOURCE = 'mfds-raw';
 const RAW_MEAT_CATEGORY = '육류';
 // "와규꽃살 2인 세트"·"가브리 보쌈 정식" — 세트어가 이것뿐이고 나머지가 한 음식이면 그 음식의 100g당(찬·양은 모른다).
@@ -85,6 +86,15 @@ export const portionKeyFor = (row: Pick<CatalogRow, 'source' | 'sourceCategory' 
   return row.dishType ?? null;
 };
 
+/**
+ * 운영자가 어휘(portion, 말=카탈로그 음식명)로 정한 이 음식의 1인분 중량. 없으면 null.
+ * 종류 키(dishType·raw_meat)는 영문이라 한글 음식명과 겹치지 않는다.
+ */
+export const foodPortionGrams = (lex: Lexicon, foodName: string): number | null => {
+  const g = lex.portionGrams[foodName.trim()] ?? lex.portionGrams[normalizeTerm(foodName)];
+  return g && g > 0 ? g : null;
+};
+
 /** 100g당 값 + 메뉴명 중량(있으면 stated) 또는 통상 중량표(typical) → 그 양의 kcal. */
 export const computePortion = (
   kcalPer100g: number,
@@ -93,6 +103,8 @@ export const computePortion = (
   lex: Lexicon,
   /** 카탈로그가 아는 1인분(중량·kcal) — 있으면 통상표보다 우선한다(해물찜(대) → 카탈로그 500g 400kcal). */
   catalogServing: { servingG: number | null; kcal: number | null } | null = null,
+  /** 카탈로그 음식명 — 운영자가 이 음식의 1인분 중량을 정했으면 카탈로그·통상표보다 우선한다. */
+  foodName: string | null = null,
 ): MenuKcalPortion | null => {
   if (weight && weight.value >= 30) {
     return {
@@ -101,6 +113,10 @@ export const computePortion = (
       basis: 'stated',
       ...(weight.unit === 'ml' ? { unit: 'ml' as const } : {}),
     };
+  }
+  const overrideG = foodName ? foodPortionGrams(lex, foodName) : null;
+  if (overrideG) {
+    return { grams: overrideG, kcal: Math.round((kcalPer100g * overrideG) / 100), basis: 'typical' };
   }
   if (catalogServing?.servingG && catalogServing.servingG > BASE_SERVING_G && catalogServing.kcal !== null) {
     return { grams: Math.round(catalogServing.servingG), kcal: Math.round(catalogServing.kcal), basis: 'typical' };
@@ -154,22 +170,31 @@ export const decideMenuKcal = (
     trace,
     components: [],
   };
+  // 운영자가 이 음식의 1인분 중량을 정했으면(어휘 portion, 말=음식명) 카탈로그 중량 대신 그것이 1인분이다.
+  const overrideG = match.kcalPer100g !== null ? foodPortionGrams(lex, match.name) : null;
   const perServingOk =
     PER_SERVING_MATCHES.has(match.matchedBy) &&
     parsed.weight === null &&
     !parsed.portionAmbiguous &&
-    match.kcal !== null &&
-    match.servingG !== null &&
-    match.servingG > BASE_SERVING_G;
+    (overrideG !== null ||
+      (match.kcal !== null && match.servingG !== null && match.servingG > BASE_SERVING_G));
   if (perServingOk) {
-    return { ...base, basis: 'per_serving', kcal: round0(match.kcal!), reason: 'per_serving' };
+    const kcal = overrideG !== null ? (match.kcalPer100g! * overrideG) / 100 : match.kcal!;
+    return { ...base, basis: 'per_serving', kcal: round0(kcal), reason: 'per_serving' };
   }
   if (match.kcalPer100g !== null) {
     return {
       ...base,
       basis: parsed.weight?.unit === 'ml' ? 'per_100ml' : 'per_100g',
       kcal: round0(match.kcalPer100g),
-      portion: computePortion(match.kcalPer100g, parsed.weight, match.portionKey ?? null, lex, { servingG: match.servingG, kcal: match.kcal }),
+      portion: computePortion(
+        match.kcalPer100g,
+        parsed.weight,
+        match.portionKey ?? null,
+        lex,
+        { servingG: match.servingG, kcal: match.kcal },
+        match.name,
+      ),
       reason: 'per_100g',
     };
   }

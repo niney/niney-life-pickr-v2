@@ -27,6 +27,8 @@ import {
 } from '@repo/api-contract';
 import { haversineM } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
+import { loadLexicon, type Lexicon } from './engine/index.js';
+import type { ServingCatalogRow } from './food-serving.js';
 import {
   inferFoodAllergens,
   parseFoodAllergenStatus,
@@ -213,9 +215,30 @@ export interface FoodMatch {
   kcalPer100g: number | null;
   // 같은 계열에서 빌려온 값이면 그 출처 문구.
   nutritionFrom: string | null;
+  // 통상 1인분 중량표 키 판정(생재료는 육류·수산물 키)용 원본 출처.
+  source: string;
+  sourceCategory: string | null;
 }
 
+const SERVING_ROW_SELECT = {
+  name: true,
+  source: true,
+  sourceCategory: true,
+  dishType: true,
+  servingG: true,
+  kcal: true,
+  kcalPer100g: true,
+  proteinG: true,
+  sodiumMg: true,
+  nutritionFrom: true,
+} as const satisfies Prisma.FoodItemSelect;
+
+// 메뉴 칼로리 엔진의 인덱스 주기(INDEX_TTL)와 같다.
+const LEXICON_TTL_MS = 10 * 60 * 1000;
+
 export class FoodService {
+  private lexiconCache: { value: Lexicon; at: number } | null = null;
+
   constructor(private readonly prisma: PrismaClient) {}
 
   // ── 사용자 자동완성 ──────────────────────────────────────────────────────
@@ -517,21 +540,32 @@ export class FoodService {
     return { ...baseResult, items: candidates.slice(0, query.limit) };
   }
 
-  // 1) nameNorm 정확 2) 별칭 정확 3) 퍼지(bigram Jaccard/포함, 임계 FOOD_MATCH_FUZZY_MIN). 비활성 행 제외.
-  /** 이미 고른 카탈로그 행의 1인분 영양만 읽는다(기록 저장 시 스냅샷용). */
-  async getNutrition(foodId: string): Promise<{
-    kcal: number | null;
-    proteinG: number | null;
-    sodiumMg: number | null;
-    nutritionFrom: string | null;
-  } | null> {
+  /**
+   * 이미 고른 카탈로그 행의 1인분 영양과 1인분 중량 판정에 필요한 값(기록 저장 시 스냅샷용).
+   * 한 끼 1인분은 이 값 그대로가 아니라 mealServingNutrition 이 어휘와 함께 정한다.
+   */
+  async getServingRow(foodId: string): Promise<ServingCatalogRow | null> {
     const r = await this.prisma.foodItem.findFirst({
       where: { id: foodId, active: true },
-      select: { kcal: true, proteinG: true, sodiumMg: true, nutritionFrom: true },
+      select: SERVING_ROW_SELECT,
     });
     return r ?? null;
   }
 
+  /**
+   * 1인분 중량 판정용 어휘(코드 기본 + 어드민 메뉴 어휘). 메뉴 칼로리 엔진과 같은 주기(10분)로 다시 읽어
+   * 어드민에서 고친 "1인분 기준 중량"이 배포 없이 식단 저장에도 반영된다.
+   */
+  async servingLexicon(): Promise<Lexicon> {
+    if (this.lexiconCache && Date.now() - this.lexiconCache.at < LEXICON_TTL_MS) {
+      return this.lexiconCache.value;
+    }
+    const value = await loadLexicon(this.prisma);
+    this.lexiconCache = { value, at: Date.now() };
+    return value;
+  }
+
+  // 1) nameNorm 정확 2) 별칭 정확 3) 퍼지(bigram Jaccard/포함, 임계 FOOD_MATCH_FUZZY_MIN). 비활성 행 제외.
   async matchFood(name: string): Promise<FoodMatch | null> {
     const norm = normalizeTerm(name);
     if (!norm) return null;
@@ -586,6 +620,8 @@ export class FoodService {
       servingG: r.servingG,
       kcalPer100g: r.kcalPer100g,
       nutritionFrom: r.nutritionFrom,
+      source: r.source,
+      sourceCategory: r.sourceCategory,
     };
   }
 

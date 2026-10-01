@@ -638,4 +638,20 @@ describe('menu-lexicon admin routes (격리 DB)', () => {
     expect((await app.inject({ method: 'DELETE', url: `${URL}/${created.id}`, headers: adminAuth })).statusCode).toBe(204);
     expect((await app.inject({ method: 'DELETE', url: `${URL}/${created.id}`, headers: adminAuth })).statusCode).toBe(404);
   });
+
+  it('1인분 중량(portion)의 말은 종류 키나 카탈로그 음식명만 받는다', async () => {
+    const post = (term: string, target = '300') =>
+      app.inject({ method: 'POST', url: URL, headers: adminAuth, payload: { kind: 'portion', term, target } });
+    const kind = await post('stir_fry', '260');
+    expect(kind.statusCode).toBe(201);
+    // 띄어쓰기가 달라도 카탈로그 음식명이면 받는다.
+    const food = await post('족 발');
+    expect(food.statusCode).toBe(201);
+    // 오타는 아무 음식에도 안 걸리므로 막는다.
+    expect((await post('족팔')).statusCode).toBe(400);
+    expect((await post('족발', '0')).statusCode).toBe(400);
+    for (const r of [kind, food]) {
+      await app.inject({ method: 'DELETE', url: `${URL}/${(r.json() as { id: string }).id}`, headers: adminAuth });
+    }
+  });
 });
