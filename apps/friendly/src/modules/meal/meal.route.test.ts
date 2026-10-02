@@ -71,6 +71,8 @@ describe('meal routes (격리 DB)', () => {
     await seedAuthUsers(app, [
       { id: 'meal-user', role: 'USER' },
       { id: 'meal-other', role: 'USER' },
+      // 빠른 추가 집계는 사용자 기록 전체를 보므로 다른 테스트 기록과 섞이지 않게 따로 둔다.
+      { id: 'meal-quick', role: 'USER' },
     ]);
     auth = {
       authorization: `Bearer ${app.jwt.sign({ userId: 'meal-user', email: 'm@x.com', role: 'USER' })}`,
@@ -964,6 +966,53 @@ describe('meal routes (격리 DB)', () => {
     expect(body.dislikedFoods).toEqual(['고수']);
     expect(body.likedFoods).toEqual(['비빔밥']);
     expect(body.weights.variety).toBe(5);
+  });
+
+  it('빠른 추가 — 내 기록에서 자주 먹은 음식을 앞에, 모자라면 기본 목록(반찬)으로 채운다', async () => {
+    const quickAuth = {
+      authorization: `Bearer ${app.jwt.sign({ userId: 'meal-quick', email: 'q@x.com', role: 'USER' })}`,
+    };
+    const post = (headers: Record<string, string>, daysAgo: number, items: unknown[]) => {
+      const at = new Date(Date.now() - daysAgo * 86_400_000);
+      return app.inject({
+        method: 'POST',
+        url: ENTRIES,
+        headers,
+        payload: {
+          eatenAt: at.toISOString(),
+          eatenDate: at.toISOString().slice(0, 10),
+          slot: 'dinner',
+          source: 'manual',
+          items,
+        },
+      });
+    };
+    expect((await post(quickAuth, 1, [
+      { name: '제육볶음', isMain: true, source: 'manual' },
+      { name: '공기밥', isMain: false, portion: 'large', source: 'manual' },
+    ])).statusCode).toBe(201);
+    expect((await post(quickAuth, 3, [{ name: '제육볶음', isMain: true, source: 'manual' }])).statusCode).toBe(201);
+    // 남의 기록은 집계에 들어가지 않는다.
+    expect((await post(otherAuth, 1, [{ name: '남의음식', isMain: true, source: 'manual' }])).statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `${ENTRIES}/items/frequent?slot=dinner&limit=4`,
+      headers: quickAuth,
+    });
+    expect(res.statusCode).toBe(200);
+    const { items } = res.json<{ items: Array<Record<string, unknown>> }>();
+    expect(items).toHaveLength(4);
+    expect(items[0]).toMatchObject({ name: '제육볶음', count: 2, isMain: true, from: 'history', dishType: 'stir_fry' });
+    expect(items[0]?.foodId).not.toBeNull();
+    expect(items[1]).toMatchObject({ name: '공기밥', count: 1, isMain: false, portion: 'large', from: 'history' });
+    // 나머지는 기본 목록 — 이미 나온 공기밥은 빼고 반찬으로 채운다.
+    expect(items.slice(2).map((i) => [i.name, i.from, i.isMain])).toEqual([
+      ['배추김치', 'default', false],
+      ['깍두기', 'default', false],
+    ]);
+    expect(items.some((i) => i.name === '남의음식')).toBe(false);
+    expect((await app.inject({ method: 'GET', url: `${ENTRIES}/items/frequent` })).statusCode).toBe(401);
   });
 
   it('지난번 기록 조회 — 양·분류·그때 사진을 돌려준다', async () => {

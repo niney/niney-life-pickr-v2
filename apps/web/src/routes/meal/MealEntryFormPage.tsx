@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Plus } from 'lucide-react';
-import { MEAL_MAX_ITEMS_PER_ENTRY } from '@repo/api-contract';
+import { MEAL_MAX_ITEMS_PER_ENTRY, type MealSlotType } from '@repo/api-contract';
 import {
   ApiError,
   draftItemToInput,
   getMealDraftIdentity,
   isMealDraftIdentityCurrent,
   mealDraftInitFromEntry,
+  mealItemNameKey,
   runMealDraftSaveSingleFlight,
   useCreateMealEntry,
   useCurrentUser,
+  useFrequentMealItems,
   useMealDraftStore,
   useMealEntry,
   useMealTimePresets,
@@ -277,6 +279,7 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
+            <QuickAddChips slot={draft.slot} />
             {draft.items.length === 0 ? (
               <p className="text-sm text-muted-foreground">음식을 추가해 주세요.</p>
             ) : (
@@ -451,6 +454,41 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
         </div>
       </div>
     </PageFrame>
+  );
+};
+
+// 빠른 추가 — 자주 먹는 음식(고른 끼니 우선)과 기본 목록. 누르면 넣고, 이미 있으면 뺀다.
+// 반찬은 반찬으로 들어간다(주식으로 넣으면 통상 1인분으로 커져 멸치볶음이 690kcal 가 된다).
+const QuickAddChips = ({ slot }: { slot: MealSlotType }) => {
+  const frequent = useFrequentMealItems(slot);
+  const items = useMealDraftStore((s) => s.items);
+  const toggleQuickItem = useMealDraftStore((s) => s.toggleQuickItem);
+  const list = frequent.data?.items ?? [];
+  if (list.length === 0) return null;
+  const chosen = new Set(items.map((item) => mealItemNameKey(item.name)));
+  return (
+    <div className="space-y-1.5 pb-1">
+      <p className="text-xs font-medium text-muted-foreground">빠르게 추가</p>
+      <div className="flex flex-wrap gap-1.5">
+        {list.map((quick) => (
+          <button
+            key={quick.name}
+            type="button"
+            aria-pressed={chosen.has(mealItemNameKey(quick.name))}
+            title={quick.count > 0 ? `최근 90일 ${quick.count}번` : '기본 목록'}
+            onClick={() => toggleQuickItem(quick)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-xs transition-colors',
+              chosen.has(mealItemNameKey(quick.name))
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'hover:bg-accent',
+            )}
+          >
+            {quick.name}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 };
 

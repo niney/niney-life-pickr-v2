@@ -1,14 +1,16 @@
 import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
-import type {
-  MealEntryType,
-  MealItemInputType,
-  MealPortionType,
-  MealRecommendationType,
-  MealSlotType,
-  MealTypeType,
-  RecognizedDishType,
+import {
+  MEAL_MAX_ITEMS_PER_ENTRY,
+  type FrequentMealItemType,
+  type MealEntryType,
+  type MealItemInputType,
+  type MealPortionType,
+  type MealRecommendationType,
+  type MealSlotType,
+  type MealTypeType,
+  type RecognizedDishType,
 } from '@repo/api-contract';
 import { guessMealSlot, toLocalDateKey } from '@repo/utils';
 import { createInjectableStorage } from './injectableStorage.js';
@@ -310,6 +312,8 @@ interface MealDraftState {
     meta: { model: string; version: number },
     options?: { mode?: 'append' | 'replace-recognized' },
   ) => void;
+  // 빠른 추가 칩 — 같은 이름이 이미 있으면 빼고, 없으면 넣는다(이름이 빈 줄이 있으면 그 자리에).
+  toggleQuickItem: (item: FrequentMealItemType) => void;
   clear: (expectedSessionId?: string) => boolean;
 }
 
@@ -327,8 +331,13 @@ type MealDraftActions = Pick<
   | 'updateItem'
   | 'removeItem'
   | 'applyRecognition'
+  | 'toggleQuickItem'
   | 'clear'
 >;
+
+/** 같은 음식인지 보는 이름 키 — 대소문자·공백 무시. 빠른 추가 칩의 선택 표시에도 쓴다. */
+export const mealItemNameKey = (name: string): string =>
+  name.trim().toLocaleLowerCase().replace(/\s+/g, '');
 
 const nextClientId = (): string =>
   `d${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -471,16 +480,11 @@ export const useMealDraftStore = create<MealDraftState>()(
             kept.map((item) => item.foodId).filter((id): id is string => !!id),
           );
           const keptNames = new Set(
-            kept
-              .map((item) => item.name.trim().toLocaleLowerCase().replace(/\s+/g, ''))
-              .filter((name) => name.length > 0),
+            kept.map((item) => mealItemNameKey(item.name)).filter((name) => name.length > 0),
           );
           const recognized = dishes
             .filter((dish) => {
-              const name = (dish.matchedName ?? dish.name)
-                .trim()
-                .toLocaleLowerCase()
-                .replace(/\s+/g, '');
+              const name = mealItemNameKey(dish.matchedName ?? dish.name);
               return !(dish.foodId && keptFoodIds.has(dish.foodId)) && !keptNames.has(name);
             })
             .map(
@@ -522,6 +526,41 @@ export const useMealDraftStore = create<MealDraftState>()(
             },
             updatedAt: Date.now(),
           };
+        }),
+
+      toggleQuickItem: (quick) =>
+        set((s) => {
+          const key = mealItemNameKey(quick.name);
+          const existing = s.items.find((it) => mealItemNameKey(it.name) === key);
+          if (existing) {
+            return { items: s.items.filter((it) => it.clientId !== existing.clientId), updatedAt: Date.now() };
+          }
+          if (s.items.length >= MEAL_MAX_ITEMS_PER_ENTRY) return s;
+          // 카탈로그 연결·분류와 지난번 양·주식/반찬 구분을 그대로 싣는다(자동완성에서 고른 것과 같은 출처).
+          const added: MealDraftItem = {
+            clientId: nextClientId(),
+            name: quick.name,
+            foodId: quick.foodId,
+            dishType: quick.dishType,
+            mainIngredient: quick.mainIngredient,
+            cuisine: quick.cuisine,
+            portion: quick.portion,
+            servings: quick.servings,
+            portionSource: quick.portionSource,
+            isMain: quick.isMain,
+            confidence: null,
+            catalogMatchedBy: quick.foodId ? 'food_id' : 'none',
+            catalogMatchScore: quick.foodId ? 1 : null,
+            source: quick.foodId ? 'catalog' : 'manual',
+            candidates: [],
+          };
+          // 새 기록의 빈 첫 줄처럼 이름이 빈 줄이 있으면 그 자리를 채운다 — 빈 줄을 남기면 지워야 한다.
+          const blank = s.items.findIndex((it) => it.name.trim().length === 0);
+          const items =
+            blank >= 0
+              ? [...s.items.slice(0, blank), added, ...s.items.slice(blank + 1)]
+              : [...s.items, added];
+          return { items, updatedAt: Date.now() };
         }),
 
       clear: (expectedSessionId) => {

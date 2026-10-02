@@ -341,6 +341,8 @@ export const Meal = {
   photoCopy: (token: string) => `${API_PREFIX}/meals/photos/${token}/copy`,
   // 이 음식을 지난번에 어떻게 먹었나(?name=) — 사진·양·분류. 수동 입력 자동완성 보조.
   recentItem: `${API_PREFIX}/meals/items/recent`,
+  // 입력 화면 빠른 추가 칩 — 자주 먹은 음식(?slot=&limit=) + 기본 목록.
+  frequentItems: `${API_PREFIX}/meals/items/frequent`,
   // 끼니별 "내가 보통 먹는 시각" — 시간 입력 프리셋.
   timePresets: `${API_PREFIX}/meals/time-presets`,
   // 사진 → 음식 인식(동기, purpose meal-photo).

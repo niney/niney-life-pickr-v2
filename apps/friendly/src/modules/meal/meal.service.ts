@@ -20,6 +20,8 @@ import {
   RecognizedDish,
   type CreateMealEntryInputType,
   type FoodCuisineType,
+  type FrequentMealItemsQueryType,
+  type FrequentMealItemsResultType,
   type FoodDishTypeType,
   type FoodMainIngredientType,
   type ListMealEntriesQueryType,
@@ -50,6 +52,7 @@ import {
   parseMealRecommendationFeedback,
   parseMealRecommendationItems,
 } from '../meal-recommendation/meal-recommendation.feedback.js';
+import { FREQUENT_WINDOW_DAYS, MEAL_QUICK_DEFAULT_NAMES, rankFrequentMealItems } from './meal-frequent.js';
 import { mealMutationBarrier } from './meal-mutation-barrier.js';
 import type { MealPhotoFileRef, MealPhotoService } from './meal-photo.service.js';
 
@@ -81,6 +84,8 @@ const enumOrNull = <T extends string>(
 // 프리셋을 뽑는 기간과 최소 표본. 1~2건으로 "내 점심은 15시"라고 단정하면 오히려 방해가 된다.
 const PRESET_WINDOW_DAYS = 90;
 const PRESET_MIN_SAMPLES = 3;
+// 빠른 추가 집계의 행 상한 — 90일치 항목이 이보다 많으면 최근 것만 본다.
+const FREQUENT_MAX_ROWS = 3000;
 
 /** UTC Date → Asia/Seoul 기준 자정으로부터의 분. 서버 시간대와 무관하게 계산한다. */
 export const minutesOfDayInSeoul = (d: Date): number => {
@@ -332,6 +337,72 @@ export class MealService {
       cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, item.cuisine),
       photoToken: item.entry.photos[0]?.token ?? null,
     };
+  }
+
+  /** 입력 화면 빠른 추가 — 최근 90일 자주 먹은 음식(끼니 우선) + 기본 목록(공기밥·김치…). */
+  async frequentItems(userId: string, query: FrequentMealItemsQueryType): Promise<FrequentMealItemsResultType> {
+    const now = new Date();
+    const since = new Date(now.getTime() - FREQUENT_WINDOW_DAYS * 86_400_000);
+    const rows = await this.prisma.mealItem.findMany({
+      where: { entry: { userId, eatenAt: { gte: since } } },
+      select: {
+        name: true,
+        nameNorm: true,
+        foodId: true,
+        dishType: true,
+        mainIngredient: true,
+        cuisine: true,
+        isMain: true,
+        portion: true,
+        servings: true,
+        portionSource: true,
+        entry: { select: { id: true, eatenAt: true, eatenDate: true, slot: true } },
+      },
+      orderBy: { entry: { eatenAt: 'desc' } },
+      take: FREQUENT_MAX_ROWS,
+    });
+    const defaultNorms = MEAL_QUICK_DEFAULT_NAMES.map((name) => normalizeTerm(name));
+    const catalog = await this.prisma.foodItem.findMany({
+      where: { nameNorm: { in: defaultNorms }, active: true },
+      select: { id: true, name: true, nameNorm: true, dishType: true, mainIngredient: true, cuisine: true },
+    });
+    const byNorm = new Map(catalog.map((c) => [c.nameNorm, c]));
+    const items = rankFrequentMealItems(
+      rows.map((r) => ({
+        entryId: r.entry.id,
+        eatenAt: r.entry.eatenAt,
+        eatenDate: r.entry.eatenDate,
+        slot: r.entry.slot,
+        name: r.name,
+        nameNorm: r.nameNorm,
+        foodId: r.foodId,
+        dishType: enumOrNull<FoodDishTypeType>(FoodDishType, r.dishType),
+        mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, r.mainIngredient),
+        cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, r.cuisine),
+        isMain: r.isMain,
+        portion: enumOrNull(MealPortion, r.portion),
+        servings: r.servings,
+        portionSource: enumOrNull(MealPortionSource, r.portionSource),
+      })),
+      {
+        ...(query.slot ? { slot: query.slot } : {}),
+        limit: query.limit,
+        now,
+        // 카탈로그에 없으면(운영 카탈로그 차이) 이름만 준다 — 저장할 때 서버가 이름으로 다시 매칭한다.
+        defaults: MEAL_QUICK_DEFAULT_NAMES.map((name, i) => {
+          const c = byNorm.get(defaultNorms[i]!);
+          return {
+            name: c?.name ?? name,
+            nameNorm: defaultNorms[i]!,
+            foodId: c?.id ?? null,
+            dishType: enumOrNull<FoodDishTypeType>(FoodDishType, c?.dishType ?? null),
+            mainIngredient: enumOrNull<FoodMainIngredientType>(FoodMainIngredient, c?.mainIngredient ?? null),
+            cuisine: enumOrNull<FoodCuisineType>(FoodCuisine, c?.cuisine ?? null),
+          };
+        }),
+      },
+    );
+    return { items };
   }
 
   // 항목 입력 → DB 행 데이터. 분류가 비어 있으면 카탈로그 매칭으로 채운다.

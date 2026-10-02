@@ -22,6 +22,7 @@ import {
   getMealDraftSaveFlight,
   isMealDraftIdentityCurrent,
   MEAL_DRAFT_MAX_PHOTOS,
+  mealItemNameKey,
   runMealDraftPhotoFlushSingleFlight,
   runMealDraftSaveSingleFlight,
   type MealDraftIdentity,
@@ -29,6 +30,7 @@ import {
   type Theme,
   useCreateMealEntry,
   useDeleteMealPhoto,
+  useFrequentMealItems,
   useMealDraftStore,
   useMealTimePresets,
   useRecognizeMeal,
@@ -99,6 +101,9 @@ export const MealEntryEditor = ({
 
   const draft = useMealDraftStore();
   const timePresets = useMealTimePresets();
+  const frequent = useFrequentMealItems(draft.slot);
+  const quickItems = frequent.data?.items ?? [];
+  const chosenNames = new Set(draft.items.map((item) => mealItemNameKey(item.name)));
   const [editingTime, setEditingTime] = useState<string | null>(null);
   const upload = useUploadMealPhoto();
   const deletePhoto = useDeleteMealPhoto();
@@ -757,6 +762,20 @@ export const MealEntryEditor = ({
         {/* 음식 */}
         <Card>
           <CardTitle title="먹은 음식" sub="이름을 고치거나 추가할 수 있어요" />
+          {/* 빠른 추가 — 자주 먹는 음식(고른 끼니 우선)과 기본 목록. 누르면 넣고, 이미 있으면 뺀다.
+              반찬은 반찬으로 들어간다(주식이면 통상 1인분으로 커진다). */}
+          {quickItems.length > 0 ? (
+            <ChipRow style={styles.quickRow}>
+              {quickItems.map((quick) => (
+                <Chip
+                  key={quick.name}
+                  label={quick.name}
+                  selected={chosenNames.has(mealItemNameKey(quick.name))}
+                  onPress={() => draft.toggleQuickItem(quick)}
+                />
+              ))}
+            </ChipRow>
+          ) : null}
           {draft.items.length === 0 ? (
             <Text style={styles.emptyText}>사진을 넣거나 직접 추가해 주세요.</Text>
           ) : (
@@ -1024,6 +1043,7 @@ const createStyles = (theme: Theme) =>
     linkBtn: { paddingVertical: 4 },
     pendingActions: { gap: 4 },
     pendingError: { fontSize: 12, lineHeight: 17 },
+    quickRow: { marginBottom: 10 },
     itemList: { gap: 8 },
     emptyText: { fontSize: 13, color: theme.colors.textMuted },
     addItemBtn: { paddingVertical: 8 },

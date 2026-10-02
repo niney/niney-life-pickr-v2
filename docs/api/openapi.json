@@ -9837,6 +9837,7 @@
                                   "enum": [
                                     "direct",
                                     "donor_estimate",
+                                    "typical_portion",
                                     "missing"
                                   ]
                                 }
@@ -10820,6 +10821,7 @@
                             "enum": [
                               "direct",
                               "donor_estimate",
+                              "typical_portion",
                               "missing"
                             ]
                           }
@@ -11839,6 +11841,7 @@
                                   "enum": [
                                     "direct",
                                     "donor_estimate",
+                                    "typical_portion",
                                     "missing"
                                   ]
                                 }
@@ -12280,6 +12283,7 @@
                                   "enum": [
                                     "direct",
                                     "donor_estimate",
+                                    "typical_portion",
                                     "missing"
                                   ]
                                 },
@@ -13025,6 +13029,7 @@
                                 "enum": [
                                   "direct",
                                   "donor_estimate",
+                                  "typical_portion",
                                   "missing"
                                 ]
                               }
@@ -13466,6 +13471,7 @@
                                 "enum": [
                                   "direct",
                                   "donor_estimate",
+                                  "typical_portion",
                                   "missing"
                                 ]
                               },
@@ -14050,6 +14056,7 @@
                                   "enum": [
                                     "direct",
                                     "donor_estimate",
+                                    "typical_portion",
                                     "missing"
                                   ]
                                 }
@@ -14696,6 +14703,7 @@
                                   "enum": [
                                     "direct",
                                     "donor_estimate",
+                                    "typical_portion",
                                     "missing"
                                   ]
                                 },
@@ -15123,6 +15131,196 @@
                   "required": [
                     "before",
                     "deleted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meals/items/frequent": {
+      "get": {
+        "summary": "빠른 추가용 자주 먹은 음식 — 최근 90일 끼니 우선 순위 + 기본 목록(공기밥·김치 등)",
+        "tags": [
+          "meal"
+        ],
+        "description": "최근 90일 기록을 끼니 단위로 세어 최근일수록(반감기 30일)·같은 끼니(slot)일수록 앞에 둔다. 이름·카탈로그 연결·양은 가장 최근 기록을, 주식/반찬 구분은 2번 이상이면 다수결을 따른다. limit 를 못 채우면 기본 목록(공기밥·배추김치·깍두기·달걀후라이·김구이·된장국·미역국, 반찬)으로 채운다.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "breakfast",
+                "lunch",
+                "dinner",
+                "snack",
+                "late_night"
+              ]
+            },
+            "in": "query",
+            "name": "slot",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 12
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-auth": "user",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "foodId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dishType": {
+                            "type": "string",
+                            "enum": [
+                              "rice",
+                              "noodle",
+                              "soup",
+                              "stew",
+                              "grill",
+                              "stir_fry",
+                              "braise",
+                              "steam",
+                              "pancake",
+                              "fried",
+                              "namul",
+                              "salad",
+                              "kimchi",
+                              "raw_fish",
+                              "bakery",
+                              "dairy",
+                              "beverage",
+                              "alcohol",
+                              "other"
+                            ],
+                            "nullable": true
+                          },
+                          "mainIngredient": {
+                            "type": "string",
+                            "enum": [
+                              "beef",
+                              "pork",
+                              "chicken",
+                              "other_meat",
+                              "fish",
+                              "seafood",
+                              "vegetable",
+                              "tofu_bean",
+                              "egg",
+                              "dairy",
+                              "grain",
+                              "fruit",
+                              "other"
+                            ],
+                            "nullable": true
+                          },
+                          "cuisine": {
+                            "type": "string",
+                            "enum": [
+                              "korean",
+                              "chinese",
+                              "japanese",
+                              "western",
+                              "asian",
+                              "fast_food",
+                              "other"
+                            ],
+                            "nullable": true
+                          },
+                          "isMain": {
+                            "type": "boolean"
+                          },
+                          "portion": {
+                            "type": "string",
+                            "enum": [
+                              "small",
+                              "normal",
+                              "large"
+                            ],
+                            "nullable": true
+                          },
+                          "servings": {
+                            "type": "number",
+                            "exclusiveMinimum": true,
+                            "minimum": 0,
+                            "nullable": true
+                          },
+                          "portionSource": {
+                            "type": "string",
+                            "enum": [
+                              "vision_ordinal",
+                              "user_serving"
+                            ],
+                            "nullable": true
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "lastEatenDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                            "nullable": true
+                          },
+                          "from": {
+                            "type": "string",
+                            "enum": [
+                              "history",
+                              "default"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "foodId",
+                          "dishType",
+                          "mainIngredient",
+                          "cuisine",
+                          "isMain",
+                          "portion",
+                          "servings",
+                          "portionSource",
+                          "count",
+                          "lastEatenDate",
+                          "from"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
                   ],
                   "additionalProperties": false
                 }
@@ -16431,6 +16629,7 @@
                                   "enum": [
                                     "direct",
                                     "donor_estimate",
+                                    "typical_portion",
                                     "missing"
                                   ]
                                 },
@@ -16824,6 +17023,7 @@
                             "enum": [
                               "direct",
                               "donor_estimate",
+                              "typical_portion",
                               "missing"
                             ]
                           },
@@ -17300,6 +17500,7 @@
                                 "enum": [
                                   "direct",
                                   "donor_estimate",
+                                  "typical_portion",
                                   "missing"
                                 ]
                               },
@@ -17871,6 +18072,7 @@
                             "enum": [
                               "direct",
                               "donor_estimate",
+                              "typical_portion",
                               "missing"
                             ]
                           },
@@ -18732,6 +18934,7 @@
                             "enum": [
                               "direct",
                               "donor_estimate",
+                              "typical_portion",
                               "missing"
                             ]
                           }
@@ -19496,6 +19699,7 @@
                             "enum": [
                               "direct",
                               "donor_estimate",
+                              "typical_portion",
                               "missing"
                             ]
                           }

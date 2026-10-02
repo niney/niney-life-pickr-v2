@@ -19,6 +19,8 @@ import {
   MealPhotoRetentionQuery,
   MealStatsQuery,
   MealTimePresetsResult,
+  FrequentMealItemsQuery,
+  FrequentMealItemsResult,
   RecentMealItemQuery,
   RecentMealItemResult,
   RestoreMealDataResult,
@@ -152,6 +154,21 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: RecentMealItemResult },
     },
     handler: async (req) => meals.findRecentItem(req.user.userId, req.query.name),
+  });
+
+  // 입력 화면 빠른 추가 칩 — 자주 먹은 음식 + 기본 목록.
+  typed.get(Routes.Meal.frequentItems, {
+    onRequest: [app.authenticate],
+    schema: {
+      tags: ['meal'],
+      summary: '빠른 추가용 자주 먹은 음식 — 최근 90일 끼니 우선 순위 + 기본 목록(공기밥·김치 등)',
+      description:
+        '최근 90일 기록을 끼니 단위로 세어 최근일수록(반감기 30일)·같은 끼니(slot)일수록 앞에 둔다. 이름·카탈로그 연결·양은 가장 최근 기록을, 주식/반찬 구분은 2번 이상이면 다수결을 따른다. limit 를 못 채우면 기본 목록(공기밥·배추김치·깍두기·달걀후라이·김구이·된장국·미역국, 반찬)으로 채운다.',
+      security: [{ bearerAuth: [] }],
+      querystring: FrequentMealItemsQuery,
+      response: { 200: FrequentMealItemsResult },
+    },
+    handler: async (req) => meals.frequentItems(req.user.userId, req.query),
   });
 
   typed.get(Routes.Meal.stats, {

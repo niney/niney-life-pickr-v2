@@ -208,6 +208,35 @@ export const RecentMealItemResult = z.object({
 });
 export type RecentMealItemResultType = z.infer<typeof RecentMealItemResult>;
 
+// 입력 화면 빠른 추가 — 최근 90일 내가 자주 먹은 음식(끼니 우선) + 기록이 적을 때 채우는 기본 목록(공기밥·김치…).
+// 누르면 그대로 항목이 되도록 카탈로그 연결·분류와 지난번 양·주식/반찬 구분을 함께 준다.
+export const FrequentMealItemsQuery = z.object({
+  slot: MealSlot.optional(),
+  limit: z.coerce.number().int().min(1).max(20).default(12),
+});
+export type FrequentMealItemsQueryType = z.infer<typeof FrequentMealItemsQuery>;
+
+export const FrequentMealItem = z.object({
+  name: z.string(),
+  foodId: z.string().nullable(),
+  dishType: FoodDishType.nullable(),
+  mainIngredient: FoodMainIngredient.nullable(),
+  cuisine: FoodCuisine.nullable(),
+  // 기록이 2번 이상이면 다수결, 1번뿐이면(기본 목록 음식은 기본값, 아니면 그 기록) 따른다.
+  isMain: z.boolean(),
+  portion: MealPortion.nullable(),
+  servings: z.number().positive().nullable(),
+  portionSource: MealPortionSource.nullable(),
+  // 최근 90일 이 음식을 먹은 끼니 수. 기본 목록에서 채운 항목은 0.
+  count: z.number().int().nonnegative(),
+  lastEatenDate: DateString.nullable(),
+  from: z.enum(['history', 'default']),
+});
+export type FrequentMealItemType = z.infer<typeof FrequentMealItem>;
+
+export const FrequentMealItemsResult = z.object({ items: z.array(FrequentMealItem) });
+export type FrequentMealItemsResultType = z.infer<typeof FrequentMealItemsResult>;
+
 export const MealItemInput = z.object({
   name: z.string().trim().min(1).max(60),
   foodId: z.string().max(64).nullable().optional(),

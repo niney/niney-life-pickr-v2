@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StateStorage } from 'zustand/middleware';
 import type {
+  FrequentMealItemType,
   MealEntryType,
   MealRecommendationType,
   RecognizedDishType,
@@ -509,6 +510,79 @@ describe('mealDraftStore', () => {
     unsubscribe();
     expect(getMealDraftReadyPrincipal()).toBe('latest-b');
     expect(notified).not.toContain('stale-a');
+  });
+});
+
+describe('빠른 추가 칩(toggleQuickItem)', () => {
+  const quick = (over: Partial<FrequentMealItemType> = {}): FrequentMealItemType => ({
+    name: '공기밥',
+    foodId: 'food-rice',
+    dishType: 'rice',
+    mainIngredient: 'grain',
+    cuisine: 'korean',
+    isMain: false,
+    portion: 'large',
+    servings: null,
+    portionSource: 'vision_ordinal',
+    count: 3,
+    lastEatenDate: '2026-10-01',
+    from: 'history',
+    ...over,
+  });
+
+  beforeEach(() => {
+    setMealDraftLocalFileAdapter(null);
+    useMealDraftStore.getState().clear();
+  });
+
+  it('카탈로그 연결·분류·지난번 양·반찬 구분을 실어 넣고, 다시 누르면 뺀다', () => {
+    useMealDraftStore.getState().toggleQuickItem(quick());
+    const [item] = useMealDraftStore.getState().items;
+    expect(item).toMatchObject({
+      name: '공기밥',
+      foodId: 'food-rice',
+      isMain: false,
+      portion: 'large',
+      source: 'catalog',
+      catalogMatchedBy: 'food_id',
+      catalogMatchScore: 1,
+    });
+    // 이름 표기가 조금 달라도(띄어쓰기) 같은 음식으로 보고 뺀다.
+    useMealDraftStore.getState().toggleQuickItem(quick({ name: '공기 밥' }));
+    expect(useMealDraftStore.getState().items).toHaveLength(0);
+  });
+
+  it('이름이 빈 줄(새 기록 첫 줄)이 있으면 그 자리를 채운다', () => {
+    const st = useMealDraftStore.getState();
+    st.addItem({
+      name: '제육볶음',
+      foodId: null,
+      dishType: null,
+      mainIngredient: null,
+      cuisine: null,
+      portion: null,
+      isMain: true,
+      confidence: null,
+      source: 'manual',
+      candidates: [],
+    });
+    st.addItem({
+      name: '  ',
+      foodId: null,
+      dishType: null,
+      mainIngredient: null,
+      cuisine: null,
+      portion: null,
+      isMain: true,
+      confidence: null,
+      source: 'manual',
+      candidates: [],
+    });
+    useMealDraftStore.getState().toggleQuickItem(quick({ name: '배추김치', foodId: null }));
+    const names = useMealDraftStore.getState().items.map((it) => it.name);
+    expect(names).toEqual(['제육볶음', '배추김치']);
+    // 카탈로그 연결이 없으면 수동 항목으로 넣고 서버가 이름으로 매칭한다.
+    expect(useMealDraftStore.getState().items[1]).toMatchObject({ source: 'manual', catalogMatchedBy: 'none' });
   });
 });
 

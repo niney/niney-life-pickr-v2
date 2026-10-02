@@ -6,6 +6,7 @@ import {
   type DeleteMealPhotosResultType,
   type DeleteMealDataInputType,
   type DeleteMealDataResultType,
+  type FrequentMealItemsResultType,
   type ListMealRecommendationsResultType,
   type MealRecommendationContextType,
   type MealRecommendationFeedbackInputType,
@@ -20,6 +21,7 @@ import {
   type MealEntryType,
   type MealPreferenceType,
   type MealPhotoRetentionPreviewType,
+  type MealSlotType,
   type MealStatsResultType,
   type MealTimePresetsResultType,
   type RecentMealItemResultType,
@@ -132,6 +134,15 @@ export const mealApi = {
     apiFetch<RecentMealItemResultType>(
       `${Routes.Meal.recentItem}?${new URLSearchParams({ name }).toString()}`,
     ),
+
+  // 입력 화면 빠른 추가 — 자주 먹은 음식(고른 끼니 우선) + 기록이 적을 때 채우는 기본 목록.
+  frequentItems: (slot?: MealSlotType, limit?: number) => {
+    const params = new URLSearchParams();
+    if (slot) params.set('slot', slot);
+    if (limit !== undefined) params.set('limit', String(limit));
+    const qs = params.toString();
+    return apiFetch<FrequentMealItemsResultType>(`${Routes.Meal.frequentItems}${qs ? `?${qs}` : ''}`);
+  },
 
   // 사진은 JWT 가 필요해 <img src> 로 직접 못 쓴다 — blob 으로 받아 화면에서 URL 로 바꾼다
   // (웹은 objectURL, RN 은 data URL — useMealPhotoUrl 훅이 처리).

@@ -28,6 +28,23 @@ const ME_URL = '/api/v1/auth/me';
 const ENTRIES_URL = '/api/v1/meals';
 const PRESETS_URL = '/api/v1/meals/time-presets';
 const FOOD_SEARCH_URL = '/api/v1/food/search';
+const FREQUENT_URL = '/api/v1/meals/items/frequent';
+
+const quickItem = (over: Partial<Record<string, unknown>> = {}) => ({
+  name: '공기밥',
+  foodId: 'f-rice',
+  dishType: 'rice',
+  mainIngredient: 'grain',
+  cuisine: 'korean',
+  isMain: false,
+  portion: null,
+  servings: null,
+  portionSource: null,
+  count: 0,
+  lastEatenDate: null,
+  from: 'default',
+  ...over,
+});
 
 const savedEntry = (over: Partial<Record<string, unknown>> = {}) => ({
   id: 'e1',
@@ -101,6 +118,7 @@ describe('MealEntryFormPage', () => {
           presets: [{ slot: 'breakfast', time: '08:10', fromRecords: true, sampleCount: 5 }],
         }),
       ),
+      http.get(FREQUENT_URL, () => HttpResponse.json({ items: [] })),
     );
   });
 
@@ -181,6 +199,49 @@ describe('MealEntryFormPage', () => {
     // 주소로 바로 열었으니 돌아갈 곳이 없어 목록으로, draft 는 비운다.
     expect(await screen.findByText('목록 화면')).toBeInTheDocument();
     expect(useMealDraftStore.getState().eatenDate).toBe('');
+  });
+
+  it('빠른 추가 — 고른 끼니로 자주 먹는 음식을 받아, 누르면 빈 첫 줄을 채우고 다시 누르면 뺀다', async () => {
+    const slots: (string | null)[] = [];
+    let body: { items: Array<Record<string, unknown>> } | null = null;
+    server.use(
+      http.get(FREQUENT_URL, ({ request }) => {
+        slots.push(new URL(request.url).searchParams.get('slot'));
+        return HttpResponse.json({
+          items: [
+            quickItem({ name: '제육볶음', foodId: 'f-jeyuk', dishType: 'stir_fry', isMain: true, count: 3, from: 'history', portion: 'large' }),
+            quickItem(),
+          ],
+        });
+      }),
+      http.post(ENTRIES_URL, async ({ request }) => {
+        body = (await request.json()) as { items: Array<Record<string, unknown>> };
+        return HttpResponse.json(savedEntry({ id: 'new-2', source: 'manual', photos: [] }), { status: 201 });
+      }),
+    );
+    renderAt('/me/meals/new');
+
+    const rice = await screen.findByRole('button', { name: '공기밥' });
+    expect(slots[0]).toBe(useMealDraftStore.getState().slot);
+    fireEvent.click(rice);
+    // 빈 첫 줄 자리에 들어가 줄이 하나뿐이다.
+    expect(screen.getAllByLabelText('음식 이름')).toHaveLength(1);
+    expect(screen.getByLabelText('음식 이름')).toHaveValue('공기밥');
+    expect(rice).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: '제육볶음' }));
+    expect(screen.getAllByLabelText('음식 이름')).toHaveLength(2);
+    // 다시 누르면 뺀다.
+    fireEvent.click(screen.getByRole('button', { name: '제육볶음' }));
+    expect(screen.getAllByLabelText('음식 이름')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '제육볶음' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(body).not.toBeNull());
+    expect(body!.items).toEqual([
+      expect.objectContaining({ name: '공기밥', foodId: 'f-rice', isMain: false, source: 'catalog' }),
+      expect.objectContaining({ name: '제육볶음', foodId: 'f-jeyuk', isMain: true, portion: 'large' }),
+    ]);
   });
 
   it('평소 시각 칩은 시각과 끼니를 함께 정하고 날짜는 두고, 음식 추가로 줄을 늘린다', async () => {

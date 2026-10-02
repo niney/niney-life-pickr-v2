@@ -14,6 +14,7 @@ import type {
   MealDataBackupType,
   MealRecommendationFeedbackInputType,
   MealRecommendationEventInputType,
+  MealSlotType,
   RecognizeMealInputType,
   UpdateMealEntryInputType,
   UpdateMealPreferenceInputType,
@@ -33,6 +34,7 @@ const invalidateEntries = (qc: ReturnType<typeof useQueryClient>): void => {
   void qc.invalidateQueries({ queryKey: [...KEY, 'stats'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'recommendation'] });
   void qc.invalidateQueries({ queryKey: [...KEY, 'time-presets'] });
+  void qc.invalidateQueries({ queryKey: [...KEY, 'frequent'] });
 };
 
 // 전체 내보내기는 사용자 동작 때만 큰 JSON 을 받도록 mutation 으로 제공한다.
@@ -203,6 +205,19 @@ export const useRecentMealItem = (name: string | null | undefined) =>
     queryFn: () => mealApi.recentItem(name!),
     enabled: !!name && name.trim().length > 0,
     staleTime: 5 * 60_000,
+  });
+
+/**
+ * 입력 화면 빠른 추가 칩 — 자주 먹은 음식(고른 끼니 우선) + 기본 목록. 끼니를 바꿔도 칩 줄이
+ * 비었다가 다시 차지 않게 이전 결과를 보여 두고, 기록을 저장하면 다른 목록과 함께 무효화된다.
+ */
+export const useFrequentMealItems = (slot: MealSlotType | null | undefined, enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'frequent', slot ?? null],
+    queryFn: () => mealApi.frequentItems(slot ?? undefined),
+    enabled,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
   });
 
 export const useCopyMealPhoto = () =>
