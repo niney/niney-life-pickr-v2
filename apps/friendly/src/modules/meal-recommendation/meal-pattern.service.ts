@@ -89,16 +89,40 @@ const EXCLUDED_DISH_TYPES = new Set<FoodDishTypeType>([
 //  · '기타' 분류 — 장류·양념·견과·과일 등 끼니 요리가 아니고 이유를 설명할 수 없다.
 //  · 무침·국 분류의 1인분 100kcal 미만 — 한 접시 반찬·맑은 국.
 //  · 식약처 생채·무침류 중 샐러드가 아닌 300kcal 미만 — 무침·겉절이·생채·냉채(물회처럼 한 끼인 것은 남는다).
+//  · 단백질 없는 샐러드(마카로니·감자·옥수수·양상추…) — 닭가슴살·참치 샐러드처럼 주재료가 단백질이면 남는다.
+//  · 채소·곡물·유제품 튀김(연근·고구마·김말이·감자튀김·치즈스틱) — 닭튀김·돈가스·생선까스는 남는다.
+//  · 환자식·이유식 죽(미음·응이)과 국물 베이스(사골국·육수).
+//  아래 셋은 '골고루'가 균형을 밀 때 편중 사용자에게 미음·마카로니 샐러드·연근튀김·사골국이 끼니로 올라와서 더했다
+//  (2026-10-04 골고루 실험).
 const SIDE_MAX_KCAL = 100;
 const SIDE_CATEGORY_KEEP_KCAL = 300;
 const SIDE_CATEGORY = '생채무침류';
+const SIDE_SALAD_INGREDIENTS = new Set(['vegetable', 'fruit']);
+const SIDE_FRIED_INGREDIENTS = new Set(['vegetable', 'grain', 'dairy']);
+const NOT_A_MEAL_NAME = /미음|응이|이유식|사골국$|육수$/;
 export const isSideLikeCatalogRow = (row: {
   name: string;
   dishType: string | null;
+  mainIngredient?: string | null;
   sourceCategory: string | null;
   kcal: number | null;
 }): boolean => {
   if (row.dishType === 'other') return true;
+  if (NOT_A_MEAL_NAME.test(row.name.replace(/\s+/g, ''))) return true;
+  if (
+    row.name.includes('샐러드') &&
+    !row.name.includes('샌드위치') &&
+    (!row.mainIngredient || SIDE_SALAD_INGREDIENTS.has(row.mainIngredient))
+  ) {
+    return true;
+  }
+  if (
+    row.dishType === 'fried' &&
+    row.mainIngredient &&
+    SIDE_FRIED_INGREDIENTS.has(row.mainIngredient)
+  ) {
+    return true;
+  }
   if (
     (row.dishType === 'salad' || row.dishType === 'soup') &&
     row.kcal !== null &&
@@ -596,13 +620,13 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     tags.unshift('가능하면 피함');
   }
 
-  // balance — 최근 분포에서 덜 먹은 축일수록 높다(아는 축만 평균, 셋 다 모르면 중립). 모르는 축을 비중 0
-  // ('안 먹은 축')으로 세면 분류가 빈 음식이 늘 골고루에 맞는 것처럼 올라갔다(2026-10-04 설정 점검: 주재료·계통이
-  // 빈 카레라이스 0.90).
+  // balance — 최근 분포에서 덜 먹은 조리형태·주재료일수록 높다(아는 축만 평균, 둘 다 모르면 중립). 모르는 축을
+  // 비중 0('안 먹은 축')으로 세면 분류가 빈 음식이 늘 골고루에 맞는 것처럼 올라갔다(카레라이스 0.90).
+  // 계통(한식·양식…)은 넣지 않는다 — 한식이 9할인 사용자에게 '골고루'가 '한식만 아니면 아무거나'가 되어 머핀·마카로니
+  // 샐러드를 골랐다(2026-10-04 골고루 실험: 편중 사용자 한식 비율 0.72 → 0.39). 계통은 프로필 요약으로만 LLM 에 준다.
   const axes: [Record<string, number>, string | null][] = [
     [ctx.profile.dishTypeShare, c.dishType],
     [ctx.profile.ingredientShare, c.mainIngredient],
-    [ctx.profile.cuisineShare, c.cuisine],
   ];
   const knownShares = axes.flatMap(([rec, key]) => (key ? [rec[key] ?? 0] : []));
   const balance =
@@ -978,6 +1002,7 @@ export class MealPatternService {
           source: true,
           name: true,
           dishType: true,
+          mainIngredient: true,
           sourceCategory: true,
           kcal: true,
         },

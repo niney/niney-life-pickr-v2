@@ -1407,9 +1407,11 @@ describe('isSideLikeCatalogRow · 프롬프트 알레르기', () => {
     dishType: string | null,
     sourceCategory: string | null,
     kcal: number | null,
+    mainIngredient: string | null = null,
   ) => ({
     name,
     dishType,
+    mainIngredient,
     sourceCategory,
     kcal,
   });
@@ -1418,11 +1420,30 @@ describe('isSideLikeCatalogRow · 프롬프트 알레르기', () => {
     expect(isSideLikeCatalogRow(row('해파리냉채', 'salad', '생채·무침류', 26))).toBe(true);
     expect(isSideLikeCatalogRow(row('토란국', 'soup', '국 및 탕류', 64))).toBe(true);
     expect(isSideLikeCatalogRow(row('도라지생채', 'salad', '생채·무침류', 123))).toBe(true);
-    expect(isSideLikeCatalogRow(row('닭가슴살 샐러드', 'salad', '생채·무침류', 111))).toBe(false);
+    expect(
+      isSideLikeCatalogRow(row('닭가슴살 샐러드', 'salad', '생채·무침류', 111, 'chicken')),
+    ).toBe(false);
     expect(isSideLikeCatalogRow(row('물회', 'salad', '생채·무침류', 532))).toBe(false);
     expect(isSideLikeCatalogRow(row('갈비탕', 'soup', '국 및 탕류', 500))).toBe(false);
     // kcal 을 모르는 국·찌개는 판단하지 않는다.
     expect(isSideLikeCatalogRow(row('된장찌개', 'stew', null, null))).toBe(false);
+  });
+
+  it('단백질 없는 샐러드·채소 튀김·미음·사골국은 반찬급, 단백질 샐러드·고기 튀김은 아니다', () => {
+    expect(
+      isSideLikeCatalogRow(row('마카로니 샐러드', 'salad', '생채·무침류', 220, 'vegetable')),
+    ).toBe(true);
+    expect(isSideLikeCatalogRow(row('참치 샐러드', 'salad', '생채·무침류', 203, 'fish'))).toBe(false);
+    expect(
+      isSideLikeCatalogRow(row('감자샐러드 샌드위치', 'bakery', null, 410, 'vegetable')),
+    ).toBe(false);
+    expect(isSideLikeCatalogRow(row('연근튀김', 'fried', '튀김류', 187, 'vegetable'))).toBe(true);
+    expect(isSideLikeCatalogRow(row('치즈스틱', 'fried', '튀김류', 300, 'dairy'))).toBe(true);
+    expect(isSideLikeCatalogRow(row('닭튀김', 'fried', '튀김류', 903, 'chicken'))).toBe(false);
+    expect(isSideLikeCatalogRow(row('돈가스', 'fried', '튀김류', 560, null))).toBe(false);
+    expect(isSideLikeCatalogRow(row('미음', 'rice', '죽 및 스프류', 19))).toBe(true);
+    expect(isSideLikeCatalogRow(row('사골국', 'soup', '국 및 탕류', 220, 'beef'))).toBe(true);
+    expect(isSideLikeCatalogRow(row('사골떡국', 'soup', '국 및 탕류', 500, 'grain'))).toBe(false);
   });
 
   it('알레르기는 프롬프트에 절대 제외로 들어간다', () => {
@@ -1550,10 +1571,16 @@ describe('이번 추천의 중심 — recommendationFocus · filterForFocus', ()
       rain: null,
       today: TODAY,
     };
-    // 계통만 아는 한식 — 모르는 조리형태·주재료를 '안 먹은 축'으로 세지 않는다.
-    const onlyCuisine = scoreCandidate(candidate('한식 무언가', { cuisine: 'korean' }), ctx);
-    expect(onlyCuisine.features.balance).toBe(0);
+    // 조리형태만 아는 찌개 — 모르는 주재료를 '안 먹은 축'으로 세지 않는다(찌개 100% → 0).
+    const onlyDish = scoreCandidate(candidate('찌개 무언가', { dishType: 'stew' }), ctx);
+    expect(onlyDish.features.balance).toBe(0);
     expect(scoreCandidate(candidate('정체불명'), ctx).features.balance).toBe(0.5);
+    // 계통(한식 100%)은 균형에 넣지 않는다 — 한식 국을 '골고루'에서 밀어내지 않는다.
+    const koreanSoup = scoreCandidate(
+      candidate('미역국', { dishType: 'soup', mainIngredient: 'vegetable', cuisine: 'korean' }),
+      ctx,
+    );
+    expect(koreanSoup.features.balance).toBe(1);
   });
 });
 
