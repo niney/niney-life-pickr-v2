@@ -233,14 +233,16 @@ export const MealDetailPage = () => {
           <p className="text-xs text-muted-foreground">사진 인식: {data.recognition.model}</p>
         ) : null}
 
+        {/* 수정이 기본 동작 — "다시 기록"을 수정으로 읽고 눌러 새 기록이 생긴 일이 있어(2026-10-02) 새로 만드는
+            버튼은 이름에 '새 기록'을 넣고 보조 버튼으로 둔다. */}
         <div className="flex flex-wrap gap-2">
-          <Button onClick={repeatEntry} disabled={!draftReady}>
-            <Copy className="size-4" />
-            이 식단 다시 기록
-          </Button>
-          <Button variant="outline" onClick={startEdit} disabled={!draftReady}>
+          <Button onClick={startEdit} disabled={!draftReady}>
             <Pencil className="size-4" />
             수정
+          </Button>
+          <Button variant="outline" onClick={repeatEntry} disabled={!draftReady}>
+            <Copy className="size-4" />
+            같은 메뉴로 새 기록
           </Button>
           <Button
             variant="outline"
@@ -252,7 +254,7 @@ export const MealDetailPage = () => {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          다시 기록은 음식·양·장소만 지금 시각으로 복사해요. 사진과 메모는 빼요.
+          같은 메뉴로 새 기록은 음식·양·장소만 지금 시각의 새 기록으로 복사해요(사진·메모 제외). 이 기록은 그대로 남아요.
         </p>
         {removeError ? (
           <p role="alert" className="text-sm text-destructive">

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type { MealRecommendationType } from '@repo/api-contract';
@@ -91,6 +91,9 @@ const savedEntry = (over: Partial<Record<string, unknown>> = {}) => ({
   ...over,
 });
 
+// 상세 자리 — 어느 기록으로 갔는지 보이게 id 를 찍는다.
+const DetailProbe = () => <p>상세 화면 {useParams().id}</p>;
+
 const renderAt = (path: string) =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -98,7 +101,7 @@ const renderAt = (path: string) =>
         <Routes>
           <Route path="/me/meals" element={<p>목록 화면</p>} />
           <Route path="/me/meals/new" element={<MealNewPage />} />
-          <Route path="/me/meals/:id" element={<p>상세 화면</p>} />
+          <Route path="/me/meals/:id" element={<DetailProbe />} />
           <Route path="/me/meals/:id/edit" element={<MealEditPage />} />
         </Routes>
       </MemoryRouter>
@@ -196,8 +199,8 @@ describe('MealEntryFormPage', () => {
         catalogMatchedBy: 'food_id',
       }),
     ]);
-    // 주소로 바로 열었으니 돌아갈 곳이 없어 목록으로, draft 는 비운다.
-    expect(await screen.findByText('목록 화면')).toBeInTheDocument();
+    // 새 기록은 방금 만든 기록의 상세로 가고 draft 는 비운다.
+    expect(await screen.findByText('상세 화면 new-1')).toBeInTheDocument();
     expect(useMealDraftStore.getState().eatenDate).toBe('');
   });
 
@@ -349,7 +352,7 @@ describe('MealEntryFormPage', () => {
       recognitionDishId: 'dish-1',
       source: 'recognized',
     });
-    expect(await screen.findByText('상세 화면')).toBeInTheDocument();
+    expect(await screen.findByText('상세 화면 e1')).toBeInTheDocument();
   });
 
   it('수정 — 취소하면 draft 를 버리고 상세로 돌아간다', async () => {
@@ -358,7 +361,7 @@ describe('MealEntryFormPage', () => {
     );
     renderAt('/me/meals/e1/edit');
     fireEvent.click(await screen.findByRole('button', { name: '취소' }));
-    expect(await screen.findByText('상세 화면')).toBeInTheDocument();
+    expect(await screen.findByText('상세 화면 e1')).toBeInTheDocument();
     expect(useMealDraftStore.getState().entryId).toBeNull();
   });
 });

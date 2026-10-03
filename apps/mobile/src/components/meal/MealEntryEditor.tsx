@@ -621,6 +621,7 @@ export const MealEntryEditor = ({
       photoTokens: current.photos.map((p) => p.token),
     };
     try {
+      let createdId: string | null = null;
       if (entryId) {
         await update.mutateAsync({
           id: entryId,
@@ -628,7 +629,7 @@ export const MealEntryEditor = ({
           expectedPrincipalId: identity.principalId,
         });
       } else {
-        await create.mutateAsync({
+        const created = await create.mutateAsync({
           input: {
             ...payload,
             source: current.originRecommendationId
@@ -641,10 +642,15 @@ export const MealEntryEditor = ({
           },
           expectedPrincipalId: identity.principalId,
         });
+        createdId = created.id;
       }
       if (!isMealDraftIdentityCurrent(identity)) return;
       const cleared = useMealDraftStore.getState().clear(identity.sessionId);
-      if (cleared && mountedRef.current) router.back();
+      if (!cleared || !mountedRef.current) return;
+      // 새 기록은 방금 만든 기록의 상세로(입력 화면 자리를 바꾼다). 들어온 화면으로 돌아가면 상세의
+      // "같은 메뉴로 새 기록"을 눌렀을 때 원래 기록이 그대로 보여 저장이 안 된 것처럼 보였다(웹과 같이).
+      if (createdId) router.replace(`/meal/${createdId}` as never);
+      else router.back();
     } catch (e) {
       if (isUiIdentityCurrent(identity)) {
         setError(e instanceof ApiError ? e.message : '저장에 실패했어요.');

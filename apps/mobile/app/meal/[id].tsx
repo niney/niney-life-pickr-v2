@@ -166,27 +166,18 @@ export default function MealDetailScreen() {
             <Note tone="muted">사진 인식: {data.recognition.model}</Note>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="이 식단을 새 기록으로 복사"
-            onPress={() => repeatEntry(data)}
-            style={[styles.repeatBtn, { backgroundColor: theme.colors.primary }]}
-          >
-            <Text style={{ color: theme.colors.primaryText, fontSize: 15, fontWeight: '700' }}>
-              이 식단 다시 기록
-            </Text>
-            <Text style={{ color: theme.colors.primaryText, fontSize: 10, opacity: 0.8 }}>
-              음식·양·장소만 복사하고 사진과 메모는 제외해요
-            </Text>
-          </Pressable>
-
+          {/* 수정이 기본 동작 — "다시 기록"을 수정으로 읽고 눌러 새 기록이 생긴 일이 있어(2026-10-02, 웹과 같이)
+              새로 만드는 버튼은 이름에 '새 기록'을 넣고 보조 버튼으로 뒤에 둔다. */}
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
               onPress={() => startEdit(data)}
-              style={[styles.actionBtn, { borderColor: theme.colors.border }]}
+              style={[
+                styles.actionBtn,
+                { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+              ]}
             >
-              <Text style={{ color: theme.colors.text, fontSize: 15 }}>수정</Text>
+              <Text style={{ color: theme.colors.primaryText, fontSize: 15, fontWeight: '700' }}>수정</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -197,6 +188,20 @@ export default function MealDetailScreen() {
               <Text style={{ color: theme.colors.danger, fontSize: 15 }}>{remove.isPending ? '삭제 중…' : '삭제'}</Text>
             </Pressable>
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="같은 메뉴로 새 기록 만들기"
+            onPress={() => repeatEntry(data)}
+            style={[styles.repeatBtn, { borderColor: theme.colors.border }]}
+          >
+            <Text style={{ color: theme.colors.text, fontSize: 15, fontWeight: '600' }}>
+              같은 메뉴로 새 기록
+            </Text>
+            <Text style={{ color: theme.colors.textMuted, fontSize: 10 }}>
+              음식·양·장소만 지금 시각의 새 기록으로 복사해요(사진·메모 제외)
+            </Text>
+          </Pressable>
         </ScrollView>
       )}
     </View>
@@ -215,7 +220,13 @@ const createStyles = (theme: Theme) =>
     nutritionMain: { fontSize: 13, color: theme.colors.text, fontWeight: '600' },
     nutritionNote: { marginTop: 3, fontSize: 11, color: theme.colors.textMuted },
     actions: { flexDirection: 'row', gap: 10 },
-    repeatBtn: { borderRadius: 10, paddingVertical: 11, alignItems: 'center', gap: 2 },
+    repeatBtn: {
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingVertical: 11,
+      alignItems: 'center',
+      gap: 2,
+    },
     placeLink: {
       flexDirection: 'row',
       alignItems: 'center',

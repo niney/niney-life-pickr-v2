@@ -7,7 +7,7 @@ import { setMealDraftPrincipal, useAuthStore, useMealDraftStore } from '@repo/sh
 import { server } from '~/test/msw';
 import { MealDetailPage } from './MealDetailPage';
 
-// 식단 상세(웹) — 표시, 수정·다시 기록이 채우는 draft, 삭제 확인과 요청을 고정한다.
+// 식단 상세(웹) — 표시, 수정·같은 메뉴로 새 기록이 채우는 draft, 삭제 확인과 요청을 고정한다.
 
 const ENTRY_URL = '/api/v1/meals/e1';
 
@@ -127,6 +127,9 @@ describe('MealDetailPage', () => {
 
   it('수정은 이 기록으로 draft 를 채우고 수정 화면으로 간다', async () => {
     renderDetail();
+    // 수정이 맨 앞(기본 동작), 새 기록을 만드는 버튼은 이름에 '새 기록'을 담아 그 뒤에 둔다.
+    const actions = (await screen.findAllByRole('button')).map((b) => b.textContent?.trim());
+    expect(actions.indexOf('수정')).toBeLessThan(actions.indexOf('같은 메뉴로 새 기록'));
     fireEvent.click(await screen.findByRole('button', { name: /수정/ }));
     expect(await screen.findByText('수정 화면')).toBeInTheDocument();
     const s = useMealDraftStore.getState();
@@ -135,9 +138,9 @@ describe('MealDetailPage', () => {
     expect(s.items.map((item) => item.name)).toEqual(['김치찌개', '계란말이']);
   });
 
-  it('다시 기록은 사진·메모를 뺀 새 draft 로 새 기록 화면에 간다', async () => {
+  it('같은 메뉴로 새 기록은 사진·메모를 뺀 새 draft 로 새 기록 화면에 간다', async () => {
     renderDetail();
-    fireEvent.click(await screen.findByRole('button', { name: /다시 기록/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /같은 메뉴로 새 기록/ }));
     expect(await screen.findByText('새 기록 화면')).toBeInTheDocument();
     const s = useMealDraftStore.getState();
     expect(s.entryId).toBeNull();

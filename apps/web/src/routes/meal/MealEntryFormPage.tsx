@@ -224,6 +224,7 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
         items: items.map(draftItemToInput),
       };
       try {
+        let createdId: string | null = null;
         if (entryId) {
           // 사진은 앱에서만 바꾼다 — photoTokens 를 보내지 않아야 서버가 기존 사진 연결을 그대로 둔다.
           await update.mutateAsync({
@@ -232,7 +233,7 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
             expectedPrincipalId: identity.principalId,
           });
         } else {
-          await create.mutateAsync({
+          const created = await create.mutateAsync({
             input: {
               ...payload,
               source: current.originRecommendationId ? 'recommendation' : 'manual',
@@ -241,9 +242,14 @@ const MealEntryForm = ({ entryId }: { entryId: string | null }) => {
             },
             expectedPrincipalId: identity.principalId,
           });
+          createdId = created.id;
         }
         if (!isMealDraftIdentityCurrent(identity)) return;
-        if (useMealDraftStore.getState().clear(identity.sessionId)) leave();
+        if (!useMealDraftStore.getState().clear(identity.sessionId)) return;
+        // 새 기록은 방금 만든 기록의 상세로(입력 화면 자리를 바꿔 뒤로 가면 들어온 화면). 들어온 화면으로 돌아가면
+        // "같은 메뉴로 새 기록"을 상세에서 눌렀을 때 원래 기록이 그대로 보여 저장이 안 된 것처럼 보였다.
+        if (createdId) navigate(`/me/meals/${createdId}`, { replace: true });
+        else leave();
       } catch (e) {
         if (isMealDraftIdentityCurrent(identity)) {
           setError(e instanceof ApiError ? e.message : '저장에 실패했어요.');
