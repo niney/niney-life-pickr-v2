@@ -8,6 +8,7 @@ import type {
   MealPreferenceType,
   MealSlotType,
   MealTypeType,
+  MealWeightsType,
 } from '@repo/api-contract';
 import {
   FOOD_CUISINE_LABEL,
@@ -16,9 +17,15 @@ import {
   MEAL_SLOT_LABEL,
   daysBetween,
 } from '@repo/utils';
-import { MealAllergen } from '@repo/api-contract';
+import { MealAllergen, MealWeightKeys } from '@repo/api-contract';
 import { normalizeTerm } from '../../lib/text.js';
-import { inferFoodAllergens, parseFoodAllergenStatus } from '../food/food-allergen.js';
+import {
+  allergensInFoodName,
+  inferFoodAllergens,
+  parseFoodAllergenStatus,
+} from '../food/food-allergen.js';
+import { loadLexicon, type Lexicon } from '../food/engine/index.js';
+import { mealServingNutrition, type ServingCatalogRow } from '../food/food-serving.js';
 import { parseMealRecommendationFeedback } from './meal-recommendation.feedback.js';
 
 // 추천의 "결정적" 절반 — 사용자 기록을 패턴 프로필로 집계하고, 후보 풀을 만들고, 가중치로
@@ -42,7 +49,14 @@ export const DISLIKE_SCORE_PENALTY = 0.5;
 export const NEGATIVE_RATING_SCORE_PENALTY = 0.4;
 // 아침으로 무거운 조리형태 — 아침 추천에서 점수를 덜어 낸다(점수에 끼니 구분이 없어 아침·점심·저녁이
 // 같은 결과가 나왔다). 내가 그 끼니에 먹던 음식은 조금 올린다.
-const BREAKFAST_HEAVY = new Set<FoodDishTypeType>(['grill', 'fried', 'stew', 'braise', 'stir_fry', 'raw_fish']);
+const BREAKFAST_HEAVY = new Set<FoodDishTypeType>([
+  'grill',
+  'fried',
+  'stew',
+  'braise',
+  'stir_fry',
+  'raw_fish',
+]);
 const BREAKFAST_LIGHT = new Set<FoodDishTypeType>(['bakery', 'soup', 'salad', 'steam']);
 const BREAKFAST_HEAVY_FACTOR = 0.75;
 const SLOT_HABIT_FACTOR = 1.1;
@@ -51,6 +65,9 @@ const SLOT_HABIT_FACTOR = 1.1;
 const RECENT_EATEN_FACTOR = [0.2, 0.5, 0.8];
 // 균형 계산 창.
 const BALANCE_DAYS = 14;
+const LEXICON_TTL_MS = 10 * 60 * 1000;
+// 조리형태·주재료·계통을 하나도 모르는 음식의 balance.
+const BALANCE_UNKNOWN = 0.5;
 // 덜 선호는 후보를 지우지 않되, 취향 만점도 거의 0으로 낮출 만큼 강하게 감점한다.
 export const SOFT_DISLIKE_TASTE_PENALTY = 0.85;
 export const CANDIDATE_POOL_SIZE = 40;
@@ -66,6 +83,36 @@ const EXCLUDED_DISH_TYPES = new Set<FoodDishTypeType>([
   'kimchi',
   'namul',
 ]);
+// 카탈로그 탐색 후보(인기·미경험)로 내놓기엔 반찬·곁들임인 행 — 내 기록·좋아함 후보에는 적용하지 않는다.
+// 저칼로리 무침·냉국(해파리냉채 26kcal·오이냉국 19kcal)이 건강·새로움 가산을 함께 받아 거의 모든 설정에서
+// 1위였고(2026-10-04 설정 점검: LLM 추천 13회 중 12회 해파리냉채), 분류 '기타'(소스/드레싱·견과)도 섞였다.
+//  · '기타' 분류 — 장류·양념·견과·과일 등 끼니 요리가 아니고 이유를 설명할 수 없다.
+//  · 무침·국 분류의 1인분 100kcal 미만 — 한 접시 반찬·맑은 국.
+//  · 식약처 생채·무침류 중 샐러드가 아닌 300kcal 미만 — 무침·겉절이·생채·냉채(물회처럼 한 끼인 것은 남는다).
+const SIDE_MAX_KCAL = 100;
+const SIDE_CATEGORY_KEEP_KCAL = 300;
+const SIDE_CATEGORY = '생채무침류';
+export const isSideLikeCatalogRow = (row: {
+  name: string;
+  dishType: string | null;
+  sourceCategory: string | null;
+  kcal: number | null;
+}): boolean => {
+  if (row.dishType === 'other') return true;
+  if (
+    (row.dishType === 'salad' || row.dishType === 'soup') &&
+    row.kcal !== null &&
+    row.kcal < SIDE_MAX_KCAL
+  ) {
+    return true;
+  }
+  const category = (row.sourceCategory ?? '').replace(/[\s·ㆍ•,，()]/g, '');
+  return (
+    category === SIDE_CATEGORY &&
+    !row.name.includes('샐러드') &&
+    (row.kcal === null || row.kcal < SIDE_CATEGORY_KEEP_KCAL)
+  );
+};
 // 원재료 카탈로그(생 감자·시금치 등)는 메뉴 칼로리 판정용이지 요리가 아니다 — 카탈로그 후보에서 뺀다.
 // 내가 먹은 기록에서 온 후보(삼겹살 등)는 실제로 먹은 음식이라 남긴다.
 const RAW_INGREDIENT_SOURCE = 'mfds-raw';
@@ -178,6 +225,9 @@ export interface CandidateInput {
   allergenWarnings: MealAllergenType[];
   allergenEvidence: string[];
   allergenMetadataKnown: boolean;
+  // 음식명에 보이는 알레르겐(가능성) — 사용자가 밝힌 알레르기면 후보에서 뺀다. 화면 경고·메타에는 쓰지 않는다
+  // (모든 사용자에게 '돼지고기'·'밀' 경고가 붙는다). 운영자 검수(verified) 행은 비운다.
+  allergenNameHints?: MealAllergenType[];
 }
 
 export interface ScoreContext {
@@ -331,6 +381,8 @@ export const buildProfile = (
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
+const CHILLED_NAME = /냉국|냉채|냉면|물회|콩국수|냉모밀|냉소바/;
+
 // 계절·날씨 적합도. 실제 기온이 있으면 그것을, 없으면 월로 판단한다.
 const weatherFit = (
   c: CandidateInput,
@@ -341,12 +393,16 @@ const weatherFit = (
   const cold =
     ctx.tempC !== null && ctx.tempC !== undefined ? ctx.tempC <= 8 : [12, 1, 2].includes(ctx.month);
   const rainy = ctx.rain === true;
+  // 차게 먹는 국물·면(오이냉국·물회·콩국수)은 국 분류여도 시원한 쪽이다(설정 점검: 추운 날 1위가 오이냉국).
+  const chilled = CHILLED_NAME.test(c.name);
   const warmDish =
-    c.dishType === 'soup' ||
-    c.dishType === 'stew' ||
-    c.dishType === 'steam' ||
-    c.dishType === 'braise';
+    !chilled &&
+    (c.dishType === 'soup' ||
+      c.dishType === 'stew' ||
+      c.dishType === 'steam' ||
+      c.dishType === 'braise');
   const coolDish =
+    chilled ||
     c.dishType === 'noodle' ||
     c.dishType === 'salad' ||
     c.dishType === 'raw_fish' ||
@@ -440,6 +496,60 @@ export const filterForSlot = <T extends Pick<CandidateInput, 'nameNorm' | 'dishT
   return kept.length >= minKeep ? kept : [...kept, ...scored.filter((c) => !fits(c))];
 };
 
+type WeightKey = keyof MealWeightsType;
+// 이 이상이면서 가장 높은 중요도를 '이번 추천의 중심'으로 본다 — 프롬프트 문장과 후보 필터가 같은 기준을 쓴다.
+// 기본값은 겹침 피하기·내 취향(4), 프리셋 '가볍게·건강'은 건강, '골고루'는 균형.
+const FOCUS_MIN_WEIGHT = 4;
+export const focusWeightKeys = (weights: MealWeightsType): WeightKey[] => {
+  const max = Math.max(...MealWeightKeys.map((k) => weights[k]));
+  return max >= FOCUS_MIN_WEIGHT ? MealWeightKeys.filter((k) => weights[k] === max) : [];
+};
+// 메모에 가볍게 먹고 싶다는 말이 있으면 건강도 중심으로 본다 — 메모는 LLM 에만 가서 후보·폴백엔 효과가 없었다
+// (설정 점검: 메모 '가볍게'에 계란빵).
+const LIGHT_NOTE = /가볍|가벼|담백|다이어트|저칼로리|라이트|건강/;
+export const recommendationFocus = (
+  weights: MealWeightsType,
+  note: string | null | undefined,
+): Set<WeightKey> => {
+  const focus = new Set(focusWeightKeys(weights));
+  if (note && LIGHT_NOTE.test(note)) focus.add('health');
+  return focus;
+};
+// 건강 요소의 중립값 — 이보다 낮으면 튀김·빵·900kcal 이상·고나트륨 같은 감점이 가점보다 크다.
+const HEALTH_NEUTRAL = 0.5;
+
+const medianOf = (xs: number[]): number => {
+  const sorted = [...xs].sort((a, b) => a - b);
+  return sorted.length === 0 ? 0 : sorted[Math.floor((sorted.length - 1) / 2)]!;
+};
+
+/**
+ * 이번 추천의 중심에 맞지 않는 후보를 LLM·폴백에 넘기기 전에 뺀다. 점수 감점만으로는 LLM 이 후보 안에서 그대로
+ * 골랐다(2026-10-04 설정 점검: '가볍게·건강' 저녁에 양념 돼지고기튀김·야채빵, '골고루'에 늘 먹던 한식 국·찌개).
+ *  · 건강 — 건강 요소가 중립 아래인 후보(튀김·빵·고열량·고나트륨).
+ *  · 균형 — 균형 요소가 후보 중앙값 아래인 후보(최근 많이 먹은 조리형태·주재료·계통 쪽 절반).
+ * 좋아함으로 둔 음식은 남기고, 빼고 나서 너무 적으면(minKeep 미만) 뺀 것을 뒤에 붙인다.
+ */
+export const filterForFocus = <T extends Pick<ScoredCandidate, 'features' | 'liked'>>(
+  scored: T[],
+  focus: ReadonlySet<WeightKey>,
+  minKeep = 3,
+): T[] => {
+  const rules: ((c: T) => boolean)[] = [];
+  if (focus.has('health')) {
+    rules.push((c) => (c.features['health'] ?? HEALTH_NEUTRAL) >= HEALTH_NEUTRAL);
+  }
+  if (focus.has('balance')) {
+    const balanceOf = (c: T): number => c.features['balance'] ?? BALANCE_UNKNOWN;
+    const median = medianOf(scored.map(balanceOf));
+    rules.push((c) => balanceOf(c) >= median);
+  }
+  if (rules.length === 0) return scored;
+  const fits = (c: T): boolean => c.liked || rules.every((rule) => rule(c));
+  const kept = scored.filter(fits);
+  return kept.length >= minKeep ? kept : [...kept, ...scored.filter((c) => !fits(c))];
+};
+
 export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCandidate => {
   const tags: string[] = [];
   const lastEaten = ctx.profile.lastEatenByNorm.get(c.nameNorm) ?? null;
@@ -486,17 +596,19 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     tags.unshift('가능하면 피함');
   }
 
-  // balance — 최근 분포에서 덜 먹은 축일수록 높다(세 축 평균).
-  const shareOf = (rec: Record<string, number>, key: string | null): number =>
-    key ? (rec[key] ?? 0) : 0;
-  const balance = clamp01(
-    1 -
-      (shareOf(ctx.profile.dishTypeShare, c.dishType) +
-        shareOf(ctx.profile.ingredientShare, c.mainIngredient) +
-        shareOf(ctx.profile.cuisineShare, c.cuisine)) /
-        3 /
-        0.5,
-  );
+  // balance — 최근 분포에서 덜 먹은 축일수록 높다(아는 축만 평균, 셋 다 모르면 중립). 모르는 축을 비중 0
+  // ('안 먹은 축')으로 세면 분류가 빈 음식이 늘 골고루에 맞는 것처럼 올라갔다(2026-10-04 설정 점검: 주재료·계통이
+  // 빈 카레라이스 0.90).
+  const axes: [Record<string, number>, string | null][] = [
+    [ctx.profile.dishTypeShare, c.dishType],
+    [ctx.profile.ingredientShare, c.mainIngredient],
+    [ctx.profile.cuisineShare, c.cuisine],
+  ];
+  const knownShares = axes.flatMap(([rec, key]) => (key ? [rec[key] ?? 0] : []));
+  const balance =
+    knownShares.length === 0
+      ? BALANCE_UNKNOWN
+      : clamp01(1 - knownShares.reduce((s, v) => s + v, 0) / knownShares.length / 0.5);
   if (balance > 0.85 && c.dishType) tags.push(`요즘 안 먹은 ${FOOD_DISH_TYPE_LABEL[c.dishType]}`);
 
   const health = healthFit(c);
@@ -578,6 +690,16 @@ export const isExcluded = (c: CandidateInput, excluded: string[]): boolean =>
 
 export class MealPatternService {
   constructor(private readonly prisma: PrismaClient) {}
+
+  // 1인분 중량 어휘(코드 기본 + 어드민) — 식단 저장(FoodService)과 같은 10분 주기로 다시 읽는다.
+  private lexiconCache: { value: Lexicon; at: number } | null = null;
+  private async servingLexicon(): Promise<Lexicon> {
+    if (this.lexiconCache && Date.now() - this.lexiconCache.at < LEXICON_TTL_MS)
+      return this.lexiconCache.value;
+    const value = await loadLexicon(this.prisma);
+    this.lexiconCache = { value, at: Date.now() };
+    return value;
+  }
 
   async loadHistory(userId: string, today: string): Promise<HistoryItem[]> {
     const from = shiftDate(today, -HISTORY_DAYS);
@@ -700,6 +822,15 @@ export class MealPatternService {
   ): Promise<CandidateInput[]> {
     const out: CandidateInput[] = [];
     const candidateByNorm = new Map<string, CandidateInput>();
+    // 건강 판정용 영양은 한 끼 1인분 기준(식단 저장과 같은 mealServingNutrition). 식약처 식품중량(대개 100g)을
+    // 그대로 쓰면 거의 모든 음식이 '500kcal 이하' 가점을 받아 건강 요소가 변별력을 잃었다(2026-10-04).
+    const lex = await this.servingLexicon();
+    const perMeal = (
+      row: ServingCatalogRow | null,
+    ): Pick<CandidateInput, 'kcal' | 'proteinG' | 'sodiumMg'> => {
+      const n = mealServingNutrition(row, { isMain: true }, lex);
+      return { kcal: n.kcal, proteinG: n.proteinG, sodiumMg: n.sodiumMg };
+    };
 
     const push = (c: CandidateInput, source = ''): void => {
       const existing = candidateByNorm.get(c.nameNorm);
@@ -728,19 +859,19 @@ export class MealPatternService {
         ].slice(0, 8);
         existing.allergenMetadataKnown ||= c.allergenMetadataKnown;
         existing.popularity = Math.max(existing.popularity, c.popularity);
+        // 합친 근거로 알레르기에 걸리게 됐으면 뺀다.
+        if (hitsUserAllergen(existing, preference.allergens ?? [])) {
+          candidateByNorm.delete(c.nameNorm);
+          out.splice(out.indexOf(existing), 1);
+        }
         return;
       }
       if (c.dishType && EXCLUDED_DISH_TYPES.has(c.dishType)) return;
       if (isVagueMenuVocabulary(source, c.dishType)) return;
       if (isExcluded(c, preference.excludedFoods)) return;
-      // 구조화 알레르겐은 알려진 이름·재료 메타에 걸린 후보만 보수적으로 제거한다.
-      // 메타가 없거나 교차접촉 가능성이 있는 음식까지 안전하다고 단정하지 않는다.
-      if (
-        (preference.allergens ?? []).some((allergen) =>
-          (c.allergenWarnings ?? []).includes(allergen),
-        )
-      )
-        return;
+      // 알레르기는 재료·표시 근거와 음식명(가능성)에 걸린 후보를 보수적으로 제거한다 — 좋아함·내 기록이어도.
+      // 근거가 없다고 안전하다고 단정하지는 않는다(화면은 '원재료 정보 부족'으로 알린다).
+      if (hitsUserAllergen(c, preference.allergens ?? [])) return;
       candidateByNorm.set(c.nameNorm, c);
       out.push(c);
     };
@@ -765,9 +896,7 @@ export class MealPatternService {
         popularity: row?.popularity ?? 0,
         fromHistory: true,
         liked: false,
-        kcal: row?.kcal ?? null,
-        sodiumMg: row?.sodiumMg ?? null,
-        proteinG: row?.proteinG ?? null,
+        ...perMeal(row ?? null),
         nutritionFrom: row?.nutritionFrom ?? null,
         nutritionBasis: nutritionBasis(
           row?.nutritionFrom ?? null,
@@ -802,9 +931,7 @@ export class MealPatternService {
         popularity: row?.popularity ?? 0,
         fromHistory: false,
         liked: true,
-        kcal: row?.kcal ?? null,
-        sodiumMg: row?.sodiumMg ?? null,
-        proteinG: row?.proteinG ?? null,
+        ...perMeal(row ?? null),
         nutritionFrom: row?.nutritionFrom ?? null,
         nutritionBasis: nutritionBasis(
           row?.nutritionFrom ?? null,
@@ -826,7 +953,9 @@ export class MealPatternService {
 
     // 인기가 같으면 흔한 메뉴 출처 → 날마다 바뀌는 고정 순서(가나다순이 아니다).
     const shuffleKey = (row: { nameNorm: string }): number => stableHash(`${seed}|${row.nameNorm}`);
-    const byPopularity = <T extends { popularity: number; source: string; nameNorm: string }>(rows: T[]): T[] =>
+    const byPopularity = <T extends { popularity: number; source: string; nameNorm: string }>(
+      rows: T[],
+    ): T[] =>
       [...rows].sort(
         (a, b) =>
           b.popularity - a.popularity ||
@@ -836,15 +965,24 @@ export class MealPatternService {
 
     // 카탈로그 후보는 적격 행 전체의 순서 키(이름·인기·출처)만 가볍게 읽어 정렬한 뒤, 고른 행만 다시 읽는다.
     // DB 에서 잘라 오면 인기가 같은 수천 행 중 가나다순 앞쪽만 남는다.
-    const eligible = await this.prisma.foodItem.findMany({
-      where: {
-        active: true,
-        source: { not: RAW_INGREDIENT_SOURCE },
-        dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
-        NOT: { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] },
-      },
-      select: { nameNorm: true, popularity: true, source: true },
-    });
+    const eligible = (
+      await this.prisma.foodItem.findMany({
+        where: {
+          active: true,
+          source: { not: RAW_INGREDIENT_SOURCE },
+          dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
+        },
+        select: {
+          nameNorm: true,
+          popularity: true,
+          source: true,
+          name: true,
+          dishType: true,
+          sourceCategory: true,
+          kcal: true,
+        },
+      })
+    ).filter((r) => !isSideLikeCatalogRow(r));
     const historySet = new Set(historyNorms);
     // ③ 카탈로그 인기 — 외식·배달에서 실제로 고를 수 있는 메뉴.
     const popularNorms = byPopularity(eligible)
@@ -864,13 +1002,13 @@ export class MealPatternService {
     for (const norm of popularNorms) {
       if (out.length >= CANDIDATE_POOL_SIZE - CATALOG_NOVEL_MAX) break;
       const row = catalogByNorm.get(norm);
-      if (row) push(toCandidate(row), row.source);
+      if (row) push({ ...toCandidate(row), ...perMeal(row) }, row.source);
     }
     for (const norm of novelNorms) {
       if (out.length >= CANDIDATE_POOL_SIZE) break;
       const row = catalogByNorm.get(norm);
       // 분류가 없는 행은 이유를 설명할 수 없어 탐험 후보로 쓰지 않는다.
-      if (row?.dishType) push(toCandidate(row), row.source);
+      if (row?.dishType) push({ ...toCandidate(row), ...perMeal(row) }, row.source);
     }
 
     return out.slice(0, CANDIDATE_POOL_SIZE);
@@ -957,12 +1095,15 @@ const parseStringJson = (json: string | null | undefined): string[] => {
 };
 
 export const allergenData = (
-  _name: string,
+  name: string,
   ingredientsJson: string | null | undefined,
   explicitJson: string | null | undefined,
   evidenceJson: string | null | undefined,
   statusValue: string | null | undefined = 'unknown',
-): Pick<CandidateInput, 'allergenWarnings' | 'allergenEvidence' | 'allergenMetadataKnown'> => {
+): Pick<
+  CandidateInput,
+  'allergenWarnings' | 'allergenEvidence' | 'allergenMetadataKnown' | 'allergenNameHints'
+> => {
   const ingredients = parseIngredients(ingredientsJson);
   const explicit = parseAllergenJson(explicitJson);
   const status = parseFoodAllergenStatus(statusValue ?? 'unknown');
@@ -976,8 +1117,20 @@ export const allergenData = (
     allergenWarnings: MealAllergen.options.filter((allergen) => warnings.has(allergen)),
     allergenEvidence: [...evidence].slice(0, 8),
     allergenMetadataKnown: status !== 'unknown' || explicit.length > 0 || ingredients.length > 0,
+    allergenNameHints: status === 'verified' ? [] : allergensInFoodName(name),
   };
 };
+
+/** 사용자가 밝힌 알레르기에 걸리는 후보인가 — 재료·표시 근거와 음식명(가능성)을 함께 본다. */
+export const hitsUserAllergen = (
+  c: Pick<CandidateInput, 'allergenWarnings' | 'allergenNameHints'>,
+  allergens: readonly MealAllergenType[],
+): boolean =>
+  allergens.some(
+    (allergen) =>
+      (c.allergenWarnings ?? []).includes(allergen) ||
+      (c.allergenNameHints ?? []).includes(allergen),
+  );
 
 // 재료 이름 목록(레시피 출처가 있는 행만). 후보 필터·화면 표시에 쓴다.
 export const parseIngredients = (json: string | null | undefined): string[] => {

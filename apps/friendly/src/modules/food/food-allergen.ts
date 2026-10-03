@@ -92,7 +92,82 @@ export const inferFoodAllergens = (ingredients: string[] | null): FoodAllergenMe
   };
 };
 
-export const verifiedFoodAllergens = (allergens: MealAllergenType[]): FoodAllergenMetadata => {
+// 음식명 단어 — 카탈로그 메타(위 재료 규칙·검수)에는 쓰지 않는다(배합 보장 없음). 사용자가 알레르기를 밝혔을 때
+// 추천 후보에서 **보수적으로 빼는** 데만 쓴다 — 잘못 빼는 쪽(우유식빵·게맛살)은 안전하지만 놓치는 쪽은 위험하다.
+// 재료 정보가 있는 행이 거의 없어(2026-10-04 dev 1,266행 중 0) 재료 규칙만으로는 깐풍새우·꽃게찜이 그대로 추천됐다.
+const ALLERGEN_NAME_KEYWORDS: Record<MealAllergenType, readonly string[]> = {
+  ...ALLERGEN_KEYWORDS,
+  egg: [...ALLERGEN_KEYWORDS.egg, '오므라이스', '에그'],
+  milk: [...ALLERGEN_KEYWORDS.milk, '크림', '라떼', '아이스크림', '까르보나라'],
+  buckwheat: [...ALLERGEN_KEYWORDS.buckwheat, '모밀', '냉면'],
+  peanut: [...ALLERGEN_KEYWORDS.peanut, '피넛'],
+  wheat: [
+    ...ALLERGEN_KEYWORDS.wheat,
+    '만두',
+    '빵',
+    '토스트',
+    '피자',
+    '케이크',
+    '쿠키',
+    '비스킷',
+    '크로와상',
+    '돈가스',
+    '돈까스',
+    '짜장면',
+    '짬뽕',
+    '수제비',
+  ],
+  crab: [...ALLERGEN_KEYWORDS.crab, '킹크랩', '크랩', '게장', '게맛살', '게찜', '게탕', '게국'],
+  shrimp: [...ALLERGEN_KEYWORDS.shrimp, '대하', '감바스'],
+  squid: [...ALLERGEN_KEYWORDS.squid, '한치', '꼴뚜기'],
+  shellfish: [...ALLERGEN_KEYWORDS.shellfish, '재첩', '소라', '키조개', '피조개'],
+  tomato: [...ALLERGEN_KEYWORDS.tomato, '케첩', '케찹'],
+  chicken: [...ALLERGEN_KEYWORDS.chicken, '닭', '삼계탕', '백숙'],
+  pork: [
+    ...ALLERGEN_KEYWORDS.pork,
+    '돼지',
+    '삼겹',
+    '제육',
+    '족발',
+    '보쌈',
+    '돈가스',
+    '돈까스',
+    '순대',
+    '탕수육',
+    '동그랑땡',
+    '감자탕',
+  ],
+  beef: [
+    ...ALLERGEN_KEYWORDS.beef,
+    '차돌',
+    '불고기',
+    '육회',
+    '육개장',
+    '갈비탕',
+    '설렁탕',
+    '곰탕',
+    '스테이크',
+    '소갈비',
+  ],
+};
+// 이름에 단어가 들어 있어도 해당 알레르겐과 무관한 음식(굴비는 조기).
+const ALLERGEN_NAME_EXCEPTIONS: Partial<Record<MealAllergenType, readonly string[]>> = {
+  shellfish: ['굴비'],
+};
+
+/** 음식명에 보이는 알레르겐(가능성) — 추천 후보 제외 전용. 카탈로그 메타로 저장하지 않는다. */
+export const allergensInFoodName = (name: string): MealAllergenType[] => {
+  const normalized = normalizeIngredient(name);
+  return MealAllergen.options.filter((allergen) => {
+    let target = normalized;
+    for (const exception of ALLERGEN_NAME_EXCEPTIONS[allergen] ?? []) {
+      target = target.replaceAll(exception, '');
+    }
+    return ALLERGEN_NAME_KEYWORDS[allergen].some((keyword) => target.includes(keyword));
+  });
+};
+
+export const verifiedFoodAllergens =(allergens: MealAllergenType[]): FoodAllergenMetadata => {
   const unique = MealAllergen.options.filter((allergen) => allergens.includes(allergen));
   return {
     allergens: unique,

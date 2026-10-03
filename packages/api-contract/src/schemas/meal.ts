@@ -523,14 +523,16 @@ export const MEAL_DEFAULT_WEIGHTS: MealWeightsType = {
 export const MEAL_WEIGHT_PRESETS: Record<string, { label: string; weights: MealWeightsType }> = {
   balanced: {
     label: '골고루',
+    // 새로움은 낮게 — 3 이면 안 먹어 본 음식이 겹침 회피·균형 가산까지 받아 '새로운 도전'과 상위 10 이
+    // 90~100% 같았다(2026-10-04 설정 점검). 골고루 = 먹던 음식 안에서도 덜 먹은 쪽.
     weights: {
-      variety: 5,
-      taste: 3,
+      variety: 3,
+      taste: 2,
       balance: 5,
-      health: 3,
-      novelty: 3,
+      health: 2,
+      novelty: 1,
       weather: 1,
-      convenience: 2,
+      convenience: 1,
     },
   },
   taste: {

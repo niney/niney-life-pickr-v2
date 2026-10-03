@@ -1,19 +1,28 @@
 import { MEAL_SLOT_LABEL, MEAL_TYPE_LABEL } from '@repo/utils';
-import type { MealSlotType, MealTypeType, MealWeightsType } from '@repo/api-contract';
-import type { ScoredCandidate } from './meal-pattern.service.js';
+import {
+  MEAL_ALLERGEN_LABEL,
+  type MealAllergenType,
+  type MealSlotType,
+  type MealTypeType,
+  type MealWeightsType,
+} from '@repo/api-contract';
+import { focusWeightKeys, type ScoredCandidate } from './meal-pattern.service.js';
 
 // 다음 끼니 추천 프롬프트(purpose meal-recommend, 텍스트).
 //
 // MEAL_RECOMMENDATION_VERSION 변경 시 이전 추천이 stale(MealRecommendation.promptVersion 으로 남는다).
 // v1: 최초 — 후보 풀 안에서만 고르게 하고 이유를 붙인다.
 // v2: 절대 제외와 덜 선호를 분리하고, 덜 선호 후보는 대안이 부족할 때만 고른다.
+// v3: 알레르기도 알린다 — 후보 풀이 이미 거르지만(이름·재료), 이유 문장이 알레르기와 어긋나지 않게.
+//     가장 높은 중요도(4 이상)를 "이번 추천의 중심"으로 구체적으로 적는다 — 숫자만 주면 '가볍게·건강'에도
+//     튀김을 골랐다(2026-10-04 설정 점검).
 //
 // 설계 근거(docs/PLAN-meal.md 결정 E):
 //  - 원시 기록을 주지 않는다. 서버가 집계한 프로필 요약 + 코드가 점수를 매긴 후보 풀만 넘긴다.
 //  - LLM 은 "고르고 설명하는" 역할이다. 후보 밖 이름은 서버가 버린다 — 없는 음식을 추천하면
 //    사용자가 검색해도 안 나오고 통계도 안 잡힌다.
 //  - 건강보다 "패턴 분석 → 겹치지 않게·골고루 + 취향"이 기본 목표라는 걸 프롬프트에 명시한다.
-export const MEAL_RECOMMENDATION_VERSION = 2;
+export const MEAL_RECOMMENDATION_VERSION = 3;
 
 export const MEAL_RECOMMENDATION_SYSTEM_PROMPT = `너는 한 사람의 식사 기록을 보고 다음 끼니를 골라 주는 도우미다.
 
@@ -64,6 +73,17 @@ const WEIGHT_LABEL: Record<keyof MealWeightsType, string> = {
   convenience: '간편함',
 };
 
+// 중심 항목을 LLM 이 바로 쓸 수 있는 고르는 기준으로.
+const WEIGHT_FOCUS_HINT: Record<keyof MealWeightsType, string> = {
+  variety: '최근 먹은 음식·분류와 겹치지 않게',
+  taste: '자주 먹고 좋아한 음식 쪽으로',
+  balance: "최근 적게 먹은 조리형태·주재료를 채우는 쪽으로(후보 태그 '요즘 안 먹은 …')",
+  health: '튀김·빵·고열량·짠 음식은 피하고 채소·단백질·가벼운 쪽으로',
+  novelty: '먹은 적 없는 음식 위주로',
+  weather: '오늘 날씨·계절에 맞게',
+  convenience: '준비·주문이 간편한 쪽으로',
+};
+
 export interface RecommendationPromptInput {
   profileText: string;
   candidates: ScoredCandidate[];
@@ -73,6 +93,7 @@ export interface RecommendationPromptInput {
   weights: MealWeightsType;
   excludedFoods: string[];
   dislikedFoods: string[];
+  allergens: MealAllergenType[];
   note: string | null;
   // 기록이 거의 없을 때 — 콜드 스타트 문구를 다르게 쓴다.
   entryCount: number;
@@ -90,8 +111,21 @@ export const buildMealRecommendationUserPrompt = (input: RecommendationPromptInp
       .map((k) => `${WEIGHT_LABEL[k]} ${input.weights[k]}`)
       .join(' / '),
   );
-  if (input.excludedFoods.length > 0) lines.push(`[못 먹는 것 — 절대 제외] ${input.excludedFoods.join(', ')}`);
-  if (input.dislikedFoods.length > 0) lines.push(`[가능하면 피할 것] ${input.dislikedFoods.join(', ')}`);
+  const focus = focusWeightKeys(input.weights);
+  if (focus.length > 0) {
+    lines.push(
+      `[이번 추천의 중심] ${focus.map((k) => `${WEIGHT_LABEL[k]} — ${WEIGHT_FOCUS_HINT[k]}`).join(' / ')}`,
+    );
+  }
+  if (input.allergens.length > 0) {
+    lines.push(
+      `[알레르기 — 이 재료가 든 음식은 절대 고르지 말 것] ${input.allergens.map((a) => MEAL_ALLERGEN_LABEL[a]).join(', ')}`,
+    );
+  }
+  if (input.excludedFoods.length > 0)
+    lines.push(`[못 먹는 것 — 절대 제외] ${input.excludedFoods.join(', ')}`);
+  if (input.dislikedFoods.length > 0)
+    lines.push(`[가능하면 피할 것] ${input.dislikedFoods.join(', ')}`);
   lines.push('');
   lines.push('[내 식사 패턴]');
   lines.push(input.entryCount === 0 ? '기록이 아직 없습니다.' : input.profileText);

@@ -34,6 +34,8 @@ import {
   buildProfile,
   describeProfile,
   filterForSlot,
+  filterForFocus,
+  recommendationFocus,
   scoreCandidate,
   type ScoredCandidate,
 } from './meal-pattern.service.js';
@@ -218,7 +220,11 @@ export class MealRecommendationService {
     const profile = buildProfile(history, input.targetSlot, today, feedbackSignals);
     // 사용자·날짜를 씨앗으로 — 같은 날 같은 사람에겐 같은 후보(캐시 키와 맞물린다), 날마다·사람마다 다른
     // 탐색 후보. 날짜만이면 같은 날 모든 사용자가 같은 탐색 후보를 받아 한 음식이 모두에게 뜬다(프로빙: 감자샐러드).
-    const candidatesRaw = await this.pattern.buildCandidates(profile, preference, `${userId}|${today}`);
+    const candidatesRaw = await this.pattern.buildCandidates(
+      profile,
+      preference,
+      `${userId}|${today}`,
+    );
 
     const month = Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
     // 날씨는 있으면 쓰고 없으면 계절로 — 어느 쪽이든 추천은 나온다.
@@ -230,23 +236,28 @@ export class MealRecommendationService {
       input.lng !== undefined
         ? await this.deps.weather(input.lat, input.lng).catch(() => null)
         : null;
-    const scored = filterForSlot(
-      candidatesRaw
-        .map((c) =>
-          scoreCandidate(c, {
-            profile,
-            preference,
-            targetSlot: input.targetSlot,
-            mealType: effectiveMealType,
-            month,
-            tempC: weather?.tempC ?? null,
-            rain: weather?.rain ?? null,
-            today,
-          }),
-        )
-        .sort((a, b) => b.score - a.score),
-      profile,
-      input.targetSlot,
+    // 끼니(아침 무거운 요리)·이번 추천의 중심(건강·균형, 메모 '가볍게')에 맞지 않는 후보는 LLM·폴백에 넘기지 않는다.
+    const scored = filterForFocus(
+      filterForSlot(
+        candidatesRaw
+          .map((c) =>
+            scoreCandidate(c, {
+              profile,
+              preference,
+              targetSlot: input.targetSlot,
+              mealType: effectiveMealType,
+              month,
+              tempC: weather?.tempC ?? null,
+              rain: weather?.rain ?? null,
+              today,
+            }),
+          )
+          .sort((a, b) => b.score - a.score),
+        profile,
+        input.targetSlot,
+        PICK_MIN,
+      ),
+      recommendationFocus(preference.weights, input.note),
       PICK_MIN,
     );
 
@@ -333,6 +344,7 @@ export class MealRecommendationService {
         mealType: effectiveMealType,
         weights: preference.weights,
         excludedFoods: preference.excludedFoods,
+        allergens: preference.allergens,
         dislikedFoods: preference.dislikedFoods,
         note: input.note ?? null,
         entryCount: profile.entryCount,

@@ -220,7 +220,7 @@ export const MealPreferenceTab = () => {
           />
           <Field
             label="좋아하는 음식"
-            hint="쉼표로 구분. 추천 후보에 항상 포함돼요."
+            hint="쉼표로 구분. 추천 후보에 항상 넣되, 알레르기 주의 항목에 걸리는 음식은 빼요."
             value={liked}
             onChange={(v) => {
               setLiked(v);
