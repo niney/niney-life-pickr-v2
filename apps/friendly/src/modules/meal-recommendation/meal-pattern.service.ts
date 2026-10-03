@@ -32,6 +32,23 @@ const HISTORY_DAYS = 90;
 const DECAY_HALF_LIFE_DAYS = 30;
 // "겹침"을 0 으로 보는 경과일 — 이 이상 안 먹었으면 variety 만점.
 const VARIETY_FULL_DAYS = 14;
+// 안 먹어 본 음식의 variety. "겹치지 않음"은 새로움(novelty) 한 곳에서만 센다 — 겹침 회피·균형·새로움이
+// 모두 미경험에 만점을 주면 기본 가중치에서 내 취향 음식이 이길 수 없었다(2026-10-04 프로빙: 4명 모두
+// 상위 8개가 전부 안 먹어 본 음식, 취향 0).
+const VARIETY_UNKNOWN = 0.5;
+// 싫다는 신호(덜 선호·👎)는 최종 점수에서 직접 깎는다. 취향(taste) 감점만으로는 안 먹어 본 음식에
+// 효과가 없었다 — taste 가 이미 0 이라 더 내려가지 않는다(프로빙: 👎 한 시금치가 0.67 그대로 1위).
+export const DISLIKE_SCORE_PENALTY = 0.5;
+export const NEGATIVE_RATING_SCORE_PENALTY = 0.4;
+// 아침으로 무거운 조리형태 — 아침 추천에서 점수를 덜어 낸다(점수에 끼니 구분이 없어 아침·점심·저녁이
+// 같은 결과가 나왔다). 내가 그 끼니에 먹던 음식은 조금 올린다.
+const BREAKFAST_HEAVY = new Set<FoodDishTypeType>(['grill', 'fried', 'stew', 'braise', 'stir_fry', 'raw_fish']);
+const BREAKFAST_LIGHT = new Set<FoodDishTypeType>(['bakery', 'soup', 'salad', 'steam']);
+const BREAKFAST_HEAVY_FACTOR = 0.75;
+const SLOT_HABIT_FACTOR = 1.1;
+// 방금(오늘·어제·그제) 먹은 음식의 최종 점수 배수. variety 가중합만으로는 오늘 먹은 음식의 높은 취향
+// (가장 최근이라 감쇠 가중이 최대)을 못 누른다(프로빙: 점심에 먹은 음식이 저녁 추천 1위로 돌아왔다).
+const RECENT_EATEN_FACTOR = [0.2, 0.5, 0.8];
 // 균형 계산 창.
 const BALANCE_DAYS = 14;
 // 덜 선호는 후보를 지우지 않되, 취향 만점도 거의 0으로 낮출 만큼 강하게 감점한다.
@@ -40,8 +57,35 @@ export const CANDIDATE_POOL_SIZE = 40;
 // 후보 풀에서 카탈로그 인기·미경험이 차지하는 최대 수(취향 후보를 밀어내지 않게).
 const CATALOG_POPULAR_MAX = 14;
 const CATALOG_NOVEL_MAX = 8;
-// 추천 대상에서 제외할 조리형태 — 끼니 추천에 음료·주류가 섞이면 쓸모가 없다.
-const EXCLUDED_DISH_TYPES = new Set<FoodDishTypeType>(['beverage', 'alcohol', 'dairy']);
+// 추천 대상에서 제외할 조리형태 — 끼니 추천에 음료·주류가 섞이면 쓸모가 없다. 김치·나물은 반찬이라
+// "다음 끼니"로 내놓을 것이 아니다(프로빙: 시금치·가자미식해가 끼니 추천 상위에 올랐다).
+const EXCLUDED_DISH_TYPES = new Set<FoodDishTypeType>([
+  'beverage',
+  'alcohol',
+  'dairy',
+  'kimchi',
+  'namul',
+]);
+// 원재료 카탈로그(생 감자·시금치 등)는 메뉴 칼로리 판정용이지 요리가 아니다 — 카탈로그 후보에서 뺀다.
+// 내가 먹은 기록에서 온 후보(삼겹살 등)는 실제로 먹은 음식이라 남긴다.
+const RAW_INGREDIENT_SOURCE = 'mfds-raw';
+// 인기가 같은 카탈로그 후보의 순서 — 흔한 메뉴 출처를 앞에, 그 안에서는 날마다 바뀌는 고정 순서로 섞는다.
+// 인기 정보가 없는 카탈로그(dev 등)에서 가나다순 앞쪽('가오리회무침·가자미식해…')만 후보가 되던 편향을 막는다.
+const SOURCE_RANK: Record<string, number> = {
+  curated: 0,
+  'hansik-800': 1,
+  'menu-canonical': 2,
+  'mfds-recipe': 3,
+  'mfds-nutrition': 4,
+};
+const stableHash = (s: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
 // 외식 메뉴 어휘(menu-canonical)에서 조리형태가 'other' 인 행은 실제 요리가 아니라 범주어·부재료·
 // 옵션인 경우가 많다 — 실측 458건에 "고기/반찬/사이드/소스/세트/마늘/신메뉴" 가 대거 섞여 있었다.
 // 자동완성에는 남겨 두고(사용자가 "군고구마" 를 직접 적을 때 매칭돼야 한다) 추천 후보에서만 뺀다.
@@ -361,13 +405,48 @@ const convenienceFit = (c: CandidateInput, ctx: ScoreContext): number => {
   return 0.5;
 };
 
+/** 이 끼니에 내가 실제로 먹던 음식인지(프로필의 끼니별 습관). */
+const isSlotHabit = (c: Pick<CandidateInput, 'nameNorm'>, profile: PatternProfile): boolean =>
+  profile.slotFoods.some((name) => normalizeTerm(name) === c.nameNorm);
+
+// 끼니 적합 — 아침엔 무거운 요리를 덜고, 이 끼니에 내가 먹던 음식은 조금 올린다. 1 이 기준인 배수다.
+// 내 습관이면 아침 무거운 요리라도 감점하지 않는다(아침에 고기를 먹는 사람).
+const slotFit = (c: CandidateInput, ctx: ScoreContext): { factor: number; tag: string | null } => {
+  if (isSlotHabit(c, ctx.profile)) {
+    return { factor: SLOT_HABIT_FACTOR, tag: `${MEAL_SLOT_LABEL[ctx.targetSlot]}에 자주` };
+  }
+  if (ctx.targetSlot === 'breakfast' && c.dishType) {
+    if (BREAKFAST_HEAVY.has(c.dishType)) return { factor: BREAKFAST_HEAVY_FACTOR, tag: null };
+    if (BREAKFAST_LIGHT.has(c.dishType)) return { factor: 1, tag: '아침에 가볍게' };
+  }
+  return { factor: 1, tag: null };
+};
+
+/**
+ * 끼니에 맞지 않는 후보를 LLM·폴백에 넘기기 전에 뺀다 — 지금은 아침의 무거운 요리(구이·튀김·찌개·조림·볶음·회).
+ * 점수 감점만으로는 LLM 이 후보 안에서 그대로 골랐다(2026-10-04 프로빙: 아침 추천에 스테이크). 내가 아침에
+ * 실제로 먹던 음식은 남기고, 빼고 나서 너무 적으면(minKeep 미만) 가벼운 것을 앞에 두고 무거운 것을 뒤에 붙인다.
+ */
+export const filterForSlot = <T extends Pick<CandidateInput, 'nameNorm' | 'dishType'>>(
+  scored: T[],
+  profile: PatternProfile,
+  targetSlot: MealSlotType,
+  minKeep = 3,
+): T[] => {
+  if (targetSlot !== 'breakfast') return scored;
+  const fits = (c: T): boolean =>
+    !(c.dishType && BREAKFAST_HEAVY.has(c.dishType)) || isSlotHabit(c, profile);
+  const kept = scored.filter(fits);
+  return kept.length >= minKeep ? kept : [...kept, ...scored.filter((c) => !fits(c))];
+};
+
 export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCandidate => {
   const tags: string[] = [];
   const lastEaten = ctx.profile.lastEatenByNorm.get(c.nameNorm) ?? null;
   const daysSince = lastEaten ? (daysBetween(lastEaten, ctx.today) ?? 0) : null;
 
-  // variety — 오래 안 먹었을수록 높다. 먹어본 적 없으면 만점.
-  const variety = daysSince === null ? 1 : clamp01(daysSince / VARIETY_FULL_DAYS);
+  // variety — 오래 안 먹었을수록 높다. 먹어 본 적 없으면 중립(새로움은 novelty 가 센다).
+  const variety = daysSince === null ? VARIETY_UNKNOWN : clamp01(daysSince / VARIETY_FULL_DAYS);
   if (daysSince !== null && daysSince >= VARIETY_FULL_DAYS) tags.push(`${daysSince}일 만에`);
 
   // taste — 감쇠 빈도 상위일수록 높다. 좋아요 표시는 가산.
@@ -382,6 +461,7 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
   if (own && own.count >= 3) tags.push(`${own.count}번 먹음`);
 
   const feedback = ctx.profile.recommendationFeedbackByNorm.get(c.nameNorm);
+  let negativeRating = 0;
   if (feedback) {
     // 선택보다 실제 기록을 더 강하게, 평가는 방향(+/-)까지 반영한다. 각 항은 상한을 둬
     // 오래 쓴 사용자의 과거 반응이 최근 취향을 영구히 압도하지 않게 한다.
@@ -393,6 +473,7 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     // 크기가 되어 감쇠가 사라지므로, 점수에는 감쇠 합계를 상한 처리해 쓴다.
     const ratingSignal = Math.max(-1, Math.min(1, feedback.ratingSum));
     const ratingBonus = 0.18 * ratingSignal;
+    negativeRating = Math.max(0, -ratingSignal);
     taste = clamp01(taste + chosenBonus + loggedBonus + ratingBonus);
     if (feedback.loggedWeight > 0) tags.push('추천 후 먹었어요');
     else if (feedback.chosenWeight > 0) tags.push('추천에서 선택');
@@ -428,6 +509,17 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
   if (weather.tag) tags.push(weather.tag);
 
   const convenience = convenienceFit(c, ctx);
+  const slot = slotFit(c, ctx);
+  if (slot.tag) tags.push(slot.tag);
+  // 싫다는 신호는 가중합과 별개로 최종 점수에서 깎는다(안 먹어 본 음식에도 듣게).
+  const aversion = Math.min(
+    0.9,
+    (disliked ? DISLIKE_SCORE_PENALTY : 0) + NEGATIVE_RATING_SCORE_PENALTY * negativeRating,
+  );
+  const recentFactor =
+    daysSince !== null && daysSince >= 0 && daysSince < RECENT_EATEN_FACTOR.length
+      ? RECENT_EATEN_FACTOR[daysSince]!
+      : 1;
 
   const features: Record<string, number> = {
     variety,
@@ -437,6 +529,10 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     novelty,
     weather: weather.score,
     convenience,
+    // 가중치가 아닌 배수 — 끼니 적합(1 기준)·싫다는 신호 감점(0~0.9)·방금 먹음(0.2~1).
+    slot: slot.factor,
+    aversion,
+    recent: recentFactor,
   };
 
   const w = ctx.preference.weights;
@@ -450,7 +546,8 @@ export const scoreCandidate = (c: CandidateInput, ctx: ScoreContext): ScoredCand
     w.novelty * novelty +
     w.weather * weather.score +
     w.convenience * convenience;
-  const score = totalWeight > 0 ? raw / totalWeight : 0;
+  const score =
+    (totalWeight > 0 ? raw / totalWeight : 0) * slot.factor * (1 - aversion) * recentFactor;
 
   return {
     ...c,
@@ -593,9 +690,13 @@ export class MealPatternService {
   }
 
   // 후보 풀 = 내 이력(취향) + 좋아요 + 카탈로그 인기 + 미경험(탐험). 제외 음식·음료/주류는 뺀다.
+  /**
+   * @param seed 카탈로그 후보 섞기의 씨앗(보통 `사용자|오늘`) — 같은 날 같은 사람에겐 같은 후보, 날마다·사람마다 다른 탐색.
+   */
   async buildCandidates(
     profile: PatternProfile,
     preference: MealPreferenceType,
+    seed = '',
   ): Promise<CandidateInput[]> {
     const out: CandidateInput[] = [];
     const candidateByNorm = new Map<string, CandidateInput>();
@@ -723,37 +824,53 @@ export class MealPatternService {
       });
     }
 
-    // ③ 카탈로그 인기 — 외식·배달에서 실제로 고를 수 있는 메뉴.
-    const popular = await this.prisma.foodItem.findMany({
+    // 인기가 같으면 흔한 메뉴 출처 → 날마다 바뀌는 고정 순서(가나다순이 아니다).
+    const shuffleKey = (row: { nameNorm: string }): number => stableHash(`${seed}|${row.nameNorm}`);
+    const byPopularity = <T extends { popularity: number; source: string; nameNorm: string }>(rows: T[]): T[] =>
+      [...rows].sort(
+        (a, b) =>
+          b.popularity - a.popularity ||
+          (SOURCE_RANK[a.source] ?? 9) - (SOURCE_RANK[b.source] ?? 9) ||
+          shuffleKey(a) - shuffleKey(b),
+      );
+
+    // 카탈로그 후보는 적격 행 전체의 순서 키(이름·인기·출처)만 가볍게 읽어 정렬한 뒤, 고른 행만 다시 읽는다.
+    // DB 에서 잘라 오면 인기가 같은 수천 행 중 가나다순 앞쪽만 남는다.
+    const eligible = await this.prisma.foodItem.findMany({
       where: {
         active: true,
+        source: { not: RAW_INGREDIENT_SOURCE },
         dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
         NOT: { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] },
       },
-      orderBy: [{ popularity: 'desc' }, { name: 'asc' }],
-      take: CATALOG_POPULAR_MAX * 3,
+      select: { nameNorm: true, popularity: true, source: true },
     });
-    for (const row of popular.slice(0, CATALOG_POPULAR_MAX * 2)) {
+    const historySet = new Set(historyNorms);
+    // ③ 카탈로그 인기 — 외식·배달에서 실제로 고를 수 있는 메뉴.
+    const popularNorms = byPopularity(eligible)
+      .slice(0, CATALOG_POPULAR_MAX * 2)
+      .map((r) => r.nameNorm);
+    // ④ 미경험 — 탐험용. 인기와 무관하게 분류가 있는 요리에서 날마다 다르게 고른다(설명 가능한 추천).
+    const popularSet = new Set(popularNorms);
+    const novelNorms = eligible
+      .filter((r) => !historySet.has(r.nameNorm) && !popularSet.has(r.nameNorm))
+      .sort((a, b) => shuffleKey(a) - shuffleKey(b))
+      .slice(0, CATALOG_NOVEL_MAX * 3)
+      .map((r) => r.nameNorm);
+    const catalogRows = await this.prisma.foodItem.findMany({
+      where: { nameNorm: { in: [...popularNorms, ...novelNorms] }, active: true },
+    });
+    const catalogByNorm = new Map(catalogRows.map((r) => [r.nameNorm, r]));
+    for (const norm of popularNorms) {
       if (out.length >= CANDIDATE_POOL_SIZE - CATALOG_NOVEL_MAX) break;
-      push(toCandidate(row), row.source);
+      const row = catalogByNorm.get(norm);
+      if (row) push(toCandidate(row), row.source);
     }
-
-    // ④ 미경험 — 탐험용. 인기 낮은 쪽에서 고르되 분류가 있는 행만(설명 가능한 추천).
-    const novel = await this.prisma.foodItem.findMany({
-      where: {
-        active: true,
-        dishType: { notIn: [...EXCLUDED_DISH_TYPES] },
-        nameNorm: { notIn: historyNorms.length ? historyNorms : ['-'] },
-        NOT: {
-          OR: [{ dishType: null }, { AND: [{ source: 'menu-canonical' }, { dishType: 'other' }] }],
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: CATALOG_NOVEL_MAX * 3,
-    });
-    for (const row of novel) {
+    for (const norm of novelNorms) {
       if (out.length >= CANDIDATE_POOL_SIZE) break;
-      push(toCandidate(row), row.source);
+      const row = catalogByNorm.get(norm);
+      // 분류가 없는 행은 이유를 설명할 수 없어 탐험 후보로 쓰지 않는다.
+      if (row?.dishType) push(toCandidate(row), row.source);
     }
 
     return out.slice(0, CANDIDATE_POOL_SIZE);

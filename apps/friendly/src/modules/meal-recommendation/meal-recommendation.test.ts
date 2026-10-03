@@ -17,6 +17,7 @@ import {
   MealPatternService,
   allergenData,
   buildProfile,
+  filterForSlot,
   isExcluded,
   scoreCandidate,
   type CandidateInput,
@@ -154,7 +155,7 @@ describe('scoreCandidate', () => {
     today: TODAY,
   };
 
-  it('어제 먹은 음식은 variety 가 낮고, 안 먹어본 음식은 novelty 만점', () => {
+  it('어제 먹은 음식은 variety 가 낮고, 안 먹어본 음식은 novelty 만점·variety 중립', () => {
     const recent = scoreCandidate(
       candidate('김치찌개', { dishType: 'stew', fromHistory: true }),
       ctx,
@@ -164,10 +165,124 @@ describe('scoreCandidate', () => {
       ctx,
     );
     expect(recent.features.variety).toBeLessThan(0.2);
-    expect(fresh.features.variety).toBe(1);
+    // 새로움은 novelty 한 곳에서만 센다 — variety 까지 만점이면 미경험이 취향을 늘 이긴다.
+    expect(fresh.features.variety).toBe(0.5);
     expect(fresh.features.novelty).toBe(1);
     expect(fresh.score).toBeGreaterThan(recent.score);
     expect(fresh.tags).toContain('새로운 음식');
+  });
+
+  it('열흘 전에 자주 먹은 음식이 처음 보는 음식보다 앞선다(기본 가중치)', () => {
+    const p = buildProfile(
+      [
+        item('비빔밥', '2026-08-12', { dishType: 'rice', mainIngredient: 'vegetable', cuisine: 'korean' }),
+        item('비빔밥', '2026-08-02', { dishType: 'rice', mainIngredient: 'vegetable', cuisine: 'korean' }),
+        item('김치찌개', '2026-08-21', { dishType: 'stew', mainIngredient: 'pork', cuisine: 'korean' }),
+      ],
+      'lunch',
+      TODAY,
+    );
+    const familiar = scoreCandidate(
+      candidate('비빔밥', { dishType: 'rice', mainIngredient: 'vegetable', cuisine: 'korean', fromHistory: true }),
+      { ...ctx, profile: p },
+    );
+    const unknown = scoreCandidate(
+      candidate('가자미찜', { dishType: 'steam', mainIngredient: 'fish', cuisine: 'korean' }),
+      { ...ctx, profile: p },
+    );
+    expect(familiar.score).toBeGreaterThan(unknown.score);
+  });
+
+  it('오늘 먹은 음식은 취향이 가장 높아도 다음 끼니로 다시 올라오지 않는다', () => {
+    const p = buildProfile(
+      [
+        item('비빔밥', TODAY, { dishType: 'rice', mainIngredient: 'vegetable', cuisine: 'korean' }),
+        item('비빔밥', '2026-08-15', { dishType: 'rice', mainIngredient: 'vegetable', cuisine: 'korean' }),
+        item('칼국수', '2026-08-12', { dishType: 'noodle', mainIngredient: 'grain', cuisine: 'korean' }),
+      ],
+      'dinner',
+      TODAY,
+    );
+    const dinnerCtx = { ...ctx, profile: p, targetSlot: 'dinner' as const };
+    const justEaten = scoreCandidate(
+      candidate('비빔밥', { dishType: 'rice', mainIngredient: 'vegetable', cuisine: 'korean', fromHistory: true }),
+      dinnerCtx,
+    );
+    const weekAgo = scoreCandidate(
+      candidate('칼국수', { dishType: 'noodle', mainIngredient: 'grain', cuisine: 'korean', fromHistory: true }),
+      dinnerCtx,
+    );
+    const unknown = scoreCandidate(candidate('가자미찜', { dishType: 'steam', mainIngredient: 'fish' }), dinnerCtx);
+    expect(justEaten.features.taste).toBe(1);
+    expect(justEaten.features.recent).toBe(0.2);
+    expect(justEaten.score).toBeLessThan(weekAgo.score);
+    expect(justEaten.score).toBeLessThan(unknown.score);
+  });
+
+  it('아침엔 무거운 요리를 후보에서 빼되 아침에 먹던 음식은 남기고, 너무 적으면 가벼운 것을 앞에 둔다', () => {
+    const p = buildProfile(
+      [item('삼겹살구이', '2026-08-20', { slot: 'breakfast', dishType: 'grill', mainIngredient: 'pork' })],
+      'breakfast',
+      TODAY,
+    );
+    const pool = [
+      candidate('스테이크', { dishType: 'grill' }),
+      candidate('삼겹살구이', { dishType: 'grill', fromHistory: true }),
+      candidate('토스트', { dishType: 'bakery' }),
+      candidate('달걀찜', { dishType: 'steam' }),
+      candidate('김치찌개', { dishType: 'stew' }),
+      candidate('콩나물국', { dishType: 'soup' }),
+    ];
+    const names = (list: typeof pool) => list.map((c) => c.name);
+    expect(names(filterForSlot(pool, p, 'breakfast'))).toEqual(['삼겹살구이', '토스트', '달걀찜', '콩나물국']);
+    // 아침이 아니면 그대로.
+    expect(filterForSlot(pool, p, 'lunch')).toHaveLength(pool.length);
+    // 가벼운 것이 모자라면 앞에 두고 무거운 것을 뒤에 붙인다(추천이 비지 않게).
+    const few = [candidate('스테이크', { dishType: 'grill' }), candidate('토스트', { dishType: 'bakery' })];
+    expect(names(filterForSlot(few, buildProfile([], 'breakfast', TODAY), 'breakfast'))).toEqual(['토스트', '스테이크']);
+    // 아침에 먹던 무거운 요리는 감점도 하지 않는다.
+    const habit = scoreCandidate(candidate('삼겹살구이', { dishType: 'grill', fromHistory: true }), {
+      ...ctx,
+      profile: p,
+      targetSlot: 'breakfast',
+    });
+    expect(habit.features.slot).toBeCloseTo(1.1);
+  });
+
+  it('👎·덜 선호는 안 먹어 본 음식에도 최종 점수를 깎는다', () => {
+    const base = scoreCandidate(candidate('시금치무침', { dishType: 'salad' }), ctx);
+    const ratedDown = scoreCandidate(candidate('시금치무침', { dishType: 'salad' }), {
+      ...ctx,
+      profile: buildProfile([], 'lunch', TODAY, [
+        { targetDate: TODAY, candidateNames: ['시금치무침'], pickedName: null, rating: -1, logged: false },
+      ]),
+    });
+    const disliked = scoreCandidate(candidate('고수샐러드', { dishType: 'salad' }), {
+      ...ctx,
+      preference: prefs({ dislikedFoods: ['고수'] }),
+    });
+    // 취향은 이미 0 이라 더 내려가지 않는다 — 그래서 최종 점수에서 직접 깎는다.
+    expect(base.features.taste).toBe(0);
+    expect(ratedDown.features.taste).toBe(0);
+    expect(ratedDown.features.aversion).toBeCloseTo(0.4);
+    expect(ratedDown.score).toBeLessThan(base.score * 0.7);
+    expect(disliked.features.aversion).toBeCloseTo(0.5);
+    expect(disliked.score).toBeLessThan(base.score * 0.6);
+  });
+
+  it('아침엔 구이·튀김·찌개류를 덜고, 그 끼니에 자주 먹던 음식은 올린다', () => {
+    const grill = candidate('삼겹살구이', { dishType: 'grill', mainIngredient: 'pork' });
+    const atLunch = scoreCandidate(grill, ctx);
+    const atBreakfast = scoreCandidate(grill, { ...ctx, targetSlot: 'breakfast' });
+    expect(atBreakfast.features.slot).toBe(0.75);
+    expect(atBreakfast.score).toBeLessThan(atLunch.score);
+    expect(scoreCandidate(candidate('토스트', { dishType: 'bakery' }), { ...ctx, targetSlot: 'breakfast' }).tags).toContain(
+      '아침에 가볍게',
+    );
+    // 이 프로필의 점심 습관은 김치찌개 — 점심에는 1.1 배.
+    const habit = scoreCandidate(candidate('김치찌개', { dishType: 'stew', fromHistory: true }), ctx);
+    expect(habit.features.slot).toBeCloseTo(1.1);
+    expect(habit.tags).toContain('점심에 자주');
   });
 
   it('최근에 몰린 분류는 balance 가 낮다', () => {
@@ -998,6 +1113,19 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
       },
       // 음료·주류는 기존 규칙대로 제외.
       { name: '콜라', dishType: 'beverage', source: 'menu-canonical', popularity: 95 },
+      // 반찬(김치·나물)과 원재료 카탈로그는 끼니 후보가 아니다(2026-10-04 프로빙).
+      { name: '가자미식해', dishType: 'kimchi', mainIngredient: 'fish', source: 'mfds-nutrition', popularity: 90 },
+      { name: '가지나물', dishType: 'namul', mainIngredient: 'vegetable', source: 'mfds-nutrition', popularity: 90 },
+      { name: '감자', dishType: 'steam', mainIngredient: 'vegetable', source: 'mfds-raw', popularity: 90 },
+      // 인기가 같은(0) 요리 여럿 — 가나다순 앞쪽만 뽑히면 안 된다.
+      ...Array.from({ length: 60 }, (_, i) => ({
+        name: `${String.fromCharCode(0xac00 + i * 180)}테스트요리${i}`,
+        dishType: 'rice' as const,
+        mainIngredient: 'grain' as const,
+        cuisine: 'korean' as const,
+        source: 'mfds-nutrition' as const,
+        popularity: 0,
+      })),
     ]);
   });
   afterAll(async () => {
@@ -1016,6 +1144,32 @@ describe('후보 풀 — 외식 어휘 노이즈 제외 (격리 DB)', () => {
     expect(names).not.toContain('소스');
     expect(names).not.toContain('사이드');
     expect(names).not.toContain('콜라');
+  });
+
+  it('김치·나물 반찬과 원재료 카탈로그는 인기가 높아도 후보에서 빠진다', async () => {
+    const pattern = new MealPatternService(app.prisma);
+    const names = (await pattern.buildCandidates(buildProfile([], 'dinner', TODAY), prefs(), TODAY)).map(
+      (c) => c.name,
+    );
+    expect(names).not.toContain('가자미식해');
+    expect(names).not.toContain('가지나물');
+    expect(names).not.toContain('감자');
+  });
+
+  it('인기가 같은 카탈로그 후보는 가나다순이 아니라 날짜마다 바뀌는 고정 순서로 섞인다', async () => {
+    const pattern = new MealPatternService(app.prisma);
+    const pick = async (seed: string) =>
+      (await pattern.buildCandidates(buildProfile([], 'dinner', TODAY), prefs(), seed))
+        .map((c) => c.name)
+        .filter((n) => n.includes('테스트요리'));
+    const day1 = await pick('2026-10-04');
+    // 같은 날엔 같은 후보(추천 캐시 키와 맞물린다).
+    expect(await pick('2026-10-04')).toEqual(day1);
+    expect(day1.length).toBeGreaterThan(5);
+    // 첫 글자가 가나다순 앞쪽(가~나 구간)에만 몰리지 않는다.
+    const firstChars = new Set(day1.map((n) => n.charCodeAt(0)));
+    expect([...firstChars].some((code) => code > 0xac00 + 30 * 180)).toBe(true);
+    expect(await pick('2026-10-05')).not.toEqual(day1);
   });
 
   it('이력 후보가 likedFoods 와 겹치면 좋아요 신호를 합친다', async () => {

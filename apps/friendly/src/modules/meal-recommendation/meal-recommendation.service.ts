@@ -33,6 +33,7 @@ import {
   MealPatternService,
   buildProfile,
   describeProfile,
+  filterForSlot,
   scoreCandidate,
   type ScoredCandidate,
 } from './meal-pattern.service.js';
@@ -215,7 +216,9 @@ export class MealRecommendationService {
       this.pattern.loadFeedbackSignals(userId, today),
     ]);
     const profile = buildProfile(history, input.targetSlot, today, feedbackSignals);
-    const candidatesRaw = await this.pattern.buildCandidates(profile, preference);
+    // 사용자·날짜를 씨앗으로 — 같은 날 같은 사람에겐 같은 후보(캐시 키와 맞물린다), 날마다·사람마다 다른
+    // 탐색 후보. 날짜만이면 같은 날 모든 사용자가 같은 탐색 후보를 받아 한 음식이 모두에게 뜬다(프로빙: 감자샐러드).
+    const candidatesRaw = await this.pattern.buildCandidates(profile, preference, `${userId}|${today}`);
 
     const month = Number(input.targetDate.slice(5, 7)) || new Date().getMonth() + 1;
     // 날씨는 있으면 쓰고 없으면 계절로 — 어느 쪽이든 추천은 나온다.
@@ -227,20 +230,25 @@ export class MealRecommendationService {
       input.lng !== undefined
         ? await this.deps.weather(input.lat, input.lng).catch(() => null)
         : null;
-    const scored = candidatesRaw
-      .map((c) =>
-        scoreCandidate(c, {
-          profile,
-          preference,
-          targetSlot: input.targetSlot,
-          mealType: effectiveMealType,
-          month,
-          tempC: weather?.tempC ?? null,
-          rain: weather?.rain ?? null,
-          today,
-        }),
-      )
-      .sort((a, b) => b.score - a.score);
+    const scored = filterForSlot(
+      candidatesRaw
+        .map((c) =>
+          scoreCandidate(c, {
+            profile,
+            preference,
+            targetSlot: input.targetSlot,
+            mealType: effectiveMealType,
+            month,
+            tempC: weather?.tempC ?? null,
+            rain: weather?.rain ?? null,
+            today,
+          }),
+        )
+        .sort((a, b) => b.score - a.score),
+      profile,
+      input.targetSlot,
+      PICK_MIN,
+    );
 
     // 캐시 키 — 같은 날·끼니에 프로필·가중치·컨텍스트가 그대로면 다시 LLM 을 부르지 않는다.
     const hash = profileHash({
