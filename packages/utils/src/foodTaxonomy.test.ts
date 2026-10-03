@@ -37,6 +37,11 @@ describe('foodTaxonomy — 원본 분류 매핑', () => {
     expect(mfdsCategoryToDishType('장류, 양념류')).toBe('other');
     expect(mfdsCategoryToDishType('빵 및 과자류')).toBe('bakery');
     expect(mfdsCategoryToDishType('알 수 없음')).toBeNull();
+    // 고기·생선·달걀 가공품 묶음은 회가 아니다 — 매핑하지 않고 이름 규칙에 맡긴다.
+    expect(mfdsCategoryToDishType('수·조·어·육류')).toBeNull();
+    expect(guessDishTypeFromName('모듬회')).toBe('raw_fish');
+    expect(guessDishTypeFromName('육회')).toBe('raw_fish');
+    expect(guessDishTypeFromName('달걀')).toBeNull();
     expect(mfdsCategoryToDishType(null)).toBeNull();
   });
   it('한식 800선 / 레시피 조리법 / 택소노미 v3 루트', () => {

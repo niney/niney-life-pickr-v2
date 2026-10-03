@@ -154,6 +154,18 @@ const cleanName = (raw: string): string =>
 
 const categoryKey = (raw: string): string => raw.replace(/[\s·ㆍ•,，()]/g, '').trim();
 
+// 식약처 대표식품명이 재료명이라 음식으로 오해되는 묶음 — 카탈로그 이름을 바로잡는다(repName 은 원본 그대로).
+// 키는 `분류키|대표식품명`. 적재는 이름(nameNorm)으로 기존 행을 찾으므로 이미 적재된 행도 같은 이름으로
+// 바꿔야(fix:food-labels) 재적재 때 원래 이름의 행이 다시 생기지 않는다. (2026-10-04 추천 프로빙에서 발견)
+export const MFDS_REP_NAME_OVERRIDES: Readonly<Record<string, string>> = {
+  // 묶음이 허파·간·머리고기(순대 부속)뿐인데 대표 이름이 '돼지고기'라 끼니 추천에 재료처럼 떴다.
+  '찜류|돼지고기': '돼지 부속고기(허파·간·머리고기)',
+  // 삶은 달걀(흰자·노른자) 묶음.
+  '수조어육류|달걀': '삶은 달걀',
+};
+export const mfdsCatalogName = (category: string | null, repName: string): string =>
+  MFDS_REP_NAME_OVERRIDES[`${category ? categoryKey(category) : ''}|${repName}`] ?? repName;
+
 const addDrop = (report: NormalizeReport, reason: string): void => {
   report.dropped[reason] = (report.dropped[reason] ?? 0) + 1;
 };
@@ -340,7 +352,7 @@ export const normalizeMfdsNutritionRows = (
           }
         : null;
     seeds.push({
-      name: g.repName,
+      name: mfdsCatalogName(g.category, g.repName),
       repName: g.repName,
       aliases: [...g.variants].slice(0, MAX_ALIASES),
       dishType: mfdsCategoryToDishType(g.category),

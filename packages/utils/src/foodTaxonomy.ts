@@ -164,7 +164,8 @@ const MFDS_CATEGORY_TO_DISH_TYPE: Record<string, FoodDishType> = {
   빵및과자류: 'bakery',
   음료및차류: 'beverage',
   유제품류및빙과류: 'dairy',
-  수조어육류: 'raw_fish',
+  // 수조어육류(고기·생선·달걀 가공품)는 매핑하지 않는다 — 통째로 회(raw_fish)로 옮기면 삶은 달걀·소시지·
+  // 대구포까지 회가 된다(2026-10-04 추천 프로빙). 모듬회·육회는 이름 규칙이 회로 잡는다.
   곡류서류제품: 'other',
   채소해조류: 'namul',
   과일류: 'other',

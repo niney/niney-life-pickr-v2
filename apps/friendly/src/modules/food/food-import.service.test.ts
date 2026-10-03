@@ -68,6 +68,22 @@ describe('normalizeMfdsNutritionRows — 표준데이터(음식)', () => {
     expect(seeds.find((s) => s.name === '비빔밥')?.dishType).toBe('rice');
   });
 
+  it('대표식품명이 재료명인 묶음은 카탈로그 이름을 바로잡고, 수조어육류를 회로 단정하지 않는다', () => {
+    const { seeds } = normalizeMfdsNutritionRows([
+      { foodCd: 'D307-1', foodNm: '돼지고기_허파', foodLv3Nm: '찜류', foodLv4Nm: '돼지고기', foodOriginNm: '외식(분석함량)', nutConSrtrQua: '100g', enerc: '91', foodSize: '100g' },
+      { foodCd: 'D327-1', foodNm: '달걀_삶은것', foodLv3Nm: '수·조·어·육류', foodLv4Nm: '달걀', foodOriginNm: '외식(분석함량)', nutConSrtrQua: '100g', enerc: '150', foodSize: '100g' },
+      { foodCd: 'D327-2', foodNm: '육회', foodLv3Nm: '수·조·어·육류', foodLv4Nm: '육회', foodOriginNm: '외식(분석함량)', nutConSrtrQua: '100g', enerc: '130', foodSize: '150g' },
+    ]);
+    const offal = seeds.find((s) => s.repName === '돼지고기')!;
+    expect(offal.name).toBe('돼지 부속고기(허파·간·머리고기)');
+    const egg = seeds.find((s) => s.repName === '달걀')!;
+    expect(egg.name).toBe('삶은 달걀');
+    // 수조어육류는 분류 매핑을 하지 않는다 — 정규화에선 비워 두고 적재 때 이름 규칙이 정한다(육회 → 회,
+    // 삶은 달걀 → 미정).
+    expect(egg.dishType ?? null).toBeNull();
+    expect(seeds.find((s) => s.repName === '육회')?.dishType ?? null).toBeNull();
+  });
+
   it('parseSize/originPriority 보조 함수', () => {
     expect(__foodImportInternals.parseSize('780ml')).toEqual({ value: 780, unit: 'ml' });
     expect(__foodImportInternals.parseSize('1.2kg')).toEqual({ value: 1200, unit: 'g' });
