@@ -27,7 +27,7 @@ import {
 } from '@repo/api-contract';
 import { haversineM } from '@repo/utils';
 import { normalizeTerm } from '../../lib/text.js';
-import { loadLexicon, type Lexicon } from './engine/index.js';
+import { DEFAULT_LEXICON, loadLexicon, synonymVariants, type Lexicon } from './engine/index.js';
 import type { ServingCatalogRow } from './food-serving.js';
 import {
   inferFoodAllergens,
@@ -56,6 +56,33 @@ export class FoodServiceError extends Error {
 // 포함 4/7≈0.57 는 통과, "된장찌개"↔"김치찌개" 0.2 는 탈락.
 export const FOOD_MATCH_FUZZY_MIN = 0.5;
 const FUZZY_CANDIDATE_LIMIT = 300;
+
+// 흔한 표기 → 카탈로그 표기(정확·별칭 일치가 없을 때만). 직접 적은 식단 41끼 중 15개 음식이 표기 차이로
+// 영양이 비었다(2026-10-04 — 계란말이·떡만둣국·크루아상·동그랑땡…). 표기 변형(계란↔달걀·둣국↔두국)은 메뉴
+// 어휘의 synonymPairs 를 그대로 쓰고, 다른 이름은 이 표로 — 식단 매칭 전용(메뉴 칼로리 엔진의 '후라이드치킨'은 한 마리라
+// 닭튀김 1인분으로 묶으면 안 된다). 비슷하기만 한 음식(까르보나라→스파게티)은 영양이 틀어질 수 있어 넣지 않는다.
+const FOOD_NAME_SYNONYMS: Readonly<Record<string, string>> = {
+  동그랑땡: '완자전',
+  치킨무: '무초절임(치킨무)',
+  요거트: '요구르트(호상)',
+  플레인요거트: '요구르트(호상)',
+  콘푸레이크: '시리얼',
+  콘플레이크: '시리얼',
+  // 프라이드치킨은 어휘의 후라이↔프라이로 여기에 닿는다.
+  후라이드치킨: '닭튀김',
+  쿠키: '비스킷/쿠키/크래커',
+};
+/** 정규화한 이름의 다른 표기 후보(정규화된 nameNorm) — 원래 이름은 빼고. */
+export const foodNameVariants = (norm: string, lex: Lexicon = DEFAULT_LEXICON): string[] => {
+  const out = new Set<string>();
+  for (const spelled of [norm, ...synonymVariants(norm, lex)]) {
+    out.add(spelled);
+    const synonym = FOOD_NAME_SYNONYMS[spelled];
+    if (synonym) out.add(normalizeTerm(synonym));
+  }
+  out.delete(norm);
+  return [...out];
+};
 const SEARCH_CANDIDATE_MULTIPLIER = 4;
 
 // 현재 판매를 직접 보장할 수 없는 역검색에서는 가까운 리뷰 한 건보다 메뉴판과
@@ -577,6 +604,17 @@ export class FoodService {
       orderBy: { popularity: 'desc' },
     });
     if (aliasHit) return this.toMatch(aliasHit, 0.95, 'alias');
+
+    // 표기 변형·다른 이름(계란말이 → 달걀말이, 동그랑땡 → 완자전).
+    for (const variant of foodNameVariants(norm, await this.servingLexicon())) {
+      const hit =
+        (await this.prisma.foodItem.findFirst({ where: { nameNorm: variant, active: true } })) ??
+        (await this.prisma.foodItem.findFirst({
+          where: { active: true, aliasNormsJson: { contains: `"${variant}"` } },
+          orderBy: { popularity: 'desc' },
+        }));
+      if (hit) return this.toMatch(hit, 0.95, 'alias');
+    }
 
     if (norm.length < 2) return null;
     const head = norm.slice(0, 2);

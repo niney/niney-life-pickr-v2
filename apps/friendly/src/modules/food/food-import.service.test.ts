@@ -20,7 +20,7 @@ import {
   upsertFoodSeeds,
 } from './food-import.service.js';
 import { foodImportRegistry } from './food-import-registry.js';
-import { FoodService, foodNameSimilarity } from './food.service.js';
+import { FoodService, foodNameSimilarity, foodNameVariants } from './food.service.js';
 
 // 정규화는 순수 함수 — 픽스처(실응답 형식을 본뜬 최소 행)로 네트워크 없이 검증. upsert·검색·매칭은
 // 격리 DB(빈 테이블)에서.
@@ -290,6 +290,33 @@ describe('upsertFoodSeeds + FoodService (격리 DB)', () => {
     expect(stats.total).toBe(4);
     expect(stats.active).toBe(3);
     expect(stats.bySource.find((s) => s.source === 'manual')?.count).toBe(3);
+  });
+
+  it('매칭: 표기 변형·다른 이름 — 계란말이 → 달걀말이, 떡만둣국 → 떡만두국, 동그랑땡 → 완자전', async () => {
+    await upsertFoodSeeds(app.prisma, [
+      { name: '달걀말이', source: 'mfds-nutrition' },
+      { name: '떡만두국', source: 'mfds-nutrition' },
+      { name: '완자전', source: 'mfds-nutrition' },
+    ]);
+    const food = new FoodService(app.prisma);
+    expect(await food.matchFood('계란말이')).toMatchObject({ name: '달걀말이', matchedBy: 'alias' });
+    expect(await food.matchFood('떡만둣국')).toMatchObject({ name: '떡만두국', matchedBy: 'alias' });
+    expect(await food.matchFood('동그랑땡')).toMatchObject({ name: '완자전', matchedBy: 'alias' });
+    // 원래 이름은 그대로 정확 일치.
+    expect((await food.matchFood('달걀말이'))?.matchedBy).toBe('exact');
+  });
+});
+
+describe('foodNameVariants', () => {
+  it('표기 변형과 다른 이름 표를 함께 본다', () => {
+    expect(foodNameVariants('계란말이')).toEqual(['달걀말이']);
+    expect(foodNameVariants('떡만둣국')).toEqual(['떡만두국']);
+    expect(foodNameVariants('크루아상')).toEqual(['크로와상']);
+    expect(foodNameVariants('치킨무')).toEqual(['무초절임치킨무']);
+    expect(foodNameVariants('후라이드치킨')).toEqual(expect.arrayContaining(['닭튀김']));
+    // 어휘의 후라이↔프라이를 거쳐 다른 이름 표에 닿는다.
+    expect(foodNameVariants('프라이드치킨')).toEqual(expect.arrayContaining(['닭튀김']));
+    expect(foodNameVariants('김치찌개')).toEqual([]);
   });
 });
 

@@ -97,4 +97,12 @@ describe('foodTaxonomy — 이름 규칙', () => {
     expect(guessCuisineFromName('김치찌개')).toBe('korean');
     expect(guessCuisineFromName('xyz')).toBeNull();
   });
+  it('분식 단어가 재료일 뿐 한식 요리형으로 끝나면 한식, 분식 이름으로 끝나면 분식', () => {
+    expect(guessCuisineFromName('어묵 매운탕')).toBe('korean');
+    expect(guessCuisineFromName('어묵볶음')).toBe('korean');
+    expect(guessCuisineFromName('순대국')).toBe('korean');
+    expect(guessCuisineFromName('김말이튀김')).toBe('fast_food');
+    expect(guessCuisineFromName('치즈떡볶이')).toBe('fast_food');
+    expect(guessCuisineFromName('참치김밥')).toBe('fast_food');
+  });
 });

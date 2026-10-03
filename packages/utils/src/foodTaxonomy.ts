@@ -319,9 +319,17 @@ const NAME_CUISINE_RULES: ReadonlyArray<readonly [RegExp, FoodCuisine]> = [
   [/(떡볶이|김밥|순대|어묵|오뎅|라볶이|쫄면|핫도그|튀김$|컵밥|토스트|햄버거|치킨$|피자$|감자튀김|너겟|콜라|사이다|도시락|삼각김밥|컵라면|라면$)/u, 'fast_food'],
   [/(밥|죽|국|탕|찌개|전골|구이|볶음|조림|찜|전$|나물|무침|김치|젓갈|장아찌|비빔|불고기|제육|삼겹|갈비|족발|보쌈|순두부|된장|청국장|김치찌개|비빔밥|냉면|칼국수|수제비|잡채|떡국|만둣국|삼계탕|갈비탕|설렁탕|곰탕|육개장|해장국|국밥|백반|정식|쌈밥|한정식|한식|막걸리|소주|식혜|수정과|떡|한과|약과|인절미|송편|빈대떡|파전|해물파전|닭갈비|찜닭|닭볶음탕|감자탕|부대찌개|곱창|막창|대창|양념|간장|고추장)/u, 'korean'],
 ];
+// 한식 요리형으로 끝나는 이름 — 분식 단어(어묵·순대·튀김…)가 재료로만 들어간 경우(어묵 매운탕·어묵볶음·순대국)엔
+// 한식이다(2026-10-04 식단 추천 설정 점검: 어묵 매운탕이 '분식·패스트푸드'로 떠 골고루 계산이 틀어졌다).
+// 떡볶이·김밥·김말이튀김처럼 분식 이름 자체로 끝나면 그대로 분식.
+const KOREAN_DISH_FORM_END = /(탕|찌개|전골|국|국밥|찜|조림|볶음|구이|무침|나물|전)$/u;
 export const guessCuisineFromName = (name: string): FoodCuisine | null => {
   const s = name.trim();
   if (!s) return null;
-  for (const [re, t] of NAME_CUISINE_RULES) if (re.test(s)) return t;
+  for (const [re, t] of NAME_CUISINE_RULES) {
+    if (!re.test(s)) continue;
+    if (t === 'fast_food' && KOREAN_DISH_FORM_END.test(s.replace(/\s+/g, ''))) return 'korean';
+    return t;
+  }
   return null;
 };

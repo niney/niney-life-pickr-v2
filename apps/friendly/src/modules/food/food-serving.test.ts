@@ -64,6 +64,13 @@ describe('mealServingNutrition', () => {
     expect(mealServingNutrition(soup, { isMain: true }, soupLex).kcal).toBeCloseTo(36);
   });
 
+  it('코드 기본 어휘의 음식명 지정 — 시리얼은 빵류 통상 100g 이 아니라 한 그릇 40g', () => {
+    const cereal = { ...jeyuk, name: '시리얼', sourceCategory: '곡류, 서류 제품', dishType: 'bakery', servingG: 40, kcal: 178, kcalPer100g: 445, proteinG: 3, sodiumMg: 200 };
+    const r = mealServingNutrition(cereal, { isMain: true }, lex);
+    expect(r.basis).toBe('direct');
+    expect(r.kcal).toBeCloseTo(178);
+  });
+
   it('1인분 중량 없이 100g당만 아는 주식(생재료 등)도 통상 1인분으로 열량을 채운다', () => {
     const raw: ServingCatalogRow = {
       name: '삼겹살',
