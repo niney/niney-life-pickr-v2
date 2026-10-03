@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, NotebookPen, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
+import {
+  Loader2,
+  NotebookPen,
+  RefreshCw,
+  Search,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+} from 'lucide-react';
 import {
   MEAL_ALLERGEN_LABEL,
   type MealRecommendationType,
@@ -8,6 +16,9 @@ import {
   type MealTypeType,
 } from '@repo/api-contract';
 import {
+  recommendationHistoryFoods,
+  recommendationProgressLabel,
+  recommendationWhenLabel,
   startMealDraftFromRecommendation,
   useAirLocation,
   useCreateMealRecommendation,
@@ -48,6 +59,10 @@ export const MealRecommendTab = () => {
   const [mealType, setMealType] = useState<MealTypeType | null | undefined>(undefined);
   const [note, setNote] = useState('');
   const [current, setCurrent] = useState<MealRecommendationType | null>(null);
+  // 사용자가 '최근 추천' 목록에서 예전 추천을 골라 보는 중인지 — 새로 받거나 '최신 추천으로'를 누르면 풀린다.
+  // 같은 날·끼니 재요청으로 캐시된 예전 추천이 돌아온 경우는 지금 요청한 것이라 지난 추천으로 보지 않는다.
+  const [browsing, setBrowsing] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const ctx = useMealRecommendationContext();
   const airLocation = useAirLocation();
@@ -57,7 +72,11 @@ export const MealRecommendTab = () => {
   const recommendationEvent = useMealRecommendationEvent();
   const shownEventIds = useRef(new Set<string>());
 
+  const today = toLocalDateKey(now);
   const shown = current ?? ctx.data?.latest ?? null;
+  // 최근 추천(최신순)의 맨 앞 = 가장 최근에 받은 추천.
+  const newest = history.data?.items[0] ?? null;
+  const viewingPast = browsing && shown !== null && newest !== null && shown.id !== newest.id;
   const configuredSlots = ctx.data?.preference.slots?.length
     ? ctx.data.preference.slots
     : MEAL_SLOTS;
@@ -69,14 +88,28 @@ export const MealRecommendTab = () => {
     mealType === undefined ? (ctx.data?.preference.mealTypes?.[0] ?? null) : mealType;
 
   useEffect(() => {
-    if (!shown || shownEventIds.current.has(shown.id)) return;
+    // 노출은 새로 받은(또는 화면 진입 때 보인) 추천만 — 목록에서 예전 추천을 다시 여는 건 새 노출이 아니다.
+    if (!shown || viewingPast || shownEventIds.current.has(shown.id)) return;
     shownEventIds.current.add(shown.id);
     recommendationEvent.mutate(
       { id: shown.id, input: { kind: 'shown', platform: 'web' } },
       { onError: () => shownEventIds.current.delete(shown.id) },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown?.id]);
+  }, [shown?.id, viewingPast]);
+
+  // 목록에서 고르면 위의 추천 카드가 바뀐다 — 바뀐 걸 보이게 카드로 스크롤한다(목록은 그대로 둔다).
+  const openFromHistory = (rec: MealRecommendationType) => {
+    setCurrent(rec);
+    setBrowsing(rec.id !== newest?.id);
+    cardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  };
+
+  const backToLatest = () => {
+    if (!newest) return;
+    setCurrent(newest);
+    setBrowsing(false);
+  };
 
   const request = (force: boolean) => {
     create.mutate(
@@ -89,7 +122,12 @@ export const MealRecommendTab = () => {
         lng: airLocation.location?.lng ?? null,
         force,
       },
-      { onSuccess: (rec) => setCurrent(rec) },
+      {
+        onSuccess: (rec) => {
+          setCurrent(rec);
+          setBrowsing(false);
+        },
+      },
     );
   };
 
@@ -150,7 +188,8 @@ export const MealRecommendTab = () => {
               )}
               추천받기
             </Button>
-            {shown ? (
+            {/* 지난 추천을 보는 중엔 숨긴다 — 그 추천을 다시 만드는 게 아니라 위에서 고른 끼니로 새로 받기 때문. */}
+            {shown && !viewingPast ? (
               <Button variant="outline" onClick={() => request(true)} disabled={create.isPending}>
                 <RefreshCw className="mr-1 size-4" />
                 다시 추천
@@ -170,95 +209,113 @@ export const MealRecommendTab = () => {
         </CardContent>
       </Card>
 
-      {shown ? (
-        <RecommendationCard
-          rec={shown}
-          lat={airLocation.location?.lat ?? null}
-          lng={airLocation.location?.lng ?? null}
-          onFeedback={(input) =>
-            feedback.mutate(
-              { id: shown.id, input },
-              { onSuccess: (recommendation) => setCurrent(recommendation) },
-            )
-          }
-          allergyFilteringEnabled={(ctx.data?.preference.allergens?.length ?? 0) > 0}
-          // draft 복원 전(새로고침 직후)에 옮기면 입력 화면에서 사라지므로 그동안은 막는다.
-          onRecord={
-            draftReady
-              ? (name) => {
-                  startMealDraftFromRecommendation(shown, name, effectiveMealType);
-                  navigate('/me/meals/new');
-                }
-              : null
-          }
-          onCandidateRating={(name, rank, rating) => {
-            const item = shown.items[rank];
-            recommendationEvent.mutate(
-              {
+      <div ref={cardRef} className="scroll-mt-20">
+        {shown ? (
+          <RecommendationCard
+            rec={shown}
+            pastLabel={viewingPast ? recommendationWhenLabel(shown, today) : null}
+            onBackToLatest={backToLatest}
+            lat={airLocation.location?.lat ?? null}
+            lng={airLocation.location?.lng ?? null}
+            onFeedback={(input) =>
+              feedback.mutate(
+                { id: shown.id, input },
+                { onSuccess: (recommendation) => setCurrent(recommendation) },
+              )
+            }
+            allergyFilteringEnabled={(ctx.data?.preference.allergens?.length ?? 0) > 0}
+            // draft 복원 전(새로고침 직후)에 옮기면 입력 화면에서 사라지므로 그동안은 막는다.
+            onRecord={
+              draftReady
+                ? (name) => {
+                    startMealDraftFromRecommendation(shown, name, effectiveMealType);
+                    navigate('/me/meals/new');
+                  }
+                : null
+            }
+            onCandidateRating={(name, rank, rating) => {
+              const item = shown.items[rank];
+              recommendationEvent.mutate(
+                {
+                  id: shown.id,
+                  input: {
+                    kind: 'candidate_rated',
+                    candidateName: name,
+                    candidateFoodId: item?.foodId ?? null,
+                    candidateRank: rank,
+                    rating,
+                    platform: 'web',
+                  },
+                },
+                {
+                  onSuccess: () =>
+                    setCurrent({
+                      ...shown,
+                      candidateRatings: [
+                        ...(shown.candidateRatings ?? []).filter(
+                          (candidate) => candidate.name !== name,
+                        ),
+                        { name, rating },
+                      ],
+                    }),
+                },
+              );
+            }}
+            onRestaurantOpened={(name, rank) => {
+              const item = shown.items[rank];
+              recommendationEvent.mutate({
                 id: shown.id,
                 input: {
-                  kind: 'candidate_rated',
+                  kind: 'restaurant_opened',
                   candidateName: name,
                   candidateFoodId: item?.foodId ?? null,
                   candidateRank: rank,
-                  rating,
                   platform: 'web',
                 },
-              },
-              {
-                onSuccess: () =>
-                  setCurrent({
-                    ...shown,
-                    candidateRatings: [
-                      ...(shown.candidateRatings ?? []).filter(
-                        (candidate) => candidate.name !== name,
-                      ),
-                      { name, rating },
-                    ],
-                  }),
-              },
-            );
-          }}
-          onRestaurantOpened={(name, rank) => {
-            const item = shown.items[rank];
-            recommendationEvent.mutate({
-              id: shown.id,
-              input: {
-                kind: 'restaurant_opened',
-                candidateName: name,
-                candidateFoodId: item?.foodId ?? null,
-                candidateRank: rank,
-                platform: 'web',
-              },
-            });
-          }}
-        />
-      ) : null}
+              });
+            }}
+          />
+        ) : null}
+      </div>
 
+      {/* 목록은 늘 최신순 그대로 — 보고 있는 추천을 목록에서 빼면 누를 때마다 줄이 빠지고 끼어들어 헷갈렸다
+          (2026-10-04). 보고 있는 줄만 강조한다. */}
       {(history.data?.items.length ?? 0) > 1 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">지난 추천</CardTitle>
+            <CardTitle className="text-base">최근 추천</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {history
-              .data!.items.filter((r) => r.id !== shown?.id)
-              .map((r) => (
+          <CardContent className="space-y-1">
+            {history.data!.items.map((r) => {
+              const active = r.id === shown?.id;
+              const progress = recommendationProgressLabel(r);
+              return (
                 <button
                   key={r.id}
                   type="button"
-                  onClick={() => setCurrent(r)}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  aria-current={active ? 'true' : undefined}
+                  onClick={() => openFromHistory(r)}
+                  className={cn(
+                    'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+                    active ? 'bg-accent' : 'hover:bg-accent',
+                  )}
                 >
-                  <span className="truncate">
-                    {r.targetDate} {MEAL_SLOT_LABEL[r.targetSlot]} ·{' '}
-                    {r.items.map((i) => i.name).join(', ')}
+                  <span className="min-w-0 truncate">
+                    <span className="text-muted-foreground">
+                      {recommendationWhenLabel(r, today)}
+                    </span>
+                    {' · '}
+                    {recommendationHistoryFoods(r)}
                   </span>
-                  {r.feedback?.rating === 1 ? (
-                    <ThumbsUp className="size-3.5 shrink-0 text-primary" />
-                  ) : null}
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    {r.feedback?.rating === 1 ? (
+                      <ThumbsUp className="size-3.5 text-primary" />
+                    ) : null}
+                    {active ? <span className="font-medium text-primary">보는 중</span> : progress}
+                  </span>
                 </button>
-              ))}
+              );
+            })}
           </CardContent>
         </Card>
       ) : null}
@@ -268,6 +325,8 @@ export const MealRecommendTab = () => {
 
 const RecommendationCard = ({
   rec,
+  pastLabel,
+  onBackToLatest,
   lat,
   lng,
   onFeedback,
@@ -277,6 +336,9 @@ const RecommendationCard = ({
   allergyFilteringEnabled,
 }: {
   rec: MealRecommendationType;
+  /** 목록에서 고른 예전 추천이면 '오늘 점심 · 12:30' — 최신 추천과 헷갈리지 않게 머리에 밝힌다. */
+  pastLabel: string | null;
+  onBackToLatest: () => void;
   lat: number | null;
   lng: number | null;
   onFeedback: (input: { rating?: -1 | 1 | null; pickedName?: string | null }) => void;
@@ -287,6 +349,16 @@ const RecommendationCard = ({
 }) => (
   <Card>
     <CardHeader className="space-y-1">
+      {pastLabel ? (
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-xs">
+          <span>
+            <span className="font-medium">지난 추천</span> · {pastLabel}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={onBackToLatest}>
+            최신 추천으로
+          </Button>
+        </div>
+      ) : null}
       <CardTitle className="text-base">
         {rec.targetDate} {MEAL_SLOT_LABEL[rec.targetSlot]} 추천
       </CardTitle>
@@ -295,7 +367,10 @@ const RecommendationCard = ({
       {rec.feedback?.eatenEntryId ? (
         <p className="text-xs text-muted-foreground">
           이 추천은 식단 기록으로 이어졌어요 ·{' '}
-          <Link to={`/me/meals/${rec.feedback.eatenEntryId}`} className="text-primary hover:underline">
+          <Link
+            to={`/me/meals/${rec.feedback.eatenEntryId}`}
+            className="text-primary hover:underline"
+          >
             기록 보기
           </Link>
         </p>

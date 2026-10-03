@@ -465,6 +465,66 @@ describe('MealPage — 추천·설정 탭', () => {
     expect(screen.queryByRole('button', { name: /먹은 메뉴로 기록/ })).not.toBeInTheDocument();
   });
 
+  it('최근 추천 — 눌러도 목록 순서는 그대로, 보는 중만 옮기고 지난 추천을 밝힌다', async () => {
+    const withItem = (id: string, name: string, createdAt: string) => ({
+      ...recommendation,
+      id,
+      items: [{ ...recommendation.items[0]!, name }],
+      createdAt,
+    });
+    const newest = withItem('r3', '연어초밥', '2026-08-22T10:00:00.000Z');
+    const older = withItem('r2', '김치찌개', '2026-08-22T09:00:00.000Z');
+    const oldest = withItem('r1', '비빔밥', '2026-08-22T08:00:00.000Z');
+    const shownIds: string[] = [];
+    server.use(
+      http.get(ENTRIES_URL, () => HttpResponse.json({ items: [], nextCursor: null })),
+      http.get(CONTEXT_URL, () =>
+        HttpResponse.json({ entryCount: 12, recentFoods: [], preference, latest: newest }),
+      ),
+      http.get(RECOMMENDATIONS_URL, () => HttpResponse.json({ items: [newest, older, oldest] })),
+      http.post(`${RECOMMENDATIONS_URL}/:id/events`, async ({ params, request }) => {
+        const body = (await request.json()) as { kind: string };
+        if (body.kind === 'shown') shownIds.push(String(params['id']));
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /추천/ }));
+
+    // 목록 줄은 받은 시각(HH:MM)이 붙은 버튼 — 카드 버튼에는 시각이 없다.
+    const rows = async () => screen.findAllByRole('button', { name: /\d{2}:\d{2}/ });
+    const order = async () => (await rows()).map((row) => row.textContent ?? '');
+    expect(await order()).toEqual([
+      expect.stringContaining('연어초밥'),
+      expect.stringContaining('김치찌개'),
+      expect.stringContaining('비빔밥'),
+    ]);
+    expect((await rows())[0]).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /다시 추천/ })).toBeInTheDocument();
+
+    fireEvent.click((await rows())[1]!);
+
+    // 위 카드가 고른 추천으로 바뀌고 지난 추천임을 밝힌다. 다시 추천은 숨긴다.
+    expect(await screen.findByText('지난 추천')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '김치찌개 먹은 메뉴로 기록' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /다시 추천/ })).not.toBeInTheDocument();
+    // 목록은 순서 그대로, 보는 중만 옮겼다.
+    expect(await order()).toEqual([
+      expect.stringContaining('연어초밥'),
+      expect.stringContaining('김치찌개'),
+      expect.stringContaining('비빔밥'),
+    ]);
+    expect((await rows())[1]).toHaveAttribute('aria-current', 'true');
+    expect((await rows())[0]).not.toHaveAttribute('aria-current');
+
+    fireEvent.click(screen.getByRole('button', { name: '최신 추천으로' }));
+    expect(await screen.findByRole('button', { name: '연어초밥 먹은 메뉴로 기록' })).toBeInTheDocument();
+    expect(screen.queryByText('지난 추천')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /다시 추천/ })).toBeInTheDocument();
+    // 노출은 처음 보인 최신 추천만 — 목록에서 다시 연 예전 추천은 새 노출이 아니다.
+    await waitFor(() => expect(shownIds).toEqual(['r3']));
+  });
+
   it('설정 탭 — 슬라이더·절대 제외·덜 선호 음식을 나눠 PUT 한다', async () => {
     let saved: Record<string, unknown> | null = null;
     server.use(

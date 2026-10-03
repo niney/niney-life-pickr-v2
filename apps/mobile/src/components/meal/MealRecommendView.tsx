@@ -18,6 +18,9 @@ import {
 } from '@repo/api-contract';
 import {
   ApiError,
+  recommendationHistoryFoods,
+  recommendationProgressLabel,
+  recommendationWhenLabel,
   useAirLocation,
   startMealDraftFromRecommendation,
   useCreateMealRecommendation,
@@ -54,7 +57,12 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   const [mealType, setMealType] = useState<MealTypeType | null | undefined>(undefined);
   const [note, setNote] = useState('');
   const [current, setCurrent] = useState<MealRecommendationType | null>(null);
+  // '최근 추천' 목록에서 예전 추천을 골라 보는 중인지 — 새로 받거나 '최신 추천으로'를 누르면 풀린다(웹과 같다).
+  const [browsing, setBrowsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  // 추천 카드의 스크롤 위치 — 목록에서 고르면 바뀐 카드로 올려 보여 준다.
+  const cardY = useRef(0);
 
   const ctx = useMealRecommendationContext();
   const history = useMealRecommendations(5);
@@ -64,6 +72,10 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   const shownEventIds = useRef(new Set<string>());
 
   const shown = current ?? ctx.data?.latest ?? null;
+  const today = toLocalDateKey(new Date());
+  // 최근 추천(최신순)의 맨 앞 = 가장 최근에 받은 추천.
+  const newest = history.data?.items[0] ?? null;
+  const viewingPast = browsing && shown !== null && newest !== null && shown.id !== newest.id;
   const configuredSlots = ctx.data?.preference.slots.length
     ? ctx.data.preference.slots
     : MEAL_SLOTS;
@@ -75,7 +87,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
     mealType === undefined ? (ctx.data?.preference.mealTypes[0] ?? null) : mealType;
 
   useEffect(() => {
-    if (!shown || shownEventIds.current.has(shown.id)) return;
+    // 노출은 새로 받은(또는 화면 진입 때 보인) 추천만 — 목록에서 예전 추천을 다시 여는 건 새 노출이 아니다.
+    if (!shown || viewingPast || shownEventIds.current.has(shown.id)) return;
     shownEventIds.current.add(shown.id);
     recommendationEvent.mutate(
       { id: shown.id, input: { kind: 'shown', platform: 'mobile' } },
@@ -83,7 +96,20 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
     );
     // 이벤트 기록 자체가 shown 객체를 바꾸지는 않는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown?.id]);
+  }, [shown?.id, viewingPast]);
+
+  // 목록에서 고르면 위의 추천 카드가 바뀐다 — 바뀐 걸 보이게 카드로 스크롤한다(목록은 그대로 둔다).
+  const openFromHistory = (rec: MealRecommendationType) => {
+    setCurrent(rec);
+    setBrowsing(rec.id !== newest?.id);
+    scrollRef.current?.scrollTo({ y: Math.max(0, cardY.current - 8), animated: true });
+  };
+
+  const backToLatest = () => {
+    if (!newest) return;
+    setCurrent(newest);
+    setBrowsing(false);
+  };
 
   const request = (force: boolean) => {
     setError(null);
@@ -98,7 +124,10 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
         force,
       },
       {
-        onSuccess: (rec) => setCurrent(rec),
+        onSuccess: (rec) => {
+          setCurrent(rec);
+          setBrowsing(false);
+        },
         onError: (e) => setError(e instanceof ApiError ? e.message : '추천을 받지 못했어요.'),
       },
     );
@@ -170,7 +199,11 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Card>
         <CardTitle title="다음 끼니 추천" sub="기록을 보고 겹치지 않게 골라 드려요" />
 
@@ -230,7 +263,8 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
               <Text style={{ color: theme.colors.primaryText, fontWeight: '700' }}>추천받기</Text>
             )}
           </Pressable>
-          {shown ? (
+          {/* 지난 추천을 보는 중엔 숨긴다 — 그 추천을 다시 만드는 게 아니라 위에서 고른 끼니로 새로 받기 때문. */}
+          {shown && !viewingPast ? (
             <Chip label="다시 추천" onPress={() => request(true)} disabled={create.isPending} />
           ) : null}
         </View>
@@ -242,257 +276,279 @@ export const MealRecommendView = ({ initialSlot }: { initialSlot?: MealSlotType 
       </Card>
 
       {shown ? (
-        <Card>
-          <CardTitle
-            title={`${shown.targetDate} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
-            sub={shown.summary || null}
-          />
-          {shown.notice ? <Note tone="warn">{shown.notice}</Note> : null}
-          {(ctx.data?.preference.allergens.length ?? 0) > 0 ? (
-            <Note tone="warn">
-              알레르기 필터는 알려진 정보만 확인해요. 추천 결과와 무관하게 원재료·교차접촉을 다시
-              확인해 주세요.
-            </Note>
-          ) : null}
-          {shown.status === 'fallback' ? (
-            <Note tone="muted">AI 없이 기록 점수만으로 골랐어요.</Note>
-          ) : null}
+        <View onLayout={(e) => (cardY.current = e.nativeEvent.layout.y)}>
+          <Card>
+            {viewingPast ? (
+              <View style={[styles.pastBanner, { backgroundColor: theme.colors.surfaceAlt }]}>
+                <Text style={styles.pastBannerText} numberOfLines={1}>
+                  <Text style={{ fontWeight: '700' }}>지난 추천</Text> ·{' '}
+                  {recommendationWhenLabel(shown, today)}
+                </Text>
+                <Chip label="최신 추천으로" onPress={backToLatest} />
+              </View>
+            ) : null}
+            <CardTitle
+              title={`${shown.targetDate} ${MEAL_SLOT_LABEL[shown.targetSlot]} 추천`}
+              sub={shown.summary || null}
+            />
+            {shown.notice ? <Note tone="warn">{shown.notice}</Note> : null}
+            {(ctx.data?.preference.allergens.length ?? 0) > 0 ? (
+              <Note tone="warn">
+                알레르기 필터는 알려진 정보만 확인해요. 추천 결과와 무관하게 원재료·교차접촉을 다시
+                확인해 주세요.
+              </Note>
+            ) : null}
+            {shown.status === 'fallback' ? (
+              <Note tone="muted">AI 없이 기록 점수만으로 골랐어요.</Note>
+            ) : null}
 
-          {shown.items.length === 0 ? (
-            <StateBlock kind="empty" message="추천할 음식을 찾지 못했어요." />
-          ) : (
-            <View style={styles.itemList}>
-              {shown.items.map((item, rank) => (
-                <View key={item.name} style={styles.itemCard}>
-                  <View style={styles.itemHead}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    {item.dishType ? (
-                      <Text style={styles.itemMeta}>{FOOD_DISH_TYPE_LABEL[item.dishType]}</Text>
+            {shown.items.length === 0 ? (
+              <StateBlock kind="empty" message="추천할 음식을 찾지 못했어요." />
+            ) : (
+              <View style={styles.itemList}>
+                {shown.items.map((item, rank) => (
+                  <View key={item.name} style={styles.itemCard}>
+                    <View style={styles.itemHead}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      {item.dishType ? (
+                        <Text style={styles.itemMeta}>{FOOD_DISH_TYPE_LABEL[item.dishType]}</Text>
+                      ) : null}
+                      <Text style={styles.itemMeta}>
+                        {item.lastEatenDate ? `마지막 ${item.lastEatenDate.slice(5)}` : '안 먹어봄'}
+                      </Text>
+                    </View>
+                    <Text style={styles.itemReason}>{item.reason}</Text>
+                    {item.ingredients.length > 0 ? (
+                      <Text style={styles.itemIngredients}>
+                        주재료 {item.ingredients.join(', ')}
+                      </Text>
                     ) : null}
-                    <Text style={styles.itemMeta}>
-                      {item.lastEatenDate ? `마지막 ${item.lastEatenDate.slice(5)}` : '안 먹어봄'}
-                    </Text>
-                  </View>
-                  <Text style={styles.itemReason}>{item.reason}</Text>
-                  {item.ingredients.length > 0 ? (
-                    <Text style={styles.itemIngredients}>주재료 {item.ingredients.join(', ')}</Text>
-                  ) : null}
-                  {item.allergenWarnings.length > 0 ? (
-                    <Text style={[styles.itemIngredients, { color: theme.colors.danger }]}>
-                      알레르기 가능 정보{' '}
-                      {item.allergenWarnings.map((value) => MEAL_ALLERGEN_LABEL[value]).join(', ')}
-                    </Text>
-                  ) : item.allergenAssessment === 'unknown' &&
-                    (ctx.data?.preference.allergens.length ?? 0) > 0 ? (
-                    <Text style={[styles.itemIngredients, { color: theme.colors.danger }]}>
-                      알레르기 원재료 정보 부족
-                    </Text>
-                  ) : null}
-                  {item.nutritionBasis === 'donor_estimate' ? (
-                    <Text style={styles.itemIngredients}>
-                      영양은 {item.nutritionFrom ?? '유사 음식'} 기준 추정
-                    </Text>
-                  ) : item.nutritionBasis === 'missing' ? (
-                    <Text style={styles.itemIngredients}>영양 근거 없음</Text>
-                  ) : null}
-                  {item.tags.length > 0 ? (
-                    <ChipRow>
-                      {item.tags.map((t) => (
-                        <Chip key={t} label={t} />
-                      ))}
-                    </ChipRow>
-                  ) : null}
-                  <View style={styles.decisionActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: shown.feedback?.pickedName === item.name }}
-                      onPress={() => chooseCandidate(shown, item.name, rank)}
-                      style={({ pressed }) => [
-                        styles.choiceButton,
-                        {
-                          backgroundColor:
-                            shown.feedback?.pickedName === item.name
-                              ? theme.colors.surfaceAlt
-                              : theme.colors.primary,
-                          opacity: pressed ? 0.8 : 1,
-                        },
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={
-                          shown.feedback?.pickedName === item.name
-                            ? 'check-circle'
-                            : 'check-circle-outline'
-                        }
-                        size={18}
-                        color={
-                          shown.feedback?.pickedName === item.name
-                            ? theme.colors.primary
-                            : theme.colors.primaryText
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.choiceButtonText,
+                    {item.allergenWarnings.length > 0 ? (
+                      <Text style={[styles.itemIngredients, { color: theme.colors.danger }]}>
+                        알레르기 가능 정보{' '}
+                        {item.allergenWarnings
+                          .map((value) => MEAL_ALLERGEN_LABEL[value])
+                          .join(', ')}
+                      </Text>
+                    ) : item.allergenAssessment === 'unknown' &&
+                      (ctx.data?.preference.allergens.length ?? 0) > 0 ? (
+                      <Text style={[styles.itemIngredients, { color: theme.colors.danger }]}>
+                        알레르기 원재료 정보 부족
+                      </Text>
+                    ) : null}
+                    {item.nutritionBasis === 'donor_estimate' ? (
+                      <Text style={styles.itemIngredients}>
+                        영양은 {item.nutritionFrom ?? '유사 음식'} 기준 추정
+                      </Text>
+                    ) : item.nutritionBasis === 'missing' ? (
+                      <Text style={styles.itemIngredients}>영양 근거 없음</Text>
+                    ) : null}
+                    {item.tags.length > 0 ? (
+                      <ChipRow>
+                        {item.tags.map((t) => (
+                          <Chip key={t} label={t} />
+                        ))}
+                      </ChipRow>
+                    ) : null}
+                    <View style={styles.decisionActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: shown.feedback?.pickedName === item.name }}
+                        onPress={() => chooseCandidate(shown, item.name, rank)}
+                        style={({ pressed }) => [
+                          styles.choiceButton,
                           {
-                            color:
+                            backgroundColor:
                               shown.feedback?.pickedName === item.name
-                                ? theme.colors.primary
-                                : theme.colors.primaryText,
+                                ? theme.colors.surfaceAlt
+                                : theme.colors.primary,
+                            opacity: pressed ? 0.8 : 1,
                           },
                         ]}
                       >
-                        {shown.feedback?.pickedName === item.name ? '선택했어요' : '이 메뉴 선택'}
+                        <MaterialCommunityIcons
+                          name={
+                            shown.feedback?.pickedName === item.name
+                              ? 'check-circle'
+                              : 'check-circle-outline'
+                          }
+                          size={18}
+                          color={
+                            shown.feedback?.pickedName === item.name
+                              ? theme.colors.primary
+                              : theme.colors.primaryText
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.choiceButtonText,
+                            {
+                              color:
+                                shown.feedback?.pickedName === item.name
+                                  ? theme.colors.primary
+                                  : theme.colors.primaryText,
+                            },
+                          ]}
+                        >
+                          {shown.feedback?.pickedName === item.name ? '선택했어요' : '이 메뉴 선택'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.name} 먹은 메뉴로 기록`}
+                        onPress={() => eatThis(shown, item.name)}
+                        style={({ pressed }) => [
+                          styles.recordButton,
+                          {
+                            borderColor: theme.colors.border,
+                            backgroundColor: pressed ? theme.colors.surfaceAlt : 'transparent',
+                          },
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name="notebook-plus-outline"
+                          size={18}
+                          color={theme.colors.text}
+                        />
+                        <Text style={[styles.recordButtonText, { color: theme.colors.text }]}>
+                          먹은 메뉴 기록
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <FoodRestaurantMatches
+                      foodId={item.foodId}
+                      foodName={item.name}
+                      lat={airLocation.location?.lat ?? null}
+                      lng={airLocation.location?.lng ?? null}
+                      onOpened={() =>
+                        recommendationEvent.mutate({
+                          id: shown.id,
+                          input: {
+                            kind: 'restaurant_opened',
+                            candidateName: item.name,
+                            candidateFoodId: item.foodId,
+                            candidateRank: rank,
+                            platform: 'mobile',
+                          },
+                        })
+                      }
+                    />
+
+                    <View style={styles.candidateFeedbackRow}>
+                      <Text
+                        style={[styles.candidateFeedbackLabel, { color: theme.colors.textMuted }]}
+                      >
+                        이 메뉴 추천
                       </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${item.name} 먹은 메뉴로 기록`}
-                      onPress={() => eatThis(shown, item.name)}
-                      style={({ pressed }) => [
-                        styles.recordButton,
-                        {
-                          borderColor: theme.colors.border,
-                          backgroundColor: pressed ? theme.colors.surfaceAlt : 'transparent',
-                        },
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="notebook-plus-outline"
-                        size={18}
-                        color={theme.colors.text}
+                      <Chip
+                        label="👍"
+                        selected={
+                          shown.candidateRatings.find((candidate) => candidate.name === item.name)
+                            ?.rating === 1
+                        }
+                        onPress={() => rateCandidate(shown, item.name, rank, 1)}
                       />
-                      <Text style={[styles.recordButtonText, { color: theme.colors.text }]}>
-                        먹은 메뉴 기록
-                      </Text>
-                    </Pressable>
+                      <Chip
+                        label="👎"
+                        selected={
+                          shown.candidateRatings.find((candidate) => candidate.name === item.name)
+                            ?.rating === -1
+                        }
+                        onPress={() => rateCandidate(shown, item.name, rank, -1)}
+                      />
+                    </View>
                   </View>
+                ))}
+              </View>
+            )}
 
-                  <FoodRestaurantMatches
-                    foodId={item.foodId}
-                    foodName={item.name}
-                    lat={airLocation.location?.lat ?? null}
-                    lng={airLocation.location?.lng ?? null}
-                    onOpened={() =>
-                      recommendationEvent.mutate({
-                        id: shown.id,
-                        input: {
-                          kind: 'restaurant_opened',
-                          candidateName: item.name,
-                          candidateFoodId: item.foodId,
-                          candidateRank: rank,
-                          platform: 'mobile',
-                        },
-                      })
-                    }
-                  />
-
-                  <View style={styles.candidateFeedbackRow}>
-                    <Text
-                      style={[styles.candidateFeedbackLabel, { color: theme.colors.textMuted }]}
-                    >
-                      이 메뉴 추천
-                    </Text>
-                    <Chip
-                      label="👍"
-                      selected={
-                        shown.candidateRatings.find((candidate) => candidate.name === item.name)
-                          ?.rating === 1
-                      }
-                      onPress={() => rateCandidate(shown, item.name, rank, 1)}
-                    />
-                    <Chip
-                      label="👎"
-                      selected={
-                        shown.candidateRatings.find((candidate) => candidate.name === item.name)
-                          ?.rating === -1
-                      }
-                      onPress={() => rateCandidate(shown, item.name, rank, -1)}
-                    />
-                  </View>
-                </View>
-              ))}
+            <View style={styles.feedbackRow}>
+              <Text style={styles.feedbackLabel}>추천 조합 전체는 어땠나요?</Text>
+              <Chip
+                label="👍"
+                selected={shown.feedback?.rating === 1}
+                onPress={() =>
+                  recommendationEvent.mutate(
+                    { id: shown.id, input: { kind: 'set_rated', rating: 1, platform: 'mobile' } },
+                    {
+                      onSuccess: () =>
+                        setCurrent({
+                          ...shown,
+                          feedback: {
+                            pickedName: shown.feedback?.pickedName ?? null,
+                            rating: 1,
+                            eatenEntryId: shown.feedback?.eatenEntryId ?? null,
+                          },
+                        }),
+                    },
+                  )
+                }
+              />
+              <Chip
+                label="👎"
+                selected={shown.feedback?.rating === -1}
+                onPress={() =>
+                  recommendationEvent.mutate(
+                    { id: shown.id, input: { kind: 'set_rated', rating: -1, platform: 'mobile' } },
+                    {
+                      onSuccess: () =>
+                        setCurrent({
+                          ...shown,
+                          feedback: {
+                            pickedName: shown.feedback?.pickedName ?? null,
+                            rating: -1,
+                            eatenEntryId: shown.feedback?.eatenEntryId ?? null,
+                          },
+                        }),
+                    },
+                  )
+                }
+              />
             </View>
-          )}
-
-          <View style={styles.feedbackRow}>
-            <Text style={styles.feedbackLabel}>추천 조합 전체는 어땠나요?</Text>
-            <Chip
-              label="👍"
-              selected={shown.feedback?.rating === 1}
-              onPress={() =>
-                recommendationEvent.mutate(
-                  { id: shown.id, input: { kind: 'set_rated', rating: 1, platform: 'mobile' } },
-                  {
-                    onSuccess: () =>
-                      setCurrent({
-                        ...shown,
-                        feedback: {
-                          pickedName: shown.feedback?.pickedName ?? null,
-                          rating: 1,
-                          eatenEntryId: shown.feedback?.eatenEntryId ?? null,
-                        },
-                      }),
-                  },
-                )
-              }
-            />
-            <Chip
-              label="👎"
-              selected={shown.feedback?.rating === -1}
-              onPress={() =>
-                recommendationEvent.mutate(
-                  { id: shown.id, input: { kind: 'set_rated', rating: -1, platform: 'mobile' } },
-                  {
-                    onSuccess: () =>
-                      setCurrent({
-                        ...shown,
-                        feedback: {
-                          pickedName: shown.feedback?.pickedName ?? null,
-                          rating: -1,
-                          eatenEntryId: shown.feedback?.eatenEntryId ?? null,
-                        },
-                      }),
-                  },
-                )
-              }
-            />
-          </View>
-        </Card>
+          </Card>
+        </View>
       ) : ctx.isLoading ? (
         <StateBlock kind="loading" />
       ) : null}
 
+      {/* 목록은 늘 최신순 그대로 — 보고 있는 추천을 목록에서 빼면 누를 때마다 줄이 빠지고 끼어들어 헷갈렸다
+          (2026-10-04). 보고 있는 줄만 강조한다. */}
       {(history.data?.items.length ?? 0) > 1 ? (
         <Card>
-          <CardTitle
-            title="지난 추천"
-            sub="선택한 메뉴를 다시 열어 실제 기록으로 이어갈 수 있어요"
-          />
+          <CardTitle title="최근 추천" sub="눌러서 다시 열면 그 추천으로 기록을 이어갈 수 있어요" />
           <View style={styles.itemList}>
-            {history
-              .data!.items.filter((item) => item.id !== shown?.id)
-              .map((item) => (
+            {history.data!.items.map((item) => {
+              const active = item.id === shown?.id;
+              return (
                 <Pressable
                   key={item.id}
                   accessibilityRole="button"
-                  onPress={() => setCurrent(item)}
-                  style={styles.historyRow}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => openFromHistory(item)}
+                  style={[
+                    styles.historyRow,
+                    active ? { backgroundColor: theme.colors.surfaceAlt } : null,
+                  ]}
                 >
                   <Text style={styles.historyText} numberOfLines={1}>
-                    {item.targetDate} {MEAL_SLOT_LABEL[item.targetSlot]} ·{' '}
-                    {item.feedback?.pickedName ??
-                      item.items.map((candidate) => candidate.name).join(', ')}
+                    <Text style={{ color: theme.colors.textMuted }}>
+                      {recommendationWhenLabel(item, today)}
+                    </Text>
+                    {' · '}
+                    {recommendationHistoryFoods(item)}
                   </Text>
-                  <Text style={styles.itemMeta}>
-                    {item.feedback?.eatenEntryId
-                      ? '기록 완료'
-                      : item.feedback?.pickedName
-                        ? '선택됨'
-                        : '보기'}
+                  <Text
+                    style={[
+                      styles.itemMeta,
+                      active ? { color: theme.colors.primary, fontWeight: '700' } : null,
+                    ]}
+                  >
+                    {active ? '보는 중' : (recommendationProgressLabel(item) ?? '보기')}
                   </Text>
                 </Pressable>
-              ))}
+              );
+            })}
           </View>
         </Card>
       ) : null}
@@ -578,6 +634,23 @@ const createStyles = (theme: Theme) =>
     candidateFeedbackLabel: { flex: 1, fontSize: 12, lineHeight: 17 },
     feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
     feedbackLabel: { fontSize: 12, color: theme.colors.textMuted, flex: 1 },
-    historyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+    historyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 7,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+    },
     historyText: { flex: 1, color: theme.colors.text, fontSize: 13 },
+    pastBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginBottom: 4,
+    },
+    pastBannerText: { flex: 1, fontSize: 12, color: theme.colors.text },
   });
