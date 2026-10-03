@@ -29,11 +29,14 @@ import { FOOD_DISH_TYPE_LABEL, FOOD_MAIN_INGREDIENT_LABEL, MEAL_SLOT_LABEL } fro
 import { buildApp } from '../src/app.js';
 import { hashPassword } from '../src/lib/hash.js';
 import { normalizeTerm } from '../src/lib/text.js';
+import { allergensInFoodName } from '../src/modules/food/food-allergen.js';
 import { MealPreferenceService } from '../src/modules/meal/meal-preference.service.js';
 import {
   MealPatternService,
   buildProfile,
   filterForSlot,
+  filterForFocus,
+  recommendationFocus,
   scoreCandidate,
   type ScoredCandidate,
 } from '../src/modules/meal-recommendation/meal-pattern.service.js';
@@ -220,7 +223,9 @@ const main = async (): Promise<void> => {
       for (const p of PERSONAS) {
         const user = await prisma.user.findUnique({ where: { id: p.id } });
         if (!user) continue;
-        const auth = { authorization: `Bearer ${app.jwt.sign({ userId: p.id, email: p.email, role: 'USER' })}` };
+        const auth = {
+          authorization: `Bearer ${app.jwt.sign({ userId: p.id, email: p.email, role: 'USER', tv: user.tokenVersion })}`,
+        };
         await app.inject({
           method: 'DELETE',
           url: '/api/v1/meals/data',
@@ -272,34 +277,40 @@ const main = async (): Promise<void> => {
       ]);
       const profile = buildProfile(history, slot, today, feedback);
       const raw = await pattern.buildCandidates(profile, preference, `${userId}|${today}`);
-      return filterForSlot(
-        raw
-        .map((c) =>
-          scoreCandidate(c, {
-            profile,
-            preference,
-            targetSlot: slot,
-            mealType: preference.mealTypes[0] ?? null,
-            month,
-            tempC: null,
-            rain: null,
-            today,
-          }),
-        )
-        .sort((a, b) => b.score - a.score),
-        profile,
-        slot,
+      return filterForFocus(
+        filterForSlot(
+          raw
+            .map((c) =>
+              scoreCandidate(c, {
+                profile,
+                preference,
+                targetSlot: slot,
+                mealType: preference.mealTypes[0] ?? null,
+                month,
+                tempC: null,
+                rain: null,
+                today,
+              }),
+            )
+            .sort((a, b) => b.score - a.score),
+          profile,
+          slot,
+        ),
+        recommendationFocus(preference.weights, null),
       );
     };
 
     for (const p of PERSONAS) {
       console.log(`\n=== ${p.title} ===`);
-      await prisma.user.upsert({
+      const user = await prisma.user.upsert({
         where: { id: p.id },
         update: { email: p.email, passwordHash, role: 'USER' },
         create: { id: p.id, email: p.email, passwordHash, role: 'USER' },
       });
-      const auth = { authorization: `Bearer ${app.jwt.sign({ userId: p.id, email: p.email, role: 'USER' })}` };
+      // 웹에서 로그인·로그아웃하면 tokenVersion 이 올라 예전 토큰이 무효가 된다 — 현재 값(tv)으로 서명한다.
+      const auth = {
+        authorization: `Bearer ${app.jwt.sign({ userId: p.id, email: p.email, role: 'USER', tv: user.tokenVersion })}`,
+      };
       const call = async <T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown): Promise<T> => {
         const res = await app.inject({ method, url, headers: auth, ...(payload === undefined ? {} : { payload: payload as object }) });
         if (res.statusCode >= 400) throw new Error(`${method} ${url} → ${res.statusCode} ${res.body.slice(0, 300)}`);
@@ -391,6 +402,8 @@ const main = async (): Promise<void> => {
           const bad = rec.items.filter(
             (i) =>
               i.allergenWarnings.some((a) => allergens.has(a)) ||
+              // 서버 경고는 재료 정보가 있을 때만 생긴다 — 이름에 보이는 알레르겐도 위반으로 본다.
+              allergensInFoodName(i.name).some((a) => allergens.has(a)) ||
               prefNow.excludedFoods.some((t) => normalizeTerm(i.name).includes(normalizeTerm(t))) ||
               i.ingredients.some((ing) => prefNow.excludedFoods.some((t) => ing.includes(t))),
           );
