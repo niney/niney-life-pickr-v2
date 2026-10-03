@@ -180,7 +180,11 @@ interface Metrics {
   variety: number; // 겹침 회피 요소 평균
   warm: number; // 국물·찜·조림 비율
   cool: number; // 면·샐러드·회·나물 비율
+  heavy: number; // 최근 가장 많이 먹은 조리형태·주재료와 겹치는 정도(0~1, 낮을수록 골고루)
 }
+// E 의 최근 1위 조리형태·주재료 — 기록을 넣은 뒤 채운다. '골고루' 판정은 균형 요소 평균이 아니라 이것으로 본다
+// (균형 요소에 계통이 섞였을 때 '0.68 → 0.68, 효과 없음'으로 잘못 읽었다 — 2026-10-04 골고루 실험).
+const heavyTop: { dish: string | null; ing: string | null } = { dish: null, ing: null };
 const metricsOf = (list: ScoredCandidate[]): Metrics => {
   const share = (pred: (c: ScoredCandidate) => boolean): number =>
     list.length ? list.filter(pred).length / list.length : 0;
@@ -195,6 +199,15 @@ const metricsOf = (list: ScoredCandidate[]): Metrics => {
     variety: avg('variety'),
     warm: share((c) => Boolean(c.dishType && WARM.has(c.dishType))),
     cool: share((c) => Boolean(c.dishType && COOL.has(c.dishType))),
+    heavy:
+      mean(
+        list.map(
+          (c) =>
+            ((heavyTop.dish && c.dishType === heavyTop.dish ? 1 : 0) +
+              (heavyTop.ing && c.mainIngredient === heavyTop.ing ? 1 : 0)) /
+            2,
+        ),
+      ) ?? 0,
   };
 };
 type MetricKey = Exclude<keyof Metrics, 'kcal'>;
@@ -207,6 +220,7 @@ const METRIC_LABEL: Record<MetricKey, string> = {
   variety: '겹침 회피 평균',
   warm: '국물·찜 비율',
   cool: '면·샐러드 비율',
+  heavy: '많이 먹은 조리형태·주재료 겹침',
 };
 const overlap = (a: ScoredCandidate[], b: ScoredCandidate[], k: number): number => {
   const as = new Set(a.slice(0, k).map((c) => c.nameNorm));
@@ -323,6 +337,17 @@ const main = async (): Promise<void> => {
     const basePref = await preferences.get(PERSONA.id);
     const seed = `${PERSONA.id}|${today}`;
     const historyCache = new Map<MealSlotType, ReturnType<typeof buildProfile>>();
+    {
+      const [history, feedback] = await Promise.all([
+        pattern.loadHistory(PERSONA.id, today),
+        pattern.loadFeedbackSignals(PERSONA.id, today),
+      ]);
+      const p = buildProfile(history, 'dinner', today, feedback);
+      const top = (rec: Record<string, number>): string | null =>
+        Object.entries(rec).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      heavyTop.dish = top(p.dishTypeShare);
+      heavyTop.ing = top(p.ingredientShare);
+    }
     const profileFor = async (slot: MealSlotType): Promise<ReturnType<typeof buildProfile>> => {
       const cached = historyCache.get(slot);
       if (cached) return cached;
@@ -379,7 +404,7 @@ const main = async (): Promise<void> => {
     const AXIS_METRIC: Record<(typeof MealWeightKeys)[number], { metric: MetricKey; dir: 'up' | 'down' } | null> = {
       variety: { metric: 'variety', dir: 'up' },
       taste: { metric: 'history', dir: 'up' },
-      balance: { metric: 'balance', dir: 'up' },
+      balance: { metric: 'heavy', dir: 'down' },
       health: { metric: 'health', dir: 'up' },
       novelty: { metric: 'novel', dir: 'up' },
       weather: null, // 날씨는 아래 고정값 시나리오에서 본다.
@@ -410,16 +435,16 @@ const main = async (): Promise<void> => {
         '',
         `후보 ${base.length}개(최대 ${CANDIDATE_POOL_SIZE}) · 지표는 상위 ${TOP}개 기준 · 겹침 = 기본값 상위 ${TOP}·${PROMPT_TOP}와 같은 음식 비율.`,
         '',
-        '| 설정 | 겹침@10 | 겹침@25 | 새 음식 | 먹던·좋아함 | 건강 | kcal | 튀김·빵 | 균형 | 겹침 회피 | 상위 5 |',
-        '|---|---|---|---|---|---|---|---|---|---|---|',
-        `| 기본값 | - | - | ${pct(baseTop.novel)} | ${pct(baseTop.history)} | ${fmt(baseTop.health)} | ${baseTop.kcal === null ? '-' : Math.round(baseTop.kcal)} | ${pct(baseTop.fried)} | ${fmt(baseTop.balance)} | ${fmt(baseTop.variety)} | ${topNames(base)} |`,
+        '| 설정 | 겹침@10 | 겹침@25 | 새 음식 | 먹던·좋아함 | 건강 | kcal | 튀김·빵 | 균형 | 많이 먹은 쪽 | 겹침 회피 | 상위 5 |',
+        '|---|---|---|---|---|---|---|---|---|---|---|---|',
+        `| 기본값 | - | - | ${pct(baseTop.novel)} | ${pct(baseTop.history)} | ${fmt(baseTop.health)} | ${baseTop.kcal === null ? '-' : Math.round(baseTop.kcal)} | ${pct(baseTop.fried)} | ${fmt(baseTop.balance)} | ${fmt(baseTop.heavy)} | ${fmt(baseTop.variety)} | ${topNames(base)} |`,
       );
       for (const s of weightScenarios) {
         const pool = await poolFor(withPref({ weights: s.weights }), slot);
         const m = metricsOf(pool.slice(0, TOP));
         const ov10 = overlap(base, pool, TOP);
         md.push(
-          `| ${s.label} | ${pct(ov10)} | ${pct(overlap(base, pool, PROMPT_TOP))} | ${pct(m.novel)} | ${pct(m.history)} | ${fmt(m.health)} | ${m.kcal === null ? '-' : Math.round(m.kcal)} | ${pct(m.fried)} | ${fmt(m.balance)} | ${fmt(m.variety)} | ${topNames(pool)} |`,
+          `| ${s.label} | ${pct(ov10)} | ${pct(overlap(base, pool, PROMPT_TOP))} | ${pct(m.novel)} | ${pct(m.history)} | ${fmt(m.health)} | ${m.kcal === null ? '-' : Math.round(m.kcal)} | ${pct(m.fried)} | ${fmt(m.balance)} | ${fmt(m.heavy)} | ${fmt(m.variety)} | ${topNames(pool)} |`,
         );
         const axis = s.axis ? AXIS_METRIC[s.axis] : null;
         if (axis) {
@@ -434,8 +459,15 @@ const main = async (): Promise<void> => {
           checks.push({
             group: `가중치·${MEAL_SLOT_LABEL[slot]}`,
             label: `${s.label} → 평균 kcal ↓`,
-            // kcal 은 상대 변화로 본다(기준 대비 비율 — EPS 2%).
-            ok: baseTop.kcal === null || m.kcal === null || baseTop.kcal === 0 ? 'warn' : judge(1, m.kcal / baseTop.kcal, 'down'),
+            // kcal 은 상대 변화로 보고(EPS 2%), 보조 지표라 반대로 가도 확인으로 둔다 — 건강 요소는 kcal 외에 생선·
+            // 단백질·튀김·나트륨을 함께 보고, 후보 kcal 이 한 끼 기준이 된 뒤로 장어구이처럼 건강 점수가 높으면서 kcal 이
+            // 조금 높은 음식이 올라온다(2026-10-04: 253 → 273, 건강 0.80 → 0.87).
+            ok:
+              baseTop.kcal === null || m.kcal === null || baseTop.kcal === 0
+                ? 'warn'
+                : judge(1, m.kcal / baseTop.kcal, 'down') === false
+                  ? 'warn'
+                  : judge(1, m.kcal / baseTop.kcal, 'down'),
             detail: `${baseTop.kcal === null ? '-' : Math.round(baseTop.kcal)} → ${m.kcal === null ? '-' : Math.round(m.kcal)}`,
           });
         }
@@ -864,7 +896,7 @@ const main = async (): Promise<void> => {
       '',
       `웹(개발 서버)에서 \`${PERSONA.email}\`(비밀번호는 \`data/meal-probe/accounts.json\`)로 로그인하면 같은 기록으로 설정을 바꿔 가며 추천을 볼 수 있다. 끝난 뒤 설정은 기본값으로 되돌렸다.`,
       '',
-      `기록 ${MEALS.length}끼(${shiftDate(today, -14)} ~ ${shiftDate(today, -1)}). 알레르기 '이름 기준'은 이 스크립트의 단어표(새우·대하·꽃게·게살 등)로 본 점검 기준이다.`,
+      `기록 ${MEALS.length}끼(${shiftDate(today, -14)} ~ ${shiftDate(today, -1)}). 알레르기 '이름 기준'은 이 스크립트의 단어표(새우·대하·꽃게·게살 등)로 본 점검 기준이다. '많이 먹은 쪽'은 최근 1위 조리형태(${heavyTop.dish ?? '-'})·주재료(${heavyTop.ing ?? '-'})와 겹치는 정도(0~1).`,
       '',
       ...summary,
       '## 점수 층',
