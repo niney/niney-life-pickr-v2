@@ -46,7 +46,9 @@ describe('사주 입력과 비동기 결과', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: 30_000, refetchOnWindowFocus: false } },
     });
-    vi.spyOn(sajuGApi, 'listMine').mockResolvedValue({ items: [], nextCursor: null });
+    const listMine = vi
+      .spyOn(sajuGApi, 'listMine')
+      .mockResolvedValue({ items: [], nextCursor: null });
     const getMine = vi
       .spyOn(sajuGApi, 'getMine')
       .mockResolvedValue({ ...reading, readingId: 'saved-id' });
@@ -60,6 +62,8 @@ describe('사주 입력과 비동기 결과', () => {
       </QueryClientProvider>,
     );
     await screen.findByRole('heading', { name: reading.report.headline });
+    // 상세 화면은 목록을 그리지 않으므로 목록 요청도 하지 않는다.
+    expect(listMine).not.toHaveBeenCalled();
     getMine.mockRejectedValue(new Error('삭제된 결과'));
     await act(async () => {
       focusManager.setFocused(false);
@@ -69,6 +73,8 @@ describe('사주 입력과 비동기 결과', () => {
     expect(
       screen.queryByRole('heading', { name: reading.report.headline }),
     ).not.toBeInTheDocument();
+    // 상세를 못 불러오면 보관함 목록이 대신 나오므로 그때는 목록을 부른다.
+    await waitFor(() => expect(listMine).toHaveBeenCalledTimes(1));
   });
   it('공유가 다른 창에서 취소되면 이전에 캐시한 지도도 숨긴다', async () => {
     const queryClient = new QueryClient({

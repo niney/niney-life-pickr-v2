@@ -30,6 +30,7 @@ import {
 // 이웃으로 바뀌고 다시 내려오며 이웃이 빠지는 식으로 떨리고(팝콘), 14px 씩 겹친 부채꼴에선
 // 어느 카드가 잡히는지 예측이 안 됐다. 정지 포즈 기준이면 애니메이션과 무관하게 안정적이고,
 // 이웃으로 넘어갈 때 약간의 히스테리시스를 둔다. 포인터가 덱 위에 있는지는 메시 이벤트로 안다.
+// 호버 결과는 hoveredRef 에만 적는다 — 커서(body)는 Scene 이 이 값을 보고 한 곳에서 바꾼다.
 
 interface Props {
   deckOrder: readonly string[];
@@ -95,6 +96,9 @@ export const FanDeck = ({ deckOrder, picked, phase, revealed, canPick }: Props) 
     };
   }
 
+  // 타임라인 세그먼트 키 — 프레임마다 문자열을 새로 만들지 않게 렌더에서 한 번.
+  const segment = segmentKey(phase, revealed);
+
   useFrame((st, dt) => {
     const mesh = meshRef.current;
     const live = liveRef.current;
@@ -106,7 +110,7 @@ export const FanDeck = ({ deckOrder, picked, phase, revealed, canPick }: Props) 
       mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 60);
     }
     const t = st.clock.elapsedTime;
-    const elapsed = syncTimeline(timelineRef, segmentKey(phase, revealed), t);
+    const elapsed = syncTimeline(timelineRef, segment, t);
     const k = dampK(dt, 7);
     const beat = Math.min(SHUFFLE_BEATS, Math.floor(elapsed / TIMING.shuffleBeatS));
 
@@ -187,7 +191,6 @@ export const FanDeck = ({ deckOrder, picked, phase, revealed, canPick }: Props) 
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    document.body.style.cursor = phase === 'picking' && hov !== -1 ? 'pointer' : '';
 
     if (phase === 'shuffling' && elapsed > TIMING.shuffleS && fireOnce(firedRef, `shuffle:${timelineRef.current.start}`)) {
       callbacks.onShuffleDone();
@@ -211,7 +214,6 @@ export const FanDeck = ({ deckOrder, picked, phase, revealed, canPick }: Props) 
     e.stopPropagation();
     hoveredRef.current = -1;
     insideRef.current = false;
-    document.body.style.cursor = '';
     callbacks.onPick(id);
   };
 

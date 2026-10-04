@@ -61,11 +61,12 @@ export function useSajuGReading() {
   }, [cancel]);
   return { chart, result, pending, error, start, reset, setResult };
 }
-export function useMySajuGReadings() {
+// enabled=false 면 목록을 부르지 않는다 — 상세 화면처럼 목록을 그리지 않는 곳에서(캐시된 목록은 그대로 둔다).
+export function useMySajuGReadings({ enabled = true }: { enabled?: boolean } = {}) {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   return useInfiniteQuery({
     queryKey: ['saju-g', 'mine', userId],
-    enabled: !!userId,
+    enabled: !!userId && enabled,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => sajuGApi.listMine(pageParam),
     getNextPageParam: (last) => last.nextCursor ?? undefined,

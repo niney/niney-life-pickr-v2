@@ -116,32 +116,28 @@ export const discGlowTexture = (): THREE.Texture => {
   return t;
 };
 
-/** 일간 캐릭터 이미지(512 webp). 로드 실패 시 null. */
-export const loadDayMasterTexture = (stem: Stem): Promise<THREE.Texture> =>
-  new Promise((resolve, reject) => {
-    new THREE.TextureLoader().load(
-      sajuImagePath(sajuStemImageId(stem), 512),
-      (t) => {
-        t.colorSpace = THREE.SRGBColorSpace;
-        t.anisotropy = 4;
-        resolve(t);
-      },
-      undefined,
-      (e) => reject(e),
-    );
-  });
+// 이미지 텍스처 — URL 별로 한 번만 받아 돌려쓴다(천간 10 + 지지 12, 많아야 22장). 캐시가 없으면 "다시 입력"으로
+// 카드가 다시 뜰 때마다 새 텍스처가 GPU 에 올라가고 이전 것은 무대가 사라질 때까지 남는다.
+const imageLoader = new THREE.TextureLoader();
+const images = new Map<string, Promise<THREE.Texture>>();
+
+const loadImageTexture = (url: string): Promise<THREE.Texture> => {
+  let p = images.get(url);
+  if (!p) {
+    p = imageLoader.loadAsync(url).then((t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      return t;
+    });
+    // 실패(이미지 없음)는 기억하지 않는다 — 부르는 쪽이 글자 카드로 대신한다.
+    p.catch(() => images.delete(url));
+    images.set(url, p);
+  }
+  return p;
+};
+
+/** 일간 캐릭터 이미지(512 webp). 로드 실패 시 reject(글자 카드로). */
+export const loadDayMasterTexture = (stem: Stem): Promise<THREE.Texture> => loadImageTexture(sajuImagePath(sajuStemImageId(stem), 512));
 
 /** 띠 동물 이미지(512 webp) — 일간 카드 옆 작은 카드. 로드 실패 시 reject(글자 카드로). */
-export const loadZodiacTexture = (branch: Branch): Promise<THREE.Texture> =>
-  new Promise((resolve, reject) => {
-    new THREE.TextureLoader().load(
-      sajuImagePath(sajuBranchImageId(branch), 512),
-      (t) => {
-        t.colorSpace = THREE.SRGBColorSpace;
-        t.anisotropy = 4;
-        resolve(t);
-      },
-      undefined,
-      (e) => reject(e),
-    );
-  });
+export const loadZodiacTexture = (branch: Branch): Promise<THREE.Texture> => loadImageTexture(sajuImagePath(sajuBranchImageId(branch), 512));

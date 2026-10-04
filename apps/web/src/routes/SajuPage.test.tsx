@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type { CreateSajuReadingInputType, SajuReadingResultType, SajuSectionsType, SajuThemesType } from '@repo/api-contract';
-import { useAuthStore, useSajuProfileStore } from '@repo/shared';
+import { useAuthStore, useSajuProfileStore, useSajuSession } from '@repo/shared';
 import { computeSajuChart } from '@repo/utils';
 import { detectTarotRender } from '~/components/tarot/tarotQuality';
 import { server } from '~/test/msw';
@@ -339,5 +340,79 @@ describe('SajuPage (Lite)', () => {
     fireEvent.click(screen.getByRole('button', { name: /엄마/ }));
     expect(screen.getByLabelText('년')).toHaveValue(1965);
     expect(screen.queryByLabelText('이 계정에 저장')).toBeNull();
+  });
+});
+
+// 세션 훅 — 화면(3D 무대·풀이 패널)에 내려가는 값이 입력이 그대로인 다시 그리기에서 새 참조로 바뀌지 않는지,
+// 그리고 섹션 long-poll 이 "다시 입력" 때 끊기는지.
+describe('useSajuSession', () => {
+  const renderSession = () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return renderHook(() => useSajuSession({ initialTab: 'chart', initialMode: 'self', skipAnimation: true }), {
+      wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
+    });
+  };
+
+  it('birth·setInput·patchPartner·result 는 입력이 그대로면 같은 참조다', async () => {
+    server.use(
+      http.post('/api/v1/saju-c/readings', async ({ request }) =>
+        HttpResponse.json({ ...fakeResult((await request.json()) as CreateSajuReadingInputType), jobId: 'job12345678' }),
+      ),
+      // job 스냅샷이 붙으면 병합 결과는 매번 새로 만들어지는 객체다 — 입력이 같으면 다시 만들지 않아야 한다.
+      http.get('/api/v1/saju-c/readings/jobs/job12345678', async ({ request }) => {
+        const after = Number(new URL(request.url).searchParams.get('after') ?? '0');
+        const sections = fakeResult({ birth: { calendar: 'solar', year: 1990, month: 1, day: 1, leapMonth: false, hour: null, minute: null, gender: 'M', options: { solarTimeCorrection: true, lateRatHour: false } } }).sections;
+        return HttpResponse.json({ jobId: 'job12345678', version: after + 1, sections, done: true, readingId: 'r1', source: 'llm' });
+      }),
+    );
+    const { result } = renderSession();
+    const first = result.current;
+    act(() => first.setTab('personality'));
+    expect(result.current.birth).toBe(first.birth);
+    expect(result.current.setInput).toBe(first.setInput);
+    expect(result.current.patchPartner).toBe(first.patchPartner);
+
+    act(() => result.current.setInput({ year: 1991 }));
+    expect(result.current.birth).not.toBe(first.birth);
+    expect(result.current.birth.year).toBe(1991);
+    act(() => result.current.patchPartner({ year: 1993 }));
+    expect(result.current.partner.year).toBe(1993);
+
+    act(() => {
+      result.current.submit({ enabled: false, label: '나', profileId: null });
+    });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.result).toMatchObject({ readingId: 'r1', source: 'llm' });
+    const merged = result.current.result;
+    const birth = result.current.birth;
+    act(() => result.current.setTab('year'));
+    expect(result.current.result).toBe(merged);
+    expect(result.current.birth).toBe(birth);
+  });
+
+  it('다시 입력하면 기다리던 섹션 long-poll 요청을 끊는다', async () => {
+    let aborted = false;
+    let polling = false;
+    server.use(
+      http.post('/api/v1/saju-c/readings', async ({ request }) =>
+        HttpResponse.json({ ...fakeResult((await request.json()) as CreateSajuReadingInputType), jobId: 'jobhang1234' }),
+      ),
+      http.get('/api/v1/saju-c/readings/jobs/jobhang1234', async ({ request }) => {
+        polling = true;
+        request.signal.addEventListener('abort', () => {
+          aborted = true;
+        });
+        // 서버가 새 섹션을 기다리며 응답을 쥐고 있는 상태.
+        await new Promise((resolve) => request.signal.addEventListener('abort', resolve));
+        return HttpResponse.json({ jobId: 'jobhang1234', version: 1, sections: {}, done: false, readingId: null, source: 'static' });
+      }),
+    );
+    const { result } = renderSession();
+    act(() => {
+      result.current.submit({ enabled: false, label: '나', profileId: null });
+    });
+    await waitFor(() => expect(polling).toBe(true));
+    act(() => result.current.edit());
+    await waitFor(() => expect(aborted).toBe(true));
   });
 });

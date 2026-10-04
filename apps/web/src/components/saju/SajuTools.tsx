@@ -254,8 +254,8 @@ export const SajuMatchResultView = ({ m }: { m: SajuMatchResultType }) => (
     <div className="flex items-center gap-3">
       <ScoreRing score={m.score} />
       <div className="flex shrink-0 items-center -space-x-2" aria-label="두 사람의 띠">
-        <img src={sajuImagePath(sajuBranchImageId(m.a.zodiac.index), 512)} alt={`${m.a.zodiac.animal}띠`} className="size-11 rounded-full border border-[#d9b65b]/60 object-cover" />
-        <img src={sajuImagePath(sajuBranchImageId(m.b.zodiac.index), 512)} alt={`${m.b.zodiac.animal}띠`} className="size-11 rounded-full border border-[#ffb4a2]/60 object-cover" />
+        <img src={sajuImagePath(sajuBranchImageId(m.a.zodiac.index), 512)} alt={`${m.a.zodiac.animal}띠`} decoding="async" className="size-11 rounded-full border border-[#d9b65b]/60 object-cover" />
+        <img src={sajuImagePath(sajuBranchImageId(m.b.zodiac.index), 512)} alt={`${m.b.zodiac.animal}띠`} decoding="async" className="size-11 rounded-full border border-[#ffb4a2]/60 object-cover" />
       </div>
       <div className="min-w-0">
         <div className="font-serif-kr text-lg font-bold text-[#f3e9c6]">{m.gradeKo}</div>

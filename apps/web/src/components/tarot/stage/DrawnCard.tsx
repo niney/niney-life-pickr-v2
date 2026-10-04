@@ -5,7 +5,8 @@ import { Sparkles } from '@react-three/drei';
 import type { TarotPhase } from '@repo/utils';
 import { TAROT_GOLD } from '@repo/shared';
 import { fireOnce, segmentKey, syncTimeline, useStage } from './StageContext';
-import { CARD_H, CARD_T, CARD_W, TIMING, clamp, clonePose, dampK, easeInOutCubic, slotPose, type Pose } from './layout';
+import { CARD_H, CARD_T, CARD_W, TIMING, clamp, clonePose, dampK, easeInOutCubic, slotPoseInto, type Pose } from './layout';
+import { sparkleColors } from './sparkles';
 import { loadCardFront, placeholderFrontTexture } from './textures';
 
 // 뽑힌 카드 한 장 — 부채꼴에서 이어받은 포즈(fromPose)에서 슬롯으로 날아가 엎어져 있다가,
@@ -28,28 +29,47 @@ interface Props {
 
 const geometry = new THREE.BoxGeometry(CARD_W, CARD_H, CARD_T);
 const edgeMaterial = new THREE.MeshStandardMaterial({ color: TAROT_GOLD, metalness: 0.85, roughness: 0.3 });
+// 뒤집히는 순간 터지는 금가루 개수.
+const BURST_COUNT = 70;
 
 export const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, revealed, spread }: Props) => {
-  const { timelineRef, firedRef, callbacks, backTexture } = useStage();
+  const { timelineRef, firedRef, cardHoverRef, callbacks, backTexture } = useStage();
   const meshRef = useRef<THREE.Mesh>(null);
   const burstRef = useRef<THREE.Group>(null);
   const live = useRef<Pose>(clonePose(fromPose));
-  const [front, setFront] = useState<THREE.Texture>(() => placeholderFrontTexture(cardId));
+  // 목표 포즈를 써 넣는 자리 — 프레임마다 Vector3·Quaternion 을 새로 만들지 않는다.
+  const scratch = useRef<Pose>(clonePose(fromPose));
+  // 앞면 로드 결과 — null 받는 중, 'failed' 이미지 없음(아직 생성되지 않은 카드).
+  const [loaded, setLoaded] = useState<THREE.Texture | 'failed' | null>(null);
   const [hover, setHover] = useState(false);
 
   useEffect(() => {
     let alive = true;
     loadCardFront(cardId)
       .then((tex) => {
-        if (alive) setFront(tex);
+        if (alive) setLoaded(tex);
       })
       .catch(() => {
-        // 아직 생성되지 않은 카드 — placeholder 유지.
+        if (alive) setLoaded('failed');
       });
     return () => {
       alive = false;
     };
   }, [cardId]);
+
+  const isUp = index < revealed;
+  const isFlipping = phase === 'revealing' && revealed === index;
+  const interactive = phase === 'reading';
+
+  // 앞면에 물릴 텍스처. 다 받기 전에는 뒷면 텍스처를 임시로 둔다 — 엎어져 있는 동안 앞면(+z)은 카메라 반대쪽이라
+  // 그려지지 않고, 재질이 같은 셰이더 변형(map 있음)이라 다 받아 갈아 끼워도 컴파일이 없다. 이름을 그린 placeholder
+  // (512×878 캔버스 + GPU 업로드)는 이미지가 없거나, 뒤집히기 시작했는데 아직 못 받았을 때만 만든다.
+  const front =
+    loaded !== null && loaded !== 'failed'
+      ? loaded
+      : loaded === 'failed' || isFlipping || isUp
+        ? placeholderFrontTexture(cardId)
+        : backTexture;
 
   const frontMaterial = useMemo(
     () =>
@@ -72,15 +92,14 @@ export const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, rev
     [frontMaterial, backMaterial],
   );
 
-  const isUp = index < revealed;
-  const isFlipping = phase === 'revealing' && revealed === index;
-  const interactive = phase === 'reading';
+  // 타임라인 세그먼트 키 — 프레임마다 문자열을 새로 만들지 않게 렌더에서 한 번.
+  const segment = segmentKey(phase, revealed);
 
   useFrame((st, dt) => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const t = st.clock.elapsedTime;
-    const elapsed = syncTimeline(timelineRef, segmentKey(phase, revealed), t);
+    const elapsed = syncTimeline(timelineRef, segment, t);
 
     let progress = isUp ? 1 : 0;
     if (isFlipping) {
@@ -92,7 +111,7 @@ export const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, rev
     const yaw = Math.PI * (1 - e);
     const roll = reversed ? Math.PI * e : 0;
     const lift = Math.sin(e * Math.PI) * 0.6 + (hover ? 0.12 : 0);
-    const target = slotPose(index, total, yaw, roll, lift, spread);
+    const target = slotPoseInto(scratch.current, index, total, yaw, roll, lift, spread);
     const targetScale = target.s * (hover ? 1.06 : 1);
 
     const cur = live.current;
@@ -120,16 +139,17 @@ export const DrawnCard = ({ index, total, cardId, reversed, fromPose, phase, rev
           if (!interactive) return;
           ev.stopPropagation();
           setHover(true);
-          document.body.style.cursor = 'pointer';
+          // 커서는 Scene 이 이 값을 보고 바꾼다(body 에 쓰는 곳은 한 군데).
+          cardHoverRef.current = true;
         }}
         onPointerOut={() => {
           setHover(false);
-          document.body.style.cursor = '';
+          cardHoverRef.current = false;
         }}
       />
       {isFlipping && (
         <group ref={burstRef}>
-          <Sparkles count={70} scale={[2.4, 3.2, 1.6]} size={5} speed={1.4} opacity={0.9} color={TAROT_GOLD} />
+          <Sparkles count={BURST_COUNT} scale={[2.4, 3.2, 1.6]} size={5} speed={1.4} opacity={0.9} color={sparkleColors(TAROT_GOLD, BURST_COUNT)} />
         </group>
       )}
     </>

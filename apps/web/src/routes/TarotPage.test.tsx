@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type { CreateTarotReadingInputType, TarotReadingResultType } from '@repo/api-contract';
-import { useAuthStore, useTarotHistoryStore } from '@repo/shared';
+import { useAuthStore, useTarotHistoryStore, useTarotSession } from '@repo/shared';
 import {
   getTarotCard,
   getTarotSpread,
@@ -215,5 +216,52 @@ describe('TarotPage (Lite)', () => {
     );
     expect(shownMeaning).toBeInTheDocument();
     expect(useTarotHistoryStore.getState().entries).toHaveLength(0);
+  });
+});
+
+// 세션 훅 — 3D 무대(TarotStage, memo)가 받는 콜백의 참조와, 렌더를 기다리지 않는 전이.
+describe('useTarotSession', () => {
+  const renderSession = () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return renderHook(() => useTarotSession({ initial: { spread: null, q: null, topic: null } }), {
+      wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
+    });
+  };
+
+  it('send·무대 콜백은 상태가 바뀌어도 같은 참조다 — 질문 입력에 무대가 다시 그려지지 않는다', () => {
+    const { result } = renderSession();
+    const { send, callbacks } = result.current;
+    act(() => result.current.send({ type: 'set_question', question: '이직할까요?' }));
+    expect(result.current.state.question).toBe('이직할까요?');
+    act(() => result.current.start());
+    expect(result.current.state.phase).toBe('shuffling');
+    act(() => result.current.callbacks.onShuffleDone());
+    expect(result.current.state.phase).toBe('picking');
+    expect(result.current.send).toBe(send);
+    expect(result.current.callbacks).toBe(callbacks);
+  });
+
+  it('렌더 사이 없이 연달아 고른 카드도 직전 상태에서 이어진다 — 요청은 한 번, 자리 잡기로 넘어간다', async () => {
+    let calls = 0;
+    server.use(
+      http.post('/api/v1/tarot/readings', async ({ request }) => {
+        calls += 1;
+        return HttpResponse.json(fakeResult((await request.json()) as CreateTarotReadingInputType));
+      }),
+    );
+    const { result } = renderSession();
+    act(() => result.current.start());
+    act(() => result.current.callbacks.onShuffleDone());
+    const [a, b, c] = result.current.state.deckOrder;
+    act(() => {
+      result.current.callbacks.onPick(a!);
+      result.current.callbacks.onPick(b!);
+      result.current.callbacks.onPick(c!);
+    });
+    expect(result.current.state.phase).toBe('placing');
+    expect(result.current.state.picked).toEqual([a, b, c]);
+    expect(result.current.state.resultStatus).toBe('pending');
+    await waitFor(() => expect(result.current.state.resultStatus).toBe('ready'));
+    expect(calls).toBe(1);
   });
 });

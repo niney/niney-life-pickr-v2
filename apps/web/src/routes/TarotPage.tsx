@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useTarotSession } from '@repo/shared';
+import { tarotRequiredPicks } from '@repo/utils';
 import { usePublicLayout } from '~/components/PublicLayout';
 import { TarotLite } from '~/components/tarot/TarotLite';
 import { TarotOverlay } from '~/components/tarot/TarotOverlay';
@@ -49,8 +50,14 @@ export const TarotPage = () => {
     >
       {render.mode === '3d' ? (
         <Suspense fallback={<StageFallback />}>
+          {/* 무대에는 그리는 데 쓰는 필드만 — 질문·주제 입력으로는 Canvas 트리가 다시 그려지지 않는다(TarotStage 는 memo). */}
           <TarotStage
-            state={state}
+            phase={state.phase}
+            deckOrder={state.deckOrder}
+            picked={state.picked}
+            drawn={state.drawn}
+            revealed={state.revealed}
+            total={tarotRequiredPicks(state)}
             quality={render.quality}
             focusX={focusX}
             focusYOffset={focusYOffset}

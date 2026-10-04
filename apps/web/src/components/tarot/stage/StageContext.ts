@@ -1,5 +1,6 @@
 import { createContext, useContext, type MutableRefObject } from 'react';
 import type * as THREE from 'three';
+import type { TarotFlowState } from '@repo/utils';
 
 // 무대 안 컴포넌트가 공유하는 가변 상태(useFrame 에서 읽고 쓰므로 ref 로. 이름을 *Ref 로 두어
 // React Compiler 린트가 ref 로 인식한다).
@@ -10,11 +11,17 @@ import type * as THREE from 'three';
 // firedRef     세그먼트별 콜백 1회 보장.
 // fanOffsetRef 부채꼴 그룹 yaw(드래그로 훑기).
 // hoveredRef   부채꼴 호버 인스턴스 index.
+// cardHoverRef 뽑힌 카드 위에 포인터가 있는지. 커서(body)는 Scene 한 곳에서만 쓴다 — 덱과 카드는 이 두 ref 로
+//              "지금 누를 수 있는 것 위" 인지만 알린다.
 
 export interface StageTimeline {
   key: string;
   start: number;
 }
+
+// 흐름 상태(TarotFlowState) 중 무대가 그리는 데 쓰는 필드. 질문·주제·선택지·결과는 무대와 무관하므로 넘기지 않는다
+// — 설정 폼에 글자를 칠 때마다 Canvas 트리가 다시 그려지지 않게(TarotStage 가 memo 로 걸러 낸다).
+export type StageFlow = Pick<TarotFlowState, 'phase' | 'deckOrder' | 'picked' | 'drawn' | 'revealed'>;
 
 export interface StageCallbacks {
   onPick: (cardId: string) => void;
@@ -28,6 +35,7 @@ export interface StageContextValue {
   firedRef: MutableRefObject<Set<string>>;
   fanOffsetRef: MutableRefObject<number>;
   hoveredRef: MutableRefObject<number>;
+  cardHoverRef: MutableRefObject<boolean>;
   callbacks: StageCallbacks;
   backTexture: THREE.Texture;
 }

@@ -77,11 +77,12 @@ export const SajuChartHeader = ({ chart, headline, size = 'sm', hideBirth = fals
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3">
         <div className="relative shrink-0">
-          <img src={sajuImagePath(sajuStemImageId(chart.dayMaster.index), 512)} alt="" className={cn(img, 'rounded-full border border-[#d9b65b]/60 object-cover')} />
+          <img src={sajuImagePath(sajuStemImageId(chart.dayMaster.index), 512)} alt="" decoding="async" className={cn(img, 'rounded-full border border-[#d9b65b]/60 object-cover')} />
           <img
             src={sajuImagePath(sajuBranchImageId(chart.zodiac.index), 512)}
             alt={`${chart.zodiac.animal}띠`}
             title={zodiacTraitLine(chart)}
+            decoding="async"
             className={cn(zimg, 'absolute -bottom-1 -right-2 rounded-full border border-[#d9b65b]/60 bg-[#121218] object-cover shadow')}
           />
         </div>

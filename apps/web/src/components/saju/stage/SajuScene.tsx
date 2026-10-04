@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { PerspectiveCamera, Sparkles, Stars } from '@react-three/drei';
@@ -16,6 +16,9 @@ import {
   type Wuxing,
 } from '@repo/utils';
 import { SAJU_BG, SAJU_GOLD, SAJU_JUSA, SAJU_STONE, WUXING_COLOR } from '@repo/shared';
+import { FrameDriver } from '../../tarot/stage/FrameDriver';
+import { segmentKey, syncTimeline, type StageTimeline } from '../../tarot/stage/StageContext';
+import { sparkleColors } from '../../tarot/stage/sparkles';
 import type { TarotQuality } from '../../tarot/tarotQuality';
 import {
   CAMERA_FOV,
@@ -141,8 +144,13 @@ const StarChart = ({ count }: { count: number }) => {
   );
 };
 
+// casting 고리 속도 — 경과 시간이 stopAt 에 닿을 때까지 감속해 멈춘다.
+const castSpeed = (elapsed: number, stopAt: number, base: number): number => base * (1 - easeInOutCubic(clamp(elapsed / stopAt, 0, 1)));
+
 // 원판 + 고리 3겹. casting 에서 고리가 각각 다른 속도로 돌다 바깥→안 순으로 멈춘다.
-const Disc = ({ phase, elapsed }: { phase: SajuPhase; elapsed: number }) => {
+// 경과 시간은 무대 타임라인(ref)에서 프레임마다 직접 읽는다 — props 가 단계가 바뀔 때만 달라져서(memo), 인장 연출 중의
+// 다시 그리기(호스트 노드 110여 개)에서 빠진다.
+const Disc = memo(({ phase, segment, timelineRef }: { phase: SajuPhase; segment: string; timelineRef: MutableRefObject<StageTimeline> }) => {
   const outer = useRef<THREE.Group>(null);
   const middle = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
@@ -152,7 +160,7 @@ const Disc = ({ phase, elapsed }: { phase: SajuPhase; elapsed: number }) => {
   const stemGlyphs = useMemo(() => SAJU_STEMS.map((s) => s.hanja), []);
   const elementGlyphs = useMemo(() => SAJU_WUXING.map((e) => SAJU_WUXING_META[e].hanja), []);
 
-  useFrame((_, dt) => {
+  useFrame((st, dt) => {
     const s = spin.current;
     if (phase === 'setup') {
       s.o += dt * 0.06;
@@ -160,13 +168,10 @@ const Disc = ({ phase, elapsed }: { phase: SajuPhase; elapsed: number }) => {
       s.i += dt * 0.03;
     } else if (phase === 'casting') {
       // 각 고리가 서로 다른 시각에 감속·정지 — 바깥 1.4s, 중간 2.1s, 안 2.8s.
-      const speed = (stopAt: number, base: number): number => {
-        const t = clamp(elapsed / stopAt, 0, 1);
-        return base * (1 - easeInOutCubic(t));
-      };
-      s.o += dt * speed(1.4, 9);
-      s.m -= dt * speed(2.1, 7);
-      s.i += dt * speed(2.8, 5);
+      const elapsed = syncTimeline(timelineRef, segment, st.clock.elapsedTime);
+      s.o += dt * castSpeed(elapsed, 1.4, 9);
+      s.m -= dt * castSpeed(elapsed, 2.1, 7);
+      s.i += dt * castSpeed(elapsed, 2.8, 5);
     }
     // stamping·reading 은 멈춘 채 아주 느리게 숨 쉬듯.
     if (phase === 'stamping' || phase === 'reading') s.o += dt * 0.01;
@@ -211,7 +216,7 @@ const Disc = ({ phase, elapsed }: { phase: SajuPhase; elapsed: number }) => {
       </mesh>
     </group>
   );
-};
+});
 
 interface SealSpec {
   index: number;
@@ -220,6 +225,12 @@ interface SealSpec {
   accent: boolean;
   rest: THREE.Vector3;
 }
+
+// 인장 옆면(금)·바닥 재질 — 모든 인장이 같은 값이라 한 벌만 둔다(인장마다 다섯 장씩 따로 만들지 않게).
+const sealGoldMaterial = new THREE.MeshStandardMaterial({ color: SAJU_GOLD, roughness: 0.35, metalness: 0.7 });
+const sealBaseMaterial = new THREE.MeshStandardMaterial({ color: '#6b1f1a', roughness: 0.7 });
+// 착지 순간 튀는 별가루 개수.
+const SEAL_SPARKLES = 24;
 
 const sealSpecs = (chart: SajuChart): SealSpec[] => {
   const total: 3 | 4 = chart.pillars.hour ? 4 : 3;
@@ -248,18 +259,26 @@ const Seal = ({
 }) => {
   const face = useMemo(() => sealFaceTexture(spec.hanja, undefined, spec.accent), [spec.hanja, spec.accent]);
   const ripple = useMemo(() => rippleTexture(), []);
+  const meshRef = useRef<THREE.Mesh>(null);
   // 훅은 전부 조기 반환보다 앞에(순서 고정).
+  // BoxGeometry 재질 순서: +x, -x, +y(윗면 — 인주 글자), -y(바닥), +z, -z. 윗면만 인장마다 다르다.
   const materials = useMemo(
     () => [
-      new THREE.MeshStandardMaterial({ color: SAJU_GOLD, roughness: 0.35, metalness: 0.7 }),
-      new THREE.MeshStandardMaterial({ color: SAJU_GOLD, roughness: 0.35, metalness: 0.7 }),
+      sealGoldMaterial,
+      sealGoldMaterial,
       new THREE.MeshStandardMaterial({ map: face, roughness: 0.6, metalness: 0.05, emissive: new THREE.Color(spec.accent ? '#ff5a3c' : '#000000'), emissiveIntensity: 0 }),
-      new THREE.MeshStandardMaterial({ color: '#6b1f1a', roughness: 0.7 }),
-      new THREE.MeshStandardMaterial({ color: SAJU_GOLD, roughness: 0.35, metalness: 0.7 }),
-      new THREE.MeshStandardMaterial({ color: SAJU_GOLD, roughness: 0.35, metalness: 0.7 }),
+      sealBaseMaterial,
+      sealGoldMaterial,
+      sealGoldMaterial,
     ],
     [face, spec.accent],
   );
+  // 일간 인장은 숨 쉬듯 빛난다 — 프레임 시각으로 직접 써서, 풀이를 읽는 동안 다시 그리기 없이도 이어진다.
+  useFrame((st) => {
+    if (!spec.accent) return;
+    const top = (meshRef.current?.material as THREE.Material[] | undefined)?.[2] as THREE.MeshStandardMaterial | undefined;
+    if (top) top.emissiveIntensity = 0.6 + Math.sin(st.clock.elapsedTime * 2.2) * 0.25;
+  });
   const visible = landedAt !== null || dropping;
   if (!visible) return null;
   const y = dropping ? SEAL_DROP_Y + (spec.rest.y - SEAL_DROP_Y) * easeOutCubic(dropProgress) : spec.rest.y;
@@ -268,12 +287,9 @@ const Seal = ({
   const rippleT = since >= 0 ? clamp(since / TIMING.rippleS, 0, 1) : 1;
   const rippleScale = 0.6 + rippleT * 2.4;
   const rippleOpacity = (1 - rippleT) * 0.9;
-  const glowPulse = spec.accent ? 0.6 + Math.sin(now * 2.2) * 0.25 : 0;
-  const top = materials[2];
-  if (top) top.emissiveIntensity = glowPulse;
   return (
     <group position={[spec.rest.x, 0, spec.rest.z]}>
-      <mesh position-y={y} rotation={[tilt, 0, tilt * 0.6]} material={materials} castShadow>
+      <mesh ref={meshRef} position-y={y} rotation={[tilt, 0, tilt * 0.6]} material={materials} castShadow>
         <boxGeometry args={[SEAL_S, SEAL_T, SEAL_S]} />
       </mesh>
       {rippleT < 1 && (
@@ -283,7 +299,15 @@ const Seal = ({
         </mesh>
       )}
       {rippleT < 1 && (
-        <Sparkles count={24} scale={[1.6, 1.2, 1.6]} position={[0, 0.5, 0]} size={4} speed={1.4} opacity={rippleOpacity} color={WUXING_COLOR[spec.element]} />
+        <Sparkles
+          count={SEAL_SPARKLES}
+          scale={[1.6, 1.2, 1.6]}
+          position={[0, 0.5, 0]}
+          size={4}
+          speed={1.4}
+          opacity={rippleOpacity}
+          color={sparkleColors(WUXING_COLOR[spec.element], SEAL_SPARKLES)}
+        />
       )}
     </group>
   );
@@ -473,37 +497,56 @@ const ElementOrbs = ({ chart, active }: { chart: SajuChart; active: boolean }) =
   );
 };
 
-const Effects = () => (
-  <EffectComposer>
+// 후처리 — props 가 없어 한 번만 그린다(memo). multisampling 은 래퍼 기본값이 8 인데, bloom 을 켠 등급은 화면 전체를
+// HalfFloat 버퍼에 그리므로 4 로 낮춘다(가장자리 계단은 4 배로도 충분히 잡힌다).
+const Effects = memo(() => (
+  <EffectComposer multisampling={4}>
     <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.55} luminanceSmoothing={0.3} radius={0.65} />
     <Vignette eskil={false} offset={0.22} darkness={0.8} />
   </EffectComposer>
-);
+));
+
+// 별·별가루 — 등급(quality)만 보므로 한 번만 그린다(연출 중의 다시 그리기에서 빠진다).
+const Ambient = memo(({ quality }: { quality: TarotQuality }) => {
+  const sparkles = Math.round(quality.sparkles * 0.7);
+  return (
+    <>
+      <Stars radius={50} depth={30} count={Math.round(quality.stars * 0.6)} factor={2.6} saturation={0} fade speed={0.25} />
+      <Sparkles count={sparkles} scale={[14, 6, 14]} position={[0, 2.5, 0]} size={2.2} speed={0.18} opacity={0.5} color={sparkleColors('#e8cf8f', sparkles)} />
+    </>
+  );
+});
+
+// 단계가 바뀐 뒤 이 시간(초)이 지나면 tick 을 멈춘다 — 그 안에 끝나는 연출: 마지막 인장 리플(0.9s), 카드 등장(0.35 + 1.2s).
+const TICK_TAIL_S = 2;
 
 export const SajuScene = ({ phase, chart, stamped, quality, focusX, focusYOffset, focus, callbacks }: Props) => {
-  const timeline = useRef({ key: '', start: 0 });
+  const timeline = useRef<StageTimeline>({ key: '', start: 0 });
   const fired = useRef(new Set<string>());
-  const [tick, setTick] = useState({ elapsed: 0, now: 0 });
+  const [tick, setTick] = useState({ key: '', elapsed: 0, now: 0 });
   const keyLight = useRef<THREE.PointLight>(null);
+  const segment = segmentKey(phase, stamped);
 
   useFrame((st) => {
     const now = st.clock.elapsedTime;
-    const key = `${phase}:${stamped}`;
-    if (timeline.current.key !== key) timeline.current = { key, start: now };
-    const elapsed = now - timeline.current.start;
+    const elapsed = syncTimeline(timeline, segment, now);
     if (phase === 'casting' && elapsed > TIMING.castS && !fired.current.has(`cast:${timeline.current.start}`)) {
       fired.current.add(`cast:${timeline.current.start}`);
       callbacks.onCastingDone();
     }
     if (keyLight.current) keyLight.current.intensity = 55 + Math.sin(now * 0.8) * 5;
-    // 프레임 시각을 React 상태로 — 인장·리플은 시간 기반이라 리렌더가 필요하다(초당 ~30회로 제한).
-    if (now - tick.now > 1 / 30) setTick({ elapsed, now });
+    // 프레임 시각을 React 상태로 — 인장 낙하·리플·카드 등장은 이 값으로 다시 그려 움직인다(초당 ~30회로 제한).
+    // 연출 단계(casting·stamping)와 단계가 바뀐 직후 TICK_TAIL_S 까지만 갱신한다 — 생년월일을 넣거나 풀이를 읽는
+    // 동안 시간으로 움직이는 것(고리 자전·일간 인장 발광·카드 부유)은 각자 useFrame 에서 돌아, 다시 그릴 일이 없다.
+    const ticking = phase === 'casting' || phase === 'stamping' || tick.key !== segment || tick.elapsed < TICK_TAIL_S;
+    if (ticking && now - tick.now > 1 / 30) setTick({ key: segment, elapsed, now });
   });
 
   const dayCardVisible = !!chart && phase === 'reading';
 
   return (
     <>
+      <FrameDriver active={phase === 'casting' || phase === 'stamping'} settleKey={`${segment}:${focus}:${focusX}:${focusYOffset}`} />
       <color attach="background" args={[SAJU_BG]} />
       <fog attach="fog" args={[SAJU_BG, 14, 34]} />
       <PerspectiveCamera makeDefault fov={CAMERA_FOV} position={[...CAMERA_POS]} near={0.1} far={80} />
@@ -514,10 +557,9 @@ export const SajuScene = ({ phase, chart, stamped, quality, focusX, focusYOffset
       <pointLight position={[-4.5, 3.5, -2]} intensity={16} color={SAJU_JUSA} distance={14} decay={2} />
       <pointLight position={[4.5, 2.5, -3]} intensity={12} color={SAJU_GOLD} distance={14} decay={2} />
 
-      <Stars radius={50} depth={30} count={Math.round(quality.stars * 0.6)} factor={2.6} saturation={0} fade speed={0.25} />
-      <Sparkles count={Math.round(quality.sparkles * 0.7)} scale={[14, 6, 14]} position={[0, 2.5, 0]} size={2.2} speed={0.18} opacity={0.5} color="#e8cf8f" />
+      <Ambient quality={quality} />
 
-      <Disc phase={phase} elapsed={tick.elapsed} />
+      <Disc phase={phase} segment={segment} timelineRef={timeline} />
       {chart && (phase === 'stamping' || phase === 'reading') && (
         <Seals chart={chart} phase={phase} stamped={stamped} elapsed={tick.elapsed} now={tick.now} onStamp={callbacks.onStamp} />
       )}

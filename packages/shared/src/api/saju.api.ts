@@ -42,15 +42,16 @@ export const sajuApi = {
       headers: guestHeaders(guestKey),
     }),
 
-  // long-poll — 서버가 after 보다 큰 버전이 생길 때까지(최대 wait ms) 기다린다.
-  pollJob: (jobId: string, after: number, wait = 20_000) =>
-    apiFetch<SajuJobPollResultType>(`${Routes.Saju.job(jobId)}?after=${after}&wait=${wait}`),
+  // long-poll — 서버가 after 보다 큰 버전이 생길 때까지(최대 wait ms) 기다린다. signal 을 주면 화면을 떠나거나
+  // 다시 입력할 때 대기 중인 요청을 끊는다(안 끊으면 최대 wait 동안 연결을 잡고 있다).
+  pollJob: (jobId: string, after: number, wait = 20_000, signal?: AbortSignal) =>
+    apiFetch<SajuJobPollResultType>(`${Routes.Saju.job(jobId)}?after=${after}&wait=${wait}`, { signal }),
 
   // 테마(인연·재물·직업, 8차) — 즉시 응답(정적 + jobId) 뒤 pollThemeJob 으로 도착 순.
   createThemes: (input: CreateSajuThemesInputType, guestKey: string | null) =>
     apiFetch<SajuThemesResultType>(Routes.Saju.themes, { method: 'POST', body: JSON.stringify(input), headers: guestHeaders(guestKey) }),
-  pollThemeJob: (jobId: string, after: number, wait = 20_000) =>
-    apiFetch<SajuThemesJobPollResultType>(`${Routes.Saju.themeJob(jobId)}?after=${after}&wait=${wait}`),
+  pollThemeJob: (jobId: string, after: number, wait = 20_000, signal?: AbortSignal) =>
+    apiFetch<SajuThemesJobPollResultType>(`${Routes.Saju.themeJob(jobId)}?after=${after}&wait=${wait}`, { signal }),
 
   // 사주에 묻기(9차) — 단일 호출.
   ask: (input: SajuAskInputType, guestKey: string | null) =>

@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { PerspectiveCamera, Sparkles, Stars } from '@react-three/drei';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
-import type { TarotReadingResultType } from '@repo/api-contract';
-import { getTarotCard, tarotRequiredPicks, type TarotFlowState } from '@repo/utils';
+import { getTarotCard, type TarotElement } from '@repo/utils';
 import type { TarotQuality } from '../tarotQuality';
 import { TAROT_BG, TAROT_ELEMENT_COLOR, TAROT_GOLD } from '@repo/shared';
 import { DrawnCard } from './DrawnCard';
 import { FanDeck } from './FanDeck';
+import { FrameDriver } from './FrameDriver';
 import {
   StageContext,
   fireOnce,
@@ -16,6 +16,7 @@ import {
   syncTimeline,
   type StageCallbacks,
   type StageContextValue,
+  type StageFlow,
   type StageTimeline,
 } from './StageContext';
 import {
@@ -33,13 +34,15 @@ import {
   slotSpreadFor,
   type Pose,
 } from './layout';
+import { sparkleColors } from './sparkles';
 import { fallbackBackTexture, glowTexture, loadCardBack } from './textures';
 
-// 무대 — 배경·조명·별·파티클·테이블·덱·뽑힌 카드·후처리. 흐름 상태(TarotFlowState)를 받아
+// 무대 — 배경·조명·별·파티클·테이블·덱·뽑힌 카드·후처리. 흐름 상태 중 무대가 보는 필드(StageFlow)를 받아
 // 그리기만 하고, 애니메이션이 끝나면 콜백으로 상태 머신을 진행시킨다.
 
-interface Props {
-  state: TarotFlowState<TarotReadingResultType>;
+interface Props extends StageFlow {
+  // 스프레드의 자리 수(뽑을 장수).
+  total: number;
   quality: TarotQuality;
   // 읽기 패널이 오른쪽을 차지할 때 카메라 시선을 오른쪽으로 옮겨 카드가 왼쪽에 오게.
   focusX: number;
@@ -133,74 +136,105 @@ const SlotOutlines = ({ total, spread }: { total: number; spread: number }) => {
   );
 };
 
-const Effects = () => (
-  <EffectComposer>
+// 후처리 — props 가 없어 한 번만 그린다(memo). multisampling 은 래퍼 기본값이 8 인데, bloom 을 켠 등급은 화면 전체를
+// HalfFloat 버퍼에 그리므로 4 로 낮춘다(가장자리 계단은 4 배로도 충분히 잡힌다).
+const Effects = memo(() => (
+  <EffectComposer multisampling={4}>
     <Bloom mipmapBlur intensity={0.55} luminanceThreshold={0.62} luminanceSmoothing={0.25} radius={0.6} />
     <Vignette eskil={false} offset={0.2} darkness={0.75} />
   </EffectComposer>
-);
+));
 
-export const Scene = ({ state, quality, focusX, focusYOffset, fanOffsetRef, callbacks }: Props) => {
+// 수트 원소 림 라이트 색 — 프레임마다 색 문자열을 파싱하지 않게 미리 Color 로.
+const ELEMENT_COLOR: Record<TarotElement, THREE.Color> = {
+  fire: new THREE.Color(TAROT_ELEMENT_COLOR.fire),
+  water: new THREE.Color(TAROT_ELEMENT_COLOR.water),
+  air: new THREE.Color(TAROT_ELEMENT_COLOR.air),
+  earth: new THREE.Color(TAROT_ELEMENT_COLOR.earth),
+};
+
+export const Scene = ({ phase, deckOrder, picked, drawn, revealed, total, quality, focusX, focusYOffset, fanOffsetRef, callbacks }: Props) => {
   const backTexture = useBackTexture();
   const timelineRef = useRef<StageTimeline>({ key: '', start: 0 });
   const firedRef = useRef(new Set<string>());
   const hoveredRef = useRef(-1);
+  const cardHoverRef = useRef(false);
+  // body 에 지금 걸어 둔 커서가 pointer 인지 — 바뀔 때만 DOM 에 쓴다.
+  const cursorRef = useRef(false);
   const fanGroup = useRef<THREE.Group>(null);
   const elementLight = useRef<THREE.PointLight>(null);
   const elementColorRef = useRef<THREE.Color | null>(null);
   if (elementColorRef.current === null) elementColorRef.current = new THREE.Color(TAROT_ELEMENT_COLOR.water);
-  const targetColorRef = useRef<THREE.Color | null>(null);
-  if (targetColorRef.current === null) targetColorRef.current = new THREE.Color();
 
   const ctx = useMemo<StageContextValue>(
-    () => ({ timelineRef, firedRef, fanOffsetRef, hoveredRef, callbacks, backTexture }),
+    () => ({ timelineRef, firedRef, fanOffsetRef, hoveredRef, cardHoverRef, callbacks, backTexture }),
     [fanOffsetRef, callbacks, backTexture],
   );
 
-  const picked = useMemo(() => new Set(state.picked), [state.picked]);
-  const total = tarotRequiredPicks(state);
+  const pickedSet = useMemo(() => new Set(picked), [picked]);
   const aspect = useThree((s) => s.viewport.aspect);
   // 소수점을 뭉개 리사이즈마다 재계산·리렌더가 튀지 않게.
   const spread = Math.round(slotSpreadFor(aspect) * 20) / 20;
   // 뽑힌 카드의 출발 포즈 — 부채꼴에서 그 카드가 있던 자리.
   const fromPoses = useMemo(() => {
     const map = new Map<string, Pose>();
-    for (const id of state.picked) {
-      const idx = state.deckOrder.indexOf(id);
-      map.set(id, fanPose(idx < 0 ? 0 : idx, state.deckOrder.length || 78));
+    for (const id of picked) {
+      const idx = deckOrder.indexOf(id);
+      map.set(id, fanPose(idx < 0 ? 0 : idx, deckOrder.length || 78));
     }
     return map;
-  }, [state.picked, state.deckOrder]);
+  }, [picked, deckOrder]);
 
   // 마지막으로 뒤집힌 카드의 원소 → 림 라이트 색.
   const lastElement = (() => {
-    const d = state.drawn[state.revealed - 1];
+    const d = drawn[revealed - 1];
     return d ? (getTarotCard(d.cardId)?.element ?? 'water') : 'water';
   })();
 
+  // 타임라인 세그먼트 키 — 프레임마다 문자열을 새로 만들지 않게 렌더에서 한 번.
+  const segment = segmentKey(phase, revealed);
+
   useFrame((st, dt) => {
     const t = st.clock.elapsedTime;
-    const elapsed = syncTimeline(timelineRef, segmentKey(state.phase, state.revealed), t);
-    if (state.phase === 'placing' && elapsed > TIMING.placeS && fireOnce(firedRef, `placed:${timelineRef.current.start}`)) {
+    const elapsed = syncTimeline(timelineRef, segment, t);
+    if (phase === 'placing' && elapsed > TIMING.placeS && fireOnce(firedRef, `placed:${timelineRef.current.start}`)) {
       callbacks.onPlaced();
     }
     // 부채꼴 훑기 — 뽑는 동안만 드래그 값, 그 밖엔 0 으로 되돌린다.
-    if (state.phase !== 'picking') fanOffsetRef.current += (0 - fanOffsetRef.current) * dampK(dt, 4);
+    if (phase !== 'picking') fanOffsetRef.current += (0 - fanOffsetRef.current) * dampK(dt, 4);
     if (fanGroup.current) fanGroup.current.rotation.y = fanOffsetRef.current;
     const light = elementLight.current;
     const color = elementColorRef.current;
-    const target = targetColorRef.current;
-    if (light && color && target) {
-      color.lerp(target.set(TAROT_ELEMENT_COLOR[lastElement]), dampK(dt, 2));
+    if (light && color) {
+      color.lerp(ELEMENT_COLOR[lastElement], dampK(dt, 2));
       light.color.copy(color);
       light.intensity = 12 + Math.sin(t * 1.3) * 2;
     }
+    // 커서 — 덱 호버(뽑는 중)와 뽑힌 카드 호버(읽는 중)를 모아 여기서만 body 에 쓴다. 카드가 호버 중에 사라지면
+    // (다시 뽑기) pointerout 이 오지 않으므로 읽는 단계를 벗어나면 카드 호버를 내린다.
+    if (phase !== 'reading') cardHoverRef.current = false;
+    const pointer = (phase === 'picking' && hoveredRef.current !== -1) || cardHoverRef.current;
+    if (pointer !== cursorRef.current) {
+      cursorRef.current = pointer;
+      document.body.style.cursor = pointer ? 'pointer' : '';
+    }
   });
 
-  const showFan = state.phase === 'picking';
+  // 무대가 사라질 때 커서를 원래대로 — 호버 중에 페이지를 떠나면 body 에 pointer 가 남는다.
+  useEffect(
+    () => () => {
+      document.body.style.cursor = '';
+    },
+    [],
+  );
+
+  const showFan = phase === 'picking';
+  // 연출이 도는 단계 — 섞기·뽑기(부채꼴 호흡·호버)·자리 잡기·뒤집기. 설정 폼과 해석을 읽는 동안은 느린 박자로.
+  const animated = phase === 'shuffling' || phase === 'picking' || phase === 'placing' || phase === 'revealing';
 
   return (
     <StageContext.Provider value={ctx}>
+      <FrameDriver active={animated} settleKey={`${phase}:${revealed}:${picked.length}:${focusX}:${focusYOffset}`} />
       <color attach="background" args={[TAROT_BG]} />
       <fog attach="fog" args={[TAROT_BG, 16, 40]} />
       <PerspectiveCamera makeDefault fov={CAMERA_FOV} position={[...CAMERA_POS]} near={0.1} far={90} />
@@ -219,21 +253,15 @@ export const Scene = ({ state, quality, focusX, focusYOffset, fanOffsetRef, call
         size={2.6}
         speed={0.22}
         opacity={0.55}
-        color="#ffd98a"
+        color={sparkleColors('#ffd98a', quality.sparkles)}
       />
       <Table />
 
       <group ref={fanGroup} position={[0, 0, FAN_CZ]}>
-        <FanDeck
-          deckOrder={state.deckOrder}
-          picked={picked}
-          phase={state.phase}
-          revealed={state.revealed}
-          canPick={showFan}
-        />
-        {(state.phase === 'picking' || state.phase === 'placing') && <SlotOutlines total={total} spread={spread} />}
-        {state.picked.map((id, i) => {
-          const d = state.drawn[i];
+        <FanDeck deckOrder={deckOrder} picked={pickedSet} phase={phase} revealed={revealed} canPick={showFan} />
+        {(phase === 'picking' || phase === 'placing') && <SlotOutlines total={total} spread={spread} />}
+        {picked.map((id, i) => {
+          const d = drawn[i];
           return (
             <DrawnCard
               key={id}
@@ -242,8 +270,8 @@ export const Scene = ({ state, quality, focusX, focusYOffset, fanOffsetRef, call
               cardId={id}
               reversed={d?.reversed ?? false}
               fromPose={fromPoses.get(id) ?? fanPose(0, 78)}
-              phase={state.phase}
-              revealed={state.revealed}
+              phase={phase}
+              revealed={revealed}
               spread={spread}
             />
           );

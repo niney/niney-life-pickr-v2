@@ -36,15 +36,16 @@ export interface SajuJobState {
 }
 
 // 섹션 long-poll — 이전 결과의 version 을 after 로 넘겨 새 섹션만 기다린다. done 이면 멈춘다.
-// 요청 자체가 최대 20초 서버 대기이므로 refetchInterval 은 짧게(연결 사이 틈만).
+// 요청 자체가 최대 20초 서버 대기이므로 refetchInterval 은 짧게(연결 사이 틈만). queryFn 의 signal 을
+// 넘겨, 다시 입력·화면 이탈로 쿼리를 보는 곳이 없어지면 대기 중인 요청도 같이 끊는다.
 export const useSajuJob = (jobId: string | null): SajuJobState => {
   const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: jobKey(jobId ?? ''),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!jobId) throw new Error('jobId required');
       const prev = queryClient.getQueryData<SajuJobPollResultType>(jobKey(jobId));
-      return sajuApi.pollJob(jobId, prev?.version ?? 0);
+      return sajuApi.pollJob(jobId, prev?.version ?? 0, undefined, signal);
     },
     enabled: !!jobId,
     refetchInterval: (query) => (query.state.data?.done || query.state.error ? false : 200),
@@ -74,10 +75,10 @@ export const useSajuThemeJob = (jobId: string | null): SajuThemeJobState => {
   const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: themeJobKey(jobId ?? ''),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!jobId) throw new Error('jobId required');
       const prev = queryClient.getQueryData<SajuThemesJobPollResultType>(themeJobKey(jobId));
-      return sajuApi.pollThemeJob(jobId, prev?.version ?? 0);
+      return sajuApi.pollThemeJob(jobId, prev?.version ?? 0, undefined, signal);
     },
     enabled: !!jobId,
     refetchInterval: (query) => (query.state.data?.done || query.state.error ? false : 200),

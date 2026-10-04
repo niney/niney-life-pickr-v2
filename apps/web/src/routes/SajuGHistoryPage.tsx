@@ -23,7 +23,6 @@ export function SajuGHistoryPage() {
 }
 function History({ principal }: { principal: string }) {
   const { id } = useParams();
-  const mine = useMySajuGReadings();
   const client = useQueryClient();
   const [device, setDevice] = useState(() => readDeviceSajuG(principal));
   const [localResult, setLocalResult] = useState<SajuGReadingResultType | null>(null);
@@ -39,6 +38,9 @@ function History({ principal }: { principal: string }) {
     retry: false,
     refetchOnWindowFocus: 'always',
   });
+  // 목록은 목록 화면에서만 부른다 — 상세(/me/saju-g/:id)는 목록을 그리지 않는다. 상세를 못 불러왔을 때는 아래에
+  // 목록이 나오므로 그때만 다시 켠다.
+  const mine = useMySajuGReadings({ enabled: !id || detail.isError });
   const result = localResult ?? (detail.isError ? null : detail.data) ?? null;
   const rows =
     principal === 'guest'

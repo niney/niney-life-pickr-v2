@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CreateTarotReadingInputType, TarotDrawnCardType, TarotMenuVerdictType, TarotReadingResultType, TarotReadingSummaryType } from '@repo/api-contract';
 import {
   createTarotFlowState,
@@ -23,8 +23,8 @@ import { useCreateTarotReading, useMyTarotReadings } from './useTarot.js';
 // 타로 세션 — 웹 TarotPage 와 앱 네이티브 화면이 공유하는 흐름 오케스트레이션. 화면은 무대·패널을 그리기만 한다.
 //  - 흐름: utils 순수 리듀서(tarotFlowReducer) setup → shuffling → picking → placing → revealing → reading.
 //  - 해석 요청은 마지막 카드를 고른 순간(placing 진입) 보내고, 자리 잡기·뒤집기 연출이 대기를 덮는다.
-//    send() 는 dispatch 전에 같은 (state, event) 로 다음 상태를 미리 계산한다 — 리듀서가 시드 기반 결정적이라
-//    dispatch 결과와 같고, placing 진입을 감지해 즉시 요청할 수 있다(useEffect 없이).
+//    send() 는 직전 상태(ref)에 리듀서를 바로 적용해 다음 상태를 얻는다 — placing 진입을 그 자리에서 감지해 즉시
+//    요청할 수 있고(useEffect 없이), 렌더 시점의 state 를 쓰지 않아 send·무대 콜백의 참조가 바뀌지 않는다.
 //  - 게스트 리딩은 서버에 저장하지 않아 기기 로컬 기록(tarotHistoryStore)에 남기고, 회원은 서버 기록.
 //  - 회원의 오늘의 카드는 서버가 하루 1장으로 잠근다 — 오늘 이미 뽑았으면 그 기록 id(todayDailyId).
 // 플랫폼 몫: 딥링크 파싱(앱·웹 라우터), 연출 유무(instantShuffle·instantPlace), 카드 뒤집기 연출.
@@ -132,7 +132,16 @@ export interface UseTarotSessionOptions {
 }
 
 export const useTarotSession = ({ initial, instantShuffle = false, instantPlace = false }: UseTarotSessionOptions) => {
-  const [state, dispatch] = useReducer(reducer, initial, tarotInitialState);
+  // 흐름 상태 — 화면에는 state 로 주고, 최신 값은 ref 로도 든다. 전이는 전부 apply 를 지나며 ref 는 거기서만
+  // 갱신한다(렌더 중에는 읽지도 쓰지도 않는다). 덕분에 send·무대 콜백이 state 에 의존하지 않아 참조가 고정된다.
+  const [state, setState] = useState(() => tarotInitialState(initial));
+  const stateRef = useRef(state);
+  const apply = useCallback((event: TarotSessionEvent): TarotSessionState => {
+    const next = reducer(stateRef.current, event);
+    stateRef.current = next;
+    setState(next);
+    return next;
+  }, []);
   const { mutate } = useCreateTarotReading();
   const history = useTarotHistoryStore((s) => s.entries);
   const addHistory = useTarotHistoryStore((s) => s.add);
@@ -144,7 +153,7 @@ export const useTarotSession = ({ initial, instantShuffle = false, instantPlace 
 
   const requestReading = useCallback(
     (s: TarotSessionState) => {
-      dispatch({ type: 'request_sent' });
+      apply({ type: 'request_sent' });
       const cards = cardsOf(s.drawn);
       mutate(
         {
@@ -156,37 +165,45 @@ export const useTarotSession = ({ initial, instantShuffle = false, instantPlace 
         },
         {
           onSuccess: (result) => {
-            dispatch({ type: 'result_ready', result });
+            apply({ type: 'result_ready', result });
             // 게스트(서버 저장 없음)만 기기 로컬 기록. 회원은 서버 기록.
             if (!result.readingId) addHistory(cards, result);
           },
-          onError: () => dispatch({ type: 'result_failed' }),
+          onError: () => {
+            apply({ type: 'result_failed' });
+          },
         },
       );
     },
-    [mutate, addHistory],
+    [apply, mutate, addHistory],
   );
 
-  // 이벤트는 사용자 동작마다 하나씩 오고 그 사이에 렌더가 끝나므로 렌더 시점의 state 로 충분하다.
+  // 사용자 동작·무대 신호 한 건. 직전 상태(ref)와 그 결과를 비교해 placing 진입을 감지하고 즉시 요청한다(useEffect 없이).
+  // state 에 의존하지 않으므로 참조가 바뀌지 않는다 — 질문 입력 같은 다시 그리기에 무대(memo)가 끌려오지 않는다.
   const send = useCallback(
     (event: TarotSessionEvent) => {
-      const prev = state;
-      const next = reducer(prev, event);
-      dispatch(event);
+      const prev = stateRef.current;
+      const next = apply(event);
       if (prev.phase === 'picking' && next.phase === 'placing') {
         requestReading(next);
-        if (instantPlace) dispatch({ type: 'placed' });
+        if (instantPlace) apply({ type: 'placed' });
       }
-      if (instantShuffle && event.type === 'shuffle' && next.phase === 'shuffling') dispatch({ type: 'shuffle_done' });
+      if (instantShuffle && event.type === 'shuffle' && next.phase === 'shuffling') apply({ type: 'shuffle_done' });
     },
-    [state, requestReading, instantPlace, instantShuffle],
+    [apply, requestReading, instantPlace, instantShuffle],
   );
 
-  // 무대 콜백 — 카드 고르기와 연출이 끝났다는 신호. 연출 완료 셋은 늘 같은 참조라 화면의 연출 타이머가 결과 도착 같은
+  // 무대 콜백 — 카드 고르기와 연출이 끝났다는 신호. 넷 다 늘 같은 참조라 화면의 연출 타이머가 결과 도착 같은
   // 다시 그리기로 리셋되지 않는다.
-  const onShuffleDone = useCallback(() => dispatch({ type: 'shuffle_done' }), []);
-  const onPlaced = useCallback(() => dispatch({ type: 'placed' }), []);
-  const onRevealed = useCallback(() => dispatch({ type: 'reveal_next' }), []);
+  const onShuffleDone = useCallback(() => {
+    apply({ type: 'shuffle_done' });
+  }, [apply]);
+  const onPlaced = useCallback(() => {
+    apply({ type: 'placed' });
+  }, [apply]);
+  const onRevealed = useCallback(() => {
+    apply({ type: 'reveal_next' });
+  }, [apply]);
   const callbacks = useMemo(
     () => ({ onPick: (cardId: string) => send({ type: 'pick', cardId, seed: newTarotSeed() }), onShuffleDone, onPlaced, onRevealed }),
     [send, onShuffleDone, onPlaced, onRevealed],
@@ -198,12 +215,11 @@ export const useTarotSession = ({ initial, instantShuffle = false, instantPlace 
   };
   const autoPick = () => send({ type: 'auto_pick', seed: newTarotSeed() });
   const retry = () => {
-    dispatch({ type: 'retry_result' });
-    requestReading(state);
+    requestReading(apply({ type: 'retry_result' }));
   };
   const reset = () => {
     setReview(null);
-    dispatch({ type: 'reset' });
+    apply({ type: 'reset' });
   };
 
   return {

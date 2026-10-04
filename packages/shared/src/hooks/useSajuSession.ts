@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import type { SajuBirthInputType, SajuJobPollResultType, SajuReadingResultType, SajuThemesType } from '@repo/api-contract';
 import { computeSajuChart, createSajuFlowState, SAJU_DEFAULT_OPTIONS, SajuInputError, sajuFlowReducer, type SajuBirthInput, type SajuFlowEvent, type SajuFlowState } from '@repo/utils';
 import { isSajuThemeTab, type SajuPanelTab, type SajuSessionMode } from '../saju/sajuPanelTabs.js';
@@ -96,8 +96,9 @@ export const useSajuSession = ({ initialTab, initialMode, skipAnimation = false 
   const [themeJobId, setThemeJobId] = useState<string | null>(null);
   const themeJob = useSajuThemeJob(themeJobId);
 
-  // 결과·상태는 렌더 중 파생 — useEffect 없음.
-  const result = mergeSajuJobResult(initial, job.data);
+  // 결과·상태는 렌더 중 파생 — useEffect 없음. 병합 결과는 입력(즉시 응답·job 스냅샷)이 그대로면 같은 참조로
+  // 돌려준다 — 무대 진행(stamp)·탭 전환 같은 다시 그리기마다 새 객체가 내려가지 않게.
+  const result = useMemo(() => mergeSajuJobResult(initial, job.data), [initial, job.data]);
   const status: SajuReadingStatus = mutationError
     ? 'failed'
     : isPending || !result
@@ -206,13 +207,18 @@ export const useSajuSession = ({ initialTab, initialMode, skipAnimation = false 
   const readingOpen = state.phase === 'reading' && !!state.chart;
   const pairOpen = mode === 'pair' && !!pair;
 
+  // 화면에 그대로 내려가는 값·콜백 — 입력이 바뀔 때만 새 참조(받는 쪽의 memo·쿼리 키 계산이 헛돌지 않게).
+  const birth = useMemo(() => toSajuBirthInput(state.input), [state.input]);
+  const setInput = useCallback((patch: Partial<SajuBirthInput>) => dispatch({ type: 'set_input', patch }), []);
+  const patchPartner = useCallback((patch: Partial<SajuBirthInputType>) => setPartner((p) => ({ ...p, ...patch })), []);
+
   return {
     state,
     /** 무대 이벤트(casting_done·stamp·skip_animation)와 입력 patch(set_input)용 — 안정 참조. */
     dispatch,
     isMember,
-    birth: toSajuBirthInput(state.input),
-    setInput: (patch: Partial<SajuBirthInput>) => dispatch({ type: 'set_input', patch }),
+    birth,
+    setInput,
     submit,
     edit,
     retry,
@@ -227,7 +233,7 @@ export const useSajuSession = ({ initialTab, initialMode, skipAnimation = false 
     mode,
     setMode,
     partner,
-    patchPartner: (patch: Partial<SajuBirthInputType>) => setPartner((p) => ({ ...p, ...patch })),
+    patchPartner,
     partnerLabel,
     setPartnerLabel,
     pair,

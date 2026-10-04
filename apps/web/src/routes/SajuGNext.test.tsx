@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -15,6 +15,7 @@ import {
   setSajuGProfileStorage,
   storeDeviceSajuG,
   useAuthStore,
+  useSajuGProfiles,
 } from '@repo/shared';
 import fixture from '~/test/fixtures/saju-g-reading.json';
 import { SajuGProfilesPage } from './SajuGProfilesPage';
@@ -160,5 +161,28 @@ describe('프로필에서 사주와 궁합까지', () => {
     expect(request.mock.calls[0]?.[2]?.aborted).toBe(true);
     await act(async () => finish(pair));
     expect(screen.queryByText(pair.report.headline)).not.toBeInTheDocument();
+  });
+  it('프로필 훅은 화면이 보는 값만 주고, 프로필이 없을 때도 같은 배열 참조를 돌려준다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(() => useSajuGProfiles(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    // 쿼리 결과를 통째로 펼치지 않는다 — 펼치면 isFetching 같은 변화에도 쓰는 화면이 다시 그려진다.
+    expect(Object.keys(result.current).sort()).toEqual(
+      ['isError', 'isLoading', 'principal', 'profiles', 'refetch', 'remove', 'save'].sort(),
+    );
+    // 아직 못 불러온 동안 렌더마다 새 [] 를 만들면 profiles 를 의존값으로 둔 effect 가 매번 다시 돈다.
+    const { profiles, save, remove } = result.current;
+    expect(profiles).toEqual([]);
+    rerender();
+    expect(result.current.profiles).toBe(profiles);
+    expect(result.current.save).toBe(save);
+    expect(result.current.remove).toBe(remove);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const loaded = result.current.profiles;
+    rerender();
+    expect(result.current.profiles).toBe(loaded);
   });
 });

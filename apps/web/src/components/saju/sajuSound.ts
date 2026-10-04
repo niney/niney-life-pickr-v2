@@ -1,8 +1,23 @@
 // 사주 무대 효과음 — 파일 없이 WebAudio 로 합성(인장 찍힘 '쿵', 다이얼 정지 '띵'). 기본 꺼짐, 켜면 기기에 기억.
 // AudioContext 는 사용자 제스처(토글·제출 클릭) 안에서만 만든다 — 자동재생 정책.
+// 소리가 끝나면 컨텍스트를 재운다(suspend) — running 으로 두면 SPA 세션이 끝날 때까지 오디오 스레드와 출력 스트림을
+// 잡고 있다. 다음 제출(primeSajuSound)이나 다음 소리가 다시 깨운다.
 
 const KEY = 'saju-sound-v1';
 let ctx: AudioContext | null = null;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+/** 소리 하나가 난 뒤 이만큼 조용하면 재운다 — 가장 긴 소리(종 0.9s)가 끝나고도 여유 있게, 인장 간격(0.55s)보다 길게. */
+const IDLE_AFTER_SOUND_MS = 1_500;
+/** 제출 때 미리 깨웠는데 소리가 안 나면(연출 건너뛰기) 이만큼 뒤에 재운다 — 연출 전체(약 8초)보다 길게. */
+const IDLE_AFTER_PRIME_MS = 12_000;
+
+const suspendLater = (ms: number): void => {
+  if (idleTimer !== null) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    if (ctx?.state === 'running') void ctx.suspend();
+  }, ms);
+};
 
 const ensure = (): AudioContext | null => {
   try {
@@ -36,7 +51,7 @@ export const setSajuSoundEnabled = (on: boolean): void => {
 
 /** 제출 클릭 같은 제스처에서 미리 컨텍스트를 깨워 둔다(연출 중 첫 소리가 잘리지 않게). */
 export const primeSajuSound = (): void => {
-  if (sajuSoundEnabled()) ensure();
+  if (sajuSoundEnabled() && ensure()) suspendLater(IDLE_AFTER_PRIME_MS);
 };
 
 /** 인장 찍힘 — 저음 '쿵'(140→45Hz) + 짧은 노이즈. */
@@ -44,6 +59,7 @@ export const playSajuStamp = (): void => {
   if (!sajuSoundEnabled()) return;
   const c = ensure();
   if (!c) return;
+  suspendLater(IDLE_AFTER_SOUND_MS);
   const t = c.currentTime;
   const o = c.createOscillator();
   o.type = 'sine';
@@ -78,6 +94,7 @@ export const playSajuChime = (vol = 0.4): void => {
   if (!sajuSoundEnabled()) return;
   const c = ensure();
   if (!c) return;
+  suspendLater(IDLE_AFTER_SOUND_MS);
   const t = c.currentTime;
   for (const [freq, delay, dur] of [[880, 0, 0.9], [1320, 0.06, 0.7]] as const) {
     const o = c.createOscillator();
