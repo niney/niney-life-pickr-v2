@@ -187,12 +187,16 @@ export const useSettlementDraftAutoSync = (opts: {
     // 마운트 시점 baseline — 사용자가 실제로 편집하기 전까진 저장 안 함.
     lastSavedRef.current = snapshotPayload(useSettlementDraftStore.getState());
 
-    const unsub = useSettlementDraftStore.subscribe((s) => {
-      const next = snapshotPayload(s);
-      if (next === lastSavedRef.current) return;
+    const unsub = useSettlementDraftStore.subscribe(() => {
+      // 변경마다 초안 전체를 직렬화해 비교하지 않는다 — 이 구독은 키 입력 한 번마다
+      // 불린다. 여기선 타이머만 다시 걸고, 직렬화·비교는 타이머가 터질 때 그 시점의
+      // 최신 상태로 한 번만 한다. 고쳤다가 되돌린 경우엔 저장할 것이 없어 요청도
+      // 나가지 않는다(예전엔 되돌리기 전의 중간 상태가 그대로 저장됐다).
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(async () => {
-        const toSave = next; // closure 시점 값
+        timerRef.current = null;
+        const toSave = snapshotPayload(useSettlementDraftStore.getState());
+        if (toSave === lastSavedRef.current) return;
         setStatus('saving');
         try {
           const res = await upsertRef.current.mutateAsync({
@@ -232,11 +236,19 @@ export interface DraftHydrateResult {
 
 // 진입 시 서버 draft 가 있으면 store 를 그 값으로 overwrite. 그 슬롯 하나만
 // fetch 하고 끝(목록은 메타만 오므로 쓰지 않는다).
+//
+// `enabled: false` 면 슬롯을 부르지도, store 를 건드리지도 않는다 — 저장된 정산을
+// 고치는 수정 모드용. 수정 모드는 저장된 세션이 source of truth 다. placeId 자리에
+// null 을 넘기는 것으로는 꺼지지 않는다: null 은 "식당 미지정 슬롯" 이라 그 슬롯에
+// 남아 있던 임시저장이 편집 중인 정산 내용을 덮어쓴다(세션이 먼저 채워지고 슬롯
+// 응답이 뒤에 오면 그대로 재현).
 export const useSettlementDraftHydrate = (
   placeId: string | null,
+  options: { enabled?: boolean } = {},
 ): DraftHydrateResult => {
+  const enabled = options.enabled ?? true;
   const isAuthed = useAuthStore((s) => !!s.token);
-  const slot = useSettlementDraftByPlace(placeId, isAuthed);
+  const slot = useSettlementDraftByPlace(placeId, enabled && isAuthed);
   const [hydrated, setHydrated] = useState(false);
   const [matched, setMatched] = useState<SettlementDraftType | null>(null);
 
@@ -247,6 +259,7 @@ export const useSettlementDraftHydrate = (
   // 방지. placeId 가 바뀌면(다른 식당 진입) 다시 hydrate 허용.
   const hydratedForRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    if (!enabled) return;
     if (hydratedForRef.current === placeId) return;
     if (!isAuthed) {
       hydratedForRef.current = placeId;
@@ -280,7 +293,8 @@ export const useSettlementDraftHydrate = (
     hydratedForRef.current = placeId;
     setMatched(found);
     setHydrated(true);
-  }, [isAuthed, slot.isLoading, slot.isFetching, slot.isError, slot.data, placeId]);
+  }, [enabled, isAuthed, slot.isLoading, slot.isFetching, slot.isError, slot.data, placeId]);
 
-  return { hydrated, matched };
+  // 꺼져 있는 동안엔 켜져 있던 때의 결과가 state 에 남아 있어도 내보내지 않는다.
+  return enabled ? { hydrated, matched } : { hydrated: false, matched: null };
 };

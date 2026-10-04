@@ -6,6 +6,7 @@ import {
   ApiError,
   useDeleteSettlement,
   useDeleteSettlementDraft,
+  useDeleteSettlements,
   useListSettlementDrafts,
   useListSettlements,
 } from '@repo/shared';
@@ -22,8 +23,8 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 // SettlementSessionSummary 만 내려 본문이 가볍다.
 //
 // 삭제: 행 우측 휴지통(단건) + 체크박스 다중 선택 후 일괄 삭제. 일괄은
-// 서버 라운드트립 N번이지만 useDeleteSettlement 가 onSuccess 마다 invalidate
-// 하니까 마지막 호출에서 한 번만 refetch 된다 (react-query 가 debounce 처리).
+// 서버 라운드트립 N번이고, 목록 무효화는 전부 끝난 뒤 한 번만 한다
+// (useDeleteSettlements — 건마다 무효화하면 목록 조회도 N번 나간다).
 export const SettlementHistoryPage = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -31,8 +32,11 @@ export const SettlementHistoryPage = () => {
     () => ({ offset: (page - 1) * pageSize, limit: pageSize }),
     [page, pageSize],
   );
-  const list = useListSettlements(query);
+  // 페이지를 넘기는 동안 직전 페이지를 그대로 둔다 — 새 페이지엔 아직 데이터가 없어
+  // 목록과 페이저가 통째로 사라지고(스크롤이 위로 튐) 다시 그려지던 것을 막는다.
+  const list = useListSettlements(query, { keepPrevious: true });
   const deleteMut = useDeleteSettlement();
+  const bulkDeleteMut = useDeleteSettlements();
   // 자동 저장 중인 임시저장 목록 — 1페이지 위쪽에만 노출하고, 페이지 이동
   // 영향 없이 그대로 보인다 (양이 적어서).
   const drafts = useListSettlementDrafts(true);
@@ -86,9 +90,8 @@ export const SettlementHistoryPage = () => {
     setBulkPending(true);
     setError(null);
     const ids = Array.from(selected);
-    const results = await Promise.allSettled(
-      ids.map((id) => deleteMut.mutateAsync(id)),
-    );
+    // 건별 결과(allSettled)가 그대로 온다 — 일부 실패해도 reject 되지 않는다.
+    const results = await bulkDeleteMut.mutateAsync(ids);
     setBulkPending(false);
     const failed = results.filter((r) => r.status === 'rejected').length;
     if (failed > 0) {
@@ -206,7 +209,15 @@ export const SettlementHistoryPage = () => {
               </CardContent>
             </Card>
           ) : (
-            <ul className="space-y-2">
+            // 다음 페이지 응답을 기다리는 동안은 직전 페이지가 보이고 있다 — 흐리게 하고
+            // 조작을 막아, 곧 사라질 행을 선택·삭제하지 않게 한다.
+            <ul
+              aria-busy={list.isPlaceholderData}
+              className={cn(
+                'space-y-2 transition-opacity',
+                list.isPlaceholderData && 'pointer-events-none opacity-60',
+              )}
+            >
               {items.map((s) => {
                 const isSelected = selected.has(s.id);
                 const isDeleting =

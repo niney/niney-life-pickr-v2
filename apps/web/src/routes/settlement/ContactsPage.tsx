@@ -10,6 +10,7 @@ import {
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { useDebounced } from '~/lib/useDebounced';
 import { ContactEditDialog } from './ContactEditDialog';
 
 // /me/contacts — 사용자별 단골 참여자 관리. 정산을 저장할 때마다 자동 적립
@@ -20,10 +21,24 @@ import { ContactEditDialog } from './ContactEditDialog';
 // 한쪽을 지우거나, 이름이 잘못 들어간 단골을 수정하기 위한 출구.
 export const ContactsPage = () => {
   const [q, setQ] = useState('');
-  const list = useSettlementContacts({
-    q: q.trim() || undefined,
-    take: 100,
-  });
+  // 검색어는 디바운스해서 조회한다 — 한글은 조합 단계마다 change 가 와서, 입력값을
+  // 그대로 키에 넣으면 "홍길동" 한 번에 요청이 아홉 번 나간다. 비울 때는 기다리지
+  // 않는다(전체 목록은 캐시에 있다). 비운 순간 디바운스 값도 곧바로 비워(지연 0)
+  // 두어, 이어서 새 글자를 칠 때 지우기 전의 검색어가 되살아나지 않게 한다.
+  const term = q.trim();
+  const debouncedTerm = useDebounced(term, term === '' ? 0 : 250);
+  const searchTerm = term === '' ? '' : debouncedTerm;
+  // 검색어가 바뀌는 동안엔 직전 목록을 그대로 둔다(keepPrevious) — 글자마다 목록이
+  // 통째로 스피너로 바뀌었다 돌아오지 않게.
+  const list = useSettlementContacts(
+    { q: searchTerm || undefined, take: 100 },
+    { keepPrevious: true },
+  );
+  // 입력이 디바운스·응답을 기다리는 동안엔 직전 검색의 결과가 보이고 있다. 그 결과가
+  // 비어 있어도 지금 검색어의 "결과 없음" 은 아니므로 답이 올 때까지 로딩으로 둔다.
+  const settled = searchTerm === term && !list.isPlaceholderData;
+  const waiting =
+    list.isLoading || (!settled && !list.isError && (list.data?.items.length ?? 0) === 0);
   const remove = useDeleteSettlementContact();
   const [editing, setEditing] = useState<SettlementContactType | null>(null);
 
@@ -72,7 +87,7 @@ export const ContactsPage = () => {
         />
       </div>
 
-      {list.isLoading && (
+      {waiting && (
         <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
           <Loader2 className="mr-2 size-4 animate-spin" /> 불러오는 중…
         </div>
@@ -88,18 +103,21 @@ export const ContactsPage = () => {
       {list.data && (
         <>
           {list.data.items.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
-                {q.trim() ? (
-                  <p>'{q.trim()}' 에 일치하는 단골이 없습니다.</p>
-                ) : (
-                  <>
-                    <p>아직 단골이 없습니다.</p>
-                    <p>정산을 저장하면 참여자가 자동으로 단골에 적립됩니다.</p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+            // 답이 확정된 뒤에만 — 기다리는 동안엔 위 로딩이 대신 보인다.
+            settled && (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
+                  {term ? (
+                    <p>'{term}' 에 일치하는 단골이 없습니다.</p>
+                  ) : (
+                    <>
+                      <p>아직 단골이 없습니다.</p>
+                      <p>정산을 저장하면 참여자가 자동으로 단골에 적립됩니다.</p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )
           ) : (
             <ul className="space-y-2">
               {list.data.items.map((c) => (

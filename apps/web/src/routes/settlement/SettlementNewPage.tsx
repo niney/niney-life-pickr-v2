@@ -38,7 +38,9 @@ export const SettlementNewPage = () => {
 
   // 1차 식당이 url 로 들어왔으면 그 식당 detail 을 fetch — placeName 을
   // store 에 prefill 하려면 필요. 독립 진입(/me/settlements/new) 이면 fetch 안 함.
-  const firstPlaceDetail = useRestaurantPublic(placeId ?? null);
+  // edit 모드도 안 한다 — 헤더·식당명은 저장된 세션에서 오고, 이 응답은 서버가 그
+  // 식당 리뷰 전체를 읽어 만드는 무거운 것이라 이름 하나 때문에 부르지 않는다.
+  const firstPlaceDetail = useRestaurantPublic(isEdit ? null : (placeId ?? null));
 
   // 편집 모드: 저장된 세션 fetch 해 draft 로 hydrate.
   const session = useSettlement(isEdit ? (id ?? null) : null);
@@ -60,10 +62,12 @@ export const SettlementNewPage = () => {
   }, [placeId, firstPlaceDetail.data?.name, isEdit]);
 
   // create 모드: 서버 draft 가 있으면 store 로 hydrate. edit 모드는 별도
-  // 로직(아래) — 저장된 세션이 source of truth.
-  const draftHydrate = useSettlementDraftHydrate(
-    !isEdit ? (placeId ?? null) : null,
-  );
+  // 로직(아래) — 저장된 세션이 source of truth 라 훅을 꺼 둔다. placeId 에 null 을
+  // 넘기는 것으로는 꺼지지 않는다(null = 식당 미지정 슬롯 — 그 슬롯의 임시저장이
+  // 편집 중인 정산을 덮어썼다).
+  const draftHydrate = useSettlementDraftHydrate(placeId ?? null, {
+    enabled: !isEdit,
+  });
   const autoSync = useSettlementDraftAutoSync({
     placeId: placeId ?? null,
     placeNameHint: firstPlaceDetail.data?.name ?? draft.rounds[0]?.placeName ?? null,

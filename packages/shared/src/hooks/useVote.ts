@@ -4,6 +4,7 @@ import type {
   SharedVoteSessionType,
   SubmitBallotInputType,
 } from '@repo/api-contract';
+import { ApiError } from '../api/client.js';
 import { voteApi } from '../api/vote.api.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useVoteGuestStore } from '../stores/voteGuestStore.js';
@@ -15,6 +16,34 @@ import { useVoteGuestStore } from '../stores/voteGuestStore.js';
 // 교체한다(즐겨찾기와 동일 계약).
 
 const sharedKey = (token: string) => ['vote', 'shared', token] as const;
+
+const VOTE_POLL_INTERVAL_MS = 15_000;
+
+/**
+ * 공개 투표 조회의 폴링 간격. 진행 중엔 15초, 마감이면 중단.
+ *
+ * 만료(410)·없는 링크(404)처럼 다시 물어도 답이 같은 4xx 에서도 멈춘다 — 한 번도
+ * 성공한 적 없는 쿼리는 재조회 때 pending 으로 되돌아가 에러 화면이 15초마다
+ * 스피너로 깜빡이고, 그때마다 요청이 나간다. 네트워크 단절·5xx·시간 초과(408)·
+ * 요청 과다(429) 같은 일시 오류는 계속 폴링해 스스로 회복한다.
+ */
+export const sharedVoteRefetchInterval = (state: {
+  data?: Pick<SharedVoteSessionType, 'closedAt'>;
+  error: unknown;
+}): number | false => {
+  if (state.data?.closedAt) return false;
+  const { error } = state;
+  if (
+    error instanceof ApiError &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500 &&
+    error.statusCode !== 408 &&
+    error.statusCode !== 429
+  ) {
+    return false;
+  }
+  return VOTE_POLL_INTERVAL_MS;
+};
 
 export const useCreateVote = () =>
   useMutation({
@@ -40,11 +69,12 @@ export const useSharedVote = (token: string | null) =>
       return voteApi.getShared(token);
     },
     enabled: !!token,
-    // 집계는 다른 참가자 투표로 수시로 바뀐다 — 진행 중 15초 폴링, 마감이면
-    // 중단. 탭 비활성 시 자동 중단(refetchIntervalInBackground 기본 false).
+    // 집계는 다른 참가자 투표로 수시로 바뀐다 — 진행 중 15초 폴링, 마감이나
+    // 만료·없는 링크면 중단. 탭 비활성 시 자동 중단(refetchIntervalInBackground
+    // 기본 false).
     staleTime: 0,
     placeholderData: (prev) => prev,
-    refetchInterval: (query) => (query.state.data?.closedAt ? false : 15_000),
+    refetchInterval: (query) => sharedVoteRefetchInterval(query.state),
   });
 
 export const useSubmitBallot = (token: string) => {

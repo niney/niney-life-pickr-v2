@@ -214,8 +214,10 @@ const RoundEditor = ({
   );
 
   // 메뉴 모달을 위한 식당 detail. 차수의 placeId 기준이라 1차/2차가 다른
-  // 식당이면 각각 자기 메뉴를 가져온다.
-  const detail = useRestaurantPublic(round.placeId);
+  // 식당이면 각각 자기 메뉴를 가져온다. 모달을 연 동안에만 조회한다 — 서버가 그
+  // 식당 리뷰 전체를 읽어 만드는 무거운 응답인데, 영수증으로 채운 차수는 메뉴
+  // 모달을 한 번도 안 여는 일이 많다. 닫았다 다시 열면 캐시에서 바로 나온다.
+  const detail = useRestaurantPublic(pickerOpen ? round.placeId : null);
   const menus = detail.data?.menus ?? [];
 
   const subtotal = useMemo(
@@ -318,6 +320,7 @@ const RoundEditor = ({
       <MenuPickerDialog
         open={pickerOpen}
         menus={menus}
+        loading={detail.isLoading}
         onClose={() => setPickerOpen(false)}
         onPick={(menu) => {
           const price = parsePrice(menu.price);
@@ -472,8 +475,10 @@ const ReceiptPreviewImage = ({ url }: { url: string }) => {
   const [zoomed, setZoomed] = useState(false);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
+  // 로드 전에도 이미지 자리(max-h-64)만큼 높이를 잡아 둔다 — 한 줄짜리 문구가 이미지로
+  // 바뀌면서 아래 항목 목록이 밀려 내려가지 않게.
   if (!objectUrl)
-    return <p className="text-sm text-muted-foreground">미리보기 불러오는 중…</p>;
+    return <p className="h-64 text-sm text-muted-foreground">미리보기 불러오는 중…</p>;
   return (
     <>
       <img

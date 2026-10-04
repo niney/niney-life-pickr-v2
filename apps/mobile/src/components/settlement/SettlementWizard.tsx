@@ -159,8 +159,9 @@ export const SettlementWizard = ({ placeId = null, editingId = null }: Props) =>
     setHydrated(true);
   }, [isEdit, session.data, hydrated, resetDraft]);
 
-  // 서버 draft 자동 sync (로그인 시).
-  const draftHydrate = useSettlementDraftHydrate(!isEdit ? placeId : null);
+  // 서버 draft 자동 sync (로그인 시). 수정 모드는 저장된 세션이 진실이라 hydrate 를 끈다 —
+  // placeId 자리에 null 을 넘기면 꺼지는 게 아니라 "식당 미지정" 임시저장이 편집 내용을 덮어쓴다.
+  const draftHydrate = useSettlementDraftHydrate(placeId, { enabled: !isEdit });
   const autoSync = useSettlementDraftAutoSync({
     placeId,
     placeNameHint:

@@ -9,6 +9,11 @@ import {
   type DraftRound,
 } from '@repo/shared';
 import { Button } from '~/components/ui/button';
+import {
+  RECEIPT_MAX_UPLOAD_BYTES,
+  RECEIPT_TOO_LARGE_MESSAGE,
+  prepareReceiptImage,
+} from './prepareReceiptImage';
 
 interface ApplyArgs {
   imageToken: string;
@@ -57,6 +62,8 @@ export const MultiReceiptSplitDialog = ({
   const [mapping, setMapping] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 업로드 전 사진을 줄이는 동안 — upload.isPending 이 켜지기 전 구간이라 따로 든다.
+  const [preparing, setPreparing] = useState(false);
 
   // 다이얼로그가 열릴 때 / 차수 변동 시 / count 변경 시 기본 매핑을 재계산.
   // 기본은 왼쪽부터 차수 순서대로 — 사용자가 "왼쪽이 1차" 라고 인지하는 가장
@@ -98,7 +105,8 @@ export const MultiReceiptSplitDialog = ({
     );
   }, [mapping]);
 
-  const isWorking = upload.isPending || extract.isPending || progress !== null;
+  const isUploading = preparing || upload.isPending;
+  const isWorking = isUploading || extract.isPending || progress !== null;
   const canExtract =
     uploaded !== null && mapping.length === count && duplicateRounds.size === 0;
 
@@ -112,8 +120,19 @@ export const MultiReceiptSplitDialog = ({
     e.target.value = '';
     if (!file) return;
     setError(null);
+    // 폰 카메라 원본을 그대로 올리지 않는다 — 줄일 수 있으면 줄여서(못 줄이면 원본).
+    // 영수증 여러 장이 나란한 사진이라 한 장짜리보다 장당 해상도가 낮아지지만, 서버가
+    // 어차피 같은 한도(장변 1600px)로 줄인 뒤 N등분하므로 추출에 쓰이는 화소는 같다.
+    setPreparing(true);
+    const prepared = await prepareReceiptImage(file);
+    setPreparing(false);
+    // 서버 한도를 넘는 사진은 다 올린 뒤에야 거절된다 — 올리기 전에 알린다.
+    if (prepared.size > RECEIPT_MAX_UPLOAD_BYTES) {
+      setError(RECEIPT_TOO_LARGE_MESSAGE);
+      return;
+    }
     try {
-      const res = await upload.mutateAsync(file);
+      const res = await upload.mutateAsync(prepared);
       setUploaded({ imageToken: res.imageToken, previewUrl: res.previewUrl });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '업로드 실패');
@@ -199,8 +218,8 @@ export const MultiReceiptSplitDialog = ({
           {!uploaded && (
             <div className="flex flex-col items-center gap-3 rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
               <p>한 사진에 영수증 여러 장이 가로로 나란히 있어야 합니다.</p>
-              <Button type="button" onClick={handlePick} disabled={upload.isPending}>
-                {upload.isPending ? (
+              <Button type="button" onClick={handlePick} disabled={isUploading}>
+                {isUploading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" /> 업로드 중…
                   </>
@@ -208,6 +227,9 @@ export const MultiReceiptSplitDialog = ({
                   '사진 선택'
                 )}
               </Button>
+              {/* 업로드 전 단계의 실패(용량 초과·업로드 실패)도 여기서 보여 준다 — 에러
+                  문구가 업로드 후 화면에만 있어 이 단계의 실패는 아무 표시가 없었다. */}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <input
                 ref={fileRef}
                 type="file"

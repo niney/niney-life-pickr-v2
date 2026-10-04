@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, Plus, Search, Vote, X } from 'lucide-react';
 import type { RestaurantPublicListItemType, VoteOptionInputType } from '@repo/api-contract';
@@ -34,7 +34,12 @@ export const VoteNewPage = () => {
   const debouncedQ = useDebounced(q, 300);
   const [selected, setSelected] = useState<VoteOptionInputType[]>(() => (preset?.presetOptions ?? []).slice(0, VOTE_OPTIONS_MAX));
 
-  const search = useRestaurantsPublic({ q: debouncedQ || undefined, limit: 20 });
+  // 검색어가 있을 때만 조회한다 — 빈 검색의 결과는 그리지도 않는데(아래 debouncedQ
+  // 가드), 이 목록은 서버에서 가장 무거운 공개 경로다.
+  const search = useRestaurantsPublic(
+    { q: debouncedQ || undefined, limit: 20 },
+    { enabled: debouncedQ !== '' },
+  );
   // 즐겨찾기 — 페이지당 1회 호출 원칙(이 페이지의 유일한 호출).
   const favorites = useRestaurantFavorites();
   const myVotes = useMyVotes();
@@ -44,23 +49,32 @@ export const VoteNewPage = () => {
   const isSelected = (placeId: string) => selected.some((s) => s.placeId === placeId);
   const full = selected.length >= VOTE_OPTIONS_MAX;
 
-  const addOption = (item: {
-    placeId: string;
-    name: string;
-    category: string | null;
-    thumbnailUrl: string | null;
-  }) => {
-    if (full || isSelected(item.placeId)) return;
-    setSelected((prev) => [
-      ...prev,
-      {
-        placeId: item.placeId,
-        name: item.name,
-        category: item.category,
-        thumbnailUrl: item.thumbnailUrl,
-      },
-    ]);
-  };
+  // 가득 참·중복 검사를 함수형 setState 안에서 한다 — selected 를 클로저로 잡지 않아
+  // 참조가 고정되고, memo 된 CandidateRow 가 제목·검색 입력 한 글자마다 다시 그려지지
+  // 않는다(즐겨찾기는 최대 100행).
+  const addOption = useCallback(
+    (item: {
+      placeId: string;
+      name: string;
+      category: string | null;
+      thumbnailUrl: string | null;
+    }) => {
+      setSelected((prev) =>
+        prev.length >= VOTE_OPTIONS_MAX || prev.some((s) => s.placeId === item.placeId)
+          ? prev
+          : [
+              ...prev,
+              {
+                placeId: item.placeId,
+                name: item.name,
+                category: item.category,
+                thumbnailUrl: item.thumbnailUrl,
+              },
+            ],
+      );
+    },
+    [],
+  );
 
   const removeOption = (placeId: string) => {
     setSelected((prev) => prev.filter((s) => s.placeId !== placeId));
@@ -264,7 +278,7 @@ export const VoteNewPage = () => {
   );
 };
 
-const CandidateRow = ({
+const CandidateRowView = ({
   item,
   added,
   disabled,
@@ -327,3 +341,7 @@ const CandidateRow = ({
     </Button>
   </li>
 );
+
+// memo — 제목·검색 입력은 페이지 루트 state 라 한 글자마다 페이지가 다시 그려진다.
+// item(쿼리 캐시의 같은 객체)·added·disabled·onAdd(안정 콜백)가 그대로인 행은 건너뛴다.
+const CandidateRow = memo(CandidateRowView);

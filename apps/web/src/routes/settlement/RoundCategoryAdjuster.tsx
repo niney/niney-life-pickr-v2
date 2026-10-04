@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import {
   SETTLEMENT_CATEGORY_LABEL,
   calculateMultiRoundShares,
@@ -44,7 +44,12 @@ const participantLabel = (p: DraftParticipant, idx: number): string => {
   return nm || nick || `참여자 ${idx + 1}`;
 };
 
-export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
+// memo — Step4 에서 다른 차수를 건드릴 때 round·participants 가 그대로인 차수는
+// 건너뛴다(RoundExceptionsEditor 머리 주석과 같은 근거).
+export const RoundCategoryAdjuster = memo(function RoundCategoryAdjuster({
+  round,
+  participants,
+}: Props) {
   const setCategoryAdjustment = useSettlementDraftStore((s) => s.setCategoryAdjustment);
 
   // 현재 보정 적용 전 상태(잔여 판단용)와 현재 round 의 활성자/풀 amount.
@@ -251,4 +256,4 @@ export const RoundCategoryAdjuster = ({ round, participants }: Props) => {
       })}
     </div>
   );
-};
+});

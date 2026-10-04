@@ -7,8 +7,6 @@ interface Props {
   // 현재 행에서 사용자가 입력 중인 이름. 닉네임도 같이 검색되지만 표시 위치는
   // 이름 input 아래라 prop 이름은 query 로 일반화.
   query: string;
-  // 드롭다운 노출 여부. 부모(Step1) 가 focused row 기준으로 토글한다.
-  open: boolean;
   onPick(contact: SettlementContactType): void;
 }
 
@@ -16,28 +14,35 @@ interface Props {
 // 호출. 빈 검색어로 focus 하면 최근 사용 순으로 단골이 나열되어, 새 정산을
 // 만들 때 자주 쓰는 참여자를 한 번에 채울 수 있다.
 //
+// 마운트 = 드롭다운 열림. 부모(Step1) 가 focus 가 있는 행에서만 렌더한다 — 닫힌
+// 상태로 행마다 깔아 두면 참여자 수만큼 쿼리가 돌아, 이름이 채워진 정산을 열 때
+// 보이지도 않는 검색이 사람 수만큼 한꺼번에 나간다.
+//
 // 위치/배경은 호출 측이 relative wrapper 로 감싸 absolute 가 input 바로 아래
 // 정렬되도록 한다. 외부 닫기 처리는 부모(Step1) 가 맡는다.
-export const ContactSuggestions = ({ query, open, onPick }: Props) => {
+export const ContactSuggestions = ({ query, onPick }: Props) => {
   const debounced = useDebounced(query.trim(), 250);
   // 드롭다운은 max-h 로 잘리고 스크롤되므로 넉넉히 가져온다 — 사용자가
   // "분명히 있는 단골이 자동완성에 안 뜬다" 고 느끼는 사고를 막는 게 6 개
   // 깔끔함보다 우선. 더 많이 필요해지면 /me/contacts 페이지(100)로 안내.
-  const list = useSettlementContacts({
-    q: debounced || undefined,
-    take: 20,
-  });
-
-  if (!open) return null;
+  // 타이핑하는 동안엔 직전 결과를 그대로 둔다(keepPrevious) — 글자마다 목록이
+  // "찾는 중" 으로 바뀌었다 돌아오지 않게.
+  const list = useSettlementContacts(
+    { q: debounced || undefined, take: 20 },
+    { keepPrevious: true },
+  );
 
   const items = list.data?.items ?? [];
+  // 직전 검색어의 빈 결과가 남아 있는 동안은 아직 답을 모르는 상태다 — "일치하는
+  // 단골이 없습니다" 가 아니라 찾는 중으로 보여 준다.
+  const searching = list.isLoading || (list.isPlaceholderData && items.length === 0);
 
   return (
     <div
       role="listbox"
       className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-md border bg-popover p-1 shadow-md"
     >
-      {list.isLoading ? (
+      {searching ? (
         <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           단골 찾는 중…

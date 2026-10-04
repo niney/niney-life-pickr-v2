@@ -47,9 +47,15 @@ export const RestaurantSearchDialog = ({
   }, [open]);
 
   // 검색어가 없으면 fetch 막아 둠 — 추천 식당 같은 별도 UX 가 아직 없어
-  // 빈 검색은 의미가 적다.
-  const list = useRestaurantsPublic({ q: q || undefined, limit: 30 });
-  const items = useMemo(() => list.data?.items ?? [], [list.data]);
+  // 빈 검색은 의미가 적다. 닫혀 있는 동안에도 막는다(이 컴포넌트는 Step2 에 항상
+  // 마운트돼 있다).
+  const list = useRestaurantsPublic(
+    { q: q || undefined, limit: 30 },
+    { enabled: open && q !== '' },
+  );
+  // 빈 검색어에선 목록도 비운다 — 꺼진 쿼리라도 캐시나 직전 검색 결과
+  // (placeholderData)를 돌려줘, "검색어를 입력해 주세요" 아래에 목록이 깔린다.
+  const items = useMemo(() => (q === '' ? [] : (list.data?.items ?? [])), [q, list.data]);
 
   if (!open) return null;
 

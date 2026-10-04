@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
 import type { MenuItemType } from '@repo/api-contract';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -7,13 +7,16 @@ import { Input } from '~/components/ui/input';
 interface Props {
   open: boolean;
   menus: MenuItemType[];
+  // 메뉴를 아직 받아오는 중 — 호출처가 모달을 연 뒤에야 조회를 시작하므로, 그동안
+  // 빈 목록을 "등록된 메뉴가 없습니다" 로 읽히지 않게 로딩으로 구분한다.
+  loading?: boolean;
   onPick(menu: MenuItemType): void;
   onClose(): void;
 }
 
 // 식당의 등록 메뉴 중에서 검색해 항목을 추가하는 모달. 외부 UI 라이브러리에
 // Dialog 가 없어 가벼운 fixed overlay 로 구현.
-export const MenuPickerDialog = ({ open, menus, onPick, onClose }: Props) => {
+export const MenuPickerDialog = ({ open, menus, loading = false, onPick, onClose }: Props) => {
   const [q, setQ] = useState('');
 
   useEffect(() => {
@@ -69,7 +72,11 @@ export const MenuPickerDialog = ({ open, menus, onPick, onClose }: Props) => {
         </div>
 
         <div className="-mx-1 flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 size-4 animate-spin" /> 메뉴 불러오는 중…
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               {menus.length === 0
                 ? '등록된 메뉴가 없습니다.'

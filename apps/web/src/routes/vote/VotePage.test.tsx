@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -275,5 +275,61 @@ describe('VotePage', () => {
     // 집계는 보이되 복구 UI 는 방장 전용.
     expect(await screen.findByRole('region', { name: '최종 집계' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '결과 확정하기' })).not.toBeInTheDocument();
+  });
+
+  // 집계 폴링(15초). 가짜 타이머로 시간을 건너뛰되 shouldAdvanceTime 으로 실제 시간도
+  // 흐르게 해, RTL 의 findBy/waitFor 폴링과 MSW 응답이 평소처럼 돈다.
+  describe('폴링', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('진행 중인 투표는 15초 뒤 집계를 다시 조회한다', async () => {
+      let calls = 0;
+      server.use(
+        http.get(SHARED_URL, () => {
+          calls += 1;
+          return HttpResponse.json(openSession());
+        }),
+      );
+
+      renderVotePage();
+      expect(await screen.findByRole('heading', { name: /오늘 점심 어디/ })).toBeInTheDocument();
+      expect(calls).toBe(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_500);
+      });
+
+      await waitFor(() => expect(calls).toBe(2));
+    });
+
+    it('만료된 링크(410)는 다시 조회하지 않고 만료 안내에 머문다', async () => {
+      // 한 번도 성공한 적 없는 쿼리는 재조회 때 pending 으로 돌아간다 — 폴링이 계속되면
+      // 만료 안내가 15초마다 "불러오는 중" 으로 깜빡이고 그때마다 요청이 나간다.
+      let calls = 0;
+      server.use(
+        http.get(SHARED_URL, () => {
+          calls += 1;
+          return errorBody(410, 'Gone', '투표 링크가 만료되었습니다.');
+        }),
+      );
+
+      renderVotePage();
+      expect(await screen.findByText('투표 링크가 만료되었어요')).toBeInTheDocument();
+      expect(calls).toBe(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(46_000);
+      });
+
+      expect(calls).toBe(1);
+      expect(screen.getByText('투표 링크가 만료되었어요')).toBeInTheDocument();
+      expect(screen.queryByText(/불러오는 중/)).not.toBeInTheDocument();
+    });
   });
 });

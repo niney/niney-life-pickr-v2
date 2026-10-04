@@ -4,6 +4,7 @@ import type { SettlementContactType } from '@repo/api-contract';
 import { ApiError, useSettlementContacts } from '@repo/shared';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { useDebounced } from '~/lib/useDebounced';
 
 interface Props {
   open: boolean;
@@ -31,18 +32,30 @@ export const ContactPickerDialog = ({
   onConfirm,
 }: Props) => {
   const [q, setQ] = useState('');
-  const list = useSettlementContacts({
-    q: q.trim() || undefined,
-    take: 100,
-  });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // 검색어는 디바운스해서 조회한다 — 한글은 조합 단계마다 change 가 와서, 입력값을
+  // 그대로 키에 넣으면 "홍길동" 한 번에 요청이 아홉 번 나간다. 비울 때는 기다리지
+  // 않는다(전체 목록은 캐시에 있고, 다시 열었을 때 직전 검색 결과가 잠깐 보이면 안 됨).
+  // 비운 순간 디바운스 값도 곧바로 비워(지연 0) 두어, 이어서 새 글자를 칠 때 지우기
+  // 전의 검색어가 되살아나지 않게 한다.
+  const term = q.trim();
+  const debouncedTerm = useDebounced(term, term === '' ? 0 : 250);
+  const searchTerm = term === '' ? '' : debouncedTerm;
+  // 닫혀 있는 동안엔 조회하지 않고(enabled), 검색어가 바뀌는 동안엔 직전 목록을
+  // 그대로 둔다(keepPrevious) — 글자마다 목록이 스피너로 바뀌었다 돌아오지 않게.
+  const list = useSettlementContacts(
+    { q: searchTerm || undefined, take: 100 },
+    { enabled: open, keepPrevious: true },
+  );
+  // 고른 단골은 id 만이 아니라 본체째 들고 있는다 — 검색어를 바꾸면 앞서 고른 사람이 목록에서
+  // 빠지는데, id 만 들고 있으면 "N명 선택됨" 으로 세어지기만 하고 추가할 때는 찾을 수 없다.
+  const [selected, setSelected] = useState<Map<string, SettlementContactType>>(new Map());
 
   // 모달이 열릴 때마다 검색·선택 초기화. 외부 시스템(다이얼로그 lifecycle)
   // 동기화라 useEffect 가 적절.
   useEffect(() => {
     if (!open) return;
     setQ('');
-    setSelected(new Set());
+    setSelected(new Map());
   }, [open]);
 
   // ESC 닫기.
@@ -58,6 +71,10 @@ export const ContactPickerDialog = ({
   // 빈 단골 상태(0건) 인지, 검색결과 0건인지 메시지를 구분하기 위해 q 비어있을
   // 때의 total 도 같이 관찰. 굳이 별도 query 까지는 안 만들고 단순 메시지로.
   const items = list.data?.items ?? [];
+  // 입력이 디바운스·응답을 기다리는 동안엔 직전 검색의 결과가 보이고 있다. 그 결과가
+  // 비어 있어도 지금 검색어의 "결과 없음" 은 아니므로 답이 올 때까지 로딩으로 둔다.
+  const settled = searchTerm === term && !list.isPlaceholderData;
+  const waiting = list.isLoading || (!settled && items.length === 0 && !list.isError);
 
   const isAlreadyAdded = useMemo(
     () => (c: SettlementContactType) => {
@@ -70,18 +87,22 @@ export const ContactPickerDialog = ({
 
   if (!open) return null;
 
-  const toggle = (id: string) => {
+  const toggle = (c: SettlementContactType) => {
     setSelected((cur) => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const next = new Map(cur);
+      if (next.has(c.id)) next.delete(c.id);
+      else next.set(c.id, c);
       return next;
     });
   };
 
   const handleConfirm = () => {
-    const picked = items.filter((c) => selected.has(c.id));
-    onConfirm(picked);
+    // 지금 보이는 목록의 순서를 먼저 따르고(검색어를 안 바꿨다면 예전과 같은 순서), 검색어를
+    // 바꿔 목록에서 빠진 선택은 고른 순서대로 뒤에 붙인다.
+    const visible = items.filter((c) => selected.has(c.id));
+    const visibleIds = new Set(visible.map((c) => c.id));
+    const hidden = [...selected.values()].filter((c) => !visibleIds.has(c.id));
+    onConfirm([...visible, ...hidden]);
     onClose();
   };
 
@@ -126,7 +147,7 @@ export const ContactPickerDialog = ({
         </div>
 
         <div className="-mx-1 flex-1 overflow-auto">
-          {list.isLoading && (
+          {waiting && (
             <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
               <Loader2 className="mr-1.5 size-3 animate-spin" />
               불러오는 중…
@@ -140,7 +161,7 @@ export const ContactPickerDialog = ({
             </p>
           )}
 
-          {list.data && items.length === 0 && (
+          {settled && list.data && items.length === 0 && (
             <div className="px-2 py-6 text-center text-sm text-muted-foreground">
               {q.trim()
                 ? `'${q.trim()}' 에 일치하는 단골이 없습니다`
@@ -160,7 +181,7 @@ export const ContactPickerDialog = ({
                       role="checkbox"
                       aria-checked={checked}
                       disabled={already}
-                      onClick={() => !already && toggle(c.id)}
+                      onClick={() => !already && toggle(c)}
                       className={
                         'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors ' +
                         (already

@@ -9,11 +9,12 @@ import { voteSession } from '~/test/fixtures/vote';
 import { VoteNewPage } from './VoteNewPage';
 
 // 투표방 생성 페이지 — 방장(로그인) 전용이라 로그인 상태로 렌더한다(실제 앱에선
-// RequireUser 가드 뒤). 로그인 상태의 마운트만으로 세 요청이 나간다:
-//   ① GET /restaurants/public   — 검색 쿼리(q 없이도 mount 1회)
-//   ② GET /restaurants/favorites — 서버 즐겨찾기(하이브리드 훅의 로그인 분기)
-//   ③ GET /votes                — 내가 만든 투표(링크 복구 목록)
-// onUnhandledRequest: 'error' 정책이라 세 개 모두 기본 핸들러로 깔아야 하고,
+// RequireUser 가드 뒤). 로그인 상태의 마운트만으로 두 요청이 나간다:
+//   ① GET /restaurants/favorites — 서버 즐겨찾기(하이브리드 훅의 로그인 분기)
+//   ② GET /votes                — 내가 만든 투표(링크 복구 목록)
+// GET /restaurants/public(검색)은 검색어를 넣은 뒤에만 나간다 — 빈 검색의 결과는
+// 그리지도 않는데 이 목록이 서버에서 가장 무거운 공개 경로라 마운트에선 부르지 않는다.
+// onUnhandledRequest: 'error' 정책이라 부르는 요청은 모두 기본 핸들러로 깔아야 하고,
 // 이 사실 자체가 "이 페이지가 마운트에 무엇을 부르는가" 의 회귀 감지가 된다.
 
 const PUBLIC_LIST_URL = '/api/v1/restaurants/public';
@@ -28,7 +29,7 @@ const searchItem = (n: number) => ({
 });
 
 interface BaseHandlerOptions {
-  // q 검색어 → 결과 목록. q 없는 mount 조회는 항상 빈 목록.
+  // q 검색어 → 결과 목록.
   searchResults?: Record<string, ReturnType<typeof searchItem>[]>;
   favorites?: Array<{ placeId: string; name: string; category: string | null }>;
   myVotes?: Array<{
@@ -102,6 +103,28 @@ describe('VoteNewPage', () => {
     expect(createButton()).toBeDisabled();
     // PublicLayout 밖 단독 라우트 — 명시적 홈 복귀 경로가 있어야 한다.
     expect(screen.getByRole('link', { name: /홈으로/ })).toHaveAttribute('href', '/');
+  });
+
+  it('검색어를 넣기 전엔 공개 맛집 목록을 조회하지 않고, 넣으면 그 검색어로만 조회한다', async () => {
+    useBaseHandlers({});
+    // 기본 핸들러를 덮어 검색 요청의 q 를 기록한다.
+    const queries: Array<string | null> = [];
+    server.use(
+      http.get(PUBLIC_LIST_URL, ({ request }) => {
+        queries.push(new URL(request.url).searchParams.get('q'));
+        return HttpResponse.json({ items: [searchItem(1)] });
+      }),
+    );
+    renderNewPage();
+
+    await screen.findByRole('heading', { name: '투표 만들기' });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(queries).toEqual([]);
+
+    fireEvent.change(screen.getByLabelText(/맛집 검색/), { target: { value: '초밥' } });
+
+    expect(await screen.findByText('검색식당1')).toBeInTheDocument();
+    expect(queries).toEqual(['초밥']);
   });
 
   it('검색에서 후보를 추가하면 목록·카운트가 갱신되고 같은 식당은 다시 못 넣는다', async () => {

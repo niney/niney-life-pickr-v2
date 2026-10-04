@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Trash2 } from 'lucide-react';
 import { SETTLEMENT_CATEGORY_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import { useSettlementDraftStore, type DraftRound } from '@repo/shared';
@@ -20,7 +20,9 @@ interface Props {
   round: DraftRound;
 }
 
-export const RoundDiscountEditor = ({ round }: Props) => {
+// memo — Step4 에서 다른 차수를 건드릴 때 round 가 그대로인 차수는 건너뛴다
+// (RoundExceptionsEditor 머리 주석과 같은 근거).
+export const RoundDiscountEditor = memo(function RoundDiscountEditor({ round }: Props) {
   const setRoundDiscount = useSettlementDraftStore((s) => s.setRoundDiscount);
 
   // 카테고리별 풀. 활성화 상태에서 카테고리 옆에 풀 금액을 같이 보여 사용자가
@@ -116,4 +118,4 @@ export const RoundDiscountEditor = ({ round }: Props) => {
       )}
     </div>
   );
-};
+});

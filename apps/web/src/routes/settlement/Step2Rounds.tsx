@@ -20,6 +20,11 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { MultiReceiptSplitDialog } from './MultiReceiptSplitDialog';
 import { RestaurantSearchDialog } from './RestaurantSearchDialog';
+import {
+  RECEIPT_MAX_UPLOAD_BYTES,
+  RECEIPT_TOO_LARGE_MESSAGE,
+  prepareReceiptImage,
+} from './prepareReceiptImage';
 
 interface Props {
   onBack: () => void;
@@ -220,6 +225,8 @@ const RoundCard = ({
   const extract = useExtractReceipt();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 업로드 전 사진을 줄이는 동안 — upload.isPending 이 켜지기 전 구간이라 따로 든다.
+  const [preparing, setPreparing] = useState(false);
 
   const handleReceiptClick = () => {
     setError(null);
@@ -235,8 +242,17 @@ const RoundCard = ({
       return;
     }
     setError(null);
+    // 폰 카메라 원본을 그대로 올리지 않는다 — 줄일 수 있으면 줄여서(못 줄이면 원본).
+    setPreparing(true);
+    const prepared = await prepareReceiptImage(file);
+    setPreparing(false);
+    // 서버 한도를 넘는 사진은 다 올린 뒤에야 거절된다 — 올리기 전에 알린다.
+    if (prepared.size > RECEIPT_MAX_UPLOAD_BYTES) {
+      setError(RECEIPT_TOO_LARGE_MESSAGE);
+      return;
+    }
     try {
-      const uploaded = await upload.mutateAsync(file);
+      const uploaded = await upload.mutateAsync(prepared);
       const extracted = await extract.mutateAsync({
         imageToken: uploaded.imageToken,
         placeId: round.placeId,
@@ -263,7 +279,7 @@ const RoundCard = ({
     }
   };
 
-  const isWorking = upload.isPending || extract.isPending;
+  const isWorking = preparing || upload.isPending || extract.isPending;
 
   const sourceLabel =
     round.source === 'MANUAL'
@@ -339,7 +355,7 @@ const RoundCard = ({
               {isWorking ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  {upload.isPending ? '업로드 중…' : '추출 중…'}
+                  {preparing || upload.isPending ? '업로드 중…' : '추출 중…'}
                 </>
               ) : (
                 <>
@@ -348,13 +364,6 @@ const RoundCard = ({
                 </>
               )}
             </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/heic,image/webp"
-              className="hidden"
-              onChange={handleFileChange}
-            />
           </div>
         )}
 
@@ -378,6 +387,17 @@ const RoundCard = ({
 
         {error && <p className="text-xs text-destructive">{error}</p>}
       </CardContent>
+      {/* 파일 입력은 입력 방식과 무관하게 항상 둔다 — '영수증 사진'(source 미정)과
+          '다른 사진'(source=RECEIPT) 두 버튼이 같은 입력을 연다. 예전엔 source 미정
+          블록 안에만 있어, 영수증을 한 번 올린 뒤엔 '다른 사진' 이 열 입력이 없었다.
+          CardContent 의 space-y 간격에 끼지 않게 그 밖에 둔다. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/heic,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </Card>
   );
 };

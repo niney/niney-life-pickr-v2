@@ -276,11 +276,14 @@ export const Step1Participants = ({ onNext }: Props) => {
                         })
                       }
                     />
-                    <ContactSuggestions
-                      query={p.name ?? ''}
-                      open={focusedClientId === p.clientId}
-                      onPick={(c) => pickContact(p.clientId, c)}
-                    />
+                    {/* focus 가 있는 행에서만 마운트 — 닫힌 드롭다운이 행마다 단골
+                        검색 쿼리를 돌리지 않게(ContactSuggestions 머리 주석). */}
+                    {focusedClientId === p.clientId && (
+                      <ContactSuggestions
+                        query={p.name ?? ''}
+                        onPick={(c) => pickContact(p.clientId, c)}
+                      />
+                    )}
                   </div>
                 </Field>
 

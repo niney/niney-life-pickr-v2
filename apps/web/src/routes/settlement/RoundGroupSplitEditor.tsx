@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Check, Minus, Plus, Trash2, Wand2 } from 'lucide-react';
 import { SETTLEMENT_CATEGORY_LABEL, type ReceiptItemCategoryType } from '@repo/api-contract';
 import {
@@ -41,7 +41,13 @@ const participantLabel = (p: DraftParticipant, idx: number): string => {
   return nm || nick || `참여자 ${idx + 1}`;
 };
 
-export const RoundGroupSplitEditor = ({ round, participants }: Props) => {
+// memo — Step4 에서 다른 차수를 건드릴 때 round·participants 가 그대로인 차수는
+// 건너뛴다(RoundExceptionsEditor 머리 주석과 같은 근거). 펼쳐 둔 '누가 마셨나'
+// 매트릭스(참석자 × 그룹)가 통째로 다시 그려지는 것이 여기서 가장 크다.
+export const RoundGroupSplitEditor = memo(function RoundGroupSplitEditor({
+  round,
+  participants,
+}: Props) {
   const [open, setOpen] = useState(false);
   const groups = round.groupSplits ?? [];
   const hasGroupableItems = round.items.some((it) => isGroupableCategory(it.category));
@@ -78,7 +84,7 @@ export const RoundGroupSplitEditor = ({ round, participants }: Props) => {
       {open && <EditorBody round={round} participants={participants} />}
     </div>
   );
-};
+});
 
 const labelFallback = (category: ReceiptItemCategoryType): string =>
   isGroupableCategory(category) ? SETTLEMENT_CATEGORY_LABEL[category] : '그룹';

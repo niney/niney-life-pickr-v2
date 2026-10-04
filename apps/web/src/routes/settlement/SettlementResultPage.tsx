@@ -168,7 +168,9 @@ const ReceiptCard = ({ previewUrl }: { previewUrl: string }) => {
         {error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : !objectUrl ? (
-          <p className="text-sm text-muted-foreground">불러오는 중…</p>
+          // 로드 전에도 이미지 자리(max-h-80)만큼 높이를 잡아 둔다 — 문구가 이미지로
+          // 바뀌면서 아래 카드들이 밀려 내려가지 않게.
+          <p className="h-80 text-sm text-muted-foreground">불러오는 중…</p>
         ) : (
           <>
             <img

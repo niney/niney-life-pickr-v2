@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import {
   PARTICIPATION_AXES,
@@ -28,7 +28,14 @@ interface Props {
 //
 // tri-state(null/true/false) 인지부하를 사용자에게 노출하지 않는 게 핵심 —
 // 평범한 사용자는 이 영역을 한 번도 안 열어보고 끝낼 수 있어야 한다.
-export const RoundExceptionsEditor = ({ round, participants }: Props) => {
+//
+// memo — Step4 는 스토어를 통째로 구독해 어떤 차수를 건드려도 전 차수 카드가 다시
+// 그려진다. 스토어는 안 바뀐 차수의 round 객체를 그대로 두므로, props(round·
+// participants)가 같은 다른 차수의 편집기는 건너뛴다.
+export const RoundExceptionsEditor = memo(function RoundExceptionsEditor({
+  round,
+  participants,
+}: Props) {
   const setExcludeOverride = useSettlementDraftStore((s) => s.setExcludeOverride);
 
   const exceptions = useMeaningfulExceptions(round, participants);
@@ -62,7 +69,7 @@ export const RoundExceptionsEditor = ({ round, participants }: Props) => {
       <AddExceptionForm round={round} participants={participants} />
     </div>
   );
-};
+});
 
 // 추가 폼 — 닫혀 있다가 '+ 추가' 클릭 시 펼침. 추가 후 자동으로 닫힘.
 const AddExceptionForm = ({
