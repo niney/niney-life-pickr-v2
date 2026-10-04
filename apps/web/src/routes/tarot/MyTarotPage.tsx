@@ -69,7 +69,13 @@ const ReadingRow = ({ item }: { item: TarotReadingSummaryType }) => {
       <Link to={`/me/tarot/${item.id}`} className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex shrink-0 -space-x-2">
           {item.cards.slice(0, 3).map((c) => (
-            <TarotCardImage key={c.cardId} cardId={c.cardId} reversed={c.reversed} className="w-8 border border-background" />
+            <TarotCardImage
+              key={c.cardId}
+              cardId={c.cardId}
+              reversed={c.reversed}
+              sizes="32px"
+              className="w-8 border border-background"
+            />
           ))}
         </div>
         <div className="min-w-0 flex-1">

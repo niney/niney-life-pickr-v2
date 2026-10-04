@@ -44,7 +44,13 @@ export const TarotReadingView = ({ reading, className }: Props) => {
       <div className="mt-5 flex flex-wrap justify-center gap-4">
         {reading.cards.map((c) => (
           <figure key={c.cardId} className="flex w-24 flex-col items-center sm:w-32">
-            <TarotCardImage cardId={c.cardId} reversed={c.reversed} className="w-full shadow-lg" />
+            {/* figure 폭(w-24 / sm:w-32)과 같은 값 — 브라우저가 화면 밀도에 맞는 변형을 고른다. */}
+            <TarotCardImage
+              cardId={c.cardId}
+              reversed={c.reversed}
+              sizes="(min-width: 640px) 128px, 96px"
+              className="w-full shadow-lg"
+            />
             <figcaption className="mt-1.5 text-center">
               <div className="text-[11px] text-[#d9b65b]">{c.positionLabel}</div>
               <div className="font-serif-kr text-sm font-bold text-[#f3e9c6]">{c.nameKo}</div>

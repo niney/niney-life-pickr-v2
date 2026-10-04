@@ -13,6 +13,11 @@ interface Props {
   onRevealNext: () => void;
 }
 
+// 카드가 그려지는 폭(CSS sizes) — 덱의 뒷면은 w-14, 뽑힌 카드는 w-24 / sm:w-32. 512 원본 대신 화면
+// 밀도에 맞는 작은 변형을 받게 한다(TarotCardImage 의 sizes).
+const DECK_CARD_SIZES = '56px';
+const DRAWN_CARD_SIZES = '(min-width: 640px) 128px, 96px';
+
 export const TarotLite = ({ state, onPick, onRevealNext }: Props) => {
   const picked = new Set(state.picked);
   const spread = getTarotSpread(state.spreadId);
@@ -32,7 +37,7 @@ export const TarotLite = ({ state, onPick, onRevealNext }: Props) => {
                     aria-label={`${i + 1}번째 카드 뽑기`}
                     className="block w-14 transition-transform hover:-translate-y-4 focus-visible:-translate-y-4 focus-visible:outline-none"
                   >
-                    <TarotCardBack className="w-14 shadow-lg" />
+                    <TarotCardBack sizes={DECK_CARD_SIZES} className="w-14 shadow-lg" />
                   </button>
                 </li>
               ),
@@ -62,9 +67,17 @@ export const TarotLite = ({ state, onPick, onRevealNext }: Props) => {
                     up && '[transform:rotateY(180deg)]',
                   )}
                 >
-                  <TarotCardBack className="absolute inset-0 h-full w-full [backface-visibility:hidden]" />
+                  <TarotCardBack
+                    sizes={DRAWN_CARD_SIZES}
+                    className="absolute inset-0 h-full w-full [backface-visibility:hidden]"
+                  />
                   <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-                    <TarotCardImage cardId={d.cardId} reversed={d.reversed} className="h-full w-full" />
+                    <TarotCardImage
+                      cardId={d.cardId}
+                      reversed={d.reversed}
+                      sizes={DRAWN_CARD_SIZES}
+                      className="h-full w-full"
+                    />
                   </div>
                 </div>
                 <div className="mt-1 text-center text-[11px] text-[#d9b65b]">{spread?.positions[i]?.label}</div>

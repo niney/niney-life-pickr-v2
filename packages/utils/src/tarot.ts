@@ -244,12 +244,15 @@ export const validateDrawnCards = (
 
 // --- 이미지 -----------------------------------------------------------------
 
-export const TAROT_IMAGE_SIZES = [512, 1024] as const;
+export const TAROT_IMAGE_SIZES = [112, 224, 512, 1024] as const;
 export type TarotImageSize = (typeof TAROT_IMAGE_SIZES)[number];
 
 // 7:12 에 가장 가까운 짝수 높이 — 뒷면 강제 대칭 처리 때 절반이 정수여야 한다.
-// 512 는 3D 텍스처(뽑힌 카드만 지연 로드), 1024 는 DOM 해석 패널·공유 이미지.
+// 112·224 는 2D 화면의 썸네일(내 기록 목록의 32px, 해석·공유 화면의 64~128px — 512 를 그대로 주면
+// 장당 약 114kB 를 받는다), 512 는 3D 텍스처(뽑힌 카드만 지연 로드)·서버 공유 이미지, 1024 는 원본 보관용.
 export const TAROT_CARD_DIMENSIONS: Record<TarotImageSize, { width: number; height: number }> = {
+  112: { width: 112, height: 192 },
+  224: { width: 224, height: 384 },
   512: { width: 512, height: 878 },
   1024: { width: 1024, height: 1756 },
 };

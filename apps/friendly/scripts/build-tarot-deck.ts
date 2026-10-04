@@ -1,5 +1,6 @@
 // 타로 덱 빌드 — 제미나이 원본(assets-src/tarot/raw/<cardId>.png|jpg|webp) → 7:12 중앙 크롭
-// → webp 1024×1756 / 512×878 → apps/web/public/tarot/cards/. 뒷면(back)은 상하좌우 강제 대칭.
+// → webp 1024×1756 / 512×878 / 224×384 / 112×192(TAROT_IMAGE_SIZES) → apps/web/public/tarot/cards/.
+// 뒷면(back)은 상하좌우 강제 대칭.
 //
 // 실행: pnpm --filter friendly build:tarot-deck [--src=<dir>] [--out=<dir>] [--only=major-00,back]
 //        [--quality=82] [--no-symmetrize] [--placeholders]
