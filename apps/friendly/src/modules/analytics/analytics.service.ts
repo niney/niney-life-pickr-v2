@@ -41,6 +41,12 @@ const GLOBAL_MERGE_RETRY_LIMIT = 3;
 // 로 머지가 중단된 실제 원인). 같은 트랜잭션 안에서 배치로 흘려보내 원자성은
 // 유지하고 메모리만 상수화한다.
 const LINK_INSERT_BATCH = 1000;
+// 값이 바뀌지 않은 글로벌 그룹의 updatedAt 을 묶어 갱신하는 IN 목록 크기.
+const UNCHANGED_TOUCH_BATCH = 500;
+// 저장 트랜잭션 한도 — 기본(timeout 5초·maxWait 2초)은 키 1만 개 안팎에서 닿는다. 몇 시간짜리 LLM 머지
+// 결과를 저장 단계 타임아웃으로 버리지 않게 넉넉히 두되, 쓰기 락 점유는 아래 "같은 값 생략"으로 줄인다.
+const SAVE_TX_TIMEOUT_MS = 30_000;
+const SAVE_TX_MAX_WAIT_MS = 10_000;
 // 머지 청크를 병렬 호출할 때 동시에 띄우는 promise 수의 상한 = 계정 동시성
 // 한도와 동일. 실제 네트워크 동시성은 어댑터의 ConcurrencyGate 가
 // OLLAMA_CLOUD_MAX_CONCURRENT 로 강제하므로(우회 불가), 이 값은 "동시에 메모리에
@@ -189,6 +195,8 @@ export interface GlobalMergeResult {
   failedChunks: number;
   model: string;
   version: number;
+  // 다른 머지(어드민 수동/스케줄)가 진행 중이라 이번 호출은 아무것도 하지 않았다.
+  busy?: true;
 }
 
 export class AnalyticsService {
@@ -202,8 +210,9 @@ export class AnalyticsService {
 
   // 머지 단일 락 — 어드민 수동 머지와 스케줄 자동 머지가 동시에 전량 리셋
   // 트랜잭션(GlobalMenuCanonical/Link deleteMany + 재작성)에 진입하면 서로의
-  // 중간 상태를 덮어쓴다. 단일 프로세스 + 앱 전역 singleton service 이므로
-  // 인스턴스 플래그 하나로 상호배제. 이미 진행 중이면 skip(빈 결과) 반환.
+  // 중간 상태를 덮어쓴다. 단일 프로세스 + 앱 전역 singleton service(plugins/schedule.ts
+  // 가 app.analytics 로 decorate, 어드민 라우트도 같은 인스턴스)라 인스턴스 플래그
+  // 하나로 상호배제. 이미 진행 중이면 skip(busy 결과) 반환.
   private mergeInflight = false;
 
   constructor(
@@ -248,6 +257,7 @@ export class AnalyticsService {
         failedChunks: 0,
         model: '',
         version: GLOBAL_MERGE_VERSION,
+        busy: true,
       };
     }
     this.mergeInflight = true;
@@ -535,15 +545,25 @@ export class AnalyticsService {
     await this.prisma.$transaction(async (tx) => {
       // GlobalMenuCanonical upsert by globalKey.
       const keyToId = new Map<string, string>();
-      // 기존 row 들의 id + categoryPath 미리 가져오기. path 는 비파괴 보존용.
+      // 기존 row 들 미리 가져오기. path 는 비파괴 보존용, 나머지는 "값이 같으면 UPDATE 생략" 비교용.
       const existing = await tx.globalMenuCanonical.findMany({
-        select: { id: true, globalKey: true, categoryPath: true },
+        select: {
+          id: true,
+          globalKey: true,
+          displayName: true,
+          categoryPath: true,
+          version: true,
+          model: true,
+        },
       });
-      const existingPathByKey = new Map<string, string | null>();
+      const existingByKey = new Map<string, (typeof existing)[number]>();
       for (const e of existing) {
         keyToId.set(e.globalKey, e.id);
-        existingPathByKey.set(e.globalKey, e.categoryPath);
+        existingByKey.set(e.globalKey, e);
       }
+      // 값이 그대로인 행 — 키마다 UPDATE 를 보내면 3,000키 재저장이 쓰기 락 1.3~1.5초(매일 03:00 증분 경로가
+      // 미링크 1건만 있어도 전 키 재저장). updatedAt 만 아래에서 묶어 갱신한다.
+      const unchangedIds: string[] = [];
 
       // 변경 요약 — full 이면 모든 row 갱신, 아니면 부족한 것만 추가.
       // 같은 globalKey 가 여러 norm 에서 나오면 첫 번째 path 가 채택되도록 dedup.
@@ -551,13 +571,22 @@ export class AnalyticsService {
       for (const [, info] of finalByNorm) {
         if (seenKeys.has(info.globalKey)) continue;
         seenKeys.add(info.globalKey);
-        if (keyToId.has(info.globalKey)) {
+        const prev = existingByKey.get(info.globalKey);
+        if (prev) {
           // 이번 런이 path 를 못 주면(빈 응답/모델 누락) 기존 path 보존 —
           // 약한 런이 좋은 categoryPath 를 null 로 덮어쓰는 사고 방지.
-          const nextPath =
-            info.categoryPath ?? existingPathByKey.get(info.globalKey) ?? null;
+          const nextPath = info.categoryPath ?? prev.categoryPath ?? null;
+          if (
+            prev.displayName === info.displayName &&
+            prev.categoryPath === nextPath &&
+            prev.version === GLOBAL_MERGE_VERSION &&
+            prev.model === model
+          ) {
+            unchangedIds.push(prev.id);
+            continue;
+          }
           await tx.globalMenuCanonical.update({
-            where: { id: keyToId.get(info.globalKey)! },
+            where: { id: prev.id },
             data: {
               displayName: info.displayName,
               categoryPath: nextPath,
@@ -579,6 +608,14 @@ export class AnalyticsService {
           });
           keyToId.set(info.globalKey, created.id);
         }
+      }
+      // 값이 같은 행도 updatedAt 은 이번 머지 시각으로 — overview 의 lastGlobalMergeAt(= max updatedAt)과
+      // 행별 의미를 그대로 둔다. 키마다가 아니라 IN 묶음 UPDATE 몇 문장.
+      for (const ids of chunk(unchangedIds, UNCHANGED_TOUCH_BATCH)) {
+        await tx.globalMenuCanonical.updateMany({
+          where: { id: { in: ids } },
+          data: { updatedAt: now },
+        });
       }
 
       // 사용 안 되는 globalKey row 삭제 (full 이면 distinct 이외 모두, 아니면
@@ -629,7 +666,7 @@ export class AnalyticsService {
         if (linkBuf.length >= LINK_INSERT_BATCH) await flushLinks();
       }
       await flushLinks();
-    });
+    }, { timeout: SAVE_TX_TIMEOUT_MS, maxWait: SAVE_TX_MAX_WAIT_MS });
 
     // 머지가 끝나면 통계 read 캐시 모두 무효화 — overview/menus/tree 모두 변함.
     this.readCache.clear();

@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import { matchDrinkKind } from '@repo/api-contract';
 import {
   SettlementExtractionError,
   SettlementExtractionService,
+  cleanupUnreferencedReceipts,
   isValidImageToken,
 } from './settlement-extraction.service.js';
 import type { LLMProvider } from '../ai/adapters/llm-provider.js';
@@ -434,5 +435,115 @@ describe('SettlementExtractionService.extract', () => {
         menuNames: [],
       }),
     ).rejects.toBeInstanceOf(SettlementExtractionError);
+  });
+});
+
+// ── PLAN-perf-2 G-3 ────────────────────────────────────────────────────────
+
+// 선언된 해상도만 큰 가짜 HEIF(ftyp + meta/ispe) — 디코드 전에 걸러져야 한다.
+const fakeLargeHeif = (w: number, h: number): Buffer => {
+  const box = (type: string, payload: Buffer): Buffer => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(8 + payload.length, 0);
+    head.write(type, 4, 'latin1');
+    return Buffer.concat([head, payload]);
+  };
+  const ispe = Buffer.alloc(12);
+  ispe.writeUInt32BE(w, 4);
+  ispe.writeUInt32BE(h, 8);
+  return Buffer.concat([
+    box('ftyp', Buffer.from('heic\0\0\0\0mif1heic', 'latin1')),
+    box('meta', Buffer.concat([Buffer.alloc(4), box('ispe', ispe)])),
+    box('mdat', Buffer.alloc(32)),
+  ]);
+};
+
+describe('SettlementExtractionService — 남용 상한(G-3)', () => {
+  it('2,500만 화소를 넘는 HEIC 는 디코드하지 않고 invalid_image', async () => {
+    const { service, storageDir } = buildService(new FakeVisionProvider());
+    await expect(service.storeImage(fakeLargeHeif(8064, 6048))).rejects.toMatchObject({
+      code: 'invalid_image',
+      message: expect.stringContaining('2,500만'),
+    });
+    expect(readdirSync(storageDir)).toEqual([]);
+  });
+
+  it('일일 한도는 비전 호출 직전에만 소비하고, 초과면 quota 로 끝나 LLM 을 부르지 않는다', async () => {
+    const provider = new FakeVisionProvider();
+    const consumeQuota = vi.fn(async () => false);
+    const storageDir = mkdtempSync(join(tmpdir(), 'settlement-extraction-test-'));
+    const service = new SettlementExtractionService({ getResolved: vi.fn() } as never, {
+      storageDir,
+      resolveOverride: async () => ({ provider, model: 'fake-vision:latest' }),
+      consumeQuota,
+    });
+    const stored = await service.storeImage(await makeTestJpeg());
+    await expect(
+      service.extract({ imageToken: stored.imageToken, restaurantName: 'x', menuNames: [], userId: 'u1' }),
+    ).rejects.toMatchObject({ code: 'quota' });
+    expect(consumeQuota).toHaveBeenCalledWith('u1');
+    expect(provider.calls).toHaveLength(0);
+
+    // 잘못된 토큰·없는 이미지는 한도를 차감하지 않는다.
+    consumeQuota.mockClear();
+    await expect(
+      service.extract({
+        imageToken: '00000000-0000-0000-0000-000000000000',
+        restaurantName: 'x',
+        menuNames: [],
+        userId: 'u1',
+      }),
+    ).rejects.toMatchObject({ code: 'image_not_found' });
+    expect(consumeQuota).not.toHaveBeenCalled();
+
+    // 남아 있으면 그대로 진행.
+    consumeQuota.mockResolvedValue(true);
+    await service.extract({ imageToken: stored.imageToken, restaurantName: 'x', menuNames: [], userId: 'u1' });
+    expect(provider.calls).toHaveLength(1);
+  });
+});
+
+describe('cleanupUnreferencedReceipts', () => {
+  const T = (n: number) => `${String(n).repeat(8)}-aaaa-bbbb-cccc-${String(n).repeat(12)}`;
+
+  it('기간이 지난 미참조 영수증만 지운다 — 정산 차수·임시저장 payload 참조와 최근 파일은 남긴다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'receipts-cleanup-test-'));
+    const now = Date.now();
+    const old = new Date(now - 40 * 86_400_000);
+    const files = {
+      oldUnref: T(1),
+      oldInRound: T(2),
+      oldInDraft: T(3),
+      recentUnref: T(4),
+    };
+    for (const t of Object.values(files)) writeFileSync(join(dir, `${t}.jpg`), 'x');
+    for (const t of [files.oldUnref, files.oldInRound, files.oldInDraft]) {
+      utimesSync(join(dir, `${t}.jpg`), old, old);
+    }
+    writeFileSync(join(dir, 'notes.txt'), 'keep');
+    utimesSync(join(dir, 'notes.txt'), old, old);
+
+    const prisma = {
+      settlementRound: {
+        findMany: vi.fn(async ({ where }: { where: { receiptImageToken: { in: string[] } } }) =>
+          where.receiptImageToken.in
+            .filter((t) => t === files.oldInRound)
+            .map((t) => ({ receiptImageToken: t })),
+        ),
+      },
+      settlementDraft: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: 'd1', payload: JSON.stringify({ rounds: [{ receiptImageToken: files.oldInDraft }] }) },
+          ])
+          .mockResolvedValue([]),
+      },
+    };
+    const out = await cleanupUnreferencedReceipts(prisma as never, { storageDir: dir, now });
+    expect(out).toMatchObject({ candidates: 3, deleted: 1 });
+    expect(readdirSync(dir).sort()).toEqual(
+      [`${files.oldInRound}.jpg`, `${files.oldInDraft}.jpg`, `${files.recentUnref}.jpg`, 'notes.txt'].sort(),
+    );
   });
 });

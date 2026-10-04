@@ -119,10 +119,71 @@ describe('OperationLogService', () => {
       const id = await service.startRun({ feature: 'summary' });
       expect(id).toMatch(/^[0-9a-f-]{36}$/);
       expect(errSpy).toHaveBeenCalled();
-      // DB 실패에도 컨텍스트는 등록 — 후속 log 가 feature 를 보충받는다.
+    });
+
+    // 운영 stderr 의 persist failed(FK) 폭주 회귀 — run 행 INSERT 가 실패했으면 그 runId 로의 스텝 로그
+    // INSERT 는 FK 위반뿐이라 쏘지 않고, finishRun 이 최종 상태로 run 행을 만든다(UPDATE 는 No record).
+    it('run 행이 없으면 스텝 로그를 쓰지 않고, finishRun 이 최종 상태로 run 행을 INSERT 한다', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      prisma.operationRun.create.mockRejectedValueOnce(new Error('database is locked'));
+      const id = await service.startRun({
+        feature: 'global-merge',
+        trigger: 'cron',
+        meta: { full: false },
+      });
+      for (let i = 0; i < 5; i++) service.log({ runId: id, stage: 's', level: 'info', message: `m${i}` });
+      await flush();
+      expect(prisma.operationLog.create).not.toHaveBeenCalled();
+
+      await service.finishRun(id, { status: 'failed', errorCode: 'unknown', errorMessage: 'boom' });
+      expect(prisma.operationRun.update).not.toHaveBeenCalled();
+      expect(prisma.runCreates).toHaveLength(1);
+      expect(prisma.runCreates[0]).toMatchObject({
+        id,
+        feature: 'global-merge',
+        trigger: 'cron',
+        status: 'failed',
+        errorCode: 'unknown',
+        errorMessage: 'boom',
+        meta: JSON.stringify({ full: false, logsDropped: 5 }),
+      });
+      expect(prisma.runCreates[0]!.finishedAt).toBeInstanceOf(Date);
+      expect(prisma.runCreates[0]!.startedAt).toBeInstanceOf(Date);
+      // 실패 로그는 startRun 1줄뿐 — 스텝마다 FK 오류가 찍히지 않는다.
+      expect(errSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('간격이 지나면 스텝 로그 전에 run 행을 다시 만들고, 성공하면 이후 로그를 그대로 쓴다', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const t0 = Date.now();
+      const now = vi.spyOn(Date, 'now').mockReturnValue(t0);
+      prisma.operationRun.create.mockRejectedValueOnce(new Error('database is locked'));
+      const id = await service.startRun({ feature: 'summary', subjectId: 'p1' });
+      now.mockReturnValue(t0 + 6_000);
+      service.log({ runId: id, stage: 'a', level: 'info', message: 'first' });
+      service.log({ runId: id, stage: 'b', level: 'info', message: 'second' });
+      await flush();
+      await flush();
+      // 재시도 INSERT 는 동시에 한 번(두 로그가 같은 시도를 기다린다).
+      expect(prisma.operationRun.create).toHaveBeenCalledTimes(2);
+      expect(prisma.logCreates.map((l) => l.message)).toEqual(['first', 'second']);
+      await service.finishRun(id, { status: 'done' });
+      expect(prisma.runUpdates).toHaveLength(1);
+    });
+
+    it('재시도 INSERT 가 unique 위반이면(앞선 INSERT 가 실은 커밋됨) 행이 있는 것으로 본다', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const t0 = Date.now();
+      const now = vi.spyOn(Date, 'now').mockReturnValue(t0);
+      prisma.operationRun.create
+        .mockRejectedValueOnce(new Error('timed out'))
+        .mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
+      const id = await service.startRun({ feature: 'crawl' });
+      now.mockReturnValue(t0 + 6_000);
       service.log({ runId: id, stage: 's', level: 'info', message: 'm' });
       await flush();
-      expect(prisma.logCreates[0]).toMatchObject({ feature: 'summary' });
+      await flush();
+      expect(prisma.logCreates).toHaveLength(1);
     });
   });
 

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  ListSettlementDraftsResultType,
-  SettlementDraftType,
-  UpsertSettlementDraftInputType,
+import {
+  utf8ByteLength,
+  type GetSettlementDraftResultType,
+  type ListSettlementDraftsResultType,
+  type SettlementDraftType,
+  type UpsertSettlementDraftInputType,
+  type UpsertSettlementDraftResultType,
 } from '@repo/api-contract';
 import { settlementDraftApi } from '../api/settlement-draft.api.js';
 import {
@@ -15,9 +18,10 @@ import { useAuthStore } from '../stores/authStore.js';
 
 // 정산 입력의 서버 임시저장 hook 들. 자동 저장(debounce)으로 다기기 동기화.
 // 로그인 시에만 동작 — 비로그인은 기존 settlementDraftStore 의 sessionStorage
-// 만 사용.
+// 만 사용. 목록은 메타만(payload 제외), 이어쓰기 payload 는 슬롯 단건 조회로.
 
 const KEY = ['settlement-draft'] as const;
+const byPlaceKey = (placeId: string | null) => [...KEY, 'by-place', placeId ?? ''] as const;
 
 export const useListSettlementDrafts = (enabled = true) =>
   useQuery({
@@ -28,19 +32,74 @@ export const useListSettlementDrafts = (enabled = true) =>
     staleTime: 30_000,
   });
 
+// 이어쓰기 단건 — 진입할 때마다 서버 최신을 받는다(staleTime 0, 다른 기기 편집 반영). 저장 성공 시
+// 아래 upsert 가 이 캐시를 방금 보낸 payload 로 갱신한다.
+export const useSettlementDraftByPlace = (placeId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: byPlaceKey(placeId),
+    queryFn: () => settlementDraftApi.getByPlace(placeId),
+    enabled,
+    staleTime: 0,
+  });
+
+// 저장 결과를 캐시에 반영 — 응답은 id·updatedAt 만이라 방금 보낸 입력으로 채운다. 순수 함수로 두어 테스트한다.
+export const applySavedDraft = (
+  saved: UpsertSettlementDraftResultType,
+  input: UpsertSettlementDraftInputType,
+  prev: { list?: ListSettlementDraftsResultType; byPlace?: GetSettlementDraftResultType },
+): {
+  list: ListSettlementDraftsResultType | undefined;
+  listHasItem: boolean;
+  byPlace: GetSettlementDraftResultType;
+} => {
+  const placeNameHint = input.placeNameHint?.trim() || null;
+  const hit = prev.list?.items.find((d) => d.id === saved.id);
+  return {
+    // 최신(updatedAt desc)이 맨 앞. 목록에 없던 새 슬롯이면 호출자가 무효화해 다시 받는다.
+    list:
+      prev.list && hit
+        ? {
+            items: [
+              {
+                ...hit,
+                placeNameHint,
+                updatedAt: saved.updatedAt,
+                byteSize: utf8ByteLength(JSON.stringify(input.payload ?? null)),
+              },
+              ...prev.list.items.filter((d) => d.id !== saved.id),
+            ],
+          }
+        : prev.list,
+    listHasItem: !!hit,
+    byPlace: {
+      draft: {
+        id: saved.id,
+        placeId: input.placeId,
+        placeNameHint,
+        payload: input.payload,
+        createdAt: prev.byPlace?.draft?.createdAt ?? saved.updatedAt,
+        updatedAt: saved.updatedAt,
+      },
+    },
+  };
+};
+
 export const useUpsertSettlementDraft = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpsertSettlementDraftInputType) =>
       settlementDraftApi.upsert(input),
-    // 자동저장마다 list 를 invalidate→refetch 하면 저장 1회당 전체 draft(payload 포함,
-    // 최대 수 MB)를 재전송한다. 대신 서버가 돌려준 최신 draft 로 캐시를 국소 갱신(refetch
-    // 없음). 최신(updatedAt desc)이 맨 앞이므로 saved 를 앞으로. 다기기 동기화는
-    // staleTime(30s)/포커스 refetch 가 담당.
-    onSuccess: (saved) => {
-      qc.setQueryData<ListSettlementDraftsResultType>([...KEY, 'list'], (prev) =>
-        prev ? { items: [saved, ...prev.items.filter((d) => d.id !== saved.id)] } : prev,
-      );
+    // 자동저장마다 refetch 하지 않고 캐시를 국소 갱신한다 — 같은 화면 재진입 때 옛 서버 스냅샷으로
+    // 되돌아가지 않게 이어쓰기 캐시를, 이력 화면이 떠 있을 때를 위해 목록 메타를.
+    onSuccess: (saved, input) => {
+      const listKey = [...KEY, 'list'];
+      const next = applySavedDraft(saved, input, {
+        list: qc.getQueryData<ListSettlementDraftsResultType>(listKey),
+        byPlace: qc.getQueryData<GetSettlementDraftResultType>(byPlaceKey(input.placeId)),
+      });
+      qc.setQueryData(byPlaceKey(input.placeId), next.byPlace);
+      if (next.listHasItem) qc.setQueryData(listKey, next.list);
+      else void qc.invalidateQueries({ queryKey: listKey });
     },
   });
 };
@@ -49,7 +108,11 @@ export const useDeleteSettlementDraft = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => settlementDraftApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'list'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'list'] });
+      // 지운 draft 가 이어쓰기 캐시에 남아 재진입 때 되살아나지 않게.
+      qc.removeQueries({ queryKey: [...KEY, 'by-place'] });
+    },
   });
 };
 
@@ -167,18 +230,18 @@ export interface DraftHydrateResult {
   matched: SettlementDraftType | null;
 }
 
-// 진입 시 서버 draft 가 있으면 store 를 그 값으로 overwrite. list 한 번만
-// fetch 하고 끝.
+// 진입 시 서버 draft 가 있으면 store 를 그 값으로 overwrite. 그 슬롯 하나만
+// fetch 하고 끝(목록은 메타만 오므로 쓰지 않는다).
 export const useSettlementDraftHydrate = (
   placeId: string | null,
 ): DraftHydrateResult => {
   const isAuthed = useAuthStore((s) => !!s.token);
-  const list = useListSettlementDrafts(isAuthed);
+  const slot = useSettlementDraftByPlace(placeId, isAuthed);
   const [hydrated, setHydrated] = useState(false);
   const [matched, setMatched] = useState<SettlementDraftType | null>(null);
 
-  // 한 placeId(식당 컨텍스트)에 대해 단 한 번만 hydrate. 자동 저장이 list 를
-  // invalidate→refetch 하면 list.data 가 새 참조로 와 effect 가 다시 돌지만,
+  // 한 placeId(식당 컨텍스트)에 대해 단 한 번만 hydrate. 자동 저장이 캐시를
+  // 갱신하면 slot.data 가 새 참조로 와 effect 가 다시 돌지만,
   // 같은 컨텍스트라면 store 를 다시 덮어쓰지 않는다 — 저장 in-flight 중 사용자
   // 입력을 옛 서버 스냅샷이 밀어내는 좁은 레이스 + 저장마다 store 전역 리렌더
   // 방지. placeId 가 바뀌면(다른 식당 진입) 다시 hydrate 허용.
@@ -190,16 +253,15 @@ export const useSettlementDraftHydrate = (
       setHydrated(true);
       return;
     }
-    if (list.isLoading) return;
-    if (list.isError) {
+    // 캐시가 있어도 진입 시 다시 받는 중이면 그 결과를 기다린다(다른 기기 편집·삭제 반영).
+    if (slot.isLoading || slot.isFetching) return;
+    if (slot.isError) {
       // 서버 실패 → sessionStorage 만 사용하는 모드로 진행.
       hydratedForRef.current = placeId;
       setHydrated(true);
       return;
     }
-    const items = list.data?.items ?? [];
-    const found =
-      items.find((d) => (d.placeId ?? '') === (placeId ?? '')) ?? null;
+    const found = slot.data?.draft ?? null;
     if (found && found.payload && typeof found.payload === 'object') {
       const p = found.payload as {
         participants?: unknown;
@@ -218,7 +280,7 @@ export const useSettlementDraftHydrate = (
     hydratedForRef.current = placeId;
     setMatched(found);
     setHydrated(true);
-  }, [isAuthed, list.isLoading, list.isError, list.data, placeId]);
+  }, [isAuthed, slot.isLoading, slot.isFetching, slot.isError, slot.data, placeId]);
 
   return { hydrated, matched };
 };

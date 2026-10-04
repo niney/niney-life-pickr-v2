@@ -7,18 +7,36 @@ import {
   Routes,
   UploadReceiptResult,
 } from '@repo/api-contract';
+import { env, isTest } from '../../config/env.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import { AiConfigService } from '../ai/ai.config.service.js';
+import { MealDailyQuotaService } from '../meal/meal-daily-quota.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
+import { scheduleRegistry } from '../schedule/schedule-registry.js';
+import { kstToday } from '../usage-quota/usage-quota.service.js';
 import {
   SettlementExtractionError,
   SettlementExtractionService,
+  cleanupUnreferencedReceipts,
   isValidImageToken,
 } from './settlement-extraction.service.js';
 
 const SE = Routes.SettlementExtraction;
 
 const PreviewParams = z.object({ token: z.string().min(1) });
+
+// 레이트리밋(라우트 로컬 프리셋 — plugins/rate-limit.ts 의 RATE 와 같은 형태). 둘 다 로그인 필요지만 가입이
+// 무료라 계정을 늘려 비전 LLM·HEIC 디코드·디스크를 태울 수 있었다(PLAN-perf-2 G-3).
+// 업로드 — 장당 1요청(차수마다 1장 + 재시도). HEIC 는 장당 디코드 ~1초라 분당 20.
+const RECEIPT_UPLOAD_RATE = { max: 20, timeWindow: '1 minute' } as const;
+// 추출 — 비전 LLM 1콜/요청. 한 사진 최대 5분할을 연속 호출해도 여유 있게 분당 20. 진짜 비용 방어선은 일일 한도.
+const RECEIPT_EXTRACT_RATE = { max: 20, timeWindow: '1 minute' } as const;
+
+// 미참조 영수증 정리 — 매일 04:20(KST). logs-retention 04:00·usage-quota GC 04:40 과 겹치지 않게.
+const RETENTION_JOB_TYPE = 'receipts-retention';
+const RETENTION_CRON = '20 4 * * *';
+// 일일 한도 카운터의 용도 키(meal_daily_quotas 의 purpose — 사용자·날짜·용도별 원자 카운터).
+const QUOTA_PURPOSE = 'settlement-extraction';
 
 // 서비스 에러를 fastify-sensible 의 httpErrors 로 매핑한다. response schema 에
 // 등록되지 않은 status code 를 typed 라우트에서 그냥 reply.code(n).send() 로
@@ -32,7 +50,12 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementExtractionError): never 
     case 'restaurant_not_found':
       throw app.httpErrors.notFound(e.message);
     case 'no_provider':
+    case 'busy':
       throw app.httpErrors.serviceUnavailable(e.message);
+    case 'quota':
+      throw app.httpErrors.tooManyRequests(
+        `오늘 영수증 추출 한도(${env.SETTLEMENT_EXTRACT_DAILY_LIMIT}회)를 모두 썼습니다. 항목을 직접 입력해 주세요.`,
+      );
     case 'llm_failed':
     default:
       throw app.httpErrors.badGateway(e.message);
@@ -41,13 +64,27 @@ const throwAsHttp = (app: FastifyInstance, e: SettlementExtractionError): never 
 
 const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
+  const dailyQuota = new MealDailyQuotaService(app.prisma);
   // operationLog 주입 — extract 1회 = OperationRun 1개 계측. plugins/logs.ts
   // 가 라우트 autoload 보다 먼저 등록되므로 여기서 참조해도 안전하다.
   const service = new SettlementExtractionService(aiConfig, {
     logger: app.log,
     operationLog: app.operationLog,
+    consumeQuota: (userId) =>
+      dailyQuota.consume(userId, kstToday(), QUOTA_PURPOSE, env.SETTLEMENT_EXTRACT_DAILY_LIMIT),
   });
   const restaurantService = new RestaurantService(app.prisma);
+
+  if (!isTest) {
+    scheduleRegistry.setCron(RETENTION_JOB_TYPE, RETENTION_CRON, 'Asia/Seoul', () => {
+      void cleanupUnreferencedReceipts(app.prisma, { logger: app.log }).catch((err: unknown) => {
+        app.log.warn({ err }, '[settlement-extraction] receipt retention cleanup failed');
+      });
+    });
+    app.addHook('onClose', async () => {
+      scheduleRegistry.clearCron(RETENTION_JOB_TYPE);
+    });
+  }
 
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -57,12 +94,14 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
   // 않는다 (parser 가 별도). 응답 스키마는 수동으로 직렬화.
   app.post(SE.upload, {
     onRequest: [app.authenticate],
+    config: { rateLimit: RECEIPT_UPLOAD_RATE },
     schema: {
       tags: ['settlement'],
       summary: '영수증 사진 업로드 — multipart 파일 1개(최대 5MB), imageToken 발급',
       description:
-        'multipart/form-data 파일 1개(필드명 무관, 공식 클라이언트는 file). HEIC 도 받으며 JPEG 로 정규화해 저장한다. ' +
-        '받은 imageToken 으로 항목 추출(extract)과 정산 저장(rounds[].receiptImageToken)을 호출한다.',
+        'multipart/form-data 파일 1개(필드명 무관, 공식 클라이언트는 file). HEIC 도 받으며(최대 2,500만 화소) JPEG 로 정규화해 저장한다. ' +
+        '받은 imageToken 으로 항목 추출(extract)과 정산 저장(rounds[].receiptImageToken)을 호출한다. ' +
+        'IP 당 분당 20회, HEIC 변환이 밀리면 503. 어떤 정산·임시저장도 참조하지 않는 사진은 30일 뒤 지워진다.',
       security: [{ bearerAuth: [] }],
     },
     handler: async (req) => {
@@ -88,12 +127,14 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
 
   typed.post(SE.extract, {
     onRequest: [app.authenticate],
+    config: { rateLimit: RECEIPT_EXTRACT_RATE },
     schema: {
       tags: ['settlement'],
       summary: '영수증 항목 추출 — 비전 LLM 1콜, 식당 메뉴를 힌트로 품목·금액·분류 반환',
       description:
         'placeId 필수(그 식당 등록 메뉴명을 프롬프트 힌트로 쓴다). 한 사진에 영수증이 여러 장이면 ' +
-        'split(count·index)로 가로 N등분한 영역만 추출한다. 모델 미설정 503, LLM 실패 502.',
+        'split(count·index)로 가로 N등분한 영역만 추출한다. 모델 미설정 503, LLM 실패 502. ' +
+        '사용자 일일 한도(SETTLEMENT_EXTRACT_DAILY_LIMIT, 기본 50회·KST 자정 기준, 분할 추출은 영역마다 1회) 초과 시 429, IP 당 분당 20회.',
       security: [{ bearerAuth: [] }],
       body: ExtractReceiptInput,
       response: { 200: ExtractReceiptResult },
@@ -121,6 +162,7 @@ const settlementExtractionRoutes: FastifyPluginAsync = async (app) => {
           split,
           // 작업 로그 subjectId — 식당 단위로 run 을 묶어 조회하기 위함.
           placeId,
+          userId: req.user.userId,
         });
       } catch (e) {
         if (e instanceof SettlementExtractionError) {

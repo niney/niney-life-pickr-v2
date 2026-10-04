@@ -149,6 +149,10 @@ const EnvSchema = z.object({
   // 영양제 조언(meal-supplement) — 캐시(같은 날·같은 기록)는 차감하지 않는다.
   MEAL_SUPPLEMENT_DAILY_LIMIT: z.coerce.number().int().min(0).default(10),
 
+  // 정산 영수증 추출(비전 LLM) per-user 일일 한도(KST 자정 기준, SQLite 카운터). 0 이면 무제한.
+  // 한 사진에 영수증 N장이면 N회(최대 5) 차감된다.
+  SETTLEMENT_EXTRACT_DAILY_LIMIT: z.coerce.number().int().min(0).default(50),
+
   // 정산 공유 링크 SNS 미리보기(OG)용. 빌드된 웹 index.html 경로 — Fastify 가
   // 읽어 <head> 에 OG 메타를 주입한다. 미설정 시 모노레포 기본 위치
   // (apps/web/dist/index.html) 를 빌드 산출물 기준 상대경로로 탐색.

@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
 
 // 텔레그램 봇 — long-polling(getUpdates) 수신 + sendMessage 송신.
 // 단일 Fastify 인스턴스(CLAUDE.md no-Redis) 안에서 폴러 1개만 돈다(webhook 대신
@@ -47,6 +48,23 @@ export interface SendCandidatesInput {
 
 const API_BASE = 'https://api.telegram.org';
 
+// 롱폴 대기(초) — 업데이트가 없으면 텔레그램이 이 시간 뒤 빈 배열로 답한다.
+const POLL_TIMEOUT_SEC = 30;
+// 롱폴 fetch 자체 상한 = 롱폴 대기 + 여유. 반쯤 끊긴 연결(half-open)이 undici 기본(약 300초)까지 매달리지 않게.
+const POLL_GRACE_MS = 10_000;
+// 송신·설정 확인 호출 상한.
+const SEND_TIMEOUT_MS = 15_000;
+// getUpdates 실패 재시도 — 2초에서 두 배씩 최대 60초, 성공하면 다시 2초. 2초 고정 재시도가 장애 동안
+// 경고 로그 15만 건(6/27~7/17)을 남겼다.
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
+
+export const nextRetryDelayMs = (
+  failures: number,
+  baseMs: number = RETRY_BASE_MS,
+  maxMs: number = RETRY_MAX_MS,
+): number => Math.min(maxMs, baseMs * 2 ** Math.max(0, failures - 1));
+
 interface TgResponse<T> {
   ok: boolean;
   result?: T;
@@ -81,12 +99,23 @@ export interface TelegramServiceOptions {
   // 불필요하지만 송신엔 필요.
   chatId: string;
   logger?: FastifyBaseLogger;
+  // 시간 상수 — 테스트가 줄여 쓴다. 기본은 위 상수.
+  timing?: Partial<TelegramTiming>;
+}
+
+interface TelegramTiming {
+  pollTimeoutSec: number;
+  pollGraceMs: number;
+  sendTimeoutMs: number;
+  retryBaseMs: number;
+  retryMaxMs: number;
 }
 
 export class TelegramService {
   private botToken: string;
   private chatId: string;
   private readonly logger?: FastifyBaseLogger;
+  private readonly timing: TelegramTiming;
 
   private handler: TelegramCallbackHandler | null = null;
   private msgHandler: TelegramMessageHandler | null = null;
@@ -95,11 +124,22 @@ export class TelegramService {
   private pollAbort: AbortController | null = null;
   // 폴링 세대 — reconfigure 로 폴러를 갈아끼울 때 옛 루프가 살아남지 않게 한다.
   private pollGen = 0;
+  // 핸들러 직렬 큐 — 폴링 루프는 핸들러(크롤 완료 대기 등 수 분)를 기다리지 않고 다음 업데이트를 받는다.
+  // 핸들러끼리는 예전처럼 도착 순서대로 하나씩(random-crawl 핸들러가 동시 실행을 가정하지 않는다).
+  private dispatchChain: Promise<void> = Promise.resolve();
 
   constructor(opts: TelegramServiceOptions) {
     this.botToken = opts.botToken.trim();
     this.chatId = opts.chatId.trim();
     this.logger = opts.logger;
+    this.timing = {
+      pollTimeoutSec: POLL_TIMEOUT_SEC,
+      pollGraceMs: POLL_GRACE_MS,
+      sendTimeoutMs: SEND_TIMEOUT_MS,
+      retryBaseMs: RETRY_BASE_MS,
+      retryMaxMs: RETRY_MAX_MS,
+      ...opts.timing,
+    };
   }
 
   // 토큰+chat id 가 모두 있어야 동작. UI 가 경고를 노출하는 근거.
@@ -222,7 +262,11 @@ export class TelegramService {
   async verifyBot(): Promise<{ ok: boolean; username: string | null; error: string | null }> {
     if (!this.botToken) return { ok: false, username: null, error: '토큰이 없습니다.' };
     try {
-      const res = await fetch(`${API_BASE}/bot${this.botToken}/getMe`);
+      const res = await fetchWithTimeout(
+        `${API_BASE}/bot${this.botToken}/getMe`,
+        {},
+        this.timing.sendTimeoutMs,
+      );
       const json = (await res.json()) as TgResponse<{ username?: string }>;
       if (!json.ok) return { ok: false, username: null, error: json.description ?? 'getMe 실패' };
       return { ok: true, username: json.result?.username ?? null, error: null };
@@ -237,8 +281,10 @@ export class TelegramService {
       return { ok: false, label: null, error: 'chat id 가 없습니다.' };
     }
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `${API_BASE}/bot${this.botToken}/getChat?chat_id=${encodeURIComponent(this.chatId)}`,
+        {},
+        this.timing.sendTimeoutMs,
       );
       const json = (await res.json()) as TgResponse<{
         first_name?: string;
@@ -278,7 +324,7 @@ export class TelegramService {
     await sleep(300); // 진행 중이던 롱폴이 취소되도록 잠깐 양보.
     try {
       const url = `${API_BASE}/bot${this.botToken}/getUpdates?timeout=${timeoutSec}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`;
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, {}, timeoutSec * 1000 + this.timing.pollGraceMs);
       const json = (await res.json()) as TgResponse<TgUpdate[]>;
       const out = new Map<number, { chatId: string; name: string; type: string }>();
       for (const u of json.result ?? []) {
@@ -326,47 +372,59 @@ export class TelegramService {
   }
 
   private async loop(gen: number): Promise<void> {
+    let failures = 0;
     while (this.polling && gen === this.pollGen) {
       const abort = new AbortController();
       this.pollAbort = abort;
       try {
-        const updates = await this.getUpdates(this.offset, 30, abort.signal);
+        const updates = await this.getUpdates(this.offset, this.timing.pollTimeoutSec, abort.signal);
+        failures = 0;
         for (const u of updates) {
           this.offset = u.update_id + 1;
           const cq = u.callback_query;
           if (cq?.message && typeof cq.data === 'string') {
-            await this.dispatch({
+            const cb: TelegramCallback = {
               callbackQueryId: cq.id,
               chatId: String(cq.message.chat.id),
               messageId: cq.message.message_id,
               data: cq.data,
-            });
+            };
+            this.enqueue(() => this.dispatch(cb));
             continue;
           }
           // 텍스트 커맨드(/discover 등). 권한: 설정된 chat 에서 온 것만.
           // staleness: 재시작 후 텔레그램이 재전송하는 옛 메시지가 새 회차를
           // 트리거하지 않도록 60초 넘은 건 무시(콜백은 awaiting 복구용이라 제외).
+          // 받은 시점 기준으로 거른다 — 앞 핸들러가 오래 걸려도 정상 메시지가 버려지지 않게.
           const msg = u.message;
           if (msg && typeof msg.text === 'string' && msg.text.length > 0) {
             if (String(msg.chat.id) !== this.chatId) continue;
             if (msg.date != null && Date.now() / 1000 - msg.date > 60) continue;
-            await this.dispatchMessage({
+            const m: TelegramMessage = {
               chatId: String(msg.chat.id),
               text: msg.text,
               replyToText: msg.reply_to_message?.text,
-            });
+            };
+            this.enqueue(() => this.dispatchMessage(m));
           }
         }
       } catch (e) {
         // stop/reconfigure 로 인한 취소거나 세대가 교체됐으면 즉시 종료.
         if (abort.signal.aborted || !this.polling || gen !== this.pollGen) break;
+        failures += 1;
+        const delayMs = nextRetryDelayMs(failures, this.timing.retryBaseMs, this.timing.retryMaxMs);
         this.logger?.warn(
-          { err: e instanceof Error ? e.message : String(e) },
-          '[telegram] getUpdates 실패 — 2초 후 재시도',
+          { err: e instanceof Error ? e.message : String(e), failures, retryInMs: delayMs },
+          '[telegram] getUpdates 실패 — 대기 후 재시도',
         );
-        await sleep(2000);
+        await sleep(delayMs);
       }
     }
+  }
+
+  // dispatch/dispatchMessage 는 핸들러 오류를 삼키므로 체인이 끊기지 않는다.
+  private enqueue(task: () => Promise<void>): void {
+    this.dispatchChain = this.dispatchChain.then(task);
   }
 
   private async dispatch(cb: TelegramCallback): Promise<void> {
@@ -397,8 +455,14 @@ export class TelegramService {
     signal: AbortSignal,
   ): Promise<TgUpdate[]> {
     const url = `${API_BASE}/bot${this.botToken}/getUpdates?offset=${offset}&timeout=${timeoutSec}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`;
-    // fetch 자체 타임아웃은 롱폴 timeout 보다 넉넉히.
-    const res = await fetch(url, { signal });
+    // stop/reconfigure 취소 + 자체 상한(롱폴 대기보다 넉넉히). 신호가 본문 읽기까지 걸려 있어 응답이 반쯤
+    // 오다 멈춰도 끝난다.
+    const res = await fetch(url, {
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(timeoutSec * 1000 + this.timing.pollGraceMs),
+      ]),
+    });
     const json = (await res.json()) as TgResponse<TgUpdate[]>;
     if (!json.ok) throw new Error(json.description ?? 'getUpdates not ok');
     return json.result ?? [];
@@ -410,11 +474,15 @@ export class TelegramService {
     body: Record<string, unknown>,
   ): Promise<T | null> {
     try {
-      const res = await fetch(`${API_BASE}/bot${this.botToken}/${method}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await fetchWithTimeout(
+        `${API_BASE}/bot${this.botToken}/${method}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        this.timing.sendTimeoutMs,
+      );
       const json = (await res.json()) as TgResponse<T>;
       if (!json.ok) {
         this.logger?.warn(

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FileEdit, Loader2, Plus, Receipt, Trash2 } from 'lucide-react';
-import type { SettlementDraftType } from '@repo/api-contract';
+import type { SettlementDraftMetaType } from '@repo/api-contract';
 import {
   ApiError,
   useDeleteSettlement,
@@ -337,9 +337,9 @@ const DraftsSection = ({
   deletingId,
   onDelete,
 }: {
-  drafts: SettlementDraftType[];
+  drafts: SettlementDraftMetaType[];
   deletingId: string | null;
-  onDelete: (d: SettlementDraftType) => void;
+  onDelete: (d: SettlementDraftMetaType) => void;
 }) => (
   <section className="mb-4">
     <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">

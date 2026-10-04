@@ -19,7 +19,7 @@ import {
   type Theme,
 } from '@repo/shared';
 import type {
-  SettlementDraftType,
+  SettlementDraftMetaType,
   SettlementSessionSummaryType,
 } from '@repo/api-contract';
 
@@ -61,7 +61,7 @@ export default function SettlementHistoryScreen() {
     );
   };
 
-  const confirmDeleteDraft = (d: SettlementDraftType) => {
+  const confirmDeleteDraft = (d: SettlementDraftMetaType) => {
     Alert.alert(
       '임시저장 삭제',
       '이 임시저장을 삭제할까요?',
@@ -287,7 +287,7 @@ const DraftRow = ({
   onDelete,
   theme,
 }: {
-  draft: SettlementDraftType;
+  draft: SettlementDraftMetaType;
   isDeleting: boolean;
   onPress: () => void;
   onDelete: () => void;

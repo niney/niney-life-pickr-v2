@@ -100,10 +100,31 @@ interface RunContext {
   feature: OperationFeatureType;
   jobId: string | null;
   subjectId: string | null;
+  parentRunId: string | null;
   // 자동 분석 게이트용 — trigger='user'(일반 사용자 요청) 실패는 LLM 분석을
   // 띄우지 않는다.
   trigger: string | null;
   meta: Record<string, unknown> | undefined;
+  startedAt: Date;
+  // run 행이 DB 에 있는지. startRun 의 INSERT 가 실패하면(다른 연결의 긴 쓰기 락으로 busy 대기 초과 등)
+  // 이 runId 로의 스텝 로그 INSERT 는 전부 FK(runId) 위반, finishRun UPDATE 는 "No record" 로 실패한다
+  // — 운영 stderr 의 persist failed 폭주(10/4 03:03)가 이것. 행이 없으면 스텝 로그를 쓰지 않고, 간격을
+  // 두고 run 행을 다시 만들어 본다(마지막 기회는 finishRun 이 최종 상태로 INSERT).
+  persisted: boolean;
+  retry: Promise<boolean> | null;
+  lastAttemptAt: number;
+  droppedLogs: number;
+}
+
+// run 행 재생성 시도 최소 간격 — 락이 길게 이어지는 동안 스텝 로그마다 INSERT 를 쏘지 않게.
+const RUN_ROW_RETRY_GAP_MS = 5_000;
+
+interface RunFinalFields {
+  status: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  meta?: string | null;
+  finishedAt: Date;
 }
 
 const capMessage = (message: string): string =>
@@ -168,31 +189,67 @@ export class OperationLogService {
   // 반환해 호출자의 비즈니스 흐름(스텝 log/finishRun)이 계속되게 한다.
   async startRun(input: StartRunInput): Promise<string> {
     const id = randomUUID();
-    this.contexts.set(id, {
+    const ctx: RunContext = {
       feature: input.feature,
       jobId: input.jobId ?? null,
       subjectId: input.subjectId ?? null,
+      parentRunId: input.parentRunId ?? null,
       trigger: input.trigger ?? null,
       meta: input.meta,
-    });
+      startedAt: new Date(),
+      persisted: false,
+      retry: null,
+      lastAttemptAt: Date.now(),
+      droppedLogs: 0,
+    };
+    this.contexts.set(id, ctx);
+    ctx.persisted = await this.createRunRow(id, ctx, null, 'startRun');
+    return id;
+  }
+
+  // run 행 INSERT. final 이 있으면 종료 상태까지 한 번에(finishRun 의 늦은 생성). 이미 있으면(앞선
+  // INSERT 가 커밋된 뒤 응답만 실패) 성공으로 본다.
+  private async createRunRow(
+    id: string,
+    ctx: RunContext,
+    final: RunFinalFields | null,
+    phase: 'startRun' | 'retry' | 'finishRun',
+  ): Promise<boolean> {
     try {
       await this.prisma.operationRun.create({
         data: {
           id,
-          feature: input.feature,
-          jobId: input.jobId ?? null,
-          subjectId: input.subjectId ?? null,
-          parentRunId: input.parentRunId ?? null,
-          trigger: input.trigger ?? null,
-          meta: serializeMeta(input.meta),
+          feature: ctx.feature,
+          jobId: ctx.jobId,
+          subjectId: ctx.subjectId,
+          parentRunId: ctx.parentRunId,
+          trigger: ctx.trigger,
+          meta: serializeMeta(ctx.meta),
+          startedAt: ctx.startedAt,
+          ...(final ?? {}),
         },
       });
+      return true;
     } catch (err) {
+      if ((err as { code?: unknown }).code === 'P2002') return true;
       // DB 실패는 콘솔에만 — 무한 루프 방지를 위해 logger 도 거치지 않음.
-       
-      console.error('[operation-log] startRun persist failed', err);
+      console.error(`[operation-log] ${phase} persist failed`, err);
+      return false;
     }
-    return id;
+  }
+
+  // run 행이 없을 때 스텝 로그 전에 한 번 더 만들어 본다 — 동시에 한 번, 직전 시도에서 간격이 지났을 때만.
+  private ensureRunRow(id: string, ctx: RunContext): Promise<boolean> {
+    if (ctx.persisted) return Promise.resolve(true);
+    if (ctx.retry) return ctx.retry;
+    if (Date.now() - ctx.lastAttemptAt < RUN_ROW_RETRY_GAP_MS) return Promise.resolve(false);
+    ctx.lastAttemptAt = Date.now();
+    ctx.retry = this.createRunRow(id, ctx, null, 'retry').then((ok) => {
+      ctx.persisted = ok;
+      ctx.retry = null;
+      return ok;
+    });
+    return ctx.retry;
   }
 
   // 스텝 로그. 동기 시그니처 — DB 쓰기는 fire-and-forget.
@@ -288,24 +345,30 @@ export class OperationLogService {
       );
       return;
     }
-    const write = this.prisma.operationLog
-      .create({
-        data: {
-          runId: input.runId,
-          feature: ctx.feature,
-          jobId,
-          subjectId,
-          stage: input.stage,
-          level: input.level,
-          message,
-          meta: serializeMeta(input.meta),
-          createdAt: at,
-        },
-      })
-      .catch((err) => {
-
+    const data = {
+      runId: input.runId,
+      feature: ctx.feature,
+      jobId,
+      subjectId,
+      stage: input.stage,
+      level: input.level,
+      message,
+      meta: serializeMeta(input.meta),
+      createdAt: at,
+    };
+    const insert = () =>
+      this.prisma.operationLog.create({ data }).catch((err) => {
         console.error('[operation-log] persist failed', err);
       });
+    // run 행이 없으면 INSERT 는 FK 위반뿐이다 — 행을 다시 만들어 보고, 그래도 없으면 건너뛴다
+    // (pino/SSE 흔적은 위에서 이미 남았다).
+    const write = ctx.persisted
+      ? insert()
+      : this.ensureRunRow(input.runId, ctx).then((ok) => {
+          if (ok) return insert();
+          ctx.droppedLogs += 1;
+          return undefined;
+        });
     this.trackPendingWrite(input.runId, write);
   }
 
@@ -334,26 +397,30 @@ export class OperationLogService {
   async finishRun(runId: string, input: FinishRunInput): Promise<void> {
     const ctx = this.contexts.get(runId);
     this.contexts.delete(runId);
-    const hasMeta = ctx?.meta !== undefined || input.meta !== undefined;
+    // 진행 중 재생성 시도가 있으면 그 결과를 보고 UPDATE/INSERT 를 고른다.
+    if (ctx?.retry) await ctx.retry;
+    // 행이 늦게 생겨 DB 에 못 남긴 스텝 로그 수 — 타임라인이 비어 보이는 이유.
+    const dropped = ctx && ctx.droppedLogs > 0 ? { logsDropped: ctx.droppedLogs } : undefined;
+    const hasMeta = ctx?.meta !== undefined || input.meta !== undefined || dropped !== undefined;
     const mergedMeta = hasMeta
-      ? { ...(ctx?.meta ?? {}), ...(input.meta ?? {}) }
+      ? { ...(ctx?.meta ?? {}), ...(input.meta ?? {}), ...(dropped ?? {}) }
       : undefined;
-    try {
-      await this.prisma.operationRun.update({
-        where: { id: runId },
-        data: {
-          status: input.status,
-          errorCode: input.errorCode ?? null,
-          errorMessage: input.errorMessage
-            ? input.errorMessage.slice(0, ERROR_MESSAGE_CAP)
-            : null,
-          ...(mergedMeta !== undefined ? { meta: serializeMeta(mergedMeta) } : {}),
-          finishedAt: new Date(),
-        },
-      });
-    } catch (err) {
-
-      console.error('[operation-log] finishRun persist failed', err);
+    const final: RunFinalFields = {
+      status: input.status,
+      errorCode: input.errorCode ?? null,
+      errorMessage: input.errorMessage ? input.errorMessage.slice(0, ERROR_MESSAGE_CAP) : null,
+      ...(mergedMeta !== undefined ? { meta: serializeMeta(mergedMeta) } : {}),
+      finishedAt: new Date(),
+    };
+    if (ctx && !ctx.persisted) {
+      // startRun 때 못 만든 run 행 — UPDATE 대신 최종 상태로 INSERT(마지막 기회).
+      await this.createRunRow(runId, ctx, final, 'finishRun');
+    } else {
+      try {
+        await this.prisma.operationRun.update({ where: { id: runId }, data: final });
+      } catch (err) {
+        console.error('[operation-log] finishRun persist failed', err);
+      }
     }
 
     // fire-and-forget INSERT 와의 경합 차단 — 마지막 error 로그가 DB 에
@@ -425,9 +492,24 @@ export const DEFAULT_LOG_RETENTION_DAYS = 30;
 //  - run 헤더: cutoff 이전 + 종료됨 + 보고서 없음 만 삭제 (cascade).
 //    done 보고서 있는 run 은 영구 보존(헤더+보고서만 남고 스텝 로그는 소멸),
 //    running run 은 건드리지 않는다 (부팅 sweep 의 몫).
+// 정리는 LIMIT 배치로 나눠 지운다 — 한 문장 DELETE 는 지울 행 수만큼 쓰기 락을 쥔다(20만 행 1.3~2.8초,
+// 하루치 플러드면 수십 초). 그동안 다른 연결의 쓰기는 busy 대기하다 5초에 database is locked 로 실패하고,
+// 그 실패가 startRun 이면 스텝 로그 FK 위반 폭주로 번진다. 배치 사이에 잠깐 쉬어 대기 중인 쓰기가 끼어들게 한다.
+const CLEANUP_LOG_BATCH = 5_000;
+// run 삭제는 남은(보존 기간 안쪽) 스텝 로그를 cascade 로 함께 지우므로 더 작게.
+const CLEANUP_RUN_BATCH = 1_000;
+const CLEANUP_PAUSE_MS = 50;
+
+export interface CleanupOptions {
+  logBatch?: number;
+  runBatch?: number;
+  pauseMs?: number;
+}
+
 export const cleanupExpiredOperationLogs = async (
   prisma: PrismaClient,
   log?: FastifyBaseLogger | null,
+  opts: CleanupOptions = {},
 ): Promise<{
   logs: number;
   runs: number;
@@ -437,12 +519,21 @@ export const cleanupExpiredOperationLogs = async (
   const cfg = await prisma.logConfig.findUnique({ where: { key: 'global' } });
   const retentionDays = cfg?.retentionDays ?? DEFAULT_LOG_RETENTION_DAYS;
   const cutoff = new Date(Date.now() - retentionDays * 86_400_000);
-  const logs = await prisma.operationLog.deleteMany({
-    where: { createdAt: { lt: cutoff } },
-  });
-  // 본문 없는(미완) 보고서를 먼저 비워야 아래 run deleteMany 의
-  // report:null 조건에 걸려 run 헤더까지 정리된다. running run 의 보고서는
-  // 건드리지 않는다 — 진행 중 분석일 수 있다.
+  // Prisma 는 SQLite DateTime 을 epoch ms 정수로 저장한다 — 원시 SQL 비교도 같은 단위로.
+  const cutoffMs = cutoff.getTime();
+  const logBatch = opts.logBatch ?? CLEANUP_LOG_BATCH;
+  const runBatch = opts.runBatch ?? CLEANUP_RUN_BATCH;
+  const pauseMs = opts.pauseMs ?? CLEANUP_PAUSE_MS;
+
+  const logs = await deleteInBatches(logBatch, pauseMs, () =>
+    prisma.$executeRaw`
+      DELETE FROM operation_logs WHERE id IN (
+        SELECT id FROM operation_logs WHERE createdAt < ${cutoffMs} LIMIT ${logBatch}
+      )`,
+  );
+  // 본문 없는(미완) 보고서를 먼저 비워야 아래 run 삭제의 "보고서 없음"
+  // 조건에 걸려 run 헤더까지 정리된다. running run 의 보고서는
+  // 건드리지 않는다 — 진행 중 분석일 수 있다. (보고서는 실패 run 당 1개라 적다.)
   const reports = await prisma.operationReport.deleteMany({
     where: {
       status: { not: 'done' },
@@ -450,23 +541,40 @@ export const cleanupExpiredOperationLogs = async (
       run: { status: { not: 'running' } },
     },
   });
-  const runs = await prisma.operationRun.deleteMany({
-    where: {
-      startedAt: { lt: cutoff },
-      status: { not: 'running' },
-      report: { is: null },
-    },
-  });
-  if (logs.count > 0 || runs.count > 0 || reports.count > 0) {
+  const runs = await deleteInBatches(runBatch, pauseMs, () =>
+    prisma.$executeRaw`
+      DELETE FROM operation_runs WHERE id IN (
+        SELECT r.id FROM operation_runs r
+        WHERE r.startedAt < ${cutoffMs}
+          AND r.status <> 'running'
+          AND NOT EXISTS (SELECT 1 FROM operation_reports p WHERE p.runId = r.id)
+        LIMIT ${runBatch}
+      )`,
+  );
+  if (logs > 0 || runs > 0 || reports.count > 0) {
     log?.info(
-      { logs: logs.count, runs: runs.count, reports: reports.count, retentionDays },
+      { logs, runs, reports: reports.count, retentionDays },
       '[operation-log] retention cleanup done',
     );
   }
   return {
-    logs: logs.count,
-    runs: runs.count,
+    logs,
+    runs,
     reports: reports.count,
     retentionDays,
   };
+};
+
+const deleteInBatches = async (
+  batch: number,
+  pauseMs: number,
+  deleteOnce: () => Promise<number>,
+): Promise<number> => {
+  let total = 0;
+  for (;;) {
+    const n = await deleteOnce();
+    total += n;
+    if (n < batch) return total;
+    await new Promise((r) => setTimeout(r, pauseMs));
+  }
 };

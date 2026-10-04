@@ -1,5 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { PrismaClient } from '@prisma/client';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -17,6 +18,8 @@ import {
   normalizeCategoryPath,
 } from './analytics.service.js';
 import { useIsolatedDatabase, type IsolatedDatabase } from '../../test-utils/temp-db.js';
+import { seedAuthUsers } from '../../test-utils/seed-users.js';
+import { buildApp as buildFullApp } from '../../app.js';
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -560,6 +563,111 @@ describe('AnalyticsService.runGlobalMerge', () => {
     expect(chunks.some((c) => c.pass === 1)).toBe(true);
     expect(chunks.some((c) => c.pass === 2)).toBe(true);
   });
+
+  // G-4 — 매일 03:00 증분 경로는 미링크 1건만 있어도 전 키를 다시 저장한다. 값이 같은 키까지 키마다
+  // UPDATE 하면 3,000키에 쓰기 락 1.3초 — 바뀐 키만 UPDATE, 나머지는 updatedAt 묶음 갱신.
+  it('재저장: 값이 같은 키는 키별 UPDATE 를 생략하고, updatedAt 은 묶음으로 이번 머지 시각', async () => {
+    const tag = stamp();
+    const names = Array.from({ length: 6 }, (_, i) => `재저장${i}${tag}`);
+    await seedRestaurant(
+      app,
+      names.map((n) => ({
+        name: n,
+        nameNorm: n,
+        canonicalName: n,
+        canonicalNorm: n,
+        mentions: [{ sentiment: 'positive' as const }],
+      })),
+    );
+    let pathFor = (v: string) => `기타 > ${v}`;
+    const provider: LLMProvider = {
+      complete: async ({ prompt }) => {
+        const arr = JSON.parse(prompt.slice(prompt.indexOf('['))) as string[];
+        const mappings = arr.map((v) => ({ variant: v, canonical: v, categoryPath: pathFor(v) }));
+        return { text: JSON.stringify({ mappings }), model: 'm', promptTokens: 1, completionTokens: 1 };
+      },
+    };
+    // 쿼리를 세려고 같은 (격리) DB 에 붙는 별도 클라이언트를 쓴다.
+    const qp = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+    const queries: string[] = [];
+    qp.$on('query', (e) => queries.push(e.query));
+    try {
+      const service = new AnalyticsService(qp, aiConfig, {
+        resolveOverride: async () => ({ provider, model: `m-${tag}` }),
+      });
+      await service.runGlobalMerge({ full: true });
+      const first = await app.prisma.globalMenuCanonical.findMany({
+        where: { displayName: { in: names } },
+        select: { id: true, updatedAt: true, categoryPath: true },
+      });
+      expect(first).toHaveLength(6);
+
+      // Prisma SQLite 는 식별자를 백틱으로 감싼다.
+      const perKeyUpdates = () =>
+        queries.filter((q) => /^UPDATE .global_menu_canonicals. SET .*displayName/.test(q.replace('`main`.', ''))).length;
+      const touchUpdates = () =>
+        queries.filter((q) => /^UPDATE .global_menu_canonicals. SET .updatedAt. = \? WHERE/.test(q.replace('`main`.', ''))).length;
+
+      // 2차 — 같은 결과: 키별 UPDATE 0, updatedAt 묶음 갱신만.
+      queries.length = 0;
+      await new Promise((r) => setTimeout(r, 5));
+      await service.runGlobalMerge({ full: true });
+      expect(perKeyUpdates()).toBe(0);
+      expect(touchUpdates()).toBeGreaterThanOrEqual(1);
+      const second = await app.prisma.globalMenuCanonical.findMany({
+        where: { displayName: { in: names } },
+        select: { id: true, updatedAt: true, categoryPath: true },
+      });
+      const firstMax = Math.max(...first.map((r) => r.updatedAt.getTime()));
+      // 모든 행이 이번 머지 시각으로 — lastGlobalMergeAt(max updatedAt)이 앞으로 간다.
+      expect(second.every((r) => r.updatedAt.getTime() > firstMax)).toBe(true);
+      expect(second.map((r) => r.categoryPath).sort()).toEqual(first.map((r) => r.categoryPath).sort());
+
+      // 3차 — 한 키의 categoryPath 만 바뀜: 그 키만 키별 UPDATE.
+      queries.length = 0;
+      const changed = names[0]!;
+      pathFor = (v) => (v === changed ? `찌개·전골 > ${v}` : `기타 > ${v}`);
+      await app.prisma.globalMergeChunkCache.deleteMany({});
+      await service.runGlobalMerge({ full: true });
+      expect(perKeyUpdates()).toBe(1);
+      const row = await app.prisma.globalMenuCanonical.findFirst({ where: { displayName: changed } });
+      expect(row?.categoryPath).toBe(`찌개·전골 > ${changed}`);
+    } finally {
+      await qp.$disconnect();
+    }
+  });
+
+  // G-V2 — 같은 인스턴스(app.analytics)의 두 번째 머지는 진행 중 머지와 겹치지 않고 busy 로 끝난다.
+  it('진행 중 머지가 있으면 같은 인스턴스의 다음 호출은 busy 결과로 건너뛴다', async () => {
+    await seedRestaurant(app, [
+      { name: 'X', nameNorm: 'x', canonicalName: 'X', canonicalNorm: 'x', mentions: [] },
+    ]);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const provider: LLMProvider = {
+      complete: async ({ prompt }) => {
+        await gate;
+        const arr = JSON.parse(prompt.slice(prompt.indexOf('['))) as string[];
+        return {
+          text: JSON.stringify({ mappings: arr.map((v) => ({ variant: v, canonical: v, categoryPath: null })) }),
+          model: 'm',
+          promptTokens: 1,
+          completionTokens: 1,
+        };
+      },
+    };
+    const service = new AnalyticsService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider, model: 'busy-m' }),
+    });
+    const first = service.runGlobalMerge({ full: true });
+    await new Promise((r) => setTimeout(r, 20));
+    const second = await service.runGlobalMerge({ full: false });
+    expect(second.busy).toBe(true);
+    release();
+    const done = await first;
+    expect(done.busy).toBeUndefined();
+    expect(done.finalGroupCount).toBeGreaterThan(0);
+  });
 });
 
 describe('AnalyticsService.getGlobalMenus / getOverview', () => {
@@ -922,5 +1030,60 @@ describe('normalizeCategoryPath', () => {
     expect(normalizeCategoryPath('   ')).toBeNull();
     expect(normalizeCategoryPath(null)).toBeNull();
     expect(normalizeCategoryPath(123)).toBeNull();
+  });
+});
+
+// G-V2 — 스케줄러와 어드민 라우트가 같은 AnalyticsService 를 쓴다(상호배제·통계 캐시 공유).
+describe('app.analytics 싱글톤', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = await buildFullApp();
+    await app.ready();
+    await seedAuthUsers(app, [{ id: 'an-merge-admin', role: 'ADMIN' }]);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('스케줄 서비스가 쓰는 인스턴스가 app.analytics 와 같다', () => {
+    expect(app.analytics).toBeInstanceOf(AnalyticsService);
+    const deps = (app.schedule as unknown as { deps: { analytics: unknown } }).deps;
+    expect(deps.analytics).toBe(app.analytics);
+  });
+
+  it('스케줄 머지가 진행 중이면 어드민 머지 잡은 busy 사유로 실패한다(0개 done 이 아니라)', async () => {
+    const spy = vi.spyOn(app.analytics, 'runGlobalMerge').mockResolvedValue({
+      inputCount: 0,
+      finalGroupCount: 0,
+      totalChunks: 0,
+      doneChunks: 0,
+      failedChunks: 0,
+      model: '',
+      version: 1,
+      busy: true,
+    });
+    try {
+      const token = app.jwt.sign({ userId: 'an-merge-admin', email: 'a@x.com', role: 'ADMIN' });
+      const headers = { authorization: `Bearer ${token}` };
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/analytics/global-merge-jobs',
+        headers,
+        payload: { full: false },
+      });
+      expect(res.statusCode).toBe(200);
+      const { jobId } = res.json() as { jobId: string };
+      await new Promise((r) => setTimeout(r, 20));
+      const snap = await app.inject({
+        method: 'GET',
+        url: `/api/v1/admin/analytics/global-merge-jobs/${jobId}`,
+        headers,
+      });
+      expect(snap.json()).toMatchObject({ state: 'failed', errorCode: 'busy' });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

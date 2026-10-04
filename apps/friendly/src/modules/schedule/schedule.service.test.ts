@@ -181,4 +181,36 @@ describe('ScheduleService', () => {
 
     expect(result.status).toBe('done');
   });
+
+  // G-V2 — 같은 AnalyticsService 에서 어드민 머지가 돌고 있으면 스케줄 머지는 busy 로 건너뛰고 run 은 done.
+  it('records a skipped merge step when another merge holds the shared analytics service', async () => {
+    menuGrouping.getRestaurantsStatus.mockResolvedValue({
+      items: [],
+      total: 0,
+      totalRestaurants: 0,
+      attentionCount: 0,
+      page: 1,
+      pageSize: 200,
+    });
+    analytics.runGlobalMerge.mockResolvedValue({ finalGroupCount: 0, busy: true });
+    const steps: Array<{ stage: string; message: string; meta?: Record<string, unknown> }> = [];
+    const operationLog = {
+      startRun: vi.fn(async () => 'op-run'),
+      log: vi.fn((input: { stage: string; message: string; meta?: Record<string, unknown> }) => {
+        steps.push(input);
+      }),
+      finishRun: vi.fn(async () => undefined),
+    };
+    const svc = new ScheduleService(prisma, {
+      menuGrouping: menuGrouping as unknown as MenuGroupingService,
+      analytics: analytics as unknown as AnalyticsService,
+      operationLog: operationLog as never,
+    });
+
+    const result = await svc.runScheduled('cron');
+
+    expect(result.status).toBe('done');
+    expect(steps.some((s) => s.stage === 'merge' && s.meta?.skipped === 'busy')).toBe(true);
+    expect(steps.some((s) => s.message === '글로벌 머지 완료')).toBe(false);
+  });
 });

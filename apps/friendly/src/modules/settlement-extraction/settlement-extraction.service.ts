@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
-import sharp from 'sharp';
-import heicConvert from 'heic-convert';
+import type Sharp from 'sharp';
 import {
   ReceiptItem,
   matchDrinkKind,
@@ -25,6 +25,12 @@ import {
   EXTRACTION_VERSION,
   buildExtractionUserPrompt,
 } from './settlement-extraction.prompts.js';
+import { HeicBusyError, MAX_HEIC_PIXELS, decodeHeicToJpeg, heifDimensions } from './receipt-heic.js';
+
+// sharp 는 부팅 RSS 를 키우는 네이티브 의존성이라 첫 업로드 때 불러온다(PLAN-perf-2 X-3).
+let sharpModule: Promise<typeof Sharp> | null = null;
+const loadSharp = (): Promise<typeof Sharp> =>
+  (sharpModule ??= import('sharp').then((m) => m.default));
 
 // 영수증 이미지 한 변 최대 길이 — vision 모델 토큰 비용을 줄이려 큰 해상도는
 // 다운스케일. 가독성을 위해 단 변 기준 1600px 까진 유지.
@@ -54,7 +60,11 @@ export class SettlementExtractionError extends Error {
       | 'image_not_found'
       | 'invalid_image'
       | 'invalid_token'
-      | 'llm_failed',
+      | 'llm_failed'
+      // HEIC 변환 대기열이 가득 참(동시 1개 + 짧은 대기열).
+      | 'busy'
+      // 사용자 일일 추출 한도 초과.
+      | 'quota',
     message: string,
   ) {
     super(message);
@@ -75,6 +85,9 @@ export interface SettlementExtractionServiceOptions {
   // 작업 로그 계측 (extract 1회 = run 1개). 미주입(테스트 등) 시 계측 생략 —
   // 추출 흐름은 계측 없이도 동일하게 동작해야 한다.
   operationLog?: OperationLogService | null;
+  // 사용자 일일 추출 한도 — 이미지·모델 확인을 통과한 뒤 비전 호출 직전에만 1회 소비한다(잘못된 토큰·
+  // 모델 미설정은 차감하지 않는다). 라우트가 SQLite 원자 카운터를 주입한다. false 면 quota.
+  consumeQuota?: (userId: string) => Promise<boolean>;
 }
 
 // 측정용 디버그 덤프 스위치. 정확도를 정량화하려면 raw LLM 응답을 모아야 하는데
@@ -157,6 +170,7 @@ export class SettlementExtractionService {
 
   // sharp 로 JPEG 정규화 + 다운스케일. 디코드 실패 시 throw (호출자가 처리).
   private async normalizeToJpeg(buffer: Buffer): Promise<Buffer> {
+    const sharp = await loadSharp();
     return sharp(buffer, { failOn: 'none' })
       .rotate() // EXIF 방향 정규화
       .resize({
@@ -178,17 +192,28 @@ export class SettlementExtractionService {
     } catch (e) {
       // sharp 가 못 읽는 경우 — 아이폰 앨범 원본 HEIC(HEVC) 가 대표적. sharp
       // prebuilt 에는 HEVC 디코더(libde265)가 없어 디코드 불가. HEIF 컨테이너로
-      // 보이면 heic-convert(libheif JS)로 JPEG 변환 후 재시도. (AVIF 는 sharp 가
-      // 위에서 이미 처리하므로 여기 안 온다. PDF 등은 ftyp 가 아니라 바로 거부.)
+      // 보이면 heic-convert(libheif JS)로 JPEG 변환 후 재시도 — 요청 스레드를 막지 않게
+      // 일회용 worker 에서(receipt-heic.ts). (AVIF 는 sharp 가 위에서 이미 처리하므로
+      // 여기 안 온다. PDF 등은 ftyp 가 아니라 바로 거부.)
       if (looksLikeHeif(buffer)) {
+        // 디코드 전에 선언된 해상도부터 — 수백 MB 를 쓰는 초대형(48MP·조작 헤더)은 풀지 않는다.
+        const dims = heifDimensions(buffer);
+        if (dims && dims.width * dims.height > MAX_HEIC_PIXELS) {
+          this.log?.warn(dims, '[settlement-extraction] HEIC too large — rejected before decode');
+          throw new SettlementExtractionError(
+            'invalid_image',
+            '사진 해상도가 너무 큽니다(최대 2,500만 화소). 해상도를 줄이거나 JPEG 로 저장해 올려 주세요.',
+          );
+        }
         try {
-          const jpegArrayBuf = await heicConvert({
-            buffer,
-            format: 'JPEG',
-            quality: 0.92,
-          });
-          processed = await this.normalizeToJpeg(Buffer.from(jpegArrayBuf));
+          processed = await this.normalizeToJpeg(await decodeHeicToJpeg(buffer));
         } catch (heicErr) {
+          if (heicErr instanceof HeicBusyError) {
+            throw new SettlementExtractionError(
+              'busy',
+              '사진 변환이 밀려 있습니다. 잠시 후 다시 올려 주세요.',
+            );
+          }
           this.log?.warn(
             { error: heicErr instanceof Error ? heicErr.message : String(heicErr) },
             '[settlement-extraction] HEIC convert failed',
@@ -239,6 +264,7 @@ export class SettlementExtractionService {
     split: { count: number; index: number } | undefined,
   ): Promise<Buffer> {
     if (!split || split.count <= 1) return buffer;
+    const sharp = await loadSharp();
     const image = sharp(buffer, { failOn: 'none' });
     const meta = await image.metadata();
     const totalWidth = meta.width;
@@ -283,6 +309,8 @@ export class SettlementExtractionService {
     // 작업 로그 run 의 subjectId 로만 쓰는 식당 식별자 — 영수증 내용이 아닌
     // 공개 식당 ID 라 기록해도 개인정보가 아니다.
     placeId?: string | null;
+    // 일일 한도 소비 키로만 쓴다 — run/스텝 meta 에는 절대 싣지 않는다(아래 개인정보 가드).
+    userId?: string | null;
   }): Promise<ExtractReceiptResultType> {
     const oplog = this.opts.operationLog ?? null;
     const runStartedAt = Date.now();
@@ -352,6 +380,11 @@ export class SettlementExtractionService {
       step('resolveProvider', 'info', `vision 모델 결정: ${model}`, { model });
 
       currentStage = 'vision';
+      if (input.userId && this.opts.consumeQuota && !(await this.opts.consumeQuota(input.userId))) {
+        failure = { errorCode: 'quota', errorMessage: '일일 영수증 추출 한도 초과' };
+        step('vision', 'warn', failure.errorMessage, { errorCode: 'quota' });
+        throw new SettlementExtractionError('quota', '오늘 영수증 추출 한도를 모두 썼습니다.');
+      }
       const base64 = buffer.toString('base64');
       const userPrompt = buildExtractionUserPrompt({
         restaurantName: input.restaurantName,
@@ -599,3 +632,94 @@ const looksLikeHeif = (buf: Buffer): boolean =>
 // 토큰 검증 — 라우트에서 사용. SHA1 등은 쓰지 않고 단순 정규식.
 export const isValidImageToken = (token: string): boolean =>
   IMAGE_TOKEN_PATTERN.test(token);
+
+// ── 보존 정리 ────────────────────────────────────────────────────────────
+
+// 어떤 정산·임시저장도 참조하지 않는 영수증은 이 기간(파일 mtime 기준)이 지나면 지운다. 업로드 → 추출 →
+// 저장은 보통 몇 분~며칠 안에 끝나고, 이어쓰기 중인 영수증은 임시저장 payload 가 참조해 남는다.
+export const RECEIPT_RETENTION_DAYS = 30;
+const RECEIPT_FILE_PATTERN = /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.jpg$/;
+const TOKEN_IN_TEXT = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/g;
+const REF_QUERY_CHUNK = 500;
+const DRAFT_SCAN_PAGE = 50;
+
+export interface ReceiptCleanupResult {
+  files: number;
+  candidates: number;
+  deleted: number;
+}
+
+// data/receipts 의 미참조 영수증 정리(매일 스케줄). 업로드는 로그인만 하면 무제한이라 디스크가 계속
+// 자랐다(PLAN-perf-2 G-3). 참조 = 정산 차수의 receiptImageToken + 임시저장 payload 안의 토큰.
+export const cleanupUnreferencedReceipts = async (
+  prisma: PrismaClient,
+  opts: {
+    storageDir?: string;
+    retentionDays?: number;
+    now?: number;
+    logger?: FastifyBaseLogger | null;
+  } = {},
+): Promise<ReceiptCleanupResult> => {
+  const dir = opts.storageDir ?? join(process.cwd(), 'data', 'receipts');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return { files: 0, candidates: 0, deleted: 0 };
+  }
+  const cutoff = (opts.now ?? Date.now()) - (opts.retentionDays ?? RECEIPT_RETENTION_DAYS) * 86_400_000;
+
+  // 1) 기간이 지난 파일만 후보로.
+  const candidates = new Map<string, string>(); // token → 파일 경로
+  for (const name of names) {
+    const m = RECEIPT_FILE_PATTERN.exec(name);
+    if (!m) continue;
+    const path = join(dir, name);
+    try {
+      if ((await stat(path)).mtimeMs < cutoff) candidates.set(m[1]!, path);
+    } catch {
+      // 사이에 지워짐.
+    }
+  }
+  if (candidates.size === 0) return { files: names.length, candidates: 0, deleted: 0 };
+
+  // 2) 저장된 정산이 참조하는 토큰.
+  const tokens = [...candidates.keys()];
+  for (let i = 0; i < tokens.length; i += REF_QUERY_CHUNK) {
+    const rows = await prisma.settlementRound.findMany({
+      where: { receiptImageToken: { in: tokens.slice(i, i + REF_QUERY_CHUNK) } },
+      select: { receiptImageToken: true },
+    });
+    for (const r of rows) if (r.receiptImageToken) candidates.delete(r.receiptImageToken);
+  }
+  // 3) 이어쓰기 중인 임시저장이 참조하는 토큰 — payload 는 자유 JSON 이라 문자열에서 찾는다.
+  let cursor: string | undefined;
+  while (candidates.size > 0) {
+    const drafts = await prisma.settlementDraft.findMany({
+      select: { id: true, payload: true },
+      orderBy: { id: 'asc' },
+      take: DRAFT_SCAN_PAGE,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
+    if (drafts.length === 0) break;
+    for (const d of drafts) {
+      for (const t of d.payload.match(TOKEN_IN_TEXT) ?? []) candidates.delete(t);
+    }
+    cursor = drafts[drafts.length - 1]!.id;
+  }
+
+  // 4) 남은 후보 삭제.
+  let deleted = 0;
+  for (const path of candidates.values()) {
+    try {
+      await unlink(path);
+      deleted += 1;
+    } catch {
+      // 이미 없음.
+    }
+  }
+  if (deleted > 0) {
+    opts.logger?.info({ deleted, files: names.length }, '[settlement-extraction] receipt retention cleanup');
+  }
+  return { files: names.length, candidates: tokens.length, deleted };
+};

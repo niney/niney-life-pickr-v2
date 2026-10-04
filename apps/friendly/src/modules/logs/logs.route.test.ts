@@ -678,5 +678,46 @@ describe('Logs routes', () => {
         await app.prisma.operationRun.findUnique({ where: { id: 'test-oplog-recent' } }),
       ).not.toBeNull();
     });
+
+    it('LIMIT 배치로 나눠 지워도 결과는 같다 — 여러 배치에 걸친 로그·run 을 모두 정리한다', async () => {
+      await app.prisma.logConfig.upsert({
+        where: { key: 'global' },
+        create: { key: 'global', retentionDays: 365 },
+        update: { retentionDays: 365 },
+      });
+      const old = new Date(Date.now() - 400 * 86_400_000);
+      const ids = Array.from({ length: 7 }, (_, i) => `test-oplog-batch-${i}`);
+      for (const id of ids) {
+        await seedRun(id, { status: 'done', startedAt: old });
+        await app.prisma.operationLog.createMany({
+          data: Array.from({ length: 4 }, (_, j) => ({
+            runId: id,
+            feature: TEST_FEATURE,
+            stage: 's',
+            level: 'info',
+            message: `old ${j}`,
+            createdAt: old,
+          })),
+        });
+      }
+      // 보존 기간 안쪽 로그가 남은 오래된 run — run 삭제가 cascade 로 함께 지운다.
+      await app.prisma.operationLog.create({
+        data: { runId: ids[0]!, feature: TEST_FEATURE, stage: 's', level: 'info', message: 'recent' },
+      });
+      await seedRun('test-oplog-batch-running', { status: 'running', startedAt: old });
+
+      const out = await cleanupExpiredOperationLogs(app.prisma, null, {
+        logBatch: 5,
+        runBatch: 3,
+        pauseMs: 0,
+      });
+      expect(out.logs).toBeGreaterThanOrEqual(28);
+      expect(out.runs).toBeGreaterThanOrEqual(7);
+      expect(await app.prisma.operationRun.count({ where: { id: { in: ids } } })).toBe(0);
+      expect(await app.prisma.operationLog.count({ where: { runId: { in: ids } } })).toBe(0);
+      expect(
+        await app.prisma.operationRun.findUnique({ where: { id: 'test-oplog-batch-running' } }),
+      ).not.toBeNull();
+    });
   });
 });

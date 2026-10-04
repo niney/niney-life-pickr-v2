@@ -1,4 +1,5 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 // 네이버 파노라마 썸네일(apis.naver.com/place/panorama/thumbnail/{placeId}/0?…
@@ -53,7 +54,17 @@ export const cachePanoramaThumbnail = async (
     if (buf.byteLength === 0) return { ok: false, reason: 'empty' };
     if (buf.byteLength > MAX_BYTES) return { ok: false, reason: 'too_large' };
     await mkdir(PANORAMA_DIR, { recursive: true });
-    await writeFile(panoramaFilePath(placeId), buf);
+    // tmp → rename — 재크롤이 같은 placeId 사본을 덮어쓰는 동안 서빙 라우트가 반쯤 쓴 JPEG 를
+    // 30일 immutable 로 내보내지 않게 한다.
+    const file = panoramaFilePath(placeId);
+    const tmp = `${file}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(tmp, buf);
+      await rename(tmp, file);
+    } catch (e) {
+      await unlink(tmp).catch(() => undefined);
+      throw e;
+    }
     return { ok: true, bytes: buf.byteLength };
   } catch {
     return { ok: false, reason: 'fetch_error' };

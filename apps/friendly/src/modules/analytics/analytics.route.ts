@@ -10,23 +10,20 @@ import {
   GlobalMergeJobSnapshot,
   Routes,
 } from '@repo/api-contract';
-import { AiConfigService } from '../ai/ai.config.service.js';
-import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
-import { AnalyticsError, AnalyticsService } from './analytics.service.js';
+import { AnalyticsError, type AnalyticsService } from './analytics.service.js';
 import { GLOBAL_MERGE_VERSION } from './global-merge.prompts.js';
 import {
   globalMergeJobRegistry,
   type GlobalMergeJobEvent,
 } from './global-merge-job-registry.js';
 
+// 스케줄 머지가 진행 중일 때 어드민 머지 잡을 실패로 닫는 사유.
+const BUSY_MESSAGE = '다른 글로벌 머지(스케줄 자동 실행)가 진행 중입니다 — 끝난 뒤 다시 실행하세요.';
+
 const analyticsRoutes: FastifyPluginAsync = async (app) => {
-  const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
-  // operationLog 주입 — runGlobalMerge 가 service 내부에서 OperationRun 을
-  // 기록한다 (plugins/logs.ts 가 decorate, 플러그인이 라우트보다 먼저 로드됨).
-  const service = new AnalyticsService(app.prisma, aiConfig, {
-    logger: app.log,
-    operationLog: app.operationLog,
-  });
+  // 스케줄러와 같은 인스턴스(plugins/schedule.ts 가 decorate, 플러그인이 라우트보다 먼저 로드됨) —
+  // 머지 상호배제·통계 캐시를 공유한다. operationLog 도 그쪽에서 주입돼 run 이 기록된다.
+  const service = app.analytics;
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get(Routes.Analytics.overview, {
@@ -218,6 +215,11 @@ async function runGlobalMerge(
         },
       },
     );
+    if (result.busy) {
+      // 빈 결과를 done(0개)으로 보이면 머지가 된 줄 안다 — 사유와 함께 실패로 닫는다.
+      globalMergeJobRegistry.markFailed(jobId, 'busy', BUSY_MESSAGE);
+      return;
+    }
     globalMergeJobRegistry.markDone(jobId, result.finalGroupCount);
   } catch (e) {
     if (e instanceof AnalyticsError) {

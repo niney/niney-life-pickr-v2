@@ -34,6 +34,10 @@ export default fp(
     });
 
     app.decorate('schedule', schedule);
+    // AnalyticsService 도 앱 전역 1개 — 글로벌 머지 상호배제(mergeInflight)와 통계 read 캐시가 인스턴스
+    // 필드라, 어드민 라우트가 따로 만들면 수동 머지와 03:00 스케줄 머지가 동시에 전량 리셋 트랜잭션에
+    // 들어가고 스케줄 머지 뒤 어드민 통계가 TTL 동안 옛 값을 보인다(PLAN-perf-2 G-V2).
+    app.decorate('analytics', analytics);
 
     // graceful shutdown — cron 타이머 정지 + 진행 중 작업 취소. server.ts 의
     // shutdown 핸들러와 중복이지만 멱등하며, 테스트의 app.close() 에서도 정리된다.
@@ -48,5 +52,6 @@ export default fp(
 declare module 'fastify' {
   interface FastifyInstance {
     schedule: ScheduleService;
+    analytics: AnalyticsService;
   }
 }

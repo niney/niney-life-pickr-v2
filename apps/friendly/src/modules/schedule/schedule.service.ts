@@ -228,12 +228,16 @@ export class ScheduleService {
         scheduleRegistry.setPhase('merging');
         try {
           step?.('info', 'merge', '글로벌 머지 시작');
-          if (opRunId) {
-            await this.deps.analytics.runGlobalMerge({ full: false, parentRunId: opRunId });
+          const merged = opRunId
+            ? await this.deps.analytics.runGlobalMerge({ full: false, parentRunId: opRunId })
+            : await this.deps.analytics.runGlobalMerge({ full: false });
+          if (merged.busy) {
+            // 어드민 수동 머지가 같은 인스턴스에서 돌고 있다 — 그 머지가 결과를 저장한다.
+            this.log?.info('[schedule] global merge skipped — another merge in progress');
+            step?.('info', 'merge', '글로벌 머지 건너뜀 — 다른 머지 진행 중', { skipped: 'busy' });
           } else {
-            await this.deps.analytics.runGlobalMerge({ full: false });
+            step?.('info', 'merge', '글로벌 머지 완료');
           }
-          step?.('info', 'merge', '글로벌 머지 완료');
         } catch (e) {
           // 머지할 입력이 없는 건 정상 — 그 외 에러만 실패로 전파.
           if (e instanceof AnalyticsError && e.code === 'no_inputs') {

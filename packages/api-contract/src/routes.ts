@@ -470,9 +470,11 @@ export const Vote = {
 // (userId, placeId) 키를 서버가 본문에서 추출해 사용 — id 를 클라이언트가
 // 모르는 상태에서 PUT 가능. 완성된 정산 저장 성공 시 매칭 draft 가 자동
 // 삭제되므로 일반 사용자 흐름에서 DELETE 를 직접 호출할 일은 거의 없다.
+// 목록은 메타만(payload 제외), 이어쓰기는 byPlace(?placeId=, 생략 시 식당 미지정 슬롯) 단건 조회.
 export const SettlementDraft = {
   list: `${API_PREFIX}/settlement-drafts`,
   upsert: `${API_PREFIX}/settlement-drafts`,
+  byPlace: `${API_PREFIX}/settlement-drafts/by-place`,
   one: (id: string) => `${API_PREFIX}/settlement-drafts/${id}`,
 } as const;
 
