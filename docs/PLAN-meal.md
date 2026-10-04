@@ -248,7 +248,8 @@ model MealRecommendation {
 ### purpose·모델
 - `meal-photo`(vision): 기본 `gemma4:31b`, 비교 `qwen3.5:397b`. 어드민 AI 키 페이지에 행 추가(`PURPOSE_ORDER`/`PURPOSE_META`), env 기본값 `OLLAMA_MEAL_PHOTO_MODEL`.
 - `meal-recommend`(text): `OLLAMA_MEAL_RECOMMEND_MODEL`. 사고(thinking) 모델은 지연만 늘리므로 `think:false`(gpt-oss 는 `'low'`).
-- 새 purpose 추가 시 건드릴 곳(확인됨): `schemas/ai.ts` enum · `config/env.ts` + `.env.example` · `ai.config.service.ts ALL_PURPOSES` · **`LlmProviderEnv.defaultModels` 리터럴 9곳 + 테스트 픽스처**(→ `buildLlmProviderEnv()` 헬퍼로 1곳에 모으는 리팩터를 1차에 같이) · `utils/aiModel.ts recommendModelForPurpose` · `AdminAiKeysPage PURPOSE_META`. `AdapterCache MAX_ENTRIES=8` 은 5 purpose 로 여유.
+- `meal-supplement`(text, 2026-10-04): 영양제 조언. 기본 `kimi-k3`(`OLLAMA_MEAL_SUPPLEMENT_MODEL`) — 가끔 보는 리포트라 지연보다 구체성. 어드민 '추론' 선택을 읽는다(kimi 전용, 사주(C)와 같은 배수로 출력 예산·타임아웃을 키움).
+- 새 purpose 추가 시 건드릴 곳(확인됨): `schemas/ai.ts` enum · `config/env.ts` + `.env.example` · `ai.config.service.ts ALL_PURPOSES` · **`LlmProviderEnv.defaultModels` 리터럴 9곳 + 테스트 픽스처**(→ `buildLlmProviderEnv()` 헬퍼로 1곳에 모으는 리팩터를 1차에 같이) · `utils/aiModel.ts recommendModelForPurpose` · `AdminAiKeysPage PURPOSE_META`. `AdapterCache MAX_ENTRIES` 는 purpose 9개가 되며 8 → 16(2026-10-04, 상한에 닿으면 삽입 순으로 chat 부터 밀려났다).
 
 ### 인식(사진 → 음식)
 - 호출: `provider.complete({ images:[b64…], systemPrompt, prompt, temperature:0, maxTokens:2000, numCtx:8192, format:'json', signal })` — `AiConfigService.getResolved('ollama-cloud','meal-photo')` + `adapterCache.get()`.
@@ -350,6 +351,18 @@ model MealRecommendation {
 ---
 
 ## 진행 기록
+
+- **2026-10-04 — 영양소 점검·영양제 조언(KIMI 기본)**: 사용자 요청 "KIMI-3 기본으로, 식단 기록을 보고 부족한 영양소를 참고해 나에게 맞는 비타민제 추천" → 의견(① 영양소 데이터·점검 ② kimi 조언 + 성별·나이 ③ 선택: 끼니 추천 점수 반영 / 제품명 없이 성분·형태만) 중 **권장(①·②) 진행, 필요하면 데이터·구현 추가 허용**.
+  - **데이터**: 식약처 음식 표준데이터의 100g당 비타민·무기질 13종을 `FoodItem.nutrientsPer100gJson` 에 둔다(빈 문자열은 없음, 0 은 0). 같은 대표식품 묶음에서는 **이름이 같은 층부터** 영양소별로 고른다 — 묶음 전체에서 고르면 참치김치찌개의 비타민 D 가 김치찌개로 샜다. 빌려온 영양(`nutritionFrom`)·`공기밥`(=쌀밥)은 같은 출처에서 복사(`backfillBorrowedNutrients`). dev 1,236/1,236. 원재료 DB(15100065, 과일·채소)는 활용신청 미등록(403) — 과일·채소 기록이 있으면 비타민 C·칼륨·식이섬유·비타민 A 가 적게 잡힐 수 있어 그 영양소는 조언을 미루고 그렇다고 밝힌다.
+  - **기준**: 2020 한국인 영양소 섭취기준 요약표(12세 이상 7구간 × 남녀 — 평균필요량·권장·충분·상한, 나트륨 만성질환위험감소섭취량, 필요추정량). 성별·출생연도(선택, `MealPreference.sex·birthYear`)가 없으면 30-49세 **남녀 중 낮은 값**(부족을 과하게 말하지 않게). 만 12세 미만은 판단하지 않는다.
+  - **점검**(결정적, `GET /meals/nutrition?days=7~28`, LLM·한도 없음): 두 끼 이상 기록한 날만 평균(4일 미만 보류) · 먹은 g = 저장 열량 ÷ 100g당 열량 · 그 영양소 정보가 있는 열량이 60% 미만이면 보류 · 음료·주류는 0 으로 아는 셈 · 부족(평균필요량 미만, 충분섭취량만 있으면 70% 미만)/조금 부족/충분/많음 · **조언 대상은 기록 열량을 필요량만큼(최대 2배) 채워 봐도 모자란 것만**(빠진 끼니 탓일 수 있어서) · 니아신·비타민 A 는 음식으로 상한 판정 안 함(상한이 보충제·레티놀 기준) · 한 끼 후보 = 흔한 한 끼 중 열량 대비 많이 든 음식 3개(알레르기·제외·덜 선호 빼고, 1인분 나트륨 1,500mg↑·100g당 200kcal↑ 빼고, **나트륨이 많은 사람에겐 국물 요리를 빼고 800mg**, 1인분이 상한을 넘는 원자료 오류 빼고 — 초밥 니아신 150mg) + 고정 '많이 든 음식'(과일·유제품 포함).
+  - **조언**(`POST /meals/nutrition/advice`, purpose `meal-supplement` 기본 **kimi-k3**, 어드민 '추론' 선택 가능): 서버가 고른 대상(최대 6)만 모델이 풀어 쓴다. 검사 — 후보 밖 영양소·한자·치료/예방/완치·점검 밖 영양소(마그네슘·아연·오메가-3·유산균…)·**프롬프트에 없는 용량 숫자**가 있으면 그 칸만 서버 문장(비타민 D 는 IU 환산값을 서버가 넘긴다). 영양제는 '부족'일 때만 권한다 — '조금 부족'은 음식으로만(프로브: 부족분 0.05mg 에 B 복합제), 칼륨·식이섬유·단백질은 늘 음식으로만. 부족분·상한·주의 문구(복약·임신·결석 등)·면책은 서버 값. 같은 날·같은 점검 결과면 저장본(한도 미차감, fallback 은 재사용 안 함), 일일 한도 `MEAL_SUPPLEMENT_DAILY_LIMIT`(기본 10)·분당 5. 기록이 모자라거나 조언할 게 없으면 모델 없이 답한다.
+  - **프로브** `probe:meal-nutrition`(가상 A·B·C·E + 내 계정, 리포트에 모델 원문): kimi-k3 5/5·p50 12.9s·서버 문장으로 바꾼 칸 0 / gpt-oss:120b 5/5·4.3s 지만 '~합니다'체·나열식 → kimi 유지. 프로브로 고친 것 3가지는 위(국물 한 끼 후보·조금 부족에 영양제·원자료 오류).
+  - **화면**: 웹 `/me/meals?tab=nutrition`·앱 '영양' 탭 — 기간 7/14/28일, 영양소별 막대(기준선 100%)·상태·한 끼 후보, 조언 카드(요약 · '영양제로 채운다면' 칩 · 영양소별 이유/음식/영양제/주의 · 면책). 설정에 성별·출생연도. 식단 전체 삭제가 조언 이력도 지운다(`deleted.nutritionAdvices`). 웹 탭바는 좁은 화면에서 아이콘을 숨기고 가로로 민다.
+  - **운영 배포**: 마이그레이션 `20261004060205_add_meal_nutrition` + `load:food-catalog --source=nutrition --backfill-nutrition`(100g당 영양소 채우기·빌려온 행 복사). `.env` 는 새 값 없이도 기본(kimi-k3·한도 10)으로 동작.
+  - 같이 고친 것: 어댑터 캐시 상한 8 → 16(용도 9개), 백업 복원이 성별·출생연도도 되살림, food-import 정규식의 리터럴 BOM → `﻿`(린트 오류).
+  - 검증: friendly 1,628 통과(1 skip, 영양 28건 신규) · web 173 · shared 115 · utils 395, 전체 typecheck·lint(오류 0). 실제 서비스 경로(dev 계정): kimi-k3 10.3s 로 생성·저장, 같은 날 재요청은 저장본.
+  - 남은 것: 원재료 DB 활용신청(과일·채소 비타민) · 점검 결과를 끼니 추천 점수에 반영(③) · 앱 화면 실기기 확인 · 웹 화면 육안 확인(이 환경 브라우저가 dev 서버에 닿지 않아 RTL 테스트로만 확인).
 
 - **2026-10-04 — 최근 추천 삭제(하나·모두)**: 사용자 요청 "최근 추천 했던것 삭제하는 기능" → 의견(A 숨기기 권장 / B 완전 삭제 / C 모두 지우기) 중 사용자 결정 **B+C**(완전 삭제 + 모두 삭제, 둘 다 확인창).
   - API: `DELETE /meals/recommendations/:id`(204, 남의 것·없는 것 404) · `DELETE /meals/recommendations`(본문 confirmation `DELETE_MY_MEAL_RECOMMENDATIONS` → `{deleted:{recommendations, recommendationEvents}}`). 반응 이벤트도 함께 지워 다음 추천 학습(선택·평가·기록)과 수락률 통계에서 빠진다. 식단 기록은 그대로(originRecommendationId 는 FK 가 아닌 출처 스냅샷), 일일 한도 카운터도 그대로라 지워서 한도를 늘릴 수 없다. 같은 날·끼니 재요청은 새로 만든다(한도 차감). 식단 쓰기 장벽 안에서 돌려 생성 중인 추천과 엇갈리지 않는다.
