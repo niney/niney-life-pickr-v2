@@ -27,13 +27,37 @@ interface GuestKeyState {
   guestKey: string;
 }
 
+const STORAGE_NAME = 'guest-key-v1';
+
 export const useGuestKeyStore = create<GuestKeyState>()(
   persist(() => ({ guestKey: newGuestKey() }), {
-    name: 'guest-key-v1',
+    name: STORAGE_NAME,
     version: 1,
     storage: createJSONStorage(() => guestStorage.storage),
   }),
 );
+
+// persist 는 저장분이 없을 때 초기 상태를 스토리지에 쓰지 않는다(set 이 불릴 때만 쓴다). 이 스토어는
+// set 을 부르는 곳이 없어, 그대로 두면 키가 한 번도 저장되지 않고 새로고침마다 새 키가 만들어진다 —
+// "기기 영속" 이 깨져 기기 단위 한도와 오늘의 카드 잠금이 새로고침으로 풀린다. 그래서 복원이 끝날
+// 때마다 저장분이 없으면 지금 키를 써 둔다. 앱은 AsyncStorage 주입 뒤 다시 복원하므로 그때도 이 길로
+// 저장된다(주입 전의 no-op 스토리지에는 써도 남지 않는다).
+const persistKeyIfMissing = (): void => {
+  const writeIfMissing = (stored: string | null): void => {
+    if (stored !== null) return;
+    useGuestKeyStore.setState({ guestKey: useGuestKeyStore.getState().guestKey });
+  };
+  try {
+    const stored = guestStorage.storage.getItem(STORAGE_NAME);
+    if (stored instanceof Promise) void stored.then(writeIfMissing).catch(() => undefined);
+    else writeIfMissing(stored);
+  } catch {
+    // 스토리지를 못 쓰는 환경(프라이빗 모드 등) — 이번 세션의 키만 쓴다.
+  }
+};
+useGuestKeyStore.persist.onFinishHydration(persistKeyIfMissing);
+// 동기 스토리지(웹 localStorage)는 스토어를 만드는 순간 복원이 끝나 위 리스너가 못 듣는다.
+if (useGuestKeyStore.persist.hasHydrated()) persistKeyIfMissing();
 
 guestStorage.bindRehydrate(() => {
   void useGuestKeyStore.persist.rehydrate();
