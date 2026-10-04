@@ -54,6 +54,16 @@ export const USAGE_QUOTA_DEFAULTS: Record<UsageQuotaFeatureType, UsageQuotaDefau
     globalPerDay: 3000,
     guestCutoffPct: 90,
   },
+  // 공개 리뷰 질문 — 캐시 미스 1건 = 임베딩 1 + LLM 최대 3콜(같은 질문 답변 캐시·합류는 소비 없음).
+  // 분당은 기존 공개 질문 한도(15/분)를 그대로, 일일은 사주와 같은 수준에서 시작한다.
+  'review-ask': {
+    enabled: true,
+    guestPerDay: 30,
+    ipPerDay: 300,
+    ipPerMinute: 15,
+    globalPerDay: 3000,
+    guestCutoffPct: 90,
+  },
 };
 
 export type UsageQuotaScope = 'global' | 'ip' | 'guest' | 'user';

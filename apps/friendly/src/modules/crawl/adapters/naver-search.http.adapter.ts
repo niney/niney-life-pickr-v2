@@ -231,9 +231,10 @@ export const searchPlacesViaMapNaver = async (
     },
   ]);
 
-  // signal 이 없으면 자체 timeout — 외부 호출이라 stuck 방지.
-  const ac = options.signal ? null : new AbortController();
-  const timeoutId = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+  // 호출자 signal(잡 취소)과 자체 timeout 을 합성 — 예전엔 signal 을 받으면 timeout 을 꺼서
+  // 업스트림이 멈추면 undici 기본(~300초)까지 매달렸다. timeout 신호는 본문 읽기까지 덮는다.
+  const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
 
   let res: Response;
   try {
@@ -247,14 +248,12 @@ export const searchPlacesViaMapNaver = async (
         Accept: '*/*',
       },
       body,
-      signal: options.signal ?? ac?.signal,
+      signal,
     });
   } catch (e) {
     throw new NaverSearchError(
       e instanceof Error ? `fetch failed: ${e.message}` : 'fetch failed',
     );
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
   }
 
   if (!res.ok) {

@@ -61,9 +61,34 @@ interface Doc {
   reviewId: string;
   body: string;
   rating: number | null;
-  vec: number[];
+  // 저장된 임베딩 JSON 원문 그대로 — Node 는 벡터를 쓰지 않고 Python 에 넘기기만 하므로
+  // 파싱하지 않는다(파싱→재직렬화가 큰 가게에서 메인 스레드를 ~100ms 막았다).
+  vecJson: string;
   aspects: Record<string, string>;
 }
+
+// 비어 있지 않은 JSON 배열 원문인지 — 파싱 없이 판정. 임베딩을 쓰는 곳은
+// JSON.stringify(number[]) 하나뿐이라 '[]'(빈 벡터)만 거르면 예전 파싱 판정과 같다.
+const isNonEmptyJsonArray = (s: string): boolean =>
+  s.length > 2 && s.startsWith('[') && s.endsWith(']');
+
+// Python 입력 — 예전 JSON.stringify({ minClusterSize, aspectWeight, docs:[{reviewId,body,vec,aspects}] })
+// 와 같은 키 순서·같은 바이트를, 임베딩은 원문을 이어 붙여 만든다(재직렬화 없음).
+export const buildClusterComputePayload = (
+  docs: ReadonlyArray<Pick<Doc, 'reviewId' | 'body' | 'vecJson' | 'aspects'>>,
+  minClusterSize: number,
+  aspectWeight: number,
+): string => {
+  const parts = docs.map(
+    (d) =>
+      `{"reviewId":${JSON.stringify(d.reviewId)},"body":${JSON.stringify(d.body)},` +
+      `"vec":${d.vecJson},"aspects":${JSON.stringify(d.aspects)}}`,
+  );
+  return (
+    `{"minClusterSize":${JSON.stringify(minClusterSize)},` +
+    `"aspectWeight":${JSON.stringify(aspectWeight)},"docs":[${parts.join(',')}]}`
+  );
+};
 // Python 출력 — clusters 는 size 내림차순.
 interface ComputeResult {
   ok: boolean;
@@ -115,14 +140,14 @@ export class ReviewClusteringService {
     for (const r of rows) {
       const body = r.review.body.trim();
       if (isJunk(body) || seen.has(body)) continue;
-      const vec = safeParse<number[]>(r.embeddingJson, []);
-      if (vec.length === 0) continue;
+      const vecJson = r.embeddingJson?.trim() ?? '';
+      if (!isNonEmptyJsonArray(vecJson)) continue;
       seen.add(body);
       docs.push({
         reviewId: r.reviewId,
         body,
         rating: r.review.rating,
-        vec,
+        vecJson,
         aspects: safeParse<Record<string, string>>(r.aspectsJson, {}),
       });
     }
@@ -134,11 +159,7 @@ export class ReviewClusteringService {
     // 조건부 극성 주입: 부정 리뷰가 임계 이상일 때만 weight 부여(probe 2 일반화 검증).
     const negTotal = docs.filter((d) => negScore(d.aspects) > 0).length;
     const aspectWeight = negTotal >= NEG_INJECT_MIN ? ASPECT_WEIGHT : 0;
-    const payload = JSON.stringify({
-      minClusterSize: MIN_CLUSTER_SIZE,
-      aspectWeight,
-      docs: docs.map((d) => ({ reviewId: d.reviewId, body: d.body, vec: d.vec, aspects: d.aspects })),
-    });
+    const payload = buildClusterComputePayload(docs, MIN_CLUSTER_SIZE, aspectWeight);
     return new Promise((resolveP, rejectP) => {
       const child = spawn(PYTHON_BIN, [PY_SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
       let out = '';

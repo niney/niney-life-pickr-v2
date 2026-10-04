@@ -7,13 +7,7 @@ import {
   Routes,
 } from '@repo/api-contract';
 import { AiConfigService } from '../ai/ai.config.service.js';
-import { CanonicalService } from '../canonical/canonical.service.js';
-import { CrawlService } from '../crawl/crawl.service.js';
-import { jobRegistry } from '../crawl/job-registry.js';
-import { ProposalService } from '../canonical/proposal.service.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
-import { SummaryService } from '../summary/summary.service.js';
-import { ReviewSearchService } from '../review-search/review-search.service.js';
 import { buildLlmProviderEnv } from '../ai/llm-provider-env.js';
 import {
   autoDiscoverRegistry,
@@ -24,29 +18,12 @@ import { AutoDiscoverService } from './auto-discover.service.js';
 const autoDiscoverRoutes: FastifyPluginAsync = async (app) => {
   const restaurants = new RestaurantService(app.prisma);
   const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
-  // operationLog 주입 — 누락 시 자동 발견에서 파생되는 크롤/요약 run 계측이
-  // 무음 비활성된다 (두 서비스 모두 null 이면 silent 정책).
-  // 요약 완료 후 자동 enrich 훅용 — 누락 시 자동 발견 파생 요약이 검색 불가로 남는다.
-  const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);
-  const summaries = new SummaryService(app.prisma, aiConfig, {
-    logger: app.log,
-    operationLog: app.operationLog,
-    reviewSearch,
-  });
-  const canonical = new CanonicalService(app.prisma);
-  const proposals = new ProposalService(app.prisma, canonical);
-  const crawl = new CrawlService(
-    restaurants,
-    summaries,
-    jobRegistry,
-    proposals,
-    canonical,
-    app.operationLog,
-  );
   const service = new AutoDiscoverService({
     restaurants,
     aiConfig,
-    crawl,
+    // plugins/crawl.ts 의 app 전역 singleton — 수동 크롤과 actor 대기열을 공유해야 슬롯이
+    // 비면 자동 발견 크롤도 이어서 시작되고, 파생 요약·enrich·군집화가 앱 singleton 체인을 탄다.
+    crawl: app.crawl,
     logger: app.log,
     // plugins/logs.ts 가 decorate 한 전역 싱글톤 — seq 카운터 공유를 위해
     // 새로 만들지 않고 주입한다.

@@ -27,6 +27,7 @@ import type {
   StartCrawlResultType,
   VisitorReviewType,
 } from '@repo/api-contract';
+import { LRUCache } from 'lru-cache';
 import {
   CrawlCancelledError,
   fetchNaverPlaceWithPlaywright,
@@ -72,7 +73,11 @@ import type { ProposalService } from '../canonical/proposal.service.js';
 import type { CanonicalService } from '../canonical/canonical.service.js';
 import { scoreMatch } from '../../lib/matching.js';
 
+// 크롤 결과 캐시 — 30초 안의 같은 가게 create 재요청만 단락한다. 엔트리(스냅샷 + 리뷰 ≤200)가
+// 가게당 0.2~0.35MB 라 개수 상한 + 만료 즉시 제거(ttlAutopurge)로 둔다 — 예전 Map 은 만료
+// 엔트리를 지우지 않아 크롤한 가게 수만큼 프로세스 수명 내내 쌓였다.
 const CACHE_TTL_MS = 30_000;
+const CACHE_MAX_ENTRIES = 30;
 
 // Distributive Omit — applies Omit to each branch of a discriminated union
 // independently, so the result stays a union TS can narrow on. A plain
@@ -87,16 +92,6 @@ type EmitInput = CrawlEventType extends infer E
 interface CacheEntry {
   data: NaverPlaceDataType;
   fetchedAt: string;
-  expiresAt: number;
-}
-
-// Per-actor FIFO of jobs waiting for a concurrency slot. The closure carries
-// every input runJob needs; once a running job ends we pop the next entry
-// for that actor and invoke it.
-interface PendingStart {
-  jobId: string;
-  actorId: string;
-  start: () => void;
 }
 
 // 자동 DC 매칭 임계 (C안 — 자동 머지). 사용자 확정값:
@@ -109,7 +104,11 @@ const AUTO_DC_DISTANCE_THRESHOLD_M = 50;
 const AUTO_DC_TIE_GAP = 0.1;
 
 export class CrawlService {
-  private readonly cache = new Map<string, CacheEntry>();
+  private readonly cache = new LRUCache<string, CacheEntry>({
+    max: CACHE_MAX_ENTRIES,
+    ttl: CACHE_TTL_MS,
+    ttlAutopurge: true,
+  });
   private readonly registry: JobRegistry;
   private readonly restaurants: RestaurantService;
   private readonly summaries: SummaryService;
@@ -123,7 +122,6 @@ export class CrawlService {
   // jobId → OperationRun id. startCrawl 에서 등록, 종료 경로에서 정리 —
   // runJob/cancel 이 같은 run 에 스텝과 마감을 연결하기 위한 매핑.
   private readonly runIdsByJob = new Map<string, string>();
-  private readonly pending: PendingStart[] = [];
   private nextSeq = 1;
 
   constructor(
@@ -301,8 +299,6 @@ export class CrawlService {
     actorId: string,
     mode: CrawlModeType = 'create',
   ): Promise<StartCrawlResultType> {
-    const now = Date.now();
-
     let normalized: Awaited<ReturnType<typeof normalizeToPlaceId>>;
     try {
       normalized = await normalizeToPlaceId(rawUrl);
@@ -329,7 +325,7 @@ export class CrawlService {
     // bypass cached state), so we skip the short-circuit for them.
     if (mode === 'create') {
       const cached = this.cache.get(normalized.placeId);
-      if (cached && cached.expiresAt > now) {
+      if (cached) {
         const created = this.registry.create({
           url: rawUrl,
           placeId: normalized.placeId,
@@ -429,7 +425,7 @@ export class CrawlService {
     // frees and the adapter starts emitting its own progress events.
     this.emit(jobId, { type: 'progress', stage: 'queued' });
     this.logStep(jobId, 'queued', 'info', '동시성 한도 — 대기열 등록');
-    this.pending.push({ jobId, actorId, start });
+    this.registry.enqueue(jobId, actorId, start);
     return { ok: true, jobId, deduped: false, queued: true };
   }
 
@@ -1010,35 +1006,40 @@ export class CrawlService {
     tablingBulkSaveRegistry.markRunning(jobId);
     const abortSignal = tablingBulkSaveRegistry.abortSignal(jobId);
 
-    for (const idx of idxs) {
-      if (abortSignal?.aborted) {
-        tablingBulkSaveRegistry.finishItem(jobId, idx, {
-          skipped: true,
-          reason: '잡이 취소되어 시작 전 건너뜀',
-        });
-        continue;
+    // finally 로 마감 — actor 당 1잡 가드(activeJobIdFor)가 예기치 못한 throw 로 남은
+    // 미종료 잡에 막히지 않게(다이닝코드 러너와 같은 구조).
+    try {
+      for (const idx of idxs) {
+        if (abortSignal?.aborted) {
+          tablingBulkSaveRegistry.finishItem(jobId, idx, {
+            skipped: true,
+            reason: '잡이 취소되어 시작 전 건너뜀',
+          });
+          continue;
+        }
+        tablingBulkSaveRegistry.markItemStart(jobId, idx);
+        try {
+          const result = await this.saveTablingShop(idx);
+          tablingBulkSaveRegistry.finishItem(jobId, idx, {
+            ok: true,
+            restaurantId: result.restaurantId,
+            fetchedPages: result.fetchedPages,
+            newReviewCount: result.newReviewCount,
+            autoMatched: result.autoMatched,
+            matchedCanonicalId: result.matchedCanonicalId,
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          tablingBulkSaveRegistry.finishItem(jobId, idx, {
+            ok: false,
+            errorCode: 'save_failed',
+            errorMessage: message,
+          });
+        }
       }
-      tablingBulkSaveRegistry.markItemStart(jobId, idx);
-      try {
-        const result = await this.saveTablingShop(idx);
-        tablingBulkSaveRegistry.finishItem(jobId, idx, {
-          ok: true,
-          restaurantId: result.restaurantId,
-          fetchedPages: result.fetchedPages,
-          newReviewCount: result.newReviewCount,
-          autoMatched: result.autoMatched,
-          matchedCanonicalId: result.matchedCanonicalId,
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        tablingBulkSaveRegistry.finishItem(jobId, idx, {
-          ok: false,
-          errorCode: 'save_failed',
-          errorMessage: message,
-        });
-      }
+    } finally {
+      tablingBulkSaveRegistry.markFinished(jobId);
     }
-    tablingBulkSaveRegistry.markFinished(jobId);
   }
 
   // 캐치테이블 가게 상세 (가벼운 미리보기). 검색 카드에서 "상세 보기" 클릭 시
@@ -1068,10 +1069,8 @@ export class CrawlService {
       outcome,
     });
     if (outcome === 'queued-cancelled') {
-      // Drop the deferred start so it never fires. The registry will record
-      // the cancellation event below.
-      const idx = this.pending.findIndex((p) => p.jobId === jobId);
-      if (idx >= 0) this.pending.splice(idx, 1);
+      // registry.cancel 이 대기열 항목을 이미 뺐다(시작 함수가 영영 안 불림). 여기서는
+      // 취소 이벤트를 기록한다.
       this.emit(jobId, {
         type: 'error',
         error: 'cancelled',
@@ -1089,15 +1088,13 @@ export class CrawlService {
   }
 
   // Pop the next queued job for this actor and start it, repeating while
-  // there's still slack. Called when a slot frees (job finished) or right
-  // after queueing a new job (in case a slot is still available).
+  // there's still slack. Called when a slot frees (job finished). 대기열은
+  // registry 공유라 어느 인스턴스가 큐에 넣었든 슬롯을 비운 쪽이 이어서 시작한다.
   private flushQueue(actorId: string): void {
     while (this.registry.hasSlotForActor(actorId)) {
-      const idx = this.pending.findIndex((p) => p.actorId === actorId);
-      if (idx < 0) return;
-      const next = this.pending.splice(idx, 1)[0];
+      const next = this.registry.takeQueued(actorId);
       if (!next) return;
-      next.start();
+      next();
     }
   }
 
@@ -1246,11 +1243,7 @@ export class CrawlService {
       });
 
       const fetchedAt = new Date().toISOString();
-      this.cache.set(placeId, {
-        data,
-        fetchedAt,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
+      this.cache.set(placeId, { data, fetchedAt });
 
       // Re-upsert the restaurant with the now-complete snapshot. All reviews
       // (SSR initial + wire pages) have already been persisted via

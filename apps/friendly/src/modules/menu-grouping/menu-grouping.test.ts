@@ -507,6 +507,128 @@ describe('MenuGroupingService', () => {
     await app.prisma.globalMenuCanonical.delete({ where: { id: global.id } });
   });
 
+  // A-V3 — 형제 식당 멘션을 식당마다 1쿼리씩 읽던 N+1 을 GROUP BY 한 번으로. 형제 3곳·중립 멘션·
+  // 글로벌 2개(한 식당에 둘 다 링크)에서 합계·긍부정·식당 수가 예전 정의와 같은지 고정한다.
+  it('aggregates sibling global stats in one query regardless of sibling count', async () => {
+    const seedWith = (mentions: SeededMention[], name: string) =>
+      seedRestaurantWithMentions(app, mentions, { name });
+    const a = await seedWith(
+      [
+        { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
+        { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'neutral' },
+        { name: '공기밥', nameNorm: '공기밥', sentiment: 'negative' },
+      ],
+      '식당 A',
+    );
+    const b = await seedWith(
+      [
+        { name: '묵은지찌개', nameNorm: '묵은지찌개', sentiment: 'negative' },
+        { name: '공기밥', nameNorm: '공기밥', sentiment: 'positive' },
+        { name: '공기밥', nameNorm: '공기밥', sentiment: 'positive' },
+      ],
+      '식당 B',
+    );
+    const c = await seedWith(
+      [
+        { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
+        { name: '돈까스', nameNorm: '돈까스', sentiment: 'positive' }, // 링크 없는 메뉴 — 집계 제외
+      ],
+      '식당 C',
+    );
+    const canon = (restaurantId: string, nameNorm: string, canonicalNorm: string) =>
+      app.prisma.menuCanonical.create({
+        data: { restaurantId, nameNorm, canonicalName: canonicalNorm, canonicalNorm, version: 1, model: 'seed' },
+      });
+    const kimchi = await app.prisma.globalMenuCanonical.create({
+      data: { globalKey: `gk-${stamp()}-kimchi`, displayName: '김치찌개', version: 1, model: 'seed' },
+    });
+    const rice = await app.prisma.globalMenuCanonical.create({
+      data: { globalKey: `gk-${stamp()}-rice`, displayName: '공기밥', version: 1, model: 'seed' },
+    });
+    const links = [
+      [await canon(a.restaurantId, '김치찌개', '김치찌개'), kimchi.id],
+      [await canon(a.restaurantId, '공기밥', '공기밥'), rice.id],
+      [await canon(b.restaurantId, '묵은지찌개', '김치찌개'), kimchi.id],
+      [await canon(b.restaurantId, '공기밥', '공기밥'), rice.id],
+      [await canon(c.restaurantId, '김치찌개', '김치찌개'), kimchi.id],
+    ] as const;
+    await app.prisma.globalMenuCanonicalLink.createMany({
+      data: links.map(([mc, globalCanonicalId]) => ({
+        menuCanonicalId: mc.id,
+        restaurantId: mc.restaurantId,
+        localCanonicalNorm: mc.canonicalNorm,
+        globalCanonicalId,
+      })),
+    });
+
+    // 멘션 조회 횟수를 세는 확장 클라이언트(Prisma 델리게이트는 spyOn 으로 감쌀 수 없다).
+    let mentionQueries = 0;
+    const counted = app.prisma.$extends({
+      query: {
+        menuMention: {
+          findMany({ args, query }) {
+            mentionQueries += 1;
+            return query(args);
+          },
+        },
+      },
+    }) as unknown as typeof app.prisma;
+    const service = new MenuGroupingService(counted, aiConfig, { resolveOverride: async () => null });
+    try {
+      const ranking = await service.getRanking(a.placeId, { sort: 'mentions', minMentions: 1 });
+      // 자기 식당 멘션 1회만 — 형제 식당 수만큼 늘던 findMany 가 없다.
+      expect(mentionQueries).toBe(1);
+      const kim = ranking.items.find((i) => i.canonicalKey === '김치찌개')!;
+      // 김치찌개 글로벌: A(긍1·중1) + B(부1) + C(긍1) = 4건, 식당 3곳.
+      expect(kim.global).toMatchObject({ totalMentions: 4, positive: 2, negative: 1, restaurantCount: 3 });
+      expect(kim.global!.positiveRatio).toBeCloseTo(2 / 3);
+      const r = ranking.items.find((i) => i.canonicalKey === '공기밥')!;
+      // 공기밥 글로벌: A(부1) + B(긍2) = 3건, 식당 2곳.
+      expect(r.global).toMatchObject({ totalMentions: 3, positive: 2, negative: 1, restaurantCount: 2 });
+      expect(r.global!.displayName).toBe('공기밥');
+    } finally {
+      await app.prisma.globalMenuCanonical.deleteMany({ where: { id: { in: [kimchi.id, rice.id] } } });
+    }
+  });
+
+  // A-6 — 같은 가게 정규화가 겹치면(벌크 잡 + 스케줄) 두 번째는 진행 중 결과에 합류한다(LLM 중복 없음).
+  it('joins an in-flight grouping for the same place instead of calling the LLM again', async () => {
+    const { placeId } = await seedRestaurantWithMentions(app, [
+      { name: '김치찌개', nameNorm: '김치찌개', sentiment: 'positive' },
+      { name: '김치 찌개', nameNorm: '김치찌개2', sentiment: 'positive' },
+    ]);
+    let calls = 0;
+    const slowProvider: LLMProvider = {
+      complete: async ({ prompt }) => {
+        calls += 1;
+        await new Promise((r) => setTimeout(r, 30));
+        const names = namesFromPrompt(prompt);
+        return {
+          text: JSON.stringify({ groups: names.length >= 2 ? [names.map((_, i) => i)] : [] }),
+          model: 'fake-model',
+          promptTokens: 1,
+          completionTokens: 1,
+        };
+      },
+    };
+    // 벌크 잡 라우트·스케줄은 서로 다른 서비스 인스턴스를 쓴다.
+    const viaJob = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider: slowProvider, model: 'm' }),
+    });
+    const viaSchedule = new MenuGroupingService(app.prisma, aiConfig, {
+      resolveOverride: async () => ({ provider: slowProvider, model: 'm' }),
+    });
+    const [first, second] = await Promise.all([
+      viaJob.groupForRestaurant(placeId),
+      viaSchedule.groupForRestaurant(placeId),
+    ]);
+    expect(second).toBe(first);
+    const single = calls;
+    // 끝난 뒤 다시 부르면 새로 돈다(합류는 진행 중일 때만).
+    await viaSchedule.groupForRestaurant(placeId);
+    expect(calls).toBe(single * 2);
+  });
+
   it('leaves global field null when MenuCanonical has no global link', async () => {
     const { placeId } = await seedRestaurantWithMentions(app, [
       { name: '돈까스', nameNorm: '돈까스', sentiment: 'positive' },

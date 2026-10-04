@@ -5,6 +5,7 @@ import {
   __test_isVisitorReviewsGraphqlRequestBody as isVisitorReviewsGraphqlRequestBody,
   __test_parseVisitorReviewsFromCaptured as parseVisitorReviews,
   __test_resolveMenuGroups as resolveMenuGroups,
+  createVisitorWireAccumulator,
 } from './naver-place.playwright.adapter.js';
 
 // Minimal wire shape mimicking what Naver returns from the visitor reviews
@@ -121,6 +122,81 @@ describe('visitor review media extraction', () => {
     const reviews = parseVisitorReviews(onlyImages);
     expect(reviews).toHaveLength(1);
     expect(reviews[0]!.videos).toEqual([]);
+  });
+});
+
+// A-2 — 응답 원본 두 벌(captured + paginationBodies)을 크롤 끝까지 들고 있다가 한 번에 파싱하던
+// 방식과, 도착 즉시 파싱해 앞 200건만 모으는 누적기의 결과(반환 스냅샷)가 같은지 고정한다.
+describe('visitor wire accumulator (A-2)', () => {
+  const review = (id: string | null, body: string) => ({
+    ...(id ? { id } : {}),
+    body,
+    authorName: `작성자-${body.slice(0, 4)}`,
+    rating: 5,
+    visited: '2026-09-01',
+    media: [
+      { __typename: 'VisitorReviewMedia', type: 'image', thumbnail: `https://pup-review-phinf.pstatic.net/${body.length}.jpg` },
+    ],
+  });
+  const page = (items: unknown[]) => [{ data: { visitorReviews: { items } } }];
+
+  // 페이지 30개(×10건) + 리뷰가 아닌 graphql 응답 + id 없는 리뷰(본문 앞 50자 중복 포함).
+  const buildSession = () => {
+    const pages: unknown[] = [];
+    for (let p = 0; p < 30; p += 1) {
+      const items: unknown[] = [];
+      for (let i = 0; i < 10; i += 1) items.push(review(`r-${p}-${i}`, `페이지 ${p} 리뷰 ${i} — 맛있어요 ${'가'.repeat(i)}`));
+      if (p % 7 === 0) items.push(review(null, `아이디 없는 리뷰 ${p % 2}`)); // p=0·14·28 은 같은 본문 → 한 번만
+      pages.push(page(items));
+    }
+    const other = [{ data: { menus: { items: [{ name: '김치찌개', price: '9000' }] } } }];
+    // 리스너가 본 순서(captured): 비리뷰 응답이 섞여 있다. 페이저는 같은 페이지 본문을 한 번 더 넣는다.
+    const captured: unknown[] = [other, ...pages.slice(0, 15), other, ...pages.slice(15)];
+    return { captured, pagination: pages };
+  };
+
+  it('원본 두 벌 merge 와 같은 스냅샷을 만든다 — Apollo id 제외·순서·중복 판정 포함', () => {
+    const { captured, pagination } = buildSession();
+    // Apollo(SSR) 가 이미 가진 리뷰 — 첫 페이지 일부와 겹친다.
+    const apolloIds = new Set(['r-0-0', 'r-0-3', 'r-1-9']);
+    const apollo = [...apolloIds].map((id) => ({ externalId: id }));
+
+    const before = parseVisitorReviews([...captured, ...pagination], new Set(apolloIds));
+
+    const acc = createVisitorWireAccumulator();
+    // 리스너 순서대로 넣고, 페이저가 같은 페이지를 다시 넣어도 중복으로 걸러진다.
+    for (const body of captured) acc.add(body);
+    for (const body of pagination) acc.add(body);
+    const after = acc.result(apolloIds);
+
+    expect([...apollo, ...after].slice(0, 200)).toEqual([...apollo, ...before].slice(0, 200));
+    // 원본 대신 파싱 결과 앞 200건만 들고 있다.
+    expect(acc.size).toBe(200);
+  });
+
+  it('페이저가 리스너보다 먼저 같은 페이지를 넣어도 결과가 같다', () => {
+    const { captured, pagination } = buildSession();
+    const apolloIds = new Set<string>(['r-2-2']);
+    const before = parseVisitorReviews([...captured, ...pagination], new Set(apolloIds));
+
+    const acc = createVisitorWireAccumulator();
+    let pageIdx = 0;
+    for (const body of captured) {
+      // 리뷰 페이지는 페이저 쪽(json 파싱)이 먼저 도착한 경우를 흉내 낸다.
+      if (body === pagination[pageIdx]) acc.add(pagination[pageIdx++]);
+      acc.add(body);
+    }
+    const apollo = [{ externalId: 'r-2-2' }];
+    expect([...apollo, ...acc.result(apolloIds)].slice(0, 200)).toEqual(
+      [...apollo, ...before].slice(0, 200),
+    );
+  });
+
+  it('리뷰가 200건 미만이면 전부 들고 있다', () => {
+    const acc = createVisitorWireAccumulator();
+    acc.add(page([review('a', '하나'), review('b', '둘'), review('a', '하나 중복')]));
+    expect(acc.size).toBe(2);
+    expect(acc.result(new Set(['b'])).map((r) => r.externalId)).toEqual(['a']);
   });
 });
 

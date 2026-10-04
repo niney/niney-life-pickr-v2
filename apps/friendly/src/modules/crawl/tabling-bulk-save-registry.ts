@@ -31,6 +31,10 @@ interface InternalJob {
   abort: AbortController;
 }
 
+// actor 당 활성 잡 1개 정책(다이닝코드와 동일) — 멈춘/크래시한 미종료 잡이 영구히 막지
+// 않도록 이 시간이 지난 미종료 잡은 "활성"으로 세지 않는다(bulk-save 는 보통 수 분 내 종료).
+const STALE_ACTIVE_JOB_MS = 30 * 60 * 1000;
+
 export class TablingBulkSaveRegistry {
   private readonly jobs = new Map<string, InternalJob>();
   private gcTimer: NodeJS.Timeout | null = null;
@@ -69,6 +73,20 @@ export class TablingBulkSaveRegistry {
     this.jobs.set(id, job);
     this.ensureGcTimer();
     return { id, abortSignal: job.abort.signal };
+  }
+
+  // 진행 중(미종료) 잡이 있으면 그 id, 없으면 null. 크래시/멈춘 잡(STALE_ACTIVE_JOB_MS
+  // 초과)은 차단하지 않는다.
+  activeJobIdFor(actorId: string): string | null {
+    const now = Date.now();
+    for (const job of this.jobs.values()) {
+      if (job.actorId !== actorId || job.finishedAtMs !== null) continue;
+      const startedMs = Date.parse(job.startedAt);
+      if (!Number.isFinite(startedMs) || now - startedMs < STALE_ACTIVE_JOB_MS) {
+        return job.id;
+      }
+    }
+    return null;
   }
 
   markRunning(jobId: string): void {

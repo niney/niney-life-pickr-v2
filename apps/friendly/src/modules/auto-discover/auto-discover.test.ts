@@ -153,6 +153,7 @@ const buildService = (
     // AI 미설정 시 fallback 사용 — 모든 테스트 기본값.
     resolveProviderOverride: async () => null,
     searchOverride: overrides.searchOverride,
+    crawlWaitTimeoutMs: overrides.crawlWaitTimeoutMs,
   };
   const service = new AutoDiscoverService(deps);
   return { service, registry };
@@ -507,6 +508,33 @@ describe('AutoDiscoverService', () => {
     expect(snap.candidates[0]!.skipReason).toBe('cancelled');
     // 크롤은 시작도 안 했다.
     expect(crawlRegistry.list('u1')).toHaveLength(0);
+  });
+
+  // A-V1 — 크롤이 끝나지 않아도(예: 대기열에서 영영 시작 안 됨) 자동 발견 잡은 상한 뒤 그 후보를
+  // 실패로 닫고 크롤을 취소한 채 끝난다. 예전엔 무한 대기해 새 자동 발견까지 409 로 막혔다.
+  it('후보 크롤이 상한 안에 끝나지 않으면 취소하고 실패로 닫은 뒤 잡을 끝낸다', async () => {
+    const restaurants = makeFakeRestaurants();
+    const crawl = makeFakeCrawl(crawlRegistry, restaurants, { autoFinish: false });
+    // 어떤 키워드든 같은 후보 1곳 — dedupe 후 후보 1건.
+    const { service, registry } = buildService({
+      crawlRegistry,
+      crawl,
+      restaurants,
+      searchOverride: (kw) => makeSearchOverride({ [kw]: [{ placeId: 't1' }] })(kw),
+      crawlWaitTimeoutMs: 30,
+    });
+    const { id } = registry.create({
+      actorId: 'u1',
+      input: { q: '강남역', categories: [], targetCount: 5 },
+    });
+    autoConfirm(registry, id);
+    await service.runAutoDiscover(id, 'u1');
+    const snap = registry.get(id, 'u1')!;
+    expect(snap.state).toBe('done');
+    const cand = snap.candidates.find((c) => c.placeId === 't1')!;
+    expect(cand.state).toBe('failed');
+    expect(cand.errorMessage).toContain('끝나지 않아 취소');
+    expect(crawl.cancelled.size).toBe(1);
   });
 
   it('AutoDiscoverRegistry: per-actor 1잡 — 두 번째 create 직전엔 findInFlightByActor 가 첫 잡을 반환', () => {

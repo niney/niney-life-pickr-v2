@@ -38,9 +38,9 @@ import {
   StartCrawlResult,
   type CrawlEventType,
   type CrawlJobLogEntryType,
+  type CrawlJobType,
   type CrawlLogLevelType,
 } from '@repo/api-contract';
-import { CrawlService } from './crawl.service.js';
 import { jobRegistry } from './job-registry.js';
 import {
   diningcodeBulkSaveRegistry,
@@ -54,8 +54,6 @@ import { closeBrowser } from './adapters/naver-place.playwright.adapter.js';
 import { closeCatchtableSearchBrowser } from './adapters/catchtable-search.playwright.adapter.js';
 import { closeCatchtableShopBrowser } from './adapters/catchtable-shop.playwright.adapter.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
-import { CanonicalService } from '../canonical/canonical.service.js';
-import { ProposalService } from '../canonical/proposal.service.js';
 
 // SSE wire format. EventSource auto-reconnects with a `last-event-id`
 // header; we also accept `?afterSeq=` for explicit replay (e.g., a fresh
@@ -88,6 +86,13 @@ const safeParseJsonObject = (raw: string): Record<string, unknown> | null => {
   }
 };
 
+// 잡 목록은 웹 폴백 폴링(8초)으로 불리므로 완료 잡의 리뷰 본문(≤200건, 잡당 ~300KB)은 빼고
+// 내린다. 리뷰 목록은 SSE 'done'(재연결 afterSeq 재생 포함)이 그대로 싣는다.
+const slimJobForList = (job: CrawlJobType): CrawlJobType =>
+  job.result?.ok
+    ? { ...job, result: { ...job.result, data: { ...job.result.data, visitorReviews: [] } } }
+    : job;
+
 const parseAfterSeq = (req: FastifyRequest): number => {
   const header = req.headers['last-event-id'];
   if (typeof header === 'string') {
@@ -104,21 +109,9 @@ const parseAfterSeq = (req: FastifyRequest): number => {
 
 const crawlRoutes: FastifyPluginAsync = async (app) => {
   const restaurants = new RestaurantService(app.prisma);
-  // summaries 는 plugins/summaries.ts, operationLog 는 plugins/logs.ts 가 만든
-  // app 전역 singleton. 두 라우트(crawl/restaurant) 가 같은 chain map ·
-  // cancelledPlaces 를 공유하고, 로그 SSE seq 는 단일 카운터를 유지한다.
-  const summaries = app.summaries;
-  const operationLog = app.operationLog;
-  const canonical = new CanonicalService(app.prisma);
-  const proposals = new ProposalService(app.prisma, canonical);
-  const service = new CrawlService(
-    restaurants,
-    summaries,
-    jobRegistry,
-    proposals,
-    canonical,
-    operationLog,
-  );
+  // plugins/crawl.ts 의 app 전역 singleton — 자동 발견·여행 시드 등록·랜덤 크롤과 결과 캐시·
+  // actor 대기열을 공유한다(요약·작업 로그도 app.summaries·app.operationLog 로 배선돼 있다).
+  const service = app.crawl;
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   app.addHook('onClose', async () => {
@@ -390,6 +383,13 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) => {
       const actorId = req.user.userId;
+      // actor 당 활성 잡 1개(다이닝코드와 동일) — 같은 가게 목록을 여러 번 시작해 외부 호출·
+      // 요약 큐가 겹치지 않게. 웹은 진행 중 잡이 있으면 시작 버튼을 막아 정상 흐름은 그대로다.
+      if (tablingBulkSaveRegistry.activeJobIdFor(actorId)) {
+        throw app.httpErrors.conflict(
+          '이미 진행 중인 테이블링 저장 작업이 있습니다. 완료 후 다시 시도하세요.',
+        );
+      }
       // 중복 idx 제거 — 같은 가게 두 번 처리 방지.
       const idxs = Array.from(new Set(req.body.idxs));
       const { id } = tablingBulkSaveRegistry.create({ actorId, idxs });
@@ -702,7 +702,7 @@ const crawlRoutes: FastifyPluginAsync = async (app) => {
       security: [{ bearerAuth: [] }],
       response: { 200: CrawlJobListResult },
     },
-    handler: async (req) => ({ jobs: jobRegistry.list(req.user.userId) }),
+    handler: async (req) => ({ jobs: jobRegistry.list(req.user.userId).map(slimJobForList) }),
   });
 
   // GET — 잡 단위 영속 로그 조회. SSE 의 실시간 'log' 이벤트와 동일한 데이터를

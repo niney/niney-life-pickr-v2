@@ -9,14 +9,15 @@
 // `fetch()` 를 호출해 JSON 만 받아온다 (응답 가로채기 대신 직접 호출).
 //
 // 모듈 스코프 캐싱:
-//   - Browser 1개 (lazy)
-//   - BrowserContext + warm Page 1개 (lazy, 모든 호출에서 재사용)
+//   - Browser 1개 (lazy, 마지막 사용 후 IDLE_CLOSE_MS 지나면 종료 — 다음 호출이 다시 띄움)
+//   - BrowserContext + warm Page 1개 (lazy, 모든 호출에서 재사용. 브라우저와 함께 버려짐)
 //   - Fastify onClose 에서 closeCatchtableSearchBrowser() 로 정리
 //
 // 첫 호출은 페이지 로드 비용으로 ~14s, 이후는 ~200-900ms.
 // 16000+ 결과는 키워드가 백엔드에 안 먹힌 fallback 신호 → response.fallback=true.
 
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
+import { LazyBrowser } from './lazy-browser.js';
 
 const ENDPOINT = 'https://ct-api.catchtable.co.kr/api/v6/search/list';
 const WARM_URL =
@@ -35,6 +36,8 @@ const FALLBACK_TOTAL_THRESHOLD = 10_000;
 const HEADLESS = process.env.CATCHTABLE_HEADLESS !== '0';
 const WARM_TIMEOUT_MS = Number(process.env.CATCHTABLE_WARM_TIMEOUT_MS ?? '30000');
 const NETWORK_IDLE_TIMEOUT_MS = Number(process.env.CATCHTABLE_NETWORK_IDLE_MS ?? '12000');
+// 어드민 검증 페이지에서만 쓰는 브라우저 — 한 번 쓰고 영구 상주하지 않게 idle 종료(기본 10분).
+const IDLE_CLOSE_MS = Number(process.env.CATCHTABLE_IDLE_CLOSE_MS ?? '600000');
 
 export interface CatchtableSearchOptions {
   // 1~30. 백엔드가 size 를 일부 무시하는 경향이 있어 실제 반환은 ~30 일 수 있음.
@@ -96,15 +99,17 @@ export class CatchtableSearchError extends Error {
 // 모듈 스코프 — 단일 인스턴스 공유. CLAUDE.md 규칙(Redis 금지 / 단일 인스턴스)
 // 과 일치. 동시 여러 어드민 검색이 와도 같은 BrowserContext 안에서 직렬화됨.
 // 동시성 부담이 커지면 BrowserContext pool 로 확장 가능.
-let browserPromise: Promise<Browser> | null = null;
 let contextPromise: Promise<{ ctx: BrowserContext; page: Page }> | null = null;
 
-const getBrowser = (): Promise<Browser> => {
-  if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: HEADLESS });
-  }
-  return browserPromise;
-};
+const searchBrowser = new LazyBrowser({
+  // playwright 는 첫 사용 때 동적 import — 정적 import 면 부팅 메모리에 실린다.
+  launch: async () => (await import('playwright')).chromium.launch({ headless: HEADLESS }),
+  idleMs: IDLE_CLOSE_MS,
+  // 브라우저가 닫히거나 끊기면 그 안의 워밍 페이지도 죽는다 — 다음 호출이 다시 워밍.
+  onReset: () => {
+    contextPromise = null;
+  },
+});
 
 const getWarmedPage = async (): Promise<Page> => {
   if (contextPromise) {
@@ -114,22 +119,28 @@ const getWarmedPage = async (): Promise<Page> => {
     contextPromise = null;
   }
   contextPromise = (async () => {
-    const browser = await getBrowser();
+    const browser = await searchBrowser.get();
     const ctx = await browser.newContext({
       userAgent: DESKTOP_UA,
       viewport: { width: 1280, height: 900 },
       locale: 'ko-KR',
     });
-    // 미디어/폰트 차단 — JS 실행과 쿠키만 필요하지 이미지/CSS 는 불필요.
-    await ctx.route('**/*.{png,jpg,jpeg,webp,gif,svg,woff,woff2,ttf,mp4,m3u8,avif}', (route) =>
-      route.abort(),
-    );
-    const page = await ctx.newPage();
-    await page.goto(WARM_URL, { waitUntil: 'domcontentloaded', timeout: WARM_TIMEOUT_MS });
-    await page.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => undefined);
-    // 약간의 idle — Cloudflare cookie / axios interceptor 들이 자리 잡을 시간.
-    await page.waitForTimeout(1_200);
-    return { ctx, page };
+    try {
+      // 미디어/폰트 차단 — JS 실행과 쿠키만 필요하지 이미지/CSS 는 불필요.
+      await ctx.route('**/*.{png,jpg,jpeg,webp,gif,svg,woff,woff2,ttf,mp4,m3u8,avif}', (route) =>
+        route.abort(),
+      );
+      const page = await ctx.newPage();
+      await page.goto(WARM_URL, { waitUntil: 'domcontentloaded', timeout: WARM_TIMEOUT_MS });
+      await page.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => undefined);
+      // 약간의 idle — Cloudflare cookie / axios interceptor 들이 자리 잡을 시간.
+      await page.waitForTimeout(1_200);
+      return { ctx, page };
+    } catch (e) {
+      // 워밍 실패한 컨텍스트가 브라우저 안에 남지 않게 닫는다(다음 호출이 새로 만든다).
+      await ctx.close().catch(() => undefined);
+      throw e;
+    }
   })();
   const { page } = await contextPromise;
   return page;
@@ -172,27 +183,30 @@ export const searchCatchtablePlaces = async (
 
   let raw: { status: number; json: unknown };
   try {
-    const page = await getWarmedPage();
-    if (options.signal?.aborted) throw new CatchtableSearchError('aborted');
-    raw = await page.evaluate(
-      async ({ url, body }) => {
-        const resp = await fetch(url, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const text = await resp.text();
-        let json: unknown = null;
-        try {
-          json = JSON.parse(text);
-        } catch {
-          // keep null
-        }
-        return { status: resp.status, json };
-      },
-      { url: ENDPOINT, body },
-    );
+    // use() 구간 동안은 idle 종료가 브라우저를 닫지 않는다.
+    raw = await searchBrowser.use(async () => {
+      const page = await getWarmedPage();
+      if (options.signal?.aborted) throw new CatchtableSearchError('aborted');
+      return page.evaluate(
+        async ({ url, body }) => {
+          const resp = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const text = await resp.text();
+          let json: unknown = null;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            // keep null
+          }
+          return { status: resp.status, json };
+        },
+        { url: ENDPOINT, body },
+      );
+    });
   } catch (e) {
     throw new CatchtableSearchError('playwright fetch failed', e);
   }
@@ -277,15 +291,5 @@ const toResult = (shop: Record<string, unknown>): CatchtableSearchResult | null 
   };
 };
 
-export const closeCatchtableSearchBrowser = async (): Promise<void> => {
-  if (contextPromise) {
-    const cached = await contextPromise.catch(() => null);
-    if (cached) await cached.ctx.close().catch(() => undefined);
-    contextPromise = null;
-  }
-  if (browserPromise) {
-    const b = await browserPromise.catch(() => null);
-    if (b) await b.close().catch(() => undefined);
-    browserPromise = null;
-  }
-};
+// 브라우저를 닫으면 워밍 컨텍스트도 함께 닫힌다(onReset 이 참조를 비운다).
+export const closeCatchtableSearchBrowser = (): Promise<void> => searchBrowser.close();

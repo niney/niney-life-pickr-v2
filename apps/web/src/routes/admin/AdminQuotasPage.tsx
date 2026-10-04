@@ -23,6 +23,10 @@ const FEATURE_META: Record<UsageQuotaFeatureType, { label: string; desc: string 
     label: '사주(C) 풀이',
     desc: '사주 전체 풀이(섹션 4개 병렬 = 1건)·오늘의 운세·궁합·택일·오행 음식의 Ollama Cloud 호출. 같은 사주는 캐시라 한도를 소비하지 않는다.',
   },
+  'review-ask': {
+    label: '맛집 리뷰 질문',
+    desc: '맛집 상세 "질문" 탭의 답변 생성(임베딩 1 + Ollama Cloud 최대 3콜 = 1건). 같은 가게·같은 질문은 답변 캐시라 한도를 소비하지 않는다. 한도를 넘으면 오류 대신 안내 문구로 답한다.',
+  },
 };
 
 const FIELDS: Array<{ key: keyof FormState; label: string; hint: string; min: number; max?: number }> = [

@@ -12,7 +12,8 @@ export type Polarity = 'pos' | 'neg' | 'neu';
 // 정보가치 없는 초단문(".", "ㄱ", "끄♡") — 검색 코퍼스에서 제외.
 export const isJunk = (body: string): boolean => body.replace(/[^가-힣a-zA-Z0-9]/g, '').length < 2;
 
-export const cosine = (a: number[], b: number[]): number => {
+// ArrayLike — 코퍼스 벡터는 Float32Array(메모리 절반), 질의 벡터는 number[].
+export const cosine = (a: ArrayLike<number>, b: ArrayLike<number>): number => {
   let dot = 0;
   let na = 0;
   let nb = 0;

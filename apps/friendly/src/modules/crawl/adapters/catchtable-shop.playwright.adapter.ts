@@ -18,8 +18,10 @@
 //
 // 검색 어댑터(catchtable-search)와 별도 Browser 인스턴스로 격리해 모바일 UA
 // 와 데스크톱 UA 혼선을 막는다 — naver-place / naver-search 분리 패턴과 동일.
+// 브라우저는 첫 사용 때 띄우고 마지막 사용 후 IDLE_CLOSE_MS 지나면 닫는다(LazyBrowser).
 
-import { chromium, type Browser, type BrowserContext } from 'playwright';
+import type { BrowserContext } from 'playwright';
+import { LazyBrowser } from './lazy-browser.js';
 
 const SHOP_URL = (ref: string) => `https://app.catchtable.co.kr/ct/shop/${ref}`;
 
@@ -31,6 +33,8 @@ const GOTO_TIMEOUT_MS = Number(process.env.CATCHTABLE_SHOP_GOTO_MS ?? '30000');
 const NETWORK_IDLE_TIMEOUT_MS = Number(process.env.CATCHTABLE_SHOP_IDLE_MS ?? '12000');
 // 메뉴/리뷰 lazy 영역까지 스크롤 후 응답이 도착할 시간.
 const LAZY_SETTLE_MS = Number(process.env.CATCHTABLE_SHOP_LAZY_MS ?? '2500');
+// 어드민 검증 페이지에서만 쓰는 브라우저 — 한 번 쓰고 영구 상주하지 않게 idle 종료(기본 10분).
+const IDLE_CLOSE_MS = Number(process.env.CATCHTABLE_IDLE_CLOSE_MS ?? '600000');
 
 export interface CatchtableShopImage {
   thumbUrl: string;
@@ -146,15 +150,17 @@ export class CatchtableShopError extends Error {
   }
 }
 
-let browserPromise: Promise<Browser> | null = null;
 let contextPromise: Promise<BrowserContext> | null = null;
 
-const getBrowser = (): Promise<Browser> => {
-  if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: HEADLESS });
-  }
-  return browserPromise;
-};
+const shopBrowser = new LazyBrowser({
+  // playwright 는 첫 사용 때 동적 import — 정적 import 면 부팅 메모리에 실린다.
+  launch: async () => (await import('playwright')).chromium.launch({ headless: HEADLESS }),
+  idleMs: IDLE_CLOSE_MS,
+  // 브라우저가 닫히거나 끊기면 공유 컨텍스트도 죽는다 — 다음 호출이 새로 만든다.
+  onReset: () => {
+    contextPromise = null;
+  },
+});
 
 const getContext = async (): Promise<BrowserContext> => {
   if (contextPromise) {
@@ -163,7 +169,7 @@ const getContext = async (): Promise<BrowserContext> => {
     contextPromise = null;
   }
   contextPromise = (async () => {
-    const browser = await getBrowser();
+    const browser = await shopBrowser.get();
     const ctx = await browser.newContext({
       userAgent: DESKTOP_UA,
       viewport: { width: 1280, height: 900 },
@@ -211,7 +217,7 @@ const includesMenu = (url: string): boolean =>
 const includesReview = (url: string): boolean =>
   /\/api\/v\d+\/review/.test(url) && !url.includes('/keywords');
 
-export const fetchCatchtableShop = async (shopRef: string): Promise<CatchtableShopData> => {
+const fetchShopImpl = async (shopRef: string): Promise<CatchtableShopData> => {
   const trimmed = shopRef.trim();
   if (!trimmed) throw new CatchtableShopError('shopRef is empty');
 
@@ -633,7 +639,7 @@ export interface CatchtableShopMenusResponse {
   source: 'playwright';
 }
 
-export const fetchCatchtableShopMenus = async (
+const fetchShopMenusImpl = async (
   shopRef: string,
 ): Promise<CatchtableShopMenusResponse> => {
   const trimmed = shopRef.trim();
@@ -760,7 +766,7 @@ export interface CatchtableShopReviewOverviewResponse {
   source: 'playwright';
 }
 
-export const fetchCatchtableShopReviewOverview = async (
+const fetchShopReviewOverviewImpl = async (
   shopRef: string,
 ): Promise<CatchtableShopReviewOverviewResponse> => {
   const trimmed = shopRef.trim();
@@ -816,15 +822,17 @@ const directFetch = async (url: string): Promise<unknown> => {
   }
 };
 
-export const closeCatchtableShopBrowser = async (): Promise<void> => {
-  if (contextPromise) {
-    const ctx = await contextPromise.catch(() => null);
-    if (ctx) await ctx.close().catch(() => undefined);
-    contextPromise = null;
-  }
-  if (browserPromise) {
-    const b = await browserPromise.catch(() => null);
-    if (b) await b.close().catch(() => undefined);
-    browserPromise = null;
-  }
-};
+// 공개 진입점 — use() 구간 동안은 idle 종료가 브라우저를 닫지 않는다.
+export const fetchCatchtableShop = (shopRef: string): Promise<CatchtableShopData> =>
+  shopBrowser.use(() => fetchShopImpl(shopRef));
+
+export const fetchCatchtableShopMenus = (shopRef: string): Promise<CatchtableShopMenusResponse> =>
+  shopBrowser.use(() => fetchShopMenusImpl(shopRef));
+
+export const fetchCatchtableShopReviewOverview = (
+  shopRef: string,
+): Promise<CatchtableShopReviewOverviewResponse> =>
+  shopBrowser.use(() => fetchShopReviewOverviewImpl(shopRef));
+
+// 브라우저를 닫으면 공유 컨텍스트도 함께 닫힌다(onReset 이 참조를 비운다).
+export const closeCatchtableShopBrowser = (): Promise<void> => shopBrowser.close();

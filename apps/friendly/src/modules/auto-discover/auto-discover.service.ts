@@ -37,6 +37,11 @@ const AI_NUM_CTX = 4096;
 // 유발할 수 있어 큐처럼 한 곳씩 순차 처리 (레스토랑 1건 내부 병렬은 유지).
 const GROUP_SIZE = 1;
 
+// 후보 크롤 1건의 종료 대기 상한(대기열 시간 포함) — 크롤이 끝나지 않아도 잡이 무한 대기하며
+// 새 자동 발견을 409 로 막지 않게 하는 안전망. 리뷰 100페이지 크롤(~15분)이 같은 actor 의
+// 다른 크롤 뒤에서 기다리는 경우까지 넉넉히 잡았다.
+const CRAWL_WAIT_TIMEOUT_MS = 60 * 60_000;
+
 export interface AutoDiscoverServiceDeps {
   restaurants: RestaurantService;
   aiConfig: AiConfigService;
@@ -52,6 +57,8 @@ export interface AutoDiscoverServiceDeps {
   resolveProviderOverride?: () => Promise<{ provider: LLMProvider; model: string } | null>;
   // 검색 어댑터 주입 (테스트에서 fake 검색 결과 주입).
   searchOverride?: (keyword: string) => Promise<NaverSearchResult[]>;
+  // 테스트용 — 후보 크롤 종료 대기 상한(기본 CRAWL_WAIT_TIMEOUT_MS).
+  crawlWaitTimeoutMs?: number;
 }
 
 // 자동 발견 잡을 백그라운드에서 실행. 라우트는 잡 생성 직후 이 메소드를
@@ -60,11 +67,13 @@ export class AutoDiscoverService {
   private readonly registry: AutoDiscoverRegistry;
   private readonly crawlRegistry: JobRegistry;
   private readonly cache: AdapterCache;
+  private readonly crawlWaitTimeoutMs: number;
 
   constructor(private readonly deps: AutoDiscoverServiceDeps) {
     this.registry = deps.registry ?? autoDiscoverRegistry;
     this.crawlRegistry = deps.crawlRegistry ?? defaultCrawlRegistry;
     this.cache = deps.adapterCache ?? adapterCache;
+    this.crawlWaitTimeoutMs = deps.crawlWaitTimeoutMs ?? CRAWL_WAIT_TIMEOUT_MS;
   }
 
   // 잡 실행 — 라우트가 잡 생성 직후 호출. await 하지 말 것 (백그라운드 의도).
@@ -546,7 +555,19 @@ export class AutoDiscoverService {
         return { crawlJobId: null };
       }
       crawlJobId = start.jobId;
-      await this.waitForCrawlTerminal(start.jobId);
+      const waited = await this.crawlRegistry.waitForTerminal(start.jobId, this.crawlWaitTimeoutMs);
+      if (waited === 'timeout') {
+        // 상한을 넘긴 크롤은 취소한다 — 대기열에 남은 잡이 나중에 좀비로 시작되지 않게.
+        this.deps.crawl.cancel(start.jobId, actorId);
+        this.failCandidate(
+          runId,
+          jobId,
+          target,
+          'timeout',
+          `크롤이 ${Math.round(this.crawlWaitTimeoutMs / 60_000)}분 안에 끝나지 않아 취소했습니다.`,
+        );
+        return { crawlJobId };
+      }
 
       // 등록 결과 — placeId 로 restaurant 조회.
       const rest = await this.deps.restaurants.findByPlaceId(item.placeId);
@@ -635,29 +656,6 @@ export class AutoDiscoverService {
       { placeId: item.placeId, code },
       item.placeId,
     );
-  }
-
-  // crawl-job-registry 의 done/error 이벤트까지 대기. 등록 직후 호출 시 이미
-  // 종료된 경우(예: 캐시 히트)면 즉시 resolve.
-  private waitForCrawlTerminal(crawlJobId: string): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const job = this.crawlRegistry.get(crawlJobId);
-      if (!job) {
-        resolve();
-        return;
-      }
-      // 이미 종료된 잡 — events 안에 terminal 이 들어있다.
-      if (job.status !== 'running') {
-        resolve();
-        return;
-      }
-      const unsubscribe = this.crawlRegistry.subscribe(crawlJobId, (ev) => {
-        if (ev.type === 'done' || ev.type === 'error') {
-          unsubscribe();
-          resolve();
-        }
-      });
-    });
   }
 
   // 검색 — 키워드 한 줄로 네이버 nx-api 호출. 옵션 주입 가능 (테스트용).

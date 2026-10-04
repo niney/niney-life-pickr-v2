@@ -7,9 +7,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-extra';
 import type { Browser, BrowserContext, Locator, Page } from 'playwright';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { LazyBrowser } from './lazy-browser.js';
 import type {
   BlogReviewType,
   CrawlStageType,
@@ -135,24 +134,28 @@ const MOBILE_UA =
 // Stealth 적용 — navigator.webdriver, plugins, permissions, chrome.runtime 등
 // 자동화 시그널을 일반 Chrome 처럼 위장. 네이버 anti-bot 우회에 결정적.
 // catchtable 어댑터는 자체 `playwright` import 라 영향 받지 않음.
-chromium.use(StealthPlugin());
-
-let browserPromise: Promise<Browser> | null = null;
-
-const getBrowser = (): Promise<Browser> => {
-  if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: HEADLESS, slowMo: SLOW_MO }) as Promise<Browser>;
+// playwright-extra·stealth 는 첫 launch 때 동적 import — 정적 import 면 크롤을 안 해도 부팅에 실린다.
+let stealthApplied = false;
+const launchStealthChromium = async (): Promise<Browser> => {
+  const [{ chromium }, { default: StealthPlugin }] = await Promise.all([
+    import('playwright-extra'),
+    import('puppeteer-extra-plugin-stealth'),
+  ]);
+  // playwright-extra 의 chromium 은 모듈 싱글톤 — 재launch 때 플러그인이 중복 등록되지 않게 한 번만.
+  if (!stealthApplied) {
+    chromium.use(StealthPlugin());
+    stealthApplied = true;
   }
-  return browserPromise;
+  return chromium.launch({ headless: HEADLESS, slowMo: SLOW_MO }) as Promise<Browser>;
 };
 
-export const closeBrowser = async (): Promise<void> => {
-  if (browserPromise) {
-    const b = await browserPromise;
-    await b.close();
-    browserPromise = null;
-  }
-};
+// 크롤마다 컨텍스트를 새로 만들고 닫으므로 브라우저만 공유한다. 크래시·launch 실패는
+// LazyBrowser 가 버려 다음 크롤이 다시 띄운다(idle 종료는 하지 않는다 — 크롤 경로의 주 브라우저).
+const naverBrowser = new LazyBrowser({ launch: launchStealthChromium });
+
+const getBrowser = (): Promise<Browser> => naverBrowser.get();
+
+export const closeBrowser = (): Promise<void> => naverBrowser.close();
 
 interface CapturedGraphQL {
   url: string;
@@ -1176,17 +1179,19 @@ const extractVisitorReviewsFromState = (
 // pagination pages live only in wire responses, which this parser walks.
 // Exported for tests. Same shape used by both pagination wire bodies and
 // the after-bodies fixture in __debug__.
-export const __test_parseVisitorReviewsFromCaptured = (captured: unknown[]): VisitorReviewType[] =>
-  parseVisitorReviewsFromCaptured(captured);
-
-const parseVisitorReviewsFromCaptured = (
+export const __test_parseVisitorReviewsFromCaptured = (
   captured: unknown[],
   alreadySeenIds?: Set<string>,
-): VisitorReviewType[] => {
-  const out: VisitorReviewType[] = [];
-  const seenIds = alreadySeenIds ?? new Set<string>();
-  const seenBodies = new Set<string>();
+): VisitorReviewType[] => parseVisitorReviewsFromCaptured(captured, alreadySeenIds);
 
+// 응답 본문 하나(단일 또는 batch 배열)의 방문자 리뷰를 out 에 잇는다. seenIds/seenBodies 는
+// 호출자가 여러 본문에 걸쳐 공유하는 중복 판정 상태.
+const appendVisitorReviewsFromBody = (
+  body: unknown,
+  seenIds: Set<string>,
+  seenBodies: Set<string>,
+  out: VisitorReviewType[],
+): void => {
   const visitItems = (items: unknown[]) => {
     for (const raw of items) {
       const r = buildVisitorReview(null, raw);
@@ -1207,9 +1212,9 @@ const parseVisitorReviewsFromCaptured = (
 
   // Response can be a single body or a batch array. Walk visitorReviews
   // wherever it appears under `data`.
-  const walk = (body: unknown): void => {
-    if (!isObject(body)) return;
-    const data = body['data'];
+  const walk = (b: unknown): void => {
+    if (!isObject(b)) return;
+    const data = b['data'];
     if (!isObject(data)) return;
     for (const v of Object.values(data)) {
       if (!isObject(v)) continue;
@@ -1230,11 +1235,44 @@ const parseVisitorReviewsFromCaptured = (
     }
   };
 
-  for (const body of captured) {
-    if (Array.isArray(body)) for (const b of body) walk(b);
-    else walk(body);
-  }
+  if (Array.isArray(body)) for (const b of body) walk(b);
+  else walk(body);
+};
+
+const parseVisitorReviewsFromCaptured = (
+  captured: unknown[],
+  alreadySeenIds?: Set<string>,
+): VisitorReviewType[] => {
+  const out: VisitorReviewType[] = [];
+  const seenIds = alreadySeenIds ?? new Set<string>();
+  const seenBodies = new Set<string>();
+  for (const body of captured) appendVisitorReviewsFromBody(body, seenIds, seenBodies, out);
   return out;
+};
+
+// 반환 스냅샷(앞 200건)용 wire 리뷰를 응답이 올 때마다 파싱해 앞 limit 건만 모은다 —
+// 예전엔 응답 원본을 captured·paginationBodies 두 벌로 크롤 끝까지 들고 있다가 마지막에
+// 한 번에 파싱했다(100페이지 ≈ 10.8MB, 절반 중복). 결과는 그 방식과 같다: 순서·중복 판정이
+// 같고, Apollo(SSR) 리뷰 id 는 끝에서 빼며, Apollo 가 a 건이면 wire 는 앞 200-a 건만 쓰이므로
+// wire 쪽 고유 리뷰 앞 limit 건이면 충분하다(Apollo id 하나가 wire 하나만 지울 수 있다).
+export const createVisitorWireAccumulator = (limit = 200) => {
+  const out: VisitorReviewType[] = [];
+  const seenIds = new Set<string>();
+  const seenBodies = new Set<string>();
+  return {
+    add(body: unknown): void {
+      if (out.length >= limit) return;
+      appendVisitorReviewsFromBody(body, seenIds, seenBodies, out);
+      if (out.length > limit) out.length = limit;
+    },
+    // excludeIds = Apollo(SSR) 리뷰가 이미 차지한 externalId — 예전 merge 의 공유 seenIds 와 같은 효과.
+    result(excludeIds: ReadonlySet<string>): VisitorReviewType[] {
+      return out.filter((r) => !(r.externalId && excludeIds.has(r.externalId)));
+    },
+    get size(): number {
+      return out.length;
+    },
+  };
 };
 
 // Walk a graphql request body and force any `sort` field inside `variables`
@@ -1405,13 +1443,17 @@ const fetchVisitorReviewsViaSubpage = async (
 
     // Intercept any JSON response from Naver place hosts — wider than just
     // /graphql because visitor reviews may come from other paths/methods.
-    // Each item carries its url so we can post-filter and diagnose.
+    // 본문은 도착 즉시 wireReviews 로 파싱하고 버린다(원본은 디버그 캡처 때만 보관).
+    // 진단용으로는 개수와 앞 5개 url 만 남긴다.
     interface CapturedResponse {
       url: string;
       method: string;
       body: unknown;
     }
     const captured: CapturedResponse[] = [];
+    const wireReviews = createVisitorWireAccumulator();
+    let capturedCount = 0;
+    const capturedSamples: string[] = [];
     page.on('response', async (res) => {
       const u = res.url();
       // The visitor-reviews "더보기" pager hits api.place.naver.com/graphql.
@@ -1432,7 +1474,12 @@ const fetchVisitorReviewsViaSubpage = async (
       } catch {
         return;
       }
-      if (body) captured.push({ url: u, method: res.request().method(), body });
+      if (!body) return;
+      const method = res.request().method();
+      capturedCount += 1;
+      if (capturedSamples.length < 5) capturedSamples.push(`${method} ${u}`);
+      if (DEBUG_CAPTURE) captured.push({ url: u, method, body });
+      wireReviews.add(body);
     });
 
     // SSR-injected initial reviews live as inline `<script>__APOLLO_STATE__=...</script>`
@@ -1514,7 +1561,7 @@ const fetchVisitorReviewsViaSubpage = async (
         await writeFile(
           file,
           JSON.stringify(
-            { placeId, url, label, capturedCount: captured.length, captured, apolloState },
+            { placeId, url, label, capturedCount, captured, apolloState },
             null,
             2,
           ),
@@ -1522,7 +1569,7 @@ const fetchVisitorReviewsViaSubpage = async (
         );
         // eslint-disable-next-line no-console
         console.log(
-          `[crawl-debug] visitor reviews (${label}, captured=${captured.length}) → ${file}`,
+          `[crawl-debug] visitor reviews (${label}, captured=${capturedCount}) → ${file}`,
         );
       }
       // Bodies-only dump alongside — flatten GraphQL batch arrays and keep
@@ -1542,7 +1589,6 @@ const fetchVisitorReviewsViaSubpage = async (
       await writeFile(bodiesFile, JSON.stringify(visitorBodies, null, 2), 'utf-8');
     };
 
-    const paginationBodies: unknown[] = [];
     let pagesAttempted = 0;
     let pagesFetched = 0;
     let reviewsFetched = ssrInitialCount;
@@ -1638,7 +1684,9 @@ const fetchVisitorReviewsViaSubpage = async (
           console.log(`[crawl-debug] visitor page ${pagesFetched + 1}: invalid JSON response`);
           break;
         }
-        paginationBodies.push(wireBody);
+        // 응답 리스너도 같은 본문을 넣지만, 리스너가 놓친 페이지(content-type 등)도 스냅샷에
+        // 들어가게 여기서도 넣는다 — 같은 리뷰는 id/본문으로 한 번만 들어간다.
+        wireReviews.add(wireBody);
 
         // Parse only the responses that arrived from this click and emit
         // them as a discrete batch. The persistence layer can write them to
@@ -1714,19 +1762,17 @@ const fetchVisitorReviewsViaSubpage = async (
     const fromApollo = isObject(apolloState)
       ? extractVisitorReviewsFromState(apolloState, placeId, seenIds)
       : [];
-    const fromWire = parseVisitorReviewsFromCaptured(
-      [...captured.map((c) => c.body), ...paginationBodies],
-      seenIds,
-    );
+    // wire 는 앞 200건까지만 모았다(createVisitorWireAccumulator) — 로그의 wire 수도 그 상한 안의 값.
+    const fromWire = wireReviews.result(seenIds);
     // eslint-disable-next-line no-console
     console.log(
-      `[crawl-debug] visitor reviews — apollo=${fromApollo.length}, wire=${fromWire.length}, captured=${captured.length}`,
+      `[crawl-debug] visitor reviews — apollo=${fromApollo.length}, wire=${fromWire.length}, captured=${capturedCount}`,
     );
-    if (fromApollo.length === 0 && fromWire.length === 0 && captured.length > 0) {
+    if (fromApollo.length === 0 && fromWire.length === 0 && capturedCount > 0) {
       // eslint-disable-next-line no-console
       console.log(
-        `[crawl-debug] captured ${captured.length} responses but none looked like visitor reviews. Sample urls:`,
-        captured.slice(0, 5).map((c) => `${c.method} ${c.url}`),
+        `[crawl-debug] captured ${capturedCount} responses but none looked like visitor reviews. Sample urls:`,
+        capturedSamples,
       );
     }
     const merged = [...fromApollo, ...fromWire].slice(0, 200);

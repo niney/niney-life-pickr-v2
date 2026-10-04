@@ -200,3 +200,114 @@ describe('GET /api/v1/admin/crawl/search — guards & shape', () => {
     expect(opts?.bbox).toBe('127.01,37.48,127.04,37.51');
   });
 });
+
+// A-1·A-3·A-V1 — CrawlService 는 app 전역 singleton 하나. 랜덤 크롤·라우트가 같은 인스턴스를 쓰고,
+// 그 인스턴스의 요약 서비스가 app.summaries(→ app.reviewSearch 배선)여야 요약 중지·enrich 중복
+// 가드·enrich 완료→군집화 체인이 모든 크롤 경로에 똑같이 걸린다.
+// A-4 — 잡 목록은 완료 잡의 리뷰 본문을 빼고 내린다. A-6 — 테이블링 일괄 저장은 actor 당 1잡.
+describe('crawl singleton wiring & job list', () => {
+  let app: FastifyInstance;
+  let adminToken: string;
+
+  beforeAll(async () => {
+    app = await buildApp();
+    await app.ready();
+    await seedAuthUsers(app, [{ id: 'admin-sg', role: 'ADMIN' }]);
+    adminToken = app.jwt.sign({ userId: 'admin-sg', email: 'a@x.com', role: 'ADMIN' });
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('app.crawl 하나를 랜덤 크롤이 공유하고, 요약·검색은 앱 singleton 으로 배선된다', () => {
+    const crawl = app.crawl as unknown as { summaries: unknown };
+    expect(app.crawl).toBeDefined();
+    expect((app.randomCrawl as unknown as { deps: { crawl: unknown } }).deps.crawl).toBe(app.crawl);
+    expect(crawl.summaries).toBe(app.summaries);
+    expect((app.summaries as unknown as { opts: { reviewSearch?: unknown } }).opts.reviewSearch).toBe(
+      app.reviewSearch,
+    );
+  });
+
+  it('GET /admin/crawl/jobs 는 완료 잡의 visitorReviews 만 비우고 나머지는 그대로 싣는다', async () => {
+    const { jobRegistry } = await import('./job-registry.js');
+    const review = (i: number) => ({
+      authorName: `작성자${i}`,
+      rating: 5,
+      body: `리뷰 본문 ${i} `.repeat(30),
+      visitedAt: '2026-09-01',
+      imageUrls: [`https://pup-review-phinf.pstatic.net/${i}.jpg`],
+      videos: [],
+      externalId: `ext-${i}`,
+    });
+    const { id } = jobRegistry.create({
+      url: 'https://map.naver.com/p/entry/place/123456',
+      placeId: '123456',
+      actorId: 'admin-sg',
+    });
+    jobRegistry.markActive(id);
+    jobRegistry.addEvent(id, {
+      seq: 1,
+      type: 'done',
+      at: new Date().toISOString(),
+      result: {
+        ok: true,
+        data: {
+          placeId: '123456',
+          name: '목록 경량화 가게',
+          category: '한식',
+          address: null,
+          roadAddress: null,
+          phone: null,
+          businessHours: null,
+          latitude: 37.5,
+          longitude: 127,
+          imageUrls: [],
+          rating: 4.5,
+          reviewCount: 200,
+          menus: [],
+          reviewStats: null,
+          blogReviews: [],
+          visitorReviews: Array.from({ length: 200 }, (_, i) => review(i)),
+          rawSourceUrl: 'https://m.place.naver.com/restaurant/123456/home',
+        },
+        fetchedAt: new Date().toISOString(),
+        durationMs: 10,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/crawl/jobs',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      jobs: Array<{ id: string; status: string; result: { ok: boolean; data?: { name: string; visitorReviews: unknown[]; reviewCount: number } } | null }>;
+    };
+    const job = body.jobs.find((j) => j.id === id)!;
+    expect(job.status).toBe('done');
+    expect(job.result?.ok).toBe(true);
+    expect(job.result?.data?.name).toBe('목록 경량화 가게');
+    expect(job.result?.data?.reviewCount).toBe(200);
+    expect(job.result?.data?.visitorReviews).toEqual([]);
+    expect(res.body.length).toBeLessThan(5_000);
+    // 레지스트리(SSE 'done' 재생 원본)는 그대로 — 목록 응답만 가볍게.
+    const kept = jobRegistry.get(id)?.result;
+    expect(kept?.ok && kept.data.visitorReviews).toHaveLength(200);
+  });
+
+  it('POST 테이블링 일괄 저장은 같은 actor 의 진행 중 잡이 있으면 409', async () => {
+    const { tablingBulkSaveRegistry } = await import('./tabling-bulk-save-registry.js');
+    // 진행 중 잡을 레지스트리에 직접 만든다(러너는 돌리지 않음 — 외부 호출 없음).
+    tablingBulkSaveRegistry.create({ actorId: 'admin-sg', idxs: [1] });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/crawl/tabling/bulk-save/jobs',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { idxs: [2, 3] },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+});

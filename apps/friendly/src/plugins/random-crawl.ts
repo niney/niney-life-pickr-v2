@@ -1,48 +1,22 @@
 import fp from 'fastify-plugin';
-import { AiConfigService } from '../modules/ai/ai.config.service.js';
-import { CanonicalService } from '../modules/canonical/canonical.service.js';
-import { ProposalService } from '../modules/canonical/proposal.service.js';
-import { CrawlService } from '../modules/crawl/crawl.service.js';
-import { jobRegistry } from '../modules/crawl/job-registry.js';
 import { RestaurantService } from '../modules/restaurant/restaurant.service.js';
-import { SummaryService } from '../modules/summary/summary.service.js';
-import { ReviewSearchService } from '../modules/review-search/review-search.service.js';
 import { TelegramService } from '../modules/telegram/telegram.service.js';
 import { TelegramConfigService } from '../modules/settings/telegram-config.service.js';
 import { RandomCrawlService } from '../modules/random-crawl/random-crawl.service.js';
 import { env } from '../config/env.js';
-import { buildLlmProviderEnv } from '../modules/ai/llm-provider-env.js';
 
 // 맛집 자동 발굴(random-crawl) 스케줄러. RandomCrawlService 를 app 전역 singleton
 // 으로 decorate — 라우트(설정/수동실행)와 부팅 cron tick + 텔레그램 폴러가 같은
 // 인스턴스를 공유한다. cron 타이머는 scheduleRegistry(모듈 singleton)에 jobType
 // 'random-crawl' 로 등록되어 schedule(정규화→머지)과 키만 다르게 공존한다.
 //
-// 의존: prisma, logs(operationLog). CrawlService/RestaurantService 등은 여기서
-// 새로 조립한다(autoload 순서에 의존하지 않게) — jobRegistry 는 모듈 singleton
-// 이라 다른 곳에서 만든 CrawlService 와 in-flight/dedup 상태를 공유한다.
+// 의존: prisma, logs(operationLog), crawl(app.crawl — plugins/crawl.ts 의 전역
+// singleton). 크롤은 그 인스턴스를 그대로 써야 요약 중지·enrich 중복 가드·enrich 완료
+// →군집화 체인이 앱 singleton 과 이어지고 결과 캐시·대기열도 하나로 유지된다.
 export default fp(
   async (app) => {
     const restaurants = new RestaurantService(app.prisma);
-    const aiConfig = new AiConfigService(app.prisma, buildLlmProviderEnv());
-    // 요약 완료 후 자동 enrich(관점/문맥/임베딩) 훅용 — 누락 시 이 경로(스케줄/
-    // 지역랜덤/텔레그램 선택 크롤)로 만든 요약이 검색 불가 상태로 남는다.
-    const reviewSearch = new ReviewSearchService(app.prisma, aiConfig);
-    const summaries = new SummaryService(app.prisma, aiConfig, {
-      logger: app.log,
-      operationLog: app.operationLog,
-      reviewSearch,
-    });
-    const canonical = new CanonicalService(app.prisma);
-    const proposals = new ProposalService(app.prisma, canonical);
-    const crawl = new CrawlService(
-      restaurants,
-      summaries,
-      jobRegistry,
-      proposals,
-      canonical,
-      app.operationLog,
-    );
+    const crawl = app.crawl;
     const telegram = new TelegramService({
       botToken: env.TELEGRAM_BOT_TOKEN,
       chatId: env.TELEGRAM_CHAT_ID,
@@ -72,7 +46,7 @@ export default fp(
       randomCrawl.shutdown();
     });
   },
-  { name: 'random-crawl', dependencies: ['prisma', 'logs'] },
+  { name: 'random-crawl', dependencies: ['prisma', 'logs', 'crawl'] },
 );
 
 declare module 'fastify' {

@@ -9,6 +9,7 @@ import {
 } from '../restaurant/canonical-members.js';
 import { ASPECTS, Bm25, RRF_K, cosine, isJunk, type Aspect, type Polarity } from './retrieval.js';
 import { fetchWithTimeout } from '../../lib/fetch-timeout.js';
+import { ConcurrencyGate } from '../ai/concurrency-gate.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // review-search — DB 영속 문맥검색/RAG. vector-lab 프로토타입에서 검증된
@@ -26,6 +27,22 @@ const ENRICH_BATCH = 12; // enrich LLM 한 호출당 리뷰 수
 const ENRICH_CONCURRENCY = 6;
 const RERANK_POOL = Number(process.env.RS_RERANK_POOL) || 30; // 리랭크 후보 풀(env 로 A/B 튜닝)
 const ASK_EVIDENCE = 6;
+// 질문 코퍼스 캐시 — 바이트 상한 + 30분 미사용 만료. 개수(16) 기준이면 큰 가게가 몰릴 때 상한이
+// 없고(1,000건급 16곳 ≈ 190MB), TTL 이 없어 한 번 물어본 가게 코퍼스가 재시작까지 상주했다.
+const CORPUS_CACHE_MAX_BYTES = 48 * 1024 * 1024;
+const CORPUS_CACHE_TTL_MS = 30 * 60_000;
+// 코퍼스 1건 바이트 근사 — 벡터(Float32)는 실제 크기, 본문은 UTF-16 + BM25 문서(trigram Map)를
+// 글자당 계수로, 항목·Map 고정 오버헤드는 상수로. 실측(1,032건 가게)으로 맞춘 값이다.
+const CORPUS_BYTES_PER_CHAR = 40;
+const CORPUS_ITEM_OVERHEAD_BYTES = 400;
+// 공개 질문 답변 캐시 — (가게, 코퍼스 버전, 정규화 질문) 키. 예시 칩처럼 같은 질문이 반복되면
+// 임베딩 1 + LLM 3콜을 건너뛴다. 코퍼스가 바뀌면(enrich) 키가 달라져 자연 무효.
+const ASK_CACHE_TTL_MS = 20 * 60_000;
+const ASK_CACHE_MAX = 500;
+// 질문 경로(리랭크·답변·검증) LLM 동시 호출 상한 — chatJson 은 어댑터의 계정 게이트를 거치지
+// 않으므로, 몰리는 공개 질문이 요약·enrich 의 계정 동시성을 잠식하지 않게 로컬에서 묶는다.
+// (enrich 는 자체 동시성 ENRICH_CONCURRENCY 로 따로 돈다 — 같이 묶으면 질문이 enrich 뒤에 줄 선다.)
+const ASK_CHAT_CONCURRENCY = 4;
 
 export type SearchMode = 'dense' | 'hybrid' | 'rerank';
 
@@ -61,17 +78,45 @@ interface CorpusItem {
   reviewId: string;
   body: string;
   rating: number | null;
-  vec: number[];
+  // Float32 — 임베딩(bge-m3)은 원래 float32 정밀도라 코사인 순위는 사실상 그대로(차이 ~1e-7),
+  // 메모리는 number[](원소당 8B) 대비 절반.
+  vec: Float32Array;
+}
+
+interface Corpus {
+  items: CorpusItem[];
+  bm25: Bm25;
+}
+
+// 공개 질문 결과 — denied 는 한도 거부 안내(같은 질문으로 합류한 다른 사용자는 자기 한도로 다시 시도).
+interface AskOutcome {
+  result: AskResult;
+  denied: boolean;
+}
+
+export interface PublicAskOptions {
+  verify?: boolean;
+  // 실제 파이프라인(임베딩 + LLM)을 돌리기 직전에만 불린다 — 답변 캐시 적중·같은 질문 합류·
+  // 준비 안 됨은 부르지 않는다(한도 소비 없음). AskResult 를 돌려주면 그 응답으로 대신한다.
+  admit?: () => Promise<AskResult | null>;
 }
 
 interface LruCacheCompat<K, V> {
   get(key: K): V | undefined;
   set(key: K, value: V): unknown;
   delete(key: K): boolean;
+  readonly size: number;
+  readonly calculatedSize?: number;
 }
 
 interface LruCacheConstructor {
-  new <K, V>(options: { max: number }): LruCacheCompat<K, V>;
+  new <K, V>(options: {
+    max: number;
+    maxSize?: number;
+    sizeCalculation?: (value: V, key: K) => number;
+    ttl?: number;
+    updateAgeOnGet?: boolean;
+  }): LruCacheCompat<K, V>;
 }
 
 const require = createRequire(import.meta.url);
@@ -82,10 +127,40 @@ const LruCache = (
     : (lruCacheModule as { LRUCache?: unknown }).LRUCache
 ) as LruCacheConstructor;
 
+// 코퍼스 바이트 근사(sizeCalculation). lru-cache 는 양의 정수를 요구한다.
+export const estimateCorpusBytes = (corpus: { items: ReadonlyArray<CorpusItem> }): number => {
+  let bytes = 0;
+  for (const c of corpus.items) {
+    bytes += c.vec.byteLength + c.body.length * CORPUS_BYTES_PER_CHAR + CORPUS_ITEM_OVERHEAD_BYTES;
+  }
+  return Math.max(1, Math.ceil(bytes));
+};
+
+// 답변 캐시 키의 질문 정규화 — 대소문자·공백·끝 문장부호 차이만 같은 질문으로 본다.
+export const normalizeAskQuery = (q: string): string =>
+  q
+    .normalize('NFC')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[\s?!.~…？！。]+$/u, '');
+
 export class ReviewSearchService {
   // restaurantId → 검색 코퍼스(DB enrich 결과 로드, BM25 포함). enrich 시 무효화.
-  // LRU 바운드 — 식당당 코퍼스가 ~수MB(임베딩)라 무한 증가 방지(단일 인스턴스 메모리 보호).
-  private corpusCache = new LruCache<string, { items: CorpusItem[]; bm25: Bm25 }>({ max: 16 });
+  // 바이트 상한(maxSize) + 미사용 30분 만료 — 개수 백스톱(max)은 작은 가게가 많을 때만 닿는다.
+  private corpusCache = new LruCache<string, Corpus>({
+    max: 64,
+    maxSize: CORPUS_CACHE_MAX_BYTES,
+    sizeCalculation: (corpus) => estimateCorpusBytes(corpus),
+    ttl: CORPUS_CACHE_TTL_MS,
+    updateAgeOnGet: true,
+  });
+  // 대표 키 → enrich 세대. enrich 가 끝날 때마다 올려 답변 캐시 키를 바꾼다(재enrich 로 임베딩만
+  // 바뀌어 검색가능 수가 같은 경우까지 덮는다). 프로세스 메모리라 재시작 시 캐시와 함께 초기화.
+  private corpusGeneration = new Map<string, number>();
+  private askCache = new LruCache<string, AskResult>({ max: ASK_CACHE_MAX, ttl: ASK_CACHE_TTL_MS });
+  private askInflight = new Map<string, Promise<AskOutcome>>();
+  private askChatGate = new ConcurrencyGate(ASK_CHAT_CONCURRENCY);
   // enrich 진행 중인 restaurantId → 진행률(processed/total). 상태 뷰 표시 + 중복 트리거 방지
   // + SSE 진행률. app 싱글톤이라 라우트·요약 훅이 같은 상태를 본다.
   private enriching = new Map<string, { processed: number; total: number }>();
@@ -171,6 +246,8 @@ export class ReviewSearchService {
     }
 
     this.corpusCache.delete(key); // 무효화(대표 키)
+    // 임베딩이 실제로 바뀐 경우만 세대를 올려 그 가게의 답변 캐시를 무효화한다.
+    if (enriched > 0) this.corpusGeneration.set(key, (this.corpusGeneration.get(key) ?? 0) + 1);
     const total = await this.prisma.reviewSummary.count({
       where: { review: { restaurantId: { in: ids } }, embeddingJson: { not: null } },
     });
@@ -392,17 +469,29 @@ export class ReviewSearchService {
   // ── RAG ─────────────────────────────────────────────────────────────────
 
   async ask(restaurantId: string, query: string, opts?: { verify?: boolean }): Promise<AskResult> {
+    return (await this.askDetailed(restaurantId, query, opts)).result;
+  }
+
+  // ask 본문 + 캐시 가능 여부(LLM 일시 실패로 답변·검증이 빠졌으면 false).
+  private async askDetailed(
+    restaurantId: string,
+    query: string,
+    opts?: { verify?: boolean },
+  ): Promise<{ result: AskResult; cacheable: boolean }> {
     await this.loadCorpus(restaurantId); // enrich 필요 시 에러
     // HyDE 미사용 — A/B(probe:hyde) 측정상 짧은 한국어 리뷰에선 가상 리뷰가 다관점으로
     // 신호를 희석해 dense recall 을 오히려 떨어뜨림(raw 65% vs HyDE 54%). 제거로 품질↑ + 1콜 절감.
     const evidence = await this.search(restaurantId, query, ASK_EVIDENCE, 'rerank');
     if (evidence.length === 0) {
       return {
-        answer: '관련 리뷰를 찾지 못했습니다.',
-        confidence: 'none',
-        hyde: null,
-        citations: [],
-        verification: null,
+        result: {
+          answer: '관련 리뷰를 찾지 못했습니다.',
+          confidence: 'none',
+          hyde: null,
+          citations: [],
+          verification: null,
+        },
+        cacheable: true,
       };
     }
     const ctx = evidence.map((h, i) => `[${i + 1}] ${h.body.slice(0, 300)}`).join('\n');
@@ -417,14 +506,18 @@ export class ReviewSearchService {
       `- 각 주장 뒤에 근거 리뷰 번호를 [n] 으로 표기(그 번호 리뷰가 실제로 그 내용을 담아야 함).\n\n` +
       `질문: ${query}\n\n리뷰:\n${ctx}\n\n` +
       `JSON {"answer": "...[n]...", "confidence": "high"|"medium"|"low"|"none"}`;
-    const parsed = await this.chatJson<{ answer?: string; confidence?: string }>(prompt, {
-      type: 'object',
-      properties: {
-        answer: { type: 'string' },
-        confidence: { enum: ['high', 'medium', 'low', 'none'] },
+    const parsed = await this.chatJson<{ answer?: string; confidence?: string }>(
+      prompt,
+      {
+        type: 'object',
+        properties: {
+          answer: { type: 'string' },
+          confidence: { enum: ['high', 'medium', 'low', 'none'] },
+        },
+        required: ['answer', 'confidence'],
       },
-      required: ['answer', 'confidence'],
-    });
+      this.askChatGate,
+    );
     const c = parsed?.confidence;
     let answer = parsed?.answer?.trim() || '답변 생성 실패 — 근거 리뷰를 참고하세요.';
     let confidence: AskResult['confidence'] =
@@ -432,9 +525,11 @@ export class ReviewSearchService {
 
     // 검증 가드레일 — 생성한 답을 claim 단위로 근거 대조. 미지원 주장 제거 + confidence 강등.
     let verification: AskResult['verification'] = null;
+    let verified = opts?.verify === false;
     if (opts?.verify !== false) {
       const v = await this.verifyAnswer(query, answer, evidence);
       if (v) {
+        verified = true;
         verification = { applied: true, dropped: v.dropped };
         if (v.dropped.length > 0) {
           answer = v.answer || '근거 리뷰에서 확인된 내용이 없습니다.';
@@ -443,7 +538,11 @@ export class ReviewSearchService {
       }
     }
 
-    return { answer, confidence, hyde: null, citations: evidence, verification };
+    return {
+      result: { answer, confidence, hyde: null, citations: evidence, verification },
+      // 답변 생성·검증이 LLM 일시 실패로 빠진 결과는 캐시하지 않는다(다음 질문이 다시 시도).
+      cacheable: parsed !== null && verified,
+    };
   }
 
   // 검증 패스 — 답변을 사실 단위로 쪼개 각 주장이 근거 리뷰에 실제로 있는지 엄격 대조.
@@ -471,25 +570,29 @@ export class ReviewSearchService {
     const parsed = await this.chatJson<{
       claims?: Array<{ text?: string; supported?: boolean; span?: string }>;
       revisedAnswer?: string;
-    }>(prompt, {
-      type: 'object',
-      properties: {
-        claims: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              text: { type: 'string' },
-              supported: { type: 'boolean' },
-              span: { type: 'string' },
+    }>(
+      prompt,
+      {
+        type: 'object',
+        properties: {
+          claims: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                text: { type: 'string' },
+                supported: { type: 'boolean' },
+                span: { type: 'string' },
+              },
+              required: ['text', 'supported', 'span'],
             },
-            required: ['text', 'supported', 'span'],
           },
+          revisedAnswer: { type: 'string' },
         },
-        revisedAnswer: { type: 'string' },
+        required: ['claims', 'revisedAnswer'],
       },
-      required: ['claims', 'revisedAnswer'],
-    });
+      this.askChatGate,
+    );
     if (!parsed?.claims) return null;
     const dropped = parsed.claims
       .filter((cl) => cl.supported === false)
@@ -513,10 +616,12 @@ export class ReviewSearchService {
 
   // 공개 질문 — placeId → 식당 해석 후 ask. 자동 enrich 안 함(비용). 식당 없음 → null.
   // enrich 안 된 식당은 graceful 'none' 으로 안내(에러 대신).
+  // 같은 가게·같은 질문은 코퍼스가 그대로인 동안 답변을 재사용하고(캐시), 동시에 들어온 같은
+  // 질문은 진행 중 결과에 합류한다. 한도(opts.admit)는 실제로 파이프라인을 돌릴 때만 센다.
   async askByPlaceId(
     placeId: string,
     query: string,
-    opts?: { verify?: boolean },
+    opts?: PublicAskOptions,
   ): Promise<AskResult | null> {
     const members = await resolveCanonicalMembersByPlaceId(this.prisma, placeId);
     if (!members) return null;
@@ -532,7 +637,45 @@ export class ReviewSearchService {
         verification: null,
       };
     }
-    return this.ask(members.primaryId, query, opts);
+    const primaryId = members.primaryId;
+    // 코퍼스 버전 = 검색가능 수 + enrich 세대 — 리뷰가 늘거나 재enrich 되면 키가 바뀐다.
+    const key = [
+      primaryId,
+      ready,
+      this.corpusGeneration.get(primaryId) ?? 0,
+      opts?.verify === false ? 'nv' : 'v',
+      normalizeAskQuery(query),
+    ].join('\u0000');
+
+    const cached = this.askCache.get(key);
+    if (cached) return cached;
+    const joined = this.askInflight.get(key);
+    if (joined) {
+      const outcome = await joined;
+      if (!outcome.denied) return outcome.result;
+      // 앞선 같은 질문이 그 사람 한도로 거부됐을 뿐 — 아래에서 내 한도로 직접 돈다.
+      const after = this.askCache.get(key);
+      if (after) return after;
+    }
+
+    const run = this.runPublicAsk(key, primaryId, query, opts).finally(() => {
+      if (this.askInflight.get(key) === run) this.askInflight.delete(key);
+    });
+    this.askInflight.set(key, run);
+    return (await run).result;
+  }
+
+  private async runPublicAsk(
+    key: string,
+    primaryId: string,
+    query: string,
+    opts?: PublicAskOptions,
+  ): Promise<AskOutcome> {
+    const denied = await opts?.admit?.();
+    if (denied) return { result: denied, denied: true };
+    const { result, cacheable } = await this.askDetailed(primaryId, query, opts);
+    if (cacheable) this.askCache.set(key, result);
+    return { result, denied: false };
   }
 
   // ── 내부: 코퍼스 로드 / LLM ────────────────────────────────────────────────
@@ -541,7 +684,7 @@ export class ReviewSearchService {
   // 단일 행이 아니라 그 가게(canonical)의 공개 멤버 행 전체에서 로드 — 공개 리뷰
   // 탭이 보여주는 통합 코퍼스와 동일하게(다이닝코드/테이블링 리뷰 포함). 캐시·
   // 대표 키는 primaryId(placeId 보유 네이버 행).
-  private async loadCorpus(restaurantId: string): Promise<{ items: CorpusItem[]; bm25: Bm25 }> {
+  private async loadCorpus(restaurantId: string): Promise<Corpus> {
     const members = await resolveCanonicalMembersByRestaurantId(this.prisma, restaurantId);
     const ids = members?.memberIds ?? [restaurantId];
     const key = members?.primaryId ?? restaurantId;
@@ -566,13 +709,18 @@ export class ReviewSearchService {
         reviewId: r.reviewId,
         body,
         rating: r.review.rating,
-        vec: safeParse<number[]>(r.embeddingJson, []),
+        vec: Float32Array.from(safeParse<number[]>(r.embeddingJson, [])),
       });
     }
     if (items.length === 0) throw new Error('먼저 리뷰 enrich 를 실행하세요 (ensureEnriched)');
-    const entry = { items, bm25: new Bm25(items.map((c) => ({ id: c.reviewId, text: c.body }))) };
+    const entry: Corpus = { items, bm25: new Bm25(items.map((c) => ({ id: c.reviewId, text: c.body }))) };
     this.corpusCache.set(key, entry);
     return entry;
+  }
+
+  // 측정·테스트용 — 코퍼스 캐시 개수와 추정 바이트.
+  corpusCacheStats(): { entries: number; bytes: number } {
+    return { entries: this.corpusCache.size, bytes: this.corpusCache.calculatedSize ?? 0 };
   }
 
   // 임베딩 엔드포인트(로컬/사이드카 Ollama) 도달성·차원 확인. 배포 preflight·부팅 헬스체크용.
@@ -636,7 +784,22 @@ export class ReviewSearchService {
   }
 
   // ollama-cloud chat 호출 — JSON 본문만 견고 파싱(코드펜스 제거). 실패 시 null.
-  private async chatJson<T>(prompt: string, schema?: Record<string, unknown>): Promise<T | null> {
+  // gate 를 주면 그 동시성 안에서만 호출한다(질문 경로 — ASK_CHAT_CONCURRENCY).
+  private async chatJson<T>(
+    prompt: string,
+    schema?: Record<string, unknown>,
+    gate?: ConcurrencyGate,
+  ): Promise<T | null> {
+    if (!gate) return this.chatJsonUngated<T>(prompt, schema);
+    await gate.acquire();
+    try {
+      return await this.chatJsonUngated<T>(prompt, schema);
+    } finally {
+      gate.release();
+    }
+  }
+
+  private async chatJsonUngated<T>(prompt: string, schema?: Record<string, unknown>): Promise<T | null> {
     const resolved = await this.aiConfig.getResolved('ollama-cloud', 'chat');
     if (!resolved?.defaultModel) return null;
     try {
@@ -676,11 +839,15 @@ export class ReviewSearchService {
     const prompt =
       `질의: "${query}"\n\n아래 리뷰 중 질의 "의도"에 실제로 부합하는 것을 관련도 높은 순으로 ` +
       `최대 ${topN}개 번호만 골라라. 글자/주제가 아니라 의미로 판단(부정 질의면 칭찬 제외). 없으면 빈 배열.\n\n리뷰:\n${list}`;
-    const parsed = await this.chatJson<{ ranking?: number[] } | number[]>(prompt, {
-      type: 'object',
-      properties: { ranking: { type: 'array', items: { type: 'number' } } },
-      required: ['ranking'],
-    });
+    const parsed = await this.chatJson<{ ranking?: number[] } | number[]>(
+      prompt,
+      {
+        type: 'object',
+        properties: { ranking: { type: 'array', items: { type: 'number' } } },
+        required: ['ranking'],
+      },
+      this.askChatGate,
+    );
     const ranking = Array.isArray(parsed) ? parsed : (parsed?.ranking ?? []);
     const picked: SearchHit[] = [];
     const used = new Set<number>();

@@ -1,13 +1,14 @@
-import type {
-  ReviewAskInputType,
-  ReviewAskResultType,
-  ReviewEnrichBgResultType,
-  ReviewEnrichPendingResultType,
-  ReviewEnrichStatusListType,
-  ReviewEnrichStatusQueryType,
-  ReviewQaReadyResultType,
-  ReviewSearchEnrichResultType,
-  ReviewSearchRestaurantsResultType,
+import {
+  REVIEW_ASK_GUEST_KEY_HEADER,
+  type ReviewAskInputType,
+  type ReviewAskResultType,
+  type ReviewEnrichBgResultType,
+  type ReviewEnrichPendingResultType,
+  type ReviewEnrichStatusListType,
+  type ReviewEnrichStatusQueryType,
+  type ReviewQaReadyResultType,
+  type ReviewSearchEnrichResultType,
+  type ReviewSearchRestaurantsResultType,
 } from '@repo/api-contract';
 import { apiFetch, getApiConfig } from './client.js';
 
@@ -54,10 +55,12 @@ export const reviewSearchApi = {
   publicQaReady: (placeId: string) =>
     apiFetch<ReviewQaReadyResultType>(`${PUBLIC_PREFIX}/${encodeURIComponent(placeId)}/qa/ready`),
 
-  publicAsk: (placeId: string, query: string) =>
+  // 게스트 키 — 서버가 기기 일일 한도를 센다(없으면 IP 기준이라 같은 IP 사용자들이 한도를 나눠 쓴다).
+  publicAsk: (placeId: string, query: string, guestKey: string | null = null) =>
     apiFetch<ReviewAskResultType>(`${PUBLIC_PREFIX}/${encodeURIComponent(placeId)}/qa`, {
       method: 'POST',
       body: JSON.stringify({ query }),
+      headers: guestKey ? { [REVIEW_ASK_GUEST_KEY_HEADER]: guestKey } : undefined,
     }),
 };
 

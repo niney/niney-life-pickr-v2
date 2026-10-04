@@ -7,6 +7,7 @@ import type {
   ReviewEnrichStatusQueryType,
 } from '@repo/api-contract';
 import { buildReviewEnrichEventsUrl, reviewSearchApi } from '../api/review-search.api.js';
+import { getGuestKey } from '../stores/guestKeyStore.js';
 
 export const useReviewSearchRestaurants = () =>
   useQuery({
@@ -96,5 +97,5 @@ export const useReviewQaReady = (placeId: string, enabled = true) =>
 export const useReviewAskPublic = () =>
   useMutation({
     mutationFn: ({ placeId, query }: { placeId: string; query: string }) =>
-      reviewSearchApi.publicAsk(placeId, query),
+      reviewSearchApi.publicAsk(placeId, query, getGuestKey()),
   });

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { createInjectableStorage } from './injectableStorage.js';
+import { getGuestKey } from './guestKeyStore.js';
 import type { ReviewAskResultType } from '@repo/api-contract';
 import { reviewSearchApi } from '../api/review-search.api.js';
 
@@ -114,7 +115,7 @@ export const useReviewAskStore = create<ReviewAskState>()(
         });
 
         try {
-          const result = await reviewSearchApi.publicAsk(placeId, text);
+          const result = await reviewSearchApi.publicAsk(placeId, text, getGuestKey());
           set((s) => {
             const inFlight = { ...s.inFlight };
             delete inFlight[placeId];

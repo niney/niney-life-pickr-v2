@@ -115,9 +115,9 @@ export const fetchVisitorReviewStats = async (
     },
   ]);
 
-  // 외부 signal 이 없으면 자체 timeout — stuck 방지.
-  const ac = options.signal ? null : new AbortController();
-  const timeoutId = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+  // 외부 signal(잡 취소)과 자체 timeout 을 합성 — signal 을 받아도 stuck 방지(본문 읽기 포함).
+  const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
 
   try {
     const res = await fetch(ENDPOINT, {
@@ -130,15 +130,13 @@ export const fetchVisitorReviewStats = async (
         'x-wtm-graphql': buildWtmHeader(placeId),
       },
       body,
-      signal: options.signal ?? ac?.signal,
+      signal,
     });
     if (!res.ok) return null;
     const json: unknown = await res.json();
     return parseVisitorReviewStats(json);
   } catch {
     return null;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
   }
 };
 

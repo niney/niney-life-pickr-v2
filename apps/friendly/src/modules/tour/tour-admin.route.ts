@@ -14,33 +14,25 @@ import {
   TourSeedRegisterResult,
 } from '@repo/api-contract';
 import { env } from '../../config/env.js';
-import { CanonicalService } from '../canonical/canonical.service.js';
-import { ProposalService } from '../canonical/proposal.service.js';
-import { CrawlService } from '../crawl/crawl.service.js';
 import { jobRegistry } from '../crawl/job-registry.js';
 import { RestaurantService } from '../restaurant/restaurant.service.js';
 import { TourAdminService, TourPlaceNotFoundError } from './tour-admin.service.js';
 import { tourDefaultExportDir } from './tour-master.service.js';
 
-// 여행로그 관리자 라우트(2차) — 전부 admin. 상태·시드 목록은 로컬 DB 만, 후보 찾기·등록은 크롤 서비스(지연 생성 —
-// 테스트 앱이 summaries/operationLog 플러그인 없이 상태·목록만 검증할 수 있게). 원본 행을 내는 라우트는 tour-raw.route.ts(3차).
+// 여행로그 관리자 라우트(2차) — 전부 admin. 상태·시드 목록은 로컬 DB 만, 후보 찾기·등록은 크롤 서비스(지연 참조 —
+// 테스트 앱이 crawl 플러그인 없이 상태·목록만 검증할 수 있게). 원본 행을 내는 라우트는 tour-raw.route.ts(3차).
 
 const PlaceParams = z.object({ placeId: z.string().min(1).max(40) });
 const SECURITY = [{ bearerAuth: [] }];
 
 const tourAdminRoutes: FastifyPluginAsync = async (app) => {
   const restaurants = new RestaurantService(app.prisma);
-  let crawl: CrawlService | null = null;
   const service = new TourAdminService({
     prisma: app.prisma,
     restaurants,
-    crawl: () => {
-      if (!crawl) {
-        const canonical = new CanonicalService(app.prisma);
-        crawl = new CrawlService(restaurants, app.summaries, jobRegistry, new ProposalService(app.prisma, canonical), canonical, app.operationLog);
-      }
-      return crawl;
-    },
+    // plugins/crawl.ts 의 전역 singleton(지연 참조 — 테스트 앱은 crawl 플러그인 없이 상태·목록만 검증).
+    // 따로 만들면 결과 캐시·actor 대기열이 갈라져 수동 크롤과 슬롯을 나눠 쓰지 못한다.
+    crawl: () => app.crawl,
     jobRegistry,
     serviceKey: () => env.DATA_GO_KR_API_KEY,
     exportDir: () => tourDefaultExportDir(),

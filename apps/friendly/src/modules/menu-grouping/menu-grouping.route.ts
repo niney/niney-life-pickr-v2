@@ -53,9 +53,11 @@ const menuGroupingRoutes: FastifyPluginAsync = async (app) => {
     },
     handler: async (req) => {
       const actorId = req.user.userId;
-      const { id } = groupingJobRegistry.create({ actorId, placeIds: req.body.placeIds });
+      // 중복 placeId 제거 — 같은 가게를 한 잡에서 두 번 정규화(LLM 두 번)하지 않게.
+      const placeIds = Array.from(new Set(req.body.placeIds));
+      const { id } = groupingJobRegistry.create({ actorId, placeIds });
       // 즉시 백그라운드 실행 — 응답은 초기 스냅샷.
-      void runJob(id, req.body.placeIds, grouping, app.log).catch((e) => {
+      void runJob(id, placeIds, grouping, app.log).catch((e) => {
         app.log.error({ err: e, jobId: id }, '[menu-grouping] job runner crashed');
       });
       const snapshot = groupingJobRegistry.get(id, actorId);

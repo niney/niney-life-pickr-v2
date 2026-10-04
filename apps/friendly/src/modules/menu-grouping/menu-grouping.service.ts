@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type {
   MenuGroupRunResultType,
@@ -75,6 +75,11 @@ export interface GroupForRestaurantOpts {
   trigger?: string | null;
 }
 
+// placeId → 진행 중인 정규화. 모듈 스코프라 벌크 잡(라우트)·스케줄 등 서비스 인스턴스가
+// 달라도 공유한다 — 같은 가게가 겹치면 두 번째 호출은 LLM 을 다시 돌리지 않고 진행 중
+// 결과에 합류한다(결과는 어차피 통째 교체라 마지막 쓰기가 이기던 중복 비용만 사라진다).
+const groupingInFlight = new Map<string, Promise<MenuGroupRunResultType>>();
+
 export class MenuGroupingService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -89,8 +94,22 @@ export class MenuGroupingService {
   // 단일 식당의 distinct nameNorm 들을 LLM 으로 canonical 그룹에 매핑.
   // 기존 매핑은 모두 삭제 후 새로 작성 (idempotent). LLM 미설정/오류 시
   // MenuGroupingError 던짐 — 호출자(라우트)가 4xx/5xx 로 변환.
-  // run 경계 = 이 메서드 1회. opts.parentRunId 로 부모 run(schedule 등)과 연계.
-  async groupForRestaurant(
+  // run 경계 = 이 메서드 1회(진행 중 합류는 run 을 새로 만들지 않는다).
+  // opts.parentRunId 로 부모 run(schedule 등)과 연계.
+  groupForRestaurant(
+    placeId: string,
+    opts?: GroupForRestaurantOpts,
+  ): Promise<MenuGroupRunResultType> {
+    const inflight = groupingInFlight.get(placeId);
+    if (inflight) return inflight;
+    const run = this.runGroupForRestaurant(placeId, opts).finally(() => {
+      groupingInFlight.delete(placeId);
+    });
+    groupingInFlight.set(placeId, run);
+    return run;
+  }
+
+  private async runGroupForRestaurant(
     placeId: string,
     opts?: GroupForRestaurantOpts,
   ): Promise<MenuGroupRunResultType> {
@@ -646,82 +665,55 @@ export class MenuGroupingService {
 
     const canonByNorm = new Map(canonicals.map((c) => [c.nameNorm, c]));
 
-    // 글로벌 비교 통계 — 우리 식당의 메뉴들이 링크된 globalCanonical id 수집 후
-    // 그 globalId 들에 매핑된 모든 식당의 멘션을 합산. 식당당 1쿼리로 바운드 — 보통
-    // 한 globalKey 에 식당 1~10개 사이라 OK. 더 빨라야 하면 raw SQL 로 단일 쿼리화.
-    const targetGlobalIds = canonicals
-      .map((c) => c.globalLink?.global.id)
-      .filter((id): id is string => !!id);
+    // 글로벌 비교 통계 — 우리 식당의 메뉴들이 링크된 globalCanonical 마다, 같은 글로벌에
+    // 링크된 모든 식당 그룹의 멘션을 합산한다. 예전엔 형제 식당마다 멘션을 1쿼리씩 읽어
+    // JS 로 셌다(N+1 — 글로벌 머지가 흔한 메뉴를 잇는 운영에선 N≈그룹핑된 가게 수). 한 번의
+    // GROUP BY 로 같은 값을 받는다: (restaurantId, nameNorm) 은 menu_canonicals 에서 유일하고
+    // 링크는 canonical 당 하나라 멘션 1건이 정확히 한 글로벌에만 잡힌다. 멘션 0건인 글로벌은
+    // 행이 없어 아래 '0 채움' 분기로 간다(예전과 같다).
+    const targetGlobalIds = [
+      ...new Set(
+        canonicals.map((c) => c.globalLink?.global.id).filter((id): id is string => !!id),
+      ),
+    ];
 
     interface GlobalAgg {
-      id: string;
-      globalKey: string;
-      displayName: string;
       totalMentions: number;
       positive: number;
       negative: number;
-      restaurants: Set<string>;
+      restaurantCount: number;
     }
     const globalAggById = new Map<string, GlobalAgg>();
 
     if (targetGlobalIds.length > 0) {
-      // 같은 글로벌에 링크된 모든 식당 그룹을 끌어온다 — (restaurantId, nameNorm)
-      // 으로 menu_mentions 와 join 하기 위함.
-      const siblings = await this.prisma.menuCanonical.findMany({
-        where: { globalLink: { globalCanonicalId: { in: targetGlobalIds } } },
-        select: {
-          restaurantId: true,
-          nameNorm: true,
-          globalLink: {
-            select: {
-              global: { select: { id: true, globalKey: true, displayName: true } },
-            },
-          },
-        },
-      });
-
-      // restaurantId → [{ nameNorm, globalId }] — 식당별로 한 번에 멘션 끌어옴.
-      const siblingsByRestaurant = new Map<
-        string,
-        { nameNorm: string; global: { id: string; globalKey: string; displayName: string } }[]
-      >();
-      for (const s of siblings) {
-        if (!s.globalLink) continue;
-        const arr = siblingsByRestaurant.get(s.restaurantId) ?? [];
-        arr.push({ nameNorm: s.nameNorm, global: s.globalLink.global });
-        siblingsByRestaurant.set(s.restaurantId, arr);
-      }
-
-      for (const [restId, sibs] of siblingsByRestaurant) {
-        const norms = sibs.map((s) => s.nameNorm);
-        const siblingMentions = await this.prisma.menuMention.findMany({
-          where: { restaurantId: restId, nameNorm: { in: norms } },
-          select: { sentiment: true, nameNorm: true },
+      const rows = await this.prisma.$queryRaw<
+        Array<{
+          globalId: string;
+          total: bigint | number;
+          positive: bigint | number | null;
+          negative: bigint | number | null;
+          restaurants: bigint | number;
+        }>
+      >`
+        SELECT l.globalCanonicalId AS globalId,
+               COUNT(*) AS total,
+               SUM(CASE WHEN m.sentiment = 'positive' THEN 1 ELSE 0 END) AS positive,
+               SUM(CASE WHEN m.sentiment = 'negative' THEN 1 ELSE 0 END) AS negative,
+               COUNT(DISTINCT m.restaurantId) AS restaurants
+        FROM global_menu_canonical_links l
+        JOIN menu_canonicals mc ON mc.id = l.menuCanonicalId
+        JOIN menu_mentions m ON m.restaurantId = mc.restaurantId AND m.nameNorm = mc.nameNorm
+        WHERE l.globalCanonicalId IN (${Prisma.join(targetGlobalIds)})
+        GROUP BY l.globalCanonicalId
+      `;
+      for (const r of rows) {
+        globalAggById.set(r.globalId, {
+          totalMentions: Number(r.total),
+          positive: Number(r.positive ?? 0),
+          // neutral 은 totalMentions 에만 들어가고 별도 트랙 안 함 — UI 가 안 씀.
+          negative: Number(r.negative ?? 0),
+          restaurantCount: Number(r.restaurants),
         });
-        // 이 식당의 nameNorm → globalId 매핑.
-        const globalByNorm = new Map(sibs.map((s) => [s.nameNorm, s.global]));
-        for (const mm of siblingMentions) {
-          const g = globalByNorm.get(mm.nameNorm);
-          if (!g) continue;
-          let agg = globalAggById.get(g.id);
-          if (!agg) {
-            agg = {
-              id: g.id,
-              globalKey: g.globalKey,
-              displayName: g.displayName,
-              totalMentions: 0,
-              positive: 0,
-              negative: 0,
-              restaurants: new Set<string>(),
-            };
-            globalAggById.set(g.id, agg);
-          }
-          agg.totalMentions += 1;
-          if (mm.sentiment === 'positive') agg.positive += 1;
-          else if (mm.sentiment === 'negative') agg.negative += 1;
-          // neutral 은 카운트만 totalMentions 에 들어가고 별도 트랙 안 함 — UI 가 안 씀.
-          agg.restaurants.add(restId);
-        }
       }
     }
     interface Bucket {
@@ -824,13 +816,13 @@ export class MenuGroupingService {
         if (agg) {
           const gDenom = agg.positive + agg.negative;
           globalField = {
-            globalKey: agg.globalKey,
-            displayName: agg.displayName,
+            globalKey: globalRef.globalKey,
+            displayName: globalRef.displayName,
             totalMentions: agg.totalMentions,
             positive: agg.positive,
             negative: agg.negative,
             positiveRatio: gDenom === 0 ? null : agg.positive / gDenom,
-            restaurantCount: agg.restaurants.size,
+            restaurantCount: agg.restaurantCount,
           };
         } else {
           // 글로벌 링크가 있긴 한데 멘션 집계가 아직 없는 케이스

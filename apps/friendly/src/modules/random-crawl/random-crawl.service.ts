@@ -29,7 +29,7 @@ import {
   type VisitorReviewStats,
 } from '../crawl/adapters/naver-review-stats.http.adapter.js';
 import { jobRegistry as defaultCrawlRegistry } from '../crawl/job-registry.js';
-import type { JobRegistry } from '../crawl/job-registry.js';
+import type { JobRegistry, WaitOutcome } from '../crawl/job-registry.js';
 import type { CrawlService } from '../crawl/crawl.service.js';
 import type { RestaurantService } from '../restaurant/restaurant.service.js';
 import {
@@ -57,6 +57,9 @@ const RUN_HISTORY_LIMIT = 50;
 const SEARCH_PAGE_SIZE = 50;
 // startCrawl 의 actor — 동시성/dedup 키. 사람 actor 와 구분되는 시스템 식별자.
 const ACTOR_ID = 'system:random-crawl';
+// 선택 크롤 종료 대기 상한(대기열 시간 포함) — 크롤이 끝나지 않아도 회차가 영원히 'crawling'
+// 으로 남아 cron·텔레그램 회차를 막지 않게 하는 안전망. 리뷰 100페이지 크롤(~15분) 기준 넉넉히.
+const CRAWL_WAIT_TIMEOUT_MS = 60 * 60_000;
 // 신규 후보 0건 스킵 사유 — notifyEmpty 안내와 텔레그램 커맨드 중복 회신 억제에 공용.
 const EMPTY_REASON = '신규 후보 0건';
 // /search 2단계 입력 — 인자 없이 탭된 /search 에 force_reply 프롬프트를 띄우고,
@@ -614,18 +617,26 @@ export class RandomCrawlService {
           cand.name,
           regionLabel,
         );
+        let waited: WaitOutcome;
         try {
-          await this.waitForCrawlTerminal(start.jobId);
+          waited = await this.crawlRegistry.waitForTerminal(start.jobId, CRAWL_WAIT_TIMEOUT_MS);
         } finally {
           // 진행 편집을 멈추고 in-flight 편집까지 await — 최종 메시지가
           // 늦게 도착한 "수집 중" 편집에 덮이는 경쟁을 막는다.
           await stopProgress();
         }
-        const rest = await this.deps.restaurants.findByPlaceId(cand.placeId);
-        restaurantId = rest?.id ?? null;
-        if (!restaurantId) {
+        if (waited === 'timeout') {
+          // 상한을 넘긴 크롤은 취소한다 — 대기열에 남은 잡이 나중에 좀비로 시작되지 않게.
+          this.deps.crawl.cancel(start.jobId, ACTOR_ID);
           status = 'failed';
-          error = '등록 결과를 찾지 못했습니다.';
+          error = `크롤이 ${CRAWL_WAIT_TIMEOUT_MS / 60_000}분 안에 끝나지 않아 취소했습니다.`;
+        } else {
+          const rest = await this.deps.restaurants.findByPlaceId(cand.placeId);
+          restaurantId = rest?.id ?? null;
+          if (!restaurantId) {
+            status = 'failed';
+            error = '등록 결과를 찾지 못했습니다.';
+          }
         }
       }
     } catch (e) {
@@ -992,22 +1003,6 @@ export class RandomCrawlService {
       unsubscribe();
       await pending;
     };
-  }
-
-  private async waitForCrawlTerminal(crawlJobId: string): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const job = this.crawlRegistry.get(crawlJobId);
-      if (!job || job.status !== 'running') {
-        resolve();
-        return;
-      }
-      const unsubscribe = this.crawlRegistry.subscribe(crawlJobId, (ev) => {
-        if (ev.type === 'done' || ev.type === 'error') {
-          unsubscribe();
-          resolve();
-        }
-      });
-    });
   }
 
   private async touchConfig(status: RandomCrawlRunStatusType): Promise<void> {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TAROT_GUEST_KEY_HEADER } from './tarot.js';
 
 // review-search — 리뷰 문맥검색 / RAG 도메인 계약. 제품 표면은 RAG(질문)만 —
 // standalone 시맨틱/관점 검색 엔드포인트는 제거됨(검색 엔진은 RAG 내부에서만 사용).
@@ -56,6 +57,8 @@ export type ReviewAskResultType = z.infer<typeof ReviewAskResult>;
 
 // 공개 QA (placeId 기반). placeId 는 경로 파라미터이므로 본문엔 query 만.
 export const ReviewPublicAskBody = z.object({ query: z.string().min(1).max(200) });
+// 공개 질문의 게스트 기기 일일 한도 키 — 타로·사주와 같은 공용 게스트 키 헤더(x-guest-key).
+export const REVIEW_ASK_GUEST_KEY_HEADER = TAROT_GUEST_KEY_HEADER;
 export type ReviewPublicAskBodyType = z.infer<typeof ReviewPublicAskBody>;
 
 // 공개 QA 준비 여부 — 해당 식당에 enrich(검색가능) 리뷰가 있는지(LLM 호출 없음).

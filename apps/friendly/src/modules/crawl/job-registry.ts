@@ -48,6 +48,17 @@ interface InternalJob {
 
 export type CancelOutcome = 'aborted' | 'queued-cancelled' | 'noop';
 
+// 슬롯을 기다리는 잡의 시작 함수(actor 별 FIFO). 슬롯 집계(countActive)와 같은 곳에 둬야
+// 어떤 CrawlService 인스턴스의 잡이 끝나든 다음 대기 잡이 시작된다 — 예전엔 인스턴스
+// 필드라 다른 인스턴스가 슬롯을 비워도 큐에 든 잡이 영영 시작되지 않았다.
+interface PendingStart {
+  jobId: string;
+  actorId: string;
+  start: () => void;
+}
+
+export type WaitOutcome = 'terminal' | 'timeout' | 'missing';
+
 // Kept exported for backward-compat with callers that imported it; never
 // thrown anymore — the queue absorbs over-cap requests instead.
 export class MaxConcurrentJobsError extends Error {
@@ -59,6 +70,7 @@ export class MaxConcurrentJobsError extends Error {
 
 export class JobRegistry {
   private readonly jobs = new Map<string, InternalJob>();
+  private readonly pending: PendingStart[] = [];
   private gcTimer: NodeJS.Timeout | null = null;
 
   // Find an in-flight job for the same actor + placeId — dedup double-clicks
@@ -140,6 +152,52 @@ export class JobRegistry {
     const job = this.jobs.get(jobId);
     if (!job) return;
     if (job.phase === 'queued') job.phase = 'active';
+  }
+
+  // 슬롯이 없어 대기열에 올린다. 시작은 takeQueued 를 부른 쪽(슬롯을 비운 잡)이 한다.
+  enqueue(jobId: string, actorId: string, start: () => void): void {
+    this.pending.push({ jobId, actorId, start });
+  }
+
+  // 그 actor 의 다음 대기 잡 시작 함수(FIFO). 취소·종료된 잡의 항목은 건너뛰며 버린다.
+  takeQueued(actorId: string): (() => void) | null {
+    for (let i = 0; i < this.pending.length; ) {
+      const p = this.pending[i]!;
+      if (p.actorId !== actorId) {
+        i += 1;
+        continue;
+      }
+      this.pending.splice(i, 1);
+      if (this.jobs.get(p.jobId)?.phase === 'queued') return p.start;
+    }
+    return null;
+  }
+
+  pendingCount(actorId?: string): number {
+    return actorId === undefined
+      ? this.pending.length
+      : this.pending.filter((p) => p.actorId === actorId).length;
+  }
+
+  // 잡이 끝날 때(done/error)까지 대기. 상한을 넘기면 'timeout' — 호출자(자동 발견·랜덤 크롤)가
+  // 무한 대기하지 않게 하는 안전망. 이미 끝났거나(캐시 히트 등) 레지스트리에서 사라졌으면 즉시.
+  waitForTerminal(jobId: string, timeoutMs: number): Promise<WaitOutcome> {
+    const job = this.jobs.get(jobId);
+    if (!job) return Promise.resolve('missing');
+    if (job.status !== 'running') return Promise.resolve('terminal');
+    return new Promise<WaitOutcome>((resolve) => {
+      // finish 는 구독 콜백·타이머에서만 불린다(둘 다 아래 선언이 끝난 뒤 비동기로 발생).
+      const finish = (outcome: WaitOutcome): void => {
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(outcome);
+      };
+      const unsubscribe = this.subscribe(jobId, (ev) => {
+        if (ev.type === 'done' || ev.type === 'error') finish('terminal');
+      });
+      const timer = setTimeout(() => finish('timeout'), timeoutMs);
+      timer.unref?.();
+    });
   }
 
   get(id: string): InternalJob | null {
@@ -240,18 +298,22 @@ export class JobRegistry {
 
   // Cancel either an active job (abort the Playwright run) or a queued one
   // (caller is responsible for emitting the 'cancelled' error event so seq
-  // numbering stays under the service's control). Returns the outcome so
-  // the service can prune its pending queue when a queued job is cancelled.
+  // numbering stays under the service's control). 대기 잡은 대기열에서 빼고
+  // abort 도 건다 — 시작 준비 중(startRun await)인 startCrawl 이 취소를 알아채게.
   cancel(jobId: string, actorId: string): CancelOutcome {
     const job = this.jobs.get(jobId);
     if (!job) return 'noop';
     if (job.actorId !== actorId) return 'noop';
     if (job.phase === 'finished') return 'noop';
-    if (job.phase === 'active') {
-      job.abort.abort();
-      return 'aborted';
-    }
+    job.abort.abort();
+    if (job.phase === 'active') return 'aborted';
+    this.dropPending(jobId);
     return 'queued-cancelled';
+  }
+
+  private dropPending(jobId: string): void {
+    const idx = this.pending.findIndex((p) => p.jobId === jobId);
+    if (idx >= 0) this.pending.splice(idx, 1);
   }
 
   // Sweep finished jobs after TTL. Runs every minute while jobs exist.
@@ -278,10 +340,12 @@ export class JobRegistry {
     }
   }
 
-  // For graceful shutdown.
+  // For graceful shutdown. 대기열도 비운다 — 진행 중 잡이 abort 로 끝나며 슬롯이 나도
+  // 종료 중에 대기 잡이 새로 시작(브라우저 launch)되지 않게.
   abortAll(): void {
+    this.pending.length = 0;
     for (const j of this.jobs.values()) {
-      if (j.phase === 'active') j.abort.abort();
+      if (j.phase !== 'finished') j.abort.abort();
     }
   }
 }

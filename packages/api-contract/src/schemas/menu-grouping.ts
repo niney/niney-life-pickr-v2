@@ -162,8 +162,9 @@ export type MenuGroupingRestaurantStatusListType = z.infer<
 
 export const MenuGroupingJobInput = z.object({
   // 비어있으면 거부 — 글로벌 "전체 정규화"는 명시적 placeIds 로만 받는다
-  // (UI 가 테이블에서 전체 선택해서 명시적으로 보냄).
-  placeIds: z.array(z.string()).min(1),
+  // (UI 가 테이블에서 전체 선택해서 명시적으로 보냄). 상한은 잡 레지스트리·응답 크기 보호용 —
+  // "처리 필요 전체"(전 네이버 가게)도 한 번에 들어가게 넉넉히 둔다.
+  placeIds: z.array(z.string().min(1).max(64)).min(1).max(5000),
 });
 export type MenuGroupingJobInputType = z.infer<typeof MenuGroupingJobInput>;
 
