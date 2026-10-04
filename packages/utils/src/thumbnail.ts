@@ -9,14 +9,25 @@
 //     크롤 시점 JPEG 사본): 이미 우리 자산이라 프록시 불필요, 그대로 서빙.
 //   - 허용 밖 호스트(자체 호스팅·DC 등): 브라우저가 원본을 직접 로드.
 //
-// 허용 호스트는 서버 ALLOWED_HOSTS(apps/friendly/src/modules/media/media.route.ts)와 맞춘다.
-// 네이버는 *.pstatic.net 전부, 배민 메뉴 사진은 두 호스트 고정.
-const PROXYABLE_HOSTS = new Set(['imagefarm.baemin.com', 'file.smartbaedal.com']);
+// 허용 호스트는 서버 ALLOWED_HOSTS(apps/friendly/src/modules/media/media.route.ts)와 **같은 목록**이다.
+// 서버는 정확히 일치하는 호스트만 받으므로, *.pstatic.net 전부를 태우면 목록 밖 호스트
+// (naverbooking-phinf·blogthumb 등)는 400 으로 깨진다 — 그런 사진은 원본을 직접 받게 둔다.
+// 서버 목록을 바꾸면 여기도 같이 바꾼다.
+const PROXYABLE_HOSTS = new Set([
+  'phinf.pstatic.net',
+  'pup-review-phinf.pstatic.net',
+  'review-phinf.pstatic.net',
+  'ldb-phinf.pstatic.net',
+  'search.pstatic.net',
+  'video-phinf.pstatic.net',
+  // 배민 메뉴 사진.
+  'imagefarm.baemin.com',
+  'file.smartbaedal.com',
+]);
 
 export const isThumbnailProxyable = (url: string): boolean => {
   const m = url.match(/^https?:\/\/([^/:?#]+)/);
-  const host = m?.[1] ?? '';
-  return /\.pstatic\.net$/.test(host) || PROXYABLE_HOSTS.has(host);
+  return PROXYABLE_HOSTS.has((m?.[1] ?? '').toLowerCase());
 };
 
 export const reviewThumbnailUrl = (
