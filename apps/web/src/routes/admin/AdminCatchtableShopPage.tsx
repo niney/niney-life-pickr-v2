@@ -329,6 +329,9 @@ const ShopDetailContent = ({
 }) => {
   const today = data.schedule?.today;
   const weekly = data.schedule?.weekly ?? [];
+  // 원본 JSON 은 펼쳤을 때만 문자열화한다 — <details> 는 닫혀 있어도 자식을 렌더하므로,
+  // 그냥 두면 가게 전체 응답을 렌더마다 pretty-print 해 DOM 에 들고 있게 된다.
+  const [rawOpen, setRawOpen] = useState(false);
   return (
     <div className="space-y-6">
       {/* 이미지 갤러리 */}
@@ -584,14 +587,19 @@ const ShopDetailContent = ({
       </div>
 
       {/* 원본 JSON */}
-      <details className="rounded-md border bg-muted/20">
+      <details
+        className="rounded-md border bg-muted/20"
+        onToggle={(e) => setRawOpen(e.currentTarget.open)}
+      >
         <summary className="cursor-pointer p-3 text-sm font-medium">
           <Code2 className="mr-1 inline size-4 align-text-bottom" />
           원본 응답 JSON
         </summary>
-        <pre className="max-h-96 overflow-auto p-3 text-[11px] leading-relaxed">
-          {JSON.stringify(data, null, 2)}
-        </pre>
+        {rawOpen && (
+          <pre className="max-h-96 overflow-auto p-3 text-[11px] leading-relaxed">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
       </details>
     </div>
   );

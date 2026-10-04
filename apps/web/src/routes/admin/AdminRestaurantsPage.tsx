@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { memo, useCallback, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -78,7 +78,11 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s;
 
-const RestaurantRow = ({
+// memo — 요약 SSE 가 목록 캐시를 패치할 때마다(청크당 두어 번) 페이지가 리렌더되는데, 패치는
+// 바뀐 가게의 item 만 새 객체로 바꾼다. 나머지 행(페이지 크기 25~100)은 props 가 그대로라
+// 다시 그리지 않는다. 그러려면 콜백이 안정 참조여야 해서, 콜백은 행을 식별할 인자(item·id)를
+// 받는 형태로 두고 부모가 useCallback 으로 한 번만 만든 함수를 모든 행에 그대로 넘긴다.
+const RestaurantRow = memo(function RestaurantRow({
   item,
   busy,
   deleting,
@@ -102,13 +106,14 @@ const RestaurantRow = ({
   mergeOpen: boolean;
   // split 진행 중인 restaurantId (해당 행만 disable). 없으면 null.
   splittingRestaurantId: string | null;
-  onAction: (mode: 'recrawl' | 'update') => void;
-  onDelete: () => void;
+  onAction: (item: CanonicalListItemType, mode: 'recrawl' | 'update') => void;
+  // confirmed=false 면 확인 단계로 진입, true("정말 삭제")면 실제 삭제.
+  onDelete: (canonicalId: string, confirmed: boolean) => void;
   onCancelDelete: () => void;
   onSaveDiningcode: (vRid: string) => void;
-  onToggleMerge: () => void;
-  onSplitSource: (restaurantId: string) => void;
-}) => {
+  onToggleMerge: (canonicalId: string) => void;
+  onSplitSource: (canonicalId: string, restaurantId: string) => void;
+}) {
   const navigate = useNavigate();
   const inFlight = summaryInFlight(item);
   const naverSource = findNaverSource(item);
@@ -178,7 +183,7 @@ const RestaurantRow = ({
                 {item.sources.length >= 2 && (
                   <button
                     type="button"
-                    onClick={stop(() => onSplitSource(s.restaurantId))}
+                    onClick={stop(() => onSplitSource(item.canonicalId, s.restaurantId))}
                     disabled={splitting}
                     className="inline-flex items-center text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     aria-label={`${sourceLabel(s.source)} 분리`}
@@ -228,7 +233,7 @@ const RestaurantRow = ({
           type="button"
           variant="blue"
           size="sm"
-          onClick={stop(() => onAction('update'))}
+          onClick={stop(() => onAction(item, 'update'))}
           disabled={busy || !naverSource}
         >
           <ChevronRight />
@@ -238,7 +243,7 @@ const RestaurantRow = ({
           type="button"
           variant="amber"
           size="sm"
-          onClick={stop(() => onAction('recrawl'))}
+          onClick={stop(() => onAction(item, 'recrawl'))}
           disabled={busy || !naverSource}
         >
           <RefreshCw />
@@ -265,7 +270,7 @@ const RestaurantRow = ({
           type="button"
           variant={mergeOpen ? 'secondary' : 'teal'}
           size="sm"
-          onClick={stop(onToggleMerge)}
+          onClick={stop(() => onToggleMerge(item.canonicalId))}
           title={
             item.candidateCount > 0
               ? `같은 가게로 추정되는 후보 ${item.candidateCount}건`
@@ -286,7 +291,7 @@ const RestaurantRow = ({
               type="button"
               variant="red"
               size="sm"
-              onClick={stop(onDelete)}
+              onClick={stop(() => onDelete(item.canonicalId, true))}
               disabled={deleting}
               title={
                 item.sources.length > 1
@@ -314,7 +319,7 @@ const RestaurantRow = ({
             type="button"
             variant="red"
             size="sm"
-            onClick={stop(onDelete)}
+            onClick={stop(() => onDelete(item.canonicalId, false))}
             disabled={busy}
             aria-label="삭제"
             title="삭제 — 매달린 모든 출처/리뷰가 함께 삭제됩니다"
@@ -324,6 +329,125 @@ const RestaurantRow = ({
         )}
       </div>
     </div>
+  );
+});
+
+// "가게 추가" 폼. URL 입력 state 를 여기에 둔다 — 페이지 루트에 두면 키 입력마다 아래 목록
+// (25~100행)과 작업 트레이까지 통째로 리렌더된다. 검증·크롤 시작은 페이지(onAdd)가 하고,
+// 시작됐으면(true) 입력을 비운다.
+const AddRestaurantForm = ({
+  pending,
+  error,
+  onClearError,
+  onAdd,
+}: {
+  // 크롤 시작 요청 중 — 입력·버튼 잠금.
+  pending: boolean;
+  // 페이지 공용 에러(추가·삭제·분리·재수집 실패). 예전처럼 URL 입력 아래에 보여 준다.
+  error: string | null;
+  onClearError: () => void;
+  onAdd: (url: string) => Promise<boolean>;
+}) => {
+  const [url, setUrl] = useState('');
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (await onAdd(url)) setUrl('');
+  };
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="flex-1">
+        <div className="relative">
+          <LinkIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="url"
+            inputMode="url"
+            placeholder="https://naver.me/..."
+            className="pl-9"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              if (error) onClearError();
+            }}
+            aria-invalid={!!error || undefined}
+            disabled={pending}
+          />
+        </div>
+        {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+      </div>
+      <Button type="submit" disabled={!url.trim() || pending}>
+        {pending ? <Loader2 className="animate-spin" /> : <Play />}
+        추가 + 크롤링
+      </Button>
+    </form>
+  );
+};
+
+// 등록된 맛집 검색 폼. 입력 초안을 여기에 둔다(키 입력이 목록을 리렌더하지 않게). 검색은 제출
+// 시에만 페이지(onSearch)로 올라간다 — 빈 문자열이면 검색 해제.
+const RestaurantSearchForm = ({
+  searchQuery,
+  onSearch,
+}: {
+  // URL 의 q — 지금 적용된 검색어.
+  searchQuery: string;
+  onSearch: (q: string) => void;
+}) => {
+  const [searchDraft, setSearchDraft] = useState(searchQuery);
+  // q 가 폼 밖에서 바뀌면(목록의 "검색 초기화" 버튼, 브라우저 뒤로/앞으로 가기, 공유 URL 진입)
+  // effect 없이 렌더 중에 초안을 새 URL 값으로 맞춘다. 초안을 "만들어진 때의 q" 와 짝지어
+  // 파생하는 방식은 q 가 A → B → A 로 되돌아올 때 예전 초안이 되살아나 쓸 수 없다.
+  const [prevQuery, setPrevQuery] = useState(searchQuery);
+  if (prevQuery !== searchQuery) {
+    setPrevQuery(searchQuery);
+    setSearchDraft(searchQuery);
+  }
+
+  const handleSearch = (e: FormEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    const q = searchDraft.trim();
+    setSearchDraft(q);
+    onSearch(q);
+  };
+
+  const handleClearSearch = (): void => {
+    setSearchDraft('');
+    onSearch('');
+  };
+
+  return (
+    <form onSubmit={handleSearch} role="search" className="flex flex-col gap-2 sm:flex-row">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="text"
+          inputMode="search"
+          maxLength={120}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
+          placeholder="가게명·카테고리·Place ID 검색"
+          aria-label="등록된 맛집 검색"
+          className="pl-9 pr-9"
+        />
+        {searchDraft.length > 0 && (
+          <button
+            type="button"
+            onClick={handleClearSearch}
+            aria-label="검색 초기화"
+            className="absolute right-2 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+      <Button
+        type="submit"
+        size="sm"
+        disabled={searchDraft.trim().length === 0 && searchQuery.length === 0}
+      >
+        <Search />
+        검색
+      </Button>
+    </form>
   );
 };
 
@@ -349,18 +473,6 @@ export const AdminRestaurantsPage = () => {
     const n = Number(searchParams.get('pageSize') ?? DEFAULT_PAGE_SIZE);
     return PAGE_SIZE_OPTIONS.includes(n) ? n : DEFAULT_PAGE_SIZE;
   })();
-  const [searchDraftState, setSearchDraftState] = useState({
-    urlQuery: searchQuery,
-    value: searchQuery,
-  });
-  // 브라우저 뒤로/앞으로 가기나 공유 URL 진입으로 q 가 바뀌면, effect 로 state 를
-  // 재설정하지 않고 새 URL 값을 즉시 표시한다. 다음 입력부터 그 URL 을 기준으로
-  // draft state 가 다시 이어진다.
-  const searchDraft =
-    searchDraftState.urlQuery === searchQuery ? searchDraftState.value : searchQuery;
-  const setSearchDraft = (value: string): void => {
-    setSearchDraftState({ urlQuery: searchQuery, value });
-  };
 
   const updateParams = (patch: Record<string, string | number | null>): void => {
     setSearchParams(
@@ -376,16 +488,9 @@ export const AdminRestaurantsPage = () => {
     );
   };
 
-  const handleSearch = (e: FormEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    const q = searchDraft.trim();
-    setSearchDraft(q);
+  // 검색어 적용/해제 — 입력 초안은 RestaurantSearchForm 이 들고, 여기서는 URL 만 바꾼다.
+  const handleSearch = (q: string): void => {
     updateParams({ q: q || null, page: null });
-  };
-
-  const handleClearSearch = (): void => {
-    setSearchDraft('');
-    updateParams({ q: null, page: null });
   };
 
   const listQuery = useRestaurantList({
@@ -411,7 +516,6 @@ export const AdminRestaurantsPage = () => {
   // 그 행으로 이동.
   const [mergeOpenCanonicalId, setMergeOpenCanonicalId] = useState<string | null>(null);
 
-  const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const jobs = useActiveCrawlJobStore((s) => s.jobs);
   const addJob = useActiveCrawlJobStore((s) => s.add);
@@ -422,34 +526,47 @@ export const AdminRestaurantsPage = () => {
   const [confirmDeleteCanonicalId, setConfirmDeleteCanonicalId] =
     useState<string | null>(null);
 
-  const handleDelete = async (canonicalId: string) => {
-    if (confirmDeleteCanonicalId !== canonicalId) {
-      setConfirmDeleteCanonicalId(canonicalId);
-      return;
-    }
-    setError(null);
-    try {
-      await deleteMutation.mutateAsync(canonicalId);
-      setConfirmDeleteCanonicalId(null);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'failed to delete');
-    }
-  };
+  // 행 콜백은 전부 안정 참조(useCallback)로 — RestaurantRow memo 가 유지되게. useMutation 의
+  // mutate/mutateAsync 는 렌더 간 같은 함수라 그것만 꺼내 deps 로 쓴다(mutation 결과 객체는
+  // 매 렌더 새 객체). 어느 행인지는 인자(item·id)로 받는다.
+  const startCrawl = startMutation.mutateAsync;
+  const deleteCanonical = deleteMutation.mutateAsync;
+  const saveDiningcodeShop = saveDcMutation.mutateAsync;
+  const splitCanonical = splitMutation.mutate;
 
-  const handleAdd = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const trimmed = url.trim();
+  // 첫 클릭(confirmed=false)은 확인 단계로, "정말 삭제"(confirmed=true)에서 실제로 지운다.
+  const handleDelete = useCallback(
+    async (canonicalId: string, confirmed: boolean) => {
+      if (!confirmed) {
+        setConfirmDeleteCanonicalId(canonicalId);
+        return;
+      }
+      setError(null);
+      try {
+        await deleteCanonical(canonicalId);
+        setConfirmDeleteCanonicalId(null);
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'failed to delete');
+      }
+    },
+    [deleteCanonical],
+  );
+  const handleCancelDelete = useCallback(() => setConfirmDeleteCanonicalId(null), []);
+
+  // AddRestaurantForm 이 부른다 — 크롤이 시작됐으면 true(폼이 입력을 비운다).
+  const handleAdd = async (rawUrl: string): Promise<boolean> => {
+    const trimmed = rawUrl.trim();
     if (!trimmed) {
       setError('URL을 입력해 주세요.');
-      return;
+      return false;
     }
     if (!isValidNaverPlaceUrl(trimmed)) {
       setError('네이버 플레이스 URL 형식이 아닙니다 (naver.com / naver.me).');
-      return;
+      return false;
     }
     setError(null);
     try {
-      const result = await startMutation.mutateAsync({ url: trimmed, mode: 'create' });
+      const result = await startCrawl({ url: trimmed, mode: 'create' });
       if (result.ok) {
         addJob({
           jobId: result.jobId,
@@ -457,47 +574,54 @@ export const AdminRestaurantsPage = () => {
           source: 'new',
           mode: 'create',
         });
-        setUrl('');
         // 신규 가게는 lastCrawledAt 가장 최근 — recent 정렬 1페이지에서 보이도록.
         updateParams({ sort: null, page: null });
-      } else {
-        setError(`${result.error}: ${result.message}`);
+        return true;
       }
+      setError(`${result.error}: ${result.message}`);
+      return false;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to start');
+      return false;
     }
   };
 
-  const handleSplitSource = (canonicalId: string, restaurantId: string) => {
-    setError(null);
-    splitMutation.mutate(
-      { canonicalId, input: { restaurantId } },
-      {
-        onError: (e) => setError(e instanceof ApiError ? e.message : '분리 실패'),
-      },
-    );
-  };
+  const handleSplitSource = useCallback(
+    (canonicalId: string, restaurantId: string) => {
+      setError(null);
+      splitCanonical(
+        { canonicalId, input: { restaurantId } },
+        {
+          onError: (e) => setError(e instanceof ApiError ? e.message : '분리 실패'),
+        },
+      );
+    },
+    [splitCanonical],
+  );
 
-  const handleSaveDiningcode = async (vRid: string) => {
-    setError(null);
-    try {
-      await saveDcMutation.mutateAsync(vRid);
-      // 응답이 새 리뷰 수 + AI 분석 큐 사이즈를 반환하지만, 행 카운트는 list
-      // 무효화로 새로 페치하면 자동으로 반영. AI 진행은 Naver source 의 SSE
-      // 와 별도 채널(dc:<vRid>) — PR2c 에서 SSE 통합 시 라이브 반영.
-      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'DC 재수집 실패');
-    }
-  };
+  const handleSaveDiningcode = useCallback(
+    async (vRid: string) => {
+      setError(null);
+      try {
+        await saveDiningcodeShop(vRid);
+        // 응답이 새 리뷰 수 + AI 분석 큐 사이즈를 반환하지만, 행 카운트는 list
+        // 무효화로 새로 페치하면 자동으로 반영. AI 진행은 Naver source 의 SSE
+        // 와 별도 채널(dc:<vRid>) — PR2c 에서 SSE 통합 시 라이브 반영.
+        qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'DC 재수집 실패');
+      }
+    },
+    [saveDiningcodeShop, qc],
+  );
 
-  const handleRowAction =
-    (item: CanonicalListItemType) => async (mode: 'recrawl' | 'update') => {
+  const handleRowAction = useCallback(
+    async (item: CanonicalListItemType, mode: 'recrawl' | 'update') => {
       const naver = findNaverSource(item);
       if (!naver) return; // 버튼이 disabled 라 이론적으로 안 옴.
       setError(null);
       try {
-        const result = await startMutation.mutateAsync({ url: naver.rawSourceUrl, mode });
+        const result = await startCrawl({ url: naver.rawSourceUrl, mode });
         if (result.ok) {
           addJob({
             jobId: result.jobId,
@@ -512,7 +636,14 @@ export const AdminRestaurantsPage = () => {
       } catch (e) {
         setError(e instanceof ApiError ? e.message : 'failed to start');
       }
-    };
+    },
+    [startCrawl, addJob],
+  );
+
+  // 병합 패널 토글 — 같은 행이면 닫고, 다른 행이면 그 행으로 옮긴다.
+  const handleToggleMerge = useCallback((canonicalId: string) => {
+    setMergeOpenCanonicalId((cur) => (cur === canonicalId ? null : canonicalId));
+  }, []);
 
   const handlePlaceIdResolved = (jobId: string, placeId: string) => {
     const existing = jobs[jobId];
@@ -599,31 +730,12 @@ export const AdminRestaurantsPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <form onSubmit={handleAdd} className="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <div className="flex-1">
-              <div className="relative">
-                <LinkIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="url"
-                  inputMode="url"
-                  placeholder="https://naver.me/..."
-                  className="pl-9"
-                  value={url}
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    if (error) setError(null);
-                  }}
-                  aria-invalid={!!error || undefined}
-                  disabled={startMutation.isPending}
-                />
-              </div>
-              {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
-            </div>
-            <Button type="submit" disabled={!url.trim() || startMutation.isPending}>
-              {startMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-              추가 + 크롤링
-            </Button>
-          </form>
+          <AddRestaurantForm
+            pending={startMutation.isPending}
+            error={error}
+            onClearError={() => setError(null)}
+            onAdd={handleAdd}
+          />
           {/* 다이닝코드는 URL 이 아니라 검색 기반 — 별도 페이지에서 키워드 입력
               후 검증·저장. 클릭 시 새 탭으로 띄워 등록 작업을 잃지 않게 한다. */}
           <div className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
@@ -674,39 +786,7 @@ export const AdminRestaurantsPage = () => {
               </select>
             </label>
           </div>
-          <form onSubmit={handleSearch} role="search" className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="text"
-                inputMode="search"
-                maxLength={120}
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder="가게명·카테고리·Place ID 검색"
-                aria-label="등록된 맛집 검색"
-                className="pl-9 pr-9"
-              />
-              {searchDraft.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearSearch}
-                  aria-label="검색 초기화"
-                  className="absolute right-2 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </div>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={searchDraft.trim().length === 0 && searchQuery.length === 0}
-            >
-              <Search />
-              검색
-            </Button>
-          </form>
+          <RestaurantSearchForm searchQuery={searchQuery} onSearch={handleSearch} />
         </CardHeader>
         <CardContent>
           {/* 크롤링 작업 트레이 — 진행 중/방금 끝난 모든 작업을 가게 이름과 함께
@@ -734,6 +814,9 @@ export const AdminRestaurantsPage = () => {
                     navigate(`/admin/restaurants/${placeId}`)
                   }
                   autoDismissOnSuccess
+                  // 트레이 카드는 가게 상세(리뷰 전량)를 스스로 받아 오지 않는다 — 리뷰
+                  // 미리보기는 카드의 "미리보기" 를 눌렀을 때만.
+                  lazyDetail
                 />
               ))}
             </div>
@@ -754,7 +837,7 @@ export const AdminRestaurantsPage = () => {
                   : '아직 등록된 맛집이 없습니다.'}
               </span>
               {searchQuery && (
-                <Button type="button" size="sm" variant="ghost" onClick={handleClearSearch}>
+                <Button type="button" size="sm" variant="ghost" onClick={() => handleSearch('')}>
                   <X />
                   검색 초기화
                 </Button>
@@ -838,14 +921,12 @@ export const AdminRestaurantsPage = () => {
                       dcSaving={dcSaving}
                       mergeOpen={mergeOpen}
                       splittingRestaurantId={splittingRestaurantId}
-                      onAction={handleRowAction(item)}
-                      onDelete={() => handleDelete(item.canonicalId)}
-                      onCancelDelete={() => setConfirmDeleteCanonicalId(null)}
+                      onAction={handleRowAction}
+                      onDelete={handleDelete}
+                      onCancelDelete={handleCancelDelete}
                       onSaveDiningcode={handleSaveDiningcode}
-                      onToggleMerge={() =>
-                        setMergeOpenCanonicalId(mergeOpen ? null : item.canonicalId)
-                      }
-                      onSplitSource={(rid) => handleSplitSource(item.canonicalId, rid)}
+                      onToggleMerge={handleToggleMerge}
+                      onSplitSource={handleSplitSource}
                     />
                     {mergeOpen && (
                       <CanonicalMergePanel

@@ -100,7 +100,9 @@ export const useRandomCrawlRunEvents = (
       setProgress(null);
       qc.invalidateQueries({ queryKey: ['random-crawl', 'runs'] });
       qc.invalidateQueries({ queryKey: ['random-crawl', 'config'] });
-      qc.invalidateQueries({ queryKey: ['restaurants'] });
+      // 새로 등록된 가게가 목록에 들어오게 — 어드민 목록과 공개 목록(발견 화면)은 키가 다르다.
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
     };
 
     const connect = async (): Promise<void> => {

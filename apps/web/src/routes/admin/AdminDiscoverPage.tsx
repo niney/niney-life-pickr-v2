@@ -11,6 +11,7 @@ import {
   useStartCrawl,
   useUserLocation,
 } from '@repo/shared';
+import type { NaverSearchResultType, RestaurantPublicListItemType } from '@repo/api-contract';
 import {
   DiscoverPanel,
   type DiscoverTab,
@@ -32,6 +33,12 @@ const isDiscoverTab = (s: string | null): s is DiscoverTab =>
 const DETAIL_TAB_KEYS = TAB_ORDER.map((t) => t.key) as TabKey[];
 const isDetailTab = (s: string | null): s is TabKey =>
   s !== null && (DETAIL_TAB_KEYS as string[]).includes(s);
+
+// 쿼리 데이터가 아직 없을 때 쓰는 빈 목록 — 모듈 상수라 렌더마다 같은 참조다. `?? []` 로 두면
+// 검색어가 없는 동안(검색 쿼리 비활성) 매 렌더 새 배열이 되어, 아래 markers useMemo 와 패널
+// 목록이 페이지가 렌더될 때마다 처음부터 다시 계산됐다.
+const EMPTY_SEARCH_ITEMS: NaverSearchResultType[] = [];
+const EMPTY_REGISTERED_ITEMS: RestaurantPublicListItemType[] = [];
 
 // /admin/discover — 풀블리드 지도 + 우/좌 토글 가능한 패널.
 // task 6 단계는 골격 + 검색·등록 리스트 + URL 동기화까지. 마커 합성, 다중 선택,
@@ -87,8 +94,8 @@ export const AdminDiscoverPage = () => {
     { limit: 200 },
     { alwaysRefetchOnMount: true },
   );
-  const searchItems = search.data?.items ?? [];
-  const registeredItems = list.data?.items ?? [];
+  const searchItems = search.data?.items ?? EMPTY_SEARCH_ITEMS;
+  const registeredItems = list.data?.items ?? EMPTY_REGISTERED_ITEMS;
   // 등록된 행마다 summary SSE 구독 — 진행 배지(pending/running/done/failed)
   // 가 크롤·요약 진행과 함께 라이브 갱신된다. 어드민 맛집 페이지와 동일한
   // 싱글톤 manager 라 연결은 1개로 멀티플렉싱.
@@ -96,11 +103,13 @@ export const AdminDiscoverPage = () => {
 
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   // 더블클릭 "확대 포커스". 매 더블클릭마다 새 객체를 넣어 DiscoverMap 의
-  // effect 가 같은 식당이라도 다시 flyToZoomIn 하게 한다.
+  // effect 가 같은 식당이라도 다시 flyToZoomIn 하게 한다. 한 번 쓰이면 지도가
+  // handleZoomConsumed 로 비운다 — 남겨 두면 이후 마커가 바뀔 때 예전 대상으로 다시 확대될 수 있다.
   const [zoomFocus, setZoomFocus] = useState<{ placeId: string } | null>(null);
   const handleZoomItem = useCallback((id: string) => {
     setZoomFocus({ placeId: id });
   }, []);
+  const handleZoomConsumed = useCallback(() => setZoomFocus(null), []);
   // 다중 선택은 페이지 레벨에서 보관 — 탭 전환·검색어 변경에도 유지.
   // 선택된 placeId 가 더 이상 검색 결과에 없으면 자동으로 무시 (필터링).
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -328,6 +337,7 @@ export const AdminDiscoverPage = () => {
             selectedPlaceId={placeId}
             hoveredPlaceId={hoveredPlaceId}
             zoomFocus={zoomFocus}
+            onZoomFocusConsumed={handleZoomConsumed}
             appliedBbox={bbox}
             focusCoord={focusCoord}
             locationStatus={userLoc.status}

@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -31,6 +31,7 @@ import {
   type MapCanvasHandle,
   type MapMarker,
 } from '~/components/restaurant/MapCanvas';
+import { useDebouncedDraft } from './useDebouncedDraft';
 
 // 다이닝코드 자체 검색 API 응답을 그대로 보여주는 어드민 검증 페이지.
 // 캐치테이블 테스트와 동일한 흐름이지만, 다이닝코드는 HTTP 직접 호출이라
@@ -229,19 +230,40 @@ const Pager = ({
 
 const DEFAULT_SIZE = 20;
 
+// 좌표·반경·페이지 크기 입력 초안. 검색 훅의 queryKey 에 그대로 들어가는 값이라, 키 입력마다
+// 넘기면 반경 "1000" 을 치는 동안 1·10·100·1000 네 번 외부(다이닝코드) 검색이 나간다.
+interface SearchDraft {
+  size: number;
+  lat: string;
+  lng: string;
+  distance: string;
+}
+const INITIAL_DRAFT: SearchDraft = {
+  size: DEFAULT_SIZE,
+  lat: '37.4979',
+  lng: '127.0276',
+  distance: '500',
+};
+// 입력이 멈춘 뒤 검색에 반영하기까지의 지연. blur·제출·지도 드래그는 기다리지 않고 즉시 반영.
+const APPLY_DEBOUNCE_MS = 400;
+
 export const AdminDiningcodeTestPage = () => {
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [from, setFrom] = useState(0);
-  const [size, setSize] = useState(DEFAULT_SIZE);
   const [order, setOrder] = useState<
     'r_score' | 'score' | 'review' | 'distance'
   >('r_score');
   // 좌표 토글 — 켜야 좌표 입력 의미 있음. 끄면 키워드만으로 검색.
   const [useCoord, setUseCoord] = useState(false);
-  const [latInput, setLatInput] = useState('37.4979');
-  const [lngInput, setLngInput] = useState('127.0276');
-  const [distanceInput, setDistanceInput] = useState('500');
+  // 화면 입력은 draft, 검색에는 applied — 적용되는 순간 첫 페이지로 되돌린다.
+  const {
+    draft,
+    applied,
+    update: updateDraft,
+    flush: flushDraft,
+  } = useDebouncedDraft(INITIAL_DRAFT, APPLY_DEBOUNCE_MS, () => setFrom(0));
+  const { size, lat: latInput, lng: lngInput, distance: distanceInput } = draft;
   const [showRaw, setShowRaw] = useState(false);
 
   // 지도 키 (vworld) — 좌표 토글 켰을 때만 fetch. 어드민 설정에서 등록 안 했으면
@@ -268,16 +290,24 @@ export const AdminDiningcodeTestPage = () => {
     mapRef.current?.flyTo(parsedLat, parsedLng);
   };
 
+  // 검색에 넘기는 값은 적용값(applied)에서 — 위 parsed* 는 입력·지도 표시용 초안이다.
+  const appliedLat = useCoord ? Number(applied.lat) : null;
+  const appliedLng = useCoord ? Number(applied.lng) : null;
+  const appliedDistance = useCoord ? Number(applied.distance) : null;
+  const appliedCoordValid =
+    !useCoord ||
+    (Number.isFinite(appliedLat) && Number.isFinite(appliedLng));
+
   const search = useDiningcodeSearch({
     q: query,
     from,
-    size,
+    size: applied.size,
     order,
-    lat: useCoord && coordValid ? parsedLat : null,
-    lng: useCoord && coordValid ? parsedLng : null,
+    lat: useCoord && appliedCoordValid ? appliedLat : null,
+    lng: useCoord && appliedCoordValid ? appliedLng : null,
     distance:
-      useCoord && coordValid && Number.isFinite(parsedDistance)
-        ? parsedDistance
+      useCoord && appliedCoordValid && Number.isFinite(appliedDistance)
+        ? appliedDistance
         : null,
   });
 
@@ -285,6 +315,8 @@ export const AdminDiningcodeTestPage = () => {
     e.preventDefault();
     const trimmed = input.trim();
     if (!trimmed) return;
+    // 입력 중이던 좌표·반경도 이 제출에 함께 반영 — 검색어만 먼저 나가 요청이 두 번 되지 않게.
+    flushDraft();
     // 새 쿼리는 항상 첫 페이지부터.
     setFrom(0);
     setQuery(trimmed);
@@ -292,6 +324,8 @@ export const AdminDiningcodeTestPage = () => {
 
   const data = search.data;
   const isLoading = search.isFetching;
+  // 페이지·정렬·좌표를 바꾼 직후 — 새 응답이 오기 전까지 직전 결과가 그대로 보인다(placeholder).
+  const isStale = search.isPlaceholderData;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
@@ -373,10 +407,13 @@ export const AdminDiningcodeTestPage = () => {
                   onChange={(e) => {
                     const n = Number(e.target.value);
                     if (Number.isFinite(n)) {
-                      setSize(Math.min(Math.max(Math.trunc(n), 1), 30));
-                      setFrom(0);
+                      updateDraft(
+                        { ...draft, size: Math.min(Math.max(Math.trunc(n), 1), 30) },
+                        'debounce',
+                      );
                     }
                   }}
+                  onBlur={flushDraft}
                 />
               </label>
               <div className="flex flex-col justify-end">
@@ -407,10 +444,12 @@ export const AdminDiningcodeTestPage = () => {
                       value={latInput}
                       onChange={(e) => {
                         if (syncingFromMapRef.current) return;
-                        setLatInput(e.target.value);
-                        setFrom(0);
+                        updateDraft({ ...draft, lat: e.target.value }, 'debounce');
                       }}
-                      onBlur={flyMapToInputs}
+                      onBlur={() => {
+                        flushDraft();
+                        flyMapToInputs();
+                      }}
                       placeholder="37.4979"
                     />
                   </label>
@@ -422,10 +461,12 @@ export const AdminDiningcodeTestPage = () => {
                       value={lngInput}
                       onChange={(e) => {
                         if (syncingFromMapRef.current) return;
-                        setLngInput(e.target.value);
-                        setFrom(0);
+                        updateDraft({ ...draft, lng: e.target.value }, 'debounce');
                       }}
-                      onBlur={flyMapToInputs}
+                      onBlur={() => {
+                        flushDraft();
+                        flyMapToInputs();
+                      }}
                       placeholder="127.0276"
                     />
                   </label>
@@ -439,10 +480,10 @@ export const AdminDiningcodeTestPage = () => {
                       max={20000}
                       step={50}
                       value={distanceInput}
-                      onChange={(e) => {
-                        setDistanceInput(e.target.value);
-                        setFrom(0);
-                      }}
+                      onChange={(e) =>
+                        updateDraft({ ...draft, distance: e.target.value }, 'debounce')
+                      }
+                      onBlur={flushDraft}
                     />
                   </label>
                 </div>
@@ -485,9 +526,11 @@ export const AdminDiningcodeTestPage = () => {
                     mapRef={mapRef}
                     onCenterChange={(nextLat, nextLng) => {
                       syncingFromMapRef.current = true;
-                      setLatInput(nextLat.toFixed(6));
-                      setLngInput(nextLng.toFixed(6));
-                      setFrom(0);
+                      // 지도 드래그는 끝난 동작이라 디바운스 없이 바로 검색에 반영.
+                      updateDraft(
+                        { ...draft, lat: nextLat.toFixed(6), lng: nextLng.toFixed(6) },
+                        'now',
+                      );
                       // microtask 이후 가드 해제 — 동일 tick 안에서 발생하는
                       // input onChange 가 fly-to 를 트리거하지 않게.
                       queueMicrotask(() => {
@@ -598,7 +641,11 @@ export const AdminDiningcodeTestPage = () => {
         )}
 
       {data && data.items.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        // 새 응답을 기다리는 동안(직전 결과 표시 중)은 흐리게 — 지금 조건의 결과가 아님을 드러낸다.
+        <div
+          className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${isStale ? 'opacity-60' : ''}`}
+          aria-busy={isStale}
+        >
           {data.items.map((it) => (
             <ResultCard key={it.vRid} item={it} />
           ))}
@@ -688,6 +735,16 @@ const MiniMapPicker = ({
   onCenterChange: (lat: number, lng: number) => void;
 }) => {
   const sizeClass = 'h-[260px] w-full';
+  const hasCoords = lat !== null && lng !== null;
+  // 마커 배열은 좌표가 같으면 같은 참조 — 부모가 키 입력 등으로 리렌더될 때마다 지도 마커를
+  // 다시 그리지 않게 한다(MapCanvas 는 markers 참조가 바뀌면 다시 칠한다). 훅이라 early return 위.
+  const markers = useMemo<MapMarker[]>(
+    () =>
+      lat !== null && lng !== null
+        ? [{ id: 'center', lat, lng, variant: 'primary' }]
+        : [],
+    [lat, lng],
+  );
   if (keyLoading) {
     return (
       <Placeholder sizeClass={sizeClass}>
@@ -713,16 +770,12 @@ const MiniMapPicker = ({
       </Placeholder>
     );
   }
-  const hasCoords = lat !== null && lng !== null;
-  const marker: MapMarker | null = hasCoords
-    ? { id: 'center', lat: lat!, lng: lng!, variant: 'primary' }
-    : null;
   return (
     <div className={`relative ${sizeClass}`}>
       <MapCanvas
         ref={mapRef}
         apiKey={apiKey}
-        markers={marker ? [marker] : []}
+        markers={markers}
         initialCenter={hasCoords ? { lat: lat!, lng: lng!, zoom: 15 } : undefined}
         onViewportChangeEnd={(v) => onCenterChange(v.centerLat, v.centerLng)}
         className="size-full overflow-hidden rounded-md border bg-muted"

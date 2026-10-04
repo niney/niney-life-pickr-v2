@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import { useMapProviderSecret } from '@repo/shared';
@@ -21,6 +21,13 @@ export const VWorldMap = ({ lat, lng, name, className }: Props) => {
   const secret = useMapProviderSecret('vworld', hasCoords);
   const apiKey = secret.data?.apiKey ?? null;
   const [tileError, setTileError] = useState<string | null>(null);
+  // 마커 배열은 좌표·이름이 같으면 같은 참조 — 부모(어드민 상세)가 요약 SSE 이벤트마다
+  // 리렌더될 때 지도 마커까지 다시 그리지 않게 한다(MapCanvas 는 markers 참조가 바뀌면 다시
+  // 칠한다). 훅이라 아래 early return 들보다 위에 둔다.
+  const markers = useMemo<MapMarker[]>(
+    () => (lat !== null && lng !== null ? [{ id: 'self', lat, lng, label: name }] : []),
+    [lat, lng, name],
+  );
 
   const sizeClass = className ?? 'h-[280px] w-full';
 
@@ -56,13 +63,11 @@ export const VWorldMap = ({ lat, lng, name, className }: Props) => {
     );
   }
 
-  const marker: MapMarker = { id: 'self', lat: lat!, lng: lng!, label: name };
-
   return (
     <div className={`relative ${sizeClass}`}>
       <MapCanvas
         apiKey={apiKey}
-        markers={[marker]}
+        markers={markers}
         initialCenter={{ lat: lat!, lng: lng!, zoom: 17 }}
         onTileError={(hasError) =>
           setTileError(

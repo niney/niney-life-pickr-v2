@@ -40,6 +40,11 @@ const LEVEL_BADGE: Record<CrawlLogLevelType, string> = {
   error: 'bg-destructive/20 text-destructive',
 };
 
+// 한 번에 그리는 행 수의 기본 상한.
+const MAX_DISPLAY = 500;
+// DB 한 페이지 크기 — "이전 로그 더 보기" 한 번에 늘어나는 표시 행 수이기도 하다.
+const LOG_PAGE_SIZE = 100;
+
 // 키는 (jobId, seq) — 백엔드가 같은 로그를 crawl SSE 와 summary SSE 양쪽에
 // fan-out 할 때 같은 seq 를 박는다. 클라이언트는 두 출처가 같은 key 를 만들
 // 어 Map dedup 으로 한 행만 남긴다.
@@ -90,7 +95,7 @@ export const JobLogTab = ({
     jobId,
     enabled: isJobFinished,
     level: levelFilter === 'all' ? null : levelFilter,
-    pageSize: 100,
+    pageSize: LOG_PAGE_SIZE,
   });
   const dbItems = useMemo(() => flattenJobLogPages(dbQuery.data), [dbQuery.data]);
 
@@ -113,10 +118,22 @@ export const JobLogTab = ({
       .sort((a, b) => a.at.localeCompare(b.at));
   }, [streamLogs, summaryLogs, dbItems, levelFilter]);
 
-  // 렌더는 최근 MAX_DISPLAY 개만 — 장시간 잡의 수천 로그를 전량 DOM 으로 그리지
+  // 렌더는 최근 displayLimit 개만 — 장시간 잡의 수천 로그를 전량 DOM 으로 그리지
   // 않게 한다(가상화 없이 DOM 노드 수를 상한). 카운트는 전체를 그대로 보여준다.
-  const MAX_DISPLAY = 500;
-  const visible = merged.length > MAX_DISPLAY ? merged.slice(-MAX_DISPLAY) : merged;
+  // 기본 MAX_DISPLAY 이고 "이전 로그 더 보기" 를 누를 때마다 한 페이지씩 늘어난다 — 상한이
+  // 고정이면 더 받아 온 이전 페이지가 상한 뒤에 가려져 버튼을 눌러도 보이는 게 없었다.
+  const [extraDisplay, setExtraDisplay] = useState(0);
+  const displayLimit = MAX_DISPLAY + extraDisplay;
+  const visible = merged.length > displayLimit ? merged.slice(-displayLimit) : merged;
+  const hiddenCount = merged.length - visible.length;
+  const canFetchOlder = isJobFinished && dbQuery.hasNextPage;
+
+  // 이미 받아 둔 행이 상한에 가려져 있으면 그것부터 보이고, 그걸로 한 페이지가 안 찰 때만
+  // DB 의 이전 페이지를 받는다(잡 종료 후에만 DB 조회).
+  const showMore = () => {
+    setExtraDisplay((n) => n + LOG_PAGE_SIZE);
+    if (hiddenCount < LOG_PAGE_SIZE && canFetchOlder) void dbQuery.fetchNextPage();
+  };
 
   const toggle = (key: string) => {
     setExpanded((prev) => {
@@ -158,9 +175,9 @@ export const JobLogTab = ({
         </div>
       )}
 
-      {merged.length > MAX_DISPLAY && (
+      {hiddenCount > 0 && (
         <div className="text-center text-[11px] text-muted-foreground">
-          이전 {merged.length - MAX_DISPLAY}건 생략 — 최근 {MAX_DISPLAY}건만 표시
+          이전 {hiddenCount}건 생략 — 최근 {visible.length}건만 표시
         </div>
       )}
 
@@ -213,13 +230,13 @@ export const JobLogTab = ({
         })}
       </ul>
 
-      {isJobFinished && dbQuery.hasNextPage && (
+      {(hiddenCount > 0 || canFetchOlder) && (
         <Button
           type="button"
           size="sm"
           variant="outline"
           className="w-full"
-          onClick={() => void dbQuery.fetchNextPage()}
+          onClick={showMore}
           disabled={dbQuery.isFetchingNextPage}
         >
           {dbQuery.isFetchingNextPage ? (

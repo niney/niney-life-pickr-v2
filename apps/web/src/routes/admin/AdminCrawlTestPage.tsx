@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { memo, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,9 +21,8 @@ import {
   useRestaurantSummaryEvents,
   useStartCrawl,
 } from '@repo/shared';
-import { compareReviewRecencyDesc, formatWonPrice } from '@repo/utils';
+import { formatWonPrice } from '@repo/utils';
 import type {
-  AdminVisitorReviewType,
   BlogReviewType,
   CrawlJobType,
   CrawlModeType,
@@ -41,6 +40,12 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { mergePersistedBatch } from '~/components/restaurant/crawlBatchMerge';
+
+// 이 페이지는 크롤 스트림(useCrawlJobStream)과 요약 SSE 를 루트에서 구독해, 이벤트 1건마다
+// 페이지 전체가 리렌더된다(리뷰 페이지마다 progress·batch·log 3건 안팎, 완료 뒤엔 요약 이벤트).
+// 아래 결과 카드들은 props(스트림의 partial/result 하위 객체 — 이벤트 사이엔 같은 참조)가 그대로면
+// 다시 그리지 않도록 memo 로 감싼다.
 
 const STAGE_ORDER: CrawlStageType[] = [
   'queued',
@@ -79,7 +84,7 @@ const FieldRow = ({ label, value }: { label: string; value: string | number | nu
   </div>
 );
 
-const MenuList = ({ menus }: { menus: MenuItemType[] }) => (
+const MenuList = memo(({ menus }: { menus: MenuItemType[] }) => (
   <Card>
     <CardHeader>
       <CardTitle>메뉴 ({menus.length})</CardTitle>
@@ -124,9 +129,10 @@ const MenuList = ({ menus }: { menus: MenuItemType[] }) => (
       )}
     </CardContent>
   </Card>
-);
+));
+MenuList.displayName = 'MenuList';
 
-const ReviewStatsCard = ({ stats }: { stats: ReviewStatsType }) => (
+const ReviewStatsCard = memo(({ stats }: { stats: ReviewStatsType }) => (
   <Card>
     <CardHeader>
       <CardTitle>리뷰 통계</CardTitle>
@@ -164,9 +170,10 @@ const ReviewStatsCard = ({ stats }: { stats: ReviewStatsType }) => (
       )}
     </CardContent>
   </Card>
-);
+));
+ReviewStatsCard.displayName = 'ReviewStatsCard';
 
-const BlogReviewList = ({ reviews }: { reviews: BlogReviewType[] }) => (
+const BlogReviewList = memo(({ reviews }: { reviews: BlogReviewType[] }) => (
   <Card>
     <CardHeader>
       <CardTitle>블로그 리뷰 ({reviews.length})</CardTitle>
@@ -215,9 +222,15 @@ const BlogReviewList = ({ reviews }: { reviews: BlogReviewType[] }) => (
       )}
     </CardContent>
   </Card>
-);
+));
+BlogReviewList.displayName = 'BlogReviewList';
 
-const VisitorReviewList = ({
+// 방문자 리뷰는 완료 결과에 전량(수백~수천 건)이 실려 온다. 한 번에 다 그리면 이후 SSE 이벤트
+// 마다 그 행들을 전부 다시 비교하게 되므로, 상한까지만 그리고 "더 보기" 로 늘린다(어드민 상세
+// 리뷰 탭과 같은 방식). 제목의 건수는 전체 기준 그대로다.
+const VISITOR_REVIEW_PAGE = 50;
+
+const VisitorReviewList = memo(function VisitorReviewList({
   reviews,
   liveCount,
   isStreaming,
@@ -225,57 +238,104 @@ const VisitorReviewList = ({
   reviews: VisitorReviewType[];
   liveCount: number;
   isStreaming: boolean;
-}) => (
-  <Card>
-    <CardHeader>
-      <CardTitle>
-        방문자 리뷰{' '}
-        <span className="text-muted-foreground">
-          ({reviews.length}
-          {isStreaming && liveCount > reviews.length ? ` · 진행 중 ${liveCount}` : ''})
-        </span>
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
-      {reviews.length === 0 ? (
-        <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-          {isStreaming
-            ? `방문자 리뷰 수집 중… ${liveCount > 0 ? `${liveCount}개 받음` : ''}`
-            : '방문자 리뷰 없음'}
-        </div>
-      ) : (
-        <ul className="divide-y">
-          {reviews.map((r, i) => (
-            <li key={i} className="py-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {r.authorName && <span className="font-medium">{r.authorName}</span>}
-                {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
-                {r.visitedAt && <span>· {r.visitedAt}</span>}
-              </div>
-              <p className="mt-1 line-clamp-3 text-sm">{r.body}</p>
-              {r.imageUrls.length > 0 && (
-                <div className="mt-2 flex gap-1.5">
-                  {r.imageUrls.slice(0, 4).map((u) => (
-                    <img
-                      key={u}
-                      src={u}
-                      alt=""
-                      className="size-12 rounded object-cover"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ))}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </CardContent>
-  </Card>
-);
+}) {
+  const [limit, setLimit] = useState(VISITOR_REVIEW_PAGE);
+  const visible = reviews.length > limit ? reviews.slice(0, limit) : reviews;
+  const remaining = reviews.length - visible.length;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          방문자 리뷰{' '}
+          <span className="text-muted-foreground">
+            ({reviews.length}
+            {isStreaming && liveCount > reviews.length ? ` · 진행 중 ${liveCount}` : ''})
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {reviews.length === 0 ? (
+          <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+            {isStreaming
+              ? `방문자 리뷰 수집 중… ${liveCount > 0 ? `${liveCount}개 받음` : ''}`
+              : '방문자 리뷰 없음'}
+          </div>
+        ) : (
+          <>
+            <ul className="divide-y">
+              {visible.map((r, i) => (
+                <li key={i} className="py-3">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {r.authorName && <span className="font-medium">{r.authorName}</span>}
+                    {r.rating !== null && <Badge variant="secondary">★ {r.rating}</Badge>}
+                    {r.visitedAt && <span>· {r.visitedAt}</span>}
+                  </div>
+                  <p className="mt-1 line-clamp-3 text-sm">{r.body}</p>
+                  {r.imageUrls.length > 0 && (
+                    <div className="mt-2 flex gap-1.5">
+                      {r.imageUrls.slice(0, 4).map((u) => (
+                        <img
+                          key={u}
+                          src={u}
+                          alt=""
+                          className="size-12 rounded object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {remaining > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setLimit((n) => n + VISITOR_REVIEW_PAGE)}
+              >
+                {remaining.toLocaleString()}개 더 보기
+              </Button>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+});
 
-const ParsedDataCard = ({ data }: { data: NaverPlaceDataType }) => (
+// 원본 응답 JSON — 접힌 상태가 기본이고, 펼쳤을 때만 문자열화한다. 완료 결과에는 방문자 리뷰
+// 전량이 들어 있어, 항상 펼쳐 두면 SSE 이벤트로 페이지가 리렌더될 때마다 수백 kB~MB 를 다시
+// pretty-print 하고 그만한 <pre> 를 DOM 에 들고 있게 된다(다른 테스트 페이지의 showRaw 와 같은 방식).
+const RawJsonCard = memo(function RawJsonCard({ data }: { data: NaverPlaceDataType }) {
+  const [show, setShow] = useState(false);
+  const text = useMemo(() => (show ? JSON.stringify(data, null, 2) : ''), [show, data]);
+  return (
+    // self-start — 접힌 동안 옆 카드(파싱된 데이터) 높이만큼 빈 카드로 늘어나지 않게.
+    <Card className="self-start">
+      <button type="button" onClick={() => setShow((v) => !v)} className="w-full text-left">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>원본 응답</CardTitle>
+            <span className="text-xs text-muted-foreground">{show ? '접기' : '펼치기'}</span>
+          </div>
+          <CardDescription>NaverPlaceData JSON</CardDescription>
+        </CardHeader>
+      </button>
+      {show && (
+        <CardContent>
+          <pre className="max-h-[600px] overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
+            {text}
+          </pre>
+        </CardContent>
+      )}
+    </Card>
+  );
+});
+
+const ParsedDataCard = memo(({ data }: { data: NaverPlaceDataType }) => (
   <Card>
     <CardHeader>
       <CardTitle>파싱된 데이터</CardTitle>
@@ -311,7 +371,8 @@ const ParsedDataCard = ({ data }: { data: NaverPlaceDataType }) => (
       </div>
     </CardContent>
   </Card>
-);
+));
+ParsedDataCard.displayName = 'ParsedDataCard';
 
 const StageStepper = ({
   stage,
@@ -584,24 +645,15 @@ export const AdminCrawlTestPage = () => {
   // (post-dedup) with their server ids — merge them straight into the detail
   // cache instead of invalidating (which would re-GET the whole review list
   // every batch). New rows are merged with summary:null, ids already present are
-  // skipped, then the same visit-date comparator as the detail API is applied.
+  // skipped, and the detail API's visit-date order is kept by inserting only the
+  // new rows at their sorted positions (mergePersistedBatch — no full re-sort).
   // The final stream.result invalidate (effect above) still reconciles totals.
   useEffect(() => {
     const batch = stream.lastPersistedBatch;
     if (!batch || batch.length === 0 || !placeId) return;
-    qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (prev) => {
-      if (!prev) return prev;
-      const existing = new Set(prev.reviews.map((r) => r.id));
-      // 크롤 스트림은 네이버 전용 — 이 상세의 기준(네이버) 행 리뷰다.
-      const fresh: AdminVisitorReviewType[] = batch
-        .filter((r) => !existing.has(r.id))
-        .map((r) => ({ ...r, source: 'naver', restaurantId: prev.id, summary: null }));
-      if (fresh.length === 0) return prev;
-      return {
-        ...prev,
-        reviews: [...fresh, ...prev.reviews].sort(compareReviewRecencyDesc),
-      };
-    });
+    qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (prev) =>
+      prev ? mergePersistedBatch(prev, batch) : prev,
+    );
   }, [stream.lastPersistedBatch, placeId, qc]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -774,17 +826,7 @@ export const AdminCrawlTestPage = () => {
                 <>
                   <div className="grid gap-6 lg:grid-cols-2">
                     <ParsedDataCard data={placeData} />
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>원본 응답</CardTitle>
-                        <CardDescription>NaverPlaceData JSON</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <pre className="max-h-[600px] overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
-                          {JSON.stringify(placeData, null, 2)}
-                        </pre>
-                      </CardContent>
-                    </Card>
+                    <RawJsonCard data={placeData} />
                   </div>
 
                   <div className="mt-6">
@@ -800,6 +842,8 @@ export const AdminCrawlTestPage = () => {
                   <div className="mt-6 grid gap-6 lg:grid-cols-2">
                     <BlogReviewList reviews={placeData.blogReviews} />
                     <VisitorReviewList
+                      // 다른 작업을 고르면 "더 보기" 로 늘린 표시 한도를 처음으로 되돌린다.
+                      key={jobId}
                       reviews={placeData.visitorReviews}
                       liveCount={stream.visitorCount}
                       isStreaming={isRunning}

@@ -423,7 +423,16 @@ const AdminRestaurantDetail = ({ placeId }: { placeId: string }) => {
         </div>
       </div>
 
-      <AdminLocationAside detail={detail} />
+      {/* 원시값으로 넘긴다 — detail 참조는 요약 SSE 이벤트마다 바뀌지만 위치 정보는 그대로라
+          사이드바(지도)는 memo 로 건너뛴다. */}
+      <AdminLocationAside
+        name={detail.name}
+        address={detail.address}
+        phone={detail.phone}
+        latitude={detail.snapshot.latitude}
+        longitude={detail.snapshot.longitude}
+        roadAddress={detail.snapshot.roadAddress}
+      />
     </div>
   );
 };

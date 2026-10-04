@@ -294,21 +294,24 @@ const Photos = ({ data }: { data: DiningcodeShopDataType }) => {
   );
 };
 
+// 평점 항목 한 줄(맛·서비스·가격·청결). ScoreBreakdown 안에서 정의하면 렌더마다 새 컴포넌트
+// 타입이 되어 막대가 매번 remount 된다 — 모듈 레벨에 둔다.
+const ScoreBar = ({ label, value }: { label: string; value: number | null }) => (
+  <div className="flex items-center gap-2 text-xs">
+    <span className="w-12 text-muted-foreground">{label}</span>
+    <div className="relative h-2 flex-1 overflow-hidden rounded bg-muted">
+      <div
+        className="absolute inset-y-0 left-0 bg-primary/70"
+        style={{ width: `${Math.min(100, ((value ?? 0) / 5) * 100)}%` }}
+      />
+    </div>
+    <span className="w-8 text-right font-medium">{formatScore(value)}</span>
+  </div>
+);
+
 const ScoreBreakdown = ({ data }: { data: DiningcodeShopDataType }) => {
   const s = data.scoreDetail;
   if (!s) return null;
-  const Bar = ({ label, value }: { label: string; value: number | null }) => (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-12 text-muted-foreground">{label}</span>
-      <div className="relative h-2 flex-1 overflow-hidden rounded bg-muted">
-        <div
-          className="absolute inset-y-0 left-0 bg-primary/70"
-          style={{ width: `${Math.min(100, ((value ?? 0) / 5) * 100)}%` }}
-        />
-      </div>
-      <span className="w-8 text-right font-medium">{formatScore(value)}</span>
-    </div>
-  );
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -323,10 +326,10 @@ const ScoreBreakdown = ({ data }: { data: DiningcodeShopDataType }) => {
           </div>
         </div>
         <div className="space-y-1.5">
-          <Bar label="맛" value={s.taste} />
-          <Bar label="서비스" value={s.service} />
-          <Bar label="가격" value={s.price} />
-          {s.clean !== null && s.clean > 0 && <Bar label="청결" value={s.clean} />}
+          <ScoreBar label="맛" value={s.taste} />
+          <ScoreBar label="서비스" value={s.service} />
+          <ScoreBar label="가격" value={s.price} />
+          {s.clean !== null && s.clean > 0 && <ScoreBar label="청결" value={s.clean} />}
         </div>
         {s.text && (
           <p className="text-[11px] text-muted-foreground">{s.text}</p>
@@ -446,10 +449,14 @@ const Reviews = ({ data }: { data: DiningcodeShopDataType }) => {
         page,
         totalCount: data.reviewsFirstPage.totalCount,
         totalPage: data.reviewsFirstPage.totalPage,
-        list: [],
+        // 1 → 2 페이지는 훅에 직전 데이터가 없다 — 응답이 올 때까지 보던 첫 페이지를 그대로 둔다.
+        list: lazy.isFetching ? data.reviewsFirstPage.list : [],
         elapsedMs: null,
       };
   const isLoading = page > 1 && lazy.isFetching;
+  // 새 페이지 응답을 기다리는 동안 보이는 목록은 직전 페이지(훅의 placeholder 또는 위 폴백)다 —
+  // 목록이 비었다 채워지며 카드 높이가 출렁이지 않게 그대로 두고, 흐리게만 표시한다.
+  const isStale = page > 1 && (lazy.isPlaceholderData || lazy.data === undefined) && lazy.isFetching;
   const totalPage = current.totalPage || 1;
   return (
     <Card>
@@ -479,7 +486,11 @@ const Reviews = ({ data }: { data: DiningcodeShopDataType }) => {
         {!isLoading && current.list.length === 0 && (
           <p className="text-xs text-muted-foreground">리뷰 없음</p>
         )}
-        {current.list.map((rv) => <ReviewCard key={rv.rvId} rv={rv} />)}
+        {current.list.length > 0 && (
+          <div className={`space-y-3 ${isStale ? 'opacity-60' : ''}`} aria-busy={isStale}>
+            {current.list.map((rv) => <ReviewCard key={rv.rvId} rv={rv} />)}
+          </div>
+        )}
         {totalPage > 1 && (
           <div className="flex justify-center gap-2 pt-2">
             <Button

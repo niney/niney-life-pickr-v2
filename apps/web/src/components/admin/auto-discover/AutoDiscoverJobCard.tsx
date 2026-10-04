@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -62,25 +62,37 @@ export const AutoDiscoverJobCard = ({
     target === 0 ? 0 : Math.min(1, snapshot.newlyRegistered / target);
 
   // 처리 큐(groupIndex 순 정렬)와 사전 제외(groupIndex = -1, already_registered) 분리.
-  const { queue, alreadyRegistered } = useMemo(() => {
-    const pre: AutoDiscoverCandidateType[] = [];
-    const q: AutoDiscoverCandidateType[] = [];
-    for (const c of snapshot.candidates) {
-      if (c.groupIndex < 0) pre.push(c);
-      else q.push(c);
-    }
-    q.sort((a, b) => a.groupIndex - b.groupIndex);
-    return { queue: q, alreadyRegistered: pre };
-  }, [snapshot.candidates]);
+  // 상태별 건수도 같은 순회에서 센다 — 후보 이벤트 1건마다 배열을 네 번 더 훑지 않게.
+  const { queue, alreadyRegistered, doneCount, failedCount, skippedCount, queueDoneCount } =
+    useMemo(() => {
+      const pre: AutoDiscoverCandidateType[] = [];
+      const q: AutoDiscoverCandidateType[] = [];
+      let done = 0;
+      let failed = 0;
+      let skipped = 0;
+      let queueDone = 0;
+      for (const c of snapshot.candidates) {
+        if (c.state === 'done') done += 1;
+        else if (c.state === 'failed') failed += 1;
+        else if (c.state === 'skipped') skipped += 1;
+        if (c.groupIndex < 0) pre.push(c);
+        else {
+          q.push(c);
+          if (c.state === 'done') queueDone += 1;
+        }
+      }
+      q.sort((a, b) => a.groupIndex - b.groupIndex);
+      return {
+        queue: q,
+        alreadyRegistered: pre,
+        doneCount: done,
+        failedCount: failed,
+        skippedCount: skipped,
+        queueDoneCount: queueDone,
+      };
+    }, [snapshot.candidates]);
 
   const totalCandidates = snapshot.candidates.length;
-  const doneCount = snapshot.candidates.filter((c) => c.state === 'done').length;
-  const failedCount = snapshot.candidates.filter(
-    (c) => c.state === 'failed',
-  ).length;
-  const skippedCount = snapshot.candidates.filter(
-    (c) => c.state === 'skipped',
-  ).length;
 
   return (
     <Card className="mb-6">
@@ -250,7 +262,7 @@ export const AutoDiscoverJobCard = ({
             <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
               처리 큐
               <span>
-                ({queue.filter((c) => c.state === 'done').length}/{queue.length}{' '}
+                ({queueDoneCount}/{queue.length}{' '}
                 완료)
               </span>
             </h4>
@@ -297,13 +309,15 @@ const KeywordTile = ({ keyword }: { keyword: AutoDiscoverKeywordType }) => {
   );
 };
 
-const CandidateRow = ({
+// memo — 후보가 수백 건일 수 있고, SSE candidate 이벤트 1건마다 카드 전체가 리렌더된다.
+// 훅(useAutoDiscoverJob)이 바뀐 후보만 새 객체로 바꾸므로 나머지 행은 bail-out 한다.
+const CandidateRow = memo(function CandidateRow({
   candidate,
   order,
 }: {
   candidate: AutoDiscoverCandidateType;
   order: number;
-}) => {
+}) {
   const stateBadge =
     candidate.state === 'pending' ? (
       <Badge variant="outline" className="font-normal text-muted-foreground">
@@ -376,4 +390,4 @@ const CandidateRow = ({
       )}
     </li>
   );
-};
+});

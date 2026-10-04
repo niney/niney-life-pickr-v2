@@ -21,6 +21,9 @@ interface Props {
   // 더블클릭으로 "확대 포커스" 요청된 식당. 참조가 바뀔 때마다(매 더블클릭 새
   // 객체) 해당 식당으로 flyToZoomIn — 단순 선택/호버 패닝과 구분된다.
   zoomFocus: { placeId: string } | null;
+  // 확대 요청을 한 번 처리한 뒤 호출 — 페이지가 zoomFocus 를 비운다(1회성 요청). 미지정이면
+  // 요청이 남아 있어 대상 좌표가 바뀔 때 다시 확대된다.
+  onZoomFocusConsumed?(): void;
   // URL 의 bbox(이미 검색에 반영된 영역). 사용자가 패닝하여 다른 영역으로 가면
   // "이 지역 재검색" 버튼이 노출된다.
   appliedBbox: string | null;
@@ -55,6 +58,7 @@ export const DiscoverMap = ({
   selectedPlaceId,
   hoveredPlaceId,
   zoomFocus,
+  onZoomFocusConsumed,
   appliedBbox,
   focusCoord,
   locationStatus,
@@ -82,32 +86,69 @@ export const DiscoverMap = ({
   // 호버 우선 강조. 호버가 없으면 selected.
   const highlightedId = hoveredPlaceId ?? selectedPlaceId;
 
-  // 강조 대상이 화면 밖일 가능성에 대비해 항상 fly-to. 시스템 동작이라
-  // userInteractedRef 는 false 유지 — onViewportChangeEnd 가 발사 안 함.
-  useEffect(() => {
-    if (!highlightedId) return;
-    const target = markers.find((m) => m.id === highlightedId);
-    if (!target) return;
-    handleRef.current?.flyTo(target.lat, target.lng);
-  }, [highlightedId, markers]);
+  // 아래 effect 들은 markers 배열 참조가 아니라 "대상의 좌표"(원시값)에 의존한다. 발견 화면의
+  // markers 는 등록 목록이 요약 SSE 로 패치될 때마다(카운트만 바뀌어도) 새 배열이 되는데, 참조에
+  // 의존하면 그때마다 flyTo 가 다시 나가 사용자가 옮겨 둔 지도가 선택 지점으로 되돌아간다.
+  const highlightTarget = highlightedId
+    ? markers.find((m) => m.id === highlightedId)
+    : undefined;
+  const highlightLat = highlightTarget?.lat;
+  const highlightLng = highlightTarget?.lng;
+  const zoomTarget = zoomFocus ? markers.find((m) => m.id === zoomFocus.placeId) : undefined;
+  const zoomLat = zoomTarget?.lat;
+  const zoomLng = zoomTarget?.lng;
+  const hasRegisteredMarkers = markers.some((m) => m.variant === 'muted');
 
-  // 더블클릭 = 해당 식당으로 확대. zoomFocus 참조가 바뀔 때마다 flyToZoomIn —
-  // 클릭/호버 패닝(줌 유지)과 달리 ZOOM_IN_LEVEL 까지 당긴다(이미 더 확대면 유지).
+  // 지도 이동 — 강조 대상으로의 패닝(줌 유지)과 확대 요청을 한 effect 에서 처리한다.
+  //  · 패닝: 강조 대상이 바뀌거나 그 좌표가 (뒤늦게) 생겼을 때만. 화면 밖일 가능성에 대비한
+  //    시스템 동작이라 userInteractedRef 는 false 유지 — onViewportChangeEnd 가 발사 안 함.
+  //  · 확대: zoomFocus 참조가 바뀔 때마다 flyToZoomIn — ZOOM_IN_LEVEL 까지 당긴다(이미 더 확대면
+  //    유지). 1회성 요청이라 처리한 뒤 비운다(대상에 좌표가 없어 못 옮긴 경우도 — 나중에 마커가
+  //    생겼을 때 뒤늦게 확대되지 않게).
+  // 위치 버튼처럼 강조와 확대가 같은 커밋에서 같은 식당으로 바뀌면 확대 하나만 부른다(이동을
+  // 겸한다) — flyTo 까지 부르면 OL 의 두 애니메이션이 겹쳐, 줌을 유지하려는 쪽이 확대를 덮는다.
+  // 예전엔 markers 참조가 바뀔 때마다 둘 다 다시 나가 뒤늦게라도 확대됐지만, 이제는 한 번만 나간다.
+  const flownHighlightRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!zoomFocus) return;
-    const target = markers.find((m) => m.id === zoomFocus.placeId);
-    if (!target) return;
-    handleRef.current?.flyToZoomIn(target.lat, target.lng, ZOOM_IN_LEVEL);
-  }, [zoomFocus, markers]);
+    const handle = handleRef.current;
+    // 지도가 아직 없으면(키 로딩 중) 아무것도 기록하지 않고 기다린다 — apiKey 가 오면 다시 돈다.
+    if (!handle) return;
+    const highlightKey =
+      highlightedId && highlightLat !== undefined && highlightLng !== undefined
+        ? `${highlightedId}|${highlightLat}|${highlightLng}`
+        : null;
+    const highlightChanged = highlightKey !== flownHighlightRef.current;
+    flownHighlightRef.current = highlightKey;
 
-  // 첫 등록 마커 묶음 fit. markers 가 빈 → 채워짐 으로 바뀐 첫 시점에만.
+    if (zoomFocus) {
+      const canZoom = zoomLat !== undefined && zoomLng !== undefined;
+      if (canZoom) handle.flyToZoomIn(zoomLat, zoomLng, ZOOM_IN_LEVEL);
+      onZoomFocusConsumed?.();
+      if (canZoom && zoomFocus.placeId === highlightedId) return;
+    }
+    if (highlightChanged && highlightLat !== undefined && highlightLng !== undefined) {
+      handle.flyTo(highlightLat, highlightLng);
+    }
+  }, [
+    highlightedId,
+    highlightLat,
+    highlightLng,
+    zoomFocus,
+    zoomLat,
+    zoomLng,
+    onZoomFocusConsumed,
+    apiKey,
+  ]);
+
+  // 첫 등록 마커 묶음 fit. 등록 마커가 없음 → 있음 으로 바뀐 첫 시점에만. 지도 키가 늦게 와
+  // MapCanvas 가 아직 없으면(handle 없음) 기다렸다가 키가 온 뒤에 맞춘다.
   useEffect(() => {
-    if (didInitialFitRef.current) return;
-    const registered = markers.filter((m) => m.variant === 'muted');
-    if (registered.length === 0) return;
-    handleRef.current?.fitToMarkers(80);
+    if (didInitialFitRef.current || !hasRegisteredMarkers) return;
+    const handle = handleRef.current;
+    if (!handle) return;
+    handle.fitToMarkers(80);
     didInitialFitRef.current = true;
-  }, [markers]);
+  }, [hasRegisteredMarkers, apiKey]);
 
   // focusCoord 참조가 바뀌면 fly — "내 위치" 버튼 클릭 경로. 같은 좌표라도
   // 호출자가 새 object 를 넘기면 다시 fly(idempotent). apiKey 가 늦게 와서

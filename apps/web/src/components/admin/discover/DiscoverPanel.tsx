@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
   MapPin,
@@ -127,6 +127,14 @@ export const DiscoverPanel = ({
     onSubmitQuery(value);
   };
 
+  // 등록된 placeId 집합(검색 결과의 "등록됨" 표시용). 등록 목록은 요약 SSE 로 패치될 때마다 새
+  // 배열이 되지만 id 구성은 그대로다 — id 문자열을 키로 메모해 집합 참조를 유지한다(아래 목록 memo).
+  const registeredIdsKey = registeredItems.map((it) => it.placeId).join(',');
+  const registeredPlaceIds = useMemo(
+    () => new Set(registeredIdsKey ? registeredIdsKey.split(',') : []),
+    [registeredIdsKey],
+  );
+
   return (
     <div className="flex flex-col xl:h-full">
       <div className="border-b p-3 space-y-2.5">
@@ -235,7 +243,7 @@ export const DiscoverPanel = ({
         {tab === 'search' ? (
           <SearchResultList
             items={searchItems}
-            registeredPlaceIds={new Set(registeredItems.map((it) => it.placeId))}
+            registeredPlaceIds={registeredPlaceIds}
             loading={searchLoading}
             error={searchError}
             empty={q.trim().length === 0}
@@ -316,7 +324,9 @@ const TabButton = ({
   </button>
 );
 
-const SearchResultList = ({
+// 두 목록은 memo — 검색 입력(qInput)은 이 패널의 로컬 state 라 키 입력마다 패널이 리렌더되는데,
+// 목록의 props 는 그동안 그대로다(콜백은 페이지가 useCallback/setState 로 안정 참조를 넘긴다).
+const SearchResultList = memo(function SearchResultList({
   items,
   registeredPlaceIds,
   loading,
@@ -342,9 +352,14 @@ const SearchResultList = ({
   onZoom(placeId: string): void;
   checkedIds: Set<string>;
   onToggleChecked(placeId: string, on: boolean): void;
-}) => {
-  // hook 호출은 모든 early return 위에 — react rules-of-hooks.
-  const ulRef = useScrollSelectedIntoView(selectedPlaceId, items);
+}) {
+  // hook 호출은 모든 early return 위에 — react rules-of-hooks. 세 번째 인자는 아래 early
+  // return 들을 모두 지나 목록(ul)이 그려지는 조건.
+  const ulRef = useScrollSelectedIntoView(
+    selectedPlaceId,
+    items,
+    !empty && !error && items.length > 0,
+  );
   if (empty) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-sm text-muted-foreground">
@@ -424,9 +439,9 @@ const SearchResultList = ({
       })}
     </ul>
   );
-};
+});
 
-const RegisteredList = ({
+const RegisteredList = memo(function RegisteredList({
   items,
   selectedPlaceId,
   hoveredPlaceId,
@@ -440,8 +455,8 @@ const RegisteredList = ({
   onSelect(placeId: string): void;
   onHover(placeId: string | null): void;
   onZoom(placeId: string): void;
-}) => {
-  const ulRef = useScrollSelectedIntoView(selectedPlaceId, items);
+}) {
+  const ulRef = useScrollSelectedIntoView(selectedPlaceId, items, items.length > 0);
   if (items.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-sm text-muted-foreground">
@@ -451,71 +466,94 @@ const RegisteredList = ({
   }
   return (
     <ul ref={ulRef} className="divide-y">
-      {items.map((it) => {
-        const inFlight = it.summaryPending + it.summaryRunning;
-        return (
-          <li
-            key={it.placeId}
-            data-place-id={it.placeId}
-            onClick={() => onSelect(it.placeId)}
-            className={cn(
-              'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
-              selectedPlaceId === it.placeId && 'bg-primary/10',
-            )}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">{it.name}</span>
-                {it.category && (
-                  <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
-                )}
-                {/* 등록 탭은 위치 버튼이 이동+확대까지 담당 (행 더블클릭 없음) */}
-                <ShowOnMapButton
-                  className="ml-auto"
-                  active={hoveredPlaceId === it.placeId}
-                  label={it.name}
-                  onClick={() => {
-                    onHover(it.placeId);
-                    onZoom(it.placeId);
-                  }}
-                />
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                {it.rating !== null && <Badge variant="secondary">★ {it.rating}</Badge>}
-                <Badge variant="outline">리뷰 {it.totalReviews}개</Badge>
-                <Badge variant="outline">
-                  요약 {it.summaryDone}/{it.totalReviews}
-                </Badge>
-                {inFlight > 0 && (
-                  <Badge variant="secondary" className="inline-flex items-center gap-1">
-                    <Loader2 className="size-3 animate-spin" /> {inFlight}건 진행
-                  </Badge>
-                )}
-                {it.summaryFailed > 0 && (
-                  <ReanalyzeFailedBadge placeId={it.placeId} count={it.summaryFailed} />
-                )}
-                {it.avgSatisfactionScore !== null && (
-                  <Badge variant="outline">😊 {it.avgSatisfactionScore.toFixed(1)}/5</Badge>
-                )}
-                {it.positiveCount + it.negativeCount + it.neutralCount > 0 && (
-                  <span className="text-[11px]">
-                    <span className="text-emerald-600 dark:text-emerald-400">
-                      +{it.positiveCount}
-                    </span>
-                    <span className="mx-1 text-muted-foreground">/</span>
-                    <span className="text-rose-600 dark:text-rose-400">
-                      -{it.negativeCount}
-                    </span>
-                  </span>
-                )}
-              </div>
-            </div>
-          </li>
-        );
-      })}
+      {items.map((it) => (
+        <RegisteredRow
+          key={it.placeId}
+          it={it}
+          selected={selectedPlaceId === it.placeId}
+          hovered={hoveredPlaceId === it.placeId}
+          onSelect={onSelect}
+          onHover={onHover}
+          onZoom={onZoom}
+        />
+      ))}
     </ul>
   );
-};
+});
+
+// 등록 맛집 한 행. memo — 등록 목록(최대 200행)은 요약 SSE 가 카운트를 패치할 때마다 새 배열이
+// 되지만, 패치는 바뀐 가게의 객체만 새로 만든다. 나머지 행은 props 가 그대로라 다시 그리지 않는다.
+const RegisteredRow = memo(function RegisteredRow({
+  it,
+  selected,
+  hovered,
+  onSelect,
+  onHover,
+  onZoom,
+}: {
+  it: RestaurantPublicListItemType;
+  selected: boolean;
+  hovered: boolean;
+  onSelect(placeId: string): void;
+  onHover(placeId: string | null): void;
+  onZoom(placeId: string): void;
+}) {
+  const inFlight = it.summaryPending + it.summaryRunning;
+  return (
+    <li
+      data-place-id={it.placeId}
+      onClick={() => onSelect(it.placeId)}
+      className={cn(
+        'flex cursor-pointer items-start gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40',
+        selected && 'bg-primary/10',
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium">{it.name}</span>
+          {it.category && (
+            <span className="shrink-0 text-xs text-muted-foreground">{it.category}</span>
+          )}
+          {/* 등록 탭은 위치 버튼이 이동+확대까지 담당 (행 더블클릭 없음) */}
+          <ShowOnMapButton
+            className="ml-auto"
+            active={hovered}
+            label={it.name}
+            onClick={() => {
+              onHover(it.placeId);
+              onZoom(it.placeId);
+            }}
+          />
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          {it.rating !== null && <Badge variant="secondary">★ {it.rating}</Badge>}
+          <Badge variant="outline">리뷰 {it.totalReviews}개</Badge>
+          <Badge variant="outline">
+            요약 {it.summaryDone}/{it.totalReviews}
+          </Badge>
+          {inFlight > 0 && (
+            <Badge variant="secondary" className="inline-flex items-center gap-1">
+              <Loader2 className="size-3 animate-spin" /> {inFlight}건 진행
+            </Badge>
+          )}
+          {it.summaryFailed > 0 && (
+            <ReanalyzeFailedBadge placeId={it.placeId} count={it.summaryFailed} />
+          )}
+          {it.avgSatisfactionScore !== null && (
+            <Badge variant="outline">😊 {it.avgSatisfactionScore.toFixed(1)}/5</Badge>
+          )}
+          {it.positiveCount + it.negativeCount + it.neutralCount > 0 && (
+            <span className="text-[11px]">
+              <span className="text-emerald-600 dark:text-emerald-400">+{it.positiveCount}</span>
+              <span className="mx-1 text-muted-foreground">/</span>
+              <span className="text-rose-600 dark:text-rose-400">-{it.negativeCount}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+});
 
 // 행 지도 버튼. 식당명 라인 우측에 배치 — 클릭 시 onHover 로 hoveredPlaceId
 // 를 갱신해 DiscoverMap 의 highlightedId effect 가 flyTo 를 발사한다. 행 본문
@@ -551,20 +589,27 @@ const ShowOnMapButton = ({
 );
 
 // 외부 시스템(DOM 스크롤) 동기화 — 지도 마커 클릭 등으로 selectedPlaceId 가
-// 화면 밖 항목을 가리키면 자동으로 보이게 한다. items 도 deps 에 넣어서 막
-// 도착한 새 데이터에 selectedPlaceId 항목이 들어오는 케이스(검색 후 즉시
-// 강조)도 커버. block:'nearest' 라 이미 보이면 no-op.
-const useScrollSelectedIntoView = <T,>(
+// 화면 밖 항목을 가리키면 자동으로 보이게 한다. 막 도착한 새 데이터에
+// selectedPlaceId 항목이 들어오는 케이스(검색 후 즉시 강조)와 새 결과에서 그 항목의 자리가
+// 달라진 케이스도 커버하도록 "선택 항목이 목록의 몇 번째인가"(없거나 목록이 안 그려진 상태면
+// -1)를 deps 에 둔다. items 참조 자체에 의존하면 등록 목록이 요약 SSE 로 패치될 때마다(카운트만
+// 바뀌어도 새 배열) 다시 스크롤돼, 사용자가 다른 곳을 보려고 내려 둔 목록이 선택 행으로
+// 되돌아간다. block:'nearest' 라 이미 보이면 no-op.
+const useScrollSelectedIntoView = <T extends { placeId: string }>(
   selectedId: string | null,
   items: T[],
+  // 목록(ul)이 실제로 그려지는 상태인가 — 로딩·에러·빈 상태 화면에서는 false.
+  listShown: boolean,
 ) => {
   const ulRef = useRef<HTMLUListElement | null>(null);
+  const selectedIndex =
+    listShown && selectedId !== null ? items.findIndex((it) => it.placeId === selectedId) : -1;
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || selectedIndex < 0) return;
     const el = ulRef.current?.querySelector<HTMLElement>(
       `[data-place-id="${CSS.escape(selectedId)}"]`,
     );
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [selectedId, items]);
+  }, [selectedId, selectedIndex]);
   return ulRef;
 };

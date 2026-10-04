@@ -34,6 +34,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { useDebounced } from '~/lib/useDebounced';
 
 // 리뷰 문맥검색 / RAG (정식 review-search 도메인). enrich(관점+문맥+임베딩 영속)
 // → RAG 질문(근거 인용·확신도·검증 가드레일). standalone 시맨틱/관점 검색은 제거됨
@@ -252,11 +253,18 @@ export const AdminReviewSearchPage = () => {
 // 식당별 enrich 상태 관리 ("식당별 정규화 상태" 미러링). 신규는 요약 후 자동 enrich,
 // 여기선 백로그를 식당별/일괄로 처리하고 진척을 폴링으로 본다.
 const STATUS_PAGE_SIZE = 30;
+// 상태 표 검색어를 쿼리에 넘기기까지의 지연 — 키 입력(한글은 조합 단계)마다 요청이 나가지 않게.
+const STATUS_SEARCH_DEBOUNCE_MS = 300;
 const EnrichStatusSection = () => {
   const [q, setQ] = useState('');
+  const debouncedQ = useDebounced(q, STATUS_SEARCH_DEBOUNCE_MS);
   const [page, setPage] = useState(1);
   useReviewEnrichEvents(); // SSE — 진행률 라이브 push
-  const statusQuery = useReviewEnrichStatus({ q: q || undefined, page, pageSize: STATUS_PAGE_SIZE });
+  const statusQuery = useReviewEnrichStatus({
+    q: debouncedQ || undefined,
+    page,
+    pageSize: STATUS_PAGE_SIZE,
+  });
   const enrichBg = useReviewEnrichBg();
   const enrichPending = useReviewEnrichPending();
   const data = statusQuery.data;
@@ -392,8 +400,13 @@ const EnrichStatusRow = ({
 // 진척을 폴링으로 본다. 새로 크롤된 식당은 요약 후 조건부 자동 군집화.
 const ClusterStatusSection = () => {
   const [q, setQ] = useState('');
+  const debouncedQ = useDebounced(q, STATUS_SEARCH_DEBOUNCE_MS);
   const [page, setPage] = useState(1);
-  const statusQuery = useClusterStatus({ q: q || undefined, page, pageSize: STATUS_PAGE_SIZE });
+  const statusQuery = useClusterStatus({
+    q: debouncedQ || undefined,
+    page,
+    pageSize: STATUS_PAGE_SIZE,
+  });
   const clusterBg = useClusterBg();
   const clusterPending = useClusterPending();
   const data = statusQuery.data;

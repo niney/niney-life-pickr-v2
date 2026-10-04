@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef } from 'react';
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -70,6 +71,9 @@ export const useNaverSearch = (q: string, bbox: string | null) =>
 // 캐치테이블 키워드 검색 — /admin/catchtable-test 페이지 전용. 첫 호출은 어댑터
 // 워밍업 비용으로 ~14s, 이후는 ~수백 ms. staleTime 60s — 같은 키워드 재검색이
 // 잦을 수 있어 네이버보다 약간 길게.
+// 같은 키워드 안에서 페이지(offset)·필터만 바뀔 때는 placeholderData 로 직전 결과를
+// 유지한다 — 응답을 기다리는 동안 결과 목록이 통째로 사라졌다 다시 그려지지 않게.
+// 키워드가 바뀌면 이전 키워드의 결과를 새 결과처럼 보여 주지 않는다(useRestaurantList 와 같은 규칙).
 export interface UseCatchtableSearchArgs {
   q: string;
   offset?: string | null;
@@ -87,10 +91,13 @@ export const useCatchtableSearch = ({
     queryFn: () => crawlApi.catchtableSearch({ q, offset, limit, contractedOnly }),
     enabled: q.trim().length > 0,
     staleTime: 60_000,
+    placeholderData: (prev, previousQuery) => (previousQuery?.queryKey[2] === q ? prev : undefined),
   });
 
 // 다이닝코드 키워드 검색 — /admin/diningcode-test 페이지 전용. HTTP 직접 호출이라
 // 첫 호출도 ~수백 ms. staleTime 60s — 같은 키워드 재검색 시 즉시 표시.
+// 같은 키워드 안에서 페이지·정렬·좌표만 바뀔 때는 직전 결과를 유지(캐치테이블 검색과 같은 규칙).
+// lat/lng/distance/size 가 그대로 queryKey 에 들어가므로 호출자가 디바운스해서 넘기는 책임.
 export interface UseDiningcodeSearchArgs {
   q: string;
   from?: number | null;
@@ -115,6 +122,7 @@ export const useDiningcodeSearch = ({
       crawlApi.diningcodeSearch({ q, from, size, order, lat, lng, distance }),
     enabled: q.trim().length > 0,
     staleTime: 60_000,
+    placeholderData: (prev, previousQuery) => (previousQuery?.queryKey[2] === q ? prev : undefined),
   });
 
 // 다이닝코드 가게 상세 — vRid null/undefined 면 disabled. /API/profile/ 한 방에
@@ -130,6 +138,8 @@ export const useDiningcodeShop = (vRid: string | null) =>
 // 다이닝코드 리뷰 페이지네이션. 페이지 단위 lazy fetch — 같은 page 재진입은
 // 캐시 hit. 본 디테일 응답의 reviewsFirstPage 와 별개 query key 라 호출자가
 // page=1 호출하면 (이미 본 페이지일 수 있어도) 추가 wire 호출 발생.
+// 같은 가게 안에서 페이지만 넘길 때는 직전 페이지를 placeholder 로 유지한다 —
+// 목록이 비었다 채워지며 페이지 높이가 출렁이지 않게. 호출자는 isPlaceholderData 로 구분.
 export const useDiningcodeShopReviews = (
   vRid: string | null,
   page: number,
@@ -140,6 +150,7 @@ export const useDiningcodeShopReviews = (
     queryFn: () => crawlApi.diningcodeShopReviews(vRid!, page),
     enabled: Boolean(vRid) && enabled,
     staleTime: 5 * 60_000,
+    placeholderData: (prev, previousQuery) => (previousQuery?.queryKey[2] === vRid ? prev : undefined),
   });
 
 // 다이닝코드 가게 DB 저장 + AI 분석 큐잉 mutation. 어드민 상세 페이지의
@@ -222,6 +233,8 @@ export const useTablingDiscover = (
   });
 
 // 등록됨 배지 — idx 다수 일괄 조회. 비면 disabled.
+// 정식 페이지는 "더 보기"로 idx 가 누적돼 키가 계속 바뀐다 — 직전 결과를 placeholder 로
+// 유지해, 새 키 응답을 기다리는 동안 이미 등록된 카드의 배지가 사라졌다 돌아오지 않게 한다.
 export const useTablingRegistered = (idxs: number[]) => {
   const key = idxs.join(',');
   return useQuery({
@@ -229,6 +242,7 @@ export const useTablingRegistered = (idxs: number[]) => {
     queryFn: () => crawlApi.tablingRegistered(idxs),
     enabled: idxs.length > 0,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 };
 

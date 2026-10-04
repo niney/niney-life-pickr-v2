@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -139,7 +139,10 @@ const JobItemBadge = ({ item }: { item: TablingBulkSaveJobItemType }) => {
   );
 };
 
-const ResultCard = ({
+// memo — 결과가 "더 보기"로 계속 쌓이는데(상한 없음) 검색어 입력·체크박스 토글·일괄 저장 SSE
+// 틱마다 부모(페이지)가 통째로 리렌더된다. props 가 그대로인 카드는 bail-out 하도록 부모는
+// 콜백(onToggleSelect/onSave)을 안정 참조로 넘긴다(다이닝코드 페이지 ResultCard 와 같은 구조).
+const ResultCard = memo(function ResultCard({
   item,
   registered,
   saveResult,
@@ -151,7 +154,7 @@ const ResultCard = ({
   onToggleSelect,
   jobItem,
   onSave,
-}: ResultCardProps) => {
+}: ResultCardProps) {
   const isRegistered = !!registered || !!saveResult || jobItem?.state === 'done';
   const activeFlags = FLAG_LABELS.filter((f) => item.flags[f.key]);
   return (
@@ -324,7 +327,7 @@ const ResultCard = ({
       </div>
     </Card>
   );
-};
+});
 
 export const AdminTablingPage = () => {
   const [input, setInput] = useState('');
@@ -436,26 +439,35 @@ export const AdminTablingPage = () => {
     return () => clearTimeout(t);
   }, [jobState, clearActiveJob]);
 
-  const handleSave = (idx: number) => {
-    if (savingIdx !== null || isJobRunning) return;
-    setSavingIdx(idx);
-    setSaveErrors((prev) => {
-      const next = new Map(prev);
-      next.delete(idx);
-      return next;
-    });
-    save.mutate(idx, {
-      onSuccess: (result) => {
-        setSaveResults((prev) => new Map(prev).set(idx, result));
-      },
-      onError: (err) => {
-        setSaveErrors((prev) =>
-          new Map(prev).set(idx, err instanceof Error ? err.message : '알 수 없는 오류'),
-        );
-      },
-      onSettled: () => setSavingIdx(null),
-    });
-  };
+  // 단건 저장 중이거나 일괄 잡이 도는 동안은 다른 카드의 저장을 막는다(버튼도 anySaving 으로
+  // disabled). handleSave 는 anySaving 이 바뀔 때만 새 참조가 된다 — 그때는 anySaving prop 도 함께
+  // 바뀌어 어차피 모든 카드가 다시 그려지므로, 카드 memo 가 깨지는 렌더가 따로 늘지 않는다.
+  const anySaving = savingIdx !== null || isJobRunning;
+  // useMutation 의 mutate 는 렌더 간 같은 참조다.
+  const saveShop = save.mutate;
+  const handleSave = useCallback(
+    (idx: number) => {
+      if (anySaving) return;
+      setSavingIdx(idx);
+      setSaveErrors((prev) => {
+        const next = new Map(prev);
+        next.delete(idx);
+        return next;
+      });
+      saveShop(idx, {
+        onSuccess: (result) => {
+          setSaveResults((prev) => new Map(prev).set(idx, result));
+        },
+        onError: (err) => {
+          setSaveErrors((prev) =>
+            new Map(prev).set(idx, err instanceof Error ? err.message : '알 수 없는 오류'),
+          );
+        },
+        onSettled: () => setSavingIdx(null),
+      });
+    },
+    [anySaving, saveShop],
+  );
 
   const resetPaging = () => {
     setPrevItems([]);
@@ -626,7 +638,7 @@ export const AdminTablingPage = () => {
               saveResult={saveResults.get(it.idx) ?? null}
               saveError={saveErrors.get(it.idx) ?? null}
               saving={savingIdx === it.idx}
-              anySaving={savingIdx !== null || isJobRunning}
+              anySaving={anySaving}
               selectable={selectableSet.has(it.idx)}
               selected={selected.has(it.idx)}
               onToggleSelect={toggleOne}

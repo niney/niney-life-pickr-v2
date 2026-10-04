@@ -203,6 +203,8 @@ export const AdminCatchtableTestPage = () => {
 
   const data = search.data;
   const isLoading = search.isFetching;
+  // 다음 페이지·필터 변경 직후 — 새 응답(첫 호출은 10초 이상)이 오기 전까지 직전 결과가 그대로 보인다.
+  const isStale = search.isPlaceholderData;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
@@ -310,7 +312,11 @@ export const AdminCatchtableTestPage = () => {
       )}
 
       {data && data.items.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        // 직전 결과를 보여 주는 동안은 흐리게 — 지금 조건의 결과가 아님을 드러낸다.
+        <div
+          className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${isStale ? 'opacity-60' : ''}`}
+          aria-busy={isStale}
+        >
           {data.items.map((it) => (
             <ResultCard key={`${it.shopRef}-${it.urlPathAlias ?? ''}`} item={it} />
           ))}

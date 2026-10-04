@@ -10,7 +10,7 @@ import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat } from 'ol/proj';
-import { createEmpty, extend, isEmpty, type Extent } from 'ol/extent';
+import { containsCoordinate, createEmpty, extend, isEmpty, type Extent } from 'ol/extent';
 import { Fill, Stroke, Style, Text as OlText } from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import 'ol/ol.css';
@@ -34,6 +34,40 @@ type MapMode = 'bubble' | 'markers' | 'choropleth';
 
 const KOREA_CENTER = { lat: 36.5, lng: 127.8 };
 const GEOJSON_URL = `${import.meta.env.BASE_URL}sigungu-geo.json`;
+
+// 시군구 경계(565kB · 폴리곤 250개 · 꼭짓점 3만여 개)는 세션에 한 번만 받아 EPSG:3857 OL Feature 로
+// 파싱해 둔다. 예전엔 원본 JSON 만 캐시해 색칠 모드로 돌아올 때마다 250개를 다시 파싱·좌표 변환했다.
+// 여기 든 feature 는 원본 — 지도에 올릴 때는 clone 해서 쓴다(원본에 count·style 을 박지 않고, 같은
+// feature 가 지난 마운트의 소스에 매달린 채 남지 않게). 실패하면 비워 다음 시도에서 다시 받는다.
+let sigunguFeaturesPromise: Promise<Feature[]> | null = null;
+const loadSigunguFeatures = (): Promise<Feature[]> => {
+  if (!sigunguFeaturesPromise) {
+    sigunguFeaturesPromise = (async () => {
+      const res = await fetch(GEOJSON_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as object;
+      return new GeoJSON().readFeatures(json, { featureProjection: 'EPSG:3857' }) as Feature[];
+    })().catch((e: unknown) => {
+      sigunguFeaturesPromise = null;
+      throw e;
+    });
+  }
+  return sigunguFeaturesPromise;
+};
+
+// 마커 모드의 점은 전부 같은 모양 — Style 인스턴스 하나를 공유한다(가게 수만큼 만들지 않는다).
+// 처음 쓸 때 만든다(모듈 평가 시점에 OL 스타일을 만들지 않게).
+let markerPointStyle: Style | null = null;
+const getMarkerPointStyle = (): Style => {
+  markerPointStyle ??= new Style({
+    image: new CircleStyle({
+      radius: 5,
+      fill: new Fill({ color: 'rgba(37,99,235,0.85)' }),
+      stroke: new Stroke({ color: '#ffffff', width: 1 }),
+    }),
+  });
+  return markerPointStyle;
+};
 
 // 면적이 개수에 비례하도록 sqrt 스케일. 10~34px.
 const bubbleRadius = (count: number, max: number): number => {
@@ -106,8 +140,6 @@ export const RegionStatsMap = ({ data }: { data: RegionStatsResultType }) => {
   const mapRef = useRef<OlMap | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
   const tileSourceRef = useRef<XYZ | null>(null);
-  // 경계 GeoJSON 은 한 번만 fetch 해 캐시 (모드 토글마다 재요청 방지).
-  const geoCacheRef = useRef<object | null>(null);
 
   // 버블 데이터 — 좌표 있는 시군구만. (regions.json centroid + 집계 count)
   const bubbles = useMemo(
@@ -153,6 +185,10 @@ export const RegionStatsMap = ({ data }: { data: RegionStatsResultType }) => {
   }, [themeMode, apiKey]);
 
   // feature 갱신 — 모드/데이터 변경 시. choropleth 는 경계 GeoJSON 지연 로드.
+  // apiKey 도 deps 에 둔다: 맵은 위 effect 가 apiKey 를 받은 뒤에야 만들어지는데, 지도 설정이
+  // 캐시에 없는 첫 진입에서는 이 effect 가 맵보다 먼저 돌고(소스 없음 → return) 다시 돌 계기가
+  // 없어 모드를 바꾸기 전까지 아무것도 그려지지 않았다. effect 는 선언 순서대로 실행되므로
+  // apiKey 가 바뀐 커밋에서는 맵 생성 뒤에 이 effect 가 이어서 돈다.
   useEffect(() => {
     const src = vectorSourceRef.current;
     const map = mapRef.current;
@@ -169,31 +205,34 @@ export const RegionStatsMap = ({ data }: { data: RegionStatsResultType }) => {
       setChoroState('loading');
       void (async () => {
         try {
-          if (!geoCacheRef.current) {
-            const res = await fetch(GEOJSON_URL);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            geoCacheRef.current = (await res.json()) as object;
-          }
+          const base = await loadSigunguFeatures();
           if (cancelled || vectorSourceRef.current !== src) return;
 
-          const features = new GeoJSON().readFeatures(geoCacheRef.current, {
-            featureProjection: 'EPSG:3857',
-          }) as Feature[];
           const coords = data.points.map((p) => fromLonLat([p.lng, p.lat]));
 
+          // 가게 좌표가 어느 시군구에 드는지 센다. OL 의 폴리곤 판정(containsXY)은 경계 상자를
+          // 먼저 보지 않고 링 전체를 돌기 때문에, 그대로면 (가게 수 × 전체 꼭짓점 3만여 개)만큼
+          // 변을 검사한다. 경계 상자 밖인 쌍을 먼저 걸러 실제 판정은 가게당 한두 폴리곤만 한다.
           let maxCount = 0;
-          for (const f of features) {
+          const counts = base.map((f) => {
             const geom = f.getGeometry();
+            if (!geom) return 0;
+            const extent = geom.getExtent();
             let c = 0;
-            if (geom) for (const co of coords) if (geom.intersectsCoordinate(co)) c += 1;
-            f.set('count', c);
+            for (const co of coords) {
+              if (containsCoordinate(extent, co) && geom.intersectsCoordinate(co)) c += 1;
+            }
             if (c > maxCount) maxCount = c;
-          }
-          for (const f of features) f.setStyle(choroplethStyle(f.get('count') as number, maxCount));
+            return c;
+          });
 
-          if (cancelled) return;
+          const features = base.map((f, i) => {
+            const clone = f.clone();
+            clone.setStyle(choroplethStyle(counts[i]!, maxCount));
+            return clone;
+          });
           src.addFeatures(features);
-          const withData = features.filter((f) => (f.get('count') as number) > 0);
+          const withData = features.filter((_, i) => counts[i]! > 0);
           fitTo(withData.length ? withData : features, 12);
           setChoroState('idle');
         } catch {
@@ -201,7 +240,7 @@ export const RegionStatsMap = ({ data }: { data: RegionStatsResultType }) => {
         }
       })();
     } else if (mode === 'bubble') {
-      for (const b of bubbles) {
+      const features = bubbles.map((b) => {
         const f = new Feature({ geometry: new Point(fromLonLat([b.lng, b.lat])) });
         f.setStyle(
           new Style({
@@ -217,30 +256,25 @@ export const RegionStatsMap = ({ data }: { data: RegionStatsResultType }) => {
             }),
           }),
         );
-        src.addFeature(f);
-      }
-      fitTo(src.getFeatures(), 13);
+        return f;
+      });
+      src.addFeatures(features);
+      fitTo(features, 13);
     } else {
-      for (const p of data.points) {
+      const pointStyle = getMarkerPointStyle();
+      const features = data.points.map((p) => {
         const f = new Feature({ geometry: new Point(fromLonLat([p.lng, p.lat])) });
-        f.setStyle(
-          new Style({
-            image: new CircleStyle({
-              radius: 5,
-              fill: new Fill({ color: 'rgba(37,99,235,0.85)' }),
-              stroke: new Stroke({ color: '#ffffff', width: 1 }),
-            }),
-          }),
-        );
-        src.addFeature(f);
-      }
-      fitTo(src.getFeatures(), 13);
+        f.setStyle(pointStyle);
+        return f;
+      });
+      src.addFeatures(features);
+      fitTo(features, 13);
     }
 
     return () => {
       cancelled = true;
     };
-  }, [mode, bubbles, maxBubble, data.points]);
+  }, [mode, bubbles, maxBubble, data.points, apiKey]);
 
   if (config.isLoading) {
     return (

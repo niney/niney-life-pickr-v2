@@ -32,6 +32,10 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { cn } from '~/lib/utils';
+import { useDebouncedDraft } from './useDebouncedDraft';
+
+// 직접 입력한 cron 식을 미리보기 요청에 반영하기까지의 지연 — 글자마다 요청이 나가지 않게.
+const CRON_PREVIEW_DEBOUNCE_MS = 300;
 
 // 하루 한 번 시간대 프리셋 — 자동 발굴은 보통 1일 1회라 일별 시각 위주.
 const PRESETS: { label: string; cron: string }[] = [
@@ -110,7 +114,14 @@ export const RandomCrawlSection = () => {
   const runs = useRandomCrawlRuns();
   const tree = useRegionTree();
 
-  const [draftCron, setDraftCron] = useState('0 12 * * *');
+  // cron 초안 — 화면·저장에는 draftCron, 미리보기 요청에는 previewCron. 직접 입력은 타이핑이
+  // 멈춘 뒤에만 미리보기에 반영하고, 프리셋 선택·설정 로드는 즉시 반영한다.
+  const {
+    draft: draftCron,
+    applied: previewCron,
+    update: updateCron,
+    flush: flushCron,
+  } = useDebouncedDraft('0 12 * * *', CRON_PREVIEW_DEBOUNCE_MS);
   const [timezone, setTimezone] = useState('Asia/Seoul');
   const [customMode, setCustomMode] = useState(false);
   const [region, setRegion] = useState<RandomCrawlRegionType>({
@@ -126,11 +137,13 @@ export const RandomCrawlSection = () => {
   const [candidateCount, setCandidateCount] = useState(5);
   const [timeoutMin, setTimeoutMin] = useState(30);
   const [timeoutAction, setTimeoutAction] = useState<'skip' | 'random'>('skip');
+  // 저장된 설정을 초안에 한 번이라도 옮겼는가 — 미리보기를 켜는 조건(아래).
+  const [configSynced, setConfigSynced] = useState(false);
 
   // config 로드 시 draft 동기화.
   useEffect(() => {
     if (!config.data) return;
-    setDraftCron(config.data.cronExpr);
+    updateCron(config.data.cronExpr, 'now');
     setTimezone(config.data.timezone);
     setCustomMode(!PRESETS.some((p) => p.cron === config.data!.cronExpr));
     setRegion(config.data.region);
@@ -138,17 +151,26 @@ export const RandomCrawlSection = () => {
     setCandidateCount(config.data.candidateCount);
     setTimeoutMin(config.data.responseTimeoutMin);
     setTimeoutAction(config.data.timeoutAction);
+    setConfigSynced(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.data?.updatedAt]);
 
-  const preview = useRandomCrawlPreview(draftCron, timezone, true);
+  // 미리보기는 저장된 설정을 초안에 옮긴 다음에만 요청한다 — 그 전에는 초안이 기본 cron 이라, 설정
+  // 응답을 기다리는 동안(그리고 응답 직후 위 effect 가 초안을 옮기기 전 렌더에서) 기본값으로 한 번
+  // 헛요청하게 된다. `!config.isPending` 만으로는 그 사이 렌더를 못 막아 동기화 여부로 가른다.
+  // 설정 조회가 실패하면 예전처럼 기본값으로 미리보기를 보여 준다.
+  const previewEnabled = configSynced || config.isError;
+  const preview = useRandomCrawlPreview(previewCron, timezone, previewEnabled);
+  // 입력 중(아직 미리보기에 반영 전)이거나 설정을 기다리는 동안에는 다른 식의 결과를 지금 식의
+  // 것처럼 보여 주지 않는다 — 응답을 기다릴 때와 같은 "불러오는 중" 상태로 둔다.
+  const previewData = previewEnabled && previewCron === draftCron ? preview.data : undefined;
   const dongs = useRegionDongs(region.sido, region.sigungu);
   const inflightRunId = runs.data?.inflightRunId ?? null;
   const { progress } = useRandomCrawlRunEvents(!!inflightRunId);
 
   const enabled = config.data?.enabled ?? false;
   const telegramOk = config.data?.telegramConfigured ?? false;
-  const cronValid = preview.data?.valid ?? true;
+  const cronValid = previewData?.valid ?? true;
   const isPreset = PRESETS.some((p) => p.cron === draftCron);
   const showCustomInput = customMode || !isPreset;
   const isRunning = !!inflightRunId || progress !== null;
@@ -176,7 +198,7 @@ export const RandomCrawlSection = () => {
     setRegion((prev) => normalizeRegion({ ...prev, ...patch }));
 
   const selectPreset = (cron: string): void => {
-    setDraftCron(cron);
+    updateCron(cron, 'now');
     setCustomMode(false);
   };
 
@@ -285,7 +307,8 @@ export const RandomCrawlSection = () => {
           {showCustomInput && (
             <Input
               value={draftCron}
-              onChange={(e) => setDraftCron(e.target.value)}
+              onChange={(e) => updateCron(e.target.value, 'debounce')}
+              onBlur={flushCron}
               placeholder="예: 0 12 * * *  (분 시 일 월 요일)"
               className="font-mono"
             />
@@ -426,13 +449,13 @@ export const RandomCrawlSection = () => {
         <div className="rounded-md border p-3 text-sm">
           {!cronValid ? (
             <p className="text-red-600 dark:text-red-400">
-              잘못된 cron 식입니다{preview.data?.error ? `: ${preview.data.error}` : ''}
+              잘못된 cron 식입니다{previewData?.error ? `: ${previewData.error}` : ''}
             </p>
-          ) : preview.data && preview.data.nextRuns.length > 0 ? (
+          ) : previewData && previewData.nextRuns.length > 0 ? (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">다음 실행 예정 (적용 후)</div>
               <ul className="space-y-0.5">
-                {preview.data.nextRuns.slice(0, 3).map((r) => (
+                {previewData.nextRuns.slice(0, 3).map((r) => (
                   <li key={r} className="font-mono text-xs text-muted-foreground">
                     {formatDate(r)}
                   </li>

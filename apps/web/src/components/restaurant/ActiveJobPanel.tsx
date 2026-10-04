@@ -7,7 +7,6 @@ import {
   useRestaurantByPlaceId,
   useRestaurantSummaryEvents,
 } from '@repo/shared';
-import { compareReviewRecencyDesc } from '@repo/utils';
 import type {
   CrawlModeType,
   CrawlNaverPlaceResultType,
@@ -18,7 +17,8 @@ import type {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
-import { ReviewSummarySection, SummaryProgressSection } from './sections';
+import { mergePersistedBatch } from './crawlBatchMerge';
+import { ReviewSummarySection, SectionHeader, SummaryProgressSection } from './sections';
 import { JobLogTab } from './JobLogTab';
 
 const STAGE_LABEL: Record<CrawlStageType, string> = {
@@ -154,6 +154,11 @@ interface ActiveJobPanelProps {
   // Detail page already shows reviews in its own filter/sort/paginate list,
   // so it hides the panel's compact 50-row preview to avoid duplication.
   showInlineReviewList?: boolean;
+  // true 면 어드민 상세(['restaurant', placeId] — 리뷰·요약 전량 응답)를 스스로 구독하지 않는다.
+  // 목록 화면의 작업 트레이용: 패널이 뜨는 것만으로 잡마다 가게의 리뷰 전량을 받아 오지 않게
+  // 하고, 리뷰 미리보기는 사용자가 "미리보기" 를 눌렀을 때만 받아 온다. 상세 화면은 페이지가
+  // 같은 쿼리를 이미 구독하고 있어(추가 요청 없음) 기본값(false)을 쓴다.
+  lazyDetail?: boolean;
   // Dismiss (X) — fired from the completed card. Wired to removeJob so the
   // user explicitly clears a finished panel. Shown only once the job is
   // terminal.
@@ -181,13 +186,17 @@ export const ActiveJobPanel = ({
   onPlaceIdResolved,
   onCancel,
   showInlineReviewList = true,
+  lazyDetail = false,
   onDismiss,
   onViewDetail,
   autoDismissOnSuccess = false,
   onFinished,
 }: ActiveJobPanelProps) => {
   const stream = useCrawlJobStream(jobId);
-  const detailQuery = useRestaurantByPlaceId(placeId);
+  // lazyDetail 이면 "미리보기" 를 누르기 전까지 상세를 구독하지 않는다(placeId=null → 쿼리 비활성).
+  const [detailRequested, setDetailRequested] = useState(false);
+  const detailEnabled = !lazyDetail || detailRequested;
+  const detailQuery = useRestaurantByPlaceId(detailEnabled ? placeId : null);
   // 활성 탭 — 진행도/로그. 로그 탭에선 크롤 SSE 의 'log' 이벤트와 요약 SSE 의
   // 'log' 이벤트를 한 곳에 누적 표시.
   const [activeTab, setActiveTab] = useState<'progress' | 'logs'>('progress');
@@ -215,36 +224,13 @@ export const ActiveJobPanel = ({
     }
   }, [stream.partial, stream.result, placeId, onPlaceIdResolved]);
 
+  // 새로 저장된 배치를 상세 캐시에 병합 — 캐시에 상세가 있을 때만(없으면 no-op). 전체를 다시
+  // 정렬하지 않고 새 행만 정렬해 끼워 넣는다(crawlBatchMerge 참고).
   useEffect(() => {
     if (!placeId || !stream.lastPersistedBatch || stream.lastPersistedBatch.length === 0) return;
     const incoming = stream.lastPersistedBatch;
-    qc.setQueryData<RestaurantDetailType | null>(
-      ['restaurant', placeId],
-      (prev) => {
-        if (!prev) return prev;
-        const seen = new Set(prev.reviews.map((r) => r.id));
-        const merged = [
-          ...incoming
-            .filter((r) => !seen.has(r.id))
-            .map((r) => ({
-              authorName: r.authorName,
-              rating: r.rating,
-              body: r.body,
-              visitedAt: r.visitedAt,
-              imageUrls: r.imageUrls,
-              videos: r.videos,
-              id: r.id,
-              externalId: r.externalId,
-              fetchedAt: r.fetchedAt,
-              // 크롤 스트림은 네이버 전용 — 이 상세의 기준(네이버) 행 리뷰다.
-              source: 'naver',
-              restaurantId: prev.id,
-              summary: null,
-            })),
-          ...prev.reviews,
-        ].sort(compareReviewRecencyDesc);
-        return { ...prev, reviews: merged };
-      },
+    qc.setQueryData<RestaurantDetailType | null>(['restaurant', placeId], (prev) =>
+      prev ? mergePersistedBatch(prev, incoming) : prev,
     );
   }, [stream.lastPersistedBatch, placeId, qc]);
 
@@ -258,9 +244,12 @@ export const ActiveJobPanel = ({
     stream.status === 'closed' ||
     stream.status === 'error';
   const stage = stream.stage;
-  // 헤더 식별 라벨 — 영속된 상세의 이름을 우선, 없으면 시작 시 seed, 둘 다
+  // 헤더 식별 라벨 — 영속된 상세의 이름을 우선, 없으면 시작 시 seed, 그것도 없으면 크롤
+  // 스트림이 알려 준 가게 이름(상세를 구독하지 않는 lazyDetail 패널의 신규 URL 작업용), 모두
   // 없으면(신규 URL 초기) 기본 라벨.
-  const displayName = detailQuery.data?.name ?? name ?? null;
+  const streamName =
+    stream.partial?.name ?? (stream.result?.ok ? stream.result.data.name : null);
+  const displayName = detailQuery.data?.name ?? name ?? streamName ?? null;
   // 수집 진행 분모 — 가게가 표기한 총 리뷰수(근사). partial 우선, 없으면 done 결과.
   const reviewTarget =
     stream.partial?.reviewCount ??
@@ -272,26 +261,51 @@ export const ActiveJobPanel = ({
     ? stream.result.durationMs
     : Math.max(0, nowTick - startedAt);
 
+  // onFinished 는 부모가 매 렌더 새 함수로 넘긴다 — ref 로 최신값만 잡고 아래 종료 effect 의
+  // deps 에서 뺀다(onDismissRef 와 같은 이유). 종료 effect 보다 먼저 선언해 같은 커밋에서 먼저 돈다.
+  const onFinishedRef = useRef(onFinished);
+  useEffect(() => {
+    onFinishedRef.current = onFinished;
+  }, [onFinished]);
+
   // Once terminal, refresh the list (counts/summary buckets) and the active
   // detail (snapshotJson, totalReviews, anything not covered by streamed
   // merges), then fire onFinished exactly once — even when result is null.
-  const finishedFiredRef = useRef(false);
+  //
+  // 무효화도 잡당 한 번만 한다. 예전엔 무효화가 가드 밖에 있고 deps 에 onFinished 가 있어, 종료된
+  // 패널이 떠 있는 동안(성공은 4초, 실패·취소는 닫을 때까지) 부모가 렌더될 때마다 목록과 상세
+  // (리뷰 전량)를 다시 받아 왔다 — 요약이 도는 중이면 응답이 매번 달라 리렌더 → 재무효화가 스스로
+  // 이어졌다. placeId 는 종료 뒤에야 알려질 수 있어(신규 URL) 상세 쪽은 placeId 단위로 따로 센다.
+  const terminalHandledRef = useRef<{
+    jobId: string;
+    lists: boolean;
+    placeId: string | null;
+    finished: boolean;
+  } | null>(null);
   useEffect(() => {
     if (!isTerminal) return;
-    qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
-    // 공개 list 도 함께 — 어드민 발견 페이지나 공개 맛집 페이지가 동일한
-    // 데이터를 다른 queryKey 로 캐싱한다.
-    qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
-    if (placeId) {
+    if (terminalHandledRef.current?.jobId !== jobId) {
+      terminalHandledRef.current = { jobId, lists: false, placeId: null, finished: false };
+    }
+    const handled = terminalHandledRef.current;
+    if (!handled.lists) {
+      handled.lists = true;
+      qc.invalidateQueries({ queryKey: ['restaurant', 'list'] });
+      // 공개 list 도 함께 — 어드민 발견 페이지나 공개 맛집 페이지가 동일한
+      // 데이터를 다른 queryKey 로 캐싱한다.
+      qc.invalidateQueries({ queryKey: ['restaurant', 'public', 'list'] });
+    }
+    if (placeId && handled.placeId !== placeId) {
+      handled.placeId = placeId;
       qc.invalidateQueries({ queryKey: ['restaurant', placeId] });
       // 어드민 상세의 공개 탭(홈·분석·메뉴 등)도 새 리뷰·메뉴를 읽게.
       invalidateDetailCaches(placeId);
     }
-    if (!finishedFiredRef.current) {
-      finishedFiredRef.current = true;
-      onFinished?.(stream.result);
+    if (!handled.finished) {
+      handled.finished = true;
+      onFinishedRef.current?.(stream.result);
     }
-  }, [isTerminal, stream.result, placeId, qc, onFinished, invalidateDetailCaches]);
+  }, [isTerminal, jobId, stream.result, placeId, qc, invalidateDetailCaches]);
 
   // 진행 중에만 1초마다 tick — 종료되면 멈춰 경과 시간이 고정된다.
   useEffect(() => {
@@ -444,6 +458,34 @@ export const ActiveJobPanel = ({
             )}
             {showInlineReviewList && detailQuery.data && (
               <ReviewSummarySection reviews={detailQuery.data.reviews} />
+            )}
+            {/* lazyDetail(목록 트레이) — 리뷰 미리보기는 눌렀을 때만 상세를 받아 오고, 받아 오면
+                위 ReviewSummarySection 으로 바뀐다. placeId 를 모르는 동안(신규 URL 초기)은 숨김. */}
+            {showInlineReviewList && lazyDetail && placeId && !detailQuery.data && (
+              <section>
+                <SectionHeader
+                  label="리뷰"
+                  meta={
+                    !detailRequested ? (
+                      <button
+                        type="button"
+                        onClick={() => setDetailRequested(true)}
+                        className="text-primary hover:underline"
+                      >
+                        미리보기
+                      </button>
+                    ) : detailQuery.isLoading ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Loader2 className="size-3 animate-spin" /> 불러오는 중…
+                      </span>
+                    ) : detailQuery.isError ? (
+                      '리뷰를 불러오지 못했습니다'
+                    ) : (
+                      '아직 저장된 리뷰가 없습니다'
+                    )
+                  }
+                />
+              </section>
             )}
           </>
         ) : (
