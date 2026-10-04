@@ -29,6 +29,7 @@ import {
   MEAL_DATA_BACKUP_MAX_PHOTOS,
   MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS,
   MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES,
+  MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES,
   MEAL_MAX_ENTRIES_PER_DAY,
   MEAL_MAX_ENTRIES_PER_USER,
   MEAL_STATS_MAX_DAYS,
@@ -270,7 +271,7 @@ const mealRoutes: FastifyPluginAsync = async (app) => {
       summary: '식단 백업 아카이브 복원 — 기존 기록에 추가, 같은 archiveId 재요청은 멱등',
       description:
         '본문은 GET /api/v1/meals/data/backup 응답 그대로(JSON 최대 75MB, IP당 시간당 10회). ' +
-        `사진 합계가 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB 를 넘으면 413, 복원 뒤 기록이 계정 ` +
+        `사진 합계가 ${MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB(예전 백업 호환 — 새 백업은 ${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / 1024 / 1024}MB)를 넘으면 413, 복원 뒤 기록이 계정 ` +
         `${MEAL_MAX_ENTRIES_PER_USER.toLocaleString('ko-KR')}건·하루 ${MEAL_MAX_ENTRIES_PER_DAY}끼를 넘으면 409, ` +
         '다른 백업·복원 대기가 길면 503. 선호 설정은 기존 값이 있으면 유지하고 없을 때만 아카이브 값으로 만든다.',
       security: [{ bearerAuth: [] }],

@@ -1028,20 +1028,32 @@ describe('meal data export/delete routes (격리 DB)', () => {
       expect(new Set(body.entries.map((entry) => entry.id)).size).toBe(1150);
     });
 
-    it('사진 합계가 25MB 를 넘는 아카이브는 디코드 전에 413, 정규식 없이도 깨진 base64 는 400', async () => {
-      const tooBig = emptyArchive('33333333-3333-4333-8333-333333333333');
-      tooBig.photos = Array.from({ length: 6 }, (_, i) => ({
-        ref: `photo-${i}`,
-        contentType: 'image/jpeg' as const,
-        dataBase64: 'AAAA',
-        sha256: '0'.repeat(64),
-        byteSize: MEAL_DATA_BACKUP_MAX_PHOTO_BYTES,
-        width: null,
-        height: null,
-      }));
-      tooBig.entries = [archiveEntry('entry-1', '2026-04-01', tooBig.photos.map((photo) => photo.ref).slice(0, 5)), archiveEntry('entry-2', '2026-04-02', ['photo-5'])];
+    it('복원은 예전 백업 한도(50MB)까지 받고 넘으면 디코드 전에 413, 정규식 없이도 깨진 base64 는 400', async () => {
+      const archiveOf = (id: string, count: number) => {
+        const archive = emptyArchive(id);
+        archive.photos = Array.from({ length: count }, (_, i) => ({
+          ref: `photo-${i}`,
+          contentType: 'image/jpeg' as const,
+          dataBase64: 'AAAA',
+          sha256: '0'.repeat(64),
+          byteSize: MEAL_DATA_BACKUP_MAX_PHOTO_BYTES,
+          width: null,
+          height: null,
+        }));
+        const refs = archive.photos.map((photo) => photo.ref);
+        archive.entries = Array.from({ length: Math.ceil(count / 5) }, (_, i) =>
+          archiveEntry(`entry-${i}`, `2026-04-${String(i + 1).padStart(2, '0')}`, refs.slice(i * 5, i * 5 + 5)),
+        );
+        return archive;
+      };
+      // 55MB — 복원 한도(50MB) 초과는 크기 선언만 보고 413.
+      const tooBig = archiveOf('33333333-3333-4333-8333-333333333333', 11);
       const big = await app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-d'), payload: tooBig });
       expect(big.statusCode).toBe(413);
+      // 30MB — 새 백업 한도(25MB)는 넘지만 예전 백업이라 크기로는 막지 않는다(여기선 가짜 사진이라 무결성 검증에서 400).
+      const legacy = archiveOf('55555555-5555-4555-8555-555555555555', 6);
+      const legacyRes = await app.inject({ method: 'POST', url: RESTORE, headers: authOf('stream-d'), payload: legacy });
+      expect(legacyRes.statusCode).toBe(400);
 
       const broken = emptyArchive('44444444-4444-4444-8444-444444444444');
       broken.photos = [{ ref: 'p', contentType: 'image/jpeg', dataBase64: '@@@@', sha256: '0'.repeat(64), byteSize: 3, width: null, height: null }];

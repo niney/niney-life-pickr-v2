@@ -10,6 +10,7 @@ import {
   MEAL_DATA_BACKUP_MAX_PHOTOS,
   MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS,
   MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES,
+  MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES,
   MEAL_DATA_BACKUP_VERSION,
   MEAL_DATA_DELETE_CONFIRMATION,
   MEAL_DATA_EXPORT_FORMAT,
@@ -821,12 +822,12 @@ export class MealDataService {
       safeDate(recommendation.createdAt, 'recommendation.createdAt');
       for (const event of recommendation.events) safeDate(event.createdAt, 'event.createdAt');
     }
-    // 선언 크기로 먼저 거른다(디코드 전) — 한도를 넘는 옛 50MB 아카이브도 여기서 413.
+    // 선언 크기로 먼저 거른다(디코드 전). 복원 한도는 예전 백업(50MB)과 호환되게 새 백업 한도보다 크다.
     const declaredBytes = archive.photos.reduce((sum, photo) => sum + photo.byteSize, 0);
-    if (declaredBytes > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES) {
+    if (declaredBytes > MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES) {
       throw new MealDataError(
         'backup_too_large',
-        `사진 합계가 복원 한도(${MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES / MB}MB)를 넘습니다.`,
+        `사진 합계가 복원 한도(${MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES / MB}MB)를 넘습니다.`,
       );
     }
 
@@ -858,7 +859,7 @@ export class MealDataService {
       bytes.byteLength !== photo.byteSize ||
       bytes.byteLength <= 0 ||
       bytes.byteLength > MEAL_DATA_BACKUP_MAX_PHOTO_BYTES ||
-      running + bytes.byteLength > MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES ||
+      running + bytes.byteLength > MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES ||
       bytes.toString('base64') !== photo.dataBase64 ||
       createHash('sha256').update(bytes).digest('hex') !== photo.sha256
     ) {

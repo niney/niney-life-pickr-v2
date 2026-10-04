@@ -1064,6 +1064,9 @@ export const MEAL_DATA_BACKUP_MAX_PHOTOS = 100;
 export const MEAL_DATA_BACKUP_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 // 사진 합계 — 백업·복원 1건의 메모리 피크가 이 값에 비례한다(2026-10 성능 감사로 50MB → 25MB).
 export const MEAL_DATA_BACKUP_MAX_TOTAL_PHOTO_BYTES = 25 * 1024 * 1024;
+// 복원은 예전 한도(50MB)로 만든 백업 파일도 받아야 한다 — 새 백업만 25MB 로 줄이고 복원은 그대로 둔다. 복원 메모리는
+// 서버 전역 동시 1건 제한으로 묶인다(요청 본문 상한 MEAL_DATA_BACKUP_MAX_JSON_BYTES 는 50MB 사진 기준 그대로).
+export const MEAL_DATA_RESTORE_MAX_TOTAL_PHOTO_BYTES = 50 * 1024 * 1024;
 export const MEAL_DATA_BACKUP_MAX_JSON_BYTES = 75 * 1024 * 1024;
 export const MEAL_DATA_BACKUP_MAX_ENTRIES = 5_000;
 export const MEAL_DATA_BACKUP_MAX_RECOMMENDATIONS = 1_000;
